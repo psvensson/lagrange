@@ -11,8 +11,8 @@
   "owner": "startup_active_gate_owner",
   "boundary": "snapshot_coverage",
   "dominantReason": "active_gate_timed_out",
-  "currentState": "Representative rerun after deadline/request-budget not-ready classification and retained contact-seed diagnostics is SAME-FRONTIER-DIAGNOSTIC under startup_active_gate_owner / snapshot_coverage: active-gate best progress snapshotCoverage=3/5, inactive_nodes=2, activeNodeCount=3/5, selected snapshot 11601fe0-72d6-5853-8590-ec2881853e72, selectedSnapshotError=unknown, readinessDelayCause=none, and activeGateState=timed_out. Seed 7493b0ab-a054-5fad-a91b-5e331db29304 plus nodes 35a891b8-c1a0-5064-9c6e-2acfba61c2a7 and 11601fe0-72d6-5853-8590-ec2881853e72 reach ACTIVE. Residual inactive joiners 8be8d30f-4499-5eed-865c-71b4d529a67a and ebc4aa0b-06c6-506d-93ea-1dd2deca3f58 remain in contacting_seed. Their retained bootstrap-not-ready response evidence now survives later 30s transport timeouts in playback: node 8be8d30f-4499-5eed-865c-71b4d529a67a carries PRIORITY_CONTROL_PLANE_RECOVERY_PENDING plus MOVE_REPLICA_HANDOFF_STABILIZING, and node ebc4aa0b-06c6-506d-93ea-1dd2deca3f58 carries READINESS_STABLE_WINDOW_PENDING plus MOVE_REPLICA_HANDOFF_STABILIZING. The final artifact does not show CLIENT_ATTEMPT_DEADLINE_EXHAUSTED or BOOTSTRAP_REQUEST_EXECUTION_BUDGET_EXHAUSTED for the residual joiners, so their elapsed-only retry path remains ordinary bootstrap-not-ready. Publication ACK convergence and priority recovery partition progress are satisfied in the failure-bundle topology graph; frontierCount=1 and the analyzer first frontier remains active_gate_snapshot_coverage.",
-  "nextAction": "Keep startup active-gate snapshot coverage as the controlling analyzer boundary. Next smallest proof should decide whether MOVE_REPLICA_HANDOFF_STABILIZING bootstrap-not-ready evidence is delaying startup active-gate snapshot coverage through admission timing/backpressure, or whether the analyzer frontier migrates after coverage improves. Do not move package ownership to operation workflow or implement rebalancer handoff logic unless local analyzer evidence makes that owner the first frontier or package escalation criteria require it.",
+  "currentState": "Representative rerun after deadline/request-budget not-ready classification and retained contact-seed diagnostics is SAME-FRONTIER-DIAGNOSTIC under startup_active_gate_owner / snapshot_coverage: active-gate best progress snapshotCoverage=3/5, inactive_nodes=2, activeNodeCount=3/5, selected snapshot 11601fe0-72d6-5853-8590-ec2881853e72, selectedSnapshotError=unknown, readinessDelayCause=none, and activeGateState=timed_out. Seed 7493b0ab-a054-5fad-a91b-5e331db29304 plus nodes 35a891b8-c1a0-5064-9c6e-2acfba61c2a7 and 11601fe0-72d6-5853-8590-ec2881853e72 reach ACTIVE. Residual inactive joiners 8be8d30f-4499-5eed-865c-71b4d529a67a and ebc4aa0b-06c6-506d-93ea-1dd2deca3f58 remain in contacting_seed. Their retained bootstrap-not-ready response evidence now survives later 30s transport timeouts in playback: node 8be8d30f-4499-5eed-865c-71b4d529a67a carries PRIORITY_CONTROL_PLANE_RECOVERY_PENDING plus MOVE_REPLICA_HANDOFF_STABILIZING, and node ebc4aa0b-06c6-506d-93ea-1dd2deca3f58 carries READINESS_STABLE_WINDOW_PENDING plus MOVE_REPLICA_HANDOFF_STABILIZING. The final artifact does not show CLIENT_ATTEMPT_DEADLINE_EXHAUSTED or BOOTSTRAP_REQUEST_EXECUTION_BUDGET_EXHAUSTED for the residual joiners, so their elapsed-only retry path remains ordinary bootstrap-not-ready. Publication ACK convergence and priority recovery partition progress are satisfied in the failure-bundle topology graph; frontierCount=1 and the analyzer first frontier remains active_gate_snapshot_coverage. Classification-only continuation confirmed MOVE_REPLICA_HANDOFF_STABILIZING is intentional bootstrap admission backpressure, not a startup active-gate/readiness projection defect: topology explain still selects startup_active_gate_owner / snapshot_coverage, failure-bundle playback keeps frontierCount=1 with publication ACK and priority recovery satisfied, and the focused MOVE_REPLICA admission contract preserves deferral while a non-terminal handoff stabilizes. No runtime readiness was manufactured.",
+  "nextAction": "Keep startup active-gate snapshot coverage as the controlling analyzer boundary. This slice found no in-scope startup active-gate/readiness/bootstrap-join defect to repair for MOVE_REPLICA_HANDOFF_STABILIZING; it is admission backpressure from the existing MOVE_REPLICA handoff contract. Do not implement operation workflow or rebalancer handoff logic inside this package unless parent evidence explicitly migrates the analyzer frontier or opens a new owner boundary.",
   "proof": [
     "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-spec-led-runtime-modularization-active-gate-snapshot-coverage-reachability.report.json --explain active_gate_snapshot_coverage",
     "Focused active-gate snapshot reachability fixture for 35a891b8-c1a0-5064-9c6e-2acfba61c2a7 with snapshotCoverage=3/5 and readinessDelayCause=snapshot_reachability_timeout",
@@ -59,7 +59,14 @@
     "Focused BootstrapAPI regression proving shared request execution budget exhaustion is surfaced as BOOTSTRAP_REQUEST_EXECUTION_BUDGET_EXHAUSTED.",
     "Focused NodeJoiningService regressions proving CLIENT_ATTEMPT_DEADLINE_EXHAUSTED and BOOTSTRAP_REQUEST_EXECUTION_BUDGET_EXHAUSTED bootstrap-not-ready evidence use the fixed resume cap instead of elapsed-only retry.",
     "Representative rerun after retained contact-seed diagnostics: startup_active_gate_owner / snapshot_coverage, snapshotCoverage=3/5, inactive_nodes=2, activeNodeCount=3/5, selected snapshot 11601fe0-72d6-5853-8590-ec2881853e72, selectedSnapshotError=unknown, readinessDelayCause=none; residual bootstrap-not-ready reasons are MOVE_REPLICA_HANDOFF_STABILIZING plus priority or readiness stable-window evidence.",
-    "Failure-bundle topology analysis after the diagnostic run: frontierCount=1, publication_ack_convergence satisfied, priority_recovery_partition_progress satisfied, dominant witness active_gate_snapshot_coverage."
+    "Failure-bundle topology analysis after the diagnostic run: frontierCount=1, publication_ack_convergence satisfied, priority_recovery_partition_progress satisfied, dominant witness active_gate_snapshot_coverage.",
+    "CLASSIFICATION-ONLY \u2014 playback trace of residual nodes 8be8d30f-4499-5eed-865c-71b4d529a67a and ebc4aa0b-06c6-506d-93ea-1dd2deca3f58 showed retained MOVE_REPLICA_HANDOFF_STABILIZING bootstrap-not-ready evidence as bootstrap admission backpressure, with no CLIENT_ATTEMPT_DEADLINE_EXHAUSTED or BOOTSTRAP_REQUEST_EXECUTION_BUDGET_EXHAUSTED residual.",
+    "PASS \u2014 npx tap --reporter=base test/bootstrap/move-replica-assignment-token.test.js preserved the MOVE_REPLICA admission contract (195 pass), including deferral while a non-terminal handoff stabilizes.",
+    "PASS \u2014 npm run analyze:topology-convergence -- test-output/reports/.playback/rolling-restart-spec-led-runtime-modularization-active-gate-snapshot-coverage-reachability/rolling-restart/failure-bundle.json confirmed first frontier active_gate_snapshot_coverage under startup_active_gate_owner / snapshot_coverage.",
+    "PASS \u2014 npm run work:model-ledger -- record ... recorded same-frontier-classified for the MOVE_REPLICA classification-only slice.",
+    "PASS \u2014 npm run work:current-blocker -- --write refreshed current blocker tracker after package metadata updates.",
+    "PASS \u2014 git diff --check -- work/packages/active-20260510-spec-led-runtime-modularization-active-gate-snapshot-coverage-reachability-frontier.md work/sprints/current-blocker.json work/sprints/current-blocker.md work/model-ledger.jsonl.",
+    "PASS \u2014 npm run work:validate reported Work tracker validation OK for 38 file(s)."
   ],
   "touchedFiles": [
     "src/control-plane/*readiness*.js",
@@ -416,6 +423,15 @@ that predecessor returned clean before this successor implementation started.
   `READINESS_STABLE_WINDOW_PENDING`, not client deadline or request-budget
   exhaustion.
 
+- Classification-only continuation traced the current MOVE_REPLICA residual. The
+  retained `MOVE_REPLICA_HANDOFF_STABILIZING` responses are the existing bootstrap
+  admission backpressure contract while a non-terminal handoff stabilizes, not a
+  startup active-gate/readiness projection defect. Focused MOVE_REPLICA admission
+  tests preserve that deferral, so this slice did not manufacture runtime readiness
+  or change operation workflow/rebalancer handoff logic. The analyzer first frontier
+  remains `startup_active_gate_owner / snapshot_coverage`.
+
+
 ## Validation
 
 1. PASS — `node --test test/scripts/analyze-topology-convergence.test.js`
@@ -669,6 +685,23 @@ that predecessor returned clean before this successor implementation started.
 107. PASS — `npm run work:validate` reported `Work tracker validation OK for
     38 file(s)`.
 108. PASS — `git diff --check -- src/bootstrap/bootstrap-api-constants.js src/bootstrap/node-joining-constants.js src/bootstrap/owners/bootstrap-join-admission-owner.js src/bootstrap/owners/bootstrap-request-owner.js src/bootstrap/phases/contact-seed-phase.js src/bootstrap/node-joining-service-segment-2.js test/bootstrap/bootstrap-request-execution-timeout.test.js test/bootstrap/node-joining-service.test.js work/packages/active-20260510-spec-led-runtime-modularization-active-gate-snapshot-coverage-reachability-frontier.md work/model-ledger.jsonl work/sprints/current-blocker.json work/sprints/current-blocker.md`.
+109. CLASSIFICATION-ONLY — playback inspection of residual contact-seed nodes
+    confirmed `MOVE_REPLICA_HANDOFF_STABILIZING` is retained bootstrap admission
+    backpressure alongside priority/stable-window evidence, with no deadline or
+    request-budget exhaustion residual.
+110. PASS — `npx tap --reporter=base test/bootstrap/move-replica-assignment-token.test.js`
+    preserved the MOVE_REPLICA admission contract (`195 pass`).
+111. PASS — `npm run analyze:topology-convergence -- test-output/reports/.playback/rolling-restart-spec-led-runtime-modularization-active-gate-snapshot-coverage-reachability/rolling-restart/failure-bundle.json`
+    confirmed first frontier `active_gate_snapshot_coverage` under
+    `startup_active_gate_owner / snapshot_coverage`.
+112. PASS — `npm run work:model-ledger -- record ...` recorded
+    `same-frontier-classified` for the MOVE_REPLICA classification-only slice.
+113. PASS — `npm run work:current-blocker -- --write` refreshed
+    `work/sprints/current-blocker.json` and `work/sprints/current-blocker.md`
+    after package metadata updates.
+114. PASS — `git diff --check -- work/packages/active-20260510-spec-led-runtime-modularization-active-gate-snapshot-coverage-reachability-frontier.md work/sprints/current-blocker.json work/sprints/current-blocker.md work/model-ledger.jsonl`.
+115. PASS — `npm run work:validate` reported `Work tracker validation OK for
+    38 file(s)`.
 
 ## Continuation Notes
 
@@ -716,6 +749,13 @@ that predecessor returned clean before this successor implementation started.
       Agent active-gate-implementation (626e22da-18de-4041-9ceb-c3ec027b6b42) implemented work/packages/active-20260510-spec-led-runtime-modularization-active-gate-snapshot-coverage-reachability-frontier.md.
 - [x] Continuation review subagent recorded:
       Agent active-gate-timeout-review (active-gate-timeout-review) reviewed
+      work/packages/active-20260510-spec-led-runtime-modularization-active-gate-snapshot-coverage-reachability-frontier.md;
+      result clean.
+- [x] Continuation fix subagent recorded or explicitly not needed:
+      not-needed.
+- [x] Continuation review subagent recorded:
+      Agent active-gate-move-replica-residual-review
+      (active-gate-move-replica-resid) reviewed
       work/packages/active-20260510-spec-led-runtime-modularization-active-gate-snapshot-coverage-reachability-frontier.md;
       result clean.
 - [x] Continuation fix subagent recorded or explicitly not needed:
@@ -873,6 +913,15 @@ that predecessor returned clean before this successor implementation started.
 - [x] Continuation review subagent recorded:
       Agent active-gate-resume-cap-review-retry-2
       (active-gate-resume-cap-review-1) reviewed
+      work/packages/active-20260510-spec-led-runtime-modularization-active-gate-snapshot-coverage-reachability-frontier.md;
+      result clean.
+- [x] Continuation fix subagent recorded or explicitly not needed:
+      not-needed.
+- [x] Continuation implementation subagent recorded:
+      Agent active-gate-move-replica-residual-impl (active-gate-move-replica-residual-impl) implemented work/packages/active-20260510-spec-led-runtime-modularization-active-gate-snapshot-coverage-reachability-frontier.md.
+- [x] Continuation review subagent recorded:
+      Agent active-gate-move-replica-implementation-review
+      (active-gate-move-replica-imple) reviewed
       work/packages/active-20260510-spec-led-runtime-modularization-active-gate-snapshot-coverage-reachability-frontier.md;
       result clean.
 - [x] Continuation fix subagent recorded or explicitly not needed:
