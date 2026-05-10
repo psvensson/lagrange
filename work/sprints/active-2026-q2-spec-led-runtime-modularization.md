@@ -19,17 +19,15 @@ dispatch-pending are closed or migrated. The active package froze the original
 selection, froze and reduced partial fixtures, repaired selected-snapshot
 projection, repaired the selected `35a891b8-c1a0-5064-9c6e-2acfba61c2a7`
 reachability timeout, and repaired the original inactive joiner path. The latest
-continuation classified the remaining artifact as true startup active-gate
-partial runtime coverage rather than a reopened selected reachability timeout,
-publication ACK, priority recovery, or original inactive-joiner regression. The
-current report remains `startup_active_gate_owner / snapshot_coverage` with
-`snapshotCoverage=3/5`, blockers `inactive_nodes=2,snapshot_coverage=3/5`,
-`activeNodeCount=3/5`, selected snapshot error `unknown`, readiness delay cause
+continuation repaired the join seed-contact retry budget interaction so late
+bootstrap HTTP attempts cannot exceed the remaining contact-seed retry window.
+The current report remains `startup_active_gate_owner / snapshot_coverage` with
+`snapshotCoverage=2/5`, blockers `inactive_nodes=3,snapshot_coverage=2/5`,
+`activeNodeCount=2/5`, selected snapshot error `unknown`, readiness delay cause
 `none`, seed readiness probe timeout evidence for
 `7493b0ab-a054-5fad-a91b-5e331db29304`, node
-`35a891b8-c1a0-5064-9c6e-2acfba61c2a7` inactive after retryable seed-contact
-failures, publication ACK convergence not reopened, and priority recovery
-retryable.
+`35a891b8-c1a0-5064-9c6e-2acfba61c2a7` now active, publication ACK
+convergence not reopened, and priority recovery retryable.
 
 Active and queued work:
 Current active package:
@@ -44,12 +42,12 @@ Companion cleanup:
 Latest closed proof package:
 `work/packages/done-20260510-spec-led-runtime-modularization-representative-green-proof-or-next-blocker.md`.
 
-Next proof surface: continue from the focused 3/5 seed-timeout partial-coverage
+Next proof surface: continue from the focused 2/5 partial-coverage
 classification in
 `test-output/reports/rolling-restart-spec-led-runtime-modularization-active-gate-snapshot-coverage-reachability.report.json`.
-If implementation continues on the same owner boundary, trace seed/admin
-responsiveness and join seed-contact budget interaction without reopening the
-repaired original joiner path, publication ACK convergence, or priority recovery.
+If implementation continues on the same owner boundary, trace residual seed
+readiness/admin responsiveness and inactive joiner bootstrap progress without
+reopening publication ACK convergence or priority recovery.
 
 ## Goal
 

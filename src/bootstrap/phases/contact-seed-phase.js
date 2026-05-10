@@ -122,6 +122,19 @@ function resolveSeedContactRequestTimeoutMs(options = {}) {
     MIN_SEED_CONTACT_REQUEST_TIMEOUT_MS;
 }
 
+function resolveSeedContactAttemptTimeoutMs(options = {}) {
+  const requestTimeoutMs = resolveSeedContactRequestTimeoutMs({
+    configuredHttpTimeoutMs: options.configuredHttpTimeoutMs,
+  });
+  const remainingRetryBudgetMs = Number.isFinite(options.remainingRetryBudgetMs) ?
+    Math.max(
+      MIN_SEED_CONTACT_REQUEST_TIMEOUT_MS,
+      Math.floor(options.remainingRetryBudgetMs),
+    ) :
+    requestTimeoutMs;
+  return Math.min(requestTimeoutMs, remainingRetryBudgetMs);
+}
+
 /**
  * Handles the contact-seed phase of the join process.
  */
@@ -201,8 +214,10 @@ class ContactSeedPhase {
       attempt += LOCAL_NUM_ONE;
       try {
         const httpPostImpl = this.delegates.getHttpPostImpl();
-        const requestTimeoutMs = resolveSeedContactRequestTimeoutMs({
+        const elapsedAtAttemptStartMs = now() - startTime;
+        const requestTimeoutMs = resolveSeedContactAttemptTimeoutMs({
           configuredHttpTimeoutMs: config.httpTimeoutMs,
+          remainingRetryBudgetMs: retryTimeoutMs - elapsedAtAttemptStartMs,
         });
         const bootstrapRequest = {
           nodeId: this.nodeId,

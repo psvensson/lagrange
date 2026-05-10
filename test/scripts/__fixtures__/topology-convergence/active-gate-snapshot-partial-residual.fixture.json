@@ -2,7 +2,7 @@
   "scenarios": [
     {
       "scenario": "rolling-restart",
-      "error": "Not all nodes reached ACTIVE state within 120000ms (attempts=9, elapsedMs=120018, nodeDiagnostics=7493b0ab-a054-5fad-a91b-5e331db29304=error:Node readiness probe timed out for 7493b0ab-a054-5fad-a91b-5e331db29304, 35a891b8-c1a0-5064-9c6e-2acfba61c2a7=inactive, 11601fe0-72d6-5853-8590-ec2881853e72=active, ebc4aa0b-06c6-506d-93ea-1dd2deca3f58=active, 8be8d30f-4499-5eed-865c-71b4d529a67a=active, snapshotCoverage=3/5@8be8d30f-4499-5eed-865c-71b4d529a67a#ts=1778413662512#adminReady=true#via=admin_health#probeMs=1113#epoch=2#pub=PUBLISHED#missingPublished=3#prioritySpread=pending#priorityRecovery=1, publicationConvergence=blocked#recovery=priority_spread_pending#missingPublished=3, priorityRecoveryInvariants=passed, progress=active=3/5,coverage=3/5,publication=PUBLISHED,snapshotNode=8be8d30f-4499-5eed-865c-71b4d529a67a#adminReady=true#via=admin_health,epoch=2,publishedActive=2/5,pendingAck=0,missingPublished=0,missingPublishedIds=35a891b8-c1a0-5064-9c6e-2acfba61c2a7|8be8d30f-4499-5eed-865c-71b4d529a67a|ebc4aa0b-06c6-506d-93ea-1dd2deca3f58,ownerQueue=unknown,cdcLag=unknown,disagreementNodes=4,prioritySpread=pending#gap=5,priorityRecovery=eligible_but_no_operation_created,priorityRecoveryState=needs_operation|recovering_in_flight,closure=none,gateReasons=none, inactiveSummary=error:Node readiness probe timed out for 7493b0ab-a054-5fad-a91b-5e331db29304:6, state:inactive:17)",
+      "error": "Not all nodes reached ACTIVE state within 120000ms (attempts=10, elapsedMs=122104, nodeDiagnostics=7493b0ab-a054-5fad-a91b-5e331db29304=error:Node readiness probe timed out for 7493b0ab-a054-5fad-a91b-5e331db29304, 35a891b8-c1a0-5064-9c6e-2acfba61c2a7=active, 11601fe0-72d6-5853-8590-ec2881853e72=inactive, ebc4aa0b-06c6-506d-93ea-1dd2deca3f58=inactive, 8be8d30f-4499-5eed-865c-71b4d529a67a=inactive, snapshotCoverage=0/5@35a891b8-c1a0-5064-9c6e-2acfba61c2a7#adminReady=true#via=admin_health#probeMs=100#reachabilityProbeMs=100, publicationConvergence=blocked#recovery=priority_spread_pending#missingPublished=3, priorityRecoveryInvariants=passed, progress=active=2/5,coverage=2/5,publication=PUBLISHED,snapshotNode=35a891b8-c1a0-5064-9c6e-2acfba61c2a7#adminReady=true#via=admin_health,epoch=2,publishedActive=2/5,pendingAck=0,missingPublished=0,missingPublishedIds=11601fe0-72d6-5853-8590-ec2881853e72|8be8d30f-4499-5eed-865c-71b4d529a67a|ebc4aa0b-06c6-506d-93ea-1dd2deca3f58,ownerQueue=unknown,cdcLag=unknown,disagreementNodes=1,prioritySpread=pending#gap=5,priorityRecovery=eligible_but_no_operation_created,priorityRecoveryState=needs_operation,closure=none,gateReasons=none, inactiveSummary=error:Node readiness probe timed out for 7493b0ab-a054-5fad-a91b-5e331db29304:7, state:inactive:31, state:bootstrapping:2)",
       "publicationConvergence": {
         "publicationStatus": "PUBLISHED",
         "pendingAckCount": 0,
@@ -14,15 +14,15 @@
           "ready": false,
           "progress": {
             "expectedNodeCount": 5,
-            "activeNodeCount": 3,
-            "inactiveNodeCount": 2,
-            "snapshotCoverageNodeCount": 3,
+            "activeNodeCount": 2,
+            "inactiveNodeCount": 3,
+            "snapshotCoverageNodeCount": 2,
             "snapshotCoverageComplete": false,
             "publicationStatus": "PUBLISHED",
             "publicationStatusRank": 3,
             "publicationEpoch": 2,
             "recoveryProtocolState": "priority_spread_pending",
-            "selectedSnapshotNodeId": "8be8d30f-4499-5eed-865c-71b4d529a67a",
+            "selectedSnapshotNodeId": "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
             "selectedSnapshotAdminReady": true,
             "selectedSnapshotReachableBy": "admin_health",
             "selectedSnapshotError": null,
@@ -30,35 +30,23 @@
             "selectedControlPlaneOwnerQueueDepth": null,
             "selectedCdcReplayLag": null,
             "perNodePublicationDisagreementSet": {
-              "7493b0ab-a054-5fad-a91b-5e331db29304": [
-                "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+              "7493b0ab-a054-5fad-a91b-5e331db29304": [],
+              "11601fe0-72d6-5853-8590-ec2881853e72": [],
+              "35a891b8-c1a0-5064-9c6e-2acfba61c2a7": [
+                "11601fe0-72d6-5853-8590-ec2881853e72",
                 "8be8d30f-4499-5eed-865c-71b4d529a67a",
                 "ebc4aa0b-06c6-506d-93ea-1dd2deca3f58"
               ],
-              "11601fe0-72d6-5853-8590-ec2881853e72": [
-                "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
-                "8be8d30f-4499-5eed-865c-71b4d529a67a",
-                "ebc4aa0b-06c6-506d-93ea-1dd2deca3f58"
-              ],
-              "35a891b8-c1a0-5064-9c6e-2acfba61c2a7": [],
-              "8be8d30f-4499-5eed-865c-71b4d529a67a": [
-                "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
-                "8be8d30f-4499-5eed-865c-71b4d529a67a",
-                "ebc4aa0b-06c6-506d-93ea-1dd2deca3f58"
-              ],
-              "ebc4aa0b-06c6-506d-93ea-1dd2deca3f58": [
-                "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
-                "8be8d30f-4499-5eed-865c-71b4d529a67a",
-                "ebc4aa0b-06c6-506d-93ea-1dd2deca3f58"
-              ]
+              "8be8d30f-4499-5eed-865c-71b4d529a67a": [],
+              "ebc4aa0b-06c6-506d-93ea-1dd2deca3f58": []
             },
             "selectedPublishedActiveNodeIds": [
-              "11601fe0-72d6-5853-8590-ec2881853e72",
+              "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
               "7493b0ab-a054-5fad-a91b-5e331db29304"
             ],
             "selectedPublishedActiveCount": 2,
             "selectedMissingPublishedNodeIds": [
-              "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+              "11601fe0-72d6-5853-8590-ec2881853e72",
               "8be8d30f-4499-5eed-865c-71b4d529a67a",
               "ebc4aa0b-06c6-506d-93ea-1dd2deca3f58"
             ],
@@ -68,7 +56,7 @@
             "gateReasons": [],
             "prioritySpreadSatisfied": false,
             "prioritySpreadGap": 5,
-            "priorityBlockedPartitionCount": 2,
+            "priorityBlockedPartitionCount": 3,
             "priorityRecoveryProgressClasses": {
               "partitionIdsByClass": {
                 "priority_operation_serial_wait": [],
@@ -82,7 +70,6 @@
               "partitionIdsBySemanticState": {
                 "converged": [],
                 "spread_satisfied_in_flight": [
-                  "control_plane_publications-p1",
                   "replica_operations-p1",
                   "sql_transaction_participants-p1"
                 ],
@@ -91,6 +78,7 @@
                 "learner_promotion_blocked": [],
                 "coordination_mismatch": [],
                 "recovering_in_flight": [
+                  "control_plane_publications-p1",
                   "sql_transactions-p1",
                   "sql_write_operations-p1"
                 ],
@@ -101,14 +89,15 @@
               ],
               "unresolvedSemanticStateCount": 1,
               "blockedPartitionIds": [
+                "control_plane_publications-p1",
                 "sql_transactions-p1",
                 "sql_write_operations-p1"
               ],
-              "blockedPartitionCount": 2
+              "blockedPartitionCount": 3
             },
             "priorityRecoveryUnresolvedClassCount": 0,
             "priorityRecoveryUnresolvedSemanticStateCount": 1,
-            "priorityRecoveryBlockedPartitionCount": 2,
+            "priorityRecoveryBlockedPartitionCount": 3,
             "closureRecordId": null,
             "closureWitnessClass": null,
             "readinessDelay": {
@@ -119,10 +108,10 @@
               "error": null
             },
             "blockers": [
-              "inactive_nodes=2",
-              "snapshot_coverage=3/5"
+              "inactive_nodes=3",
+              "snapshot_coverage=2/5"
             ],
-            "blockerSignature": "inactive_nodes=2|snapshot_coverage=3/5"
+            "blockerSignature": "inactive_nodes=3|snapshot_coverage=2/5"
           }
         }
       }

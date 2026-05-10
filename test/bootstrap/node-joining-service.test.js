@@ -1637,6 +1637,90 @@ test('NodeJoiningService - exhausted retryable seed-contact timeouts preserve ' 
   t.same(retryDelays, [10], 'phase should make one bounded retry before surfacing exhaustion');
 });
 
+test('NodeJoiningService - contact-seed request timeout uses remaining retry budget',
+  async (t) => {
+    initializeTestEnvironment();
+
+    const TEST_RETRY_AFTER_MS = 5;
+    const TEST_RETRY_DELAY_MS = 10;
+    const TEST_HTTP_TIMEOUT_MS = 25;
+    const TEST_RETRY_TIMEOUT_MS = 40;
+    const TEST_REMAINING_TIMEOUT_MS = 5;
+    const TEST_BOOTSTRAP_PHASE = 'partitions';
+    const TEST_RETRYABLE_RESPONSE = Object.freeze({
+      success: false,
+      error: 'Bootstrap not ready',
+      code: BOOTSTRAP_PIPELINE_ERROR_CODE.BOOTSTRAP_NOT_READY,
+      phase: TEST_BOOTSTRAP_PHASE,
+      retryAfterMs: TEST_RETRY_AFTER_MS,
+    });
+
+    let attempts = 0;
+    let currentNow = 0;
+    const observedTimeoutMs = [];
+    const retryDelays = [];
+    const service = new NodeJoiningService({
+      nodeId: '550e8400-e29b-41d4-a716-446655440119',
+      nodeAddress: 'ws://localhost:9090',
+      seedNodeAddress: 'http://localhost:8080',
+      now: () => currentNow,
+      sleep: async (delayMs) => {
+        retryDelays.push(delayMs);
+        currentNow += delayMs;
+      },
+      config: {
+        httpTimeoutMs: TEST_HTTP_TIMEOUT_MS,
+        leadershipWaitTimeoutMs: TEST_RETRY_TIMEOUT_MS,
+        leadershipWaitInitialDelayMs: TEST_RETRY_DELAY_MS,
+        leadershipWaitMaxDelayMs: TEST_RETRY_DELAY_MS,
+        leadershipWaitBackoffMultiplier: 1,
+        leadershipWaitJitterRatio: 0,
+      },
+      httpPost: async (_url, _payload, options = {}) => {
+        attempts += 1;
+        observedTimeoutMs.push(options.timeoutMs);
+        currentNow += options.timeoutMs;
+        if (attempts === 1) {
+          const error = new Error(
+            `HTTP 503: ${JSON.stringify(TEST_RETRYABLE_RESPONSE)}`,
+          );
+          error.statusCode = 503;
+          throw error;
+        }
+        throw new Error('Request timeout after ' + options.timeoutMs + 'ms');
+      },
+    });
+
+    const error = await t.rejects(
+      service.phaseContactSeed(),
+      'near the retry deadline, contact-seed should surface a retryable timeout',
+    );
+
+    t.equal(attempts, 2, 'phase should keep the existing bounded in-call retry');
+    t.same(
+      observedTimeoutMs,
+      [TEST_HTTP_TIMEOUT_MS, TEST_REMAINING_TIMEOUT_MS],
+      'later seed-contact transport attempts should not exceed the remaining retry budget',
+    );
+    t.equal(
+      error?.message,
+      'Failed to contact seed node: Request timeout after ' +
+        TEST_REMAINING_TIMEOUT_MS + 'ms',
+      'surfaced timeout should reflect the budget-bounded transport attempt',
+    );
+    t.equal(
+      error?.deferRetry,
+      true,
+      'budget-bounded seed contact timeout should remain retryable',
+    );
+    t.same(
+      retryDelays,
+      [TEST_RETRY_DELAY_MS],
+      'phase should spend only the canonical retry delay before the bounded attempt',
+    );
+  },
+);
+
 test('NodeJoiningService - retryable seed-contact bootstrap authority ' +
   'preserves the configured request timeout on the retried transport ' +
   'attempt', async (t) => {
