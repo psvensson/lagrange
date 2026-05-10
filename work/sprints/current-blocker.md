@@ -4,7 +4,7 @@
 
 Sprint: `work/sprints/active-2026-q2-spec-led-runtime-modularization.md`
 
-Package: `work/packages/done-20260510-spec-led-runtime-modularization-active-gate-snapshot-coverage-reachability-frontier.md`
+Package: `work/packages/active-20260510-spec-led-runtime-modularization-high-level-causal-analysis-infrastructure.md`
 
 Scenario: `spec-led-runtime-modularization`
 
@@ -14,116 +14,62 @@ Playback: `test-output/reports/.playback/rolling-restart-spec-led-runtime-modula
 
 ## Boundary
 
-Owner: `startup_active_gate_owner`
+Owner: `diagnostics_owner`
 
-Boundary: `snapshot_coverage`
+Boundary: `causal_analysis_framework`
 
-Dominant reason: `active_gate_timed_out`
+Dominant reason: `active_gate_classification_incomplete_requires_causal_model`
 
-Current state: Representative rerun after deadline/request-budget not-ready classification and retained contact-seed diagnostics is SAME-FRONTIER-DIAGNOSTIC under startup_active_gate_owner / snapshot_coverage: active-gate best progress snapshotCoverage=3/5, inactive_nodes=2, activeNodeCount=3/5, selected snapshot 11601fe0-72d6-5853-8590-ec2881853e72, selectedSnapshotError=unknown, readinessDelayCause=none, and activeGateState=timed_out. Seed 7493b0ab-a054-5fad-a91b-5e331db29304 plus nodes 35a891b8-c1a0-5064-9c6e-2acfba61c2a7 and 11601fe0-72d6-5853-8590-ec2881853e72 reach ACTIVE. Residual inactive joiners 8be8d30f-4499-5eed-865c-71b4d529a67a and ebc4aa0b-06c6-506d-93ea-1dd2deca3f58 remain in contacting_seed. Their retained bootstrap-not-ready response evidence now survives later 30s transport timeouts in playback: node 8be8d30f-4499-5eed-865c-71b4d529a67a carries PRIORITY_CONTROL_PLANE_RECOVERY_PENDING plus MOVE_REPLICA_HANDOFF_STABILIZING, and node ebc4aa0b-06c6-506d-93ea-1dd2deca3f58 carries READINESS_STABLE_WINDOW_PENDING plus MOVE_REPLICA_HANDOFF_STABILIZING. The final artifact does not show CLIENT_ATTEMPT_DEADLINE_EXHAUSTED or BOOTSTRAP_REQUEST_EXECUTION_BUDGET_EXHAUSTED for the residual joiners, so their elapsed-only retry path remains ordinary bootstrap-not-ready. Publication ACK convergence and priority recovery partition progress are satisfied in the failure-bundle topology graph; frontierCount=1 and the analyzer first frontier remains active_gate_snapshot_coverage. Classification-only continuation confirmed MOVE_REPLICA_HANDOFF_STABILIZING is intentional bootstrap admission backpressure, not a startup active-gate/readiness projection defect: topology explain still selects startup_active_gate_owner / snapshot_coverage, failure-bundle playback keeps frontierCount=1 with publication ACK and priority recovery satisfied, and the focused MOVE_REPLICA admission contract preserves deferral while a non-terminal handoff stabilizes. No runtime readiness was manufactured.
+Current state: The active-gate snapshot-coverage reachability frontier package is a classification closure, not a runtime resolver. The representative rolling-restart report is still failing with snapshotCoverage=3/5 and residual seed readiness timeout / contact-seed transport-timeout joiners. Before further tactical runtime owner patches, the high-level causal-analysis framework must be established to trace root-cause chains, bound recovery budgets, account for timeout cascades, enumerate failure classes, and define stop conditions for rolling restart.
 
 ## Next Action
 
-Keep startup active-gate snapshot coverage as the controlling analyzer boundary. This slice found no in-scope startup active-gate/readiness/bootstrap-join defect to repair for MOVE_REPLICA_HANDOFF_STABILIZING; it is admission backpressure from the existing MOVE_REPLICA handoff contract. Do not implement operation workflow or rebalancer handoff logic inside this package unless parent evidence explicitly migrates the analyzer frontier or opens a new owner boundary.
+Establish the causal-analysis infrastructure framework covering all six user-requested capabilities: (1) end-to-end phase model for rolling restart lifecycle, (2) cross-node causal graph capturing dependency chains between components, (3) budget/timeout accounting model tracking resource limits, (4) invariant review for constraint preservation, (5) failure-class taxonomy for normalized failure modes, and (6) architecture-level stop condition definition. Emit canonical causal-analysis schema and decision table suitable for future runtime owner packages.
 
 ## Proof Ladder
 
-1. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-spec-led-runtime-modularization-active-gate-snapshot-coverage-reachability.report.json --explain active_gate_snapshot_coverage`
-2. `Focused active-gate snapshot reachability fixture for 35a891b8-c1a0-5064-9c6e-2acfba61c2a7 with snapshotCoverage=3/5 and readinessDelayCause=snapshot_reachability_timeout`
-3. `Focused diagnostics-backed selected snapshot regression preserving partial 3/5 coverage while neutralizing redundant reachability timeout`
-4. `Focused seed-timeout partial residual fixture for 8be8d30f-4499-5eed-865c-71b4d529a67a with snapshotCoverage=3/5, readinessDelayCause=none, seed readiness timeout evidence, and node 35 inactive`
-5. `Focused TAP regression proving seed-timeout partial startup coverage remains blocked when two nodes are inactive`
-6. `Focused BootstrapAPI regression proving an assignment reservation that exhausts the shared bootstrap request execution budget returns BOOTSTRAP_NOT_READY instead of a stale success response`
-7. `Focused NodeJoiningService regression proving late contact-seed HTTP attempts are capped by the remaining contact-seed retry budget`
-8. `Representative rerun reduced node 35 to active and refreshed the residual fixture to snapshotCoverage=2/5 under the same startup active-gate snapshot coverage boundary`
-9. `node --test test/diagnostics/topology-convergence-graph.test.js test/scripts/analyze-topology-convergence.test.js`
-10. `TAP_ALLOW_INCOMPLETE_COVERAGE=1 npx tap test/distributed/harness/__tests__/cluster.test-part-5.js`
-11. `Modified-file decision-boundary and runtime-grammar guardrails; literal guard not applicable to legacy TAP test baseline`
-12. `npm run work:validate`
-13. `Focused NodeJoiningService regression proving retained BOOTSTRAP_NOT_READY seed evidence no longer converts a later contact-seed transport timeout into elapsed-only auto-resume; direct bootstrap-not-ready remains elapsed-only.`
-14. `Representative rerun after retained-evidence resume classification refreshed the residual to snapshotCoverage=3/5 with node 8be8d30f-4499-5eed-865c-71b4d529a67a nodeDiagnostics active, activeGate activeNodeCount=2/5, two contact-seed joiners exhausting the fixed resume cap, and seed readiness timeout still present under startup_active_gate_owner / snapshot_coverage.`
-15. `Focused analyzer fixture refreshed from the resume-cap residual artifact: snapshotCoverage=3/5, inactive_nodes=3, activeNodeCount=2/5, selected snapshot 8be8d30f-4499-5eed-865c-71b4d529a67a, readinessDelayCause=none, seed readiness timeout plus two fixed-cap contact-seed transport-timeout joiners.`
-16. `Focused harness regression adjusted to preserve seed-timeout partial startup coverage while keeping selected publication debt diagnostics-only.`
-17. `node --test test/scripts/analyze-topology-convergence.test.js && TAP_ALLOW_INCOMPLETE_COVERAGE=1 npx tap --reporter=base test/distributed/harness/__tests__/cluster.test-part-5.js`
-18. `node scripts/check-guideline-decision-boundaries.js test/distributed/harness/__tests__/cluster.test-part-5.js test/scripts/analyze-topology-convergence.test.js; npm run audit:runtime-grammar:file -- test/distributed/harness/__tests__/cluster.test-part-5.js test/scripts/analyze-topology-convergence.test.js; git diff --check -- touched files`
-19. `Representative rerun after retained seed-contact owner-marker repair: startup_active_gate_owner / snapshot_coverage, snapshotCoverage=3/5, inactive_nodes=2, activeNodeCount=3/5, selected snapshot 35a891b8-c1a0-5064-9c6e-2acfba61c2a7, selectedSnapshotError=unknown, readinessDelayCause=none, priority recovery satisfied.`
-20. `Focused analyzer fixture and active-gate harness regression refreshed to the current two-node contact-seed residual with nodes 8be8d30f-4499-5eed-865c-71b4d529a67a and ebc4aa0b-06c6-506d-93ea-1dd2deca3f58 inactive.`
-21. `Focused BootstrapAPI regression proving startup-complete seed bootstrap admission ignores only stale BOOTSTRAP_PHASE_INCOMPLETE bootstrap-join snapshot evidence and preserves non-stale 503 blockers.`
-22. `npx tap --reporter=base test/bootstrap/bootstrap-request-admission-precheck.test.js`
-23. `node scripts/check-guideline-literals.js src/bootstrap/owners/bootstrap-request-owner.js; node scripts/check-guideline-decision-boundaries.js src/bootstrap/owners/bootstrap-request-owner.js test/bootstrap/bootstrap-request-admission-precheck.test.js; npm run audit:runtime-grammar:file -- src/bootstrap/owners/bootstrap-request-owner.js test/bootstrap/bootstrap-request-admission-precheck.test.js; git diff --check -- src/bootstrap/owners/bootstrap-request-owner.js test/bootstrap/bootstrap-request-admission-precheck.test.js work/packages/done-20260510-spec-led-runtime-modularization-active-gate-snapshot-coverage-reachability-frontier.md`
-24. `Representative rerun after startup-complete stale admission repair: startup_active_gate_owner / snapshot_coverage, snapshotCoverage=3/5, inactive_nodes=1, activeNodeCount=4/5, selected snapshot 8be8d30f-4499-5eed-865c-71b4d529a67a, selectedSnapshotError=unknown, readinessDelayCause=none, recoveryProtocolState=priority_spread_pending.`
-25. `Focused analyzer fixture and active-gate harness regression refreshed to the current one-node contact-seed residual with ebc4aa0b-06c6-506d-93ea-1dd2deca3f58 inactive.`
-26. `Focused BootstrapJoinAdmissionOwner regression proving assignment-lock wait observes the shared bootstrap request execution budget and returns canonical BOOTSTRAP_NOT_READY before caller HTTP timeout.`
-27. `Representative rerun after budget-aware assignment-lock repair: startup_active_gate_owner / snapshot_coverage, snapshotCoverage=2/5, inactive_nodes=2, activeNodeCount=3/5, selected snapshot 35a891b8-c1a0-5064-9c6e-2acfba61c2a7, selectedSnapshotError=unknown, readinessDelayCause=none, recoveryProtocolState=priority_spread_pending.`
-28. `Fix subagent repaired assignment-lock budget exhaustion so BUDGET_EXHAUSTED deterministically emits canonical BOOTSTRAP_NOT_READY before assignment work.`
-29. `npx tap --reporter=base test/bootstrap/bootstrap-request-execution-timeout.test.js`
-30. `node scripts/check-guideline-literals.js src/bootstrap/owners/bootstrap-join-admission-owner.js test/bootstrap/bootstrap-request-execution-timeout.test.js; node scripts/check-guideline-decision-boundaries.js src/bootstrap/owners/bootstrap-join-admission-owner.js test/bootstrap/bootstrap-request-execution-timeout.test.js; npm run audit:runtime-grammar:file -- src/bootstrap/owners/bootstrap-join-admission-owner.js test/bootstrap/bootstrap-request-execution-timeout.test.js`
-31. `npm run work:validate`
-32. `Focused BootstrapAPI regression proving expired client contact-seed attempts are deferred as BOOTSTRAP_NOT_READY before leader readiness, assignment work, or admission-slot claim.`
-33. `Fix subagent regression reproduced initially valid client contact-seed attempts expiring during async pre-admission work after one bootstrap admission slot was claimed.`
-34. `Focused BootstrapAPI regression proving initially valid client contact-seed attempts that expire during async pre-admission work are deferred as BOOTSTRAP_NOT_READY before admission-slot claim, admitted blocking checks, leader readiness, or assignment work.`
-35. `Focused NodeJoiningService regression proving contact-seed sends clientAttemptDeadlineMs to the seed based on the current HTTP attempt budget.`
-36. `Representative rerun after client contact-seed deadline propagation: startup_active_gate_owner / snapshot_coverage, best snapshotCoverage=3/5, inactive_nodes=2, activeNodeCount=3/5, selected snapshot 35a891b8-c1a0-5064-9c6e-2acfba61c2a7, selectedSnapshotError=unknown, readinessDelayCause=none, with subordinate operation_workflow_owner / rebalancer_handoff priority recovery progress.`
-37. `Focused analyzer fixture and active-gate harness regression refreshed to the current two-node contact-seed residual with active-gate best snapshotCoverage=3/5 and residual inactive joiners 8be8d30f-4499-5eed-865c-71b4d529a67a plus ebc4aa0b-06c6-506d-93ea-1dd2deca3f58.`
-38. `node --test test/scripts/analyze-topology-convergence.test.js; TAP_ALLOW_INCOMPLETE_COVERAGE=1 npx tap --reporter=base test/distributed/harness/__tests__/cluster.test-part-5.js`
-39. `node scripts/check-guideline-literals.js src/bootstrap/bootstrap-api-constants.js src/bootstrap/owners/bootstrap-request-owner.js src/bootstrap/phases/contact-seed-phase.js; node scripts/check-guideline-decision-boundaries.js src/bootstrap/bootstrap-api-constants.js src/bootstrap/owners/bootstrap-request-owner.js src/bootstrap/phases/contact-seed-phase.js test/bootstrap/bootstrap-request-execution-timeout.test.js test/bootstrap/node-joining-service.test.js test/bootstrap/bootstrap-request-admission-precheck.test.js test/distributed/harness/__tests__/cluster.test-part-5.js test/scripts/analyze-topology-convergence.test.js; npm run audit:runtime-grammar:file -- focused modified files`
-40. `npm run work:model-ledger -- record ...`
-41. `npm run work:current-blocker -- --write`
-42. `npm run work:validate`
-43. `Focused BootstrapAPI regression proving shared request execution budget exhaustion is surfaced as BOOTSTRAP_REQUEST_EXECUTION_BUDGET_EXHAUSTED.`
-44. `Focused NodeJoiningService regressions proving CLIENT_ATTEMPT_DEADLINE_EXHAUSTED and BOOTSTRAP_REQUEST_EXECUTION_BUDGET_EXHAUSTED bootstrap-not-ready evidence use the fixed resume cap instead of elapsed-only retry.`
-45. `Representative rerun after retained contact-seed diagnostics: startup_active_gate_owner / snapshot_coverage, snapshotCoverage=3/5, inactive_nodes=2, activeNodeCount=3/5, selected snapshot 11601fe0-72d6-5853-8590-ec2881853e72, selectedSnapshotError=unknown, readinessDelayCause=none; residual bootstrap-not-ready reasons are MOVE_REPLICA_HANDOFF_STABILIZING plus priority or readiness stable-window evidence.`
-46. `Failure-bundle topology analysis after the diagnostic run: frontierCount=1, publication_ack_convergence satisfied, priority_recovery_partition_progress satisfied, dominant witness active_gate_snapshot_coverage.`
-47. `CLASSIFICATION-ONLY — playback trace of residual nodes 8be8d30f-4499-5eed-865c-71b4d529a67a and ebc4aa0b-06c6-506d-93ea-1dd2deca3f58 showed retained MOVE_REPLICA_HANDOFF_STABILIZING bootstrap-not-ready evidence as bootstrap admission backpressure, with no CLIENT_ATTEMPT_DEADLINE_EXHAUSTED or BOOTSTRAP_REQUEST_EXECUTION_BUDGET_EXHAUSTED residual.`
-48. `PASS — npx tap --reporter=base test/bootstrap/move-replica-assignment-token.test.js preserved the MOVE_REPLICA admission contract (195 pass), including deferral while a non-terminal handoff stabilizes.`
-49. `PASS — npm run analyze:topology-convergence -- test-output/reports/.playback/rolling-restart-spec-led-runtime-modularization-active-gate-snapshot-coverage-reachability/rolling-restart/failure-bundle.json confirmed first frontier active_gate_snapshot_coverage under startup_active_gate_owner / snapshot_coverage.`
-50. `PASS — npm run work:model-ledger -- record ... recorded same-frontier-classified for the MOVE_REPLICA classification-only slice.`
-51. `PASS — npm run work:current-blocker -- --write refreshed current blocker tracker after package metadata updates.`
-52. `PASS — git diff --check -- work/packages/done-20260510-spec-led-runtime-modularization-active-gate-snapshot-coverage-reachability-frontier.md work/sprints/current-blocker.json work/sprints/current-blocker.md work/model-ledger.jsonl.`
-53. `PASS — npm run work:validate reported Work tracker validation OK for 38 file(s).`
+1. `npm run work:validate`
+2. `git diff --check`
+3. `src/diagnostics/causal-analysis-schema.js defines end-to-end phase model with canonical vocabulary`
+4. `src/diagnostics/causal-graph-builder.js or equivalent builds cross-node causal chains from report data`
+5. `src/diagnostics/budget-timeout-accounting.js or equivalent models resource limits and cascade behavior`
+6. `src/diagnostics/invariant-review.js or equivalent validates constraint preservation`
+7. `src/diagnostics/failure-class-taxonomy.js or equivalent normalizes failure modes`
+8. `src/diagnostics/stop-condition-decision.js or equivalent defines architecture-level stop conditions`
+9. `test/diagnostics/causal-analysis-schema.test.js validates schema, phase model, and decision tables`
+10. `npm run analyze:causal-model validates both report and failure-bundle inputs`
+11. `node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-spec-led-runtime-modularization-causal-analysis.report.json --fast-local --verbose`
+12. `Scripts produce new causal-analysis artifact; no regressions in topology-convergence analysis`
 
 ## Model Fit
 
-Package class: `representative-frontier-closure`
+Package class: `diagnostics-infrastructure`
 
 Intended minimum model: `gpt-5.3-codex`
 
-Scope shape: `owner-boundary-contraction`
+Scope shape: `cross-domain-foundation`
 
 Escalation triggers:
 
-1. `snapshot reachability requires changes outside startup active-gate owner, readiness, active-gate harness, or diagnostics consumers`
-2. `focused fixture exposes operation_workflow_owner, publication convergence, or priority recovery as the first frontier again`
-3. `representative proof still fails on active_gate_snapshot_coverage after owner repair`
+1. `causal-analysis schema requires runtime owner behavior changes`
+2. `failure-class taxonomy reveals missing owner boundaries not in current diagnostics`
+3. `budget/timeout accounting exposes dead-code or orphaned fallback paths in runtime`
+4. `stop-condition decision table contradicts existing phase model invariants`
 
 ## Touched Files
 
-1. `src/control-plane/*readiness*.js`
-2. `src/control-plane/bootstrap-readiness-owner*.js`
-3. `test/control-plane/*readiness*.test.js`
-4. `test/distributed/harness/active-gate-contract.js`
-5. `test/distributed/harness/cluster-segment-7*.js`
-6. `test/distributed/harness/cluster-segment-7-class-5.js`
-7. `test/distributed/harness/failure-bundle*.js`
-8. `test/distributed/harness/__tests__/cluster.test-part-4.js`
-9. `test/distributed/harness/__tests__/cluster.test-part-5.js`
-10. `test/distributed/harness/__tests__/failure-bundle-active-gate-tail-test-cases.js`
-11. `test/scripts/__fixtures__/topology-convergence/active-gate-snapshot*.json`
-12. `src/diagnostics/topology-convergence-graph.js`
-13. `src/bootstrap/bootstrap-api-constants.js`
-14. `src/bootstrap/node-joining-constants.js`
-15. `src/bootstrap/node-joining-service-segment-2.js`
-16. `src/bootstrap/owners/bootstrap-join-admission-owner.js`
-17. `src/bootstrap/owners/bootstrap-request-owner.js`
-18. `src/bootstrap/phases/contact-seed-phase.js`
-19. `test/bootstrap/node-joining-service.test.js`
-20. `scripts/analyze-topology-convergence.js`
-21. `test/diagnostics/topology-convergence-graph.test.js`
-22. `test/bootstrap/bootstrap-request-admission-precheck.test.js`
-23. `test/bootstrap/bootstrap-request-execution-timeout.test.js`
-24. `test/scripts/analyze-topology-convergence.test.js`
-25. `work/model-ledger.jsonl`
-26. `work/packages/done-20260510-spec-led-runtime-modularization-active-gate-snapshot-coverage-reachability-frontier.md`
-27. `work/sprints/active-2026-q2-spec-led-runtime-modularization.md`
-28. `work/sprints/current-blocker.json`
-29. `work/sprints/current-blocker.md`
+1. `src/diagnostics/causal-analysis-schema.js`
+2. `src/diagnostics/causal-graph-builder.js`
+3. `src/diagnostics/budget-timeout-accounting.js`
+4. `src/diagnostics/invariant-review.js`
+5. `src/diagnostics/failure-class-taxonomy.js`
+6. `src/diagnostics/stop-condition-decision.js`
+7. `src/diagnostics/index.js`
+8. `scripts/analyze-causal-model.js`
+9. `test/diagnostics/causal-analysis-schema.test.js`
+10. `test/diagnostics/causal-graph-builder.test.js`
+11. `test/diagnostics/budget-timeout-accounting.test.js`
+12. `test/diagnostics/invariant-review.test.js`
+13. `test/diagnostics/failure-class-taxonomy.test.js`
+14. `test/diagnostics/stop-condition-decision.test.js`
+15. `work/packages/active-20260510-spec-led-runtime-modularization-high-level-causal-analysis-infrastructure.md`

@@ -8,12 +8,12 @@ the representative gate before companion cleanup or broad successor work.
 ## Current Package Snapshot
 
 Current blocker package:
-`work/packages/done-20260510-spec-led-runtime-modularization-active-gate-snapshot-coverage-reachability-frontier.md`.
+`work/packages/active-20260510-spec-led-runtime-modularization-high-level-causal-analysis-infrastructure.md`.
 
-**Package status: CLASSIFICATION CLOSURE (diagnostic, not runtime resolver)**
+**Package status: ACTIVE CAUSAL-ANALYSIS INFRASTRUCTURE**
 
 Owner boundary:
-`startup_active_gate_owner / snapshot_coverage`.
+`diagnostics_owner / causal_analysis_framework`.
 
 Current state: prior packages through workflow-progress SQL transactions
 dispatch-pending are closed or migrated. The active package is a classification
@@ -42,14 +42,14 @@ conditions for rolling restart.
 
 Active and queued work:
 Current active package:
-`work/packages/done-20260510-spec-led-runtime-modularization-active-gate-snapshot-coverage-reachability-frontier.md`
-(classification closure).
+`work/packages/active-20260510-spec-led-runtime-modularization-high-level-causal-analysis-infrastructure.md`
+(high-level causal-analysis infrastructure).
 
 Latest closed runtime package:
 `work/packages/done-20260510-spec-led-runtime-modularization-operation-workflow-progress-sql-transactions-dispatch-pending-frontier.md`.
 
-Next immediate package (high-level causal-analysis infrastructure):
-`work/packages/todo-20260510-spec-led-runtime-modularization-high-level-causal-analysis-infrastructure.md`.
+Most recent classification closure:
+`work/packages/done-20260510-spec-led-runtime-modularization-active-gate-snapshot-coverage-reachability-frontier.md`.
 
 Deferred companion cleanup:
 `work/packages/todo-20260509-spec-led-runtime-modularization-active-gate-report-schema-alias-deletion.md`
@@ -133,7 +133,7 @@ the contract and proof ladder are stable.
 21. [Representative Green Proof Or Next Blocker Classification](../packages/done-20260510-spec-led-runtime-modularization-representative-green-proof-or-next-blocker.md)
 22. [Operation Workflow Progress SQL Transactions Dispatch-Pending Frontier](../packages/done-20260510-spec-led-runtime-modularization-operation-workflow-progress-sql-transactions-dispatch-pending-frontier.md)
 23. [Active Gate Snapshot Coverage Reachability Frontier](../packages/done-20260510-spec-led-runtime-modularization-active-gate-snapshot-coverage-reachability-frontier.md)
-24. [High-Level Causal-Analysis Infrastructure](../packages/todo-20260510-spec-led-runtime-modularization-high-level-causal-analysis-infrastructure.md)
+24. [High-Level Causal-Analysis Infrastructure](../packages/active-20260510-spec-led-runtime-modularization-high-level-causal-analysis-infrastructure.md)
 25. [Active Gate Report Schema Alias Deletion](../packages/todo-20260509-spec-led-runtime-modularization-active-gate-report-schema-alias-deletion.md)
 
 ## Model Fit Strategy
