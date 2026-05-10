@@ -20,7 +20,8 @@ selection, froze the residual `snapshotCoverage=4/5` partial fixture, repaired
 partial selected-snapshot projection for covered timeout-shaped nodes, repaired
 the selected `35a891b8-c1a0-5064-9c6e-2acfba61c2a7` reachability timeout, and
 now froze the clean residual selected node
-`8be8d30f-4499-5eed-865c-71b4d529a67a`. Focused evidence shows the latest
+`8be8d30f-4499-5eed-865c-71b4d529a67a`. The classification slice was reviewed
+clean and committed in `87f207f3`. Focused evidence shows the latest
 representative report is true partial runtime coverage, not an owner-path
 projection defect: `startup_active_gate_owner / snapshot_coverage` remains
 blocked with `snapshotCoverage=2/5`, blockers
@@ -41,11 +42,11 @@ Companion cleanup:
 Latest closed proof package:
 `work/packages/done-20260510-spec-led-runtime-modularization-representative-green-proof-or-next-blocker.md`.
 
-Next proof surface: review the focused residual classification slice from
-`test-output/reports/rolling-restart-spec-led-runtime-modularization-active-gate-snapshot-coverage-reachability.report.json`, then migrate or continue from
-the true runtime cause behind the two inactive nodes and 2/5 selected snapshot
-coverage without reopening selected reachability timeout, publication ACK
-convergence, or priority recovery.
+Next proof surface: continue from the true runtime cause behind the two inactive
+nodes and 2/5 selected snapshot coverage in
+`test-output/reports/rolling-restart-spec-led-runtime-modularization-active-gate-snapshot-coverage-reachability.report.json`
+without reopening selected reachability timeout, publication ACK convergence, or
+priority recovery.
 
 ## Goal
 

@@ -20,11 +20,11 @@ Boundary: `snapshot_coverage`
 
 Dominant reason: `active_gate_timed_out`
 
-Current state: Residual clean partial snapshot coverage for selected node 8be8d30f-4499-5eed-865c-71b4d529a67a is traced and frozen. The explain output remains startup_active_gate_owner / snapshot_coverage with snapshotCoverage=2/5, inactive_nodes=2, activeNodeCount=3/5, selectedSnapshotError=unknown, readinessDelayCause=none, publication ACK convergence satisfied, and priority recovery retryable. Focused harness coverage confirms this is true partial runtime coverage with two inactive nodes, not a diagnostics projection or owner-path defect to manufacture ready.
+Current state: Residual clean partial snapshot coverage for selected node 8be8d30f-4499-5eed-865c-71b4d529a67a is traced, frozen, reviewed clean, and committed in 87f207f3. The explain output remains startup_active_gate_owner / snapshot_coverage with snapshotCoverage=2/5, inactive_nodes=2, activeNodeCount=3/5, selectedSnapshotError=unknown, readinessDelayCause=none, publication ACK convergence satisfied, and priority recovery retryable. Focused harness coverage confirms this is true partial runtime coverage with two inactive nodes, not a diagnostics projection or owner-path defect to manufacture ready.
 
 ## Next Action
 
-Review the focused residual classification slice. If accepted, migrate or continue from the true runtime partial-coverage cause behind the two inactive nodes and 2/5 selected snapshot coverage without reopening selected reachability timeout, publication ACK convergence, or priority recovery.
+Continue from the true runtime partial-coverage cause behind the two inactive nodes and 2/5 selected snapshot coverage without reopening selected reachability timeout, publication ACK convergence, or priority recovery.
 
 ## Proof Ladder
 
