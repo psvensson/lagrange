@@ -177,6 +177,38 @@ function resolveSteadyPublishedSelectedMissingCount({
     ZERO;
 }
 
+function resolveStartupPublicationLagSelectedMissingCount({
+  readinessMode = null,
+  expectedNodeCount = ZERO,
+  publicationStatus = PUBLICATION_CONVERGENCE_GATE_SUMMARY_TEXT.EMPTY,
+  pendingAckNodeIds = [],
+  selectedPublishedActiveNodeIds = [],
+  selectedMissingPublishedNodeIds = [],
+} = {}) {
+  const normalizedExpectedNodeCount =
+    Number.isInteger(expectedNodeCount) && expectedNodeCount > ZERO ?
+      expectedNodeCount :
+      ZERO;
+  const normalizedPendingAckNodeIds =
+    normalizeDistinctStringArray(pendingAckNodeIds);
+  const normalizedSelectedPublishedActiveNodeIds =
+    normalizeDistinctStringArray(selectedPublishedActiveNodeIds);
+  const normalizedSelectedMissingPublishedNodeIds =
+    normalizeDistinctStringArray(selectedMissingPublishedNodeIds);
+  const startupPublicationLagSelection =
+    readinessMode === CLUSTER_READINESS_MODE_STARTUP &&
+    publicationStatus === ACTIVE_WAIT_PUBLICATION_STATUS_PUBLISHED &&
+    normalizedPendingAckNodeIds.length === ZERO &&
+    normalizedSelectedPublishedActiveNodeIds.length > ZERO &&
+    normalizedSelectedMissingPublishedNodeIds.length > ZERO &&
+    normalizedSelectedPublishedActiveNodeIds.length +
+      normalizedSelectedMissingPublishedNodeIds.length ===
+      normalizedExpectedNodeCount;
+  return startupPublicationLagSelection === true ?
+    normalizedSelectedMissingPublishedNodeIds.length :
+    ZERO;
+}
+
 /**
  * Resolve/reject with timeout protection for potentially hanging operations.
  * @param {Promise<*>} promise
@@ -1230,6 +1262,15 @@ function buildActiveWaitProgressSnapshot(
       selectedPublishedActiveNodeIds,
       selectedMissingPublishedNodeIds,
     });
+  const startupPublicationLagSelectedMissingCount =
+    resolveStartupPublicationLagSelectedMissingCount({
+      readinessMode,
+      expectedNodeCount: normalizedExpectedNodeCount,
+      publicationStatus,
+      pendingAckNodeIds,
+      selectedPublishedActiveNodeIds,
+      selectedMissingPublishedNodeIds,
+    });
   const priorityRecoveryDecisionSnapshots =
     snapshotCoverage?.selectedPriorityRecoveryDecisionSnapshots &&
     typeof snapshotCoverage.selectedPriorityRecoveryDecisionSnapshots ===
@@ -1291,6 +1332,7 @@ function buildActiveWaitProgressSnapshot(
       missingPublishedCount: Math.max(
         missingPublishedCount,
         steadyPublishedSelectedMissingCount,
+        startupPublicationLagSelectedMissingCount,
       ),
       gateReasons,
       prioritySpreadSatisfied,
@@ -1359,8 +1401,8 @@ function buildActiveWaitProgressSnapshot(
     missingPublishedCount: Math.max(
       missingPublishedCount,
       steadyPublishedSelectedMissingCount,
+      startupPublicationLagSelectedMissingCount,
     ),
-    gateReasonCount: gateReasons.length,
     gateReasons,
     prioritySpreadSatisfied,
     prioritySpreadGap,
