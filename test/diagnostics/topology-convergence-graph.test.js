@@ -20,7 +20,8 @@ const FIXTURE_ELAPSED_MS = 123292;
 const FIXTURE_DOMINANT_REASON = 'priority_recovery_workflow_progress_event_driven';
 const FIXTURE_FAILURE_CLASS = 'priority_recovery_progress_blocked';
 const FIXTURE_PARTITION_ID = 'sql_write_operations-p1';
-const FIXTURE_PRIORITY_SEMANTIC_STATE = 'recovering_in_flight';
+const FIXTURE_PRIORITY_SEMANTIC_STATE = 'operation_stalled';
+const FIXTURE_PRIORITY_RECOVERING_STATE = 'recovering_in_flight';
 const FIXTURE_READINESS_MODE = 'startup';
 const FIXTURE_READINESS_CLASS = 'snapshot_reachability_timeout';
 const FIXTURE_READINESS_RECOVERABILITY = 'terminal';
@@ -69,6 +70,8 @@ const PENDING_ACKS_PRESENT_REASON = 'pending_acks_present';
 const ACTIVE_GATE_TIMED_OUT_REASON = 'active_gate_timed_out';
 const SNAPSHOT_COVERAGE_INCOMPLETE_REASON = 'snapshot_coverage_incomplete';
 const PRIORITY_RECOVERY_BLOCKED_REASON = 'priority_recovery_progress_blocked';
+const PRIORITY_RECOVERY_RETRYABLE_REASON =
+  'priority_recovery_event_driven_wait';
 const ARTIFACT_PRIORITY_RECOVERY_OWNER = 'artifact_priority_owner';
 const ARTIFACT_PRIORITY_RECOVERY_BOUNDARY = 'artifact_priority_boundary';
 const OWNER_STARTUP_ACTIVE_GATE = 'startup_active_gate_owner';
@@ -424,6 +427,44 @@ describe('TopologyConvergenceGraph', () => {
       assertNoNullOrUndefined(graph);
     });
 
+  it('ranks active-gate coverage ahead of retryable in-flight priority recovery',
+    () => {
+      const fixture = buildFixtureFailureBundle();
+      const graph = buildTopologyConvergenceGraphFromArtifacts({
+        failureBundle: {
+          ...fixture,
+          publicationConvergence: {
+            ...fixture.publicationConvergence,
+            activeGate: {
+              ...fixture.publicationConvergence.activeGate,
+              progress: {
+                ...fixture.publicationConvergence.activeGate.progress,
+                priorityRecoveryProgressClasses: {
+                  unresolvedSemanticStateIds: [
+                    FIXTURE_PRIORITY_RECOVERING_STATE,
+                  ],
+                  blockedPartitionIds: [FIXTURE_PARTITION_ID],
+                },
+              },
+            },
+          },
+        },
+      });
+      const priorityEdge = findEdge(graph.edges, EDGE_PRIORITY_RECOVERY);
+
+      assert.equal(graph.summary.firstFrontierEdgeId, EDGE_SNAPSHOT_COVERAGE);
+      assert.equal(graph.summary.firstFrontierOwner, OWNER_STARTUP_ACTIVE_GATE);
+      assert.equal(priorityEdge.state, EDGE_STATE.RETRYABLE);
+      assert.deepEqual(priorityEdge.reasons, [
+        PRIORITY_RECOVERY_RETRYABLE_REASON,
+      ]);
+      assert.deepEqual(
+        graph.frontier.map((edge) => edge.id),
+        [EDGE_SNAPSHOT_COVERAGE, EDGE_PRIORITY_RECOVERY],
+      );
+      assertNoNullOrUndefined(graph);
+    });
+
   it('keeps the decision table deterministic after artifact-specific owner evidence', () => {
     const fixture = buildFixtureFailureBundle();
     const graph = buildTopologyConvergenceGraphFromArtifacts({
@@ -474,9 +515,11 @@ describe('TopologyConvergenceGraph', () => {
   it('builds a graph for the 20260507 playback failure bundle artifact', () => {
     const artifact = JSON.parse(fs.readFileSync(ARTIFACT_PATH_20260507, JSON_ENCODING_UTF8));
     const graph = buildTopologyConvergenceGraphFromArtifacts({failureBundle: artifact});
+    const priorityEdge = findEdge(graph.edges, EDGE_PRIORITY_RECOVERY);
 
     assert.equal(graph.scenario, SCENARIO_ROLLING_RESTART);
-    assert.equal(graph.summary.firstFrontierEdgeId, EDGE_PRIORITY_RECOVERY);
+    assert.equal(graph.summary.firstFrontierEdgeId, EDGE_SNAPSHOT_COVERAGE);
+    assert.equal(priorityEdge.state, EDGE_STATE.RETRYABLE);
     assert.ok(graph.frontier.length >= MIN_FRONTIER_COUNT);
     assert.ok(graph.nextExpectedFrontier.length >= MIN_FRONTIER_COUNT);
     assertNoNullOrUndefined(graph);
@@ -489,10 +532,10 @@ describe('TopologyConvergenceGraph', () => {
     const graph = buildTopologyConvergenceGraph(artifact);
 
     assert.equal(graph.scenario, SCENARIO_ROLLING_RESTART);
-    assert.equal(graph.summary.firstFrontierEdgeId, EDGE_PRIORITY_RECOVERY);
+    assert.equal(graph.summary.firstFrontierEdgeId, EDGE_SNAPSHOT_COVERAGE);
     assert.deepEqual(
       graph.nextExpectedFrontier.map((edge) => edge.id),
-      [EDGE_SNAPSHOT_COVERAGE],
+      [EDGE_READINESS, EDGE_PRIORITY_RECOVERY],
     );
     assertNoNullOrUndefined(graph);
   });

@@ -1,0 +1,47 @@
+{
+  "scenarios": [
+    {
+      "scenario": "rolling-restart",
+      "summary": {
+        "dominantReason": "BOOTSTRAP_PHASE_INCOMPLETE",
+        "failureClass": "startup_recovery_blocked"
+      },
+      "publicationConvergence": {
+        "publicationStatus": "PUBLISHED",
+        "pendingAckCount": 0,
+        "blockedNodeCount": 0,
+        "missingPublishedCount": 0,
+        "activeGate": {
+          "state": "timed_out",
+          "ready": false,
+          "progress": {
+            "expectedNodeCount": 5,
+            "snapshotCoverageNodeCount": 3,
+            "snapshotCoverageComplete": false,
+            "priorityBlockedPartitionCount": 5,
+            "priorityRecoveryProgressClasses": {
+              "unresolvedSemanticStateIds": [
+                "recovering_in_flight"
+              ],
+              "blockedPartitionIds": [
+                "control_plane_publications-p1",
+                "replica_operations-p1",
+                "sql_transaction_participants-p1",
+                "sql_transactions-p1",
+                "sql_write_operations-p1"
+              ]
+            },
+            "selectedSnapshotError": "Control snapshot reachability probe timed out for 7493b0ab-a054-5fad-a91b-5e331db29304",
+            "readinessDelay": {
+              "cause": "snapshot_reachability_timeout"
+            },
+            "blockers": [
+              "inactive_nodes=3",
+              "snapshot_coverage=3/5"
+            ]
+          }
+        }
+      }
+    }
+  ]
+}

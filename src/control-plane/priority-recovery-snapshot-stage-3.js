@@ -47,6 +47,12 @@ const PRIORITY_RECOVERY_SYNTHETIC_SERIAL_WAIT_SOURCE_MODE = Object.freeze({
   NONE: 'none',
 });
 
+const PRIORITY_RECOVERY_WORKFLOW_PROGRESS_IN_FLIGHT_ACTIONS =
+  Object.freeze(new Set([
+    PRIORITY_RECOVERY_NEXT_REQUIRED_ACTION.ADVANCE_EXISTING_OPERATION,
+    PRIORITY_RECOVERY_NEXT_REQUIRED_ACTION.WAIT_FOR_OPERATION_PROGRESS,
+  ]));
+
 function resolvePriorityRecoveryDecisionSnapshotCoordinator(
   snapshot,
   options = {},
@@ -614,8 +620,9 @@ function isPriorityRecoveryOperationWorkflowProgressAdvancementSnapshot(
       PRIORITY_RECOVERY_PROGRESS_OWNER.OPERATION_WORKFLOW_OWNER &&
     actuation?.owner ===
       PRIORITY_RECOVERY_PROGRESS_OWNER.OPERATION_WORKFLOW_OWNER &&
-    progress?.nextRequiredAction ===
-      PRIORITY_RECOVERY_NEXT_REQUIRED_ACTION.ADVANCE_EXISTING_OPERATION &&
+    PRIORITY_RECOVERY_WORKFLOW_PROGRESS_IN_FLIGHT_ACTIONS.has(
+      progress?.nextRequiredAction,
+    ) &&
     progress?.blockingBoundary ===
       PRIORITY_RECOVERY_BLOCKING_BOUNDARY.WORKFLOW_PROGRESS &&
     progress?.waitMode === PRIORITY_RECOVERY_WAIT_MODE.EVENT_DRIVEN

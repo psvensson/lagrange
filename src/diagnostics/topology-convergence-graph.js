@@ -218,6 +218,8 @@ const DECISION_CONDITION = Object.freeze({
     'priority recovery has no unresolved semantic states',
   PRIORITY_BLOCKED_PARTITIONS:
     'priority recovery has blocked partitions',
+  PRIORITY_ONLY_RECOVERING_IN_FLIGHT:
+    'priority recovery has only recovering_in_flight semantic state',
   PRIORITY_RECOVERING_IN_FLIGHT:
     'priority recovery contains recovering_in_flight semantic state',
   PRIORITY_UNRESOLVED_WITHOUT_IN_FLIGHT:
@@ -302,6 +304,11 @@ const DECISION_TABLE_ROWS = Object.freeze([
         condition: DECISION_CONDITION.PRIORITY_NO_UNRESOLVED_SEMANTIC_STATES,
         state: EDGE_STATE.SATISFIED,
         reasons: Object.freeze([REASON.PRIORITY_RECOVERY_SATISFIED]),
+      }),
+      Object.freeze({
+        condition: DECISION_CONDITION.PRIORITY_ONLY_RECOVERING_IN_FLIGHT,
+        state: EDGE_STATE.RETRYABLE,
+        reasons: Object.freeze([REASON.PRIORITY_RECOVERY_RETRYABLE]),
       }),
       Object.freeze({
         condition: DECISION_CONDITION.PRIORITY_BLOCKED_PARTITIONS,
@@ -1059,6 +1066,12 @@ function resolvePriorityRecoveryState(priorityRecoveryEvidence, reasons) {
     reasons.push(REASON.PRIORITY_RECOVERY_SATISFIED);
     return EDGE_STATE.SATISFIED;
   }
+  if (isOnlyRecoveringInFlightPriorityRecoveryEvidence(
+    priorityRecoveryEvidence,
+  )) {
+    reasons.push(REASON.PRIORITY_RECOVERY_RETRYABLE);
+    return EDGE_STATE.RETRYABLE;
+  }
   if (priorityRecoveryEvidence.priorityBlockedPartitionCount > SOURCE_ORDER_BASE) {
     reasons.push(REASON.PRIORITY_RECOVERY_PROGRESS_BLOCKED);
     if (priorityRecoveryEvidence.semanticStateIds.includes(
@@ -1076,6 +1089,12 @@ function resolvePriorityRecoveryState(priorityRecoveryEvidence, reasons) {
   }
   reasons.push(REASON.PRIORITY_RECOVERY_PROGRESS_BLOCKED);
   return EDGE_STATE.BLOCKED;
+}
+
+function isOnlyRecoveringInFlightPriorityRecoveryEvidence(evidence) {
+  return evidence.semanticStateIds.every((semanticStateId) =>
+    semanticStateId === PRIORITY_RECOVERY_SEMANTIC_RECOVERING_IN_FLIGHT,
+  );
 }
 
 function resolvePriorityRecoveryOwnerBoundary(progressSummary) {

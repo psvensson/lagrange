@@ -40,6 +40,10 @@ const PRIORITY_WORKFLOW_PROGRESS_EVENT_DRIVEN_FIXTURE_PATH =
   `${FIXTURE_DIRECTORY}/priority-workflow-progress-event-driven.fixture.json`;
 const PRIORITY_WORKFLOW_PROGRESS_EVENT_DRIVEN_EXPECTED_PATH =
   `${FIXTURE_DIRECTORY}/priority-workflow-progress-event-driven.expected.json`;
+const PRIORITY_WORKFLOW_PROGRESS_RECOVERING_IN_FLIGHT_FIXTURE_PATH =
+  `${FIXTURE_DIRECTORY}/priority-workflow-progress-recovering-in-flight.fixture.json`;
+const PRIORITY_WORKFLOW_PROGRESS_RECOVERING_IN_FLIGHT_EXPECTED_PATH =
+  `${FIXTURE_DIRECTORY}/priority-workflow-progress-recovering-in-flight.expected.json`;
 const ABSENT_VALUE = 'absent';
 const PRIORITY_EDGE_ALIAS = 'priority';
 const PRIORITY_EDGE_ID = 'priority_recovery_partition_progress';
@@ -113,6 +117,17 @@ describe('analyze-topology-convergence CLI', () => {
     );
     const expected = readJson(
       PRIORITY_WORKFLOW_PROGRESS_EVENT_DRIVEN_EXPECTED_PATH,
+    );
+
+    assert.deepEqual(projectGoldenFrontier(output), expected);
+  });
+
+  it('matches golden frontier fixture for in-flight workflow progress', () => {
+    const output = runAnalyzerJson(
+      PRIORITY_WORKFLOW_PROGRESS_RECOVERING_IN_FLIGHT_FIXTURE_PATH,
+    );
+    const expected = readJson(
+      PRIORITY_WORKFLOW_PROGRESS_RECOVERING_IN_FLIGHT_EXPECTED_PATH,
     );
 
     assert.deepEqual(projectGoldenFrontier(output), expected);

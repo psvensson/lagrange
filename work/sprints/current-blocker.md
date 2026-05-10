@@ -14,25 +14,25 @@ Playback: `test-output/reports/.playback/rolling-restart-spec-led-runtime-modula
 
 ## Boundary
 
-Owner: `operation_workflow_owner`
+Owner: `startup_active_gate_owner`
 
-Boundary: `workflow_progress`
+Boundary: `snapshot_coverage`
 
-Dominant reason: `priority_recovery_progress_blocked`
+Dominant reason: `active_gate_timed_out`
 
-Current state: The workflow-progress implementation now treats persisted PENDING dispatch-pending rows as owner re-entry candidates and applies owner-advance diagnostic normalization to PENDING persisted-not-dispatched snapshots plus SENDING dispatch-pending snapshots with absent or non-active non-terminal targets. Focused tests and touched-file guardrails pass. The fresh direct-diagnostic representative rerun reduced the former sql_transaction_participants-p1 operation_stalled SENDING/non-active witness to recovering_in_flight with no blocker reasons, and publication ACK convergence is satisfied with pendingAck=0 and missingPublished=0. The normalized first frontier remains operation_workflow_owner / workflow_progress; the dominant witness migrated to sql_write_operations-p1 needs_operation / priority_operation_serial_wait behind sql_transaction_participants-p1 and sql_transactions-p1, with active gate snapshot coverage downstream at 2/5.
+Current state: The workflow-progress slice now keeps event-driven wait_for_operation_progress serial-wait carriers in recovering_in_flight instead of restoring needs_operation / priority_operation_serial_wait, and the topology analyzer ranks all-recovering_in_flight priority evidence as retryable. Focused owner, analyzer, CLI, and touched-file guardrails pass. The latest representative report still fails, but publication ACK convergence is satisfied and priorityRecovery=none/recovering_in_flight; the normalized first blocked frontier has migrated to startup_active_gate_owner / snapshot_coverage with snapshotCoverage=3/5 and selected snapshot reachability timeout for 7493b0ab-a054-5fad-a91b-5e331db29304.
 
 ## Next Action
 
-Freeze and repair the sql_write_operations-p1 / sql_transactions-p1 priority_operation_serial_wait summary classification: direct decision snapshots are recovering_in_flight with event-driven workflow-progress waits, while priority recovery observation still promotes the serial-wait summary to needs_operation and transition_deferred. Decide whether the serial-wait carrier should normalize to in-flight owner progress or expose a separate owner action without reopening publication ACK convergence.
+Close or migrate this workflow-progress package to a successor active-gate snapshot-coverage package using the generated evidence block. Before active-gate implementation, run the required review/fix/implementation subagents and freeze the selectedSnapshotError plus snapshotCoverage=3/5 fixture.
 
 ## Proof Ladder
 
-1. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-spec-led-runtime-modularization-operation-scheduling-sql-write-operations.report.json --explain priority_recovery_partition_progress`
-2. `Focused operation_workflow_owner workflow_progress fixture for sql_transactions-p1 persisted-not-dispatched/no-step-transition evidence`
-3. `Focused topology convergence graph fixture for priority-spread missing publication subordinate to priority recovery`
-4. `Focused operation workflow owner and dispatch wake/replay tests selected by priority_recovery_workflow_progress_event_driven`
-5. `Touched-file static guardrails selected by operation_workflow_owner and dispatch service ownership`
+1. `node --test test/control-plane/priority-recovery-snapshot.test.js`
+2. `node --test test/diagnostics/topology-convergence-graph.test.js`
+3. `node --test test/scripts/analyze-topology-convergence.test.js`
+4. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-spec-led-runtime-modularization-workflow-progress-sql-transactions-dispatch-pending-direct-diagnostic.report.json --explain active_gate_snapshot_coverage`
+5. `Touched-file static guardrails selected by operation_workflow_owner and topology convergence analyzer ownership`
 6. `node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-spec-led-runtime-modularization-workflow-progress-sql-transactions-dispatch-pending-direct-diagnostic.report.json --fast-local --verbose`
 
 ## Model Fit
@@ -55,19 +55,22 @@ Escalation triggers:
 2. `src/rebalancer/operation-workflow-owner-ports.js`
 3. `src/control-plane/replica-dispatch-service*.js`
 4. `src/control-plane/priority-recovery-snapshot*.js`
-5. `src/control-plane/priority-recovery-snapshot-stage-10.js`
-6. `test/rebalancer/*workflow*.test.js`
-7. `test/rebalancer/operation-workflow-owner-adapter.test.js`
-8. `test/rebalancer/operation-workflow-progress-event-driven-reentry.test.js`
-9. `test/control-plane/*dispatch*.test.js`
-10. `test/control-plane/priority-recovery-snapshot*.js`
-11. `test/control-plane/priority-recovery-snapshot-operation-owner-outcome.test.js`
-12. `test/control-plane/priority-recovery-snapshot.test.js`
-13. `src/diagnostics/topology-convergence-graph.js`
-14. `test/diagnostics/topology-convergence-graph.test.js`
-15. `test/scripts/analyze-topology-convergence.test.js`
-16. `work/model-ledger.jsonl`
-17. `work/packages/active-20260510-spec-led-runtime-modularization-operation-workflow-progress-sql-transactions-dispatch-pending-frontier.md`
-18. `work/sprints/active-2026-q2-spec-led-runtime-modularization.md`
-19. `work/sprints/current-blocker.json`
-20. `work/sprints/current-blocker.md`
+5. `src/control-plane/priority-recovery-snapshot-stage-3.js`
+6. `src/control-plane/priority-recovery-snapshot-stage-10.js`
+7. `test/rebalancer/*workflow*.test.js`
+8. `test/rebalancer/operation-workflow-owner-adapter.test.js`
+9. `test/rebalancer/operation-workflow-progress-event-driven-reentry.test.js`
+10. `test/control-plane/*dispatch*.test.js`
+11. `test/control-plane/priority-recovery-snapshot*.js`
+12. `test/control-plane/priority-recovery-snapshot-operation-owner-outcome.test.js`
+13. `test/control-plane/priority-recovery-snapshot.test.js`
+14. `src/diagnostics/topology-convergence-graph.js`
+15. `test/diagnostics/topology-convergence-graph.test.js`
+16. `test/scripts/analyze-topology-convergence.test.js`
+17. `test/scripts/__fixtures__/topology-convergence/priority-workflow-progress-recovering-in-flight.fixture.json`
+18. `test/scripts/__fixtures__/topology-convergence/priority-workflow-progress-recovering-in-flight.expected.json`
+19. `work/model-ledger.jsonl`
+20. `work/packages/active-20260510-spec-led-runtime-modularization-operation-workflow-progress-sql-transactions-dispatch-pending-frontier.md`
+21. `work/sprints/active-2026-q2-spec-led-runtime-modularization.md`
+22. `work/sprints/current-blocker.json`
+23. `work/sprints/current-blocker.md`

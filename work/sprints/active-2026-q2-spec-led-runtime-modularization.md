@@ -11,7 +11,7 @@ Current blocker package:
 `work/packages/active-20260510-spec-led-runtime-modularization-operation-workflow-progress-sql-transactions-dispatch-pending-frontier.md`.
 
 Owner boundary:
-`operation_workflow_owner / workflow_progress`.
+`startup_active_gate_owner / snapshot_coverage`.
 
 Current state: prior packages through operation scheduling SQL write operations
 are closed. The proof-only package classified the post-scheduling report as
@@ -21,13 +21,17 @@ owner re-entry slice and focused diagnostics for appended and direct persisted
 `PENDING` snapshots plus absent/non-active-target `SENDING` witnesses. The
 fresh direct-diagnostic representative rerun reduced the former
 `sql_transaction_participants-p1` `SENDING`/non-active-target
-`operation_stalled` witness to `recovering_in_flight` with no blocker reasons,
-and publication ACK convergence is satisfied with `pendingAck=0` and
-`missingPublished=0`. The normalized first frontier remains
-`operation_workflow_owner / workflow_progress`; the current dominant witness is
-`sql_write_operations-p1` `needs_operation` /
-`priority_operation_serial_wait` behind `sql_transaction_participants-p1` and
-`sql_transactions-p1`, with active gate snapshot coverage downstream at `2/5`.
+`operation_stalled` witness to `recovering_in_flight` with no blocker reasons.
+The retained serial-wait repair also keeps event-driven
+`wait_for_operation_progress` carriers in `recovering_in_flight` instead of
+promoting them back to `needs_operation` /
+`priority_operation_serial_wait`. Publication ACK convergence is satisfied
+with `pendingAck=0` and `missingPublished=0`; priority recovery is now a
+retryable edge because all unresolved semantic states are
+`recovering_in_flight`. The normalized first blocked frontier has migrated to
+`startup_active_gate_owner / snapshot_coverage` with `snapshotCoverage=3/5`
+and selected snapshot reachability timeout for
+`7493b0ab-a054-5fad-a91b-5e331db29304`.
 
 Active and queued work:
 Current active package:
@@ -42,15 +46,14 @@ Companion cleanup:
 Latest closed runtime package:
 `work/packages/done-20260509-spec-led-runtime-modularization-operation-scheduling-sql-write-operations-frontier.md`.
 
-Next proof surface: freeze and repair the
-`sql_write_operations-p1` / `sql_transactions-p1`
-`priority_operation_serial_wait` summary classification from
+Next proof surface: close or migrate the workflow-progress package to a
+successor active-gate snapshot-coverage package using
 `test-output/reports/rolling-restart-spec-led-runtime-modularization-workflow-progress-sql-transactions-dispatch-pending-direct-diagnostic.report.json`.
-Direct decision snapshots show event-driven `recovering_in_flight`
-workflow-progress waits, while priority recovery observation still promotes
-the serial-wait summary to `needs_operation` and `transition_deferred`.
-Publication ACK convergence must stay satisfied and active gate snapshot
-coverage must remain downstream.
+Before active-gate implementation starts, run the required review, fix if
+needed, and implementation subagents. The successor fixture should freeze the
+selected snapshot reachability timeout plus `snapshotCoverage=3/5` evidence,
+while publication ACK convergence and priority recovery retryable status stay
+satisfied.
 
 ## Goal
 
