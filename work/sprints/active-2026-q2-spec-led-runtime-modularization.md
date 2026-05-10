@@ -14,20 +14,23 @@ Owner boundary:
 `startup_active_gate_owner / snapshot_coverage`.
 
 Current state: prior packages through workflow-progress SQL transactions
-dispatch-pending are closed or migrated. The active package froze the original
-`snapshotCoverage=3/5` reachability-timeout witness, repaired readiness-delay
-selection, froze and reduced partial fixtures, repaired selected-snapshot
-projection, repaired the selected `35a891b8-c1a0-5064-9c6e-2acfba61c2a7`
-reachability timeout, and repaired the original inactive joiner path. The latest
-continuation repaired the join seed-contact retry budget interaction so late
-bootstrap HTTP attempts cannot exceed the remaining contact-seed retry window.
-The current report remains `startup_active_gate_owner / snapshot_coverage` with
-`snapshotCoverage=2/5`, blockers `inactive_nodes=3,snapshot_coverage=2/5`,
-`activeNodeCount=2/5`, selected snapshot error `unknown`, readiness delay cause
-`none`, seed readiness probe timeout evidence for
-`7493b0ab-a054-5fad-a91b-5e331db29304`, node
-`35a891b8-c1a0-5064-9c6e-2acfba61c2a7` now active, publication ACK
-convergence not reopened, and priority recovery retryable.
+dispatch-pending are closed or migrated. The active package froze and reduced
+successive startup active-gate snapshot coverage witnesses, repaired
+readiness-delay selection, selected-snapshot projection, inactive joiner
+bootstrap request budget leakage, seed-contact retry budgeting, and now the
+retained seed-contact evidence resume classification. Direct
+`BOOTSTRAP_NOT_READY` contact-seed failures still use elapsed-only auto-resume,
+but later transport timeouts carrying retained bootstrap-not-ready evidence now
+obey the fixed retryable resume attempt cap. The current report remains
+`startup_active_gate_owner / snapshot_coverage` with `snapshotCoverage=3/5`,
+blockers `inactive_nodes=3,snapshot_coverage=3/5`, `activeNodeCount=2/5`,
+selected snapshot `8be8d30f-4499-5eed-865c-71b4d529a67a`, selected snapshot
+error `unknown`, readiness delay cause `none`, two residual contact-seed
+transport-timeout joiners exhausting `attempt_budget_exhausted`, and seed
+readiness timeout evidence for `7493b0ab-a054-5fad-a91b-5e331db29304`.
+Publication ACK convergence was not reopened; priority recovery appears in
+triage as subordinate/event-driven, while topology explain still selects the
+startup active-gate snapshot coverage frontier.
 
 Active and queued work:
 Current active package:
@@ -42,12 +45,13 @@ Companion cleanup:
 Latest closed proof package:
 `work/packages/done-20260510-spec-led-runtime-modularization-representative-green-proof-or-next-blocker.md`.
 
-Next proof surface: continue from the focused 2/5 partial-coverage
+Next proof surface: continue from the refreshed 3/5 partial-coverage
 classification in
 `test-output/reports/rolling-restart-spec-led-runtime-modularization-active-gate-snapshot-coverage-reachability.report.json`.
-If implementation continues on the same owner boundary, trace residual seed
-readiness/admin responsiveness and inactive joiner bootstrap progress without
-reopening publication ACK convergence or priority recovery.
+Trace the residual seed readiness timeout and two contact-seed transport-timeout
+joiners after fixed resume-cap classification without reopening publication ACK
+convergence or priority recovery/workflow progress unless the analyzer frontier
+migrates.
 
 ## Goal
 

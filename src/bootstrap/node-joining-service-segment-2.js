@@ -19,6 +19,7 @@ const {
   JOINING_ERROR_MSG,
   JOINING_ERROR_NAME,
   JOINING_LOG_MSG,
+  JOINING_SEED_CONTACT_FAILURE_KIND,
   JOINING_PHASE_TO_SUB_PHASE,
   JOINING_UNIFIED_RECONCILE,
   JOIN_CHECKPOINT,
@@ -506,14 +507,30 @@ class NodeJoiningServiceSegment2 extends NodeJoiningServiceSegment1 {
         ),
     };
   }
+  isRetryableJoinResumeBootstrapNotReadyFailure(error, failureResult) {
+    if (
+      error?.seedContactFailureKind ===
+      JOINING_SEED_CONTACT_FAILURE_KIND.BOOTSTRAP_NOT_READY
+    ) {
+      return true;
+    }
+    const errorCode = getControlPlaneErrorCode(error);
+    if (errorCode !== BOOTSTRAP_PIPELINE_ERROR_CODE.BOOTSTRAP_NOT_READY) {
+      return false;
+    }
+    const failureMessage =
+      typeof failureResult?.error === TYPEOF.STRING ?
+        failureResult.error :
+        error?.message;
+    const bootstrapNotReadyPrefix = JOINING_ERROR_MSG.bootstrapNotReady();
+    return typeof failureMessage === TYPEOF.STRING &&
+      failureMessage.startsWith(bootstrapNotReadyPrefix);
+  }
   resolveRetryableJoinResumeFailureProfile(error, failureResult) {
     const phase = failureResult?.phase || this.getPhase();
-    const errorCode =
-      getControlPlaneErrorCode(error) ||
-      getControlPlaneErrorCode(error?.bootstrapResponse);
     if (
       phase === JoiningPhase.CONTACTING_SEED &&
-      errorCode === BOOTSTRAP_PIPELINE_ERROR_CODE.BOOTSTRAP_NOT_READY
+      this.isRetryableJoinResumeBootstrapNotReadyFailure(error, failureResult)
     ) {
       return RETRYABLE_JOIN_RESUME_FAILURE_PROFILE
         .CONTACTING_SEED_BOOTSTRAP_NOT_READY;

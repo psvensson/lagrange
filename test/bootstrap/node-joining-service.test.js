@@ -25,6 +25,7 @@ import {
 } from '../../src/bootstrap/join-session-store.js';
 import {
   JOINING_ERROR_MSG,
+  JOINING_SEED_CONTACT_FAILURE_KIND,
 } from '../../src/bootstrap/node-joining-constants.js';
 import {
   BOOTSTRAP_API_PROBE_REASON,
@@ -1899,6 +1900,11 @@ test('NodeJoiningService - retained retryable seed-contact evidence ' +
     true,
     'first attempt should remain retryable for auto-resume',
   );
+  t.equal(
+    firstError?.seedContactFailureKind,
+    JOINING_SEED_CONTACT_FAILURE_KIND.BOOTSTRAP_NOT_READY,
+    'direct bootstrap-not-ready should carry the seed-contact failure marker',
+  );
 
   const secondError = await t.rejects(
     service.phaseContactSeed(),
@@ -2023,6 +2029,11 @@ test('NodeJoiningService - surfaces retryable bootstrap authority after one ' +
     'phase should preserve retryability for join auto-resume',
   );
   t.equal(
+    error?.seedContactFailureKind,
+    JOINING_SEED_CONTACT_FAILURE_KIND.BOOTSTRAP_NOT_READY,
+    'direct bootstrap-not-ready should use the explicit seed-contact marker',
+  );
+  t.equal(
     error?.retryAfterMs,
     TEST_RETRY_DELAY_MS,
     'phase should preserve the retry hint from the retryable seed response',
@@ -2083,7 +2094,8 @@ test('NodeJoiningService - contacting-seed bootstrap-not-ready resumes on ' +
   const bootstrapNotReady = new Error(TEST_CONTACTING_SEED_FAILURE.error);
   bootstrapNotReady.deferRetry = true;
   bootstrapNotReady.retryAfterMs = TEST_RETRY_AFTER_MS;
-  bootstrapNotReady.code = BOOTSTRAP_PIPELINE_ERROR_CODE.BOOTSTRAP_NOT_READY;
+  bootstrapNotReady.seedContactFailureKind =
+    JOINING_SEED_CONTACT_FAILURE_KIND.BOOTSTRAP_NOT_READY;
 
   t.equal(
     service.shouldAutoResumeRetryableJoinFailure(
@@ -2094,6 +2106,152 @@ test('NodeJoiningService - contacting-seed bootstrap-not-ready resumes on ' +
     ),
     true,
     'contacting-seed bootstrap-not-ready should keep resuming while elapsed budget remains',
+  );
+});
+
+test('NodeJoiningService - leader metadata incomplete uses fixed retryable ' +
+  'resume cap', async (t) => {
+  initializeTestEnvironment();
+
+  const TEST_NODE_ID = 'joining-node-leader-metadata-fixed-cap-1';
+  const TEST_NODE_ADDRESS = 'ws://localhost:9104';
+  const TEST_SEED_ADDRESS = 'http://localhost:8080';
+  const TEST_MAX_ATTEMPTS = 4;
+  const TEST_ELAPSED_MS = 41056;
+  const TEST_RETRY_AFTER_MS = 1000;
+  const TEST_HTTP_TIMEOUT_MS = 1;
+  const TEST_RETRY_TIMEOUT_MS = 100;
+  const TEST_RETRY_DELAY_MS = 10;
+  const TEST_MISSING_PARTITION_LEADERS = Object.freeze(['partition-a']);
+  const TEST_LEADER_METADATA_RESPONSE = Object.freeze({
+    success: false,
+    error: 'Leader metadata incomplete',
+    code: BOOTSTRAP_PIPELINE_ERROR_CODE.LEADER_METADATA_INCOMPLETE,
+    retryAfterMs: TEST_RETRY_AFTER_MS,
+    missingPartitionLeaders: TEST_MISSING_PARTITION_LEADERS,
+  });
+
+  let currentNow = 0;
+  const service = new NodeJoiningService({
+    nodeId: TEST_NODE_ID,
+    nodeAddress: TEST_NODE_ADDRESS,
+    seedNodeAddress: TEST_SEED_ADDRESS,
+    now: () => currentNow,
+    sleep: async (delayMs) => {
+      currentNow += delayMs;
+    },
+    config: {
+      autoResumeRetryableFailures: true,
+      retryableFailureResumeMaxAttempts: TEST_MAX_ATTEMPTS,
+      httpTimeoutMs: TEST_HTTP_TIMEOUT_MS,
+      leadershipWaitTimeoutMs: TEST_RETRY_TIMEOUT_MS,
+      leadershipWaitInitialDelayMs: TEST_RETRY_DELAY_MS,
+      leadershipWaitMaxDelayMs: TEST_RETRY_DELAY_MS,
+      leadershipWaitBackoffMultiplier: 1,
+      leadershipWaitJitterRatio: 0,
+    },
+    httpPost: async () => {
+      currentNow += TEST_HTTP_TIMEOUT_MS;
+      const error = new Error(
+        `HTTP 503: ${JSON.stringify(TEST_LEADER_METADATA_RESPONSE)}`,
+      );
+      error.statusCode = 503;
+      throw error;
+    },
+  });
+
+  const leaderMetadataIncomplete = await t.rejects(
+    service.phaseContactSeed(),
+    'contact-seed should surface leader metadata incomplete as retryable',
+  );
+  const leaderMetadataFailure = {
+    phase: JoiningPhase.CONTACTING_SEED,
+    error: leaderMetadataIncomplete.message,
+  };
+  const policy = service.resolveRetryableJoinResumePolicy();
+  service.startTime = 0;
+  service.now = () => TEST_ELAPSED_MS;
+
+  t.notOk(
+    Object.hasOwn(leaderMetadataIncomplete, 'seedContactFailureKind'),
+    'leader metadata incomplete must not carry the bootstrap-not-ready marker',
+  );
+  t.equal(
+    service.shouldAutoResumeRetryableJoinFailure(
+      leaderMetadataIncomplete,
+      leaderMetadataFailure,
+      TEST_MAX_ATTEMPTS - 1,
+      policy,
+    ),
+    true,
+    'leader metadata incomplete should remain retryable before the fixed cap',
+  );
+  t.equal(
+    service.shouldAutoResumeRetryableJoinFailure(
+      leaderMetadataIncomplete,
+      leaderMetadataFailure,
+      TEST_MAX_ATTEMPTS,
+      policy,
+    ),
+    false,
+    'leader metadata incomplete should stop at the fixed retryable cap',
+  );
+});
+
+test('NodeJoiningService - retained seed-contact evidence does not turn a ' +
+  'transport timeout into elapsed-only auto-resume', async (t) => {
+  initializeTestEnvironment();
+
+  const TEST_NODE_ID = 'joining-node-retained-seed-evidence-timeout-1';
+  const TEST_NODE_ADDRESS = 'ws://localhost:9103';
+  const TEST_SEED_ADDRESS = 'http://localhost:8080';
+  const TEST_MAX_ATTEMPTS = 4;
+  const TEST_ELAPSED_MS = 41056;
+  const TEST_RETRY_AFTER_MS = 1000;
+  const TEST_HTTP_TIMEOUT_MS = 30000;
+  const TEST_TIMEOUT_MESSAGE = JOINING_ERROR_MSG.contactSeedFailed(
+    JOINING_ERROR_MSG.httpTimeout(TEST_HTTP_TIMEOUT_MS),
+  );
+  const TEST_FAILURE = {
+    phase: JoiningPhase.CONTACTING_SEED,
+    error: TEST_TIMEOUT_MESSAGE,
+  };
+  const TEST_RETAINED_BOOTSTRAP_RESPONSE = Object.freeze({
+    code: BOOTSTRAP_PIPELINE_ERROR_CODE.BOOTSTRAP_NOT_READY,
+    retryAfterMs: TEST_RETRY_AFTER_MS,
+  });
+
+  const service = new NodeJoiningService({
+    nodeId: TEST_NODE_ID,
+    nodeAddress: TEST_NODE_ADDRESS,
+    seedNodeAddress: TEST_SEED_ADDRESS,
+    config: {
+      autoResumeRetryableFailures: true,
+      retryableFailureResumeMaxAttempts: TEST_MAX_ATTEMPTS,
+    },
+  });
+
+  const policy = service.resolveRetryableJoinResumePolicy();
+  service.startTime = 0;
+  service.now = () => TEST_ELAPSED_MS;
+  const retainedEvidenceTimeout = new Error(TEST_TIMEOUT_MESSAGE);
+  retainedEvidenceTimeout.deferRetry = true;
+  retainedEvidenceTimeout.retryAfterMs = TEST_RETRY_AFTER_MS;
+  retainedEvidenceTimeout.code =
+    BOOTSTRAP_PIPELINE_ERROR_CODE.BOOTSTRAP_NOT_READY;
+  retainedEvidenceTimeout.bootstrapResponse =
+    TEST_RETAINED_BOOTSTRAP_RESPONSE;
+
+  t.equal(
+    service.shouldAutoResumeRetryableJoinFailure(
+      retainedEvidenceTimeout,
+      TEST_FAILURE,
+      TEST_MAX_ATTEMPTS,
+      policy,
+    ),
+    false,
+    'retained bootstrap-not-ready evidence should not bypass the fixed cap ' +
+      'for a transport timeout',
   );
 });
 

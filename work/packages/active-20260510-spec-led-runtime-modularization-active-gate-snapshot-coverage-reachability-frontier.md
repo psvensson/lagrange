@@ -11,8 +11,8 @@
   "owner": "startup_active_gate_owner",
   "boundary": "snapshot_coverage",
   "dominantReason": "active_gate_timed_out",
-  "currentState": "Continuation repaired and reviewed clean the join seed-contact retry budget interaction: each HTTP contact attempt now consumes no more than the remaining contact-seed retry window, so retained retryable seed evidence cannot let a late transport attempt spend a full stale 30000ms request timeout past the owner budget. The representative artifact remains startup_active_gate_owner / snapshot_coverage with snapshotCoverage=2/5, inactive_nodes=3, activeNodeCount=2/5, selectedSnapshotError=unknown, readinessDelayCause=none, seed readiness probe timeout evidence for 7493b0ab-a054-5fad-a91b-5e331db29304, node 35a891b8-c1a0-5064-9c6e-2acfba61c2a7 now active, publication ACK convergence not reopened, and priority recovery retryable.",
-  "nextAction": "Continue on the same startup active-gate snapshot coverage boundary from the refreshed 2/5 fixture by tracing residual seed readiness/admin responsiveness and inactive joiner bootstrap progress without reopening publication ACK convergence or priority recovery.",
+  "currentState": "Continuation repaired retained seed-contact evidence resume classification: direct BOOTSTRAP_NOT_READY contact-seed failures still use elapsed-only auto-resume, but later transport timeouts that only carry retained bootstrap-not-ready evidence now fall back to the fixed retryable resume attempt cap. The representative rerun refreshed the residual fixture to snapshotCoverage=3/5, inactive_nodes=3, activeNodeCount=2/5, selected snapshot 8be8d30f-4499-5eed-865c-71b4d529a67a, selectedSnapshotError=unknown, readinessDelayCause=none. Node 8be8d30f-4499-5eed-865c-71b4d529a67a reached nodeDiagnostics active, while joiners 11601fe0-72d6-5853-8590-ec2881853e72 and ebc4aa0b-06c6-506d-93ea-1dd2deca3f58 now exhaust the fixed contact-seed resume cap instead of looping elapsed-only; seed readiness probe timeout for 7493b0ab-a054-5fad-a91b-5e331db29304 persists. Publication ACK convergence was not reopened; priority recovery appears in triage as subordinate/event-driven, but the analyzer frontier remains startup_active_gate_owner / snapshot_coverage.",
+  "nextAction": "Continue on the same startup active-gate snapshot coverage boundary by tracing the residual seed readiness timeout and two contact-seed transport-timeout joiners after fixed resume-cap classification; do not reopen priority recovery/workflow progress unless the topology analyzer frontier migrates.",
   "proof": [
     "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-spec-led-runtime-modularization-active-gate-snapshot-coverage-reachability.report.json --explain active_gate_snapshot_coverage",
     "Focused active-gate snapshot reachability fixture for 35a891b8-c1a0-5064-9c6e-2acfba61c2a7 with snapshotCoverage=3/5 and readinessDelayCause=snapshot_reachability_timeout",
@@ -25,7 +25,9 @@
     "node --test test/diagnostics/topology-convergence-graph.test.js test/scripts/analyze-topology-convergence.test.js",
     "TAP_ALLOW_INCOMPLETE_COVERAGE=1 npx tap test/distributed/harness/__tests__/cluster.test-part-5.js",
     "Modified-file decision-boundary and runtime-grammar guardrails; literal guard not applicable to legacy TAP test baseline",
-    "npm run work:validate"
+    "npm run work:validate",
+    "Focused NodeJoiningService regression proving retained BOOTSTRAP_NOT_READY seed evidence no longer converts a later contact-seed transport timeout into elapsed-only auto-resume; direct bootstrap-not-ready remains elapsed-only.",
+    "Representative rerun after retained-evidence resume classification refreshed the residual to snapshotCoverage=3/5 with node 8be8d30f-4499-5eed-865c-71b4d529a67a nodeDiagnostics active, activeGate activeNodeCount=2/5, two contact-seed joiners exhausting the fixed resume cap, and seed readiness timeout still present under startup_active_gate_owner / snapshot_coverage."
   ],
   "touchedFiles": [
     "src/control-plane/*readiness*.js",
@@ -258,6 +260,9 @@ that predecessor returned clean before this successor implementation started.
   `35a891b8-c1a0-5064-9c6e-2acfba61c2a7`, selected snapshot error `unknown`,
   and readiness delay cause `none`.
 
+- Continuation repaired retained seed-contact evidence auto-resume classification. Contact-seed now marks direct `BOOTSTRAP_NOT_READY` failures with an explicit seed-contact failure kind, and retryable join resume uses that owner marker or the canonical bootstrap-not-ready message rather than retained bootstrap response codes. A later transport timeout that carries retained bootstrap-not-ready evidence is now a default retryable failure and obeys the fixed resume attempt cap instead of receiving elapsed-only bootstrap-not-ready treatment.
+- Representative rerun is SAME-FRONTIER-REDUCED under `startup_active_gate_owner / snapshot_coverage`: selected snapshot `8be8d30f-4499-5eed-865c-71b4d529a67a`, `snapshotCoverage=3/5`, blockers `inactive_nodes=3,snapshot_coverage=3/5`, `activeNodeCount=2/5`, selected snapshot error `unknown`, readiness delay `none`. Node `8be8d30f-4499-5eed-865c-71b4d529a67a` reached nodeDiagnostics active; joiners `11601fe0-72d6-5853-8590-ec2881853e72` and `ebc4aa0b-06c6-506d-93ea-1dd2deca3f58` now log `attempt_budget_exhausted` for default retryable contact-seed transport timeouts. Seed readiness timeout for `7493b0ab-a054-5fad-a91b-5e331db29304` persists.
+
 ## Validation
 
 1. PASS — `node --test test/scripts/analyze-topology-convergence.test.js`
@@ -304,6 +309,12 @@ that predecessor returned clean before this successor implementation started.
 38. PASS — `TAP_ALLOW_INCOMPLETE_COVERAGE=1 npx tap --reporter=base test/distributed/harness/__tests__/cluster.test-part-5.js`.
 39. PASS — `npm run work:model-ledger -- record ...` recorded `same-frontier-reduced`; `npm run work:validate` passed after tracker regeneration and model-ledger record.
 
+40. PASS — `npx tap --reporter=base test/bootstrap/node-joining-service.test.js` after adding the retained seed-contact evidence resume-cap regression (`131 pass`).
+41. PASS — `node scripts/check-guideline-literals.js src/bootstrap/node-joining-constants.js src/bootstrap/node-joining-service-shared.js src/bootstrap/phases/contact-seed-phase.js src/bootstrap/node-joining-service-segment-2.js`; `node scripts/check-guideline-decision-boundaries.js src/bootstrap/node-joining-constants.js src/bootstrap/node-joining-service-shared.js src/bootstrap/phases/contact-seed-phase.js src/bootstrap/node-joining-service-segment-2.js test/bootstrap/node-joining-service.test.js`; `npm run audit:runtime-grammar:file -- src/bootstrap/node-joining-constants.js src/bootstrap/node-joining-service-shared.js src/bootstrap/phases/contact-seed-phase.js src/bootstrap/node-joining-service-segment-2.js test/bootstrap/node-joining-service.test.js`; `git diff --check -- ...`.
+42. SAME-FRONTIER-REDUCED — `node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-spec-led-runtime-modularization-active-gate-snapshot-coverage-reachability.report.json --fast-local --verbose` failed with analyzer frontier `startup_active_gate_owner / snapshot_coverage`, `snapshotCoverage=3/5`, `inactive_nodes=3`, selected snapshot `8be8d30f-4499-5eed-865c-71b4d529a67a`, selected snapshot error `unknown`, readiness delay `none`; retained-evidence transport timeout joiners now exhaust `attempt_budget_exhausted` under the fixed resume cap.
+43. PASS — `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-spec-led-runtime-modularization-active-gate-snapshot-coverage-reachability.report.json --explain active_gate_snapshot_coverage` confirmed the same startup active-gate snapshot coverage frontier on the refreshed representative artifact.
+44. PASS — `npm run work:current-blocker -- --write`; `npm run work:model-ledger -- record ...`; `npm run work:validate`.
+
 ## Continuation Notes
 
 - Agent active-gate-residual-implementation (active-gate-residual-implementation) continued residual implementation.
@@ -322,6 +333,13 @@ that predecessor returned clean before this successor implementation started.
       Agent active-gate-implementation (626e22da-18de-4041-9ceb-c3ec027b6b42) implemented work/packages/active-20260510-spec-led-runtime-modularization-active-gate-snapshot-coverage-reachability-frontier.md.
 - [x] Continuation review subagent recorded:
       Agent active-gate-timeout-review (active-gate-timeout-review) reviewed
+      work/packages/active-20260510-spec-led-runtime-modularization-active-gate-snapshot-coverage-reachability-frontier.md;
+      result clean.
+- [x] Continuation fix subagent recorded or explicitly not needed:
+      not-needed.
+- [x] Continuation review subagent recorded:
+      Agent active-gate-two-of-five-review
+      (active-gate-two-of-five-review) reviewed
       work/packages/active-20260510-spec-led-runtime-modularization-active-gate-snapshot-coverage-reachability-frontier.md;
       result clean.
 - [x] Continuation fix subagent recorded or explicitly not needed:
@@ -384,3 +402,16 @@ that predecessor returned clean before this successor implementation started.
       result clean.
 - [x] Continuation fix subagent recorded or explicitly not needed:
       not-needed.
+- [x] Continuation implementation subagent recorded:
+      Agent active-gate-two-of-five-impl
+      (active-gate-two-of-five-impl) implemented
+      work/packages/active-20260510-spec-led-runtime-modularization-active-gate-snapshot-coverage-reachability-frontier.md.
+- [x] Continuation review subagent recorded:
+      Agent active-gate-two-of-five-implementation-review
+      (active-gate-two-of-five-implem) reviewed
+      work/packages/active-20260510-spec-led-runtime-modularization-active-gate-snapshot-coverage-reachability-frontier.md;
+      result fixes-required.
+- [x] Continuation fix subagent recorded:
+      Agent active-gate-two-of-five-fix
+      (active-gate-two-of-five-fix) fixed
+      work/packages/active-20260510-spec-led-runtime-modularization-active-gate-snapshot-coverage-reachability-frontier.md.

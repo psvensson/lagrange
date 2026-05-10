@@ -19,6 +19,7 @@ import {
   JOINING_ERROR_MSG,
   JOINING_HTTP,
   JOINING_LOG_MSG,
+  JOINING_SEED_CONTACT_FAILURE_KIND,
 } from '../node-joining-constants.js';
 import {
   HTTP_STATUS,
@@ -204,8 +205,12 @@ class ContactSeedPhase {
         retryableError.bootstrapResponse = options.parsedError;
       }
       if (typeof options.code === TYPEOF.STRING &&
-          options.code.length > NUM.ZERO) {
+           options.code.length > NUM.ZERO) {
         retryableError.code = options.code;
+      }
+      if (typeof options.failureKind === TYPEOF.STRING &&
+          options.failureKind.length > NUM.ZERO) {
+        retryableError.seedContactFailureKind = options.failureKind;
       }
       return retryableError;
     };
@@ -370,6 +375,8 @@ class ContactSeedPhase {
                 retryAfterMs: lastRetryAfterMs,
                 parsedError,
                 code: classification.code,
+                failureKind:
+                  JOINING_SEED_CONTACT_FAILURE_KIND.BOOTSTRAP_NOT_READY,
               },
             );
           }
@@ -463,6 +470,7 @@ class ContactSeedPhase {
           retryAfterMs: lastRetryAfterMs,
           parsedError: lastBootstrapError,
           code: lastBootstrapError.code,
+          failureKind: JOINING_SEED_CONTACT_FAILURE_KIND.BOOTSTRAP_NOT_READY,
         },
       );
     }

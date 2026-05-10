@@ -24,6 +24,10 @@ const JOINING_DEFAULT = Object.freeze({
   wsPort: null,
 });
 
+const JOINING_SEED_CONTACT_FAILURE_KIND = Object.freeze({
+  BOOTSTRAP_NOT_READY: 'bootstrap_not_ready',
+});
+
 const JOINING_UNIFIED_RECONCILE = Object.freeze({
   INFRA_READY_REASON: 'joining_infrastructure_ready',
   MESSAGE_GROUPS_REASON: 'joining_message_groups',
@@ -352,6 +356,7 @@ export {
   JOINING_ERROR_MSG,
   JOINING_ERROR_NAME,
   JOINING_HTTP,
+  JOINING_SEED_CONTACT_FAILURE_KIND,
   JOINING_UNIFIED_RECONCILE,
   JOIN_MESH_CONNECTIVITY_REPAIR,
   JOIN_READINESS_DEFAULT_TABLE,

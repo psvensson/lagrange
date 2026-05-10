@@ -20,11 +20,11 @@ Boundary: `snapshot_coverage`
 
 Dominant reason: `active_gate_timed_out`
 
-Current state: Continuation repaired and reviewed clean the join seed-contact retry budget interaction: each HTTP contact attempt now consumes no more than the remaining contact-seed retry window, so retained retryable seed evidence cannot let a late transport attempt spend a full stale 30000ms request timeout past the owner budget. The representative artifact remains startup_active_gate_owner / snapshot_coverage with snapshotCoverage=2/5, inactive_nodes=3, activeNodeCount=2/5, selectedSnapshotError=unknown, readinessDelayCause=none, seed readiness probe timeout evidence for 7493b0ab-a054-5fad-a91b-5e331db29304, node 35a891b8-c1a0-5064-9c6e-2acfba61c2a7 now active, publication ACK convergence not reopened, and priority recovery retryable.
+Current state: Continuation repaired retained seed-contact evidence resume classification: direct BOOTSTRAP_NOT_READY contact-seed failures still use elapsed-only auto-resume, but later transport timeouts that only carry retained bootstrap-not-ready evidence now fall back to the fixed retryable resume attempt cap. The representative rerun refreshed the residual fixture to snapshotCoverage=3/5, inactive_nodes=3, activeNodeCount=2/5, selected snapshot 8be8d30f-4499-5eed-865c-71b4d529a67a, selectedSnapshotError=unknown, readinessDelayCause=none. Node 8be8d30f-4499-5eed-865c-71b4d529a67a reached nodeDiagnostics active, while joiners 11601fe0-72d6-5853-8590-ec2881853e72 and ebc4aa0b-06c6-506d-93ea-1dd2deca3f58 now exhaust the fixed contact-seed resume cap instead of looping elapsed-only; seed readiness probe timeout for 7493b0ab-a054-5fad-a91b-5e331db29304 persists. Publication ACK convergence was not reopened; priority recovery appears in triage as subordinate/event-driven, but the analyzer frontier remains startup_active_gate_owner / snapshot_coverage.
 
 ## Next Action
 
-Continue on the same startup active-gate snapshot coverage boundary from the refreshed 2/5 fixture by tracing residual seed readiness/admin responsiveness and inactive joiner bootstrap progress without reopening publication ACK convergence or priority recovery.
+Continue on the same startup active-gate snapshot coverage boundary by tracing the residual seed readiness timeout and two contact-seed transport-timeout joiners after fixed resume-cap classification; do not reopen priority recovery/workflow progress unless the topology analyzer frontier migrates.
 
 ## Proof Ladder
 
@@ -40,6 +40,8 @@ Continue on the same startup active-gate snapshot coverage boundary from the ref
 10. `TAP_ALLOW_INCOMPLETE_COVERAGE=1 npx tap test/distributed/harness/__tests__/cluster.test-part-5.js`
 11. `Modified-file decision-boundary and runtime-grammar guardrails; literal guard not applicable to legacy TAP test baseline`
 12. `npm run work:validate`
+13. `Focused NodeJoiningService regression proving retained BOOTSTRAP_NOT_READY seed evidence no longer converts a later contact-seed transport timeout into elapsed-only auto-resume; direct bootstrap-not-ready remains elapsed-only.`
+14. `Representative rerun after retained-evidence resume classification refreshed the residual to snapshotCoverage=3/5 with node 8be8d30f-4499-5eed-865c-71b4d529a67a nodeDiagnostics active, activeGate activeNodeCount=2/5, two contact-seed joiners exhausting the fixed resume cap, and seed readiness timeout still present under startup_active_gate_owner / snapshot_coverage.`
 
 ## Model Fit
 
