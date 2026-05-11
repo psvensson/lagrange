@@ -4,46 +4,45 @@
 
 Sprint: `work/sprints/active-2026-q2-phase-0-1-rolling-restart-release-gate-closure.md`
 
-Package: `work/packages/done-20260511-rolling-restart-topology-publication-convergence-published-pending.md`
+Package: `work/packages/active-20260511-rolling-restart-operation-workflow-progress-event-driven-wait.md`
 
 Scenario: `rolling-restart`
 
-Artifact: `test-output/reports/rolling-restart-current-release-gate-after-publication-convergence-fix-v2.report.json`
+Artifact: `test-output/reports/rolling-restart-current-release-gate-after-event-driven-wait-fix.report.json`
 
-Playback: `test-output/reports/.playback/rolling-restart-current-release-gate-after-publication-convergence-fix-v2/rolling-restart/`
+Playback: `test-output/reports/.playback/rolling-restart-current-release-gate-after-event-driven-wait-fix/rolling-restart/`
 
 ## Boundary
 
 Owner: `operation_workflow_owner`
 
-Boundary: `workflow_progress`
+Boundary: `rebalancer_handoff`
 
 Dominant reason: `priority_recovery_event_driven_wait`
 
-Current state: The publication convergence package fixed failure-bundle classification so PUBLISHED publication evidence with pendingAckCount=0, blockedNodeCount=0, prioritySpreadPending=true, and no canonical missing-active publication debt no longer fronts as publication ACK convergence. The representative rolling-restart rerun still failed 0/1, but publication_ack_convergence is satisfied/non-frontier with publicationPending=false and recoveryProtocolState=priority_spread_pending. The first frontier migrated to priority_recovery_partition_progress under operation_workflow_owner / workflow_progress, state retryable, dominant reason priority_recovery_event_driven_wait, with sql_write_operations-p1 recovering_in_flight, persisted_not_dispatched, event_driven, and advance_existing_operation. Raw distributed-failure classification still presents publication_convergence_blocked / publication_missing_active_node; treat that as a presentation residual, not the canonical owner-boundary frontier selected by topology/current-blocker evidence.
+Current state: The package added owner-lane-held dispatch-pending re-entry coverage and changed priority recovery re-entry scheduling so a held operation-owner lane arms a bounded remote handoff follow-up instead of dropping the wake. Focused tests, touched-file guardrails, work validation, and diff hygiene passed. The representative rolling-restart rerun still failed 0/1, but the first frontier migrated from operation_workflow_owner / workflow_progress to operation_workflow_owner / rebalancer_handoff with dominant source reason priority_recovery_rebalancer_handoff_retry_scheduled for control_plane_publications-p1 and sql_transaction_participants-p1.
 
 ## Next Action
 
-Open the next focused package on operation_workflow_owner / workflow_progress for the priority_recovery_event_driven_wait retryable frontier.
+Open the next focused package on operation_workflow_owner / rebalancer_handoff to explain, repair, or classify the priority_recovery_rebalancer_handoff_retry_scheduled retry frontier exposed by the event-driven-wait fix.
 
 ## Proof Ladder
 
-1. `npm run work:package:evidence-block -- test-output/reports/rolling-restart-current-release-gate-after-sql-write-serial-wait-fix.report.json`
-2. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-current-release-gate-after-sql-write-serial-wait-fix.report.json --explain publication_ack_convergence`
-3. `npm run analyze:distributed-failure -- --report test-output/reports/rolling-restart-current-release-gate-after-sql-write-serial-wait-fix.report.json`
-4. `TMPDIR="$PWD/test-output/tmp" npm test -- --grep='keeps published priority-spread recovery out of publication-pending' test/distributed/harness/__tests__/failure-bundle.test.js`
-5. `TMPDIR="$PWD/test-output/tmp" npm test -- test/distributed/harness/__tests__/failure-bundle.test.js test/control-plane/publication-recovery-evidence.test.js test/control-plane/publication-recovery-gate.test.js test/control-plane/publication-owner-stream.test.js`
-6. `node scripts/check-guideline-literals.js test/distributed/harness/failure-bundle-segment-4.js test/distributed/harness/__tests__/failure-bundle-core-10-test-cases.js`
-7. `node scripts/check-guideline-decision-boundaries.js test/distributed/harness/failure-bundle-segment-4.js test/distributed/harness/__tests__/failure-bundle-core-10-test-cases.js`
-8. `npm run audit:runtime-grammar:file -- test/distributed/harness/failure-bundle-segment-4.js test/distributed/harness/__tests__/failure-bundle-core-10-test-cases.js`
-9. `node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-current-release-gate-after-publication-convergence-fix-v2.report.json --fast-local --verbose`
-10. `npm run work:package:evidence-block -- test-output/reports/rolling-restart-current-release-gate-after-publication-convergence-fix-v2.report.json`
-11. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-current-release-gate-after-publication-convergence-fix-v2.report.json --explain publication_ack_convergence`
-12. `npm run analyze:distributed-failure -- --report test-output/reports/rolling-restart-current-release-gate-after-publication-convergence-fix-v2.report.json`
-13. `npm run work:model-ledger -- record --package work/packages/done-20260511-rolling-restart-topology-publication-convergence-published-pending.md --model gpt-5.3-codex --reasoning-effort high --task-class implementation --package-class representative-frontier-closure --intended-minimum-model gpt-5.3-codex --scope-shape owner-boundary-contraction/cross-boundary-causal-edge --escalated false --bailout-reason none --outcome migrated --validation-status passed --correction-loops 2 --review-findings 0 --notes ...`
-14. `npm run work:current-blocker`
-15. `npm run work:validate`
-16. `git diff --check`
+1. `npm run work:package:evidence-block -- test-output/reports/rolling-restart-current-release-gate-after-publication-convergence-fix-v2.report.json`
+2. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-current-release-gate-after-publication-convergence-fix-v2.report.json --explain priority_recovery_partition_progress`
+3. `npm run analyze:distributed-failure -- --report test-output/reports/rolling-restart-current-release-gate-after-publication-convergence-fix-v2.report.json`
+4. `node --test test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js`
+5. `node scripts/check-guideline-literals.js src/rebalancer/operation-workflow-owner*.js src/control-plane/priority-recovery-snapshot*.js`
+6. `node scripts/check-guideline-decision-boundaries.js src/rebalancer/operation-workflow-owner*.js src/control-plane/priority-recovery-snapshot*.js`
+7. `npm run audit:runtime-grammar:file -- src/rebalancer/operation-workflow-owner-segment-7-stage-5.js src/rebalancer/operation-workflow-owner.js`
+8. `npm run work:current-blocker`
+9. `npm run work:validate`
+10. `git diff --check`
+11. `node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-current-release-gate-after-event-driven-wait-fix.report.json --fast-local --verbose`
+12. `npm run work:package:evidence-block -- test-output/reports/rolling-restart-current-release-gate-after-event-driven-wait-fix.report.json`
+13. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-current-release-gate-after-event-driven-wait-fix.report.json --explain priority_recovery_partition_progress`
+14. `npm run analyze:distributed-failure -- --report test-output/reports/rolling-restart-current-release-gate-after-event-driven-wait-fix.report.json`
+15. `npm run work:model-ledger -- record --package work/packages/active-20260511-rolling-restart-operation-workflow-progress-event-driven-wait.md --model gpt-5.3-codex --reasoning-effort high --task-class implementation --package-class representative-frontier-closure --intended-minimum-model gpt-5.3-codex --scope-shape owner-boundary-contraction/cross-boundary-causal-edge --escalated false --bailout-reason none --outcome migrated --validation-status passed --correction-loops 1 --review-findings 0 --notes ...`
 
 ## Model Fit
 
@@ -55,30 +54,31 @@ Scope shape: `owner-boundary-contraction/cross-boundary-causal-edge`
 
 Escalation triggers:
 
-1. `publication convergence evidence requires changes outside topology publication ownership or priority recovery publication evidence`
-2. `representative proof restores operation_workflow_owner or startup_active_gate_owner as the direct blocker`
+1. `event-driven wait evidence requires changes outside operation_workflow_owner or priority recovery snapshots`
+2. `representative proof restores topology_publication_owner or startup_active_gate_owner as the direct blocker`
 3. `runtime implementation would need Pro or Enterprise features`
 
 ## Causal Governance
 
-Causal hypothesis: `If publication convergence is repaired or classified, publication_ack_convergence should reduce or migrate away from topology_publication_owner / publication_convergence before startup active-gate snapshot coverage is treated as direct.`
+Causal hypothesis: `If retryable event-driven workflow progress is repaired or classified, priority_recovery_partition_progress should reduce, converge, or migrate away from operation_workflow_owner / workflow_progress before startup active-gate snapshot coverage is treated as direct.`
 
-Stop-condition check: `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-current-release-gate-after-sql-write-serial-wait-fix.report.json`
+Stop-condition check: `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-current-release-gate-after-publication-convergence-fix-v2.report.json`
 
-Expected causal-model change: `The PUBLISHED plus publication_pending evidence either converges, reduces to classified retryable publication spread, or migrates to a new named owner boundary.`
+Expected causal-model change: `The recovering_in_flight event-driven wait either advances, becomes a non-frontier retryable state, or migrates to a new named owner boundary.`
 
 Representative outcome: `migrated`
 
-Causal debt: `Publication ACK convergence is satisfied/non-frontier in the closure rerun; the remaining rolling-restart debt belongs to operation_workflow_owner / workflow_progress and must be opened as a successor package before implementation continues.`
+Causal debt: `The workflow_progress event-driven wait seam now has focused owner-lane-held re-entry coverage and no longer remains the representative boundary. The remaining rolling-restart debt belongs to operation_workflow_owner / rebalancer_handoff, where a remote handoff retry remains scheduled for control_plane_publications-p1 and sql_transaction_participants-p1.`
 
-Cross-boundary review: `Required before implementing the successor because the representative rerun migrated from topology_publication_owner / publication_convergence back to operation_workflow_owner / workflow_progress.`
+Cross-boundary review: `Required before implementing the successor because the representative rerun migrated from workflow_progress event-driven wait to operation_workflow_owner / rebalancer_handoff retry scheduling.`
 
 ## Touched Files
 
-1. `test/distributed/harness/failure-bundle-segment-4.js`
-2. `test/distributed/harness/__tests__/failure-bundle-core-10-test-cases.js`
-3. `work/packages/done-20260511-rolling-restart-topology-publication-convergence-published-pending.md`
-4. `work/sprints/active-2026-q2-phase-0-1-rolling-restart-release-gate-closure.md`
-5. `work/sprints/current-blocker.json`
-6. `work/sprints/current-blocker.md`
-7. `work/model-ledger.jsonl`
+1. `src/rebalancer/operation-workflow-owner-segment-7-stage-5.js`
+2. `src/rebalancer/operation-workflow-owner.js`
+3. `test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js`
+4. `work/packages/active-20260511-rolling-restart-operation-workflow-progress-event-driven-wait.md`
+5. `work/sprints/active-2026-q2-phase-0-1-rolling-restart-release-gate-closure.md`
+6. `work/sprints/current-blocker.json`
+7. `work/sprints/current-blocker.md`
+8. `work/model-ledger.jsonl`

@@ -206,6 +206,7 @@ function normalizePriorityRecoveryDispatchPendingOwnerSnapshot(
   owner.schedulePriorityRecoveryDispatchPendingReentry(
     normalizedSnapshot,
     [operation],
+    {allowOwnerLaneRetry: true},
   );
   return normalizedSnapshot;
 }
