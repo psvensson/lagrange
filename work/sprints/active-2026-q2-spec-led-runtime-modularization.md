@@ -5,30 +5,28 @@ after the prior rolling-restart package closed. It now advances one
 representative rolling-restart frontier at a time and must prove or classify
 the representative gate before companion cleanup or broad successor work.
 
-## Recent Package Snapshot
+## Current Package Snapshot
 
-Recently completed package:
-`work/packages/done-20260510-spec-led-runtime-modularization-operation-workflow-progress-recovering-in-flight-frontier.md`.
+Current active package:
+`work/packages/active-20260510-spec-led-runtime-modularization-active-gate-snapshot-coverage-publication-lag-frontier.md`.
 
-**Package status: CLOSED / DONE REPRESENTATIVE FRONTIER CLOSURE**
+**Package status: ACTIVE REPRESENTATIVE FRONTIER CLOSURE**
 
-Closed owner boundary:
-`operation_workflow_owner / workflow_progress`.
+Owner boundary:
+`startup_active_gate_owner / snapshot_coverage`.
 
-Current state: the active-gate architecture-gap package is closed and pushed.
-The recovering-in-flight workflow-progress package repaired the focused direct
-owner snapshot re-entry so dispatch-pending owner builds now enqueue canonical
-wake work. The fresh representative rerun remains non-green but migrated away
-from the direct workflow-progress repair target: active nodes are `5/5`,
-snapshot coverage is `3/5`, `priorityRecoveryProgressSummary` is absent, and
-causal analysis no longer reports `priority_recovery_event_wait`. The next
-owner boundary is `startup_active_gate_owner / snapshot_coverage`.
+Current state: the CL-006 startup publication-lag owner path is reduced by the
+active package fixture and runtime repair. The latest representative rerun is
+still non-green, but the first critical path moved to
+`publication_ack_convergence / publication_ack_blocked`; the active-gate witness
+now shows active nodes `3/5`, snapshot coverage `2/5`, `pendingAck=0`, and
+`missingPublishedCount=3`. The active package remains open pending review,
+guardrail resolution, and migration/closure of the fresh blocker.
 
 Active and queued work:
-No active package is open after the recovering-in-flight workflow-progress
-package closed to done. Do not treat
-`work/packages/done-20260510-spec-led-runtime-modularization-operation-workflow-progress-recovering-in-flight-frontier.md`
-as current active work.
+Current active package:
+`work/packages/active-20260510-spec-led-runtime-modularization-active-gate-snapshot-coverage-publication-lag-frontier.md`
+(active-gate snapshot coverage publication lag frontier).
 
 Recently completed workflow-progress package:
 `work/packages/done-20260510-spec-led-runtime-modularization-operation-workflow-progress-recovering-in-flight-frontier.md`.
@@ -50,12 +48,11 @@ old diagnostics schema aliases).
 Latest closed proof package:
 `work/packages/done-20260510-spec-led-runtime-modularization-representative-green-proof-or-next-blocker.md`.
 
-Next proof surface: use
-`test-output/reports/rolling-restart-spec-led-runtime-modularization-operation-workflow-progress-recovering-in-flight.report.json`
-to activate exactly one successor package for
-`startup_active_gate_owner / snapshot_coverage`. Do not repeat the completed
-`sql_write_operations-p1` dispatch-pending workflow-progress repair. Diagnostics
-schema alias cleanup remains deferred.
+Next proof surface: review the CL-006 owner-path repair, preserve the focused
+fixture, and decide whether to close/migrate to the fresh
+`publication_ack_convergence / publication_ack_blocked` blocker. Do not repeat
+the completed `sql_write_operations-p1` dispatch-pending workflow-progress
+repair. Diagnostics schema alias cleanup remains deferred.
 
 ## Goal
 
@@ -128,6 +125,7 @@ the contract and proof ladder are stable.
 24. [High-Level Causal-Analysis Infrastructure](../packages/done-20260510-spec-led-runtime-modularization-high-level-causal-analysis-infrastructure.md)
 25. [Active Gate Report Schema Alias Deletion](../packages/todo-20260509-spec-led-runtime-modularization-active-gate-report-schema-alias-deletion.md)
 26. [Operation Workflow Progress Recovering-In-Flight Frontier](../packages/done-20260510-spec-led-runtime-modularization-operation-workflow-progress-recovering-in-flight-frontier.md)
+27. [Active Gate Snapshot Coverage Publication Lag Frontier](../packages/active-20260510-spec-led-runtime-modularization-active-gate-snapshot-coverage-publication-lag-frontier.md)
 
 ## Model Fit Strategy
 
@@ -185,6 +183,12 @@ The sprint now separates broad orchestration from Spark-safe leaf work.
 13. Representative proof may classify a leaf slice as closed, reduced,
     migrated, or same-frontier. It must not expand implementation scope inside
     the leaf package.
+14. `Active Gate Snapshot Coverage Publication Lag Frontier` is a
+    representative frontier closure package intended for `gpt-5.3-codex`. It
+    owns the fresh `startup_active_gate_owner / snapshot_coverage` residual with
+    closure witness class `startup_active_publication_lag` and must not repeat
+    completed workflow-progress repair work unless a focused fixture proves
+    direct regression.
 
 ## Activation Rules
 

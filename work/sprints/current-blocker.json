@@ -1,38 +1,59 @@
 {
   "schema": "current-blocker-v1",
-  "generatedBy": "manual closure handoff; scripts/work-tracker.js cannot express no-active-package",
+  "generatedBy": "scripts/work-tracker.js",
   "sprint": "work/sprints/active-2026-q2-spec-led-runtime-modularization.md",
-  "package": "none",
-  "status": "none",
+  "package": "work/packages/active-20260510-spec-led-runtime-modularization-active-gate-snapshot-coverage-publication-lag-frontier.md",
+  "status": "active",
   "scenario": "spec-led-runtime-modularization",
   "artifact": "test-output/reports/rolling-restart-spec-led-runtime-modularization-operation-workflow-progress-recovering-in-flight.report.json",
   "playback": "test-output/reports/.playback/rolling-restart-spec-led-runtime-modularization-operation-workflow-progress-recovering-in-flight/rolling-restart/",
   "owner": "startup_active_gate_owner",
   "boundary": "snapshot_coverage",
   "dominantReason": "active_gate_timed_out",
-  "currentState": "No active package is open. The recovering-in-flight workflow-progress package closed the focused direct owner re-entry residual: dispatch-pending SENDING/pending owner snapshot builds now enqueue canonical wake/replay work. The fresh representative artifact remains non-green with activeNodeCount=5/5, snapshotCoverage=3/5, priorityRecoveryProgressSummary absent, closureWitnessClass startup_active_publication_lag, and only class-only recovering_in_flight priority evidence for sql_transactions-p1 and sql_write_operations-p1. Topology and causal analysis now point the next owner boundary at startup_active_gate_owner / snapshot_coverage.",
-  "nextAction": "When work resumes, activate exactly one successor package for startup_active_gate_owner / snapshot_coverage using the fresh recovering-in-flight report. Do not repeat the completed sql_write_operations-p1 dispatch-pending workflow-progress repair and do not reopen diagnostics schema alias cleanup.",
+  "currentState": "Implemented the focused CL-006 startup_active_publication_lag owner-path reduction: startup active-gate progress now derives missingPublishedCount from selectedMissingPublishedNodeIds when publication is PUBLISHED, pending ACKs are converged, and the selected snapshot partitions all expected nodes into published plus missing sets. The focused owner-path fixture passes. The representative rerun is still non-green, but the fresh causal first critical path moved to publication_ack_convergence/publication_ack_blocked and the active-gate snapshot witness no longer has all nodes active.",
+  "nextAction": "Review this package slice, decide whether to close/migrate to the fresh publication_ack_convergence blocker after resolving or accepting the inherited harness literal guard failure, and preserve the CL-006 owner-path fixture.",
   "proof": [
-    "node test/rebalancer/operation-workflow-progress-event-driven-reentry.test.js",
-    "node test/rebalancer/operation-workflow-owner-adapter.test.js",
-    "node test/control-plane/priority-recovery-snapshot-operation-owner-outcome.test.js",
-    "node scripts/check-guideline-literals.js src/rebalancer/operation-workflow-owner.js test/rebalancer/operation-workflow-progress-event-driven-reentry.test.js",
-    "node scripts/check-guideline-decision-boundaries.js src/rebalancer/operation-workflow-owner.js test/rebalancer/operation-workflow-progress-event-driven-reentry.test.js",
-    "npm run audit:runtime-grammar:file -- src/rebalancer/operation-workflow-owner.js test/rebalancer/operation-workflow-progress-event-driven-reentry.test.js",
-    "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-spec-led-runtime-modularization-operation-workflow-progress-recovering-in-flight.report.json",
+    "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-spec-led-runtime-modularization-operation-workflow-progress-recovering-in-flight.report.json --explain active_gate_snapshot_coverage",
     "npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-spec-led-runtime-modularization-operation-workflow-progress-recovering-in-flight.report.json",
-    "npm run work:validate",
-    "git diff --check -- package-owned files"
+    "Focused startup_active_gate_owner snapshot coverage fixture for activeNodeCount=5/5, snapshotCoverage=3/5, closureWitnessClass startup_active_publication_lag, pendingAck=0, publicationStatus=PUBLISHED, and selected missing published nodes",
+    "Focused owner tests selected by the implementation boundary",
+    "Touched-file static guardrails: guideline literals, decision boundaries, runtime grammar, and git diff hygiene",
+    "node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-spec-led-runtime-modularization-active-gate-snapshot-coverage-publication-lag.report.json --fast-local --verbose"
   ],
   "touchedFiles": [
-    "src/rebalancer/operation-workflow-owner.js",
-    "test/rebalancer/operation-workflow-progress-event-driven-reentry.test.js",
+    "src/bootstrap/owners/*.js",
+    "src/control-plane/*publication*.js",
+    "src/control-plane/*recovery*.js",
+    "test/bootstrap/*.test.js",
+    "test/control-plane/*publication*.test.js",
+    "test/distributed/harness/*publication*.js",
+    "test/distributed/harness/*active-gate*.js",
+    "test/distributed/harness/cluster-segment-2.js",
+    "test/distributed/harness/__tests__/active-gate-closure-classification.test.js",
     "work/model-ledger.jsonl",
-    "work/packages/done-20260510-spec-led-runtime-modularization-operation-workflow-progress-recovering-in-flight-frontier.md",
+    "work/packages/active-20260510-spec-led-runtime-modularization-active-gate-snapshot-coverage-publication-lag-frontier.md",
     "work/sprints/active-2026-q2-spec-led-runtime-modularization.md",
     "work/sprints/current-blocker.json",
     "work/sprints/current-blocker.md"
   ],
-  "modelFit": {},
+  "modelFit": {
+    "packageClass": "representative-frontier-closure",
+    "intendedMinimumModel": "gpt-5.3-codex",
+    "scopeShape": "owner-boundary-contraction/cross-boundary-causal-edge",
+    "escalationTriggers": [
+      "focused fixture proves the selected snapshot is diagnostics-only and the runtime owner is not startup_active_gate_owner",
+      "proof requires reopening the completed workflow-progress re-entry repair",
+      "proof requires diagnostics schema alias deletion instead of active-gate snapshot coverage owner work",
+      "runtime implementation would need Pro or Enterprise features"
+    ]
+  },
+  "causalGovernance": {
+    "hypothesis": "If startup active-gate snapshot coverage accounts for the selected CL-006 startup publication-lag witness, active_gate_snapshot_coverage should reduce or migrate away from startup_active_publication_lag without reopening workflow_progress.",
+    "stopConditionCheck": "npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-spec-led-runtime-modularization-operation-workflow-progress-recovering-in-flight.report.json",
+    "expectedCausalModelChange": "The CL-006 startup_active_publication_lag edge disappears, reduces, or migrates to a named publication_ack_convergence blocker; same-frontier without reduced witness evidence is contradictory.",
+    "representativeOutcome": "migrated",
+    "causalDebt": "Fresh publication_ack_convergence evidence must be opened or closed separately; do not hide it inside active-gate snapshot coverage closure.",
+    "crossBoundaryReview": "Required before the next runtime implementation because the package crosses startup_active_gate_owner, publication ACK convergence, and completed workflow_progress repairs."
+  },
   "predecessor": "work/packages/done-20260510-spec-led-runtime-modularization-operation-workflow-progress-recovering-in-flight-frontier.md"
 }

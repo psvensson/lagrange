@@ -12,6 +12,7 @@ import {
   PRIORITY_RECOVERY_DECISION_SET_EXPECTED,
   buildPriorityRecoveryPublicationConvergenceFixture,
 } from '../__fixtures__/priority-recovery-actuation-contract-fixture.js';
+import {CLUSTER_SEGMENT_2} from '../cluster-segment-2.js';
 
 const ACTIVE_GATE_READINESS_MODE_LOAD = 'load';
 const ACTIVE_GATE_READINESS_MODE_STARTUP = 'startup';
@@ -27,6 +28,19 @@ const ACTIVE_GATE_PRIORITY_SPREAD_TEST_NAME =
   'active gate classifies publication-closed priority spread as closure witness';
 const ACTIVE_GATE_STARTUP_PUBLICATION_LAG_TEST_NAME =
   'active gate classifies startup publication lag as CL-006 witness when snapshot covers partial nodes and publication gate is stub';
+const ACTIVE_GATE_STARTUP_PUBLICATION_LAG_OWNER_PATH_TEST_NAME =
+  'active gate owner path preserves selected missing published nodes for startup publication lag';
+const ACTIVE_GATE_SELECTED_SNAPSHOT_NODE_ID =
+  '8be8d30f-4499-5eed-865c-71b4d529a67a';
+const ACTIVE_GATE_PUBLISHED_NODE_IDS = Object.freeze([
+  '35a891b8-c1a0-5064-9c6e-2acfba61c2a7',
+  '7493b0ab-a054-5fad-a91b-5e331db29304',
+]);
+const ACTIVE_GATE_MISSING_PUBLISHED_NODE_IDS = Object.freeze([
+  '11601fe0-72d6-5853-8590-ec2881853e72',
+  '8be8d30f-4499-5eed-865c-71b4d529a67a',
+  'ebc4aa0b-06c6-506d-93ea-1dd2deca3f58',
+]);
 
 test(ACTIVE_GATE_PRIORITY_SPREAD_TEST_NAME,
   () => {
@@ -89,3 +103,60 @@ test(ACTIVE_GATE_STARTUP_PUBLICATION_LAG_TEST_NAME,
     });
   });
 
+test(ACTIVE_GATE_STARTUP_PUBLICATION_LAG_OWNER_PATH_TEST_NAME,
+  () => {
+    const progressSnapshot = CLUSTER_SEGMENT_2.buildActiveWaitProgressSnapshot(
+      {
+        allActive: true,
+        nodeDiagnostics: ACTIVE_GATE_MISSING_PUBLISHED_NODE_IDS.map(
+          (nodeId) => ({
+            nodeId,
+            active: true,
+          }),
+        ).concat(
+          ACTIVE_GATE_PUBLISHED_NODE_IDS.map((nodeId) => ({
+            nodeId,
+            active: true,
+          })),
+        ),
+        publicationConvergenceGate: {
+          ready: true,
+          reasons: [],
+          publicationStatus: ACTIVE_GATE_PUBLICATION_STATUS_PUBLISHED,
+          pendingAckNodeIds: [],
+        },
+        snapshotCoverage: {
+          expectedNodeCount: ACTIVE_GATE_EXPECTED_NODE_COUNT,
+          bestCoverageNodeCount: ACTIVE_GATE_PARTIAL_SNAPSHOT_COVERAGE_COUNT,
+          completeCoverage: false,
+          selectedNodeId: ACTIVE_GATE_SELECTED_SNAPSHOT_NODE_ID,
+          selectedAdminReady: true,
+          selectedPublishedActiveNodeIds: ACTIVE_GATE_PUBLISHED_NODE_IDS,
+          selectedMissingPublishedNodeIds:
+            ACTIVE_GATE_MISSING_PUBLISHED_NODE_IDS,
+          selectedPublicationConvergence: {
+            publicationStatus: ACTIVE_GATE_PUBLICATION_STATUS_PUBLISHED,
+          },
+        },
+      },
+      ACTIVE_GATE_EXPECTED_NODE_COUNT,
+      {readinessMode: ACTIVE_GATE_READINESS_MODE_STARTUP},
+    );
+
+    assert.equal(
+      progressSnapshot.missingPublishedCount,
+      ACTIVE_GATE_MISSING_PUBLISHED_COUNT,
+    );
+    assert.equal(
+      progressSnapshot.closureRecordId,
+      ACTIVE_GATE_CLOSURE_RECORD_ID_STARTUP_PUBLICATION_LAG,
+    );
+    assert.equal(
+      progressSnapshot.closureWitnessClass,
+      ACTIVE_GATE_CLOSURE_WITNESS_CLASS_STARTUP_PUBLICATION_LAG,
+    );
+    assert.deepEqual(
+      progressSnapshot.selectedMissingPublishedNodeIds,
+      ACTIVE_GATE_MISSING_PUBLISHED_NODE_IDS,
+    );
+  });

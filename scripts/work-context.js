@@ -49,10 +49,14 @@ const GIT_COMMAND = 'git';
 const GIT_STATUS_ARGS = Object.freeze(['status', '--short']);
 const NPM_RUN_WORK_CURRENT_BLOCKER_COMMAND = 'npm run work:current-blocker';
 const NPM_RUN_WORK_VALIDATE_COMMAND = 'npm run work:validate';
+const NPM_RUN_WORK_PACKAGE_DOCTOR_COMMAND = 'npm run work:package:doctor --';
+const NPM_RUN_WORK_EVIDENCE_SUMMARY_COMMAND = 'npm run work:evidence-summary --';
 const ANALYZE_DISTRIBUTED_FAILURE_COMMAND =
   'npm run analyze:distributed-failure -- --report';
 const ANALYZE_TOPOLOGY_CONVERGENCE_COMMAND =
   'npm run analyze:topology-convergence --';
+const ANALYZE_CAUSAL_MODEL_COMMAND =
+  'npm --silent run analyze:causal-model --';
 const SUMMARIZE_HARNESS_COMMAND =
   'npm run summarize:harness -- --report-dir test-output/reports';
 const CHECK_LITERAL_COMMAND = 'node scripts/check-guideline-literals.js';
@@ -82,6 +86,7 @@ const SPACE = ' ';
 const NEWLINE = '\n';
 const PATH_PRESENT = 'present';
 const PATH_MISSING = 'missing';
+const PATH_PATTERN = 'pattern';
 const PATH_NONE = 'none';
 const OPTIONAL_TEXT_PRESENT = 'optional-text-present';
 const OPTIONAL_TEXT_MISSING = 'optional-text-missing';
@@ -101,6 +106,7 @@ const SECTION_TOUCHED_FILES = 'Touched Files';
 const SECTION_PROOF_LADDER = 'Proof Ladder';
 const SECTION_SUBAGENT_SEQUENCING = 'Subagent Sequencing';
 const SECTION_MODEL_FIT = 'Model Fit';
+const SECTION_CAUSAL_GOVERNANCE = 'Causal Governance';
 const SECTION_OPEN_CHECKLIST = 'Open Package Checklist';
 const SECTION_OUT_OF_SCOPE = 'Out Of Scope';
 const SECTION_USEFUL_COMMANDS = 'Useful Commands';
@@ -163,7 +169,11 @@ const FIELD_LABELS = Object.freeze({
   DIRTY_ENTRIES: 'Dirty entries',
   DOMINANT_REASON: 'Dominant reason',
   ESCALATION_TRIGGERS: 'Escalation triggers',
+  EXPECTED_CAUSAL_MODEL_CHANGE: 'Expected causal-model change',
   INTENDED_MINIMUM_MODEL: 'Intended minimum model',
+  CAUSAL_DEBT: 'Causal debt',
+  CAUSAL_HYPOTHESIS: 'Causal hypothesis',
+  CROSS_BOUNDARY_REVIEW: 'Cross-boundary review',
   MODEL_FIT_PACKAGE_CLASS: 'Package class',
   OWNER: 'Owner',
   PACKAGE: 'Package',
@@ -174,8 +184,10 @@ const FIELD_LABELS = Object.freeze({
   SCOPE_SHAPE: 'Scope shape',
   SPRINT: 'Sprint',
   STATUS: 'Status',
+  STOP_CONDITION_CHECK: 'Stop-condition check',
   SUBAGENT_ROLE: 'Next required subagent role',
   SUBAGENT_STATUS: 'Subagent sequencing status',
+  REPRESENTATIVE_OUTCOME: 'Representative outcome',
 });
 const GIT_GROUP_LABELS = Object.freeze({
   [GIT_GROUP_PACKAGE_OWNED]: 'Package-owned dirty entries',
@@ -198,6 +210,16 @@ const GIT_RENAME_SEPARATOR = ' -> ';
 const DOUBLE_QUOTE = '"';
 const FORWARD_SLASH = '/';
 const REGEXP_ESCAPE_REPLACEMENT = '\\$&';
+const GLOB_ANY_PATH_SEGMENT = '*';
+const GLOB_SINGLE_CHARACTER = '?';
+const GLOB_PATTERN_MARKERS = Object.freeze([
+  GLOB_ANY_PATH_SEGMENT,
+  GLOB_SINGLE_CHARACTER,
+  '[',
+  ']',
+  '{',
+  '}',
+]);
 const METADATA_FIELD_STATUS = 'status';
 const METADATA_FIELD_SCENARIO = 'scenario';
 const METADATA_FIELD_ARTIFACT = 'artifact';
@@ -211,6 +233,7 @@ const METADATA_FIELD_PROOF = 'proof';
 const METADATA_FIELD_TOUCHED_FILES = 'touchedFiles';
 const METADATA_FIELD_PREDECESSOR = 'predecessor';
 const METADATA_FIELD_MODEL_FIT = 'modelFit';
+const METADATA_FIELD_CAUSAL_GOVERNANCE = 'causalGovernance';
 const MODEL_FIT_FIELD_PACKAGE_CLASS = 'packageClass';
 const MODEL_FIT_FIELD_INTENDED_MINIMUM_MODEL = 'intendedMinimumModel';
 const MODEL_FIT_FIELD_SCOPE_SHAPE = 'scopeShape';
@@ -219,6 +242,14 @@ const MODEL_FIT_LABEL_PACKAGE_CLASS = 'Package class';
 const MODEL_FIT_LABEL_INTENDED_MINIMUM_MODEL = 'Intended minimum model';
 const MODEL_FIT_LABEL_SCOPE_SHAPE = 'Scope shape';
 const MODEL_FIT_LABEL_ESCALATION_TRIGGERS = 'Escalation triggers';
+const CAUSAL_GOVERNANCE_FIELD_HYPOTHESIS = 'hypothesis';
+const CAUSAL_GOVERNANCE_FIELD_STOP_CONDITION_CHECK = 'stopConditionCheck';
+const CAUSAL_GOVERNANCE_FIELD_EXPECTED_CAUSAL_MODEL_CHANGE =
+  'expectedCausalModelChange';
+const CAUSAL_GOVERNANCE_FIELD_REPRESENTATIVE_OUTCOME =
+  'representativeOutcome';
+const CAUSAL_GOVERNANCE_FIELD_CAUSAL_DEBT = 'causalDebt';
+const CAUSAL_GOVERNANCE_FIELD_CROSS_BOUNDARY_REVIEW = 'crossBoundaryReview';
 
 function appendSection(lines, title) {
   lines.push(EMPTY_STRING, `${SECTION_HEADING_PREFIX}${title}`);
@@ -342,6 +373,7 @@ async function buildCurrentBlockerFromPackage(packagePath) {
       proof: metadataList(metadata, METADATA_FIELD_PROOF),
       touchedFiles: metadataList(metadata, METADATA_FIELD_TOUCHED_FILES),
       modelFit: metadataModelFit(metadata),
+      causalGovernance: metadataCausalGovernance(metadata),
       predecessor: metadataText(metadata, METADATA_FIELD_PREDECESSOR),
     },
     packageContent: content,
@@ -372,6 +404,39 @@ function metadataModelFit(metadata) {
       metadataText(modelFit, MODEL_FIT_FIELD_SCOPE_SHAPE),
     [MODEL_FIT_FIELD_ESCALATION_TRIGGERS]:
       metadataList(modelFit, MODEL_FIT_FIELD_ESCALATION_TRIGGERS),
+  };
+}
+
+function metadataCausalGovernance(metadata) {
+  const causalGovernance = metadataObject(
+    metadata,
+    METADATA_FIELD_CAUSAL_GOVERNANCE,
+  );
+  return {
+    [CAUSAL_GOVERNANCE_FIELD_HYPOTHESIS]:
+      metadataText(causalGovernance, CAUSAL_GOVERNANCE_FIELD_HYPOTHESIS),
+    [CAUSAL_GOVERNANCE_FIELD_STOP_CONDITION_CHECK]:
+      metadataText(
+        causalGovernance,
+        CAUSAL_GOVERNANCE_FIELD_STOP_CONDITION_CHECK,
+      ),
+    [CAUSAL_GOVERNANCE_FIELD_EXPECTED_CAUSAL_MODEL_CHANGE]:
+      metadataText(
+        causalGovernance,
+        CAUSAL_GOVERNANCE_FIELD_EXPECTED_CAUSAL_MODEL_CHANGE,
+      ),
+    [CAUSAL_GOVERNANCE_FIELD_REPRESENTATIVE_OUTCOME]:
+      metadataText(
+        causalGovernance,
+        CAUSAL_GOVERNANCE_FIELD_REPRESENTATIVE_OUTCOME,
+      ),
+    [CAUSAL_GOVERNANCE_FIELD_CAUSAL_DEBT]:
+      metadataText(causalGovernance, CAUSAL_GOVERNANCE_FIELD_CAUSAL_DEBT),
+    [CAUSAL_GOVERNANCE_FIELD_CROSS_BOUNDARY_REVIEW]:
+      metadataText(
+        causalGovernance,
+        CAUSAL_GOVERNANCE_FIELD_CROSS_BOUNDARY_REVIEW,
+      ),
   };
 }
 
@@ -738,8 +803,16 @@ function buildSubagentSequencingStatus(
 }
 
 async function resolvePathPresenceLabel(filePath) {
+  if (isGlobPattern(filePath)) {
+    return `${filePath} (${PATH_PATTERN})`;
+  }
   const exists = await fileExists(filePath);
   return `${filePath} (${exists ? PATH_PRESENT : PATH_MISSING})`;
+}
+
+function isGlobPattern(filePath) {
+  const normalizedPath = normalizeString(filePath);
+  return GLOB_PATTERN_MARKERS.some((marker) => normalizedPath.includes(marker));
 }
 
 function pathHasRealValue(filePath) {
@@ -841,7 +914,19 @@ function buildUsefulCommands(currentBlocker) {
     NPM_RUN_WORK_CURRENT_BLOCKER_COMMAND,
     NPM_RUN_WORK_VALIDATE_COMMAND,
   ];
+  if (pathHasRealValue(currentBlocker.package)) {
+    commands.push(
+      commandWithPaths(NPM_RUN_WORK_PACKAGE_DOCTOR_COMMAND, [
+        currentBlocker.package,
+      ]),
+    );
+  }
   if (pathHasRealValue(currentBlocker.artifact)) {
+    commands.push(
+      commandWithPaths(NPM_RUN_WORK_EVIDENCE_SUMMARY_COMMAND, [
+        currentBlocker.artifact,
+      ]),
+    );
     commands.push(
       commandWithPaths(ANALYZE_DISTRIBUTED_FAILURE_COMMAND, [
         currentBlocker.artifact,
@@ -852,10 +937,25 @@ function buildUsefulCommands(currentBlocker) {
         currentBlocker.artifact,
       ]),
     );
+    commands.push(
+      commandWithPaths(ANALYZE_CAUSAL_MODEL_COMMAND, [
+        currentBlocker.artifact,
+      ]),
+    );
   }
   if (pathHasRealValue(currentBlocker.playback)) {
     commands.push(
+      commandWithPaths(NPM_RUN_WORK_EVIDENCE_SUMMARY_COMMAND, [
+        path.join(currentBlocker.playback, PLAYBACK_FAILURE_BUNDLE_FILE),
+      ]),
+    );
+    commands.push(
       commandWithPaths(ANALYZE_TOPOLOGY_CONVERGENCE_COMMAND, [
+        path.join(currentBlocker.playback, PLAYBACK_FAILURE_BUNDLE_FILE),
+      ]),
+    );
+    commands.push(
+      commandWithPaths(ANALYZE_CAUSAL_MODEL_COMMAND, [
         path.join(currentBlocker.playback, PLAYBACK_FAILURE_BUNDLE_FILE),
       ]),
     );
@@ -906,11 +1006,40 @@ function pathMatchesAny(filePath, pathSet) {
     filePath :
     `${filePath}${FORWARD_SLASH}`;
   for (const ownedPath of pathSet) {
+    if (isGlobPattern(ownedPath) && globPatternToRegExp(ownedPath).test(filePath)) {
+      return true;
+    }
     if (ownedPath.startsWith(directoryPrefix)) {
       return true;
     }
   }
   return false;
+}
+
+function globPatternToRegExp(pattern) {
+  let expression = '^';
+  for (let index = NUM_ZERO; index < pattern.length; index += NUM_ONE) {
+    const character = pattern[index];
+    const nextCharacter = pattern[index + NUM_ONE];
+    if (
+      character === GLOB_ANY_PATH_SEGMENT &&
+      nextCharacter === GLOB_ANY_PATH_SEGMENT
+    ) {
+      expression += '.*';
+      index += NUM_ONE;
+      continue;
+    }
+    if (character === GLOB_ANY_PATH_SEGMENT) {
+      expression += '[^/]*';
+      continue;
+    }
+    if (character === GLOB_SINGLE_CHARACTER) {
+      expression += '[^/]';
+      continue;
+    }
+    expression += escapeRegExp(character);
+  }
+  return new RegExp(`${expression}$`, 'u');
 }
 
 function normalizeGitStatusPath(filePath) {
@@ -1073,6 +1202,39 @@ async function buildContextLines(currentBlocker, packageContent) {
     lines,
     FIELD_LABELS.ESCALATION_TRIGGERS,
     normalizeStringList(modelFit[MODEL_FIT_FIELD_ESCALATION_TRIGGERS]).join(', '),
+  );
+
+  appendSection(lines, SECTION_CAUSAL_GOVERNANCE);
+  const causalGovernance = currentBlocker.causalGovernance || {};
+  appendKeyValue(
+    lines,
+    FIELD_LABELS.CAUSAL_HYPOTHESIS,
+    causalGovernance[CAUSAL_GOVERNANCE_FIELD_HYPOTHESIS],
+  );
+  appendKeyValue(
+    lines,
+    FIELD_LABELS.STOP_CONDITION_CHECK,
+    causalGovernance[CAUSAL_GOVERNANCE_FIELD_STOP_CONDITION_CHECK],
+  );
+  appendKeyValue(
+    lines,
+    FIELD_LABELS.EXPECTED_CAUSAL_MODEL_CHANGE,
+    causalGovernance[CAUSAL_GOVERNANCE_FIELD_EXPECTED_CAUSAL_MODEL_CHANGE],
+  );
+  appendKeyValue(
+    lines,
+    FIELD_LABELS.REPRESENTATIVE_OUTCOME,
+    causalGovernance[CAUSAL_GOVERNANCE_FIELD_REPRESENTATIVE_OUTCOME],
+  );
+  appendKeyValue(
+    lines,
+    FIELD_LABELS.CAUSAL_DEBT,
+    causalGovernance[CAUSAL_GOVERNANCE_FIELD_CAUSAL_DEBT],
+  );
+  appendKeyValue(
+    lines,
+    FIELD_LABELS.CROSS_BOUNDARY_REVIEW,
+    causalGovernance[CAUSAL_GOVERNANCE_FIELD_CROSS_BOUNDARY_REVIEW],
   );
 
   appendSection(lines, SECTION_CURRENT_STATE);

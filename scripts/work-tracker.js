@@ -6,6 +6,7 @@ import process from 'node:process';
 import {fileURLToPath} from 'node:url';
 
 const ENCODING_UTF8 = 'utf8';
+const EMPTY_TEXT = '';
 const NUM_ZERO = 0;
 const NUM_ONE = 1;
 const NUM_TWO = 2;
@@ -70,6 +71,36 @@ const MODEL_FIT_FOCUSED_PROOF_LABEL = 'Focused proof';
 const MODEL_FIT_SPARK_SAFE_CLASS = 'spark-safe';
 const MODEL_FIT_SPARK_MODEL = 'gpt-5.3-codex-spark';
 const MODEL_FIT_LEAF_SLICE_SCOPE = 'leaf-slice';
+const SCENARIO_NONE = 'none';
+const SCENARIO_UNKNOWN = 'unknown';
+const SCENARIO_TEMPLATE_VALUE = 'scenario-or-none';
+const CAUSAL_GOVERNANCE_METADATA_FIELD = 'causalGovernance';
+const CAUSAL_GOVERNANCE_HYPOTHESIS_FIELD = 'hypothesis';
+const CAUSAL_GOVERNANCE_STOP_CONDITION_FIELD = 'stopConditionCheck';
+const CAUSAL_GOVERNANCE_EXPECTED_CHANGE_FIELD = 'expectedCausalModelChange';
+const CAUSAL_GOVERNANCE_REPRESENTATIVE_OUTCOME_FIELD =
+  'representativeOutcome';
+const CAUSAL_GOVERNANCE_CAUSAL_DEBT_FIELD = 'causalDebt';
+const CAUSAL_GOVERNANCE_CROSS_BOUNDARY_REVIEW_FIELD = 'crossBoundaryReview';
+const CAUSAL_GOVERNANCE_PENDING_OUTCOME = 'pending-before-rerun';
+const CAUSAL_GOVERNANCE_VALID_OUTCOMES = Object.freeze([
+  'representative-green',
+  'reduced',
+  'same-frontier',
+  'migrated',
+  'contradictory',
+  CAUSAL_GOVERNANCE_PENDING_OUTCOME,
+]);
+const CAUSAL_GOVERNANCE_REQUIRED_FIELDS = Object.freeze([
+  CAUSAL_GOVERNANCE_HYPOTHESIS_FIELD,
+  CAUSAL_GOVERNANCE_STOP_CONDITION_FIELD,
+  CAUSAL_GOVERNANCE_EXPECTED_CHANGE_FIELD,
+  CAUSAL_GOVERNANCE_REPRESENTATIVE_OUTCOME_FIELD,
+  CAUSAL_GOVERNANCE_CAUSAL_DEBT_FIELD,
+  CAUSAL_GOVERNANCE_CROSS_BOUNDARY_REVIEW_FIELD,
+]);
+const CAUSAL_GOVERNANCE_CAUSAL_MODEL_COMMAND_PATTERN =
+  /\bnpm\s+(?:--silent\s+)?run\s+analyze:causal-model\b/iu;
 const MODEL_FIT_EMPTY_VALUE_PATTERN = /^(?:none|n\/a|na|unknown|tbd|todo)$/iu;
 const MODEL_FIT_FOCUSED_PROOF_COMMAND_PATTERN =
   /\b(?:npm\s+run|node(?:\s+--test)?|tap|rg|git\s+diff)\b/iu;
@@ -135,6 +166,7 @@ const CLI_FLAG_TO = '--to';
 const CLI_FLAG_SUCCESSOR = '--successor';
 const CLI_COMMAND_CURRENT_BLOCKER = 'current-blocker';
 const CLI_COMMAND_VALIDATE = 'validate';
+const CLI_COMMAND_DOCTOR = 'doctor';
 const CLI_COMMAND_CLOSE = 'close';
 const CLI_COMMAND_MIGRATE = 'migrate';
 const CLI_COMMAND_MOVE = 'move';
@@ -147,6 +179,7 @@ function printUsage() {
     'Usage:',
     '  node scripts/work-tracker.js current-blocker [--write]',
     '  node scripts/work-tracker.js validate [--all] [paths...]',
+    '  node scripts/work-tracker.js doctor [package]',
     '  node scripts/work-tracker.js close <package> [--write]',
     '  node scripts/work-tracker.js migrate <package> <successor> [--write]',
     '  node scripts/work-tracker.js move <package> --to <status> [--write]',
@@ -228,10 +261,6 @@ function findCheckedSubagentLedgerEntry(ledger, label) {
     content,
     index: itemStart,
   };
-}
-
-function findCheckedSubagentLedgerItem(ledger, label) {
-  return findCheckedSubagentLedgerEntry(ledger, label)?.content || null;
 }
 
 function validateCheckedSubagentLedgerItem(content, options = {}) {
@@ -737,6 +766,98 @@ export function validateModelFitContract(content, filePath, options = {}) {
   return errors;
 }
 
+function isObjectRecord(value) {
+  return value && typeof value === 'object' && !Array.isArray(value);
+}
+
+function isScenarioDrivenMetadata(metadata) {
+  const scenario = normalizeLedgerText(metadata?.scenario).toLowerCase();
+  return scenario.length > NUM_ZERO &&
+    scenario !== SCENARIO_NONE &&
+    scenario !== SCENARIO_UNKNOWN &&
+    scenario !== SCENARIO_TEMPLATE_VALUE;
+}
+
+function validateCausalGovernanceField(filePath, fieldName, value) {
+  const normalizedValue = normalizeLedgerText(value);
+  if (
+    normalizedValue.length === NUM_ZERO ||
+    MODEL_FIT_EMPTY_VALUE_PATTERN.test(normalizedValue) ||
+    LEDGER_TEMPLATE_PLACEHOLDER_PATTERN.test(normalizedValue) ||
+    normalizedValue.includes(LEDGER_PENDING_BEFORE_IMPLEMENTATION_MARKER)
+  ) {
+    return [
+      `${filePath}: causalGovernance.${fieldName} must be a concrete value.`,
+    ];
+  }
+  return [];
+}
+
+export function validateCausalGovernanceContract(
+  metadata,
+  filePath,
+  options = {},
+) {
+  const requiresGovernance =
+    options[LEDGER_VALIDATION_REQUIRES_LEDGER] === true;
+  const fileStatus = options.status || normalizeLedgerText(metadata?.status);
+  const causalGovernance = metadata?.[CAUSAL_GOVERNANCE_METADATA_FIELD];
+  if (!causalGovernance) {
+    return requiresGovernance ?
+      [`${filePath}: metadata causalGovernance is required.`] :
+      [];
+  }
+  if (!isObjectRecord(causalGovernance)) {
+    return [`${filePath}: metadata causalGovernance must be an object.`];
+  }
+
+  const errors = [];
+  for (const fieldName of CAUSAL_GOVERNANCE_REQUIRED_FIELDS) {
+    errors.push(
+      ...validateCausalGovernanceField(
+        filePath,
+        fieldName,
+        causalGovernance[fieldName],
+      ),
+    );
+  }
+
+  const representativeOutcome = normalizeLedgerText(
+    causalGovernance[CAUSAL_GOVERNANCE_REPRESENTATIVE_OUTCOME_FIELD],
+  ).toLowerCase();
+  if (
+    representativeOutcome.length > NUM_ZERO &&
+    !CAUSAL_GOVERNANCE_VALID_OUTCOMES.includes(representativeOutcome)
+  ) {
+    errors.push(
+      `${filePath}: causalGovernance.representativeOutcome must be one of ` +
+      CAUSAL_GOVERNANCE_VALID_OUTCOMES.join(', ') + '.',
+    );
+  }
+  if (
+    (fileStatus === STATUS_DONE || fileStatus === STATUS_SUPERSEDED) &&
+    representativeOutcome === CAUSAL_GOVERNANCE_PENDING_OUTCOME
+  ) {
+    errors.push(
+      `${filePath}: closed packages must classify representativeOutcome as ` +
+      'representative-green, reduced, same-frontier, migrated, or contradictory.',
+    );
+  }
+  if (
+    !CAUSAL_GOVERNANCE_CAUSAL_MODEL_COMMAND_PATTERN.test(
+      normalizeLedgerText(
+        causalGovernance[CAUSAL_GOVERNANCE_STOP_CONDITION_FIELD],
+      ),
+    )
+  ) {
+    errors.push(
+      `${filePath}: causalGovernance.stopConditionCheck must cite ` +
+      '`npm run analyze:causal-model`.',
+    );
+  }
+  return errors;
+}
+
 function normalizeCliPath(filePath) {
   return path.normalize(
     path.isAbsolute(filePath) ? filePath : path.join(process.cwd(), filePath),
@@ -782,7 +903,14 @@ async function listPackageFiles() {
 }
 
 async function listSprintFiles() {
-  return listMarkdownFiles(WORK_SPRINTS_DIR);
+  const sprintFiles = await listMarkdownFiles(WORK_SPRINTS_DIR);
+  return sprintFiles.filter((filePath) => !isGeneratedCurrentBlockerPath(filePath));
+}
+
+export function isGeneratedCurrentBlockerPath(filePath) {
+  const normalizedPath = normalizeRelativePath(filePath);
+  return normalizedPath === CURRENT_BLOCKER_MARKDOWN_PATH ||
+    normalizedPath === CURRENT_BLOCKER_JSON_PATH;
 }
 
 function parsePackageMetadata(content, filePath) {
@@ -889,6 +1017,13 @@ async function validatePackageFile(filePath) {
     [LEDGER_VALIDATION_REQUIRES_LEDGER]:
       fileStatus === STATUS_ACTIVE && metadata !== null,
   }));
+  errors.push(...validateCausalGovernanceContract(metadata, relativePath, {
+    [LEDGER_VALIDATION_REQUIRES_LEDGER]:
+      fileStatus === STATUS_ACTIVE &&
+      metadata !== null &&
+      isScenarioDrivenMetadata(metadata),
+    status: fileStatus,
+  }));
   errors.push(...validateCommitAndPushLedger(content, relativePath, {
     [LEDGER_VALIDATION_REQUIRES_LEDGER]:
       metadata !== null &&
@@ -957,6 +1092,112 @@ async function validateCommand(args) {
   console.log(`Work tracker validation OK for ${targets.length} file(s).`);
 }
 
+function appendDoctorField(lines, label, value) {
+  lines.push(`- ${label}: ${normalizeLedgerText(value) || DEFAULT_UNKNOWN}`);
+}
+
+function summarizeDoctorMetadata(metadata = {}) {
+  return {
+    scenario: metadata.scenario || DEFAULT_UNKNOWN,
+    owner: metadata.owner || DEFAULT_UNKNOWN,
+    boundary: metadata.boundary || DEFAULT_UNKNOWN,
+    dominantReason: metadata.dominantReason || DEFAULT_UNKNOWN,
+    touchedFileCount: Array.isArray(metadata.touchedFiles) ?
+      metadata.touchedFiles.length :
+      NUM_ZERO,
+    proofCount: Array.isArray(metadata.proof) ? metadata.proof.length : NUM_ZERO,
+  };
+}
+
+export function buildPackageDoctorLines(filePath, content) {
+  const relativePath = normalizeRelativePath(filePath);
+  const fileStatus = getPackageStatusFromPath(filePath) || DEFAULT_UNKNOWN;
+  const errors = [];
+  let metadata = null;
+  try {
+    metadata = parsePackageMetadata(content, relativePath);
+  } catch (error) {
+    errors.push(error.message);
+  }
+  if (!getPackageStatusFromPath(filePath)) {
+    errors.push(`${relativePath}: package filename has no valid status prefix.`);
+  }
+  if (
+    (fileStatus === STATUS_DONE || fileStatus === STATUS_SUPERSEDED) &&
+    hasOpenChecklist(content)
+  ) {
+    errors.push(`${relativePath}: closed package still has open checklist items.`);
+  }
+  errors.push(...validatePackageMetadataShape(relativePath, fileStatus, metadata));
+  errors.push(...validateSubagentSequencingLedger(content, relativePath, {
+    [LEDGER_VALIDATION_REQUIRES_LEDGER]:
+      fileStatus === STATUS_ACTIVE && metadata !== null,
+    [LEDGER_VALIDATION_REQUIRES_STRICT_ENTRIES]:
+      fileStatus === STATUS_ACTIVE && metadata !== null,
+  }));
+  errors.push(...validateModelFitContract(content, relativePath, {
+    [LEDGER_VALIDATION_REQUIRES_LEDGER]:
+      fileStatus === STATUS_ACTIVE && metadata !== null,
+  }));
+  errors.push(...validateCausalGovernanceContract(metadata, relativePath, {
+    [LEDGER_VALIDATION_REQUIRES_LEDGER]:
+      fileStatus === STATUS_ACTIVE &&
+      metadata !== null &&
+      isScenarioDrivenMetadata(metadata),
+    status: fileStatus,
+  }));
+  errors.push(...validateCommitAndPushLedger(content, relativePath, {
+    [LEDGER_VALIDATION_REQUIRES_LEDGER]:
+      metadata !== null &&
+      metadata[METADATA_COMMIT_AND_PUSH_LEDGER_REQUIRED] === true,
+  }));
+
+  const metadataSummary = summarizeDoctorMetadata(metadata || {});
+  const lines = ['# Work Package Doctor'];
+  appendDoctorField(lines, 'Package', relativePath);
+  appendDoctorField(lines, 'Status', fileStatus);
+  appendDoctorField(lines, 'Scenario', metadataSummary.scenario);
+  appendDoctorField(lines, 'Owner', metadataSummary.owner);
+  appendDoctorField(lines, 'Boundary', metadataSummary.boundary);
+  appendDoctorField(lines, 'Dominant reason', metadataSummary.dominantReason);
+  appendDoctorField(lines, 'Touched files', String(metadataSummary.touchedFileCount));
+  appendDoctorField(lines, 'Proof commands', String(metadataSummary.proofCount));
+  appendDoctorField(lines, 'Validation', errors.length === NUM_ZERO ? 'ok' : 'failed');
+  if (errors.length > NUM_ZERO) {
+    lines.push('', '## Findings');
+    for (const error of errors) {
+      lines.push(`- ${error}`);
+    }
+  }
+  return {
+    lines,
+    errors,
+  };
+}
+
+async function resolveDoctorPackagePath(args) {
+  const packageArg = args.find((arg) => !arg.startsWith('--'));
+  if (packageArg) {
+    return normalizeCliPath(packageArg);
+  }
+  const activeSprintFile = await findActiveSprintFile();
+  const activePackageFile = await findActivePackageFile(activeSprintFile);
+  if (!activePackageFile) {
+    throw new Error(ERROR_NO_ACTIVE_PACKAGE);
+  }
+  return activePackageFile;
+}
+
+async function doctorCommand(args) {
+  const packagePath = await resolveDoctorPackagePath(args);
+  const content = await readTextFile(packagePath);
+  const report = buildPackageDoctorLines(packagePath, content);
+  console.log(report.lines.join(NEWLINE));
+  if (report.errors.length > NUM_ZERO) {
+    process.exit(EXIT_FAILURE);
+  }
+}
+
 async function findActiveSprintFile() {
   const sprintFiles = await listSprintFiles();
   return sprintFiles.find((filePath) =>
@@ -1001,6 +1242,7 @@ function buildCurrentBlockerPayload(activeSprintFile, activePackageFile, metadat
     proof: Array.isArray(metadata.proof) ? metadata.proof : [],
     touchedFiles: Array.isArray(metadata.touchedFiles) ? metadata.touchedFiles : [],
     modelFit: metadata.modelFit || {},
+    causalGovernance: metadata.causalGovernance || {},
     predecessor: metadata.predecessor || null,
   };
 }
@@ -1058,6 +1300,26 @@ function renderCurrentBlockerMarkdown(payload) {
     'Escalation triggers:',
     '',
     formatMarkdownList(payload.modelFit?.escalationTriggers || []),
+    '',
+    '## Causal Governance',
+    '',
+    'Causal hypothesis: ' +
+      `\`${payload.causalGovernance?.hypothesis || DEFAULT_UNKNOWN}\``,
+    '',
+    'Stop-condition check: ' +
+      `\`${payload.causalGovernance?.stopConditionCheck || DEFAULT_UNKNOWN}\``,
+    '',
+    'Expected causal-model change: ' +
+      `\`${payload.causalGovernance?.expectedCausalModelChange || DEFAULT_UNKNOWN}\``,
+    '',
+    'Representative outcome: ' +
+      `\`${payload.causalGovernance?.representativeOutcome || DEFAULT_UNKNOWN}\``,
+    '',
+    'Causal debt: ' +
+      `\`${payload.causalGovernance?.causalDebt || DEFAULT_UNKNOWN}\``,
+    '',
+    'Cross-boundary review: ' +
+      `\`${payload.causalGovernance?.crossBoundaryReview || DEFAULT_UNKNOWN}\``,
     '',
     '## Touched Files',
     '',
@@ -1200,6 +1462,10 @@ async function main() {
   try {
     if (command === CLI_COMMAND_VALIDATE) {
       await validateCommand(args);
+      return;
+    }
+    if (command === CLI_COMMAND_DOCTOR) {
+      await doctorCommand(args);
       return;
     }
     if (command === CLI_COMMAND_CURRENT_BLOCKER) {

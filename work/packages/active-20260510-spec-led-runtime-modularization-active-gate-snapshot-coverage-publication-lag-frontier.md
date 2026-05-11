@@ -11,8 +11,8 @@
   "owner": "startup_active_gate_owner",
   "boundary": "snapshot_coverage",
   "dominantReason": "active_gate_timed_out",
-  "currentState": "The workflow-progress recovering-in-flight package closed the focused operation owner re-entry residual. The fresh representative rerun remains non-green with activeNodeCount=5/5, snapshotCoverage=3/5, publicationStatus=PUBLISHED, pendingAck=0, missingPublishedCount=3 on the selected active-gate snapshot, closureWitnessClass startup_active_publication_lag, and no detailed priorityRecoveryProgressSummary. Topology and causal analysis select startup_active_gate_owner / snapshot_coverage as the next blocked frontier.",
-  "nextAction": "Review the just-closed workflow-progress package, then freeze the CL-006 startup_active_publication_lag active-gate snapshot witness and repair or classify why active nodes are not all covered by the selected active-gate publication snapshot.",
+  "currentState": "Implemented the focused CL-006 startup_active_publication_lag owner-path reduction: startup active-gate progress now derives missingPublishedCount from selectedMissingPublishedNodeIds when publication is PUBLISHED, pending ACKs are converged, and the selected snapshot partitions all expected nodes into published plus missing sets. The focused owner-path fixture passes. The representative rerun is still non-green, but the fresh causal first critical path moved to publication_ack_convergence/publication_ack_blocked and the active-gate snapshot witness no longer has all nodes active.",
+  "nextAction": "Review this package slice, decide whether to close/migrate to the fresh publication_ack_convergence blocker after resolving or accepting the inherited harness literal guard failure, and preserve the CL-006 owner-path fixture.",
   "proof": [
     "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-spec-led-runtime-modularization-operation-workflow-progress-recovering-in-flight.report.json --explain active_gate_snapshot_coverage",
     "npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-spec-led-runtime-modularization-operation-workflow-progress-recovering-in-flight.report.json",
@@ -29,6 +29,8 @@
     "test/control-plane/*publication*.test.js",
     "test/distributed/harness/*publication*.js",
     "test/distributed/harness/*active-gate*.js",
+    "test/distributed/harness/cluster-segment-2.js",
+    "test/distributed/harness/__tests__/active-gate-closure-classification.test.js",
     "work/model-ledger.jsonl",
     "work/packages/active-20260510-spec-led-runtime-modularization-active-gate-snapshot-coverage-publication-lag-frontier.md",
     "work/sprints/active-2026-q2-spec-led-runtime-modularization.md",
@@ -45,6 +47,14 @@
       "proof requires diagnostics schema alias deletion instead of active-gate snapshot coverage owner work",
       "runtime implementation would need Pro or Enterprise features"
     ]
+  },
+  "causalGovernance": {
+    "hypothesis": "If startup active-gate snapshot coverage accounts for the selected CL-006 startup publication-lag witness, active_gate_snapshot_coverage should reduce or migrate away from startup_active_publication_lag without reopening workflow_progress.",
+    "stopConditionCheck": "npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-spec-led-runtime-modularization-operation-workflow-progress-recovering-in-flight.report.json",
+    "expectedCausalModelChange": "The CL-006 startup_active_publication_lag edge disappears, reduces, or migrates to a named publication_ack_convergence blocker; same-frontier without reduced witness evidence is contradictory.",
+    "representativeOutcome": "migrated",
+    "causalDebt": "Fresh publication_ack_convergence evidence must be opened or closed separately; do not hide it inside active-gate snapshot coverage closure.",
+    "crossBoundaryReview": "Required before the next runtime implementation because the package crosses startup_active_gate_owner, publication ACK convergence, and completed workflow_progress repairs."
   },
   "predecessor": "work/packages/done-20260510-spec-led-runtime-modularization-operation-workflow-progress-recovering-in-flight-frontier.md"
 }
@@ -149,6 +159,24 @@ only three of five expected nodes.
   causal-model output, focused owner fixture, touched-file guardrails, and one
   representative rolling-restart rerun.
 
+## Causal Governance
+
+- Causal hypothesis: if startup active-gate snapshot coverage accounts for the
+  selected CL-006 startup publication-lag witness, the causal model should reduce
+  or migrate away from `startup_active_publication_lag` without reopening the
+  completed `workflow_progress` repair.
+- Stop-condition check:
+  `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-spec-led-runtime-modularization-operation-workflow-progress-recovering-in-flight.report.json`.
+- Expected causal-model change: the CL-006 publication-lag edge disappears,
+  reduces, or migrates to a named `publication_ack_convergence` blocker;
+  same-frontier without reduced witness evidence is contradictory.
+- Representative outcome: `migrated`.
+- Causal debt: fresh `publication_ack_convergence` evidence must be opened or
+  closed separately; do not hide it inside active-gate snapshot coverage closure.
+- Cross-boundary review: required before the next runtime implementation because
+  this package crosses startup active-gate ownership, publication ACK convergence,
+  and completed workflow-progress repairs.
+
 ## Shared Boundary Contract
 
 Semantic owner: `startup_active_gate_owner`.
@@ -212,5 +240,5 @@ static guardrails, causal-model output, and representative rolling-restart.
       Agent Gatecheck (`6dc3e7d5-3f5e-4976-a506-2872c0f3d8e9`) reviewed `work/packages/done-20260510-spec-led-runtime-modularization-operation-workflow-progress-recovering-in-flight-frontier.md`; result `clean`.
 - [x] Fix subagent recorded or explicitly not needed:
       not-needed.
-- [ ] Implementation subagent recorded:
+- [x] Implementation subagent recorded:
       Agent Copilot (`8f971078-63fd-40d9-a0be-6de4c4a27a36`) implemented `work/packages/active-20260510-spec-led-runtime-modularization-active-gate-snapshot-coverage-publication-lag-frontier.md`.

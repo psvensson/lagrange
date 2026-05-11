@@ -98,6 +98,8 @@
     "work:dirty-scope": "node scripts/work-context.js --dirty-scope",
     "work:model-ledger": "node scripts/model-ledger.js",
     "work:package:evidence-block": "node scripts/analyze-topology-convergence.js --package-evidence-block",
+    "work:package:doctor": "node scripts/work-tracker.js doctor",
+    "work:evidence-summary": "node scripts/summarize-representative-evidence.js",
     "work:validate": "node scripts/work-tracker.js validate",
     "work:package:close": "node scripts/work-tracker.js close",
     "work:package:migrate": "node scripts/work-tracker.js migrate",

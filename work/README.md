@@ -41,26 +41,32 @@ Use the tracker utility for current sprint/package mechanics:
 4. `npm run work:model-ledger -- summary` prints recent model, reasoning
    effort, task class, package class, intended minimum model, scope shape,
    escalation, bailout, outcome, validation, correction-loop, and
-   review-finding signals with a simple advisory recommendation to escalate,
-   de-escalate, or hold effort.
-5. `npm run work:validate` checks active and metadata-bearing packages for
-   filename/header drift, stale open checklist items, and required Subagent
-   Sequencing Ledgers on active metadata-bearing packages.
-6. `npm run work:package:close -- --write work/packages/active-...md` renames a
-   package to `done-...` only after open checklist items are closed.
-7. `npm run work:package:migrate -- --write work/packages/active-...md`
-   `work/packages/active-successor.md` performs the same closure gate while
-   recording a successor handoff.
-8. `npm run work:package:move -- --write work/packages/todo-...md --to active`
-   performs non-terminal state moves.
-9. `npm run work:package:evidence-block -- <artifact>` generates a Markdown
-   owner/evidence block from topology-convergence analyzer output for package
-   migration or contraction notes.
-10. After each completed package slice, create one focused git commit containing
-   only that slice's package-owned changes and push the current branch before
-   starting the next slice.
-11. If the slice cannot be pushed because the remote or credentials are
-   unavailable, record the unpushed commit SHA and reason in the package or
+    review-finding signals with a simple advisory recommendation to escalate,
+    de-escalate, or hold effort.
+5. `npm run work:package:doctor -- work/packages/active-...md` prints a compact
+   package summary plus the same validation findings used by the tracker. It is
+   a local diagnostic aid only; it does not replace real subagent sequencing.
+6. `npm run work:evidence-summary -- <artifact>` prints a compact deterministic
+   topology plus causal-model summary for LLM handoff before reading raw logs or
+   large harness segment files.
+7. `npm run work:validate` checks active and metadata-bearing packages for
+    filename/header drift, stale open checklist items, and required Subagent
+    Sequencing Ledgers on active metadata-bearing packages.
+8. `npm run work:package:close -- --write work/packages/active-...md` renames a
+    package to `done-...` only after open checklist items are closed.
+9. `npm run work:package:migrate -- --write work/packages/active-...md`
+    `work/packages/active-successor.md` performs the same closure gate while
+    recording a successor handoff.
+10. `npm run work:package:move -- --write work/packages/todo-...md --to active`
+    performs non-terminal state moves.
+11. `npm run work:package:evidence-block -- <artifact>` generates a Markdown
+    owner/evidence block from topology-convergence analyzer output for package
+    migration or contraction notes.
+12. After each completed package slice, create one focused git commit containing
+    only that slice's package-owned changes and push the current branch before
+    starting the next slice.
+13. If the slice cannot be pushed because the remote or credentials are
+    unavailable, record the unpushed commit SHA and reason in the package or
    sprint handoff. If package-owned and unrelated dirty changes cannot be
    separated safely, stop for human direction instead of committing a mixed
    slice.
@@ -236,6 +242,14 @@ Every active package should start with a machine-readable metadata comment:
       "owned files expand beyond this package"
     ]
   },
+  "causalGovernance": {
+    "hypothesis": "predicted causal edge change",
+    "stopConditionCheck": "npm --silent run analyze:causal-model -- path/to/latest.report.json",
+    "expectedCausalModelChange": "edge disappears, reduces, migrates, or contradicts the hypothesis",
+    "representativeOutcome": "pending-before-rerun",
+    "causalDebt": "residual causal debt tracked outside local closure",
+    "crossBoundaryReview": "due/not-due/required-before-next-runtime-package"
+  },
   "predecessor": "work/packages/done-predecessor.md"
 }
 -->
@@ -287,7 +301,7 @@ Every work package should answer:
     - what replayable owner-decision fixture or blocker probe represents the
       current blocker
 15. If the representative scenario remains red after repeated local fixes or
-    classification-only reductions:
+     classification-only reductions:
     - whether the next package must be causal-analysis infrastructure instead
       of another tactical runtime patch
     - what end-to-end phase model the scenario follows
@@ -296,6 +310,34 @@ Every work package should answer:
     - which invariants and failure classes are canonical
     - what stop conditions decide local fix, owner-boundary migration, broader
       architecture work, or human escalation
+
+## Causal Governance Gate
+
+Scenario-driven active packages must keep systemic reasoning in front of local
+bugfixing. `npm run work:validate` requires metadata `causalGovernance` for
+active packages with a real scenario.
+
+Required fields:
+
+1. `hypothesis`: the causal hypothesis for this owner-boundary package.
+2. `stopConditionCheck`: the causal-model command or artifact check, citing
+   `npm run analyze:causal-model`.
+3. `expectedCausalModelChange`: the predicted edge/class change that makes the
+   runtime patch meaningful.
+4. `representativeOutcome`: exactly one of `pending-before-rerun`,
+   `representative-green`, `reduced`, `same-frontier`, `migrated`, or
+   `contradictory`. Closed packages must not leave it pending.
+5. `causalDebt`: residual causal work tracked separately from local closure.
+6. `crossBoundaryReview`: whether a periodic cross-boundary review is due now,
+   not due, or required before the next runtime package.
+
+The closure rule is: no runtime patch lands merely because it improves a local
+symptom. The package must prove the causal model changed in the predicted way,
+or classify the result as same-frontier or contradictory and stop broadening.
+
+Use cross-boundary reviews after every two to three scenario-driven packages, or
+immediately when a blocker crosses owner boundaries such as active-gate,
+publication ACK convergence, operation workflow, and rebalancer ownership.
 
 ## Model Fit
 

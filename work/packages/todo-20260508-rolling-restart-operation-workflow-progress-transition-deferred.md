@@ -27,6 +27,24 @@
     "work/sprints/current-blocker.json",
     "work/sprints/current-blocker.md"
   ],
+  "modelFit": {
+    "packageClass": "representative-frontier-closure",
+    "intendedMinimumModel": "gpt-5.3-codex",
+    "scopeShape": "owner-boundary-contraction",
+    "escalationTriggers": [
+      "workflow progress evidence requires changes outside operation_workflow_owner or priority recovery snapshots",
+      "representative proof restores startup_active_gate_owner / snapshot_coverage as the direct blocker before workflow progress is classified",
+      "runtime implementation would need Pro or Enterprise features"
+    ]
+  },
+  "causalGovernance": {
+    "hypothesis": "If the workflow-progress transition-deferred owner path is repaired or classified, priority_recovery_partition_progress should reduce or migrate away from operation_workflow_owner / workflow_progress before startup_active_gate_owner / snapshot_coverage is treated as direct.",
+    "stopConditionCheck": "npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-current-release-gate-20260508T194848Z.report.json",
+    "expectedCausalModelChange": "The transition_deferred workflow_progress edge either disappears, reduces to classified retryable backpressure, or migrates to the already-recorded operation_workflow_owner / rebalancer_handoff blocker.",
+    "representativeOutcome": "migrated",
+    "causalDebt": "The rebalancer_handoff successor remains separate causal debt; this package must not absorb that owner boundary while still named workflow_progress.",
+    "crossBoundaryReview": "Required before reactivating this package because its recorded representative rerun already crossed from workflow_progress to rebalancer_handoff."
+  },
   "predecessor": "work/packages/done-20260508-core-topology-legacy-path-deletion-and-proof.md"
 }
 -->
@@ -125,7 +143,49 @@ Edition matrix status: Community / AGPL repo.
 4. `startup_active_gate_owner / snapshot_coverage` remains downstream until
    priority workflow progress closes or migrates.
 5. No domain/runtime scalar, absence state, or independent branch lattice may
-   be introduced while fixing the owner-path boundary.
+    be introduced while fixing the owner-path boundary.
+
+## Model Fit
+
+- Package class: `representative-frontier-closure`
+- Intended minimum model: `gpt-5.3-codex`
+- Scope shape: `owner-boundary-contraction`
+- Owned files: `operation_workflow_owner` workflow-progress owner tests and
+  diagnostics consumers named in Hotspots, this package file, and tracker
+  handoff files.
+- Forbidden files: startup active-gate owner implementation, unrelated archived
+  rolling-restart packages, harness timeout configuration, Pro or Enterprise
+  surfaces.
+- Frozen decisions: this todo remains a workflow-progress package; the recorded
+  rebalancer-handoff migration is successor evidence, not scope expansion inside
+  this package.
+- Escalation triggers: workflow progress evidence requires changes outside
+  `operation_workflow_owner` or priority recovery snapshots; representative
+  proof restores startup active-gate snapshot coverage as the direct blocker
+  before workflow progress is classified; runtime implementation would need Pro
+  or Enterprise features.
+- Focused proof: topology explain for `priority_recovery_partition_progress`,
+  causal-model output, focused workflow-progress owner probe, touched-file
+  guardrails, and one representative rolling-restart rerun.
+
+## Causal Governance
+
+- Causal hypothesis: if the workflow-progress transition-deferred owner path is
+  repaired or classified, `priority_recovery_partition_progress` should reduce
+  or migrate away from `operation_workflow_owner / workflow_progress` before
+  startup active-gate snapshot coverage is treated as direct.
+- Stop-condition check:
+  `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-current-release-gate-20260508T194848Z.report.json`.
+- Expected causal-model change: the `transition_deferred` workflow-progress edge
+  disappears, reduces to classified retryable backpressure, or migrates to the
+  already-recorded `operation_workflow_owner / rebalancer_handoff` blocker.
+- Representative outcome: `migrated`.
+- Causal debt: the `rebalancer_handoff` successor remains separate causal debt;
+  this package must not absorb that owner boundary while still named
+  `workflow_progress`.
+- Cross-boundary review: required before reactivating this package because its
+  recorded representative rerun already crossed from `workflow_progress` to
+  `rebalancer_handoff`.
 
 ## Hotspots
 

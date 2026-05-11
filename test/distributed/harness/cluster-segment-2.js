@@ -178,7 +178,7 @@ function resolveSteadyPublishedSelectedMissingCount({
 }
 
 function resolveStartupPublicationLagSelectedMissingCount({
-  readinessMode = null,
+  readinessMode = UNKNOWN_STATE,
   expectedNodeCount = ZERO,
   publicationStatus = PUBLICATION_CONVERGENCE_GATE_SUMMARY_TEXT.EMPTY,
   pendingAckNodeIds = [],
@@ -1271,6 +1271,11 @@ function buildActiveWaitProgressSnapshot(
       selectedPublishedActiveNodeIds,
       selectedMissingPublishedNodeIds,
     });
+  const normalizedMissingPublishedCount = Math.max(
+    missingPublishedCount,
+    steadyPublishedSelectedMissingCount,
+    startupPublicationLagSelectedMissingCount,
+  );
   const priorityRecoveryDecisionSnapshots =
     snapshotCoverage?.selectedPriorityRecoveryDecisionSnapshots &&
     typeof snapshotCoverage.selectedPriorityRecoveryDecisionSnapshots ===
@@ -1318,6 +1323,20 @@ function buildActiveWaitProgressSnapshot(
   if (blockers.length === ZERO && probeResult?.allActive === true) {
     blockers.push(ACTIVE_WAIT_BLOCKER_READY);
   }
+  const progressPublicationRecoveryGate = buildPublicationRecoveryGateSnapshot({
+    ...publicationConvergenceGate,
+    publicationStatus,
+    recoveryProtocolState,
+    priorityRecoveryReasonCodes:
+      publicationConvergenceGate?.priorityRecoveryReasonCodes,
+    priorityPartitionSummary,
+    priorityRecoveryDecisionSnapshots,
+    priorityRecoveryClosureWitness:
+      priorityRecoveryDecisionSnapshots?.closureWitness || null,
+    pendingAckNodeIds,
+    missingPublishedNodeIds: selectedMissingPublishedNodeIds,
+    missingPublishedCount: normalizedMissingPublishedCount,
+  });
 
   const closureWitness = classifyActiveGateClosureWitness({
     progressSnapshot: {
@@ -1329,20 +1348,13 @@ function buildActiveWaitProgressSnapshot(
       publicationStatus,
       recoveryProtocolState,
       pendingAckCount: pendingAckNodeIds.length,
-      missingPublishedCount: Math.max(
-        missingPublishedCount,
-        steadyPublishedSelectedMissingCount,
-        startupPublicationLagSelectedMissingCount,
-      ),
+      missingPublishedCount: normalizedMissingPublishedCount,
       gateReasons,
       prioritySpreadSatisfied,
       priorityRecoveryDecisionSnapshots,
       priorityRecoveryClosureWitness:
         priorityRecoveryDecisionSnapshots?.closureWitness || null,
-      publicationRecoveryGate:
-        publicationConvergenceGate?.publicationRecoveryGate ||
-        publicationConvergenceGate ||
-        null,
+      publicationRecoveryGate: progressPublicationRecoveryGate,
       selectedSnapshotAdminReady,
       selectedSnapshotReachableBy,
       selectedSnapshotError,
@@ -1398,11 +1410,8 @@ function buildActiveWaitProgressSnapshot(
     selectedPublishedActiveCount: selectedPublishedActiveNodeIds.length,
     selectedMissingPublishedNodeIds,
     pendingAckCount: pendingAckNodeIds.length,
-    missingPublishedCount: Math.max(
-      missingPublishedCount,
-      steadyPublishedSelectedMissingCount,
-      startupPublicationLagSelectedMissingCount,
-    ),
+    missingPublishedCount: normalizedMissingPublishedCount,
+    gateReasonCount: gateReasons.length,
     gateReasons,
     prioritySpreadSatisfied,
     prioritySpreadGap,

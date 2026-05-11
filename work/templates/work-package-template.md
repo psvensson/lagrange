@@ -30,6 +30,14 @@
       "a frozen decision must be reopened"
     ]
   },
+  "causalGovernance": {
+    "hypothesis": "If this owner-boundary package is correct, the named causal edge will disappear, reduce, or migrate in the predicted way.",
+    "stopConditionCheck": "npm --silent run analyze:causal-model -- path/to/latest.report.json",
+    "expectedCausalModelChange": "State the exact causal edge/class expected to disappear, reduce, migrate, or contradict the hypothesis.",
+    "representativeOutcome": "pending-before-rerun",
+    "causalDebt": "State residual causal debt separately from local package closure, or explain why none remains.",
+    "crossBoundaryReview": "State whether a cross-boundary review is due now, not due, or required before the next runtime package."
+  },
   "predecessor": "work/packages/done-predecessor.md"
 }
 -->
@@ -91,6 +99,24 @@ Required when adding or reshaping a shared runtime boundary.
 - Allowed consumers:
 - Prohibited reinterpretations:
 - Primary diagnostics / proof surfaces:
+
+## Causal Governance
+
+Required for scenario-driven active packages. A runtime patch may land only when
+it is tied to a predicted causal-model change rather than a local symptom.
+
+- Causal hypothesis: if this package is correct, which causal edge or class
+  changes?
+- Stop-condition check:
+  `npm --silent run analyze:causal-model -- path/to/latest.report.json`.
+- Expected causal-model change: one predicted result, such as edge disappears,
+  reduced evidence, named migration, or contradiction.
+- Representative outcome: one of `pending-before-rerun`,
+  `representative-green`, `reduced`, `same-frontier`, `migrated`, or
+  `contradictory`.
+- Causal debt: residual causal work tracked separately from package closure.
+- Cross-boundary review: due/not-due/required-before-next-runtime-package, with
+  the owner boundaries named.
 
 ## Static Drift Ledger
 
@@ -181,6 +207,12 @@ Required for scenario-driven packages after blocker migration.
 - [ ] Detect branch lattices.
 - [ ] If dirty worktree scope matters, run `npm run work:dirty-scope` and
       classify package-owned versus unrelated entries before committing.
+- [ ] If package status or validation ownership is unclear, run
+      `npm run work:package:doctor -- <package>` and record the concrete
+      findings without treating it as a subagent replacement.
+- [ ] If representative evidence is involved, run
+      `npm run work:evidence-summary -- <artifact>` before reading raw logs or
+      large harness segment files.
 - [ ] If oversized segment files block review, run
       `npm run audit:owner-boundary-segments -- <files...>` and record the
       extraction guidance or the reason extraction is out of scope.

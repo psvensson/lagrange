@@ -1,6 +1,9 @@
 import {describe, it} from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  buildPackageDoctorLines,
+  isGeneratedCurrentBlockerPath,
+  validateCausalGovernanceContract,
   validateCommitAndPushLedger,
   validateModelFitContract,
   validateSubagentSequencingLedger,
@@ -8,11 +11,49 @@ import {
 
 const WORK_TRACKER_LEDGER_TEST_FILE = 'work/packages/active-test-package.md';
 const WORK_TRACKER_DONE_TEST_FILE = 'work/packages/done-test-package.md';
+const WORK_TRACKER_CURRENT_BLOCKER_MARKDOWN =
+  'work/sprints/current-blocker.md';
+const WORK_TRACKER_ACTIVE_DOCTOR_FILE =
+  'work/packages/active-20260507-doctor-test.md';
 const REVIEW_AGENT_ID = '019e02b6-1920-7130-b040-da2e6f4efbc4';
 const FIX_AGENT_ID = '019e02b7-ece3-73a2-a664-389d40dfd575';
 const IMPLEMENTATION_AGENT_ID = '019e02b9-7651-7851-bc85-a0cef8a90176';
 const TEST_COMMIT_SHA = 'abcdef1234567890abcdef1234567890abcdef12';
 const TEST_PUSH_TARGET = 'origin/main';
+const WORK_TRACKER_ACTIVE_STATUS = 'active';
+const WORK_TRACKER_DONE_STATUS = 'done';
+const CAUSAL_GOVERNANCE_VALID_METADATA = Object.freeze({
+  status: WORK_TRACKER_ACTIVE_STATUS,
+  scenario: 'rolling-restart',
+  causalGovernance: Object.freeze({
+    hypothesis:
+      'If owner boundary repair is correct, causal edge x reduces or migrates.',
+    stopConditionCheck:
+      'npm --silent run analyze:causal-model -- test-output/reports/example.report.json',
+    expectedCausalModelChange:
+      'causal edge x disappears, reduces, migrates, or contradicts the package',
+    representativeOutcome: 'pending-before-rerun',
+    causalDebt: 'residual causal debt tracked in successor package',
+    crossBoundaryReview: 'not-due until the next two package closures',
+  }),
+});
+const CAUSAL_GOVERNANCE_MISSING_METADATA = Object.freeze({
+  status: WORK_TRACKER_ACTIVE_STATUS,
+  scenario: 'rolling-restart',
+});
+const CAUSAL_GOVERNANCE_INVALID_METADATA = Object.freeze({
+  status: WORK_TRACKER_DONE_STATUS,
+  scenario: 'rolling-restart',
+  causalGovernance: Object.freeze({
+    hypothesis: '<hypothesis>',
+    stopConditionCheck:
+      'npm run analyze:topology-convergence -- test-output/reports/example.report.json',
+    expectedCausalModelChange: 'todo',
+    representativeOutcome: 'pending-before-rerun',
+    causalDebt: 'unknown',
+    crossBoundaryReview: 'manual parent session says ok',
+  }),
+});
 const MODEL_FIT_VALID_SPARK_SAFE_CONTENT = [
   '# Test Package',
   '',
@@ -219,6 +260,50 @@ const WORK_TRACKER_COMMIT_LEDGER_VALID_CONTENT = [
   '- Commit contains only package-owned files/package-status/allowed sprint handoff: yes',
   '',
 ].join('\n');
+const WORK_TRACKER_DOCTOR_CONTENT = [
+  '# Test Package',
+  '',
+  '<!-- work-package',
+  JSON.stringify({
+    schema: 'work-package-v1',
+    status: 'active',
+    scenario: 'none',
+    owner: 'workflow_tooling_owner',
+    boundary: 'package_doctor',
+    dominantReason: 'doctor_needed',
+    currentState: 'Doctor command needs a compact package summary.',
+    nextAction: 'Run package doctor.',
+    proof: ['node --test test/scripts/work-tracker-subagent-ledger.test.js'],
+    touchedFiles: ['scripts/work-tracker.js'],
+    modelFit: {
+      packageClass: 'bounded-implementation',
+      intendedMinimumModel: 'gpt-5.3-codex-spark',
+      scopeShape: 'leaf-slice',
+      escalationTriggers: ['package doctor expands beyond work tracker'],
+    },
+  }, null, 2),
+  '-->',
+  '',
+  '## Model Fit',
+  '',
+  '- Package class: `bounded-implementation`',
+  '- Intended minimum model: `gpt-5.3-codex-spark`',
+  '- Scope shape: `leaf-slice`',
+  '- Owned files: `scripts/work-tracker.js`',
+  '- Forbidden files: `src/`',
+  '- Frozen decisions: package doctor is a validation summary only.',
+  '- Escalation triggers: package doctor expands beyond work tracker.',
+  '- Focused proof: `node --test test/scripts/work-tracker-subagent-ledger.test.js`',
+  '',
+  '## Subagent Sequencing Ledger',
+  '',
+  '- [x] Review subagent recorded: `not-needed` (`first-package-in-sprint`).',
+  '- [x] Fix subagent recorded or explicitly not needed: `not-needed`.',
+  '- [x] Implementation subagent recorded:',
+  `      Agent Implement (${IMPLEMENTATION_AGENT_ID}) implemented`,
+  `      \`${WORK_TRACKER_ACTIVE_DOCTOR_FILE}\`.`,
+  '',
+].join('\n');
 const WORK_TRACKER_COMMIT_LEDGER_TEMPLATE_CONTENT = [
   '# Test Package',
   '',
@@ -378,6 +463,28 @@ describe('work tracker subagent sequencing ledger validation', () => {
   });
 });
 
+describe('work tracker package doctor', () => {
+  it('recognizes generated current-blocker handoff files as tracker output', () => {
+    assert.equal(
+      isGeneratedCurrentBlockerPath(WORK_TRACKER_CURRENT_BLOCKER_MARKDOWN),
+      true,
+    );
+  });
+
+  it('prints a compact validation summary for a package', () => {
+    const report = buildPackageDoctorLines(
+      WORK_TRACKER_ACTIVE_DOCTOR_FILE,
+      WORK_TRACKER_DOCTOR_CONTENT,
+    );
+    const rendered = report.lines.join('\n');
+
+    assert.deepEqual(report.errors, []);
+    assert.match(rendered, /# Work Package Doctor/u);
+    assert.match(rendered, /Owner: workflow_tooling_owner/u);
+    assert.match(rendered, /Validation: ok/u);
+  });
+});
+
 describe('work tracker commit and push ledger validation', () => {
   it('grandfathers historical done packages without commit and push proof', () => {
     const errors = validateCommitAndPushLedger(
@@ -457,5 +564,43 @@ describe('work tracker model fit validation', () => {
       assert.match(errors.join('\n'), /gpt-5\.3-codex-spark/u);
       assert.match(errors.join('\n'), /leaf-slice/u);
       assert.match(errors.join('\n'), /open-ended frontier language/u);
+    });
+});
+
+describe('work tracker causal governance validation', () => {
+  it('requires causal governance on active scenario-driven packages', () => {
+    const errors = validateCausalGovernanceContract(
+      CAUSAL_GOVERNANCE_MISSING_METADATA,
+      WORK_TRACKER_LEDGER_TEST_FILE,
+      {requiresLedger: true, status: WORK_TRACKER_ACTIVE_STATUS},
+    );
+
+    assert.equal(errors.length, 1);
+    assert.match(errors[0], /metadata causalGovernance is required/u);
+  });
+
+  it('accepts complete causal governance with a pending active-package rerun', () => {
+    const errors = validateCausalGovernanceContract(
+      CAUSAL_GOVERNANCE_VALID_METADATA,
+      WORK_TRACKER_LEDGER_TEST_FILE,
+      {requiresLedger: true, status: WORK_TRACKER_ACTIVE_STATUS},
+    );
+
+    assert.deepEqual(errors, []);
+  });
+
+  it('rejects placeholders, missing causal-model checks, and pending closure outcomes',
+    () => {
+      const errors = validateCausalGovernanceContract(
+        CAUSAL_GOVERNANCE_INVALID_METADATA,
+        WORK_TRACKER_DONE_TEST_FILE,
+        {requiresLedger: true, status: WORK_TRACKER_DONE_STATUS},
+      );
+
+      assert.match(errors.join('\n'), /hypothesis/u);
+      assert.match(errors.join('\n'), /expectedCausalModelChange/u);
+      assert.match(errors.join('\n'), /causalDebt/u);
+      assert.match(errors.join('\n'), /closed packages must classify/u);
+      assert.match(errors.join('\n'), /analyze:causal-model/u);
     });
 });

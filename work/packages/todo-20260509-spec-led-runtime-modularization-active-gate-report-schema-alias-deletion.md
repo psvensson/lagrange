@@ -39,6 +39,14 @@
       "representative proof reveals a new owner boundary instead of schema aliases"
     ]
   },
+  "causalGovernance": {
+    "hypothesis": "If active-gate report schema aliases are deleted correctly, diagnostics readers should preserve the same owner-bound active-gate evidence without changing runtime active-gate causal edges.",
+    "stopConditionCheck": "npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-spec-led-runtime-modularization-final.report.json",
+    "expectedCausalModelChange": "The causal model should stay on the same runtime owner boundary while report aliases disappear from diagnostics schema; any runtime owner migration is contradictory for this schema-only package.",
+    "representativeOutcome": "pending-before-rerun",
+    "causalDebt": "No runtime causal debt is owned here; any runtime blocker exposed by alias deletion must be split into a separate owner-boundary package.",
+    "crossBoundaryReview": "Required before activation because this package touches diagnostics, failure-bundle, topology-convergence, and active-gate report consumers."
+  },
   "predecessor": "work/packages/done-20260509-spec-led-runtime-modularization-legacy-deletion-proof.md"
 }
 -->
@@ -77,6 +85,23 @@ Phase `0.1` internal-coherence cleanup within the AGPL repository.
 - Frozen decisions: this package only renames/removes active-gate report schema aliases; it must not change active-gate semantics or owner-witness classification.
 - Escalation triggers: owned files expand outside diagnostics artifact schema surfaces; migration requires runtime active-gate behavior changes; representative proof reveals a new owner boundary instead of schema aliases.
 - Focused proof: `rg "activeGateBestProgress|activeGateNoProgress|activeGateBlockerHistory" src/diagnostics scripts test/distributed/harness test/diagnostics test/scripts`; `node --test test/diagnostics/topology-convergence-graph.test.js test/scripts/analyze-topology-convergence.test.js test/distributed/harness/__tests__/failure-bundle.test.js`
+
+## Causal Governance
+
+- Causal hypothesis: if active-gate report schema aliases are deleted correctly,
+  diagnostics readers should preserve the same owner-bound active-gate evidence
+  without changing runtime active-gate causal edges.
+- Stop-condition check:
+  `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-spec-led-runtime-modularization-final.report.json`.
+- Expected causal-model change: the causal model should stay on the same runtime
+  owner boundary while report aliases disappear from diagnostics schema; any
+  runtime owner migration is contradictory for this schema-only package.
+- Representative outcome: `pending-before-rerun`.
+- Causal debt: no runtime causal debt is owned here; any runtime blocker exposed
+  by alias deletion must be split into a separate owner-boundary package.
+- Cross-boundary review: required before activation because this package touches
+  diagnostics, failure-bundle, topology-convergence, and active-gate report
+  consumers.
 
 ## Out Of Scope
 
