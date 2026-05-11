@@ -8,8 +8,10 @@ import {
 } from '../../src/control-plane/publication-owner-constants.js';
 import {RECOVERY_PROTOCOL_STATE} from
   '../../src/control-plane/membership-lifecycle-constants.js';
-import {PUBLICATION_RECOVERY_PENDING_ACK_EVIDENCE_STATE} from
-  '../../src/control-plane/publication-recovery-gate.js';
+import {
+  PUBLICATION_RECOVERY_GATE_STATE,
+  PUBLICATION_RECOVERY_PENDING_ACK_EVIDENCE_STATE,
+} from '../../src/control-plane/publication-recovery-gate.js';
 import {buildCanonicalPublicationRecoveryEvidence} from
   '../../src/control-plane/publication-recovery-evidence.js';
 
@@ -41,6 +43,9 @@ const TEST_COUNT_ONLY_REENTRY_ACK_TARGET_ASSERTION =
 const TEST_COUNT_ONLY_REENTRY_ACK_TARGET_TEST_NAME =
   'buildCanonicalPublicationRecoveryEvidence keeps pending ACK targets ' +
   'when empty required lists are canonical reentry noise';
+const TEST_STALE_PUBLISHED_PUBLICATION_PENDING_TEST_NAME =
+  'buildCanonicalPublicationRecoveryEvidence settles stale published ' +
+  'publication pending evidence';
 const TEST_AUTHORITATIVE_PUBLISHED_NODE_IDS = Object.freeze([
   TEST_NODE_ID.FIRST,
   TEST_NODE_ID.SECOND,
@@ -369,9 +374,45 @@ test('buildCanonicalPublicationRecoveryEvidence carries owner stream consumer la
       evidence.publicationConvergence.recoveryOutcome,
       PUBLICATION_OWNER_RECOVERY_OUTCOME.WAITING_FOR_CONSUMER,
     );
-    t.equal(evidence.publicationConvergence.publicationPending, true);
+    t.equal(evidence.publicationConvergence.publicationPending, false);
     t.end();
   });
+
+test(TEST_STALE_PUBLISHED_PUBLICATION_PENDING_TEST_NAME, (t) => {
+  const evidence = buildCanonicalPublicationRecoveryEvidence({
+    publicationConvergence: {
+      publicationEpoch: TEST_PUBLICATION_EPOCH,
+      publicationStatus: CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED,
+      recoveryProtocolState: RECOVERY_PROTOCOL_STATE.PUBLICATION_PENDING,
+      pendingAckNodeIds: TEST_EMPTY_NODE_IDS,
+      pendingAckCount: TEST_EMPTY_PUBLICATION_DEBT_COUNT,
+      missingPublishedNodeIds: TEST_AUTHORITATIVE_PUBLISHED_NODE_IDS,
+      missingPublishedCount: TEST_AUTHORITATIVE_PUBLISHED_NODE_IDS.length,
+      priorityRecoveryReasonCodes: [TEST_STALE_REASON_CODE],
+      priorityPartitionSummary: TEST_STALE_PRIORITY_PARTITION_SUMMARY,
+    },
+  });
+
+  t.equal(
+    evidence.publicationConvergenceGate.state,
+    PUBLICATION_RECOVERY_GATE_STATE.CONSUMER_LAG,
+  );
+  t.equal(evidence.publicationConvergenceGate.publicationPending, false);
+  t.equal(
+    evidence.publicationConvergenceGate.recoveryProtocolState,
+    RECOVERY_PROTOCOL_STATE.PRIORITY_SPREAD_PENDING,
+  );
+  t.equal(evidence.publicationConvergence.publicationPending, false);
+  t.equal(
+    evidence.publicationConvergence.recoveryProtocolState,
+    RECOVERY_PROTOCOL_STATE.PRIORITY_SPREAD_PENDING,
+  );
+  t.same(
+    evidence.publicationConvergence.priorityRecoveryReasonCodes,
+    [TEST_STALE_REASON_CODE],
+  );
+  t.end();
+});
 
 test('buildCanonicalPublicationRecoveryEvidence keeps active-gate publication debt over stale top-level zero counts',
   (t) => {

@@ -60,6 +60,12 @@ const PUBLICATION_OWNER_ACK_STATE_RULES = Object.freeze([
       evidence.requiredAckNodeIds.length > NUM.ZERO,
   }),
   Object.freeze({
+    state: PUBLICATION_OWNER_ACK_STATE.ACKNOWLEDGED,
+    matches: (evidence) =>
+      evidence.publicationStatus === CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED &&
+      evidence.pendingAckCount === NUM.ZERO,
+  }),
+  Object.freeze({
     state: PUBLICATION_OWNER_ACK_STATE.UNAVAILABLE,
     matches: () => true,
   }),
@@ -140,6 +146,10 @@ function hasPublicationOwnerPublicationPending(evidence) {
       evidence.publicationStatus,
     ) ||
     isPublicationOwnerPublicationProtocolPending(evidence);
+}
+
+function hasPublicationOwnerPublishingFence(snapshot) {
+  return snapshot.freshnessFence === PUBLICATION_OWNER_FRESHNESS_FENCE.PUBLISHING;
 }
 
 const PUBLICATION_OWNER_FRESHNESS_RULES = Object.freeze([
@@ -334,12 +344,14 @@ const PUBLICATION_OWNER_REASON_RULES = Object.freeze([
   Object.freeze({
     reason: PUBLICATION_OWNER_REASON.PUBLICATION_PENDING_HINT,
     matches: (snapshot) =>
-      snapshot.evidence.publicationPendingHint === true,
+      snapshot.evidence.publicationPendingHint === true &&
+      hasPublicationOwnerPublishingFence(snapshot),
   }),
   Object.freeze({
     reason: PUBLICATION_OWNER_REASON.RECOVERY_PROTOCOL_PUBLICATION_PENDING,
     matches: (snapshot) =>
-      isPublicationOwnerPublicationProtocolPending(snapshot.evidence),
+      isPublicationOwnerPublicationProtocolPending(snapshot.evidence) &&
+      hasPublicationOwnerPublishingFence(snapshot),
   }),
   Object.freeze({
     reason: PUBLICATION_OWNER_REASON.PRIORITY_SPREAD_PENDING,

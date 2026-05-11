@@ -733,10 +733,10 @@ function deriveReasonCountsFromPublicationConvergence(controlPlane = null) {
   const publicationConvergenceGateReasons =
     resolvePublicationConvergenceGateReasonCodes(publicationConvergenceGate);
   const recoveryProtocolState =
-    typeof priorityRecoveryObservation?.recoveryProtocolState === 'string' ?
-      priorityRecoveryObservation.recoveryProtocolState :
-      typeof publicationConvergenceGate?.recoveryProtocolState === 'string' ?
-        publicationConvergenceGate.recoveryProtocolState :
+    typeof publicationConvergenceGate?.recoveryProtocolState === 'string' ?
+      publicationConvergenceGate.recoveryProtocolState :
+      typeof priorityRecoveryObservation?.recoveryProtocolState === 'string' ?
+        priorityRecoveryObservation.recoveryProtocolState :
         typeof publicationDetails?.recoveryProtocolState === 'string' ?
           publicationDetails.recoveryProtocolState :
           typeof publicationDetails?.membershipLifecycleSummary

@@ -1322,8 +1322,8 @@ function buildCanonicalPublicationConvergence(options = {}) {
     normalizeOptionalString(rawPublicationConvergence?.publicationStatus) ||
     normalizeOptionalString(rawPublicationConvergence?.status);
   const recoveryProtocolState =
-    normalizeOptionalString(priorityRecoveryObservation?.recoveryProtocolState) ||
     normalizeOptionalString(publicationConvergenceGate?.recoveryProtocolState) ||
+    normalizeOptionalString(priorityRecoveryObservation?.recoveryProtocolState) ||
     normalizeOptionalString(rawPublicationConvergence?.recoveryProtocolState) ||
     normalizeOptionalString(
       rawPublicationConvergence?.membershipLifecycleSummary

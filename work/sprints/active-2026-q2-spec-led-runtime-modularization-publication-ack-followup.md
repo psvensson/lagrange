@@ -1,14 +1,15 @@
 # Spec-Led Runtime Modularization Publication ACK Follow-Up Sprint
 
-Status: todo. This successor sprint is the handoff from the closed
+Status: active. This successor sprint is the handoff from the closed
 spec-led runtime modularization sprint after representative rolling-restart
 evidence migrated from startup active-gate snapshot coverage to publication ACK
-convergence.
+convergence; the publication ACK package implemented its owner fix and is ready
+for migrated closure.
 
 ## Current Blocker Snapshot
 
 Current package:
-`work/packages/todo-20260511-spec-led-runtime-modularization-publication-ack-convergence-publication-published-frontier.md`.
+`work/packages/active-20260511-spec-led-runtime-modularization-publication-ack-convergence-publication-published-frontier.md`.
 
 Owner boundary:
 `topology_publication_owner / publication_convergence`.
@@ -16,10 +17,9 @@ Owner boundary:
 Latest representative evidence:
 `test-output/reports/rolling-restart-spec-led-runtime-modularization-active-gate-snapshot-coverage-publication-lag.report.json`.
 
-The generated evidence block names frontier `publication_ack_convergence`,
-dominant reason `publication_published`, and causal dominant failure class
-`publication_ack_blocked`. `active_gate_snapshot_coverage` is downstream until
-publication convergence is reduced or migrated.
+The implementation rerun now satisfies `publication_ack_convergence` for
+`PUBLISHED` plus zero pending ACKs. The representative first frontier migrated
+to `active_gate_snapshot_coverage`, with publication ACK evidence closed.
 
 ## Scope Basis
 
@@ -33,16 +33,16 @@ publication convergence is reduced or migrated.
 
 ## Package Queue
 
-1. [Publication ACK Convergence Publication-Published Frontier](../packages/todo-20260511-spec-led-runtime-modularization-publication-ack-convergence-publication-published-frontier.md)
+1. [Publication ACK Convergence Publication-Published Frontier](../packages/active-20260511-spec-led-runtime-modularization-publication-ack-convergence-publication-published-frontier.md)
 2. [Active Gate Report Schema Alias Deletion](../packages/todo-20260509-spec-led-runtime-modularization-active-gate-report-schema-alias-deletion.md)
 
 ## Activation Rules
 
-1. Activate the publication ACK convergence successor first.
-2. Before implementation starts, record the formal `fixes-required` review of
-   the closed active-gate publication-lag package and this separate
-   tracker-evidence fix in the activated publication ACK package ledger, then
-   assign a separate implementation subagent.
+1. Publication ACK convergence successor is active.
+2. The formal `fixes-required` review of the closed active-gate
+   publication-lag package, the separate tracker-evidence fix, and the separate
+   implementation subagent are recorded in the active publication ACK package
+   ledger.
 3. Keep active-gate report schema alias deletion deferred until the
    representative publication frontier is classified.
 4. Do not reopen completed workflow-progress or startup active-gate packages

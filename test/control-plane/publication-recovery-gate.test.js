@@ -62,6 +62,9 @@ const TEST_PRIORITY_RECOVERY_CLOSURE_WITNESS = Object.freeze({
 const TEST_PRIORITY_RECOVERY_DECISION_SNAPSHOTS = Object.freeze({
   closureWitness: TEST_PRIORITY_RECOVERY_CLOSURE_WITNESS,
 });
+const TEST_SETTLED_PUBLISHED_MISSING_MEMBERSHIP_TEST_NAME =
+  'buildPublicationRecoveryGateSnapshot settles publication pending when ' +
+  'published membership still excludes required nodes';
 
 test('buildPublicationRecoveryGateSnapshot classifies acknowledgement lag explicitly',
   (t) => {
@@ -328,36 +331,40 @@ test('buildPublicationRecoveryGateSnapshot consumes the decision snapshot closur
     t.end();
   });
 
-test('buildPublicationRecoveryGateSnapshot keeps publication pending when published membership still excludes required nodes',
-  (t) => {
-    const gate = buildPublicationRecoveryGateSnapshot({
-      publicationEpoch: TEST_PUBLICATION_EPOCH,
-      publicationStatus: CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED,
-      recoveryProtocolState: RECOVERY_PROTOCOL_STATE.STEADY_PUBLISHED,
-      requiredAckNodeIds: [TEST_NODE_ID.FIRST, TEST_NODE_ID.SECOND],
-      acknowledgedNodeIds: [TEST_NODE_ID.FIRST, TEST_NODE_ID.SECOND],
-      priorityPartitionSummary: TEST_PRIORITY_PARTITION_SUMMARY.SATISFIED,
-      missingPublishedNodeIds: [TEST_NODE_ID.SECOND],
-      priorityRecoveryReasonCodes: [
-        CONTROL_PLANE_PRIORITY_RECOVERY_REASON.PUBLICATION_EPOCH_PENDING,
-      ],
-    });
-
-    t.equal(gate.state, PUBLICATION_RECOVERY_GATE_STATE.PUBLICATION_PENDING);
-    t.equal(gate.ready, false);
-    t.equal(gate.publicationPending, true);
-    t.equal(gate.freshnessFence, PUBLICATION_OWNER_FRESHNESS_FENCE.CONSUMER_LAG);
-    t.equal(
-      gate.recoveryOutcome,
-      PUBLICATION_OWNER_RECOVERY_OUTCOME.WAITING_FOR_CONSUMER,
-    );
-    t.equal(gate.missingPublishedCount, 1);
-    t.same(gate.missingPublishedNodeIds, [TEST_NODE_ID.SECOND]);
-    t.same(gate.reasonCodes, [
+test(TEST_SETTLED_PUBLISHED_MISSING_MEMBERSHIP_TEST_NAME, (t) => {
+  const gate = buildPublicationRecoveryGateSnapshot({
+    publicationEpoch: TEST_PUBLICATION_EPOCH,
+    publicationStatus: CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED,
+    recoveryProtocolState: RECOVERY_PROTOCOL_STATE.STEADY_PUBLISHED,
+    requiredAckNodeIds: [TEST_NODE_ID.FIRST, TEST_NODE_ID.SECOND],
+    acknowledgedNodeIds: [TEST_NODE_ID.FIRST, TEST_NODE_ID.SECOND],
+    priorityPartitionSummary: TEST_PRIORITY_PARTITION_SUMMARY.SATISFIED,
+    missingPublishedNodeIds: [TEST_NODE_ID.SECOND],
+    priorityRecoveryReasonCodes: [
       CONTROL_PLANE_PRIORITY_RECOVERY_REASON.PUBLICATION_EPOCH_PENDING,
-    ]);
-    t.end();
+    ],
   });
+
+  t.equal(gate.state, PUBLICATION_RECOVERY_GATE_STATE.CONSUMER_LAG);
+  t.equal(gate.ready, false);
+  t.equal(gate.publicationPending, false);
+  t.equal(
+    gate.recoveryProtocolState,
+    RECOVERY_PROTOCOL_STATE.STEADY_PUBLISHED,
+  );
+  t.equal(
+    gate.freshnessFence,
+    PUBLICATION_OWNER_FRESHNESS_FENCE.CONSUMER_LAG,
+  );
+  t.equal(
+    gate.recoveryOutcome,
+    PUBLICATION_OWNER_RECOVERY_OUTCOME.WAITING_FOR_CONSUMER,
+  );
+  t.equal(gate.missingPublishedCount, 1);
+  t.same(gate.missingPublishedNodeIds, [TEST_NODE_ID.SECOND]);
+  t.same(gate.reasonCodes, []);
+  t.end();
+});
 
 test('buildPublicationRecoveryGateSnapshot uses supplied owner stream as authority',
   (t) => {

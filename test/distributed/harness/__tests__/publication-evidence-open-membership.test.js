@@ -89,6 +89,45 @@ const STEADY_EMPTY_PROGRESS_CLASSES = Object.freeze({
   blockedPartitionIds: Object.freeze([]),
   blockedPartitionCount: STEADY_ZERO_COUNT,
 });
+const PUBLISHED_ACK_FRONTIER_TEST_NAME =
+  'buildCanonicalPublicationEvidenceFromControlPlane closes publication ' +
+  'pending when published ACK evidence is acknowledged';
+const PUBLISHED_ACK_FRONTIER_EPOCH = 5;
+const PUBLISHED_ACK_FRONTIER_ZERO_COUNT = 0;
+const PUBLISHED_ACK_FRONTIER_AUTHORITATIVE_NODE_IDS = Object.freeze([
+  'published-frontier-node-a',
+  'published-frontier-node-b',
+  'published-frontier-node-c',
+]);
+const PUBLISHED_ACK_FRONTIER_MISSING_NODE_IDS = Object.freeze([
+  'published-frontier-node-d',
+  'published-frontier-node-e',
+]);
+const PUBLISHED_ACK_FRONTIER_PRIORITY_REASON_CODES = Object.freeze([
+  'priority_partitions_not_spread',
+]);
+const PUBLISHED_ACK_FRONTIER_EMPTY_GATE_REASONS = Object.freeze([]);
+const PUBLISHED_ACK_FRONTIER_PROGRESS_CLASSES = Object.freeze({
+  unresolvedClassIds: Object.freeze([]),
+  unresolvedClassCount: PUBLISHED_ACK_FRONTIER_ZERO_COUNT,
+  unresolvedSemanticStateIds: Object.freeze([]),
+  unresolvedSemanticStateCount: PUBLISHED_ACK_FRONTIER_ZERO_COUNT,
+  blockedPartitionIds: Object.freeze([]),
+  blockedPartitionCount: PUBLISHED_ACK_FRONTIER_ZERO_COUNT,
+});
+const PUBLISHED_ACK_FRONTIER_PER_NODE_PUBLICATION_DISAGREEMENT_SET =
+  Object.freeze({
+    [PUBLISHED_ACK_FRONTIER_AUTHORITATIVE_NODE_IDS[0]]:
+      PUBLISHED_ACK_FRONTIER_MISSING_NODE_IDS,
+    [PUBLISHED_ACK_FRONTIER_AUTHORITATIVE_NODE_IDS[1]]:
+      PUBLISHED_ACK_FRONTIER_MISSING_NODE_IDS,
+    [PUBLISHED_ACK_FRONTIER_AUTHORITATIVE_NODE_IDS[2]]:
+      PUBLISHED_ACK_FRONTIER_MISSING_NODE_IDS,
+    [PUBLISHED_ACK_FRONTIER_MISSING_NODE_IDS[0]]:
+      PUBLISHED_ACK_FRONTIER_MISSING_NODE_IDS,
+    [PUBLISHED_ACK_FRONTIER_MISSING_NODE_IDS[1]]:
+      PUBLISHED_ACK_FRONTIER_MISSING_NODE_IDS,
+  });
 
 it(TEST_NAME, () => {
   const publicationEvidence = buildCanonicalPublicationEvidenceFromControlPlane({
@@ -304,5 +343,102 @@ it(STEADY_TEST_NAME, () => {
   assert.deepEqual(
     activeGate.lastMeaningfulProgress.selectedMissingPublishedNodeIds,
     STEADY_SELECTED_MISSING_NODE_IDS,
+  );
+});
+
+it(PUBLISHED_ACK_FRONTIER_TEST_NAME, () => {
+  const publicationEvidence = buildCanonicalPublicationEvidenceFromControlPlane({
+    publicationConvergence: {
+      publicationEpoch: PUBLISHED_ACK_FRONTIER_EPOCH,
+      publicationStatus: CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED,
+      recoveryProtocolState: RECOVERY_PROTOCOL_STATE.PUBLICATION_PENDING,
+      publishedActiveNodeIds: PUBLISHED_ACK_FRONTIER_AUTHORITATIVE_NODE_IDS,
+      pendingAckNodeIds: TEST_EMPTY_NODE_IDS,
+      pendingAckCount: PUBLISHED_ACK_FRONTIER_ZERO_COUNT,
+      missingPublishedNodeIds: PUBLISHED_ACK_FRONTIER_MISSING_NODE_IDS,
+      missingPublishedCount: PUBLISHED_ACK_FRONTIER_MISSING_NODE_IDS.length,
+      publicationPending: true,
+      prioritySpreadPending: true,
+      priorityRecoveryReasonCodes:
+        PUBLISHED_ACK_FRONTIER_PRIORITY_REASON_CODES,
+    },
+    publicationConvergenceGate: {
+      publicationEpoch: PUBLISHED_ACK_FRONTIER_EPOCH,
+      publicationStatus: CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED,
+      recoveryProtocolState: RECOVERY_PROTOCOL_STATE.PRIORITY_SPREAD_PENDING,
+      requiredAckNodeIds: PUBLISHED_ACK_FRONTIER_AUTHORITATIVE_NODE_IDS,
+      acknowledgedNodeIds: PUBLISHED_ACK_FRONTIER_AUTHORITATIVE_NODE_IDS,
+      pendingAckNodeIds: TEST_EMPTY_NODE_IDS,
+      pendingAckCount: PUBLISHED_ACK_FRONTIER_ZERO_COUNT,
+      missingPublishedNodeIds: PUBLISHED_ACK_FRONTIER_MISSING_NODE_IDS,
+      missingPublishedCount: PUBLISHED_ACK_FRONTIER_MISSING_NODE_IDS.length,
+      publicationPending: false,
+      prioritySpreadPending: true,
+      reasonCodes: PUBLISHED_ACK_FRONTIER_PRIORITY_REASON_CODES,
+      reasons: PUBLISHED_ACK_FRONTIER_PRIORITY_REASON_CODES,
+    },
+    priorityRecoveryObservation: {
+      publicationEpoch: PUBLISHED_ACK_FRONTIER_EPOCH,
+      publicationStatus: CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED,
+      recoveryProtocolState: RECOVERY_PROTOCOL_STATE.PUBLICATION_PENDING,
+      publishedActiveNodeIds: PUBLISHED_ACK_FRONTIER_AUTHORITATIVE_NODE_IDS,
+      pendingAckNodeIds: TEST_EMPTY_NODE_IDS,
+      pendingAckCount: PUBLISHED_ACK_FRONTIER_ZERO_COUNT,
+      missingPublishedNodeIds: PUBLISHED_ACK_FRONTIER_MISSING_NODE_IDS,
+      missingPublishedCount: PUBLISHED_ACK_FRONTIER_MISSING_NODE_IDS.length,
+      publicationPending: true,
+      prioritySpreadPending: true,
+      priorityRecoveryReasonCodes:
+        PUBLISHED_ACK_FRONTIER_PRIORITY_REASON_CODES,
+      publicationConvergenceGateReasons:
+        PUBLISHED_ACK_FRONTIER_PRIORITY_REASON_CODES,
+    },
+    activeGate: {
+      mode: 'startup',
+      ready: false,
+      progress: {
+        expectedNodeCount:
+          PUBLISHED_ACK_FRONTIER_AUTHORITATIVE_NODE_IDS.length +
+          PUBLISHED_ACK_FRONTIER_MISSING_NODE_IDS.length,
+        activeNodeCount: PUBLISHED_ACK_FRONTIER_AUTHORITATIVE_NODE_IDS.length,
+        snapshotCoverageNodeCount:
+          PUBLISHED_ACK_FRONTIER_AUTHORITATIVE_NODE_IDS.length,
+        snapshotCoverageComplete: false,
+        publicationStatus: CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED,
+        publicationEpoch: PUBLISHED_ACK_FRONTIER_EPOCH,
+        recoveryProtocolState: RECOVERY_PROTOCOL_STATE.PRIORITY_SPREAD_PENDING,
+        selectedPublishedActiveNodeIds:
+          PUBLISHED_ACK_FRONTIER_AUTHORITATIVE_NODE_IDS,
+        selectedPublishedActiveCount:
+          PUBLISHED_ACK_FRONTIER_AUTHORITATIVE_NODE_IDS.length,
+        selectedMissingPublishedNodeIds:
+          PUBLISHED_ACK_FRONTIER_MISSING_NODE_IDS,
+        pendingAckCount: PUBLISHED_ACK_FRONTIER_ZERO_COUNT,
+        missingPublishedCount: PUBLISHED_ACK_FRONTIER_MISSING_NODE_IDS.length,
+        perNodePublicationDisagreementSet:
+          PUBLISHED_ACK_FRONTIER_PER_NODE_PUBLICATION_DISAGREEMENT_SET,
+        gateReasons: PUBLISHED_ACK_FRONTIER_EMPTY_GATE_REASONS,
+        prioritySpreadSatisfied: false,
+        priorityRecoveryProgressClasses:
+          PUBLISHED_ACK_FRONTIER_PROGRESS_CLASSES,
+      },
+    },
+  });
+
+  assert.equal(
+    publicationEvidence.publicationConvergence.pendingAckCount,
+    PUBLISHED_ACK_FRONTIER_ZERO_COUNT,
+  );
+  assert.equal(
+    publicationEvidence.publicationConvergence.publicationPending,
+    false,
+  );
+  assert.equal(
+    publicationEvidence.publicationConvergence.recoveryProtocolState,
+    RECOVERY_PROTOCOL_STATE.PRIORITY_SPREAD_PENDING,
+  );
+  assert.equal(
+    publicationEvidence.publicationConvergence.missingPublishedCount,
+    PUBLISHED_ACK_FRONTIER_MISSING_NODE_IDS.length,
   );
 });

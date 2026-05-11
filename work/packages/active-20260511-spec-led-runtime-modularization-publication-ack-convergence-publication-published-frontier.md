@@ -3,7 +3,7 @@
 <!-- work-package
 {
   "schema": "work-package-v1",
-  "status": "todo",
+  "status": "active",
   "opened": "2026-05-11",
   "scenario": "spec-led-runtime-modularization",
   "artifact": "test-output/reports/rolling-restart-spec-led-runtime-modularization-active-gate-snapshot-coverage-publication-lag.report.json",
@@ -11,8 +11,8 @@
   "owner": "topology_publication_owner",
   "boundary": "publication_convergence",
   "dominantReason": "publication_published",
-  "currentState": "Fresh representative evidence migrated the first critical path from startup active-gate snapshot coverage to publication_ack_convergence. The topology witness is blocked with reason publication_published while the causal summary names publication_ack_blocked as the dominant failure class.",
-  "nextAction": "Activate this package only after recording the formal fixes-required predecessor review and this separate tracker-evidence fix in the active package ledger, then freeze the publication owner fixture for the publication_published ACK-blocked witness.",
+  "currentState": "Implementation rerun settled published/no-pending-ACK evidence: publication_ack_convergence is satisfied and the representative first frontier migrated to active_gate_snapshot_coverage.",
+  "nextAction": "Package is ready for review/closure proof; remaining representative debt is active-gate snapshot coverage and budget timeout cascade, not publication ACK convergence.",
   "proof": [
     "npm run work:evidence-summary -- test-output/reports/rolling-restart-spec-led-runtime-modularization-active-gate-snapshot-coverage-publication-lag.report.json",
     "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-spec-led-runtime-modularization-active-gate-snapshot-coverage-publication-lag.report.json --explain publication_ack_convergence",
@@ -28,9 +28,10 @@
     "test/control-plane/*publication*.test.js",
     "test/distributed/harness/*publication*.js",
     "test/distributed/harness/*active-gate*.js",
+    "test/distributed/harness/failure-bundle-segment-*.js",
     "test-output/reports/rolling-restart-spec-led-runtime-modularization-active-gate-snapshot-coverage-publication-lag.report.json",
-    "work/packages/todo-20260511-spec-led-runtime-modularization-publication-ack-convergence-publication-published-frontier.md",
-    "work/sprints/todo-2026-q2-spec-led-runtime-modularization-publication-ack-followup.md"
+    "work/packages/active-20260511-spec-led-runtime-modularization-publication-ack-convergence-publication-published-frontier.md",
+    "work/sprints/active-2026-q2-spec-led-runtime-modularization-publication-ack-followup.md"
   ],
   "modelFit": {
     "packageClass": "representative-frontier-closure",
@@ -47,9 +48,9 @@
     "hypothesis": "If topology publication ownership accounts for the publication_published ACK-blocked witness, publication_ack_convergence should reduce or migrate away from publication_ack_blocked without reopening startup active-gate snapshot coverage.",
     "stopConditionCheck": "npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-spec-led-runtime-modularization-active-gate-snapshot-coverage-publication-lag.report.json",
     "expectedCausalModelChange": "The publication_ack_blocked critical path disappears, reduces, or migrates to a named downstream active-gate or readiness blocker; same-frontier without reduced publication evidence is contradictory.",
-    "representativeOutcome": "pending-before-rerun",
+    "representativeOutcome": "migrated",
     "causalDebt": "Budget timeout cascade remains architecture-analysis debt and must not be hidden by relabeling publication ACK evidence.",
-    "crossBoundaryReview": "Required before activation because the predecessor crosses startup active-gate ownership and publication ACK convergence."
+    "crossBoundaryReview": "The predecessor fixes-required review and separate tracker-evidence fix are recorded; assign a fresh implementation subagent before runtime changes."
   },
   "predecessor": "work/packages/done-20260510-spec-led-runtime-modularization-active-gate-snapshot-coverage-publication-lag-frontier.md"
 }
@@ -158,10 +159,11 @@ guardrails, causal-model output, and representative rolling-restart.
 - Representative outcome: `pending-before-rerun`.
 - Causal debt: budget timeout cascade remains architecture-analysis debt and
   must not be hidden by relabeling publication ACK evidence.
-- Cross-boundary review: required before activation because the predecessor
+- Cross-boundary review: required before implementation because the predecessor
   crosses startup active-gate ownership and publication ACK convergence. The
-  formal predecessor review returned `fixes-required`; activation must record
-  that review and the separate tracker-evidence fix before implementation.
+  formal predecessor review returned `fixes-required`, and this active package
+  now records that review plus the separate tracker-evidence fix; assigning the
+  fresh implementation subagent is next.
 
 ## Generated Owner Evidence Block
 
@@ -178,10 +180,22 @@ guardrails, causal-model output, and representative rolling-restart.
 - Next explain command:
   `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-spec-led-runtime-modularization-active-gate-snapshot-coverage-publication-lag.report.json --explain publication_ack_convergence`
 
-## Activation Note
+## Subagent Sequencing Ledger
 
-This package is intentionally `todo`. Before runtime implementation starts, move
-it to `active` and record the formal `fixes-required` predecessor review plus
-this separate tracker-evidence fix in the active package Subagent Sequencing
-Ledger; an unrecorded informal review is not sufficient. Only then assign the
-fresh implementation subagent under the current package sequencing policy.
+- [x] Review subagent recorded:
+      Agent 019e02b6-1920-7130-b040-da2e6f4efbc4 (019e02b6-1920-7130-b040-da2e6f4efbc4) reviewed work/packages/done-20260510-spec-led-runtime-modularization-active-gate-snapshot-coverage-publication-lag-frontier.md; result fixes-required.
+- [x] Fix subagent recorded or explicitly not needed:
+      Agent 019e02b7-ece3-73a2-a664-389d40dfd575 (019e02b7-ece3-73a2-a664-389d40dfd575) fixed work/packages/done-20260510-spec-led-runtime-modularization-active-gate-snapshot-coverage-publication-lag-frontier.md.
+- [x] Implementation subagent recorded:
+      Agent 019e02b9-7651-7851-bc85-a0cef8a90176 (019e02b9-7651-7851-bc85-a0cef8a90176) implemented work/packages/active-20260511-spec-led-runtime-modularization-publication-ack-convergence-publication-published-frontier.md.
+
+## Implementation Proof Notes
+
+- Focused owner and harness fixtures cover the `PUBLISHED` + zero pending ACK
+  witness with missing published members.
+- Representative rerun now reports `publication_ack_convergence` as satisfied:
+  `publicationPending=false`, `pendingAckCount=0`, `missingPublishedCount=0`,
+  and `recoveryProtocolState=steady_published`.
+- The first frontier and causal model migrated to
+  `active_gate_snapshot_coverage`; remaining budget timeout cascade is not hidden
+  as publication ACK debt.

@@ -2332,6 +2332,12 @@ function resolvePublicationConvergenceRecoveryProtocolState({
 }) {
   if (
     rawRecoveryProtocolState === RECOVERY_PROTOCOL_STATE.PRIORITY_SPREAD_PENDING &&
+    activePrioritySpreadGate === true
+  ) {
+    return RECOVERY_PROTOCOL_STATE.PRIORITY_SPREAD_PENDING;
+  }
+  if (
+    rawRecoveryProtocolState === RECOVERY_PROTOCOL_STATE.PRIORITY_SPREAD_PENDING &&
     publicationRecoveryOpen === true
   ) {
     return RECOVERY_PROTOCOL_STATE.PUBLICATION_PENDING;
@@ -3137,8 +3143,9 @@ function buildPublicationConvergenceSummary(controlPlane) {
     activePrioritySpreadGate === true ||
     canonicalCoveragePrioritySpreadPending;
   const rawRecoveryProtocolState =
-    priorityRecoveryObservation?.recoveryProtocolState ||
+    publicationConvergenceGate?.recoveryProtocolState ||
     publicationConvergence?.recoveryProtocolState ||
+    priorityRecoveryObservation?.recoveryProtocolState ||
     activeGateProgress?.recoveryProtocolState ||
     activeGateBestProgress?.recoveryProtocolState ||
     null;
