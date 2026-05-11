@@ -11,8 +11,8 @@
   "owner": "operation_workflow_owner",
   "boundary": "workflow_progress",
   "dominantReason": "priority_recovery_event_driven_wait",
-  "currentState": "The publication convergence package fixed failure-bundle classification so PUBLISHED publication evidence with pendingAckCount=0, blockedNodeCount=0, prioritySpreadPending=true, and no canonical missing-active publication debt no longer fronts as publication ACK convergence. The representative rolling-restart rerun still failed 0/1, but publication_ack_convergence is satisfied/non-frontier with publicationPending=false and recoveryProtocolState=priority_spread_pending. The first frontier migrated to priority_recovery_partition_progress under operation_workflow_owner / workflow_progress, state retryable, dominant reason priority_recovery_event_driven_wait, with sql_write_operations-p1 recovering_in_flight, persisted_not_dispatched, event_driven, and advance_existing_operation.",
-  "nextAction": "Commit and push this focused publication-convergence slice, then open the next focused package on operation_workflow_owner / workflow_progress for the priority_recovery_event_driven_wait retryable frontier.",
+  "currentState": "The publication convergence package fixed failure-bundle classification so PUBLISHED publication evidence with pendingAckCount=0, blockedNodeCount=0, prioritySpreadPending=true, and no canonical missing-active publication debt no longer fronts as publication ACK convergence. The representative rolling-restart rerun still failed 0/1, but publication_ack_convergence is satisfied/non-frontier with publicationPending=false and recoveryProtocolState=priority_spread_pending. The first frontier migrated to priority_recovery_partition_progress under operation_workflow_owner / workflow_progress, state retryable, dominant reason priority_recovery_event_driven_wait, with sql_write_operations-p1 recovering_in_flight, persisted_not_dispatched, event_driven, and advance_existing_operation. Raw distributed-failure classification still presents publication_convergence_blocked / publication_missing_active_node; treat that as a presentation residual, not the canonical owner-boundary frontier selected by topology/current-blocker evidence.",
+  "nextAction": "Open the next focused package on operation_workflow_owner / workflow_progress for the priority_recovery_event_driven_wait retryable frontier.",
   "proof": [
     "npm run work:package:evidence-block -- test-output/reports/rolling-restart-current-release-gate-after-sql-write-serial-wait-fix.report.json",
     "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-current-release-gate-after-sql-write-serial-wait-fix.report.json --explain publication_ack_convergence",
@@ -233,8 +233,9 @@ Closure:
 ## Commit And Push Ledger
 
 1. Focused package commit: `fe7ae399`
-2. Pushed to: `origin/codex/pending-ack-eligibility-filter`
-3. Commit contains only package-owned files/package-status/allowed sprint handoff: yes
+2. Closure metadata commit: `870f3037`
+3. Pushed to: `origin/codex/pending-ack-eligibility-filter`
+4. Commit contains only package-owned files/package-status/allowed sprint handoff: yes
 
 ## Validation
 
@@ -252,7 +253,7 @@ Required implementation validation:
 6. `npm run work:current-blocker`.
 7. `npm run work:validate`.
 8. Representative
-   `node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-current-release-gate-after-publication-convergence-fix.report.json --fast-local --verbose`.
+   `node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-current-release-gate-after-publication-convergence-fix-v2.report.json --fast-local --verbose`.
 
 Validation notes:
 
@@ -273,6 +274,13 @@ Validation notes:
    first frontier, owner `operation_workflow_owner`, boundary
    `workflow_progress`, state `retryable`, dominant reason
    `priority_recovery_event_driven_wait`.
+7. Raw distributed-failure presentation still reports
+   `publication_convergence_blocked` / `publication_missing_active_node` in the
+   latest artifact. The corrected topology owner contract and current-blocker
+   snapshot select `operation_workflow_owner / workflow_progress` with
+   `priority_recovery_event_driven_wait`; treat the distributed-failure raw
+   classification as a presentation residual before successor implementation,
+   not as the canonical owner-boundary frontier.
 
 ## Done When
 

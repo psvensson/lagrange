@@ -79,6 +79,11 @@ workflow_progress` on edge `priority_recovery_partition_progress`, state
 witness is `sql_write_operations-p1`, `recovering_in_flight`,
 `persisted_not_dispatched`, `event_driven`, and `advance_existing_operation`.
 
+Raw distributed-failure presentation for the same latest artifact still reports
+`publication_convergence_blocked` / `publication_missing_active_node`; treat that
+as a presentation residual before successor implementation, not as the canonical
+owner-boundary frontier.
+
 Startup active-gate snapshot coverage remains downstream until operation
 workflow progress is either green or promoted by fresh representative evidence.
 
@@ -130,8 +135,9 @@ Edition matrix status: Community / AGPL repo.
 6. Preserve the publication-convergence package rerun showing
    `publication_ack_convergence` satisfied/non-frontier and the representative
    migrated to retryable operation workflow progress.
-7. Close and push the focused publication-convergence package metadata before
-   opening the operation-workflow successor.
+7. Open the operation-workflow successor; the focused publication-convergence
+   implementation commit `fe7ae399` and closure metadata commit `870f3037` are
+   already pushed.
 8. If `rolling-restart` passes, run sustained throughput and 7-node stress
    confirmation for `0.1`.
 
