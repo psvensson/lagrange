@@ -12,6 +12,7 @@ import {
   asRecord,
   arrayOrEmpty,
   textOrUnknown,
+  numberOrZero,
 } from './causal-analysis-schema.js';
 import {buildCausalGraph, normalizeCausalInput} from './causal-graph-builder.js';
 import {accountBudgets} from './budget-timeout-accounting.js';
@@ -28,13 +29,27 @@ const REASON_BUDGET_CASCADE = 'budget_cascade';
 const REASON_EVIDENCE_INCOMPLETE = 'evidence_incomplete';
 const REASON_NO_FAILURE = 'no_failure';
 const WAIT_MODE_EVENT_DRIVEN = 'event_driven';
+const READINESS_FAILURE_CLASS_NO_PROGRESS_TERMINAL = 'no_progress_terminal';
+const READINESS_TERMINAL_REASON_STALLED_NO_PROGRESS = 'stalled_no_progress';
+const READINESS_CLASSIFICATION_DECISION = Object.freeze({
+  CLASSIFY_BLOCKER: 'classify_blocker',
+  INHERITED_ACTIVE_GATE_NO_PROGRESS: 'inherited_active_gate_no_progress',
+});
 const EVIDENCE_PATH_PRIORITY_RECOVERY_WITNESS =
   'publicationConvergence.priorityRecoveryProgressSummary.dominantWitness';
 const EVIDENCE_PATH_BUDGET_CASCADES = 'budgetAccounting.cascades';
 const EVIDENCE_PATH_CAUSAL_GRAPH_NODES = 'causalGraph.nodes';
 const READINESS_CLASSIFICATION_RULES = Object.freeze([
   Object.freeze({
-    classify: (snapshot) => snapshot.reportOutcome !== REPORT_OUTCOME.PASSED &&
+    decision: READINESS_CLASSIFICATION_DECISION.INHERITED_ACTIVE_GATE_NO_PROGRESS,
+    matches: (snapshot) =>
+      snapshot.classCode === READINESS_FAILURE_CLASS_NO_PROGRESS_TERMINAL &&
+      snapshot.terminalReason === READINESS_TERMINAL_REASON_STALLED_NO_PROGRESS &&
+      snapshot.attemptsSinceProgress > ZERO_COUNT,
+  }),
+  Object.freeze({
+    decision: READINESS_CLASSIFICATION_DECISION.CLASSIFY_BLOCKER,
+    matches: (snapshot) => snapshot.reportOutcome !== REPORT_OUTCOME.PASSED &&
       snapshot.blockedReasonEntries.length > ZERO_COUNT,
   }),
 ]);
@@ -138,9 +153,17 @@ function classifyReadiness(normalized) {
   const snapshot = {
     reportOutcome: normalized.reportOutcome,
     blockedReasonEntries,
+    classCode: textOrUnknown(normalized.readinessFailure.classCode),
+    terminalReason: textOrUnknown(normalized.readinessFailure.terminalReason),
+    attemptsSinceProgress: numberOrZero(
+      asRecord(normalized.readinessFailure.progressSignal).attemptsSinceProgress,
+    ),
   };
-  const selectedRule = READINESS_CLASSIFICATION_RULES.find((rule) => rule.classify(snapshot));
-  if (!selectedRule) {
+  const selectedRule = READINESS_CLASSIFICATION_RULES.find((rule) => rule.matches(snapshot));
+  if (
+    !selectedRule ||
+    selectedRule.decision !== READINESS_CLASSIFICATION_DECISION.CLASSIFY_BLOCKER
+  ) {
     return [];
   }
   return [buildClass({

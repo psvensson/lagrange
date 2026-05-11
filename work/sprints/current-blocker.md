@@ -2,5 +2,77 @@
 
 # Current Blocker
 
-No active sprint is currently selected. The next todo sprint is
-`work/sprints/todo-2026-q2-spec-led-runtime-modularization-startup-readiness-followup.md`.
+Sprint: `work/sprints/active-2026-q2-spec-led-runtime-modularization-startup-readiness-followup.md`
+
+Package: `work/packages/active-20260511-spec-led-runtime-modularization-startup-readiness-support-evidence-frontier.md`
+
+Scenario: `spec-led-runtime-modularization`
+
+Artifact: `test-output/reports/rolling-restart-spec-led-runtime-modularization-active-gate-snapshot-coverage-publication-lag.report.json`
+
+Playback: `test-output/reports/.playback/rolling-restart-spec-led-runtime-modularization-active-gate-snapshot-coverage-publication-lag/rolling-restart/`
+
+## Boundary
+
+Owner: `startup_readiness_owner`
+
+Boundary: `startup_support_evidence`
+
+Dominant reason: `startup_readiness_boundary`
+
+Current state: Diagnostics budget ownership is classified and no longer reports budget_timeout_cascade as an architecture gap. The representative causal model migrates to startup_readiness_owner / startup_support_evidence while active_gate_snapshot_coverage remains an inherited frozen topology symptom.
+
+## Next Action
+
+Assign the fresh implementation subagent to freeze the startup readiness support evidence and decide whether the residual is runtime readiness ownership, retry/backoff contract debt, or a narrower successor boundary.
+
+## Proof Ladder
+
+1. `npm run work:evidence-summary -- test-output/reports/rolling-restart-spec-led-runtime-modularization-active-gate-snapshot-coverage-publication-lag.report.json`
+2. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-spec-led-runtime-modularization-active-gate-snapshot-coverage-publication-lag.report.json --explain active_gate_snapshot_coverage`
+3. `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-spec-led-runtime-modularization-active-gate-snapshot-coverage-publication-lag.report.json`
+4. `Focused startup readiness support evidence fixture selected after package review`
+5. `Touched-file static guardrails selected by startup_readiness_owner`
+6. `Representative rolling-restart rerun or classification handoff`
+
+## Model Fit
+
+Package class: `representative-frontier-closure`
+
+Intended minimum model: `gpt-5.3-codex`
+
+Scope shape: `owner-boundary-contraction/cross-boundary-causal-edge`
+
+Escalation triggers:
+
+1. `causal stop condition no longer reports owner_boundary_migration`
+2. `proof returns to diagnostics_owner budget_timeout_cascade`
+3. `proof requires startup_active_gate_owner snapshot coverage runtime changes`
+4. `runtime implementation would need Pro or Enterprise features`
+
+## Causal Governance
+
+Causal hypothesis: `With budget ownership classified, startup readiness support evidence should either reduce through the startup readiness owner contract or migrate to a named downstream owner-boundary blocker.`
+
+Stop-condition check: `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-spec-led-runtime-modularization-active-gate-snapshot-coverage-publication-lag.report.json`
+
+Expected causal-model change: `The startup_readiness_boundary migration disappears, reduces, or migrates to a named downstream owner-boundary blocker; same-frontier without reduced readiness evidence is contradictory.`
+
+Representative outcome: `pending-before-rerun`
+
+Causal debt: `Do not hide readiness support evidence by reopening publication ACK, budget cascade, active-gate runtime behavior, or harness timeouts.`
+
+Cross-boundary review: `The closed budget-cascade review found stale links; a separate fix subagent corrected them and the fix was committed/pushed before activation.`
+
+## Touched Files
+
+1. `src/bootstrap/**/*.js`
+2. `src/control-plane/*readiness*.js`
+3. `src/diagnostics/*causal*.js`
+4. `src/diagnostics/*stop-condition*.js`
+5. `test/bootstrap/**/*.test.js`
+6. `test/diagnostics/*causal*.test.js`
+7. `test/diagnostics/*stop-condition*.test.js`
+8. `test-output/reports/rolling-restart-spec-led-runtime-modularization-active-gate-snapshot-coverage-publication-lag.report.json`
+9. `work/packages/active-20260511-spec-led-runtime-modularization-startup-readiness-support-evidence-frontier.md`
+10. `work/sprints/active-2026-q2-spec-led-runtime-modularization-startup-readiness-followup.md`

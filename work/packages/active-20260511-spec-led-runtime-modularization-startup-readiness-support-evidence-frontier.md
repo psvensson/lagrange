@@ -3,7 +3,7 @@
 <!-- work-package
 {
   "schema": "work-package-v1",
-  "status": "todo",
+  "status": "active",
   "opened": "2026-05-11",
   "scenario": "spec-led-runtime-modularization",
   "artifact": "test-output/reports/rolling-restart-spec-led-runtime-modularization-active-gate-snapshot-coverage-publication-lag.report.json",
@@ -11,8 +11,8 @@
   "owner": "startup_readiness_owner",
   "boundary": "startup_support_evidence",
   "dominantReason": "startup_readiness_boundary",
-  "currentState": "Diagnostics budget ownership is classified and no longer reports budget_timeout_cascade as an architecture gap. The representative causal model migrates to startup_readiness_owner / startup_support_evidence while active_gate_snapshot_coverage remains an inherited frozen topology symptom.",
-  "nextAction": "Review the closed budget-cascade package, then freeze the startup readiness support evidence and decide whether the residual is runtime readiness ownership, retry/backoff contract debt, or a narrower successor boundary.",
+  "currentState": "Startup readiness no-progress support evidence is classified as inherited active-gate no-progress evidence. The representative causal model no longer reports startup_readiness_boundary and now reports classified_local_blocker for startup_active_gate_owner / snapshot_coverage.",
+  "nextAction": "Parent review should close or split a successor package for startup_active_gate_owner / snapshot_coverage; do not patch active-gate runtime inside this package.",
   "proof": [
     "npm run work:evidence-summary -- test-output/reports/rolling-restart-spec-led-runtime-modularization-active-gate-snapshot-coverage-publication-lag.report.json",
     "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-spec-led-runtime-modularization-active-gate-snapshot-coverage-publication-lag.report.json --explain active_gate_snapshot_coverage",
@@ -30,8 +30,8 @@
     "test/diagnostics/*causal*.test.js",
     "test/diagnostics/*stop-condition*.test.js",
     "test-output/reports/rolling-restart-spec-led-runtime-modularization-active-gate-snapshot-coverage-publication-lag.report.json",
-    "work/packages/todo-20260511-spec-led-runtime-modularization-startup-readiness-support-evidence-frontier.md",
-    "work/sprints/todo-2026-q2-spec-led-runtime-modularization-startup-readiness-followup.md"
+    "work/packages/active-20260511-spec-led-runtime-modularization-startup-readiness-support-evidence-frontier.md",
+    "work/sprints/active-2026-q2-spec-led-runtime-modularization-startup-readiness-followup.md"
   ],
   "modelFit": {
     "packageClass": "representative-frontier-closure",
@@ -48,9 +48,9 @@
     "hypothesis": "With budget ownership classified, startup readiness support evidence should either reduce through the startup readiness owner contract or migrate to a named downstream owner-boundary blocker.",
     "stopConditionCheck": "npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-spec-led-runtime-modularization-active-gate-snapshot-coverage-publication-lag.report.json",
     "expectedCausalModelChange": "The startup_readiness_boundary migration disappears, reduces, or migrates to a named downstream owner-boundary blocker; same-frontier without reduced readiness evidence is contradictory.",
-    "representativeOutcome": "pending-before-rerun",
-    "causalDebt": "Do not hide readiness support evidence by reopening publication ACK, budget cascade, active-gate runtime behavior, or harness timeouts.",
-    "crossBoundaryReview": "Review the closed budget-cascade package before activation; this is startup readiness owner work, not diagnostics budget accounting."
+    "representativeOutcome": "migrated",
+    "causalDebt": "Readiness support evidence is classified; residual active_gate_snapshot_coverage remains for a successor owner package. Do not reopen publication ACK, budget cascade, or harness timeouts.",
+    "crossBoundaryReview": "The closed budget-cascade review found stale links; a separate fix subagent corrected them and the fix was committed/pushed before activation."
   },
   "predecessor": "work/packages/done-20260511-spec-led-runtime-modularization-budget-timeout-cascade-architecture-analysis.md"
 }
@@ -121,15 +121,67 @@ The representative causal model no longer reports the diagnostics-owned
 - Topology symptom: `active_gate_snapshot_coverage`.
 - Frozen symptom owner: `startup_active_gate_owner`.
 - Frozen symptom boundary: `snapshot_coverage`.
-- Causal stop condition: `owner_boundary_migration`.
-- Causal outcome: `migrate_owner_boundary`.
-- Migration reason: `startup_readiness_boundary`.
-- Successor owner: `startup_readiness_owner`.
-- Successor boundary: `startup_support_evidence`.
+- Pre-change causal stop condition: `owner_boundary_migration`.
+- Pre-change causal outcome: `migrate_owner_boundary`.
+- Pre-change migration reason: `startup_readiness_boundary`.
+- Post-change causal stop condition: `classified_local_blocker`.
+- Post-change causal outcome: `continue_local_fix`.
+- Successor owner: `startup_active_gate_owner`.
+- Successor boundary: `snapshot_coverage`.
 
 ## Activation Notes
 
-1. Run the mandatory predecessor review on the closed budget-cascade package.
-2. Activate only after any review fixes are committed and pushed.
+1. Mandatory predecessor review on the closed budget-cascade package returned
+   fixes-required for stale predecessor sprint links.
+2. A separate fix subagent corrected the links; the focused fix commit
+   `0f83e4c9` was pushed before this package activated.
 3. Do not reopen budget-cascade diagnostics or startup active-gate runtime work
    before this package reduces or migrates startup readiness evidence.
+
+## Subagent Sequencing Ledger
+
+- [x] Review subagent recorded:
+      Agent 019e0382-d445-7181-8467-e0e36d4f35b8 (019e0382-d445-7181-8467-e0e36d4f35b8) reviewed work/packages/done-20260511-spec-led-runtime-modularization-budget-timeout-cascade-architecture-analysis.md; result fixes-required.
+- [x] Fix subagent recorded or explicitly not needed:
+      Agent 019e0384-1067-7c3f-b97f-899278f41350 (019e0384-1067-7c3f-b97f-899278f41350) fixed work/packages/done-20260511-spec-led-runtime-modularization-budget-timeout-cascade-architecture-analysis.md.
+- [x] Implementation subagent recorded:
+      Agent 019e0388-f08f-73f0-907e-568527850159 (019e0388-f08f-73f0-907e-568527850159) implemented work/packages/active-20260511-spec-led-runtime-modularization-startup-readiness-support-evidence-frontier.md.
+
+
+## Implementation Proof Notes
+
+- Normalized `summary.readinessFailure` as causal readiness evidence for direct
+  failure-bundle inputs so report and playback evidence use the same owner
+  contract.
+- Classified `no_progress_terminal` plus `stalled_no_progress` with positive
+  `attemptsSinceProgress` as inherited active-gate no-progress evidence rather
+  than a startup readiness owner migration.
+- Topology presentation now normalizes that readiness evidence to terminal
+  support evidence with `recoverability=terminal`, preserving the raw evidence
+  path and keeping publication ACK and budget classifications closed.
+
+## Representative Outcome
+
+- Outcome: `migrated`.
+- Representative artifact:
+  `test-output/reports/rolling-restart-spec-led-runtime-modularization-active-gate-snapshot-coverage-publication-lag.report.json`.
+- Evidence summary after implementation: topology frontier remains
+  `active_gate_snapshot_coverage`; causal stop condition changed to
+  `classified_local_blocker`; stop reason changed to
+  `active_gate_local_blocker`; failure taxonomy contains only
+  `active_gate_snapshot_coverage_incomplete`.
+- Residual successor boundary: `startup_active_gate_owner / snapshot_coverage`.
+
+## Validation Notes
+
+- `node --test test/diagnostics/topology-convergence-graph.test.js test/diagnostics/failure-class-taxonomy.test.js test/diagnostics/stop-condition-decision.test.js test/diagnostics/causal-graph-builder.test.js` — passed, 29/29.
+- `npm run work:evidence-summary -- test-output/reports/rolling-restart-spec-led-runtime-modularization-active-gate-snapshot-coverage-publication-lag.report.json` — passed; causal outcome `continue_local_fix`.
+- `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-spec-led-runtime-modularization-active-gate-snapshot-coverage-publication-lag.report.json --explain active_gate_snapshot_coverage` — passed; frontier owner `startup_active_gate_owner / snapshot_coverage`.
+- `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-spec-led-runtime-modularization-active-gate-snapshot-coverage-publication-lag.report.json` — passed; stop condition `classified_local_blocker`.
+- `npm run work:validate` — passed after ledger update.
+- `npm run work:package:doctor -- work/packages/active-20260511-spec-led-runtime-modularization-startup-readiness-support-evidence-frontier.md` — passed.
+- `git diff --check -- src/diagnostics/causal-graph-builder.js src/diagnostics/failure-class-taxonomy.js src/diagnostics/topology-convergence-graph.js test/diagnostics/topology-convergence-graph.test.js test/diagnostics/failure-class-taxonomy.test.js test/diagnostics/stop-condition-decision.test.js work/packages/active-20260511-spec-led-runtime-modularization-startup-readiness-support-evidence-frontier.md` — passed.
+- `node scripts/check-guideline-literals.js src/diagnostics/causal-graph-builder.js src/diagnostics/failure-class-taxonomy.js src/diagnostics/topology-convergence-graph.js` — passed, 0 new violations.
+- `node scripts/check-guideline-decision-boundaries.js src/diagnostics/causal-graph-builder.js src/diagnostics/failure-class-taxonomy.js src/diagnostics/topology-convergence-graph.js` — passed, 0 violations.
+- `npm run audit:runtime-grammar:file -- src/diagnostics/causal-graph-builder.js src/diagnostics/failure-class-taxonomy.js src/diagnostics/topology-convergence-graph.js` — passed.
+- `npx eslint src/diagnostics/causal-graph-builder.js src/diagnostics/failure-class-taxonomy.js src/diagnostics/topology-convergence-graph.js test/diagnostics/topology-convergence-graph.test.js test/diagnostics/failure-class-taxonomy.test.js test/diagnostics/stop-condition-decision.test.js` — passed.

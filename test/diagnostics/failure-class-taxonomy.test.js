@@ -6,6 +6,8 @@ import {FAILURE_CLASS, RESOLUTION_STRATEGY} from '../../src/diagnostics/causal-a
 
 const ACTIVE_REPORT_PATH = 'test-output/reports/rolling-restart-spec-led-runtime-modularization-active-gate-snapshot-coverage-reachability.report.json';
 const ACTIVE_ARTIFACT_PATH = 'test-output/reports/.playback/rolling-restart-spec-led-runtime-modularization-active-gate-snapshot-coverage-reachability/rolling-restart/failure-bundle.json';
+const ACTIVE_GATE_NO_PROGRESS_REPORT_PATH =
+  'test-output/reports/rolling-restart-spec-led-runtime-modularization-active-gate-snapshot-coverage-publication-lag.report.json';
 const PASSED_REPORT_PATH = 'test-output/reports/canary-rolling-restart-local-latest.report.json';
 const JSON_ENCODING_UTF8 = 'utf8';
 const NULL_VALUE = null;
@@ -21,6 +23,10 @@ function readActiveReport() {
 
 function readPassedReport() {
   return JSON.parse(fs.readFileSync(PASSED_REPORT_PATH, JSON_ENCODING_UTF8));
+}
+
+function readActiveGateNoProgressReport() {
+  return JSON.parse(fs.readFileSync(ACTIVE_GATE_NO_PROGRESS_REPORT_PATH, JSON_ENCODING_UTF8));
 }
 
 function assertNoNullOrUndefined(value) {
@@ -60,6 +66,15 @@ describe('FailureClassTaxonomy', () => {
     assert.ok(artifactClasses.includes(FAILURE_CLASS.STARTUP_READINESS_BLOCKED));
     assertNoNullOrUndefined(reportTaxonomy);
     assertNoNullOrUndefined(artifactTaxonomy);
+  });
+
+  it('keeps active-gate no-progress readiness evidence on the snapshot coverage owner', () => {
+    const taxonomy = classifyFailures(readActiveGateNoProgressReport());
+    const failureClasses = taxonomy.classes.map((entry) => entry.failureClass);
+
+    assert.ok(failureClasses.includes(FAILURE_CLASS.ACTIVE_GATE_SNAPSHOT_COVERAGE_INCOMPLETE));
+    assert.equal(failureClasses.includes(FAILURE_CLASS.STARTUP_READINESS_BLOCKED), false);
+    assertNoNullOrUndefined(taxonomy);
   });
 
   it('classifies a passed rolling-restart report without blockers as healthy', () => {

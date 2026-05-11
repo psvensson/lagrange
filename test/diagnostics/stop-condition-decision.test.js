@@ -11,6 +11,8 @@ import {
 } from '../../src/diagnostics/causal-analysis-schema.js';
 
 const ACTIVE_ARTIFACT_PATH = 'test-output/reports/.playback/rolling-restart-spec-led-runtime-modularization-active-gate-snapshot-coverage-reachability/rolling-restart/failure-bundle.json';
+const ACTIVE_GATE_NO_PROGRESS_REPORT_PATH =
+  'test-output/reports/rolling-restart-spec-led-runtime-modularization-active-gate-snapshot-coverage-publication-lag.report.json';
 const PASSED_REPORT_PATH = 'test-output/reports/canary-rolling-restart-local-latest.report.json';
 const JSON_ENCODING_UTF8 = 'utf8';
 const NODE_COMMAND = 'node';
@@ -25,6 +27,10 @@ function readActiveArtifact() {
 
 function readPassedReport() {
   return JSON.parse(fs.readFileSync(PASSED_REPORT_PATH, JSON_ENCODING_UTF8));
+}
+
+function readActiveGateNoProgressReport() {
+  return JSON.parse(fs.readFileSync(ACTIVE_GATE_NO_PROGRESS_REPORT_PATH, JSON_ENCODING_UTF8));
 }
 
 function assertNoNullOrUndefined(value) {
@@ -61,6 +67,17 @@ describe('StopConditionDecision', () => {
     assert.ok(failureClasses.includes(FAILURE_CLASS.ACTIVE_GATE_SNAPSHOT_COVERAGE_INCOMPLETE));
     assert.ok(failureClasses.includes(FAILURE_CLASS.STARTUP_READINESS_BLOCKED));
     assert.equal(failureClasses.includes(FAILURE_CLASS.BUDGET_TIMEOUT_CASCADE), false);
+    assertNoNullOrUndefined(artifact);
+  });
+
+  it('classifies active-gate no-progress readiness as snapshot coverage successor work', () => {
+    const artifact = buildCausalAnalysis(readActiveGateNoProgressReport());
+    const failureClasses = artifact.failureTaxonomy.classes.map((entry) => entry.failureClass);
+
+    assert.equal(artifact.stopDecision.outcome, STOP_OUTCOME.CONTINUE_LOCAL_FIX);
+    assert.equal(artifact.stopDecision.condition, STOP_CONDITION.CLASSIFIED_LOCAL_BLOCKER);
+    assert.ok(failureClasses.includes(FAILURE_CLASS.ACTIVE_GATE_SNAPSHOT_COVERAGE_INCOMPLETE));
+    assert.equal(failureClasses.includes(FAILURE_CLASS.STARTUP_READINESS_BLOCKED), false);
     assertNoNullOrUndefined(artifact);
   });
 

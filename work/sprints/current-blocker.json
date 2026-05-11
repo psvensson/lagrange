@@ -1,9 +1,55 @@
 {
   "schema": "current-blocker-v1",
   "generatedBy": "scripts/work-tracker.js",
-  "sprint": null,
-  "package": null,
-  "status": "none",
-  "nextSprint": "work/sprints/todo-2026-q2-spec-led-runtime-modularization-startup-readiness-followup.md",
-  "nextPackage": "work/packages/todo-20260511-spec-led-runtime-modularization-startup-readiness-support-evidence-frontier.md"
+  "sprint": "work/sprints/active-2026-q2-spec-led-runtime-modularization-startup-readiness-followup.md",
+  "package": "work/packages/active-20260511-spec-led-runtime-modularization-startup-readiness-support-evidence-frontier.md",
+  "status": "active",
+  "scenario": "spec-led-runtime-modularization",
+  "artifact": "test-output/reports/rolling-restart-spec-led-runtime-modularization-active-gate-snapshot-coverage-publication-lag.report.json",
+  "playback": "test-output/reports/.playback/rolling-restart-spec-led-runtime-modularization-active-gate-snapshot-coverage-publication-lag/rolling-restart/",
+  "owner": "startup_readiness_owner",
+  "boundary": "startup_support_evidence",
+  "dominantReason": "startup_readiness_boundary",
+  "currentState": "Diagnostics budget ownership is classified and no longer reports budget_timeout_cascade as an architecture gap. The representative causal model migrates to startup_readiness_owner / startup_support_evidence while active_gate_snapshot_coverage remains an inherited frozen topology symptom.",
+  "nextAction": "Assign the fresh implementation subagent to freeze the startup readiness support evidence and decide whether the residual is runtime readiness ownership, retry/backoff contract debt, or a narrower successor boundary.",
+  "proof": [
+    "npm run work:evidence-summary -- test-output/reports/rolling-restart-spec-led-runtime-modularization-active-gate-snapshot-coverage-publication-lag.report.json",
+    "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-spec-led-runtime-modularization-active-gate-snapshot-coverage-publication-lag.report.json --explain active_gate_snapshot_coverage",
+    "npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-spec-led-runtime-modularization-active-gate-snapshot-coverage-publication-lag.report.json",
+    "Focused startup readiness support evidence fixture selected after package review",
+    "Touched-file static guardrails selected by startup_readiness_owner",
+    "Representative rolling-restart rerun or classification handoff"
+  ],
+  "touchedFiles": [
+    "src/bootstrap/**/*.js",
+    "src/control-plane/*readiness*.js",
+    "src/diagnostics/*causal*.js",
+    "src/diagnostics/*stop-condition*.js",
+    "test/bootstrap/**/*.test.js",
+    "test/diagnostics/*causal*.test.js",
+    "test/diagnostics/*stop-condition*.test.js",
+    "test-output/reports/rolling-restart-spec-led-runtime-modularization-active-gate-snapshot-coverage-publication-lag.report.json",
+    "work/packages/active-20260511-spec-led-runtime-modularization-startup-readiness-support-evidence-frontier.md",
+    "work/sprints/active-2026-q2-spec-led-runtime-modularization-startup-readiness-followup.md"
+  ],
+  "modelFit": {
+    "packageClass": "representative-frontier-closure",
+    "intendedMinimumModel": "gpt-5.3-codex",
+    "scopeShape": "owner-boundary-contraction/cross-boundary-causal-edge",
+    "escalationTriggers": [
+      "causal stop condition no longer reports owner_boundary_migration",
+      "proof returns to diagnostics_owner budget_timeout_cascade",
+      "proof requires startup_active_gate_owner snapshot coverage runtime changes",
+      "runtime implementation would need Pro or Enterprise features"
+    ]
+  },
+  "causalGovernance": {
+    "hypothesis": "With budget ownership classified, startup readiness support evidence should either reduce through the startup readiness owner contract or migrate to a named downstream owner-boundary blocker.",
+    "stopConditionCheck": "npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-spec-led-runtime-modularization-active-gate-snapshot-coverage-publication-lag.report.json",
+    "expectedCausalModelChange": "The startup_readiness_boundary migration disappears, reduces, or migrates to a named downstream owner-boundary blocker; same-frontier without reduced readiness evidence is contradictory.",
+    "representativeOutcome": "pending-before-rerun",
+    "causalDebt": "Do not hide readiness support evidence by reopening publication ACK, budget cascade, active-gate runtime behavior, or harness timeouts.",
+    "crossBoundaryReview": "The closed budget-cascade review found stale links; a separate fix subagent corrected them and the fix was committed/pushed before activation."
+  },
+  "predecessor": "work/packages/done-20260511-spec-led-runtime-modularization-budget-timeout-cascade-architecture-analysis.md"
 }

@@ -62,6 +62,8 @@ const REPORT_ARTIFACT_PATH_PUBLICATION_ACK_REDUCED =
   'test-output/reports/rolling-restart-spec-led-runtime-modularization-publication-ack.report.json';
 const REPORT_ARTIFACT_PATH_PUBLICATION_COUNT_ONLY_ACK =
   'test-output/reports/rolling-restart-spec-led-runtime-modularization-operation-workflow-timeout.report.json';
+const REPORT_ARTIFACT_PATH_PUBLICATION_LAG =
+  'test-output/reports/rolling-restart-spec-led-runtime-modularization-active-gate-snapshot-coverage-publication-lag.report.json';
 const PUBLICATION_ACK_PENDING_STATUS = 'ACK_PENDING';
 const PUBLICATION_UNKNOWN_STATUS = 'UNKNOWN';
 const PUBLICATION_PENDING_REASON = 'publication_pending';
@@ -72,6 +74,7 @@ const SNAPSHOT_COVERAGE_INCOMPLETE_REASON = 'snapshot_coverage_incomplete';
 const PRIORITY_RECOVERY_BLOCKED_REASON = 'priority_recovery_progress_blocked';
 const PRIORITY_RECOVERY_RETRYABLE_REASON =
   'priority_recovery_event_driven_wait';
+const READINESS_TERMINAL_REASON = 'readiness_terminal';
 const ARTIFACT_PRIORITY_RECOVERY_OWNER = 'artifact_priority_owner';
 const ARTIFACT_PRIORITY_RECOVERY_BOUNDARY = 'artifact_priority_boundary';
 const OWNER_STARTUP_ACTIVE_GATE = 'startup_active_gate_owner';
@@ -235,6 +238,19 @@ describe('TopologyConvergenceGraph', () => {
       triageSummary: SOURCE_PATH_ABSENT,
       report: SOURCE_PATH_ABSENT,
     });
+  });
+
+  it('normalizes active-gate no-progress readiness evidence as terminal support evidence', () => {
+    const report = JSON.parse(
+      fs.readFileSync(REPORT_ARTIFACT_PATH_PUBLICATION_LAG, JSON_ENCODING_UTF8),
+    );
+    const graph = buildTopologyConvergenceGraph(report);
+    const readinessEdge = findEdge(graph.edges, EDGE_READINESS);
+
+    assert.equal(readinessEdge.state, EDGE_STATE.TERMINAL_FAILED);
+    assert.equal(readinessEdge.source.recoverability, FIXTURE_READINESS_RECOVERABILITY);
+    assert.deepEqual(readinessEdge.reasons, [READINESS_TERMINAL_REASON]);
+    assertNoNullOrUndefined(graph);
   });
 
   it('presents publication ACK debt as owner reason before raw status text', () => {

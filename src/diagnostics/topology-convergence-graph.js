@@ -35,6 +35,8 @@ const PUBLICATION_RECOVERY_PROTOCOL_PUBLICATION_PENDING =
 const PRIORITY_RECOVERY_SEMANTIC_RECOVERING_IN_FLIGHT = 'recovering_in_flight';
 const ACTIVE_GATE_STATE_TIMED_OUT = 'timed_out';
 const READINESS_RECOVERABILITY_TERMINAL = 'terminal';
+const READINESS_FAILURE_CLASS_NO_PROGRESS_TERMINAL = 'no_progress_terminal';
+const READINESS_TERMINAL_REASON_STALLED_NO_PROGRESS = 'stalled_no_progress';
 const PRIORITY_RECOVERY_EVIDENCE_SOURCE_PROGRESS = 'progress';
 const PRIORITY_RECOVERY_EVIDENCE_SOURCE_SUMMARY = 'summary';
 
@@ -438,6 +440,23 @@ const PUBLICATION_STATE_RULES = Object.freeze([
   Object.freeze({
     state: EDGE_STATE.SATISFIED,
     reasons: Object.freeze([]),
+    matches: () => true,
+  }),
+]);
+
+const READINESS_RECOVERABILITY_RULES = Object.freeze([
+  Object.freeze({
+    recoverability: READINESS_RECOVERABILITY_TERMINAL,
+    matches: (snapshot) => snapshot.recoverability === READINESS_RECOVERABILITY_TERMINAL,
+  }),
+  Object.freeze({
+    recoverability: READINESS_RECOVERABILITY_TERMINAL,
+    matches: (snapshot) =>
+      snapshot.classCode === READINESS_FAILURE_CLASS_NO_PROGRESS_TERMINAL &&
+      snapshot.terminalReason === READINESS_TERMINAL_REASON_STALLED_NO_PROGRESS,
+  }),
+  Object.freeze({
+    recoverability: UNKNOWN_VALUE,
     matches: () => true,
   }),
 ]);
@@ -857,7 +876,7 @@ function buildActiveGateSnapshotEdge(normalized) {
 }
 
 function buildReadinessEdge(normalized) {
-  const readiness = normalized.readinessFailure;
+  const readiness = normalizeReadinessSupportEvidence(normalized.readinessFailure);
   const reasons = [];
   const state = resolveReadinessState(readiness, normalized.activeGate, reasons);
 
@@ -873,6 +892,7 @@ function buildReadinessEdge(normalized) {
       mode: textOrUnknown(readiness.mode),
       classCode: textOrUnknown(readiness.classCode),
       recoverability: textOrUnknown(readiness.recoverability),
+      terminalReason: textOrUnknown(readiness.terminalReason),
       cause: textOrUnknown(readiness.cause),
       source: textOrUnknown(readiness.source),
     },
@@ -923,6 +943,27 @@ function buildEdge(edge) {
     dependencies: edge.dependencies,
     projectionHint: edge.projectionHint,
   };
+}
+
+function normalizeReadinessSupportEvidence(readinessFailure) {
+  const readiness = asRecord(readinessFailure);
+  const recoverability = resolveReadinessRecoverability(readiness);
+  return {
+    ...readiness,
+    recoverability,
+  };
+}
+
+function resolveReadinessRecoverability(readiness) {
+  const snapshot = {
+    recoverability: textOrUnknown(readiness.recoverability),
+    classCode: textOrUnknown(readiness.classCode),
+    terminalReason: textOrUnknown(readiness.terminalReason),
+  };
+  const decision = READINESS_RECOVERABILITY_RULES.find((rule) =>
+    rule.matches(snapshot),
+  );
+  return decision.recoverability;
 }
 
 function computeFrontier(edges) {

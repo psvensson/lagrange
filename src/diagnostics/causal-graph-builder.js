@@ -274,7 +274,7 @@ function normalizeCausalInput(input) {
   const progress = asRecord(activeGate.progress);
   const progressSummary = asRecord(publication.priorityRecoveryProgressSummary);
   const dominantWitness = asRecord(progressSummary.dominantWitness);
-  const readinessEvidence = normalizeReadinessEvidence(failureBundle, scenario);
+  const readinessEvidence = normalizeReadinessEvidence(failureBundle, scenario, summary);
   const reportOutcome = resolveReportOutcome({
     report,
     scenario,
@@ -356,9 +356,13 @@ function resolveReportOutcome({report, scenario, summary}) {
   return REPORT_OUTCOME_RULES.find((rule) => rule.matches(snapshot)).outcome;
 }
 
-function normalizeReadinessEvidence(failureBundle, scenario) {
+function normalizeReadinessEvidence(failureBundle, scenario, summary) {
   const readiness = firstRecord(failureBundle.readiness, scenario.readiness);
-  const readinessFailure = firstRecord(failureBundle.readinessFailure, scenario.readinessFailure);
+  const readinessFailure = firstRecord(
+    failureBundle.readinessFailure,
+    scenario.readinessFailure,
+    summary.readinessFailure,
+  );
   return {
     readiness,
     readinessFailure,

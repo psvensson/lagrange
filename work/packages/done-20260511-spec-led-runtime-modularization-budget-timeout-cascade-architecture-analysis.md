@@ -56,7 +56,7 @@
   "predecessor": "work/packages/done-20260511-spec-led-runtime-modularization-active-gate-snapshot-coverage-post-publication-ack-frontier.md",
   "closed": "2026-05-11",
   "commitAndPushLedgerRequired": true,
-  "successor": "work/packages/todo-20260511-spec-led-runtime-modularization-startup-readiness-support-evidence-frontier.md"
+  "successor": "work/packages/active-20260511-spec-led-runtime-modularization-startup-readiness-support-evidence-frontier.md"
 }
 -->
 
@@ -221,7 +221,7 @@ to a narrower runtime owner boundary.
   `ownershipGapCount=0`; the budget invariant passes with
   `budget_ownership_classified`.
 - Successor package:
-  `work/packages/todo-20260511-spec-led-runtime-modularization-startup-readiness-support-evidence-frontier.md`.
+  `work/packages/active-20260511-spec-led-runtime-modularization-startup-readiness-support-evidence-frontier.md`.
 
 ## Commit And Push Ledger
 

@@ -1,13 +1,13 @@
 # Spec-Led Runtime Modularization Startup Readiness Follow-Up Sprint
 
-Status: todo. This successor sprint follows the budget timeout cascade
+Status: active. This successor sprint follows the budget timeout cascade
 classification after causal analysis migrated the remaining representative
 blocker to startup readiness support evidence.
 
 ## Current Blocker Snapshot
 
 Current package:
-`work/packages/todo-20260511-spec-led-runtime-modularization-startup-readiness-support-evidence-frontier.md`.
+`work/packages/active-20260511-spec-led-runtime-modularization-startup-readiness-support-evidence-frontier.md`.
 
 Owner boundary:
 `startup_readiness_owner / startup_support_evidence`.
@@ -32,12 +32,13 @@ budget ownership is classified and causal analysis now reports
 
 ## Package Queue
 
-1. [Startup Readiness Support Evidence Frontier](../packages/todo-20260511-spec-led-runtime-modularization-startup-readiness-support-evidence-frontier.md)
+1. [Startup Readiness Support Evidence Frontier](../packages/active-20260511-spec-led-runtime-modularization-startup-readiness-support-evidence-frontier.md)
 2. [Active Gate Report Schema Alias Deletion](../packages/todo-20260509-spec-led-runtime-modularization-active-gate-report-schema-alias-deletion.md)
 
 ## Activation Rules
 
-1. Review the closed budget-cascade package before activating the successor.
+1. Review of the closed budget-cascade package found stale predecessor sprint
+   links; the separate fix subagent corrected them before successor activation.
 2. Keep active-gate report schema alias deletion deferred until the startup
    readiness support evidence frontier is classified.
 3. Do not reopen publication ACK, budget cascade, or startup active-gate runtime
