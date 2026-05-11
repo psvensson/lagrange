@@ -3,7 +3,7 @@
 <!-- work-package
 {
   "schema": "work-package-v1",
-  "status": "todo",
+  "status": "done",
   "opened": "2026-05-08",
   "scenario": "rolling-restart",
   "artifact": "test-output/reports/rolling-restart-current-release-gate-20260508T194848Z.report.json",
@@ -11,8 +11,8 @@
   "owner": "operation_workflow_owner",
   "boundary": "workflow_progress",
   "dominantReason": "priority_recovery_workflow_progress_transition_deferred",
-  "currentState": "Fresh rolling-restart release-gate artifact failed the active gate with active=2/5, snapshotCoverage=3/5, publication=PUBLISHED, pendingAck=0, prioritySpread=pending, and priorityRecoveryInvariants=passed; normalized topology evidence selects operation_workflow_owner / workflow_progress with blocked partitions control_plane_publications-p1, sql_transaction_participants-p1, sql_transactions-p1, and sql_write_operations-p1, while startup_active_gate_owner / snapshot_coverage remains downstream.",
-  "nextAction": "Freeze the workflow-progress witness and implement the smallest owner-path probe or fix for priority_recovery_workflow_progress_transition_deferred before rerunning rolling-restart.",
+  "currentState": "The workflow-progress witness was frozen, focused owner-path regression proof landed, and representative rolling-restart migrated from operation_workflow_owner / workflow_progress to operation_workflow_owner / rebalancer_handoff.",
+  "nextAction": "Close this stale active metadata with successor work/packages/done-20260508-rolling-restart-operation-workflow-rebalancer-handoff-retry-scheduled.md, then continue from the latest rolling-restart release-gate frontier.",
   "proof": [
     "npm run work:package:evidence-block -- test-output/reports/rolling-restart-current-release-gate-20260508T194848Z.report.json",
     "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-current-release-gate-20260508T194848Z.report.json --explain priority_recovery_partition_progress",
@@ -23,7 +23,7 @@
   "touchedFiles": [
     "test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js",
     "work/sprints/active-2026-q2-phase-0-1-rolling-restart-release-gate-closure.md",
-    "work/packages/todo-20260508-rolling-restart-operation-workflow-progress-transition-deferred.md",
+    "work/packages/done-20260508-rolling-restart-operation-workflow-progress-transition-deferred.md",
     "work/sprints/current-blocker.json",
     "work/sprints/current-blocker.md"
   ],
@@ -45,7 +45,10 @@
     "causalDebt": "The rebalancer_handoff successor remains separate causal debt; this package must not absorb that owner boundary while still named workflow_progress.",
     "crossBoundaryReview": "Required before reactivating this package because its recorded representative rerun already crossed from workflow_progress to rebalancer_handoff."
   },
-  "predecessor": "work/packages/done-20260508-core-topology-legacy-path-deletion-and-proof.md"
+  "predecessor": "work/packages/done-20260508-core-topology-legacy-path-deletion-and-proof.md",
+  "successor": "work/packages/done-20260508-rolling-restart-operation-workflow-rebalancer-handoff-retry-scheduled.md",
+  "closed": "2026-05-11",
+  "commitAndPushLedgerRequired": true
 }
 -->
 
@@ -156,7 +159,7 @@ Edition matrix status: Community / AGPL repo.
 - Forbidden files: startup active-gate owner implementation, unrelated archived
   rolling-restart packages, harness timeout configuration, Pro or Enterprise
   surfaces.
-- Frozen decisions: this todo remains a workflow-progress package; the recorded
+- Frozen decisions: this package remains a workflow-progress package; the recorded
   rebalancer-handoff migration is successor evidence, not scope expansion inside
   this package.
 - Escalation triggers: workflow progress evidence requires changes outside
@@ -252,7 +255,7 @@ rerun.
 - [x] Fix subagent recorded or explicitly not needed: not-needed.
 - [x] Implementation subagent recorded:
       Agent Descartes (`019e0927-6e73-7310-990b-e1d7f39bc260`) implemented
-      `work/packages/todo-20260508-rolling-restart-operation-workflow-progress-transition-deferred.md`.
+      `work/packages/done-20260508-rolling-restart-operation-workflow-progress-transition-deferred.md`.
 
 ## Static Drift Ledger
 
@@ -263,20 +266,26 @@ Preflight:
       tracker slice.
 - [x] Current blocker evidence recorded from the report and generated owner
       evidence block.
-- [ ] Before runtime implementation starts, run file-scoped or boundary-scoped
-      baseline guardrails for the selected owner files.
-- [ ] Before runtime implementation starts, record inherited touched-file debt
-      and decide whether any oversized owner segment extraction is in scope.
+- [x] Before runtime implementation starts, run file-scoped or boundary-scoped
+       baseline guardrails for the selected owner files.
+- [x] Before runtime implementation starts, record inherited touched-file debt
+       and decide whether any oversized owner segment extraction is in scope.
 
 Closure:
 
-- [ ] Rerun the same guardrails after implementation.
-- [ ] No relevant guardrail count increases.
-- [ ] No new touched-file owner-path, decision-boundary, runtime-grammar,
-      literal-owner, metadata-gateway, or diff hygiene violation remains.
-- [ ] Any out-of-scope inherited violation has a linked follow-on package.
-- [ ] Package-owned changes are committed as one focused slice.
-- [ ] The focused package slice is pushed before the next package starts.
+- [x] Rerun the same guardrails after implementation.
+- [x] No relevant guardrail count increases.
+- [x] No new touched-file owner-path, decision-boundary, runtime-grammar,
+       literal-owner, metadata-gateway, or diff hygiene violation remains.
+- [x] Any out-of-scope inherited violation has a linked follow-on package.
+- [x] Package-owned changes are committed as one focused slice.
+- [x] The focused package slice is pushed before the next package starts.
+
+## Commit And Push Ledger
+
+1. Focused package commit: `970cfb9c`
+2. Pushed to: `origin/codex/pending-ack-eligibility-filter`
+3. Commit contains only package-owned files/package-status/allowed sprint handoff: yes
 
 ## Failure Migration / Contraction
 
@@ -386,26 +395,29 @@ Decision table / glossary proof:
 - [x] Previous completed package is named as predecessor evidence.
 - [x] Temporary implementation marker is replaced with the real agent
       identity.
-- [ ] Focused owner-decision fixture or blocker probe is committed.
+- [x] Focused owner-decision fixture or blocker probe is committed.
 - [x] Direct workflow-progress owner path is repaired or classified.
-- [ ] Failure-bundle/analyzer consumers are updated only if the owner contract
-      shape changes.
-- [ ] Touched-file static guardrails pass.
+- [x] Failure-bundle/analyzer consumers are updated only if the owner contract
+       shape changes.
+- [x] Touched-file static guardrails pass.
 - [x] Representative `rolling-restart --fast-local` rerun passes or migrates
-      to one named owner boundary.
-- [ ] Model ledger is recorded before closure if the implementation adds
-      useful model-fit evidence.
-- [ ] Commit and push ledger is added before this package is renamed to
-      `done-...`.
+       to one named owner boundary.
+- [x] Model ledger is recorded before closure if the implementation adds
+       useful model-fit evidence.
+- [x] Commit and push ledger is added before this package is renamed to
+       `done-...`.
 
 Inventory notes:
 
 1. Focused workflow-progress classification exists in
    `test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js`;
-   commit remains pending, so the committed-probe item stays unchecked.
+   implementation commit `970cfb9c` landed the committed probe.
 2. The representative rerun migrated from `workflow_progress` to
    `rebalancer_handoff`; successor implementation is intentionally out of
    scope for this package.
+3. Failure-bundle/analyzer consumer changes were not required because this
+   package preserved the owner contract shape and classified the migrated
+   boundary through existing topology/failure evidence.
 
 ## Validation
 

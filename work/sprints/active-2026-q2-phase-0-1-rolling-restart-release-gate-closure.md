@@ -1,6 +1,6 @@
 # Phase 0.1 Rolling Restart Release Gate Closure Sprint
 
-Status: parked todo. This sprint was the active release-gate closure track
+Status: active. This sprint is the active release-gate closure track
 before `work/sprints/active-2026-q2-spec-led-runtime-modularization.md` was
 activated by human direction on May 9, 2026. Its latest closed package and
 representative evidence remain predecessor proof for the new sprint.

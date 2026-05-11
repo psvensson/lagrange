@@ -2,93 +2,70 @@
 
 # Current Blocker
 
-Sprint: `work/sprints/archived/done-2026-q2-spec-led-runtime-modularization-priority-recovery-backpressure-followup.md`
+Sprint: `work/sprints/active-2026-q2-phase-0-1-rolling-restart-release-gate-closure.md`
 
-Package: `work/packages/done-20260509-spec-led-runtime-modularization-active-gate-report-schema-alias-deletion.md`
+Package: `work/packages/done-20260508-rolling-restart-operation-workflow-progress-transition-deferred.md`
 
-Scenario: `spec-led-runtime-modularization`
+Scenario: `rolling-restart`
 
-Artifact: `test-output/reports/rolling-restart-spec-led-runtime-modularization-final.report.json`
+Artifact: `test-output/reports/rolling-restart-current-release-gate-20260508T194848Z.report.json`
 
-Playback: `none`
+Playback: `test-output/reports/.playback/rolling-restart-current-release-gate-20260508T194848Z/rolling-restart/`
 
 ## Boundary
 
-Owner: `diagnostics_artifact_schema_owner`
+Owner: `operation_workflow_owner`
 
-Boundary: `active_gate_report_schema_alias_deletion`
+Boundary: `workflow_progress`
 
-Dominant reason: `active_gate_report_aliases_remain_external_artifact_contract`
+Dominant reason: `priority_recovery_workflow_progress_transition_deferred`
 
-Current state: Active-gate report aliases were removed from scoped diagnostics/report artifact surfaces, and consumers now use the canonical owner-bound activeGate shape without changing runtime active-gate behavior.
+Current state: The workflow-progress witness was frozen, focused owner-path regression proof landed, and representative rolling-restart migrated from operation_workflow_owner / workflow_progress to operation_workflow_owner / rebalancer_handoff.
 
 ## Next Action
 
-No successor is open for this sprint; reopen only if focused diagnostics proof finds alias drift or runtime owner evidence changes.
+Close this stale active metadata with successor work/packages/done-20260508-rolling-restart-operation-workflow-rebalancer-handoff-retry-scheduled.md, then continue from the latest rolling-restart release-gate frontier.
 
 ## Proof Ladder
 
-1. `rg checks for activeGateBestProgress, activeGateNoProgress, and activeGateBlockerHistory before and after migration`
-2. `node --test test/diagnostics/topology-convergence-graph.test.js test/scripts/analyze-topology-convergence.test.js test/distributed/harness/__tests__/failure-bundle.test.js`
-3. `Touched-file static guardrails selected by diagnostics_artifact_schema_owner`
-4. `Representative rolling-restart report preserves canonical owner-boundary evidence without old active-gate report aliases`
+1. `npm run work:package:evidence-block -- test-output/reports/rolling-restart-current-release-gate-20260508T194848Z.report.json`
+2. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-current-release-gate-20260508T194848Z.report.json --explain priority_recovery_partition_progress`
+3. `Focused operation_workflow_owner workflow_progress regression or blocker probe`
+4. `Touched-file static guardrails selected by the implementation boundary`
+5. `node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-current-release-gate-next.report.json --fast-local --verbose`
 
 ## Model Fit
 
-Package class: `bounded-implementation`
+Package class: `representative-frontier-closure`
 
 Intended minimum model: `gpt-5.3-codex`
 
-Scope shape: `diagnostics-artifact-schema-migration`
+Scope shape: `owner-boundary-contraction`
 
 Escalation triggers:
 
-1. `owned files expand outside diagnostics artifact schema surfaces`
-2. `migration requires runtime active-gate behavior changes`
-3. `representative proof reveals a new owner boundary instead of schema aliases`
+1. `workflow progress evidence requires changes outside operation_workflow_owner or priority recovery snapshots`
+2. `representative proof restores startup_active_gate_owner / snapshot_coverage as the direct blocker before workflow progress is classified`
+3. `runtime implementation would need Pro or Enterprise features`
 
 ## Causal Governance
 
-Causal hypothesis: `If active-gate report schema aliases are deleted correctly, diagnostics readers should preserve the same owner-bound active-gate evidence without changing runtime active-gate causal edges.`
+Causal hypothesis: `If the workflow-progress transition-deferred owner path is repaired or classified, priority_recovery_partition_progress should reduce or migrate away from operation_workflow_owner / workflow_progress before startup_active_gate_owner / snapshot_coverage is treated as direct.`
 
-Stop-condition check: `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-spec-led-runtime-modularization-final.report.json`
+Stop-condition check: `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-current-release-gate-20260508T194848Z.report.json`
 
-Expected causal-model change: `The causal model should stay on the same runtime owner boundary while report aliases disappear from diagnostics schema; any runtime owner migration is contradictory for this schema-only package.`
+Expected causal-model change: `The transition_deferred workflow_progress edge either disappears, reduces to classified retryable backpressure, or migrates to the already-recorded operation_workflow_owner / rebalancer_handoff blocker.`
 
-Representative outcome: `same-frontier`
+Representative outcome: `migrated`
 
-Causal debt: `No runtime causal debt is owned here; any runtime blocker exposed by alias deletion must be split into a separate owner-boundary package.`
+Causal debt: `The rebalancer_handoff successor remains separate causal debt; this package must not absorb that owner boundary while still named workflow_progress.`
 
-Cross-boundary review: `Review the closed priority recovery backpressure package before activation because this package touches diagnostics, failure-bundle, topology-convergence, and active-gate report consumers.`
+Cross-boundary review: `Required before reactivating this package because its recorded representative rerun already crossed from workflow_progress to rebalancer_handoff.`
 
 ## Touched Files
 
-1. `src/diagnostics/topology-convergence-graph.js`
-2. `scripts/analyze-topology-convergence.js`
-3. `test/distributed/harness/active-gate-contract.js`
-4. `test/distributed/harness/cluster-segment-7.js`
-5. `test/distributed/harness/cluster-segment-7-class-4.js`
-6. `test/distributed/harness/failure-bundle-segment-1.js`
-7. `test/distributed/harness/failure-bundle-segment-2.js`
-8. `test/distributed/harness/failure-bundle-segment-3.js`
-9. `test/distributed/harness/failure-bundle-segment-4.js`
-10. `test/distributed/harness/failure-bundle-segment-6.js`
-11. `test/distributed/harness/publication-evidence-contract.js`
-12. `test/distributed/harness/__tests__/cluster-part-6-core-01-test-cases.js`
-13. `test/distributed/harness/__tests__/cluster-part-6-core-04-test-cases.js`
-14. `test/distributed/harness/__tests__/cluster.test-part-5.js`
-15. `test/distributed/harness/__tests__/failure-bundle-active-gate-tail-test-cases.js`
-16. `test/distributed/harness/__tests__/failure-bundle-core-02-test-cases.js`
-17. `test/distributed/harness/__tests__/failure-bundle-core-03-test-cases.js`
-18. `test/distributed/harness/__tests__/failure-bundle-core-05-test-cases.js`
-19. `test/distributed/harness/__tests__/failure-bundle-core-06-test-cases.js`
-20. `test/distributed/harness/__tests__/failure-bundle-core-08-test-cases.js`
-21. `test/distributed/harness/__tests__/failure-bundle-core-11-test-cases.js`
-22. `test/distributed/harness/__tests__/failure-bundle-core-15-test-cases.js`
-23. `test/distributed/harness/__tests__/failure-bundle-playback-test-cases.js`
-24. `test/distributed/harness/__tests__/failure-bundle-publication-closure-tail-test-cases.js`
-25. `test/distributed/harness/__tests__/failure-bundle.test.js`
-26. `test/diagnostics/topology-convergence-graph.test.js`
-27. `test/scripts/__fixtures__/topology-convergence/*.json`
-28. `test/scripts/analyze-topology-convergence.test.js`
-29. `work/packages/done-20260509-spec-led-runtime-modularization-active-gate-report-schema-alias-deletion.md`
+1. `test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js`
+2. `work/sprints/active-2026-q2-phase-0-1-rolling-restart-release-gate-closure.md`
+3. `work/packages/done-20260508-rolling-restart-operation-workflow-progress-transition-deferred.md`
+4. `work/sprints/current-blocker.json`
+5. `work/sprints/current-blocker.md`

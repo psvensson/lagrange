@@ -144,11 +144,11 @@ explicitly adopts that scope.
 
 - [x] Review subagent recorded:
       Agent Gauss (`019e093f-a973-7132-814e-6bdc386284a3`) reviewed
-      `work/packages/todo-20260508-rolling-restart-operation-workflow-progress-transition-deferred.md`;
+      `work/packages/done-20260508-rolling-restart-operation-workflow-progress-transition-deferred.md`;
       result `fixes-required`.
 - [x] Fix subagent recorded or explicitly not needed:
       Agent Rawls (`019e0942-4819-7283-bb21-bc516f4728aa`) fixed
-      `work/packages/todo-20260508-rolling-restart-operation-workflow-progress-transition-deferred.md`.
+      `work/packages/done-20260508-rolling-restart-operation-workflow-progress-transition-deferred.md`.
 - [x] Implementation subagent recorded:
       Agent Hooke (`019e0947-8ec0-76f2-b14c-8fb2d826b166`) implemented
       `work/packages/done-20260508-rolling-restart-operation-workflow-rebalancer-handoff-retry-scheduled.md`.
