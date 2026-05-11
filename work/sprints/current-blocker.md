@@ -24,7 +24,7 @@ Current state: The implementation classified active coordinator-created remote h
 
 ## Next Action
 
-Open or activate the next workflow-progress event-driven priority recovery package for the migrated representative frontier.
+Activate `work/packages/todo-20260511-rolling-restart-operation-workflow-progress-event-driven-priority-recovery.md` for the migrated workflow-progress event-driven priority recovery frontier.
 
 ## Proof Ladder
 
@@ -63,12 +63,11 @@ Cross-boundary review: `completed-before-package-open; predecessor review found 
 
 ## Touched Files
 
-1. `src/rebalancer/operation-workflow-owner-segment-7-stage-5.js`
-2. `src/rebalancer/operation-workflow-owner.js`
-3. `test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js`
-4. `work/packages/done-20260511-rolling-restart-operation-workflow-rebalancer-handoff-retry-scheduled.md`
-5. `work/packages/done-20260511-rolling-restart-operation-workflow-progress-event-driven-wait.md`
-6. `work/sprints/active-2026-q2-phase-0-1-rolling-restart-release-gate-closure.md`
-7. `work/sprints/current-blocker.json`
-8. `work/sprints/current-blocker.md`
-9. `work/model-ledger.jsonl`
+1. `src/rebalancer/operation-workflow-owner.js`
+2. `test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js`
+3. `work/packages/done-20260511-rolling-restart-operation-workflow-rebalancer-handoff-retry-scheduled.md`
+4. `work/packages/done-20260511-rolling-restart-operation-workflow-progress-event-driven-wait.md`
+5. `work/sprints/active-2026-q2-phase-0-1-rolling-restart-release-gate-closure.md`
+6. `work/sprints/current-blocker.json`
+7. `work/sprints/current-blocker.md`
+8. `work/model-ledger.jsonl`
