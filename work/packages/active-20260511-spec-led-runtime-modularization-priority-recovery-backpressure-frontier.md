@@ -3,7 +3,7 @@
 <!-- work-package
 {
   "schema": "work-package-v1",
-  "status": "todo",
+  "status": "active",
   "opened": "2026-05-11",
   "scenario": "spec-led-runtime-modularization",
   "artifact": "test-output/reports/rolling-restart-spec-led-runtime-modularization-active-gate-snapshot-coverage-publication-lag.report.json",
@@ -33,8 +33,8 @@
     "test/diagnostics/*causal*.test.js",
     "test/diagnostics/*topology*.test.js",
     "test-output/reports/rolling-restart-spec-led-runtime-modularization-active-gate-snapshot-coverage-publication-lag.report.json",
-    "work/packages/todo-20260511-spec-led-runtime-modularization-priority-recovery-backpressure-frontier.md",
-    "work/sprints/todo-2026-q2-spec-led-runtime-modularization-priority-recovery-backpressure-followup.md"
+    "work/packages/active-20260511-spec-led-runtime-modularization-priority-recovery-backpressure-frontier.md",
+    "work/sprints/active-2026-q2-spec-led-runtime-modularization-priority-recovery-backpressure-followup.md"
   ],
   "modelFit": {
     "packageClass": "representative-frontier-closure",
@@ -52,7 +52,7 @@
     "hypothesis": "With active-gate local ownership classified, priority recovery backpressure should either remain accepted classified backpressure, reduce through operation workflow ownership, or migrate to one narrower owner-boundary blocker.",
     "stopConditionCheck": "npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-spec-led-runtime-modularization-active-gate-snapshot-coverage-publication-lag.report.json",
     "expectedCausalModelChange": "The priority_recovery_backpressure condition remains accepted, disappears, reduces, or migrates to a named downstream owner-boundary blocker; returning to active_gate_local_blocker is contradictory.",
-    "representativeOutcome": "pending-before-rerun",
+    "representativeOutcome": "same-frontier",
     "causalDebt": "Do not hide operation workflow backpressure by reopening publication ACK, diagnostics budget, startup readiness, active-gate local ownership, or harness timeouts.",
     "crossBoundaryReview": "Review the closed active-gate local blocker package before activation; this is operation workflow owner work, not active-gate runtime work."
   },
@@ -109,3 +109,42 @@ presenting active-gate snapshot coverage as local ownership.
 3. Do not reopen publication ACK, diagnostics budget, startup readiness support,
    active-gate local ownership, or harness timeouts before this package reduces
    or migrates priority recovery backpressure evidence.
+
+## Subagent Sequencing Ledger
+
+- [x] Review subagent recorded:
+      Agent review-2b74d91c (2b74d91c-0000-4000-8000-000000000000) reviewed work/packages/done-20260511-spec-led-runtime-modularization-active-gate-local-blocker-frontier.md; result clean.
+- [x] Fix subagent recorded or explicitly not needed:
+      not-needed.
+- [x] Implementation subagent recorded:
+      Agent implement-4fa67bd2 (4fa67bd2-0000-4000-8000-000000000000) implemented work/packages/active-20260511-spec-led-runtime-modularization-priority-recovery-backpressure-frontier.md.
+
+## Implementation Proof Notes
+
+**Causal artifact:** `test-output/reports/rolling-restart-spec-led-runtime-modularization-active-gate-snapshot-coverage-publication-lag.report.json`
+**Decision table:** `analyze:topology-convergence --explain priority_recovery_partition_progress` and `analyze:causal-model`
+
+Evidence run summary:
+
+1. `work:evidence-summary` confirms single topology frontier `priority_recovery_partition_progress` with state `retryable`, owner `operation_workflow_owner`, boundary `rebalancer_handoff`, dominant reason `priority_recovery_event_driven_wait`.
+
+2. `analyze:topology-convergence --explain priority_recovery_partition_progress` confirms decision outcome `retryable` with source `dominantReason: priority_recovery_rebalancer_handoff_retry_scheduled`, `unresolvedSemanticStateIds: recovering_in_flight`, `blockedPartitionIds` for 4 control-plane partitions.
+
+3. `analyze:causal-model` confirms: `outcome: accept_classified_backpressure`, `stopCondition: classified_backpressure`, `stopReasons: [priority_recovery_backpressure]`. Critical path is the single topology node `priority_recovery_partition_progress`.
+
+4. Failure bundle inspection confirms `pendingAckNodeIds: []`, `pendingAckCount: 0` — no pending ACK nodes at the time of capture. The 4 partitions are all `recovering_in_flight` (3 with `actuationState: dispatched_waiting_progress` and `waitMode: event_driven`; 1 dominant witness with `waitMode: retry_scheduled` and `latestOperationStatus: retry_deferred`).
+
+**Classification decision:** `accept_classified_backpressure`. The priority recovery partitions are in flight with retries scheduled. No pending ACK nodes are present. The `eligibleNodeIds: []` in the dominant witness reflects that the workflow admission lacks an explicit eligible node list for this partition — the fallback to count-only (`readyEligibleNodeCount`) is active. The `WAIT_FOR_REBALANCER_HANDOFF_RETRY` outcome is the correct decision-table row: remote owner authoritative, retry deadline active, dispatch observation wake required. No runtime gap was found that would reduce or migrate this blocker. Pending ACK eligibility filter was evaluated but is inapplicable (`pendingAckNodeIds: []`).
+
+**Representative outcome:** `accept_classified_backpressure` — classified, no runtime changes required.
+
+## Validation Notes
+
+- `work:validate`: passed.
+- `work:package:doctor`: passes after implementation ledger entry added.
+- `git diff --check` (touched runtime/test files): clean — no runtime source changes made.
+- `node scripts/check-guideline-literals.js` (touched files): passed.
+- `node scripts/check-guideline-decision-boundaries.js` (touched files): passed.
+- No touched runtime files: this package is classification-only; no source code was modified.
+- `npm run work:model-ledger -- record ...` recorded the same-frontier
+  classification experience.

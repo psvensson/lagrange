@@ -1,6 +1,6 @@
 # Spec-Led Runtime Modularization Priority Recovery Backpressure Follow-Up Sprint
 
-Status: todo. This successor sprint follows active-gate local blocker
+Status: active. This successor sprint follows active-gate local blocker
 classification after causal analysis migrated the remaining representative
 blocker to priority recovery backpressure at the operation workflow rebalancer
 handoff boundary.
@@ -8,7 +8,7 @@ handoff boundary.
 ## Current Blocker Snapshot
 
 Current package:
-`work/packages/todo-20260511-spec-led-runtime-modularization-priority-recovery-backpressure-frontier.md`.
+`work/packages/active-20260511-spec-led-runtime-modularization-priority-recovery-backpressure-frontier.md`.
 
 Owner boundary:
 `operation_workflow_owner / rebalancer_handoff`.
@@ -33,7 +33,7 @@ evidence, and active-gate local ownership are closed as predecessor concerns.
 
 ## Package Queue
 
-1. [Priority Recovery Backpressure Frontier](../packages/todo-20260511-spec-led-runtime-modularization-priority-recovery-backpressure-frontier.md)
+1. [Priority Recovery Backpressure Frontier](../packages/active-20260511-spec-led-runtime-modularization-priority-recovery-backpressure-frontier.md)
 2. [Active Gate Report Schema Alias Deletion](../packages/todo-20260509-spec-led-runtime-modularization-active-gate-report-schema-alias-deletion.md)
 
 ## Activation Rules

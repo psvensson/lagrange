@@ -1,9 +1,9 @@
 {
   "schema": "current-blocker-v1",
   "generatedBy": "scripts/work-tracker.js",
-  "sprint": "work/sprints/todo-2026-q2-spec-led-runtime-modularization-priority-recovery-backpressure-followup.md",
-  "package": "work/packages/todo-20260511-spec-led-runtime-modularization-priority-recovery-backpressure-frontier.md",
-  "status": "todo",
+  "sprint": "work/sprints/active-2026-q2-spec-led-runtime-modularization-priority-recovery-backpressure-followup.md",
+  "package": "work/packages/active-20260511-spec-led-runtime-modularization-priority-recovery-backpressure-frontier.md",
+  "status": "active",
   "scenario": "spec-led-runtime-modularization",
   "artifact": "test-output/reports/rolling-restart-spec-led-runtime-modularization-active-gate-snapshot-coverage-publication-lag.report.json",
   "playback": "test-output/reports/.playback/rolling-restart-spec-led-runtime-modularization-active-gate-snapshot-coverage-publication-lag/rolling-restart/",
@@ -32,8 +32,8 @@
     "test/diagnostics/*causal*.test.js",
     "test/diagnostics/*topology*.test.js",
     "test-output/reports/rolling-restart-spec-led-runtime-modularization-active-gate-snapshot-coverage-publication-lag.report.json",
-    "work/packages/todo-20260511-spec-led-runtime-modularization-priority-recovery-backpressure-frontier.md",
-    "work/sprints/todo-2026-q2-spec-led-runtime-modularization-priority-recovery-backpressure-followup.md"
+    "work/packages/active-20260511-spec-led-runtime-modularization-priority-recovery-backpressure-frontier.md",
+    "work/sprints/active-2026-q2-spec-led-runtime-modularization-priority-recovery-backpressure-followup.md"
   ],
   "modelFit": {
     "packageClass": "representative-frontier-closure",

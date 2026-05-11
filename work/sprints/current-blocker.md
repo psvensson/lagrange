@@ -2,9 +2,9 @@
 
 # Current Blocker
 
-Sprint: `work/sprints/todo-2026-q2-spec-led-runtime-modularization-priority-recovery-backpressure-followup.md`
+Sprint: `work/sprints/active-2026-q2-spec-led-runtime-modularization-priority-recovery-backpressure-followup.md`
 
-Package: `work/packages/todo-20260511-spec-led-runtime-modularization-priority-recovery-backpressure-frontier.md`
+Package: `work/packages/active-20260511-spec-led-runtime-modularization-priority-recovery-backpressure-frontier.md`
 
 Scenario: `spec-led-runtime-modularization`
 
@@ -78,5 +78,5 @@ Cross-boundary review: `Review the closed active-gate local blocker package befo
 9. `test/diagnostics/*causal*.test.js`
 10. `test/diagnostics/*topology*.test.js`
 11. `test-output/reports/rolling-restart-spec-led-runtime-modularization-active-gate-snapshot-coverage-publication-lag.report.json`
-12. `work/packages/todo-20260511-spec-led-runtime-modularization-priority-recovery-backpressure-frontier.md`
-13. `work/sprints/todo-2026-q2-spec-led-runtime-modularization-priority-recovery-backpressure-followup.md`
+12. `work/packages/active-20260511-spec-led-runtime-modularization-priority-recovery-backpressure-frontier.md`
+13. `work/sprints/active-2026-q2-spec-led-runtime-modularization-priority-recovery-backpressure-followup.md`
