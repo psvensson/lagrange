@@ -359,9 +359,9 @@ test(TEST_REENTRY_TEST_NAME, async (t) => {
       'the re-entry should stay on event-driven workflow progress',
     );
     t.equal(
-      coordinator.workflowOwner.shouldSchedulePriorityRecoveryDispatchPendingReentry(
+      coordinator.workflowOwner.schedulePriorityRecoveryDispatchPendingReentry(
         snapshot,
-        operation,
+        [operation],
       ),
       false,
       'the active remote wake retry should close duplicate owner re-entry scheduling',
