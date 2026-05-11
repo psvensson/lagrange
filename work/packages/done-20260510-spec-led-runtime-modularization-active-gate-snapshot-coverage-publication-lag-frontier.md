@@ -29,7 +29,7 @@
     "test/distributed/harness/__tests__/active-gate-closure-classification.test.js",
     "work/model-ledger.jsonl",
     "work/packages/done-20260510-spec-led-runtime-modularization-active-gate-snapshot-coverage-publication-lag-frontier.md",
-    "work/packages/active-20260511-spec-led-runtime-modularization-publication-ack-convergence-publication-published-frontier.md",
+    "work/packages/done-20260511-spec-led-runtime-modularization-publication-ack-convergence-publication-published-frontier.md",
     "work/sprints/archived/done-2026-q2-spec-led-runtime-modularization.md",
     "work/sprints/todo-2026-q2-spec-led-runtime-modularization-publication-ack-followup.md",
     "work/sprints/current-blocker.json",
@@ -57,7 +57,7 @@
   "predecessor": "work/packages/done-20260510-spec-led-runtime-modularization-operation-workflow-progress-recovering-in-flight-frontier.md",
   "closed": "2026-05-11",
   "commitAndPushLedgerRequired": true,
-  "successor": "work/packages/active-20260511-spec-led-runtime-modularization-publication-ack-convergence-publication-published-frontier.md"
+  "successor": "work/packages/done-20260511-spec-led-runtime-modularization-publication-ack-convergence-publication-published-frontier.md"
 }
 -->
 
@@ -316,7 +316,7 @@ static guardrails, causal-model output, and representative rolling-restart.
 - Owner explain command:
   `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-spec-led-runtime-modularization-active-gate-snapshot-coverage-publication-lag.report.json --explain publication_ack_convergence`.
 - Successor package:
-  `work/packages/active-20260511-spec-led-runtime-modularization-publication-ack-convergence-publication-published-frontier.md`.
+  `work/packages/done-20260511-spec-led-runtime-modularization-publication-ack-convergence-publication-published-frontier.md`.
 
 ## Commit And Push Ledger
 

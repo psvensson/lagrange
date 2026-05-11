@@ -3,7 +3,7 @@
 <!-- work-package
 {
   "schema": "work-package-v1",
-  "status": "active",
+  "status": "done",
   "opened": "2026-05-11",
   "scenario": "spec-led-runtime-modularization",
   "artifact": "test-output/reports/rolling-restart-spec-led-runtime-modularization-active-gate-snapshot-coverage-publication-lag.report.json",
@@ -12,7 +12,7 @@
   "boundary": "publication_convergence",
   "dominantReason": "publication_published",
   "currentState": "Implementation rerun settled published/no-pending-ACK evidence: publication_ack_convergence is satisfied and the representative first frontier migrated to active_gate_snapshot_coverage.",
-  "nextAction": "Package is ready for review/closure proof; remaining representative debt is active-gate snapshot coverage and budget timeout cascade, not publication ACK convergence.",
+  "nextAction": "Publication ACK package is closed as migrated; next successor is startup_active_gate_owner / snapshot_coverage.",
   "proof": [
     "npm run work:evidence-summary -- test-output/reports/rolling-restart-spec-led-runtime-modularization-active-gate-snapshot-coverage-publication-lag.report.json",
     "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-spec-led-runtime-modularization-active-gate-snapshot-coverage-publication-lag.report.json --explain publication_ack_convergence",
@@ -30,8 +30,8 @@
     "test/distributed/harness/*active-gate*.js",
     "test/distributed/harness/failure-bundle-segment-*.js",
     "test-output/reports/rolling-restart-spec-led-runtime-modularization-active-gate-snapshot-coverage-publication-lag.report.json",
-    "work/packages/active-20260511-spec-led-runtime-modularization-publication-ack-convergence-publication-published-frontier.md",
-    "work/sprints/active-2026-q2-spec-led-runtime-modularization-publication-ack-followup.md"
+    "work/packages/done-20260511-spec-led-runtime-modularization-publication-ack-convergence-publication-published-frontier.md",
+    "work/sprints/archived/done-2026-q2-spec-led-runtime-modularization-publication-ack-followup.md"
   ],
   "modelFit": {
     "packageClass": "representative-frontier-closure",
@@ -50,9 +50,12 @@
     "expectedCausalModelChange": "The publication_ack_blocked critical path disappears, reduces, or migrates to a named downstream active-gate or readiness blocker; same-frontier without reduced publication evidence is contradictory.",
     "representativeOutcome": "migrated",
     "causalDebt": "Budget timeout cascade remains architecture-analysis debt and must not be hidden by relabeling publication ACK evidence.",
-    "crossBoundaryReview": "The predecessor fixes-required review and separate tracker-evidence fix are recorded; assign a fresh implementation subagent before runtime changes."
+    "crossBoundaryReview": "The predecessor fixes-required review, separate tracker-evidence fix, and fresh implementation subagent are recorded before closure."
   },
-  "predecessor": "work/packages/done-20260510-spec-led-runtime-modularization-active-gate-snapshot-coverage-publication-lag-frontier.md"
+  "predecessor": "work/packages/done-20260510-spec-led-runtime-modularization-active-gate-snapshot-coverage-publication-lag-frontier.md",
+  "closed": "2026-05-11",
+  "commitAndPushLedgerRequired": true,
+  "successor": "work/packages/todo-20260511-spec-led-runtime-modularization-active-gate-snapshot-coverage-post-publication-ack-frontier.md"
 }
 -->
 
@@ -156,14 +159,14 @@ guardrails, causal-model output, and representative rolling-restart.
 - Expected causal-model change: the `publication_ack_blocked` critical path
   disappears, reduces, or migrates to a named downstream active-gate/readiness
   blocker; same-frontier without reduced publication evidence is contradictory.
-- Representative outcome: `pending-before-rerun`.
+- Representative outcome: `migrated`.
 - Causal debt: budget timeout cascade remains architecture-analysis debt and
   must not be hidden by relabeling publication ACK evidence.
 - Cross-boundary review: required before implementation because the predecessor
   crosses startup active-gate ownership and publication ACK convergence. The
-  formal predecessor review returned `fixes-required`, and this active package
-  now records that review plus the separate tracker-evidence fix; assigning the
-  fresh implementation subagent is next.
+  formal predecessor review returned `fixes-required`, the separate
+  tracker-evidence fix ran before implementation, and the fresh implementation
+  subagent completed this package.
 
 ## Generated Owner Evidence Block
 
@@ -187,7 +190,7 @@ guardrails, causal-model output, and representative rolling-restart.
 - [x] Fix subagent recorded or explicitly not needed:
       Agent 019e02b7-ece3-73a2-a664-389d40dfd575 (019e02b7-ece3-73a2-a664-389d40dfd575) fixed work/packages/done-20260510-spec-led-runtime-modularization-active-gate-snapshot-coverage-publication-lag-frontier.md.
 - [x] Implementation subagent recorded:
-      Agent 019e02b9-7651-7851-bc85-a0cef8a90176 (019e02b9-7651-7851-bc85-a0cef8a90176) implemented work/packages/active-20260511-spec-led-runtime-modularization-publication-ack-convergence-publication-published-frontier.md.
+      Agent 019e02b9-7651-7851-bc85-a0cef8a90176 (019e02b9-7651-7851-bc85-a0cef8a90176) implemented work/packages/done-20260511-spec-led-runtime-modularization-publication-ack-convergence-publication-published-frontier.md.
 
 ## Implementation Proof Notes
 
@@ -199,3 +202,48 @@ guardrails, causal-model output, and representative rolling-restart.
 - The first frontier and causal model migrated to
   `active_gate_snapshot_coverage`; remaining budget timeout cascade is not hidden
   as publication ACK debt.
+
+## Validation Notes
+
+- Focused owner and harness tests passed:
+  `node --test test/control-plane/publication-owner-stream.test.js test/control-plane/publication-recovery-evidence.test.js test/control-plane/publication-recovery-gate.test.js test/distributed/harness/__tests__/publication-evidence-open-membership.test.js`.
+- Focused changed-file ESLint passed; ignored harness bundle warnings are from
+  existing ignore rules.
+- Exact changed runtime grammar passed for
+  `src/control-plane/publication-owner-decision.js`,
+  `src/control-plane/publication-owner-state.js`,
+  `src/control-plane/publication-recovery-evidence.js`, and
+  `src/control-plane/publication-recovery-gate.js`.
+- `npm run work:package:doctor -- work/packages/done-20260511-spec-led-runtime-modularization-publication-ack-convergence-publication-published-frontier.md`,
+  `npm run work:validate -- --all`, and `git diff --check` passed.
+- The broad runtime grammar guard still reports inherited debt in
+  `src/control-plane/membership-publication-coordinator.js`; this package did
+  not introduce or modify that debt.
+
+## Failure Migration / Contraction
+
+- Current dominant blocker: `active_gate_snapshot_coverage`.
+- Current semantic owner: `startup_active_gate_owner`.
+- Current boundary: `snapshot_coverage`.
+- Dominant reason: `active_gate_timed_out`.
+- Evidence path:
+  `report.scenarios[0].publicationConvergence.activeGate.progress`.
+- Latest active-gate evidence: expected node count `5`, active node count `3`,
+  inactive node count `2`, snapshot coverage node count `3`, selected snapshot
+  node `5a429178-87eb-48f1-a122-65d1a7d4956a`, closure record `null`, closure
+  witness class `null`, blockers `inactive_nodes=2` and
+  `snapshot_coverage=3/5`.
+- Generated evidence block:
+  `npm run work:package:evidence-block -- test-output/reports/rolling-restart-spec-led-runtime-modularization-active-gate-snapshot-coverage-publication-lag.report.json`.
+- Owner explain command:
+  `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-spec-led-runtime-modularization-active-gate-snapshot-coverage-publication-lag.report.json --explain active_gate_snapshot_coverage`.
+- Successor package:
+  `work/packages/todo-20260511-spec-led-runtime-modularization-active-gate-snapshot-coverage-post-publication-ack-frontier.md`.
+
+## Commit And Push Ledger
+
+1. Focused package commit: `acc9762c`
+2. Pushed to: `origin/codex/pending-ack-eligibility-filter`
+3. Commit contains only package-owned files/package-status/allowed sprint handoff: yes
+4. Runtime implementation commit: `acc9762c`; closure and successor handoff are
+   recorded by the publication ACK follow-up sprint closure commit.
