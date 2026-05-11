@@ -106,7 +106,8 @@ coverage.
 
 1. Mandatory predecessor review on the closed publication ACK package returned
    clean.
-2. This package is active; assign the implementation subagent next.
+2. This package is done/migrated; before activating successor work, assign the
+   successor review subagent and fix subagent if review finds fixes.
 3. Preserve the publication ACK closure invariant: published zero-pending ACKs
    must not reopen publication pending evidence.
 4. Implementation classification froze the active-gate witness without runtime
