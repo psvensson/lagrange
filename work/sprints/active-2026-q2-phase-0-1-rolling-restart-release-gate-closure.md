@@ -31,6 +31,7 @@ trail is:
 15. `test-output/reports/rolling-restart-current-release-gate-after-rebalancer-handoff-fix.report.json`
 16. `test-output/reports/rolling-restart-current-release-gate-after-workflow-progress-event-driven-priority-recovery-fix.report.json`
 17. `test-output/reports/rolling-restart-current-release-gate-after-dispatch-pending-step-timeout-contract-fix.report.json`
+18. `test-output/reports/rolling-restart-current-release-gate-after-event-driven-residual-recovery-fix.report.json`
 
 The matching playback is:
 
@@ -51,6 +52,7 @@ The matching playback is:
 15. `test-output/reports/.playback/rolling-restart-current-release-gate-after-rebalancer-handoff-fix/rolling-restart/`
 16. `test-output/reports/.playback/rolling-restart-current-release-gate-after-workflow-progress-event-driven-priority-recovery-fix/rolling-restart/`
 17. `test-output/reports/.playback/rolling-restart-current-release-gate-after-dispatch-pending-step-timeout-contract-fix/rolling-restart/`
+18. `test-output/reports/.playback/rolling-restart-current-release-gate-after-event-driven-residual-recovery-fix/rolling-restart/`
 
 ## Current Blocker Snapshot
 
@@ -60,23 +62,24 @@ Latest package:
 2. [Rolling Restart Operation Workflow Rebalancer Handoff Retry Scheduled](../packages/done-20260511-rolling-restart-operation-workflow-rebalancer-handoff-retry-scheduled.md)
 3. [Rolling Restart Operation Workflow Progress Event Driven Priority Recovery](../packages/done-20260511-rolling-restart-operation-workflow-progress-event-driven-priority-recovery.md)
 4. [Rolling Restart Operation Workflow Progress Dispatch Pending Step Timeout Contract](../packages/done-20260511-rolling-restart-operation-workflow-progress-dispatch-pending-step-timeout-contract.md)
+5. [Rolling Restart Operation Workflow Progress Event Driven Residual Recovery](../packages/active-20260511-rolling-restart-operation-workflow-progress-event-driven-residual-recovery.md)
 
 Latest representative evidence:
 
 1. Scenario: `rolling-restart`
 2. Report total/passed/failed: `1/0/1`
-3. Duration: approximately `122304ms`
-4. Active gate: failed at `3/5` terminal progress
-5. Snapshot coverage: `3/5`
+3. Duration: approximately `121337ms`
+4. Active gate: failed at `2/5` terminal progress
+5. Snapshot coverage: `2/5`
 6. Publication: `PUBLISHED`
 7. Pending acknowledgements: `0`
-8. Publication ACK convergence remains presentation-blocked in raw distributed
-   failure, while topology owner evidence selects priority recovery as the
-   first frontier.
-9. Current frontier: `priority_recovery_partition_progress` under
-   `operation_workflow_owner / workflow_progress`, state `retryable`, dominant
-   source reason `priority_recovery_event_driven_wait`
-10. Priority recovery invariants: `passed`
+8. Current frontier: `priority_recovery_partition_progress` under
+   `operation_workflow_owner / rebalancer_handoff`, state `blocked`, dominant
+   source reason `priority_recovery_progress_blocked` with retry-scheduled
+   evidence.
+9. Priority recovery invariants: `passed`
+10. Representative outcome: migrated from workflow-progress event-driven wait to
+    rebalancer-handoff retry-scheduled recovery.
 
 The publication-convergence package reduced the prior
 `topology_publication_owner / publication_convergence` blocker.
@@ -193,6 +196,7 @@ Edition matrix status: Community / AGPL repo.
 16. `node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-current-release-gate-after-rebalancer-handoff-fix.report.json --fast-local --verbose`
 17. `node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-current-release-gate-after-workflow-progress-event-driven-priority-recovery-fix.report.json --fast-local --verbose`
 18. `node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-current-release-gate-after-dispatch-pending-step-timeout-contract-fix.report.json --fast-local --verbose`
+19. `node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-current-release-gate-after-event-driven-residual-recovery-fix.report.json --fast-local --verbose`
 19. Sustained throughput and 7-node stress confirmation after
     `rolling-restart` passes.
 

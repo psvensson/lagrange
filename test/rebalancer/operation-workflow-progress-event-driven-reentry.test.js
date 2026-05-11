@@ -63,6 +63,9 @@ const TEST_PENDING_REENTRY_TEST_NAME =
 const TEST_DIRECT_BUILD_REENTRY_TEST_NAME =
   'direct owner snapshot build enqueues dispatch-pending workflow progress ' +
   're-entry';
+const TEST_CACHE_EVENT_REENTRY_TEST_NAME =
+  'replica_operations cache events re-enter priority dispatch-pending ' +
+  'workflow progress';
 const TEST_ASSERT_TIMEOUT_RECONCILE_OWNER_OUTCOME =
   'timeout-due dispatch-pending snapshots should carry the stale-progress ' +
   'reconcile owner outcome';
@@ -72,6 +75,10 @@ const TEST_ASSERT_TIMEOUT_RECONCILE_EFFECT =
 const TEST_ASSERT_TIMEOUT_RECONCILE_NO_INLINE_WAKE =
   'timeout-due dispatch-pending snapshot normalization should not wake the ' +
   'remote owner inline';
+const TEST_ASSERT_CACHE_REENTRY_TARGET =
+  'cache-event re-entry should use the canonical dispatch ingress';
+const TEST_ASSERT_CACHE_REENTRY_TIMER =
+  'cache-event re-entry should arm bounded handoff verification';
 
 function buildEventDrivenOperation(overrides = {}) {
   return Object.freeze({
@@ -602,6 +609,96 @@ test(TEST_DIRECT_BUILD_REENTRY_TEST_NAME, async (t) => {
     );
   } finally {
     Date.now = originalDateNow;
+    await coordinator.shutdown();
+  }
+});
+
+test(TEST_CACHE_EVENT_REENTRY_TEST_NAME, async (t) => {
+  const deliveries = [];
+  const deferredTimers = [];
+  const operation = buildEventDrivenOperation({
+    workflowStep: WORKFLOW_STEP.PENDING,
+  });
+  const operationRow = buildEventDrivenOperationRow({
+    workflow_step: WORKFLOW_STEP.PENDING,
+  });
+  const coordinator = createEventDrivenCoordinator(
+    deliveries,
+    deferredTimers,
+    operationRow,
+  );
+
+  try {
+    coordinator.initialize();
+
+    t.equal(
+      coordinator.workflowOwner
+        .scheduleCoordinatorCreatedCacheReentryFromOperationRow(
+          coordinator.workflowOwner.getObservedProgressTableState(
+            TEST_REPLICA_OPERATIONS_TABLE,
+          ),
+          TEST_DELIVERY_STATUS_INITIATED,
+          operationRow,
+        ),
+      true,
+      'PENDING priority cache rows should re-enter the workflow owner lane',
+    );
+    await new Promise((resolve) => {
+      setTimeout(resolve, NUM.ZERO);
+    });
+
+    t.equal(
+      deliveries.length,
+      NUM.ONE,
+      'PENDING priority cache rows should wake the remote operation owner',
+    );
+    t.equal(
+      deliveries[NUM.ZERO]?.target,
+      TEST_REPLICA_DISPATCH_TARGET,
+      TEST_ASSERT_CACHE_REENTRY_TARGET,
+    );
+    t.equal(
+      deferredTimers.length,
+      NUM.ONE,
+      TEST_ASSERT_CACHE_REENTRY_TIMER,
+    );
+
+    const sendingOperationRow = buildEventDrivenOperationRow({
+      operation_id: TEST_OPERATION_ID,
+      workflow_step: WORKFLOW_STEP.SENDING,
+      updated_at: TEST_UPDATED_AT_MS,
+    });
+    coordinator.workflowOwner.clearCreatedOperationHandoffRetry(
+      operation.operationId,
+    );
+
+    t.equal(
+      coordinator.workflowOwner
+        .scheduleCoordinatorCreatedCacheReentryFromOperationRow(
+          coordinator.workflowOwner.getObservedProgressTableState(
+            TEST_REPLICA_OPERATIONS_TABLE,
+          ),
+          TEST_DELIVERY_STATUS_INITIATED,
+          sendingOperationRow,
+        ),
+      true,
+      'SENDING priority cache rows should re-enter the workflow owner lane',
+    );
+    await new Promise((resolve) => {
+      setTimeout(resolve, NUM.ZERO);
+    });
+
+    t.equal(
+      deliveries.length,
+      NUM.TWO,
+      'SENDING priority cache rows should re-wake the remote operation owner',
+    );
+    t.equal(
+      deliveries[NUM.ONE]?.target,
+      TEST_REPLICA_DISPATCH_TARGET,
+      TEST_ASSERT_CACHE_REENTRY_TARGET,
+    );
+  } finally {
     await coordinator.shutdown();
   }
 });

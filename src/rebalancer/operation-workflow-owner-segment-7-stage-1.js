@@ -28,6 +28,52 @@ const {
   WORKFLOW_STEP,
 } = SHARED;
 
+const COORDINATOR_CREATED_CACHE_REENTRY_STATE = Object.freeze({
+  UNAVAILABLE: 'unavailable',
+  NOT_OPERATION_WORKFLOW_ROW: 'not_operation_workflow_row',
+  NOT_DISPATCH_RETRYABLE: 'not_dispatch_retryable',
+  REENTER: 'reenter',
+});
+
+const COORDINATOR_CREATED_CACHE_REENTRY_ACTION = Object.freeze({
+  SKIP: 'skip',
+  ARM_OWNER: 'arm_owner',
+});
+
+const COORDINATOR_CREATED_CACHE_REENTRY_ACTION_BY_STATE = Object.freeze(
+  new Map([
+    [
+      COORDINATOR_CREATED_CACHE_REENTRY_STATE.REENTER,
+      COORDINATOR_CREATED_CACHE_REENTRY_ACTION.ARM_OWNER,
+    ],
+  ]),
+);
+
+const COORDINATOR_CREATED_CACHE_REENTRY_STATE_TABLE = Object.freeze([
+  Object.freeze({
+    state: COORDINATOR_CREATED_CACHE_REENTRY_STATE.NOT_OPERATION_WORKFLOW_ROW,
+    matches: (evidence) =>
+      evidence.tableState !==
+        OBSERVED_PROGRESS_TABLE_STATE.OPERATION_WORKFLOW_STATE ||
+      evidence.cacheDelete === true,
+  }),
+  Object.freeze({
+    state: COORDINATOR_CREATED_CACHE_REENTRY_STATE.UNAVAILABLE,
+    matches: (evidence) => evidence.operationAvailable !== true,
+  }),
+  Object.freeze({
+    state: COORDINATOR_CREATED_CACHE_REENTRY_STATE.NOT_DISPATCH_RETRYABLE,
+    matches: (evidence) =>
+      evidence.terminalOperation === true ||
+      evidence.dispatchRetryable !== true ||
+      evidence.priorityRecoveryReentryEligible !== true,
+  }),
+  Object.freeze({
+    state: COORDINATOR_CREATED_CACHE_REENTRY_STATE.REENTER,
+    matches: () => true,
+  }),
+]);
+
 class OperationWorkflowOwnerSegment7Stage1 extends OperationWorkflowOwnerSegment6 {
   getObservedProgressTableState(tableName) {
     return (
@@ -347,6 +393,94 @@ class OperationWorkflowOwnerSegment7Stage1 extends OperationWorkflowOwnerSegment
     return progressed;
   }
 
+  selectCoordinatorCreatedCacheReentryOperation(
+    tableState,
+    cacheOperation,
+    record,
+  ) {
+    if (
+      tableState !== OBSERVED_PROGRESS_TABLE_STATE.OPERATION_WORKFLOW_STATE ||
+      cacheOperation === OPERATION_WORKFLOW_OWNER_LITERAL.DELETE ||
+      !record ||
+      typeof record !== OPERATION_WORKFLOW_OWNER_LITERAL.OBJECT ||
+      !this.repository ||
+      typeof this.repository.rowToOperation !== TYPEOF.FUNCTION
+    ) {
+      return null;
+    }
+    return this.repository.rowToOperation(record);
+  }
+
+  buildCoordinatorCreatedCacheReentryEvidence(
+    tableState,
+    cacheOperation,
+    operation,
+  ) {
+    return Object.freeze({
+      tableState,
+      cacheDelete: cacheOperation === OPERATION_WORKFLOW_OWNER_LITERAL.DELETE,
+      operationAvailable:
+        operation &&
+        typeof operation === OPERATION_WORKFLOW_OWNER_LITERAL.OBJECT &&
+        typeof operation.operationId ===
+          OPERATION_WORKFLOW_OWNER_LITERAL.STRING &&
+        operation.operationId.length > NUM.ZERO,
+      terminalOperation: this.repository.isOperationTerminal(operation),
+      dispatchRetryable: this.isDispatchRetryableWorkflowStep(operation),
+      priorityRecoveryReentryEligible:
+        this.shouldRetryCoordinatorCreatedRemoteHandoff(operation),
+    });
+  }
+
+  resolveCoordinatorCreatedCacheReentryAction(evidence) {
+    const state =
+      COORDINATOR_CREATED_CACHE_REENTRY_STATE_TABLE.find((entry) =>
+        entry.matches(evidence),
+      )?.state ||
+      COORDINATOR_CREATED_CACHE_REENTRY_STATE.UNAVAILABLE;
+    return (
+      COORDINATOR_CREATED_CACHE_REENTRY_ACTION_BY_STATE.get(state) ||
+      COORDINATOR_CREATED_CACHE_REENTRY_ACTION.SKIP
+    );
+  }
+
+  scheduleCoordinatorCreatedCacheReentry(operation, action) {
+    if (action !== COORDINATOR_CREATED_CACHE_REENTRY_ACTION.ARM_OWNER) {
+      return false;
+    }
+    this.operationWorkflowRunExclusive(
+      this.getOperationOwnerSingleFlightKey(operation.operationId),
+      () => this.armCoordinatorCreatedOperation(operation),
+    ).catch((error) => {
+      this.handleDeferredCoordinatorCreatedRemoteHandoffRetryFailure(
+        operation,
+        error,
+      );
+    });
+    return true;
+  }
+
+  scheduleCoordinatorCreatedCacheReentryFromOperationRow(
+    tableState,
+    cacheOperation,
+    record,
+  ) {
+    const operation = this.selectCoordinatorCreatedCacheReentryOperation(
+      tableState,
+      cacheOperation,
+      record,
+    );
+    const evidence = this.buildCoordinatorCreatedCacheReentryEvidence(
+      tableState,
+      cacheOperation,
+      operation,
+    );
+    return this.scheduleCoordinatorCreatedCacheReentry(
+      operation,
+      this.resolveCoordinatorCreatedCacheReentryAction(evidence),
+    );
+  }
+
   handleObservedReplicaStateChange(tableName, cacheOperation, record) {
     const tableState = this.getObservedProgressTableState(tableName);
     if (
@@ -356,6 +490,12 @@ class OperationWorkflowOwnerSegment7Stage1 extends OperationWorkflowOwnerSegment
     ) {
       return;
     }
+
+    this.scheduleCoordinatorCreatedCacheReentryFromOperationRow(
+      tableState,
+      cacheOperation,
+      record,
+    );
 
     const operationIds = this.resolveObservedProgressOperationIds(
       tableState,
