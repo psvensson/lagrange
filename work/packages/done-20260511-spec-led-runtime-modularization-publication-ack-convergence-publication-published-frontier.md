@@ -245,5 +245,5 @@ guardrails, causal-model output, and representative rolling-restart.
 1. Focused package commit: `acc9762c`
 2. Pushed to: `origin/codex/pending-ack-eligibility-filter`
 3. Commit contains only package-owned files/package-status/allowed sprint handoff: yes
-4. Runtime implementation commit: `acc9762c`; closure and successor handoff are
-   recorded by the publication ACK follow-up sprint closure commit.
+4. Runtime implementation commit: `acc9762c`; closure and successor handoff
+   commit: `33945616`.
