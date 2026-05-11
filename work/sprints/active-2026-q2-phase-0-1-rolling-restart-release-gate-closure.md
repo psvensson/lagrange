@@ -26,6 +26,7 @@ trail is:
 10. `test-output/reports/rolling-restart-current-release-gate-after-workflow-progress-dispatch-pending-fix.report.json`
 11. `test-output/reports/rolling-restart-current-release-gate-after-workflow-timeout-stale-progress-fix.report.json`
 12. `test-output/reports/rolling-restart-current-release-gate-after-sql-write-serial-wait-fix.report.json`
+13. `test-output/reports/rolling-restart-current-release-gate-after-publication-convergence-fix-v2.report.json`
 
 The matching playback is:
 
@@ -41,42 +42,45 @@ The matching playback is:
 10. `test-output/reports/.playback/rolling-restart-current-release-gate-after-workflow-progress-dispatch-pending-fix/rolling-restart/`
 11. `test-output/reports/.playback/rolling-restart-current-release-gate-after-workflow-timeout-stale-progress-fix/rolling-restart/`
 12. `test-output/reports/.playback/rolling-restart-current-release-gate-after-sql-write-serial-wait-fix/rolling-restart/`
+13. `test-output/reports/.playback/rolling-restart-current-release-gate-after-publication-convergence-fix-v2/rolling-restart/`
 
 ## Current Blocker Snapshot
 
 Latest package:
 
-1. [Rolling Restart Operation Workflow Progress SQL Write Operations Serial Wait](../packages/done-20260511-rolling-restart-operation-workflow-progress-sql-write-operations-serial-wait.md)
+1. [Rolling Restart Topology Publication Convergence Published Pending](../packages/active-20260511-rolling-restart-topology-publication-convergence-published-pending.md)
 
 Latest representative evidence:
 
 1. Scenario: `rolling-restart`
 2. Report total/passed/failed: `1/0/1`
-3. Duration: approximately `139320ms`
+3. Duration: approximately `131804ms`
 4. Active gate: failed at `3/5` terminal progress
 5. Snapshot coverage: `3/5`
 6. Publication: `PUBLISHED`
 7. Pending acknowledgements: `0`
-8. Blocked priority recovery partitions: `control_plane_publications-p1`,
-   `replica_operations-p1`, and `sql_write_operations-p1`
-9. Priority recovery invariants: `passed`
+8. Publication ACK convergence: `satisfied` / non-frontier with
+   `publicationPending=false` and
+   `recoveryProtocolState=priority_spread_pending`
+9. Current frontier: `priority_recovery_partition_progress` under
+   `operation_workflow_owner / workflow_progress`, state `retryable`, dominant
+   reason `priority_recovery_event_driven_wait`
+10. Priority recovery invariants: `passed`
 
-The serial-wait package reduced the prior `operation_workflow_owner /
-workflow_progress` blocker. `priority_recovery_partition_progress` is now
-classified as retryable/non-frontier: `sql_write_operations-p1` is
-`recovering_in_flight`, `persisted_not_dispatched`, `event_driven`, and
-`advance_existing_operation` instead of the stale `needs_operation` /
-`priority_operation_serial_wait` presentation.
+The publication-convergence package reduced the prior
+`topology_publication_owner / publication_convergence` blocker.
+`publication_ack_convergence` is now satisfied/non-frontier for the published,
+zero-ACK, zero-blocked-node, priority-spread-pending case without canonical
+missing-active publication debt.
 
-The normalized first frontier is now `topology_publication_owner /
-publication_convergence` on edge `publication_ack_convergence`, state `blocked`,
-and dominant reason `publication_published`. The publication snapshot is
-`PUBLISHED` with `pendingAckCount=0`, `blockedNodeCount=0`,
-`missingPublishedCount=2`, `publicationPending=true`,
-`recoveryProtocolState=publication_pending`, and `prioritySpreadPending=true`.
+The normalized first frontier migrated back to `operation_workflow_owner /
+workflow_progress` on edge `priority_recovery_partition_progress`, state
+`retryable`, dominant reason `priority_recovery_event_driven_wait`. The dominant
+witness is `sql_write_operations-p1`, `recovering_in_flight`,
+`persisted_not_dispatched`, `event_driven`, and `advance_existing_operation`.
 
-Startup active-gate snapshot coverage remains downstream until publication
-convergence is either green or promoted by fresh representative evidence.
+Startup active-gate snapshot coverage remains downstream until operation
+workflow progress is either green or promoted by fresh representative evidence.
 
 ## Scope Basis
 
@@ -123,9 +127,12 @@ Edition matrix status: Community / AGPL repo.
 5. Preserve the serial-wait package rerun showing
    `priority_recovery_partition_progress` reduced to retryable/non-frontier and
    `publication_ack_convergence` became the first frontier.
-6. Commit and push the focused serial-wait package slice before opening the
-   topology-publication successor.
-7. If `rolling-restart` passes, run sustained throughput and 7-node stress
+6. Preserve the publication-convergence package rerun showing
+   `publication_ack_convergence` satisfied/non-frontier and the representative
+   migrated to retryable operation workflow progress.
+7. Commit and push the focused publication-convergence package slice before
+   opening the operation-workflow successor.
+8. If `rolling-restart` passes, run sustained throughput and 7-node stress
    confirmation for `0.1`.
 
 ## Validation Ladder
@@ -143,7 +150,10 @@ Edition matrix status: Community / AGPL repo.
 9. Representative `rolling-restart --fast-local` rerun.
 10. `npm run work:package:evidence-block -- test-output/reports/rolling-restart-current-release-gate-after-sql-write-serial-wait-fix.report.json`
 11. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-current-release-gate-after-sql-write-serial-wait-fix.report.json --explain publication_ack_convergence`
-12. Sustained throughput and 7-node stress confirmation after
+12. `node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-current-release-gate-after-publication-convergence-fix-v2.report.json --fast-local --verbose`
+13. `npm run work:package:evidence-block -- test-output/reports/rolling-restart-current-release-gate-after-publication-convergence-fix-v2.report.json`
+14. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-current-release-gate-after-publication-convergence-fix-v2.report.json --explain publication_ack_convergence`
+15. Sustained throughput and 7-node stress confirmation after
     `rolling-restart` passes.
 
 ## Done When
@@ -152,8 +162,8 @@ Edition matrix status: Community / AGPL repo.
    named owner boundary with a focused successor package.
 2. Priority recovery no longer reports stale priority operations without an
    owner dispatch, progress, retry, or timeout-reconcile path.
-3. Publication convergence is either green or promoted as the next direct
-   topology-publication package after priority progress reduces.
+3. Publication convergence is either green or reduced to non-frontier before
+   any successor operation-workflow package starts.
 4. Current-blocker handoff names the latest representative evidence and next
    successor package action.
 5. No Phase `0.5`, Phase `1.0`, or paid-edition queue item outranks the active

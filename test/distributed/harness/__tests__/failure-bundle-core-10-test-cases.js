@@ -20,6 +20,16 @@ export function registerFailureBundleCore10Tests(context) {
     PRIORITY_RECOVERY_WAIT_MODE,
     STABILITY_GATE_BLOCKER_PUBLICATION_MISSING_ACTIVE_NODE,
   } = context;
+  const ACTIVE_GATE_STALE_PRIORITY_SPREAD_CLOSURE_TEST_NAME =
+    'clears stale priority-spread closure from the direct startup active-gate witness once snapshot coverage owns the blocker';
+  const PUBLISHED_PRIORITY_SPREAD_RECOVERY_CLASSIFICATION_TEST_NAME =
+    'keeps published priority-spread recovery out of publication-pending';
+  const OPERATION_WORKFLOW_PROGRESS_PUBLICATION_CLEAR_TEST_NAME =
+    'keeps publication debt cleared while waiting for operation-workflow progress';
+  const OPERATION_WORKFLOW_PROGRESS_PENDING_ACK_SUPPRESSION_TEST_NAME =
+    'suppresses active-gate pending ACK reentry while waiting on operation-workflow progress';
+  const CURRENT_PROGRESS_IGNORES_STALE_BEST_PROGRESS_PUBLICATION_TEST_NAME =
+    'ignores stale best-progress missing publication evidence when current active-gate progress is clean';
 
   it(
     ACTIVE_GATE_CANONICAL_MISSING_WITH_STALE_CLOSURE_TEST_NAME,
@@ -146,7 +156,7 @@ export function registerFailureBundleCore10Tests(context) {
   );
 
   it(
-    'clears stale priority-spread closure from the direct startup active-gate witness once snapshot coverage owns the blocker',
+    ACTIVE_GATE_STALE_PRIORITY_SPREAD_CLOSURE_TEST_NAME,
     () => {
       const CLOSURE_RECORD_ID_PRIORITY_SPREAD = 'CL-003';
       const CLOSURE_WITNESS_CLASS_PRIORITY_SPREAD =
@@ -302,6 +312,160 @@ export function registerFailureBundleCore10Tests(context) {
   );
 
   it(
+    PUBLISHED_PRIORITY_SPREAD_RECOVERY_CLASSIFICATION_TEST_NAME,
+    () => {
+      const PUBLICATION_EPOCH = 3;
+      const PUBLICATION_STATUS_PUBLISHED = 'PUBLISHED';
+      const RECOVERY_PROTOCOL_PUBLICATION_PENDING = 'publication_pending';
+      const RECOVERY_PROTOCOL_PRIORITY_SPREAD_PENDING = 'priority_spread_pending';
+      const PRIORITY_SPREAD_REASON = 'priority_partitions_not_spread';
+      const SNAPSHOT_COVERAGE_REASON = 'snapshot_coverage=3/5';
+      const PUBLISHED_NODE_ONE = 'published-node-a';
+      const PUBLISHED_NODE_TWO = 'published-node-b';
+      const PUBLISHED_NODE_THREE = 'published-node-c';
+      const MISSING_NODE_ONE = 'missing-node-a';
+      const MISSING_NODE_TWO = 'missing-node-b';
+      const PRIORITY_PARTITION_ID = 'control_plane_publications-p1';
+      const EXPECTED_NODE_COUNT = 5;
+      const ACTIVE_NODE_COUNT = 3;
+      const SNAPSHOT_COVERAGE_NODE_COUNT = 3;
+      const ZERO_COUNT = 0;
+      const ONE_COUNT = 1;
+      const TWO_COUNT = 2;
+      const THREE_COUNT = 3;
+      const FOUR_COUNT = 4;
+      const priorityPartitionSummary = {
+        satisfied: false,
+        blockedPartitionCount: FOUR_COUNT,
+        largestSpreadGap: FOUR_COUNT,
+        totalSpreadGap: FOUR_COUNT,
+      };
+      const priorityRecoveryPartitionWitnesses = [{
+        partitionId: PRIORITY_PARTITION_ID,
+        currentOwner: PRIORITY_RECOVERY_PROGRESS_OWNER.OPERATION_WORKFLOW_OWNER,
+        blockingBoundary: PRIORITY_RECOVERY_BLOCKING_BOUNDARY.WORKFLOW_PROGRESS,
+        nextRequiredAction:
+          PRIORITY_RECOVERY_NEXT_REQUIRED_ACTION.WAIT_FOR_OPERATION_PROGRESS,
+        actuationState:
+          PRIORITY_RECOVERY_ACTUATION_STATE.DISPATCHED_WAITING_PROGRESS,
+        semanticStateId: PRIORITY_RECOVERY_SEMANTIC_STATE.RECOVERING_IN_FLIGHT,
+        progressClassIds: [],
+      }];
+      const activeGateProgress = {
+        publicationEpoch: PUBLICATION_EPOCH,
+        publicationStatus: PUBLICATION_STATUS_PUBLISHED,
+        recoveryProtocolState: RECOVERY_PROTOCOL_PRIORITY_SPREAD_PENDING,
+        expectedNodeCount: EXPECTED_NODE_COUNT,
+        activeNodeCount: ACTIVE_NODE_COUNT,
+        snapshotCoverageNodeCount: SNAPSHOT_COVERAGE_NODE_COUNT,
+        snapshotCoverageComplete: false,
+        selectedPublishedActiveCount: THREE_COUNT,
+        selectedPublishedActiveNodeIds: [
+          PUBLISHED_NODE_ONE,
+          PUBLISHED_NODE_TWO,
+          PUBLISHED_NODE_THREE,
+        ],
+        selectedMissingPublishedNodeIds: [
+          MISSING_NODE_ONE,
+          MISSING_NODE_TWO,
+        ],
+        pendingAckNodeIds: [],
+        pendingAckCount: ZERO_COUNT,
+        missingPublishedCount: TWO_COUNT,
+        prioritySpreadSatisfied: false,
+        prioritySpreadGap: FOUR_COUNT,
+        priorityBlockedPartitionCount: ONE_COUNT,
+        priorityRecoveryProgressClasses: {
+          unresolvedClassIds: [],
+          unresolvedSemanticStateIds: [
+            PRIORITY_RECOVERY_SEMANTIC_STATE.RECOVERING_IN_FLIGHT,
+          ],
+          blockedPartitionIds: [PRIORITY_PARTITION_ID],
+          blockedPartitionCount: ONE_COUNT,
+        },
+        gateReasons: [],
+        blockers: [SNAPSHOT_COVERAGE_REASON],
+      };
+      const controlPlane = {
+        publicationConvergence: {
+          publicationEpoch: PUBLICATION_EPOCH,
+          publicationStatus: PUBLICATION_STATUS_PUBLISHED,
+          recoveryProtocolState: RECOVERY_PROTOCOL_PUBLICATION_PENDING,
+          pendingAckNodeIds: [],
+          pendingAckCount: ZERO_COUNT,
+          blockedNodeCount: ZERO_COUNT,
+          missingPublishedNodeIds: [],
+          missingPublishedCount: TWO_COUNT,
+          publishedActiveNodeIds: [
+            PUBLISHED_NODE_ONE,
+            PUBLISHED_NODE_TWO,
+            PUBLISHED_NODE_THREE,
+          ],
+          publicationPending: true,
+          prioritySpreadPending: true,
+          priorityRecoveryReasonCodes: [PRIORITY_SPREAD_REASON],
+          publicationConvergenceGateReasons: [
+            PRIORITY_SPREAD_REASON,
+            SNAPSHOT_COVERAGE_REASON,
+          ],
+          priorityPartitionSummary,
+        },
+        priorityRecoveryObservation: {
+          publicationEpoch: PUBLICATION_EPOCH,
+          publicationStatus: PUBLICATION_STATUS_PUBLISHED,
+          publicationPending: false,
+          recoveryProtocolState: RECOVERY_PROTOCOL_PRIORITY_SPREAD_PENDING,
+          pendingAckNodeIds: [],
+          pendingAckCount: ZERO_COUNT,
+          missingPublishedNodeIds: [
+            MISSING_NODE_ONE,
+            MISSING_NODE_TWO,
+          ],
+          missingPublishedCount: TWO_COUNT,
+          publishedActiveNodeIds: [
+            PUBLISHED_NODE_ONE,
+            PUBLISHED_NODE_TWO,
+            PUBLISHED_NODE_THREE,
+          ],
+          prioritySpreadPending: true,
+          priorityRecoveryReasonCodes: [PRIORITY_SPREAD_REASON],
+          publicationConvergenceGateReasons: [PRIORITY_SPREAD_REASON],
+          priorityPartitionSummary,
+          priorityRecoveryPartitionWitnesses,
+          priorityRecoveryProgressClassIds: [],
+          priorityRecoverySemanticStateIds: [
+            PRIORITY_RECOVERY_SEMANTIC_STATE.RECOVERING_IN_FLIGHT,
+          ],
+          priorityRecoveryBlockedPartitionIds: [PRIORITY_PARTITION_ID],
+          priorityRecoveryBlockedPartitionCount: ONE_COUNT,
+          activeGateProgress,
+        },
+        activeGate: {
+          progress: activeGateProgress,
+        },
+      };
+
+      const publicationConvergence =
+        buildPublicationConvergenceSummary(controlPlane);
+
+      assert.equal(publicationConvergence.publicationPending, false);
+      assert.equal(
+        publicationConvergence.recoveryProtocolState,
+        RECOVERY_PROTOCOL_PRIORITY_SPREAD_PENDING,
+      );
+      assert.equal(publicationConvergence.pendingAckCount, ZERO_COUNT);
+      assert.equal(publicationConvergence.blockedNodeCount, ZERO_COUNT);
+      assert.equal(publicationConvergence.missingPublishedCount, TWO_COUNT);
+      assert.equal(publicationConvergence.prioritySpreadPending, true);
+      assert.deepEqual(publicationConvergence.publishedActiveNodeIds, [
+        PUBLISHED_NODE_ONE,
+        PUBLISHED_NODE_TWO,
+        PUBLISHED_NODE_THREE,
+      ]);
+    },
+  );
+
+  it(
     ACTIVE_GATE_ACK_IDS_CLEAR_STALE_COUNT_TEST_NAME,
     () => {
       const PUBLICATION_EPOCH = 94;
@@ -453,7 +617,7 @@ export function registerFailureBundleCore10Tests(context) {
   );
 
   it(
-    'keeps publication debt cleared while waiting for operation-workflow progress',
+    OPERATION_WORKFLOW_PROGRESS_PUBLICATION_CLEAR_TEST_NAME,
     () => {
       const PUBLICATION_EPOCH = 95;
       const PUBLICATION_STATUS_PUBLISHED = 'PUBLISHED';
@@ -525,9 +689,12 @@ export function registerFailureBundleCore10Tests(context) {
   );
 
   it(
-    'suppresses active-gate pending ACK reentry while waiting on operation-workflow progress',
+    OPERATION_WORKFLOW_PROGRESS_PENDING_ACK_SUPPRESSION_TEST_NAME,
     () => {
       const PUBLICATION_EPOCH = 4;
+      const PUBLICATION_STATUS_OPEN = 'OPEN';
+      const SNAPSHOT_COVERAGE_BLOCKER = 'snapshot_coverage=3/5';
+      const PUBLICATION_EPOCH_PENDING_REASON = 'publication_epoch_pending';
       const EXPECTED_NODE_COUNT = 5;
       const SNAPSHOT_COVERAGE_NODE_COUNT = 3;
       const ZERO_COUNT = 0;
@@ -537,7 +704,7 @@ export function registerFailureBundleCore10Tests(context) {
       const controlPlane = {
         publicationConvergence: {
           publicationEpoch: PUBLICATION_EPOCH,
-          publicationStatus: 'OPEN',
+          publicationStatus: PUBLICATION_STATUS_OPEN,
           pendingAckNodeIds: [
             PENDING_ACK_NODE_ONE,
             PENDING_ACK_NODE_TWO,
@@ -555,7 +722,7 @@ export function registerFailureBundleCore10Tests(context) {
         },
         priorityRecoveryObservation: {
           publicationEpoch: PUBLICATION_EPOCH,
-          publicationStatus: 'OPEN',
+          publicationStatus: PUBLICATION_STATUS_OPEN,
           recoveryProtocolState: 'publication_pending',
           publicationPending: true,
           prioritySpreadPending: true,
@@ -612,7 +779,7 @@ export function registerFailureBundleCore10Tests(context) {
             inactiveNodeCount: 4,
             snapshotCoverageNodeCount: SNAPSHOT_COVERAGE_NODE_COUNT,
             snapshotCoverageComplete: false,
-            publicationStatus: 'OPEN',
+            publicationStatus: PUBLICATION_STATUS_OPEN,
             publicationEpoch: PUBLICATION_EPOCH,
             recoveryProtocolState: 'publication_pending',
             pendingAckCount: ZERO_COUNT,
@@ -628,7 +795,7 @@ export function registerFailureBundleCore10Tests(context) {
             missingPublishedCount: 1,
             blockers: [
               'inactive_nodes=4',
-              'snapshot_coverage=3/5',
+              SNAPSHOT_COVERAGE_BLOCKER,
             ],
           },
           bestProgress: {
@@ -637,7 +804,7 @@ export function registerFailureBundleCore10Tests(context) {
             inactiveNodeCount: 2,
             snapshotCoverageNodeCount: SNAPSHOT_COVERAGE_NODE_COUNT,
             snapshotCoverageComplete: false,
-            publicationStatus: 'OPEN',
+            publicationStatus: PUBLICATION_STATUS_OPEN,
             publicationEpoch: PUBLICATION_EPOCH,
             recoveryProtocolState: 'publication_pending',
             pendingAckCount: PENDING_ACK_COUNT,
@@ -653,7 +820,7 @@ export function registerFailureBundleCore10Tests(context) {
             missingPublishedCount: 3,
             blockers: [
               'inactive_nodes=2',
-              'snapshot_coverage=3/5',
+              SNAPSHOT_COVERAGE_BLOCKER,
             ],
           },
         },
@@ -678,19 +845,19 @@ export function registerFailureBundleCore10Tests(context) {
       );
       assert.equal(
         publicationConvergence.publicationConvergenceGateReasons.includes(
-          'snapshot_coverage=3/5',
+          SNAPSHOT_COVERAGE_BLOCKER,
         ),
         true,
       );
       assert.equal(
         publicationConvergence.publicationConvergenceGateReasons.includes(
-          'publication_epoch_pending',
+          PUBLICATION_EPOCH_PENDING_REASON,
         ),
         false,
       );
       assert.equal(
         publicationConvergence.publicationStatus,
-        'OPEN',
+        PUBLICATION_STATUS_OPEN,
       );
       assert.equal(
         dominantWitness.currentOwner,
@@ -928,7 +1095,7 @@ export function registerFailureBundleCore10Tests(context) {
   );
 
   it(
-    'ignores stale best-progress missing publication evidence when current active-gate progress is clean',
+    CURRENT_PROGRESS_IGNORES_STALE_BEST_PROGRESS_PUBLICATION_TEST_NAME,
     () => {
       const PUBLICATION_EPOCH = 92;
       const PUBLICATION_STATUS_PUBLISHED = 'PUBLISHED';
