@@ -195,6 +195,6 @@ budget cascade package.
 
 ## Commit And Push Ledger
 
-1. Focused package commit: `pending-closure-commit`
+1. Focused package commit: `6843fdc9`
 2. Pushed to: `origin/codex/pending-ack-eligibility-filter`
 3. Commit contains only package-owned files/package-status/allowed sprint handoff: yes
