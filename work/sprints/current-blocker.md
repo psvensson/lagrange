@@ -4,7 +4,7 @@
 
 Sprint: `work/sprints/active-2026-q2-phase-0-1-rolling-restart-release-gate-closure.md`
 
-Package: `work/packages/active-20260511-rolling-restart-operation-workflow-progress-event-driven-wait.md`
+Package: `work/packages/done-20260511-rolling-restart-operation-workflow-progress-event-driven-wait.md`
 
 Scenario: `rolling-restart`
 
@@ -42,7 +42,7 @@ Open the next focused package on operation_workflow_owner / rebalancer_handoff t
 12. `npm run work:package:evidence-block -- test-output/reports/rolling-restart-current-release-gate-after-event-driven-wait-fix.report.json`
 13. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-current-release-gate-after-event-driven-wait-fix.report.json --explain priority_recovery_partition_progress`
 14. `npm run analyze:distributed-failure -- --report test-output/reports/rolling-restart-current-release-gate-after-event-driven-wait-fix.report.json`
-15. `npm run work:model-ledger -- record --package work/packages/active-20260511-rolling-restart-operation-workflow-progress-event-driven-wait.md --model gpt-5.3-codex --reasoning-effort high --task-class implementation --package-class representative-frontier-closure --intended-minimum-model gpt-5.3-codex --scope-shape owner-boundary-contraction/cross-boundary-causal-edge --escalated false --bailout-reason none --outcome migrated --validation-status passed --correction-loops 1 --review-findings 0 --notes ...`
+15. `npm run work:model-ledger -- record --package work/packages/done-20260511-rolling-restart-operation-workflow-progress-event-driven-wait.md --model gpt-5.3-codex --reasoning-effort high --task-class implementation --package-class representative-frontier-closure --intended-minimum-model gpt-5.3-codex --scope-shape owner-boundary-contraction/cross-boundary-causal-edge --escalated false --bailout-reason none --outcome migrated --validation-status passed --correction-loops 1 --review-findings 0 --notes ...`
 
 ## Model Fit
 
@@ -77,7 +77,7 @@ Cross-boundary review: `Required before implementing the successor because the r
 1. `src/rebalancer/operation-workflow-owner-segment-7-stage-5.js`
 2. `src/rebalancer/operation-workflow-owner.js`
 3. `test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js`
-4. `work/packages/active-20260511-rolling-restart-operation-workflow-progress-event-driven-wait.md`
+4. `work/packages/done-20260511-rolling-restart-operation-workflow-progress-event-driven-wait.md`
 5. `work/sprints/active-2026-q2-phase-0-1-rolling-restart-release-gate-closure.md`
 6. `work/sprints/current-blocker.json`
 7. `work/sprints/current-blocker.md`

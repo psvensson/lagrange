@@ -50,7 +50,7 @@ The matching playback is:
 
 Latest package:
 
-1. [Rolling Restart Operation Workflow Progress Event Driven Wait](../packages/active-20260511-rolling-restart-operation-workflow-progress-event-driven-wait.md)
+1. [Rolling Restart Operation Workflow Progress Event Driven Wait](../packages/done-20260511-rolling-restart-operation-workflow-progress-event-driven-wait.md)
 
 Latest representative evidence:
 

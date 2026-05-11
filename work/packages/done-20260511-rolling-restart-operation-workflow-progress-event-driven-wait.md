@@ -3,7 +3,7 @@
 <!-- work-package
 {
   "schema": "work-package-v1",
-  "status": "active",
+  "status": "done",
   "opened": "2026-05-11",
   "scenario": "rolling-restart",
   "artifact": "test-output/reports/rolling-restart-current-release-gate-after-event-driven-wait-fix.report.json",
@@ -28,13 +28,13 @@
     "npm run work:package:evidence-block -- test-output/reports/rolling-restart-current-release-gate-after-event-driven-wait-fix.report.json",
     "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-current-release-gate-after-event-driven-wait-fix.report.json --explain priority_recovery_partition_progress",
     "npm run analyze:distributed-failure -- --report test-output/reports/rolling-restart-current-release-gate-after-event-driven-wait-fix.report.json",
-    "npm run work:model-ledger -- record --package work/packages/active-20260511-rolling-restart-operation-workflow-progress-event-driven-wait.md --model gpt-5.3-codex --reasoning-effort high --task-class implementation --package-class representative-frontier-closure --intended-minimum-model gpt-5.3-codex --scope-shape owner-boundary-contraction/cross-boundary-causal-edge --escalated false --bailout-reason none --outcome migrated --validation-status passed --correction-loops 1 --review-findings 0 --notes ..."
+    "npm run work:model-ledger -- record --package work/packages/done-20260511-rolling-restart-operation-workflow-progress-event-driven-wait.md --model gpt-5.3-codex --reasoning-effort high --task-class implementation --package-class representative-frontier-closure --intended-minimum-model gpt-5.3-codex --scope-shape owner-boundary-contraction/cross-boundary-causal-edge --escalated false --bailout-reason none --outcome migrated --validation-status passed --correction-loops 1 --review-findings 0 --notes ..."
   ],
   "touchedFiles": [
     "src/rebalancer/operation-workflow-owner-segment-7-stage-5.js",
     "src/rebalancer/operation-workflow-owner.js",
     "test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js",
-    "work/packages/active-20260511-rolling-restart-operation-workflow-progress-event-driven-wait.md",
+    "work/packages/done-20260511-rolling-restart-operation-workflow-progress-event-driven-wait.md",
     "work/sprints/active-2026-q2-phase-0-1-rolling-restart-release-gate-closure.md",
     "work/sprints/current-blocker.json",
     "work/sprints/current-blocker.md",
@@ -58,7 +58,10 @@
     "causalDebt": "The workflow_progress event-driven wait seam now has focused owner-lane-held re-entry coverage and no longer remains the representative boundary. The remaining rolling-restart debt belongs to operation_workflow_owner / rebalancer_handoff, where a remote handoff retry remains scheduled for control_plane_publications-p1 and sql_transaction_participants-p1.",
     "crossBoundaryReview": "Required before implementing the successor because the representative rerun migrated from workflow_progress event-driven wait to operation_workflow_owner / rebalancer_handoff retry scheduling."
   },
-  "predecessor": "work/packages/done-20260511-rolling-restart-topology-publication-convergence-published-pending.md"
+  "predecessor": "work/packages/done-20260511-rolling-restart-topology-publication-convergence-published-pending.md",
+  "closed": "2026-05-11",
+  "commitAndPushLedgerRequired": true,
+  "successor": "work/packages/todo-20260511-rolling-restart-operation-workflow-rebalancer-handoff-retry-scheduled.md"
 }
 -->
 
@@ -219,7 +222,7 @@ Forbidden reinterpretations:
       `work/packages/done-20260511-rolling-restart-topology-publication-convergence-published-pending.md`.
 - [x] Implementation subagent recorded:
       Agent workflow-event-implement (`019e0c70-28e5-7850-9de6-a76d00a9db94`) implemented
-      `work/packages/active-20260511-rolling-restart-operation-workflow-progress-event-driven-wait.md`.
+      `work/packages/done-20260511-rolling-restart-operation-workflow-progress-event-driven-wait.md`.
 
 ## Static Drift Ledger
 
@@ -241,6 +244,13 @@ Closure:
    files.
 3. Representative `rolling-restart --fast-local` migrated to
    `operation_workflow_owner / rebalancer_handoff`.
+
+
+## Commit And Push Ledger
+
+1. Focused package commit: `1a1bde92628bb4c5c04a54dcf2d16c1e400ae4d4`
+2. Pushed to: `origin/codex/pending-ack-eligibility-filter`
+3. Commit contains only package-owned files/package-status/allowed sprint handoff: yes
 
 ## Validation
 
