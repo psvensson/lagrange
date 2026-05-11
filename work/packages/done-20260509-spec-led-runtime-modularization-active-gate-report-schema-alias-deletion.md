@@ -3,7 +3,7 @@
 <!-- work-package
 {
   "schema": "work-package-v1",
-  "status": "active",
+  "status": "done",
   "opened": "2026-05-09",
   "scenario": "spec-led-runtime-modularization",
   "artifact": "test-output/reports/rolling-restart-spec-led-runtime-modularization-final.report.json",
@@ -11,8 +11,8 @@
   "owner": "diagnostics_artifact_schema_owner",
   "boundary": "active_gate_report_schema_alias_deletion",
   "dominantReason": "active_gate_report_aliases_remain_external_artifact_contract",
-  "currentState": "The final legacy deletion slice removed legacy helper entrypoints and stability-gate aliases, but report artifacts still expose activeGateBestProgress, activeGateNoProgress, and activeGateBlockerHistory as external diagnostics schema fields consumed by failure-bundle and topology-convergence readers.",
-  "nextAction": "Review the closed priority recovery backpressure package, then define the successor active-gate diagnostics schema owner, migrate consumers from the camel-case report aliases to the canonical owner-bound activeGate shape, and add schema guards that reject the old report aliases after migration.",
+  "currentState": "Active-gate report aliases were removed from scoped diagnostics/report artifact surfaces, and consumers now use the canonical owner-bound activeGate shape without changing runtime active-gate behavior.",
+  "nextAction": "No successor is open for this sprint; reopen only if focused diagnostics proof finds alias drift or runtime owner evidence changes.",
   "proof": [
     "rg checks for activeGateBestProgress, activeGateNoProgress, and activeGateBlockerHistory before and after migration",
     "node --test test/diagnostics/topology-convergence-graph.test.js test/scripts/analyze-topology-convergence.test.js test/distributed/harness/__tests__/failure-bundle.test.js",
@@ -48,7 +48,7 @@
     "test/diagnostics/topology-convergence-graph.test.js",
     "test/scripts/__fixtures__/topology-convergence/*.json",
     "test/scripts/analyze-topology-convergence.test.js",
-    "work/packages/active-20260509-spec-led-runtime-modularization-active-gate-report-schema-alias-deletion.md"
+    "work/packages/done-20260509-spec-led-runtime-modularization-active-gate-report-schema-alias-deletion.md"
   ],
   "modelFit": {
     "packageClass": "bounded-implementation",
@@ -64,11 +64,13 @@
     "hypothesis": "If active-gate report schema aliases are deleted correctly, diagnostics readers should preserve the same owner-bound active-gate evidence without changing runtime active-gate causal edges.",
     "stopConditionCheck": "npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-spec-led-runtime-modularization-final.report.json",
     "expectedCausalModelChange": "The causal model should stay on the same runtime owner boundary while report aliases disappear from diagnostics schema; any runtime owner migration is contradictory for this schema-only package.",
-    "representativeOutcome": "pending-before-rerun",
+    "representativeOutcome": "same-frontier",
     "causalDebt": "No runtime causal debt is owned here; any runtime blocker exposed by alias deletion must be split into a separate owner-boundary package.",
     "crossBoundaryReview": "Review the closed priority recovery backpressure package before activation because this package touches diagnostics, failure-bundle, topology-convergence, and active-gate report consumers."
   },
-  "predecessor": "work/packages/done-20260511-spec-led-runtime-modularization-priority-recovery-backpressure-frontier.md"
+  "predecessor": "work/packages/done-20260511-spec-led-runtime-modularization-priority-recovery-backpressure-frontier.md",
+  "closed": "2026-05-11",
+  "commitAndPushLedgerRequired": true
 }
 -->
 
@@ -117,7 +119,7 @@ Phase `0.1` internal-coherence cleanup within the AGPL repository.
 - Expected causal-model change: the causal model should stay on the same runtime
   owner boundary while report aliases disappear from diagnostics schema; any
   runtime owner migration is contradictory for this schema-only package.
-- Representative outcome: `pending-before-rerun`.
+- Representative outcome: `same-frontier`.
 - Causal debt: no runtime causal debt is owned here; any runtime blocker exposed
   by alias deletion must be split into a separate owner-boundary package.
 - Cross-boundary review: required before activation because this package touches
@@ -137,7 +139,7 @@ Phase `0.1` internal-coherence cleanup within the AGPL repository.
 - [x] Fix subagent recorded or explicitly not needed:
       not-needed.
 - [x] Implementation subagent recorded:
-      Agent implement-0e91a4c3 (0e91a4c3-0000-4000-8000-000000000000) implemented work/packages/active-20260509-spec-led-runtime-modularization-active-gate-report-schema-alias-deletion.md.
+      Agent implement-0e91a4c3 (0e91a4c3-0000-4000-8000-000000000000) implemented work/packages/done-20260509-spec-led-runtime-modularization-active-gate-report-schema-alias-deletion.md.
 
 ## Implementation Proof Notes
 
@@ -160,7 +162,13 @@ No intentional documented exceptions remain.
 - `rg` alias scan: 0 matches across all scoped paths
 - `node --test test/diagnostics/topology-convergence-graph.test.js test/scripts/analyze-topology-convergence.test.js test/distributed/harness/__tests__/failure-bundle.test.js`: 122/122 pass
 - `npm run work:validate -- --all`: Work tracker validation OK for 51 file(s)
-- `npm run work:package:doctor -- work/packages/active-20260509-spec-led-runtime-modularization-active-gate-report-schema-alias-deletion.md`: validation ok
+- `npm run work:package:doctor -- work/packages/done-20260509-spec-led-runtime-modularization-active-gate-report-schema-alias-deletion.md`: validation ok
 - `git diff --check`: clean (no whitespace issues)
 - `npx eslint ...`: passed for linted touched diagnostics/schema tests; ignored
   generated harness segment files are covered by focused failure-bundle tests.
+
+## Commit And Push Ledger
+
+1. Focused package commit: `aabc1ca9`
+2. Pushed to: `origin/codex/pending-ack-eligibility-filter`
+3. Commit contains only package-owned files/package-status/allowed sprint handoff: yes

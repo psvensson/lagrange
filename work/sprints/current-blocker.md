@@ -2,9 +2,9 @@
 
 # Current Blocker
 
-Sprint: `work/sprints/active-2026-q2-spec-led-runtime-modularization-priority-recovery-backpressure-followup.md`
+Sprint: `work/sprints/archived/done-2026-q2-spec-led-runtime-modularization-priority-recovery-backpressure-followup.md`
 
-Package: `work/packages/active-20260509-spec-led-runtime-modularization-active-gate-report-schema-alias-deletion.md`
+Package: `work/packages/done-20260509-spec-led-runtime-modularization-active-gate-report-schema-alias-deletion.md`
 
 Scenario: `spec-led-runtime-modularization`
 
@@ -20,11 +20,11 @@ Boundary: `active_gate_report_schema_alias_deletion`
 
 Dominant reason: `active_gate_report_aliases_remain_external_artifact_contract`
 
-Current state: Priority recovery backpressure is accepted as classified operational state, so the deferred active-gate report schema alias deletion package is unblocked. Report artifacts still expose activeGateBestProgress, activeGateNoProgress, and activeGateBlockerHistory as external diagnostics schema fields.
+Current state: Active-gate report aliases were removed from scoped diagnostics/report artifact surfaces, and consumers now use the canonical owner-bound activeGate shape without changing runtime active-gate behavior.
 
 ## Next Action
 
-Review the closed priority recovery backpressure package, then migrate diagnostics consumers from the camel-case report aliases to the canonical owner-bound activeGate shape and add schema guards that reject the old report aliases after migration.
+No successor is open for this sprint; reopen only if focused diagnostics proof finds alias drift or runtime owner evidence changes.
 
 ## Proof Ladder
 
@@ -55,7 +55,7 @@ Stop-condition check: `npm --silent run analyze:causal-model -- test-output/repo
 
 Expected causal-model change: `The causal model should stay on the same runtime owner boundary while report aliases disappear from diagnostics schema; any runtime owner migration is contradictory for this schema-only package.`
 
-Representative outcome: `pending-before-rerun`
+Representative outcome: `same-frontier`
 
 Causal debt: `No runtime causal debt is owned here; any runtime blocker exposed by alias deletion must be split into a separate owner-boundary package.`
 
@@ -91,4 +91,4 @@ Cross-boundary review: `Review the closed priority recovery backpressure package
 26. `test/diagnostics/topology-convergence-graph.test.js`
 27. `test/scripts/__fixtures__/topology-convergence/*.json`
 28. `test/scripts/analyze-topology-convergence.test.js`
-29. `work/packages/active-20260509-spec-led-runtime-modularization-active-gate-report-schema-alias-deletion.md`
+29. `work/packages/done-20260509-spec-led-runtime-modularization-active-gate-report-schema-alias-deletion.md`
