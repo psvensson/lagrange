@@ -3,37 +3,35 @@
 <!-- work-package
 {
   "schema": "work-package-v1",
-  "status": "active",
+  "status": "done",
   "opened": "2026-05-10",
   "scenario": "spec-led-runtime-modularization",
-  "artifact": "test-output/reports/rolling-restart-spec-led-runtime-modularization-operation-workflow-progress-recovering-in-flight.report.json",
-  "playback": "test-output/reports/.playback/rolling-restart-spec-led-runtime-modularization-operation-workflow-progress-recovering-in-flight/rolling-restart/",
+  "artifact": "test-output/reports/rolling-restart-spec-led-runtime-modularization-active-gate-snapshot-coverage-publication-lag.report.json",
+  "playback": "test-output/reports/.playback/rolling-restart-spec-led-runtime-modularization-active-gate-snapshot-coverage-publication-lag/rolling-restart/",
   "owner": "startup_active_gate_owner",
   "boundary": "snapshot_coverage",
   "dominantReason": "active_gate_timed_out",
-  "currentState": "Implemented the focused CL-006 startup_active_publication_lag owner-path reduction: startup active-gate progress now derives missingPublishedCount from selectedMissingPublishedNodeIds when publication is PUBLISHED, pending ACKs are converged, and the selected snapshot partitions all expected nodes into published plus missing sets. The focused owner-path fixture passes. The representative rerun is still non-green, but the fresh causal first critical path moved to publication_ack_convergence/publication_ack_blocked and the active-gate snapshot witness no longer has all nodes active.",
-  "nextAction": "Review this package slice, decide whether to close/migrate to the fresh publication_ack_convergence blocker after resolving or accepting the inherited harness literal guard failure, and preserve the CL-006 owner-path fixture.",
+  "currentState": "Closed as migrated. The focused CL-006 startup_active_publication_lag owner-path fixture passes, exact changed-file guardrails pass, and the latest representative evidence moved the first critical path to publication_ack_convergence/publication_ack_blocked.",
+  "nextAction": "Activate the publication_ack_convergence publication_published successor package only after the required fresh review subagent records the next package ledger.",
   "proof": [
     "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-spec-led-runtime-modularization-operation-workflow-progress-recovering-in-flight.report.json --explain active_gate_snapshot_coverage",
     "npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-spec-led-runtime-modularization-operation-workflow-progress-recovering-in-flight.report.json",
+    "npm run work:evidence-summary -- test-output/reports/rolling-restart-spec-led-runtime-modularization-active-gate-snapshot-coverage-publication-lag.report.json",
+    "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-spec-led-runtime-modularization-active-gate-snapshot-coverage-publication-lag.report.json --explain active_gate_snapshot_coverage",
+    "npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-spec-led-runtime-modularization-active-gate-snapshot-coverage-publication-lag.report.json",
     "Focused startup_active_gate_owner snapshot coverage fixture for activeNodeCount=5/5, snapshotCoverage=3/5, closureWitnessClass startup_active_publication_lag, pendingAck=0, publicationStatus=PUBLISHED, and selected missing published nodes",
-    "Focused owner tests selected by the implementation boundary",
+    "node --test test/distributed/harness/__tests__/active-gate-closure-classification.test.js",
     "Touched-file static guardrails: guideline literals, decision boundaries, runtime grammar, and git diff hygiene",
     "node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-spec-led-runtime-modularization-active-gate-snapshot-coverage-publication-lag.report.json --fast-local --verbose"
   ],
   "touchedFiles": [
-    "src/bootstrap/owners/*.js",
-    "src/control-plane/*publication*.js",
-    "src/control-plane/*recovery*.js",
-    "test/bootstrap/*.test.js",
-    "test/control-plane/*publication*.test.js",
-    "test/distributed/harness/*publication*.js",
-    "test/distributed/harness/*active-gate*.js",
     "test/distributed/harness/cluster-segment-2.js",
     "test/distributed/harness/__tests__/active-gate-closure-classification.test.js",
     "work/model-ledger.jsonl",
-    "work/packages/active-20260510-spec-led-runtime-modularization-active-gate-snapshot-coverage-publication-lag-frontier.md",
-    "work/sprints/active-2026-q2-spec-led-runtime-modularization.md",
+    "work/packages/done-20260510-spec-led-runtime-modularization-active-gate-snapshot-coverage-publication-lag-frontier.md",
+    "work/packages/todo-20260511-spec-led-runtime-modularization-publication-ack-convergence-publication-published-frontier.md",
+    "work/sprints/archived/done-2026-q2-spec-led-runtime-modularization.md",
+    "work/sprints/todo-2026-q2-spec-led-runtime-modularization-publication-ack-followup.md",
     "work/sprints/current-blocker.json",
     "work/sprints/current-blocker.md"
   ],
@@ -50,13 +48,16 @@
   },
   "causalGovernance": {
     "hypothesis": "If startup active-gate snapshot coverage accounts for the selected CL-006 startup publication-lag witness, active_gate_snapshot_coverage should reduce or migrate away from startup_active_publication_lag without reopening workflow_progress.",
-    "stopConditionCheck": "npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-spec-led-runtime-modularization-operation-workflow-progress-recovering-in-flight.report.json",
+    "stopConditionCheck": "npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-spec-led-runtime-modularization-active-gate-snapshot-coverage-publication-lag.report.json",
     "expectedCausalModelChange": "The CL-006 startup_active_publication_lag edge disappears, reduces, or migrates to a named publication_ack_convergence blocker; same-frontier without reduced witness evidence is contradictory.",
     "representativeOutcome": "migrated",
     "causalDebt": "Fresh publication_ack_convergence evidence must be opened or closed separately; do not hide it inside active-gate snapshot coverage closure.",
     "crossBoundaryReview": "Required before the next runtime implementation because the package crosses startup_active_gate_owner, publication ACK convergence, and completed workflow_progress repairs."
   },
-  "predecessor": "work/packages/done-20260510-spec-led-runtime-modularization-operation-workflow-progress-recovering-in-flight-frontier.md"
+  "predecessor": "work/packages/done-20260510-spec-led-runtime-modularization-operation-workflow-progress-recovering-in-flight-frontier.md",
+  "closed": "2026-05-11",
+  "commitAndPushLedgerRequired": true,
+  "successor": "work/packages/todo-20260511-spec-led-runtime-modularization-publication-ack-convergence-publication-published-frontier.md"
 }
 -->
 
@@ -241,4 +242,57 @@ static guardrails, causal-model output, and representative rolling-restart.
 - [x] Fix subagent recorded or explicitly not needed:
       not-needed.
 - [x] Implementation subagent recorded:
-      Agent Copilot (`8f971078-63fd-40d9-a0be-6de4c4a27a36`) implemented `work/packages/active-20260510-spec-led-runtime-modularization-active-gate-snapshot-coverage-publication-lag-frontier.md`.
+       Agent Copilot (`8f971078-63fd-40d9-a0be-6de4c4a27a36`) implemented `work/packages/done-20260510-spec-led-runtime-modularization-active-gate-snapshot-coverage-publication-lag-frontier.md`.
+
+## Validation
+
+1. `npm run work:package:doctor -- work/packages/active-20260510-spec-led-runtime-modularization-active-gate-snapshot-coverage-publication-lag-frontier.md`
+2. `npm run work:evidence-summary -- test-output/reports/rolling-restart-spec-led-runtime-modularization-active-gate-snapshot-coverage-publication-lag.report.json`
+3. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-spec-led-runtime-modularization-active-gate-snapshot-coverage-publication-lag.report.json --explain active_gate_snapshot_coverage`
+4. `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-spec-led-runtime-modularization-active-gate-snapshot-coverage-publication-lag.report.json`
+5. `node --test test/distributed/harness/__tests__/active-gate-closure-classification.test.js`
+6. Touched-file literal, decision-boundary, runtime-grammar, and diff-hygiene guardrails.
+
+## Validation Notes
+
+- Package doctor passed before closure while the file was still active.
+- The focused active-gate owner-path fixture passed: 3 tests, 3 pass.
+- Latest representative evidence summary reports first frontier
+  `publication_ack_convergence`, owner `topology_publication_owner`, boundary
+  `publication_convergence`, dominant witness reason `publication_published`,
+  and causal dominant failure class `publication_ack_blocked`.
+- The latest causal summary reports first critical path
+  `topology:publication_ack_convergence`. `active_gate_snapshot_coverage` is now
+  downstream, so this package closed as migrated rather than green.
+- File-scoped literal and decision-boundary guardrails passed across the selected
+  bootstrap/publication/recovery owner paths: 62 files, 0 new literal violations,
+  0 decision-boundary violations.
+- The broad selected source runtime-grammar guard still reports inherited debt:
+  5 runtime-grammar-contract violations in
+  `src/control-plane/membership-publication-coordinator.js`.
+- Exact changed harness runtime-grammar guard passed for
+  `test/distributed/harness/cluster-segment-2.js` and
+  `test/distributed/harness/__tests__/active-gate-closure-classification.test.js`.
+- A fresh package-slice review found no runtime correctness issue, but found
+  tracker-scope ambiguity because commit `54980cf3` also contains workflow
+  tooling files. Those tooling files are recorded in
+  `work/packages/todo-20260511-workflow-tooling-llm-usability.md`; this runtime
+  closure owns only the active-gate harness changes and package/sprint handoff.
+
+## Failure Migration / Contraction
+
+- Current dominant blocker: `publication_ack_convergence`.
+- Current semantic owner: `topology_publication_owner`.
+- Current boundary: `publication_convergence`.
+- Generated evidence block:
+  `npm run work:package:evidence-block -- test-output/reports/rolling-restart-spec-led-runtime-modularization-active-gate-snapshot-coverage-publication-lag.report.json`.
+- Owner explain command:
+  `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-spec-led-runtime-modularization-active-gate-snapshot-coverage-publication-lag.report.json --explain publication_ack_convergence`.
+- Successor package:
+  `work/packages/todo-20260511-spec-led-runtime-modularization-publication-ack-convergence-publication-published-frontier.md`.
+
+## Commit And Push Ledger
+
+1. Focused package commit: `904829d6`
+2. Pushed to: `origin/codex/pending-ack-eligibility-filter`
+3. Commit contains only package-owned files/package-status/allowed sprint handoff: yes

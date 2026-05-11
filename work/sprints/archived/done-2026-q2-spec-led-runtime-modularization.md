@@ -1,32 +1,36 @@
 # Spec-Led Runtime Modularization Sprint
 
-Status: active. This sprint was activated by human direction on May 9, 2026
-after the prior rolling-restart package closed. It now advances one
-representative rolling-restart frontier at a time and must prove or classify
-the representative gate before companion cleanup or broad successor work.
+Status: done. This sprint was activated by human direction on May 9, 2026 after
+the prior rolling-restart package closed. It advanced one representative
+rolling-restart frontier at a time until the active-gate publication-lag package
+reduced its owner witness and migrated the remaining representative blocker to a
+fresh publication ACK convergence package.
 
 ## Current Package Snapshot
 
-Current active package:
-`work/packages/active-20260510-spec-led-runtime-modularization-active-gate-snapshot-coverage-publication-lag-frontier.md`.
+Closed package:
+`work/packages/done-20260510-spec-led-runtime-modularization-active-gate-snapshot-coverage-publication-lag-frontier.md`.
 
-**Package status: ACTIVE REPRESENTATIVE FRONTIER CLOSURE**
+**Package status: DONE; REPRESENTATIVE FRONTIER MIGRATED**
 
 Owner boundary:
 `startup_active_gate_owner / snapshot_coverage`.
 
 Current state: the CL-006 startup publication-lag owner path is reduced by the
-active package fixture and runtime repair. The latest representative rerun is
+focused package fixture and runtime repair. The latest representative rerun is
 still non-green, but the first critical path moved to
 `publication_ack_convergence / publication_ack_blocked`; the active-gate witness
-now shows active nodes `3/5`, snapshot coverage `2/5`, `pendingAck=0`, and
-`missingPublishedCount=3`. The active package remains open pending review,
-guardrail resolution, and migration/closure of the fresh blocker.
+is now downstream. The fresh blocker is recorded as a successor package in the
+follow-up sprint.
 
 Active and queued work:
-Current active package:
-`work/packages/active-20260510-spec-led-runtime-modularization-active-gate-snapshot-coverage-publication-lag-frontier.md`
+Closed frontier package:
+`work/packages/done-20260510-spec-led-runtime-modularization-active-gate-snapshot-coverage-publication-lag-frontier.md`
 (active-gate snapshot coverage publication lag frontier).
+
+Follow-up successor package:
+`work/packages/todo-20260511-spec-led-runtime-modularization-publication-ack-convergence-publication-published-frontier.md`
+(publication ACK convergence publication-published frontier).
 
 Recently completed workflow-progress package:
 `work/packages/done-20260510-spec-led-runtime-modularization-operation-workflow-progress-recovering-in-flight-frontier.md`.
@@ -42,17 +46,16 @@ Most recent classification closure:
 
 Deferred companion cleanup:
 `work/packages/todo-20260509-spec-led-runtime-modularization-active-gate-report-schema-alias-deletion.md`
-(remains deferred because the causal output points at the architecture gap, not
-old diagnostics schema aliases).
+(remains deferred to the follow-up sprint because the representative gate is a
+runtime publication frontier, not diagnostics schema aliases).
 
 Latest closed proof package:
 `work/packages/done-20260510-spec-led-runtime-modularization-representative-green-proof-or-next-blocker.md`.
 
-Next proof surface: review the CL-006 owner-path repair, preserve the focused
-fixture, and decide whether to close/migrate to the fresh
-`publication_ack_convergence / publication_ack_blocked` blocker. Do not repeat
-the completed `sql_write_operations-p1` dispatch-pending workflow-progress
-repair. Diagnostics schema alias cleanup remains deferred.
+Next proof surface: activate the publication ACK convergence successor only
+after a fresh review subagent reviews the closed active-gate publication-lag
+package. Do not repeat the completed `sql_write_operations-p1` dispatch-pending
+workflow-progress repair. Diagnostics schema alias cleanup remains deferred.
 
 ## Goal
 
@@ -125,7 +128,8 @@ the contract and proof ladder are stable.
 24. [High-Level Causal-Analysis Infrastructure](../packages/done-20260510-spec-led-runtime-modularization-high-level-causal-analysis-infrastructure.md)
 25. [Active Gate Report Schema Alias Deletion](../packages/todo-20260509-spec-led-runtime-modularization-active-gate-report-schema-alias-deletion.md)
 26. [Operation Workflow Progress Recovering-In-Flight Frontier](../packages/done-20260510-spec-led-runtime-modularization-operation-workflow-progress-recovering-in-flight-frontier.md)
-27. [Active Gate Snapshot Coverage Publication Lag Frontier](../packages/active-20260510-spec-led-runtime-modularization-active-gate-snapshot-coverage-publication-lag-frontier.md)
+27. [Active Gate Snapshot Coverage Publication Lag Frontier](../packages/done-20260510-spec-led-runtime-modularization-active-gate-snapshot-coverage-publication-lag-frontier.md)
+28. [Publication ACK Convergence Publication-Published Frontier](../packages/todo-20260511-spec-led-runtime-modularization-publication-ack-convergence-publication-published-frontier.md)
 
 ## Model Fit Strategy
 
@@ -184,11 +188,15 @@ The sprint now separates broad orchestration from Spark-safe leaf work.
     migrated, or same-frontier. It must not expand implementation scope inside
     the leaf package.
 14. `Active Gate Snapshot Coverage Publication Lag Frontier` is a
-    representative frontier closure package intended for `gpt-5.3-codex`. It
-    owns the fresh `startup_active_gate_owner / snapshot_coverage` residual with
-    closure witness class `startup_active_publication_lag` and must not repeat
-    completed workflow-progress repair work unless a focused fixture proves
-    direct regression.
+     representative frontier closure package intended for `gpt-5.3-codex`. It
+     owns the fresh `startup_active_gate_owner / snapshot_coverage` residual with
+     closure witness class `startup_active_publication_lag` and must not repeat
+     completed workflow-progress repair work unless a focused fixture proves
+     direct regression.
+15. `Publication ACK Convergence Publication-Published Frontier` is the successor
+    representative frontier closure package intended for `gpt-5.3-codex`. It is
+    deferred to the follow-up sprint and owns the migrated
+    `topology_publication_owner / publication_convergence` residual.
 
 ## Activation Rules
 
@@ -237,3 +245,15 @@ The sprint now separates broad orchestration from Spark-safe leaf work.
    owner-boundary package with a canonical evidence block.
 5. No companion cleanup package starts while the representative proof gate is
    unclassified.
+
+## Closure Notes
+
+1. The active-gate publication-lag package is closed as migrated after focused
+   owner-path proof and latest representative evidence moved the first critical
+   path to `publication_ack_convergence / publication_ack_blocked`.
+2. The fresh publication ACK convergence frontier is deferred to
+   `work/sprints/todo-2026-q2-spec-led-runtime-modularization-publication-ack-followup.md`.
+3. The active-gate report schema alias deletion package remains deferred to that
+   follow-up sprint and must not start before the representative publication
+   frontier is classified.
+4. No Pro or Enterprise work entered the sprint.
