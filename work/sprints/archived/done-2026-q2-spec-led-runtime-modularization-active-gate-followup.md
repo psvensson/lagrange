@@ -41,7 +41,7 @@ closed and migrated to the next architecture-analysis budget-cascade package.
 ## Package Queue
 
 1. [Active-Gate Snapshot Coverage Post-Publication-ACK Frontier](../packages/done-20260511-spec-led-runtime-modularization-active-gate-snapshot-coverage-post-publication-ack-frontier.md)
-2. [Budget Timeout Cascade Architecture Analysis](../packages/todo-20260511-spec-led-runtime-modularization-budget-timeout-cascade-architecture-analysis.md)
+2. [Budget Timeout Cascade Architecture Analysis](../packages/done-20260511-spec-led-runtime-modularization-budget-timeout-cascade-architecture-analysis.md)
 3. [Active Gate Report Schema Alias Deletion](../packages/todo-20260509-spec-led-runtime-modularization-active-gate-report-schema-alias-deletion.md)
 
 ## Activation Rules
@@ -59,7 +59,7 @@ closed and migrated to the next architecture-analysis budget-cascade package.
 1. Representative rolling-restart proof migrated to one fresh owner-boundary
    package with a canonical architecture-analysis handoff.
 2. The active-gate snapshot coverage package is closed with named successor
-   `work/packages/todo-20260511-spec-led-runtime-modularization-budget-timeout-cascade-architecture-analysis.md`.
+   `work/packages/done-20260511-spec-led-runtime-modularization-budget-timeout-cascade-architecture-analysis.md`.
 3. Companion diagnostics cleanup remains deferred unless the representative
    proof gate is classified.
 4. No Pro or Enterprise feature work enters this sprint.
