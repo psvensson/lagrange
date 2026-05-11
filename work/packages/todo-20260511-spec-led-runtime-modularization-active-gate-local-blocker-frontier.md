@@ -1,9 +1,10 @@
+# Spec-Led Runtime Modularization Active-Gate Local Blocker Frontier
+
+<!-- work-package
 {
-  "schema": "current-blocker-v1",
-  "generatedBy": "scripts/work-tracker.js",
-  "sprint": "work/sprints/todo-2026-q2-spec-led-runtime-modularization-active-gate-local-followup.md",
-  "package": "work/packages/todo-20260511-spec-led-runtime-modularization-active-gate-local-blocker-frontier.md",
+  "schema": "work-package-v1",
   "status": "todo",
+  "opened": "2026-05-11",
   "scenario": "spec-led-runtime-modularization",
   "artifact": "test-output/reports/rolling-restart-spec-led-runtime-modularization-active-gate-snapshot-coverage-publication-lag.report.json",
   "playback": "test-output/reports/.playback/rolling-restart-spec-led-runtime-modularization-active-gate-snapshot-coverage-publication-lag/rolling-restart/",
@@ -54,3 +55,29 @@
   },
   "predecessor": "work/packages/done-20260511-spec-led-runtime-modularization-startup-readiness-support-evidence-frontier.md"
 }
+-->
+
+## Why
+
+Startup readiness support evidence is now classified as inherited active-gate
+no-progress evidence. The representative causal model no longer points at
+`startup_readiness_boundary`; it points at `classified_local_blocker` with
+reason `active_gate_local_blocker`.
+
+## Generated Evidence Snapshot
+
+- Topology frontier: `active_gate_snapshot_coverage`.
+- Current semantic owner: `startup_active_gate_owner`.
+- Current boundary: `snapshot_coverage`.
+- Causal stop condition: `classified_local_blocker`.
+- Causal outcome: `continue_local_fix`.
+- Causal reason: `active_gate_local_blocker`.
+- Frozen closures: publication ACK convergence, diagnostics budget ownership, and
+  startup readiness support evidence.
+
+## Activation Notes
+
+1. Run the mandatory predecessor review on the closed startup-readiness package.
+2. Activate only after any review fixes are committed and pushed.
+3. Do not reopen publication ACK, budget cascade, or startup readiness evidence
+   before this package reduces or migrates active-gate local blocker evidence.

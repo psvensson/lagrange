@@ -3,7 +3,7 @@
 <!-- work-package
 {
   "schema": "work-package-v1",
-  "status": "active",
+  "status": "done",
   "opened": "2026-05-11",
   "scenario": "spec-led-runtime-modularization",
   "artifact": "test-output/reports/rolling-restart-spec-led-runtime-modularization-active-gate-snapshot-coverage-publication-lag.report.json",
@@ -12,7 +12,7 @@
   "boundary": "startup_support_evidence",
   "dominantReason": "startup_readiness_boundary",
   "currentState": "Startup readiness no-progress support evidence is classified as inherited active-gate no-progress evidence. The representative causal model no longer reports startup_readiness_boundary and now reports classified_local_blocker for startup_active_gate_owner / snapshot_coverage.",
-  "nextAction": "Parent review should close or split a successor package for startup_active_gate_owner / snapshot_coverage; do not patch active-gate runtime inside this package.",
+  "nextAction": "Package is ready to close as migrated; successor ownership moves to startup_active_gate_owner / snapshot_coverage for active_gate_local_blocker.",
   "proof": [
     "npm run work:evidence-summary -- test-output/reports/rolling-restart-spec-led-runtime-modularization-active-gate-snapshot-coverage-publication-lag.report.json",
     "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-spec-led-runtime-modularization-active-gate-snapshot-coverage-publication-lag.report.json --explain active_gate_snapshot_coverage",
@@ -30,8 +30,8 @@
     "test/diagnostics/*causal*.test.js",
     "test/diagnostics/*stop-condition*.test.js",
     "test-output/reports/rolling-restart-spec-led-runtime-modularization-active-gate-snapshot-coverage-publication-lag.report.json",
-    "work/packages/active-20260511-spec-led-runtime-modularization-startup-readiness-support-evidence-frontier.md",
-    "work/sprints/active-2026-q2-spec-led-runtime-modularization-startup-readiness-followup.md"
+    "work/packages/done-20260511-spec-led-runtime-modularization-startup-readiness-support-evidence-frontier.md",
+    "work/sprints/archived/done-2026-q2-spec-led-runtime-modularization-startup-readiness-followup.md"
   ],
   "modelFit": {
     "packageClass": "representative-frontier-closure",
@@ -185,3 +185,27 @@ The representative causal model no longer reports the diagnostics-owned
 - `node scripts/check-guideline-decision-boundaries.js src/diagnostics/causal-graph-builder.js src/diagnostics/failure-class-taxonomy.js src/diagnostics/topology-convergence-graph.js` — passed, 0 violations.
 - `npm run audit:runtime-grammar:file -- src/diagnostics/causal-graph-builder.js src/diagnostics/failure-class-taxonomy.js src/diagnostics/topology-convergence-graph.js` — passed.
 - `npx eslint src/diagnostics/causal-graph-builder.js src/diagnostics/failure-class-taxonomy.js src/diagnostics/topology-convergence-graph.js test/diagnostics/topology-convergence-graph.test.js test/diagnostics/failure-class-taxonomy.test.js test/diagnostics/stop-condition-decision.test.js` — passed.
+
+## Failure Migration / Contraction
+
+- Current dominant blocker: `active_gate_snapshot_coverage`.
+- Current semantic owner: `startup_active_gate_owner`.
+- Current boundary: `snapshot_coverage`.
+- Causal stop condition: `classified_local_blocker`.
+- Causal outcome: `continue_local_fix`.
+- Migration reason: `active_gate_local_blocker`.
+- Readiness classification result: startup readiness support evidence is no
+  longer the owner-boundary migration; `no_progress_terminal` with
+  `stalled_no_progress` and positive attempts-since-progress is inherited
+  active-gate no-progress evidence.
+- Preserved invariants: publication ACK convergence remains closed; diagnostics
+  budget ownership remains classified; no harness timeout changes or report
+  relabeling occurred.
+- Successor package:
+  `work/packages/todo-20260511-spec-led-runtime-modularization-active-gate-local-blocker-frontier.md`.
+
+## Commit And Push Ledger
+
+1. Focused package commit: `bf8314f7`
+2. Pushed to: `origin/codex/pending-ack-eligibility-filter`
+3. Commit contains only package-owned files/package-status/allowed sprint handoff: yes
