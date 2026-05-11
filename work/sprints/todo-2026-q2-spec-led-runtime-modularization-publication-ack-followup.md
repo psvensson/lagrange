@@ -39,9 +39,10 @@ publication convergence is reduced or migrated.
 ## Activation Rules
 
 1. Activate the publication ACK convergence successor first.
-2. Before implementation starts, run the required fresh review subagent on the
-   closed active-gate publication-lag package, then a separate fix subagent if
-   review finds fixes, then a separate implementation subagent.
+2. Before implementation starts, record the formal `fixes-required` review of
+   the closed active-gate publication-lag package and this separate
+   tracker-evidence fix in the activated publication ACK package ledger, then
+   assign a separate implementation subagent.
 3. Keep active-gate report schema alias deletion deferred until the
    representative publication frontier is classified.
 4. Do not reopen completed workflow-progress or startup active-gate packages

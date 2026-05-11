@@ -12,7 +12,7 @@
   "boundary": "publication_convergence",
   "dominantReason": "publication_published",
   "currentState": "Fresh representative evidence migrated the first critical path from startup active-gate snapshot coverage to publication_ack_convergence. The topology witness is blocked with reason publication_published while the causal summary names publication_ack_blocked as the dominant failure class.",
-  "nextAction": "Activate this package only after a fresh review subagent reviews the closed active-gate publication-lag package, then freeze the publication owner fixture for the publication_published ACK-blocked witness.",
+  "nextAction": "Activate this package only after recording the formal fixes-required predecessor review and this separate tracker-evidence fix in the active package ledger, then freeze the publication owner fixture for the publication_published ACK-blocked witness.",
   "proof": [
     "npm run work:evidence-summary -- test-output/reports/rolling-restart-spec-led-runtime-modularization-active-gate-snapshot-coverage-publication-lag.report.json",
     "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-spec-led-runtime-modularization-active-gate-snapshot-coverage-publication-lag.report.json --explain publication_ack_convergence",
@@ -57,9 +57,10 @@
 
 ## Why
 
-The active-gate publication-lag package reduced the CL-006 startup publication
-lag witness. The latest representative rerun is still non-green, but the first
-frontier moved to `publication_ack_convergence` with owner
+The active-gate publication-lag package reduced the original CL-006 startup
+publication lag fixture. The latest representative rerun is still non-green, but
+it no longer carries CL-006 closure data; the first frontier moved to
+`publication_ack_convergence` with owner
 `topology_publication_owner / publication_convergence`.
 
 ## Scope Basis
@@ -158,7 +159,9 @@ guardrails, causal-model output, and representative rolling-restart.
 - Causal debt: budget timeout cascade remains architecture-analysis debt and
   must not be hidden by relabeling publication ACK evidence.
 - Cross-boundary review: required before activation because the predecessor
-  crosses startup active-gate ownership and publication ACK convergence.
+  crosses startup active-gate ownership and publication ACK convergence. The
+  formal predecessor review returned `fixes-required`; activation must record
+  that review and the separate tracker-evidence fix before implementation.
 
 ## Generated Owner Evidence Block
 
@@ -178,5 +181,7 @@ guardrails, causal-model output, and representative rolling-restart.
 ## Activation Note
 
 This package is intentionally `todo`. Before runtime implementation starts, move
-it to `active` and record fresh review, fix-if-needed, and implementation
-subagent ledger entries under the current package sequencing policy.
+it to `active` and record the formal `fixes-required` predecessor review plus
+this separate tracker-evidence fix in the active package Subagent Sequencing
+Ledger; an unrecorded informal review is not sufficient. Only then assign the
+fresh implementation subagent under the current package sequencing policy.

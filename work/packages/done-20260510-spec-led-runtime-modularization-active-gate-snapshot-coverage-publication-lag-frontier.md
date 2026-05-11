@@ -12,7 +12,7 @@
   "boundary": "snapshot_coverage",
   "dominantReason": "active_gate_timed_out",
   "currentState": "Closed as migrated. The focused CL-006 startup_active_publication_lag owner-path fixture passes, exact changed-file guardrails pass, and the latest representative evidence moved the first critical path to publication_ack_convergence/publication_ack_blocked.",
-  "nextAction": "Activate the publication_ack_convergence publication_published successor package only after the required fresh review subagent records the next package ledger.",
+  "nextAction": "Activate the publication_ack_convergence publication_published successor package only after the formal fixes-required predecessor review and separate fix result are recorded in the next package ledger.",
   "proof": [
     "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-spec-led-runtime-modularization-operation-workflow-progress-recovering-in-flight.report.json --explain active_gate_snapshot_coverage",
     "npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-spec-led-runtime-modularization-operation-workflow-progress-recovering-in-flight.report.json",
@@ -69,29 +69,37 @@ dispatch-pending wake/replay work. The fresh representative proof did not go
 green, but it no longer has the detailed `sql_write_operations-p1`
 workflow-progress witness or the `priority_recovery_event_wait` causal class.
 
-The current blocked frontier is active-gate snapshot coverage. Every node is
-active, publication ACK convergence is satisfied, and priority recovery has only
-class-only retryable evidence, but the selected active-gate snapshot still covers
-only three of five expected nodes.
+The predecessor artifact selected active-gate snapshot coverage: every node was
+active, publication ACK convergence was satisfied, and the selected active-gate
+snapshot still covered only three of five expected nodes. The focused CL-006
+fixture/proof in this package froze that original witness.
+
+The latest representative artifact named in package metadata is different: it no
+longer carries CL-006 closure data, the first frontier migrated to
+`publication_ack_convergence`, and the active-gate snapshot-coverage evidence is
+downstream with inactive-node evidence.
 
 ## Scope Basis
 
 1. Predecessor package:
    `work/packages/done-20260510-spec-led-runtime-modularization-operation-workflow-progress-recovering-in-flight-frontier.md`.
-2. Representative artifact:
+2. Focused CL-006 proof artifact:
    `test-output/reports/rolling-restart-spec-led-runtime-modularization-operation-workflow-progress-recovering-in-flight.report.json`.
-3. Generated owner evidence block selects `active_gate_snapshot_coverage` with
+3. Latest representative migration artifact:
+   `test-output/reports/rolling-restart-spec-led-runtime-modularization-active-gate-snapshot-coverage-publication-lag.report.json`.
+4. The original owner evidence selected `active_gate_snapshot_coverage` with
    owner `startup_active_gate_owner`, boundary `snapshot_coverage`, and dominant
    reason `active_gate_timed_out`.
-4. Fresh causal output reports `widen_architecture_work / architecture_gap` with
-   dominant `active_gate_snapshot_coverage_incomplete`; it no longer includes
-   `priority_recovery_event_wait`.
-5. Phase `0.1` internal-coherence work in the Community / AGPL repository.
+5. The latest generated owner evidence selects `publication_ack_convergence`
+   with owner `topology_publication_owner`, boundary `publication_convergence`,
+   and dominant reason `publication_published`.
+6. Phase `0.1` internal-coherence work in the Community / AGPL repository.
 
 ## In Scope
 
 1. Review the just-closed workflow-progress package before implementation starts.
-2. Freeze the smallest active-gate snapshot coverage witness: `activeNodeCount=5`,
+2. For the focused fixture/proof, freeze the original active-gate snapshot
+   coverage witness from the predecessor artifact: `activeNodeCount=5`,
    `snapshotCoverageNodeCount=3`, `publicationStatus=PUBLISHED`, `pendingAck=0`,
    `missingPublishedCount=3`, closure record `CL-006`, closure witness class
    `startup_active_publication_lag`, selected active-gate snapshot node
@@ -100,7 +108,8 @@ only three of five expected nodes.
    `7493b0ab-a054-5fad-a91b-5e331db29304`, and selected missing published nodes
    `11601fe0-72d6-5853-8590-ec2881853e72`,
    `8be8d30f-4499-5eed-865c-71b4d529a67a`, and
-   `ebc4aa0b-06c6-506d-93ea-1dd2deca3f58`.
+   `ebc4aa0b-06c6-506d-93ea-1dd2deca3f58`. The latest representative
+   migration artifact must not be read as this CL-006 fixture.
 3. Trace the owner path that selects active-gate publication snapshots and
    determines snapshot coverage for startup active readiness.
 4. Repair or classify why all active nodes are not covered by the selected
@@ -211,16 +220,24 @@ static guardrails, causal-model output, and representative rolling-restart.
 ## Generated Owner Evidence Block
 
 - Source artifact:
-  `test-output/reports/rolling-restart-spec-led-runtime-modularization-operation-workflow-progress-recovering-in-flight.report.json`
+  `test-output/reports/rolling-restart-spec-led-runtime-modularization-active-gate-snapshot-coverage-publication-lag.report.json`
 - Scenario: `rolling-restart`
-- Frontier edge: `active_gate_snapshot_coverage`
-- Current semantic owner: `startup_active_gate_owner`
-- Current boundary: `snapshot_coverage`
+- Frontier edge: `publication_ack_convergence`
+- Current semantic owner: `topology_publication_owner`
+- Current boundary: `publication_convergence`
 - Frontier state: `blocked`
-- Dominant reason: `active_gate_timed_out`
-- Evidence path:
-  `report.scenarios[0].publicationConvergence.activeGate.progress`
-- Reasons: `active_gate_timed_out, snapshot_coverage_incomplete`
+- Dominant reason: `publication_published`
+- Evidence path: `report.scenarios[0].publicationConvergence`
+- Reasons: `publication_published`
+- Next explain command:
+  `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-spec-led-runtime-modularization-active-gate-snapshot-coverage-publication-lag.report.json --explain publication_ack_convergence`
+
+## Focused CL-006 Fixture Evidence
+
+- Source artifact:
+  `test-output/reports/rolling-restart-spec-led-runtime-modularization-operation-workflow-progress-recovering-in-flight.report.json`
+- This is the original focused proof surface, not the latest generated owner
+  evidence block.
 - Active-gate witness: expected node count `5`, active node count `5`,
   snapshot coverage node count `3`, publication status `PUBLISHED`, publication
   epoch `2`, pending ACK count `0`, selected snapshot node
@@ -232,7 +249,7 @@ static guardrails, causal-model output, and representative rolling-restart.
   `ebc4aa0b-06c6-506d-93ea-1dd2deca3f58`, closure record `CL-006`, closure
   witness class `startup_active_publication_lag`, blockers
   `snapshot_coverage=3/5`.
-- Next explain command:
+- Original focused explain command:
   `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-spec-led-runtime-modularization-operation-workflow-progress-recovering-in-flight.report.json --explain active_gate_snapshot_coverage`
 
 ## Subagent Sequencing Ledger
@@ -264,6 +281,11 @@ static guardrails, causal-model output, and representative rolling-restart.
 - The latest causal summary reports first critical path
   `topology:publication_ack_convergence`. `active_gate_snapshot_coverage` is now
   downstream, so this package closed as migrated rather than green.
+- The latest artifact active-gate progress is not the CL-006 closure witness:
+  expected node count `5`, active node count `3`, inactive node count `2`,
+  snapshot coverage node count `2`, selected snapshot node
+  `35a891b8-c1a0-5064-9c6e-2acfba61c2a7`, closure record `null`, and closure
+  witness class `null`.
 - File-scoped literal and decision-boundary guardrails passed across the selected
   bootstrap/publication/recovery owner paths: 62 files, 0 new literal violations,
   0 decision-boundary violations.
@@ -273,11 +295,11 @@ static guardrails, causal-model output, and representative rolling-restart.
 - Exact changed harness runtime-grammar guard passed for
   `test/distributed/harness/cluster-segment-2.js` and
   `test/distributed/harness/__tests__/active-gate-closure-classification.test.js`.
-- A fresh package-slice review found no runtime correctness issue, but found
-  tracker-scope ambiguity because commit `54980cf3` also contains workflow
-  tooling files. Those tooling files are recorded in
-  `work/packages/todo-20260511-workflow-tooling-llm-usability.md`; this runtime
-  closure owns only the active-gate harness changes and package/sprint handoff.
+- Runtime implementation for the focused CL-006 fixture landed in commit
+  `904829d6`. Package closure, handoff, successor, sprint archive,
+  current-blocker, and model-ledger proof landed in focused closure commit
+  `da027f3d`, which is the Commit And Push Ledger commit for this closed
+  package tracker.
 
 ## Failure Migration / Contraction
 
@@ -286,6 +308,11 @@ static guardrails, causal-model output, and representative rolling-restart.
 - Current boundary: `publication_convergence`.
 - Generated evidence block:
   `npm run work:package:evidence-block -- test-output/reports/rolling-restart-spec-led-runtime-modularization-active-gate-snapshot-coverage-publication-lag.report.json`.
+- Latest active-gate downstream evidence: expected node count `5`, active node
+  count `3`, inactive node count `2`, snapshot coverage node count `2`, selected
+  snapshot node `35a891b8-c1a0-5064-9c6e-2acfba61c2a7`, closure record `null`,
+  closure witness class `null`, blockers `inactive_nodes=2` and
+  `snapshot_coverage=2/5`.
 - Owner explain command:
   `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-spec-led-runtime-modularization-active-gate-snapshot-coverage-publication-lag.report.json --explain publication_ack_convergence`.
 - Successor package:
@@ -293,6 +320,8 @@ static guardrails, causal-model output, and representative rolling-restart.
 
 ## Commit And Push Ledger
 
-1. Focused package commit: `904829d6`
+1. Focused package commit: `da027f3d`
 2. Pushed to: `origin/codex/pending-ack-eligibility-filter`
 3. Commit contains only package-owned files/package-status/allowed sprint handoff: yes
+4. Runtime implementation commit for the focused CL-006 fixture: `904829d6`;
+   package closure and handoff proof commit: `da027f3d`.
