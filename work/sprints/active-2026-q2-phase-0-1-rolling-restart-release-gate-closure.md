@@ -59,7 +59,7 @@ Latest package:
 1. [Rolling Restart Operation Workflow Progress Event Driven Wait](../packages/done-20260511-rolling-restart-operation-workflow-progress-event-driven-wait.md)
 2. [Rolling Restart Operation Workflow Rebalancer Handoff Retry Scheduled](../packages/done-20260511-rolling-restart-operation-workflow-rebalancer-handoff-retry-scheduled.md)
 3. [Rolling Restart Operation Workflow Progress Event Driven Priority Recovery](../packages/done-20260511-rolling-restart-operation-workflow-progress-event-driven-priority-recovery.md)
-4. [Rolling Restart Operation Workflow Progress Dispatch Pending Step Timeout Contract](../packages/active-20260511-rolling-restart-operation-workflow-progress-dispatch-pending-step-timeout-contract.md)
+4. [Rolling Restart Operation Workflow Progress Dispatch Pending Step Timeout Contract](../packages/done-20260511-rolling-restart-operation-workflow-progress-dispatch-pending-step-timeout-contract.md)
 
 Latest representative evidence:
 
@@ -102,8 +102,9 @@ owner-boundary frontier.
 Startup active-gate snapshot coverage remains downstream until the
 operation-workflow workflow-progress event-driven frontier is either green or
 promoted by fresh representative evidence. The latest causal model keeps the
-first critical path at `priority_recovery_partition_progress` and names the
-remaining local proof as the operation workflow step-timeout contract.
+first critical path at `priority_recovery_partition_progress`; the next proof
+must continue reducing event-driven recovery for the remaining blocked
+partitions or expose a new owner boundary.
 
 ## Scope Basis
 

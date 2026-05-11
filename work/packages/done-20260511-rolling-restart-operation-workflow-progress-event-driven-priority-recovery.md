@@ -12,7 +12,7 @@
   "boundary": "workflow_progress",
   "dominantReason": "priority_recovery_workflow_progress_event_driven",
   "currentState": "Focused workflow-progress owner probes are green. The representative rerun remains red on the same priority_recovery_partition_progress frontier under operation_workflow_owner / workflow_progress with recovering_in_flight, but reduced blocked partitions from five to three: replica_operations-p1, sql_transactions-p1, and sql_write_operations-p1. Active gate and snapshot coverage are now 3/5.",
-  "nextAction": "Activate `work/packages/active-20260511-rolling-restart-operation-workflow-progress-dispatch-pending-step-timeout-contract.md` for the remaining dispatch-pending operation workflow step-timeout contract on replica_operations-p1, sql_transactions-p1, and sql_write_operations-p1.",
+  "nextAction": "Activate `work/packages/done-20260511-rolling-restart-operation-workflow-progress-dispatch-pending-step-timeout-contract.md` for the remaining dispatch-pending operation workflow step-timeout contract on replica_operations-p1, sql_transactions-p1, and sql_write_operations-p1.",
   "proof": [
     "npm run work:package:evidence-block -- test-output/reports/rolling-restart-current-release-gate-after-rebalancer-handoff-fix.report.json",
     "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-current-release-gate-after-rebalancer-handoff-fix.report.json --explain priority_recovery_partition_progress",
@@ -52,7 +52,7 @@
   "predecessor": "work/packages/done-20260511-rolling-restart-operation-workflow-rebalancer-handoff-retry-scheduled.md",
   "closed": "2026-05-11",
   "commitAndPushLedgerRequired": true,
-  "successor": "work/packages/active-20260511-rolling-restart-operation-workflow-progress-dispatch-pending-step-timeout-contract.md"
+  "successor": "work/packages/done-20260511-rolling-restart-operation-workflow-progress-dispatch-pending-step-timeout-contract.md"
 }
 -->
 
