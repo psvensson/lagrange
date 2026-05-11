@@ -2,47 +2,58 @@
   "schema": "current-blocker-v1",
   "generatedBy": "scripts/work-tracker.js",
   "sprint": "work/sprints/active-2026-q2-phase-0-1-rolling-restart-release-gate-closure.md",
-  "package": "work/packages/done-20260508-rolling-restart-operation-workflow-progress-transition-deferred.md",
+  "package": "work/packages/done-20260511-rolling-restart-operation-workflow-progress-sql-write-operations-serial-wait.md",
   "status": "done",
   "scenario": "rolling-restart",
-  "artifact": "test-output/reports/rolling-restart-current-release-gate-20260508T194848Z.report.json",
-  "playback": "test-output/reports/.playback/rolling-restart-current-release-gate-20260508T194848Z/rolling-restart/",
-  "owner": "operation_workflow_owner",
-  "boundary": "workflow_progress",
-  "dominantReason": "priority_recovery_workflow_progress_transition_deferred",
-  "currentState": "The workflow-progress witness was frozen, focused owner-path regression proof landed, and representative rolling-restart migrated from operation_workflow_owner / workflow_progress to operation_workflow_owner / rebalancer_handoff.",
-  "nextAction": "Close this stale active metadata with successor work/packages/done-20260508-rolling-restart-operation-workflow-rebalancer-handoff-retry-scheduled.md, then continue from the latest rolling-restart release-gate frontier.",
+  "artifact": "test-output/reports/rolling-restart-current-release-gate-after-sql-write-serial-wait-fix.report.json",
+  "playback": "test-output/reports/.playback/rolling-restart-current-release-gate-after-sql-write-serial-wait-fix/rolling-restart/",
+  "owner": "topology_publication_owner",
+  "boundary": "publication_convergence",
+  "dominantReason": "publication_published",
+  "currentState": "The serial-wait package added focused owner-path regression coverage and fixed priority recovery summary selection so actionable source workflow progress outranks supporting serial-wait carrier witnesses. The representative rolling-restart rerun failed 0/1 after 139320ms, but priority_recovery_partition_progress reduced to retryable/non-frontier with sql_write_operations-p1 recovering_in_flight, persisted_not_dispatched, event_driven, and advance_existing_operation. The first frontier migrated to publication_ack_convergence: topology_publication_owner / publication_convergence, state blocked, dominant reason publication_published, publicationStatus PUBLISHED, pendingAckCount 0, blockedNodeCount 0, missingPublishedCount 2, publicationPending true, recoveryProtocolState publication_pending, and prioritySpreadPending true.",
+  "nextAction": "Open the next focused package on topology_publication_owner / publication_convergence to explain or repair why publication remains pending/published with missingPublishedCount=2 and prioritySpreadPending=true after priority recovery is classified as retryable rather than blocked.",
   "proof": [
-    "npm run work:package:evidence-block -- test-output/reports/rolling-restart-current-release-gate-20260508T194848Z.report.json",
-    "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-current-release-gate-20260508T194848Z.report.json --explain priority_recovery_partition_progress",
-    "Focused operation_workflow_owner workflow_progress regression or blocker probe",
-    "Touched-file static guardrails selected by the implementation boundary",
-    "node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-current-release-gate-next.report.json --fast-local --verbose"
+    "npm run work:package:evidence-block -- test-output/reports/rolling-restart-current-release-gate-after-workflow-timeout-stale-progress-fix.report.json",
+    "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-current-release-gate-after-workflow-timeout-stale-progress-fix.report.json --explain priority_recovery_partition_progress",
+    "npm run analyze:distributed-failure -- --report test-output/reports/rolling-restart-current-release-gate-after-workflow-timeout-stale-progress-fix.report.json",
+    "node test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js",
+    "node --test test/distributed/harness/__tests__/priority-recovery-summary-normalization.test.js",
+    "node scripts/check-guideline-literals.js test/distributed/harness/priority-recovery-summary-normalization.js test/distributed/harness/__tests__/priority-recovery-summary-normalization.test.js test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js",
+    "node scripts/check-guideline-decision-boundaries.js test/distributed/harness/priority-recovery-summary-normalization.js test/distributed/harness/__tests__/priority-recovery-summary-normalization.test.js test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js",
+    "npm run audit:runtime-grammar:file -- test/distributed/harness/priority-recovery-summary-normalization.js test/distributed/harness/__tests__/priority-recovery-summary-normalization.test.js test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js",
+    "npm run work:current-blocker",
+    "npm run work:validate",
+    "git diff --check",
+    "node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-current-release-gate-after-sql-write-serial-wait-fix.report.json --fast-local --verbose",
+    "npm run work:package:evidence-block -- test-output/reports/rolling-restart-current-release-gate-after-sql-write-serial-wait-fix.report.json",
+    "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-current-release-gate-after-sql-write-serial-wait-fix.report.json --explain publication_ack_convergence"
   ],
   "touchedFiles": [
     "test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js",
+    "test/distributed/harness/priority-recovery-summary-normalization.js",
+    "test/distributed/harness/__tests__/priority-recovery-summary-normalization.test.js",
+    "work/packages/done-20260511-rolling-restart-operation-workflow-progress-sql-write-operations-serial-wait.md",
     "work/sprints/active-2026-q2-phase-0-1-rolling-restart-release-gate-closure.md",
-    "work/packages/done-20260508-rolling-restart-operation-workflow-progress-transition-deferred.md",
     "work/sprints/current-blocker.json",
     "work/sprints/current-blocker.md"
   ],
   "modelFit": {
     "packageClass": "representative-frontier-closure",
     "intendedMinimumModel": "gpt-5.3-codex",
-    "scopeShape": "owner-boundary-contraction",
+    "scopeShape": "owner-boundary-contraction/cross-boundary-causal-edge",
     "escalationTriggers": [
-      "workflow progress evidence requires changes outside operation_workflow_owner or priority recovery snapshots",
-      "representative proof restores startup_active_gate_owner / snapshot_coverage as the direct blocker before workflow progress is classified",
+      "serial-wait evidence requires changes outside operation_workflow_owner, priority recovery snapshots, or harness summary classification",
+      "representative proof restores workflow_timeout or startup_active_gate_owner / snapshot_coverage as the direct blocker",
       "runtime implementation would need Pro or Enterprise features"
     ]
   },
   "causalGovernance": {
-    "hypothesis": "If the workflow-progress transition-deferred owner path is repaired or classified, priority_recovery_partition_progress should reduce or migrate away from operation_workflow_owner / workflow_progress before startup_active_gate_owner / snapshot_coverage is treated as direct.",
-    "stopConditionCheck": "npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-current-release-gate-20260508T194848Z.report.json",
-    "expectedCausalModelChange": "The transition_deferred workflow_progress edge either disappears, reduces to classified retryable backpressure, or migrates to the already-recorded operation_workflow_owner / rebalancer_handoff blocker.",
+    "hypothesis": "If the sql_write_operations-p1 serial-wait carrier is repaired or classified, priority_recovery_partition_progress should reduce or migrate away from blocked operation_workflow_owner / workflow_progress before startup active-gate snapshot coverage is treated as direct.",
+    "stopConditionCheck": "npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-current-release-gate-after-sql-write-serial-wait-fix.report.json",
+    "expectedCausalModelChange": "The sql_write_operations-p1 priority_operation_serial_wait edge disappears or reduces to retryable in-flight workflow progress, exposing publication_ack_convergence as the next named frontier if rolling-restart remains red.",
     "representativeOutcome": "migrated",
-    "causalDebt": "The rebalancer_handoff successor remains separate causal debt; this package must not absorb that owner boundary while still named workflow_progress.",
-    "crossBoundaryReview": "Required before reactivating this package because its recorded representative rerun already crossed from workflow_progress to rebalancer_handoff."
+    "causalDebt": "Publication convergence remains separate causal debt under topology_publication_owner / publication_convergence; this package must not absorb that successor boundary after classifying priority recovery as retryable.",
+    "crossBoundaryReview": "Required before opening the topology_publication_owner successor because the representative rerun migrated from priority recovery workflow progress to publication acknowledgement convergence."
   },
-  "predecessor": "work/packages/done-20260508-core-topology-legacy-path-deletion-and-proof.md"
+  "predecessor": "work/packages/done-20260509-rolling-restart-operation-workflow-timeout-control-plane-publications-stale-progress-reconcile.md"
 }

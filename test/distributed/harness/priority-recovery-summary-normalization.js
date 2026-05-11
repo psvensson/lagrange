@@ -673,6 +673,27 @@ function isPriorityRecoveryDirectSourceBlockerWitness(witness) {
     .length > ZERO;
 }
 
+function isPriorityRecoveryActionableWorkflowProgressWitness(witness) {
+  const evidence = buildPriorityRecoveryDominantWitnessEvidence(witness);
+  return (
+    evidence.currentOwner ===
+      PRIORITY_RECOVERY_PROGRESS_OWNER.OPERATION_WORKFLOW_OWNER &&
+    evidence.blockingBoundary ===
+      PRIORITY_RECOVERY_BLOCKING_BOUNDARY.WORKFLOW_PROGRESS &&
+    evidence.nextRequiredAction ===
+      PRIORITY_RECOVERY_NEXT_REQUIRED_ACTION.ADVANCE_EXISTING_OPERATION &&
+    evidence.actuationState ===
+      PRIORITY_RECOVERY_ACTUATION_STATE.PERSISTED_NOT_DISPATCHED
+  );
+}
+
+function isPriorityRecoverySerialWaitSourceBlockerWitness(witness) {
+  return (
+    isPriorityRecoveryDirectSourceBlockerWitness(witness) === true ||
+    isPriorityRecoveryActionableWorkflowProgressWitness(witness) === true
+  );
+}
+
 function isPriorityRecoveryTerminalFollowUpCarrierWitness(witness) {
   const evidence = buildPriorityRecoveryDominantWitnessEvidence(witness);
   return (
@@ -695,7 +716,7 @@ function resolveSerialWaitSourceDirectBlockerRankDelta(left, right) {
   if (
     leftPartitionId &&
     rightPartitionId &&
-    isPriorityRecoveryDirectSourceBlockerWitness(left) === true &&
+    isPriorityRecoverySerialWaitSourceBlockerWitness(left) === true &&
     isPriorityRecoverySupportingSerialWaitCarrierWitness(right) === true &&
     normalizeDistinctStringArray(right?.serialWaitPartitionIds)
       .includes(leftPartitionId)
@@ -706,7 +727,7 @@ function resolveSerialWaitSourceDirectBlockerRankDelta(left, right) {
     leftPartitionId &&
     rightPartitionId &&
     isPriorityRecoverySupportingSerialWaitCarrierWitness(left) === true &&
-    isPriorityRecoveryDirectSourceBlockerWitness(right) === true &&
+    isPriorityRecoverySerialWaitSourceBlockerWitness(right) === true &&
     normalizeDistinctStringArray(left?.serialWaitPartitionIds)
       .includes(rightPartitionId)
   ) {

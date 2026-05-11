@@ -9,6 +9,7 @@ import {
   PRIORITY_RECOVERY_NEXT_REQUIRED_ACTION,
   PRIORITY_RECOVERY_SEMANTIC_STATE,
   PRIORITY_RECOVERY_WAIT_MODE,
+  PRIORITY_RECOVERY_WORKFLOW_PROGRESS_PHASE,
 } from '../../src/control-plane/priority-recovery-diagnostics-constants.js';
 import {
   OPERATION_WORKFLOW_EFFECT_COMMAND_VALUES,
@@ -28,6 +29,8 @@ const {
 
 const TEST_ENTITY_TYPE_PARTITION = 'partition';
 const TEST_OPERATION_ID = 'priority-dispatch-pending-timeout-operation';
+const TEST_SERIAL_WAIT_OPERATION_ID =
+  'priority-dispatch-pending-serial-wait-operation';
 const TEST_OPERATION_TYPE_REPLACE = OperationType.REPLACE;
 const TEST_PARTITION_ID = 'sql_write_operations-p1';
 const TEST_LOCAL_OWNER_PARTITION_ID = 'control_plane_publications-p1';
@@ -72,6 +75,12 @@ const TEST_READY_ELIGIBLE_NODE_COUNT = 2;
 const TEST_TIMELINE_LENGTH = 1;
 const TEST_TIMELINE_STEP_COUNT = 1;
 const TEST_EMPTY_LIST = Object.freeze([]);
+const TEST_SERIAL_WAIT_OPERATION_IDS = Object.freeze([
+  TEST_SERIAL_WAIT_OPERATION_ID,
+]);
+const TEST_SERIAL_WAIT_PARTITION_IDS = Object.freeze([
+  TEST_LOCAL_OWNER_PARTITION_ID,
+]);
 const TEST_REPLICA_OPERATIONS_TABLE = 'replica_operations';
 const TEST_SERVICES_TABLE = 'services';
 const TEST_QUERY_REPLICA_OPERATIONS_FRAGMENT = 'FROM replica_operations';
@@ -137,6 +146,56 @@ function buildDispatchPendingReentryPlanningSnapshot() {
         }),
       ]),
       readyEligibleNodeCount: TEST_READY_ELIGIBLE_NODE_COUNT,
+    }),
+  });
+}
+
+function buildSerialWaitSourceOperationContext() {
+  return Object.freeze({
+    operationId: TEST_SERIAL_WAIT_OPERATION_ID,
+    partitionId: TEST_LOCAL_OWNER_PARTITION_ID,
+    type: TEST_OPERATION_TYPE_REPLACE,
+    status: TEST_STATUS_PENDING,
+    workflowStep: TEST_STEP_PENDING,
+    sourceNodeId: TEST_SOURCE_NODE_ID,
+    targetNodeId: TEST_TARGET_NODE_ID,
+    replicaId: TEST_LOCAL_OWNER_REPLICA_ID,
+    createdAtMs: TEST_OPERATION_CREATED_AT_MS,
+    updatedAtMs: TEST_OPERATION_CREATED_AT_MS,
+    stepTimeoutMs: TEST_STEP_TIMEOUT_MS,
+    timelineLength: TEST_TIMELINE_LENGTH,
+    timelineStepCount: TEST_TIMELINE_STEP_COUNT,
+    latestTimelineStep: TEST_STEP_PENDING,
+    latestTimelineStatus: TEST_STATUS_PENDING,
+    latestTimelineInFlight: true,
+  });
+}
+
+function buildSerialWaitReentryPlanningSnapshot() {
+  const planningSnapshot = buildDispatchPendingReentryPlanningSnapshot();
+  const serialWaitSnapshot = buildPriorityRecoveryDecisionSnapshot({
+    partitionId: TEST_PARTITION_ID,
+    capturedAt: TEST_CAPTURED_AT_MS,
+    publicationEpoch: TEST_PUBLICATION_EPOCH,
+    publicationConvergence: planningSnapshot,
+    priorityPartitionSummary: planningSnapshot.priorityPartitionSummary,
+    operationId: TEST_OPERATION_ID,
+    operationContexts: TEST_EMPTY_LIST,
+    serialLaneOperationContexts: Object.freeze([
+      buildSerialWaitSourceOperationContext(),
+    ]),
+    stepTimeoutMsByWorkflowStep: {
+      [TEST_STEP_PENDING]: TEST_STEP_TIMEOUT_MS,
+    },
+  });
+  return Object.freeze({
+    ...planningSnapshot,
+    priorityRecoveryDecisionSnapshots: Object.freeze({
+      schemaVersion: NUM.ONE,
+      capturedAt: TEST_CAPTURED_AT_MS,
+      publicationEpoch: TEST_PUBLICATION_EPOCH,
+      priorityPartitionSummary: planningSnapshot.priorityPartitionSummary,
+      snapshots: Object.freeze([serialWaitSnapshot]),
     }),
   });
 }
@@ -1009,6 +1068,197 @@ async (t) => {
       operationRow.status,
       TEST_STATUS_PENDING,
       TEST_ASSERT_SNAPSHOT_REENTRY_PRESERVES_PENDING,
+    );
+  } finally {
+    Date.now = originalDateNow;
+    await coordinator.shutdown();
+  }
+});
+
+test('priority recovery snapshots re-enter serial-wait PENDING rows through ' +
+  'the workflow owner',
+async (t) => {
+  const deliveries = [];
+  const deferredTimers = [];
+  let nowMs = TEST_CAPTURED_AT_MS;
+  const originalDateNow = Date.now;
+  Date.now = () => nowMs;
+  const operationRow = {
+    operation_id: TEST_OPERATION_ID,
+    type: TEST_OPERATION_TYPE_REPLACE,
+    partition_id: TEST_PARTITION_ID,
+    replica_id: TEST_REPLICA_ID,
+    source_node_id: TEST_SOURCE_NODE_ID,
+    target_node_id: TEST_TARGET_NODE_ID,
+    status: TEST_STATUS_PENDING,
+    workflow_step: TEST_STEP_PENDING,
+    created_at: TEST_OPERATION_CREATED_AT_MS,
+    updated_at: TEST_OPERATION_CREATED_AT_MS,
+    completed_at: TEST_EMPTY_VALUE,
+    error_message: TEST_EMPTY_VALUE,
+    steps_history: JSON.stringify(TEST_EMPTY_LIST),
+    entity_type: TEST_ENTITY_TYPE_PARTITION,
+    entity_id: TEST_PARTITION_ID,
+  };
+
+  const sqlQueryEngine = {
+    async executeQuery(sql, params = []) {
+      const normalizedSql = String(sql);
+      if (
+        normalizedSql.includes(TEST_QUERY_REPLICA_OPERATIONS_FRAGMENT) &&
+        normalizedSql.includes('WHERE operation_id = ?')
+      ) {
+        const operationId = params[NUM.ZERO];
+        return {
+          success: true,
+          rows: operationId === TEST_OPERATION_ID ? [{...operationRow}] : [],
+          affectedRows:
+            operationId === TEST_OPERATION_ID ? NUM.ONE : NUM.ZERO,
+        };
+      }
+      if (normalizedSql.includes(TEST_QUERY_REPLICA_OPERATIONS_FRAGMENT)) {
+        return {
+          success: true,
+          rows: [{...operationRow}],
+          affectedRows: NUM.ONE,
+        };
+      }
+      if (normalizedSql.includes(TEST_QUERY_SERVICES_FRAGMENT)) {
+        return {
+          success: true,
+          rows: [],
+          affectedRows: NUM.ZERO,
+        };
+      }
+      return {
+        success: true,
+        rows: [],
+        affectedRows: NUM.ZERO,
+      };
+    },
+  };
+
+  const coordinator = createCoordinator({
+    nodeId: TEST_OBSERVER_NODE_ID,
+    sqlQueryEngine,
+    transactionCoordinator: buildTransactionCoordinator(),
+    systemTableCache: {
+      get() {
+        return null;
+      },
+      getAll() {
+        return [];
+      },
+      filter() {
+        return [];
+      },
+    },
+    cdcIntegrationService: {
+      async waitForCacheUpdate() {},
+    },
+    controlPlaneReadinessService: {
+      getPriorityRecoveryPlanningSnapshotBestEffort() {
+        return buildSerialWaitReentryPlanningSnapshot();
+      },
+      getNodeReadinessSync(nodeId) {
+        return {
+          nodeId,
+          dimensions: {
+            controlPlaneRecoveryEligible: true,
+            repairEligible: true,
+            serveEligible: true,
+          },
+        };
+      },
+    },
+    messageRouter: {
+      async deliver(target, payload, options) {
+        deliveries.push({target, payload, options});
+        return {acknowledged: true, status: TEST_DELIVERY_STATUS_INITIATED};
+      },
+    },
+    tablePolicyService: {
+      async getPolicyForPartition() {
+        return {minReplicaCount: TEST_MIN_REPLICA_COUNT};
+      },
+    },
+    setTimeoutFn(fn, delayMs) {
+      const handle = {fn, delayMs};
+      deferredTimers.push(handle);
+      return handle;
+    },
+    clearTimeoutFn() {},
+    enableTimeouts: false,
+  });
+
+  try {
+    coordinator.initialize();
+    const operation = coordinator.repository.rowToOperation(operationRow);
+    coordinator.workflowOwner.repository
+      .getOperationsByEntityAuthoritativeObservation = async () => {
+        return Object.freeze({
+          state: 'present',
+          operationCount: NUM.ONE,
+          operations: Object.freeze([operation]),
+          deferredOutcome: null,
+          retryAfterMs: null,
+        });
+      };
+
+    const snapshot =
+      await coordinator.workflowOwner
+        .getPriorityRecoveryDecisionSnapshotForPartitionOperations(
+          TEST_PARTITION_ID,
+          TEST_EMPTY_LIST,
+        );
+    await new Promise((resolve) => {
+      setTimeout(resolve, TEST_MICROTASK_DELAY_MS);
+    });
+
+    t.same(
+      snapshot?.blockerReasons,
+      TEST_EMPTY_LIST,
+      'serial-wait PENDING rows with durable operation evidence should clear the stale serial blocker',
+    );
+    t.equal(
+      snapshot?.semanticState,
+      PRIORITY_RECOVERY_SEMANTIC_STATE.RECOVERING_IN_FLIGHT,
+      'serial-wait PENDING rows should be classified as in-flight workflow progress',
+    );
+    t.equal(
+      snapshot?.progress?.workflowProgressPhaseId,
+      PRIORITY_RECOVERY_WORKFLOW_PROGRESS_PHASE.DISPATCH_PENDING,
+      'serial-wait PENDING rows should enter the dispatch-pending workflow phase',
+    );
+    t.equal(
+      snapshot?.progress?.nextRequiredAction,
+      PRIORITY_RECOVERY_NEXT_REQUIRED_ACTION.ADVANCE_EXISTING_OPERATION,
+      'serial-wait PENDING rows should surface owner advancement',
+    );
+    t.same(
+      snapshot?.coordinator?.serialWaitOperationIds,
+      TEST_SERIAL_WAIT_OPERATION_IDS,
+      'serial-wait PENDING rows should retain the source operation witness',
+    );
+    t.same(
+      snapshot?.coordinator?.serialWaitPartitionIds,
+      TEST_SERIAL_WAIT_PARTITION_IDS,
+      'serial-wait PENDING rows should retain the source partition witness',
+    );
+    t.equal(
+      deliveries.length,
+      NUM.ONE,
+      'serial-wait PENDING rows should wake the remote operation owner once',
+    );
+    t.equal(
+      deliveries[NUM.ZERO]?.target,
+      TEST_REPLICA_DISPATCH_TARGET,
+      'serial-wait re-entry should use the canonical remote replica-dispatch ingress',
+    );
+    t.equal(
+      deferredTimers.length,
+      NUM.ONE,
+      'serial-wait re-entry should arm one verification retry',
     );
   } finally {
     Date.now = originalDateNow;

@@ -38,6 +38,8 @@ const SERIAL_WAIT_METADATA_TEST_NAME =
   'serial wait operation metadata survives progress summary normalization';
 const SERIAL_WAIT_SOURCE_BLOCKER_TEST_NAME =
   'direct source blockers outrank supporting serial-wait carriers';
+const SERIAL_WAIT_SOURCE_PROGRESS_TEST_NAME =
+  'actionable source workflow progress outranks supporting serial-wait carriers';
 const TERMINAL_FOLLOW_UP_CARRIER_TEST_NAME =
   'direct workflow blockers outrank terminal rebalancer follow-up carriers';
 const OPERATION_SCHEDULING_PARTITION_ID = 'replica_operations-p1';
@@ -53,6 +55,8 @@ const TERMINAL_FOLLOW_UP_CARRIER_PARTITION_ID = 'sql_write_operations-p1';
 const SERIAL_WAIT_BLOCKING_OPERATION_ID = 'op-serial-wait-owner';
 const SERIAL_WAIT_SOURCE_BLOCKER_OPERATION_ID =
   'op-serial-wait-source-direct-blocker';
+const SERIAL_WAIT_SOURCE_PROGRESS_OPERATION_ID =
+  'op-serial-wait-source-workflow-progress';
 const SERIAL_WAIT_SUPPORTING_CARRIER_OPERATION_ID =
   'op-serial-wait-supporting-carrier';
 const STALE_WORKFLOW_TIMEOUT_OPERATION_ID = 'op-retry-handoff';
@@ -173,6 +177,28 @@ const SERIAL_WAIT_SUPPORTING_CARRIER_WITNESS = Object.freeze({
   lastProgressAtMs: SERIAL_WAIT_SUPPORTING_CARRIER_PROGRESS_AT_MS,
   latestOperationWorkflowStep: 'REMOVED',
   latestOperationStatus: 'removed',
+});
+const SERIAL_WAIT_SOURCE_PROGRESS_WITNESS = Object.freeze({
+  partitionId: SERIAL_WAIT_SOURCE_BLOCKER_PARTITION_ID,
+  semanticStateId: PRIORITY_RECOVERY_SEMANTIC_STATE.RECOVERING_IN_FLIGHT,
+  progressContractState: OWNER_CONTRACT_STATE.PENDING,
+  actuationState: PRIORITY_RECOVERY_ACTUATION_STATE.PERSISTED_NOT_DISPATCHED,
+  currentOwner: PRIORITY_RECOVERY_PROGRESS_OWNER.OPERATION_WORKFLOW_OWNER,
+  actuationOwner: PRIORITY_RECOVERY_PROGRESS_OWNER.OPERATION_WORKFLOW_OWNER,
+  blockingBoundary: PRIORITY_RECOVERY_BLOCKING_BOUNDARY.WORKFLOW_PROGRESS,
+  waitMode: PRIORITY_RECOVERY_WAIT_MODE.EVENT_DRIVEN,
+  nextRequiredAction:
+    PRIORITY_RECOVERY_NEXT_REQUIRED_ACTION.ADVANCE_EXISTING_OPERATION,
+  workflowProgressPhaseId:
+    PRIORITY_RECOVERY_WORKFLOW_PROGRESS_PHASE.DISPATCH_PENDING,
+  operationIds: Object.freeze([SERIAL_WAIT_SOURCE_PROGRESS_OPERATION_ID]),
+  witnessIds: Object.freeze([SERIAL_WAIT_SOURCE_PROGRESS_OPERATION_ID]),
+  correlationKey:
+    SERIAL_WAIT_SOURCE_BLOCKER_PARTITION_ID + '|4|' +
+    SERIAL_WAIT_SOURCE_PROGRESS_OPERATION_ID,
+  lastProgressAtMs: SERIAL_WAIT_SOURCE_BLOCKER_PROGRESS_AT_MS,
+  latestOperationWorkflowStep: WORKFLOW_STEP_PENDING,
+  latestOperationStatus: OPERATION_STATUS_PENDING,
 });
 const OPERATION_SCHEDULING_WITNESS = Object.freeze({
   partitionId: OPERATION_SCHEDULING_PARTITION_ID,
@@ -486,6 +512,40 @@ test(SERIAL_WAIT_SOURCE_BLOCKER_TEST_NAME, () => {
   assert.equal(
     dominantWitness.latestOperationStatus,
     OPERATION_STATUS_PENDING,
+  );
+});
+
+test(SERIAL_WAIT_SOURCE_PROGRESS_TEST_NAME, () => {
+  const progressSummary = buildPriorityRecoveryProgressSummary({
+    priorityRecoveryPartitionWitnesses: Object.freeze([
+      SERIAL_WAIT_SOURCE_PROGRESS_WITNESS,
+      SERIAL_WAIT_SUPPORTING_CARRIER_WITNESS,
+    ]),
+  });
+  const dominantWitness = progressSummary.dominantWitness;
+
+  assert.equal(progressSummary.partitionCount, EXPECTED_PARTITION_COUNT);
+  assert.equal(
+    dominantWitness.partitionId,
+    SERIAL_WAIT_SOURCE_BLOCKER_PARTITION_ID,
+  );
+  assert.deepEqual(dominantWitness.blockerReasonCodes || [], []);
+  assert.deepEqual(
+    dominantWitness.operationIds,
+    [SERIAL_WAIT_SOURCE_PROGRESS_OPERATION_ID],
+  );
+  assert.deepEqual(dominantWitness.serialWaitPartitionIds, []);
+  assert.equal(
+    dominantWitness.nextRequiredAction,
+    PRIORITY_RECOVERY_NEXT_REQUIRED_ACTION.ADVANCE_EXISTING_OPERATION,
+  );
+  assert.equal(
+    dominantWitness.workflowProgressPhaseId,
+    PRIORITY_RECOVERY_WORKFLOW_PROGRESS_PHASE.DISPATCH_PENDING,
+  );
+  assert.equal(
+    dominantWitness.latestOperationWorkflowStep,
+    WORKFLOW_STEP_PENDING,
   );
 });
 

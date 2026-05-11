@@ -24,6 +24,8 @@ trail is:
 8. `test-output/reports/rolling-restart-current-release-gate-after-remote-handoff-retry-stale-fix.report.json`
 9. `test-output/reports/rolling-restart-current-release-gate-after-operation-scheduling-sql-transaction-participants-fix.report.json`
 10. `test-output/reports/rolling-restart-current-release-gate-after-workflow-progress-dispatch-pending-fix.report.json`
+11. `test-output/reports/rolling-restart-current-release-gate-after-workflow-timeout-stale-progress-fix.report.json`
+12. `test-output/reports/rolling-restart-current-release-gate-after-sql-write-serial-wait-fix.report.json`
 
 The matching playback is:
 
@@ -37,48 +39,44 @@ The matching playback is:
 8. `test-output/reports/.playback/rolling-restart-current-release-gate-after-remote-handoff-retry-stale-fix/rolling-restart/`
 9. `test-output/reports/.playback/rolling-restart-current-release-gate-after-operation-scheduling-sql-transaction-participants-fix/rolling-restart/`
 10. `test-output/reports/.playback/rolling-restart-current-release-gate-after-workflow-progress-dispatch-pending-fix/rolling-restart/`
+11. `test-output/reports/.playback/rolling-restart-current-release-gate-after-workflow-timeout-stale-progress-fix/rolling-restart/`
+12. `test-output/reports/.playback/rolling-restart-current-release-gate-after-sql-write-serial-wait-fix/rolling-restart/`
 
 ## Current Blocker Snapshot
 
-Active package:
+Latest package:
 
-1. [Rolling Restart Operation Workflow Timeout Control Plane Publications Stale Progress Reconcile](../packages/done-20260509-rolling-restart-operation-workflow-timeout-control-plane-publications-stale-progress-reconcile.md)
+1. [Rolling Restart Operation Workflow Progress SQL Write Operations Serial Wait](../packages/done-20260511-rolling-restart-operation-workflow-progress-sql-write-operations-serial-wait.md)
 
 Latest representative evidence:
 
 1. Scenario: `rolling-restart`
 2. Report total/passed/failed: `1/0/1`
-3. Duration: approximately `132188ms`
-4. Active gate: failed at `2/5` terminal progress, with best observed progress
-   `3/5`
+3. Duration: approximately `139320ms`
+4. Active gate: failed at `3/5` terminal progress
 5. Snapshot coverage: `3/5`
 6. Publication: `PUBLISHED`
 7. Pending acknowledgements: `0`
-8. Blocked partitions: `control_plane_publications-p1` and
-   `sql_transaction_participants-p1`
+8. Blocked priority recovery partitions: `control_plane_publications-p1`,
+   `replica_operations-p1`, and `sql_write_operations-p1`
 9. Priority recovery invariants: `passed`
 
-The normalized first frontier is
-`operation_workflow_owner / workflow_timeout` with dominant reason
-`priority_recovery_workflow_timeout_transition_deferred`. Startup replay
-contracted the first `PENDING` / `persisted_not_dispatched` blocker, the
-target-creation observed-progress fix contracted the `CREATING` /
-`dispatched_waiting_progress` blocker, dispatch-skip retry contracted the
-timed-out `sql_transactions-p1` persisted-not-dispatched witness, stale
-remote-handoff retry plus participant scheduling removed the
-`operation_workflow_owner / rebalancer_handoff` and
-`sql_transaction_participants-p1` selected witnesses, and the workflow-progress
-dispatch-pending fix moved `sql_write_operations-p1` to
-`spread_satisfied_in_flight`. The fresh dominant witness is
-`control_plane_publications-p1` with operation
-`9cc14694-88ba-47df-9c72-ecc301be8312`, semantic state `operation_stalled`,
-workflow phase `dispatch_pending`, latest step `SENDING`, latest status
-`pending`, actuation state `transition_deferred`, wait mode
-`timeout_reconcile_due`, and next action
-`reconcile_stale_operation_progress`.
+The serial-wait package reduced the prior `operation_workflow_owner /
+workflow_progress` blocker. `priority_recovery_partition_progress` is now
+classified as retryable/non-frontier: `sql_write_operations-p1` is
+`recovering_in_flight`, `persisted_not_dispatched`, `event_driven`, and
+`advance_existing_operation` instead of the stale `needs_operation` /
+`priority_operation_serial_wait` presentation.
 
-`startup_active_gate_owner / snapshot_coverage` remains downstream until the
-priority recovery timeout frontier progresses or migrates.
+The normalized first frontier is now `topology_publication_owner /
+publication_convergence` on edge `publication_ack_convergence`, state `blocked`,
+and dominant reason `publication_published`. The publication snapshot is
+`PUBLISHED` with `pendingAckCount=0`, `blockedNodeCount=0`,
+`missingPublishedCount=2`, `publicationPending=true`,
+`recoveryProtocolState=publication_pending`, and `prioritySpreadPending=true`.
+
+Startup active-gate snapshot coverage remains downstream until publication
+convergence is either green or promoted by fresh representative evidence.
 
 ## Scope Basis
 
@@ -94,16 +92,15 @@ Edition matrix status: Community / AGPL repo.
 
 1. Keep `rolling-restart` as the primary representative release gate until it
    passes or migrates to a new named owner boundary.
-2. The operation-scheduling package is locally closed, and the active
-   workflow-progress successor migrated to `workflow_timeout`; the focused
-   slice is committed and pushed, so the timeout successor owns the current
-   boundary.
-3. Preserve the completed core topology control-plane rewrite as predecessor
+2. The workflow-progress serial-wait package is locally closed. Its
+   representative rerun reduced priority recovery to retryable/non-frontier and
+   migrated the next focused successor to `topology_publication_owner /
+   publication_convergence` on `publication_ack_convergence`.
+3. Preserve the completed priority recovery owner-path packages as predecessor
    proof, not as the current owner.
-4. Keep sustained throughput and 7-node stress confirmation behind the
-   current `rolling-restart` gate until this representative path is green.
-5. Update tracker truth whenever the representative blocker closes or
-   migrates.
+4. Keep sustained throughput and 7-node stress confirmation behind the current
+   `rolling-restart` gate until this representative path is green.
+5. Update tracker truth whenever the representative blocker closes or migrates.
 
 ## Out Of Scope
 
@@ -121,29 +118,33 @@ Edition matrix status: Community / AGPL repo.
 2. Preserve the target-creation observed-progress proof and regression.
 3. Preserve the workflow-progress dispatch-pending fix and representative rerun
    showing `sql_write_operations-p1` as `spread_satisfied_in_flight`.
-4. Keep exactly one active successor package for
-   `operation_workflow_owner / workflow_timeout` and target
-   `reconcile_stale_operation_progress` for operation
-   `9cc14694-88ba-47df-9c72-ecc301be8312`.
-5. Rerun focused owner tests, touched-file static guardrails, and
-   `rolling-restart --fast-local`.
-6. If `rolling-restart` passes, run sustained throughput and 7-node stress
+4. Preserve the workflow-timeout stale-progress fix and representative rerun
+   showing `control_plane_publications-p1` moved off `workflow_timeout`.
+5. Preserve the serial-wait package rerun showing
+   `priority_recovery_partition_progress` reduced to retryable/non-frontier and
+   `publication_ack_convergence` became the first frontier.
+6. Commit and push the focused serial-wait package slice before opening the
+   topology-publication successor.
+7. If `rolling-restart` passes, run sustained throughput and 7-node stress
    confirmation for `0.1`.
 
 ## Validation Ladder
 
-1. `npm run work:package:evidence-block -- test-output/reports/rolling-restart-current-release-gate-after-target-creation-progress-rerun.report.json`
-2. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-current-release-gate-after-target-creation-progress-rerun.report.json --explain priority_recovery_partition_progress`
-3. `npm run work:package:evidence-block -- test-output/reports/rolling-restart-current-release-gate-after-dispatch-skip-retry.report.json`
-4. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-current-release-gate-after-dispatch-skip-retry.report.json --explain priority_recovery_partition_progress`
-5. Focused workflow-progress startup replay, target-creation, dispatch-skip
-   retry, and dispatch-pending timeout re-entry regressions.
-6. Touched-file static guardrails selected by the implementation boundary.
+1. `npm run work:package:evidence-block -- test-output/reports/rolling-restart-current-release-gate-after-workflow-timeout-stale-progress-fix.report.json`
+2. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-current-release-gate-after-workflow-timeout-stale-progress-fix.report.json --explain priority_recovery_partition_progress`
+3. `npm run analyze:distributed-failure -- --report test-output/reports/rolling-restart-current-release-gate-after-workflow-timeout-stale-progress-fix.report.json`
+4. Focused workflow-progress startup replay, target-creation, dispatch-skip
+   retry, dispatch-pending timeout re-entry, serial-wait, and harness summary
+   regressions.
+5. Touched-file static guardrails selected by the implementation boundary.
+6. `npm run work:current-blocker`
 7. `npm run work:validate`
 8. `git diff --check`
 9. Representative `rolling-restart --fast-local` rerun.
-10. Sustained throughput and 7-node stress confirmation after
-   `rolling-restart` passes.
+10. `npm run work:package:evidence-block -- test-output/reports/rolling-restart-current-release-gate-after-sql-write-serial-wait-fix.report.json`
+11. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-current-release-gate-after-sql-write-serial-wait-fix.report.json --explain publication_ack_convergence`
+12. Sustained throughput and 7-node stress confirmation after
+    `rolling-restart` passes.
 
 ## Done When
 
@@ -151,8 +152,9 @@ Edition matrix status: Community / AGPL repo.
    named owner boundary with a focused successor package.
 2. Priority recovery no longer reports stale priority operations without an
    owner dispatch, progress, retry, or timeout-reconcile path.
-3. Startup active-gate snapshot coverage is either green or promoted as the
-   next direct frontier after priority progress closes.
-4. Current-blocker handoff is generated from the active package.
+3. Publication convergence is either green or promoted as the next direct
+   topology-publication package after priority progress reduces.
+4. Current-blocker handoff names the latest representative evidence and next
+   successor package action.
 5. No Phase `0.5`, Phase `1.0`, or paid-edition queue item outranks the active
    `0.1` representative release gate.
