@@ -10,7 +10,7 @@
   "playback": "test-output/reports/.playback/rolling-restart-current-release-gate-after-event-driven-wait-fix/rolling-restart/",
   "owner": "operation_workflow_owner",
   "boundary": "rebalancer_handoff",
-  "dominantReason": "priority_recovery_event_driven_wait",
+  "dominantReason": "priority_recovery_rebalancer_handoff_retry_scheduled",
   "currentState": "The package added owner-lane-held dispatch-pending re-entry coverage and changed priority recovery re-entry scheduling so a held operation-owner lane arms a bounded remote handoff follow-up instead of dropping the wake. Focused tests, touched-file guardrails, work validation, and diff hygiene passed. The representative rolling-restart rerun still failed 0/1, but the first frontier migrated from operation_workflow_owner / workflow_progress to operation_workflow_owner / rebalancer_handoff with dominant source reason priority_recovery_rebalancer_handoff_retry_scheduled for control_plane_publications-p1 and sql_transaction_participants-p1.",
   "nextAction": "Open the next focused package on operation_workflow_owner / rebalancer_handoff to explain, repair, or classify the priority_recovery_rebalancer_handoff_retry_scheduled retry frontier exposed by the event-driven-wait fix.",
   "proof": [

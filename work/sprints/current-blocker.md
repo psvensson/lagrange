@@ -18,7 +18,7 @@ Owner: `operation_workflow_owner`
 
 Boundary: `rebalancer_handoff`
 
-Dominant reason: `priority_recovery_event_driven_wait`
+Dominant reason: `priority_recovery_rebalancer_handoff_retry_scheduled`
 
 Current state: The package added owner-lane-held dispatch-pending re-entry coverage and changed priority recovery re-entry scheduling so a held operation-owner lane arms a bounded remote handoff follow-up instead of dropping the wake. Focused tests, touched-file guardrails, work validation, and diff hygiene passed. The representative rolling-restart rerun still failed 0/1, but the first frontier migrated from operation_workflow_owner / workflow_progress to operation_workflow_owner / rebalancer_handoff with dominant source reason priority_recovery_rebalancer_handoff_retry_scheduled for control_plane_publications-p1 and sql_transaction_participants-p1.
 
