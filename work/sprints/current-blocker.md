@@ -4,79 +4,70 @@
 
 Sprint: `work/sprints/active-2026-q2-spec-led-runtime-modularization-priority-recovery-backpressure-followup.md`
 
-Package: `work/packages/active-20260511-spec-led-runtime-modularization-priority-recovery-backpressure-frontier.md`
+Package: `work/packages/todo-20260509-spec-led-runtime-modularization-active-gate-report-schema-alias-deletion.md`
 
 Scenario: `spec-led-runtime-modularization`
 
-Artifact: `test-output/reports/rolling-restart-spec-led-runtime-modularization-active-gate-snapshot-coverage-publication-lag.report.json`
+Artifact: `test-output/reports/rolling-restart-spec-led-runtime-modularization-final.report.json`
 
-Playback: `test-output/reports/.playback/rolling-restart-spec-led-runtime-modularization-active-gate-snapshot-coverage-publication-lag/rolling-restart/`
+Playback: `none`
 
 ## Boundary
 
-Owner: `operation_workflow_owner`
+Owner: `diagnostics_artifact_schema_owner`
 
-Boundary: `rebalancer_handoff`
+Boundary: `active_gate_report_schema_alias_deletion`
 
-Dominant reason: `priority_recovery_backpressure`
+Dominant reason: `active_gate_report_aliases_remain_external_artifact_contract`
 
-Current state: Publication ACK, diagnostics budget ownership, startup readiness support evidence, and active-gate local ownership are classified. The representative causal model reports classified_backpressure / accept_classified_backpressure for operation_workflow_owner / rebalancer_handoff.
+Current state: Priority recovery backpressure is accepted as classified operational state, so the deferred active-gate report schema alias deletion package is unblocked. Report artifacts still expose activeGateBestProgress, activeGateNoProgress, and activeGateBlockerHistory as external diagnostics schema fields.
 
 ## Next Action
 
-Review the closed active-gate local blocker package, then decide whether priority recovery backpressure is acceptable classified backpressure, reducible operation workflow debt, or a narrower downstream owner boundary.
+Review the closed priority recovery backpressure package, then migrate diagnostics consumers from the camel-case report aliases to the canonical owner-bound activeGate shape and add schema guards that reject the old report aliases after migration.
 
 ## Proof Ladder
 
-1. `npm run work:evidence-summary -- test-output/reports/rolling-restart-spec-led-runtime-modularization-active-gate-snapshot-coverage-publication-lag.report.json`
-2. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-spec-led-runtime-modularization-active-gate-snapshot-coverage-publication-lag.report.json --explain priority_recovery_partition_progress`
-3. `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-spec-led-runtime-modularization-active-gate-snapshot-coverage-publication-lag.report.json`
-4. `Focused priority recovery rebalancer handoff fixture selected after package review`
-5. `Touched-file static guardrails selected by operation_workflow_owner`
-6. `Representative rolling-restart rerun or classification handoff`
+1. `rg checks for activeGateBestProgress, activeGateNoProgress, and activeGateBlockerHistory before and after migration`
+2. `node --test test/diagnostics/topology-convergence-graph.test.js test/scripts/analyze-topology-convergence.test.js test/distributed/harness/__tests__/failure-bundle.test.js`
+3. `Touched-file static guardrails selected by diagnostics_artifact_schema_owner`
+4. `Representative rolling-restart report preserves canonical owner-boundary evidence without old active-gate report aliases`
 
 ## Model Fit
 
-Package class: `representative-frontier-closure`
+Package class: `bounded-implementation`
 
-Intended minimum model: `gpt-5.3-codex`
+Intended minimum model: `gpt-5.3-codex-spark`
 
-Scope shape: `owner-boundary-contraction/cross-boundary-causal-edge`
+Scope shape: `leaf-slice`
 
 Escalation triggers:
 
-1. `proof returns to publication ACK`
-2. `proof returns to diagnostics budget cascade`
-3. `proof returns to startup readiness support evidence`
-4. `proof returns to active-gate local blocker`
-5. `runtime implementation would need Pro or Enterprise features`
+1. `owned files expand outside diagnostics artifact schema surfaces`
+2. `migration requires runtime active-gate behavior changes`
+3. `representative proof reveals a new owner boundary instead of schema aliases`
 
 ## Causal Governance
 
-Causal hypothesis: `With active-gate local ownership classified, priority recovery backpressure should either remain accepted classified backpressure, reduce through operation workflow ownership, or migrate to one narrower owner-boundary blocker.`
+Causal hypothesis: `If active-gate report schema aliases are deleted correctly, diagnostics readers should preserve the same owner-bound active-gate evidence without changing runtime active-gate causal edges.`
 
-Stop-condition check: `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-spec-led-runtime-modularization-active-gate-snapshot-coverage-publication-lag.report.json`
+Stop-condition check: `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-spec-led-runtime-modularization-final.report.json`
 
-Expected causal-model change: `The priority_recovery_backpressure condition remains accepted, disappears, reduces, or migrates to a named downstream owner-boundary blocker; returning to active_gate_local_blocker is contradictory.`
+Expected causal-model change: `The causal model should stay on the same runtime owner boundary while report aliases disappear from diagnostics schema; any runtime owner migration is contradictory for this schema-only package.`
 
 Representative outcome: `pending-before-rerun`
 
-Causal debt: `Do not hide operation workflow backpressure by reopening publication ACK, diagnostics budget, startup readiness, active-gate local ownership, or harness timeouts.`
+Causal debt: `No runtime causal debt is owned here; any runtime blocker exposed by alias deletion must be split into a separate owner-boundary package.`
 
-Cross-boundary review: `Review the closed active-gate local blocker package before activation; this is operation workflow owner work, not active-gate runtime work.`
+Cross-boundary review: `Review the closed priority recovery backpressure package before activation because this package touches diagnostics, failure-bundle, topology-convergence, and active-gate report consumers.`
 
 ## Touched Files
 
-1. `src/control-plane/**/*operation*.js`
-2. `src/control-plane/**/*workflow*.js`
-3. `src/control-plane/**/*rebalance*.js`
-4. `src/diagnostics/*causal*.js`
-5. `src/diagnostics/*topology*.js`
-6. `test/control-plane/**/*operation*.test.js`
-7. `test/control-plane/**/*workflow*.test.js`
-8. `test/control-plane/**/*rebalance*.test.js`
-9. `test/diagnostics/*causal*.test.js`
-10. `test/diagnostics/*topology*.test.js`
-11. `test-output/reports/rolling-restart-spec-led-runtime-modularization-active-gate-snapshot-coverage-publication-lag.report.json`
-12. `work/packages/active-20260511-spec-led-runtime-modularization-priority-recovery-backpressure-frontier.md`
-13. `work/sprints/active-2026-q2-spec-led-runtime-modularization-priority-recovery-backpressure-followup.md`
+1. `src/diagnostics/topology-convergence-graph.js`
+2. `scripts/analyze-topology-convergence.js`
+3. `test/distributed/harness/active-gate-contract.js`
+4. `test/distributed/harness/failure-bundle-segment-4.js`
+5. `test/distributed/harness/__tests__/failure-bundle*.js`
+6. `test/diagnostics/topology-convergence-graph.test.js`
+7. `test/scripts/analyze-topology-convergence.test.js`
+8. `work/packages/todo-20260509-spec-led-runtime-modularization-active-gate-report-schema-alias-deletion.md`

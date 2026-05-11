@@ -12,7 +12,7 @@
   "boundary": "active_gate_report_schema_alias_deletion",
   "dominantReason": "active_gate_report_aliases_remain_external_artifact_contract",
   "currentState": "The final legacy deletion slice removed legacy helper entrypoints and stability-gate aliases, but report artifacts still expose activeGateBestProgress, activeGateNoProgress, and activeGateBlockerHistory as external diagnostics schema fields consumed by failure-bundle and topology-convergence readers.",
-  "nextAction": "Define the successor active-gate diagnostics schema owner, migrate consumers from the camel-case report aliases to the canonical owner-bound activeGate shape, and add schema guards that reject the old report aliases after migration.",
+  "nextAction": "Review the closed priority recovery backpressure package, then define the successor active-gate diagnostics schema owner, migrate consumers from the camel-case report aliases to the canonical owner-bound activeGate shape, and add schema guards that reject the old report aliases after migration.",
   "proof": [
     "rg checks for activeGateBestProgress, activeGateNoProgress, and activeGateBlockerHistory before and after migration",
     "node --test test/diagnostics/topology-convergence-graph.test.js test/scripts/analyze-topology-convergence.test.js test/distributed/harness/__tests__/failure-bundle.test.js",
@@ -45,9 +45,9 @@
     "expectedCausalModelChange": "The causal model should stay on the same runtime owner boundary while report aliases disappear from diagnostics schema; any runtime owner migration is contradictory for this schema-only package.",
     "representativeOutcome": "pending-before-rerun",
     "causalDebt": "No runtime causal debt is owned here; any runtime blocker exposed by alias deletion must be split into a separate owner-boundary package.",
-    "crossBoundaryReview": "Required before activation because this package touches diagnostics, failure-bundle, topology-convergence, and active-gate report consumers."
+    "crossBoundaryReview": "Review the closed priority recovery backpressure package before activation because this package touches diagnostics, failure-bundle, topology-convergence, and active-gate report consumers."
   },
-  "predecessor": "work/packages/done-20260509-spec-led-runtime-modularization-legacy-deletion-proof.md"
+  "predecessor": "work/packages/done-20260511-spec-led-runtime-modularization-priority-recovery-backpressure-frontier.md"
 }
 -->
 

@@ -3,7 +3,7 @@
 <!-- work-package
 {
   "schema": "work-package-v1",
-  "status": "active",
+  "status": "done",
   "opened": "2026-05-11",
   "scenario": "spec-led-runtime-modularization",
   "artifact": "test-output/reports/rolling-restart-spec-led-runtime-modularization-active-gate-snapshot-coverage-publication-lag.report.json",
@@ -12,7 +12,7 @@
   "boundary": "rebalancer_handoff",
   "dominantReason": "priority_recovery_backpressure",
   "currentState": "Publication ACK, diagnostics budget ownership, startup readiness support evidence, and active-gate local ownership are classified. The representative causal model reports classified_backpressure / accept_classified_backpressure for operation_workflow_owner / rebalancer_handoff.",
-  "nextAction": "Review the closed active-gate local blocker package, then decide whether priority recovery backpressure is acceptable classified backpressure, reducible operation workflow debt, or a narrower downstream owner boundary.",
+  "nextAction": "Priority recovery backpressure is accepted as classified operational state; active-gate report schema alias deletion is unblocked as the next package.",
   "proof": [
     "npm run work:evidence-summary -- test-output/reports/rolling-restart-spec-led-runtime-modularization-active-gate-snapshot-coverage-publication-lag.report.json",
     "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-spec-led-runtime-modularization-active-gate-snapshot-coverage-publication-lag.report.json --explain priority_recovery_partition_progress",
@@ -33,7 +33,7 @@
     "test/diagnostics/*causal*.test.js",
     "test/diagnostics/*topology*.test.js",
     "test-output/reports/rolling-restart-spec-led-runtime-modularization-active-gate-snapshot-coverage-publication-lag.report.json",
-    "work/packages/active-20260511-spec-led-runtime-modularization-priority-recovery-backpressure-frontier.md",
+    "work/packages/done-20260511-spec-led-runtime-modularization-priority-recovery-backpressure-frontier.md",
     "work/sprints/active-2026-q2-spec-led-runtime-modularization-priority-recovery-backpressure-followup.md"
   ],
   "modelFit": {
@@ -148,3 +148,26 @@ Evidence run summary:
 - No touched runtime files: this package is classification-only; no source code was modified.
 - `npm run work:model-ledger -- record ...` recorded the same-frontier
   classification experience.
+
+## Classification Closure
+
+- Closed blocker: `priority_recovery_backpressure`.
+- Closed semantic owner: `operation_workflow_owner`.
+- Closed boundary: `rebalancer_handoff`.
+- Causal stop condition: `classified_backpressure`.
+- Causal outcome: `accept_classified_backpressure`.
+- Closure reason: the evidence shows priority recovery partitions are in flight
+  with event-driven waits and retry scheduling; this is accepted operational
+  backpressure, not a reducible runtime ownership gap.
+- Preserved invariants: publication ACK convergence remains closed; diagnostics
+  budget ownership remains classified; startup readiness support evidence
+  remains inherited active-gate no-progress evidence; active-gate local ownership
+  remains classified; no harness timeout changes occurred.
+- Next package:
+  `work/packages/todo-20260509-spec-led-runtime-modularization-active-gate-report-schema-alias-deletion.md`.
+
+## Commit And Push Ledger
+
+1. Focused package commit: `96d2838c`
+2. Pushed to: `origin/codex/pending-ack-eligibility-filter`
+3. Commit contains only package-owned files/package-status/allowed sprint handoff: yes

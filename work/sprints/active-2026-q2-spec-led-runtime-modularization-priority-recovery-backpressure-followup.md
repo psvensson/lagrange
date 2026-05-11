@@ -8,18 +8,19 @@ handoff boundary.
 ## Current Blocker Snapshot
 
 Current package:
-`work/packages/active-20260511-spec-led-runtime-modularization-priority-recovery-backpressure-frontier.md`.
+`work/packages/todo-20260509-spec-led-runtime-modularization-active-gate-report-schema-alias-deletion.md`.
 
 Owner boundary:
-`operation_workflow_owner / rebalancer_handoff`.
+`diagnostics_artifact_schema_owner / active_gate_report_schema_alias_deletion`.
 
 Latest representative evidence:
-`test-output/reports/rolling-restart-spec-led-runtime-modularization-active-gate-snapshot-coverage-publication-lag.report.json`.
+`test-output/reports/rolling-restart-spec-led-runtime-modularization-final.report.json`.
 
-The representative causal model reports `classified_backpressure /
-accept_classified_backpressure` with reason `priority_recovery_backpressure`.
-Publication ACK, diagnostics budget ownership, startup readiness support
-evidence, and active-gate local ownership are closed as predecessor concerns.
+Priority recovery backpressure is accepted as classified operational state, so
+the deferred diagnostics artifact schema cleanup is unblocked. Publication ACK,
+diagnostics budget ownership, startup readiness support evidence, active-gate
+local ownership, and priority recovery backpressure are closed as predecessor
+concerns.
 
 ## Scope Basis
 
@@ -33,14 +34,14 @@ evidence, and active-gate local ownership are closed as predecessor concerns.
 
 ## Package Queue
 
-1. [Priority Recovery Backpressure Frontier](../packages/active-20260511-spec-led-runtime-modularization-priority-recovery-backpressure-frontier.md)
+1. [Priority Recovery Backpressure Frontier](../packages/done-20260511-spec-led-runtime-modularization-priority-recovery-backpressure-frontier.md)
 2. [Active Gate Report Schema Alias Deletion](../packages/todo-20260509-spec-led-runtime-modularization-active-gate-report-schema-alias-deletion.md)
 
 ## Activation Rules
 
 1. Review the closed active-gate local blocker package before activating the
    successor.
-2. Keep active-gate report schema alias deletion deferred until the priority
+2. Active-gate report schema alias deletion is unblocked because the priority
    recovery backpressure frontier is classified.
 3. Do not reopen publication ACK, diagnostics budget, startup readiness support,
    active-gate local ownership, or harness timeouts unless focused proof shows a
@@ -49,11 +50,9 @@ evidence, and active-gate local ownership are closed as predecessor concerns.
 
 ## Exit Criteria
 
-1. Representative rolling-restart proof is green, accepted as classified
-   backpressure with a durable owner contract, or migrates to one fresh
-   owner-boundary package with a canonical evidence block.
-2. The priority recovery backpressure package is closed, superseded with a named
-   replacement, or explicitly deferred with proof.
+1. Representative rolling-restart proof is accepted as classified backpressure
+   with a durable owner contract.
+2. The priority recovery backpressure package is closed.
 3. Companion diagnostics cleanup remains deferred unless the representative
    proof gate is classified.
 4. No Pro or Enterprise feature work enters this sprint.
