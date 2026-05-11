@@ -4,7 +4,7 @@
 
 Sprint: `work/sprints/active-2026-q2-phase-0-1-rolling-restart-release-gate-closure.md`
 
-Package: `work/packages/active-20260511-rolling-restart-operation-workflow-rebalancer-handoff-retry-scheduled.md`
+Package: `work/packages/done-20260511-rolling-restart-operation-workflow-rebalancer-handoff-retry-scheduled.md`
 
 Scenario: `rolling-restart`
 
@@ -24,7 +24,7 @@ Current state: The implementation classified active coordinator-created remote h
 
 ## Next Action
 
-Parent session should close or migrate this rebalancer-handoff package, then open or activate the next workflow-progress event-driven priority recovery package for the migrated representative frontier.
+Open or activate the next workflow-progress event-driven priority recovery package for the migrated representative frontier.
 
 ## Proof Ladder
 
@@ -66,7 +66,7 @@ Cross-boundary review: `completed-before-package-open; predecessor review found 
 1. `src/rebalancer/operation-workflow-owner-segment-7-stage-5.js`
 2. `src/rebalancer/operation-workflow-owner.js`
 3. `test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js`
-4. `work/packages/active-20260511-rolling-restart-operation-workflow-rebalancer-handoff-retry-scheduled.md`
+4. `work/packages/done-20260511-rolling-restart-operation-workflow-rebalancer-handoff-retry-scheduled.md`
 5. `work/packages/done-20260511-rolling-restart-operation-workflow-progress-event-driven-wait.md`
 6. `work/sprints/active-2026-q2-phase-0-1-rolling-restart-release-gate-closure.md`
 7. `work/sprints/current-blocker.json`

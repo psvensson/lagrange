@@ -3,7 +3,7 @@
 <!-- work-package
 {
   "schema": "work-package-v1",
-  "status": "active",
+  "status": "done",
   "opened": "2026-05-11",
   "scenario": "rolling-restart",
   "artifact": "test-output/reports/rolling-restart-current-release-gate-after-rebalancer-handoff-fix.report.json",
@@ -12,7 +12,7 @@
   "boundary": "workflow_progress",
   "dominantReason": "priority_recovery_workflow_progress_event_driven",
   "currentState": "The implementation classified active coordinator-created remote handoff retry timers as bounded owner-internal retry state instead of reclassifying otherwise event-driven dispatch-pending priority recovery snapshots to rebalancer_handoff. The representative rolling-restart rerun still fails 0/1, but the first frontier migrated from operation_workflow_owner / rebalancer_handoff to operation_workflow_owner / workflow_progress with dominant source reason priority_recovery_workflow_progress_event_driven, recovering_in_flight, blocked partitions control_plane_publications-p1, replica_operations-p1, sql_transaction_participants-p1, sql_transactions-p1, and sql_write_operations-p1, active progress 2/5, and snapshot coverage 2/5.",
-  "nextAction": "Parent session should close or migrate this rebalancer-handoff package, then open or activate the next workflow-progress event-driven priority recovery package for the migrated representative frontier.",
+  "nextAction": "Open or activate the next workflow-progress event-driven priority recovery package for the migrated representative frontier.",
   "proof": [
     "npm run work:package:evidence-block -- test-output/reports/rolling-restart-current-release-gate-after-rebalancer-handoff-fix.report.json",
     "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-current-release-gate-after-rebalancer-handoff-fix.report.json --explain priority_recovery_partition_progress",
@@ -23,7 +23,7 @@
     "src/rebalancer/operation-workflow-owner-segment-7-stage-5.js",
     "src/rebalancer/operation-workflow-owner.js",
     "test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js",
-    "work/packages/active-20260511-rolling-restart-operation-workflow-rebalancer-handoff-retry-scheduled.md",
+    "work/packages/done-20260511-rolling-restart-operation-workflow-rebalancer-handoff-retry-scheduled.md",
     "work/packages/done-20260511-rolling-restart-operation-workflow-progress-event-driven-wait.md",
     "work/sprints/active-2026-q2-phase-0-1-rolling-restart-release-gate-closure.md",
     "work/sprints/current-blocker.json",
@@ -48,7 +48,10 @@
     "causalDebt": "The remote handoff retry scheduling seam is reduced to bounded owner-internal retry state; remaining rolling-restart debt migrated back to operation_workflow_owner / workflow_progress event-driven priority recovery progress.",
     "crossBoundaryReview": "completed-before-package-open; predecessor review found metadata fixes that were fixed and pushed before this package opened."
   },
-  "predecessor": "work/packages/done-20260511-rolling-restart-operation-workflow-progress-event-driven-wait.md"
+  "predecessor": "work/packages/done-20260511-rolling-restart-operation-workflow-progress-event-driven-wait.md",
+  "closed": "2026-05-11",
+  "commitAndPushLedgerRequired": true,
+  "successor": "work/packages/todo-20260511-rolling-restart-operation-workflow-progress-event-driven-priority-recovery.md"
 }
 -->
 
@@ -211,7 +214,7 @@ Forbidden reinterpretations:
       `work/packages/done-20260511-rolling-restart-operation-workflow-progress-event-driven-wait.md`.
 - [x] Implementation subagent recorded:
       Agent copilot-cli-implementation (`19990eef-56e9-4705-b3bb-0fe702c62cf7`) implemented
-      `work/packages/active-20260511-rolling-restart-operation-workflow-rebalancer-handoff-retry-scheduled.md`.
+      `work/packages/done-20260511-rolling-restart-operation-workflow-rebalancer-handoff-retry-scheduled.md`.
 
 ## Static Drift Ledger
 
@@ -238,6 +241,12 @@ Closure:
 4. Representative rerun migrated the first frontier to
    `operation_workflow_owner / workflow_progress` with
    `priority_recovery_workflow_progress_event_driven`.
+
+## Commit And Push Ledger
+
+1. Focused package commit: `7198e5d3c175e931a213bb6fa0b247b5a8f999c7`
+2. Pushed to: `origin/codex/pending-ack-eligibility-filter`
+3. Commit contains only package-owned files/package-status/allowed sprint handoff: yes
 
 ## Validation
 
@@ -297,7 +306,7 @@ Validation results:
    `dominantFailureClass=priority_recovery_event_wait`.
 9. Tracker and diff hygiene passed:
    `npm run work:current-blocker`,
-   `npm run work:validate -- --all`, `npm run work:package:doctor -- work/packages/active-20260511-rolling-restart-operation-workflow-rebalancer-handoff-retry-scheduled.md`,
+   `npm run work:validate -- --all`, `npm run work:package:doctor -- work/packages/done-20260511-rolling-restart-operation-workflow-rebalancer-handoff-retry-scheduled.md`,
    and `git diff --check`.
 
 ## Done When
