@@ -3,4 +3,4 @@
 # Current Blocker
 
 No active sprint is currently selected. The next todo sprint is
-`work/sprints/todo-2026-q2-spec-led-runtime-modularization-active-gate-followup.md`.
+`work/sprints/todo-2026-q2-spec-led-runtime-modularization-budget-cascade-followup.md`.
