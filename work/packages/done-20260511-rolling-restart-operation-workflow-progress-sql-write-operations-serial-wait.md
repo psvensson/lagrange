@@ -57,7 +57,8 @@
     "crossBoundaryReview": "Required before opening the topology_publication_owner successor because the representative rerun migrated from priority recovery workflow progress to publication acknowledgement convergence."
   },
   "predecessor": "work/packages/done-20260509-rolling-restart-operation-workflow-timeout-control-plane-publications-stale-progress-reconcile.md",
-  "closed": "2026-05-11"
+  "closed": "2026-05-11",
+  "commitAndPushLedgerRequired": true
 }
 -->
 
@@ -313,3 +314,8 @@ Validation notes:
    pass.
 5. The final branch records a truthful Commit And Push Ledger for this focused
    package slice.
+## Commit And Push Ledger
+
+- Focused package commit: `de19bffb`
+- Pushed to: `origin/codex/pending-ack-eligibility-filter`
+- Commit contains only package-owned files/package-status/allowed sprint handoff: `yes`
