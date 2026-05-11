@@ -3,7 +3,7 @@
 <!-- work-package
 {
   "schema": "work-package-v1",
-  "status": "active",
+  "status": "done",
   "opened": "2026-05-11",
   "scenario": "rolling-restart",
   "artifact": "test-output/reports/rolling-restart-current-release-gate-after-publication-convergence-fix-v2.report.json",
@@ -26,7 +26,7 @@
     "npm run work:package:evidence-block -- test-output/reports/rolling-restart-current-release-gate-after-publication-convergence-fix-v2.report.json",
     "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-current-release-gate-after-publication-convergence-fix-v2.report.json --explain publication_ack_convergence",
     "npm run analyze:distributed-failure -- --report test-output/reports/rolling-restart-current-release-gate-after-publication-convergence-fix-v2.report.json",
-    "npm run work:model-ledger -- record --package work/packages/active-20260511-rolling-restart-topology-publication-convergence-published-pending.md --model gpt-5.3-codex --reasoning-effort high --task-class implementation --package-class representative-frontier-closure --intended-minimum-model gpt-5.3-codex --scope-shape owner-boundary-contraction/cross-boundary-causal-edge --escalated false --bailout-reason none --outcome migrated --validation-status passed --correction-loops 2 --review-findings 0 --notes ...",
+    "npm run work:model-ledger -- record --package work/packages/done-20260511-rolling-restart-topology-publication-convergence-published-pending.md --model gpt-5.3-codex --reasoning-effort high --task-class implementation --package-class representative-frontier-closure --intended-minimum-model gpt-5.3-codex --scope-shape owner-boundary-contraction/cross-boundary-causal-edge --escalated false --bailout-reason none --outcome migrated --validation-status passed --correction-loops 2 --review-findings 0 --notes ...",
     "npm run work:current-blocker",
     "npm run work:validate",
     "git diff --check"
@@ -34,7 +34,7 @@
   "touchedFiles": [
     "test/distributed/harness/failure-bundle-segment-4.js",
     "test/distributed/harness/__tests__/failure-bundle-core-10-test-cases.js",
-    "work/packages/active-20260511-rolling-restart-topology-publication-convergence-published-pending.md",
+    "work/packages/done-20260511-rolling-restart-topology-publication-convergence-published-pending.md",
     "work/sprints/active-2026-q2-phase-0-1-rolling-restart-release-gate-closure.md",
     "work/sprints/current-blocker.json",
     "work/sprints/current-blocker.md",
@@ -58,7 +58,10 @@
     "causalDebt": "Publication ACK convergence is satisfied/non-frontier in the closure rerun; the remaining rolling-restart debt belongs to operation_workflow_owner / workflow_progress and must be opened as a successor package before implementation continues.",
     "crossBoundaryReview": "Required before implementing the successor because the representative rerun migrated from topology_publication_owner / publication_convergence back to operation_workflow_owner / workflow_progress."
   },
-  "predecessor": "work/packages/done-20260511-rolling-restart-operation-workflow-progress-sql-write-operations-serial-wait.md"
+  "predecessor": "work/packages/done-20260511-rolling-restart-operation-workflow-progress-sql-write-operations-serial-wait.md",
+  "closed": "2026-05-11",
+  "commitAndPushLedgerRequired": true,
+  "successor": "work/packages/todo-20260511-rolling-restart-operation-workflow-progress-event-driven-wait.md"
 }
 -->
 
@@ -202,7 +205,7 @@ Forbidden reinterpretations:
       `work/packages/done-20260511-rolling-restart-operation-workflow-progress-sql-write-operations-serial-wait.md`.
 - [x] Implementation subagent recorded:
       Agent publication-implement (`019e0c09-38af-755d-9722-3665e5f7fd81`) implemented
-      `work/packages/active-20260511-rolling-restart-topology-publication-convergence-published-pending.md`.
+      `work/packages/done-20260511-rolling-restart-topology-publication-convergence-published-pending.md`.
 
 ## Static Drift Ledger
 
@@ -226,6 +229,12 @@ Closure:
    `publication_ack_convergence` to retryable
    `priority_recovery_partition_progress` under
    `operation_workflow_owner / workflow_progress`.
+
+## Commit And Push Ledger
+
+1. Focused package commit: `fe7ae399`
+2. Pushed to: `origin/codex/pending-ack-eligibility-filter`
+3. Commit contains only package-owned files/package-status/allowed sprint handoff: yes
 
 ## Validation
 

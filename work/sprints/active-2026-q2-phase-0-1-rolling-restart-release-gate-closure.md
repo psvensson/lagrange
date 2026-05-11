@@ -48,7 +48,7 @@ The matching playback is:
 
 Latest package:
 
-1. [Rolling Restart Topology Publication Convergence Published Pending](../packages/active-20260511-rolling-restart-topology-publication-convergence-published-pending.md)
+1. [Rolling Restart Topology Publication Convergence Published Pending](../packages/done-20260511-rolling-restart-topology-publication-convergence-published-pending.md)
 
 Latest representative evidence:
 
@@ -96,10 +96,10 @@ Edition matrix status: Community / AGPL repo.
 
 1. Keep `rolling-restart` as the primary representative release gate until it
    passes or migrates to a new named owner boundary.
-2. The workflow-progress serial-wait package is locally closed. Its
-   representative rerun reduced priority recovery to retryable/non-frontier and
-   migrated the next focused successor to `topology_publication_owner /
-   publication_convergence` on `publication_ack_convergence`.
+2. The publication-convergence package is locally closed. Its representative
+   rerun reduced `publication_ack_convergence` to satisfied/non-frontier and
+   migrated the next focused successor back to `operation_workflow_owner /
+   workflow_progress` on `priority_recovery_partition_progress`.
 3. Preserve the completed priority recovery owner-path packages as predecessor
    proof, not as the current owner.
 4. Keep sustained throughput and 7-node stress confirmation behind the current
@@ -130,7 +130,7 @@ Edition matrix status: Community / AGPL repo.
 6. Preserve the publication-convergence package rerun showing
    `publication_ack_convergence` satisfied/non-frontier and the representative
    migrated to retryable operation workflow progress.
-7. Commit and push the focused publication-convergence package slice before
+7. Close and push the focused publication-convergence package metadata before
    opening the operation-workflow successor.
 8. If `rolling-restart` passes, run sustained throughput and 7-node stress
    confirmation for `0.1`.

@@ -4,7 +4,7 @@
 
 Sprint: `work/sprints/active-2026-q2-phase-0-1-rolling-restart-release-gate-closure.md`
 
-Package: `work/packages/active-20260511-rolling-restart-topology-publication-convergence-published-pending.md`
+Package: `work/packages/done-20260511-rolling-restart-topology-publication-convergence-published-pending.md`
 
 Scenario: `rolling-restart`
 
@@ -24,7 +24,7 @@ Current state: The publication convergence package fixed failure-bundle classifi
 
 ## Next Action
 
-Commit and push this focused publication-convergence slice, then open the next focused package on operation_workflow_owner / workflow_progress for the priority_recovery_event_driven_wait retryable frontier.
+Open the next focused package on operation_workflow_owner / workflow_progress for the priority_recovery_event_driven_wait retryable frontier.
 
 ## Proof Ladder
 
@@ -40,7 +40,7 @@ Commit and push this focused publication-convergence slice, then open the next f
 10. `npm run work:package:evidence-block -- test-output/reports/rolling-restart-current-release-gate-after-publication-convergence-fix-v2.report.json`
 11. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-current-release-gate-after-publication-convergence-fix-v2.report.json --explain publication_ack_convergence`
 12. `npm run analyze:distributed-failure -- --report test-output/reports/rolling-restart-current-release-gate-after-publication-convergence-fix-v2.report.json`
-13. `npm run work:model-ledger -- record --package work/packages/active-20260511-rolling-restart-topology-publication-convergence-published-pending.md --model gpt-5.3-codex --reasoning-effort high --task-class implementation --package-class representative-frontier-closure --intended-minimum-model gpt-5.3-codex --scope-shape owner-boundary-contraction/cross-boundary-causal-edge --escalated false --bailout-reason none --outcome migrated --validation-status passed --correction-loops 2 --review-findings 0 --notes ...`
+13. `npm run work:model-ledger -- record --package work/packages/done-20260511-rolling-restart-topology-publication-convergence-published-pending.md --model gpt-5.3-codex --reasoning-effort high --task-class implementation --package-class representative-frontier-closure --intended-minimum-model gpt-5.3-codex --scope-shape owner-boundary-contraction/cross-boundary-causal-edge --escalated false --bailout-reason none --outcome migrated --validation-status passed --correction-loops 2 --review-findings 0 --notes ...`
 14. `npm run work:current-blocker`
 15. `npm run work:validate`
 16. `git diff --check`
@@ -77,7 +77,7 @@ Cross-boundary review: `Required before implementing the successor because the r
 
 1. `test/distributed/harness/failure-bundle-segment-4.js`
 2. `test/distributed/harness/__tests__/failure-bundle-core-10-test-cases.js`
-3. `work/packages/active-20260511-rolling-restart-topology-publication-convergence-published-pending.md`
+3. `work/packages/done-20260511-rolling-restart-topology-publication-convergence-published-pending.md`
 4. `work/sprints/active-2026-q2-phase-0-1-rolling-restart-release-gate-closure.md`
 5. `work/sprints/current-blocker.json`
 6. `work/sprints/current-blocker.md`

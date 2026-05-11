@@ -2,8 +2,8 @@
   "schema": "current-blocker-v1",
   "generatedBy": "scripts/work-tracker.js",
   "sprint": "work/sprints/active-2026-q2-phase-0-1-rolling-restart-release-gate-closure.md",
-  "package": "work/packages/active-20260511-rolling-restart-topology-publication-convergence-published-pending.md",
-  "status": "active",
+  "package": "work/packages/done-20260511-rolling-restart-topology-publication-convergence-published-pending.md",
+  "status": "done",
   "scenario": "rolling-restart",
   "artifact": "test-output/reports/rolling-restart-current-release-gate-after-publication-convergence-fix-v2.report.json",
   "playback": "test-output/reports/.playback/rolling-restart-current-release-gate-after-publication-convergence-fix-v2/rolling-restart/",
@@ -11,7 +11,7 @@
   "boundary": "workflow_progress",
   "dominantReason": "priority_recovery_event_driven_wait",
   "currentState": "The publication convergence package fixed failure-bundle classification so PUBLISHED publication evidence with pendingAckCount=0, blockedNodeCount=0, prioritySpreadPending=true, and no canonical missing-active publication debt no longer fronts as publication ACK convergence. The representative rolling-restart rerun still failed 0/1, but publication_ack_convergence is satisfied/non-frontier with publicationPending=false and recoveryProtocolState=priority_spread_pending. The first frontier migrated to priority_recovery_partition_progress under operation_workflow_owner / workflow_progress, state retryable, dominant reason priority_recovery_event_driven_wait, with sql_write_operations-p1 recovering_in_flight, persisted_not_dispatched, event_driven, and advance_existing_operation.",
-  "nextAction": "Commit and push this focused publication-convergence slice, then open the next focused package on operation_workflow_owner / workflow_progress for the priority_recovery_event_driven_wait retryable frontier.",
+  "nextAction": "Open the next focused package on operation_workflow_owner / workflow_progress for the priority_recovery_event_driven_wait retryable frontier.",
   "proof": [
     "npm run work:package:evidence-block -- test-output/reports/rolling-restart-current-release-gate-after-sql-write-serial-wait-fix.report.json",
     "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-current-release-gate-after-sql-write-serial-wait-fix.report.json --explain publication_ack_convergence",
@@ -25,7 +25,7 @@
     "npm run work:package:evidence-block -- test-output/reports/rolling-restart-current-release-gate-after-publication-convergence-fix-v2.report.json",
     "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-current-release-gate-after-publication-convergence-fix-v2.report.json --explain publication_ack_convergence",
     "npm run analyze:distributed-failure -- --report test-output/reports/rolling-restart-current-release-gate-after-publication-convergence-fix-v2.report.json",
-    "npm run work:model-ledger -- record --package work/packages/active-20260511-rolling-restart-topology-publication-convergence-published-pending.md --model gpt-5.3-codex --reasoning-effort high --task-class implementation --package-class representative-frontier-closure --intended-minimum-model gpt-5.3-codex --scope-shape owner-boundary-contraction/cross-boundary-causal-edge --escalated false --bailout-reason none --outcome migrated --validation-status passed --correction-loops 2 --review-findings 0 --notes ...",
+    "npm run work:model-ledger -- record --package work/packages/done-20260511-rolling-restart-topology-publication-convergence-published-pending.md --model gpt-5.3-codex --reasoning-effort high --task-class implementation --package-class representative-frontier-closure --intended-minimum-model gpt-5.3-codex --scope-shape owner-boundary-contraction/cross-boundary-causal-edge --escalated false --bailout-reason none --outcome migrated --validation-status passed --correction-loops 2 --review-findings 0 --notes ...",
     "npm run work:current-blocker",
     "npm run work:validate",
     "git diff --check"
@@ -33,7 +33,7 @@
   "touchedFiles": [
     "test/distributed/harness/failure-bundle-segment-4.js",
     "test/distributed/harness/__tests__/failure-bundle-core-10-test-cases.js",
-    "work/packages/active-20260511-rolling-restart-topology-publication-convergence-published-pending.md",
+    "work/packages/done-20260511-rolling-restart-topology-publication-convergence-published-pending.md",
     "work/sprints/active-2026-q2-phase-0-1-rolling-restart-release-gate-closure.md",
     "work/sprints/current-blocker.json",
     "work/sprints/current-blocker.md",
