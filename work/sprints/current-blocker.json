@@ -27,13 +27,13 @@
     "npm run work:package:evidence-block -- test-output/reports/rolling-restart-current-release-gate-after-event-driven-wait-fix.report.json",
     "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-current-release-gate-after-event-driven-wait-fix.report.json --explain priority_recovery_partition_progress",
     "npm run analyze:distributed-failure -- --report test-output/reports/rolling-restart-current-release-gate-after-event-driven-wait-fix.report.json",
-    "npm run work:model-ledger -- record --package work/packages/active-20260511-rolling-restart-operation-workflow-progress-event-driven-wait.md --model gpt-5.3-codex --reasoning-effort high --task-class implementation --package-class representative-frontier-closure --intended-minimum-model gpt-5.3-codex --scope-shape owner-boundary-contraction/cross-boundary-causal-edge --escalated false --bailout-reason none --outcome migrated --validation-status passed --correction-loops 1 --review-findings 0 --notes ..."
+    "Model ledger reconciliation: work/model-ledger.jsonl entry recorded at 2026-05-11T16:34:28.696Z was captured before package closure/rename and belongs to this closed package without rewriting historical ledger rows."
   ],
   "touchedFiles": [
     "src/rebalancer/operation-workflow-owner-segment-7-stage-5.js",
     "src/rebalancer/operation-workflow-owner.js",
     "test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js",
-    "work/packages/active-20260511-rolling-restart-operation-workflow-progress-event-driven-wait.md",
+    "work/packages/done-20260511-rolling-restart-operation-workflow-progress-event-driven-wait.md",
     "work/sprints/active-2026-q2-phase-0-1-rolling-restart-release-gate-closure.md",
     "work/sprints/current-blocker.json",
     "work/sprints/current-blocker.md",

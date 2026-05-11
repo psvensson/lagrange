@@ -28,7 +28,7 @@
     "npm run work:package:evidence-block -- test-output/reports/rolling-restart-current-release-gate-after-event-driven-wait-fix.report.json",
     "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-current-release-gate-after-event-driven-wait-fix.report.json --explain priority_recovery_partition_progress",
     "npm run analyze:distributed-failure -- --report test-output/reports/rolling-restart-current-release-gate-after-event-driven-wait-fix.report.json",
-    "npm run work:model-ledger -- record --package work/packages/done-20260511-rolling-restart-operation-workflow-progress-event-driven-wait.md --model gpt-5.3-codex --reasoning-effort high --task-class implementation --package-class representative-frontier-closure --intended-minimum-model gpt-5.3-codex --scope-shape owner-boundary-contraction/cross-boundary-causal-edge --escalated false --bailout-reason none --outcome migrated --validation-status passed --correction-loops 1 --review-findings 0 --notes ..."
+    "Model ledger reconciliation: work/model-ledger.jsonl entry recorded at 2026-05-11T16:34:28.696Z was captured before package closure/rename and belongs to this closed package without rewriting historical ledger rows."
   ],
   "touchedFiles": [
     "src/rebalancer/operation-workflow-owner-segment-7-stage-5.js",
@@ -292,6 +292,9 @@ Required implementation validation:
 6. Closure distributed-failure analysis reports active progress `3/5`, snapshot
    coverage `2/5`, priority recovery `needs_operation|recovering_in_flight`,
    and dominant reason `priority_recovery_rebalancer_handoff_retry_scheduled`.
+7. Model ledger evidence at `2026-05-11T16:34:28.696Z` was recorded before
+   package closure/rename and remains the historical ledger row for this closed
+   package; it was not rewritten.
 
 ## Done When
 
