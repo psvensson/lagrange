@@ -3,7 +3,7 @@
 <!-- work-package
 {
   "schema": "work-package-v1",
-  "status": "active",
+  "status": "done",
   "opened": "2026-05-11",
   "scenario": "spec-led-runtime-modularization",
   "artifact": "test-output/reports/rolling-restart-spec-led-runtime-modularization-active-gate-snapshot-coverage-publication-lag.report.json",
@@ -36,8 +36,8 @@
     "test/diagnostics/*topology*.test.js",
     "test/scripts/work-tracker-subagent-ledger.test.js",
     "test-output/reports/rolling-restart-spec-led-runtime-modularization-active-gate-snapshot-coverage-publication-lag.report.json",
-    "work/packages/active-20260511-spec-led-runtime-modularization-active-gate-local-blocker-frontier.md",
-    "work/sprints/active-2026-q2-spec-led-runtime-modularization-active-gate-local-followup.md"
+    "work/packages/done-20260511-spec-led-runtime-modularization-active-gate-local-blocker-frontier.md",
+    "work/sprints/archived/done-2026-q2-spec-led-runtime-modularization-active-gate-local-followup.md"
   ],
   "modelFit": {
     "packageClass": "representative-frontier-closure",
@@ -134,9 +134,6 @@ rebalancer_handoff` instead of presenting as a local active-gate blocker.
 - Representative outcome: migrated from `startup_active_gate_owner /
   snapshot_coverage` to `operation_workflow_owner / rebalancer_handoff` with
   stop condition `classified_backpressure`.
-- Implementation identity requested by parent session:
-  `Agent implement-9e8f6a42 (implement-9e8f6a42) implemented work/packages/active-20260511-spec-led-runtime-modularization-active-gate-local-blocker-frontier.md.`
-
 ## Validation Notes
 
 - `node --test test/diagnostics/topology-convergence-graph.test.js test/diagnostics/failure-class-taxonomy.test.js test/diagnostics/stop-condition-decision.test.js`
@@ -162,3 +159,29 @@ rebalancer_handoff` instead of presenting as a local active-gate blocker.
   `priority_recovery_partition_progress`, owner `operation_workflow_owner`,
   boundary `rebalancer_handoff`, and causal outcome
   `accept_classified_backpressure`.
+
+## Failure Migration / Contraction
+
+- Closed blocker: `active_gate_local_blocker`.
+- Closed semantic owner: `startup_active_gate_owner`.
+- Closed boundary: `snapshot_coverage`.
+- Migrated blocker: `priority_recovery_backpressure`.
+- Current semantic owner: `operation_workflow_owner`.
+- Current boundary: `rebalancer_handoff`.
+- Causal stop condition: `classified_backpressure`.
+- Causal outcome: `accept_classified_backpressure`.
+- Migration reason: priority recovery is retryable/in flight and is now the
+  first frontier; active-gate snapshot coverage is dependent downstream evidence
+  rather than local active-gate ownership.
+- Preserved invariants: publication ACK convergence remains closed; diagnostics
+  budget ownership remains classified; startup readiness support evidence
+  remains inherited active-gate no-progress evidence; no harness timeout changes
+  occurred.
+- Successor package:
+  `work/packages/todo-20260511-spec-led-runtime-modularization-priority-recovery-backpressure-frontier.md`.
+
+## Commit And Push Ledger
+
+1. Focused package commit: `9f47865d`
+2. Pushed to: `origin/codex/pending-ack-eligibility-filter`
+3. Commit contains only package-owned files/package-status/allowed sprint handoff: yes

@@ -1,9 +1,10 @@
+# Spec-Led Runtime Modularization Priority Recovery Backpressure Frontier
+
+<!-- work-package
 {
-  "schema": "current-blocker-v1",
-  "generatedBy": "scripts/work-tracker.js",
-  "sprint": "work/sprints/todo-2026-q2-spec-led-runtime-modularization-priority-recovery-backpressure-followup.md",
-  "package": "work/packages/todo-20260511-spec-led-runtime-modularization-priority-recovery-backpressure-frontier.md",
+  "schema": "work-package-v1",
   "status": "todo",
+  "opened": "2026-05-11",
   "scenario": "spec-led-runtime-modularization",
   "artifact": "test-output/reports/rolling-restart-spec-led-runtime-modularization-active-gate-snapshot-coverage-publication-lag.report.json",
   "playback": "test-output/reports/.playback/rolling-restart-spec-led-runtime-modularization-active-gate-snapshot-coverage-publication-lag/rolling-restart/",
@@ -57,3 +58,54 @@
   },
   "predecessor": "work/packages/done-20260511-spec-led-runtime-modularization-active-gate-local-blocker-frontier.md"
 }
+-->
+
+## Why
+
+The active-gate local blocker is classified. Priority recovery remains
+retryable/in flight, so the representative causal model now accepts classified
+backpressure at `operation_workflow_owner / rebalancer_handoff` instead of
+presenting active-gate snapshot coverage as local ownership.
+
+## Generated Evidence Snapshot
+
+- Topology frontier: `priority_recovery_partition_progress`.
+- Current semantic owner: `operation_workflow_owner`.
+- Current boundary: `rebalancer_handoff`.
+- Causal stop condition: `classified_backpressure`.
+- Causal outcome: `accept_classified_backpressure`.
+- Causal reason: `priority_recovery_backpressure`.
+- Frozen closures: publication ACK convergence, diagnostics budget ownership,
+  startup readiness support evidence, and active-gate local blocker.
+
+## Model Fit
+
+- Package class: `representative-frontier-closure`
+- Intended minimum model: `gpt-5.3-codex`
+- Scope shape: `owner-boundary-contraction/cross-boundary-causal-edge`
+- Owned files: operation workflow/rebalancer handoff owner files, focused
+  operation workflow tests, diagnostics causal/topology consumers if the
+  classified backpressure contract changes, representative evidence notes, and
+  current-blocker files.
+- Forbidden files: publication ACK runtime, diagnostics budget accounting,
+  startup readiness runtime, active-gate runtime, harness timeout configuration,
+  Pro or Enterprise surfaces.
+- Frozen decisions: publication ACK convergence is closed; diagnostics budget
+  ownership is classified; startup readiness support evidence is inherited
+  active-gate no-progress evidence; active-gate local ownership is classified.
+- Escalation triggers: proof returns to publication ACK, diagnostics budget,
+  startup readiness support evidence, active-gate local blocker, or runtime
+  implementation would need Pro or Enterprise features.
+- Focused proof: evidence summary, topology explain for
+  `priority_recovery_partition_progress`, causal-model output, focused operation
+  workflow/rebalancer tests, touched-file lint and guardrails, work validation,
+  package doctor, and `git diff --check`.
+
+## Activation Notes
+
+1. Run the mandatory predecessor review on the closed active-gate local blocker
+   package.
+2. Activate only after any review fixes are committed and pushed.
+3. Do not reopen publication ACK, diagnostics budget, startup readiness support,
+   active-gate local ownership, or harness timeouts before this package reduces
+   or migrates priority recovery backpressure evidence.

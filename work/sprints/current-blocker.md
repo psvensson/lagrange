@@ -2,9 +2,9 @@
 
 # Current Blocker
 
-Sprint: `work/sprints/active-2026-q2-spec-led-runtime-modularization-active-gate-local-followup.md`
+Sprint: `work/sprints/todo-2026-q2-spec-led-runtime-modularization-priority-recovery-backpressure-followup.md`
 
-Package: `work/packages/active-20260511-spec-led-runtime-modularization-active-gate-local-blocker-frontier.md`
+Package: `work/packages/todo-20260511-spec-led-runtime-modularization-priority-recovery-backpressure-frontier.md`
 
 Scenario: `spec-led-runtime-modularization`
 
@@ -20,19 +20,19 @@ Boundary: `rebalancer_handoff`
 
 Dominant reason: `priority_recovery_backpressure`
 
-Current state: Publication ACK, diagnostics budget ownership, startup readiness support evidence, and the active-gate local blocker are classified. The representative causal model now reports classified_backpressure / accept_classified_backpressure for operation_workflow_owner / rebalancer_handoff.
+Current state: Publication ACK, diagnostics budget ownership, startup readiness support evidence, and active-gate local ownership are classified. The representative causal model reports classified_backpressure / accept_classified_backpressure for operation_workflow_owner / rebalancer_handoff.
 
 ## Next Action
 
-Carry the migrated priority recovery backpressure evidence into the next owner-boundary package; do not reopen publication ACK, diagnostics budget, startup readiness support, or active-gate local ownership unless fresh proof shows a regression.
+Review the closed active-gate local blocker package, then decide whether priority recovery backpressure is acceptable classified backpressure, reducible operation workflow debt, or a narrower downstream owner boundary.
 
 ## Proof Ladder
 
 1. `npm run work:evidence-summary -- test-output/reports/rolling-restart-spec-led-runtime-modularization-active-gate-snapshot-coverage-publication-lag.report.json`
 2. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-spec-led-runtime-modularization-active-gate-snapshot-coverage-publication-lag.report.json --explain priority_recovery_partition_progress`
 3. `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-spec-led-runtime-modularization-active-gate-snapshot-coverage-publication-lag.report.json`
-4. `Focused startup active-gate local blocker fixture selected after package review`
-5. `Touched-file static guardrails selected by startup_active_gate_owner`
+4. `Focused priority recovery rebalancer handoff fixture selected after package review`
+5. `Touched-file static guardrails selected by operation_workflow_owner`
 6. `Representative rolling-restart rerun or classification handoff`
 
 ## Model Fit
@@ -45,40 +45,38 @@ Scope shape: `owner-boundary-contraction/cross-boundary-causal-edge`
 
 Escalation triggers:
 
-1. `causal stop condition no longer reports classified_local_blocker`
-2. `proof returns to startup_readiness_owner startup_support_evidence`
-3. `proof returns to diagnostics_owner budget_timeout_cascade`
-4. `runtime implementation would need Pro or Enterprise features`
+1. `proof returns to publication ACK`
+2. `proof returns to diagnostics budget cascade`
+3. `proof returns to startup readiness support evidence`
+4. `proof returns to active-gate local blocker`
+5. `runtime implementation would need Pro or Enterprise features`
 
 ## Causal Governance
 
-Causal hypothesis: `With publication ACK, budget ownership, and readiness support evidence classified, startup active-gate ownership should either reduce snapshot coverage or migrate to one narrower owner-boundary blocker.`
+Causal hypothesis: `With active-gate local ownership classified, priority recovery backpressure should either remain accepted classified backpressure, reduce through operation workflow ownership, or migrate to one narrower owner-boundary blocker.`
 
 Stop-condition check: `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-spec-led-runtime-modularization-active-gate-snapshot-coverage-publication-lag.report.json`
 
-Expected causal-model change: `The active_gate_local_blocker disappears, reduces, or migrates to a named downstream owner-boundary blocker; same-frontier without reduced active-gate evidence is contradictory.`
+Expected causal-model change: `The priority_recovery_backpressure condition remains accepted, disappears, reduces, or migrates to a named downstream owner-boundary blocker; returning to active_gate_local_blocker is contradictory.`
 
-Representative outcome: `migrated`
+Representative outcome: `pending-before-rerun`
 
-Causal debt: `Do not hide active-gate local blocker evidence by reopening publication ACK, budget cascade, readiness support, or harness timeouts.`
+Causal debt: `Do not hide operation workflow backpressure by reopening publication ACK, diagnostics budget, startup readiness, active-gate local ownership, or harness timeouts.`
 
-Cross-boundary review: `Review the closed startup-readiness package before activation; this is startup active-gate owner work, not readiness or diagnostics budget work.`
+Cross-boundary review: `Review the closed active-gate local blocker package before activation; this is operation workflow owner work, not active-gate runtime work.`
 
 ## Touched Files
 
-1. `src/bootstrap/**/*.js`
-2. `src/control-plane/*active-gate*.js`
-3. `src/diagnostics/*causal*.js`
-4. `src/diagnostics/failure-class-taxonomy.js`
+1. `src/control-plane/**/*operation*.js`
+2. `src/control-plane/**/*workflow*.js`
+3. `src/control-plane/**/*rebalance*.js`
+4. `src/diagnostics/*causal*.js`
 5. `src/diagnostics/*topology*.js`
-6. `scripts/work-tracker.js`
-7. `test/bootstrap/**/*.test.js`
-8. `test/control-plane/*active-gate*.test.js`
+6. `test/control-plane/**/*operation*.test.js`
+7. `test/control-plane/**/*workflow*.test.js`
+8. `test/control-plane/**/*rebalance*.test.js`
 9. `test/diagnostics/*causal*.test.js`
-10. `test/diagnostics/failure-class-taxonomy.test.js`
-11. `test/diagnostics/stop-condition-decision.test.js`
-12. `test/diagnostics/*topology*.test.js`
-13. `test/scripts/work-tracker-subagent-ledger.test.js`
-14. `test-output/reports/rolling-restart-spec-led-runtime-modularization-active-gate-snapshot-coverage-publication-lag.report.json`
-15. `work/packages/active-20260511-spec-led-runtime-modularization-active-gate-local-blocker-frontier.md`
-16. `work/sprints/active-2026-q2-spec-led-runtime-modularization-active-gate-local-followup.md`
+10. `test/diagnostics/*topology*.test.js`
+11. `test-output/reports/rolling-restart-spec-led-runtime-modularization-active-gate-snapshot-coverage-publication-lag.report.json`
+12. `work/packages/todo-20260511-spec-led-runtime-modularization-priority-recovery-backpressure-frontier.md`
+13. `work/sprints/todo-2026-q2-spec-led-runtime-modularization-priority-recovery-backpressure-followup.md`
