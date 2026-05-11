@@ -33,6 +33,7 @@
     "test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js",
     "test/distributed/harness/priority-recovery-summary-normalization.js",
     "test/distributed/harness/__tests__/priority-recovery-summary-normalization.test.js",
+    "work/model-ledger.jsonl",
     "work/packages/done-20260511-rolling-restart-operation-workflow-progress-sql-write-operations-serial-wait.md",
     "work/sprints/active-2026-q2-phase-0-1-rolling-restart-release-gate-closure.md",
     "work/sprints/current-blocker.json",
@@ -128,8 +129,8 @@ Edition matrix status: Community / AGPL repo.
 - Intended minimum model: `gpt-5.3-codex`
 - Scope shape: `owner-boundary-contraction/cross-boundary-causal-edge`
 - Owned files: focused rebalancer regression, priority recovery summary
-  normalization, summary normalization regression, this package file, and
-  tracker handoff files.
+  normalization, summary normalization regression, model-ledger evidence record,
+  this package file, and tracker handoff files.
 - Forbidden files: startup active-gate owner implementation, harness timeout
   configuration, unrelated archived rolling-restart packages, Pro or Enterprise
   surfaces, and publication-convergence runtime repair.

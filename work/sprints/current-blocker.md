@@ -76,7 +76,8 @@ Cross-boundary review: `Required before opening the topology_publication_owner s
 1. `test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js`
 2. `test/distributed/harness/priority-recovery-summary-normalization.js`
 3. `test/distributed/harness/__tests__/priority-recovery-summary-normalization.test.js`
-4. `work/packages/done-20260511-rolling-restart-operation-workflow-progress-sql-write-operations-serial-wait.md`
-5. `work/sprints/active-2026-q2-phase-0-1-rolling-restart-release-gate-closure.md`
-6. `work/sprints/current-blocker.json`
-7. `work/sprints/current-blocker.md`
+4. `work/model-ledger.jsonl`
+5. `work/packages/done-20260511-rolling-restart-operation-workflow-progress-sql-write-operations-serial-wait.md`
+6. `work/sprints/active-2026-q2-phase-0-1-rolling-restart-release-gate-closure.md`
+7. `work/sprints/current-blocker.json`
+8. `work/sprints/current-blocker.md`
