@@ -88,6 +88,11 @@ const BUDGET_STATE = Object.freeze({
   UNBOUNDED: 'unbounded',
 });
 
+const BUDGET_OWNERSHIP_STATE = Object.freeze({
+  CLASSIFIED: 'classified',
+  UNCLASSIFIED: 'unclassified',
+});
+
 const INVARIANT_KIND = Object.freeze({
   NODE_COUNT_BOUNDS: 'node_count_bounds',
   SNAPSHOT_COVERAGE_BOUNDS: 'snapshot_coverage_bounds',
@@ -278,6 +283,7 @@ function buildCausalAnalysisSchema() {
     dependencyKinds: glossaryEntries(DEPENDENCY_KIND),
     budgetKinds: glossaryEntries(BUDGET_KIND),
     budgetStates: glossaryEntries(BUDGET_STATE),
+    budgetOwnershipStates: glossaryEntries(BUDGET_OWNERSHIP_STATE),
     invariantKinds: glossaryEntries(INVARIANT_KIND),
     invariantStates: glossaryEntries(INVARIANT_STATE),
     reportOutcomes: glossaryEntries(REPORT_OUTCOME),
@@ -422,6 +428,7 @@ export {
   DEPENDENCY_KIND,
   BUDGET_KIND,
   BUDGET_STATE,
+  BUDGET_OWNERSHIP_STATE,
   INVARIANT_KIND,
   INVARIANT_STATE,
   REPORT_OUTCOME,

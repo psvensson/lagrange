@@ -1,24 +1,26 @@
 # Spec-Led Runtime Modularization Budget Cascade Follow-Up Sprint
 
-Status: todo. This successor sprint follows the active-gate post-publication-ACK
+Status: active. This successor sprint follows the active-gate post-publication-ACK
 classification after causal analysis identified the remaining representative
 blocker as architecture-analysis budget timeout cascade debt.
 
 ## Current Blocker Snapshot
 
 Current package:
-`work/packages/todo-20260511-spec-led-runtime-modularization-budget-timeout-cascade-architecture-analysis.md`.
+`work/packages/active-20260511-spec-led-runtime-modularization-budget-timeout-cascade-architecture-analysis.md`.
 
 Owner boundary:
-`diagnostics_owner / budget_timeout_cascade`.
+`diagnostics_owner / budget_timeout_cascade` reduced to successor handoff
+`startup_readiness_owner / startup_support_evidence`.
 
 Latest representative evidence:
 `test-output/reports/rolling-restart-spec-led-runtime-modularization-active-gate-snapshot-coverage-publication-lag.report.json`.
 
 The representative topology symptom remains `active_gate_snapshot_coverage`
-under `startup_active_gate_owner / snapshot_coverage`, but causal analysis
-classifies the stop condition as `architecture_gap / widen_architecture_work`
-with reason `budget_timeout_cascade`.
+under `startup_active_gate_owner / snapshot_coverage`. After budget ownership
+classification, causal analysis reports `owner_boundary_migration /
+migrate_owner_boundary` with reason `startup_readiness_boundary`; the
+diagnostics-owned `budget_timeout_cascade` architecture gap is reduced.
 
 ## Scope Basis
 
@@ -32,13 +34,14 @@ with reason `budget_timeout_cascade`.
 
 ## Package Queue
 
-1. [Budget Timeout Cascade Architecture Analysis](../packages/todo-20260511-spec-led-runtime-modularization-budget-timeout-cascade-architecture-analysis.md)
+1. [Budget Timeout Cascade Architecture Analysis](../packages/active-20260511-spec-led-runtime-modularization-budget-timeout-cascade-architecture-analysis.md)
 2. [Active Gate Report Schema Alias Deletion](../packages/todo-20260509-spec-led-runtime-modularization-active-gate-report-schema-alias-deletion.md)
 
 ## Activation Rules
 
-1. Review the closed active-gate post-publication-ACK package before activating
-   the successor.
+1. Review of the closed active-gate post-publication-ACK package found one stale
+   tracker sentence; the separate fix subagent corrected it before successor
+   activation.
 2. Keep active-gate report schema alias deletion deferred until the budget
    timeout cascade architecture-analysis package is classified.
 3. Do not reopen publication ACK convergence or startup active-gate runtime work

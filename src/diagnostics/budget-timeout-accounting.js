@@ -5,7 +5,10 @@ import {
   ZERO_COUNT,
   BUDGET_KIND,
   BUDGET_STATE,
+  BUDGET_OWNERSHIP_STATE,
   REPORT_OUTCOME,
+  OWNER,
+  BOUNDARY,
   asRecord,
   finiteOrAbsent,
   textOrUnknown,
@@ -15,8 +18,16 @@ import {normalizeCausalInput} from './causal-graph-builder.js';
 const ERROR_TIMEOUT_PATTERN = /within (\d+)ms/u;
 const CASCADE_REASON_ACTIVE_GATE_EXHAUSTED = 'active_gate_timeout_exhausted';
 const CASCADE_REASON_WORKFLOW_STEP_NEAR_LIMIT = 'workflow_step_near_timeout';
+const CASCADE_REASON_WORKFLOW_STEP_UNKNOWN = 'workflow_step_timeout_unknown';
 const CASCADE_REASON_UNBOUNDED_ATTEMPTS = 'active_gate_attempts_unbounded';
 const CASCADE_REASON_UNKNOWN_READINESS_WINDOW = 'readiness_retry_window_unknown';
+const NEXT_ACTION_INSPECT_SCENARIO_BUDGET = 'inspect_scenario_timeout_budget';
+const NEXT_ACTION_REDUCE_ACTIVE_GATE_BUDGET =
+  'reduce_startup_active_gate_budget_contract';
+const NEXT_ACTION_REDUCE_WORKFLOW_BUDGET =
+  'reduce_operation_workflow_step_timeout_contract';
+const NEXT_ACTION_REDUCE_READINESS_BUDGET =
+  'reduce_startup_readiness_retry_window_contract';
 const EVIDENCE_PATH_SCENARIO_DURATION = 'scenario.duration';
 const EVIDENCE_PATH_REPORT_SUMMARY_DURATION = 'reportSummary.duration';
 const EVIDENCE_PATH_SUMMARY_DURATION = 'summary.duration';
@@ -34,6 +45,38 @@ const RATIO_FULL = 1;
 const ONE_COUNT = 1;
 const BUDGET_EVIDENCE_PRESENT = 'present';
 const BUDGET_EVIDENCE_ABSENT = ABSENT_VALUE;
+const BUDGET_OWNERSHIP_RULES = Object.freeze({
+  [BUDGET_KIND.SCENARIO_DURATION]: Object.freeze({
+    owner: OWNER.DIAGNOSTICS,
+    boundary: BOUNDARY.CAUSAL_ANALYSIS,
+    nextRequiredAction: NEXT_ACTION_INSPECT_SCENARIO_BUDGET,
+  }),
+  [BUDGET_KIND.ACTIVE_GATE_TIMEOUT]: Object.freeze({
+    owner: OWNER.ACTIVE_GATE,
+    boundary: BOUNDARY.SNAPSHOT_COVERAGE,
+    nextRequiredAction: NEXT_ACTION_REDUCE_ACTIVE_GATE_BUDGET,
+  }),
+  [BUDGET_KIND.ACTIVE_GATE_ATTEMPTS]: Object.freeze({
+    owner: OWNER.ACTIVE_GATE,
+    boundary: BOUNDARY.SNAPSHOT_COVERAGE,
+    nextRequiredAction: NEXT_ACTION_REDUCE_ACTIVE_GATE_BUDGET,
+  }),
+  [BUDGET_KIND.WORKFLOW_STEP_TIMEOUT]: Object.freeze({
+    owner: OWNER.OPERATION_WORKFLOW,
+    boundary: BOUNDARY.WORKFLOW_PROGRESS,
+    nextRequiredAction: NEXT_ACTION_REDUCE_WORKFLOW_BUDGET,
+  }),
+  [BUDGET_KIND.READINESS_RETRY_WINDOW]: Object.freeze({
+    owner: OWNER.READINESS,
+    boundary: BOUNDARY.STARTUP_SUPPORT_EVIDENCE,
+    nextRequiredAction: NEXT_ACTION_REDUCE_READINESS_BUDGET,
+  }),
+});
+const FALLBACK_BUDGET_OWNERSHIP = Object.freeze({
+  owner: OWNER.DIAGNOSTICS,
+  boundary: BOUNDARY.CAUSAL_ANALYSIS,
+  nextRequiredAction: NEXT_ACTION_INSPECT_SCENARIO_BUDGET,
+});
 const ABSENT_DURATION_EVIDENCE = Object.freeze({
   value: ABSENT_VALUE,
   path: EVIDENCE_PATH_SCENARIO_DURATION,
@@ -82,6 +125,9 @@ function accountBudgets(input = {}) {
       cascadeCount: cascades.length,
       unknownCount: budgets.filter((budget) => budget.state === BUDGET_STATE.UNKNOWN).length,
       unboundedCount: budgets.filter((budget) => budget.state === BUDGET_STATE.UNBOUNDED).length,
+      ownershipGapCount: budgets.filter((budget) =>
+        budget.ownershipState !== BUDGET_OWNERSHIP_STATE.CLASSIFIED,
+      ).length,
     },
   };
 }
@@ -177,14 +223,29 @@ function buildReadinessRetryBudget(readinessFailure, normalized) {
 
 function buildBudget({kind, observed, limit, evidencePath, reportOutcome}) {
   const state = resolveBudgetState({observed, limit, reportOutcome});
+  const ownership = classifyBudgetOwnership(kind);
   return {
     kind,
     state,
+    owner: ownership.owner,
+    boundary: ownership.boundary,
+    ownershipState: ownership.ownershipState,
+    nextRequiredAction: ownership.nextRequiredAction,
     observed,
     limit,
     remaining: remainingBudget(observed, limit),
     ratio: budgetRatio(observed, limit),
     evidencePath,
+  };
+}
+
+function classifyBudgetOwnership(kind) {
+  const ownership = BUDGET_OWNERSHIP_RULES[kind] || FALLBACK_BUDGET_OWNERSHIP;
+  return {
+    owner: ownership.owner,
+    boundary: ownership.boundary,
+    ownershipState: BUDGET_OWNERSHIP_STATE.CLASSIFIED,
+    nextRequiredAction: ownership.nextRequiredAction,
   };
 }
 
@@ -232,8 +293,16 @@ function buildCascades(budgets) {
       state: BUDGET_STATE.CASCADE,
       reason: rule.reason,
       budgetKinds: matches.map((budget) => budget.kind),
+      owners: uniqueValues(matches.map((budget) => budget.owner)),
+      boundaries: uniqueValues(matches.map((budget) => budget.boundary)),
+      ownershipStates: uniqueValues(matches.map((budget) => budget.ownershipState)),
+      nextRequiredActions: uniqueValues(matches.map((budget) => budget.nextRequiredAction)),
     }];
   });
+}
+
+function uniqueValues(values) {
+  return [...new Set(values)];
 }
 
 const CASCADE_RULES = Object.freeze([
@@ -253,6 +322,14 @@ const CASCADE_RULES = Object.freeze([
         typeof budget.ratio === 'number' &&
         budget.ratio >= HALF_RATIO &&
         budget.ratio < RATIO_FULL,
+    ),
+  }),
+  Object.freeze({
+    id: 'workflow-step-unknown-cascade',
+    reason: CASCADE_REASON_WORKFLOW_STEP_UNKNOWN,
+    select: (budgets) => budgets.filter((budget) =>
+      budget.kind === BUDGET_KIND.WORKFLOW_STEP_TIMEOUT &&
+        [BUDGET_STATE.UNKNOWN, BUDGET_STATE.UNBOUNDED].includes(budget.state),
     ),
   }),
   Object.freeze({

@@ -3,7 +3,7 @@
 <!-- work-package
 {
   "schema": "work-package-v1",
-  "status": "todo",
+  "status": "active",
   "opened": "2026-05-11",
   "scenario": "spec-led-runtime-modularization",
   "artifact": "test-output/reports/rolling-restart-spec-led-runtime-modularization-active-gate-snapshot-coverage-publication-lag.report.json",
@@ -11,8 +11,8 @@
   "owner": "diagnostics_owner",
   "boundary": "budget_timeout_cascade",
   "dominantReason": "budget_timeout_cascade",
-  "currentState": "The post-publication-ACK active-gate slice froze active_gate_snapshot_coverage at snapshot coverage 3/5 with two inactive nodes, then classified the residual as architecture_gap / widen_architecture_work because budget accounting is unbounded or unknown for active_gate_attempts, workflow_step_timeout, and readiness_retry_window.",
-  "nextAction": "Review the closed active-gate classification package, then widen architecture analysis around the budget timeout cascade without changing startup active-gate runtime behavior or increasing harness timeouts.",
+  "currentState": "Diagnostics budget accounting now classifies ownership for active_gate_attempts, workflow_step_timeout, and readiness_retry_window. The representative causal model no longer reports architecture_gap; it migrates to owner_boundary_migration with stop reason startup_readiness_boundary while active_gate_snapshot_coverage remains the frozen topology symptom.",
+  "nextAction": "Parent review should close or supersede this package and open the narrower startup_readiness_owner / startup_support_evidence successor using the representative causal-model handoff; do not patch startup active-gate runtime in this package.",
   "proof": [
     "npm run work:evidence-summary -- test-output/reports/rolling-restart-spec-led-runtime-modularization-active-gate-snapshot-coverage-publication-lag.report.json",
     "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-spec-led-runtime-modularization-active-gate-snapshot-coverage-publication-lag.report.json --explain active_gate_snapshot_coverage",
@@ -31,8 +31,8 @@
     "test/diagnostics/*stop-condition*.test.js",
     "test/diagnostics/*invariant*.test.js",
     "test-output/reports/rolling-restart-spec-led-runtime-modularization-active-gate-snapshot-coverage-publication-lag.report.json",
-    "work/packages/todo-20260511-spec-led-runtime-modularization-budget-timeout-cascade-architecture-analysis.md",
-    "work/sprints/todo-2026-q2-spec-led-runtime-modularization-budget-cascade-followup.md"
+    "work/packages/active-20260511-spec-led-runtime-modularization-budget-timeout-cascade-architecture-analysis.md",
+    "work/sprints/active-2026-q2-spec-led-runtime-modularization-budget-cascade-followup.md"
   ],
   "modelFit": {
     "packageClass": "architecture-gap analysis package",
@@ -49,9 +49,9 @@
     "hypothesis": "If the budget timeout cascade is modeled with bounded active-gate attempts, workflow-step timeout, and readiness retry-window ownership, the architecture gap should reduce or migrate to a named runtime owner boundary.",
     "stopConditionCheck": "npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-spec-led-runtime-modularization-active-gate-snapshot-coverage-publication-lag.report.json",
     "expectedCausalModelChange": "The budget_timeout_cascade architecture gap disappears, reduces, or migrates to a named owner-boundary blocker; same-frontier without reduced budget-accounting evidence is contradictory.",
-    "representativeOutcome": "pending-before-rerun",
+    "representativeOutcome": "migrated",
     "causalDebt": "Do not hide exhausted scenario or active-gate budgets by raising harness timeouts or relabeling active-gate snapshot coverage.",
-    "crossBoundaryReview": "Review the closed active-gate post-publication-ACK package before activation; this is a diagnostics architecture-analysis successor, not startup active-gate runtime work."
+    "crossBoundaryReview": "The closed active-gate post-publication-ACK review found one stale tracker sentence; a separate fix subagent corrected it and the fix was committed/pushed before activation."
   },
   "predecessor": "work/packages/done-20260511-spec-led-runtime-modularization-active-gate-snapshot-coverage-post-publication-ack-frontier.md"
 }
@@ -60,11 +60,13 @@
 ## Why
 
 The active-gate post-publication-ACK package froze the startup active-gate witness
-without runtime changes. Causal analysis classifies the remaining failure as
-`architecture_gap / widen_architecture_work` with stop reason
-`budget_timeout_cascade`: scenario duration and active-gate timeout are exhausted
-while `active_gate_attempts`, `workflow_step_timeout`, and
-`readiness_retry_window` are unbounded or unknown.
+without runtime changes. Pre-implementation causal analysis classified the
+remaining failure as `architecture_gap / widen_architecture_work` with stop
+reason `budget_timeout_cascade`: scenario duration and active-gate timeout were
+exhausted while `active_gate_attempts`, `workflow_step_timeout`, and
+`readiness_retry_window` were unbounded or unknown. This package classified the
+ownership of those budget dimensions so the representative handoff now migrates
+to a narrower runtime owner boundary.
 
 ## Scope Basis
 
@@ -133,10 +135,69 @@ while `active_gate_attempts`, `workflow_step_timeout`, and
 - Budget accounting gap: `active_gate_attempts`, `workflow_step_timeout`, and
   `readiness_retry_window` are unbounded or unknown.
 
+## Implementation Notes
+
+- Agent 019e036d-0b79-737a-97b1-bb7ab420346a classified budget ownership in
+  `budget-timeout-accounting-v1`:
+  - `active_gate_attempts` and `active_gate_timeout`:
+    `startup_active_gate_owner / snapshot_coverage`.
+  - `workflow_step_timeout`: `operation_workflow_owner / workflow_progress`.
+  - `readiness_retry_window`: `startup_readiness_owner /
+    startup_support_evidence`.
+- `budget_accounted` now passes when unknown or unbounded budget dimensions are
+  owner-classified instead of treating them as diagnostics architecture gaps.
+- Budget cascades still report exhausted or unknown budget dimensions, but fully
+  owner-classified cascades no longer emit the diagnostics-owned
+  `budget_timeout_cascade` failure class.
+- Representative outcome after rerun/classification: `migrated`.
+
+## Successor Handoff
+
+- Recommended successor owner boundary:
+  `startup_readiness_owner / startup_support_evidence`.
+- Evidence basis:
+  `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-spec-led-runtime-modularization-active-gate-snapshot-coverage-publication-lag.report.json`
+  now reports `owner_boundary_migration / migrate_owner_boundary` with reason
+  `startup_readiness_boundary`.
+- Frozen symptom:
+  `active_gate_snapshot_coverage` remains under
+  `startup_active_gate_owner / snapshot_coverage`; this package does not
+  authorize active-gate runtime changes.
+- Supporting budget ownership:
+  `active_gate_attempts`, `workflow_step_timeout`, and
+  `readiness_retry_window` all have `ownershipState: classified`; summary
+  `ownershipGapCount` is `0`.
+
+## Validation Notes
+
+- `node --test test/diagnostics/budget-timeout-accounting.test.js test/diagnostics/invariant-review.test.js test/diagnostics/failure-class-taxonomy.test.js test/diagnostics/stop-condition-decision.test.js`
+  passed.
+- `npx eslint src/diagnostics/budget-timeout-accounting.js src/diagnostics/causal-analysis-schema.js src/diagnostics/invariant-review.js src/diagnostics/failure-class-taxonomy.js test/diagnostics/budget-timeout-accounting.test.js test/diagnostics/invariant-review.test.js test/diagnostics/stop-condition-decision.test.js test/diagnostics/failure-class-taxonomy.test.js`
+  passed.
+- Diagnostics literal, decision-boundary, and runtime grammar guardrails passed
+  for the touched diagnostics source files.
+- Proof ladder rerun:
+  - evidence summary now reports causal outcome `migrate_owner_boundary`,
+    stop condition `owner_boundary_migration`, stop reason
+    `startup_readiness_boundary`, and failed invariant count `0`.
+  - topology explain still preserves `active_gate_snapshot_coverage`.
+  - causal model reports budget invariant `passed` with reason
+    `budget_ownership_classified`.
+
 ## Activation Notes
 
-1. Run the mandatory predecessor review on the closed active-gate
-   post-publication-ACK package.
-2. Activate only after any review fixes are committed and pushed.
+1. Mandatory predecessor review on the closed active-gate post-publication-ACK
+   package returned fixes-required for one stale tracker sentence.
+2. A separate fix subagent corrected the stale sentence; the focused fix commit
+   was pushed before this package activated.
 3. Do not patch startup active-gate runtime behavior or increase harness timeouts
    before this package reduces the architecture gap.
+
+## Subagent Sequencing Ledger
+
+- [x] Review subagent recorded:
+      Agent 019e0368-d89e-74c6-bf6d-0df7dd8d88f1 (019e0368-d89e-74c6-bf6d-0df7dd8d88f1) reviewed work/packages/done-20260511-spec-led-runtime-modularization-active-gate-snapshot-coverage-post-publication-ack-frontier.md; result fixes-required.
+- [x] Fix subagent recorded or explicitly not needed:
+      Agent 019e036a-96fd-71de-83d1-9f4076564564 (019e036a-96fd-71de-83d1-9f4076564564) fixed work/packages/done-20260511-spec-led-runtime-modularization-active-gate-snapshot-coverage-post-publication-ack-frontier.md.
+- [x] Implementation subagent recorded:
+      Agent 019e036d-0b79-737a-97b1-bb7ab420346a (019e036d-0b79-737a-97b1-bb7ab420346a) implemented work/packages/active-20260511-spec-led-runtime-modularization-budget-timeout-cascade-architecture-analysis.md.

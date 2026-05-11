@@ -54,7 +54,7 @@
   "predecessor": "work/packages/done-20260511-spec-led-runtime-modularization-publication-ack-convergence-publication-published-frontier.md",
   "closed": "2026-05-11",
   "commitAndPushLedgerRequired": true,
-  "successor": "work/packages/todo-20260511-spec-led-runtime-modularization-budget-timeout-cascade-architecture-analysis.md"
+  "successor": "work/packages/active-20260511-spec-led-runtime-modularization-budget-timeout-cascade-architecture-analysis.md"
 }
 -->
 
@@ -192,7 +192,7 @@ budget cascade package.
   `workflow_step_timeout`, and `readiness_retry_window` are unbounded or unknown
   while both scenario duration and active-gate timeout are exhausted.
 - Successor package:
-  `work/packages/todo-20260511-spec-led-runtime-modularization-budget-timeout-cascade-architecture-analysis.md`.
+  `work/packages/active-20260511-spec-led-runtime-modularization-budget-timeout-cascade-architecture-analysis.md`.
 
 ## Commit And Push Ledger
 

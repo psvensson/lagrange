@@ -48,7 +48,7 @@ function assertNoNullOrUndefined(value) {
 }
 
 describe('InvariantReview', () => {
-  it('keeps structural invariants separate from unresolved budget accounting', () => {
+  it('keeps structural invariants separate from classified budget ownership', () => {
     const review = reviewInvariants(readActiveArtifact());
 
     assert.equal(
@@ -57,7 +57,7 @@ describe('InvariantReview', () => {
     );
     assert.equal(
       findInvariant(review, INVARIANT_KIND.BUDGET_ACCOUNTED).state,
-      INVARIANT_STATE.FAILED,
+      INVARIANT_STATE.PASSED,
     );
     assertNoNullOrUndefined(review);
   });

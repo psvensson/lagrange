@@ -44,23 +44,23 @@ function assertNoNullOrUndefined(value) {
 }
 
 describe('StopConditionDecision', () => {
-  it('selects an architecture-level stop outcome from the decision table', () => {
+  it('selects owner-boundary migration after budget ownership is classified', () => {
     const decision = decideStopCondition(readActiveArtifact());
 
-    assert.equal(decision.outcome, STOP_OUTCOME.WIDEN_ARCHITECTURE_WORK);
-    assert.equal(decision.condition, STOP_CONDITION.ARCHITECTURE_GAP);
+    assert.equal(decision.outcome, STOP_OUTCOME.MIGRATE_OWNER_BOUNDARY);
+    assert.equal(decision.condition, STOP_CONDITION.OWNER_BOUNDARY_MIGRATION);
     assertNoNullOrUndefined(decision);
   });
 
-  it('preserves active failed artifact classes while selecting architecture work', () => {
+  it('preserves active failed artifact classes after budget cascade classification', () => {
     const artifact = buildCausalAnalysis(readActiveArtifact());
     const failureClasses = artifact.failureTaxonomy.classes.map((entry) => entry.failureClass);
 
-    assert.equal(artifact.stopDecision.outcome, STOP_OUTCOME.WIDEN_ARCHITECTURE_WORK);
-    assert.equal(artifact.stopDecision.condition, STOP_CONDITION.ARCHITECTURE_GAP);
+    assert.equal(artifact.stopDecision.outcome, STOP_OUTCOME.MIGRATE_OWNER_BOUNDARY);
+    assert.equal(artifact.stopDecision.condition, STOP_CONDITION.OWNER_BOUNDARY_MIGRATION);
     assert.ok(failureClasses.includes(FAILURE_CLASS.ACTIVE_GATE_SNAPSHOT_COVERAGE_INCOMPLETE));
     assert.ok(failureClasses.includes(FAILURE_CLASS.STARTUP_READINESS_BLOCKED));
-    assert.ok(failureClasses.includes(FAILURE_CLASS.BUDGET_TIMEOUT_CASCADE));
+    assert.equal(failureClasses.includes(FAILURE_CLASS.BUDGET_TIMEOUT_CASCADE), false);
     assertNoNullOrUndefined(artifact);
   });
 
@@ -80,7 +80,7 @@ describe('StopConditionDecision', () => {
     const artifact = JSON.parse(result.stdout);
 
     assert.equal(result.status, EXIT_SUCCESS);
-    assert.equal(artifact.stopDecision.outcome, STOP_OUTCOME.WIDEN_ARCHITECTURE_WORK);
+    assert.equal(artifact.stopDecision.outcome, STOP_OUTCOME.MIGRATE_OWNER_BOUNDARY);
     assertNoNullOrUndefined(artifact);
   });
 

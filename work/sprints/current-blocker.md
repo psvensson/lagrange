@@ -2,5 +2,78 @@
 
 # Current Blocker
 
-No active sprint is currently selected. The next todo sprint is
-`work/sprints/todo-2026-q2-spec-led-runtime-modularization-budget-cascade-followup.md`.
+Sprint: `work/sprints/active-2026-q2-spec-led-runtime-modularization-budget-cascade-followup.md`
+
+Package: `work/packages/active-20260511-spec-led-runtime-modularization-budget-timeout-cascade-architecture-analysis.md`
+
+Scenario: `spec-led-runtime-modularization`
+
+Artifact: `test-output/reports/rolling-restart-spec-led-runtime-modularization-active-gate-snapshot-coverage-publication-lag.report.json`
+
+Playback: `test-output/reports/.playback/rolling-restart-spec-led-runtime-modularization-active-gate-snapshot-coverage-publication-lag/rolling-restart/`
+
+## Boundary
+
+Owner: `diagnostics_owner`
+
+Boundary: `budget_timeout_cascade`
+
+Dominant reason: `budget_timeout_cascade`
+
+Current state: Diagnostics budget accounting now classifies ownership for active_gate_attempts, workflow_step_timeout, and readiness_retry_window. The representative causal model no longer reports architecture_gap; it migrates to owner_boundary_migration with stop reason startup_readiness_boundary while active_gate_snapshot_coverage remains the frozen topology symptom.
+
+## Next Action
+
+Parent review should close or supersede this package and open the narrower startup_readiness_owner / startup_support_evidence successor using the representative causal-model handoff; do not patch startup active-gate runtime in this package.
+
+## Proof Ladder
+
+1. `npm run work:evidence-summary -- test-output/reports/rolling-restart-spec-led-runtime-modularization-active-gate-snapshot-coverage-publication-lag.report.json`
+2. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-spec-led-runtime-modularization-active-gate-snapshot-coverage-publication-lag.report.json --explain active_gate_snapshot_coverage`
+3. `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-spec-led-runtime-modularization-active-gate-snapshot-coverage-publication-lag.report.json`
+4. `Focused diagnostics budget-accounting fixture selected after package review`
+5. `Touched-file static guardrails selected by diagnostics_owner`
+6. `Representative rolling-restart rerun or classification handoff`
+
+## Model Fit
+
+Package class: `architecture-gap analysis package`
+
+Intended minimum model: `gpt-5.3-codex`
+
+Scope shape: `owner-boundary-contraction/cross-boundary-causal-edge`
+
+Escalation triggers:
+
+1. `causal stop condition no longer reports architecture_gap`
+2. `proof requires startup_active_gate_owner runtime changes`
+3. `proof requires harness timeout increases`
+4. `runtime implementation would need Pro or Enterprise features`
+
+## Causal Governance
+
+Causal hypothesis: `If the budget timeout cascade is modeled with bounded active-gate attempts, workflow-step timeout, and readiness retry-window ownership, the architecture gap should reduce or migrate to a named runtime owner boundary.`
+
+Stop-condition check: `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-spec-led-runtime-modularization-active-gate-snapshot-coverage-publication-lag.report.json`
+
+Expected causal-model change: `The budget_timeout_cascade architecture gap disappears, reduces, or migrates to a named owner-boundary blocker; same-frontier without reduced budget-accounting evidence is contradictory.`
+
+Representative outcome: `migrated`
+
+Causal debt: `Do not hide exhausted scenario or active-gate budgets by raising harness timeouts or relabeling active-gate snapshot coverage.`
+
+Cross-boundary review: `The closed active-gate post-publication-ACK review found one stale tracker sentence; a separate fix subagent corrected it and the fix was committed/pushed before activation.`
+
+## Touched Files
+
+1. `src/diagnostics/*budget*.js`
+2. `src/diagnostics/*causal*.js`
+3. `src/diagnostics/*stop-condition*.js`
+4. `src/diagnostics/*invariant*.js`
+5. `test/diagnostics/*budget*.test.js`
+6. `test/diagnostics/*causal*.test.js`
+7. `test/diagnostics/*stop-condition*.test.js`
+8. `test/diagnostics/*invariant*.test.js`
+9. `test-output/reports/rolling-restart-spec-led-runtime-modularization-active-gate-snapshot-coverage-publication-lag.report.json`
+10. `work/packages/active-20260511-spec-led-runtime-modularization-budget-timeout-cascade-architecture-analysis.md`
+11. `work/sprints/active-2026-q2-spec-led-runtime-modularization-budget-cascade-followup.md`

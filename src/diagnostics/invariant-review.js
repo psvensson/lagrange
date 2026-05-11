@@ -6,6 +6,7 @@ import {
   INVARIANT_KIND,
   INVARIANT_STATE,
   BUDGET_STATE,
+  BUDGET_OWNERSHIP_STATE,
   REPORT_OUTCOME,
   asRecord,
   arrayOrEmpty,
@@ -29,11 +30,13 @@ const REASON_READINESS_BLOCKERS_ABSENT_ON_SUCCESS = 'readiness_blockers_absent_o
 const REASON_READINESS_BLOCKERS_MISSING = 'readiness_blockers_missing';
 const REASON_BUDGET_ACCOUNTED = 'budget_accounted';
 const REASON_BUDGET_UNACCOUNTED = 'budget_unknown_or_unbounded';
+const REASON_BUDGET_OWNERSHIP_CLASSIFIED = 'budget_ownership_classified';
 const EDGE_PUBLICATION_ACK = 'publication_ack_convergence';
 const EDGE_PRIORITY_RECOVERY = 'priority_recovery_partition_progress';
 const EVIDENCE_PATH_BUDGETS = 'budgetAccounting.budgets';
 const EXPECTATION_READINESS_REASONS = 'readiness reasons for blocked nodes';
-const EXPECTATION_BUDGETS_ACCOUNTED = 'all budgets bounded or observed';
+const EXPECTATION_BUDGETS_ACCOUNTED =
+  'all budgets bounded, observed, or owner-classified';
 const LIST_SEPARATOR = ',';
 const EVIDENCE_PRESENT = 'present';
 const EVIDENCE_ABSENT = ABSENT_VALUE;
@@ -254,20 +257,39 @@ function evaluateBudgetInvariant(budgetAccounting) {
   const unaccounted = budgetAccounting.budgets.filter((budget) =>
     [BUDGET_STATE.UNKNOWN, BUDGET_STATE.UNBOUNDED].includes(budget.state),
   );
-  const state = unaccounted.length === ZERO_COUNT ?
+  const unresolved = unaccounted.filter((budget) =>
+    budget.ownershipState !== BUDGET_OWNERSHIP_STATE.CLASSIFIED,
+  );
+  const state = unresolved.length === ZERO_COUNT ?
     INVARIANT_STATE.PASSED :
     INVARIANT_STATE.FAILED;
   return {
     kind: INVARIANT_KIND.BUDGET_ACCOUNTED,
     state,
-    reasons: [state === INVARIANT_STATE.PASSED ?
-      REASON_BUDGET_ACCOUNTED :
-      REASON_BUDGET_UNACCOUNTED],
+    reasons: [resolveBudgetInvariantReason({state, unaccounted})],
     evidencePath: EVIDENCE_PATH_BUDGETS,
-    observed: unaccounted.map((budget) => textOrUnknown(budget.kind)).join(LIST_SEPARATOR) ||
+    observed: unresolved.map((budget) => textOrUnknown(budget.kind)).join(LIST_SEPARATOR) ||
       ABSENT_VALUE,
     expected: EXPECTATION_BUDGETS_ACCOUNTED,
   };
+}
+
+function resolveBudgetInvariantReason({state, unaccounted}) {
+  const rules = [
+    {
+      reason: REASON_BUDGET_UNACCOUNTED,
+      matches: (snapshot) => snapshot.state === INVARIANT_STATE.FAILED,
+    },
+    {
+      reason: REASON_BUDGET_OWNERSHIP_CLASSIFIED,
+      matches: (snapshot) => snapshot.unaccounted.length > ZERO_COUNT,
+    },
+    {
+      reason: REASON_BUDGET_ACCOUNTED,
+      matches: () => true,
+    },
+  ];
+  return rules.find((rule) => rule.matches({state, unaccounted})).reason;
 }
 
 export {reviewInvariants};

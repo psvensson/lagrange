@@ -8,6 +8,7 @@ import {
   OWNER,
   BOUNDARY,
   REPORT_OUTCOME,
+  BUDGET_OWNERSHIP_STATE,
   asRecord,
   arrayOrEmpty,
   textOrUnknown,
@@ -153,7 +154,12 @@ function classifyReadiness(normalized) {
 }
 
 function classifyBudgetCascade(budgetAccounting) {
-  if (budgetAccounting.cascades.length === ZERO_COUNT) {
+  const unresolvedCascades = budgetAccounting.cascades.filter((cascade) =>
+    cascade.ownershipStates.some((state) =>
+      state !== BUDGET_OWNERSHIP_STATE.CLASSIFIED,
+    ),
+  );
+  if (unresolvedCascades.length === ZERO_COUNT) {
     return [];
   }
   return [buildClass({
@@ -162,7 +168,7 @@ function classifyBudgetCascade(budgetAccounting) {
     owner: OWNER.DIAGNOSTICS,
     boundary: BOUNDARY.CAUSAL_ANALYSIS,
     evidencePath: EVIDENCE_PATH_BUDGET_CASCADES,
-    causalNodeIds: budgetAccounting.cascades.map((cascade) => cascade.id),
+    causalNodeIds: unresolvedCascades.map((cascade) => cascade.id),
   })];
 }
 
