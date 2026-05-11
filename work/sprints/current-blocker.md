@@ -4,7 +4,7 @@
 
 Sprint: `work/sprints/active-2026-q2-spec-led-runtime-modularization-priority-recovery-backpressure-followup.md`
 
-Package: `work/packages/todo-20260509-spec-led-runtime-modularization-active-gate-report-schema-alias-deletion.md`
+Package: `work/packages/active-20260509-spec-led-runtime-modularization-active-gate-report-schema-alias-deletion.md`
 
 Scenario: `spec-led-runtime-modularization`
 
@@ -37,9 +37,9 @@ Review the closed priority recovery backpressure package, then migrate diagnosti
 
 Package class: `bounded-implementation`
 
-Intended minimum model: `gpt-5.3-codex-spark`
+Intended minimum model: `gpt-5.3-codex`
 
-Scope shape: `leaf-slice`
+Scope shape: `diagnostics-artifact-schema-migration`
 
 Escalation triggers:
 
@@ -66,8 +66,29 @@ Cross-boundary review: `Review the closed priority recovery backpressure package
 1. `src/diagnostics/topology-convergence-graph.js`
 2. `scripts/analyze-topology-convergence.js`
 3. `test/distributed/harness/active-gate-contract.js`
-4. `test/distributed/harness/failure-bundle-segment-4.js`
-5. `test/distributed/harness/__tests__/failure-bundle*.js`
-6. `test/diagnostics/topology-convergence-graph.test.js`
-7. `test/scripts/analyze-topology-convergence.test.js`
-8. `work/packages/todo-20260509-spec-led-runtime-modularization-active-gate-report-schema-alias-deletion.md`
+4. `test/distributed/harness/cluster-segment-7.js`
+5. `test/distributed/harness/cluster-segment-7-class-4.js`
+6. `test/distributed/harness/failure-bundle-segment-1.js`
+7. `test/distributed/harness/failure-bundle-segment-2.js`
+8. `test/distributed/harness/failure-bundle-segment-3.js`
+9. `test/distributed/harness/failure-bundle-segment-4.js`
+10. `test/distributed/harness/failure-bundle-segment-6.js`
+11. `test/distributed/harness/publication-evidence-contract.js`
+12. `test/distributed/harness/__tests__/cluster-part-6-core-01-test-cases.js`
+13. `test/distributed/harness/__tests__/cluster-part-6-core-04-test-cases.js`
+14. `test/distributed/harness/__tests__/cluster.test-part-5.js`
+15. `test/distributed/harness/__tests__/failure-bundle-active-gate-tail-test-cases.js`
+16. `test/distributed/harness/__tests__/failure-bundle-core-02-test-cases.js`
+17. `test/distributed/harness/__tests__/failure-bundle-core-03-test-cases.js`
+18. `test/distributed/harness/__tests__/failure-bundle-core-05-test-cases.js`
+19. `test/distributed/harness/__tests__/failure-bundle-core-06-test-cases.js`
+20. `test/distributed/harness/__tests__/failure-bundle-core-08-test-cases.js`
+21. `test/distributed/harness/__tests__/failure-bundle-core-11-test-cases.js`
+22. `test/distributed/harness/__tests__/failure-bundle-core-15-test-cases.js`
+23. `test/distributed/harness/__tests__/failure-bundle-playback-test-cases.js`
+24. `test/distributed/harness/__tests__/failure-bundle-publication-closure-tail-test-cases.js`
+25. `test/distributed/harness/__tests__/failure-bundle.test.js`
+26. `test/diagnostics/topology-convergence-graph.test.js`
+27. `test/scripts/__fixtures__/topology-convergence/*.json`
+28. `test/scripts/analyze-topology-convergence.test.js`
+29. `work/packages/active-20260509-spec-led-runtime-modularization-active-gate-report-schema-alias-deletion.md`

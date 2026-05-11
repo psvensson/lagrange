@@ -771,13 +771,12 @@ function buildPlaybackActiveGateStageEvent({
         pendingAckNodeIds: [],
         missingPublishedNodeIds: [],
       },
-      activeGateNoProgress: {
-        enabled: true,
+      activeGate: {
         mode: readinessMode,
+        state: 'waiting',
         maxAttempts: 45,
         attemptsSinceProgress: 22,
-        stalled: false,
-        currentProgress: activeGateCurrentProgress || {
+        progress: activeGateCurrentProgress || {
           expectedNodeCount: 2,
           activeNodeCount: 2,
           inactiveNodeCount: 0,

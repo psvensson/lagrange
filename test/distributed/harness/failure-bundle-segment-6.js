@@ -700,16 +700,12 @@ function renderScenarioFailureBundleMarkdown(bundle) {
     ) ?
       bundle.publicationConvergence.publicationConvergenceGateReasons :
       [];
-    const activeGateBlockerHistory = Array.isArray(
-      bundle.publicationConvergence.activeGateBlockerHistory,
+    const activeGate = bundle.publicationConvergence.activeGate || null;
+    const activeGateBlockerEntries = Array.isArray(
+      activeGate?.blockerHistory,
     ) ?
-      bundle.publicationConvergence.activeGateBlockerHistory :
+      activeGate.blockerHistory :
       [];
-    const activeGateNoProgress =
-      bundle.publicationConvergence.activeGateNoProgress &&
-      typeof bundle.publicationConvergence.activeGateNoProgress === 'object' ?
-        bundle.publicationConvergence.activeGateNoProgress :
-        null;
     sections.push(
       '## Publication Convergence\n' +
         [
@@ -814,22 +810,22 @@ function renderScenarioFailureBundleMarkdown(bundle) {
             ),
           '- Active Gate Best Progress: ' +
             formatActiveGateProgress(
-              bundle.publicationConvergence.activeGateBestProgress,
+              activeGate?.bestProgress,
             ),
           '- Active Gate No-Progress: ' +
-            (activeGateNoProgress ?
+            (activeGate ?
               'attemptsSinceProgress=' +
                 String(
-                  activeGateNoProgress.attemptsSinceProgress ?? UNKNOWN_VALUE,
+                  activeGate.attemptsSinceProgress ?? UNKNOWN_VALUE,
                 ) +
                 '/' +
-                String(activeGateNoProgress.maxAttempts ?? UNKNOWN_VALUE) +
+                String(activeGate.maxAttempts ?? UNKNOWN_VALUE) +
                 ', stalled=' +
-                String(activeGateNoProgress.stalled === true) :
+                String(activeGate.state === 'stalled') :
               UNKNOWN_VALUE),
           '- Active Gate Blocker History: ' +
-            (activeGateBlockerHistory.length > ZERO ?
-              activeGateBlockerHistory
+            (activeGateBlockerEntries.length > ZERO ?
+              activeGateBlockerEntries
                 .map((entry) => {
                   const signature = String(entry?.signature || '').trim();
                   const count = Number(entry?.count || ZERO);

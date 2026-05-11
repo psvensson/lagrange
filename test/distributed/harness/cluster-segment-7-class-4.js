@@ -1481,11 +1481,6 @@ class Cluster4 extends Cluster3 {
       priorityRecoveryInvariants,
       activeGate: controlPlaneDiagnostics?.activeGate || null,
       activeGateProgress: controlPlaneDiagnostics?.activeGateProgress || null,
-      activeGateBestProgress:
-        controlPlaneDiagnostics?.activeGateBestProgress || null,
-      activeGateNoProgress: controlPlaneDiagnostics?.activeGateNoProgress || null,
-      activeGateBlockerHistory:
-        controlPlaneDiagnostics?.activeGateBlockerHistory || null,
       activeGateAdmissionState:
         controlPlaneDiagnostics?.activeGateAdmissionState || null,
       logsTable,

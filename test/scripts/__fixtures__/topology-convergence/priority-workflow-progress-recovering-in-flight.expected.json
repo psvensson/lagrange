@@ -1,25 +1,13 @@
 {
   "summary": {
-    "frontierCount": 2,
-    "firstFrontierEdgeId": "active_gate_snapshot_coverage",
-    "firstFrontierState": "blocked",
-    "firstFrontierOwner": "startup_active_gate_owner",
-    "firstFrontierBoundary": "snapshot_coverage",
-    "firstFrontierReason": "active_gate_timed_out"
+    "frontierCount": 1,
+    "firstFrontierEdgeId": "priority_recovery_partition_progress",
+    "firstFrontierState": "retryable",
+    "firstFrontierOwner": "operation_workflow_owner",
+    "firstFrontierBoundary": "workflow_progress",
+    "firstFrontierReason": "priority_recovery_event_driven_wait"
   },
   "frontier": [
-    {
-      "id": "active_gate_snapshot_coverage",
-      "state": "blocked",
-      "owner": "startup_active_gate_owner",
-      "boundary": "snapshot_coverage",
-      "dominantReason": "absent",
-      "evidencePath": "report.scenarios[0].publicationConvergence.activeGate.progress",
-      "reasons": [
-        "active_gate_timed_out",
-        "snapshot_coverage_incomplete"
-      ]
-    },
     {
       "id": "priority_recovery_partition_progress",
       "state": "retryable",
@@ -33,26 +21,22 @@
     }
   ],
   "dominantWitness": {
-    "edgeId": "active_gate_snapshot_coverage",
-    "owner": "startup_active_gate_owner",
-    "boundary": "snapshot_coverage",
-    "state": "blocked",
-    "frontierState": "blocked",
-    "dominantReason": "active_gate_timed_out",
-    "evidencePath": "report.scenarios[0].publicationConvergence.activeGate.progress",
+    "edgeId": "priority_recovery_partition_progress",
+    "owner": "operation_workflow_owner",
+    "boundary": "workflow_progress",
+    "state": "retryable",
+    "frontierState": "retryable",
+    "dominantReason": "priority_recovery_event_driven_wait",
     "reasons": [
-      "active_gate_timed_out",
-      "snapshot_coverage_incomplete"
+      "priority_recovery_event_driven_wait"
     ],
+    "evidencePath": "report.scenarios[0].publicationConvergence.activeGate.progress.priorityRecoveryProgressClasses",
     "source": {
-      "activeGateState": "timed_out",
-      "snapshotCoverageComplete": "false",
-      "snapshotCoverageNodeCount": 3,
-      "expectedNodeCount": 5,
-      "selectedSnapshotError": "Control snapshot reachability probe timed out for 7493b0ab-a054-5fad-a91b-5e331db29304",
-      "readinessDelayCause": "snapshot_reachability_timeout",
-      "blockers": "inactive_nodes=3,snapshot_coverage=3/5"
+      "unresolvedSemanticStateIds": "recovering_in_flight",
+      "blockedPartitionIds": "control_plane_publications-p1,replica_operations-p1,sql_transaction_participants-p1,sql_transactions-p1,sql_write_operations-p1",
+      "dominantReason": "BOOTSTRAP_PHASE_INCOMPLETE",
+      "failureClass": "startup_recovery_blocked"
     },
-    "rootCauseClass": "startup"
+    "rootCauseClass": "topology"
   }
 }

@@ -138,7 +138,6 @@ const SOURCE_PATH = Object.freeze({
 const SOURCE_FIELD = Object.freeze({
   ACTIVE_GATE: 'activeGate',
   ACTIVE_GATE_PROGRESS: 'activeGateProgress',
-  ACTIVE_GATE_BEST_PROGRESS: 'activeGateBestProgress',
   BEST_PROGRESS: 'bestProgress',
   BLOCKING_BOUNDARY: 'blockingBoundary',
   CURRENT_OWNER: 'currentOwner',
@@ -705,13 +704,6 @@ function normalizeTopologyConvergenceInput(input) {
       flattenEvidencePath(
         SOURCE_PATH.REPORT_SCENARIO_PRIORITY_RECOVERY_OBSERVATION,
         SOURCE_FIELD.ACTIVE_GATE_PROGRESS,
-      ),
-    ),
-    recordCandidate(
-      priorityRecoveryObservation.activeGateBestProgress,
-      flattenEvidencePath(
-        SOURCE_PATH.REPORT_SCENARIO_PRIORITY_RECOVERY_OBSERVATION,
-        SOURCE_FIELD.ACTIVE_GATE_BEST_PROGRESS,
       ),
     ),
     recordCandidate(scenario.priorityRecoveryProgress, SOURCE_PATH.REPORT_SCENARIO),

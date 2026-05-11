@@ -403,11 +403,11 @@ export function registerFailureBundleCore06Tests(context) {
                   error: SNAPSHOT_REACHABILITY_ERROR,
                 },
               },
-              activeGateNoProgress: {
+              activeGate: {
                 mode: STARTUP_READINESS_MODE,
+                state: 'waiting',
                 attemptsSinceProgress: SINGLE_COUNT,
-                stalled: false,
-                currentProgress: {
+                progress: {
                   expectedNodeCount: EXPECTED_NODE_COUNT,
                   activeNodeCount: ACTIVE_NODE_COUNT,
                   inactiveNodeCount: EMPTY_COUNT,

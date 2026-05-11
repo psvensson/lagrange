@@ -3,7 +3,7 @@
 <!-- work-package
 {
   "schema": "work-package-v1",
-  "status": "todo",
+  "status": "active",
   "opened": "2026-05-09",
   "scenario": "spec-led-runtime-modularization",
   "artifact": "test-output/reports/rolling-restart-spec-led-runtime-modularization-final.report.json",
@@ -23,16 +23,37 @@
     "src/diagnostics/topology-convergence-graph.js",
     "scripts/analyze-topology-convergence.js",
     "test/distributed/harness/active-gate-contract.js",
+    "test/distributed/harness/cluster-segment-7.js",
+    "test/distributed/harness/cluster-segment-7-class-4.js",
+    "test/distributed/harness/failure-bundle-segment-1.js",
+    "test/distributed/harness/failure-bundle-segment-2.js",
+    "test/distributed/harness/failure-bundle-segment-3.js",
     "test/distributed/harness/failure-bundle-segment-4.js",
-    "test/distributed/harness/__tests__/failure-bundle*.js",
+    "test/distributed/harness/failure-bundle-segment-6.js",
+    "test/distributed/harness/publication-evidence-contract.js",
+    "test/distributed/harness/__tests__/cluster-part-6-core-01-test-cases.js",
+    "test/distributed/harness/__tests__/cluster-part-6-core-04-test-cases.js",
+    "test/distributed/harness/__tests__/cluster.test-part-5.js",
+    "test/distributed/harness/__tests__/failure-bundle-active-gate-tail-test-cases.js",
+    "test/distributed/harness/__tests__/failure-bundle-core-02-test-cases.js",
+    "test/distributed/harness/__tests__/failure-bundle-core-03-test-cases.js",
+    "test/distributed/harness/__tests__/failure-bundle-core-05-test-cases.js",
+    "test/distributed/harness/__tests__/failure-bundle-core-06-test-cases.js",
+    "test/distributed/harness/__tests__/failure-bundle-core-08-test-cases.js",
+    "test/distributed/harness/__tests__/failure-bundle-core-11-test-cases.js",
+    "test/distributed/harness/__tests__/failure-bundle-core-15-test-cases.js",
+    "test/distributed/harness/__tests__/failure-bundle-playback-test-cases.js",
+    "test/distributed/harness/__tests__/failure-bundle-publication-closure-tail-test-cases.js",
+    "test/distributed/harness/__tests__/failure-bundle.test.js",
     "test/diagnostics/topology-convergence-graph.test.js",
+    "test/scripts/__fixtures__/topology-convergence/*.json",
     "test/scripts/analyze-topology-convergence.test.js",
-    "work/packages/todo-20260509-spec-led-runtime-modularization-active-gate-report-schema-alias-deletion.md"
+    "work/packages/active-20260509-spec-led-runtime-modularization-active-gate-report-schema-alias-deletion.md"
   ],
   "modelFit": {
     "packageClass": "bounded-implementation",
-    "intendedMinimumModel": "gpt-5.3-codex-spark",
-    "scopeShape": "leaf-slice",
+    "intendedMinimumModel": "gpt-5.3-codex",
+    "scopeShape": "diagnostics-artifact-schema-migration",
     "escalationTriggers": [
       "owned files expand outside diagnostics artifact schema surfaces",
       "migration requires runtime active-gate behavior changes",
@@ -78,12 +99,12 @@ Phase `0.1` internal-coherence cleanup within the AGPL repository.
 ## Model Fit
 
 - Package class: `bounded-implementation`
-- Intended minimum model: `gpt-5.3-codex-spark`
-- Scope shape: `leaf-slice`
-- Owned files: `src/diagnostics/topology-convergence-graph.js`, `scripts/analyze-topology-convergence.js`, `test/distributed/harness/active-gate-contract.js`, `test/distributed/harness/failure-bundle-segment-4.js`, `test/distributed/harness/__tests__/failure-bundle*.js`, `test/diagnostics/topology-convergence-graph.test.js`, `test/scripts/analyze-topology-convergence.test.js`, this package file.
+- Intended minimum model: `gpt-5.3-codex`
+- Scope shape: `diagnostics-artifact-schema-migration`
+- Owned files: `src/diagnostics/topology-convergence-graph.js`, `scripts/analyze-topology-convergence.js`, active-gate diagnostics readers/writers under `test/distributed/harness/`, migrated failure-bundle and cluster active-gate fixtures under `test/distributed/harness/__tests__/`, `test/diagnostics/topology-convergence-graph.test.js`, topology-convergence JSON fixtures under `test/scripts/__fixtures__/topology-convergence/`, `test/scripts/analyze-topology-convergence.test.js`, this package file.
 - Forbidden files: `src/control-plane/`, `src/rebalancer/`, runtime active-gate owner behavior, unrelated sprint/package files.
 - Frozen decisions: this package only renames/removes active-gate report schema aliases; it must not change active-gate semantics or owner-witness classification.
-- Escalation triggers: owned files expand outside diagnostics artifact schema surfaces; migration requires runtime active-gate behavior changes; representative proof reveals a new owner boundary instead of schema aliases.
+- Escalation triggers: owned files expand outside diagnostics artifact schema surfaces, migration requires runtime active-gate behavior changes, or representative proof reveals a new owner boundary instead of schema aliases.
 - Focused proof: `rg "activeGateBestProgress|activeGateNoProgress|activeGateBlockerHistory" src/diagnostics scripts test/distributed/harness test/diagnostics test/scripts`; `node --test test/diagnostics/topology-convergence-graph.test.js test/scripts/analyze-topology-convergence.test.js test/distributed/harness/__tests__/failure-bundle.test.js`
 
 ## Causal Governance
@@ -108,3 +129,38 @@ Phase `0.1` internal-coherence cleanup within the AGPL repository.
 1. New active-gate behavior.
 2. Reclassification of owner witnesses from raw report fields.
 3. Harness timeout or report relabeling changes.
+
+## Subagent Sequencing Ledger
+
+- [x] Review subagent recorded:
+      Agent review-6c1e830f (6c1e830f-0000-4000-8000-000000000000) reviewed work/packages/done-20260511-spec-led-runtime-modularization-priority-recovery-backpressure-frontier.md; result clean.
+- [x] Fix subagent recorded or explicitly not needed:
+      not-needed.
+- [x] Implementation subagent recorded:
+      Agent implement-0e91a4c3 (0e91a4c3-0000-4000-8000-000000000000) implemented work/packages/active-20260509-spec-led-runtime-modularization-active-gate-report-schema-alias-deletion.md.
+
+## Implementation Proof Notes
+
+Additional files touched beyond original touchedFiles:
+- `test/distributed/harness/failure-bundle-segment-1.js` — migrated normalizePriorityRecoveryActiveGateSnapshot calls, removed activeGateNoProgress local extractions, replaced with canonical activeGate.readinessFailure/attemptsSinceProgress/state/etc.
+- `test/distributed/harness/failure-bundle-segment-2.js` — replaced details.activeGateNoProgress/activeGateBlockerHistory checks with canonical activeGate.state/blockerHistory checks
+- `test/distributed/harness/failure-bundle-segment-6.js` — replaced publicationConvergence.activeGateBlockerHistory/activeGateNoProgress with activeGate.blockerHistory/state
+- `test/distributed/harness/cluster-segment-7.js` — removed activeGateBlockerHistory mutation on stalledNoProgress, removed activeGateNoProgress from _recordClusterStage calls
+- `test/distributed/harness/cluster-segment-7-class-4.js` — removed old alias copies from controlPlaneDiagnostics spread
+- `test/distributed/harness/publication-evidence-contract.js` — stripped old alias fields from all normalizePriorityRecoveryActiveGateSnapshot calls, buildPriorityRecoveryObservationSnapshot calls, hasExplicitActiveGateSource checks, and canonicalActiveGateFields fallback
+- All test data files under `test/distributed/harness/__tests__/` listed above — migrated inline test data from old alias shape to canonical activeGate nested object
+
+Alias scan result after implementation:
+`rg "activeGateBestProgress|activeGateNoProgress|activeGateBlockerHistory" src/diagnostics scripts test/distributed/harness test/diagnostics test/scripts` → zero matches.
+
+No intentional documented exceptions remain.
+
+## Validation Notes
+
+- `rg` alias scan: 0 matches across all scoped paths
+- `node --test test/diagnostics/topology-convergence-graph.test.js test/scripts/analyze-topology-convergence.test.js test/distributed/harness/__tests__/failure-bundle.test.js`: 122/122 pass
+- `npm run work:validate -- --all`: Work tracker validation OK for 51 file(s)
+- `npm run work:package:doctor -- work/packages/active-20260509-spec-led-runtime-modularization-active-gate-report-schema-alias-deletion.md`: validation ok
+- `git diff --check`: clean (no whitespace issues)
+- `npx eslint ...`: passed for linted touched diagnostics/schema tests; ignored
+  generated harness segment files are covered by focused failure-bundle tests.

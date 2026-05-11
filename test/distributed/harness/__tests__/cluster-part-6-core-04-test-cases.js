@@ -512,7 +512,7 @@ export function registerClusterPart6Core04Tests(context) {
       assert.equal(
         recordedStages.some((entry) =>
           entry.stage === LOAD_READINESS_NO_PROGRESS_STAGE &&
-        entry.details?.activeGateNoProgress?.stalled === true),
+        entry.details?.activeGate?.state === 'stalled'),
         true,
         'load-readiness stall diagnostics should be recorded as stage evidence',
       );

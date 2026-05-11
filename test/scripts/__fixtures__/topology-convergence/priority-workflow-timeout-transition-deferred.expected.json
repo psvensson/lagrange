@@ -1,6 +1,6 @@
 {
   "summary": {
-    "frontierCount": 2,
+    "frontierCount": 1,
     "firstFrontierEdgeId": "priority_recovery_partition_progress",
     "firstFrontierState": "blocked",
     "firstFrontierOwner": "operation_workflow_owner",
@@ -19,17 +19,6 @@
         "priority_recovery_progress_blocked",
         "priority_recovery_event_driven_wait"
       ]
-    },
-    {
-      "id": "readiness_startup_support",
-      "state": "unknown",
-      "owner": "startup_readiness_owner",
-      "boundary": "startup_support_evidence",
-      "dominantReason": "absent",
-      "evidencePath": "absent",
-      "reasons": [
-        "evidence_missing"
-      ]
     }
   ],
   "dominantWitness": {
@@ -39,11 +28,11 @@
     "state": "blocked",
     "frontierState": "blocked",
     "dominantReason": "priority_recovery_progress_blocked",
-    "evidencePath": "report.scenarios[0].publicationConvergence.priorityRecoveryProgressSummary.dominantWitness",
     "reasons": [
       "priority_recovery_progress_blocked",
       "priority_recovery_event_driven_wait"
     ],
+    "evidencePath": "report.scenarios[0].publicationConvergence.priorityRecoveryProgressSummary.dominantWitness",
     "source": {
       "unresolvedSemanticStateIds": "operation_stalled,recovering_in_flight",
       "blockedPartitionIds": "control_plane_publications-p1,replica_operations-p1,sql_transaction_participants-p1",

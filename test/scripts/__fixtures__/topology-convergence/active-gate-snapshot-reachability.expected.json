@@ -28,11 +28,11 @@
     "state": "blocked",
     "frontierState": "blocked",
     "dominantReason": "active_gate_timed_out",
-    "evidencePath": "report.scenarios[0].publicationConvergence.activeGate.progress",
     "reasons": [
       "active_gate_timed_out",
       "snapshot_coverage_incomplete"
     ],
+    "evidencePath": "report.scenarios[0].publicationConvergence.activeGate.progress",
     "source": {
       "activeGateState": "timed_out",
       "snapshotCoverageComplete": "false",

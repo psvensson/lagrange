@@ -785,28 +785,10 @@ function deriveReasonCountsFromPublicationConvergence(controlPlane = null) {
   const activeGate = normalizePriorityRecoveryActiveGateSnapshot({
     activeGate: controlPlane?.activeGate || null,
     activeGateProgress: controlPlane?.activeGateProgress || null,
-    activeGateBestProgress: controlPlane?.activeGateBestProgress || null,
-    activeGateNoProgress: controlPlane?.activeGateNoProgress || null,
-    activeGateBlockerHistory: controlPlane?.activeGateBlockerHistory || null,
     activeGateAdmissionState: controlPlane?.activeGateAdmissionState || null,
   });
-  const activeGateProgress =
-    activeGate?.progress ||
-    (controlPlane?.activeGateProgress &&
-    typeof controlPlane.activeGateProgress === 'object' ?
-      controlPlane.activeGateProgress :
-      null);
-  const activeGateBestProgress =
-    activeGate?.bestProgress ||
-    (controlPlane?.activeGateBestProgress &&
-    typeof controlPlane.activeGateBestProgress === 'object' ?
-      controlPlane.activeGateBestProgress :
-      null);
-  const activeGateNoProgress =
-    controlPlane?.activeGateNoProgress &&
-    typeof controlPlane.activeGateNoProgress === 'object' ?
-      controlPlane.activeGateNoProgress :
-      null;
+  const activeGateProgress = activeGate?.progress || null;
+  const activeGateBestSnapshot = activeGate?.bestProgress || null;
   const activeGateSnapshotCoverage =
     controlPlane?.activeGateSnapshotCoverage &&
     typeof controlPlane.activeGateSnapshotCoverage === 'object' ?
@@ -814,8 +796,7 @@ function deriveReasonCountsFromPublicationConvergence(controlPlane = null) {
       null;
   const closureProgressSnapshot =
     activeGateProgress ||
-    activeGateBestProgress ||
-    activeGateNoProgress?.currentProgress ||
+    activeGateBestSnapshot ||
     (activeGateSnapshotCoverage ?
       {
         snapshotCoverageComplete:
@@ -847,10 +828,10 @@ function deriveReasonCountsFromPublicationConvergence(controlPlane = null) {
       null);
   const activeGateClosureWitness = classifyActiveGateClosureWitness({
     progressSnapshot: closureProgressSnapshot,
-    bestProgressSnapshot: activeGateBestProgress,
+    bestProgressSnapshot: activeGateBestSnapshot,
     publicationConvergence: publicationDetails,
     publicationConvergenceGate,
-    readinessMode: activeGate?.mode || activeGateNoProgress?.mode || null,
+    readinessMode: activeGate?.mode || null,
   });
   const normalizedPriorityRecoveryPartitionWitnesses =
     normalizePriorityRecoveryPartitionWitnessesForDiagnostics(
@@ -889,8 +870,7 @@ function deriveReasonCountsFromPublicationConvergence(controlPlane = null) {
     !publicationConvergenceGate &&
     !activeGate &&
     !activeGateProgress &&
-    !activeGateBestProgress &&
-    !activeGateNoProgress &&
+    !activeGateBestSnapshot &&
     priorityRecoveryProgressClassCount === ZERO &&
     failingInvariantIds.length === ZERO ?
     null :
@@ -906,8 +886,7 @@ function deriveReasonCountsFromPublicationConvergence(controlPlane = null) {
       closureWitnessClass:
             activeGate?.closureWitnessClass ||
             activeGateProgress?.closureWitnessClass ||
-            activeGateBestProgress?.closureWitnessClass ||
-            activeGateNoProgress?.closureWitnessClass ||
+            activeGateBestSnapshot?.closureWitnessClass ||
             activeGateClosureWitness?.closureWitnessClass ||
             null,
       priorityRecoveryProgressClassCount,
@@ -1211,39 +1190,37 @@ function hasBlockingReadinessFailure(readinessFailure = null) {
 }
 
 function resolveReadinessFailure(controlPlane = {}) {
-  const activeGateNoProgress =
-    controlPlane?.activeGateNoProgress &&
-    typeof controlPlane.activeGateNoProgress === 'object' ?
-      controlPlane.activeGateNoProgress :
-      null;
+  const resolvedActiveGate = normalizePriorityRecoveryActiveGateSnapshot({
+    activeGate: controlPlane?.activeGate || null,
+    activeGateProgress: controlPlane?.activeGateProgress || null,
+    activeGateAdmissionState: controlPlane?.activeGateAdmissionState || null,
+  });
   const explicit = normalizeReadinessFailure(
-    activeGateNoProgress?.readinessFailure || null,
+    resolvedActiveGate?.readinessFailure || null,
   );
   if (explicit) {
     return explicit;
   }
   const readinessDelay = normalizeActiveGateReadinessDelay(
-    activeGateNoProgress?.readinessDelay ||
+    resolvedActiveGate?.readinessDelay ||
       controlPlane?.activeGateProgress?.readinessDelay ||
-      controlPlane?.activeGateBestProgress?.readinessDelay ||
-      activeGateNoProgress?.currentProgress?.readinessDelay ||
       null,
   );
-  if (!isRecord(activeGateNoProgress) && !readinessDelay) {
+  if (!isRecord(resolvedActiveGate) && !readinessDelay) {
     return null;
   }
   const attemptsSinceProgress = Number.isInteger(
-    activeGateNoProgress?.attemptsSinceProgress,
+    resolvedActiveGate?.attemptsSinceProgress,
   ) ?
-    Math.max(ZERO, activeGateNoProgress.attemptsSinceProgress) :
+    Math.max(ZERO, resolvedActiveGate.attemptsSinceProgress) :
     null;
   const maxAttempts =
-    Number.isInteger(activeGateNoProgress?.maxAttempts) &&
-    activeGateNoProgress.maxAttempts > ZERO ?
-      Math.max(ZERO, activeGateNoProgress.maxAttempts) :
+    Number.isInteger(resolvedActiveGate?.maxAttempts) &&
+    resolvedActiveGate.maxAttempts > ZERO ?
+      Math.max(ZERO, resolvedActiveGate.maxAttempts) :
       null;
-  const stalled = activeGateNoProgress?.stalled === true;
-  const reasonCode = activeGateNoProgress?.reasonCode;
+  const stalled = resolvedActiveGate?.state === 'stalled';
+  const reasonCode = resolvedActiveGate?.reasonCode;
   const classCode =
     readinessDelay &&
     readinessDelay.timedOut === true &&
@@ -1253,7 +1230,7 @@ function resolveReadinessFailure(controlPlane = {}) {
         READINESS_FAILURE_CLASS_NO_PROGRESS :
         null;
   return normalizeReadinessFailure({
-    mode: activeGateNoProgress?.mode || null,
+    mode: resolvedActiveGate?.mode || null,
     classCode,
     recoverability: readinessDelay?.recoverability || null,
     progressSignal: {

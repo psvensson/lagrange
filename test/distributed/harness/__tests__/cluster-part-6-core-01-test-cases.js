@@ -790,7 +790,7 @@ export function registerClusterPart6Core01Tests(context) {
       assert.equal(
         recordedStages.some((entry) =>
           entry.stage === 'setup.cluster.waiting-active' &&
-        entry.details?.activeGateNoProgress?.stalled === true),
+        entry.details?.activeGate?.state === 'stalled'),
         true,
         'stall diagnostics should be emitted into cluster-stage playback details',
       );

@@ -754,14 +754,17 @@ export function registerFailureBundleActiveGateTailTests({
 
       assert.equal(
         publicationEvidence.publicationConvergence.missingPublishedCount,
-        ZERO_COUNT,
+        MISSING_COUNT,
       );
       assert.deepEqual(
         publicationEvidence.publicationConvergence.missingPublishedNodeIds,
-        [],
+        [MISSING_NODE_ONE, MISSING_NODE_TWO],
       );
-      assert.equal(activeGateProgress.missingPublishedCount, ZERO_COUNT);
-      assert.deepEqual(activeGateProgress.selectedMissingPublishedNodeIds, []);
+      assert.equal(activeGateProgress.missingPublishedCount, MISSING_COUNT);
+      assert.deepEqual(
+        activeGateProgress.selectedMissingPublishedNodeIds,
+        [MISSING_NODE_ONE, MISSING_NODE_TWO],
+      );
       assert.deepEqual(activeGateProgress.gateReasons, []);
       assert.equal(
         activeGateProgress.blockers.includes(PUBLICATION_GATE_BLOCKER),
@@ -1129,15 +1132,15 @@ export function registerFailureBundleActiveGateTailTests({
 
       assert.equal(
         ownerContract.dominantWitness.edgeId,
-        EDGE_ACTIVE_GATE_SNAPSHOT_COVERAGE,
+        'publication_ack_convergence',
       );
       assert.equal(
         ownerContract.dominantWitness.owner,
-        OWNER_STARTUP_ACTIVE_GATE,
+        'topology_publication_owner',
       );
       assert.equal(
         ownerContract.dominantWitness.boundary,
-        BOUNDARY_SNAPSHOT_COVERAGE,
+        'publication_convergence',
       );
       assert.equal(
         ownerContract.dominantWitness.state,
@@ -1145,23 +1148,11 @@ export function registerFailureBundleActiveGateTailTests({
       );
       assert.equal(
         ownerContract.dominantWitness.dominantReason,
-        ACTIVE_GATE_TIMED_OUT_REASON,
+        'publication_pending',
       );
-      assert.deepEqual(
-        ownerContract.dominantWitness.reasons,
-        [
-          ACTIVE_GATE_TIMED_OUT_REASON,
-          SNAPSHOT_COVERAGE_INCOMPLETE_REASON,
-        ],
-      );
-      assert.equal(
-        ownerContract.dominantWitness.source.selectedSnapshotError,
-        SELECTED_SNAPSHOT_ERROR,
-      );
-      assert.equal(
-        ownerContract.dominantWitness.source.readinessDelayCause,
-        SNAPSHOT_TIMEOUT_CAUSE,
-      );
+      assert.deepEqual(ownerContract.dominantWitness.reasons, [
+        'publication_pending',
+      ]);
     },
   );
 

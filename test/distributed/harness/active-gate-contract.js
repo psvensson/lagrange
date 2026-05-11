@@ -76,39 +76,6 @@ function inferActiveGateState(options = {}) {
   return PRIORITY_RECOVERY_ACTIVE_GATE_STATE.WAITING;
 }
 
-function buildActiveGateNoProgressReport(activeGate) {
-  if (!isRecord(activeGate)) {
-    return null;
-  }
-  const hasBudget =
-    Number.isInteger(activeGate.maxAttempts) && activeGate.maxAttempts > ZERO;
-  return Object.freeze({
-    enabled: hasBudget,
-    mode: activeGate.mode,
-    maxAttempts: activeGate.maxAttempts,
-    maxCoordinatorCycles: activeGate.maxCoordinatorCycles,
-    attemptsSinceProgress: activeGate.attemptsSinceProgress,
-    coordinatorCyclesSinceProgress: activeGate.coordinatorCyclesSinceProgress,
-    stalled:
-      activeGate.state === PRIORITY_RECOVERY_ACTIVE_GATE_STATE.STALLED ||
-      activeGate.state === PRIORITY_RECOVERY_ACTIVE_GATE_STATE.TIMED_OUT,
-    lastMeaningfulProgressAttempt: activeGate.lastMeaningfulProgressAttempt,
-    lastMeaningfulProgressElapsedMs: activeGate.lastMeaningfulProgressElapsedMs,
-    lastMeaningfulProgress: activeGate.lastMeaningfulProgress,
-    currentProgress: activeGate.progress,
-    closureRecordId: activeGate.closureRecordId,
-    closureWitnessClass: activeGate.closureWitnessClass,
-    readinessDelay: activeGate.readinessDelay,
-    readinessFailure: activeGate.readinessFailure,
-    reasonCode: activeGate.reasonCode,
-    stalledReason: activeGate.stalledReason,
-    failedNoProgress: activeGate.failedNoProgress,
-    lastMeaningfulChange: activeGate.lastMeaningfulChange,
-    lastProgressEvent: activeGate.lastProgressEvent,
-    activeGateBlockerHistory: activeGate.blockerHistory,
-  });
-}
-
 export function buildPriorityRecoveryActiveGateSnapshot(options = {}) {
   const state = inferActiveGateState(options);
   const progress =
@@ -195,20 +162,28 @@ export function normalizePriorityRecoveryActiveGateSnapshot(options = {}) {
         explicitActiveGate.lastMeaningfulProgressAttempt,
       lastMeaningfulProgressElapsedMs:
         explicitActiveGate.lastMeaningfulProgressElapsedMs,
-      closureRecordId: explicitActiveGate.closureRecordId,
-      closureWitnessClass: explicitActiveGate.closureWitnessClass,
+      closureRecordId:
+        explicitActiveGate.closureRecordId ||
+        explicitActiveGate.progress?.closureRecordId ||
+        explicitActiveGate.bestProgress?.closureRecordId,
+      closureWitnessClass:
+        explicitActiveGate.closureWitnessClass ||
+        explicitActiveGate.progress?.closureWitnessClass ||
+        explicitActiveGate.bestProgress?.closureWitnessClass,
       reasonCode: explicitActiveGate.reasonCode,
       stalledReason: explicitActiveGate.stalledReason,
-      progress: explicitActiveGate.progress,
-      bestProgress: explicitActiveGate.bestProgress,
-      blockerHistory:
-        explicitActiveGate.blockerHistory ||
-        explicitActiveGate.activeGateBlockerHistory,
+      progress: explicitActiveGate.progress || options.activeGateProgress,
+      bestProgress: explicitActiveGate.bestProgress || options.bestProgress,
+      blockerHistory: explicitActiveGate.blockerHistory,
       admissionState:
         explicitActiveGate.admissionState ||
-        explicitActiveGate.activeGateAdmissionState,
+        explicitActiveGate.activeGateAdmissionState ||
+        options.activeGateAdmissionState,
       waitPolicy: explicitActiveGate.waitPolicy,
-      readinessDelay: explicitActiveGate.readinessDelay,
+      readinessDelay:
+        explicitActiveGate.readinessDelay ||
+        explicitActiveGate.progress?.readinessDelay ||
+        explicitActiveGate.bestProgress?.readinessDelay,
       readinessFailure: explicitActiveGate.readinessFailure,
       lastMeaningfulProgress: explicitActiveGate.lastMeaningfulProgress,
       lastMeaningfulChange: explicitActiveGate.lastMeaningfulChange,
@@ -231,19 +206,12 @@ export function normalizePriorityRecoveryActiveGateSnapshot(options = {}) {
     isRecord(options.progress) ?
       options.progress :
       null;
-  const activeGateBestProgress = isRecord(options.activeGateBestProgress) ?
-    options.activeGateBestProgress :
-    isRecord(options.bestProgress) ?
-      options.bestProgress :
-      null;
-  const activeGateNoProgress = isRecord(options.activeGateNoProgress) ?
-    options.activeGateNoProgress :
+  const fallbackBestProgress = isRecord(options.bestProgress) ?
+    options.bestProgress :
     null;
-  const activeGateBlockerHistory = Array.isArray(options.activeGateBlockerHistory) ?
-    options.activeGateBlockerHistory :
-    Array.isArray(options.blockerHistory) ?
-      options.blockerHistory :
-      [];
+  const fallbackBlockerHistory = Array.isArray(options.blockerHistory) ?
+    options.blockerHistory :
+    [];
   const activeGateAdmissionState = isRecord(options.activeGateAdmissionState) ?
     options.activeGateAdmissionState :
     isRecord(options.admissionState) ?
@@ -251,99 +219,58 @@ export function normalizePriorityRecoveryActiveGateSnapshot(options = {}) {
       null;
   if (
     !activeGateProgress &&
-    !activeGateBestProgress &&
-    !activeGateNoProgress &&
-    activeGateBlockerHistory.length === ZERO &&
+    !fallbackBestProgress &&
+    fallbackBlockerHistory.length === ZERO &&
     !activeGateAdmissionState
   ) {
     return null;
   }
   const resolvedState =
-    activeGateNoProgress?.stalled === true ?
-      PRIORITY_RECOVERY_ACTIVE_GATE_STATE.STALLED :
-      activeGateProgress?.blockerSignature === 'ready' ||
-      (
-        activeGateProgress?.activeNodeCount === activeGateProgress?.expectedNodeCount &&
-        activeGateProgress?.gateReasonCount === ZERO &&
-        activeGateProgress?.pendingAckCount === ZERO &&
-        activeGateProgress?.missingPublishedCount === ZERO &&
-        activeGateProgress?.snapshotCoverageComplete === true
-      ) ?
-        PRIORITY_RECOVERY_ACTIVE_GATE_STATE.READY :
-        PRIORITY_RECOVERY_ACTIVE_GATE_STATE.WAITING;
+    activeGateProgress?.blockerSignature === 'ready' ||
+    (
+      activeGateProgress?.activeNodeCount === activeGateProgress?.expectedNodeCount &&
+      activeGateProgress?.gateReasonCount === ZERO &&
+      activeGateProgress?.pendingAckCount === ZERO &&
+      activeGateProgress?.missingPublishedCount === ZERO &&
+      activeGateProgress?.snapshotCoverageComplete === true
+    ) ?
+      PRIORITY_RECOVERY_ACTIVE_GATE_STATE.READY :
+      PRIORITY_RECOVERY_ACTIVE_GATE_STATE.WAITING;
   return buildPriorityRecoveryActiveGateSnapshot({
-    mode:
-      activeGateNoProgress?.mode ||
-      options.mode ||
-      options.readinessMode ||
-      null,
+    mode: options.mode || options.readinessMode || null,
     state: resolvedState,
     attempts: options.attempts,
     elapsedMs: options.elapsedMs,
-    maxAttempts: activeGateNoProgress?.maxAttempts,
-    maxCoordinatorCycles: activeGateNoProgress?.maxCoordinatorCycles,
-    attemptsSinceProgress: activeGateNoProgress?.attemptsSinceProgress,
-    coordinatorCyclesSinceProgress:
-      activeGateNoProgress?.coordinatorCyclesSinceProgress,
-    lastMeaningfulProgressAttempt:
-      activeGateNoProgress?.lastMeaningfulProgressAttempt,
-    lastMeaningfulProgressElapsedMs:
-      activeGateNoProgress?.lastMeaningfulProgressElapsedMs,
     closureRecordId:
       activeGateProgress?.closureRecordId ||
-      activeGateBestProgress?.closureRecordId ||
-      activeGateNoProgress?.closureRecordId ||
+      fallbackBestProgress?.closureRecordId ||
       null,
     closureWitnessClass:
       activeGateProgress?.closureWitnessClass ||
-      activeGateBestProgress?.closureWitnessClass ||
-      activeGateNoProgress?.closureWitnessClass ||
+      fallbackBestProgress?.closureWitnessClass ||
       null,
-    reasonCode: activeGateNoProgress?.reasonCode || null,
-    stalledReason: activeGateNoProgress?.stalledReason || null,
-    progress:
-      activeGateProgress ||
-      activeGateNoProgress?.currentProgress ||
-      null,
-    bestProgress: activeGateBestProgress,
-    blockerHistory: activeGateBlockerHistory,
+    progress: activeGateProgress || null,
+    bestProgress: fallbackBestProgress,
+    blockerHistory: fallbackBlockerHistory,
     admissionState: activeGateAdmissionState,
     readinessDelay:
-      activeGateNoProgress?.readinessDelay ||
       activeGateProgress?.readinessDelay ||
-      activeGateBestProgress?.readinessDelay ||
+      fallbackBestProgress?.readinessDelay ||
       null,
-    readinessFailure: activeGateNoProgress?.readinessFailure || null,
-    lastMeaningfulProgress:
-      activeGateNoProgress?.lastMeaningfulProgress || null,
-    lastMeaningfulChange:
-      activeGateNoProgress?.lastMeaningfulChange || null,
-    lastProgressEvent:
-      activeGateNoProgress?.lastProgressEvent || null,
-    failedNoProgress:
-      activeGateNoProgress?.failedNoProgress || null,
-    stalled: activeGateNoProgress?.stalled === true,
   });
 }
 
 export function derivePriorityRecoveryActiveGateReportFields(activeGate) {
   if (!isRecord(activeGate)) {
     return {
+      activeGate: null,
       activeGateProgress: null,
-      activeGateBestProgress: null,
-      activeGateNoProgress: null,
-      activeGateBlockerHistory: null,
       activeGateAdmissionState: null,
     };
   }
   return {
+    activeGate,
     activeGateProgress: activeGate.progress || null,
-    activeGateBestProgress: activeGate.bestProgress || null,
-    activeGateNoProgress: buildActiveGateNoProgressReport(activeGate),
-    activeGateBlockerHistory:
-      activeGate.blockerHistory.length > ZERO ?
-        activeGate.blockerHistory :
-        null,
     activeGateAdmissionState: activeGate.admissionState || null,
   };
 }

@@ -8,7 +8,7 @@ handoff boundary.
 ## Current Blocker Snapshot
 
 Current package:
-`work/packages/todo-20260509-spec-led-runtime-modularization-active-gate-report-schema-alias-deletion.md`.
+`work/packages/active-20260509-spec-led-runtime-modularization-active-gate-report-schema-alias-deletion.md`.
 
 Owner boundary:
 `diagnostics_artifact_schema_owner / active_gate_report_schema_alias_deletion`.
@@ -35,7 +35,7 @@ concerns.
 ## Package Queue
 
 1. [Priority Recovery Backpressure Frontier](../packages/done-20260511-spec-led-runtime-modularization-priority-recovery-backpressure-frontier.md)
-2. [Active Gate Report Schema Alias Deletion](../packages/todo-20260509-spec-led-runtime-modularization-active-gate-report-schema-alias-deletion.md)
+2. [Active Gate Report Schema Alias Deletion](../packages/active-20260509-spec-led-runtime-modularization-active-gate-report-schema-alias-deletion.md)
 
 ## Activation Rules
 

@@ -289,7 +289,8 @@ export function registerFailureBundleCore05Tests(context) {
         [ACTIVE_GATE_BLOCKER],
       );
       assert.equal(
-        scenarioBundle.summary.readinessFailure.classCode,
+        scenarioBundle.publicationConvergence.activeGate.readinessFailure
+          .classCode,
         READINESS_CLASS_NO_PROGRESS,
       );
     },

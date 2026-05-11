@@ -135,12 +135,6 @@ export function registerFailureBundlePublicationClosureTailTests({
                   blockers: [ACTIVE_GATE_COVERAGE_BLOCKER],
                 },
               },
-              activeGateNoProgress: {
-                mode: ACTIVE_GATE_MODE_STARTUP,
-                reasonCode: ACTIVE_GATE_TERMINAL_REASON,
-                attemptsSinceProgress: ATTEMPTS_SINCE_PROGRESS,
-                stalled: false,
-              },
             },
           },
         },
@@ -270,12 +264,6 @@ export function registerFailureBundlePublicationClosureTailTests({
                   ],
                 },
               },
-              activeGateNoProgress: {
-                mode: ACTIVE_GATE_MODE_STARTUP,
-                reasonCode: ACTIVE_GATE_TERMINAL_REASON,
-                attemptsSinceProgress: ATTEMPTS_SINCE_PROGRESS,
-                stalled: false,
-              },
             },
           },
         },
@@ -385,11 +373,10 @@ export function registerFailureBundlePublicationClosureTailTests({
           ACTIVE_GATE_COVERAGE_BLOCKER,
         ],
       };
-      const activeGateNoProgress = {
+      const activeGateReadinessSnapshot = {
         mode: ACTIVE_GATE_MODE_STARTUP,
         reasonCode: ACTIVE_GATE_TERMINAL_REASON,
         attemptsSinceProgress: ATTEMPTS_SINCE_PROGRESS,
-        stalled: false,
         readinessFailure: {
           mode: ACTIVE_GATE_MODE_STARTUP,
           classCode: ACTIVE_GATE_READINESS_CLASS,
@@ -404,7 +391,7 @@ export function registerFailureBundlePublicationClosureTailTests({
           cause: ACTIVE_GATE_READINESS_CLASS,
           error: SNAPSHOT_TIMEOUT_ERROR,
         },
-        currentProgress: {
+        progress: {
           expectedNodeCount: EXPECTED_NODE_COUNT,
           activeNodeCount: ACTIVE_NODE_COUNT,
           inactiveNodeCount: INACTIVE_NODE_COUNT,
@@ -439,7 +426,7 @@ export function registerFailureBundlePublicationClosureTailTests({
         lastMeaningfulProgress: activeGateProgress,
       };
       const activeGate = {
-        mode: ACTIVE_GATE_MODE_STARTUP,
+        ...activeGateReadinessSnapshot,
         state: ACTIVE_GATE_STATE_TIMED_OUT,
         ready: false,
         attempts: NO_PROGRESS_ATTEMPT_COUNT,
@@ -449,6 +436,7 @@ export function registerFailureBundlePublicationClosureTailTests({
         closureRecordId: CLOSURE_RECORD_ID,
         closureWitnessClass: CLOSURE_WITNESS_CLASS,
         reasonCode: ACTIVE_GATE_TERMINAL_REASON,
+        readinessFailure: activeGateReadinessSnapshot.readinessFailure,
         readinessDelay: {
           timedOut: true,
           cause: ACTIVE_GATE_READINESS_CLASS,
@@ -457,6 +445,8 @@ export function registerFailureBundlePublicationClosureTailTests({
           error: SNAPSHOT_TIMEOUT_ERROR,
         },
         progress: activeGateProgress,
+        bestProgress: activeGateProgress,
+        lastMeaningfulProgress: activeGateProgress,
       };
       const scenarios = [{
         scenario: SCENARIO_NAME,
@@ -489,7 +479,6 @@ export function registerFailureBundlePublicationClosureTailTests({
               },
             },
             activeGate,
-            activeGateNoProgress,
           },
         },
       }];
@@ -521,7 +510,8 @@ export function registerFailureBundlePublicationClosureTailTests({
         STARTUP_DOMINANT_REASON,
       );
       assert.equal(
-        scenarioBundle.summary.readinessFailure?.classCode,
+        scenarioBundle.publicationConvergence.activeGate.readinessFailure
+          ?.classCode,
         ACTIVE_GATE_READINESS_CLASS,
       );
       assert.equal(

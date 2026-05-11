@@ -84,10 +84,20 @@ export function registerFailureBundleCore08Tests(context) {
                   }],
                 },
               },
-              activeGateBestProgress: {
+              activeGate: {
                 closureRecordId: 'CL-PR-021',
                 closureWitnessClass:
                   'publication_converged_priority_spread_pending',
+                progress: {
+                  closureRecordId: 'CL-PR-021',
+                  closureWitnessClass:
+                    'publication_converged_priority_spread_pending',
+                },
+                bestProgress: {
+                  closureRecordId: 'CL-PR-021',
+                  closureWitnessClass:
+                    'publication_converged_priority_spread_pending',
+                },
               },
               priorityRecoveryDecisionSnapshots: {
                 schemaVersion: 1,

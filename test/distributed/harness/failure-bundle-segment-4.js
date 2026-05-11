@@ -550,14 +550,6 @@ function mergeControlPlaneDiagnostics(primary, fallback) {
       null,
     activeGateProgress:
       primary.activeGateProgress || fallback.activeGateProgress || null,
-    activeGateBestProgress:
-      primary.activeGateBestProgress || fallback.activeGateBestProgress || null,
-    activeGateNoProgress:
-      primary.activeGateNoProgress || fallback.activeGateNoProgress || null,
-    activeGateBlockerHistory:
-      primary.activeGateBlockerHistory ||
-      fallback.activeGateBlockerHistory ||
-      null,
     priorityRecoveryObservation: mergePriorityRecoveryObservationSnapshots(
       primary.priorityRecoveryObservation,
       fallback.priorityRecoveryObservation,
@@ -2866,14 +2858,9 @@ function buildPublicationConvergenceSummary(controlPlane) {
     controlPlane.priorityRecoveryObservation :
     null;
   const hasActiveGatePublicationEvidence =
-    (controlPlane?.publicationConvergenceGate &&
-      typeof controlPlane.publicationConvergenceGate === 'object') ||
-    (controlPlane?.activeGateProgress &&
-      typeof controlPlane.activeGateProgress === 'object') ||
-    (controlPlane?.activeGateBestProgress &&
-      typeof controlPlane.activeGateBestProgress === 'object') ||
-    (controlPlane?.activeGateNoProgress &&
-      typeof controlPlane.activeGateNoProgress === 'object');
+    isRecord(controlPlane?.activeGate) ||
+    isRecord(controlPlane?.publicationConvergenceGate) ||
+    isRecord(controlPlane?.activeGateProgress);
   if (
     !publicationConvergence &&
     !priorityRecoveryObservation &&
@@ -2916,21 +2903,6 @@ function buildPublicationConvergenceSummary(controlPlane) {
       explicitPriorityRecoveryObservation?.activeGateProgress ||
       controlPlane?.activeGateProgress ||
       null,
-    activeGateBestProgress:
-      priorityRecoveryObservation?.activeGateBestProgress ||
-      explicitPriorityRecoveryObservation?.activeGateBestProgress ||
-      controlPlane?.activeGateBestProgress ||
-      null,
-    activeGateNoProgress:
-      priorityRecoveryObservation?.activeGateNoProgress ||
-      explicitPriorityRecoveryObservation?.activeGateNoProgress ||
-      controlPlane?.activeGateNoProgress ||
-      null,
-    activeGateBlockerHistory:
-      priorityRecoveryObservation?.activeGateBlockerHistory ||
-      explicitPriorityRecoveryObservation?.activeGateBlockerHistory ||
-      controlPlane?.activeGateBlockerHistory ||
-      null,
     activeGateAdmissionState:
       priorityRecoveryObservation?.activeGateAdmissionState ||
       explicitPriorityRecoveryObservation?.activeGateAdmissionState ||
@@ -2938,7 +2910,7 @@ function buildPublicationConvergenceSummary(controlPlane) {
       null,
   });
   const activeGateProgress = activeGate?.progress || null;
-  const activeGateBestProgress = activeGate?.bestProgress || null;
+  const bestProgressSnapshot = activeGate?.bestProgress || null;
   const currentPendingAckNodeIds = resolveCurrentPendingAckNodeIds({
     activeGateProgress,
     priorityRecoveryObservation,
@@ -2951,41 +2923,15 @@ function buildPublicationConvergenceSummary(controlPlane) {
     typeof controlPlane.activeGateSnapshotCoverage === 'object' ?
       controlPlane.activeGateSnapshotCoverage :
       null;
-  const activeGateNoProgress =
-    isRecord(priorityRecoveryObservation?.activeGateNoProgress) ?
-      priorityRecoveryObservation.activeGateNoProgress :
-      isRecord(explicitPriorityRecoveryObservation?.activeGateNoProgress) ?
-        explicitPriorityRecoveryObservation.activeGateNoProgress :
-        isRecord(controlPlane?.activeGateNoProgress) ?
-          controlPlane.activeGateNoProgress :
-          null;
   const activeGateReadinessDelay = normalizeActiveGateReadinessDelay(
     activeGate?.readinessDelay ||
-      activeGateNoProgress?.readinessDelay ||
       activeGateProgress?.readinessDelay ||
-      activeGateBestProgress?.readinessDelay ||
-      activeGateNoProgress?.currentProgress?.readinessDelay ||
+      bestProgressSnapshot?.readinessDelay ||
       null,
   );
-  const activeGateBlockerHistory = Array.isArray(
-    activeGate?.blockerHistory,
-  ) ?
-    activeGate.blockerHistory :
-    Array.isArray(
-      priorityRecoveryObservation?.activeGateBlockerHistory,
-    ) ?
-      priorityRecoveryObservation.activeGateBlockerHistory :
-      Array.isArray(
-        explicitPriorityRecoveryObservation?.activeGateBlockerHistory,
-      ) ?
-        explicitPriorityRecoveryObservation.activeGateBlockerHistory :
-        Array.isArray(controlPlane?.activeGateBlockerHistory) ?
-          controlPlane.activeGateBlockerHistory :
-          [];
   const closureProgressSnapshot =
     activeGateProgress ||
-    activeGateBestProgress ||
-    activeGateNoProgress?.currentProgress ||
+    bestProgressSnapshot ||
     (activeGateSnapshotCoverage ?
       {
         snapshotCoverageComplete:
@@ -3029,10 +2975,10 @@ function buildPublicationConvergenceSummary(controlPlane) {
       null);
   const activeGateClosureWitness = classifyActiveGateClosureWitness({
     progressSnapshot: closureProgressSnapshot,
-    bestProgressSnapshot: activeGateBestProgress,
+    bestProgressSnapshot,
     publicationConvergence,
     publicationConvergenceGate,
-    readinessMode: activeGate?.mode || activeGateNoProgress?.mode || null,
+    readinessMode: activeGate?.mode || null,
   });
   const decisionClosureWitness =
     priorityRecoveryDecisionSnapshots?.closureWitness &&
@@ -3092,7 +3038,7 @@ function buildPublicationConvergenceSummary(controlPlane) {
         normalizeNonNegativeCount(publicationConvergence?.pendingAckCount),
         normalizeNonNegativeCount(publicationConvergenceGate?.pendingAckCount),
         normalizeNonNegativeCount(activeGateProgress?.pendingAckCount),
-        normalizeNonNegativeCount(activeGateBestProgress?.pendingAckCount),
+        normalizeNonNegativeCount(bestProgressSnapshot?.pendingAckCount),
       );
   const missingPublishedEvidence = buildPublicationMissingPublishedEvidence({
     activeGateSnapshotCoveragePending,
@@ -3111,7 +3057,14 @@ function buildPublicationConvergenceSummary(controlPlane) {
   const explicitPublicationPendingOpen =
     priorityRecoveryObservation?.publicationPending === true ||
     publicationConvergenceGate?.publicationPending === true ||
-    publicationConvergence?.publicationPending === true;
+    publicationConvergence?.publicationPending === true ||
+    rawPublicationConvergence?.publicationPending === true ||
+    rawPublicationConvergenceGate?.publicationPending === true ||
+    explicitPriorityRecoveryObservation?.publicationPending === true;
+  const rawPublicationPendingOpen =
+    rawPublicationConvergence?.publicationPending === true ||
+    rawPublicationConvergenceGate?.publicationPending === true ||
+    explicitPriorityRecoveryObservation?.publicationPending === true;
   const coverageLagAllowsExplicitPublicationPending =
     activeGateSnapshotCoveragePending !== true ||
     (
@@ -3122,6 +3075,8 @@ function buildPublicationConvergenceSummary(controlPlane) {
     );
   const publicationPendingOpen =
     pendingAckCount > ZERO ||
+    missingPublishedCount > ZERO ||
+    rawPublicationPendingOpen === true ||
     (
       explicitPublicationPendingOpen === true &&
       coverageLagAllowsExplicitPublicationPending === true
@@ -3147,12 +3102,13 @@ function buildPublicationConvergenceSummary(controlPlane) {
     publicationConvergence?.recoveryProtocolState ||
     priorityRecoveryObservation?.recoveryProtocolState ||
     activeGateProgress?.recoveryProtocolState ||
-    activeGateBestProgress?.recoveryProtocolState ||
+    bestProgressSnapshot?.recoveryProtocolState ||
     null;
   const recoveryProtocolState =
     resolvePublicationConvergenceRecoveryProtocolState({
       rawRecoveryProtocolState,
-      activePrioritySpreadGate: prioritySpreadPendingOpen,
+      activePrioritySpreadGate:
+        prioritySpreadPendingOpen === true && publicationPendingOpen !== true,
       publicationRecoveryOpen,
     });
   const suppressGenericPublicationEpochReason =
@@ -3238,13 +3194,13 @@ function buildPublicationConvergenceSummary(controlPlane) {
       priorityRecoveryObservation?.publicationEpoch ??
       publicationConvergence?.publicationEpoch ??
       activeGateProgress?.publicationEpoch ??
-      activeGateBestProgress?.publicationEpoch ??
+      bestProgressSnapshot?.publicationEpoch ??
       null,
     publicationStatus:
       priorityRecoveryObservation?.publicationStatus ||
       publicationConvergence?.publicationStatus ||
       activeGateProgress?.publicationStatus ||
-      activeGateBestProgress?.publicationStatus ||
+      bestProgressSnapshot?.publicationStatus ||
       null,
     pendingAckNodeIds,
     pendingAckCount,
@@ -3271,12 +3227,9 @@ function buildPublicationConvergenceSummary(controlPlane) {
     publicationConvergenceGateReasons,
     ...(activeGate ? {activeGate} : {}),
     activeGateProgress,
-    activeGateBestProgress,
-    activeGateNoProgress,
     activeGateSnapshotCoveragePending,
     activeGateSnapshotCoverageBlocker,
     activeGateReadinessDelay,
-    activeGateBlockerHistory,
     closureRecordId:
       priorityRecoveryObservation?.closureRecordId ||
       publicationConvergenceGate?.closureRecordId ||

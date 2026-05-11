@@ -121,10 +121,10 @@ export function registerFailureBundleCore03Tests(context) {
                   error: SNAPSHOT_REACHABILITY_ERROR,
                 },
               },
-              activeGateNoProgress: {
+              activeGate: {
                 mode: STARTUP_READINESS_MODE,
+                state: 'ready',
                 attemptsSinceProgress: SINGLE_COUNT,
-                stalled: false,
                 readinessDelay: {
                   timedOut: true,
                   cause: SNAPSHOT_REACHABILITY_TIMEOUT,

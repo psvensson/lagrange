@@ -28,11 +28,11 @@
     "state": "blocked",
     "frontierState": "blocked",
     "dominantReason": "pending_acks_present",
-    "evidencePath": "report.scenarios[0].publicationConvergence",
     "reasons": [
       "publication_pending",
       "pending_acks_present"
     ],
+    "evidencePath": "report.scenarios[0].publicationConvergence",
     "source": {
       "publicationEpoch": 4,
       "publicationStatus": "ACK_PENDING",

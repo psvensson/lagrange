@@ -438,7 +438,7 @@ function buildBestProgressPublicationClosedControlPlane(
     bestProgress,
     priorityPartitionSummary,
   );
-  const activeGateBestProgress = buildClosedPublicationProgressProjection(
+  const projectedBestProgress = buildClosedPublicationProgressProjection(
     activeGate?.bestProgress,
     bestProgress,
     priorityPartitionSummary,
@@ -448,16 +448,13 @@ function buildBestProgressPublicationClosedControlPlane(
       activeGate: {
         ...omitStalePublicationFields(activeGate),
         progress: activeGateProgress || activeGate.progress,
-        bestProgress: activeGateBestProgress || activeGate.bestProgress,
+        bestProgress: projectedBestProgress || activeGate.bestProgress,
       },
     }) :
     null;
   const activeGateFields = projectedActiveGate ?
     derivePriorityRecoveryActiveGateReportFields(projectedActiveGate) :
     {};
-  const projectedActiveGateBestProgress = projectedActiveGate?.bestProgress ||
-    activeGateBestProgress ||
-    null;
   const closedPublicationFields = Object.freeze({
     publicationStatus: bestProgress.publicationStatus,
     status: bestProgress.publicationStatus,
@@ -512,15 +509,6 @@ function buildBestProgressPublicationClosedControlPlane(
     ...(activeGateFields.activeGateProgress ?
       {activeGateProgress: activeGateFields.activeGateProgress} :
       {}),
-    ...(projectedActiveGateBestProgress ?
-      {activeGateBestProgress: projectedActiveGateBestProgress} :
-      {}),
-    ...(activeGateFields.activeGateNoProgress ?
-      {activeGateNoProgress: activeGateFields.activeGateNoProgress} :
-      {}),
-    ...(activeGateFields.activeGateBlockerHistory ?
-      {activeGateBlockerHistory: activeGateFields.activeGateBlockerHistory} :
-      {}),
   });
   return {
     ...controlPlane,
@@ -530,7 +518,12 @@ function buildBestProgressPublicationClosedControlPlane(
     priorityRecoveryDecisionSnapshots:
       PUBLICATION_EVIDENCE_CLOSED_PRIORITY_RECOVERY_DECISION_SNAPSHOTS,
     ...(projectedActiveGate ? {activeGate: projectedActiveGate} : {}),
-    ...(activeGateFields || {}),
+    ...(activeGateFields.activeGateProgress ?
+      {activeGateProgress: activeGateFields.activeGateProgress} :
+      {}),
+    ...(activeGateFields.activeGateAdmissionState ?
+      {activeGateAdmissionState: activeGateFields.activeGateAdmissionState} :
+      {}),
   };
 }
 
@@ -543,18 +536,6 @@ function buildPublicationEvidenceControlPlane(controlPlane = null) {
     activeGateProgress:
       controlPlane?.activeGateProgress ||
       controlPlane?.priorityRecoveryObservation?.activeGateProgress ||
-      null,
-    activeGateBestProgress:
-      controlPlane?.activeGateBestProgress ||
-      controlPlane?.priorityRecoveryObservation?.activeGateBestProgress ||
-      null,
-    activeGateNoProgress:
-      controlPlane?.activeGateNoProgress ||
-      controlPlane?.priorityRecoveryObservation?.activeGateNoProgress ||
-      null,
-    activeGateBlockerHistory:
-      controlPlane?.activeGateBlockerHistory ||
-      controlPlane?.priorityRecoveryObservation?.activeGateBlockerHistory ||
       null,
     activeGateAdmissionState:
       controlPlane?.activeGateAdmissionState ||
@@ -1855,21 +1836,6 @@ function buildCanonicalPriorityRecoveryObservation(
       explicitPriorityRecoveryObservation?.activeGateProgress ||
       existingPriorityRecoveryObservation?.activeGateProgress ||
       null,
-    activeGateBestProgress:
-      controlPlane?.activeGateBestProgress ||
-      explicitPriorityRecoveryObservation?.activeGateBestProgress ||
-      existingPriorityRecoveryObservation?.activeGateBestProgress ||
-      null,
-    activeGateNoProgress:
-      controlPlane?.activeGateNoProgress ||
-      explicitPriorityRecoveryObservation?.activeGateNoProgress ||
-      existingPriorityRecoveryObservation?.activeGateNoProgress ||
-      null,
-    activeGateBlockerHistory:
-      controlPlane?.activeGateBlockerHistory ||
-      explicitPriorityRecoveryObservation?.activeGateBlockerHistory ||
-      existingPriorityRecoveryObservation?.activeGateBlockerHistory ||
-      null,
     activeGateAdmissionState:
       controlPlane?.activeGateAdmissionState ||
       explicitPriorityRecoveryObservation?.activeGateAdmissionState ||
@@ -1880,37 +1846,15 @@ function buildCanonicalPriorityRecoveryObservation(
     explicitPriorityRecoveryObservation?.activeGateProgress ||
     existingPriorityRecoveryObservation?.activeGateProgress ||
     null;
-  const activeGateBestProgress = rawActiveGate?.bestProgress ||
-    explicitPriorityRecoveryObservation?.activeGateBestProgress ||
-    existingPriorityRecoveryObservation?.activeGateBestProgress ||
-    null;
-  const activeGateNoProgress =
-    controlPlane?.activeGateNoProgress ||
-    explicitPriorityRecoveryObservation?.activeGateNoProgress ||
-    existingPriorityRecoveryObservation?.activeGateNoProgress ||
-    null;
-  const activeGateBlockerHistory =
-    controlPlane?.activeGateBlockerHistory ||
-    explicitPriorityRecoveryObservation?.activeGateBlockerHistory ||
-    existingPriorityRecoveryObservation?.activeGateBlockerHistory ||
-    null;
   const rawPublicationConvergenceGate =
     resolveRawPublicationConvergenceGate(controlPlane);
   const logsTable = isRecord(controlPlane?.logsTable) ? controlPlane.logsTable : null;
   const hasExplicitActiveGateSource =
     isRecord(controlPlane?.activeGate) ||
     isRecord(controlPlane?.activeGateProgress) ||
-    isRecord(controlPlane?.activeGateBestProgress) ||
-    isRecord(controlPlane?.activeGateNoProgress) ||
-    Array.isArray(controlPlane?.activeGateBlockerHistory) ||
     isRecord(controlPlane?.activeGateAdmissionState) ||
     isRecord(explicitPriorityRecoveryObservation?.activeGate) ||
     isRecord(explicitPriorityRecoveryObservation?.activeGateProgress) ||
-    isRecord(explicitPriorityRecoveryObservation?.activeGateBestProgress) ||
-    isRecord(explicitPriorityRecoveryObservation?.activeGateNoProgress) ||
-    Array.isArray(
-      explicitPriorityRecoveryObservation?.activeGateBlockerHistory,
-    ) ||
     isRecord(explicitPriorityRecoveryObservation?.activeGateAdmissionState);
   const hasCanonicalObservationSource =
     Boolean(publicationConvergence) ||
@@ -1932,9 +1876,6 @@ function buildCanonicalPriorityRecoveryObservation(
       priorityRecoveryInvariants,
       activeGate: rawActiveGate,
       activeGateProgress,
-      activeGateBestProgress,
-      activeGateNoProgress,
-      activeGateBlockerHistory,
       logsTable,
       closureRecordId: existingPriorityRecoveryObservation?.closureRecordId ?? null,
       closureWitnessClass:
@@ -1949,10 +1890,8 @@ function buildCanonicalPriorityRecoveryObservation(
   const canonicalActiveGateFields = canonicalActiveGate ?
     derivePriorityRecoveryActiveGateReportFields(canonicalActiveGate) :
     {
+      activeGate: null,
       activeGateProgress,
-      activeGateBestProgress,
-      activeGateNoProgress,
-      activeGateBlockerHistory,
       activeGateAdmissionState: null,
     };
   const derivedPriorityRecoveryObservation =
@@ -1963,10 +1902,6 @@ function buildCanonicalPriorityRecoveryObservation(
       priorityRecoveryInvariants,
       activeGate: canonicalActiveGate,
       activeGateProgress: canonicalActiveGateFields.activeGateProgress,
-      activeGateBestProgress: canonicalActiveGateFields.activeGateBestProgress,
-      activeGateNoProgress: canonicalActiveGateFields.activeGateNoProgress,
-      activeGateBlockerHistory:
-        canonicalActiveGateFields.activeGateBlockerHistory,
       logsTable,
       closureRecordId:
         existingPriorityRecoveryObservation?.closureRecordId ?? null,
@@ -2389,9 +2324,6 @@ function buildCanonicalPublicationEvidenceFromControlPlane(controlPlane = null) 
         evidenceControlPlane.priorityRecoveryInvariants,
       activeGate: evidenceControlPlane.activeGate,
       activeGateProgress: evidenceControlPlane.activeGateProgress,
-      activeGateBestProgress: evidenceControlPlane.activeGateBestProgress,
-      activeGateNoProgress: evidenceControlPlane.activeGateNoProgress,
-      activeGateBlockerHistory: evidenceControlPlane.activeGateBlockerHistory,
       logsTable: evidenceControlPlane.logsTable,
     });
   const publicationConvergenceGate =
@@ -2436,18 +2368,6 @@ function buildCanonicalControlPlaneDiagnosticsFromControlPlane(controlPlane = nu
       activeGateProgress:
         publicationEvidence.priorityRecoveryObservation?.activeGateProgress ||
         controlPlane?.activeGateProgress ||
-        null,
-      activeGateBestProgress:
-        publicationEvidence.priorityRecoveryObservation?.activeGateBestProgress ||
-        controlPlane?.activeGateBestProgress ||
-        null,
-      activeGateNoProgress:
-        publicationEvidence.priorityRecoveryObservation?.activeGateNoProgress ||
-        controlPlane?.activeGateNoProgress ||
-        null,
-      activeGateBlockerHistory:
-        publicationEvidence.priorityRecoveryObservation?.activeGateBlockerHistory ||
-        controlPlane?.activeGateBlockerHistory ||
         null,
       activeGateAdmissionState:
         controlPlane?.activeGateAdmissionState || null,

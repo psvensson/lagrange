@@ -55,7 +55,6 @@ const PRIORITY_WORKFLOW_PROGRESS_RECOVERING_IN_FLIGHT_EXPECTED_PATH =
 const ABSENT_VALUE = 'absent';
 const PRIORITY_EDGE_ALIAS = 'priority';
 const PRIORITY_EDGE_ID = 'priority_recovery_partition_progress';
-const ACTIVE_GATE_EDGE_ID = 'active_gate_snapshot_coverage';
 const OPERATION_WORKFLOW_OWNER = 'operation_workflow_owner';
 const WORKFLOW_PROGRESS_BOUNDARY = 'workflow_progress';
 const REBALANCER_LEADER_OWNER = 'rebalancer_leader';

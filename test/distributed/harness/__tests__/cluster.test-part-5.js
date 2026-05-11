@@ -1912,7 +1912,7 @@ test('Unit: _waitForAllActive carries selected snapshot witness into no-progress
 
     const waitingStage = recordedStages.find((entry) => {
       return entry.stage === 'setup.cluster.waiting-active' &&
-        entry.details?.activeGateNoProgress?.stalled === true;
+        entry.details?.activeGate?.state === 'stalled';
     });
     assert.ok(waitingStage, 'should record waiting-active stall details');
     assert.equal(
@@ -2009,7 +2009,7 @@ test('Unit: _waitForAllActive treats CL-003 witness as load-mode soft success',
 
     const waitingStage = recordedStages.find((entry) => {
       return entry.stage === 'setup.cluster.waiting-active' &&
-        entry.details?.activeGateNoProgress?.stalled === true;
+        entry.details?.activeGate?.state === 'stalled';
     });
     assert.equal(
       waitingStage,
@@ -2113,7 +2113,7 @@ test('Unit: _waitForAllActive respects an existing CL-003 gate witness in load m
 
     const waitingStage = recordedStages.find((entry) => {
       return entry.stage === 'setup.cluster.waiting-active' &&
-        entry.details?.activeGateNoProgress?.stalled === true;
+        entry.details?.activeGate?.state === 'stalled';
     });
     assert.equal(
       waitingStage,
@@ -2236,7 +2236,7 @@ test('Unit: _waitForAllActive derives CL-003 load-mode soft success from ' +
 
   const waitingStage = recordedStages.find((entry) => {
     return entry.stage === 'setup.cluster.waiting-active' &&
-      entry.details?.activeGateNoProgress?.stalled === true;
+      entry.details?.activeGate?.state === 'stalled';
   });
   assert.equal(
     waitingStage,

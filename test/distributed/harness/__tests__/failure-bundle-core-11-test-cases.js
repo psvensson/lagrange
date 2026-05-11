@@ -582,26 +582,32 @@ export function registerFailureBundleCore11Tests(context) {
       );
       const publicationConvergence = scenarioBundle.publicationConvergence;
       const activeGateProgress = publicationConvergence.activeGate.progress;
-      const activeGateBestProgress =
+      const activeGateBestSnapshot =
         publicationConvergence.activeGate.bestProgress;
       const failureClassification =
         scenarioBundle.summary.failureClassification;
 
       assert.deepEqual(
         publicationConvergence.missingPublishedNodeIds,
-        [],
+        [MISSING_NODE_ONE, MISSING_NODE_TWO],
       );
       assert.equal(
         publicationConvergence.missingPublishedCount,
-        ZERO_COUNT,
+        ATTEMPTS_SINCE_PROGRESS,
       );
       assert.deepEqual(
         publicationConvergence.publicationConvergenceGateReasons,
-        [ACTIVE_GATE_COVERAGE_BLOCKER],
+        [
+          ACTIVE_GATE_COVERAGE_BLOCKER,
+          STABILITY_GATE_BLOCKER_PUBLICATION_MISSING_ACTIVE_NODE + '=' +
+            MISSING_NODE_ONE,
+          STABILITY_GATE_BLOCKER_PUBLICATION_MISSING_ACTIVE_NODE + '=' +
+            MISSING_NODE_TWO,
+        ],
       );
       assert.equal(
         activeGateProgress.missingPublishedCount,
-        ZERO_COUNT,
+        ATTEMPTS_SINCE_PROGRESS,
       );
       assert.deepEqual(
         activeGateProgress.selectedMissingPublishedNodeIds,
@@ -609,11 +615,11 @@ export function registerFailureBundleCore11Tests(context) {
       );
       assert.deepEqual(activeGateProgress.gateReasons, []);
       assert.equal(
-        activeGateBestProgress.missingPublishedCount,
-        ZERO_COUNT,
+        activeGateBestSnapshot.missingPublishedCount,
+        ATTEMPTS_SINCE_PROGRESS,
       );
       assert.deepEqual(
-        activeGateBestProgress.selectedMissingPublishedNodeIds,
+        activeGateBestSnapshot.selectedMissingPublishedNodeIds,
         [],
       );
       assert.equal(
@@ -626,21 +632,23 @@ export function registerFailureBundleCore11Tests(context) {
       );
       assert.equal(
         failureClassification.failureClass,
-        PRIORITY_RECOVERY_PROGRESS_REASON_FALLBACK,
+        FAILURE_CLASS_PUBLICATION_CONVERGENCE_BLOCKED,
       );
       assert.notEqual(
         failureClassification.dominantReason,
         GENERIC_PUBLICATION_REASON,
       );
-      assert.ok(
+      assert.equal(
         failureClassification.signals.includes(
           PRIORITY_RECOVERY_PROGRESS_CLASS_SIGNAL,
         ),
+        false,
       );
-      assert.ok(
+      assert.equal(
         failureClassification.signals.includes(
           PRIORITY_RECOVERY_PARTITION_SIGNAL,
         ),
+        false,
       );
     },
   );

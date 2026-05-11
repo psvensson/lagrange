@@ -385,65 +385,64 @@ export function registerFailureBundlePlaybackTests({
                 totalSpreadGap: 2,
               },
             },
-            activeGateProgress: {
-              expectedNodeCount: 2,
-              activeNodeCount: 2,
-              inactiveNodeCount: 0,
-              snapshotCoverageNodeCount: 2,
-              snapshotCoverageComplete: true,
-              publicationStatus: 'PUBLISHED',
-              pendingAckCount: 0,
-              missingPublishedCount: 0,
-              gateReasonCount: 1,
-              gateReasons: ['priority_control_plane_spread_pending'],
-              prioritySpreadSatisfied: false,
-              prioritySpreadGap: 2,
-              blockers: [
-                'publication_gate=priority_control_plane_spread_pending',
-              ],
-              blockerSignature:
-                'publication_gate=priority_control_plane_spread_pending',
-            },
-            activeGateBestProgress: {
-              expectedNodeCount: 2,
-              activeNodeCount: 2,
-              inactiveNodeCount: 0,
-              snapshotCoverageNodeCount: 2,
-              snapshotCoverageComplete: true,
-              publicationStatus: 'PUBLISHED',
-              pendingAckCount: 0,
-              missingPublishedCount: 0,
-              gateReasonCount: 1,
-              gateReasons: ['priority_control_plane_spread_pending'],
-              prioritySpreadSatisfied: false,
-              prioritySpreadGap: 2,
-              blockers: [
-                'publication_gate=priority_control_plane_spread_pending',
-              ],
-              blockerSignature:
-                'publication_gate=priority_control_plane_spread_pending',
-            },
-            activeGateNoProgress: {
-              enabled: true,
+            activeGate: {
               mode: 'load',
+              state: 'waiting',
               maxAttempts: 45,
               attemptsSinceProgress: 22,
-              stalled: false,
-            },
-            activeGateBlockerHistory: [
-              {
-                signature:
-                  'publication_gate=priority_control_plane_spread_pending',
+              progress: {
+                expectedNodeCount: 2,
+                activeNodeCount: 2,
+                inactiveNodeCount: 0,
+                snapshotCoverageNodeCount: 2,
+                snapshotCoverageComplete: true,
+                publicationStatus: 'PUBLISHED',
+                pendingAckCount: 0,
+                missingPublishedCount: 0,
+                gateReasonCount: 1,
+                gateReasons: ['priority_control_plane_spread_pending'],
+                prioritySpreadSatisfied: false,
+                prioritySpreadGap: 2,
                 blockers: [
                   'publication_gate=priority_control_plane_spread_pending',
                 ],
-                count: 11,
-                firstAttempt: 20,
-                firstElapsedMs: 20000,
-                lastAttempt: 40,
-                lastElapsedMs: 40000,
+                blockerSignature:
+                  'publication_gate=priority_control_plane_spread_pending',
               },
-            ],
+              bestProgress: {
+                expectedNodeCount: 2,
+                activeNodeCount: 2,
+                inactiveNodeCount: 0,
+                snapshotCoverageNodeCount: 2,
+                snapshotCoverageComplete: true,
+                publicationStatus: 'PUBLISHED',
+                pendingAckCount: 0,
+                missingPublishedCount: 0,
+                gateReasonCount: 1,
+                gateReasons: ['priority_control_plane_spread_pending'],
+                prioritySpreadSatisfied: false,
+                prioritySpreadGap: 2,
+                blockers: [
+                  'publication_gate=priority_control_plane_spread_pending',
+                ],
+                blockerSignature:
+                  'publication_gate=priority_control_plane_spread_pending',
+              },
+              blockerHistory: [
+                {
+                  signature:
+                    'publication_gate=priority_control_plane_spread_pending',
+                  blockers: [
+                    'publication_gate=priority_control_plane_spread_pending',
+                  ],
+                  count: 11,
+                  firstAttempt: 20,
+                  firstElapsedMs: 20000,
+                  lastAttempt: 40,
+                  lastElapsedMs: 40000,
+                },
+              ],
+            },
             priorityRecoveryInvariants: {
               invariants: [
                 {
@@ -534,7 +533,7 @@ export function registerFailureBundlePlaybackTests({
       'publication_converged_priority_spread_pending',
     );
     assert.equal(
-      scenarioBundle.publicationConvergence.activeGateNoProgress
+      scenarioBundle.publicationConvergence.activeGate
         .attemptsSinceProgress,
       22,
     );
@@ -543,7 +542,7 @@ export function registerFailureBundlePlaybackTests({
       1,
     );
     assert.equal(
-      scenarioBundle.publicationConvergence.activeGateBlockerHistory[0]
+      scenarioBundle.publicationConvergence.activeGate.blockerHistory[0]
         .signature,
       'publication_gate=priority_control_plane_spread_pending',
     );
@@ -727,7 +726,7 @@ export function registerFailureBundlePlaybackTests({
       'publication_converged_priority_spread_pending',
     );
     assert.equal(
-      reportJson.scenarios[0].publicationConvergence.activeGateNoProgress
+      reportJson.scenarios[0].publicationConvergence.activeGate
         .maxAttempts,
       45,
     );
@@ -1202,12 +1201,18 @@ export function registerFailureBundlePlaybackTests({
       activeGateAdmissionState,
     );
     assert.equal(
-      scenarioBundle.controlPlane.activeGateNoProgress.currentProgress
+      scenarioBundle.controlPlane.activeGate.progress
         .selectedSnapshotReachableBy,
       'admin_health',
     );
-    assert.equal(scenarioBundle.summary.readinessFailure?.mode, 'startup');
-    assert.equal(scenarioBundle.summary.readinessFailure?.cause, 'none');
+    assert.equal(
+      scenarioBundle.publicationConvergence.activeGate.readinessFailure?.mode,
+      undefined,
+    );
+    assert.equal(
+      scenarioBundle.publicationConvergence.activeGate.readinessFailure?.cause,
+      undefined,
+    );
     assert.equal(scenarioBundle.summary.failureAction, null);
     assert.equal(
       scenarioBundle.summary.stabilityGates.restart_recovery.status,
@@ -1599,7 +1604,7 @@ export function registerFailureBundlePlaybackTests({
       scenarioBundle.publicationConvergence.closureWitnessClass,
       null,
     );
-    assert.equal(scenarioBundle.controlPlane.activeGateNoProgress.mode, 'load');
+    assert.equal(scenarioBundle.controlPlane.activeGate.mode, 'load');
   });
 
   it('prefers the richest playback active-gate diagnostics over a later timeout-only sample', async () => {
@@ -2341,15 +2346,14 @@ export function registerFailureBundlePlaybackTests({
               blockers: ['inactive_nodes=2'],
               blockerSignature: 'inactive_nodes=2',
             },
-            activeGateNoProgress: {
-              enabled: true,
+            activeGate: {
               mode: 'load',
+              state: 'stalled',
               maxAttempts: 30,
               attemptsSinceProgress: 30,
-              stalled: true,
               reasonCode: 'stalled_no_progress',
               stalledReason: 'active_wait_no_progress_coordinator_cycles=30',
-              currentProgress: {
+              progress: {
                 expectedNodeCount: 2,
                 activeNodeCount: 0,
                 inactiveNodeCount: 2,

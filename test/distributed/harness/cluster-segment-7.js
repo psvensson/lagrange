@@ -1162,7 +1162,6 @@ class Cluster extends Cluster5 {
                     ),
                   } :
                   null,
-              activeGateBlockerHistory: waitingProgress.blockerHistory,
             };
             const stalledActiveGateDetails = buildActiveGateDetails({
               state: PRIORITY_RECOVERY_ACTIVE_GATE_STATE.STALLED,
@@ -1186,7 +1185,6 @@ class Cluster extends Cluster5 {
                 attempts,
                 elapsedMs,
                 ...waitingProgress.waitingDetails,
-                activeGateNoProgress: stalledNoProgress,
               },
             );
             const stalledError = new Error(
@@ -1338,13 +1336,6 @@ class Cluster extends Cluster5 {
         maxAttempts: noProgressMaxAttempts,
       }) :
       null;
-    if (
-      finalNoProgressOwnerOutcome &&
-      !Array.isArray(finalNoProgressOwnerOutcome.activeGateBlockerHistory)
-    ) {
-      finalNoProgressOwnerOutcome.activeGateBlockerHistory =
-        summarizeActiveWaitBlockerHistory(blockerHistoryBySignature);
-    }
     const timeoutActiveGateDetails = buildActiveGateDetails({
       state: PRIORITY_RECOVERY_ACTIVE_GATE_STATE.TIMED_OUT,
       attempts: pollResult.attempts,
@@ -1398,7 +1389,6 @@ class Cluster extends Cluster5 {
       invariantBreaches: priorityRecoveryInvariantBreaches,
       activeGate: timeoutActiveGateDetails.activeGate,
       ...timeoutActiveGateDetails,
-      activeGateNoProgress: finalNoProgressOwnerOutcome,
     });
     const timeoutError = new Error(
       'Not all nodes reached ' +
@@ -1823,7 +1813,6 @@ class Cluster extends Cluster5 {
                   ),
                 } :
                 null,
-            activeGateBlockerHistory: readinessProgress.blockerHistory,
           };
           const stalledActiveGateDetails = buildLoadReadinessActiveGateDetails({
             state: PRIORITY_RECOVERY_ACTIVE_GATE_STATE.STALLED,
@@ -1854,7 +1843,6 @@ class Cluster extends Cluster5 {
               lastResult.publicationConvergenceGate || null,
             priorityRecoveryInvariants:
               lastResult.priorityRecoveryInvariants || null,
-            activeGateNoProgress: stalledNoProgress,
             ...stalledActiveGateDetails,
           });
           const stalledError = new Error(
@@ -1981,7 +1969,6 @@ class Cluster extends Cluster5 {
         pollResult.lastResult?.publicationConvergenceGate || null,
       priorityRecoveryInvariants:
         pollResult.lastResult?.priorityRecoveryInvariants || null,
-      activeGateNoProgress: finalNoProgressWithReasonCode,
       activeGate: timeoutActiveGateDetails.activeGate,
       ...timeoutActiveGateDetails,
     });

@@ -173,9 +173,6 @@ const PLAYBACK_CONTROL_PLANE_FALLBACK_STAGE_IDS = Object.freeze(new Set([
 const DIRECT_ACTIVE_GATE_DIAGNOSTIC_FIELD = Object.freeze({
   ACTIVE_GATE: 'activeGate',
   ACTIVE_GATE_PROGRESS: 'activeGateProgress',
-  ACTIVE_GATE_BEST_PROGRESS: 'activeGateBestProgress',
-  ACTIVE_GATE_NO_PROGRESS: 'activeGateNoProgress',
-  ACTIVE_GATE_BLOCKER_HISTORY: 'activeGateBlockerHistory',
   ACTIVE_GATE_ADMISSION_STATE: 'activeGateAdmissionState',
   ACTIVE_GATE_SNAPSHOT_COVERAGE: 'activeGateSnapshotCoverage',
   PRIORITY_RECOVERY_INVARIANTS: 'priorityRecoveryInvariants',
@@ -791,31 +788,6 @@ function resolveDirectActiveGateDiagnostics(diagnostics) {
     ) ?
       diagnostics[DIRECT_ACTIVE_GATE_DIAGNOSTIC_FIELD.ACTIVE_GATE_PROGRESS] :
       null,
-    activeGateBestProgress: isRecord(
-      diagnostics[
-        DIRECT_ACTIVE_GATE_DIAGNOSTIC_FIELD.ACTIVE_GATE_BEST_PROGRESS
-      ],
-    ) ?
-      diagnostics[
-        DIRECT_ACTIVE_GATE_DIAGNOSTIC_FIELD.ACTIVE_GATE_BEST_PROGRESS
-      ] :
-      null,
-    activeGateNoProgress: isRecord(
-      diagnostics[
-        DIRECT_ACTIVE_GATE_DIAGNOSTIC_FIELD.ACTIVE_GATE_NO_PROGRESS
-      ],
-    ) ?
-      diagnostics[DIRECT_ACTIVE_GATE_DIAGNOSTIC_FIELD.ACTIVE_GATE_NO_PROGRESS] :
-      null,
-    activeGateBlockerHistory: Array.isArray(
-      diagnostics[
-        DIRECT_ACTIVE_GATE_DIAGNOSTIC_FIELD.ACTIVE_GATE_BLOCKER_HISTORY
-      ],
-    ) ?
-      diagnostics[
-        DIRECT_ACTIVE_GATE_DIAGNOSTIC_FIELD.ACTIVE_GATE_BLOCKER_HISTORY
-      ] :
-      null,
     activeGateAdmissionState: isRecord(
       diagnostics[
         DIRECT_ACTIVE_GATE_DIAGNOSTIC_FIELD.ACTIVE_GATE_ADMISSION_STATE
@@ -826,12 +798,8 @@ function resolveDirectActiveGateDiagnostics(diagnostics) {
       ] :
       null,
   });
-  const activeGateReportFields = derivePriorityRecoveryActiveGateReportFields(
-    activeGate,
-  );
   const directActiveGateDiagnostics = {
     ...(activeGate ? {activeGate} : {}),
-    ...(activeGateReportFields || {}),
   };
   if (
     isRecord(

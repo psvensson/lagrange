@@ -609,10 +609,10 @@ export function registerFailureBundleCore02Tests(context) {
                 priorityRecoveryProgressClassCount: 0,
                 priorityRecoveryInvariantFailingIds: [],
               },
-              activeGateNoProgress: {
+              activeGate: {
                 mode: 'startup',
+                state: 'waiting',
                 attemptsSinceProgress: 1,
-                stalled: false,
                 readinessDelay: {
                   timedOut: false,
                   cause: 'none',
@@ -792,10 +792,10 @@ export function registerFailureBundleCore02Tests(context) {
                   error: SNAPSHOT_REACHABILITY_ERROR,
                 },
               },
-              activeGateNoProgress: {
+              activeGate: {
                 mode: STARTUP_READINESS_MODE,
+                state: 'ready',
                 attemptsSinceProgress: SINGLE_COUNT,
-                stalled: false,
                 readinessDelay: {
                   timedOut: true,
                   cause: SNAPSHOT_REACHABILITY_TIMEOUT,

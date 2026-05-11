@@ -1309,14 +1309,21 @@ function scorePlaybackActiveGateDetails(details) {
   const hasActiveGateProgress =
     details.activeGateProgress &&
     typeof details.activeGateProgress === 'object';
-  const hasActiveGateNoProgress =
-    details.activeGateNoProgress &&
-    typeof details.activeGateNoProgress === 'object';
-  const activeGate = normalizePriorityRecoveryActiveGateSnapshot(details);
+  const activeGate = normalizePriorityRecoveryActiveGateSnapshot({
+    activeGate: details.activeGate || null,
+    activeGateProgress: details.activeGateProgress || null,
+    activeGateAdmissionState: details.activeGateAdmissionState || null,
+  });
   const activeGateState = activeGate?.state || null;
+  const hasActiveGateNoProgress =
+    isRecord(details.activeGate) && (
+      details.activeGate.state === 'stalled' ||
+      details.activeGate.state === 'timed_out' ||
+      Number.isInteger(details.activeGate.attemptsSinceProgress)
+    );
   const hasActiveGateBlockerHistory =
-    Array.isArray(details.activeGateBlockerHistory) &&
-    details.activeGateBlockerHistory.length > ZERO;
+    Array.isArray(details.activeGate?.blockerHistory) &&
+    details.activeGate.blockerHistory.length > ZERO;
   const hasPriorityRecoveryDecisionSnapshots =
     details?.snapshotCoverage?.selectedPriorityRecoveryDecisionSnapshots &&
     typeof details.snapshotCoverage
