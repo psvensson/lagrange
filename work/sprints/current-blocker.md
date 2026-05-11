@@ -4,7 +4,7 @@
 
 Sprint: `work/sprints/active-2026-q2-phase-0-1-rolling-restart-release-gate-closure.md`
 
-Package: `work/packages/active-20260511-rolling-restart-operation-workflow-progress-event-driven-priority-recovery.md`
+Package: `work/packages/done-20260511-rolling-restart-operation-workflow-progress-event-driven-priority-recovery.md`
 
 Scenario: `rolling-restart`
 
@@ -24,7 +24,7 @@ Current state: Focused workflow-progress owner probes are green. The representat
 
 ## Next Action
 
-Continue the same workflow-progress frontier with the remaining dispatch-pending operation workflow step-timeout contract probe for replica_operations-p1, sql_transactions-p1, and sql_write_operations-p1.
+Activate `work/packages/todo-20260511-rolling-restart-operation-workflow-progress-dispatch-pending-step-timeout-contract.md` for the remaining dispatch-pending operation workflow step-timeout contract on replica_operations-p1, sql_transactions-p1, and sql_write_operations-p1.
 
 ## Proof Ladder
 
@@ -68,7 +68,7 @@ Cross-boundary review: `completed-before-implementation; predecessor review foun
 ## Touched Files
 
 1. `test/rebalancer/operation-workflow-progress-event-driven-reentry.test.js`
-2. `work/packages/active-20260511-rolling-restart-operation-workflow-progress-event-driven-priority-recovery.md`
+2. `work/packages/done-20260511-rolling-restart-operation-workflow-progress-event-driven-priority-recovery.md`
 3. `work/sprints/active-2026-q2-phase-0-1-rolling-restart-release-gate-closure.md`
 4. `work/sprints/current-blocker.json`
 5. `work/sprints/current-blocker.md`

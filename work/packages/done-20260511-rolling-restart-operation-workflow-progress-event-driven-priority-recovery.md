@@ -3,7 +3,7 @@
 <!-- work-package
 {
   "schema": "work-package-v1",
-  "status": "active",
+  "status": "done",
   "opened": "2026-05-11",
   "scenario": "rolling-restart",
   "artifact": "test-output/reports/rolling-restart-current-release-gate-after-workflow-progress-event-driven-priority-recovery-fix.report.json",
@@ -12,7 +12,7 @@
   "boundary": "workflow_progress",
   "dominantReason": "priority_recovery_workflow_progress_event_driven",
   "currentState": "Focused workflow-progress owner probes are green. The representative rerun remains red on the same priority_recovery_partition_progress frontier under operation_workflow_owner / workflow_progress with recovering_in_flight, but reduced blocked partitions from five to three: replica_operations-p1, sql_transactions-p1, and sql_write_operations-p1. Active gate and snapshot coverage are now 3/5.",
-  "nextAction": "Continue the same workflow-progress frontier with the remaining dispatch-pending operation workflow step-timeout contract probe for replica_operations-p1, sql_transactions-p1, and sql_write_operations-p1.",
+  "nextAction": "Activate `work/packages/todo-20260511-rolling-restart-operation-workflow-progress-dispatch-pending-step-timeout-contract.md` for the remaining dispatch-pending operation workflow step-timeout contract on replica_operations-p1, sql_transactions-p1, and sql_write_operations-p1.",
   "proof": [
     "npm run work:package:evidence-block -- test-output/reports/rolling-restart-current-release-gate-after-rebalancer-handoff-fix.report.json",
     "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-current-release-gate-after-rebalancer-handoff-fix.report.json --explain priority_recovery_partition_progress",
@@ -25,7 +25,7 @@
   ],
   "touchedFiles": [
     "test/rebalancer/operation-workflow-progress-event-driven-reentry.test.js",
-    "work/packages/active-20260511-rolling-restart-operation-workflow-progress-event-driven-priority-recovery.md",
+    "work/packages/done-20260511-rolling-restart-operation-workflow-progress-event-driven-priority-recovery.md",
     "work/sprints/active-2026-q2-phase-0-1-rolling-restart-release-gate-closure.md",
     "work/sprints/current-blocker.json",
     "work/sprints/current-blocker.md",
@@ -49,7 +49,10 @@
     "causalDebt": "Rolling-restart remains red on the same operation_workflow_owner / workflow_progress frontier; remaining evidence points to the dispatch-pending operation workflow step-timeout contract on replica_operations-p1, sql_transactions-p1, and sql_write_operations-p1.",
     "crossBoundaryReview": "completed-before-implementation; predecessor review found bookkeeping fixes that were fixed before this package was activated."
   },
-  "predecessor": "work/packages/done-20260511-rolling-restart-operation-workflow-rebalancer-handoff-retry-scheduled.md"
+  "predecessor": "work/packages/done-20260511-rolling-restart-operation-workflow-rebalancer-handoff-retry-scheduled.md",
+  "closed": "2026-05-11",
+  "commitAndPushLedgerRequired": true,
+  "successor": "work/packages/todo-20260511-rolling-restart-operation-workflow-progress-dispatch-pending-step-timeout-contract.md"
 }
 -->
 
@@ -108,7 +111,7 @@ failure simulations, and production guarantees in the Community / AGPL repo.
 
 - [x] Review subagent recorded: Agent code-review (9b4b6a10-2e64-4b77-a6d2-13e4e4a4d8b9) reviewed work/packages/done-20260511-rolling-restart-operation-workflow-rebalancer-handoff-retry-scheduled.md; result fixes-required.
 - [x] Fix subagent recorded or explicitly not needed: Agent copilot-cli-fix (da97f155-8b4c-4ad2-8e32-1a2e4e0b8d9a) fixed work/packages/done-20260511-rolling-restart-operation-workflow-rebalancer-handoff-retry-scheduled.md.
-- [x] Implementation subagent recorded: Agent copilot-cli-implementation (7fb345ac-89a0-4b44-8f9e-0f3277f0e4fb) implemented work/packages/active-20260511-rolling-restart-operation-workflow-progress-event-driven-priority-recovery.md.
+- [x] Implementation subagent recorded: Agent copilot-cli-implementation (7fb345ac-89a0-4b44-8f9e-0f3277f0e4fb) implemented work/packages/done-20260511-rolling-restart-operation-workflow-progress-event-driven-priority-recovery.md.
 
 ## Validation
 
@@ -125,6 +128,12 @@ Result: `same-frontier-classified`. The package-owned owner probe was repaired t
 call the canonical scheduling entry point and now proves duplicate event-driven
 owner wakes are suppressed while the remote handoff retry lane is active. No
 runtime owner file change was required; `src/rebalancer/operation-workflow-owner-segment-7-stage-5.js` stayed untouched.
+
+## Commit And Push Ledger
+
+1. Focused package commit: `118beb34a932bfea22ef43af0b4cfefa4f0a06fe`
+2. Pushed to: `origin/codex/pending-ack-eligibility-filter`
+3. Commit contains only package-owned files/package-status/allowed sprint handoff: yes
 
 ## Validation Evidence
 
@@ -147,8 +156,8 @@ runtime owner file change was required; `src/rebalancer/operation-workflow-owner
 
 ## Closure / Handoff
 
-Do not rename this package to `done-...` yet. The representative gate is still
-red on the same owner boundary. The next focused proof should target the
-remaining dispatch-pending operation workflow step-timeout contract for
+This package is closed as same-frontier classified. The representative gate is
+still red on the same owner boundary. The successor proof targets the remaining
+dispatch-pending operation workflow step-timeout contract for
 `replica_operations-p1`, `sql_transactions-p1`, and `sql_write_operations-p1`
 using the latest artifact above.

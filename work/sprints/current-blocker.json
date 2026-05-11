@@ -2,8 +2,8 @@
   "schema": "current-blocker-v1",
   "generatedBy": "scripts/work-tracker.js",
   "sprint": "work/sprints/active-2026-q2-phase-0-1-rolling-restart-release-gate-closure.md",
-  "package": "work/packages/active-20260511-rolling-restart-operation-workflow-progress-event-driven-priority-recovery.md",
-  "status": "active",
+  "package": "work/packages/done-20260511-rolling-restart-operation-workflow-progress-event-driven-priority-recovery.md",
+  "status": "done",
   "scenario": "rolling-restart",
   "artifact": "test-output/reports/rolling-restart-current-release-gate-after-workflow-progress-event-driven-priority-recovery-fix.report.json",
   "playback": "test-output/reports/.playback/rolling-restart-current-release-gate-after-workflow-progress-event-driven-priority-recovery-fix/rolling-restart/",
@@ -11,7 +11,7 @@
   "boundary": "workflow_progress",
   "dominantReason": "priority_recovery_workflow_progress_event_driven",
   "currentState": "Focused workflow-progress owner probes are green. The representative rerun remains red on the same priority_recovery_partition_progress frontier under operation_workflow_owner / workflow_progress with recovering_in_flight, but reduced blocked partitions from five to three: replica_operations-p1, sql_transactions-p1, and sql_write_operations-p1. Active gate and snapshot coverage are now 3/5.",
-  "nextAction": "Continue the same workflow-progress frontier with the remaining dispatch-pending operation workflow step-timeout contract probe for replica_operations-p1, sql_transactions-p1, and sql_write_operations-p1.",
+  "nextAction": "Activate `work/packages/todo-20260511-rolling-restart-operation-workflow-progress-dispatch-pending-step-timeout-contract.md` for the remaining dispatch-pending operation workflow step-timeout contract on replica_operations-p1, sql_transactions-p1, and sql_write_operations-p1.",
   "proof": [
     "npm run work:package:evidence-block -- test-output/reports/rolling-restart-current-release-gate-after-rebalancer-handoff-fix.report.json",
     "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-current-release-gate-after-rebalancer-handoff-fix.report.json --explain priority_recovery_partition_progress",
@@ -24,7 +24,7 @@
   ],
   "touchedFiles": [
     "test/rebalancer/operation-workflow-progress-event-driven-reentry.test.js",
-    "work/packages/active-20260511-rolling-restart-operation-workflow-progress-event-driven-priority-recovery.md",
+    "work/packages/done-20260511-rolling-restart-operation-workflow-progress-event-driven-priority-recovery.md",
     "work/sprints/active-2026-q2-phase-0-1-rolling-restart-release-gate-closure.md",
     "work/sprints/current-blocker.json",
     "work/sprints/current-blocker.md",

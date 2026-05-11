@@ -12,7 +12,7 @@
   "boundary": "workflow_progress",
   "dominantReason": "priority_recovery_workflow_progress_event_driven",
   "currentState": "The implementation classified active coordinator-created remote handoff retry timers as bounded owner-internal retry state instead of reclassifying otherwise event-driven dispatch-pending priority recovery snapshots to rebalancer_handoff. The representative rolling-restart rerun still fails 0/1, but the first frontier migrated from operation_workflow_owner / rebalancer_handoff to operation_workflow_owner / workflow_progress with dominant source reason priority_recovery_workflow_progress_event_driven, recovering_in_flight, blocked partitions control_plane_publications-p1, replica_operations-p1, sql_transaction_participants-p1, sql_transactions-p1, and sql_write_operations-p1, active progress 2/5, and snapshot coverage 2/5.",
-  "nextAction": "Activate `work/packages/active-20260511-rolling-restart-operation-workflow-progress-event-driven-priority-recovery.md` for the migrated workflow-progress event-driven priority recovery frontier.",
+  "nextAction": "Activate `work/packages/done-20260511-rolling-restart-operation-workflow-progress-event-driven-priority-recovery.md` for the migrated workflow-progress event-driven priority recovery frontier.",
   "proof": [
     "npm run work:package:evidence-block -- test-output/reports/rolling-restart-current-release-gate-after-rebalancer-handoff-fix.report.json",
     "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-current-release-gate-after-rebalancer-handoff-fix.report.json --explain priority_recovery_partition_progress",
@@ -50,7 +50,7 @@
   "predecessor": "work/packages/done-20260511-rolling-restart-operation-workflow-progress-event-driven-wait.md",
   "closed": "2026-05-11",
   "commitAndPushLedgerRequired": true,
-  "successor": "work/packages/active-20260511-rolling-restart-operation-workflow-progress-event-driven-priority-recovery.md"
+  "successor": "work/packages/done-20260511-rolling-restart-operation-workflow-progress-event-driven-priority-recovery.md"
 }
 -->
 
