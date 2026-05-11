@@ -3,7 +3,7 @@
 <!-- work-package
 {
   "schema": "work-package-v1",
-  "status": "active",
+  "status": "done",
   "opened": "2026-05-11",
   "scenario": "spec-led-runtime-modularization",
   "artifact": "test-output/reports/rolling-restart-spec-led-runtime-modularization-active-gate-snapshot-coverage-publication-lag.report.json",
@@ -12,7 +12,7 @@
   "boundary": "budget_timeout_cascade",
   "dominantReason": "budget_timeout_cascade",
   "currentState": "Diagnostics budget accounting now classifies ownership for active_gate_attempts, workflow_step_timeout, and readiness_retry_window. The representative causal model no longer reports architecture_gap; it migrates to owner_boundary_migration with stop reason startup_readiness_boundary while active_gate_snapshot_coverage remains the frozen topology symptom.",
-  "nextAction": "Parent review should close or supersede this package and open the narrower startup_readiness_owner / startup_support_evidence successor using the representative causal-model handoff; do not patch startup active-gate runtime in this package.",
+  "nextAction": "Package is ready to close as migrated; successor ownership moves to startup_readiness_owner / startup_support_evidence using the representative causal-model handoff.",
   "proof": [
     "npm run work:evidence-summary -- test-output/reports/rolling-restart-spec-led-runtime-modularization-active-gate-snapshot-coverage-publication-lag.report.json",
     "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-spec-led-runtime-modularization-active-gate-snapshot-coverage-publication-lag.report.json --explain active_gate_snapshot_coverage",
@@ -31,8 +31,8 @@
     "test/diagnostics/*stop-condition*.test.js",
     "test/diagnostics/*invariant*.test.js",
     "test-output/reports/rolling-restart-spec-led-runtime-modularization-active-gate-snapshot-coverage-publication-lag.report.json",
-    "work/packages/active-20260511-spec-led-runtime-modularization-budget-timeout-cascade-architecture-analysis.md",
-    "work/sprints/active-2026-q2-spec-led-runtime-modularization-budget-cascade-followup.md"
+    "work/packages/done-20260511-spec-led-runtime-modularization-budget-timeout-cascade-architecture-analysis.md",
+    "work/sprints/archived/done-2026-q2-spec-led-runtime-modularization-budget-cascade-followup.md"
   ],
   "modelFit": {
     "packageClass": "architecture-gap analysis package",
@@ -53,7 +53,10 @@
     "causalDebt": "Do not hide exhausted scenario or active-gate budgets by raising harness timeouts or relabeling active-gate snapshot coverage.",
     "crossBoundaryReview": "The closed active-gate post-publication-ACK review found one stale tracker sentence; a separate fix subagent corrected it and the fix was committed/pushed before activation."
   },
-  "predecessor": "work/packages/done-20260511-spec-led-runtime-modularization-active-gate-snapshot-coverage-post-publication-ack-frontier.md"
+  "predecessor": "work/packages/done-20260511-spec-led-runtime-modularization-active-gate-snapshot-coverage-post-publication-ack-frontier.md",
+  "closed": "2026-05-11",
+  "commitAndPushLedgerRequired": true,
+  "successor": "work/packages/todo-20260511-spec-led-runtime-modularization-startup-readiness-support-evidence-frontier.md"
 }
 -->
 
@@ -200,4 +203,28 @@ to a narrower runtime owner boundary.
 - [x] Fix subagent recorded or explicitly not needed:
       Agent 019e036a-96fd-71de-83d1-9f4076564564 (019e036a-96fd-71de-83d1-9f4076564564) fixed work/packages/done-20260511-spec-led-runtime-modularization-active-gate-snapshot-coverage-post-publication-ack-frontier.md.
 - [x] Implementation subagent recorded:
-      Agent 019e036d-0b79-737a-97b1-bb7ab420346a (019e036d-0b79-737a-97b1-bb7ab420346a) implemented work/packages/active-20260511-spec-led-runtime-modularization-budget-timeout-cascade-architecture-analysis.md.
+      Agent 019e036d-0b79-737a-97b1-bb7ab420346a (019e036d-0b79-737a-97b1-bb7ab420346a) implemented work/packages/done-20260511-spec-led-runtime-modularization-budget-timeout-cascade-architecture-analysis.md.
+
+## Failure Migration / Contraction
+
+- Current dominant blocker: `readiness_startup_support`.
+- Current semantic owner: `startup_readiness_owner`.
+- Current boundary: `startup_support_evidence`.
+- Causal stop condition: `owner_boundary_migration`.
+- Causal outcome: `migrate_owner_boundary`.
+- Migration reason: `startup_readiness_boundary`.
+- Frozen symptom: topology first frontier remains `active_gate_snapshot_coverage`
+  under `startup_active_gate_owner / snapshot_coverage`; the active-gate symptom
+  is inherited and must not be patched from this diagnostics package.
+- Budget ownership classification result: `active_gate_attempts`,
+  `workflow_step_timeout`, and `readiness_retry_window` are owner-classified;
+  `ownershipGapCount=0`; the budget invariant passes with
+  `budget_ownership_classified`.
+- Successor package:
+  `work/packages/todo-20260511-spec-led-runtime-modularization-startup-readiness-support-evidence-frontier.md`.
+
+## Commit And Push Ledger
+
+1. Focused package commit: `dd6df3db`
+2. Pushed to: `origin/codex/pending-ack-eligibility-filter`
+3. Commit contains only package-owned files/package-status/allowed sprint handoff: yes
