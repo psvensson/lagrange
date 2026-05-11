@@ -12,7 +12,7 @@
   "boundary": "workflow_progress",
   "dominantReason": "priority_recovery_event_driven_wait",
   "currentState": "The dispatch-pending step-timeout owner probes are green and classify timeout-due dispatch-pending snapshots through the stale-progress reconcile owner outcome, but the representative rolling-restart rerun remains red on priority_recovery_partition_progress under operation_workflow_owner / workflow_progress with recovering_in_flight. Blocked partitions are control_plane_publications-p1, replica_operations-p1, and sql_transactions-p1; active gate and snapshot coverage remain 3/5; dominant reason is priority_recovery_event_driven_wait.",
-  "nextAction": "Activate `work/packages/active-20260511-rolling-restart-operation-workflow-progress-event-driven-residual-recovery.md` to continue reducing operation_workflow_owner / workflow_progress event-driven recovery for control_plane_publications-p1, replica_operations-p1, and sql_transactions-p1.",
+  "nextAction": "Activate `work/packages/done-20260511-rolling-restart-operation-workflow-progress-event-driven-residual-recovery.md` to continue reducing operation_workflow_owner / workflow_progress event-driven recovery for control_plane_publications-p1, replica_operations-p1, and sql_transactions-p1.",
   "proof": [
     "npm run work:evidence-summary -- test-output/reports/rolling-restart-current-release-gate-after-dispatch-pending-step-timeout-contract-fix.report.json",
     "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-current-release-gate-after-dispatch-pending-step-timeout-contract-fix.report.json --explain priority_recovery_partition_progress",
@@ -52,7 +52,7 @@
   "predecessor": "work/packages/done-20260511-rolling-restart-operation-workflow-progress-event-driven-priority-recovery.md",
   "closed": "2026-05-11",
   "commitAndPushLedgerRequired": true,
-  "successor": "work/packages/active-20260511-rolling-restart-operation-workflow-progress-event-driven-residual-recovery.md"
+  "successor": "work/packages/done-20260511-rolling-restart-operation-workflow-progress-event-driven-residual-recovery.md"
 }
 -->
 

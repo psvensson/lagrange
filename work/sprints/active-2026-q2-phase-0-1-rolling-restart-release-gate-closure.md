@@ -62,7 +62,7 @@ Latest package:
 2. [Rolling Restart Operation Workflow Rebalancer Handoff Retry Scheduled](../packages/done-20260511-rolling-restart-operation-workflow-rebalancer-handoff-retry-scheduled.md)
 3. [Rolling Restart Operation Workflow Progress Event Driven Priority Recovery](../packages/done-20260511-rolling-restart-operation-workflow-progress-event-driven-priority-recovery.md)
 4. [Rolling Restart Operation Workflow Progress Dispatch Pending Step Timeout Contract](../packages/done-20260511-rolling-restart-operation-workflow-progress-dispatch-pending-step-timeout-contract.md)
-5. [Rolling Restart Operation Workflow Progress Event Driven Residual Recovery](../packages/active-20260511-rolling-restart-operation-workflow-progress-event-driven-residual-recovery.md)
+5. [Rolling Restart Operation Workflow Progress Event Driven Residual Recovery](../packages/done-20260511-rolling-restart-operation-workflow-progress-event-driven-residual-recovery.md)
 
 Latest representative evidence:
 

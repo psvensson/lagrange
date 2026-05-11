@@ -2,8 +2,8 @@
   "schema": "current-blocker-v1",
   "generatedBy": "scripts/work-tracker.js",
   "sprint": "work/sprints/active-2026-q2-phase-0-1-rolling-restart-release-gate-closure.md",
-  "package": "work/packages/active-20260511-rolling-restart-operation-workflow-progress-event-driven-residual-recovery.md",
-  "status": "active",
+  "package": "work/packages/done-20260511-rolling-restart-operation-workflow-progress-event-driven-residual-recovery.md",
+  "status": "done",
   "scenario": "rolling-restart",
   "artifact": "test-output/reports/rolling-restart-current-release-gate-after-event-driven-residual-recovery-fix.report.json",
   "playback": "test-output/reports/.playback/rolling-restart-current-release-gate-after-event-driven-residual-recovery-fix/rolling-restart/",
@@ -11,7 +11,7 @@
   "boundary": "rebalancer_handoff",
   "dominantReason": "priority_recovery_progress_blocked",
   "currentState": "Implementation added replica_operations cache-event re-entry for priority dispatch-pending workflow progress. Focused owner tests and touched runtime guardrails are green. The representative rolling-restart rerun remains red, but the normalized frontier migrated from operation_workflow_owner / workflow_progress event-driven wait to operation_workflow_owner / rebalancer_handoff with retry_scheduled evidence; active gate and snapshot coverage are 2/5.",
-  "nextAction": "Open a focused successor for operation_workflow_owner / rebalancer_handoff retry-scheduled priority recovery; do not continue broad workflow-progress changes in this package.",
+  "nextAction": "Activate `work/packages/todo-20260511-rolling-restart-operation-workflow-rebalancer-handoff-retry-scheduled-v2.md` for the operation_workflow_owner / rebalancer_handoff retry-scheduled priority recovery frontier.",
   "proof": [
     "npm run work:evidence-summary -- test-output/reports/rolling-restart-current-release-gate-after-dispatch-pending-step-timeout-contract-fix.report.json",
     "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-current-release-gate-after-dispatch-pending-step-timeout-contract-fix.report.json --explain priority_recovery_partition_progress",
@@ -28,7 +28,7 @@
   "touchedFiles": [
     "src/rebalancer/operation-workflow-owner-segment-7-stage-1.js",
     "test/rebalancer/operation-workflow-progress-event-driven-reentry.test.js",
-    "work/packages/active-20260511-rolling-restart-operation-workflow-progress-event-driven-residual-recovery.md",
+    "work/packages/done-20260511-rolling-restart-operation-workflow-progress-event-driven-residual-recovery.md",
     "work/sprints/active-2026-q2-phase-0-1-rolling-restart-release-gate-closure.md",
     "work/sprints/current-blocker.json",
     "work/sprints/current-blocker.md",

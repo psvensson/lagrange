@@ -4,7 +4,7 @@
 
 Sprint: `work/sprints/active-2026-q2-phase-0-1-rolling-restart-release-gate-closure.md`
 
-Package: `work/packages/active-20260511-rolling-restart-operation-workflow-progress-event-driven-residual-recovery.md`
+Package: `work/packages/done-20260511-rolling-restart-operation-workflow-progress-event-driven-residual-recovery.md`
 
 Scenario: `rolling-restart`
 
@@ -24,7 +24,7 @@ Current state: Implementation added replica_operations cache-event re-entry for 
 
 ## Next Action
 
-Open a focused successor for operation_workflow_owner / rebalancer_handoff retry-scheduled priority recovery; do not continue broad workflow-progress changes in this package.
+Activate `work/packages/todo-20260511-rolling-restart-operation-workflow-rebalancer-handoff-retry-scheduled-v2.md` for the operation_workflow_owner / rebalancer_handoff retry-scheduled priority recovery frontier.
 
 ## Proof Ladder
 
@@ -72,7 +72,7 @@ Cross-boundary review: `completed-before-implementation; predecessor review was 
 
 1. `src/rebalancer/operation-workflow-owner-segment-7-stage-1.js`
 2. `test/rebalancer/operation-workflow-progress-event-driven-reentry.test.js`
-3. `work/packages/active-20260511-rolling-restart-operation-workflow-progress-event-driven-residual-recovery.md`
+3. `work/packages/done-20260511-rolling-restart-operation-workflow-progress-event-driven-residual-recovery.md`
 4. `work/sprints/active-2026-q2-phase-0-1-rolling-restart-release-gate-closure.md`
 5. `work/sprints/current-blocker.json`
 6. `work/sprints/current-blocker.md`

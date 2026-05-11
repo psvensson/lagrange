@@ -3,7 +3,7 @@
 <!-- work-package
 {
   "schema": "work-package-v1",
-  "status": "active",
+  "status": "done",
   "opened": "2026-05-11",
   "scenario": "rolling-restart",
   "artifact": "test-output/reports/rolling-restart-current-release-gate-after-event-driven-residual-recovery-fix.report.json",
@@ -12,7 +12,7 @@
   "boundary": "rebalancer_handoff",
   "dominantReason": "priority_recovery_progress_blocked",
   "currentState": "Implementation added replica_operations cache-event re-entry for priority dispatch-pending workflow progress. Focused owner tests and touched runtime guardrails are green. The representative rolling-restart rerun remains red, but the normalized frontier migrated from operation_workflow_owner / workflow_progress event-driven wait to operation_workflow_owner / rebalancer_handoff with retry_scheduled evidence; active gate and snapshot coverage are 2/5.",
-  "nextAction": "Open a focused successor for operation_workflow_owner / rebalancer_handoff retry-scheduled priority recovery; do not continue broad workflow-progress changes in this package.",
+  "nextAction": "Activate `work/packages/todo-20260511-rolling-restart-operation-workflow-rebalancer-handoff-retry-scheduled-v2.md` for the operation_workflow_owner / rebalancer_handoff retry-scheduled priority recovery frontier.",
   "proof": [
     "npm run work:evidence-summary -- test-output/reports/rolling-restart-current-release-gate-after-dispatch-pending-step-timeout-contract-fix.report.json",
     "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-current-release-gate-after-dispatch-pending-step-timeout-contract-fix.report.json --explain priority_recovery_partition_progress",
@@ -29,7 +29,7 @@
   "touchedFiles": [
     "src/rebalancer/operation-workflow-owner-segment-7-stage-1.js",
     "test/rebalancer/operation-workflow-progress-event-driven-reentry.test.js",
-    "work/packages/active-20260511-rolling-restart-operation-workflow-progress-event-driven-residual-recovery.md",
+    "work/packages/done-20260511-rolling-restart-operation-workflow-progress-event-driven-residual-recovery.md",
     "work/sprints/active-2026-q2-phase-0-1-rolling-restart-release-gate-closure.md",
     "work/sprints/current-blocker.json",
     "work/sprints/current-blocker.md",
@@ -53,7 +53,10 @@
     "causalDebt": "Representative rolling-restart migrated from workflow_progress event-driven wait to operation_workflow_owner / rebalancer_handoff retry-scheduled priority recovery. The new artifact also reports startup active-gate snapshot coverage as downstream 2/5, but priority_recovery_partition_progress remains the first frontier.",
     "crossBoundaryReview": "completed-before-implementation; predecessor review was clean before this package was activated."
   },
-  "predecessor": "work/packages/done-20260511-rolling-restart-operation-workflow-progress-dispatch-pending-step-timeout-contract.md"
+  "predecessor": "work/packages/done-20260511-rolling-restart-operation-workflow-progress-dispatch-pending-step-timeout-contract.md",
+  "closed": "2026-05-11",
+  "commitAndPushLedgerRequired": true,
+  "successor": "work/packages/todo-20260511-rolling-restart-operation-workflow-rebalancer-handoff-retry-scheduled-v2.md"
 }
 -->
 
@@ -111,7 +114,7 @@ failure simulations, and production guarantees in the Community / AGPL repo.
 
 - [x] Review subagent recorded: Agent code-review (9b4b6a10-2e64-4b77-a6d2-13e4e4a4d8b9) reviewed work/packages/done-20260511-rolling-restart-operation-workflow-progress-dispatch-pending-step-timeout-contract.md; result clean.
 - [x] Fix subagent recorded or explicitly not needed: not-needed.
-- [x] Implementation subagent recorded: Agent copilot-cli-implementation (6bb8c2d9-9a2c-4a93-98b1-6d7723af0f1e) implemented work/packages/active-20260511-rolling-restart-operation-workflow-progress-event-driven-residual-recovery.md.
+- [x] Implementation subagent recorded: Agent copilot-cli-implementation (6bb8c2d9-9a2c-4a93-98b1-6d7723af0f1e) implemented work/packages/done-20260511-rolling-restart-operation-workflow-progress-event-driven-residual-recovery.md.
 
 
 ## Implementation Result
@@ -121,6 +124,12 @@ Result: `migrated`. The package added owner-path cache-event re-entry for
 candidates. This gives missed operation-created cache visibility the same
 canonical owner lane as explicit operation-created events without adding a
 second workflow engine.
+
+## Commit And Push Ledger
+
+1. Focused package commit: `c0a8f35f9546ea26579e963439ff1580b7a58508`
+2. Pushed to: `origin/codex/pending-ack-eligibility-filter`
+3. Commit contains only package-owned files/package-status/allowed sprint handoff: yes
 
 ## Validation Evidence
 
