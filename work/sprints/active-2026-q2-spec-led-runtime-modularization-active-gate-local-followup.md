@@ -1,24 +1,25 @@
 # Spec-Led Runtime Modularization Active-Gate Local Follow-Up Sprint
 
-Status: todo. This successor sprint follows startup readiness support evidence
+Status: active. This successor sprint follows startup readiness support evidence
 classification after causal analysis migrated the remaining representative
-blocker to startup active-gate local snapshot coverage ownership.
+blocker through startup active-gate local snapshot coverage ownership and then
+to priority recovery backpressure.
 
 ## Current Blocker Snapshot
 
 Current package:
-`work/packages/todo-20260511-spec-led-runtime-modularization-active-gate-local-blocker-frontier.md`.
+`work/packages/active-20260511-spec-led-runtime-modularization-active-gate-local-blocker-frontier.md`.
 
 Owner boundary:
-`startup_active_gate_owner / snapshot_coverage`.
+`operation_workflow_owner / rebalancer_handoff`.
 
 Latest representative evidence:
 `test-output/reports/rolling-restart-spec-led-runtime-modularization-active-gate-snapshot-coverage-publication-lag.report.json`.
 
-The representative causal model reports `classified_local_blocker /
-continue_local_fix` with reason `active_gate_local_blocker`. Publication ACK,
-diagnostics budget ownership, and startup readiness support evidence are closed
-as predecessor concerns.
+The representative causal model reports `classified_backpressure /
+accept_classified_backpressure` with reason `priority_recovery_backpressure`.
+Publication ACK, diagnostics budget ownership, startup readiness support
+evidence, and active-gate local ownership are closed as predecessor concerns.
 
 ## Scope Basis
 
@@ -32,7 +33,7 @@ as predecessor concerns.
 
 ## Package Queue
 
-1. [Active-Gate Local Blocker Frontier](../packages/todo-20260511-spec-led-runtime-modularization-active-gate-local-blocker-frontier.md)
+1. [Active-Gate Local Blocker Frontier](../packages/active-20260511-spec-led-runtime-modularization-active-gate-local-blocker-frontier.md)
 2. [Active Gate Report Schema Alias Deletion](../packages/todo-20260509-spec-led-runtime-modularization-active-gate-report-schema-alias-deletion.md)
 
 ## Activation Rules

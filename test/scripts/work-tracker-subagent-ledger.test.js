@@ -10,6 +10,8 @@ import {
 } from '../../scripts/work-tracker.js';
 
 const WORK_TRACKER_LEDGER_TEST_FILE = 'work/packages/active-test-package.md';
+const WORK_TRACKER_LEDGER_LOCAL_PATH_TEST_FILE =
+  'work/packages/active-20260511-active-gate-local-blocker-frontier.md';
 const WORK_TRACKER_DONE_TEST_FILE = 'work/packages/done-test-package.md';
 const WORK_TRACKER_CURRENT_BLOCKER_MARKDOWN =
   'work/sprints/current-blocker.md';
@@ -194,6 +196,20 @@ const WORK_TRACKER_LEDGER_MANUAL_FIX_NOTE_CONTENT = [
   '- [x] Implementation subagent recorded:',
   `      Agent Implement (${IMPLEMENTATION_AGENT_ID}) implemented`,
   '      `work/packages/active-test-package.md`.',
+  '',
+].join('\n');
+const WORK_TRACKER_LEDGER_LOCAL_PATH_CONTENT = [
+  '# Test Package',
+  '',
+  '## Subagent Sequencing Ledger',
+  '',
+  '- [x] Review subagent recorded:',
+  `      Agent Review (${REVIEW_AGENT_ID}) reviewed`,
+  '      `work/packages/done-test-package.md`; result `clean`.',
+  '- [x] Fix subagent recorded or explicitly not needed: `not-needed`.',
+  '- [x] Implementation subagent recorded:',
+  `      Agent Implement (${IMPLEMENTATION_AGENT_ID}) implemented`,
+  '      `work/packages/active-20260511-active-gate-local-blocker-frontier.md`.',
   '',
 ].join('\n');
 const WORK_TRACKER_LEDGER_BAD_NOT_NEEDED_CONTENT = [
@@ -412,6 +428,15 @@ describe('work tracker subagent sequencing ledger validation', () => {
     );
 
     assert.match(errors.join('\n'), /non-real agent identity/u);
+  });
+
+  it('accepts real agent entries whose package path contains local', () => {
+    const errors = validateSubagentSequencingLedger(
+      WORK_TRACKER_LEDGER_LOCAL_PATH_CONTENT,
+      WORK_TRACKER_LEDGER_LOCAL_PATH_TEST_FILE,
+    );
+
+    assert.deepEqual(errors, []);
   });
 
   it('reports not-needed fixes when review found fixes required', () => {

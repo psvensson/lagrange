@@ -870,7 +870,10 @@ function buildActiveGateSnapshotEdge(normalized) {
     },
     reasons,
     rank: RANK.SNAPSHOT_COVERAGE,
-    dependencies: [EDGE_ID.PUBLICATION_ACK_CONVERGENCE],
+    dependencies: [
+      EDGE_ID.PUBLICATION_ACK_CONVERGENCE,
+      EDGE_ID.PRIORITY_RECOVERY_PARTITION_PROGRESS,
+    ],
     projectionHint: PROJECTION_HINT.SNAPSHOT_COVERAGE,
   });
 }

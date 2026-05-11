@@ -50,9 +50,9 @@ describe('FailureClassTaxonomy', () => {
     const taxonomy = classifyFailures(readActiveArtifact());
     const failureClasses = taxonomy.classes.map((entry) => entry.failureClass);
 
-    assert.ok(failureClasses.includes(FAILURE_CLASS.ACTIVE_GATE_SNAPSHOT_COVERAGE_INCOMPLETE));
+    assert.ok(failureClasses.includes(FAILURE_CLASS.PRIORITY_RECOVERY_EVENT_WAIT));
     assert.ok(failureClasses.includes(FAILURE_CLASS.STARTUP_READINESS_BLOCKED));
-    assert.equal(taxonomy.resolutionStrategy, RESOLUTION_STRATEGY.LOCAL_RUNTIME_OWNER_FIX);
+    assert.equal(taxonomy.resolutionStrategy, RESOLUTION_STRATEGY.ACCEPT_CLASSIFIED_BACKPRESSURE);
     assertNoNullOrUndefined(taxonomy);
   });
 
@@ -68,12 +68,17 @@ describe('FailureClassTaxonomy', () => {
     assertNoNullOrUndefined(artifactTaxonomy);
   });
 
-  it('keeps active-gate no-progress readiness evidence on the snapshot coverage owner', () => {
+  it('migrates active-gate no-progress behind in-flight priority recovery', () => {
     const taxonomy = classifyFailures(readActiveGateNoProgressReport());
     const failureClasses = taxonomy.classes.map((entry) => entry.failureClass);
 
-    assert.ok(failureClasses.includes(FAILURE_CLASS.ACTIVE_GATE_SNAPSHOT_COVERAGE_INCOMPLETE));
+    assert.ok(failureClasses.includes(FAILURE_CLASS.PRIORITY_RECOVERY_EVENT_WAIT));
+    assert.equal(
+      failureClasses.includes(FAILURE_CLASS.ACTIVE_GATE_SNAPSHOT_COVERAGE_INCOMPLETE),
+      false,
+    );
     assert.equal(failureClasses.includes(FAILURE_CLASS.STARTUP_READINESS_BLOCKED), false);
+    assert.equal(taxonomy.resolutionStrategy, RESOLUTION_STRATEGY.ACCEPT_CLASSIFIED_BACKPRESSURE);
     assertNoNullOrUndefined(taxonomy);
   });
 

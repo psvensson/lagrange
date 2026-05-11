@@ -132,7 +132,9 @@ const TOPOLOGY_DEPENDENCY_KIND_RULES = Object.freeze([
     dependencyKind: DEPENDENCY_KIND.PRIORITY_RECOVERY,
     matches: (snapshot) =>
       snapshot.edgeId === EDGE_ID.PRIORITY_RECOVERY_PARTITION_PROGRESS ||
+      snapshot.dependencyId === EDGE_ID.PRIORITY_RECOVERY_PARTITION_PROGRESS ||
       snapshot.edgeBoundary === BOUNDARY.WORKFLOW_PROGRESS ||
+      snapshot.dependencyBoundary === BOUNDARY.WORKFLOW_PROGRESS ||
       hasAnyReason(snapshot.edgeReasons, TOPOLOGY_PRIORITY_RECOVERY_REASON_SET),
   }),
   Object.freeze({

@@ -218,7 +218,7 @@ describe('TopologyConvergenceGraph', () => {
     assert.equal(findEdge(graph.edges, EDGE_READINESS).state, EDGE_STATE.TERMINAL_FAILED);
     assert.deepEqual(
       graph.frontier.map((edge) => edge.id),
-      [EDGE_PRIORITY_RECOVERY, EDGE_SNAPSHOT_COVERAGE],
+      [EDGE_PRIORITY_RECOVERY],
     );
     assert.deepEqual(
       graph.nextExpectedFrontier.map((edge) => edge.id),
@@ -443,7 +443,7 @@ describe('TopologyConvergenceGraph', () => {
       assertNoNullOrUndefined(graph);
     });
 
-  it('ranks active-gate coverage ahead of retryable in-flight priority recovery',
+  it('keeps active-gate coverage behind retryable in-flight priority recovery',
     () => {
       const fixture = buildFixtureFailureBundle();
       const graph = buildTopologyConvergenceGraphFromArtifacts({
@@ -468,15 +468,19 @@ describe('TopologyConvergenceGraph', () => {
       });
       const priorityEdge = findEdge(graph.edges, EDGE_PRIORITY_RECOVERY);
 
-      assert.equal(graph.summary.firstFrontierEdgeId, EDGE_SNAPSHOT_COVERAGE);
-      assert.equal(graph.summary.firstFrontierOwner, OWNER_STARTUP_ACTIVE_GATE);
+      assert.equal(graph.summary.firstFrontierEdgeId, EDGE_PRIORITY_RECOVERY);
+      assert.equal(graph.summary.firstFrontierOwner, OWNER_OPERATION_WORKFLOW);
       assert.equal(priorityEdge.state, EDGE_STATE.RETRYABLE);
       assert.deepEqual(priorityEdge.reasons, [
         PRIORITY_RECOVERY_RETRYABLE_REASON,
       ]);
       assert.deepEqual(
         graph.frontier.map((edge) => edge.id),
-        [EDGE_SNAPSHOT_COVERAGE, EDGE_PRIORITY_RECOVERY],
+        [EDGE_PRIORITY_RECOVERY],
+      );
+      assert.deepEqual(
+        graph.nextExpectedFrontier.map((edge) => edge.id),
+        [EDGE_SNAPSHOT_COVERAGE],
       );
       assertNoNullOrUndefined(graph);
     });
@@ -534,7 +538,7 @@ describe('TopologyConvergenceGraph', () => {
     const priorityEdge = findEdge(graph.edges, EDGE_PRIORITY_RECOVERY);
 
     assert.equal(graph.scenario, SCENARIO_ROLLING_RESTART);
-    assert.equal(graph.summary.firstFrontierEdgeId, EDGE_SNAPSHOT_COVERAGE);
+    assert.equal(graph.summary.firstFrontierEdgeId, EDGE_PRIORITY_RECOVERY);
     assert.equal(priorityEdge.state, EDGE_STATE.RETRYABLE);
     assert.ok(graph.frontier.length >= MIN_FRONTIER_COUNT);
     assert.ok(graph.nextExpectedFrontier.length >= MIN_FRONTIER_COUNT);
@@ -548,10 +552,10 @@ describe('TopologyConvergenceGraph', () => {
     const graph = buildTopologyConvergenceGraph(artifact);
 
     assert.equal(graph.scenario, SCENARIO_ROLLING_RESTART);
-    assert.equal(graph.summary.firstFrontierEdgeId, EDGE_SNAPSHOT_COVERAGE);
+    assert.equal(graph.summary.firstFrontierEdgeId, EDGE_PRIORITY_RECOVERY);
     assert.deepEqual(
       graph.nextExpectedFrontier.map((edge) => edge.id),
-      [EDGE_READINESS, EDGE_PRIORITY_RECOVERY],
+      [EDGE_SNAPSHOT_COVERAGE],
     );
     assertNoNullOrUndefined(graph);
   });

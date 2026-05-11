@@ -154,6 +154,7 @@ const SUBAGENT_IMPLEMENTATION_PATTERN = new RegExp(
 );
 const NON_REAL_IDENTITY_PATTERN =
   /\b(?:current-session|current session|parent\s+codex|manual|local|session)\b/iu;
+const FILE_PATH_TOKEN_PATTERN = /\S*\/\S+/gu;
 const COMMIT_SHA_PATTERN = /^[0-9a-f]{7,40}$/iu;
 const REMOTE_BRANCH_PATTERN = /^[A-Za-z0-9._-]+\/[A-Za-z0-9._/-]+$/u;
 const LEDGER_YES_VALUE = 'yes';
@@ -271,11 +272,11 @@ function validateCheckedSubagentLedgerItem(content, options = {}) {
   if (content.includes(LEDGER_PENDING_BEFORE_IMPLEMENTATION_MARKER)) {
     errors.push(`contains ${LEDGER_PENDING_BEFORE_IMPLEMENTATION_MARKER}`);
   }
-  if (
-    options[LEDGER_VALIDATION_REQUIRES_STRICT_ENTRIES] === true &&
-    NON_REAL_IDENTITY_PATTERN.test(content)
-  ) {
-    errors.push('contains a non-real agent identity');
+  if (options[LEDGER_VALIDATION_REQUIRES_STRICT_ENTRIES] === true) {
+    const contentWithoutPaths = content.replace(FILE_PATH_TOKEN_PATTERN, '');
+    if (NON_REAL_IDENTITY_PATTERN.test(contentWithoutPaths)) {
+      errors.push('contains a non-real agent identity');
+    }
   }
   return errors;
 }

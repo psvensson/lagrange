@@ -98,6 +98,7 @@ const FAILURE_RULES = Object.freeze([
       stateSet: [EDGE_STATE.BLOCKED, EDGE_STATE.DEFERRED],
       failureClass: FAILURE_CLASS.ACTIVE_GATE_SNAPSHOT_COVERAGE_INCOMPLETE,
       reason: REASON_SNAPSHOT_COVERAGE_INCOMPLETE,
+      frontierOnly: true,
     }),
   }),
   Object.freeze({
@@ -114,9 +115,21 @@ const FAILURE_RULES = Object.freeze([
   }),
 ]);
 
-function classifyTopologyEdge({graph, edgeId, stateSet, failureClass, reason}) {
+function classifyTopologyEdge({
+  graph,
+  edgeId,
+  stateSet,
+  failureClass,
+  reason,
+  frontierOnly = false,
+}) {
   const edge = findTopologyNode(graph, edgeId);
-  if (!edge || stateSet.includes(edge.state) !== true) {
+  const frontierEdge = frontierOnly === true ?
+    arrayOrEmpty(graph.criticalPath).some((frontier) =>
+      frontier.edgeId === edgeId,
+    ) :
+    true;
+  if (!edge || frontierEdge !== true || stateSet.includes(edge.state) !== true) {
     return [];
   }
   return [buildClass({
@@ -132,15 +145,17 @@ function classifyTopologyEdge({graph, edgeId, stateSet, failureClass, reason}) {
 function classifyPriorityWait(graph) {
   const edge = findTopologyNode(graph, EDGE_PRIORITY_RECOVERY);
   const eventWait = graph.waits.find((wait) => wait.waitMode === WAIT_MODE_EVENT_DRIVEN);
-  if (!edge || !eventWait || edge.state !== EDGE_STATE.RETRYABLE) {
+  if (!edge || edge.state !== EDGE_STATE.RETRYABLE) {
     return [];
   }
   return [buildClass({
     failureClass: FAILURE_CLASS.PRIORITY_RECOVERY_EVENT_WAIT,
     reason: REASON_EVENT_DRIVEN_WAIT,
-    owner: eventWait.owner,
-    boundary: eventWait.boundary,
-    evidencePath: EVIDENCE_PATH_PRIORITY_RECOVERY_WITNESS,
+    owner: eventWait?.owner || edge.owner,
+    boundary: eventWait?.boundary || edge.boundary,
+    evidencePath: eventWait ?
+      EVIDENCE_PATH_PRIORITY_RECOVERY_WITNESS :
+      edge.evidencePath,
     causalNodeIds: [edge.id],
   })];
 }

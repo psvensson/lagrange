@@ -58,25 +58,29 @@ describe('StopConditionDecision', () => {
     assertNoNullOrUndefined(decision);
   });
 
-  it('preserves active failed artifact classes after budget cascade classification', () => {
+  it('preserves migrated artifact classes after budget cascade classification', () => {
     const artifact = buildCausalAnalysis(readActiveArtifact());
     const failureClasses = artifact.failureTaxonomy.classes.map((entry) => entry.failureClass);
 
     assert.equal(artifact.stopDecision.outcome, STOP_OUTCOME.MIGRATE_OWNER_BOUNDARY);
     assert.equal(artifact.stopDecision.condition, STOP_CONDITION.OWNER_BOUNDARY_MIGRATION);
-    assert.ok(failureClasses.includes(FAILURE_CLASS.ACTIVE_GATE_SNAPSHOT_COVERAGE_INCOMPLETE));
+    assert.ok(failureClasses.includes(FAILURE_CLASS.PRIORITY_RECOVERY_EVENT_WAIT));
     assert.ok(failureClasses.includes(FAILURE_CLASS.STARTUP_READINESS_BLOCKED));
     assert.equal(failureClasses.includes(FAILURE_CLASS.BUDGET_TIMEOUT_CASCADE), false);
     assertNoNullOrUndefined(artifact);
   });
 
-  it('classifies active-gate no-progress readiness as snapshot coverage successor work', () => {
+  it('migrates active-gate no-progress to classified priority backpressure', () => {
     const artifact = buildCausalAnalysis(readActiveGateNoProgressReport());
     const failureClasses = artifact.failureTaxonomy.classes.map((entry) => entry.failureClass);
 
-    assert.equal(artifact.stopDecision.outcome, STOP_OUTCOME.CONTINUE_LOCAL_FIX);
-    assert.equal(artifact.stopDecision.condition, STOP_CONDITION.CLASSIFIED_LOCAL_BLOCKER);
-    assert.ok(failureClasses.includes(FAILURE_CLASS.ACTIVE_GATE_SNAPSHOT_COVERAGE_INCOMPLETE));
+    assert.equal(artifact.stopDecision.outcome, STOP_OUTCOME.ACCEPT_CLASSIFIED_BACKPRESSURE);
+    assert.equal(artifact.stopDecision.condition, STOP_CONDITION.CLASSIFIED_BACKPRESSURE);
+    assert.ok(failureClasses.includes(FAILURE_CLASS.PRIORITY_RECOVERY_EVENT_WAIT));
+    assert.equal(
+      failureClasses.includes(FAILURE_CLASS.ACTIVE_GATE_SNAPSHOT_COVERAGE_INCOMPLETE),
+      false,
+    );
     assert.equal(failureClasses.includes(FAILURE_CLASS.STARTUP_READINESS_BLOCKED), false);
     assertNoNullOrUndefined(artifact);
   });
