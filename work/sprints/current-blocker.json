@@ -2,37 +2,27 @@
   "schema": "current-blocker-v1",
   "generatedBy": "scripts/work-tracker.js",
   "sprint": "work/sprints/active-2026-q2-phase-0-1-rolling-restart-release-gate-closure.md",
-  "package": "work/packages/done-20260511-rolling-restart-operation-workflow-progress-event-driven-wait.md",
-  "status": "done",
+  "package": "work/packages/active-20260511-rolling-restart-operation-workflow-rebalancer-handoff-retry-scheduled.md",
+  "status": "active",
   "scenario": "rolling-restart",
-  "artifact": "test-output/reports/rolling-restart-current-release-gate-after-event-driven-wait-fix.report.json",
-  "playback": "test-output/reports/.playback/rolling-restart-current-release-gate-after-event-driven-wait-fix/rolling-restart/",
+  "artifact": "test-output/reports/rolling-restart-current-release-gate-after-rebalancer-handoff-fix.report.json",
+  "playback": "test-output/reports/.playback/rolling-restart-current-release-gate-after-rebalancer-handoff-fix/rolling-restart/",
   "owner": "operation_workflow_owner",
-  "boundary": "rebalancer_handoff",
-  "dominantReason": "priority_recovery_rebalancer_handoff_retry_scheduled",
-  "currentState": "The package added owner-lane-held dispatch-pending re-entry coverage and changed priority recovery re-entry scheduling so a held operation-owner lane arms a bounded remote handoff follow-up instead of dropping the wake. Focused tests, touched-file guardrails, work validation, and diff hygiene passed. The representative rolling-restart rerun still failed 0/1, but the first frontier migrated from operation_workflow_owner / workflow_progress to operation_workflow_owner / rebalancer_handoff with dominant source reason priority_recovery_rebalancer_handoff_retry_scheduled for control_plane_publications-p1 and sql_transaction_participants-p1.",
-  "nextAction": "Open the next focused package on operation_workflow_owner / rebalancer_handoff to explain, repair, or classify the priority_recovery_rebalancer_handoff_retry_scheduled retry frontier exposed by the event-driven-wait fix.",
+  "boundary": "workflow_progress",
+  "dominantReason": "priority_recovery_workflow_progress_event_driven",
+  "currentState": "The implementation classified active coordinator-created remote handoff retry timers as bounded owner-internal retry state instead of reclassifying otherwise event-driven dispatch-pending priority recovery snapshots to rebalancer_handoff. The representative rolling-restart rerun still fails 0/1, but the first frontier migrated from operation_workflow_owner / rebalancer_handoff to operation_workflow_owner / workflow_progress with dominant source reason priority_recovery_workflow_progress_event_driven, recovering_in_flight, blocked partitions control_plane_publications-p1, replica_operations-p1, sql_transaction_participants-p1, sql_transactions-p1, and sql_write_operations-p1, active progress 2/5, and snapshot coverage 2/5.",
+  "nextAction": "Parent session should close or migrate this rebalancer-handoff package, then open or activate the next workflow-progress event-driven priority recovery package for the migrated representative frontier.",
   "proof": [
-    "npm run work:package:evidence-block -- test-output/reports/rolling-restart-current-release-gate-after-publication-convergence-fix-v2.report.json",
-    "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-current-release-gate-after-publication-convergence-fix-v2.report.json --explain priority_recovery_partition_progress",
-    "npm run analyze:distributed-failure -- --report test-output/reports/rolling-restart-current-release-gate-after-publication-convergence-fix-v2.report.json",
-    "node --test test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js",
-    "node scripts/check-guideline-literals.js src/rebalancer/operation-workflow-owner*.js src/control-plane/priority-recovery-snapshot*.js",
-    "node scripts/check-guideline-decision-boundaries.js src/rebalancer/operation-workflow-owner*.js src/control-plane/priority-recovery-snapshot*.js",
-    "npm run audit:runtime-grammar:file -- src/rebalancer/operation-workflow-owner-segment-7-stage-5.js src/rebalancer/operation-workflow-owner.js",
-    "npm run work:current-blocker",
-    "npm run work:validate",
-    "git diff --check",
-    "node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-current-release-gate-after-event-driven-wait-fix.report.json --fast-local --verbose",
-    "npm run work:package:evidence-block -- test-output/reports/rolling-restart-current-release-gate-after-event-driven-wait-fix.report.json",
-    "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-current-release-gate-after-event-driven-wait-fix.report.json --explain priority_recovery_partition_progress",
-    "npm run analyze:distributed-failure -- --report test-output/reports/rolling-restart-current-release-gate-after-event-driven-wait-fix.report.json",
-    "Model ledger reconciliation: work/model-ledger.jsonl entry recorded at 2026-05-11T16:34:28.696Z was captured before package closure/rename and belongs to this closed package without rewriting historical ledger rows."
+    "npm run work:package:evidence-block -- test-output/reports/rolling-restart-current-release-gate-after-rebalancer-handoff-fix.report.json",
+    "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-current-release-gate-after-rebalancer-handoff-fix.report.json --explain priority_recovery_partition_progress",
+    "npm run analyze:distributed-failure -- --report test-output/reports/rolling-restart-current-release-gate-after-rebalancer-handoff-fix.report.json",
+    "npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-current-release-gate-after-rebalancer-handoff-fix.report.json"
   ],
   "touchedFiles": [
     "src/rebalancer/operation-workflow-owner-segment-7-stage-5.js",
     "src/rebalancer/operation-workflow-owner.js",
     "test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js",
+    "work/packages/active-20260511-rolling-restart-operation-workflow-rebalancer-handoff-retry-scheduled.md",
     "work/packages/done-20260511-rolling-restart-operation-workflow-progress-event-driven-wait.md",
     "work/sprints/active-2026-q2-phase-0-1-rolling-restart-release-gate-closure.md",
     "work/sprints/current-blocker.json",
@@ -44,18 +34,18 @@
     "intendedMinimumModel": "gpt-5.3-codex",
     "scopeShape": "owner-boundary-contraction/cross-boundary-causal-edge",
     "escalationTriggers": [
-      "event-driven wait evidence requires changes outside operation_workflow_owner or priority recovery snapshots",
+      "rebalancer handoff evidence requires changes outside operation_workflow_owner, RebalanceCoordinator handoff contracts, or priority recovery diagnostics",
       "representative proof restores topology_publication_owner or startup_active_gate_owner as the direct blocker",
       "runtime implementation would need Pro or Enterprise features"
     ]
   },
   "causalGovernance": {
-    "hypothesis": "If retryable event-driven workflow progress is repaired or classified, priority_recovery_partition_progress should reduce, converge, or migrate away from operation_workflow_owner / workflow_progress before startup active-gate snapshot coverage is treated as direct.",
-    "stopConditionCheck": "npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-current-release-gate-after-publication-convergence-fix-v2.report.json",
-    "expectedCausalModelChange": "The recovering_in_flight event-driven wait either advances, becomes a non-frontier retryable state, or migrates to a new named owner boundary.",
+    "hypothesis": "If rebalancer handoff retry scheduling is repaired or classified, priority_recovery_partition_progress should reduce, converge, or migrate away from operation_workflow_owner / rebalancer_handoff before startup active-gate snapshot coverage is treated as direct.",
+    "stopConditionCheck": "npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-current-release-gate-after-event-driven-wait-fix.report.json",
+    "expectedCausalModelChange": "The remote handoff retry either advances, becomes a bounded non-frontier retryable state, or migrates to a new named owner boundary.",
     "representativeOutcome": "migrated",
-    "causalDebt": "The workflow_progress event-driven wait seam now has focused owner-lane-held re-entry coverage and no longer remains the representative boundary. The remaining rolling-restart debt belongs to operation_workflow_owner / rebalancer_handoff, where a remote handoff retry remains scheduled for control_plane_publications-p1 and sql_transaction_participants-p1.",
-    "crossBoundaryReview": "Required before implementing the successor because the representative rerun migrated from workflow_progress event-driven wait to operation_workflow_owner / rebalancer_handoff retry scheduling."
+    "causalDebt": "The remote handoff retry scheduling seam is reduced to bounded owner-internal retry state; remaining rolling-restart debt migrated back to operation_workflow_owner / workflow_progress event-driven priority recovery progress.",
+    "crossBoundaryReview": "completed-before-package-open; predecessor review found metadata fixes that were fixed and pushed before this package opened."
   },
-  "predecessor": "work/packages/done-20260511-rolling-restart-topology-publication-convergence-published-pending.md"
+  "predecessor": "work/packages/done-20260511-rolling-restart-operation-workflow-progress-event-driven-wait.md"
 }

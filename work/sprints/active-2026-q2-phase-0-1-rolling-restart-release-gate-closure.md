@@ -28,6 +28,7 @@ trail is:
 12. `test-output/reports/rolling-restart-current-release-gate-after-sql-write-serial-wait-fix.report.json`
 13. `test-output/reports/rolling-restart-current-release-gate-after-publication-convergence-fix-v2.report.json`
 14. `test-output/reports/rolling-restart-current-release-gate-after-event-driven-wait-fix.report.json`
+15. `test-output/reports/rolling-restart-current-release-gate-after-rebalancer-handoff-fix.report.json`
 
 The matching playback is:
 
@@ -45,19 +46,21 @@ The matching playback is:
 12. `test-output/reports/.playback/rolling-restart-current-release-gate-after-sql-write-serial-wait-fix/rolling-restart/`
 13. `test-output/reports/.playback/rolling-restart-current-release-gate-after-publication-convergence-fix-v2/rolling-restart/`
 14. `test-output/reports/.playback/rolling-restart-current-release-gate-after-event-driven-wait-fix/rolling-restart/`
+15. `test-output/reports/.playback/rolling-restart-current-release-gate-after-rebalancer-handoff-fix/rolling-restart/`
 
 ## Current Blocker Snapshot
 
 Latest package:
 
 1. [Rolling Restart Operation Workflow Progress Event Driven Wait](../packages/done-20260511-rolling-restart-operation-workflow-progress-event-driven-wait.md)
+2. [Rolling Restart Operation Workflow Rebalancer Handoff Retry Scheduled](../packages/active-20260511-rolling-restart-operation-workflow-rebalancer-handoff-retry-scheduled.md)
 
 Latest representative evidence:
 
 1. Scenario: `rolling-restart`
 2. Report total/passed/failed: `1/0/1`
-3. Duration: approximately `127998ms`
-4. Active gate: failed at `3/5` terminal progress
+3. Duration: approximately `129766ms`
+4. Active gate: failed at `2/5` terminal progress
 5. Snapshot coverage: `2/5`
 6. Publication: `PUBLISHED`
 7. Pending acknowledgements: `0`
@@ -65,8 +68,8 @@ Latest representative evidence:
    failure, while topology owner evidence selects priority recovery as the
    first frontier.
 9. Current frontier: `priority_recovery_partition_progress` under
-   `operation_workflow_owner / rebalancer_handoff`, state `retryable`, dominant
-   source reason `priority_recovery_rebalancer_handoff_retry_scheduled`
+   `operation_workflow_owner / workflow_progress`, state `retryable`, dominant
+   source reason `priority_recovery_workflow_progress_event_driven`
 10. Priority recovery invariants: `passed`
 
 The publication-convergence package reduced the prior
@@ -75,11 +78,15 @@ The publication-convergence package reduced the prior
 zero-ACK, zero-blocked-node, priority-spread-pending case without canonical
 missing-active publication debt.
 
-The normalized first frontier migrated again to `operation_workflow_owner /
-rebalancer_handoff` on edge `priority_recovery_partition_progress`, state
-`retryable`. The dominant source reason is
-`priority_recovery_rebalancer_handoff_retry_scheduled`, with blocked partitions
-`control_plane_publications-p1` and `sql_transaction_participants-p1`.
+The rebalancer-handoff retry package classified active remote handoff retry
+timers as bounded owner-internal retry state rather than the first frontier when
+the priority recovery snapshot is otherwise event-driven. The normalized first
+frontier migrated to `operation_workflow_owner / workflow_progress` on edge
+`priority_recovery_partition_progress`, state `retryable`. The dominant source
+reason is `priority_recovery_workflow_progress_event_driven`, with blocked
+partitions `control_plane_publications-p1`, `replica_operations-p1`,
+`sql_transaction_participants-p1`, `sql_transactions-p1`, and
+`sql_write_operations-p1`.
 
 Raw distributed-failure presentation for the same latest artifact still reports
 `publication_convergence_blocked` / `publication_missing_active_node`; treat that
@@ -87,8 +94,8 @@ as a presentation residual before successor implementation, not as the canonical
 owner-boundary frontier.
 
 Startup active-gate snapshot coverage remains downstream until the
-operation-workflow rebalancer-handoff retry frontier is either green or promoted
-by fresh representative evidence.
+operation-workflow workflow-progress event-driven frontier is either green or
+promoted by fresh representative evidence.
 
 ## Scope Basis
 
@@ -139,9 +146,10 @@ Edition matrix status: Community / AGPL repo.
    `publication_ack_convergence` satisfied/non-frontier and the representative
    migrated to retryable operation workflow progress.
 7. Preserve the event-driven workflow-progress package rerun showing
-   migration to `operation_workflow_owner / rebalancer_handoff`.
-8. Open the rebalancer-handoff successor after this package is committed and
-   pushed.
+    migration to `operation_workflow_owner / rebalancer_handoff`.
+8. Preserve the rebalancer-handoff successor rerun showing active handoff retry
+   is no longer the first frontier and the representative migrated to
+   `operation_workflow_owner / workflow_progress`.
 9. If `rolling-restart` passes, run sustained throughput and 7-node stress
    confirmation for `0.1`.
 
@@ -164,7 +172,8 @@ Edition matrix status: Community / AGPL repo.
 13. `npm run work:package:evidence-block -- test-output/reports/rolling-restart-current-release-gate-after-publication-convergence-fix-v2.report.json`
 14. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-current-release-gate-after-publication-convergence-fix-v2.report.json --explain publication_ack_convergence`
 15. `node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-current-release-gate-after-event-driven-wait-fix.report.json --fast-local --verbose`
-16. Sustained throughput and 7-node stress confirmation after
+16. `node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-current-release-gate-after-rebalancer-handoff-fix.report.json --fast-local --verbose`
+17. Sustained throughput and 7-node stress confirmation after
     `rolling-restart` passes.
 
 ## Done When

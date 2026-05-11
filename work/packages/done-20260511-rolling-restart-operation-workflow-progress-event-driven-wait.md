@@ -61,7 +61,7 @@
   "predecessor": "work/packages/done-20260511-rolling-restart-topology-publication-convergence-published-pending.md",
   "closed": "2026-05-11",
   "commitAndPushLedgerRequired": true,
-  "successor": "work/packages/todo-20260511-rolling-restart-operation-workflow-rebalancer-handoff-retry-scheduled.md"
+  "successor": "work/packages/active-20260511-rolling-restart-operation-workflow-rebalancer-handoff-retry-scheduled.md"
 }
 -->
 

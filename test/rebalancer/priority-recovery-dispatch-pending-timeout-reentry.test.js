@@ -132,6 +132,12 @@ const TEST_ASSERT_OWNER_LANE_HELD_NO_INLINE_WAKE =
   'owner-lane-held snapshots should not wake the remote owner inline';
 const TEST_ASSERT_OWNER_LANE_HELD_RETRY_WAKES =
   'deferred owner-lane re-entry should wake the remote owner after the lane releases';
+const TEST_ASSERT_ACTIVE_HANDOFF_RETRY_EVENT_DRIVEN =
+  'active handoff retry should not reclassify event-driven owner progress';
+const TEST_ASSERT_ACTIVE_HANDOFF_RETRY_NO_INLINE_WAKE =
+  'active handoff retry snapshots should not wake the remote owner inline';
+const TEST_ASSERT_ACTIVE_HANDOFF_RETRY_TIMER_PRESERVED =
+  'active handoff retry snapshots should preserve the existing bounded retry';
 
 function buildDispatchPendingReentryPlanningSnapshot() {
   return Object.freeze({
@@ -1261,6 +1267,186 @@ async (t) => {
       deliveries[NUM.ZERO]?.target,
       TEST_REPLICA_DISPATCH_TARGET,
       TEST_ASSERT_SNAPSHOT_REENTRY_TARGET,
+    );
+  } finally {
+    Date.now = originalDateNow;
+    await coordinator.shutdown();
+  }
+});
+
+test('priority recovery snapshots keep event-driven progress while a remote ' +
+  'handoff retry is already active',
+async (t) => {
+  const deliveries = [];
+  const deferredTimers = [];
+  let nowMs = TEST_CAPTURED_AT_MS;
+  const originalDateNow = Date.now;
+  Date.now = () => nowMs;
+  const operationRow = {
+    operation_id: TEST_OPERATION_ID,
+    type: TEST_OPERATION_TYPE_REPLACE,
+    partition_id: TEST_PARTITION_ID,
+    replica_id: TEST_REPLICA_ID,
+    source_node_id: TEST_SOURCE_NODE_ID,
+    target_node_id: TEST_TARGET_NODE_ID,
+    status: TEST_STATUS_PENDING,
+    workflow_step: WORKFLOW_STEP.SENDING,
+    created_at: TEST_OPERATION_CREATED_AT_MS,
+    updated_at: TEST_OPERATION_CREATED_AT_MS,
+    completed_at: TEST_EMPTY_VALUE,
+    error_message: TEST_EMPTY_VALUE,
+    steps_history: JSON.stringify(TEST_EMPTY_LIST),
+    entity_type: TEST_ENTITY_TYPE_PARTITION,
+    entity_id: TEST_PARTITION_ID,
+  };
+
+  const sqlQueryEngine = {
+    async executeQuery(sql, params = []) {
+      const normalizedSql = String(sql);
+      if (
+        normalizedSql.includes(TEST_QUERY_REPLICA_OPERATIONS_FRAGMENT) &&
+        normalizedSql.includes('WHERE operation_id = ?')
+      ) {
+        const operationId = params[NUM.ZERO];
+        return {
+          success: true,
+          rows: operationId === TEST_OPERATION_ID ? [{...operationRow}] : [],
+          affectedRows:
+            operationId === TEST_OPERATION_ID ? NUM.ONE : NUM.ZERO,
+        };
+      }
+      if (normalizedSql.includes(TEST_QUERY_REPLICA_OPERATIONS_FRAGMENT)) {
+        return {
+          success: true,
+          rows: [{...operationRow}],
+          affectedRows: NUM.ONE,
+        };
+      }
+      if (normalizedSql.includes(TEST_QUERY_SERVICES_FRAGMENT)) {
+        return {
+          success: true,
+          rows: [],
+          affectedRows: NUM.ZERO,
+        };
+      }
+      return {
+        success: true,
+        rows: [],
+        affectedRows: NUM.ZERO,
+      };
+    },
+  };
+
+  const coordinator = createCoordinator({
+    nodeId: TEST_OBSERVER_NODE_ID,
+    sqlQueryEngine,
+    transactionCoordinator: buildTransactionCoordinator(),
+    systemTableCache: {
+      get() {
+        return null;
+      },
+      getAll() {
+        return [];
+      },
+      filter() {
+        return [];
+      },
+    },
+    cdcIntegrationService: {
+      async waitForCacheUpdate() {},
+    },
+    controlPlaneReadinessService: {
+      getPriorityRecoveryPlanningSnapshotBestEffort() {
+        return buildDispatchPendingReentryPlanningSnapshot();
+      },
+      getNodeReadinessSync(nodeId) {
+        return {
+          nodeId,
+          dimensions: {
+            controlPlaneRecoveryEligible: true,
+            repairEligible: true,
+            serveEligible: true,
+          },
+        };
+      },
+    },
+    messageRouter: {
+      async deliver(target, payload, options) {
+        deliveries.push({target, payload, options});
+        return {acknowledged: true, status: TEST_DELIVERY_STATUS_INITIATED};
+      },
+    },
+    tablePolicyService: {
+      async getPolicyForPartition() {
+        return {minReplicaCount: TEST_MIN_REPLICA_COUNT};
+      },
+    },
+    setTimeoutFn(fn, delayMs) {
+      const handle = {fn, delayMs};
+      deferredTimers.push(handle);
+      return handle;
+    },
+    clearTimeoutFn() {},
+    enableTimeouts: false,
+  });
+
+  try {
+    coordinator.initialize();
+    const operation = coordinator.repository.rowToOperation(operationRow);
+    coordinator.workflowOwner.repository
+      .getOperationsByEntityAuthoritativeObservation = async () => {
+        return Object.freeze({
+          state: 'present',
+          operationCount: NUM.ONE,
+          operations: Object.freeze([operation]),
+          deferredOutcome: null,
+          retryAfterMs: null,
+        });
+      };
+    t.equal(
+      coordinator.workflowOwner.deferCoordinatorCreatedRemoteHandoffRetry(
+        operation,
+        {
+          deferRetry: true,
+          retryAfterMs: TEST_RETRY_AFTER_MS,
+          error: TEST_RETRYABLE_HANDOFF_ERROR,
+        },
+      ),
+      true,
+      TEST_ASSERT_ACTIVE_HANDOFF_RETRY_TIMER_PRESERVED,
+    );
+
+    const snapshot =
+      await coordinator.workflowOwner
+        .getPriorityRecoveryDecisionSnapshotForPartitionOperations(
+          TEST_PARTITION_ID,
+          TEST_EMPTY_LIST,
+        );
+
+    t.equal(
+      snapshot?.progress?.nextRequiredAction,
+      PRIORITY_RECOVERY_NEXT_REQUIRED_ACTION.ADVANCE_EXISTING_OPERATION,
+      TEST_ASSERT_ACTIVE_HANDOFF_RETRY_EVENT_DRIVEN,
+    );
+    t.equal(
+      snapshot?.progress?.blockingBoundary,
+      PRIORITY_RECOVERY_BLOCKING_BOUNDARY.WORKFLOW_PROGRESS,
+      TEST_ASSERT_ACTIVE_HANDOFF_RETRY_EVENT_DRIVEN,
+    );
+    t.equal(
+      snapshot?.progress?.waitMode,
+      PRIORITY_RECOVERY_WAIT_MODE.EVENT_DRIVEN,
+      TEST_ASSERT_ACTIVE_HANDOFF_RETRY_EVENT_DRIVEN,
+    );
+    t.equal(
+      deliveries.length,
+      NUM.ZERO,
+      TEST_ASSERT_ACTIVE_HANDOFF_RETRY_NO_INLINE_WAKE,
+    );
+    t.equal(
+      deferredTimers.length,
+      NUM.ONE,
+      TEST_ASSERT_ACTIVE_HANDOFF_RETRY_TIMER_PRESERVED,
     );
   } finally {
     Date.now = originalDateNow;
