@@ -49,6 +49,7 @@ const TEST_HANDOFF_TIMEOUT_MS = 7;
 const TEST_RETRY_AFTER_MS = 11;
 const TEST_EMPTY_VALUE = null;
 const TEST_ACTUAL_STATUS_ABSENT = null;
+const TEST_UNDEFINED_VALUE = undefined;
 const TEST_OPERATION_OWNER_STATE =
   'priority_dispatch_pending_timeout_owner_state';
 const TEST_OPERATION_OWNER_CORRELATION_KEY =
@@ -114,9 +115,9 @@ const TEST_SNAPSHOT_REENTRY_TEST_NAME =
 const TEST_ASSERT_SNAPSHOT_REENTRY_ADVANCE_ACTION =
   'the snapshot should return stale SENDING timeout rows to owner advancement';
 const TEST_ASSERT_SNAPSHOT_REENTRY_WAKES_REMOTE_OWNER =
-  'snapshot re-entry should wake the remote operation owner once';
+  'snapshot re-entry should not wake the remote operation owner inline';
 const TEST_ASSERT_SNAPSHOT_REENTRY_TARGET =
-  'snapshot re-entry should use the canonical remote replica-dispatch ingress';
+  'snapshot re-entry should not use the remote replica-dispatch ingress inline';
 const TEST_ASSERT_SNAPSHOT_REENTRY_NOT_TRANSITION_DEFERRED =
   'snapshot re-entry should not leave the stale SENDING row transition-deferred';
 const TEST_EXPECTED_SENDING_REENTRY_ACTUATION_STATE =
@@ -1064,12 +1065,12 @@ async (t) => {
     );
     t.equal(
       deliveries.length,
-      NUM.ONE,
+      NUM.ZERO,
       TEST_ASSERT_SNAPSHOT_REENTRY_WAKES_REMOTE_OWNER,
     );
     t.equal(
       deliveries[NUM.ZERO]?.target,
-      TEST_REPLICA_DISPATCH_TARGET,
+      TEST_UNDEFINED_VALUE,
       TEST_ASSERT_SNAPSHOT_REENTRY_TARGET,
     );
     t.equal(
@@ -1626,13 +1627,13 @@ async (t) => {
     );
     t.equal(
       deliveries.length,
-      NUM.ONE,
-      'serial-wait PENDING rows should wake the remote operation owner once',
+      NUM.ZERO,
+      'serial-wait PENDING rows should not wake the remote owner inline',
     );
     t.equal(
       deliveries[NUM.ZERO]?.target,
-      TEST_REPLICA_DISPATCH_TARGET,
-      'serial-wait re-entry should use the canonical remote replica-dispatch ingress',
+      TEST_UNDEFINED_VALUE,
+      'serial-wait re-entry should not use the remote dispatch ingress inline',
     );
     t.equal(
       deferredTimers.length,

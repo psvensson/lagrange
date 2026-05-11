@@ -30,6 +30,7 @@ trail is:
 14. `test-output/reports/rolling-restart-current-release-gate-after-event-driven-wait-fix.report.json`
 15. `test-output/reports/rolling-restart-current-release-gate-after-rebalancer-handoff-fix.report.json`
 16. `test-output/reports/rolling-restart-current-release-gate-after-workflow-progress-event-driven-priority-recovery-fix.report.json`
+17. `test-output/reports/rolling-restart-current-release-gate-after-dispatch-pending-step-timeout-contract-fix.report.json`
 
 The matching playback is:
 
@@ -49,6 +50,7 @@ The matching playback is:
 14. `test-output/reports/.playback/rolling-restart-current-release-gate-after-event-driven-wait-fix/rolling-restart/`
 15. `test-output/reports/.playback/rolling-restart-current-release-gate-after-rebalancer-handoff-fix/rolling-restart/`
 16. `test-output/reports/.playback/rolling-restart-current-release-gate-after-workflow-progress-event-driven-priority-recovery-fix/rolling-restart/`
+17. `test-output/reports/.playback/rolling-restart-current-release-gate-after-dispatch-pending-step-timeout-contract-fix/rolling-restart/`
 
 ## Current Blocker Snapshot
 
@@ -57,12 +59,13 @@ Latest package:
 1. [Rolling Restart Operation Workflow Progress Event Driven Wait](../packages/done-20260511-rolling-restart-operation-workflow-progress-event-driven-wait.md)
 2. [Rolling Restart Operation Workflow Rebalancer Handoff Retry Scheduled](../packages/done-20260511-rolling-restart-operation-workflow-rebalancer-handoff-retry-scheduled.md)
 3. [Rolling Restart Operation Workflow Progress Event Driven Priority Recovery](../packages/done-20260511-rolling-restart-operation-workflow-progress-event-driven-priority-recovery.md)
+4. [Rolling Restart Operation Workflow Progress Dispatch Pending Step Timeout Contract](../packages/active-20260511-rolling-restart-operation-workflow-progress-dispatch-pending-step-timeout-contract.md)
 
 Latest representative evidence:
 
 1. Scenario: `rolling-restart`
 2. Report total/passed/failed: `1/0/1`
-3. Duration: approximately `132312ms`
+3. Duration: approximately `122304ms`
 4. Active gate: failed at `3/5` terminal progress
 5. Snapshot coverage: `3/5`
 6. Publication: `PUBLISHED`
@@ -72,7 +75,7 @@ Latest representative evidence:
    first frontier.
 9. Current frontier: `priority_recovery_partition_progress` under
    `operation_workflow_owner / workflow_progress`, state `retryable`, dominant
-   source reason `priority_recovery_workflow_progress_event_driven`
+   source reason `priority_recovery_event_driven_wait`
 10. Priority recovery invariants: `passed`
 
 The publication-convergence package reduced the prior
@@ -158,7 +161,13 @@ Edition matrix status: Community / AGPL repo.
 9. Preserve the workflow-progress priority recovery rerun showing the same
    owner boundary remains first frontier, with blocked partitions reduced from
    five to three and next proof at the operation workflow step-timeout contract.
-10. If `rolling-restart` passes, run sustained throughput and 7-node stress
+10. Preserve the dispatch-pending step-timeout contract rerun showing focused
+   owner probes green but `rolling-restart` same-frontier red on
+   `operation_workflow_owner / workflow_progress`, dominant reason
+   `priority_recovery_event_driven_wait`, blocked partitions
+   `control_plane_publications-p1`, `replica_operations-p1`, and
+   `sql_transactions-p1`.
+11. If `rolling-restart` passes, run sustained throughput and 7-node stress
    confirmation for `0.1`.
 
 ## Validation Ladder
@@ -182,7 +191,8 @@ Edition matrix status: Community / AGPL repo.
 15. `node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-current-release-gate-after-event-driven-wait-fix.report.json --fast-local --verbose`
 16. `node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-current-release-gate-after-rebalancer-handoff-fix.report.json --fast-local --verbose`
 17. `node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-current-release-gate-after-workflow-progress-event-driven-priority-recovery-fix.report.json --fast-local --verbose`
-18. Sustained throughput and 7-node stress confirmation after
+18. `node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-current-release-gate-after-dispatch-pending-step-timeout-contract-fix.report.json --fast-local --verbose`
+19. Sustained throughput and 7-node stress confirmation after
     `rolling-restart` passes.
 
 ## Done When

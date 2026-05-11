@@ -46,6 +46,7 @@ const TEST_REQUIRED_DISTINCT_NODE_COUNT = 2;
 const TEST_MIN_REPLICA_COUNT = 3;
 const TEST_EMPTY_LIST = Object.freeze([]);
 const TEST_EMPTY_ROWS = Object.freeze([]);
+const TEST_UNDEFINED_VALUE = undefined;
 const TEST_REPLICA_DISPATCH_TARGET =
   'node-target/service/replica-dispatch';
 const TEST_DELIVERY_STATUS_INITIATED = 'initiated';
@@ -62,6 +63,15 @@ const TEST_PENDING_REENTRY_TEST_NAME =
 const TEST_DIRECT_BUILD_REENTRY_TEST_NAME =
   'direct owner snapshot build enqueues dispatch-pending workflow progress ' +
   're-entry';
+const TEST_ASSERT_TIMEOUT_RECONCILE_OWNER_OUTCOME =
+  'timeout-due dispatch-pending snapshots should carry the stale-progress ' +
+  'reconcile owner outcome';
+const TEST_ASSERT_TIMEOUT_RECONCILE_EFFECT =
+  'timeout-due dispatch-pending snapshots should use the stale-progress ' +
+  'reconcile command';
+const TEST_ASSERT_TIMEOUT_RECONCILE_NO_INLINE_WAKE =
+  'timeout-due dispatch-pending snapshot normalization should not wake the ' +
+  'remote owner inline';
 
 function buildEventDrivenOperation(overrides = {}) {
   return Object.freeze({
@@ -330,8 +340,8 @@ test(TEST_REENTRY_TEST_NAME, async (t) => {
 
     t.equal(
       snapshot?.operationOwnerObservation?.outcome,
-      OPERATION_WORKFLOW_OUTCOME_VALUES.WAKE_REMOTE_OWNER,
-      'the stale event-driven wait should carry the canonical remote wake outcome',
+      OPERATION_WORKFLOW_OUTCOME_VALUES.RECONCILE_STALE_PROGRESS,
+      TEST_ASSERT_TIMEOUT_RECONCILE_OWNER_OUTCOME,
     );
     t.equal(
       snapshot?.operationOwnerObservation?.requestedOwnerAction,
@@ -340,8 +350,8 @@ test(TEST_REENTRY_TEST_NAME, async (t) => {
     );
     t.equal(
       snapshot?.operationOwnerObservation?.effectCommand,
-      OPERATION_WORKFLOW_EFFECT_COMMAND_VALUES.WAKE_REMOTE_OWNER_COMMAND,
-      'the operation owner effect should be the remote wake command',
+      OPERATION_WORKFLOW_EFFECT_COMMAND_VALUES.RECONCILE_STALE_PROGRESS_COMMAND,
+      TEST_ASSERT_TIMEOUT_RECONCILE_EFFECT,
     );
     t.equal(
       snapshot?.actuation?.state,
@@ -368,13 +378,13 @@ test(TEST_REENTRY_TEST_NAME, async (t) => {
     );
     t.equal(
       deliveries.length,
-      NUM.ONE,
-      'event-driven re-entry should enqueue one remote owner wake',
+      NUM.ZERO,
+      TEST_ASSERT_TIMEOUT_RECONCILE_NO_INLINE_WAKE,
     );
     t.equal(
       deliveries[NUM.ZERO]?.target,
-      TEST_REPLICA_DISPATCH_TARGET,
-      'event-driven re-entry should target the canonical replica-dispatch ingress',
+      TEST_UNDEFINED_VALUE,
+      TEST_ASSERT_TIMEOUT_RECONCILE_NO_INLINE_WAKE,
     );
     t.equal(
       deferredTimers.length,
@@ -405,7 +415,7 @@ test(TEST_REENTRY_TEST_NAME, async (t) => {
     });
     t.equal(
       deliveries.length,
-      NUM.TWO,
+      NUM.ONE,
       'owner-observed event-driven re-entry should enqueue a fresh owner wake',
     );
 
@@ -432,7 +442,7 @@ test(TEST_REENTRY_TEST_NAME, async (t) => {
     });
     t.equal(
       deliveries.length,
-      NUM.THREE,
+      NUM.TWO,
       'observation-missing event-driven re-entry should enqueue owner work',
     );
   } finally {
@@ -498,8 +508,8 @@ test(TEST_PENDING_REENTRY_TEST_NAME, async (t) => {
     );
     t.equal(
       snapshot?.operationOwnerObservation?.outcome,
-      OPERATION_WORKFLOW_OUTCOME_VALUES.WAKE_REMOTE_OWNER,
-      'the focused PENDING witness should carry the remote wake outcome',
+      OPERATION_WORKFLOW_OUTCOME_VALUES.RECONCILE_STALE_PROGRESS,
+      TEST_ASSERT_TIMEOUT_RECONCILE_OWNER_OUTCOME,
     );
     t.equal(
       snapshot?.operationOwnerObservation?.requestedOwnerAction,
@@ -508,18 +518,18 @@ test(TEST_PENDING_REENTRY_TEST_NAME, async (t) => {
     );
     t.equal(
       snapshot?.operationOwnerObservation?.effectCommand,
-      OPERATION_WORKFLOW_EFFECT_COMMAND_VALUES.WAKE_REMOTE_OWNER_COMMAND,
-      'the focused PENDING witness should use the remote wake command',
+      OPERATION_WORKFLOW_EFFECT_COMMAND_VALUES.RECONCILE_STALE_PROGRESS_COMMAND,
+      TEST_ASSERT_TIMEOUT_RECONCILE_EFFECT,
     );
     t.equal(
       deliveries.length,
-      NUM.ONE,
-      'the focused PENDING witness should enqueue one remote owner wake',
+      NUM.ZERO,
+      TEST_ASSERT_TIMEOUT_RECONCILE_NO_INLINE_WAKE,
     );
     t.equal(
       deliveries[NUM.ZERO]?.target,
-      TEST_REPLICA_DISPATCH_TARGET,
-      'the focused PENDING witness should target the canonical replica-dispatch ingress',
+      TEST_UNDEFINED_VALUE,
+      TEST_ASSERT_TIMEOUT_RECONCILE_NO_INLINE_WAKE,
     );
     t.equal(
       deferredTimers.length,
@@ -572,8 +582,8 @@ test(TEST_DIRECT_BUILD_REENTRY_TEST_NAME, async (t) => {
     );
     t.equal(
       snapshot?.operationOwnerObservation?.outcome,
-      OPERATION_WORKFLOW_OUTCOME_VALUES.WAKE_REMOTE_OWNER,
-      'direct owner snapshot builds should carry the remote wake outcome',
+      OPERATION_WORKFLOW_OUTCOME_VALUES.RECONCILE_STALE_PROGRESS,
+      TEST_ASSERT_TIMEOUT_RECONCILE_OWNER_OUTCOME,
     );
     t.equal(
       snapshot?.operationOwnerObservation?.requestedOwnerAction,

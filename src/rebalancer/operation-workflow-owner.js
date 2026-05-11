@@ -168,10 +168,13 @@ function buildPriorityRecoveryDispatchPendingOwnerReentryContext(snapshot) {
     mode: OPERATION_WORKFLOW_OWNER_PORT_CONTEXT_MODE.OWNER_RECONCILE,
   });
   if (
-    snapshot?.progress?.blockingBoundary !==
+    snapshot?.actuation?.timeoutReconcileDue !== true &&
+    (
+      snapshot?.progress?.blockingBoundary !==
       PRIORITY_RECOVERY_BLOCKING_BOUNDARY.WORKFLOW_TIMEOUT ||
-    snapshot?.progress?.waitMode !==
+      snapshot?.progress?.waitMode !==
       PRIORITY_RECOVERY_WAIT_MODE.TIMEOUT_RECONCILE_DUE
+    )
   ) {
     return baseContext;
   }
@@ -202,7 +205,7 @@ function normalizePriorityRecoveryDispatchPendingOwnerSnapshot(
       ),
     );
   owner.schedulePriorityRecoveryDispatchPendingReentry(
-    normalizedSnapshot,
+    snapshot,
     [operation],
     {allowOwnerLaneRetry: true},
   );
@@ -322,6 +325,14 @@ class OperationWorkflowOwner extends OperationWorkflowOwnerSegment7 {
         snapshot,
         operations,
       );
+    return normalizePriorityRecoveryDispatchPendingOwnerSnapshot(
+      this,
+      snapshot,
+      operation,
+    );
+  }
+
+  normalizePriorityRecoveryDispatchPendingOwnerSnapshot(snapshot, operation) {
     return normalizePriorityRecoveryDispatchPendingOwnerSnapshot(
       this,
       snapshot,

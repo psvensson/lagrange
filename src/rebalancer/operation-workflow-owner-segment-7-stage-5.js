@@ -17,6 +17,7 @@ const {
   REPLICA_OPERATION_VISIBILITY_READ_MODE,
   SAFETY_DEFERRED_LOG_THROTTLE_MS,
   TRANSITION_RETRY_DELAY_MS,
+  TYPEOF,
   WORKFLOW_STEP,
 } = SHARED;
 
@@ -110,8 +111,24 @@ class OperationWorkflowOwnerSegment7Stage5 extends OperationWorkflowOwnerSegment
         partitionId,
         operations,
       );
-    this.schedulePriorityRecoveryDispatchPendingReentry(snapshot, operations);
-    return snapshot;
+    const operation =
+      this.selectPriorityRecoveryDispatchPendingReentryOperation(
+        snapshot,
+        operations,
+      );
+    const normalizedSnapshot =
+      typeof this.normalizePriorityRecoveryDispatchPendingOwnerSnapshot ===
+        TYPEOF.FUNCTION ?
+        this.normalizePriorityRecoveryDispatchPendingOwnerSnapshot(
+          snapshot,
+          operation,
+        ) :
+        snapshot;
+    this.schedulePriorityRecoveryDispatchPendingReentry(
+      snapshot,
+      operations,
+    );
+    return normalizedSnapshot;
   }
 
   selectPriorityRecoveryDispatchPendingReentryOperation(
