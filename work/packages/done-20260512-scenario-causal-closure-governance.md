@@ -3,7 +3,7 @@
 <!-- work-package
 {
   "schema": "work-package-v1",
-  "status": "active",
+  "status": "done",
   "opened": "2026-05-12",
   "scenario": "rolling-restart",
   "artifact": "test-output/reports/rolling-restart-current-release-gate-after-rebalancer-handoff-retry-scheduled-v2-fix.report.json",
@@ -15,11 +15,11 @@
   "nextAction": "Add repo-wide scenario causal closure policy, template guidance, tracker validation, current-blocker handoff fields, and focused tests.",
   "proof": [
     "node --test test/scripts/work-tracker-subagent-ledger.test.js test/scripts/work-context.test.js",
-    "npm run work:package:doctor -- work/packages/active-20260512-scenario-causal-closure-governance.md",
+    "npm run work:package:doctor -- work/packages/done-20260512-scenario-causal-closure-governance.md",
     "npm run work:current-blocker",
     "npm run work:validate",
     "npm run work:context",
-    "git diff --check -- .kiro/steering/doctrine.md .kiro/steering/system\\ guidelines.md .kiro/steering/testing-guidelines.md work/README.md work/templates/work-package-template.md scripts/work-tracker.js scripts/work-context.js test/scripts/work-tracker-subagent-ledger.test.js test/scripts/work-context.test.js work/packages/active-20260512-scenario-causal-closure-governance.md work/packages/todo-20260512-rolling-restart-operation-workflow-progress-event-driven-dispatch-pending.md work/sprints/current-blocker.json work/sprints/current-blocker.md .kiro/steering/llm"
+    "git diff --check -- .kiro/steering/doctrine.md .kiro/steering/system\\ guidelines.md .kiro/steering/testing-guidelines.md work/README.md work/templates/work-package-template.md scripts/work-tracker.js scripts/work-context.js test/scripts/work-tracker-subagent-ledger.test.js test/scripts/work-context.test.js work/packages/done-20260512-scenario-causal-closure-governance.md work/packages/todo-20260512-rolling-restart-operation-workflow-progress-event-driven-dispatch-pending.md work/sprints/current-blocker.json work/sprints/current-blocker.md .kiro/steering/llm"
   ],
   "touchedFiles": [
     ".kiro/steering/doctrine.md",
@@ -31,7 +31,7 @@
     "scripts/work-context.js",
     "test/scripts/work-tracker-subagent-ledger.test.js",
     "test/scripts/work-context.test.js",
-    "work/packages/active-20260512-scenario-causal-closure-governance.md",
+    "work/packages/done-20260512-scenario-causal-closure-governance.md",
     "work/packages/todo-20260512-rolling-restart-operation-workflow-progress-event-driven-dispatch-pending.md",
     "work/sprints/current-blocker.json",
     "work/sprints/current-blocker.md",
@@ -78,7 +78,9 @@
     "resultClassification": "classification-only",
     "stopCondition": "classification-only-stop"
   },
-  "predecessor": "work/packages/done-20260511-rolling-restart-operation-workflow-rebalancer-handoff-retry-scheduled-v2.md"
+  "predecessor": "work/packages/done-20260511-rolling-restart-operation-workflow-rebalancer-handoff-retry-scheduled-v2.md",
+  "closed": "2026-05-12",
+  "commitAndPushLedgerRequired": true
 }
 -->
 
@@ -128,7 +130,7 @@ governance. This package does not implement runtime behavior.
 - Forbidden files: `src/`, runtime rolling-restart implementation edits, successor package activation or renaming, and sprint or package-status rewrites.
 - Frozen decisions: this package adds governance/tooling enforcement only and does not change runtime blocker ownership.
 - Escalation triggers: validation requires runtime code, roadmap scope changes, or package-status mutation outside owned scope.
-- Focused proof: `node --test test/scripts/work-tracker-subagent-ledger.test.js test/scripts/work-context.test.js`; `npm run work:package:doctor -- work/packages/active-20260512-scenario-causal-closure-governance.md`; `npm run work:current-blocker`; `npm run work:validate`.
+- Focused proof: `node --test test/scripts/work-tracker-subagent-ledger.test.js test/scripts/work-context.test.js`; `npm run work:package:doctor -- work/packages/done-20260512-scenario-causal-closure-governance.md`; `npm run work:current-blocker`; `npm run work:validate`.
 
 ## Scenario Causal Closure
 
@@ -151,23 +153,29 @@ governance. This package does not implement runtime behavior.
 
 - [x] Review subagent recorded:
       Agent Helmholtz (019e1aaf-6f87-74c2-9a58-943d084de77d) reviewed
-      `work/packages/active-20260512-scenario-causal-closure-governance.md`;
+      `work/packages/done-20260512-scenario-causal-closure-governance.md`;
       result `fixes-required`.
 - [x] Fix subagent recorded or explicitly not needed:
       Agent Leibniz (019e1ab2-72b5-7272-a631-53ebee8a9a02) fixed
-      `work/packages/active-20260512-scenario-causal-closure-governance.md`.
+      `work/packages/done-20260512-scenario-causal-closure-governance.md`.
 - [x] Implementation subagent recorded:
       Agent Euclid (019e1ab5-bb1a-76b0-8732-8556baf9176b) implemented
-      `work/packages/active-20260512-scenario-causal-closure-governance.md`.
+      `work/packages/done-20260512-scenario-causal-closure-governance.md`.
 
 ## Validation Plan
 
 1. `node --test test/scripts/work-tracker-subagent-ledger.test.js test/scripts/work-context.test.js`
-2. `npm run work:package:doctor -- work/packages/active-20260512-scenario-causal-closure-governance.md`
+2. `npm run work:package:doctor -- work/packages/done-20260512-scenario-causal-closure-governance.md`
 3. `npm run work:current-blocker`
 4. `npm run work:validate`
 5. `npm run work:context`
-6. `git diff --check -- .kiro/steering/doctrine.md .kiro/steering/system\ guidelines.md .kiro/steering/testing-guidelines.md work/README.md work/templates/work-package-template.md scripts/work-tracker.js scripts/work-context.js test/scripts/work-tracker-subagent-ledger.test.js test/scripts/work-context.test.js work/packages/active-20260512-scenario-causal-closure-governance.md work/packages/todo-20260512-rolling-restart-operation-workflow-progress-event-driven-dispatch-pending.md work/sprints/current-blocker.json work/sprints/current-blocker.md .kiro/steering/llm`
+6. `git diff --check -- .kiro/steering/doctrine.md .kiro/steering/system\ guidelines.md .kiro/steering/testing-guidelines.md work/README.md work/templates/work-package-template.md scripts/work-tracker.js scripts/work-context.js test/scripts/work-tracker-subagent-ledger.test.js test/scripts/work-context.test.js work/packages/done-20260512-scenario-causal-closure-governance.md work/packages/todo-20260512-rolling-restart-operation-workflow-progress-event-driven-dispatch-pending.md work/sprints/current-blocker.json work/sprints/current-blocker.md .kiro/steering/llm`
+
+## Commit And Push Ledger
+
+1. Focused package commit: `1c9085992d07e69a171e1e59a84a3e21e47bab74`
+2. Pushed to: `origin/codex/pending-ack-eligibility-filter`
+3. Commit contains only package-owned files/package-status/allowed sprint handoff: yes
 
 ## Model Ledger
 
