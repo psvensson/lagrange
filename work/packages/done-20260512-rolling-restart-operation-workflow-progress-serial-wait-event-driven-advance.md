@@ -3,7 +3,7 @@
 <!-- work-package
 {
   "schema": "work-package-v1",
-  "status": "active",
+  "status": "done",
   "opened": "2026-05-12",
   "lane": "scenario-release-gate",
   "scenario": "rolling-restart",
@@ -25,7 +25,7 @@
     "npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-current-release-gate-after-workflow-progress-serial-wait-event-driven-advance-proof.report.json --markdown"
   ],
   "touchedFiles": [
-    "work/packages/active-20260512-rolling-restart-operation-workflow-progress-serial-wait-event-driven-advance.md",
+    "work/packages/done-20260512-rolling-restart-operation-workflow-progress-serial-wait-event-driven-advance.md",
     "work/model-ledger.jsonl",
     "work/packages/todo-20260512-rolling-restart-operation-workflow-progress-direct-chain-after-owner-proof.md",
     "work/sprints/active-2026-q2-phase-0-1-rolling-restart-release-gate-closure.md",
@@ -77,7 +77,9 @@
     "stopCondition": "continue-local-fix"
   },
   "predecessor": "work/packages/done-20260512-rolling-restart-operation-workflow-progress-coordinator-excludes-node.md",
-  "successor": "work/packages/todo-20260512-rolling-restart-operation-workflow-progress-direct-chain-after-owner-proof.md"
+  "successor": "work/packages/todo-20260512-rolling-restart-operation-workflow-progress-direct-chain-after-owner-proof.md",
+  "closed": "2026-05-12",
+  "commitAndPushLedgerRequired": true
 }
 -->
 
@@ -161,7 +163,7 @@ Review/fix proof and implementation proof are recorded for this package.
 - [x] Fix subagent recorded or explicitly not needed:
       Agent Codex (019e1cd9-0833-74d3-ac62-7647f74756de) fixed work/packages/done-20260512-rolling-restart-operation-workflow-progress-coordinator-excludes-node.md
 - [x] Implementation subagent recorded:
-      Agent Ampere (019e1ced-b894-7602-994e-438a596976ca) implemented work/packages/active-20260512-rolling-restart-operation-workflow-progress-serial-wait-event-driven-advance.md
+      Agent Ampere (019e1ced-b894-7602-994e-438a596976ca) implemented work/packages/done-20260512-rolling-restart-operation-workflow-progress-serial-wait-event-driven-advance.md
 
 ## Causal Governance
 
@@ -296,3 +298,9 @@ Guardrails:
   direct workflow-progress chain.
 - Successor:
   `work/packages/todo-20260512-rolling-restart-operation-workflow-progress-direct-chain-after-owner-proof.md`.
+
+## Commit And Push Ledger
+
+1. Focused package commit: `8545fbf5`
+2. Pushed to: `origin/codex/pending-ack-eligibility-filter`
+3. Commit contains only package-owned files/package-status/allowed sprint handoff: yes

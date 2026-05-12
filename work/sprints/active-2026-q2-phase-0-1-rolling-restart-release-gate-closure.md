@@ -70,7 +70,7 @@ The matching playback is:
 
 Current package:
 
-1. [Rolling Restart Operation Workflow Progress Serial Wait Event Driven Advance](../packages/active-20260512-rolling-restart-operation-workflow-progress-serial-wait-event-driven-advance.md)
+1. [Rolling Restart Operation Workflow Progress Serial Wait Event Driven Advance](../packages/done-20260512-rolling-restart-operation-workflow-progress-serial-wait-event-driven-advance.md)
 
 Recent completed packages:
 

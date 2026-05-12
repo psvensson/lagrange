@@ -29,7 +29,7 @@
     "test/control-plane/priority-recovery-snapshot-operation-owner-outcome.test.js",
     "work/model-ledger.jsonl",
     "work/packages/done-20260512-rolling-restart-operation-workflow-progress-coordinator-excludes-node.md",
-    "work/packages/active-20260512-rolling-restart-operation-workflow-progress-serial-wait-event-driven-advance.md",
+    "work/packages/done-20260512-rolling-restart-operation-workflow-progress-serial-wait-event-driven-advance.md",
     "work/packages/todo-20260512-rolling-restart-operation-workflow-progress-coordinator-excludes-node.md",
     "work/packages/done-20260512-rolling-restart-operation-workflow-rebalancer-handoff-needs-operation-coordination-mismatch-classification.md",
     "work/sprints/active-2026-q2-phase-0-1-rolling-restart-release-gate-closure.md",
@@ -51,7 +51,7 @@
     "stopConditionCheck": "npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-current-release-gate-after-operation-workflow-rebalancer-handoff-priority-recovery-retry-scheduled-fix.report.json",
     "expectedCausalModelChange": "The direct publication_recovery_eligible_but_coordinator_excludes_node witnesses for replica_operations-p1 and sql_transaction_participants-p1 reduce, converge, or migrate to a new named owner boundary; serial-wait dependents remain subordinate unless fresh evidence promotes them.",
     "representativeOutcome": "reduced",
-    "causalDebt": "Rolling-restart remains red, but the coordinator-excludes-node witnesses are gone. The remaining debt is the same owner-boundary workflow-progress serial-wait/event-driven advance residual recorded in work/packages/active-20260512-rolling-restart-operation-workflow-progress-serial-wait-event-driven-advance.md; startup active-gate and publication convergence remain downstream.",
+    "causalDebt": "Rolling-restart remains red, but the coordinator-excludes-node witnesses are gone. The remaining debt is the same owner-boundary workflow-progress serial-wait/event-driven advance residual recorded in work/packages/done-20260512-rolling-restart-operation-workflow-progress-serial-wait-event-driven-advance.md; startup active-gate and publication convergence remain downstream.",
     "crossBoundaryReview": "completed-before-implementation through Agent Codex (019e1c9d-bb39-7061-b834-d87b3a65f87f) review and Agent Codex (019e1ca5-86e6-76f0-bf27-4168a3aebd67) fix of work/packages/done-20260512-rolling-restart-operation-workflow-rebalancer-handoff-needs-operation-coordination-mismatch-classification.md."
   },
   "scenarioCausalClosure": {
@@ -76,14 +76,14 @@
     "expectedObservableTransition": "replica_operations-p1 and sql_transaction_participants-p1 leave coordination_mismatch, dispatch or advance their pending persisted operations, or migrate to a different named owner boundary.",
     "maxProgressBound": "one workflow-progress owner cycle or focused timeout/progress probe for the selected pending operations",
     "sameFrontierFallback": "keep operation_workflow_owner / workflow_progress active and do not promote startup active-gate, publication convergence, or the parked operation-scheduling successor without fresh owner evidence",
-    "expectedNextFrontier": "operation_workflow_owner / workflow_progress serial-wait event-driven advance residual in work/packages/active-20260512-rolling-restart-operation-workflow-progress-serial-wait-event-driven-advance.md",
+    "expectedNextFrontier": "operation_workflow_owner / workflow_progress serial-wait event-driven advance residual in work/packages/done-20260512-rolling-restart-operation-workflow-progress-serial-wait-event-driven-advance.md",
     "resultClassification": "reduced",
     "stopCondition": "continue-local-fix"
   },
   "predecessor": "work/packages/done-20260512-rolling-restart-operation-workflow-rebalancer-handoff-needs-operation-coordination-mismatch-classification.md",
   "closed": "2026-05-12",
   "commitAndPushLedgerRequired": true,
-  "successor": "work/packages/active-20260512-rolling-restart-operation-workflow-progress-serial-wait-event-driven-advance.md"
+  "successor": "work/packages/done-20260512-rolling-restart-operation-workflow-progress-serial-wait-event-driven-advance.md"
 }
 -->
 
@@ -234,7 +234,7 @@ Fresh representative after implementation:
    `priority_operation_serial_wait` dependents with `transition_deferred` and
    `wait_for_operation_progress`.
 4. The next package is
-   `work/packages/active-20260512-rolling-restart-operation-workflow-progress-serial-wait-event-driven-advance.md`.
+   `work/packages/done-20260512-rolling-restart-operation-workflow-progress-serial-wait-event-driven-advance.md`.
 
 ## Out Of Scope
 
@@ -328,7 +328,7 @@ Fresh representative after implementation:
   `operation_workflow_owner / workflow_progress` with event-driven advance and
   serial-wait evidence.
 - Successor:
-  `work/packages/active-20260512-rolling-restart-operation-workflow-progress-serial-wait-event-driven-advance.md`.
+  `work/packages/done-20260512-rolling-restart-operation-workflow-progress-serial-wait-event-driven-advance.md`.
 
 ## Commit And Push Ledger
 

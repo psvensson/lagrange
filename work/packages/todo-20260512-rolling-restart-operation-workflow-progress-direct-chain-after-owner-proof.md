@@ -36,7 +36,7 @@
       "a frozen decision must be reopened"
     ]
   },
-  "predecessor": "work/packages/active-20260512-rolling-restart-operation-workflow-progress-serial-wait-event-driven-advance.md"
+  "predecessor": "work/packages/done-20260512-rolling-restart-operation-workflow-progress-serial-wait-event-driven-advance.md"
 }
 -->
 
