@@ -12,7 +12,7 @@
   "boundary": "workflow_progress",
   "dominantReason": "priority_recovery_event_driven_wait",
   "currentState": "The package classified/repaired the rebalancer-handoff retry-scheduled frontier by allowing retry-scheduled dispatch-pending handoff snapshots to re-enter the owner path when no bounded retry is active. Focused tests and touched runtime guardrails are green. The representative rolling-restart rerun remains red but migrated away from operation_workflow_owner / rebalancer_handoff to operation_workflow_owner / workflow_progress with event-driven dispatch-pending evidence on control_plane_publications-p1 and sql_transaction_participants-p1; active gate and snapshot coverage remain downstream at 2/5.",
-  "nextAction": "Activate `work/packages/todo-20260512-rolling-restart-operation-workflow-progress-event-driven-dispatch-pending.md` for the restored operation_workflow_owner / workflow_progress event-driven dispatch-pending priority recovery frontier; preserve this rebalancer-handoff reduction and do not pursue startup active-gate or publication-presentation residuals until priority_recovery_partition_progress reduces or migrates.",
+  "nextAction": "Activate `work/packages/active-20260512-rolling-restart-operation-workflow-progress-event-driven-dispatch-pending.md` for the restored operation_workflow_owner / workflow_progress event-driven dispatch-pending priority recovery frontier; preserve this rebalancer-handoff reduction and do not pursue startup active-gate or publication-presentation residuals until priority_recovery_partition_progress reduces or migrates.",
   "proof": [
     "npm run work:evidence-summary -- test-output/reports/rolling-restart-current-release-gate-after-event-driven-residual-recovery-fix.report.json",
     "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-current-release-gate-after-event-driven-residual-recovery-fix.report.json --explain priority_recovery_partition_progress",
@@ -31,7 +31,7 @@
     "test/rebalancer/operation-workflow-progress-event-driven-reentry.test.js",
     "test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js",
     "work/packages/done-20260511-rolling-restart-operation-workflow-rebalancer-handoff-retry-scheduled-v2.md",
-    "work/packages/todo-20260512-rolling-restart-operation-workflow-progress-event-driven-dispatch-pending.md",
+    "work/packages/active-20260512-rolling-restart-operation-workflow-progress-event-driven-dispatch-pending.md",
     "work/sprints/active-2026-q2-phase-0-1-rolling-restart-release-gate-closure.md",
     "work/sprints/current-blocker.json",
     "work/sprints/current-blocker.md",
@@ -59,7 +59,7 @@
   "result": "migrated",
   "closed": "2026-05-12",
   "commitAndPushLedgerRequired": true,
-  "successor": "work/packages/todo-20260512-rolling-restart-operation-workflow-progress-event-driven-dispatch-pending.md"
+  "successor": "work/packages/active-20260512-rolling-restart-operation-workflow-progress-event-driven-dispatch-pending.md"
 }
 -->
 
@@ -159,7 +159,7 @@ failure simulations, and production guarantees in the Community / AGPL repo.
 - Blocked partitions: `control_plane_publications-p1`,
   `sql_transaction_participants-p1`.
 - Successor package:
-  `work/packages/todo-20260512-rolling-restart-operation-workflow-progress-event-driven-dispatch-pending.md`.
+  `work/packages/active-20260512-rolling-restart-operation-workflow-progress-event-driven-dispatch-pending.md`.
 - Downstream/non-owner-frontier evidence: startup active-gate and snapshot coverage
   remain `2/5`; raw failure presentation reports `publication_missing_active_node`,
   but owner-contract evidence keeps `publication_ack_convergence` satisfied.

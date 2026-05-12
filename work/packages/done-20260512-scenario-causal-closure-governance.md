@@ -19,7 +19,7 @@
     "npm run work:current-blocker",
     "npm run work:validate",
     "npm run work:context",
-    "git diff --check -- .kiro/steering/doctrine.md .kiro/steering/system\\ guidelines.md .kiro/steering/testing-guidelines.md work/README.md work/templates/work-package-template.md scripts/work-tracker.js scripts/work-context.js test/scripts/work-tracker-subagent-ledger.test.js test/scripts/work-context.test.js work/packages/done-20260512-scenario-causal-closure-governance.md work/packages/todo-20260512-rolling-restart-operation-workflow-progress-event-driven-dispatch-pending.md work/sprints/current-blocker.json work/sprints/current-blocker.md .kiro/steering/llm"
+    "git diff --check -- .kiro/steering/doctrine.md .kiro/steering/system\\ guidelines.md .kiro/steering/testing-guidelines.md work/README.md work/templates/work-package-template.md scripts/work-tracker.js scripts/work-context.js test/scripts/work-tracker-subagent-ledger.test.js test/scripts/work-context.test.js work/packages/done-20260512-scenario-causal-closure-governance.md work/packages/active-20260512-rolling-restart-operation-workflow-progress-event-driven-dispatch-pending.md work/sprints/current-blocker.json work/sprints/current-blocker.md .kiro/steering/llm"
   ],
   "touchedFiles": [
     ".kiro/steering/doctrine.md",
@@ -32,7 +32,7 @@
     "test/scripts/work-tracker-subagent-ledger.test.js",
     "test/scripts/work-context.test.js",
     "work/packages/done-20260512-scenario-causal-closure-governance.md",
-    "work/packages/todo-20260512-rolling-restart-operation-workflow-progress-event-driven-dispatch-pending.md",
+    "work/packages/active-20260512-rolling-restart-operation-workflow-progress-event-driven-dispatch-pending.md",
     "work/sprints/current-blocker.json",
     "work/sprints/current-blocker.md",
     ".kiro/steering/llm/*"
@@ -109,7 +109,7 @@ governance. This package does not implement runtime behavior.
 5. Add focused tracker tests for valid, missing, invalid, doctor, and
    current-blocker behavior.
 6. Own metadata-only successor planning updates to
-   `work/packages/todo-20260512-rolling-restart-operation-workflow-progress-event-driven-dispatch-pending.md`
+   `work/packages/active-20260512-rolling-restart-operation-workflow-progress-event-driven-dispatch-pending.md`
    so the next runtime package can inherit the causal-closure handoff without
    this package implementing runtime behavior or changing package status.
 
@@ -126,7 +126,7 @@ governance. This package does not implement runtime behavior.
 - Package class: `workflow-tooling-governance`
 - Intended minimum model: `gpt-5.3-codex`
 - Scope shape: `repo-wide-governance/tooling-contract`
-- Owned files: `.kiro/steering/doctrine.md`, `.kiro/steering/system guidelines.md`, `.kiro/steering/testing-guidelines.md`, `work/README.md`, `work/templates/work-package-template.md`, `scripts/work-tracker.js`, `scripts/work-context.js`, `test/scripts/work-tracker-subagent-ledger.test.js`, `test/scripts/work-context.test.js`, this package file, metadata-only successor planning updates in `work/packages/todo-20260512-rolling-restart-operation-workflow-progress-event-driven-dispatch-pending.md`, and regenerated `.kiro/steering/llm/*`.
+- Owned files: `.kiro/steering/doctrine.md`, `.kiro/steering/system guidelines.md`, `.kiro/steering/testing-guidelines.md`, `work/README.md`, `work/templates/work-package-template.md`, `scripts/work-tracker.js`, `scripts/work-context.js`, `test/scripts/work-tracker-subagent-ledger.test.js`, `test/scripts/work-context.test.js`, this package file, metadata-only successor planning updates in `work/packages/active-20260512-rolling-restart-operation-workflow-progress-event-driven-dispatch-pending.md`, and regenerated `.kiro/steering/llm/*`.
 - Forbidden files: `src/`, runtime rolling-restart implementation edits, successor package activation or renaming, and sprint or package-status rewrites.
 - Frozen decisions: this package adds governance/tooling enforcement only and does not change runtime blocker ownership.
 - Escalation triggers: validation requires runtime code, roadmap scope changes, or package-status mutation outside owned scope.
@@ -169,7 +169,7 @@ governance. This package does not implement runtime behavior.
 3. `npm run work:current-blocker`
 4. `npm run work:validate`
 5. `npm run work:context`
-6. `git diff --check -- .kiro/steering/doctrine.md .kiro/steering/system\ guidelines.md .kiro/steering/testing-guidelines.md work/README.md work/templates/work-package-template.md scripts/work-tracker.js scripts/work-context.js test/scripts/work-tracker-subagent-ledger.test.js test/scripts/work-context.test.js work/packages/done-20260512-scenario-causal-closure-governance.md work/packages/todo-20260512-rolling-restart-operation-workflow-progress-event-driven-dispatch-pending.md work/sprints/current-blocker.json work/sprints/current-blocker.md .kiro/steering/llm`
+6. `git diff --check -- .kiro/steering/doctrine.md .kiro/steering/system\ guidelines.md .kiro/steering/testing-guidelines.md work/README.md work/templates/work-package-template.md scripts/work-tracker.js scripts/work-context.js test/scripts/work-tracker-subagent-ledger.test.js test/scripts/work-context.test.js work/packages/done-20260512-scenario-causal-closure-governance.md work/packages/active-20260512-rolling-restart-operation-workflow-progress-event-driven-dispatch-pending.md work/sprints/current-blocker.json work/sprints/current-blocker.md .kiro/steering/llm`
 
 ## Commit And Push Ledger
 

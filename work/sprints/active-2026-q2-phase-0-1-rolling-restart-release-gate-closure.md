@@ -60,48 +60,51 @@ The matching playback is:
 
 Latest package:
 
-1. [Rolling Restart Operation Workflow Progress Event Driven Wait](../packages/done-20260511-rolling-restart-operation-workflow-progress-event-driven-wait.md)
-2. [Rolling Restart Operation Workflow Rebalancer Handoff Retry Scheduled](../packages/done-20260511-rolling-restart-operation-workflow-rebalancer-handoff-retry-scheduled.md)
-3. [Rolling Restart Operation Workflow Progress Event Driven Priority Recovery](../packages/done-20260511-rolling-restart-operation-workflow-progress-event-driven-priority-recovery.md)
-4. [Rolling Restart Operation Workflow Progress Dispatch Pending Step Timeout Contract](../packages/done-20260511-rolling-restart-operation-workflow-progress-dispatch-pending-step-timeout-contract.md)
-5. [Rolling Restart Operation Workflow Progress Event Driven Residual Recovery](../packages/done-20260511-rolling-restart-operation-workflow-progress-event-driven-residual-recovery.md)
-6. [Rolling Restart Operation Workflow Rebalancer Handoff Retry Scheduled V2](../packages/done-20260511-rolling-restart-operation-workflow-rebalancer-handoff-retry-scheduled-v2.md)
+1. [Rolling Restart Operation Workflow Progress Event Driven Dispatch Pending](../packages/active-20260512-rolling-restart-operation-workflow-progress-event-driven-dispatch-pending.md)
+2. [Rolling Restart Operation Workflow Rebalancer Handoff Retry Scheduled V2](../packages/done-20260511-rolling-restart-operation-workflow-rebalancer-handoff-retry-scheduled-v2.md)
 
 Latest representative evidence:
 
 1. Scenario: `rolling-restart`
-2. Report total/passed/failed: `1/0/1`
-3. Duration: approximately `132117ms`
-4. Active gate: failed at `2/5` terminal progress
-5. Snapshot coverage: `2/5`
-6. Publication: `PUBLISHED`
-7. Pending acknowledgements: `0`
-8. Current frontier: `priority_recovery_partition_progress` under
+2. Artifact:
+   `test-output/reports/rolling-restart-current-release-gate-after-workflow-progress-event-driven-dispatch-pending-fix.report.json`
+3. Report total/passed/failed: `1/0/1`
+4. Duration: approximately `132494ms`
+5. Active gate: failed at `3/5` terminal progress
+6. Snapshot coverage: `3/5`
+7. Publication: `PUBLISHED`
+8. Pending acknowledgements: `0`
+9. Current frontier: `priority_recovery_partition_progress` under
    `operation_workflow_owner / workflow_progress`, state `retryable`, dominant
    source reason `priority_recovery_workflow_progress_event_driven`
    (`priority_recovery_event_driven_wait` in owner-contract summary).
-9. Dominant witness: `control_plane_publications-p1`,
-   `waitMode=event_driven`, `blockingBoundary=workflow_progress`,
-   `actuationState=persisted_not_dispatched`, latest workflow step `PENDING`.
-10. Blocked partitions: `control_plane_publications-p1` and
-    `sql_transaction_participants-p1`.
-11. Priority recovery invariants: `passed`
-12. Representative outcome: migrated away from rebalancer-handoff
-    retry-scheduled recovery; rebalancer-handoff is no longer the first
-    normalized owner-boundary frontier.
+10. Dominant witness: `control_plane_publications-p1`,
+    `waitMode=event_driven`, `blockingBoundary=workflow_progress`,
+    `actuationState=persisted_not_dispatched`, `latestOperationWorkflowStep=PENDING`,
+    `stepAgeMs=65582`, `stepTimeoutMs=30000`,
+    `nextRequiredAction=advance_existing_operation`.
+11. Blocked partitions: `control_plane_publications-p1`,
+    `sql_transaction_participants-p1`, `sql_transactions-p1`, and
+    `sql_write_operations-p1`.
+12. Priority recovery invariants: `passed`
+13. Representative outcome: same-frontier. The causal decision is
+    `accept_classified_backpressure`; the next downstream frontier remains
+    `startup_active_gate_owner / snapshot_coverage`.
+14. Exact residual owner/path for a follow-on runtime package:
+    `src/rebalancer/operation-workflow-owner-segment-7-stage-3.js`,
+    `OperationWorkflowOwnerSegment7Stage3.checkTimeouts()`.
 
-The publication-convergence package reduced the prior
-`topology_publication_owner / publication_convergence` blocker.
-`publication_ack_convergence` is now satisfied/non-frontier for the published,
+The publication-convergence package still holds the prior
+`topology_publication_owner / publication_convergence` reduction:
+`publication_ack_convergence` remains satisfied/non-frontier for the published,
 zero-ACK, zero-blocked-node, priority-spread-pending case without canonical
 missing-active publication debt.
 
-The rebalancer-handoff retry-scheduled V2 package added focused owner re-entry
-for retry-scheduled dispatch-pending handoff snapshots when no bounded handoff
-retry is active. Focused owner tests and touched runtime guardrails are green.
-The representative rerun confirms `operation_workflow_owner / rebalancer_handoff`
-is no longer the first frontier and restores `operation_workflow_owner /
-workflow_progress` as the successor boundary.
+The rebalancer-handoff retry-scheduled V2 package still holds its predecessor
+reduction: `operation_workflow_owner / rebalancer_handoff` is no longer the
+first normalized frontier. The current package verifies that focused owner
+tests remain green while the representative artifact stays same-frontier on
+`operation_workflow_owner / workflow_progress`.
 
 Raw distributed-failure presentation for the same latest artifact reports
 `publication_missing_active_node`; treat that as a presentation residual before
@@ -111,9 +114,10 @@ owner-contract evidence keeps `publication_ack_convergence` satisfied.
 Startup active-gate snapshot coverage remains downstream until the
 operation-workflow workflow-progress event-driven frontier is either green or
 promoted by fresh representative evidence. The latest causal model keeps the
-first critical path at `priority_recovery_partition_progress`; the next proof
-must reduce event-driven dispatch-pending recovery for `control_plane_publications-p1`
-and `sql_transaction_participants-p1`, or expose a new owner boundary.
+first critical path at `priority_recovery_partition_progress`; this sprint
+should not reopen startup active-gate or publication-convergence work from this
+package while the residual runtime path remains the stage-3 timeout reconcile
+owner boundary named above.
 
 ## Scope Basis
 
@@ -177,8 +181,12 @@ Edition matrix status: Community / AGPL repo.
    `priority_recovery_event_driven_wait`, blocked partitions
    `control_plane_publications-p1`, `replica_operations-p1`, and
    `sql_transactions-p1`.
-11. If `rolling-restart` passes, run sustained throughput and 7-node stress
-   confirmation for `0.1`.
+11. Preserve the current same-frontier classification until a follow-on package
+    explicitly owns `src/rebalancer/operation-workflow-owner-segment-7-stage-3.js`
+    timeout progression or fresh representative evidence names a new owner
+    boundary.
+12. If `rolling-restart` passes, run sustained throughput and 7-node stress
+    confirmation for `0.1`.
 
 ## Validation Ladder
 
