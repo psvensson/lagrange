@@ -13,6 +13,8 @@ import {
 const ACTIVE_ARTIFACT_PATH = 'test-output/reports/.playback/rolling-restart-spec-led-runtime-modularization-active-gate-snapshot-coverage-reachability/rolling-restart/failure-bundle.json';
 const ACTIVE_GATE_NO_PROGRESS_REPORT_PATH =
   'test-output/reports/rolling-restart-spec-led-runtime-modularization-active-gate-snapshot-coverage-publication-lag.report.json';
+const CURRENT_STARTUP_READINESS_SUPPORT_REPORT_PATH =
+  'test-output/reports/rolling-restart-current-release-gate-after-workflow-progress-direct-chain-owner-proof.report.json';
 const PASSED_REPORT_PATH = 'test-output/reports/canary-rolling-restart-local-latest.report.json';
 const JSON_ENCODING_UTF8 = 'utf8';
 const NODE_COMMAND = 'node';
@@ -33,6 +35,12 @@ function readActiveGateNoProgressReport() {
   return JSON.parse(fs.readFileSync(ACTIVE_GATE_NO_PROGRESS_REPORT_PATH, JSON_ENCODING_UTF8));
 }
 
+function readCurrentStartupReadinessSupportReport() {
+  return JSON.parse(
+    fs.readFileSync(CURRENT_STARTUP_READINESS_SUPPORT_REPORT_PATH, JSON_ENCODING_UTF8),
+  );
+}
+
 function assertNoNullOrUndefined(value) {
   assert.notEqual(value, NULL_VALUE);
   assert.notEqual(value, UNDEFINED_VALUE);
@@ -50,22 +58,22 @@ function assertNoNullOrUndefined(value) {
 }
 
 describe('StopConditionDecision', () => {
-  it('selects owner-boundary migration after budget ownership is classified', () => {
+  it('contracts weak active-gate no-progress to classified priority backpressure', () => {
     const decision = decideStopCondition(readActiveArtifact());
 
-    assert.equal(decision.outcome, STOP_OUTCOME.MIGRATE_OWNER_BOUNDARY);
-    assert.equal(decision.condition, STOP_CONDITION.OWNER_BOUNDARY_MIGRATION);
+    assert.equal(decision.outcome, STOP_OUTCOME.ACCEPT_CLASSIFIED_BACKPRESSURE);
+    assert.equal(decision.condition, STOP_CONDITION.CLASSIFIED_BACKPRESSURE);
     assertNoNullOrUndefined(decision);
   });
 
-  it('preserves migrated artifact classes after budget cascade classification', () => {
+  it('preserves weak active-gate no-progress classes after budget cascade classification', () => {
     const artifact = buildCausalAnalysis(readActiveArtifact());
     const failureClasses = artifact.failureTaxonomy.classes.map((entry) => entry.failureClass);
 
-    assert.equal(artifact.stopDecision.outcome, STOP_OUTCOME.MIGRATE_OWNER_BOUNDARY);
-    assert.equal(artifact.stopDecision.condition, STOP_CONDITION.OWNER_BOUNDARY_MIGRATION);
+    assert.equal(artifact.stopDecision.outcome, STOP_OUTCOME.ACCEPT_CLASSIFIED_BACKPRESSURE);
+    assert.equal(artifact.stopDecision.condition, STOP_CONDITION.CLASSIFIED_BACKPRESSURE);
     assert.ok(failureClasses.includes(FAILURE_CLASS.PRIORITY_RECOVERY_EVENT_WAIT));
-    assert.ok(failureClasses.includes(FAILURE_CLASS.STARTUP_READINESS_BLOCKED));
+    assert.equal(failureClasses.includes(FAILURE_CLASS.STARTUP_READINESS_BLOCKED), false);
     assert.equal(failureClasses.includes(FAILURE_CLASS.BUDGET_TIMEOUT_CASCADE), false);
     assertNoNullOrUndefined(artifact);
   });
@@ -81,6 +89,17 @@ describe('StopConditionDecision', () => {
       failureClasses.includes(FAILURE_CLASS.ACTIVE_GATE_SNAPSHOT_COVERAGE_INCOMPLETE),
       false,
     );
+    assert.equal(failureClasses.includes(FAILURE_CLASS.STARTUP_READINESS_BLOCKED), false);
+    assertNoNullOrUndefined(artifact);
+  });
+
+  it('does not migrate weak zero-attempt active-gate no-progress to startup readiness', () => {
+    const artifact = buildCausalAnalysis(readCurrentStartupReadinessSupportReport());
+    const failureClasses = artifact.failureTaxonomy.classes.map((entry) => entry.failureClass);
+
+    assert.equal(artifact.stopDecision.outcome, STOP_OUTCOME.ACCEPT_CLASSIFIED_BACKPRESSURE);
+    assert.equal(artifact.stopDecision.condition, STOP_CONDITION.CLASSIFIED_BACKPRESSURE);
+    assert.ok(failureClasses.includes(FAILURE_CLASS.PRIORITY_RECOVERY_EVENT_WAIT));
     assert.equal(failureClasses.includes(FAILURE_CLASS.STARTUP_READINESS_BLOCKED), false);
     assertNoNullOrUndefined(artifact);
   });
@@ -101,7 +120,7 @@ describe('StopConditionDecision', () => {
     const artifact = JSON.parse(result.stdout);
 
     assert.equal(result.status, EXIT_SUCCESS);
-    assert.equal(artifact.stopDecision.outcome, STOP_OUTCOME.MIGRATE_OWNER_BOUNDARY);
+    assert.equal(artifact.stopDecision.outcome, STOP_OUTCOME.ACCEPT_CLASSIFIED_BACKPRESSURE);
     assertNoNullOrUndefined(artifact);
   });
 

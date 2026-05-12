@@ -37,6 +37,8 @@ const ACTIVE_GATE_STATE_TIMED_OUT = 'timed_out';
 const READINESS_RECOVERABILITY_TERMINAL = 'terminal';
 const READINESS_FAILURE_CLASS_NO_PROGRESS_TERMINAL = 'no_progress_terminal';
 const READINESS_TERMINAL_REASON_STALLED_NO_PROGRESS = 'stalled_no_progress';
+const READINESS_SOURCE_UNKNOWN = 'unknown';
+const READINESS_CAUSE_NONE = 'none';
 const PRIORITY_RECOVERY_EVIDENCE_SOURCE_PROGRESS = 'progress';
 const PRIORITY_RECOVERY_EVIDENCE_SOURCE_SUMMARY = 'summary';
 
@@ -104,6 +106,8 @@ const REASON = Object.freeze({
   PRIORITY_RECOVERY_RETRYABLE: 'priority_recovery_event_driven_wait',
   PRIORITY_RECOVERY_SATISFIED: 'priority_recovery_satisfied',
   READINESS_TERMINAL: 'readiness_terminal',
+  READINESS_INHERITED_ACTIVE_GATE_NO_PROGRESS:
+    'readiness_inherited_active_gate_no_progress',
   READINESS_RETRYABLE: 'readiness_retryable',
   READINESS_SATISFIED: 'readiness_satisfied',
   TOP_FAILURES_PRESENT: 'top_failures_present',
@@ -234,11 +238,18 @@ const DECISION_CONDITION = Object.freeze({
   ACTIVE_GATE_COVERAGE_DEFERRED:
     'active gate progress exists but snapshot coverage is incomplete',
   READINESS_ACTIVE_GATE_READY: 'active gate readiness is already satisfied',
+  READINESS_INHERITED_ACTIVE_GATE_NO_PROGRESS:
+    'readiness no-progress is inherited from active-gate timeout',
   READINESS_TERMINAL_FAILURE: 'readiness recoverability is terminal',
   READINESS_EVIDENCE_MISSING: 'readiness failure evidence is missing',
   READINESS_RETRYABLE_FAILURE: 'readiness failure evidence is retryable',
   TOP_FAILURES_PRESENT: 'top failure reasons are present',
   TOP_FAILURES_ABSENT: 'top failure reasons are absent',
+});
+
+const READINESS_SUPPORT_PATH = Object.freeze({
+  READINESS_FAILURE: 'readiness_failure',
+  INHERITED_ACTIVE_GATE_NO_PROGRESS: 'inherited_active_gate_no_progress',
 });
 
 const DECISION_TABLE_ROWS = Object.freeze([
@@ -376,6 +387,13 @@ const DECISION_TABLE_ROWS = Object.freeze([
         condition: DECISION_CONDITION.READINESS_ACTIVE_GATE_READY,
         state: EDGE_STATE.SATISFIED,
         reasons: Object.freeze([REASON.READINESS_SATISFIED]),
+      }),
+      Object.freeze({
+        condition: DECISION_CONDITION.READINESS_INHERITED_ACTIVE_GATE_NO_PROGRESS,
+        state: EDGE_STATE.DEFERRED,
+        reasons: Object.freeze([
+          REASON.READINESS_INHERITED_ACTIVE_GATE_NO_PROGRESS,
+        ]),
       }),
       Object.freeze({
         condition: DECISION_CONDITION.READINESS_TERMINAL_FAILURE,
@@ -871,7 +889,10 @@ function buildActiveGateSnapshotEdge(normalized) {
 }
 
 function buildReadinessEdge(normalized) {
-  const readiness = normalizeReadinessSupportEvidence(normalized.readinessFailure);
+  const readiness = normalizeReadinessSupportEvidence(
+    normalized.readinessFailure,
+    normalized.activeGate,
+  );
   const reasons = [];
   const state = resolveReadinessState(readiness, normalized.activeGate, reasons);
 
@@ -890,6 +911,7 @@ function buildReadinessEdge(normalized) {
       terminalReason: textOrUnknown(readiness.terminalReason),
       cause: textOrUnknown(readiness.cause),
       source: textOrUnknown(readiness.source),
+      supportPath: readiness.supportPath,
     },
     reasons,
     rank: RANK.READINESS,
@@ -940,13 +962,35 @@ function buildEdge(edge) {
   };
 }
 
-function normalizeReadinessSupportEvidence(readinessFailure) {
+function normalizeReadinessSupportEvidence(readinessFailure, activeGate) {
   const readiness = asRecord(readinessFailure);
   const recoverability = resolveReadinessRecoverability(readiness);
+  const supportPath = resolveReadinessSupportPath(readiness, activeGate);
   return {
     ...readiness,
     recoverability,
+    supportPath,
   };
+}
+
+function resolveReadinessSupportPath(readiness, activeGate) {
+  const snapshot = {
+    activeGateState: textOrUnknown(asRecord(activeGate).state),
+    classCode: textOrUnknown(readiness.classCode),
+    terminalReason: textOrUnknown(readiness.terminalReason),
+    source: textOrUnknown(readiness.source),
+    cause: textOrUnknown(readiness.cause),
+  };
+  if (
+    snapshot.activeGateState === ACTIVE_GATE_STATE_TIMED_OUT &&
+    snapshot.classCode === READINESS_FAILURE_CLASS_NO_PROGRESS_TERMINAL &&
+    snapshot.terminalReason === READINESS_TERMINAL_REASON_STALLED_NO_PROGRESS &&
+    snapshot.source === READINESS_SOURCE_UNKNOWN &&
+    snapshot.cause === READINESS_CAUSE_NONE
+  ) {
+    return READINESS_SUPPORT_PATH.INHERITED_ACTIVE_GATE_NO_PROGRESS;
+  }
+  return READINESS_SUPPORT_PATH.READINESS_FAILURE;
 }
 
 function resolveReadinessRecoverability(readiness) {
@@ -1202,6 +1246,13 @@ function resolveReadinessState(readiness, activeGate, reasons) {
   if (activeGate.ready === true) {
     reasons.push(REASON.READINESS_SATISFIED);
     return EDGE_STATE.SATISFIED;
+  }
+  if (
+    readiness.supportPath ===
+    READINESS_SUPPORT_PATH.INHERITED_ACTIVE_GATE_NO_PROGRESS
+  ) {
+    reasons.push(REASON.READINESS_INHERITED_ACTIVE_GATE_NO_PROGRESS);
+    return EDGE_STATE.DEFERRED;
   }
   if (readiness.recoverability === READINESS_RECOVERABILITY_TERMINAL) {
     reasons.push(REASON.READINESS_TERMINAL);

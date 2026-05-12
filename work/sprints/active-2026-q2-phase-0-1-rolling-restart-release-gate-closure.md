@@ -14,30 +14,33 @@ owner-boundary package with replayable proof.
 ## Current Blocker Snapshot
 
 - Current package:
-  [Rolling Restart Startup Readiness Support Evidence Boundary](../packages/active-20260512-rolling-restart-startup-readiness-support-evidence-boundary.md)
+  [Rolling Restart Startup Readiness Support Evidence Boundary](../packages/done-20260512-rolling-restart-startup-readiness-support-evidence-boundary.md)
 - Latest artifact:
   `test-output/reports/rolling-restart-current-release-gate-after-workflow-progress-direct-chain-owner-proof.report.json`
 - Latest playback:
   `test-output/reports/.playback/rolling-restart-current-release-gate-after-workflow-progress-direct-chain-owner-proof/rolling-restart/`
 - Representative gate: `rolling-restart`
 - Owner boundary: `startup_readiness_owner / startup_support_evidence`
-- Canonical blocker: startup readiness terminal no-progress has weak support
-  evidence (`source=unknown`, `cause=none`).
+- Canonical blocker: reduced by the current package. Startup readiness
+  no-progress with weak support evidence now carries
+  `supportPath=inherited_active_gate_no_progress` and is deferred rather than
+  terminal readiness ownership.
 - Prior blocker status: operation workflow progress direct-chain proof reduced
   priority recovery to retryable owner work; publication ACK convergence remains
   satisfied with `PUBLISHED` and zero pending ACKs.
 - Subordinate evidence: `startup_active_gate_owner / snapshot_coverage` is
-  projected downstream and must not drive write scope until readiness-support
-  evidence reduces or migrates.
-- Next action: use the required fresh implementation subagent to prove
-  `readiness_startup_support` with a focused startup-readiness fixture or probe
-  before changing runtime behavior.
+  projected downstream after priority progress closes; current causal stop is
+  `classified_backpressure` on `operation_workflow_owner / workflow_progress`.
+- Next action: parent owner should close the current focused
+  startup-readiness support-evidence contraction with commit/push proof, then
+  choose the next package from normalized evidence without changing
+  operation-workflow or startup active-gate runtime behavior in this package.
 - Proof ladder:
-  `npm run work:llm-start -- --package work/packages/active-20260512-rolling-restart-startup-readiness-support-evidence-boundary.md`,
-  `npm run work:package:doctor -- --pre-impl --suggest work/packages/active-20260512-rolling-restart-startup-readiness-support-evidence-boundary.md`,
+  `npm run work:llm-start -- --package work/packages/done-20260512-rolling-restart-startup-readiness-support-evidence-boundary.md`,
+  `npm run work:package:doctor -- --pre-impl --suggest work/packages/done-20260512-rolling-restart-startup-readiness-support-evidence-boundary.md`,
   `npm run work:evidence-summary -- test-output/reports/rolling-restart-current-release-gate-after-workflow-progress-direct-chain-owner-proof.report.json`,
   `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-current-release-gate-after-workflow-progress-direct-chain-owner-proof.report.json`,
-  focused startup-readiness support evidence fixture or owner test,
+  `node --test test/diagnostics/topology-convergence-graph.test.js test/diagnostics/failure-class-taxonomy.test.js test/diagnostics/stop-condition-decision.test.js test/diagnostics/causal-graph-builder.test.js`,
   representative rerun or explicit owner-boundary migration.
 
 ## Artifact History
@@ -103,7 +106,7 @@ The matching playback is:
 
 Current package:
 
-1. [Rolling Restart Startup Readiness Support Evidence Boundary](../packages/active-20260512-rolling-restart-startup-readiness-support-evidence-boundary.md)
+1. [Rolling Restart Startup Readiness Support Evidence Boundary](../packages/done-20260512-rolling-restart-startup-readiness-support-evidence-boundary.md)
 
 Recent completed packages:
 
@@ -119,16 +122,16 @@ Recent completed packages:
 Next action:
 
 1. Continue from the active startup-readiness package:
-   [Rolling Restart Startup Readiness Support Evidence Boundary](../packages/active-20260512-rolling-restart-startup-readiness-support-evidence-boundary.md).
-2. Use a fresh implementation subagent after the recorded review/fix handoff
-   repair.
-3. Prove the representative startup readiness terminal no-progress evidence
-   with a focused `startup_readiness_owner / startup_support_evidence` fixture
-   or probe before changing runtime behavior.
-4. Reduce the readiness support-evidence boundary, record representative green,
-   or migrate to one named owner boundary. Do not implement
-   `startup_active_gate_owner / snapshot_coverage` from this package without
-   fresh normalized owner evidence.
+   [Rolling Restart Startup Readiness Support Evidence Boundary](../packages/done-20260512-rolling-restart-startup-readiness-support-evidence-boundary.md).
+2. Fresh implementation subagent proof is recorded in the package ledger.
+3. Focused diagnostics tests reduced the representative startup readiness
+   terminal no-progress evidence to
+   `readiness_inherited_active_gate_no_progress`.
+4. Parent owner should review and close this package with focused commit/push
+   proof, then choose the next package from normalized evidence. Do not
+   implement `operation_workflow_owner / workflow_progress` or
+   `startup_active_gate_owner / snapshot_coverage` runtime behavior from this
+   startup-readiness package.
 5. Keep the direct-chain workflow-progress package as predecessor proof only; it
    is no longer the active package.
 6. Parked split successor, not promoted by the fresh representative report:
@@ -152,17 +155,17 @@ Latest representative evidence:
 11. Residual partitions: `control_plane_publications-p1`,
     `replica_operations-p1`, `sql_transactions-p1`, and
     `sql_write_operations-p1`.
-12. Representative outcome: migrated. Focused owner proof showed the
-    dispatch-pending advance path is canonical and guarded from overwriting
-    stronger spread-satisfied or coordination-mismatch decisions.
+12. Representative outcome: reduced for startup readiness support evidence.
+    Focused owner proof showed weak readiness no-progress is inherited
+    active-gate evidence, not a terminal startup-readiness owner blocker.
 13. Exact residual shape: one `operation_workflow_owner / workflow_progress`
-    group, no split required, priority recovery invariants passed, and causal
-    stop decision `owner_boundary_migration` with reason
-    `startup_readiness_boundary`.
-14. Named successor: `startup_readiness_owner / startup_support_evidence`.
-    `startup_active_gate_owner / snapshot_coverage` remains the projected
-    topology edge after priority recovery becomes retryable; do not implement
-    startup active-gate behavior inside the workflow-progress package.
+    group remains retryable, no split required, priority recovery invariants
+    passed, and causal stop decision is now `classified_backpressure` with
+    reason `priority_recovery_backpressure`.
+14. Startup readiness support evidence is reduced. `startup_active_gate_owner /
+    snapshot_coverage` remains the projected topology edge after priority
+    recovery closes; do not implement startup active-gate behavior inside this
+    startup-readiness package.
 
 The publication-convergence package still holds the prior
 `topology_publication_owner / publication_convergence` reduction:
@@ -182,11 +185,11 @@ the canonical topology frontier remains `priority_recovery_partition_progress`
 under `operation_workflow_owner / workflow_progress`. Owner-contract evidence
 also keeps `publication_ack_convergence` satisfied.
 
-Startup active-gate snapshot coverage is projected after priority recovery,
-but the fresh causal stop decision names `startup_readiness_owner /
-startup_support_evidence` as the next owner-boundary successor. This sprint
-should not reopen publication-convergence work while publication ACK
-convergence remains satisfied.
+Startup active-gate snapshot coverage is projected after priority recovery.
+The current startup-readiness package reduced weak readiness support evidence
+to inherited active-gate no-progress; this sprint should not reopen
+publication-convergence work while publication ACK convergence remains
+satisfied.
 
 ## Scope Basis
 
@@ -272,8 +275,8 @@ Edition matrix status: Community / AGPL repo.
 
 ## Validation Ladder
 
-1. `npm run work:llm-start -- --package work/packages/active-20260512-rolling-restart-startup-readiness-support-evidence-boundary.md`
-2. `npm run work:package:doctor -- --suggest work/packages/active-20260512-rolling-restart-startup-readiness-support-evidence-boundary.md`
+1. `npm run work:llm-start -- --package work/packages/done-20260512-rolling-restart-startup-readiness-support-evidence-boundary.md`
+2. `npm run work:package:doctor -- --suggest work/packages/done-20260512-rolling-restart-startup-readiness-support-evidence-boundary.md`
 3. `npm run work:evidence-summary -- test-output/reports/rolling-restart-current-release-gate-after-workflow-progress-direct-chain-owner-proof.report.json`
 4. `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-current-release-gate-after-workflow-progress-direct-chain-owner-proof.report.json`
 5. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-current-release-gate-after-workflow-progress-direct-chain-owner-proof.report.json --explain readiness_startup_support`

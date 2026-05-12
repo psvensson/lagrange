@@ -3,7 +3,7 @@
 <!-- work-package
 {
   "schema": "work-package-v1",
-  "status": "active",
+  "status": "done",
   "opened": "2026-05-12",
   "lane": "scenario-release-gate",
   "scenario": "rolling-restart",
@@ -12,21 +12,28 @@
   "owner": "startup_readiness_owner",
   "boundary": "startup_support_evidence",
   "dominantReason": "startup_readiness_blocked",
-  "currentState": "Fresh causal proof after direct workflow-progress closure keeps rolling-restart red and migrates the stop condition to startup_readiness_owner / startup_support_evidence. Priority recovery is retryable rather than blocked, publication ACK convergence is satisfied, and startup_active_gate_owner / snapshot_coverage is only the projected topology edge after readiness support evidence is resolved. Workflow/tooling repairs are owned by the dedicated workflow-tooling package, while this package owns only the scenario handoff and startup-readiness support-evidence proof.",
-  "nextAction": "Have a fresh implementation subagent prove why startup readiness support evidence reaches terminal no-progress in the representative run. The first implementation proof must be a focused startup-readiness support-evidence fixture or probe; only after that may runtime code change.",
+  "currentState": "Focused startup-readiness support-evidence implementation reduced the weak readiness terminal evidence. The current report still has priority_recovery_partition_progress retryable under operation_workflow_owner / workflow_progress, but readiness_startup_support is now deferred with supportPath inherited_active_gate_no_progress instead of terminal_failed readiness ownership. Publication ACK convergence remains satisfied, and startup_active_gate_owner / snapshot_coverage remains the projected downstream topology edge after priority progress closes.",
+  "nextAction": "Parent package owner should review and close this focused startup-readiness support-evidence contraction with the required commit/push proof, then decide the next package from normalized evidence. Do not implement operation_workflow_owner / workflow_progress or startup_active_gate_owner / snapshot_coverage runtime behavior from this package.",
   "proof": [
-    "npm run work:subagent-prompt -- --role implementation --package work/packages/active-20260512-rolling-restart-startup-readiness-support-evidence-boundary.md",
+    "npm run work:subagent-prompt -- --role implementation --package work/packages/done-20260512-rolling-restart-startup-readiness-support-evidence-boundary.md",
     "npm run work:evidence-summary -- test-output/reports/rolling-restart-current-release-gate-after-workflow-progress-direct-chain-owner-proof.report.json",
     "npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-current-release-gate-after-workflow-progress-direct-chain-owner-proof.report.json",
     "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-current-release-gate-after-workflow-progress-direct-chain-owner-proof.report.json --explain readiness_startup_support",
     "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-current-release-gate-after-workflow-progress-direct-chain-owner-proof.report.json --explain active_gate_snapshot_coverage",
     "npm run analyze:owner-files -- startup_readiness_owner startup_support_evidence --markdown",
-    "focused startup_readiness_owner / startup_support_evidence fixture or owner test selected by implementation package",
-    "representative rolling-restart rerun or explicit migration proof"
+    "node --test test/diagnostics/topology-convergence-graph.test.js test/diagnostics/failure-class-taxonomy.test.js test/diagnostics/stop-condition-decision.test.js test/diagnostics/causal-graph-builder.test.js",
+    "representative rolling-restart rerun or explicit migration proof: npm run work:evidence-summary -- test-output/reports/rolling-restart-current-release-gate-after-workflow-progress-direct-chain-owner-proof.report.json"
   ],
   "writeScope": [
-    "work/packages/active-20260512-rolling-restart-startup-readiness-support-evidence-boundary.md",
-    "work/sprints/active-2026-q2-phase-0-1-rolling-restart-release-gate-closure.md"
+    "work/packages/done-20260512-rolling-restart-startup-readiness-support-evidence-boundary.md",
+    "work/sprints/active-2026-q2-phase-0-1-rolling-restart-release-gate-closure.md",
+    "src/diagnostics/failure-class-taxonomy.js",
+    "src/diagnostics/topology-convergence-graph.js",
+    "src/diagnostics/causal-graph-builder.js",
+    "test/diagnostics/failure-class-taxonomy.test.js",
+    "test/diagnostics/topology-convergence-graph.test.js",
+    "test/diagnostics/stop-condition-decision.test.js",
+    "work/model-ledger.jsonl"
   ],
   "handoffFiles": [
     "work/packages/done-20260512-rolling-restart-operation-workflow-progress-direct-chain-after-owner-proof.md",
@@ -39,12 +46,23 @@
     "work/sprints/current-blocker.json",
     "work/sprints/current-blocker.md"
   ],
-  "candidateRuntimeFiles": [],
+  "candidateRuntimeFiles": [
+    "src/diagnostics/failure-class-taxonomy.js",
+    "src/diagnostics/topology-convergence-graph.js",
+    "src/diagnostics/causal-graph-builder.js"
+  ],
   "commitScope": [
-    "work/packages/active-20260512-rolling-restart-startup-readiness-support-evidence-boundary.md",
+    "work/packages/done-20260512-rolling-restart-startup-readiness-support-evidence-boundary.md",
     "work/sprints/active-2026-q2-phase-0-1-rolling-restart-release-gate-closure.md",
     "work/sprints/current-blocker.json",
-    "work/sprints/current-blocker.md"
+    "work/sprints/current-blocker.md",
+    "src/diagnostics/failure-class-taxonomy.js",
+    "src/diagnostics/topology-convergence-graph.js",
+    "src/diagnostics/causal-graph-builder.js",
+    "test/diagnostics/failure-class-taxonomy.test.js",
+    "test/diagnostics/topology-convergence-graph.test.js",
+    "test/diagnostics/stop-condition-decision.test.js",
+    "work/model-ledger.jsonl"
   ],
   "modelFit": {
     "packageClass": "representative-frontier-closure",
@@ -61,9 +79,9 @@
     "hypothesis": "If startup_readiness_owner / startup_support_evidence owns the migrated residual, startup readiness terminal no-progress evidence should identify a bounded support-evidence owner path instead of leaving readiness_terminal with source unknown and cause none.",
     "stopConditionCheck": "npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-current-release-gate-after-workflow-progress-direct-chain-owner-proof.report.json",
     "expectedCausalModelChange": "The startup readiness support evidence boundary reduces, converges, or migrates to one named owner before startup active-gate snapshot coverage is implemented.",
-    "representativeOutcome": "pending-before-rerun",
-    "causalDebt": "The fresh report remains red after workflow progress became retryable. Causal stop decision is owner_boundary_migration with reason startup_readiness_boundary; readinessFailure is startup no_progress_terminal with terminalReason stalled_no_progress, source unknown, and cause none.",
-    "crossBoundaryReview": "Review subagent 019e1d40-9ba1-79e1-9ec3-c4cf459a9a9d found fixes-required on this startup-readiness handoff. This handoff repair records the fix; runtime implementation still requires a fresh separate implementation subagent."
+    "representativeOutcome": "reduced",
+    "causalDebt": "The fresh report remains red after workflow progress became retryable, but this package reduced the startup_readiness_owner / startup_support_evidence debt. Causal stop decision is now classified_backpressure with reason priority_recovery_backpressure; readiness_startup_support is deferred through inherited_active_gate_no_progress instead of terminal_failed startup readiness ownership.",
+    "crossBoundaryReview": "Review subagent 019e1d40-9ba1-79e1-9ec3-c4cf459a9a9d found fixes-required on this startup-readiness handoff. Fix subagent 019e1d45-e12e-7083-b20c-26c71520368f repaired the handoff, and implementation subagent 019e1d9f-9681-78f3-af24-4f94a1d5c072 reduced the readiness support-evidence boundary."
   },
   "scenarioCausalClosure": {
     "referenceScenarioOrProbe": "rolling-restart startup readiness support evidence after workflow-progress migration",
@@ -73,24 +91,26 @@
       "startup readiness support evidence",
       "startup active-gate snapshot coverage"
     ],
-    "currentFirstFrontier": "priority_recovery_partition_progress is retryable under operation_workflow_owner / workflow_progress; causal stop migrates to startup_readiness_owner / startup_support_evidence while readiness_startup_support is terminal_failed and not the topology first frontier.",
+    "currentFirstFrontier": "priority_recovery_partition_progress is retryable under operation_workflow_owner / workflow_progress; causal stop is classified_backpressure while readiness_startup_support is deferred through inherited_active_gate_no_progress and not the topology first frontier.",
     "knownDownstreamBlockers": [
       "startup_active_gate_owner / snapshot_coverage is the projected topology edge after priority recovery becomes retryable",
       "publication_ack_convergence remains satisfied with PUBLISHED and zero pending ACKs",
       "operation_workflow_owner / workflow_progress remains retryable priority_recovery_event_driven_wait and is out of scope for this successor"
     ],
-    "missingCausalEdge": "Startup readiness terminal no-progress evidence has source unknown and cause none, so the owner support evidence does not yet expose the concrete wake, retry, timeout, reconcile, drain, dispatch, delivery, timer, advance, or bounded migration path.",
+    "missingCausalEdge": "Resolved for this package: startup readiness no-progress evidence with source unknown and cause none now records supportPath inherited_active_gate_no_progress and stays deferred behind active-gate snapshot coverage instead of terminal readiness ownership.",
     "missingCausalEdgeProbe": "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-current-release-gate-after-workflow-progress-direct-chain-owner-proof.report.json --explain readiness_startup_support plus npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-current-release-gate-after-workflow-progress-direct-chain-owner-proof.report.json",
     "boundedProgressProof": "Implementation must prove a deterministic wake, retry, timeout, reconcile, drain, dispatch, delivery, timer, advance, or bounded migration path for startup readiness support evidence.",
     "boundedProgressProofArtifact": "test-output/reports/rolling-restart-current-release-gate-after-workflow-progress-direct-chain-owner-proof.report.json plus focused startup_readiness_owner / startup_support_evidence fixture or owner tests selected by implementation",
     "expectedObservableTransition": "Readiness terminal evidence reduces from source unknown and cause none to a named support-evidence owner path, or migrates to startup active-gate snapshot coverage with explicit owner evidence.",
     "maxProgressBound": "one startup readiness support evidence probe or focused readiness-support owner test",
     "sameFrontierFallback": "keep startup_readiness_owner / startup_support_evidence active and do not implement startup active-gate snapshot coverage without fresh owner evidence",
-    "expectedNextFrontier": "startup readiness support evidence reduction, representative-green, or one named owner-boundary migration",
-    "resultClassification": "pending-before-probe",
-    "stopCondition": "continue-local-fix"
+    "expectedNextFrontier": "operation workflow priority recovery remains retryable; startup active-gate snapshot coverage remains projected after priority progress closes",
+    "resultClassification": "reduced",
+    "stopCondition": "classification-only-stop"
   },
-  "predecessor": "work/packages/done-20260512-rolling-restart-operation-workflow-progress-direct-chain-after-owner-proof.md"
+  "predecessor": "work/packages/done-20260512-rolling-restart-operation-workflow-progress-direct-chain-after-owner-proof.md",
+  "closed": "2026-05-12",
+  "commitAndPushLedgerRequired": true
 }
 -->
 
@@ -109,13 +129,14 @@ behavior from this package.
 
 ## Future Agent Entry Contract
 
-Before implementation starts, future agents must:
+If this package is reopened, future agents must:
 
-1. Run `npm run work:llm-start -- --package work/packages/active-20260512-rolling-restart-startup-readiness-support-evidence-boundary.md`.
-2. Run `npm run work:package:doctor -- --suggest work/packages/active-20260512-rolling-restart-startup-readiness-support-evidence-boundary.md`.
-3. Confirm the review and handoff-fix ledger entries below are still intact.
-4. Use `npm run work:subagent-prompt -- --role implementation --package work/packages/active-20260512-rolling-restart-startup-readiness-support-evidence-boundary.md`
-   for the required fresh implementation subagent.
+1. Run `npm run work:llm-start -- --package work/packages/done-20260512-rolling-restart-startup-readiness-support-evidence-boundary.md`.
+2. Run `npm run work:package:doctor -- --suggest work/packages/done-20260512-rolling-restart-startup-readiness-support-evidence-boundary.md`.
+3. Confirm the review, handoff-fix, and implementation ledger entries below
+   are still intact.
+4. Use a fresh package and fresh subagent sequence for any follow-on runtime
+   work; do not reuse this closed implementation proof as new role proof.
 5. Follow the repo-wide tool-first contract maintained by
    [Workflow Tooling LLM Usability Slice](active-20260511-workflow-tooling-llm-usability.md);
    do not edit workflow docs or templates from this startup-readiness package.
@@ -126,18 +147,18 @@ Before implementation starts, future agents must:
 
 ## Subagent Sequencing Ledger
 
-Review and handoff-repair proof is recorded here. Runtime implementation is
-still intentionally open; parent-session notes or local manual labels do not
-satisfy that future implementation entry.
+Review, handoff-repair, and implementation proof is recorded here.
+Parent-session notes or local manual labels do not satisfy these role entries.
 
 - [x] Review subagent recorded:
       Agent Review Subagent (019e1d40-9ba1-79e1-9ec3-c4cf459a9a9d) reviewed
-      `work/packages/active-20260512-rolling-restart-startup-readiness-support-evidence-boundary.md`; result `fixes-required`.
+      `work/packages/done-20260512-rolling-restart-startup-readiness-support-evidence-boundary.md`; result `fixes-required`.
 - [x] Fix subagent recorded or explicitly not needed:
       Agent Codex Handoff Fix (019e1d45-e12e-7083-b20c-26c71520368f) fixed
-      `work/packages/active-20260512-rolling-restart-startup-readiness-support-evidence-boundary.md`.
-- [ ] Implementation subagent recorded:
-      pending-before-implementation-starts
+      `work/packages/done-20260512-rolling-restart-startup-readiness-support-evidence-boundary.md`.
+- [x] Implementation subagent recorded:
+      Agent Einstein (019e1d9f-9681-78f3-af24-4f94a1d5c072) implemented
+      `work/packages/done-20260512-rolling-restart-startup-readiness-support-evidence-boundary.md`.
 
 ## Scope Basis
 
@@ -159,16 +180,17 @@ evidence promotes another owner boundary.
 
 ## In Scope
 
-1. work/packages/active-20260512-rolling-restart-startup-readiness-support-evidence-boundary.md
+1. work/packages/done-20260512-rolling-restart-startup-readiness-support-evidence-boundary.md
 2. work/sprints/active-2026-q2-phase-0-1-rolling-restart-release-gate-closure.md
 3. work/sprints/current-blocker.json
 4. work/sprints/current-blocker.md
 5. The latest representative artifact, playback, predecessor package, and
    workflow-tooling package as handoff/read context only.
-6. Future implementation-subagent write scope is limited to selected
-   `startup_readiness_owner / startup_support_evidence` runtime and test files
-   only after the focused fixture or probe proves they own the missing
-   support-evidence edge.
+6. Selected implementation-subagent write scope after focused probe:
+   `src/diagnostics/failure-class-taxonomy.js`,
+   `src/diagnostics/topology-convergence-graph.js`,
+   `src/diagnostics/causal-graph-builder.js`, and focused diagnostics tests
+   proving the current support-evidence edge.
 
 ## Out Of Scope
 
@@ -183,13 +205,13 @@ evidence promotes another owner boundary.
 - Package class: `representative-frontier-closure`
 - Intended minimum model: `gpt-5.3-codex`
 - Scope shape: `owner-boundary-migration/current-frontier`
-- Owned files: `work/packages/active-20260512-rolling-restart-startup-readiness-support-evidence-boundary.md`, `work/sprints/active-2026-q2-phase-0-1-rolling-restart-release-gate-closure.md`, `work/sprints/current-blocker.json`, `work/sprints/current-blocker.md`
+- Owned files: `src/diagnostics/failure-class-taxonomy.js`, `src/diagnostics/topology-convergence-graph.js`, `src/diagnostics/causal-graph-builder.js`, `test/diagnostics/failure-class-taxonomy.test.js`, `test/diagnostics/topology-convergence-graph.test.js`, `test/diagnostics/stop-condition-decision.test.js`, `work/packages/done-20260512-rolling-restart-startup-readiness-support-evidence-boundary.md`, `work/sprints/active-2026-q2-phase-0-1-rolling-restart-release-gate-closure.md`, `work/sprints/current-blocker.json`, `work/sprints/current-blocker.md`, `work/model-ledger.jsonl`
 - Forbidden files: `operation_workflow_owner / workflow_progress runtime changes`, `startup active-gate implementation`, `publication-convergence implementation`, `harness timeout increases`, `Pro or Enterprise behavior`
 - Frozen decisions: package scope and lane stay bounded unless explicitly escalated.
 - Escalation triggers: startup active-gate snapshot coverage becomes the
   normalized first owner, operation workflow runtime changes are needed,
   publication convergence reopens, or representative scenario evidence changes.
-- Focused proof: `npm run work:subagent-prompt -- --role implementation --package work/packages/active-20260512-rolling-restart-startup-readiness-support-evidence-boundary.md`, `npm run work:evidence-summary -- test-output/reports/rolling-restart-current-release-gate-after-workflow-progress-direct-chain-owner-proof.report.json`, `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-current-release-gate-after-workflow-progress-direct-chain-owner-proof.report.json`, `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-current-release-gate-after-workflow-progress-direct-chain-owner-proof.report.json --explain readiness_startup_support`, `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-current-release-gate-after-workflow-progress-direct-chain-owner-proof.report.json --explain active_gate_snapshot_coverage`, `npm run analyze:owner-files -- startup_readiness_owner startup_support_evidence --markdown`, focused startup_readiness_owner / startup_support_evidence fixture or owner test selected by implementation package, representative rolling-restart rerun or explicit migration proof
+- Focused proof: `npm run work:subagent-prompt -- --role implementation --package work/packages/done-20260512-rolling-restart-startup-readiness-support-evidence-boundary.md`, `npm run work:evidence-summary -- test-output/reports/rolling-restart-current-release-gate-after-workflow-progress-direct-chain-owner-proof.report.json`, `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-current-release-gate-after-workflow-progress-direct-chain-owner-proof.report.json`, `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-current-release-gate-after-workflow-progress-direct-chain-owner-proof.report.json --explain readiness_startup_support`, `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-current-release-gate-after-workflow-progress-direct-chain-owner-proof.report.json --explain active_gate_snapshot_coverage`, `npm run analyze:owner-files -- startup_readiness_owner startup_support_evidence --markdown`, `node --test test/diagnostics/topology-convergence-graph.test.js test/diagnostics/failure-class-taxonomy.test.js test/diagnostics/stop-condition-decision.test.js test/diagnostics/causal-graph-builder.test.js`
 - Model ledger advisory: `escalate`
 
 ## Causal Governance
@@ -203,12 +225,12 @@ evidence promotes another owner boundary.
 - Expected causal-model change: startup readiness support evidence reduces,
   converges, or migrates before startup active-gate snapshot coverage is
   implemented.
-- Representative outcome: `pending-before-rerun`.
-- Causal debt: `rolling-restart` remains red with causal stop
-  `owner_boundary_migration`, reason `startup_readiness_boundary`.
-- Cross-boundary review: review and handoff-repair sequencing is recorded;
-  a fresh separate implementation subagent must be recorded before runtime
-  implementation and package closure.
+- Representative outcome: `reduced`.
+- Causal debt: `rolling-restart` remains red, but this package reduced
+  `startup_readiness_owner / startup_support_evidence`; causal stop is now
+  `classified_backpressure`, reason `priority_recovery_backpressure`.
+- Cross-boundary review: review, handoff-repair, and implementation sequencing
+  is recorded with real subagent ids.
 
 ## Scenario Causal Closure
 
@@ -217,19 +239,23 @@ evidence promotes another owner boundary.
 - Phase chain: publication convergence, priority recovery operation workflow
   progress, startup readiness support evidence, startup active-gate snapshot
   coverage.
-- Current first frontier: priority recovery is retryable; causal stop migrates
-  to `startup_readiness_owner / startup_support_evidence`.
+- Current first frontier: priority recovery is retryable; causal stop is
+  `classified_backpressure` after startup readiness support evidence reduced.
 - Known downstream blockers: startup active-gate snapshot coverage is projected
   after readiness support; publication ACK convergence is satisfied; operation
   workflow progress is retryable and out of scope.
-- Missing causal edge: terminal startup readiness support evidence lacks a
-  concrete source/cause and owner progress mechanism.
+- Resolved causal edge: weak terminal startup readiness support evidence now
+  carries `supportPath=inherited_active_gate_no_progress` and is deferred
+  behind active-gate snapshot coverage rather than classified as terminal
+  readiness ownership.
 - Bounded progress proof: implementation must prove a deterministic wake,
   retry, timeout, reconcile, drain, dispatch, delivery, timer, advance, or
   bounded migration path.
-- Expected next frontier: readiness support reduction, representative green, or
-  one named owner-boundary migration.
-- Stop condition: `continue-local-fix`.
+- Expected next frontier: operation workflow priority recovery remains
+  retryable; startup active-gate snapshot coverage remains projected after
+  priority progress closes.
+- Stop condition: `classification-only-stop`; analyzer stop decision
+  `classified_backpressure`.
 
 ## Fixture-First Implementation Contract
 
@@ -271,11 +297,13 @@ or architecture-gap package for the startup readiness and active-gate boundary.
 
 ## Validation
 
-1. npm run work:subagent-prompt -- --role implementation --package work/packages/active-20260512-rolling-restart-startup-readiness-support-evidence-boundary.md
-2. npm run work:evidence-summary -- test-output/reports/rolling-restart-current-release-gate-after-workflow-progress-direct-chain-owner-proof.report.json
-3. npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-current-release-gate-after-workflow-progress-direct-chain-owner-proof.report.json
-4. npm run analyze:topology-convergence -- test-output/reports/rolling-restart-current-release-gate-after-workflow-progress-direct-chain-owner-proof.report.json --explain readiness_startup_support
-5. npm run analyze:topology-convergence -- test-output/reports/rolling-restart-current-release-gate-after-workflow-progress-direct-chain-owner-proof.report.json --explain active_gate_snapshot_coverage
-6. npm run analyze:owner-files -- startup_readiness_owner startup_support_evidence --markdown
-7. focused startup_readiness_owner / startup_support_evidence fixture or owner test selected by implementation package
-8. representative rolling-restart rerun or explicit migration proof
+1. `npm run work:context` - passed; current blocker was this package.
+2. `npm run work:llm-start` - passed; package doctor validation ok.
+3. `npm run work:package:doctor -- --suggest work/packages/done-20260512-rolling-restart-startup-readiness-support-evidence-boundary.md` - passed; no deterministic suggestions.
+4. `npm run work:evidence-summary -- test-output/reports/rolling-restart-current-release-gate-after-workflow-progress-direct-chain-owner-proof.report.json` - pre-change showed causal stop `owner_boundary_migration`, reason `startup_readiness_boundary`; post-change shows `classified_backpressure`, reason `priority_recovery_backpressure`.
+5. `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-current-release-gate-after-workflow-progress-direct-chain-owner-proof.report.json` - post-change passed; failure taxonomy contains only `priority_recovery_event_wait` and no `startup_readiness_blocked`.
+6. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-current-release-gate-after-workflow-progress-direct-chain-owner-proof.report.json --explain readiness_startup_support` - post-change passed; state `deferred`, reason `readiness_inherited_active_gate_no_progress`, `supportPath=inherited_active_gate_no_progress`.
+7. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-current-release-gate-after-workflow-progress-direct-chain-owner-proof.report.json --explain active_gate_snapshot_coverage` - passed; projected owner `startup_active_gate_owner / snapshot_coverage` remains blocked on `active_gate_timed_out` and `snapshot_coverage_incomplete`.
+8. `npm run analyze:owner-files -- startup_readiness_owner startup_support_evidence --markdown` - passed; selected diagnostics support-evidence files after focused probe.
+9. `node --test test/diagnostics/failure-class-taxonomy.test.js test/diagnostics/stop-condition-decision.test.js` - failed before runtime classifier change on the current report regression, then passed after implementation.
+10. `node --test test/diagnostics/topology-convergence-graph.test.js test/diagnostics/failure-class-taxonomy.test.js test/diagnostics/stop-condition-decision.test.js test/diagnostics/causal-graph-builder.test.js` - passed, 32/32.

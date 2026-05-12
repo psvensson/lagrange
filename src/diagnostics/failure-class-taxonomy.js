@@ -29,8 +29,11 @@ const REASON_BUDGET_CASCADE = 'budget_cascade';
 const REASON_EVIDENCE_INCOMPLETE = 'evidence_incomplete';
 const REASON_NO_FAILURE = 'no_failure';
 const WAIT_MODE_EVENT_DRIVEN = 'event_driven';
+const ACTIVE_GATE_STATE_TIMED_OUT = 'timed_out';
 const READINESS_FAILURE_CLASS_NO_PROGRESS_TERMINAL = 'no_progress_terminal';
 const READINESS_TERMINAL_REASON_STALLED_NO_PROGRESS = 'stalled_no_progress';
+const READINESS_SOURCE_UNKNOWN = 'unknown';
+const READINESS_CAUSE_NONE = 'none';
 const READINESS_CLASSIFICATION_DECISION = Object.freeze({
   CLASSIFY_BLOCKER: 'classify_blocker',
   INHERITED_ACTIVE_GATE_NO_PROGRESS: 'inherited_active_gate_no_progress',
@@ -46,6 +49,15 @@ const READINESS_CLASSIFICATION_RULES = Object.freeze([
       snapshot.classCode === READINESS_FAILURE_CLASS_NO_PROGRESS_TERMINAL &&
       snapshot.terminalReason === READINESS_TERMINAL_REASON_STALLED_NO_PROGRESS &&
       snapshot.attemptsSinceProgress > ZERO_COUNT,
+  }),
+  Object.freeze({
+    decision: READINESS_CLASSIFICATION_DECISION.INHERITED_ACTIVE_GATE_NO_PROGRESS,
+    matches: (snapshot) =>
+      snapshot.activeGateState === ACTIVE_GATE_STATE_TIMED_OUT &&
+      snapshot.classCode === READINESS_FAILURE_CLASS_NO_PROGRESS_TERMINAL &&
+      snapshot.terminalReason === READINESS_TERMINAL_REASON_STALLED_NO_PROGRESS &&
+      snapshot.source === READINESS_SOURCE_UNKNOWN &&
+      snapshot.cause === READINESS_CAUSE_NONE,
   }),
   Object.freeze({
     decision: READINESS_CLASSIFICATION_DECISION.CLASSIFY_BLOCKER,
@@ -170,6 +182,9 @@ function classifyReadiness(normalized) {
     blockedReasonEntries,
     classCode: textOrUnknown(normalized.readinessFailure.classCode),
     terminalReason: textOrUnknown(normalized.readinessFailure.terminalReason),
+    source: textOrUnknown(normalized.readinessFailure.source),
+    cause: textOrUnknown(normalized.readinessFailure.cause),
+    activeGateState: textOrUnknown(normalized.activeGate.state),
     attemptsSinceProgress: numberOrZero(
       asRecord(normalized.readinessFailure.progressSignal).attemptsSinceProgress,
     ),
