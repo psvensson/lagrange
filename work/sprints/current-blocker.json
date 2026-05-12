@@ -2,20 +2,20 @@
   "schema": "current-blocker-v1",
   "generatedBy": "scripts/work-tracker.js",
   "sprint": "work/sprints/active-2026-q2-phase-0-1-rolling-restart-release-gate-closure.md",
-  "package": "work/packages/todo-20260512-rolling-restart-operation-workflow-progress-stage3-timeout-progression.md",
-  "status": "todo",
+  "package": "work/packages/active-20260512-rolling-restart-operation-workflow-progress-stage3-timeout-progression.md",
+  "status": "active",
   "scenario": "rolling-restart",
-  "artifact": "test-output/reports/rolling-restart-current-release-gate-after-workflow-progress-event-driven-dispatch-pending-fix.report.json",
-  "playback": "test-output/reports/.playback/rolling-restart-current-release-gate-after-workflow-progress-event-driven-dispatch-pending-fix/rolling-restart/",
-  "owner": "operation_workflow_owner",
-  "boundary": "workflow_progress",
-  "dominantReason": "priority_recovery_event_driven_wait",
-  "currentState": "The dispatch-pending classification package closed as same-frontier bounded backpressure with focused owner probes green. The representative rolling-restart artifact remains red at operation_workflow_owner / workflow_progress / priority_recovery_event_driven_wait for control_plane_publications-p1, sql_transaction_participants-p1, sql_transactions-p1, and sql_write_operations-p1. Residual stale PENDING timeout progression maps to OperationWorkflowOwnerSegment7Stage3.checkTimeouts in src/rebalancer/operation-workflow-owner-segment-7-stage-3.js.",
-  "nextAction": "Run the required review/fix sequence against work/packages/done-20260512-rolling-restart-operation-workflow-progress-event-driven-dispatch-pending.md, then activate this package and have a fresh implementation subagent own stage-3 timeout progression for stale PENDING dispatch-pending operations.",
+  "artifact": "test-output/reports/rolling-restart-current-release-gate-after-workflow-progress-stage3-timeout-progression-fix.report.json",
+  "playback": "test-output/reports/.playback/rolling-restart-current-release-gate-after-workflow-progress-stage3-timeout-progression-fix/rolling-restart/",
+  "owner": "rebalancer_leader",
+  "boundary": "operation_scheduling",
+  "dominantReason": "priority_recovery_operation_scheduling_event_driven",
+  "currentState": "Focused stage-3 timeout proof is green without runtime edits. The fresh rolling-restart artifact migrated away from operation_workflow_owner / workflow_progress to rebalancer_leader / operation_scheduling with priority_recovery_progress_blocked evidence. The dominant witness reports needs_operation for control_plane_publications-p1, replica_operations-p1, sql_transaction_participants-p1, sql_transactions-p1, and sql_write_operations-p1; active-gate snapshot coverage remains downstream at 2/5.",
+  "nextAction": "Close this package as migrated, then activate a successor for rebalancer_leader / operation_scheduling priority recovery operation creation. Do not pursue startup active-gate until priority_recovery_partition_progress reduces, converges, or migrates again.",
   "proof": [
-    "npm run work:evidence-summary -- test-output/reports/rolling-restart-current-release-gate-after-workflow-progress-event-driven-dispatch-pending-fix.report.json",
-    "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-current-release-gate-after-workflow-progress-event-driven-dispatch-pending-fix.report.json --explain priority_recovery_partition_progress",
-    "npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-current-release-gate-after-workflow-progress-event-driven-dispatch-pending-fix.report.json",
+    "npm run work:evidence-summary -- test-output/reports/rolling-restart-current-release-gate-after-workflow-progress-stage3-timeout-progression-fix.report.json",
+    "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-current-release-gate-after-workflow-progress-stage3-timeout-progression-fix.report.json --explain priority_recovery_partition_progress",
+    "npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-current-release-gate-after-workflow-progress-stage3-timeout-progression-fix.report.json",
     "npm test -- test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js",
     "node scripts/check-guideline-literals.js src/rebalancer/operation-workflow-owner-segment-7-stage-3.js",
     "node scripts/check-guideline-decision-boundaries.js src/rebalancer/operation-workflow-owner-segment-7-stage-3.js",
@@ -25,7 +25,7 @@
   "touchedFiles": [
     "src/rebalancer/operation-workflow-owner-segment-7-stage-3.js",
     "test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js",
-    "work/packages/todo-20260512-rolling-restart-operation-workflow-progress-stage3-timeout-progression.md",
+    "work/packages/active-20260512-rolling-restart-operation-workflow-progress-stage3-timeout-progression.md",
     "work/sprints/active-2026-q2-phase-0-1-rolling-restart-release-gate-closure.md",
     "work/sprints/current-blocker.json",
     "work/sprints/current-blocker.md",
@@ -43,11 +43,11 @@
   },
   "causalGovernance": {
     "hypothesis": "If stage-3 timeout progression for stale PENDING dispatch-pending operations is repaired or classified, priority_recovery_partition_progress should reduce, converge, or migrate away from operation_workflow_owner / workflow_progress.",
-    "stopConditionCheck": "npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-current-release-gate-after-workflow-progress-event-driven-dispatch-pending-fix.report.json",
+    "stopConditionCheck": "npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-current-release-gate-after-workflow-progress-stage3-timeout-progression-fix.report.json",
     "expectedCausalModelChange": "The stale PENDING timeout frontier either advances through stage-3 timeout progression, becomes classified bounded backpressure with focused proof, or exposes a new named owner boundary.",
-    "representativeOutcome": "pending-before-rerun",
-    "causalDebt": "Rolling-restart remains red on workflow-progress event-driven dispatch-pending priority recovery for control_plane_publications-p1, sql_transaction_participants-p1, sql_transactions-p1, and sql_write_operations-p1. The next residual path is OperationWorkflowOwnerSegment7Stage3.checkTimeouts in src/rebalancer/operation-workflow-owner-segment-7-stage-3.js.",
-    "crossBoundaryReview": "required-before-implementation through a fresh review of work/packages/done-20260512-rolling-restart-operation-workflow-progress-event-driven-dispatch-pending.md."
+    "representativeOutcome": "migrated",
+    "causalDebt": "Focused proof covers the named OperationWorkflowOwnerSegment7Stage3.checkTimeouts stale PENDING timeout progression path. Fresh representative evidence now points at rebalancer_leader / operation_scheduling with needs_operation priority recovery operation creation debt for five partitions.",
+    "crossBoundaryReview": "completed-before-implementation through Agent Codex (019e1b9d-81cf-7073-a449-64a0cf0a36cf) review of work/packages/done-20260512-rolling-restart-operation-workflow-progress-event-driven-dispatch-pending.md."
   },
   "scenarioCausalClosure": {
     "referenceScenarioOrProbe": "rolling-restart workflow-progress stage-3 timeout progression probe",
@@ -56,21 +56,21 @@
       "operation workflow dispatch and retry",
       "startup active-gate presentation"
     ],
-    "currentFirstFrontier": "operation_workflow_owner / workflow_progress / priority_recovery_event_driven_wait on control_plane_publications-p1, sql_transaction_participants-p1, sql_transactions-p1, and sql_write_operations-p1",
+    "currentFirstFrontier": "rebalancer_leader / operation_scheduling / priority_recovery_operation_scheduling_event_driven on control_plane_publications-p1, replica_operations-p1, sql_transaction_participants-p1, sql_transactions-p1, and sql_write_operations-p1",
     "knownDownstreamBlockers": [
-      "startup_active_gate_owner snapshot coverage remains downstream at 3/5",
+      "startup_active_gate_owner snapshot coverage remains downstream at 2/5",
       "publication_missing_active_node is presentation evidence while publication_ack_convergence remains satisfied"
     ],
-    "missingCausalEdge": "stage-3 timeout progression for stale PENDING dispatch-pending workflow operations must be proven before downstream active-gate closure is pursued",
+    "missingCausalEdge": "rebalancer leader operation scheduling must create priority recovery operations for needs_operation partitions before downstream active-gate closure is pursued",
     "missingCausalEdgeProbe": "npm test -- test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js",
     "boundedProgressProof": "Focused timeout progression proof must show stage-3 timer or timeout reconcile advance for stale PENDING dispatch-pending operations.",
     "boundedProgressProofArtifact": "test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js; src/rebalancer/operation-workflow-owner-segment-7-stage-3.js",
-    "expectedObservableTransition": "stale PENDING dispatch-pending operations either advance through OperationWorkflowOwnerSegment7Stage3.checkTimeouts or remain same-frontier with bounded timeout evidence.",
+    "expectedObservableTransition": "stale PENDING dispatch-pending operations are no longer the representative first frontier; fresh evidence migrates to operation scheduling needs_operation recovery creation.",
     "maxProgressBound": "one stage-3 timer or timeout reconcile cycle per blocked partition before same-frontier fallback",
-    "sameFrontierFallback": "keep operation_workflow_owner / workflow_progress active and do not pursue startup active-gate closure",
-    "expectedNextFrontier": "same operation_workflow_owner / workflow_progress frontier unless the stage-3 timeout proof reduces or migrates the representative artifact",
-    "resultClassification": "pending-before-probe",
-    "stopCondition": "continue-local-fix"
+    "sameFrontierFallback": "keep priority_recovery_partition_progress active and do not pursue startup active-gate closure",
+    "expectedNextFrontier": "rebalancer_leader / operation_scheduling priority recovery operation creation",
+    "resultClassification": "migrated",
+    "stopCondition": "migrate-owner-boundary"
   },
   "predecessor": "work/packages/done-20260512-rolling-restart-operation-workflow-progress-event-driven-dispatch-pending.md"
 }
