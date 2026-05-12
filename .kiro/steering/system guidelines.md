@@ -455,6 +455,57 @@ Mandatory rules:
    explain whether the stop condition is accepted backpressure, insufficient
    budget, wrong sequencing, missing handoff, or a migrated owner boundary.
 
+### 0.1.8.2 Scenario Causal Closure Ledger
+
+Scenario-driven active packages and scenario-driven active sprint snapshots must
+keep a Scenario Causal Closure Ledger. The ledger prevents first-frontier
+migration from erasing whole-scenario understanding.
+
+Mandatory package metadata field: `scenarioCausalClosure`.
+
+Mandatory ledger fields:
+
+1. Reference scenario/probe: the named distributed scenario or focused blocker
+   probe that represents the current chain.
+2. Phase chain: the ordered phases already known for the scenario, including
+   handoff, wake, retry, timeout, reconcile, drain, dispatch, delivery, timer,
+   advance, or bounded-progress phases when they are relevant.
+3. Current first frontier: the current owner, boundary, state, and dominant
+   reason.
+4. Known downstream blockers: blockers already observed but intentionally not
+   first frontier.
+5. Missing causal edge: the unproven edge that prevents closure.
+6. Missing causal edge probe: the focused command that proves or disproves the
+   missing edge before a representative rerun substitutes for it.
+7. Bounded progress proof: the focused proof that a retryable or backpressure
+   state has a concrete wake, retry, timeout, reconcile, drain, dispatch,
+   delivery, timer, advance, or bounded-progress mechanism.
+8. Bounded progress proof artifact: the focused test, report, diagnostic
+   output, or artifact path that carries the proof.
+9. Expected observable transition: the before/after state change or named
+   classification expected from the focused probe.
+10. Max progress bound: the maximum retry, timeout, dispatch, timer, or
+    owner-cycle bound before fallback.
+11. Same-frontier fallback: the explicit action if the package remains on the
+    same first frontier.
+12. Expected next frontier: the owner boundary expected after the current edge
+   reduces, is classified, or migrates.
+13. Result classification: one of pending-before-probe, representative-green,
+   reduced, same-frontier, migrated, classification-only, architecture-gap, or
+   contradictory.
+14. Stop condition: one of continue-local-fix, bounded-non-frontier,
+   migrate-owner-boundary, classification-only-stop, architecture-gap-stop,
+   representative-green, or human-escalation.
+
+The sprint current-blocker handoff must surface the current package's ledger.
+Retryable or backpressure first frontiers cannot be classified as bounded or
+non-frontier with prose alone. The package must name the focused probe command,
+proof artifact path, observable transition, maximum progress bound, and
+same-frontier fallback.
+If repeated packages cross the same owner boundary without proving the missing
+causal edge, the next package must escalate to causal analysis or classify the
+architecture gap instead of adding another local patch.
+
 ### 0.1.9 Roadmap And Work-Tracker Truth Reconciliation
 
 Roadmap status must not outrun current representative evidence.

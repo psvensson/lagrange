@@ -250,6 +250,27 @@ Every active package should start with a machine-readable metadata comment:
     "causalDebt": "residual causal debt tracked outside local closure",
     "crossBoundaryReview": "due/not-due/required-before-next-runtime-package"
   },
+  "scenarioCausalClosure": {
+    "referenceScenarioOrProbe": "named scenario or focused blocker probe",
+    "phaseChain": [
+      "phase one",
+      "phase two"
+    ],
+    "currentFirstFrontier": "current owner / boundary / reason",
+    "knownDownstreamBlockers": [
+      "blocked downstream owner or phase"
+    ],
+    "missingCausalEdge": "unproven handoff, wake, retry, or visibility edge",
+    "missingCausalEdgeProbe": "npm test -- path/to/focused-probe.test.js",
+    "boundedProgressProof": "focused proof of wake/retry/timeout/reconcile/drain progress",
+    "boundedProgressProofArtifact": "path/to/focused-probe.test.js",
+    "expectedObservableTransition": "before state -> after state or named classification",
+    "maxProgressBound": "maximum retry/timer/dispatch bound before fallback",
+    "sameFrontierFallback": "named same-frontier action if the probe does not move",
+    "expectedNextFrontier": "expected next owner boundary after this package",
+    "resultClassification": "pending-before-probe",
+    "stopCondition": "continue-local-fix"
+  },
   "predecessor": "work/packages/done-predecessor.md"
 }
 -->
@@ -282,6 +303,12 @@ Every work package should answer:
    - what the current dominant blocker is
    - what probe or scenario will confirm the next-order blocker after each fix
    - where blocker migration will be recorded if the failure moves
+   - how the current blocker fits the whole scenario phase chain
+   - which downstream blockers are known but not first frontier
+   - which missing causal edge still needs a focused probe
+   - which probe command and artifact path prove the missing causal edge
+   - what observable transition, maximum progress bound, and same-frontier
+     fallback govern retryable or backpressure states
 12. If the package touches lifecycle, readiness, admission, recovery, or
     convergence behavior:
    - what the shared progress grammar is
@@ -325,8 +352,9 @@ Required fields:
 3. `expectedCausalModelChange`: the predicted edge/class change that makes the
    runtime patch meaningful.
 4. `representativeOutcome`: exactly one of `pending-before-rerun`,
-   `representative-green`, `reduced`, `same-frontier`, `migrated`, or
-   `contradictory`. Closed packages must not leave it pending.
+   `representative-green`, `reduced`, `same-frontier`, `migrated`,
+   `classification-only`, `architecture-gap`, or `contradictory`. Closed
+   packages must not leave it pending.
 5. `causalDebt`: residual causal work tracked separately from local closure.
 6. `crossBoundaryReview`: whether a periodic cross-boundary review is due now,
    not due, or required before the next runtime package.
@@ -338,6 +366,52 @@ or classify the result as same-frontier or contradictory and stop broadening.
 Use cross-boundary reviews after every two to three scenario-driven packages, or
 immediately when a blocker crosses owner boundaries such as active-gate,
 publication ACK convergence, operation workflow, and rebalancer ownership.
+
+## Scenario Causal Closure Gate
+
+Scenario-driven active packages must also carry metadata
+`scenarioCausalClosure`. First-frontier migration is not enough: the package
+must preserve whole-scenario causal understanding so successor work does not
+forget the phase chain or known downstream blockers.
+
+Required fields:
+
+1. `referenceScenarioOrProbe`: the named scenario or focused blocker probe.
+2. `phaseChain`: a non-empty ordered array of scenario phases already known.
+3. `currentFirstFrontier`: the current owner, boundary, and reason at the first
+   frontier.
+4. `knownDownstreamBlockers`: a non-empty array of blockers known to be
+   downstream rather than first frontier.
+5. `missingCausalEdge`: the unproven causal edge that prevents closure.
+6. `missingCausalEdgeProbe`: the focused command that proves or disproves the
+   missing edge.
+7. `boundedProgressProof`: the focused proof for retryable or backpressure
+   states. It must name a concrete mechanism such as wake, retry, timeout,
+   reconcile, drain, dispatch, delivery, timer, advance, or bounded progress.
+8. `boundedProgressProofArtifact`: the path to the proof artifact, focused
+   test, report, or diagnostic output that carries the bounded-progress proof.
+9. `expectedObservableTransition`: the before/after transition expected in the
+   focused probe or report.
+10. `maxProgressBound`: the maximum retry, timeout, dispatch, timer, or
+    owner-cycle bound before the package must stop and classify the result.
+11. `sameFrontierFallback`: the explicit same-frontier action when the probe
+    does not reduce or migrate the boundary.
+12. `expectedNextFrontier`: the owner boundary expected after this package
+   reduces, classifies, or migrates the current edge.
+13. `resultClassification`: one of `pending-before-probe`,
+   `representative-green`, `reduced`, `same-frontier`, `migrated`,
+   `classification-only`, `architecture-gap`, or `contradictory`.
+14. `stopCondition`: one of `continue-local-fix`, `bounded-non-frontier`,
+   `migrate-owner-boundary`, `classification-only-stop`,
+   `architecture-gap-stop`, `representative-green`, or `human-escalation`.
+
+Representative reruns can confirm a causal edge, but they do not replace the
+focused probe for a missing wake, retry, timeout, reconcile, drain, dispatch,
+delivery, timer, advance, or bounded-progress mechanism.
+Retryable or backpressure first frontiers cannot be classified as bounded or
+non-frontier with prose alone: the package must name the probe command, proof
+artifact path, observable transition, maximum progress bound, and
+same-frontier fallback.
 
 ## Model Fit
 

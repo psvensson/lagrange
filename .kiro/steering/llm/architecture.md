@@ -128,16 +128,16 @@ Domains: architecture
 118. [ARCH-0118] Pressure must not become hidden drops, memory growth without bounds, or correctness failures.
 119. [ARCH-0119] Never let degraded evidence promote a blocked entity to ready or admitted.
 120. [ARCH-0120] Broad ideas must not go straight into code.
-121. [ARCH-0121] Do not treat a package as complete when only the hot path is fixed. A package is complete only when the hot path, tail consumers, diagnostics or reporting, deletion work, and required proof are all closed.
-122. [ARCH-0122] Use the model ledger as an advisory feedback loop for future model and reasoning-effort choice when a package produces useful evidence. It must not replace validation, review, sequencing, or closure proof.
-123. [ARCH-0123] Any given runtime function or semantic concern MUST have one active code path once policy has been normalized.
-124. [ARCH-0124] Boundary normalization happens once at ingress. Runtime logic must consume the normalized state rather than reopening raw storage or transport shapes. at a time.
-125. [ARCH-0125] Initial creation must write the full canonical row shape.
-126. [ARCH-0126] Later lifecycle changes must use partial updates only.
-127. [ARCH-0127] When cache evidence is insufficient, readers MUST consume the owner outcome directly as fresh, stale-but-usable, deferred-refresh, or failed instead of reopening broad repair locally.
-128. [ARCH-0128] Background or deferred repair MUST be scheduled through the owner-held reconcile path rather than through reader-local retry loops.
-129. [ARCH-0129] Forced repair, when a boundary explicitly allows it, MUST still route through the same owner and bounded budget rather than bypassing it with a second repair path.
-130. [ARCH-0130] one declared list of forbidden reinterpretations
+121. [ARCH-0121] Any given runtime function or semantic concern MUST have one active code path once policy has been normalized.
+122. [ARCH-0122] Boundary normalization happens once at ingress. Runtime logic must consume the normalized state rather than reopening raw storage or transport shapes. at a time.
+123. [ARCH-0123] Do not treat a package as complete when only the hot path is fixed. A package is complete only when the hot path, tail consumers, diagnostics or reporting, deletion work, and required proof are all closed.
+124. [ARCH-0124] Use the model ledger as an advisory feedback loop for future model and reasoning-effort choice when a package produces useful evidence. It must not replace validation, review, sequencing, or closure proof.
+125. [ARCH-0125] one declared list of forbidden reinterpretations
+126. [ARCH-0126] Initial creation must write the full canonical row shape.
+127. [ARCH-0127] Later lifecycle changes must use partial updates only.
+128. [ARCH-0128] When cache evidence is insufficient, readers MUST consume the owner outcome directly as fresh, stale-but-usable, deferred-refresh, or failed instead of reopening broad repair locally.
+129. [ARCH-0129] Background or deferred repair MUST be scheduled through the owner-held reconcile path rather than through reader-local retry loops.
+130. [ARCH-0130] Forced repair, when a boundary explicitly allows it, MUST still route through the same owner and bounded budget rather than bypassing it with a second repair path.
 131. [ARCH-0131] Any "is active" predicate must gate on the canonical active status set.
 132. [ARCH-0132] Any sweep that expires entries must skip canonical terminal statuses.
 133. [ARCH-0133] Evaluate canonical admission owner (storageAdmissionService) per candidate until the required minimum cohort is satisfiable.

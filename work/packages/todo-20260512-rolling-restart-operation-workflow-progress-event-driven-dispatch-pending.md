@@ -50,6 +50,29 @@
     "causalDebt": "Rolling-restart remains red on workflow-progress event-driven dispatch-pending priority recovery for control_plane_publications-p1 and sql_transaction_participants-p1.",
     "crossBoundaryReview": "required-before-implementation; review the rebalancer-handoff retry-scheduled V2 predecessor before runtime changes."
   },
+  "scenarioCausalClosure": {
+    "referenceScenarioOrProbe": "rolling-restart workflow-progress event-driven dispatch-pending probe",
+    "phaseChain": [
+      "publication convergence",
+      "operation workflow dispatch and retry",
+      "startup active-gate presentation"
+    ],
+    "currentFirstFrontier": "operation_workflow_owner / workflow_progress / priority_recovery_event_driven_wait on control_plane_publications-p1 and sql_transaction_participants-p1",
+    "knownDownstreamBlockers": [
+      "startup_active_gate_owner snapshot coverage remains downstream at 2/5",
+      "publication_missing_active_node is presentation evidence while publication_ack_convergence remains satisfied"
+    ],
+    "missingCausalEdge": "workflow-progress dispatch-pending retry wake must be proven before downstream active-gate closure is pursued",
+    "missingCausalEdgeProbe": "npm test -- test/rebalancer/operation-workflow-progress-event-driven-reentry.test.js test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js",
+    "boundedProgressProof": "Focused owner tests must prove dispatch-pending wake, retry, timeout, and dispatch advance through bounded owner progress rather than prose-only classification.",
+    "boundedProgressProofArtifact": "test/rebalancer/operation-workflow-progress-event-driven-reentry.test.js; test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js",
+    "expectedObservableTransition": "Before: control_plane_publications-p1 and sql_transaction_participants-p1 stay dispatch-pending workflow_progress; after: they advance through retry/timeout dispatch or are classified bounded non-frontier with named evidence.",
+    "maxProgressBound": "one owner wake/retry/timeout dispatch cycle per blocked partition before same-frontier fallback",
+    "sameFrontierFallback": "keep operation_workflow_owner / workflow_progress active and do not pursue startup active-gate closure",
+    "expectedNextFrontier": "workflow_progress reduces, becomes bounded non-frontier, or migrates to a named downstream owner boundary",
+    "resultClassification": "pending-before-probe",
+    "stopCondition": "continue-local-fix"
+  },
   "predecessor": "work/packages/done-20260511-rolling-restart-operation-workflow-rebalancer-handoff-retry-scheduled-v2.md"
 }
 -->
@@ -66,6 +89,14 @@ frontier. The dominant evidence is event-driven dispatch-pending progress on
 
 Roadmap Phase `0.1 - Internal Coherence`: topology workflow stabilization,
 failure simulations, and production guarantees in the Community / AGPL repo.
+
+## Scenario Causal Closure Handoff
+
+- Focused missing edge probe: `npm test -- test/rebalancer/operation-workflow-progress-event-driven-reentry.test.js test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js`
+- Proof artifact expectation: `test/rebalancer/operation-workflow-progress-event-driven-reentry.test.js`; `test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js`
+- Observable transition: before, `control_plane_publications-p1` and `sql_transaction_participants-p1` stay dispatch-pending in `workflow_progress`; after, they advance through retry/timeout dispatch or are classified bounded non-frontier with named evidence.
+- Max progress bound: one owner wake/retry/timeout dispatch cycle per blocked partition before same-frontier fallback.
+- Same-frontier fallback: keep `operation_workflow_owner / workflow_progress` active and do not pursue startup active-gate closure.
 
 ## In Scope
 

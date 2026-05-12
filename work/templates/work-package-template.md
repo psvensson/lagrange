@@ -38,6 +38,27 @@
     "causalDebt": "State residual causal debt separately from local package closure, or explain why none remains.",
     "crossBoundaryReview": "State whether a cross-boundary review is due now, not due, or required before the next runtime package."
   },
+  "scenarioCausalClosure": {
+    "referenceScenarioOrProbe": "named scenario or focused blocker probe",
+    "phaseChain": [
+      "phase one",
+      "phase two"
+    ],
+    "currentFirstFrontier": "current owner / boundary / reason",
+    "knownDownstreamBlockers": [
+      "blocked downstream owner or phase"
+    ],
+    "missingCausalEdge": "unproven handoff, wake, retry, or visibility edge",
+    "missingCausalEdgeProbe": "npm test -- path/to/focused-probe.test.js",
+    "boundedProgressProof": "focused proof of wake/retry/timeout/reconcile/drain progress",
+    "boundedProgressProofArtifact": "path/to/focused-probe.test.js",
+    "expectedObservableTransition": "before state -> after state or named classification",
+    "maxProgressBound": "maximum retry/timer/dispatch bound before fallback",
+    "sameFrontierFallback": "named same-frontier action if the probe does not move",
+    "expectedNextFrontier": "expected next owner boundary after this package",
+    "resultClassification": "pending-before-probe",
+    "stopCondition": "continue-local-fix"
+  },
   "predecessor": "work/packages/done-predecessor.md"
 }
 -->
@@ -113,10 +134,43 @@ it is tied to a predicted causal-model change rather than a local symptom.
   reduced evidence, named migration, or contradiction.
 - Representative outcome: one of `pending-before-rerun`,
   `representative-green`, `reduced`, `same-frontier`, `migrated`, or
-  `contradictory`.
+  `classification-only`, `architecture-gap`, or `contradictory`.
 - Causal debt: residual causal work tracked separately from package closure.
 - Cross-boundary review: due/not-due/required-before-next-runtime-package, with
   the owner boundaries named.
+
+## Scenario Causal Closure
+
+Required for scenario-driven active packages. First-frontier migration does not
+close the scenario unless the whole causal chain remains recorded.
+Retryable or backpressure frontiers cannot be classified as bounded or
+non-frontier with prose alone.
+
+- Reference scenario/probe:
+- Phase chain:
+- Current first frontier:
+- Known downstream blockers:
+- Missing causal edge:
+- Missing causal edge probe:
+  name the focused command that proves or disproves the missing edge.
+- Bounded progress proof:
+  name the focused wake/retry/timeout/reconcile/drain/dispatch/delivery/timer/
+  advance/bounded mechanism.
+- Bounded progress proof artifact:
+  name the focused test, report, diagnostic output, or artifact path.
+- Expected observable transition:
+  name the before/after state change or classification.
+- Max progress bound:
+  name the maximum retry/timer/dispatch/owner-cycle bound before fallback.
+- Same-frontier fallback:
+  name the fallback action if the boundary does not reduce or migrate.
+- Expected next frontier:
+- Result classification: one of `pending-before-probe`,
+  `representative-green`, `reduced`, `same-frontier`, `migrated`,
+  `classification-only`, `architecture-gap`, or `contradictory`.
+- Stop condition: one of `continue-local-fix`, `bounded-non-frontier`,
+  `migrate-owner-boundary`, `classification-only-stop`,
+  `architecture-gap-stop`, `representative-green`, or `human-escalation`.
 
 ## Static Drift Ledger
 

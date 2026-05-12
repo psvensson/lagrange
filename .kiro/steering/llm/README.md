@@ -24,7 +24,7 @@ Recommended load strategy:
 | --- | ---: | ---: |
 | core | 48 | 1678 |
 | architecture | 140 | 4881 |
-| testing | 120 | 4370 |
+| testing | 120 | 4526 |
 | style | 21 | 489 |
 | governance | 41 | 1567 |
 

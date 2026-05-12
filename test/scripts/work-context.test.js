@@ -194,6 +194,33 @@ const TEST_BLOCKER = Object.freeze({
     causalDebt: 'none for this synthetic package',
     crossBoundaryReview: 'not due',
   },
+  scenarioCausalClosure: {
+    referenceScenarioOrProbe: 'rolling-restart focused blocker probe',
+    phaseChain: [
+      'startup',
+      'operation workflow dispatch',
+      'active gate',
+    ],
+    currentFirstFrontier:
+      'operation_workflow_owner / workflow_progress / retryable',
+    knownDownstreamBlockers: [
+      'startup_active_gate_owner / snapshot_coverage',
+    ],
+    missingCausalEdge: 'dispatch wake proof',
+    missingCausalEdgeProbe:
+      'npm test -- test/rebalancer/operation-workflow-progress-event-driven-reentry.test.js',
+    boundedProgressProof: 'wake and retry proof must be bounded',
+    boundedProgressProofArtifact:
+      'test/rebalancer/operation-workflow-progress-event-driven-reentry.test.js',
+    expectedObservableTransition:
+      'dispatch-pending workflow progress advances to retry-scheduled proof',
+    maxProgressBound: 'one owner wake retry timeout dispatch cycle',
+    sameFrontierFallback:
+      'keep operation_workflow_owner / workflow_progress as first frontier',
+    expectedNextFrontier: 'startup_active_gate_owner / snapshot_coverage',
+    resultClassification: 'pending-before-probe',
+    stopCondition: 'continue-local-fix',
+  },
   predecessor: TEST_PREDECESSOR_PATH,
 });
 const COMPACT_PACK_README_PATH = '.kiro/steering/llm/README.md';
@@ -230,6 +257,7 @@ const SECTION_FIRST_FILES = '## First Files To Read';
 const SECTION_SUBAGENT_SEQUENCING = '## Subagent Sequencing';
 const SECTION_MODEL_FIT = '## Model Fit';
 const SECTION_CAUSAL_GOVERNANCE = '## Causal Governance';
+const SECTION_SCENARIO_CAUSAL_CLOSURE = '## Scenario Causal Closure';
 const DIRTY_SCOPE_TITLE = '# Worktree Package Scope';
 const PACKAGE_STATUS_LINE = ' M ' + TEST_BOOTSTRAP_SOURCE_PATH;
 const TRACKER_STATUS_LINE = ' M work/sprints/current-blocker.json';
@@ -288,12 +316,39 @@ test('work context advertises triage commands before raw artifact reads',
     t.ok(rendered.includes(SECTION_SUBAGENT_SEQUENCING));
     t.ok(rendered.includes(SECTION_MODEL_FIT));
     t.ok(rendered.includes(SECTION_CAUSAL_GOVERNANCE));
+    t.ok(rendered.includes(SECTION_SCENARIO_CAUSAL_CLOSURE));
     t.ok(rendered.includes('Package class: bounded-implementation'));
     t.ok(rendered.includes('Intended minimum model: gpt-5.3-codex-spark'));
     t.ok(rendered.includes('Scope shape: leaf-slice'));
     t.ok(rendered.includes('Escalation triggers: package scope expands'));
     t.ok(rendered.includes('Causal hypothesis: Causal edge should reduce.'));
     t.ok(rendered.includes('Representative outcome: pending-before-rerun'));
+    t.ok(rendered.includes(
+      'Reference scenario/probe: rolling-restart focused blocker probe',
+    ));
+    t.ok(rendered.includes(
+      'Known downstream blockers: startup_active_gate_owner / snapshot_coverage',
+    ));
+    t.ok(rendered.includes(
+      'Missing causal edge probe: npm test -- test/rebalancer/' +
+        'operation-workflow-progress-event-driven-reentry.test.js',
+    ));
+    t.ok(rendered.includes(
+      'Bounded progress proof artifact: test/rebalancer/' +
+        'operation-workflow-progress-event-driven-reentry.test.js',
+    ));
+    t.ok(rendered.includes(
+      'Expected observable transition: dispatch-pending workflow progress ' +
+        'advances to retry-scheduled proof',
+    ));
+    t.ok(rendered.includes(
+      'Max progress bound: one owner wake retry timeout dispatch cycle',
+    ));
+    t.ok(rendered.includes(
+      'Same-frontier fallback: keep operation_workflow_owner / ' +
+        'workflow_progress as first frontier',
+    ));
+    t.ok(rendered.includes('Stop condition: continue-local-fix'));
     t.ok(rendered.includes('Next required subagent role: review'));
     t.ok(
       rendered.indexOf(SECTION_USEFUL_COMMANDS) <

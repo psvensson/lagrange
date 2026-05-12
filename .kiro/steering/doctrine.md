@@ -196,6 +196,32 @@ A causal model must name:
 Runtime packages that follow such a model should cite it as their scope basis
 and proof surface. Otherwise the sprint is still patching symptoms.
 
+Scenario-driven sprints and packages must maintain scenario causal closure
+across the whole chain, not only the current first frontier. Each package must
+keep enough evidence for a new agent to understand:
+
+- the full phase chain from the scenario/probe through the current first
+  frontier
+- which blockers are known downstream and why they are not first frontier yet
+- the missing causal edge that still needs proof
+- the focused probe command and artifact path that prove the missing edge
+- the bounded-progress mechanism for retryable or backpressure states,
+  including wake, retry, timeout, reconcile, drain, dispatch, delivery, timer,
+  advance, or bounded progress
+- the expected observable transition, maximum progress bound, and
+  same-frontier fallback for retryable or backpressure states
+- when repeated crossings of the same boundary require escalation to causal
+  analysis or architecture work
+- whether the result is a runtime fix, a classification-only closure, an
+  architecture gap, a migration, or a contradiction
+
+Classification-only is a valid result only when the causal chain is still
+explicit, the focused probe command and artifact are named, the
+bounded-progress proof has an observable transition and bound, and the stop
+condition says why no local runtime patch should continue in that package.
+Retryable or backpressure first frontiers cannot become bounded non-frontiers
+through prose-only proof.
+
 ## 10. Normalize Evidence Before Adjudicating Decisions
 
 When one decision depends on several live signals, separate observation from

@@ -1,11 +1,14 @@
 import {describe, it} from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  buildCurrentBlockerPayload,
   buildPackageDoctorLines,
   isGeneratedCurrentBlockerPath,
+  renderCurrentBlockerMarkdown,
   validateCausalGovernanceContract,
   validateCommitAndPushLedger,
   validateModelFitContract,
+  validateScenarioCausalClosureContract,
   validateSubagentSequencingLedger,
 } from '../../scripts/work-tracker.js';
 
@@ -37,6 +40,64 @@ const CAUSAL_GOVERNANCE_VALID_METADATA = Object.freeze({
     representativeOutcome: 'pending-before-rerun',
     causalDebt: 'residual causal debt tracked in successor package',
     crossBoundaryReview: 'not-due until the next two package closures',
+  }),
+});
+const SCENARIO_CAUSAL_CLOSURE_VALID_METADATA = Object.freeze({
+  status: WORK_TRACKER_ACTIVE_STATUS,
+  scenario: 'rolling-restart',
+  scenarioCausalClosure: Object.freeze({
+    referenceScenarioOrProbe: 'rolling-restart priority recovery blocker probe',
+    phaseChain: Object.freeze([
+      'publication convergence',
+      'operation workflow dispatch',
+      'startup active-gate presentation',
+    ]),
+    currentFirstFrontier:
+      'operation_workflow_owner / workflow_progress retryable frontier',
+    knownDownstreamBlockers: Object.freeze([
+      'startup_active_gate_owner snapshot coverage remains downstream',
+    ]),
+    missingCausalEdge:
+      'dispatch-pending retry wake must be proven before downstream closure',
+    missingCausalEdgeProbe:
+      'npm test -- test/rebalancer/operation-workflow-progress-event-driven-reentry.test.js',
+    boundedProgressProof:
+      'Focused probe proves dispatch wake retry timeout advances through a bounded timer.',
+    boundedProgressProofArtifact:
+      'test/rebalancer/operation-workflow-progress-event-driven-reentry.test.js',
+    expectedObservableTransition:
+      'dispatch-pending workflow progress advances to retry-scheduled proof',
+    maxProgressBound: 'one owner wake retry timeout dispatch cycle',
+    sameFrontierFallback:
+      'keep operation_workflow_owner / workflow_progress as the active frontier',
+    expectedNextFrontier:
+      'priority_recovery_partition_progress reduces or migrates to a named owner',
+    resultClassification: 'classification-only',
+    stopCondition: 'classification-only-stop',
+  }),
+});
+const SCENARIO_CAUSAL_CLOSURE_MISSING_METADATA = Object.freeze({
+  status: WORK_TRACKER_ACTIVE_STATUS,
+  scenario: 'rolling-restart',
+});
+const SCENARIO_CAUSAL_CLOSURE_INVALID_METADATA = Object.freeze({
+  status: WORK_TRACKER_ACTIVE_STATUS,
+  scenario: 'rolling-restart',
+  scenarioCausalClosure: Object.freeze({
+    referenceScenarioOrProbe: '<scenario>',
+    phaseChain: Object.freeze([]),
+    currentFirstFrontier: 'todo',
+    knownDownstreamBlockers: Object.freeze(['unknown']),
+    missingCausalEdge: 'pending-before-implementation-resumes',
+    missingCausalEdgeProbe: 'dispatch pending probe',
+    boundedProgressProof: 'Focused proof exists.',
+    boundedProgressProofArtifact: 'proof exists',
+    expectedObservableTransition: 'todo',
+    maxProgressBound: 'unknown',
+    sameFrontierFallback: '<fallback>',
+    expectedNextFrontier: 'n/a',
+    resultClassification: 'surprise',
+    stopCondition: 'later',
   }),
 });
 const CAUSAL_GOVERNANCE_MISSING_METADATA = Object.freeze({
@@ -508,6 +569,30 @@ describe('work tracker package doctor', () => {
     assert.match(rendered, /Owner: workflow_tooling_owner/u);
     assert.match(rendered, /Validation: ok/u);
   });
+
+  it('surfaces scenario causal closure metadata in package doctor output', () => {
+    const scenarioDoctorContent = WORK_TRACKER_DOCTOR_CONTENT.replace(
+      '"scenario": "none"',
+      '"scenario": "rolling-restart"',
+    ).replace(
+      '"modelFit": {',
+      '"causalGovernance": ' +
+        JSON.stringify(CAUSAL_GOVERNANCE_VALID_METADATA.causalGovernance) +
+        ',\n    "scenarioCausalClosure": ' +
+        JSON.stringify(
+          SCENARIO_CAUSAL_CLOSURE_VALID_METADATA.scenarioCausalClosure,
+        ) +
+        ',\n    "modelFit": {',
+    );
+    const report = buildPackageDoctorLines(
+      WORK_TRACKER_ACTIVE_DOCTOR_FILE,
+      scenarioDoctorContent,
+    );
+    const rendered = report.lines.join('\n');
+
+    assert.deepEqual(report.errors, []);
+    assert.match(rendered, /Scenario causal closure: recorded/u);
+  });
 });
 
 describe('work tracker commit and push ledger validation', () => {
@@ -627,5 +712,84 @@ describe('work tracker causal governance validation', () => {
       assert.match(errors.join('\n'), /causalDebt/u);
       assert.match(errors.join('\n'), /closed packages must classify/u);
       assert.match(errors.join('\n'), /analyze:causal-model/u);
+    });
+});
+
+describe('work tracker scenario causal closure validation', () => {
+  it('requires scenario causal closure on active scenario-driven packages', () => {
+    const errors = validateScenarioCausalClosureContract(
+      SCENARIO_CAUSAL_CLOSURE_MISSING_METADATA,
+      WORK_TRACKER_LEDGER_TEST_FILE,
+      {requiresLedger: true, status: WORK_TRACKER_ACTIVE_STATUS},
+    );
+
+    assert.equal(errors.length, 1);
+    assert.match(errors[0], /metadata scenarioCausalClosure is required/u);
+  });
+
+  it('accepts concrete scenario causal closure metadata', () => {
+    const errors = validateScenarioCausalClosureContract(
+      SCENARIO_CAUSAL_CLOSURE_VALID_METADATA,
+      WORK_TRACKER_LEDGER_TEST_FILE,
+      {requiresLedger: true, status: WORK_TRACKER_ACTIVE_STATUS},
+    );
+
+    assert.deepEqual(errors, []);
+  });
+
+  it('rejects placeholders, empty arrays, invalid classifications, and missing progress proof',
+    () => {
+      const errors = validateScenarioCausalClosureContract(
+        SCENARIO_CAUSAL_CLOSURE_INVALID_METADATA,
+        WORK_TRACKER_LEDGER_TEST_FILE,
+        {requiresLedger: true, status: WORK_TRACKER_ACTIVE_STATUS},
+      );
+      const rendered = errors.join('\n');
+
+      assert.match(rendered, /referenceScenarioOrProbe/u);
+      assert.match(rendered, /phaseChain must be a non-empty array/u);
+      assert.match(rendered, /knownDownstreamBlockers\[0\]/u);
+      assert.match(rendered, /currentFirstFrontier/u);
+      assert.match(rendered, /missingCausalEdge/u);
+      assert.match(rendered, /missingCausalEdgeProbe must name a focused command/u);
+      assert.match(rendered, /expectedNextFrontier/u);
+      assert.match(rendered, /boundedProgressProofArtifact/u);
+      assert.match(rendered, /expectedObservableTransition/u);
+      assert.match(rendered, /maxProgressBound/u);
+      assert.match(rendered, /sameFrontierFallback/u);
+      assert.match(rendered, /resultClassification must be one of/u);
+      assert.match(rendered, /stopCondition must be one of/u);
+      assert.match(rendered, /boundedProgressProof must mention/u);
+    });
+
+  it('includes scenario causal closure in current-blocker payload and markdown',
+    () => {
+      const metadata = {
+        ...SCENARIO_CAUSAL_CLOSURE_VALID_METADATA,
+        schema: 'work-package-v1',
+        owner: 'workflow_tooling_owner',
+        boundary: 'scenario_causal_closure',
+        nextAction: 'Keep causal closure visible in handoff.',
+      };
+      const payload = buildCurrentBlockerPayload(
+        'work/sprints/active-test.md',
+        WORK_TRACKER_LEDGER_TEST_FILE,
+        metadata,
+      );
+      const rendered = renderCurrentBlockerMarkdown(payload);
+
+      assert.equal(
+        payload.scenarioCausalClosure.resultClassification,
+        'classification-only',
+      );
+      assert.match(rendered, /## Scenario Causal Closure/u);
+      assert.match(rendered, /Reference scenario\/probe/u);
+      assert.match(rendered, /startup_active_gate_owner snapshot coverage/u);
+      assert.match(rendered, /Missing causal edge probe/u);
+      assert.match(rendered, /Bounded progress proof artifact/u);
+      assert.match(rendered, /Expected observable transition/u);
+      assert.match(rendered, /Max progress bound/u);
+      assert.match(rendered, /Same-frontier fallback/u);
+      assert.match(rendered, /classification-only-stop/u);
     });
 });

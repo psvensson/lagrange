@@ -168,13 +168,28 @@ Required workflow:
     produce the validation handoff block before writing manual analysis.
 13. A representative rerun should not be the next debugging step while the
     current owner-decision fixture or narrow blocker probe is missing.
-14. When repeated scenario runs keep failing after local fixes or
+14. Retryable or backpressure states require focused probes that prove the
+    concrete progress mechanism: wake, retry, timeout, reconcile, drain,
+    dispatch, delivery, timer, advance, or bounded progress. A representative
+    rerun may confirm that proof, but it must not replace the missing
+    causal-edge probe.
+15. When a package classifies a retryable or backpressure state as bounded
+    rather than fixing runtime code, the validation must prove why the state is
+    not the first frontier, which downstream blockers remain, and which stop
+    condition prevents another local patch.
+    That classification cannot rest on prose alone: it must name the focused
+    probe command, proof artifact path, expected observable transition, maximum
+    progress bound, and same-frontier fallback.
+16. Repeated crossings of the same owner boundary must escalate to a causal
+    analysis package or architecture-gap classification unless the package
+    includes a focused probe for the missing causal edge.
+17. When repeated scenario runs keep failing after local fixes or
     classification-only reductions, the next validation package must establish a
     causal-analysis boundary before more runtime fixes. At minimum it must
     validate the end-to-end phase model, cross-entity causal graph,
     budget/timeout accounting, invariant review, failure-class taxonomy, and
     architecture-level stop conditions.
-15. A runtime fix that follows causal-analysis escalation must cite the causal
+18. A runtime fix that follows causal-analysis escalation must cite the causal
     model or artifact it uses, then prove that its local regression changes the
     relevant causal edge rather than only improving the immediate symptom.
 

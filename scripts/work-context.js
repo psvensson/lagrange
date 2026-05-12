@@ -107,6 +107,7 @@ const SECTION_PROOF_LADDER = 'Proof Ladder';
 const SECTION_SUBAGENT_SEQUENCING = 'Subagent Sequencing';
 const SECTION_MODEL_FIT = 'Model Fit';
 const SECTION_CAUSAL_GOVERNANCE = 'Causal Governance';
+const SECTION_SCENARIO_CAUSAL_CLOSURE = 'Scenario Causal Closure';
 const SECTION_OPEN_CHECKLIST = 'Open Package Checklist';
 const SECTION_OUT_OF_SCOPE = 'Out Of Scope';
 const SECTION_USEFUL_COMMANDS = 'Useful Commands';
@@ -188,6 +189,20 @@ const FIELD_LABELS = Object.freeze({
   SUBAGENT_ROLE: 'Next required subagent role',
   SUBAGENT_STATUS: 'Subagent sequencing status',
   REPRESENTATIVE_OUTCOME: 'Representative outcome',
+  REFERENCE_SCENARIO_OR_PROBE: 'Reference scenario/probe',
+  PHASE_CHAIN: 'Phase chain',
+  CURRENT_FIRST_FRONTIER: 'Current first frontier',
+  KNOWN_DOWNSTREAM_BLOCKERS: 'Known downstream blockers',
+  MISSING_CAUSAL_EDGE: 'Missing causal edge',
+  MISSING_CAUSAL_EDGE_PROBE: 'Missing causal edge probe',
+  BOUNDED_PROGRESS_PROOF: 'Bounded progress proof',
+  BOUNDED_PROGRESS_PROOF_ARTIFACT: 'Bounded progress proof artifact',
+  EXPECTED_OBSERVABLE_TRANSITION: 'Expected observable transition',
+  MAX_PROGRESS_BOUND: 'Max progress bound',
+  SAME_FRONTIER_FALLBACK: 'Same-frontier fallback',
+  EXPECTED_NEXT_FRONTIER: 'Expected next frontier',
+  RESULT_CLASSIFICATION: 'Result classification',
+  STOP_CONDITION: 'Stop condition',
 });
 const GIT_GROUP_LABELS = Object.freeze({
   [GIT_GROUP_PACKAGE_OWNED]: 'Package-owned dirty entries',
@@ -234,6 +249,7 @@ const METADATA_FIELD_TOUCHED_FILES = 'touchedFiles';
 const METADATA_FIELD_PREDECESSOR = 'predecessor';
 const METADATA_FIELD_MODEL_FIT = 'modelFit';
 const METADATA_FIELD_CAUSAL_GOVERNANCE = 'causalGovernance';
+const METADATA_FIELD_SCENARIO_CAUSAL_CLOSURE = 'scenarioCausalClosure';
 const MODEL_FIT_FIELD_PACKAGE_CLASS = 'packageClass';
 const MODEL_FIT_FIELD_INTENDED_MINIMUM_MODEL = 'intendedMinimumModel';
 const MODEL_FIT_FIELD_SCOPE_SHAPE = 'scopeShape';
@@ -250,6 +266,27 @@ const CAUSAL_GOVERNANCE_FIELD_REPRESENTATIVE_OUTCOME =
   'representativeOutcome';
 const CAUSAL_GOVERNANCE_FIELD_CAUSAL_DEBT = 'causalDebt';
 const CAUSAL_GOVERNANCE_FIELD_CROSS_BOUNDARY_REVIEW = 'crossBoundaryReview';
+const SCENARIO_CAUSAL_CLOSURE_FIELD_REFERENCE = 'referenceScenarioOrProbe';
+const SCENARIO_CAUSAL_CLOSURE_FIELD_PHASE_CHAIN = 'phaseChain';
+const SCENARIO_CAUSAL_CLOSURE_FIELD_CURRENT_FRONTIER = 'currentFirstFrontier';
+const SCENARIO_CAUSAL_CLOSURE_FIELD_DOWNSTREAM_BLOCKERS =
+  'knownDownstreamBlockers';
+const SCENARIO_CAUSAL_CLOSURE_FIELD_MISSING_EDGE = 'missingCausalEdge';
+const SCENARIO_CAUSAL_CLOSURE_FIELD_MISSING_EDGE_PROBE =
+  'missingCausalEdgeProbe';
+const SCENARIO_CAUSAL_CLOSURE_FIELD_BOUNDED_PROOF = 'boundedProgressProof';
+const SCENARIO_CAUSAL_CLOSURE_FIELD_BOUNDED_PROOF_ARTIFACT =
+  'boundedProgressProofArtifact';
+const SCENARIO_CAUSAL_CLOSURE_FIELD_EXPECTED_OBSERVABLE_TRANSITION =
+  'expectedObservableTransition';
+const SCENARIO_CAUSAL_CLOSURE_FIELD_MAX_PROGRESS_BOUND = 'maxProgressBound';
+const SCENARIO_CAUSAL_CLOSURE_FIELD_SAME_FRONTIER_FALLBACK =
+  'sameFrontierFallback';
+const SCENARIO_CAUSAL_CLOSURE_FIELD_EXPECTED_NEXT_FRONTIER =
+  'expectedNextFrontier';
+const SCENARIO_CAUSAL_CLOSURE_FIELD_RESULT_CLASSIFICATION =
+  'resultClassification';
+const SCENARIO_CAUSAL_CLOSURE_FIELD_STOP_CONDITION = 'stopCondition';
 
 function appendSection(lines, title) {
   lines.push(EMPTY_STRING, `${SECTION_HEADING_PREFIX}${title}`);
@@ -374,6 +411,7 @@ async function buildCurrentBlockerFromPackage(packagePath) {
       touchedFiles: metadataList(metadata, METADATA_FIELD_TOUCHED_FILES),
       modelFit: metadataModelFit(metadata),
       causalGovernance: metadataCausalGovernance(metadata),
+      scenarioCausalClosure: metadataScenarioCausalClosure(metadata),
       predecessor: metadataText(metadata, METADATA_FIELD_PREDECESSOR),
     },
     packageContent: content,
@@ -436,6 +474,85 @@ function metadataCausalGovernance(metadata) {
       metadataText(
         causalGovernance,
         CAUSAL_GOVERNANCE_FIELD_CROSS_BOUNDARY_REVIEW,
+      ),
+  };
+}
+
+function metadataScenarioCausalClosure(metadata) {
+  const scenarioCausalClosure = metadataObject(
+    metadata,
+    METADATA_FIELD_SCENARIO_CAUSAL_CLOSURE,
+  );
+  return {
+    [SCENARIO_CAUSAL_CLOSURE_FIELD_REFERENCE]:
+      metadataText(
+        scenarioCausalClosure,
+        SCENARIO_CAUSAL_CLOSURE_FIELD_REFERENCE,
+      ),
+    [SCENARIO_CAUSAL_CLOSURE_FIELD_PHASE_CHAIN]:
+      metadataList(
+        scenarioCausalClosure,
+        SCENARIO_CAUSAL_CLOSURE_FIELD_PHASE_CHAIN,
+      ),
+    [SCENARIO_CAUSAL_CLOSURE_FIELD_CURRENT_FRONTIER]:
+      metadataText(
+        scenarioCausalClosure,
+        SCENARIO_CAUSAL_CLOSURE_FIELD_CURRENT_FRONTIER,
+      ),
+    [SCENARIO_CAUSAL_CLOSURE_FIELD_DOWNSTREAM_BLOCKERS]:
+      metadataList(
+        scenarioCausalClosure,
+        SCENARIO_CAUSAL_CLOSURE_FIELD_DOWNSTREAM_BLOCKERS,
+      ),
+    [SCENARIO_CAUSAL_CLOSURE_FIELD_MISSING_EDGE]:
+      metadataText(
+        scenarioCausalClosure,
+        SCENARIO_CAUSAL_CLOSURE_FIELD_MISSING_EDGE,
+      ),
+    [SCENARIO_CAUSAL_CLOSURE_FIELD_MISSING_EDGE_PROBE]:
+      metadataText(
+        scenarioCausalClosure,
+        SCENARIO_CAUSAL_CLOSURE_FIELD_MISSING_EDGE_PROBE,
+      ),
+    [SCENARIO_CAUSAL_CLOSURE_FIELD_BOUNDED_PROOF]:
+      metadataText(
+        scenarioCausalClosure,
+        SCENARIO_CAUSAL_CLOSURE_FIELD_BOUNDED_PROOF,
+      ),
+    [SCENARIO_CAUSAL_CLOSURE_FIELD_BOUNDED_PROOF_ARTIFACT]:
+      metadataText(
+        scenarioCausalClosure,
+        SCENARIO_CAUSAL_CLOSURE_FIELD_BOUNDED_PROOF_ARTIFACT,
+      ),
+    [SCENARIO_CAUSAL_CLOSURE_FIELD_EXPECTED_OBSERVABLE_TRANSITION]:
+      metadataText(
+        scenarioCausalClosure,
+        SCENARIO_CAUSAL_CLOSURE_FIELD_EXPECTED_OBSERVABLE_TRANSITION,
+      ),
+    [SCENARIO_CAUSAL_CLOSURE_FIELD_MAX_PROGRESS_BOUND]:
+      metadataText(
+        scenarioCausalClosure,
+        SCENARIO_CAUSAL_CLOSURE_FIELD_MAX_PROGRESS_BOUND,
+      ),
+    [SCENARIO_CAUSAL_CLOSURE_FIELD_SAME_FRONTIER_FALLBACK]:
+      metadataText(
+        scenarioCausalClosure,
+        SCENARIO_CAUSAL_CLOSURE_FIELD_SAME_FRONTIER_FALLBACK,
+      ),
+    [SCENARIO_CAUSAL_CLOSURE_FIELD_EXPECTED_NEXT_FRONTIER]:
+      metadataText(
+        scenarioCausalClosure,
+        SCENARIO_CAUSAL_CLOSURE_FIELD_EXPECTED_NEXT_FRONTIER,
+      ),
+    [SCENARIO_CAUSAL_CLOSURE_FIELD_RESULT_CLASSIFICATION]:
+      metadataText(
+        scenarioCausalClosure,
+        SCENARIO_CAUSAL_CLOSURE_FIELD_RESULT_CLASSIFICATION,
+      ),
+    [SCENARIO_CAUSAL_CLOSURE_FIELD_STOP_CONDITION]:
+      metadataText(
+        scenarioCausalClosure,
+        SCENARIO_CAUSAL_CLOSURE_FIELD_STOP_CONDITION,
       ),
   };
 }
@@ -1235,6 +1352,97 @@ async function buildContextLines(currentBlocker, packageContent) {
     lines,
     FIELD_LABELS.CROSS_BOUNDARY_REVIEW,
     causalGovernance[CAUSAL_GOVERNANCE_FIELD_CROSS_BOUNDARY_REVIEW],
+  );
+
+  appendSection(lines, SECTION_SCENARIO_CAUSAL_CLOSURE);
+  const scenarioCausalClosure = currentBlocker.scenarioCausalClosure || {};
+  appendKeyValue(
+    lines,
+    FIELD_LABELS.REFERENCE_SCENARIO_OR_PROBE,
+    scenarioCausalClosure[SCENARIO_CAUSAL_CLOSURE_FIELD_REFERENCE],
+  );
+  appendKeyValue(
+    lines,
+    FIELD_LABELS.PHASE_CHAIN,
+    normalizeStringList(
+      scenarioCausalClosure[SCENARIO_CAUSAL_CLOSURE_FIELD_PHASE_CHAIN],
+    ).join(', '),
+  );
+  appendKeyValue(
+    lines,
+    FIELD_LABELS.CURRENT_FIRST_FRONTIER,
+    scenarioCausalClosure[SCENARIO_CAUSAL_CLOSURE_FIELD_CURRENT_FRONTIER],
+  );
+  appendKeyValue(
+    lines,
+    FIELD_LABELS.KNOWN_DOWNSTREAM_BLOCKERS,
+    normalizeStringList(
+      scenarioCausalClosure[
+        SCENARIO_CAUSAL_CLOSURE_FIELD_DOWNSTREAM_BLOCKERS
+      ],
+    ).join(', '),
+  );
+  appendKeyValue(
+    lines,
+    FIELD_LABELS.MISSING_CAUSAL_EDGE,
+    scenarioCausalClosure[SCENARIO_CAUSAL_CLOSURE_FIELD_MISSING_EDGE],
+  );
+  appendKeyValue(
+    lines,
+    FIELD_LABELS.MISSING_CAUSAL_EDGE_PROBE,
+    scenarioCausalClosure[SCENARIO_CAUSAL_CLOSURE_FIELD_MISSING_EDGE_PROBE],
+  );
+  appendKeyValue(
+    lines,
+    FIELD_LABELS.BOUNDED_PROGRESS_PROOF,
+    scenarioCausalClosure[SCENARIO_CAUSAL_CLOSURE_FIELD_BOUNDED_PROOF],
+  );
+  appendKeyValue(
+    lines,
+    FIELD_LABELS.BOUNDED_PROGRESS_PROOF_ARTIFACT,
+    scenarioCausalClosure[
+      SCENARIO_CAUSAL_CLOSURE_FIELD_BOUNDED_PROOF_ARTIFACT
+    ],
+  );
+  appendKeyValue(
+    lines,
+    FIELD_LABELS.EXPECTED_OBSERVABLE_TRANSITION,
+    scenarioCausalClosure[
+      SCENARIO_CAUSAL_CLOSURE_FIELD_EXPECTED_OBSERVABLE_TRANSITION
+    ],
+  );
+  appendKeyValue(
+    lines,
+    FIELD_LABELS.MAX_PROGRESS_BOUND,
+    scenarioCausalClosure[
+      SCENARIO_CAUSAL_CLOSURE_FIELD_MAX_PROGRESS_BOUND
+    ],
+  );
+  appendKeyValue(
+    lines,
+    FIELD_LABELS.SAME_FRONTIER_FALLBACK,
+    scenarioCausalClosure[
+      SCENARIO_CAUSAL_CLOSURE_FIELD_SAME_FRONTIER_FALLBACK
+    ],
+  );
+  appendKeyValue(
+    lines,
+    FIELD_LABELS.EXPECTED_NEXT_FRONTIER,
+    scenarioCausalClosure[
+      SCENARIO_CAUSAL_CLOSURE_FIELD_EXPECTED_NEXT_FRONTIER
+    ],
+  );
+  appendKeyValue(
+    lines,
+    FIELD_LABELS.RESULT_CLASSIFICATION,
+    scenarioCausalClosure[
+      SCENARIO_CAUSAL_CLOSURE_FIELD_RESULT_CLASSIFICATION
+    ],
+  );
+  appendKeyValue(
+    lines,
+    FIELD_LABELS.STOP_CONDITION,
+    scenarioCausalClosure[SCENARIO_CAUSAL_CLOSURE_FIELD_STOP_CONDITION],
   );
 
   appendSection(lines, SECTION_CURRENT_STATE);

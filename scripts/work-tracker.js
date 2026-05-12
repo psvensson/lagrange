@@ -88,6 +88,8 @@ const CAUSAL_GOVERNANCE_VALID_OUTCOMES = Object.freeze([
   'reduced',
   'same-frontier',
   'migrated',
+  'classification-only',
+  'architecture-gap',
   'contradictory',
   CAUSAL_GOVERNANCE_PENDING_OUTCOME,
 ]);
@@ -101,9 +103,79 @@ const CAUSAL_GOVERNANCE_REQUIRED_FIELDS = Object.freeze([
 ]);
 const CAUSAL_GOVERNANCE_CAUSAL_MODEL_COMMAND_PATTERN =
   /\bnpm\s+(?:--silent\s+)?run\s+analyze:causal-model\b/iu;
+const SCENARIO_CAUSAL_CLOSURE_METADATA_FIELD = 'scenarioCausalClosure';
+const SCENARIO_CAUSAL_CLOSURE_REFERENCE_FIELD = 'referenceScenarioOrProbe';
+const SCENARIO_CAUSAL_CLOSURE_PHASE_CHAIN_FIELD = 'phaseChain';
+const SCENARIO_CAUSAL_CLOSURE_CURRENT_FRONTIER_FIELD = 'currentFirstFrontier';
+const SCENARIO_CAUSAL_CLOSURE_DOWNSTREAM_BLOCKERS_FIELD =
+  'knownDownstreamBlockers';
+const SCENARIO_CAUSAL_CLOSURE_MISSING_EDGE_FIELD = 'missingCausalEdge';
+const SCENARIO_CAUSAL_CLOSURE_MISSING_EDGE_PROBE_FIELD =
+  'missingCausalEdgeProbe';
+const SCENARIO_CAUSAL_CLOSURE_BOUNDED_PROOF_FIELD = 'boundedProgressProof';
+const SCENARIO_CAUSAL_CLOSURE_BOUNDED_PROOF_ARTIFACT_FIELD =
+  'boundedProgressProofArtifact';
+const SCENARIO_CAUSAL_CLOSURE_EXPECTED_OBSERVABLE_TRANSITION_FIELD =
+  'expectedObservableTransition';
+const SCENARIO_CAUSAL_CLOSURE_MAX_PROGRESS_BOUND_FIELD = 'maxProgressBound';
+const SCENARIO_CAUSAL_CLOSURE_SAME_FRONTIER_FALLBACK_FIELD =
+  'sameFrontierFallback';
+const SCENARIO_CAUSAL_CLOSURE_EXPECTED_NEXT_FRONTIER_FIELD =
+  'expectedNextFrontier';
+const SCENARIO_CAUSAL_CLOSURE_RESULT_CLASSIFICATION_FIELD =
+  'resultClassification';
+const SCENARIO_CAUSAL_CLOSURE_STOP_CONDITION_FIELD = 'stopCondition';
+const SCENARIO_CAUSAL_CLOSURE_TEXT_FIELDS = Object.freeze([
+  SCENARIO_CAUSAL_CLOSURE_REFERENCE_FIELD,
+  SCENARIO_CAUSAL_CLOSURE_CURRENT_FRONTIER_FIELD,
+  SCENARIO_CAUSAL_CLOSURE_MISSING_EDGE_FIELD,
+  SCENARIO_CAUSAL_CLOSURE_MISSING_EDGE_PROBE_FIELD,
+  SCENARIO_CAUSAL_CLOSURE_BOUNDED_PROOF_FIELD,
+  SCENARIO_CAUSAL_CLOSURE_BOUNDED_PROOF_ARTIFACT_FIELD,
+  SCENARIO_CAUSAL_CLOSURE_EXPECTED_OBSERVABLE_TRANSITION_FIELD,
+  SCENARIO_CAUSAL_CLOSURE_MAX_PROGRESS_BOUND_FIELD,
+  SCENARIO_CAUSAL_CLOSURE_SAME_FRONTIER_FALLBACK_FIELD,
+  SCENARIO_CAUSAL_CLOSURE_EXPECTED_NEXT_FRONTIER_FIELD,
+  SCENARIO_CAUSAL_CLOSURE_RESULT_CLASSIFICATION_FIELD,
+  SCENARIO_CAUSAL_CLOSURE_STOP_CONDITION_FIELD,
+]);
+const SCENARIO_CAUSAL_CLOSURE_ARRAY_FIELDS = Object.freeze([
+  SCENARIO_CAUSAL_CLOSURE_PHASE_CHAIN_FIELD,
+  SCENARIO_CAUSAL_CLOSURE_DOWNSTREAM_BLOCKERS_FIELD,
+]);
+const SCENARIO_CAUSAL_CLOSURE_VALID_RESULT_CLASSIFICATIONS = Object.freeze([
+  'pending-before-probe',
+  'representative-green',
+  'reduced',
+  'same-frontier',
+  'migrated',
+  'classification-only',
+  'architecture-gap',
+  'contradictory',
+]);
+const SCENARIO_CAUSAL_CLOSURE_VALID_STOP_CONDITIONS = Object.freeze([
+  'continue-local-fix',
+  'bounded-non-frontier',
+  'migrate-owner-boundary',
+  'classification-only-stop',
+  'architecture-gap-stop',
+  'representative-green',
+  'human-escalation',
+]);
+const SCENARIO_CAUSAL_CLOSURE_PROGRESS_MECHANISM_PATTERN =
+  /\b(?:wake|retry|timeout|reconcile|drain|dispatch|delivery|timer|advance|bounded)\b/iu;
+const SCENARIO_CAUSAL_CLOSURE_ARTIFACT_PATH_PATTERN = new RegExp(
+  '(?:^|[\\s`\'"])(?:[A-Za-z0-9._-]+/[A-Za-z0-9._/@%+=,-]+|' +
+    '[A-Za-z0-9._@%+=,-]+\\.(?:json|md|txt|log|tap|js|mjs|cjs))' +
+    '(?:$|[\\s`\'".,;])',
+  'u',
+);
 const MODEL_FIT_EMPTY_VALUE_PATTERN = /^(?:none|n\/a|na|unknown|tbd|todo)$/iu;
-const MODEL_FIT_FOCUSED_PROOF_COMMAND_PATTERN =
-  /\b(?:npm\s+run|node(?:\s+--test)?|tap|rg|git\s+diff)\b/iu;
+const MODEL_FIT_FOCUSED_PROOF_COMMAND_PATTERN = new RegExp(
+  '\\b(?:npm\\s+(?:--silent\\s+)?run|npm\\s+test|' +
+    'node(?:\\s+--test)?|tap|rg|git\\s+diff)\\b',
+  'iu',
+);
 const MODEL_FIT_REQUIRED_SPARK_LABELS = Object.freeze([
   MODEL_FIT_OWNED_FILES_LABEL,
   MODEL_FIT_FORBIDDEN_FILES_LABEL,
@@ -841,7 +913,8 @@ export function validateCausalGovernanceContract(
   ) {
     errors.push(
       `${filePath}: closed packages must classify representativeOutcome as ` +
-      'representative-green, reduced, same-frontier, migrated, or contradictory.',
+      'representative-green, reduced, same-frontier, migrated, ' +
+      'classification-only, architecture-gap, or contradictory.',
     );
   }
   if (
@@ -856,6 +929,161 @@ export function validateCausalGovernanceContract(
       '`npm run analyze:causal-model`.',
     );
   }
+  return errors;
+}
+
+function validateScenarioCausalClosureConcreteValue(filePath, fieldName, value) {
+  const normalizedValue = normalizeLedgerText(value);
+  if (
+    normalizedValue.length === NUM_ZERO ||
+    MODEL_FIT_EMPTY_VALUE_PATTERN.test(normalizedValue) ||
+    LEDGER_TEMPLATE_PLACEHOLDER_PATTERN.test(normalizedValue) ||
+    normalizedValue.includes(LEDGER_PENDING_BEFORE_IMPLEMENTATION_MARKER)
+  ) {
+    return [
+      `${filePath}: scenarioCausalClosure.${fieldName} must be a concrete value.`,
+    ];
+  }
+  return [];
+}
+
+function validateScenarioCausalClosureArrayField(
+  filePath,
+  fieldName,
+  values,
+) {
+  if (!Array.isArray(values) || values.length === NUM_ZERO) {
+    return [
+      `${filePath}: scenarioCausalClosure.${fieldName} must be a ` +
+      'non-empty array.',
+    ];
+  }
+  const errors = [];
+  for (let index = NUM_ZERO; index < values.length; index += NUM_ONE) {
+    errors.push(
+      ...validateScenarioCausalClosureConcreteValue(
+        filePath,
+        `${fieldName}[${index}]`,
+        values[index],
+      ),
+    );
+  }
+  return errors;
+}
+
+export function validateScenarioCausalClosureContract(
+  metadata,
+  filePath,
+  options = {},
+) {
+  const requiresClosure =
+    options[LEDGER_VALIDATION_REQUIRES_LEDGER] === true;
+  const scenarioCausalClosure =
+    metadata?.[SCENARIO_CAUSAL_CLOSURE_METADATA_FIELD];
+  if (!scenarioCausalClosure) {
+    return requiresClosure ?
+      [`${filePath}: metadata scenarioCausalClosure is required.`] :
+      [];
+  }
+  if (!isObjectRecord(scenarioCausalClosure)) {
+    return [`${filePath}: metadata scenarioCausalClosure must be an object.`];
+  }
+
+  const errors = [];
+  for (const fieldName of SCENARIO_CAUSAL_CLOSURE_TEXT_FIELDS) {
+    errors.push(
+      ...validateScenarioCausalClosureConcreteValue(
+        filePath,
+        fieldName,
+        scenarioCausalClosure[fieldName],
+      ),
+    );
+  }
+  for (const fieldName of SCENARIO_CAUSAL_CLOSURE_ARRAY_FIELDS) {
+    errors.push(
+      ...validateScenarioCausalClosureArrayField(
+        filePath,
+        fieldName,
+        scenarioCausalClosure[fieldName],
+      ),
+    );
+  }
+
+  const resultClassification = normalizeLedgerText(
+    scenarioCausalClosure[
+      SCENARIO_CAUSAL_CLOSURE_RESULT_CLASSIFICATION_FIELD
+    ],
+  ).toLowerCase();
+  if (
+    resultClassification.length > NUM_ZERO &&
+    !SCENARIO_CAUSAL_CLOSURE_VALID_RESULT_CLASSIFICATIONS.includes(
+      resultClassification,
+    )
+  ) {
+    errors.push(
+      `${filePath}: scenarioCausalClosure.resultClassification must be one ` +
+      'of ' +
+      SCENARIO_CAUSAL_CLOSURE_VALID_RESULT_CLASSIFICATIONS.join(', ') +
+      '.',
+    );
+  }
+
+  const stopCondition = normalizeLedgerText(
+    scenarioCausalClosure[SCENARIO_CAUSAL_CLOSURE_STOP_CONDITION_FIELD],
+  ).toLowerCase();
+  if (
+    stopCondition.length > NUM_ZERO &&
+    !SCENARIO_CAUSAL_CLOSURE_VALID_STOP_CONDITIONS.includes(stopCondition)
+  ) {
+    errors.push(
+      `${filePath}: scenarioCausalClosure.stopCondition must be one of ` +
+      SCENARIO_CAUSAL_CLOSURE_VALID_STOP_CONDITIONS.join(', ') +
+      '.',
+    );
+  }
+
+  if (
+    !SCENARIO_CAUSAL_CLOSURE_PROGRESS_MECHANISM_PATTERN.test(
+      normalizeLedgerText(
+        scenarioCausalClosure[SCENARIO_CAUSAL_CLOSURE_BOUNDED_PROOF_FIELD],
+      ),
+    )
+  ) {
+    errors.push(
+      `${filePath}: scenarioCausalClosure.boundedProgressProof must mention ` +
+      'a concrete wake, retry, timeout, reconcile, drain, dispatch, delivery, ' +
+      'timer, advance, or bounded progress mechanism.',
+    );
+  }
+  if (
+    !MODEL_FIT_FOCUSED_PROOF_COMMAND_PATTERN.test(
+      normalizeLedgerText(
+        scenarioCausalClosure[
+          SCENARIO_CAUSAL_CLOSURE_MISSING_EDGE_PROBE_FIELD
+        ],
+      ),
+    )
+  ) {
+    errors.push(
+      `${filePath}: scenarioCausalClosure.missingCausalEdgeProbe must ` +
+      'name a focused command.',
+    );
+  }
+  if (
+    !SCENARIO_CAUSAL_CLOSURE_ARTIFACT_PATH_PATTERN.test(
+      normalizeLedgerText(
+        scenarioCausalClosure[
+          SCENARIO_CAUSAL_CLOSURE_BOUNDED_PROOF_ARTIFACT_FIELD
+        ],
+      ),
+    )
+  ) {
+    errors.push(
+      `${filePath}: scenarioCausalClosure.boundedProgressProofArtifact ` +
+      'must name a path or proof artifact.',
+    );
+  }
+
   return errors;
 }
 
@@ -1025,6 +1253,13 @@ async function validatePackageFile(filePath) {
       isScenarioDrivenMetadata(metadata),
     status: fileStatus,
   }));
+  errors.push(...validateScenarioCausalClosureContract(metadata, relativePath, {
+    [LEDGER_VALIDATION_REQUIRES_LEDGER]:
+      fileStatus === STATUS_ACTIVE &&
+      metadata !== null &&
+      isScenarioDrivenMetadata(metadata),
+    status: fileStatus,
+  }));
   errors.push(...validateCommitAndPushLedger(content, relativePath, {
     [LEDGER_VALIDATION_REQUIRES_LEDGER]:
       metadata !== null &&
@@ -1103,6 +1338,9 @@ function summarizeDoctorMetadata(metadata = {}) {
     owner: metadata.owner || DEFAULT_UNKNOWN,
     boundary: metadata.boundary || DEFAULT_UNKNOWN,
     dominantReason: metadata.dominantReason || DEFAULT_UNKNOWN,
+    scenarioCausalClosure: isObjectRecord(
+      metadata[SCENARIO_CAUSAL_CLOSURE_METADATA_FIELD],
+    ) ? 'recorded' : 'missing',
     touchedFileCount: Array.isArray(metadata.touchedFiles) ?
       metadata.touchedFiles.length :
       NUM_ZERO,
@@ -1147,6 +1385,13 @@ export function buildPackageDoctorLines(filePath, content) {
       isScenarioDrivenMetadata(metadata),
     status: fileStatus,
   }));
+  errors.push(...validateScenarioCausalClosureContract(metadata, relativePath, {
+    [LEDGER_VALIDATION_REQUIRES_LEDGER]:
+      fileStatus === STATUS_ACTIVE &&
+      metadata !== null &&
+      isScenarioDrivenMetadata(metadata),
+    status: fileStatus,
+  }));
   errors.push(...validateCommitAndPushLedger(content, relativePath, {
     [LEDGER_VALIDATION_REQUIRES_LEDGER]:
       metadata !== null &&
@@ -1161,6 +1406,11 @@ export function buildPackageDoctorLines(filePath, content) {
   appendDoctorField(lines, 'Owner', metadataSummary.owner);
   appendDoctorField(lines, 'Boundary', metadataSummary.boundary);
   appendDoctorField(lines, 'Dominant reason', metadataSummary.dominantReason);
+  appendDoctorField(
+    lines,
+    'Scenario causal closure',
+    metadataSummary.scenarioCausalClosure,
+  );
   appendDoctorField(lines, 'Touched files', String(metadataSummary.touchedFileCount));
   appendDoctorField(lines, 'Proof commands', String(metadataSummary.proofCount));
   appendDoctorField(lines, 'Validation', errors.length === NUM_ZERO ? 'ok' : 'failed');
@@ -1225,7 +1475,11 @@ async function findActivePackageFile(activeSprintFile) {
   return path.normalize(path.join(path.dirname(activeSprintFile), match[NUM_ONE]));
 }
 
-function buildCurrentBlockerPayload(activeSprintFile, activePackageFile, metadata) {
+export function buildCurrentBlockerPayload(
+  activeSprintFile,
+  activePackageFile,
+  metadata,
+) {
   return {
     schema: 'current-blocker-v1',
     generatedBy: 'scripts/work-tracker.js',
@@ -1244,6 +1498,7 @@ function buildCurrentBlockerPayload(activeSprintFile, activePackageFile, metadat
     touchedFiles: Array.isArray(metadata.touchedFiles) ? metadata.touchedFiles : [],
     modelFit: metadata.modelFit || {},
     causalGovernance: metadata.causalGovernance || {},
+    scenarioCausalClosure: metadata.scenarioCausalClosure || {},
     predecessor: metadata.predecessor || null,
   };
 }
@@ -1255,7 +1510,7 @@ function formatMarkdownList(values) {
   return values.map((value, index) => `${index + NUM_ONE}. \`${value}\``).join(NEWLINE);
 }
 
-function renderCurrentBlockerMarkdown(payload) {
+export function renderCurrentBlockerMarkdown(payload) {
   return [
     GENERATED_NOTE,
     '',
@@ -1321,6 +1576,58 @@ function renderCurrentBlockerMarkdown(payload) {
     '',
     'Cross-boundary review: ' +
       `\`${payload.causalGovernance?.crossBoundaryReview || DEFAULT_UNKNOWN}\``,
+    '',
+    '## Scenario Causal Closure',
+    '',
+    'Reference scenario/probe: ' +
+      `\`${payload.scenarioCausalClosure?.referenceScenarioOrProbe || DEFAULT_UNKNOWN}\``,
+    '',
+    'Phase chain:',
+    '',
+    formatMarkdownList(payload.scenarioCausalClosure?.phaseChain || []),
+    '',
+    'Current first frontier: ' +
+      `\`${payload.scenarioCausalClosure?.currentFirstFrontier || DEFAULT_UNKNOWN}\``,
+    '',
+    'Known downstream blockers:',
+    '',
+    formatMarkdownList(
+      payload.scenarioCausalClosure?.knownDownstreamBlockers || [],
+    ),
+    '',
+    'Missing causal edge: ' +
+      `\`${payload.scenarioCausalClosure?.missingCausalEdge || DEFAULT_UNKNOWN}\``,
+    '',
+    'Missing causal edge probe: ' +
+      `\`${payload.scenarioCausalClosure?.missingCausalEdgeProbe ||
+        DEFAULT_UNKNOWN}\``,
+    '',
+    'Bounded progress proof: ' +
+      `\`${payload.scenarioCausalClosure?.boundedProgressProof || DEFAULT_UNKNOWN}\``,
+    '',
+    'Bounded progress proof artifact: ' +
+      `\`${payload.scenarioCausalClosure?.boundedProgressProofArtifact ||
+        DEFAULT_UNKNOWN}\``,
+    '',
+    'Expected observable transition: ' +
+      `\`${payload.scenarioCausalClosure?.expectedObservableTransition ||
+        DEFAULT_UNKNOWN}\``,
+    '',
+    'Max progress bound: ' +
+      `\`${payload.scenarioCausalClosure?.maxProgressBound || DEFAULT_UNKNOWN}\``,
+    '',
+    'Same-frontier fallback: ' +
+      `\`${payload.scenarioCausalClosure?.sameFrontierFallback ||
+        DEFAULT_UNKNOWN}\``,
+    '',
+    'Expected next frontier: ' +
+      `\`${payload.scenarioCausalClosure?.expectedNextFrontier || DEFAULT_UNKNOWN}\``,
+    '',
+    'Result classification: ' +
+      `\`${payload.scenarioCausalClosure?.resultClassification || DEFAULT_UNKNOWN}\``,
+    '',
+    'Stop condition: ' +
+      `\`${payload.scenarioCausalClosure?.stopCondition || DEFAULT_UNKNOWN}\``,
     '',
     '## Touched Files',
     '',
