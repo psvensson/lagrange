@@ -627,6 +627,8 @@ test(TEST_CACHE_EVENT_REENTRY_TEST_NAME, async (t) => {
     deferredTimers,
     operationRow,
   );
+  const originalDateNow = Date.now;
+  Date.now = () => TEST_CAPTURED_AT_MS;
 
   try {
     coordinator.initialize();
@@ -699,6 +701,7 @@ test(TEST_CACHE_EVENT_REENTRY_TEST_NAME, async (t) => {
       TEST_ASSERT_CACHE_REENTRY_TARGET,
     );
   } finally {
+    Date.now = originalDateNow;
     await coordinator.shutdown();
   }
 });

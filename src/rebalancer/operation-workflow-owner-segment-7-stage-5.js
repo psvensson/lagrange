@@ -101,6 +101,30 @@ const PRIORITY_RECOVERY_DISPATCH_PENDING_REENTRY_STATE_TABLE = Object.freeze([
   }),
 ]);
 
+const PRIORITY_RECOVERY_DISPATCH_PENDING_REENTRY_OWNER_PROGRESS_STATES =
+  Object.freeze(
+    new Set([
+      PRIORITY_RECOVERY_NEXT_REQUIRED_ACTION.ADVANCE_EXISTING_OPERATION,
+      PRIORITY_RECOVERY_NEXT_REQUIRED_ACTION.WAIT_FOR_OPERATION_PROGRESS,
+    ]),
+  );
+
+const PRIORITY_RECOVERY_DISPATCH_PENDING_REENTRY_OWNER_BOUNDARIES =
+  Object.freeze(
+    new Set([
+      PRIORITY_RECOVERY_BLOCKING_BOUNDARY.WORKFLOW_PROGRESS,
+      PRIORITY_RECOVERY_BLOCKING_BOUNDARY.REBALANCER_HANDOFF,
+    ]),
+  );
+
+const PRIORITY_RECOVERY_DISPATCH_PENDING_REENTRY_OWNER_WAIT_MODES =
+  Object.freeze(
+    new Set([
+      PRIORITY_RECOVERY_WAIT_MODE.EVENT_DRIVEN,
+      PRIORITY_RECOVERY_WAIT_MODE.RETRY_SCHEDULED,
+    ]),
+  );
+
 class OperationWorkflowOwnerSegment7Stage5 extends OperationWorkflowOwnerSegment7Stage4 {
   async getPriorityRecoveryDecisionSnapshotForPartitionOperations(
     partitionId,
@@ -186,12 +210,15 @@ class OperationWorkflowOwnerSegment7Stage5 extends OperationWorkflowOwnerSegment
           PRIORITY_RECOVERY_PROGRESS_OWNER.OPERATION_WORKFLOW_OWNER &&
         snapshot?.progress?.currentOwner ===
           PRIORITY_RECOVERY_PROGRESS_OWNER.OPERATION_WORKFLOW_OWNER &&
-        snapshot?.progress?.nextRequiredAction ===
-          PRIORITY_RECOVERY_NEXT_REQUIRED_ACTION.ADVANCE_EXISTING_OPERATION &&
-        snapshot?.progress?.blockingBoundary ===
-          PRIORITY_RECOVERY_BLOCKING_BOUNDARY.WORKFLOW_PROGRESS &&
-        snapshot?.progress?.waitMode ===
-          PRIORITY_RECOVERY_WAIT_MODE.EVENT_DRIVEN,
+        PRIORITY_RECOVERY_DISPATCH_PENDING_REENTRY_OWNER_PROGRESS_STATES.has(
+          snapshot?.progress?.nextRequiredAction,
+        ) &&
+        PRIORITY_RECOVERY_DISPATCH_PENDING_REENTRY_OWNER_BOUNDARIES.has(
+          snapshot?.progress?.blockingBoundary,
+        ) &&
+        PRIORITY_RECOVERY_DISPATCH_PENDING_REENTRY_OWNER_WAIT_MODES.has(
+          snapshot?.progress?.waitMode,
+        ),
       dispatchPending:
         PRIORITY_RECOVERY_DISPATCH_PENDING_REENTRY_ACTUATION_STATES.has(
           snapshot?.actuation?.state,

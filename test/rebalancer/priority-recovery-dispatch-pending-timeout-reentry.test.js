@@ -139,6 +139,16 @@ const TEST_ASSERT_ACTIVE_HANDOFF_RETRY_NO_INLINE_WAKE =
   'active handoff retry snapshots should not wake the remote owner inline';
 const TEST_ASSERT_ACTIVE_HANDOFF_RETRY_TIMER_PRESERVED =
   'active handoff retry snapshots should preserve the existing bounded retry';
+const TEST_RETRY_SCHEDULED_REENTRY_TEST_NAME =
+  'retry-scheduled rebalancer handoff snapshots re-enter dispatch-pending ' +
+  'owner progress';
+const TEST_ASSERT_RETRY_SCHEDULED_REENTRY_WAKES =
+  'retry-scheduled handoff snapshots should wake the remote owner when no ' +
+  'bounded retry is active';
+const TEST_ASSERT_RETRY_SCHEDULED_REENTRY_TARGET =
+  'retry-scheduled handoff re-entry should use the canonical dispatch ingress';
+const TEST_ASSERT_RETRY_SCHEDULED_REENTRY_TIMER =
+  'retry-scheduled handoff re-entry should arm bounded handoff verification';
 
 function buildDispatchPendingReentryPlanningSnapshot() {
   return Object.freeze({
@@ -1448,6 +1458,113 @@ async (t) => {
       deferredTimers.length,
       NUM.ONE,
       TEST_ASSERT_ACTIVE_HANDOFF_RETRY_TIMER_PRESERVED,
+    );
+  } finally {
+    Date.now = originalDateNow;
+    await coordinator.shutdown();
+  }
+});
+
+test(TEST_RETRY_SCHEDULED_REENTRY_TEST_NAME, async (t) => {
+  const deliveries = [];
+  const deferredTimers = [];
+  const operation = Object.freeze({
+    operationId: TEST_OPERATION_ID,
+    partitionId: TEST_LOCAL_OWNER_PARTITION_ID,
+    type: TEST_OPERATION_TYPE_REPLACE,
+    status: TEST_STATUS_PENDING,
+    workflowStep: WORKFLOW_STEP.SENDING,
+    sourceNodeId: TEST_SOURCE_NODE_ID,
+    targetNodeId: TEST_TARGET_NODE_ID,
+    replicaId: TEST_LOCAL_OWNER_REPLICA_ID,
+    createdAt: TEST_CAPTURED_AT_MS,
+    updatedAt: TEST_CAPTURED_AT_MS,
+  });
+  const snapshot = Object.freeze({
+    operationId: TEST_OPERATION_ID,
+    actuation: Object.freeze({
+      owner: OPERATION_WORKFLOW_OWNER,
+      state: PRIORITY_RECOVERY_ACTUATION_STATE.DISPATCHED_WAITING_PROGRESS,
+      workflowProgressPhaseId:
+        PRIORITY_RECOVERY_WORKFLOW_PROGRESS_PHASE.DISPATCH_PENDING,
+    }),
+    progress: Object.freeze({
+      currentOwner: OPERATION_WORKFLOW_OWNER,
+      nextRequiredAction:
+        PRIORITY_RECOVERY_NEXT_REQUIRED_ACTION.WAIT_FOR_OPERATION_PROGRESS,
+      blockingBoundary:
+        PRIORITY_RECOVERY_BLOCKING_BOUNDARY.REBALANCER_HANDOFF,
+      waitMode: PRIORITY_RECOVERY_WAIT_MODE.RETRY_SCHEDULED,
+      workflowProgressPhaseId:
+        PRIORITY_RECOVERY_WORKFLOW_PROGRESS_PHASE.DISPATCH_PENDING,
+    }),
+  });
+  const coordinator = createCoordinator({
+    nodeId: TEST_OBSERVER_NODE_ID,
+    transactionCoordinator: buildTransactionCoordinator(),
+    systemTableCache: {
+      get() {
+        return TEST_EMPTY_VALUE;
+      },
+      getAll() {
+        return [];
+      },
+      filter() {
+        return [];
+      },
+    },
+    cdcIntegrationService: {
+      async waitForCacheUpdate() {},
+    },
+    messageRouter: {
+      async deliver(target, payload, options) {
+        deliveries.push({target, payload, options});
+        return {acknowledged: true, status: TEST_DELIVERY_STATUS_INITIATED};
+      },
+    },
+    tablePolicyService: {
+      async getPolicyForPartition() {
+        return {minReplicaCount: TEST_MIN_REPLICA_COUNT};
+      },
+    },
+    setTimeoutFn(fn, delayMs) {
+      const handle = {fn, delayMs};
+      deferredTimers.push(handle);
+      return handle;
+    },
+    clearTimeoutFn() {},
+    enableTimeouts: false,
+  });
+  const originalDateNow = Date.now;
+  Date.now = () => TEST_CAPTURED_AT_MS;
+
+  try {
+    coordinator.initialize();
+    t.equal(
+      coordinator.workflowOwner.schedulePriorityRecoveryDispatchPendingReentry(
+        snapshot,
+        [operation],
+      ),
+      true,
+      TEST_ASSERT_RETRY_SCHEDULED_REENTRY_WAKES,
+    );
+    await new Promise((resolve) => {
+      setTimeout(resolve, TEST_MICROTASK_DELAY_MS);
+    });
+    t.equal(
+      deliveries.length,
+      NUM.ONE,
+      TEST_ASSERT_RETRY_SCHEDULED_REENTRY_WAKES,
+    );
+    t.equal(
+      deliveries[NUM.ZERO]?.target,
+      TEST_REPLICA_DISPATCH_TARGET,
+      TEST_ASSERT_RETRY_SCHEDULED_REENTRY_TARGET,
+    );
+    t.equal(
+      deferredTimers.length,
+      NUM.ONE,
+      TEST_ASSERT_RETRY_SCHEDULED_REENTRY_TIMER,
     );
   } finally {
     Date.now = originalDateNow;

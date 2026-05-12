@@ -12,7 +12,7 @@
   "boundary": "rebalancer_handoff",
   "dominantReason": "priority_recovery_progress_blocked",
   "currentState": "Implementation added replica_operations cache-event re-entry for priority dispatch-pending workflow progress. Focused owner tests and touched runtime guardrails are green. The representative rolling-restart rerun remains red, but the normalized frontier migrated from operation_workflow_owner / workflow_progress event-driven wait to operation_workflow_owner / rebalancer_handoff with retry_scheduled evidence; active gate and snapshot coverage are 2/5.",
-  "nextAction": "Activate `work/packages/todo-20260511-rolling-restart-operation-workflow-rebalancer-handoff-retry-scheduled-v2.md` for the operation_workflow_owner / rebalancer_handoff retry-scheduled priority recovery frontier.",
+  "nextAction": "Activate `work/packages/active-20260511-rolling-restart-operation-workflow-rebalancer-handoff-retry-scheduled-v2.md` for the operation_workflow_owner / rebalancer_handoff retry-scheduled priority recovery frontier.",
   "proof": [
     "npm run work:evidence-summary -- test-output/reports/rolling-restart-current-release-gate-after-dispatch-pending-step-timeout-contract-fix.report.json",
     "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-current-release-gate-after-dispatch-pending-step-timeout-contract-fix.report.json --explain priority_recovery_partition_progress",
@@ -56,7 +56,7 @@
   "predecessor": "work/packages/done-20260511-rolling-restart-operation-workflow-progress-dispatch-pending-step-timeout-contract.md",
   "closed": "2026-05-11",
   "commitAndPushLedgerRequired": true,
-  "successor": "work/packages/todo-20260511-rolling-restart-operation-workflow-rebalancer-handoff-retry-scheduled-v2.md"
+  "successor": "work/packages/active-20260511-rolling-restart-operation-workflow-rebalancer-handoff-retry-scheduled-v2.md"
 }
 -->
 
