@@ -36,6 +36,8 @@ trail is:
 20. `test-output/reports/rolling-restart-current-release-gate-after-rebalancer-leader-operation-scheduling-priority-recovery-fix.report.json`
 21. `test-output/reports/rolling-restart-current-release-gate-after-operation-workflow-progress-priority-recovery-event-wait-fix.report.json`
 22. `test-output/reports/rolling-restart-current-release-gate-after-operation-workflow-rebalancer-handoff-priority-recovery-retry-scheduled-fix.report.json`
+23. `test-output/reports/rolling-restart-current-release-gate-after-workflow-progress-coordinator-excludes-node-fix.report.json`
+24. `test-output/reports/rolling-restart-current-release-gate-after-workflow-progress-serial-wait-event-driven-advance-proof.report.json`
 
 The matching playback is:
 
@@ -61,10 +63,16 @@ The matching playback is:
 20. `test-output/reports/.playback/rolling-restart-current-release-gate-after-rebalancer-leader-operation-scheduling-priority-recovery-fix/rolling-restart/`
 21. `test-output/reports/.playback/rolling-restart-current-release-gate-after-operation-workflow-progress-priority-recovery-event-wait-fix/rolling-restart/`
 22. `test-output/reports/.playback/rolling-restart-current-release-gate-after-operation-workflow-rebalancer-handoff-priority-recovery-retry-scheduled-fix/rolling-restart/`
+23. `test-output/reports/.playback/rolling-restart-current-release-gate-after-workflow-progress-coordinator-excludes-node-fix/rolling-restart/`
+24. `test-output/reports/.playback/rolling-restart-current-release-gate-after-workflow-progress-serial-wait-event-driven-advance-proof/rolling-restart/`
 
 ## Current Blocker Snapshot
 
-Latest package:
+Current package:
+
+1. [Rolling Restart Operation Workflow Progress Serial Wait Event Driven Advance](../packages/active-20260512-rolling-restart-operation-workflow-progress-serial-wait-event-driven-advance.md)
+
+Recent completed packages:
 
 1. [Rolling Restart Operation Workflow Progress Coordinator Excludes Node](../packages/done-20260512-rolling-restart-operation-workflow-progress-coordinator-excludes-node.md)
 2. [Rolling Restart Operation Workflow Rebalancer Handoff Needs Operation Coordination Mismatch Classification](../packages/done-20260512-rolling-restart-operation-workflow-rebalancer-handoff-needs-operation-coordination-mismatch-classification.md)
@@ -74,11 +82,12 @@ Latest package:
 6. [Rolling Restart Operation Workflow Progress Stage3 Timeout Progression](../packages/done-20260512-rolling-restart-operation-workflow-progress-stage3-timeout-progression.md)
 7. [Rolling Restart Operation Workflow Progress Event Driven Dispatch Pending](../packages/done-20260512-rolling-restart-operation-workflow-progress-event-driven-dispatch-pending.md)
 
-Next package:
+Next action:
 
-1. Close the active coordinator-excludes-node package after its focused package
-   commit is pushed.
-2. [Rolling Restart Operation Workflow Progress Serial Wait Event Driven Advance](../packages/todo-20260512-rolling-restart-operation-workflow-progress-serial-wait-event-driven-advance.md)
+1. Close the active serial-wait event-driven advance package as reduced after
+   the focused package commit is pushed.
+2. Activate the direct-chain workflow-progress successor:
+   [Rolling Restart Operation Workflow Progress Direct Chain After Owner Proof](../packages/todo-20260512-rolling-restart-operation-workflow-progress-direct-chain-after-owner-proof.md)
 3. Parked split successor, not promoted by the fresh representative report:
    [Rolling Restart Rebalancer Leader Operation Scheduling Control Plane Publications Create Recovery Operation](../packages/todo-20260512-rolling-restart-rebalancer-leader-operation-scheduling-control-plane-publications-create-recovery-operation.md)
 
@@ -86,9 +95,9 @@ Latest representative evidence:
 
 1. Scenario: `rolling-restart`
 2. Artifact:
-   `test-output/reports/rolling-restart-current-release-gate-after-workflow-progress-coordinator-excludes-node-fix.report.json`
+   `test-output/reports/rolling-restart-current-release-gate-after-workflow-progress-serial-wait-event-driven-advance-proof.report.json`
 3. Report total/passed/failed: `1/0/1`
-4. Duration: approximately `133200ms`
+4. Duration: approximately `138200ms`
 5. Active gate: failed; not all nodes active within `120000ms`
 6. Priority recovery invariants: passed
 7. Publication: `PUBLISHED`
@@ -101,20 +110,20 @@ Latest representative evidence:
 11. Blocked partitions: `control_plane_publications-p1`,
     `replica_operations-p1`, `sql_transaction_participants-p1`,
     `sql_transactions-p1`, and `sql_write_operations-p1`.
-12. Representative outcome: reduced. The focused package cleared the direct
-    `publication_recovery_eligible_but_coordinator_excludes_node` evidence, but
-    the same owner-boundary remains first with serial-wait/event-driven advance
-    work.
+12. Representative outcome: reduced. Focused owner proof showed the
+    dispatch-pending advance/re-entry path was already implemented; the fresh
+    rerun reduces the prior serial-wait residual to a direct workflow-progress
+    chain plus one secondary non-promoted rebalancer-handoff witness.
 13. Exact residual shape:
     `control_plane_publications-p1`, `replica_operations-p1`, and
-    `sql_transaction_participants-p1` are direct `recovering_in_flight`,
-    `persisted_not_dispatched`, `advance_existing_operation` workflow-progress
-    witnesses. `sql_transactions-p1` and `sql_write_operations-p1` are
-    `priority_operation_serial_wait` dependents waiting on those operations.
-14. The workflow-progress serial-wait event-driven advance successor should run
-    next. The parked operation-scheduling successor is not promoted by the
-    fresh report because `control_plane_publications-p1` now has operation
-    evidence.
+    `sql_transactions-p1` are direct workflow-progress witnesses.
+    `sql_transaction_participants-p1` and `sql_write_operations-p1` are
+    `priority_operation_serial_wait` dependents waiting on `sql_transactions-p1`.
+    `control_plane_publications-p1` also has a secondary
+    `operation_workflow_owner / rebalancer_handoff` retry-scheduled witness.
+14. The direct-chain workflow-progress successor should run next. The secondary
+    rebalancer-handoff witness and parked operation-scheduling successor are not
+    promoted while `workflow_progress` remains the first frontier.
 
 The publication-convergence package still holds the prior
 `topology_publication_owner / publication_convergence` reduction:
