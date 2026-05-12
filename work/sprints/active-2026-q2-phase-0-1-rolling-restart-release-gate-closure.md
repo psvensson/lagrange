@@ -66,15 +66,18 @@ The matching playback is:
 
 Latest package:
 
-1. [Rolling Restart Operation Workflow Rebalancer Handoff Priority Recovery Retry Scheduled](../packages/done-20260512-rolling-restart-operation-workflow-rebalancer-handoff-priority-recovery-retry-scheduled.md)
-2. [Rolling Restart Operation Workflow Progress Priority Recovery Event Wait](../packages/done-20260512-rolling-restart-operation-workflow-progress-priority-recovery-event-wait.md)
-3. [Rolling Restart Rebalancer Leader Operation Scheduling Priority Recovery](../packages/done-20260512-rolling-restart-rebalancer-leader-operation-scheduling-priority-recovery.md)
-4. [Rolling Restart Operation Workflow Progress Stage3 Timeout Progression](../packages/done-20260512-rolling-restart-operation-workflow-progress-stage3-timeout-progression.md)
-5. [Rolling Restart Operation Workflow Progress Event Driven Dispatch Pending](../packages/done-20260512-rolling-restart-operation-workflow-progress-event-driven-dispatch-pending.md)
+1. [Rolling Restart Operation Workflow Rebalancer Handoff Needs Operation Coordination Mismatch Classification](../packages/done-20260512-rolling-restart-operation-workflow-rebalancer-handoff-needs-operation-coordination-mismatch-classification.md)
+2. [Rolling Restart Operation Workflow Rebalancer Handoff Priority Recovery Retry Scheduled](../packages/done-20260512-rolling-restart-operation-workflow-rebalancer-handoff-priority-recovery-retry-scheduled.md)
+3. [Rolling Restart Operation Workflow Progress Priority Recovery Event Wait](../packages/done-20260512-rolling-restart-operation-workflow-progress-priority-recovery-event-wait.md)
+4. [Rolling Restart Rebalancer Leader Operation Scheduling Priority Recovery](../packages/done-20260512-rolling-restart-rebalancer-leader-operation-scheduling-priority-recovery.md)
+5. [Rolling Restart Operation Workflow Progress Stage3 Timeout Progression](../packages/done-20260512-rolling-restart-operation-workflow-progress-stage3-timeout-progression.md)
+6. [Rolling Restart Operation Workflow Progress Event Driven Dispatch Pending](../packages/done-20260512-rolling-restart-operation-workflow-progress-event-driven-dispatch-pending.md)
 
 Next package:
 
-1. [Rolling Restart Operation Workflow Rebalancer Handoff Needs Operation Coordination Mismatch Classification](../packages/active-20260512-rolling-restart-operation-workflow-rebalancer-handoff-needs-operation-coordination-mismatch-classification.md)
+1. [Rolling Restart Operation Workflow Progress Coordinator Excludes Node](../packages/todo-20260512-rolling-restart-operation-workflow-progress-coordinator-excludes-node.md)
+2. Parked split successor:
+   [Rolling Restart Rebalancer Leader Operation Scheduling Control Plane Publications Create Recovery Operation](../packages/todo-20260512-rolling-restart-rebalancer-leader-operation-scheduling-control-plane-publications-create-recovery-operation.md)
 
 Latest representative evidence:
 
@@ -92,17 +95,19 @@ Latest representative evidence:
    reason `priority_recovery_progress_blocked`.
 10. Residual semantic states: `needs_operation` and `coordination_mismatch`.
     Retry-scheduled handoff backpressure is bounded by focused predecessor
-    proof; the remaining evidence must now be classified as one owner fix or a
-    deliberate split.
+    proof; the classification package records this as a deliberate split, not
+    one owner fix.
 11. Blocked partitions: `control_plane_publications-p1`,
     `replica_operations-p1`, `sql_transaction_participants-p1`,
     `sql_transactions-p1`, and `sql_write_operations-p1`.
 12. Priority recovery invariants: failed classification invariant in the
     causal model because the latest representative has blocked
     `needs_operation` and `coordination_mismatch` evidence.
-13. Representative outcome: same-frontier bounded retry-scheduled proof. The
-    causal decision is `ask_human` with stop condition
-    `insufficient_evidence` after focused owner proof passed.
+13. Representative outcome: classification-only split after
+    same-frontier bounded retry-scheduled proof. The causal decision remains
+    `ask_human` with stop condition `insufficient_evidence` in the analyzer,
+    but package-level residual evidence now names two successor owner
+    boundaries.
 14. Exact residual shape for classification:
     `control_plane_publications-p1` is `rebalancer_leader /
     operation_scheduling / eligible_but_no_operation_created`, while
@@ -111,6 +116,9 @@ Latest representative evidence:
     publication_recovery_eligible_but_coordinator_excludes_node`; the
     `sql_transactions-p1` and `sql_write_operations-p1` `needs_operation`
     witnesses are serial-wait dependents of the workflow-progress operations.
+    The workflow-progress successor should run first; the operation-scheduling
+    successor stays parked until workflow-progress direct blockers are fixed,
+    reduced, or fresh evidence promotes operation scheduling.
 
 The publication-convergence package still holds the prior
 `topology_publication_owner / publication_convergence` reduction:

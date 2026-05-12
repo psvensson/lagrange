@@ -4,7 +4,7 @@
 
 Sprint: `work/sprints/active-2026-q2-phase-0-1-rolling-restart-release-gate-closure.md`
 
-Package: `work/packages/active-20260512-rolling-restart-operation-workflow-rebalancer-handoff-needs-operation-coordination-mismatch-classification.md`
+Package: `work/packages/done-20260512-rolling-restart-operation-workflow-rebalancer-handoff-needs-operation-coordination-mismatch-classification.md`
 
 Workflow lane: `scenario-release-gate`
 
@@ -22,11 +22,11 @@ Boundary: `rebalancer_handoff`
 
 Dominant reason: `priority_recovery_progress_blocked`
 
-Current state: Retry-scheduled rebalancer-handoff backpressure is bounded by focused owner proof, but the representative artifact remains red on priority_recovery_partition_progress with unresolved needs_operation and coordination_mismatch evidence. The residual is not one retry-scheduled runtime gap: control_plane_publications-p1 is rebalancer_leader / operation_scheduling / eligible_but_no_operation_created, replica_operations-p1 and sql_transaction_participants-p1 are operation_workflow_owner / workflow_progress / publication_recovery_eligible_but_coordinator_excludes_node, and sql_transactions-p1 plus sql_write_operations-p1 are operation_workflow_owner / workflow_progress serial-wait dependents.
+Current state: Classification complete: the residual does not narrow to one owner fix. The latest artifact still keeps priority_recovery_partition_progress first, but the partition evidence splits across rebalancer_leader / operation_scheduling for control_plane_publications-p1 and operation_workflow_owner / workflow_progress for replica_operations-p1 plus sql_transaction_participants-p1; sql_transactions-p1 and sql_write_operations-p1 are serial-wait dependents of the workflow-progress operations.
 
 ## Next Action
 
-Classify the residual into one owner fix only if evidence proves one owner owns the whole needs_operation / coordination_mismatch set; otherwise split deliberately into the smallest owner-boundary successor packages. Do not add more retry-scheduled handoff runtime code and do not touch startup active-gate, publication convergence, harness timeouts, Pro, or Enterprise behavior.
+This classification package is closed. Next package to activate is the operation_workflow_owner / workflow_progress coordinator-excludes-node successor first. Keep the rebalancer_leader / operation_scheduling control-plane-publications successor parked until the workflow-progress direct blockers are fixed, reduced, or fresh evidence promotes operation scheduling.
 
 ## Proof Ladder
 
@@ -35,7 +35,7 @@ Classify the residual into one owner fix only if evidence proves one owner owns 
 3. `npm run analyze:distributed-failure -- --report test-output/reports/rolling-restart-current-release-gate-after-operation-workflow-rebalancer-handoff-priority-recovery-retry-scheduled-fix.report.json`
 4. `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-current-release-gate-after-operation-workflow-rebalancer-handoff-priority-recovery-retry-scheduled-fix.report.json`
 5. `jq residual semantic-state extraction for needs_operation and coordination_mismatch partitions`
-6. `npm run work:package:doctor -- work/packages/active-20260512-rolling-restart-operation-workflow-rebalancer-handoff-needs-operation-coordination-mismatch-classification.md`
+6. `npm run work:package:doctor -- work/packages/done-20260512-rolling-restart-operation-workflow-rebalancer-handoff-needs-operation-coordination-mismatch-classification.md`
 7. `npm run work:validate`
 8. `git diff --check`
 
@@ -62,9 +62,9 @@ Stop-condition check: `npm --silent run analyze:causal-model -- test-output/repo
 
 Expected causal-model change: `The package either names one owner fix for the residual or records a deliberate split with successor owner-boundary packages before further runtime work.`
 
-Representative outcome: `pending-before-classification`
+Representative outcome: `classification-only`
 
-Causal debt: `Rolling-restart remains red with priority_recovery_partition_progress blocked after bounded retry proof; startup active-gate snapshot coverage remains downstream at 2/5 and publication ACK convergence remains satisfied.`
+Causal debt: `Rolling-restart remains red with priority_recovery_partition_progress blocked after bounded retry proof. The residual now has two owner-boundary successors: operation_workflow_owner / workflow_progress for coordinator-excludes-node plus serial-wait dependents, and rebalancer_leader / operation_scheduling for the control-plane-publications missing operation. Startup active-gate snapshot coverage remains downstream at 2/5 and publication ACK convergence remains satisfied.`
 
 Cross-boundary review: `Review the closed retry-scheduled handoff package before implementation; fix any package-proof defects before classifying this residual.`
 
@@ -79,7 +79,7 @@ Phase chain:
 3. `operation workflow coordination and progress`
 4. `startup active-gate presentation`
 
-Current first frontier: `operation_workflow_owner / rebalancer_handoff / priority_recovery_progress_blocked with unresolved semantic states needs_operation and coordination_mismatch`
+Current first frontier: `priority_recovery_partition_progress remains the topology first frontier, but the residual owner evidence splits between rebalancer_leader / operation_scheduling and operation_workflow_owner / workflow_progress`
 
 Known downstream blockers:
 
@@ -88,29 +88,29 @@ Known downstream blockers:
 
 Missing causal edge: `The residual needs classification between rebalancer_leader operation scheduling and operation_workflow_owner workflow progress instead of another retry-scheduled handoff patch.`
 
-Missing causal edge probe: `jq residual semantic-state extraction plus topology convergence explain for priority_recovery_partition_progress`
+Missing causal edge probe: `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-current-release-gate-after-operation-workflow-rebalancer-handoff-priority-recovery-retry-scheduled-fix.report.json --explain priority_recovery_partition_progress`
 
 Bounded progress proof: `Predecessor proof bounds retry-scheduled handoff work through focused operation workflow owner tests; this package classifies the non-retry residual only.`
 
 Bounded progress proof artifact: `test/rebalancer/coordinator-created-operation-progress-remote-handoff.test.js; test/rebalancer/operation-workflow-progress-event-driven-reentry.test.js; test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js`
 
-Expected observable transition: `residual classification narrows to one owner fix or splits into explicit owner-boundary successors without changing runtime behavior`
+Expected observable transition: `residual classification split recorded into explicit owner-boundary successors without changing runtime behavior`
 
 Max progress bound: `classification-only package; no runtime wait or retry budget is added`
 
-Same-frontier fallback: `split the residual by owner-boundary and keep startup active-gate downstream`
+Same-frontier fallback: `keep startup active-gate downstream and choose the workflow-progress direct blockers as the first successor`
 
-Expected next frontier: `first selected owner-boundary successor from the classified split`
+Expected next frontier: `operation_workflow_owner / workflow_progress / publication_recovery_eligible_but_coordinator_excludes_node; rebalancer_leader / operation_scheduling remains a parked successor`
 
-Result classification: `pending-before-classification`
+Result classification: `classification-only`
 
-Stop condition: `classify-or-split`
+Stop condition: `classification-only-stop`
 
 ## Touched Files
 
-1. `work/packages/done-20260512-rolling-restart-operation-workflow-rebalancer-handoff-priority-recovery-retry-scheduled.md`
-2. `work/packages/active-20260512-rolling-restart-operation-workflow-rebalancer-handoff-needs-operation-coordination-mismatch-classification.md`
-3. `work/packages/done-20260512-rolling-restart-operation-workflow-progress-priority-recovery-event-wait.md`
+1. `work/packages/done-20260512-rolling-restart-operation-workflow-rebalancer-handoff-needs-operation-coordination-mismatch-classification.md`
+2. `work/packages/todo-20260512-rolling-restart-operation-workflow-progress-coordinator-excludes-node.md`
+3. `work/packages/todo-20260512-rolling-restart-rebalancer-leader-operation-scheduling-control-plane-publications-create-recovery-operation.md`
 4. `work/sprints/active-2026-q2-phase-0-1-rolling-restart-release-gate-closure.md`
 5. `work/sprints/current-blocker.json`
 6. `work/sprints/current-blocker.md`
