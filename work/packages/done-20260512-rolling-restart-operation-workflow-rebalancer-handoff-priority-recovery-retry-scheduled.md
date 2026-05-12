@@ -180,7 +180,7 @@ failure simulations, and production guarantees in the Community / AGPL repo.
 
 ## Commit And Push Ledger
 
-1. Focused package commit: `1a8b28dbf14984a92eb8acc9912dacde3bab79d7`
+1. Focused package commit: `c73128a32e0c360d2bc884bea22185e2e0c54769`
 2. Pushed to: `origin/codex/pending-ack-eligibility-filter`
 3. Commit contains only package-owned files/package-status/allowed sprint handoff: yes
 
