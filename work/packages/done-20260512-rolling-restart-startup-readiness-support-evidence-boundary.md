@@ -307,3 +307,9 @@ or architecture-gap package for the startup readiness and active-gate boundary.
 8. `npm run analyze:owner-files -- startup_readiness_owner startup_support_evidence --markdown` - passed; selected diagnostics support-evidence files after focused probe.
 9. `node --test test/diagnostics/failure-class-taxonomy.test.js test/diagnostics/stop-condition-decision.test.js` - failed before runtime classifier change on the current report regression, then passed after implementation.
 10. `node --test test/diagnostics/topology-convergence-graph.test.js test/diagnostics/failure-class-taxonomy.test.js test/diagnostics/stop-condition-decision.test.js test/diagnostics/causal-graph-builder.test.js` - passed, 32/32.
+
+## Commit And Push Ledger
+
+1. Focused package commit: `e2b1aeed`
+2. Pushed to: `origin/codex/pending-ack-eligibility-filter`
+3. Commit contains only package-owned files/package-status/allowed sprint handoff: yes
