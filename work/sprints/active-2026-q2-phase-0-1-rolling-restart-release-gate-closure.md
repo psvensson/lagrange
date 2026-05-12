@@ -33,6 +33,7 @@ trail is:
 17. `test-output/reports/rolling-restart-current-release-gate-after-dispatch-pending-step-timeout-contract-fix.report.json`
 18. `test-output/reports/rolling-restart-current-release-gate-after-event-driven-residual-recovery-fix.report.json`
 19. `test-output/reports/rolling-restart-current-release-gate-after-rebalancer-handoff-retry-scheduled-v2-fix.report.json`
+20. `test-output/reports/rolling-restart-current-release-gate-after-rebalancer-leader-operation-scheduling-priority-recovery-fix.report.json`
 
 The matching playback is:
 
@@ -55,46 +56,46 @@ The matching playback is:
 17. `test-output/reports/.playback/rolling-restart-current-release-gate-after-dispatch-pending-step-timeout-contract-fix/rolling-restart/`
 18. `test-output/reports/.playback/rolling-restart-current-release-gate-after-event-driven-residual-recovery-fix/rolling-restart/`
 19. `test-output/reports/.playback/rolling-restart-current-release-gate-after-rebalancer-handoff-retry-scheduled-v2-fix/rolling-restart/`
+20. `test-output/reports/.playback/rolling-restart-current-release-gate-after-rebalancer-leader-operation-scheduling-priority-recovery-fix/rolling-restart/`
 
 ## Current Blocker Snapshot
 
 Latest package:
 
-1. [Rolling Restart Operation Workflow Progress Stage3 Timeout Progression](../packages/done-20260512-rolling-restart-operation-workflow-progress-stage3-timeout-progression.md)
-2. [Rolling Restart Operation Workflow Progress Event Driven Dispatch Pending](../packages/done-20260512-rolling-restart-operation-workflow-progress-event-driven-dispatch-pending.md)
-3. [Rolling Restart Operation Workflow Rebalancer Handoff Retry Scheduled V2](../packages/done-20260511-rolling-restart-operation-workflow-rebalancer-handoff-retry-scheduled-v2.md)
+1. [Rolling Restart Rebalancer Leader Operation Scheduling Priority Recovery](../packages/done-20260512-rolling-restart-rebalancer-leader-operation-scheduling-priority-recovery.md)
+2. [Rolling Restart Operation Workflow Progress Stage3 Timeout Progression](../packages/done-20260512-rolling-restart-operation-workflow-progress-stage3-timeout-progression.md)
+3. [Rolling Restart Operation Workflow Progress Event Driven Dispatch Pending](../packages/done-20260512-rolling-restart-operation-workflow-progress-event-driven-dispatch-pending.md)
 
 Next package:
 
-1. [Rolling Restart Rebalancer Leader Operation Scheduling Priority Recovery](../packages/active-20260512-rolling-restart-rebalancer-leader-operation-scheduling-priority-recovery.md)
+1. [Rolling Restart Operation Workflow Progress Priority Recovery Event Wait](../packages/todo-20260512-rolling-restart-operation-workflow-progress-priority-recovery-event-wait.md)
 
 Latest representative evidence:
 
 1. Scenario: `rolling-restart`
 2. Artifact:
-   `test-output/reports/rolling-restart-current-release-gate-after-workflow-progress-stage3-timeout-progression-fix.report.json`
+   `test-output/reports/rolling-restart-current-release-gate-after-rebalancer-leader-operation-scheduling-priority-recovery-fix.report.json`
 3. Report total/passed/failed: `1/0/1`
-4. Duration: approximately `133794ms`
+4. Duration: approximately `138185ms`
 5. Active gate: failed at `2/5` terminal progress
 6. Snapshot coverage: `2/5`
 7. Publication: `PUBLISHED`
 8. Pending acknowledgements: `0`
 9. Current frontier: `priority_recovery_partition_progress` under
-   `rebalancer_leader / operation_scheduling`, state `blocked`, dominant
-   source reason `priority_recovery_operation_scheduling_event_driven`
-   (`priority_recovery_progress_blocked` in owner-contract summary).
-10. Dominant witness: priority recovery `needs_operation`,
-    `nextRequiredAction=create_recovery_operation`.
+   `operation_workflow_owner / workflow_progress`, state `retryable`, dominant
+   reason `priority_recovery_event_driven_wait`.
+10. Dominant witness: priority recovery `recovering_in_flight`,
+    `nextRequiredAction=wait_for_operation_progress`.
 11. Blocked partitions: `control_plane_publications-p1`,
     `replica_operations-p1`, `sql_transaction_participants-p1`,
-    `sql_transactions-p1`, and `sql_write_operations-p1`.
+    and `sql_write_operations-p1`.
 12. Priority recovery invariants: `passed`
-13. Representative outcome: migrated. The causal decision is `ask_human`
-    because priority recovery classified evidence is incomplete, but topology
-    explain names the new direct owner boundary.
+13. Representative outcome: migrated. The causal decision is
+    `accept_classified_backpressure` with stop condition
+    `classified_backpressure` and `0` failed invariants.
 14. Exact residual owner/path for a follow-on runtime package:
-    `rebalancer_leader / operation_scheduling` priority recovery operation
-    creation.
+    `operation_workflow_owner / workflow_progress` priority recovery
+    event-driven wait.
 
 The publication-convergence package still holds the prior
 `topology_publication_owner / publication_convergence` reduction:
@@ -115,11 +116,12 @@ successor implementation, not as the canonical owner-boundary frontier, because
 owner-contract evidence keeps `publication_ack_convergence` satisfied.
 
 Startup active-gate snapshot coverage remains downstream until the
-rebalancer-leader operation-scheduling frontier is either green or promoted by
-fresh representative evidence. The latest causal model keeps the first critical
-path at `priority_recovery_partition_progress`; this sprint should not reopen
-startup active-gate or publication-convergence work while priority recovery
-operation creation remains the named owner boundary.
+operation-workflow progress frontier is either green, reduced, classified as
+bounded non-frontier work, or promoted by fresh representative evidence. The
+latest causal model keeps the first critical path at
+`priority_recovery_partition_progress`; this sprint should not reopen startup
+active-gate or publication-convergence work while priority recovery workflow
+progress remains the named owner boundary.
 
 ## Scope Basis
 

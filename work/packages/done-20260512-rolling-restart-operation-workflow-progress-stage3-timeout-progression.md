@@ -76,7 +76,7 @@
   "predecessor": "work/packages/done-20260512-rolling-restart-operation-workflow-progress-event-driven-dispatch-pending.md",
   "closed": "2026-05-12",
   "commitAndPushLedgerRequired": true,
-  "successor": "work/packages/active-20260512-rolling-restart-rebalancer-leader-operation-scheduling-priority-recovery.md"
+  "successor": "work/packages/done-20260512-rolling-restart-rebalancer-leader-operation-scheduling-priority-recovery.md"
 }
 -->
 

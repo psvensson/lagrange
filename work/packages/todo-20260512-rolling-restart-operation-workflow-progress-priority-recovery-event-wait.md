@@ -1,9 +1,10 @@
+# Rolling Restart Operation Workflow Progress Priority Recovery Event Wait
+
+<!-- work-package
 {
-  "schema": "current-blocker-v1",
-  "generatedBy": "scripts/work-tracker.js",
-  "sprint": "work/sprints/active-2026-q2-phase-0-1-rolling-restart-release-gate-closure.md",
-  "package": "work/packages/todo-20260512-rolling-restart-operation-workflow-progress-priority-recovery-event-wait.md",
+  "schema": "work-package-v1",
   "status": "todo",
+  "opened": "2026-05-12",
   "scenario": "rolling-restart",
   "artifact": "test-output/reports/rolling-restart-current-release-gate-after-rebalancer-leader-operation-scheduling-priority-recovery-fix.report.json",
   "playback": "test-output/reports/.playback/rolling-restart-current-release-gate-after-rebalancer-leader-operation-scheduling-priority-recovery-fix/rolling-restart/",
@@ -80,3 +81,56 @@
   },
   "predecessor": "work/packages/done-20260512-rolling-restart-rebalancer-leader-operation-scheduling-priority-recovery.md"
 }
+-->
+
+## Why
+
+The rebalancer-leader scheduling fix reduced the prior `needs_operation`
+frontier. Fresh representative evidence now shows priority recovery operations
+exist and are `recovering_in_flight`, so the remaining first frontier belongs to
+operation workflow progress, not operation scheduling.
+
+## Scope Basis
+
+Roadmap Phase `0.1 - Internal Coherence`: topology workflow stabilization,
+failure simulations, and production guarantees in the Community / AGPL repo.
+
+## Model Fit
+
+- Package class: `representative-frontier-closure`
+- Intended minimum model: `gpt-5.3-codex`
+- Scope shape: `owner-boundary-contraction/current-frontier`
+- Owned files: operation workflow owner progress/timeout files, focused
+  workflow-progress tests, this package, generated current-blocker files,
+  `work/model-ledger.jsonl`, and the active sprint file only if current-blocker
+  truth requires it.
+- Forbidden files and behavior: rebalancer leader operation scheduling unless
+  fresh proof regresses to that owner, startup active-gate implementation,
+  topology publication convergence implementation, harness timeout increases,
+  Pro or Enterprise behavior.
+- Frozen decisions: publication ACK convergence is satisfied/non-frontier;
+  rebalancer leader operation scheduling has created recovery work and is not
+  the current owner boundary; startup active-gate remains downstream.
+- Escalation triggers: focused proof requires reopening scheduling, startup
+  active-gate, publication convergence, or broad architecture/budget behavior.
+- Focused proof: `npm test -- test/rebalancer/operation-workflow-progress-event-driven-reentry.test.js test/rebalancer/coordinator-created-operation-progress-remote-handoff.test.js test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js`.
+
+## In Scope
+
+1. Review the closed rebalancer-leader operation scheduling package before
+   activation.
+2. Classify or own the `recovering_in_flight` priority recovery workflow
+   progress wait.
+3. Add or extend focused tests that prove dispatch, retry, timeout, progress, or
+   bounded wait classification.
+4. Rerun selected static guardrails for touched operation-workflow owner files.
+5. Rerun one representative `rolling-restart --fast-local` gate or classify the
+   unchanged frontier with focused proof.
+
+## Out Of Scope
+
+1. Startup active-gate, publication-convergence, harness timeout, Pro, or
+   Enterprise behavior.
+2. Rebalancer leader operation scheduling changes unless fresh focused evidence
+   proves regression to `needs_operation`.
+3. Presentation-only relabeling that hides owner-boundary evidence.

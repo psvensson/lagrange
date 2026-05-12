@@ -3,7 +3,7 @@
 <!-- work-package
 {
   "schema": "work-package-v1",
-  "status": "active",
+  "status": "done",
   "opened": "2026-05-12",
   "scenario": "rolling-restart",
   "artifact": "test-output/reports/rolling-restart-current-release-gate-after-workflow-progress-stage3-timeout-progression-fix.report.json",
@@ -28,7 +28,7 @@
     "src/rebalancer/unified-rebalancer-segment-4-stage-shared.js",
     "test/rebalancer/unified-rebalancer-part-5-2-stage-2.js",
     "test/rebalancer/unified-rebalancer-core-05-test-cases.js",
-    "work/packages/active-20260512-rolling-restart-rebalancer-leader-operation-scheduling-priority-recovery.md",
+    "work/packages/done-20260512-rolling-restart-rebalancer-leader-operation-scheduling-priority-recovery.md",
     "work/sprints/active-2026-q2-phase-0-1-rolling-restart-release-gate-closure.md",
     "work/sprints/current-blocker.json",
     "work/sprints/current-blocker.md",
@@ -76,7 +76,10 @@
     "resultClassification": "migrated",
     "stopCondition": "migrate-owner-boundary"
   },
-  "predecessor": "work/packages/done-20260512-rolling-restart-operation-workflow-progress-stage3-timeout-progression.md"
+  "predecessor": "work/packages/done-20260512-rolling-restart-operation-workflow-progress-stage3-timeout-progression.md",
+  "closed": "2026-05-12",
+  "commitAndPushLedgerRequired": true,
+  "successor": "work/packages/todo-20260512-rolling-restart-operation-workflow-progress-priority-recovery-event-wait.md"
 }
 -->
 
@@ -125,7 +128,7 @@ failure simulations, and production guarantees in the Community / AGPL repo.
       `work/packages/done-20260512-rolling-restart-operation-workflow-progress-stage3-timeout-progression.md`.
 - [x] Implementation subagent recorded:
       Agent Faraday (019e1bce-391e-7182-92bf-1a3126d4c18e) implemented
-      `work/packages/active-20260512-rolling-restart-rebalancer-leader-operation-scheduling-priority-recovery.md`.
+      `work/packages/done-20260512-rolling-restart-rebalancer-leader-operation-scheduling-priority-recovery.md`.
 
 ## In Scope
 
@@ -210,3 +213,9 @@ failure simulations, and production guarantees in the Community / AGPL repo.
 - Classification: migrated to `operation_workflow_owner / workflow_progress`.
   Startup active-gate snapshot coverage remains downstream and was not pursued
   in this package.
+
+## Commit And Push Ledger
+
+1. Focused package commit: `5aac69aa`
+2. Pushed to: `origin/codex/pending-ack-eligibility-filter`
+3. Commit contains only package-owned files/package-status/allowed sprint handoff: yes
