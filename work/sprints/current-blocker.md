@@ -2,209 +2,157 @@
 
 # Current Blocker
 
-Sprint: `work/sprints/active-2026-q2-phase-0-1-rolling-restart-release-gate-closure.md`
+Sprint: `work/sprints/archived/done-2026-q2-phase-0-1-rolling-restart-release-gate-closure.md`
 
-Package: `work/packages/active-20260511-workflow-tooling-llm-usability.md`
+Package: `work/packages/done-20260512-rolling-restart-startup-readiness-support-evidence-boundary.md`
 
-Workflow lane: `lightweight-maintenance`
+Workflow lane: `scenario-release-gate`
 
-Scenario: `none`
+Scenario: `rolling-restart`
 
-Artifact: `none`
+Artifact: `test-output/reports/rolling-restart-current-release-gate-after-workflow-progress-direct-chain-owner-proof.report.json`
 
-Playback: `none`
+Playback: `test-output/reports/.playback/rolling-restart-current-release-gate-after-workflow-progress-direct-chain-owner-proof/rolling-restart/`
 
 ## Boundary
 
-Owner: `workflow_tooling_owner`
+Owner: `startup_readiness_owner`
 
-Boundary: `llm_usability_handoff`
+Boundary: `startup_support_evidence`
 
-Dominant reason: `tooling_handoff_false_positive_and_large_context`
+Dominant reason: `startup_readiness_blocked`
 
-Current state: Dedicated workflow-tooling package records the local LLM-usability slice without taking ownership of the active runtime representative package. The implementation adds explicit scope fields, phased validation, schema-backed package scaffolding, doctor suggestions, combined LLM start handoff, owner-file discovery, residual extraction, subagent prompt generation, oversized-file extraction candidates, and repo-wide tool-first steering so guidance is not localized to one sprint.
+Current state: Focused startup-readiness support-evidence implementation reduced the weak readiness terminal evidence. The current report still has priority_recovery_partition_progress retryable under operation_workflow_owner / workflow_progress, but readiness_startup_support is now deferred with supportPath inherited_active_gate_no_progress instead of terminal_failed readiness ownership. Publication ACK convergence remains satisfied, and startup_active_gate_owner / snapshot_coverage remains the projected downstream topology edge after priority progress closes.
 
 ## Next Action
 
-Validate scope-field handoff behavior, phased validation, tracker, context, package doctor suggestions, scaffolder, LLM-start handoff, owner-file index, priority residual extraction, subagent prompt generator, oversized-file candidates, representative evidence summary, and harness owner-card guidance.
+Sprint closure recorded this package as the final runtime handoff. Future work must start from a fresh package and fresh representative evidence; do not implement operation_workflow_owner / workflow_progress or startup_active_gate_owner / snapshot_coverage runtime behavior from this package.
 
 ## Proof Ladder
 
-1. `node --test test/scripts/work-context.test.js test/scripts/work-tracker-subagent-ledger.test.js test/scripts/summarize-representative-evidence.test.js test/scripts/work-llm-usability-tools.test.js test/scripts/list-commands.test.js`
-2. `npm run work:package:doctor -- work/packages/active-20260511-workflow-tooling-llm-usability.md`
-3. `npm run work:package:doctor -- --suggest work/packages/active-20260511-workflow-tooling-llm-usability.md`
-4. `npm run work:package:doctor -- --fix-dry-run work/packages/active-20260511-workflow-tooling-llm-usability.md`
-5. `npm run work:package:schema`
-6. `npm run work:package:new -- --title "LLM Usability Dry Run" --slug llm-usability-dry-run --lane lightweight-maintenance --owner workflow_tooling_owner --boundary llm_usability_handoff --dominant-reason scaffolder_dry_run --next-action "Validate package scaffolding" --write-scope scripts/work-package-new.js --proof "git diff --check"`
-7. `npm run work:llm-start -- --package work/packages/active-20260511-workflow-tooling-llm-usability.md`
-8. `npm run analyze:owner-files -- workflow_tooling_owner llm_usability_handoff --markdown`
-9. `npm run analyze:priority-recovery-residuals -- test/scripts/__fixtures__/topology-convergence/active-gate-snapshot-partial-residual.fixture.json --markdown`
-10. `npm run work:subagent-prompt -- --role implementation --package work/packages/active-20260511-workflow-tooling-llm-usability.md`
-11. `npm run work:oversized-next -- --top 3 --markdown`
-12. `npm run work:evidence-summary -- test/scripts/__fixtures__/topology-convergence/active-gate-snapshot-partial-residual.fixture.json`
-13. `npm run work:validate -- --entry --all`
-14. `npm run work:validate -- --pre-impl --all`
-15. `npm run work:validate -- --closure work/packages/active-20260511-workflow-tooling-llm-usability.md`
+1. `npm run work:subagent-prompt -- --role implementation --package work/packages/done-20260512-rolling-restart-startup-readiness-support-evidence-boundary.md`
+2. `npm run work:evidence-summary -- test-output/reports/rolling-restart-current-release-gate-after-workflow-progress-direct-chain-owner-proof.report.json`
+3. `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-current-release-gate-after-workflow-progress-direct-chain-owner-proof.report.json`
+4. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-current-release-gate-after-workflow-progress-direct-chain-owner-proof.report.json --explain readiness_startup_support`
+5. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-current-release-gate-after-workflow-progress-direct-chain-owner-proof.report.json --explain active_gate_snapshot_coverage`
+6. `npm run analyze:owner-files -- startup_readiness_owner startup_support_evidence --markdown`
+7. `node --test test/diagnostics/topology-convergence-graph.test.js test/diagnostics/failure-class-taxonomy.test.js test/diagnostics/stop-condition-decision.test.js test/diagnostics/causal-graph-builder.test.js`
+8. `representative rolling-restart rerun or explicit migration proof: npm run work:evidence-summary -- test-output/reports/rolling-restart-current-release-gate-after-workflow-progress-direct-chain-owner-proof.report.json`
 
 ## Model Fit
 
-Package class: `bounded-implementation`
+Package class: `representative-frontier-closure`
 
-Intended minimum model: `gpt-5.3-codex-spark`
+Intended minimum model: `gpt-5.3-codex`
 
-Scope shape: `leaf-slice`
+Scope shape: `owner-boundary-migration/current-frontier`
 
 Escalation triggers:
 
-1. `scope expands into runtime active-gate behavior`
-2. `package doctor becomes a replacement for real subagent sequencing`
-3. `evidence summary reads raw logs or mutates artifacts`
-4. `owner-file or residual extraction tooling mutates runtime artifacts`
+1. `evidence promotes startup_active_gate_owner / snapshot_coverage ahead of startup readiness support evidence`
+2. `the fix requires operation_workflow_owner / workflow_progress runtime changes`
+3. `the fix requires publication convergence, harness timeout, Pro, or Enterprise behavior`
+4. `startup readiness support evidence is only presentation debt and not an owner-runtime boundary`
 
 ## Causal Governance
 
-Causal hypothesis: `unknown`
+Causal hypothesis: `If startup_readiness_owner / startup_support_evidence owns the migrated residual, startup readiness terminal no-progress evidence should identify a bounded support-evidence owner path instead of leaving readiness_terminal with source unknown and cause none.`
 
-Stop-condition check: `unknown`
+Stop-condition check: `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-current-release-gate-after-workflow-progress-direct-chain-owner-proof.report.json`
 
-Expected causal-model change: `unknown`
+Expected causal-model change: `The startup readiness support evidence boundary reduces, converges, or migrates to one named owner before startup active-gate snapshot coverage is implemented.`
 
-Representative outcome: `unknown`
+Representative outcome: `reduced`
 
-Causal debt: `unknown`
+Causal debt: `The fresh report remains red after workflow progress became retryable, but this package reduced the startup_readiness_owner / startup_support_evidence debt. Causal stop decision is now classified_backpressure with reason priority_recovery_backpressure; readiness_startup_support is deferred through inherited_active_gate_no_progress instead of terminal_failed startup readiness ownership.`
 
-Cross-boundary review: `unknown`
+Cross-boundary review: `Review subagent 019e1d40-9ba1-79e1-9ec3-c4cf459a9a9d found fixes-required on this startup-readiness handoff. Fix subagent 019e1d45-e12e-7083-b20c-26c71520368f repaired the handoff, and implementation subagent 019e1d9f-9681-78f3-af24-4f94a1d5c072 reduced the readiness support-evidence boundary.`
 
 ## Scenario Causal Closure
 
-Reference scenario/probe: `unknown`
+Reference scenario/probe: `rolling-restart startup readiness support evidence after workflow-progress migration`
 
 Phase chain:
 
-1. None recorded
+1. `publication convergence`
+2. `priority recovery operation workflow progress`
+3. `startup readiness support evidence`
+4. `startup active-gate snapshot coverage`
 
-Current first frontier: `unknown`
+Current first frontier: `priority_recovery_partition_progress is retryable under operation_workflow_owner / workflow_progress; causal stop is classified_backpressure while readiness_startup_support is deferred through inherited_active_gate_no_progress and not the topology first frontier.`
 
 Known downstream blockers:
 
-1. None recorded
+1. `startup_active_gate_owner / snapshot_coverage is the projected topology edge after priority recovery becomes retryable`
+2. `publication_ack_convergence remains satisfied with PUBLISHED and zero pending ACKs`
+3. `operation_workflow_owner / workflow_progress remains retryable priority_recovery_event_driven_wait and is out of scope for this successor`
 
-Missing causal edge: `unknown`
+Missing causal edge: `Resolved for this package: startup readiness no-progress evidence with source unknown and cause none now records supportPath inherited_active_gate_no_progress and stays deferred behind active-gate snapshot coverage instead of terminal readiness ownership.`
 
-Missing causal edge probe: `unknown`
+Missing causal edge probe: `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-current-release-gate-after-workflow-progress-direct-chain-owner-proof.report.json --explain readiness_startup_support plus npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-current-release-gate-after-workflow-progress-direct-chain-owner-proof.report.json`
 
-Bounded progress proof: `unknown`
+Bounded progress proof: `Implementation must prove a deterministic wake, retry, timeout, reconcile, drain, dispatch, delivery, timer, advance, or bounded migration path for startup readiness support evidence.`
 
-Bounded progress proof artifact: `unknown`
+Bounded progress proof artifact: `test-output/reports/rolling-restart-current-release-gate-after-workflow-progress-direct-chain-owner-proof.report.json plus focused startup_readiness_owner / startup_support_evidence fixture or owner tests selected by implementation`
 
-Expected observable transition: `unknown`
+Expected observable transition: `Readiness terminal evidence reduces from source unknown and cause none to a named support-evidence owner path, or migrates to startup active-gate snapshot coverage with explicit owner evidence.`
 
-Max progress bound: `unknown`
+Max progress bound: `one startup readiness support evidence probe or focused readiness-support owner test`
 
-Same-frontier fallback: `unknown`
+Same-frontier fallback: `keep startup_readiness_owner / startup_support_evidence active and do not implement startup active-gate snapshot coverage without fresh owner evidence`
 
-Expected next frontier: `unknown`
+Expected next frontier: `operation workflow priority recovery remains retryable; startup active-gate snapshot coverage remains projected after priority progress closes`
 
-Result classification: `unknown`
+Result classification: `reduced`
 
-Stop condition: `unknown`
+Stop condition: `classification-only-stop`
 
 ## Scope
 
 Write scope:
 
-1. `scripts/work-package-schema.js`
-2. `scripts/work-package-new.js`
-3. `scripts/work-llm-start.js`
-4. `scripts/analyze-owner-files.js`
-5. `scripts/analyze-priority-recovery-residuals.js`
-6. `scripts/work-subagent-prompt.js`
-7. `scripts/work-oversized-next.js`
-8. `scripts/work-tracker.js`
-9. `scripts/work-context.js`
-10. `scripts/summarize-representative-evidence.js`
-11. `scripts/check-file-size-thresholds.js`
-12. `scripts/list-commands.js`
-13. `AGENTS.md`
-14. `.kiro/steering/workflow-guidelines.md`
-15. `.kiro/steering/testing-guidelines.md`
-16. `.kiro/steering/llm/README.md`
-17. `.kiro/steering/llm/core.md`
-18. `.kiro/steering/llm/governance.md`
-19. `.kiro/steering/llm/manifest.json`
-20. `.kiro/steering/llm/rules.json`
-21. `.kiro/steering/llm/testing.md`
-22. `package.json`
-23. `test/scripts/work-context.test.js`
-24. `test/scripts/work-tracker-subagent-ledger.test.js`
-25. `test/scripts/summarize-representative-evidence.test.js`
-26. `test/scripts/work-llm-usability-tools.test.js`
-27. `test/scripts/list-commands.test.js`
-28. `test/distributed/harness/README.md`
-29. `work/README.md`
-30. `work/templates/lightweight-maintenance-package.md`
-31. `work/templates/work-package-template.md`
-32. `work/templates/runtime-owner-package.md`
-33. `work/templates/scenario-closure-package.md`
-34. `work/packages/active-20260511-workflow-tooling-llm-usability.md`
+1. `work/packages/done-20260512-rolling-restart-startup-readiness-support-evidence-boundary.md`
+2. `work/sprints/archived/done-2026-q2-phase-0-1-rolling-restart-release-gate-closure.md`
+3. `src/diagnostics/failure-class-taxonomy.js`
+4. `src/diagnostics/topology-convergence-graph.js`
+5. `src/diagnostics/causal-graph-builder.js`
+6. `test/diagnostics/failure-class-taxonomy.test.js`
+7. `test/diagnostics/topology-convergence-graph.test.js`
+8. `test/diagnostics/stop-condition-decision.test.js`
+9. `work/model-ledger.jsonl`
 
 Handoff files:
 
-1. `work/packages/done-20260512-rolling-restart-startup-readiness-support-evidence-boundary.md`
-2. `work/sprints/active-2026-q2-phase-0-1-rolling-restart-release-gate-closure.md`
+1. `work/packages/done-20260512-rolling-restart-operation-workflow-progress-direct-chain-after-owner-proof.md`
+2. `work/packages/done-20260511-workflow-tooling-llm-usability.md`
+3. `test-output/reports/rolling-restart-current-release-gate-after-workflow-progress-direct-chain-owner-proof.report.json`
+4. `test-output/reports/.playback/rolling-restart-current-release-gate-after-workflow-progress-direct-chain-owner-proof/rolling-restart/`
+5. `test-output/reports/.playback/rolling-restart-current-release-gate-after-workflow-progress-direct-chain-owner-proof/rolling-restart/failure-bundle.json`
 
 Generated files:
 
-1. `.kiro/steering/llm/manifest.json`
-2. `.kiro/steering/llm/rules.json`
-3. `.kiro/steering/llm/testing.md`
-4. `.kiro/steering/llm/governance.md`
+1. `work/sprints/current-blocker.json`
+2. `work/sprints/current-blocker.md`
 
 Candidate runtime files:
 
-1. None recorded
+1. `src/diagnostics/failure-class-taxonomy.js`
+2. `src/diagnostics/topology-convergence-graph.js`
+3. `src/diagnostics/causal-graph-builder.js`
 
 Commit scope:
 
-1. `scripts/work-package-schema.js`
-2. `scripts/work-package-new.js`
-3. `scripts/work-llm-start.js`
-4. `scripts/analyze-owner-files.js`
-5. `scripts/analyze-priority-recovery-residuals.js`
-6. `scripts/work-subagent-prompt.js`
-7. `scripts/work-oversized-next.js`
-8. `scripts/work-tracker.js`
-9. `scripts/work-context.js`
-10. `scripts/summarize-representative-evidence.js`
-11. `scripts/check-file-size-thresholds.js`
-12. `scripts/list-commands.js`
-13. `AGENTS.md`
-14. `.kiro/steering/workflow-guidelines.md`
-15. `.kiro/steering/testing-guidelines.md`
-16. `.kiro/steering/llm/README.md`
-17. `.kiro/steering/llm/core.md`
-18. `.kiro/steering/llm/governance.md`
-19. `.kiro/steering/llm/manifest.json`
-20. `.kiro/steering/llm/rules.json`
-21. `.kiro/steering/llm/testing.md`
-22. `package.json`
-23. `test/scripts/work-context.test.js`
-24. `test/scripts/work-tracker-subagent-ledger.test.js`
-25. `test/scripts/summarize-representative-evidence.test.js`
-26. `test/scripts/work-llm-usability-tools.test.js`
-27. `test/scripts/list-commands.test.js`
-28. `test/distributed/harness/README.md`
-29. `work/README.md`
-30. `work/templates/lightweight-maintenance-package.md`
-31. `work/templates/work-package-template.md`
-32. `work/templates/runtime-owner-package.md`
-33. `work/templates/scenario-closure-package.md`
-34. `work/packages/active-20260511-workflow-tooling-llm-usability.md`
-35. `work/packages/todo-20260511-workflow-tooling-llm-usability.md`
-36. `work/packages/done-20260512-rolling-restart-startup-readiness-support-evidence-boundary.md`
-37. `work/sprints/active-2026-q2-phase-0-1-rolling-restart-release-gate-closure.md`
-38. `work/sprints/current-blocker.json`
-39. `work/sprints/current-blocker.md`
+1. `work/packages/done-20260512-rolling-restart-startup-readiness-support-evidence-boundary.md`
+2. `work/sprints/archived/done-2026-q2-phase-0-1-rolling-restart-release-gate-closure.md`
+3. `work/sprints/current-blocker.json`
+4. `work/sprints/current-blocker.md`
+5. `src/diagnostics/failure-class-taxonomy.js`
+6. `src/diagnostics/topology-convergence-graph.js`
+7. `src/diagnostics/causal-graph-builder.js`
+8. `test/diagnostics/failure-class-taxonomy.test.js`
+9. `test/diagnostics/topology-convergence-graph.test.js`
+10. `test/diagnostics/stop-condition-decision.test.js`
+11. `work/model-ledger.jsonl`
 
 Legacy touched files:
 

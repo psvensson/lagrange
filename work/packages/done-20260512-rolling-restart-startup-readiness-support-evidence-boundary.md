@@ -13,7 +13,7 @@
   "boundary": "startup_support_evidence",
   "dominantReason": "startup_readiness_blocked",
   "currentState": "Focused startup-readiness support-evidence implementation reduced the weak readiness terminal evidence. The current report still has priority_recovery_partition_progress retryable under operation_workflow_owner / workflow_progress, but readiness_startup_support is now deferred with supportPath inherited_active_gate_no_progress instead of terminal_failed readiness ownership. Publication ACK convergence remains satisfied, and startup_active_gate_owner / snapshot_coverage remains the projected downstream topology edge after priority progress closes.",
-  "nextAction": "Parent package owner should review and close this focused startup-readiness support-evidence contraction with the required commit/push proof, then decide the next package from normalized evidence. Do not implement operation_workflow_owner / workflow_progress or startup_active_gate_owner / snapshot_coverage runtime behavior from this package.",
+  "nextAction": "Sprint closure recorded this package as the final runtime handoff. Future work must start from a fresh package and fresh representative evidence; do not implement operation_workflow_owner / workflow_progress or startup_active_gate_owner / snapshot_coverage runtime behavior from this package.",
   "proof": [
     "npm run work:subagent-prompt -- --role implementation --package work/packages/done-20260512-rolling-restart-startup-readiness-support-evidence-boundary.md",
     "npm run work:evidence-summary -- test-output/reports/rolling-restart-current-release-gate-after-workflow-progress-direct-chain-owner-proof.report.json",
@@ -26,7 +26,7 @@
   ],
   "writeScope": [
     "work/packages/done-20260512-rolling-restart-startup-readiness-support-evidence-boundary.md",
-    "work/sprints/active-2026-q2-phase-0-1-rolling-restart-release-gate-closure.md",
+    "work/sprints/archived/done-2026-q2-phase-0-1-rolling-restart-release-gate-closure.md",
     "src/diagnostics/failure-class-taxonomy.js",
     "src/diagnostics/topology-convergence-graph.js",
     "src/diagnostics/causal-graph-builder.js",
@@ -53,7 +53,7 @@
   ],
   "commitScope": [
     "work/packages/done-20260512-rolling-restart-startup-readiness-support-evidence-boundary.md",
-    "work/sprints/active-2026-q2-phase-0-1-rolling-restart-release-gate-closure.md",
+    "work/sprints/archived/done-2026-q2-phase-0-1-rolling-restart-release-gate-closure.md",
     "work/sprints/current-blocker.json",
     "work/sprints/current-blocker.md",
     "src/diagnostics/failure-class-taxonomy.js",
@@ -181,7 +181,7 @@ evidence promotes another owner boundary.
 ## In Scope
 
 1. work/packages/done-20260512-rolling-restart-startup-readiness-support-evidence-boundary.md
-2. work/sprints/active-2026-q2-phase-0-1-rolling-restart-release-gate-closure.md
+2. work/sprints/archived/done-2026-q2-phase-0-1-rolling-restart-release-gate-closure.md
 3. work/sprints/current-blocker.json
 4. work/sprints/current-blocker.md
 5. The latest representative artifact, playback, predecessor package, and
@@ -205,7 +205,7 @@ evidence promotes another owner boundary.
 - Package class: `representative-frontier-closure`
 - Intended minimum model: `gpt-5.3-codex`
 - Scope shape: `owner-boundary-migration/current-frontier`
-- Owned files: `src/diagnostics/failure-class-taxonomy.js`, `src/diagnostics/topology-convergence-graph.js`, `src/diagnostics/causal-graph-builder.js`, `test/diagnostics/failure-class-taxonomy.test.js`, `test/diagnostics/topology-convergence-graph.test.js`, `test/diagnostics/stop-condition-decision.test.js`, `work/packages/done-20260512-rolling-restart-startup-readiness-support-evidence-boundary.md`, `work/sprints/active-2026-q2-phase-0-1-rolling-restart-release-gate-closure.md`, `work/sprints/current-blocker.json`, `work/sprints/current-blocker.md`, `work/model-ledger.jsonl`
+- Owned files: `src/diagnostics/failure-class-taxonomy.js`, `src/diagnostics/topology-convergence-graph.js`, `src/diagnostics/causal-graph-builder.js`, `test/diagnostics/failure-class-taxonomy.test.js`, `test/diagnostics/topology-convergence-graph.test.js`, `test/diagnostics/stop-condition-decision.test.js`, `work/packages/done-20260512-rolling-restart-startup-readiness-support-evidence-boundary.md`, `work/sprints/archived/done-2026-q2-phase-0-1-rolling-restart-release-gate-closure.md`, `work/sprints/current-blocker.json`, `work/sprints/current-blocker.md`, `work/model-ledger.jsonl`
 - Forbidden files: `operation_workflow_owner / workflow_progress runtime changes`, `startup active-gate implementation`, `publication-convergence implementation`, `harness timeout increases`, `Pro or Enterprise behavior`
 - Frozen decisions: package scope and lane stay bounded unless explicitly escalated.
 - Escalation triggers: startup active-gate snapshot coverage becomes the

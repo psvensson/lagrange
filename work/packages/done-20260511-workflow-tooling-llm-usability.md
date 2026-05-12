@@ -69,7 +69,7 @@
   ],
   "handoffFiles": [
     "work/packages/done-20260512-rolling-restart-startup-readiness-support-evidence-boundary.md",
-    "work/sprints/active-2026-q2-phase-0-1-rolling-restart-release-gate-closure.md"
+    "work/sprints/archived/done-2026-q2-phase-0-1-rolling-restart-release-gate-closure.md"
   ],
   "generatedFiles": [
     ".kiro/steering/llm/manifest.json",
@@ -115,7 +115,7 @@
     "work/packages/done-20260511-workflow-tooling-llm-usability.md",
     "work/packages/todo-20260511-workflow-tooling-llm-usability.md",
     "work/packages/done-20260512-rolling-restart-startup-readiness-support-evidence-boundary.md",
-    "work/sprints/active-2026-q2-phase-0-1-rolling-restart-release-gate-closure.md",
+    "work/sprints/archived/done-2026-q2-phase-0-1-rolling-restart-release-gate-closure.md",
     "work/sprints/current-blocker.json",
     "work/sprints/current-blocker.md"
   ],

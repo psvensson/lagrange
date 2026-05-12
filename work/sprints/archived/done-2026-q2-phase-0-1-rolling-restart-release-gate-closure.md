@@ -1,9 +1,30 @@
 # Phase 0.1 Rolling Restart Release Gate Closure Sprint
 
-Status: active. This sprint is the active release-gate closure track
-before `work/sprints/active-2026-q2-spec-led-runtime-modularization.md` was
-activated by human direction on May 9, 2026. Its latest closed package and
-representative evidence remain predecessor proof for the new sprint.
+Status: done. This sprint closed on May 12, 2026 after the final
+startup-readiness support-evidence package reduced its owner boundary and the
+representative causal analyzer accepted the remaining priority-recovery wait as
+classified backpressure.
+
+## Exit Result
+
+This sprint is complete by classified causal closure, not by a green
+`rolling-restart` run.
+
+Exit proof:
+
+1. Latest representative artifact:
+   `test-output/reports/rolling-restart-current-release-gate-after-workflow-progress-direct-chain-owner-proof.report.json`.
+2. Startup readiness support evidence reduced from terminal failed ownership to
+   deferred `readiness_inherited_active_gate_no_progress` with
+   `supportPath=inherited_active_gate_no_progress`.
+3. Publication ACK convergence remains satisfied with `PUBLISHED` and zero
+   pending acknowledgements.
+4. Causal stop decision is `classified_backpressure`, outcome
+   `accept_classified_backpressure`, reason `priority_recovery_backpressure`,
+   with no failed invariants.
+5. No active package remains in this sprint. Future runtime work must start
+   from a fresh package and fresh evidence rather than reopening this closed
+   sprint handoff.
 
 ## Goal
 
@@ -11,10 +32,10 @@ Get to the `0.1` release by closing the representative `rolling-restart`
 distributed harness gate, or by migrating each remaining failure to one named
 owner-boundary package with replayable proof.
 
-## Current Blocker Snapshot
+## Closure Snapshot
 
-- Current package:
-  [Rolling Restart Startup Readiness Support Evidence Boundary](../packages/done-20260512-rolling-restart-startup-readiness-support-evidence-boundary.md)
+- Latest closed package:
+  [Rolling Restart Startup Readiness Support Evidence Boundary](../../packages/done-20260512-rolling-restart-startup-readiness-support-evidence-boundary.md)
 - Latest artifact:
   `test-output/reports/rolling-restart-current-release-gate-after-workflow-progress-direct-chain-owner-proof.report.json`
 - Latest playback:
@@ -31,10 +52,10 @@ owner-boundary package with replayable proof.
 - Subordinate evidence: `startup_active_gate_owner / snapshot_coverage` is
   projected downstream after priority progress closes; current causal stop is
   `classified_backpressure` on `operation_workflow_owner / workflow_progress`.
-- Next action: parent owner should close the current focused
-  startup-readiness support-evidence contraction with commit/push proof, then
-  choose the next package from normalized evidence without changing
-  operation-workflow or startup active-gate runtime behavior in this package.
+- Next action: no active package remains in this sprint. Use a fresh sprint or
+  package only if new representative evidence promotes a local owner-boundary
+  fix; do not reopen this closed startup-readiness package for
+  operation-workflow or startup active-gate runtime behavior.
 - Proof ladder:
   `npm run work:llm-start -- --package work/packages/done-20260512-rolling-restart-startup-readiness-support-evidence-boundary.md`,
   `npm run work:package:doctor -- --pre-impl --suggest work/packages/done-20260512-rolling-restart-startup-readiness-support-evidence-boundary.md`,
@@ -104,38 +125,37 @@ The matching playback is:
 
 ## Current Blocker Detail Ledger
 
-Current package:
+Latest closed package:
 
-1. [Rolling Restart Startup Readiness Support Evidence Boundary](../packages/done-20260512-rolling-restart-startup-readiness-support-evidence-boundary.md)
+1. [Rolling Restart Startup Readiness Support Evidence Boundary](../../packages/done-20260512-rolling-restart-startup-readiness-support-evidence-boundary.md)
 
 Recent completed packages:
 
-1. [Rolling Restart Operation Workflow Progress Direct Chain After Owner Proof](../packages/done-20260512-rolling-restart-operation-workflow-progress-direct-chain-after-owner-proof.md)
-2. [Rolling Restart Operation Workflow Progress Serial Wait Event Driven Advance](../packages/done-20260512-rolling-restart-operation-workflow-progress-serial-wait-event-driven-advance.md)
-3. [Rolling Restart Operation Workflow Progress Coordinator Excludes Node](../packages/done-20260512-rolling-restart-operation-workflow-progress-coordinator-excludes-node.md)
-4. [Rolling Restart Operation Workflow Rebalancer Handoff Needs Operation Coordination Mismatch Classification](../packages/done-20260512-rolling-restart-operation-workflow-rebalancer-handoff-needs-operation-coordination-mismatch-classification.md)
-5. [Rolling Restart Operation Workflow Rebalancer Handoff Priority Recovery Retry Scheduled](../packages/done-20260512-rolling-restart-operation-workflow-rebalancer-handoff-priority-recovery-retry-scheduled.md)
-6. [Rolling Restart Operation Workflow Progress Priority Recovery Event Wait](../packages/done-20260512-rolling-restart-operation-workflow-progress-priority-recovery-event-wait.md)
-7. [Rolling Restart Rebalancer Leader Operation Scheduling Priority Recovery](../packages/done-20260512-rolling-restart-rebalancer-leader-operation-scheduling-priority-recovery.md)
-8. [Rolling Restart Operation Workflow Progress Stage3 Timeout Progression](../packages/done-20260512-rolling-restart-operation-workflow-progress-stage3-timeout-progression.md)
+1. [Rolling Restart Operation Workflow Progress Direct Chain After Owner Proof](../../packages/done-20260512-rolling-restart-operation-workflow-progress-direct-chain-after-owner-proof.md)
+2. [Rolling Restart Operation Workflow Progress Serial Wait Event Driven Advance](../../packages/done-20260512-rolling-restart-operation-workflow-progress-serial-wait-event-driven-advance.md)
+3. [Rolling Restart Operation Workflow Progress Coordinator Excludes Node](../../packages/done-20260512-rolling-restart-operation-workflow-progress-coordinator-excludes-node.md)
+4. [Rolling Restart Operation Workflow Rebalancer Handoff Needs Operation Coordination Mismatch Classification](../../packages/done-20260512-rolling-restart-operation-workflow-rebalancer-handoff-needs-operation-coordination-mismatch-classification.md)
+5. [Rolling Restart Operation Workflow Rebalancer Handoff Priority Recovery Retry Scheduled](../../packages/done-20260512-rolling-restart-operation-workflow-rebalancer-handoff-priority-recovery-retry-scheduled.md)
+6. [Rolling Restart Operation Workflow Progress Priority Recovery Event Wait](../../packages/done-20260512-rolling-restart-operation-workflow-progress-priority-recovery-event-wait.md)
+7. [Rolling Restart Rebalancer Leader Operation Scheduling Priority Recovery](../../packages/done-20260512-rolling-restart-rebalancer-leader-operation-scheduling-priority-recovery.md)
+8. [Rolling Restart Operation Workflow Progress Stage3 Timeout Progression](../../packages/done-20260512-rolling-restart-operation-workflow-progress-stage3-timeout-progression.md)
 
-Next action:
+Closure action:
 
-1. Continue from the active startup-readiness package:
-   [Rolling Restart Startup Readiness Support Evidence Boundary](../packages/done-20260512-rolling-restart-startup-readiness-support-evidence-boundary.md).
+1. Preserve the closed startup-readiness package:
+   [Rolling Restart Startup Readiness Support Evidence Boundary](../../packages/done-20260512-rolling-restart-startup-readiness-support-evidence-boundary.md).
 2. Fresh implementation subagent proof is recorded in the package ledger.
 3. Focused diagnostics tests reduced the representative startup readiness
    terminal no-progress evidence to
    `readiness_inherited_active_gate_no_progress`.
-4. Parent owner should review and close this package with focused commit/push
-   proof, then choose the next package from normalized evidence. Do not
+4. Focused commit/push proof is recorded in the closed package ledger. Do not
    implement `operation_workflow_owner / workflow_progress` or
    `startup_active_gate_owner / snapshot_coverage` runtime behavior from this
    startup-readiness package.
 5. Keep the direct-chain workflow-progress package as predecessor proof only; it
    is no longer the active package.
 6. Parked split successor, not promoted by the fresh representative report:
-   [Rolling Restart Rebalancer Leader Operation Scheduling Control Plane Publications Create Recovery Operation](../packages/todo-20260512-rolling-restart-rebalancer-leader-operation-scheduling-control-plane-publications-create-recovery-operation.md)
+   [Rolling Restart Rebalancer Leader Operation Scheduling Control Plane Publications Create Recovery Operation](../../packages/todo-20260512-rolling-restart-rebalancer-leader-operation-scheduling-control-plane-publications-create-recovery-operation.md)
 
 Latest representative evidence:
 
@@ -266,10 +286,9 @@ Edition matrix status: Community / AGPL repo.
     retryable under `operation_workflow_owner / workflow_progress` and the
     causal stop migrated to `startup_readiness_owner /
     startup_support_evidence`.
-14. Current implementation work must start from the startup-readiness package,
-    prove `readiness_startup_support` with a focused fixture or probe, and use
-    `active_gate_snapshot_coverage` only as explanatory/projected evidence until
-    the readiness-support boundary reduces or migrates.
+14. Final implementation work proved `readiness_startup_support` with focused
+    fixtures and analyzer probes, using `active_gate_snapshot_coverage` only as
+    explanatory/projected evidence.
 15. If `rolling-restart` passes, run sustained throughput and 7-node stress
     confirmation for `0.1`.
 
