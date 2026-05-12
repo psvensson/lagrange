@@ -3,7 +3,7 @@
 <!-- work-package
 {
   "schema": "work-package-v1",
-  "status": "active",
+  "status": "done",
   "opened": "2026-05-12",
   "lane": "scenario-release-gate",
   "scenario": "rolling-restart",
@@ -27,7 +27,7 @@
     "npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-current-release-gate-after-workflow-progress-direct-chain-owner-proof.report.json"
   ],
   "touchedFiles": [
-    "work/packages/active-20260512-rolling-restart-operation-workflow-progress-direct-chain-after-owner-proof.md",
+    "work/packages/done-20260512-rolling-restart-operation-workflow-progress-direct-chain-after-owner-proof.md",
     "work/sprints/active-2026-q2-phase-0-1-rolling-restart-release-gate-closure.md",
     "work/sprints/current-blocker.json",
     "work/sprints/current-blocker.md",
@@ -85,7 +85,9 @@
     "resultClassification": "migrated",
     "stopCondition": "migrate-owner-boundary"
   },
-  "predecessor": "work/packages/done-20260512-rolling-restart-operation-workflow-progress-serial-wait-event-driven-advance.md"
+  "predecessor": "work/packages/done-20260512-rolling-restart-operation-workflow-progress-serial-wait-event-driven-advance.md",
+  "closed": "2026-05-12",
+  "commitAndPushLedgerRequired": true
 }
 -->
 
@@ -122,7 +124,7 @@ promotes another owner boundary.
 
 ## In Scope
 
-1. work/packages/active-20260512-rolling-restart-operation-workflow-progress-direct-chain-after-owner-proof.md
+1. work/packages/done-20260512-rolling-restart-operation-workflow-progress-direct-chain-after-owner-proof.md
 2. work/sprints/active-2026-q2-phase-0-1-rolling-restart-release-gate-closure.md
 3. work/sprints/current-blocker.json
 4. work/sprints/current-blocker.md
@@ -167,7 +169,7 @@ Review and fix sequencing is recorded before implementation starts.
 - [x] Fix subagent recorded or explicitly not needed:
       Agent Codex-Fix (019f0d7f-8f29-7b7a-a99e-e9bc8c52df64) fixed work/packages/done-20260512-rolling-restart-operation-workflow-progress-serial-wait-event-driven-advance.md
 - [x] Implementation subagent recorded:
-      Agent Codex (019f2471-88a6-7bde-8ff9-4c4fe88cc0e4) implemented work/packages/active-20260512-rolling-restart-operation-workflow-progress-direct-chain-after-owner-proof.md
+      Agent Codex (019f2471-88a6-7bde-8ff9-4c4fe88cc0e4) implemented work/packages/done-20260512-rolling-restart-operation-workflow-progress-direct-chain-after-owner-proof.md
 
 ## Causal Governance
 
@@ -237,3 +239,9 @@ Review and fix sequencing is recorded before implementation starts.
 - Causal stop decision: `owner_boundary_migration`, reason
   `startup_readiness_boundary`, named successor
   `startup_readiness_owner / startup_support_evidence`.
+
+## Commit And Push Ledger
+
+- [x] Focused package commit: 856de7a0
+- [x] Pushed to: origin/codex/pending-ack-eligibility-filter
+- [x] Commit contains only package-owned files/package-status/allowed sprint handoff: yes

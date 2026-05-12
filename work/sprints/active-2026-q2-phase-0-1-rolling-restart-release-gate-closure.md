@@ -72,7 +72,7 @@ The matching playback is:
 
 Current package:
 
-1. [Rolling Restart Operation Workflow Progress Direct Chain After Owner Proof](../packages/active-20260512-rolling-restart-operation-workflow-progress-direct-chain-after-owner-proof.md)
+1. [Rolling Restart Operation Workflow Progress Direct Chain After Owner Proof](../packages/done-20260512-rolling-restart-operation-workflow-progress-direct-chain-after-owner-proof.md)
 
 Recent completed packages:
 

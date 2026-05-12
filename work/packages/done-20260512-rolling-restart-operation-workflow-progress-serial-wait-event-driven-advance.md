@@ -27,7 +27,7 @@
   "touchedFiles": [
     "work/packages/done-20260512-rolling-restart-operation-workflow-progress-serial-wait-event-driven-advance.md",
     "work/model-ledger.jsonl",
-    "work/packages/active-20260512-rolling-restart-operation-workflow-progress-direct-chain-after-owner-proof.md",
+    "work/packages/done-20260512-rolling-restart-operation-workflow-progress-direct-chain-after-owner-proof.md",
     "work/sprints/active-2026-q2-phase-0-1-rolling-restart-release-gate-closure.md",
     "work/sprints/current-blocker.json",
     "work/sprints/current-blocker.md"
@@ -72,12 +72,12 @@
     "expectedObservableTransition": "The previous direct sql_transaction_participants-p1 witness reduces to a serial-wait dependent; control_plane_publications-p1, replica_operations-p1, and sql_transactions-p1 remain the direct workflow-progress chain for the successor package.",
     "maxProgressBound": "one workflow-progress owner cycle or focused timeout/reconcile probe for the direct pending operations",
     "sameFrontierFallback": "keep operation_workflow_owner / workflow_progress active and do not promote startup active-gate, publication convergence, or the parked operation-scheduling successor without fresh owner evidence",
-    "expectedNextFrontier": "operation_workflow_owner / workflow_progress direct-chain successor in work/packages/active-20260512-rolling-restart-operation-workflow-progress-direct-chain-after-owner-proof.md",
+    "expectedNextFrontier": "operation_workflow_owner / workflow_progress direct-chain successor in work/packages/done-20260512-rolling-restart-operation-workflow-progress-direct-chain-after-owner-proof.md",
     "resultClassification": "reduced",
     "stopCondition": "continue-local-fix"
   },
   "predecessor": "work/packages/done-20260512-rolling-restart-operation-workflow-progress-coordinator-excludes-node.md",
-  "successor": "work/packages/active-20260512-rolling-restart-operation-workflow-progress-direct-chain-after-owner-proof.md",
+  "successor": "work/packages/done-20260512-rolling-restart-operation-workflow-progress-direct-chain-after-owner-proof.md",
   "closed": "2026-05-12",
   "commitAndPushLedgerRequired": true
 }
@@ -297,7 +297,7 @@ Guardrails:
   failed overall (`0/1` passed) but reduced the target residual to a new
   direct workflow-progress chain.
 - Successor:
-  `work/packages/active-20260512-rolling-restart-operation-workflow-progress-direct-chain-after-owner-proof.md`.
+  `work/packages/done-20260512-rolling-restart-operation-workflow-progress-direct-chain-after-owner-proof.md`.
 
 ## Commit And Push Ledger
 
