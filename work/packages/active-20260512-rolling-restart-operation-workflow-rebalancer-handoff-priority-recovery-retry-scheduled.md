@@ -1,10 +1,10 @@
+# Rolling Restart Operation Workflow Rebalancer Handoff Priority Recovery Retry Scheduled
+
+<!-- work-package
 {
-  "schema": "current-blocker-v1",
-  "generatedBy": "scripts/work-tracker.js",
-  "sprint": "work/sprints/active-2026-q2-phase-0-1-rolling-restart-release-gate-closure.md",
-  "package": "work/packages/active-20260512-rolling-restart-operation-workflow-rebalancer-handoff-priority-recovery-retry-scheduled.md",
+  "schema": "work-package-v1",
   "status": "active",
-  "lane": "unknown",
+  "opened": "2026-05-12",
   "scenario": "rolling-restart",
   "artifact": "test-output/reports/rolling-restart-current-release-gate-after-operation-workflow-rebalancer-handoff-priority-recovery-retry-scheduled-fix.report.json",
   "playback": "test-output/reports/.playback/rolling-restart-current-release-gate-after-operation-workflow-rebalancer-handoff-priority-recovery-retry-scheduled-fix/rolling-restart/",
@@ -83,3 +83,110 @@
   },
   "predecessor": "work/packages/done-20260512-rolling-restart-operation-workflow-progress-priority-recovery-event-wait.md"
 }
+-->
+
+## Why
+
+The predecessor workflow-progress package narrowed the current
+priority-recovery frontier to retry-scheduled rebalancer handoff work. This
+successor owns that boundary directly, keeping startup active-gate and
+publication convergence out of scope until priority recovery reduces or
+migrates again.
+
+## Scope Basis
+
+Roadmap Phase `0.1 - Internal Coherence`: topology workflow stabilization,
+failure simulations, and production guarantees in the Community / AGPL repo.
+
+## Model Fit
+
+- Package class: `representative-frontier-closure`
+- Intended minimum model: `gpt-5.3-codex`
+- Scope shape: `owner-boundary-contraction/current-frontier`
+- Owned files: operation workflow owner rebalancer-handoff retry paths, focused
+  handoff/progress tests, this package, generated current-blocker files,
+  `work/model-ledger.jsonl`, and the active sprint file only if tracker truth
+  requires it.
+- Forbidden files and behavior: startup active-gate implementation, topology
+  publication convergence implementation, harness timeout increases,
+  rebalancer-leader operation scheduling, Pro or Enterprise behavior.
+- Frozen decisions: publication ACK convergence is satisfied/non-frontier;
+  rebalancer-leader operation scheduling and workflow-progress flattening are
+  predecessor proof, not the current owner boundary; startup active-gate remains
+  downstream.
+- Escalation triggers: handoff retry proof requires files outside
+  `operation_workflow_owner`, representative proof restores publication
+  convergence or startup active-gate as direct blocker, or runtime
+  implementation would need Pro or Enterprise behavior.
+- Focused proof: `npm test -- test/rebalancer/coordinator-created-operation-progress-remote-handoff.test.js test/rebalancer/operation-workflow-progress-event-driven-reentry.test.js test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js`.
+
+## Subagent Sequencing Ledger
+
+- [x] Review subagent recorded:
+      Agent Russell (019e1c12-b097-75d1-80e7-269ad8287722) reviewed
+      `work/packages/done-20260512-rolling-restart-operation-workflow-progress-priority-recovery-event-wait.md`;
+      result `fixes-required`.
+- [x] Fix subagent recorded or explicitly not needed:
+      Agent Newton (019e1c1b-e500-7753-97ff-75b4b61fd2ba) fixed
+      `work/packages/done-20260512-rolling-restart-operation-workflow-progress-priority-recovery-event-wait.md`.
+- [x] Implementation subagent recorded:
+      Agent Beauvoir (019e1c20-5c53-72e1-9d79-6a92fa9332a2) implemented work/packages/active-20260512-rolling-restart-operation-workflow-rebalancer-handoff-priority-recovery-retry-scheduled.md
+
+## In Scope
+
+1. Review the closed workflow-progress priority recovery event-wait package
+   before activation.
+2. Own the retry-scheduled rebalancer-handoff priority recovery wait.
+3. Add or extend focused tests that prove wake, retry, timer, drain, or bounded
+   wait classification.
+4. Rerun selected static guardrails for touched operation-workflow owner files.
+5. Rerun one representative `rolling-restart --fast-local` gate or classify the
+   unchanged frontier with focused proof.
+
+## Out Of Scope
+
+1. Startup active-gate, publication-convergence, harness timeout, Pro, or
+   Enterprise behavior.
+2. Rebalancer leader operation scheduling or generic workflow-progress changes
+   unless fresh focused evidence proves regression to those owners.
+3. Presentation-only relabeling that hides owner-boundary evidence.
+
+## Implementation Result
+
+- Focused owner tests prove the retry-scheduled handoff path is bounded rather
+  than unowned backpressure:
+  `priority-recovery-dispatch-pending-timeout-reentry.test.js` covers
+  retry-scheduled snapshots waking the remote owner through the canonical
+  dispatch ingress, active handoff retries preserving the existing bounded
+  timer, and acknowledged handoff retries stopping at operation-budget
+  exhaustion.
+- No runtime source change was needed in this package. The existing
+  `OperationWorkflowOwner` and
+  `OperationWorkflowOwnerSegment7Stage5` decision tables already keep
+  retry-scheduled handoff work on one owner path.
+- Representative rerun:
+  `test-output/reports/rolling-restart-current-release-gate-after-operation-workflow-rebalancer-handoff-priority-recovery-retry-scheduled-fix.report.json`.
+  It remains red, with publication ACK convergence still satisfied and startup
+  active-gate snapshot coverage still downstream at `2/5`.
+- Result classification:
+  `same-frontier-bounded-retry-scheduled-proof`. The latest representative
+  artifact keeps `operation_workflow_owner / rebalancer_handoff` as the first
+  frontier, but the residual blocker is broader
+  `priority_recovery_progress_blocked` evidence with `needs_operation` and
+  `coordination_mismatch`, not missing retry-scheduled handoff ownership.
+
+## Validation Notes
+
+- Baseline evidence summary, topology explain, and causal model were run on
+  `test-output/reports/rolling-restart-current-release-gate-after-operation-workflow-progress-priority-recovery-event-wait-fix.report.json`.
+- Focused owner proof passed:
+  `npm test -- test/rebalancer/coordinator-created-operation-progress-remote-handoff.test.js test/rebalancer/operation-workflow-progress-event-driven-reentry.test.js test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js`.
+- Static guardrails passed for
+  `src/rebalancer/operation-workflow-owner.js` and
+  `src/rebalancer/operation-workflow-owner-segment-7-stage-5.js`:
+  guideline literals, decision boundaries, and runtime grammar.
+- Representative `rolling-restart --fast-local` rerun failed as expected for
+  the release gate, then the new artifact was analyzed with evidence summary,
+  topology explain, and causal model. The causal model returned
+  `ask_human / insufficient_evidence` because the latest representative
+  artifact has one failed priority recovery classification invariant.

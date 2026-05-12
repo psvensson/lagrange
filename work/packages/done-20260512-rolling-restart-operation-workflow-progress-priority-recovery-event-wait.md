@@ -3,7 +3,7 @@
 <!-- work-package
 {
   "schema": "work-package-v1",
-  "status": "active",
+  "status": "done",
   "opened": "2026-05-12",
   "scenario": "rolling-restart",
   "artifact": "test-output/reports/rolling-restart-current-release-gate-after-operation-workflow-progress-priority-recovery-event-wait-fix.report.json",
@@ -12,7 +12,7 @@
   "boundary": "rebalancer_handoff",
   "dominantReason": "priority_recovery_event_driven_wait",
   "currentState": "Focused workflow-progress proof first failed because active coordinator-created rebalancer handoff retries were flattened into generic event-driven workflow progress. The runtime fix lets active handoff retries pass through the operation workflow adapter, producing the canonical wait_for_rebalancer_handoff_retry owner observation while the existing scheduler prevents duplicate wakes. Focused tests and owner guardrails are green. The representative rerun remains red, but the normalized frontier migrated from operation_workflow_owner / workflow_progress to operation_workflow_owner / rebalancer_handoff with retryable priority_recovery_event_driven_wait and source dominantReason priority_recovery_rebalancer_handoff_retry_scheduled on control_plane_publications-p1, replica_operations-p1, sql_transaction_participants-p1, sql_transactions-p1, and sql_write_operations-p1. Publication ACK convergence remains satisfied. Startup active-gate snapshot coverage remains downstream at 2/5.",
-  "nextAction": "Treat the workflow-progress edge as reduced and continue from the migrated operation_workflow_owner / rebalancer_handoff boundary. Prove the retry-scheduled remote handoff backpressure drains, stays explicitly bounded, or exposes a new owner boundary. Do not reopen startup active-gate or publication convergence from this package.",
+  "nextAction": "Activate the successor for operation_workflow_owner / rebalancer_handoff priority recovery retry-scheduled backpressure. Do not reopen startup active-gate or publication convergence until priority_recovery_partition_progress reduces, converges, or migrates again.",
   "proof": [
     "npm run work:evidence-summary -- test-output/reports/rolling-restart-current-release-gate-after-operation-workflow-progress-priority-recovery-event-wait-fix.report.json",
     "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-current-release-gate-after-operation-workflow-progress-priority-recovery-event-wait-fix.report.json --explain priority_recovery_partition_progress",
@@ -30,7 +30,7 @@
     "test/rebalancer/operation-workflow-progress-event-driven-reentry.test.js",
     "test/rebalancer/coordinator-created-operation-progress-remote-handoff.test.js",
     "test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js",
-    "work/packages/active-20260512-rolling-restart-operation-workflow-progress-priority-recovery-event-wait.md",
+    "work/packages/done-20260512-rolling-restart-operation-workflow-progress-priority-recovery-event-wait.md",
     "work/sprints/active-2026-q2-phase-0-1-rolling-restart-release-gate-closure.md",
     "work/sprints/current-blocker.json",
     "work/sprints/current-blocker.md",
@@ -49,7 +49,7 @@
   },
   "causalGovernance": {
     "hypothesis": "If operation workflow progress owns the recovering_in_flight priority recovery wait, the selected operations should advance, remain explicitly bounded retryable work, reduce the priority recovery frontier, or migrate to a new owner boundary.",
-    "stopConditionCheck": "npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-current-release-gate-after-rebalancer-leader-operation-scheduling-priority-recovery-fix.report.json",
+    "stopConditionCheck": "npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-current-release-gate-after-operation-workflow-progress-priority-recovery-event-wait-fix.report.json",
     "expectedCausalModelChange": "The priority_recovery_event_driven_wait frontier either remains classified bounded backpressure, reduces, converges, or exposes a new named owner boundary.",
     "representativeOutcome": "migrated",
     "causalDebt": "Rolling-restart remains red while priority recovery rebalancer handoff retry-scheduled work is retryable and active-gate snapshot coverage remains downstream at 2/5.",
@@ -79,16 +79,21 @@
     "resultClassification": "migrated",
     "stopCondition": "migrate-owner-boundary"
   },
-  "predecessor": "work/packages/done-20260512-rolling-restart-rebalancer-leader-operation-scheduling-priority-recovery.md"
+  "predecessor": "work/packages/done-20260512-rolling-restart-rebalancer-leader-operation-scheduling-priority-recovery.md",
+  "closed": "2026-05-12",
+  "commitAndPushLedgerRequired": true,
+  "successor": "work/packages/active-20260512-rolling-restart-operation-workflow-rebalancer-handoff-priority-recovery-retry-scheduled.md"
 }
 -->
 
 ## Why
 
 The rebalancer-leader scheduling fix reduced the prior `needs_operation`
-frontier. Fresh representative evidence now shows priority recovery operations
-exist and are `recovering_in_flight`, so the remaining first frontier belongs to
-operation workflow progress, not operation scheduling.
+frontier. This package repaired the workflow-progress flattening of active
+handoff retries by letting the operation owner emit its canonical
+rebalancer-handoff retry outcome. Fresh representative evidence now migrates the
+first frontier from workflow progress to the narrower rebalancer-handoff retry
+boundary.
 
 ## Scope Basis
 
@@ -114,6 +119,23 @@ failure simulations, and production guarantees in the Community / AGPL repo.
 - Escalation triggers: focused proof requires reopening scheduling, startup
   active-gate, publication convergence, or broad architecture/budget behavior.
 - Focused proof: `npm test -- test/rebalancer/operation-workflow-progress-event-driven-reentry.test.js test/rebalancer/coordinator-created-operation-progress-remote-handoff.test.js test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js`.
+
+## Result Classification
+
+- Representative outcome: `migrated`.
+- Migrated owner/boundary: `operation_workflow_owner / rebalancer_handoff`.
+- Dominant source reason: `priority_recovery_rebalancer_handoff_retry_scheduled`.
+- Blocked partitions: `control_plane_publications-p1`,
+  `replica_operations-p1`, `sql_transaction_participants-p1`,
+  `sql_transactions-p1`, and `sql_write_operations-p1`.
+- Downstream/non-owner-frontier evidence: publication ACK convergence remains
+  satisfied; startup active-gate snapshot coverage remains downstream at `2/5`.
+
+## Commit And Push Ledger
+
+1. Focused package commit: `e2856e44129751db5ce123d994288868be4ac94a`
+2. Pushed to: `origin/codex/pending-ack-eligibility-filter`
+3. Commit contains only package-owned files/package-status/allowed sprint handoff: yes
 
 ## Subagent Sequencing Ledger
 
