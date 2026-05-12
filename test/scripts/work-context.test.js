@@ -4,6 +4,7 @@ import path from 'node:path';
 import {test} from '../../src/test-helpers/tap.js';
 import {
   buildContextLines,
+  buildCommitScope,
   buildCurrentBlockerFromPackage,
   buildDirtyScopeLines,
   buildFirstReadPaths,
@@ -11,6 +12,7 @@ import {
   buildOwnerCardPaths,
   buildSubagentSequencingStatus,
   buildUsefulCommands,
+  buildWriteScope,
   groupGitStatusLines,
 } from '../../scripts/work-context.js';
 
@@ -192,7 +194,16 @@ const TEST_BLOCKER = Object.freeze({
   currentState: 'Current state.',
   nextAction: 'Next action.',
   proof: ['Focused proof'],
-  touchedFiles: [
+  touchedFiles: [],
+  writeScope: [
+    TEST_BOOTSTRAP_SOURCE_PATH,
+    TEST_BOOTSTRAP_TEST_PATH,
+    TEST_PACKAGE_PATH,
+  ],
+  handoffFiles: [TEST_PREDECESSOR_PATH],
+  generatedFiles: [],
+  candidateRuntimeFiles: [],
+  commitScope: [
     TEST_BOOTSTRAP_SOURCE_PATH,
     TEST_BOOTSTRAP_TEST_PATH,
     TEST_PACKAGE_PATH,
@@ -304,6 +315,16 @@ test('work context first-read paths prefer compact pack and owner cards', (t) =>
   const firstReadPaths = buildFirstReadPaths(TEST_BLOCKER);
   const ownerCardPaths = buildOwnerCardPaths(TEST_BLOCKER);
 
+  t.same(buildWriteScope(TEST_BLOCKER), [
+    TEST_BOOTSTRAP_SOURCE_PATH,
+    TEST_BOOTSTRAP_TEST_PATH,
+    TEST_PACKAGE_PATH,
+  ]);
+  t.same(buildCommitScope(TEST_BLOCKER), [
+    TEST_BOOTSTRAP_SOURCE_PATH,
+    TEST_BOOTSTRAP_TEST_PATH,
+    TEST_PACKAGE_PATH,
+  ]);
   t.same(ownerCardPaths, [BOOTSTRAP_OWNER_CARD_PATH]);
   t.equal(firstReadPaths[1], COMPACT_PACK_README_PATH);
   t.equal(firstReadPaths[2], COMPACT_PACK_CORE_PATH);
@@ -313,6 +334,7 @@ test('work context first-read paths prefer compact pack and owner cards', (t) =>
   t.ok(firstReadPaths.includes(TEST_ARTIFACT_PATH));
   t.ok(firstReadPaths.includes(TEST_PLAYBACK_PATH));
   t.ok(firstReadPaths.includes(PLAYBACK_FAILURE_BUNDLE_PATH));
+  t.ok(firstReadPaths.includes(TEST_PREDECESSOR_PATH));
   t.notOk(firstReadPaths.includes(FULL_STEERING_SYSTEM_PATH));
   t.end();
 });
@@ -344,6 +366,9 @@ test('work context advertises triage commands before raw artifact reads',
     t.ok(rendered.includes(SECTION_CAUSAL_GOVERNANCE));
     t.ok(rendered.includes(SECTION_SCENARIO_CAUSAL_CLOSURE));
     t.ok(rendered.includes('Package class: bounded-implementation'));
+    t.ok(rendered.includes('## Scope'));
+    t.ok(rendered.includes('Write scope: ' + TEST_BOOTSTRAP_SOURCE_PATH));
+    t.ok(rendered.includes('Commit scope: ' + TEST_BOOTSTRAP_SOURCE_PATH));
     t.ok(rendered.includes('Intended minimum model: gpt-5.3-codex-spark'));
     t.ok(rendered.includes('Scope shape: leaf-slice'));
     t.ok(rendered.includes('Escalation triggers: package scope expands'));
@@ -490,7 +515,11 @@ test('work context matches quoted paths and untracked directories to package sco
   (t) => {
     const packageBlocker = {
       ...TEST_BLOCKER,
-      touchedFiles: [
+      writeScope: [
+        QUOTED_PACKAGE_PATH,
+        'test/scripts/__fixtures__/topology-convergence/priority.fixture.json',
+      ],
+      commitScope: [
         QUOTED_PACKAGE_PATH,
         'test/scripts/__fixtures__/topology-convergence/priority.fixture.json',
       ],
@@ -509,11 +538,12 @@ test('work context matches quoted paths and untracked directories to package sco
     t.end();
   });
 
-test('work context marks touched-file globs as patterns, not missing files',
+test('work context marks scope-field globs as patterns, not missing files',
   async (t) => {
     const packageBlocker = {
       ...TEST_BLOCKER,
-      touchedFiles: [CONTROL_PLANE_PUBLICATION_PATTERN],
+      writeScope: [CONTROL_PLANE_PUBLICATION_PATTERN],
+      commitScope: [CONTROL_PLANE_PUBLICATION_PATTERN],
     };
     const lines = await buildContextLines(packageBlocker, TEST_PACKAGE_READY_CONTENT);
     const rendered = lines.join('\n');
@@ -522,10 +552,11 @@ test('work context marks touched-file globs as patterns, not missing files',
     t.notMatch(rendered, `${CONTROL_PLANE_PUBLICATION_PATTERN} (missing)`);
   });
 
-test('work context matches dirty paths against touched-file glob patterns', (t) => {
+test('work context matches dirty paths against scope-field glob patterns', (t) => {
   const packageBlocker = {
     ...TEST_BLOCKER,
-    touchedFiles: [CONTROL_PLANE_PUBLICATION_PATTERN],
+    writeScope: [CONTROL_PLANE_PUBLICATION_PATTERN],
+    commitScope: [CONTROL_PLANE_PUBLICATION_PATTERN],
   };
   const grouped = groupGitStatusLines([
     CONTROL_PLANE_PUBLICATION_STATUS_LINE,
@@ -593,4 +624,7 @@ test('work context can scope dirty reports to an explicit package file',
     t.equal(packageBlocker.currentBlocker.owner, TEMP_OWNER);
     t.equal(packageBlocker.currentBlocker.boundary, TEMP_BOUNDARY);
     t.same(packageBlocker.currentBlocker.touchedFiles, [TEST_BOOTSTRAP_SOURCE_PATH]);
+    t.same(buildWriteScope(packageBlocker.currentBlocker), [
+      TEST_BOOTSTRAP_SOURCE_PATH,
+    ]);
   });

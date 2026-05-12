@@ -22,6 +22,11 @@ const EMPTY_TEXT = '';
 const NEWLINE = '\n';
 const PACKAGE_METADATA_OPEN = '<!-- work-package';
 const PACKAGE_METADATA_CLOSE = '-->';
+const METADATA_FIELD_TOUCHED_FILES = 'touchedFiles';
+const METADATA_FIELD_WRITE_SCOPE = 'writeScope';
+const METADATA_FIELD_HANDOFF_FILES = 'handoffFiles';
+const METADATA_FIELD_CANDIDATE_RUNTIME_FILES = 'candidateRuntimeFiles';
+const METADATA_FIELD_COMMIT_SCOPE = 'commitScope';
 const VALID_ROLES = Object.freeze([
   ROLE_REVIEW,
   ROLE_FIX,
@@ -74,6 +79,15 @@ function list(values = [], fallback = 'None recorded.') {
   return normalized.map((value) => `- \`${value}\``).join(NEWLINE);
 }
 
+function scopeList(metadata, fieldName, fallbackFieldName = null) {
+  if (Array.isArray(metadata[fieldName])) {
+    return metadata[fieldName];
+  }
+  return fallbackFieldName && Array.isArray(metadata[fallbackFieldName]) ?
+    metadata[fallbackFieldName] :
+    [];
+}
+
 function packageTitle(content) {
   const firstHeading = content
     .split(/\r?\n/u)
@@ -100,7 +114,7 @@ function roleTask(role, metadata, packagePath) {
   return [
     'Implement only this current package after review/fix proof is clean:',
     packagePath + '.',
-    'Do not widen beyond the owned files, forbidden files, frozen decisions,',
+    'Do not widen beyond the write scope, forbidden files, frozen decisions,',
     'and proof ladder recorded below.',
   ].join(' ');
 }
@@ -148,9 +162,33 @@ function buildSubagentPrompt(role, packagePath, content, args = []) {
     EMPTY_TEXT,
     metadata.nextAction || 'Unknown.',
     EMPTY_TEXT,
-    '## Owned Files',
+    '## Tool-First Workflow',
     EMPTY_TEXT,
-    list(metadata.touchedFiles),
+    'Use canonical workflow tools before raw JSON, raw logs, broad file search, oversized segment files, or ad hoc `jq`:',
+    EMPTY_TEXT,
+    '- `npm run work:package:doctor -- --suggest <package>` or `npm run work:package:doctor -- --fix-dry-run <package>` before package metadata or ledger edits.',
+    '- `npm run work:package:schema` and `npm run work:package:new -- ...` before inventing package enum values or new package shape.',
+    '- `npm run work:evidence-summary -- <artifact>` plus focused scenario extractors before raw distributed report JSON or logs.',
+    '- `npm run analyze:owner-files -- <owner> [boundary]` before broad owner file search.',
+    '- `npm run work:oversized-next -- --markdown` before creating broad file-size cleanup packages.',
+    EMPTY_TEXT,
+    'If fallback to raw JSON, raw logs, or ad hoc `jq` is necessary, record which canonical extractor was tried and why it was insufficient.',
+    EMPTY_TEXT,
+    '## Write Scope',
+    EMPTY_TEXT,
+    list(scopeList(metadata, METADATA_FIELD_WRITE_SCOPE, METADATA_FIELD_TOUCHED_FILES)),
+    EMPTY_TEXT,
+    '## Handoff Files',
+    EMPTY_TEXT,
+    list(scopeList(metadata, METADATA_FIELD_HANDOFF_FILES)),
+    EMPTY_TEXT,
+    '## Candidate Runtime Files',
+    EMPTY_TEXT,
+    list(scopeList(metadata, METADATA_FIELD_CANDIDATE_RUNTIME_FILES)),
+    EMPTY_TEXT,
+    '## Commit Scope',
+    EMPTY_TEXT,
+    list(scopeList(metadata, METADATA_FIELD_COMMIT_SCOPE, METADATA_FIELD_TOUCHED_FILES)),
     EMPTY_TEXT,
     '## Proof Ladder',
     EMPTY_TEXT,

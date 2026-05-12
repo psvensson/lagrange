@@ -18,9 +18,19 @@
     "Focused owner test",
     "Representative scenario rerun"
   ],
-  "touchedFiles": [
+  "writeScope": [
     "src/example.js",
     "test/example.test.js"
+  ],
+  "handoffFiles": [
+    "work/packages/done-predecessor.md"
+  ],
+  "generatedFiles": [],
+  "candidateRuntimeFiles": [],
+  "commitScope": [
+    "src/example.js",
+    "test/example.test.js",
+    "work/packages/active-YYYYMMDD-package.md"
   ],
   "modelFit": {
     "packageClass": "bounded-implementation",
@@ -81,6 +91,28 @@ Select the lightest valid lane from
 - Selected lane:
 - Why this lane is sufficient:
 - Escalation trigger to a heavier lane:
+
+## LLM Tool-First Contract
+
+Before raw JSON, raw logs, broad file search, oversized segment files, or ad hoc
+`jq`, use the canonical workflow command that owns the question:
+
+1. Package metadata or ledger edits:
+   `npm run work:package:doctor -- --suggest <package>`,
+   `npm run work:package:doctor -- --fix-dry-run <package>`,
+   `npm run work:package:schema`, or `npm run work:package:new -- ...`.
+2. Representative evidence:
+   `npm run work:evidence-summary -- <artifact>` plus any focused extractor
+   for this failure class.
+3. Owner discovery:
+   `npm run analyze:owner-files -- <owner> [boundary]`.
+4. Subagent sequencing:
+   `npm run work:subagent-prompt -- --role <role> --package <package>`.
+5. Large-file cleanup:
+   `npm run work:oversized-next -- --markdown`.
+
+If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which
+canonical extractor was tried and why it was insufficient.
 
 ## In Scope
 
@@ -196,14 +228,14 @@ Preflight:
 
 - [ ] Relevant guardrails selected by boundary.
 - [ ] Inherited repo-wide debt classified.
-- [ ] Inherited touched-file debt classified.
+- [ ] Inherited write-scope debt classified.
 - [ ] File-scoped or boundary-scoped baseline recorded.
 
 Closure:
 
 - [ ] Same guardrails rerun after implementation.
 - [ ] No relevant guardrail count increased.
-- [ ] No new touched-file owner-path, decision-boundary, runtime-grammar, or
+- [ ] No new write-scope owner-path, decision-boundary, runtime-grammar, or
       metadata-gateway violation remains.
 - [ ] Any out-of-scope inherited violation has a linked follow-on package.
 - [ ] Package-owned changes committed as one focused slice.
@@ -215,10 +247,14 @@ Required before implementation starts for `runtime-owner-boundary`,
 `scenario-release-gate`, and `causal-escalation` packages. Optional for
 `read-review-doc-only` and `lightweight-maintenance` packages unless the
 package declares otherwise. Active metadata-bearing packages in required lanes
-fail `npm run work:validate` without this ledger. Do not check these items
-until real subagent names and agent ids replace the template placeholders;
-checked placeholders, pending markers, parent-session labels, local/manual
-labels, or arbitrary text without agent id proof are invalid.
+fail `npm run work:validate -- --pre-impl` without review/fix proof and fail
+`npm run work:validate -- --closure` without complete implementation proof. Do
+not check these items until real subagent names and agent ids replace the
+template placeholders; checked placeholders, pending markers, parent-session
+labels, local/manual labels, or arbitrary text without agent id proof are
+invalid at closure. Before closure only, unavailable delegation may be recorded
+as `human-waived`, `tool-unavailable`, or `blocked-by-environment-policy` with
+`reason: ...`.
 Subagents are orchestrated by Codex sessions and recorded here; npm scripts
 must not stand in for review, fix, or implementation subagents.
 

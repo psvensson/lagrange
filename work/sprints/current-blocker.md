@@ -4,7 +4,7 @@
 
 Sprint: `work/sprints/active-2026-q2-phase-0-1-rolling-restart-release-gate-closure.md`
 
-Package: `work/packages/active-20260512-rolling-restart-operation-workflow-progress-direct-chain-after-owner-proof.md`
+Package: `work/packages/active-20260512-rolling-restart-startup-readiness-support-evidence-boundary.md`
 
 Workflow lane: `scenario-release-gate`
 
@@ -16,30 +16,28 @@ Playback: `test-output/reports/.playback/rolling-restart-current-release-gate-af
 
 ## Boundary
 
-Owner: `operation_workflow_owner`
+Owner: `startup_readiness_owner`
 
-Boundary: `workflow_progress`
+Boundary: `startup_support_evidence`
 
-Dominant reason: `priority_recovery_event_driven_wait`
+Dominant reason: `startup_readiness_blocked`
 
-Current state: Focused owner proof reduced the direct workflow-progress chain from blocked residual evidence to retryable priority_recovery_event_driven_wait. The fresh representative report remains red, but priority recovery invariants pass, the residual has one operation_workflow_owner / workflow_progress group with recovering_in_flight witnesses only, and the causal analyzer records owner-boundary migration to startup_readiness_owner / startup_support_evidence.
+Current state: Fresh causal proof after direct workflow-progress closure keeps rolling-restart red and migrates the stop condition to startup_readiness_owner / startup_support_evidence. Priority recovery is retryable rather than blocked, publication ACK convergence is satisfied, and startup_active_gate_owner / snapshot_coverage is only the projected topology edge after readiness support evidence is resolved. Workflow/tooling repairs are owned by the dedicated workflow-tooling package, while this package owns only the scenario handoff and startup-readiness support-evidence proof.
 
 ## Next Action
 
-Close or migrate this package to the named startup_readiness_owner / startup_support_evidence successor; do not promote startup active-gate implementation from this operation-workflow package.
+Have a fresh implementation subagent prove why startup readiness support evidence reaches terminal no-progress in the representative run. The first implementation proof must be a focused startup-readiness support-evidence fixture or probe; only after that may runtime code change.
 
 ## Proof Ladder
 
-1. `npm run work:evidence-summary -- test-output/reports/rolling-restart-current-release-gate-after-workflow-progress-serial-wait-event-driven-advance-proof.report.json`
-2. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-current-release-gate-after-workflow-progress-serial-wait-event-driven-advance-proof.report.json --explain priority_recovery_partition_progress`
-3. `npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-current-release-gate-after-workflow-progress-serial-wait-event-driven-advance-proof.report.json --markdown`
-4. `node test/control-plane/priority-recovery-snapshot.test.js`
-5. `node test/rebalancer/coordinator-created-operation-progress-remote-handoff.test.js`
-6. `node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-current-release-gate-after-workflow-progress-direct-chain-owner-proof.report.json --fast-local --verbose`
-7. `npm run work:evidence-summary -- test-output/reports/rolling-restart-current-release-gate-after-workflow-progress-direct-chain-owner-proof.report.json`
-8. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-current-release-gate-after-workflow-progress-direct-chain-owner-proof.report.json --explain priority_recovery_partition_progress`
-9. `npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-current-release-gate-after-workflow-progress-direct-chain-owner-proof.report.json --markdown`
-10. `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-current-release-gate-after-workflow-progress-direct-chain-owner-proof.report.json`
+1. `npm run work:subagent-prompt -- --role implementation --package work/packages/active-20260512-rolling-restart-startup-readiness-support-evidence-boundary.md`
+2. `npm run work:evidence-summary -- test-output/reports/rolling-restart-current-release-gate-after-workflow-progress-direct-chain-owner-proof.report.json`
+3. `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-current-release-gate-after-workflow-progress-direct-chain-owner-proof.report.json`
+4. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-current-release-gate-after-workflow-progress-direct-chain-owner-proof.report.json --explain readiness_startup_support`
+5. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-current-release-gate-after-workflow-progress-direct-chain-owner-proof.report.json --explain active_gate_snapshot_coverage`
+6. `npm run analyze:owner-files -- startup_readiness_owner startup_support_evidence --markdown`
+7. `focused startup_readiness_owner / startup_support_evidence fixture or owner test selected by implementation package`
+8. `representative rolling-restart rerun or explicit migration proof`
 
 ## Model Fit
 
@@ -47,80 +45,99 @@ Package class: `representative-frontier-closure`
 
 Intended minimum model: `gpt-5.3-codex`
 
-Scope shape: `owner-boundary-contraction/direct-chain-current-frontier`
+Scope shape: `owner-boundary-migration/current-frontier`
 
 Escalation triggers:
 
-1. `evidence promotes rebalancer_handoff or rebalancer_leader / operation_scheduling ahead of workflow_progress`
-2. `the fix requires startup active-gate, publication convergence, harness timeout, Pro, or Enterprise behavior`
-3. `serial-wait dependents become independent direct blockers rather than downstream waits`
-4. `runtime ownership changes are required instead of workflow-progress edge reduction`
+1. `evidence promotes startup_active_gate_owner / snapshot_coverage ahead of startup readiness support evidence`
+2. `the fix requires operation_workflow_owner / workflow_progress runtime changes`
+3. `the fix requires publication convergence, harness timeout, Pro, or Enterprise behavior`
+4. `startup readiness support evidence is only presentation debt and not an owner-runtime boundary`
 
 ## Causal Governance
 
-Causal hypothesis: `If operation_workflow_owner / workflow_progress owns the direct-chain residual, the direct recovering_in_flight event-driven operations for control_plane_publications-p1, replica_operations-p1, and sql_transactions-p1 must dispatch, advance, timeout, reconcile, or migrate through one named owner path instead of leaving serial dependents blocked.`
+Causal hypothesis: `If startup_readiness_owner / startup_support_evidence owns the migrated residual, startup readiness terminal no-progress evidence should identify a bounded support-evidence owner path instead of leaving readiness_terminal with source unknown and cause none.`
 
 Stop-condition check: `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-current-release-gate-after-workflow-progress-direct-chain-owner-proof.report.json`
 
-Expected causal-model change: `The direct workflow-progress chain reduces, converges, or migrates to one named owner boundary before sql_transaction_participants-p1 or sql_write_operations-p1 are promoted as independent blockers.`
+Expected causal-model change: `The startup readiness support evidence boundary reduces, converges, or migrates to one named owner before startup active-gate snapshot coverage is implemented.`
 
-Representative outcome: `migrated`
+Representative outcome: `pending-before-rerun`
 
-Causal debt: `The fresh representative report remains red, but operation_workflow_owner / workflow_progress is now retryable priority_recovery_event_driven_wait with one recovering_in_flight residual group; causal stop decision is owner_boundary_migration to startup_readiness_owner / startup_support_evidence.`
+Causal debt: `The fresh report remains red after workflow progress became retryable. Causal stop decision is owner_boundary_migration with reason startup_readiness_boundary; readinessFailure is startup no_progress_terminal with terminalReason stalled_no_progress, source unknown, and cause none.`
 
-Cross-boundary review: `Review found a stale sprint snapshot, a separate fix subagent repaired it, and a separate implementation subagent completed the direct-chain proof.`
+Cross-boundary review: `Review subagent 019e1d40-9ba1-79e1-9ec3-c4cf459a9a9d found fixes-required on this startup-readiness handoff. This handoff repair records the fix; runtime implementation still requires a fresh separate implementation subagent.`
 
 ## Scenario Causal Closure
 
-Reference scenario/probe: `rolling-restart direct workflow-progress chain after serial-wait owner proof`
+Reference scenario/probe: `rolling-restart startup readiness support evidence after workflow-progress migration`
 
 Phase chain:
 
 1. `publication convergence`
-2. `priority recovery operation scheduling`
-3. `operation workflow coordination and progress`
-4. `serial wait dependent release`
-5. `startup active-gate presentation`
+2. `priority recovery operation workflow progress`
+3. `startup readiness support evidence`
+4. `startup active-gate snapshot coverage`
 
-Current first frontier: `priority_recovery_partition_progress remains first under operation_workflow_owner / workflow_progress, but the decision is retryable priority_recovery_event_driven_wait instead of blocked priority_recovery_progress_blocked.`
+Current first frontier: `priority_recovery_partition_progress is retryable under operation_workflow_owner / workflow_progress; causal stop migrates to startup_readiness_owner / startup_support_evidence while readiness_startup_support is terminal_failed and not the topology first frontier.`
 
 Known downstream blockers:
 
-1. `startup_readiness_owner / startup_support_evidence is the named causal migration boundary`
-2. `startup_active_gate_owner / snapshot_coverage is the projected topology edge after priority recovery becomes retryable`
-3. `publication_ack_convergence remains satisfied with PUBLISHED and zero pending ACKs`
-4. `the prior rebalancer_handoff secondary split is gone from the fresh residual extractor`
+1. `startup_active_gate_owner / snapshot_coverage is the projected topology edge after priority recovery becomes retryable`
+2. `publication_ack_convergence remains satisfied with PUBLISHED and zero pending ACKs`
+3. `operation_workflow_owner / workflow_progress remains retryable priority_recovery_event_driven_wait and is out of scope for this successor`
 
-Missing causal edge: `The direct blocked workflow-progress chain is reduced to retryable event-driven owner progress; the remaining scenario stop condition is outside this operation-workflow package at startup_readiness_owner / startup_support_evidence.`
+Missing causal edge: `Startup readiness terminal no-progress evidence has source unknown and cause none, so the owner support evidence does not yet expose the concrete wake, retry, timeout, reconcile, drain, dispatch, delivery, timer, advance, or bounded migration path.`
 
-Missing causal edge probe: `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-current-release-gate-after-workflow-progress-direct-chain-owner-proof.report.json --explain priority_recovery_partition_progress plus npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-current-release-gate-after-workflow-progress-direct-chain-owner-proof.report.json --markdown`
+Missing causal edge probe: `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-current-release-gate-after-workflow-progress-direct-chain-owner-proof.report.json --explain readiness_startup_support plus npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-current-release-gate-after-workflow-progress-direct-chain-owner-proof.report.json`
 
-Bounded progress proof: `Implementation must prove one deterministic dispatch, advance, timeout, reconcile, retry, or bounded migration path for the direct workflow-progress operations before the serial-wait dependents are treated as independent blockers.`
+Bounded progress proof: `Implementation must prove a deterministic wake, retry, timeout, reconcile, drain, dispatch, delivery, timer, advance, or bounded migration path for startup readiness support evidence.`
 
-Bounded progress proof artifact: `test-output/reports/rolling-restart-current-release-gate-after-workflow-progress-direct-chain-owner-proof.report.json plus focused operation_workflow_owner / workflow_progress tests selected by implementation`
+Bounded progress proof artifact: `test-output/reports/rolling-restart-current-release-gate-after-workflow-progress-direct-chain-owner-proof.report.json plus focused startup_readiness_owner / startup_support_evidence fixture or owner tests selected by implementation`
 
-Expected observable transition: `The direct witnesses reduce from blocked workflow-progress evidence to retryable priority_recovery_event_driven_wait, with no failed priority recovery invariants and one owner-boundary migration to startup_readiness_owner / startup_support_evidence.`
+Expected observable transition: `Readiness terminal evidence reduces from source unknown and cause none to a named support-evidence owner path, or migrates to startup active-gate snapshot coverage with explicit owner evidence.`
 
-Max progress bound: `one workflow-progress owner cycle or focused dispatch/advance/timeout/reconcile probe for the three direct pending operations`
+Max progress bound: `one startup readiness support evidence probe or focused readiness-support owner test`
 
-Same-frontier fallback: `keep operation_workflow_owner / workflow_progress active and do not promote startup active-gate, publication convergence, or the parked operation-scheduling successor without fresh owner evidence`
+Same-frontier fallback: `keep startup_readiness_owner / startup_support_evidence active and do not implement startup active-gate snapshot coverage without fresh owner evidence`
 
-Expected next frontier: `startup_readiness_owner / startup_support_evidence successor, with startup_active_gate_owner / snapshot_coverage as the projected topology edge`
+Expected next frontier: `startup readiness support evidence reduction, representative-green, or one named owner-boundary migration`
 
-Result classification: `migrated`
+Result classification: `pending-before-probe`
 
-Stop condition: `migrate-owner-boundary`
+Stop condition: `continue-local-fix`
 
-## Touched Files
+## Scope
 
-1. `work/packages/active-20260512-rolling-restart-operation-workflow-progress-direct-chain-after-owner-proof.md`
+Write scope:
+
+1. `work/packages/active-20260512-rolling-restart-startup-readiness-support-evidence-boundary.md`
+2. `work/sprints/active-2026-q2-phase-0-1-rolling-restart-release-gate-closure.md`
+
+Handoff files:
+
+1. `work/packages/done-20260512-rolling-restart-operation-workflow-progress-direct-chain-after-owner-proof.md`
+2. `work/packages/active-20260511-workflow-tooling-llm-usability.md`
+3. `test-output/reports/rolling-restart-current-release-gate-after-workflow-progress-direct-chain-owner-proof.report.json`
+4. `test-output/reports/.playback/rolling-restart-current-release-gate-after-workflow-progress-direct-chain-owner-proof/rolling-restart/`
+5. `test-output/reports/.playback/rolling-restart-current-release-gate-after-workflow-progress-direct-chain-owner-proof/rolling-restart/failure-bundle.json`
+
+Generated files:
+
+1. `work/sprints/current-blocker.json`
+2. `work/sprints/current-blocker.md`
+
+Candidate runtime files:
+
+1. None recorded
+
+Commit scope:
+
+1. `work/packages/active-20260512-rolling-restart-startup-readiness-support-evidence-boundary.md`
 2. `work/sprints/active-2026-q2-phase-0-1-rolling-restart-release-gate-closure.md`
 3. `work/sprints/current-blocker.json`
 4. `work/sprints/current-blocker.md`
-5. `src/control-plane/priority-recovery-snapshot-stage-10.js`
-6. `test/control-plane/priority-recovery-snapshot-core-02-test-cases.js`
-7. `test/control-plane/priority-recovery-snapshot-core-03-test-cases.js`
-8. `test/distributed/harness/__fixtures__/priority-recovery-actuation-contract-fixture.js`
-9. `test-output/reports/rolling-restart-current-release-gate-after-workflow-progress-direct-chain-owner-proof.report.json`
-10. `work/model-ledger.jsonl`
-11. `work/packages/todo-20260512-rolling-restart-operation-workflow-progress-direct-chain-after-owner-proof.md`
+
+Legacy touched files:
+
+1. None recorded

@@ -22,11 +22,11 @@ Recommended load strategy:
 
 | Pack | Mode | Rules | Estimated Tokens |
 | --- | --- | ---: | ---: |
-| core | manual | 18 | 987 |
+| core | manual | 21 | 1291 |
 | architecture | generated | 109 | 3511 |
-| testing | generated | 94 | 3678 |
+| testing | generated | 95 | 3802 |
 | style | generated | 8 | 203 |
-| governance | generated | 43 | 1633 |
+| governance | generated | 47 | 1923 |
 
 ## Notes
 

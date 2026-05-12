@@ -73,7 +73,7 @@ function buildCandidate(entry) {
       '--dominant-reason oversized_file_ratchet',
       '--next-action',
       JSON.stringify('Extract one named owner/boundary helper without changing runtime behavior.'),
-      '--touched-file',
+      '--write-scope',
       entry.path,
       '--proof',
       JSON.stringify(`npm run audit:owner-boundary-segments -- ${entry.path}`),

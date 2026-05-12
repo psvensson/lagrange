@@ -19,9 +19,17 @@
     "affected consumer proof",
     "static guardrails"
   ],
-  "touchedFiles": [
+  "writeScope": [
     "src/example.js",
     "test/example.test.js"
+  ],
+  "handoffFiles": [],
+  "generatedFiles": [],
+  "candidateRuntimeFiles": [],
+  "commitScope": [
+    "src/example.js",
+    "test/example.test.js",
+    "work/packages/active-YYYYMMDD-package.md"
   ],
   "modelFit": {
     "packageClass": "runtime-owner-boundary",
@@ -46,6 +54,28 @@ Describe the runtime owner-boundary problem.
 - Primary owner:
 - Primary boundary:
 - Escalate to scenario lane if:
+
+## LLM Tool-First Contract
+
+Before raw JSON, raw logs, broad file search, oversized segment files, or ad hoc
+`jq`, use the canonical workflow command that owns the question:
+
+1. Package metadata or ledger edits:
+   `npm run work:package:doctor -- --suggest <package>`,
+   `npm run work:package:doctor -- --fix-dry-run <package>`,
+   `npm run work:package:schema`, or `npm run work:package:new -- ...`.
+2. Representative evidence:
+   `npm run work:evidence-summary -- <artifact>` plus any focused extractor
+   for this failure class.
+3. Owner discovery:
+   `npm run analyze:owner-files -- <owner> [boundary]`.
+4. Subagent sequencing:
+   `npm run work:subagent-prompt -- --role <role> --package <package>`.
+5. Large-file cleanup:
+   `npm run work:oversized-next -- --markdown`.
+
+If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which
+canonical extractor was tried and why it was insufficient.
 
 ## Shared Boundary Contract
 
@@ -86,6 +116,12 @@ Closure:
 ## Subagent Sequencing Ledger
 
 Required for this lane unless the user explicitly disables subagents.
+Use `npm run work:validate -- --pre-impl` before implementation and
+`npm run work:validate -- --closure` before close/commit. Before closure only,
+unavailable delegation may be recorded as `human-waived`,
+`tool-unavailable`, or `blocked-by-environment-policy` with `reason: ...`;
+closure still requires complete real proof unless human policy explicitly
+changes the package.
 
 - [ ] Review subagent recorded:
       Agent <name> (<agent-id>) reviewed <package>;

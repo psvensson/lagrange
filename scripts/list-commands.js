@@ -21,8 +21,8 @@ const COMMAND_GROUPS = Object.freeze([
         description: 'Summarize recent model and reasoning-effort fit signals.',
       }),
       Object.freeze({
-        command: 'npm run work:validate',
-        description: 'Validate active work-package metadata, checklist state, and lane-required subagent proof.',
+        command: 'npm run work:validate -- --entry|--pre-impl|--closure',
+        description: 'Validate active work-package metadata, checklist state, and lane-required subagent proof at a workflow phase.',
       }),
       Object.freeze({
         command: 'npm run work:package:new -- --lane <lane> --title <title> --slug <slug> --owner <owner> --boundary <boundary> --dominant-reason <reason> --next-action <action>',
@@ -113,7 +113,7 @@ const COMMAND_GROUPS = Object.freeze([
     commands: Object.freeze([
       Object.freeze({
         command: 'npm run audit:guideline:literals -- <files...>',
-        description: 'Check touched files for new unowned runtime literals.',
+        description: 'Check write-scope files for new unowned runtime literals.',
       }),
       Object.freeze({
         command: 'npm run guard:guideline:constant-names:file -- <files...>',

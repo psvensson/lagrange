@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-05-12T12:33:24.762Z",
+  "generatedAt": "2026-05-12T18:57:00.960Z",
   "sourceDir": ".kiro/steering",
   "llmDir": ".kiro/steering/llm",
   "sourceFiles": [
@@ -45,10 +45,10 @@
     }
   ],
   "stats": {
-    "candidateCount": 254,
-    "dedupedRuleCount": 254,
-    "exportedRuleCount": 254,
-    "estimatedAllRulesTokens": 8899
+    "candidateCount": 259,
+    "dedupedRuleCount": 259,
+    "exportedRuleCount": 259,
+    "estimatedAllRulesTokens": 9310
   },
   "rules": [
     {
@@ -814,7 +814,7 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 274,
+          "line": 277,
           "section": "Testing Guidelines > Reuse-First Fix Strategy > When fixing a bug"
         }
       ]
@@ -829,7 +829,7 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 328,
+          "line": 331,
           "section": "Testing Guidelines > Bug-Cluster Escalation Policy"
         }
       ]
@@ -846,7 +846,7 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 376,
+          "line": 379,
           "section": "Testing Guidelines > System Guideline Conformance Gate for New and Existing Tests"
         }
       ]
@@ -861,7 +861,7 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 411,
+          "line": 414,
           "section": "Testing Guidelines > Deterministic Control-Loop Regression Policy"
         }
       ]
@@ -878,7 +878,7 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 491,
+          "line": 494,
           "section": "Testing Guidelines > Test Duration Hard Limit"
         }
       ]
@@ -893,7 +893,7 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 559,
+          "line": 562,
           "section": "Testing Guidelines > No Skipped Tests Policy"
         }
       ]
@@ -910,7 +910,7 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 560,
+          "line": 563,
           "section": "Testing Guidelines > No Skipped Tests Policy"
         }
       ]
@@ -927,7 +927,7 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 561,
+          "line": 564,
           "section": "Testing Guidelines > No Skipped Tests Policy"
         }
       ]
@@ -944,7 +944,7 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 575,
+          "line": 578,
           "section": "Testing Guidelines > No Test-Only Code Paths in Production Code"
         }
       ]
@@ -961,7 +961,7 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 577,
+          "line": 580,
           "section": "Testing Guidelines > No Test-Only Code Paths in Production Code"
         }
       ]
@@ -978,7 +978,7 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 579,
+          "line": 582,
           "section": "Testing Guidelines > No Test-Only Code Paths in Production Code"
         }
       ]
@@ -995,7 +995,7 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 581,
+          "line": 584,
           "section": "Testing Guidelines > No Test-Only Code Paths in Production Code"
         }
       ]
@@ -1012,7 +1012,7 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 583,
+          "line": 586,
           "section": "Testing Guidelines > No Test-Only Code Paths in Production Code"
         }
       ]
@@ -1029,7 +1029,7 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 604,
+          "line": 607,
           "section": "Testing Guidelines > Fix Failing Tests Immediately"
         }
       ]
@@ -1044,7 +1044,7 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 605,
+          "line": 608,
           "section": "Testing Guidelines > Fix Failing Tests Immediately"
         }
       ]
@@ -1062,7 +1062,7 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 628,
+          "line": 631,
           "section": "Testing Guidelines > System-Table Mutation Test Requirements"
         }
       ]
@@ -1077,7 +1077,7 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 661,
+          "line": 664,
           "section": "Testing Guidelines > Baseline-Discovered Bug Closure Policy"
         }
       ]
@@ -1094,7 +1094,7 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 667,
+          "line": 670,
           "section": "Testing Guidelines > Baseline-Discovered Bug Closure Policy"
         }
       ]
@@ -1111,7 +1111,7 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 779,
+          "line": 794,
           "section": "Testing Guidelines > Agent And Sub-Agent Validation Handoff Policy"
         }
       ]
@@ -1128,7 +1128,7 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 783,
+          "line": 798,
           "section": "Testing Guidelines > Agent And Sub-Agent Validation Handoff Policy"
         }
       ]
@@ -1433,7 +1433,7 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 566,
+          "line": 569,
           "section": "Testing Guidelines > No Test-Only Code Paths in Production Code"
         }
       ]
@@ -1448,7 +1448,7 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 617,
+          "line": 620,
           "section": "Testing Guidelines > Fix Failing Tests Immediately"
         }
       ]
@@ -1465,7 +1465,7 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 633,
+          "line": 636,
           "section": "Testing Guidelines > System-Table Mutation Test Requirements"
         }
       ]
@@ -1723,7 +1723,7 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 183,
+          "line": 186,
           "section": "Testing Guidelines > Scenario-Driven Failure Migration Validation Policy"
         }
       ]
@@ -1740,7 +1740,7 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 240,
+          "line": 243,
           "section": "Testing Guidelines > Test-First Bug Fix Policy"
         }
       ]
@@ -1755,7 +1755,7 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 330,
+          "line": 333,
           "section": "Testing Guidelines > Bug-Cluster Escalation Policy"
         }
       ]
@@ -1946,25 +1946,8 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 557,
+          "line": 560,
           "section": "Testing Guidelines > No Skipped Tests Policy"
-        }
-      ]
-    },
-    {
-      "id": "TEST-0040",
-      "domain": "testing",
-      "strength": "must",
-      "tags": [
-        "ownership"
-      ],
-      "rule": "The evidence block must name the canonical blocker, owner boundary, source artifact paths, prior blocker status, subordinate evidence, and next focused proof surface.",
-      "score": 216,
-      "sources": [
-        {
-          "file": "testing-guidelines.md",
-          "line": 747,
-          "section": "Testing Guidelines > Artifact-First Distributed Failure Triage Policy"
         }
       ]
     },
@@ -2096,24 +2079,24 @@
       ]
     },
     {
-      "id": "TEST-0041",
+      "id": "TEST-0040",
       "domain": "testing",
       "strength": "must",
       "tags": [
         "ownership"
       ],
-      "rule": "Manual evidence summaries are allowed only when no extractor exists, and must preserve the normalized owner fields from the artifact rather than reclassifying from raw logs.",
+      "rule": "The evidence block must name the canonical blocker, owner boundary, source artifact paths, prior blocker status, subordinate evidence, and next focused proof surface.",
       "score": 215,
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 750,
+          "line": 761,
           "section": "Testing Guidelines > Artifact-First Distributed Failure Triage Policy"
         }
       ]
     },
     {
-      "id": "TEST-0042",
+      "id": "TEST-0041",
       "domain": "testing",
       "strength": "must",
       "tags": [
@@ -2124,13 +2107,13 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 764,
+          "line": 779,
           "section": "Testing Guidelines > Agent And Sub-Agent Validation Handoff Policy"
         }
       ]
     },
     {
-      "id": "TEST-0043",
+      "id": "TEST-0042",
       "domain": "testing",
       "strength": "must",
       "tags": [
@@ -2141,13 +2124,13 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 785,
+          "line": 800,
           "section": "Testing Guidelines > Agent And Sub-Agent Validation Handoff Policy"
         }
       ]
     },
     {
-      "id": "TEST-0044",
+      "id": "TEST-0043",
       "domain": "testing",
       "strength": "must",
       "tags": [
@@ -2158,7 +2141,7 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 893,
+          "line": 908,
           "section": "Testing Guidelines > Availability Under Pressure Test Policy > Test structure"
         }
       ]
@@ -2199,7 +2182,7 @@
       ]
     },
     {
-      "id": "TEST-0045",
+      "id": "TEST-0044",
       "domain": "testing",
       "strength": "must_not",
       "tags": [
@@ -2210,7 +2193,7 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 171,
+          "line": 174,
           "section": "Testing Guidelines > Scenario-Driven Failure Migration Validation Policy"
         }
       ]
@@ -2333,12 +2316,12 @@
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
-      "rule": "Parent-session notes, local/manual labels, and arbitrary text without a real agent id do not satisfy review, fix, or implementation roles unless the user disables sub-agents.",
+      "rule": "Parent-session notes, local/manual labels, and arbitrary text without a real agent id do not satisfy review, fix, or implementation roles at closure.",
       "score": 210,
       "sources": [
         {
           "file": "workflow-guidelines.md",
-          "line": 374,
+          "line": 424,
           "section": "Workflow Guidelines Detail > Sub-Agent Sequencing"
         }
       ]
@@ -2351,11 +2334,11 @@
         "governance"
       ],
       "rule": "Roadmap status must not outrun representative evidence.",
-      "score": 210,
+      "score": 209,
       "sources": [
         {
           "file": "workflow-guidelines.md",
-          "line": 463,
+          "line": 516,
           "section": "Workflow Guidelines Detail > Roadmap And Work-Tracker Truth"
         }
       ]
@@ -2561,7 +2544,7 @@
       ]
     },
     {
-      "id": "TEST-0046",
+      "id": "TEST-0045",
       "domain": "testing",
       "strength": "must",
       "tags": [
@@ -2578,7 +2561,7 @@
       ]
     },
     {
-      "id": "TEST-0047",
+      "id": "TEST-0046",
       "domain": "testing",
       "strength": "must",
       "tags": [],
@@ -2593,7 +2576,7 @@
       ]
     },
     {
-      "id": "TEST-0048",
+      "id": "TEST-0047",
       "domain": "testing",
       "strength": "must",
       "tags": [
@@ -2610,7 +2593,7 @@
       ]
     },
     {
-      "id": "TEST-0049",
+      "id": "TEST-0048",
       "domain": "testing",
       "strength": "must",
       "tags": [
@@ -2621,13 +2604,13 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 235,
+          "line": 238,
           "section": "Testing Guidelines > Test-First Bug Fix Policy"
         }
       ]
     },
     {
-      "id": "TEST-0050",
+      "id": "TEST-0049",
       "domain": "testing",
       "strength": "must",
       "tags": [],
@@ -2636,13 +2619,13 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 309,
+          "line": 312,
           "section": "Testing Guidelines > Bug-Cluster Escalation Policy"
         }
       ]
     },
     {
-      "id": "TEST-0051",
+      "id": "TEST-0050",
       "domain": "testing",
       "strength": "must",
       "tags": [
@@ -2655,13 +2638,13 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 335,
+          "line": 338,
           "section": "Testing Guidelines > Owner-Path Regression Policy"
         }
       ]
     },
     {
-      "id": "TEST-0052",
+      "id": "TEST-0051",
       "domain": "testing",
       "strength": "must",
       "tags": [
@@ -2672,13 +2655,13 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 360,
+          "line": 363,
           "section": "Testing Guidelines > System Guideline Conformance Gate for New and Existing Tests"
         }
       ]
     },
     {
-      "id": "TEST-0053",
+      "id": "TEST-0052",
       "domain": "testing",
       "strength": "must",
       "tags": [
@@ -2689,13 +2672,13 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 387,
+          "line": 390,
           "section": "Testing Guidelines > Gateway Boundary Regression Policy"
         }
       ]
     },
     {
-      "id": "TEST-0054",
+      "id": "TEST-0053",
       "domain": "testing",
       "strength": "must",
       "tags": [
@@ -2709,13 +2692,13 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 403,
+          "line": 406,
           "section": "Testing Guidelines > Deterministic Control-Loop Regression Policy"
         }
       ]
     },
     {
-      "id": "TEST-0055",
+      "id": "TEST-0054",
       "domain": "testing",
       "strength": "must",
       "tags": [
@@ -2728,13 +2711,13 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 453,
+          "line": 456,
           "section": "Testing Guidelines > Continuity And Lifetime Regression Policy"
         }
       ]
     },
     {
-      "id": "TEST-0056",
+      "id": "TEST-0055",
       "domain": "testing",
       "strength": "must",
       "tags": [
@@ -2746,13 +2729,13 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 530,
+          "line": 533,
           "section": "Testing Guidelines > Timeout Budget and Classification Policy"
         }
       ]
     },
     {
-      "id": "TEST-0057",
+      "id": "TEST-0056",
       "domain": "testing",
       "strength": "must",
       "tags": [
@@ -2763,13 +2746,13 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 557,
+          "line": 560,
           "section": "Testing Guidelines > No Skipped Tests Policy"
         }
       ]
     },
     {
-      "id": "TEST-0058",
+      "id": "TEST-0057",
       "domain": "testing",
       "strength": "must",
       "tags": [
@@ -2780,7 +2763,24 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 569,
+          "line": 572,
+          "section": "Testing Guidelines > No Test-Only Code Paths in Production Code"
+        }
+      ]
+    },
+    {
+      "id": "TEST-0058",
+      "domain": "testing",
+      "strength": "must",
+      "tags": [
+        "testing"
+      ],
+      "rule": "The test suite must prove that production code works — not that a test-friendly fork of it works.",
+      "score": 206,
+      "sources": [
+        {
+          "file": "testing-guidelines.md",
+          "line": 597,
           "section": "Testing Guidelines > No Test-Only Code Paths in Production Code"
         }
       ]
@@ -2792,35 +2792,18 @@
       "tags": [
         "testing"
       ],
-      "rule": "The test suite must prove that production code works — not that a test-friendly fork of it works.",
-      "score": 206,
-      "sources": [
-        {
-          "file": "testing-guidelines.md",
-          "line": 594,
-          "section": "Testing Guidelines > No Test-Only Code Paths in Production Code"
-        }
-      ]
-    },
-    {
-      "id": "TEST-0060",
-      "domain": "testing",
-      "strength": "must",
-      "tags": [
-        "testing"
-      ],
       "rule": "Failures discovered in the touched area, or discovered by the test runs chosen for the current change, must be resolved before the task closes.",
       "score": 206,
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 599,
+          "line": 602,
           "section": "Testing Guidelines > Fix Failing Tests Immediately"
         }
       ]
     },
     {
-      "id": "TEST-0061",
+      "id": "TEST-0060",
       "domain": "testing",
       "strength": "must",
       "tags": [
@@ -2831,13 +2814,13 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 759,
+          "line": 774,
           "section": "Testing Guidelines > Agent And Sub-Agent Validation Handoff Policy"
         }
       ]
     },
     {
-      "id": "TEST-0062",
+      "id": "TEST-0061",
       "domain": "testing",
       "strength": "must",
       "tags": [
@@ -2849,13 +2832,13 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 796,
+          "line": 811,
           "section": "Testing Guidelines > Structured Deferred-Outcome Regression Policy"
         }
       ]
     },
     {
-      "id": "TEST-0063",
+      "id": "TEST-0062",
       "domain": "testing",
       "strength": "must",
       "tags": [
@@ -2867,13 +2850,13 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 818,
+          "line": 833,
           "section": "Testing Guidelines > Read-Side Repair Separation Regression Policy"
         }
       ]
     },
     {
-      "id": "TEST-0064",
+      "id": "TEST-0063",
       "domain": "testing",
       "strength": "must",
       "tags": [
@@ -2884,7 +2867,7 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 858,
+          "line": 873,
           "section": "Testing Guidelines > Availability Under Pressure Test Policy"
         }
       ]
@@ -3220,7 +3203,7 @@
       ]
     },
     {
-      "id": "TEST-0065",
+      "id": "TEST-0064",
       "domain": "testing",
       "strength": "must",
       "tags": [
@@ -3237,7 +3220,7 @@
       ]
     },
     {
-      "id": "TEST-0066",
+      "id": "TEST-0065",
       "domain": "testing",
       "strength": "must",
       "tags": [
@@ -3255,7 +3238,7 @@
       ]
     },
     {
-      "id": "TEST-0067",
+      "id": "TEST-0066",
       "domain": "testing",
       "strength": "must",
       "tags": [
@@ -3273,7 +3256,7 @@
       ]
     },
     {
-      "id": "TEST-0068",
+      "id": "TEST-0067",
       "domain": "testing",
       "strength": "must",
       "tags": [
@@ -3291,7 +3274,7 @@
       ]
     },
     {
-      "id": "TEST-0069",
+      "id": "TEST-0068",
       "domain": "testing",
       "strength": "must",
       "tags": [
@@ -3308,7 +3291,7 @@
       ]
     },
     {
-      "id": "TEST-0070",
+      "id": "TEST-0069",
       "domain": "testing",
       "strength": "must",
       "tags": [],
@@ -3317,13 +3300,13 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 176,
+          "line": 179,
           "section": "Testing Guidelines > Scenario-Driven Failure Migration Validation Policy"
         }
       ]
     },
     {
-      "id": "TEST-0071",
+      "id": "TEST-0070",
       "domain": "testing",
       "strength": "must",
       "tags": [
@@ -3335,13 +3318,13 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 186,
+          "line": 189,
           "section": "Testing Guidelines > Scenario-Driven Failure Migration Validation Policy"
         }
       ]
     },
     {
-      "id": "TEST-0072",
+      "id": "TEST-0071",
       "domain": "testing",
       "strength": "must",
       "tags": [],
@@ -3350,7 +3333,7 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 192,
+          "line": 195,
           "section": "Testing Guidelines > Scenario-Driven Failure Migration Validation Policy"
         }
       ]
@@ -3450,6 +3433,23 @@
       ]
     },
     {
+      "id": "TEST-0072",
+      "domain": "testing",
+      "strength": "must",
+      "tags": [
+        "ownership"
+      ],
+      "rule": "Manual evidence summaries are allowed only when no extractor exists or the extractor output is insufficient. They must preserve the normalized owner fields from the artifact rather than reclassifying from raw logs, and the package must record why the extractor was not enough.",
+      "score": 191,
+      "sources": [
+        {
+          "file": "testing-guidelines.md",
+          "line": 764,
+          "section": "Testing Guidelines > Artifact-First Distributed Failure Triage Policy"
+        }
+      ]
+    },
+    {
       "id": "TEST-0073",
       "domain": "testing",
       "strength": "must",
@@ -3459,7 +3459,7 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 769,
+          "line": 784,
           "section": "Testing Guidelines > Agent And Sub-Agent Validation Handoff Policy"
         }
       ]
@@ -3474,7 +3474,7 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 873,
+          "line": 888,
           "section": "Testing Guidelines > Availability Under Pressure Test Policy > Required coverage patterns"
         }
       ]
@@ -3593,7 +3593,7 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 169,
+          "line": 172,
           "section": "Testing Guidelines > Scenario-Driven Failure Migration Validation Policy"
         }
       ]
@@ -3610,7 +3610,7 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 241,
+          "line": 244,
           "section": "Testing Guidelines > Test-First Bug Fix Policy"
         }
       ]
@@ -3625,7 +3625,7 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 245,
+          "line": 248,
           "section": "Testing Guidelines > Test-First Bug Fix Policy"
         }
       ]
@@ -3638,11 +3638,11 @@
         "testing"
       ],
       "rule": "The fix should make the failing test pass",
-      "score": 186,
+      "score": 185,
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 249,
+          "line": 252,
           "section": "Testing Guidelines > Test-First Bug Fix Policy"
         }
       ]
@@ -3657,7 +3657,7 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 296,
+          "line": 299,
           "section": "Testing Guidelines > Reuse-First Fix Strategy > Periodic architecture check"
         }
       ]
@@ -3709,7 +3709,7 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 431,
+          "line": 434,
           "section": "Testing Guidelines > Temporal Witness Replay Policy"
         }
       ]
@@ -3726,7 +3726,7 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 781,
+          "line": 796,
           "section": "Testing Guidelines > Agent And Sub-Agent Validation Handoff Policy"
         }
       ]
@@ -3743,8 +3743,25 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 713,
+          "line": 716,
           "section": "Testing Guidelines > Distributed Validation Ladder Policy"
+        }
+      ]
+    },
+    {
+      "id": "TEST-0083",
+      "domain": "testing",
+      "strength": "must",
+      "tags": [
+        "ownership"
+      ],
+      "rule": "Distributed artifact triage must start with npm run work:evidence-summary -- <artifact>, the focused extractor for the failure class such as npm run analyze:priority-recovery-residuals -- <artifact>, and npm run analyze:owner-files -- <owner> [boundary] before broad text search, raw JSON slicing, ad hoc jq, or raw logs.",
+      "score": 182,
+      "sources": [
+        {
+          "file": "testing-guidelines.md",
+          "line": 738,
+          "section": "Testing Guidelines > Artifact-First Distributed Failure Triage Policy"
         }
       ]
     },
@@ -3768,7 +3785,7 @@
       ]
     },
     {
-      "id": "TEST-0083",
+      "id": "TEST-0084",
       "domain": "testing",
       "strength": "should",
       "tags": [
@@ -3779,7 +3796,7 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 250,
+          "line": 253,
           "section": "Testing Guidelines > Test-First Bug Fix Policy"
         }
       ]
@@ -3817,7 +3834,7 @@
       ]
     },
     {
-      "id": "TEST-0084",
+      "id": "TEST-0085",
       "domain": "testing",
       "strength": "should",
       "tags": [],
@@ -3832,7 +3849,7 @@
       ]
     },
     {
-      "id": "TEST-0085",
+      "id": "TEST-0086",
       "domain": "testing",
       "strength": "should",
       "tags": [
@@ -3865,7 +3882,7 @@
       ]
     },
     {
-      "id": "TEST-0086",
+      "id": "TEST-0087",
       "domain": "testing",
       "strength": "should",
       "tags": [
@@ -3876,7 +3893,7 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 355,
+          "line": 358,
           "section": "Testing Guidelines > Owner-Path Regression Policy"
         }
       ]
@@ -3899,7 +3916,7 @@
       ]
     },
     {
-      "id": "TEST-0087",
+      "id": "TEST-0088",
       "domain": "testing",
       "strength": "should",
       "tags": [
@@ -3911,23 +3928,8 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 728,
+          "line": 731,
           "section": "Testing Guidelines > Distributed Validation Ladder Policy"
-        }
-      ]
-    },
-    {
-      "id": "TEST-0088",
-      "domain": "testing",
-      "strength": "may",
-      "tags": [],
-      "rule": "Only return to suite-local fixes after the shared runner boundary is shown stable.",
-      "score": 170,
-      "sources": [
-        {
-          "file": "testing-guidelines.md",
-          "line": 208,
-          "section": "Testing Guidelines > Runner Stability Boundary Policy"
         }
       ]
     },
@@ -3936,13 +3938,13 @@
       "domain": "testing",
       "strength": "may",
       "tags": [],
-      "rule": "Only restore higher parallelism after the aggregate gate is proven stable at the new boundary.",
+      "rule": "Only return to suite-local fixes after the shared runner boundary is shown stable.",
       "score": 170,
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 227,
-          "section": "Testing Guidelines > Runner Parallelism Budget Policy"
+          "line": 211,
+          "section": "Testing Guidelines > Runner Stability Boundary Policy"
         }
       ]
     },
@@ -3951,13 +3953,13 @@
       "domain": "testing",
       "strength": "may",
       "tags": [],
-      "rule": "Are multiple recent bugs clustering around the same boundary or component? That may indicate a design-level issue worth addressing instead of patching each symptom individually.",
-      "score": 169,
+      "rule": "Only restore higher parallelism after the aggregate gate is proven stable at the new boundary.",
+      "score": 170,
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 300,
-          "section": "Testing Guidelines > Reuse-First Fix Strategy > Periodic architecture check"
+          "line": 230,
+          "section": "Testing Guidelines > Runner Parallelism Budget Policy"
         }
       ]
     },
@@ -3966,13 +3968,30 @@
       "domain": "testing",
       "strength": "may",
       "tags": [],
-      "rule": "Only after the artifact summaries have been read may raw container or node logs become the primary debugging surface.",
-      "score": 168,
+      "rule": "Are multiple recent bugs clustering around the same boundary or component? That may indicate a design-level issue worth addressing instead of patching each symptom individually.",
+      "score": 169,
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 742,
-          "section": "Testing Guidelines > Artifact-First Distributed Failure Triage Policy"
+          "line": 303,
+          "section": "Testing Guidelines > Reuse-First Fix Strategy > Periodic architecture check"
+        }
+      ]
+    },
+    {
+      "id": "GOV-0038",
+      "domain": "governance",
+      "strength": "must",
+      "tags": [
+        "ownership"
+      ],
+      "rule": "LLM-driven work across all packages and sub-agent tasks must use canonical workflow and artifact tools before raw JSON or log slicing: work:llm-start, work:evidence-summary, work:package:doctor -- --suggest, work:package:schema, work:package:new, analyze:owner-files, focused scenario extractors such as analyze:priority-recovery-residuals, work:subagent-prompt, and work:oversized-next.",
+      "score": 168,
+      "sources": [
+        {
+          "file": "workflow-guidelines.md",
+          "line": 343,
+          "section": "Workflow Guidelines Detail > LLM Tool-First Triage"
         }
       ]
     },
@@ -3981,12 +4000,27 @@
       "domain": "testing",
       "strength": "may",
       "tags": [],
+      "rule": "Only after the artifact summaries and relevant extractors have been read may raw container logs, node logs, raw JSON slicing, or ad hoc jq become the primary debugging surface.",
+      "score": 167,
+      "sources": [
+        {
+          "file": "testing-guidelines.md",
+          "line": 755,
+          "section": "Testing Guidelines > Artifact-First Distributed Failure Triage Policy"
+        }
+      ]
+    },
+    {
+      "id": "TEST-0093",
+      "domain": "testing",
+      "strength": "may",
+      "tags": [],
       "rule": "A separate implementation sub-agent may start the current work package only after the previous-package review is clean or the review findings have been fixed.",
       "score": 167,
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 776,
+          "line": 791,
           "section": "Testing Guidelines > Agent And Sub-Agent Validation Handoff Policy"
         }
       ]
@@ -4056,7 +4090,7 @@
       ]
     },
     {
-      "id": "GOV-0038",
+      "id": "GOV-0039",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -4073,7 +4107,7 @@
       ]
     },
     {
-      "id": "GOV-0039",
+      "id": "GOV-0040",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -4090,7 +4124,7 @@
       ]
     },
     {
-      "id": "GOV-0040",
+      "id": "GOV-0041",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -4107,7 +4141,7 @@
       ]
     },
     {
-      "id": "TEST-0093",
+      "id": "TEST-0094",
       "domain": "testing",
       "strength": "may",
       "tags": [],
@@ -4116,13 +4150,13 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 728,
+          "line": 731,
           "section": "Testing Guidelines > Distributed Validation Ladder Policy"
         }
       ]
     },
     {
-      "id": "TEST-0094",
+      "id": "TEST-0095",
       "domain": "testing",
       "strength": "may",
       "tags": [
@@ -4133,8 +4167,25 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 837,
+          "line": 852,
           "section": "Testing Guidelines > When to Run Full Test Suite"
+        }
+      ]
+    },
+    {
+      "id": "GOV-0042",
+      "domain": "governance",
+      "strength": "may",
+      "tags": [
+        "lifecycle"
+      ],
+      "rule": "Use validation phases deliberately: npm run work:validate -- --entry for package shape, --pre-impl when review/fix proof is complete and implementation may still be pending, and --closure before close/commit.",
+      "score": 154,
+      "sources": [
+        {
+          "file": "workflow-guidelines.md",
+          "line": 380,
+          "section": "Workflow Guidelines Detail > LLM Tool-First Triage"
         }
       ]
     },
@@ -4154,7 +4205,7 @@
       ]
     },
     {
-      "id": "GOV-0041",
+      "id": "GOV-0043",
       "domain": "governance",
       "strength": "may",
       "tags": [],
@@ -4169,7 +4220,7 @@
       ]
     },
     {
-      "id": "GOV-0042",
+      "id": "GOV-0044",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -4182,6 +4233,21 @@
           "file": "workflow-guidelines.md",
           "line": 211,
           "section": "Workflow Guidelines Detail > Residual Closure Inventory"
+        }
+      ]
+    },
+    {
+      "id": "GOV-0045",
+      "domain": "governance",
+      "strength": "may",
+      "tags": [],
+      "rule": "Before closure, an implementation environment may record human-waived, tool-unavailable, or blocked-by-environment-policy with a reason: ... note so unavailable delegation is explicit instead of disguised as agent proof.",
+      "score": 144,
+      "sources": [
+        {
+          "file": "workflow-guidelines.md",
+          "line": 424,
+          "section": "Workflow Guidelines Detail > Sub-Agent Sequencing"
         }
       ]
     },
@@ -4201,7 +4267,7 @@
       ]
     },
     {
-      "id": "GOV-0043",
+      "id": "GOV-0046",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -4214,6 +4280,23 @@
           "file": "roadmap.md",
           "line": 113,
           "section": "Roadmap Steering Pointer > AGPL Preparatory Work"
+        }
+      ]
+    },
+    {
+      "id": "GOV-0047",
+      "domain": "governance",
+      "strength": "may",
+      "tags": [
+        "governance"
+      ],
+      "rule": "Use explicit metadata scope fields for new packages: writeScope for files the package may edit, handoffFiles for read-only context, generatedFiles for deterministic outputs, candidateRuntimeFiles for files gated by a focused probe, and commitScope for focused commit containment. touchedFiles is legacy compatibility only.",
+      "score": 130,
+      "sources": [
+        {
+          "file": "workflow-guidelines.md",
+          "line": 375,
+          "section": "Workflow Guidelines Detail > LLM Tool-First Triage"
         }
       ]
     }

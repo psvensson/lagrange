@@ -11,6 +11,37 @@ Get to the `0.1` release by closing the representative `rolling-restart`
 distributed harness gate, or by migrating each remaining failure to one named
 owner-boundary package with replayable proof.
 
+## Current Blocker Snapshot
+
+- Current package:
+  [Rolling Restart Startup Readiness Support Evidence Boundary](../packages/active-20260512-rolling-restart-startup-readiness-support-evidence-boundary.md)
+- Latest artifact:
+  `test-output/reports/rolling-restart-current-release-gate-after-workflow-progress-direct-chain-owner-proof.report.json`
+- Latest playback:
+  `test-output/reports/.playback/rolling-restart-current-release-gate-after-workflow-progress-direct-chain-owner-proof/rolling-restart/`
+- Representative gate: `rolling-restart`
+- Owner boundary: `startup_readiness_owner / startup_support_evidence`
+- Canonical blocker: startup readiness terminal no-progress has weak support
+  evidence (`source=unknown`, `cause=none`).
+- Prior blocker status: operation workflow progress direct-chain proof reduced
+  priority recovery to retryable owner work; publication ACK convergence remains
+  satisfied with `PUBLISHED` and zero pending ACKs.
+- Subordinate evidence: `startup_active_gate_owner / snapshot_coverage` is
+  projected downstream and must not drive write scope until readiness-support
+  evidence reduces or migrates.
+- Next action: use the required fresh implementation subagent to prove
+  `readiness_startup_support` with a focused startup-readiness fixture or probe
+  before changing runtime behavior.
+- Proof ladder:
+  `npm run work:llm-start -- --package work/packages/active-20260512-rolling-restart-startup-readiness-support-evidence-boundary.md`,
+  `npm run work:package:doctor -- --pre-impl --suggest work/packages/active-20260512-rolling-restart-startup-readiness-support-evidence-boundary.md`,
+  `npm run work:evidence-summary -- test-output/reports/rolling-restart-current-release-gate-after-workflow-progress-direct-chain-owner-proof.report.json`,
+  `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-current-release-gate-after-workflow-progress-direct-chain-owner-proof.report.json`,
+  focused startup-readiness support evidence fixture or owner test,
+  representative rerun or explicit owner-boundary migration.
+
+## Artifact History
+
 The current representative gate is `rolling-restart`. The release-gate artifact
 trail is:
 
@@ -68,30 +99,39 @@ The matching playback is:
 24. `test-output/reports/.playback/rolling-restart-current-release-gate-after-workflow-progress-serial-wait-event-driven-advance-proof/rolling-restart/`
 25. `test-output/reports/.playback/rolling-restart-current-release-gate-after-workflow-progress-direct-chain-owner-proof/rolling-restart/`
 
-## Current Blocker Snapshot
+## Current Blocker Detail Ledger
 
 Current package:
 
-1. [Rolling Restart Operation Workflow Progress Direct Chain After Owner Proof](../packages/done-20260512-rolling-restart-operation-workflow-progress-direct-chain-after-owner-proof.md)
+1. [Rolling Restart Startup Readiness Support Evidence Boundary](../packages/active-20260512-rolling-restart-startup-readiness-support-evidence-boundary.md)
 
 Recent completed packages:
 
-1. [Rolling Restart Operation Workflow Progress Serial Wait Event Driven Advance](../packages/done-20260512-rolling-restart-operation-workflow-progress-serial-wait-event-driven-advance.md)
-2. [Rolling Restart Operation Workflow Progress Coordinator Excludes Node](../packages/done-20260512-rolling-restart-operation-workflow-progress-coordinator-excludes-node.md)
-3. [Rolling Restart Operation Workflow Rebalancer Handoff Needs Operation Coordination Mismatch Classification](../packages/done-20260512-rolling-restart-operation-workflow-rebalancer-handoff-needs-operation-coordination-mismatch-classification.md)
-4. [Rolling Restart Operation Workflow Rebalancer Handoff Priority Recovery Retry Scheduled](../packages/done-20260512-rolling-restart-operation-workflow-rebalancer-handoff-priority-recovery-retry-scheduled.md)
-5. [Rolling Restart Operation Workflow Progress Priority Recovery Event Wait](../packages/done-20260512-rolling-restart-operation-workflow-progress-priority-recovery-event-wait.md)
-6. [Rolling Restart Rebalancer Leader Operation Scheduling Priority Recovery](../packages/done-20260512-rolling-restart-rebalancer-leader-operation-scheduling-priority-recovery.md)
-7. [Rolling Restart Operation Workflow Progress Stage3 Timeout Progression](../packages/done-20260512-rolling-restart-operation-workflow-progress-stage3-timeout-progression.md)
-8. [Rolling Restart Operation Workflow Progress Event Driven Dispatch Pending](../packages/done-20260512-rolling-restart-operation-workflow-progress-event-driven-dispatch-pending.md)
+1. [Rolling Restart Operation Workflow Progress Direct Chain After Owner Proof](../packages/done-20260512-rolling-restart-operation-workflow-progress-direct-chain-after-owner-proof.md)
+2. [Rolling Restart Operation Workflow Progress Serial Wait Event Driven Advance](../packages/done-20260512-rolling-restart-operation-workflow-progress-serial-wait-event-driven-advance.md)
+3. [Rolling Restart Operation Workflow Progress Coordinator Excludes Node](../packages/done-20260512-rolling-restart-operation-workflow-progress-coordinator-excludes-node.md)
+4. [Rolling Restart Operation Workflow Rebalancer Handoff Needs Operation Coordination Mismatch Classification](../packages/done-20260512-rolling-restart-operation-workflow-rebalancer-handoff-needs-operation-coordination-mismatch-classification.md)
+5. [Rolling Restart Operation Workflow Rebalancer Handoff Priority Recovery Retry Scheduled](../packages/done-20260512-rolling-restart-operation-workflow-rebalancer-handoff-priority-recovery-retry-scheduled.md)
+6. [Rolling Restart Operation Workflow Progress Priority Recovery Event Wait](../packages/done-20260512-rolling-restart-operation-workflow-progress-priority-recovery-event-wait.md)
+7. [Rolling Restart Rebalancer Leader Operation Scheduling Priority Recovery](../packages/done-20260512-rolling-restart-rebalancer-leader-operation-scheduling-priority-recovery.md)
+8. [Rolling Restart Operation Workflow Progress Stage3 Timeout Progression](../packages/done-20260512-rolling-restart-operation-workflow-progress-stage3-timeout-progression.md)
 
 Next action:
 
-1. Close or migrate the direct-chain workflow-progress package to the named
-   `startup_readiness_owner / startup_support_evidence` successor.
-2. Keep the serial-wait event-driven advance package as predecessor proof; it
+1. Continue from the active startup-readiness package:
+   [Rolling Restart Startup Readiness Support Evidence Boundary](../packages/active-20260512-rolling-restart-startup-readiness-support-evidence-boundary.md).
+2. Use a fresh implementation subagent after the recorded review/fix handoff
+   repair.
+3. Prove the representative startup readiness terminal no-progress evidence
+   with a focused `startup_readiness_owner / startup_support_evidence` fixture
+   or probe before changing runtime behavior.
+4. Reduce the readiness support-evidence boundary, record representative green,
+   or migrate to one named owner boundary. Do not implement
+   `startup_active_gate_owner / snapshot_coverage` from this package without
+   fresh normalized owner evidence.
+5. Keep the direct-chain workflow-progress package as predecessor proof only; it
    is no longer the active package.
-3. Parked split successor, not promoted by the fresh representative report:
+6. Parked split successor, not promoted by the fresh representative report:
    [Rolling Restart Rebalancer Leader Operation Scheduling Control Plane Publications Create Recovery Operation](../packages/todo-20260512-rolling-restart-rebalancer-leader-operation-scheduling-control-plane-publications-create-recovery-operation.md)
 
 Latest representative evidence:
@@ -210,46 +250,44 @@ Edition matrix status: Community / AGPL repo.
    `priority_recovery_event_driven_wait`, blocked partitions
    `control_plane_publications-p1`, `replica_operations-p1`, and
    `sql_transactions-p1`.
-11. Preserve the current same-frontier classification until a follow-on package
-    explicitly owns `src/rebalancer/operation-workflow-owner-segment-7-stage-3.js`
-    timeout progression or fresh representative evidence names a new owner
-    boundary.
-12. Preserve the retry-scheduled rebalancer-handoff proof: focused owner tests
+11. Preserve the retry-scheduled rebalancer-handoff proof: focused owner tests
     show retry-scheduled handoff work wakes through canonical dispatch, keeps
     one bounded verification timer, and stops at operation-budget exhaustion.
     The representative remains same-boundary red on broader priority recovery
     progress blocked evidence.
-13. Classify the broader residual into one owner fix only if the evidence
+12. Classify the broader residual into one owner fix only if the evidence
     proves one owner owns the whole `needs_operation` /
     `coordination_mismatch` set; otherwise split the next runtime work by
     owner-boundary.
-14. If `rolling-restart` passes, run sustained throughput and 7-node stress
+13. Preserve the direct-chain owner proof showing priority recovery is now
+    retryable under `operation_workflow_owner / workflow_progress` and the
+    causal stop migrated to `startup_readiness_owner /
+    startup_support_evidence`.
+14. Current implementation work must start from the startup-readiness package,
+    prove `readiness_startup_support` with a focused fixture or probe, and use
+    `active_gate_snapshot_coverage` only as explanatory/projected evidence until
+    the readiness-support boundary reduces or migrates.
+15. If `rolling-restart` passes, run sustained throughput and 7-node stress
     confirmation for `0.1`.
 
 ## Validation Ladder
 
-1. `npm run work:package:evidence-block -- test-output/reports/rolling-restart-current-release-gate-after-workflow-timeout-stale-progress-fix.report.json`
-2. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-current-release-gate-after-workflow-timeout-stale-progress-fix.report.json --explain priority_recovery_partition_progress`
-3. `npm run analyze:distributed-failure -- --report test-output/reports/rolling-restart-current-release-gate-after-workflow-timeout-stale-progress-fix.report.json`
-4. Focused workflow-progress startup replay, target-creation, dispatch-skip
-   retry, dispatch-pending timeout re-entry, serial-wait, and harness summary
-   regressions.
-5. Touched-file static guardrails selected by the implementation boundary.
-6. `npm run work:current-blocker`
-7. `npm run work:validate`
-8. `git diff --check`
-9. Representative `rolling-restart --fast-local` rerun.
-10. `npm run work:package:evidence-block -- test-output/reports/rolling-restart-current-release-gate-after-sql-write-serial-wait-fix.report.json`
-11. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-current-release-gate-after-sql-write-serial-wait-fix.report.json --explain publication_ack_convergence`
-12. `node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-current-release-gate-after-publication-convergence-fix-v2.report.json --fast-local --verbose`
-13. `npm run work:package:evidence-block -- test-output/reports/rolling-restart-current-release-gate-after-publication-convergence-fix-v2.report.json`
-14. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-current-release-gate-after-publication-convergence-fix-v2.report.json --explain publication_ack_convergence`
-15. `node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-current-release-gate-after-event-driven-wait-fix.report.json --fast-local --verbose`
-16. `node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-current-release-gate-after-rebalancer-handoff-fix.report.json --fast-local --verbose`
-17. `node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-current-release-gate-after-workflow-progress-event-driven-priority-recovery-fix.report.json --fast-local --verbose`
-18. `node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-current-release-gate-after-dispatch-pending-step-timeout-contract-fix.report.json --fast-local --verbose`
-19. `node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-current-release-gate-after-event-driven-residual-recovery-fix.report.json --fast-local --verbose`
-19. Sustained throughput and 7-node stress confirmation after
+1. `npm run work:llm-start -- --package work/packages/active-20260512-rolling-restart-startup-readiness-support-evidence-boundary.md`
+2. `npm run work:package:doctor -- --suggest work/packages/active-20260512-rolling-restart-startup-readiness-support-evidence-boundary.md`
+3. `npm run work:evidence-summary -- test-output/reports/rolling-restart-current-release-gate-after-workflow-progress-direct-chain-owner-proof.report.json`
+4. `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-current-release-gate-after-workflow-progress-direct-chain-owner-proof.report.json`
+5. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-current-release-gate-after-workflow-progress-direct-chain-owner-proof.report.json --explain readiness_startup_support`
+6. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-current-release-gate-after-workflow-progress-direct-chain-owner-proof.report.json --explain active_gate_snapshot_coverage`
+7. `npm run analyze:distributed-failure -- --report test-output/reports/rolling-restart-current-release-gate-after-workflow-progress-direct-chain-owner-proof.report.json`
+8. `npm run analyze:owner-files -- startup_readiness_owner startup_support_evidence --markdown`
+9. Focused `startup_readiness_owner / startup_support_evidence` fixture or
+    owner test before runtime code changes.
+10. Representative `rolling-restart --fast-local` rerun or explicit migration
+    proof after focused startup-readiness proof.
+11. `npm run work:current-blocker`
+12. `npm run work:validate -- --pre-impl --all`
+13. `git diff --check`
+14. Sustained throughput and 7-node stress confirmation after
     `rolling-restart` passes.
 
 ## Done When

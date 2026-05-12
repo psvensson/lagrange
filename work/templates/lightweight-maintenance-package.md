@@ -18,8 +18,15 @@
     "focused script or test",
     "git diff --check"
   ],
-  "touchedFiles": [
+  "writeScope": [
     "path/to/file"
+  ],
+  "handoffFiles": [],
+  "generatedFiles": [],
+  "candidateRuntimeFiles": [],
+  "commitScope": [
+    "path/to/file",
+    "work/packages/active-YYYYMMDD-package.md"
   ],
   "modelFit": {
     "packageClass": "lightweight-maintenance",

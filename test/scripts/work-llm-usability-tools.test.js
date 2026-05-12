@@ -35,7 +35,7 @@ async function writeTempPackage() {
     'dominant-reason': 'test_package',
     'next-action': 'Render LLM start output.',
     proof: ['node --test test/scripts/work-llm-usability-tools.test.js'],
-    'touched-file': ['scripts/work-package-new.js'],
+    'write-scope': ['scripts/work-package-new.js'],
     ledger: TEMP_LEDGER_PATH,
   });
   await fs.writeFile(TEMP_PACKAGE_PATH, `${content}\n`, 'utf8');
@@ -46,6 +46,9 @@ test('shared package schema lists validator enums for LLM scaffolding', (t) => {
   const rendered = renderSchemaReference();
 
   t.match(rendered, /scenario-release-gate/u);
+  t.match(rendered, /writeScope/u);
+  t.match(rendered, /pre-impl/u);
+  t.match(rendered, /tool-unavailable/u);
   t.match(rendered, /pending-before-rerun/u);
   t.match(rendered, /classification-only-stop/u);
   t.end();
@@ -61,14 +64,19 @@ test('package scaffolder pre-fills Model Fit from schema defaults', async (t) =>
     'dominant-reason': 'test_package',
     'next-action': 'Create a package.',
     proof: ['git diff --check'],
-    'touched-file': ['scripts/work-package-new.js'],
+    'write-scope': ['scripts/work-package-new.js'],
     ledger: TEMP_LEDGER_PATH,
   });
 
   t.match(content, /"schema": "work-package-v1"/u);
   t.match(content, /"lane": "lightweight-maintenance"/u);
+  t.match(content, /"writeScope": \[/u);
+  t.match(content, /"commitScope": \[/u);
   t.match(content, /Intended minimum model: `gpt-5\.3-codex-spark`/u);
   t.match(content, /Model ledger advisory: `hold`/u);
+  t.match(content, /## LLM Tool-First Contract/u);
+  t.match(content, /work:evidence-summary/u);
+  t.match(content, /ad hoc `jq`/u);
 });
 
 test('package scaffolder uses package filename date convention', async (t) => {
@@ -146,7 +154,12 @@ test('subagent prompt generator emits bounded task and ledger guidance',
     t.match(prompt, /implementation Subagent Prompt/u);
     t.match(prompt, /workflow_tooling_owner/u);
     t.match(prompt, /Predecessor: `none`/u);
-    t.match(prompt, /Do not widen beyond the owned files/u);
+    t.match(prompt, /Do not widen beyond the write scope/u);
+    t.match(prompt, /## Tool-First Workflow/u);
+    t.match(prompt, /## Write Scope/u);
+    t.match(prompt, /## Commit Scope/u);
+    t.match(prompt, /work:evidence-summary/u);
+    t.match(prompt, /ad hoc `jq`/u);
     t.match(prompt, /Add the real returned agent name and id/u);
   });
 

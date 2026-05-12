@@ -111,6 +111,7 @@ const SECTION_CURRENT_STATE = 'Current State';
 const SECTION_NEXT_ACTION = 'Next Action';
 const SECTION_FIRST_FILES = 'First Files To Read';
 const SECTION_TOUCHED_FILES = 'Touched Files';
+const SECTION_SCOPE = 'Scope';
 const SECTION_PROOF_LADDER = 'Proof Ladder';
 const SECTION_SUBAGENT_SEQUENCING = 'Subagent Sequencing';
 const SECTION_MODEL_FIT = 'Model Fit';
@@ -258,6 +259,11 @@ const METADATA_FIELD_CURRENT_STATE = 'currentState';
 const METADATA_FIELD_NEXT_ACTION = 'nextAction';
 const METADATA_FIELD_PROOF = 'proof';
 const METADATA_FIELD_TOUCHED_FILES = 'touchedFiles';
+const METADATA_FIELD_WRITE_SCOPE = 'writeScope';
+const METADATA_FIELD_HANDOFF_FILES = 'handoffFiles';
+const METADATA_FIELD_GENERATED_FILES = 'generatedFiles';
+const METADATA_FIELD_CANDIDATE_RUNTIME_FILES = 'candidateRuntimeFiles';
+const METADATA_FIELD_COMMIT_SCOPE = 'commitScope';
 const METADATA_FIELD_PREDECESSOR = 'predecessor';
 const METADATA_FIELD_MODEL_FIT = 'modelFit';
 const METADATA_FIELD_CAUSAL_GOVERNANCE = 'causalGovernance';
@@ -430,6 +436,12 @@ async function buildCurrentBlockerFromPackage(packagePath) {
       nextAction: metadataText(metadata, METADATA_FIELD_NEXT_ACTION),
       proof: metadataList(metadata, METADATA_FIELD_PROOF),
       touchedFiles: metadataList(metadata, METADATA_FIELD_TOUCHED_FILES),
+      writeScope: metadataList(metadata, METADATA_FIELD_WRITE_SCOPE),
+      handoffFiles: metadataList(metadata, METADATA_FIELD_HANDOFF_FILES),
+      generatedFiles: metadataList(metadata, METADATA_FIELD_GENERATED_FILES),
+      candidateRuntimeFiles:
+        metadataList(metadata, METADATA_FIELD_CANDIDATE_RUNTIME_FILES),
+      commitScope: metadataList(metadata, METADATA_FIELD_COMMIT_SCOPE),
       modelFit: metadataModelFit(metadata),
       causalGovernance: metadataCausalGovernance(metadata),
       scenarioCausalClosure: metadataScenarioCausalClosure(metadata),
@@ -965,8 +977,55 @@ function pathHasRealValue(filePath) {
   return normalizedPath.length > NUM_ZERO && normalizedPath !== PATH_NONE;
 }
 
+function scopeList(currentBlocker = {}, fieldName, fallbackFieldName = null) {
+  const values = normalizeStringList(currentBlocker[fieldName]);
+  if (values.length > NUM_ZERO) {
+    return values;
+  }
+  return fallbackFieldName ?
+    normalizeStringList(currentBlocker[fallbackFieldName]) :
+    [];
+}
+
+function buildWriteScope(currentBlocker = {}) {
+  return scopeList(
+    currentBlocker,
+    METADATA_FIELD_WRITE_SCOPE,
+    METADATA_FIELD_TOUCHED_FILES,
+  );
+}
+
+function buildHandoffFiles(currentBlocker = {}) {
+  return scopeList(currentBlocker, METADATA_FIELD_HANDOFF_FILES);
+}
+
+function buildGeneratedFiles(currentBlocker = {}) {
+  return scopeList(currentBlocker, METADATA_FIELD_GENERATED_FILES);
+}
+
+function buildCandidateRuntimeFiles(currentBlocker = {}) {
+  return scopeList(currentBlocker, METADATA_FIELD_CANDIDATE_RUNTIME_FILES);
+}
+
+function buildCommitScope(currentBlocker = {}) {
+  const commitScope = scopeList(currentBlocker, METADATA_FIELD_COMMIT_SCOPE);
+  return commitScope.length > NUM_ZERO ? commitScope : buildWriteScope(currentBlocker);
+}
+
+function buildReadScope(currentBlocker = {}) {
+  return normalizeStringList([
+    ...buildWriteScope(currentBlocker),
+    ...buildHandoffFiles(currentBlocker),
+    ...buildGeneratedFiles(currentBlocker),
+    ...buildCandidateRuntimeFiles(currentBlocker),
+  ]);
+}
+
 function buildOwnerCardPaths(currentBlocker) {
-  const touchedFiles = normalizeStringList(currentBlocker.touchedFiles);
+  const touchedFiles = normalizeStringList([
+    ...buildWriteScope(currentBlocker),
+    ...buildCandidateRuntimeFiles(currentBlocker),
+  ]);
   const ownerCards = [];
 
   for (const filePath of touchedFiles) {
@@ -984,14 +1043,15 @@ function buildOwnerCardPaths(currentBlocker) {
 }
 
 function buildRelevantLlmDomainPackPaths(currentBlocker) {
-  const touchedFiles = normalizeStringList(currentBlocker.touchedFiles);
+  const readScope = buildReadScope(currentBlocker);
+  const writeScope = buildWriteScope(currentBlocker);
   const scenario = normalizeString(currentBlocker.scenario);
   const domainPacks = [];
-  if (touchedFiles.some((filePath) => filePath.startsWith(SOURCE_DIRECTORY_PREFIX))) {
+  if (readScope.some((filePath) => filePath.startsWith(SOURCE_DIRECTORY_PREFIX))) {
     domainPacks.push(LLM_STEERING_ARCHITECTURE_PATH);
   }
   if (
-    touchedFiles.some((filePath) => filePath.startsWith(TEST_DIRECTORY_PREFIX)) ||
+    readScope.some((filePath) => filePath.startsWith(TEST_DIRECTORY_PREFIX)) ||
     pathHasRealValue(currentBlocker.artifact) ||
     pathHasRealValue(currentBlocker.playback) ||
     (scenario.length > NUM_ZERO &&
@@ -1000,12 +1060,12 @@ function buildRelevantLlmDomainPackPaths(currentBlocker) {
   ) {
     domainPacks.push(LLM_STEERING_TESTING_PATH);
   }
-  if (touchedFiles.some((filePath) => filePath.startsWith(SCRIPT_DIRECTORY_PREFIX))) {
+  if (writeScope.some((filePath) => filePath.startsWith(SCRIPT_DIRECTORY_PREFIX))) {
     domainPacks.push(LLM_STEERING_STYLE_PATH);
   }
   if (
-    touchedFiles.some((filePath) => filePath.startsWith(WORK_README_PATH)) ||
-    touchedFiles.some((filePath) => filePath.startsWith(WORK_DIRECTORY_PREFIX))
+    readScope.some((filePath) => filePath.startsWith(WORK_README_PATH)) ||
+    readScope.some((filePath) => filePath.startsWith(WORK_DIRECTORY_PREFIX))
   ) {
     domainPacks.push(LLM_STEERING_GOVERNANCE_PATH);
   }
@@ -1034,7 +1094,7 @@ function buildFirstReadPaths(currentBlocker) {
     ...buildOwnerCardPaths(currentBlocker),
     ...(pathHasRealValue(currentBlocker.artifact) ? [currentBlocker.artifact] : []),
     ...buildPlaybackEvidencePaths(currentBlocker),
-    ...normalizeStringList(currentBlocker.touchedFiles),
+    ...buildReadScope(currentBlocker),
   ].filter(pathHasRealValue);
   return normalizeStringList(currentPaths);
 }
@@ -1045,7 +1105,7 @@ async function buildFirstReadPathLabels(currentBlocker) {
 }
 
 function buildRuntimeTouchedFiles(currentBlocker) {
-  return normalizeStringList(currentBlocker.touchedFiles).filter(
+  return normalizeStringList(buildWriteScope(currentBlocker)).filter(
     (filePath) =>
       filePath.startsWith(SOURCE_DIRECTORY_PREFIX) &&
       filePath.endsWith(JAVASCRIPT_EXTENSION),
@@ -1053,7 +1113,7 @@ function buildRuntimeTouchedFiles(currentBlocker) {
 }
 
 function buildUsefulCommands(currentBlocker) {
-  const touchedFiles = normalizeStringList(currentBlocker.touchedFiles);
+  const commitScope = buildCommitScope(currentBlocker);
   const runtimeTouchedFiles = buildRuntimeTouchedFiles(currentBlocker);
   const commands = [
     NPM_RUN_WORK_CURRENT_BLOCKER_COMMAND,
@@ -1126,8 +1186,8 @@ function buildUsefulCommands(currentBlocker) {
       commandWithPaths(CHECK_RUNTIME_GRAMMAR_FILE_COMMAND, runtimeTouchedFiles),
     );
   }
-  if (touchedFiles.length > NUM_ZERO) {
-    commands.push(commandWithPaths(GIT_DIFF_CHECK_COMMAND, touchedFiles));
+  if (commitScope.length > NUM_ZERO) {
+    commands.push(commandWithPaths(GIT_DIFF_CHECK_COMMAND, commitScope));
   }
   return commands;
 }
@@ -1150,7 +1210,7 @@ function buildPackageOwnedPaths(currentBlocker = {}) {
     currentBlocker.package,
     currentBlocker.predecessor,
     currentBlocker.sprint,
-    ...normalizeStringList(currentBlocker.touchedFiles),
+    ...buildCommitScope(currentBlocker),
   ]));
 }
 
@@ -1497,8 +1557,19 @@ async function buildContextLines(currentBlocker, packageContent) {
   appendSection(lines, SECTION_FIRST_FILES);
   appendList(lines, firstReadPaths, DEFAULT_UNKNOWN);
 
+  appendSection(lines, SECTION_SCOPE);
+  appendKeyValue(lines, 'Write scope', buildWriteScope(currentBlocker).join(', '));
+  appendKeyValue(lines, 'Handoff files', buildHandoffFiles(currentBlocker).join(', '));
+  appendKeyValue(lines, 'Generated files', buildGeneratedFiles(currentBlocker).join(', '));
+  appendKeyValue(
+    lines,
+    'Candidate runtime files',
+    buildCandidateRuntimeFiles(currentBlocker).join(', '),
+  );
+  appendKeyValue(lines, 'Commit scope', buildCommitScope(currentBlocker).join(', '));
+
   appendSection(lines, SECTION_TOUCHED_FILES);
-  appendList(lines, currentBlocker.touchedFiles, DEFAULT_UNKNOWN);
+  appendList(lines, currentBlocker.touchedFiles, 'No legacy touched files recorded.');
 
   appendSection(lines, SECTION_PROOF_LADDER);
   appendList(lines, currentBlocker.proof, DEFAULT_UNKNOWN);
@@ -1590,11 +1661,13 @@ if (isDirectRun()) {
 
 export {
   buildContextLines,
+  buildCommitScope,
   buildCurrentBlockerFromPackage,
   buildDirtyScopeLines,
   buildFirstReadPaths,
   buildModelFitContext,
   buildOwnerCardPaths,
+  buildWriteScope,
   buildSubagentSequencingStatus,
   buildUsefulCommands,
   groupGitStatusLines,

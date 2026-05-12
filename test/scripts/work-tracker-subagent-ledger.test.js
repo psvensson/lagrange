@@ -197,6 +197,33 @@ const WORK_TRACKER_LEDGER_FIXES_REQUIRED_CONTENT = [
   '      `work/packages/active-test-package.md`.',
   '',
 ].join('\n');
+const WORK_TRACKER_LEDGER_PRE_IMPL_CONTENT = [
+  '# Test Package',
+  '',
+  '## Subagent Sequencing Ledger',
+  '',
+  '- [x] Review subagent recorded:',
+  `      Agent Review (${REVIEW_AGENT_ID}) reviewed`,
+  '      `work/packages/done-test-package.md`; result `fixes-required`.',
+  '- [x] Fix subagent recorded or explicitly not needed:',
+  `      Agent Fix (${FIX_AGENT_ID}) fixed`,
+  '      `work/packages/done-test-package.md`.',
+  '- [ ] Implementation subagent recorded:',
+  '      pending-before-implementation-starts',
+  '',
+].join('\n');
+const WORK_TRACKER_LEDGER_UNAVAILABLE_CONTENT = [
+  '# Test Package',
+  '',
+  '## Subagent Sequencing Ledger',
+  '',
+  '- [x] Review subagent recorded:',
+  '      tool-unavailable (reason: host does not expose delegation).',
+  '- [x] Fix subagent recorded or explicitly not needed: `not-needed`.',
+  '- [ ] Implementation subagent recorded:',
+  '      pending-before-implementation-starts',
+  '',
+].join('\n');
 const WORK_TRACKER_LEDGER_FIRST_PACKAGE_CONTENT = [
   '# Test Package',
   '',
@@ -355,7 +382,8 @@ const WORK_TRACKER_DOCTOR_CONTENT = [
     currentState: 'Doctor command needs a compact package summary.',
     nextAction: 'Run package doctor.',
     proof: ['node --test test/scripts/work-tracker-subagent-ledger.test.js'],
-    touchedFiles: ['scripts/work-tracker.js'],
+    writeScope: ['scripts/work-tracker.js'],
+    commitScope: ['scripts/work-tracker.js'],
     modelFit: {
       packageClass: 'bounded-implementation',
       intendedMinimumModel: 'gpt-5.3-codex-spark',
@@ -463,6 +491,44 @@ describe('work tracker subagent sequencing ledger validation', () => {
     );
 
     assert.deepEqual(errors, []);
+  });
+
+  it('allows pending implementation at pre-implementation validation', () => {
+    const errors = validateSubagentSequencingLedger(
+      WORK_TRACKER_LEDGER_PRE_IMPL_CONTENT,
+      WORK_TRACKER_LEDGER_TEST_FILE,
+      {
+        requiresLedger: true,
+        requiresStrictEntries: true,
+        allowOpenImplementation: true,
+      },
+    );
+
+    assert.deepEqual(errors, []);
+  });
+
+  it('allows unavailable subagent states before closure but not as closure proof', () => {
+    const preImplErrors = validateSubagentSequencingLedger(
+      WORK_TRACKER_LEDGER_UNAVAILABLE_CONTENT,
+      WORK_TRACKER_LEDGER_TEST_FILE,
+      {
+        requiresLedger: true,
+        requiresStrictEntries: true,
+        allowOpenImplementation: true,
+        allowUnavailableSubagents: true,
+      },
+    );
+    const closureErrors = validateSubagentSequencingLedger(
+      WORK_TRACKER_LEDGER_UNAVAILABLE_CONTENT,
+      WORK_TRACKER_LEDGER_TEST_FILE,
+      {
+        requiresLedger: true,
+        requiresStrictEntries: true,
+      },
+    );
+
+    assert.deepEqual(preImplErrors, []);
+    assert.match(closureErrors.join('\n'), /Subagent Sequencing Ledger/u);
   });
 
   it('accepts not-needed review for the first package in a sprint', () => {
@@ -587,7 +653,29 @@ describe('work tracker package doctor', () => {
     assert.deepEqual(report.errors, []);
     assert.match(rendered, /# Work Package Doctor/u);
     assert.match(rendered, /Owner: workflow_tooling_owner/u);
+    assert.match(rendered, /Write scope: 1/u);
+    assert.match(rendered, /Legacy touched files: 0/u);
     assert.match(rendered, /Validation: ok/u);
+  });
+
+  it('does not require subagent ledger proof at entry phase', () => {
+    const openLedgerContent = WORK_TRACKER_DOCTOR_CONTENT.replace(
+      /## Subagent Sequencing Ledger[\s\S]*$/u,
+      WORK_TRACKER_LEDGER_OPEN_CONTENT.split('\n').slice(2).join('\n'),
+    );
+    const entryReport = buildPackageDoctorLines(
+      WORK_TRACKER_ACTIVE_DOCTOR_FILE,
+      openLedgerContent,
+      {phase: 'entry'},
+    );
+    const preImplReport = buildPackageDoctorLines(
+      WORK_TRACKER_ACTIVE_DOCTOR_FILE,
+      openLedgerContent,
+      {phase: 'pre-impl'},
+    );
+
+    assert.deepEqual(entryReport.errors, []);
+    assert.match(preImplReport.errors.join('\n'), /has open items/u);
   });
 
   it('surfaces scenario causal closure metadata in package doctor output', () => {
@@ -818,6 +906,11 @@ describe('work tracker scenario causal closure validation', () => {
         owner: 'workflow_tooling_owner',
         boundary: 'scenario_causal_closure',
         nextAction: 'Keep causal closure visible in handoff.',
+        writeScope: ['scripts/work-tracker.js'],
+        handoffFiles: ['work/packages/done-test-package.md'],
+        generatedFiles: ['work/sprints/current-blocker.md'],
+        candidateRuntimeFiles: ['src/example.js'],
+        commitScope: ['scripts/work-tracker.js', 'work/sprints/current-blocker.md'],
       };
       const payload = buildCurrentBlockerPayload(
         'work/sprints/active-test.md',
@@ -831,7 +924,18 @@ describe('work tracker scenario causal closure validation', () => {
         'classification-only',
       );
       assert.equal(payload.lane, LANE_RUNTIME_OWNER_BOUNDARY);
+      assert.deepEqual(payload.writeScope, ['scripts/work-tracker.js']);
+      assert.deepEqual(payload.handoffFiles, ['work/packages/done-test-package.md']);
+      assert.deepEqual(payload.generatedFiles, ['work/sprints/current-blocker.md']);
+      assert.deepEqual(payload.candidateRuntimeFiles, ['src/example.js']);
+      assert.deepEqual(payload.commitScope, [
+        'scripts/work-tracker.js',
+        'work/sprints/current-blocker.md',
+      ]);
       assert.match(rendered, /Workflow lane/u);
+      assert.match(rendered, /## Scope/u);
+      assert.match(rendered, /Write scope/u);
+      assert.match(rendered, /Commit scope/u);
       assert.match(rendered, /## Scenario Causal Closure/u);
       assert.match(rendered, /Reference scenario\/probe/u);
       assert.match(rendered, /startup_active_gate_owner snapshot coverage/u);

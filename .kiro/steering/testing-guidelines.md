@@ -165,7 +165,10 @@ Required workflow:
     active package and sprint current blocker snapshot instead of forcing a new
     package split.
 12. If artifact-derived evidence tooling exists for the scenario, use it to
-    produce the validation handoff block before writing manual analysis.
+    produce the validation handoff block before writing manual analysis. For
+    priority recovery residuals, use
+    `npm run analyze:priority-recovery-residuals -- <artifact>` instead of
+    hand-written `jq` extraction.
 13. A representative rerun should not be the next debugging step while the
     current owner-decision fixture or narrow blocker probe is missing.
 14. Retryable or backpressure states require focused probes that prove the
@@ -733,23 +736,35 @@ command in that same order.
 ## Artifact-First Distributed Failure Triage Policy
 
 After a distributed harness failure, artifact-first triage is mandatory.
+Distributed artifact triage must start with `npm run work:evidence-summary --
+<artifact>`, the focused extractor for the failure class such as `npm run
+analyze:priority-recovery-residuals -- <artifact>`, and `npm run
+analyze:owner-files -- <owner> [boundary]` before broad text search, raw JSON
+slicing, ad hoc `jq`, or raw logs.
 
 Required workflow:
 
 1. Read `triage-summary.md` first.
 2. Read `triage-summary.json` next.
-3. Use the consolidated diagnostics tooling before sampling raw node logs.
-4. Only after the artifact summaries have been read may raw container or node
-   logs become the primary debugging surface.
-5. When the harness provides a report, playback bundle, failure bundle, or
+3. Use the consolidated diagnostics tooling before sampling raw node logs:
+   start with `npm run work:evidence-summary -- <artifact>` and then use the
+   focused extractor for the failure class, such as
+   `npm run analyze:priority-recovery-residuals -- <artifact>`.
+4. Use `npm run analyze:owner-files -- <owner> [boundary]` before broad text
+   search or opening large owner-boundary segment files.
+5. Only after the artifact summaries and relevant extractors have been read may
+   raw container logs, node logs, raw JSON slicing, or ad hoc `jq` become the
+   primary debugging surface.
+6. When the harness provides a report, playback bundle, failure bundle, or
    triage summary, derive a compact evidence block from those artifacts before
    assigning sub-agent work or changing runtime code.
-6. The evidence block must name the canonical blocker, owner boundary, source
+7. The evidence block must name the canonical blocker, owner boundary, source
    artifact paths, prior blocker status, subordinate evidence, and next focused
    proof surface.
-7. Manual evidence summaries are allowed only when no extractor exists, and
-   must preserve the normalized owner fields from the artifact rather than
-   reclassifying from raw logs.
+8. Manual evidence summaries are allowed only when no extractor exists or the
+   extractor output is insufficient. They must preserve the normalized owner
+   fields from the artifact rather than reclassifying from raw logs, and the
+   package must record why the extractor was not enough.
 
 This keeps rerun cost low and prevents repeated raw-log spelunking from becoming
 an accidental substitute for canonical owner diagnostics.

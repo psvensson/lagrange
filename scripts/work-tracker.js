@@ -9,8 +9,18 @@ import {
   CAUSAL_GOVERNANCE_VALID_OUTCOMES,
   SCENARIO_CAUSAL_CLOSURE_VALID_RESULT_CLASSIFICATIONS,
   SCENARIO_CAUSAL_CLOSURE_VALID_STOP_CONDITIONS,
+  SCOPE_FIELD_CANDIDATE_RUNTIME_FILES,
+  SCOPE_FIELD_COMMIT_SCOPE,
+  SCOPE_FIELD_GENERATED_FILES,
+  SCOPE_FIELD_HANDOFF_FILES,
+  SCOPE_FIELD_WRITE_SCOPE,
   SUBAGENT_OPTIONAL_LANES,
+  SUBAGENT_UNAVAILABLE_STATES,
   VALID_PACKAGE_STATUSES,
+  VALIDATION_PHASE_CLOSURE,
+  VALIDATION_PHASE_ENTRY,
+  VALIDATION_PHASE_PRE_IMPL,
+  VALIDATION_PHASES,
   WORK_PACKAGE_METADATA_SCHEMA,
 } from './work-package-schema.js';
 
@@ -212,6 +222,9 @@ const CLI_FLAG_TO = '--to';
 const CLI_FLAG_SUCCESSOR = '--successor';
 const CLI_FLAG_SUGGEST = '--suggest';
 const CLI_FLAG_FIX_DRY_RUN = '--fix-dry-run';
+const CLI_FLAG_ENTRY = '--entry';
+const CLI_FLAG_PRE_IMPL = '--pre-impl';
+const CLI_FLAG_CLOSURE = '--closure';
 const CLI_COMMAND_CURRENT_BLOCKER = 'current-blocker';
 const CLI_COMMAND_VALIDATE = 'validate';
 const CLI_COMMAND_DOCTOR = 'doctor';
@@ -223,12 +236,16 @@ const ERROR_NO_ACTIVE_SPRINT = 'No active sprint file was found.';
 const DEFAULT_UNKNOWN = 'unknown';
 const DOCTOR_SUGGESTION_NONE =
   'No deterministic suggestions are available for these findings.';
+const LEDGER_VALIDATION_ALLOW_OPEN_IMPLEMENTATION = 'allowOpenImplementation';
+const LEDGER_VALIDATION_ALLOW_UNAVAILABLE_SUBAGENTS =
+  'allowUnavailableSubagents';
+const SUBAGENT_UNAVAILABLE_REASON_PATTERN = /\breason\s*:\s*\S+/iu;
 
 function printUsage() {
   console.log([
     'Usage:',
     '  node scripts/work-tracker.js current-blocker [--write]',
-    '  node scripts/work-tracker.js validate [--all] [paths...]',
+    '  node scripts/work-tracker.js validate [--entry|--pre-impl|--closure] [--all] [paths...]',
     '  node scripts/work-tracker.js doctor [package]',
     '  node scripts/work-tracker.js close <package> [--write]',
     '  node scripts/work-tracker.js migrate <package> <successor> [--write]',
@@ -313,6 +330,31 @@ function findCheckedSubagentLedgerEntry(ledger, label) {
   };
 }
 
+function findOpenSubagentLedgerEntry(ledger, label) {
+  const openLabelPattern = new RegExp(
+    `- \\[ \\] ${escapeRegExp(label)}:`,
+    'u',
+  );
+  return openLabelPattern.test(ledger);
+}
+
+function hasOnlyOpenImplementationChecklist(ledger) {
+  const openLabels = SUBAGENT_LEDGER_REQUIRED_LABELS.filter((label) =>
+    findOpenSubagentLedgerEntry(ledger, label));
+  return openLabels.length === NUM_ONE &&
+    openLabels[NUM_ZERO] === SUBAGENT_LEDGER_IMPLEMENTATION_LABEL;
+}
+
+function findSubagentUnavailableState(content) {
+  const normalizedContent = normalizeLedgerText(content).toLowerCase();
+  const state = SUBAGENT_UNAVAILABLE_STATES.find((candidateState) =>
+    normalizedContent.includes(candidateState));
+  if (!state || !SUBAGENT_UNAVAILABLE_REASON_PATTERN.test(normalizedContent)) {
+    return null;
+  }
+  return state;
+}
+
 function validateCheckedSubagentLedgerItem(content, options = {}) {
   const errors = [];
   if (LEDGER_TEMPLATE_PLACEHOLDER_PATTERN.test(content)) {
@@ -322,6 +364,12 @@ function validateCheckedSubagentLedgerItem(content, options = {}) {
     errors.push(`contains ${LEDGER_PENDING_BEFORE_IMPLEMENTATION_MARKER}`);
   }
   if (options[LEDGER_VALIDATION_REQUIRES_STRICT_ENTRIES] === true) {
+    if (
+      findSubagentUnavailableState(content) &&
+      options[LEDGER_VALIDATION_ALLOW_UNAVAILABLE_SUBAGENTS] !== true
+    ) {
+      errors.push('contains a non-closure subagent unavailable state');
+    }
     const contentWithoutPaths = content.replace(FILE_PATH_TOKEN_PATTERN, '');
     if (NON_REAL_IDENTITY_PATTERN.test(contentWithoutPaths)) {
       errors.push('contains a non-real agent identity');
@@ -369,7 +417,16 @@ function validateAgentProof(agent, roleLabel, filePath) {
   return errors;
 }
 
-function parseReviewEntry(content) {
+function parseReviewEntry(content, options = {}) {
+  if (
+    options[LEDGER_VALIDATION_ALLOW_UNAVAILABLE_SUBAGENTS] === true &&
+    findSubagentUnavailableState(content)
+  ) {
+    return {
+      type: findSubagentUnavailableState(content),
+      result: SUBAGENT_REVIEW_RESULT_CLEAN,
+    };
+  }
   if (isReviewNotNeededEntry(content)) {
     return {
       type: SUBAGENT_FIX_NOT_NEEDED,
@@ -407,7 +464,15 @@ function isFixNotNeededEntry(content) {
   return notNeededPattern.test(normalizedContent);
 }
 
-function parseFixEntry(content) {
+function parseFixEntry(content, options = {}) {
+  if (
+    options[LEDGER_VALIDATION_ALLOW_UNAVAILABLE_SUBAGENTS] === true &&
+    findSubagentUnavailableState(content)
+  ) {
+    return {
+      type: findSubagentUnavailableState(content),
+    };
+  }
   if (isFixNotNeededEntry(content)) {
     return {
       type: SUBAGENT_FIX_NOT_NEEDED,
@@ -427,7 +492,15 @@ function parseFixEntry(content) {
   };
 }
 
-function parseImplementationEntry(content) {
+function parseImplementationEntry(content, options = {}) {
+  if (
+    options[LEDGER_VALIDATION_ALLOW_UNAVAILABLE_SUBAGENTS] === true &&
+    findSubagentUnavailableState(content)
+  ) {
+    return {
+      type: findSubagentUnavailableState(content),
+    };
+  }
   const match = SUBAGENT_IMPLEMENTATION_PATTERN.exec(normalizeLedgerText(content));
   if (!match) {
     return null;
@@ -457,9 +530,12 @@ function validateSubagentLedgerSequence(entries, filePath) {
   return errors;
 }
 
-function validateSubagentLedgerRoles(entries, filePath) {
+function validateSubagentLedgerReviewFixRoles(entries, filePath, options = {}) {
   const errors = [];
-  const review = parseReviewEntry(entries[SUBAGENT_LEDGER_REVIEW_LABEL].content);
+  const review = parseReviewEntry(
+    entries[SUBAGENT_LEDGER_REVIEW_LABEL].content,
+    options,
+  );
   if (!review) {
     errors.push(
       `${filePath}: Subagent Sequencing Ledger review entry must match ` +
@@ -472,7 +548,10 @@ function validateSubagentLedgerRoles(entries, filePath) {
     errors.push(...validateAgentProof(review.agent, 'review', filePath));
   }
 
-  const fix = parseFixEntry(entries[SUBAGENT_LEDGER_FIX_LABEL].content);
+  const fix = parseFixEntry(
+    entries[SUBAGENT_LEDGER_FIX_LABEL].content,
+    options,
+  );
   if (!fix) {
     errors.push(
       `${filePath}: Subagent Sequencing Ledger fix entry must match ` +
@@ -483,20 +562,7 @@ function validateSubagentLedgerRoles(entries, filePath) {
     errors.push(...validateAgentProof(fix.agent, 'fix', filePath));
   }
 
-  const implementation = parseImplementationEntry(
-    entries[SUBAGENT_LEDGER_IMPLEMENTATION_LABEL].content,
-  );
-  if (!implementation) {
-    errors.push(
-      `${filePath}: Subagent Sequencing Ledger implementation entry must ` +
-      'match Agent <name> (<agent-id>) implemented <package>.',
-    );
-  }
-  errors.push(
-    ...validateAgentProof(implementation?.agent, 'implementation', filePath),
-  );
-
-  if (!review || !fix || !implementation) {
+  if (!review || !fix) {
     return errors;
   }
   if (
@@ -510,7 +576,8 @@ function validateSubagentLedgerRoles(entries, filePath) {
   }
   if (
     review.result === SUBAGENT_REVIEW_RESULT_CLEAN &&
-    fix.type !== SUBAGENT_FIX_NOT_NEEDED
+    fix.type !== SUBAGENT_FIX_NOT_NEEDED &&
+    fix.type === 'agent'
   ) {
     errors.push(
       `${filePath}: Subagent Sequencing Ledger fix entry must be not-needed ` +
@@ -527,12 +594,6 @@ function validateSubagentLedgerRoles(entries, filePath) {
       'reviewed package.',
     );
   }
-  if (implementation.packagePath !== filePath) {
-    errors.push(
-      `${filePath}: Subagent Sequencing Ledger implementation package must ` +
-      'match this package path.',
-    );
-  }
   if (
     review.type === 'agent' &&
     fix.type === 'agent' &&
@@ -543,7 +604,49 @@ function validateSubagentLedgerRoles(entries, filePath) {
       'from the review agent.',
     );
   }
-  if (review.type === 'agent' && implementation.agent.id === review.agent.id) {
+  return errors;
+}
+
+function validateSubagentLedgerRoles(entries, filePath, options = {}) {
+  const errors = validateSubagentLedgerReviewFixRoles(entries, filePath, options);
+  const review = parseReviewEntry(
+    entries[SUBAGENT_LEDGER_REVIEW_LABEL].content,
+    options,
+  );
+  const fix = parseFixEntry(
+    entries[SUBAGENT_LEDGER_FIX_LABEL].content,
+    options,
+  );
+  const implementation = parseImplementationEntry(
+    entries[SUBAGENT_LEDGER_IMPLEMENTATION_LABEL].content,
+    options,
+  );
+  if (!implementation) {
+    errors.push(
+      `${filePath}: Subagent Sequencing Ledger implementation entry must ` +
+      'match Agent <name> (<agent-id>) implemented <package>.',
+    );
+  }
+  if (implementation?.agent) {
+    errors.push(
+      ...validateAgentProof(implementation.agent, 'implementation', filePath),
+    );
+  }
+
+  if (!review || !fix || !implementation) {
+    return errors;
+  }
+  if (implementation.agent && implementation.packagePath !== filePath) {
+    errors.push(
+      `${filePath}: Subagent Sequencing Ledger implementation package must ` +
+      'match this package path.',
+    );
+  }
+  if (
+    review.type === 'agent' &&
+    implementation.agent &&
+    implementation.agent.id === review.agent.id
+  ) {
     errors.push(
       `${filePath}: Subagent Sequencing Ledger implementation agent must be ` +
       'separate from the review agent.',
@@ -551,6 +654,7 @@ function validateSubagentLedgerRoles(entries, filePath) {
   }
   if (
     fix.type === 'agent' &&
+    implementation.agent &&
     implementation.agent.id === fix.agent.id
   ) {
     errors.push(
@@ -565,17 +669,28 @@ export function validateSubagentSequencingLedger(content, filePath, options = {}
   const ledger = extractSubagentSequencingLedger(content);
   const requiresStrictEntries =
     options[LEDGER_VALIDATION_REQUIRES_STRICT_ENTRIES] !== false;
+  const allowOpenImplementation =
+    options[LEDGER_VALIDATION_ALLOW_OPEN_IMPLEMENTATION] === true;
+  const requiredLabels = allowOpenImplementation ?
+    [
+      SUBAGENT_LEDGER_REVIEW_LABEL,
+      SUBAGENT_LEDGER_FIX_LABEL,
+    ] :
+    SUBAGENT_LEDGER_REQUIRED_LABELS;
   if (!ledger) {
     return options[LEDGER_VALIDATION_REQUIRES_LEDGER] ?
       [`${filePath}: Subagent Sequencing Ledger is required.`] :
       [];
   }
   const errors = [];
-  if (hasOpenChecklist(ledger)) {
+  if (
+    hasOpenChecklist(ledger) &&
+    !(allowOpenImplementation && hasOnlyOpenImplementationChecklist(ledger))
+  ) {
     errors.push(`${filePath}: Subagent Sequencing Ledger has open items.`);
   }
   const checkedEntries = {};
-  for (const label of SUBAGENT_LEDGER_REQUIRED_LABELS) {
+  for (const label of requiredLabels) {
     const checkedEntry = findCheckedSubagentLedgerEntry(ledger, label);
     if (!checkedEntry) {
       errors.push(
@@ -587,7 +702,11 @@ export function validateSubagentSequencingLedger(content, filePath, options = {}
     checkedEntries[label] = checkedEntry;
     const checkedItemErrors = validateCheckedSubagentLedgerItem(
       checkedEntry.content,
-      {[LEDGER_VALIDATION_REQUIRES_STRICT_ENTRIES]: requiresStrictEntries},
+      {
+        [LEDGER_VALIDATION_REQUIRES_STRICT_ENTRIES]: requiresStrictEntries,
+        [LEDGER_VALIDATION_ALLOW_UNAVAILABLE_SUBAGENTS]:
+          options[LEDGER_VALIDATION_ALLOW_UNAVAILABLE_SUBAGENTS],
+      },
     );
     for (const checkedItemError of checkedItemErrors) {
       errors.push(
@@ -598,10 +717,18 @@ export function validateSubagentSequencingLedger(content, filePath, options = {}
   }
   if (
     requiresStrictEntries &&
-    SUBAGENT_LEDGER_REQUIRED_LABELS.every((label) => checkedEntries[label])
+    requiredLabels.every((label) => checkedEntries[label])
   ) {
-    errors.push(...validateSubagentLedgerSequence(checkedEntries, filePath));
-    errors.push(...validateSubagentLedgerRoles(checkedEntries, filePath));
+    if (!allowOpenImplementation) {
+      errors.push(...validateSubagentLedgerSequence(checkedEntries, filePath));
+      errors.push(...validateSubagentLedgerRoles(checkedEntries, filePath, options));
+    } else {
+      errors.push(...validateSubagentLedgerReviewFixRoles(
+        checkedEntries,
+        filePath,
+        options,
+      ));
+    }
   }
   return errors;
 }
@@ -1200,10 +1327,52 @@ function validatePackageMetadataShape(filePath, fileStatus, metadata) {
   if (!metadata.nextAction) {
     errors.push(`${filePath}: metadata nextAction is required.`);
   }
+  for (const scopeField of [
+    SCOPE_FIELD_WRITE_SCOPE,
+    SCOPE_FIELD_HANDOFF_FILES,
+    SCOPE_FIELD_GENERATED_FILES,
+    SCOPE_FIELD_CANDIDATE_RUNTIME_FILES,
+    SCOPE_FIELD_COMMIT_SCOPE,
+  ]) {
+    if (metadata[scopeField] !== undefined && !Array.isArray(metadata[scopeField])) {
+      errors.push(`${filePath}: metadata ${scopeField} must be an array.`);
+    }
+  }
   return errors;
 }
 
-async function validatePackageFile(filePath) {
+function resolveValidationPhase(args = []) {
+  const requestedPhases = [
+    args.includes(CLI_FLAG_ENTRY) ? VALIDATION_PHASE_ENTRY : null,
+    args.includes(CLI_FLAG_PRE_IMPL) ? VALIDATION_PHASE_PRE_IMPL : null,
+    args.includes(CLI_FLAG_CLOSURE) ? VALIDATION_PHASE_CLOSURE : null,
+  ].filter(Boolean);
+  if (requestedPhases.length > NUM_ONE) {
+    throw new Error(
+      `Use only one validation phase: ${VALIDATION_PHASES.join(', ')}.`,
+    );
+  }
+  return requestedPhases[NUM_ZERO] || VALIDATION_PHASE_PRE_IMPL;
+}
+
+function buildSubagentValidationOptions(fileStatus, metadata, phase) {
+  const requiresSubagentLedger =
+    fileStatus === STATUS_ACTIVE &&
+    metadata !== null &&
+    metadataRequiresSubagentSequencing(metadata) &&
+    phase !== VALIDATION_PHASE_ENTRY;
+  return {
+    skipSubagentLedger: phase === VALIDATION_PHASE_ENTRY,
+    requiresSubagentLedger,
+    allowOpenImplementation:
+      phase === VALIDATION_PHASE_PRE_IMPL && fileStatus === STATUS_ACTIVE,
+    allowUnavailableSubagents:
+      phase !== VALIDATION_PHASE_CLOSURE && fileStatus === STATUS_ACTIVE,
+  };
+}
+
+async function validatePackageFile(filePath, options = {}) {
+  const phase = options.phase || VALIDATION_PHASE_PRE_IMPL;
   const content = await readTextFile(filePath);
   const relativePath = normalizeRelativePath(filePath);
   const fileStatus = getPackageStatusFromPath(filePath);
@@ -1224,14 +1393,23 @@ async function validatePackageFile(filePath) {
   errors.push(
     ...validatePackageMetadataShape(relativePath, fileStatus, metadata),
   );
-  const requiresSubagentLedger =
-    fileStatus === STATUS_ACTIVE &&
-    metadata !== null &&
-    metadataRequiresSubagentSequencing(metadata);
-  errors.push(...validateSubagentSequencingLedger(content, relativePath, {
-    [LEDGER_VALIDATION_REQUIRES_LEDGER]: requiresSubagentLedger,
-    [LEDGER_VALIDATION_REQUIRES_STRICT_ENTRIES]: requiresSubagentLedger,
-  }));
+  const subagentValidation = buildSubagentValidationOptions(
+    fileStatus,
+    metadata,
+    phase,
+  );
+  if (!subagentValidation.skipSubagentLedger) {
+    errors.push(...validateSubagentSequencingLedger(content, relativePath, {
+      [LEDGER_VALIDATION_REQUIRES_LEDGER]:
+        subagentValidation.requiresSubagentLedger,
+      [LEDGER_VALIDATION_REQUIRES_STRICT_ENTRIES]:
+        subagentValidation.requiresSubagentLedger,
+      [LEDGER_VALIDATION_ALLOW_OPEN_IMPLEMENTATION]:
+        subagentValidation.allowOpenImplementation,
+      [LEDGER_VALIDATION_ALLOW_UNAVAILABLE_SUBAGENTS]:
+        subagentValidation.allowUnavailableSubagents,
+    }));
+  }
   errors.push(...validateModelFitContract(content, relativePath, {
     [LEDGER_VALIDATION_REQUIRES_LEDGER]:
       fileStatus === STATUS_ACTIVE && metadata !== null,
@@ -1301,6 +1479,7 @@ async function resolveValidationTargets(args) {
 }
 
 async function validateCommand(args) {
+  const phase = resolveValidationPhase(args);
   const targets = await resolveValidationTargets(args);
   const errors = [];
   for (const filePath of targets) {
@@ -1308,14 +1487,17 @@ async function validateCommand(args) {
       errors.push(...(await validateSprintFile(filePath)));
       continue;
     }
-    const result = await validatePackageFile(filePath);
+    const result = await validatePackageFile(filePath, {phase});
     errors.push(...result.errors);
   }
   if (errors.length > NUM_ZERO) {
     console.error(errors.join(NEWLINE));
     process.exit(EXIT_FAILURE);
   }
-  console.log(`Work tracker validation OK for ${targets.length} file(s).`);
+  console.log(
+    `Work tracker validation OK for ${targets.length} file(s) ` +
+      `at ${phase} phase.`,
+  );
 }
 
 function appendDoctorField(lines, label, value) {
@@ -1332,7 +1514,24 @@ function summarizeDoctorMetadata(metadata = {}) {
     scenarioCausalClosure: isObjectRecord(
       metadata[SCENARIO_CAUSAL_CLOSURE_METADATA_FIELD],
     ) ? 'recorded' : 'missing',
-    touchedFileCount: Array.isArray(metadata.touchedFiles) ?
+    writeScopeCount: Array.isArray(metadata[SCOPE_FIELD_WRITE_SCOPE]) ?
+      metadata[SCOPE_FIELD_WRITE_SCOPE].length :
+      NUM_ZERO,
+    handoffFileCount: Array.isArray(metadata[SCOPE_FIELD_HANDOFF_FILES]) ?
+      metadata[SCOPE_FIELD_HANDOFF_FILES].length :
+      NUM_ZERO,
+    generatedFileCount: Array.isArray(metadata[SCOPE_FIELD_GENERATED_FILES]) ?
+      metadata[SCOPE_FIELD_GENERATED_FILES].length :
+      NUM_ZERO,
+    candidateRuntimeFileCount: Array.isArray(
+      metadata[SCOPE_FIELD_CANDIDATE_RUNTIME_FILES],
+    ) ?
+      metadata[SCOPE_FIELD_CANDIDATE_RUNTIME_FILES].length :
+      NUM_ZERO,
+    commitScopeCount: Array.isArray(metadata[SCOPE_FIELD_COMMIT_SCOPE]) ?
+      metadata[SCOPE_FIELD_COMMIT_SCOPE].length :
+      NUM_ZERO,
+    legacyTouchedFileCount: Array.isArray(metadata.touchedFiles) ?
       metadata.touchedFiles.length :
       NUM_ZERO,
     proofCount: Array.isArray(metadata.proof) ? metadata.proof.length : NUM_ZERO,
@@ -1404,6 +1603,7 @@ function appendDoctorSuggestions(lines, errors, heading) {
 }
 
 export function buildPackageDoctorLines(filePath, content, options = {}) {
+  const phase = options.phase || VALIDATION_PHASE_PRE_IMPL;
   const relativePath = normalizeRelativePath(filePath);
   const fileStatus = getPackageStatusFromPath(filePath) || DEFAULT_UNKNOWN;
   const errors = [];
@@ -1423,14 +1623,23 @@ export function buildPackageDoctorLines(filePath, content, options = {}) {
     errors.push(`${relativePath}: closed package still has open checklist items.`);
   }
   errors.push(...validatePackageMetadataShape(relativePath, fileStatus, metadata));
-  const requiresSubagentLedger =
-    fileStatus === STATUS_ACTIVE &&
-    metadata !== null &&
-    metadataRequiresSubagentSequencing(metadata);
-  errors.push(...validateSubagentSequencingLedger(content, relativePath, {
-    [LEDGER_VALIDATION_REQUIRES_LEDGER]: requiresSubagentLedger,
-    [LEDGER_VALIDATION_REQUIRES_STRICT_ENTRIES]: requiresSubagentLedger,
-  }));
+  const subagentValidation = buildSubagentValidationOptions(
+    fileStatus,
+    metadata,
+    phase,
+  );
+  if (!subagentValidation.skipSubagentLedger) {
+    errors.push(...validateSubagentSequencingLedger(content, relativePath, {
+      [LEDGER_VALIDATION_REQUIRES_LEDGER]:
+        subagentValidation.requiresSubagentLedger,
+      [LEDGER_VALIDATION_REQUIRES_STRICT_ENTRIES]:
+        subagentValidation.requiresSubagentLedger,
+      [LEDGER_VALIDATION_ALLOW_OPEN_IMPLEMENTATION]:
+        subagentValidation.allowOpenImplementation,
+      [LEDGER_VALIDATION_ALLOW_UNAVAILABLE_SUBAGENTS]:
+        subagentValidation.allowUnavailableSubagents,
+    }));
+  }
   errors.push(...validateModelFitContract(content, relativePath, {
     [LEDGER_VALIDATION_REQUIRES_LEDGER]:
       fileStatus === STATUS_ACTIVE && metadata !== null,
@@ -1464,12 +1673,26 @@ export function buildPackageDoctorLines(filePath, content, options = {}) {
   appendDoctorField(lines, 'Owner', metadataSummary.owner);
   appendDoctorField(lines, 'Boundary', metadataSummary.boundary);
   appendDoctorField(lines, 'Dominant reason', metadataSummary.dominantReason);
+  appendDoctorField(lines, 'Validation phase', phase);
   appendDoctorField(
     lines,
     'Scenario causal closure',
     metadataSummary.scenarioCausalClosure,
   );
-  appendDoctorField(lines, 'Touched files', String(metadataSummary.touchedFileCount));
+  appendDoctorField(lines, 'Write scope', String(metadataSummary.writeScopeCount));
+  appendDoctorField(lines, 'Handoff files', String(metadataSummary.handoffFileCount));
+  appendDoctorField(lines, 'Generated files', String(metadataSummary.generatedFileCount));
+  appendDoctorField(
+    lines,
+    'Candidate runtime files',
+    String(metadataSummary.candidateRuntimeFileCount),
+  );
+  appendDoctorField(lines, 'Commit scope', String(metadataSummary.commitScopeCount));
+  appendDoctorField(
+    lines,
+    'Legacy touched files',
+    String(metadataSummary.legacyTouchedFileCount),
+  );
   appendDoctorField(lines, 'Proof commands', String(metadataSummary.proofCount));
   appendDoctorField(lines, 'Validation', errors.length === NUM_ZERO ? 'ok' : 'failed');
   if (errors.length > NUM_ZERO) {
@@ -1505,9 +1728,11 @@ async function resolveDoctorPackagePath(args) {
 }
 
 async function doctorCommand(args) {
+  const phase = resolveValidationPhase(args);
   const packagePath = await resolveDoctorPackagePath(args);
   const content = await readTextFile(packagePath);
   const report = buildPackageDoctorLines(packagePath, content, {
+    phase,
     suggest: args.includes(CLI_FLAG_SUGGEST),
     fixDryRun: args.includes(CLI_FLAG_FIX_DRY_RUN),
   });
@@ -1543,11 +1768,39 @@ async function findActivePackageFile(activeSprintFile) {
   return path.normalize(path.join(path.dirname(activeSprintFile), match[NUM_ONE]));
 }
 
+function metadataArray(metadata, fieldName) {
+  return Array.isArray(metadata?.[fieldName]) ? metadata[fieldName] : [];
+}
+
+function metadataScopeArray(metadata, fieldName, fallbackFieldName = null) {
+  const values = metadataArray(metadata, fieldName);
+  if (values.length > NUM_ZERO) {
+    return values;
+  }
+  return fallbackFieldName ? metadataArray(metadata, fallbackFieldName) : [];
+}
+
 export function buildCurrentBlockerPayload(
   activeSprintFile,
   activePackageFile,
   metadata,
 ) {
+  const legacyTouchedFiles = metadataArray(metadata, 'touchedFiles');
+  const writeScope = metadataScopeArray(
+    metadata,
+    SCOPE_FIELD_WRITE_SCOPE,
+    'touchedFiles',
+  );
+  const handoffFiles = metadataArray(metadata, SCOPE_FIELD_HANDOFF_FILES);
+  const generatedFiles = metadataArray(metadata, SCOPE_FIELD_GENERATED_FILES);
+  const candidateRuntimeFiles = metadataArray(
+    metadata,
+    SCOPE_FIELD_CANDIDATE_RUNTIME_FILES,
+  );
+  const metadataCommitScope = metadataArray(metadata, SCOPE_FIELD_COMMIT_SCOPE);
+  const commitScope = metadataCommitScope.length > NUM_ZERO ?
+    metadataCommitScope :
+    writeScope;
   return {
     schema: 'current-blocker-v1',
     generatedBy: 'scripts/work-tracker.js',
@@ -1564,7 +1817,12 @@ export function buildCurrentBlockerPayload(
     currentState: metadata.currentState || DEFAULT_UNKNOWN,
     nextAction: metadata.nextAction || DEFAULT_UNKNOWN,
     proof: Array.isArray(metadata.proof) ? metadata.proof : [],
-    touchedFiles: Array.isArray(metadata.touchedFiles) ? metadata.touchedFiles : [],
+    writeScope,
+    handoffFiles,
+    generatedFiles,
+    candidateRuntimeFiles,
+    commitScope,
+    touchedFiles: legacyTouchedFiles,
     modelFit: metadata.modelFit || {},
     causalGovernance: metadata.causalGovernance || {},
     scenarioCausalClosure: metadata.scenarioCausalClosure || {},
@@ -1700,7 +1958,29 @@ export function renderCurrentBlockerMarkdown(payload) {
     'Stop condition: ' +
       `\`${payload.scenarioCausalClosure?.stopCondition || DEFAULT_UNKNOWN}\``,
     '',
-    '## Touched Files',
+    '## Scope',
+    '',
+    'Write scope:',
+    '',
+    formatMarkdownList(payload.writeScope),
+    '',
+    'Handoff files:',
+    '',
+    formatMarkdownList(payload.handoffFiles),
+    '',
+    'Generated files:',
+    '',
+    formatMarkdownList(payload.generatedFiles),
+    '',
+    'Candidate runtime files:',
+    '',
+    formatMarkdownList(payload.candidateRuntimeFiles),
+    '',
+    'Commit scope:',
+    '',
+    formatMarkdownList(payload.commitScope),
+    '',
+    'Legacy touched files:',
     '',
     formatMarkdownList(payload.touchedFiles),
     '',

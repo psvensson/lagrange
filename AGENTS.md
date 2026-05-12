@@ -27,6 +27,33 @@ For steering context, load the compact LLM pack first:
 Use the full steering source documents only when the handoff or compact pack
 requires source-level detail for the current boundary.
 
+## LLM Tool-First Workflow
+
+For implementation, handoff repair, package migration, representative evidence
+triage, or subagent preparation, use canonical workflow tools before raw JSON,
+log slicing, or ad hoc `jq`:
+
+1. Start with `npm run work:llm-start` when the task needs more than the compact
+   `work:context` handoff.
+2. Use `npm run work:package:doctor -- --suggest <package>` or
+   `npm run work:package:doctor -- --fix-dry-run <package>` before
+   hand-editing package metadata, causal ledgers, Model Fit, subagent ledgers,
+   or commit ledgers.
+3. Use `npm run work:package:schema` and `npm run work:package:new -- ...`
+   instead of inventing package schema, lane, status, or enum values by hand.
+4. Use `npm run work:evidence-summary -- <artifact>`, focused scenario
+   extractors such as `npm run analyze:priority-recovery-residuals -- <artifact>`,
+   and `npm run analyze:owner-files -- <owner> [boundary]` before raw report
+   JSON, broad file search, oversized segment files, or container logs.
+5. Use `npm run work:subagent-prompt -- --role <role> --package <package>` for
+   bounded subagent prompts and ledger-line guidance.
+6. Use `npm run work:oversized-next -- --markdown` before creating broad
+   file-size cleanup packages.
+
+Raw `jq`, raw JSON slicing, or raw-log sampling is a fallback only when the
+canonical extractor is missing or insufficient. Record the tried extractor and
+fallback reason in the package.
+
 ## Subagent Sequencing By Lane
 
 Use the lightest valid workflow lane from `.kiro/steering/workflow-guidelines.md`.
@@ -51,7 +78,10 @@ package file:
 
 Parent-session notes, local/manual session labels, or arbitrary text do not
 satisfy the review, fix, or implementation roles when subagent sequencing is
-required. Do not parallelize or skip required roles by default.
+required for closure. Before closure, if the host cannot expose delegation or
+a human explicitly waives a role, record `human-waived`, `tool-unavailable`, or
+`blocked-by-environment-policy` with a `reason: ...` note instead of inventing
+agent proof. Do not parallelize or skip required roles by default.
 
 The package's Subagent Sequencing Ledger is the durable proof that the sequence
 happened. Runtime owner-boundary and scenario/release-gate packages must carry
@@ -67,7 +97,20 @@ checked entries in this format:
 Checked required ledger entries must not contain template placeholders such as
 `<...>`, pending markers such as `pending-before-implementation-resumes`, or
 non-real identities such as `current-session`, `parent Codex`, `manual`,
-`local`, or `session`.
+`local`, or `session` at closure.
+
+Use validation phases deliberately:
+
+1. `npm run work:validate -- --entry` for package shape before role proof exists
+2. `npm run work:validate -- --pre-impl` when review/fix proof is clean and the
+   next required role may still be implementation
+3. `npm run work:validate -- --closure` before closing, committing, or pushing
+
+New package metadata must keep scope fields distinct: `writeScope` for files
+the package may edit, `handoffFiles` for read-only context, `generatedFiles`
+for deterministic outputs, `candidateRuntimeFiles` for files gated by a focused
+probe, and `commitScope` for focused commit containment. `touchedFiles` is
+legacy compatibility only.
 
 Packages closed under this policy must also carry a Commit And Push Ledger.
 Historical closed packages that predate this proof field are not backfilled by

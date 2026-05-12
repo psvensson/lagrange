@@ -7,6 +7,11 @@ import {fileURLToPath} from 'node:url';
 import {buildSummary, readLedgerEntries} from './model-ledger.js';
 import {
   LANE_LIGHTWEIGHT_MAINTENANCE,
+  SCOPE_FIELD_CANDIDATE_RUNTIME_FILES,
+  SCOPE_FIELD_COMMIT_SCOPE,
+  SCOPE_FIELD_GENERATED_FILES,
+  SCOPE_FIELD_HANDOFF_FILES,
+  SCOPE_FIELD_WRITE_SCOPE,
   VALID_PACKAGE_STATUSES,
   WORKFLOW_LANES,
   WORK_PACKAGE_METADATA_SCHEMA,
@@ -45,6 +50,11 @@ const FLAG_NEXT_ACTION = 'next-action';
 const FLAG_PROOF = 'proof';
 const FLAG_TOUCHED_FILE = 'touched-file';
 const FLAG_OWNED_FILE = 'owned-file';
+const FLAG_WRITE_SCOPE = 'write-scope';
+const FLAG_HANDOFF_FILE = 'handoff-file';
+const FLAG_GENERATED_FILE = 'generated-file';
+const FLAG_CANDIDATE_RUNTIME_FILE = 'candidate-runtime-file';
+const FLAG_COMMIT_SCOPE = 'commit-scope';
 const FLAG_FORBIDDEN_FILE = 'forbidden-file';
 const FLAG_PREDECESSOR = 'predecessor';
 const FLAG_PACKAGE_CLASS = 'package-class';
@@ -69,6 +79,11 @@ const REPEATED_FLAGS = Object.freeze([
   FLAG_PROOF,
   FLAG_TOUCHED_FILE,
   FLAG_OWNED_FILE,
+  FLAG_WRITE_SCOPE,
+  FLAG_HANDOFF_FILE,
+  FLAG_GENERATED_FILE,
+  FLAG_CANDIDATE_RUNTIME_FILE,
+  FLAG_COMMIT_SCOPE,
   FLAG_FORBIDDEN_FILE,
 ]);
 const HELP_TEXT = [
@@ -77,8 +92,13 @@ const HELP_TEXT = [
   '',
   'Repeated options:',
   '  --proof <command>',
-  '  --touched-file <path>',
-  '  --owned-file <path>',
+  '  --write-scope <path>',
+  '  --handoff-file <path>',
+  '  --generated-file <path>',
+  '  --candidate-runtime-file <path>',
+  '  --commit-scope <path>',
+  '  --touched-file <path>  Legacy alias for --write-scope',
+  '  --owned-file <path>    Legacy alias for --write-scope and Model Fit',
   '  --forbidden-file <path>',
   '',
   'Use --schema to print the shared work-package schema reference.',
@@ -180,8 +200,20 @@ async function buildPackageContent(flags = {}) {
   const opened = normalizeText(flags[FLAG_OPENED]) || todayIsoDate();
   const status = normalizeText(flags[FLAG_STATUS]) || DEFAULT_STATUS;
   const proof = flags[FLAG_PROOF] || [];
-  const touchedFiles = flags[FLAG_TOUCHED_FILE] || [];
-  const ownedFiles = flags[FLAG_OWNED_FILE] || touchedFiles;
+  const legacyTouchedFiles = flags[FLAG_TOUCHED_FILE] || [];
+  const writeScope = [
+    ...(flags[FLAG_WRITE_SCOPE] || []),
+    ...(flags[FLAG_OWNED_FILE] || []),
+    ...legacyTouchedFiles,
+  ];
+  const handoffFiles = flags[FLAG_HANDOFF_FILE] || [];
+  const generatedFiles = flags[FLAG_GENERATED_FILE] || [];
+  const candidateRuntimeFiles = flags[FLAG_CANDIDATE_RUNTIME_FILE] || [];
+  const commitScope = flags[FLAG_COMMIT_SCOPE] || [
+    ...writeScope,
+    ...generatedFiles,
+  ];
+  const ownedFiles = writeScope;
   const forbiddenFiles = flags[FLAG_FORBIDDEN_FILE] || [];
   const metadata = {
     schema: WORK_PACKAGE_METADATA_SCHEMA,
@@ -199,7 +231,11 @@ async function buildPackageContent(flags = {}) {
       'New package scaffolded from the shared work-package schema.',
     nextAction: normalizeText(flags[FLAG_NEXT_ACTION]),
     proof,
-    touchedFiles,
+    [SCOPE_FIELD_WRITE_SCOPE]: writeScope,
+    [SCOPE_FIELD_HANDOFF_FILES]: handoffFiles,
+    [SCOPE_FIELD_GENERATED_FILES]: generatedFiles,
+    [SCOPE_FIELD_CANDIDATE_RUNTIME_FILES]: candidateRuntimeFiles,
+    [SCOPE_FIELD_COMMIT_SCOPE]: commitScope,
     modelFit: {
       packageClass:
         normalizeText(flags[FLAG_PACKAGE_CLASS]) ||
@@ -241,6 +277,18 @@ async function buildPackageContent(flags = {}) {
     `- Selected lane: \`${lane}\``,
     '- Why this lane is sufficient: bounded workflow/tooling scope unless changed.',
     '- Escalation trigger to a heavier lane: runtime ownership, shared contract, or representative scenario evidence changes.',
+    EMPTY_TEXT,
+    '## LLM Tool-First Contract',
+    EMPTY_TEXT,
+    'Before raw JSON, raw logs, broad file search, oversized segment files, or ad hoc `jq`, use the canonical workflow command that owns the question:',
+    EMPTY_TEXT,
+    '1. Package metadata or ledger edits: `npm run work:package:doctor -- --suggest <package>`, `npm run work:package:doctor -- --fix-dry-run <package>`, `npm run work:package:schema`, or `npm run work:package:new -- ...`.',
+    '2. Representative evidence: `npm run work:evidence-summary -- <artifact>` plus any focused extractor for this failure class.',
+    '3. Owner discovery: `npm run analyze:owner-files -- <owner> [boundary]`.',
+    '4. Subagent sequencing: `npm run work:subagent-prompt -- --role <role> --package <package>`.',
+    '5. Large-file cleanup: `npm run work:oversized-next -- --markdown`.',
+    EMPTY_TEXT,
+    'If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which canonical extractor was tried and why it was insufficient.',
     EMPTY_TEXT,
     '## In Scope',
     EMPTY_TEXT,

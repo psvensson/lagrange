@@ -176,7 +176,7 @@ Every work package ends with an affected-area review before `done-...`.
 
 Affected area means:
 
-1. every production file touched by the package
+1. every production file in package `writeScope`
 2. direct owner collaborators of those files
 3. decision, lifecycle, ingress, dissemination, persistence, diagnostic, or
    resource-lifetime boundaries that those files participate in
@@ -305,7 +305,7 @@ Before implementation, record relevant guardrails:
 The ledger distinguishes:
 
 1. inherited repo-wide debt outside the package boundary
-2. inherited debt in touched files
+2. inherited debt in write-scope files
 3. new debt introduced by the package
 4. debt removed by the package
 
@@ -323,17 +323,67 @@ LLM-driven sprint work keeps architectural width small.
 Required workflow:
 
 1. Run `npm run work:context` before non-trivial package implementation.
-2. Use the handoff's current blocker, first files, proof ladder, commands, and
+2. Use `npm run work:llm-start` when the next step needs a fuller startup
+   bundle with package doctor suggestions, dirty scope, model-ledger summary,
+   and representative evidence summary.
+3. Use the handoff's current blocker, first files, proof ladder, commands, and
    dirty-worktree summary as the starting point.
-3. Keep one representative gate per sprint and at most one package owning the
+4. Keep one representative gate per sprint and at most one package owning the
    current representative re-entry gate.
-4. Keep one primary owner and boundary per active scenario-driven package.
-5. Split work when guardrail cleanup, runtime behavior, presentation, or
+5. Keep one primary owner and boundary per active scenario-driven package.
+6. Split work when guardrail cleanup, runtime behavior, presentation, or
    roadmap truth repair are separate boundaries.
-6. After two material blocker migrations inside one package, close the gate or
+7. After two material blocker migrations inside one package, close the gate or
    split a contraction package around the current owner contract.
-7. Broad representative reruns are acceptance proof only after owner fixtures,
+8. Broad representative reruns are acceptance proof only after owner fixtures,
    focused owner tests, and affected presentation tests are green.
+
+## LLM Tool-First Triage
+
+This is a repo-wide package and sub-agent entry contract, not a sprint-local
+note. LLM-driven work across all packages and sub-agent tasks must use canonical
+workflow and artifact tools before raw JSON or log slicing: `work:llm-start`,
+`work:evidence-summary`,
+`work:package:doctor -- --suggest`, `work:package:schema`,
+`work:package:new`, `analyze:owner-files`, focused scenario extractors such as
+`analyze:priority-recovery-residuals`, `work:subagent-prompt`, and
+`work:oversized-next`.
+
+Required workflow:
+
+1. Use `npm run work:package:doctor -- --suggest <package>` or
+   `npm run work:package:doctor -- --fix-dry-run <package>` before hand-editing
+   package schema, causal ledger, Model Fit, sub-agent ledger, or commit-ledger
+   fields.
+2. Use `npm run work:package:schema` before choosing status, lane,
+   causal-outcome, scenario-classification, stop-condition, or bounded-progress
+   enum values.
+3. Use `npm run work:package:new -- ...` to create new package files unless the
+   task is only renaming an existing package status.
+4. Use `npm run work:evidence-summary -- <artifact>` before reading raw
+   distributed report JSON or large harness files.
+5. Use `npm run analyze:owner-files -- <owner> [boundary]` before broad owner
+   file search or opening oversized segment files.
+6. Use scenario-specific extractors such as
+   `npm run analyze:priority-recovery-residuals -- <artifact>` before ad hoc
+   residual extraction.
+7. Use `npm run work:subagent-prompt -- --role <role> --package <package>` to
+   prepare bounded sub-agent tasks; the generated text assists the real
+   sub-agent sequence but does not replace real returned agent ids.
+8. Use `npm run work:oversized-next -- --markdown` before inventing file-size
+   cleanup packages from raw line counts.
+9. Use explicit metadata scope fields for new packages: `writeScope` for files
+   the package may edit, `handoffFiles` for read-only context,
+   `generatedFiles` for deterministic outputs, `candidateRuntimeFiles` for
+   files gated by a focused probe, and `commitScope` for focused commit
+   containment. `touchedFiles` is legacy compatibility only.
+10. Use validation phases deliberately: `npm run work:validate -- --entry` for
+    package shape, `--pre-impl` when review/fix proof is complete and
+    implementation may still be pending, and `--closure` before close/commit.
+
+Ad hoc `jq`, raw JSON slicing, or raw-log sampling is allowed only after the
+relevant canonical extractor is missing or insufficient. The package records
+which extractor was tried and why the fallback was necessary.
 
 The sprint current-blocker snapshot stays near the top of the sprint document
 and names:
@@ -374,7 +424,10 @@ Review checks:
 Parallel sub-agents are allowed only for independent sidecar questions with
 disjoint owner or file scope. Parent-session notes, local/manual labels, and
 arbitrary text without a real agent id do not satisfy review, fix, or
-implementation roles unless the user disables sub-agents.
+implementation roles at closure. Before closure, an implementation environment
+may record `human-waived`, `tool-unavailable`, or
+`blocked-by-environment-policy` with a `reason: ...` note so unavailable
+delegation is explicit instead of disguised as agent proof.
 
 The main agent remains responsible for integrating findings, deciding whether
 the owner boundary changed, and keeping package status filename-first.

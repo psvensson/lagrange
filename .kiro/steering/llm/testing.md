@@ -2,8 +2,8 @@
 
 Load for test-first workflow, reliability harness work, and regression policy.
 
-Generated rules: 94
-Estimated tokens: 3770
+Generated rules: 95
+Estimated tokens: 3895
 Domains: testing
 
 ## Rules
@@ -48,38 +48,38 @@ Domains: testing
 38. [TEST-0038] The next regression in that area must prove the reduced boundary, not only the immediate symptom.
 39. [TEST-0039] Tests must never be skipped.
 40. [TEST-0040] The evidence block must name the canonical blocker, owner boundary, source artifact paths, prior blocker status, subordinate evidence, and next focused proof surface.
-41. [TEST-0041] Manual evidence summaries are allowed only when no extractor exists, and must preserve the normalized owner fields from the artifact rather than reclassifying from raw logs.
-42. [TEST-0042] The first delegated or local analysis step must extract the canonical evidence from the latest artifact and compare it with the sprint current blocker snapshot.
-43. [TEST-0043] The final validation note must state whether the representative scenario passed, stayed on the same owner boundary, or migrated to a new named owner boundary.
-44. [TEST-0044] Pressure tests MUST respect the standard duration limits (2s unit, 30s integration). Use mocked time and injected latency, not real delays.
-45. [TEST-0045] Retryable or backpressure states require focused probes that prove the concrete progress mechanism: wake, retry, timeout, reconcile, drain, dispatch, delivery, timer, advance, or bounded progress. A representative rerun may confirm that proof, but it must not replace the missing causal-edge probe.
-46. [TEST-0046] Test closure and package closure both require the final affected-area deep dive required by .kiro/steering/system guidelines.md.
-47. [TEST-0047] Every non-trivial package must prove that it did not increase architecture drift while fixing behavior.
-48. [TEST-0048] When a package exists because a distributed, integration, load, or scenario failure exposed a blocker, validation must prove not only the local fix but also what the original scenario does next.
-49. [TEST-0049] All bug fixes MUST be preceded by a failing test that reproduces the bug.
-50. [TEST-0050] When the second correctness bug appears at the same architectural boundary in one work cycle, the response must escalate from a local patch to boundary consolidation.
-51. [TEST-0051] When a bug involves component ownership, lifecycle persistence, or system-table row mutation, tests must prove that the canonical owner is actually used.
-52. [TEST-0052] When adding new tests or changing existing tests for production code, you must also audit the code under test for System Guidelines violations and fix them as part of the same change.
-53. [TEST-0053] When a change touches shared metadata reads or writes, tests and CI checks must prove the canonical gateway boundary is still the only runtime ingress.
-54. [TEST-0054] When a change touches control-plane progression (dispatch, rebalance, split, admission progression, operation timeout handling), tests must prove deterministic owner-path behavior rather than only eventual convergence.
-55. [TEST-0055] When a change touches CDC propagation, watches, subscriptions, reconnect loops, buffers, queues, or phase-to-runtime handoff, tests must prove continuity and bounded lifetime, not just eventual correctness.
-56. [TEST-0056] Timeouts in control-plane logic are hard correctness bugs and must be tested as typed outcomes, not generic strings.
-57. [TEST-0057] Every test that exists must run and pass.
-58. [TEST-0058] Tests must exercise the real production code paths.
-59. [TEST-0059] The test suite must prove that production code works — not that a test-friendly fork of it works.
-60. [TEST-0060] Failures discovered in the touched area, or discovered by the test runs chosen for the current change, must be resolved before the task closes.
-61. [TEST-0061] When an agent or sub-agent is used to continue a sprint, validation ownership must follow the same evidence ladder as package work.
-62. [TEST-0062] When an owner path is intentionally unresolved under pressure, publication establishment, or recovery completion, tests must prove the caller receives a structured deferred outcome rather than ambiguous absence.
-63. [TEST-0063] When a change touches startup, readiness, admin snapshot, service discovery, or another shared control-plane truth surface, tests must prove readers observe and schedule repair instead of repairing inline.
-64. [TEST-0064] Tests MUST verify this property at the unit and integration layers, not only in the distributed harness.
-65. [TEST-0065] Existing violations in touched files must be fixed when they are part of the same semantic boundary. If they are genuinely outside scope, the package must name the excluded boundary and link a follow-on package before closure.
-66. [TEST-0066] If the package has already recorded two material blocker migrations, the next validation cycle must start from a replayable owner-decision fixture or the narrowest blocker probe that represents the current dominant owner.
-67. [TEST-0067] A scenario-driven package that changes runtime meaning, decision meaning, or presentation meaning must prove the current blocker in this order: owner-decision fixture or blocker probe, focused owner tests, affected presentation tests, then the representative scenario.
-68. [TEST-0068] Presentation tests are required when failure bundles, triage summaries, admin summaries, active gates, or report writers consume the changed contract. A green owner test alone is not sufficient if presentation can still classify the same evidence under a different blocker.
-69. [TEST-0069] A fresh artifact with different counts, node ids, epochs, or timing does not by itself prove blocker migration. Treat it as the same blocker until the normalized evidence shows a different semantic owner, owner boundary, or next required action.
-70. [TEST-0070] When a package classifies a retryable or backpressure state as bounded rather than fixing runtime code, the validation must prove why the state is not the first frontier, which downstream blockers remain, and which stop condition prevents another local patch. That classification cannot rest on prose alone: it must name the focused probe command, proof artifact path, expected observable transition, maximum progress bound, and same-frontier fallback.
-71. [TEST-0071] When repeated scenario runs keep failing after local fixes or classification-only reductions, the next validation package must establish a causal-analysis boundary before more runtime fixes. At minimum it must validate the end-to-end phase model, cross-entity causal graph, budget/timeout accounting, invariant review, failure-class taxonomy, and architecture-level stop conditions.
-72. [TEST-0072] A runtime fix that follows causal-analysis escalation must cite the causal model or artifact it uses, then prove that its local regression changes the relevant causal edge rather than only improving the immediate symptom.
+41. [TEST-0041] The first delegated or local analysis step must extract the canonical evidence from the latest artifact and compare it with the sprint current blocker snapshot.
+42. [TEST-0042] The final validation note must state whether the representative scenario passed, stayed on the same owner boundary, or migrated to a new named owner boundary.
+43. [TEST-0043] Pressure tests MUST respect the standard duration limits (2s unit, 30s integration). Use mocked time and injected latency, not real delays.
+44. [TEST-0044] Retryable or backpressure states require focused probes that prove the concrete progress mechanism: wake, retry, timeout, reconcile, drain, dispatch, delivery, timer, advance, or bounded progress. A representative rerun may confirm that proof, but it must not replace the missing causal-edge probe.
+45. [TEST-0045] Test closure and package closure both require the final affected-area deep dive required by .kiro/steering/system guidelines.md.
+46. [TEST-0046] Every non-trivial package must prove that it did not increase architecture drift while fixing behavior.
+47. [TEST-0047] When a package exists because a distributed, integration, load, or scenario failure exposed a blocker, validation must prove not only the local fix but also what the original scenario does next.
+48. [TEST-0048] All bug fixes MUST be preceded by a failing test that reproduces the bug.
+49. [TEST-0049] When the second correctness bug appears at the same architectural boundary in one work cycle, the response must escalate from a local patch to boundary consolidation.
+50. [TEST-0050] When a bug involves component ownership, lifecycle persistence, or system-table row mutation, tests must prove that the canonical owner is actually used.
+51. [TEST-0051] When adding new tests or changing existing tests for production code, you must also audit the code under test for System Guidelines violations and fix them as part of the same change.
+52. [TEST-0052] When a change touches shared metadata reads or writes, tests and CI checks must prove the canonical gateway boundary is still the only runtime ingress.
+53. [TEST-0053] When a change touches control-plane progression (dispatch, rebalance, split, admission progression, operation timeout handling), tests must prove deterministic owner-path behavior rather than only eventual convergence.
+54. [TEST-0054] When a change touches CDC propagation, watches, subscriptions, reconnect loops, buffers, queues, or phase-to-runtime handoff, tests must prove continuity and bounded lifetime, not just eventual correctness.
+55. [TEST-0055] Timeouts in control-plane logic are hard correctness bugs and must be tested as typed outcomes, not generic strings.
+56. [TEST-0056] Every test that exists must run and pass.
+57. [TEST-0057] Tests must exercise the real production code paths.
+58. [TEST-0058] The test suite must prove that production code works — not that a test-friendly fork of it works.
+59. [TEST-0059] Failures discovered in the touched area, or discovered by the test runs chosen for the current change, must be resolved before the task closes.
+60. [TEST-0060] When an agent or sub-agent is used to continue a sprint, validation ownership must follow the same evidence ladder as package work.
+61. [TEST-0061] When an owner path is intentionally unresolved under pressure, publication establishment, or recovery completion, tests must prove the caller receives a structured deferred outcome rather than ambiguous absence.
+62. [TEST-0062] When a change touches startup, readiness, admin snapshot, service discovery, or another shared control-plane truth surface, tests must prove readers observe and schedule repair instead of repairing inline.
+63. [TEST-0063] Tests MUST verify this property at the unit and integration layers, not only in the distributed harness.
+64. [TEST-0064] Existing violations in touched files must be fixed when they are part of the same semantic boundary. If they are genuinely outside scope, the package must name the excluded boundary and link a follow-on package before closure.
+65. [TEST-0065] If the package has already recorded two material blocker migrations, the next validation cycle must start from a replayable owner-decision fixture or the narrowest blocker probe that represents the current dominant owner.
+66. [TEST-0066] A scenario-driven package that changes runtime meaning, decision meaning, or presentation meaning must prove the current blocker in this order: owner-decision fixture or blocker probe, focused owner tests, affected presentation tests, then the representative scenario.
+67. [TEST-0067] Presentation tests are required when failure bundles, triage summaries, admin summaries, active gates, or report writers consume the changed contract. A green owner test alone is not sufficient if presentation can still classify the same evidence under a different blocker.
+68. [TEST-0068] A fresh artifact with different counts, node ids, epochs, or timing does not by itself prove blocker migration. Treat it as the same blocker until the normalized evidence shows a different semantic owner, owner boundary, or next required action.
+69. [TEST-0069] When a package classifies a retryable or backpressure state as bounded rather than fixing runtime code, the validation must prove why the state is not the first frontier, which downstream blockers remain, and which stop condition prevents another local patch. That classification cannot rest on prose alone: it must name the focused probe command, proof artifact path, expected observable transition, maximum progress bound, and same-frontier fallback.
+70. [TEST-0070] When repeated scenario runs keep failing after local fixes or classification-only reductions, the next validation package must establish a causal-analysis boundary before more runtime fixes. At minimum it must validate the end-to-end phase model, cross-entity causal graph, budget/timeout accounting, invariant review, failure-class taxonomy, and architecture-level stop conditions.
+71. [TEST-0071] A runtime fix that follows causal-analysis escalation must cite the causal model or artifact it uses, then prove that its local regression changes the relevant causal edge rather than only improving the immediate symptom.
+72. [TEST-0072] Manual evidence summaries are allowed only when no extractor exists or the extractor output is insufficient. They must preserve the normalized owner fields from the artifact rather than reclassifying from raw logs, and the package must record why the extractor was not enough.
 73. [TEST-0073] The review must check package closure evidence, residual inventory, guardrail ledger, blocker migration notes, sprint snapshot consistency, and whether the last package's stated next action still matches current artifact evidence.
 74. [TEST-0074] Slow-dependency resilience — inject artificial latency into a dependency (mock that resolves after a delay) and prove the component does not fail, corrupt state, or drop work. It may be slower, but it must remain correct.
 75. [TEST-0075] A representative rerun should not be the next debugging step while the current owner-decision fixture or narrow blocker probe is missing.
@@ -90,15 +90,16 @@ Domains: testing
 80. [TEST-0080] When a bug depends on stale cache truth, stale routing, delayed authoritative visibility, no-handler witnesses, or other cross-time evidence races, the regression must replay the witness order that triggered the bug rather than asserting only the final steady state.
 81. [TEST-0081] Implementation work should start only after the current owner boundary and smallest proof surface are named.
 82. [TEST-0082] For control-plane, readiness, topology, and other shared distributed-boundary work, the normal debugging loop must follow one validation ladder instead of jumping straight from unit failures to repeated full distributed reruns.
-83. [TEST-0083] No other tests should break
-84. [TEST-0084] All non-trivial implementation work should have validation owned by its active work package.
-85. [TEST-0085] Runtime packages that touch already oversized files should record whether they are adding local size debt or extracting a smaller owner/helper boundary.
-86. [TEST-0086] These tests should be small and targeted.
-87. [TEST-0087] Work packages should list their targeted owner tests, the relevant boundary-transition scenarios, and the final distributed checkpoint command in that same order.
-88. [TEST-0088] Only return to suite-local fixes after the shared runner boundary is shown stable.
-89. [TEST-0089] Only restore higher parallelism after the aggregate gate is proven stable at the new boundary.
-90. [TEST-0090] Are multiple recent bugs clustering around the same boundary or component? That may indicate a design-level issue worth addressing instead of patching each symptom individually.
-91. [TEST-0091] Only after the artifact summaries have been read may raw container or node logs become the primary debugging surface.
-92. [TEST-0092] A separate implementation sub-agent may start the current work package only after the previous-package review is clean or the review findings have been fixed.
-93. [TEST-0093] Local execution may use scripts/run-distributed-validation-ladder.js to make this order explicit.
-94. [TEST-0094] Only run the complete test suite (npm test) at: - Checkpoint tasks explicitly marked in the task list; - Final integration verification; - When explicitly requested by the user
+83. [TEST-0083] Distributed artifact triage must start with npm run work:evidence-summary -- <artifact>, the focused extractor for the failure class such as npm run analyze:priority-recovery-residuals -- <artifact>, and npm run analyze:owner-files -- <owner> [boundary] before broad text search, raw JSON slicing, ad hoc jq, or raw logs.
+84. [TEST-0084] No other tests should break
+85. [TEST-0085] All non-trivial implementation work should have validation owned by its active work package.
+86. [TEST-0086] Runtime packages that touch already oversized files should record whether they are adding local size debt or extracting a smaller owner/helper boundary.
+87. [TEST-0087] These tests should be small and targeted.
+88. [TEST-0088] Work packages should list their targeted owner tests, the relevant boundary-transition scenarios, and the final distributed checkpoint command in that same order.
+89. [TEST-0089] Only return to suite-local fixes after the shared runner boundary is shown stable.
+90. [TEST-0090] Only restore higher parallelism after the aggregate gate is proven stable at the new boundary.
+91. [TEST-0091] Are multiple recent bugs clustering around the same boundary or component? That may indicate a design-level issue worth addressing instead of patching each symptom individually.
+92. [TEST-0092] Only after the artifact summaries and relevant extractors have been read may raw container logs, node logs, raw JSON slicing, or ad hoc jq become the primary debugging surface.
+93. [TEST-0093] A separate implementation sub-agent may start the current work package only after the previous-package review is clean or the review findings have been fixed.
+94. [TEST-0094] Local execution may use scripts/run-distributed-validation-ladder.js to make this order explicit.
+95. [TEST-0095] Only run the complete test suite (npm test) at: - Checkpoint tasks explicitly marked in the task list; - Final integration verification; - When explicitly requested by the user

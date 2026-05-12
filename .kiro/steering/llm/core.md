@@ -29,8 +29,10 @@ contracts, or representative scenario evidence can change.
 
 ## Rules
 
-1. Start from `npm run work:context` for non-trivial implementation work; keep
-   the named owner, boundary, proof ladder, and out-of-scope list in view.
+1. Start from `npm run work:context` for non-trivial implementation work; use
+   `npm run work:llm-start` when the next step needs package doctor, dirty
+   scope, model-ledger, or artifact summary context. Keep the named owner,
+   boundary, proof ladder, and out-of-scope list in view.
 2. Work one bounded concern at a time. Do not let a package become a bucket for
    unrelated guardrail, runtime, presentation, or roadmap changes.
 3. Do not locally patch symptoms. Identify the semantic owner boundary, reduce
@@ -56,17 +58,34 @@ contracts, or representative scenario evidence can change.
     reuse that grammar.
 12. Tests prove the owner path and affected consumers, not only eventual local
     convergence.
-13. Static guardrails are architecture evidence. Do not weaken scripts,
+13. Use canonical workflow and artifact extractors before raw JSON slicing:
+    `work:evidence-summary`, `analyze:owner-files`,
+    `analyze:priority-recovery-residuals`, `work:package:doctor -- --suggest`,
+    `work:package:schema`, `work:package:new`, `work:subagent-prompt`, and
+    `work:oversized-next`. Ad hoc `jq` is a fallback only when no extractor
+    exists or the extractor output is insufficient, and that reason must be
+    recorded in the package.
+14. New package metadata uses explicit scope fields: `writeScope`,
+    `handoffFiles`, `generatedFiles`, `candidateRuntimeFiles`, and
+    `commitScope`. `touchedFiles` is legacy compatibility, not a write or
+    subagent ownership contract.
+15. Validate at the right phase: `--entry` for shape, `--pre-impl` when
+    review/fix proof is clean and implementation is next, and `--closure`
+    before closing or committing.
+16. Static guardrails are architecture evidence. Do not weaken scripts,
     allowlists, scan scope, or lint rules to make a package pass.
-14. Scenario artifacts migrate only when normalized evidence changes owner,
+17. Scenario artifacts migrate only when normalized evidence changes owner,
     boundary, or next required action; new counts, node ids, epochs, or timing
     alone do not justify package churn.
-15. A package is not done while in-scope residuals, tail consumers, guardrail
+18. A package is not done while in-scope residuals, tail consumers, guardrail
     drift, or unnamed scenario migration evidence remain.
-16. Sub-agents are mandatory for runtime owner-boundary and scenario/release-gate
+19. Sub-agents are mandatory for runtime owner-boundary and scenario/release-gate
     packages; they are optional for read/review/doc-only and lightweight
-    maintenance lanes unless the package declares otherwise.
-17. Commit and push focused package slices before starting the next package.
+    maintenance lanes unless the package declares otherwise. If the host cannot
+    expose delegation before implementation, record `human-waived`,
+    `tool-unavailable`, or `blocked-by-environment-policy` with a reason; do
+    not use that as closure proof.
+20. Commit and push focused package slices before starting the next package.
     Do not sweep unrelated dirty worktree changes into the slice.
-18. If a local fix feels hard because the boundary is porous, reduce the
+21. If a local fix feels hard because the boundary is porous, reduce the
     boundary or raise the abstraction instead of adding another symptom patch.

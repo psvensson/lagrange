@@ -75,9 +75,10 @@ Use the tracker utility for current sprint/package mechanics:
 13. `npm run work:oversized-next -- --markdown` turns oversized
     owner-boundary segment files into package-ready extraction candidates so
     file-size debt stays actionable rather than a broad background concern.
-14. `npm run work:validate` checks active and metadata-bearing packages for
-   filename/header drift, stale open checklist items, and lane-required
-   Subagent Sequencing Ledgers.
+14. `npm run work:validate -- --entry|--pre-impl|--closure` checks active and
+   metadata-bearing packages for filename/header drift, stale open checklist
+   items, and lane-required Subagent Sequencing Ledgers at the requested phase.
+   The default phase is `--pre-impl`.
 15. `npm run work:package:close -- --write work/packages/active-...md` renames a
     package to `done-...` only after open checklist items are closed.
 16. `npm run work:package:migrate -- --write work/packages/active-...md`
@@ -96,6 +97,31 @@ Use the tracker utility for current sprint/package mechanics:
    sprint handoff. If package-owned and unrelated dirty changes cannot be
    separated safely, stop for human direction instead of committing a mixed
    slice.
+
+## Tool-First LLM Workflow
+
+The workflow tools are the default entry path for all future packages, not a
+single-sprint convention. Before reading raw distributed JSON, large harness
+segments, raw logs, or writing ad hoc `jq`, an LLM should use the applicable
+canonical extractor:
+
+1. Package metadata or package-status changes:
+   `npm run work:package:doctor -- --suggest <package>`,
+   `npm run work:package:doctor -- --fix-dry-run <package>`,
+   `npm run work:package:schema`, and `npm run work:package:new -- ...`.
+2. Representative artifacts:
+   `npm run work:evidence-summary -- <artifact>` plus the focused scenario
+   extractor for the failure class.
+3. Owner discovery:
+   `npm run analyze:owner-files -- <owner> [boundary]`.
+4. Subagent sequencing:
+   `npm run work:subagent-prompt -- --role <role> --package <package>`.
+5. Large-file reduction:
+   `npm run work:oversized-next -- --markdown`.
+
+Raw JSON slicing, raw-log sampling, or ad hoc `jq` is allowed only after the
+relevant canonical extractor is missing or insufficient. Record the extractor
+that was tried and the fallback reason in the package.
 
 Use `npm run work:model-ledger -- record` to append explicit package experience
 to `work/model-ledger.jsonl` when a package adds useful model-fit evidence:
@@ -162,16 +188,25 @@ the package sequencing contract. Parent-session notes, local/manual session
 labels, and arbitrary text without a real agent id do not satisfy required
 roles unless the user explicitly disables subagents for the task.
 
-`npm run work:validate` requires this ledger only for lanes that require
-subagents. Legacy active metadata packages without `lane` remain strict.
-Historical `done-...` packages without the ledger remain valid unless they add
-a ledger with open or incomplete required entries. Checked required entries
-must contain real agent identities; template placeholders such as `<...>`,
-pending markers such as `pending-before-implementation-resumes`, and non-real
-identities such as `current-session`, `parent Codex`, `manual`, `local`, or
-`session` are validation failures for packages under the current policy.
-Historical closed-package proof is not backfilled by invention; if a package is
-reopened, migrated, or closed again, the current proof rules apply.
+`npm run work:validate -- --entry` validates package shape and contracts while
+subagent proof is still being assigned. `--pre-impl` also requires clean
+review/fix proof for lanes that require subagents but permits the
+implementation entry to remain open. `--closure` is strict: all required
+subagent entries must be checked, real, ordered, and complete before package
+closure.
+
+Legacy active metadata packages without `lane` remain strict. Historical
+`done-...` packages without the ledger remain valid unless they add a ledger
+with open or incomplete required entries. Checked closure entries must contain
+real agent identities; template placeholders such as `<...>`, pending markers
+such as `pending-before-implementation-resumes`, and non-real identities such
+as `current-session`, `parent Codex`, `manual`, `local`, or `session` are
+closure validation failures for packages under the current policy. Before
+closure, a required role may explicitly record `human-waived`,
+`tool-unavailable`, or `blocked-by-environment-policy` with a `reason: ...`
+note so the environment state is visible without pretending a real subagent
+ran. Historical closed-package proof is not backfilled by invention; if a
+package is reopened, migrated, or closed again, the current proof rules apply.
 
 ## Commit And Push Ledger
 
@@ -256,9 +291,19 @@ Every active package should start with a machine-readable metadata comment:
     "Focused owner test",
     "Representative scenario rerun"
   ],
-  "touchedFiles": [
+  "writeScope": [
     "src/example.js",
     "test/example.test.js"
+  ],
+  "handoffFiles": [
+    "work/packages/done-predecessor.md"
+  ],
+  "generatedFiles": [],
+  "candidateRuntimeFiles": [],
+  "commitScope": [
+    "src/example.js",
+    "test/example.test.js",
+    "work/packages/active-YYYYMMDD-package.md"
   ],
   "modelFit": {
     "packageClass": "bounded-implementation",
@@ -303,6 +348,22 @@ Every active package should start with a machine-readable metadata comment:
 ```
 
 The header exists to make handoff and automation reliable. The prose package
+must keep these scope fields distinct:
+
+1. `writeScope`: files the package or implementation subagent may edit.
+2. `handoffFiles`: files or artifacts to read for context only.
+3. `generatedFiles`: outputs produced by tracker, steering-pack, or other
+   deterministic generators.
+4. `candidateRuntimeFiles`: possible runtime/test files that require a focused
+   probe before they become write scope.
+5. `commitScope`: files allowed in the focused package commit. When omitted,
+   tooling falls back to `writeScope` for new packages and to legacy
+   `touchedFiles` for older packages.
+
+`touchedFiles` is legacy metadata. New packages should use the explicit scope
+fields so read lists, write ownership, generated outputs, runtime candidates,
+and commit containment do not drift together.
+
 body remains the source for reasoning, context, and the checklist.
 
 Every work package should answer:
@@ -344,7 +405,7 @@ Every work package should answer:
     shared test infrastructure, or broad refactor boundaries:
    - which static guardrails apply
    - what the preflight baseline is
-   - what inherited touched-file debt is in or out of scope
+   - what inherited write-scope debt is in or out of scope
    - what after-state proves no drift increased
 14. If the package has accumulated repeated blocker migrations:
     - which single current blocker remains active
@@ -462,12 +523,12 @@ bounded leaf slices. They must also name:
 
 Packages intended for `gpt-5.3-codex-spark` must use
 `Scope shape: leaf-slice` and must not contain open-ended frontier language. If
-a package must chase a new owner boundary, broaden touched files, or reopen
+a package must chase a new owner boundary, broaden write scope, or reopen
 frozen decisions, mark it as escalated in the model ledger instead.
 
 Package closure also requires one final deep dive across the affected area:
 
-1. read the touched files and their direct owner collaborators as one boundary
+1. read the write-scope files and their direct owner collaborators as one boundary
 2. look for mistakes, irregularities, and doctrine/system-guideline violations
 3. fix any discovered issue that falls inside the affected area before renaming
    the package to `done-...`
@@ -482,7 +543,7 @@ package.
 When a scenario-driven package crosses two material blocker migrations, prefer
 splitting a new contraction package over continuing to edit the historical
 package. The contraction package should carry only the current owner,
-boundary, fixture or probe, touched files, and proof ladder. The older package
+boundary, fixture or probe, write scope, and proof ladder. The older package
 may stay queued as history or later re-entry work.
 
 Use the topology convergence analyzer to keep that handoff mechanical:
