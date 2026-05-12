@@ -26,7 +26,7 @@
   ],
   "touchedFiles": [
     "work/packages/done-20260512-rolling-restart-operation-workflow-rebalancer-handoff-needs-operation-coordination-mismatch-classification.md",
-    "work/packages/todo-20260512-rolling-restart-operation-workflow-progress-coordinator-excludes-node.md",
+    "work/packages/active-20260512-rolling-restart-operation-workflow-progress-coordinator-excludes-node.md",
     "work/packages/todo-20260512-rolling-restart-rebalancer-leader-operation-scheduling-control-plane-publications-create-recovery-operation.md",
     "work/sprints/active-2026-q2-phase-0-1-rolling-restart-release-gate-closure.md",
     "work/sprints/current-blocker.json",
@@ -77,9 +77,9 @@
     "stopCondition": "classification-only-stop"
   },
   "predecessor": "work/packages/done-20260512-rolling-restart-operation-workflow-rebalancer-handoff-priority-recovery-retry-scheduled.md",
-  "successor": "work/packages/todo-20260512-rolling-restart-operation-workflow-progress-coordinator-excludes-node.md",
+  "successor": "work/packages/active-20260512-rolling-restart-operation-workflow-progress-coordinator-excludes-node.md",
   "splitSuccessors": [
-    "work/packages/todo-20260512-rolling-restart-operation-workflow-progress-coordinator-excludes-node.md",
+    "work/packages/active-20260512-rolling-restart-operation-workflow-progress-coordinator-excludes-node.md",
     "work/packages/todo-20260512-rolling-restart-rebalancer-leader-operation-scheduling-control-plane-publications-create-recovery-operation.md"
   ],
   "closed": "2026-05-12",
@@ -198,7 +198,7 @@ Stop condition: `classification-only-stop`.
 ## Successor Handoff
 
 Recommended next package to activate after this package is closed:
-`work/packages/todo-20260512-rolling-restart-operation-workflow-progress-coordinator-excludes-node.md`.
+`work/packages/active-20260512-rolling-restart-operation-workflow-progress-coordinator-excludes-node.md`.
 
 Parked split successor:
 `work/packages/todo-20260512-rolling-restart-rebalancer-leader-operation-scheduling-control-plane-publications-create-recovery-operation.md`.

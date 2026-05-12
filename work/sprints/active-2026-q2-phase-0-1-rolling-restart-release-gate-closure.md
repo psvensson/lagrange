@@ -66,59 +66,55 @@ The matching playback is:
 
 Latest package:
 
-1. [Rolling Restart Operation Workflow Rebalancer Handoff Needs Operation Coordination Mismatch Classification](../packages/done-20260512-rolling-restart-operation-workflow-rebalancer-handoff-needs-operation-coordination-mismatch-classification.md)
-2. [Rolling Restart Operation Workflow Rebalancer Handoff Priority Recovery Retry Scheduled](../packages/done-20260512-rolling-restart-operation-workflow-rebalancer-handoff-priority-recovery-retry-scheduled.md)
-3. [Rolling Restart Operation Workflow Progress Priority Recovery Event Wait](../packages/done-20260512-rolling-restart-operation-workflow-progress-priority-recovery-event-wait.md)
-4. [Rolling Restart Rebalancer Leader Operation Scheduling Priority Recovery](../packages/done-20260512-rolling-restart-rebalancer-leader-operation-scheduling-priority-recovery.md)
-5. [Rolling Restart Operation Workflow Progress Stage3 Timeout Progression](../packages/done-20260512-rolling-restart-operation-workflow-progress-stage3-timeout-progression.md)
-6. [Rolling Restart Operation Workflow Progress Event Driven Dispatch Pending](../packages/done-20260512-rolling-restart-operation-workflow-progress-event-driven-dispatch-pending.md)
+1. [Rolling Restart Operation Workflow Progress Coordinator Excludes Node](../packages/active-20260512-rolling-restart-operation-workflow-progress-coordinator-excludes-node.md)
+2. [Rolling Restart Operation Workflow Rebalancer Handoff Needs Operation Coordination Mismatch Classification](../packages/done-20260512-rolling-restart-operation-workflow-rebalancer-handoff-needs-operation-coordination-mismatch-classification.md)
+3. [Rolling Restart Operation Workflow Rebalancer Handoff Priority Recovery Retry Scheduled](../packages/done-20260512-rolling-restart-operation-workflow-rebalancer-handoff-priority-recovery-retry-scheduled.md)
+4. [Rolling Restart Operation Workflow Progress Priority Recovery Event Wait](../packages/done-20260512-rolling-restart-operation-workflow-progress-priority-recovery-event-wait.md)
+5. [Rolling Restart Rebalancer Leader Operation Scheduling Priority Recovery](../packages/done-20260512-rolling-restart-rebalancer-leader-operation-scheduling-priority-recovery.md)
+6. [Rolling Restart Operation Workflow Progress Stage3 Timeout Progression](../packages/done-20260512-rolling-restart-operation-workflow-progress-stage3-timeout-progression.md)
+7. [Rolling Restart Operation Workflow Progress Event Driven Dispatch Pending](../packages/done-20260512-rolling-restart-operation-workflow-progress-event-driven-dispatch-pending.md)
 
 Next package:
 
-1. [Rolling Restart Operation Workflow Progress Coordinator Excludes Node](../packages/todo-20260512-rolling-restart-operation-workflow-progress-coordinator-excludes-node.md)
-2. Parked split successor:
+1. Close the active coordinator-excludes-node package after its focused package
+   commit is pushed.
+2. [Rolling Restart Operation Workflow Progress Serial Wait Event Driven Advance](../packages/todo-20260512-rolling-restart-operation-workflow-progress-serial-wait-event-driven-advance.md)
+3. Parked split successor, not promoted by the fresh representative report:
    [Rolling Restart Rebalancer Leader Operation Scheduling Control Plane Publications Create Recovery Operation](../packages/todo-20260512-rolling-restart-rebalancer-leader-operation-scheduling-control-plane-publications-create-recovery-operation.md)
 
 Latest representative evidence:
 
 1. Scenario: `rolling-restart`
 2. Artifact:
-   `test-output/reports/rolling-restart-current-release-gate-after-operation-workflow-rebalancer-handoff-priority-recovery-retry-scheduled-fix.report.json`
+   `test-output/reports/rolling-restart-current-release-gate-after-workflow-progress-coordinator-excludes-node-fix.report.json`
 3. Report total/passed/failed: `1/0/1`
-4. Duration: approximately `130160ms`
-5. Active gate: failed at `4/5` terminal progress
-6. Snapshot coverage: `2/5`
+4. Duration: approximately `133200ms`
+5. Active gate: failed; not all nodes active within `120000ms`
+6. Priority recovery invariants: passed
 7. Publication: `PUBLISHED`
 8. Pending acknowledgements: `0`
 9. Current frontier: `priority_recovery_partition_progress` under
-   `operation_workflow_owner / rebalancer_handoff`, state `blocked`, dominant
+   `operation_workflow_owner / workflow_progress`, state `blocked`, dominant
    reason `priority_recovery_progress_blocked`.
-10. Residual semantic states: `needs_operation` and `coordination_mismatch`.
-    Retry-scheduled handoff backpressure is bounded by focused predecessor
-    proof; the classification package records this as a deliberate split, not
-    one owner fix.
+10. Residual semantic states: `needs_operation` and `recovering_in_flight`.
+    The coordinator-excludes-node `coordination_mismatch` witnesses are gone.
 11. Blocked partitions: `control_plane_publications-p1`,
     `replica_operations-p1`, `sql_transaction_participants-p1`,
     `sql_transactions-p1`, and `sql_write_operations-p1`.
-12. Priority recovery invariants: failed classification invariant in the
-    causal model because the latest representative has blocked
-    `needs_operation` and `coordination_mismatch` evidence.
-13. Representative outcome: classification-only split after
-    same-frontier bounded retry-scheduled proof. The causal decision remains
-    `ask_human` with stop condition `insufficient_evidence` in the analyzer,
-    but package-level residual evidence now names two successor owner
-    boundaries.
-14. Exact residual shape for classification:
-    `control_plane_publications-p1` is `rebalancer_leader /
-    operation_scheduling / eligible_but_no_operation_created`, while
-    `replica_operations-p1` and `sql_transaction_participants-p1` are
-    `operation_workflow_owner / workflow_progress /
-    publication_recovery_eligible_but_coordinator_excludes_node`; the
-    `sql_transactions-p1` and `sql_write_operations-p1` `needs_operation`
-    witnesses are serial-wait dependents of the workflow-progress operations.
-    The workflow-progress successor should run first; the operation-scheduling
-    successor stays parked until workflow-progress direct blockers are fixed,
-    reduced, or fresh evidence promotes operation scheduling.
+12. Representative outcome: reduced. The focused package cleared the direct
+    `publication_recovery_eligible_but_coordinator_excludes_node` evidence, but
+    the same owner-boundary remains first with serial-wait/event-driven advance
+    work.
+13. Exact residual shape:
+    `control_plane_publications-p1`, `replica_operations-p1`, and
+    `sql_transaction_participants-p1` are direct `recovering_in_flight`,
+    `persisted_not_dispatched`, `advance_existing_operation` workflow-progress
+    witnesses. `sql_transactions-p1` and `sql_write_operations-p1` are
+    `priority_operation_serial_wait` dependents waiting on those operations.
+14. The workflow-progress serial-wait event-driven advance successor should run
+    next. The parked operation-scheduling successor is not promoted by the
+    fresh report because `control_plane_publications-p1` now has operation
+    evidence.
 
 The publication-convergence package still holds the prior
 `topology_publication_owner / publication_convergence` reduction:
@@ -126,27 +122,25 @@ The publication-convergence package still holds the prior
 zero-ACK, zero-blocked-node, priority-spread-pending case without canonical
 missing-active publication debt.
 
-The workflow-progress priority recovery package holds the predecessor
-reduction: active handoff retries now surface the canonical operation-owner
-rebalancer-handoff outcome instead of a generic workflow-progress wait. The
-current retry-scheduled package proves the retry-scheduled handoff path is
-bounded, while the fresh representative artifact keeps the first frontier at
-`operation_workflow_owner / rebalancer_handoff /
+The workflow-progress priority recovery packages hold the predecessor
+reductions: active handoff retries now surface canonical owner outcomes, and
+the coordinator-excludes-node package clears stale direct
+`coordination_mismatch` blockers. The fresh representative artifact keeps the
+first frontier at `operation_workflow_owner / workflow_progress /
 priority_recovery_progress_blocked`.
 
 Raw distributed-failure presentation for the same latest artifact reports
-`publication_missing_active_node`; treat that as a presentation residual before
-successor implementation, not as the canonical owner-boundary frontier, because
-owner-contract evidence keeps `publication_ack_convergence` satisfied.
+`publication_missing_active_node`; treat that as presentation evidence while
+the canonical topology frontier remains `priority_recovery_partition_progress`
+under `operation_workflow_owner / workflow_progress`. Owner-contract evidence
+also keeps `publication_ack_convergence` satisfied.
 
 Startup active-gate snapshot coverage remains downstream until the
-operation-workflow rebalancer-handoff frontier is either green, reduced,
+operation-workflow progress frontier is either green, reduced again,
 classified as bounded non-frontier work, or promoted by fresh representative
-evidence. The latest focused proof classifies retry-scheduled handoff work as
-bounded, but the representative still keeps the first critical path at
-`priority_recovery_partition_progress`; this sprint should not reopen startup
-active-gate or publication-convergence work while priority recovery
-rebalancer-handoff remains the named owner boundary.
+evidence. This sprint should not reopen startup active-gate or
+publication-convergence work while priority recovery workflow progress remains
+the named owner boundary.
 
 ## Scope Basis
 

@@ -51,15 +51,18 @@ const PRIORITY_RECOVERY_DISPATCH_PENDING_DIAGNOSTIC_OWNER_STATE =
   });
 
 const PRIORITY_RECOVERY_DISPATCH_PENDING_DIAGNOSTIC_WORKFLOW_STEPS =
-  Object.freeze(new Set([
-    WORKFLOW_STEP.PENDING,
-    WORKFLOW_STEP.SENDING,
-  ]));
+  Object.freeze(new Set([WORKFLOW_STEP.PENDING, WORKFLOW_STEP.SENDING]));
 
 const PRIORITY_RECOVERY_DISPATCH_PENDING_DIAGNOSTIC_ACTUATION_STATES =
   Object.freeze(new Set([
     PRIORITY_RECOVERY_ACTUATION_STATE.DISPATCHED_WAITING_PROGRESS,
     PRIORITY_RECOVERY_ACTUATION_STATE.PERSISTED_NOT_DISPATCHED,
+  ]));
+
+const PRIORITY_RECOVERY_DISPATCH_PENDING_DIAGNOSTIC_PROGRESS_ACTIONS =
+  Object.freeze(new Set([
+    PRIORITY_RECOVERY_NEXT_REQUIRED_ACTION.ADVANCE_EXISTING_OPERATION,
+    PRIORITY_RECOVERY_NEXT_REQUIRED_ACTION.WAIT_FOR_OPERATION_PROGRESS,
   ]));
 
 const PRIORITY_RECOVERY_DISPATCH_PENDING_DIAGNOSTIC_TARGET_STATE =
@@ -121,7 +124,7 @@ const PRIORITY_RECOVERY_DISPATCH_PENDING_DIAGNOSTIC_OWNER_TABLE =
         evidence.actuationStateDispatchPending === true &&
         evidence.actuationPhaseDispatchPending === true &&
         evidence.progressOwnerWorkflow === true &&
-        evidence.progressAdvanceExisting === true &&
+        evidence.progressDispatchPendingAction === true &&
         evidence.progressBoundaryWorkflow === true &&
         evidence.progressWaitEventDriven === true &&
         evidence.progressPhaseDispatchPending === true,
@@ -242,9 +245,10 @@ function buildPriorityRecoveryDispatchPendingDiagnosticOwnerEvidence(
     progressOwnerWorkflow:
       snapshot?.progress?.currentOwner ===
         PRIORITY_RECOVERY_PROGRESS_OWNER.OPERATION_WORKFLOW_OWNER,
-    progressAdvanceExisting:
-      snapshot?.progress?.nextRequiredAction ===
-        PRIORITY_RECOVERY_NEXT_REQUIRED_ACTION.ADVANCE_EXISTING_OPERATION,
+    progressDispatchPendingAction:
+      PRIORITY_RECOVERY_DISPATCH_PENDING_DIAGNOSTIC_PROGRESS_ACTIONS.has(
+        snapshot?.progress?.nextRequiredAction,
+      ),
     progressBoundaryWorkflow:
       snapshot?.progress?.blockingBoundary ===
         PRIORITY_RECOVERY_BLOCKING_BOUNDARY.WORKFLOW_PROGRESS,

@@ -43,8 +43,10 @@ const TEST_PUBLICATION_EPOCH = 2;
 const TEST_CAPTURED_AT_MS = 1000000;
 const TEST_CREATED_AT_MS = 900000;
 const TEST_UPDATED_AT_MS = 960000;
+const TEST_RECENT_UPDATED_AT_MS = 999000;
 const TEST_READY_DISTINCT_NODE_COUNT = 1;
 const TEST_REQUIRED_DISTINCT_NODE_COUNT = 2;
+const TEST_SPREAD_GAP = 1;
 const TEST_SOURCE_NODE_ID = 'priority-recovery-owner-contract-source';
 const TEST_TARGET_NODE_ID = 'priority-recovery-owner-contract-target';
 const TEST_REPLICA_ID = 'priority-recovery-owner-contract-replica';
@@ -100,8 +102,34 @@ function buildPriorityRecoveryOwnerPublicationConvergence() {
           partitionId: TEST_PARTITION_ID,
           readyDistinctNodeCount: TEST_READY_DISTINCT_NODE_COUNT,
           requiredDistinctNodeCount: TEST_REQUIRED_DISTINCT_NODE_COUNT,
+          spreadGap: TEST_SPREAD_GAP,
         }),
       ]),
+    }),
+  });
+}
+
+function buildPriorityRecoveryOwnerCoordinatorExcludesPublicationConvergence() {
+  return Object.freeze({
+    publicationEpoch: TEST_PUBLICATION_EPOCH,
+    publicationStatus: TEST_PUBLICATION_STATUS_PUBLISHED,
+    publishedActiveNodeIds: Object.freeze([TEST_SOURCE_NODE_ID]),
+    pendingAckNodeIds: Object.freeze([]),
+    priorityPartitionSummary: Object.freeze({
+      missingPartitionIds: Object.freeze([TEST_PARTITION_ID]),
+      requiredDistinctNodeCount: TEST_REQUIRED_DISTINCT_NODE_COUNT,
+      blockedPartitions: Object.freeze([
+        Object.freeze({
+          partitionId: TEST_PARTITION_ID,
+          readyDistinctNodeCount: TEST_READY_DISTINCT_NODE_COUNT,
+          requiredDistinctNodeCount: TEST_REQUIRED_DISTINCT_NODE_COUNT,
+          spreadGap: TEST_SPREAD_GAP,
+        }),
+      ]),
+    }),
+    membershipLifecycleSummary: Object.freeze({
+      projectedServingNodeIds: Object.freeze([TEST_SOURCE_NODE_ID]),
+      locallyEligibleNodeIds: Object.freeze([TEST_SOURCE_NODE_ID]),
     }),
   });
 }
@@ -472,6 +500,74 @@ test('direct priority recovery decision snapshots attach owner observation ' +
     PRIORITY_RECOVERY_SEMANTIC_STATE.RECOVERING_IN_FLIGHT,
     'direct owner-observed diagnostics should stay in flight',
   );
+});
+
+test('direct priority recovery decision snapshots attach owner observation ' +
+  'for PENDING dispatch witnesses outside the eligible cohort', async (t) => {
+  const operationContext = buildPriorityRecoveryOperationContextFromRecord(
+    buildPriorityRecoveryOwnerPendingOperationRow({
+      updated_at: TEST_RECENT_UPDATED_AT_MS,
+    }),
+    {
+      nowMs: TEST_CAPTURED_AT_MS,
+    },
+  );
+  const targetSnapshot = buildPriorityRecoveryDecisionSnapshot({
+    capturedAt: TEST_CAPTURED_AT_MS,
+    partitionId: TEST_PARTITION_ID,
+    publicationConvergence:
+      buildPriorityRecoveryOwnerCoordinatorExcludesPublicationConvergence(),
+    operationContexts: Object.freeze([operationContext]),
+    operationId: TEST_OPERATION_ID,
+    operationContext,
+  });
+
+  t.equal(
+    targetSnapshot?.conditions?.latestOperationWorkflowStep,
+    TEST_WORKFLOW_STEP_PENDING,
+    'the direct fixture should preserve the durable PENDING workflow step',
+  );
+  t.same(
+    targetSnapshot?.admission?.effectiveEligibleNodeIds,
+    [TEST_SOURCE_NODE_ID],
+    'the fixture should keep the target outside the effective eligible cohort',
+  );
+  t.equal(
+    targetSnapshot?.coordinator?.operation?.targetNodeId,
+    TEST_TARGET_NODE_ID,
+    'the focused operation should still target the excluded node',
+  );
+  t.equal(
+    targetSnapshot?.operationOwnerObservation?.outcome,
+    OPERATION_WORKFLOW_OUTCOME_VALUES.ADVANCE_EXISTING_OPERATION,
+    'coordinator-excludes dispatch diagnostics should carry owner advancement observation',
+  );
+  t.equal(
+    targetSnapshot?.operationOwnerObservation?.requestedOwnerAction,
+    PRIORITY_RECOVERY_NEXT_REQUIRED_ACTION.ADVANCE_EXISTING_OPERATION,
+    'coordinator-excludes dispatch diagnostics should request existing operation advance',
+  );
+  t.same(
+    targetSnapshot?.blockerReasons,
+    [],
+    'owner-observed coordinator-excludes diagnostics should clear stale blockers',
+  );
+  t.equal(
+    targetSnapshot?.semanticState,
+    PRIORITY_RECOVERY_SEMANTIC_STATE.RECOVERING_IN_FLIGHT,
+    'owner-observed coordinator-excludes diagnostics should stay in flight',
+  );
+  t.match(targetSnapshot?.actuation, {
+    owner: PRIORITY_RECOVERY_PROGRESS_OWNER.OPERATION_WORKFLOW_OWNER,
+    state: PRIORITY_RECOVERY_ACTUATION_STATE.PERSISTED_NOT_DISPATCHED,
+  });
+  t.match(targetSnapshot?.progress, {
+    currentOwner: PRIORITY_RECOVERY_PROGRESS_OWNER.OPERATION_WORKFLOW_OWNER,
+    nextRequiredAction:
+      PRIORITY_RECOVERY_NEXT_REQUIRED_ACTION.ADVANCE_EXISTING_OPERATION,
+    blockingBoundary: PRIORITY_RECOVERY_BLOCKING_BOUNDARY.WORKFLOW_PROGRESS,
+    waitMode: PRIORITY_RECOVERY_WAIT_MODE.EVENT_DRIVEN,
+  });
 });
 
 test('priority recovery decision snapshots attach owner observation for ' +
