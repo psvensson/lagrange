@@ -4,7 +4,7 @@
 
 Sprint: `work/sprints/active-2026-q2-phase-0-1-rolling-restart-release-gate-closure.md`
 
-Package: `work/packages/active-20260511-rolling-restart-operation-workflow-rebalancer-handoff-retry-scheduled-v2.md`
+Package: `work/packages/done-20260511-rolling-restart-operation-workflow-rebalancer-handoff-retry-scheduled-v2.md`
 
 Scenario: `rolling-restart`
 
@@ -24,7 +24,7 @@ Current state: The package classified/repaired the rebalancer-handoff retry-sche
 
 ## Next Action
 
-Open or activate a successor for the restored operation_workflow_owner / workflow_progress event-driven dispatch-pending priority recovery frontier; preserve this rebalancer-handoff reduction and do not pursue startup active-gate or publication-presentation residuals until priority_recovery_partition_progress reduces or migrates.
+Activate `work/packages/todo-20260512-rolling-restart-operation-workflow-progress-event-driven-dispatch-pending.md` for the restored operation_workflow_owner / workflow_progress event-driven dispatch-pending priority recovery frontier; preserve this rebalancer-handoff reduction and do not pursue startup active-gate or publication-presentation residuals until priority_recovery_partition_progress reduces or migrates.
 
 ## Proof Ladder
 
@@ -73,8 +73,9 @@ Cross-boundary review: `completed-before-implementation; predecessor review was 
 1. `src/rebalancer/operation-workflow-owner-segment-7-stage-5.js`
 2. `test/rebalancer/operation-workflow-progress-event-driven-reentry.test.js`
 3. `test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js`
-4. `work/packages/active-20260511-rolling-restart-operation-workflow-rebalancer-handoff-retry-scheduled-v2.md`
-5. `work/sprints/active-2026-q2-phase-0-1-rolling-restart-release-gate-closure.md`
-6. `work/sprints/current-blocker.json`
-7. `work/sprints/current-blocker.md`
-8. `work/model-ledger.jsonl`
+4. `work/packages/done-20260511-rolling-restart-operation-workflow-rebalancer-handoff-retry-scheduled-v2.md`
+5. `work/packages/todo-20260512-rolling-restart-operation-workflow-progress-event-driven-dispatch-pending.md`
+6. `work/sprints/active-2026-q2-phase-0-1-rolling-restart-release-gate-closure.md`
+7. `work/sprints/current-blocker.json`
+8. `work/sprints/current-blocker.md`
+9. `work/model-ledger.jsonl`
