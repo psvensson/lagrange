@@ -3,7 +3,7 @@
 <!-- work-package
 {
   "schema": "work-package-v1",
-  "status": "active",
+  "status": "done",
   "opened": "2026-05-12",
   "lane": "scenario-release-gate",
   "scenario": "rolling-restart",
@@ -28,7 +28,7 @@
     "src/control-plane/priority-recovery-snapshot-stage-10.js",
     "test/control-plane/priority-recovery-snapshot-operation-owner-outcome.test.js",
     "work/model-ledger.jsonl",
-    "work/packages/active-20260512-rolling-restart-operation-workflow-progress-coordinator-excludes-node.md",
+    "work/packages/done-20260512-rolling-restart-operation-workflow-progress-coordinator-excludes-node.md",
     "work/packages/todo-20260512-rolling-restart-operation-workflow-progress-serial-wait-event-driven-advance.md",
     "work/packages/todo-20260512-rolling-restart-operation-workflow-progress-coordinator-excludes-node.md",
     "work/packages/done-20260512-rolling-restart-operation-workflow-rebalancer-handoff-needs-operation-coordination-mismatch-classification.md",
@@ -80,7 +80,10 @@
     "resultClassification": "reduced",
     "stopCondition": "continue-local-fix"
   },
-  "predecessor": "work/packages/done-20260512-rolling-restart-operation-workflow-rebalancer-handoff-needs-operation-coordination-mismatch-classification.md"
+  "predecessor": "work/packages/done-20260512-rolling-restart-operation-workflow-rebalancer-handoff-needs-operation-coordination-mismatch-classification.md",
+  "closed": "2026-05-12",
+  "commitAndPushLedgerRequired": true,
+  "successor": "work/packages/todo-20260512-rolling-restart-operation-workflow-progress-serial-wait-event-driven-advance.md"
 }
 -->
 
@@ -136,7 +139,7 @@ classification.
 - [x] Fix subagent recorded or explicitly not needed:
       Agent Codex (019e1ca5-86e6-76f0-bf27-4168a3aebd67) fixed work/packages/done-20260512-rolling-restart-operation-workflow-rebalancer-handoff-needs-operation-coordination-mismatch-classification.md
 - [x] Implementation subagent recorded:
-      Agent Codex (019e1caf-970d-7f62-87c3-19c1641169c8) implemented work/packages/active-20260512-rolling-restart-operation-workflow-progress-coordinator-excludes-node.md
+      Agent Codex (019e1caf-970d-7f62-87c3-19c1641169c8) implemented work/packages/done-20260512-rolling-restart-operation-workflow-progress-coordinator-excludes-node.md
 
 ## Causal Governance
 
@@ -326,3 +329,9 @@ Fresh representative after implementation:
   serial-wait evidence.
 - Successor:
   `work/packages/todo-20260512-rolling-restart-operation-workflow-progress-serial-wait-event-driven-advance.md`.
+
+## Commit And Push Ledger
+
+1. Focused package commit: `d3e4b9b2`
+2. Pushed to: `origin/codex/pending-ack-eligibility-filter`
+3. Commit contains only package-owned files/package-status/allowed sprint handoff: yes

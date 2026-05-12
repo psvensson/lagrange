@@ -66,7 +66,7 @@ The matching playback is:
 
 Latest package:
 
-1. [Rolling Restart Operation Workflow Progress Coordinator Excludes Node](../packages/active-20260512-rolling-restart-operation-workflow-progress-coordinator-excludes-node.md)
+1. [Rolling Restart Operation Workflow Progress Coordinator Excludes Node](../packages/done-20260512-rolling-restart-operation-workflow-progress-coordinator-excludes-node.md)
 2. [Rolling Restart Operation Workflow Rebalancer Handoff Needs Operation Coordination Mismatch Classification](../packages/done-20260512-rolling-restart-operation-workflow-rebalancer-handoff-needs-operation-coordination-mismatch-classification.md)
 3. [Rolling Restart Operation Workflow Rebalancer Handoff Priority Recovery Retry Scheduled](../packages/done-20260512-rolling-restart-operation-workflow-rebalancer-handoff-priority-recovery-retry-scheduled.md)
 4. [Rolling Restart Operation Workflow Progress Priority Recovery Event Wait](../packages/done-20260512-rolling-restart-operation-workflow-progress-priority-recovery-event-wait.md)

@@ -4,7 +4,7 @@
 
 Sprint: `work/sprints/active-2026-q2-phase-0-1-rolling-restart-release-gate-closure.md`
 
-Package: `work/packages/active-20260512-rolling-restart-operation-workflow-progress-coordinator-excludes-node.md`
+Package: `work/packages/done-20260512-rolling-restart-operation-workflow-progress-coordinator-excludes-node.md`
 
 Workflow lane: `scenario-release-gate`
 
@@ -112,7 +112,7 @@ Stop condition: `continue-local-fix`
 1. `src/control-plane/priority-recovery-snapshot-stage-10.js`
 2. `test/control-plane/priority-recovery-snapshot-operation-owner-outcome.test.js`
 3. `work/model-ledger.jsonl`
-4. `work/packages/active-20260512-rolling-restart-operation-workflow-progress-coordinator-excludes-node.md`
+4. `work/packages/done-20260512-rolling-restart-operation-workflow-progress-coordinator-excludes-node.md`
 5. `work/packages/todo-20260512-rolling-restart-operation-workflow-progress-serial-wait-event-driven-advance.md`
 6. `work/packages/todo-20260512-rolling-restart-operation-workflow-progress-coordinator-excludes-node.md`
 7. `work/packages/done-20260512-rolling-restart-operation-workflow-rebalancer-handoff-needs-operation-coordination-mismatch-classification.md`

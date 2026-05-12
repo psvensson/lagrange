@@ -33,7 +33,7 @@
       "a frozen decision must be reopened"
     ]
   },
-  "predecessor": "work/packages/active-20260512-rolling-restart-operation-workflow-progress-coordinator-excludes-node.md"
+  "predecessor": "work/packages/done-20260512-rolling-restart-operation-workflow-progress-coordinator-excludes-node.md"
 }
 -->
 
