@@ -9,6 +9,10 @@ const COMMAND_GROUPS = Object.freeze([
         description: 'Print current blocker, first-read files, proof ladder, and dirty worktree.',
       }),
       Object.freeze({
+        command: 'npm run work:llm-start',
+        description: 'Print combined LLM handoff, doctor suggestions, dirty scope, model ledger, and evidence summary.',
+      }),
+      Object.freeze({
         command: 'npm run work:dirty-scope',
         description: 'Report dirty worktree entries grouped as package-owned, tracker-generated, or unrelated.',
       }),
@@ -19,6 +23,18 @@ const COMMAND_GROUPS = Object.freeze([
       Object.freeze({
         command: 'npm run work:validate',
         description: 'Validate active work-package metadata, checklist state, and lane-required subagent proof.',
+      }),
+      Object.freeze({
+        command: 'npm run work:package:new -- --lane <lane> --title <title> --slug <slug> --owner <owner> --boundary <boundary> --dominant-reason <reason> --next-action <action>',
+        description: 'Scaffold a schema-valid package with Model Fit defaults from the model ledger.',
+      }),
+      Object.freeze({
+        command: 'npm run work:package:schema',
+        description: 'Print the shared work-package schema enums used by templates and validation.',
+      }),
+      Object.freeze({
+        command: 'npm run work:subagent-prompt -- --role <role> --package <package>',
+        description: 'Generate bounded review, fix, or implementation subagent prompts and ledger line guidance.',
       }),
       Object.freeze({
         command: 'npm run steering:llm:pack',
@@ -45,6 +61,10 @@ const COMMAND_GROUPS = Object.freeze([
         command: 'npm run audit:owner-boundary-segments -- <files...>',
         description: 'Print extraction guidance for oversized owner-boundary segment files.',
       }),
+      Object.freeze({
+        command: 'npm run work:oversized-next -- --markdown',
+        description: 'Turn oversized owner-boundary files into package-ready extraction candidates.',
+      }),
     ]),
   }),
   Object.freeze({
@@ -69,6 +89,14 @@ const COMMAND_GROUPS = Object.freeze([
       Object.freeze({
         command: 'npm run analyze:owner-glossary',
         description: 'Print canonical topology owner, boundary, reason, and semantic-state glossary.',
+      }),
+      Object.freeze({
+        command: 'npm run analyze:owner-files -- <owner> [boundary]',
+        description: 'Find files most associated with an owner and optional boundary.',
+      }),
+      Object.freeze({
+        command: 'npm run analyze:priority-recovery-residuals -- <artifact>',
+        description: 'Extract priority-recovery residual witnesses grouped by owner and boundary.',
       }),
       Object.freeze({
         command: 'npm run work:package:evidence-block -- <artifact>',

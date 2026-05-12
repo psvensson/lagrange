@@ -35,38 +35,63 @@ Use the tracker utility for current sprint/package mechanics:
 2. `npm run work:context` prints a compact human and LLM handoff with the
    current blocker, first-read files, proof ladder, useful commands, and dirty
    worktree summary.
-3. `npm run work:dirty-scope` prints only the dirty worktree scope report,
+3. `npm run work:llm-start` prints a fuller LLM startup bundle: work context,
+   package doctor suggestions, dirty scope, model-ledger summary, and
+   representative evidence summary for the active artifact.
+4. `npm run work:dirty-scope` prints only the dirty worktree scope report,
    grouped into package-owned, tracker-generated, and unrelated entries. Add
    `-- --package work/packages/active-...md` to scope the report to a package
    other than the generated current blocker.
-4. `npm run work:model-ledger -- summary` prints recent model, reasoning
+5. `npm run work:model-ledger -- summary` prints recent model, reasoning
    effort, task class, package class, intended minimum model, scope shape,
    escalation, bailout, outcome, validation, correction-loop, and
     review-finding signals with a simple advisory recommendation to escalate,
     de-escalate, or hold effort.
-5. `npm run work:package:doctor -- work/packages/active-...md` prints a compact
+6. `npm run work:package:doctor -- work/packages/active-...md` prints a compact
    package summary plus the same validation findings used by the tracker. It is
    a local diagnostic aid only; it does not replace real subagent sequencing.
-6. `npm run work:evidence-summary -- <artifact>` prints a compact deterministic
+   Add `-- --suggest` or `-- --fix-dry-run` when validation failed and the LLM
+   needs concrete schema or ledger guidance before editing the package.
+7. `npm run work:package:schema` prints the shared status, lane,
+   causal-outcome, scenario-classification, stop-condition, and bounded-progress
+   enums used by templates and validation.
+8. `npm run work:package:new -- --lane <lane> --title <title> --slug <slug>
+   --owner <owner> --boundary <boundary> --dominant-reason <reason>
+   --next-action <action>` scaffolds a schema-valid work package. The
+   scaffolder pre-fills Model Fit from the lane and model-ledger summary unless
+   explicit Model Fit flags are provided.
+9. `npm run work:evidence-summary -- <artifact>` prints a compact deterministic
    topology plus causal-model summary for LLM handoff before reading raw logs or
    large harness segment files.
-7. `npm run work:validate` checks active and metadata-bearing packages for
+10. `npm run analyze:owner-files -- <owner> [boundary]` prints a ranked
+    owner-to-files index so agents can inspect likely owner files before broad
+    text search.
+11. `npm run analyze:priority-recovery-residuals -- <artifact>` extracts
+    priority-recovery partition witnesses by owner and boundary and prints
+    package scaffolding commands for deliberate residual splits.
+12. `npm run work:subagent-prompt -- --role review|fix|implementation
+    --package work/packages/active-...md` generates bounded role prompts and
+    the ledger-line shape to record after a real subagent returns.
+13. `npm run work:oversized-next -- --markdown` turns oversized
+    owner-boundary segment files into package-ready extraction candidates so
+    file-size debt stays actionable rather than a broad background concern.
+14. `npm run work:validate` checks active and metadata-bearing packages for
    filename/header drift, stale open checklist items, and lane-required
    Subagent Sequencing Ledgers.
-8. `npm run work:package:close -- --write work/packages/active-...md` renames a
+15. `npm run work:package:close -- --write work/packages/active-...md` renames a
     package to `done-...` only after open checklist items are closed.
-9. `npm run work:package:migrate -- --write work/packages/active-...md`
+16. `npm run work:package:migrate -- --write work/packages/active-...md`
     `work/packages/active-successor.md` performs the same closure gate while
     recording a successor handoff.
-10. `npm run work:package:move -- --write work/packages/todo-...md --to active`
+17. `npm run work:package:move -- --write work/packages/todo-...md --to active`
     performs non-terminal state moves.
-11. `npm run work:package:evidence-block -- <artifact>` generates a Markdown
+18. `npm run work:package:evidence-block -- <artifact>` generates a Markdown
     owner/evidence block from topology-convergence analyzer output for package
     migration or contraction notes.
-12. After each completed package slice, create one focused git commit containing
+19. After each completed package slice, create one focused git commit containing
     only that slice's package-owned changes and push the current branch before
     starting the next slice.
-13. If the slice cannot be pushed because the remote or credentials are
+20. If the slice cannot be pushed because the remote or credentials are
     unavailable, record the unpushed commit SHA and reason in the package or
    sprint handoff. If package-owned and unrelated dirty changes cannot be
    separated safely, stop for human direction instead of committing a mixed

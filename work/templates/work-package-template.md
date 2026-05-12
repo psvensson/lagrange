@@ -112,6 +112,11 @@ Required for active metadata-bearing packages. Use `gpt-5.3-codex-spark` only
 for a bounded leaf slice; otherwise choose a package class and intended model
 that records why escalation is already required.
 
+Prefer creating new packages with `npm run work:package:new -- ...` so the
+metadata, lane defaults, and Model Fit fields come from the shared schema.
+Use `npm run work:package:schema` before hand-editing enum fields such as
+representative outcomes, scenario result classifications, and stop conditions.
+
 - Package class: `bounded-implementation`
 - Intended minimum model: `gpt-5.3-codex-spark`
 - Scope shape: `leaf-slice`
@@ -273,15 +278,30 @@ Required for scenario-driven packages after blocker migration.
 - [ ] Detect branch lattices.
 - [ ] If dirty worktree scope matters, run `npm run work:dirty-scope` and
       classify package-owned versus unrelated entries before committing.
+- [ ] If the LLM needs the whole startup bundle, run `npm run work:llm-start`
+      before reading raw logs or large segment files.
 - [ ] If package status or validation ownership is unclear, run
       `npm run work:package:doctor -- <package>` and record the concrete
       findings without treating it as a subagent replacement.
+- [ ] If package validation fails on schema, ledger, or enum values, rerun the
+      doctor with `-- --suggest` or `-- --fix-dry-run` before manually editing
+      metadata.
 - [ ] If representative evidence is involved, run
       `npm run work:evidence-summary -- <artifact>` before reading raw logs or
       large harness segment files.
+- [ ] If owner-file discovery is unclear, run
+      `npm run analyze:owner-files -- <owner> [boundary]`.
+- [ ] If priority-recovery residuals must be classified, run
+      `npm run analyze:priority-recovery-residuals -- <artifact>` instead of
+      ad hoc `jq` extraction.
+- [ ] If a real subagent is required, run
+      `npm run work:subagent-prompt -- --role <role> --package <package>` to
+      generate the bounded role prompt and ledger-line guidance.
 - [ ] If oversized segment files block review, run
       `npm run audit:owner-boundary-segments -- <files...>` and record the
       extraction guidance or the reason extraction is out of scope.
+- [ ] If broad file-size debt needs the next bounded package, run
+      `npm run work:oversized-next -- --markdown`.
 
 ## Implementation Tasks
 

@@ -255,5 +255,8 @@ if (isDirectRun()) {
 }
 
 export {
+  buildExplicitFileSizeEntries,
+  buildFileSizeEntries,
   buildOwnerBoundaryGuidanceEntries,
+  FILE_SIZE_SCOPE,
 };

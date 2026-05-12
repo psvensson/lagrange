@@ -613,6 +613,33 @@ describe('work tracker package doctor', () => {
     assert.deepEqual(report.errors, []);
     assert.match(rendered, /Scenario causal closure: recorded/u);
   });
+
+  it('prints concrete fix dry-run suggestions for schema failures', () => {
+    const invalidDoctorContent = WORK_TRACKER_DOCTOR_CONTENT.replace(
+      '"scenario": "none"',
+      '"scenario": "rolling-restart"',
+    ).replace(
+      '"modelFit": {',
+      '"causalGovernance": ' +
+        JSON.stringify(CAUSAL_GOVERNANCE_INVALID_METADATA.causalGovernance) +
+        ',\n    "scenarioCausalClosure": ' +
+        JSON.stringify(
+          SCENARIO_CAUSAL_CLOSURE_INVALID_METADATA.scenarioCausalClosure,
+        ) +
+        ',\n    "modelFit": {',
+    );
+    const report = buildPackageDoctorLines(
+      WORK_TRACKER_ACTIVE_DOCTOR_FILE,
+      invalidDoctorContent,
+      {fixDryRun: true},
+    );
+    const rendered = report.lines.join('\n');
+
+    assert.notDeepEqual(report.errors, []);
+    assert.match(rendered, /## Fix Dry Run/u);
+    assert.match(rendered, /work:package:schema/u);
+    assert.match(rendered, /analyze:topology-convergence/u);
+  });
 });
 
 describe('work tracker commit and push ledger validation', () => {

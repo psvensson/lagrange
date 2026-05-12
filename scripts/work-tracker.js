@@ -4,6 +4,15 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import process from 'node:process';
 import {fileURLToPath} from 'node:url';
+import {
+  CAUSAL_GOVERNANCE_PENDING_OUTCOME,
+  CAUSAL_GOVERNANCE_VALID_OUTCOMES,
+  SCENARIO_CAUSAL_CLOSURE_VALID_RESULT_CLASSIFICATIONS,
+  SCENARIO_CAUSAL_CLOSURE_VALID_STOP_CONDITIONS,
+  SUBAGENT_OPTIONAL_LANES,
+  VALID_PACKAGE_STATUSES,
+  WORK_PACKAGE_METADATA_SCHEMA,
+} from './work-package-schema.js';
 
 const ENCODING_UTF8 = 'utf8';
 const EMPTY_TEXT = '';
@@ -17,20 +26,7 @@ const STATUS_ACTIVE = 'active';
 const STATUS_DONE = 'done';
 const STATUS_SUPERSEDED = 'superseded';
 const STATUS_TODO = 'todo';
-const VALID_PACKAGE_STATUSES = Object.freeze([
-  STATUS_ACTIVE,
-  STATUS_DONE,
-  STATUS_SUPERSEDED,
-  STATUS_TODO,
-]);
-const WORK_PACKAGE_METADATA_SCHEMA = 'work-package-v1';
 const METADATA_LANE_FIELD = 'lane';
-const LANE_READ_REVIEW_DOC_ONLY = 'read-review-doc-only';
-const LANE_LIGHTWEIGHT_MAINTENANCE = 'lightweight-maintenance';
-const SUBAGENT_OPTIONAL_LANES = Object.freeze([
-  LANE_READ_REVIEW_DOC_ONLY,
-  LANE_LIGHTWEIGHT_MAINTENANCE,
-]);
 const WORK_ROOT = 'work';
 const WORK_PACKAGES_DIR = path.join(WORK_ROOT, 'packages');
 const WORK_SPRINTS_DIR = path.join(WORK_ROOT, 'sprints');
@@ -89,17 +85,6 @@ const CAUSAL_GOVERNANCE_REPRESENTATIVE_OUTCOME_FIELD =
   'representativeOutcome';
 const CAUSAL_GOVERNANCE_CAUSAL_DEBT_FIELD = 'causalDebt';
 const CAUSAL_GOVERNANCE_CROSS_BOUNDARY_REVIEW_FIELD = 'crossBoundaryReview';
-const CAUSAL_GOVERNANCE_PENDING_OUTCOME = 'pending-before-rerun';
-const CAUSAL_GOVERNANCE_VALID_OUTCOMES = Object.freeze([
-  'representative-green',
-  'reduced',
-  'same-frontier',
-  'migrated',
-  'classification-only',
-  'architecture-gap',
-  'contradictory',
-  CAUSAL_GOVERNANCE_PENDING_OUTCOME,
-]);
 const CAUSAL_GOVERNANCE_REQUIRED_FIELDS = Object.freeze([
   CAUSAL_GOVERNANCE_HYPOTHESIS_FIELD,
   CAUSAL_GOVERNANCE_STOP_CONDITION_FIELD,
@@ -149,25 +134,6 @@ const SCENARIO_CAUSAL_CLOSURE_TEXT_FIELDS = Object.freeze([
 const SCENARIO_CAUSAL_CLOSURE_ARRAY_FIELDS = Object.freeze([
   SCENARIO_CAUSAL_CLOSURE_PHASE_CHAIN_FIELD,
   SCENARIO_CAUSAL_CLOSURE_DOWNSTREAM_BLOCKERS_FIELD,
-]);
-const SCENARIO_CAUSAL_CLOSURE_VALID_RESULT_CLASSIFICATIONS = Object.freeze([
-  'pending-before-probe',
-  'representative-green',
-  'reduced',
-  'same-frontier',
-  'migrated',
-  'classification-only',
-  'architecture-gap',
-  'contradictory',
-]);
-const SCENARIO_CAUSAL_CLOSURE_VALID_STOP_CONDITIONS = Object.freeze([
-  'continue-local-fix',
-  'bounded-non-frontier',
-  'migrate-owner-boundary',
-  'classification-only-stop',
-  'architecture-gap-stop',
-  'representative-green',
-  'human-escalation',
 ]);
 const SCENARIO_CAUSAL_CLOSURE_PROGRESS_MECHANISM_PATTERN =
   /\b(?:wake|retry|timeout|reconcile|drain|dispatch|delivery|timer|advance|bounded)\b/iu;
@@ -244,6 +210,8 @@ const CLI_FLAG_WRITE = '--write';
 const CLI_FLAG_STATUS = '--status';
 const CLI_FLAG_TO = '--to';
 const CLI_FLAG_SUCCESSOR = '--successor';
+const CLI_FLAG_SUGGEST = '--suggest';
+const CLI_FLAG_FIX_DRY_RUN = '--fix-dry-run';
 const CLI_COMMAND_CURRENT_BLOCKER = 'current-blocker';
 const CLI_COMMAND_VALIDATE = 'validate';
 const CLI_COMMAND_DOCTOR = 'doctor';
@@ -253,6 +221,8 @@ const CLI_COMMAND_MOVE = 'move';
 const ERROR_NO_ACTIVE_PACKAGE = 'No active work package was found.';
 const ERROR_NO_ACTIVE_SPRINT = 'No active sprint file was found.';
 const DEFAULT_UNKNOWN = 'unknown';
+const DOCTOR_SUGGESTION_NONE =
+  'No deterministic suggestions are available for these findings.';
 
 function printUsage() {
   console.log([
@@ -1369,7 +1339,71 @@ function summarizeDoctorMetadata(metadata = {}) {
   };
 }
 
-export function buildPackageDoctorLines(filePath, content) {
+function buildDoctorSuggestion(error) {
+  if (/representativeOutcome must be one of/iu.test(error)) {
+    return 'Use one of the schema outcomes from `npm run work:package:schema`; ' +
+      'active packages normally use `pending-before-rerun`, while completed ' +
+      'classification packages use `classification-only`, `reduced`, ' +
+      '`migrated`, `same-frontier`, `representative-green`, ' +
+      '`architecture-gap`, or `contradictory`.';
+  }
+  if (/resultClassification must be one of/iu.test(error)) {
+    return 'Use one of the scenario result classifications from ' +
+      '`npm run work:package:schema`; for classification-only residual work, ' +
+      'prefer `classification-only` when the split is recorded and ' +
+      '`pending-before-probe` before proof runs.';
+  }
+  if (/stopCondition must be one of/iu.test(error)) {
+    return 'Use a schema stop condition from `npm run work:package:schema`; ' +
+      'classification-only packages normally use `classification-only-stop`, ' +
+      'owner migrations use `migrate-owner-boundary`, and local fixes use ' +
+      '`continue-local-fix`.';
+  }
+  if (/missingCausalEdgeProbe must name a focused command/iu.test(error)) {
+    return 'Replace prose probe descriptions with an executable command, for ' +
+      'example `npm run analyze:topology-convergence -- <artifact> --explain ' +
+      '<edge>` or `npm test -- <focused-test.js>`.';
+  }
+  if (/Subagent Sequencing Ledger/iu.test(error)) {
+    return 'Use `npm run work:subagent-prompt -- --role review|fix|' +
+      'implementation --package <package>` to generate bounded role prompts, ' +
+      'then record the returned real agent id in the ledger.';
+  }
+  if (/Model Fit section is required/iu.test(error)) {
+    return 'Use `npm run work:package:new -- --lane <lane> ...` to scaffold a ' +
+      'package with schema-valid Model Fit fields prefilled from the model ledger.';
+  }
+  if (/Commit And Push Ledger is required/iu.test(error)) {
+    return 'After validation and package closure, commit only package-owned ' +
+      'files, push the branch, and record commit SHA, remote/branch, and ' +
+      '`yes` for focused-slice containment.';
+  }
+  return EMPTY_TEXT;
+}
+
+function buildDoctorSuggestions(errors = []) {
+  return [
+    ...new Set(
+      errors
+        .map(buildDoctorSuggestion)
+        .filter((suggestion) => suggestion.length > NUM_ZERO),
+    ),
+  ];
+}
+
+function appendDoctorSuggestions(lines, errors, heading) {
+  const suggestions = buildDoctorSuggestions(errors);
+  lines.push('', heading);
+  if (suggestions.length === NUM_ZERO) {
+    lines.push(`- ${DOCTOR_SUGGESTION_NONE}`);
+    return;
+  }
+  for (const suggestion of suggestions) {
+    lines.push(`- ${suggestion}`);
+  }
+}
+
+export function buildPackageDoctorLines(filePath, content, options = {}) {
   const relativePath = normalizeRelativePath(filePath);
   const fileStatus = getPackageStatusFromPath(filePath) || DEFAULT_UNKNOWN;
   const errors = [];
@@ -1444,6 +1478,13 @@ export function buildPackageDoctorLines(filePath, content) {
       lines.push(`- ${error}`);
     }
   }
+  if (options.suggest || options.fixDryRun) {
+    appendDoctorSuggestions(
+      lines,
+      errors,
+      options.fixDryRun ? '## Fix Dry Run' : '## Suggestions',
+    );
+  }
   return {
     lines,
     errors,
@@ -1466,7 +1507,10 @@ async function resolveDoctorPackagePath(args) {
 async function doctorCommand(args) {
   const packagePath = await resolveDoctorPackagePath(args);
   const content = await readTextFile(packagePath);
-  const report = buildPackageDoctorLines(packagePath, content);
+  const report = buildPackageDoctorLines(packagePath, content, {
+    suggest: args.includes(CLI_FLAG_SUGGEST),
+    fixDryRun: args.includes(CLI_FLAG_FIX_DRY_RUN),
+  });
   console.log(report.lines.join(NEWLINE));
   if (report.errors.length > NUM_ZERO) {
     process.exit(EXIT_FAILURE);

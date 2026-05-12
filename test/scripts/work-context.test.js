@@ -249,11 +249,16 @@ const FULL_STEERING_SYSTEM_PATH = '.kiro/steering/system guidelines.md';
 const BOOTSTRAP_OWNER_CARD_PATH = 'src/bootstrap/README.md';
 const PLAYBACK_FAILURE_BUNDLE_PATH = TEST_PLAYBACK_PATH + 'failure-bundle.json';
 const WORK_CONTEXT_COMMAND = 'npm run work:current-blocker';
+const WORK_LLM_START_COMMAND = 'npm run work:llm-start';
 const WORK_VALIDATE_COMMAND = 'npm run work:validate';
 const PACKAGE_DOCTOR_COMMAND =
   'npm run work:package:doctor -- ' + TEST_PACKAGE_PATH;
+const PACKAGE_DOCTOR_SUGGEST_COMMAND =
+  'npm run work:package:doctor -- --suggest ' + TEST_PACKAGE_PATH;
 const EVIDENCE_SUMMARY_ARTIFACT_COMMAND =
   'npm run work:evidence-summary -- ' + TEST_ARTIFACT_PATH;
+const PRIORITY_RECOVERY_RESIDUALS_COMMAND =
+  'npm run analyze:priority-recovery-residuals -- ' + TEST_ARTIFACT_PATH;
 const EVIDENCE_SUMMARY_PLAYBACK_COMMAND =
   'npm run work:evidence-summary -- ' + PLAYBACK_FAILURE_BUNDLE_PATH;
 const DISTRIBUTED_FAILURE_COMMAND =
@@ -319,12 +324,15 @@ test('work context advertises triage commands before raw artifact reads',
     const rendered = lines.join('\n');
 
     t.equal(commands[0], WORK_CONTEXT_COMMAND);
-    t.equal(commands[1], WORK_VALIDATE_COMMAND);
-    t.equal(commands[2], PACKAGE_DOCTOR_COMMAND);
-    t.equal(commands[3], EVIDENCE_SUMMARY_ARTIFACT_COMMAND);
+    t.equal(commands[1], WORK_LLM_START_COMMAND);
+    t.equal(commands[2], WORK_VALIDATE_COMMAND);
+    t.equal(commands[3], PACKAGE_DOCTOR_COMMAND);
+    t.equal(commands[4], PACKAGE_DOCTOR_SUGGEST_COMMAND);
+    t.equal(commands[5], EVIDENCE_SUMMARY_ARTIFACT_COMMAND);
     t.ok(commands.includes(DISTRIBUTED_FAILURE_COMMAND));
     t.ok(commands.includes(TOPOLOGY_ARTIFACT_COMMAND));
     t.ok(commands.includes(CAUSAL_ARTIFACT_COMMAND));
+    t.ok(commands.includes(PRIORITY_RECOVERY_RESIDUALS_COMMAND));
     t.ok(commands.includes(EVIDENCE_SUMMARY_PLAYBACK_COMMAND));
     t.ok(commands.includes(TOPOLOGY_PLAYBACK_COMMAND));
     t.ok(commands.includes(CAUSAL_PLAYBACK_COMMAND));

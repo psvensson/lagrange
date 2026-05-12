@@ -51,9 +51,14 @@ const WORK_README_PATH = path.join('work', 'README.md');
 const GIT_COMMAND = 'git';
 const GIT_STATUS_ARGS = Object.freeze(['status', '--short']);
 const NPM_RUN_WORK_CURRENT_BLOCKER_COMMAND = 'npm run work:current-blocker';
+const NPM_RUN_WORK_LLM_START_COMMAND = 'npm run work:llm-start';
 const NPM_RUN_WORK_VALIDATE_COMMAND = 'npm run work:validate';
 const NPM_RUN_WORK_PACKAGE_DOCTOR_COMMAND = 'npm run work:package:doctor --';
+const NPM_RUN_WORK_PACKAGE_DOCTOR_SUGGEST_COMMAND =
+  'npm run work:package:doctor -- --suggest';
 const NPM_RUN_WORK_EVIDENCE_SUMMARY_COMMAND = 'npm run work:evidence-summary --';
+const ANALYZE_PRIORITY_RECOVERY_RESIDUALS_COMMAND =
+  'npm run analyze:priority-recovery-residuals --';
 const ANALYZE_DISTRIBUTED_FAILURE_COMMAND =
   'npm run analyze:distributed-failure -- --report';
 const ANALYZE_TOPOLOGY_CONVERGENCE_COMMAND =
@@ -1052,11 +1057,17 @@ function buildUsefulCommands(currentBlocker) {
   const runtimeTouchedFiles = buildRuntimeTouchedFiles(currentBlocker);
   const commands = [
     NPM_RUN_WORK_CURRENT_BLOCKER_COMMAND,
+    NPM_RUN_WORK_LLM_START_COMMAND,
     NPM_RUN_WORK_VALIDATE_COMMAND,
   ];
   if (pathHasRealValue(currentBlocker.package)) {
     commands.push(
       commandWithPaths(NPM_RUN_WORK_PACKAGE_DOCTOR_COMMAND, [
+        currentBlocker.package,
+      ]),
+    );
+    commands.push(
+      commandWithPaths(NPM_RUN_WORK_PACKAGE_DOCTOR_SUGGEST_COMMAND, [
         currentBlocker.package,
       ]),
     );
@@ -1079,6 +1090,11 @@ function buildUsefulCommands(currentBlocker) {
     );
     commands.push(
       commandWithPaths(ANALYZE_CAUSAL_MODEL_COMMAND, [
+        currentBlocker.artifact,
+      ]),
+    );
+    commands.push(
+      commandWithPaths(ANALYZE_PRIORITY_RECOVERY_RESIDUALS_COMMAND, [
         currentBlocker.artifact,
       ]),
     );

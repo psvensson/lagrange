@@ -12,8 +12,14 @@ const ORIENTATION_GROUP_TITLE = 'Orientation';
 const FOCUSED_VALIDATION_GROUP_TITLE = 'Focused Validation';
 const REPORT_TRIAGE_GROUP_TITLE = 'Report And Triage';
 const WORK_CONTEXT_COMMAND = 'npm run work:context';
+const WORK_LLM_START_COMMAND = 'npm run work:llm-start';
 const WORK_DIRTY_SCOPE_COMMAND = 'npm run work:dirty-scope';
 const MODEL_LEDGER_SUMMARY_COMMAND = 'npm run work:model-ledger -- summary';
+const PACKAGE_NEW_COMMAND =
+  'npm run work:package:new -- --lane <lane> --title <title> --slug <slug> --owner <owner> --boundary <boundary> --dominant-reason <reason> --next-action <action>';
+const PACKAGE_SCHEMA_COMMAND = 'npm run work:package:schema';
+const SUBAGENT_PROMPT_COMMAND =
+  'npm run work:subagent-prompt -- --role <role> --package <package>';
 const GUIDELINE_LITERALS_COMMAND =
   'npm run audit:guideline:literals -- <files...>';
 const CONSTANT_NAME_GUARD_COMMAND =
@@ -24,6 +30,7 @@ const GUIDELINE_BOUNDARY_MODE_COMMAND =
   'npm run audit:guideline:boundary-mode-contracts -- <files...>';
 const OWNER_BOUNDARY_SEGMENTS_COMMAND =
   'npm run audit:owner-boundary-segments -- <files...>';
+const OVERSIZED_NEXT_COMMAND = 'npm run work:oversized-next -- --markdown';
 const SCOPED_METRICS_COMMAND = 'npm run test:metrics:scoped -- <files...>';
 const DISTRIBUTED_FAILURE_COMMAND =
   'npm run analyze:distributed-failure -- --report <path>';
@@ -33,6 +40,9 @@ const OWNER_EXPLAIN_COMMAND =
   'npm run analyze:owner-explain -- <artifact> <edge-or-alias>';
 const OWNER_DECISIONS_COMMAND = 'npm run analyze:owner-decisions';
 const OWNER_GLOSSARY_COMMAND = 'npm run analyze:owner-glossary';
+const OWNER_FILES_COMMAND = 'npm run analyze:owner-files -- <owner> [boundary]';
+const PRIORITY_RESIDUALS_COMMAND =
+  'npm run analyze:priority-recovery-residuals -- <artifact>';
 const PACKAGE_EVIDENCE_BLOCK_COMMAND =
   'npm run work:package:evidence-block -- <artifact>';
 const HARNESS_SUMMARY_COMMAND =
@@ -67,6 +77,8 @@ const HARNESS_SUMMARY_DESCRIPTION =
   'List latest harness reports by scenario and status.';
 const MODEL_LEDGER_SUMMARY_DESCRIPTION =
   'Summarize recent model and reasoning-effort fit signals.';
+const LLM_START_DESCRIPTION =
+  'Print combined LLM handoff, doctor suggestions, dirty scope, model ledger, and evidence summary.';
 const COMMAND_ENTRY_SEPARATOR = ' - ';
 const COMMAND_CHAIN_SEPARATOR = ' && ';
 const NONEMPTY_COMMAND_GROUP_COUNT = 0;
@@ -83,6 +95,8 @@ const WORK_CONTEXT_ORIENTATION_MESSAGE =
   'work context should remain the first orientation entrypoint';
 const MODEL_LEDGER_ORIENTATION_MESSAGE =
   'model-ledger summary should be discoverable from orientation';
+const LLM_START_ORIENTATION_MESSAGE =
+  'combined llm-start handoff should be discoverable from orientation';
 const DIRTY_SCOPE_ORIENTATION_MESSAGE =
   'dirty-scope report should be discoverable from orientation';
 const GUIDELINE_LITERALS_GROUP_MESSAGE =
@@ -93,6 +107,8 @@ const GUIDELINE_BOUNDARY_MODE_GROUP_MESSAGE =
   'boundary-mode checks should be discoverable from guideline guardrails';
 const OWNER_BOUNDARY_SEGMENTS_GROUP_MESSAGE =
   'owner-boundary segment guidance should be discoverable from focused validation';
+const OVERSIZED_NEXT_GROUP_MESSAGE =
+  'oversized file package candidates should be discoverable from focused validation';
 const DISTRIBUTED_FAILURE_GROUP_MESSAGE =
   'distributed report analyzer should be discoverable from report triage';
 const TOPOLOGY_CONVERGENCE_GROUP_MESSAGE =
@@ -103,6 +119,10 @@ const OWNER_DECISIONS_GROUP_MESSAGE =
   'owner decision table should be discoverable from report triage';
 const OWNER_GLOSSARY_GROUP_MESSAGE =
   'owner glossary should be discoverable from report triage';
+const OWNER_FILES_GROUP_MESSAGE =
+  'owner file index should be discoverable from report triage';
+const PRIORITY_RESIDUALS_GROUP_MESSAGE =
+  'priority residual extraction should be discoverable from report triage';
 const PACKAGE_EVIDENCE_BLOCK_GROUP_MESSAGE =
   'package evidence block should be discoverable from report triage';
 const HARNESS_SUMMARY_GROUP_MESSAGE =
@@ -118,12 +138,27 @@ const ANALYZE_OWNER_GLOSSARY_SCRIPT_COMMAND =
   'node scripts/analyze-topology-convergence.js --glossary';
 const WORK_DIRTY_SCOPE_SCRIPT = 'work:dirty-scope';
 const WORK_DIRTY_SCOPE_SCRIPT_COMMAND = 'node scripts/work-context.js --dirty-scope';
+const WORK_LLM_START_SCRIPT = 'work:llm-start';
+const WORK_LLM_START_SCRIPT_COMMAND = 'node scripts/work-llm-start.js';
+const WORK_PACKAGE_NEW_SCRIPT = 'work:package:new';
+const WORK_PACKAGE_NEW_SCRIPT_COMMAND = 'node scripts/work-package-new.js';
+const WORK_PACKAGE_SCHEMA_SCRIPT = 'work:package:schema';
+const WORK_PACKAGE_SCHEMA_SCRIPT_COMMAND = 'node scripts/work-package-schema.js';
+const WORK_SUBAGENT_PROMPT_SCRIPT = 'work:subagent-prompt';
+const WORK_SUBAGENT_PROMPT_SCRIPT_COMMAND = 'node scripts/work-subagent-prompt.js';
 const PACKAGE_EVIDENCE_BLOCK_SCRIPT = 'work:package:evidence-block';
 const PACKAGE_EVIDENCE_BLOCK_SCRIPT_COMMAND =
   'node scripts/analyze-topology-convergence.js --package-evidence-block';
 const OWNER_BOUNDARY_SEGMENTS_SCRIPT = 'audit:owner-boundary-segments';
 const OWNER_BOUNDARY_SEGMENTS_SCRIPT_COMMAND =
   'node scripts/check-file-size-thresholds.js --owner-boundary-guidance';
+const OVERSIZED_NEXT_SCRIPT = 'work:oversized-next';
+const OVERSIZED_NEXT_SCRIPT_COMMAND = 'node scripts/work-oversized-next.js';
+const ANALYZE_OWNER_FILES_SCRIPT = 'analyze:owner-files';
+const ANALYZE_OWNER_FILES_SCRIPT_COMMAND = 'node scripts/analyze-owner-files.js';
+const ANALYZE_PRIORITY_RESIDUALS_SCRIPT = 'analyze:priority-recovery-residuals';
+const ANALYZE_PRIORITY_RESIDUALS_SCRIPT_COMMAND =
+  'node scripts/analyze-priority-recovery-residuals.js';
 
 function findCommandEntry(command) {
   for (const group of COMMAND_GROUPS) {
@@ -147,13 +182,18 @@ test(ORIENTATION_GUARDRAILS_TEST_NAME, (t) => {
   const rendered = renderCommandList();
 
   t.match(rendered, WORK_CONTEXT_COMMAND);
+  t.match(rendered, WORK_LLM_START_COMMAND);
   t.match(rendered, WORK_DIRTY_SCOPE_COMMAND);
   t.match(rendered, MODEL_LEDGER_SUMMARY_COMMAND);
+  t.match(rendered, PACKAGE_NEW_COMMAND);
+  t.match(rendered, PACKAGE_SCHEMA_COMMAND);
+  t.match(rendered, SUBAGENT_PROMPT_COMMAND);
   t.match(rendered, GUIDELINE_LITERALS_COMMAND);
   t.match(rendered, CONSTANT_NAME_GUARD_COMMAND);
   t.match(rendered, GUIDELINE_DECISION_BOUNDARY_COMMAND);
   t.match(rendered, GUIDELINE_BOUNDARY_MODE_COMMAND);
   t.match(rendered, OWNER_BOUNDARY_SEGMENTS_COMMAND);
+  t.match(rendered, OVERSIZED_NEXT_COMMAND);
   t.match(rendered, SCOPED_METRICS_COMMAND);
   t.match(rendered, RUNTIME_GRAMMAR_FILE_COMMAND);
   t.notMatch(rendered, RUNTIME_GRAMMAR_BROAD_COMMAND);
@@ -170,6 +210,11 @@ test(ORIENTATION_GUARDRAILS_TEST_NAME, (t) => {
     findCommandEntry(MODEL_LEDGER_SUMMARY_COMMAND).group.title,
     ORIENTATION_GROUP_TITLE,
     MODEL_LEDGER_ORIENTATION_MESSAGE,
+  );
+  t.equal(
+    findCommandEntry(WORK_LLM_START_COMMAND).group.title,
+    ORIENTATION_GROUP_TITLE,
+    LLM_START_ORIENTATION_MESSAGE,
   );
   t.equal(
     findCommandEntry(WORK_DIRTY_SCOPE_COMMAND).group.title,
@@ -196,6 +241,11 @@ test(ORIENTATION_GUARDRAILS_TEST_NAME, (t) => {
     FOCUSED_VALIDATION_GROUP_TITLE,
     OWNER_BOUNDARY_SEGMENTS_GROUP_MESSAGE,
   );
+  t.equal(
+    findCommandEntry(OVERSIZED_NEXT_COMMAND).group.title,
+    FOCUSED_VALIDATION_GROUP_TITLE,
+    OVERSIZED_NEXT_GROUP_MESSAGE,
+  );
   t.match(
     rendered,
     `${WORK_DIRTY_SCOPE_COMMAND}\`${COMMAND_ENTRY_SEPARATOR}` +
@@ -205,6 +255,11 @@ test(ORIENTATION_GUARDRAILS_TEST_NAME, (t) => {
     rendered,
     `${MODEL_LEDGER_SUMMARY_COMMAND}\`${COMMAND_ENTRY_SEPARATOR}` +
       MODEL_LEDGER_SUMMARY_DESCRIPTION,
+  );
+  t.match(
+    rendered,
+    `${WORK_LLM_START_COMMAND}\`${COMMAND_ENTRY_SEPARATOR}` +
+      LLM_START_DESCRIPTION,
   );
   t.match(
     rendered,
@@ -243,6 +298,8 @@ test(REPORT_TRIAGE_TEST_NAME, (t) => {
     `${OWNER_GLOSSARY_COMMAND}\`${COMMAND_ENTRY_SEPARATOR}` +
       OWNER_GLOSSARY_DESCRIPTION,
   );
+  t.match(rendered, OWNER_FILES_COMMAND);
+  t.match(rendered, PRIORITY_RESIDUALS_COMMAND);
   t.match(
     rendered,
     `${PACKAGE_EVIDENCE_BLOCK_COMMAND}\`${COMMAND_ENTRY_SEPARATOR}` +
@@ -277,6 +334,16 @@ test(REPORT_TRIAGE_TEST_NAME, (t) => {
     findCommandEntry(OWNER_GLOSSARY_COMMAND).group.title,
     REPORT_TRIAGE_GROUP_TITLE,
     OWNER_GLOSSARY_GROUP_MESSAGE,
+  );
+  t.equal(
+    findCommandEntry(OWNER_FILES_COMMAND).group.title,
+    REPORT_TRIAGE_GROUP_TITLE,
+    OWNER_FILES_GROUP_MESSAGE,
+  );
+  t.equal(
+    findCommandEntry(PRIORITY_RESIDUALS_COMMAND).group.title,
+    REPORT_TRIAGE_GROUP_TITLE,
+    PRIORITY_RESIDUALS_GROUP_MESSAGE,
   );
   t.equal(
     findCommandEntry(PACKAGE_EVIDENCE_BLOCK_COMMAND).group.title,
@@ -321,8 +388,36 @@ test(RUNTIME_GRAMMAR_TEST_NAME,
       WORK_DIRTY_SCOPE_SCRIPT_COMMAND,
     );
     t.equal(
+      scripts[WORK_LLM_START_SCRIPT],
+      WORK_LLM_START_SCRIPT_COMMAND,
+    );
+    t.equal(
+      scripts[WORK_PACKAGE_NEW_SCRIPT],
+      WORK_PACKAGE_NEW_SCRIPT_COMMAND,
+    );
+    t.equal(
+      scripts[WORK_PACKAGE_SCHEMA_SCRIPT],
+      WORK_PACKAGE_SCHEMA_SCRIPT_COMMAND,
+    );
+    t.equal(
+      scripts[WORK_SUBAGENT_PROMPT_SCRIPT],
+      WORK_SUBAGENT_PROMPT_SCRIPT_COMMAND,
+    );
+    t.equal(
       scripts[PACKAGE_EVIDENCE_BLOCK_SCRIPT],
       PACKAGE_EVIDENCE_BLOCK_SCRIPT_COMMAND,
+    );
+    t.equal(
+      scripts[OVERSIZED_NEXT_SCRIPT],
+      OVERSIZED_NEXT_SCRIPT_COMMAND,
+    );
+    t.equal(
+      scripts[ANALYZE_OWNER_FILES_SCRIPT],
+      ANALYZE_OWNER_FILES_SCRIPT_COMMAND,
+    );
+    t.equal(
+      scripts[ANALYZE_PRIORITY_RESIDUALS_SCRIPT],
+      ANALYZE_PRIORITY_RESIDUALS_SCRIPT_COMMAND,
     );
     t.equal(
       scripts[OWNER_BOUNDARY_SEGMENTS_SCRIPT],

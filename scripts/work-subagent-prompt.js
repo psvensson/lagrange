@@ -1,0 +1,209 @@
+#!/usr/bin/env node
+
+import fs from 'node:fs/promises';
+import process from 'node:process';
+import {fileURLToPath} from 'node:url';
+
+const ENCODING_UTF8 = 'utf8';
+const EXIT_SUCCESS = 0;
+const EXIT_FAILURE = 1;
+const NUM_ZERO = 0;
+const NUM_ONE = 1;
+const NUM_TWO = 2;
+const ROLE_REVIEW = 'review';
+const ROLE_FIX = 'fix';
+const ROLE_IMPLEMENTATION = 'implementation';
+const FLAG_ROLE = '--role';
+const FLAG_PACKAGE = '--package';
+const FLAG_AGENT_NAME = '--agent-name';
+const FLAG_AGENT_ID = '--agent-id';
+const FLAG_HELP = '--help';
+const EMPTY_TEXT = '';
+const NEWLINE = '\n';
+const PACKAGE_METADATA_OPEN = '<!-- work-package';
+const PACKAGE_METADATA_CLOSE = '-->';
+const VALID_ROLES = Object.freeze([
+  ROLE_REVIEW,
+  ROLE_FIX,
+  ROLE_IMPLEMENTATION,
+]);
+const HELP_TEXT = [
+  'Usage:',
+  '  node scripts/work-subagent-prompt.js --role review|fix|implementation --package <package.md>',
+  '',
+  'Optional:',
+  '  --agent-name <name> --agent-id <uuid>  Print the exact ledger line to record.',
+].join(NEWLINE);
+
+function normalizeText(value) {
+  return String(value || EMPTY_TEXT).trim();
+}
+
+function parseOptionValue(args, optionName) {
+  const optionIndex = args.indexOf(optionName);
+  if (optionIndex < NUM_ZERO) {
+    return EMPTY_TEXT;
+  }
+  return normalizeText(args[optionIndex + NUM_ONE]);
+}
+
+function parseMetadata(content, filePath) {
+  const openIndex = content.indexOf(PACKAGE_METADATA_OPEN);
+  if (openIndex < NUM_ZERO) {
+    throw new Error(`${filePath}: work-package metadata is required.`);
+  }
+  const closeIndex = content.indexOf(
+    PACKAGE_METADATA_CLOSE,
+    openIndex + PACKAGE_METADATA_OPEN.length,
+  );
+  if (closeIndex < NUM_ZERO) {
+    throw new Error(`${filePath}: work-package metadata closing marker is missing.`);
+  }
+  return JSON.parse(
+    content.slice(openIndex + PACKAGE_METADATA_OPEN.length, closeIndex).trim(),
+  );
+}
+
+function list(values = [], fallback = 'None recorded.') {
+  const normalized = Array.isArray(values) ?
+    values.map(normalizeText).filter(Boolean) :
+    [];
+  if (normalized.length === NUM_ZERO) {
+    return `- ${fallback}`;
+  }
+  return normalized.map((value) => `- \`${value}\``).join(NEWLINE);
+}
+
+function packageTitle(content) {
+  const firstHeading = content
+    .split(/\r?\n/u)
+    .find((line) => line.startsWith('# '));
+  return firstHeading ? firstHeading.slice(NUM_TWO).trim() : 'Work Package';
+}
+
+function roleTask(role, metadata, packagePath) {
+  if (role === ROLE_REVIEW) {
+    return [
+      'Review the predecessor or most recently executed package named by this',
+      'package. Focus on package proof, residual inventory, guardrail ledger,',
+      'blocker migration notes, sprint snapshot consistency, and whether the',
+      'stated next action still matches artifact evidence.',
+    ].join(' ');
+  }
+  if (role === ROLE_FIX) {
+    return [
+      'Fix only the actionable findings from the review subagent. Keep the',
+      'write scope to the reviewed package and directly related tracker proof.',
+      'Do not implement the new package yet.',
+    ].join(' ');
+  }
+  return [
+    'Implement only this current package after review/fix proof is clean:',
+    packagePath + '.',
+    'Do not widen beyond the owned files, forbidden files, frozen decisions,',
+    'and proof ladder recorded below.',
+  ].join(' ');
+}
+
+function ledgerLine(role, packagePath, flags = {}) {
+  const agentName = parseOptionValue(flags, FLAG_AGENT_NAME);
+  const agentId = parseOptionValue(flags, FLAG_AGENT_ID);
+  if (!agentName || !agentId) {
+    return 'Add the real returned agent name and id after the subagent completes.';
+  }
+  if (role === ROLE_REVIEW) {
+    return `Agent ${agentName} (${agentId}) reviewed ${packagePath}; result <clean|fixes-required>`;
+  }
+  if (role === ROLE_FIX) {
+    return `Agent ${agentName} (${agentId}) fixed ${packagePath}`;
+  }
+  return `Agent ${agentName} (${agentId}) implemented ${packagePath}`;
+}
+
+function buildSubagentPrompt(role, packagePath, content, args = []) {
+  const metadata = parseMetadata(content, packagePath);
+  return [
+    `# ${role} Subagent Prompt`,
+    EMPTY_TEXT,
+    'You are not alone in the codebase. Do not revert edits made by others;',
+    'adjust your work to accommodate existing changes.',
+    EMPTY_TEXT,
+    `Package: \`${packagePath}\``,
+    `Title: \`${packageTitle(content)}\``,
+    `Lane: \`${metadata.lane || 'unknown'}\``,
+    `Owner: \`${metadata.owner || 'unknown'}\``,
+    `Boundary: \`${metadata.boundary || 'unknown'}\``,
+    `Dominant reason: \`${metadata.dominantReason || 'unknown'}\``,
+    `Predecessor: \`${metadata.predecessor || 'none'}\``,
+    EMPTY_TEXT,
+    '## Task',
+    EMPTY_TEXT,
+    roleTask(role, metadata, packagePath),
+    EMPTY_TEXT,
+    '## Current State',
+    EMPTY_TEXT,
+    metadata.currentState || 'Unknown.',
+    EMPTY_TEXT,
+    '## Next Action',
+    EMPTY_TEXT,
+    metadata.nextAction || 'Unknown.',
+    EMPTY_TEXT,
+    '## Owned Files',
+    EMPTY_TEXT,
+    list(metadata.touchedFiles),
+    EMPTY_TEXT,
+    '## Proof Ladder',
+    EMPTY_TEXT,
+    list(metadata.proof),
+    EMPTY_TEXT,
+    '## Escalation Triggers',
+    EMPTY_TEXT,
+    list(metadata.modelFit?.escalationTriggers),
+    EMPTY_TEXT,
+    '## Ledger Line',
+    EMPTY_TEXT,
+    ledgerLine(role, packagePath, args),
+    EMPTY_TEXT,
+  ].join(NEWLINE);
+}
+
+async function runCli(args = process.argv.slice(NUM_TWO)) {
+  if (args.includes(FLAG_HELP)) {
+    return `${HELP_TEXT}${NEWLINE}`;
+  }
+  const role = parseOptionValue(args, FLAG_ROLE);
+  const packagePath = parseOptionValue(args, FLAG_PACKAGE);
+  if (!VALID_ROLES.includes(role)) {
+    throw new Error(`--role must be one of ${VALID_ROLES.join(', ')}.`);
+  }
+  if (!packagePath) {
+    throw new Error('--package is required.');
+  }
+  return `${buildSubagentPrompt(
+    role,
+    packagePath,
+    await fs.readFile(packagePath, ENCODING_UTF8),
+    args,
+  )}${NEWLINE}`;
+}
+
+function isDirectRun() {
+  return process.argv[NUM_ONE] === fileURLToPath(import.meta.url);
+}
+
+if (isDirectRun()) {
+  runCli()
+    .then((output) => {
+      process.stdout.write(output);
+      process.exitCode = EXIT_SUCCESS;
+    })
+    .catch((error) => {
+      process.stderr.write(`${error.message}${NEWLINE}`);
+      process.exitCode = EXIT_FAILURE;
+    });
+}
+
+export {
+  buildSubagentPrompt,
+  runCli,
+};

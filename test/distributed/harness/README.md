@@ -20,7 +20,12 @@ Start here before opening large `cluster-segment-*` files.
    `npm run analyze:topology-convergence -- <artifact> --explain <edge>`.
 3. Run `npm --silent run analyze:causal-model -- <artifact>` for stop-condition
    and critical-path evidence.
-4. Read focused owner/helper files named by those summaries before opening large
+4. For priority-recovery residual splits, run
+   `npm run analyze:priority-recovery-residuals -- <artifact>` before writing
+   package metadata or ad hoc extraction commands.
+5. Use `npm run analyze:owner-files -- <owner> [boundary]` to find likely owner
+   files before broad source searches.
+6. Read focused owner/helper files named by those summaries before opening large
    harness segment files.
 
 Do not infer owner boundaries from raw logs when compact report, topology, or
