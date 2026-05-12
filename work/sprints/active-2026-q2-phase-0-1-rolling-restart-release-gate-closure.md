@@ -108,7 +108,8 @@ reduction: `operation_workflow_owner / rebalancer_handoff` is no longer the
 first normalized frontier. The dispatch-pending and stage-3 timeout packages
 verify that focused owner tests remain green, and the fresh representative
 artifact migrates the first frontier to
-`rebalancer_leader / operation_scheduling`.
+`operation_workflow_owner / workflow_progress /
+priority_recovery_event_driven_wait`.
 
 Raw distributed-failure presentation for the same latest artifact reports
 `publication_missing_active_node`; treat that as a presentation residual before
