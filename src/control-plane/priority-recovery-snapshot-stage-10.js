@@ -11,6 +11,7 @@ import {
   PRIORITY_RECOVERY_NEXT_REQUIRED_ACTION,
   PRIORITY_RECOVERY_PROGRESS_CLASS_IDS,
   PRIORITY_RECOVERY_PROGRESS_OWNER,
+  PRIORITY_RECOVERY_SEMANTIC_STATE,
   PRIORITY_RECOVERY_WAIT_MODE,
   PRIORITY_RECOVERY_WORKFLOW_PROGRESS_PHASE,
 } from './priority-recovery-diagnostics-constants.js';
@@ -65,6 +66,12 @@ const PRIORITY_RECOVERY_DISPATCH_PENDING_DIAGNOSTIC_PROGRESS_ACTIONS =
     PRIORITY_RECOVERY_NEXT_REQUIRED_ACTION.WAIT_FOR_OPERATION_PROGRESS,
   ]));
 
+const PRIORITY_RECOVERY_DISPATCH_PENDING_DIAGNOSTIC_OWNER_EXCLUDED_STATES =
+  Object.freeze(new Set([
+    PRIORITY_RECOVERY_SEMANTIC_STATE.SPREAD_SATISFIED_IN_FLIGHT,
+    PRIORITY_RECOVERY_SEMANTIC_STATE.COORDINATION_MISMATCH,
+  ]));
+
 const PRIORITY_RECOVERY_DISPATCH_PENDING_DIAGNOSTIC_TARGET_STATE =
   Object.freeze({
     COMPATIBLE: 'diagnostic_dispatch_pending_target_compatible',
@@ -117,6 +124,7 @@ const PRIORITY_RECOVERY_DISPATCH_PENDING_DIAGNOSTIC_OWNER_TABLE =
       matches: (evidence) =>
         evidence.operationContextAvailable === true &&
         evidence.operationOwnerObservationAbsent === true &&
+        evidence.ownerDiagnosticAllowed === true &&
         evidence.workflowStepDispatchPending === true &&
         evidence.operationStatusPending === true &&
         evidence.targetVisibilityDispatchPending === true &&
@@ -224,6 +232,9 @@ function buildPriorityRecoveryDispatchPendingDiagnosticOwnerEvidence(
       operationContext && typeof operationContext === TYPEOF.OBJECT,
     operationOwnerObservationAbsent:
       !isPriorityRecoverySnapshotObject(snapshot?.operationOwnerObservation),
+    ownerDiagnosticAllowed:
+      !PRIORITY_RECOVERY_DISPATCH_PENDING_DIAGNOSTIC_OWNER_EXCLUDED_STATES
+        .has(snapshot?.semanticState),
     workflowStepDispatchPending:
       PRIORITY_RECOVERY_DISPATCH_PENDING_DIAGNOSTIC_WORKFLOW_STEPS.has(
         workflowStep,

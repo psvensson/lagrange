@@ -404,7 +404,7 @@ export function registerPriorityRecoverySnapshotCore02Tests(context) {
         {
           currentOwner: PRIORITY_RECOVERY_PROGRESS_OWNER_WORKFLOW,
           nextRequiredAction:
-          PRIORITY_RECOVERY_PROGRESS_ACTION_WAIT_FOR_PROGRESS,
+          PRIORITY_RECOVERY_PROGRESS_ACTION_ADVANCE_EXISTING_OPERATION,
           blockingBoundary: PRIORITY_RECOVERY_PROGRESS_BOUNDARY_WORKFLOW,
           workflowProgressPhaseId:
           PRIORITY_RECOVERY_PROGRESS_PHASE_DISPATCH_PENDING,
@@ -966,7 +966,7 @@ export function registerPriorityRecoverySnapshotCore02Tests(context) {
       t.match(
         snapshot,
         PRIORITY_RECOVERY_DECISION_SNAPSHOT_EXPECTED,
-        'SENDING sql_transactions-p1 evidence should replay as workflow-owned waiting progress',
+        'SENDING sql_transactions-p1 evidence should replay as workflow-owned owner advancement',
       );
     });
 
@@ -1022,7 +1022,7 @@ export function registerPriorityRecoverySnapshotCore02Tests(context) {
         nextAction: PRIORITY_RECOVERY_PROGRESS_NEXT_ACTION_WAIT,
         currentOwner: PRIORITY_RECOVERY_PROGRESS_OWNER_WORKFLOW,
         nextRequiredAction:
-        PRIORITY_RECOVERY_PROGRESS_ACTION_WAIT_FOR_PROGRESS,
+        PRIORITY_RECOVERY_PROGRESS_ACTION_ADVANCE_EXISTING_OPERATION,
         blockingBoundary: PRIORITY_RECOVERY_PROGRESS_BOUNDARY_WORKFLOW,
         waitMode: PRIORITY_RECOVERY_PROGRESS_WAIT_EVENT_DRIVEN,
         workflowProgressPhaseId:
@@ -1065,7 +1065,7 @@ export function registerPriorityRecoverySnapshotCore02Tests(context) {
         PRIORITY_RECOVERY_ACTUATION_STATE_PERSISTED_NOT_DISPATCHED,
         currentOwner: PRIORITY_RECOVERY_PROGRESS_OWNER_WORKFLOW,
         nextRequiredAction:
-        PRIORITY_RECOVERY_PROGRESS_ACTION_WAIT_FOR_PROGRESS,
+        PRIORITY_RECOVERY_PROGRESS_ACTION_ADVANCE_EXISTING_OPERATION,
         blockingBoundary: PRIORITY_RECOVERY_PROGRESS_BOUNDARY_WORKFLOW,
         waitMode: PRIORITY_RECOVERY_PROGRESS_WAIT_EVENT_DRIVEN,
         workflowProgressPhaseId:

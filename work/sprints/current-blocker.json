@@ -2,78 +2,87 @@
   "schema": "current-blocker-v1",
   "generatedBy": "scripts/work-tracker.js",
   "sprint": "work/sprints/active-2026-q2-phase-0-1-rolling-restart-release-gate-closure.md",
-  "package": "work/packages/active-20260512-rolling-restart-operation-workflow-progress-serial-wait-event-driven-advance.md",
+  "package": "work/packages/active-20260512-rolling-restart-operation-workflow-progress-direct-chain-after-owner-proof.md",
   "status": "active",
   "lane": "scenario-release-gate",
   "scenario": "rolling-restart",
-  "artifact": "test-output/reports/rolling-restart-current-release-gate-after-workflow-progress-serial-wait-event-driven-advance-proof.report.json",
-  "playback": "test-output/reports/.playback/rolling-restart-current-release-gate-after-workflow-progress-serial-wait-event-driven-advance-proof/rolling-restart/",
+  "artifact": "test-output/reports/rolling-restart-current-release-gate-after-workflow-progress-direct-chain-owner-proof.report.json",
+  "playback": "test-output/reports/.playback/rolling-restart-current-release-gate-after-workflow-progress-direct-chain-owner-proof/rolling-restart/",
   "owner": "operation_workflow_owner",
   "boundary": "workflow_progress",
-  "dominantReason": "priority_recovery_progress_blocked",
-  "currentState": "Focused owner proof was already green for dispatch-pending owner advancement/re-entry. The representative rerun remains red but reduces the residual: priority_recovery_partition_progress is still first under operation_workflow_owner / workflow_progress, now with direct event-driven advance witnesses for control_plane_publications-p1, replica_operations-p1, and sql_transactions-p1; sql_transaction_participants-p1 and sql_write_operations-p1 are serial-wait dependents, and control_plane_publications-p1 also has a secondary non-promoted rebalancer_handoff retry witness.",
-  "nextAction": "Close this package as reduced, then activate the direct-chain workflow-progress successor. Do not promote the secondary rebalancer_handoff split while workflow_progress remains the first frontier.",
+  "dominantReason": "priority_recovery_event_driven_wait",
+  "currentState": "Focused owner proof reduced the direct workflow-progress chain from blocked residual evidence to retryable priority_recovery_event_driven_wait. The fresh representative report remains red, but priority recovery invariants pass, the residual has one operation_workflow_owner / workflow_progress group with recovering_in_flight witnesses only, and the causal analyzer records owner-boundary migration to startup_readiness_owner / startup_support_evidence.",
+  "nextAction": "Close or migrate this package to the named startup_readiness_owner / startup_support_evidence successor; do not promote startup active-gate implementation from this operation-workflow package.",
   "proof": [
-    "npm run work:evidence-summary -- test-output/reports/rolling-restart-current-release-gate-after-workflow-progress-coordinator-excludes-node-fix.report.json",
-    "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-current-release-gate-after-workflow-progress-coordinator-excludes-node-fix.report.json --explain priority_recovery_partition_progress",
-    "npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-current-release-gate-after-workflow-progress-coordinator-excludes-node-fix.report.json --markdown",
-    "focused operation_workflow_owner / workflow_progress tests selected by implementation package",
-    "node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-current-release-gate-after-workflow-progress-serial-wait-event-driven-advance-proof.report.json --fast-local --verbose",
     "npm run work:evidence-summary -- test-output/reports/rolling-restart-current-release-gate-after-workflow-progress-serial-wait-event-driven-advance-proof.report.json",
     "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-current-release-gate-after-workflow-progress-serial-wait-event-driven-advance-proof.report.json --explain priority_recovery_partition_progress",
-    "npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-current-release-gate-after-workflow-progress-serial-wait-event-driven-advance-proof.report.json --markdown"
+    "npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-current-release-gate-after-workflow-progress-serial-wait-event-driven-advance-proof.report.json --markdown",
+    "node test/control-plane/priority-recovery-snapshot.test.js",
+    "node test/rebalancer/coordinator-created-operation-progress-remote-handoff.test.js",
+    "node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-current-release-gate-after-workflow-progress-direct-chain-owner-proof.report.json --fast-local --verbose",
+    "npm run work:evidence-summary -- test-output/reports/rolling-restart-current-release-gate-after-workflow-progress-direct-chain-owner-proof.report.json",
+    "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-current-release-gate-after-workflow-progress-direct-chain-owner-proof.report.json --explain priority_recovery_partition_progress",
+    "npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-current-release-gate-after-workflow-progress-direct-chain-owner-proof.report.json --markdown",
+    "npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-current-release-gate-after-workflow-progress-direct-chain-owner-proof.report.json"
   ],
   "touchedFiles": [
-    "work/packages/active-20260512-rolling-restart-operation-workflow-progress-serial-wait-event-driven-advance.md",
-    "work/model-ledger.jsonl",
-    "work/packages/todo-20260512-rolling-restart-operation-workflow-progress-direct-chain-after-owner-proof.md",
+    "work/packages/active-20260512-rolling-restart-operation-workflow-progress-direct-chain-after-owner-proof.md",
     "work/sprints/active-2026-q2-phase-0-1-rolling-restart-release-gate-closure.md",
     "work/sprints/current-blocker.json",
-    "work/sprints/current-blocker.md"
+    "work/sprints/current-blocker.md",
+    "src/control-plane/priority-recovery-snapshot-stage-10.js",
+    "test/control-plane/priority-recovery-snapshot-core-02-test-cases.js",
+    "test/control-plane/priority-recovery-snapshot-core-03-test-cases.js",
+    "test/distributed/harness/__fixtures__/priority-recovery-actuation-contract-fixture.js",
+    "test-output/reports/rolling-restart-current-release-gate-after-workflow-progress-direct-chain-owner-proof.report.json",
+    "work/model-ledger.jsonl",
+    "work/packages/todo-20260512-rolling-restart-operation-workflow-progress-direct-chain-after-owner-proof.md"
   ],
   "modelFit": {
     "packageClass": "representative-frontier-closure",
     "intendedMinimumModel": "gpt-5.3-codex",
-    "scopeShape": "owner-boundary-contraction/current-frontier",
+    "scopeShape": "owner-boundary-contraction/direct-chain-current-frontier",
     "escalationTriggers": [
-      "evidence promotes rebalancer_leader / operation_scheduling ahead of workflow progress",
+      "evidence promotes rebalancer_handoff or rebalancer_leader / operation_scheduling ahead of workflow_progress",
       "the fix requires startup active-gate, publication convergence, harness timeout, Pro, or Enterprise behavior",
-      "serial-wait dependents become independent direct blockers rather than downstream waits"
+      "serial-wait dependents become independent direct blockers rather than downstream waits",
+      "runtime ownership changes are required instead of workflow-progress edge reduction"
     ]
   },
   "causalGovernance": {
-    "hypothesis": "If operation_workflow_owner / workflow_progress owns the serial-wait event-driven advance residual, the direct recovering_in_flight persisted_not_dispatched operations for control_plane_publications-p1, replica_operations-p1, and sql_transaction_participants-p1 must dispatch, advance, timeout, reconcile, or migrate through one named owner path instead of leaving priority recovery blocked.",
-    "stopConditionCheck": "npm run analyze:causal-model -- test-output/reports/rolling-restart-current-release-gate-after-workflow-progress-coordinator-excludes-node-fix.report.json",
-    "expectedCausalModelChange": "The direct advance_existing_operation workflow-progress witnesses reduce, converge, or migrate to a new named owner boundary before serial-wait dependents are promoted as independent blockers.",
-    "representativeOutcome": "reduced",
-    "causalDebt": "Rolling-restart remains red after the serial-wait owner proof, but the direct workflow-progress residual reduced to control_plane_publications-p1, replica_operations-p1, and sql_transactions-p1. sql_transaction_participants-p1 and sql_write_operations-p1 are serial-wait dependents, and the secondary control_plane_publications-p1 rebalancer_handoff retry witness is not promoted while workflow_progress remains first.",
-    "crossBoundaryReview": "Review/fix proof is recorded in the Subagent Sequencing Ledger, with implementation proof recorded by Agent Ampere (019e1ced-b894-7602-994e-438a596976ca)."
+    "hypothesis": "If operation_workflow_owner / workflow_progress owns the direct-chain residual, the direct recovering_in_flight event-driven operations for control_plane_publications-p1, replica_operations-p1, and sql_transactions-p1 must dispatch, advance, timeout, reconcile, or migrate through one named owner path instead of leaving serial dependents blocked.",
+    "stopConditionCheck": "npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-current-release-gate-after-workflow-progress-direct-chain-owner-proof.report.json",
+    "expectedCausalModelChange": "The direct workflow-progress chain reduces, converges, or migrates to one named owner boundary before sql_transaction_participants-p1 or sql_write_operations-p1 are promoted as independent blockers.",
+    "representativeOutcome": "migrated",
+    "causalDebt": "The fresh representative report remains red, but operation_workflow_owner / workflow_progress is now retryable priority_recovery_event_driven_wait with one recovering_in_flight residual group; causal stop decision is owner_boundary_migration to startup_readiness_owner / startup_support_evidence.",
+    "crossBoundaryReview": "Review found a stale sprint snapshot, a separate fix subagent repaired it, and a separate implementation subagent completed the direct-chain proof."
   },
   "scenarioCausalClosure": {
-    "referenceScenarioOrProbe": "rolling-restart workflow-progress serial-wait event-driven advance residual",
+    "referenceScenarioOrProbe": "rolling-restart direct workflow-progress chain after serial-wait owner proof",
     "phaseChain": [
       "publication convergence",
       "priority recovery operation scheduling",
       "operation workflow coordination and progress",
+      "serial wait dependent release",
       "startup active-gate presentation"
     ],
-    "currentFirstFrontier": "priority_recovery_partition_progress remains first under operation_workflow_owner / workflow_progress after coordination_mismatch was removed.",
+    "currentFirstFrontier": "priority_recovery_partition_progress remains first under operation_workflow_owner / workflow_progress, but the decision is retryable priority_recovery_event_driven_wait instead of blocked priority_recovery_progress_blocked.",
     "knownDownstreamBlockers": [
-      "sql_transaction_participants-p1 and sql_write_operations-p1 are priority_operation_serial_wait dependents of the direct workflow-progress operations",
-      "startup_active_gate_owner snapshot coverage remains downstream while priority_recovery_partition_progress is first",
+      "startup_readiness_owner / startup_support_evidence is the named causal migration boundary",
+      "startup_active_gate_owner / snapshot_coverage is the projected topology edge after priority recovery becomes retryable",
       "publication_ack_convergence remains satisfied with PUBLISHED and zero pending ACKs",
-      "the secondary operation_workflow_owner / rebalancer_handoff witness on control_plane_publications-p1 is not promoted while workflow_progress remains the first frontier"
+      "the prior rebalancer_handoff secondary split is gone from the fresh residual extractor"
     ],
-    "missingCausalEdge": "The event-driven workflow-progress path leaves persisted operations not dispatched or advanced enough to clear priority recovery.",
-    "missingCausalEdgeProbe": "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-current-release-gate-after-workflow-progress-coordinator-excludes-node-fix.report.json --explain priority_recovery_partition_progress plus focused operation_workflow_owner / workflow_progress tests selected by implementation",
-    "boundedProgressProof": "Implementation must prove a deterministic dispatch, advance, timeout, or reconcile path for the direct persisted operations, or record a bounded migration.",
-    "boundedProgressProofArtifact": "test-output/reports/rolling-restart-current-release-gate-after-workflow-progress-coordinator-excludes-node-fix.report.json plus focused operation_workflow_owner / workflow_progress tests selected by implementation",
-    "expectedObservableTransition": "The previous direct sql_transaction_participants-p1 witness reduces to a serial-wait dependent; control_plane_publications-p1, replica_operations-p1, and sql_transactions-p1 remain the direct workflow-progress chain for the successor package.",
-    "maxProgressBound": "one workflow-progress owner cycle or focused timeout/reconcile probe for the direct pending operations",
+    "missingCausalEdge": "The direct blocked workflow-progress chain is reduced to retryable event-driven owner progress; the remaining scenario stop condition is outside this operation-workflow package at startup_readiness_owner / startup_support_evidence.",
+    "missingCausalEdgeProbe": "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-current-release-gate-after-workflow-progress-direct-chain-owner-proof.report.json --explain priority_recovery_partition_progress plus npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-current-release-gate-after-workflow-progress-direct-chain-owner-proof.report.json --markdown",
+    "boundedProgressProof": "Implementation must prove one deterministic dispatch, advance, timeout, reconcile, retry, or bounded migration path for the direct workflow-progress operations before the serial-wait dependents are treated as independent blockers.",
+    "boundedProgressProofArtifact": "test-output/reports/rolling-restart-current-release-gate-after-workflow-progress-direct-chain-owner-proof.report.json plus focused operation_workflow_owner / workflow_progress tests selected by implementation",
+    "expectedObservableTransition": "The direct witnesses reduce from blocked workflow-progress evidence to retryable priority_recovery_event_driven_wait, with no failed priority recovery invariants and one owner-boundary migration to startup_readiness_owner / startup_support_evidence.",
+    "maxProgressBound": "one workflow-progress owner cycle or focused dispatch/advance/timeout/reconcile probe for the three direct pending operations",
     "sameFrontierFallback": "keep operation_workflow_owner / workflow_progress active and do not promote startup active-gate, publication convergence, or the parked operation-scheduling successor without fresh owner evidence",
-    "expectedNextFrontier": "operation_workflow_owner / workflow_progress direct-chain successor in work/packages/todo-20260512-rolling-restart-operation-workflow-progress-direct-chain-after-owner-proof.md",
-    "resultClassification": "reduced",
-    "stopCondition": "continue-local-fix"
+    "expectedNextFrontier": "startup_readiness_owner / startup_support_evidence successor, with startup_active_gate_owner / snapshot_coverage as the projected topology edge",
+    "resultClassification": "migrated",
+    "stopCondition": "migrate-owner-boundary"
   },
-  "predecessor": "work/packages/done-20260512-rolling-restart-operation-workflow-progress-coordinator-excludes-node.md"
+  "predecessor": "work/packages/done-20260512-rolling-restart-operation-workflow-progress-serial-wait-event-driven-advance.md"
 }
