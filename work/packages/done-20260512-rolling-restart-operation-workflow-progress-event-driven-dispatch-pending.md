@@ -3,7 +3,7 @@
 <!-- work-package
 {
   "schema": "work-package-v1",
-  "status": "active",
+  "status": "done",
   "opened": "2026-05-12",
   "scenario": "rolling-restart",
   "artifact": "test-output/reports/rolling-restart-current-release-gate-after-workflow-progress-event-driven-dispatch-pending-fix.report.json",
@@ -26,7 +26,8 @@
     "src/rebalancer/operation-workflow-owner-segment-7-stage-5.js",
     "test/rebalancer/operation-workflow-progress-event-driven-reentry.test.js",
     "test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js",
-    "work/packages/active-20260512-rolling-restart-operation-workflow-progress-event-driven-dispatch-pending.md",
+    "work/packages/done-20260512-rolling-restart-operation-workflow-progress-event-driven-dispatch-pending.md",
+    "work/packages/todo-20260512-rolling-restart-operation-workflow-progress-stage3-timeout-progression.md",
     "work/sprints/active-2026-q2-phase-0-1-rolling-restart-release-gate-closure.md",
     "work/sprints/current-blocker.json",
     "work/sprints/current-blocker.md",
@@ -73,7 +74,10 @@
     "resultClassification": "same-frontier",
     "stopCondition": "classification-only-stop"
   },
-  "predecessor": "work/packages/done-20260511-rolling-restart-operation-workflow-rebalancer-handoff-retry-scheduled-v2.md"
+  "predecessor": "work/packages/done-20260511-rolling-restart-operation-workflow-rebalancer-handoff-retry-scheduled-v2.md",
+  "closed": "2026-05-12",
+  "commitAndPushLedgerRequired": true,
+  "successor": "work/packages/todo-20260512-rolling-restart-operation-workflow-progress-stage3-timeout-progression.md"
 }
 -->
 
@@ -124,7 +128,7 @@ failure simulations, and production guarantees in the Community / AGPL repo.
       `work/packages/done-20260512-scenario-causal-closure-governance.md`.
 - [x] Implementation subagent recorded:
       Agent Erdos (019e1ae3-d4b2-7b33-9a2a-af248baaa1b4) implemented
-      `work/packages/active-20260512-rolling-restart-operation-workflow-progress-event-driven-dispatch-pending.md`.
+      `work/packages/done-20260512-rolling-restart-operation-workflow-progress-event-driven-dispatch-pending.md`.
 
 ## Scenario Causal Closure Handoff
 
@@ -208,8 +212,26 @@ failure simulations, and production guarantees in the Community / AGPL repo.
   `work/sprints/current-blocker.md`.
 - Work tracker package doctor:
   `npm run work:package:doctor --
-  work/packages/active-20260512-rolling-restart-operation-workflow-progress-event-driven-dispatch-pending.md`:
+  work/packages/done-20260512-rolling-restart-operation-workflow-progress-event-driven-dispatch-pending.md`:
   passed.
 - Work tracker validation: `npm run work:validate`: passed.
 - Diff whitespace check over touched package/tracker/model-ledger/runtime/test
   paths: passed.
+
+## Commit And Push Ledger
+
+1. Focused package commit: `e6cde1b1aa12f3534c2921696e91861d50383aa4`
+2. Pushed to: `origin/codex/pending-ack-eligibility-filter`
+3. Commit contains only package-owned files/package-status/allowed sprint handoff: yes
+
+## Model Ledger
+
+A model-ledger row was recorded for this classification package:
+`2026-05-12T06:38:27.219Z`, package
+`work/packages/active-20260512-rolling-restart-operation-workflow-progress-event-driven-dispatch-pending.md`
+before closure, model `gpt-5.3-codex`, task class
+`proof-classification`, package class `representative-frontier-closure`,
+scope shape `owner-boundary-contraction/current-frontier`, outcome
+`same-frontier`, validation status `focused-green-classification-only`,
+correction loops `1`, review findings `0`, bailout reason
+`stage3-timeout-path-outside-owned-write-scope`.
