@@ -1,58 +1,72 @@
 # Core Steering Pack
 
-Always-load compact rules for ownership, safety, scope, and quality baseline.
+Manual always-load operating contract for LLM work in this repository.
 
-Generated rules: 48
-Estimated tokens: 1724
-Domains: architecture, governance, style, testing
+Use this before domain packs. Domain packs and source steering documents provide
+detail; this file carries the shape that should stay active in memory.
+
+## North Star
+
+Preserve the highest-level owner boundary, choose the lightest process that
+proves the boundary was not weakened, and do not locally patch symptoms when
+the owner contract is porous.
+
+## Process Weight
+
+Use the lightest valid lane:
+
+- Read/review/doc-only: answer or edit docs; no package unless implementation
+  truth changes.
+- Lightweight maintenance: use a focused package and focused proof; omit causal
+  ledgers and sub-agent sequencing unless runtime ownership can change.
+- Runtime owner-boundary work: use the full package lane with owner contract,
+  static guardrails, focused tests, and affected consumers.
+- Scenario or release-gate work: use the full package lane with sequential
+  sub-agents, causal ledger, focused owner proof, and representative rerun.
+
+When uncertain, choose the heavier lane only if runtime ownership, shared
+contracts, or representative scenario evidence can change.
 
 ## Rules
 
-1. [ARCH-0001] Work packages MUST be one executable concern per file. Do not mix unrelated concerns into one package.
-2. [ARCH-0002] Do not create a second status system in headings, directories, or sidecar trackers when the filename already carries status.
-3. [ARCH-0003] The model ledger MUST remain advisory. It MUST NOT replace validation, review subagents, mandatory package sequencing, package closure, or focused commit discipline.
-4. [ARCH-0004] Close a completed package by renaming its file from active-... to done-.... Do not create a second closure marker inside another tracker to compensate for a stale filename.
-5. [ARCH-0005] If a package is not being executed yet, rename it to todo-...; do not leave dormant work in active-....
-6. [ARCH-0006] Do not archive package files into a second package-status directory. Package status is carried by the filename; sprint archival is the exception used to keep the live sprint root small and readable.
-7. [ARCH-0007] The commit MUST include only package-owned changes and package-status or sprint-handoff updates that belong to that slice. Do not sweep unrelated dirty worktree changes into the package commit.
-8. [ARCH-0008] Do not leave known doctrine or system-guideline violations in the affected area behind as "follow-up cleanup" while still closing the package.
-9. [ARCH-0009] Do not start a second active package on the same architectural boundary while the first package still has unresolved in-scope residuals.
-10. [ARCH-0010] Do not close a scenario-driven package or sprint on “hot path fixed” while the original scenario still fails and the new dominant blocker is unnamed.
-11. [ARCH-0011] Do not open a new package merely because a fresh artifact has a different epoch, node id set, count, timestamp, or presentation shape while the same semantic owner and boundary still dominate.
-12. [ARCH-0012] Do not hide guardrail failures by weakening scripts, expanding allowlists, renaming files out of scan scope, or moving code into test-only paths.
-13. [ARCH-0013] Long migration history belongs below the snapshot as a ledger. It must not force readers or sub-agents to reconstruct the current blocker from old package narratives.
-14. [ARCH-0014] Sub-agents may run in parallel only for independent sidecar questions with disjoint owner or file scope. They must not each chase separate interpretations of the same current blocker.
-15. [ARCH-0015] Runtime edits must not start from a sub-agent until the current blocker snapshot names the canonical owner boundary and the smallest focused proof surface.
-16. [ARCH-0016] Parent-session notes, local/manual session labels, and arbitrary text without a real agent id do not satisfy review, fix, or implementation roles unless the user explicitly disables sub-agents for that task.
-17. [ARCH-0017] No inline domain scalars. Do not write raw string, number, null, or undefined values directly in domain logic, runtime/exported structures, or semantic decisions.
-18. [ARCH-0018] Absence is not state. null and undefined must not encode runtime/domain state. Use an explicit named variant instead.
-19. [ARCH-0019] If a scalar or state has no clear owner, stop and define the owner first. Do not inline it “for now”.
-20. [ARCH-0020] Shared contract surfaces must declare: - semantic owner; - canonical evidence inputs; - canonical state or outcome vocabulary; - allowed consumers; - forbidden reinterpretations
-21. [ARCH-0021] Do not expose semantic mode through combinable boolean or tri-state option bags. If callers are choosing between policy variants, define one explicit named mode set and make invalid combinations unrepresentable.
-22. [ARCH-0022] Do not introduce a second cache, snapshot, field, or helper for the same concern unless the role boundary is explicit and non-overlapping.
-23. [ARCH-0023] If it exists, use it. Do not create a second version.
-24. [ARCH-0024] If it exists but needs modification, modify the original. Do not fork it.
-25. [ARCH-0025] If you are unsure whether something already exists, search first. Do not guess.
-26. [ARCH-0026] Callers must not assemble semantic behavior by toggling combinations of booleans that route into overlapping owner behavior.
-27. [ARCH-0027] INSERT OR REPLACE or full-row replacement is FORBIDDEN for steady-state lifecycle/status mutation of existing system rows.
-28. [ARCH-0028] Non-forced readers MUST NOT perform synchronous multi-table authoritative repair on the hot path.
-29. [STYLE-0001] Do not inline domain/runtime scalars when an owner constant or explicit state variant should exist.
-30. [STYLE-0002] Do not introduce synonyms for an existing concept.
-31. [STYLE-0003] Do not expose semantic policy through combinable booleans when one named mode constant set should exist.
-32. [STYLE-0004] Do not leak raw storage or transport field shapes into runtime model names or contracts.
-33. [TEST-0001] A package must not be renamed to done-... until its required validation has passed.
-34. [TEST-0002] Static guardrail proof is required even when focused unit and integration tests pass. Green behavior tests do not override a failed owner-path guard.
-35. [TEST-0003] The default ratchet must not increase the inherited count of production JavaScript files over 800 lines or test JavaScript files over 1200 lines.
-36. [TEST-0004] Do not close the package on local green proof alone while the reference scenario still fails for a different named reason.
-37. [TEST-0005] Combine before creating - If two existing pieces almost solve the problem, combine them. Do not create a third piece that reimplements both.
-38. [TEST-0006] Do not close the second bug with only a local patch if the porous boundary remains unchanged.
-39. [TEST-0007] Do not land a test-only change that leaves a known System Guidelines violation in the code path being tested.
-40. [TEST-0008] Enqueue-only triggers - Add coverage proving event handlers enqueue work and do not execute long-running progression inline.
-41. [GOV-0001] Roadmap corrections discovered during implementation should land with the package or sprint closure that discovered them. Do not leave truth repair as an out-of-band memory item.
-42. [GOV-0002] Do not create a new package solely for changed artifact timestamps, epochs, node ids, counters, or presentation-only shape.
-43. [STYLE-0005] NEVER introduce eslint override comments.
-44. [STYLE-0006] Shared domain literals belong in their canonical owner module and must be imported from there.
-45. [GOV-0003] Sprint files do not replace work packages.
-46. [GOV-0004] docs/ is reserved for end-user or operator-facing documentation. Internal planning, work-package execution, and sprint tracking must not live there.
-47. [GOV-0005] The row must be in scope for this repository under ../../edition-matrix.md.
-48. [GOV-0006] Broad rows must gain a linked spec or architecture document before active implementation starts.
+1. Start from `npm run work:context` for non-trivial implementation work; keep
+   the named owner, boundary, proof ladder, and out-of-scope list in view.
+2. Work one bounded concern at a time. Do not let a package become a bucket for
+   unrelated guardrail, runtime, presentation, or roadmap changes.
+3. Do not locally patch symptoms. Identify the semantic owner boundary, reduce
+   duplicate paths, prove the owner contract, and record what the representative
+   scenario does next.
+4. One concern has one semantic owner. Callers submit intent to the owner and
+   consume owner outcomes; they do not reproduce owner logic locally.
+5. One semantic decision has one path after ingress normalization. Avoid
+   fallback branches, helper-local verdicts, and combinable boolean policy.
+6. Runtime scalars and states have named owners. Do not use raw strings,
+   numbers, `null`, or `undefined` as domain/runtime state.
+7. Cache observes; owners decide. Cache visibility, elapsed time, and incidental
+   rows do not prove owner-managed phase completion.
+8. Phase code hands off completely. Bootstrap, join, recovery, split, and
+   rebalance phases must not leave steady state dependent on phase-owned wiring.
+9. Pressure may slow, defer, reject, or coalesce work; it must not produce
+   hidden drops, unbounded growth, incorrect results, or timeout-only failure.
+10. Events enqueue owner-key work. Long-running progression belongs in the
+    deterministic owner reconcile path with one in-flight execution per owner
+    key.
+11. Shared runtime contracts declare owner, evidence inputs, vocabulary,
+    allowed consumers, and forbidden reinterpretations. Diagnostics and reports
+    reuse that grammar.
+12. Tests prove the owner path and affected consumers, not only eventual local
+    convergence.
+13. Static guardrails are architecture evidence. Do not weaken scripts,
+    allowlists, scan scope, or lint rules to make a package pass.
+14. Scenario artifacts migrate only when normalized evidence changes owner,
+    boundary, or next required action; new counts, node ids, epochs, or timing
+    alone do not justify package churn.
+15. A package is not done while in-scope residuals, tail consumers, guardrail
+    drift, or unnamed scenario migration evidence remain.
+16. Sub-agents are mandatory for runtime owner-boundary and scenario/release-gate
+    packages; they are optional for read/review/doc-only and lightweight
+    maintenance lanes unless the package declares otherwise.
+17. Commit and push focused package slices before starting the next package.
+    Do not sweep unrelated dirty worktree changes into the slice.
+18. If a local fix feels hard because the boundary is porous, reduce the
+    boundary or raise the abstraction instead of adding another symptom patch.

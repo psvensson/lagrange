@@ -36,6 +36,23 @@ const TEST_PACKAGE_CONTENT = [
   '- Runtime behavior changes.',
   '',
 ].join('\n');
+const TEST_LIGHTWEIGHT_PACKAGE_CONTENT = [
+  '# Lightweight Package',
+  '',
+  '<!-- work-package',
+  JSON.stringify({
+    schema: 'work-package-v1',
+    status: 'active',
+    lane: 'lightweight-maintenance',
+    scenario: 'none',
+    owner: 'workflow_tooling_owner',
+    boundary: 'steering_pack',
+    currentState: 'Core steering pack needs a wording update.',
+    nextAction: 'Edit the compact steering pack.',
+  }, null, 2),
+  '-->',
+  '',
+].join('\n');
 const REVIEW_AGENT_ID = '019e02b6-1920-7130-b040-da2e6f4efbc4';
 const FIX_AGENT_ID = '019e02b7-ece3-73a2-a664-389d40dfd575';
 const IMPLEMENTATION_AGENT_ID = '019e02b9-7651-7851-bc85-a0cef8a90176';
@@ -165,6 +182,7 @@ const TEST_BLOCKER = Object.freeze({
   sprint: TEST_SPRINT_PATH,
   package: TEST_PACKAGE_PATH,
   status: 'active',
+  lane: 'runtime-owner-boundary',
   scenario: 'rolling-restart',
   artifact: TEST_ARTIFACT_PATH,
   playback: TEST_PLAYBACK_PATH,
@@ -393,6 +411,17 @@ test('work context reports the next required subagent role', (t) => {
   t.match(firstInSprint.status, /implementation proof recorded/u);
   t.equal(localSession.role, 'review');
   t.match(localSession.status, /Review proof missing/u);
+  t.end();
+});
+
+test('work context treats lightweight lanes as subagent optional', (t) => {
+  const lightweight = buildSubagentSequencingStatus(
+    TEST_LIGHTWEIGHT_PACKAGE_CONTENT,
+    TEST_PACKAGE_PATH,
+  );
+
+  t.equal(lightweight.role, 'none');
+  t.match(lightweight.status, /not required/u);
   t.end();
 });
 

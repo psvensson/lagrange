@@ -41,7 +41,9 @@ Use the repository documents according to this ownership split:
 | Document class | Canonical location | Primary concern |
 | --- | --- | --- |
 | Implementation doctrine | `.kiro/steering/doctrine.md` | Short repo-wide architectural intent |
-| Stable implementation rules | `.kiro/steering/system guidelines.md` | Durable repo-wide coding rules |
+| Stable implementation contract | `.kiro/steering/system guidelines.md` | Compact repo-wide hard stops |
+| Runtime contract detail | `.kiro/steering/runtime-contracts.md` | Control-plane, cache, metadata, pressure, and transport rules |
+| Workflow contract detail | `.kiro/steering/workflow-guidelines.md` | Package, sprint, sub-agent, guardrail, and causal-closure workflow |
 | Stable testing policy | `.kiro/steering/testing-guidelines.md` | Durable repo-wide testing rules |
 | Style and lint | `.kiro/steering/code-style.md` | Formatting, lint, and local coding style |
 | Architecture entrypoint | `architecture.md` | Current subsystem owner maps and data flow index |
@@ -83,10 +85,10 @@ replace work packages.
 
 Scenario-driven sprint files must keep a compact current blocker snapshot near
 the top of the document. The snapshot is the handoff point for agents and
-sub-agents when starting or continuing the sprint. It must identify the latest
-artifact, representative gate, current representative package, owner boundary,
-canonical blocker, prior blocker status, subordinate evidence, and next focused
-proof surface.
+sub-agents when starting or continuing the sprint. The snapshot must identify
+the latest artifact, representative gate, current representative package, owner
+boundary, canonical blocker, prior blocker status, subordinate evidence, and
+next focused proof surface.
 
 At most one package in a sprint may own the current representative re-entry
 gate. Residual packages that are not currently being executed must be renamed

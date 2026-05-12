@@ -1,5 +1,7 @@
 import {test} from '../../src/test-helpers/tap.js';
 import {
+  buildManifest,
+  countMarkdownRules,
   parseMarkdownCandidates,
   renderPackMarkdown,
   validateCompleteRules,
@@ -53,12 +55,57 @@ const TEST_CONTEXT_DEPENDENT_MARKDOWN = [
   TEST_CONTEXT_ANTECEDENT_TEXT + ' ' + TEST_CONTEXT_DEPENDENT_RULE_TEXT,
   '',
 ].join('\n');
+const TEST_CODE_EXAMPLE_TEXT = 'const timeoutPromise = new Promise(() => {});';
+const TEST_CODE_FENCE_MARKDOWN = [
+  '# Rules',
+  '',
+  'Do not create a second owner.',
+  '',
+  '**Common violations:**',
+  '```javascript',
+  '// MUST NOT become a generated rule',
+  TEST_CODE_EXAMPLE_TEXT,
+  '```',
+  '',
+].join('\n');
+const TEST_FORBIDDEN_PREAMBLE = 'It is FORBIDDEN to:';
+const TEST_FORBIDDEN_BULLET_TEXT =
+  'Introduce optional parameters that only bypass real logic for tests.';
+const TEST_FORBIDDEN_PREAMBLE_MARKDOWN = [
+  '# Rules',
+  '',
+  TEST_FORBIDDEN_PREAMBLE,
+  '',
+  '- ' + TEST_FORBIDDEN_BULLET_TEXT,
+  '',
+].join('\n');
+const TEST_FRAGMENT_MARKDOWN = [
+  '# Rules',
+  '',
+  '- one declared list of forbidden reinterpretations',
+  '',
+].join('\n');
 const TEST_OUTPUT_NAME = 'core';
 const TEST_OUTPUT = Object.freeze({
   name: TEST_OUTPUT_NAME,
   title: 'Core',
   description: 'Core rules.',
 });
+const TEST_MANUAL_OUTPUT = Object.freeze({
+  name: TEST_OUTPUT_NAME,
+  title: 'Core',
+  description: 'Core rules.',
+  manual: true,
+});
+const TEST_MANUAL_CORE_MARKDOWN = [
+  '# Core',
+  '',
+  '## Rules',
+  '',
+  '1. First rule.',
+  '2. Second rule.',
+  '',
+].join('\n');
 const TEST_INCOMPLETE_RULE = Object.freeze({
   id: 'ARCH-0001',
   text: 'Required workflow:',
@@ -142,6 +189,42 @@ test('steering pack parser preserves antecedent for context-dependent rules',
     t.end();
   });
 
+test('steering pack parser ignores fenced code examples', (t) => {
+  const candidates = parseTestCandidates(TEST_CODE_FENCE_MARKDOWN);
+
+  t.equal(
+    candidates.some((candidate) => candidate.text.includes(TEST_CODE_EXAMPLE_TEXT)),
+    false,
+    'code inside fenced examples should not become rules',
+  );
+  t.equal(
+    candidates.some((candidate) => candidate.text === TEST_UNRELATED_RULE_TEXT),
+    true,
+    'normative prose outside the fence should still be emitted',
+  );
+  t.end();
+});
+
+test('steering pack parser preserves forbidden list preambles across blanks',
+  (t) => {
+    const candidates = parseTestCandidates(TEST_FORBIDDEN_PREAMBLE_MARKDOWN);
+    const forbiddenRule = candidates.find((candidate) =>
+      candidate.text.includes(TEST_FORBIDDEN_BULLET_TEXT),
+    );
+
+    t.ok(forbiddenRule, 'forbidden child bullet should be emitted');
+    t.match(forbiddenRule.text, /^It is FORBIDDEN to:/u);
+    t.match(forbiddenRule.text, TEST_FORBIDDEN_BULLET_TEXT);
+    t.end();
+  });
+
+test('steering pack parser rejects non-normative fragments', (t) => {
+  const candidates = parseTestCandidates(TEST_FRAGMENT_MARKDOWN);
+
+  t.same(candidates, []);
+  t.end();
+});
+
 test('steering pack renderer rejects incomplete generated rule text', (t) => {
   t.throws(
     () => validateCompleteRules([TEST_INCOMPLETE_RULE], TEST_OUTPUT_NAME),
@@ -157,5 +240,22 @@ test('steering pack renderer rejects incomplete generated rule text', (t) => {
     () => renderPackMarkdown(TEST_OUTPUT, [TEST_COMPLETE_RULE]),
     'complete rules should still render',
   );
+  t.end();
+});
+
+test('steering pack manifest supports manual core packs', (t) => {
+  const manualContentByOutput = new Map([
+    [TEST_OUTPUT_NAME, TEST_MANUAL_CORE_MARKDOWN],
+  ]);
+  const manifest = buildManifest(
+    [TEST_MANUAL_OUTPUT],
+    new Map(),
+    manualContentByOutput,
+  );
+
+  t.equal(countMarkdownRules(TEST_MANUAL_CORE_MARKDOWN), 2);
+  t.equal(manifest[0].mode, 'manual');
+  t.equal(manifest[0].ruleCount, 2);
+  t.ok(manifest[0].estimatedTokens > 0);
   t.end();
 });

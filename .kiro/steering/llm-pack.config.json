@@ -11,7 +11,12 @@
     {
       "file": "system guidelines.md",
       "domain": "architecture",
-      "priority": 140
+      "priority": 150
+    },
+    {
+      "file": "runtime-contracts.md",
+      "domain": "architecture",
+      "priority": 135
     },
     {
       "file": "doctrine.md",
@@ -37,6 +42,11 @@
       "file": "roadmap.md",
       "domain": "governance",
       "priority": 120
+    },
+    {
+      "file": "workflow-guidelines.md",
+      "domain": "governance",
+      "priority": 115
     }
   ],
   "outputs": [
@@ -44,6 +54,7 @@
       "name": "core",
       "title": "Core Steering Pack",
       "description": "Always-load compact rules for ownership, safety, scope, and quality baseline.",
+      "manual": true,
       "domains": [
         "architecture",
         "testing",

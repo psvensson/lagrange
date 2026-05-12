@@ -15,7 +15,8 @@ Internal execution planning, work packages, and sprint tracking live under
   - Optional grouping documents that collect several active work packages into
     one focused push.
 - `work/templates/`
-  - Templates for ideas and work packages.
+  - Templates for ideas, generic work packages, and lane-specific package
+    shapes.
 
 ## Recommended Workflow
 
@@ -50,8 +51,8 @@ Use the tracker utility for current sprint/package mechanics:
    topology plus causal-model summary for LLM handoff before reading raw logs or
    large harness segment files.
 7. `npm run work:validate` checks active and metadata-bearing packages for
-    filename/header drift, stale open checklist items, and required Subagent
-    Sequencing Ledgers on active metadata-bearing packages.
+   filename/header drift, stale open checklist items, and lane-required
+   Subagent Sequencing Ledgers.
 8. `npm run work:package:close -- --write work/packages/active-...md` renames a
     package to `done-...` only after open checklist items are closed.
 9. `npm run work:package:migrate -- --write work/packages/active-...md`
@@ -93,21 +94,23 @@ npm run work:model-ledger -- record \
 ```
 
 The ledger is advisory. It helps future agents choose a model and reasoning
-effort, but it never replaces `npm run work:validate`, review/fix/implementation
-subagent sequencing, focused validation, package closure, or commit discipline.
+effort, but it never replaces `npm run work:validate`, lane selection, focused
+validation, package closure, or commit discipline.
 
-## Mandatory Subagent Sequencing
+## Subagent Sequencing By Lane
 
-Every new or continued work package must make the implementation handoff
-sequential with real subagents by default. Record the sequence in the package
-file before runtime, test, harness, documentation, or tracker implementation
-starts.
+Choose the lightest workflow lane that still proves the owner boundary was not
+weakened. Record the lane in package metadata as `lane`.
 
-Subagents are orchestrated by Codex sessions and proven by package ledger
-entries. Do not add npm scripts that pretend to spawn or replace the review,
-fix, or implementation subagent roles.
+Subagents are not required for `read-review-doc-only` or
+`lightweight-maintenance` packages unless the package explicitly declares that
+they are needed or a human asks for them. These lanes are for review, steering,
+documentation, tracker, or narrow maintenance work that cannot change runtime
+ownership, shared contracts, or representative scenario evidence.
 
-Required sequence:
+Subagents are required by default for `runtime-owner-boundary`,
+`scenario-release-gate`, and `causal-escalation` packages. Use the sequential
+handoff before implementation starts:
 
 1. Fresh review subagent: review the most recently executed package on the same
    sprint or owner boundary. For the first work package in a new sprint, record
@@ -130,22 +133,20 @@ The package must record:
    review/fix proof is recorded.
 
 Do not use parallel subagents for these roles unless a human explicitly changes
-the package sequencing contract. The default is review, then fixes if needed,
-then implementation.
+the package sequencing contract. Parent-session notes, local/manual session
+labels, and arbitrary text without a real agent id do not satisfy required
+roles unless the user explicitly disables subagents for the task.
 
-Parent-session notes, local/manual session labels, and arbitrary text without a
-real agent id do not satisfy the required roles unless the user explicitly
-disables subagents for the task.
-
-`npm run work:validate` requires this ledger for active metadata-bearing
-packages. Historical `done-...` packages without the ledger remain valid unless
-they add a ledger with open or incomplete required entries. Checked required
-entries must contain real agent identities; template placeholders such as
-`<...>`, pending markers such as `pending-before-implementation-resumes`, and
-non-real identities such as `current-session`, `parent Codex`, `manual`,
-`local`, or `session` are validation failures for packages under the current
-policy. Historical closed-package proof is not backfilled by invention; if a
-package is reopened, migrated, or closed again, the current proof rules apply.
+`npm run work:validate` requires this ledger only for lanes that require
+subagents. Legacy active metadata packages without `lane` remain strict.
+Historical `done-...` packages without the ledger remain valid unless they add
+a ledger with open or incomplete required entries. Checked required entries
+must contain real agent identities; template placeholders such as `<...>`,
+pending markers such as `pending-before-implementation-resumes`, and non-real
+identities such as `current-session`, `parent Codex`, `manual`, `local`, or
+`session` are validation failures for packages under the current policy.
+Historical closed-package proof is not backfilled by invention; if a package is
+reopened, migrated, or closed again, the current proof rules apply.
 
 ## Commit And Push Ledger
 
@@ -575,5 +576,5 @@ guideline audits (`audit:guideline:literals`,
 `audit:guideline:decision-boundaries`,
 `audit:guideline:boundary-mode-contracts`,
 `guard:guideline:constant-names:file`, and
-`audit:runtime-grammar:file`) plus the mandatory Subagent Sequencing Ledger for
-review proof; do not depend on network-backed LLM API checks.
+`audit:runtime-grammar:file`) plus the lane-required Subagent Sequencing Ledger
+for review proof; do not depend on network-backed LLM API checks.

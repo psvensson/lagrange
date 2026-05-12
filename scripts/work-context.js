@@ -6,7 +6,10 @@ import path from 'node:path';
 import process from 'node:process';
 import {fileURLToPath} from 'node:url';
 import {promisify} from 'node:util';
-import {validateSubagentSequencingLedger} from './work-tracker.js';
+import {
+  metadataRequiresSubagentSequencing,
+  validateSubagentSequencingLedger,
+} from './work-tracker.js';
 
 const execFileAsync = promisify(execFile);
 
@@ -147,6 +150,8 @@ const SUBAGENT_STATUS_IMPLEMENTATION_RECORDED =
   'Review, fix, and implementation proof recorded.';
 const SUBAGENT_STATUS_STRICT_VALIDATION_FAILED =
   'Subagent Sequencing Ledger strict validation failed; repair the recorded proof before implementation.';
+const SUBAGENT_STATUS_NOT_REQUIRED =
+  'Subagent sequencing not required for this workflow lane.';
 const SUBAGENT_REVIEW_RESULT_CLEAN = 'clean';
 const SUBAGENT_REVIEW_RESULT_FIXES_REQUIRED = 'fixes-required';
 const SUBAGENT_FIX_NOT_NEEDED = 'not-needed';
@@ -185,6 +190,7 @@ const FIELD_LABELS = Object.freeze({
   SCOPE_SHAPE: 'Scope shape',
   SPRINT: 'Sprint',
   STATUS: 'Status',
+  WORKFLOW_LANE: 'Workflow lane',
   STOP_CONDITION_CHECK: 'Stop-condition check',
   SUBAGENT_ROLE: 'Next required subagent role',
   SUBAGENT_STATUS: 'Subagent sequencing status',
@@ -236,6 +242,7 @@ const GLOB_PATTERN_MARKERS = Object.freeze([
   '}',
 ]);
 const METADATA_FIELD_STATUS = 'status';
+const METADATA_FIELD_LANE = 'lane';
 const METADATA_FIELD_SCENARIO = 'scenario';
 const METADATA_FIELD_ARTIFACT = 'artifact';
 const METADATA_FIELD_PLAYBACK = 'playback';
@@ -391,6 +398,14 @@ function parsePackageMetadata(content, filePath) {
   return JSON.parse(content.slice(jsonStart, closeIndex).trim());
 }
 
+function parseOptionalPackageMetadata(content, filePath) {
+  try {
+    return parsePackageMetadata(content, filePath || DEFAULT_UNKNOWN);
+  } catch (_error) {
+    return null;
+  }
+}
+
 async function buildCurrentBlockerFromPackage(packagePath) {
   const content = await readTextFile(packagePath);
   const metadata = parsePackageMetadata(content, packagePath);
@@ -399,6 +414,7 @@ async function buildCurrentBlockerFromPackage(packagePath) {
       sprint: DEFAULT_UNKNOWN,
       package: packagePath,
       status: metadataText(metadata, METADATA_FIELD_STATUS),
+      lane: metadataText(metadata, METADATA_FIELD_LANE),
       scenario: metadataText(metadata, METADATA_FIELD_SCENARIO),
       artifact: metadataText(metadata, METADATA_FIELD_ARTIFACT),
       playback: metadataText(metadata, METADATA_FIELD_PLAYBACK),
@@ -817,6 +833,13 @@ function buildSubagentSequencingStatus(
   packageContent = EMPTY_STRING,
   packagePath = EMPTY_STRING,
 ) {
+  const metadata = parseOptionalPackageMetadata(packageContent, packagePath);
+  if (metadata && !metadataRequiresSubagentSequencing(metadata)) {
+    return buildSubagentRoleStatus(
+      SUBAGENT_ROLE_NONE,
+      SUBAGENT_STATUS_NOT_REQUIRED,
+    );
+  }
   const ledger = extractMarkdownSectionText(
     packageContent,
     PACKAGE_SECTION_SUBAGENT_LEDGER,
@@ -1286,6 +1309,7 @@ async function buildContextLines(currentBlocker, packageContent) {
   appendKeyValue(lines, FIELD_LABELS.SPRINT, currentBlocker.sprint);
   appendKeyValue(lines, FIELD_LABELS.PACKAGE, currentBlocker.package);
   appendKeyValue(lines, FIELD_LABELS.STATUS, currentBlocker.status);
+  appendKeyValue(lines, FIELD_LABELS.WORKFLOW_LANE, currentBlocker.lane);
   appendKeyValue(lines, FIELD_LABELS.SCENARIO, currentBlocker.scenario);
   appendKeyValue(lines, FIELD_LABELS.OWNER, currentBlocker.owner);
   appendKeyValue(lines, FIELD_LABELS.BOUNDARY, currentBlocker.boundary);

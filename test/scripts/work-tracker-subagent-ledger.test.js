@@ -4,6 +4,7 @@ import {
   buildCurrentBlockerPayload,
   buildPackageDoctorLines,
   isGeneratedCurrentBlockerPath,
+  metadataRequiresSubagentSequencing,
   renderCurrentBlockerMarkdown,
   validateCausalGovernanceContract,
   validateCommitAndPushLedger,
@@ -27,6 +28,9 @@ const TEST_COMMIT_SHA = 'abcdef1234567890abcdef1234567890abcdef12';
 const TEST_PUSH_TARGET = 'origin/main';
 const WORK_TRACKER_ACTIVE_STATUS = 'active';
 const WORK_TRACKER_DONE_STATUS = 'done';
+const LANE_READ_REVIEW_DOC_ONLY = 'read-review-doc-only';
+const LANE_LIGHTWEIGHT_MAINTENANCE = 'lightweight-maintenance';
+const LANE_RUNTIME_OWNER_BOUNDARY = 'runtime-owner-boundary';
 const CAUSAL_GOVERNANCE_VALID_METADATA = Object.freeze({
   status: WORK_TRACKER_ACTIVE_STATUS,
   scenario: 'rolling-restart',
@@ -393,6 +397,22 @@ const WORK_TRACKER_COMMIT_LEDGER_TEMPLATE_CONTENT = [
 ].join('\n');
 
 describe('work tracker subagent sequencing ledger validation', () => {
+  it('requires subagent sequencing only for strict workflow lanes', () => {
+    assert.equal(
+      metadataRequiresSubagentSequencing({lane: LANE_READ_REVIEW_DOC_ONLY}),
+      false,
+    );
+    assert.equal(
+      metadataRequiresSubagentSequencing({lane: LANE_LIGHTWEIGHT_MAINTENANCE}),
+      false,
+    );
+    assert.equal(
+      metadataRequiresSubagentSequencing({lane: LANE_RUNTIME_OWNER_BOUNDARY}),
+      true,
+    );
+    assert.equal(metadataRequiresSubagentSequencing({}), true);
+  });
+
   it('reports active metadata-bearing packages without the new ledger', () => {
     const errors = validateSubagentSequencingLedger(
       WORK_TRACKER_LEDGER_NO_LEDGER_CONTENT,
@@ -767,6 +787,7 @@ describe('work tracker scenario causal closure validation', () => {
       const metadata = {
         ...SCENARIO_CAUSAL_CLOSURE_VALID_METADATA,
         schema: 'work-package-v1',
+        lane: LANE_RUNTIME_OWNER_BOUNDARY,
         owner: 'workflow_tooling_owner',
         boundary: 'scenario_causal_closure',
         nextAction: 'Keep causal closure visible in handoff.',
@@ -782,6 +803,8 @@ describe('work tracker scenario causal closure validation', () => {
         payload.scenarioCausalClosure.resultClassification,
         'classification-only',
       );
+      assert.equal(payload.lane, LANE_RUNTIME_OWNER_BOUNDARY);
+      assert.match(rendered, /Workflow lane/u);
       assert.match(rendered, /## Scenario Causal Closure/u);
       assert.match(rendered, /Reference scenario\/probe/u);
       assert.match(rendered, /startup_active_gate_owner snapshot coverage/u);

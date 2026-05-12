@@ -45,8 +45,8 @@ Every durable concern must have one semantic owner.
 - Topology workflow state has one owner.
 - Shared metadata row lifecycle has one owner.
 
-Callers submit intent to the owner. They do not reproduce the owner's logic
-locally, and they do not keep shadow state for the same concern.
+Callers submit intent to the owner. Callers do not reproduce the owner's logic
+locally, and callers do not keep shadow state for the same concern.
 
 ## 2. One Ingress, Not Many Helpers
 
@@ -89,7 +89,7 @@ they must hand off to steady-state owners before phase completion.
 ## 5. Slower Under Pressure, Never Less Correct
 
 Under load, the system may slow down, defer work, or reject new edge work with
-structured retry semantics. It must not become less correct.
+structured retry semantics. The system must not become less correct.
 
 - Pressure must become admission, defer, reject, or coalescing signals.
 - Pressure must not become hidden drops, memory growth without bounds, or
@@ -99,8 +99,8 @@ structured retry semantics. It must not become less correct.
 
 When an owner-path read or write is unresolved because pressure, authority
 establishment, or recovery completion is still in flight, the owner must emit
-one structured deferred outcome. It must not degrade into empty collections,
-null-shaped absence, or timeout-only silence.
+one structured deferred outcome. The owner outcome must not degrade into empty
+collections, null-shaped absence, or timeout-only silence.
 
 That deferred outcome must carry the canonical vocabulary for the boundary,
 such as:
@@ -116,7 +116,7 @@ silently reinterpret it as success, empty visibility, or unknown absence.
 
 For shared control-plane truth surfaces such as startup, readiness, admin
 snapshot, service discovery, and harness convergence, readers must observe
-through a canonical snapshot/watch owner. They must not run synchronous
+through a canonical snapshot/watch owner. Readers must not run synchronous
 multi-table authoritative repair inline on the hot read path. If freshness is
 insufficient, the owner returns an explicit fresh, stale-but-usable, deferred,
 or failed observation and schedules or performs repair through the owned

@@ -27,12 +27,18 @@ For steering context, load the compact LLM pack first:
 Use the full steering source documents only when the handoff or compact pack
 requires source-level detail for the current boundary.
 
-## Mandatory Subagent Sequencing
+## Subagent Sequencing By Lane
 
-Real subagents are authorized and required for all sprint or work-package
-implementation work by default. Before implementation starts for any new or
-continued work package, run the subagents sequentially and record the result in
-the package file:
+Use the lightest valid workflow lane from `.kiro/steering/workflow-guidelines.md`.
+
+Subagents are not required for read/review/doc-only work or lightweight
+maintenance unless the package explicitly declares that requirement or the user
+asks for it.
+
+Real subagents are authorized and required for runtime owner-boundary packages
+and scenario/release-gate packages by default. Before implementation starts for
+those packages, run the subagents sequentially and record the result in the
+package file:
 
 1. A fresh review subagent reviews the most recently executed package on the
    same sprint or owner boundary. For the first work package in a new sprint,
@@ -44,13 +50,12 @@ the package file:
 4. Commit and push the focused package slice before the next package starts.
 
 Parent-session notes, local/manual session labels, or arbitrary text do not
-satisfy the review, fix, or implementation roles unless the user explicitly
-disables subagents for that task. Do not parallelize or skip these roles by
-default.
+satisfy the review, fix, or implementation roles when subagent sequencing is
+required. Do not parallelize or skip required roles by default.
 
 The package's Subagent Sequencing Ledger is the durable proof that the sequence
-happened. Active metadata-bearing packages must carry checked entries in this
-format:
+happened. Runtime owner-boundary and scenario/release-gate packages must carry
+checked entries in this format:
 
 1. `Agent <name> (<agent-id>) reviewed <package>; result <clean|fixes-required>`,
    or `not-needed (first-package-in-sprint)` only for the first package in a
@@ -88,6 +93,8 @@ or same-frontier. It must not expand implementation scope inside the package.
 
 Canonical steering source documents live under `.kiro/steering/`:
 - `.kiro/steering/system guidelines.md`
+- `.kiro/steering/runtime-contracts.md`
+- `.kiro/steering/workflow-guidelines.md`
 - `.kiro/steering/code-style.md`
 - `.kiro/steering/testing-guidelines.md`
 - `.kiro/steering/doctrine.md`

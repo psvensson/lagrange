@@ -1,6 +1,6 @@
 # Steering LLM Pack
 
-This directory contains generated low-token steering artifacts.
+This directory contains curated and generated low-token steering artifacts.
 
 Generation command:
 
@@ -20,15 +20,16 @@ Recommended load strategy:
 
 ## Pack Sizes
 
-| Pack | Rules | Estimated Tokens |
-| --- | ---: | ---: |
-| core | 48 | 1678 |
-| architecture | 140 | 4881 |
-| testing | 120 | 4526 |
-| style | 21 | 489 |
-| governance | 41 | 1567 |
+| Pack | Mode | Rules | Estimated Tokens |
+| --- | --- | ---: | ---: |
+| core | manual | 18 | 987 |
+| architecture | generated | 109 | 3511 |
+| testing | generated | 94 | 3678 |
+| style | generated | 8 | 203 |
+| governance | generated | 43 | 1633 |
 
 ## Notes
 
-- `rules.json` is the complete machine-readable source with IDs and citations.
-- Markdown packs are intentionally compact for prompt loading.
+- `rules.json` is the complete generated domain source with IDs and citations.
+- `core.md` is manually curated so the always-load contract stays memorable.
+- Domain Markdown packs are generated and compact for prompt loading.

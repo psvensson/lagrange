@@ -24,6 +24,13 @@ const VALID_PACKAGE_STATUSES = Object.freeze([
   STATUS_TODO,
 ]);
 const WORK_PACKAGE_METADATA_SCHEMA = 'work-package-v1';
+const METADATA_LANE_FIELD = 'lane';
+const LANE_READ_REVIEW_DOC_ONLY = 'read-review-doc-only';
+const LANE_LIGHTWEIGHT_MAINTENANCE = 'lightweight-maintenance';
+const SUBAGENT_OPTIONAL_LANES = Object.freeze([
+  LANE_READ_REVIEW_DOC_ONLY,
+  LANE_LIGHTWEIGHT_MAINTENANCE,
+]);
 const WORK_ROOT = 'work';
 const WORK_PACKAGES_DIR = path.join(WORK_ROOT, 'packages');
 const WORK_SPRINTS_DIR = path.join(WORK_ROOT, 'sprints');
@@ -851,6 +858,17 @@ function isScenarioDrivenMetadata(metadata) {
     scenario !== SCENARIO_TEMPLATE_VALUE;
 }
 
+function metadataLane(metadata) {
+  return normalizeLedgerText(metadata?.[METADATA_LANE_FIELD]).toLowerCase();
+}
+
+export function metadataRequiresSubagentSequencing(metadata) {
+  if (!metadata) {
+    return false;
+  }
+  return !SUBAGENT_OPTIONAL_LANES.includes(metadataLane(metadata));
+}
+
 function validateCausalGovernanceField(filePath, fieldName, value) {
   const normalizedValue = normalizeLedgerText(value);
   if (
@@ -1236,11 +1254,13 @@ async function validatePackageFile(filePath) {
   errors.push(
     ...validatePackageMetadataShape(relativePath, fileStatus, metadata),
   );
+  const requiresSubagentLedger =
+    fileStatus === STATUS_ACTIVE &&
+    metadata !== null &&
+    metadataRequiresSubagentSequencing(metadata);
   errors.push(...validateSubagentSequencingLedger(content, relativePath, {
-    [LEDGER_VALIDATION_REQUIRES_LEDGER]:
-      fileStatus === STATUS_ACTIVE && metadata !== null,
-    [LEDGER_VALIDATION_REQUIRES_STRICT_ENTRIES]:
-      fileStatus === STATUS_ACTIVE && metadata !== null,
+    [LEDGER_VALIDATION_REQUIRES_LEDGER]: requiresSubagentLedger,
+    [LEDGER_VALIDATION_REQUIRES_STRICT_ENTRIES]: requiresSubagentLedger,
   }));
   errors.push(...validateModelFitContract(content, relativePath, {
     [LEDGER_VALIDATION_REQUIRES_LEDGER]:
@@ -1334,6 +1354,7 @@ function appendDoctorField(lines, label, value) {
 
 function summarizeDoctorMetadata(metadata = {}) {
   return {
+    lane: metadata[METADATA_LANE_FIELD] || DEFAULT_UNKNOWN,
     scenario: metadata.scenario || DEFAULT_UNKNOWN,
     owner: metadata.owner || DEFAULT_UNKNOWN,
     boundary: metadata.boundary || DEFAULT_UNKNOWN,
@@ -1368,11 +1389,13 @@ export function buildPackageDoctorLines(filePath, content) {
     errors.push(`${relativePath}: closed package still has open checklist items.`);
   }
   errors.push(...validatePackageMetadataShape(relativePath, fileStatus, metadata));
+  const requiresSubagentLedger =
+    fileStatus === STATUS_ACTIVE &&
+    metadata !== null &&
+    metadataRequiresSubagentSequencing(metadata);
   errors.push(...validateSubagentSequencingLedger(content, relativePath, {
-    [LEDGER_VALIDATION_REQUIRES_LEDGER]:
-      fileStatus === STATUS_ACTIVE && metadata !== null,
-    [LEDGER_VALIDATION_REQUIRES_STRICT_ENTRIES]:
-      fileStatus === STATUS_ACTIVE && metadata !== null,
+    [LEDGER_VALIDATION_REQUIRES_LEDGER]: requiresSubagentLedger,
+    [LEDGER_VALIDATION_REQUIRES_STRICT_ENTRIES]: requiresSubagentLedger,
   }));
   errors.push(...validateModelFitContract(content, relativePath, {
     [LEDGER_VALIDATION_REQUIRES_LEDGER]:
@@ -1402,6 +1425,7 @@ export function buildPackageDoctorLines(filePath, content) {
   const lines = ['# Work Package Doctor'];
   appendDoctorField(lines, 'Package', relativePath);
   appendDoctorField(lines, 'Status', fileStatus);
+  appendDoctorField(lines, 'Workflow lane', metadataSummary.lane);
   appendDoctorField(lines, 'Scenario', metadataSummary.scenario);
   appendDoctorField(lines, 'Owner', metadataSummary.owner);
   appendDoctorField(lines, 'Boundary', metadataSummary.boundary);
@@ -1486,6 +1510,7 @@ export function buildCurrentBlockerPayload(
     sprint: normalizeRelativePath(activeSprintFile),
     package: normalizeRelativePath(activePackageFile),
     status: metadata.status,
+    lane: metadata[METADATA_LANE_FIELD] || DEFAULT_UNKNOWN,
     scenario: metadata.scenario || DEFAULT_UNKNOWN,
     artifact: metadata.artifact || DEFAULT_UNKNOWN,
     playback: metadata.playback || DEFAULT_UNKNOWN,
@@ -1519,6 +1544,8 @@ export function renderCurrentBlockerMarkdown(payload) {
     `Sprint: \`${payload.sprint}\``,
     '',
     `Package: \`${payload.package}\``,
+    '',
+    `Workflow lane: \`${payload.lane || DEFAULT_UNKNOWN}\``,
     '',
     `Scenario: \`${payload.scenario}\``,
     '',

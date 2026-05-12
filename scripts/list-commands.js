@@ -18,7 +18,7 @@ const COMMAND_GROUPS = Object.freeze([
       }),
       Object.freeze({
         command: 'npm run work:validate',
-        description: 'Validate active work-package metadata, checklist state, and Subagent Sequencing Ledger proof.',
+        description: 'Validate active work-package metadata, checklist state, and lane-required subagent proof.',
       }),
       Object.freeze({
         command: 'npm run steering:llm:pack',

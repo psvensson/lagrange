@@ -5,6 +5,7 @@
   "schema": "work-package-v1",
   "status": "active",
   "opened": "YYYY-MM-DD",
+  "lane": "lightweight-maintenance|runtime-owner-boundary|scenario-release-gate|causal-escalation",
   "scenario": "scenario-or-none",
   "artifact": "path/to/latest.report.json",
   "playback": "path/to/playback-or-none",
@@ -71,6 +72,15 @@ Describe the problem being solved.
 
 Link the roadmap row, or state the approved existing subsystem / maintenance
 scope that makes this work package valid without a roadmap change.
+
+## Workflow Lane
+
+Select the lightest valid lane from
+`.kiro/steering/workflow-guidelines.md`.
+
+- Selected lane:
+- Why this lane is sufficient:
+- Escalation trigger to a heavier lane:
 
 ## In Scope
 
@@ -196,12 +206,14 @@ Closure:
 
 ## Subagent Sequencing Ledger
 
-Required before implementation starts for every new or continued package.
-Active metadata-bearing packages fail `npm run work:validate` without this
-ledger. Do not check these items until real subagent names and agent ids
-replace the template placeholders; checked placeholders, pending markers,
-parent-session labels, local/manual labels, or arbitrary text without agent id
-proof are invalid.
+Required before implementation starts for `runtime-owner-boundary`,
+`scenario-release-gate`, and `causal-escalation` packages. Optional for
+`read-review-doc-only` and `lightweight-maintenance` packages unless the
+package declares otherwise. Active metadata-bearing packages in required lanes
+fail `npm run work:validate` without this ledger. Do not check these items
+until real subagent names and agent ids replace the template placeholders;
+checked placeholders, pending markers, parent-session labels, local/manual
+labels, or arbitrary text without agent id proof are invalid.
 Subagents are orchestrated by Codex sessions and recorded here; npm scripts
 must not stand in for review, fix, or implementation subagents.
 

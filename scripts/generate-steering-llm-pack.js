@@ -51,6 +51,8 @@ const LOCAL_STR_1WFBO = 'Generated steering LLM pack';
 const LOCAL_STR_INCOMPLETE_RULE = 'Incomplete generated steering rule';
 const LOCAL_STR_UNKNOWN_RULE = '<unknown-rule>';
 const LOCAL_STR_UNKNOWN_OUTPUT = '<unknown-output>';
+const LOCAL_STR_MANUAL = 'manual';
+const LOCAL_STR_GENERATED = 'generated';
 
 const DEFAULT_CONFIG_PATH = path.join(
   '.kiro',
@@ -62,7 +64,10 @@ const HEADING_PATTERN = /^(\s{0,3})(#{1,6})\s+(.+)$/u;
 const BULLET_PATTERN = /^\s*(?:[-*]|\d+\.)\s+(.+)$/u;
 const BULLET_WITH_INDENT_PATTERN = /^(\s*)(?:[-*]|\d+\.)\s+(.+)$/u;
 const TABLE_PATTERN = /^\s*\|/u;
+const FENCED_CODE_PATTERN = /^\s*```/u;
 const TRAILING_COLON_PATTERN = /:\s*$/u;
+const NORMATIVE_LIST_PREAMBLE_PATTERN =
+  /\b(FORBIDDEN|MUST\s+NOT|SHALL\s+NOT|DO\s+NOT|NEVER)\b[^:]*:\s*$/iu;
 const CHILD_RULE_PREFIX = '- ';
 const CHILD_RULE_JOINER = '; ';
 const RULE_BODY_JOINER = ' ';
@@ -78,7 +83,7 @@ const JSON_INDENT_SPACES = 2;
 const DEFAULT_RULE_PREFIX = 'RULE';
 
 const NORMATIVE_PATTERN =
-  /\b(MUST\s+NOT|SHALL\s+NOT|MUST|SHALL|NEVER|SHOULD|MAY|REQUIRED|FORBIDDEN|DO\s+NOT|ONLY)\b/iu;
+  /\b(MUST\s+NOT|SHALL\s+NOT|MUST|SHALL|NEVER|SHOULD|MAY|REQUIRED|DO\s+NOT)\b|^ONLY\b|\b(?:IS|ARE|BE)\s+FORBIDDEN\b|\bFORBIDDEN\s+TO\b/iu;
 const CONTEXT_DEPENDENT_NORMATIVE_PATTERN =
   /\bthere\b/iu;
 
@@ -137,6 +142,19 @@ function isTable(line) {
   return TABLE_PATTERN.test(line);
 }
 
+function isFencedCodeBoundary(line) {
+  return FENCED_CODE_PATTERN.test(line);
+}
+
+function isNormativeListPreamble(text = LOCAL_STR_EMPTY) {
+  return NORMATIVE_LIST_PREAMBLE_PATTERN.test(normalizeWhitespace(text));
+}
+
+function isFragmentLikeBullet(text = LOCAL_STR_EMPTY) {
+  const normalized = normalizeWhitespace(text);
+  return /^[a-z]/u.test(normalized) && !/[.!?)]$/u.test(normalized);
+}
+
 function normalizeWhitespace(value) {
   return String(value || LOCAL_STR_EMPTY).replace(/\s+/gu, LOCAL_STR_SPACE).trim();
 }
@@ -182,7 +200,10 @@ function normalizeRuleKey(value) {
 
 function inferStrength(text) {
   const normalized = String(text || '').toUpperCase();
-  if (/(MUST\s+NOT|SHALL\s+NOT|NEVER|FORBIDDEN|DO\s+NOT)/u.test(normalized)) {
+  if (
+    /(MUST\s+NOT|SHALL\s+NOT|NEVER|DO\s+NOT)/u.test(normalized) ||
+    /\b(?:IS|ARE|BE)\s+FORBIDDEN\b|\bFORBIDDEN\s+TO\b/u.test(normalized)
+  ) {
     return LOCAL_STR_MUST_NOT;
   }
   if (/(MUST|SHALL|REQUIRED)/u.test(normalized)) {
@@ -191,7 +212,7 @@ function inferStrength(text) {
   if (/SHOULD/u.test(normalized)) {
     return LOCAL_STR_SHOULD;
   }
-  if (/(MAY|ONLY)/u.test(normalized)) {
+  if (/MAY/u.test(normalized) || /^ONLY\b/u.test(normalized)) {
     return LOCAL_STR_MAY;
   }
   return LOCAL_STR_INFO;
@@ -327,7 +348,10 @@ function pushCandidate(container, options = {}) {
   }
 
   const strength = inferStrength(text);
-  if (strength === LOCAL_STR_INFO && options.kind !== LOCAL_STR_BULLET) {
+  if (options.kind === LOCAL_STR_BULLET && isFragmentLikeBullet(text)) {
+    return;
+  }
+  if (strength === LOCAL_STR_INFO) {
     return;
   }
 
@@ -372,7 +396,8 @@ function collectBulletListText(lines = [], startIndex = LOCAL_NUM_ZERO, options 
     while (itemCursor < lines.length) {
       const nextLine = lines[itemCursor];
       if (isBlank(nextLine) || isHeading(nextLine) ||
-          isBullet(nextLine) || isTable(nextLine)) {
+          isBullet(nextLine) || isTable(nextLine) ||
+          isFencedCodeBoundary(nextLine)) {
         break;
       }
       text += `${RULE_BODY_JOINER}${nextLine.trim()}`;
@@ -415,12 +440,28 @@ function parseMarkdownCandidates(content, source = {}) {
   const lines = String(content || '').split(/\r?\n/u);
   const sectionStack = [];
   const candidates = [];
+  let inCodeFence = false;
+  let pendingListPreamble = LOCAL_STR_EMPTY;
+  let pendingListPreambleAllowsBlank = false;
+  let pendingListPreambleInList = false;
 
   for (let index = LOCAL_NUM_ZERO; index < lines.length; index++) {
     const rawLine = lines[index];
 
+    if (isFencedCodeBoundary(rawLine)) {
+      inCodeFence = !inCodeFence;
+      continue;
+    }
+
+    if (inCodeFence) {
+      continue;
+    }
+
     const headingMatch = rawLine.match(HEADING_PATTERN);
     if (headingMatch) {
+      pendingListPreamble = LOCAL_STR_EMPTY;
+      pendingListPreambleAllowsBlank = false;
+      pendingListPreambleInList = false;
       const level = headingMatch[2].length;
       const headingText = stripInlineMarkdown(headingMatch[3]);
       sectionStack.length = Math.max(level - LOCAL_NUM_ONE, LOCAL_NUM_ZERO);
@@ -431,12 +472,17 @@ function parseMarkdownCandidates(content, source = {}) {
     const bulletMatch = rawLine.match(BULLET_WITH_INDENT_PATTERN);
     if (bulletMatch) {
       let text = bulletMatch[LOCAL_NUM_TWO];
+      if (pendingListPreamble) {
+        text = `${pendingListPreamble}${RULE_BODY_JOINER}${text}`;
+        pendingListPreambleAllowsBlank = false;
+        pendingListPreambleInList = true;
+      }
       let cursor = index + LOCAL_NUM_ONE;
 
       while (cursor < lines.length) {
         const nextLine = lines[cursor];
         if (isBlank(nextLine) || isHeading(nextLine) || isBullet(nextLine) ||
-            isTable(nextLine)) {
+            isTable(nextLine) || isFencedCodeBoundary(nextLine)) {
           break;
         }
         text += ` ${nextLine.trim()}`;
@@ -466,16 +512,34 @@ function parseMarkdownCandidates(content, source = {}) {
       continue;
     }
 
-    if (isBlank(rawLine) || isTable(rawLine)) {
+    if (isBlank(rawLine)) {
+      if (pendingListPreambleInList || !pendingListPreambleAllowsBlank) {
+        pendingListPreamble = LOCAL_STR_EMPTY;
+        pendingListPreambleAllowsBlank = false;
+        pendingListPreambleInList = false;
+        continue;
+      }
+      pendingListPreambleAllowsBlank = false;
       continue;
     }
+
+    if (isTable(rawLine)) {
+      pendingListPreamble = LOCAL_STR_EMPTY;
+      pendingListPreambleAllowsBlank = false;
+      pendingListPreambleInList = false;
+      continue;
+    }
+
+    pendingListPreamble = LOCAL_STR_EMPTY;
+    pendingListPreambleAllowsBlank = false;
+    pendingListPreambleInList = false;
 
     let paragraph = rawLine.trim();
     let cursor = index + LOCAL_NUM_ONE;
     while (cursor < lines.length) {
       const nextLine = lines[cursor];
       if (isBlank(nextLine) || isHeading(nextLine) || isBullet(nextLine) ||
-          isTable(nextLine)) {
+          isTable(nextLine) || isFencedCodeBoundary(nextLine)) {
         break;
       }
       paragraph += ` ${nextLine.trim()}`;
@@ -489,6 +553,18 @@ function parseMarkdownCandidates(content, source = {}) {
     );
     paragraph = expandedRule.text;
     cursor = expandedRule.nextIndex;
+
+    if (
+      paragraph === rawLine.trim() &&
+      isIncompleteRuleText(paragraph) &&
+      isNormativeListPreamble(paragraph)
+    ) {
+      pendingListPreamble = stripInlineMarkdown(paragraph);
+      pendingListPreambleAllowsBlank = true;
+      pendingListPreambleInList = false;
+      index = cursor - LOCAL_NUM_ONE;
+      continue;
+    }
 
     const sentences = splitNormativeSentences(paragraph);
     for (const sentence of sentences) {
@@ -665,6 +741,13 @@ function validateCompleteRules(rules = [], outputName = LOCAL_STR_UNKNOWN_OUTPUT
   }
 }
 
+function countMarkdownRules(content = LOCAL_STR_EMPTY) {
+  return String(content || LOCAL_STR_EMPTY)
+    .split(/\r?\n/u)
+    .filter((line) => /^\s*\d+\.\s+/u.test(line))
+    .length;
+}
+
 function renderPackMarkdown(output = {}, rules = []) {
   validateCompleteRules(rules, output.name);
 
@@ -694,8 +777,26 @@ function renderPackMarkdown(output = {}, rules = []) {
   return body.join(LOCAL_STR_NEWLINE);
 }
 
-function buildManifest(outputs = [], selectedByOutput = new Map()) {
+function buildManifest(
+  outputs = [],
+  selectedByOutput = new Map(),
+  manualContentByOutput = new Map(),
+) {
   return outputs.map((output) => {
+    if (output.manual) {
+      const manualContent = manualContentByOutput.get(output.name) ||
+        LOCAL_STR_EMPTY;
+      return {
+        name: output.name,
+        title: output.title,
+        description: output.description,
+        ruleCount: countMarkdownRules(manualContent),
+        estimatedTokens: estimateTokens(manualContent),
+        domains: output.domains || [],
+        mode: LOCAL_STR_MANUAL,
+      };
+    }
+
     const rules = selectedByOutput.get(output.name) || [];
     const estimatedRuleTokens = estimateTokens(
       rules.map((rule) => `[${rule.id}] ${rule.text}`).join('\n'),
@@ -708,6 +809,7 @@ function buildManifest(outputs = [], selectedByOutput = new Map()) {
       ruleCount: rules.length,
       estimatedTokens: estimatedRuleTokens,
       domains: output.domains || [],
+      mode: LOCAL_STR_GENERATED,
     };
   });
 }
@@ -716,7 +818,7 @@ function renderReadme(manifestEntries = []) {
   const lines = [
     '# Steering LLM Pack',
     '',
-    'This directory contains generated low-token steering artifacts.',
+    'This directory contains curated and generated low-token steering artifacts.',
     '',
     'Generation command:',
     '',
@@ -736,16 +838,18 @@ function renderReadme(manifestEntries = []) {
     '',
     '## Pack Sizes',
     '',
-    '| Pack | Rules | Estimated Tokens |',
-    '| --- | ---: | ---: |',
+    '| Pack | Mode | Rules | Estimated Tokens |',
+    '| --- | --- | ---: | ---: |',
     ...manifestEntries.map((entry) =>
-      `| ${entry.name} | ${entry.ruleCount} | ${entry.estimatedTokens} |`,
+      `| ${entry.name} | ${entry.mode || LOCAL_STR_GENERATED} | ` +
+      `${entry.ruleCount} | ${entry.estimatedTokens} |`,
     ),
     '',
     '## Notes',
     '',
-    '- `rules.json` is the complete machine-readable source with IDs and citations.',
-    '- Markdown packs are intentionally compact for prompt loading.',
+    '- `rules.json` is the complete generated domain source with IDs and citations.',
+    '- `core.md` is manually curated so the always-load contract stays memorable.',
+    '- Domain Markdown packs are generated and compact for prompt loading.',
     '',
   ];
 
@@ -792,7 +896,16 @@ async function main() {
   await fs.mkdir(llmDir, {recursive: true});
 
   const selectedByOutput = new Map();
+  const manualContentByOutput = new Map();
   for (const output of config.outputs || []) {
+    if (output.manual) {
+      const manualPath = path.join(llmDir, `${output.name}.md`);
+      const manualContent = await fs.readFile(manualPath, LOCAL_STR_UTF8);
+      manualContentByOutput.set(output.name, manualContent);
+      selectedByOutput.set(output.name, []);
+      continue;
+    }
+
     const selected = selectOutputRules(allRules, output);
     selectedByOutput.set(output.name, selected);
 
@@ -804,7 +917,11 @@ async function main() {
     );
   }
 
-  const manifestEntries = buildManifest(config.outputs || [], selectedByOutput);
+  const manifestEntries = buildManifest(
+    config.outputs || [],
+    selectedByOutput,
+    manualContentByOutput,
+  );
   const rulesJson = {
     generatedAt: new Date().toISOString(),
     sourceDir: config.sourceDir,
@@ -880,7 +997,9 @@ if (isDirectRun()) {
 
 export {
   appendChildBulletsForParentRule,
+  buildManifest,
   collectBulletListText,
+  countMarkdownRules,
   parseMarkdownCandidates,
   renderPackMarkdown,
   validateCompleteRules,

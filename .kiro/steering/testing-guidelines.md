@@ -888,10 +888,10 @@ For any component that:
 
 ### Test structure
 
-- These tests belong alongside the existing unit or integration tests for the
+- Pressure tests belong alongside the existing unit or integration tests for the
   component, not in a separate stress-test directory.
-- They MUST respect the standard duration limits (2s unit, 30s integration).
-  Use mocked time and injected latency, not real delays.
+- Pressure tests MUST respect the standard duration limits (2s unit,
+  30s integration). Use mocked time and injected latency, not real delays.
 - Name them clearly: include "under pressure", "slow dependency",
   "concurrent callers", or "stale cache" in the test description.
 
