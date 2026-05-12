@@ -79,7 +79,7 @@
   "predecessor": "work/packages/done-20260512-rolling-restart-operation-workflow-progress-stage3-timeout-progression.md",
   "closed": "2026-05-12",
   "commitAndPushLedgerRequired": true,
-  "successor": "work/packages/todo-20260512-rolling-restart-operation-workflow-progress-priority-recovery-event-wait.md"
+  "successor": "work/packages/active-20260512-rolling-restart-operation-workflow-progress-priority-recovery-event-wait.md"
 }
 -->
 
