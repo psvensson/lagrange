@@ -66,14 +66,15 @@ The matching playback is:
 
 Latest package:
 
-1. [Rolling Restart Operation Workflow Progress Priority Recovery Event Wait](../packages/done-20260512-rolling-restart-operation-workflow-progress-priority-recovery-event-wait.md)
-2. [Rolling Restart Rebalancer Leader Operation Scheduling Priority Recovery](../packages/done-20260512-rolling-restart-rebalancer-leader-operation-scheduling-priority-recovery.md)
-3. [Rolling Restart Operation Workflow Progress Stage3 Timeout Progression](../packages/done-20260512-rolling-restart-operation-workflow-progress-stage3-timeout-progression.md)
-4. [Rolling Restart Operation Workflow Progress Event Driven Dispatch Pending](../packages/done-20260512-rolling-restart-operation-workflow-progress-event-driven-dispatch-pending.md)
+1. [Rolling Restart Operation Workflow Rebalancer Handoff Priority Recovery Retry Scheduled](../packages/done-20260512-rolling-restart-operation-workflow-rebalancer-handoff-priority-recovery-retry-scheduled.md)
+2. [Rolling Restart Operation Workflow Progress Priority Recovery Event Wait](../packages/done-20260512-rolling-restart-operation-workflow-progress-priority-recovery-event-wait.md)
+3. [Rolling Restart Rebalancer Leader Operation Scheduling Priority Recovery](../packages/done-20260512-rolling-restart-rebalancer-leader-operation-scheduling-priority-recovery.md)
+4. [Rolling Restart Operation Workflow Progress Stage3 Timeout Progression](../packages/done-20260512-rolling-restart-operation-workflow-progress-stage3-timeout-progression.md)
+5. [Rolling Restart Operation Workflow Progress Event Driven Dispatch Pending](../packages/done-20260512-rolling-restart-operation-workflow-progress-event-driven-dispatch-pending.md)
 
 Next package:
 
-1. [Rolling Restart Operation Workflow Rebalancer Handoff Priority Recovery Retry Scheduled](../packages/active-20260512-rolling-restart-operation-workflow-rebalancer-handoff-priority-recovery-retry-scheduled.md)
+1. [Rolling Restart Operation Workflow Rebalancer Handoff Needs Operation Coordination Mismatch Classification](../packages/active-20260512-rolling-restart-operation-workflow-rebalancer-handoff-needs-operation-coordination-mismatch-classification.md)
 
 Latest representative evidence:
 
@@ -89,9 +90,10 @@ Latest representative evidence:
 9. Current frontier: `priority_recovery_partition_progress` under
    `operation_workflow_owner / rebalancer_handoff`, state `blocked`, dominant
    reason `priority_recovery_progress_blocked`.
-10. Dominant witness: priority recovery retry-scheduled handoff evidence on
-    `replica_operations-p1` with `retryAfterMs=1000`, latest operation status
-    `retry_deferred`, and source `operation_dispatch_retry_log`.
+10. Residual semantic states: `needs_operation` and `coordination_mismatch`.
+    Retry-scheduled handoff backpressure is bounded by focused predecessor
+    proof; the remaining evidence must now be classified as one owner fix or a
+    deliberate split.
 11. Blocked partitions: `control_plane_publications-p1`,
     `replica_operations-p1`, `sql_transaction_participants-p1`,
     `sql_transactions-p1`, and `sql_write_operations-p1`.
@@ -101,10 +103,14 @@ Latest representative evidence:
 13. Representative outcome: same-frontier bounded retry-scheduled proof. The
     causal decision is `ask_human` with stop condition
     `insufficient_evidence` after focused owner proof passed.
-14. Exact residual owner/path for a follow-on runtime package:
-    `operation_workflow_owner / rebalancer_handoff` priority recovery progress
-    blocked, with `needs_operation` / `coordination_mismatch` evidence after
-    retry-scheduled handoff ownership was proven bounded.
+14. Exact residual shape for classification:
+    `control_plane_publications-p1` is `rebalancer_leader /
+    operation_scheduling / eligible_but_no_operation_created`, while
+    `replica_operations-p1` and `sql_transaction_participants-p1` are
+    `operation_workflow_owner / workflow_progress /
+    publication_recovery_eligible_but_coordinator_excludes_node`; the
+    `sql_transactions-p1` and `sql_write_operations-p1` `needs_operation`
+    witnesses are serial-wait dependents of the workflow-progress operations.
 
 The publication-convergence package still holds the prior
 `topology_publication_owner / publication_convergence` reduction:
@@ -205,7 +211,11 @@ Edition matrix status: Community / AGPL repo.
     one bounded verification timer, and stops at operation-budget exhaustion.
     The representative remains same-boundary red on broader priority recovery
     progress blocked evidence.
-13. If `rolling-restart` passes, run sustained throughput and 7-node stress
+13. Classify the broader residual into one owner fix only if the evidence
+    proves one owner owns the whole `needs_operation` /
+    `coordination_mismatch` set; otherwise split the next runtime work by
+    owner-boundary.
+14. If `rolling-restart` passes, run sustained throughput and 7-node stress
     confirmation for `0.1`.
 
 ## Validation Ladder

@@ -3,7 +3,7 @@
 <!-- work-package
 {
   "schema": "work-package-v1",
-  "status": "active",
+  "status": "done",
   "opened": "2026-05-12",
   "scenario": "rolling-restart",
   "artifact": "test-output/reports/rolling-restart-current-release-gate-after-operation-workflow-rebalancer-handoff-priority-recovery-retry-scheduled-fix.report.json",
@@ -12,7 +12,7 @@
   "boundary": "rebalancer_handoff",
   "dominantReason": "priority_recovery_progress_blocked",
   "currentState": "Focused operation-workflow owner proof shows retry-scheduled rebalancer-handoff priority recovery work is explicitly bounded: retry-scheduled snapshots wake the remote owner through the canonical dispatch ingress, active handoff retry preserves one bounded verification timer, and acknowledged handoff retry re-arms only until the operation budget is exhausted. The representative rolling-restart rerun remains red on operation_workflow_owner / rebalancer_handoff, but the prior retryable recovering_in_flight-only frontier is no longer the whole priority recovery shape; the latest artifact reports blocked needs_operation and coordination_mismatch evidence alongside retry-scheduled handoff evidence. Publication ACK convergence remains satisfied. Startup active-gate snapshot coverage remains downstream at 2/5.",
-  "nextAction": "Do not add more retry-scheduled handoff runtime code in this package. Treat retry-scheduled handoff backpressure as bounded by focused proof, then split or migrate the remaining same-boundary priority recovery progress blocker from the latest artifact before touching startup active-gate, publication convergence, harness timeouts, Pro, or Enterprise behavior.",
+  "nextAction": "Continue in the successor residual-classification package. Do not add more retry-scheduled handoff runtime code; classify the remaining needs_operation / coordination_mismatch evidence and either narrow it to one owner fix or split it deliberately before touching startup active-gate, publication convergence, harness timeouts, Pro, or Enterprise behavior.",
   "proof": [
     "npm run work:evidence-summary -- test-output/reports/rolling-restart-current-release-gate-after-operation-workflow-progress-priority-recovery-event-wait-fix.report.json",
     "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-current-release-gate-after-operation-workflow-progress-priority-recovery-event-wait-fix.report.json --explain priority_recovery_partition_progress",
@@ -32,7 +32,7 @@
     "test/rebalancer/coordinator-created-operation-progress-remote-handoff.test.js",
     "test/rebalancer/operation-workflow-progress-event-driven-reentry.test.js",
     "test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js",
-    "work/packages/active-20260512-rolling-restart-operation-workflow-rebalancer-handoff-priority-recovery-retry-scheduled.md",
+    "work/packages/done-20260512-rolling-restart-operation-workflow-rebalancer-handoff-priority-recovery-retry-scheduled.md",
     "work/sprints/active-2026-q2-phase-0-1-rolling-restart-release-gate-closure.md",
     "work/sprints/current-blocker.json",
     "work/sprints/current-blocker.md",
@@ -81,7 +81,10 @@
     "resultClassification": "same-frontier",
     "stopCondition": "human-escalation"
   },
-  "predecessor": "work/packages/done-20260512-rolling-restart-operation-workflow-progress-priority-recovery-event-wait.md"
+  "predecessor": "work/packages/done-20260512-rolling-restart-operation-workflow-progress-priority-recovery-event-wait.md",
+  "closed": "2026-05-12",
+  "commitAndPushLedgerRequired": true,
+  "successor": "work/packages/active-20260512-rolling-restart-operation-workflow-rebalancer-handoff-needs-operation-coordination-mismatch-classification.md"
 }
 -->
 
@@ -174,6 +177,12 @@ failure simulations, and production guarantees in the Community / AGPL repo.
   frontier, but the residual blocker is broader
   `priority_recovery_progress_blocked` evidence with `needs_operation` and
   `coordination_mismatch`, not missing retry-scheduled handoff ownership.
+
+## Commit And Push Ledger
+
+1. Focused package commit: `1a8b28dbf14984a92eb8acc9912dacde3bab79d7`
+2. Pushed to: `origin/codex/pending-ack-eligibility-filter`
+3. Commit contains only package-owned files/package-status/allowed sprint handoff: yes
 
 ## Validation Notes
 

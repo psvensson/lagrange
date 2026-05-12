@@ -82,7 +82,7 @@
   "predecessor": "work/packages/done-20260512-rolling-restart-rebalancer-leader-operation-scheduling-priority-recovery.md",
   "closed": "2026-05-12",
   "commitAndPushLedgerRequired": true,
-  "successor": "work/packages/active-20260512-rolling-restart-operation-workflow-rebalancer-handoff-priority-recovery-retry-scheduled.md"
+  "successor": "work/packages/done-20260512-rolling-restart-operation-workflow-rebalancer-handoff-priority-recovery-retry-scheduled.md"
 }
 -->
 

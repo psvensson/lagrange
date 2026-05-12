@@ -1,9 +1,10 @@
+# Rolling Restart Operation Workflow Rebalancer Handoff Needs Operation Coordination Mismatch Classification
+
+<!-- work-package
 {
-  "schema": "current-blocker-v1",
-  "generatedBy": "scripts/work-tracker.js",
-  "sprint": "work/sprints/active-2026-q2-phase-0-1-rolling-restart-release-gate-closure.md",
-  "package": "work/packages/active-20260512-rolling-restart-operation-workflow-rebalancer-handoff-needs-operation-coordination-mismatch-classification.md",
+  "schema": "work-package-v1",
   "status": "active",
+  "opened": "2026-05-12",
   "lane": "scenario-release-gate",
   "scenario": "rolling-restart",
   "artifact": "test-output/reports/rolling-restart-current-release-gate-after-operation-workflow-rebalancer-handoff-priority-recovery-retry-scheduled-fix.report.json",
@@ -77,3 +78,116 @@
   },
   "predecessor": "work/packages/done-20260512-rolling-restart-operation-workflow-rebalancer-handoff-priority-recovery-retry-scheduled.md"
 }
+-->
+
+## Why
+
+The predecessor proved retry-scheduled rebalancer-handoff backpressure is
+bounded. The representative gate remains red because the residual
+priority-recovery evidence is mixed: one partition still needs a recovery
+operation, two partitions have coordinator/operation workflow mismatch, and two
+partitions are serial-wait dependents.
+
+## Scope Basis
+
+Roadmap Phase `0.1 - Internal Coherence`: topology workflow stabilization,
+failure simulations, and production guarantees in the Community / AGPL repo.
+
+## Model Fit
+
+- Package class: `representative-frontier-classification`
+- Intended minimum model: `gpt-5.3-codex`
+- Scope shape: `owner-boundary-residual-classification/current-frontier`
+- Owned files: this package, the predecessor package closure metadata, active
+  sprint handoff, generated current-blocker files, `work/model-ledger.jsonl`,
+  and successor package metadata if the residual must split.
+- Forbidden files and behavior: retry-scheduled handoff runtime code, startup
+  active-gate implementation, topology publication convergence implementation,
+  harness timeout increases, Pro or Enterprise behavior.
+- Frozen decisions: publication ACK convergence is satisfied/non-frontier;
+  retry-scheduled handoff backpressure is bounded by predecessor focused proof;
+  startup active-gate remains downstream until priority recovery is green,
+  reduced, or explicitly split.
+- Escalation triggers: classification needs runtime changes before the owner
+  split is known, evidence restores publication convergence or startup
+  active-gate as the first frontier, or implementation would need paid-edition
+  behavior.
+- Focused proof: evidence summary, topology explain, distributed-failure
+  summary, causal model, residual semantic-state extraction, package doctor,
+  work validation, and `git diff --check`.
+
+## Subagent Sequencing Ledger
+
+- [x] Review subagent recorded:
+      Agent Lorentz (019e1c4f-a952-7480-8829-994b3254d02c) reviewed
+      `work/packages/done-20260512-rolling-restart-operation-workflow-rebalancer-handoff-priority-recovery-retry-scheduled.md`;
+      result `fixes-required`.
+- [x] Fix subagent recorded or explicitly not needed:
+      Agent Mendel (019e1c54-5aaf-7fe0-b8ae-3e0836ee4670) fixed
+      `work/packages/done-20260512-rolling-restart-operation-workflow-rebalancer-handoff-priority-recovery-retry-scheduled.md`.
+- [ ] Implementation subagent recorded:
+      Agent <name> (<agent-id>) implemented
+      `work/packages/active-20260512-rolling-restart-operation-workflow-rebalancer-handoff-needs-operation-coordination-mismatch-classification.md`.
+
+## Residual Evidence To Classify
+
+The latest artifact keeps the first frontier at
+`priority_recovery_partition_progress` with topology owner
+`operation_workflow_owner / rebalancer_handoff`, but the unresolved semantic
+state set is `needs_operation,coordination_mismatch`.
+
+Residual partition witnesses:
+
+1. `control_plane_publications-p1`: `needs_operation`,
+   `eligible_but_no_operation_created`, `action_required`,
+   `rebalancer_leader / operation_scheduling`, next action
+   `create_recovery_operation`.
+2. `replica_operations-p1`: `coordination_mismatch`,
+   `publication_recovery_eligible_but_coordinator_excludes_node`,
+   `persisted_not_dispatched`, `operation_workflow_owner / workflow_progress`,
+   latest operation `PENDING`.
+3. `sql_transaction_participants-p1`: `coordination_mismatch`,
+   `publication_recovery_eligible_but_coordinator_excludes_node`,
+   `persisted_not_dispatched`, `operation_workflow_owner / workflow_progress`,
+   latest operation `PENDING`.
+4. `sql_transactions-p1`: `needs_operation`, `priority_operation_serial_wait`,
+   `transition_deferred`, `operation_workflow_owner / workflow_progress`,
+   serial-waiting on the first two operation ids.
+5. `sql_write_operations-p1`: `needs_operation`,
+   `priority_operation_serial_wait`, `transition_deferred`,
+   `operation_workflow_owner / workflow_progress`, serial-waiting on the same
+   two operation ids.
+
+## In Scope
+
+1. Review the closed retry-scheduled handoff package before residual
+   classification starts.
+2. Classify whether the residual is one owner fix or a deliberate split.
+3. Preserve the exact owner-boundary evidence for each residual partition.
+4. Update the sprint/current-blocker handoff to the classification result.
+5. Create successor package metadata only if the residual splits.
+
+## Out Of Scope
+
+1. More retry-scheduled handoff runtime code.
+2. Startup active-gate, publication-convergence, harness timeout, Pro, or
+   Enterprise behavior.
+3. Runtime implementation before the residual owner split is known.
+4. Presentation-only relabeling that hides owner-boundary evidence.
+
+## Validation
+
+1. Evidence summary:
+   `npm run work:evidence-summary -- test-output/reports/rolling-restart-current-release-gate-after-operation-workflow-rebalancer-handoff-priority-recovery-retry-scheduled-fix.report.json`
+2. Topology explain:
+   `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-current-release-gate-after-operation-workflow-rebalancer-handoff-priority-recovery-retry-scheduled-fix.report.json --explain priority_recovery_partition_progress`
+3. Distributed-failure summary:
+   `npm run analyze:distributed-failure -- --report test-output/reports/rolling-restart-current-release-gate-after-operation-workflow-rebalancer-handoff-priority-recovery-retry-scheduled-fix.report.json`
+4. Causal model:
+   `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-current-release-gate-after-operation-workflow-rebalancer-handoff-priority-recovery-retry-scheduled-fix.report.json`
+5. Package doctor:
+   `npm run work:package:doctor -- work/packages/active-20260512-rolling-restart-operation-workflow-rebalancer-handoff-needs-operation-coordination-mismatch-classification.md`
+6. Work validation:
+   `npm run work:validate`
+7. Diff check:
+   `git diff --check`
