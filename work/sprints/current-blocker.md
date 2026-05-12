@@ -4,7 +4,7 @@
 
 Sprint: `work/sprints/active-2026-q2-phase-0-1-rolling-restart-release-gate-closure.md`
 
-Package: `work/packages/active-20260512-rolling-restart-operation-workflow-progress-stage3-timeout-progression.md`
+Package: `work/packages/todo-20260512-rolling-restart-rebalancer-leader-operation-scheduling-priority-recovery.md`
 
 Scenario: `rolling-restart`
 
@@ -20,22 +20,22 @@ Boundary: `operation_scheduling`
 
 Dominant reason: `priority_recovery_operation_scheduling_event_driven`
 
-Current state: Focused stage-3 timeout proof is green without runtime edits. The fresh rolling-restart artifact migrated away from operation_workflow_owner / workflow_progress to rebalancer_leader / operation_scheduling with priority_recovery_progress_blocked evidence. The dominant witness reports needs_operation for control_plane_publications-p1, replica_operations-p1, sql_transaction_participants-p1, sql_transactions-p1, and sql_write_operations-p1; active-gate snapshot coverage remains downstream at 2/5.
+Current state: The stage-3 timeout progression package closed as migrated. Fresh rolling-restart evidence names rebalancer_leader / operation_scheduling as the first frontier: priority_recovery_partition_progress is blocked with needs_operation on control_plane_publications-p1, replica_operations-p1, sql_transaction_participants-p1, sql_transactions-p1, and sql_write_operations-p1. Publication ACK convergence is satisfied and startup active-gate snapshot coverage remains downstream at 2/5.
 
 ## Next Action
 
-Close this package as migrated, then activate a successor for rebalancer_leader / operation_scheduling priority recovery operation creation. Do not pursue startup active-gate until priority_recovery_partition_progress reduces, converges, or migrates again.
+After the required review/fix sequence against work/packages/done-20260512-rolling-restart-operation-workflow-progress-stage3-timeout-progression.md, activate this package and own priority recovery operation creation for needs_operation partitions under rebalancer_leader / operation_scheduling.
 
 ## Proof Ladder
 
 1. `npm run work:evidence-summary -- test-output/reports/rolling-restart-current-release-gate-after-workflow-progress-stage3-timeout-progression-fix.report.json`
 2. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-current-release-gate-after-workflow-progress-stage3-timeout-progression-fix.report.json --explain priority_recovery_partition_progress`
 3. `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-current-release-gate-after-workflow-progress-stage3-timeout-progression-fix.report.json`
-4. `npm test -- test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js`
-5. `node scripts/check-guideline-literals.js src/rebalancer/operation-workflow-owner-segment-7-stage-3.js`
-6. `node scripts/check-guideline-decision-boundaries.js src/rebalancer/operation-workflow-owner-segment-7-stage-3.js`
-7. `npm run audit:runtime-grammar:file -- src/rebalancer/operation-workflow-owner-segment-7-stage-3.js`
-8. `node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-current-release-gate-after-workflow-progress-stage3-timeout-progression-fix.report.json --fast-local --verbose`
+4. `npm test -- test/rebalancer/unified-rebalancer-part-5-2-stage-2.js test/rebalancer/unified-rebalancer-core-05-test-cases.js`
+5. `node scripts/check-guideline-literals.js src/rebalancer/unified-rebalancer-segment-5.js src/rebalancer/unified-rebalancer-segment-4-stage-shared.js`
+6. `node scripts/check-guideline-decision-boundaries.js src/rebalancer/unified-rebalancer-segment-5.js src/rebalancer/unified-rebalancer-segment-4-stage-shared.js`
+7. `npm run audit:runtime-grammar:file -- src/rebalancer/unified-rebalancer-segment-5.js src/rebalancer/unified-rebalancer-segment-4-stage-shared.js`
+8. `node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-current-release-gate-after-rebalancer-leader-operation-scheduling-priority-recovery-fix.report.json --fast-local --verbose`
 
 ## Model Fit
 
@@ -47,33 +47,34 @@ Scope shape: `owner-boundary-contraction/current-frontier`
 
 Escalation triggers:
 
-1. `stage-3 timeout progression requires changes outside operation_workflow_owner`
-2. `representative proof restores topology_publication_owner or startup_active_gate_owner as the direct blocker`
+1. `priority recovery operation creation requires changes outside rebalancer_leader operation scheduling`
+2. `representative proof restores operation_workflow_owner or startup_active_gate_owner as the direct blocker`
 3. `runtime implementation would need Pro or Enterprise features`
 
 ## Causal Governance
 
-Causal hypothesis: `If stage-3 timeout progression for stale PENDING dispatch-pending operations is repaired or classified, priority_recovery_partition_progress should reduce, converge, or migrate away from operation_workflow_owner / workflow_progress.`
+Causal hypothesis: `If rebalancer leader operation scheduling creates priority recovery operations for needs_operation partitions, priority_recovery_partition_progress should reduce, converge, or migrate away from rebalancer_leader / operation_scheduling.`
 
 Stop-condition check: `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-current-release-gate-after-workflow-progress-stage3-timeout-progression-fix.report.json`
 
-Expected causal-model change: `The stale PENDING timeout frontier either advances through stage-3 timeout progression, becomes classified bounded backpressure with focused proof, or exposes a new named owner boundary.`
+Expected causal-model change: `The needs_operation operation-scheduling frontier either creates recovery work, reduces blocked partitions, migrates to workflow progress, or exposes a new named owner boundary.`
 
-Representative outcome: `migrated`
+Representative outcome: `pending-before-rerun`
 
-Causal debt: `Focused proof covers the named OperationWorkflowOwnerSegment7Stage3.checkTimeouts stale PENDING timeout progression path. Fresh representative evidence now points at rebalancer_leader / operation_scheduling with needs_operation priority recovery operation creation debt for five partitions.`
+Causal debt: `Rolling-restart remains red on priority recovery operation scheduling for five partitions; active-gate snapshot coverage remains downstream at 2/5.`
 
-Cross-boundary review: `completed-before-implementation through Agent Codex (019e1b9d-81cf-7073-a449-64a0cf0a36cf) review of work/packages/done-20260512-rolling-restart-operation-workflow-progress-event-driven-dispatch-pending.md.`
+Cross-boundary review: `required-before-implementation through a fresh review of work/packages/done-20260512-rolling-restart-operation-workflow-progress-stage3-timeout-progression.md.`
 
 ## Scenario Causal Closure
 
-Reference scenario/probe: `rolling-restart workflow-progress stage-3 timeout progression probe`
+Reference scenario/probe: `rolling-restart rebalancer leader operation scheduling priority recovery probe`
 
 Phase chain:
 
 1. `publication convergence`
-2. `operation workflow dispatch and retry`
-3. `startup active-gate presentation`
+2. `priority recovery operation scheduling`
+3. `operation workflow dispatch and retry`
+4. `startup active-gate presentation`
 
 Current first frontier: `rebalancer_leader / operation_scheduling / priority_recovery_operation_scheduling_event_driven on control_plane_publications-p1, replica_operations-p1, sql_transaction_participants-p1, sql_transactions-p1, and sql_write_operations-p1`
 
@@ -82,32 +83,34 @@ Known downstream blockers:
 1. `startup_active_gate_owner snapshot coverage remains downstream at 2/5`
 2. `publication_missing_active_node is presentation evidence while publication_ack_convergence remains satisfied`
 
-Missing causal edge: `rebalancer leader operation scheduling must create priority recovery operations for needs_operation partitions before downstream active-gate closure is pursued`
+Missing causal edge: `rebalancer leader operation scheduling must create or dispatch priority recovery operations for needs_operation partitions before downstream active-gate closure is pursued`
 
-Missing causal edge probe: `npm test -- test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js`
+Missing causal edge probe: `npm test -- test/rebalancer/unified-rebalancer-part-5-2-stage-2.js test/rebalancer/unified-rebalancer-core-05-test-cases.js`
 
-Bounded progress proof: `Focused timeout progression proof must show stage-3 timer or timeout reconcile advance for stale PENDING dispatch-pending operations.`
+Bounded progress proof: `Focused operation scheduling proof must show bounded create, dispatch, persist, or advance behavior for needs_operation priority recovery partitions.`
 
-Bounded progress proof artifact: `test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js; src/rebalancer/operation-workflow-owner-segment-7-stage-3.js`
+Bounded progress proof artifact: `test/rebalancer/unified-rebalancer-part-5-2-stage-2.js; test/rebalancer/unified-rebalancer-core-05-test-cases.js; src/rebalancer/unified-rebalancer-segment-5.js`
 
-Expected observable transition: `stale PENDING dispatch-pending operations are no longer the representative first frontier; fresh evidence migrates to operation scheduling needs_operation recovery creation.`
+Expected observable transition: `needs_operation partitions create recovery operations, reduce blocked partition count, or migrate to operation workflow progress with named evidence.`
 
-Max progress bound: `one stage-3 timer or timeout reconcile cycle per blocked partition before same-frontier fallback`
+Max progress bound: `one rebalancer leader operation-scheduling cycle per blocked priority partition before same-frontier fallback`
 
-Same-frontier fallback: `keep priority_recovery_partition_progress active and do not pursue startup active-gate closure`
+Same-frontier fallback: `keep rebalancer_leader / operation_scheduling active and do not pursue startup active-gate closure`
 
-Expected next frontier: `rebalancer_leader / operation_scheduling priority recovery operation creation`
+Expected next frontier: `operation_workflow_owner / workflow_progress after recovery operations are created, unless operation scheduling remains the same-frontier blocker`
 
-Result classification: `migrated`
+Result classification: `pending-before-probe`
 
-Stop condition: `migrate-owner-boundary`
+Stop condition: `continue-local-fix`
 
 ## Touched Files
 
-1. `src/rebalancer/operation-workflow-owner-segment-7-stage-3.js`
-2. `test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js`
-3. `work/packages/active-20260512-rolling-restart-operation-workflow-progress-stage3-timeout-progression.md`
-4. `work/sprints/active-2026-q2-phase-0-1-rolling-restart-release-gate-closure.md`
-5. `work/sprints/current-blocker.json`
-6. `work/sprints/current-blocker.md`
-7. `work/model-ledger.jsonl`
+1. `src/rebalancer/unified-rebalancer-segment-5.js`
+2. `src/rebalancer/unified-rebalancer-segment-4-stage-shared.js`
+3. `test/rebalancer/unified-rebalancer-part-5-2-stage-2.js`
+4. `test/rebalancer/unified-rebalancer-core-05-test-cases.js`
+5. `work/packages/todo-20260512-rolling-restart-rebalancer-leader-operation-scheduling-priority-recovery.md`
+6. `work/sprints/active-2026-q2-phase-0-1-rolling-restart-release-gate-closure.md`
+7. `work/sprints/current-blocker.json`
+8. `work/sprints/current-blocker.md`
+9. `work/model-ledger.jsonl`

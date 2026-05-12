@@ -3,7 +3,7 @@
 <!-- work-package
 {
   "schema": "work-package-v1",
-  "status": "active",
+  "status": "done",
   "opened": "2026-05-12",
   "scenario": "rolling-restart",
   "artifact": "test-output/reports/rolling-restart-current-release-gate-after-workflow-progress-stage3-timeout-progression-fix.report.json",
@@ -12,7 +12,7 @@
   "boundary": "operation_scheduling",
   "dominantReason": "priority_recovery_operation_scheduling_event_driven",
   "currentState": "Focused stage-3 timeout proof is green without runtime edits. The fresh rolling-restart artifact migrated away from operation_workflow_owner / workflow_progress to rebalancer_leader / operation_scheduling with priority_recovery_progress_blocked evidence. The dominant witness reports needs_operation for control_plane_publications-p1, replica_operations-p1, sql_transaction_participants-p1, sql_transactions-p1, and sql_write_operations-p1; active-gate snapshot coverage remains downstream at 2/5.",
-  "nextAction": "Close this package as migrated, then activate a successor for rebalancer_leader / operation_scheduling priority recovery operation creation. Do not pursue startup active-gate until priority_recovery_partition_progress reduces, converges, or migrates again.",
+  "nextAction": "Activate the successor for rebalancer_leader / operation_scheduling priority recovery operation creation. Do not pursue startup active-gate until priority_recovery_partition_progress reduces, converges, or migrates again.",
   "proof": [
     "npm run work:evidence-summary -- test-output/reports/rolling-restart-current-release-gate-after-workflow-progress-stage3-timeout-progression-fix.report.json",
     "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-current-release-gate-after-workflow-progress-stage3-timeout-progression-fix.report.json --explain priority_recovery_partition_progress",
@@ -26,7 +26,7 @@
   "touchedFiles": [
     "src/rebalancer/operation-workflow-owner-segment-7-stage-3.js",
     "test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js",
-    "work/packages/active-20260512-rolling-restart-operation-workflow-progress-stage3-timeout-progression.md",
+    "work/packages/done-20260512-rolling-restart-operation-workflow-progress-stage3-timeout-progression.md",
     "work/sprints/active-2026-q2-phase-0-1-rolling-restart-release-gate-closure.md",
     "work/sprints/current-blocker.json",
     "work/sprints/current-blocker.md",
@@ -73,7 +73,10 @@
     "resultClassification": "migrated",
     "stopCondition": "migrate-owner-boundary"
   },
-  "predecessor": "work/packages/done-20260512-rolling-restart-operation-workflow-progress-event-driven-dispatch-pending.md"
+  "predecessor": "work/packages/done-20260512-rolling-restart-operation-workflow-progress-event-driven-dispatch-pending.md",
+  "closed": "2026-05-12",
+  "commitAndPushLedgerRequired": true,
+  "successor": "work/packages/todo-20260512-rolling-restart-rebalancer-leader-operation-scheduling-priority-recovery.md"
 }
 -->
 
@@ -122,7 +125,7 @@ failure simulations, and production guarantees in the Community / AGPL repo.
       not-needed.
 - [x] Implementation subagent recorded:
       Agent Codex (019e1ba4-6a69-71e1-ad9e-bb85cb273dfa) implemented
-      `work/packages/active-20260512-rolling-restart-operation-workflow-progress-stage3-timeout-progression.md`.
+      `work/packages/done-20260512-rolling-restart-operation-workflow-progress-stage3-timeout-progression.md`.
 
 ## In Scope
 
@@ -241,3 +244,21 @@ package as focused proof plus representative migration evidence.
   failed invariant `priority_recovery_classified`; this is treated as an owner
   migration because topology explain names the new direct owner boundary.
 - Classification: `migrated`.
+
+## Commit And Push Ledger
+
+1. Focused package commit: `8679cb4f`
+2. Pushed to: `origin/codex/pending-ack-eligibility-filter`
+3. Commit contains only package-owned files/package-status/allowed sprint handoff: yes
+
+## Model Ledger
+
+A model-ledger row was recorded for this proof-classification package:
+`2026-05-12T10:09:13.048Z`, package
+`work/packages/active-20260512-rolling-restart-operation-workflow-progress-stage3-timeout-progression.md`,
+model `gpt-5.3-codex`, task class `proof-classification`, package class
+`representative-frontier-closure`, scope shape
+`owner-boundary-contraction/current-frontier`, outcome `migrated`, validation
+status `focused-green-representative-migrated`, correction loops `0`, review
+findings `0`, bailout reason
+`migrated-to-rebalancer-leader-operation-scheduling`.
