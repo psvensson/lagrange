@@ -3,7 +3,7 @@
 <!-- work-package
 {
   "schema": "work-package-v1",
-  "status": "active",
+  "status": "done",
   "opened": "2026-05-11",
   "lane": "lightweight-maintenance",
   "scenario": "none",
@@ -16,20 +16,20 @@
   "nextAction": "Validate scope-field handoff behavior, phased validation, tracker, context, package doctor suggestions, scaffolder, LLM-start handoff, owner-file index, priority residual extraction, subagent prompt generator, oversized-file candidates, representative evidence summary, and harness owner-card guidance.",
   "proof": [
     "node --test test/scripts/work-context.test.js test/scripts/work-tracker-subagent-ledger.test.js test/scripts/summarize-representative-evidence.test.js test/scripts/work-llm-usability-tools.test.js test/scripts/list-commands.test.js",
-    "npm run work:package:doctor -- work/packages/active-20260511-workflow-tooling-llm-usability.md",
-    "npm run work:package:doctor -- --suggest work/packages/active-20260511-workflow-tooling-llm-usability.md",
-    "npm run work:package:doctor -- --fix-dry-run work/packages/active-20260511-workflow-tooling-llm-usability.md",
+    "npm run work:package:doctor -- work/packages/done-20260511-workflow-tooling-llm-usability.md",
+    "npm run work:package:doctor -- --suggest work/packages/done-20260511-workflow-tooling-llm-usability.md",
+    "npm run work:package:doctor -- --fix-dry-run work/packages/done-20260511-workflow-tooling-llm-usability.md",
     "npm run work:package:schema",
     "npm run work:package:new -- --title \"LLM Usability Dry Run\" --slug llm-usability-dry-run --lane lightweight-maintenance --owner workflow_tooling_owner --boundary llm_usability_handoff --dominant-reason scaffolder_dry_run --next-action \"Validate package scaffolding\" --write-scope scripts/work-package-new.js --proof \"git diff --check\"",
-    "npm run work:llm-start -- --package work/packages/active-20260511-workflow-tooling-llm-usability.md",
+    "npm run work:llm-start -- --package work/packages/done-20260511-workflow-tooling-llm-usability.md",
     "npm run analyze:owner-files -- workflow_tooling_owner llm_usability_handoff --markdown",
     "npm run analyze:priority-recovery-residuals -- test/scripts/__fixtures__/topology-convergence/active-gate-snapshot-partial-residual.fixture.json --markdown",
-    "npm run work:subagent-prompt -- --role implementation --package work/packages/active-20260511-workflow-tooling-llm-usability.md",
+    "npm run work:subagent-prompt -- --role implementation --package work/packages/done-20260511-workflow-tooling-llm-usability.md",
     "npm run work:oversized-next -- --top 3 --markdown",
     "npm run work:evidence-summary -- test/scripts/__fixtures__/topology-convergence/active-gate-snapshot-partial-residual.fixture.json",
     "npm run work:validate -- --entry --all",
     "npm run work:validate -- --pre-impl --all",
-    "npm run work:validate -- --closure work/packages/active-20260511-workflow-tooling-llm-usability.md"
+    "npm run work:validate -- --closure work/packages/done-20260511-workflow-tooling-llm-usability.md"
   ],
   "writeScope": [
     "scripts/work-package-schema.js",
@@ -65,7 +65,7 @@
     "work/templates/work-package-template.md",
     "work/templates/runtime-owner-package.md",
     "work/templates/scenario-closure-package.md",
-    "work/packages/active-20260511-workflow-tooling-llm-usability.md"
+    "work/packages/done-20260511-workflow-tooling-llm-usability.md"
   ],
   "handoffFiles": [
     "work/packages/done-20260512-rolling-restart-startup-readiness-support-evidence-boundary.md",
@@ -112,7 +112,7 @@
     "work/templates/work-package-template.md",
     "work/templates/runtime-owner-package.md",
     "work/templates/scenario-closure-package.md",
-    "work/packages/active-20260511-workflow-tooling-llm-usability.md",
+    "work/packages/done-20260511-workflow-tooling-llm-usability.md",
     "work/packages/todo-20260511-workflow-tooling-llm-usability.md",
     "work/packages/done-20260512-rolling-restart-startup-readiness-support-evidence-boundary.md",
     "work/sprints/active-2026-q2-phase-0-1-rolling-restart-release-gate-closure.md",
@@ -130,7 +130,9 @@
       "owner-file or residual extraction tooling mutates runtime artifacts"
     ]
   },
-  "predecessor": "work/packages/done-20260510-spec-led-runtime-modularization-high-level-causal-analysis-infrastructure.md"
+  "predecessor": "work/packages/done-20260510-spec-led-runtime-modularization-high-level-causal-analysis-infrastructure.md",
+  "closed": "2026-05-12",
+  "commitAndPushLedgerRequired": true
 }
 -->
 
@@ -188,7 +190,7 @@ summaries, and harness owner-card guidance for existing AGPL test infrastructure
 - Package class: `bounded-implementation`
 - Intended minimum model: `gpt-5.3-codex-spark`
 - Scope shape: `leaf-slice`
-- Owned files: `scripts/work-package-schema.js`, `scripts/work-package-new.js`, `scripts/work-llm-start.js`, `scripts/analyze-owner-files.js`, `scripts/analyze-priority-recovery-residuals.js`, `scripts/work-subagent-prompt.js`, `scripts/work-oversized-next.js`, `scripts/work-tracker.js`, `scripts/work-context.js`, `scripts/summarize-representative-evidence.js`, `scripts/check-file-size-thresholds.js`, `scripts/list-commands.js`, `AGENTS.md`, `.kiro/steering/workflow-guidelines.md`, `.kiro/steering/testing-guidelines.md`, `.kiro/steering/llm/*`, `package.json`, `test/scripts/*`, `test/distributed/harness/README.md`, `work/README.md`, `work/templates/lightweight-maintenance-package.md`, `work/templates/work-package-template.md`, `work/templates/runtime-owner-package.md`, `work/templates/scenario-closure-package.md`, `work/packages/active-20260511-workflow-tooling-llm-usability.md`
+- Owned files: `scripts/work-package-schema.js`, `scripts/work-package-new.js`, `scripts/work-llm-start.js`, `scripts/analyze-owner-files.js`, `scripts/analyze-priority-recovery-residuals.js`, `scripts/work-subagent-prompt.js`, `scripts/work-oversized-next.js`, `scripts/work-tracker.js`, `scripts/work-context.js`, `scripts/summarize-representative-evidence.js`, `scripts/check-file-size-thresholds.js`, `scripts/list-commands.js`, `AGENTS.md`, `.kiro/steering/workflow-guidelines.md`, `.kiro/steering/testing-guidelines.md`, `.kiro/steering/llm/*`, `package.json`, `test/scripts/*`, `test/distributed/harness/README.md`, `work/README.md`, `work/templates/lightweight-maintenance-package.md`, `work/templates/work-package-template.md`, `work/templates/runtime-owner-package.md`, `work/templates/scenario-closure-package.md`, `work/packages/done-20260511-workflow-tooling-llm-usability.md`
 - Forbidden files: `src/`, `test/distributed/harness/cluster-segment-2.js`, `test/distributed/harness/__tests__/active-gate-closure-classification.test.js`
 - Frozen decisions: npm scripts assist workflow checks but do not replace real review/fix/implementation subagents.
 - Escalation triggers: runtime behavior changes, raw-log evidence parsing,
@@ -210,4 +212,15 @@ summaries, and harness owner-card guidance for existing AGPL test infrastructure
 11. Representative evidence summary fixture command.
 12. `npm run work:validate -- --entry --all`.
 13. `npm run work:validate -- --pre-impl --all`.
-14. `npm run work:validate -- --closure work/packages/active-20260511-workflow-tooling-llm-usability.md`.
+14. `npm run work:validate -- --closure work/packages/done-20260511-workflow-tooling-llm-usability.md`.
+
+## Closure Notes
+
+- Focused script validation passed: `node --test test/scripts/work-context.test.js test/scripts/work-tracker-subagent-ledger.test.js test/scripts/summarize-representative-evidence.test.js test/scripts/work-llm-usability-tools.test.js test/scripts/list-commands.test.js`.
+- Workflow command validation passed for package doctor, doctor suggestions,
+  fix dry-run, package schema, package scaffolder dry run, LLM-start handoff,
+  owner-file discovery, priority-residual extraction, subagent prompt
+  generation, oversized-file candidates, and representative evidence summary.
+- Tracker validation passed at entry, pre-implementation, and package closure
+  phases.
+- Model-ledger record appended for this workflow-tooling package.

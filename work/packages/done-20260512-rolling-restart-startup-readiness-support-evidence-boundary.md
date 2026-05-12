@@ -37,7 +37,7 @@
   ],
   "handoffFiles": [
     "work/packages/done-20260512-rolling-restart-operation-workflow-progress-direct-chain-after-owner-proof.md",
-    "work/packages/active-20260511-workflow-tooling-llm-usability.md",
+    "work/packages/done-20260511-workflow-tooling-llm-usability.md",
     "test-output/reports/rolling-restart-current-release-gate-after-workflow-progress-direct-chain-owner-proof.report.json",
     "test-output/reports/.playback/rolling-restart-current-release-gate-after-workflow-progress-direct-chain-owner-proof/rolling-restart/",
     "test-output/reports/.playback/rolling-restart-current-release-gate-after-workflow-progress-direct-chain-owner-proof/rolling-restart/failure-bundle.json"
@@ -138,7 +138,7 @@ If this package is reopened, future agents must:
 4. Use a fresh package and fresh subagent sequence for any follow-on runtime
    work; do not reuse this closed implementation proof as new role proof.
 5. Follow the repo-wide tool-first contract maintained by
-   [Workflow Tooling LLM Usability Slice](active-20260511-workflow-tooling-llm-usability.md);
+   [Workflow Tooling LLM Usability Slice](done-20260511-workflow-tooling-llm-usability.md);
    do not edit workflow docs or templates from this startup-readiness package.
 6. Do not reopen predecessor
    workflow-progress work unless fresh normalized evidence promotes it.
