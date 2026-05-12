@@ -191,7 +191,7 @@ Stop condition: `classification-only-stop`.
 
 ## Commit And Push Ledger
 
-1. Focused package commit: `77d3209824d73ef13372f44c653ca915af51df1c`
+1. Focused package commit: `2f21e69cc88a746937bdda25e46353c403d1db5b`
 2. Pushed to: `origin/codex/pending-ack-eligibility-filter`
 3. Commit contains only package-owned files/package-status/allowed sprint handoff: yes
 
