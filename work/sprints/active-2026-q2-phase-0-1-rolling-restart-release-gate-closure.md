@@ -66,7 +66,7 @@ Latest package:
 
 Next package:
 
-1. [Rolling Restart Rebalancer Leader Operation Scheduling Priority Recovery](../packages/todo-20260512-rolling-restart-rebalancer-leader-operation-scheduling-priority-recovery.md)
+1. [Rolling Restart Rebalancer Leader Operation Scheduling Priority Recovery](../packages/active-20260512-rolling-restart-rebalancer-leader-operation-scheduling-priority-recovery.md)
 
 Latest representative evidence:
 

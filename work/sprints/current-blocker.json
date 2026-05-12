@@ -2,8 +2,8 @@
   "schema": "current-blocker-v1",
   "generatedBy": "scripts/work-tracker.js",
   "sprint": "work/sprints/active-2026-q2-phase-0-1-rolling-restart-release-gate-closure.md",
-  "package": "work/packages/todo-20260512-rolling-restart-rebalancer-leader-operation-scheduling-priority-recovery.md",
-  "status": "todo",
+  "package": "work/packages/active-20260512-rolling-restart-rebalancer-leader-operation-scheduling-priority-recovery.md",
+  "status": "active",
   "scenario": "rolling-restart",
   "artifact": "test-output/reports/rolling-restart-current-release-gate-after-workflow-progress-stage3-timeout-progression-fix.report.json",
   "playback": "test-output/reports/.playback/rolling-restart-current-release-gate-after-workflow-progress-stage3-timeout-progression-fix/rolling-restart/",
@@ -11,7 +11,7 @@
   "boundary": "operation_scheduling",
   "dominantReason": "priority_recovery_operation_scheduling_event_driven",
   "currentState": "The stage-3 timeout progression package closed as migrated. Fresh rolling-restart evidence names rebalancer_leader / operation_scheduling as the first frontier: priority_recovery_partition_progress is blocked with needs_operation on control_plane_publications-p1, replica_operations-p1, sql_transaction_participants-p1, sql_transactions-p1, and sql_write_operations-p1. Publication ACK convergence is satisfied and startup active-gate snapshot coverage remains downstream at 2/5.",
-  "nextAction": "After the required review/fix sequence against work/packages/done-20260512-rolling-restart-operation-workflow-progress-stage3-timeout-progression.md, activate this package and own priority recovery operation creation for needs_operation partitions under rebalancer_leader / operation_scheduling.",
+  "nextAction": "Own priority recovery operation creation for needs_operation partitions under rebalancer_leader / operation_scheduling. Preserve publication ACK convergence and keep startup active-gate downstream until priority_recovery_partition_progress reduces, converges, or migrates.",
   "proof": [
     "npm run work:evidence-summary -- test-output/reports/rolling-restart-current-release-gate-after-workflow-progress-stage3-timeout-progression-fix.report.json",
     "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-current-release-gate-after-workflow-progress-stage3-timeout-progression-fix.report.json --explain priority_recovery_partition_progress",
@@ -27,7 +27,7 @@
     "src/rebalancer/unified-rebalancer-segment-4-stage-shared.js",
     "test/rebalancer/unified-rebalancer-part-5-2-stage-2.js",
     "test/rebalancer/unified-rebalancer-core-05-test-cases.js",
-    "work/packages/todo-20260512-rolling-restart-rebalancer-leader-operation-scheduling-priority-recovery.md",
+    "work/packages/active-20260512-rolling-restart-rebalancer-leader-operation-scheduling-priority-recovery.md",
     "work/sprints/active-2026-q2-phase-0-1-rolling-restart-release-gate-closure.md",
     "work/sprints/current-blocker.json",
     "work/sprints/current-blocker.md",
@@ -49,7 +49,7 @@
     "expectedCausalModelChange": "The needs_operation operation-scheduling frontier either creates recovery work, reduces blocked partitions, migrates to workflow progress, or exposes a new named owner boundary.",
     "representativeOutcome": "pending-before-rerun",
     "causalDebt": "Rolling-restart remains red on priority recovery operation scheduling for five partitions; active-gate snapshot coverage remains downstream at 2/5.",
-    "crossBoundaryReview": "required-before-implementation through a fresh review of work/packages/done-20260512-rolling-restart-operation-workflow-progress-stage3-timeout-progression.md."
+    "crossBoundaryReview": "completed-before-implementation through Agent Locke (019e1bc0-0a4b-7f91-aef1-5da20bad7369) review and Agent Aristotle (019e1bc4-b5d7-7d82-a7b8-52c909e82825) fix of work/packages/done-20260512-rolling-restart-operation-workflow-progress-stage3-timeout-progression.md."
   },
   "scenarioCausalClosure": {
     "referenceScenarioOrProbe": "rolling-restart rebalancer leader operation scheduling priority recovery probe",

@@ -36,6 +36,9 @@ import {
   CONTROL_PLANE_READINESS_DIMENSION,
 } from '../../src/control-plane/control-plane-readiness-constants.js';
 import {
+  CONTROL_PLANE_PUBLICATION_STATUS,
+} from '../../src/control-plane/control-plane-publication-merge.js';
+import {
 } from '../../src/control-plane/control-plane-workload-profile.js';
 import {
 } from '../../src/bootstrap/lifecycle-controller-constants.js';
@@ -52,6 +55,7 @@ import {
 } from '../../src/constants/index.js';
 import {SERVICE_TYPE} from '../../src/constants/service.js';
 import {ENDPOINT_SYNC_HEALTH} from '../../src/runtime/endpoint-sync-constants.js';
+import {RECONCILE_REASON} from '../../src/workflow/reconcile-queue-constants.js';
 
 // Initialize test environment
 function initializeTestEnvironment() {
@@ -381,6 +385,7 @@ const TEST_SCALAR = Object.freeze({
   EXECUTED_OPERATION_ADD: 'add',
   LOG_LEVEL_ERROR: 'error',
   OPERATION_ID_PREFIX: 'op-',
+  PRIORITY_PUBLICATION_ID: 'priority-publication',
   SKIP_REASON_BUDGET_EXCEEDED: 'budget_exceeded',
   TYPE_NUMBER: 'number',
 });
@@ -418,6 +423,8 @@ const TEST_NAME = Object.freeze({
   SUITE: 'UnifiedRebalancer - Rebalancing Triggers chunk 2',
   BYPASSES_STARTUP_AND_STABILIZATION_GATES:
     'checkRebalance lets priority recovery operation creation bypass startup cluster and stabilization gates',
+  ENQUEUES_PUBLICATION_EVENT_OPERATION_CREATION:
+    'priority recovery publication events enqueue needs_operation scheduling',
 });
 const TEST_MESSAGE = Object.freeze({
   CACHED_PLANNING_IDENTIFIES_MISSING_PRIORITY_WORK:
@@ -450,6 +457,16 @@ const TEST_MESSAGE = Object.freeze({
     'missing priority work should reach evaluation despite critical reserve exhaustion',
   PRIORITY_OPERATION_CREATION_BYPASSES_STARTUP_GATES:
     'priority operation creation should not wait behind startup planning gates',
+  PRIORITY_PUBLICATION_EVENT_ENQUEUES_PUBLICATION:
+    'publication event should enqueue publication reconciliation',
+  PRIORITY_PUBLICATION_EVENT_ENQUEUES_REBALANCE:
+    'publication event should enqueue rebalance scheduling',
+  PRIORITY_PUBLICATION_EVENT_HANDLED:
+    'publication event with current needs_operation should be handled',
+  PRIORITY_PUBLICATION_EVENT_REASON:
+    'publication event should use the priority recovery progress reason',
+  PRIORITY_PUBLICATION_EVENT_VISIBILITY_PROGRESS:
+    'publication event should classify priority recovery visibility progress',
   PRIORITY_PARTITIONS_KEEP_SHORT_RETRY_WHILE_WAITING:
     'priority partitions should keep the short retry cadence while waiting for the next convergence change',
   PRIORITY_PRESSURE_DEFER_KEEPS_SHORT_RETRY:
@@ -1076,6 +1093,146 @@ test(TEST_NAME.SUITE, async (t) => {
         evaluateCalls,
         TEST_NUMBER.ONE,
         TEST_MESSAGE.PRIORITY_OPERATION_CREATION_BYPASSES_STARTUP_GATES,
+      );
+    },
+  );
+
+  await t.test(
+    TEST_NAME.ENQUEUES_PUBLICATION_EVENT_OPERATION_CREATION,
+    async (t) => {
+      const nodeRows = Object.freeze([
+        Object.freeze({
+          node_id: PRIORITY_FOLLOW_UP_NODE_ID_A,
+          status: NodeStatus.ACTIVE,
+        }),
+        Object.freeze({
+          node_id: PRIORITY_FOLLOW_UP_NODE_ID_B,
+          status: NodeStatus.ACTIVE,
+        }),
+      ]);
+      const priorityPartitionSummary = Object.freeze({
+        satisfied: PRIORITY_RECOVERY_CLOSURE_WITNESS_SATISFIED,
+        requiredDistinctNodeCount:
+          PRIORITY_RECOVERY_REQUIRED_DISTINCT_NODE_COUNT,
+        blockedPartitions: Object.freeze([Object.freeze({
+          partitionId: SQL_WRITE_OPERATION_PRIORITY_PARTITION_ID,
+          readyDistinctNodeCount: PRIORITY_RECOVERY_READY_DISTINCT_NODE_COUNT,
+          requiredDistinctNodeCount:
+            PRIORITY_RECOVERY_REQUIRED_DISTINCT_NODE_COUNT,
+          spreadGap: PRIORITY_RECOVERY_SPREAD_GAP,
+        })]),
+      });
+      const planningSnapshot = Object.freeze({
+        publicationEpoch: PRIORITY_RECOVERY_PUBLICATION_EPOCH,
+        publishedActiveNodeIds: Object.freeze([
+          PRIORITY_FOLLOW_UP_NODE_ID_A,
+          PRIORITY_FOLLOW_UP_NODE_ID_B,
+        ]),
+        priorityPartitionSummary,
+        priorityRecoveryDecisionSnapshots: Object.freeze({
+          snapshots: Object.freeze([Object.freeze({
+            partitionId: SQL_WRITE_OPERATION_PRIORITY_PARTITION_ID,
+            semanticState: PRIORITY_RECOVERY_SEMANTIC_STATE.NEEDS_OPERATION,
+            blockerReasons: Object.freeze([
+              PRIORITY_RECOVERY_BLOCKER_REASON.ELIGIBLE_NO_OPERATION,
+            ]),
+            progress: Object.freeze({
+              nextRequiredAction:
+                PRIORITY_RECOVERY_NEXT_REQUIRED_ACTION
+                  .CREATE_RECOVERY_OPERATION,
+            }),
+            planner: Object.freeze({
+              requiredDistinctNodeCount:
+                PRIORITY_RECOVERY_REQUIRED_DISTINCT_NODE_COUNT,
+              readyDistinctNodeCount:
+                PRIORITY_RECOVERY_READY_DISTINCT_NODE_COUNT,
+              spreadGap: PRIORITY_RECOVERY_SPREAD_GAP,
+            }),
+            admission: Object.freeze({
+              effectiveEligibleNodeIds: Object.freeze([
+                PRIORITY_FOLLOW_UP_NODE_ID_A,
+                PRIORITY_FOLLOW_UP_NODE_ID_B,
+              ]),
+            }),
+            publication: Object.freeze({
+              recoveryActiveNodeIds: Object.freeze([
+                PRIORITY_FOLLOW_UP_NODE_ID_A,
+                PRIORITY_FOLLOW_UP_NODE_ID_B,
+              ]),
+            }),
+          })]),
+        }),
+      });
+      const cache = createMockCache(
+        nodeRows,
+        [],
+        [Object.freeze({
+          partition_id: SQL_WRITE_OPERATION_PRIORITY_PARTITION_ID,
+          table_id: SYSTEM_TABLE_NAME.SQL_WRITE_OPERATIONS,
+        })],
+      );
+      const readinessService = {
+        ...createMockReadinessService(cache),
+        getPriorityRecoveryPlanningAnswerSync() {
+          return planningSnapshot;
+        },
+      };
+      const rebalancer = createTestRebalancer({
+        entityId: SQL_WRITE_OPERATION_PRIORITY_PARTITION_ID,
+        entityType: EntityType.PARTITION,
+        nodeId: PRIORITY_FOLLOW_UP_NODE_ID_A,
+        nodes: nodeRows,
+        controlPlaneReadinessService: readinessService,
+      });
+      const event = Object.freeze({
+        tableName: SYSTEM_TABLE_NAME.CONTROL_PLANE_PUBLICATIONS,
+        data: Object.freeze({
+          publication_id: TEST_SCALAR.PRIORITY_PUBLICATION_ID,
+          priority_partition_summary: JSON.stringify(priorityPartitionSummary),
+          status: CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED,
+        }),
+      });
+      const rebalanceReasons = [];
+      const publicationReasons = [];
+
+      rebalancer.setLeader(true);
+      rebalancer.enqueueRebalanceCheck = (reason) => {
+        rebalanceReasons.push(reason);
+        return true;
+      };
+      rebalancer.enqueueMembershipPublicationReconcile = (reason) => {
+        publicationReasons.push(reason);
+        return true;
+      };
+
+      const decision =
+        rebalancer.buildPriorityRecoveryVisibilityRebalanceDecision(event);
+      const handled = rebalancer.handlePriorityRecoveryVisibilityEvent(event);
+
+      t.equal(
+        decision.visibilityProgress,
+        true,
+        TEST_MESSAGE.PRIORITY_PUBLICATION_EVENT_VISIBILITY_PROGRESS,
+      );
+      t.equal(
+        handled,
+        true,
+        TEST_MESSAGE.PRIORITY_PUBLICATION_EVENT_HANDLED,
+      );
+      t.equal(
+        rebalanceReasons.length,
+        TEST_NUMBER.ONE,
+        TEST_MESSAGE.PRIORITY_PUBLICATION_EVENT_ENQUEUES_REBALANCE,
+      );
+      t.equal(
+        publicationReasons.length,
+        TEST_NUMBER.ONE,
+        TEST_MESSAGE.PRIORITY_PUBLICATION_EVENT_ENQUEUES_PUBLICATION,
+      );
+      t.equal(
+        rebalanceReasons[TEST_NUMBER.ZERO],
+        RECONCILE_REASON.PRIORITY_RECOVERY_PROGRESS,
+        TEST_MESSAGE.PRIORITY_PUBLICATION_EVENT_REASON,
       );
     },
   );

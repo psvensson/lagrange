@@ -3,6 +3,7 @@ import {UnifiedRebalancerSegment4} from './unified-rebalancer-segment-4.js';
 
 const {
   CONTROL_PLANE_WORKLOAD_CLASS,
+  CONTROL_PLANE_PUBLICATION_STATUS,
   EntityType,
   NUM,
   NodeStatus,
@@ -14,6 +15,7 @@ const {
   RECONCILE_REASON,
   ReplicaStatus,
   STABILIZATION_RESET_TRIGGER,
+  SYSTEM_TABLE_NAME,
   TYPEOF,
   TriggerType,
   UNIFIED_REBALANCER_LITERAL,
@@ -51,6 +53,91 @@ const REBALANCE_PLANNING_GATE_SCHEDULE_MODE = Object.freeze({
   NEXT: 'next',
   PRIORITY_AWARE: 'priority_aware',
 });
+
+const PRIORITY_RECOVERY_PUBLICATION_EVENT_FIELD = Object.freeze({
+  STATUS: 'status',
+});
+
+const PRIORITY_RECOVERY_PUBLICATION_EVENT_SCHEDULING_STATE = Object.freeze({
+  NOT_PRIORITY_PARTITION: 'not_priority_partition',
+  NOT_PUBLICATION_EVENT: 'not_publication_event',
+  LEADER_REQUIRED: 'leader_required',
+  PUBLICATION_NOT_CLOSED: 'publication_not_closed',
+  OPERATION_CREATION_REQUIRED: 'operation_creation_required',
+  OPERATION_CREATION_NOT_REQUIRED: 'operation_creation_not_required',
+});
+
+const PRIORITY_RECOVERY_PUBLICATION_EVENT_SCHEDULING_ACTION = Object.freeze({
+  ENQUEUE_RECOVERY_SCHEDULING: 'enqueue_recovery_scheduling',
+  IGNORE_EVENT: 'ignore_event',
+});
+
+const PRIORITY_RECOVERY_PUBLICATION_EVENT_SCHEDULING_STATE_TABLE =
+  Object.freeze([
+    Object.freeze({
+      state:
+        PRIORITY_RECOVERY_PUBLICATION_EVENT_SCHEDULING_STATE
+          .NOT_PRIORITY_PARTITION,
+      matches: (evidence) => evidence.priorityPartition !== true,
+    }),
+    Object.freeze({
+      state:
+        PRIORITY_RECOVERY_PUBLICATION_EVENT_SCHEDULING_STATE
+          .NOT_PUBLICATION_EVENT,
+      matches: (evidence) => evidence.publicationEvent !== true,
+    }),
+    Object.freeze({
+      state:
+        PRIORITY_RECOVERY_PUBLICATION_EVENT_SCHEDULING_STATE.LEADER_REQUIRED,
+      matches: (evidence) => evidence.leaderSatisfied !== true,
+    }),
+    Object.freeze({
+      state:
+        PRIORITY_RECOVERY_PUBLICATION_EVENT_SCHEDULING_STATE
+          .PUBLICATION_NOT_CLOSED,
+      matches: (evidence) => evidence.publicationClosed !== true,
+    }),
+    Object.freeze({
+      state:
+        PRIORITY_RECOVERY_PUBLICATION_EVENT_SCHEDULING_STATE
+          .OPERATION_CREATION_REQUIRED,
+      matches: (evidence) =>
+        evidence.operationCreationRequired === true,
+    }),
+    Object.freeze({
+      state:
+        PRIORITY_RECOVERY_PUBLICATION_EVENT_SCHEDULING_STATE
+          .OPERATION_CREATION_NOT_REQUIRED,
+      matches: () => true,
+    }),
+  ]);
+
+const PRIORITY_RECOVERY_PUBLICATION_EVENT_SCHEDULING_ACTION_BY_STATE =
+  Object.freeze({
+    [
+    PRIORITY_RECOVERY_PUBLICATION_EVENT_SCHEDULING_STATE
+      .OPERATION_CREATION_REQUIRED
+    ]: PRIORITY_RECOVERY_PUBLICATION_EVENT_SCHEDULING_ACTION
+      .ENQUEUE_RECOVERY_SCHEDULING,
+    [
+    PRIORITY_RECOVERY_PUBLICATION_EVENT_SCHEDULING_STATE
+      .NOT_PRIORITY_PARTITION
+    ]: PRIORITY_RECOVERY_PUBLICATION_EVENT_SCHEDULING_ACTION.IGNORE_EVENT,
+    [
+    PRIORITY_RECOVERY_PUBLICATION_EVENT_SCHEDULING_STATE.NOT_PUBLICATION_EVENT
+    ]: PRIORITY_RECOVERY_PUBLICATION_EVENT_SCHEDULING_ACTION.IGNORE_EVENT,
+    [
+    PRIORITY_RECOVERY_PUBLICATION_EVENT_SCHEDULING_STATE.LEADER_REQUIRED
+    ]: PRIORITY_RECOVERY_PUBLICATION_EVENT_SCHEDULING_ACTION.IGNORE_EVENT,
+    [
+    PRIORITY_RECOVERY_PUBLICATION_EVENT_SCHEDULING_STATE
+      .PUBLICATION_NOT_CLOSED
+    ]: PRIORITY_RECOVERY_PUBLICATION_EVENT_SCHEDULING_ACTION.IGNORE_EVENT,
+    [
+    PRIORITY_RECOVERY_PUBLICATION_EVENT_SCHEDULING_STATE
+      .OPERATION_CREATION_NOT_REQUIRED
+    ]: PRIORITY_RECOVERY_PUBLICATION_EVENT_SCHEDULING_ACTION.IGNORE_EVENT,
+  });
 
 const REBALANCE_PLANNING_GATE_DELAY_MULTIPLIER = Object.freeze({
   WAIT: 1.25,
@@ -1086,6 +1173,91 @@ class UnifiedRebalancerSegment5 extends UnifiedRebalancerSegment4 {
       }) ||
       null;
     return this.isPriorityRecoveryFollowUpOperationRequired(decisionSnapshot);
+  }
+
+  /**
+   * Published membership rows are the event-driven wake-up for newly exposed
+   * priority recovery work. If the current priority partition already has a
+   * needs-operation planning witness, enqueue the canonical rebalance owner.
+   * @param {Object} event
+   * @param {Object} options
+   * @return {Object}
+   * @private
+   */
+  buildPriorityRecoveryPublicationEventSchedulingSnapshot(
+    event = {},
+    options = {},
+  ) {
+    const publicationRow =
+      event?.data && typeof event.data === TYPEOF.OBJECT ? event.data : {};
+    const publicationStatus = String(
+      publicationRow[PRIORITY_RECOVERY_PUBLICATION_EVENT_FIELD.STATUS] ||
+        UNIFIED_REBALANCER_LITERAL.EMPTY_STRING,
+    ).toUpperCase();
+    const priorityPartition = this.isControlPlanePriorityPartition() === true;
+    const operationCreationGate = priorityPartition ?
+      this.buildPriorityRecoveryOperationCreationPlanningGateSnapshot(
+        this.entityId,
+      ) :
+      null;
+    const evidence = Object.freeze({
+      priorityPartition,
+      publicationEvent:
+        event?.tableName === SYSTEM_TABLE_NAME.CONTROL_PLANE_PUBLICATIONS,
+      leaderSatisfied:
+        options?.requireLeader === false || this.isLeader === true,
+      publicationClosed:
+        publicationStatus === CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED,
+      operationCreationRequired:
+        operationCreationGate?.operationCreationRequired === true,
+    });
+    const schedulingState =
+      PRIORITY_RECOVERY_PUBLICATION_EVENT_SCHEDULING_STATE_TABLE.find(
+        (entry) => entry.matches(evidence),
+      )?.state ||
+      PRIORITY_RECOVERY_PUBLICATION_EVENT_SCHEDULING_STATE
+        .OPERATION_CREATION_NOT_REQUIRED;
+    const schedulingAction =
+      PRIORITY_RECOVERY_PUBLICATION_EVENT_SCHEDULING_ACTION_BY_STATE[
+        schedulingState
+      ] ||
+      PRIORITY_RECOVERY_PUBLICATION_EVENT_SCHEDULING_ACTION.IGNORE_EVENT;
+    const visibilityProgress =
+      evidence.priorityPartition === true &&
+      evidence.publicationEvent === true &&
+      evidence.publicationClosed === true &&
+      evidence.operationCreationRequired === true;
+    return Object.freeze({
+      evidence,
+      operationCreationGate,
+      schedulingState,
+      schedulingAction,
+      visibilityProgress,
+      shouldEnqueue:
+        schedulingAction ===
+        PRIORITY_RECOVERY_PUBLICATION_EVENT_SCHEDULING_ACTION
+          .ENQUEUE_RECOVERY_SCHEDULING,
+    });
+  }
+
+  buildPriorityRecoveryVisibilityRebalanceDecision(event = {}, options = {}) {
+    const baseDecision =
+      super.buildPriorityRecoveryVisibilityRebalanceDecision(event, options);
+    const publicationEventScheduling =
+      this.buildPriorityRecoveryPublicationEventSchedulingSnapshot(
+        event,
+        options,
+      );
+    return Object.freeze({
+      ...baseDecision,
+      shouldEnqueue:
+        baseDecision.shouldEnqueue === true ||
+        publicationEventScheduling.shouldEnqueue === true,
+      visibilityProgress:
+        baseDecision.visibilityProgress === true ||
+        publicationEventScheduling.visibilityProgress === true,
+      publicationEventScheduling,
+    });
   }
 
   /**

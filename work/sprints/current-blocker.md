@@ -4,7 +4,7 @@
 
 Sprint: `work/sprints/active-2026-q2-phase-0-1-rolling-restart-release-gate-closure.md`
 
-Package: `work/packages/todo-20260512-rolling-restart-rebalancer-leader-operation-scheduling-priority-recovery.md`
+Package: `work/packages/active-20260512-rolling-restart-rebalancer-leader-operation-scheduling-priority-recovery.md`
 
 Scenario: `rolling-restart`
 
@@ -24,7 +24,7 @@ Current state: The stage-3 timeout progression package closed as migrated. Fresh
 
 ## Next Action
 
-After the required review/fix sequence against work/packages/done-20260512-rolling-restart-operation-workflow-progress-stage3-timeout-progression.md, activate this package and own priority recovery operation creation for needs_operation partitions under rebalancer_leader / operation_scheduling.
+Own priority recovery operation creation for needs_operation partitions under rebalancer_leader / operation_scheduling. Preserve publication ACK convergence and keep startup active-gate downstream until priority_recovery_partition_progress reduces, converges, or migrates.
 
 ## Proof Ladder
 
@@ -63,7 +63,7 @@ Representative outcome: `pending-before-rerun`
 
 Causal debt: `Rolling-restart remains red on priority recovery operation scheduling for five partitions; active-gate snapshot coverage remains downstream at 2/5.`
 
-Cross-boundary review: `required-before-implementation through a fresh review of work/packages/done-20260512-rolling-restart-operation-workflow-progress-stage3-timeout-progression.md.`
+Cross-boundary review: `completed-before-implementation through Agent Locke (019e1bc0-0a4b-7f91-aef1-5da20bad7369) review and Agent Aristotle (019e1bc4-b5d7-7d82-a7b8-52c909e82825) fix of work/packages/done-20260512-rolling-restart-operation-workflow-progress-stage3-timeout-progression.md.`
 
 ## Scenario Causal Closure
 
@@ -109,7 +109,7 @@ Stop condition: `continue-local-fix`
 2. `src/rebalancer/unified-rebalancer-segment-4-stage-shared.js`
 3. `test/rebalancer/unified-rebalancer-part-5-2-stage-2.js`
 4. `test/rebalancer/unified-rebalancer-core-05-test-cases.js`
-5. `work/packages/todo-20260512-rolling-restart-rebalancer-leader-operation-scheduling-priority-recovery.md`
+5. `work/packages/active-20260512-rolling-restart-rebalancer-leader-operation-scheduling-priority-recovery.md`
 6. `work/sprints/active-2026-q2-phase-0-1-rolling-restart-release-gate-closure.md`
 7. `work/sprints/current-blocker.json`
 8. `work/sprints/current-blocker.md`
