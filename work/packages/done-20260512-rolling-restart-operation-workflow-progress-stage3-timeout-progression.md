@@ -62,10 +62,10 @@
       "startup_active_gate_owner snapshot coverage remains downstream at 2/5",
       "publication_missing_active_node is presentation evidence while publication_ack_convergence remains satisfied"
     ],
-    "missingCausalEdge": "rebalancer leader operation scheduling must create priority recovery operations for needs_operation partitions before downstream active-gate closure is pursued",
-    "missingCausalEdgeProbe": "npm test -- test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js",
-    "boundedProgressProof": "Focused timeout progression proof must show stage-3 timer or timeout reconcile advance for stale PENDING dispatch-pending operations.",
-    "boundedProgressProofArtifact": "test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js; src/rebalancer/operation-workflow-owner-segment-7-stage-3.js",
+    "missingCausalEdge": "rebalancer leader operation scheduling must create or dispatch priority recovery operations for needs_operation partitions before downstream active-gate closure is pursued",
+    "missingCausalEdgeProbe": "npm test -- test/rebalancer/unified-rebalancer-part-5-2-stage-2.js test/rebalancer/unified-rebalancer-core-05-test-cases.js",
+    "boundedProgressProof": "Focused operation scheduling proof must show bounded create, dispatch, persist, or advance behavior for needs_operation priority recovery partitions.",
+    "boundedProgressProofArtifact": "test/rebalancer/unified-rebalancer-part-5-2-stage-2.js; test/rebalancer/unified-rebalancer-core-05-test-cases.js; src/rebalancer/unified-rebalancer-segment-5.js",
     "expectedObservableTransition": "stale PENDING dispatch-pending operations are no longer the representative first frontier; fresh evidence migrates to operation scheduling needs_operation recovery creation.",
     "maxProgressBound": "one stage-3 timer or timeout reconcile cycle per blocked partition before same-frontier fallback",
     "sameFrontierFallback": "keep priority_recovery_partition_progress active and do not pursue startup active-gate closure",
@@ -174,7 +174,7 @@ package as focused proof plus representative migration evidence.
   stale `PENDING` dispatch-pending operations reduces or migrates
   `priority_recovery_partition_progress`.
 - Stop-condition check:
-  `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-current-release-gate-after-workflow-progress-event-driven-dispatch-pending-fix.report.json`.
+  `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-current-release-gate-after-workflow-progress-stage3-timeout-progression-fix.report.json`.
 - Expected causal-model change: stage-3 timeout evidence advances, reduces,
   stays same-frontier with bounded proof, or names a new owner boundary.
 - Representative outcome: `migrated`.
@@ -196,14 +196,16 @@ package as focused proof plus representative migration evidence.
 - Known downstream blockers: startup active-gate snapshot coverage remains
   downstream at `2/5`; raw publication-missing presentation remains downstream
   while publication ACK convergence is satisfied.
-- Missing causal edge: rebalancer leader operation scheduling must create
-  priority recovery operations for `needs_operation` partitions.
-- Missing causal edge probe: `npm test -- test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js`
-- Bounded progress proof: focused timer, timeout reconcile, and advance proof
-  in `OperationWorkflowOwnerSegment7Stage3.checkTimeouts()`.
+- Missing causal edge: rebalancer leader operation scheduling must create or
+  dispatch priority recovery operations for `needs_operation` partitions.
+- Missing causal edge probe: `npm test -- test/rebalancer/unified-rebalancer-part-5-2-stage-2.js test/rebalancer/unified-rebalancer-core-05-test-cases.js`
+- Bounded progress proof: focused operation scheduling proof must show bounded
+  create, dispatch, persist, or advance behavior for `needs_operation` priority
+  recovery partitions.
 - Bounded progress proof artifact:
-  `test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js`;
-  `src/rebalancer/operation-workflow-owner-segment-7-stage-3.js`.
+  `test/rebalancer/unified-rebalancer-part-5-2-stage-2.js`;
+  `test/rebalancer/unified-rebalancer-core-05-test-cases.js`;
+  `src/rebalancer/unified-rebalancer-segment-5.js`.
 - Expected observable transition: stale `PENDING` dispatch-pending operations
   are no longer the representative first frontier; fresh evidence migrates to
   operation scheduling `needs_operation` recovery creation.
