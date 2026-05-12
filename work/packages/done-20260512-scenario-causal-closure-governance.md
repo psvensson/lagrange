@@ -173,11 +173,17 @@ governance. This package does not implement runtime behavior.
 
 ## Commit And Push Ledger
 
-1. Focused package commit: `1c9085992d07e69a171e1e59a84a3e21e47bab74`
+1. Focused package commit: `7c9707632e6a15b93b799211109271722e9cf9ff`
 2. Pushed to: `origin/codex/pending-ack-eligibility-filter`
 3. Commit contains only package-owned files/package-status/allowed sprint handoff: yes
 
 ## Model Ledger
 
-No model-ledger row is recorded by this package because `work/model-ledger.jsonl`
-is outside the user-provided owned write scope for this slice.
+A model-ledger row was recorded for this governance/tooling package:
+`2026-05-12T06:10:04.887Z`, package
+`work/packages/done-20260512-scenario-causal-closure-governance.md`, model
+`gpt-5.3-codex`, task class `workflow-tooling`, package class
+`workflow-tooling-governance`, scope shape
+`repo-wide-governance/tooling-contract`, outcome `implemented`, validation
+status `passed`, correction loops `1`, review findings `4`, bailout reason
+`none`.

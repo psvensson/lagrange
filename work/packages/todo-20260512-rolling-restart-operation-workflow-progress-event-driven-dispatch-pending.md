@@ -48,7 +48,7 @@
     "expectedCausalModelChange": "The event-driven dispatch-pending frontier either advances, becomes classified bounded backpressure, or exposes a new named owner boundary.",
     "representativeOutcome": "pending-before-rerun",
     "causalDebt": "Rolling-restart remains red on workflow-progress event-driven dispatch-pending priority recovery for control_plane_publications-p1 and sql_transaction_participants-p1.",
-    "crossBoundaryReview": "required-before-implementation; review the rebalancer-handoff retry-scheduled V2 predecessor before runtime changes."
+    "crossBoundaryReview": "completed-before-implementation through Hilbert review of work/packages/done-20260512-scenario-causal-closure-governance.md; Hilbert found tracker, commit-ledger, model-ledger, and successor metadata fixes. Runtime predecessor evidence remains work/packages/done-20260511-rolling-restart-operation-workflow-rebalancer-handoff-retry-scheduled-v2.md."
   },
   "scenarioCausalClosure": {
     "referenceScenarioOrProbe": "rolling-restart workflow-progress event-driven dispatch-pending probe",

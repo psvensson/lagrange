@@ -4,7 +4,7 @@
 
 Sprint: `work/sprints/active-2026-q2-phase-0-1-rolling-restart-release-gate-closure.md`
 
-Package: `work/packages/active-20260512-scenario-causal-closure-governance.md`
+Package: `work/packages/todo-20260512-rolling-restart-operation-workflow-progress-event-driven-dispatch-pending.md`
 
 Scenario: `rolling-restart`
 
@@ -14,58 +14,57 @@ Playback: `test-output/reports/.playback/rolling-restart-current-release-gate-af
 
 ## Boundary
 
-Owner: `work_tracker_owner`
+Owner: `operation_workflow_owner`
 
-Boundary: `scenario_causal_closure_governance`
+Boundary: `workflow_progress`
 
-Dominant reason: `first_frontier_migration_without_whole_scenario_closure`
+Dominant reason: `priority_recovery_event_driven_wait`
 
-Current state: Scenario-driven rolling-restart packages can preserve first-frontier migration while leaving the whole phase chain, downstream blockers, and missing causal edge implicit.
+Current state: The rebalancer-handoff retry-scheduled V2 package migrated rolling-restart away from operation_workflow_owner / rebalancer_handoff and restored operation_workflow_owner / workflow_progress as the first priority recovery frontier. The latest evidence is event-driven dispatch-pending progress on control_plane_publications-p1 and sql_transaction_participants-p1; active gate and snapshot coverage remain downstream at 2/5.
 
 ## Next Action
 
-Add repo-wide scenario causal closure policy, template guidance, tracker validation, current-blocker handoff fields, and focused tests.
+Activate this package and reduce the restored operation_workflow_owner / workflow_progress event-driven dispatch-pending priority recovery frontier while preserving the rebalancer-handoff retry-scheduled reduction.
 
 ## Proof Ladder
 
-1. `node --test test/scripts/work-tracker-subagent-ledger.test.js test/scripts/work-context.test.js`
-2. `npm run work:package:doctor -- work/packages/active-20260512-scenario-causal-closure-governance.md`
-3. `npm run work:current-blocker`
-4. `npm run work:validate`
-5. `npm run work:context`
-6. `git diff --check -- .kiro/steering/doctrine.md .kiro/steering/system\ guidelines.md .kiro/steering/testing-guidelines.md work/README.md work/templates/work-package-template.md scripts/work-tracker.js scripts/work-context.js test/scripts/work-tracker-subagent-ledger.test.js test/scripts/work-context.test.js work/packages/active-20260512-scenario-causal-closure-governance.md work/packages/todo-20260512-rolling-restart-operation-workflow-progress-event-driven-dispatch-pending.md work/sprints/current-blocker.json work/sprints/current-blocker.md .kiro/steering/llm`
+1. `npm run work:evidence-summary -- test-output/reports/rolling-restart-current-release-gate-after-rebalancer-handoff-retry-scheduled-v2-fix.report.json`
+2. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-current-release-gate-after-rebalancer-handoff-retry-scheduled-v2-fix.report.json --explain priority_recovery_partition_progress`
+3. `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-current-release-gate-after-rebalancer-handoff-retry-scheduled-v2-fix.report.json`
+4. `npm test -- test/rebalancer/operation-workflow-progress-event-driven-reentry.test.js test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js`
+5. `node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-current-release-gate-after-workflow-progress-event-driven-dispatch-pending-fix.report.json --fast-local --verbose`
 
 ## Model Fit
 
-Package class: `workflow-tooling-governance`
+Package class: `representative-frontier-closure`
 
 Intended minimum model: `gpt-5.3-codex`
 
-Scope shape: `repo-wide-governance/tooling-contract`
+Scope shape: `owner-boundary-contraction/current-frontier`
 
 Escalation triggers:
 
-1. `validation requires runtime src changes`
-2. `policy must redefine roadmap or edition scope`
-3. `current-blocker generation requires sprint package-status mutation outside owned scope`
+1. `event-driven dispatch-pending proof requires changes outside operation_workflow_owner`
+2. `representative proof restores topology_publication_owner or startup_active_gate_owner as the direct blocker`
+3. `runtime implementation would need Pro or Enterprise features`
 
 ## Causal Governance
 
-Causal hypothesis: `If scenario causal closure metadata is required, future scenario-driven packages will preserve the full causal chain instead of treating first-frontier migration as sufficient closure.`
+Causal hypothesis: `If workflow-progress event-driven dispatch-pending recovery is repaired or classified, priority_recovery_partition_progress should reduce, converge, or migrate away from operation_workflow_owner / workflow_progress.`
 
 Stop-condition check: `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-current-release-gate-after-rebalancer-handoff-retry-scheduled-v2-fix.report.json`
 
-Expected causal-model change: `The governance contract records first frontier, downstream blockers, missing causal edge, bounded progress proof, and classification-only stop conditions for successor packages.`
+Expected causal-model change: `The event-driven dispatch-pending frontier either advances, becomes classified bounded backpressure, or exposes a new named owner boundary.`
 
-Representative outcome: `classification-only`
+Representative outcome: `pending-before-rerun`
 
-Causal debt: `This package adds governance and tracker enforcement only; it does not repair the rolling-restart runtime frontier.`
+Causal debt: `Rolling-restart remains red on workflow-progress event-driven dispatch-pending priority recovery for control_plane_publications-p1 and sql_transaction_participants-p1.`
 
-Cross-boundary review: `completed-before-implementation through Helmholtz review and Leibniz fix of the active governance continuation.`
+Cross-boundary review: `completed-before-implementation through Hilbert review of work/packages/done-20260512-scenario-causal-closure-governance.md; Hilbert found tracker, commit-ledger, model-ledger, and successor metadata fixes. Runtime predecessor evidence remains work/packages/done-20260511-rolling-restart-operation-workflow-rebalancer-handoff-retry-scheduled-v2.md.`
 
 ## Scenario Causal Closure
 
-Reference scenario/probe: `rolling-restart current-blocker causal-governance probe`
+Reference scenario/probe: `rolling-restart workflow-progress event-driven dispatch-pending probe`
 
 Phase chain:
 
@@ -73,7 +72,7 @@ Phase chain:
 2. `operation workflow dispatch and retry`
 3. `startup active-gate presentation`
 
-Current first frontier: `operation_workflow_owner / workflow_progress / priority_recovery_event_driven_wait`
+Current first frontier: `operation_workflow_owner / workflow_progress / priority_recovery_event_driven_wait on control_plane_publications-p1 and sql_transaction_participants-p1`
 
 Known downstream blockers:
 
@@ -84,35 +83,31 @@ Missing causal edge: `workflow-progress dispatch-pending retry wake must be prov
 
 Missing causal edge probe: `npm test -- test/rebalancer/operation-workflow-progress-event-driven-reentry.test.js test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js`
 
-Bounded progress proof: `Tracker policy requires focused wake, retry, timeout, reconcile, drain, dispatch, delivery, timer, advance, or bounded progress proof before representative reruns substitute for missing causal edges.`
+Bounded progress proof: `Focused owner tests must prove dispatch-pending wake, retry, timeout, and dispatch advance through bounded owner progress rather than prose-only classification.`
 
 Bounded progress proof artifact: `test/rebalancer/operation-workflow-progress-event-driven-reentry.test.js; test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js`
 
-Expected observable transition: `control_plane_publications-p1 and sql_transaction_participants-p1 leave dispatch-pending workflow_progress or are classified as bounded non-frontier with named retry and timer evidence`
+Expected observable transition: `Before: control_plane_publications-p1 and sql_transaction_participants-p1 stay dispatch-pending workflow_progress; after: they advance through retry/timeout dispatch or are classified bounded non-frontier with named evidence.`
 
-Max progress bound: `one owner wake/retry/timeout dispatch cycle per blocked partition before rerun or same-frontier classification`
+Max progress bound: `one owner wake/retry/timeout dispatch cycle per blocked partition before same-frontier fallback`
 
-Same-frontier fallback: `keep operation_workflow_owner / workflow_progress as the active successor frontier and stop downstream active-gate closure`
+Same-frontier fallback: `keep operation_workflow_owner / workflow_progress active and do not pursue startup active-gate closure`
 
-Expected next frontier: `successor runtime package either reduces workflow_progress, classifies bounded non-frontier progress, or migrates to a named downstream owner`
+Expected next frontier: `workflow_progress reduces, becomes bounded non-frontier, or migrates to a named downstream owner boundary`
 
-Result classification: `classification-only`
+Result classification: `pending-before-probe`
 
-Stop condition: `classification-only-stop`
+Stop condition: `continue-local-fix`
 
 ## Touched Files
 
-1. `.kiro/steering/doctrine.md`
-2. `.kiro/steering/system guidelines.md`
-3. `.kiro/steering/testing-guidelines.md`
-4. `work/README.md`
-5. `work/templates/work-package-template.md`
-6. `scripts/work-tracker.js`
-7. `scripts/work-context.js`
-8. `test/scripts/work-tracker-subagent-ledger.test.js`
-9. `test/scripts/work-context.test.js`
-10. `work/packages/active-20260512-scenario-causal-closure-governance.md`
-11. `work/packages/todo-20260512-rolling-restart-operation-workflow-progress-event-driven-dispatch-pending.md`
-12. `work/sprints/current-blocker.json`
-13. `work/sprints/current-blocker.md`
-14. `.kiro/steering/llm/*`
+1. `src/rebalancer/operation-workflow-owner.js`
+2. `src/rebalancer/operation-workflow-owner-segment-7-stage-1.js`
+3. `src/rebalancer/operation-workflow-owner-segment-7-stage-5.js`
+4. `test/rebalancer/operation-workflow-progress-event-driven-reentry.test.js`
+5. `test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js`
+6. `work/packages/todo-20260512-rolling-restart-operation-workflow-progress-event-driven-dispatch-pending.md`
+7. `work/sprints/active-2026-q2-phase-0-1-rolling-restart-release-gate-closure.md`
+8. `work/sprints/current-blocker.json`
+9. `work/sprints/current-blocker.md`
+10. `work/model-ledger.jsonl`
