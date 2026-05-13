@@ -3,7 +3,7 @@
 <!-- work-package
 {
   "schema": "work-package-v1",
-  "status": "active",
+  "status": "done",
   "opened": "2026-05-13",
   "lane": "runtime-owner-boundary",
   "scenario": "rolling-restart",
@@ -22,14 +22,14 @@
     "node scripts/check-guideline-decision-boundaries.js src/bootstrap/bootstrap-api.js src/bootstrap/bootstrap-api-runtime-methods.js src/bootstrap/bootstrap-service-runtime-methods.js src/bootstrap/join-readiness-evaluator-tail-methods.js src/bootstrap/node-joining-service-segment-1.js src/bootstrap/node-joining-service-segment-2.js src/bootstrap/node-joining-service-segment-5.js src/bootstrap/owners/bootstrap-request-owner.js src/bootstrap/owners/move-replica-assignment-owner.js src/bootstrap/phases/connect-websocket-phase.js src/bootstrap/phases/contact-seed-phase.js src/bootstrap/phases/create-message-group-phase.js test/distributed/harness/cluster-segment-4.js test/distributed/harness/cluster-segment-7-class-4.js test/distributed/harness/__tests__/node-handle-control-snapshot-fallback.test.js test/bootstrap/connect-websocket-phase.test.js test/bootstrap/dynamic-partition-cdc-subscription.test.js test/bootstrap/move-replica-assignment-token.test.js test/bootstrap/node-joining-service.test.js",
     "npm run audit:runtime-grammar:file -- src/bootstrap/bootstrap-api.js src/bootstrap/bootstrap-api-runtime-methods.js src/bootstrap/bootstrap-service-runtime-methods.js src/bootstrap/join-readiness-evaluator-tail-methods.js src/bootstrap/node-joining-service-segment-1.js src/bootstrap/node-joining-service-segment-2.js src/bootstrap/node-joining-service-segment-5.js src/bootstrap/owners/bootstrap-request-owner.js src/bootstrap/owners/move-replica-assignment-owner.js src/bootstrap/phases/connect-websocket-phase.js src/bootstrap/phases/contact-seed-phase.js src/bootstrap/phases/create-message-group-phase.js test/distributed/harness/cluster-segment-4.js test/distributed/harness/cluster-segment-7-class-4.js test/distributed/harness/__tests__/node-handle-control-snapshot-fallback.test.js test/bootstrap/connect-websocket-phase.test.js test/bootstrap/dynamic-partition-cdc-subscription.test.js test/bootstrap/move-replica-assignment-token.test.js test/bootstrap/node-joining-service.test.js",
     "git diff --check -- src/bootstrap/bootstrap-api.js src/bootstrap/bootstrap-api-runtime-methods.js src/bootstrap/bootstrap-service-runtime-methods.js src/bootstrap/join-readiness-evaluator-tail-methods.js src/bootstrap/node-joining-service-segment-1.js src/bootstrap/node-joining-service-segment-2.js src/bootstrap/node-joining-service-segment-5.js src/bootstrap/owners/bootstrap-request-owner.js src/bootstrap/owners/move-replica-assignment-owner.js src/bootstrap/phases/connect-websocket-phase.js src/bootstrap/phases/contact-seed-phase.js src/bootstrap/phases/create-message-group-phase.js test/distributed/harness/cluster-segment-4.js test/distributed/harness/cluster-segment-7-class-4.js test/distributed/harness/__tests__/node-handle-control-snapshot-fallback.test.js test/bootstrap/connect-websocket-phase.test.js test/bootstrap/dynamic-partition-cdc-subscription.test.js test/bootstrap/move-replica-assignment-token.test.js test/bootstrap/node-joining-service.test.js",
-    "npm run work:package:doctor -- work/packages/active-20260513-topology-active-gate-owner-truth.md",
+    "npm run work:package:doctor -- work/packages/done-20260513-topology-active-gate-owner-truth.md",
     "node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-green-gate-after-active-gate-owner-truth.report.json --fast-local --verbose",
     "npm run work:evidence-summary -- test-output/reports/rolling-restart-green-gate-after-active-gate-owner-truth.report.json",
     "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-green-gate-after-active-gate-owner-truth.report.json --explain active_gate_snapshot_coverage",
     "npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-green-gate-after-active-gate-owner-truth.report.json"
   ],
   "writeScope": [
-    "work/packages/active-20260513-topology-active-gate-owner-truth.md",
+    "work/packages/done-20260513-topology-active-gate-owner-truth.md",
     "work/packages/done-20260513-topology-remote-handoff-convergence.md",
     "work/sprints/active-2026-q2-topology-convergence-ship-shape.md",
     "work/sprints/current-blocker.json",
@@ -75,7 +75,7 @@
     "test/distributed/harness/cluster-segment-7-class-4.js"
   ],
   "commitScope": [
-    "work/packages/active-20260513-topology-active-gate-owner-truth.md",
+    "work/packages/done-20260513-topology-active-gate-owner-truth.md",
     "work/packages/done-20260513-topology-remote-handoff-convergence.md",
     "work/sprints/active-2026-q2-topology-convergence-ship-shape.md",
     "work/sprints/current-blocker.json",
@@ -149,7 +149,10 @@
       "npm run work:evidence-summary -- test-output/reports/rolling-restart-green-gate-after-active-gate-owner-truth.report.json",
       "npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-green-gate-after-active-gate-owner-truth.report.json"
     ]
-  }
+  },
+  "closed": "2026-05-13",
+  "commitAndPushLedgerRequired": true,
+  "successor": "work/packages/active-20260513-topology-readiness-stalled-support.md"
 }
 -->
 
@@ -211,7 +214,13 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
       work/packages/done-20260513-topology-remote-handoff-convergence.md`.
 - [x] Implementation subagent recorded:
       `Agent Nietzsche (019e22db-2b29-78a0-ba9f-fbb8740cab13) implemented
-      work/packages/active-20260513-topology-active-gate-owner-truth.md`.
+      work/packages/done-20260513-topology-active-gate-owner-truth.md`.
+
+## Commit And Push Ledger
+
+1. Focused package commit: fab1b6def2c096a3ec432b77e35c4c2ef6873cf5
+2. Pushed to: origin/codex/pending-ack-eligibility-filter
+3. Commit contains only package-owned files/package-status/allowed sprint handoff: yes
 
 ## Out Of Scope
 
@@ -224,11 +233,11 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 - Package class: `representative-frontier-closure`
 - Intended minimum model: `gpt-5.3-codex`
 - Scope shape: `owner-boundary-contraction/current-frontier`
-- Owned files: `work/packages/active-20260513-topology-active-gate-owner-truth.md`, `work/packages/done-20260513-topology-remote-handoff-convergence.md`, `work/sprints/active-2026-q2-topology-convergence-ship-shape.md`, `work/sprints/current-blocker.json`, `work/sprints/current-blocker.md`, `src/bootstrap/bootstrap-api.js`, `src/bootstrap/bootstrap-api-runtime-methods.js`, `src/bootstrap/bootstrap-service-runtime-methods.js`, `src/bootstrap/join-readiness-evaluator-tail-methods.js`, `src/bootstrap/node-joining-service-segment-1.js`, `src/bootstrap/node-joining-service-segment-2.js`, `src/bootstrap/node-joining-service-segment-5.js`, `src/bootstrap/owners/bootstrap-request-owner.js`, `src/bootstrap/owners/move-replica-assignment-owner.js`, `src/bootstrap/phases/connect-websocket-phase.js`, `src/bootstrap/phases/contact-seed-phase.js`, `src/bootstrap/phases/create-message-group-phase.js`, `test/distributed/harness/cluster-segment-4.js`, `test/distributed/harness/cluster-segment-7-class-4.js`, `test/distributed/harness/__tests__/node-handle-control-snapshot-fallback.test.js`, `test/bootstrap/connect-websocket-phase.test.js`, `test/bootstrap/dynamic-partition-cdc-subscription.test.js`, `test/bootstrap/move-replica-assignment-token.test.js`, `test/bootstrap/node-joining-service.test.js`
+- Owned files: `work/packages/done-20260513-topology-active-gate-owner-truth.md`, `work/packages/done-20260513-topology-remote-handoff-convergence.md`, `work/sprints/active-2026-q2-topology-convergence-ship-shape.md`, `work/sprints/current-blocker.json`, `work/sprints/current-blocker.md`, `src/bootstrap/bootstrap-api.js`, `src/bootstrap/bootstrap-api-runtime-methods.js`, `src/bootstrap/bootstrap-service-runtime-methods.js`, `src/bootstrap/join-readiness-evaluator-tail-methods.js`, `src/bootstrap/node-joining-service-segment-1.js`, `src/bootstrap/node-joining-service-segment-2.js`, `src/bootstrap/node-joining-service-segment-5.js`, `src/bootstrap/owners/bootstrap-request-owner.js`, `src/bootstrap/owners/move-replica-assignment-owner.js`, `src/bootstrap/phases/connect-websocket-phase.js`, `src/bootstrap/phases/contact-seed-phase.js`, `src/bootstrap/phases/create-message-group-phase.js`, `test/distributed/harness/cluster-segment-4.js`, `test/distributed/harness/cluster-segment-7-class-4.js`, `test/distributed/harness/__tests__/node-handle-control-snapshot-fallback.test.js`, `test/bootstrap/connect-websocket-phase.test.js`, `test/bootstrap/dynamic-partition-cdc-subscription.test.js`, `test/bootstrap/move-replica-assignment-token.test.js`, `test/bootstrap/node-joining-service.test.js`
 - Forbidden files: harness timeout increases, priority-recovery runtime changes without fresh first-frontier evidence, publication-convergence implementation without fresh first-frontier evidence, Pro behavior, Enterprise behavior.
 - Frozen decisions: package scope and lane stay bounded unless explicitly escalated.
 - Escalation triggers: owned files expand beyond this package, runtime ownership changes, or representative scenario evidence changes.
-- Focused proof: `node --test test/bootstrap/node-joining-service.test.js`, `npx tap test/bootstrap/bootstrap-api.test-part-5.js`, `npx tap test/bootstrap/connect-websocket-phase.test.js`, `node scripts/check-guideline-literals.js ...` for the 19 package JS files, `node scripts/check-guideline-decision-boundaries.js ...` for the 19 package JS files, `npm run audit:runtime-grammar:file -- ...` for the 19 package JS files, `git diff --check -- ...` for the 19 package JS files, `npm run work:package:doctor -- work/packages/active-20260513-topology-active-gate-owner-truth.md`, and representative rerun `node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-green-gate-after-active-gate-owner-truth.report.json --fast-local --verbose` with red/migrated outcome.
+- Focused proof: `node --test test/bootstrap/node-joining-service.test.js`, `npx tap test/bootstrap/bootstrap-api.test-part-5.js`, `npx tap test/bootstrap/connect-websocket-phase.test.js`, `node scripts/check-guideline-literals.js ...` for the 19 package JS files, `node scripts/check-guideline-decision-boundaries.js ...` for the 19 package JS files, `npm run audit:runtime-grammar:file -- ...` for the 19 package JS files, `git diff --check -- ...` for the 19 package JS files, `npm run work:package:doctor -- work/packages/done-20260513-topology-active-gate-owner-truth.md`, and representative rerun `node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-green-gate-after-active-gate-owner-truth.report.json --fast-local --verbose` with red/migrated outcome.
 - Model ledger advisory: `escalate`
 
 ## Validation
@@ -240,7 +249,7 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 5. `node scripts/check-guideline-decision-boundaries.js ...` for the 19 package JS files - passed.
 6. `npm run audit:runtime-grammar:file -- ...` for the 19 package JS files - passed.
 7. `git diff --check -- ...` for the 19 package JS files - passed.
-8. `npm run work:package:doctor -- work/packages/active-20260513-topology-active-gate-owner-truth.md` - passed.
+8. `npm run work:package:doctor -- work/packages/done-20260513-topology-active-gate-owner-truth.md` - passed.
 9. `node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-green-gate-after-active-gate-owner-truth.report.json --fast-local --verbose` - report red/migrated: `active_gate_snapshot_coverage`, `snapshot_coverage_incomplete`, `snapshotCoverage=2/5`, `publishedActive=1/5`, `missingPublished=4`, canonical causal outcome `migrate_owner_boundary` to `startup_readiness_owner / startup_support_evidence`.
 10. `npm run work:evidence-summary -- test-output/reports/rolling-restart-green-gate-after-active-gate-owner-truth.report.json` - passed; causal outcome `migrate_owner_boundary`.
 11. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-green-gate-after-active-gate-owner-truth.report.json --explain active_gate_snapshot_coverage` - passed; first frontier remains `active_gate_snapshot_coverage`.

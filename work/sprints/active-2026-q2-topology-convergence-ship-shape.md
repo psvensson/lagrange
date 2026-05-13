@@ -115,7 +115,7 @@ This sprint treats the system as ship-shape only when these properties hold:
      representative rolling-restart either passes or migrates to a fresh
      owner-boundary blocker.
 
-2. [Topology Active Gate Owner Truth](../packages/active-20260513-topology-active-gate-owner-truth.md)
+2. [Topology Active Gate Owner Truth](../packages/done-20260513-topology-active-gate-owner-truth.md)
    - Lane: `runtime-owner-boundary`
    - Owner boundary: `startup_active_gate_owner / snapshot_coverage`
    - Recommendation covered: make active-gate convergence owner-truth based.
