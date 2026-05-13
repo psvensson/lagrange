@@ -105,15 +105,19 @@ frontier?
    - Lane: `scenario-release-gate`
    - Purpose: freeze the latest promoted frontier and any stale/subordinate
      priority-recovery residue into focused fixtures before another full run.
-5. [Rolling Restart Operation Progress State Machine Gap Closure](../packages/todo-20260513-rolling-restart-operation-progress-state-machine-gap-closure.md)
+5. [Rolling Restart Operation Progress State Machine Gap Closure](../packages/superseded-20260513-rolling-restart-operation-progress-state-machine-gap-closure.md)
    - Lane: `runtime-owner-boundary`
    - Purpose: prove or repair every priority-recovery operation-progress state
      transition if priority recovery remains actionable.
-6. [Rolling Restart Wake Retry Progress Closure](../packages/todo-20260513-rolling-restart-wake-retry-progress-closure.md)
+   - Result: superseded before activation because latest preflight selected
+     `startup_active_gate_owner / snapshot_coverage`.
+6. [Rolling Restart Wake Retry Progress Closure](../packages/superseded-20260513-rolling-restart-wake-retry-progress-closure.md)
    - Lane: `runtime-owner-boundary`
    - Purpose: prove or repair dispatch wake, delivery, event consumption,
      retry, timeout, and reconcile paths if `dispatched_waiting_progress` or
      `wait_for_operation_progress` remains actionable.
+   - Result: superseded before activation because latest preflight selected
+     `startup_active_gate_owner / snapshot_coverage`.
 7. [Rolling Restart Diff Aware Risk Review](../packages/todo-20260513-rolling-restart-diff-aware-risk-review.md)
    - Lane: `read-review-doc-only`
    - Purpose: inspect dirty runtime/test diffs against package ownership and
