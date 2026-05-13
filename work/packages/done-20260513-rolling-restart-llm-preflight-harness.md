@@ -12,8 +12,8 @@
   "owner": "workflow_tooling_owner",
   "boundary": "release_gate_preflight",
   "dominantReason": "llm_preflight_not_recorded",
-  "currentState": "The recommendations require a recorded LLM preflight gate before the next full rolling-restart run. Today there are canonical extractor results, but no durable preflight prompt, decision ledger, or agent answer proving whether the remaining priority-recovery evidence is real, stale, or subordinate to active-gate snapshot coverage.",
-  "nextAction": "Create the reusable preflight prompt, sprint execution checklist, and decision ledger, then require later packages to record the LLM preflight result before runtime implementation or full scenario rerun.",
+  "currentState": "The reusable LLM preflight template and sprint execution queue now exist. Later packages must record the preflight decision before runtime implementation or full rolling-restart rerun.",
+  "nextAction": "Use work/templates/release-gate-llm-preflight-template.md in the latest-artifact refresh, owner-boundary consistency, diff-risk, and confirmation packages.",
   "proof": [
     "npm run work:package:doctor -- --suggest work/packages/done-20260513-rolling-restart-llm-preflight-harness.md",
     "npm run work:validate -- --entry work/packages/done-20260513-rolling-restart-llm-preflight-harness.md",
@@ -21,6 +21,13 @@
   ],
   "writeScope": [
     "work/packages/done-20260513-rolling-restart-llm-preflight-harness.md",
+    "work/packages/todo-20260513-rolling-restart-latest-artifact-preflight-refresh.md",
+    "work/packages/todo-20260513-rolling-restart-owner-boundary-consistency-closure.md",
+    "work/packages/todo-20260513-rolling-restart-latest-residual-fixture-synthesis.md",
+    "work/packages/todo-20260513-rolling-restart-operation-progress-state-machine-gap-closure.md",
+    "work/packages/todo-20260513-rolling-restart-wake-retry-progress-closure.md",
+    "work/packages/todo-20260513-rolling-restart-diff-aware-risk-review.md",
+    "work/packages/todo-20260513-rolling-restart-preflight-green-gate-confirmation.md",
     "work/sprints/todo-2026-q2-rolling-restart-llm-preflight-and-code-risk-closure.md",
     "work/templates/release-gate-llm-preflight-template.md"
   ],
@@ -34,6 +41,13 @@
   "candidateRuntimeFiles": [],
   "commitScope": [
     "work/packages/done-20260513-rolling-restart-llm-preflight-harness.md",
+    "work/packages/todo-20260513-rolling-restart-latest-artifact-preflight-refresh.md",
+    "work/packages/todo-20260513-rolling-restart-owner-boundary-consistency-closure.md",
+    "work/packages/todo-20260513-rolling-restart-latest-residual-fixture-synthesis.md",
+    "work/packages/todo-20260513-rolling-restart-operation-progress-state-machine-gap-closure.md",
+    "work/packages/todo-20260513-rolling-restart-wake-retry-progress-closure.md",
+    "work/packages/todo-20260513-rolling-restart-diff-aware-risk-review.md",
+    "work/packages/todo-20260513-rolling-restart-preflight-green-gate-confirmation.md",
     "work/sprints/todo-2026-q2-rolling-restart-llm-preflight-and-code-risk-closure.md",
     "work/templates/release-gate-llm-preflight-template.md"
   ],
@@ -98,7 +112,8 @@ The created template must require the preflight agent to answer:
 
 1. This package file.
 2. The new sprint file.
-3. `work/templates/release-gate-llm-preflight-template.md`.
+3. The todo package queue created for this sprint.
+4. `work/templates/release-gate-llm-preflight-template.md`.
 
 ## Out Of Scope
 
@@ -128,3 +143,18 @@ The created template must require the preflight agent to answer:
 1. `npm run work:package:doctor -- --suggest work/packages/done-20260513-rolling-restart-llm-preflight-harness.md`
 2. `npm run work:validate -- --entry work/packages/done-20260513-rolling-restart-llm-preflight-harness.md`
 3. `git diff --check -- work/packages/done-20260513-rolling-restart-llm-preflight-harness.md work/sprints/todo-2026-q2-rolling-restart-llm-preflight-and-code-risk-closure.md work/templates/release-gate-llm-preflight-template.md`
+
+## Execution Notes
+
+1. Created `work/templates/release-gate-llm-preflight-template.md`.
+2. Materialized the sprint queue for latest-artifact refresh, owner-boundary
+   consistency, latest-residual fixtures, conditional operation-progress state
+   machine closure, conditional wake/retry closure, diff-aware risk review, and
+   final green-gate confirmation.
+3. Kept runtime `src/` and `test/` edits out of this package slice.
+
+## Commit And Push Ledger
+
+1. Focused package commit: `3c6c706b092cdd30087e6f5b80b7b9d116380f12`
+2. Pushed to: `origin/codex/pending-ack-eligibility-filter`
+3. Commit contains only package-owned files/package-status/allowed sprint handoff: `yes`
