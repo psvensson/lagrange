@@ -5,7 +5,7 @@
   "schema": "work-package-v1",
   "status": "active",
   "opened": "YYYY-MM-DD",
-  "lane": "lightweight-maintenance|runtime-owner-boundary|scenario-release-gate|causal-escalation",
+  "lane": "read-review-doc-only|lightweight-maintenance|runtime-owner-boundary|scenario-release-gate|causal-escalation",
   "scenario": "scenario-or-none",
   "artifact": "path/to/latest.report.json",
   "playback": "path/to/playback-or-none",
@@ -91,6 +91,31 @@ Select the lightest valid lane from
 - Selected lane:
 - Why this lane is sufficient:
 - Escalation trigger to a heavier lane:
+
+## Active Sprint Isolation
+
+Required when the package is systemic, governance, architecture-planning,
+tooling, or future-sprint work while another scenario package is active.
+
+- Active package/sprint used only as handoff context:
+- Evidence that may be read but not mutated:
+- Files explicitly forbidden by this package:
+- Runtime architecture ideas captured as contract/backlog items:
+- Activation rule before any runtime/scenario implementation:
+
+## Higher-Order Problem Framing
+
+Required when the package changes release-gate workflow, architecture planning,
+or systemic sprint execution.
+
+- Blocker-path ledger rows this package creates, updates, or consumes:
+- Repeated owner-boundary failure or causal edge being addressed:
+- Architecture contract created, updated, or required before runtime work:
+- Focused fixture, extractor, or probe required before representative rerun:
+- Bounded progress mechanism and maximum bound, when retryable/backpressure
+  evidence is involved:
+- Runtime backlog item that may activate later:
+- Latest active scenario proof this package reconciles with:
 
 ## LLM Tool-First Contract
 

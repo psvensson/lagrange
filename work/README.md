@@ -589,6 +589,72 @@ Required workflow:
 Use a sprint file only when several active work packages must be coordinated.
 The sprint file should link packages; it should not replace them.
 
+## Systemic Sprint Isolation
+
+When a human asks for way-of-working, systemic, or architecture changes that
+should help future sprints, do not silently blend that work into the active
+scenario blocker package.
+
+Default rule:
+
+1. Create a separate sprint or package with `scenario: none` unless the package
+   explicitly owns scenario-governance metadata.
+2. Treat active scenario reports, packages, and sprint files as handoff context
+   unless the human explicitly asks to edit that active lane.
+3. Put the active runtime package, active sprint file, and runtime directories
+   in `Forbidden files` when the package is governance-only.
+4. Record runtime architecture ideas as contracts or backlog packages first.
+   Implement them later only through a separate `runtime-owner-boundary` or
+   `scenario-release-gate` package with focused proof.
+5. Keep current-blocker generation pointed at the active release-gate package
+   unless the human intentionally switches active work.
+
+Systemic packages may analyze the recent path of blockers. They must classify
+each suggested change as one of:
+
+1. workflow or package-policy change
+2. analyzer, fixture, or tooling change
+3. architecture contract or ADR
+4. future runtime implementation package
+
+Only the fourth category is allowed to touch runtime code, and only after it is
+activated as its own runtime/scenario package.
+
+Systemic release-gate sprints must also carry a higher-order execution gate:
+
+1. **Blocker-path ledger:** the sprint records the last several material
+   blockers, owner-boundary migrations, same-frontier loops, downstream
+   blockers, residual semantic states, and the repeated causal edge that
+   explains why local packages would otherwise ping-pong.
+2. **Architecture contract:** repeated causal edges are converted into one
+   owner contract before runtime scope is selected. The contract names the
+   semantic owner, vocabulary, allowed consumers, prohibited reinterpretations,
+   diagnostics, activation criteria, and the latest active scenario proof it
+   reconciles against.
+3. **Fixture-first proof:** runtime packages name a focused fixture, extractor,
+   or probe before another full distributed rerun is used for confirmation.
+4. **Bounded progress:** retryable, backpressure, accepted, or deferred
+   evidence stays active until a wake, retry, timeout, reconcile, drain,
+   dispatch, delivery, timer, advance, or bounded migration mechanism and
+   maximum bound are named.
+5. **Runtime backlog activation:** runtime implementation starts only from a
+   backlog item that cites the blocker-path ledger row, architecture contract,
+   focused proof, forbidden files, and active-proof reconciliation.
+
+When systemic governance work intentionally pauses an active release-gate sprint,
+it must also leave a resume activation brief before implementation resumes. The
+brief is governance-owned, not runtime-owned, and must name:
+
+1. The latest active artifact and the artifact used when governance started.
+2. The concrete blocker-path ledger rows that explain the current frontier.
+3. The runtime owner, boundary, residual state, and exact forbidden closure modes.
+4. The focused fixture, analyzer, or probe that must pass before the next full
+   distributed rerun.
+5. The green path sequence from current residual to representative scenario
+   success.
+6. The stale-proof check that decides whether the brief must be refreshed before
+   activation.
+
 Scenario-driven active sprints should keep their newest compact handoff in:
 
 1. `work/sprints/current-blocker.json`
