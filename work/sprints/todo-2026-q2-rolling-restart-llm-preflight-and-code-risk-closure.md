@@ -43,6 +43,14 @@ Canonical extractor state from May 13, 2026:
    `PUBLISHED`, `pendingAck=0`, `missingPublished=4`, `active=2/5`, and
    `snapshotCoverage=1/5`.
 
+Execution update from May 13, 2026: focused owner-boundary and fixture proof
+passes in the current workspace, but the diff-aware review blocks the full
+`rolling-restart` rerun until the active startup package is committed and
+unrelated control-plane/rebalancer/failure-bundle edits are split or admitted.
+The earlier active green sprint is paused; this preflight sprint must not edit,
+regenerate, stage, commit, or push its active package, active sprint file, or
+current-blocker files.
+
 This sprint therefore starts from a concrete preflight question: is the
 remaining priority-recovery evidence real owner work, stale diagnostic residue,
 or subordinate context behind the now-promoted active-gate snapshot coverage
@@ -101,10 +109,16 @@ frontier?
    - Purpose: reconcile topology, residual, causal-model, distributed-failure,
      active-gate, and startup-readiness projections into one owner-owned first
      frontier.
+   - Result so far: focused proof selects `startup_active_gate_owner /
+     snapshot_coverage`; the residual priority witness is stale/subordinate
+     context, not a runtime package activation.
 4. [Rolling Restart Latest Residual Fixture Synthesis](../packages/todo-20260513-rolling-restart-latest-residual-fixture-synthesis.md)
    - Lane: `scenario-release-gate`
    - Purpose: freeze the latest promoted frontier and any stale/subordinate
      priority-recovery residue into focused fixtures before another full run.
+   - Result so far: focused fixture tests pass in the current workspace, but
+     closure is deferred because the fixture/test files overlap the active
+     startup package write scope.
 5. [Rolling Restart Operation Progress State Machine Gap Closure](../packages/superseded-20260513-rolling-restart-operation-progress-state-machine-gap-closure.md)
    - Lane: `runtime-owner-boundary`
    - Purpose: prove or repair every priority-recovery operation-progress state
@@ -122,6 +136,9 @@ frontier?
    - Lane: `read-review-doc-only`
    - Purpose: inspect dirty runtime/test diffs against package ownership and
      split unrelated or risky changes before representative rerun.
+   - Result: full representative rerun is blocked by mixed dirty scope: 23
+     current active-package entries plus 14 split-required unrelated runtime
+     and test files after package-status cleanup is excluded.
 8. [Rolling Restart Preflight Green Gate Confirmation](../packages/todo-20260513-rolling-restart-preflight-green-gate-confirmation.md)
    - Lane: `scenario-release-gate`
    - Purpose: run focused proof first, then the full `rolling-restart` gate,

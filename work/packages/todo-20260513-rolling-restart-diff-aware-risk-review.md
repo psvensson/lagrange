@@ -12,8 +12,8 @@
   "owner": "workflow_tooling_owner",
   "boundary": "dirty_diff_risk_review",
   "dominantReason": "broad_dirty_runtime_diff_before_release_gate",
-  "currentState": "The worktree contains broad runtime and test changes across bootstrap, control-plane, diagnostics, rebalancer, and fixtures. Before another full rolling-restart run, the sprint needs a recorded diff-aware review that separates package-owned changes from unrelated or risky work.",
-  "nextAction": "Review dirty files against the active package and this sprint queue, classify each changed file as package-owned, generated, unrelated, or blocking-risk, and split or stop before full scenario execution if ownership is mixed.",
+  "currentState": "Executed the dirty-diff review on May 13, 2026. `npm run work:dirty-scope` reports 44 dirty entries: 23 current-blocker package-owned entries under `startup_active_gate_owner / snapshot_coverage`, no tracker-generated entries, and 21 unrelated entries. After removing sprint metadata/package-status cleanup from the unrelated bucket, 14 runtime/test files remain split-required before a representative full rolling-restart rerun can be trusted.",
+  "nextAction": "Do not run the full rolling-restart gate from this mixed diff. Continue only focused proof until the active startup package is committed and the unrelated control-plane, node, rebalancer, and failure-bundle edits are split into their own package or explicitly admitted by the human.",
   "proof": [
     "npm run work:dirty-scope",
     "git status --short",
@@ -82,6 +82,49 @@ The executed package must classify each dirty entry into one of:
 
 For `blocking-risk` and `split-required`, the package must name the exact
 successor package or ask the human before continuing.
+
+## Risk Ledger
+
+Executed on May 13, 2026.
+
+| Class | Dirty entries | Decision |
+| --- | ---: | --- |
+| `package-owned` | 23 | Owned by `work/packages/active-20260513-rolling-restart-green-gate-workflow-progress-recovery.md`; keep focused proof there and do not commit from this package. |
+| `sprint-owned` | 7 | Metadata/package-status cleanup from this sprint: moved latest-artifact refresh to `done`, moved two priority-recovery packages to `superseded`, and updated package references. Safe to commit with this package as package-status cleanup. |
+| `tracker-generated` | 0 | No generated tracker entries in this review. |
+| `split-required` | 14 | Runtime/test edits in control-plane, node, rebalancer, and failure-bundle files are outside the active startup package and outside this review package. |
+| `blocking-risk` | 37 runtime/test entries | Full `rolling-restart` would run over both current active-package changes and unrelated runtime/test changes, so a representative rerun would not isolate causality. |
+
+Split-required files:
+
+1. `src/control-plane/replica-dispatch-service-segment-1.js`
+2. `src/control-plane/replica-dispatch-service-segment-2.js`
+3. `src/control-plane/replica-dispatch-service-segment-4.js`
+4. `src/node/replica-handler-class-part-1.js`
+5. `src/rebalancer/operation-workflow-owner-segment-4.js`
+6. `src/rebalancer/operation-workflow-owner-segment-7-stage-3.js`
+7. `src/rebalancer/operation-workflow-owner-segment-7-stage-shared.js`
+8. `src/rebalancer/replica-operation-constants.js`
+9. `src/rebalancer/unified-rebalancer-segment-4-stage-3.js`
+10. `test/control-plane/replica-dispatch-node-state-update.test-part-2.js`
+11. `test/distributed/harness/__tests__/failure-bundle-core-16-test-cases.js`
+12. `test/distributed/harness/failure-bundle-segment-4.js`
+13. `test/rebalancer/priority-follow-up-target-readiness.test.js`
+14. `test/rebalancer/rebalance-coordinator-outcome-routing.test.js`
+
+Successor decision: the package-owned path remains the active startup package;
+the split-required files need a separate owner-boundary package or explicit
+human admission before the final green-gate confirmation package can run.
+
+## Execution Notes
+
+1. `npm run work:dirty-scope` reported 44 dirty entries, including 23 current
+   active-package entries and no tracker-generated entries.
+2. `git status --short` confirmed broad runtime/test changes plus sprint
+   package-status cleanup.
+3. `git diff --stat` showed 42 changed tracked files with broad bootstrap,
+   diagnostics, control-plane, rebalancer, test, and package metadata churn.
+4. `git diff --check` passed with no whitespace errors.
 
 ## In Scope
 

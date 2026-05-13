@@ -12,8 +12,8 @@
   "owner": "diagnostics_owner",
   "boundary": "topology_frontier_projection",
   "dominantReason": "priority_recovery_startup_boundary_projection_mismatch",
-  "currentState": "The latest known artifact has a projection split: evidence-summary and causal critical path promote active_gate_snapshot_coverage, topology explain says priority recovery is satisfied, distributed failure reports priorityRecovery=none, but the priority-recovery residual extractor still reports one workflow-progress witness and causal waits still include priority_recovery:event_driven.",
-  "nextAction": "Reconcile topology, residual, causal-model, distributed-failure, active-gate, and startup-readiness projections so the latest artifact has exactly one owner-owned first frontier and stale/subordinate priority-recovery evidence is not promoted into runtime implementation.",
+  "currentState": "Focused projection proof on May 13, 2026 selects one actionable first frontier: `startup_active_gate_owner / snapshot_coverage`. Evidence summary, topology active-gate explain, causal-model critical path, and distributed-failure summary agree on active-gate snapshot coverage. Topology priority recovery is satisfied and distributed failure reports `priorityRecovery=none`; the single priority residual witness is retained only as stale/subordinate context.",
+  "nextAction": "Keep operation-workflow priority-recovery packages superseded unless fresh canonical evidence promotes them again. Continue through the active startup active-gate package and do not run the full rolling-restart gate until dirty-diff split requirements are resolved.",
   "proof": [
     "npm run work:subagent-prompt -- --role review --package work/packages/todo-20260513-rolling-restart-owner-boundary-consistency-closure.md",
     "npm run work:evidence-summary -- test-output/reports/rolling-restart-green-gate-after-dispatch-retry-recovery-readiness.report.json",
@@ -39,7 +39,7 @@
     "test/distributed/harness/__tests__/failure-bundle-core-16-test-cases.js"
   ],
   "handoffFiles": [
-    "work/packages/todo-20260513-rolling-restart-latest-artifact-preflight-refresh.md",
+    "work/packages/done-20260513-rolling-restart-latest-artifact-preflight-refresh.md",
     "test-output/reports/rolling-restart-green-gate-after-dispatch-retry-recovery-readiness.report.json"
   ],
   "generatedFiles": [],
@@ -76,9 +76,9 @@
     "hypothesis": "If active-gate snapshot coverage is the real first frontier, all diagnostics must demote priority recovery to satisfied or subordinate context and preserve only owner-owned waits that are actually on the critical path.",
     "stopConditionCheck": "Run topology, residual, npm run analyze:causal-model, and distributed-failure extractors before and after the projection fix.",
     "expectedCausalModelChange": "The same artifact should report one consistent first frontier and no contradictory priority-recovery activation decision.",
-    "representativeOutcome": "pending-before-rerun",
-    "causalDebt": "The representative gate remains red until the owner boundary selected by this package is implemented.",
-    "crossBoundaryReview": "Requires scenario-release-gate review/fix/implementation sequencing when activated."
+    "representativeOutcome": "migrated",
+    "causalDebt": "The representative gate remains red; this package only records owner-boundary projection consistency and selects the existing startup active-gate runtime package as the continuation.",
+    "crossBoundaryReview": "blocked-by-environment-policy reason: subagent-spawn-requires-explicit-user-request-for-scenario-projection-review"
   },
   "scenarioCausalClosure": {
     "referenceScenarioOrProbe": "Latest rolling-restart artifact projection reconciliation",
@@ -88,21 +88,21 @@
       "active gate snapshot coverage",
       "startup readiness"
     ],
-    "currentFirstFrontier": "Extractor-dependent: active_gate_snapshot_coverage in evidence-summary; priority recovery satisfied in topology explain; one priority residual witness in residual extractor.",
+    "currentFirstFrontier": "active_gate_snapshot_coverage under startup_active_gate_owner / snapshot_coverage; priority recovery is satisfied in topology and non-actionable in distributed failure.",
     "knownDownstreamBlockers": [
       "startup_readiness_owner / startup_support_evidence after snapshot coverage",
       "budget cascade after active-gate timeout"
     ],
-    "missingCausalEdge": "One projection path must decide whether priority recovery evidence is actionable, stale, or subordinate before runtime packages run.",
+    "missingCausalEdge": "Projection proof classifies the retained priority residual as stale/subordinate; the remaining missing edge is the startup active-gate runtime path already owned by the active package.",
     "missingCausalEdgeProbe": "npm run work:evidence-summary -- test-output/reports/rolling-restart-green-gate-after-dispatch-retry-recovery-readiness.report.json plus focused topology explain commands",
     "boundedProgressProof": "Projection code and fixtures must reconcile the latest artifact consistently before any full scenario rerun.",
     "boundedProgressProofArtifact": "test-output/reports/rolling-restart-green-gate-after-dispatch-retry-recovery-readiness.report.json",
-    "expectedObservableTransition": "All extractors agree on active-gate, priority-recovery actionable, or contradictory evidence requiring a successor.",
+    "expectedObservableTransition": "All first-frontier extractors select active-gate snapshot coverage while residual-only priority evidence remains non-actionable context.",
     "maxProgressBound": "one projection review and focused fixture run",
     "sameFrontierFallback": "If priority recovery is still real, activate the operation-progress state-machine package.",
-    "expectedNextFrontier": "startup_active_gate_owner / snapshot_coverage or operation_workflow_owner / workflow_progress with fresh proof",
-    "resultClassification": "pending-before-probe",
-    "stopCondition": "continue-local-fix"
+    "expectedNextFrontier": "startup_active_gate_owner / snapshot_coverage in the active runtime package",
+    "resultClassification": "migrated",
+    "stopCondition": "migrate-owner-boundary"
   }
 }
 -->
@@ -139,6 +139,42 @@ across:
 5. causal model
 6. distributed failure summary
 7. focused topology/failure-bundle fixtures
+
+## Execution Notes
+
+The focused extractor ladder was rerun on May 13, 2026:
+
+1. `npm run work:evidence-summary -- test-output/reports/rolling-restart-green-gate-after-dispatch-retry-recovery-readiness.report.json`
+   selected `active_gate_snapshot_coverage` with owner
+   `startup_active_gate_owner / snapshot_coverage`.
+2. `npm run analyze:topology-convergence -- ... --explain priority_recovery_partition_progress`
+   returned `state=satisfied` and `frontier=false`.
+3. `npm run analyze:topology-convergence -- ... --explain active_gate_snapshot_coverage`
+   returned `state=blocked`, `frontier=true`, blockers
+   `inactive_nodes=3,snapshot_coverage=1/5`.
+4. `npm --silent run analyze:causal-model -- ...` kept the first critical path
+   at `topology:active_gate_snapshot_coverage`.
+5. `npm run analyze:distributed-failure -- --report ...` reported
+   `priorityRecovery=none`, `priorityRecoveryState=none`, `active=2/5`, and
+   `coverage=1/5`.
+6. `npm run analyze:priority-recovery-residuals -- ... --markdown` still
+   reported one workflow-progress witness, classified here as residual context
+   rather than first-frontier owner work.
+7. `node --test test/diagnostics/topology-convergence-graph.test.js test/scripts/analyze-topology-convergence.test.js`
+   passed 33 tests.
+8. `node --test test/distributed/harness/__tests__/failure-bundle-core-16-test-cases.js`
+   passed 1 test.
+
+## Subagent Sequencing Ledger
+
+- [x] Review subagent recorded:
+      `blocked-by-environment-policy`; reason:
+      subagent-spawn-requires-explicit-user-request-for-scenario-projection-review.
+- [x] Fix subagent recorded or explicitly not needed:
+      `not-needed`.
+- [x] Implementation subagent recorded:
+      `blocked-by-environment-policy`; reason:
+      subagent-spawn-requires-explicit-user-request-for-scenario-projection-implementation.
 
 ## Subagent Sequencing Requirement
 

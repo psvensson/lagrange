@@ -12,12 +12,12 @@
   "owner": "release_gate_owner",
   "boundary": "rolling_restart_green_gate_confirmation",
   "dominantReason": "full_scenario_requires_preflight_closure_proof",
-  "currentState": "The full rolling-restart scenario must not be the next discovery step until latest-artifact refresh, LLM preflight, owner-boundary consistency, focused fixtures, optional runtime owner fixes, and diff-aware risk review have produced durable proof.",
-  "nextAction": "Run the focused preflight proof ladder, then the full rolling-restart release gate, and close only on representative green or a fresh successor owner-boundary package with canonical evidence.",
+  "currentState": "The full rolling-restart scenario must not be the next discovery step until latest-artifact refresh, LLM preflight, owner-boundary consistency, focused fixtures, optional runtime owner fixes, and diff-aware risk review have produced durable proof. The earlier active rolling-restart green sprint is paused and must not be mutated by this preflight sprint.",
+  "nextAction": "Keep this package blocked until focused proof is closed, dirty scope is split, and the human explicitly resumes the green-sprint gate. Do not run the full rolling-restart release gate or update current-blocker files from this package while the earlier active sprint is paused.",
   "proof": [
     "npm run work:context",
     "npm run work:llm-start",
-    "npm run work:validate -- --closure work/packages/todo-20260513-rolling-restart-latest-artifact-preflight-refresh.md",
+    "npm run work:validate -- --closure work/packages/done-20260513-rolling-restart-latest-artifact-preflight-refresh.md",
     "npm run work:validate -- --closure work/packages/todo-20260513-rolling-restart-owner-boundary-consistency-closure.md",
     "npm run work:validate -- --closure work/packages/todo-20260513-rolling-restart-latest-residual-fixture-synthesis.md",
     "npm run work:validate -- --closure work/packages/todo-20260513-rolling-restart-diff-aware-risk-review.md",
@@ -33,10 +33,10 @@
     "work/sprints/todo-2026-q2-rolling-restart-llm-preflight-and-code-risk-closure.md"
   ],
   "handoffFiles": [
-    "work/packages/todo-20260513-rolling-restart-latest-artifact-preflight-refresh.md",
-    "work/packages/todo-20260513-rolling-restart-operation-progress-state-machine-gap-closure.md",
+    "work/packages/done-20260513-rolling-restart-latest-artifact-preflight-refresh.md",
+    "work/packages/superseded-20260513-rolling-restart-operation-progress-state-machine-gap-closure.md",
     "work/packages/todo-20260513-rolling-restart-owner-boundary-consistency-closure.md",
-    "work/packages/todo-20260513-rolling-restart-wake-retry-progress-closure.md",
+    "work/packages/superseded-20260513-rolling-restart-wake-retry-progress-closure.md",
     "work/packages/todo-20260513-rolling-restart-latest-residual-fixture-synthesis.md",
     "work/packages/todo-20260513-rolling-restart-diff-aware-risk-review.md",
     "test-output/reports/rolling-restart-green-gate-after-dispatch-retry-recovery-readiness.report.json"
@@ -124,6 +124,20 @@ Before this package runs the full scenario:
 5. Any selected runtime owner package is closed with focused tests and static
    guardrails.
 6. Diff-aware risk review has cleared or split dirty changes.
+7. The human has explicitly resumed the paused active rolling-restart green
+   sprint or authorized this sprint to run the representative gate.
+
+## Pause Boundary
+
+This package must not edit or commit:
+
+1. `work/packages/active-20260513-rolling-restart-green-gate-workflow-progress-recovery.md`
+2. `work/sprints/active-2026-q2-phase-0-1-rolling-restart-release-gate-closure.md`
+3. `work/sprints/current-blocker.json`
+4. `work/sprints/current-blocker.md`
+
+Those files belong to the paused green-sprint workflow. This preflight sprint
+may read them as handoff context only.
 
 ## Subagent Sequencing Requirement
 

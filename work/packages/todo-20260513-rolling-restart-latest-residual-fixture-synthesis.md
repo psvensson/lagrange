@@ -12,8 +12,8 @@
   "owner": "diagnostics_owner",
   "boundary": "latest_residual_fixture",
   "dominantReason": "focused_fixture_stale_against_latest_single_witness",
-  "currentState": "Existing focused priority-recovery fixture proof was created for an older May 13 baseline. The latest known artifact now needs fixtures that lock the active-gate first-frontier shape and any remaining priority-recovery stale/subordinate witness shape before another full distributed run.",
-  "nextAction": "Freeze the latest artifact into focused topology/residual fixtures that prove whether priority recovery is actionable or stale/subordinate and whether active-gate snapshot coverage is the selected first frontier.",
+  "currentState": "Focused fixture proof now passes in the current dirty workspace: active-gate snapshot coverage is represented as the selected first frontier, and the priority partition witness-only fixture keeps the retained priority residual explicit. The fixture/test files overlap the active startup package write scope, so this package should not commit them separately while the active package remains open.",
+  "nextAction": "Leave fixture synthesis gated behind the active startup package commit. Do not run the final full rolling-restart gate until the active package owns and commits the shared diagnostics/fixture changes or this package is explicitly reactivated with disjoint write scope.",
   "proof": [
     "npm run work:evidence-summary -- test-output/reports/rolling-restart-green-gate-after-dispatch-retry-recovery-readiness.report.json",
     "npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-green-gate-after-dispatch-retry-recovery-readiness.report.json --markdown",
@@ -34,7 +34,7 @@
     "test/scripts/priority-recovery-current-artifact-fixture.test.js"
   ],
   "handoffFiles": [
-    "work/packages/todo-20260513-rolling-restart-latest-artifact-preflight-refresh.md",
+    "work/packages/done-20260513-rolling-restart-latest-artifact-preflight-refresh.md",
     "work/packages/todo-20260513-rolling-restart-owner-boundary-consistency-closure.md",
     "test-output/reports/rolling-restart-green-gate-after-dispatch-retry-recovery-readiness.report.json"
   ],
@@ -69,9 +69,9 @@
     "hypothesis": "If the latest artifact can be represented by focused fixtures, later packages can prove owner-boundary changes without using the full distributed run as the first debugging loop.",
     "stopConditionCheck": "Run npm run analyze:causal-model on the latest artifact, then topology and priority-recovery fixture tests against the generated fixtures.",
     "expectedCausalModelChange": "No runtime change; fixture evidence becomes the focused proof surface for subsequent packages.",
-    "representativeOutcome": "pending-before-rerun",
-    "causalDebt": "The representative gate remains red until the selected owner package fixes or migrates the latest frontier.",
-    "crossBoundaryReview": "Requires scenario-release-gate subagent sequencing when activated."
+    "representativeOutcome": "reduced",
+    "causalDebt": "The representative gate remains red; fixture proof reduced discovery risk but cannot close independently because the passing proof depends on dirty files owned by the active startup package.",
+    "crossBoundaryReview": "blocked-by-environment-policy reason: subagent-spawn-requires-explicit-user-request-for-fixture-synthesis-review"
   },
   "scenarioCausalClosure": {
     "referenceScenarioOrProbe": "Latest rolling-restart residual and active-gate fixtures",
@@ -94,7 +94,7 @@
     "maxProgressBound": "one focused fixture test run",
     "sameFrontierFallback": "If fixtures cannot represent the evidence, return to owner-boundary consistency closure.",
     "expectedNextFrontier": "selected runtime owner package",
-    "resultClassification": "pending-before-probe",
+    "resultClassification": "reduced",
     "stopCondition": "continue-local-fix"
   }
 }
@@ -129,6 +129,34 @@ This package writes tests and fixtures only.
    select a runtime owner.
 4. Distributed failure evidence with `priorityRecovery=none` cannot be promoted
    into workflow-progress implementation without matching topology evidence.
+
+## Execution Notes
+
+Focused fixture proof was rerun on May 13, 2026:
+
+1. `node --test test/scripts/analyze-topology-convergence.test.js` passed as
+   part of the topology proof run.
+2. `node --test test/scripts/priority-recovery-current-artifact-fixture.test.js`
+   passed 2 tests.
+3. `node --test test/diagnostics/topology-convergence-graph.test.js test/scripts/analyze-topology-convergence.test.js`
+   passed 33 tests.
+
+Closure is intentionally deferred because the passing fixture surface overlaps
+`work/packages/active-20260513-rolling-restart-green-gate-workflow-progress-recovery.md`
+write scope, including topology fixtures and analyzer tests. Committing those
+files from this package would make the active runtime package harder to review
+as one focused startup active-gate slice.
+
+## Subagent Sequencing Ledger
+
+- [x] Review subagent recorded:
+      `blocked-by-environment-policy`; reason:
+      subagent-spawn-requires-explicit-user-request-for-fixture-synthesis-review.
+- [x] Fix subagent recorded or explicitly not needed:
+      `not-needed`.
+- [x] Implementation subagent recorded:
+      `blocked-by-environment-policy`; reason:
+      subagent-spawn-requires-explicit-user-request-for-fixture-synthesis-implementation.
 
 ## Subagent Sequencing Requirement
 
