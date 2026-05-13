@@ -31,6 +31,7 @@
     "work/packages/done-20260513-topology-active-gate-snapshot-coverage-repair.md",
     "work/packages/done-20260513-topology-active-gate-owner-truth.md",
     "work/packages/done-20260513-topology-readiness-stalled-support.md",
+    "work/model-ledger.jsonl",
     "work/sprints/active-2026-q2-topology-convergence-ship-shape.md",
     "work/sprints/current-blocker.json",
     "work/sprints/current-blocker.md",
@@ -71,6 +72,7 @@
     "work/packages/done-20260513-topology-active-gate-snapshot-coverage-repair.md",
     "work/packages/done-20260513-topology-active-gate-owner-truth.md",
     "work/packages/done-20260513-topology-readiness-stalled-support.md",
+    "work/model-ledger.jsonl",
     "work/sprints/active-2026-q2-topology-convergence-ship-shape.md",
     "work/sprints/current-blocker.json",
     "work/sprints/current-blocker.md",
@@ -355,3 +357,9 @@ only because those extractors did not expose the selected snapshot's nested
 stringified lifecycle/projection payloads or the individual selected readiness
 rows needed to determine whether the active-gate coverage failure was a
 serializer, publication metadata, or projection input problem.
+
+## Commit And Push Ledger
+
+1. Focused package commit: 27c0d8dfc5518f5beaf7237e2e1d0dc39040b3ff
+2. Pushed to: origin/codex/pending-ack-eligibility-filter
+3. Commit contains only package-owned files/package-status/allowed sprint handoff: yes
