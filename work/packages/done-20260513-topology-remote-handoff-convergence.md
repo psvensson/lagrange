@@ -3,7 +3,7 @@
 <!-- work-package
 {
   "schema": "work-package-v1",
-  "status": "active",
+  "status": "done",
   "opened": "2026-05-13",
   "lane": "scenario-release-gate",
   "scenario": "rolling-restart",
@@ -26,7 +26,7 @@
     "node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-green-gate-after-topology-remote-handoff-convergence.report.json --fast-local --verbose"
   ],
   "writeScope": [
-    "work/packages/active-20260513-topology-remote-handoff-convergence.md",
+    "work/packages/done-20260513-topology-remote-handoff-convergence.md",
     "work/sprints/active-2026-q2-topology-convergence-ship-shape.md",
     "work/sprints/current-blocker.json",
     "work/sprints/current-blocker.md",
@@ -44,7 +44,7 @@
     "src/rebalancer/operation-workflow-owner-segment-7-stage-5.js"
   ],
   "commitScope": [
-    "work/packages/active-20260513-topology-remote-handoff-convergence.md",
+    "work/packages/done-20260513-topology-remote-handoff-convergence.md",
     "work/sprints/active-2026-q2-topology-convergence-ship-shape.md",
     "work/sprints/current-blocker.json",
     "work/sprints/current-blocker.md",
@@ -96,7 +96,9 @@
     "expectedNextFrontier": "active_gate_snapshot_coverage after priority recovery operation progress closes",
     "resultClassification": "migrated",
     "stopCondition": "migrate-owner-boundary"
-  }
+  },
+  "closed": "2026-05-13",
+  "commitAndPushLedgerRequired": true
 }
 -->
 
@@ -150,7 +152,7 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 - [x] Fix subagent recorded or explicitly not needed:
       `not-needed`.
 - [x] Implementation subagent recorded:
-      `Agent Raman (019e22c9-ed9a-7ec1-9b00-bc3081b69b48) implemented work/packages/active-20260513-topology-remote-handoff-convergence.md`.
+      `Agent Raman (019e22c9-ed9a-7ec1-9b00-bc3081b69b48) implemented work/packages/done-20260513-topology-remote-handoff-convergence.md`.
 
 ## Implementation Subagent Handoff
 
@@ -160,8 +162,14 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 - Focused proof rerun:
   `node --test test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js test/rebalancer/operation-workflow-progress-event-driven-reentry.test.js test/rebalancer/coordinator-created-operation-progress-remote-handoff.test.js`
   completed with 202 passing tests.
-- Parent closure still needs the checked implementation subagent ledger line
-  with the actual agent identity and the required commit/push proof.
+- Parent closure recorded the checked implementation subagent ledger line
+  with the actual agent identity plus focused commit/push proof.
+
+## Commit And Push Ledger
+
+1. Focused package commit: 68fe6912
+2. Pushed to: origin/codex/pending-ack-eligibility-filter
+3. Commit contains only package-owned files/package-status/allowed sprint handoff: yes
 
 ## Out Of Scope
 

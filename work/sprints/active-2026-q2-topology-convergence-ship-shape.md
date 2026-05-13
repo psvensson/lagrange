@@ -98,7 +98,7 @@ This sprint treats the system as ship-shape only when these properties hold:
 
 ## Package Queue
 
-1. [Topology Remote Handoff Convergence](../packages/active-20260513-topology-remote-handoff-convergence.md)
+1. [Topology Remote Handoff Convergence](../packages/done-20260513-topology-remote-handoff-convergence.md)
    - Lane: `scenario-release-gate`
    - Owner boundary: `operation_workflow_owner / workflow_progress`
    - Recommendation covered: fix the current ship blocker first.
