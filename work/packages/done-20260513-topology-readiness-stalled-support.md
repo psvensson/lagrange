@@ -3,7 +3,7 @@
 <!-- work-package
 {
   "schema": "work-package-v1",
-  "status": "active",
+  "status": "done",
   "opened": "2026-05-13",
   "lane": "runtime-owner-boundary",
   "scenario": "rolling-restart",
@@ -22,14 +22,14 @@
     "node scripts/check-guideline-literals.js src/diagnostics/failure-class-taxonomy.js src/diagnostics/topology-convergence-graph.js test/diagnostics/topology-convergence-graph.test.js test/diagnostics/failure-class-taxonomy.test.js test/diagnostics/stop-condition-decision.test.js test/diagnostics/causal-graph-builder.test.js",
     "node scripts/check-guideline-decision-boundaries.js src/diagnostics/failure-class-taxonomy.js src/diagnostics/topology-convergence-graph.js test/diagnostics/topology-convergence-graph.test.js test/diagnostics/failure-class-taxonomy.test.js test/diagnostics/stop-condition-decision.test.js test/diagnostics/causal-graph-builder.test.js",
     "npm run audit:runtime-grammar:file -- src/diagnostics/failure-class-taxonomy.js src/diagnostics/topology-convergence-graph.js",
-    "git diff --check -- work/packages/active-20260513-topology-readiness-stalled-support.md work/sprints/active-2026-q2-topology-convergence-ship-shape.md work/sprints/current-blocker.json work/sprints/current-blocker.md src/diagnostics/failure-class-taxonomy.js src/diagnostics/topology-convergence-graph.js test/diagnostics/topology-convergence-graph.test.js test/diagnostics/failure-class-taxonomy.test.js test/diagnostics/stop-condition-decision.test.js test/diagnostics/causal-graph-builder.test.js",
+    "git diff --check -- work/packages/done-20260513-topology-readiness-stalled-support.md work/sprints/active-2026-q2-topology-convergence-ship-shape.md work/sprints/current-blocker.json work/sprints/current-blocker.md src/diagnostics/failure-class-taxonomy.js src/diagnostics/topology-convergence-graph.js test/diagnostics/topology-convergence-graph.test.js test/diagnostics/failure-class-taxonomy.test.js test/diagnostics/stop-condition-decision.test.js test/diagnostics/causal-graph-builder.test.js",
     "node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-green-gate-after-readiness-stalled-support.report.json --fast-local --verbose",
     "npm run work:evidence-summary -- test-output/reports/rolling-restart-green-gate-after-readiness-stalled-support.report.json",
     "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-green-gate-after-readiness-stalled-support.report.json --markdown",
     "npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-green-gate-after-readiness-stalled-support.report.json"
   ],
   "writeScope": [
-    "work/packages/active-20260513-topology-readiness-stalled-support.md",
+    "work/packages/done-20260513-topology-readiness-stalled-support.md",
     "work/sprints/active-2026-q2-topology-convergence-ship-shape.md",
     "work/sprints/current-blocker.json",
     "work/sprints/current-blocker.md",
@@ -51,7 +51,7 @@
     "src/diagnostics/topology-convergence-graph.js"
   ],
   "commitScope": [
-    "work/packages/active-20260513-topology-readiness-stalled-support.md",
+    "work/packages/done-20260513-topology-readiness-stalled-support.md",
     "work/sprints/active-2026-q2-topology-convergence-ship-shape.md",
     "work/sprints/current-blocker.json",
     "work/sprints/current-blocker.md",
@@ -110,7 +110,10 @@
     "reason": "Focused diagnostics proof reduced readiness_startup_support to inherited active-gate no-progress; the representative rerun returns continue_local_fix for active_gate_snapshot_coverage with snapshotCoverage=1/5.",
     "evidence": "test-output/reports/rolling-restart-green-gate-after-readiness-stalled-support.report.json"
   },
-  "predecessor": "work/packages/done-20260513-topology-active-gate-owner-truth.md"
+  "predecessor": "work/packages/done-20260513-topology-active-gate-owner-truth.md",
+  "closed": "2026-05-13",
+  "commitAndPushLedgerRequired": true,
+  "successor": "work/packages/active-20260513-topology-active-gate-snapshot-coverage-repair.md"
 }
 -->
 
@@ -157,11 +160,17 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
       `Agent Hilbert (019e2336-831f-7153-abe4-ab105bffaac4) fixed
       work/packages/done-20260513-topology-active-gate-owner-truth.md`.
 - [x] Implementation subagent recorded:
-      `Agent Codex (019e233e-54cb-7ab0-b8ae-cd1a4a2fd297) implemented work/packages/active-20260513-topology-readiness-stalled-support.md`.
+      `Agent Codex (019e233e-54cb-7ab0-b8ae-cd1a4a2fd297) implemented work/packages/done-20260513-topology-readiness-stalled-support.md`.
+
+## Commit And Push Ledger
+
+1. Focused package commit: e3404a81f11c4077910ea56d4e9b3994862ded30
+2. Pushed to: origin/codex/pending-ack-eligibility-filter
+3. Commit contains only package-owned files/package-status/allowed sprint handoff: yes
 
 ## In Scope
 
-1. work/packages/active-20260513-topology-readiness-stalled-support.md
+1. work/packages/done-20260513-topology-readiness-stalled-support.md
 2. work/sprints/active-2026-q2-topology-convergence-ship-shape.md
 3. work/sprints/current-blocker.json
 4. work/sprints/current-blocker.md
@@ -185,7 +194,7 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 - Package class: `representative-frontier-closure`
 - Intended minimum model: `gpt-5.3-codex`
 - Scope shape: `owner-boundary-contraction/current-frontier`
-- Owned files: `work/packages/active-20260513-topology-readiness-stalled-support.md`, `work/sprints/active-2026-q2-topology-convergence-ship-shape.md`, `work/sprints/current-blocker.json`, `work/sprints/current-blocker.md`, `src/diagnostics/failure-class-taxonomy.js`, `src/diagnostics/topology-convergence-graph.js`, `test/diagnostics/topology-convergence-graph.test.js`, `test/diagnostics/failure-class-taxonomy.test.js`, `test/diagnostics/stop-condition-decision.test.js`, `test/diagnostics/causal-graph-builder.test.js`
+- Owned files: `work/packages/done-20260513-topology-readiness-stalled-support.md`, `work/sprints/active-2026-q2-topology-convergence-ship-shape.md`, `work/sprints/current-blocker.json`, `work/sprints/current-blocker.md`, `src/diagnostics/failure-class-taxonomy.js`, `src/diagnostics/topology-convergence-graph.js`, `test/diagnostics/topology-convergence-graph.test.js`, `test/diagnostics/failure-class-taxonomy.test.js`, `test/diagnostics/stop-condition-decision.test.js`, `test/diagnostics/causal-graph-builder.test.js`
 - Forbidden files: `harness timeout increases`, `bootstrap runtime changes without fresh first-frontier evidence`, `priority-recovery runtime changes without fresh first-frontier evidence`, `Pro behavior`, `Enterprise behavior`
 - Frozen decisions: package scope and lane stay bounded unless explicitly escalated.
 - Escalation triggers: owned files expand beyond this package, runtime ownership changes, or representative scenario evidence changes.

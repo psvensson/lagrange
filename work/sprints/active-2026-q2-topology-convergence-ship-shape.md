@@ -128,7 +128,7 @@ This sprint treats the system as ship-shape only when these properties hold:
      operations, and evaluated topology epoch; `PUBLISHED` cannot mask
      `active=2/5` without a degraded owner reason.
 
-3. [Topology Readiness Stalled Support](../packages/active-20260513-topology-readiness-stalled-support.md)
+3. [Topology Readiness Stalled Support](../packages/done-20260513-topology-readiness-stalled-support.md)
    - Lane: `runtime-owner-boundary`
    - Owner boundary: `startup_readiness_owner / startup_support_evidence`
    - Recommendation covered: keep startup support evidence tied to owner
