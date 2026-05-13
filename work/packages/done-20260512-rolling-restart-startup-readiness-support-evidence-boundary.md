@@ -13,7 +13,7 @@
   "boundary": "startup_support_evidence",
   "dominantReason": "startup_readiness_blocked",
   "currentState": "Focused startup-readiness support-evidence implementation reduced the weak readiness terminal evidence. The current report still has priority_recovery_partition_progress retryable under operation_workflow_owner / workflow_progress, but readiness_startup_support is now deferred with supportPath inherited_active_gate_no_progress instead of terminal_failed readiness ownership. Publication ACK convergence remains satisfied, and startup_active_gate_owner / snapshot_coverage remains the projected downstream topology edge after priority progress closes.",
-  "nextAction": "Sprint closure recorded this package as the final runtime handoff. Future work must start from a fresh package and fresh representative evidence; do not implement operation_workflow_owner / workflow_progress or startup_active_gate_owner / snapshot_coverage runtime behavior from this package.",
+  "nextAction": "This package is predecessor proof only. The May 13, 2026 green-only rerun invalidated sprint closure and restored operation_workflow_owner / workflow_progress as the active handoff in work/packages/active-20260513-rolling-restart-green-gate-workflow-progress-recovery.md. Do not present this package as final runtime handoff, and do not implement operation_workflow_owner / workflow_progress or startup_active_gate_owner / snapshot_coverage runtime behavior from it.",
   "proof": [
     "npm run work:subagent-prompt -- --role implementation --package work/packages/done-20260512-rolling-restart-startup-readiness-support-evidence-boundary.md",
     "npm run work:evidence-summary -- test-output/reports/rolling-restart-current-release-gate-after-workflow-progress-direct-chain-owner-proof.report.json",
@@ -127,6 +127,17 @@ startup readiness support evidence goes terminal, then reduce it or record the
 next named owner-boundary migration without implementing startup active-gate
 behavior from this package.
 
+## May 13 Handoff Correction
+
+This closed package is predecessor proof only. The May 13, 2026 green-only
+`rolling-restart` rerun invalidated sprint closure and restored
+`operation_workflow_owner / workflow_progress` as the active handoff in
+[Rolling Restart Green Gate Workflow Progress Recovery](active-20260513-rolling-restart-green-gate-workflow-progress-recovery.md).
+
+Do not use this package as final runtime handoff or sprint-exit proof. Its
+`reduced` and `classification-only-stop` results remain package-local history;
+they do not close the reopened sprint while `rolling-restart` is non-green.
+
 ## Future Agent Entry Contract
 
 If this package is reopened, future agents must:
@@ -135,14 +146,16 @@ If this package is reopened, future agents must:
 2. Run `npm run work:package:doctor -- --suggest work/packages/done-20260512-rolling-restart-startup-readiness-support-evidence-boundary.md`.
 3. Confirm the review, handoff-fix, and implementation ledger entries below
    are still intact.
-4. Use a fresh package and fresh subagent sequence for any follow-on runtime
+4. Treat this package as predecessor proof only; the May 13, 2026 green-only
+   rerun invalidated any sprint closure that used it as final handoff.
+5. Use a fresh package and fresh subagent sequence for any follow-on runtime
    work; do not reuse this closed implementation proof as new role proof.
-5. Follow the repo-wide tool-first contract maintained by
+6. Follow the repo-wide tool-first contract maintained by
    [Workflow Tooling LLM Usability Slice](done-20260511-workflow-tooling-llm-usability.md);
    do not edit workflow docs or templates from this startup-readiness package.
-6. Do not reopen predecessor
+7. Do not reopen predecessor
    workflow-progress work unless fresh normalized evidence promotes it.
-7. Do not use ad hoc `jq` or raw log sampling unless the canonical extractors
+8. Do not use ad hoc `jq` or raw log sampling unless the canonical extractors
    are missing or insufficient and the package records why.
 
 ## Subagent Sequencing Ledger

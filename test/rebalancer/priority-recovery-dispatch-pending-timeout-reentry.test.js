@@ -61,6 +61,8 @@ const TEST_REPLICA_DISPATCH_TARGET =
 const TEST_REPLICA_HANDLER_DISPATCH_TARGET =
   'node-target/service/replica-handler';
 const TEST_RETRYABLE_HANDOFF_ERROR = 'handoff retryable timeout';
+const TEST_RETRYABLE_TRANSITION_FAILURE =
+  'retryable transition claim failure';
 const TEST_COORDINATOR_CREATED_REMOTE_HANDOFF =
   'coordinator_created_remote_handoff';
 const TEST_PUBLICATION_STATUS_PUBLISHED = 'PUBLISHED';
@@ -142,6 +144,13 @@ const TEST_ASSERT_ACTIVE_HANDOFF_RETRY_TIMER_PRESERVED =
 const TEST_RETRY_SCHEDULED_REENTRY_TEST_NAME =
   'retry-scheduled rebalancer handoff snapshots re-enter dispatch-pending ' +
   'owner progress';
+const TEST_TRANSITION_RETRY_SNAPSHOT_REENTRY_TEST_NAME =
+  'coordinator-created dispatch-pending transition retries preserve the ' +
+  'operation snapshot for deferred visibility re-entry';
+const TEST_DEFERRED_VISIBILITY_STATE = 'deferred_visibility';
+const TEST_DISPATCH_SUCCESS = Object.freeze({
+  success: true,
+});
 const TEST_ASSERT_RETRY_SCHEDULED_REENTRY_WAKES =
   'retry-scheduled handoff snapshots should wake the remote owner when no ' +
   'bounded retry is active';
@@ -280,6 +289,151 @@ function createCoordinator(overrides = {}) {
     },
   });
 }
+
+function buildRetryableTransitionFailure() {
+  const error = new Error(TEST_RETRYABLE_TRANSITION_FAILURE);
+  error.deferRetry = true;
+  error.retryAfterMs = TEST_RETRY_AFTER_MS;
+  return error;
+}
+
+test(TEST_TRANSITION_RETRY_SNAPSHOT_REENTRY_TEST_NAME,
+async (t) => {
+  const deferredTimers = [];
+  const resumedDispatchOperations = [];
+  const nowMs = Date.now();
+  const operation = Object.freeze({
+    operationId: TEST_OPERATION_ID,
+    type: TEST_OPERATION_TYPE_REPLACE,
+    partitionId: TEST_PARTITION_ID,
+    entityType: TEST_ENTITY_TYPE_PARTITION,
+    entityId: TEST_PARTITION_ID,
+    replicaId: TEST_REPLICA_ID,
+    sourceNodeId: TEST_SOURCE_NODE_ID,
+    targetNodeId: TEST_TARGET_NODE_ID,
+    status: TEST_STATUS_PENDING,
+    workflowStep: TEST_STEP_PENDING,
+    createdAt: nowMs,
+    updatedAt: nowMs,
+    createdAtMs: nowMs,
+    updatedAtMs: nowMs,
+    stepsHistory: TEST_EMPTY_LIST,
+  });
+  const coordinator = createCoordinator({
+    nodeId: TEST_TARGET_NODE_ID,
+    transactionCoordinator: buildTransactionCoordinator(),
+    systemTableCache: {
+      get() {
+        return TEST_EMPTY_VALUE;
+      },
+      getAll() {
+        return [];
+      },
+      filter() {
+        return [];
+      },
+    },
+    cdcIntegrationService: {
+      async waitForCacheUpdate() {},
+    },
+    controlPlaneReadinessService: {
+      getNodeReadinessSync(nodeId) {
+        return {
+          nodeId,
+          dimensions: {
+            controlPlaneRecoveryEligible: true,
+            repairEligible: true,
+            serveEligible: true,
+          },
+        };
+      },
+    },
+    tablePolicyService: {
+      async getPolicyForPartition() {
+        return {minReplicaCount: TEST_MIN_REPLICA_COUNT};
+      },
+    },
+    messageRouter: {
+      async deliver() {
+        return {
+          acknowledged: true,
+          status: TEST_DELIVERY_STATUS_INITIATED,
+        };
+      },
+    },
+    setTimeoutFn(fn, delayMs) {
+      const handle = {fn, delayMs};
+      deferredTimers.push(handle);
+      return handle;
+    },
+    clearTimeoutFn() {},
+    enableTimeouts: false,
+  });
+
+  coordinator.initialize();
+  coordinator.workflowOwner.repository.queryAuthoritativeOperationById =
+    async () => TEST_EMPTY_VALUE;
+  coordinator.workflowOwner.repository.getOperationByIdVisibilityObservation =
+    async () => Object.freeze({
+      operation: TEST_EMPTY_VALUE,
+      deferredOutcome: Object.freeze({
+        state: TEST_DEFERRED_VISIBILITY_STATE,
+      }),
+    });
+  coordinator.workflowOwner.claimPendingDispatchOperation = async () => {
+    throw buildRetryableTransitionFailure();
+  };
+  coordinator.workflowOwner.dispatchOperationInternal =
+    async (dispatchOperation) => {
+      resumedDispatchOperations.push(dispatchOperation);
+      return TEST_DISPATCH_SUCCESS;
+    };
+
+  try {
+    const applied =
+      await coordinator.workflowOwner.armCoordinatorCreatedOperation(operation);
+    const retrySnapshot =
+      coordinator.workflowOwner.getTransitionRetryOperationSnapshot(
+        TEST_OPERATION_ID,
+      );
+
+    t.equal(
+      applied,
+      false,
+      'retryable coordinator-created claim failures should defer owner progress',
+    );
+    t.equal(
+      deferredTimers.length,
+      NUM.ONE,
+      'the retryable claim failure should arm one transition retry',
+    );
+    t.equal(
+      retrySnapshot?.operationId,
+      TEST_OPERATION_ID,
+      'the transition retry should retain the adapter operation snapshot',
+    );
+
+    await deferredTimers[NUM.ZERO].fn();
+
+    t.equal(
+      resumedDispatchOperations.length,
+      NUM.ONE,
+      'deferred visibility should re-enter dispatch from the retained snapshot',
+    );
+    t.equal(
+      resumedDispatchOperations[NUM.ZERO]?.operationId,
+      TEST_OPERATION_ID,
+      'deferred retry dispatch should use the original operation id',
+    );
+    t.equal(
+      resumedDispatchOperations[NUM.ZERO]?.workflowStep,
+      TEST_STEP_PENDING,
+      'deferred retry dispatch should preserve the dispatch-pending workflow step',
+    );
+  } finally {
+    await coordinator.shutdown();
+  }
+});
 
 test('checkTimeouts re-wakes restart-discovered remote-owned priority ' +
   'dispatch-pending PENDING rows while the operation budget is still active',

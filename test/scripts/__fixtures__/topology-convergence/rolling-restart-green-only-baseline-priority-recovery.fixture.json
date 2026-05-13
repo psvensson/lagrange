@@ -1,0 +1,143 @@
+{
+  "scenario": "rolling-restart",
+  "publicationConvergence": {
+    "publicationStatus": "PUBLISHED",
+    "pendingAckCount": 0,
+    "activeGate": {
+      "state": "timed_out",
+      "ready": false,
+      "progress": {
+        "activeNodeCount": 3,
+        "expectedNodeCount": 5,
+        "snapshotCoverageComplete": false,
+        "snapshotCoverageNodeCount": 2
+      }
+    },
+    "priorityRecoveryPartitionWitnesses": [
+      {
+        "partitionId": "control_plane_publications-p1",
+        "semanticStateId": "coordination_mismatch",
+        "progressClassIds": [
+          "operation_created_but_no_step_transitions",
+          "publication_recovery_eligible_but_coordinator_excludes_node"
+        ],
+        "blockerReasonCodes": [
+          "operation_created_but_no_step_transitions",
+          "publication_recovery_eligible_but_coordinator_excludes_node"
+        ],
+        "currentOwner": "operation_workflow_owner",
+        "blockingBoundary": "workflow_progress",
+        "actuationState": "dispatched_waiting_progress",
+        "waitMode": "event_driven",
+        "nextRequiredAction": "advance_existing_operation",
+        "operationIds": [
+          "ff1b3c8d-1df3-4fde-a0f2-bb205a3ff639"
+        ],
+        "serialWaitOperationIds": [],
+        "serialWaitPartitionIds": []
+      },
+      {
+        "partitionId": "replica_operations-p1",
+        "semanticStateId": "recovering_in_flight",
+        "progressClassIds": [],
+        "blockerReasonCodes": [],
+        "currentOwner": "operation_workflow_owner",
+        "blockingBoundary": "workflow_progress",
+        "actuationState": "dispatched_waiting_progress",
+        "waitMode": "event_driven",
+        "nextRequiredAction": "advance_existing_operation",
+        "operationIds": [
+          "32d547a7-8518-43bc-b983-29c1a7a18223"
+        ],
+        "serialWaitOperationIds": [],
+        "serialWaitPartitionIds": []
+      },
+      {
+        "partitionId": "sql_transaction_participants-p1",
+        "semanticStateId": "recovering_in_flight",
+        "progressClassIds": [],
+        "blockerReasonCodes": [],
+        "currentOwner": "operation_workflow_owner",
+        "blockingBoundary": "workflow_progress",
+        "actuationState": "dispatched_waiting_progress",
+        "waitMode": "event_driven",
+        "nextRequiredAction": "advance_existing_operation",
+        "operationIds": [
+          "a7f9eff6-bb09-4466-a4c1-9d2e868d2203"
+        ],
+        "serialWaitOperationIds": [
+          "0bac12bb-e775-416d-8143-696a8af0dd0d",
+          "32d547a7-8518-43bc-b983-29c1a7a18223",
+          "ff1b3c8d-1df3-4fde-a0f2-bb205a3ff639"
+        ],
+        "serialWaitPartitionIds": [
+          "control_plane_publications-p1",
+          "replica_operations-p1",
+          "sql_transactions-p1"
+        ]
+      },
+      {
+        "partitionId": "sql_transactions-p1",
+        "semanticStateId": "coordination_mismatch",
+        "progressClassIds": [
+          "operation_created_but_no_step_transitions",
+          "publication_recovery_eligible_but_coordinator_excludes_node"
+        ],
+        "blockerReasonCodes": [
+          "operation_created_but_no_step_transitions",
+          "publication_recovery_eligible_but_coordinator_excludes_node"
+        ],
+        "currentOwner": "operation_workflow_owner",
+        "blockingBoundary": "workflow_progress",
+        "actuationState": "persisted_not_dispatched",
+        "waitMode": "event_driven",
+        "nextRequiredAction": "advance_existing_operation",
+        "operationIds": [
+          "0bac12bb-e775-416d-8143-696a8af0dd0d"
+        ],
+        "serialWaitOperationIds": [
+          "32d547a7-8518-43bc-b983-29c1a7a18223",
+          "a7f9eff6-bb09-4466-a4c1-9d2e868d2203",
+          "ff1b3c8d-1df3-4fde-a0f2-bb205a3ff639"
+        ],
+        "serialWaitPartitionIds": [
+          "control_plane_publications-p1",
+          "replica_operations-p1",
+          "sql_transaction_participants-p1"
+        ]
+      },
+      {
+        "partitionId": "sql_transaction_participants-p1",
+        "semanticStateId": "recovering_in_flight",
+        "progressClassIds": [],
+        "blockerReasonCodes": [],
+        "currentOwner": "operation_workflow_owner",
+        "blockingBoundary": "rebalancer_handoff",
+        "actuationState": "dispatched_waiting_progress",
+        "waitMode": "retry_scheduled",
+        "nextRequiredAction": "wait_for_operation_progress",
+        "operationIds": [
+          "a7f9eff6-bb09-4466-a4c1-9d2e868d2203"
+        ],
+        "serialWaitOperationIds": [],
+        "serialWaitPartitionIds": []
+      },
+      {
+        "partitionId": "sql_transactions-p1",
+        "semanticStateId": "recovering_in_flight",
+        "progressClassIds": [],
+        "blockerReasonCodes": [],
+        "currentOwner": "operation_workflow_owner",
+        "blockingBoundary": "rebalancer_handoff",
+        "actuationState": "dispatched_waiting_progress",
+        "waitMode": "retry_scheduled",
+        "nextRequiredAction": "wait_for_operation_progress",
+        "operationIds": [
+          "0bac12bb-e775-416d-8143-696a8af0dd0d"
+        ],
+        "serialWaitOperationIds": [],
+        "serialWaitPartitionIds": []
+      }
+    ]
+  }
+}

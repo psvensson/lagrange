@@ -29,6 +29,9 @@ import {
 
 const OPERATION_WORKFLOW_OWNER_ADAPTER_DEFAULT_CONTEXT = Object.freeze({});
 const OPERATION_WORKFLOW_OWNER_EMPTY_TEXT = '';
+const OPERATION_WORKFLOW_OWNER_NO_OPERATION = null;
+const OPERATION_WORKFLOW_OWNER_NO_OPERATION_ID = null;
+const OPERATION_WORKFLOW_OWNER_OBJECT_REFERENCE = Object.freeze({});
 const OPERATION_WORKFLOW_OWNER_DISPATCH_PENDING_REENTRY_STATE =
   Object.freeze({
     OPERATION_UNAVAILABLE: 'operation_unavailable',
@@ -146,6 +149,21 @@ function resolveOperationWorkflowOwnerDispatchPendingReentryState(evidence) {
   );
 }
 
+function isOperationWorkflowOwnerSnapshotCandidate(value) {
+  return Boolean(value) &&
+    typeof value === typeof OPERATION_WORKFLOW_OWNER_OBJECT_REFERENCE &&
+    !Array.isArray(value);
+}
+
+function normalizeOperationWorkflowOwnerSnapshotOperationId(operation) {
+  const operationId = String(
+    operation?.operationId || OPERATION_WORKFLOW_OWNER_EMPTY_TEXT,
+  ).trim();
+  return operationId.length > OPERATION_WORKFLOW_OWNER_EMPTY_TEXT.length ?
+    operationId :
+    OPERATION_WORKFLOW_OWNER_NO_OPERATION_ID;
+}
+
 function shouldReenterOperationWorkflowOwnerDispatchPending(
   owner,
   snapshot,
@@ -217,6 +235,8 @@ function normalizePriorityRecoveryDispatchPendingOwnerSnapshot(
 class OperationWorkflowOwner extends OperationWorkflowOwnerSegment7 {
   constructor(options) {
     super(options);
+    this.operationWorkflowOwnerAdapterOperationSnapshotByOperationId =
+      new Map();
     this.operationWorkflowOwnerPorts =
       createOperationWorkflowOwnerPorts(this);
     this.operationWorkflowOwnerAdapter =
@@ -225,12 +245,116 @@ class OperationWorkflowOwner extends OperationWorkflowOwnerSegment7 {
       });
   }
 
-  async runOperationWorkflowOwnerAdapter(operationInput, context) {
-    const result = await this.operationWorkflowOwnerAdapter.run(
+  selectOperationWorkflowOwnerAdapterSnapshotOperation(
+    operationInput,
+    context = OPERATION_WORKFLOW_OWNER_ADAPTER_DEFAULT_CONTEXT,
+  ) {
+    if (isOperationWorkflowOwnerSnapshotCandidate(operationInput)) {
+      return operationInput;
+    }
+    if (isOperationWorkflowOwnerSnapshotCandidate(context?.operationSnapshot)) {
+      return context.operationSnapshot;
+    }
+    if (isOperationWorkflowOwnerSnapshotCandidate(context?.operation)) {
+      return context.operation;
+    }
+    if (isOperationWorkflowOwnerSnapshotCandidate(context?.fallbackOperation)) {
+      return context.fallbackOperation;
+    }
+    return OPERATION_WORKFLOW_OWNER_NO_OPERATION;
+  }
+
+  retainOperationWorkflowOwnerAdapterOperationSnapshot(
+    operationInput,
+    context = OPERATION_WORKFLOW_OWNER_ADAPTER_DEFAULT_CONTEXT,
+  ) {
+    const operation = this.selectOperationWorkflowOwnerAdapterSnapshotOperation(
       operationInput,
       context,
     );
-    return result.applied === true;
+    const operationId =
+      normalizeOperationWorkflowOwnerSnapshotOperationId(operation);
+    if (!operationId) {
+      return OPERATION_WORKFLOW_OWNER_NO_OPERATION_ID;
+    }
+    const operationSnapshot = this.cloneOperationSnapshot(operation);
+    if (!operationSnapshot) {
+      return OPERATION_WORKFLOW_OWNER_NO_OPERATION_ID;
+    }
+    this.operationWorkflowOwnerAdapterOperationSnapshotByOperationId.set(
+      operationId,
+      operationSnapshot,
+    );
+    return operationId;
+  }
+
+  clearOperationWorkflowOwnerAdapterOperationSnapshot(operationId) {
+    if (!operationId) {
+      return;
+    }
+    this.operationWorkflowOwnerAdapterOperationSnapshotByOperationId.delete(
+      operationId,
+    );
+  }
+
+  buildTransitionRetryContextWithAdapterOperationSnapshot(
+    operationId,
+    context = OPERATION_WORKFLOW_OWNER_ADAPTER_DEFAULT_CONTEXT,
+  ) {
+    if (
+      isOperationWorkflowOwnerSnapshotCandidate(context?.operationSnapshot) ||
+      isOperationWorkflowOwnerSnapshotCandidate(context?.operation)
+    ) {
+      return context;
+    }
+    const operationSnapshot =
+      this.operationWorkflowOwnerAdapterOperationSnapshotByOperationId.get(
+        operationId,
+      );
+    if (!operationSnapshot) {
+      return context;
+    }
+    return {
+      ...context,
+      operationSnapshot: this.cloneOperationSnapshot(operationSnapshot),
+    };
+  }
+
+  deferTransitionRetry(
+    operationId,
+    errorLike,
+    context = OPERATION_WORKFLOW_OWNER_ADAPTER_DEFAULT_CONTEXT,
+  ) {
+    return super.deferTransitionRetry(
+      operationId,
+      errorLike,
+      this.buildTransitionRetryContextWithAdapterOperationSnapshot(
+        operationId,
+        context,
+      ),
+    );
+  }
+
+  async runOperationWorkflowOwnerAdapter(
+    operationInput,
+    context = OPERATION_WORKFLOW_OWNER_ADAPTER_DEFAULT_CONTEXT,
+  ) {
+    const retainedOperationId =
+      this.retainOperationWorkflowOwnerAdapterOperationSnapshot(
+        operationInput,
+        context,
+      );
+    try {
+      const result = await this.operationWorkflowOwnerAdapter.run(
+        operationInput,
+        context,
+      );
+      return result.applied === true;
+    } finally {
+      this.clearOperationWorkflowOwnerAdapterOperationSnapshot(
+        retainedOperationId,
+      );
+    }
   }
 
   async armCoordinatorCreatedOperation(operationInput) {
