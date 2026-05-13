@@ -4,44 +4,44 @@
 
 Sprint: `work/sprints/active-2026-q2-topology-convergence-ship-shape.md`
 
-Package: `work/packages/active-20260513-topology-active-gate-owner-truth.md`
+Package: `work/packages/active-20260513-topology-readiness-stalled-support.md`
 
 Workflow lane: `runtime-owner-boundary`
 
 Scenario: `rolling-restart`
 
-Artifact: `test-output/reports/rolling-restart-green-gate-after-active-gate-owner-truth.report.json`
+Artifact: `test-output/reports/rolling-restart-green-gate-after-readiness-stalled-support.report.json`
 
 Playback: `none`
 
 ## Boundary
 
-Owner: `startup_active_gate_owner`
+Owner: `startup_readiness_owner`
 
-Boundary: `snapshot_coverage`
+Boundary: `startup_support_evidence`
 
-Dominant reason: `snapshot_coverage_incomplete`
+Dominant reason: `readiness_inherited_active_gate_no_progress`
 
-Current state: Focused runtime checks have passed, and the representative rerun is red/migrated: active_gate_snapshot_coverage remains first frontier with snapshot_coverage_incomplete, snapshotCoverage=2/5, publishedActive=1/5, missingPublished=4, and canonical causal outcome migrate_owner_boundary to startup_readiness_owner / startup_support_evidence.
+Current state: Focused diagnostics proof passed and the representative rerun reduced readiness support evidence to inherited active-gate no-progress. The current first frontier is back at startup_active_gate_owner / snapshot_coverage with snapshotCoverage=1/5.
 
 ## Next Action
 
-Migrate the next package boundary to startup_readiness_owner / startup_support_evidence while preserving this active-gate owner-truth proof.
+Close this reduced readiness-support package and hand off to startup_active_gate_owner / snapshot_coverage for the remaining active-gate coverage repair.
 
 ## Proof Ladder
 
-1. `node --test test/bootstrap/node-joining-service.test.js`
-2. `npx tap test/bootstrap/bootstrap-api.test-part-5.js`
-3. `npx tap test/bootstrap/connect-websocket-phase.test.js`
-4. `node scripts/check-guideline-literals.js src/bootstrap/bootstrap-api.js src/bootstrap/bootstrap-api-runtime-methods.js src/bootstrap/bootstrap-service-runtime-methods.js src/bootstrap/join-readiness-evaluator-tail-methods.js src/bootstrap/node-joining-service-segment-1.js src/bootstrap/node-joining-service-segment-2.js src/bootstrap/node-joining-service-segment-5.js src/bootstrap/owners/bootstrap-request-owner.js src/bootstrap/owners/move-replica-assignment-owner.js src/bootstrap/phases/connect-websocket-phase.js src/bootstrap/phases/contact-seed-phase.js src/bootstrap/phases/create-message-group-phase.js test/distributed/harness/cluster-segment-4.js test/distributed/harness/cluster-segment-7-class-4.js test/distributed/harness/__tests__/node-handle-control-snapshot-fallback.test.js test/bootstrap/connect-websocket-phase.test.js test/bootstrap/dynamic-partition-cdc-subscription.test.js test/bootstrap/move-replica-assignment-token.test.js test/bootstrap/node-joining-service.test.js`
-5. `node scripts/check-guideline-decision-boundaries.js src/bootstrap/bootstrap-api.js src/bootstrap/bootstrap-api-runtime-methods.js src/bootstrap/bootstrap-service-runtime-methods.js src/bootstrap/join-readiness-evaluator-tail-methods.js src/bootstrap/node-joining-service-segment-1.js src/bootstrap/node-joining-service-segment-2.js src/bootstrap/node-joining-service-segment-5.js src/bootstrap/owners/bootstrap-request-owner.js src/bootstrap/owners/move-replica-assignment-owner.js src/bootstrap/phases/connect-websocket-phase.js src/bootstrap/phases/contact-seed-phase.js src/bootstrap/phases/create-message-group-phase.js test/distributed/harness/cluster-segment-4.js test/distributed/harness/cluster-segment-7-class-4.js test/distributed/harness/__tests__/node-handle-control-snapshot-fallback.test.js test/bootstrap/connect-websocket-phase.test.js test/bootstrap/dynamic-partition-cdc-subscription.test.js test/bootstrap/move-replica-assignment-token.test.js test/bootstrap/node-joining-service.test.js`
-6. `npm run audit:runtime-grammar:file -- src/bootstrap/bootstrap-api.js src/bootstrap/bootstrap-api-runtime-methods.js src/bootstrap/bootstrap-service-runtime-methods.js src/bootstrap/join-readiness-evaluator-tail-methods.js src/bootstrap/node-joining-service-segment-1.js src/bootstrap/node-joining-service-segment-2.js src/bootstrap/node-joining-service-segment-5.js src/bootstrap/owners/bootstrap-request-owner.js src/bootstrap/owners/move-replica-assignment-owner.js src/bootstrap/phases/connect-websocket-phase.js src/bootstrap/phases/contact-seed-phase.js src/bootstrap/phases/create-message-group-phase.js test/distributed/harness/cluster-segment-4.js test/distributed/harness/cluster-segment-7-class-4.js test/distributed/harness/__tests__/node-handle-control-snapshot-fallback.test.js test/bootstrap/connect-websocket-phase.test.js test/bootstrap/dynamic-partition-cdc-subscription.test.js test/bootstrap/move-replica-assignment-token.test.js test/bootstrap/node-joining-service.test.js`
-7. `git diff --check -- src/bootstrap/bootstrap-api.js src/bootstrap/bootstrap-api-runtime-methods.js src/bootstrap/bootstrap-service-runtime-methods.js src/bootstrap/join-readiness-evaluator-tail-methods.js src/bootstrap/node-joining-service-segment-1.js src/bootstrap/node-joining-service-segment-2.js src/bootstrap/node-joining-service-segment-5.js src/bootstrap/owners/bootstrap-request-owner.js src/bootstrap/owners/move-replica-assignment-owner.js src/bootstrap/phases/connect-websocket-phase.js src/bootstrap/phases/contact-seed-phase.js src/bootstrap/phases/create-message-group-phase.js test/distributed/harness/cluster-segment-4.js test/distributed/harness/cluster-segment-7-class-4.js test/distributed/harness/__tests__/node-handle-control-snapshot-fallback.test.js test/bootstrap/connect-websocket-phase.test.js test/bootstrap/dynamic-partition-cdc-subscription.test.js test/bootstrap/move-replica-assignment-token.test.js test/bootstrap/node-joining-service.test.js`
-8. `npm run work:package:doctor -- work/packages/active-20260513-topology-active-gate-owner-truth.md`
-9. `node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-green-gate-after-active-gate-owner-truth.report.json --fast-local --verbose`
-10. `npm run work:evidence-summary -- test-output/reports/rolling-restart-green-gate-after-active-gate-owner-truth.report.json`
-11. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-green-gate-after-active-gate-owner-truth.report.json --explain active_gate_snapshot_coverage`
-12. `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-green-gate-after-active-gate-owner-truth.report.json`
+1. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-green-gate-after-active-gate-owner-truth.report.json --explain readiness_startup_support`
+2. `npm run work:evidence-summary -- test-output/reports/rolling-restart-green-gate-after-active-gate-owner-truth.report.json`
+3. `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-green-gate-after-active-gate-owner-truth.report.json`
+4. `node --test test/diagnostics/topology-convergence-graph.test.js test/diagnostics/failure-class-taxonomy.test.js test/diagnostics/stop-condition-decision.test.js test/diagnostics/causal-graph-builder.test.js`
+5. `node scripts/check-guideline-literals.js src/diagnostics/failure-class-taxonomy.js src/diagnostics/topology-convergence-graph.js test/diagnostics/topology-convergence-graph.test.js test/diagnostics/failure-class-taxonomy.test.js test/diagnostics/stop-condition-decision.test.js test/diagnostics/causal-graph-builder.test.js`
+6. `node scripts/check-guideline-decision-boundaries.js src/diagnostics/failure-class-taxonomy.js src/diagnostics/topology-convergence-graph.js test/diagnostics/topology-convergence-graph.test.js test/diagnostics/failure-class-taxonomy.test.js test/diagnostics/stop-condition-decision.test.js test/diagnostics/causal-graph-builder.test.js`
+7. `npm run audit:runtime-grammar:file -- src/diagnostics/failure-class-taxonomy.js src/diagnostics/topology-convergence-graph.js`
+8. `git diff --check -- work/packages/active-20260513-topology-readiness-stalled-support.md work/sprints/active-2026-q2-topology-convergence-ship-shape.md work/sprints/current-blocker.json work/sprints/current-blocker.md src/diagnostics/failure-class-taxonomy.js src/diagnostics/topology-convergence-graph.js test/diagnostics/topology-convergence-graph.test.js test/diagnostics/failure-class-taxonomy.test.js test/diagnostics/stop-condition-decision.test.js test/diagnostics/causal-graph-builder.test.js`
+9. `node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-green-gate-after-readiness-stalled-support.report.json --fast-local --verbose`
+10. `npm run work:evidence-summary -- test-output/reports/rolling-restart-green-gate-after-readiness-stalled-support.report.json`
+11. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-green-gate-after-readiness-stalled-support.report.json --markdown`
+12. `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-green-gate-after-readiness-stalled-support.report.json`
 
 ## Model Fit
 
@@ -58,17 +58,17 @@ Escalation triggers:
 
 ## Causal Governance
 
-Causal hypothesis: `If startup_active_gate_owner / snapshot_coverage owns the current local blocker, active-gate convergence must be derived from owner truth and topology epoch instead of presentation publication alone.`
+Causal hypothesis: `If startup_readiness_owner / startup_support_evidence owns the migrated residual, no-progress readiness with source unknown/cause none while active-gate state is stalled should reduce to inherited active-gate support evidence instead of staying an independent retryable readiness edge.`
 
-Stop-condition check: `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-green-gate-after-active-gate-owner-truth.report.json`
+Stop-condition check: `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-green-gate-after-readiness-stalled-support.report.json`
 
-Expected causal-model change: `active_gate_snapshot_coverage either converges, reduces to a bounded startup_active_gate_owner sub-boundary, or migrates to startup_readiness_owner / startup_support_evidence after focused owner proof.`
+Expected causal-model change: `readiness_startup_support defers through inherited_active_gate_no_progress, and the causal model returns continue_local_fix for startup_active_gate_owner / snapshot_coverage.`
 
-Representative outcome: `migrated`
+Representative outcome: `reduced`
 
-Causal debt: `The focused active-gate owner-truth proof is green, priority recovery has zero witnesses, and the representative rerun is red/migrated: active_gate_snapshot_coverage remains first frontier with snapshot_coverage_incomplete, snapshotCoverage=2/5, publishedActive=1/5, missingPublished=4; canonical causal outcome is migrate_owner_boundary to startup_readiness_owner / startup_support_evidence.`
+Causal debt: `The fresh representative remains red, but readiness support evidence is reduced to inherited active-gate no-progress. The remaining local blocker is active_gate_snapshot_coverage with snapshotCoverage=1/5.`
 
-Cross-boundary review: `Review subagent Dewey (019e22ce-cf29-7d43-b6db-9481bc1c4d5c) found predecessor metadata fixes; fix subagent Volta (019e22d4-34e7-75a2-8090-e3ffcdea50af) repaired the predecessor handoff and active package evidence before implementation.`
+Cross-boundary review: `Review subagent Nash (019e2335-1f68-79f2-b550-34b487ec1645) found fixes-required on the predecessor active-gate package. Fix subagent Hilbert (019e2336-831f-7153-abe4-ab105bffaac4) repaired the predecessor metadata and current-blocker handoff before this implementation starts.`
 
 ## Scenario Causal Closure
 
@@ -78,65 +78,55 @@ Phase chain:
 
 1. `startup active-gate snapshot coverage`
 2. `startup readiness support evidence`
+3. `top failure reason ranking`
 
-Current first frontier: `active_gate_snapshot_coverage under startup_active_gate_owner / snapshot_coverage with dominant reason snapshot_coverage_incomplete`
+Current first frontier: `active_gate_snapshot_coverage under startup_active_gate_owner / snapshot_coverage with dominant reason snapshot_coverage_incomplete after readiness support reduction`
 
 Known downstream blockers:
 
-1. `startup_readiness_owner / startup_support_evidence is the canonical owner-boundary migration target after active-gate owner-truth proof`
+1. `active_gate_snapshot_coverage remains visible as stalled owner-truth evidence with snapshotCoverage=2/5`
+2. `top failure reason ranking is downstream of readiness support classification`
 
-Missing causal edge: `Active-gate coverage must explain expected nodes, ready leased nodes, published active nodes, missing nodes, pending repair operations, and evaluated topology epoch from owner truth.`
+Missing causal edge: `No-progress readiness with source unknown and cause none must classify active-gate state stalled the same way timeout-owned inherited active-gate no-progress is classified, or expose a concrete readiness owner reason.`
 
-Missing causal edge probe: `npm run work:evidence-summary -- test-output/reports/rolling-restart-green-gate-after-active-gate-owner-truth.report.json`
+Missing causal edge probe: `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-green-gate-after-active-gate-owner-truth.report.json --explain readiness_startup_support`
 
-Bounded progress proof: `Focused active-gate timer, reconcile, and bounded progress runtime checks passed; the representative rerun records owner-truth coverage instead of letting PUBLISHED mask incomplete active coverage.`
+Bounded progress proof: `Focused bounded diagnostics proof advanced readiness support from retryable readiness_failure to inherited active-gate no-progress, and the representative rerun confirmed the remaining frontier is active-gate snapshot coverage.`
 
-Bounded progress proof artifact: `test-output/reports/rolling-restart-green-gate-after-active-gate-owner-truth.report.json`
+Bounded progress proof artifact: `test-output/reports/rolling-restart-green-gate-after-readiness-stalled-support.report.json`
 
-Expected observable transition: `active gate now exposes snapshotCoverage=2/5, publishedActive=1/5, missingPublished=4, and migrates the next boundary to startup_readiness_owner / startup_support_evidence.`
+Expected observable transition: `readiness_startup_support changed from retryable readiness_failure to deferred inherited_active_gate_no_progress; the current first frontier returned to active_gate_snapshot_coverage.`
 
-Max progress bound: `one required review subagent, optional fix subagent if review finds fixes, one implementation subagent, focused owner proof, and representative rerun`
+Max progress bound: `one review subagent, one fix subagent because review found fixes, one implementation subagent, focused diagnostics proof, and representative rerun`
 
-Same-frontier fallback: `not used; the representative rerun records canonical migrate_owner_boundary after active-gate owner-truth proof.`
+Same-frontier fallback: `not used; readiness support reduced and the successor returns to startup_active_gate_owner / snapshot_coverage.`
 
-Expected next frontier: `startup_readiness_owner / startup_support_evidence`
+Expected next frontier: `startup_active_gate_owner / snapshot_coverage`
 
-Result classification: `migrated`
+Result classification: `reduced`
 
-Stop condition: `migrate-owner-boundary`
+Stop condition: `continue-local-fix`
 
 ## Scope
 
 Write scope:
 
-1. `work/packages/active-20260513-topology-active-gate-owner-truth.md`
-2. `work/packages/done-20260513-topology-remote-handoff-convergence.md`
-3. `work/sprints/active-2026-q2-topology-convergence-ship-shape.md`
-4. `work/sprints/current-blocker.json`
-5. `work/sprints/current-blocker.md`
-6. `src/bootstrap/bootstrap-api.js`
-7. `src/bootstrap/bootstrap-api-runtime-methods.js`
-8. `src/bootstrap/bootstrap-service-runtime-methods.js`
-9. `src/bootstrap/join-readiness-evaluator-tail-methods.js`
-10. `src/bootstrap/node-joining-service-segment-1.js`
-11. `src/bootstrap/node-joining-service-segment-2.js`
-12. `src/bootstrap/node-joining-service-segment-5.js`
-13. `src/bootstrap/owners/bootstrap-request-owner.js`
-14. `src/bootstrap/owners/move-replica-assignment-owner.js`
-15. `src/bootstrap/phases/connect-websocket-phase.js`
-16. `src/bootstrap/phases/contact-seed-phase.js`
-17. `src/bootstrap/phases/create-message-group-phase.js`
-18. `test/distributed/harness/cluster-segment-4.js`
-19. `test/distributed/harness/cluster-segment-7-class-4.js`
-20. `test/distributed/harness/__tests__/node-handle-control-snapshot-fallback.test.js`
-21. `test/bootstrap/connect-websocket-phase.test.js`
-22. `test/bootstrap/dynamic-partition-cdc-subscription.test.js`
-23. `test/bootstrap/move-replica-assignment-token.test.js`
-24. `test/bootstrap/node-joining-service.test.js`
+1. `work/packages/active-20260513-topology-readiness-stalled-support.md`
+2. `work/sprints/active-2026-q2-topology-convergence-ship-shape.md`
+3. `work/sprints/current-blocker.json`
+4. `work/sprints/current-blocker.md`
+5. `src/diagnostics/failure-class-taxonomy.js`
+6. `src/diagnostics/topology-convergence-graph.js`
+7. `test/diagnostics/topology-convergence-graph.test.js`
+8. `test/diagnostics/failure-class-taxonomy.test.js`
+9. `test/diagnostics/stop-condition-decision.test.js`
+10. `test/diagnostics/causal-graph-builder.test.js`
 
 Handoff files:
 
-1. `test-output/reports/rolling-restart-green-gate-after-active-gate-owner-truth.report.json`
+1. `work/packages/done-20260513-topology-active-gate-owner-truth.md`
+2. `test-output/reports/rolling-restart-green-gate-after-active-gate-owner-truth.report.json`
+3. `test-output/reports/rolling-restart-green-gate-after-readiness-stalled-support.report.json`
 
 Generated files:
 
@@ -144,47 +134,21 @@ Generated files:
 
 Candidate runtime files:
 
-1. `src/bootstrap/bootstrap-api-runtime-methods.js`
-2. `src/bootstrap/bootstrap-api.js`
-3. `src/bootstrap/bootstrap-service-runtime-methods.js`
-4. `src/bootstrap/join-readiness-evaluator-tail-methods.js`
-5. `src/bootstrap/node-joining-service-segment-1.js`
-6. `src/bootstrap/node-joining-service-segment-2.js`
-7. `src/bootstrap/node-joining-service-segment-5.js`
-8. `src/bootstrap/owners/bootstrap-request-owner.js`
-9. `src/bootstrap/owners/move-replica-assignment-owner.js`
-10. `src/bootstrap/phases/connect-websocket-phase.js`
-11. `src/bootstrap/phases/contact-seed-phase.js`
-12. `src/bootstrap/phases/create-message-group-phase.js`
-13. `test/distributed/harness/cluster-segment-4.js`
-14. `test/distributed/harness/cluster-segment-7-class-4.js`
+1. `src/diagnostics/failure-class-taxonomy.js`
+2. `src/diagnostics/topology-convergence-graph.js`
 
 Commit scope:
 
-1. `work/packages/active-20260513-topology-active-gate-owner-truth.md`
-2. `work/packages/done-20260513-topology-remote-handoff-convergence.md`
-3. `work/sprints/active-2026-q2-topology-convergence-ship-shape.md`
-4. `work/sprints/current-blocker.json`
-5. `work/sprints/current-blocker.md`
-6. `src/bootstrap/bootstrap-api.js`
-7. `src/bootstrap/bootstrap-api-runtime-methods.js`
-8. `src/bootstrap/bootstrap-service-runtime-methods.js`
-9. `src/bootstrap/join-readiness-evaluator-tail-methods.js`
-10. `src/bootstrap/node-joining-service-segment-1.js`
-11. `src/bootstrap/node-joining-service-segment-2.js`
-12. `src/bootstrap/node-joining-service-segment-5.js`
-13. `src/bootstrap/owners/bootstrap-request-owner.js`
-14. `src/bootstrap/owners/move-replica-assignment-owner.js`
-15. `src/bootstrap/phases/connect-websocket-phase.js`
-16. `src/bootstrap/phases/contact-seed-phase.js`
-17. `src/bootstrap/phases/create-message-group-phase.js`
-18. `test/distributed/harness/cluster-segment-4.js`
-19. `test/distributed/harness/cluster-segment-7-class-4.js`
-20. `test/distributed/harness/__tests__/node-handle-control-snapshot-fallback.test.js`
-21. `test/bootstrap/connect-websocket-phase.test.js`
-22. `test/bootstrap/dynamic-partition-cdc-subscription.test.js`
-23. `test/bootstrap/move-replica-assignment-token.test.js`
-24. `test/bootstrap/node-joining-service.test.js`
+1. `work/packages/active-20260513-topology-readiness-stalled-support.md`
+2. `work/sprints/active-2026-q2-topology-convergence-ship-shape.md`
+3. `work/sprints/current-blocker.json`
+4. `work/sprints/current-blocker.md`
+5. `src/diagnostics/failure-class-taxonomy.js`
+6. `src/diagnostics/topology-convergence-graph.js`
+7. `test/diagnostics/topology-convergence-graph.test.js`
+8. `test/diagnostics/failure-class-taxonomy.test.js`
+9. `test/diagnostics/stop-condition-decision.test.js`
+10. `test/diagnostics/causal-graph-builder.test.js`
 
 Legacy touched files:
 

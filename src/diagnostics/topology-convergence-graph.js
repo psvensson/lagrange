@@ -32,15 +32,27 @@ const PUBLICATION_STATUS_OPEN = 'OPEN';
 const PUBLICATION_STATUS_ACK_PENDING = 'ACK_PENDING';
 const PUBLICATION_RECOVERY_PROTOCOL_PUBLICATION_PENDING =
   'publication_pending';
+const PUBLICATION_RECOVERY_PROTOCOL_STEADY_PUBLISHED = 'steady_published';
 const PRIORITY_RECOVERY_SEMANTIC_RECOVERING_IN_FLIGHT = 'recovering_in_flight';
+const PRIORITY_RECOVERY_SEMANTIC_SPREAD_SATISFIED_IN_FLIGHT =
+  'spread_satisfied_in_flight';
+const PRIORITY_RECOVERY_WAIT_MODE_EVENT_DRIVEN = 'event_driven';
+const PRIORITY_RECOVERY_NEXT_REQUIRED_ACTION_WAIT_FOR_OPERATION_PROGRESS =
+  'wait_for_operation_progress';
 const ACTIVE_GATE_STATE_TIMED_OUT = 'timed_out';
+const ACTIVE_GATE_STATE_STALLED = 'stalled';
 const READINESS_RECOVERABILITY_TERMINAL = 'terminal';
 const READINESS_FAILURE_CLASS_NO_PROGRESS_TERMINAL = 'no_progress_terminal';
+const READINESS_FAILURE_CLASS_SNAPSHOT_TIMEOUT = 'snapshot_timeout';
 const READINESS_TERMINAL_REASON_STALLED_NO_PROGRESS = 'stalled_no_progress';
 const READINESS_SOURCE_UNKNOWN = 'unknown';
+const READINESS_SOURCE_SELECTED_SNAPSHOT_ERROR = 'selectedSnapshotError';
 const READINESS_CAUSE_NONE = 'none';
+const READINESS_CAUSE_SNAPSHOT_TIMEOUT = 'snapshot_timeout';
 const PRIORITY_RECOVERY_EVIDENCE_SOURCE_PROGRESS = 'progress';
 const PRIORITY_RECOVERY_EVIDENCE_SOURCE_SUMMARY = 'summary';
+const PRIORITY_RECOVERY_EVIDENCE_SOURCE_PARTITION_WITNESSES =
+  'partition_witnesses';
 
 const EDGE_STATE = Object.freeze({
   SATISFIED: 'satisfied',
@@ -150,7 +162,13 @@ const SOURCE_FIELD = Object.freeze({
   PROGRESS: 'progress',
   PRIORITY_RECOVERY_PROGRESS_CLASSES: 'priorityRecoveryProgressClasses',
   PRIORITY_RECOVERY_PROGRESS_SUMMARY: 'priorityRecoveryProgressSummary',
+  PRIORITY_RECOVERY_PARTITION_WITNESSES: 'priorityRecoveryPartitionWitnesses',
   READINESS_FAILURE: 'readinessFailure',
+  PARTITION_ID: 'partitionId',
+  SEMANTIC_STATE_ID: 'semanticStateId',
+  WAIT_MODE: 'waitMode',
+  NEXT_REQUIRED_ACTION: 'nextRequiredAction',
+  ACTUATION_STATE: 'actuationState',
 });
 
 const OWNER_WITNESS_FIELD = Object.freeze({
@@ -195,7 +213,21 @@ const RANK = Object.freeze({
 const SEMANTIC_STATE = Object.freeze({
   PRIORITY_RECOVERY_RECOVERING_IN_FLIGHT:
     PRIORITY_RECOVERY_SEMANTIC_RECOVERING_IN_FLIGHT,
+  PRIORITY_RECOVERY_SPREAD_SATISFIED_IN_FLIGHT:
+    PRIORITY_RECOVERY_SEMANTIC_SPREAD_SATISFIED_IN_FLIGHT,
 });
+
+const PRIORITY_RECOVERY_RETRYABLE_WITNESS_SEMANTIC_STATE_SET =
+  Object.freeze(new Set([
+    PRIORITY_RECOVERY_SEMANTIC_RECOVERING_IN_FLIGHT,
+    PRIORITY_RECOVERY_SEMANTIC_SPREAD_SATISFIED_IN_FLIGHT,
+  ]));
+
+const READINESS_INHERITED_ACTIVE_GATE_NO_PROGRESS_STATE_SET =
+  Object.freeze(new Set([
+    ACTIVE_GATE_STATE_TIMED_OUT,
+    ACTIVE_GATE_STATE_STALLED,
+  ]));
 
 const DECISION_INPUT = Object.freeze({
   PUBLICATION_STATUS: 'publicationStatus',
@@ -217,7 +249,7 @@ const DECISION_CONDITION = Object.freeze({
   PUBLICATION_PENDING_ACKS: 'pending acknowledgement count is positive',
   PUBLICATION_BLOCKED_NODES: 'blocked publication node count is positive',
   PUBLICATION_MISSING_PUBLISHED_WITHOUT_PRIORITY_SPREAD:
-    'missing published node count is positive without priority spread pending',
+    'missing published node count is positive without priority spread pending or steady publication',
   PUBLICATION_CLOSED: 'publication has no pending convergence blockers',
   PRIORITY_NO_UNRESOLVED_SEMANTIC_STATES:
     'priority recovery has no unresolved semantic states',
@@ -225,6 +257,8 @@ const DECISION_CONDITION = Object.freeze({
     'priority recovery has blocked partitions',
   PRIORITY_ONLY_RECOVERING_IN_FLIGHT:
     'priority recovery has only recovering_in_flight semantic state',
+  PRIORITY_PARTITION_WITNESS_EVENT_DRIVEN_WAIT:
+    'priority recovery partition witness has event-driven workflow wait',
   PRIORITY_RECOVERING_IN_FLIGHT:
     'priority recovery contains recovering_in_flight semantic state',
   PRIORITY_UNRESOLVED_WITHOUT_IN_FLIGHT:
@@ -239,7 +273,7 @@ const DECISION_CONDITION = Object.freeze({
     'active gate progress exists but snapshot coverage is incomplete',
   READINESS_ACTIVE_GATE_READY: 'active gate readiness is already satisfied',
   READINESS_INHERITED_ACTIVE_GATE_NO_PROGRESS:
-    'readiness no-progress is inherited from active-gate timeout',
+    'readiness no-progress is inherited from active-gate no-progress',
   READINESS_TERMINAL_FAILURE: 'readiness recoverability is terminal',
   READINESS_EVIDENCE_MISSING: 'readiness failure evidence is missing',
   READINESS_RETRYABLE_FAILURE: 'readiness failure evidence is retryable',
@@ -319,6 +353,12 @@ const DECISION_TABLE_ROWS = Object.freeze([
       }),
       Object.freeze({
         condition: DECISION_CONDITION.PRIORITY_ONLY_RECOVERING_IN_FLIGHT,
+        state: EDGE_STATE.RETRYABLE,
+        reasons: Object.freeze([REASON.PRIORITY_RECOVERY_RETRYABLE]),
+      }),
+      Object.freeze({
+        condition:
+          DECISION_CONDITION.PRIORITY_PARTITION_WITNESS_EVENT_DRIVEN_WAIT,
         state: EDGE_STATE.RETRYABLE,
         reasons: Object.freeze([REASON.PRIORITY_RECOVERY_RETRYABLE]),
       }),
@@ -475,6 +515,26 @@ const READINESS_RECOVERABILITY_RULES = Object.freeze([
   Object.freeze({
     recoverability: UNKNOWN_VALUE,
     matches: () => true,
+  }),
+]);
+
+const READINESS_INHERITED_ACTIVE_GATE_SUPPORT_RULES = Object.freeze([
+  Object.freeze({
+    matches: (snapshot) =>
+      READINESS_INHERITED_ACTIVE_GATE_NO_PROGRESS_STATE_SET.has(
+        snapshot.activeGateState,
+      ) &&
+      snapshot.classCode === READINESS_FAILURE_CLASS_NO_PROGRESS_TERMINAL &&
+      snapshot.source === READINESS_SOURCE_UNKNOWN &&
+      snapshot.cause === READINESS_CAUSE_NONE,
+  }),
+  Object.freeze({
+    matches: (snapshot) =>
+      snapshot.activeGateState === ACTIVE_GATE_STATE_TIMED_OUT &&
+      snapshot.classCode === READINESS_FAILURE_CLASS_SNAPSHOT_TIMEOUT &&
+      snapshot.terminalReason === READINESS_TERMINAL_REASON_STALLED_NO_PROGRESS &&
+      snapshot.source === READINESS_SOURCE_SELECTED_SNAPSHOT_ERROR &&
+      snapshot.cause === READINESS_CAUSE_SNAPSHOT_TIMEOUT,
   }),
 ]);
 
@@ -745,6 +805,31 @@ function normalizeTopologyConvergenceInput(input) {
     ),
   );
   const progressSummary = progressSummaryEvidence.record;
+  const priorityRecoveryPartitionWitnessesEvidence = firstArrayWithSource(
+    arrayCandidate(
+      publication[SOURCE_FIELD.PRIORITY_RECOVERY_PARTITION_WITNESSES],
+      flattenEvidencePath(
+        publicationEvidence.sourcePath,
+        SOURCE_FIELD.PRIORITY_RECOVERY_PARTITION_WITNESSES,
+      ),
+    ),
+    arrayCandidate(
+      priorityRecoveryObservation[
+        SOURCE_FIELD.PRIORITY_RECOVERY_PARTITION_WITNESSES
+      ],
+      flattenEvidencePath(
+        SOURCE_PATH.REPORT_SCENARIO_PRIORITY_RECOVERY_OBSERVATION,
+        SOURCE_FIELD.PRIORITY_RECOVERY_PARTITION_WITNESSES,
+      ),
+    ),
+    arrayCandidate(
+      progressSummary[SOURCE_FIELD.PRIORITY_RECOVERY_PARTITION_WITNESSES],
+      flattenEvidencePath(
+        progressSummaryEvidence.sourcePath,
+        SOURCE_FIELD.PRIORITY_RECOVERY_PARTITION_WITNESSES,
+      ),
+    ),
+  );
   const readinessFailureEvidence = firstRecordWithSource(
     recordCandidate(scenario.readinessFailure, SOURCE_PATH.REPORT_SCENARIO_READINESS_FAILURE),
     recordCandidate(summary.readinessFailure, SOURCE_PATH.READINESS_FAILURE),
@@ -778,6 +863,8 @@ function normalizeTopologyConvergenceInput(input) {
     activeGate,
     progress,
     progressSummary,
+    priorityRecoveryPartitionWitnesses:
+      priorityRecoveryPartitionWitnessesEvidence.items,
     readinessFailure,
     evidencePath: {
       publication: publicationEvidence.sourcePath,
@@ -795,6 +882,8 @@ function normalizeTopologyConvergenceInput(input) {
           progressSummaryEvidence.sourcePath,
           SOURCE_FIELD.DOMINANT_WITNESS,
         ),
+      priorityRecoveryPartitionWitnesses:
+        priorityRecoveryPartitionWitnessesEvidence.sourcePath,
       activeGateProgress: progressEvidence.sourcePath,
       readinessFailure: readinessFailureEvidence.sourcePath,
     },
@@ -844,6 +933,7 @@ function buildPriorityRecoveryEdge(normalized) {
         normalized.summary.failureClass ||
         normalized.summary.failureClassification?.failureClass,
       ),
+      ...buildPriorityRecoveryWitnessSource(evidence),
     },
     reasons,
     rank: RANK.PRIORITY_RECOVERY,
@@ -981,13 +1071,9 @@ function resolveReadinessSupportPath(readiness, activeGate) {
     source: textOrUnknown(readiness.source),
     cause: textOrUnknown(readiness.cause),
   };
-  if (
-    snapshot.activeGateState === ACTIVE_GATE_STATE_TIMED_OUT &&
-    snapshot.classCode === READINESS_FAILURE_CLASS_NO_PROGRESS_TERMINAL &&
-    snapshot.terminalReason === READINESS_TERMINAL_REASON_STALLED_NO_PROGRESS &&
-    snapshot.source === READINESS_SOURCE_UNKNOWN &&
-    snapshot.cause === READINESS_CAUSE_NONE
-  ) {
+  if (READINESS_INHERITED_ACTIVE_GATE_SUPPORT_RULES.some((rule) =>
+    rule.matches(snapshot),
+  )) {
     return READINESS_SUPPORT_PATH.INHERITED_ACTIVE_GATE_NO_PROGRESS;
   }
   return READINESS_SUPPORT_PATH.READINESS_FAILURE;
@@ -1108,7 +1194,16 @@ function isPublicationPendingFlagEvidence(evidence) {
 
 function isPublicationMissingPublishedEvidence(evidence) {
   return evidence.missingPublishedCount > SOURCE_ORDER_BASE &&
-    evidence.prioritySpreadPending !== true;
+    evidence.prioritySpreadPending !== true &&
+    isPublicationSteadyPublishedEvidence(evidence) !== true;
+}
+
+function isPublicationSteadyPublishedEvidence(evidence) {
+  return evidence.publicationStatus === PUBLICATION_STATUS_PUBLISHED &&
+    evidence.pendingAckCount === SOURCE_ORDER_BASE &&
+    evidence.blockedNodeCount === SOURCE_ORDER_BASE &&
+    evidence.recoveryProtocolState ===
+      PUBLICATION_RECOVERY_PROTOCOL_STEADY_PUBLISHED;
 }
 
 function normalizePriorityRecoveryEvidence(normalized) {
@@ -1118,10 +1213,17 @@ function normalizePriorityRecoveryEvidence(normalized) {
   const progressSummaryClasses = asRecord(
     progressSummary[SOURCE_FIELD.PRIORITY_RECOVERY_PROGRESS_CLASSES],
   );
-  const ownerBoundary = resolvePriorityRecoveryOwnerBoundary(progressSummary);
+  const witnessSelection = buildPriorityRecoveryWitnessSelection(
+    normalized.priorityRecoveryPartitionWitnesses,
+  );
+  const ownerBoundary = resolvePriorityRecoveryOwnerBoundary(
+    progressSummary,
+    witnessSelection.dominantWitness,
+  );
   const classSelection = selectPriorityRecoveryClassSelection(
     progressSummaryClasses,
     progressClasses,
+    witnessSelection.classes,
   );
 
   return {
@@ -1135,9 +1237,28 @@ function normalizePriorityRecoveryEvidence(normalized) {
     priorityBlockedPartitionCount: firstFiniteNumber(
       progressSummary.priorityBlockedPartitionCount,
       progress.priorityBlockedPartitionCount,
+      classSelection.source ===
+        PRIORITY_RECOVERY_EVIDENCE_SOURCE_PARTITION_WITNESSES ?
+        witnessSelection.classes.blockedPartitionIds.length :
+        UNKNOWN_VALUE,
     ),
     semanticStateIds: arrayOrEmpty(classSelection.classes.unresolvedSemanticStateIds),
     blockedPartitionIds: arrayOrEmpty(classSelection.classes.blockedPartitionIds),
+    waitModes: classSelection.source ===
+      PRIORITY_RECOVERY_EVIDENCE_SOURCE_PARTITION_WITNESSES ?
+      witnessSelection.waitModes :
+      [],
+    nextRequiredActions: classSelection.source ===
+      PRIORITY_RECOVERY_EVIDENCE_SOURCE_PARTITION_WITNESSES ?
+      witnessSelection.nextRequiredActions :
+      [],
+    actuationStates: classSelection.source ===
+      PRIORITY_RECOVERY_EVIDENCE_SOURCE_PARTITION_WITNESSES ?
+      witnessSelection.actuationStates :
+      [],
+    eventDrivenWait: classSelection.source ===
+      PRIORITY_RECOVERY_EVIDENCE_SOURCE_PARTITION_WITNESSES &&
+      witnessSelection.eventDrivenWait === true,
   };
 }
 
@@ -1146,9 +1267,10 @@ function resolvePriorityRecoveryState(priorityRecoveryEvidence, reasons) {
     reasons.push(REASON.PRIORITY_RECOVERY_SATISFIED);
     return EDGE_STATE.SATISFIED;
   }
-  if (isOnlyRecoveringInFlightPriorityRecoveryEvidence(
-    priorityRecoveryEvidence,
-  )) {
+  if (
+    isOnlyRecoveringInFlightPriorityRecoveryEvidence(priorityRecoveryEvidence) ||
+    priorityRecoveryEvidence.eventDrivenWait === true
+  ) {
     reasons.push(REASON.PRIORITY_RECOVERY_RETRYABLE);
     return EDGE_STATE.RETRYABLE;
   }
@@ -1177,9 +1299,15 @@ function isOnlyRecoveringInFlightPriorityRecoveryEvidence(evidence) {
   );
 }
 
-function resolvePriorityRecoveryOwnerBoundary(progressSummary) {
+function resolvePriorityRecoveryOwnerBoundary(
+  progressSummary,
+  fallbackDominantWitness = {},
+) {
   const dominantWitness = asRecord(
-    asRecord(progressSummary)[SOURCE_FIELD.DOMINANT_WITNESS],
+    firstRecord(
+      asRecord(progressSummary)[SOURCE_FIELD.DOMINANT_WITNESS],
+      fallbackDominantWitness,
+    ),
   );
   const usesDominantWitness =
     firstText(dominantWitness[SOURCE_FIELD.CURRENT_OWNER], ABSENT_VALUE) !==
@@ -1199,7 +1327,41 @@ function resolvePriorityRecoveryOwnerBoundary(progressSummary) {
   };
 }
 
-function selectPriorityRecoveryClassSelection(progressSummaryClasses, progressClasses) {
+function selectPriorityRecoveryClassSelection(
+  progressSummaryClasses,
+  progressClasses,
+  witnessClasses,
+) {
+  if (hasPriorityRecoveryClassEvidence(progressSummaryClasses)) {
+    return {
+      source: PRIORITY_RECOVERY_EVIDENCE_SOURCE_SUMMARY,
+      classes: progressSummaryClasses,
+    };
+  }
+  if (hasPriorityRecoveryClassEvidence(progressClasses)) {
+    return {
+      source: PRIORITY_RECOVERY_EVIDENCE_SOURCE_PROGRESS,
+      classes: progressClasses,
+    };
+  }
+  if (hasPriorityRecoveryClassContract(progressClasses)) {
+    return {
+      source: PRIORITY_RECOVERY_EVIDENCE_SOURCE_PROGRESS,
+      classes: progressClasses,
+    };
+  }
+  if (hasPriorityRecoveryClassContract(progressSummaryClasses)) {
+    return {
+      source: PRIORITY_RECOVERY_EVIDENCE_SOURCE_SUMMARY,
+      classes: progressSummaryClasses,
+    };
+  }
+  if (hasPriorityRecoveryClassEvidence(witnessClasses)) {
+    return {
+      source: PRIORITY_RECOVERY_EVIDENCE_SOURCE_PARTITION_WITNESSES,
+      classes: witnessClasses,
+    };
+  }
   if (Object.keys(progressSummaryClasses).length > SOURCE_ORDER_BASE) {
     return {
       source: PRIORITY_RECOVERY_EVIDENCE_SOURCE_SUMMARY,
@@ -1213,15 +1375,142 @@ function selectPriorityRecoveryClassSelection(progressSummaryClasses, progressCl
 }
 
 function selectPriorityRecoveryEvidencePath(normalized, evidenceSource, ownerBoundary) {
-  if (ownerBoundary.usesDominantWitness &&
-      normalized.evidencePath.priorityRecoveryDominantWitness !== ABSENT_VALUE) {
-    return normalized.evidencePath.priorityRecoveryDominantWitness;
+  if (
+    evidenceSource === PRIORITY_RECOVERY_EVIDENCE_SOURCE_PARTITION_WITNESSES &&
+    normalized.evidencePath.priorityRecoveryPartitionWitnesses !== ABSENT_VALUE
+  ) {
+    return normalized.evidencePath.priorityRecoveryPartitionWitnesses;
+  }
+  if (evidenceSource === PRIORITY_RECOVERY_EVIDENCE_SOURCE_PROGRESS) {
+    return normalized.evidencePath.priorityRecoveryProgressClasses;
   }
   if (evidenceSource === PRIORITY_RECOVERY_EVIDENCE_SOURCE_SUMMARY &&
       normalized.evidencePath.priorityRecoveryProgressSummary !== ABSENT_VALUE) {
     return normalized.evidencePath.priorityRecoveryProgressSummary;
   }
+  if (ownerBoundary.usesDominantWitness &&
+      normalized.evidencePath.priorityRecoveryDominantWitness !== ABSENT_VALUE) {
+    return normalized.evidencePath.priorityRecoveryDominantWitness;
+  }
   return normalized.evidencePath.priorityRecoveryProgressClasses;
+}
+
+function hasPriorityRecoveryClassEvidence(classes) {
+  const progressClasses = asRecord(classes);
+  return arrayOrEmpty(
+    progressClasses.unresolvedSemanticStateIds,
+  ).length > SOURCE_ORDER_BASE ||
+    arrayOrEmpty(progressClasses.blockedPartitionIds).length >
+      SOURCE_ORDER_BASE;
+}
+
+function hasPriorityRecoveryClassContract(classes) {
+  return Object.keys(asRecord(classes)).length > SOURCE_ORDER_BASE;
+}
+
+function buildPriorityRecoveryWitnessSelection(witnesses) {
+  const normalizedWitnesses = normalizePriorityRecoveryPartitionWitnesses(
+    witnesses,
+  );
+  const semanticStateIds = collectDistinctRecordText(
+    normalizedWitnesses,
+    SOURCE_FIELD.SEMANTIC_STATE_ID,
+  );
+  const blockedPartitionIds = collectDistinctRecordText(
+    normalizedWitnesses,
+    SOURCE_FIELD.PARTITION_ID,
+  );
+  const waitModes = collectDistinctRecordText(
+    normalizedWitnesses,
+    SOURCE_FIELD.WAIT_MODE,
+  );
+  const nextRequiredActions = collectDistinctRecordText(
+    normalizedWitnesses,
+    SOURCE_FIELD.NEXT_REQUIRED_ACTION,
+  );
+  const actuationStates = collectDistinctRecordText(
+    normalizedWitnesses,
+    SOURCE_FIELD.ACTUATION_STATE,
+  );
+
+  return {
+    witnesses: normalizedWitnesses,
+    dominantWitness: normalizedWitnesses[FIRST_FRONTIER_INDEX] || {},
+    classes: {
+      unresolvedSemanticStateIds: semanticStateIds,
+      blockedPartitionIds,
+    },
+    waitModes,
+    nextRequiredActions,
+    actuationStates,
+    eventDrivenWait: isPriorityRecoveryEventDrivenWaitWitnessSelection({
+      witnesses: normalizedWitnesses,
+      semanticStateIds,
+    }),
+  };
+}
+
+function normalizePriorityRecoveryPartitionWitnesses(witnesses) {
+  return arrayOrEmpty(witnesses)
+    .map(asRecord)
+    .filter((witness) =>
+      Object.keys(witness).length > SOURCE_ORDER_BASE,
+    );
+}
+
+function collectDistinctRecordText(records, fieldName) {
+  const values = new Set();
+  for (const record of records) {
+    const value = record[fieldName];
+    if (typeof value === TYPE_STRING && value.length > SOURCE_ORDER_BASE) {
+      values.add(value);
+    }
+  }
+  return [...values];
+}
+
+function isPriorityRecoveryEventDrivenWaitWitnessSelection(selection) {
+  if (selection.witnesses.length === SOURCE_ORDER_BASE) {
+    return false;
+  }
+  if (selection.semanticStateIds.length === SOURCE_ORDER_BASE) {
+    return false;
+  }
+  if (selection.semanticStateIds.every((semanticStateId) =>
+    PRIORITY_RECOVERY_RETRYABLE_WITNESS_SEMANTIC_STATE_SET.has(
+      semanticStateId,
+    ),
+  ) !== true) {
+    return false;
+  }
+  return selection.witnesses.every(isPriorityRecoveryEventDrivenWaitWitness);
+}
+
+function isPriorityRecoveryEventDrivenWaitWitness(witness) {
+  return (
+    textOrUnknown(witness[SOURCE_FIELD.CURRENT_OWNER]) ===
+      OWNER.PRIORITY_RECOVERY &&
+    textOrUnknown(witness[SOURCE_FIELD.BLOCKING_BOUNDARY]) ===
+      BOUNDARY.WORKFLOW_PROGRESS &&
+    textOrUnknown(witness[SOURCE_FIELD.WAIT_MODE]) ===
+      PRIORITY_RECOVERY_WAIT_MODE_EVENT_DRIVEN &&
+    textOrUnknown(witness[SOURCE_FIELD.NEXT_REQUIRED_ACTION]) ===
+      PRIORITY_RECOVERY_NEXT_REQUIRED_ACTION_WAIT_FOR_OPERATION_PROGRESS
+  );
+}
+
+function buildPriorityRecoveryWitnessSource(evidence) {
+  const witnessSource = {};
+  if (evidence.waitModes.length > SOURCE_ORDER_BASE) {
+    witnessSource.waitModes = joinValues(evidence.waitModes);
+  }
+  if (evidence.nextRequiredActions.length > SOURCE_ORDER_BASE) {
+    witnessSource.nextRequiredActions = joinValues(evidence.nextRequiredActions);
+  }
+  if (evidence.actuationStates.length > SOURCE_ORDER_BASE) {
+    witnessSource.actuationStates = joinValues(evidence.actuationStates);
+  }
+  return witnessSource;
 }
 
 function resolveActiveGateSnapshotState(activeGate, progress, reasons) {
@@ -1343,6 +1632,13 @@ function recordCandidate(record, sourcePath) {
   };
 }
 
+function arrayCandidate(items, sourcePath) {
+  return {
+    items,
+    sourcePath,
+  };
+}
+
 function firstRecordWithSource(...candidates) {
   for (const candidate of candidates) {
     const record = asRecord(candidate.record);
@@ -1355,6 +1651,22 @@ function firstRecordWithSource(...candidates) {
   }
   return {
     record: {},
+    sourcePath: ABSENT_VALUE,
+  };
+}
+
+function firstArrayWithSource(...candidates) {
+  for (const candidate of candidates) {
+    const items = arrayOrEmpty(candidate.items);
+    if (items.length > SOURCE_ORDER_BASE) {
+      return {
+        items,
+        sourcePath: candidate.sourcePath || ABSENT_VALUE,
+      };
+    }
+  }
+  return {
+    items: [],
     sourcePath: ABSENT_VALUE,
   };
 }

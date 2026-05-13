@@ -22,11 +22,17 @@ const FIXTURE_FAILURE_CLASS = 'priority_recovery_progress_blocked';
 const FIXTURE_PARTITION_ID = 'sql_write_operations-p1';
 const FIXTURE_PRIORITY_SEMANTIC_STATE = 'operation_stalled';
 const FIXTURE_PRIORITY_RECOVERING_STATE = 'recovering_in_flight';
+const FIXTURE_PRIORITY_SPREAD_SATISFIED_STATE =
+  'spread_satisfied_in_flight';
 const FIXTURE_READINESS_MODE = 'startup';
 const FIXTURE_READINESS_CLASS = 'snapshot_reachability_timeout';
+const FIXTURE_READINESS_SNAPSHOT_TIMEOUT_CLASS = 'snapshot_timeout';
 const FIXTURE_READINESS_RECOVERABILITY = 'terminal';
+const FIXTURE_READINESS_TERMINAL_REASON = 'stalled_no_progress';
 const FIXTURE_READINESS_CAUSE = 'snapshot_reachability_timeout';
+const FIXTURE_READINESS_SNAPSHOT_TIMEOUT_CAUSE = 'snapshot_timeout';
 const FIXTURE_READINESS_SOURCE = 'selectedSnapshotReachabilityError';
+const FIXTURE_READINESS_SELECTED_SNAPSHOT_SOURCE = 'selectedSnapshotError';
 const FIXTURE_TOP_REASON = 'priority_partitions_not_spread';
 const FIXTURE_TOP_REASON_COUNT = 2;
 const ZERO_COUNT = 0;
@@ -66,16 +72,20 @@ const REPORT_ARTIFACT_PATH_PUBLICATION_LAG =
   'test-output/reports/rolling-restart-spec-led-runtime-modularization-active-gate-snapshot-coverage-publication-lag.report.json';
 const REPORT_ARTIFACT_PATH_CURRENT_READINESS_SUPPORT =
   'test-output/reports/rolling-restart-current-release-gate-after-workflow-progress-direct-chain-owner-proof.report.json';
+const REPORT_ARTIFACT_PATH_ACTIVE_GATE_OWNER_TRUTH =
+  'test-output/reports/rolling-restart-green-gate-after-active-gate-owner-truth.report.json';
 const PUBLICATION_ACK_PENDING_STATUS = 'ACK_PENDING';
 const PUBLICATION_UNKNOWN_STATUS = 'UNKNOWN';
 const PUBLICATION_PENDING_REASON = 'publication_pending';
 const PUBLICATION_PUBLISHED_REASON = 'publication_published';
+const RECOVERY_PROTOCOL_STEADY_PUBLISHED = 'steady_published';
 const PENDING_ACKS_PRESENT_REASON = 'pending_acks_present';
 const ACTIVE_GATE_TIMED_OUT_REASON = 'active_gate_timed_out';
 const SNAPSHOT_COVERAGE_INCOMPLETE_REASON = 'snapshot_coverage_incomplete';
 const PRIORITY_RECOVERY_BLOCKED_REASON = 'priority_recovery_progress_blocked';
 const PRIORITY_RECOVERY_RETRYABLE_REASON =
   'priority_recovery_event_driven_wait';
+const PRIORITY_RECOVERY_SATISFIED_REASON = 'priority_recovery_satisfied';
 const READINESS_INHERITED_ACTIVE_GATE_NO_PROGRESS_REASON =
   'readiness_inherited_active_gate_no_progress';
 const READINESS_SUPPORT_PATH_INHERITED_ACTIVE_GATE_NO_PROGRESS =
@@ -83,6 +93,15 @@ const READINESS_SUPPORT_PATH_INHERITED_ACTIVE_GATE_NO_PROGRESS =
 const ARTIFACT_PRIORITY_RECOVERY_OWNER = 'artifact_priority_owner';
 const ARTIFACT_PRIORITY_RECOVERY_BOUNDARY = 'artifact_priority_boundary';
 const OWNER_STARTUP_ACTIVE_GATE = 'startup_active_gate_owner';
+const PRIORITY_RECOVERY_WAIT_MODE_EVENT_DRIVEN = 'event_driven';
+const PRIORITY_RECOVERY_ACTION_WAIT_FOR_OPERATION_PROGRESS =
+  'wait_for_operation_progress';
+const PRIORITY_RECOVERY_ACTUATION_DISPATCHED_WAITING_PROGRESS =
+  'dispatched_waiting_progress';
+const PRIORITY_RECOVERY_PARTITION_WITNESS_EVIDENCE_PATH =
+  'failureBundle.publicationConvergence.priorityRecoveryPartitionWitnesses';
+const PRIORITY_RECOVERY_PROGRESS_CLASS_EVIDENCE_PATH =
+  'failureBundle.publicationConvergence.activeGate.progress.priorityRecoveryProgressClasses';
 const PUBLICATION_ACK_FRONTIER_PENDING_NODE_ID =
   '11601fe0-72d6-5853-8590-ec2881853e72';
 const PUBLICATION_ACK_FRONTIER_MISSING_NODE_IDS = Object.freeze([
@@ -90,6 +109,7 @@ const PUBLICATION_ACK_FRONTIER_MISSING_NODE_IDS = Object.freeze([
   '8be8d30f-4499-5eed-865c-71b4d529a67a',
   'ebc4aa0b-06c6-506d-93ea-1dd2deca3f58',
 ]);
+const SNAPSHOT_COVERAGE_TWO_OF_FIVE_BLOCKER = 'snapshot_coverage=2/5';
 
 function buildFixtureFailureBundle() {
   return {
@@ -282,6 +302,57 @@ describe('TopologyConvergenceGraph', () => {
     assertNoNullOrUndefined(graph);
   });
 
+  it('contracts stalled active-gate no-progress readiness to inherited support evidence', () => {
+    const report = JSON.parse(
+      fs.readFileSync(
+        REPORT_ARTIFACT_PATH_ACTIVE_GATE_OWNER_TRUTH,
+        JSON_ENCODING_UTF8,
+      ),
+    );
+    const graph = buildTopologyConvergenceGraph(report);
+    const readinessEdge = findEdge(graph.edges, EDGE_READINESS);
+
+    assert.equal(readinessEdge.state, EDGE_STATE.DEFERRED);
+    assert.equal(
+      readinessEdge.source.supportPath,
+      READINESS_SUPPORT_PATH_INHERITED_ACTIVE_GATE_NO_PROGRESS,
+    );
+    assert.deepEqual(readinessEdge.reasons, [
+      READINESS_INHERITED_ACTIVE_GATE_NO_PROGRESS_REASON,
+    ]);
+    assertNoNullOrUndefined(graph);
+  });
+
+  it('contracts selected snapshot timeout to inherited active-gate support evidence', () => {
+    const failureBundle = buildFixtureFailureBundle();
+    const graph = buildTopologyConvergenceGraphFromArtifacts({
+      failureBundle: {
+        ...failureBundle,
+        summary: {
+          ...failureBundle.summary,
+          readinessFailure: {
+            ...failureBundle.summary.readinessFailure,
+            classCode: FIXTURE_READINESS_SNAPSHOT_TIMEOUT_CLASS,
+            terminalReason: FIXTURE_READINESS_TERMINAL_REASON,
+            cause: FIXTURE_READINESS_SNAPSHOT_TIMEOUT_CAUSE,
+            source: FIXTURE_READINESS_SELECTED_SNAPSHOT_SOURCE,
+          },
+        },
+      },
+    });
+    const readinessEdge = findEdge(graph.edges, EDGE_READINESS);
+
+    assert.equal(readinessEdge.state, EDGE_STATE.DEFERRED);
+    assert.equal(
+      readinessEdge.source.supportPath,
+      READINESS_SUPPORT_PATH_INHERITED_ACTIVE_GATE_NO_PROGRESS,
+    );
+    assert.deepEqual(readinessEdge.reasons, [
+      READINESS_INHERITED_ACTIVE_GATE_NO_PROGRESS_REASON,
+    ]);
+    assertNoNullOrUndefined(graph);
+  });
+
   it('presents publication ACK debt as owner reason before raw status text', () => {
     const graph = buildTopologyConvergenceGraphFromArtifacts({
       failureBundle: buildAckPendingPublicationFixtureFailureBundle(),
@@ -438,6 +509,67 @@ describe('TopologyConvergenceGraph', () => {
       assertNoNullOrUndefined(graph);
     });
 
+  it('keeps steady published missing nodes behind startup snapshot coverage',
+    () => {
+      const fixture = buildHealthyFixtureFailureBundle();
+      const graph = buildTopologyConvergenceGraphFromArtifacts({
+        failureBundle: {
+          ...fixture,
+          publicationConvergence: {
+            ...fixture.publicationConvergence,
+            publicationPending: true,
+            recoveryProtocolState: RECOVERY_PROTOCOL_STEADY_PUBLISHED,
+            prioritySpreadPending: false,
+            missingPublishedCount:
+              PUBLICATION_ACK_FRONTIER_MISSING_NODE_IDS.length,
+            missingPublishedNodeIds: [
+              ...PUBLICATION_ACK_FRONTIER_MISSING_NODE_IDS,
+            ],
+            activeGate: {
+              ...fixture.publicationConvergence.activeGate,
+              state: ACTIVE_GATE_STATE_TIMED_OUT,
+              ready: false,
+              progress: {
+                ...fixture.publicationConvergence.activeGate.progress,
+                snapshotCoverageNodeCount: FIXTURE_SNAPSHOT_COVERAGE_COUNT,
+                snapshotCoverageComplete: false,
+                blockers: [SNAPSHOT_COVERAGE_TWO_OF_FIVE_BLOCKER],
+              },
+            },
+          },
+        },
+      });
+      const publicationWitness = graph.ownerWitnesses.find((witness) =>
+        witness.edgeId === EDGE_PUBLICATION_ACK_CONVERGENCE,
+      );
+      const presentation = buildTopologyConvergenceOwnerPresentation(graph);
+      const dominantWitness = selectTopologyConvergenceDominantWitness(
+        presentation,
+      );
+
+      assert.equal(graph.summary.firstFrontierEdgeId, EDGE_SNAPSHOT_COVERAGE);
+      assert.equal(graph.summary.firstFrontierOwner, OWNER_STARTUP_ACTIVE_GATE);
+      assert.equal(dominantWitness.edgeId, EDGE_SNAPSHOT_COVERAGE);
+      assert.equal(dominantWitness.owner, OWNER_STARTUP_ACTIVE_GATE);
+      assert.equal(
+        dominantWitness.dominantReason,
+        ACTIVE_GATE_TIMED_OUT_REASON,
+      );
+      assert.equal(publicationWitness.state, EDGE_STATE.SATISFIED);
+      assert.deepEqual(publicationWitness.reasons, [
+        PUBLICATION_PUBLISHED_REASON,
+      ]);
+      assert.equal(
+        publicationWitness.source.recoveryProtocolState,
+        RECOVERY_PROTOCOL_STEADY_PUBLISHED,
+      );
+      assert.equal(
+        publicationWitness.source.missingPublishedCount,
+        PUBLICATION_ACK_FRONTIER_MISSING_NODE_IDS.length,
+      );
+      assertNoNullOrUndefined(graph);
+    });
+
   it('keeps priority-spread missing publication subordinate to priority recovery',
     () => {
       const fixture = buildFixtureFailureBundle();
@@ -509,6 +641,134 @@ describe('TopologyConvergenceGraph', () => {
       );
       assert.deepEqual(
         graph.nextExpectedFrontier.map((edge) => edge.id),
+        [EDGE_SNAPSHOT_COVERAGE],
+      );
+      assertNoNullOrUndefined(graph);
+    });
+
+  it('uses partition witnesses when priority class contracts are absent',
+    () => {
+      const fixture = buildFixtureFailureBundle();
+      const partitionWitness = {
+        partitionId: FIXTURE_PARTITION_ID,
+        semanticStateId: FIXTURE_PRIORITY_SPREAD_SATISFIED_STATE,
+        currentOwner: OWNER_OPERATION_WORKFLOW,
+        blockingBoundary: BOUNDARY_WORKFLOW_PROGRESS,
+        waitMode: PRIORITY_RECOVERY_WAIT_MODE_EVENT_DRIVEN,
+        nextRequiredAction:
+          PRIORITY_RECOVERY_ACTION_WAIT_FOR_OPERATION_PROGRESS,
+        actuationState:
+          PRIORITY_RECOVERY_ACTUATION_DISPATCHED_WAITING_PROGRESS,
+      };
+      const graph = buildTopologyConvergenceGraphFromArtifacts({
+        failureBundle: {
+          ...fixture,
+          publicationConvergence: {
+            ...fixture.publicationConvergence,
+            activeGate: {
+              ...fixture.publicationConvergence.activeGate,
+              progress: {
+                expectedNodeCount: FIXTURE_EXPECTED_NODE_COUNT,
+                snapshotCoverageNodeCount: FIXTURE_SNAPSHOT_COVERAGE_COUNT,
+                snapshotCoverageComplete: false,
+                priorityBlockedPartitionCount: ZERO_COUNT,
+                blockers: [SNAPSHOT_COVERAGE_TWO_OF_FIVE_BLOCKER],
+              },
+            },
+            priorityRecoveryPartitionWitnesses: [partitionWitness],
+            priorityRecoveryProgressSummary: {
+              dominantWitness: partitionWitness,
+              priorityBlockedPartitionCount: ZERO_COUNT,
+            },
+          },
+        },
+      });
+      const priorityEdge = findEdge(graph.edges, EDGE_PRIORITY_RECOVERY);
+
+      assert.equal(graph.summary.firstFrontierEdgeId, EDGE_PRIORITY_RECOVERY);
+      assert.equal(graph.summary.firstFrontierOwner, OWNER_OPERATION_WORKFLOW);
+      assert.equal(priorityEdge.state, EDGE_STATE.RETRYABLE);
+      assert.equal(
+        priorityEdge.evidencePath,
+        PRIORITY_RECOVERY_PARTITION_WITNESS_EVIDENCE_PATH,
+      );
+      assert.deepEqual(priorityEdge.reasons, [
+        PRIORITY_RECOVERY_RETRYABLE_REASON,
+      ]);
+      assert.equal(
+        priorityEdge.source.unresolvedSemanticStateIds,
+        FIXTURE_PRIORITY_SPREAD_SATISFIED_STATE,
+      );
+      assert.equal(priorityEdge.source.blockedPartitionIds, FIXTURE_PARTITION_ID);
+      assert.equal(
+        priorityEdge.source.waitModes,
+        PRIORITY_RECOVERY_WAIT_MODE_EVENT_DRIVEN,
+      );
+      assert.deepEqual(
+        graph.nextExpectedFrontier.map((edge) => edge.id),
+        [EDGE_SNAPSHOT_COVERAGE],
+      );
+      assertNoNullOrUndefined(graph);
+    });
+
+  it('treats an explicit empty priority class contract as satisfied before retained witnesses',
+    () => {
+      const fixture = buildFixtureFailureBundle();
+      const partitionWitness = {
+        partitionId: FIXTURE_PARTITION_ID,
+        semanticStateId: FIXTURE_PRIORITY_SPREAD_SATISFIED_STATE,
+        currentOwner: OWNER_OPERATION_WORKFLOW,
+        blockingBoundary: BOUNDARY_WORKFLOW_PROGRESS,
+        waitMode: PRIORITY_RECOVERY_WAIT_MODE_EVENT_DRIVEN,
+        nextRequiredAction:
+          PRIORITY_RECOVERY_ACTION_WAIT_FOR_OPERATION_PROGRESS,
+        actuationState:
+          PRIORITY_RECOVERY_ACTUATION_DISPATCHED_WAITING_PROGRESS,
+      };
+      const graph = buildTopologyConvergenceGraphFromArtifacts({
+        failureBundle: {
+          ...fixture,
+          publicationConvergence: {
+            ...fixture.publicationConvergence,
+            activeGate: {
+              ...fixture.publicationConvergence.activeGate,
+              progress: {
+                ...fixture.publicationConvergence.activeGate.progress,
+                priorityBlockedPartitionCount: ZERO_COUNT,
+                priorityRecoveryProgressClasses: {
+                  unresolvedSemanticStateIds: [],
+                  blockedPartitionIds: [],
+                },
+              },
+            },
+            priorityRecoveryPartitionWitnesses: [partitionWitness],
+            priorityRecoveryProgressSummary: {
+              dominantWitness: partitionWitness,
+              priorityRecoveryProgressClasses: {
+                unresolvedSemanticStateIds: [],
+                blockedPartitionIds: [],
+              },
+              priorityBlockedPartitionCount: ZERO_COUNT,
+            },
+          },
+        },
+      });
+      const priorityEdge = findEdge(graph.edges, EDGE_PRIORITY_RECOVERY);
+
+      assert.equal(graph.summary.firstFrontierEdgeId, EDGE_SNAPSHOT_COVERAGE);
+      assert.equal(graph.summary.firstFrontierOwner, OWNER_STARTUP_ACTIVE_GATE);
+      assert.equal(priorityEdge.state, EDGE_STATE.SATISFIED);
+      assert.equal(
+        priorityEdge.evidencePath,
+        PRIORITY_RECOVERY_PROGRESS_CLASS_EVIDENCE_PATH,
+      );
+      assert.deepEqual(priorityEdge.reasons, [
+        PRIORITY_RECOVERY_SATISFIED_REASON,
+      ]);
+      assert.equal(priorityEdge.source.unresolvedSemanticStateIds, SOURCE_PATH_ABSENT);
+      assert.equal(priorityEdge.source.blockedPartitionIds, SOURCE_PATH_ABSENT);
+      assert.deepEqual(
+        graph.frontier.map((edge) => edge.id),
         [EDGE_SNAPSHOT_COVERAGE],
       );
       assertNoNullOrUndefined(graph);

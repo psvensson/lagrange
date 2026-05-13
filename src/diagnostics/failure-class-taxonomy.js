@@ -21,6 +21,7 @@ import {EDGE_STATE} from './topology-convergence-graph.js';
 const EDGE_PUBLICATION_ACK = 'publication_ack_convergence';
 const EDGE_SNAPSHOT_COVERAGE = 'active_gate_snapshot_coverage';
 const EDGE_PRIORITY_RECOVERY = 'priority_recovery_partition_progress';
+const EDGE_READINESS_STARTUP_SUPPORT = 'readiness_startup_support';
 const REASON_SNAPSHOT_COVERAGE_INCOMPLETE = 'snapshot_coverage_incomplete';
 const REASON_STARTUP_READINESS_BLOCKED = 'startup_readiness_blocked';
 const REASON_EVENT_DRIVEN_WAIT = 'event_driven_wait';
@@ -43,6 +44,11 @@ const EVIDENCE_PATH_PRIORITY_RECOVERY_WITNESS =
 const EVIDENCE_PATH_BUDGET_CASCADES = 'budgetAccounting.cascades';
 const EVIDENCE_PATH_CAUSAL_GRAPH_NODES = 'causalGraph.nodes';
 const READINESS_CLASSIFICATION_RULES = Object.freeze([
+  Object.freeze({
+    decision: READINESS_CLASSIFICATION_DECISION.INHERITED_ACTIVE_GATE_NO_PROGRESS,
+    matches: (snapshot) =>
+      snapshot.readinessEdgeState === EDGE_STATE.DEFERRED,
+  }),
   Object.freeze({
     decision: READINESS_CLASSIFICATION_DECISION.INHERITED_ACTIVE_GATE_NO_PROGRESS,
     matches: (snapshot) =>
@@ -117,7 +123,7 @@ const FAILURE_RULES = Object.freeze([
     classify: ({graph}) => classifyPriorityWait(graph),
   }),
   Object.freeze({
-    classify: ({normalized}) => classifyReadiness(normalized),
+    classify: ({normalized, graph}) => classifyReadiness(normalized, graph),
   }),
   Object.freeze({
     classify: ({budgetAccounting}) => classifyBudgetCascade(budgetAccounting),
@@ -172,14 +178,16 @@ function classifyPriorityWait(graph) {
   })];
 }
 
-function classifyReadiness(normalized) {
+function classifyReadiness(normalized, graph) {
   const reasonEntries = Object.entries(asRecord(normalized.nodeReasonsByNodeId));
   const blockedReasonEntries = reasonEntries.filter((entry) =>
     arrayOrEmpty(entry[1]).length > ZERO_COUNT,
   );
+  const readinessEdge = findTopologyNode(graph, EDGE_READINESS_STARTUP_SUPPORT);
   const snapshot = {
     reportOutcome: normalized.reportOutcome,
     blockedReasonEntries,
+    readinessEdgeState: textOrUnknown(readinessEdge?.state),
     classCode: textOrUnknown(normalized.readinessFailure.classCode),
     terminalReason: textOrUnknown(normalized.readinessFailure.terminalReason),
     source: textOrUnknown(normalized.readinessFailure.source),

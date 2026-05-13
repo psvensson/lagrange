@@ -128,7 +128,23 @@ This sprint treats the system as ship-shape only when these properties hold:
      operations, and evaluated topology epoch; `PUBLISHED` cannot mask
      `active=2/5` without a degraded owner reason.
 
-3. [Topology Membership Epoch Fencing](../packages/todo-20260513-topology-membership-epoch-fencing.md)
+3. [Topology Readiness Stalled Support](../packages/active-20260513-topology-readiness-stalled-support.md)
+   - Lane: `runtime-owner-boundary`
+   - Owner boundary: `startup_readiness_owner / startup_support_evidence`
+   - Recommendation covered: keep startup support evidence tied to owner
+     truth instead of treating active-gate stalls as independent readiness
+     failures.
+   - Purpose: classify no-progress readiness with source unknown/cause none
+     while active-gate state is stalled as inherited active-gate support
+     evidence, or name a fresh owner boundary with canonical evidence.
+   - Entry condition: the active-gate owner-truth package closed with
+     `migrate_owner_boundary` toward startup readiness support evidence.
+   - Acceptance: focused diagnostics prove the support classification;
+     rolling-restart either passes, returns to startup active-gate snapshot
+     coverage with reduced readiness support debt, or migrates to a fresh
+     owner-boundary blocker.
+
+4. [Topology Membership Epoch Fencing](../packages/todo-20260513-topology-membership-epoch-fencing.md)
    - Lane: `runtime-owner-boundary`
    - Owner boundary: `topology_membership_owner / membership_epoch`
    - Recommendation covered: add a membership/topology epoch.
@@ -141,7 +157,7 @@ This sprint treats the system as ship-shape only when these properties hold:
      observations are fenced by epoch checks; diagnostics expose the evaluated
      epoch and rejection reason.
 
-4. [Topology Failure Repair Intents](../packages/todo-20260513-topology-failure-repair-intents.md)
+5. [Topology Failure Repair Intents](../packages/todo-20260513-topology-failure-repair-intents.md)
    - Lane: `runtime-owner-boundary`
    - Owner boundary: `failure_detector / durable_repair_intent`
    - Recommendation covered: make failure detection enqueue durable repair work.
@@ -155,7 +171,7 @@ This sprint treats the system as ship-shape only when these properties hold:
      partition, message group, and replica operation is named or explicitly
      classified as not affected.
 
-5. [Topology Post Rejoin Reconciliation](../packages/todo-20260513-topology-post-rejoin-reconciliation.md)
+6. [Topology Post Rejoin Reconciliation](../packages/todo-20260513-topology-post-rejoin-reconciliation.md)
    - Lane: `runtime-owner-boundary`
    - Owner boundary: `topology_membership_owner / rejoin_reconciliation`
    - Recommendation covered: add post-rejoin reconciliation.
@@ -169,7 +185,7 @@ This sprint treats the system as ship-shape only when these properties hold:
      become placement targets until reconciliation reaches a typed owner
      outcome.
 
-6. [Topology Partition Descriptor Epoch](../packages/todo-20260513-topology-partition-descriptor-epoch.md)
+7. [Topology Partition Descriptor Epoch](../packages/todo-20260513-topology-partition-descriptor-epoch.md)
    - Lane: `runtime-owner-boundary`
    - Owner boundary: `partition_topology_owner / descriptor_epoch`
    - Recommendation covered: make partition descriptors versioned and central.
@@ -182,7 +198,7 @@ This sprint treats the system as ship-shape only when these properties hold:
      vocabulary; diagnostics do not reconstruct partition freshness from cache
      age or incidental rows.
 
-7. [Topology Placement Capacity Fail Closed](../packages/todo-20260513-topology-placement-capacity-fail-closed.md)
+8. [Topology Placement Capacity Fail Closed](../packages/todo-20260513-topology-placement-capacity-fail-closed.md)
    - Lane: `runtime-owner-boundary`
    - Owner boundary: `topology_placement_owner / capacity_admission`
    - Recommendation covered: fail closed on unknown placement capacity.
@@ -195,7 +211,7 @@ This sprint treats the system as ship-shape only when these properties hold:
      diagnostics name capacity/accounting availability; tests prove strict and
      best-effort modes separately.
 
-8. [Topology Anti Entropy Reconciler](../packages/todo-20260513-topology-anti-entropy-reconciler.md)
+9. [Topology Anti Entropy Reconciler](../packages/todo-20260513-topology-anti-entropy-reconciler.md)
    - Lane: `runtime-owner-boundary`
    - Owner boundary: `topology_reconcile_owner / durable_truth_reconcile`
    - Recommendation covered: add anti-entropy reconciliation.
@@ -208,7 +224,7 @@ This sprint treats the system as ship-shape only when these properties hold:
      output is deterministic repair intent, bounded no-op, or typed terminal
      classification; focused tests cover stale/missing/double-owned evidence.
 
-9. [Topology Bounded Progress Budgets](../packages/todo-20260513-topology-bounded-progress-budgets.md)
+10. [Topology Bounded Progress Budgets](../packages/todo-20260513-topology-bounded-progress-budgets.md)
    - Lane: `runtime-owner-boundary`
    - Owner boundary: `topology_control_plane / progress_budget_taxonomy`
    - Recommendation covered: harden budgets and terminal states.
@@ -222,7 +238,7 @@ This sprint treats the system as ship-shape only when these properties hold:
      progress; retryable evidence without a bounded mechanism remains an
      active causal edge.
 
-10. [Topology Failure Scenario Gates](../packages/todo-20260513-topology-failure-scenario-gates.md)
+11. [Topology Failure Scenario Gates](../packages/todo-20260513-topology-failure-scenario-gates.md)
     - Lane: `scenario-release-gate`
     - Owner boundary: `distributed_test_harness / failure_gate_matrix`
     - Recommendation covered: promote failure scenarios to release gates.
