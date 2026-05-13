@@ -686,6 +686,8 @@ class NodeJoiningServiceSegment5 extends NodeJoiningServiceSegment4 {
       const subscriptionSelection =
         await this.resolveOperationalMessageGroupSelectionAsync({
           requiredTables: [tableName],
+          preferredService: messageGroupService,
+          reuseCapturedIngress: true,
         });
       const subscriptionMessageGroupService = subscriptionSelection.service;
       if (!subscriptionMessageGroupService) {

@@ -27,6 +27,7 @@ import {
   HTTP_STATUS,
   NUM,
   STRING,
+  TIME_MS,
   TYPEOF,
 } from '../../constants/index.js';
 
@@ -40,10 +41,18 @@ const LOCAL_STR_1AWHD = 'missingMessageGroupLeaderNodes=';
 const LOCAL_STR_SPACE = ' ';
 const MAX_RETRYABLE_SEED_CONTACT_EVIDENCE_RETRIES = 1;
 const MIN_SEED_CONTACT_REQUEST_TIMEOUT_MS = NUM.ONE;
+const RETAINED_BOOTSTRAP_NOT_READY_REQUEST_TIMEOUT_MS =
+  TIME_MS.SECOND * NUM.FIVE;
 const RETRYABLE_SEED_CONTACT_FAILURE_ACTION = Object.freeze({
+  CLEAR_RETAINED_EVIDENCE_AND_RETRY: 'clear_retained_evidence_and_retry',
   RETRY: 'retry',
   SURFACE: 'surface',
   TERMINAL: 'terminal',
+});
+const RETRYABLE_SEED_CONTACT_EVIDENCE_SOURCE = Object.freeze({
+  FRESH: 'fresh',
+  NONE: 'none',
+  RETAINED: 'retained',
 });
 const BOOTSTRAP_NOT_READY_LIMITED_RESUME_REASON_CODES = Object.freeze([
   BOOTSTRAP_API_PROBE_REASON.CLIENT_ATTEMPT_DEADLINE_EXHAUSTED,
@@ -150,6 +159,13 @@ function resolveRetryableSeedContactFailureAction(options = {}) {
     options.hasRetryableSeedContactEvidence === true &&
     Number.isFinite(options.retryableSeedContactEvidenceRetryBudget) &&
     options.retryableSeedContactEvidenceRetryBudget <= LOCAL_NUM_ZERO;
+  if (retryableSeedContactOutcomeBudgetExhausted === true &&
+      options.classification?.retryableTimeout === true &&
+      options.retryableSeedContactEvidenceSource ===
+        RETRYABLE_SEED_CONTACT_EVIDENCE_SOURCE.RETAINED) {
+    return RETRYABLE_SEED_CONTACT_FAILURE_ACTION
+      .CLEAR_RETAINED_EVIDENCE_AND_RETRY;
+  }
   return retryableSeedContactOutcomeBudgetExhausted === true ?
     RETRYABLE_SEED_CONTACT_FAILURE_ACTION.SURFACE :
     RETRYABLE_SEED_CONTACT_FAILURE_ACTION.RETRY;
@@ -174,7 +190,22 @@ function resolveSeedContactAttemptTimeoutMs(options = {}) {
       Math.floor(options.remainingRetryBudgetMs),
     ) :
     requestTimeoutMs;
-  return Math.min(requestTimeoutMs, remainingRetryBudgetMs);
+  const retainedBootstrapNotReadyTimeoutMs =
+    isBootstrapNotReadySeedContactEvidence(
+      options.retryableSeedContactEvidence,
+    ) ?
+      Math.max(
+        RETAINED_BOOTSTRAP_NOT_READY_REQUEST_TIMEOUT_MS,
+        Number.isFinite(options.retryableSeedContactEvidence?.retryAfterMs) ?
+          Math.floor(options.retryableSeedContactEvidence.retryAfterMs) :
+          MIN_SEED_CONTACT_REQUEST_TIMEOUT_MS,
+      ) :
+      requestTimeoutMs;
+  return Math.min(
+    requestTimeoutMs,
+    remainingRetryBudgetMs,
+    retainedBootstrapNotReadyTimeoutMs,
+  );
 }
 
 /**
@@ -227,6 +258,9 @@ class ContactSeedPhase {
       normalizeRetryableSeedContactEvidence(
         this.delegates.getLastRetryableSeedContactEvidence?.(),
       );
+    let lastBootstrapErrorSource = lastBootstrapError === null ?
+      RETRYABLE_SEED_CONTACT_EVIDENCE_SOURCE.NONE :
+      RETRYABLE_SEED_CONTACT_EVIDENCE_SOURCE.RETAINED;
     let lastRetryableSeedContactError = null;
     let lastRetryAfterMs =
       resolveSeedContactRetryAfterMs(null, lastBootstrapError);
@@ -235,6 +269,9 @@ class ContactSeedPhase {
       grants: LOCAL_NUM_ZERO,
     };
     const config = this.delegates.getConfig();
+    let lastAttemptRequestTimeoutMs = resolveSeedContactRequestTimeoutMs({
+      configuredHttpTimeoutMs: config.httpTimeoutMs,
+    });
     const buildRetryableSeedContactError = (message, options = {}) => {
       const retryableError = new Error(message);
       retryableError.deferRetry = true;
@@ -265,7 +302,9 @@ class ContactSeedPhase {
         const requestTimeoutMs = resolveSeedContactAttemptTimeoutMs({
           configuredHttpTimeoutMs: config.httpTimeoutMs,
           remainingRetryBudgetMs: retryTimeoutMs - elapsedAtAttemptStartMs,
+          retryableSeedContactEvidence: lastBootstrapError,
         });
+        lastAttemptRequestTimeoutMs = requestTimeoutMs;
         const bootstrapRequest = {
           nodeId: this.nodeId,
           nodeAddress,
@@ -321,9 +360,7 @@ class ContactSeedPhase {
         return;
       } catch (error) {
         const retryableTimeoutErrorMessage = JOINING_ERROR_MSG.httpTimeout(
-          resolveSeedContactRequestTimeoutMs({
-            configuredHttpTimeoutMs: config.httpTimeoutMs,
-          }),
+          lastAttemptRequestTimeoutMs,
         );
         const classification = this.classifySeedContactFailure(
           error,
@@ -341,6 +378,8 @@ class ContactSeedPhase {
           normalizeRetryableSeedContactEvidence(parsedError);
         if (retryableSeedContactEvidence) {
           lastBootstrapError = retryableSeedContactEvidence;
+          lastBootstrapErrorSource =
+            RETRYABLE_SEED_CONTACT_EVIDENCE_SOURCE.FRESH;
           this.delegates.setLastRetryableSeedContactEvidence?.(
             retryableSeedContactEvidence,
           );
@@ -358,9 +397,21 @@ class ContactSeedPhase {
             retryTimeoutMs,
             hasRetryableSeedContactEvidence: lastBootstrapError !== null,
             retryableSeedContactEvidenceRetryBudget: evidenceWindow.budget,
+            retryableSeedContactEvidenceSource: lastBootstrapErrorSource,
           });
         if (retryableSeedContactFailureAction ===
-            RETRYABLE_SEED_CONTACT_FAILURE_ACTION.RETRY) {
+            RETRYABLE_SEED_CONTACT_FAILURE_ACTION
+              .CLEAR_RETAINED_EVIDENCE_AND_RETRY) {
+          lastBootstrapError = null;
+          lastBootstrapErrorSource =
+            RETRYABLE_SEED_CONTACT_EVIDENCE_SOURCE.NONE;
+          this.delegates.setLastRetryableSeedContactEvidence?.(null);
+        }
+        if (retryableSeedContactFailureAction ===
+              RETRYABLE_SEED_CONTACT_FAILURE_ACTION.RETRY ||
+            retryableSeedContactFailureAction ===
+              RETRYABLE_SEED_CONTACT_FAILURE_ACTION
+                .CLEAR_RETAINED_EVIDENCE_AND_RETRY) {
           if (classification.retryableTimeout) {
             lastRetryableSeedContactError = error.message;
           }

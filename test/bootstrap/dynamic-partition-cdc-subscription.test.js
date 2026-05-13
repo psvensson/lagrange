@@ -13,6 +13,13 @@ import {
   JOINING_PHASE,
 } from '../../src/bootstrap/bootstrap-constants.js';
 
+const TEST_CAPTURED_MESSAGE_GROUP_ID = 'mg-captured';
+const TEST_CONTROL_PLANE_PUBLICATIONS_TABLE =
+  TABLES.CONTROL_PLANE_PUBLICATIONS;
+const TEST_METADATA_INGRESS_NOT_READY_REASON =
+  'operational message-group ingress not ready';
+const TEST_METADATA_INGRESS_RETRY_AFTER_MS = 25;
+
 function initializeTestEnvironment() {
   ConfigurationManager.resetInstance();
   const config = ConfigurationManager.getInstance();
@@ -31,7 +38,31 @@ function initializeTestEnvironment() {
   NodeService.resetInstance();
 }
 
-async function withCapturedReplicaFactory(service, t, assertFactory) {
+function createCapturedIngressMessageGroupServices(subscribedTables) {
+  return new Map([
+    [TEST_CAPTURED_MESSAGE_GROUP_ID, {
+      groupId: TEST_CAPTURED_MESSAGE_GROUP_ID,
+      initialized: true,
+      isLeaderReplica: () => true,
+      getMetadataIngressReadiness: () => ({
+        ready: false,
+        reason: TEST_METADATA_INGRESS_NOT_READY_REASON,
+        retryAfterMs: TEST_METADATA_INGRESS_RETRY_AFTER_MS,
+      }),
+      getLeaderId: () => null,
+      subscribeToCDC: async (tableName) => {
+        subscribedTables.push(tableName);
+      },
+    }],
+  ]);
+}
+
+async function withCapturedReplicaFactory(
+  service,
+  t,
+  assertFactory,
+  options = {},
+) {
   const cache = new SystemTableCache();
   let capturedCreatePartitionService = null;
   const subscribedTables = [];
@@ -58,18 +89,21 @@ async function withCapturedReplicaFactory(service, t, assertFactory) {
     service.systemCacheHydrated = true;
     service.tablePolicyService = {};
     service.rebalanceCoordinator = {};
-    service.messageGroupServices = new Map([
-      ['mg-1', {
-        groupId: 'mg-1',
-        initialized: true,
-        isLeaderReplica: () => true,
-        getMetadataIngressReadiness: () => ({ready: true}),
-        getLeaderId: () => null,
-        subscribeToCDC: async (tableName) => {
-          subscribedTables.push(tableName);
-        },
-      }],
-    ]);
+    service.messageGroupServices =
+      typeof options.createMessageGroupServices === 'function' ?
+        options.createMessageGroupServices({subscribedTables}) :
+        new Map([
+          ['mg-1', {
+            groupId: 'mg-1',
+            initialized: true,
+            isLeaderReplica: () => true,
+            getMetadataIngressReadiness: () => ({ready: true}),
+            getLeaderId: () => null,
+            subscribeToCDC: async (tableName) => {
+              subscribedTables.push(tableName);
+            },
+          }],
+        ]);
     if (typeof service.createCdcIntegrationService === 'function' &&
         hasCustomCreateCdcIntegrationService) {
       const originalCreateCdcIntegrationService =
@@ -238,6 +272,79 @@ test('NodeJoiningService dynamic user partition CDC subscription', async (t) => 
     );
   });
 });
+
+test('BootstrapService dynamic system partition CDC subscription reuses captured ingress during metadata readiness churn',
+  async (t) => {
+    initializeTestEnvironment();
+
+    const service = new BootstrapService({
+      nodeId: 'seed-node',
+      nodeAddress: 'ws://localhost:9001',
+    });
+
+    await withCapturedReplicaFactory(service, t, async ({
+      subscribedTables,
+      handshakeSubscriberIds,
+      createPartitionService,
+    }) => {
+      await createPartition(
+        createPartitionService,
+        TEST_CONTROL_PLANE_PUBLICATIONS_TABLE,
+        'seed-node',
+      );
+
+      t.ok(
+        subscribedTables.includes(TEST_CONTROL_PLANE_PUBLICATIONS_TABLE),
+        'bootstrap dynamic system partition should reuse captured CDC ingress',
+      );
+      t.ok(
+        handshakeSubscriberIds.some((subscriberId) =>
+          String(subscriberId || '')
+            .includes(TEST_CONTROL_PLANE_PUBLICATIONS_TABLE)),
+        'bootstrap dynamic system partition should register a CDC handshake',
+      );
+    }, {
+      createMessageGroupServices: ({subscribedTables}) =>
+        createCapturedIngressMessageGroupServices(subscribedTables),
+    });
+  });
+
+test('NodeJoiningService dynamic system partition CDC subscription reuses captured ingress during metadata readiness churn',
+  async (t) => {
+    initializeTestEnvironment();
+
+    const service = new NodeJoiningService({
+      nodeId: 'join-node',
+      nodeAddress: 'ws://localhost:9002',
+      seedNodeAddress: 'http://localhost:8080',
+    });
+
+    await withCapturedReplicaFactory(service, t, async ({
+      subscribedTables,
+      handshakeSubscriberIds,
+      createPartitionService,
+    }) => {
+      await createPartition(
+        createPartitionService,
+        TEST_CONTROL_PLANE_PUBLICATIONS_TABLE,
+        'join-node',
+      );
+
+      t.ok(
+        subscribedTables.includes(TEST_CONTROL_PLANE_PUBLICATIONS_TABLE),
+        'joining dynamic system partition should reuse captured CDC ingress',
+      );
+      t.ok(
+        handshakeSubscriberIds.some((subscriberId) =>
+          String(subscriberId || '')
+            .includes(TEST_CONTROL_PLANE_PUBLICATIONS_TABLE)),
+        'joining dynamic system partition should register a CDC handshake',
+      );
+    }, {
+      createMessageGroupServices: ({subscribedTables}) =>
+        createCapturedIngressMessageGroupServices(subscribedTables),
+    });
+  });
 
 test('BootstrapService keeps CDC propagation attached after bootstrap completes',
   async (t) => {

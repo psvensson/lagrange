@@ -168,6 +168,17 @@ const PARTIAL_COVERAGE_CONVERGENCE_DECISION_TABLE = Object.freeze([
       evidence.bestCoverageNodeCount > ZERO &&
       evidence.selectedSnapshotErrorPresent !== true,
   }),
+  Object.freeze({
+    outcome: PARTIAL_COVERAGE_CONVERGENCE_OUTCOME_APPLY,
+    matches: (evidence) =>
+      evidence.readinessMode === CLUSTER_READINESS_MODE_STARTUP &&
+      evidence.activeByStatus === true &&
+      evidence.publicationGateReady === true &&
+      evidence.snapshotCoverageComplete !== true &&
+      evidence.bestCoverageNodeCount > ZERO &&
+      evidence.selectedSnapshotAdminReady === true &&
+      evidence.selectedSnapshotErrorPresent !== true,
+  }),
 ]);
 
 function normalizeOptionalString(value) {
@@ -465,12 +476,16 @@ function normalizePartialCoverageConvergenceEvidence({
   const selectedSnapshotErrorPresent =
     typeof normalizeOptionalString(snapshotCoverage?.selectedError) ===
       TYPEOF_STRING;
+  const selectedSnapshotAdminReady =
+    snapshotCoverage?.selectedAdminReady === true ||
+    snapshotCoverage?.selectedSnapshotAdminReady === true;
   return Object.freeze({
     readinessMode,
     activeByStatus: activeByStatus === true,
     publicationGateReady: publicationConvergenceGate?.ready === true,
     snapshotCoverageComplete: snapshotCoverage?.completeCoverage === true,
     bestCoverageNodeCount,
+    selectedSnapshotAdminReady,
     selectedSnapshotErrorPresent,
   });
 }

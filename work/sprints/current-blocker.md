@@ -4,34 +4,44 @@
 
 Sprint: `work/sprints/active-2026-q2-topology-convergence-ship-shape.md`
 
-Package: `work/packages/active-20260513-topology-remote-handoff-convergence.md`
+Package: `work/packages/active-20260513-topology-active-gate-owner-truth.md`
 
-Workflow lane: `scenario-release-gate`
+Workflow lane: `runtime-owner-boundary`
 
 Scenario: `rolling-restart`
 
-Artifact: `test-output/reports/rolling-restart-green-gate-after-sql-write-dispatch-retry-progress.report.json`
+Artifact: `test-output/reports/rolling-restart-green-gate-after-active-gate-owner-truth.report.json`
 
 Playback: `none`
 
 ## Boundary
 
-Owner: `operation_workflow_owner`
+Owner: `startup_active_gate_owner`
 
-Boundary: `workflow_progress`
+Boundary: `snapshot_coverage`
 
-Dominant reason: `priority_recovery_event_driven_wait`
+Dominant reason: `snapshot_coverage_incomplete`
 
-Current state: The successor ship-shape sprint starts from the same-frontier rolling-restart artifact where priority recovery remains blocked on coordinator-created remote handoff retry/ACK progress.
+Current state: Focused runtime checks have passed, and the representative rerun is red/migrated: active_gate_snapshot_coverage remains first frontier with snapshot_coverage_incomplete, snapshotCoverage=2/5, publishedActive=1/5, missingPublished=4, and canonical causal outcome migrate_owner_boundary to startup_readiness_owner / startup_support_evidence.
 
 ## Next Action
 
-Close coordinator-created remote handoff retry and ACK progress before active-gate work resumes
+Migrate the next package boundary to startup_readiness_owner / startup_support_evidence while preserving this active-gate owner-truth proof.
 
 ## Proof Ladder
 
-1. `npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-green-gate-after-sql-write-dispatch-retry-progress.report.json --markdown`
-2. `npm run analyze:owner-files -- operation_workflow_owner workflow_progress --markdown`
+1. `node --test test/bootstrap/node-joining-service.test.js`
+2. `npx tap test/bootstrap/bootstrap-api.test-part-5.js`
+3. `npx tap test/bootstrap/connect-websocket-phase.test.js`
+4. `node scripts/check-guideline-literals.js src/bootstrap/bootstrap-api.js src/bootstrap/bootstrap-api-runtime-methods.js src/bootstrap/bootstrap-service-runtime-methods.js src/bootstrap/join-readiness-evaluator-tail-methods.js src/bootstrap/node-joining-service-segment-1.js src/bootstrap/node-joining-service-segment-2.js src/bootstrap/node-joining-service-segment-5.js src/bootstrap/owners/bootstrap-request-owner.js src/bootstrap/owners/move-replica-assignment-owner.js src/bootstrap/phases/connect-websocket-phase.js src/bootstrap/phases/contact-seed-phase.js src/bootstrap/phases/create-message-group-phase.js test/distributed/harness/cluster-segment-4.js test/distributed/harness/cluster-segment-7-class-4.js test/distributed/harness/__tests__/node-handle-control-snapshot-fallback.test.js test/bootstrap/connect-websocket-phase.test.js test/bootstrap/dynamic-partition-cdc-subscription.test.js test/bootstrap/move-replica-assignment-token.test.js test/bootstrap/node-joining-service.test.js`
+5. `node scripts/check-guideline-decision-boundaries.js src/bootstrap/bootstrap-api.js src/bootstrap/bootstrap-api-runtime-methods.js src/bootstrap/bootstrap-service-runtime-methods.js src/bootstrap/join-readiness-evaluator-tail-methods.js src/bootstrap/node-joining-service-segment-1.js src/bootstrap/node-joining-service-segment-2.js src/bootstrap/node-joining-service-segment-5.js src/bootstrap/owners/bootstrap-request-owner.js src/bootstrap/owners/move-replica-assignment-owner.js src/bootstrap/phases/connect-websocket-phase.js src/bootstrap/phases/contact-seed-phase.js src/bootstrap/phases/create-message-group-phase.js test/distributed/harness/cluster-segment-4.js test/distributed/harness/cluster-segment-7-class-4.js test/distributed/harness/__tests__/node-handle-control-snapshot-fallback.test.js test/bootstrap/connect-websocket-phase.test.js test/bootstrap/dynamic-partition-cdc-subscription.test.js test/bootstrap/move-replica-assignment-token.test.js test/bootstrap/node-joining-service.test.js`
+6. `npm run audit:runtime-grammar:file -- src/bootstrap/bootstrap-api.js src/bootstrap/bootstrap-api-runtime-methods.js src/bootstrap/bootstrap-service-runtime-methods.js src/bootstrap/join-readiness-evaluator-tail-methods.js src/bootstrap/node-joining-service-segment-1.js src/bootstrap/node-joining-service-segment-2.js src/bootstrap/node-joining-service-segment-5.js src/bootstrap/owners/bootstrap-request-owner.js src/bootstrap/owners/move-replica-assignment-owner.js src/bootstrap/phases/connect-websocket-phase.js src/bootstrap/phases/contact-seed-phase.js src/bootstrap/phases/create-message-group-phase.js test/distributed/harness/cluster-segment-4.js test/distributed/harness/cluster-segment-7-class-4.js test/distributed/harness/__tests__/node-handle-control-snapshot-fallback.test.js test/bootstrap/connect-websocket-phase.test.js test/bootstrap/dynamic-partition-cdc-subscription.test.js test/bootstrap/move-replica-assignment-token.test.js test/bootstrap/node-joining-service.test.js`
+7. `git diff --check -- src/bootstrap/bootstrap-api.js src/bootstrap/bootstrap-api-runtime-methods.js src/bootstrap/bootstrap-service-runtime-methods.js src/bootstrap/join-readiness-evaluator-tail-methods.js src/bootstrap/node-joining-service-segment-1.js src/bootstrap/node-joining-service-segment-2.js src/bootstrap/node-joining-service-segment-5.js src/bootstrap/owners/bootstrap-request-owner.js src/bootstrap/owners/move-replica-assignment-owner.js src/bootstrap/phases/connect-websocket-phase.js src/bootstrap/phases/contact-seed-phase.js src/bootstrap/phases/create-message-group-phase.js test/distributed/harness/cluster-segment-4.js test/distributed/harness/cluster-segment-7-class-4.js test/distributed/harness/__tests__/node-handle-control-snapshot-fallback.test.js test/bootstrap/connect-websocket-phase.test.js test/bootstrap/dynamic-partition-cdc-subscription.test.js test/bootstrap/move-replica-assignment-token.test.js test/bootstrap/node-joining-service.test.js`
+8. `npm run work:package:doctor -- work/packages/active-20260513-topology-active-gate-owner-truth.md`
+9. `node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-green-gate-after-active-gate-owner-truth.report.json --fast-local --verbose`
+10. `npm run work:evidence-summary -- test-output/reports/rolling-restart-green-gate-after-active-gate-owner-truth.report.json`
+11. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-green-gate-after-active-gate-owner-truth.report.json --explain active_gate_snapshot_coverage`
+12. `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-green-gate-after-active-gate-owner-truth.report.json`
 
 ## Model Fit
 
@@ -48,61 +58,85 @@ Escalation triggers:
 
 ## Causal Governance
 
-Causal hypothesis: `unknown`
+Causal hypothesis: `If startup_active_gate_owner / snapshot_coverage owns the current local blocker, active-gate convergence must be derived from owner truth and topology epoch instead of presentation publication alone.`
 
-Stop-condition check: `unknown`
+Stop-condition check: `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-green-gate-after-active-gate-owner-truth.report.json`
 
-Expected causal-model change: `unknown`
+Expected causal-model change: `active_gate_snapshot_coverage either converges, reduces to a bounded startup_active_gate_owner sub-boundary, or migrates to startup_readiness_owner / startup_support_evidence after focused owner proof.`
 
-Representative outcome: `unknown`
+Representative outcome: `migrated`
 
-Causal debt: `unknown`
+Causal debt: `The focused active-gate owner-truth proof is green, priority recovery has zero witnesses, and the representative rerun is red/migrated: active_gate_snapshot_coverage remains first frontier with snapshot_coverage_incomplete, snapshotCoverage=2/5, publishedActive=1/5, missingPublished=4; canonical causal outcome is migrate_owner_boundary to startup_readiness_owner / startup_support_evidence.`
 
-Cross-boundary review: `unknown`
+Cross-boundary review: `Review subagent Dewey (019e22ce-cf29-7d43-b6db-9481bc1c4d5c) found predecessor metadata fixes; fix subagent Volta (019e22d4-34e7-75a2-8090-e3ffcdea50af) repaired the predecessor handoff and active package evidence before implementation.`
 
 ## Scenario Causal Closure
 
-Reference scenario/probe: `unknown`
+Reference scenario/probe: `rolling-restart representative report after active-gate owner-truth proof`
 
 Phase chain:
 
-1. None recorded
+1. `startup active-gate snapshot coverage`
+2. `startup readiness support evidence`
 
-Current first frontier: `unknown`
+Current first frontier: `active_gate_snapshot_coverage under startup_active_gate_owner / snapshot_coverage with dominant reason snapshot_coverage_incomplete`
 
 Known downstream blockers:
 
-1. None recorded
+1. `startup_readiness_owner / startup_support_evidence is the canonical owner-boundary migration target after active-gate owner-truth proof`
 
-Missing causal edge: `unknown`
+Missing causal edge: `Active-gate coverage must explain expected nodes, ready leased nodes, published active nodes, missing nodes, pending repair operations, and evaluated topology epoch from owner truth.`
 
-Missing causal edge probe: `unknown`
+Missing causal edge probe: `npm run work:evidence-summary -- test-output/reports/rolling-restart-green-gate-after-active-gate-owner-truth.report.json`
 
-Bounded progress proof: `unknown`
+Bounded progress proof: `Focused active-gate timer, reconcile, and bounded progress runtime checks passed; the representative rerun records owner-truth coverage instead of letting PUBLISHED mask incomplete active coverage.`
 
-Bounded progress proof artifact: `unknown`
+Bounded progress proof artifact: `test-output/reports/rolling-restart-green-gate-after-active-gate-owner-truth.report.json`
 
-Expected observable transition: `unknown`
+Expected observable transition: `active gate now exposes snapshotCoverage=2/5, publishedActive=1/5, missingPublished=4, and migrates the next boundary to startup_readiness_owner / startup_support_evidence.`
 
-Max progress bound: `unknown`
+Max progress bound: `one required review subagent, optional fix subagent if review finds fixes, one implementation subagent, focused owner proof, and representative rerun`
 
-Same-frontier fallback: `unknown`
+Same-frontier fallback: `not used; the representative rerun records canonical migrate_owner_boundary after active-gate owner-truth proof.`
 
-Expected next frontier: `unknown`
+Expected next frontier: `startup_readiness_owner / startup_support_evidence`
 
-Result classification: `unknown`
+Result classification: `migrated`
 
-Stop condition: `unknown`
+Stop condition: `migrate-owner-boundary`
 
 ## Scope
 
 Write scope:
 
-1. None recorded
+1. `work/packages/active-20260513-topology-active-gate-owner-truth.md`
+2. `work/packages/done-20260513-topology-remote-handoff-convergence.md`
+3. `work/sprints/active-2026-q2-topology-convergence-ship-shape.md`
+4. `work/sprints/current-blocker.json`
+5. `work/sprints/current-blocker.md`
+6. `src/bootstrap/bootstrap-api.js`
+7. `src/bootstrap/bootstrap-api-runtime-methods.js`
+8. `src/bootstrap/bootstrap-service-runtime-methods.js`
+9. `src/bootstrap/join-readiness-evaluator-tail-methods.js`
+10. `src/bootstrap/node-joining-service-segment-1.js`
+11. `src/bootstrap/node-joining-service-segment-2.js`
+12. `src/bootstrap/node-joining-service-segment-5.js`
+13. `src/bootstrap/owners/bootstrap-request-owner.js`
+14. `src/bootstrap/owners/move-replica-assignment-owner.js`
+15. `src/bootstrap/phases/connect-websocket-phase.js`
+16. `src/bootstrap/phases/contact-seed-phase.js`
+17. `src/bootstrap/phases/create-message-group-phase.js`
+18. `test/distributed/harness/cluster-segment-4.js`
+19. `test/distributed/harness/cluster-segment-7-class-4.js`
+20. `test/distributed/harness/__tests__/node-handle-control-snapshot-fallback.test.js`
+21. `test/bootstrap/connect-websocket-phase.test.js`
+22. `test/bootstrap/dynamic-partition-cdc-subscription.test.js`
+23. `test/bootstrap/move-replica-assignment-token.test.js`
+24. `test/bootstrap/node-joining-service.test.js`
 
 Handoff files:
 
-1. `test-output/reports/rolling-restart-green-gate-after-sql-write-dispatch-retry-progress.report.json`
+1. `test-output/reports/rolling-restart-green-gate-after-active-gate-owner-truth.report.json`
 
 Generated files:
 
@@ -110,11 +144,47 @@ Generated files:
 
 Candidate runtime files:
 
-1. None recorded
+1. `src/bootstrap/bootstrap-api-runtime-methods.js`
+2. `src/bootstrap/bootstrap-api.js`
+3. `src/bootstrap/bootstrap-service-runtime-methods.js`
+4. `src/bootstrap/join-readiness-evaluator-tail-methods.js`
+5. `src/bootstrap/node-joining-service-segment-1.js`
+6. `src/bootstrap/node-joining-service-segment-2.js`
+7. `src/bootstrap/node-joining-service-segment-5.js`
+8. `src/bootstrap/owners/bootstrap-request-owner.js`
+9. `src/bootstrap/owners/move-replica-assignment-owner.js`
+10. `src/bootstrap/phases/connect-websocket-phase.js`
+11. `src/bootstrap/phases/contact-seed-phase.js`
+12. `src/bootstrap/phases/create-message-group-phase.js`
+13. `test/distributed/harness/cluster-segment-4.js`
+14. `test/distributed/harness/cluster-segment-7-class-4.js`
 
 Commit scope:
 
-1. None recorded
+1. `work/packages/active-20260513-topology-active-gate-owner-truth.md`
+2. `work/packages/done-20260513-topology-remote-handoff-convergence.md`
+3. `work/sprints/active-2026-q2-topology-convergence-ship-shape.md`
+4. `work/sprints/current-blocker.json`
+5. `work/sprints/current-blocker.md`
+6. `src/bootstrap/bootstrap-api.js`
+7. `src/bootstrap/bootstrap-api-runtime-methods.js`
+8. `src/bootstrap/bootstrap-service-runtime-methods.js`
+9. `src/bootstrap/join-readiness-evaluator-tail-methods.js`
+10. `src/bootstrap/node-joining-service-segment-1.js`
+11. `src/bootstrap/node-joining-service-segment-2.js`
+12. `src/bootstrap/node-joining-service-segment-5.js`
+13. `src/bootstrap/owners/bootstrap-request-owner.js`
+14. `src/bootstrap/owners/move-replica-assignment-owner.js`
+15. `src/bootstrap/phases/connect-websocket-phase.js`
+16. `src/bootstrap/phases/contact-seed-phase.js`
+17. `src/bootstrap/phases/create-message-group-phase.js`
+18. `test/distributed/harness/cluster-segment-4.js`
+19. `test/distributed/harness/cluster-segment-7-class-4.js`
+20. `test/distributed/harness/__tests__/node-handle-control-snapshot-fallback.test.js`
+21. `test/bootstrap/connect-websocket-phase.test.js`
+22. `test/bootstrap/dynamic-partition-cdc-subscription.test.js`
+23. `test/bootstrap/move-replica-assignment-token.test.js`
+24. `test/bootstrap/node-joining-service.test.js`
 
 Legacy touched files:
 

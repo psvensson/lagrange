@@ -68,9 +68,12 @@ function createBootstrapApiRuntimeMethods(options = {}) {
         .evaluateMoveReplicaAssignmentReservationOwnership(reservation, now);
     },
 
-    canReviveExpiredMoveReplicaAssignmentReservation(reservation) {
+    canReviveExpiredMoveReplicaAssignmentReservation(
+      reservation,
+      now = Date.now(),
+    ) {
       return this.moveReplicaAssignmentOwner
-        .canReviveExpiredMoveReplicaAssignmentReservation(reservation);
+        .canReviveExpiredMoveReplicaAssignmentReservation(reservation, now);
     },
 
     hasViableMoveReplicaAssignmentSource(reservation, now = Date.now()) {
@@ -311,6 +314,14 @@ function createBootstrapApiRuntimeMethods(options = {}) {
         .isMoveReplicaBootstrapAdmissionBlocked(reservation, now);
     },
 
+    isMoveReplicaBootstrapAdmissionGloballyBlocked(
+      reservation,
+      now = Date.now(),
+    ) {
+      return this.moveReplicaAssignmentOwner
+        .isMoveReplicaBootstrapAdmissionGloballyBlocked(reservation, now);
+    },
+
     isMoveReplicaAssignmentReservationOpen(
       reservation,
       now = Date.now(),
@@ -442,13 +453,8 @@ function createBootstrapApiRuntimeMethods(options = {}) {
     },
 
     getBootstrapAdmissionTableRows(tableName) {
-      const systemTableCache = this.getSystemTableCache();
-      const cacheRows =
-        typeof systemTableCache?.getAll === typeofToken.FUNCTION ?
-          systemTableCache.getAll(tableName) || [] :
-          [];
       const rows = this.bootstrapTopologySnapshotOwner
-        .resolveBootstrapResponseTopologySnapshotRows(tableName, cacheRows);
+        .getBootstrapAuthoritativeTableRows(tableName);
       return Array.isArray(rows) ? rows : [];
     },
 

@@ -112,6 +112,7 @@ const BOOTSTRAP_CONTROL_PLANE_MUTATION_PROFILE =
   );
 const BOOTSTRAP_ADMISSION_ID_PREFIX = 'bootstrap-admission';
 const BOOTSTRAP_ADMISSION_ID_SEPARATOR = ':';
+const BOOTSTRAP_ADMISSION_PEER_HINT_EMPTY = Object.freeze([]);
 /**
  * BootstrapAPI provides REST endpoints for node bootstrap and discovery.
  */
@@ -207,6 +208,7 @@ class BootstrapAPI {
         BOOTSTRAP_API_DEFAULT.BOOTSTRAP_REQUEST_EXECUTION_BUDGET_MS;
     this.inFlightBootstrapRequestCount = NUM.ZERO;
     this.bootstrapAdmissionLeases = new Map();
+    this.bootstrapAdmissionPeerHints = new Map();
     this.bootstrapAdmissionSequence = NUM.ZERO;
     this.moveReplicaAssignmentLeaseMs = Number.isFinite(options.moveReplicaAssignmentLeaseMs) ?
       Math.max(NUM.ONE, Math.floor(options.moveReplicaAssignmentLeaseMs)) :
@@ -492,6 +494,8 @@ class BootstrapAPI {
           setInFlightBootstrapRequestCount: (count) => {
             this.inFlightBootstrapRequestCount = count;
           },
+          getBootstrapAdmissionPeerHints: () =>
+            this.getBootstrapAdmissionPeerHints(),
           validateBootstrapRequest: (nodeId, nodeAddress) =>
             this.validateBootstrapRequest(nodeId, nodeAddress),
           checkForConflicts: (nodeId, nodeAddress, options) =>
@@ -1089,6 +1093,15 @@ class BootstrapAPI {
     return this.inFlightBootstrapRequestCount;
   }
 
+  expireStaleBootstrapAdmissionPeerHints(now = Date.now()) {
+    for (const [nodeId, hint] of this.bootstrapAdmissionPeerHints) {
+      if (hint.hintExpiresAt > now) {
+        continue;
+      }
+      this.bootstrapAdmissionPeerHints.delete(nodeId);
+    }
+  }
+
   expireStaleBootstrapAdmissions(now = Date.now()) {
     const expiredAdmissions = [];
     for (const [admissionId, admission] of this.bootstrapAdmissionLeases) {
@@ -1098,6 +1111,7 @@ class BootstrapAPI {
       this.bootstrapAdmissionLeases.delete(admissionId);
       expiredAdmissions.push(admission);
     }
+    this.expireStaleBootstrapAdmissionPeerHints(now);
     this.synchronizeBootstrapAdmissionCount();
     if (expiredAdmissions.length > NUM.ZERO) {
       this.logger.warn(BOOTSTRAP_API_LOG_MSG.BOOTSTRAP_ADMISSION_EXPIRED, {
@@ -1118,6 +1132,34 @@ class BootstrapAPI {
     return expiredAdmissions;
   }
 
+  recordBootstrapAdmissionPeerHint(admission) {
+    if (
+      !admission ||
+      typeof admission.nodeId !== TYPEOF.STRING ||
+      admission.nodeId.length === NUM.ZERO ||
+      typeof admission.nodeAddress !== TYPEOF.STRING ||
+      admission.nodeAddress.length === NUM.ZERO
+    ) {
+      return;
+    }
+    this.bootstrapAdmissionPeerHints.set(admission.nodeId, {
+      nodeId: admission.nodeId,
+      nodeAddress: admission.nodeAddress,
+      hintExpiresAt: admission.leaseExpiresAt,
+    });
+  }
+
+  getBootstrapAdmissionPeerHints(now = Date.now()) {
+    this.expireStaleBootstrapAdmissionPeerHints(now);
+    if (this.bootstrapAdmissionPeerHints.size === NUM.ZERO) {
+      return BOOTSTRAP_ADMISSION_PEER_HINT_EMPTY;
+    }
+    return Array.from(this.bootstrapAdmissionPeerHints.values()).map((hint) => ({
+      nodeId: hint.nodeId,
+      nodeAddress: hint.nodeAddress,
+    }));
+  }
+
   acquireBootstrapAdmission(snapshot = {}) {
     const now = Number.isFinite(snapshot.now) ?
       Math.floor(snapshot.now) :
@@ -1136,6 +1178,7 @@ class BootstrapAPI {
       leaseExpiresAt: now + this.bootstrapAdmissionLeaseMs,
     };
     this.bootstrapAdmissionLeases.set(admissionId, admission);
+    this.recordBootstrapAdmissionPeerHint(admission);
     this.synchronizeBootstrapAdmissionCount();
     return admission;
   }

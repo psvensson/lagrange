@@ -15,10 +15,12 @@ import {
   MESSAGE_GROUP_ASSIGNMENT_STRATEGY as AssignmentStrategy,
 } from '../message-group-assignment.js';
 import {
+  BOOTSTRAP_API_DEFAULT,
   BOOTSTRAP_API_REGISTER_SERVICE_ERROR_CODE,
 } from '../bootstrap-api-constants.js';
 import {
   JOIN_BACKFILL_QUERY,
+  JOINING_DEFAULT,
   JOINING_ERROR_MSG,
   JOINING_LOG_MSG,
   JOINING_UNIFIED_RECONCILE,
@@ -35,6 +37,7 @@ import {
   SERVICE_LIFECYCLE_STATE,
   SERVICE_STATUS,
   TABLES,
+  TIME_MS,
   TYPEOF,
   UNIFIED_SERVICE_TYPE,
 } from '../../constants/index.js';
@@ -73,15 +76,47 @@ const MESSAGE_GROUP_SERVICE_REGISTRATION_ADMISSION_TARGET = Object.freeze({
 const MESSAGE_GROUP_REGISTER_SHORTCUT_FAILED =
   'Message group service registration shortcut returned non-success';
 const MAX_RETRYABLE_MOVE_REPLICA_ASSIGNMENT_TOKEN_UNKNOWN_RETRIES = 1;
+const MOVE_REPLICA_REGISTER_SERVICE_REQUEST_TIMEOUT_MS =
+  BOOTSTRAP_API_DEFAULT.SERVICE_REGISTRATION_WRITE_RETRY_TIMEOUT_MS +
+  BOOTSTRAP_API_DEFAULT.SERVICE_REGISTRATION_CACHE_VISIBILITY_TIMEOUT_MS +
+  TIME_MS.SECOND * NUM.FIVE;
 const RETRYABLE_MESSAGE_GROUP_REGISTRATION_FAILURE_ACTION = Object.freeze({
   RETRY: 'retry',
   SURFACE: 'surface',
   TERMINAL: 'terminal',
 });
 
+function hasMoveReplicaAssignmentId(assignmentId) {
+  return typeof assignmentId === TYPEOF.STRING &&
+    assignmentId.length > NUM.ZERO;
+}
+
+function resolveRegisterServiceRequestTimeoutMs(options = {}) {
+  const configuredHttpTimeoutMs =
+    Number.isFinite(options.configuredHttpTimeoutMs) &&
+      options.configuredHttpTimeoutMs > NUM.ZERO ?
+      Math.floor(options.configuredHttpTimeoutMs) :
+      JOINING_DEFAULT.httpTimeoutMs;
+  const remainingRetryBudgetMs =
+    Number.isFinite(options.remainingRetryBudgetMs) &&
+      options.remainingRetryBudgetMs > NUM.ZERO ?
+      Math.floor(options.remainingRetryBudgetMs) :
+      configuredHttpTimeoutMs;
+  const assignmentRequestTimeoutMs =
+    hasMoveReplicaAssignmentId(options.assignmentId) ?
+      Math.min(
+        configuredHttpTimeoutMs,
+        MOVE_REPLICA_REGISTER_SERVICE_REQUEST_TIMEOUT_MS,
+      ) :
+      configuredHttpTimeoutMs;
+  return Math.max(
+    NUM.ONE,
+    Math.min(assignmentRequestTimeoutMs, remainingRetryBudgetMs),
+  );
+}
+
 function isRetryableMoveReplicaAssignmentTokenUnknownFailure(options = {}) {
-  return typeof options.assignmentId === TYPEOF.STRING &&
-    options.assignmentId.length > NUM.ZERO &&
+  return hasMoveReplicaAssignmentId(options.assignmentId) &&
     options.classification?.code ===
       BOOTSTRAP_API_REGISTER_SERVICE_ERROR_CODE.ASSIGNMENT_TOKEN_UNKNOWN;
 }
@@ -656,8 +691,6 @@ class CreateMessageGroupPhase {
     let delayMs = retryPolicy.initialDelayMs;
     const maxDelayMs = retryPolicy.maxDelayMs;
     const backoffMultiplier = retryPolicy.backoffMultiplier;
-    const retryableTimeoutErrorMessage =
-      JOINING_ERROR_MSG.httpTimeout(config.httpTimeoutMs);
     const startTime = nowFn();
     let attempt = NUM.ZERO;
     let lastError = null;
@@ -668,9 +701,17 @@ class CreateMessageGroupPhase {
 
     while (nowFn() - startTime < retryTimeoutMs) {
       attempt += LOCAL_NUM_ONE;
+      const elapsedAtAttemptStartMs = nowFn() - startTime;
+      const requestTimeoutMs = resolveRegisterServiceRequestTimeoutMs({
+        assignmentId,
+        configuredHttpTimeoutMs: config.httpTimeoutMs,
+        remainingRetryBudgetMs: retryTimeoutMs - elapsedAtAttemptStartMs,
+      });
       try {
         const response = await this.delegates
-          .getHttpPostImpl()(registerUrl, serviceData);
+          .getHttpPostImpl()(registerUrl, serviceData, {
+            timeoutMs: requestTimeoutMs,
+          });
 
         if (!response.success) {
           logger.error(
@@ -723,6 +764,8 @@ class CreateMessageGroupPhase {
       } catch (error) {
         lastError = error;
         const elapsedMs = nowFn() - startTime;
+        const retryableTimeoutErrorMessage =
+          JOINING_ERROR_MSG.httpTimeout(requestTimeoutMs);
         const classification =
           this.delegates.classifySeedContactFailure(
             error,

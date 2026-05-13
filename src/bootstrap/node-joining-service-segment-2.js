@@ -144,6 +144,27 @@ function buildSeedContactFailureDiagnostics(error) {
   return diagnostics;
 }
 
+function resolveRetryableJoinMinimumMaxElapsedMs(options = {}) {
+  const retryWindowMs = Number.isFinite(options.retryWindowMs) ?
+    Math.max(NUM.ZERO, Math.floor(options.retryWindowMs)) :
+    NUM.ZERO;
+  const httpTimeoutMs = Number.isFinite(options.httpTimeoutMs) ?
+    Math.max(NUM.ZERO, Math.floor(options.httpTimeoutMs)) :
+    NUM.ZERO;
+  const defaultMaxElapsedMs =
+    JOINING_DEFAULT.retryableFailureResumeMaxElapsedMs;
+  const contactSeedWindowMs = retryWindowMs + httpTimeoutMs;
+  const latePhaseWindowMs =
+    retryWindowMs <= defaultMaxElapsedMs ?
+      defaultMaxElapsedMs + retryWindowMs :
+      contactSeedWindowMs;
+  return Math.max(
+    NUM.ZERO,
+    contactSeedWindowMs,
+    latePhaseWindowMs,
+  );
+}
+
 class NodeJoiningServiceSegment2 extends NodeJoiningServiceSegment1 {
   _buildJoinRuntimeWiringDelegates() {
     const self = this;
@@ -533,10 +554,10 @@ class NodeJoiningServiceSegment2 extends NodeJoiningServiceSegment1 {
     const joinHttpTimeoutMs = Number.isFinite(this.config.httpTimeoutMs) ?
       Math.max(NUM.ZERO, Math.floor(this.config.httpTimeoutMs)) :
       JOINING_DEFAULT.httpTimeoutMs;
-    const minimumMaxElapsedMs = Math.max(
-      NUM.ZERO,
-      joinRetryPolicy.retryTimeoutMs + joinHttpTimeoutMs,
-    );
+    const minimumMaxElapsedMs = resolveRetryableJoinMinimumMaxElapsedMs({
+      retryWindowMs: joinRetryPolicy.retryTimeoutMs,
+      httpTimeoutMs: joinHttpTimeoutMs,
+    });
     return {
       enabled: this.config.autoResumeRetryableFailures === true,
       maxAttempts: Number.isFinite(

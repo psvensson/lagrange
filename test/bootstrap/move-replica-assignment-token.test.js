@@ -1,17 +1,21 @@
 import {test} from '../../src/test-helpers/tap.js';
 import {BootstrapAPI} from '../../src/bootstrap/bootstrap-api.js';
 import {
+  BOOTSTRAP_API_ASSIGNMENT,
   BOOTSTRAP_API_CACHE_VISIBILITY,
   BOOTSTRAP_API_HANDOFF_PHASE,
   BOOTSTRAP_API_HANDOFF_STATUS,
   BOOTSTRAP_API_MOVE_REPLICA_ASSIGNMENT_ERROR,
   BOOTSTRAP_API_MOVE_REPLICA_ASSIGNMENT_HISTORY_PHASE as
   MOVE_REPLICA_ASSIGNMENT_HISTORY_PHASE,
+  BOOTSTRAP_API_MOVE_REPLICA_ASSIGNMENT_INVALIDATION_REASON as
+  MOVE_REPLICA_ASSIGNMENT_INVALIDATION_REASON,
 } from '../../src/bootstrap/bootstrap-api-constants.js';
 import {
   SERVICE_STATUS,
   SERVICE_TYPE,
   STATE,
+  TABLES,
   WORKFLOW_STEP,
 } from '../../src/constants/index.js';
 import {RAFT_ROLE} from '../../src/raft/constants.js';
@@ -28,6 +32,64 @@ const MOVE_REPLICA_SHORT_ASSIGNMENT_LEASE_MS = 5;
 const MOVE_REPLICA_SWEEP_INTERVAL_MS = 5;
 const MOVE_REPLICA_SWEEP_WAIT_MS = 30;
 const EXPIRED_LEASE_OFFSET_MS = 1;
+const MISSING_SOURCE_ROW_JOINING_NODE_ID =
+  '550e8400-e29b-41d4-a716-446655440335';
+const MISSING_LOCAL_SOURCE_JOINING_NODE_ID =
+  '550e8400-e29b-41d4-a716-446655440339';
+const STALE_SOURCE_READY_LEASE_JOINING_NODE_ID =
+  '550e8400-e29b-41d4-a716-44665544033a';
+const SOURCE_OWNER_STALE_READY_LEASE_JOINING_NODE_ID =
+  '550e8400-e29b-41d4-a716-446655440344';
+const STALE_CACHE_SOURCE_OWNER_JOINING_NODE_ID =
+  '550e8400-e29b-41d4-a716-44665544033b';
+const STALE_CACHE_SOURCE_OWNER_NODE_ID =
+  '550e8400-e29b-41d4-a716-44665544033c';
+const ADMISSION_OWNER_TRUTH_JOINING_NODE_ID =
+  '550e8400-e29b-41d4-a716-446655440347';
+const SWEEP_OWNER_DRIFT_JOINING_NODE_ID =
+  '550e8400-e29b-41d4-a716-44665544033d';
+const SWEEP_OWNER_DRIFT_NODE_ID =
+  '550e8400-e29b-41d4-a716-44665544033e';
+const TARGET_ADOPTION_VISIBILITY_JOINING_NODE_ID =
+  '550e8400-e29b-41d4-a716-44665544033f';
+const SOURCE_VISIBILITY_FALLBACK_JOINING_NODE_ID =
+  '550e8400-e29b-41d4-a716-446655440340';
+const CAN_REVIVE_SUPPLIED_NOW_JOINING_NODE_ID =
+  '550e8400-e29b-41d4-a716-446655440341';
+const EXPIRED_BOOTSTRAP_ADMISSION_JOINING_NODE_ID =
+  '550e8400-e29b-41d4-a716-446655440342';
+const EXPIRED_BOOTSTRAP_ADMISSION_SECOND_NODE_ID =
+  '550e8400-e29b-41d4-a716-446655440343';
+const EXPIRED_BOOTSTRAP_ADMISSION_SECOND_NODE_ADDRESS =
+  'ws://localhost:9135';
+const EXPIRED_TARGET_PROGRESS_JOINING_NODE_ID =
+  '550e8400-e29b-41d4-a716-446655440345';
+const EXPIRED_TARGET_PROGRESS_SECOND_NODE_ID =
+  '550e8400-e29b-41d4-a716-446655440346';
+const EXPIRED_TARGET_PROGRESS_SECOND_NODE_ADDRESS =
+  'ws://localhost:9136';
+const AUTHORITATIVE_TARGET_READY_JOINING_NODE_ID =
+  '550e8400-e29b-41d4-a716-446655440348';
+const AUTHORITATIVE_TARGET_READY_SECOND_NODE_ID =
+  '550e8400-e29b-41d4-a716-446655440349';
+const AUTHORITATIVE_TARGET_READY_SECOND_NODE_ADDRESS =
+  'ws://localhost:9137';
+const BOOTSTRAP_TEST_ROUTE = '/bootstrap';
+const SUCCESS_HTTP_STATUS_CODE = 200;
+const CAN_REVIVE_SUPPLIED_NOW_MS = 1_000_000;
+const CAN_REVIVE_READY_LEASE_OFFSET_MS = 1_000;
+const CAN_REVIVE_HEARTBEAT_OFFSET_MS = 2_000;
+const CAN_REVIVE_WALL_CLOCK_OFFSET_MS = 5_000;
+const EXPLICITLY_CLEARED_READY_LEASE_EXPIRES_AT = null;
+const REMOTE_SOURCE_SWEEP_ASSIGNMENT_ID =
+  '550e8400-e29b-41d4-a716-446655440336';
+const REMOTE_SOURCE_SWEEP_SOURCE_NODE_ID =
+  '550e8400-e29b-41d4-a716-446655440337';
+const REMOTE_SOURCE_SWEEP_TARGET_NODE_ID =
+  '550e8400-e29b-41d4-a716-446655440338';
+const REMOTE_SOURCE_SWEEP_GROUP_ID = 'mg-remote-source-sweep';
+const REMOTE_SOURCE_SWEEP_REPLICA_ID = 'mg-remote-source-sweep-r1';
+const REMOTE_SOURCE_SWEEP_NODE_ADDRESS = 'ws://localhost:8080';
 
 test('BootstrapAPI register-service rejects missing and unknown assignment token', async (t) => {
   const fixture = await bootstrapMoveReplicaAssignment(t);
@@ -335,7 +397,614 @@ test('BootstrapAPI background sweep preserves expired but revivable MOVE_REPLICA
     );
   });
 
-test('BootstrapAPI defers subsequent bootstrap while an expired non-terminal MOVE_REPLICA reservation remains open',
+test('BootstrapAPI sweep preserves expired local-source MOVE_REPLICA reservation when service row is missing',
+  async (t) => {
+    const fixture = await bootstrapMoveReplicaAssignment(t, {
+      joiningNodeId: MISSING_SOURCE_ROW_JOINING_NODE_ID,
+      assignmentLeaseMs: MOVE_REPLICA_SHORT_ASSIGNMENT_LEASE_MS,
+    });
+    const {api, assignment, joiningNodeId, rows} = fixture;
+    const expiredAt = Date.now() - EXPIRED_LEASE_OFFSET_MS;
+    const reservationRow = rows.replica_operations.find((row) =>
+      row.operation_id === assignment.assignmentId,
+    );
+    const cachedReservation = api.moveReplicaAssignmentReservations.get(
+      assignment.assignmentId,
+    );
+
+    rows.services = rows.services.filter((row) =>
+      row.service_id !== assignment.replicaToMove,
+    );
+    reservationRow.lease_expires_at = expiredAt;
+    reservationRow.completed_at = expiredAt;
+    cachedReservation.leaseExpiresAt = expiredAt;
+    cachedReservation.updatedAt = expiredAt;
+
+    await api.expireMoveReplicaAssignmentReservations();
+
+    t.equal(
+      reservationRow?.status,
+      BOOTSTRAP_API_HANDOFF_STATUS.PREPARING,
+      'sweep should preserve a local-source assignment when only the service row is missing',
+    );
+
+    const registerResponse = await api.getFastify().inject({
+      method: 'POST',
+      url: '/register-service',
+      payload: buildRegisterPayload(joiningNodeId, assignment, {
+        assignment_id: assignment.assignmentId,
+      }),
+    });
+    t.equal(
+      registerResponse.statusCode,
+      200,
+      'register-service should revive the preserved local-source assignment',
+    );
+  });
+
+test('BootstrapAPI sweep preserves expired source-owned MOVE_REPLICA reservation across source visibility gap',
+  async (t) => {
+    const fixture = await bootstrapMoveReplicaAssignment(t, {
+      joiningNodeId: MISSING_LOCAL_SOURCE_JOINING_NODE_ID,
+      assignmentLeaseMs: MOVE_REPLICA_SHORT_ASSIGNMENT_LEASE_MS,
+    });
+    const {api, assignment, rows} = fixture;
+    const expiredAt = Date.now() - EXPIRED_LEASE_OFFSET_MS;
+    const reservationRow = rows.replica_operations.find((row) =>
+      row.operation_id === assignment.assignmentId,
+    );
+    const cachedReservation = api.moveReplicaAssignmentReservations.get(
+      assignment.assignmentId,
+    );
+
+    rows.services = rows.services.filter((row) =>
+      row.service_id !== assignment.replicaToMove,
+    );
+    api.messageGroupServices.delete(assignment.replicaToMove);
+    reservationRow.lease_expires_at = expiredAt;
+    reservationRow.completed_at = expiredAt;
+    cachedReservation.leaseExpiresAt = expiredAt;
+    cachedReservation.updatedAt = expiredAt;
+
+    await api.expireMoveReplicaAssignmentReservations();
+
+    t.equal(
+      reservationRow?.status,
+      BOOTSTRAP_API_HANDOFF_STATUS.PREPARING,
+      'source-owned assignment should outlive a source service visibility gap',
+    );
+    t.equal(
+      reservationRow?.workflow_step,
+      WORKFLOW_STEP.PENDING,
+      'visibility gap should not terminalize the source-owned handoff',
+    );
+    t.equal(
+      reservationRow?.error_message,
+      null,
+      'visibility gap should not persist a synthetic source-owner failure',
+    );
+  });
+
+test('BootstrapAPI sweep preserves source-owned MOVE_REPLICA reservation across stale ready lease visibility gap',
+  async (t) => {
+    const fixture = await bootstrapMoveReplicaAssignment(t, {
+      joiningNodeId: STALE_SOURCE_READY_LEASE_JOINING_NODE_ID,
+      assignmentLeaseMs: MOVE_REPLICA_SHORT_ASSIGNMENT_LEASE_MS,
+    });
+    const {api, assignment, rows} = fixture;
+    const expiredAt = Date.now() - EXPIRED_LEASE_OFFSET_MS;
+    const staleHeartbeatAt = expiredAt + EXPIRED_LEASE_OFFSET_MS;
+    const sourceNode = rows.nodes.find((row) =>
+      row.node_id === assignment.sourceNodeId,
+    );
+    const reservationRow = rows.replica_operations.find((row) =>
+      row.operation_id === assignment.assignmentId,
+    );
+    const cachedReservation = api.moveReplicaAssignmentReservations.get(
+      assignment.assignmentId,
+    );
+
+    t.ok(sourceNode, 'fixture should include the source node row');
+    rows.services = rows.services.filter((row) =>
+      row.service_id !== assignment.replicaToMove,
+    );
+    api.messageGroupServices.delete(assignment.replicaToMove);
+    sourceNode.connection_state = STATE.READY;
+    sourceNode.last_heartbeat = staleHeartbeatAt;
+    sourceNode.ready_lease_expires_at = expiredAt;
+    reservationRow.lease_expires_at = expiredAt;
+    reservationRow.completed_at = expiredAt;
+    cachedReservation.leaseExpiresAt = expiredAt;
+    cachedReservation.updatedAt = expiredAt;
+
+    await api.expireMoveReplicaAssignmentReservations();
+
+    t.equal(
+      reservationRow?.status,
+      BOOTSTRAP_API_HANDOFF_STATUS.PREPARING,
+      'source-owned assignment should outlive a stale ready-lease visibility gap',
+    );
+    t.equal(
+      reservationRow?.workflow_step,
+      WORKFLOW_STEP.PENDING,
+      'stale ready-lease visibility gap should remain revivable',
+    );
+    t.equal(
+      reservationRow?.error_message,
+      null,
+      'stale ready-lease visibility gap should not synthesize source-owner failure',
+    );
+  });
+
+test('BootstrapAPI sweep preserves source-owned MOVE_REPLICA when source service row remains active across stale ready lease',
+  async (t) => {
+    const fixture = await bootstrapMoveReplicaAssignment(t, {
+      joiningNodeId: SOURCE_OWNER_STALE_READY_LEASE_JOINING_NODE_ID,
+      assignmentLeaseMs: MOVE_REPLICA_SHORT_ASSIGNMENT_LEASE_MS,
+    });
+    const {api, assignment, rows} = fixture;
+    const expiredAt = Date.now() - EXPIRED_LEASE_OFFSET_MS;
+    const sourceServiceRow = rows.services.find((row) =>
+      row.service_id === assignment.replicaToMove,
+    );
+    const sourceNode = rows.nodes.find((row) =>
+      row.node_id === assignment.sourceNodeId,
+    );
+    const reservationRow = rows.replica_operations.find((row) =>
+      row.operation_id === assignment.assignmentId,
+    );
+    const cachedReservation = api.moveReplicaAssignmentReservations.get(
+      assignment.assignmentId,
+    );
+
+    t.ok(sourceServiceRow, 'fixture should include the source service row');
+    t.ok(sourceNode, 'fixture should include the source node row');
+    sourceServiceRow.node_id = assignment.sourceNodeId;
+    sourceServiceRow.status = SERVICE_STATUS.ACTIVE;
+    api.messageGroupServices.delete(assignment.replicaToMove);
+    sourceNode.status = SERVICE_STATUS.ACTIVE;
+    sourceNode.connection_state = STATE.READY;
+    sourceNode.last_heartbeat = expiredAt - EXPIRED_LEASE_OFFSET_MS;
+    sourceNode.ready_lease_expires_at = expiredAt;
+    reservationRow.lease_expires_at = expiredAt;
+    reservationRow.completed_at = expiredAt;
+    cachedReservation.leaseExpiresAt = expiredAt;
+    cachedReservation.updatedAt = expiredAt;
+
+    await api.expireMoveReplicaAssignmentReservations();
+
+    t.equal(
+      reservationRow?.status,
+      BOOTSTRAP_API_HANDOFF_STATUS.PREPARING,
+      'source-owned assignment should outlive stale source ready-lease evidence',
+    );
+    t.equal(
+      reservationRow?.workflow_step,
+      WORKFLOW_STEP.PENDING,
+      'stale source ready-lease evidence should not terminalize the handoff',
+    );
+    t.equal(
+      reservationRow?.error_message,
+      null,
+      'stale source ready-lease evidence should not synthesize source-owner failure',
+    );
+  });
+
+test('BootstrapAPI sweep ignores stale cache source owner when authoritative services omit the row',
+  async (t) => {
+    const fixture = await bootstrapMoveReplicaAssignment(t, {
+      joiningNodeId: STALE_CACHE_SOURCE_OWNER_JOINING_NODE_ID,
+      assignmentLeaseMs: MOVE_REPLICA_SHORT_ASSIGNMENT_LEASE_MS,
+    });
+    const {api, assignment, rows} = fixture;
+    const expiredAt = Date.now() - EXPIRED_LEASE_OFFSET_MS;
+    const sourceServiceRow = rows.services.find((row) =>
+      row.service_id === assignment.replicaToMove,
+    );
+    const reservationRow = rows.replica_operations.find((row) =>
+      row.operation_id === assignment.assignmentId,
+    );
+    const cachedReservation = api.moveReplicaAssignmentReservations.get(
+      assignment.assignmentId,
+    );
+    const originalAuthoritativeRows =
+      api.getBootstrapAuthoritativeTableRows.bind(api);
+
+    t.ok(sourceServiceRow, 'fixture should include the source service cache row');
+    sourceServiceRow.node_id = STALE_CACHE_SOURCE_OWNER_NODE_ID;
+    api.messageGroupServices.delete(assignment.replicaToMove);
+    api.getBootstrapAuthoritativeTableRows = (tableName) => {
+      if (tableName !== TABLES.SERVICES) {
+        return originalAuthoritativeRows(tableName);
+      }
+      return rows.services.filter((row) =>
+        row.service_id !== assignment.replicaToMove,
+      );
+    };
+    reservationRow.lease_expires_at = expiredAt;
+    reservationRow.completed_at = expiredAt;
+    cachedReservation.leaseExpiresAt = expiredAt;
+    cachedReservation.updatedAt = expiredAt;
+
+    await api.expireMoveReplicaAssignmentReservations();
+
+    t.equal(
+      reservationRow?.status,
+      BOOTSTRAP_API_HANDOFF_STATUS.PREPARING,
+      'authoritative service absence should beat a stale cache owner row',
+    );
+    t.equal(
+      reservationRow?.workflow_step,
+      WORKFLOW_STEP.PENDING,
+      'stale cache owner row should not terminalize the source-owned handoff',
+    );
+    t.equal(
+      reservationRow?.error_message,
+      null,
+      'stale cache owner row should not synthesize source-owner failure',
+    );
+  });
+
+test('BootstrapAPI admission message-group view ignores stale service cache when owner truth omits row',
+  async (t) => {
+    const fixture = await bootstrapMoveReplicaAssignment(t, {
+      joiningNodeId: ADMISSION_OWNER_TRUTH_JOINING_NODE_ID,
+    });
+    const {api, assignment, rows} = fixture;
+    const staleSourceRow = rows.services.find((row) =>
+      row.service_id === assignment.replicaToMove,
+    );
+    const originalAuthoritativeRows =
+      api.bootstrapTopologySnapshotOwner
+        .getBootstrapAuthoritativeTableRows
+        .bind(api.bootstrapTopologySnapshotOwner);
+
+    t.ok(staleSourceRow, 'fixture should include a stale cache source row');
+    api.bootstrapTopologySnapshotOwner.getBootstrapAuthoritativeTableRows =
+      (tableName) => {
+        if (tableName !== TABLES.SERVICES) {
+          return originalAuthoritativeRows(tableName);
+        }
+        return rows.services.filter((row) =>
+          row.service_id !== assignment.replicaToMove,
+        );
+      };
+
+    const admissionRows =
+      api.getBootstrapAdmissionTableRows(TABLES.SERVICES);
+    const admissionGroups = api.getMessageGroups();
+
+    t.notOk(
+      admissionRows.some((row) =>
+        row.service_id === assignment.replicaToMove,
+      ),
+      'bootstrap admission rows should follow owner truth over stale cache rows',
+    );
+    t.notOk(
+      admissionGroups.some((group) =>
+        (group.replicas || []).some((replica) =>
+          replica.replica_id === assignment.replicaToMove,
+        ),
+      ),
+      'bootstrap admission message groups should not resurrect stale cache replicas',
+    );
+  });
+
+test('BootstrapAPI sweep preserves expired MOVE_REPLICA reservation across active-owner visibility drift',
+  async (t) => {
+    const fixture = await bootstrapMoveReplicaAssignment(t, {
+      joiningNodeId: SWEEP_OWNER_DRIFT_JOINING_NODE_ID,
+      assignmentLeaseMs: MOVE_REPLICA_SHORT_ASSIGNMENT_LEASE_MS,
+    });
+    const {api, assignment, rows} = fixture;
+    const expiredAt = Date.now() - EXPIRED_LEASE_OFFSET_MS;
+    const sourceServiceRow = rows.services.find((row) =>
+      row.service_id === assignment.replicaToMove,
+    );
+    const sourceNode = rows.nodes.find((row) =>
+      row.node_id === assignment.sourceNodeId,
+    );
+    const reservationRow = rows.replica_operations.find((row) =>
+      row.operation_id === assignment.assignmentId,
+    );
+    const cachedReservation = api.moveReplicaAssignmentReservations.get(
+      assignment.assignmentId,
+    );
+
+    t.ok(sourceServiceRow, 'fixture should include source service row');
+    t.ok(sourceNode, 'fixture should include source node row');
+    sourceServiceRow.node_id = SWEEP_OWNER_DRIFT_NODE_ID;
+    sourceNode.status = SERVICE_STATUS.ACTIVE;
+    sourceNode.connection_state = STATE.READY;
+    sourceNode.last_heartbeat = Date.now();
+    sourceNode.ready_lease_expires_at =
+      Date.now() + MOVE_REPLICA_LONG_ASSIGNMENT_LEASE_MS;
+    reservationRow.lease_expires_at = expiredAt;
+    reservationRow.completed_at = expiredAt;
+    cachedReservation.leaseExpiresAt = expiredAt;
+    cachedReservation.updatedAt = expiredAt;
+
+    await api.expireMoveReplicaAssignmentReservations();
+
+    t.equal(
+      reservationRow?.status,
+      BOOTSTRAP_API_HANDOFF_STATUS.PREPARING,
+      'sweep should not terminalize active-owner drift while source remains visible',
+    );
+    t.equal(
+      reservationRow?.workflow_step,
+      WORKFLOW_STEP.PENDING,
+      'active-owner drift should stay pending for target registration recovery',
+    );
+    t.equal(
+      reservationRow?.error_message,
+      null,
+      'active-owner drift should not synthesize source-owner failure',
+    );
+  });
+
+test('BootstrapAPI sweep preserves expired MOVE_REPLICA reservation while target adoption is connected',
+  async (t) => {
+    const fixture = await bootstrapMoveReplicaAssignment(t, {
+      joiningNodeId: TARGET_ADOPTION_VISIBILITY_JOINING_NODE_ID,
+      assignmentLeaseMs: MOVE_REPLICA_SHORT_ASSIGNMENT_LEASE_MS,
+    });
+    const {api, assignment, joiningNodeId, rows} = fixture;
+    const expiredAt = Date.now() - EXPIRED_LEASE_OFFSET_MS;
+    const sourceNode = rows.nodes.find((row) =>
+      row.node_id === assignment.sourceNodeId,
+    );
+    const reservationRow = rows.replica_operations.find((row) =>
+      row.operation_id === assignment.assignmentId,
+    );
+    const cachedReservation = api.moveReplicaAssignmentReservations.get(
+      assignment.assignmentId,
+    );
+
+    t.ok(sourceNode, 'fixture should include source node row');
+    rows.services = rows.services.filter((row) =>
+      row.service_id !== assignment.replicaToMove,
+    );
+    api.messageGroupServices.delete(assignment.replicaToMove);
+    sourceNode.connection_state = STATE.DISCONNECTED;
+    sourceNode.ready_lease_expires_at = expiredAt;
+    rows.nodes.push({
+      node_id: joiningNodeId,
+      status: SERVICE_STATUS.ACTIVE,
+      connection_state: STATE.CONNECTED,
+      last_heartbeat: Date.now(),
+      ready_lease_expires_at: null,
+    });
+    reservationRow.lease_expires_at = expiredAt;
+    reservationRow.completed_at = expiredAt;
+    cachedReservation.leaseExpiresAt = expiredAt;
+    cachedReservation.updatedAt = expiredAt;
+
+    await api.expireMoveReplicaAssignmentReservations();
+
+    t.equal(
+      reservationRow?.status,
+      BOOTSTRAP_API_HANDOFF_STATUS.PREPARING,
+      'sweep should preserve an expired assignment when target adoption is connected',
+    );
+    t.equal(
+      reservationRow?.workflow_step,
+      WORKFLOW_STEP.PENDING,
+      'target adoption should keep the handoff pending for registration retry',
+    );
+    t.equal(
+      reservationRow?.error_message,
+      null,
+      'target adoption should not synthesize source-owner failure',
+    );
+  });
+
+test('BootstrapAPI sweep source-visibility fallback preserves no-owner MOVE_REPLICA',
+  async (t) => {
+    const fixture = await bootstrapMoveReplicaAssignment(t, {
+      joiningNodeId: SOURCE_VISIBILITY_FALLBACK_JOINING_NODE_ID,
+      assignmentLeaseMs: MOVE_REPLICA_SHORT_ASSIGNMENT_LEASE_MS,
+    });
+    const {api, assignment, rows} = fixture;
+    const now = Date.now();
+    const expiredAt = now - EXPIRED_LEASE_OFFSET_MS;
+    const sourceNode = rows.nodes.find((row) =>
+      row.node_id === assignment.sourceNodeId,
+    );
+    const reservationRow = rows.replica_operations.find((row) =>
+      row.operation_id === assignment.assignmentId,
+    );
+    const cachedReservation = api.moveReplicaAssignmentReservations.get(
+      assignment.assignmentId,
+    );
+
+    t.ok(sourceNode, 'fixture should include source node row');
+    rows.services = rows.services.filter((row) =>
+      row.service_id !== assignment.replicaToMove,
+    );
+    api.messageGroupServices.delete(assignment.replicaToMove);
+    sourceNode.status = SERVICE_STATUS.ACTIVE;
+    sourceNode.connection_state = STATE.READY;
+    sourceNode.last_heartbeat = now;
+    sourceNode.ready_lease_expires_at =
+      now + MOVE_REPLICA_LONG_ASSIGNMENT_LEASE_MS;
+    reservationRow.lease_expires_at = expiredAt;
+    reservationRow.completed_at = expiredAt;
+    cachedReservation.leaseExpiresAt = expiredAt;
+    cachedReservation.updatedAt = expiredAt;
+
+    const shouldPreserve =
+      api.moveReplicaAssignmentOwner
+        .shouldPreserveMoveReplicaAssignmentSweepSourceVisibilityGap(
+          cachedReservation,
+          MOVE_REPLICA_ASSIGNMENT_INVALIDATION_REASON.SOURCE_OWNER_UNAVAILABLE,
+          now,
+        );
+
+    t.equal(
+      shouldPreserve,
+      true,
+      'source readiness should preserve a no-owner assignment without target adoption',
+    );
+  });
+
+test('BootstrapAPI MOVE_REPLICA revival uses supplied readiness timestamp',
+  async (t) => {
+    const fixture = await bootstrapMoveReplicaAssignment(t, {
+      joiningNodeId: CAN_REVIVE_SUPPLIED_NOW_JOINING_NODE_ID,
+      assignmentLeaseMs: MOVE_REPLICA_SHORT_ASSIGNMENT_LEASE_MS,
+    });
+    const {api, assignment, rows} = fixture;
+    const sourceNode = rows.nodes.find((row) =>
+      row.node_id === assignment.sourceNodeId,
+    );
+    const cachedReservation = api.moveReplicaAssignmentReservations.get(
+      assignment.assignmentId,
+    );
+    const originalDateNow = Date.now;
+
+    t.ok(sourceNode, 'fixture should include source node row');
+    sourceNode.status = SERVICE_STATUS.ACTIVE;
+    sourceNode.connection_state = STATE.DISCONNECTED;
+    sourceNode.last_heartbeat =
+      CAN_REVIVE_SUPPLIED_NOW_MS + CAN_REVIVE_HEARTBEAT_OFFSET_MS;
+    sourceNode.ready_lease_expires_at =
+      CAN_REVIVE_SUPPLIED_NOW_MS + CAN_REVIVE_READY_LEASE_OFFSET_MS;
+    cachedReservation.leaseExpiresAt =
+      CAN_REVIVE_SUPPLIED_NOW_MS - EXPIRED_LEASE_OFFSET_MS;
+    cachedReservation.updatedAt =
+      CAN_REVIVE_SUPPLIED_NOW_MS - EXPIRED_LEASE_OFFSET_MS;
+    Date.now = () =>
+      CAN_REVIVE_SUPPLIED_NOW_MS + CAN_REVIVE_WALL_CLOCK_OFFSET_MS;
+    t.teardown(() => {
+      Date.now = originalDateNow;
+    });
+
+    t.equal(
+      api.canReviveExpiredMoveReplicaAssignmentReservation(
+        cachedReservation,
+        CAN_REVIVE_SUPPLIED_NOW_MS,
+      ),
+      true,
+      'revival should evaluate source readiness at the supplied sweep timestamp',
+    );
+  });
+
+test('BootstrapAPI sweep defers expired remote-source MOVE_REPLICA invalidation to source owner',
+  async (t) => {
+    initializeTestEnvironment();
+    const now = Date.now();
+    const expiredAt = now - EXPIRED_LEASE_OFFSET_MS;
+    const rows = {
+      services: [],
+      nodes: [
+        {
+          node_id: REMOTE_SOURCE_SWEEP_SOURCE_NODE_ID,
+          status: SERVICE_STATUS.ACTIVE,
+          connection_state: STATE.READY,
+          last_heartbeat: now,
+          ready_lease_expires_at: now + MOVE_REPLICA_LONG_ASSIGNMENT_LEASE_MS,
+        },
+        {
+          node_id: REMOTE_SOURCE_SWEEP_TARGET_NODE_ID,
+          status: SERVICE_STATUS.ACTIVE,
+          connection_state: STATE.READY,
+          last_heartbeat: now,
+          ready_lease_expires_at: now + MOVE_REPLICA_LONG_ASSIGNMENT_LEASE_MS,
+        },
+      ],
+      partitions: [],
+      tables: [],
+      message_groups: [],
+      replica_operations: [
+        {
+          operation_id: REMOTE_SOURCE_SWEEP_ASSIGNMENT_ID,
+          type: BOOTSTRAP_API_ASSIGNMENT.OPERATION_TYPE,
+          partition_id: REMOTE_SOURCE_SWEEP_GROUP_ID,
+          replica_id: REMOTE_SOURCE_SWEEP_REPLICA_ID,
+          source_node_id: REMOTE_SOURCE_SWEEP_SOURCE_NODE_ID,
+          target_node_id: REMOTE_SOURCE_SWEEP_TARGET_NODE_ID,
+          status: BOOTSTRAP_API_HANDOFF_STATUS.PREPARING,
+          workflow_step: WORKFLOW_STEP.PENDING,
+          created_at: now,
+          updated_at: now,
+          completed_at: expiredAt,
+          lease_expires_at: expiredAt,
+          error_message: null,
+          steps_history: JSON.stringify([]),
+          entity_type: SERVICE_TYPE.MESSAGE_GROUP,
+          entity_id: REMOTE_SOURCE_SWEEP_GROUP_ID,
+        },
+      ],
+      indices: [],
+      config: [],
+      logs: [],
+      live_queries: [],
+      contexts: [],
+      code: [],
+      node_endpoints: [],
+    };
+    const systemTableCache = {
+      getAll(tableName) {
+        return rows[tableName] || [];
+      },
+      get(tableName, id) {
+        return (rows[tableName] || []).find((row) =>
+          row.service_id === id ||
+          row.node_id === id ||
+          row.operation_id === id,
+        ) || null;
+      },
+      filter(tableName, predicate) {
+        return (rows[tableName] || []).filter(predicate);
+      },
+      getReadyNodes() {
+        return [
+          REMOTE_SOURCE_SWEEP_SOURCE_NODE_ID,
+          REMOTE_SOURCE_SWEEP_TARGET_NODE_ID,
+        ];
+      },
+    };
+    const api = new BootstrapAPI({
+      seedNodeId: REMOTE_SOURCE_SWEEP_TARGET_NODE_ID,
+      seedNodeAddress: REMOTE_SOURCE_SWEEP_NODE_ADDRESS,
+      systemTableCache,
+      messageGroupServices: new Map(),
+      cdcIntegrationService: createCdcIntegrationServiceFixture(rows),
+    });
+    await api.initialize(0, {listen: false});
+    api.setSqlQueryEngine({
+      async executeQuery() {
+        return {success: true, rows: rows.replica_operations};
+      },
+    });
+    t.teardown(async () => {
+      await api.shutdown();
+    });
+
+    await api.expireMoveReplicaAssignmentReservations();
+
+    const reservationRow = rows.replica_operations.find((row) =>
+      row.operation_id === REMOTE_SOURCE_SWEEP_ASSIGNMENT_ID,
+    );
+    t.equal(
+      reservationRow?.status,
+      BOOTSTRAP_API_HANDOFF_STATUS.PREPARING,
+      'target-local sweep should not terminalize a remote-source assignment',
+    );
+    t.equal(
+      reservationRow?.workflow_step,
+      WORKFLOW_STEP.PENDING,
+      'remote-source assignment should remain source-owned after target sweep',
+    );
+    t.equal(
+      reservationRow?.error_message,
+      null,
+      'target-local sweep should not persist a synthetic source-owner failure',
+    );
+  });
+
+test('BootstrapAPI admits subsequent bootstrap after expired non-terminal MOVE_REPLICA reservation lease',
   async (t) => {
     const fixture = await bootstrapMoveReplicaAssignment(t, {
       joiningNodeId: '550e8400-e29b-41d4-a716-446655440332',
@@ -358,12 +1027,13 @@ test('BootstrapAPI defers subsequent bootstrap while an expired non-terminal MOV
     });
     t.equal(
       secondBootstrap.statusCode,
-      503,
-      'bootstrap should defer while the original MOVE_REPLICA handoff remains non-terminal after lease expiry',
+      200,
+      'bootstrap should resume after the original MOVE_REPLICA handoff lease expires',
     );
-    t.ok(
-      secondBootstrap.json().messageGroupAssignment === undefined,
-      'deferred bootstrap should not allocate another MOVE_REPLICA assignment after lease expiry',
+    t.not(
+      secondBootstrap.json().messageGroupAssignment?.assignmentId,
+      fixture.assignment.assignmentId,
+      'resumed bootstrap should allocate a fresh MOVE_REPLICA assignment lease',
     );
   });
 
@@ -504,7 +1174,7 @@ test('BootstrapAPI register-service returns retryable 503 when assignment token 
     );
   });
 
-test('BootstrapAPI defers subsequent bootstrap until committed MOVE_REPLICA target is ready',
+test('BootstrapAPI excludes committed MOVE_REPLICA target while admitting unrelated bootstrap',
   async (t) => {
     const fixture = await bootstrapMoveReplicaAssignment(t, {
       joiningNodeId: '550e8400-e29b-41d4-a716-446655440325',
@@ -543,24 +1213,19 @@ test('BootstrapAPI defers subsequent bootstrap until committed MOVE_REPLICA targ
       method: 'POST',
       url: '/bootstrap',
       payload: {
-        nodeId: '550e8400-e29b-41d4-a716-446655440326',
-        nodeAddress: 'ws://localhost:9124',
+        nodeId: AUTHORITATIVE_TARGET_READY_SECOND_NODE_ID,
+        nodeAddress: AUTHORITATIVE_TARGET_READY_SECOND_NODE_ADDRESS,
       },
     });
     t.equal(
       secondBootstrap.statusCode,
-      503,
-      'second bootstrap should defer while the committed target is still unready',
+      200,
+      'second bootstrap should proceed while committed target readiness converges',
     );
-    t.equal(
-      secondBootstrap.json().code,
-      'BOOTSTRAP_NOT_READY',
-      'bootstrap defer should use the canonical not-ready code',
-    );
-    t.ok(
-      (secondBootstrap.json().reasons || [])
-        .includes('MOVE_REPLICA_HANDOFF_STABILIZING'),
-      'bootstrap defer should surface committed handoff stabilization reason',
+    t.not(
+      secondBootstrap.json().messageGroupAssignment?.replicaToMove,
+      assignment.replicaToMove,
+      'second bootstrap should exclude the committed target replica',
     );
 
     rows.nodes.push({
@@ -582,7 +1247,7 @@ test('BootstrapAPI defers subsequent bootstrap until committed MOVE_REPLICA targ
     t.equal(
       thirdBootstrap.statusCode,
       200,
-      'bootstrap should resume once the committed target becomes ready',
+      'bootstrap should keep admitting unrelated joiners once the committed target is ready',
     );
 
     const operationAfterSecondBootstrap = rows.replica_operations.find((row) =>
@@ -602,6 +1267,93 @@ test('BootstrapAPI defers subsequent bootstrap until committed MOVE_REPLICA targ
       operationAfterSecondBootstrap?.error_message || null,
       null,
       'committed handoff should not gain synthetic expiry failure',
+    );
+  });
+
+test('BootstrapAPI bootstrap admission accepts committed MOVE_REPLICA target readiness from authoritative owner truth',
+  async (t) => {
+    const fixture = await bootstrapMoveReplicaAssignment(t, {
+      joiningNodeId: AUTHORITATIVE_TARGET_READY_JOINING_NODE_ID,
+    });
+    const {api, assignment, joiningNodeId, rows} = fixture;
+    const observedAtMs = Date.now() + MOVE_REPLICA_LONG_ASSIGNMENT_LEASE_MS;
+    const targetServiceRow = {
+      service_id: assignment.replicaToMove,
+      service_type: SERVICE_TYPE.MESSAGE_GROUP,
+      node_id: joiningNodeId,
+      group_id: assignment.groupId,
+      replica_id: assignment.replicaToMove,
+      raft_role: RAFT_ROLE.FOLLOWER,
+      status: SERVICE_STATUS.ACTIVE,
+      address: `${joiningNodeId}/message-group/${assignment.replicaToMove}`,
+      updated_at: observedAtMs,
+    };
+    const targetNodeRow = {
+      node_id: joiningNodeId,
+      status: SERVICE_STATUS.ACTIVE,
+      connection_state: STATE.READY,
+      last_heartbeat: observedAtMs,
+      ready_lease_expires_at:
+        observedAtMs + MOVE_REPLICA_LONG_ASSIGNMENT_LEASE_MS,
+      updated_at: observedAtMs,
+    };
+    const reservation =
+      api.moveReplicaAssignmentReservations.get(assignment.assignmentId);
+    t.ok(reservation, 'fixture should retain the MOVE_REPLICA reservation');
+    Object.assign(reservation, {
+      status: BOOTSTRAP_API_HANDOFF_STATUS.COMMITTED,
+      updatedAt: observedAtMs,
+      completedAt: observedAtMs,
+      leaseExpiresAt: observedAtMs + MOVE_REPLICA_LONG_ASSIGNMENT_LEASE_MS,
+    });
+
+    const operationRow = rows.replica_operations.find((row) =>
+      row.operation_id === assignment.assignmentId,
+    );
+    t.ok(operationRow, 'fixture should persist the MOVE_REPLICA operation row');
+    Object.assign(operationRow, {
+      status: BOOTSTRAP_API_HANDOFF_STATUS.COMMITTED,
+      workflow_step: WORKFLOW_STEP.ACTIVE,
+      updated_at: observedAtMs,
+      completed_at: observedAtMs,
+    });
+
+    api.getBootstrapAuthoritativeTableRows = (tableName) => {
+      if (tableName === TABLES.SERVICES) {
+        return [targetServiceRow];
+      }
+      if (tableName === TABLES.NODES) {
+        return [targetNodeRow];
+      }
+      return [];
+    };
+
+    t.equal(
+      api.isMoveReplicaAssignmentTargetReady(reservation, observedAtMs),
+      true,
+      'authoritative service and node rows should prove the committed target ready',
+    );
+
+    const blockingReservations =
+      await api.getBlockingMoveReplicaBootstrapAdmissions(observedAtMs);
+    t.equal(
+      blockingReservations.length,
+      0,
+      'committed target readiness from owner truth should clear bootstrap admission',
+    );
+
+    const nextBootstrap = await api.getFastify().inject({
+      method: 'POST',
+      url: BOOTSTRAP_TEST_ROUTE,
+      payload: {
+        nodeId: AUTHORITATIVE_TARGET_READY_SECOND_NODE_ID,
+        nodeAddress: AUTHORITATIVE_TARGET_READY_SECOND_NODE_ADDRESS,
+      },
+    });
+    t.equal(
+      nextBootstrap.statusCode,
+      SUCCESS_HTTP_STATUS_CODE,
+      'bootstrap should not defer on stale cache when authoritative target ownership is ready',
     );
   });
 
@@ -1140,12 +1892,13 @@ test('BootstrapAPI bootstrap preserves MOVE_REPLICA assignment after retryable r
     });
     t.equal(
       competingBootstrap.statusCode,
-      503,
-      'bootstrap should defer while the in-memory reservation is open',
+      200,
+      'bootstrap should admit unrelated joiners while the in-memory reservation is open',
     );
-    t.ok(
-      competingBootstrap.json().messageGroupAssignment === undefined,
-      'competing bootstrap should not allocate a second assignment while the in-memory reservation is open',
+    t.not(
+      competingBootstrap.json().messageGroupAssignment?.replicaToMove,
+      assignment.replicaToMove,
+      'competing bootstrap should not allocate the reserved replica',
     );
 
     const registerResponse = await api.getFastify().inject({
@@ -1162,12 +1915,12 @@ test('BootstrapAPI bootstrap preserves MOVE_REPLICA assignment after retryable r
     );
   });
 
-test('BootstrapAPI bootstrap admission defers on cached MOVE_REPLICA reservations without replica_operations SQL rereads',
+test('BootstrapAPI bootstrap admission excludes cached MOVE_REPLICA reservations without replica_operations SQL rereads',
   async (t) => {
     const fixture = await bootstrapMoveReplicaAssignment(t, {
       joiningNodeId: '550e8400-e29b-41d4-a716-4466554403ae',
     });
-    const {api} = fixture;
+    const {api, assignment} = fixture;
     const originalExecute =
       api.executeBootstrapControlPlaneQuery.bind(api);
     let reservationSelectCount = 0;
@@ -1191,17 +1944,118 @@ test('BootstrapAPI bootstrap admission defers on cached MOVE_REPLICA reservation
 
     t.equal(
       competingBootstrap.statusCode,
-      503,
-      'competing bootstrap should defer while the reservation is open',
+      200,
+      'competing bootstrap should proceed while excluding the reservation',
     );
-    t.ok(
-      competingBootstrap.json().messageGroupAssignment === undefined,
-      'deferred bootstrap should not allocate a competing message group assignment',
+    t.not(
+      competingBootstrap.json().messageGroupAssignment?.replicaToMove,
+      assignment.replicaToMove,
+      'bootstrap should not allocate a competing message group assignment',
     );
     t.equal(
       reservationSelectCount,
       0,
       'bootstrap admission should reuse cache/in-memory reservation summary before falling back to SQL',
+    );
+  });
+
+test('BootstrapAPI bootstrap admission resumes after expired MOVE_REPLICA reservation lease',
+  async (t) => {
+    const fixture = await bootstrapMoveReplicaAssignment(t, {
+      joiningNodeId: EXPIRED_BOOTSTRAP_ADMISSION_JOINING_NODE_ID,
+      assignmentLeaseMs: MOVE_REPLICA_SHORT_ASSIGNMENT_LEASE_MS,
+    });
+    const {api, assignment} = fixture;
+
+    await new Promise((resolve) =>
+      setTimeout(resolve, MOVE_REPLICA_SWEEP_WAIT_MS),
+    );
+
+    const expiredReservation =
+      api.moveReplicaAssignmentReservations.get(assignment.assignmentId);
+    t.equal(
+      api.isMoveReplicaAssignmentReservationOpen(expiredReservation),
+      false,
+      'expired MOVE_REPLICA reservation should not keep bootstrap admission closed',
+    );
+
+    const competingBootstrap = await api.getFastify().inject({
+      method: 'POST',
+      url: '/bootstrap',
+      payload: {
+        nodeId: EXPIRED_BOOTSTRAP_ADMISSION_SECOND_NODE_ID,
+        nodeAddress: EXPIRED_BOOTSTRAP_ADMISSION_SECOND_NODE_ADDRESS,
+      },
+    });
+
+    t.equal(
+      competingBootstrap.statusCode,
+      200,
+      'bootstrap should admit the next joiner after the old assignment lease expires',
+    );
+    t.not(
+      competingBootstrap.json().messageGroupAssignment?.assignmentId,
+      assignment.assignmentId,
+      'new bootstrap admission should allocate a fresh assignment lease',
+    );
+  });
+
+test('BootstrapAPI bootstrap admission excludes expired MOVE_REPLICA while target remains connected',
+  async (t) => {
+    const fixture = await bootstrapMoveReplicaAssignment(t, {
+      joiningNodeId: EXPIRED_TARGET_PROGRESS_JOINING_NODE_ID,
+      assignmentLeaseMs: MOVE_REPLICA_SHORT_ASSIGNMENT_LEASE_MS,
+    });
+    const {api, assignment, joiningNodeId, rows} = fixture;
+
+    rows.nodes.push({
+      node_id: joiningNodeId,
+      status: SERVICE_STATUS.ACTIVE,
+      connection_state: STATE.CONNECTED,
+      last_heartbeat: Date.now(),
+      ready_lease_expires_at: EXPLICITLY_CLEARED_READY_LEASE_EXPIRES_AT,
+    });
+
+    await new Promise((resolve) =>
+      setTimeout(resolve, MOVE_REPLICA_SWEEP_WAIT_MS),
+    );
+
+    const expiredReservation =
+      api.moveReplicaAssignmentReservations.get(assignment.assignmentId);
+    t.equal(
+      api.isMoveReplicaAssignmentReservationOpen(expiredReservation),
+      false,
+      'expired MOVE_REPLICA reservation should not report open after lease expiry',
+    );
+    t.equal(
+      api.isMoveReplicaBootstrapAdmissionBlocked(expiredReservation),
+      true,
+      'connected original target should keep expired MOVE_REPLICA handoff excluded',
+    );
+    t.equal(
+      api.isMoveReplicaBootstrapAdmissionGloballyBlocked(expiredReservation),
+      false,
+      'target progress should not block unrelated bootstrap admission globally',
+    );
+
+    const competingBootstrap = await api.getFastify().inject({
+      method: 'POST',
+      url: '/bootstrap',
+      payload: {
+        nodeId: EXPIRED_TARGET_PROGRESS_SECOND_NODE_ID,
+        nodeAddress: EXPIRED_TARGET_PROGRESS_SECOND_NODE_ADDRESS,
+      },
+    });
+
+    t.equal(
+      competingBootstrap.statusCode,
+      200,
+      'bootstrap should admit unrelated joiners while the expired target remains connected',
+    );
+    t.not(
+      competingBootstrap.json().messageGroupAssignment?.replicaToMove,
+      assignment.replicaToMove,
+      'bootstrap should not allocate a duplicate replica assignment',
     );
   });
 

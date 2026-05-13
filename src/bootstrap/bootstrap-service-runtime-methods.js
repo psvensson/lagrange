@@ -208,6 +208,8 @@ function createBootstrapServiceRuntimeMethods() {
           const subscriptionSelection =
             await this.resolveOperationalMessageGroupSelectionAsync({
               requiredTables: [tableName],
+              preferredService: messageGroupService,
+              reuseCapturedIngress: true,
             });
           const subscriptionMessageGroupService =
             subscriptionSelection.service;

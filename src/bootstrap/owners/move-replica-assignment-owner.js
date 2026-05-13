@@ -5,12 +5,17 @@ import {
   NUM,
   SERVICE_STATUS,
   SERVICE_TYPE,
+  STATE,
   STRING,
   TABLES,
   TYPEOF,
   WORKFLOW_STEP,
 } from '../../constants/index.js';
-import {isNodeRecordReady} from '../../node/node-readiness-policy.js';
+import {
+  isNodeReadyLeaseExplicitlyCleared,
+  isNodeRecordReady,
+  wasNodeRecordReadyWhenWritten,
+} from '../../node/node-readiness-policy.js';
 import {
   BOOTSTRAP_API_ASSIGNMENT,
   BOOTSTRAP_API_DEFAULT,
@@ -557,7 +562,10 @@ class MoveReplicaAssignmentOwner {
       options.phase :
       MOVE_REPLICA_ASSIGNMENT_HISTORY_PHASE.LEASE_RENEWED;
     if (force) {
-      if (!this.canReviveExpiredMoveReplicaAssignmentReservation(reservation)) {
+      if (!this.canReviveExpiredMoveReplicaAssignmentReservation(
+        reservation,
+        now,
+      )) {
         return null;
       }
     } else if (!this.shouldRenewMoveReplicaAssignmentReservation(
@@ -683,8 +691,10 @@ class MoveReplicaAssignmentOwner {
     }
 
     const authoritativeRows = this.getBootstrapAuthoritativeTableRows(tableName);
+    const hasAuthoritativeRows =
+      Array.isArray(authoritativeRows) && authoritativeRows.length > NUM.ZERO;
     const authoritativeRow =
-      Array.isArray(authoritativeRows) && authoritativeRows.length > NUM.ZERO ?
+      hasAuthoritativeRows ?
         authoritativeRows.find((row) => {
           return readMoveReplicaAssignmentObservedRowKey(tableName, row) ===
             normalizedRowKey;
@@ -692,6 +702,9 @@ class MoveReplicaAssignmentOwner {
         null;
     const cacheRow =
       this.getSystemTableCache()?.get?.(tableName, normalizedRowKey) || null;
+    if (hasAuthoritativeRows && !authoritativeRow) {
+      return null;
+    }
     if (!authoritativeRow) {
       return cacheRow;
     }
@@ -704,6 +717,68 @@ class MoveReplicaAssignmentOwner {
     ) ?
       authoritativeRow :
       cacheRow;
+  }
+
+  evaluateMoveReplicaAssignmentSourceNodeVisibility(
+    sourceNodeRow,
+    now = Date.now(),
+  ) {
+    if (!sourceNodeRow) {
+      return {
+        ready: true,
+        recoverableVisibilityGap: true,
+      };
+    }
+
+    const connectionState = typeof sourceNodeRow[COLUMN.CONNECTION_STATE] ===
+      TYPEOF.STRING ?
+      sourceNodeRow[COLUMN.CONNECTION_STATE].toLowerCase() :
+      null;
+    const explicitlyDisconnected = connectionState === STATE.DISCONNECTED;
+    const activeStatus = sourceNodeRow[COLUMN.STATUS] === SERVICE_STATUS.ACTIVE;
+    const ready = isNodeRecordReady(sourceNodeRow, {now});
+    const encodedReadyHeartbeat =
+      wasNodeRecordReadyWhenWritten(sourceNodeRow, {now});
+    const transportConnected =
+      connectionState === STATE.READY ||
+      connectionState === STATE.CONNECTED;
+    const explicitReadyLeaseClear =
+      isNodeReadyLeaseExplicitlyCleared(sourceNodeRow);
+
+    return {
+      ready,
+      recoverableVisibilityGap:
+        activeStatus &&
+        !explicitlyDisconnected &&
+        !explicitReadyLeaseClear &&
+        (encodedReadyHeartbeat || transportConnected),
+    };
+  }
+
+  evaluateMoveReplicaAssignmentTargetNodeVisibility(
+    targetNodeRow,
+    now = Date.now(),
+  ) {
+    if (!targetNodeRow) {
+      return {
+        ready: false,
+        recoverableAdoption: false,
+      };
+    }
+
+    const connectionState = typeof targetNodeRow[COLUMN.CONNECTION_STATE] ===
+      TYPEOF.STRING ?
+      targetNodeRow[COLUMN.CONNECTION_STATE].toLowerCase() :
+      null;
+    const activeStatus = targetNodeRow[COLUMN.STATUS] === SERVICE_STATUS.ACTIVE;
+    const transportConnected =
+      connectionState === STATE.READY ||
+      connectionState === STATE.CONNECTED;
+
+    return {
+      ready: isNodeRecordReady(targetNodeRow, {now}),
+      recoverableAdoption: activeStatus && transportConnected,
+    };
   }
 
   evaluateMoveReplicaAssignmentReservationOwnership(
@@ -737,10 +812,16 @@ class MoveReplicaAssignmentOwner {
         reservation.targetNodeId,
       ) :
       null;
-    const sourceNodeReady = !sourceNodeRow ||
-      isNodeRecordReady(sourceNodeRow, {now});
-    const targetNodeReady = !!targetNodeRow &&
-      isNodeRecordReady(targetNodeRow, {now});
+    const sourceNodeVisibility =
+      this.evaluateMoveReplicaAssignmentSourceNodeVisibility(
+        sourceNodeRow,
+        now,
+      );
+    const targetNodeVisibility =
+      this.evaluateMoveReplicaAssignmentTargetNodeVisibility(
+        targetNodeRow,
+        now,
+      );
     const sourceReplicaPresentLocally =
       this.isMoveReplicaAssignmentSourceReplicaPresentLocally(reservation);
 
@@ -750,8 +831,12 @@ class MoveReplicaAssignmentOwner {
       existingStatus,
       sourceOwnsActiveReplica,
       targetOwnsActiveReplica,
-      sourceNodeReady,
-      targetNodeReady,
+      sourceNodeReady: sourceNodeVisibility.ready,
+      sourceNodeRecoverableVisibilityGap:
+        sourceNodeVisibility.recoverableVisibilityGap,
+      targetNodeReady: targetNodeVisibility.ready,
+      targetNodeRecoverableAdoption:
+        targetNodeVisibility.recoverableAdoption,
       sourceReplicaPresentLocally,
       hasActiveServiceOwner:
         existingStatus === SERVICE_STATUS.ACTIVE && typeof existingNodeId === TYPEOF.STRING,
@@ -775,9 +860,22 @@ class MoveReplicaAssignmentOwner {
       return false;
     }
     const ownership =
-      this.evaluateMoveReplicaAssignmentReservationOwnership(reservation);
-    if (!ownership.hasActiveServiceOwner || ownership.observedCommitted) {
+      this.evaluateMoveReplicaAssignmentReservationOwnership(reservation, now);
+    if (ownership.observedCommitted) {
       return false;
+    }
+    const localSourceReplicaIsViable =
+      ownership.sourceReplicaPresentLocally &&
+      ownership.sourceNodeReady;
+    if (!ownership.hasActiveServiceOwner) {
+      return localSourceReplicaIsViable ||
+        ownership.sourceNodeReady ||
+        ownership.sourceNodeRecoverableVisibilityGap ||
+        ownership.targetNodeRecoverableAdoption;
+    }
+    if (ownership.sourceOwnsActiveReplica &&
+        ownership.sourceNodeRecoverableVisibilityGap) {
+      return true;
     }
     if (!ownership.sourceOwnsActiveReplica &&
         !ownership.continuingTargetAdoption) {
@@ -792,6 +890,49 @@ class MoveReplicaAssignmentOwner {
   ) {
     return Number.isFinite(reservation?.leaseExpiresAt) &&
       reservation.leaseExpiresAt > now;
+  }
+
+  isRemoteSourceMoveReplicaAssignmentReservation(reservation) {
+    return typeof reservation?.sourceNodeId === TYPEOF.STRING &&
+      reservation.sourceNodeId.length > NUM.ZERO &&
+      reservation.sourceNodeId !== this.getSeedNodeId();
+  }
+
+  shouldDeferMoveReplicaAssignmentInvalidationToSourceOwner(
+    reservation,
+    invalidationReason,
+  ) {
+    return invalidationReason ===
+      MOVE_REPLICA_ASSIGNMENT_INVALIDATION_REASON.SOURCE_OWNER_UNAVAILABLE &&
+      this.isRemoteSourceMoveReplicaAssignmentReservation(reservation);
+  }
+
+  shouldPreserveMoveReplicaAssignmentSweepSourceVisibilityGap(
+    reservation,
+    invalidationReason,
+    now = Date.now(),
+  ) {
+    if (invalidationReason !==
+        MOVE_REPLICA_ASSIGNMENT_INVALIDATION_REASON.SOURCE_OWNER_UNAVAILABLE) {
+      return false;
+    }
+    if (!Number.isFinite(reservation?.leaseExpiresAt) ||
+        reservation.leaseExpiresAt > now) {
+      return false;
+    }
+    const ownership =
+      this.evaluateMoveReplicaAssignmentReservationOwnership(reservation, now);
+    if (!ownership.hasActiveServiceOwner) {
+      return ownership.sourceNodeReady ||
+        ownership.sourceNodeRecoverableVisibilityGap ||
+        ownership.targetNodeRecoverableAdoption;
+    }
+    if (ownership.continuingTargetAdoption ||
+        ownership.observedCommitted) {
+      return false;
+    }
+    return ownership.sourceNodeReady ||
+      ownership.sourceNodeRecoverableVisibilityGap;
   }
 
   hasViableMoveReplicaAssignmentSource(reservation, now = Date.now()) {
@@ -821,7 +962,8 @@ class MoveReplicaAssignmentOwner {
     if (!ownership.sourceOwnsActiveReplica) {
       return false;
     }
-    return ownership.sourceNodeReady;
+    return ownership.sourceNodeReady ||
+      ownership.sourceNodeRecoverableVisibilityGap;
   }
 
   getMoveReplicaAssignmentReservationInvalidationReason(
@@ -868,6 +1010,27 @@ class MoveReplicaAssignmentOwner {
       return MOVE_REPLICA_ASSIGNMENT_INVALIDATION_REASON.SOURCE_OWNER_UNAVAILABLE;
     }
     return null;
+  }
+
+  isExpiredMoveReplicaAssignmentTargetProgressVisible(
+    reservation,
+    now = Date.now(),
+  ) {
+    if (this.getMoveReplicaAssignmentReservationInvalidationReason(
+      reservation,
+      now,
+    ) !== MOVE_REPLICA_ASSIGNMENT_INVALIDATION_REASON.LEASE_EXPIRED) {
+      return false;
+    }
+
+    const ownership =
+      this.evaluateMoveReplicaAssignmentReservationOwnership(reservation, now);
+    if (ownership.observedCommitted) {
+      return false;
+    }
+    return ownership.continuingTargetAdoption ||
+      ownership.targetNodeReady ||
+      ownership.targetNodeRecoverableAdoption;
   }
 
   shouldReconcileMoveReplicaAssignmentReservationToCommitted(
@@ -971,7 +1134,10 @@ class MoveReplicaAssignmentOwner {
     }
 
     for (const reservation of byAssignmentId.values()) {
-      if (this.isMoveReplicaBootstrapAdmissionBlocked(reservation, now)) {
+      if (this.isMoveReplicaBootstrapAdmissionGloballyBlocked(
+        reservation,
+        now,
+      )) {
         reservations.push(reservation);
       }
     }
@@ -1001,8 +1167,7 @@ class MoveReplicaAssignmentOwner {
     }
 
     for (const reservation of byAssignmentId.values()) {
-      if (this.isMoveReplicaAssignmentReservationOpen(reservation, now) ||
-          this.isCommittedMoveReplicaHandoffStabilizing(reservation, now)) {
+      if (this.isMoveReplicaBootstrapAdmissionBlocked(reservation, now)) {
         reservations.push(reservation);
       }
     }
@@ -1020,7 +1185,18 @@ class MoveReplicaAssignmentOwner {
     now = Date.now(),
   ) {
     return this.isMoveReplicaAssignmentReservationOpen(reservation, now) ||
+      this.isExpiredMoveReplicaAssignmentTargetProgressVisible(
+        reservation,
+        now,
+      ) ||
       this.isCommittedMoveReplicaHandoffStabilizing(reservation, now);
+  }
+
+  isMoveReplicaBootstrapAdmissionGloballyBlocked(
+    _reservation,
+    _now = Date.now(),
+  ) {
+    return false;
   }
 
   isMoveReplicaAssignmentReservationOpen(
@@ -1041,6 +1217,12 @@ class MoveReplicaAssignmentOwner {
     if (!BOOTSTRAP_API_ASSIGNMENT.ACTIVE_RESERVATION_STATUSES.includes(
       reservation.status,
     )) {
+      return false;
+    }
+    if (this.getMoveReplicaAssignmentReservationInvalidationReason(
+      reservation,
+      now,
+    ) !== null) {
       return false;
     }
     const ownership =
@@ -1087,22 +1269,9 @@ class MoveReplicaAssignmentOwner {
     if (!reservation?.targetNodeId || !reservation?.replicaId) {
       return false;
     }
-
-    const targetNodeRow =
-      this.getSystemTableCache()?.get(TABLES.NODES, reservation.targetNodeId) || null;
-    if (!targetNodeRow || !isNodeRecordReady(targetNodeRow, {now})) {
-      return false;
-    }
-
-    const existingServiceRow =
-      this.getSystemTableCache()?.get(TABLES.SERVICES, reservation.replicaId) || null;
-    const existingNodeId = existingServiceRow?.[COLUMN.NODE_ID] || null;
-    const existingStatus = String(
-      existingServiceRow?.[COLUMN.STATUS] || STRING.UNKNOWN,
-    ).toLowerCase();
-
-    return existingNodeId === reservation.targetNodeId &&
-      existingStatus === SERVICE_STATUS.ACTIVE;
+    const ownership =
+      this.evaluateMoveReplicaAssignmentReservationOwnership(reservation, now);
+    return ownership.targetOwnsActiveReplica && ownership.targetNodeReady;
   }
 
   resolveMoveReplicaBootstrapAdmissionRetryAfterMs(
@@ -1207,6 +1376,21 @@ class MoveReplicaAssignmentOwner {
         assignmentReservations?.set(reservation.assignmentId, reservation);
         continue;
       }
+      if (this.shouldDeferMoveReplicaAssignmentInvalidationToSourceOwner(
+        reservation,
+        invalidationReason,
+      )) {
+        assignmentReservations?.set(reservation.assignmentId, reservation);
+        continue;
+      }
+      if (this.shouldPreserveMoveReplicaAssignmentSweepSourceVisibilityGap(
+        reservation,
+        invalidationReason,
+        now,
+      )) {
+        assignmentReservations?.set(reservation.assignmentId, reservation);
+        continue;
+      }
       assignmentReservations?.set(reservation.assignmentId, reservation);
       await this.markMoveReplicaAssignmentReservationTerminal(
         reservation.assignmentId,
@@ -1235,12 +1419,19 @@ class MoveReplicaAssignmentOwner {
       );
     }
 
-    const activeReservations =
-      await this.getActiveMoveReplicaAssignmentReservations({
+    const now = Date.now();
+    const existingReservations =
+      await this.collectMoveReplicaAssignmentReservations({
+        now,
         timeoutBudget: options.timeoutBudget || null,
       });
-    const conflictingReservation = activeReservations.find((reservation) =>
-      reservation.replicaId === replicaId,
+    const conflictingReservation = existingReservations.find((reservation) =>
+      reservation.replicaId === replicaId &&
+        (this.isMoveReplicaAssignmentReservationActive(reservation, now) ||
+          this.isExpiredMoveReplicaAssignmentTargetProgressVisible(
+            reservation,
+            now,
+          )),
     );
     if (conflictingReservation) {
       this.getLogger().warn(BOOTSTRAP_API_LOG_MSG.MOVE_REPLICA_ASSIGNMENT_CONFLICT, {
@@ -1252,7 +1443,6 @@ class MoveReplicaAssignmentOwner {
       throw new Error(MOVE_REPLICA_ASSIGNMENT_ERROR.RESERVATION_CONFLICT);
     }
 
-    const now = Date.now();
     const assignmentId = uuidv4();
     const leaseExpiresAt = now + this.getMoveReplicaAssignmentLeaseMs();
     const stepsHistory = [{

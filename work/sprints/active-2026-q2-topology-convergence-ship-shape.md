@@ -34,24 +34,26 @@ Pro or Enterprise behavior.
 Seed artifact:
 `test-output/reports/rolling-restart-green-gate-after-sql-write-dispatch-retry-progress.report.json`.
 
+Current representative artifact:
+`test-output/reports/rolling-restart-green-gate-after-topology-remote-handoff-convergence.report.json`.
+
 Current first frontier from `npm run work:context` on May 13, 2026:
 
-1. Owner: `operation_workflow_owner`
-2. Boundary: `workflow_progress`
-3. Dominant reason: `priority_recovery_event_driven_wait`
-4. Residual state: `retry_deferred` / `recovering_in_flight`
-   coordinator-created remote handoff ACK failures across
-   `replica_operations-p1`, `sql_transaction_participants-p1`,
-   `sql_transactions-p1`, and `sql_write_operations-p1`
-5. Split residual group: `operation_workflow_owner / rebalancer_handoff`
-6. Downstream active gate: `active=2/5`, `snapshotCoverage=2/5`,
-   publication `PUBLISHED`, `pendingAck=0`, `missingPublished=3`
+1. Owner: `startup_active_gate_owner`
+2. Boundary: `snapshot_coverage`
+3. Dominant reason: `active_gate_timed_out`
+4. Residual state: `active_gate_snapshot_coverage` blocked with
+   `snapshot_coverage_incomplete`
+5. Priority recovery: cleared; the post-fix representative artifact reports
+   zero priority-recovery witnesses.
+6. Downstream readiness support: deferred behind active-gate coverage.
 
 The immediate missing causal edge is:
 
-1. Coordinator-created remote handoff retry/ACK progress must move
-   `retry_deferred` and `recovering_in_flight` operations through one bounded
-   dispatch, delivery, ACK, timeout, or reconcile path.
+1. Active-gate coverage must derive expected nodes, ready leased nodes,
+   published active nodes, missing nodes, pending repair operations, and
+   evaluated topology epoch from owner truth instead of presentation
+   publication alone.
 
 ## Ship-Shape Definition
 
@@ -113,7 +115,7 @@ This sprint treats the system as ship-shape only when these properties hold:
      representative rolling-restart either passes or migrates to a fresh
      owner-boundary blocker.
 
-2. [Topology Active Gate Owner Truth](../packages/todo-20260513-topology-active-gate-owner-truth.md)
+2. [Topology Active Gate Owner Truth](../packages/active-20260513-topology-active-gate-owner-truth.md)
    - Lane: `runtime-owner-boundary`
    - Owner boundary: `startup_active_gate_owner / snapshot_coverage`
    - Recommendation covered: make active-gate convergence owner-truth based.

@@ -29,10 +29,14 @@ import {
 import {
   OperationType,
 } from '../rebalancer/replica-status.js';
+import {NODE_STATE} from '../constants/node-state.js';
+import {CONNECTION_STATE} from '../constants/transport.js';
 
 const LOCAL_STR_EMPTY = '';
 const LOCAL_STR_SYSTEM_TABLE_CACHE = 'system_table_cache';
 const LOCAL_STR_BOOTSTRAP_SNAPSHOT = 'bootstrap_snapshot';
+const LOCAL_STR_SYSTEM_TABLE_CACHE_WITH_BOOTSTRAP_SUPPLEMENT =
+  'system_table_cache_with_bootstrap_supplement';
 const LOCAL_STR_COMMA = ',';
 
 const JOIN_READINESS_REPLICA_OPERATION_ENTITY_TYPE = Object.freeze({
@@ -44,6 +48,55 @@ const JOIN_READINESS_PRIORITY_OPERATION_EXCLUSION_KIND = Object.freeze({
   SELF_SOURCE_ACTIVE_TARGET_REPLACEMENT:
     'self_source_active_target_replacement',
 });
+const MESH_CONNECTIVITY_ROW_SELECTION_KIND = Object.freeze({
+  CACHE_WITH_BOOTSTRAP_SUPPLEMENT: 'cache_with_bootstrap_supplement',
+  SYSTEM_TABLE_CACHE: 'system_table_cache',
+  BOOTSTRAP_SNAPSHOT: 'bootstrap_snapshot',
+});
+const MESH_CONNECTIVITY_ROW_SELECTION_RULES = Object.freeze([
+  Object.freeze({
+    kind: MESH_CONNECTIVITY_ROW_SELECTION_KIND
+      .CACHE_WITH_BOOTSTRAP_SUPPLEMENT,
+    source: LOCAL_STR_SYSTEM_TABLE_CACHE_WITH_BOOTSTRAP_SUPPLEMENT,
+    matches: (evidence) =>
+      evidence.cacheRows.length > NUM.ZERO &&
+      evidence.supplementalBootstrapRows.length > NUM.ZERO,
+    resolveRows: (evidence) =>
+      evidence.cacheRows.concat(evidence.supplementalBootstrapRows),
+    resolveBootstrapSupplementNodeIds: (evidence) =>
+      evidence.bootstrapSupplementNodeIds,
+  }),
+  Object.freeze({
+    kind: MESH_CONNECTIVITY_ROW_SELECTION_KIND.SYSTEM_TABLE_CACHE,
+    source: LOCAL_STR_SYSTEM_TABLE_CACHE,
+    matches: (evidence) => evidence.cacheRows.length > NUM.ZERO,
+    resolveRows: (evidence) => evidence.cacheRows,
+    resolveBootstrapSupplementNodeIds: () => [],
+  }),
+  Object.freeze({
+    kind: MESH_CONNECTIVITY_ROW_SELECTION_KIND.BOOTSTRAP_SNAPSHOT,
+    source: LOCAL_STR_BOOTSTRAP_SNAPSHOT,
+    matches: () => true,
+    resolveRows: (evidence) => evidence.bootstrapRows,
+    resolveBootstrapSupplementNodeIds: () => [],
+  }),
+]);
+const MESH_CONNECTIVITY_BOOTSTRAP_SUPPLEMENT_LIFECYCLE_STATES = new Set([
+  NODE_STATE.JOINING,
+  CONNECTION_STATE.CONNECTING,
+]);
+
+function selectMeshConnectivityRows(evidence) {
+  const selectionRule = MESH_CONNECTIVITY_ROW_SELECTION_RULES.find((rule) =>
+    rule.matches(evidence),
+  );
+  return {
+    source: selectionRule.source,
+    rows: selectionRule.resolveRows(evidence),
+    bootstrapSupplementNodeIds:
+      selectionRule.resolveBootstrapSupplementNodeIds(evidence),
+  };
+}
 
 function createJoinReadinessEvaluatorTailMethods(options = {}) {
   const joinReadinessReasonPrecedence =
@@ -116,6 +169,68 @@ function createJoinReadinessEvaluatorTailMethods(options = {}) {
     },
 
     /**
+     * Determine whether a bootstrap row may supplement active membership.
+     * @param {Object|null} row
+     * @return {boolean}
+     */
+    isBootstrapMeshSupplementalNodeRow(row) {
+      return this.resolveMeshConnectivityLifecycleTokens(row).some((token) =>
+        MESH_CONNECTIVITY_BOOTSTRAP_SUPPLEMENT_LIFECYCLE_STATES.has(token),
+      );
+    },
+
+    /**
+     * Resolve bootstrap rows that can safely participate in mesh connectivity.
+     * @param {Object|null} bootstrapResponse
+     * @param {Set<string>} bootstrapActiveNodeIds
+     * @return {Object[]}
+     */
+    resolveBootstrapMeshConnectivityNodeRows(
+      bootstrapResponse,
+      bootstrapActiveNodeIds,
+    ) {
+      return Array.isArray(bootstrapResponse?.systemTableSnapshots?.nodes) ?
+        bootstrapResponse.systemTableSnapshots.nodes.filter((row) => {
+          const nodeId = this.resolveMeshConnectivityNodeId(row);
+          const belongsToPublishedActiveSet =
+            bootstrapActiveNodeIds.size === NUM.ZERO ||
+            (
+              nodeId.length > NUM.ZERO &&
+              bootstrapActiveNodeIds.has(nodeId)
+            );
+          return (
+            belongsToPublishedActiveSet ||
+            this.isBootstrapMeshSupplementalNodeRow(row)
+          ) &&
+            this.isMeshEligibleNodeRow(row);
+        }) :
+        [];
+    },
+
+    /**
+     * Resolve bootstrap rows that fill gaps in a partial cache membership view.
+     * @param {Object[]} cacheRows
+     * @param {Object[]} bootstrapRows
+     * @return {{rows: Object[], nodeIds: string[]}}
+     */
+    resolveBootstrapMeshConnectivitySupplement(cacheRows, bootstrapRows) {
+      const cacheNodeIds = new Set(cacheRows.map((row) =>
+        this.resolveMeshConnectivityNodeId(row),
+      ).filter((nodeId) => nodeId.length > NUM.ZERO));
+      const supplementalRows = bootstrapRows.filter((row) => {
+        const nodeId = this.resolveMeshConnectivityNodeId(row);
+        return nodeId.length > NUM.ZERO && !cacheNodeIds.has(nodeId);
+      });
+      const supplementalNodeIds = supplementalRows.map((row) =>
+        this.resolveMeshConnectivityNodeId(row),
+      );
+      return {
+        rows: supplementalRows,
+        nodeIds: supplementalNodeIds,
+      };
+    },
+
+    /**
      * Resolve node rows used for mesh connectivity.
      * @return {{source: string, rows: Object[]}}
      */
@@ -123,42 +238,35 @@ function createJoinReadinessEvaluatorTailMethods(options = {}) {
       const bootstrapActiveNodeIds = new Set(
         this.resolveBootstrapTopologySnapshotActiveNodeIds(),
       );
+      const bootstrapResponse = this.delegates.getBootstrapResponse();
+      const bootstrapRows = this.resolveBootstrapMeshConnectivityNodeRows(
+        bootstrapResponse,
+        bootstrapActiveNodeIds,
+      );
       const systemTableCache =
         NodeService.getInstance().getSystemTableCache();
+      let cacheRows = [];
       if (
         systemTableCache &&
         typeof systemTableCache.getAll === TYPEOF.FUNCTION
       ) {
-        const cacheRows =
+        cacheRows =
           (systemTableCache.getAll(TABLES.NODES) || []).filter((row) => {
             return this.isMeshEligibleNodeRow(row);
           });
-        if (cacheRows.length > NUM.ZERO) {
-          return {
-            source: LOCAL_STR_SYSTEM_TABLE_CACHE,
-            rows: cacheRows,
-          };
-        }
       }
 
-      const bootstrapResponse = this.delegates.getBootstrapResponse();
-      const snapshotRows = Array.isArray(
-        bootstrapResponse?.systemTableSnapshots?.nodes,
-      ) ?
-        bootstrapResponse.systemTableSnapshots.nodes.filter((row) => {
-          if (bootstrapActiveNodeIds.size > NUM.ZERO) {
-            const nodeId =
-              this.resolveMeshConnectivityNodeId(row);
-            return nodeId.length > NUM.ZERO &&
-              bootstrapActiveNodeIds.has(nodeId);
-          }
-          return this.isMeshEligibleNodeRow(row);
-        }) :
-        [];
-      return {
-        source: LOCAL_STR_BOOTSTRAP_SNAPSHOT,
-        rows: snapshotRows,
-      };
+      const bootstrapSupplement =
+        this.resolveBootstrapMeshConnectivitySupplement(
+          cacheRows,
+          bootstrapRows,
+        );
+      return selectMeshConnectivityRows({
+        cacheRows,
+        bootstrapRows,
+        supplementalBootstrapRows: bootstrapSupplement.rows,
+        bootstrapSupplementNodeIds: bootstrapSupplement.nodeIds,
+      });
     },
 
     /**

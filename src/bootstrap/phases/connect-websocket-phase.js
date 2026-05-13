@@ -31,11 +31,39 @@ import {
 import {
   resolveQueryTransportSelection,
 } from '../shared/query-transport-selection.js';
+import {
+  MESSAGE_ROUTER_SHARED,
+} from '../../transport/message-router-shared.js';
 
 const OWNER_MESSAGE_ROUTER_SETUP = 'MessageRouterSetup';
+const {
+  WEBSOCKET_CONNECT_TIMEOUT_ERROR_CODE,
+} = MESSAGE_ROUTER_SHARED;
 const ERR_MISSING_WS_ENDPOINT = 'Missing canonical node_endpoints websocket address';
 const LOG_SEED_WS_FALLBACK =
   '[JOIN-DEBUG] Proceeding with peer mesh after seed websocket retry exhaustion';
+const MESH_CONNECTIVITY_NODE_SOURCE = Object.freeze({
+  BOOTSTRAP_SNAPSHOT: 'bootstrap_snapshot',
+  SYSTEM_TABLE_CACHE_WITH_BOOTSTRAP_SUPPLEMENT:
+    'system_table_cache_with_bootstrap_supplement',
+});
+const MESH_BOOTSTRAP_ADDRESS_SCOPE_STATE = Object.freeze({
+  ALL: 'all',
+  NODE_IDS: 'node_ids',
+  NONE: 'none',
+});
+const MESH_BOOTSTRAP_ADDRESS_SCOPE_RULES = Object.freeze([
+  Object.freeze({
+    source: MESH_CONNECTIVITY_NODE_SOURCE.BOOTSTRAP_SNAPSHOT,
+    state: MESH_BOOTSTRAP_ADDRESS_SCOPE_STATE.ALL,
+  }),
+  Object.freeze({
+    source:
+      MESH_CONNECTIVITY_NODE_SOURCE
+        .SYSTEM_TABLE_CACHE_WITH_BOOTSTRAP_SUPPLEMENT,
+    state: MESH_BOOTSTRAP_ADDRESS_SCOPE_STATE.NODE_IDS,
+  }),
+]);
 const MESH_CONNECTED_OR_IN_FLIGHT_STATES = new Set([
   CONNECTION_STATE.CONNECTED,
   CONNECTION_STATE.CONNECTING,
@@ -63,6 +91,64 @@ function getConnectedPeerNodeIds(messageRouter, localNodeId) {
       nodeId.length > NUM.ZERO &&
       nodeId !== localNodeId;
   });
+}
+
+function markRetryableSeedWebSocketTimeout(error, retryAfterMs) {
+  if (
+    !error ||
+    typeof error !== TYPEOF.OBJECT ||
+    error.code !== WEBSOCKET_CONNECT_TIMEOUT_ERROR_CODE
+  ) {
+    return;
+  }
+  error.deferRetry = true;
+  if (!Number.isFinite(error.retryAfterMs) || error.retryAfterMs <= NUM.ZERO) {
+    error.retryAfterMs = Math.max(NUM.ONE, Math.floor(retryAfterMs));
+  }
+}
+
+function buildBootstrapAddressScope(state, nodeIds = []) {
+  return Object.freeze({
+    state,
+    nodeIds: new Set(nodeIds.filter((nodeId) =>
+      typeof nodeId === TYPEOF.STRING && nodeId.length > NUM.ZERO,
+    )),
+  });
+}
+
+function resolveBootstrapAddressScope(nodeSource, bootstrapSupplementNodeIds) {
+  const scopeRule = MESH_BOOTSTRAP_ADDRESS_SCOPE_RULES.find((rule) =>
+    rule.source === nodeSource,
+  );
+  if (!scopeRule) {
+    return buildBootstrapAddressScope(
+      MESH_BOOTSTRAP_ADDRESS_SCOPE_STATE.NONE,
+    );
+  }
+  return buildBootstrapAddressScope(
+    scopeRule.state,
+    bootstrapSupplementNodeIds,
+  );
+}
+
+function resolveBootstrapResponseForMeshAddress(
+  bootstrapResponse,
+  bootstrapAddressScope,
+  targetNodeId,
+) {
+  if (
+    bootstrapAddressScope?.state === MESH_BOOTSTRAP_ADDRESS_SCOPE_STATE.ALL
+  ) {
+    return bootstrapResponse;
+  }
+  if (
+    bootstrapAddressScope?.state ===
+      MESH_BOOTSTRAP_ADDRESS_SCOPE_STATE.NODE_IDS &&
+    bootstrapAddressScope.nodeIds.has(targetNodeId)
+  ) {
+    return bootstrapResponse;
+  }
+  return null;
 }
 
 /**
@@ -351,6 +437,7 @@ class ConnectWebSocketPhase {
       }
     }
 
+    markRetryableSeedWebSocketTimeout(lastError, maxDelayMs);
     throw lastError;
   }
 
@@ -399,6 +486,7 @@ class ConnectWebSocketPhase {
    * @param {Object|null} options.systemTableCache
    * @param {Object} options.messageRouter
    * @param {Object} options.logger
+   * @param {Object} options.bootstrapAddressScope
    * @return {Promise<{missingEndpointNodeIds: string[]}>}
    * @private
    */
@@ -410,6 +498,8 @@ class ConnectWebSocketPhase {
     const bootstrapResponse = options.bootstrapResponse || null;
     const systemTableCache = options.systemTableCache || null;
     const logger = options.logger;
+    const bootstrapAddressScope = options.bootstrapAddressScope ||
+      buildBootstrapAddressScope(MESH_BOOTSTRAP_ADDRESS_SCOPE_STATE.NONE);
     const missingEndpointNodeIds = [];
     const reusableConnectionStates =
       options.requireReadyConnections === true ?
@@ -430,9 +520,14 @@ class ConnectWebSocketPhase {
         return null;
       }
 
+      const addressBootstrapResponse = resolveBootstrapResponseForMeshAddress(
+        bootstrapResponse,
+        bootstrapAddressScope,
+        targetNodeId,
+      );
       const wsAddressResolution = resolveNodeWebSocketAddress({
         targetNodeId,
-        bootstrapResponse,
+        bootstrapResponse: addressBootstrapResponse,
         systemTableCache,
       });
       if (wsAddressResolution.state !==
@@ -516,11 +611,14 @@ class ConnectWebSocketPhase {
       const {
         source: nodeSource,
         rows: nodesSnapshot,
+        bootstrapSupplementNodeIds,
       } = this.delegates.resolveMeshConnectivityNodeRows();
-      const addressBootstrapResponse =
-        nodeSource === 'bootstrap_snapshot' ?
-          bootstrapResponse :
-          null;
+      const bootstrapAddressScope = resolveBootstrapAddressScope(
+        nodeSource,
+        Array.isArray(bootstrapSupplementNodeIds) ?
+          bootstrapSupplementNodeIds :
+          [],
+      );
 
       if (!Array.isArray(nodesSnapshot) ||
           nodesSnapshot.length === NUM.ZERO) {
@@ -551,7 +649,8 @@ class ConnectWebSocketPhase {
         missingEndpointNodeIds,
       } = await this.connectToClusterNodesFromSnapshot({
         otherNodes,
-        bootstrapResponse: addressBootstrapResponse,
+        bootstrapResponse,
+        bootstrapAddressScope,
         systemTableCache,
         messageRouter,
         logger,

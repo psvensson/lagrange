@@ -1,10 +1,16 @@
 import {resolveAdvertisedWebSocketAddress} from
   '../../transport/node-address-resolution.js';
 import {
+  COLUMN,
+  ENDPOINT_STATUS,
   HTTP_STATUS,
   NUM,
+  TABLES,
+  TRANSPORT_TYPE,
   TYPEOF,
 } from '../../constants/index.js';
+import {NODE_STATE} from '../../constants/node-state.js';
+import {CONNECTION_STATE} from '../../constants/transport.js';
 import {
   BOOTSTRAP_PHASE,
   BOOTSTRAP_PIPELINE_ERROR_CODE,
@@ -32,10 +38,15 @@ import {
 
 const LOCAL_STR_836HW = 'move_replica_handoff_stabilizing';
 const LOCAL_STR_STRING = 'string';
+const LOCAL_STR_DASH = '-';
 const LOCAL_NUM_ZERO = 0;
 const BOOTSTRAP_REQUEST_EXECUTION_OPERATION_NAME =
   'bootstrap_request_execution';
 const BOOTSTRAP_REQUEST_TIMEOUT_BUDGET_FIELD = 'timeoutBudget';
+const BOOTSTRAP_ADMISSION_PEER_ENDPOINT_ID_SUFFIX =
+  'bootstrap-admission-ws';
+const BOOTSTRAP_ADMISSION_PEER_ENDPOINT_PRIORITY = NUM.ZERO;
+const BOOTSTRAP_ADMISSION_PEER_HINT_EMPTY = Object.freeze([]);
 const BOOTSTRAP_REQUEST_ADMISSION_DECISION = Object.freeze({
   ADMIT: 'admit',
   DEFER_STARTUP_INCOMPLETE: 'defer_startup_incomplete',
@@ -128,6 +139,68 @@ function canAdmitStartupCompleteStaleAdmissionSnapshot(
     snapshot?.draining !== true &&
     snapshot?.bootstrapJoinAuthorityAvailable === true &&
     hasStartupCompleteStaleAdmissionReasons(snapshot);
+}
+
+function normalizeBootstrapAdmissionPeerHints(hints) {
+  if (!Array.isArray(hints)) {
+    return BOOTSTRAP_ADMISSION_PEER_HINT_EMPTY;
+  }
+  return hints.filter((hint) =>
+    typeof hint?.nodeId === TYPEOF.STRING &&
+    hint.nodeId.length > NUM.ZERO &&
+    typeof hint?.nodeAddress === TYPEOF.STRING &&
+    hint.nodeAddress.length > NUM.ZERO,
+  );
+}
+
+function buildBootstrapAdmissionPeerEndpointId(nodeId) {
+  return [
+    nodeId,
+    BOOTSTRAP_ADMISSION_PEER_ENDPOINT_ID_SUFFIX,
+  ].join(LOCAL_STR_DASH);
+}
+
+function buildBootstrapAdmissionPeerNodeRows(peerHints) {
+  return peerHints.map((hint) => ({
+    [COLUMN.NODE_ID]: hint.nodeId,
+    [COLUMN.NODE_ADDRESS]: hint.nodeAddress,
+    [COLUMN.STATUS]: NODE_STATE.JOINING,
+    [COLUMN.CONNECTION_STATE]: CONNECTION_STATE.CONNECTING,
+  }));
+}
+
+function buildBootstrapAdmissionPeerEndpointRows(peerHints) {
+  return peerHints.map((hint) => ({
+    [COLUMN.ENDPOINT_ID]:
+      buildBootstrapAdmissionPeerEndpointId(hint.nodeId),
+    [COLUMN.NODE_ID]: hint.nodeId,
+    [COLUMN.TRANSPORT_TYPE]: TRANSPORT_TYPE.WEBSOCKET,
+    [COLUMN.ADDRESS]: resolveAdvertisedWebSocketAddress({
+      nodeAddress: hint.nodeAddress,
+    }),
+    [COLUMN.PRIORITY]: BOOTSTRAP_ADMISSION_PEER_ENDPOINT_PRIORITY,
+    [COLUMN.STATUS]: ENDPOINT_STATUS.ACTIVE,
+  }));
+}
+
+function appendRowsMissingKey(existingRows, supplementalRows, keyField) {
+  const rows = Array.isArray(existingRows) ? [...existingRows] : [];
+  const observedKeys = new Set(rows.map((row) => row?.[keyField]).filter(
+    (value) => typeof value === TYPEOF.STRING && value.length > NUM.ZERO,
+  ));
+  for (const row of supplementalRows) {
+    const key = row?.[keyField];
+    if (
+      typeof key !== TYPEOF.STRING ||
+      key.length === NUM.ZERO ||
+      observedKeys.has(key)
+    ) {
+      continue;
+    }
+    observedKeys.add(key);
+    rows.push(row);
+  }
+  return rows;
 }
 
 function normalizeBootstrapRequestClientAttemptDeadlineMs(requestBody) {
@@ -355,6 +428,54 @@ class BootstrapRequestOwner {
 
   getReadyNodes(options = {}) {
     return this.delegates.getReadyNodes?.(options) || [];
+  }
+
+  getBootstrapAdmissionPeerHints() {
+    return normalizeBootstrapAdmissionPeerHints(
+      this.delegates.getBootstrapAdmissionPeerHints?.(),
+    );
+  }
+
+  attachBootstrapAdmissionPeerHints(topologySnapshotEnvelope, options = {}) {
+    const excludedNodeId =
+      typeof options.excludeNodeId === TYPEOF.STRING ?
+        options.excludeNodeId :
+        null;
+    const peerHints = this.getBootstrapAdmissionPeerHints().filter((hint) =>
+      hint.nodeId !== excludedNodeId,
+    );
+    if (peerHints.length === NUM.ZERO) {
+      return topologySnapshotEnvelope;
+    }
+    const systemTableSnapshots = {
+      ...(topologySnapshotEnvelope?.systemTableSnapshots || {}),
+    };
+    systemTableSnapshots[TABLES.NODES] = appendRowsMissingKey(
+      systemTableSnapshots[TABLES.NODES],
+      buildBootstrapAdmissionPeerNodeRows(peerHints),
+      COLUMN.NODE_ID,
+    );
+    systemTableSnapshots[TABLES.NODE_ENDPOINTS] = appendRowsMissingKey(
+      systemTableSnapshots[TABLES.NODE_ENDPOINTS],
+      buildBootstrapAdmissionPeerEndpointRows(peerHints),
+      COLUMN.ENDPOINT_ID,
+    );
+    const tableRowCounts = {
+      ...(topologySnapshotEnvelope?.topologySnapshotMeta?.tableRowCounts || {}),
+      [TABLES.NODES]: systemTableSnapshots[TABLES.NODES].length,
+      [TABLES.NODE_ENDPOINTS]:
+        systemTableSnapshots[TABLES.NODE_ENDPOINTS].length,
+    };
+    return {
+      ...topologySnapshotEnvelope,
+      systemTableSnapshots,
+      topologySnapshotMeta: {
+        ...(topologySnapshotEnvelope?.topologySnapshotMeta || {}),
+        tableRowCounts,
+        bootstrapAdmissionPeerHintNodeIds:
+          peerHints.map((hint) => hint.nodeId),
+      },
+    };
   }
 
   getTablePolicies() {
@@ -960,12 +1081,16 @@ class BootstrapRequestOwner {
         );
       }
       const currentEpoch = this.getCurrentEpoch();
+      const topologySnapshotEnvelope = this.attachBootstrapAdmissionPeerHints(
+        this.buildBootstrapResponseTopologySnapshotEnvelope({
+          currentEpoch,
+        }),
+        {excludeNodeId: nodeId},
+      );
       const {
         systemTableSnapshots,
         topologySnapshotMeta,
-      } = this.buildBootstrapResponseTopologySnapshotEnvelope({
-        currentEpoch,
-      });
+      } = topologySnapshotEnvelope;
       const clusterConfig = this.getClusterConfiguration();
       const readyNodes = this.getReadyNodes({
         requirePublishedMembership: true,

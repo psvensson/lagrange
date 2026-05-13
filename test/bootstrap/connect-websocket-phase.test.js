@@ -252,6 +252,131 @@ test(
 );
 
 test(
+  'ConnectWebSocketPhase marks exhausted seed websocket timeout retryable',
+  async () => {
+    const originalCreate = MessageRouterSetup.create;
+    let nowMs = 0;
+    const sleepCalls = [];
+    const warningEvents = [];
+    const errorEvents = [];
+    const connectCalls = [];
+    let currentRouter = null;
+
+    const router = {
+      nodeConnections: new Map(),
+      async connectToNode(nodeId, address) {
+        connectCalls.push({nodeId, address});
+        const error = new Error('WebSocket connection timeout after 5000ms');
+        error.code = 'WS_CONNECT_TIMEOUT';
+        throw error;
+      },
+      getConnectionState(nodeId) {
+        return this.nodeConnections.get(nodeId)?.state || null;
+      },
+      getConnectedNodes() {
+        return Array.from(this.nodeConnections.keys());
+      },
+      hasSelfConnection() {
+        return true;
+      },
+      setQueryMessageGroupServiceResolver() {},
+    };
+
+    MessageRouterSetup.create = async () => router;
+
+    try {
+      const phase = new ConnectWebSocketPhase({
+        nodeId: 'joining-node-1',
+        delegates: {
+          getWsPort: () => 9090,
+          getIdentifyPayload: () => ({role: 'joining'}),
+          getNodeAddress: () => 'joining-node-1:8080',
+          getLogger: () => ({
+            info() {},
+            warn(message, details) {
+              warningEvents.push({message, details});
+            },
+            error(message, details) {
+              errorEvents.push({message, details});
+            },
+            debug() {},
+          }),
+          getNow: () => () => nowMs,
+          getSleep: () => async (delayMs) => {
+            sleepCalls.push(delayMs);
+            nowMs += delayMs;
+          },
+          getConfig: () => ({
+            leadershipWaitTimeoutMs: 50,
+            leadershipWaitInitialDelayMs: 25,
+            leadershipWaitMaxDelayMs: 25,
+            leadershipWaitBackoffMultiplier: 2,
+          }),
+          computeSeedContactRetryDelayMs: ({baseDelayMs, maxDelayMs}) =>
+            Math.min(baseDelayMs, maxDelayMs),
+          getMessageRouter: () => currentRouter,
+          setMessageRouter(routerInstance) {
+            currentRouter = routerInstance;
+          },
+          setTransport() {},
+          initializeJoiningLifecycleOwners: async () => {},
+          triggerJoinReconciler: async () => {},
+          getSeedNodeWsAddress: () => 'ws://seed-node:8082',
+          getSeedNodeId: () => 'seed-node',
+          getBootstrapResponse: () =>
+            createBootstrapResponseWithPeerEndpoints('joining-node-1'),
+          resolveMeshConnectivityNodeRows: () => ({
+            source: 'cache',
+            rows: [
+              {
+                node_id: 'joining-node-1',
+                node_address: 'joining-node-1:8080',
+              },
+            ],
+          }),
+          buildClusterMeshSignature: () => 'mesh-signature',
+          setLastClusterMeshSignature: () => {},
+          sendControlPlaneNodeStateUpdate: async () => {},
+          getNodeCapabilities: () => ['sql'],
+          getLeaderMessageGroupService: () => null,
+        },
+      });
+
+      await assert.rejects(
+        () => phase.phaseConnectWebSocket(),
+        (error) => {
+          assert.equal(error.code, 'WS_CONNECT_TIMEOUT');
+          assert.equal(error.deferRetry, true);
+          assert.equal(error.retryAfterMs, 25);
+          return true;
+        },
+      );
+
+      assert.equal(
+        connectCalls.length,
+        3,
+        'seed websocket connect should spend the bounded retry window',
+      );
+      assert.deepEqual(
+        sleepCalls,
+        [25, 25],
+        'seed websocket retry should spend bounded backoff before surfacing',
+      );
+      assert.ok(
+        warningEvents.length > 0,
+        'seed websocket retry exhaustion should preserve retry warnings',
+      );
+      assert.ok(
+        errorEvents.length > 0,
+        'seed websocket retry exhaustion should log the terminal phase error',
+      );
+    } finally {
+      MessageRouterSetup.create = originalCreate;
+    }
+  },
+);
+
+test(
   'ConnectWebSocketPhase only exposes initialized local message-group transport',
   async () => {
     const originalCreate = MessageRouterSetup.create;
@@ -348,17 +473,32 @@ test(
         'function',
         'phase should install a query transport resolver on the router',
       );
-      assert.equal(
+      assert.deepEqual(
         queryTransportResolver(),
-        null,
-        'uninitialized message-group service should not be exposed as query transport',
+        {
+          state: 'deferred',
+          ready: false,
+          deferRetry: true,
+          reason: 'Query/data-plane message-group transport is not configured',
+          reasonCode: 'query_transport_not_ready',
+          errorCode: 'ROUTER_QUERY_TRANSPORT_NOT_READY',
+          retryAfterMs: null,
+          service: null,
+        },
+        'uninitialized message-group service should return deferred query transport context',
       );
 
       leaderService.initialized = true;
+      const resolvedLeaderSelection = queryTransportResolver();
       assert.equal(
-        queryTransportResolver(),
+        resolvedLeaderSelection.service,
         leaderService,
         'initialized message-group service should become the query transport',
+      );
+      assert.equal(
+        resolvedLeaderSelection.ready,
+        true,
+        'initialized message-group service should be marked ready',
       );
     } finally {
       MessageRouterSetup.create = originalCreate;
@@ -476,8 +616,13 @@ test(
       assert.deepEqual(
         queryTransportResolver(),
         {
+          state: 'deferred',
+          ready: false,
+          deferRetry: true,
           service: null,
           reason: 'operational message-group ingress not ready',
+          reasonCode: 'query_transport_not_ready',
+          errorCode: 'ROUTER_QUERY_TRANSPORT_NOT_READY',
           retryAfterMs: 25,
         },
         'deferred query transport selection should preserve structured retry context',
@@ -498,9 +643,9 @@ test(
         'initialized relay should become the bound query transport service',
       );
       assert.equal(
-        resolvedSelection.route,
-        'relay',
-        'resolver should preserve the dedicated relay route classification',
+        resolvedSelection.ready,
+        true,
+        'resolver should mark an initialized relay as ready',
       );
     } finally {
       MessageRouterSetup.create = originalCreate;

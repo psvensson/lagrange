@@ -594,6 +594,7 @@ class NodeJoiningServiceSegment1 extends EventEmitter {
         getNodeAddress: () => this.nodeAddress,
         getAdvertisedNodeWsAddress: () => this.advertisedNodeWsAddress,
         getLogger: () => this.logger,
+        getConfig: () => this.config,
         getIdentifyPayload: () => this.getIdentifyBootstrapPayload(),
         getNow: () => this.now,
         getSleep: () => this.sleep,

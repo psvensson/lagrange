@@ -28,6 +28,7 @@ import {
   JOINING_SEED_CONTACT_FAILURE_KIND,
 } from '../../src/bootstrap/node-joining-constants.js';
 import {
+  BOOTSTRAP_API_DEFAULT,
   BOOTSTRAP_API_PROBE_REASON,
   BOOTSTRAP_API_REQUEST_FIELD,
   BOOTSTRAP_API_RESPONSE_FIELD,
@@ -60,6 +61,11 @@ import {
   SERVICE_TYPE,
   SERVICE_STATUS,
   TABLES,
+  NUM,
+  TIME_MS,
+  CDC_OPERATION,
+  ENDPOINT_STATUS,
+  TRANSPORT_TYPE,
 } from '../../src/constants/index.js';
 
 const DEFAULT_SEED_WS_ADDRESS =
@@ -119,6 +125,257 @@ test('NodeJoiningService - initialization', async (t) => {
   t.equal(service.nodeAddress, 'ws://localhost:9090');
   t.equal(service.seedNodeAddress, 'http://localhost:8080');
 });
+
+test('NodeJoiningService - websocket phase receives configured retry policy',
+  async (t) => {
+    initializeTestEnvironment();
+
+    const TEST_JOINING_NODE_ID = 'joining-node-websocket-retry-policy';
+    const TEST_JOINING_NODE_ADDRESS = 'ws://localhost:9090';
+    const TEST_SEED_NODE_ADDRESS = 'http://localhost:8080';
+    const TEST_LEADERSHIP_WAIT_TIMEOUT_MS = 1200;
+    const TEST_LEADERSHIP_WAIT_INITIAL_DELAY_MS = 25;
+    const TEST_LEADERSHIP_WAIT_MAX_DELAY_MS = 75;
+    const TEST_LEADERSHIP_WAIT_BACKOFF_MULTIPLIER = 2;
+
+    const service = new NodeJoiningService({
+      nodeId: TEST_JOINING_NODE_ID,
+      nodeAddress: TEST_JOINING_NODE_ADDRESS,
+      seedNodeAddress: TEST_SEED_NODE_ADDRESS,
+      config: {
+        leadershipWaitTimeoutMs: TEST_LEADERSHIP_WAIT_TIMEOUT_MS,
+        leadershipWaitInitialDelayMs: TEST_LEADERSHIP_WAIT_INITIAL_DELAY_MS,
+        leadershipWaitMaxDelayMs: TEST_LEADERSHIP_WAIT_MAX_DELAY_MS,
+        leadershipWaitBackoffMultiplier:
+          TEST_LEADERSHIP_WAIT_BACKOFF_MULTIPLIER,
+      },
+    });
+
+    const retryPolicy =
+      service.connectWebSocketPhase.resolveSeedWebSocketRetryPolicy();
+
+    t.equal(
+      retryPolicy.retryTimeoutMs,
+      TEST_LEADERSHIP_WAIT_TIMEOUT_MS,
+      'production websocket phase delegate should expose join retry timeout config',
+    );
+    t.equal(
+      retryPolicy.initialDelayMs,
+      TEST_LEADERSHIP_WAIT_INITIAL_DELAY_MS,
+      'production websocket phase delegate should expose join retry initial delay config',
+    );
+    t.equal(
+      retryPolicy.maxDelayMs,
+      TEST_LEADERSHIP_WAIT_MAX_DELAY_MS,
+      'production websocket phase delegate should expose join retry max delay config',
+    );
+    t.equal(
+      retryPolicy.backoffMultiplier,
+      TEST_LEADERSHIP_WAIT_BACKOFF_MULTIPLIER,
+      'production websocket phase delegate should expose join retry backoff config',
+    );
+  });
+
+test('NodeJoiningService - supplements partial cache mesh from bootstrap snapshot',
+  async (t) => {
+    initializeTestEnvironment();
+
+    const TEST_JOINING_NODE_ID = 'joining-node-partial-cache-mesh';
+    const TEST_JOINING_NODE_ADDRESS = 'ws://localhost:9102';
+    const TEST_SEED_NODE_ADDRESS = 'http://localhost:8080';
+    const TEST_SEED_NODE_ID = 'seed-node-partial-cache';
+    const TEST_SEED_NODE_REST_ADDRESS = 'seed-node-partial-cache:8080';
+    const TEST_PEER_NODE_ID = 'peer-node-bootstrap-supplement';
+    const TEST_PEER_NODE_REST_ADDRESS = 'peer-node-bootstrap-supplement:8080';
+    const TEST_PEER_WS_ADDRESS = 'ws://peer-node-bootstrap-supplement:8082';
+    const TEST_PEER_ENDPOINT_ID = 'peer-node-bootstrap-supplement-ws';
+    const TEST_ACTIVE_STATUS = 'active';
+    const TEST_JOINING_STATUS = 'joining';
+    const TEST_CONNECTING_STATE = 'connecting';
+    const TEST_CONNECTED_STATE = 'connected';
+    const TEST_ENDPOINT_PRIORITY = 0;
+
+    const service = new NodeJoiningService({
+      nodeId: TEST_JOINING_NODE_ID,
+      nodeAddress: TEST_JOINING_NODE_ADDRESS,
+      seedNodeAddress: TEST_SEED_NODE_ADDRESS,
+    });
+
+    service.bootstrapResponse = {
+      systemTableSnapshots: {
+        nodes: [
+          {
+            node_id: TEST_JOINING_NODE_ID,
+            node_address: TEST_JOINING_NODE_ADDRESS,
+            status: TEST_ACTIVE_STATUS,
+          },
+          {
+            node_id: TEST_SEED_NODE_ID,
+            node_address: TEST_SEED_NODE_REST_ADDRESS,
+            status: TEST_ACTIVE_STATUS,
+          },
+          {
+            node_id: TEST_PEER_NODE_ID,
+            node_address: TEST_PEER_NODE_REST_ADDRESS,
+            status: TEST_JOINING_STATUS,
+            connection_state: TEST_CONNECTING_STATE,
+          },
+        ],
+        node_endpoints: [
+          {
+            endpoint_id: TEST_PEER_ENDPOINT_ID,
+            node_id: TEST_PEER_NODE_ID,
+            transport_type: TRANSPORT_TYPE.WEBSOCKET,
+            address: TEST_PEER_WS_ADDRESS,
+            priority: TEST_ENDPOINT_PRIORITY,
+            status: ENDPOINT_STATUS.ACTIVE,
+          },
+        ],
+      },
+      topologySnapshotMeta: {
+        activeNodeIds: [TEST_SEED_NODE_ID],
+      },
+    };
+
+    const systemTableCache =
+      NodeService.getInstance().getSystemTableCache();
+    service.systemTableCache = systemTableCache;
+    systemTableCache.applySystemTableChange(
+      TABLES.NODES,
+      CDC_OPERATION.INSERT,
+      {
+        node_id: TEST_JOINING_NODE_ID,
+        node_address: TEST_JOINING_NODE_ADDRESS,
+        status: TEST_ACTIVE_STATUS,
+      },
+    );
+    systemTableCache.applySystemTableChange(
+      TABLES.NODES,
+      CDC_OPERATION.INSERT,
+      {
+        node_id: TEST_SEED_NODE_ID,
+        node_address: TEST_SEED_NODE_REST_ADDRESS,
+        status: TEST_ACTIVE_STATUS,
+      },
+    );
+
+    const connectCalls = [];
+    service.messageRouter = {
+      nodeConnections: new Map([
+        [TEST_SEED_NODE_ID, {state: TEST_CONNECTED_STATE}],
+      ]),
+      getConnectionState(nodeId) {
+        return this.nodeConnections.get(nodeId)?.state || null;
+      },
+      async connectToNode(nodeId, wsAddress) {
+        connectCalls.push({nodeId, wsAddress});
+        this.nodeConnections.set(nodeId, {
+          state: TEST_CONNECTED_STATE,
+          address: wsAddress,
+        });
+      },
+      getConnectedNodes() {
+        return Array.from(this.nodeConnections.keys());
+      },
+    };
+
+    await service.connectToClusterNodes();
+
+    t.same(
+      connectCalls,
+      [{
+        nodeId: TEST_PEER_NODE_ID,
+        wsAddress: TEST_PEER_WS_ADDRESS,
+      }],
+      'partial cache mesh reconciliation should connect bootstrap-supplemented peers',
+    );
+  });
+
+test('BootstrapAPI - retains admission peer hints in bootstrap snapshots',
+  async (t) => {
+    initializeTestEnvironment();
+
+    const TEST_SEED_NODE_ID = 'seed-node-admission-hint';
+    const TEST_SEED_NODE_ADDRESS = 'seed-node-admission-hint:8080';
+    const TEST_SEED_WS_ADDRESS = 'ws://seed-node-admission-hint:8082';
+    const TEST_PEER_NODE_ID = 'peer-node-admission-hint';
+    const TEST_PEER_NODE_ADDRESS = 'peer-node-admission-hint:8080';
+    const TEST_PEER_WS_ADDRESS = 'ws://peer-node-admission-hint:8082';
+    const TEST_ACTIVE_STATUS = 'active';
+    const TEST_JOINING_STATUS = 'joining';
+    const TEST_CONNECTING_STATE = 'connecting';
+    const TEST_LEASE_MS = 5000;
+    const TEST_NOW_MS = Date.now();
+    const TEST_EXPIRED_NOW_MS = TEST_NOW_MS + TEST_LEASE_MS + 1;
+
+    const api = new BootstrapAPI({
+      seedNodeId: TEST_SEED_NODE_ID,
+      seedNodeAddress: TEST_SEED_NODE_ADDRESS,
+      seedNodeWsAddress: TEST_SEED_WS_ADDRESS,
+      bootstrapAdmissionLeaseMs: TEST_LEASE_MS,
+      systemTableCache: {
+        getAll() {
+          return [];
+        },
+      },
+    });
+
+    const admission = api.acquireBootstrapAdmission({
+      nodeId: TEST_PEER_NODE_ID,
+      nodeAddress: TEST_PEER_NODE_ADDRESS,
+      now: TEST_NOW_MS,
+    });
+    api.releaseBootstrapAdmission(admission);
+
+    const envelope = api.bootstrapRequestOwner
+      .attachBootstrapAdmissionPeerHints({
+        systemTableSnapshots: {
+          [TABLES.NODES]: [{
+            node_id: TEST_SEED_NODE_ID,
+            node_address: TEST_SEED_NODE_ADDRESS,
+            status: TEST_ACTIVE_STATUS,
+          }],
+          [TABLES.NODE_ENDPOINTS]: [],
+        },
+        topologySnapshotMeta: {
+          activeNodeIds: [TEST_SEED_NODE_ID],
+          tableRowCounts: {
+            [TABLES.NODES]: 1,
+            [TABLES.NODE_ENDPOINTS]: 0,
+          },
+        },
+      });
+
+    t.match(
+      envelope.systemTableSnapshots[TABLES.NODES].find((row) =>
+        row.node_id === TEST_PEER_NODE_ID,
+      ),
+      {
+        node_id: TEST_PEER_NODE_ID,
+        node_address: TEST_PEER_NODE_ADDRESS,
+        status: TEST_JOINING_STATUS,
+        connection_state: TEST_CONNECTING_STATE,
+      },
+      'bootstrap response snapshots should retain recently admitted peers as joining hints',
+    );
+    t.match(
+      envelope.systemTableSnapshots[TABLES.NODE_ENDPOINTS].find((row) =>
+        row.node_id === TEST_PEER_NODE_ID,
+      ),
+      {
+        node_id: TEST_PEER_NODE_ID,
+        transport_type: TRANSPORT_TYPE.WEBSOCKET,
+        address: TEST_PEER_WS_ADDRESS,
+        status: ENDPOINT_STATUS.ACTIVE,
+      },
+      'bootstrap response snapshots should include websocket endpoints for admission hints',
+    );
+    t.same(
+      api.getBootstrapAdmissionPeerHints(TEST_EXPIRED_NOW_MS),
+      [],
+      'admission peer hints should expire on the bootstrap admission lease',
+    );
+  });
 
 test('NodeJoiningService - runtime owner exposes control-plane readiness service',
   async (t) => {
@@ -1393,6 +1650,175 @@ test('NodeJoiningService - includes assignment_id on MOVE_REPLICA register-servi
     );
   });
 
+test('NodeJoiningService - MOVE_REPLICA register-service keeps progress-path ' +
+  'request timeout', async (t) => {
+  initializeTestEnvironment();
+
+  const TEST_RETRY_TIMEOUT_MULTIPLIER = 3;
+  const TEST_CONFIGURED_TIMEOUT_MS = 2025;
+  const TEST_RETRY_DELAY_MS = 10;
+  const TEST_RETRY_TIMEOUT_MS =
+    TEST_CONFIGURED_TIMEOUT_MS * TEST_RETRY_TIMEOUT_MULTIPLIER;
+  const TEST_ASSIGNMENT_ID = '5ef301f9-6f73-4cb5-bb4e-8d73ef2a9ce6';
+  const TEST_NODE_ID = '550e8400-e29b-41d4-a716-44665544010b';
+  const TEST_NODE_ADDRESS = 'ws://localhost:9090';
+  const TEST_SEED_ADDRESS = 'http://localhost:8080';
+  const TEST_GROUP_ID = 'mg-1';
+  const TEST_REPLICA_ID = 'mg-1-r0';
+
+  let attempts = 0;
+  const observedTimeoutMs = [];
+  const retryDelays = [];
+  const service = new NodeJoiningService({
+    nodeId: TEST_NODE_ID,
+    nodeAddress: TEST_NODE_ADDRESS,
+    seedNodeAddress: TEST_SEED_ADDRESS,
+    config: {
+      httpTimeoutMs: TEST_CONFIGURED_TIMEOUT_MS,
+      leadershipWaitTimeoutMs: TEST_RETRY_TIMEOUT_MS,
+      leadershipWaitInitialDelayMs: TEST_RETRY_DELAY_MS,
+      leadershipWaitMaxDelayMs: TEST_RETRY_DELAY_MS,
+      leadershipWaitBackoffMultiplier: 1,
+      leadershipWaitJitterRatio: 0,
+    },
+    sleep: async (delayMs) => {
+      retryDelays.push(delayMs);
+    },
+    httpPost: async (url, _payload, options = {}) => {
+      if (!url.endsWith('/register-service')) {
+        throw new Error('unexpected URL in MOVE_REPLICA register-service test');
+      }
+      const timeoutMs = Number.isFinite(options?.timeoutMs) ?
+        options.timeoutMs :
+        TEST_CONFIGURED_TIMEOUT_MS;
+      observedTimeoutMs.push(timeoutMs);
+      attempts += 1;
+      if (attempts === 1) {
+        throw new Error('Request timeout after ' + timeoutMs + 'ms');
+      }
+      return {success: true};
+    },
+  });
+  service.bootstrapResponse = {
+    messageGroupAssignment: {
+      strategy: AssignmentStrategy.MOVE_REPLICA,
+      groupId: TEST_GROUP_ID,
+      replicaToMove: TEST_REPLICA_ID,
+      assignmentId: TEST_ASSIGNMENT_ID,
+    },
+  };
+
+  await service.registerMessageGroupService(
+    TEST_GROUP_ID,
+    TEST_REPLICA_ID,
+    {getRole: () => 'leader'},
+  );
+
+  t.equal(
+    attempts,
+    2,
+    'MOVE_REPLICA register-service timeout should remain retryable',
+  );
+  t.same(
+    observedTimeoutMs,
+    [
+      TEST_CONFIGURED_TIMEOUT_MS,
+      TEST_CONFIGURED_TIMEOUT_MS,
+    ],
+    'MOVE_REPLICA register-service attempts should keep the configured HTTP timeout',
+  );
+  t.same(
+    retryDelays,
+    [TEST_RETRY_DELAY_MS],
+    'register-service attempts should keep the canonical retry delay',
+  );
+});
+
+test('NodeJoiningService - MOVE_REPLICA register-service caps long request ' +
+  'timeout', async (t) => {
+  initializeTestEnvironment();
+
+  const TEST_CONFIGURED_TIMEOUT_MS = NUM.THIRTY_THOUSAND;
+  const TEST_MOVE_REPLICA_REGISTER_TIMEOUT_MS =
+    BOOTSTRAP_API_DEFAULT.SERVICE_REGISTRATION_WRITE_RETRY_TIMEOUT_MS +
+    BOOTSTRAP_API_DEFAULT.SERVICE_REGISTRATION_CACHE_VISIBILITY_TIMEOUT_MS +
+    TIME_MS.SECOND * NUM.FIVE;
+  const TEST_RETRY_DELAY_MS = NUM.TEN;
+  const TEST_ASSIGNMENT_ID = '5ef301f9-6f73-4cb5-bb4e-8d73ef2a9ce7';
+  const TEST_NODE_ID = '550e8400-e29b-41d4-a716-44665544010c';
+  const TEST_NODE_ADDRESS = 'ws://localhost:9090';
+  const TEST_SEED_ADDRESS = 'http://localhost:8080';
+  const TEST_GROUP_ID = 'mg-1';
+  const TEST_REPLICA_ID = 'mg-1-r0';
+
+  let attempts = 0;
+  const observedTimeoutMs = [];
+  const retryDelays = [];
+  const service = new NodeJoiningService({
+    nodeId: TEST_NODE_ID,
+    nodeAddress: TEST_NODE_ADDRESS,
+    seedNodeAddress: TEST_SEED_ADDRESS,
+    config: {
+      httpTimeoutMs: TEST_CONFIGURED_TIMEOUT_MS,
+      leadershipWaitTimeoutMs: TEST_CONFIGURED_TIMEOUT_MS,
+      leadershipWaitInitialDelayMs: TEST_RETRY_DELAY_MS,
+      leadershipWaitMaxDelayMs: TEST_RETRY_DELAY_MS,
+      leadershipWaitBackoffMultiplier: 1,
+      leadershipWaitJitterRatio: 0,
+    },
+    sleep: async (delayMs) => {
+      retryDelays.push(delayMs);
+    },
+    httpPost: async (url, _payload, options = {}) => {
+      if (!url.endsWith('/register-service')) {
+        throw new Error('unexpected URL in MOVE_REPLICA register-service test');
+      }
+      const timeoutMs = Number.isFinite(options?.timeoutMs) ?
+        options.timeoutMs :
+        TEST_CONFIGURED_TIMEOUT_MS;
+      observedTimeoutMs.push(timeoutMs);
+      attempts += 1;
+      if (attempts === 1) {
+        throw new Error('Request timeout after ' + timeoutMs + 'ms');
+      }
+      return {success: true};
+    },
+  });
+  service.bootstrapResponse = {
+    messageGroupAssignment: {
+      strategy: AssignmentStrategy.MOVE_REPLICA,
+      groupId: TEST_GROUP_ID,
+      replicaToMove: TEST_REPLICA_ID,
+      assignmentId: TEST_ASSIGNMENT_ID,
+    },
+  };
+
+  await service.registerMessageGroupService(
+    TEST_GROUP_ID,
+    TEST_REPLICA_ID,
+    {getRole: () => 'leader'},
+  );
+
+  t.equal(
+    attempts,
+    2,
+    'MOVE_REPLICA register-service timeout should remain retryable',
+  );
+  t.same(
+    observedTimeoutMs,
+    [
+      TEST_MOVE_REPLICA_REGISTER_TIMEOUT_MS,
+      TEST_MOVE_REPLICA_REGISTER_TIMEOUT_MS,
+    ],
+    'long MOVE_REPLICA register-service attempts should use the bounded probe timeout',
+  );
+  t.same(
+    retryDelays,
+    [TEST_RETRY_DELAY_MS],
+    'bounded register-service attempts should keep the canonical retry delay',
+  );
+});
+
 test('NodeJoiningService - bypasses HTTP register-service for local seed self-registration',
   async (t) => {
     initializeTestEnvironment();
@@ -1870,6 +2296,299 @@ test('NodeJoiningService - retryable seed-contact bootstrap authority ' +
     observedTimeoutMs,
     [TEST_HTTP_TIMEOUT_MS, TEST_HTTP_TIMEOUT_MS],
     'phase should keep the configured request timeout for retryable transport attempts',
+  );
+});
+
+test('NodeJoiningService - move-replica bootstrap defer keeps configured ' +
+  'seed-contact timeout on the progress path', async (t) => {
+  initializeTestEnvironment();
+
+  const TEST_RETRY_AFTER_MS = 5;
+  const TEST_RETRY_DELAY_MS = 10;
+  const TEST_HTTP_TIMEOUT_MS = 1030;
+  const TEST_RETRY_TIMEOUT_MS =
+    TEST_HTTP_TIMEOUT_MS + TEST_RETRY_DELAY_MS + TEST_HTTP_TIMEOUT_MS;
+  const TEST_NODE_ID = '550e8400-e29b-41d4-a716-446655440123';
+  const TEST_NODE_ADDRESS = 'ws://localhost:9090';
+  const TEST_SEED_ADDRESS = 'http://localhost:8080';
+  const TEST_BOOTSTRAP_PHASE = 'partitions';
+  const TEST_BOOTSTRAP_ERROR = 'Bootstrap not ready';
+  const TEST_RETRYABLE_RESPONSE = Object.freeze({
+    success: false,
+    error: TEST_BOOTSTRAP_ERROR,
+    code: BOOTSTRAP_PIPELINE_ERROR_CODE.BOOTSTRAP_NOT_READY,
+    phase: TEST_BOOTSTRAP_PHASE,
+    reasons: Object.freeze([
+      BOOTSTRAP_API_PROBE_REASON.MOVE_REPLICA_HANDOFF_STABILIZING,
+    ]),
+    retryAfterMs: TEST_RETRY_AFTER_MS,
+  });
+
+  let attempts = 0;
+  let currentNow = 0;
+  const observedTimeoutMs = [];
+  const retryDelays = [];
+  const service = new NodeJoiningService({
+    nodeId: TEST_NODE_ID,
+    nodeAddress: TEST_NODE_ADDRESS,
+    seedNodeAddress: TEST_SEED_ADDRESS,
+    now: () => currentNow,
+    sleep: async (delayMs) => {
+      retryDelays.push(delayMs);
+      currentNow += delayMs;
+    },
+    config: {
+      httpTimeoutMs: TEST_HTTP_TIMEOUT_MS,
+      leadershipWaitTimeoutMs: TEST_RETRY_TIMEOUT_MS,
+      leadershipWaitInitialDelayMs: TEST_RETRY_DELAY_MS,
+      leadershipWaitMaxDelayMs: TEST_RETRY_DELAY_MS,
+      leadershipWaitBackoffMultiplier: 1,
+      leadershipWaitJitterRatio: 0,
+    },
+    httpPost: async (_url, _payload, options = {}) => {
+      attempts += 1;
+      const timeoutMs = Number.isFinite(options?.timeoutMs) ?
+        options.timeoutMs :
+        TEST_HTTP_TIMEOUT_MS;
+      observedTimeoutMs.push(timeoutMs);
+      currentNow += timeoutMs;
+      if (attempts === 1) {
+        const error = new Error(
+          `HTTP 503: ${JSON.stringify(TEST_RETRYABLE_RESPONSE)}`,
+        );
+        error.statusCode = 503;
+        throw error;
+      }
+      throw new Error('Request timeout after ' + timeoutMs + 'ms');
+    },
+  });
+
+  const error = await t.rejects(
+    service.phaseContactSeed(),
+    'move-replica handoff evidence should keep the failure resumable',
+  );
+
+  t.equal(attempts, 2, 'phase should keep the existing bounded in-call retry');
+  t.equal(
+    error?.message,
+    JOINING_ERROR_MSG.contactSeedFailed(
+      JOINING_ERROR_MSG.httpTimeout(TEST_HTTP_TIMEOUT_MS),
+    ),
+    'move-replica retained evidence should surface the configured request ' +
+      'timeout',
+  );
+  t.equal(
+    error?.deferRetry,
+    true,
+    'move-replica retained evidence should remain retryable',
+  );
+  t.equal(
+    error?.seedContactFailureKind,
+    JOINING_SEED_CONTACT_FAILURE_KIND.BOOTSTRAP_NOT_READY,
+    'move-replica retained evidence should keep the seed-contact owner marker',
+  );
+  t.same(
+    observedTimeoutMs,
+    [TEST_HTTP_TIMEOUT_MS, TEST_HTTP_TIMEOUT_MS],
+    'move-replica retained evidence should keep the configured request ' +
+      'timeout for the next attempt',
+  );
+  t.same(
+    retryDelays,
+    [TEST_RETRY_DELAY_MS],
+    'phase should still use the canonical retry delay before the bounded attempt',
+  );
+});
+
+test('NodeJoiningService - fresh bootstrap-not-ready evidence bounds long ' +
+  'seed-contact timeout', async (t) => {
+  initializeTestEnvironment();
+
+  const TEST_RETRY_AFTER_MS = TIME_MS.SECOND;
+  const TEST_RETRY_DELAY_MS = NUM.TEN;
+  const TEST_HTTP_TIMEOUT_MS = NUM.THIRTY_THOUSAND;
+  const TEST_RETAINED_EVIDENCE_TIMEOUT_MS = TIME_MS.SECOND * NUM.FIVE;
+  const TEST_RETRY_TIMEOUT_MS = TEST_HTTP_TIMEOUT_MS;
+  const TEST_BOOTSTRAP_PHASE = 'partitions';
+  const TEST_RETRYABLE_RESPONSE = Object.freeze({
+    success: false,
+    error: 'Bootstrap not ready',
+    code: BOOTSTRAP_PIPELINE_ERROR_CODE.BOOTSTRAP_NOT_READY,
+    phase: TEST_BOOTSTRAP_PHASE,
+    reasons: Object.freeze([
+      BOOTSTRAP_API_PROBE_REASON.MOVE_REPLICA_HANDOFF_STABILIZING,
+    ]),
+    retryAfterMs: TEST_RETRY_AFTER_MS,
+  });
+
+  let attempts = 0;
+  let currentNow = 0;
+  const observedTimeoutMs = [];
+  const service = new NodeJoiningService({
+    nodeId: '550e8400-e29b-41d4-a716-446655440124',
+    nodeAddress: 'ws://localhost:9090',
+    seedNodeAddress: 'http://localhost:8080',
+    now: () => currentNow,
+    sleep: async (delayMs) => {
+      currentNow += delayMs;
+    },
+    config: {
+      httpTimeoutMs: TEST_HTTP_TIMEOUT_MS,
+      leadershipWaitTimeoutMs: TEST_RETRY_TIMEOUT_MS,
+      leadershipWaitInitialDelayMs: TEST_RETRY_DELAY_MS,
+      leadershipWaitMaxDelayMs: TEST_RETRY_DELAY_MS,
+      leadershipWaitBackoffMultiplier: 1,
+      leadershipWaitJitterRatio: 0,
+    },
+    httpPost: async (_url, _payload, options = {}) => {
+      attempts += 1;
+      const timeoutMs = Number.isFinite(options?.timeoutMs) ?
+        options.timeoutMs :
+        TEST_HTTP_TIMEOUT_MS;
+      observedTimeoutMs.push(timeoutMs);
+      if (attempts === 1) {
+        const error = new Error(
+          `HTTP 503: ${JSON.stringify(TEST_RETRYABLE_RESPONSE)}`,
+        );
+        error.statusCode = 503;
+        throw error;
+      }
+      currentNow += timeoutMs;
+      throw new Error('Request timeout after ' + timeoutMs + 'ms');
+    },
+  });
+
+  const error = await t.rejects(
+    service.phaseContactSeed(),
+    'retained bootstrap-not-ready evidence should keep the failure resumable',
+  );
+
+  t.equal(attempts, 2, 'phase should keep the existing bounded in-call retry');
+  t.same(
+    observedTimeoutMs,
+    [
+      TEST_HTTP_TIMEOUT_MS,
+      TEST_RETAINED_EVIDENCE_TIMEOUT_MS,
+    ],
+    'retained bootstrap-not-ready evidence should cap the next long seed-contact request',
+  );
+  t.equal(
+    error?.message,
+    JOINING_ERROR_MSG.contactSeedFailed(
+      JOINING_ERROR_MSG.httpTimeout(TEST_RETAINED_EVIDENCE_TIMEOUT_MS),
+    ),
+    'surfaced timeout should reflect the retained-evidence request cap',
+  );
+  t.equal(
+    error?.deferRetry,
+    true,
+    'retained bootstrap-not-ready transport timeout should remain retryable',
+  );
+  t.equal(
+    error?.seedContactFailureKind,
+    JOINING_SEED_CONTACT_FAILURE_KIND.BOOTSTRAP_NOT_READY,
+    'fresh evidence should keep the seed-contact owner marker',
+  );
+});
+
+test('NodeJoiningService - retained bootstrap-not-ready timeout clears stale ' +
+  'evidence before retry', async (t) => {
+  initializeTestEnvironment();
+
+  const TEST_RETRY_AFTER_MS = TIME_MS.SECOND;
+  const TEST_RETRY_DELAY_MS = NUM.TEN;
+  const TEST_HTTP_TIMEOUT_MS = NUM.THIRTY_THOUSAND;
+  const TEST_RETAINED_EVIDENCE_TIMEOUT_MS = TIME_MS.SECOND * NUM.FIVE;
+  const TEST_RETRY_TIMEOUT_MS = TEST_HTTP_TIMEOUT_MS;
+  const TEST_SERVICE_UNAVAILABLE_STATUS = 503;
+  const TEST_BOOTSTRAP_PHASE = 'partitions';
+  const TEST_SEED_NODE_ID = 'seed-node-retained-evidence-clear';
+  const TEST_SEED_NODE_WS_ADDRESS = 'ws://localhost:9091';
+  const TEST_SUCCESSFUL_RESPONSE = Object.freeze({
+    success: true,
+    seedNodeId: TEST_SEED_NODE_ID,
+    seedNodeWsAddress: TEST_SEED_NODE_WS_ADDRESS,
+    messageGroupAssignment: Object.freeze({
+      strategy: AssignmentStrategy.LEAST_LOADED,
+    }),
+  });
+  const TEST_RETAINED_EVIDENCE = Object.freeze({
+    success: false,
+    error: 'Bootstrap not ready',
+    code: BOOTSTRAP_PIPELINE_ERROR_CODE.BOOTSTRAP_NOT_READY,
+    phase: TEST_BOOTSTRAP_PHASE,
+    reasons: Object.freeze([
+      BOOTSTRAP_API_PROBE_REASON.MOVE_REPLICA_HANDOFF_STABILIZING,
+    ]),
+    retryAfterMs: TEST_RETRY_AFTER_MS,
+    statusCode: TEST_SERVICE_UNAVAILABLE_STATUS,
+  });
+
+  let attempts = 0;
+  let currentNow = 0;
+  const observedTimeoutMs = [];
+  const service = new NodeJoiningService({
+    nodeId: '550e8400-e29b-41d4-a716-446655440125',
+    nodeAddress: 'ws://localhost:9090',
+    seedNodeAddress: 'http://localhost:8080',
+    now: () => currentNow,
+    sleep: async (delayMs) => {
+      currentNow += delayMs;
+    },
+    config: {
+      httpTimeoutMs: TEST_HTTP_TIMEOUT_MS,
+      leadershipWaitTimeoutMs: TEST_RETRY_TIMEOUT_MS,
+      leadershipWaitInitialDelayMs: TEST_RETRY_DELAY_MS,
+      leadershipWaitMaxDelayMs: TEST_RETRY_DELAY_MS,
+      leadershipWaitBackoffMultiplier: 1,
+      leadershipWaitJitterRatio: 0,
+    },
+    httpPost: async (_url, _payload, options = {}) => {
+      attempts += 1;
+      const timeoutMs = Number.isFinite(options?.timeoutMs) ?
+        options.timeoutMs :
+        TEST_HTTP_TIMEOUT_MS;
+      observedTimeoutMs.push(timeoutMs);
+      if (attempts === 1) {
+        currentNow += timeoutMs;
+        throw new Error('Request timeout after ' + timeoutMs + 'ms');
+      }
+      return TEST_SUCCESSFUL_RESPONSE;
+    },
+  });
+  service.lastRetryableSeedContactEvidence = TEST_RETAINED_EVIDENCE;
+
+  await service.phaseContactSeed();
+
+  t.equal(
+    attempts,
+    2,
+    'retained evidence should spend one bounded probe before normal retry',
+  );
+  t.same(
+    observedTimeoutMs,
+    [
+      TEST_RETAINED_EVIDENCE_TIMEOUT_MS,
+      TEST_HTTP_TIMEOUT_MS -
+        TEST_RETAINED_EVIDENCE_TIMEOUT_MS -
+        TEST_RETRY_DELAY_MS,
+    ],
+    'stale retained evidence should clear before the remaining-budget retry',
+  );
+  t.equal(
+    service.lastRetryableSeedContactEvidence,
+    null,
+    'successful retry should leave no stale retained seed evidence',
+  );
+  t.equal(
+    service.bootstrapResponse,
+    TEST_SUCCESSFUL_RESPONSE,
+    'normal retry should be able to accept a fresh successful seed response',
+  );
+  t.equal(
+    service.seedNodeId,
+    TEST_SEED_NODE_ID,
+    'successful retry should update seed node identity',
   );
 });
 

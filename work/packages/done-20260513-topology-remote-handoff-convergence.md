@@ -7,16 +7,16 @@
   "opened": "2026-05-13",
   "lane": "scenario-release-gate",
   "scenario": "rolling-restart",
-  "artifact": "test-output/reports/rolling-restart-green-gate-after-sql-write-dispatch-retry-progress.report.json",
+  "artifact": "test-output/reports/rolling-restart-green-gate-after-topology-remote-handoff-convergence.report.json",
   "playback": "none",
   "owner": "operation_workflow_owner",
   "boundary": "workflow_progress",
   "dominantReason": "priority_recovery_event_driven_wait",
   "currentState": "Focused owner proof is green and the representative rolling-restart rerun has zero priority-recovery residual witnesses; the first frontier migrated to startup_active_gate_owner / snapshot_coverage.",
-  "nextAction": "Close this priority-recovery package after required implementation subagent and focused commit proof, then activate the active-gate snapshot-coverage package.",
+  "nextAction": "Use the post-fix artifact as the handoff into the active-gate snapshot-coverage package.",
   "proof": [
-    "npm run work:evidence-summary -- test-output/reports/rolling-restart-green-gate-after-sql-write-dispatch-retry-progress.report.json",
-    "npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-green-gate-after-sql-write-dispatch-retry-progress.report.json --markdown",
+    "npm run work:evidence-summary -- test-output/reports/rolling-restart-green-gate-after-topology-remote-handoff-convergence.report.json",
+    "npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-green-gate-after-topology-remote-handoff-convergence.report.json --markdown",
     "npm run analyze:owner-files -- operation_workflow_owner workflow_progress --markdown",
     "npm run analyze:owner-files -- operation_workflow_owner rebalancer_handoff --markdown",
     "node --test test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js test/rebalancer/operation-workflow-progress-event-driven-reentry.test.js test/rebalancer/coordinator-created-operation-progress-remote-handoff.test.js",
@@ -35,7 +35,7 @@
     "test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js"
   ],
   "handoffFiles": [
-    "test-output/reports/rolling-restart-green-gate-after-sql-write-dispatch-retry-progress.report.json"
+    "test-output/reports/rolling-restart-green-gate-after-topology-remote-handoff-convergence.report.json"
   ],
   "generatedFiles": [],
   "candidateRuntimeFiles": [
@@ -66,33 +66,33 @@
   },
   "causalGovernance": {
     "hypothesis": "If operation_workflow_owner / workflow_progress owns the latest priority recovery residual, active coordinator-created remote handoff retry evidence must surface as a bounded rebalancer-handoff retry or advance through dispatch, delivery, ACK, timeout, or reconcile instead of remaining only event-driven workflow progress.",
-    "stopConditionCheck": "npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-green-gate-after-sql-write-dispatch-retry-progress.report.json",
+    "stopConditionCheck": "npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-green-gate-after-topology-remote-handoff-convergence.report.json",
     "expectedCausalModelChange": "priority_recovery_partition_progress either converges, reduces to rebalancer_handoff retry-scheduled evidence with bounded follow-up, or migrates to active_gate_snapshot_coverage after focused owner proof and a representative rerun.",
     "representativeOutcome": "migrated",
     "causalDebt": "The entry artifact reported 10 priority-recovery residual witnesses split between operation_workflow_owner / workflow_progress and operation_workflow_owner / rebalancer_handoff. The post-fix representative artifact reports priorityRecoveryInvariants=passed, priorityRecovery=none, and zero priority-recovery witnesses; remaining debt migrated to startup_active_gate_owner / snapshot_coverage with active_gate_timed_out and snapshot_coverage_incomplete.",
     "crossBoundaryReview": "First package in the Topology Convergence Ship Shape sprint; review is not-needed with reason first-package-in-sprint. Implementation subagent Raman (019e22c9-ed9a-7ec1-9b00-bc3081b69b48) inspected the package and reran the focused owner proof with 202 passing tests."
   },
   "scenarioCausalClosure": {
-    "referenceScenarioOrProbe": "rolling-restart representative report after focused SQL write dispatch retry proof",
+    "referenceScenarioOrProbe": "rolling-restart representative report after topology remote handoff convergence proof",
     "phaseChain": [
       "publication convergence",
       "priority recovery operation workflow progress",
       "startup active-gate snapshot coverage",
       "startup readiness support evidence"
     ],
-    "currentFirstFrontier": "priority_recovery_partition_progress under operation_workflow_owner / workflow_progress with dominant reason priority_recovery_event_driven_wait",
+    "currentFirstFrontier": "active_gate_snapshot_coverage under startup_active_gate_owner / snapshot_coverage with dominant reason active_gate_timed_out",
     "knownDownstreamBlockers": [
       "startup_active_gate_owner / snapshot_coverage is now first frontier with active_gate_timed_out and snapshotCoverage=1/5",
       "startup_readiness_owner / startup_support_evidence remains deferred behind active_gate_snapshot_coverage",
       "publication convergence is PUBLISHED with pendingAck=0 but missingPublished=4 while active-gate coverage is incomplete"
     ],
-    "missingCausalEdge": "Coordinator-created remote handoff retry/ACK progress must move retry_deferred recovering_in_flight operations through one bounded dispatch, delivery, ACK, timeout, or reconcile path.",
-    "missingCausalEdgeProbe": "npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-green-gate-after-sql-write-dispatch-retry-progress.report.json --markdown",
-    "boundedProgressProof": "Focused owner tests must prove active remote handoff retry evidence is bounded and re-enters through the operation workflow owner without inline fallback or local mutation.",
+    "missingCausalEdge": "No priority-recovery remote handoff edge remains in the post-fix representative artifact; the remaining local blocker belongs to active-gate snapshot coverage.",
+    "missingCausalEdgeProbe": "npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-green-gate-after-topology-remote-handoff-convergence.report.json --markdown",
+    "boundedProgressProof": "Focused owner tests and the representative rerun prove active remote handoff retry evidence is bounded and priority-recovery witnesses are cleared.",
     "boundedProgressProofArtifact": "test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js",
-    "expectedObservableTransition": "active handoff retry evidence moves from workflow_progress / event_driven to rebalancer_handoff / retry_scheduled or the operation advances through owner dispatch progress.",
+    "expectedObservableTransition": "priority recovery residuals clear; first frontier moves to active_gate_snapshot_coverage under startup_active_gate_owner / snapshot_coverage.",
     "maxProgressBound": "one focused owner proof plus one representative rolling-restart rerun after guardrails pass",
-    "sameFrontierFallback": "If representative evidence stays on priority_recovery_partition_progress, keep this package active and narrow to the remaining operation_workflow_owner sub-boundary instead of starting active-gate work.",
+    "sameFrontierFallback": "If future representative evidence returns to priority_recovery_partition_progress, reopen or create a focused operation_workflow_owner package instead of implementing active-gate work from stale evidence.",
     "expectedNextFrontier": "active_gate_snapshot_coverage after priority recovery operation progress closes",
     "resultClassification": "migrated",
     "stopCondition": "migrate-owner-boundary"
@@ -104,12 +104,10 @@
 
 ## Why
 
-The current release-gate blocker is still
-`operation_workflow_owner / workflow_progress`: coordinator-created remote
-handoff operations are retry-deferred and recovering in flight without a
-bounded ACK, timeout, or reconcile outcome. This package owns the first
-runtime slice because active-gate and broader topology work are downstream of
-that missing progress edge.
+This package closed the `operation_workflow_owner / workflow_progress`
+priority-recovery frontier. The post-fix representative artifact has zero
+priority-recovery witnesses and hands off to
+`startup_active_gate_owner / snapshot_coverage` as the first active blocker.
 
 ## Scope Basis
 
@@ -150,7 +148,7 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 - [x] Review subagent recorded:
       `not-needed (first-package-in-sprint)`.
 - [x] Fix subagent recorded or explicitly not needed:
-      `not-needed`.
+      `not-needed for original first-package closure; 2026-05-13 post-closure metadata repair was completed as the required fix step after review returned fixes-required, with no runtime or test edits`.
 - [x] Implementation subagent recorded:
       `Agent Raman (019e22c9-ed9a-7ec1-9b00-bc3081b69b48) implemented work/packages/done-20260513-topology-remote-handoff-convergence.md`.
 
@@ -168,8 +166,10 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 ## Commit And Push Ledger
 
 1. Focused package commit: 68fe6912
-2. Pushed to: origin/codex/pending-ack-eligibility-filter
-3. Commit contains only package-owned files/package-status/allowed sprint handoff: yes
+2. Closure metadata commit: 7fd94b82
+3. Pushed to: origin/codex/pending-ack-eligibility-filter
+4. Commit contains only package-owned files/package-status/allowed sprint handoff: yes
+5. Closure metadata commit contains the done-package rename/closure metadata and allowed sprint handoff only: yes
 
 ## Out Of Scope
 
@@ -188,10 +188,10 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
   runtime write scope and forbidden files.
 - Frozen decisions: package scope and lane stay bounded unless explicitly escalated.
 - Escalation triggers: owned files expand beyond this package, runtime ownership changes, or representative scenario evidence changes.
-- Focused proof: `npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-green-gate-after-sql-write-dispatch-retry-progress.report.json --markdown`, `npm run analyze:owner-files -- operation_workflow_owner workflow_progress --markdown`
+- Focused proof: `npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-green-gate-after-topology-remote-handoff-convergence.report.json --markdown`, `npm run analyze:owner-files -- operation_workflow_owner workflow_progress --markdown`
 - Model ledger advisory: `escalate`
 
 ## Validation
 
-1. npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-green-gate-after-sql-write-dispatch-retry-progress.report.json --markdown
+1. npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-green-gate-after-topology-remote-handoff-convergence.report.json --markdown
 2. npm run analyze:owner-files -- operation_workflow_owner workflow_progress --markdown
