@@ -258,3 +258,9 @@ active rolling-restart runtime package. Its package queue covers:
       handoff before runtime work resumes.
 - [x] Runtime architecture implementation remains split into later
       runtime-owner or scenario-release-gate packages.
+
+## Commit And Push Ledger
+
+1. Focused package commit: `6f7f9be0963fa642b84a40d968b228a80361d604`
+2. Pushed to: `origin/codex/pending-ack-eligibility-filter`
+3. Commit contains only package-owned files/package-status/allowed sprint handoff: `yes`
