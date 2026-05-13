@@ -1,9 +1,10 @@
+# Topology Active Gate Snapshot Coverage Repair
+
+<!-- work-package
 {
-  "schema": "current-blocker-v1",
-  "generatedBy": "scripts/work-tracker.js",
-  "sprint": "work/sprints/active-2026-q2-topology-convergence-ship-shape.md",
-  "package": "work/packages/active-20260513-topology-active-gate-snapshot-coverage-repair.md",
+  "schema": "work-package-v1",
   "status": "active",
+  "opened": "2026-05-13",
   "lane": "runtime-owner-boundary",
   "scenario": "rolling-restart",
   "artifact": "test-output/reports/rolling-restart-green-gate-after-readiness-stalled-support.report.json",
@@ -68,7 +69,6 @@
     "test/distributed/harness/cluster-segment-7-class-5.js",
     "test/distributed/harness/__tests__/cluster.test-part-5.js"
   ],
-  "touchedFiles": [],
   "modelFit": {
     "packageClass": "representative-frontier-closure",
     "intendedMinimumModel": "gpt-5.3-codex",
@@ -110,3 +110,95 @@
   },
   "predecessor": "work/packages/done-20260513-topology-readiness-stalled-support.md"
 }
+-->
+
+## Why
+
+Readiness support has been reduced to inherited active-gate no-progress. The
+remaining representative frontier is active-gate snapshot coverage: the selected
+snapshot is admin-ready but only exposes one observed/published node while the
+harness expects five. This package owns the active-gate coverage repair or the
+fresh owner-boundary migration if coverage is blocked by publication or
+membership truth.
+
+## Scope Basis
+
+Roadmap Phase `0.1 - Internal Coherence`: topology workflow stabilization,
+failure simulations, and production guarantees. This package belongs to
+`work/sprints/active-2026-q2-topology-convergence-ship-shape.md`.
+
+## Workflow Lane
+
+- Selected lane: `runtime-owner-boundary`
+- Why this lane is sufficient: bounded workflow/tooling scope unless changed.
+- Escalation trigger to a heavier lane: runtime ownership, shared contract, or representative scenario evidence changes.
+
+## LLM Tool-First Contract
+
+Before raw JSON, raw logs, broad file search, oversized segment files, or ad hoc `jq`, use the canonical workflow command that owns the question:
+
+1. Package metadata or ledger edits: `npm run work:package:doctor -- --suggest <package>`, `npm run work:package:doctor -- --fix-dry-run <package>`, `npm run work:package:schema`, or `npm run work:package:new -- ...`.
+2. Representative evidence: `npm run work:evidence-summary -- <artifact>` plus any focused extractor for this failure class.
+3. Owner discovery: `npm run analyze:owner-files -- <owner> [boundary]`.
+4. Subagent sequencing: `npm run work:subagent-prompt -- --role <role> --package <package>`.
+5. Large-file cleanup: `npm run work:oversized-next -- --markdown`.
+
+If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which canonical extractor was tried and why it was insufficient.
+
+## Subagent Sequencing Ledger
+
+- [x] Review subagent recorded:
+      `Agent Curie (019e2348-bb34-72a2-80cd-febb1473fb0c) reviewed
+      work/packages/done-20260513-topology-readiness-stalled-support.md;
+      result fixes-required`.
+- [x] Fix subagent recorded or explicitly not needed:
+      `Agent Averroes (019e234a-71d7-7780-b605-8d3d4682fc7e) fixed
+      work/packages/done-20260513-topology-readiness-stalled-support.md`.
+- [ ] Implementation subagent recorded:
+      `pending-before-implementation`.
+
+## In Scope
+
+1. work/packages/active-20260513-topology-active-gate-snapshot-coverage-repair.md
+2. work/packages/done-20260513-topology-active-gate-owner-truth.md
+3. work/packages/done-20260513-topology-readiness-stalled-support.md
+4. work/sprints/active-2026-q2-topology-convergence-ship-shape.md
+5. work/sprints/current-blocker.json
+6. work/sprints/current-blocker.md
+7. src/admin/admin-control-snapshot-class-part-1.js
+8. src/admin/admin-control-snapshot-class-part-3.js
+9. src/admin/admin-control-snapshot-class-part-5.js
+10. src/control-plane/membership-publication-planning.js
+11. test/admin/admin-control-snapshot.test.js
+12. test/admin/admin-control-snapshot-response-contract.test.js
+13. test/control-plane/membership-publication-coordinator-main-stage-1.js
+14. test/control-plane/membership-publication-coordinator-main-stage-3.js
+15. test/distributed/harness/cluster-segment-7-class-5.js
+16. test/distributed/harness/__tests__/cluster.test-part-5.js
+
+## Out Of Scope
+
+1. harness timeout increases
+2. priority-recovery runtime changes without fresh first-frontier evidence
+3. publication-convergence implementation without fresh first-frontier evidence
+4. Pro behavior
+5. Enterprise behavior
+
+## Model Fit
+
+- Package class: `representative-frontier-closure`
+- Intended minimum model: `gpt-5.3-codex`
+- Scope shape: `owner-boundary-contraction/current-frontier`
+- Owned files: `work/packages/active-20260513-topology-active-gate-snapshot-coverage-repair.md`, `work/packages/done-20260513-topology-active-gate-owner-truth.md`, `work/packages/done-20260513-topology-readiness-stalled-support.md`, `work/sprints/active-2026-q2-topology-convergence-ship-shape.md`, `work/sprints/current-blocker.json`, `work/sprints/current-blocker.md`, `src/admin/admin-control-snapshot-class-part-1.js`, `src/admin/admin-control-snapshot-class-part-3.js`, `src/admin/admin-control-snapshot-class-part-5.js`, `src/control-plane/membership-publication-planning.js`, `test/admin/admin-control-snapshot.test.js`, `test/admin/admin-control-snapshot-response-contract.test.js`, `test/control-plane/membership-publication-coordinator-main-stage-1.js`, `test/control-plane/membership-publication-coordinator-main-stage-3.js`, `test/distributed/harness/cluster-segment-7-class-5.js`, `test/distributed/harness/__tests__/cluster.test-part-5.js`
+- Forbidden files: `harness timeout increases`, `priority-recovery runtime changes without fresh first-frontier evidence`, `publication-convergence implementation without fresh first-frontier evidence`, `Pro behavior`, `Enterprise behavior`
+- Frozen decisions: package scope and lane stay bounded unless explicitly escalated.
+- Escalation triggers: owned files expand beyond this package, runtime ownership changes, or representative scenario evidence changes.
+- Focused proof: `npm run work:evidence-summary -- test-output/reports/rolling-restart-green-gate-after-readiness-stalled-support.report.json`, `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-green-gate-after-readiness-stalled-support.report.json --explain active_gate_snapshot_coverage`, `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-green-gate-after-readiness-stalled-support.report.json`, `npm run analyze:distributed-failure -- --report test-output/reports/rolling-restart-green-gate-after-readiness-stalled-support.report.json`
+- Model ledger advisory: `escalate`
+
+## Validation
+
+1. npm run work:evidence-summary -- test-output/reports/rolling-restart-green-gate-after-readiness-stalled-support.report.json
+2. npm run analyze:topology-convergence -- test-output/reports/rolling-restart-green-gate-after-readiness-stalled-support.report.json --explain active_gate_snapshot_coverage
+3. npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-green-gate-after-readiness-stalled-support.report.json
+4. npm run analyze:distributed-failure -- --report test-output/reports/rolling-restart-green-gate-after-readiness-stalled-support.report.json

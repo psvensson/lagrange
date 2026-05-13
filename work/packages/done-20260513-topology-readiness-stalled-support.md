@@ -164,9 +164,11 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 
 ## Commit And Push Ledger
 
-1. Focused package commit: e3404a81f11c4077910ea56d4e9b3994862ded30
-2. Pushed to: origin/codex/pending-ack-eligibility-filter
-3. Commit contains only package-owned files/package-status/allowed sprint handoff: yes
+1. Focused package commit: 65739ab3989344c5a96f8c97752b0c7a64612650
+2. Closure commit title: Close topology readiness stalled support
+3. Implementation commit before closure: e3404a81f11c4077910ea56d4e9b3994862ded30
+4. Pushed to: origin/codex/pending-ack-eligibility-filter
+5. Commit contains only package-owned files/package-status/allowed sprint handoff: yes
 
 ## In Scope
 

@@ -35,15 +35,16 @@ Seed artifact:
 `test-output/reports/rolling-restart-green-gate-after-sql-write-dispatch-retry-progress.report.json`.
 
 Current representative artifact:
-`test-output/reports/rolling-restart-green-gate-after-topology-remote-handoff-convergence.report.json`.
+`test-output/reports/rolling-restart-green-gate-after-readiness-stalled-support.report.json`.
 
-Current first frontier from `npm run work:context` on May 13, 2026:
+Current first frontier from canonical evidence on May 13, 2026:
 
 1. Owner: `startup_active_gate_owner`
 2. Boundary: `snapshot_coverage`
-3. Dominant reason: `active_gate_timed_out`
+3. Dominant reason: `snapshot_coverage_incomplete`
 4. Residual state: `active_gate_snapshot_coverage` blocked with
-   `snapshot_coverage_incomplete`
+   `snapshotCoverage=1/5`, `active=0/5`, `publishedActive=1/5`, and
+   `missingPublished=4`.
 5. Priority recovery: cleared; the post-fix representative artifact reports
    zero priority-recovery witnesses.
 6. Downstream readiness support: deferred behind active-gate coverage.
@@ -144,7 +145,22 @@ This sprint treats the system as ship-shape only when these properties hold:
      coverage with reduced readiness support debt, or migrates to a fresh
      owner-boundary blocker.
 
-4. [Topology Membership Epoch Fencing](../packages/todo-20260513-topology-membership-epoch-fencing.md)
+4. [Topology Active Gate Snapshot Coverage Repair](../packages/active-20260513-topology-active-gate-snapshot-coverage-repair.md)
+   - Lane: `runtime-owner-boundary`
+   - Owner boundary: `startup_active_gate_owner / snapshot_coverage`
+   - Recommendation covered: finish current active-gate owner-truth closure.
+   - Purpose: repair active-gate snapshot coverage so selected snapshots include
+     current owner truth for durable published, locally projected, and recently
+     admitted active nodes, or produce a fresh narrower owner-boundary
+     migration with canonical evidence.
+   - Entry condition: readiness support has reduced to inherited active-gate
+     no-progress and the representative first frontier is active-gate snapshot
+     coverage.
+   - Acceptance: focused owner tests prove snapshot coverage selection and
+     publication/member projection behavior; rolling-restart is green, reduced,
+     or migrated to a fresh narrower owner-boundary blocker.
+
+5. [Topology Membership Epoch Fencing](../packages/todo-20260513-topology-membership-epoch-fencing.md)
    - Lane: `runtime-owner-boundary`
    - Owner boundary: `topology_membership_owner / membership_epoch`
    - Recommendation covered: add a membership/topology epoch.
@@ -157,7 +173,7 @@ This sprint treats the system as ship-shape only when these properties hold:
      observations are fenced by epoch checks; diagnostics expose the evaluated
      epoch and rejection reason.
 
-5. [Topology Failure Repair Intents](../packages/todo-20260513-topology-failure-repair-intents.md)
+6. [Topology Failure Repair Intents](../packages/todo-20260513-topology-failure-repair-intents.md)
    - Lane: `runtime-owner-boundary`
    - Owner boundary: `failure_detector / durable_repair_intent`
    - Recommendation covered: make failure detection enqueue durable repair work.
@@ -171,7 +187,7 @@ This sprint treats the system as ship-shape only when these properties hold:
      partition, message group, and replica operation is named or explicitly
      classified as not affected.
 
-6. [Topology Post Rejoin Reconciliation](../packages/todo-20260513-topology-post-rejoin-reconciliation.md)
+7. [Topology Post Rejoin Reconciliation](../packages/todo-20260513-topology-post-rejoin-reconciliation.md)
    - Lane: `runtime-owner-boundary`
    - Owner boundary: `topology_membership_owner / rejoin_reconciliation`
    - Recommendation covered: add post-rejoin reconciliation.
@@ -185,7 +201,7 @@ This sprint treats the system as ship-shape only when these properties hold:
      become placement targets until reconciliation reaches a typed owner
      outcome.
 
-7. [Topology Partition Descriptor Epoch](../packages/todo-20260513-topology-partition-descriptor-epoch.md)
+8. [Topology Partition Descriptor Epoch](../packages/todo-20260513-topology-partition-descriptor-epoch.md)
    - Lane: `runtime-owner-boundary`
    - Owner boundary: `partition_topology_owner / descriptor_epoch`
    - Recommendation covered: make partition descriptors versioned and central.
@@ -198,7 +214,7 @@ This sprint treats the system as ship-shape only when these properties hold:
      vocabulary; diagnostics do not reconstruct partition freshness from cache
      age or incidental rows.
 
-8. [Topology Placement Capacity Fail Closed](../packages/todo-20260513-topology-placement-capacity-fail-closed.md)
+9. [Topology Placement Capacity Fail Closed](../packages/todo-20260513-topology-placement-capacity-fail-closed.md)
    - Lane: `runtime-owner-boundary`
    - Owner boundary: `topology_placement_owner / capacity_admission`
    - Recommendation covered: fail closed on unknown placement capacity.
@@ -211,7 +227,7 @@ This sprint treats the system as ship-shape only when these properties hold:
      diagnostics name capacity/accounting availability; tests prove strict and
      best-effort modes separately.
 
-9. [Topology Anti Entropy Reconciler](../packages/todo-20260513-topology-anti-entropy-reconciler.md)
+10. [Topology Anti Entropy Reconciler](../packages/todo-20260513-topology-anti-entropy-reconciler.md)
    - Lane: `runtime-owner-boundary`
    - Owner boundary: `topology_reconcile_owner / durable_truth_reconcile`
    - Recommendation covered: add anti-entropy reconciliation.
@@ -224,7 +240,7 @@ This sprint treats the system as ship-shape only when these properties hold:
      output is deterministic repair intent, bounded no-op, or typed terminal
      classification; focused tests cover stale/missing/double-owned evidence.
 
-10. [Topology Bounded Progress Budgets](../packages/todo-20260513-topology-bounded-progress-budgets.md)
+11. [Topology Bounded Progress Budgets](../packages/todo-20260513-topology-bounded-progress-budgets.md)
    - Lane: `runtime-owner-boundary`
    - Owner boundary: `topology_control_plane / progress_budget_taxonomy`
    - Recommendation covered: harden budgets and terminal states.
@@ -238,7 +254,7 @@ This sprint treats the system as ship-shape only when these properties hold:
      progress; retryable evidence without a bounded mechanism remains an
      active causal edge.
 
-11. [Topology Failure Scenario Gates](../packages/todo-20260513-topology-failure-scenario-gates.md)
+12. [Topology Failure Scenario Gates](../packages/todo-20260513-topology-failure-scenario-gates.md)
     - Lane: `scenario-release-gate`
     - Owner boundary: `distributed_test_harness / failure_gate_matrix`
     - Recommendation covered: promote failure scenarios to release gates.
@@ -257,13 +273,15 @@ This sprint treats the system as ship-shape only when these properties hold:
 1. Close or migrate the current remote handoff frontier.
 2. Prove active-gate owner truth only after priority recovery no longer fronts
    the causal chain.
-3. Add membership epoch before durable failure repair and post-rejoin
+3. Repair or migrate the active-gate snapshot coverage residual after readiness
+   support has reduced to inherited active-gate no-progress.
+4. Add membership epoch before durable failure repair and post-rejoin
    admission semantics depend on it.
-4. Add failure repair intents before broad anti-entropy reconciliation.
-5. Add partition descriptor epoch before split/move/stale-route gates depend
+5. Add failure repair intents before broad anti-entropy reconciliation.
+6. Add partition descriptor epoch before split/move/stale-route gates depend
    on descriptor freshness.
-6. Harden placement capacity and progress budgets before final failure gates.
-7. Run full failure scenario gates only after focused owner proof is green.
+7. Harden placement capacity and progress budgets before final failure gates.
+8. Run full failure scenario gates only after focused owner proof is green.
 
 ## Proof Ladder
 
