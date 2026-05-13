@@ -42,6 +42,7 @@ const LOCAL_PRIORITY_EXACT_TARGET_REPLICA_OBSERVATION_OPTIONS =
 const COORDINATOR_CREATED_LOCAL_OPERATION_PRIME_STATE = Object.freeze({
   DEFAULT: 'default',
   CRITICAL_SYSTEM_PARTITION: 'critical_system_partition',
+  PRIORITY_CONTROL_PLANE_PARTITION: 'priority_control_plane_partition',
 });
 
 const COORDINATOR_CREATED_LOCAL_OPERATION_PRIME_ACTION = Object.freeze({
@@ -59,6 +60,12 @@ const COORDINATOR_CREATED_LOCAL_OPERATION_PRIME_ACTION_BY_STATE =
       [
         COORDINATOR_CREATED_LOCAL_OPERATION_PRIME_STATE
           .CRITICAL_SYSTEM_PARTITION,
+        COORDINATOR_CREATED_LOCAL_OPERATION_PRIME_ACTION
+          .DISPATCH_AFTER_CLAIM,
+      ],
+      [
+        COORDINATOR_CREATED_LOCAL_OPERATION_PRIME_STATE
+          .PRIORITY_CONTROL_PLANE_PARTITION,
         COORDINATOR_CREATED_LOCAL_OPERATION_PRIME_ACTION
           .DISPATCH_AFTER_CLAIM,
       ],
@@ -422,9 +429,14 @@ class OperationWorkflowOwnerSegment2 extends OperationWorkflowOwnerSegment1 {
    * @private
    */
   resolveCoordinatorCreatedLocalOperationPrimeState(operation) {
-    if (this.isCriticalSystemPartition(operation?.partitionId || null)) {
+    const partitionId = operation?.partitionId || null;
+    if (this.isCriticalSystemPartition(partitionId)) {
       return COORDINATOR_CREATED_LOCAL_OPERATION_PRIME_STATE
         .CRITICAL_SYSTEM_PARTITION;
+    }
+    if (isPriorityControlPlanePartition({partitionId})) {
+      return COORDINATOR_CREATED_LOCAL_OPERATION_PRIME_STATE
+        .PRIORITY_CONTROL_PLANE_PARTITION;
     }
     return COORDINATOR_CREATED_LOCAL_OPERATION_PRIME_STATE.DEFAULT;
   }

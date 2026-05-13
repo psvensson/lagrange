@@ -98,6 +98,10 @@ const CREATE_IN_PROGRESS_OBSERVED_RECONCILE_STATUSES = Object.freeze(
   ]),
 );
 
+const CREATE_IN_PROGRESS_OBSERVED_RETRY_STATUSES = Object.freeze(
+  new Set([ReplicaStatus.SYNCING]),
+);
+
 class OperationWorkflowOwnerSegment4 extends OperationWorkflowOwnerSegment3 {
   shouldFailRemoveSafetyHandoffResponse(removeSafetyEvaluation, response) {
     return (
@@ -585,7 +589,11 @@ class OperationWorkflowOwnerSegment4 extends OperationWorkflowOwnerSegment3 {
    * @private
    */
   shouldBoundReplicaOperationDispatch(operation) {
-    return this.isCriticalSystemPartition(operation?.partitionId);
+    const partitionId = operation?.partitionId || null;
+    return (
+      this.isCriticalSystemPartition(partitionId) ||
+      isPriorityControlPlanePartition({partitionId})
+    );
   }
 
   /**
@@ -1000,6 +1008,7 @@ class OperationWorkflowOwnerSegment4 extends OperationWorkflowOwnerSegment3 {
         response.status === ReplicaOperationResponseStatus.IN_PROGRESS &&
         await this.reconcileCreateInProgressDispatchResponse(
           operation,
+          response,
           replaceRemovePhase,
         )
       ) {
@@ -1276,6 +1285,7 @@ class OperationWorkflowOwnerSegment4 extends OperationWorkflowOwnerSegment3 {
 
   async reconcileCreateInProgressDispatchResponse(
     operation,
+    response,
     replaceRemovePhase = false,
   ) {
     if (
@@ -1295,7 +1305,10 @@ class OperationWorkflowOwnerSegment4 extends OperationWorkflowOwnerSegment3 {
       return false;
     }
     const observedTargetStatus =
-      this.getObservedOperationRowTargetProgressStatus(operation);
+      this.resolveCreateInProgressDispatchResponseStatus(
+        operation,
+        response,
+      );
     if (
       !CREATE_IN_PROGRESS_OBSERVED_RECONCILE_STATUSES.has(
         observedTargetStatus,
@@ -1303,9 +1316,37 @@ class OperationWorkflowOwnerSegment4 extends OperationWorkflowOwnerSegment3 {
     ) {
       return false;
     }
-    return this.applyReconciledReplicaStatus(operation, observedTargetStatus, {
-      cause: OPERATION_WORKFLOW_OWNER_LITERAL.OBSERVED_PROGRESS,
-    });
+    const reconciled = await this.applyReconciledReplicaStatus(
+      operation,
+      observedTargetStatus,
+      {
+        cause: OPERATION_WORKFLOW_OWNER_LITERAL.OBSERVED_PROGRESS,
+      },
+    );
+    if (
+      reconciled === true &&
+      CREATE_IN_PROGRESS_OBSERVED_RETRY_STATUSES.has(observedTargetStatus)
+    ) {
+      this.scheduleObservedProgressRetry(
+        operation.operationId,
+        SYSTEM_TABLE_NAME.SERVICES,
+        OPERATION_WORKFLOW_OWNER_LITERAL.SYNTHETIC_UPSERT,
+      );
+    }
+    return reconciled;
+  }
+
+  resolveCreateInProgressDispatchResponseStatus(operation, response) {
+    const responseReplicaStatus =
+      response?.[ReplicaOperationField.REPLICA_STATUS];
+    if (
+      CREATE_IN_PROGRESS_OBSERVED_RECONCILE_STATUSES.has(
+        responseReplicaStatus,
+      )
+    ) {
+      return responseReplicaStatus;
+    }
+    return this.getObservedOperationRowTargetProgressStatus(operation);
   }
 
   /**

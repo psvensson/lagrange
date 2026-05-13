@@ -43,7 +43,7 @@ const DISPATCH_REARM_RECONCILE_STATE = Object.freeze({
   CREATING_WITHOUT_CREATE_REARM: 'creating_without_create_rearm',
   OBSERVED_BLOCKING_STATUS: 'observed_blocking_status',
   NON_DISPATCH_RETRYABLE_STEP: 'non_dispatch_retryable_step',
-  NON_CRITICAL_PARTITION: 'non_critical_partition',
+  NON_PRIORITY_RECOVERY_PARTITION: 'non_priority_recovery_partition',
   DISPATCH_REARM_BUDGET_EXHAUSTED: 'dispatch_rearm_budget_exhausted',
   REARM_DISPATCH: 'rearm_dispatch',
 });
@@ -68,8 +68,9 @@ const DISPATCH_REARM_RECONCILE_STATE_TABLE = Object.freeze([
       evidence.dispatchRetryableWorkflowStep !== true,
   }),
   Object.freeze({
-    state: DISPATCH_REARM_RECONCILE_STATE.NON_CRITICAL_PARTITION,
-    matches: (evidence) => evidence.criticalSystemPartition !== true,
+    state:
+      DISPATCH_REARM_RECONCILE_STATE.NON_PRIORITY_RECOVERY_PARTITION,
+    matches: (evidence) => evidence.priorityRecoveryPartition !== true,
   }),
   Object.freeze({
     state: DISPATCH_REARM_RECONCILE_STATE.DISPATCH_REARM_BUDGET_EXHAUSTED,
@@ -688,8 +689,11 @@ class OperationWorkflowOwnerSegment1 {
         ),
       dispatchRetryableWorkflowStep:
         this.isDispatchRetryableWorkflowStep(operation),
-      criticalSystemPartition:
-        this.isCriticalSystemPartition(operation?.partitionId || null),
+      priorityRecoveryPartition:
+        this.isCriticalSystemPartition(operation?.partitionId || null) ||
+        isPriorityControlPlanePartition({
+          partitionId: operation?.partitionId || null,
+        }),
       dispatchRearmBudgetAvailable:
         timeoutDecision.stepTimedOut !== true ||
         timeoutDecision.operationBudgetActive === true,

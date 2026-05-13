@@ -9,6 +9,7 @@ const {
   EXECUTOR_OUTCOME_TYPE,
   EXECUTOR_STEP_UPDATE_RECONCILE_WORKFLOW_STEPS,
   INCOMPLETE_OPERATION_OBSERVATION_STATE,
+  INCOMPLETE_OPERATION_VISIBILITY_SUPPLEMENT_MODE,
   NUM,
   OPERATION_LIFECYCLE_ACTION,
   OPERATION_TRANSITION_REASON,
@@ -32,6 +33,7 @@ const {
   REPLICA_OPERATION_VISIBILITY_READ_MODE,
   ReplicaStatus,
   OBSERVED_PROGRESS_RETRY_DELAY_MS,
+  TIME_MS,
   TYPEOF,
   WORKFLOW_STEP,
   isRetryableControlPlaneError,
@@ -86,6 +88,15 @@ const EXECUTOR_OUTCOME_OPERATION_VISIBILITY_ACTION_BY_STATE = Object.freeze(
   ]),
 );
 
+const EXECUTOR_OUTCOME_EMPTY_VISIBILITY_RETRYABLE_TYPES = Object.freeze(
+  new Set([
+    EXECUTOR_OUTCOME_TYPE.REPLICA_CREATE_SYNCING,
+    EXECUTOR_OUTCOME_TYPE.REPLICA_CREATE_ACTIVE,
+  ]),
+);
+
+const EXECUTOR_OUTCOME_EMPTY_VISIBILITY_RETRY_WINDOW_MS = TIME_MS.MINUTE;
+
 const EXECUTOR_OUTCOME_OPERATION_VISIBILITY_STATE_TABLE = Object.freeze([
   Object.freeze({
     state: EXECUTOR_OUTCOME_OPERATION_VISIBILITY_STATE.PRESENT,
@@ -94,6 +105,14 @@ const EXECUTOR_OUTCOME_OPERATION_VISIBILITY_STATE_TABLE = Object.freeze([
   Object.freeze({
     state: EXECUTOR_OUTCOME_OPERATION_VISIBILITY_STATE.DEFERRED,
     matches: (evidence) => evidence.visibilityDeferred === true,
+  }),
+  Object.freeze({
+    state: EXECUTOR_OUTCOME_OPERATION_VISIBILITY_STATE.DEFERRED,
+    matches: (evidence) =>
+      evidence.emptyVisibility === true &&
+      evidence.emptyVisibilityReplicaOutcome === true &&
+      evidence.emptyVisibilityRetryableOutcome === true &&
+      evidence.freshEmptyVisibilityOutcome === true,
   }),
   Object.freeze({
     state: EXECUTOR_OUTCOME_OPERATION_VISIBILITY_STATE.EMPTY,
@@ -126,7 +145,91 @@ const EXECUTOR_OUTCOME_VISIBILITY_ABSENCE = Object.freeze({
   WORKFLOW_STEP: 'executor_outcome_workflow_step_unavailable',
 });
 
+const TIMEOUT_INCOMPLETE_VISIBILITY_SUPPLEMENT_STATE = Object.freeze({
+  CACHE_EMPTY: 'cache_empty',
+  OBSERVED_TARGET_PROGRESS: 'observed_target_progress',
+  PRIORITY_RECOVERY_SCAN: 'priority_recovery_scan',
+  CACHE_ONLY: 'cache_only',
+});
+
+const TIMEOUT_INCOMPLETE_VISIBILITY_SUPPLEMENT_MODE_BY_STATE = Object.freeze(
+  new Map([
+    [
+      TIMEOUT_INCOMPLETE_VISIBILITY_SUPPLEMENT_STATE.PRIORITY_RECOVERY_SCAN,
+      INCOMPLETE_OPERATION_VISIBILITY_SUPPLEMENT_MODE
+        .AUTHORITATIVE_SUPPLEMENT,
+    ],
+  ]),
+);
+
+const TIMEOUT_INCOMPLETE_VISIBILITY_SUPPLEMENT_STATE_TABLE = Object.freeze([
+  Object.freeze({
+    state: TIMEOUT_INCOMPLETE_VISIBILITY_SUPPLEMENT_STATE.CACHE_EMPTY,
+    matches: (evidence) => evidence.cacheVisibleOperationCount === NUM.ZERO,
+  }),
+  Object.freeze({
+    state:
+      TIMEOUT_INCOMPLETE_VISIBILITY_SUPPLEMENT_STATE.OBSERVED_TARGET_PROGRESS,
+    matches: (evidence) =>
+      evidence.observedTargetProgressVisible === true,
+  }),
+  Object.freeze({
+    state:
+      TIMEOUT_INCOMPLETE_VISIBILITY_SUPPLEMENT_STATE.PRIORITY_RECOVERY_SCAN,
+    matches: (evidence) =>
+      evidence.priorityRecoveryOperationVisible === true,
+  }),
+  Object.freeze({
+    state: TIMEOUT_INCOMPLETE_VISIBILITY_SUPPLEMENT_STATE.CACHE_ONLY,
+    matches: () => true,
+  }),
+]);
+
 class OperationWorkflowOwnerSegment7Stage3 extends OperationWorkflowOwnerSegment7Stage2 {
+  isPriorityRecoveryTimeoutVisibilityOperation(operation) {
+    const partitionId = operation?.partitionId || null;
+    return (
+      this.isCriticalSystemPartition(partitionId) ||
+      isPriorityControlPlanePartition({partitionId})
+    );
+  }
+
+  buildTimeoutIncompleteVisibilitySupplementEvidence(
+    cachedOperations,
+  ) {
+    const operations = Array.isArray(cachedOperations) ?
+      cachedOperations :
+      [];
+    return Object.freeze({
+      cacheVisibleOperationCount: operations.length,
+      observedTargetProgressVisible:
+        operations.some((operation) =>
+          this.hasObservedOperationRowTargetProgress(operation),
+        ),
+      priorityRecoveryOperationVisible:
+        operations.some((operation) =>
+          this.isPriorityRecoveryTimeoutVisibilityOperation(operation) &&
+          this.isDispatchRetryableWorkflowStep(operation),
+        ),
+    });
+  }
+
+  resolveTimeoutIncompleteVisibilitySupplementMode(cachedOperations) {
+    const evidence =
+      this.buildTimeoutIncompleteVisibilitySupplementEvidence(
+        cachedOperations,
+      );
+    const state =
+      TIMEOUT_INCOMPLETE_VISIBILITY_SUPPLEMENT_STATE_TABLE.find((entry) =>
+        entry.matches(evidence),
+      )?.state ||
+      TIMEOUT_INCOMPLETE_VISIBILITY_SUPPLEMENT_STATE.CACHE_ONLY;
+    return (
+      TIMEOUT_INCOMPLETE_VISIBILITY_SUPPLEMENT_MODE_BY_STATE.get(state) ||
+      INCOMPLETE_OPERATION_VISIBILITY_SUPPLEMENT_MODE.NONE
+    );
+  }
+
   async checkTimeouts() {
     if (this.isShuttingDown || !this.isInitialized) {
       return;
@@ -160,6 +263,10 @@ class OperationWorkflowOwnerSegment7Stage3 extends OperationWorkflowOwnerSegment
         cachedOperations: cachedIncompleteOps,
         visibilityReadMode:
           REPLICA_OPERATION_VISIBILITY_READ_MODE.CACHE_PREFERRED_SQL_FALLBACK,
+        visibilitySupplementMode:
+          this.resolveTimeoutIncompleteVisibilitySupplementMode(
+            cachedIncompleteOps,
+          ),
       });
     const incompleteOps = Array.isArray(
       incompleteOperationObservation?.operations,
@@ -368,8 +475,35 @@ class OperationWorkflowOwnerSegment7Stage3 extends OperationWorkflowOwnerSegment
     );
   }
 
-  buildExecutorOutcomeOperationVisibilityEvidence(visibilityObservation) {
+  isFreshExecutorOutcomeForEmptyVisibility(outcome) {
+    const timestamp = outcome?.[EXECUTOR_OUTCOME_FIELD.TIMESTAMP];
+    if (!Number.isFinite(timestamp)) {
+      return false;
+    }
+    const outcomeAgeMs = Date.now() - timestamp;
+    return (
+      outcomeAgeMs >= NUM.ZERO &&
+      outcomeAgeMs <= EXECUTOR_OUTCOME_EMPTY_VISIBILITY_RETRY_WINDOW_MS
+    );
+  }
+
+  buildExecutorOutcomeOperationVisibilityEvidence(
+    visibilityObservation,
+    outcome,
+  ) {
+    const replicaId = outcome?.[EXECUTOR_OUTCOME_FIELD.REPLICA_ID];
     return Object.freeze({
+      emptyVisibility:
+        visibilityObservation?.state ===
+        INCOMPLETE_OPERATION_OBSERVATION_STATE.EMPTY,
+      emptyVisibilityReplicaOutcome:
+        typeof replicaId === TYPEOF.STRING && replicaId.length > NUM.ZERO,
+      emptyVisibilityRetryableOutcome:
+        EXECUTOR_OUTCOME_EMPTY_VISIBILITY_RETRYABLE_TYPES.has(
+          outcome?.[EXECUTOR_OUTCOME_FIELD.OUTCOME_TYPE],
+        ),
+      freshEmptyVisibilityOutcome:
+        this.isFreshExecutorOutcomeForEmptyVisibility(outcome),
       operationAvailable: Boolean(visibilityObservation?.operation),
       visibilityDeferred:
         visibilityObservation?.state ===
@@ -378,10 +512,14 @@ class OperationWorkflowOwnerSegment7Stage3 extends OperationWorkflowOwnerSegment
     });
   }
 
-  resolveExecutorOutcomeOperationVisibilityAction(visibilityObservation) {
+  resolveExecutorOutcomeOperationVisibilityAction(
+    visibilityObservation,
+    outcome,
+  ) {
     const evidence =
       this.buildExecutorOutcomeOperationVisibilityEvidence(
         visibilityObservation,
+        outcome,
       );
     const state =
       EXECUTOR_OUTCOME_OPERATION_VISIBILITY_STATE_TABLE.find((entry) =>
@@ -554,6 +692,7 @@ class OperationWorkflowOwnerSegment7Stage3 extends OperationWorkflowOwnerSegment
     const visibilityAction =
       this.resolveExecutorOutcomeOperationVisibilityAction(
         visibilityObservation,
+        outcome,
       );
     if (
       visibilityAction ===

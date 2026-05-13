@@ -15,6 +15,9 @@ import {
   PRIORITY_RECOVERY_WORKFLOW_PROGRESS_PHASE,
 } from '../../src/control-plane/priority-recovery-diagnostics-constants.js';
 import {
+  PRIORITY_RECOVERY_TARGET_SERVICE_TERMINAL_STATE,
+} from '../../src/control-plane/priority-recovery-snapshot-stage-shared.js';
+import {
   OPERATION_WORKFLOW_EFFECT_COMMAND_VALUES,
   OPERATION_WORKFLOW_OUTCOME_VALUES,
 } from '../../src/rebalancer/operation-workflow-owner-constants.js';
@@ -66,6 +69,11 @@ const TEST_DIRECT_BUILD_REENTRY_TEST_NAME =
 const TEST_CACHE_EVENT_REENTRY_TEST_NAME =
   'replica_operations cache events re-enter priority dispatch-pending ' +
   'workflow progress';
+const TEST_TARGET_PROGRESS_REENTRY_TEST_NAME =
+  'target-service terminal progress snapshots re-enter workflow progress';
+const TEST_LOCAL_INITIALIZATION_RETRY_TEST_NAME =
+  'locally owned coordinator-created priority PENDING rows retry after ' +
+  'workflow owner initialization';
 const TEST_ASSERT_TIMEOUT_RECONCILE_OWNER_OUTCOME =
   'timeout-due dispatch-pending snapshots should carry the stale-progress ' +
   'reconcile owner outcome';
@@ -79,6 +87,16 @@ const TEST_ASSERT_CACHE_REENTRY_TARGET =
   'cache-event re-entry should use the canonical dispatch ingress';
 const TEST_ASSERT_CACHE_REENTRY_TIMER =
   'cache-event re-entry should arm bounded handoff verification';
+const TEST_ASSERT_TARGET_PROGRESS_REENTRY =
+  'target terminal progress should re-enter the observed-progress owner lane';
+const TEST_ASSERT_TARGET_PROGRESS_PHASE =
+  'target terminal progress fixture should preserve target creation phase';
+const TEST_ASSERT_LOCAL_INITIALIZATION_RETRY_TIMER =
+  'local uninitialized owner arms one bounded transition retry';
+const TEST_ASSERT_LOCAL_INITIALIZATION_RETRY_NO_DELIVERY =
+  'local uninitialized owner should not deliver before initialization';
+const TEST_ASSERT_LOCAL_INITIALIZATION_RETRY_RESUMES =
+  'local initialization retry drains the transition retry slot';
 
 function buildEventDrivenOperation(overrides = {}) {
   return Object.freeze({
@@ -121,6 +139,19 @@ function buildEventDrivenPlanningSnapshot(options = {}) {
   const actuationState =
     options.actuationState ||
     PRIORITY_RECOVERY_ACTUATION_STATE.DISPATCHED_WAITING_PROGRESS;
+  const latestOperationStatus =
+    options.latestOperationStatus || ReplicaStatus.PENDING;
+  const workflowProgressPhaseId =
+    options.workflowProgressPhaseId ||
+    PRIORITY_RECOVERY_WORKFLOW_PROGRESS_PHASE.DISPATCH_PENDING;
+  const nextRequiredAction =
+    options.nextRequiredAction ||
+    PRIORITY_RECOVERY_NEXT_REQUIRED_ACTION.ADVANCE_EXISTING_OPERATION;
+  const coordinatorOperation = options.coordinatorOperation || null;
+  const coordinatorSnapshot = {
+    operationIds: Object.freeze([TEST_OPERATION_ID]),
+    ...(coordinatorOperation ? {operation: coordinatorOperation} : {}),
+  };
   return Object.freeze({
     publicationEpoch: TEST_PUBLICATION_EPOCH,
     publicationStatus: 'PUBLISHED',
@@ -154,13 +185,12 @@ function buildEventDrivenPlanningSnapshot(options = {}) {
           }),
           conditions: Object.freeze({
             latestOperationWorkflowStep: workflowStep,
-            latestOperationStatus: ReplicaStatus.PENDING,
+            latestOperationStatus,
           }),
           actuation: Object.freeze({
             owner: PRIORITY_RECOVERY_PROGRESS_OWNER.OPERATION_WORKFLOW_OWNER,
             state: actuationState,
-            workflowProgressPhaseId:
-              PRIORITY_RECOVERY_WORKFLOW_PROGRESS_PHASE.DISPATCH_PENDING,
+            workflowProgressPhaseId,
             stepAgeMs: TEST_STEP_AGE_MS,
             stepTimeoutMs: TEST_STEP_TIMEOUT_MS,
             lastProgressAtMs: TEST_UPDATED_AT_MS,
@@ -171,20 +201,16 @@ function buildEventDrivenPlanningSnapshot(options = {}) {
             nextAction: OWNER_CONTRACT_NEXT_ACTION.WAIT,
             currentOwner:
               PRIORITY_RECOVERY_PROGRESS_OWNER.OPERATION_WORKFLOW_OWNER,
-            nextRequiredAction:
-              PRIORITY_RECOVERY_NEXT_REQUIRED_ACTION.ADVANCE_EXISTING_OPERATION,
+            nextRequiredAction,
             blockingBoundary:
               PRIORITY_RECOVERY_BLOCKING_BOUNDARY.WORKFLOW_PROGRESS,
             waitMode: PRIORITY_RECOVERY_WAIT_MODE.EVENT_DRIVEN,
-            workflowProgressPhaseId:
-              PRIORITY_RECOVERY_WORKFLOW_PROGRESS_PHASE.DISPATCH_PENDING,
+            workflowProgressPhaseId,
             stepAgeMs: TEST_STEP_AGE_MS,
             stepTimeoutMs: TEST_STEP_TIMEOUT_MS,
             lastProgressAtMs: TEST_UPDATED_AT_MS,
           }),
-          coordinator: Object.freeze({
-            operationIds: Object.freeze([TEST_OPERATION_ID]),
-          }),
+          coordinator: Object.freeze(coordinatorSnapshot),
         }),
       ]),
     }),
@@ -702,6 +728,140 @@ test(TEST_CACHE_EVENT_REENTRY_TEST_NAME, async (t) => {
     );
   } finally {
     Date.now = originalDateNow;
+    await coordinator.shutdown();
+  }
+});
+
+test(TEST_TARGET_PROGRESS_REENTRY_TEST_NAME, async (t) => {
+  const deliveries = [];
+  const deferredTimers = [];
+  const observedProgressOperationIds = [];
+  const operation = buildEventDrivenOperation({
+    status: ReplicaStatus.CREATING,
+    workflowStep: WORKFLOW_STEP.CREATING,
+    targetNodeId: TEST_OBSERVER_NODE_ID,
+  });
+  const operationWithTargetProgress = Object.freeze({
+    ...operation,
+    targetServiceTerminalState:
+      PRIORITY_RECOVERY_TARGET_SERVICE_TERMINAL_STATE.TERMINAL,
+  });
+  const operationRow = buildEventDrivenOperationRow({
+    status: ReplicaStatus.CREATING,
+    workflow_step: WORKFLOW_STEP.CREATING,
+    target_node_id: TEST_OBSERVER_NODE_ID,
+  });
+  const coordinator = createEventDrivenCoordinator(
+    deliveries,
+    deferredTimers,
+    operationRow,
+    {
+      workflowStep: WORKFLOW_STEP.CREATING,
+      latestOperationStatus: ReplicaStatus.CREATING,
+      workflowProgressPhaseId:
+        PRIORITY_RECOVERY_WORKFLOW_PROGRESS_PHASE.TARGET_CREATION,
+      nextRequiredAction:
+        PRIORITY_RECOVERY_NEXT_REQUIRED_ACTION.WAIT_FOR_OPERATION_PROGRESS,
+      coordinatorOperation: operationWithTargetProgress,
+    },
+  );
+  const originalDateNow = Date.now;
+  Date.now = () => TEST_CAPTURED_AT_MS;
+
+  try {
+    coordinator.initialize();
+    coordinator.workflowOwner.reconcileObservedProgressOperation =
+      async (operationId) => {
+        observedProgressOperationIds.push(operationId);
+        return true;
+      };
+
+    const snapshot =
+      coordinator.workflowOwner.buildPriorityRecoveryDecisionSnapshotForOperations(
+        operation.partitionId,
+        [operationWithTargetProgress],
+        buildEventDrivenPlanningSnapshot({
+          workflowStep: WORKFLOW_STEP.CREATING,
+          latestOperationStatus: ReplicaStatus.CREATING,
+          workflowProgressPhaseId:
+            PRIORITY_RECOVERY_WORKFLOW_PROGRESS_PHASE.TARGET_CREATION,
+          nextRequiredAction:
+            PRIORITY_RECOVERY_NEXT_REQUIRED_ACTION.WAIT_FOR_OPERATION_PROGRESS,
+          coordinatorOperation: operationWithTargetProgress,
+        }),
+      );
+    await new Promise((resolve) => {
+      setTimeout(resolve, NUM.ZERO);
+    });
+
+    t.equal(
+      snapshot?.progress?.workflowProgressPhaseId,
+      PRIORITY_RECOVERY_WORKFLOW_PROGRESS_PHASE.TARGET_CREATION,
+      TEST_ASSERT_TARGET_PROGRESS_PHASE,
+    );
+    t.same(
+      observedProgressOperationIds,
+      [operation.operationId],
+      TEST_ASSERT_TARGET_PROGRESS_REENTRY,
+    );
+  } finally {
+    Date.now = originalDateNow;
+    await coordinator.shutdown();
+  }
+});
+
+test(TEST_LOCAL_INITIALIZATION_RETRY_TEST_NAME, async (t) => {
+  const deliveries = [];
+  const deferredTimers = [];
+  const operation = buildEventDrivenOperation({
+    partitionId: TEST_SQL_WRITE_PARTITION_ID,
+    entityId: TEST_SQL_WRITE_PARTITION_ID,
+    replicaId: TEST_SQL_WRITE_REPLICA_ID,
+    targetNodeId: TEST_OBSERVER_NODE_ID,
+  });
+  const operationRow = buildEventDrivenOperationRow({
+    partition_id: TEST_SQL_WRITE_PARTITION_ID,
+    entity_id: TEST_SQL_WRITE_PARTITION_ID,
+    replica_id: TEST_SQL_WRITE_REPLICA_ID,
+    target_node_id: TEST_OBSERVER_NODE_ID,
+  });
+  const coordinator = createEventDrivenCoordinator(
+    deliveries,
+    deferredTimers,
+    operationRow,
+    {
+      workflowStep: WORKFLOW_STEP.PENDING,
+      actuationState:
+        PRIORITY_RECOVERY_ACTUATION_STATE.PERSISTED_NOT_DISPATCHED,
+    },
+  );
+
+  try {
+    t.equal(
+      await coordinator.workflowOwner.armCoordinatorCreatedOperation(operation),
+      true,
+      TEST_ASSERT_LOCAL_INITIALIZATION_RETRY_TIMER,
+    );
+    t.equal(
+      deferredTimers.length,
+      NUM.ONE,
+      TEST_ASSERT_LOCAL_INITIALIZATION_RETRY_TIMER,
+    );
+    t.equal(
+      deliveries.length,
+      NUM.ZERO,
+      TEST_ASSERT_LOCAL_INITIALIZATION_RETRY_NO_DELIVERY,
+    );
+
+    coordinator.initialize();
+    await deferredTimers[NUM.ZERO].fn();
+
+    t.equal(
+      coordinator.workflowOwner.transitionRetryTimerByOperationId.size,
+      NUM.ZERO,
+      TEST_ASSERT_LOCAL_INITIALIZATION_RETRY_RESUMES,
+    );
+  } finally {
     await coordinator.shutdown();
   }
 });

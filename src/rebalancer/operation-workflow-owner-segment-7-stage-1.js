@@ -31,6 +31,7 @@ const {
 const COORDINATOR_CREATED_CACHE_REENTRY_STATE = Object.freeze({
   UNAVAILABLE: 'unavailable',
   NOT_OPERATION_WORKFLOW_ROW: 'not_operation_workflow_row',
+  OBSERVED_TARGET_PROGRESS: 'observed_target_progress',
   NOT_DISPATCH_RETRYABLE: 'not_dispatch_retryable',
   REENTER: 'reenter',
 });
@@ -60,6 +61,11 @@ const COORDINATOR_CREATED_CACHE_REENTRY_STATE_TABLE = Object.freeze([
   Object.freeze({
     state: COORDINATOR_CREATED_CACHE_REENTRY_STATE.UNAVAILABLE,
     matches: (evidence) => evidence.operationAvailable !== true,
+  }),
+  Object.freeze({
+    state: COORDINATOR_CREATED_CACHE_REENTRY_STATE.OBSERVED_TARGET_PROGRESS,
+    matches: (evidence) =>
+      evidence.observedTargetProgressVisible === true,
   }),
   Object.freeze({
     state: COORDINATOR_CREATED_CACHE_REENTRY_STATE.NOT_DISPATCH_RETRYABLE,
@@ -426,6 +432,8 @@ class OperationWorkflowOwnerSegment7Stage1 extends OperationWorkflowOwnerSegment
           OPERATION_WORKFLOW_OWNER_LITERAL.STRING &&
         operation.operationId.length > NUM.ZERO,
       terminalOperation: this.repository.isOperationTerminal(operation),
+      observedTargetProgressVisible:
+        this.hasObservedOperationRowTargetProgress(operation),
       dispatchRetryable: this.isDispatchRetryableWorkflowStep(operation),
       priorityRecoveryReentryEligible:
         this.shouldRetryCoordinatorCreatedRemoteHandoff(operation),
