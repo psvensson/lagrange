@@ -35,6 +35,59 @@ const COMPLETED_REPLACE_CONTROL_SNAPSHOT_FIXTURE = Object.freeze({
     }),
   ]),
 });
+const ACTIVE_GATE_OWNER_TRUTH_NOW_MS = 1000;
+const ACTIVE_GATE_OWNER_TRUTH_READY_LEASE_DELTA_MS = 1000;
+const ACTIVE_GATE_OWNER_TRUTH_PUBLICATION_EPOCH = 31;
+const ACTIVE_GATE_OWNER_TRUTH_PUBLICATION_STATUS = 'PUBLISHED';
+const ACTIVE_GATE_OWNER_TRUTH_NODE_STATUS = 'active';
+const ACTIVE_GATE_OWNER_TRUTH_CONNECTION_STATE = 'ready';
+const ACTIVE_GATE_OWNER_TRUTH_CONNECTED_STATE = 'connected';
+const ACTIVE_GATE_OWNER_TRUTH_SOURCE = 'locally_eligible_projection';
+const ACTIVE_GATE_OWNER_TRUTH_EFFECTIVE_SOURCE = 'publication_owner_truth';
+const ACTIVE_GATE_OWNER_TRUTH_LOCAL_ENDPOINT_ID = 'node-1-ws';
+const ACTIVE_GATE_OWNER_TRUTH_LOCAL_ENDPOINT_TRANSPORT = 'ws';
+const ACTIVE_GATE_OWNER_TRUTH_LOCAL_ENDPOINT_ADDRESS = 'ws://node-1:8082';
+const ACTIVE_GATE_OWNER_TRUTH_PRIORITY_PARTITION_COUNT = 0;
+const ACTIVE_GATE_OWNER_TRUTH_RECENT_HEARTBEAT_DELTA_MS = 1000;
+const ACTIVE_GATE_OWNER_TRUTH_STALE_HEARTBEAT_DELTA_MS = 61000;
+const ACTIVE_GATE_OWNER_TRUTH_NODE_IDS = Object.freeze([
+  'node-1',
+  'node-2',
+  'node-3',
+  'node-4',
+  'node-5',
+]);
+const ACTIVE_GATE_OWNER_TRUTH_LOCAL_NODE_ID =
+  ACTIVE_GATE_OWNER_TRUTH_NODE_IDS[0];
+const ACTIVE_GATE_OWNER_TRUTH_RECENT_NODE_IDS = Object.freeze(
+  ACTIVE_GATE_OWNER_TRUTH_NODE_IDS.slice(1),
+);
+const ACTIVE_GATE_OWNER_TRUTH_PUBLICATION_ROW = Object.freeze({
+  publication_id: 'publication-active-gate-owner-truth',
+  publication_kind: 'cluster_membership',
+  publication_epoch: ACTIVE_GATE_OWNER_TRUTH_PUBLICATION_EPOCH,
+  status: ACTIVE_GATE_OWNER_TRUTH_PUBLICATION_STATUS,
+  published_active_node_ids: [ACTIVE_GATE_OWNER_TRUTH_LOCAL_NODE_ID],
+  required_ack_node_ids: [ACTIVE_GATE_OWNER_TRUTH_LOCAL_NODE_ID],
+  acknowledged_node_ids: [ACTIVE_GATE_OWNER_TRUTH_LOCAL_NODE_ID],
+  priority_partition_summary: Object.freeze({
+    satisfied: true,
+    totalPriorityPartitionCount:
+      ACTIVE_GATE_OWNER_TRUTH_PRIORITY_PARTITION_COUNT,
+    missingPartitionIds: Object.freeze([]),
+    blockedPartitions: Object.freeze([]),
+  }),
+  membership_lifecycle_summary: Object.freeze({
+    publishedActiveNodeIds: [ACTIVE_GATE_OWNER_TRUTH_LOCAL_NODE_ID],
+    projectedServingNodeIds: [...ACTIVE_GATE_OWNER_TRUTH_NODE_IDS],
+    locallyEligibleNodeIds: [...ACTIVE_GATE_OWNER_TRUTH_NODE_IDS],
+    recoveryActiveNodeIds: [...ACTIVE_GATE_OWNER_TRUTH_NODE_IDS],
+    recoveryActiveNodeSource: ACTIVE_GATE_OWNER_TRUTH_SOURCE,
+    missingPublishedRecoveryActiveNodeIds: [
+      ...ACTIVE_GATE_OWNER_TRUTH_RECENT_NODE_IDS,
+    ],
+  }),
+});
 
 test('AdminControlSnapshot routes publication convergence through the shared recovery protocol snapshot',
   async (t) => {
@@ -88,6 +141,213 @@ test('AdminControlSnapshot routes publication convergence through the shared rec
         },
       },
       'admin convergence diagnostics should preserve canonical node participation',
+    );
+  });
+
+test('AdminControlSnapshot exposes publication owner-truth active cohort in control snapshot nodes',
+  async (t) => {
+    const snapshot = new AdminControlSnapshot({
+      nodeId: ACTIVE_GATE_OWNER_TRUTH_LOCAL_NODE_ID,
+      nowFn: () => ACTIVE_GATE_OWNER_TRUTH_NOW_MS,
+      systemTableCache: {
+        getAll(tableId) {
+          if (tableId === TABLES.NODES) {
+            return [{
+              node_id: ACTIVE_GATE_OWNER_TRUTH_LOCAL_NODE_ID,
+              status: ACTIVE_GATE_OWNER_TRUTH_NODE_STATUS,
+              connection_state: ACTIVE_GATE_OWNER_TRUTH_CONNECTION_STATE,
+              ready_lease_expires_at:
+                ACTIVE_GATE_OWNER_TRUTH_NOW_MS +
+                  ACTIVE_GATE_OWNER_TRUTH_READY_LEASE_DELTA_MS,
+            }];
+          }
+          return [];
+        },
+      },
+      controlPlaneReadinessService: {
+        async getAllNodeReadiness() {
+          return [];
+        },
+        membershipPublicationService: {
+          getLatestClusterPublicationSync() {
+            return ACTIVE_GATE_OWNER_TRUTH_PUBLICATION_ROW;
+          },
+          getLatestPublishedClusterPublicationSync() {
+            return ACTIVE_GATE_OWNER_TRUTH_PUBLICATION_ROW;
+          },
+        },
+      },
+    });
+
+    const result = await snapshot.buildLocalControlSnapshot();
+
+    t.same(
+      result.nodes,
+      [...ACTIVE_GATE_OWNER_TRUTH_NODE_IDS],
+      'snapshot nodes should include durable and recently admitted owner truth',
+    );
+    t.same(
+      result.projectedNodes,
+      [...ACTIVE_GATE_OWNER_TRUTH_NODE_IDS],
+      'projected nodes should expose the owner-truth active cohort',
+    );
+    t.same(
+      result.publishedNodes,
+      [ACTIVE_GATE_OWNER_TRUTH_LOCAL_NODE_ID],
+      'durable published nodes should remain publication-scoped',
+    );
+    t.same(
+      result.suspectedOrTransitioningNodes,
+      [...ACTIVE_GATE_OWNER_TRUTH_RECENT_NODE_IDS],
+      'recently admitted nodes should remain distinct from durable publication',
+    );
+    t.match(
+      result.controlPlaneDiagnostics.activeNodeViews,
+      {
+        effectiveNodeIds: [...ACTIVE_GATE_OWNER_TRUTH_NODE_IDS],
+        projectedNodeIds: [...ACTIVE_GATE_OWNER_TRUTH_NODE_IDS],
+        publishedNodeIds: [ACTIVE_GATE_OWNER_TRUTH_LOCAL_NODE_ID],
+        effectiveSource: ACTIVE_GATE_OWNER_TRUTH_EFFECTIVE_SOURCE,
+      },
+      'diagnostics should identify publication owner truth as the widened source',
+    );
+  });
+
+test('AdminControlSnapshot projects recovery-eligible readiness into diagnostic node coverage',
+  async (t) => {
+    const snapshot = new AdminControlSnapshot({
+      nodeId: ACTIVE_GATE_OWNER_TRUTH_LOCAL_NODE_ID,
+      nowFn: () => ACTIVE_GATE_OWNER_TRUTH_NOW_MS,
+    });
+
+    const activeNodeViews = snapshot.resolveControlSnapshotNodeViews(
+      [{
+        node_id: ACTIVE_GATE_OWNER_TRUTH_LOCAL_NODE_ID,
+        status: ACTIVE_GATE_OWNER_TRUTH_NODE_STATUS,
+        connection_state: ACTIVE_GATE_OWNER_TRUTH_CONNECTION_STATE,
+        ready_lease_expires_at:
+          ACTIVE_GATE_OWNER_TRUTH_NOW_MS +
+            ACTIVE_GATE_OWNER_TRUTH_READY_LEASE_DELTA_MS,
+      }],
+      [],
+      [],
+      {
+        publishedMembershipObservation: {
+          publicationEpoch: ACTIVE_GATE_OWNER_TRUTH_PUBLICATION_EPOCH,
+          status: ACTIVE_GATE_OWNER_TRUTH_PUBLICATION_STATUS,
+          publishedActiveNodeIds: [ACTIVE_GATE_OWNER_TRUTH_LOCAL_NODE_ID],
+        },
+        readinessByNodeId: {
+          [ACTIVE_GATE_OWNER_TRUTH_LOCAL_NODE_ID]: {
+            dimensions: {
+              [CONTROL_PLANE_READINESS_DIMENSION.CLUSTER_MEMBER_HEALTHY]: true,
+            },
+          },
+          [ACTIVE_GATE_OWNER_TRUTH_RECENT_NODE_IDS[0]]: {
+            dimensions: {
+              [CONTROL_PLANE_READINESS_DIMENSION.CLUSTER_MEMBER_HEALTHY]: false,
+              [CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE]: true,
+            },
+          },
+        },
+      },
+    );
+
+    t.same(
+      activeNodeViews.effectiveActiveNodeIds,
+      [ACTIVE_GATE_OWNER_TRUTH_LOCAL_NODE_ID],
+      'durable effective nodes should remain scoped to the published row',
+    );
+    t.same(
+      activeNodeViews.projectedActiveNodeIds,
+      [
+        ACTIVE_GATE_OWNER_TRUTH_LOCAL_NODE_ID,
+        ACTIVE_GATE_OWNER_TRUTH_RECENT_NODE_IDS[0],
+      ],
+      'diagnostic projection should include recovery-eligible readiness-only nodes',
+    );
+  });
+
+test('AdminControlSnapshot projects connected active heartbeat rows when readiness is unavailable',
+  async (t) => {
+    const snapshot = new AdminControlSnapshot({
+      nodeId: ACTIVE_GATE_OWNER_TRUTH_LOCAL_NODE_ID,
+      nowFn: () => ACTIVE_GATE_OWNER_TRUTH_NOW_MS,
+    });
+    const activeNodeViews = snapshot.resolveControlSnapshotNodeViews(
+      [
+        {
+          node_id: ACTIVE_GATE_OWNER_TRUTH_LOCAL_NODE_ID,
+          status: ACTIVE_GATE_OWNER_TRUTH_NODE_STATUS,
+          connection_state: ACTIVE_GATE_OWNER_TRUTH_CONNECTION_STATE,
+          ready_lease_expires_at:
+            ACTIVE_GATE_OWNER_TRUTH_NOW_MS +
+              ACTIVE_GATE_OWNER_TRUTH_READY_LEASE_DELTA_MS,
+        },
+        {
+          node_id: ACTIVE_GATE_OWNER_TRUTH_RECENT_NODE_IDS[0],
+          status: ACTIVE_GATE_OWNER_TRUTH_NODE_STATUS,
+          connection_state: ACTIVE_GATE_OWNER_TRUTH_CONNECTED_STATE,
+          last_heartbeat:
+            ACTIVE_GATE_OWNER_TRUTH_NOW_MS -
+              ACTIVE_GATE_OWNER_TRUTH_RECENT_HEARTBEAT_DELTA_MS,
+        },
+        {
+          node_id: ACTIVE_GATE_OWNER_TRUTH_RECENT_NODE_IDS[1],
+          status: ACTIVE_GATE_OWNER_TRUTH_NODE_STATUS,
+          connection_state: ACTIVE_GATE_OWNER_TRUTH_CONNECTED_STATE,
+          last_heartbeat:
+            ACTIVE_GATE_OWNER_TRUTH_NOW_MS -
+              ACTIVE_GATE_OWNER_TRUTH_RECENT_HEARTBEAT_DELTA_MS,
+        },
+        {
+          node_id: ACTIVE_GATE_OWNER_TRUTH_RECENT_NODE_IDS[2],
+          status: ACTIVE_GATE_OWNER_TRUTH_NODE_STATUS,
+          connection_state: ACTIVE_GATE_OWNER_TRUTH_CONNECTED_STATE,
+          last_heartbeat:
+            ACTIVE_GATE_OWNER_TRUTH_NOW_MS -
+              ACTIVE_GATE_OWNER_TRUTH_STALE_HEARTBEAT_DELTA_MS,
+        },
+      ],
+      [],
+      [{
+        endpoint_id: ACTIVE_GATE_OWNER_TRUTH_LOCAL_ENDPOINT_ID,
+        node_id: ACTIVE_GATE_OWNER_TRUTH_LOCAL_NODE_ID,
+        transport_type: ACTIVE_GATE_OWNER_TRUTH_LOCAL_ENDPOINT_TRANSPORT,
+        status: ACTIVE_GATE_OWNER_TRUTH_NODE_STATUS,
+        address: ACTIVE_GATE_OWNER_TRUTH_LOCAL_ENDPOINT_ADDRESS,
+      }],
+      {
+        publishedMembershipObservation: {
+          publicationEpoch: ACTIVE_GATE_OWNER_TRUTH_PUBLICATION_EPOCH,
+          status: ACTIVE_GATE_OWNER_TRUTH_PUBLICATION_STATUS,
+          publishedActiveNodeIds: [ACTIVE_GATE_OWNER_TRUTH_LOCAL_NODE_ID],
+        },
+        readinessByNodeId: {},
+      },
+    );
+
+    t.same(
+      activeNodeViews.effectiveActiveNodeIds,
+      [ACTIVE_GATE_OWNER_TRUTH_LOCAL_NODE_ID],
+      'durable effective nodes should remain scoped to the published row',
+    );
+    t.same(
+      activeNodeViews.projectedActiveNodeIds,
+      [
+        ACTIVE_GATE_OWNER_TRUTH_LOCAL_NODE_ID,
+        ACTIVE_GATE_OWNER_TRUTH_RECENT_NODE_IDS[0],
+        ACTIVE_GATE_OWNER_TRUTH_RECENT_NODE_IDS[1],
+      ],
+      'diagnostic projection should include active connected nodes with fresh heartbeat evidence',
+    );
+    t.same(
+      activeNodeViews.suspectedOrTransitioningNodeIds,
+      [
+        ACTIVE_GATE_OWNER_TRUTH_RECENT_NODE_IDS[0],
+        ACTIVE_GATE_OWNER_TRUTH_RECENT_NODE_IDS[1],
+      ],
+      'fresh connected nodes should remain distinct from durable publication',
     );
   });
 

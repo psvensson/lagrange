@@ -390,12 +390,17 @@ class MembershipPublicationCoordinatorClassStage2 extends
                 typeof candidate.priorityPartitionSummary === TYPEOF.OBJECT) ||
               (candidate.membershipLifecycleSummary &&
                 typeof candidate.membershipLifecycleSummary === TYPEOF.OBJECT));
+            const shouldRefreshMembershipLifecycleMetadata =
+              candidate.membershipLifecycleSummaryChanged === true &&
+              candidate.membershipLifecycleSummary &&
+              typeof candidate.membershipLifecycleSummary === TYPEOF.OBJECT;
             const shouldRefreshAcknowledgements =
               hasCandidateAcknowledgementRefresh(latestPublicationRow, candidate);
             const shouldRefreshStatus =
               hasCandidateStatusRefresh(latestPublicationRow, candidate);
             if (
               shouldRefreshPriorityMetadata ||
+              shouldRefreshMembershipLifecycleMetadata ||
               shouldRefreshAcknowledgements ||
               shouldRefreshStatus
             ) {

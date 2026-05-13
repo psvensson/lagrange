@@ -924,22 +924,19 @@ class Cluster4 extends Cluster3 {
       publication.acknowledgedNodeIds ?? publication.acknowledged_node_ids,
     );
     const membershipLifecycleSummaryRaw =
-      publication.membershipLifecycleSummary &&
-      typeof publication.membershipLifecycleSummary === 'object' ?
-        publication.membershipLifecycleSummary :
-        publication.membership_lifecycle_summary &&
-            typeof publication.membership_lifecycle_summary === 'object' ?
-          publication.membership_lifecycle_summary :
-          null;
+      parseJsonObjectField(publication.membershipLifecycleSummary) ??
+      parseJsonObjectField(publication.membership_lifecycle_summary);
+    const projectionDiagnosticsFromLifecycle =
+      parseJsonObjectField(
+        membershipLifecycleSummaryRaw?.projectionDiagnostics,
+      ) ??
+      parseJsonObjectField(
+        membershipLifecycleSummaryRaw?.projection_diagnostics,
+      );
     const projectionDiagnosticsRaw =
-      publication.projectionDiagnostics &&
-      typeof publication.projectionDiagnostics === 'object' ?
-        publication.projectionDiagnostics :
-        membershipLifecycleSummaryRaw?.projectionDiagnostics &&
-            typeof membershipLifecycleSummaryRaw.projectionDiagnostics ===
-              'object' ?
-          membershipLifecycleSummaryRaw.projectionDiagnostics :
-          null;
+      parseJsonObjectField(publication.projectionDiagnostics) ??
+      parseJsonObjectField(publication.projection_diagnostics) ??
+      projectionDiagnosticsFromLifecycle;
     const participationByNodeIdRaw = parseJsonObjectField(
       publication.participationByNodeId ??
         publication.participation_by_node_id ??
@@ -1002,13 +999,8 @@ class Cluster4 extends Cluster3 {
         }, {}) :
       null;
     const priorityPartitionSummaryRaw =
-      publication.priorityPartitionSummary &&
-      typeof publication.priorityPartitionSummary === 'object' ?
-        publication.priorityPartitionSummary :
-        publication.priority_partition_summary &&
-            typeof publication.priority_partition_summary === 'object' ?
-          publication.priority_partition_summary :
-          null;
+      parseJsonObjectField(publication.priorityPartitionSummary) ??
+      parseJsonObjectField(publication.priority_partition_summary);
     const blockedPartitions = parseJsonArrayField(
       priorityPartitionSummaryRaw?.blockedPartitions ??
         priorityPartitionSummaryRaw?.blocked_partitions,
@@ -1225,10 +1217,8 @@ class Cluster4 extends Cluster3 {
       ),
     );
     const publicationRecoveryGateRaw =
-      publication.publicationRecoveryGate &&
-      typeof publication.publicationRecoveryGate === 'object' ?
-        publication.publicationRecoveryGate :
-        null;
+      parseJsonObjectField(publication.publicationRecoveryGate) ??
+      parseJsonObjectField(publication.publication_recovery_gate);
     const membershipLifecycleSummary = membershipLifecycleSummaryRaw ?
       {
         lifecycleState:

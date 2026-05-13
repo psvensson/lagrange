@@ -10,12 +10,16 @@
  * as module-private functions. Shared helpers are imported from
  * admin-helpers.js.
  */
-import {TABLES, TYPEOF} from '../constants/index.js';
+import {NUM, TABLES, TYPEOF} from '../constants/index.js';
 import {evaluateAuthoritativeRepairPolicy} from './admin-authoritative-repair-policy.js';
 import {
   ADMIN_CACHE_DUMP,
 } from './admin-constants.js';
 import {
+  uniqueSorted,
+} from './admin-helpers.js';
+import {
+  buildActiveMembershipSnapshot,
   resolveActiveNodeViews,
   buildReadinessByNodeId,
   hasCanonicalWebSocketEndpoint,
@@ -62,6 +66,20 @@ const CONTROL_SNAPSHOT_CACHE_STALE_THRESHOLD_MS = 5000;
 const CONTROL_SNAPSHOT_PUBLICATION_OBSERVATION_STATE = Object.freeze({
   AVAILABLE: 'available',
 });
+const CONTROL_SNAPSHOT_PUBLICATION_STATUS_PUBLISHED = 'PUBLISHED';
+const CONTROL_SNAPSHOT_RECOVERY_PROTOCOL_STATE_PRIORITY_SPREAD_PENDING =
+  'priority_spread_pending';
+const CONTROL_SNAPSHOT_ACTIVE_NODE_VIEW_SOURCE_PUBLICATION_OWNER_TRUTH =
+  'publication_owner_truth';
+function normalizeControlSnapshotNodeIdList(values = ADMIN_CACHE_DUMP.EMPTY) {
+  return uniqueSorted(
+    (Array.isArray(values) ? values : ADMIN_CACHE_DUMP.EMPTY)
+      .map((value) =>
+        String(value || ADMIN_CONTROL_SNAPSHOT_LITERAL.VALUE).trim(),
+      )
+      .filter((value) => value.length > NUM.ZERO),
+  );
+}
 function hasDurablePublishedMembershipObservation(
   publicationDiagnostics = null,
 ) {
@@ -97,6 +115,139 @@ function selectDurablePublishedMembershipObservation(
   return hasDurablePublishedMembershipObservation(publicationDiagnostics) ?
     publicationDiagnostics :
     null;
+}
+
+function buildControlSnapshotPublicationOwnerTruthEvidence(
+  publicationConvergence = null,
+) {
+  if (
+    !publicationConvergence ||
+    typeof publicationConvergence !== TYPEOF.OBJECT
+  ) {
+    return {
+      published: false,
+      ackComplete: false,
+      prioritySpreadSatisfied: false,
+    };
+  }
+  const publicationStatus = String(
+    publicationConvergence.publicationStatus ||
+      publicationConvergence.status ||
+      publicationConvergence.publicationObservation?.status ||
+      ADMIN_CONTROL_SNAPSHOT_LITERAL.VALUE,
+  ).toUpperCase();
+  const priorityPartitionSummary =
+    publicationConvergence.priorityPartitionSummary &&
+    typeof publicationConvergence.priorityPartitionSummary === TYPEOF.OBJECT ?
+      publicationConvergence.priorityPartitionSummary :
+      null;
+  const blockedPriorityPartitions = Array.isArray(
+    priorityPartitionSummary?.blockedPartitions,
+  ) ?
+    priorityPartitionSummary.blockedPartitions :
+    ADMIN_CACHE_DUMP.EMPTY;
+  const missingPriorityPartitionIds = Array.isArray(
+    priorityPartitionSummary?.missingPartitionIds,
+  ) ?
+    priorityPartitionSummary.missingPartitionIds :
+    ADMIN_CACHE_DUMP.EMPTY;
+  const prioritySpreadSatisfied =
+    priorityPartitionSummary === null ||
+    (
+      priorityPartitionSummary.satisfied === true &&
+      blockedPriorityPartitions.length === NUM.ZERO &&
+      missingPriorityPartitionIds.length === NUM.ZERO
+    );
+  return {
+    published:
+      publicationStatus === CONTROL_SNAPSHOT_PUBLICATION_STATUS_PUBLISHED,
+    ackComplete:
+      normalizeControlSnapshotNodeIdList(
+        publicationConvergence.pendingAckNodeIds,
+      ).length === NUM.ZERO,
+    prioritySpreadSatisfied:
+      prioritySpreadSatisfied &&
+      publicationConvergence.recoveryProtocolState !==
+        CONTROL_SNAPSHOT_RECOVERY_PROTOCOL_STATE_PRIORITY_SPREAD_PENDING,
+  };
+}
+
+function shouldMergeControlSnapshotPublicationOwnerTruth(
+  publicationConvergence = null,
+) {
+  const evidence = buildControlSnapshotPublicationOwnerTruthEvidence(
+    publicationConvergence,
+  );
+  return (
+    evidence.published === true &&
+    evidence.ackComplete === true &&
+    evidence.prioritySpreadSatisfied === true
+  );
+}
+
+function mergeControlSnapshotActiveNodeViewsWithPublicationOwnerTruth(
+  activeNodeViews,
+  publicationConvergence = null,
+) {
+  if (
+    shouldMergeControlSnapshotPublicationOwnerTruth(
+      publicationConvergence,
+    ) !== true
+  ) {
+    return activeNodeViews;
+  }
+  const activeMembershipSnapshot =
+    buildActiveMembershipSnapshot(publicationConvergence);
+  const ownerTruthNodeIds = normalizeControlSnapshotNodeIdList([
+    ...activeMembershipSnapshot.concreteEligibleNodeIds,
+    ...activeMembershipSnapshot.recoveryActiveNodeIds,
+  ]);
+  if (ownerTruthNodeIds.length === NUM.ZERO) {
+    return activeNodeViews;
+  }
+  const effectiveActiveNodeIds = normalizeControlSnapshotNodeIdList([
+    ...activeNodeViews.effectiveActiveNodeIds,
+    ...ownerTruthNodeIds,
+  ]);
+  const projectedServingNodeIds = normalizeControlSnapshotNodeIdList([
+    ...activeNodeViews.projectedServingNodeIds,
+    ...activeMembershipSnapshot.projectedServingNodeIds,
+    ...activeMembershipSnapshot.locallyEligibleNodeIds,
+    ...activeMembershipSnapshot.recoveryEligibleIncludedNodeIds,
+  ]);
+  const locallyEligibleNodeIds = normalizeControlSnapshotNodeIdList([
+    ...activeNodeViews.locallyEligibleNodeIds,
+    ...activeMembershipSnapshot.locallyEligibleNodeIds,
+    ...activeMembershipSnapshot.recoveryEligibleIncludedNodeIds,
+  ]);
+  const publishedActiveNodeIds = Array.isArray(
+    activeNodeViews.publishedActiveNodeIds,
+  ) ?
+    activeNodeViews.publishedActiveNodeIds :
+    ADMIN_CACHE_DUMP.EMPTY;
+  const suspectedOrTransitioningNodeIds = normalizeControlSnapshotNodeIdList([
+    ...activeNodeViews.suspectedOrTransitioningNodeIds,
+    ...ownerTruthNodeIds.filter(
+      (nodeId) => !publishedActiveNodeIds.includes(nodeId),
+    ),
+  ]);
+  return {
+    ...activeNodeViews,
+    projectedServingNodeIds,
+    locallyEligibleNodeIds,
+    suspectedOrTransitioningNodeIds,
+    effectiveSource:
+      effectiveActiveNodeIds.length >
+        activeNodeViews.effectiveActiveNodeIds.length ?
+        CONTROL_SNAPSHOT_ACTIVE_NODE_VIEW_SOURCE_PUBLICATION_OWNER_TRUTH :
+        activeNodeViews.effectiveSource,
+    effectiveActiveNodeIds,
+    projectedActiveNodeIds: normalizeControlSnapshotNodeIdList([
+      ...activeNodeViews.projectedActiveNodeIds,
+      ...projectedServingNodeIds,
+      ...ownerTruthNodeIds,
+    ]),
+  };
 }
 // ── AdminControlSnapshot class ──────────────────────────────────────────────
 /**
@@ -140,29 +291,44 @@ class AdminControlSnapshotPart3 extends AdminControlSnapshotPart2 {
       connectedNodeIds,
       localNodeId: this.nodeId,
       localNodeResponsive: true,
+      allowControlPlaneRecoveryEligibleProjection: true,
+      allowLivenessFallbackProjection: true,
       nowMs: this.nowFn(),
     });
+    const activeNodeViewsWithOwnerTruth =
+      mergeControlSnapshotActiveNodeViewsWithPublicationOwnerTruth(
+        activeNodeViews,
+        publicationConvergence,
+      );
     return {
-      authoritativeSource: activeNodeViews.authoritativeSource,
+      authoritativeSource: activeNodeViewsWithOwnerTruth.authoritativeSource,
       authoritativeActiveNodeIds: [
-        ...activeNodeViews.authoritativeActiveNodeIds,
+        ...activeNodeViewsWithOwnerTruth.authoritativeActiveNodeIds,
       ],
-      projectedServingNodeIds: [...activeNodeViews.projectedServingNodeIds],
-      locallyEligibleNodeIds: [...activeNodeViews.locallyEligibleNodeIds],
+      projectedServingNodeIds: [
+        ...activeNodeViewsWithOwnerTruth.projectedServingNodeIds,
+      ],
+      locallyEligibleNodeIds: [
+        ...activeNodeViewsWithOwnerTruth.locallyEligibleNodeIds,
+      ],
       suspectedOrTransitioningNodeIds: [
-        ...activeNodeViews.suspectedOrTransitioningNodeIds,
+        ...activeNodeViewsWithOwnerTruth.suspectedOrTransitioningNodeIds,
       ],
-      membershipFreeze: activeNodeViews.membershipFreeze,
-      effectiveSource: activeNodeViews.effectiveSource,
-      effectiveActiveNodeIds: [...activeNodeViews.effectiveActiveNodeIds],
-      projectedActiveNodeIds: [...activeNodeViews.projectedActiveNodeIds],
+      membershipFreeze: activeNodeViewsWithOwnerTruth.membershipFreeze,
+      effectiveSource: activeNodeViewsWithOwnerTruth.effectiveSource,
+      effectiveActiveNodeIds: [
+        ...activeNodeViewsWithOwnerTruth.effectiveActiveNodeIds,
+      ],
+      projectedActiveNodeIds: [
+        ...activeNodeViewsWithOwnerTruth.projectedActiveNodeIds,
+      ],
       publishedActiveNodeIds: Array.isArray(
-        activeNodeViews.publishedActiveNodeIds,
+        activeNodeViewsWithOwnerTruth.publishedActiveNodeIds,
       ) ?
-        [...activeNodeViews.publishedActiveNodeIds] :
+        [...activeNodeViewsWithOwnerTruth.publishedActiveNodeIds] :
         null,
       publishedMembershipAvailable: Array.isArray(
-        activeNodeViews.publishedActiveNodeIds,
+        activeNodeViewsWithOwnerTruth.publishedActiveNodeIds,
       ),
     };
   }

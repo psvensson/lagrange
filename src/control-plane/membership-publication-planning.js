@@ -12,6 +12,7 @@ import {
 } from './membership-lifecycle-constants.js';
 import {
   normalizeControlPlanePublicationRow,
+  normalizeNodeRow,
   normalizeServiceRow,
 } from './system-row-normalizers.js';
 import {CONTROL_PLANE_PUBLICATION_STATUS} from './control-plane-publication-merge.js';
@@ -305,6 +306,89 @@ function areMembershipLifecycleSummariesEqual(leftSummary, rightSummary) {
     return left === right;
   }
   return JSON.stringify(left) === JSON.stringify(right);
+}
+
+function listHasMembershipLifecycleNodeAdvance(
+  baselineNodeIds = [],
+  candidateNodeIds = [],
+  helperFns = {},
+) {
+  const baselineNodeIdSet = new Set(helperFns.normalizeNodeIdList(baselineNodeIds));
+  return helperFns.normalizeNodeIdList(candidateNodeIds).some(
+    (nodeId) => !baselineNodeIdSet.has(nodeId),
+  );
+}
+
+function hasMembershipLifecycleSummaryProjectionAdvance(
+  baselineSummary,
+  candidateSummary,
+  helperFns = {},
+) {
+  const baselineProjectionDiagnostics =
+    baselineSummary?.projectionDiagnostics &&
+      typeof baselineSummary.projectionDiagnostics === TYPEOF.OBJECT ?
+      baselineSummary.projectionDiagnostics :
+      {};
+  const candidateProjectionDiagnostics =
+    candidateSummary?.projectionDiagnostics &&
+      typeof candidateSummary.projectionDiagnostics === TYPEOF.OBJECT ?
+      candidateSummary.projectionDiagnostics :
+      {};
+  return [
+    listHasMembershipLifecycleNodeAdvance(
+      baselineSummary?.projectedServingNodeIds,
+      candidateSummary?.projectedServingNodeIds,
+      helperFns,
+    ),
+    listHasMembershipLifecycleNodeAdvance(
+      baselineSummary?.locallyEligibleNodeIds,
+      candidateSummary?.locallyEligibleNodeIds,
+      helperFns,
+    ),
+    listHasMembershipLifecycleNodeAdvance(
+      baselineSummary?.recoveryActiveNodeIds,
+      candidateSummary?.recoveryActiveNodeIds,
+      helperFns,
+    ),
+    listHasMembershipLifecycleNodeAdvance(
+      baselineSummary?.missingPublishedRecoveryActiveNodeIds,
+      candidateSummary?.missingPublishedRecoveryActiveNodeIds,
+      helperFns,
+    ),
+    listHasMembershipLifecycleNodeAdvance(
+      baselineProjectionDiagnostics.recoveryEligibleIncludedNodeIds,
+      candidateProjectionDiagnostics.recoveryEligibleIncludedNodeIds,
+      helperFns,
+    ),
+    baselineProjectionDiagnostics.recoveryEligibleProjectionEnabled !== true &&
+      candidateProjectionDiagnostics.recoveryEligibleProjectionEnabled === true,
+  ].some(Boolean);
+}
+
+function chooseMembershipLifecycleSummaryBase(
+  planningMembershipLifecycleSummary,
+  derivedMembershipLifecycleSummary,
+  helperFns = {},
+) {
+  const derivedSummary = buildMembershipLifecycleSummary(
+    derivedMembershipLifecycleSummary,
+  );
+  if (
+    !planningMembershipLifecycleSummary ||
+    typeof planningMembershipLifecycleSummary !== TYPEOF.OBJECT
+  ) {
+    return derivedSummary;
+  }
+  const planningSummary = buildMembershipLifecycleSummary(
+    planningMembershipLifecycleSummary,
+  );
+  return hasMembershipLifecycleSummaryProjectionAdvance(
+    planningSummary,
+    derivedSummary,
+    helperFns,
+  ) ?
+    derivedSummary :
+    planningSummary;
 }
 
 function normalizePriorityRecoveryClosureWitness(value) {
@@ -1169,12 +1253,33 @@ function deriveMembershipPublicationCandidate(options = {}, helperFns = {}) {
     ...planningSnapshot,
     readinessByNodeId,
   });
+  const publicationWideningProjection = publicationProjectedServingNodeIds.some(
+    (nodeId) => !publishedBaselineNodeIds.includes(nodeId),
+  );
+  const publicationProjectionNodeRowIds = new Set(
+    planningSnapshot.nodeRows
+      .map((nodeRow) => normalizeNodeRow(nodeRow).nodeId)
+      .filter((nodeId) => nodeId.length > NUM.ZERO),
+  );
+  const publicationWideningHasNodeRowEvidence =
+    publicationProjectedServingNodeIds.some(
+      (nodeId) =>
+        !publishedBaselineNodeIds.includes(nodeId) &&
+        publicationProjectionNodeRowIds.has(nodeId),
+    );
+  const retainPublishedDurableTarget =
+    latestPublicationStatus === MEMBERSHIP_PUBLICATION_STATUS.PUBLISHED &&
+    priorityRecoverySpreadGapPending !== true &&
+    publicationWideningProjection === true &&
+    publicationWideningHasNodeRowEvidence !== true;
   const publicationTargetSnapshot = buildMembershipPublicationTargetSnapshot(
     {
       explicitPublishedNodeIds:
         Array.isArray(planningSnapshot.publishedActiveNodeIds) ?
           planningSnapshot.publishedActiveNodeIds :
-          [],
+          retainPublishedDurableTarget === true ?
+            publishedBaselineNodeIds :
+            [],
       publishedBaselineNodeIds,
       projectedServingNodeIds: publicationProjectedServingNodeIds,
       recoveryActiveNodeIds:
@@ -1310,40 +1415,41 @@ function deriveMembershipPublicationCandidate(options = {}, helperFns = {}) {
     typeof planningSnapshot.reasonCode === TYPEOF.STRING && planningSnapshot.reasonCode.length > 0 ?
       planningSnapshot.reasonCode :
       AUTHORITATIVE_MEMBERSHIP_CHANGED_REASON;
-  const membershipLifecycleSummaryBase =
-    planningSnapshot.membershipLifecycleSummary &&
-    typeof planningSnapshot.membershipLifecycleSummary === TYPEOF.OBJECT ?
-      buildMembershipLifecycleSummary(planningSnapshot.membershipLifecycleSummary) :
-      buildMembershipLifecycleSummary({
-        lifecycleState: candidateLifecycleState,
-        publishedActiveNodeIds,
+  const derivedMembershipLifecycleSummaryBase = buildMembershipLifecycleSummary({
+    lifecycleState: candidateLifecycleState,
+    publishedActiveNodeIds,
+    projectedServingNodeIds,
+    locallyEligibleNodeIds: publicationLocallyEligibleNodeIds,
+    suspectedOrTransitioningNodeIds: activeNodeViews.suspectedOrTransitioningNodeIds,
+    memberStatesByNodeId: buildPublishedMemberStates(
+      {
+        publishedBaselineNodeIds,
+        desiredPublishedNodeIds: publishedActiveNodeIds,
         projectedServingNodeIds,
-        locallyEligibleNodeIds: publicationLocallyEligibleNodeIds,
         suspectedOrTransitioningNodeIds: activeNodeViews.suspectedOrTransitioningNodeIds,
-        memberStatesByNodeId: buildPublishedMemberStates(
-          {
-            publishedBaselineNodeIds,
-            desiredPublishedNodeIds: publishedActiveNodeIds,
-            projectedServingNodeIds,
-            suspectedOrTransitioningNodeIds: activeNodeViews.suspectedOrTransitioningNodeIds,
-            recoveryEpochByNodeId,
-          },
-          helperFns,
-        ),
-        recoveryEpochByNodeId: Object.keys(recoveryEpochByNodeId).reduce(
-          (accumulator, nodeId) => {
-            accumulator[nodeId] = recoveryEpochByNodeId[nodeId].epochId;
-            return accumulator;
-          },
-          {},
-        ),
-        membershipFreeze: activeNodeViews.membershipFreeze,
-        projectionDiagnostics,
-        recoveryActiveNodeIds: priorityRecoveryPublicationContext.recoveryActiveNodeIds,
-        recoveryActiveNodeSource: priorityRecoveryPublicationContext.recoveryActiveNodeSource,
-        missingPublishedRecoveryActiveNodeIds:
-          priorityRecoveryPublicationContext.missingPublishedRecoveryActiveNodeIds,
-      });
+        recoveryEpochByNodeId,
+      },
+      helperFns,
+    ),
+    recoveryEpochByNodeId: Object.keys(recoveryEpochByNodeId).reduce(
+      (accumulator, nodeId) => {
+        accumulator[nodeId] = recoveryEpochByNodeId[nodeId].epochId;
+        return accumulator;
+      },
+      {},
+    ),
+    membershipFreeze: activeNodeViews.membershipFreeze,
+    projectionDiagnostics,
+    recoveryActiveNodeIds: priorityRecoveryPublicationContext.recoveryActiveNodeIds,
+    recoveryActiveNodeSource: priorityRecoveryPublicationContext.recoveryActiveNodeSource,
+    missingPublishedRecoveryActiveNodeIds:
+      priorityRecoveryPublicationContext.missingPublishedRecoveryActiveNodeIds,
+  });
+  const membershipLifecycleSummaryBase = chooseMembershipLifecycleSummaryBase(
+    planningSnapshot.membershipLifecycleSummary,
+    derivedMembershipLifecycleSummaryBase,
+    helperFns,
+  );
   const pendingAckNodeIds = ackCompletionSnapshot.pendingAckNodeIds;
   const {
     priorityRecoveryClosureWitness,

@@ -107,7 +107,16 @@ const MEMBERSHIP_PUBLICATION_RECONCILE_PUBLICATION_ID = 'publication-epoch-3';
 const MEMBERSHIP_PUBLICATION_RECONCILE_KIND = 'cluster_membership';
 
 const MEMBERSHIP_PUBLICATION_RECONCILE_RECOVERY_ACTIVE_SOURCE =
+  'locally_eligible_projection';
+
+const MEMBERSHIP_PUBLICATION_RECONCILE_STALE_RECOVERY_ACTIVE_SOURCE =
   'published_membership';
+
+const MEMBERSHIP_PUBLICATION_RECONCILE_STALE_READINESS_DECISION_MODE =
+  'cluster_member_healthy_only';
+
+const MEMBERSHIP_PUBLICATION_RECONCILE_STALE_READINESS_DIMENSION =
+  'clusterMemberHealthy';
 
 const MEMBERSHIP_PUBLICATION_RECONCILE_TEST_NAME =
   'reconcileClusterMembership keeps epoch 3 published-active 3/5 when ' +
@@ -120,7 +129,10 @@ const MEMBERSHIP_PUBLICATION_RECONCILE_TARGET_ASSERTION =
   'the publication target should stay on the durable owner baseline';
 
 const MEMBERSHIP_PUBLICATION_RECONCILE_PERSIST_ASSERTION =
-  'unchanged membership should not persist a widened or refreshed epoch';
+  'unchanged membership should refresh lifecycle metadata without widening the durable epoch';
+
+const MEMBERSHIP_PUBLICATION_RECONCILE_LIFECYCLE_ASSERTION =
+  'metadata refresh should carry the lifecycle owner-truth cohort';
 
 const MEMBERSHIP_PUBLICATION_RECONCILE_ROW_ASSERTION =
   'the reconcile result should return the existing published epoch';
@@ -145,6 +157,14 @@ const MEMBERSHIP_PUBLICATION_RECONCILE_ACTIVE_GATE_NODE_IDS = Object.freeze([
   MEMBERSHIP_PUBLICATION_TRIM_STALE_NODE_FIVE_ID,
 ]);
 
+const MEMBERSHIP_PUBLICATION_RECONCILE_MISSING_RECOVERY_NODE_IDS =
+  Object.freeze(
+    MEMBERSHIP_PUBLICATION_RECONCILE_ACTIVE_GATE_NODE_IDS.filter(
+      (nodeId) =>
+        !MEMBERSHIP_PUBLICATION_RECONCILE_BASELINE_NODE_IDS.includes(nodeId),
+    ),
+  );
+
 function buildMembershipPublicationReconcileBaselineRow() {
   return {
     publication_id: MEMBERSHIP_PUBLICATION_RECONCILE_PUBLICATION_ID,
@@ -163,6 +183,35 @@ function buildMembershipPublicationReconcileBaselineRow() {
     updated_at: MEMBERSHIP_PUBLICATION_RECONCILE_ROW_UPDATED_AT_MS,
     published_at: MEMBERSHIP_PUBLICATION_RECONCILE_ROW_UPDATED_AT_MS,
     closed_at: MEMBERSHIP_PUBLICATION_RECONCILE_ROW_UPDATED_AT_MS,
+    membership_lifecycle_summary: {
+      lifecycleState: MEMBERSHIP_LIFECYCLE_STATE.PUBLISHED_ACTIVE,
+      publishedActiveNodeIds: [
+        ...MEMBERSHIP_PUBLICATION_RECONCILE_BASELINE_NODE_IDS,
+      ],
+      projectedServingNodeIds: [
+        ...MEMBERSHIP_PUBLICATION_RECONCILE_BASELINE_NODE_IDS,
+      ],
+      locallyEligibleNodeIds: [
+        ...MEMBERSHIP_PUBLICATION_RECONCILE_BASELINE_NODE_IDS,
+      ],
+      recoveryActiveNodeIds: [
+        ...MEMBERSHIP_PUBLICATION_RECONCILE_BASELINE_NODE_IDS,
+      ],
+      recoveryActiveNodeSource:
+        MEMBERSHIP_PUBLICATION_RECONCILE_STALE_RECOVERY_ACTIVE_SOURCE,
+      missingPublishedRecoveryActiveNodeIds: [],
+      projectionDiagnostics: {
+        readinessDecisionMode:
+          MEMBERSHIP_PUBLICATION_RECONCILE_STALE_READINESS_DECISION_MODE,
+        readinessDecisionDimensions: [
+          MEMBERSHIP_PUBLICATION_RECONCILE_STALE_READINESS_DIMENSION,
+        ],
+        recoveryEligibleProjectionEnabled: false,
+        recoveryEligibleIncludedNodeIds: [],
+        readinessExcludedNodeIds: [],
+        clusterMemberUnhealthyExcludedNodeIds: [],
+      },
+    },
   };
 }
 
@@ -842,6 +891,8 @@ export {
   MEMBERSHIP_PUBLICATION_RECONCILE_BASELINE_NODE_IDS,
   MEMBERSHIP_PUBLICATION_RECONCILE_EMPTY_ROWS,
   MEMBERSHIP_PUBLICATION_RECONCILE_KIND,
+  MEMBERSHIP_PUBLICATION_RECONCILE_LIFECYCLE_ASSERTION,
+  MEMBERSHIP_PUBLICATION_RECONCILE_MISSING_RECOVERY_NODE_IDS,
   MEMBERSHIP_PUBLICATION_RECONCILE_NOW_MS,
   MEMBERSHIP_PUBLICATION_RECONCILE_PERSIST_ASSERTION,
   MEMBERSHIP_PUBLICATION_RECONCILE_PUBLICATION_EPOCH,

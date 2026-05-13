@@ -113,7 +113,7 @@
   "predecessor": "work/packages/done-20260513-topology-active-gate-owner-truth.md",
   "closed": "2026-05-13",
   "commitAndPushLedgerRequired": true,
-  "successor": "work/packages/active-20260513-topology-active-gate-snapshot-coverage-repair.md"
+  "successor": "work/packages/done-20260513-topology-active-gate-snapshot-coverage-repair.md"
 }
 -->
 

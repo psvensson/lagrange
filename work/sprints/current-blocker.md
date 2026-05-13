@@ -4,36 +4,36 @@
 
 Sprint: `work/sprints/active-2026-q2-topology-convergence-ship-shape.md`
 
-Package: `work/packages/active-20260513-topology-active-gate-snapshot-coverage-repair.md`
+Package: `work/packages/active-20260513-priority-recovery-operation-workflow-owner-workflow-progress-after-snapshot-coverage.md`
 
-Workflow lane: `runtime-owner-boundary`
+Workflow lane: `scenario-release-gate`
 
 Scenario: `rolling-restart`
 
-Artifact: `test-output/reports/rolling-restart-green-gate-after-readiness-stalled-support.report.json`
+Artifact: `test-output/reports/rolling-restart-green-gate-after-active-gate-snapshot-coverage-repair-6.report.json`
 
-Playback: `none`
+Playback: `test-output/reports/.playback/rolling-restart-green-gate-after-active-gate-snapshot-coverage-repair-6/rolling-restart/`
 
 ## Boundary
 
-Owner: `startup_active_gate_owner`
+Owner: `operation_workflow_owner`
 
-Boundary: `snapshot_coverage`
+Boundary: `workflow_progress`
 
-Dominant reason: `snapshot_coverage_incomplete`
+Dominant reason: `priority_recovery_progress_blocked`
 
-Current state: Readiness support has reduced to inherited active-gate no-progress. The current representative first frontier is active_gate_snapshot_coverage under startup_active_gate_owner / snapshot_coverage with snapshotCoverage=1/5, active=0/5, publication=PUBLISHED, publishedActive=1/5, missingPublished=4, priorityRecovery=none.
+Current state: Snapshot-coverage proof moved the representative off startup_active_gate_owner / snapshot_coverage. Publication convergence remains red, and priority-recovery residual extraction names operation_workflow_owner / workflow_progress for sql_transactions-p1 and sql_write_operations-p1 with priority_operation_serial_wait.
 
 ## Next Action
 
-Repair active-gate snapshot coverage so selected snapshots include current owner truth for all active or recently admitted nodes, or produce a fresh bounded owner migration.
+Prove or split the priority recovery workflow-progress residual, focusing on needs_operation and recovering_in_flight partitions that remain publication-blocking after snapshot coverage widened.
 
 ## Proof Ladder
 
-1. `npm run work:evidence-summary -- test-output/reports/rolling-restart-green-gate-after-readiness-stalled-support.report.json`
-2. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-green-gate-after-readiness-stalled-support.report.json --explain active_gate_snapshot_coverage`
-3. `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-green-gate-after-readiness-stalled-support.report.json`
-4. `npm run analyze:distributed-failure -- --report test-output/reports/rolling-restart-green-gate-after-readiness-stalled-support.report.json`
+1. `npm run work:evidence-summary -- test-output/reports/rolling-restart-green-gate-after-active-gate-snapshot-coverage-repair-6.report.json`
+2. `npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-green-gate-after-active-gate-snapshot-coverage-repair-6.report.json --markdown`
+3. `npm run analyze:owner-files -- operation_workflow_owner workflow_progress --markdown`
+4. `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-green-gate-after-active-gate-snapshot-coverage-repair-6.report.json`
 
 ## Model Fit
 
@@ -50,49 +50,51 @@ Escalation triggers:
 
 ## Causal Governance
 
-Causal hypothesis: `If active-gate snapshot coverage owns the current frontier, selected control snapshots must include owner truth for durable published, locally projected, and recently admitted active nodes instead of collapsing coverage to one durable publication row.`
+Causal hypothesis: `If operation_workflow_owner / workflow_progress owns the latest priority recovery residual, needs_operation and recovering_in_flight partition operations must advance through one bounded owner wake, retry, timeout, dispatch, delivery, ACK, or terminal classification path instead of leaving publication convergence blocked.`
 
-Stop-condition check: `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-green-gate-after-readiness-stalled-support.report.json`
+Stop-condition check: `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-green-gate-after-active-gate-snapshot-coverage-repair-6.report.json`
 
-Expected causal-model change: `active_gate_snapshot_coverage either converges, reduces to a bounded startup_active_gate_owner sub-boundary, or migrates to a fresh publication/membership owner boundary with canonical evidence instead of remaining snapshotCoverage=1/5 from presentation publication only.`
+Expected causal-model change: `The priority recovery workflow-progress residual either converges, reduces to a narrower operation workflow runtime edge, or exposes a fresh publication owner boundary with canonical evidence.`
 
 Representative outcome: `pending-before-rerun`
 
-Causal debt: `The latest representative remains red: active_gate_snapshot_coverage is first frontier with snapshotCoverage=1/5, active=0/5, publication=PUBLISHED, publishedActive=1/5, and missingPublished=4. Readiness support is already reduced to inherited active-gate no-progress.`
+Causal debt: `The latest representative is red after snapshot coverage widened. Publication convergence is blocked with missing active publication evidence, and priority residual extraction identifies two operation_workflow_owner / workflow_progress witnesses in priority_operation_serial_wait.`
 
-Cross-boundary review: `Review subagent Curie (019e2348-bb34-72a2-80cd-febb1473fb0c) found predecessor metadata fixes. Fix subagent Averroes (019e234a-71d7-7780-b605-8d3d4682fc7e) repaired the predecessor commit ledger and current-blocker handoff before implementation.`
+Cross-boundary review: `Review subagent Hooke (019e23a5-aa77-7f22-85b1-89f2cf2bb89e) reviewed predecessor work/packages/done-20260513-topology-active-gate-snapshot-coverage-repair.md and found fixes required. Fix agent Codex (019e23a8-7118-7e51-9f7e-6d621611f5b0) reconciled predecessor proof docs, guardrail closure proof, migration wording, and successor sequencing before implementation resumes.`
 
 ## Scenario Causal Closure
 
-Reference scenario/probe: `rolling-restart representative report after readiness support reduction`
+Reference scenario/probe: `rolling-restart representative after active-gate snapshot coverage repair`
 
 Phase chain:
 
 1. `startup active-gate snapshot coverage`
-2. `membership publication projection/convergence`
-3. `startup readiness support evidence`
+2. `publication acknowledgement convergence`
+3. `priority recovery operation workflow progress`
 
-Current first frontier: `active_gate_snapshot_coverage under startup_active_gate_owner / snapshot_coverage with dominant reason snapshot_coverage_incomplete`
+Current first frontier: `publication_ack_convergence under topology_publication_owner / publication_convergence is the first frontier. Priority recovery is the residual/next expected owner-boundary, and operation_workflow_owner / workflow_progress is the narrowed implementation owner because publication convergence delegates the missing-active-node progress block to priority recovery residual witnesses.`
 
 Known downstream blockers:
 
-1. `membership epoch, durable failure repair intents, post-rejoin reconciliation, partition descriptor epoch, placement capacity, anti-entropy, bounded budgets, and failure gates remain queued behind the current representative frontier`
+1. `active-gate snapshot coverage is deferred at 3/5 rather than first frontier`
+2. `publication convergence is missing active nodes while priority spread remains pending`
+3. `membership epoch, failure repair intent, rejoin reconciliation, partition descriptor epoch, placement capacity, anti-entropy, bounded budgets, and failure gates remain downstream`
 
-Missing causal edge: `Active-gate selected snapshot coverage must derive coverage from canonical owner truth that includes durable publication plus projected/locally eligible or recently admitted members, or name the exact publication/membership owner blocker that prevents that truth from widening.`
+Missing causal edge: `Priority recovery workflow rows for sql_transactions-p1 and sql_write_operations-p1 must leave needs_operation or recovering_in_flight through a bounded owner progress path.`
 
-Missing causal edge probe: `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-green-gate-after-readiness-stalled-support.report.json --explain active_gate_snapshot_coverage`
+Missing causal edge probe: `npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-green-gate-after-active-gate-snapshot-coverage-repair-6.report.json --markdown`
 
-Bounded progress proof: `pending before focused implementation proof and representative rerun; proof must cover the active-gate bounded reconcile/timeout path instead of treating snapshot coverage as unbounded waiting`
+Bounded progress proof: `Focused proof must show wake, retry, timeout, dispatch, delivery, ACK, advance, or terminal classification for the selected operation workflow residual before representative rerun.`
 
-Bounded progress proof artifact: `test-output/reports/rolling-restart-green-gate-after-readiness-stalled-support.report.json`
+Bounded progress proof artifact: `test-output/reports/rolling-restart-green-gate-after-active-gate-snapshot-coverage-repair-6.report.json`
 
-Expected observable transition: `Focused proof should make selected snapshot coverage include the current owner-truth active cohort, or produce a fresh narrower owner-boundary migration with canonical evidence.`
+Expected observable transition: `Representative rolling-restart should move publication convergence off its priority-recovery dependency, reduce to a narrower operation workflow edge, or remain at topology_publication_owner / publication_convergence with evidence that no longer delegates downward.`
 
-Max progress bound: `one review subagent, one fix subagent because review found fixes, one implementation subagent, focused owner proof, and representative rerun`
+Max progress bound: `one predecessor review subagent, one fix subagent if review finds fixes, one implementation subagent, focused owner proof, and one representative rolling-restart rerun`
 
-Same-frontier fallback: `If active_gate_snapshot_coverage remains first frontier after focused proof, the package must record why coverage is still bounded and which exact owner value is missing.`
+Same-frontier fallback: `If priority recovery workflow progress remains the blocker, record the exact operation id, semantic state, actuation state, and bounded next attempt owner field that is still missing.`
 
-Expected next frontier: `representative-green or a narrower publication/membership owner-boundary handoff`
+Expected next frontier: `representative-green, a narrower operation_workflow_owner runtime edge, or topology_publication_owner / publication_convergence if publication remains the first frontier without priority-recovery delegation`
 
 Result classification: `pending-before-probe`
 
@@ -102,59 +104,63 @@ Stop condition: `continue-local-fix`
 
 Write scope:
 
-1. `work/packages/active-20260513-topology-active-gate-snapshot-coverage-repair.md`
-2. `work/packages/done-20260513-topology-active-gate-owner-truth.md`
-3. `work/packages/done-20260513-topology-readiness-stalled-support.md`
-4. `work/sprints/active-2026-q2-topology-convergence-ship-shape.md`
-5. `work/sprints/current-blocker.json`
-6. `work/sprints/current-blocker.md`
-7. `src/admin/admin-control-snapshot-class-part-1.js`
-8. `src/admin/admin-control-snapshot-class-part-3.js`
-9. `src/admin/admin-control-snapshot-class-part-5.js`
-10. `src/control-plane/membership-publication-planning.js`
-11. `test/admin/admin-control-snapshot.test.js`
-12. `test/admin/admin-control-snapshot-response-contract.test.js`
-13. `test/control-plane/membership-publication-coordinator-main-stage-1.js`
-14. `test/control-plane/membership-publication-coordinator-main-stage-3.js`
-15. `test/distributed/harness/cluster-segment-7-class-5.js`
-16. `test/distributed/harness/__tests__/cluster.test-part-5.js`
+1. `work/packages/active-20260513-priority-recovery-operation-workflow-owner-workflow-progress-after-snapshot-coverage.md`
+2. `work/sprints/active-2026-q2-topology-convergence-ship-shape.md`
+3. `work/sprints/current-blocker.json`
+4. `work/sprints/current-blocker.md`
+5. `src/rebalancer/operation-workflow-owner-segment-1.js`
+6. `src/rebalancer/operation-workflow-owner-segment-2.js`
+7. `src/rebalancer/operation-workflow-owner-segment-4.js`
+8. `src/rebalancer/operation-workflow-owner-segment-7-stage-1.js`
+9. `src/rebalancer/operation-workflow-owner-segment-7-stage-3.js`
+10. `src/rebalancer/operation-workflow-owner-segment-7-stage-shared.js`
+11. `src/rebalancer/operation-workflow-owner-shared.js`
+12. `src/rebalancer/operation-workflow-owner.js`
+13. `test/rebalancer/operation-workflow-progress-event-driven-reentry.test.js`
+14. `test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js`
+15. `test/rebalancer/coordinator-created-operation-progress-remote-handoff.test.js`
 
 Handoff files:
 
-1. `work/packages/done-20260513-topology-active-gate-owner-truth.md`
-2. `work/packages/done-20260513-topology-readiness-stalled-support.md`
-3. `test-output/reports/rolling-restart-green-gate-after-readiness-stalled-support.report.json`
+1. `work/packages/done-20260513-topology-active-gate-snapshot-coverage-repair.md`
+2. `test-output/reports/rolling-restart-green-gate-after-active-gate-snapshot-coverage-repair-6.report.json`
 
 Generated files:
 
-1. None recorded
+1. `work/sprints/current-blocker.json`
+2. `work/sprints/current-blocker.md`
 
 Candidate runtime files:
 
-1. `src/admin/admin-control-snapshot-class-part-1.js`
-2. `src/admin/admin-control-snapshot-class-part-3.js`
-3. `src/admin/admin-control-snapshot-class-part-5.js`
-4. `src/control-plane/membership-publication-planning.js`
-5. `test/distributed/harness/cluster-segment-7-class-5.js`
+1. `src/rebalancer/operation-workflow-owner-segment-1.js`
+2. `src/rebalancer/operation-workflow-owner-segment-2.js`
+3. `src/rebalancer/operation-workflow-owner-segment-4.js`
+4. `src/rebalancer/operation-workflow-owner-segment-7-stage-1.js`
+5. `src/rebalancer/operation-workflow-owner-segment-7-stage-3.js`
+6. `src/rebalancer/operation-workflow-owner-segment-7-stage-shared.js`
+7. `src/rebalancer/operation-workflow-owner-shared.js`
+8. `src/rebalancer/operation-workflow-owner.js`
+9. `test/rebalancer/operation-workflow-progress-event-driven-reentry.test.js`
+10. `test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js`
+11. `test/rebalancer/coordinator-created-operation-progress-remote-handoff.test.js`
 
 Commit scope:
 
-1. `work/packages/active-20260513-topology-active-gate-snapshot-coverage-repair.md`
-2. `work/packages/done-20260513-topology-active-gate-owner-truth.md`
-3. `work/packages/done-20260513-topology-readiness-stalled-support.md`
-4. `work/sprints/active-2026-q2-topology-convergence-ship-shape.md`
-5. `work/sprints/current-blocker.json`
-6. `work/sprints/current-blocker.md`
-7. `src/admin/admin-control-snapshot-class-part-1.js`
-8. `src/admin/admin-control-snapshot-class-part-3.js`
-9. `src/admin/admin-control-snapshot-class-part-5.js`
-10. `src/control-plane/membership-publication-planning.js`
-11. `test/admin/admin-control-snapshot.test.js`
-12. `test/admin/admin-control-snapshot-response-contract.test.js`
-13. `test/control-plane/membership-publication-coordinator-main-stage-1.js`
-14. `test/control-plane/membership-publication-coordinator-main-stage-3.js`
-15. `test/distributed/harness/cluster-segment-7-class-5.js`
-16. `test/distributed/harness/__tests__/cluster.test-part-5.js`
+1. `work/packages/active-20260513-priority-recovery-operation-workflow-owner-workflow-progress-after-snapshot-coverage.md`
+2. `work/sprints/active-2026-q2-topology-convergence-ship-shape.md`
+3. `work/sprints/current-blocker.json`
+4. `work/sprints/current-blocker.md`
+5. `src/rebalancer/operation-workflow-owner-segment-1.js`
+6. `src/rebalancer/operation-workflow-owner-segment-2.js`
+7. `src/rebalancer/operation-workflow-owner-segment-4.js`
+8. `src/rebalancer/operation-workflow-owner-segment-7-stage-1.js`
+9. `src/rebalancer/operation-workflow-owner-segment-7-stage-3.js`
+10. `src/rebalancer/operation-workflow-owner-segment-7-stage-shared.js`
+11. `src/rebalancer/operation-workflow-owner-shared.js`
+12. `src/rebalancer/operation-workflow-owner.js`
+13. `test/rebalancer/operation-workflow-progress-event-driven-reentry.test.js`
+14. `test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js`
+15. `test/rebalancer/coordinator-created-operation-progress-remote-handoff.test.js`
 
 Legacy touched files:
 

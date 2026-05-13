@@ -324,6 +324,21 @@ function hasFreshReadyLeaseOrHeartbeat(nodeRow, options = {}) {
     lastHeartbeatMs > nowMs - ACTIVE_NODE_HEARTBEAT_GRACE_MS;
 }
 
+function isProjectionLivenessConnectionState(connectionState) {
+  return connectionState === String(STATE.READY).toLowerCase() ||
+    connectionState === String(STATE.CONNECTED).toLowerCase();
+}
+
+function hasFreshProjectionLiveness(nodeRow, options = {}) {
+  const normalizedNode = normalizeNodeRow(nodeRow);
+  if (!normalizedNode.nodeId) {
+    return false;
+  }
+  return isProjectionLivenessConnectionState(
+    normalizedNode.connectionState,
+  ) && hasFreshReadyLeaseOrHeartbeat(nodeRow, options);
+}
+
 function buildReadinessByNodeId(options = {}) {
   if (options.readinessByNodeId &&
       typeof options.readinessByNodeId === TYPEOF.OBJECT) {
@@ -514,7 +529,6 @@ function shouldAllowLivenessFallbackProjection(
     return false;
   }
   if (!readinessProjection ||
-      readinessProjection.hasReadinessEvidence !== true ||
       readinessProjection.projectionEligible === true) {
     return false;
   }
@@ -522,14 +536,10 @@ function shouldAllowLivenessFallbackProjection(
   if (!normalizedNode.nodeId) {
     return false;
   }
-  const nowMs = Number.isFinite(options.nowMs) ?
-    options.nowMs :
-    Date.now();
-  const hasReadyConnection = normalizedNode.connectionState ===
-    String(STATE.READY).toLowerCase();
-  const hasFreshLiveness = hasReadyConnection &&
-    hasFreshReadyLeaseOrHeartbeat(nodeRow, {nowMs});
-  return hasFreshLiveness;
+  if (normalizedNode.status !== String(SERVICE_STATUS.ACTIVE).toLowerCase()) {
+    return false;
+  }
+  return hasFreshProjectionLiveness(nodeRow, options);
 }
 
 function isCanonicallyActiveNode(nodeRow, options = {}) {
@@ -568,7 +578,8 @@ function isCanonicallyActiveNode(nodeRow, options = {}) {
       return false;
     }
   } else {
-    if (!hasReadyConnection || !hasFreshLiveness) {
+    if ((!hasReadyConnection || !hasFreshLiveness) &&
+        !allowLivenessFallbackProjection) {
       return false;
     }
   }
@@ -580,7 +591,9 @@ function isCanonicallyActiveNode(nodeRow, options = {}) {
     options.allowControlPlaneRecoveryEligibleProjection === true &&
     (readinessProjection.projectedByRecoveryEligibility === true ||
       readinessProjection.projectedByRuntimeAuthority === true);
-  if (!projectedByAuthorityConvergence) {
+  const projectedByLivenessFallback =
+    allowLivenessFallbackProjection === true;
+  if (!projectedByAuthorityConvergence && !projectedByLivenessFallback) {
     if (hasCanonicalWebSocketEndpoints(nodeEndpointRows) &&
         !hasCanonicalWebSocketEndpoint(
           normalizedNode.nodeId,
@@ -635,6 +648,10 @@ function resolveProjectedActiveNodeSelection(options = {}) {
       readinessEntry,
       options,
     );
+    const readinessOnlyProjectionEligible =
+      options.allowControlPlaneRecoveryEligibleProjection === true &&
+      readinessProjection.hasReadinessEvidence === true &&
+      readinessProjection.projectionEligible === true;
     const allowLivenessFallbackProjection =
       shouldAllowLivenessFallbackProjection(
         nodeRow,
@@ -702,12 +719,14 @@ function resolveProjectedActiveNodeSelection(options = {}) {
     }
     if (requireWebSocketEndpoint &&
         !hasCanonicalWebSocketEndpoint(nodeId, options.nodeEndpointRows) &&
-        !runtimeTransportEvidence) {
+        !runtimeTransportEvidence &&
+        readinessOnlyProjectionEligible !== true) {
       continue;
     }
     if (!hasCanonicalActiveService(nodeId, options.serviceRows) &&
         !hasCanonicalWebSocketEndpoint(nodeId, options.nodeEndpointRows) &&
-        !runtimeTransportEvidence) {
+        !runtimeTransportEvidence &&
+        readinessOnlyProjectionEligible !== true) {
       continue;
     }
     activeNodeIds.push(nodeId);

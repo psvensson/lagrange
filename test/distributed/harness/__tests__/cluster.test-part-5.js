@@ -871,7 +871,7 @@ test('Unit: _probeControlSnapshotCoverage counts projected and suspected nodes '
   );
 });
 
-test('Unit: _probeControlSnapshotCoverage surfaces publication diagnostics from the selected snapshot',
+test('Unit: _probeControlSnapshotCoverage surfaces stringified publication diagnostics from the selected snapshot',
   async () => {
     const cluster = createCluster({
       size: 1,
@@ -900,17 +900,16 @@ test('Unit: _probeControlSnapshotCoverage surfaces publication diagnostics from 
             capturedAtMs: 123,
             controlPlaneDiagnostics: {
               publicationConvergence: {
-                publicationEpoch: '18',
-                publicationStatus: 'OPEN',
-                publishedActiveNodeIds: JSON.stringify(['node-a', 'node-b']),
-                pendingAckNodeIds: ['node-b'],
-                acknowledgedNodeIds: ['node-a'],
-                recoveryProtocolState: 'publication_pending',
-                priorityRecoveryReasonCodes: [
+                publication_epoch: '18',
+                status: 'OPEN',
+                published_active_node_ids: JSON.stringify(['node-a', 'node-b']),
+                pending_ack_node_ids: JSON.stringify(['node-b']),
+                acknowledged_node_ids: JSON.stringify(['node-a']),
+                priority_recovery_reason_codes: JSON.stringify([
                   'publication_epoch_pending',
                   'priority_partitions_not_spread',
-                ],
-                participationByNodeId: {
+                ]),
+                participation_by_node_id: JSON.stringify({
                   'node-a': {
                     state: 'published_active',
                     publishedActive: true,
@@ -926,19 +925,20 @@ test('Unit: _probeControlSnapshotCoverage surfaces publication diagnostics from 
                     recoveryActive: true,
                     recoverySource: 'recovery_eligible_projection',
                   },
-                },
-                participationStateCounts: {
+                }),
+                participation_state_counts: JSON.stringify({
                   published_active: 1,
                   recovery_pending_publish: 2,
-                },
-                membershipLifecycleSummary: {
+                }),
+                membership_lifecycle_summary: JSON.stringify({
                   lifecycleState: 'publish_pending',
                   epochBoundary: 'publication_pending',
                   publishedActiveNodeIds: ['node-a', 'node-b'],
                   projectedServingNodeIds: ['node-a', 'node-b', 'node-c'],
                   locallyEligibleNodeIds: ['node-a', 'node-b', 'node-c'],
                   suspectedOrTransitioningNodeIds: ['node-c'],
-                  projectionDiagnostics: {
+                  recoveryProtocolState: 'publication_pending',
+                  projection_diagnostics: {
                     readinessDecisionMode:
                       'cluster_member_or_recovery_eligible',
                     readinessDecisionDimensions: [
@@ -951,7 +951,7 @@ test('Unit: _probeControlSnapshotCoverage surfaces publication diagnostics from 
                     readinessExcludedNodeIds: ['node-c'],
                     clusterMemberUnhealthyExcludedNodeIds: ['node-c'],
                   },
-                },
+                }),
               },
               publishedMembershipObservation: {
                 publicationEpoch: 17,
