@@ -34,6 +34,7 @@
     "work/sprints/active-2026-q2-topology-convergence-ship-shape.md",
     "work/sprints/current-blocker.json",
     "work/sprints/current-blocker.md",
+    "work/model-ledger.jsonl",
     "src/rebalancer/operation-workflow-owner-segment-1.js",
     "src/rebalancer/operation-workflow-owner-segment-2.js",
     "src/rebalancer/operation-workflow-owner-segment-4.js",
@@ -73,6 +74,7 @@
     "work/sprints/active-2026-q2-topology-convergence-ship-shape.md",
     "work/sprints/current-blocker.json",
     "work/sprints/current-blocker.md",
+    "work/model-ledger.jsonl",
     "src/rebalancer/operation-workflow-owner-segment-1.js",
     "src/rebalancer/operation-workflow-owner-segment-2.js",
     "src/rebalancer/operation-workflow-owner-segment-4.js",
@@ -201,17 +203,18 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 2. work/sprints/active-2026-q2-topology-convergence-ship-shape.md
 3. work/sprints/current-blocker.json
 4. work/sprints/current-blocker.md
-5. src/rebalancer/operation-workflow-owner-segment-1.js
-6. src/rebalancer/operation-workflow-owner-segment-2.js
-7. src/rebalancer/operation-workflow-owner-segment-4.js
-8. src/rebalancer/operation-workflow-owner-segment-7-stage-1.js
-9. src/rebalancer/operation-workflow-owner-segment-7-stage-3.js
-10. src/rebalancer/operation-workflow-owner-segment-7-stage-shared.js
-11. src/rebalancer/operation-workflow-owner-shared.js
-12. src/rebalancer/operation-workflow-owner.js
-13. test/rebalancer/operation-workflow-progress-event-driven-reentry.test.js
-14. test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js
-15. test/rebalancer/coordinator-created-operation-progress-remote-handoff.test.js
+5. work/model-ledger.jsonl
+6. src/rebalancer/operation-workflow-owner-segment-1.js
+7. src/rebalancer/operation-workflow-owner-segment-2.js
+8. src/rebalancer/operation-workflow-owner-segment-4.js
+9. src/rebalancer/operation-workflow-owner-segment-7-stage-1.js
+10. src/rebalancer/operation-workflow-owner-segment-7-stage-3.js
+11. src/rebalancer/operation-workflow-owner-segment-7-stage-shared.js
+12. src/rebalancer/operation-workflow-owner-shared.js
+13. src/rebalancer/operation-workflow-owner.js
+14. test/rebalancer/operation-workflow-progress-event-driven-reentry.test.js
+15. test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js
+16. test/rebalancer/coordinator-created-operation-progress-remote-handoff.test.js
 
 ## Out Of Scope
 
@@ -243,6 +246,12 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 
 - `Agent Codex (019e23ad-b2ae-75d3-91f7-a71d0bbfc665) implemented work/packages/done-20260513-priority-recovery-operation-workflow-owner-workflow-progress-after-snapshot-coverage.md`
 
+## Commit And Push Ledger
+
+1. Focused package commit: 227c242562abf79e6a0bf65517bee5f8e0f626ec
+2. Pushed to: origin/codex/pending-ack-eligibility-filter
+3. Commit contains only package-owned files/package-status/allowed sprint handoff: yes
+
 ## Changed Files
 
 1. `src/rebalancer/operation-workflow-owner-segment-1.js`
@@ -255,6 +264,7 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 8. `test/rebalancer/operation-workflow-progress-event-driven-reentry.test.js`
 9. `work/packages/done-20260513-priority-recovery-operation-workflow-owner-workflow-progress-after-snapshot-coverage.md`
 10. `work/sprints/active-2026-q2-topology-convergence-ship-shape.md`
+11. `work/model-ledger.jsonl`
 
 ## Focused Proof
 
