@@ -169,3 +169,9 @@ Supporting evidence:
 4. Selected owner-boundary consistency and latest-residual fixture synthesis as
    focused proof follow-ups; selected startup active-gate runtime work as the
    implementation path.
+
+## Commit And Push Ledger
+
+1. Focused package commit: `89af56b6c8755c979549ab0456022f0922cfd64f`
+2. Pushed to: `origin/codex/pending-ack-eligibility-filter`
+3. Commit contains only package-owned files/package-status/allowed sprint handoff: `yes`
