@@ -32,6 +32,16 @@ const PRIORITY_RECOVERY_DISPATCH_PENDING_REENTRY_STATE = Object.freeze({
   REENTER: 'reenter',
 });
 
+const PRIORITY_RECOVERY_DISPATCH_PENDING_SNAPSHOT_FIELD = Object.freeze({
+  CONDITIONS: 'conditions',
+  LATEST_OPERATION_STATUS: 'latestOperationStatus',
+  LATEST_OPERATION_WORKFLOW_STEP: 'latestOperationWorkflowStep',
+  LATEST_TIMELINE_STATUS: 'latestTimelineStatus',
+  LATEST_TIMELINE_STEP: 'latestTimelineStep',
+  STATUS: 'status',
+  WORKFLOW_STEP: 'workflowStep',
+});
+
 const PRIORITY_RECOVERY_DISPATCH_PENDING_REENTRY_ACTION = Object.freeze({
   SKIP: 'skip',
   ARM_NOW: 'arm_now',
@@ -183,9 +193,43 @@ class OperationWorkflowOwnerSegment7Stage5 extends OperationWorkflowOwnerSegment
     ) {
       return null;
     }
+    const snapshotConditions =
+      snapshot?.[
+        PRIORITY_RECOVERY_DISPATCH_PENDING_SNAPSHOT_FIELD.CONDITIONS
+      ] || {};
+    const workflowStep = String(
+      snapshotOperation[
+        PRIORITY_RECOVERY_DISPATCH_PENDING_SNAPSHOT_FIELD.WORKFLOW_STEP
+      ] ||
+        snapshotOperation[
+          PRIORITY_RECOVERY_DISPATCH_PENDING_SNAPSHOT_FIELD
+            .LATEST_TIMELINE_STEP
+        ] ||
+        snapshotConditions[
+          PRIORITY_RECOVERY_DISPATCH_PENDING_SNAPSHOT_FIELD
+            .LATEST_OPERATION_WORKFLOW_STEP
+        ] ||
+        OPERATION_WORKFLOW_OWNER_LITERAL.EMPTY_STRING,
+    ).trim();
+    const status = String(
+      snapshotOperation[
+        PRIORITY_RECOVERY_DISPATCH_PENDING_SNAPSHOT_FIELD.STATUS
+      ] ||
+        snapshotOperation[
+          PRIORITY_RECOVERY_DISPATCH_PENDING_SNAPSHOT_FIELD
+            .LATEST_TIMELINE_STATUS
+        ] ||
+        snapshotConditions[
+          PRIORITY_RECOVERY_DISPATCH_PENDING_SNAPSHOT_FIELD
+            .LATEST_OPERATION_STATUS
+        ] ||
+        OPERATION_WORKFLOW_OWNER_LITERAL.EMPTY_STRING,
+    ).trim();
     return Object.freeze({
       ...snapshotOperation,
       operationId: snapshotOperationId,
+      ...(workflowStep.length > NUM.ZERO ? {workflowStep} : {}),
+      ...(status.length > NUM.ZERO ? {status} : {}),
       createdAt: snapshotOperation.createdAtMs,
       updatedAt: snapshotOperation.updatedAtMs,
       completedAt: snapshotOperation.completedAtMs,

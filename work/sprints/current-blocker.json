@@ -1,139 +1,40 @@
 {
   "schema": "current-blocker-v1",
   "generatedBy": "scripts/work-tracker.js",
-  "sprint": "work/sprints/active-2026-q2-phase-0-1-rolling-restart-release-gate-closure.md",
-  "package": "work/packages/active-20260513-rolling-restart-green-gate-workflow-progress-recovery.md",
+  "sprint": "work/sprints/active-2026-q2-topology-convergence-ship-shape.md",
+  "package": "work/packages/active-20260513-topology-remote-handoff-convergence.md",
   "status": "active",
   "lane": "scenario-release-gate",
   "scenario": "rolling-restart",
-  "artifact": "test-output/reports/rolling-restart-green-only-baseline-20260513.report.json",
-  "playback": "test-output/reports/.playback/rolling-restart-green-only-baseline-20260513/rolling-restart/",
+  "artifact": "test-output/reports/rolling-restart-green-gate-after-sql-write-dispatch-retry-progress.report.json",
+  "playback": "none",
   "owner": "operation_workflow_owner",
   "boundary": "workflow_progress",
-  "dominantReason": "priority_recovery_progress_blocked",
-  "currentState": "Fresh rolling-restart baseline on May 13, 2026 is red. The first frontier is priority_recovery_partition_progress under operation_workflow_owner / workflow_progress, blocked by coordination_mismatch and recovering_in_flight residuals. Residual extraction also shows a secondary operation_workflow_owner / rebalancer_handoff group. The sprint cannot close until rolling-restart passes.",
-  "nextAction": "Fix the operation_workflow_owner / workflow_progress residual and any same-scenario successor blockers until rolling-restart passes. Classification-only closure, accepted backpressure, owner migration, or reduced evidence is not a sprint success measure.",
+  "dominantReason": "priority_recovery_event_driven_wait",
+  "currentState": "The successor ship-shape sprint starts from the same-frontier rolling-restart artifact where priority recovery remains blocked on coordinator-created remote handoff retry/ACK progress.",
+  "nextAction": "Close coordinator-created remote handoff retry and ACK progress before active-gate work resumes",
   "proof": [
-    "npm run work:evidence-summary -- test-output/reports/rolling-restart-green-only-baseline-20260513.report.json",
-    "npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-green-only-baseline-20260513.report.json --markdown",
-    "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-green-only-baseline-20260513.report.json --explain priority_recovery_partition_progress",
-    "npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-green-only-baseline-20260513.report.json",
-    "npm test -- test/rebalancer/coordinator-created-operation-progress-remote-handoff.test.js test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js test/rebalancer/operation-workflow-progress-event-driven-reentry.test.js",
-    "node --test test/control-plane/replica-dispatch-node-state-update.test-part-2.js",
-    "node --test test/scripts/priority-recovery-current-artifact-fixture.test.js",
-    "node scripts/check-guideline-literals.js src/rebalancer/operation-workflow-owner-segment-7-stage-3.js src/rebalancer/operation-workflow-owner-segment-7-stage-5.js src/rebalancer/operation-workflow-owner-segment-7-stage-1.js src/rebalancer/operation-workflow-owner.js src/rebalancer/operation-workflow-owner-decision.js src/rebalancer/operation-workflow-owner-effects.js src/control-plane/replica-dispatch-service-segment-1.js",
-    "node scripts/check-guideline-decision-boundaries.js src/rebalancer/operation-workflow-owner-segment-7-stage-3.js src/rebalancer/operation-workflow-owner-segment-7-stage-5.js src/rebalancer/operation-workflow-owner-segment-7-stage-1.js src/rebalancer/operation-workflow-owner.js src/rebalancer/operation-workflow-owner-decision.js src/rebalancer/operation-workflow-owner-effects.js src/control-plane/replica-dispatch-service-segment-1.js",
-    "npm run audit:runtime-grammar:file -- src/rebalancer/operation-workflow-owner-segment-7-stage-3.js src/rebalancer/operation-workflow-owner-segment-7-stage-5.js src/rebalancer/operation-workflow-owner-segment-7-stage-1.js src/rebalancer/operation-workflow-owner.js src/rebalancer/operation-workflow-owner-decision.js src/rebalancer/operation-workflow-owner-effects.js src/control-plane/replica-dispatch-service-segment-1.js",
-    "node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-green-gate-after-workflow-progress-recovery.report.json --fast-local --verbose"
+    "npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-green-gate-after-sql-write-dispatch-retry-progress.report.json --markdown",
+    "npm run analyze:owner-files -- operation_workflow_owner workflow_progress --markdown"
   ],
-  "writeScope": [
-    "work/packages/active-20260513-rolling-restart-green-gate-workflow-progress-recovery.md",
-    "work/packages/done-20260512-rolling-restart-startup-readiness-support-evidence-boundary.md",
-    "work/sprints/active-2026-q2-phase-0-1-rolling-restart-release-gate-closure.md",
-    "work/sprints/current-blocker.json",
-    "work/sprints/current-blocker.md",
-    "work/model-ledger.jsonl",
-    "work/packages/todo-20260513-priority-recovery-current-artifact-fixture-and-burndown.md",
-    "src/rebalancer/operation-workflow-owner-segment-7-stage-3.js",
-    "src/rebalancer/operation-workflow-owner-segment-7-stage-5.js",
-    "src/rebalancer/operation-workflow-owner-segment-7-stage-1.js",
-    "src/rebalancer/operation-workflow-owner.js",
-    "src/rebalancer/operation-workflow-owner-decision.js",
-    "src/rebalancer/operation-workflow-owner-effects.js",
-    "src/control-plane/replica-dispatch-service-segment-1.js",
-    "test/rebalancer/coordinator-created-operation-progress-remote-handoff.test.js",
-    "test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js",
-    "test/rebalancer/operation-workflow-progress-event-driven-reentry.test.js",
-    "test/control-plane/replica-dispatch-node-state-update.test-part-2.js",
-    "test/scripts/__fixtures__/topology-convergence/rolling-restart-green-only-baseline-priority-recovery.fixture.json",
-    "test/scripts/priority-recovery-current-artifact-fixture.test.js"
-  ],
+  "writeScope": [],
   "handoffFiles": [
-    "work/packages/done-20260512-rolling-restart-operation-workflow-progress-direct-chain-after-owner-proof.md",
-    "test-output/reports/rolling-restart-green-only-baseline-20260513.report.json",
-    "test-output/reports/.playback/rolling-restart-green-only-baseline-20260513/rolling-restart/",
-    "test-output/reports/.playback/rolling-restart-green-only-baseline-20260513/rolling-restart/failure-bundle.json"
+    "test-output/reports/rolling-restart-green-gate-after-sql-write-dispatch-retry-progress.report.json"
   ],
-  "generatedFiles": [
-    "work/sprints/current-blocker.json",
-    "work/sprints/current-blocker.md"
-  ],
-  "candidateRuntimeFiles": [
-    "src/rebalancer/operation-workflow-owner-segment-7-stage-3.js",
-    "src/rebalancer/operation-workflow-owner-segment-7-stage-5.js",
-    "src/rebalancer/operation-workflow-owner-segment-7-stage-1.js",
-    "src/rebalancer/operation-workflow-owner.js",
-    "src/rebalancer/operation-workflow-owner-decision.js",
-    "src/rebalancer/operation-workflow-owner-effects.js",
-    "src/control-plane/replica-dispatch-service-segment-1.js"
-  ],
-  "commitScope": [
-    "work/packages/active-20260513-rolling-restart-green-gate-workflow-progress-recovery.md",
-    "work/packages/done-20260512-rolling-restart-startup-readiness-support-evidence-boundary.md",
-    "work/sprints/active-2026-q2-phase-0-1-rolling-restart-release-gate-closure.md",
-    "work/sprints/current-blocker.json",
-    "work/sprints/current-blocker.md",
-    "work/model-ledger.jsonl",
-    "work/packages/todo-20260513-priority-recovery-current-artifact-fixture-and-burndown.md",
-    "src/rebalancer/operation-workflow-owner-segment-7-stage-3.js",
-    "src/rebalancer/operation-workflow-owner-segment-7-stage-5.js",
-    "src/rebalancer/operation-workflow-owner-segment-7-stage-1.js",
-    "src/rebalancer/operation-workflow-owner.js",
-    "src/rebalancer/operation-workflow-owner-decision.js",
-    "src/rebalancer/operation-workflow-owner-effects.js",
-    "src/control-plane/replica-dispatch-service-segment-1.js",
-    "test/rebalancer/coordinator-created-operation-progress-remote-handoff.test.js",
-    "test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js",
-    "test/rebalancer/operation-workflow-progress-event-driven-reentry.test.js",
-    "test/control-plane/replica-dispatch-node-state-update.test-part-2.js",
-    "test/scripts/__fixtures__/topology-convergence/rolling-restart-green-only-baseline-priority-recovery.fixture.json",
-    "test/scripts/priority-recovery-current-artifact-fixture.test.js"
-  ],
+  "generatedFiles": [],
+  "candidateRuntimeFiles": [],
+  "commitScope": [],
   "touchedFiles": [],
   "modelFit": {
     "packageClass": "representative-frontier-closure",
     "intendedMinimumModel": "gpt-5.3-codex",
-    "scopeShape": "owner-boundary-contraction/current-frontier-until-green",
+    "scopeShape": "owner-boundary-contraction/current-frontier",
     "escalationTriggers": [
-      "fresh evidence promotes startup_active_gate_owner / snapshot_coverage ahead of operation workflow progress",
-      "fresh evidence promotes topology_publication_owner / publication_convergence ahead of operation workflow progress",
-      "the fix requires harness timeout changes, Pro behavior, or Enterprise behavior",
-      "workflow-progress implementation cannot produce deterministic dispatch, advance, timeout, retry, reconcile, or bounded migration proof"
+      "owned files expand beyond this package",
+      "a frozen decision must be reopened"
     ]
   },
-  "causalGovernance": {
-    "hypothesis": "If operation_workflow_owner / workflow_progress owns the fresh priority recovery residual, the coordination_mismatch and recovering_in_flight partitions must dispatch, advance, timeout, retry, reconcile, or migrate through one named owner path until the representative rolling-restart gate passes.",
-    "stopConditionCheck": "npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-green-only-baseline-20260513.report.json",
-    "expectedCausalModelChange": "The current first frontier either converges to representative-green or exposes the next same-scenario owner boundary with fresh evidence; non-green classifications do not close this sprint.",
-    "representativeOutcome": "pending-before-rerun",
-    "causalDebt": "Fresh May 13, 2026 rolling-restart evidence is red: active=3/5 before the 120000ms gate, publication is PUBLISHED with zero pending ACKs, priorityRecoveryState is needs_operation, and priorityRecovery is eligible_but_no_operation_created.",
-    "crossBoundaryReview": "Review subagent Codex (GPT-5) found fixes-required on the predecessor startup-readiness handoff; fix subagent Codex (019e1f7d-e951-7610-b22b-9b0211cbe7a3) repaired sprint and predecessor handoff truth. Implementation subagent Kepler (019e1f85-8605-7ae1-9d73-f59744e47e48) implemented the active workflow-progress package; parent session added the May 13 fixture/burn-down proof surface."
-  },
-  "scenarioCausalClosure": {
-    "referenceScenarioOrProbe": "rolling-restart green-only release gate baseline from May 13, 2026",
-    "phaseChain": [
-      "publication convergence",
-      "priority recovery operation workflow progress",
-      "rebalancer handoff",
-      "startup active-gate snapshot coverage",
-      "startup readiness"
-    ],
-    "currentFirstFrontier": "priority_recovery_partition_progress is blocked under operation_workflow_owner / workflow_progress with coordination_mismatch and recovering_in_flight residuals.",
-    "knownDownstreamBlockers": [
-      "operation_workflow_owner / rebalancer_handoff has secondary recovering_in_flight residuals",
-      "startup_active_gate_owner / snapshot_coverage remains downstream until priority recovery progress closes",
-      "publication_ack_convergence remains satisfied with PUBLISHED and zero pending ACKs"
-    ],
-    "missingCausalEdge": "The workflow-progress owner must create or advance eligible priority recovery work for blocked partitions instead of leaving needs_operation evidence through the active gate timeout.",
-    "missingCausalEdgeProbe": "npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-green-only-baseline-20260513.report.json --markdown plus npm run analyze:topology-convergence -- test-output/reports/rolling-restart-green-only-baseline-20260513.report.json --explain priority_recovery_partition_progress",
-    "boundedProgressProof": "Implementation must prove deterministic dispatch, advance, timeout, retry, reconcile, or bounded migration for workflow-progress priority recovery work before the representative rerun.",
-    "boundedProgressProofArtifact": "test-output/reports/rolling-restart-green-gate-after-workflow-progress-recovery.report.json plus focused operation_workflow_owner / workflow_progress tests selected by implementation",
-    "expectedObservableTransition": "rolling-restart passes, or the same scenario emits a fresh first frontier with concrete owner evidence that remains part of the green-only sprint loop.",
-    "maxProgressBound": "one workflow-progress owner cycle plus one representative rolling-restart rerun after focused tests pass",
-    "sameFrontierFallback": "keep this operation_workflow_owner / workflow_progress package active, inspect the new report with canonical extractors, and continue local fixes until rolling-restart passes or a different owner is first frontier.",
-    "expectedNextFrontier": "representative-green rolling-restart; any non-green successor remains active sprint work, not closure.",
-    "resultClassification": "pending-before-probe",
-    "stopCondition": "continue-local-fix"
-  },
-  "predecessor": "work/packages/done-20260512-rolling-restart-startup-readiness-support-evidence-boundary.md"
+  "causalGovernance": {},
+  "scenarioCausalClosure": {},
+  "predecessor": null
 }

@@ -29,13 +29,19 @@ const {
 
 const TEST_ENTITY_TYPE_PARTITION = 'partition';
 const TEST_OPERATION_ID = 'priority-dispatch-pending-timeout-operation';
+const TEST_SQL_PRIORITY_TIMEOUT_OPERATION_ID =
+  'priority-sql-dispatch-pending-timeout-operation';
+const TEST_AUTHORITATIVE_ONLY_OPERATION_ID =
+  'priority-authoritative-only-timeout-operation';
 const TEST_SERIAL_WAIT_OPERATION_ID =
   'priority-dispatch-pending-serial-wait-operation';
 const TEST_OPERATION_TYPE_REPLACE = OperationType.REPLACE;
 const TEST_PARTITION_ID = 'sql_write_operations-p1';
 const TEST_LOCAL_OWNER_PARTITION_ID = 'control_plane_publications-p1';
+const TEST_AUTHORITATIVE_ONLY_PARTITION_ID = 'replica_operations-p1';
 const TEST_REPLICA_ID = 'sql_write_operations-p1-r4';
 const TEST_LOCAL_OWNER_REPLICA_ID = 'control_plane_publications-p1-r4';
+const TEST_AUTHORITATIVE_ONLY_REPLICA_ID = 'replica_operations-p1-r4';
 const TEST_OBSERVER_NODE_ID = 'node-observer';
 const TEST_SOURCE_NODE_ID = 'node-source';
 const TEST_TARGET_NODE_ID = 'node-target';
@@ -60,6 +66,9 @@ const TEST_REPLICA_DISPATCH_TARGET =
   'node-target/service/replica-dispatch';
 const TEST_REPLICA_HANDLER_DISPATCH_TARGET =
   'node-target/service/replica-handler';
+const TEST_REPLICA_OPERATION_DISPATCH_DELIVERY_SOURCE =
+  STAGE_SHARED.OPERATION_WORKFLOW_OWNER_SHARED.OPERATION_WORKFLOW_OWNER_LITERAL
+    .REPLICA_OPERATION_DISPATCH;
 const TEST_RETRYABLE_HANDOFF_ERROR = 'handoff retryable timeout';
 const TEST_RETRYABLE_TRANSITION_FAILURE =
   'retryable transition claim failure';
@@ -87,6 +96,8 @@ const TEST_SERIAL_WAIT_PARTITION_IDS = Object.freeze([
 const TEST_REPLICA_OPERATIONS_TABLE = 'replica_operations';
 const TEST_SERVICES_TABLE = 'services';
 const TEST_QUERY_REPLICA_OPERATIONS_FRAGMENT = 'FROM replica_operations';
+const TEST_UPDATE_REPLICA_OPERATIONS_PREFIX =
+  'UPDATE replica_operations SET';
 const TEST_QUERY_SERVICES_FRAGMENT = 'FROM services';
 const TEST_DELIVERY_STATUS_INITIATED = 'initiated';
 const TEST_MIN_REPLICA_COUNT = 3;
@@ -111,6 +122,33 @@ const TEST_ASSERT_STALE_HANDOFF_REPLACES_TIMER =
 const TEST_ASSERT_STALE_HANDOFF_REMAINS_SINGLE_TIMER =
   'exactly one remote handoff retry timer should remain armed after stale ' +
   'retry reconciliation';
+const TEST_SQL_PRIORITY_TIMEOUT_REDISPATCH_TEST_NAME =
+  'checkTimeouts re-dispatches locally owned priority SQL PENDING rows ' +
+  'while the operation budget is still active';
+const TEST_ASSERT_SQL_PRIORITY_LOCAL_OWNER =
+  'priority SQL timeout witness should be locally owned by the replacement ' +
+  'target node';
+const TEST_ASSERT_SQL_PRIORITY_REARM =
+  'priority SQL PENDING rows should be eligible for dispatch re-arm while ' +
+  'the operation budget remains active';
+const TEST_ASSERT_SQL_PRIORITY_DISPATCH =
+  'priority SQL timeout reconciliation should dispatch the local-owner ' +
+  'operation once';
+const TEST_ASSERT_SQL_PRIORITY_DISPATCH_TARGET =
+  'priority SQL re-dispatch should target the canonical replica handler';
+const TEST_ASSERT_SQL_PRIORITY_DISPATCH_TIMEOUT =
+  'priority SQL replica dispatch should carry the owner delivery deadline';
+const TEST_ASSERT_SQL_PRIORITY_DISPATCH_SOURCE =
+  'priority SQL replica dispatch should identify the owner delivery source';
+const TEST_ASSERT_SQL_PRIORITY_STEP =
+  'priority SQL re-dispatch should advance durable workflow progress out of ' +
+  'PENDING';
+const TEST_ASSERT_SQL_PRIORITY_STATUS =
+  'priority SQL re-dispatch should persist the creating status after ' +
+  'dispatch acknowledgement';
+const TEST_ASSERT_SQL_PRIORITY_TRANSITIONS =
+  'priority SQL re-dispatch should persist the SENDING and CREATING ' +
+  'transitions';
 const TEST_SNAPSHOT_REENTRY_TEST_NAME =
   'priority recovery snapshots re-enter stale SENDING pending dispatch-' +
   'pending workflow-timeout operations through the workflow owner';
@@ -135,8 +173,8 @@ const TEST_ASSERT_OWNER_LANE_HELD_NO_INLINE_WAKE =
   'owner-lane-held snapshots should not wake the remote owner inline';
 const TEST_ASSERT_OWNER_LANE_HELD_RETRY_WAKES =
   'deferred owner-lane re-entry should wake the remote owner after the lane releases';
-const TEST_ASSERT_ACTIVE_HANDOFF_RETRY_EVENT_DRIVEN =
-  'active handoff retry should not reclassify event-driven owner progress';
+const TEST_ASSERT_ACTIVE_HANDOFF_RETRY_BOUNDED =
+  'active handoff retry should surface bounded rebalancer-handoff progress';
 const TEST_ASSERT_ACTIVE_HANDOFF_RETRY_NO_INLINE_WAKE =
   'active handoff retry snapshots should not wake the remote owner inline';
 const TEST_ASSERT_ACTIVE_HANDOFF_RETRY_TIMER_PRESERVED =
@@ -288,6 +326,34 @@ function createCoordinator(overrides = {}) {
       },
     },
   });
+}
+
+function buildPendingOperationRow({
+  operationId,
+  partitionId,
+  replicaId,
+  nowMs,
+}) {
+  return {
+    operation_id: operationId,
+    type: TEST_OPERATION_TYPE_REPLACE,
+    partition_id: partitionId,
+    replica_id: replicaId,
+    source_node_id: TEST_SOURCE_NODE_ID,
+    target_node_id: TEST_TARGET_NODE_ID,
+    status: TEST_STATUS_PENDING,
+    workflow_step: TEST_STEP_PENDING,
+    created_at: nowMs,
+    updated_at: nowMs,
+    completed_at: TEST_EMPTY_VALUE,
+    error_message: TEST_EMPTY_VALUE,
+    steps_history: JSON.stringify([{
+      step: TEST_STEP_PENDING,
+      timestamp: nowMs - TEST_STEP_HISTORY_LAG_MS,
+    }]),
+    entity_type: TEST_ENTITY_TYPE_PARTITION,
+    entity_id: partitionId,
+  };
 }
 
 function buildRetryableTransitionFailure() {
@@ -958,6 +1024,7 @@ async (t) => {
 
   const coordinator = createCoordinator({
     nodeId: TEST_TARGET_NODE_ID,
+    replicaOperationDispatchTimeoutMs: TEST_HANDOFF_TIMEOUT_MS,
     sqlQueryEngine,
     transactionCoordinator: buildTransactionCoordinator(),
     systemTableCache: {
@@ -1072,6 +1139,388 @@ async (t) => {
     updateCount,
     2,
     'local-owner re-dispatch should persist the SENDING and CREATING transitions',
+  );
+
+  await coordinator.shutdown();
+});
+
+test(TEST_SQL_PRIORITY_TIMEOUT_REDISPATCH_TEST_NAME, async (t) => {
+  const deliveries = [];
+  let updateCount = 0;
+  const nowMs = Date.now();
+  const operationRow = buildPendingOperationRow({
+    operationId: TEST_SQL_PRIORITY_TIMEOUT_OPERATION_ID,
+    partitionId: TEST_PARTITION_ID,
+    replicaId: TEST_REPLICA_ID,
+    nowMs,
+  });
+
+  const sqlQueryEngine = {
+    async executeQuery(sql, params = []) {
+      const normalizedSql = String(sql);
+      if (normalizedSql.includes(TEST_QUERY_REPLICA_OPERATIONS_FRAGMENT)) {
+        return {
+          success: true,
+          rows: [{...operationRow}],
+          affectedRows: 1,
+        };
+      }
+      if (normalizedSql.startsWith(TEST_UPDATE_REPLICA_OPERATIONS_PREFIX)) {
+        updateCount += 1;
+        operationRow.status = params[0];
+        operationRow.workflow_step = params[1];
+        operationRow.updated_at = params[2];
+        operationRow.completed_at = params[3];
+        operationRow.error_message = params[4];
+        operationRow.steps_history = params[5];
+        operationRow.replica_id = params[6];
+        return {
+          success: true,
+          affectedRows: 1,
+        };
+      }
+      if (normalizedSql.includes(TEST_QUERY_SERVICES_FRAGMENT)) {
+        return {
+          success: true,
+          rows: [],
+          affectedRows: 0,
+        };
+      }
+      return {
+        success: true,
+        rows: [],
+        affectedRows: 0,
+      };
+    },
+  };
+
+  const coordinator = createCoordinator({
+    nodeId: TEST_TARGET_NODE_ID,
+    replicaOperationDispatchTimeoutMs: TEST_HANDOFF_TIMEOUT_MS,
+    sqlQueryEngine,
+    transactionCoordinator: buildTransactionCoordinator(),
+    systemTableCache: {
+      get(tableName, key) {
+        if (tableName !== TEST_REPLICA_OPERATIONS_TABLE) {
+          return null;
+        }
+        return key === TEST_SQL_PRIORITY_TIMEOUT_OPERATION_ID ?
+          operationRow :
+          null;
+      },
+      getAll(tableName) {
+        if (tableName !== TEST_REPLICA_OPERATIONS_TABLE) {
+          return [];
+        }
+        return [operationRow];
+      },
+      filter(tableName, predicate) {
+        if (tableName !== TEST_REPLICA_OPERATIONS_TABLE) {
+          return [];
+        }
+        return [operationRow].filter(predicate);
+      },
+    },
+    cdcIntegrationService: {
+      async waitForCacheUpdate() {},
+    },
+    controlPlaneReadinessService: {
+      getNodeReadinessSync(nodeId) {
+        return {
+          nodeId,
+          dimensions: {
+            controlPlaneRecoveryEligible: true,
+            repairEligible: true,
+            serveEligible: true,
+          },
+        };
+      },
+    },
+    messageRouter: {
+      async deliver(target, payload, options) {
+        deliveries.push({target, payload, options});
+        return {acknowledged: true, status: TEST_DELIVERY_STATUS_INITIATED};
+      },
+    },
+    tablePolicyService: {
+      async getPolicyForPartition() {
+        return {minReplicaCount: TEST_MIN_REPLICA_COUNT};
+      },
+    },
+    enableTimeouts: false,
+  });
+
+  const pendingTimeoutMs = coordinator.getTimeoutForStep(
+    WORKFLOW_STEP.PENDING,
+    {partitionId: TEST_PARTITION_ID},
+  );
+  operationRow.created_at =
+    nowMs - pendingTimeoutMs - TEST_TIMEOUT_OVERRUN_MS;
+  operationRow.updated_at = operationRow.created_at;
+  operationRow.steps_history = JSON.stringify([{
+    step: TEST_STEP_PENDING,
+    timestamp: operationRow.updated_at - TEST_STEP_HISTORY_LAG_MS,
+  }]);
+
+  coordinator.initialize();
+
+  const cachedOperation =
+    coordinator.repository.queryCachedIncompleteOperations()[0];
+
+  t.equal(
+    coordinator.repository.isOperationLocallyOwned(cachedOperation),
+    true,
+    TEST_ASSERT_SQL_PRIORITY_LOCAL_OWNER,
+  );
+  t.equal(
+    coordinator.workflowOwner.shouldRearmDispatchFromProgressReconcile(
+      cachedOperation,
+      TEST_ACTUAL_STATUS_ABSENT,
+      {now: nowMs},
+    ),
+    true,
+    TEST_ASSERT_SQL_PRIORITY_REARM,
+  );
+
+  await coordinator.checkTimeouts();
+
+  t.equal(
+    deliveries.length,
+    NUM.ONE,
+    TEST_ASSERT_SQL_PRIORITY_DISPATCH,
+  );
+  t.equal(
+    deliveries[NUM.ZERO]?.target,
+    TEST_REPLICA_HANDLER_DISPATCH_TARGET,
+    TEST_ASSERT_SQL_PRIORITY_DISPATCH_TARGET,
+  );
+  t.equal(
+    deliveries[NUM.ZERO]?.options?.timeoutMs,
+    TEST_HANDOFF_TIMEOUT_MS,
+    TEST_ASSERT_SQL_PRIORITY_DISPATCH_TIMEOUT,
+  );
+  t.equal(
+    deliveries[NUM.ZERO]?.options?.deliverySource,
+    TEST_REPLICA_OPERATION_DISPATCH_DELIVERY_SOURCE,
+    TEST_ASSERT_SQL_PRIORITY_DISPATCH_SOURCE,
+  );
+  t.equal(
+    operationRow.workflow_step,
+    TEST_STEP_CREATING,
+    TEST_ASSERT_SQL_PRIORITY_STEP,
+  );
+  t.equal(
+    operationRow.status,
+    TEST_STATUS_CREATING,
+    TEST_ASSERT_SQL_PRIORITY_STATUS,
+  );
+  t.equal(
+    updateCount,
+    2,
+    TEST_ASSERT_SQL_PRIORITY_TRANSITIONS,
+  );
+
+  await coordinator.shutdown();
+});
+
+test('checkTimeouts supplements cache-visible priority scans with ' +
+  'authoritative no-step rows',
+async (t) => {
+  const deliveries = [];
+  const authoritativeIncompleteReads = [];
+  const nowMs = Date.now();
+  const cacheVisibleOperationRow = {
+    operation_id: TEST_OPERATION_ID,
+    type: TEST_OPERATION_TYPE_REPLACE,
+    partition_id: TEST_PARTITION_ID,
+    replica_id: TEST_REPLICA_ID,
+    source_node_id: TEST_OBSERVER_NODE_ID,
+    target_node_id: TEST_SOURCE_NODE_ID,
+    status: TEST_STATUS_PENDING,
+    workflow_step: TEST_STEP_PENDING,
+    created_at: nowMs,
+    updated_at: nowMs,
+    completed_at: TEST_EMPTY_VALUE,
+    error_message: TEST_EMPTY_VALUE,
+    steps_history: JSON.stringify(TEST_EMPTY_LIST),
+    entity_type: TEST_ENTITY_TYPE_PARTITION,
+    entity_id: TEST_PARTITION_ID,
+  };
+  const authoritativeOnlyOperationRow = {
+    operation_id: TEST_AUTHORITATIVE_ONLY_OPERATION_ID,
+    type: TEST_OPERATION_TYPE_REPLACE,
+    partition_id: TEST_AUTHORITATIVE_ONLY_PARTITION_ID,
+    replica_id: TEST_AUTHORITATIVE_ONLY_REPLICA_ID,
+    source_node_id: TEST_SOURCE_NODE_ID,
+    target_node_id: TEST_TARGET_NODE_ID,
+    status: TEST_STATUS_PENDING,
+    workflow_step: TEST_STEP_PENDING,
+    created_at: nowMs,
+    updated_at: nowMs,
+    completed_at: TEST_EMPTY_VALUE,
+    error_message: TEST_EMPTY_VALUE,
+    steps_history: JSON.stringify(TEST_EMPTY_LIST),
+    entity_type: TEST_ENTITY_TYPE_PARTITION,
+    entity_id: TEST_AUTHORITATIVE_ONLY_PARTITION_ID,
+  };
+  const operationRows = new Map([
+    [cacheVisibleOperationRow.operation_id, cacheVisibleOperationRow],
+    [
+      authoritativeOnlyOperationRow.operation_id,
+      authoritativeOnlyOperationRow,
+    ],
+  ]);
+
+  const sqlQueryEngine = {
+    async executeQuery(sql, params = []) {
+      const normalizedSql = String(sql);
+      if (
+        normalizedSql.includes(TEST_QUERY_REPLICA_OPERATIONS_FRAGMENT) &&
+        normalizedSql.includes('WHERE operation_id = ?')
+      ) {
+        const operationId = params[NUM.ZERO];
+        const operationRow = operationRows.get(operationId) || null;
+        return {
+          success: true,
+          rows: operationRow ? [{...operationRow}] : [],
+          affectedRows: operationRow ? NUM.ONE : NUM.ZERO,
+        };
+      }
+      if (normalizedSql.includes(TEST_QUERY_REPLICA_OPERATIONS_FRAGMENT)) {
+        authoritativeIncompleteReads.push({
+          sql: normalizedSql,
+          params: [...params],
+        });
+        return {
+          success: true,
+          rows: [...operationRows.values()]
+            .filter((row) =>
+              row.source_node_id === TEST_TARGET_NODE_ID ||
+              row.target_node_id === TEST_TARGET_NODE_ID,
+            )
+            .map((row) => ({...row})),
+          affectedRows: NUM.ONE,
+        };
+      }
+      if (normalizedSql.startsWith('UPDATE replica_operations SET')) {
+        const operationRow = operationRows.get(params[7]);
+        operationRow.status = params[NUM.ZERO];
+        operationRow.workflow_step = params[NUM.ONE];
+        operationRow.updated_at = params[NUM.TWO];
+        operationRow.completed_at = params[NUM.THREE];
+        operationRow.error_message = params[NUM.FOUR];
+        operationRow.steps_history = params[NUM.FIVE];
+        operationRow.replica_id = params[NUM.SIX];
+        return {
+          success: true,
+          affectedRows: NUM.ONE,
+        };
+      }
+      if (normalizedSql.includes(TEST_QUERY_SERVICES_FRAGMENT)) {
+        return {
+          success: true,
+          rows: [],
+          affectedRows: NUM.ZERO,
+        };
+      }
+      return {
+        success: true,
+        rows: [],
+        affectedRows: NUM.ZERO,
+      };
+    },
+  };
+
+  const coordinator = createCoordinator({
+    nodeId: TEST_TARGET_NODE_ID,
+    sqlQueryEngine,
+    transactionCoordinator: buildTransactionCoordinator(),
+    systemTableCache: {
+      get(tableName, key) {
+        if (tableName !== TEST_REPLICA_OPERATIONS_TABLE) {
+          return TEST_EMPTY_VALUE;
+        }
+        return key === TEST_OPERATION_ID ?
+          cacheVisibleOperationRow :
+          TEST_EMPTY_VALUE;
+      },
+      getAll(tableName) {
+        if (tableName !== TEST_REPLICA_OPERATIONS_TABLE) {
+          return [];
+        }
+        return [cacheVisibleOperationRow];
+      },
+      filter(tableName, predicate) {
+        if (tableName !== TEST_REPLICA_OPERATIONS_TABLE) {
+          return [];
+        }
+        return [cacheVisibleOperationRow].filter(predicate);
+      },
+    },
+    cdcIntegrationService: {
+      async waitForCacheUpdate() {},
+    },
+    controlPlaneReadinessService: {
+      getNodeReadinessSync(nodeId) {
+        return {
+          nodeId,
+          dimensions: {
+            controlPlaneRecoveryEligible: true,
+            repairEligible: true,
+            serveEligible: true,
+          },
+        };
+      },
+    },
+    messageRouter: {
+      async deliver(target, payload, options) {
+        deliveries.push({target, payload, options});
+        return {acknowledged: true, status: TEST_DELIVERY_STATUS_INITIATED};
+      },
+    },
+    tablePolicyService: {
+      async getPolicyForPartition() {
+        return {minReplicaCount: TEST_MIN_REPLICA_COUNT};
+      },
+    },
+    enableTimeouts: false,
+  });
+
+  const pendingTimeoutMs = coordinator.getTimeoutForStep(
+    WORKFLOW_STEP.PENDING,
+    {partitionId: TEST_AUTHORITATIVE_ONLY_PARTITION_ID},
+  );
+  authoritativeOnlyOperationRow.created_at =
+    nowMs - pendingTimeoutMs - TEST_TIMEOUT_OVERRUN_MS;
+  authoritativeOnlyOperationRow.updated_at =
+    authoritativeOnlyOperationRow.created_at;
+
+  coordinator.initialize();
+
+  await coordinator.checkTimeouts();
+
+  t.ok(
+    authoritativeIncompleteReads.some((entry) =>
+      entry.sql.includes(TEST_QUERY_REPLICA_OPERATIONS_FRAGMENT),
+    ),
+    'priority timeout scans should supplement partial cache visibility with one authoritative owner read',
+  );
+  t.equal(
+    authoritativeOnlyOperationRow.workflow_step,
+    TEST_STEP_CREATING,
+    'authoritative-only no-step priority rows should re-enter local dispatch',
+  );
+  t.equal(
+    authoritativeOnlyOperationRow.status,
+    TEST_STATUS_CREATING,
+    'authoritative-only no-step priority rows should persist dispatch progress',
+  );
+  t.ok(
+    deliveries.some((delivery) =>
+      delivery.target === TEST_REPLICA_HANDLER_DISPATCH_TARGET &&
+      delivery.payload?.operationId === TEST_AUTHORITATIVE_ONLY_OPERATION_ID,
+    ),
+    'authoritative-only priority rows should dispatch through the replica handler',
   );
 
   await coordinator.shutdown();
@@ -1439,8 +1888,8 @@ async (t) => {
   }
 });
 
-test('priority recovery snapshots keep event-driven progress while a remote ' +
-  'handoff retry is already active',
+test('priority recovery snapshots surface retry-scheduled rebalancer ' +
+  'handoff progress while a remote handoff retry is already active',
 async (t) => {
   const deliveries = [];
   const deferredTimers = [];
@@ -1590,18 +2039,18 @@ async (t) => {
 
     t.equal(
       snapshot?.progress?.nextRequiredAction,
-      PRIORITY_RECOVERY_NEXT_REQUIRED_ACTION.ADVANCE_EXISTING_OPERATION,
-      TEST_ASSERT_ACTIVE_HANDOFF_RETRY_EVENT_DRIVEN,
+      PRIORITY_RECOVERY_NEXT_REQUIRED_ACTION.WAIT_FOR_OPERATION_PROGRESS,
+      TEST_ASSERT_ACTIVE_HANDOFF_RETRY_BOUNDED,
     );
     t.equal(
       snapshot?.progress?.blockingBoundary,
-      PRIORITY_RECOVERY_BLOCKING_BOUNDARY.WORKFLOW_PROGRESS,
-      TEST_ASSERT_ACTIVE_HANDOFF_RETRY_EVENT_DRIVEN,
+      PRIORITY_RECOVERY_BLOCKING_BOUNDARY.REBALANCER_HANDOFF,
+      TEST_ASSERT_ACTIVE_HANDOFF_RETRY_BOUNDED,
     );
     t.equal(
       snapshot?.progress?.waitMode,
-      PRIORITY_RECOVERY_WAIT_MODE.EVENT_DRIVEN,
-      TEST_ASSERT_ACTIVE_HANDOFF_RETRY_EVENT_DRIVEN,
+      PRIORITY_RECOVERY_WAIT_MODE.RETRY_SCHEDULED,
+      TEST_ASSERT_ACTIVE_HANDOFF_RETRY_BOUNDED,
     );
     t.equal(
       deliveries.length,

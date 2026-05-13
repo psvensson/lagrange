@@ -22,6 +22,10 @@ import {
   normalizePriorityRecoveryDispatchPendingDecisionSnapshot,
 } from '../control-plane/priority-recovery-snapshot.js';
 import {
+  PRIORITY_RECOVERY_PROVENANCE_SOURCE,
+  PRIORITY_RECOVERY_TARGET_SERVICE_TERMINAL_STATE,
+} from '../control-plane/priority-recovery-snapshot-stage-shared.js';
+import {
   OPERATION_WORKFLOW_OWNER_PORT_CONTEXT_CAUSE,
   OPERATION_WORKFLOW_OWNER_PORT_CONTEXT_MODE,
   createOperationWorkflowOwnerPorts,
@@ -29,9 +33,17 @@ import {
 
 const OPERATION_WORKFLOW_OWNER_ADAPTER_DEFAULT_CONTEXT = Object.freeze({});
 const OPERATION_WORKFLOW_OWNER_EMPTY_TEXT = '';
+const OPERATION_WORKFLOW_OWNER_LOCAL_INITIALIZATION_RETRY_BOUNDARY =
+  'coordinator_created_local_initialization';
+const OPERATION_WORKFLOW_OWNER_LOCAL_INITIALIZATION_RETRY_ERROR =
+  'control_plane_pressure_degraded while local workflow owner initialization is pending';
 const OPERATION_WORKFLOW_OWNER_NO_OPERATION = null;
 const OPERATION_WORKFLOW_OWNER_NO_OPERATION_ID = null;
 const OPERATION_WORKFLOW_OWNER_OBJECT_REFERENCE = Object.freeze({});
+const OPERATION_WORKFLOW_OWNER_PRIORITY_RECOVERY_REENTRY_TABLE_NAME =
+  PRIORITY_RECOVERY_PROVENANCE_SOURCE.PRIORITY_RECOVERY_SNAPSHOT;
+const OPERATION_WORKFLOW_OWNER_PRIORITY_RECOVERY_REENTRY_CACHE_OPERATION =
+  PRIORITY_RECOVERY_PROVENANCE_SOURCE.PRIORITY_RECOVERY_SNAPSHOT;
 const OPERATION_WORKFLOW_OWNER_DISPATCH_PENDING_REENTRY_STATE =
   Object.freeze({
     OPERATION_UNAVAILABLE: 'operation_unavailable',
@@ -41,6 +53,13 @@ const OPERATION_WORKFLOW_OWNER_DISPATCH_PENDING_REENTRY_STATE =
     PERSISTED_NOT_DISPATCHED: 'persisted_not_dispatched',
     EVENT_DRIVEN_ADVANCE: 'event_driven_advance',
     NOT_REENTERABLE: 'not_reenterable',
+  });
+
+const OPERATION_WORKFLOW_OWNER_DISPATCH_PENDING_REENTRY_CONTEXT_STATE =
+  Object.freeze({
+    REBALANCER_HANDOFF_RETRY_ACTIVE: 'rebalancer_handoff_retry_active',
+    TIMEOUT_RECONCILE_DUE: 'timeout_reconcile_due',
+    OWNER_RECONCILE: 'owner_reconcile',
   });
 
 const OPERATION_WORKFLOW_OWNER_DISPATCH_PENDING_REENTRY_ALLOWED_STATES =
@@ -105,6 +124,105 @@ const OPERATION_WORKFLOW_OWNER_DISPATCH_PENDING_REENTRY_TABLE =
     }),
   ]);
 
+const OPERATION_WORKFLOW_OWNER_DISPATCH_PENDING_REENTRY_CONTEXT_TABLE =
+  Object.freeze([
+    Object.freeze({
+      state:
+        OPERATION_WORKFLOW_OWNER_DISPATCH_PENDING_REENTRY_CONTEXT_STATE
+          .REBALANCER_HANDOFF_RETRY_ACTIVE,
+      matches: (evidence) => evidence.rebalancerHandoffRetryActive === true,
+    }),
+    Object.freeze({
+      state:
+        OPERATION_WORKFLOW_OWNER_DISPATCH_PENDING_REENTRY_CONTEXT_STATE
+          .TIMEOUT_RECONCILE_DUE,
+      matches: (evidence) =>
+        evidence.timeoutReconcileDue === true ||
+        evidence.timeoutProgressWait === true,
+    }),
+    Object.freeze({
+      state:
+        OPERATION_WORKFLOW_OWNER_DISPATCH_PENDING_REENTRY_CONTEXT_STATE
+          .OWNER_RECONCILE,
+      matches: () => true,
+    }),
+  ]);
+
+const OPERATION_WORKFLOW_OWNER_TARGET_PROGRESS_REENTRY_STATE = Object.freeze({
+  OPERATION_UNAVAILABLE: 'operation_unavailable',
+  NOT_OPERATION_WORKFLOW_OWNER: 'not_operation_workflow_owner',
+  NOT_TARGET_PROGRESS: 'not_target_progress',
+  TARGET_NOT_TERMINAL: 'target_not_terminal',
+  NOT_LOCAL_OWNER: 'not_local_owner',
+  OWNER_LANE_HELD: 'owner_lane_held',
+  REENTER: 'reenter',
+});
+
+const OPERATION_WORKFLOW_OWNER_TARGET_PROGRESS_REENTRY_ACTION = Object.freeze({
+  SKIP: 'skip',
+  RECONCILE_NOW: 'reconcile_now',
+  RETRY_AFTER_OWNER_LANE: 'retry_after_owner_lane',
+});
+
+const OPERATION_WORKFLOW_OWNER_TARGET_PROGRESS_REENTRY_ACTION_BY_STATE =
+  Object.freeze(new Map([
+    [
+      OPERATION_WORKFLOW_OWNER_TARGET_PROGRESS_REENTRY_STATE.REENTER,
+      OPERATION_WORKFLOW_OWNER_TARGET_PROGRESS_REENTRY_ACTION.RECONCILE_NOW,
+    ],
+    [
+      OPERATION_WORKFLOW_OWNER_TARGET_PROGRESS_REENTRY_STATE.OWNER_LANE_HELD,
+      OPERATION_WORKFLOW_OWNER_TARGET_PROGRESS_REENTRY_ACTION
+        .RETRY_AFTER_OWNER_LANE,
+    ],
+  ]));
+
+const OPERATION_WORKFLOW_OWNER_TARGET_PROGRESS_PHASES = Object.freeze(
+  new Set([
+    PRIORITY_RECOVERY_WORKFLOW_PROGRESS_PHASE.TARGET_CREATION,
+    PRIORITY_RECOVERY_WORKFLOW_PROGRESS_PHASE.TARGET_SYNC,
+  ]),
+);
+
+const OPERATION_WORKFLOW_OWNER_TARGET_PROGRESS_REENTRY_TABLE = Object.freeze([
+  Object.freeze({
+    state:
+      OPERATION_WORKFLOW_OWNER_TARGET_PROGRESS_REENTRY_STATE
+        .OPERATION_UNAVAILABLE,
+    matches: (evidence) => evidence.operationAvailable !== true,
+  }),
+  Object.freeze({
+    state:
+      OPERATION_WORKFLOW_OWNER_TARGET_PROGRESS_REENTRY_STATE
+        .NOT_OPERATION_WORKFLOW_OWNER,
+    matches: (evidence) => evidence.operationWorkflowOwner !== true,
+  }),
+  Object.freeze({
+    state:
+      OPERATION_WORKFLOW_OWNER_TARGET_PROGRESS_REENTRY_STATE
+        .NOT_TARGET_PROGRESS,
+    matches: (evidence) => evidence.targetProgressWait !== true,
+  }),
+  Object.freeze({
+    state:
+      OPERATION_WORKFLOW_OWNER_TARGET_PROGRESS_REENTRY_STATE
+        .TARGET_NOT_TERMINAL,
+    matches: (evidence) => evidence.targetServiceTerminal !== true,
+  }),
+  Object.freeze({
+    state: OPERATION_WORKFLOW_OWNER_TARGET_PROGRESS_REENTRY_STATE.NOT_LOCAL_OWNER,
+    matches: (evidence) => evidence.locallyOwned !== true,
+  }),
+  Object.freeze({
+    state: OPERATION_WORKFLOW_OWNER_TARGET_PROGRESS_REENTRY_STATE.OWNER_LANE_HELD,
+    matches: (evidence) => evidence.ownerLaneHeld === true,
+  }),
+  Object.freeze({
+    state: OPERATION_WORKFLOW_OWNER_TARGET_PROGRESS_REENTRY_STATE.REENTER,
+    matches: () => true,
+  }),
+]);
+
 function buildOperationWorkflowOwnerDispatchPendingReentryEvidence(
   snapshot,
   operation,
@@ -164,44 +282,111 @@ function normalizeOperationWorkflowOwnerSnapshotOperationId(operation) {
     OPERATION_WORKFLOW_OWNER_NO_OPERATION_ID;
 }
 
+function hasActiveOperationWorkflowOwnerDispatchPendingHandoffRetry(
+  owner,
+  operation,
+) {
+  const operationId = normalizeOperationWorkflowOwnerSnapshotOperationId(
+    operation,
+  );
+  return (
+    typeof operationId === typeof OPERATION_WORKFLOW_OWNER_EMPTY_TEXT &&
+    operationId.length > OPERATION_WORKFLOW_OWNER_EMPTY_TEXT.length &&
+    owner.hasActiveCreatedOperationHandoffRetry(operationId)
+  );
+}
+
+function isOperationWorkflowOwnerDispatchPendingOwnerLaneHeld(
+  owner,
+  operation,
+) {
+  const operationId = normalizeOperationWorkflowOwnerSnapshotOperationId(
+    operation,
+  );
+  return (
+    typeof operationId === typeof OPERATION_WORKFLOW_OWNER_EMPTY_TEXT &&
+    operationId.length > OPERATION_WORKFLOW_OWNER_EMPTY_TEXT.length &&
+    owner.isOperationOwnerLaneHeld(operationId)
+  );
+}
+
 function shouldReenterOperationWorkflowOwnerDispatchPending(
   owner,
   snapshot,
   operation,
 ) {
-  const operationId = String(
-    operation?.operationId || OPERATION_WORKFLOW_OWNER_EMPTY_TEXT,
-  ).trim();
   const evidence = buildOperationWorkflowOwnerDispatchPendingReentryEvidence(
     snapshot,
     operation,
-    operationId.length > OPERATION_WORKFLOW_OWNER_EMPTY_TEXT.length &&
-      owner.hasActiveCreatedOperationHandoffRetry(operationId),
+    hasActiveOperationWorkflowOwnerDispatchPendingHandoffRetry(
+      owner,
+      operation,
+    ),
   );
   return OPERATION_WORKFLOW_OWNER_DISPATCH_PENDING_REENTRY_ALLOWED_STATES.has(
     resolveOperationWorkflowOwnerDispatchPendingReentryState(evidence),
   );
 }
 
-function buildPriorityRecoveryDispatchPendingOwnerReentryContext(snapshot) {
+function buildOperationWorkflowOwnerDispatchPendingReentryContextEvidence(
+  owner,
+  snapshot,
+  operation,
+) {
+  const ownerLaneHeld =
+    isOperationWorkflowOwnerDispatchPendingOwnerLaneHeld(owner, operation);
+  return Object.freeze({
+    rebalancerHandoffRetryActive:
+      hasActiveOperationWorkflowOwnerDispatchPendingHandoffRetry(
+        owner,
+        operation,
+      ) && ownerLaneHeld !== true,
+    ownerLaneHeld,
+    timeoutReconcileDue: snapshot?.actuation?.timeoutReconcileDue === true,
+    timeoutProgressWait:
+      snapshot?.progress?.blockingBoundary ===
+        PRIORITY_RECOVERY_BLOCKING_BOUNDARY.WORKFLOW_TIMEOUT &&
+      snapshot?.progress?.waitMode ===
+        PRIORITY_RECOVERY_WAIT_MODE.TIMEOUT_RECONCILE_DUE,
+  });
+}
+
+function resolveOperationWorkflowOwnerDispatchPendingReentryContextState(
+  evidence,
+) {
+  return (
+    OPERATION_WORKFLOW_OWNER_DISPATCH_PENDING_REENTRY_CONTEXT_TABLE.find(
+      (entry) => entry.matches(evidence),
+    )?.state ||
+    OPERATION_WORKFLOW_OWNER_DISPATCH_PENDING_REENTRY_CONTEXT_STATE
+      .OWNER_RECONCILE
+  );
+}
+
+function buildPriorityRecoveryDispatchPendingOwnerReentryContext(
+  owner,
+  snapshot,
+  operation,
+) {
   const baseContext = Object.freeze({
     mode: OPERATION_WORKFLOW_OWNER_PORT_CONTEXT_MODE.OWNER_RECONCILE,
   });
-  if (
-    snapshot?.actuation?.timeoutReconcileDue !== true &&
-    (
-      snapshot?.progress?.blockingBoundary !==
-      PRIORITY_RECOVERY_BLOCKING_BOUNDARY.WORKFLOW_TIMEOUT ||
-      snapshot?.progress?.waitMode !==
-      PRIORITY_RECOVERY_WAIT_MODE.TIMEOUT_RECONCILE_DUE
-    )
-  ) {
-    return baseContext;
-  }
-  return Object.freeze({
-    ...baseContext,
-    cause: OPERATION_WORKFLOW_OWNER_PORT_CONTEXT_CAUSE.TIMEOUT,
-  });
+  const state =
+    resolveOperationWorkflowOwnerDispatchPendingReentryContextState(
+      buildOperationWorkflowOwnerDispatchPendingReentryContextEvidence(
+        owner,
+        snapshot,
+        operation,
+      ),
+    );
+  return state ===
+    OPERATION_WORKFLOW_OWNER_DISPATCH_PENDING_REENTRY_CONTEXT_STATE
+      .TIMEOUT_RECONCILE_DUE ?
+    Object.freeze({
+      ...baseContext,
+      cause: OPERATION_WORKFLOW_OWNER_PORT_CONTEXT_CAUSE.TIMEOUT,
+    }) :
+    baseContext;
 }
 
 function normalizePriorityRecoveryDispatchPendingOwnerSnapshot(
@@ -221,7 +406,11 @@ function normalizePriorityRecoveryDispatchPendingOwnerSnapshot(
       snapshot,
       owner.operationWorkflowOwnerAdapter.decide(
         operation,
-        buildPriorityRecoveryDispatchPendingOwnerReentryContext(snapshot),
+        buildPriorityRecoveryDispatchPendingOwnerReentryContext(
+          owner,
+          snapshot,
+          operation,
+        ),
       ),
     );
   owner.schedulePriorityRecoveryDispatchPendingReentry(
@@ -230,6 +419,114 @@ function normalizePriorityRecoveryDispatchPendingOwnerSnapshot(
     {allowOwnerLaneRetry: true},
   );
   return normalizedSnapshot;
+}
+
+function buildOperationWorkflowOwnerTargetProgressReentryEvidence(
+  owner,
+  snapshot,
+  operation,
+) {
+  const operationId =
+    normalizeOperationWorkflowOwnerSnapshotOperationId(operation);
+  return Object.freeze({
+    operationAvailable: Boolean(operationId),
+    operationWorkflowOwner:
+      snapshot?.actuation?.owner ===
+        PRIORITY_RECOVERY_PROGRESS_OWNER.OPERATION_WORKFLOW_OWNER &&
+      snapshot?.progress?.currentOwner ===
+        PRIORITY_RECOVERY_PROGRESS_OWNER.OPERATION_WORKFLOW_OWNER,
+    targetProgressWait:
+      OPERATION_WORKFLOW_OWNER_TARGET_PROGRESS_PHASES.has(
+        snapshot?.actuation?.workflowProgressPhaseId,
+      ) &&
+      OPERATION_WORKFLOW_OWNER_TARGET_PROGRESS_PHASES.has(
+        snapshot?.progress?.workflowProgressPhaseId,
+      ) &&
+      snapshot?.progress?.nextRequiredAction ===
+        PRIORITY_RECOVERY_NEXT_REQUIRED_ACTION.WAIT_FOR_OPERATION_PROGRESS &&
+      snapshot?.progress?.blockingBoundary ===
+        PRIORITY_RECOVERY_BLOCKING_BOUNDARY.WORKFLOW_PROGRESS &&
+      snapshot?.progress?.waitMode ===
+        PRIORITY_RECOVERY_WAIT_MODE.EVENT_DRIVEN,
+    targetServiceTerminal:
+      snapshot?.coordinator?.operation?.targetServiceTerminalState ===
+        PRIORITY_RECOVERY_TARGET_SERVICE_TERMINAL_STATE.TERMINAL ||
+      operation?.targetServiceTerminalState ===
+        PRIORITY_RECOVERY_TARGET_SERVICE_TERMINAL_STATE.TERMINAL,
+    locallyOwned: owner.repository.isOperationLocallyOwned(operation),
+    ownerLaneHeld:
+      Boolean(operationId) && owner.isOperationOwnerLaneHeld(operationId),
+  });
+}
+
+function resolveOperationWorkflowOwnerTargetProgressReentryState(evidence) {
+  return (
+    OPERATION_WORKFLOW_OWNER_TARGET_PROGRESS_REENTRY_TABLE.find((entry) =>
+      entry.matches(evidence),
+    )?.state ||
+    OPERATION_WORKFLOW_OWNER_TARGET_PROGRESS_REENTRY_STATE
+      .OPERATION_UNAVAILABLE
+  );
+}
+
+function resolveOperationWorkflowOwnerTargetProgressReentryAction(
+  owner,
+  snapshot,
+  operation,
+) {
+  const evidence = buildOperationWorkflowOwnerTargetProgressReentryEvidence(
+    owner,
+    snapshot,
+    operation,
+  );
+  const state =
+    resolveOperationWorkflowOwnerTargetProgressReentryState(evidence);
+  return (
+    OPERATION_WORKFLOW_OWNER_TARGET_PROGRESS_REENTRY_ACTION_BY_STATE
+      .get(state) ||
+    OPERATION_WORKFLOW_OWNER_TARGET_PROGRESS_REENTRY_ACTION.SKIP
+  );
+}
+
+function applyOperationWorkflowOwnerTargetProgressReentryAction(
+  owner,
+  operation,
+  action,
+) {
+  const operationId =
+    normalizeOperationWorkflowOwnerSnapshotOperationId(operation);
+  if (!operationId) {
+    return false;
+  }
+  if (
+    action ===
+    OPERATION_WORKFLOW_OWNER_TARGET_PROGRESS_REENTRY_ACTION
+      .RETRY_AFTER_OWNER_LANE
+  ) {
+    return owner.scheduleObservedProgressRetry(
+      operationId,
+      OPERATION_WORKFLOW_OWNER_PRIORITY_RECOVERY_REENTRY_TABLE_NAME,
+      OPERATION_WORKFLOW_OWNER_PRIORITY_RECOVERY_REENTRY_CACHE_OPERATION,
+    );
+  }
+  if (
+    action !==
+    OPERATION_WORKFLOW_OWNER_TARGET_PROGRESS_REENTRY_ACTION.RECONCILE_NOW
+  ) {
+    return false;
+  }
+  owner.operationWorkflowRunExclusive(
+    owner.getOperationOwnerSingleFlightKey(operationId),
+    () => owner.reconcileObservedProgressOperation(operationId),
+  ).catch((error) => {
+    owner.handleObservedProgressFailure(
+      operationId,
+      OPERATION_WORKFLOW_OWNER_PRIORITY_RECOVERY_REENTRY_TABLE_NAME,
+      OPERATION_WORKFLOW_OWNER_PRIORITY_RECOVERY_REENTRY_CACHE_OPERATION,
+      error,
+    );
+  });
+  return true;
 }
 
 class OperationWorkflowOwner extends OperationWorkflowOwnerSegment7 {
@@ -357,6 +654,43 @@ class OperationWorkflowOwner extends OperationWorkflowOwnerSegment7 {
     }
   }
 
+  buildCoordinatorCreatedLocalInitializationRetryError() {
+    const error = new Error(
+      OPERATION_WORKFLOW_OWNER_LOCAL_INITIALIZATION_RETRY_ERROR,
+    );
+    error.deferRetry = true;
+    return error;
+  }
+
+  shouldDeferCoordinatorCreatedLocalInitialization(operationInput) {
+    return (
+      this.isCoordinatorCreatedOperationLocallyOwned(operationInput) &&
+      this.isDispatchRetryableWorkflowStep(operationInput)
+    );
+  }
+
+  deferCoordinatorCreatedLocalInitializationRetry(operationInput) {
+    const operationId = operationInput?.operationId || null;
+    if (
+      !operationId ||
+      !this.shouldDeferCoordinatorCreatedLocalInitialization(operationInput)
+    ) {
+      return false;
+    }
+    return this.deferTransitionRetry(
+      operationId,
+      this.buildCoordinatorCreatedLocalInitializationRetryError(),
+      {
+        boundary: OPERATION_WORKFLOW_OWNER_LOCAL_INITIALIZATION_RETRY_BOUNDARY,
+        workflowStep: operationInput?.workflowStep || null,
+        partitionId: operationInput?.partitionId || null,
+        updatedAt: operationInput?.updatedAt,
+        createdAt: operationInput?.createdAt,
+        operationSnapshot: operationInput,
+      },
+    );
+  }
+
   async armCoordinatorCreatedOperation(operationInput) {
     const operationId = operationInput?.operationId || null;
     if (!operationId || this.isShuttingDown) {
@@ -368,7 +702,9 @@ class OperationWorkflowOwner extends OperationWorkflowOwnerSegment7 {
         operationInput,
       )
     ) {
-      return false;
+      return this.deferCoordinatorCreatedLocalInitializationRetry(
+        operationInput,
+      );
     }
 
     const singleFlightKey = this.getOperationOwnerSingleFlightKey(operationId);
@@ -451,11 +787,16 @@ class OperationWorkflowOwner extends OperationWorkflowOwnerSegment7 {
         snapshot,
         operations,
       );
-    return normalizePriorityRecoveryDispatchPendingOwnerSnapshot(
+    const normalizedSnapshot = normalizePriorityRecoveryDispatchPendingOwnerSnapshot(
       this,
       snapshot,
       operation,
     );
+    this.schedulePriorityRecoveryTargetProgressReentry(
+      normalizedSnapshot,
+      [operation],
+    );
+    return normalizedSnapshot;
   }
 
   normalizePriorityRecoveryDispatchPendingOwnerSnapshot(snapshot, operation) {
@@ -463,6 +804,25 @@ class OperationWorkflowOwner extends OperationWorkflowOwnerSegment7 {
       this,
       snapshot,
       operation,
+    );
+  }
+
+  schedulePriorityRecoveryTargetProgressReentry(snapshot, operations = []) {
+    const operation =
+      this.selectPriorityRecoveryDispatchPendingReentryOperation(
+        snapshot,
+        operations,
+      );
+    const action =
+      resolveOperationWorkflowOwnerTargetProgressReentryAction(
+        this,
+        snapshot,
+        operation,
+      );
+    return applyOperationWorkflowOwnerTargetProgressReentryAction(
+      this,
+      operation,
+      action,
     );
   }
 }
