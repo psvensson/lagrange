@@ -90,10 +90,12 @@ frontier?
    - Lane: `lightweight-maintenance`
    - Purpose: create the reusable agent prompt/checklist and sprint execution
      ledger so preflight is a recorded gate, not a conversation note.
-2. [Rolling Restart Latest Artifact Preflight Refresh](../packages/todo-20260513-rolling-restart-latest-artifact-preflight-refresh.md)
+2. [Rolling Restart Latest Artifact Preflight Refresh](../packages/done-20260513-rolling-restart-latest-artifact-preflight-refresh.md)
    - Lane: `read-review-doc-only`
    - Purpose: refresh current evidence, decide whether priority recovery is
      real, stale, or subordinate, and select the first runtime package.
+   - Result: `active-gate-first-frontier`; priority-recovery residual evidence
+     is stale/subordinate unless fresh canonical evidence promotes it again.
 3. [Rolling Restart Owner Boundary Consistency Closure](../packages/todo-20260513-rolling-restart-owner-boundary-consistency-closure.md)
    - Lane: `scenario-release-gate`
    - Purpose: reconcile topology, residual, causal-model, distributed-failure,
