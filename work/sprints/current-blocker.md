@@ -4,35 +4,34 @@
 
 Sprint: `work/sprints/active-2026-q2-topology-convergence-residual-closure.md`
 
-Package: `work/packages/active-20260514-topology-failure-gate-execution-harness.md`
+Package: `work/packages/active-20260514-topology-failure-detection-repair-gate.md`
 
 Workflow lane: `scenario-release-gate`
 
-Scenario: `failure-gate-matrix`
+Scenario: `rolling-restart`
 
-Artifact: `test-output/reports/topology-failure-gate-execution-harness.report.json`
+Artifact: `test-output/reports/topology-failure-detection-repair-gate.report.json`
 
 Playback: `none`
 
 ## Boundary
 
-Owner: `distributed_test_harness`
+Owner: `failure_detector`
 
-Boundary: `failure_gate_execution`
+Boundary: `durable_repair_intent_release_gate`
 
-Dominant reason: `failure_gate_matrix_not_executed`
+Dominant reason: `failure_detection_repair_intent_not_release_proven`
 
-Current state: The prior sprint added a canonical failure-gate matrix but recorded no executable gate plan, artifact naming, durable assertion IDs, or red-outcome split package wiring.
+Current state: Focused durable repair-intent tests exist, and the failure-gate harness now has an executable rolling-restart gate plan, but no observe/classify release-gate artifact has been recorded for failure detection repair.
 
 ## Next Action
 
-Sharpen the failure-gate harness and sprint observability only: generate deterministic gate execution plans, assertion metadata, artifact paths, and package split rules without fixing rolling-restart runtime behavior.
+Execute and classify the failure-detection gate evidence only. If the gate is red, split to the owning package; do not fix rolling-restart runtime behavior in this package without explicit re-scope.
 
 ## Proof Ladder
 
-1. `npm run analyze:owner-files -- distributed_test_harness failure_gate_matrix --markdown`
-2. `node test/distributed/harness/__tests__/scenario-registry.test.js`
-3. `node test/distributed/harness/__tests__/topology-failure-gate-matrix.test.js`
+1. `npx tap test/node/failure-repair-intent-contract.test.js test/node/failure-detector.test.js`
+2. `node test/distributed/run.js --config test/distributed/config/local-three-node.json --scenario rolling-restart --output test-output/reports/topology-failure-detection-repair-gate.report.json --verbose`
 
 ## Model Fit
 
@@ -67,48 +66,48 @@ Next action: `unknown`
 
 ## Causal Governance
 
-Causal hypothesis: `distributed_test_harness / failure_gate_execution proof should reduce, migrate, or classify failure_gate_matrix_not_executed without hiding the sprint representative residual.`
+Causal hypothesis: `failure_detector / durable_repair_intent_release_gate proof should reduce, migrate, or classify failure_detection_repair_intent_not_release_proven without hiding the sprint representative residual.`
 
-Stop-condition check: `npm --silent run analyze:causal-model -- test-output/reports/topology-failure-gate-execution-harness.report.json`
+Stop-condition check: `npm --silent run analyze:causal-model -- test-output/reports/topology-failure-detection-repair-gate.report.json`
 
-Expected causal-model change: `failure_gate_matrix_not_executed becomes representative-green, reduced, same-frontier, migrated, or classification-only with a named owner-boundary reason.`
+Expected causal-model change: `failure_detection_repair_intent_not_release_proven becomes representative-green, reduced, same-frontier, migrated, or classification-only with a named owner-boundary reason.`
 
 Representative outcome: `pending-before-rerun`
 
-Causal debt: `Until distributed_test_harness / failure_gate_execution is proven, the sprint representative rolling-restart residual stays open. Runtime rolling-restart fixes are out of scope for this tooling package.`
+Causal debt: `Until failure_detector / durable_repair_intent_release_gate is proven, the sprint representative rolling-restart residual stays open. This package may execute and classify the gate, but runtime rolling-restart fixes are out of scope.`
 
 Cross-boundary review: `Required before closure through the scenario-release-gate subagent ledger or an allowed waiver recorded in this package.`
 
 ## Scenario Causal Closure
 
-Reference scenario/probe: `failure-gate-matrix / distributed_test_harness / failure_gate_execution`
+Reference scenario/probe: `rolling-restart / failure_detector / durable_repair_intent_release_gate`
 
 Phase chain:
 
 1. `canonical evidence extraction`
-2. `distributed_test_harness / failure_gate_execution focused proof`
+2. `failure_detector / durable_repair_intent_release_gate focused proof`
 3. `representative or gate rerun classification`
 
-Current first frontier: `package-local frontier distributed_test_harness / failure_gate_execution; sprint representative frontier remains startup_active_gate_owner / snapshot_coverage until fresh evidence changes it`
+Current first frontier: `package-local frontier failure_detector / durable_repair_intent_release_gate; sprint representative frontier remains startup_active_gate_owner / snapshot_coverage until fresh evidence changes it`
 
 Known downstream blockers:
 
 1. `rolling-restart representative publication/snapshot coverage remains red until green or migrated by a later runtime package`
 2. `runtime or harness fixes discovered outside this owner boundary require a narrower successor package`
 
-Missing causal edge: `unproven distributed_test_harness / failure_gate_execution causal edge for failure_gate_matrix_not_executed`
+Missing causal edge: `unproven failure_detector / durable_repair_intent_release_gate causal edge for failure_detection_repair_intent_not_release_proven`
 
-Missing causal edge probe: `npm run analyze:owner-files -- distributed_test_harness failure_gate_matrix --markdown`
+Missing causal edge probe: `npx tap test/node/failure-repair-intent-contract.test.js test/node/failure-detector.test.js`
 
-Bounded progress proof: `Focused proof must show bounded wake, retry, timeout, reconcile, drain, dispatch, delivery, timer, or advance for distributed_test_harness / failure_gate_execution.`
+Bounded progress proof: `Focused proof must show bounded wake, retry, timeout, reconcile, drain, dispatch, delivery, timer, or advance for failure_detector / durable_repair_intent_release_gate.`
 
-Bounded progress proof artifact: `test-output/reports/topology-failure-gate-execution-harness.report.json`
+Bounded progress proof artifact: `test-output/reports/topology-failure-detection-repair-gate.report.json`
 
-Expected observable transition: `failure_gate_matrix_not_executed resolves to executable gate-plan evidence, a reduced residual, same-frontier evidence, migrated owner-boundary proof, or classification-only stop.`
+Expected observable transition: `failure_detection_repair_intent_not_release_proven resolves to green evidence, a reduced residual, same-frontier evidence, migrated owner-boundary proof, or classification-only stop without runtime repair in this package.`
 
 Max progress bound: `one activation cycle: package doctor, extractor/probe, owner-file proof, focused validation, and result classification`
 
-Same-frontier fallback: `keep distributed_test_harness / failure_gate_execution active and do not broaden the package or claim ship proof`
+Same-frontier fallback: `keep failure_detector / durable_repair_intent_release_gate active and do not broaden the package or claim ship proof`
 
 Expected next frontier: `representative green evidence or a narrower owner-boundary blocker selected by canonical evidence`
 
@@ -120,18 +119,14 @@ Stop condition: `continue-local-fix`
 
 Write scope:
 
-1. `work/packages/active-20260514-topology-failure-gate-execution-harness.md`
+1. `work/packages/active-20260514-topology-failure-detection-repair-gate.md`
 2. `work/sprints/active-2026-q2-topology-convergence-residual-closure.md`
 3. `work/sprints/current-blocker.json`
 4. `work/sprints/current-blocker.md`
-5. `test/distributed/harness/topology-failure-gate-matrix.js`
-6. `test/distributed/harness/scenario-registry.js`
-7. `test/distributed/harness/__tests__/topology-failure-gate-matrix.test.js`
-8. `test/distributed/harness/__tests__/scenario-registry.test.js`
 
 Handoff files:
 
-1. `work/packages/done-20260513-topology-failure-scenario-gates.md`
+1. `work/packages/done-20260513-topology-failure-repair-intents.md`
 
 Generated files:
 
@@ -140,18 +135,17 @@ Generated files:
 
 Candidate runtime files:
 
-1. None recorded
+1. `src/node/failure-detector.js`
+2. `src/node/failure-repair-intent-contract.js`
+3. `test/node/failure-detector.test.js`
+4. `test/node/failure-repair-intent-contract.test.js`
 
 Commit scope:
 
-1. `work/packages/active-20260514-topology-failure-gate-execution-harness.md`
+1. `work/packages/active-20260514-topology-failure-detection-repair-gate.md`
 2. `work/sprints/active-2026-q2-topology-convergence-residual-closure.md`
 3. `work/sprints/current-blocker.json`
 4. `work/sprints/current-blocker.md`
-5. `test/distributed/harness/topology-failure-gate-matrix.js`
-6. `test/distributed/harness/scenario-registry.js`
-7. `test/distributed/harness/__tests__/topology-failure-gate-matrix.test.js`
-8. `test/distributed/harness/__tests__/scenario-registry.test.js`
 
 Legacy touched files:
 

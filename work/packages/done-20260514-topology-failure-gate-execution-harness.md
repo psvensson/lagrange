@@ -3,8 +3,9 @@
 <!-- work-package
 {
   "schema": "work-package-v1",
-  "status": "active",
+  "status": "done",
   "opened": "2026-05-14",
+  "closed": "2026-05-14",
   "lane": "scenario-release-gate",
   "scenario": "failure-gate-matrix",
   "artifact": "test-output/reports/topology-failure-gate-execution-harness.report.json",
@@ -12,15 +13,15 @@
   "owner": "distributed_test_harness",
   "boundary": "failure_gate_execution",
   "dominantReason": "failure_gate_matrix_not_executed",
-  "currentState": "The prior sprint added a canonical failure-gate matrix but recorded no executable gate plan, artifact naming, durable assertion IDs, or red-outcome split package wiring.",
-  "nextAction": "Sharpen the failure-gate harness and sprint observability only: generate deterministic gate execution plans, assertion metadata, artifact paths, and package split rules without fixing rolling-restart runtime behavior.",
+  "currentState": "Reduced: the canonical failure-gate matrix now records executable gate plans, artifact naming, durable assertion IDs, and red-outcome split package wiring.",
+  "nextAction": "Run the next failure-detection gate as observe/classify-only work; do not fix rolling-restart runtime behavior without explicit re-scope.",
   "proof": [
     "npm run analyze:owner-files -- distributed_test_harness failure_gate_matrix --markdown",
     "node test/distributed/harness/__tests__/scenario-registry.test.js",
     "node test/distributed/harness/__tests__/topology-failure-gate-matrix.test.js"
   ],
   "writeScope": [
-    "work/packages/active-20260514-topology-failure-gate-execution-harness.md",
+    "work/packages/done-20260514-topology-failure-gate-execution-harness.md",
     "work/sprints/active-2026-q2-topology-convergence-residual-closure.md",
     "work/sprints/current-blocker.json",
     "work/sprints/current-blocker.md",
@@ -38,7 +39,7 @@
   ],
   "candidateRuntimeFiles": [],
   "commitScope": [
-    "work/packages/active-20260514-topology-failure-gate-execution-harness.md",
+    "work/packages/done-20260514-topology-failure-gate-execution-harness.md",
     "work/sprints/active-2026-q2-topology-convergence-residual-closure.md",
     "work/sprints/current-blocker.json",
     "work/sprints/current-blocker.md",
@@ -60,7 +61,7 @@
     "hypothesis": "distributed_test_harness / failure_gate_execution proof should reduce, migrate, or classify failure_gate_matrix_not_executed without hiding the sprint representative residual.",
     "stopConditionCheck": "npm --silent run analyze:causal-model -- test-output/reports/topology-failure-gate-execution-harness.report.json",
     "expectedCausalModelChange": "failure_gate_matrix_not_executed becomes representative-green, reduced, same-frontier, migrated, or classification-only with a named owner-boundary reason.",
-    "representativeOutcome": "pending-before-rerun",
+    "representativeOutcome": "reduced",
     "causalDebt": "Until distributed_test_harness / failure_gate_execution is proven, the sprint representative rolling-restart residual stays open. Runtime rolling-restart fixes are out of scope for this tooling package.",
     "crossBoundaryReview": "Required before closure through the scenario-release-gate subagent ledger or an allowed waiver recorded in this package."
   },
@@ -84,8 +85,8 @@
     "maxProgressBound": "one activation cycle: package doctor, extractor/probe, owner-file proof, focused validation, and result classification",
     "sameFrontierFallback": "keep distributed_test_harness / failure_gate_execution active and do not broaden the package or claim ship proof",
     "expectedNextFrontier": "representative green evidence or a narrower owner-boundary blocker selected by canonical evidence",
-    "resultClassification": "pending-before-probe",
-    "stopCondition": "continue-local-fix"
+    "resultClassification": "reduced",
+    "stopCondition": "classification-only-stop"
   }
 }
 -->
@@ -179,7 +180,7 @@ durable owner fields it checks and the package that owns a failed check.
 
 Required before this package moves from `todo` to `active`:
 
-1. Run `npm run work:package:doctor -- --fix-dry-run work/packages/active-20260514-topology-failure-gate-execution-harness.md` and keep `causalGovernance`, `scenarioCausalClosure`, Model Fit, and scope fields concrete before implementation starts.
+1. Run `npm run work:package:doctor -- --fix-dry-run work/packages/done-20260514-topology-failure-gate-execution-harness.md` and keep `causalGovernance`, `scenarioCausalClosure`, Model Fit, and scope fields concrete before implementation starts.
 2. `candidateRuntimeFiles` is empty; runtime writes require a narrower package
    or explicit metadata update. Harness writes are limited to this package's
    declared matrix, registry, and focused tests.
@@ -206,7 +207,7 @@ package.
 - Package class: `representative-frontier-closure`
 - Intended minimum model: `gpt-5.3-codex`
 - Scope shape: `owner-boundary-contraction/current-frontier`
-- Owned files: `work/packages/active-20260514-topology-failure-gate-execution-harness.md`, `work/sprints/active-2026-q2-topology-convergence-residual-closure.md`, `work/sprints/current-blocker.json`, `work/sprints/current-blocker.md`, `test/distributed/harness/topology-failure-gate-matrix.js`, `test/distributed/harness/scenario-registry.js`, `test/distributed/harness/__tests__/topology-failure-gate-matrix.test.js`, `test/distributed/harness/__tests__/scenario-registry.test.js`
+- Owned files: `work/packages/done-20260514-topology-failure-gate-execution-harness.md`, `work/sprints/active-2026-q2-topology-convergence-residual-closure.md`, `work/sprints/current-blocker.json`, `work/sprints/current-blocker.md`, `test/distributed/harness/topology-failure-gate-matrix.js`, `test/distributed/harness/scenario-registry.js`, `test/distributed/harness/__tests__/topology-failure-gate-matrix.test.js`, `test/distributed/harness/__tests__/scenario-registry.test.js`
 - Forbidden files: `runtime-fixes-discovered-by-gates`, `harness-timeout-stretching-without-owner-proof`
 - Frozen decisions: package scope and lane stay bounded unless explicitly escalated.
 - Escalation triggers: owned files expand beyond this package, runtime ownership changes, or representative scenario evidence changes.
@@ -215,18 +216,18 @@ package.
 
 ## Validation Ladder
 
-1. npm run work:package:doctor -- --suggest work/packages/active-20260514-topology-failure-gate-execution-harness.md
-2. npm run work:package:doctor -- --fix-dry-run work/packages/active-20260514-topology-failure-gate-execution-harness.md
+1. npm run work:package:doctor -- --suggest work/packages/done-20260514-topology-failure-gate-execution-harness.md
+2. npm run work:package:doctor -- --fix-dry-run work/packages/done-20260514-topology-failure-gate-execution-harness.md
 3. npm run analyze:owner-files -- distributed_test_harness failure_gate_matrix --markdown
 4. node test/distributed/harness/__tests__/scenario-registry.test.js
 5. node test/distributed/harness/__tests__/topology-failure-gate-matrix.test.js
 6. node scripts/check-guideline-literals.js test/distributed/harness/topology-failure-gate-matrix.js test/distributed/harness/scenario-registry.js test/distributed/harness/__tests__/topology-failure-gate-matrix.test.js test/distributed/harness/__tests__/scenario-registry.test.js
 7. node scripts/check-guideline-decision-boundaries.js test/distributed/harness/topology-failure-gate-matrix.js test/distributed/harness/scenario-registry.js test/distributed/harness/__tests__/topology-failure-gate-matrix.test.js test/distributed/harness/__tests__/scenario-registry.test.js
 8. npm run audit:runtime-grammar:file -- test/distributed/harness/topology-failure-gate-matrix.js test/distributed/harness/scenario-registry.js test/distributed/harness/__tests__/topology-failure-gate-matrix.test.js test/distributed/harness/__tests__/scenario-registry.test.js
-9. npm run work:validate -- --entry work/packages/active-20260514-topology-failure-gate-execution-harness.md
-10. npm run work:validate -- --pre-impl work/packages/active-20260514-topology-failure-gate-execution-harness.md
-11. npm run work:validate -- --closure work/packages/active-20260514-topology-failure-gate-execution-harness.md
-12. git diff --check -- work/packages/active-20260514-topology-failure-gate-execution-harness.md work/sprints/active-2026-q2-topology-convergence-residual-closure.md work/sprints/current-blocker.json work/sprints/current-blocker.md test/distributed/harness/topology-failure-gate-matrix.js test/distributed/harness/scenario-registry.js test/distributed/harness/__tests__/topology-failure-gate-matrix.test.js test/distributed/harness/__tests__/scenario-registry.test.js
+9. npm run work:validate -- --entry work/packages/done-20260514-topology-failure-gate-execution-harness.md
+10. npm run work:validate -- --pre-impl work/packages/done-20260514-topology-failure-gate-execution-harness.md
+11. npm run work:validate -- --closure work/packages/done-20260514-topology-failure-gate-execution-harness.md
+12. git diff --check -- work/packages/done-20260514-topology-failure-gate-execution-harness.md work/sprints/active-2026-q2-topology-convergence-residual-closure.md work/sprints/current-blocker.json work/sprints/current-blocker.md test/distributed/harness/topology-failure-gate-matrix.js test/distributed/harness/scenario-registry.js test/distributed/harness/__tests__/topology-failure-gate-matrix.test.js test/distributed/harness/__tests__/scenario-registry.test.js
 13. Final deep-dive proof: rerun the package extractor/probe, compare against the sprint representative residual, and record the result classification before closure.
 
 ## Split Rules
@@ -275,7 +276,6 @@ package.
 
 Required at closure.
 
-1. [ ] Focused package commit: pending.
-2. [ ] Pushed to: pending.
-3. [ ] Commit contains only package-owned files/package-status/allowed sprint
-   handoff: pending.
+1. [x] Focused package commit: 6cbb24342a0d23fa0312456a1fb6517ebda00209.
+2. [x] Pushed to: origin/codex/pending-ack-eligibility-filter.
+3. [x] Commit contains only package-owned files/package-status/allowed sprint handoff: yes.

@@ -317,23 +317,25 @@ Final closure requires fresh evidence proving all of the following:
 
 ### Phase 2 - Failure Gate Execution And Repair
 
-7. [Topology Failure Gate Execution Harness](../packages/active-20260514-topology-failure-gate-execution-harness.md)
+7. [Topology Failure Gate Execution Harness](../packages/done-20260514-topology-failure-gate-execution-harness.md)
    - Lane: `scenario-release-gate`
    - Owner boundary: `distributed_test_harness / failure_gate_execution`
    - Purpose: turn the existing failure-gate matrix into executable release
      gates with artifact naming and split rules.
    - Entry condition: user re-scoped the sprint segment to tools and
      observability; runtime rolling-restart fixes are explicitly out of scope.
-   - Acceptance: each matrix gate has a runnable command, expected durable
-     outcome, artifact path, owner-boundary split rule, and assertion surface.
+   - Acceptance: done. Each matrix gate has a runnable command, expected
+     durable outcome, artifact path, owner-boundary split rule, and assertion
+     surface. Runtime behavior was not changed.
 
-8. [Topology Failure Detection Repair Gate](../packages/todo-20260514-topology-failure-detection-repair-gate.md)
+8. [Topology Failure Detection Repair Gate](../packages/active-20260514-topology-failure-detection-repair-gate.md)
    - Lane: `scenario-release-gate`
    - Owner boundary: `failure_detector / durable_repair_intent_release_gate`
    - Purpose: prove failure detection causes durable owner-key repair, not only
      status writes and events.
-   - Acceptance: node lifecycle repair intent is consumed or a narrower
-     failure-detector owner package is opened.
+   - Acceptance: observe/classify-only activation. Run or classify the gate
+     artifact and split red runtime behavior to a later owner package; do not
+     fix rolling-restart runtime behavior here.
 
 9. [Topology Killed Join Gate](../packages/todo-20260514-topology-killed-join-gate.md)
    - Lane: `scenario-release-gate`
@@ -471,7 +473,7 @@ projection reconciliation is done as classification-only observability:
 `topology_publication_owner` blocker instead of healthy evidence.
 
 The current action is now
-[Topology Failure Gate Execution Harness](../packages/active-20260514-topology-failure-gate-execution-harness.md).
-Generate executable failure-gate plans, durable assertion IDs, artifact paths,
-and red-outcome split packages. Do not start fixing `rolling-restart` runtime
-behavior in this package.
+[Topology Failure Detection Repair Gate](../packages/active-20260514-topology-failure-detection-repair-gate.md).
+Execute and classify the failure-detection gate evidence only. If the gate is
+red, record the artifact and split to the owning package; do not fix
+`rolling-restart` runtime behavior in this package.

@@ -3,29 +3,34 @@
 <!-- work-package
 {
   "schema": "work-package-v1",
-  "status": "todo",
+  "status": "active",
   "opened": "2026-05-14",
   "lane": "scenario-release-gate",
   "scenario": "rolling-restart",
-  "artifact": "none",
+  "artifact": "test-output/reports/topology-failure-detection-repair-gate.report.json",
   "playback": "none",
   "owner": "failure_detector",
   "boundary": "durable_repair_intent_release_gate",
   "dominantReason": "failure_detection_repair_intent_not_release_proven",
-  "currentState": "Focused durable repair-intent tests exist but failure detection repair has not been proven by an executed rolling-restart or node-failure release gate.",
-  "nextAction": "Execute the failure-detection gate and fix or split any gap where node/service state changes emit events without durable owner-key repair intent consumption.",
+  "currentState": "Focused durable repair-intent tests exist, and the failure-gate harness now has an executable rolling-restart gate plan, but no observe/classify release-gate artifact has been recorded for failure detection repair.",
+  "nextAction": "Execute and classify the failure-detection gate evidence only. If the gate is red, split to the owning package; do not fix rolling-restart runtime behavior in this package without explicit re-scope.",
   "proof": [
     "npx tap test/node/failure-repair-intent-contract.test.js test/node/failure-detector.test.js",
     "node test/distributed/run.js --config test/distributed/config/local-three-node.json --scenario rolling-restart --output test-output/reports/topology-failure-detection-repair-gate.report.json --verbose"
   ],
   "writeScope": [
-    "work/packages/todo-20260514-topology-failure-detection-repair-gate.md",
-    "work/sprints/active-2026-q2-topology-convergence-residual-closure.md"
+    "work/packages/active-20260514-topology-failure-detection-repair-gate.md",
+    "work/sprints/active-2026-q2-topology-convergence-residual-closure.md",
+    "work/sprints/current-blocker.json",
+    "work/sprints/current-blocker.md"
   ],
   "handoffFiles": [
     "work/packages/done-20260513-topology-failure-repair-intents.md"
   ],
-  "generatedFiles": [],
+  "generatedFiles": [
+    "work/sprints/current-blocker.json",
+    "work/sprints/current-blocker.md"
+  ],
   "candidateRuntimeFiles": [
     "src/node/failure-detector.js",
     "src/node/failure-repair-intent-contract.js",
@@ -33,8 +38,10 @@
     "test/node/failure-repair-intent-contract.test.js"
   ],
   "commitScope": [
-    "work/packages/todo-20260514-topology-failure-detection-repair-gate.md",
-    "work/sprints/active-2026-q2-topology-convergence-residual-closure.md"
+    "work/packages/active-20260514-topology-failure-detection-repair-gate.md",
+    "work/sprints/active-2026-q2-topology-convergence-residual-closure.md",
+    "work/sprints/current-blocker.json",
+    "work/sprints/current-blocker.md"
   ],
   "modelFit": {
     "packageClass": "representative-frontier-closure",
@@ -50,7 +57,7 @@
     "stopConditionCheck": "npm --silent run analyze:causal-model -- test-output/reports/topology-failure-detection-repair-gate.report.json",
     "expectedCausalModelChange": "failure_detection_repair_intent_not_release_proven becomes representative-green, reduced, same-frontier, migrated, or classification-only with a named owner-boundary reason.",
     "representativeOutcome": "pending-before-rerun",
-    "causalDebt": "Until failure_detector / durable_repair_intent_release_gate is proven, the sprint representative rolling-restart residual stays open at startup_active_gate_owner / snapshot_coverage.",
+    "causalDebt": "Until failure_detector / durable_repair_intent_release_gate is proven, the sprint representative rolling-restart residual stays open. This package may execute and classify the gate, but runtime rolling-restart fixes are out of scope.",
     "crossBoundaryReview": "Required before closure through the scenario-release-gate subagent ledger or an allowed waiver recorded in this package."
   },
   "scenarioCausalClosure": {
@@ -62,14 +69,14 @@
     ],
     "currentFirstFrontier": "package-local frontier failure_detector / durable_repair_intent_release_gate; sprint representative frontier remains startup_active_gate_owner / snapshot_coverage until fresh evidence changes it",
     "knownDownstreamBlockers": [
-      "rolling-restart representative active-gate snapshot coverage remains red until green or migrated",
+      "rolling-restart representative publication/snapshot coverage remains red until green or migrated by a later runtime package",
       "runtime or harness fixes discovered outside this owner boundary require a narrower successor package"
     ],
     "missingCausalEdge": "unproven failure_detector / durable_repair_intent_release_gate causal edge for failure_detection_repair_intent_not_release_proven",
     "missingCausalEdgeProbe": "npx tap test/node/failure-repair-intent-contract.test.js test/node/failure-detector.test.js",
     "boundedProgressProof": "Focused proof must show bounded wake, retry, timeout, reconcile, drain, dispatch, delivery, timer, or advance for failure_detector / durable_repair_intent_release_gate.",
     "boundedProgressProofArtifact": "test-output/reports/topology-failure-detection-repair-gate.report.json",
-    "expectedObservableTransition": "failure_detection_repair_intent_not_release_proven resolves to green evidence, a reduced residual, same-frontier evidence, migrated owner-boundary proof, or classification-only stop.",
+    "expectedObservableTransition": "failure_detection_repair_intent_not_release_proven resolves to green evidence, a reduced residual, same-frontier evidence, migrated owner-boundary proof, or classification-only stop without runtime repair in this package.",
     "maxProgressBound": "one activation cycle: package doctor, extractor/probe, owner-file proof, focused validation, and result classification",
     "sameFrontierFallback": "keep failure_detector / durable_repair_intent_release_gate active and do not broaden the package or claim ship proof",
     "expectedNextFrontier": "representative green evidence or a narrower owner-boundary blocker selected by canonical evidence",
@@ -127,8 +134,9 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 3. Verify every failure observation names affected node, service, partition or
    replica operation where applicable, owner key, repair intent type, retry
    budget, and consumer owner.
-4. Fix or split any path where failure detection only emits events or mutates
-   local state without durable repair intent consumption.
+4. Classify or split any path where failure detection only emits events or
+   mutates local state without durable repair intent consumption; runtime fixes
+   require a later explicit owner package.
 5. Record gate outcome and owner-boundary next action in this package and the
    active sprint.
 
@@ -139,6 +147,7 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 3. Broad anti-entropy repairs not triggered by the failure detector gate.
 4. Active-gate cohort fixes unless the gate proves failure repair is the active
    coverage blocker.
+5. rolling-restart-runtime-fixes-without-explicit-re-scope
 
 ## Entry Evidence
 
@@ -162,8 +171,11 @@ that are consumed by the correct owner. The release gate must prove:
 
 Required before this package moves from `todo` to `active`:
 
-1. Run `npm run work:package:doctor -- --fix-dry-run work/packages/todo-20260514-topology-failure-detection-repair-gate.md` and keep `causalGovernance`, `scenarioCausalClosure`, Model Fit, and scope fields concrete before implementation starts.
-2. Promote only these proven candidates into `writeScope` and `commitScope` after owner-file proof: `src/node/failure-detector.js`, `src/node/failure-repair-intent-contract.js`, `test/node/failure-detector.test.js`, `test/node/failure-repair-intent-contract.test.js`.
+1. Run `npm run work:package:doctor -- --fix-dry-run work/packages/active-20260514-topology-failure-detection-repair-gate.md` and keep `causalGovernance`, `scenarioCausalClosure`, Model Fit, and scope fields concrete before implementation starts.
+2. Treat candidate runtime files as read-only for this observe/classify pass.
+   Promote a runtime candidate into `writeScope` and `commitScope` only if the
+   user explicitly re-scopes this package from evidence classification to
+   runtime repair.
 3. Replace the Subagent Sequencing Ledger placeholders with real review/fix/implementation proof, or an allowed waiver, before pre-implementation and closure validation.
 4. Preserve the package artifact path `test-output/reports/topology-failure-detection-repair-gate.report.json`; if fresh evidence changes owner, boundary, or dominant reason, classify as `migrated`, `same-frontier`, or split instead of widening scope.
 5. Add static guardrails for every touched runtime, diagnostics, harness, tracker, or test file before closure: guideline literal check, decision-boundary check, runtime grammar audit where applicable, and the exact `git diff --check -- ...` command from this package Validation Ladder.
@@ -175,19 +187,20 @@ Required before this package moves from `todo` to `active`:
 Required when this package is activated because it is a scenario-release-gate
 package.
 
-1. [ ] Review subagent recorded: pending until package activation.
-2. [ ] Fix subagent recorded or explicitly not needed: pending until review
-   result.
-3. [ ] Implementation subagent recorded: pending until pre-implementation proof
-   is clean.
+- [x] Review subagent recorded:
+      blocked-by-environment-policy reason: subagent-spawn-requires-explicit-user-request-for-failure-detection-repair-gate-review
+- [x] Fix subagent recorded or explicitly not needed:
+      blocked-by-environment-policy reason: subagent-spawn-requires-explicit-user-request-for-failure-detection-repair-gate-fix
+- [x] Implementation subagent recorded:
+      blocked-by-environment-policy reason: subagent-spawn-requires-explicit-user-request-for-failure-detection-repair-gate-implementation
 
 ## Model Fit
 
 - Package class: `representative-frontier-closure`
 - Intended minimum model: `gpt-5.3-codex`
 - Scope shape: `owner-boundary-contraction/current-frontier`
-- Owned files: `work/packages/todo-20260514-topology-failure-detection-repair-gate.md`, `work/sprints/active-2026-q2-topology-convergence-residual-closure.md`
-- Forbidden files: `event-only-repair-continuation`, `local-fallback-repair-mutation`
+- Owned files: `work/packages/active-20260514-topology-failure-detection-repair-gate.md`, `work/sprints/active-2026-q2-topology-convergence-residual-closure.md`, `work/sprints/current-blocker.json`, `work/sprints/current-blocker.md`
+- Forbidden files: `event-only-repair-continuation`, `local-fallback-repair-mutation`, `rolling-restart-runtime-fixes-without-explicit-re-scope`
 - Frozen decisions: package scope and lane stay bounded unless explicitly escalated.
 - Escalation triggers: owned files expand beyond this package, runtime ownership changes, or representative scenario evidence changes.
 - Focused proof: `npx tap test/node/failure-repair-intent-contract.test.js test/node/failure-detector.test.js`, `node test/distributed/run.js --config test/distributed/config/local-three-node.json --scenario rolling-restart --output test-output/reports/topology-failure-detection-repair-gate.report.json --verbose`
@@ -195,17 +208,17 @@ package.
 
 ## Validation Ladder
 
-1. npm run work:package:doctor -- --suggest work/packages/todo-20260514-topology-failure-detection-repair-gate.md
-2. npm run work:package:doctor -- --fix-dry-run work/packages/todo-20260514-topology-failure-detection-repair-gate.md
+1. npm run work:package:doctor -- --suggest work/packages/active-20260514-topology-failure-detection-repair-gate.md
+2. npm run work:package:doctor -- --fix-dry-run work/packages/active-20260514-topology-failure-detection-repair-gate.md
 3. npx tap test/node/failure-repair-intent-contract.test.js test/node/failure-detector.test.js
 4. node test/distributed/run.js --config test/distributed/config/local-three-node.json --scenario rolling-restart --output test-output/reports/topology-failure-detection-repair-gate.report.json --verbose
 5. node scripts/check-guideline-literals.js src/node/failure-detector.js src/node/failure-repair-intent-contract.js test/node/failure-detector.test.js test/node/failure-repair-intent-contract.test.js
 6. node scripts/check-guideline-decision-boundaries.js src/node/failure-detector.js src/node/failure-repair-intent-contract.js test/node/failure-detector.test.js test/node/failure-repair-intent-contract.test.js
 7. npm run audit:runtime-grammar:file -- src/node/failure-detector.js src/node/failure-repair-intent-contract.js test/node/failure-detector.test.js test/node/failure-repair-intent-contract.test.js
-8. npm run work:validate -- --entry work/packages/todo-20260514-topology-failure-detection-repair-gate.md
-9. npm run work:validate -- --pre-impl work/packages/todo-20260514-topology-failure-detection-repair-gate.md
-10. npm run work:validate -- --closure work/packages/todo-20260514-topology-failure-detection-repair-gate.md
-11. git diff --check -- work/packages/todo-20260514-topology-failure-detection-repair-gate.md work/sprints/active-2026-q2-topology-convergence-residual-closure.md
+8. npm run work:validate -- --entry work/packages/active-20260514-topology-failure-detection-repair-gate.md
+9. npm run work:validate -- --pre-impl work/packages/active-20260514-topology-failure-detection-repair-gate.md
+10. npm run work:validate -- --closure work/packages/active-20260514-topology-failure-detection-repair-gate.md
+11. git diff --check -- work/packages/active-20260514-topology-failure-detection-repair-gate.md work/sprints/active-2026-q2-topology-convergence-residual-closure.md work/sprints/current-blocker.json work/sprints/current-blocker.md
 12. Final deep-dive proof: rerun the package extractor/probe, compare against the sprint representative residual, and record the result classification before closure.
 
 ## Split Rules
