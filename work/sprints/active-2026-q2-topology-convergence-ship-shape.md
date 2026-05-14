@@ -89,24 +89,41 @@ Historical sprint pivot completed on May 14, 2026:
 6. Post-rejoin reconciliation is historical/completed sprint context, not the
    active sprint target.
 
-Human-directed active sprint pivot on May 14, 2026:
+Historical sprint pivot completed on May 14, 2026:
 
 1. Owner: `partition_topology_owner`.
 2. Boundary: `descriptor_epoch`.
 3. Dominant reason: `partition_map_epoch_missing`.
-4. Active package:
-   `work/packages/active-20260513-topology-partition-descriptor-epoch.md`.
+4. Completed package:
+   `work/packages/done-20260513-topology-partition-descriptor-epoch.md`.
 5. Focused proof surface:
-   to be finalized by the active package metadata before implementation.
+   `npx tap test/partition/partition-descriptor-epoch-contract.test.js test/partition/partition-split-routing.test.js test/partition/managed-split-workflow-transition-persistence.test.js test/rebalancer/move-planner-placement-owner-kernel.test.js`.
 6. Rolling-restart, active-gate snapshot coverage, publication owner truth,
    membership epoch fencing, failure repair intents, and post-rejoin
    reconciliation remain historical representative context, not the active
    sprint target.
+7. Partition descriptor epoch is historical/completed sprint context, not the
+   active sprint target.
+
+Human-directed active sprint pivot on May 14, 2026:
+
+1. Owner: `topology_placement_owner`.
+2. Boundary: `capacity_admission`.
+3. Dominant reason: `unknown_capacity_allows_optimistic_placement`.
+4. Active package:
+   `work/packages/active-20260513-topology-placement-capacity-fail-closed.md`.
+5. Focused proof surface:
+   to be finalized by the active package metadata before implementation.
+6. Rolling-restart, active-gate snapshot coverage, publication owner truth,
+   membership epoch fencing, failure repair intents, post-rejoin
+   reconciliation, and partition descriptor epoch remain historical
+   representative context, not the active sprint target.
 
 The immediate missing causal edge is:
 
-1. Partition, split, move, route, and stale-route decisions do not yet consume
-   one canonical partition descriptor epoch.
+1. Placement can still treat missing capacity/accounting evidence
+   optimistically instead of producing an explicit degraded or blocked
+   capacity admission outcome.
 
 ## Ship-Shape Definition
 
@@ -335,7 +352,7 @@ This sprint treats the system as ship-shape only when these properties hold:
      gate node reintegration before active-node writes and rebalance wake
      events.
 
-12. [Topology Partition Descriptor Epoch](../packages/active-20260513-topology-partition-descriptor-epoch.md)
+12. [Topology Partition Descriptor Epoch](../packages/done-20260513-topology-partition-descriptor-epoch.md)
    - Lane: `runtime-owner-boundary`
    - Owner boundary: `partition_topology_owner / descriptor_epoch`
    - Recommendation covered: make partition descriptors versioned and central.
@@ -347,8 +364,11 @@ This sprint treats the system as ship-shape only when these properties hold:
      split and move workflows publish descriptor updates with one owner
      vocabulary; diagnostics do not reconstruct partition freshness from cache
      age or incidental rows.
+   - Implementation note: canonical descriptor epoch decisions now normalize
+     table and partition descriptor versions for split target admission,
+     stale split routing rejection, and move-planner placement snapshots.
 
-13. [Topology Placement Capacity Fail Closed](../packages/todo-20260513-topology-placement-capacity-fail-closed.md)
+13. [Topology Placement Capacity Fail Closed](../packages/active-20260513-topology-placement-capacity-fail-closed.md)
    - Lane: `runtime-owner-boundary`
    - Owner boundary: `topology_placement_owner / capacity_admission`
    - Recommendation covered: fail closed on unknown placement capacity.
