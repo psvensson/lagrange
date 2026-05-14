@@ -26,7 +26,7 @@
   ],
   "handoffFiles": [
     "work/packages/todo-20260514-topology-failure-gate-execution-harness.md",
-    "work/packages/todo-20260514-topology-contract-integration-reconciliation.md"
+    "work/packages/active-20260514-topology-contract-integration-reconciliation.md"
   ],
   "generatedFiles": [
     "work/sprints/current-blocker.md",

@@ -377,7 +377,7 @@ Final closure requires fresh evidence proving all of the following:
     - Acceptance: stale cache publication schedules owner-key reconcile or
       emits a typed degraded reason.
 
-14. [Topology Rebalance Disruption Recovery Gate](../packages/active-20260514-topology-rebalance-disruption-recovery-gate.md)
+14. [Topology Rebalance Disruption Recovery Gate](../packages/done-20260514-topology-rebalance-disruption-recovery-gate.md)
     - Lane: `scenario-release-gate`
     - Owner boundary: `topology_rebalance_owner / split_rebalance_recovery_gate`
     - Purpose: observe/classify whether split/rebalance during recovery drains
@@ -389,7 +389,7 @@ Final closure requires fresh evidence proving all of the following:
 
 ### Phase 3 - Integrated Closure
 
-15. [Topology Contract Integration Reconciliation](../packages/todo-20260514-topology-contract-integration-reconciliation.md)
+15. [Topology Contract Integration Reconciliation](../packages/active-20260514-topology-contract-integration-reconciliation.md)
     - Lane: `causal-escalation`
     - Owner boundary: `topology_control_plane / contract_integration_reconcile`
     - Purpose: verify the focused contracts from the prior sprint compose as
@@ -478,26 +478,10 @@ projection reconciliation is done as classification-only observability:
 `topology_publication_owner` blocker instead of healthy evidence.
 
 The current action is now
-[Topology Rebalance Disruption Recovery Gate](../packages/active-20260514-topology-rebalance-disruption-recovery-gate.md).
+[Topology Contract Integration Reconciliation](../packages/active-20260514-topology-contract-integration-reconciliation.md).
 The predecessor
-[Topology Remote Coordinator Handoff Gate](../packages/done-20260514-topology-remote-coordinator-handoff-gate.md)
+[Topology Rebalance Disruption Recovery Gate](../packages/done-20260514-topology-rebalance-disruption-recovery-gate.md)
 closed as migrated observe/classify work:
-`test-output/reports/topology-remote-coordinator-handoff-gate.report.json`
-failed after `235174ms` because not all nodes reached `ACTIVE` within
-`225000ms`. Focused direct Node proof for remote handoff passed, but canonical
-evidence did not reach
-`operation_workflow_owner / replica_operation_coordinator_handoff_gate`; the
-first frontier migrated to `topology_publication_owner /
-publication_convergence` with `publication_ack_convergence`,
-`missing_published_nodes_present`, `publicationStatus=PUBLISHED`,
-`pendingAckCount=0`, `missingPublishedCount=4`, `publicationPending=true`,
-active gate `timed_out`, snapshot coverage `3/7`, and active nodes `6/7`.
-Priority recovery residual extraction reported one
-`operation_workflow_owner / workflow_progress` witness with
-`splitRequired=false`.
-
-`seven-node-load-during-partitioning` has now been observed and should be
-closed as migrated/classification evidence:
 `test-output/reports/topology-rebalance-disruption-recovery-gate.report.json`
 failed after `336079ms`. Canonical topology evidence did not reach
 `topology_rebalance_owner / split_rebalance_recovery_gate`; the first frontier
@@ -511,7 +495,9 @@ failed invariant `publication_ack_closed`, and stop condition
 `owner_boundary_migration`. Priority recovery residual extraction reports zero
 witnesses and `splitRequired=false`.
 
-Close rebalance disruption recovery as observe/classify work only and activate
-contract integration reconciliation next. Do not fix `rolling-restart`,
-publication, or rebalance runtime behavior in this sprint segment without
-explicit re-scope.
+Run contract integration as observe/classify work: reconcile the focused
+contracts, the prior representative residual, and the latest failure-gate
+artifacts into one integration matrix. Record `ready-for-ship-gate` only if the
+chain is coherent; otherwise record the exact owner-boundary blocker. Do not
+fix `rolling-restart`, publication, active-gate, or rebalance runtime behavior
+in this sprint segment without explicit re-scope.

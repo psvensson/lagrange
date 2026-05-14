@@ -104,7 +104,7 @@
   },
   "closed": "2026-05-14",
   "commitAndPushLedgerRequired": true,
-  "successor": "work/packages/active-20260514-topology-rebalance-disruption-recovery-gate.md"
+  "successor": "work/packages/done-20260514-topology-rebalance-disruption-recovery-gate.md"
 }
 -->
 

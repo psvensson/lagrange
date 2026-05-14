@@ -3,7 +3,7 @@
 <!-- work-package
 {
   "schema": "work-package-v1",
-  "status": "todo",
+  "status": "active",
   "opened": "2026-05-14",
   "lane": "causal-escalation",
   "scenario": "rolling-restart",
@@ -12,16 +12,22 @@
   "owner": "topology_control_plane",
   "boundary": "contract_integration_reconcile",
   "dominantReason": "focused_contracts_not_integrated_by_scenario",
-  "currentState": "Membership epoch failure repair intents rejoin reconciliation descriptor epoch placement capacity anti-entropy and budgets have focused proof but no integration package verifies the contracts together.",
-  "nextAction": "Run a focused integration reconciliation that verifies all topology owner contracts compose without cache authority event-only waits unbounded budgets or local fallback repairs.",
+  "currentState": "Activated after rebalance disruption recovery gate migration. All promoted failure gates have executable observe/classify artifacts or completed harness mapping, but the latest rebalance gate still migrated before its owner boundary to topology_publication_owner / publication_convergence with missing_published_nodes_present, publicationStatus=PUBLISHED, pendingAckCount=0, missingPublishedCount=6, publicationPending=true, activeGateState=ready, snapshotCoverageNodeCount=2/7, activeNodeCount=7/7, and zero priority recovery witnesses. Focused contracts still need one integration reconciliation before final ship confirmation.",
+  "nextAction": "Run a focused integration reconciliation across the focused contracts and latest gate evidence. Record ready-for-ship-gate only if the chain is coherent; otherwise record the exact owner-boundary blocker. Do not fix rolling-restart, publication, active-gate, or rebalance runtime behavior without explicit re-scope.",
   "proof": [
     "npm run work:evidence-summary -- test-output/reports/rolling-restart-green-gate-after-priority-recovery-workflow-progress-after-snapshot-coverage.report.json",
     "npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-green-gate-after-priority-recovery-workflow-progress-after-snapshot-coverage.report.json",
+    "npm run work:evidence-summary -- test-output/reports/topology-rebalance-disruption-recovery-gate.report.json",
+    "npm run analyze:topology-convergence -- test-output/reports/topology-rebalance-disruption-recovery-gate.report.json",
+    "npm --silent run analyze:causal-model -- test-output/reports/topology-rebalance-disruption-recovery-gate.report.json",
+    "npm run analyze:priority-recovery-residuals -- test-output/reports/topology-rebalance-disruption-recovery-gate.report.json --markdown",
     "npm run analyze:owner-files -- topology_control_plane contract_integration_reconcile --markdown"
   ],
   "writeScope": [
-    "work/packages/todo-20260514-topology-contract-integration-reconciliation.md",
-    "work/sprints/active-2026-q2-topology-convergence-residual-closure.md"
+    "work/packages/active-20260514-topology-contract-integration-reconciliation.md",
+    "work/sprints/active-2026-q2-topology-convergence-residual-closure.md",
+    "work/sprints/current-blocker.json",
+    "work/sprints/current-blocker.md"
   ],
   "handoffFiles": [
     "work/packages/done-20260513-topology-membership-epoch-fencing.md",
@@ -30,9 +36,13 @@
     "work/packages/done-20260513-topology-partition-descriptor-epoch.md",
     "work/packages/done-20260513-topology-placement-capacity-fail-closed.md",
     "work/packages/done-20260513-topology-anti-entropy-reconciler.md",
-    "work/packages/done-20260513-topology-bounded-progress-budgets.md"
+    "work/packages/done-20260513-topology-bounded-progress-budgets.md",
+    "work/packages/done-20260514-topology-rebalance-disruption-recovery-gate.md"
   ],
-  "generatedFiles": [],
+  "generatedFiles": [
+    "work/sprints/current-blocker.json",
+    "work/sprints/current-blocker.md"
+  ],
   "candidateRuntimeFiles": [
     "src/rebalancer/topology-owner-constants.js",
     "src/topology/topology-anti-entropy-reconciler.js",
@@ -42,8 +52,10 @@
     "src/partition/partition-descriptor-epoch-contract.js"
   ],
   "commitScope": [
-    "work/packages/todo-20260514-topology-contract-integration-reconciliation.md",
-    "work/sprints/active-2026-q2-topology-convergence-residual-closure.md"
+    "work/packages/active-20260514-topology-contract-integration-reconciliation.md",
+    "work/sprints/active-2026-q2-topology-convergence-residual-closure.md",
+    "work/sprints/current-blocker.json",
+    "work/sprints/current-blocker.md"
   ],
   "modelFit": {
     "packageClass": "representative-frontier-closure",
@@ -54,12 +66,22 @@
       "a frozen decision must be reopened"
     ]
   },
+  "representativeResidual": {
+    "status": "live-red",
+    "scenario": "rolling-restart",
+    "artifact": "test-output/reports/rolling-restart-green-gate-after-priority-recovery-workflow-progress-after-snapshot-coverage.report.json",
+    "frontier": "active_gate_snapshot_coverage",
+    "owner": "startup_active_gate_owner",
+    "boundary": "snapshot_coverage",
+    "dominantReason": "snapshot_coverage_incomplete",
+    "nextAction": "Keep the representative residual live while contract integration classifies whether focused topology contracts are ready for final ship confirmation or must point at a narrower owner-boundary blocker."
+  },
   "causalGovernance": {
-    "hypothesis": "topology_control_plane / contract_integration_reconcile proof should reduce, migrate, or classify focused_contracts_not_integrated_by_scenario without hiding the sprint representative residual.",
+    "hypothesis": "topology_control_plane / contract_integration_reconcile evidence should reduce, migrate, or classify focused_contracts_not_integrated_by_scenario without hiding the sprint representative residual.",
     "stopConditionCheck": "npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-green-gate-after-priority-recovery-workflow-progress-after-snapshot-coverage.report.json",
     "expectedCausalModelChange": "focused_contracts_not_integrated_by_scenario becomes representative-green, reduced, same-frontier, migrated, or classification-only with a named owner-boundary reason.",
     "representativeOutcome": "pending-before-rerun",
-    "causalDebt": "Until topology_control_plane / contract_integration_reconcile is proven, the sprint representative rolling-restart residual stays open at startup_active_gate_owner / snapshot_coverage.",
+    "causalDebt": "Until topology_control_plane / contract_integration_reconcile is classified, the sprint representative rolling-restart residual stays open. Latest gate evidence still names topology_publication_owner / publication_convergence before final ship proof; runtime fixes remain out of scope.",
     "crossBoundaryReview": "Required before closure through the causal-escalation subagent ledger or an allowed waiver recorded in this package."
   },
   "scenarioCausalClosure": {
@@ -76,14 +98,14 @@
     ],
     "missingCausalEdge": "unproven topology_control_plane / contract_integration_reconcile causal edge for focused_contracts_not_integrated_by_scenario",
     "missingCausalEdgeProbe": "npm run work:evidence-summary -- test-output/reports/rolling-restart-green-gate-after-priority-recovery-workflow-progress-after-snapshot-coverage.report.json",
-    "boundedProgressProof": "Focused proof must show bounded wake, retry, timeout, reconcile, drain, dispatch, delivery, timer, or advance for topology_control_plane / contract_integration_reconcile.",
+    "boundedProgressProof": "Focused evidence must show the cross-contract chain is bounded and diagnosable, or classify the first owner boundary that prevents final ship confirmation.",
     "boundedProgressProofArtifact": "test-output/reports/rolling-restart-green-gate-after-priority-recovery-workflow-progress-after-snapshot-coverage.report.json",
     "expectedObservableTransition": "focused_contracts_not_integrated_by_scenario resolves to green evidence, a reduced residual, same-frontier evidence, migrated owner-boundary proof, or classification-only stop.",
     "maxProgressBound": "one activation cycle: package doctor, extractor/probe, owner-file proof, focused validation, and result classification",
     "sameFrontierFallback": "keep topology_control_plane / contract_integration_reconcile active and do not broaden the package or claim ship proof",
-    "expectedNextFrontier": "representative green evidence or a narrower owner-boundary blocker selected by canonical evidence",
+    "expectedNextFrontier": "ready-for-ship-gate or a narrower owner-boundary blocker selected by canonical evidence",
     "resultClassification": "pending-before-probe",
-    "stopCondition": "continue-local-fix"
+    "stopCondition": "classification-only-stop"
   }
 }
 -->
@@ -112,7 +134,8 @@ not silently widen into all topology owners.
 - Selected lane: `causal-escalation`
 - Why this lane is sufficient: it reconciles existing contracts and evidence to
   decide whether the sprint can proceed to final gate or needs a narrower owner
-  package.
+  package. In this sprint segment it records classification and handoff state
+  only unless explicitly re-scoped.
 - Escalation trigger to a heavier lane: reconciliation requires runtime edits
   to a shared topology contract or representative evidence changes first
   frontier.
@@ -139,8 +162,8 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
    operation workflow contracts.
 4. Identify duplicate authorities, missing handoffs, event-only waits,
    unbounded budgets, stale cache authority, and local fallback repairs.
-5. Split runtime work to exactly one owner-boundary package when a composition
-   gap is found.
+5. Record the exact owner-boundary package required when a composition gap is
+   found.
 6. Record a final `ready-for-ship-gate` or `blocked-by-owner-boundary` decision.
 
 ## Out Of Scope
@@ -149,6 +172,8 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 2. pro-or-enterprise-behavior
 3. Broad runtime refactors across multiple topology owners in one package.
 4. Closing the sprint without final rolling-restart and failure-gate evidence.
+5. Runtime repair for rolling-restart, publication convergence, active-gate
+   snapshot coverage, or rebalance behavior.
 
 ## Integration Matrix
 
@@ -183,7 +208,7 @@ epoch-fenced, bounded, and diagnosable from owner decision snapshots.
 
 Required before this package moves from `todo` to `active`:
 
-1. Run `npm run work:package:doctor -- --fix-dry-run work/packages/todo-20260514-topology-contract-integration-reconciliation.md` and keep `causalGovernance`, `scenarioCausalClosure`, Model Fit, and scope fields concrete before implementation starts.
+1. Run `npm run work:package:doctor -- --fix-dry-run work/packages/active-20260514-topology-contract-integration-reconciliation.md` and keep `causalGovernance`, `scenarioCausalClosure`, Model Fit, and scope fields concrete before implementation starts.
 2. Promote only these proven candidates into `writeScope` and `commitScope` after owner-file proof: `src/rebalancer/topology-owner-constants.js`, `src/topology/topology-anti-entropy-reconciler.js`, `src/control-plane/membership-epoch-contract.js`, `src/control-plane/rejoin-reconciliation-contract.js`, `src/node/failure-repair-intent-contract.js`, `src/partition/partition-descriptor-epoch-contract.js`.
 3. Replace the Subagent Sequencing Ledger placeholders with real review/fix/implementation proof, or an allowed waiver, before pre-implementation and closure validation.
 4. Preserve the package artifact path `test-output/reports/rolling-restart-green-gate-after-priority-recovery-workflow-progress-after-snapshot-coverage.report.json`; if fresh evidence changes owner, boundary, or dominant reason, classify as `migrated`, `same-frontier`, or split instead of widening scope.
@@ -195,37 +220,47 @@ Required before this package moves from `todo` to `active`:
 
 Required when this package is activated because it is a causal-escalation package.
 
-1. [ ] Review subagent recorded: pending until package activation.
-2. [ ] Fix subagent recorded or explicitly not needed: pending until review result.
-3. [ ] Implementation subagent recorded: pending until pre-implementation proof is clean.
+1. [x] Review subagent recorded:
+   blocked-by-environment-policy reason:
+   subagent-spawn-requires-explicit-user-request-for-contract-integration-reconciliation-review
+2. [x] Fix subagent recorded or explicitly not needed:
+   blocked-by-environment-policy reason:
+   subagent-spawn-requires-explicit-user-request-for-contract-integration-reconciliation-fix
+3. [x] Implementation subagent recorded:
+   blocked-by-environment-policy reason:
+   subagent-spawn-requires-explicit-user-request-for-contract-integration-reconciliation-implementation
 
 ## Model Fit
 
 - Package class: `representative-frontier-closure`
 - Intended minimum model: `gpt-5.3-codex`
 - Scope shape: `owner-boundary-contraction/current-frontier`
-- Owned files: `work/packages/todo-20260514-topology-contract-integration-reconciliation.md`, `work/sprints/active-2026-q2-topology-convergence-residual-closure.md`
+- Owned files: `work/packages/active-20260514-topology-contract-integration-reconciliation.md`, `work/sprints/active-2026-q2-topology-convergence-residual-closure.md`, `work/sprints/current-blocker.json`, `work/sprints/current-blocker.md`
 - Forbidden files: `new-feature-scope`, `pro-or-enterprise-behavior`
 - Frozen decisions: package scope and lane stay bounded unless explicitly escalated.
 - Escalation triggers: owned files expand beyond this package, runtime ownership changes, or representative scenario evidence changes.
-- Focused proof: `npm run work:evidence-summary -- test-output/reports/rolling-restart-green-gate-after-priority-recovery-workflow-progress-after-snapshot-coverage.report.json`, `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-green-gate-after-priority-recovery-workflow-progress-after-snapshot-coverage.report.json`, `npm run analyze:owner-files -- topology_control_plane contract_integration_reconcile --markdown`
+- Focused proof: `npm run work:evidence-summary -- test-output/reports/rolling-restart-green-gate-after-priority-recovery-workflow-progress-after-snapshot-coverage.report.json`, `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-green-gate-after-priority-recovery-workflow-progress-after-snapshot-coverage.report.json`, `npm run work:evidence-summary -- test-output/reports/topology-rebalance-disruption-recovery-gate.report.json`, `npm run analyze:topology-convergence -- test-output/reports/topology-rebalance-disruption-recovery-gate.report.json`, `npm --silent run analyze:causal-model -- test-output/reports/topology-rebalance-disruption-recovery-gate.report.json`, `npm run analyze:priority-recovery-residuals -- test-output/reports/topology-rebalance-disruption-recovery-gate.report.json --markdown`, `npm run analyze:owner-files -- topology_control_plane contract_integration_reconcile --markdown`
 - Model ledger advisory: `escalate`
 
 ## Validation Ladder
 
-1. npm run work:package:doctor -- --suggest work/packages/todo-20260514-topology-contract-integration-reconciliation.md
-2. npm run work:package:doctor -- --fix-dry-run work/packages/todo-20260514-topology-contract-integration-reconciliation.md
+1. npm run work:package:doctor -- --suggest work/packages/active-20260514-topology-contract-integration-reconciliation.md
+2. npm run work:package:doctor -- --fix-dry-run work/packages/active-20260514-topology-contract-integration-reconciliation.md
 3. npm run work:evidence-summary -- test-output/reports/rolling-restart-green-gate-after-priority-recovery-workflow-progress-after-snapshot-coverage.report.json
 4. npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-green-gate-after-priority-recovery-workflow-progress-after-snapshot-coverage.report.json
-5. npm run analyze:owner-files -- topology_control_plane contract_integration_reconcile --markdown
-6. node scripts/check-guideline-literals.js src/rebalancer/topology-owner-constants.js src/topology/topology-anti-entropy-reconciler.js src/control-plane/membership-epoch-contract.js src/control-plane/rejoin-reconciliation-contract.js src/node/failure-repair-intent-contract.js src/partition/partition-descriptor-epoch-contract.js
-7. node scripts/check-guideline-decision-boundaries.js src/rebalancer/topology-owner-constants.js src/topology/topology-anti-entropy-reconciler.js src/control-plane/membership-epoch-contract.js src/control-plane/rejoin-reconciliation-contract.js src/node/failure-repair-intent-contract.js src/partition/partition-descriptor-epoch-contract.js
-8. npm run audit:runtime-grammar:file -- src/rebalancer/topology-owner-constants.js src/topology/topology-anti-entropy-reconciler.js src/control-plane/membership-epoch-contract.js src/control-plane/rejoin-reconciliation-contract.js src/node/failure-repair-intent-contract.js src/partition/partition-descriptor-epoch-contract.js
-9. npm run work:validate -- --entry work/packages/todo-20260514-topology-contract-integration-reconciliation.md
-10. npm run work:validate -- --pre-impl work/packages/todo-20260514-topology-contract-integration-reconciliation.md
-11. npm run work:validate -- --closure work/packages/todo-20260514-topology-contract-integration-reconciliation.md
-12. git diff --check -- work/packages/todo-20260514-topology-contract-integration-reconciliation.md work/sprints/active-2026-q2-topology-convergence-residual-closure.md
-13. Final deep-dive proof: rerun the package extractor/probe, compare against the sprint representative residual, and record the result classification before closure.
+5. npm run work:evidence-summary -- test-output/reports/topology-rebalance-disruption-recovery-gate.report.json
+6. npm run analyze:topology-convergence -- test-output/reports/topology-rebalance-disruption-recovery-gate.report.json
+7. npm --silent run analyze:causal-model -- test-output/reports/topology-rebalance-disruption-recovery-gate.report.json
+8. npm run analyze:priority-recovery-residuals -- test-output/reports/topology-rebalance-disruption-recovery-gate.report.json --markdown
+9. npm run analyze:owner-files -- topology_control_plane contract_integration_reconcile --markdown
+10. node scripts/check-guideline-literals.js src/rebalancer/topology-owner-constants.js src/topology/topology-anti-entropy-reconciler.js src/control-plane/membership-epoch-contract.js src/control-plane/rejoin-reconciliation-contract.js src/node/failure-repair-intent-contract.js src/partition/partition-descriptor-epoch-contract.js
+11. node scripts/check-guideline-decision-boundaries.js src/rebalancer/topology-owner-constants.js src/topology/topology-anti-entropy-reconciler.js src/control-plane/membership-epoch-contract.js src/control-plane/rejoin-reconciliation-contract.js src/node/failure-repair-intent-contract.js src/partition/partition-descriptor-epoch-contract.js
+12. npm run audit:runtime-grammar:file -- src/rebalancer/topology-owner-constants.js src/topology/topology-anti-entropy-reconciler.js src/control-plane/membership-epoch-contract.js src/control-plane/rejoin-reconciliation-contract.js src/node/failure-repair-intent-contract.js src/partition/partition-descriptor-epoch-contract.js
+13. npm run work:validate -- --entry work/packages/active-20260514-topology-contract-integration-reconciliation.md
+14. npm run work:validate -- --pre-impl work/packages/active-20260514-topology-contract-integration-reconciliation.md
+15. npm run work:validate -- --closure work/packages/active-20260514-topology-contract-integration-reconciliation.md
+16. git diff --check -- work/packages/active-20260514-topology-contract-integration-reconciliation.md work/sprints/active-2026-q2-topology-convergence-residual-closure.md work/sprints/current-blocker.json work/sprints/current-blocker.md
+17. Final deep-dive proof: rerun the package extractor/probe, compare against the sprint representative residual, and record the result classification before closure.
 
 ## Split Rules
 

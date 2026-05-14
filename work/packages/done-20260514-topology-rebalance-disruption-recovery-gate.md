@@ -3,7 +3,7 @@
 <!-- work-package
 {
   "schema": "work-package-v1",
-  "status": "active",
+  "status": "done",
   "opened": "2026-05-14",
   "lane": "scenario-release-gate",
   "scenario": "seven-node-load-during-partitioning",
@@ -23,7 +23,7 @@
     "npm run analyze:priority-recovery-residuals -- test-output/reports/topology-rebalance-disruption-recovery-gate.report.json --markdown"
   ],
   "writeScope": [
-    "work/packages/active-20260514-topology-rebalance-disruption-recovery-gate.md",
+    "work/packages/done-20260514-topology-rebalance-disruption-recovery-gate.md",
     "work/sprints/active-2026-q2-topology-convergence-residual-closure.md",
     "work/sprints/current-blocker.json",
     "work/sprints/current-blocker.md"
@@ -46,7 +46,7 @@
     "test/rebalancer/move-planner-placement-owner-kernel.test.js"
   ],
   "commitScope": [
-    "work/packages/active-20260514-topology-rebalance-disruption-recovery-gate.md",
+    "work/packages/done-20260514-topology-rebalance-disruption-recovery-gate.md",
     "work/sprints/active-2026-q2-topology-convergence-residual-closure.md",
     "work/sprints/current-blocker.json",
     "work/sprints/current-blocker.md"
@@ -99,7 +99,9 @@
     "reason": "fresh seven-node-load-during-partitioning gate first frontier is publication_ack_convergence / missing_published_nodes_present before split/rebalance recovery release-gate evidence can be evaluated",
     "evidence": "test-output/reports/topology-rebalance-disruption-recovery-gate.report.json"
   },
-  "successor": "work/packages/todo-20260514-topology-contract-integration-reconciliation.md"
+  "successor": "work/packages/active-20260514-topology-contract-integration-reconciliation.md",
+  "closed": "2026-05-14",
+  "commitAndPushLedgerRequired": true
 }
 -->
 
@@ -192,7 +194,7 @@ truth. This package must observe and classify whether the gate proves:
 
 Required before this package moves from `todo` to `active`:
 
-1. Run `npm run work:package:doctor -- --fix-dry-run work/packages/active-20260514-topology-rebalance-disruption-recovery-gate.md` and keep `causalGovernance`, `scenarioCausalClosure`, Model Fit, and scope fields concrete before implementation starts.
+1. Run `npm run work:package:doctor -- --fix-dry-run work/packages/done-20260514-topology-rebalance-disruption-recovery-gate.md` and keep `causalGovernance`, `scenarioCausalClosure`, Model Fit, and scope fields concrete before implementation starts.
 2. Promote only these proven candidates into `writeScope` and `commitScope` after owner-file proof: `src/partition/partition-descriptor-epoch-contract.js`, `src/partition/partition-split-routing.js`, `src/rebalancer/move-planner.js`, `src/rebalancer/storage-admission-service.js`, `test/rebalancer/move-planner-placement-owner-kernel.test.js`.
 3. Replace the Subagent Sequencing Ledger placeholders with real review/fix/implementation proof, or an allowed waiver, before pre-implementation and closure validation.
 4. Preserve the package artifact path `test-output/reports/topology-rebalance-disruption-recovery-gate.report.json`; if fresh evidence changes owner, boundary, or dominant reason, classify as `migrated`, `same-frontier`, or split instead of widening scope.
@@ -220,7 +222,7 @@ package.
 - Package class: `representative-frontier-closure`
 - Intended minimum model: `gpt-5.3-codex`
 - Scope shape: `owner-boundary-contraction/current-frontier`
-- Owned files: `work/packages/active-20260514-topology-rebalance-disruption-recovery-gate.md`, `work/sprints/active-2026-q2-topology-convergence-residual-closure.md`, `work/sprints/current-blocker.json`, `work/sprints/current-blocker.md`
+- Owned files: `work/packages/done-20260514-topology-rebalance-disruption-recovery-gate.md`, `work/sprints/active-2026-q2-topology-convergence-residual-closure.md`, `work/sprints/current-blocker.json`, `work/sprints/current-blocker.md`
 - Forbidden files: `best-effort-production-placement`, `stale-route-success`
 - Frozen decisions: package scope and lane stay bounded unless explicitly escalated.
 - Escalation triggers: owned files expand beyond this package, runtime ownership changes, or representative scenario evidence changes.
@@ -229,8 +231,8 @@ package.
 
 ## Validation Ladder
 
-1. npm run work:package:doctor -- --suggest work/packages/active-20260514-topology-rebalance-disruption-recovery-gate.md
-2. npm run work:package:doctor -- --fix-dry-run work/packages/active-20260514-topology-rebalance-disruption-recovery-gate.md
+1. npm run work:package:doctor -- --suggest work/packages/done-20260514-topology-rebalance-disruption-recovery-gate.md
+2. npm run work:package:doctor -- --fix-dry-run work/packages/done-20260514-topology-rebalance-disruption-recovery-gate.md
 3. node test/distributed/run.js --config test/distributed/config/local-benchmark-7node.json --scenario seven-node-load-during-partitioning --output test-output/reports/topology-rebalance-disruption-recovery-gate.report.json --verbose
 4. npm run work:evidence-summary -- test-output/reports/topology-rebalance-disruption-recovery-gate.report.json
 5. npm run analyze:distributed-failure -- --report test-output/reports/topology-rebalance-disruption-recovery-gate.report.json
@@ -240,10 +242,10 @@ package.
 9. node scripts/check-guideline-literals.js src/partition/partition-descriptor-epoch-contract.js src/partition/partition-split-routing.js src/rebalancer/move-planner.js src/rebalancer/storage-admission-service.js test/rebalancer/move-planner-placement-owner-kernel.test.js
 10. node scripts/check-guideline-decision-boundaries.js src/partition/partition-descriptor-epoch-contract.js src/partition/partition-split-routing.js src/rebalancer/move-planner.js src/rebalancer/storage-admission-service.js test/rebalancer/move-planner-placement-owner-kernel.test.js
 11. npm run audit:runtime-grammar:file -- src/partition/partition-descriptor-epoch-contract.js src/partition/partition-split-routing.js src/rebalancer/move-planner.js src/rebalancer/storage-admission-service.js test/rebalancer/move-planner-placement-owner-kernel.test.js
-12. npm run work:validate -- --entry work/packages/active-20260514-topology-rebalance-disruption-recovery-gate.md
-13. npm run work:validate -- --pre-impl work/packages/active-20260514-topology-rebalance-disruption-recovery-gate.md
-14. npm run work:validate -- --closure work/packages/active-20260514-topology-rebalance-disruption-recovery-gate.md
-15. git diff --check -- work/packages/active-20260514-topology-rebalance-disruption-recovery-gate.md work/sprints/active-2026-q2-topology-convergence-residual-closure.md work/sprints/current-blocker.json work/sprints/current-blocker.md
+12. npm run work:validate -- --entry work/packages/done-20260514-topology-rebalance-disruption-recovery-gate.md
+13. npm run work:validate -- --pre-impl work/packages/done-20260514-topology-rebalance-disruption-recovery-gate.md
+14. npm run work:validate -- --closure work/packages/done-20260514-topology-rebalance-disruption-recovery-gate.md
+15. git diff --check -- work/packages/done-20260514-topology-rebalance-disruption-recovery-gate.md work/sprints/active-2026-q2-topology-convergence-residual-closure.md work/sprints/current-blocker.json work/sprints/current-blocker.md
 16. Final deep-dive proof: rerun the package extractor/probe, compare against the sprint representative residual, and record the result classification before closure.
 
 ## Split Rules
@@ -290,7 +292,6 @@ into rebalance or rolling-restart runtime repair.
 
 Required at closure.
 
-1. [ ] Focused package commit: pending.
-2. [ ] Pushed to: pending.
-3. [ ] Commit contains only package-owned files/package-status/allowed sprint
-   handoff: pending.
+1. [x] Focused package commit: 0148798db43890488552a34f12351c7dbf53d7bc.
+2. [x] Pushed to: origin/codex/pending-ack-eligibility-filter.
+3. [x] Commit contains only package-owned files/package-status/allowed sprint handoff: yes.

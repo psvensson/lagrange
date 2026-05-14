@@ -248,7 +248,7 @@ queue rather than treated as release proof:
 6. Stale publication durable truth: unexecuted; owner package
    `done-20260514-topology-stale-publication-durable-truth-gate.md`.
 7. Rebalance disruption recovery: unexecuted; owner package
-   `active-20260514-topology-rebalance-disruption-recovery-gate.md`.
+   `done-20260514-topology-rebalance-disruption-recovery-gate.md`.
 
 The executable harness package
 `todo-20260514-topology-failure-gate-execution-harness.md` owns turning the

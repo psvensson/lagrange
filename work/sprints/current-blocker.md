@@ -4,38 +4,39 @@
 
 Sprint: `work/sprints/active-2026-q2-topology-convergence-residual-closure.md`
 
-Package: `work/packages/active-20260514-topology-rebalance-disruption-recovery-gate.md`
+Package: `work/packages/active-20260514-topology-contract-integration-reconciliation.md`
 
-Workflow lane: `scenario-release-gate`
+Workflow lane: `causal-escalation`
 
-Scenario: `seven-node-load-during-partitioning`
+Scenario: `rolling-restart`
 
-Artifact: `test-output/reports/topology-rebalance-disruption-recovery-gate.report.json`
+Artifact: `test-output/reports/rolling-restart-green-gate-after-priority-recovery-workflow-progress-after-snapshot-coverage.report.json`
 
 Playback: `none`
 
 ## Boundary
 
-Owner: `topology_rebalance_owner`
+Owner: `topology_control_plane`
 
-Boundary: `split_rebalance_recovery_gate`
+Boundary: `contract_integration_reconcile`
 
-Dominant reason: `rebalance_disruption_release_gate_unproven`
+Dominant reason: `focused_contracts_not_integrated_by_scenario`
 
-Current state: Observed gate result: seven-node-load-during-partitioning failed after 336079ms. Canonical evidence did not reach topology_rebalance_owner / split_rebalance_recovery_gate; the first frontier is topology_publication_owner / publication_convergence with publication_ack_convergence deferred, missing_published_nodes_present, publicationStatus=PUBLISHED, pendingAckCount=0, missingPublishedCount=6, publicationPending=true, activeGateState=ready, snapshotCoverageNodeCount=2/7, and activeNodeCount=7/7. Priority recovery residual extraction reports zero witnesses.
+Current state: Activated after rebalance disruption recovery gate migration. All promoted failure gates have executable observe/classify artifacts or completed harness mapping, but the latest rebalance gate still migrated before its owner boundary to topology_publication_owner / publication_convergence with missing_published_nodes_present, publicationStatus=PUBLISHED, pendingAckCount=0, missingPublishedCount=6, publicationPending=true, activeGateState=ready, snapshotCoverageNodeCount=2/7, activeNodeCount=7/7, and zero priority recovery witnesses. Focused contracts still need one integration reconciliation before final ship confirmation.
 
 ## Next Action
 
-Close this package as migrated/classification evidence and activate contract integration reconciliation; do not fix rolling-restart, publication, or rebalance runtime behavior in this package without explicit re-scope.
+Run a focused integration reconciliation across the focused contracts and latest gate evidence. Record ready-for-ship-gate only if the chain is coherent; otherwise record the exact owner-boundary blocker. Do not fix rolling-restart, publication, active-gate, or rebalance runtime behavior without explicit re-scope.
 
 ## Proof Ladder
 
-1. `node test/distributed/run.js --config test/distributed/config/local-benchmark-7node.json --scenario seven-node-load-during-partitioning --output test-output/reports/topology-rebalance-disruption-recovery-gate.report.json --verbose`
-2. `npm run work:evidence-summary -- test-output/reports/topology-rebalance-disruption-recovery-gate.report.json`
-3. `npm run analyze:distributed-failure -- --report test-output/reports/topology-rebalance-disruption-recovery-gate.report.json`
+1. `npm run work:evidence-summary -- test-output/reports/rolling-restart-green-gate-after-priority-recovery-workflow-progress-after-snapshot-coverage.report.json`
+2. `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-green-gate-after-priority-recovery-workflow-progress-after-snapshot-coverage.report.json`
+3. `npm run work:evidence-summary -- test-output/reports/topology-rebalance-disruption-recovery-gate.report.json`
 4. `npm run analyze:topology-convergence -- test-output/reports/topology-rebalance-disruption-recovery-gate.report.json`
 5. `npm --silent run analyze:causal-model -- test-output/reports/topology-rebalance-disruption-recovery-gate.report.json`
 6. `npm run analyze:priority-recovery-residuals -- test-output/reports/topology-rebalance-disruption-recovery-gate.report.json --markdown`
+7. `npm run analyze:owner-files -- topology_control_plane contract_integration_reconcile --markdown`
 
 ## Model Fit
 
@@ -52,88 +53,92 @@ Escalation triggers:
 
 ## Representative Residual
 
-Status: `unknown`
+Status: `live-red`
 
-Scenario: `unknown`
+Scenario: `rolling-restart`
 
-Artifact: `unknown`
+Artifact: `test-output/reports/rolling-restart-green-gate-after-priority-recovery-workflow-progress-after-snapshot-coverage.report.json`
 
-Frontier: `unknown`
+Frontier: `active_gate_snapshot_coverage`
 
-Owner: `unknown`
+Owner: `startup_active_gate_owner`
 
-Boundary: `unknown`
+Boundary: `snapshot_coverage`
 
-Dominant reason: `unknown`
+Dominant reason: `snapshot_coverage_incomplete`
 
-Next action: `unknown`
+Next action: `Keep the representative residual live while contract integration classifies whether focused topology contracts are ready for final ship confirmation or must point at a narrower owner-boundary blocker.`
 
 ## Causal Governance
 
-Causal hypothesis: `topology_rebalance_owner / split_rebalance_recovery_gate evidence should reduce, migrate, or classify rebalance_disruption_release_gate_unproven without hiding the sprint representative residual.`
+Causal hypothesis: `topology_control_plane / contract_integration_reconcile evidence should reduce, migrate, or classify focused_contracts_not_integrated_by_scenario without hiding the sprint representative residual.`
 
-Stop-condition check: `npm --silent run analyze:causal-model -- test-output/reports/topology-rebalance-disruption-recovery-gate.report.json`
+Stop-condition check: `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-green-gate-after-priority-recovery-workflow-progress-after-snapshot-coverage.report.json`
 
-Expected causal-model change: `rebalance_disruption_release_gate_unproven becomes representative-green, reduced, same-frontier, migrated, or classification-only with a named owner-boundary reason.`
+Expected causal-model change: `focused_contracts_not_integrated_by_scenario becomes representative-green, reduced, same-frontier, migrated, or classification-only with a named owner-boundary reason.`
 
-Representative outcome: `migrated`
+Representative outcome: `pending-before-rerun`
 
-Causal debt: `The rebalance-disruption gate artifact is red, but canonical evidence does not implicate topology_rebalance_owner / split_rebalance_recovery_gate. The first frontier migrated to topology_publication_owner / publication_convergence with missing_published_nodes_present; runtime rolling-restart, publication, and rebalance fixes remain out of scope.`
+Causal debt: `Until topology_control_plane / contract_integration_reconcile is classified, the sprint representative rolling-restart residual stays open. Latest gate evidence still names topology_publication_owner / publication_convergence before final ship proof; runtime fixes remain out of scope.`
 
-Cross-boundary review: `Required before closure through the scenario-release-gate subagent ledger or an allowed waiver recorded in this package.`
+Cross-boundary review: `Required before closure through the causal-escalation subagent ledger or an allowed waiver recorded in this package.`
 
 ## Scenario Causal Closure
 
-Reference scenario/probe: `seven-node-load-during-partitioning / topology_rebalance_owner / split_rebalance_recovery_gate`
+Reference scenario/probe: `rolling-restart / topology_control_plane / contract_integration_reconcile`
 
 Phase chain:
 
 1. `canonical evidence extraction`
-2. `topology_rebalance_owner / split_rebalance_recovery_gate focused proof`
+2. `topology_control_plane / contract_integration_reconcile focused proof`
 3. `representative or gate rerun classification`
 
-Current first frontier: `migrated frontier topology_publication_owner / publication_convergence with missing_published_nodes_present in test-output/reports/topology-rebalance-disruption-recovery-gate.report.json`
+Current first frontier: `package-local frontier topology_control_plane / contract_integration_reconcile; sprint representative frontier remains startup_active_gate_owner / snapshot_coverage until fresh evidence changes it`
 
 Known downstream blockers:
 
 1. `rolling-restart representative active-gate snapshot coverage remains red until green or migrated`
 2. `runtime or harness fixes discovered outside this owner boundary require a narrower successor package`
 
-Missing causal edge: `unproven topology_rebalance_owner / split_rebalance_recovery_gate causal edge for rebalance_disruption_release_gate_unproven`
+Missing causal edge: `unproven topology_control_plane / contract_integration_reconcile causal edge for focused_contracts_not_integrated_by_scenario`
 
-Missing causal edge probe: `node test/distributed/run.js --config test/distributed/config/local-benchmark-7node.json --scenario seven-node-load-during-partitioning --output test-output/reports/topology-rebalance-disruption-recovery-gate.report.json --verbose`
+Missing causal edge probe: `npm run work:evidence-summary -- test-output/reports/rolling-restart-green-gate-after-priority-recovery-workflow-progress-after-snapshot-coverage.report.json`
 
-Bounded progress proof: `Focused evidence must show bounded wake, retry, timeout, reconcile, drain, dispatch, delivery, timer, or advance for topology_rebalance_owner / split_rebalance_recovery_gate, or classify the first earlier owner boundary.`
+Bounded progress proof: `Focused evidence must show the cross-contract chain is bounded and diagnosable, or classify the first owner boundary that prevents final ship confirmation.`
 
-Bounded progress proof artifact: `test-output/reports/topology-rebalance-disruption-recovery-gate.report.json`
+Bounded progress proof artifact: `test-output/reports/rolling-restart-green-gate-after-priority-recovery-workflow-progress-after-snapshot-coverage.report.json`
 
-Expected observable transition: `rebalance_disruption_release_gate_unproven migrated before the rebalance owner boundary: publicationStatus=PUBLISHED with pendingAckCount=0, missingPublishedCount=6, publicationPending=true, activeGateState=ready, snapshotCoverageNodeCount=2/7, and activeNodeCount=7/7.`
+Expected observable transition: `focused_contracts_not_integrated_by_scenario resolves to green evidence, a reduced residual, same-frontier evidence, migrated owner-boundary proof, or classification-only stop.`
 
 Max progress bound: `one activation cycle: package doctor, extractor/probe, owner-file proof, focused validation, and result classification`
 
-Same-frontier fallback: `keep topology_rebalance_owner / split_rebalance_recovery_gate active and do not broaden the package or claim ship proof`
+Same-frontier fallback: `keep topology_control_plane / contract_integration_reconcile active and do not broaden the package or claim ship proof`
 
-Expected next frontier: `contract integration reconciliation unless explicitly re-scoped to a publication-owner runtime repair`
+Expected next frontier: `ready-for-ship-gate or a narrower owner-boundary blocker selected by canonical evidence`
 
-Result classification: `migrated`
+Result classification: `pending-before-probe`
 
-Stop condition: `migrate-owner-boundary`
+Stop condition: `classification-only-stop`
 
 ## Scope
 
 Write scope:
 
-1. `work/packages/active-20260514-topology-rebalance-disruption-recovery-gate.md`
+1. `work/packages/active-20260514-topology-contract-integration-reconciliation.md`
 2. `work/sprints/active-2026-q2-topology-convergence-residual-closure.md`
 3. `work/sprints/current-blocker.json`
 4. `work/sprints/current-blocker.md`
 
 Handoff files:
 
-1. `work/packages/done-20260513-topology-partition-descriptor-epoch.md`
-2. `work/packages/done-20260513-topology-placement-capacity-fail-closed.md`
-3. `work/packages/done-20260513-topology-anti-entropy-reconciler.md`
-4. `work/packages/done-20260514-topology-remote-coordinator-handoff-gate.md`
+1. `work/packages/done-20260513-topology-membership-epoch-fencing.md`
+2. `work/packages/done-20260513-topology-failure-repair-intents.md`
+3. `work/packages/done-20260513-topology-post-rejoin-reconciliation.md`
+4. `work/packages/done-20260513-topology-partition-descriptor-epoch.md`
+5. `work/packages/done-20260513-topology-placement-capacity-fail-closed.md`
+6. `work/packages/done-20260513-topology-anti-entropy-reconciler.md`
+7. `work/packages/done-20260513-topology-bounded-progress-budgets.md`
+8. `work/packages/done-20260514-topology-rebalance-disruption-recovery-gate.md`
 
 Generated files:
 
@@ -142,15 +147,16 @@ Generated files:
 
 Candidate runtime files:
 
-1. `src/partition/partition-descriptor-epoch-contract.js`
-2. `src/partition/partition-split-routing.js`
-3. `src/rebalancer/move-planner.js`
-4. `src/rebalancer/storage-admission-service.js`
-5. `test/rebalancer/move-planner-placement-owner-kernel.test.js`
+1. `src/rebalancer/topology-owner-constants.js`
+2. `src/topology/topology-anti-entropy-reconciler.js`
+3. `src/control-plane/membership-epoch-contract.js`
+4. `src/control-plane/rejoin-reconciliation-contract.js`
+5. `src/node/failure-repair-intent-contract.js`
+6. `src/partition/partition-descriptor-epoch-contract.js`
 
 Commit scope:
 
-1. `work/packages/active-20260514-topology-rebalance-disruption-recovery-gate.md`
+1. `work/packages/active-20260514-topology-contract-integration-reconciliation.md`
 2. `work/sprints/active-2026-q2-topology-convergence-residual-closure.md`
 3. `work/sprints/current-blocker.json`
 4. `work/sprints/current-blocker.md`
