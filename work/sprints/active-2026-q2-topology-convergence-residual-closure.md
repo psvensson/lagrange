@@ -333,9 +333,10 @@ Final closure requires fresh evidence proving all of the following:
    - Owner boundary: `failure_detector / durable_repair_intent_release_gate`
    - Purpose: prove failure detection causes durable owner-key repair, not only
      status writes and events.
-   - Acceptance: observe/classify-only activation. Run or classify the gate
-     artifact and split red runtime behavior to a later owner package; do not
-     fix rolling-restart runtime behavior here.
+   - Acceptance: migrated by observe/classify artifact. Focused
+     failure-detector tests pass, but the rolling-restart gate first frontier
+     is `topology_publication_owner / publication_convergence` with
+     `publication_pending`; no runtime behavior was changed.
 
 9. [Topology Killed Join Gate](../packages/todo-20260514-topology-killed-join-gate.md)
    - Lane: `scenario-release-gate`
@@ -474,6 +475,9 @@ projection reconciliation is done as classification-only observability:
 
 The current action is now
 [Topology Failure Detection Repair Gate](../packages/active-20260514-topology-failure-detection-repair-gate.md).
-Execute and classify the failure-detection gate evidence only. If the gate is
-red, record the artifact and split to the owning package; do not fix
-`rolling-restart` runtime behavior in this package.
+Record and close the migration proof from the failure-detection gate artifact,
+then activate a publication-owner gate/package. The fresh artifact is
+`test-output/reports/topology-failure-detection-repair-gate.report.json`; it
+selects `topology_publication_owner / publication_convergence` with
+`publication_pending`. Do not fix `rolling-restart` runtime behavior in this
+package.

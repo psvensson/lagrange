@@ -12,11 +12,16 @@
   "owner": "failure_detector",
   "boundary": "durable_repair_intent_release_gate",
   "dominantReason": "failure_detection_repair_intent_not_release_proven",
-  "currentState": "Focused durable repair-intent tests exist, and the failure-gate harness now has an executable rolling-restart gate plan, but no observe/classify release-gate artifact has been recorded for failure detection repair.",
-  "nextAction": "Execute and classify the failure-detection gate evidence only. If the gate is red, split to the owning package; do not fix rolling-restart runtime behavior in this package without explicit re-scope.",
+  "currentState": "Migrated evidence: focused failure-detector tests pass, but the rolling-restart observe/classify gate did not reach the failure_detector boundary. Canonical first frontier is topology_publication_owner / publication_convergence with reason publication_pending.",
+  "nextAction": "Close this package as migrated and activate a publication-owner gate package; do not fix rolling-restart runtime behavior in this package without explicit re-scope.",
   "proof": [
-    "npx tap test/node/failure-repair-intent-contract.test.js test/node/failure-detector.test.js",
-    "node test/distributed/run.js --config test/distributed/config/local-three-node.json --scenario rolling-restart --output test-output/reports/topology-failure-detection-repair-gate.report.json --verbose"
+    "node test/node/failure-repair-intent-contract.test.js",
+    "node test/node/failure-detector.test.js",
+    "node test/distributed/run.js --config test/distributed/config/local-three-node.json --scenario rolling-restart --output test-output/reports/topology-failure-detection-repair-gate.report.json --verbose",
+    "npm run work:evidence-summary -- test-output/reports/topology-failure-detection-repair-gate.report.json",
+    "npm run analyze:topology-convergence -- test-output/reports/topology-failure-detection-repair-gate.report.json",
+    "npm --silent run analyze:causal-model -- test-output/reports/topology-failure-detection-repair-gate.report.json",
+    "npm run analyze:priority-recovery-residuals -- test-output/reports/topology-failure-detection-repair-gate.report.json --markdown"
   ],
   "writeScope": [
     "work/packages/active-20260514-topology-failure-detection-repair-gate.md",
@@ -56,8 +61,8 @@
     "hypothesis": "failure_detector / durable_repair_intent_release_gate proof should reduce, migrate, or classify failure_detection_repair_intent_not_release_proven without hiding the sprint representative residual.",
     "stopConditionCheck": "npm --silent run analyze:causal-model -- test-output/reports/topology-failure-detection-repair-gate.report.json",
     "expectedCausalModelChange": "failure_detection_repair_intent_not_release_proven becomes representative-green, reduced, same-frontier, migrated, or classification-only with a named owner-boundary reason.",
-    "representativeOutcome": "pending-before-rerun",
-    "causalDebt": "Until failure_detector / durable_repair_intent_release_gate is proven, the sprint representative rolling-restart residual stays open. This package may execute and classify the gate, but runtime rolling-restart fixes are out of scope.",
+    "representativeOutcome": "migrated",
+    "causalDebt": "The failure-detection gate artifact is red, but canonical evidence does not implicate failure_detector / durable_repair_intent_release_gate. The first frontier migrated to topology_publication_owner / publication_convergence with publication_pending; runtime rolling-restart fixes remain out of scope.",
     "crossBoundaryReview": "Required before closure through the scenario-release-gate subagent ledger or an allowed waiver recorded in this package."
   },
   "scenarioCausalClosure": {
@@ -67,7 +72,7 @@
       "failure_detector / durable_repair_intent_release_gate focused proof",
       "representative or gate rerun classification"
     ],
-    "currentFirstFrontier": "package-local frontier failure_detector / durable_repair_intent_release_gate; sprint representative frontier remains startup_active_gate_owner / snapshot_coverage until fresh evidence changes it",
+    "currentFirstFrontier": "migrated frontier topology_publication_owner / publication_convergence with publication_pending in test-output/reports/topology-failure-detection-repair-gate.report.json",
     "knownDownstreamBlockers": [
       "rolling-restart representative publication/snapshot coverage remains red until green or migrated by a later runtime package",
       "runtime or harness fixes discovered outside this owner boundary require a narrower successor package"
@@ -79,9 +84,17 @@
     "expectedObservableTransition": "failure_detection_repair_intent_not_release_proven resolves to green evidence, a reduced residual, same-frontier evidence, migrated owner-boundary proof, or classification-only stop without runtime repair in this package.",
     "maxProgressBound": "one activation cycle: package doctor, extractor/probe, owner-file proof, focused validation, and result classification",
     "sameFrontierFallback": "keep failure_detector / durable_repair_intent_release_gate active and do not broaden the package or claim ship proof",
-    "expectedNextFrontier": "representative green evidence or a narrower owner-boundary blocker selected by canonical evidence",
-    "resultClassification": "pending-before-probe",
-    "stopCondition": "continue-local-fix"
+    "expectedNextFrontier": "publication owner gate package selected by canonical evidence",
+    "resultClassification": "migrated",
+    "stopCondition": "migrate-owner-boundary"
+  },
+  "ownerBoundaryMigrationProof": {
+    "fromOwner": "failure_detector",
+    "fromBoundary": "durable_repair_intent_release_gate",
+    "toOwner": "topology_publication_owner",
+    "toBoundary": "publication_convergence",
+    "reason": "fresh rolling-restart gate first frontier is publication_ack_convergence / publication_pending before failure-detector release-gate evidence can be evaluated",
+    "evidence": "test-output/reports/topology-failure-detection-repair-gate.report.json"
   }
 }
 -->
@@ -203,23 +216,27 @@ package.
 - Forbidden files: `event-only-repair-continuation`, `local-fallback-repair-mutation`, `rolling-restart-runtime-fixes-without-explicit-re-scope`
 - Frozen decisions: package scope and lane stay bounded unless explicitly escalated.
 - Escalation triggers: owned files expand beyond this package, runtime ownership changes, or representative scenario evidence changes.
-- Focused proof: `npx tap test/node/failure-repair-intent-contract.test.js test/node/failure-detector.test.js`, `node test/distributed/run.js --config test/distributed/config/local-three-node.json --scenario rolling-restart --output test-output/reports/topology-failure-detection-repair-gate.report.json --verbose`
+- Focused proof: `node test/node/failure-repair-intent-contract.test.js`, `node test/node/failure-detector.test.js`, `node test/distributed/run.js --config test/distributed/config/local-three-node.json --scenario rolling-restart --output test-output/reports/topology-failure-detection-repair-gate.report.json --verbose`
 - Model ledger advisory: `escalate`
 
 ## Validation Ladder
 
 1. npm run work:package:doctor -- --suggest work/packages/active-20260514-topology-failure-detection-repair-gate.md
 2. npm run work:package:doctor -- --fix-dry-run work/packages/active-20260514-topology-failure-detection-repair-gate.md
-3. npx tap test/node/failure-repair-intent-contract.test.js test/node/failure-detector.test.js
-4. node test/distributed/run.js --config test/distributed/config/local-three-node.json --scenario rolling-restart --output test-output/reports/topology-failure-detection-repair-gate.report.json --verbose
-5. node scripts/check-guideline-literals.js src/node/failure-detector.js src/node/failure-repair-intent-contract.js test/node/failure-detector.test.js test/node/failure-repair-intent-contract.test.js
-6. node scripts/check-guideline-decision-boundaries.js src/node/failure-detector.js src/node/failure-repair-intent-contract.js test/node/failure-detector.test.js test/node/failure-repair-intent-contract.test.js
-7. npm run audit:runtime-grammar:file -- src/node/failure-detector.js src/node/failure-repair-intent-contract.js test/node/failure-detector.test.js test/node/failure-repair-intent-contract.test.js
-8. npm run work:validate -- --entry work/packages/active-20260514-topology-failure-detection-repair-gate.md
-9. npm run work:validate -- --pre-impl work/packages/active-20260514-topology-failure-detection-repair-gate.md
-10. npm run work:validate -- --closure work/packages/active-20260514-topology-failure-detection-repair-gate.md
-11. git diff --check -- work/packages/active-20260514-topology-failure-detection-repair-gate.md work/sprints/active-2026-q2-topology-convergence-residual-closure.md work/sprints/current-blocker.json work/sprints/current-blocker.md
-12. Final deep-dive proof: rerun the package extractor/probe, compare against the sprint representative residual, and record the result classification before closure.
+3. node test/node/failure-repair-intent-contract.test.js
+4. node test/node/failure-detector.test.js
+5. node test/distributed/run.js --config test/distributed/config/local-three-node.json --scenario rolling-restart --output test-output/reports/topology-failure-detection-repair-gate.report.json --verbose
+6. npm run work:evidence-summary -- test-output/reports/topology-failure-detection-repair-gate.report.json
+7. npm run analyze:topology-convergence -- test-output/reports/topology-failure-detection-repair-gate.report.json
+8. npm --silent run analyze:causal-model -- test-output/reports/topology-failure-detection-repair-gate.report.json
+9. npm run analyze:priority-recovery-residuals -- test-output/reports/topology-failure-detection-repair-gate.report.json --markdown
+10. node scripts/check-guideline-literals.js work/packages/active-20260514-topology-failure-detection-repair-gate.md work/sprints/active-2026-q2-topology-convergence-residual-closure.md work/sprints/current-blocker.json work/sprints/current-blocker.md
+11. node scripts/check-guideline-decision-boundaries.js work/packages/active-20260514-topology-failure-detection-repair-gate.md work/sprints/active-2026-q2-topology-convergence-residual-closure.md work/sprints/current-blocker.json work/sprints/current-blocker.md
+12. npm run work:validate -- --entry work/packages/active-20260514-topology-failure-detection-repair-gate.md
+13. npm run work:validate -- --pre-impl work/packages/active-20260514-topology-failure-detection-repair-gate.md
+14. npm run work:validate -- --closure work/packages/active-20260514-topology-failure-detection-repair-gate.md
+15. git diff --check -- work/packages/active-20260514-topology-failure-detection-repair-gate.md work/sprints/active-2026-q2-topology-convergence-residual-closure.md work/sprints/current-blocker.json work/sprints/current-blocker.md
+16. Final deep-dive proof: rerun the package extractor/probe, compare against the sprint representative residual, and record the result classification before closure.
 
 ## Split Rules
 
@@ -238,6 +255,30 @@ package.
 3. Distributed analysis is green for this gate or records a narrower
    owner-boundary blocker.
 4. Package records exact artifact, owner, boundary, and residual if any.
+
+## Evidence Proof
+
+- Focused tests:
+  `node test/node/failure-repair-intent-contract.test.js` passed `8/8`;
+  `node test/node/failure-detector.test.js` passed `66/66`.
+- Historical package command caveat:
+  `npx tap test/node/failure-repair-intent-contract.test.js test/node/failure-detector.test.js`
+  exited `0` but reported `skip/no tests found`; the package proof now uses
+  direct node execution for these tap ESM tests.
+- Gate artifact:
+  `node test/distributed/run.js --config test/distributed/config/local-three-node.json --scenario rolling-restart --output test-output/reports/topology-failure-detection-repair-gate.report.json --verbose`
+  produced `0/1` passed, `1` failed after `55.8s`.
+- Canonical classification:
+  `work:evidence-summary`, `analyze:topology-convergence`, and
+  `analyze:causal-model` all select `publication_ack_convergence` as the first
+  frontier with owner `topology_publication_owner`, boundary
+  `publication_convergence`, and dominant reason `publication_pending`.
+- Priority recovery check:
+  `analyze:priority-recovery-residuals --markdown` reports `0` witnesses and
+  `splitRequired=false` for this artifact.
+- Result classification: `migrated`. The failure-detection gate did not reach
+  the failure-detector owner boundary; the next active blocker should be a
+  publication-owner gate/package. No runtime code was changed.
 
 ## Commit And Push Ledger
 

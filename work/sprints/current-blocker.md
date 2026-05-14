@@ -22,16 +22,21 @@ Boundary: `durable_repair_intent_release_gate`
 
 Dominant reason: `failure_detection_repair_intent_not_release_proven`
 
-Current state: Focused durable repair-intent tests exist, and the failure-gate harness now has an executable rolling-restart gate plan, but no observe/classify release-gate artifact has been recorded for failure detection repair.
+Current state: Migrated evidence: focused failure-detector tests pass, but the rolling-restart observe/classify gate did not reach the failure_detector boundary. Canonical first frontier is topology_publication_owner / publication_convergence with reason publication_pending.
 
 ## Next Action
 
-Execute and classify the failure-detection gate evidence only. If the gate is red, split to the owning package; do not fix rolling-restart runtime behavior in this package without explicit re-scope.
+Close this package as migrated and activate a publication-owner gate package; do not fix rolling-restart runtime behavior in this package without explicit re-scope.
 
 ## Proof Ladder
 
-1. `npx tap test/node/failure-repair-intent-contract.test.js test/node/failure-detector.test.js`
-2. `node test/distributed/run.js --config test/distributed/config/local-three-node.json --scenario rolling-restart --output test-output/reports/topology-failure-detection-repair-gate.report.json --verbose`
+1. `node test/node/failure-repair-intent-contract.test.js`
+2. `node test/node/failure-detector.test.js`
+3. `node test/distributed/run.js --config test/distributed/config/local-three-node.json --scenario rolling-restart --output test-output/reports/topology-failure-detection-repair-gate.report.json --verbose`
+4. `npm run work:evidence-summary -- test-output/reports/topology-failure-detection-repair-gate.report.json`
+5. `npm run analyze:topology-convergence -- test-output/reports/topology-failure-detection-repair-gate.report.json`
+6. `npm --silent run analyze:causal-model -- test-output/reports/topology-failure-detection-repair-gate.report.json`
+7. `npm run analyze:priority-recovery-residuals -- test-output/reports/topology-failure-detection-repair-gate.report.json --markdown`
 
 ## Model Fit
 
@@ -72,9 +77,9 @@ Stop-condition check: `npm --silent run analyze:causal-model -- test-output/repo
 
 Expected causal-model change: `failure_detection_repair_intent_not_release_proven becomes representative-green, reduced, same-frontier, migrated, or classification-only with a named owner-boundary reason.`
 
-Representative outcome: `pending-before-rerun`
+Representative outcome: `migrated`
 
-Causal debt: `Until failure_detector / durable_repair_intent_release_gate is proven, the sprint representative rolling-restart residual stays open. This package may execute and classify the gate, but runtime rolling-restart fixes are out of scope.`
+Causal debt: `The failure-detection gate artifact is red, but canonical evidence does not implicate failure_detector / durable_repair_intent_release_gate. The first frontier migrated to topology_publication_owner / publication_convergence with publication_pending; runtime rolling-restart fixes remain out of scope.`
 
 Cross-boundary review: `Required before closure through the scenario-release-gate subagent ledger or an allowed waiver recorded in this package.`
 
@@ -88,7 +93,7 @@ Phase chain:
 2. `failure_detector / durable_repair_intent_release_gate focused proof`
 3. `representative or gate rerun classification`
 
-Current first frontier: `package-local frontier failure_detector / durable_repair_intent_release_gate; sprint representative frontier remains startup_active_gate_owner / snapshot_coverage until fresh evidence changes it`
+Current first frontier: `migrated frontier topology_publication_owner / publication_convergence with publication_pending in test-output/reports/topology-failure-detection-repair-gate.report.json`
 
 Known downstream blockers:
 
@@ -109,11 +114,11 @@ Max progress bound: `one activation cycle: package doctor, extractor/probe, owne
 
 Same-frontier fallback: `keep failure_detector / durable_repair_intent_release_gate active and do not broaden the package or claim ship proof`
 
-Expected next frontier: `representative green evidence or a narrower owner-boundary blocker selected by canonical evidence`
+Expected next frontier: `publication owner gate package selected by canonical evidence`
 
-Result classification: `pending-before-probe`
+Result classification: `migrated`
 
-Stop condition: `continue-local-fix`
+Stop condition: `migrate-owner-boundary`
 
 ## Scope
 
