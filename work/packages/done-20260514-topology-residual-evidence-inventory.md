@@ -246,7 +246,7 @@ queue rather than treated as release proof:
 5. Missed handoff ACK: unexecuted; owner package
    `todo-20260514-topology-missed-handoff-ack-gate.md`.
 6. Stale publication durable truth: unexecuted; owner package
-   `todo-20260514-topology-stale-publication-durable-truth-gate.md`.
+   `active-20260514-topology-stale-publication-durable-truth-gate.md`.
 7. Rebalance disruption recovery: unexecuted; owner package
    `todo-20260514-topology-rebalance-disruption-recovery-gate.md`.
 

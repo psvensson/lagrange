@@ -4,13 +4,13 @@
 
 Sprint: `work/sprints/active-2026-q2-topology-convergence-residual-closure.md`
 
-Package: `work/packages/active-20260514-topology-missed-handoff-ack-gate.md`
+Package: `work/packages/active-20260514-topology-stale-publication-durable-truth-gate.md`
 
 Workflow lane: `scenario-release-gate`
 
 Scenario: `write-ack-visibility`
 
-Artifact: `test-output/reports/topology-missed-handoff-ack-gate.report.json`
+Artifact: `test-output/reports/topology-stale-publication-durable-truth-gate.report.json`
 
 Playback: `none`
 
@@ -18,24 +18,24 @@ Playback: `none`
 
 Owner: `topology_publication_owner`
 
-Boundary: `remote_handoff_ack_closure_gate`
+Boundary: `publication_truth_projection_gate`
 
-Dominant reason: `missing_published_nodes_present`
+Dominant reason: `stale_publication_release_gate_unproven`
 
-Current state: Observed gate result: write-ack-visibility failed after 173275ms with an Admin API timeout while canonical topology evidence identified topology_publication_owner / publication_convergence as the first frontier. pendingAckCount=0, publicationStatus=PUBLISHED, missingPublishedCount=2, publicationPending=true, and priority recovery residual witnesses=0.
+Current state: Activated after the missed-ACK gate migrated: write-ack-visibility showed pendingAckCount=0 with publicationStatus=PUBLISHED, missingPublishedCount=2, publicationPending=true, and first frontier topology_publication_owner / publication_convergence. The stale durable-truth gate now owns classifying durable truth versus projection freshness.
 
 ## Next Action
 
-Close this package as migrated and activate the stale publication durable-truth gate; do not fix rolling-restart runtime behavior in this package without explicit re-scope.
+Execute and classify the stale-publication durable-truth gate only. If the gate is red, record the owner-boundary split; do not fix rolling-restart runtime behavior in this package without explicit re-scope.
 
 ## Proof Ladder
 
-1. `node test/distributed/run.js --config test/distributed/config/local-three-node.json --scenario write-ack-visibility --output test-output/reports/topology-missed-handoff-ack-gate.report.json --verbose`
-2. `npm run work:evidence-summary -- test-output/reports/topology-missed-handoff-ack-gate.report.json`
-3. `npm run analyze:distributed-failure -- --report test-output/reports/topology-missed-handoff-ack-gate.report.json`
-4. `npm run analyze:topology-convergence -- test-output/reports/topology-missed-handoff-ack-gate.report.json`
-5. `npm --silent run analyze:causal-model -- test-output/reports/topology-missed-handoff-ack-gate.report.json`
-6. `npm run analyze:priority-recovery-residuals -- test-output/reports/topology-missed-handoff-ack-gate.report.json --markdown`
+1. `node test/distributed/run.js --config test/distributed/config/local-three-node.json --scenario write-ack-visibility --output test-output/reports/topology-stale-publication-durable-truth-gate.report.json --verbose`
+2. `npm run work:evidence-summary -- test-output/reports/topology-stale-publication-durable-truth-gate.report.json`
+3. `npm run analyze:distributed-failure -- --report test-output/reports/topology-stale-publication-durable-truth-gate.report.json`
+4. `npm run analyze:topology-convergence -- test-output/reports/topology-stale-publication-durable-truth-gate.report.json`
+5. `npm --silent run analyze:causal-model -- test-output/reports/topology-stale-publication-durable-truth-gate.report.json`
+6. `npm run analyze:priority-recovery-residuals -- test-output/reports/topology-stale-publication-durable-truth-gate.report.json --markdown`
 
 ## Model Fit
 
@@ -70,60 +70,60 @@ Next action: `unknown`
 
 ## Causal Governance
 
-Causal hypothesis: `topology_publication_owner / remote_handoff_ack_closure_gate proof should reduce, migrate, or classify missed_handoff_ack_release_gate_unproven without hiding the sprint representative residual.`
+Causal hypothesis: `topology_publication_owner / publication_truth_projection_gate proof should reduce, migrate, or classify stale_publication_release_gate_unproven without hiding the sprint representative residual.`
 
-Stop-condition check: `npm --silent run analyze:causal-model -- test-output/reports/topology-missed-handoff-ack-gate.report.json`
+Stop-condition check: `npm --silent run analyze:causal-model -- test-output/reports/topology-stale-publication-durable-truth-gate.report.json`
 
-Expected causal-model change: `missed_handoff_ack_release_gate_unproven becomes representative-green, reduced, same-frontier, migrated, or classification-only with a named owner-boundary reason.`
+Expected causal-model change: `stale_publication_release_gate_unproven becomes representative-green, reduced, same-frontier, migrated, or classification-only with a named owner-boundary reason.`
 
-Representative outcome: `migrated`
+Representative outcome: `pending-before-rerun`
 
-Causal debt: `The missed-ACK gate artifact is red, but canonical evidence does not implicate ACK absence: pendingAckCount=0 and the first frontier is topology_publication_owner / publication_convergence with missing_published_nodes_present. Runtime rolling-restart fixes remain out of scope.`
+Causal debt: `Until topology_publication_owner / publication_truth_projection_gate is proven, the sprint representative rolling-restart residual stays open. Runtime rolling-restart fixes are out of scope for this observe/classify package.`
 
 Cross-boundary review: `Required before closure through the scenario-release-gate subagent ledger or an allowed waiver recorded in this package.`
 
 ## Scenario Causal Closure
 
-Reference scenario/probe: `write-ack-visibility / topology_publication_owner / remote_handoff_ack_closure_gate`
+Reference scenario/probe: `write-ack-visibility / topology_publication_owner / publication_truth_projection_gate`
 
 Phase chain:
 
 1. `canonical evidence extraction`
-2. `topology_publication_owner / remote_handoff_ack_closure_gate focused proof`
+2. `topology_publication_owner / publication_truth_projection_gate focused proof`
 3. `representative or gate rerun classification`
 
-Current first frontier: `migrated frontier topology_publication_owner / publication_convergence with missing_published_nodes_present in test-output/reports/topology-missed-handoff-ack-gate.report.json`
+Current first frontier: `package-local frontier topology_publication_owner / publication_truth_projection_gate; sprint representative frontier remains startup_active_gate_owner / snapshot_coverage until fresh evidence changes it`
 
 Known downstream blockers:
 
-1. `rolling-restart representative publication/snapshot coverage remains red until green or migrated by a later runtime package`
+1. `rolling-restart representative active-gate snapshot coverage remains red until green or migrated`
 2. `runtime or harness fixes discovered outside this owner boundary require a narrower successor package`
 
-Missing causal edge: `unproven topology_publication_owner / remote_handoff_ack_closure_gate causal edge for missed_handoff_ack_release_gate_unproven`
+Missing causal edge: `unproven topology_publication_owner / publication_truth_projection_gate causal edge for stale_publication_release_gate_unproven`
 
-Missing causal edge probe: `node test/distributed/run.js --config test/distributed/config/local-three-node.json --scenario write-ack-visibility --output test-output/reports/topology-missed-handoff-ack-gate.report.json --verbose`
+Missing causal edge probe: `node test/distributed/run.js --config test/distributed/config/local-three-node.json --scenario write-ack-visibility --output test-output/reports/topology-stale-publication-durable-truth-gate.report.json --verbose`
 
-Bounded progress proof: `Focused proof must show bounded wake, retry, timeout, reconcile, drain, dispatch, delivery, timer, or advance for topology_publication_owner / remote_handoff_ack_closure_gate.`
+Bounded progress proof: `Focused proof must show bounded wake, retry, timeout, reconcile, drain, dispatch, delivery, timer, or advance for topology_publication_owner / publication_truth_projection_gate.`
 
-Bounded progress proof artifact: `test-output/reports/topology-missed-handoff-ack-gate.report.json`
+Bounded progress proof artifact: `test-output/reports/topology-stale-publication-durable-truth-gate.report.json`
 
-Expected observable transition: `missed_handoff_ack_release_gate_unproven migrated to publication convergence/projection evidence without ACK absence: pendingAckCount=0, missingPublishedCount=2, and publicationPending=true.`
+Expected observable transition: `stale_publication_release_gate_unproven resolves to green evidence, a reduced residual, same-frontier evidence, migrated owner-boundary proof, or classification-only stop.`
 
 Max progress bound: `one activation cycle: package doctor, extractor/probe, owner-file proof, focused validation, and result classification`
 
-Same-frontier fallback: `keep topology_publication_owner / remote_handoff_ack_closure_gate active and do not broaden the package or claim ship proof`
+Same-frontier fallback: `keep topology_publication_owner / publication_truth_projection_gate active and do not broaden the package or claim ship proof`
 
-Expected next frontier: `stale publication durable-truth gate selected by canonical evidence`
+Expected next frontier: `representative green evidence or a narrower owner-boundary blocker selected by canonical evidence`
 
-Result classification: `migrated`
+Result classification: `pending-before-probe`
 
-Stop condition: `migrate-owner-boundary`
+Stop condition: `continue-local-fix`
 
 ## Scope
 
 Write scope:
 
-1. `work/packages/active-20260514-topology-missed-handoff-ack-gate.md`
+1. `work/packages/active-20260514-topology-stale-publication-durable-truth-gate.md`
 2. `work/sprints/active-2026-q2-topology-convergence-residual-closure.md`
 3. `work/sprints/current-blocker.json`
 4. `work/sprints/current-blocker.md`
@@ -131,6 +131,7 @@ Write scope:
 Handoff files:
 
 1. `work/packages/done-20260514-topology-publication-convergence-after-active-gate-owner-truth.md`
+2. `work/packages/done-20260514-topology-missed-handoff-ack-gate.md`
 
 Generated files:
 
@@ -139,14 +140,15 @@ Generated files:
 
 Candidate runtime files:
 
-1. `src/control-plane/publication-owner-decision.js`
-2. `src/control-plane/publication-owner-evidence.js`
-3. `src/control-plane/publication-recovery-gate.js`
-4. `test/control-plane/publication-recovery-gate.test.js`
+1. `src/control-plane/publication-owner-evidence.js`
+2. `src/control-plane/publication-recovery-evidence.js`
+3. `src/admin/admin-control-snapshot-class-part-3.js`
+4. `test/control-plane/publication-recovery-evidence.test.js`
+5. `test/admin/admin-control-snapshot.test.js`
 
 Commit scope:
 
-1. `work/packages/active-20260514-topology-missed-handoff-ack-gate.md`
+1. `work/packages/active-20260514-topology-stale-publication-durable-truth-gate.md`
 2. `work/sprints/active-2026-q2-topology-convergence-residual-closure.md`
 3. `work/sprints/current-blocker.json`
 4. `work/sprints/current-blocker.md`

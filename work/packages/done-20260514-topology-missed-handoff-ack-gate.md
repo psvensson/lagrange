@@ -3,7 +3,7 @@
 <!-- work-package
 {
   "schema": "work-package-v1",
-  "status": "active",
+  "status": "done",
   "opened": "2026-05-14",
   "lane": "scenario-release-gate",
   "scenario": "write-ack-visibility",
@@ -23,7 +23,7 @@
     "npm run analyze:priority-recovery-residuals -- test-output/reports/topology-missed-handoff-ack-gate.report.json --markdown"
   ],
   "writeScope": [
-    "work/packages/active-20260514-topology-missed-handoff-ack-gate.md",
+    "work/packages/done-20260514-topology-missed-handoff-ack-gate.md",
     "work/sprints/active-2026-q2-topology-convergence-residual-closure.md",
     "work/sprints/current-blocker.json",
     "work/sprints/current-blocker.md"
@@ -42,7 +42,7 @@
     "test/control-plane/publication-recovery-gate.test.js"
   ],
   "commitScope": [
-    "work/packages/active-20260514-topology-missed-handoff-ack-gate.md",
+    "work/packages/done-20260514-topology-missed-handoff-ack-gate.md",
     "work/sprints/active-2026-q2-topology-convergence-residual-closure.md",
     "work/sprints/current-blocker.json",
     "work/sprints/current-blocker.md"
@@ -94,7 +94,10 @@
     "toBoundary": "publication_convergence",
     "reason": "fresh write-ack-visibility gate first frontier is publication_ack_convergence / missing_published_nodes_present with pendingAckCount=0 before missed-ACK release-gate evidence can be evaluated",
     "evidence": "test-output/reports/topology-missed-handoff-ack-gate.report.json"
-  }
+  },
+  "closed": "2026-05-14",
+  "commitAndPushLedgerRequired": true,
+  "successor": "work/packages/active-20260514-topology-stale-publication-durable-truth-gate.md"
 }
 -->
 
@@ -179,7 +182,7 @@ best-effort events. The gate must prove:
 
 Required before this package moves from `todo` to `active`:
 
-1. Run `npm run work:package:doctor -- --fix-dry-run work/packages/active-20260514-topology-missed-handoff-ack-gate.md` and keep `causalGovernance`, `scenarioCausalClosure`, Model Fit, and scope fields concrete before implementation starts.
+1. Run `npm run work:package:doctor -- --fix-dry-run work/packages/done-20260514-topology-missed-handoff-ack-gate.md` and keep `causalGovernance`, `scenarioCausalClosure`, Model Fit, and scope fields concrete before implementation starts.
 2. Treat candidate runtime files as read-only for this observe/classify pass.
    Promote a runtime candidate into `writeScope` and `commitScope` only if the
    user explicitly re-scopes this package from evidence classification to
@@ -207,7 +210,7 @@ package.
 - Package class: `representative-frontier-closure`
 - Intended minimum model: `gpt-5.3-codex`
 - Scope shape: `owner-boundary-contraction/current-frontier`
-- Owned files: `work/packages/active-20260514-topology-missed-handoff-ack-gate.md`, `work/sprints/active-2026-q2-topology-convergence-residual-closure.md`, `work/sprints/current-blocker.json`, `work/sprints/current-blocker.md`
+- Owned files: `work/packages/done-20260514-topology-missed-handoff-ack-gate.md`, `work/sprints/active-2026-q2-topology-convergence-residual-closure.md`, `work/sprints/current-blocker.json`, `work/sprints/current-blocker.md`
 - Forbidden files: `treating-ack-absence-as-success`, `harness-timeout-increases`, `rolling-restart-runtime-fixes-without-explicit-re-scope`
 - Frozen decisions: package scope and lane stay bounded unless explicitly escalated.
 - Escalation triggers: owned files expand beyond this package, runtime ownership changes, or representative scenario evidence changes.
@@ -216,17 +219,17 @@ package.
 
 ## Validation Ladder
 
-1. npm run work:package:doctor -- --suggest work/packages/active-20260514-topology-missed-handoff-ack-gate.md
-2. npm run work:package:doctor -- --fix-dry-run work/packages/active-20260514-topology-missed-handoff-ack-gate.md
+1. npm run work:package:doctor -- --suggest work/packages/done-20260514-topology-missed-handoff-ack-gate.md
+2. npm run work:package:doctor -- --fix-dry-run work/packages/done-20260514-topology-missed-handoff-ack-gate.md
 3. node test/distributed/run.js --config test/distributed/config/local-three-node.json --scenario write-ack-visibility --output test-output/reports/topology-missed-handoff-ack-gate.report.json --verbose
 4. npm run analyze:distributed-failure -- --report test-output/reports/topology-missed-handoff-ack-gate.report.json
 5. node scripts/check-guideline-literals.js src/control-plane/publication-owner-decision.js src/control-plane/publication-owner-evidence.js src/control-plane/publication-recovery-gate.js test/control-plane/publication-recovery-gate.test.js
 6. node scripts/check-guideline-decision-boundaries.js src/control-plane/publication-owner-decision.js src/control-plane/publication-owner-evidence.js src/control-plane/publication-recovery-gate.js test/control-plane/publication-recovery-gate.test.js
 7. npm run audit:runtime-grammar:file -- src/control-plane/publication-owner-decision.js src/control-plane/publication-owner-evidence.js src/control-plane/publication-recovery-gate.js test/control-plane/publication-recovery-gate.test.js
-8. npm run work:validate -- --entry work/packages/active-20260514-topology-missed-handoff-ack-gate.md
-9. npm run work:validate -- --pre-impl work/packages/active-20260514-topology-missed-handoff-ack-gate.md
-10. npm run work:validate -- --closure work/packages/active-20260514-topology-missed-handoff-ack-gate.md
-11. git diff --check -- work/packages/active-20260514-topology-missed-handoff-ack-gate.md work/sprints/active-2026-q2-topology-convergence-residual-closure.md work/sprints/current-blocker.json work/sprints/current-blocker.md
+8. npm run work:validate -- --entry work/packages/done-20260514-topology-missed-handoff-ack-gate.md
+9. npm run work:validate -- --pre-impl work/packages/done-20260514-topology-missed-handoff-ack-gate.md
+10. npm run work:validate -- --closure work/packages/done-20260514-topology-missed-handoff-ack-gate.md
+11. git diff --check -- work/packages/done-20260514-topology-missed-handoff-ack-gate.md work/sprints/active-2026-q2-topology-convergence-residual-closure.md work/sprints/current-blocker.json work/sprints/current-blocker.md
 12. Final deep-dive proof: rerun the package extractor/probe, compare against the sprint representative residual, and record the result classification before closure.
 
 ## Split Rules
@@ -267,7 +270,6 @@ runtime fix.
 
 Required at closure.
 
-1. [ ] Focused package commit: pending.
-2. [ ] Pushed to: pending.
-3. [ ] Commit contains only package-owned files/package-status/allowed sprint
-   handoff: pending.
+1. [x] Focused package commit: 91dbdfa4d39579604c84493c46a62f226f117570.
+2. [x] Pushed to: origin/codex/pending-ack-eligibility-filter.
+3. [x] Commit contains only package-owned files/package-status/allowed sprint handoff: yes.

@@ -361,7 +361,7 @@ Final closure requires fresh evidence proving all of the following:
       delivery, ACK, timeout, reconcile, or terminal workflow status.
     - Acceptance: no coordinator-created operation waits only on event delivery.
 
-12. [Topology Missed Handoff ACK Gate](../packages/active-20260514-topology-missed-handoff-ack-gate.md)
+12. [Topology Missed Handoff ACK Gate](../packages/done-20260514-topology-missed-handoff-ack-gate.md)
     - Lane: `scenario-release-gate`
     - Owner boundary: `topology_publication_owner / remote_handoff_ack_closure_gate`
     - Purpose: prove missed ACKs retry or terminally classify before
@@ -370,7 +370,7 @@ Final closure requires fresh evidence proving all of the following:
       gate migrated to publication convergence. Runtime fixes remain out of
       scope unless explicitly re-scoped.
 
-13. [Topology Stale Publication Durable Truth Gate](../packages/todo-20260514-topology-stale-publication-durable-truth-gate.md)
+13. [Topology Stale Publication Durable Truth Gate](../packages/active-20260514-topology-stale-publication-durable-truth-gate.md)
     - Lane: `scenario-release-gate`
     - Owner boundary: `topology_publication_owner / publication_truth_projection_gate`
     - Purpose: prove durable acknowledged truth outranks stale projection.
@@ -476,13 +476,15 @@ projection reconciliation is done as classification-only observability:
 `topology_publication_owner` blocker instead of healthy evidence.
 
 The current action is now
-[Topology Missed Handoff ACK Gate](../packages/active-20260514-topology-missed-handoff-ack-gate.md).
-Observed result: `write-ack-visibility` failed after `173275ms`, but canonical
+[Topology Stale Publication Durable Truth Gate](../packages/active-20260514-topology-stale-publication-durable-truth-gate.md).
+The predecessor
+[Topology Missed Handoff ACK Gate](../packages/done-20260514-topology-missed-handoff-ack-gate.md)
+migrated: `write-ack-visibility` failed after `173275ms`, but canonical
 evidence did not implicate ACK absence. `pendingAckCount=0`,
 `publicationStatus=PUBLISHED`, and the first frontier is
 `topology_publication_owner / publication_convergence` with
 `missing_published_nodes_present`, `missingPublishedCount=2`, and
 `publicationPending=true`; priority recovery residual extraction reported zero
-witnesses. Close this package as migrated and activate
-[Topology Stale Publication Durable Truth Gate](../packages/todo-20260514-topology-stale-publication-durable-truth-gate.md)
-next. Do not fix `rolling-restart` runtime behavior in this sprint segment.
+witnesses. Execute and classify the stale publication durable-truth gate as
+observe/classify work only. Do not fix `rolling-restart` runtime behavior in
+this sprint segment.

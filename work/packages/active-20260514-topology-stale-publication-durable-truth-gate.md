@@ -3,29 +3,39 @@
 <!-- work-package
 {
   "schema": "work-package-v1",
-  "status": "todo",
+  "status": "active",
   "opened": "2026-05-14",
   "lane": "scenario-release-gate",
   "scenario": "write-ack-visibility",
-  "artifact": "none",
+  "artifact": "test-output/reports/topology-stale-publication-durable-truth-gate.report.json",
   "playback": "none",
   "owner": "topology_publication_owner",
   "boundary": "publication_truth_projection_gate",
   "dominantReason": "stale_publication_release_gate_unproven",
-  "currentState": "The matrix names stale publication with durable truth ahead but no release-gate artifact proves durable acknowledged writes outrank stale projection.",
-  "nextAction": "Execute the stale-publication gate and ensure durable owner truth schedules projection reconcile or emits a degraded owner reason instead of treating stale cache publication as convergence.",
+  "currentState": "Activated after the missed-ACK gate migrated: write-ack-visibility showed pendingAckCount=0 with publicationStatus=PUBLISHED, missingPublishedCount=2, publicationPending=true, and first frontier topology_publication_owner / publication_convergence. The stale durable-truth gate now owns classifying durable truth versus projection freshness.",
+  "nextAction": "Execute and classify the stale-publication durable-truth gate only. If the gate is red, record the owner-boundary split; do not fix rolling-restart runtime behavior in this package without explicit re-scope.",
   "proof": [
     "node test/distributed/run.js --config test/distributed/config/local-three-node.json --scenario write-ack-visibility --output test-output/reports/topology-stale-publication-durable-truth-gate.report.json --verbose",
-    "npm run analyze:distributed-failure -- --report test-output/reports/topology-stale-publication-durable-truth-gate.report.json"
+    "npm run work:evidence-summary -- test-output/reports/topology-stale-publication-durable-truth-gate.report.json",
+    "npm run analyze:distributed-failure -- --report test-output/reports/topology-stale-publication-durable-truth-gate.report.json",
+    "npm run analyze:topology-convergence -- test-output/reports/topology-stale-publication-durable-truth-gate.report.json",
+    "npm --silent run analyze:causal-model -- test-output/reports/topology-stale-publication-durable-truth-gate.report.json",
+    "npm run analyze:priority-recovery-residuals -- test-output/reports/topology-stale-publication-durable-truth-gate.report.json --markdown"
   ],
   "writeScope": [
-    "work/packages/todo-20260514-topology-stale-publication-durable-truth-gate.md",
-    "work/sprints/active-2026-q2-topology-convergence-residual-closure.md"
+    "work/packages/active-20260514-topology-stale-publication-durable-truth-gate.md",
+    "work/sprints/active-2026-q2-topology-convergence-residual-closure.md",
+    "work/sprints/current-blocker.json",
+    "work/sprints/current-blocker.md"
   ],
   "handoffFiles": [
-    "work/packages/done-20260514-topology-publication-convergence-after-active-gate-owner-truth.md"
+    "work/packages/done-20260514-topology-publication-convergence-after-active-gate-owner-truth.md",
+    "work/packages/done-20260514-topology-missed-handoff-ack-gate.md"
   ],
-  "generatedFiles": [],
+  "generatedFiles": [
+    "work/sprints/current-blocker.json",
+    "work/sprints/current-blocker.md"
+  ],
   "candidateRuntimeFiles": [
     "src/control-plane/publication-owner-evidence.js",
     "src/control-plane/publication-recovery-evidence.js",
@@ -34,8 +44,10 @@
     "test/admin/admin-control-snapshot.test.js"
   ],
   "commitScope": [
-    "work/packages/todo-20260514-topology-stale-publication-durable-truth-gate.md",
-    "work/sprints/active-2026-q2-topology-convergence-residual-closure.md"
+    "work/packages/active-20260514-topology-stale-publication-durable-truth-gate.md",
+    "work/sprints/active-2026-q2-topology-convergence-residual-closure.md",
+    "work/sprints/current-blocker.json",
+    "work/sprints/current-blocker.md"
   ],
   "modelFit": {
     "packageClass": "representative-frontier-closure",
@@ -51,7 +63,7 @@
     "stopConditionCheck": "npm --silent run analyze:causal-model -- test-output/reports/topology-stale-publication-durable-truth-gate.report.json",
     "expectedCausalModelChange": "stale_publication_release_gate_unproven becomes representative-green, reduced, same-frontier, migrated, or classification-only with a named owner-boundary reason.",
     "representativeOutcome": "pending-before-rerun",
-    "causalDebt": "Until topology_publication_owner / publication_truth_projection_gate is proven, the sprint representative rolling-restart residual stays open at startup_active_gate_owner / snapshot_coverage.",
+    "causalDebt": "Until topology_publication_owner / publication_truth_projection_gate is proven, the sprint representative rolling-restart residual stays open. Runtime rolling-restart fixes are out of scope for this observe/classify package.",
     "crossBoundaryReview": "Required before closure through the scenario-release-gate subagent ledger or an allowed waiver recorded in this package."
   },
   "scenarioCausalClosure": {
@@ -160,7 +172,7 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 
 Required before this package moves from `todo` to `active`:
 
-1. Run `npm run work:package:doctor -- --fix-dry-run work/packages/todo-20260514-topology-stale-publication-durable-truth-gate.md` and keep `causalGovernance`, `scenarioCausalClosure`, Model Fit, and scope fields concrete before implementation starts.
+1. Run `npm run work:package:doctor -- --fix-dry-run work/packages/active-20260514-topology-stale-publication-durable-truth-gate.md` and keep `causalGovernance`, `scenarioCausalClosure`, Model Fit, and scope fields concrete before implementation starts.
 2. Promote only these proven candidates into `writeScope` and `commitScope` after owner-file proof: `src/control-plane/publication-owner-evidence.js`, `src/control-plane/publication-recovery-evidence.js`, `src/admin/admin-control-snapshot-class-part-3.js`, `test/control-plane/publication-recovery-evidence.test.js`, `test/admin/admin-control-snapshot.test.js`.
 3. Replace the Subagent Sequencing Ledger placeholders with real review/fix/implementation proof, or an allowed waiver, before pre-implementation and closure validation.
 4. Preserve the package artifact path `test-output/reports/topology-stale-publication-durable-truth-gate.report.json`; if fresh evidence changes owner, boundary, or dominant reason, classify as `migrated`, `same-frontier`, or split instead of widening scope.
@@ -173,38 +185,43 @@ Required before this package moves from `todo` to `active`:
 Required when this package is activated because it is a scenario-release-gate
 package.
 
-1. [ ] Review subagent recorded: pending until package activation.
-2. [ ] Fix subagent recorded or explicitly not needed: pending until review
-   result.
-3. [ ] Implementation subagent recorded: pending until pre-implementation proof
-   is clean.
+- [x] Review subagent recorded:
+      blocked-by-environment-policy reason: subagent-spawn-requires-explicit-user-request-for-stale-publication-durable-truth-gate-review
+- [x] Fix subagent recorded or explicitly not needed:
+      blocked-by-environment-policy reason: subagent-spawn-requires-explicit-user-request-for-stale-publication-durable-truth-gate-fix
+- [x] Implementation subagent recorded:
+      blocked-by-environment-policy reason: subagent-spawn-requires-explicit-user-request-for-stale-publication-durable-truth-gate-implementation
 
 ## Model Fit
 
 - Package class: `representative-frontier-closure`
 - Intended minimum model: `gpt-5.3-codex`
 - Scope shape: `owner-boundary-contraction/current-frontier`
-- Owned files: `work/packages/todo-20260514-topology-stale-publication-durable-truth-gate.md`, `work/sprints/active-2026-q2-topology-convergence-residual-closure.md`
+- Owned files: `work/packages/active-20260514-topology-stale-publication-durable-truth-gate.md`, `work/sprints/active-2026-q2-topology-convergence-residual-closure.md`, `work/sprints/current-blocker.json`, `work/sprints/current-blocker.md`
 - Forbidden files: `cache-publication-as-authority`, `local-hot-path-repair`
 - Frozen decisions: package scope and lane stay bounded unless explicitly escalated.
 - Escalation triggers: owned files expand beyond this package, runtime ownership changes, or representative scenario evidence changes.
-- Focused proof: `node test/distributed/run.js --config test/distributed/config/local-three-node.json --scenario write-ack-visibility --output test-output/reports/topology-stale-publication-durable-truth-gate.report.json --verbose`, `npm run analyze:distributed-failure -- --report test-output/reports/topology-stale-publication-durable-truth-gate.report.json`
+- Focused proof: `node test/distributed/run.js --config test/distributed/config/local-three-node.json --scenario write-ack-visibility --output test-output/reports/topology-stale-publication-durable-truth-gate.report.json --verbose`, `npm run work:evidence-summary -- test-output/reports/topology-stale-publication-durable-truth-gate.report.json`, `npm run analyze:distributed-failure -- --report test-output/reports/topology-stale-publication-durable-truth-gate.report.json`
 - Model ledger advisory: `escalate`
 
 ## Validation Ladder
 
-1. npm run work:package:doctor -- --suggest work/packages/todo-20260514-topology-stale-publication-durable-truth-gate.md
-2. npm run work:package:doctor -- --fix-dry-run work/packages/todo-20260514-topology-stale-publication-durable-truth-gate.md
+1. npm run work:package:doctor -- --suggest work/packages/active-20260514-topology-stale-publication-durable-truth-gate.md
+2. npm run work:package:doctor -- --fix-dry-run work/packages/active-20260514-topology-stale-publication-durable-truth-gate.md
 3. node test/distributed/run.js --config test/distributed/config/local-three-node.json --scenario write-ack-visibility --output test-output/reports/topology-stale-publication-durable-truth-gate.report.json --verbose
-4. npm run analyze:distributed-failure -- --report test-output/reports/topology-stale-publication-durable-truth-gate.report.json
-5. node scripts/check-guideline-literals.js src/control-plane/publication-owner-evidence.js src/control-plane/publication-recovery-evidence.js src/admin/admin-control-snapshot-class-part-3.js test/control-plane/publication-recovery-evidence.test.js test/admin/admin-control-snapshot.test.js
-6. node scripts/check-guideline-decision-boundaries.js src/control-plane/publication-owner-evidence.js src/control-plane/publication-recovery-evidence.js src/admin/admin-control-snapshot-class-part-3.js test/control-plane/publication-recovery-evidence.test.js test/admin/admin-control-snapshot.test.js
-7. npm run audit:runtime-grammar:file -- src/control-plane/publication-owner-evidence.js src/control-plane/publication-recovery-evidence.js src/admin/admin-control-snapshot-class-part-3.js test/control-plane/publication-recovery-evidence.test.js test/admin/admin-control-snapshot.test.js
-8. npm run work:validate -- --entry work/packages/todo-20260514-topology-stale-publication-durable-truth-gate.md
-9. npm run work:validate -- --pre-impl work/packages/todo-20260514-topology-stale-publication-durable-truth-gate.md
-10. npm run work:validate -- --closure work/packages/todo-20260514-topology-stale-publication-durable-truth-gate.md
-11. git diff --check -- work/packages/todo-20260514-topology-stale-publication-durable-truth-gate.md work/sprints/active-2026-q2-topology-convergence-residual-closure.md
-12. Final deep-dive proof: rerun the package extractor/probe, compare against the sprint representative residual, and record the result classification before closure.
+4. npm run work:evidence-summary -- test-output/reports/topology-stale-publication-durable-truth-gate.report.json
+5. npm run analyze:distributed-failure -- --report test-output/reports/topology-stale-publication-durable-truth-gate.report.json
+6. npm run analyze:topology-convergence -- test-output/reports/topology-stale-publication-durable-truth-gate.report.json
+7. npm --silent run analyze:causal-model -- test-output/reports/topology-stale-publication-durable-truth-gate.report.json
+8. npm run analyze:priority-recovery-residuals -- test-output/reports/topology-stale-publication-durable-truth-gate.report.json --markdown
+9. node scripts/check-guideline-literals.js src/control-plane/publication-owner-evidence.js src/control-plane/publication-recovery-evidence.js src/admin/admin-control-snapshot-class-part-3.js test/control-plane/publication-recovery-evidence.test.js test/admin/admin-control-snapshot.test.js
+10. node scripts/check-guideline-decision-boundaries.js src/control-plane/publication-owner-evidence.js src/control-plane/publication-recovery-evidence.js src/admin/admin-control-snapshot-class-part-3.js test/control-plane/publication-recovery-evidence.test.js test/admin/admin-control-snapshot.test.js
+11. npm run audit:runtime-grammar:file -- src/control-plane/publication-owner-evidence.js src/control-plane/publication-recovery-evidence.js src/admin/admin-control-snapshot-class-part-3.js test/control-plane/publication-recovery-evidence.test.js test/admin/admin-control-snapshot.test.js
+12. npm run work:validate -- --entry work/packages/active-20260514-topology-stale-publication-durable-truth-gate.md
+13. npm run work:validate -- --pre-impl work/packages/active-20260514-topology-stale-publication-durable-truth-gate.md
+14. npm run work:validate -- --closure work/packages/active-20260514-topology-stale-publication-durable-truth-gate.md
+15. git diff --check -- work/packages/active-20260514-topology-stale-publication-durable-truth-gate.md work/sprints/active-2026-q2-topology-convergence-residual-closure.md work/sprints/current-blocker.json work/sprints/current-blocker.md
+16. Final deep-dive proof: rerun the package extractor/probe, compare against the sprint representative residual, and record the result classification before closure.
 
 ## Split Rules
 
