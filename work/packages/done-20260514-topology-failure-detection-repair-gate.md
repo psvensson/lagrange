@@ -3,8 +3,9 @@
 <!-- work-package
 {
   "schema": "work-package-v1",
-  "status": "active",
+  "status": "done",
   "opened": "2026-05-14",
+  "closed": "2026-05-14",
   "lane": "scenario-release-gate",
   "scenario": "rolling-restart",
   "artifact": "test-output/reports/topology-failure-detection-repair-gate.report.json",
@@ -24,7 +25,7 @@
     "npm run analyze:priority-recovery-residuals -- test-output/reports/topology-failure-detection-repair-gate.report.json --markdown"
   ],
   "writeScope": [
-    "work/packages/active-20260514-topology-failure-detection-repair-gate.md",
+    "work/packages/done-20260514-topology-failure-detection-repair-gate.md",
     "work/sprints/active-2026-q2-topology-convergence-residual-closure.md",
     "work/sprints/current-blocker.json",
     "work/sprints/current-blocker.md"
@@ -43,7 +44,7 @@
     "test/node/failure-repair-intent-contract.test.js"
   ],
   "commitScope": [
-    "work/packages/active-20260514-topology-failure-detection-repair-gate.md",
+    "work/packages/done-20260514-topology-failure-detection-repair-gate.md",
     "work/sprints/active-2026-q2-topology-convergence-residual-closure.md",
     "work/sprints/current-blocker.json",
     "work/sprints/current-blocker.md"
@@ -184,7 +185,7 @@ that are consumed by the correct owner. The release gate must prove:
 
 Required before this package moves from `todo` to `active`:
 
-1. Run `npm run work:package:doctor -- --fix-dry-run work/packages/active-20260514-topology-failure-detection-repair-gate.md` and keep `causalGovernance`, `scenarioCausalClosure`, Model Fit, and scope fields concrete before implementation starts.
+1. Run `npm run work:package:doctor -- --fix-dry-run work/packages/done-20260514-topology-failure-detection-repair-gate.md` and keep `causalGovernance`, `scenarioCausalClosure`, Model Fit, and scope fields concrete before implementation starts.
 2. Treat candidate runtime files as read-only for this observe/classify pass.
    Promote a runtime candidate into `writeScope` and `commitScope` only if the
    user explicitly re-scopes this package from evidence classification to
@@ -212,7 +213,7 @@ package.
 - Package class: `representative-frontier-closure`
 - Intended minimum model: `gpt-5.3-codex`
 - Scope shape: `owner-boundary-contraction/current-frontier`
-- Owned files: `work/packages/active-20260514-topology-failure-detection-repair-gate.md`, `work/sprints/active-2026-q2-topology-convergence-residual-closure.md`, `work/sprints/current-blocker.json`, `work/sprints/current-blocker.md`
+- Owned files: `work/packages/done-20260514-topology-failure-detection-repair-gate.md`, `work/sprints/active-2026-q2-topology-convergence-residual-closure.md`, `work/sprints/current-blocker.json`, `work/sprints/current-blocker.md`
 - Forbidden files: `event-only-repair-continuation`, `local-fallback-repair-mutation`, `rolling-restart-runtime-fixes-without-explicit-re-scope`
 - Frozen decisions: package scope and lane stay bounded unless explicitly escalated.
 - Escalation triggers: owned files expand beyond this package, runtime ownership changes, or representative scenario evidence changes.
@@ -221,8 +222,8 @@ package.
 
 ## Validation Ladder
 
-1. npm run work:package:doctor -- --suggest work/packages/active-20260514-topology-failure-detection-repair-gate.md
-2. npm run work:package:doctor -- --fix-dry-run work/packages/active-20260514-topology-failure-detection-repair-gate.md
+1. npm run work:package:doctor -- --suggest work/packages/done-20260514-topology-failure-detection-repair-gate.md
+2. npm run work:package:doctor -- --fix-dry-run work/packages/done-20260514-topology-failure-detection-repair-gate.md
 3. node test/node/failure-repair-intent-contract.test.js
 4. node test/node/failure-detector.test.js
 5. node test/distributed/run.js --config test/distributed/config/local-three-node.json --scenario rolling-restart --output test-output/reports/topology-failure-detection-repair-gate.report.json --verbose
@@ -230,12 +231,12 @@ package.
 7. npm run analyze:topology-convergence -- test-output/reports/topology-failure-detection-repair-gate.report.json
 8. npm --silent run analyze:causal-model -- test-output/reports/topology-failure-detection-repair-gate.report.json
 9. npm run analyze:priority-recovery-residuals -- test-output/reports/topology-failure-detection-repair-gate.report.json --markdown
-10. node scripts/check-guideline-literals.js work/packages/active-20260514-topology-failure-detection-repair-gate.md work/sprints/active-2026-q2-topology-convergence-residual-closure.md work/sprints/current-blocker.json work/sprints/current-blocker.md
-11. node scripts/check-guideline-decision-boundaries.js work/packages/active-20260514-topology-failure-detection-repair-gate.md work/sprints/active-2026-q2-topology-convergence-residual-closure.md work/sprints/current-blocker.json work/sprints/current-blocker.md
-12. npm run work:validate -- --entry work/packages/active-20260514-topology-failure-detection-repair-gate.md
-13. npm run work:validate -- --pre-impl work/packages/active-20260514-topology-failure-detection-repair-gate.md
-14. npm run work:validate -- --closure work/packages/active-20260514-topology-failure-detection-repair-gate.md
-15. git diff --check -- work/packages/active-20260514-topology-failure-detection-repair-gate.md work/sprints/active-2026-q2-topology-convergence-residual-closure.md work/sprints/current-blocker.json work/sprints/current-blocker.md
+10. node scripts/check-guideline-literals.js work/packages/done-20260514-topology-failure-detection-repair-gate.md work/sprints/active-2026-q2-topology-convergence-residual-closure.md work/sprints/current-blocker.json work/sprints/current-blocker.md
+11. node scripts/check-guideline-decision-boundaries.js work/packages/done-20260514-topology-failure-detection-repair-gate.md work/sprints/active-2026-q2-topology-convergence-residual-closure.md work/sprints/current-blocker.json work/sprints/current-blocker.md
+12. npm run work:validate -- --entry work/packages/done-20260514-topology-failure-detection-repair-gate.md
+13. npm run work:validate -- --pre-impl work/packages/done-20260514-topology-failure-detection-repair-gate.md
+14. npm run work:validate -- --closure work/packages/done-20260514-topology-failure-detection-repair-gate.md
+15. git diff --check -- work/packages/done-20260514-topology-failure-detection-repair-gate.md work/sprints/active-2026-q2-topology-convergence-residual-closure.md work/sprints/current-blocker.json work/sprints/current-blocker.md
 16. Final deep-dive proof: rerun the package extractor/probe, compare against the sprint representative residual, and record the result classification before closure.
 
 ## Split Rules
@@ -284,7 +285,6 @@ package.
 
 Required at closure.
 
-1. [ ] Focused package commit: pending.
-2. [ ] Pushed to: pending.
-3. [ ] Commit contains only package-owned files/package-status/allowed sprint
-   handoff: pending.
+1. [x] Focused package commit: 2c57f07a50e55e8c399278dcf86f2f7a921ab1fa.
+2. [x] Pushed to: origin/codex/pending-ack-eligibility-filter.
+3. [x] Commit contains only package-owned files/package-status/allowed sprint handoff: yes.

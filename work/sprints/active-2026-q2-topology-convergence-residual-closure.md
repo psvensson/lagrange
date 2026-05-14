@@ -328,7 +328,7 @@ Final closure requires fresh evidence proving all of the following:
      durable outcome, artifact path, owner-boundary split rule, and assertion
      surface. Runtime behavior was not changed.
 
-8. [Topology Failure Detection Repair Gate](../packages/active-20260514-topology-failure-detection-repair-gate.md)
+8. [Topology Failure Detection Repair Gate](../packages/done-20260514-topology-failure-detection-repair-gate.md)
    - Lane: `scenario-release-gate`
    - Owner boundary: `failure_detector / durable_repair_intent_release_gate`
    - Purpose: prove failure detection causes durable owner-key repair, not only
@@ -361,12 +361,14 @@ Final closure requires fresh evidence proving all of the following:
       delivery, ACK, timeout, reconcile, or terminal workflow status.
     - Acceptance: no coordinator-created operation waits only on event delivery.
 
-12. [Topology Missed Handoff ACK Gate](../packages/todo-20260514-topology-missed-handoff-ack-gate.md)
+12. [Topology Missed Handoff ACK Gate](../packages/active-20260514-topology-missed-handoff-ack-gate.md)
     - Lane: `scenario-release-gate`
     - Owner boundary: `topology_publication_owner / remote_handoff_ack_closure_gate`
     - Purpose: prove missed ACKs retry or terminally classify before
       publication closure.
-    - Acceptance: ACK absence is never interpreted as publication convergence.
+    - Acceptance: observe/classify-only activation after the failure-detection
+      gate migrated to publication convergence. Runtime fixes remain out of
+      scope unless explicitly re-scoped.
 
 13. [Topology Stale Publication Durable Truth Gate](../packages/todo-20260514-topology-stale-publication-durable-truth-gate.md)
     - Lane: `scenario-release-gate`
@@ -474,10 +476,10 @@ projection reconciliation is done as classification-only observability:
 `topology_publication_owner` blocker instead of healthy evidence.
 
 The current action is now
-[Topology Failure Detection Repair Gate](../packages/active-20260514-topology-failure-detection-repair-gate.md).
-Record and close the migration proof from the failure-detection gate artifact,
-then activate a publication-owner gate/package. The fresh artifact is
-`test-output/reports/topology-failure-detection-repair-gate.report.json`; it
-selects `topology_publication_owner / publication_convergence` with
+[Topology Missed Handoff ACK Gate](../packages/active-20260514-topology-missed-handoff-ack-gate.md).
+Run and classify the publication-owner missed-ACK gate as an observability
+gate. The predecessor failure-detection gate artifact
+`test-output/reports/topology-failure-detection-repair-gate.report.json`
+migrated to `topology_publication_owner / publication_convergence` with
 `publication_pending`. Do not fix `rolling-restart` runtime behavior in this
 package.
