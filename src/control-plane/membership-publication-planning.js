@@ -39,10 +39,16 @@ import {
 } from './membership-epoch-contract.js';
 
 const LOCAL_STR_EMPTY = '';
+const READINESS_REASON_CODE_KEY = 'code';
+const READINESS_REASON_CODES_KEY = 'reasonCodes';
+const READINESS_REASONS_KEY = 'reasons';
 
 const MEMBERSHIP_PUBLICATION_STATUS = CONTROL_PLANE_PUBLICATION_STATUS;
 const PRIORITY_SPREAD_REQUIRED_DISTINCT_NODE_COUNT = 3;
 const AUTHORITATIVE_MEMBERSHIP_CHANGED_REASON = 'authoritative_membership_changed';
+const PRIORITY_RECOVERY_PENDING_PUBLICATION_DIMENSIONS = Object.freeze({
+  [CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE]: true,
+});
 const MEMBERSHIP_PUBLICATION_TARGET_STATE = Object.freeze({
   EXPLICIT_PUBLICATION: 'explicit_publication',
   OBSERVED_ACTIVE: 'observed_active',
@@ -399,6 +405,69 @@ function normalizePriorityRecoveryClosureWitness(value) {
   return value && typeof value === TYPEOF.OBJECT ?
     value :
     null;
+}
+
+function normalizeReadinessReasonCodeValue(reason) {
+  if (typeof reason === TYPEOF.STRING) {
+    return reason;
+  }
+  if (
+    reason &&
+    typeof reason === TYPEOF.OBJECT &&
+    typeof reason[READINESS_REASON_CODE_KEY] === TYPEOF.STRING
+  ) {
+    return reason[READINESS_REASON_CODE_KEY];
+  }
+  return LOCAL_STR_EMPTY;
+}
+
+function normalizeReadinessReasonCodes(readinessEntry = null) {
+  if (!readinessEntry || typeof readinessEntry !== TYPEOF.OBJECT) {
+    return [];
+  }
+  return normalizePartitionIdList([
+    ...(Array.isArray(readinessEntry[READINESS_REASON_CODES_KEY]) ?
+      readinessEntry[READINESS_REASON_CODES_KEY] :
+      []),
+    ...(Array.isArray(readinessEntry[READINESS_REASONS_KEY]) ?
+      readinessEntry[READINESS_REASONS_KEY].map((reason) =>
+        normalizeReadinessReasonCodeValue(reason),
+      ) :
+      []),
+  ]);
+}
+
+function hasPriorityRecoveryPendingReasonOnlyEvidence(readinessEntry = null) {
+  if (!readinessEntry || typeof readinessEntry !== TYPEOF.OBJECT) {
+    return false;
+  }
+  if (
+    readinessEntry.dimensions &&
+    typeof readinessEntry.dimensions === TYPEOF.OBJECT
+  ) {
+    return false;
+  }
+  return normalizeReadinessReasonCodes(readinessEntry).includes(
+    CONTROL_PLANE_READINESS_REASON.PRIORITY_CONTROL_PLANE_RECOVERY_PENDING,
+  );
+}
+
+function buildPublicationPlanningReadinessByNodeId(options = {}) {
+  const readinessByNodeId = buildReadinessByNodeId(options);
+  return Object.keys(readinessByNodeId)
+    .sort()
+    .reduce((accumulator, nodeId) => {
+      const readinessEntry = readinessByNodeId[nodeId];
+      accumulator[nodeId] = hasPriorityRecoveryPendingReasonOnlyEvidence(
+        readinessEntry,
+      ) ?
+        {
+          ...readinessEntry,
+          dimensions: PRIORITY_RECOVERY_PENDING_PUBLICATION_DIMENSIONS,
+        } :
+        readinessEntry;
+      return accumulator;
+    }, {});
 }
 
 function buildPriorityRecoveryDecisionPublicationConvergence(options = {}, helperFns = {}) {
@@ -1167,7 +1236,7 @@ function deriveMembershipPublicationCandidate(options = {}, helperFns = {}) {
       latestPublicationRow.publishedActiveNodeIds :
       latestPublishedPublicationRow?.publishedActiveNodeIds,
   );
-  const readinessByNodeId = buildReadinessByNodeId({
+  const readinessByNodeId = buildPublicationPlanningReadinessByNodeId({
     readinessByNodeId: planningSnapshot.readinessByNodeId,
     readinessEntries: planningSnapshot.readinessEntries,
   });

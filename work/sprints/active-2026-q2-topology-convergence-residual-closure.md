@@ -412,12 +412,17 @@ Final closure requires fresh evidence proving all of the following:
 17. [Topology Publication Convergence Final Blocker](../packages/active-20260514-topology-publication-convergence-final-blocker.md)
     - Lane: `runtime-owner-boundary`
     - Owner boundary: `topology_publication_owner / publication_convergence`
-    - Purpose: hold the fresh final-gate publication convergence blocker until
-      runtime repair is explicitly re-scoped.
-    - Acceptance: not executed in this sprint segment. It records the final
-      red handoff: `active=0/5`, `snapshotCoverage=2/5`,
-      `pendingAck=0`, `missingPublished=4`, and two non-frontier priority
-      recovery witnesses.
+    - Purpose: continue the after-repair publication convergence blocker after
+      the focused runtime re-scope reduced but did not close representative
+      evidence.
+    - Acceptance: active same-frontier red package. Focused reason-only
+      `PRIORITY_CONTROL_PLANE_RECOVERY_PENDING` publication-planning repair is
+      green locally, but representative artifact
+      `test-output/reports/topology-publication-convergence-final-blocker-after-reason-only-repair.report.json`
+      failed in `146127ms` with `active=0/5`, `snapshotCoverage=2/5`,
+      `publishedActive=1/5`, `pendingAck=0`, `missingPublished=4`, and
+      one non-frontier `operation_workflow_owner / workflow_progress`
+      witness.
 
 ## Dependency Order
 
@@ -515,16 +520,24 @@ budget at `1269/30000ms`. The latest rebalance gate reports zero priority
 recovery witnesses.
 
 Final ship confirmation ran as observe/classify work and did not meet ship
-criteria. `rolling-restart` failed in `114789ms` with `active=0/5`,
-`snapshotCoverage=2/5`, `publication=PUBLISHED`, `pendingAck=0`,
-`missingPublished=4`, and first frontier `topology_publication_owner /
-publication_convergence` with `missing_published_nodes_present`. Priority
-recovery is not the first frontier, but final evidence has two non-frontier
+criteria. The publication convergence runtime re-scope then reduced the
+representative blocker but did not close it. After-repair artifact
+`test-output/reports/topology-publication-convergence-final-blocker-after-repair.report.json`
+reports `active=2/5`, `snapshotCoverage=3/5`,
+`publication=PUBLISHED`, `publishedActive=3/5`, `pendingAck=0`, and
+`missingPublished=2`; the first frontier remains
+`topology_publication_owner / publication_convergence` with
+`missing_published_nodes_present`. Priority recovery is not the first
+frontier, but after-repair evidence has three non-frontier
 `operation_workflow_owner / workflow_progress` witnesses in
 `spread_satisfied_in_flight`.
 
-Final confirmation is closed as a migrated red gate. Hold on
+Final confirmation is closed as a migrated red gate. Continue
 [Topology Publication Convergence Final Blocker](../packages/active-20260514-topology-publication-convergence-final-blocker.md)
-until runtime publication-convergence work is explicitly re-scoped. Do not fix
-`rolling-restart`, publication, active-gate, rebalance, or operation workflow
-runtime behavior in this sprint segment without explicit re-scope.
+against the same-owner residual. The current implementation step added a
+bounded publication-planning repair for readiness entries that expose only
+`PRIORITY_CONTROL_PLANE_RECOVERY_PENDING`; focused proof is green, but the
+representative checkpoint stayed same-frontier red with
+`missingPublished=4`. Do not fix `rolling-restart`, active-gate, rebalance, or
+operation workflow runtime behavior in this sprint segment unless owner
+evidence proves the remaining blocker has split or migrated.
