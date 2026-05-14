@@ -99,7 +99,7 @@
     "reason": "fresh seven-node-load-during-partitioning gate first frontier is publication_ack_convergence / missing_published_nodes_present before split/rebalance recovery release-gate evidence can be evaluated",
     "evidence": "test-output/reports/topology-rebalance-disruption-recovery-gate.report.json"
   },
-  "successor": "work/packages/active-20260514-topology-contract-integration-reconciliation.md",
+  "successor": "work/packages/done-20260514-topology-contract-integration-reconciliation.md",
   "closed": "2026-05-14",
   "commitAndPushLedgerRequired": true
 }

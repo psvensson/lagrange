@@ -218,7 +218,7 @@ and `npm run analyze:distributed-failure -- --report test-output/reports/rolling
    `operation_workflow_owner / workflow_progress`, `stepAgeMs=1269`,
    `stepTimeoutMs=30000`, and `nextRequiredAction=wait_for_operation_progress`.
    This remains a tail residual owned by
-   `todo-20260514-topology-priority-recovery-residual-drain.md` after the
+   `active-20260514-topology-priority-recovery-residual-drain.md` after the
    active-gate and publication blockers no longer dominate.
 5. Budget state: `analyze:causal-model` reports `scenario_duration` as
    unbounded under `diagnostics_owner / causal_analysis_framework`
@@ -275,7 +275,7 @@ than replace the first debugging loop.
    and still has a `spread_satisfied_in_flight` witness. Reconciliation: it is
    not first frontier and does not require a split now; it remains a
    non-frontier tail for
-   `todo-20260514-topology-priority-recovery-residual-drain.md`.
+   `active-20260514-topology-priority-recovery-residual-drain.md`.
 4. `scenario_duration` is unbounded under diagnostics while
    `active_gate_timeout` is unbounded under the startup active-gate owner.
    Reconciliation: the runtime first fix is the active-gate budget contract;
@@ -382,7 +382,7 @@ Required now because this active package is a causal-escalation package.
 2. If publication is the first durable blocker, activate
    `active-20260514-topology-publication-projection-reconciliation.md`.
 3. If operation workflow residual becomes first frontier, activate
-   `todo-20260514-topology-priority-recovery-residual-drain.md` or split a
+   `active-20260514-topology-priority-recovery-residual-drain.md` or split a
    narrower operation package if the owner/boundary has changed.
 4. If the artifact is stale or extractors cannot parse it, create a fresh
    evidence package or rerun package instead of editing runtime from uncertain

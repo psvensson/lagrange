@@ -3,7 +3,7 @@
 <!-- work-package
 {
   "schema": "work-package-v1",
-  "status": "active",
+  "status": "done",
   "opened": "2026-05-14",
   "lane": "causal-escalation",
   "scenario": "rolling-restart",
@@ -24,7 +24,7 @@
     "npm run analyze:owner-files -- topology_control_plane contract_integration_reconcile --markdown"
   ],
   "writeScope": [
-    "work/packages/active-20260514-topology-contract-integration-reconciliation.md",
+    "work/packages/done-20260514-topology-contract-integration-reconciliation.md",
     "work/sprints/active-2026-q2-topology-convergence-residual-closure.md",
     "work/sprints/current-blocker.json",
     "work/sprints/current-blocker.md"
@@ -52,7 +52,7 @@
     "src/partition/partition-descriptor-epoch-contract.js"
   ],
   "commitScope": [
-    "work/packages/active-20260514-topology-contract-integration-reconciliation.md",
+    "work/packages/done-20260514-topology-contract-integration-reconciliation.md",
     "work/sprints/active-2026-q2-topology-convergence-residual-closure.md",
     "work/sprints/current-blocker.json",
     "work/sprints/current-blocker.md"
@@ -118,7 +118,9 @@
       "test-output/reports/topology-rebalance-disruption-recovery-gate.report.json"
     ]
   },
-  "successor": "work/packages/todo-20260514-topology-priority-recovery-residual-drain.md"
+  "successor": "work/packages/active-20260514-topology-priority-recovery-residual-drain.md",
+  "closed": "2026-05-14",
+  "commitAndPushLedgerRequired": true
 }
 -->
 
@@ -220,7 +222,7 @@ epoch-fenced, bounded, and diagnosable from owner decision snapshots.
 
 Required before this package moves from `todo` to `active`:
 
-1. Run `npm run work:package:doctor -- --fix-dry-run work/packages/active-20260514-topology-contract-integration-reconciliation.md` and keep `causalGovernance`, `scenarioCausalClosure`, Model Fit, and scope fields concrete before implementation starts.
+1. Run `npm run work:package:doctor -- --fix-dry-run work/packages/done-20260514-topology-contract-integration-reconciliation.md` and keep `causalGovernance`, `scenarioCausalClosure`, Model Fit, and scope fields concrete before implementation starts.
 2. Promote only these proven candidates into `writeScope` and `commitScope` after owner-file proof: `src/rebalancer/topology-owner-constants.js`, `src/topology/topology-anti-entropy-reconciler.js`, `src/control-plane/membership-epoch-contract.js`, `src/control-plane/rejoin-reconciliation-contract.js`, `src/node/failure-repair-intent-contract.js`, `src/partition/partition-descriptor-epoch-contract.js`.
 3. Replace the Subagent Sequencing Ledger placeholders with real review/fix/implementation proof, or an allowed waiver, before pre-implementation and closure validation.
 4. Preserve the package artifact path `test-output/reports/rolling-restart-green-gate-after-priority-recovery-workflow-progress-after-snapshot-coverage.report.json`; if fresh evidence changes owner, boundary, or dominant reason, classify as `migrated`, `same-frontier`, or split instead of widening scope.
@@ -247,7 +249,7 @@ Required when this package is activated because it is a causal-escalation packag
 - Package class: `representative-frontier-closure`
 - Intended minimum model: `gpt-5.3-codex`
 - Scope shape: `owner-boundary-contraction/current-frontier`
-- Owned files: `work/packages/active-20260514-topology-contract-integration-reconciliation.md`, `work/sprints/active-2026-q2-topology-convergence-residual-closure.md`, `work/sprints/current-blocker.json`, `work/sprints/current-blocker.md`
+- Owned files: `work/packages/done-20260514-topology-contract-integration-reconciliation.md`, `work/sprints/active-2026-q2-topology-convergence-residual-closure.md`, `work/sprints/current-blocker.json`, `work/sprints/current-blocker.md`
 - Forbidden files: `new-feature-scope`, `pro-or-enterprise-behavior`
 - Frozen decisions: package scope and lane stay bounded unless explicitly escalated.
 - Escalation triggers: owned files expand beyond this package, runtime ownership changes, or representative scenario evidence changes.
@@ -256,8 +258,8 @@ Required when this package is activated because it is a causal-escalation packag
 
 ## Validation Ladder
 
-1. npm run work:package:doctor -- --suggest work/packages/active-20260514-topology-contract-integration-reconciliation.md
-2. npm run work:package:doctor -- --fix-dry-run work/packages/active-20260514-topology-contract-integration-reconciliation.md
+1. npm run work:package:doctor -- --suggest work/packages/done-20260514-topology-contract-integration-reconciliation.md
+2. npm run work:package:doctor -- --fix-dry-run work/packages/done-20260514-topology-contract-integration-reconciliation.md
 3. npm run work:evidence-summary -- test-output/reports/rolling-restart-green-gate-after-priority-recovery-workflow-progress-after-snapshot-coverage.report.json
 4. npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-green-gate-after-priority-recovery-workflow-progress-after-snapshot-coverage.report.json
 5. npm run work:evidence-summary -- test-output/reports/topology-rebalance-disruption-recovery-gate.report.json
@@ -268,10 +270,10 @@ Required when this package is activated because it is a causal-escalation packag
 10. node scripts/check-guideline-literals.js src/rebalancer/topology-owner-constants.js src/topology/topology-anti-entropy-reconciler.js src/control-plane/membership-epoch-contract.js src/control-plane/rejoin-reconciliation-contract.js src/node/failure-repair-intent-contract.js src/partition/partition-descriptor-epoch-contract.js
 11. node scripts/check-guideline-decision-boundaries.js src/rebalancer/topology-owner-constants.js src/topology/topology-anti-entropy-reconciler.js src/control-plane/membership-epoch-contract.js src/control-plane/rejoin-reconciliation-contract.js src/node/failure-repair-intent-contract.js src/partition/partition-descriptor-epoch-contract.js
 12. npm run audit:runtime-grammar:file -- src/rebalancer/topology-owner-constants.js src/topology/topology-anti-entropy-reconciler.js src/control-plane/membership-epoch-contract.js src/control-plane/rejoin-reconciliation-contract.js src/node/failure-repair-intent-contract.js src/partition/partition-descriptor-epoch-contract.js
-13. npm run work:validate -- --entry work/packages/active-20260514-topology-contract-integration-reconciliation.md
-14. npm run work:validate -- --pre-impl work/packages/active-20260514-topology-contract-integration-reconciliation.md
-15. npm run work:validate -- --closure work/packages/active-20260514-topology-contract-integration-reconciliation.md
-16. git diff --check -- work/packages/active-20260514-topology-contract-integration-reconciliation.md work/sprints/active-2026-q2-topology-convergence-residual-closure.md work/sprints/current-blocker.json work/sprints/current-blocker.md
+13. npm run work:validate -- --entry work/packages/done-20260514-topology-contract-integration-reconciliation.md
+14. npm run work:validate -- --pre-impl work/packages/done-20260514-topology-contract-integration-reconciliation.md
+15. npm run work:validate -- --closure work/packages/done-20260514-topology-contract-integration-reconciliation.md
+16. git diff --check -- work/packages/done-20260514-topology-contract-integration-reconciliation.md work/sprints/active-2026-q2-topology-convergence-residual-closure.md work/sprints/current-blocker.json work/sprints/current-blocker.md
 17. Final deep-dive proof: rerun the package extractor/probe, compare against the sprint representative residual, and record the result classification before closure.
 
 ## Split Rules
@@ -317,7 +319,7 @@ No runtime behavior was changed.
 
 Required at closure if this package edits package/sprint state.
 
-1. [ ] Focused package commit: pending.
-2. [ ] Pushed to: pending.
-3. [ ] Commit contains only package-owned files/package-status/allowed sprint
-   handoff: pending.
+1. [x] Focused package commit: 85f76b36d3f683fdd076bba06a0f92550096039f.
+2. [x] Pushed to: origin/codex/pending-ack-eligibility-filter.
+3. [x] Commit contains only package-owned files/package-status/allowed sprint handoff: yes.
+kage-owned files/package-status/allowed sprint handoff: yes.

@@ -305,7 +305,7 @@ Final closure requires fresh evidence proving all of the following:
      `publication_ack_blocked / continue_local_fix`; fresh evidence remains red
      and no rolling-restart runtime repair is claimed.
 
-6. [Topology Priority Recovery Residual Drain](../packages/todo-20260514-topology-priority-recovery-residual-drain.md)
+6. [Topology Priority Recovery Residual Drain](../packages/active-20260514-topology-priority-recovery-residual-drain.md)
    - Lane: `runtime-owner-boundary`
    - Owner boundary: `operation_workflow_owner / workflow_progress`
    - Purpose: drain or classify the non-frontier
@@ -389,7 +389,7 @@ Final closure requires fresh evidence proving all of the following:
 
 ### Phase 3 - Integrated Closure
 
-15. [Topology Contract Integration Reconciliation](../packages/active-20260514-topology-contract-integration-reconciliation.md)
+15. [Topology Contract Integration Reconciliation](../packages/done-20260514-topology-contract-integration-reconciliation.md)
     - Lane: `causal-escalation`
     - Owner boundary: `topology_control_plane / contract_integration_reconcile`
     - Purpose: verify the focused contracts from the prior sprint compose as
@@ -478,26 +478,12 @@ projection reconciliation is done as classification-only observability:
 `topology_publication_owner` blocker instead of healthy evidence.
 
 The current action is now
-[Topology Contract Integration Reconciliation](../packages/active-20260514-topology-contract-integration-reconciliation.md).
+[Topology Priority Recovery Residual Drain](../packages/active-20260514-topology-priority-recovery-residual-drain.md).
 The predecessor
-[Topology Rebalance Disruption Recovery Gate](../packages/done-20260514-topology-rebalance-disruption-recovery-gate.md)
-closed as migrated observe/classify work:
-`test-output/reports/topology-rebalance-disruption-recovery-gate.report.json`
-failed after `336079ms`. Canonical topology evidence did not reach
-`topology_rebalance_owner / split_rebalance_recovery_gate`; the first frontier
-migrated to `topology_publication_owner / publication_convergence` with
-`publication_ack_convergence`, `missing_published_nodes_present`,
-`publicationStatus=PUBLISHED`, `pendingAckCount=0`,
-`missingPublishedCount=6`, `publicationPending=true`, active gate `ready`,
-snapshot coverage `2/7`, and active nodes `7/7`. The causal model reports
-`outcome=migrate_owner_boundary`, `dominantFailureClass=publication_ack_blocked`,
-failed invariant `publication_ack_closed`, and stop condition
-`owner_boundary_migration`. Priority recovery residual extraction reports zero
-witnesses and `splitRequired=false`.
-
-Contract integration has now been classified: focused membership epoch, failure
-repair, rejoin, descriptor, capacity, anti-entropy, and budget contracts exist,
-but they are not release-ready while current evidence still blocks at
+[Topology Contract Integration Reconciliation](../packages/done-20260514-topology-contract-integration-reconciliation.md)
+closed as classification-only work: focused membership epoch, failure repair,
+rejoin, descriptor, capacity, anti-entropy, and budget contracts exist, but
+they are not release-ready while current evidence still blocks at
 `topology_publication_owner / publication_convergence`. The representative
 artifact first frontier is `publication_ack_convergence` with
 `missing_published_nodes_present`, `pendingAckCount=0`, `missingPublishedCount=4`,
@@ -506,7 +492,9 @@ recovery wait. The latest rebalance gate also migrates to publication
 convergence with `missingPublishedCount=6` and zero priority recovery
 witnesses.
 
-Close contract integration as classification-only and activate priority
-recovery residual drain before final ship confirmation. Do not fix
-`rolling-restart`, publication, active-gate, or rebalance runtime behavior in
+Run priority residual drain as observe/classify work: compare the representative
+priority recovery witness against the latest rebalance artifact that has zero
+priority witnesses, then record whether a live operation workflow residual
+remains before final ship confirmation. Do not fix `rolling-restart`,
+publication, active-gate, rebalance, or operation workflow runtime behavior in
 this sprint segment without explicit re-scope.
