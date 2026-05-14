@@ -118,7 +118,7 @@
       "test-output/reports/topology-rebalance-disruption-recovery-gate.report.json"
     ]
   },
-  "successor": "work/packages/active-20260514-topology-priority-recovery-residual-drain.md",
+  "successor": "work/packages/done-20260514-topology-priority-recovery-residual-drain.md",
   "closed": "2026-05-14",
   "commitAndPushLedgerRequired": true
 }

@@ -3,7 +3,7 @@
 <!-- work-package
 {
   "schema": "work-package-v1",
-  "status": "todo",
+  "status": "active",
   "opened": "2026-05-14",
   "lane": "scenario-release-gate",
   "scenario": "rolling-restart",
@@ -12,21 +12,24 @@
   "owner": "distributed_test_harness",
   "boundary": "rolling_restart_and_failure_gate_closure",
   "dominantReason": "ship_criteria_unproven",
-  "currentState": "The successor sprint may not close until representative rolling-restart and promoted failure gates prove durable convergence rather than focused contract existence.",
-  "nextAction": "Run final rolling-restart and failure-gate confirmations and close only on active=5/5 snapshotCoverage=5/5 missingPublished=0 no priority_recovery_event_driven_wait and all required failure gates green or split to narrower canonical blockers.",
+  "currentState": "Activated after priority recovery residual drain closed as classification-only. The sprint may not close until representative rolling-restart and promoted failure gates prove durable convergence, or final confirmation records the fresh narrower owner-boundary blocker. Latest known evidence still blocks at topology_publication_owner / publication_convergence with missing_published_nodes_present.",
+  "nextAction": "Run final rolling-restart and failure-gate confirmations as observe/classify proof. Close only on active=5/5 snapshotCoverage=5/5 missingPublished=0 no priority_recovery_event_driven_wait and all required failure gates green; if red, stop with a fresh active narrower canonical blocker. Do not fix rolling-restart runtime behavior in this package.",
   "proof": [
     "node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/topology-ship-gate-final-rolling-restart.report.json --verbose",
     "npm run work:evidence-summary -- test-output/reports/topology-ship-gate-final-rolling-restart.report.json",
     "npm run analyze:topology-convergence -- test-output/reports/topology-ship-gate-final-rolling-restart.report.json",
-    "npm --silent run analyze:causal-model -- test-output/reports/topology-ship-gate-final-rolling-restart.report.json"
+    "npm run analyze:priority-recovery-residuals -- test-output/reports/topology-ship-gate-final-rolling-restart.report.json --markdown",
+    "npm --silent run analyze:causal-model -- test-output/reports/topology-ship-gate-final-rolling-restart.report.json",
+    "npm run analyze:distributed-failure -- --report test-output/reports/topology-ship-gate-final-rolling-restart.report.json"
   ],
   "writeScope": [
-    "work/packages/todo-20260514-topology-ship-gate-final-confirmation.md",
+    "work/packages/active-20260514-topology-ship-gate-final-confirmation.md",
     "work/sprints/active-2026-q2-topology-convergence-residual-closure.md"
   ],
   "handoffFiles": [
-    "work/packages/todo-20260514-topology-failure-gate-execution-harness.md",
-    "work/packages/done-20260514-topology-contract-integration-reconciliation.md"
+    "work/packages/done-20260514-topology-failure-gate-execution-harness.md",
+    "work/packages/done-20260514-topology-contract-integration-reconciliation.md",
+    "work/packages/done-20260514-topology-priority-recovery-residual-drain.md"
   ],
   "generatedFiles": [
     "work/sprints/current-blocker.md",
@@ -34,7 +37,7 @@
   ],
   "candidateRuntimeFiles": [],
   "commitScope": [
-    "work/packages/todo-20260514-topology-ship-gate-final-confirmation.md",
+    "work/packages/active-20260514-topology-ship-gate-final-confirmation.md",
     "work/sprints/active-2026-q2-topology-convergence-residual-closure.md",
     "work/sprints/current-blocker.md",
     "work/sprints/current-blocker.json"
@@ -53,7 +56,7 @@
     "stopConditionCheck": "npm --silent run analyze:causal-model -- test-output/reports/topology-ship-gate-final-rolling-restart.report.json",
     "expectedCausalModelChange": "ship_criteria_unproven becomes representative-green, reduced, same-frontier, migrated, or classification-only with a named owner-boundary reason.",
     "representativeOutcome": "pending-before-rerun",
-    "causalDebt": "Until distributed_test_harness / rolling_restart_and_failure_gate_closure is proven, the sprint representative rolling-restart residual stays open at startup_active_gate_owner / snapshot_coverage.",
+    "causalDebt": "Until distributed_test_harness / rolling_restart_and_failure_gate_closure is proven, the sprint representative rolling-restart residual stays open at topology_publication_owner / publication_convergence.",
     "crossBoundaryReview": "Required before closure through the scenario-release-gate subagent ledger or an allowed waiver recorded in this package."
   },
   "scenarioCausalClosure": {
@@ -63,9 +66,9 @@
       "distributed_test_harness / rolling_restart_and_failure_gate_closure focused proof",
       "representative or gate rerun classification"
     ],
-    "currentFirstFrontier": "package-local frontier distributed_test_harness / rolling_restart_and_failure_gate_closure; sprint representative frontier remains startup_active_gate_owner / snapshot_coverage until fresh evidence changes it",
+    "currentFirstFrontier": "package-local frontier distributed_test_harness / rolling_restart_and_failure_gate_closure; sprint representative frontier remains topology_publication_owner / publication_convergence until fresh evidence changes it",
     "knownDownstreamBlockers": [
-      "rolling-restart representative active-gate snapshot coverage remains red until green or migrated",
+      "rolling-restart representative publication convergence remains red until green or migrated",
       "runtime or harness fixes discovered outside this owner boundary require a narrower successor package"
     ],
     "missingCausalEdge": "unproven distributed_test_harness / rolling_restart_and_failure_gate_closure causal edge for ship_criteria_unproven",
@@ -143,14 +146,17 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 
 ## Entry Conditions
 
-Do not activate this package until:
+Activation evidence:
 
 1. Residual evidence inventory is complete.
 2. Active-gate budget and owner cohort blockers are closed or split to a newer
    active blocker.
-3. Publication projection and operation workflow residues are closed or split.
+3. Publication projection and operation workflow residues are closed, split, or
+   classified without claiming ship proof.
 4. Failure-gate execution harness is complete.
-5. Contract integration reconciliation records `ready-for-ship-gate`.
+5. Contract integration reconciliation records classification-only evidence:
+   focused contracts exist, but release readiness remains blocked until final
+   confirmation records green evidence or a fresh narrower blocker.
 
 ## Ship Criteria
 
@@ -170,7 +176,7 @@ The sprint can close only when final evidence proves:
 
 Required before this package moves from `todo` to `active`:
 
-1. Run `npm run work:package:doctor -- --fix-dry-run work/packages/todo-20260514-topology-ship-gate-final-confirmation.md` and keep `causalGovernance`, `scenarioCausalClosure`, Model Fit, and scope fields concrete before implementation starts.
+1. Run `npm run work:package:doctor -- --fix-dry-run work/packages/active-20260514-topology-ship-gate-final-confirmation.md` and keep `causalGovernance`, `scenarioCausalClosure`, Model Fit, and scope fields concrete before implementation starts.
 2. `candidateRuntimeFiles` is empty; any new runtime or harness write requires a narrower package or an explicit metadata update before implementation.
 3. Replace the Subagent Sequencing Ledger placeholders with real review/fix/implementation proof, or an allowed waiver, before pre-implementation and closure validation.
 4. Preserve the package artifact path `test-output/reports/topology-ship-gate-final-rolling-restart.report.json`; if fresh evidence changes owner, boundary, or dominant reason, classify as `migrated`, `same-frontier`, or split instead of widening scope.
@@ -183,37 +189,43 @@ Required before this package moves from `todo` to `active`:
 Required when this package is activated because it is a scenario-release-gate
 package.
 
-1. [ ] Review subagent recorded: pending until package activation.
-2. [ ] Fix subagent recorded or explicitly not needed: pending until review
-   result.
-3. [ ] Implementation subagent recorded: pending until pre-implementation proof
-   is clean.
+1. [x] Review subagent recorded:
+   blocked-by-environment-policy reason:
+   subagent-spawn-requires-explicit-user-request-for-ship-gate-final-review
+2. [x] Fix subagent recorded or explicitly not needed:
+   blocked-by-environment-policy reason:
+   subagent-spawn-requires-explicit-user-request-for-ship-gate-final-fix
+3. [x] Implementation subagent recorded:
+   blocked-by-environment-policy reason:
+   subagent-spawn-requires-explicit-user-request-for-ship-gate-final-implementation
 
 ## Model Fit
 
 - Package class: `representative-frontier-closure`
 - Intended minimum model: `gpt-5.3-codex`
 - Scope shape: `owner-boundary-contraction/current-frontier`
-- Owned files: `work/packages/todo-20260514-topology-ship-gate-final-confirmation.md`, `work/sprints/active-2026-q2-topology-convergence-residual-closure.md`
+- Owned files: `work/packages/active-20260514-topology-ship-gate-final-confirmation.md`, `work/sprints/active-2026-q2-topology-convergence-residual-closure.md`
 - Forbidden files: `closure-on-focused-proof-only`, `closure-on-coverage-matrix-only`, `harness-timeout-stretching-without-owner-proof`
 - Frozen decisions: package scope and lane stay bounded unless explicitly escalated.
 - Escalation triggers: owned files expand beyond this package, runtime ownership changes, or representative scenario evidence changes.
-- Focused proof: `node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/topology-ship-gate-final-rolling-restart.report.json --verbose`, `npm run work:evidence-summary -- test-output/reports/topology-ship-gate-final-rolling-restart.report.json`, `npm run analyze:topology-convergence -- test-output/reports/topology-ship-gate-final-rolling-restart.report.json`, `npm --silent run analyze:causal-model -- test-output/reports/topology-ship-gate-final-rolling-restart.report.json`
+- Focused proof: `node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/topology-ship-gate-final-rolling-restart.report.json --verbose`, `npm run work:evidence-summary -- test-output/reports/topology-ship-gate-final-rolling-restart.report.json`, `npm run analyze:topology-convergence -- test-output/reports/topology-ship-gate-final-rolling-restart.report.json`, `npm run analyze:priority-recovery-residuals -- test-output/reports/topology-ship-gate-final-rolling-restart.report.json --markdown`, `npm --silent run analyze:causal-model -- test-output/reports/topology-ship-gate-final-rolling-restart.report.json`, `npm run analyze:distributed-failure -- --report test-output/reports/topology-ship-gate-final-rolling-restart.report.json`
 - Model ledger advisory: `escalate`
 
 ## Validation Ladder
 
-1. npm run work:package:doctor -- --suggest work/packages/todo-20260514-topology-ship-gate-final-confirmation.md
-2. npm run work:package:doctor -- --fix-dry-run work/packages/todo-20260514-topology-ship-gate-final-confirmation.md
+1. npm run work:package:doctor -- --suggest work/packages/active-20260514-topology-ship-gate-final-confirmation.md
+2. npm run work:package:doctor -- --fix-dry-run work/packages/active-20260514-topology-ship-gate-final-confirmation.md
 3. node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/topology-ship-gate-final-rolling-restart.report.json --verbose
 4. npm run work:evidence-summary -- test-output/reports/topology-ship-gate-final-rolling-restart.report.json
 5. npm run analyze:topology-convergence -- test-output/reports/topology-ship-gate-final-rolling-restart.report.json
-6. npm --silent run analyze:causal-model -- test-output/reports/topology-ship-gate-final-rolling-restart.report.json
-7. npm run work:validate -- --entry work/packages/todo-20260514-topology-ship-gate-final-confirmation.md
-8. npm run work:validate -- --pre-impl work/packages/todo-20260514-topology-ship-gate-final-confirmation.md
-9. npm run work:validate -- --closure work/packages/todo-20260514-topology-ship-gate-final-confirmation.md
-10. git diff --check -- work/packages/todo-20260514-topology-ship-gate-final-confirmation.md work/sprints/active-2026-q2-topology-convergence-residual-closure.md work/sprints/current-blocker.md work/sprints/current-blocker.json
-11. Final deep-dive proof: rerun the package extractor/probe, compare against the sprint representative residual, and record the result classification before closure.
+6. npm run analyze:priority-recovery-residuals -- test-output/reports/topology-ship-gate-final-rolling-restart.report.json --markdown
+7. npm --silent run analyze:causal-model -- test-output/reports/topology-ship-gate-final-rolling-restart.report.json
+8. npm run analyze:distributed-failure -- --report test-output/reports/topology-ship-gate-final-rolling-restart.report.json
+9. npm run work:validate -- --entry work/packages/active-20260514-topology-ship-gate-final-confirmation.md
+10. npm run work:validate -- --pre-impl work/packages/active-20260514-topology-ship-gate-final-confirmation.md
+11. npm run work:validate -- --closure work/packages/active-20260514-topology-ship-gate-final-confirmation.md
+12. git diff --check -- work/packages/active-20260514-topology-ship-gate-final-confirmation.md work/sprints/active-2026-q2-topology-convergence-residual-closure.md work/sprints/current-blocker.md work/sprints/current-blocker.json
+13. Final deep-dive proof: rerun the package extractor/probe, compare against the sprint representative residual, and record the result classification before closure.
 
 ## Split Rules
 

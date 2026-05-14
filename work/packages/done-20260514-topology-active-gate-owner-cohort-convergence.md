@@ -256,7 +256,7 @@ package.
    split a membership/topology epoch package instead of expanding active-gate
    logic.
 3. If coordinator-created operation residue blocks active coverage, hand off to
-   `active-20260514-topology-priority-recovery-residual-drain.md`.
+   `done-20260514-topology-priority-recovery-residual-drain.md`.
 
 ## Acceptance Criteria
 

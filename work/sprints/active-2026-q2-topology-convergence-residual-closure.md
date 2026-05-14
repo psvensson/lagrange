@@ -305,15 +305,17 @@ Final closure requires fresh evidence proving all of the following:
      `publication_ack_blocked / continue_local_fix`; fresh evidence remains red
      and no rolling-restart runtime repair is claimed.
 
-6. [Topology Priority Recovery Residual Drain](../packages/active-20260514-topology-priority-recovery-residual-drain.md)
+6. [Topology Priority Recovery Residual Drain](../packages/done-20260514-topology-priority-recovery-residual-drain.md)
    - Lane: `runtime-owner-boundary`
    - Owner boundary: `operation_workflow_owner / workflow_progress`
    - Purpose: drain or classify the non-frontier
      `control_plane_publications-p1` witness.
    - Entry condition: active-gate and publication work no longer dominate the
      first frontier, or final evidence still shows workflow-progress tails.
-   - Acceptance: final evidence has no critical event-driven wait and no
-     ambiguous priority recovery residual that can become the next blocker.
+   - Acceptance: classification-only closure. Representative evidence has one
+     bounded non-frontier legacy witness, causal analysis classifies priority
+     recovery as satisfied/passed, and the latest rebalance gate has zero
+     priority recovery witnesses. Runtime behavior was not changed.
 
 ### Phase 2 - Failure Gate Execution And Repair
 
@@ -398,7 +400,7 @@ Final closure requires fresh evidence proving all of the following:
       descriptor epoch, capacity admission, anti-entropy, and budgets produce
       one coherent owner-key reconciliation chain without local fallback repair.
 
-16. [Topology Ship Gate Final Confirmation](../packages/todo-20260514-topology-ship-gate-final-confirmation.md)
+16. [Topology Ship Gate Final Confirmation](../packages/active-20260514-topology-ship-gate-final-confirmation.md)
     - Lane: `scenario-release-gate`
     - Owner boundary: `distributed_test_harness / rolling_restart_and_failure_gate_closure`
     - Purpose: run final representative confirmation.
@@ -478,7 +480,7 @@ projection reconciliation is done as classification-only observability:
 `topology_publication_owner` blocker instead of healthy evidence.
 
 The current action is now
-[Topology Priority Recovery Residual Drain](../packages/active-20260514-topology-priority-recovery-residual-drain.md).
+[Topology Ship Gate Final Confirmation](../packages/active-20260514-topology-ship-gate-final-confirmation.md).
 The predecessor
 [Topology Contract Integration Reconciliation](../packages/done-20260514-topology-contract-integration-reconciliation.md)
 closed as classification-only work: focused membership epoch, failure repair,
@@ -492,14 +494,17 @@ recovery wait. The latest rebalance gate also migrates to publication
 convergence with `missingPublishedCount=6` and zero priority recovery
 witnesses.
 
-Priority residual drain is classification-complete. The representative
-priority extractor still reports one non-frontier
+Priority residual drain is classification-complete and closed. The
+representative priority extractor still reports one non-frontier
 `operation_workflow_owner / workflow_progress` witness for
 `control_plane_publications-p1` in `spread_satisfied_in_flight`, but causal
 analysis classifies `priority_recovery_partition_progress` as satisfied,
 `priority_recovery_classified` as passed, and `workflow_step_timeout` as within
 budget at `1269/30000ms`. The latest rebalance gate reports zero priority
-recovery witnesses. Close this package as classification-only, then activate
-[Topology Ship Gate Final Confirmation](../packages/todo-20260514-topology-ship-gate-final-confirmation.md).
-Do not fix `rolling-restart`, publication, active-gate, rebalance, or operation
-workflow runtime behavior in this sprint segment without explicit re-scope.
+recovery witnesses.
+
+Run final ship confirmation as observe/classify work. The package may close the
+sprint only if final evidence is green; if final evidence is red, stop with a
+fresh active narrower owner-boundary blocker. Do not fix `rolling-restart`,
+publication, active-gate, rebalance, or operation workflow runtime behavior in
+this sprint segment without explicit re-scope.

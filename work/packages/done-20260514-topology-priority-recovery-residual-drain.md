@@ -3,7 +3,7 @@
 <!-- work-package
 {
   "schema": "work-package-v1",
-  "status": "active",
+  "status": "done",
   "opened": "2026-05-14",
   "lane": "runtime-owner-boundary",
   "scenario": "rolling-restart",
@@ -25,7 +25,7 @@
     "npm run audit:runtime-grammar:file -- src/rebalancer/operation-workflow-owner.js src/rebalancer/operation-workflow-owner-segment-1.js src/rebalancer/operation-workflow-owner-segment-2.js src/rebalancer/operation-workflow-owner-segment-4.js src/rebalancer/operation-workflow-owner-segment-7-stage-shared.js test/rebalancer/coordinator-created-operation-progress-remote-handoff.test.js"
   ],
   "writeScope": [
-    "work/packages/active-20260514-topology-priority-recovery-residual-drain.md",
+    "work/packages/done-20260514-topology-priority-recovery-residual-drain.md",
     "work/sprints/active-2026-q2-topology-convergence-residual-closure.md",
     "work/sprints/current-blocker.json",
     "work/sprints/current-blocker.md"
@@ -48,7 +48,7 @@
     "test/rebalancer/coordinator-created-operation-progress-remote-handoff.test.js"
   ],
   "commitScope": [
-    "work/packages/active-20260514-topology-priority-recovery-residual-drain.md",
+    "work/packages/done-20260514-topology-priority-recovery-residual-drain.md",
     "work/sprints/active-2026-q2-topology-convergence-residual-closure.md",
     "work/sprints/current-blocker.json",
     "work/sprints/current-blocker.md"
@@ -104,7 +104,10 @@
     "resultClassification": "classification-only",
     "resultClassificationEvidence": "bounded non-frontier legacy witness in representative evidence, zero priority witnesses in the latest rebalance gate, and publication convergence remains the representative blocker",
     "stopCondition": "classification-only-stop"
-  }
+  },
+  "closed": "2026-05-14",
+  "commitAndPushLedgerRequired": true,
+  "successor": "work/packages/active-20260514-topology-ship-gate-final-confirmation.md"
 }
 -->
 
@@ -216,7 +219,7 @@ runtime candidates into `writeScope` or change operation workflow behavior.
 
 Required before this package moves from `todo` to `active`:
 
-1. Run `npm run work:package:doctor -- --fix-dry-run work/packages/active-20260514-topology-priority-recovery-residual-drain.md` and keep `causalGovernance`, `scenarioCausalClosure`, Model Fit, and scope fields concrete before implementation starts.
+1. Run `npm run work:package:doctor -- --fix-dry-run work/packages/done-20260514-topology-priority-recovery-residual-drain.md` and keep `causalGovernance`, `scenarioCausalClosure`, Model Fit, and scope fields concrete before implementation starts.
 2. Promote only these proven candidates into `writeScope` and `commitScope` after owner-file proof: `src/rebalancer/operation-workflow-owner.js`, `src/rebalancer/operation-workflow-owner-segment-1.js`, `src/rebalancer/operation-workflow-owner-segment-2.js`, `src/rebalancer/operation-workflow-owner-segment-4.js`, `src/rebalancer/operation-workflow-owner-segment-7-stage-shared.js`, `test/rebalancer/coordinator-created-operation-progress-remote-handoff.test.js`.
 3. Replace the Subagent Sequencing Ledger placeholders with real review/fix/implementation proof, or an allowed waiver, before pre-implementation and closure validation.
 4. Preserve the package artifact path `test-output/reports/rolling-restart-green-gate-after-priority-recovery-workflow-progress-after-snapshot-coverage.report.json`; if fresh evidence changes owner, boundary, or dominant reason, classify as `migrated`, `same-frontier`, or split instead of widening scope.
@@ -244,7 +247,7 @@ package.
 - Package class: `representative-frontier-closure`
 - Intended minimum model: `gpt-5.3-codex`
 - Scope shape: `owner-boundary-contraction/current-frontier`
-- Owned files: `work/packages/active-20260514-topology-priority-recovery-residual-drain.md`, `work/sprints/active-2026-q2-topology-convergence-residual-closure.md`, `work/sprints/current-blocker.json`, `work/sprints/current-blocker.md`
+- Owned files: `work/packages/done-20260514-topology-priority-recovery-residual-drain.md`, `work/sprints/active-2026-q2-topology-convergence-residual-closure.md`, `work/sprints/current-blocker.json`, `work/sprints/current-blocker.md`
 - Forbidden files: `active-gate-runtime-changes-without-frontier-evidence`, `harness-timeout-increases`
 - Frozen decisions: package scope and lane stay bounded unless explicitly escalated.
 - Escalation triggers: owned files expand beyond this package, runtime ownership changes, or representative scenario evidence changes.
@@ -253,8 +256,8 @@ package.
 
 ## Validation Ladder
 
-1. npm run work:package:doctor -- --suggest work/packages/active-20260514-topology-priority-recovery-residual-drain.md
-2. npm run work:package:doctor -- --fix-dry-run work/packages/active-20260514-topology-priority-recovery-residual-drain.md
+1. npm run work:package:doctor -- --suggest work/packages/done-20260514-topology-priority-recovery-residual-drain.md
+2. npm run work:package:doctor -- --fix-dry-run work/packages/done-20260514-topology-priority-recovery-residual-drain.md
 3. npm run work:evidence-summary -- test-output/reports/rolling-restart-green-gate-after-priority-recovery-workflow-progress-after-snapshot-coverage.report.json
 4. npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-green-gate-after-priority-recovery-workflow-progress-after-snapshot-coverage.report.json --markdown
 5. npm run analyze:priority-recovery-residuals -- test-output/reports/topology-rebalance-disruption-recovery-gate.report.json --markdown
@@ -262,10 +265,10 @@ package.
 7. node scripts/check-guideline-literals.js src/rebalancer/operation-workflow-owner.js src/rebalancer/operation-workflow-owner-segment-1.js src/rebalancer/operation-workflow-owner-segment-2.js src/rebalancer/operation-workflow-owner-segment-4.js src/rebalancer/operation-workflow-owner-segment-7-stage-shared.js test/rebalancer/coordinator-created-operation-progress-remote-handoff.test.js
 8. node scripts/check-guideline-decision-boundaries.js src/rebalancer/operation-workflow-owner.js src/rebalancer/operation-workflow-owner-segment-1.js src/rebalancer/operation-workflow-owner-segment-2.js src/rebalancer/operation-workflow-owner-segment-4.js src/rebalancer/operation-workflow-owner-segment-7-stage-shared.js test/rebalancer/coordinator-created-operation-progress-remote-handoff.test.js
 9. npm run audit:runtime-grammar:file -- src/rebalancer/operation-workflow-owner.js src/rebalancer/operation-workflow-owner-segment-1.js src/rebalancer/operation-workflow-owner-segment-2.js src/rebalancer/operation-workflow-owner-segment-4.js src/rebalancer/operation-workflow-owner-segment-7-stage-shared.js test/rebalancer/coordinator-created-operation-progress-remote-handoff.test.js
-10. npm run work:validate -- --entry work/packages/active-20260514-topology-priority-recovery-residual-drain.md
-11. npm run work:validate -- --pre-impl work/packages/active-20260514-topology-priority-recovery-residual-drain.md
-12. npm run work:validate -- --closure work/packages/active-20260514-topology-priority-recovery-residual-drain.md
-13. git diff --check -- work/packages/active-20260514-topology-priority-recovery-residual-drain.md work/sprints/active-2026-q2-topology-convergence-residual-closure.md work/sprints/current-blocker.json work/sprints/current-blocker.md
+10. npm run work:validate -- --entry work/packages/done-20260514-topology-priority-recovery-residual-drain.md
+11. npm run work:validate -- --pre-impl work/packages/done-20260514-topology-priority-recovery-residual-drain.md
+12. npm run work:validate -- --closure work/packages/done-20260514-topology-priority-recovery-residual-drain.md
+13. git diff --check -- work/packages/done-20260514-topology-priority-recovery-residual-drain.md work/sprints/active-2026-q2-topology-convergence-residual-closure.md work/sprints/current-blocker.json work/sprints/current-blocker.md
 14. Final deep-dive proof: rerun the package extractor/probe, compare against the sprint representative residual, and record the result classification before closure.
 
 ## Split Rules
@@ -292,7 +295,7 @@ package.
 
 Required at closure.
 
-1. [ ] Focused package commit: pending.
-2. [ ] Pushed to: pending.
-3. [ ] Commit contains only package-owned files/package-status/allowed sprint
-   handoff: pending.
+1. [x] Focused package commit:
+   `254df002a2b9af8084f54ee1d4609f6656037339`
+2. [x] Pushed to: `origin/codex/pending-ack-eligibility-filter`
+3. [x] Commit contains only package-owned files/package-status/allowed sprint handoff: yes.

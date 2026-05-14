@@ -31,7 +31,7 @@
     "work/packages/done-20260514-topology-active-gate-budget-closure.md",
     "work/packages/done-20260514-topology-active-gate-owner-cohort-convergence.md",
     "work/packages/active-20260514-topology-publication-projection-reconciliation.md",
-    "work/packages/active-20260514-topology-priority-recovery-residual-drain.md",
+    "work/packages/done-20260514-topology-priority-recovery-residual-drain.md",
     "work/packages/todo-20260514-topology-failure-gate-execution-harness.md",
     "work/packages/todo-20260514-topology-failure-detection-repair-gate.md",
     "work/packages/done-20260514-topology-killed-join-gate.md",
@@ -41,7 +41,7 @@
     "work/packages/done-20260514-topology-stale-publication-durable-truth-gate.md",
     "work/packages/done-20260514-topology-rebalance-disruption-recovery-gate.md",
     "work/packages/done-20260514-topology-contract-integration-reconciliation.md",
-    "work/packages/todo-20260514-topology-ship-gate-final-confirmation.md",
+    "work/packages/active-20260514-topology-ship-gate-final-confirmation.md",
     "work/sprints/active-2026-q2-topology-convergence-residual-closure.md",
     "scripts/work-tracker.js",
     "scripts/work-context.js",
@@ -67,7 +67,7 @@
     "work/packages/done-20260514-topology-active-gate-budget-closure.md",
     "work/packages/done-20260514-topology-active-gate-owner-cohort-convergence.md",
     "work/packages/active-20260514-topology-publication-projection-reconciliation.md",
-    "work/packages/active-20260514-topology-priority-recovery-residual-drain.md",
+    "work/packages/done-20260514-topology-priority-recovery-residual-drain.md",
     "work/packages/todo-20260514-topology-failure-gate-execution-harness.md",
     "work/packages/todo-20260514-topology-failure-detection-repair-gate.md",
     "work/packages/done-20260514-topology-killed-join-gate.md",
@@ -77,7 +77,7 @@
     "work/packages/done-20260514-topology-stale-publication-durable-truth-gate.md",
     "work/packages/done-20260514-topology-rebalance-disruption-recovery-gate.md",
     "work/packages/done-20260514-topology-contract-integration-reconciliation.md",
-    "work/packages/todo-20260514-topology-ship-gate-final-confirmation.md",
+    "work/packages/active-20260514-topology-ship-gate-final-confirmation.md",
     "work/sprints/active-2026-q2-topology-convergence-residual-closure.md",
     "scripts/work-tracker.js",
     "scripts/work-context.js",
@@ -159,7 +159,7 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 3. work/packages/done-20260514-topology-active-gate-budget-closure.md
 4. work/packages/done-20260514-topology-active-gate-owner-cohort-convergence.md
 5. work/packages/active-20260514-topology-publication-projection-reconciliation.md
-6. work/packages/active-20260514-topology-priority-recovery-residual-drain.md
+6. work/packages/done-20260514-topology-priority-recovery-residual-drain.md
 7. work/packages/todo-20260514-topology-failure-gate-execution-harness.md
 8. work/packages/todo-20260514-topology-failure-detection-repair-gate.md
 9. work/packages/done-20260514-topology-killed-join-gate.md
@@ -169,7 +169,7 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 13. work/packages/done-20260514-topology-stale-publication-durable-truth-gate.md
 14. work/packages/done-20260514-topology-rebalance-disruption-recovery-gate.md
 15. work/packages/done-20260514-topology-contract-integration-reconciliation.md
-16. work/packages/todo-20260514-topology-ship-gate-final-confirmation.md
+16. work/packages/active-20260514-topology-ship-gate-final-confirmation.md
 17. work/sprints/active-2026-q2-topology-convergence-residual-closure.md
 18. scripts/work-tracker.js
 19. scripts/work-context.js
