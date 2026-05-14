@@ -404,9 +404,20 @@ Final closure requires fresh evidence proving all of the following:
     - Lane: `scenario-release-gate`
     - Owner boundary: `distributed_test_harness / rolling_restart_and_failure_gate_closure`
     - Purpose: run final representative confirmation.
-    - Acceptance: `rolling-restart` reaches the ship criteria and promoted
-      failure gates are green, or the sprint stops with a fresh active package
-      for a narrower canonical blocker.
+    - Acceptance: migrated red confirmation. Final `rolling-restart` failed
+      in `114789ms`; canonical evidence selected
+      `topology_publication_owner / publication_convergence` with
+      `missing_published_nodes_present`, and runtime behavior was not changed.
+
+17. [Topology Publication Convergence Final Blocker](../packages/todo-20260514-topology-publication-convergence-final-blocker.md)
+    - Lane: `runtime-owner-boundary`
+    - Owner boundary: `topology_publication_owner / publication_convergence`
+    - Purpose: hold the fresh final-gate publication convergence blocker until
+      runtime repair is explicitly re-scoped.
+    - Acceptance: not executed in this sprint segment. It records the final
+      red handoff: `active=0/5`, `snapshotCoverage=2/5`,
+      `pendingAck=0`, `missingPublished=4`, and two non-frontier priority
+      recovery witnesses.
 
 ## Dependency Order
 
@@ -503,8 +514,16 @@ analysis classifies `priority_recovery_partition_progress` as satisfied,
 budget at `1269/30000ms`. The latest rebalance gate reports zero priority
 recovery witnesses.
 
-Run final ship confirmation as observe/classify work. The package may close the
-sprint only if final evidence is green; if final evidence is red, stop with a
-fresh active narrower owner-boundary blocker. Do not fix `rolling-restart`,
-publication, active-gate, rebalance, or operation workflow runtime behavior in
-this sprint segment without explicit re-scope.
+Final ship confirmation ran as observe/classify work and did not meet ship
+criteria. `rolling-restart` failed in `114789ms` with `active=0/5`,
+`snapshotCoverage=2/5`, `publication=PUBLISHED`, `pendingAck=0`,
+`missingPublished=4`, and first frontier `topology_publication_owner /
+publication_convergence` with `missing_published_nodes_present`. Priority
+recovery is not the first frontier, but final evidence has two non-frontier
+`operation_workflow_owner / workflow_progress` witnesses in
+`spread_satisfied_in_flight`.
+
+Close final confirmation as a migrated red gate and activate
+[Topology Publication Convergence Final Blocker](../packages/todo-20260514-topology-publication-convergence-final-blocker.md).
+Do not fix `rolling-restart`, publication, active-gate, rebalance, or operation
+workflow runtime behavior in this sprint segment without explicit re-scope.
