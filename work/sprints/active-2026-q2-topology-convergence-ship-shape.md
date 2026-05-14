@@ -219,7 +219,7 @@ This sprint treats the system as ship-shape only when these properties hold:
      satisfied and migrates first frontier back to active-gate snapshot
      coverage at `2/5`.
 
-8. [Topology Active Gate Snapshot Coverage After Publication Owner Truth](../packages/active-20260514-topology-active-gate-snapshot-coverage-after-publication-owner-truth.md)
+8. [Topology Active Gate Snapshot Coverage After Publication Owner Truth](../packages/superseded-20260514-topology-active-gate-snapshot-coverage-after-publication-owner-truth.md)
    - Lane: `runtime-owner-boundary`
    - Owner boundary: `startup_active_gate_owner / snapshot_coverage`
    - Recommendation covered: finish active-gate coverage after publication
@@ -233,7 +233,7 @@ This sprint treats the system as ship-shape only when these properties hold:
      the owner-truth active cohort, or rolling-restart migrates to a fresh
      narrower owner-boundary blocker with canonical evidence.
 
-9. [Topology Membership Epoch Fencing](../packages/todo-20260513-topology-membership-epoch-fencing.md)
+9. [Topology Membership Epoch Fencing](../packages/active-20260513-topology-membership-epoch-fencing.md)
    - Lane: `runtime-owner-boundary`
    - Owner boundary: `topology_membership_owner / membership_epoch`
    - Recommendation covered: add a membership/topology epoch.

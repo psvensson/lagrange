@@ -3,7 +3,7 @@
 <!-- work-package
 {
   "schema": "work-package-v1",
-  "status": "active",
+  "status": "superseded",
   "opened": "2026-05-14",
   "lane": "runtime-owner-boundary",
   "scenario": "rolling-restart",
@@ -12,8 +12,8 @@
   "owner": "startup_active_gate_owner",
   "boundary": "snapshot_coverage",
   "dominantReason": "snapshot_coverage_incomplete",
-  "currentState": "Publication convergence is satisfied after preserving active-gate best publication owner truth; the representative rolling-restart now fronts active_gate_snapshot_coverage with snapshotCoverage=2/5, expectedNodeCount=5, publicationStatus=PUBLISHED, pendingAckCount=0, and priorityRecovery=none.",
-  "nextAction": "Repair active-gate snapshot coverage so the selected admin-ready snapshot observes the owner-truth active cohort, or migrate to a narrower owner boundary with canonical evidence.",
+  "currentState": "Superseded by human direction on 2026-05-14: this sprint is the systemic topology ship-shape sprint, not a rolling-restart blocker chase. The rolling-restart artifact remains handoff context only.",
+  "nextAction": "Continue with work/packages/active-20260513-topology-membership-epoch-fencing.md and do not run rolling-restart again until the systemic sprint pieces are in place.",
   "proof": [
     "npm run work:evidence-summary -- test-output/reports/rolling-restart-green-gate-after-priority-recovery-workflow-progress-after-snapshot-coverage.report.json",
     "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-green-gate-after-priority-recovery-workflow-progress-after-snapshot-coverage.report.json --explain active_gate_snapshot_coverage",
@@ -22,21 +22,11 @@
     "npm run analyze:owner-files -- startup_active_gate_owner snapshot_coverage"
   ],
   "writeScope": [
-    "work/packages/active-20260514-topology-active-gate-snapshot-coverage-after-publication-owner-truth.md",
+    "work/packages/superseded-20260514-topology-active-gate-snapshot-coverage-after-publication-owner-truth.md",
     "work/sprints/active-2026-q2-topology-convergence-ship-shape.md",
     "work/sprints/current-blocker.json",
     "work/sprints/current-blocker.md",
-    "src/admin/admin-control-snapshot-class-part-1.js",
-    "src/admin/admin-control-snapshot-class-part-3.js",
-    "src/admin/admin-control-snapshot-class-part-5.js",
-    "src/control-plane/active-node-projection.js",
-    "src/control-plane/membership-publication-planning.js",
-    "src/control-plane/membership-publication-coordinator-class-stage-2.js",
-    "test/admin/admin-control-snapshot.test.js",
-    "test/control-plane/active-node-projection.test.js",
-    "test/distributed/harness/cluster-segment-7-class-4.js",
-    "test/distributed/harness/cluster-segment-7-class-5.js",
-    "test/distributed/harness/__tests__/cluster.test-part-5.js"
+    "work/packages/active-20260513-topology-membership-epoch-fencing.md"
   ],
   "handoffFiles": [
     "work/packages/done-20260514-topology-publication-convergence-after-active-gate-owner-truth.md",
@@ -47,32 +37,13 @@
     "work/sprints/current-blocker.json",
     "work/sprints/current-blocker.md"
   ],
-  "candidateRuntimeFiles": [
-    "src/admin/admin-control-snapshot-class-part-1.js",
-    "src/admin/admin-control-snapshot-class-part-3.js",
-    "src/admin/admin-control-snapshot-class-part-5.js",
-    "src/control-plane/active-node-projection.js",
-    "src/control-plane/membership-publication-planning.js",
-    "src/control-plane/membership-publication-coordinator-class-stage-2.js"
-  ],
+  "candidateRuntimeFiles": [],
   "commitScope": [
-    "work/packages/active-20260514-topology-active-gate-snapshot-coverage-after-publication-owner-truth.md",
+    "work/packages/superseded-20260514-topology-active-gate-snapshot-coverage-after-publication-owner-truth.md",
     "work/sprints/active-2026-q2-topology-convergence-ship-shape.md",
     "work/sprints/current-blocker.json",
     "work/sprints/current-blocker.md",
-    "src/admin/admin-control-snapshot-class-part-1.js",
-    "src/admin/admin-control-snapshot-class-part-3.js",
-    "src/admin/admin-control-snapshot-class-part-5.js",
-    "src/control-plane/active-node-projection.js",
-    "src/control-plane/membership-publication-planning.js",
-    "src/control-plane/membership-publication-coordinator-class-stage-2.js",
-    "test/admin/admin-control-snapshot.test.js",
-    "test/control-plane/active-node-projection.test.js",
-    "test/distributed/harness/cluster-segment-7-class-4.js",
-    "test/distributed/harness/cluster-segment-7-class-5.js",
-    "test/distributed/harness/__tests__/cluster.test-part-5.js",
-    "work/sprints/current-blocker.json",
-    "work/sprints/current-blocker.md"
+    "work/packages/active-20260513-topology-membership-epoch-fencing.md"
   ],
   "modelFit": {
     "packageClass": "representative-frontier-closure",
@@ -87,9 +58,9 @@
     "hypothesis": "If startup_active_gate_owner / snapshot_coverage owns the current first frontier, active-gate selection must observe the owner-truth active cohort after publication convergence is satisfied, or report the exact startup owner blocker for missing snapshot coverage.",
     "stopConditionCheck": "npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-green-gate-after-priority-recovery-workflow-progress-after-snapshot-coverage.report.json",
     "expectedCausalModelChange": "active_gate_snapshot_coverage either converges, reduces to a narrower startup active-gate sub-boundary, or migrates to a fresh owner boundary with canonical evidence.",
-    "representativeOutcome": "pending-before-rerun",
-    "causalDebt": "The latest representative is red with active_gate_snapshot_coverage as the first frontier, snapshotCoverage=2/5, expectedNodeCount=5, publicationStatus=PUBLISHED, pendingAckCount=0, publishedActive=1/5, missingPublishedCount=4 with exact ids, and priorityRecovery=none.",
-    "crossBoundaryReview": "Required before implementation: review predecessor work/packages/done-20260514-topology-publication-convergence-after-active-gate-owner-truth.md, fix any predecessor proof issues, then implement this active-gate snapshot-coverage package."
+    "representativeOutcome": "classification-only",
+    "causalDebt": "The rolling-restart active-gate residual is intentionally not the active sprint objective after the human-directed pivot.",
+    "crossBoundaryReview": "not-needed: package superseded before active-gate runtime implementation closure."
   },
   "scenarioCausalClosure": {
     "referenceScenarioOrProbe": "rolling-restart representative after publication owner-truth proof",
@@ -105,25 +76,27 @@
     ],
     "missingCausalEdge": "Active-gate snapshot coverage must connect the selected admin-ready snapshot and owner-truth active cohort so coverage does not stall at 2/5 after publication convergence is satisfied.",
     "missingCausalEdgeProbe": "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-green-gate-after-priority-recovery-workflow-progress-after-snapshot-coverage.report.json --explain active_gate_snapshot_coverage",
-    "boundedProgressProof": "Focused proof must show the selected admin-ready snapshot advances through the active-gate wake/timeout path to include the owner-truth active cohort, reduce to an exact startup active-gate blocker, or migrate to a fresh owner boundary.",
+    "boundedProgressProof": "Focused admin snapshot proof now shows canonical missing published owner-truth nodes advance the selected admin snapshot observed cohort while durable published membership remains publication-scoped. Representative rerun is still required.",
     "boundedProgressProofArtifact": "test-output/reports/rolling-restart-green-gate-after-priority-recovery-workflow-progress-after-snapshot-coverage.report.json",
-    "expectedObservableTransition": "Representative rolling-restart should move active_gate_snapshot_coverage to satisfied, reduce to a narrower startup active-gate blocker, or migrate to a fresh owner boundary with canonical evidence.",
+    "expectedObservableTransition": "Expected next representative rolling-restart should move active_gate_snapshot_coverage to satisfied, reduce to a narrower startup active-gate blocker, or migrate to a fresh owner boundary with canonical evidence.",
     "maxProgressBound": "one predecessor review subagent, one fix subagent if review finds fixes, one implementation subagent, focused owner proof, and one representative rolling-restart rerun",
     "sameFrontierFallback": "If active_gate_snapshot_coverage remains first frontier, record snapshotCoverageNodeCount, expectedNodeCount, selectedSnapshotNodeId, selectedSnapshotError, activeNodeCount, and blocker reasons.",
     "expectedNextFrontier": "representative-green, startup readiness support evidence, or a narrower startup active-gate sub-boundary",
-    "resultClassification": "pending-before-probe",
-    "stopCondition": "continue-local-fix"
+    "resultClassification": "classification-only",
+    "stopCondition": "human-escalation"
   },
-  "predecessor": "work/packages/done-20260514-topology-publication-convergence-after-active-gate-owner-truth.md"
+  "predecessor": "work/packages/done-20260514-topology-publication-convergence-after-active-gate-owner-truth.md",
+  "closed": "2026-05-14",
+  "commitAndPushLedgerRequired": true
 }
 -->
 
 ## Why
 
-Publication convergence is now satisfied, so the remaining critical path is the
-selected active-gate snapshot only covering two of five expected nodes. This
-package owns the startup active-gate repair or the next canonical owner-boundary
-migration.
+This package was superseded after human clarification that the active sprint is
+about strengthening topology-control-plane work, not chasing the
+rolling-restart blocker. The artifact remains useful context for why the
+systemic packages matter, but it is no longer the active implementation lane.
 
 ## Scope Basis
 
@@ -149,32 +122,32 @@ Before raw JSON, raw logs, broad file search, oversized segment files, or ad hoc
 
 If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which canonical extractor was tried and why it was insufficient.
 
+## Superseded Notes
+
+- Human direction on 2026-05-14 clarified that this sprint must proceed through
+  the systemic ship-shape packages before any further `rolling-restart`
+  representative run.
+- Any uncommitted active-gate runtime and harness edits from this package were
+  removed before the membership-epoch package continued.
+- The active package is now
+  `work/packages/active-20260513-topology-membership-epoch-fencing.md`.
+
 ## Subagent Sequencing Ledger
 
-- [ ] Review subagent recorded:
-      `pending-before-implementation-starts`.
-- [ ] Fix subagent recorded or explicitly not needed:
-      `pending-before-review-result`.
-- [ ] Implementation subagent recorded:
-      `pending-before-implementation-starts`.
+- [x] Review subagent recorded:
+      `not-needed (human-directed supersede before package closure)`.
+- [x] Fix subagent recorded or explicitly not needed:
+      `not-needed`.
+- [x] Implementation subagent recorded:
+      `not-needed (human-directed supersede; no runtime edits retained)`.
 
 ## In Scope
 
-1. work/packages/active-20260514-topology-active-gate-snapshot-coverage-after-publication-owner-truth.md
+1. work/packages/superseded-20260514-topology-active-gate-snapshot-coverage-after-publication-owner-truth.md
 2. work/sprints/active-2026-q2-topology-convergence-ship-shape.md
 3. work/sprints/current-blocker.json
 4. work/sprints/current-blocker.md
-5. src/admin/admin-control-snapshot-class-part-1.js
-6. src/admin/admin-control-snapshot-class-part-3.js
-7. src/admin/admin-control-snapshot-class-part-5.js
-8. src/control-plane/active-node-projection.js
-9. src/control-plane/membership-publication-planning.js
-10. src/control-plane/membership-publication-coordinator-class-stage-2.js
-11. test/admin/admin-control-snapshot.test.js
-12. test/control-plane/active-node-projection.test.js
-13. test/distributed/harness/cluster-segment-7-class-4.js
-14. test/distributed/harness/cluster-segment-7-class-5.js
-15. test/distributed/harness/__tests__/cluster.test-part-5.js
+5. work/packages/active-20260513-topology-membership-epoch-fencing.md
 
 ## Out Of Scope
 
@@ -189,17 +162,19 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 - Package class: `representative-frontier-closure`
 - Intended minimum model: `gpt-5.3-codex`
 - Scope shape: `owner-boundary-contraction/current-frontier`
-- Owned files: `work/packages/active-20260514-topology-active-gate-snapshot-coverage-after-publication-owner-truth.md`, `work/sprints/active-2026-q2-topology-convergence-ship-shape.md`, `work/sprints/current-blocker.json`, `work/sprints/current-blocker.md`, `src/admin/admin-control-snapshot-class-part-1.js`, `src/admin/admin-control-snapshot-class-part-3.js`, `src/admin/admin-control-snapshot-class-part-5.js`, `src/control-plane/active-node-projection.js`, `src/control-plane/membership-publication-planning.js`, `src/control-plane/membership-publication-coordinator-class-stage-2.js`, `test/admin/admin-control-snapshot.test.js`, `test/control-plane/active-node-projection.test.js`, `test/distributed/harness/cluster-segment-7-class-4.js`, `test/distributed/harness/cluster-segment-7-class-5.js`, `test/distributed/harness/__tests__/cluster.test-part-5.js`
+- Owned files: `work/packages/superseded-20260514-topology-active-gate-snapshot-coverage-after-publication-owner-truth.md`, `work/sprints/active-2026-q2-topology-convergence-ship-shape.md`, `work/sprints/current-blocker.json`, `work/sprints/current-blocker.md`, `work/packages/active-20260513-topology-membership-epoch-fencing.md`
 - Forbidden files: `harness timeout increases`, `publication convergence runtime changes unless fresh evidence delegates back`, `operation workflow runtime changes unless fresh evidence delegates back`, `Pro behavior`, `Enterprise behavior`
 - Frozen decisions: package scope and lane stay bounded unless explicitly escalated.
 - Escalation triggers: owned files expand beyond this package, runtime ownership changes, or representative scenario evidence changes.
-- Focused proof: `npm run work:evidence-summary -- test-output/reports/rolling-restart-green-gate-after-priority-recovery-workflow-progress-after-snapshot-coverage.report.json`, `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-green-gate-after-priority-recovery-workflow-progress-after-snapshot-coverage.report.json --explain active_gate_snapshot_coverage`, `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-green-gate-after-priority-recovery-workflow-progress-after-snapshot-coverage.report.json`, `npm run analyze:distributed-failure -- --report test-output/reports/rolling-restart-green-gate-after-priority-recovery-workflow-progress-after-snapshot-coverage.report.json`, `npm run analyze:owner-files -- startup_active_gate_owner snapshot_coverage`
+- Focused proof: `npm run work:context`, `npm run work:current-blocker -- --write`, `git diff --check -- work/packages/superseded-20260514-topology-active-gate-snapshot-coverage-after-publication-owner-truth.md work/packages/active-20260513-topology-membership-epoch-fencing.md work/sprints/active-2026-q2-topology-convergence-ship-shape.md work/sprints/current-blocker.json work/sprints/current-blocker.md`
 - Model ledger advisory: `escalate`
 
 ## Validation
 
-1. npm run work:evidence-summary -- test-output/reports/rolling-restart-green-gate-after-priority-recovery-workflow-progress-after-snapshot-coverage.report.json
-2. npm run analyze:topology-convergence -- test-output/reports/rolling-restart-green-gate-after-priority-recovery-workflow-progress-after-snapshot-coverage.report.json --explain active_gate_snapshot_coverage
-3. npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-green-gate-after-priority-recovery-workflow-progress-after-snapshot-coverage.report.json
-4. npm run analyze:distributed-failure -- --report test-output/reports/rolling-restart-green-gate-after-priority-recovery-workflow-progress-after-snapshot-coverage.report.json
-5. npm run analyze:owner-files -- startup_active_gate_owner snapshot_coverage
+1. `npm run work:current-blocker -- --write` passed and regenerated the
+   current blocker to the active membership-epoch package.
+2. `npm run work:context` passed and confirmed the active package is
+   `work/packages/active-20260513-topology-membership-epoch-fencing.md`.
+3. Active-gate runtime and harness diffs were removed before continuing.
+4. Representative `rolling-restart` was not rerun after the human stop
+   instruction.
