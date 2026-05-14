@@ -3,7 +3,7 @@
 <!-- work-package
 {
   "schema": "work-package-v1",
-  "status": "active",
+  "status": "done",
   "opened": "2026-05-13",
   "lane": "runtime-owner-boundary",
   "scenario": "none",
@@ -20,14 +20,14 @@
     "node scripts/check-guideline-literals.js src/topology/topology-anti-entropy-constants.js src/topology/topology-anti-entropy-reconciler.js src/workflow/reconcile-queue-constants.js",
     "node scripts/check-guideline-decision-boundaries.js src/topology/topology-anti-entropy-constants.js src/topology/topology-anti-entropy-reconciler.js src/workflow/reconcile-queue-constants.js",
     "npm run audit:runtime-grammar:file -- src/topology/topology-anti-entropy-constants.js src/topology/topology-anti-entropy-reconciler.js src/workflow/reconcile-queue-constants.js",
-    "git diff --check -- src/topology/topology-anti-entropy-constants.js src/topology/topology-anti-entropy-reconciler.js src/workflow/reconcile-queue-constants.js test/topology/topology-anti-entropy-reconciler.test.js work/packages/active-20260513-topology-anti-entropy-reconciler.md"
+    "git diff --check -- src/topology/topology-anti-entropy-constants.js src/topology/topology-anti-entropy-reconciler.js src/workflow/reconcile-queue-constants.js test/topology/topology-anti-entropy-reconciler.test.js work/packages/done-20260513-topology-anti-entropy-reconciler.md"
   ],
   "writeScope": [
     "src/topology/topology-anti-entropy-constants.js",
     "src/topology/topology-anti-entropy-reconciler.js",
     "src/workflow/reconcile-queue-constants.js",
     "test/topology/topology-anti-entropy-reconciler.test.js",
-    "work/packages/active-20260513-topology-anti-entropy-reconciler.md",
+    "work/packages/done-20260513-topology-anti-entropy-reconciler.md",
     "work/model-ledger.jsonl"
   ],
   "handoffFiles": [
@@ -47,7 +47,7 @@
     "src/topology/topology-anti-entropy-reconciler.js",
     "src/workflow/reconcile-queue-constants.js",
     "test/topology/topology-anti-entropy-reconciler.test.js",
-    "work/packages/active-20260513-topology-anti-entropy-reconciler.md",
+    "work/packages/done-20260513-topology-anti-entropy-reconciler.md",
     "work/model-ledger.jsonl"
   ],
   "modelFit": {
@@ -59,7 +59,9 @@
       "a frozen decision must be reopened"
     ]
   },
-  "predecessor": "work/packages/done-20260513-topology-placement-capacity-fail-closed.md"
+  "predecessor": "work/packages/done-20260513-topology-placement-capacity-fail-closed.md",
+  "closed": "2026-05-14",
+  "commitAndPushLedgerRequired": true
 }
 -->
 
@@ -119,7 +121,7 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
   `src/topology/topology-anti-entropy-reconciler.js`,
   `src/workflow/reconcile-queue-constants.js`,
   `test/topology/topology-anti-entropy-reconciler.test.js`,
-  `work/packages/active-20260513-topology-anti-entropy-reconciler.md`,
+  `work/packages/done-20260513-topology-anti-entropy-reconciler.md`,
   `work/model-ledger.jsonl`
 - Forbidden files: rolling-restart scenarios/artifacts, direct local fallback
   repair writers, failure-transition-specific repair intent code, Pro behavior,
@@ -152,13 +154,13 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 - [x] Fix subagent recorded or explicitly not needed:
       `Agent Boole (019e2595-b843-7c60-95d7-adff53a8bc19) fixed work/packages/done-20260513-topology-placement-capacity-fail-closed.md`.
 - [x] Implementation subagent recorded:
-      `Agent Codex (019e25a2-7464-7540-8603-b1c916c213ae) implemented work/packages/active-20260513-topology-anti-entropy-reconciler.md`.
+      `Agent Codex (019e25a2-7464-7540-8603-b1c916c213ae) implemented work/packages/done-20260513-topology-anti-entropy-reconciler.md`.
 
 ## Validation
 
 1. `npm run work:context` passed and confirmed this package as the current
    blocker.
-2. `npm run work:package:doctor -- --suggest work/packages/active-20260513-topology-anti-entropy-reconciler.md`
+2. `npm run work:package:doctor -- --suggest work/packages/done-20260513-topology-anti-entropy-reconciler.md`
    initially found the required Subagent Sequencing Ledger missing.
 3. `npm run analyze:owner-files -- topology_reconcile_owner durable_truth_reconcile --markdown`
    passed and showed the owner/boundary is represented by the active package,
@@ -171,7 +173,7 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
    `npm run work:validate -- --closure work/packages/done-20260513-topology-placement-capacity-fail-closed.md`
    and `git diff --check -- work/packages/done-20260513-topology-placement-capacity-fail-closed.md`.
 6. Focused predecessor ledger repair was committed and pushed as `a579d445`.
-7. `npm run work:validate -- --pre-impl work/packages/active-20260513-topology-anti-entropy-reconciler.md`
+7. `npm run work:validate -- --pre-impl work/packages/done-20260513-topology-anti-entropy-reconciler.md`
    passed.
 8. `npx tap test/topology/topology-anti-entropy-reconciler.test.js test/workflow/owner-key-reconcile-queue.test.js`
    passed.
@@ -181,10 +183,16 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
    passed with 0 decision-boundary guideline violations.
 11. `npm run audit:runtime-grammar:file -- src/topology/topology-anti-entropy-constants.js src/topology/topology-anti-entropy-reconciler.js src/workflow/reconcile-queue-constants.js`
    passed with 0 runtime-grammar-contract violations.
-12. `git diff --check -- src/topology/topology-anti-entropy-constants.js src/topology/topology-anti-entropy-reconciler.js src/workflow/reconcile-queue-constants.js test/topology/topology-anti-entropy-reconciler.test.js work/packages/active-20260513-topology-anti-entropy-reconciler.md`
+12. `git diff --check -- src/topology/topology-anti-entropy-constants.js src/topology/topology-anti-entropy-reconciler.js src/workflow/reconcile-queue-constants.js test/topology/topology-anti-entropy-reconciler.test.js work/packages/done-20260513-topology-anti-entropy-reconciler.md`
    passed.
 13. Parent review tightened active publication/placement filtering and
     normalized identity-field support, then reran the focused Tap, literal,
     decision-boundary, and runtime-grammar proof successfully.
-14. `npm run work:model-ledger -- record --package work/packages/active-20260513-topology-anti-entropy-reconciler.md --model gpt-5.3-codex --reasoning-effort high --task-class runtime-owner-boundary --package-class representative-frontier-closure --intended-minimum-model gpt-5.3-codex --scope-shape owner-boundary-contraction/current-frontier --escalated true --bailout-reason none --outcome implemented --validation-status focused-green --correction-loops 1 --review-findings 1 --notes "..."`
+14. `npm run work:model-ledger -- record --package work/packages/done-20260513-topology-anti-entropy-reconciler.md --model gpt-5.3-codex --reasoning-effort high --task-class runtime-owner-boundary --package-class representative-frontier-closure --intended-minimum-model gpt-5.3-codex --scope-shape owner-boundary-contraction/current-frontier --escalated true --bailout-reason none --outcome implemented --validation-status focused-green --correction-loops 1 --review-findings 1 --notes "..."`
     recorded the final package evidence.
+
+## Commit And Push Ledger
+
+1. Focused package commit: `f6fa47a5`
+2. Pushed to: `origin/codex/pending-ack-eligibility-filter`
+3. Commit contains only package-owned files/package-status/allowed sprint handoff: `yes`

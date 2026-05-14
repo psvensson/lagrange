@@ -4,7 +4,7 @@
 
 Sprint: `work/sprints/active-2026-q2-topology-convergence-ship-shape.md`
 
-Package: `work/packages/active-20260513-topology-anti-entropy-reconciler.md`
+Package: `work/packages/active-20260513-topology-bounded-progress-budgets.md`
 
 Workflow lane: `runtime-owner-boundary`
 
@@ -16,17 +16,17 @@ Playback: `none`
 
 ## Boundary
 
-Owner: `topology_reconcile_owner`
+Owner: `topology_control_plane`
 
-Boundary: `durable_truth_reconcile`
+Boundary: `progress_budget_taxonomy`
 
-Dominant reason: `durable_truth_lacks_periodic_owner_key_repair`
+Dominant reason: `retryable_waits_lack_terminal_bounds`
 
-Current state: The topology control plane lacks a periodic durable truth reconciler that enqueues exact owner-key repair without local fallback mutation.
+Current state: Critical topology diagnostics still expose unknown or unbounded progress budgets in paths that can affect release-gate closure.
 
 ## Next Action
 
-Add low-rate durable truth scans that enqueue exact owner-key reconciliation without local fallback repairs
+Require bounded retry timeout reconcile and terminal classifications for critical topology workflows
 
 ## Proof Ladder
 

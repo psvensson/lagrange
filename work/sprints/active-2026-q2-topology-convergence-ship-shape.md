@@ -127,7 +127,7 @@ Human-directed active sprint pivot on May 14, 2026:
 2. Boundary: `durable_truth_reconcile`.
 3. Dominant reason: `durable_truth_lacks_periodic_owner_key_repair`.
 4. Active package:
-   `work/packages/active-20260513-topology-anti-entropy-reconciler.md`.
+   `work/packages/done-20260513-topology-anti-entropy-reconciler.md`.
 5. Focused proof surface:
    to be finalized by the active package metadata before implementation.
 6. Rolling-restart, active-gate snapshot coverage, publication owner truth,
@@ -399,7 +399,7 @@ This sprint treats the system as ship-shape only when these properties hold:
      with explicit owner vocabulary, and placement diagnostics surface an
      accounting-unavailable degraded frontier.
 
-14. [Topology Anti Entropy Reconciler](../packages/active-20260513-topology-anti-entropy-reconciler.md)
+14. [Topology Anti Entropy Reconciler](../packages/done-20260513-topology-anti-entropy-reconciler.md)
    - Lane: `runtime-owner-boundary`
    - Owner boundary: `topology_reconcile_owner / durable_truth_reconcile`
    - Recommendation covered: add anti-entropy reconciliation.
@@ -412,7 +412,7 @@ This sprint treats the system as ship-shape only when these properties hold:
      output is deterministic repair intent, bounded no-op, or typed terminal
      classification; focused tests cover stale/missing/double-owned evidence.
 
-15. [Topology Bounded Progress Budgets](../packages/todo-20260513-topology-bounded-progress-budgets.md)
+15. [Topology Bounded Progress Budgets](../packages/active-20260513-topology-bounded-progress-budgets.md)
    - Lane: `runtime-owner-boundary`
    - Owner boundary: `topology_control_plane / progress_budget_taxonomy`
    - Recommendation covered: harden budgets and terminal states.
