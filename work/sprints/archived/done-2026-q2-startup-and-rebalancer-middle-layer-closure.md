@@ -1,5 +1,7 @@
 # Startup And Rebalancer Middle-Layer Closure Sprint (AGPL)
 
+Status: done. Marked done on May 14, 2026 during sprint backlog cleanup.
+
 ## Goal
 
 Collapse the remaining middle-layer compatibility and orchestration logic

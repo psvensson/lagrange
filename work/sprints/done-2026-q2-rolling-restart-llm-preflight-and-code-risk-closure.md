@@ -1,10 +1,7 @@
 # Rolling Restart LLM Preflight And Code Risk Closure Sprint
 
-Status: todo. This sprint is a preflight execution sprint for the current
-`rolling-restart` release-gate loop. It must be activated deliberately and must
-not run beside an active package on the same owner boundary unless the active
-package is first closed, migrated, superseded, or the human explicitly switches
-the current blocker.
+Status: done. Marked done on May 14, 2026 during sprint backlog cleanup. This
+preflight sprint is closed and has no active package assigned.
 
 ## Goal
 

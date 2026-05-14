@@ -1,9 +1,8 @@
 # Future Sprint Release Gate Systemic Governance Sprint
 
-Status: todo. This sprint is intentionally separate from the active
-rolling-restart release-gate sprint. It may read active scenario evidence as
-handoff context, but it must not implement the current rolling-restart blocker
-or mutate the active rolling-restart sprint/package.
+Status: done. Marked done on May 14, 2026 during sprint backlog cleanup. This
+sprint is intentionally separate from any active release-gate sprint and has no
+active package assigned.
 
 ## Goal
 

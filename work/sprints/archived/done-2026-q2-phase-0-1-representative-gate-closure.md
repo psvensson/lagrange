@@ -1,5 +1,7 @@
 # Phase 0.1 Representative Gate Closure Sprint
 
+Status: done. Marked done on May 14, 2026 during sprint backlog cleanup.
+
 ## Goal
 
 Close Phase `0.1 - Internal Coherence` by making the representative gates
