@@ -496,10 +496,22 @@ Priority recovery residual extraction reported one
 `operation_workflow_owner / workflow_progress` witness with
 `splitRequired=false`.
 
-Execute and classify
-`seven-node-load-during-partitioning` as
+`seven-node-load-during-partitioning` has now been observed and should be
+closed as migrated/classification evidence:
 `test-output/reports/topology-rebalance-disruption-recovery-gate.report.json`
-using canonical extractors. If the gate is red, record the owner-boundary split
-or migration evidence and keep runtime repair out of scope unless explicitly
-re-scoped. Do not fix `rolling-restart` runtime behavior in this sprint
-segment.
+failed after `336079ms`. Canonical topology evidence did not reach
+`topology_rebalance_owner / split_rebalance_recovery_gate`; the first frontier
+migrated to `topology_publication_owner / publication_convergence` with
+`publication_ack_convergence`, `missing_published_nodes_present`,
+`publicationStatus=PUBLISHED`, `pendingAckCount=0`,
+`missingPublishedCount=6`, `publicationPending=true`, active gate `ready`,
+snapshot coverage `2/7`, and active nodes `7/7`. The causal model reports
+`outcome=migrate_owner_boundary`, `dominantFailureClass=publication_ack_blocked`,
+failed invariant `publication_ack_closed`, and stop condition
+`owner_boundary_migration`. Priority recovery residual extraction reports zero
+witnesses and `splitRequired=false`.
+
+Close rebalance disruption recovery as observe/classify work only and activate
+contract integration reconciliation next. Do not fix `rolling-restart`,
+publication, or rebalance runtime behavior in this sprint segment without
+explicit re-scope.

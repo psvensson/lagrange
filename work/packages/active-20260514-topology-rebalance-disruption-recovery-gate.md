@@ -12,8 +12,8 @@
   "owner": "topology_rebalance_owner",
   "boundary": "split_rebalance_recovery_gate",
   "dominantReason": "rebalance_disruption_release_gate_unproven",
-  "currentState": "Activated after remote-coordinator handoff gate migration. Remote handoff focused proof passed, but fresh seven-node evidence migrated before that owner boundary to topology_publication_owner / publication_convergence with missing_published_nodes_present, publicationStatus=PUBLISHED, pendingAckCount=0, missingPublishedCount=4, publicationPending=true, activeGateState=timed_out, snapshotCoverageNodeCount=3/7, activeNodeCount=6/7, and priority recovery residual splitRequired=false. Split/rebalance during recovery still needs observe/classify release-gate evidence.",
-  "nextAction": "Execute and classify the split/rebalance recovery gate using canonical evidence extractors. If red, record the owner-boundary split or migration evidence; do not fix rolling-restart runtime behavior or broaden into runtime repair without explicit re-scope.",
+  "currentState": "Observed gate result: seven-node-load-during-partitioning failed after 336079ms. Canonical evidence did not reach topology_rebalance_owner / split_rebalance_recovery_gate; the first frontier is topology_publication_owner / publication_convergence with publication_ack_convergence deferred, missing_published_nodes_present, publicationStatus=PUBLISHED, pendingAckCount=0, missingPublishedCount=6, publicationPending=true, activeGateState=ready, snapshotCoverageNodeCount=2/7, and activeNodeCount=7/7. Priority recovery residual extraction reports zero witnesses.",
+  "nextAction": "Close this package as migrated/classification evidence and activate contract integration reconciliation; do not fix rolling-restart, publication, or rebalance runtime behavior in this package without explicit re-scope.",
   "proof": [
     "node test/distributed/run.js --config test/distributed/config/local-benchmark-7node.json --scenario seven-node-load-during-partitioning --output test-output/reports/topology-rebalance-disruption-recovery-gate.report.json --verbose",
     "npm run work:evidence-summary -- test-output/reports/topology-rebalance-disruption-recovery-gate.report.json",
@@ -64,8 +64,8 @@
     "hypothesis": "topology_rebalance_owner / split_rebalance_recovery_gate evidence should reduce, migrate, or classify rebalance_disruption_release_gate_unproven without hiding the sprint representative residual.",
     "stopConditionCheck": "npm --silent run analyze:causal-model -- test-output/reports/topology-rebalance-disruption-recovery-gate.report.json",
     "expectedCausalModelChange": "rebalance_disruption_release_gate_unproven becomes representative-green, reduced, same-frontier, migrated, or classification-only with a named owner-boundary reason.",
-    "representativeOutcome": "pending-before-rerun",
-    "causalDebt": "Until topology_rebalance_owner / split_rebalance_recovery_gate is observed and classified, the sprint representative rolling-restart residual stays open at startup_active_gate_owner / snapshot_coverage. Runtime rolling-restart fixes remain out of scope for this package.",
+    "representativeOutcome": "migrated",
+    "causalDebt": "The rebalance-disruption gate artifact is red, but canonical evidence does not implicate topology_rebalance_owner / split_rebalance_recovery_gate. The first frontier migrated to topology_publication_owner / publication_convergence with missing_published_nodes_present; runtime rolling-restart, publication, and rebalance fixes remain out of scope.",
     "crossBoundaryReview": "Required before closure through the scenario-release-gate subagent ledger or an allowed waiver recorded in this package."
   },
   "scenarioCausalClosure": {
@@ -75,7 +75,7 @@
       "topology_rebalance_owner / split_rebalance_recovery_gate focused proof",
       "representative or gate rerun classification"
     ],
-    "currentFirstFrontier": "package-local frontier topology_rebalance_owner / split_rebalance_recovery_gate; sprint representative frontier remains startup_active_gate_owner / snapshot_coverage until fresh evidence changes it",
+    "currentFirstFrontier": "migrated frontier topology_publication_owner / publication_convergence with missing_published_nodes_present in test-output/reports/topology-rebalance-disruption-recovery-gate.report.json",
     "knownDownstreamBlockers": [
       "rolling-restart representative active-gate snapshot coverage remains red until green or migrated",
       "runtime or harness fixes discovered outside this owner boundary require a narrower successor package"
@@ -84,13 +84,22 @@
     "missingCausalEdgeProbe": "node test/distributed/run.js --config test/distributed/config/local-benchmark-7node.json --scenario seven-node-load-during-partitioning --output test-output/reports/topology-rebalance-disruption-recovery-gate.report.json --verbose",
     "boundedProgressProof": "Focused evidence must show bounded wake, retry, timeout, reconcile, drain, dispatch, delivery, timer, or advance for topology_rebalance_owner / split_rebalance_recovery_gate, or classify the first earlier owner boundary.",
     "boundedProgressProofArtifact": "test-output/reports/topology-rebalance-disruption-recovery-gate.report.json",
-    "expectedObservableTransition": "rebalance_disruption_release_gate_unproven resolves to green evidence, a reduced residual, same-frontier evidence, migrated owner-boundary proof, or classification-only stop.",
+    "expectedObservableTransition": "rebalance_disruption_release_gate_unproven migrated before the rebalance owner boundary: publicationStatus=PUBLISHED with pendingAckCount=0, missingPublishedCount=6, publicationPending=true, activeGateState=ready, snapshotCoverageNodeCount=2/7, and activeNodeCount=7/7.",
     "maxProgressBound": "one activation cycle: package doctor, extractor/probe, owner-file proof, focused validation, and result classification",
     "sameFrontierFallback": "keep topology_rebalance_owner / split_rebalance_recovery_gate active and do not broaden the package or claim ship proof",
-    "expectedNextFrontier": "representative green evidence or a narrower owner-boundary blocker selected by canonical evidence",
-    "resultClassification": "pending-before-probe",
-    "stopCondition": "classification-only-stop"
-  }
+    "expectedNextFrontier": "contract integration reconciliation unless explicitly re-scoped to a publication-owner runtime repair",
+    "resultClassification": "migrated",
+    "stopCondition": "migrate-owner-boundary"
+  },
+  "ownerBoundaryMigrationProof": {
+    "fromOwner": "topology_rebalance_owner",
+    "fromBoundary": "split_rebalance_recovery_gate",
+    "toOwner": "topology_publication_owner",
+    "toBoundary": "publication_convergence",
+    "reason": "fresh seven-node-load-during-partitioning gate first frontier is publication_ack_convergence / missing_published_nodes_present before split/rebalance recovery release-gate evidence can be evaluated",
+    "evidence": "test-output/reports/topology-rebalance-disruption-recovery-gate.report.json"
+  },
+  "successor": "work/packages/todo-20260514-topology-contract-integration-reconciliation.md"
 }
 -->
 
@@ -252,6 +261,30 @@ package.
    local fallback repair.
 3. Owner evidence names descriptor epoch, capacity/degraded state, reconcile
    work, and final placement publication.
+
+## Observed Gate Result
+
+`seven-node-load-during-partitioning` failed after `336079ms`. The direct
+scenario error was an admin query failure on node
+`7493b0ab-a054-5fad-a91b-5e331db29304`: minimum routable provisioning cohort
+could not be satisfied for one table partition (`required=2`,
+`provisionable=1`, `target=3`) because two candidate nodes were rejected with
+`insufficient_placement_eligible_nodes`,
+`control_plane_write_unhealthy`, and `cluster_member_unhealthy`.
+
+Canonical topology evidence did not reach the rebalance owner boundary. The
+first frontier is `topology_publication_owner / publication_convergence` with
+`publication_ack_convergence`, `missing_published_nodes_present`,
+`publicationStatus=PUBLISHED`, `pendingAckCount=0`,
+`missingPublishedCount=6`, and `publicationPending=true`. Active-gate evidence
+is `ready` but incomplete at snapshot coverage `2/7` with active nodes `7/7`.
+
+The causal model reports `outcome=migrate_owner_boundary`,
+`dominantFailureClass=publication_ack_blocked`, failed invariant
+`publication_ack_closed`, and stop condition `owner_boundary_migration`.
+Priority recovery residual extraction reports zero witnesses and
+`splitRequired=false`. This package is therefore migrated rather than widened
+into rebalance or rolling-restart runtime repair.
 
 ## Commit And Push Ledger
 
