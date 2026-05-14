@@ -477,15 +477,17 @@ projection reconciliation is done as classification-only observability:
 
 The current action is now
 [Topology Killed Rejoin Gate](../packages/active-20260514-topology-killed-rejoin-gate.md).
-The predecessor
-[Topology Killed Join Gate](../packages/done-20260514-topology-killed-join-gate.md)
-migrated:
-`test-output/reports/topology-killed-join-gate.report.json` failed after
-`108325ms` while waiting for `benchmark_events` partition visibility. Canonical
-evidence did not reach `topology_join_owner / join_admission_rebalance_gate`;
-the first frontier migrated to `topology_publication_owner /
-publication_convergence` with `missing_published_nodes_present`,
-`missingPublishedCount=4`, `publicationPending=true`, active gate `timed_out`,
-snapshot coverage `1/5`, and zero priority recovery residual witnesses. Close
-the killed-rejoin gate as observe/classify work only. Do not fix
+It has now been observed and should be closed as migrated:
+`test-output/reports/topology-killed-rejoin-gate.report.json` failed after
+`132499ms` because not all nodes reached `ACTIVE` within `60000ms`. Focused
+direct Node proof for rejoin reconciliation passed, but canonical evidence did
+not reach `topology_rejoin_owner / post_restore_reconciliation_gate`; the first
+frontier migrated to `topology_publication_owner / publication_convergence`
+with `publication_ack_convergence`, `missing_published_nodes_present`,
+`publicationStatus=PUBLISHED`, `pendingAckCount=0`, `missingPublishedCount=4`,
+`publicationPending=true`, active gate `timed_out`, and snapshot coverage
+`3/5`. Priority recovery residual extraction reported three
+`operation_workflow_owner / workflow_progress` witnesses with
+`splitRequired=false`. Close killed-rejoin as observe/classify work only and
+activate the next remaining failure-gate package. Do not fix
 `rolling-restart` runtime behavior in this sprint segment.
