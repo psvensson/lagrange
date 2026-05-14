@@ -406,6 +406,7 @@ to prove the handoff names the intended next blocker.
 
 ## Commit And Push Ledger
 
-1. Focused package commit: 03e9f7559745a66ad6f7f64463372d7e3aa3dd70
+1. Focused package commit: 3736f05d88e3b56e35c221f97031658e7421489f
 2. Pushed to: origin/codex/pending-ack-eligibility-filter
 3. Commit contains only package-owned files/package-status/allowed sprint handoff: yes
+4. Closure bundle commit: 03e9f7559745a66ad6f7f64463372d7e3aa3dd70 carried the residual inventory closure plus work-tracker script/test hardening, `work/model-ledger.jsonl`, active package status handoff, and predecessor review-fix ledger finalization; it is not claimed as the focused package commit and did not include runtime changes.

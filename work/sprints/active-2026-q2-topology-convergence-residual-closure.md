@@ -453,9 +453,10 @@ Final closure requires fresh evidence proving all of the following:
 
 ## Current Next Action
 
-Finish
-[Topology Residual Evidence Inventory](../packages/done-20260514-topology-residual-evidence-inventory.md)
-as classification-only evidence inventory, then activate
+Residual inventory is done as classification-only evidence inventory. The
+current action is now
 [Topology Active Gate Budget Closure](../packages/active-20260514-topology-active-gate-budget-closure.md).
-Do not skip directly to cohort convergence while `active_gate_timeout` is
-unbounded and active-gate attempts are exhausted.
+Keep active-gate budget closure before
+[Topology Active Gate Owner Cohort Convergence](../packages/todo-20260514-topology-active-gate-owner-cohort-convergence.md)
+while `active_gate_timeout` is unbounded and active-gate attempts are
+exhausted.

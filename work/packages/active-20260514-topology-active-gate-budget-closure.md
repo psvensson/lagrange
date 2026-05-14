@@ -193,9 +193,8 @@ Required before implementation continues in this active package:
 
 Required now because this active package is a runtime owner-boundary package.
 
-1. [ ] Review subagent recorded: pending before implementation starts.
-2. [ ] Fix subagent recorded or explicitly not needed: pending until review
-   result.
+1. [x] Review subagent recorded: Agent Socrates (019e2658-5ef0-7500-aad6-94fbcbd913bd) reviewed work/packages/done-20260514-topology-residual-evidence-inventory.md; result fixes-required.
+2. [x] Fix subagent recorded or explicitly not needed: Agent Codex (019e265a-3938-7a12-bd38-a44307a5f603) fixed work/packages/done-20260514-topology-residual-evidence-inventory.md.
 3. [ ] Implementation subagent recorded: pending until pre-implementation proof
    is clean.
 
