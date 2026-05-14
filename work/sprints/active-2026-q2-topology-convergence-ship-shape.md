@@ -105,25 +105,40 @@ Historical sprint pivot completed on May 14, 2026:
 7. Partition descriptor epoch is historical/completed sprint context, not the
    active sprint target.
 
-Human-directed active sprint pivot on May 14, 2026:
+Historical sprint pivot completed on May 14, 2026:
 
 1. Owner: `topology_placement_owner`.
 2. Boundary: `capacity_admission`.
 3. Dominant reason: `unknown_capacity_allows_optimistic_placement`.
-4. Active package:
-   `work/packages/active-20260513-topology-placement-capacity-fail-closed.md`.
+4. Completed package:
+   `work/packages/done-20260513-topology-placement-capacity-fail-closed.md`.
 5. Focused proof surface:
-   to be finalized by the active package metadata before implementation.
+   `npx tap test/rebalancer/storage-admission-service.test.js test/rebalancer/move-planner-capacity-gating.test.js test/rebalancer/storage-capacity-ownership.test.js test/rebalancer/storage-capacity-constants.test.js test/rebalancer/provisioning-admission-policy.test.js`.
 6. Rolling-restart, active-gate snapshot coverage, publication owner truth,
    membership epoch fencing, failure repair intents, post-rejoin
    reconciliation, and partition descriptor epoch remain historical
    representative context, not the active sprint target.
+7. Placement capacity fail-closed is historical/completed sprint context, not
+   the active sprint target.
+
+Human-directed active sprint pivot on May 14, 2026:
+
+1. Owner: `topology_reconcile_owner`.
+2. Boundary: `durable_truth_reconcile`.
+3. Dominant reason: `durable_truth_lacks_periodic_owner_key_repair`.
+4. Active package:
+   `work/packages/active-20260513-topology-anti-entropy-reconciler.md`.
+5. Focused proof surface:
+   to be finalized by the active package metadata before implementation.
+6. Rolling-restart, active-gate snapshot coverage, publication owner truth,
+   membership epoch fencing, failure repair intents, post-rejoin
+   reconciliation, partition descriptor epoch, and placement capacity remain
+   historical representative context, not the active sprint target.
 
 The immediate missing causal edge is:
 
-1. Placement can still treat missing capacity/accounting evidence
-   optimistically instead of producing an explicit degraded or blocked
-   capacity admission outcome.
+1. The topology control plane still lacks a periodic durable truth reconciler
+   that enqueues exact owner-key repair without local fallback mutation.
 
 ## Ship-Shape Definition
 
@@ -368,7 +383,7 @@ This sprint treats the system as ship-shape only when these properties hold:
      table and partition descriptor versions for split target admission,
      stale split routing rejection, and move-planner placement snapshots.
 
-13. [Topology Placement Capacity Fail Closed](../packages/active-20260513-topology-placement-capacity-fail-closed.md)
+13. [Topology Placement Capacity Fail Closed](../packages/done-20260513-topology-placement-capacity-fail-closed.md)
    - Lane: `runtime-owner-boundary`
    - Owner boundary: `topology_placement_owner / capacity_admission`
    - Recommendation covered: fail closed on unknown placement capacity.
@@ -380,8 +395,11 @@ This sprint treats the system as ship-shape only when these properties hold:
    - Acceptance: unknown capacity no longer silently makes all nodes feasible;
      diagnostics name capacity/accounting availability; tests prove strict and
      best-effort modes separately.
+   - Implementation note: admission now blocks unavailable capacity accounting
+     with explicit owner vocabulary, and placement diagnostics surface an
+     accounting-unavailable degraded frontier.
 
-14. [Topology Anti Entropy Reconciler](../packages/todo-20260513-topology-anti-entropy-reconciler.md)
+14. [Topology Anti Entropy Reconciler](../packages/active-20260513-topology-anti-entropy-reconciler.md)
    - Lane: `runtime-owner-boundary`
    - Owner boundary: `topology_reconcile_owner / durable_truth_reconcile`
    - Recommendation covered: add anti-entropy reconciliation.

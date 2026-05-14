@@ -4,7 +4,7 @@
 
 Sprint: `work/sprints/active-2026-q2-topology-convergence-ship-shape.md`
 
-Package: `work/packages/active-20260513-topology-placement-capacity-fail-closed.md`
+Package: `work/packages/active-20260513-topology-anti-entropy-reconciler.md`
 
 Workflow lane: `runtime-owner-boundary`
 
@@ -16,17 +16,17 @@ Playback: `none`
 
 ## Boundary
 
-Owner: `topology_placement_owner`
+Owner: `topology_reconcile_owner`
 
-Boundary: `capacity_admission`
+Boundary: `durable_truth_reconcile`
 
-Dominant reason: `unknown_capacity_allows_optimistic_placement`
+Dominant reason: `durable_truth_lacks_periodic_owner_key_repair`
 
-Current state: Placement can still treat missing capacity/accounting evidence too optimistically unless strict dependencies are enforced explicitly.
+Current state: The topology control plane lacks a periodic durable truth reconciler that enqueues exact owner-key repair without local fallback mutation.
 
 ## Next Action
 
-Classify unavailable capacity accounting as degraded or blocked in production and release gates
+Add low-rate durable truth scans that enqueue exact owner-key reconciliation without local fallback repairs
 
 ## Proof Ladder
 
