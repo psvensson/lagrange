@@ -213,6 +213,74 @@ test('AdminControlSnapshot exposes publication owner-truth active cohort in cont
     );
   });
 
+test('AdminControlSnapshot widens owner truth from missing published recovery nodes',
+  async (t) => {
+    const snapshot = new AdminControlSnapshot({
+      nodeId: ACTIVE_GATE_OWNER_TRUTH_LOCAL_NODE_ID,
+      nowFn: () => ACTIVE_GATE_OWNER_TRUTH_NOW_MS,
+    });
+
+    const activeNodeViews = snapshot.resolveControlSnapshotNodeViews(
+      [{
+        node_id: ACTIVE_GATE_OWNER_TRUTH_LOCAL_NODE_ID,
+        status: ACTIVE_GATE_OWNER_TRUTH_NODE_STATUS,
+        connection_state: ACTIVE_GATE_OWNER_TRUTH_CONNECTION_STATE,
+        ready_lease_expires_at:
+          ACTIVE_GATE_OWNER_TRUTH_NOW_MS +
+            ACTIVE_GATE_OWNER_TRUTH_READY_LEASE_DELTA_MS,
+      }],
+      [],
+      [],
+      {
+        publicationConvergence: {
+          status: ACTIVE_GATE_OWNER_TRUTH_PUBLICATION_STATUS,
+          publicationStatus: ACTIVE_GATE_OWNER_TRUTH_PUBLICATION_STATUS,
+          publishedActiveNodeIds: [ACTIVE_GATE_OWNER_TRUTH_LOCAL_NODE_ID],
+          requiredAckNodeIds: [ACTIVE_GATE_OWNER_TRUTH_LOCAL_NODE_ID],
+          acknowledgedNodeIds: [ACTIVE_GATE_OWNER_TRUTH_LOCAL_NODE_ID],
+          pendingAckNodeIds: [],
+          priorityPartitionSummary: {
+            satisfied: true,
+            totalPriorityPartitionCount:
+              ACTIVE_GATE_OWNER_TRUTH_PRIORITY_PARTITION_COUNT,
+            missingPartitionIds: [],
+            blockedPartitions: [],
+          },
+          missingPublishedRecoveryActiveNodeIds: [
+            ...ACTIVE_GATE_OWNER_TRUTH_RECENT_NODE_IDS,
+          ],
+        },
+      },
+      [],
+    );
+
+    t.same(
+      activeNodeViews.effectiveActiveNodeIds,
+      [...ACTIVE_GATE_OWNER_TRUTH_NODE_IDS],
+      'missing published recovery nodes should count as owner-truth active nodes',
+    );
+    t.same(
+      activeNodeViews.projectedActiveNodeIds,
+      [...ACTIVE_GATE_OWNER_TRUTH_NODE_IDS],
+      'projected nodes should include missing published recovery owner truth',
+    );
+    t.same(
+      activeNodeViews.publishedActiveNodeIds,
+      [ACTIVE_GATE_OWNER_TRUTH_LOCAL_NODE_ID],
+      'durable publication membership should remain distinct',
+    );
+    t.same(
+      activeNodeViews.suspectedOrTransitioningNodeIds,
+      [...ACTIVE_GATE_OWNER_TRUTH_RECENT_NODE_IDS],
+      'missing published recovery nodes should remain transitional diagnostics',
+    );
+    t.equal(
+      activeNodeViews.effectiveSource,
+      ACTIVE_GATE_OWNER_TRUTH_EFFECTIVE_SOURCE,
+      'diagnostics should identify owner truth as the effective source',
+    );
+  });
+
 test('AdminControlSnapshot projects recovery-eligible readiness into diagnostic node coverage',
   async (t) => {
     const snapshot = new AdminControlSnapshot({

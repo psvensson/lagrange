@@ -4,7 +4,7 @@
 
 Sprint: `work/sprints/active-2026-q2-topology-convergence-ship-shape.md`
 
-Package: `work/packages/active-20260513-topology-active-gate-snapshot-coverage-after-workflow-progress.md`
+Package: `work/packages/active-20260514-topology-publication-convergence-after-active-gate-owner-truth.md`
 
 Workflow lane: `runtime-owner-boundary`
 
@@ -16,24 +16,25 @@ Playback: `test-output/reports/.playback/rolling-restart-green-gate-after-priori
 
 ## Boundary
 
-Owner: `startup_active_gate_owner`
+Owner: `topology_publication_owner`
 
-Boundary: `snapshot_coverage`
+Boundary: `publication_convergence`
 
-Dominant reason: `snapshot_coverage_incomplete`
+Dominant reason: `missing_published_nodes_present`
 
-Current state: Priority recovery workflow progress moved publication ACK and priority recovery to satisfied in the latest representative rerun, but active-gate snapshot coverage is again the first frontier with snapshotCoverage=2/5, expectedNodeCount=5, publishedActive=1/5, missingPublished=4, prioritySpread=ready, and priorityRecovery=none.
+Current state: Active-gate owner-truth focused proof widened missing published recovery nodes in control-snapshot projection, and the refreshed representative rerun migrated the first frontier to publication_ack_convergence with missing_published_nodes_present; downstream active-gate snapshot coverage is no longer the first frontier.
 
 ## Next Action
 
-Repair active-gate snapshot coverage after publication and priority recovery are satisfied, focusing on why the selected admin-ready snapshot exposes only two owner-truth nodes.
+Repair publication convergence so the publication owner publishes or retains the owner-truth active cohort, or emits the exact publication-owner blocker while recoveryProtocolState=steady_published and pendingAck=0.
 
 ## Proof Ladder
 
 1. `npm run work:evidence-summary -- test-output/reports/rolling-restart-green-gate-after-priority-recovery-workflow-progress-after-snapshot-coverage.report.json`
-2. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-green-gate-after-priority-recovery-workflow-progress-after-snapshot-coverage.report.json --explain active_gate_snapshot_coverage`
+2. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-green-gate-after-priority-recovery-workflow-progress-after-snapshot-coverage.report.json --explain publication_ack_convergence`
 3. `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-green-gate-after-priority-recovery-workflow-progress-after-snapshot-coverage.report.json`
 4. `npm run analyze:distributed-failure -- --report test-output/reports/rolling-restart-green-gate-after-priority-recovery-workflow-progress-after-snapshot-coverage.report.json`
+5. `npm run analyze:owner-files -- topology_publication_owner publication_convergence`
 
 ## Model Fit
 
@@ -50,51 +51,51 @@ Escalation triggers:
 
 ## Causal Governance
 
-Causal hypothesis: `If startup_active_gate_owner / snapshot_coverage owns the current first frontier after publication ACK and priority recovery are satisfied, selected admin-ready control snapshots must include the current owner-truth active cohort or report the exact owner blocker that prevents widening past two nodes.`
+Causal hypothesis: `If topology_publication_owner / publication_convergence owns the current first frontier, the publication owner must publish or retain the owner-truth active cohort after recovery-active projection, or report the exact publication-owner blocker instead of surfacing steady_published with five missing published nodes.`
 
 Stop-condition check: `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-green-gate-after-priority-recovery-workflow-progress-after-snapshot-coverage.report.json`
 
-Expected causal-model change: `active_gate_snapshot_coverage either converges, reduces to a narrower selected-snapshot freshness/projection sub-boundary, or migrates to a fresh owner boundary with canonical evidence.`
+Expected causal-model change: `publication_ack_convergence either converges, reduces to a narrower publication-owner sub-boundary, or migrates to a fresh owner boundary with canonical evidence.`
 
 Representative outcome: `pending-before-rerun`
 
-Causal debt: `The latest representative is red with publication ACK and priority recovery satisfied, but active-gate snapshot coverage remains 2/5 and the selected admin-ready snapshot exposes only one durable published node plus one additional owner-truth node.`
+Causal debt: `The latest representative is red with publication_ack_convergence as the first frontier, publicationStatus=UNKNOWN, pendingAckCount=0, recoveryProtocolState=steady_published, and missingPublishedCount=5. Active-gate snapshot coverage is downstream and includes publication_gate blockers for all five nodes.`
 
-Cross-boundary review: `Pending fresh review subagent for predecessor work/packages/done-20260513-priority-recovery-operation-workflow-owner-workflow-progress-after-snapshot-coverage.md before implementation starts.`
+Cross-boundary review: `Required before implementation: review predecessor work/packages/done-20260513-topology-active-gate-snapshot-coverage-after-workflow-progress.md, fix any predecessor proof issues, then implement this publication-convergence package.`
 
 ## Scenario Causal Closure
 
-Reference scenario/probe: `rolling-restart representative after priority recovery workflow-progress proof`
+Reference scenario/probe: `rolling-restart representative after active-gate owner-truth proof`
 
 Phase chain:
 
 1. `publication acknowledgement convergence`
-2. `priority recovery operation workflow progress`
-3. `startup active-gate snapshot coverage`
-4. `startup readiness support evidence`
+2. `startup active-gate snapshot coverage`
+3. `startup readiness support evidence`
 
-Current first frontier: `active_gate_snapshot_coverage under startup_active_gate_owner / snapshot_coverage with snapshotCoverage=2/5 after publication ACK and priority recovery are satisfied.`
+Current first frontier: `publication_ack_convergence under topology_publication_owner / publication_convergence with missing_published_nodes_present after active-gate owner-truth proof.`
 
 Known downstream blockers:
 
-1. `startup readiness support remains inherited active-gate no-progress`
-2. `membership epoch, failure repair intent, rejoin reconciliation, partition descriptor epoch, placement capacity, anti-entropy, bounded budgets, and failure gates remain downstream`
+1. `active-gate snapshot coverage is deferred behind publication convergence with snapshotCoverage=0/5 and selectedSnapshotError=snapshot_timeout`
+2. `startup readiness support remains inherited from publication and active-gate blockers`
+3. `membership epoch, failure repair intent, rejoin reconciliation, partition descriptor epoch, placement capacity, anti-entropy, bounded budgets, and failure gates remain downstream`
 
-Missing causal edge: `Selected control snapshot coverage must derive expected nodes and observed nodes from the current owner-truth active cohort after publication and priority recovery are satisfied.`
+Missing causal edge: `Publication convergence must connect recovery owner truth and published active membership so steady_published does not leave all five expected active nodes missing.`
 
-Missing causal edge probe: `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-green-gate-after-priority-recovery-workflow-progress-after-snapshot-coverage.report.json --explain active_gate_snapshot_coverage`
+Missing causal edge probe: `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-green-gate-after-priority-recovery-workflow-progress-after-snapshot-coverage.report.json --explain publication_ack_convergence`
 
-Bounded progress proof: `Focused proof must show a bounded reconcile, repair, projection, refresh, or owner-boundary migration for selected active-gate snapshot coverage.`
+Bounded progress proof: `Focused proof must show bounded publication reconcile, publish, retain, reduce, or owner-boundary migration for missing published active nodes.`
 
 Bounded progress proof artifact: `test-output/reports/rolling-restart-green-gate-after-priority-recovery-workflow-progress-after-snapshot-coverage.report.json`
 
-Expected observable transition: `Representative rolling-restart should move selected snapshot coverage beyond 2/5, reach active-gate readiness, or migrate to a narrower owner boundary with canonical evidence.`
+Expected observable transition: `Representative rolling-restart should move publication_ack_convergence to satisfied, reduce to a narrower publication-owner blocker, or migrate to a fresh owner boundary with canonical evidence.`
 
 Max progress bound: `one predecessor review subagent, one fix subagent if review finds fixes, one implementation subagent, focused owner proof, and one representative rolling-restart rerun`
 
-Same-frontier fallback: `If active_gate_snapshot_coverage remains first frontier, record the exact selected snapshot source, missing node ids, publication state, and owner truth field that fails to widen.`
+Same-frontier fallback: `If publication_ack_convergence remains first frontier, record publicationStatus, recoveryProtocolState, pendingAckCount, publishedActiveNodeIds, missingPublishedCount, and missing node ids.`
 
-Expected next frontier: `representative-green, startup readiness support, or a narrower startup_active_gate_owner selected-snapshot owner boundary`
+Expected next frontier: `representative-green, startup active-gate snapshot coverage, or a narrower topology_publication_owner publication sub-boundary`
 
 Result classification: `pending-before-probe`
 
@@ -104,27 +105,29 @@ Stop condition: `continue-local-fix`
 
 Write scope:
 
-1. `work/packages/active-20260513-topology-active-gate-snapshot-coverage-after-workflow-progress.md`
+1. `work/packages/active-20260514-topology-publication-convergence-after-active-gate-owner-truth.md`
 2. `work/sprints/active-2026-q2-topology-convergence-ship-shape.md`
 3. `work/sprints/current-blocker.json`
 4. `work/sprints/current-blocker.md`
-5. `src/admin/admin-control-snapshot-class-part-1.js`
-6. `src/admin/admin-control-snapshot-class-part-3.js`
-7. `src/admin/admin-control-snapshot-class-part-5.js`
-8. `src/control-plane/active-node-projection.js`
-9. `src/control-plane/membership-publication-planning.js`
-10. `src/control-plane/membership-publication-coordinator-class-stage-2.js`
-11. `test/admin/admin-control-snapshot.test.js`
-12. `test/control-plane/membership-publication-coordinator-main-stage-1.js`
-13. `test/control-plane/membership-publication-coordinator-main-stage-3.js`
-14. `test/distributed/harness/cluster-segment-7-class-4.js`
-15. `test/distributed/harness/cluster-segment-7-class-5.js`
-16. `test/distributed/harness/__tests__/cluster.test-part-5.js`
+5. `src/control-plane/membership-publication-planning.js`
+6. `src/control-plane/membership-publication-coordinator-class-stage-2.js`
+7. `src/control-plane/publication-owner-decision.js`
+8. `src/control-plane/publication-owner-evidence.js`
+9. `src/control-plane/publication-owner-state.js`
+10. `src/control-plane/publication-recovery-evidence.js`
+11. `src/control-plane/publication-recovery-gate.js`
+12. `src/admin/admin-control-snapshot-class-part-3.js`
+13. `test/control-plane/membership-publication-coordinator-main-stage-1.js`
+14. `test/control-plane/membership-publication-coordinator-main-stage-3.js`
+15. `test/control-plane/membership-publication-coordinator-tail-final-test-cases.js`
+16. `test/control-plane/membership-publication-coordinator-tail-more-test-cases.js`
+17. `test/admin/admin-control-snapshot.test.js`
 
 Handoff files:
 
-1. `work/packages/done-20260513-priority-recovery-operation-workflow-owner-workflow-progress-after-snapshot-coverage.md`
-2. `test-output/reports/rolling-restart-green-gate-after-priority-recovery-workflow-progress-after-snapshot-coverage.report.json`
+1. `work/packages/done-20260513-topology-active-gate-snapshot-coverage-after-workflow-progress.md`
+2. `work/packages/done-20260513-priority-recovery-operation-workflow-owner-workflow-progress-after-snapshot-coverage.md`
+3. `test-output/reports/rolling-restart-green-gate-after-priority-recovery-workflow-progress-after-snapshot-coverage.report.json`
 
 Generated files:
 
@@ -133,33 +136,36 @@ Generated files:
 
 Candidate runtime files:
 
-1. `src/admin/admin-control-snapshot-class-part-1.js`
-2. `src/admin/admin-control-snapshot-class-part-3.js`
-3. `src/admin/admin-control-snapshot-class-part-5.js`
-4. `src/control-plane/active-node-projection.js`
-5. `src/control-plane/membership-publication-planning.js`
-6. `src/control-plane/membership-publication-coordinator-class-stage-2.js`
-7. `test/distributed/harness/cluster-segment-7-class-4.js`
-8. `test/distributed/harness/cluster-segment-7-class-5.js`
+1. `src/control-plane/membership-publication-planning.js`
+2. `src/control-plane/membership-publication-coordinator-class-stage-2.js`
+3. `src/control-plane/publication-owner-decision.js`
+4. `src/control-plane/publication-owner-evidence.js`
+5. `src/control-plane/publication-owner-state.js`
+6. `src/control-plane/publication-recovery-evidence.js`
+7. `src/control-plane/publication-recovery-gate.js`
+8. `src/admin/admin-control-snapshot-class-part-3.js`
 
 Commit scope:
 
-1. `work/packages/active-20260513-topology-active-gate-snapshot-coverage-after-workflow-progress.md`
+1. `work/packages/active-20260514-topology-publication-convergence-after-active-gate-owner-truth.md`
 2. `work/sprints/active-2026-q2-topology-convergence-ship-shape.md`
 3. `work/sprints/current-blocker.json`
 4. `work/sprints/current-blocker.md`
-5. `src/admin/admin-control-snapshot-class-part-1.js`
-6. `src/admin/admin-control-snapshot-class-part-3.js`
-7. `src/admin/admin-control-snapshot-class-part-5.js`
-8. `src/control-plane/active-node-projection.js`
-9. `src/control-plane/membership-publication-planning.js`
-10. `src/control-plane/membership-publication-coordinator-class-stage-2.js`
-11. `test/admin/admin-control-snapshot.test.js`
-12. `test/control-plane/membership-publication-coordinator-main-stage-1.js`
-13. `test/control-plane/membership-publication-coordinator-main-stage-3.js`
-14. `test/distributed/harness/cluster-segment-7-class-4.js`
-15. `test/distributed/harness/cluster-segment-7-class-5.js`
-16. `test/distributed/harness/__tests__/cluster.test-part-5.js`
+5. `src/control-plane/membership-publication-planning.js`
+6. `src/control-plane/membership-publication-coordinator-class-stage-2.js`
+7. `src/control-plane/publication-owner-decision.js`
+8. `src/control-plane/publication-owner-evidence.js`
+9. `src/control-plane/publication-owner-state.js`
+10. `src/control-plane/publication-recovery-evidence.js`
+11. `src/control-plane/publication-recovery-gate.js`
+12. `src/admin/admin-control-snapshot-class-part-3.js`
+13. `test/control-plane/membership-publication-coordinator-main-stage-1.js`
+14. `test/control-plane/membership-publication-coordinator-main-stage-3.js`
+15. `test/control-plane/membership-publication-coordinator-tail-final-test-cases.js`
+16. `test/control-plane/membership-publication-coordinator-tail-more-test-cases.js`
+17. `test/admin/admin-control-snapshot.test.js`
+18. `work/sprints/current-blocker.json`
+19. `work/sprints/current-blocker.md`
 
 Legacy touched files:
 

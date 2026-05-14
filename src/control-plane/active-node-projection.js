@@ -952,6 +952,18 @@ function resolvePriorityRecoveryActiveNodeCohort(publicationConvergence = null) 
       membershipLifecycleSummary.recoveryActiveNodeIds :
       []),
   ]);
+  const missingPublishedRecoveryActiveNodeIds = normalizeNodeIdList([
+    ...(Array.isArray(
+      normalizedPublicationConvergence?.missingPublishedRecoveryActiveNodeIds,
+    ) ?
+      normalizedPublicationConvergence.missingPublishedRecoveryActiveNodeIds :
+      []),
+    ...(Array.isArray(
+      membershipLifecycleSummary?.missingPublishedRecoveryActiveNodeIds,
+    ) ?
+      membershipLifecycleSummary.missingPublishedRecoveryActiveNodeIds :
+      []),
+  ]);
   const admittedPublishedActiveNodeIds = excludeAdmissionBlockedNodeIds(
     publishedActiveNodeIds,
     admissionBlockedNodeIdSet,
@@ -976,6 +988,11 @@ function resolvePriorityRecoveryActiveNodeCohort(publicationConvergence = null) 
     explicitRecoveryActiveNodeIds,
     admissionBlockedNodeIdSet,
   );
+  const admittedMissingPublishedRecoveryActiveNodeIds =
+    excludeAdmissionBlockedNodeIds(
+      missingPublishedRecoveryActiveNodeIds,
+      admissionBlockedNodeIdSet,
+    );
   const explicitRecoveryActiveNodeSource =
     typeof normalizedPublicationConvergence?.recoveryActiveNodeSource ===
       TYPEOF.STRING &&
@@ -1053,6 +1070,17 @@ function resolvePriorityRecoveryActiveNodeCohort(publicationConvergence = null) 
     if (source === ACTIVE_MEMBERSHIP_SNAPSHOT_SOURCE.NONE) {
       source = explicitRecoveryActiveNodeSource ||
         ACTIVE_MEMBERSHIP_SNAPSHOT_SOURCE.LOCALLY_ELIGIBLE_PROJECTION;
+    }
+  }
+  if (admittedMissingPublishedRecoveryActiveNodeIds.length > NUM.ZERO) {
+    activeNodeIds = normalizeNodeIdList([
+      ...activeNodeIds,
+      ...admittedPublishedActiveNodeIds,
+      ...admittedMissingPublishedRecoveryActiveNodeIds,
+    ]);
+    if (source === ACTIVE_MEMBERSHIP_SNAPSHOT_SOURCE.NONE) {
+      source =
+        ACTIVE_MEMBERSHIP_SNAPSHOT_SOURCE.RECOVERY_ELIGIBLE_PROJECTION;
     }
   }
 

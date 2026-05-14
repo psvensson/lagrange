@@ -144,7 +144,7 @@
   "predecessor": "work/packages/done-20260513-topology-active-gate-snapshot-coverage-repair.md",
   "closed": "2026-05-13",
   "commitAndPushLedgerRequired": true,
-  "successor": "work/packages/active-20260513-topology-active-gate-snapshot-coverage-after-workflow-progress.md"
+  "successor": "work/packages/done-20260513-topology-active-gate-snapshot-coverage-after-workflow-progress.md"
 }
 -->
 
@@ -249,8 +249,9 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 ## Commit And Push Ledger
 
 1. Focused package commit: 227c242562abf79e6a0bf65517bee5f8e0f626ec
-2. Pushed to: origin/codex/pending-ack-eligibility-filter
-3. Commit contains only package-owned files/package-status/allowed sprint handoff: yes
+2. Closure ledger/model-ledger commit: 4e43b85fde0edf23e5700235556b90145c7cf38c
+3. Pushed to: origin/codex/pending-ack-eligibility-filter
+4. Commit contains only package-owned files/package-status/allowed sprint handoff: yes
 
 ## Changed Files
 
