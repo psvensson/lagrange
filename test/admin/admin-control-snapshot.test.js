@@ -3,6 +3,7 @@ import {AdminControlSnapshot} from '../../src/admin/admin-control-snapshot.js';
 import {TABLES} from '../../src/constants/index.js';
 import {
   CONTROL_PLANE_READINESS_DIMENSION,
+  CONTROL_PLANE_READINESS_REASON,
 } from '../../src/control-plane/control-plane-readiness-constants.js';
 import {
   buildCanonicalPublicationRecoveryEvidence,
@@ -52,10 +53,25 @@ const ACTIVE_GATE_OWNER_TRUTH_LOCAL_ENDPOINT_TRANSPORT = 'ws';
 const ACTIVE_GATE_OWNER_TRUTH_LOCAL_ENDPOINT_ADDRESS = 'ws://node-1:8082';
 const ACTIVE_GATE_OWNER_TRUTH_PRIORITY_PARTITION_COUNT = 0;
 const ACTIVE_GATE_OWNER_TRUTH_PENDING_ACK_COUNT = 0;
+const ACTIVE_GATE_OWNER_TRUTH_READY_LEASE_COUNT = 1;
 const ACTIVE_GATE_OWNER_TRUTH_SELECTED_PUBLISHED_COUNT = 1;
 const ACTIVE_GATE_OWNER_TRUTH_CURRENT_MISSING_COUNT = 5;
 const ACTIVE_GATE_OWNER_TRUTH_BEST_MISSING_COUNT = 4;
 const ACTIVE_GATE_OWNER_TRUTH_EXPECTED_NODE_COUNT = 5;
+const ACTIVE_GATE_OWNER_COHORT_SCHEMA_VERSION = 1;
+const ACTIVE_GATE_OWNER_COHORT_STATE_DEGRADED = 'degraded';
+const ACTIVE_GATE_OWNER_COHORT_REASON_PUBLISHED_INCOMPLETE =
+  'published_active_coverage_incomplete';
+const ACTIVE_GATE_OWNER_COHORT_BUDGET_STATE_AVAILABLE = 'available';
+const ACTIVE_GATE_OWNER_COHORT_BUDGET_STATE_UNAVAILABLE = 'unavailable';
+const ACTIVE_GATE_OWNER_COHORT_GATE_STATE_STALLED = 'stalled';
+const ACTIVE_GATE_OWNER_COHORT_GATE_REASON_STALLED_NO_PROGRESS =
+  'stalled_no_progress';
+const ACTIVE_GATE_OWNER_COHORT_BUDGET_ELAPSED_MS = 121033;
+const ACTIVE_GATE_OWNER_COHORT_BUDGET_ATTEMPTS = 9;
+const ACTIVE_GATE_OWNER_COHORT_BUDGET_MAX_ATTEMPTS = 10;
+const ACTIVE_GATE_OWNER_COHORT_BUDGET_ATTEMPTS_SINCE_PROGRESS = 2;
+const ACTIVE_GATE_OWNER_COHORT_BUDGET_COORDINATOR_CYCLES = 3;
 const ACTIVE_GATE_OWNER_TRUTH_PUBLICATION_EVIDENCE_UNPUBLISHED =
   'unpublished_observation';
 const ACTIVE_GATE_OWNER_TRUTH_PUBLICATION_EVIDENCE_STEADY =
@@ -227,6 +243,116 @@ test('AdminControlSnapshot exposes publication owner-truth active cohort in cont
         effectiveSource: ACTIVE_GATE_OWNER_TRUTH_EFFECTIVE_SOURCE,
       },
       'diagnostics should identify publication owner truth as the widened source',
+    );
+    t.match(
+      result.controlPlaneDiagnostics.activeGateOwnerCohort,
+      {
+        schemaVersion: ACTIVE_GATE_OWNER_COHORT_SCHEMA_VERSION,
+        state: ACTIVE_GATE_OWNER_COHORT_STATE_DEGRADED,
+        reasonCode: ACTIVE_GATE_OWNER_COHORT_REASON_PUBLISHED_INCOMPLETE,
+        topologyEpoch: ACTIVE_GATE_OWNER_TRUTH_PUBLICATION_EPOCH,
+        expectedNodeIds: [...ACTIVE_GATE_OWNER_TRUTH_NODE_IDS],
+        expectedNodeCount: ACTIVE_GATE_OWNER_TRUTH_EXPECTED_NODE_COUNT,
+        readyLeaseNodeIds: [ACTIVE_GATE_OWNER_TRUTH_LOCAL_NODE_ID],
+        readyLeaseNodeCount: ACTIVE_GATE_OWNER_TRUTH_READY_LEASE_COUNT,
+        publishedActiveNodeIds: [ACTIVE_GATE_OWNER_TRUTH_LOCAL_NODE_ID],
+        publishedActiveNodeCount:
+          ACTIVE_GATE_OWNER_TRUTH_SELECTED_PUBLISHED_COUNT,
+        missingPublishedNodeIds: [...ACTIVE_GATE_OWNER_TRUTH_RECENT_NODE_IDS],
+        missingPublishedCount: ACTIVE_GATE_OWNER_TRUTH_BEST_MISSING_COUNT,
+        pendingReconcileNodeIds: [...ACTIVE_GATE_OWNER_TRUTH_RECENT_NODE_IDS],
+        pendingReconcileCount: ACTIVE_GATE_OWNER_TRUTH_BEST_MISSING_COUNT,
+        activeGateBudget: {
+          state: ACTIVE_GATE_OWNER_COHORT_BUDGET_STATE_UNAVAILABLE,
+        },
+      },
+      'active-gate owner cohort diagnostics should keep published coverage distinct from PUBLISHED status',
+    );
+  });
+
+test('AdminControlSnapshot normalizes active-gate owner cohort budget state',
+  async (t) => {
+    const snapshot = new AdminControlSnapshot({
+      nodeId: ACTIVE_GATE_OWNER_TRUTH_LOCAL_NODE_ID,
+      nowFn: () => ACTIVE_GATE_OWNER_TRUTH_NOW_MS,
+    });
+
+    const activeGateOwnerCohort =
+      snapshot.resolveActiveGateOwnerCohortSnapshot({
+        nodeRows: [
+          {
+            node_id: ACTIVE_GATE_OWNER_TRUTH_LOCAL_NODE_ID,
+            status: ACTIVE_GATE_OWNER_TRUTH_NODE_STATUS,
+            connection_state: ACTIVE_GATE_OWNER_TRUTH_CONNECTION_STATE,
+            ready_lease_expires_at:
+              ACTIVE_GATE_OWNER_TRUTH_NOW_MS +
+                ACTIVE_GATE_OWNER_TRUTH_READY_LEASE_DELTA_MS,
+          },
+          {
+            node_id: ACTIVE_GATE_OWNER_TRUTH_RECENT_NODE_IDS[0],
+            status: ACTIVE_GATE_OWNER_TRUTH_NODE_STATUS,
+            connection_state: ACTIVE_GATE_OWNER_TRUTH_CONNECTION_STATE,
+            ready_lease_expires_at:
+              ACTIVE_GATE_OWNER_TRUTH_NOW_MS +
+                ACTIVE_GATE_OWNER_TRUTH_READY_LEASE_DELTA_MS,
+          },
+        ],
+        activeNodeViews: {
+          effectiveActiveNodeIds: [
+            ACTIVE_GATE_OWNER_TRUTH_LOCAL_NODE_ID,
+            ACTIVE_GATE_OWNER_TRUTH_RECENT_NODE_IDS[0],
+          ],
+          publishedActiveNodeIds: [ACTIVE_GATE_OWNER_TRUTH_LOCAL_NODE_ID],
+        },
+        publicationConvergence: {
+          publicationEpoch: ACTIVE_GATE_OWNER_TRUTH_PUBLICATION_EPOCH,
+          publishedActiveNodeIds: [ACTIVE_GATE_OWNER_TRUTH_LOCAL_NODE_ID],
+          missingPublishedNodeIds: [ACTIVE_GATE_OWNER_TRUTH_RECENT_NODE_IDS[0]],
+        },
+        readinessByNodeId: {
+          [ACTIVE_GATE_OWNER_TRUTH_RECENT_NODE_IDS[0]]: {
+            reasonCodes: [
+              CONTROL_PLANE_READINESS_REASON
+                .PRIORITY_CONTROL_PLANE_RECOVERY_PENDING,
+            ],
+          },
+        },
+        activeGate: {
+          state: ACTIVE_GATE_OWNER_COHORT_GATE_STATE_STALLED,
+          reasonCode:
+            ACTIVE_GATE_OWNER_COHORT_GATE_REASON_STALLED_NO_PROGRESS,
+          elapsedMs: ACTIVE_GATE_OWNER_COHORT_BUDGET_ELAPSED_MS,
+          attempts: ACTIVE_GATE_OWNER_COHORT_BUDGET_ATTEMPTS,
+          maxAttempts: ACTIVE_GATE_OWNER_COHORT_BUDGET_MAX_ATTEMPTS,
+          attemptsSinceProgress:
+            ACTIVE_GATE_OWNER_COHORT_BUDGET_ATTEMPTS_SINCE_PROGRESS,
+          coordinatorCyclesSinceProgress:
+            ACTIVE_GATE_OWNER_COHORT_BUDGET_COORDINATOR_CYCLES,
+        },
+      });
+
+    t.match(
+      activeGateOwnerCohort,
+      {
+        state: ACTIVE_GATE_OWNER_COHORT_STATE_DEGRADED,
+        reasonCode: ACTIVE_GATE_OWNER_COHORT_REASON_PUBLISHED_INCOMPLETE,
+        pendingRecoveryNodeIds: [ACTIVE_GATE_OWNER_TRUTH_RECENT_NODE_IDS[0]],
+        pendingReconcileNodeIds: [],
+        activeGateBudget: {
+          state: ACTIVE_GATE_OWNER_COHORT_BUDGET_STATE_AVAILABLE,
+          activeGateState: ACTIVE_GATE_OWNER_COHORT_GATE_STATE_STALLED,
+          reasonCode:
+            ACTIVE_GATE_OWNER_COHORT_GATE_REASON_STALLED_NO_PROGRESS,
+          elapsedMs: ACTIVE_GATE_OWNER_COHORT_BUDGET_ELAPSED_MS,
+          attempts: ACTIVE_GATE_OWNER_COHORT_BUDGET_ATTEMPTS,
+          maxAttempts: ACTIVE_GATE_OWNER_COHORT_BUDGET_MAX_ATTEMPTS,
+          attemptsSinceProgress:
+            ACTIVE_GATE_OWNER_COHORT_BUDGET_ATTEMPTS_SINCE_PROGRESS,
+          coordinatorCyclesSinceProgress:
+            ACTIVE_GATE_OWNER_COHORT_BUDGET_COORDINATOR_CYCLES,
+        },
+      },
+      'active-gate owner cohort diagnostics should normalize bounded budget fields',
     );
   });
 

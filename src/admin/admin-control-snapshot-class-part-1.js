@@ -63,6 +63,8 @@ const CONTROL_SNAPSHOT_FIELD_SNAPSHOT_REVISION = 'snapshotRevision';
 const CONTROL_SNAPSHOT_PUBLICATION_CONVERGENCE_FIELD =
   'publicationConvergence';
 const CONTROL_SNAPSHOT_PUBLICATION_EPOCH_FIELD = 'publicationEpoch';
+const CONTROL_SNAPSHOT_ACTIVE_GATE_OWNER_COHORT_FIELD =
+  'activeGateOwnerCohort';
 const CONTROL_SNAPSHOT_AUTHORITY_INTEGER_STATE_AVAILABLE = 'available';
 const CONTROL_SNAPSHOT_AUTHORITY_INTEGER_STATE_UNAVAILABLE = 'unavailable';
 const CONTROL_SNAPSHOT_ADMIN_OBSERVATION_SCHEMA_VERSION = 1;
@@ -411,6 +413,13 @@ class AdminControlSnapshotPart1 {
       controlPlaneDiagnostics &&
       typeof controlPlaneDiagnostics === TYPEOF.OBJECT
     ) {
+      controlPlaneDiagnostics[CONTROL_SNAPSHOT_ACTIVE_GATE_OWNER_COHORT_FIELD] =
+        this.resolveActiveGateOwnerCohortSnapshot({
+          nodeRows,
+          activeNodeViews,
+          controlPlaneDiagnostics,
+          nowMs: capturedAt,
+        });
       controlPlaneDiagnostics.activeNodeViews = {
         authoritativeSource: activeNodeViews.authoritativeSource,
         authoritativeNodeIds: [...activeNodeViews.authoritativeActiveNodeIds],

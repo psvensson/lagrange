@@ -21,7 +21,10 @@
   ],
   "writeScope": [
     "work/packages/active-20260514-topology-active-gate-owner-cohort-convergence.md",
-    "work/sprints/active-2026-q2-topology-convergence-residual-closure.md"
+    "work/sprints/active-2026-q2-topology-convergence-residual-closure.md",
+    "src/admin/admin-control-snapshot-class-part-1.js",
+    "src/admin/admin-control-snapshot-class-part-3.js",
+    "test/admin/admin-control-snapshot.test.js"
   ],
   "handoffFiles": [
     "work/packages/done-20260513-topology-active-gate-snapshot-coverage-after-workflow-progress.md",
@@ -38,7 +41,10 @@
   ],
   "commitScope": [
     "work/packages/active-20260514-topology-active-gate-owner-cohort-convergence.md",
-    "work/sprints/active-2026-q2-topology-convergence-residual-closure.md"
+    "work/sprints/active-2026-q2-topology-convergence-residual-closure.md",
+    "src/admin/admin-control-snapshot-class-part-1.js",
+    "src/admin/admin-control-snapshot-class-part-3.js",
+    "test/admin/admin-control-snapshot.test.js"
   ],
   "modelFit": {
     "packageClass": "representative-frontier-closure",
@@ -63,8 +69,8 @@
     "hypothesis": "startup_active_gate_owner / snapshot_coverage proof should reduce, migrate, or classify snapshot_coverage_incomplete without hiding the sprint representative residual.",
     "stopConditionCheck": "npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-green-gate-after-priority-recovery-workflow-progress-after-snapshot-coverage.report.json",
     "expectedCausalModelChange": "snapshot_coverage_incomplete becomes representative-green, reduced, same-frontier, migrated, or classification-only with a named owner-boundary reason.",
-    "representativeOutcome": "pending-before-rerun",
-    "causalDebt": "Until startup_active_gate_owner / snapshot_coverage is proven, the sprint representative rolling-restart residual stays open at startup_active_gate_owner / snapshot_coverage.",
+    "representativeOutcome": "migrated",
+    "causalDebt": "The active-gate owner cohort snapshot now exposes the missing published cohort explicitly. The sprint representative rolling-restart residual stays open and moves to topology_publication_owner / publication_projection_cohort for publication projection repair.",
     "crossBoundaryReview": "Required before closure through the runtime-owner-boundary subagent ledger or an allowed waiver recorded in this package."
   },
   "scenarioCausalClosure": {
@@ -86,9 +92,21 @@
     "expectedObservableTransition": "snapshot_coverage_incomplete resolves to green evidence, a reduced residual, same-frontier evidence, migrated owner-boundary proof, or classification-only stop.",
     "maxProgressBound": "one activation cycle: package doctor, extractor/probe, owner-file proof, focused validation, and result classification",
     "sameFrontierFallback": "keep startup_active_gate_owner / snapshot_coverage active and do not broaden the package or claim ship proof",
-    "expectedNextFrontier": "representative green evidence or a narrower owner-boundary blocker selected by canonical evidence",
-    "resultClassification": "pending-before-probe",
-    "stopCondition": "continue-local-fix"
+    "expectedNextFrontier": "topology_publication_owner / publication_projection_cohort",
+    "resultClassification": "migrated",
+    "stopCondition": "migrate-owner-boundary"
+  },
+  "ownerBoundaryMigrationProof": {
+    "fromOwner": "startup_active_gate_owner",
+    "fromBoundary": "snapshot_coverage",
+    "toOwner": "topology_publication_owner",
+    "toBoundary": "publication_projection_cohort",
+    "reason": "The active-gate owner snapshot now exposes expected, ready-leased, published, missing, pending, epoch, and budget dimensions. Focused proof shows PUBLISHED status still coexists with missing published active nodes, so the remaining canonical blocker is publication projection.",
+    "evidence": [
+      "node --test test/admin/admin-control-snapshot.test.js",
+      "baseline HEAD export produced the same 8 unrelated priority-recovery admin snapshot failures",
+      "test/distributed/harness/cluster-segment-7-class-5.js still computes snapshot coverage from observed top-level snapshot nodes, so this package is classification evidence rather than representative green proof"
+    ]
   }
 }
 -->
@@ -197,15 +215,14 @@ package.
 
 1. [x] Review subagent recorded: Agent Codex (019e2672-0488-71c3-b2b5-6244c3b5515e) reviewed work/packages/done-20260514-topology-active-gate-budget-closure.md; result fixes-required.
 2. [x] Fix subagent recorded or explicitly not needed: Agent Codex (019e2675-a55f-7101-94ab-4b2af3bdb06f) fixed work/packages/done-20260514-topology-active-gate-budget-closure.md.
-3. [ ] Implementation subagent recorded: pending until pre-implementation proof
-   is clean.
+3. [x] Implementation subagent recorded: Agent Codex (019e2684-8e3c-7281-80ba-cf7886e62ea3) implemented work/packages/active-20260514-topology-active-gate-owner-cohort-convergence.md.
 
 ## Model Fit
 
 - Package class: `representative-frontier-closure`
 - Intended minimum model: `gpt-5.3-codex`
 - Scope shape: `owner-boundary-contraction/current-frontier`
-- Owned files: `work/packages/active-20260514-topology-active-gate-owner-cohort-convergence.md`, `work/sprints/active-2026-q2-topology-convergence-residual-closure.md`
+- Owned files: `work/packages/active-20260514-topology-active-gate-owner-cohort-convergence.md`, `work/sprints/active-2026-q2-topology-convergence-residual-closure.md`, `src/admin/admin-control-snapshot-class-part-1.js`, `src/admin/admin-control-snapshot-class-part-3.js`, `test/admin/admin-control-snapshot.test.js`
 - Forbidden files: `priority-recovery-runtime-changes-without-frontier-evidence`, `harness-timeout-increases`
 - Frozen decisions: package scope and lane stay bounded unless explicitly escalated.
 - Escalation triggers: owned files expand beyond this package, runtime ownership changes, or representative scenario evidence changes.
@@ -247,6 +264,42 @@ package.
 3. Rolling-restart reaches `active=5/5`, `snapshotCoverage=5/5`, and
    `missingPublished=0`, or this package records a narrower canonical blocker
    with exact owner/boundary evidence.
+
+## Implementation Notes
+
+The active-gate owner cohort is now emitted as
+`controlPlaneDiagnostics.activeGateOwnerCohort` from the admin control snapshot.
+The snapshot is intentionally separate from `activeNodeViews` so existing exact
+published/projected node-view contracts remain stable while LLMs and harness
+triage get one normalized owner-cohort record.
+
+The snapshot records schema version, state, reason code, topology epoch,
+expected node IDs/count, ready lease node IDs/count, published active node
+IDs/count, missing published node IDs/count, pending recovery node IDs/count,
+pending reconcile node IDs/count, and a bounded `activeGateBudget` record. When
+publication status is `PUBLISHED` but published active coverage is incomplete,
+the snapshot reports `degraded` with
+`published_active_coverage_incomplete` instead of allowing publication status
+alone to imply durable active convergence.
+
+Focused proof did not claim representative green. The distributed harness still
+computes active-gate snapshot coverage from top-level observed snapshot nodes,
+and the new owner-cohort diagnostic makes the remaining blocker sharper:
+`topology_publication_owner / publication_projection_cohort` must reconcile why
+`PUBLISHED` coexists with `publishedActive=1/5` and four missing published active
+nodes.
+
+## Validation Notes
+
+1. `node --test test/admin/admin-control-snapshot.test.js` - new owner-cohort
+   assertions passed; full file remains red with the same 8 pre-existing
+   priority-recovery assertion failures as a clean `HEAD` export in
+   `/tmp/something-baseline-head-585bece0`.
+2. `node scripts/check-guideline-literals.js src/admin/admin-control-snapshot-class-part-1.js src/admin/admin-control-snapshot-class-part-3.js test/admin/admin-control-snapshot.test.js` - passed.
+3. `node scripts/check-guideline-decision-boundaries.js src/admin/admin-control-snapshot-class-part-1.js src/admin/admin-control-snapshot-class-part-3.js test/admin/admin-control-snapshot.test.js` - passed.
+4. `npm run audit:runtime-grammar:file -- src/admin/admin-control-snapshot-class-part-1.js src/admin/admin-control-snapshot-class-part-3.js test/admin/admin-control-snapshot.test.js` - passed.
+5. `npm run work:package:doctor -- --fix-dry-run work/packages/active-20260514-topology-active-gate-owner-cohort-convergence.md` - passed.
+6. `git diff --check -- src/admin/admin-control-snapshot-class-part-1.js src/admin/admin-control-snapshot-class-part-3.js test/admin/admin-control-snapshot.test.js work/packages/active-20260514-topology-active-gate-owner-cohort-convergence.md` - passed.
 
 ## Commit And Push Ledger
 
