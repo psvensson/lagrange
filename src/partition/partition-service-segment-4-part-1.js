@@ -1,5 +1,8 @@
 import {PARTITION_SERVICE_SHARED} from './partition-service-shared.js';
 import {PartitionServiceSegment3} from './partition-service-segment-3.js';
+import {
+  assertSplitRoutingDescriptorEpoch as assertPartitionSplitRoutingDescriptorEpoch,
+} from './partition-split-routing.js';
 
 const {
   CONTROL_PLANE_MUTATION_OPERATION,
@@ -155,6 +158,50 @@ class PartitionServiceSegment4Part1 extends PartitionServiceSegment3 {
       workflowId:
         metadata[PARTITION_TRANSITION_METADATA_FIELD.WORKFLOW_ID] || null,
     };
+  }
+  /**
+   * Build descriptor-epoch evidence for split mirror routing when the
+   * system-table cache can see the table and target partition rows.
+   * @param {Object} metadata - Normalized split transition metadata.
+   * @return {Object|null} Descriptor epoch evidence.
+   * @private
+   */
+  resolveSplitDescriptorEpochEvidence(metadata) {
+    if (!this.systemTableCache || typeof this.systemTableCache.get !==
+        PARTITION_SERVICE_TYPE.FUNCTION) {
+      return null;
+    }
+    const tableDescriptor =
+      this.systemTableCache.get(TABLES.TABLES, this.tableId) ||
+      this.systemTableCache.get(TABLES.TABLES, this.tableName) ||
+      null;
+    if (!tableDescriptor) {
+      return null;
+    }
+    const targetPartitionIds = Array.isArray(metadata?.targetPartitionIds) ?
+      metadata.targetPartitionIds :
+      [];
+    const targetPartitionDescriptors = targetPartitionIds.map((partitionId) =>
+      this.systemTableCache.get(TABLES.PARTITIONS, partitionId) || null,
+    );
+    return {
+      tableDescriptor,
+      targetPartitionDescriptors,
+      requireTargetDescriptors: targetPartitionIds.length > NUM.ZERO,
+    };
+  }
+  /**
+   * Assert split routing still matches the descriptor epoch visible in
+   * system-table metadata.
+   * @param {Object} metadata - Normalized split transition metadata.
+   * @return {Object|null} Descriptor epoch decision when evidence exists.
+   * @private
+   */
+  assertSplitRoutingDescriptorEpoch(metadata) {
+    return assertPartitionSplitRoutingDescriptorEpoch(metadata, {
+      descriptorEpochEvidence:
+        this.resolveSplitDescriptorEpochEvidence(metadata),
+    });
   }
   /**
    * Determine whether two split-replication descriptors refer to the same split.
@@ -413,6 +460,7 @@ class PartitionServiceSegment4Part1 extends PartitionServiceSegment3 {
    * @private
    */
   async applySplitSnapshotRow(row, columns, metadata) {
+    this.assertSplitRoutingDescriptorEpoch(metadata);
     const targetPartitionId = this.resolveSplitTargetPartitionId(
       row?.[metadata.primaryKeyColumn],
       metadata,
@@ -560,6 +608,8 @@ class PartitionServiceSegment4Part1 extends PartitionServiceSegment3 {
     await replayPartitionSplitEntry(entry, metadata, {
       queryExecutor: this.sqlQueryEngine?.queryExecutor || null,
       tableName: this.tableName,
+      descriptorEpochEvidence:
+        this.resolveSplitDescriptorEpochEvidence(metadata),
     });
   }
   /**

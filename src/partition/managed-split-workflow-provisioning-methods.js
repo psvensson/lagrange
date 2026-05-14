@@ -14,6 +14,10 @@ import {
   PARTITION_TRANSITION_METADATA_FIELD,
   PARTITION_TRANSITION_STATE,
 } from './partition-constants.js';
+import {
+  buildPartitionDescriptorEpochDecision,
+  isPartitionDescriptorEpochAccepted,
+} from './partition-descriptor-epoch-contract.js';
 import {SPLIT_PARTICIPANT_PREFIX} from './split-ack-constants.js';
 import {
   isRetryableManagedSplitExecutionFailure,
@@ -36,6 +40,8 @@ const LOCAL_STR_S87I2 = 'partition_key_start';
 const LOCAL_STR_PARTITION_KEY_END = 'partition_key_end';
 const LOCAL_STR_PARTITION_VERSION = 'partition_version';
 const LOCAL_STR_1BLIL = 'Managed split child partition metadata mismatch for ';
+const LOCAL_STR_DESCRIPTOR_EPOCH_REJECTED =
+  'Managed split partition descriptor epoch rejected stale evidence';
 
 const CRITICAL_SPLIT_MINIMUM_ROUTABLE_SOURCE_COUNT = 1;
 
@@ -575,9 +581,33 @@ class ManagedSplitWorkflowProvisioningMethods {
       ],
     );
     if (Number.isInteger(persistedVersion) && persistedVersion > LOCAL_NUM_ZERO) {
+      this.assertSplitTargetDescriptorEpoch(tableInfo, persistedVersion);
       return persistedVersion;
     }
-    return this.resolveActivePartitionVersion(tableInfo) + LOCAL_NUM_ONE;
+    const targetVersion =
+      this.resolveActivePartitionVersion(tableInfo) + LOCAL_NUM_ONE;
+    this.assertSplitTargetDescriptorEpoch(tableInfo, targetVersion);
+    return targetVersion;
+  }
+
+  /**
+   * Validate one split target version against the table descriptor epoch.
+   * @param {Object} tableInfo
+   * @param {number} targetVersion
+   * @return {Object}
+   * @private
+   */
+  assertSplitTargetDescriptorEpoch(tableInfo, targetVersion) {
+    const decision = buildPartitionDescriptorEpochDecision({
+      tableDescriptor: tableInfo,
+      routeTargetPartitionVersion: targetVersion,
+      requireRouteTargetVersion: true,
+      allowNextActivePartitionVersion: true,
+    });
+    if (!isPartitionDescriptorEpochAccepted(decision)) {
+      throw new Error(LOCAL_STR_DESCRIPTOR_EPOCH_REJECTED);
+    }
+    return decision;
   }
 
   /**
@@ -939,6 +969,20 @@ class ManagedSplitWorkflowProvisioningMethods {
       expected.partition_version,
       existing.partition_version ?? existing.partitionVersion ?? null,
     );
+    const descriptorEpochDecision = buildPartitionDescriptorEpochDecision({
+      tableDescriptor: {
+        active_partition_version: expected.partition_version,
+      },
+      partitionDescriptor: existing,
+      requirePartitionDescriptor: true,
+    });
+    if (!isPartitionDescriptorEpochAccepted(descriptorEpochDecision)) {
+      mismatches.push({
+        field: LOCAL_STR_PARTITION_VERSION,
+        expected: expected.partition_version,
+        actual: existing.partition_version ?? existing.partitionVersion ?? null,
+      });
+    }
 
     if (mismatches.length > LOCAL_NUM_ZERO) {
       throw new Error(

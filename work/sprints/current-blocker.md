@@ -30,7 +30,12 @@ Make partition descriptors versioned routing truth for split merge move and stal
 
 ## Proof Ladder
 
-1. None recorded
+1. `npm run analyze:owner-files -- partition_topology_owner descriptor_epoch --markdown`
+2. `npx tap test/partition/partition-descriptor-epoch-contract.test.js test/partition/partition-split-routing.test.js test/partition/managed-split-workflow-transition-persistence.test.js test/rebalancer/move-planner-placement-owner-kernel.test.js`
+3. `node scripts/check-guideline-literals.js src/partition/partition-descriptor-epoch-contract.js src/partition/partition-constants.js src/partition/partition-split-routing.js src/partition/partition-service-segment-4-part-1.js src/partition/managed-split-workflow-provisioning-methods.js src/rebalancer/move-planner.js src/rebalancer/move-planner-state-methods.js`
+4. `node scripts/check-guideline-decision-boundaries.js src/partition/partition-descriptor-epoch-contract.js src/partition/partition-constants.js src/partition/partition-split-routing.js src/partition/partition-service-segment-4-part-1.js src/partition/managed-split-workflow-provisioning-methods.js src/rebalancer/move-planner.js src/rebalancer/move-planner-state-methods.js`
+5. `npm run audit:runtime-grammar:file -- src/partition/partition-descriptor-epoch-contract.js src/partition/partition-constants.js src/partition/partition-split-routing.js src/partition/partition-service-segment-4-part-1.js src/partition/managed-split-workflow-provisioning-methods.js src/rebalancer/move-planner.js src/rebalancer/move-planner-state-methods.js`
+6. `git diff --check -- work/packages/active-20260513-topology-partition-descriptor-epoch.md work/model-ledger.jsonl work/sprints/active-2026-q2-topology-convergence-ship-shape.md work/sprints/current-blocker.json work/sprints/current-blocker.md src/partition/partition-descriptor-epoch-contract.js src/partition/partition-constants.js src/partition/partition-split-routing.js src/partition/partition-service-segment-4-part-1.js src/partition/managed-split-workflow-provisioning-methods.js src/rebalancer/move-planner.js src/rebalancer/move-planner-state-methods.js test/partition/partition-descriptor-epoch-contract.test.js test/partition/partition-split-routing.test.js test/partition/managed-split-workflow-transition-persistence.test.js test/rebalancer/move-planner-placement-owner-kernel.test.js`
 
 ## Model Fit
 
@@ -47,61 +52,90 @@ Escalation triggers:
 
 ## Causal Governance
 
-Causal hypothesis: `unknown`
+Causal hypothesis: `If partition_topology_owner exposes one descriptor epoch decision for table and partition rows, split, merge, move planning, and write routing can reject stale topology evidence before changing placement or routing state.`
 
-Stop-condition check: `unknown`
+Stop-condition check: `Do not rerun rolling-restart for this package; npm run analyze:causal-model is cited only as not applicable for scenario:none/artifact:none. Focused stop proof is descriptor-epoch owner tests plus directly affected split-routing and move-planner consumers.`
 
-Expected causal-model change: `unknown`
+Expected causal-model change: `partition_topology_owner / descriptor_epoch becomes the routing and placement freshness boundary consumed by split, merge, move, and stale-route rejection paths.`
 
-Representative outcome: `unknown`
+Representative outcome: `classification-only`
 
-Causal debt: `unknown`
+Causal debt: `Later packages must use descriptor epoch outcomes for placement capacity, anti-entropy, bounded budgets, and failure scenario gates without reopening this owner contract.`
 
-Cross-boundary review: `unknown`
+Cross-boundary review: `Review and fix subagents must confirm the post-rejoin predecessor closed cleanly before implementation.`
 
 ## Scenario Causal Closure
 
-Reference scenario/probe: `unknown`
+Reference scenario/probe: `focused partition descriptor epoch tests`
 
 Phase chain:
 
-1. None recorded
+1. `partition descriptor read`
+2. `descriptor epoch decision`
+3. `split or move admission`
+4. `write route acceptance or stale-route rejection`
 
-Current first frontier: `unknown`
+Current first frontier: `systemic sprint frontier: partition_topology_owner / descriptor_epoch / partition_map_epoch_missing`
 
 Known downstream blockers:
 
-1. None recorded
+1. `placement capacity`
+2. `anti-entropy reconciler`
+3. `bounded progress budgets`
+4. `failure scenario gates`
 
-Missing causal edge: `unknown`
+Missing causal edge: `Partition consumers infer freshness from cache-visible table and partition rows without one canonical descriptor epoch outcome.`
 
-Missing causal edge probe: `unknown`
+Missing causal edge probe: `npx tap test/partition/partition-descriptor-epoch-contract.test.js test/partition/partition-split-routing.test.js test/partition/managed-split-workflow-transition-persistence.test.js test/rebalancer/move-planner-placement-owner-kernel.test.js`
 
-Bounded progress proof: `unknown`
+Bounded progress proof: `Focused tests must prove stale table/partition descriptor combinations are rejected, matching descriptor epochs are accepted, split routing dispatch rejects stale routes, and move-planner reconcile snapshots consume descriptor epoch outcomes.`
 
-Bounded progress proof artifact: `unknown`
+Bounded progress proof artifact: `test/partition/partition-descriptor-epoch-contract.test.js, test/partition/partition-split-routing.test.js, test/partition/managed-split-workflow-transition-persistence.test.js, and test/rebalancer/move-planner-placement-owner-kernel.test.js`
 
-Expected observable transition: `unknown`
+Expected observable transition: `cache-row freshness inference -> descriptor epoch decision with stale-route rejection`
 
-Max progress bound: `unknown`
+Max progress bound: `one review subagent, one fix subagent if needed, one implementation subagent, focused owner tests, static guardrails`
 
-Same-frontier fallback: `unknown`
+Same-frontier fallback: `If scope requires a broad membership epoch or scenario artifact rerun, split that consumer into a later package instead of broadening this one.`
 
-Expected next frontier: `unknown`
+Expected next frontier: `topology_placement_owner / capacity_fail_closed`
 
-Result classification: `unknown`
+Result classification: `classification-only`
 
-Stop condition: `unknown`
+Stop condition: `classification-only-stop`
 
 ## Scope
 
 Write scope:
 
-1. None recorded
+1. `work/packages/active-20260513-topology-partition-descriptor-epoch.md`
+2. `work/model-ledger.jsonl`
+3. `work/sprints/active-2026-q2-topology-convergence-ship-shape.md`
+4. `work/sprints/current-blocker.json`
+5. `work/sprints/current-blocker.md`
+6. `src/partition/partition-descriptor-epoch-contract.js`
+7. `src/partition/partition-constants.js`
+8. `src/partition/partition-split-routing.js`
+9. `src/partition/partition-service-segment-4-part-1.js`
+10. `src/partition/managed-split-workflow-provisioning-methods.js`
+11. `src/rebalancer/move-planner.js`
+12. `src/rebalancer/move-planner-state-methods.js`
+13. `test/partition/partition-descriptor-epoch-contract.test.js`
+14. `test/partition/partition-split-routing.test.js`
+15. `test/partition/managed-split-workflow-transition-persistence.test.js`
+16. `test/rebalancer/move-planner-placement-owner-kernel.test.js`
 
 Handoff files:
 
-1. None recorded
+1. `work/packages/done-20260513-topology-post-rejoin-reconciliation.md`
+2. `work/packages/done-20260513-topology-failure-repair-intents.md`
+3. `work/packages/done-20260513-topology-membership-epoch-fencing.md`
+4. `src/bootstrap/system-table-schemas-constants.js`
+5. `src/partition/partition-service-constants.js`
+6. `src/partition/managed-split-workflow.js`
+7. `src/partition/partition-service-row-owner.js`
+8. `src/partition/partition-split-merge-manager.js`
+9. `src/rebalancer/topology-owner-constants.js`
 
 Generated files:
 
@@ -109,11 +143,32 @@ Generated files:
 
 Candidate runtime files:
 
-1. None recorded
+1. `src/partition/partition-descriptor-epoch-contract.js`
+2. `src/partition/partition-constants.js`
+3. `src/partition/partition-split-routing.js`
+4. `src/partition/partition-service-segment-4-part-1.js`
+5. `src/partition/managed-split-workflow-provisioning-methods.js`
+6. `src/rebalancer/move-planner.js`
+7. `src/rebalancer/move-planner-state-methods.js`
 
 Commit scope:
 
-1. None recorded
+1. `work/packages/active-20260513-topology-partition-descriptor-epoch.md`
+2. `work/model-ledger.jsonl`
+3. `work/sprints/active-2026-q2-topology-convergence-ship-shape.md`
+4. `work/sprints/current-blocker.json`
+5. `work/sprints/current-blocker.md`
+6. `src/partition/partition-descriptor-epoch-contract.js`
+7. `src/partition/partition-constants.js`
+8. `src/partition/partition-split-routing.js`
+9. `src/partition/partition-service-segment-4-part-1.js`
+10. `src/partition/managed-split-workflow-provisioning-methods.js`
+11. `src/rebalancer/move-planner.js`
+12. `src/rebalancer/move-planner-state-methods.js`
+13. `test/partition/partition-descriptor-epoch-contract.test.js`
+14. `test/partition/partition-split-routing.test.js`
+15. `test/partition/managed-split-workflow-transition-persistence.test.js`
+16. `test/rebalancer/move-planner-placement-owner-kernel.test.js`
 
 Legacy touched files:
 

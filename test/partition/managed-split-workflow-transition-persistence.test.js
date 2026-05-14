@@ -27,6 +27,9 @@ import {
   createTransactionCoordinator,
 } from './managed-split-workflow-test-helpers.js';
 
+const DESCRIPTOR_EPOCH_REJECTED_MESSAGE =
+  'Managed split partition descriptor epoch rejected stale evidence';
+
 test('ManagedSplitWorkflow reuses persisted split plan and child metadata ' +
   'on retryable failed execution transitions', async (t) => {
   const existingWorkflowId = 'split-tbl-users-users-p1-v2';
@@ -140,6 +143,29 @@ test('ManagedSplitWorkflow reuses persisted split plan and child metadata ' +
     'retryable failed execution should provision the persisted split child IDs',
   );
 });
+
+test('ManagedSplitWorkflow rejects stale persisted split target version',
+  async (t) => {
+    const {workflow} = buildWorkflow();
+
+    t.throws(
+      () => workflow.resolveTargetPartitionVersion(
+        {
+          table_id: 'tbl-users',
+          table_name: 'users',
+          partition_key: 'id',
+          active_partition_version: 4,
+        },
+        {
+          metadata: {
+            [PARTITION_TRANSITION_METADATA_FIELD.TARGET_PARTITION_VERSION]:
+              2,
+          },
+        },
+      ),
+      {message: DESCRIPTOR_EPOCH_REJECTED_MESSAGE},
+    );
+  });
 
 test('ManagedSplitWorkflow wraps partition metadata insertion in ' +
   'transaction boundary', async (t) => {

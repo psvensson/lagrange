@@ -190,6 +190,37 @@ const PARTITION_SPLIT_MIRROR_ORIGIN = Object.freeze({
   TARGET: 'target',
 });
 
+const PARTITION_DESCRIPTOR_EPOCH_DECISION = Object.freeze({
+  ACCEPT: 'accept',
+  REJECT: 'reject',
+});
+
+const PARTITION_DESCRIPTOR_EPOCH_STATE = Object.freeze({
+  ACTIVE_MATCH: 'active_match',
+  PENDING_MATCH: 'pending_match',
+  SPLIT_TARGET_MATCH: 'split_target_match',
+  STALE_ROUTE: 'stale_route',
+  MISSING_EVIDENCE: 'missing_evidence',
+});
+
+const PARTITION_DESCRIPTOR_EPOCH_REASON = Object.freeze({
+  ACTIVE_DESCRIPTOR_EPOCH_MATCH: 'active_descriptor_epoch_match',
+  PENDING_DESCRIPTOR_EPOCH_MATCH: 'pending_descriptor_epoch_match',
+  SPLIT_TARGET_VERSION_MATCH: 'split_target_version_match',
+  TABLE_ACTIVE_VERSION_MISSING: 'table_active_version_missing',
+  ROUTE_TARGET_VERSION_MISSING: 'route_target_version_missing',
+  PARTITION_DESCRIPTOR_VERSION_MISSING:
+    'partition_descriptor_version_missing',
+  TARGET_DESCRIPTOR_VERSION_MISSING: 'target_descriptor_version_missing',
+  PARTITION_DESCRIPTOR_STALE: 'partition_descriptor_stale',
+  ROUTE_TARGET_VERSION_STALE: 'route_target_version_stale',
+  TARGET_DESCRIPTOR_VERSION_STALE: 'target_descriptor_version_stale',
+});
+
+const PARTITION_DESCRIPTOR_EPOCH_ERROR_MSG = Object.freeze({
+  STALE_ROUTE: 'Partition descriptor epoch rejected stale route',
+});
+
 const PARTITION_RAFT_ROLE = RAFT_ROLE;
 
 const PARTITION_REQUEST_TYPE = Object.freeze({
@@ -400,6 +431,10 @@ export {
   RETRYABLE_PARTITION_TRANSITION_STATES,
   PARTITION_TRANSITION_METADATA_FIELD,
   PARTITION_SPLIT_MIRROR_ORIGIN,
+  PARTITION_DESCRIPTOR_EPOCH_DECISION,
+  PARTITION_DESCRIPTOR_EPOCH_ERROR_MSG,
+  PARTITION_DESCRIPTOR_EPOCH_REASON,
+  PARTITION_DESCRIPTOR_EPOCH_STATE,
   SPLIT_OWNER_MANAGED_PHASES,
   buildPartitionTransitionProjection,
   isDeferredPartitionTransitionOutcome,

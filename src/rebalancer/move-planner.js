@@ -18,6 +18,13 @@ import {
   isSystemTablePartition,
 } from '../bootstrap/system-partition-classification.js';
 import {NUM, WORKFLOW_STEP} from '../constants/index.js';
+import {
+  PARTITION_DESCRIPTOR_EPOCH_DECISION,
+  PARTITION_DESCRIPTOR_EPOCH_REASON,
+} from '../partition/partition-constants.js';
+import {
+  buildPartitionDescriptorEpochDecision,
+} from '../partition/partition-descriptor-epoch-contract.js';
 import {ADJUST_DIRECTION, ReplicaStatus} from './replica-status.js';
 import {
   adjustToOddCount,
@@ -57,6 +64,7 @@ const MOVE_PLANNER_LITERAL = Object.freeze({
   MOVEPLANNER_REQUIRES_MOVESTATEPROVIDER:
     'MovePlanner requires moveStateProvider',
   FUNCTION: 'function',
+  OBJECT: 'object',
   STRING: 'string',
   EMPTY_STRING: '',
   NODES_WITHOUT_LOCAL_REPLICA: 'nodes_without_local_replica: ',
@@ -83,6 +91,9 @@ const MOVE_PLANNER_REBALANCE_REASON = Object.freeze({
   NODES_WITHOUT_LOCAL_REPLICA: 'nodes_without_local_replica',
 });
 const MESSAGE_GROUP_PLACEMENT_DEFAULT_MAX_REPLICA_COUNT = NUM.FIVE;
+const MOVE_PLANNER_DESCRIPTOR_EPOCH_DIAGNOSTIC = Object.freeze({
+  REJECTED: 'partition_descriptor_epoch_rejected',
+});
 function buildReplicaCountPolicyDecision(options = {}) {
   const healthyReplicaCount = Number(options.healthyReplicaCount) || NUM.ZERO;
   const actionableTarget = Number(options.actionableTarget) || NUM.ZERO;
@@ -128,6 +139,7 @@ function buildMessageGroupPlacementResult(options = {}) {
     capacityDiagnostics: options.capacityDiagnostics,
     placementOwnerOutcome:
       options.placementOwnerOutcome || buildPlacementOwnerTargetOutcome(),
+    topologyTransitionSnapshot: options.topologyTransitionSnapshot || null,
   };
 }
 
@@ -142,6 +154,7 @@ const MOVE_PLANNER_STATE_METHODS = createMovePlannerStateMethods({
   WORKFLOW_STEP,
   adjustToOddCount,
   applyAdditionalRebalancingReason,
+  buildPartitionDescriptorEpochDecision,
   buildReplicaCountPolicyDecision,
   getNextOddCount,
   getPartitionRowFromCache,
@@ -236,6 +249,31 @@ class MovePlanner {
       policy.targetReplicaCount || policy.replicaCount || NUM.THREE;
     const estimatedBytes = this.getEstimatedBytesForEntity();
     const transitionSnapshot = this.buildTopologyTransitionSnapshot();
+    if (this.isDescriptorEpochRejected(transitionSnapshot)) {
+      const diagnostics =
+        this.buildDescriptorEpochRejectedDiagnostics(nodes, transitionSnapshot);
+      if (
+        this.entityType === EntityType.MESSAGE_GROUP &&
+        policy.ensureLocalAccess
+      ) {
+        return this.calculateMessageGroupPlacement(
+          [],
+          targetReplicaCount,
+          policy,
+          diagnostics,
+          transitionSnapshot,
+          currentReplicas,
+        );
+      }
+      return this.calculatePartitionPlacement(
+        [],
+        targetReplicaCount,
+        policy,
+        diagnostics,
+        transitionSnapshot,
+        currentReplicas,
+      );
+    }
     const {feasibleNodes, diagnostics} = await this.filterNodesByCapacity(
       nodes,
       estimatedBytes,
@@ -293,6 +331,42 @@ class MovePlanner {
       entityType: this.entityType,
       sizeBytes: NUM.ZERO,
     });
+  }
+
+  /**
+   * Determine whether descriptor epoch evidence rejects placement planning.
+   * @param {Object} transitionSnapshot
+   * @return {boolean}
+   * @private
+   */
+  isDescriptorEpochRejected(transitionSnapshot) {
+    return transitionSnapshot?.descriptorEpochDecision?.decision ===
+      PARTITION_DESCRIPTOR_EPOCH_DECISION.REJECT;
+  }
+
+  /**
+   * Build capacity-shaped diagnostics for descriptor epoch rejection.
+   * @param {Array<Object>} nodes
+   * @param {Object} transitionSnapshot
+   * @return {Object}
+   * @private
+   */
+  buildDescriptorEpochRejectedDiagnostics(nodes, transitionSnapshot) {
+    const candidateCount = Array.isArray(nodes) ? nodes.length : NUM.ZERO;
+    return {
+      totalCandidates: candidateCount,
+      feasibleCount: NUM.ZERO,
+      rejectedCount: candidateCount,
+      rejectionsByReason: {
+        [transitionSnapshot.descriptorEpochDecision.reason]:
+          candidateCount,
+      },
+      capacityFilterApplied: false,
+      descriptorEpochRejected: true,
+      descriptorEpochDecision: transitionSnapshot.descriptorEpochDecision,
+      diagnostic:
+        MOVE_PLANNER_DESCRIPTOR_EPOCH_DIAGNOSTIC.REJECTED,
+    };
   }
 
   /**
@@ -491,6 +565,7 @@ class MovePlanner {
         capacityDiagnostics: diag,
         placementOwnerOutcome: placementOwnerDecision.placementOwnerOutcome,
         placementOwnerDecision,
+        topologyTransitionSnapshot: transitionSnapshot,
       });
     }
 
@@ -515,6 +590,7 @@ class MovePlanner {
         capacityDiagnostics: diag,
         placementOwnerOutcome: placementOwnerDecision.placementOwnerOutcome,
         placementOwnerDecision,
+        topologyTransitionSnapshot: transitionSnapshot,
       });
     }
     return buildMessageGroupPlacementResult({
@@ -531,6 +607,7 @@ class MovePlanner {
       availableNodeCount: nodes.length,
       capacityDiagnostics: diag,
       placementOwnerDecision,
+      topologyTransitionSnapshot: transitionSnapshot,
     });
   }
 
@@ -600,6 +677,7 @@ class MovePlanner {
         prioritySpread,
         placementOwnerOutcome: placementOwnerDecision.placementOwnerOutcome,
         placementOwnerDecision,
+        topologyTransitionSnapshot: transitionSnapshot,
       };
     }
 
@@ -636,6 +714,7 @@ class MovePlanner {
       prioritySpread,
       placementOwnerOutcome: placementOwnerDecision.placementOwnerOutcome,
       placementOwnerDecision,
+      topologyTransitionSnapshot: transitionSnapshot,
     };
   }
 

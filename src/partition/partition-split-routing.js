@@ -1,5 +1,12 @@
 import {NUM, SQL} from '../constants/index.js';
-import {PARTITION_SPLIT_MIRROR_ORIGIN} from './partition-constants.js';
+import {
+  PARTITION_DESCRIPTOR_EPOCH_ERROR_MSG,
+  PARTITION_SPLIT_MIRROR_ORIGIN,
+} from './partition-constants.js';
+import {
+  buildPartitionDescriptorEpochDecision,
+  isPartitionDescriptorEpochAccepted,
+} from './partition-descriptor-epoch-contract.js';
 import {
   PARTITION_SERVICE_ERROR_MSG,
   PARTITION_SERVICE_OPERATION,
@@ -97,6 +104,7 @@ export function cloneSplitEntry(entry) {
 }
 
 export async function replaySplitEntry(entry, metadata, options = {}) {
+  assertSplitRoutingDescriptorEpoch(metadata, options);
   const routingKey = extractSplitRoutingKey(
     entry,
     metadata.primaryKeyColumn,
@@ -109,6 +117,22 @@ export async function replaySplitEntry(entry, metadata, options = {}) {
     entry.params || [],
     options,
   );
+}
+
+export function assertSplitRoutingDescriptorEpoch(metadata, options = {}) {
+  const descriptorEpochEvidence = options.descriptorEpochEvidence || null;
+  if (!descriptorEpochEvidence) {
+    return null;
+  }
+  const decision = buildPartitionDescriptorEpochDecision({
+    ...descriptorEpochEvidence,
+    splitMetadata: metadata,
+    requireRouteTargetVersion: true,
+  });
+  if (!isPartitionDescriptorEpochAccepted(decision)) {
+    throw new Error(PARTITION_DESCRIPTOR_EPOCH_ERROR_MSG.STALE_ROUTE);
+  }
+  return decision;
 }
 
 export async function routeSplitMirroredWrite(

@@ -1,5 +1,9 @@
 import {test} from '../../src/test-helpers/tap.js';
 import {NUM} from '../../src/constants/index.js';
+import {
+  PARTITION_DESCRIPTOR_EPOCH_DECISION,
+  PARTITION_DESCRIPTOR_EPOCH_REASON,
+} from '../../src/partition/partition-constants.js';
 import {MovePlanner} from '../../src/rebalancer/move-planner.js';
 import {
   MOVE_REASON,
@@ -61,6 +65,7 @@ function createMoveStateProvider(options = {}) {
   const nodes = options.nodes || [];
   const currentReplicas = options.currentReplicas || [];
   const inFlightOperations = options.inFlightOperations || [];
+  const descriptorEpochEvidence = options.descriptorEpochEvidence || null;
   return {
     getAvailableNodes: () => nodes,
     getCurrentReplicas: () => currentReplicas,
@@ -68,6 +73,7 @@ function createMoveStateProvider(options = {}) {
       replicas.filter((replica) => replica.status === ReplicaStatus.ACTIVE),
     getInFlightOperations: () => inFlightOperations,
     getGlobalTopologyBlockingInFlightOperations: () => inFlightOperations,
+    getPartitionDescriptorEpochEvidence: () => descriptorEpochEvidence,
     hasPendingMove: () => false,
     hasPendingAddForNode: () => false,
   };
@@ -309,3 +315,41 @@ test('placement owner kernel exposes explicit policy phases', async (t) => {
       t.same(noCandidateDecision.intent.targetNodeIds, []);
     });
 });
+
+test('move planner rejects stale partition descriptor epoch evidence',
+  async (t) => {
+    const nodes = [
+      createNode(NODE_1),
+      createNode(NODE_2),
+      createNode(NODE_3),
+    ];
+    const planner = createPlanner({
+      nodes,
+      descriptorEpochEvidence: {
+        tableDescriptor: {
+          active_partition_version: TARGET_TWO,
+        },
+        partitionDescriptor: {
+          partition_version: NUM.ONE,
+        },
+      },
+    });
+
+    const result = await planner.calculateTargetState([], {
+      targetReplicaCount: TARGET_THREE,
+    });
+
+    t.same(result.targetNodes, []);
+    t.equal(result.capacityDiagnostics.descriptorEpochRejected, true);
+    t.equal(
+      result.capacityDiagnostics
+        .rejectionsByReason[
+          PARTITION_DESCRIPTOR_EPOCH_REASON.PARTITION_DESCRIPTOR_STALE
+        ],
+      TARGET_THREE,
+    );
+    t.equal(
+      result.topologyTransitionSnapshot.descriptorEpochDecision.decision,
+      PARTITION_DESCRIPTOR_EPOCH_DECISION.REJECT,
+    );
+  });

@@ -12,6 +12,7 @@ function createMovePlannerStateMethods(deps = {}) {
     WORKFLOW_STEP,
     adjustToOddCount,
     applyAdditionalRebalancingReason,
+    buildPartitionDescriptorEpochDecision,
     buildReplicaCountPolicyDecision,
     getNextOddCount,
     getPartitionRowFromCache,
@@ -290,7 +291,50 @@ function createMovePlannerStateMethods(deps = {}) {
         nodesWithEntityAddTransitional,
         nodesWithGlobalSystemAddTransitional,
         replicasInRemoving,
+        descriptorEpochDecision:
+          this.resolvePartitionDescriptorEpochDecision(),
       };
+    }
+
+    /**
+     * Resolve the descriptor-epoch decision exposed by the topology provider.
+     * @return {Object|null}
+     * @private
+     */
+    resolvePartitionDescriptorEpochDecision() {
+      if (this.entityType !== EntityType.PARTITION) {
+        return null;
+      }
+      const provider = this.moveStateProvider || {};
+      if (
+        typeof provider.getPartitionDescriptorEpochDecision ===
+        MOVE_PLANNER_LITERAL.FUNCTION
+      ) {
+        return provider.getPartitionDescriptorEpochDecision(this.entityId);
+      }
+      let evidence = null;
+      if (
+        typeof provider.getPartitionDescriptorEpochSnapshot ===
+        MOVE_PLANNER_LITERAL.FUNCTION
+      ) {
+        evidence = provider.getPartitionDescriptorEpochSnapshot(this.entityId);
+      } else if (
+        typeof provider.getPartitionDescriptorEpochEvidence ===
+        MOVE_PLANNER_LITERAL.FUNCTION
+      ) {
+        evidence = provider.getPartitionDescriptorEpochEvidence(this.entityId);
+      }
+      if (!evidence || typeof evidence !== MOVE_PLANNER_LITERAL.OBJECT) {
+        return null;
+      }
+      if (evidence.decision) {
+        return evidence;
+      }
+      return buildPartitionDescriptorEpochDecision({
+        ...evidence,
+        requirePartitionDescriptor:
+          evidence.requirePartitionDescriptor !== false,
+      });
     }
 
     /**

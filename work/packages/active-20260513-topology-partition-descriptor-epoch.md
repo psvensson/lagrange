@@ -20,11 +20,10 @@
     "node scripts/check-guideline-literals.js src/partition/partition-descriptor-epoch-contract.js src/partition/partition-constants.js src/partition/partition-split-routing.js src/partition/partition-service-segment-4-part-1.js src/partition/managed-split-workflow-provisioning-methods.js src/rebalancer/move-planner.js src/rebalancer/move-planner-state-methods.js",
     "node scripts/check-guideline-decision-boundaries.js src/partition/partition-descriptor-epoch-contract.js src/partition/partition-constants.js src/partition/partition-split-routing.js src/partition/partition-service-segment-4-part-1.js src/partition/managed-split-workflow-provisioning-methods.js src/rebalancer/move-planner.js src/rebalancer/move-planner-state-methods.js",
     "npm run audit:runtime-grammar:file -- src/partition/partition-descriptor-epoch-contract.js src/partition/partition-constants.js src/partition/partition-split-routing.js src/partition/partition-service-segment-4-part-1.js src/partition/managed-split-workflow-provisioning-methods.js src/rebalancer/move-planner.js src/rebalancer/move-planner-state-methods.js",
-    "git diff --check -- work/packages/active-20260513-topology-partition-descriptor-epoch.md work/packages/done-20260513-topology-post-rejoin-reconciliation.md work/model-ledger.jsonl work/sprints/active-2026-q2-topology-convergence-ship-shape.md work/sprints/current-blocker.json work/sprints/current-blocker.md src/partition/partition-descriptor-epoch-contract.js src/partition/partition-constants.js src/partition/partition-split-routing.js src/partition/partition-service-segment-4-part-1.js src/partition/managed-split-workflow-provisioning-methods.js src/rebalancer/move-planner.js src/rebalancer/move-planner-state-methods.js test/partition/partition-descriptor-epoch-contract.test.js test/partition/partition-split-routing.test.js test/partition/managed-split-workflow-transition-persistence.test.js test/rebalancer/move-planner-placement-owner-kernel.test.js"
+    "git diff --check -- work/packages/active-20260513-topology-partition-descriptor-epoch.md work/model-ledger.jsonl work/sprints/active-2026-q2-topology-convergence-ship-shape.md work/sprints/current-blocker.json work/sprints/current-blocker.md src/partition/partition-descriptor-epoch-contract.js src/partition/partition-constants.js src/partition/partition-split-routing.js src/partition/partition-service-segment-4-part-1.js src/partition/managed-split-workflow-provisioning-methods.js src/rebalancer/move-planner.js src/rebalancer/move-planner-state-methods.js test/partition/partition-descriptor-epoch-contract.test.js test/partition/partition-split-routing.test.js test/partition/managed-split-workflow-transition-persistence.test.js test/rebalancer/move-planner-placement-owner-kernel.test.js"
   ],
   "writeScope": [
     "work/packages/active-20260513-topology-partition-descriptor-epoch.md",
-    "work/packages/done-20260513-topology-post-rejoin-reconciliation.md",
     "work/model-ledger.jsonl",
     "work/sprints/active-2026-q2-topology-convergence-ship-shape.md",
     "work/sprints/current-blocker.json",
@@ -64,7 +63,6 @@
   ],
   "commitScope": [
     "work/packages/active-20260513-topology-partition-descriptor-epoch.md",
-    "work/packages/done-20260513-topology-post-rejoin-reconciliation.md",
     "work/model-ledger.jsonl",
     "work/sprints/active-2026-q2-topology-convergence-ship-shape.md",
     "work/sprints/current-blocker.json",
@@ -181,7 +179,7 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 - Package class: `representative-frontier-closure`
 - Intended minimum model: `gpt-5.3-codex`
 - Scope shape: `owner-boundary-contraction/current-frontier`
-- Owned files: `work/packages/active-20260513-topology-partition-descriptor-epoch.md`, `work/packages/done-20260513-topology-post-rejoin-reconciliation.md`, `work/model-ledger.jsonl`, `work/sprints/active-2026-q2-topology-convergence-ship-shape.md`, `work/sprints/current-blocker.json`, `work/sprints/current-blocker.md`, `src/partition/partition-descriptor-epoch-contract.js`, `src/partition/partition-constants.js`, `src/partition/partition-split-routing.js`, `src/partition/partition-service-segment-4-part-1.js`, `src/partition/managed-split-workflow-provisioning-methods.js`, `src/rebalancer/move-planner.js`, `src/rebalancer/move-planner-state-methods.js`, `test/partition/partition-descriptor-epoch-contract.test.js`, `test/partition/partition-split-routing.test.js`, `test/partition/managed-split-workflow-transition-persistence.test.js`, `test/rebalancer/move-planner-placement-owner-kernel.test.js`
+- Owned files: `work/packages/active-20260513-topology-partition-descriptor-epoch.md`, `work/model-ledger.jsonl`, `work/sprints/active-2026-q2-topology-convergence-ship-shape.md`, `work/sprints/current-blocker.json`, `work/sprints/current-blocker.md`, `src/partition/partition-descriptor-epoch-contract.js`, `src/partition/partition-constants.js`, `src/partition/partition-split-routing.js`, `src/partition/partition-service-segment-4-part-1.js`, `src/partition/managed-split-workflow-provisioning-methods.js`, `src/rebalancer/move-planner.js`, `src/rebalancer/move-planner-state-methods.js`, `test/partition/partition-descriptor-epoch-contract.test.js`, `test/partition/partition-split-routing.test.js`, `test/partition/managed-split-workflow-transition-persistence.test.js`, `test/rebalancer/move-planner-placement-owner-kernel.test.js`
 - Forbidden files: membership epoch implementation, user-facing partition
   management APIs, broad operation workflow owner changes, rolling-restart
   harness scenarios, Pro behavior, Enterprise behavior.
@@ -196,8 +194,8 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
       `Agent Codex (019e2560-da68-74b0-89e3-ce4b07639458) reviewed work/packages/active-20260513-topology-partition-descriptor-epoch.md; result fixes-required`.
 - [x] Fix subagent recorded or explicitly not needed:
       `Agent Codex (019e2563-6c77-7f51-8e78-84aaf44fef9b) fixed work/packages/active-20260513-topology-partition-descriptor-epoch.md`.
-- [ ] Implementation subagent recorded:
-      pending-before-implementation-starts
+- [x] Implementation subagent recorded:
+      `Agent Codex (019e2571-7b93-7440-a7d9-fa58cfe89117) implemented work/packages/active-20260513-topology-partition-descriptor-epoch.md`.
 
 ## Validation
 
@@ -214,3 +212,23 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
    (`019e2563-6c77-7f51-8e78-84aaf44fef9b`) for the predecessor commit ledger.
 6. `git diff --check -- work/packages/active-20260513-topology-partition-descriptor-epoch.md work/packages/done-20260513-topology-post-rejoin-reconciliation.md`
    passed before implementation subagent starts.
+7. Implementation subagent proof recorded from Codex
+   (`019e2571-7b93-7440-a7d9-fa58cfe89117`) after completing the
+   Herschel partial runtime edits; Herschel is not recorded as implemented.
+8. `npm run analyze:owner-files -- partition_topology_owner descriptor_epoch --markdown`
+   passed and showed seven owner/boundary matches.
+9. `npx tap test/partition/partition-descriptor-epoch-contract.test.js test/partition/partition-split-routing.test.js test/partition/managed-split-workflow-transition-persistence.test.js test/rebalancer/move-planner-placement-owner-kernel.test.js`
+   passed with 114 assertions.
+10. `node scripts/check-guideline-literals.js src/partition/partition-descriptor-epoch-contract.js src/partition/partition-constants.js src/partition/partition-split-routing.js src/partition/partition-service-segment-4-part-1.js src/partition/managed-split-workflow-provisioning-methods.js src/rebalancer/move-planner.js src/rebalancer/move-planner-state-methods.js`
+    passed with zero new literal-guideline violations.
+11. `node scripts/check-guideline-decision-boundaries.js src/partition/partition-descriptor-epoch-contract.js src/partition/partition-constants.js src/partition/partition-split-routing.js src/partition/partition-service-segment-4-part-1.js src/partition/managed-split-workflow-provisioning-methods.js src/rebalancer/move-planner.js src/rebalancer/move-planner-state-methods.js`
+    passed with zero decision-boundary guideline violations.
+12. `npm run audit:runtime-grammar:file -- src/partition/partition-descriptor-epoch-contract.js src/partition/partition-constants.js src/partition/partition-split-routing.js src/partition/partition-service-segment-4-part-1.js src/partition/managed-split-workflow-provisioning-methods.js src/rebalancer/move-planner.js src/rebalancer/move-planner-state-methods.js`
+    passed with zero runtime-grammar-contract violations.
+13. `git diff --check -- work/packages/active-20260513-topology-partition-descriptor-epoch.md work/model-ledger.jsonl work/sprints/active-2026-q2-topology-convergence-ship-shape.md work/sprints/current-blocker.json work/sprints/current-blocker.md src/partition/partition-descriptor-epoch-contract.js src/partition/partition-constants.js src/partition/partition-split-routing.js src/partition/partition-service-segment-4-part-1.js src/partition/managed-split-workflow-provisioning-methods.js src/rebalancer/move-planner.js src/rebalancer/move-planner-state-methods.js test/partition/partition-descriptor-epoch-contract.test.js test/partition/partition-split-routing.test.js test/partition/managed-split-workflow-transition-persistence.test.js test/rebalancer/move-planner-placement-owner-kernel.test.js`
+    passed.
+14. `npm run work:current-blocker` refreshed
+    `work/sprints/current-blocker.json` and
+    `work/sprints/current-blocker.md` from this package metadata.
+15. `npm run work:validate -- --closure work/packages/active-20260513-topology-partition-descriptor-epoch.md`
+    passed after implementation proof.
