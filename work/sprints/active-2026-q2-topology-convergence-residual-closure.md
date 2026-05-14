@@ -477,19 +477,19 @@ projection reconciliation is done as classification-only observability:
 
 The current action is now
 [Topology Remote Coordinator Handoff Gate](../packages/active-20260514-topology-remote-coordinator-handoff-gate.md).
-The predecessor
-[Topology Killed Rejoin Gate](../packages/done-20260514-topology-killed-rejoin-gate.md)
-migrated:
-`test-output/reports/topology-killed-rejoin-gate.report.json` failed after
-`132499ms` because not all nodes reached `ACTIVE` within `60000ms`. Focused
-direct Node proof for rejoin reconciliation passed, but canonical evidence did
-not reach `topology_rejoin_owner / post_restore_reconciliation_gate`; the first
-frontier migrated to `topology_publication_owner / publication_convergence`
-with `publication_ack_convergence`, `missing_published_nodes_present`,
-`publicationStatus=PUBLISHED`, `pendingAckCount=0`, `missingPublishedCount=4`,
-`publicationPending=true`, active gate `timed_out`, and snapshot coverage
-`3/5`. Priority recovery residual extraction reported three
-`operation_workflow_owner / workflow_progress` witnesses with
-`splitRequired=false`. Execute the remote-coordinator handoff gate as
-observe/classify work only. Do not fix `rolling-restart` runtime behavior in
-this sprint segment.
+It has now been observed and should be closed as migrated:
+`test-output/reports/topology-remote-coordinator-handoff-gate.report.json`
+failed after `235174ms` because not all nodes reached `ACTIVE` within
+`225000ms`. Focused direct Node proof for remote handoff passed, but canonical
+evidence did not reach
+`operation_workflow_owner / replica_operation_coordinator_handoff_gate`; the
+first frontier migrated to `topology_publication_owner /
+publication_convergence` with `publication_ack_convergence`,
+`missing_published_nodes_present`, `publicationStatus=PUBLISHED`,
+`pendingAckCount=0`, `missingPublishedCount=4`, `publicationPending=true`,
+active gate `timed_out`, snapshot coverage `3/7`, and active nodes `6/7`.
+Priority recovery residual extraction reported one
+`operation_workflow_owner / workflow_progress` witness with
+`splitRequired=false`. Close remote-coordinator handoff as observe/classify
+work only and activate the next remaining failure-gate package. Do not fix
+`rolling-restart` runtime behavior in this sprint segment.
