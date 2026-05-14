@@ -115,6 +115,7 @@ const SECTION_SCOPE = 'Scope';
 const SECTION_PROOF_LADDER = 'Proof Ladder';
 const SECTION_SUBAGENT_SEQUENCING = 'Subagent Sequencing';
 const SECTION_MODEL_FIT = 'Model Fit';
+const SECTION_REPRESENTATIVE_RESIDUAL = 'Representative Residual';
 const SECTION_CAUSAL_GOVERNANCE = 'Causal Governance';
 const SECTION_SCENARIO_CAUSAL_CLOSURE = 'Scenario Causal Closure';
 const SECTION_OPEN_CHECKLIST = 'Open Package Checklist';
@@ -187,6 +188,7 @@ const FIELD_LABELS = Object.freeze({
   CAUSAL_HYPOTHESIS: 'Causal hypothesis',
   CROSS_BOUNDARY_REVIEW: 'Cross-boundary review',
   MODEL_FIT_PACKAGE_CLASS: 'Package class',
+  NEXT_ACTION: 'Next action',
   OWNER: 'Owner',
   PACKAGE: 'Package',
   PACKAGE_TITLE: 'Package title',
@@ -204,6 +206,7 @@ const FIELD_LABELS = Object.freeze({
   REFERENCE_SCENARIO_OR_PROBE: 'Reference scenario/probe',
   PHASE_CHAIN: 'Phase chain',
   CURRENT_FIRST_FRONTIER: 'Current first frontier',
+  FRONTIER: 'Frontier',
   KNOWN_DOWNSTREAM_BLOCKERS: 'Known downstream blockers',
   MISSING_CAUSAL_EDGE: 'Missing causal edge',
   MISSING_CAUSAL_EDGE_PROBE: 'Missing causal edge probe',
@@ -266,6 +269,7 @@ const METADATA_FIELD_CANDIDATE_RUNTIME_FILES = 'candidateRuntimeFiles';
 const METADATA_FIELD_COMMIT_SCOPE = 'commitScope';
 const METADATA_FIELD_PREDECESSOR = 'predecessor';
 const METADATA_FIELD_MODEL_FIT = 'modelFit';
+const METADATA_FIELD_REPRESENTATIVE_RESIDUAL = 'representativeResidual';
 const METADATA_FIELD_CAUSAL_GOVERNANCE = 'causalGovernance';
 const METADATA_FIELD_SCENARIO_CAUSAL_CLOSURE = 'scenarioCausalClosure';
 const MODEL_FIT_FIELD_PACKAGE_CLASS = 'packageClass';
@@ -443,6 +447,10 @@ async function buildCurrentBlockerFromPackage(packagePath) {
         metadataList(metadata, METADATA_FIELD_CANDIDATE_RUNTIME_FILES),
       commitScope: metadataList(metadata, METADATA_FIELD_COMMIT_SCOPE),
       modelFit: metadataModelFit(metadata),
+      representativeResidual: metadataObject(
+        metadata,
+        METADATA_FIELD_REPRESENTATIVE_RESIDUAL,
+      ),
       causalGovernance: metadataCausalGovernance(metadata),
       scenarioCausalClosure: metadataScenarioCausalClosure(metadata),
       predecessor: metadataText(metadata, METADATA_FIELD_PREDECESSOR),
@@ -1419,6 +1427,41 @@ async function buildContextLines(currentBlocker, packageContent) {
     lines,
     FIELD_LABELS.ESCALATION_TRIGGERS,
     normalizeStringList(modelFit[MODEL_FIT_FIELD_ESCALATION_TRIGGERS]).join(', '),
+  );
+
+  appendSection(lines, SECTION_REPRESENTATIVE_RESIDUAL);
+  const representativeResidual = currentBlocker.representativeResidual || {};
+  appendKeyValue(
+    lines,
+    FIELD_LABELS.STATUS,
+    representativeResidual.status,
+  );
+  appendKeyValue(
+    lines,
+    FIELD_LABELS.SCENARIO,
+    representativeResidual.scenario,
+  );
+  appendKeyValue(
+    lines,
+    FIELD_LABELS.ARTIFACT,
+    representativeResidual.artifact,
+  );
+  appendKeyValue(
+    lines,
+    FIELD_LABELS.FRONTIER,
+    representativeResidual.frontier,
+  );
+  appendKeyValue(lines, FIELD_LABELS.OWNER, representativeResidual.owner);
+  appendKeyValue(lines, FIELD_LABELS.BOUNDARY, representativeResidual.boundary);
+  appendKeyValue(
+    lines,
+    FIELD_LABELS.DOMINANT_REASON,
+    representativeResidual.dominantReason,
+  );
+  appendKeyValue(
+    lines,
+    FIELD_LABELS.NEXT_ACTION,
+    representativeResidual.nextAction,
   );
 
   appendSection(lines, SECTION_CAUSAL_GOVERNANCE);

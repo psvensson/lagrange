@@ -1,39 +1,32 @@
 {
   "schema": "current-blocker-v1",
   "generatedBy": "scripts/work-tracker.js",
-  "sprint": "work/sprints/done-2026-q2-topology-convergence-ship-shape.md",
-  "package": "work/packages/done-20260513-topology-failure-scenario-gates.md",
-  "status": "done",
-  "lane": "scenario-release-gate",
-  "scenario": "failure-gate-matrix",
-  "artifact": "none",
+  "sprint": "work/sprints/active-2026-q2-topology-convergence-residual-closure.md",
+  "package": "work/packages/active-20260514-topology-residual-evidence-inventory.md",
+  "status": "active",
+  "lane": "causal-escalation",
+  "scenario": "rolling-restart",
+  "artifact": "test-output/reports/rolling-restart-green-gate-after-priority-recovery-workflow-progress-after-snapshot-coverage.report.json",
   "playback": "none",
-  "owner": "distributed_test_harness",
-  "boundary": "failure_gate_matrix",
-  "dominantReason": "missing_failure_detection_rebalance_gate_coverage",
-  "currentState": "Closed sprint snapshot. The topology failure-gate matrix package is done and the sprint package queue has zero remaining work packages; the latest representative rolling-restart evidence still fronts startup_active_gate_owner / snapshot_coverage with snapshot_coverage_incomplete.",
-  "nextAction": "Open a successor sprint or package for focused failure-gate execution, full distributed confirmation, or the remaining active-gate snapshot-coverage residual. Do not treat this closure as representative green evidence.",
+  "owner": "diagnostics_owner",
+  "boundary": "residual_inventory",
+  "dominantReason": "residual_inventory_incomplete",
+  "currentState": "Latest representative evidence remains red with active_gate_snapshot_coverage first frontier and failure-gate matrix execution pending.",
+  "nextAction": "Produce one canonical residual ledger from evidence-summary topology-convergence priority-recovery residuals causal-model and distributed-failure analyzers before runtime fixes continue.",
   "proof": [
-    "npm run analyze:owner-files -- distributed_test_harness failure_gate_matrix --markdown",
-    "npx tap test/distributed/harness/__tests__/scenario-registry.test.js test/distributed/harness/__tests__/topology-failure-gate-matrix.test.js",
-    "node scripts/check-guideline-literals.js test/distributed/harness/topology-failure-gate-matrix.js test/distributed/harness/scenario-registry.js",
-    "node scripts/check-guideline-decision-boundaries.js test/distributed/harness/topology-failure-gate-matrix.js test/distributed/harness/scenario-registry.js",
-    "npm run audit:runtime-grammar:file -- test/distributed/harness/topology-failure-gate-matrix.js test/distributed/harness/scenario-registry.js",
-    "git diff --check -- test/distributed/harness/topology-failure-gate-matrix.js test/distributed/harness/__tests__/topology-failure-gate-matrix.test.js test/distributed/harness/scenario-registry.js test/distributed/harness/__tests__/scenario-registry.test.js work/packages/done-20260513-topology-failure-scenario-gates.md work/sprints/done-2026-q2-topology-convergence-ship-shape.md work/sprints/current-blocker.json work/sprints/current-blocker.md work/model-ledger.jsonl"
+    "npm run work:evidence-summary -- test-output/reports/rolling-restart-green-gate-after-priority-recovery-workflow-progress-after-snapshot-coverage.report.json",
+    "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-green-gate-after-priority-recovery-workflow-progress-after-snapshot-coverage.report.json",
+    "npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-green-gate-after-priority-recovery-workflow-progress-after-snapshot-coverage.report.json --markdown",
+    "npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-green-gate-after-priority-recovery-workflow-progress-after-snapshot-coverage.report.json",
+    "npm run analyze:distributed-failure -- --report test-output/reports/rolling-restart-green-gate-after-priority-recovery-workflow-progress-after-snapshot-coverage.report.json"
   ],
   "writeScope": [
-    "test/distributed/harness/topology-failure-gate-matrix.js",
-    "test/distributed/harness/__tests__/topology-failure-gate-matrix.test.js",
-    "test/distributed/harness/scenario-registry.js",
-    "test/distributed/harness/__tests__/scenario-registry.test.js",
-    "work/packages/done-20260513-topology-failure-scenario-gates.md",
-    "work/model-ledger.jsonl"
+    "work/packages/active-20260514-topology-residual-evidence-inventory.md",
+    "work/sprints/active-2026-q2-topology-convergence-residual-closure.md"
   ],
   "handoffFiles": [
-    "work/packages/done-20260513-topology-bounded-progress-budgets.md",
     "work/sprints/done-2026-q2-topology-convergence-ship-shape.md",
-    "work/sprints/current-blocker.md",
-    "work/sprints/current-blocker.json"
+    "work/packages/done-20260513-topology-failure-scenario-gates.md"
   ],
   "generatedFiles": [
     "work/sprints/current-blocker.md",
@@ -41,17 +34,10 @@
   ],
   "candidateRuntimeFiles": [],
   "commitScope": [
-    "test/distributed/harness/topology-failure-gate-matrix.js",
-    "test/distributed/harness/__tests__/topology-failure-gate-matrix.test.js",
-    "test/distributed/harness/scenario-registry.js",
-    "test/distributed/harness/__tests__/scenario-registry.test.js",
-    "work/packages/done-20260513-topology-failure-scenario-gates.md",
-    "work/packages/done-20260513-topology-failure-scenario-gates.md",
-    "work/packages/todo-20260513-topology-failure-scenario-gates.md",
-    "work/sprints/done-2026-q2-topology-convergence-ship-shape.md",
+    "work/packages/active-20260514-topology-residual-evidence-inventory.md",
+    "work/sprints/active-2026-q2-topology-convergence-residual-closure.md",
     "work/sprints/current-blocker.md",
-    "work/sprints/current-blocker.json",
-    "work/model-ledger.jsonl"
+    "work/sprints/current-blocker.json"
   ],
   "touchedFiles": [],
   "modelFit": {
@@ -63,39 +49,37 @@
       "a frozen decision must be reopened"
     ]
   },
+  "representativeResidual": {},
   "causalGovernance": {
-    "hypothesis": "If distributed_test_harness / failure_gate_matrix owns the final sprint gate, the harness must expose a canonical topology failure gate matrix that maps failure detection, join, rejoin, remote handoff, stale publication, and rebalance disruption scenarios to expected durable owner outcomes instead of leaving coverage implicit in broad distributed runs.",
+    "hypothesis": "diagnostics_owner / residual_inventory proof should reduce, migrate, or classify residual_inventory_incomplete without hiding the sprint representative residual.",
     "stopConditionCheck": "npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-green-gate-after-priority-recovery-workflow-progress-after-snapshot-coverage.report.json",
-    "expectedCausalModelChange": "No representative rolling-restart causal-model change is claimed by this handoff. Scenario gate coverage becomes an explicit matrix with missing runtime failures split into follow-on owner-boundary packages rather than patched inside this package.",
-    "representativeOutcome": "classification-only",
-    "causalDebt": "No representative failure-gate artifact is recorded yet. The latest rolling-restart artifact still fronts startup_active_gate_owner / snapshot_coverage with snapshot_coverage_incomplete and unbounded active_gate_timeout; this package first creates the focused matrix and proof surface by human direction.",
-    "crossBoundaryReview": "Review subagent Codex (019e25d8-a64b-7363-ab65-ef787e5a3fb9) reviewed work/packages/done-20260513-topology-bounded-progress-budgets.md and found fixes required; fix subagent Codex (019e25dd-ec25-7de3-ac1a-4beb4ed7ac8a) fixed the reviewed bounded-progress package handoff and reconciled this active package before implementation."
+    "expectedCausalModelChange": "residual_inventory_incomplete becomes representative-green, reduced, same-frontier, migrated, or classification-only with a named owner-boundary reason.",
+    "representativeOutcome": "pending-before-rerun",
+    "causalDebt": "Until diagnostics_owner / residual_inventory is proven, the sprint representative rolling-restart residual stays open at startup_active_gate_owner / snapshot_coverage.",
+    "crossBoundaryReview": "Required before closure through the causal-escalation subagent ledger or an allowed waiver recorded in this package."
   },
   "scenarioCausalClosure": {
-    "referenceScenarioOrProbe": "failure-gate-matrix focused harness probe",
+    "referenceScenarioOrProbe": "rolling-restart / diagnostics_owner / residual_inventory",
     "phaseChain": [
-      "failure detection repair intent",
-      "join and rejoin reconciliation",
-      "remote handoff acknowledgement",
-      "publication truth ahead of projection",
-      "split and rebalance disruption recovery"
+      "canonical evidence extraction",
+      "diagnostics_owner / residual_inventory focused proof",
+      "representative or gate rerun classification"
     ],
-    "currentFirstFrontier": "The current representative rolling-restart first frontier remains active_gate_snapshot_coverage under startup_active_gate_owner / snapshot_coverage with snapshot_coverage_incomplete. This package is a human-directed sprint-queue pivot to distributed_test_harness / failure_gate_matrix coverage after owner proof, not a representative owner-boundary migration.",
+    "currentFirstFrontier": "package-local frontier diagnostics_owner / residual_inventory; sprint representative frontier remains startup_active_gate_owner / snapshot_coverage until fresh evidence changes it",
     "knownDownstreamBlockers": [
-      "startup_active_gate_owner / snapshot_coverage remains the representative runtime frontier with active_gate_timeout still unbounded",
-      "runtime fixes discovered by new gates are out of scope for this package",
-      "full distributed scenario reruns remain downstream of focused matrix proof"
+      "rolling-restart representative active-gate snapshot coverage remains red until green or migrated",
+      "runtime or harness fixes discovered outside this owner boundary require a narrower successor package"
     ],
-    "missingCausalEdge": "The canonical scenario registry does not yet declare which topology failure gates are required for ship-shape closure or which owner outcome each gate must prove.",
-    "missingCausalEdgeProbe": "npx tap test/distributed/harness/__tests__/topology-failure-gate-matrix.test.js",
-    "boundedProgressProof": "Focused matrix tests must prove every required gate names at least one bounded progress mechanism from wake, retry, timeout, reconcile, drain, dispatch, delivery, timer, advance, or bounded progress.",
-    "boundedProgressProofArtifact": "test/distributed/harness/__tests__/topology-failure-gate-matrix.test.js",
-    "expectedObservableTransition": "Focused harness tests expose a complete topology failure gate matrix and fail if any required gate lacks a canonical scenario, config, owner, boundary, or expected durable outcome.",
-    "maxProgressBound": "one predecessor review subagent, one fix subagent if review finds fixes, one implementation subagent, focused harness proof, and no runtime edits",
-    "sameFrontierFallback": "If canonical representative evidence is rechecked before failure-gate implementation, keep startup_active_gate_owner / snapshot_coverage as the runtime first frontier unless fresh evidence proves otherwise.",
-    "expectedNextFrontier": "focused failure-gate execution, a fresh runtime owner-boundary package if a gate exposes behavior debt, or return to startup_active_gate_owner / snapshot_coverage if the human-directed coverage pivot is paused",
-    "resultClassification": "classification-only",
-    "stopCondition": "human-escalation"
+    "missingCausalEdge": "unproven diagnostics_owner / residual_inventory causal edge for residual_inventory_incomplete",
+    "missingCausalEdgeProbe": "npm run work:evidence-summary -- test-output/reports/rolling-restart-green-gate-after-priority-recovery-workflow-progress-after-snapshot-coverage.report.json",
+    "boundedProgressProof": "Focused proof must show bounded wake, retry, timeout, reconcile, drain, dispatch, delivery, timer, or advance for diagnostics_owner / residual_inventory.",
+    "boundedProgressProofArtifact": "test-output/reports/rolling-restart-green-gate-after-priority-recovery-workflow-progress-after-snapshot-coverage.report.json",
+    "expectedObservableTransition": "residual_inventory_incomplete resolves to green evidence, a reduced residual, same-frontier evidence, migrated owner-boundary proof, or classification-only stop.",
+    "maxProgressBound": "one activation cycle: package doctor, extractor/probe, owner-file proof, focused validation, and result classification",
+    "sameFrontierFallback": "keep diagnostics_owner / residual_inventory active and do not broaden the package or claim ship proof",
+    "expectedNextFrontier": "representative green evidence or a narrower owner-boundary blocker selected by canonical evidence",
+    "resultClassification": "pending-before-probe",
+    "stopCondition": "continue-local-fix"
   },
-  "predecessor": "work/packages/done-20260513-topology-bounded-progress-budgets.md"
+  "predecessor": null
 }

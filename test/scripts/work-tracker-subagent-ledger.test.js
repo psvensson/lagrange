@@ -370,6 +370,16 @@ const WORK_TRACKER_COMMIT_LEDGER_VALID_CONTENT = [
   '- Commit contains only package-owned files/package-status/allowed sprint handoff: yes',
   '',
 ].join('\n');
+const WORK_TRACKER_COMMIT_LEDGER_LEGACY_VALID_CONTENT = [
+  '# Test Package',
+  '',
+  '## Closure Commit Proof',
+  '',
+  `- Focused package commit: ${TEST_COMMIT_SHA}`,
+  `- Pushed to: ${TEST_PUSH_TARGET}`,
+  '- Commit contains only package-owned files/package-status/allowed sprint handoff: yes',
+  '',
+].join('\n');
 const WORK_TRACKER_DOCTOR_CONTENT = [
   '# Test Package',
   '',
@@ -425,6 +435,16 @@ const WORK_TRACKER_COMMIT_LEDGER_TEMPLATE_CONTENT = [
   '- Commit contains only package-owned files/package-status/allowed sprint handoff: <yes>',
   '',
 ].join('\n');
+const WORK_TRACKER_COMMIT_LEDGER_PENDING_CONTENT = [
+  '# Test Package',
+  '',
+  '## Commit And Push Ledger',
+  '',
+  '- Focused package commit: pending.',
+  '- Pushed to: pending.',
+  '- Commit contains only package-owned files/package-status/allowed sprint handoff: pending.',
+  '',
+].join('\n');
 
 describe('work tracker subagent sequencing ledger validation', () => {
   it('requires subagent sequencing only for strict workflow lanes', () => {
@@ -475,6 +495,19 @@ describe('work tracker subagent sequencing ledger validation', () => {
     assert.match(errors[1], /Review subagent recorded/u);
     assert.match(errors[2], /Fix subagent recorded or explicitly not needed/u);
     assert.match(errors[3], /Implementation subagent recorded/u);
+  });
+
+  it('allows pending subagent ledgers on queued packages', () => {
+    const errors = validateSubagentSequencingLedger(
+      WORK_TRACKER_LEDGER_OPEN_CONTENT,
+      'work/packages/todo-test-package.md',
+      {
+        allowPendingSubagentLedger: true,
+        requiresLedger: false,
+      },
+    );
+
+    assert.deepEqual(errors, []);
   });
 
   it('accepts a clean review with an explicit not-needed fix entry', () => {
@@ -743,7 +776,10 @@ describe('work tracker commit and push ledger validation', () => {
     const errors = validateCommitAndPushLedger(
       WORK_TRACKER_LEDGER_NO_LEDGER_CONTENT,
       WORK_TRACKER_DONE_TEST_FILE,
-      {requiresLedger: false},
+      {
+        requiresLedger: true,
+        allowMissingHistoricalCommitLedger: true,
+      },
     );
 
     assert.deepEqual(errors, []);
@@ -768,6 +804,32 @@ describe('work tracker commit and push ledger validation', () => {
     );
 
     assert.deepEqual(errors, []);
+  });
+
+  it('accepts the legacy closure commit proof heading as an alias', () => {
+    const errors = validateCommitAndPushLedger(
+      WORK_TRACKER_COMMIT_LEDGER_LEGACY_VALID_CONTENT,
+      WORK_TRACKER_DONE_TEST_FILE,
+      {requiresLedger: true},
+    );
+
+    assert.deepEqual(errors, []);
+  });
+
+  it('allows pending commit proof only when the package is still open', () => {
+    const openErrors = validateCommitAndPushLedger(
+      WORK_TRACKER_COMMIT_LEDGER_PENDING_CONTENT,
+      WORK_TRACKER_LEDGER_TEST_FILE,
+      {allowPendingCommitLedger: true},
+    );
+    const closedErrors = validateCommitAndPushLedger(
+      WORK_TRACKER_COMMIT_LEDGER_PENDING_CONTENT,
+      WORK_TRACKER_DONE_TEST_FILE,
+      {requiresLedger: true},
+    );
+
+    assert.deepEqual(openErrors, []);
+    assert.match(closedErrors.join('\n'), /must be a git commit SHA/u);
   });
 
   it('reports placeholders in commit and push proof fields', () => {
@@ -977,6 +1039,16 @@ describe('work tracker scenario causal closure validation', () => {
         generatedFiles: ['work/sprints/current-blocker.md'],
         candidateRuntimeFiles: ['src/example.js'],
         commitScope: ['scripts/work-tracker.js', 'work/sprints/current-blocker.md'],
+        representativeResidual: {
+          status: 'red',
+          scenario: 'rolling-restart',
+          artifact: 'test-output/reports/current-red.report.json',
+          frontier: 'active_gate_snapshot_coverage',
+          owner: 'startup_active_gate_owner',
+          boundary: 'snapshot_coverage',
+          dominantReason: 'snapshot_coverage_incomplete',
+          nextAction: 'keep representative residual visible',
+        },
       };
       const payload = buildCurrentBlockerPayload(
         'work/sprints/active-test.md',
@@ -998,10 +1070,17 @@ describe('work tracker scenario causal closure validation', () => {
         'scripts/work-tracker.js',
         'work/sprints/current-blocker.md',
       ]);
+      assert.equal(payload.representativeResidual.status, 'red');
+      assert.equal(
+        payload.representativeResidual.frontier,
+        'active_gate_snapshot_coverage',
+      );
       assert.match(rendered, /Workflow lane/u);
       assert.match(rendered, /## Scope/u);
       assert.match(rendered, /Write scope/u);
       assert.match(rendered, /Commit scope/u);
+      assert.match(rendered, /## Representative Residual/u);
+      assert.match(rendered, /active_gate_snapshot_coverage/u);
       assert.match(rendered, /## Scenario Causal Closure/u);
       assert.match(rendered, /Reference scenario\/probe/u);
       assert.match(rendered, /startup_active_gate_owner snapshot coverage/u);

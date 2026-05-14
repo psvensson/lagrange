@@ -79,6 +79,12 @@ const SUBAGENT_LEDGER_REQUIRED_LABELS = Object.freeze([
   SUBAGENT_LEDGER_IMPLEMENTATION_LABEL,
 ]);
 const COMMIT_AND_PUSH_LEDGER_HEADING = '## Commit And Push Ledger';
+const COMMIT_AND_PUSH_LEDGER_LEGACY_HEADING = '## Closure Commit Proof';
+const COMMIT_AND_PUSH_LEDGER_HEADINGS = Object.freeze([
+  COMMIT_AND_PUSH_LEDGER_HEADING,
+  COMMIT_AND_PUSH_LEDGER_LEGACY_HEADING,
+]);
+const COMMIT_LEDGER_POLICY_OPENED_ON_OR_AFTER = '2026-05-14';
 const MODEL_FIT_HEADING = '## Model Fit';
 const COMMIT_LEDGER_COMMIT_LABEL = 'Focused package commit';
 const COMMIT_LEDGER_PUSHED_LABEL = 'Pushed to';
@@ -98,6 +104,7 @@ const MODEL_FIT_LEAF_SLICE_SCOPE = 'leaf-slice';
 const SCENARIO_NONE = 'none';
 const SCENARIO_UNKNOWN = 'unknown';
 const SCENARIO_TEMPLATE_VALUE = 'scenario-or-none';
+const REPRESENTATIVE_RESIDUAL_METADATA_FIELD = 'representativeResidual';
 const CAUSAL_GOVERNANCE_METADATA_FIELD = 'causalGovernance';
 const CAUSAL_GOVERNANCE_HYPOTHESIS_FIELD = 'hypothesis';
 const CAUSAL_GOVERNANCE_STOP_CONDITION_FIELD = 'stopConditionCheck';
@@ -188,6 +195,12 @@ const CHECKBOX_DONE_PREFIX_PATTERN = '- \\[[xX]\\] ';
 const CHECKBOX_ANY_PREFIX = '- [';
 const LEDGER_VALIDATION_REQUIRES_LEDGER = 'requiresLedger';
 const LEDGER_VALIDATION_REQUIRES_STRICT_ENTRIES = 'requiresStrictEntries';
+const LEDGER_VALIDATION_ALLOW_PENDING_SUBAGENT_LEDGER =
+  'allowPendingSubagentLedger';
+const LEDGER_VALIDATION_ALLOW_PENDING_COMMIT_LEDGER =
+  'allowPendingCommitLedger';
+const LEDGER_VALIDATION_ALLOW_MISSING_HISTORICAL_COMMIT_LEDGER =
+  'allowMissingHistoricalCommitLedger';
 const METADATA_COMMIT_AND_PUSH_LEDGER_REQUIRED =
   'commitAndPushLedgerRequired';
 const LEDGER_PENDING_BEFORE_IMPLEMENTATION_MARKER =
@@ -311,7 +324,13 @@ function extractSubagentSequencingLedger(content) {
 }
 
 function extractCommitAndPushLedger(content) {
-  return extractMarkdownLevelTwoSection(content, COMMIT_AND_PUSH_LEDGER_HEADING);
+  for (const heading of COMMIT_AND_PUSH_LEDGER_HEADINGS) {
+    const ledger = extractMarkdownLevelTwoSection(content, heading);
+    if (ledger) {
+      return ledger;
+    }
+  }
+  return null;
 }
 
 function extractModelFitSection(content) {
@@ -693,6 +712,12 @@ export function validateSubagentSequencingLedger(content, filePath, options = {}
       [`${filePath}: Subagent Sequencing Ledger is required.`] :
       [];
   }
+  if (
+    options[LEDGER_VALIDATION_ALLOW_PENDING_SUBAGENT_LEDGER] &&
+    !options[LEDGER_VALIDATION_REQUIRES_LEDGER]
+  ) {
+    return [];
+  }
   const errors = [];
   if (
     hasOpenChecklist(ledger) &&
@@ -753,6 +778,34 @@ function findCommitLedgerField(ledger, label) {
   return match ? normalizeLedgerFieldValue(match[NUM_ONE]) : null;
 }
 
+function isPendingCommitLedgerValue(value) {
+  return value === null ||
+    MODEL_FIT_EMPTY_VALUE_PATTERN.test(value) ||
+    LEDGER_TEMPLATE_PLACEHOLDER_PATTERN.test(value) ||
+    value.includes(LEDGER_PENDING_BEFORE_IMPLEMENTATION_MARKER) ||
+    /\bpending\b/iu.test(value);
+}
+
+function isPendingCommitAndPushLedger(ledger) {
+  return [
+    findCommitLedgerField(ledger, COMMIT_LEDGER_COMMIT_LABEL),
+    findCommitLedgerField(ledger, COMMIT_LEDGER_PUSHED_LABEL),
+    findCommitLedgerField(ledger, COMMIT_LEDGER_FOCUSED_SLICE_LABEL),
+  ].some(isPendingCommitLedgerValue);
+}
+
+function isHistoricalClosedCommitLedgerMetadata(fileStatus, metadata) {
+  const opened = normalizeLedgerText(metadata?.opened).slice(
+    NUM_ZERO,
+    DATE_SLICE_END,
+  );
+  return (
+    (fileStatus === STATUS_DONE || fileStatus === STATUS_SUPERSEDED) &&
+    opened.length === DATE_SLICE_END &&
+    opened < COMMIT_LEDGER_POLICY_OPENED_ON_OR_AFTER
+  );
+}
+
 function validateCommitLedgerFieldValue(filePath, label, value, validateValue) {
   const errors = [];
   if (value === null) {
@@ -777,9 +830,17 @@ function validateCommitLedgerFieldValue(filePath, label, value, validateValue) {
 export function validateCommitAndPushLedger(content, filePath, options = {}) {
   const ledger = extractCommitAndPushLedger(content);
   if (!ledger) {
-    return options[LEDGER_VALIDATION_REQUIRES_LEDGER] ?
+    return options[LEDGER_VALIDATION_REQUIRES_LEDGER] &&
+      !options[LEDGER_VALIDATION_ALLOW_MISSING_HISTORICAL_COMMIT_LEDGER] ?
       [`${filePath}: Commit And Push Ledger is required.`] :
       [];
+  }
+  if (
+    options[LEDGER_VALIDATION_ALLOW_PENDING_COMMIT_LEDGER] &&
+    !options[LEDGER_VALIDATION_REQUIRES_LEDGER] &&
+    isPendingCommitAndPushLedger(ledger)
+  ) {
+    return [];
   }
   const focusedCommit = findCommitLedgerField(ledger, COMMIT_LEDGER_COMMIT_LABEL);
   const pushedTo = findCommitLedgerField(ledger, COMMIT_LEDGER_PUSHED_LABEL);
@@ -1530,6 +1591,8 @@ async function validatePackageFile(filePath, options = {}) {
         subagentValidation.allowOpenImplementation,
       [LEDGER_VALIDATION_ALLOW_UNAVAILABLE_SUBAGENTS]:
         subagentValidation.allowUnavailableSubagents,
+      [LEDGER_VALIDATION_ALLOW_PENDING_SUBAGENT_LEDGER]:
+        fileStatus === STATUS_TODO,
     }));
   }
   errors.push(...validateModelFitContract(content, relativePath, {
@@ -1561,10 +1624,15 @@ async function validatePackageFile(filePath, options = {}) {
       status: fileStatus,
     },
   ));
+  const requiresCommitLedger =
+    metadata !== null &&
+    metadata[METADATA_COMMIT_AND_PUSH_LEDGER_REQUIRED] === true;
   errors.push(...validateCommitAndPushLedger(content, relativePath, {
-    [LEDGER_VALIDATION_REQUIRES_LEDGER]:
-      metadata !== null &&
-      metadata[METADATA_COMMIT_AND_PUSH_LEDGER_REQUIRED] === true,
+    [LEDGER_VALIDATION_REQUIRES_LEDGER]: requiresCommitLedger,
+    [LEDGER_VALIDATION_ALLOW_PENDING_COMMIT_LEDGER]:
+      fileStatus === STATUS_ACTIVE || fileStatus === STATUS_TODO,
+    [LEDGER_VALIDATION_ALLOW_MISSING_HISTORICAL_COMMIT_LEDGER]:
+      isHistoricalClosedCommitLedgerMetadata(fileStatus, metadata),
   }));
   return {
     errors,
@@ -1927,6 +1995,8 @@ export function buildPackageDoctorLines(filePath, content, options = {}) {
         subagentValidation.allowOpenImplementation,
       [LEDGER_VALIDATION_ALLOW_UNAVAILABLE_SUBAGENTS]:
         subagentValidation.allowUnavailableSubagents,
+      [LEDGER_VALIDATION_ALLOW_PENDING_SUBAGENT_LEDGER]:
+        fileStatus === STATUS_TODO,
     }));
   }
   errors.push(...validateModelFitContract(content, relativePath, {
@@ -1958,10 +2028,15 @@ export function buildPackageDoctorLines(filePath, content, options = {}) {
       status: fileStatus,
     },
   ));
+  const requiresCommitLedger =
+    metadata !== null &&
+    metadata[METADATA_COMMIT_AND_PUSH_LEDGER_REQUIRED] === true;
   errors.push(...validateCommitAndPushLedger(content, relativePath, {
-    [LEDGER_VALIDATION_REQUIRES_LEDGER]:
-      metadata !== null &&
-      metadata[METADATA_COMMIT_AND_PUSH_LEDGER_REQUIRED] === true,
+    [LEDGER_VALIDATION_REQUIRES_LEDGER]: requiresCommitLedger,
+    [LEDGER_VALIDATION_ALLOW_PENDING_COMMIT_LEDGER]:
+      fileStatus === STATUS_ACTIVE || fileStatus === STATUS_TODO,
+    [LEDGER_VALIDATION_ALLOW_MISSING_HISTORICAL_COMMIT_LEDGER]:
+      isHistoricalClosedCommitLedgerMetadata(fileStatus, metadata),
   }));
 
   const metadataSummary = summarizeDoctorMetadata(metadata || {});
@@ -2124,6 +2199,9 @@ export function buildCurrentBlockerPayload(
     commitScope,
     touchedFiles: legacyTouchedFiles,
     modelFit: metadata.modelFit || {},
+    representativeResidual: isObjectRecord(
+      metadata[REPRESENTATIVE_RESIDUAL_METADATA_FIELD],
+    ) ? metadata[REPRESENTATIVE_RESIDUAL_METADATA_FIELD] : {},
     causalGovernance: metadata.causalGovernance || {},
     scenarioCausalClosure: metadata.scenarioCausalClosure || {},
     predecessor: metadata.predecessor || null,
@@ -2185,6 +2263,26 @@ export function renderCurrentBlockerMarkdown(payload) {
     'Escalation triggers:',
     '',
     formatMarkdownList(payload.modelFit?.escalationTriggers || []),
+    '',
+    '## Representative Residual',
+    '',
+    `Status: \`${payload.representativeResidual?.status || DEFAULT_UNKNOWN}\``,
+    '',
+    `Scenario: \`${payload.representativeResidual?.scenario || DEFAULT_UNKNOWN}\``,
+    '',
+    `Artifact: \`${payload.representativeResidual?.artifact || DEFAULT_UNKNOWN}\``,
+    '',
+    `Frontier: \`${payload.representativeResidual?.frontier || DEFAULT_UNKNOWN}\``,
+    '',
+    `Owner: \`${payload.representativeResidual?.owner || DEFAULT_UNKNOWN}\``,
+    '',
+    `Boundary: \`${payload.representativeResidual?.boundary || DEFAULT_UNKNOWN}\``,
+    '',
+    'Dominant reason: ' +
+      `\`${payload.representativeResidual?.dominantReason || DEFAULT_UNKNOWN}\``,
+    '',
+    'Next action: ' +
+      `\`${payload.representativeResidual?.nextAction || DEFAULT_UNKNOWN}\``,
     '',
     '## Causal Governance',
     '',

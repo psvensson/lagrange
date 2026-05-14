@@ -313,6 +313,16 @@ Every active package should start with a machine-readable metadata comment:
       "owned files expand beyond this package"
     ]
   },
+  "representativeResidual": {
+    "status": "red|green|unknown",
+    "scenario": "representative scenario",
+    "artifact": "path/to/latest.report.json",
+    "frontier": "first failing frontier or none",
+    "owner": "representative owner",
+    "boundary": "representative boundary",
+    "dominantReason": "representative dominant reason",
+    "nextAction": "next representative action"
+  },
   "causalGovernance": {
     "hypothesis": "predicted causal edge change",
     "stopConditionCheck": "npm --silent run analyze:causal-model -- path/to/latest.report.json",
@@ -363,6 +373,28 @@ must keep these scope fields distinct:
 `touchedFiles` is legacy metadata. New packages should use the explicit scope
 fields so read lists, write ownership, generated outputs, runtime candidates,
 and commit containment do not drift together.
+
+`representativeResidual` is required when the active package is workflow,
+diagnostics, or classification work whose own `scenario` does not describe the
+live release-gate blocker. `current-blocker` renders it separately from the
+active package status so focused-green, coverage-only, workflow-complete, and
+representative-green cannot collapse into one signal.
+
+Queued runtime, scenario, and causal packages must carry an activation contract
+before implementation starts. At minimum, activation must:
+
+1. run `npm run work:package:doctor -- --fix-dry-run <package>`
+2. keep `causalGovernance`, `scenarioCausalClosure`, Model Fit, and scope
+   fields concrete before pre-implementation validation
+3. promote exact files from `candidateRuntimeFiles` into `writeScope` and
+   `commitScope` only after focused owner-file proof such as
+   `npm run analyze:owner-files -- <owner> [boundary] --markdown`
+4. replace subagent placeholders with real review/fix/implementation proof, or
+   an allowed waiver, before pre-implementation and closure validation
+5. keep the package artifact path explicit and classify fresh evidence as
+   `representative-green`, `reduced`, `same-frontier`, `migrated`, or
+   `classification-only`
+6. record static guardrails and final deep-dive proof in the validation ladder
 
 body remains the source for reasoning, context, and the checklist.
 
@@ -567,6 +599,16 @@ static guardrail in the same work cycle when the boundary contract is durable.
 
 A completed package slice is not closed until its package-owned changes are in
 a focused git commit and that commit has been pushed.
+
+The canonical package section is `## Commit And Push Ledger`. The legacy
+heading `## Closure Commit Proof` is accepted only as a compatibility alias;
+new and migrated packages should use the canonical heading. Open `todo` and
+`active` packages may keep pending ledger values, but `done` and `superseded`
+packages must carry real values when they are closed under the current policy.
+Historical closed packages opened before 2026-05-14 and missing the section are
+grandfathered by validation; if they are reopened, migrated, or closed again,
+the canonical ledger becomes mandatory and historical proof must not be
+invented.
 
 Required workflow:
 

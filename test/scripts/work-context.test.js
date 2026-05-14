@@ -214,6 +214,16 @@ const TEST_BLOCKER = Object.freeze({
     scopeShape: 'leaf-slice',
     escalationTriggers: ['package scope expands beyond bootstrap files'],
   },
+  representativeResidual: {
+    status: 'red',
+    scenario: 'rolling-restart',
+    artifact: TEST_ARTIFACT_PATH,
+    frontier: 'active_gate_snapshot_coverage',
+    owner: 'startup_active_gate_owner',
+    boundary: 'snapshot_coverage',
+    dominantReason: 'snapshot_coverage_incomplete',
+    nextAction: 'keep representative residual visible',
+  },
   causalGovernance: {
     hypothesis: 'Causal edge should reduce.',
     stopConditionCheck:
@@ -290,6 +300,7 @@ const SECTION_USEFUL_COMMANDS = '## Useful Commands';
 const SECTION_FIRST_FILES = '## First Files To Read';
 const SECTION_SUBAGENT_SEQUENCING = '## Subagent Sequencing';
 const SECTION_MODEL_FIT = '## Model Fit';
+const SECTION_REPRESENTATIVE_RESIDUAL = '## Representative Residual';
 const SECTION_CAUSAL_GOVERNANCE = '## Causal Governance';
 const SECTION_SCENARIO_CAUSAL_CLOSURE = '## Scenario Causal Closure';
 const DIRTY_SCOPE_TITLE = '# Worktree Package Scope';
@@ -363,9 +374,12 @@ test('work context advertises triage commands before raw artifact reads',
     t.ok(rendered.includes('Playback: ' + TEST_PLAYBACK_PATH + ' (missing)'));
     t.ok(rendered.includes(SECTION_SUBAGENT_SEQUENCING));
     t.ok(rendered.includes(SECTION_MODEL_FIT));
+    t.ok(rendered.includes(SECTION_REPRESENTATIVE_RESIDUAL));
     t.ok(rendered.includes(SECTION_CAUSAL_GOVERNANCE));
     t.ok(rendered.includes(SECTION_SCENARIO_CAUSAL_CLOSURE));
     t.ok(rendered.includes('Package class: bounded-implementation'));
+    t.ok(rendered.includes('Frontier: active_gate_snapshot_coverage'));
+    t.ok(rendered.includes('Next action: keep representative residual visible'));
     t.ok(rendered.includes('## Scope'));
     t.ok(rendered.includes('Write scope: ' + TEST_BOOTSTRAP_SOURCE_PATH));
     t.ok(rendered.includes('Commit scope: ' + TEST_BOOTSTRAP_SOURCE_PATH));
