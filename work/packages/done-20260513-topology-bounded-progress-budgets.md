@@ -186,3 +186,9 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
     passed with 0 runtime-grammar-contract violations.
 13. `npm run work:model-ledger -- record --package work/packages/done-20260513-topology-bounded-progress-budgets.md --model gpt-5.3-codex --reasoning-effort high --task-class runtime-owner-boundary --package-class representative-frontier-closure --intended-minimum-model gpt-5.3-codex --scope-shape owner-boundary-contraction/current-frontier --escalated true --bailout-reason none --outcome implemented --validation-status focused-green --correction-loops 1 --review-findings 0 --notes "..."`
     recorded the final implementation evidence.
+
+## Commit And Push Ledger
+
+1. Focused package commit: `2e1a8443`
+2. Pushed to: `origin/codex/pending-ack-eligibility-filter`
+3. Commit contains only package-owned files/package-status/allowed sprint handoff: `yes`
