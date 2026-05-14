@@ -1,4 +1,13 @@
 import {basename} from 'node:path';
+import {
+  TOPOLOGY_FAILURE_GATE_MATRIX,
+  formatTopologyFailureGateMatrixLines,
+  listTopologyFailureGateEntries,
+  listUniqueTopologyFailureGateScenarioNames,
+} from './topology-failure-gate-matrix.js';
+
+const SCENARIO_REGISTRY_TYPEOF_STRING = 'string';
+const SCENARIO_REGISTRY_ZERO = 0;
 
 const CANONICAL_SCENARIO_MATRIX = Object.freeze([
   Object.freeze({
@@ -84,11 +93,11 @@ const CANONICAL_SCENARIO_MATRIX = Object.freeze([
 ]);
 
 function normalizeScenarioConfigName(configPathOrName) {
-  if (typeof configPathOrName !== 'string') {
+  if (typeof configPathOrName !== SCENARIO_REGISTRY_TYPEOF_STRING) {
     return null;
   }
   const normalized = basename(configPathOrName).trim();
-  return normalized.length > 0 ? normalized : null;
+  return normalized.length > SCENARIO_REGISTRY_ZERO ? normalized : null;
 }
 
 function listCanonicalScenarioEntries(configPathOrName = null) {
@@ -100,12 +109,12 @@ function listCanonicalScenarioEntries(configPathOrName = null) {
 }
 
 function selectCanonicalScenariosForConfig(scenarios, configPathOrName) {
-  if (!Array.isArray(scenarios) || scenarios.length === 0) {
+  if (!Array.isArray(scenarios) || scenarios.length === SCENARIO_REGISTRY_ZERO) {
     return [];
   }
 
   const canonicalEntries = listCanonicalScenarioEntries(configPathOrName);
-  if (canonicalEntries.length === 0) {
+  if (canonicalEntries.length === SCENARIO_REGISTRY_ZERO) {
     return [...scenarios];
   }
 
@@ -117,6 +126,33 @@ function selectCanonicalScenariosForConfig(scenarios, configPathOrName) {
     .filter((scenario) => Boolean(scenario));
 }
 
+function listCanonicalTopologyFailureGateEntries(configPathOrName = null) {
+  return listTopologyFailureGateEntries(configPathOrName);
+}
+
+function selectCanonicalTopologyFailureGateScenariosForConfig(
+  scenarios,
+  configPathOrName,
+) {
+  if (!Array.isArray(scenarios) || scenarios.length === SCENARIO_REGISTRY_ZERO) {
+    return [];
+  }
+
+  const gateScenarioNames = listUniqueTopologyFailureGateScenarioNames(
+    listCanonicalTopologyFailureGateEntries(configPathOrName),
+  );
+  const byName = new Map(
+    scenarios.map((scenario) => [scenario?.name, scenario]),
+  );
+  return gateScenarioNames
+    .map((scenarioName) => byName.get(scenarioName) || null)
+    .filter((scenario) => Boolean(scenario));
+}
+
+function formatCanonicalTopologyFailureGateMatrixLines() {
+  return formatTopologyFailureGateMatrixLines();
+}
+
 function formatCanonicalScenarioMatrixLines() {
   return CANONICAL_SCENARIO_MATRIX.map((entry) => {
     return `${entry.config}|${entry.name}`;
@@ -125,8 +161,12 @@ function formatCanonicalScenarioMatrixLines() {
 
 export {
   CANONICAL_SCENARIO_MATRIX,
+  TOPOLOGY_FAILURE_GATE_MATRIX,
   formatCanonicalScenarioMatrixLines,
+  formatCanonicalTopologyFailureGateMatrixLines,
   listCanonicalScenarioEntries,
+  listCanonicalTopologyFailureGateEntries,
   normalizeScenarioConfigName,
   selectCanonicalScenariosForConfig,
+  selectCanonicalTopologyFailureGateScenariosForConfig,
 };

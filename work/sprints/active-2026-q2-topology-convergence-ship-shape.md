@@ -121,24 +121,56 @@ Historical sprint pivot completed on May 14, 2026:
 7. Placement capacity fail-closed is historical/completed sprint context, not
    the active sprint target.
 
-Human-directed active sprint pivot on May 14, 2026:
+Historical sprint pivot completed on May 14, 2026:
 
 1. Owner: `topology_reconcile_owner`.
 2. Boundary: `durable_truth_reconcile`.
 3. Dominant reason: `durable_truth_lacks_periodic_owner_key_repair`.
-4. Active package:
+4. Completed package:
    `work/packages/done-20260513-topology-anti-entropy-reconciler.md`.
 5. Focused proof surface:
-   to be finalized by the active package metadata before implementation.
+   anti-entropy owner tests recorded in the package validation ledger.
 6. Rolling-restart, active-gate snapshot coverage, publication owner truth,
    membership epoch fencing, failure repair intents, post-rejoin
    reconciliation, partition descriptor epoch, and placement capacity remain
    historical representative context, not the active sprint target.
 
-The immediate missing causal edge is:
+Historical sprint pivot completed on May 14, 2026:
 
-1. The topology control plane still lacks a periodic durable truth reconciler
-   that enqueues exact owner-key repair without local fallback mutation.
+1. Owner: `topology_control_plane`.
+2. Boundary: `progress_budget_taxonomy`.
+3. Dominant reason: `retryable_waits_lack_terminal_bounds`.
+4. Completed package:
+   `work/packages/done-20260513-topology-bounded-progress-budgets.md`.
+5. Focused proof surface:
+   `npx tap test/rebalancer/topology-owner-contracts.test.js test/diagnostics/budget-timeout-accounting.test.js`.
+6. Latest causal-model residuals remain explicit: `scenario_duration` is
+   unbounded under `diagnostics_owner / causal_analysis_framework`, and
+   `active_gate_timeout` is unbounded under
+   `startup_active_gate_owner / snapshot_coverage` with next action
+   `reduce_startup_active_gate_budget_contract`.
+7. Those residuals do not represent failure-gate green evidence. They remain
+   active-gate/diagnostics residuals while the bounded-progress package closes
+   only the shared taxonomy and focused owner proof.
+
+Human-directed active sprint-queue pivot on May 14, 2026:
+
+1. Owner: `distributed_test_harness`.
+2. Boundary: `failure_gate_matrix`.
+3. Dominant reason: `missing_failure_detection_rebalance_gate_coverage`.
+4. Active package:
+   `work/packages/done-20260513-topology-failure-scenario-gates.md`.
+5. Focused proof surface:
+   `npx tap test/distributed/harness/__tests__/scenario-registry.test.js test/distributed/harness/__tests__/topology-failure-gate-matrix.test.js`.
+6. This is a user-directed coverage-gate handoff after focused runtime owner
+   proof, not a representative runtime first-frontier migration.
+7. Current representative evidence still fronts
+   `startup_active_gate_owner / snapshot_coverage` with
+   `snapshot_coverage_incomplete`; `work:evidence-summary` and
+   `analyze:topology-convergence` on
+   `test-output/reports/rolling-restart-green-gate-after-priority-recovery-workflow-progress-after-snapshot-coverage.report.json`
+   must remain the source of truth until fresh representative evidence changes
+   owner, boundary, or next action.
 
 ## Ship-Shape Definition
 
@@ -425,8 +457,15 @@ This sprint treats the system as ship-shape only when these properties hold:
      unbounded active-gate/readiness retry windows for critical topology
      progress; retryable evidence without a bounded mechanism remains an
      active causal edge.
+   - Review-fix note: the latest causal model still reports
+     `unboundedCount: 2`, including `active_gate_timeout` under
+     `startup_active_gate_owner / snapshot_coverage` with next action
+     `reduce_startup_active_gate_budget_contract`. That residual is not closed
+     by the bounded-progress package and must not be used as green
+     representative evidence; it remains a named residual while the
+     human-directed sprint queue moves to focused failure-gate coverage.
 
-16. [Topology Failure Scenario Gates](../packages/todo-20260513-topology-failure-scenario-gates.md)
+16. [Topology Failure Scenario Gates](../packages/done-20260513-topology-failure-scenario-gates.md)
     - Lane: `scenario-release-gate`
     - Owner boundary: `distributed_test_harness / failure_gate_matrix`
     - Recommendation covered: promote failure scenarios to release gates.
@@ -435,7 +474,10 @@ This sprint treats the system as ship-shape only when these properties hold:
       handoff ACK, stale publication with durable truth ahead, and split or
       rebalance during node recovery.
     - Entry condition: the runtime contracts above have focused proof so the
-      gates validate behavior instead of serving as the first discovery loop.
+      gates validate behavior instead of serving as the first discovery loop;
+      this activation is a human-directed coverage-gate pivot while the latest
+      representative rolling-restart artifact still fronts
+      `startup_active_gate_owner / snapshot_coverage`.
     - Acceptance: each gate asserts durable convergence, owner reasons, and
       topology epoch/fencing where applicable; the final sprint closure records
       representative green or a fresh owner-boundary handoff.

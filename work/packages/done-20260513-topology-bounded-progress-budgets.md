@@ -184,8 +184,40 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
     passed with 0 decision-boundary guideline violations.
 12. `npm run audit:runtime-grammar:file -- src/rebalancer/topology-owner-constants.js src/diagnostics/budget-timeout-accounting.js`
     passed with 0 runtime-grammar-contract violations.
-13. `npm run work:model-ledger -- record --package work/packages/done-20260513-topology-bounded-progress-budgets.md --model gpt-5.3-codex --reasoning-effort high --task-class runtime-owner-boundary --package-class representative-frontier-closure --intended-minimum-model gpt-5.3-codex --scope-shape owner-boundary-contraction/current-frontier --escalated true --bailout-reason none --outcome implemented --validation-status focused-green --correction-loops 1 --review-findings 0 --notes "..."`
-    recorded the final implementation evidence.
+13. `npm run work:model-ledger -- record --package work/packages/active-20260513-topology-bounded-progress-budgets.md --model gpt-5.3-codex --reasoning-effort high --task-class runtime-owner-boundary --package-class representative-frontier-closure --intended-minimum-model gpt-5.3-codex --scope-shape owner-boundary-contraction/current-frontier --escalated true --bailout-reason none --outcome implemented --validation-status focused-green --correction-loops 1 --review-findings 0 --notes "..."`
+    recorded the final implementation evidence before the package was renamed
+    from `active-...` to `done-...`. The ledger was not duplicated after the
+    rename so the recorded package path remains
+    `work/packages/active-20260513-topology-bounded-progress-budgets.md`.
+
+## Post-Closure Review Fix Notes
+
+Review subagent Codex (`019e25d8-a64b-7363-ab65-ef787e5a3fb9`) found that the
+successor handoff needed to reconcile this package with the latest
+representative evidence before failure-gate implementation starts.
+
+Residual budget inventory from
+`npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-green-gate-after-priority-recovery-workflow-progress-after-snapshot-coverage.report.json`:
+
+1. `scenario_duration` remains `unbounded` under
+   `diagnostics_owner / causal_analysis_framework` with next action
+   `inspect_scenario_timeout_budget`.
+2. `active_gate_timeout` remains `unbounded` under
+   `startup_active_gate_owner / snapshot_coverage` with next action
+   `reduce_startup_active_gate_budget_contract`.
+3. `active_gate_attempts` is `exhausted` but has an observed bound of `8`.
+4. `readiness_retry_window` is `exhausted` but has an observed bound of `8`.
+5. `workflow_step_timeout` is `within_budget` for
+   `operation_workflow_owner / workflow_progress`.
+
+This residual inventory does not prove representative green and does not close
+the active-gate runtime first frontier. It also does not block the
+human-directed sprint-queue move to the failure-gate package because this
+package owned the shared progress-budget taxonomy and focused proof only; the
+remaining `active_gate_timeout` budget belongs to
+`startup_active_gate_owner / snapshot_coverage`, and the successor
+`distributed_test_harness / failure_gate_matrix` package is a coverage-gate
+handoff rather than a runtime first-frontier fix.
 
 ## Commit And Push Ledger
 

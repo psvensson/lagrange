@@ -2,23 +2,57 @@
   "schema": "current-blocker-v1",
   "generatedBy": "scripts/work-tracker.js",
   "sprint": "work/sprints/active-2026-q2-topology-convergence-ship-shape.md",
-  "package": "work/packages/active-20260513-topology-bounded-progress-budgets.md",
+  "package": "work/packages/active-20260513-topology-failure-scenario-gates.md",
   "status": "active",
-  "lane": "runtime-owner-boundary",
-  "scenario": "none",
+  "lane": "scenario-release-gate",
+  "scenario": "failure-gate-matrix",
   "artifact": "none",
   "playback": "none",
-  "owner": "topology_control_plane",
-  "boundary": "progress_budget_taxonomy",
-  "dominantReason": "retryable_waits_lack_terminal_bounds",
-  "currentState": "Critical topology diagnostics still expose unknown or unbounded progress budgets in paths that can affect release-gate closure.",
-  "nextAction": "Require bounded retry timeout reconcile and terminal classifications for critical topology workflows",
-  "proof": [],
-  "writeScope": [],
-  "handoffFiles": [],
-  "generatedFiles": [],
+  "owner": "distributed_test_harness",
+  "boundary": "failure_gate_matrix",
+  "dominantReason": "missing_failure_detection_rebalance_gate_coverage",
+  "currentState": "Human-directed sprint-queue pivot to focused failure-gate coverage after owner proof. The latest representative rolling-restart artifact still fronts startup_active_gate_owner / snapshot_coverage with snapshot_coverage_incomplete; this package is a coverage-gate handoff, not a runtime first-frontier fix.",
+  "nextAction": "Promote join rejoin failure remote handoff and rebalance disruptions into focused release gates while preserving active-gate snapshot coverage as the current representative runtime frontier.",
+  "proof": [
+    "npm run analyze:owner-files -- distributed_test_harness failure_gate_matrix --markdown",
+    "npx tap test/distributed/harness/__tests__/scenario-registry.test.js test/distributed/harness/__tests__/topology-failure-gate-matrix.test.js",
+    "node scripts/check-guideline-literals.js test/distributed/harness/topology-failure-gate-matrix.js test/distributed/harness/scenario-registry.js",
+    "node scripts/check-guideline-decision-boundaries.js test/distributed/harness/topology-failure-gate-matrix.js test/distributed/harness/scenario-registry.js",
+    "npm run audit:runtime-grammar:file -- test/distributed/harness/topology-failure-gate-matrix.js test/distributed/harness/scenario-registry.js",
+    "git diff --check -- test/distributed/harness/topology-failure-gate-matrix.js test/distributed/harness/__tests__/topology-failure-gate-matrix.test.js test/distributed/harness/scenario-registry.js test/distributed/harness/__tests__/scenario-registry.test.js work/packages/active-20260513-topology-failure-scenario-gates.md work/sprints/active-2026-q2-topology-convergence-ship-shape.md work/sprints/current-blocker.json work/sprints/current-blocker.md work/model-ledger.jsonl"
+  ],
+  "writeScope": [
+    "test/distributed/harness/topology-failure-gate-matrix.js",
+    "test/distributed/harness/__tests__/topology-failure-gate-matrix.test.js",
+    "test/distributed/harness/scenario-registry.js",
+    "test/distributed/harness/__tests__/scenario-registry.test.js",
+    "work/packages/active-20260513-topology-failure-scenario-gates.md",
+    "work/model-ledger.jsonl"
+  ],
+  "handoffFiles": [
+    "work/packages/done-20260513-topology-bounded-progress-budgets.md",
+    "work/sprints/active-2026-q2-topology-convergence-ship-shape.md",
+    "work/sprints/current-blocker.md",
+    "work/sprints/current-blocker.json"
+  ],
+  "generatedFiles": [
+    "work/sprints/current-blocker.md",
+    "work/sprints/current-blocker.json"
+  ],
   "candidateRuntimeFiles": [],
-  "commitScope": [],
+  "commitScope": [
+    "test/distributed/harness/topology-failure-gate-matrix.js",
+    "test/distributed/harness/__tests__/topology-failure-gate-matrix.test.js",
+    "test/distributed/harness/scenario-registry.js",
+    "test/distributed/harness/__tests__/scenario-registry.test.js",
+    "work/packages/active-20260513-topology-failure-scenario-gates.md",
+    "work/packages/done-20260513-topology-failure-scenario-gates.md",
+    "work/packages/todo-20260513-topology-failure-scenario-gates.md",
+    "work/sprints/active-2026-q2-topology-convergence-ship-shape.md",
+    "work/sprints/current-blocker.md",
+    "work/sprints/current-blocker.json",
+    "work/model-ledger.jsonl"
+  ],
   "touchedFiles": [],
   "modelFit": {
     "packageClass": "representative-frontier-closure",
@@ -29,7 +63,39 @@
       "a frozen decision must be reopened"
     ]
   },
-  "causalGovernance": {},
-  "scenarioCausalClosure": {},
-  "predecessor": "work/packages/done-20260513-topology-anti-entropy-reconciler.md"
+  "causalGovernance": {
+    "hypothesis": "If distributed_test_harness / failure_gate_matrix owns the final sprint gate, the harness must expose a canonical topology failure gate matrix that maps failure detection, join, rejoin, remote handoff, stale publication, and rebalance disruption scenarios to expected durable owner outcomes instead of leaving coverage implicit in broad distributed runs.",
+    "stopConditionCheck": "npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-green-gate-after-priority-recovery-workflow-progress-after-snapshot-coverage.report.json",
+    "expectedCausalModelChange": "No representative rolling-restart causal-model change is claimed by this handoff. Scenario gate coverage becomes an explicit matrix with missing runtime failures split into follow-on owner-boundary packages rather than patched inside this package.",
+    "representativeOutcome": "classification-only",
+    "causalDebt": "No representative failure-gate artifact is recorded yet. The latest rolling-restart artifact still fronts startup_active_gate_owner / snapshot_coverage with snapshot_coverage_incomplete and unbounded active_gate_timeout; this package first creates the focused matrix and proof surface by human direction.",
+    "crossBoundaryReview": "Review subagent Codex (019e25d8-a64b-7363-ab65-ef787e5a3fb9) reviewed work/packages/done-20260513-topology-bounded-progress-budgets.md and found fixes required; fix subagent Codex (019e25dd-ec25-7de3-ac1a-4beb4ed7ac8a) fixed the reviewed bounded-progress package handoff and reconciled this active package before implementation."
+  },
+  "scenarioCausalClosure": {
+    "referenceScenarioOrProbe": "failure-gate-matrix focused harness probe",
+    "phaseChain": [
+      "failure detection repair intent",
+      "join and rejoin reconciliation",
+      "remote handoff acknowledgement",
+      "publication truth ahead of projection",
+      "split and rebalance disruption recovery"
+    ],
+    "currentFirstFrontier": "The current representative rolling-restart first frontier remains active_gate_snapshot_coverage under startup_active_gate_owner / snapshot_coverage with snapshot_coverage_incomplete. This package is a human-directed sprint-queue pivot to distributed_test_harness / failure_gate_matrix coverage after owner proof, not a representative owner-boundary migration.",
+    "knownDownstreamBlockers": [
+      "startup_active_gate_owner / snapshot_coverage remains the representative runtime frontier with active_gate_timeout still unbounded",
+      "runtime fixes discovered by new gates are out of scope for this package",
+      "full distributed scenario reruns remain downstream of focused matrix proof"
+    ],
+    "missingCausalEdge": "The canonical scenario registry does not yet declare which topology failure gates are required for ship-shape closure or which owner outcome each gate must prove.",
+    "missingCausalEdgeProbe": "npx tap test/distributed/harness/__tests__/topology-failure-gate-matrix.test.js",
+    "boundedProgressProof": "Focused matrix tests must prove every required gate names at least one bounded progress mechanism from wake, retry, timeout, reconcile, drain, dispatch, delivery, timer, advance, or bounded progress.",
+    "boundedProgressProofArtifact": "test/distributed/harness/__tests__/topology-failure-gate-matrix.test.js",
+    "expectedObservableTransition": "Focused harness tests expose a complete topology failure gate matrix and fail if any required gate lacks a canonical scenario, config, owner, boundary, or expected durable outcome.",
+    "maxProgressBound": "one predecessor review subagent, one fix subagent if review finds fixes, one implementation subagent, focused harness proof, and no runtime edits",
+    "sameFrontierFallback": "If canonical representative evidence is rechecked before failure-gate implementation, keep startup_active_gate_owner / snapshot_coverage as the runtime first frontier unless fresh evidence proves otherwise.",
+    "expectedNextFrontier": "focused failure-gate execution, a fresh runtime owner-boundary package if a gate exposes behavior debt, or return to startup_active_gate_owner / snapshot_coverage if the human-directed coverage pivot is paused",
+    "resultClassification": "classification-only",
+    "stopCondition": "human-escalation"
+  },
+  "predecessor": "work/packages/done-20260513-topology-bounded-progress-budgets.md"
 }
