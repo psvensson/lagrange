@@ -27,6 +27,7 @@ import {
   ADMISSION_MODE,
   ADMISSION_REASON,
   RESERVATION_STATUS,
+  STORAGE_CAPACITY_ERROR_MSG,
   STORAGE_CAPACITY_DEFAULT,
 } from '../../src/rebalancer/storage-capacity-constants.js';
 import {
@@ -243,6 +244,44 @@ test('checkAdd - denies when node does not exist', async (t) => {
   t.equal(result.reason, ADMISSION_REASON.NO_BUDGET_REGISTERED);
   t.end();
 });
+
+test('checkAdd - blocks when capacity accounting has no readable data source',
+  async (t) => {
+    initializeConfig();
+    const accounting = new StorageCapacityAccountingService({});
+    const admission = new StorageAdmissionService({
+      accountingService: accounting,
+      controlPlaneReadinessService: createReadinessService({
+        'node-no-source': createReadiness('node-no-source'),
+      }),
+    });
+
+    const result = await admission.checkAdd({
+      targetNodeId: 'node-no-source',
+      estimatedBytes: NUM.TEN,
+    });
+
+    t.equal(result.allowed, false);
+    t.equal(result.decision, ADMISSION_DECISION.DENY);
+    t.equal(result.reason, ADMISSION_REASON.CAPACITY_ACCOUNTING_UNAVAILABLE);
+    t.equal(
+      result.decisionType,
+      STORAGE_ADMISSION_DECISION_TYPE.BLOCKED,
+    );
+    t.same(result.blockingReasons, [
+      STORAGE_ADMISSION_REASON.INSUFFICIENT_PLACEMENT_ELIGIBLE_NODES,
+      STORAGE_ADMISSION_REASON.CAPACITY_ACCOUNTING_UNAVAILABLE,
+    ]);
+    t.same(result.ineligibleNodes[NUM.ZERO].reasonCodes, [
+      ADMISSION_REASON.CAPACITY_ACCOUNTING_UNAVAILABLE,
+    ]);
+    t.equal(
+      result.projectedUtilization.budgetBytes,
+      null,
+      STORAGE_CAPACITY_ERROR_MSG.ACCOUNTING_SOURCE_REQUIRED,
+    );
+    t.end();
+  });
 
 test('checkAdd - denies when budget would be exceeded', async (t) => {
   initializeConfig();

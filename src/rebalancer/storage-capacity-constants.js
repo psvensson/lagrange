@@ -111,6 +111,7 @@ const ADMISSION_REASON = Object.freeze({
   POLICY_MAX_UTILIZATION_VIOLATED: 'policy_max_utilization_violated',
   NO_BUDGET_REGISTERED: 'no_budget_registered',
   ESTIMATION_UNAVAILABLE: 'estimation_unavailable',
+  CAPACITY_ACCOUNTING_UNAVAILABLE: 'capacity_accounting_unavailable',
 });
 
 // --- Reservation status values ---

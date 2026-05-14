@@ -23,6 +23,7 @@ import {
 import {
   ADMISSION_DECISION,
   ADMISSION_REASON,
+  STORAGE_CAPACITY_ERROR_MSG,
 } from '../../src/rebalancer/storage-capacity-constants.js';
 
 function initEnv() {
@@ -440,6 +441,43 @@ test('MovePlanner capacity gating', async (t) => {
         'diagnostics should include admission_error rejection count',
       );
     });
+
+  await t.test('accounting unavailable admission error has explicit capacity ' +
+    'diagnostic and degraded reason', async (t) => {
+    const nodes = [
+      {node_id: 'n1', cpu_usage_percent: 10},
+      {node_id: 'n2', cpu_usage_percent: 20},
+    ];
+    const unavailableAdmission = {
+      checkAdd: async () => {
+        throw new Error(STORAGE_CAPACITY_ERROR_MSG.ACCOUNTING_SOURCE_REQUIRED);
+      },
+    };
+    const planner = new MovePlanner({
+      entityId: 'p1',
+      entityType: REBALANCER_ENTITY_TYPE.PARTITION,
+      moveStateProvider: makeMoveStateProvider(nodes),
+      storageAdmissionService: unavailableAdmission,
+      accountingService: makeAccountingService(NUM.BYTES_PER_MIB),
+    });
+
+    const result = await planner.calculateTargetState([], {
+      targetReplicaCount: NUM.TWO,
+    });
+
+    t.equal(
+      result.capacityDiagnostics.rejectionsByReason[
+        ADMISSION_REASON.CAPACITY_ACCOUNTING_UNAVAILABLE
+      ],
+      NUM.TWO,
+      'diagnostics should count accounting-unavailable rejections',
+    );
+    t.equal(
+      result.degradedReason,
+      PLACEMENT_DEGRADED_REASON.CAPACITY_ACCOUNTING_UNAVAILABLE,
+      'degraded placement should name accounting unavailable as the frontier',
+    );
+  });
 
   await t.test('critical system partition planning propagates critical admission mode',
     async (t) => {

@@ -430,7 +430,27 @@ class StorageAdmissionService {
    */
   async evaluateCapacity(options) {
     const targetNodeId = options.targetNodeId;
-    const snapshot = await this.accountingService.getCapacitySnapshotForNode(targetNodeId);
+    let snapshot;
+    try {
+      snapshot = await this.accountingService.getCapacitySnapshotForNode(targetNodeId);
+    } catch {
+      const projected = this.buildProjectedUtilization(
+        null,
+        NUM.ZERO,
+        NUM.ZERO,
+        options.estimatedBytes,
+      );
+      this.logDenial(
+        targetNodeId,
+        ADMISSION_REASON.CAPACITY_ACCOUNTING_UNAVAILABLE,
+        projected,
+      );
+      return this.buildCapacityResult(
+        false,
+        ADMISSION_REASON.CAPACITY_ACCOUNTING_UNAVAILABLE,
+        projected,
+      );
+    }
 
     if (!snapshot || snapshot.budgetBytes === null) {
       const projected = this.buildProjectedUtilization(
@@ -697,6 +717,7 @@ class StorageAdmissionService {
       return STORAGE_ADMISSION_REASON.ROUTING_NOT_READY;
     }
     if (
+      reasonCode === ADMISSION_REASON.CAPACITY_ACCOUNTING_UNAVAILABLE ||
       reasonCode === ADMISSION_REASON.NO_BUDGET_REGISTERED ||
       reasonCode === ADMISSION_REASON.BUDGET_EXCEEDED ||
       reasonCode === ADMISSION_REASON.EXHAUSTED ||
@@ -705,6 +726,9 @@ class StorageAdmissionService {
       reasonCode === CONTROL_PLANE_READINESS_REASON.STORAGE_PRESSURE_HARD ||
       reasonCode === CONTROL_PLANE_READINESS_REASON.STORAGE_PRESSURE_EXHAUSTED
     ) {
+      if (reasonCode === ADMISSION_REASON.CAPACITY_ACCOUNTING_UNAVAILABLE) {
+        return STORAGE_ADMISSION_REASON.CAPACITY_ACCOUNTING_UNAVAILABLE;
+      }
       return STORAGE_ADMISSION_REASON.STORAGE_BUDGET_EXHAUSTED;
     }
     return null;

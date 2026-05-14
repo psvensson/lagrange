@@ -14,12 +14,51 @@
   "dominantReason": "unknown_capacity_allows_optimistic_placement",
   "currentState": "Placement can still treat missing capacity/accounting evidence too optimistically unless strict dependencies are enforced explicitly.",
   "nextAction": "Classify unavailable capacity accounting as degraded or blocked in production and release gates",
-  "proof": [],
-  "writeScope": [],
+  "proof": [
+    "npm run analyze:owner-files -- topology_placement_owner capacity_admission --markdown",
+    "npx tap test/rebalancer/storage-admission-service.test.js test/rebalancer/move-planner-capacity-gating.test.js test/rebalancer/storage-capacity-ownership.test.js test/rebalancer/storage-capacity-constants.test.js test/rebalancer/provisioning-admission-policy.test.js",
+    "node scripts/check-guideline-literals.js src/rebalancer/storage-capacity-constants.js src/rebalancer/storage-admission-constants.js src/rebalancer/storage-admission-service.js src/rebalancer/rebalancer-constants.js src/rebalancer/move-planner.js",
+    "node scripts/check-guideline-decision-boundaries.js src/rebalancer/storage-capacity-constants.js src/rebalancer/storage-admission-constants.js src/rebalancer/storage-admission-service.js src/rebalancer/rebalancer-constants.js src/rebalancer/move-planner.js",
+    "npm run audit:runtime-grammar:file -- src/rebalancer/storage-capacity-constants.js src/rebalancer/storage-admission-constants.js src/rebalancer/storage-admission-service.js src/rebalancer/rebalancer-constants.js src/rebalancer/move-planner.js",
+    "git diff --check -- work/packages/active-20260513-topology-placement-capacity-fail-closed.md work/model-ledger.jsonl src/rebalancer/storage-capacity-constants.js src/rebalancer/storage-admission-constants.js src/rebalancer/storage-admission-service.js src/rebalancer/rebalancer-constants.js src/rebalancer/move-planner.js test/rebalancer/storage-admission-service.test.js test/rebalancer/move-planner-capacity-gating.test.js test/rebalancer/storage-capacity-ownership.test.js test/rebalancer/storage-capacity-constants.test.js test/rebalancer/provisioning-admission-policy.test.js"
+  ],
+  "writeScope": [
+    "work/packages/active-20260513-topology-placement-capacity-fail-closed.md",
+    "work/model-ledger.jsonl",
+    "src/rebalancer/storage-capacity-constants.js",
+    "src/rebalancer/storage-admission-constants.js",
+    "src/rebalancer/storage-admission-service.js",
+    "src/rebalancer/rebalancer-constants.js",
+    "src/rebalancer/move-planner.js",
+    "test/rebalancer/storage-admission-service.test.js",
+    "test/rebalancer/move-planner-capacity-gating.test.js",
+    "test/rebalancer/storage-capacity-ownership.test.js",
+    "test/rebalancer/storage-capacity-constants.test.js",
+    "test/rebalancer/provisioning-admission-policy.test.js"
+  ],
   "handoffFiles": [],
   "generatedFiles": [],
-  "candidateRuntimeFiles": [],
-  "commitScope": [],
+  "candidateRuntimeFiles": [
+    "src/rebalancer/storage-capacity-constants.js",
+    "src/rebalancer/storage-admission-constants.js",
+    "src/rebalancer/storage-admission-service.js",
+    "src/rebalancer/rebalancer-constants.js",
+    "src/rebalancer/move-planner.js"
+  ],
+  "commitScope": [
+    "work/packages/active-20260513-topology-placement-capacity-fail-closed.md",
+    "work/model-ledger.jsonl",
+    "src/rebalancer/storage-capacity-constants.js",
+    "src/rebalancer/storage-admission-constants.js",
+    "src/rebalancer/storage-admission-service.js",
+    "src/rebalancer/rebalancer-constants.js",
+    "src/rebalancer/move-planner.js",
+    "test/rebalancer/storage-admission-service.test.js",
+    "test/rebalancer/move-planner-capacity-gating.test.js",
+    "test/rebalancer/storage-capacity-ownership.test.js",
+    "test/rebalancer/storage-capacity-constants.test.js",
+    "test/rebalancer/provisioning-admission-policy.test.js"
+  ],
   "modelFit": {
     "packageClass": "representative-frontier-closure",
     "intendedMinimumModel": "gpt-5.3-codex",
@@ -84,14 +123,53 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 - Package class: `representative-frontier-closure`
 - Intended minimum model: `gpt-5.3-codex`
 - Scope shape: `owner-boundary-contraction/current-frontier`
-- Owned files: `work/packages/<this-package>.md`
-- Forbidden files: none selected before activation; activation must name exact
-  runtime write scope and forbidden files.
+- Owned files: `work/packages/active-20260513-topology-placement-capacity-fail-closed.md`, `work/model-ledger.jsonl`, `src/rebalancer/storage-capacity-constants.js`, `src/rebalancer/storage-admission-constants.js`, `src/rebalancer/storage-admission-service.js`, `src/rebalancer/rebalancer-constants.js`, `src/rebalancer/move-planner.js`, `test/rebalancer/storage-admission-service.test.js`, `test/rebalancer/move-planner-capacity-gating.test.js`, `test/rebalancer/storage-capacity-ownership.test.js`, `test/rebalancer/storage-capacity-constants.test.js`, `test/rebalancer/provisioning-admission-policy.test.js`
+- Forbidden files: rolling-restart packages, rolling-restart scenarios,
+  `src/rebalancer/unified-rebalancer-segment-4-stage-3.js`, Pro behavior,
+  Enterprise behavior.
 - Frozen decisions: package scope and lane stay bounded unless explicitly escalated.
 - Escalation triggers: owned files expand beyond this package, runtime ownership changes, or representative scenario evidence changes.
-- Focused proof: `git diff --check`
+- Focused proof: `npx tap test/rebalancer/storage-admission-service.test.js test/rebalancer/move-planner-capacity-gating.test.js test/rebalancer/storage-capacity-ownership.test.js test/rebalancer/storage-capacity-constants.test.js test/rebalancer/provisioning-admission-policy.test.js`
 - Model ledger advisory: `escalate`
+
+## Subagent Sequencing Ledger
+
+- [x] Review subagent recorded:
+      `Agent Bohr (019e257c-6a62-7e42-bb9e-85024529225a) reviewed work/packages/active-20260513-topology-placement-capacity-fail-closed.md predecessor work/packages/done-20260513-topology-partition-descriptor-epoch.md; result clean`.
+- [x] Fix subagent recorded or explicitly not needed:
+      `not-needed`.
+- [x] Implementation subagent recorded:
+      `Agent Boyle (019e2587-0697-79c1-8557-1e027a8feb43) implemented work/packages/active-20260513-topology-placement-capacity-fail-closed.md`.
 
 ## Validation
 
-1. `git diff --check -- <files>`
+1. `npm run work:context` passed after activation and confirmed this package as
+   the current blocker.
+2. `npm run work:package:doctor -- --suggest work/packages/active-20260513-topology-placement-capacity-fail-closed.md`
+   initially found the required Subagent Sequencing Ledger missing.
+3. `npm run analyze:owner-files -- topology_placement_owner capacity_admission --markdown`
+   passed and showed the owner/boundary is represented by the active package,
+   current blocker handoff, sprint, and predecessor package.
+4. Review subagent proof recorded from Bohr
+   (`019e257c-6a62-7e42-bb9e-85024529225a`), result `clean`.
+5. Implementation subagent proof recorded from Boyle
+   (`019e2587-0697-79c1-8557-1e027a8feb43`) after completing scoped
+   capacity-accounting unavailable classification changes. Plato
+   (`019e2583-1af0-7fc2-b127-2cf6344f42ba`) performed read-only analysis and
+   is not recorded as implemented.
+6. `npm run analyze:owner-files -- topology_placement_owner capacity_admission --markdown`
+   passed and showed five owner/boundary matches.
+7. `npx tap test/rebalancer/storage-admission-service.test.js test/rebalancer/move-planner-capacity-gating.test.js test/rebalancer/storage-capacity-ownership.test.js test/rebalancer/storage-capacity-constants.test.js test/rebalancer/provisioning-admission-policy.test.js`
+   passed with 264 assertions.
+8. `node scripts/check-guideline-literals.js src/rebalancer/storage-capacity-constants.js src/rebalancer/storage-admission-constants.js src/rebalancer/storage-admission-service.js src/rebalancer/rebalancer-constants.js src/rebalancer/move-planner.js`
+   passed with zero new literal-guideline violations.
+9. `node scripts/check-guideline-decision-boundaries.js src/rebalancer/storage-capacity-constants.js src/rebalancer/storage-admission-constants.js src/rebalancer/storage-admission-service.js src/rebalancer/rebalancer-constants.js src/rebalancer/move-planner.js`
+   passed with zero decision-boundary guideline violations.
+10. `npm run audit:runtime-grammar:file -- src/rebalancer/storage-capacity-constants.js src/rebalancer/storage-admission-constants.js src/rebalancer/storage-admission-service.js src/rebalancer/rebalancer-constants.js src/rebalancer/move-planner.js`
+    passed with zero runtime-grammar-contract violations.
+11. `git diff --check -- work/packages/active-20260513-topology-placement-capacity-fail-closed.md work/model-ledger.jsonl src/rebalancer/storage-capacity-constants.js src/rebalancer/storage-admission-constants.js src/rebalancer/storage-admission-service.js src/rebalancer/rebalancer-constants.js src/rebalancer/move-planner.js test/rebalancer/storage-admission-service.test.js test/rebalancer/move-planner-capacity-gating.test.js test/rebalancer/storage-capacity-ownership.test.js test/rebalancer/storage-capacity-constants.test.js test/rebalancer/provisioning-admission-policy.test.js`
+    passed.
+12. `npm run work:model-ledger -- record --package work/packages/active-20260513-topology-placement-capacity-fail-closed.md --model gpt-5.3-codex --reasoning-effort high --task-class runtime-owner-boundary --package-class representative-frontier-closure --intended-minimum-model gpt-5.3-codex --scope-shape owner-boundary-contraction/current-frontier --escalated true --bailout-reason none --outcome implemented --validation-status focused-green --correction-loops 0 --review-findings 0 --notes "..."`
+    recorded the package evidence.
+13. `npm run work:validate -- --closure work/packages/active-20260513-topology-placement-capacity-fail-closed.md`
+    passed.

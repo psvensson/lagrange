@@ -381,6 +381,7 @@ const STABILIZATION_RESET_TRIGGER = Object.freeze({
 const PLACEMENT_DEGRADED_REASON = Object.freeze({
   INSUFFICIENT_NODES: 'insufficient_nodes',
   INSUFFICIENT_CAPACITY: 'insufficient_capacity',
+  CAPACITY_ACCOUNTING_UNAVAILABLE: 'capacity_accounting_unavailable',
 });
 
 const REBALANCER_SKIP_REASON = Object.freeze({

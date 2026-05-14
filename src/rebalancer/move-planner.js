@@ -43,8 +43,10 @@ import {
 } from './rebalancer-constants.js';
 import {
   ADMISSION_DECISION,
+  ADMISSION_REASON,
   MOVE_CRITICALITY,
   PRESSURE_BEHAVIOR_DECISION,
+  STORAGE_CAPACITY_ERROR_MSG,
   STORAGE_CAPACITY_LOG_MSG,
 } from './storage-capacity-constants.js';
 import {createMovePlannerStateMethods} from './move-planner-state-methods.js';
@@ -84,6 +86,26 @@ const PLACEMENT_OCCUPIED_STATUSES = new Set([
 const CAPACITY_REJECTION_REASON = Object.freeze({
   ADMISSION_ERROR: 'admission_error',
 });
+function classifyCapacityAdmissionError(err) {
+  const message = err?.message;
+  if (
+    message === STORAGE_CAPACITY_ERROR_MSG.ACCOUNTING_SOURCE_REQUIRED ||
+    message === MOVE_PLANNER_ERROR_MSG.STORAGE_ACCOUNTING_REQUIRED ||
+    message === MOVE_PLANNER_ERROR_MSG.STORAGE_ACCOUNTING_ESTIMATE_REQUIRED
+  ) {
+    return ADMISSION_REASON.CAPACITY_ACCOUNTING_UNAVAILABLE;
+  }
+  return CAPACITY_REJECTION_REASON.ADMISSION_ERROR;
+}
+function hasCapacityAccountingUnavailableRejection(diagnostics) {
+  return (
+    (
+      diagnostics?.rejectionsByReason?.[
+        ADMISSION_REASON.CAPACITY_ACCOUNTING_UNAVAILABLE
+      ] || NUM.ZERO
+    ) > NUM.ZERO
+  );
+}
 const MOVE_PLANNER_REBALANCE_REASON = Object.freeze({
   REPLICA_COUNT_BELOW_TARGET: 'replica_count_below_target',
   REPLICA_COUNT_ABOVE_TARGET: 'replica_count_above_target',
@@ -441,16 +463,13 @@ class MovePlanner {
           });
         }
       } catch (err) {
-        diagnostics.rejectionsByReason[
-          CAPACITY_REJECTION_REASON.ADMISSION_ERROR
-        ] =
-          (diagnostics.rejectionsByReason[
-            CAPACITY_REJECTION_REASON.ADMISSION_ERROR
-          ] || NUM.ZERO) + NUM.ONE;
+        const reason = classifyCapacityAdmissionError(err);
+        diagnostics.rejectionsByReason[reason] =
+          (diagnostics.rejectionsByReason[reason] || NUM.ZERO) + NUM.ONE;
         this.logger.warn(STORAGE_CAPACITY_LOG_MSG.CAPACITY_FILTER_REJECTED, {
           entityId: this.entityId,
           nodeId,
-          reason: CAPACITY_REJECTION_REASON.ADMISSION_ERROR,
+          reason,
           error: err?.message || null,
         });
       }
@@ -500,6 +519,9 @@ class MovePlanner {
     // Capacity filtering removed nodes — capacity is the bottleneck
     // when the filter reduced the candidate set below target.
     if (diagnostics.rejectedCount > NUM.ZERO && feasibleCount < targetCount) {
+      if (hasCapacityAccountingUnavailableRejection(diagnostics)) {
+        return DegradedReason.CAPACITY_ACCOUNTING_UNAVAILABLE;
+      }
       return DegradedReason.INSUFFICIENT_CAPACITY;
     }
     // Not enough ready nodes regardless of capacity

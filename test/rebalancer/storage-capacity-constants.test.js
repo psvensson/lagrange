@@ -145,7 +145,11 @@ test('storage capacity constants', async (t) => {
     assert.ok(ADMISSION_REASON.POLICY_MAX_UTILIZATION_VIOLATED);
     assert.ok(ADMISSION_REASON.NO_BUDGET_REGISTERED);
     assert.ok(ADMISSION_REASON.ESTIMATION_UNAVAILABLE);
-    assert.equal(Object.keys(ADMISSION_REASON).length, 10);
+    assert.equal(
+      ADMISSION_REASON.CAPACITY_ACCOUNTING_UNAVAILABLE,
+      'capacity_accounting_unavailable',
+    );
+    assert.equal(Object.keys(ADMISSION_REASON).length, 11);
   });
 
   await t.test('RESERVATION_STATUS has lifecycle values', () => {
