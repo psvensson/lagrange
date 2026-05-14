@@ -403,3 +403,9 @@ Required now because this active package is a causal-escalation package.
 Before marking done, record the extractor outputs summarized above, regenerate
 `current-blocker` if package selection changes, then run `npm run work:context`
 to prove the handoff names the intended next blocker.
+
+## Commit And Push Ledger
+
+1. Focused package commit: 03e9f7559745a66ad6f7f64463372d7e3aa3dd70
+2. Pushed to: origin/codex/pending-ack-eligibility-filter
+3. Commit contains only package-owned files/package-status/allowed sprint handoff: yes
