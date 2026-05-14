@@ -245,3 +245,9 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
     passed before final package and model-ledger notes were recorded.
 13. `npm run work:model-ledger -- record --package work/packages/done-20260513-topology-failure-scenario-gates.md --model gpt-5.3-codex --reasoning-effort high --task-class implementation --package-class representative-frontier-closure --intended-minimum-model gpt-5.3-codex --scope-shape owner-boundary-contraction/current-frontier --escalated true --bailout-reason none --outcome implemented --validation-status focused-green --correction-loops 1 --review-findings 1 --notes "..."`
     recorded the final coverage-gate implementation evidence.
+
+## Commit And Push Ledger
+
+1. Focused package commit: f9362f6e
+2. Pushed to: origin/codex/pending-ack-eligibility-filter
+3. Commit contains only package-owned files/package-status/allowed sprint handoff: yes
