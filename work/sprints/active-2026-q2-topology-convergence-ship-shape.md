@@ -412,7 +412,7 @@ This sprint treats the system as ship-shape only when these properties hold:
      output is deterministic repair intent, bounded no-op, or typed terminal
      classification; focused tests cover stale/missing/double-owned evidence.
 
-15. [Topology Bounded Progress Budgets](../packages/active-20260513-topology-bounded-progress-budgets.md)
+15. [Topology Bounded Progress Budgets](../packages/done-20260513-topology-bounded-progress-budgets.md)
    - Lane: `runtime-owner-boundary`
    - Owner boundary: `topology_control_plane / progress_budget_taxonomy`
    - Recommendation covered: harden budgets and terminal states.

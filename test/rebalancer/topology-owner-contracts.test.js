@@ -7,9 +7,12 @@ import {
 import {
   OPERATION_OWNER_RESUME_ACTION,
   OPERATION_OWNER_RESUME_STATE,
+  OPERATION_OWNER_PROGRESS_STATE,
   OPERATION_OWNER_RETRY_ACTION,
   OPERATION_OWNER_RETRY_KIND,
   OPERATION_OWNER_RETRY_STATE,
+  OPERATION_OWNER_TERMINAL_REASON,
+  OPERATION_OWNER_TERMINAL_STATE,
   PLACEMENT_OWNER_POLICY,
   PLACEMENT_OWNER_TARGET_ACTION,
   PLACEMENT_OWNER_TARGET_STATE,
@@ -26,6 +29,10 @@ const PARTITION_ID = 'partition-owner-contract';
 const RETRY_OPERATION_ID = 'operation-retry-contract';
 const RETRY_AFTER_MS = 125;
 const FALLBACK_DELAY_MS = 500;
+const CURRENT_TIME_MS = 1000;
+const NEXT_RETRY_AT_MS = 1125;
+const RETRY_ATTEMPT = NUM.TWO;
+const RETRY_MAX_ATTEMPTS = NUM.THREE;
 const TARGET_REPLICA_COUNT = NUM.TWO;
 
 function createPlacementNodes() {
@@ -138,6 +145,8 @@ test('operation owner retry vocabulary separates rejection, reuse, and schedule'
       retryable: true,
       timerActive: true,
       fallbackDelayMs: FALLBACK_DELAY_MS,
+      attempt: RETRY_ATTEMPT,
+      maxAttempts: RETRY_MAX_ATTEMPTS,
       retryKind: OPERATION_OWNER_RETRY_KIND.DISPATCH,
     });
     const scheduled = buildOperationOwnerRetryOutcome({
@@ -146,6 +155,30 @@ test('operation owner retry vocabulary separates rejection, reuse, and schedule'
       timerActive: false,
       retryAfterMs: RETRY_AFTER_MS,
       fallbackDelayMs: FALLBACK_DELAY_MS,
+      attempt: RETRY_ATTEMPT,
+      maxAttempts: RETRY_MAX_ATTEMPTS,
+      criticalWorkflow: true,
+      currentTimeMs: CURRENT_TIME_MS,
+      retryKind: OPERATION_OWNER_RETRY_KIND.TRANSITION,
+    });
+    const unbounded = buildOperationOwnerRetryOutcome({
+      operationId: RETRY_OPERATION_ID,
+      retryable: true,
+      timerActive: false,
+      retryAfterMs: RETRY_AFTER_MS,
+      fallbackDelayMs: FALLBACK_DELAY_MS,
+      criticalWorkflow: true,
+      retryKind: OPERATION_OWNER_RETRY_KIND.TRANSITION,
+    });
+    const exhausted = buildOperationOwnerRetryOutcome({
+      operationId: RETRY_OPERATION_ID,
+      retryable: true,
+      timerActive: false,
+      retryAfterMs: RETRY_AFTER_MS,
+      fallbackDelayMs: FALLBACK_DELAY_MS,
+      attempt: RETRY_MAX_ATTEMPTS,
+      maxAttempts: RETRY_MAX_ATTEMPTS,
+      criticalWorkflow: true,
       retryKind: OPERATION_OWNER_RETRY_KIND.TRANSITION,
     });
 
@@ -156,6 +189,20 @@ test('operation owner retry vocabulary separates rejection, reuse, and schedule'
     t.equal(scheduled.state, OPERATION_OWNER_RETRY_STATE.SCHEDULE_RETRY);
     t.equal(scheduled.action, OPERATION_OWNER_RETRY_ACTION.SCHEDULE_TIMER);
     t.equal(scheduled.delayMs, RETRY_AFTER_MS);
+    t.equal(scheduled.progressState, OPERATION_OWNER_PROGRESS_STATE.BOUNDED_RETRY);
+    t.equal(scheduled.nextAttemptAtMs, NEXT_RETRY_AT_MS);
+    t.equal(unbounded.state, OPERATION_OWNER_RETRY_STATE.ATTEMPT_BOUND_REQUIRED);
+    t.equal(unbounded.action, OPERATION_OWNER_RETRY_ACTION.TERMINAL_DEGRADE);
+    t.equal(
+      unbounded.terminalReason,
+      OPERATION_OWNER_TERMINAL_REASON.RETRY_ATTEMPT_BOUND_REQUIRED,
+    );
+    t.equal(exhausted.state, OPERATION_OWNER_RETRY_STATE.ATTEMPTS_EXHAUSTED);
+    t.equal(exhausted.terminalState, OPERATION_OWNER_TERMINAL_STATE.TERMINAL_DEGRADED);
+    t.equal(
+      exhausted.terminalReason,
+      OPERATION_OWNER_TERMINAL_REASON.RETRY_ATTEMPTS_EXHAUSTED,
+    );
   });
 
 test('operation owner resume vocabulary owns terminal and timeout decisions',
@@ -175,20 +222,41 @@ test('operation owner resume vocabulary owns terminal and timeout decisions',
       dispatchRetryable: true,
       retryGraceActive: false,
       stepTimedOut: false,
+      retryAfterMs: RETRY_AFTER_MS,
+      currentTimeMs: CURRENT_TIME_MS,
+      criticalWorkflow: true,
     });
     const timeout = buildOperationOwnerResumeOutcome({
       operationAvailable: true,
       terminalOperation: false,
       locallyOwned: true,
       dispatchRetryable: true,
-      retryGraceActive: false,
+      retryGraceActive: true,
       stepTimedOut: true,
+      criticalWorkflow: true,
+    });
+    const unbounded = buildOperationOwnerResumeOutcome({
+      operationAvailable: true,
+      terminalOperation: false,
+      locallyOwned: true,
+      dispatchRetryable: true,
+      retryGraceActive: false,
+      stepTimedOut: false,
+      criticalWorkflow: true,
     });
 
     t.equal(terminal.state, OPERATION_OWNER_RESUME_STATE.TERMINAL_OPERATION);
     t.equal(terminal.action, OPERATION_OWNER_RESUME_ACTION.CLEAR_RETRY);
     t.equal(dispatch.state, OPERATION_OWNER_RESUME_STATE.DISPATCH_RESUME);
     t.equal(dispatch.action, OPERATION_OWNER_RESUME_ACTION.DISPATCH);
+    t.equal(dispatch.nextAttemptAtMs, NEXT_RETRY_AT_MS);
     t.equal(timeout.state, OPERATION_OWNER_RESUME_STATE.TIMEOUT_RECONCILE);
     t.equal(timeout.action, OPERATION_OWNER_RESUME_ACTION.RECONCILE_TIMEOUT);
+    t.equal(timeout.terminalState, OPERATION_OWNER_TERMINAL_STATE.TERMINAL_DEGRADED);
+    t.equal(
+      timeout.terminalReason,
+      OPERATION_OWNER_TERMINAL_REASON.TIMEOUT_RECONCILE_DUE,
+    );
+    t.equal(unbounded.state, OPERATION_OWNER_RESUME_STATE.RETRY_BOUND_REQUIRED);
+    t.equal(unbounded.action, OPERATION_OWNER_RESUME_ACTION.TERMINAL_DEGRADE);
   });

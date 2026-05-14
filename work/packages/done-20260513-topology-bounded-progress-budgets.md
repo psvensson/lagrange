@@ -3,7 +3,7 @@
 <!-- work-package
 {
   "schema": "work-package-v1",
-  "status": "active",
+  "status": "done",
   "opened": "2026-05-13",
   "lane": "runtime-owner-boundary",
   "scenario": "none",
@@ -20,14 +20,14 @@
     "node scripts/check-guideline-literals.js src/rebalancer/topology-owner-constants.js src/diagnostics/budget-timeout-accounting.js",
     "node scripts/check-guideline-decision-boundaries.js src/rebalancer/topology-owner-constants.js src/diagnostics/budget-timeout-accounting.js",
     "npm run audit:runtime-grammar:file -- src/rebalancer/topology-owner-constants.js src/diagnostics/budget-timeout-accounting.js",
-    "git diff --check -- src/rebalancer/topology-owner-constants.js src/diagnostics/budget-timeout-accounting.js test/rebalancer/topology-owner-contracts.test.js test/diagnostics/budget-timeout-accounting.test.js work/packages/active-20260513-topology-bounded-progress-budgets.md"
+    "git diff --check -- src/rebalancer/topology-owner-constants.js src/diagnostics/budget-timeout-accounting.js test/rebalancer/topology-owner-contracts.test.js test/diagnostics/budget-timeout-accounting.test.js work/packages/done-20260513-topology-bounded-progress-budgets.md"
   ],
   "writeScope": [
     "src/rebalancer/topology-owner-constants.js",
     "src/diagnostics/budget-timeout-accounting.js",
     "test/rebalancer/topology-owner-contracts.test.js",
     "test/diagnostics/budget-timeout-accounting.test.js",
-    "work/packages/active-20260513-topology-bounded-progress-budgets.md",
+    "work/packages/done-20260513-topology-bounded-progress-budgets.md",
     "work/model-ledger.jsonl"
   ],
   "handoffFiles": [
@@ -46,7 +46,7 @@
     "src/diagnostics/budget-timeout-accounting.js",
     "test/rebalancer/topology-owner-contracts.test.js",
     "test/diagnostics/budget-timeout-accounting.test.js",
-    "work/packages/active-20260513-topology-bounded-progress-budgets.md",
+    "work/packages/done-20260513-topology-bounded-progress-budgets.md",
     "work/model-ledger.jsonl"
   ],
   "modelFit": {
@@ -58,7 +58,9 @@
       "a frozen decision must be reopened"
     ]
   },
-  "predecessor": "work/packages/done-20260513-topology-anti-entropy-reconciler.md"
+  "predecessor": "work/packages/done-20260513-topology-anti-entropy-reconciler.md",
+  "closed": "2026-05-14",
+  "commitAndPushLedgerRequired": true
 }
 -->
 
@@ -119,7 +121,7 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
   `src/diagnostics/budget-timeout-accounting.js`,
   `test/rebalancer/topology-owner-contracts.test.js`,
   `test/diagnostics/budget-timeout-accounting.test.js`,
-  `work/packages/active-20260513-topology-bounded-progress-budgets.md`,
+  `work/packages/done-20260513-topology-bounded-progress-budgets.md`,
   `work/model-ledger.jsonl`
 - Forbidden files: rolling-restart scenarios/artifacts, topology convergence
   golden fixtures already dirty before this package, Pro behavior, Enterprise
@@ -149,8 +151,8 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 - [x] Review subagent recorded:
       `Agent Codex (019e25ad-657d-7a23-8b65-e60bf5b607e4) reviewed work/packages/done-20260513-topology-anti-entropy-reconciler.md; result clean`.
 - [x] Fix subagent recorded or explicitly not needed: `not-needed`.
-- [ ] Implementation subagent recorded:
-      pending-before-implementation-starts
+- [x] Implementation subagent recorded:
+      `Agent Epicurus (019e25c4-0d7d-71a2-a44c-8bec70755176) implemented work/packages/done-20260513-topology-bounded-progress-budgets.md`.
 
 ## Validation
 
@@ -167,3 +169,20 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
    handoff as the owner surface.
 6. Review subagent proof recorded from Gauss
    (`019e25ad-657d-7a23-8b65-e60bf5b607e4`), result `clean`.
+7. Implementation subagent proof recorded from Epicurus
+   (`019e25c4-0d7d-71a2-a44c-8bec70755176`).
+8. `npm run work:evidence-summary -- test-output/reports/rolling-restart-spec-led-runtime-modularization-active-gate-snapshot-coverage-publication-lag.report.json`
+   and `npm run work:evidence-summary -- test-output/reports/.playback/rolling-restart-spec-led-runtime-modularization-active-gate-snapshot-coverage-reachability/rolling-restart/failure-bundle.json`
+   passed. Focused raw artifact inspection followed because the summary did
+   not expose the exact retry-after, timeout-reconcile, and terminal readiness
+   fields needed to bind the budget taxonomy.
+9. `npx tap test/rebalancer/topology-owner-contracts.test.js test/diagnostics/budget-timeout-accounting.test.js`
+   passed after implementation.
+10. `node scripts/check-guideline-literals.js src/rebalancer/topology-owner-constants.js src/diagnostics/budget-timeout-accounting.js`
+    passed with 0 new literal-guideline violations.
+11. `node scripts/check-guideline-decision-boundaries.js src/rebalancer/topology-owner-constants.js src/diagnostics/budget-timeout-accounting.js`
+    passed with 0 decision-boundary guideline violations.
+12. `npm run audit:runtime-grammar:file -- src/rebalancer/topology-owner-constants.js src/diagnostics/budget-timeout-accounting.js`
+    passed with 0 runtime-grammar-contract violations.
+13. `npm run work:model-ledger -- record --package work/packages/done-20260513-topology-bounded-progress-budgets.md --model gpt-5.3-codex --reasoning-effort high --task-class runtime-owner-boundary --package-class representative-frontier-closure --intended-minimum-model gpt-5.3-codex --scope-shape owner-boundary-contraction/current-frontier --escalated true --bailout-reason none --outcome implemented --validation-status focused-green --correction-loops 1 --review-findings 0 --notes "..."`
+    recorded the final implementation evidence.

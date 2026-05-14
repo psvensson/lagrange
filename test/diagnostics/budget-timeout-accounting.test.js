@@ -18,8 +18,22 @@ const CURRENT_REPORT_PATH =
   'test-output/reports/rolling-restart-spec-led-runtime-modularization-active-gate-snapshot-coverage-publication-lag.report.json';
 const JSON_ENCODING_UTF8 = 'utf8';
 const ZERO_COUNT = 0;
+const ONE_COUNT = 1;
+const TWO_COUNT = 2;
+const THREE_COUNT = 3;
+const CURRENT_WORKFLOW_RETRY_AFTER_MS = 1000;
 const NULL_VALUE = null;
 const UNDEFINED_VALUE = undefined;
+const PROGRESS_STATE_BOUNDED = 'bounded_progress';
+const PROGRESS_STATE_TERMINAL = 'terminal_progress';
+const PROGRESS_MECHANISM_OBSERVED_LIMIT = 'observed_limit';
+const PROGRESS_MECHANISM_NEXT_ATTEMPT = 'next_attempt';
+const PROGRESS_MECHANISM_TERMINAL_CLASSIFICATION =
+  'terminal_classification';
+const TERMINAL_STATE_DEGRADED = 'terminal_degraded';
+const REASON_ACTIVE_GATE_TERMINAL = 'active_gate_timeout_terminal';
+const REASON_READINESS_TERMINAL = 'readiness_terminal';
+const REASON_RETRY_SCHEDULED = 'retry_scheduled';
 
 function readArtifact(artifactPath) {
   return JSON.parse(fs.readFileSync(artifactPath, JSON_ENCODING_UTF8));
@@ -46,17 +60,24 @@ function assertNoNullOrUndefined(value) {
 }
 
 describe('BudgetTimeoutAccounting', () => {
-  it('accounts timeout, unbounded attempts, and cascades explicitly', () => {
+  it('accounts terminal attempts and bounded cascades explicitly', () => {
     const accounting = accountBudgets(readArtifact(ACTIVE_FAILURE_BUNDLE_PATH));
+    const attemptBudget = findBudget(accounting, BUDGET_KIND.ACTIVE_GATE_ATTEMPTS);
 
     assert.equal(
       findBudget(accounting, BUDGET_KIND.ACTIVE_GATE_TIMEOUT).state,
       BUDGET_STATE.EXHAUSTED,
     );
+    assert.equal(attemptBudget.state, BUDGET_STATE.EXHAUSTED);
+    assert.equal(attemptBudget.progressState, PROGRESS_STATE_TERMINAL);
     assert.equal(
-      findBudget(accounting, BUDGET_KIND.ACTIVE_GATE_ATTEMPTS).state,
-      BUDGET_STATE.UNBOUNDED,
+      attemptBudget.progressMechanism,
+      PROGRESS_MECHANISM_TERMINAL_CLASSIFICATION,
     );
+    assert.equal(attemptBudget.terminalState, TERMINAL_STATE_DEGRADED);
+    assert.equal(attemptBudget.reason, REASON_ACTIVE_GATE_TERMINAL);
+    assert.equal(accounting.summary.unknownCount, ZERO_COUNT);
+    assert.equal(accounting.summary.unboundedCount, ZERO_COUNT);
     assert.ok(accounting.cascades.length > ZERO_COUNT);
     assertNoNullOrUndefined(accounting);
   });
@@ -85,19 +106,50 @@ describe('BudgetTimeoutAccounting', () => {
     const workflowBudget = findBudget(accounting, BUDGET_KIND.WORKFLOW_STEP_TIMEOUT);
     const readinessBudget = findBudget(accounting, BUDGET_KIND.READINESS_RETRY_WINDOW);
 
-    assert.equal(attemptBudget.state, BUDGET_STATE.UNBOUNDED);
+    assert.equal(attemptBudget.state, BUDGET_STATE.EXHAUSTED);
     assert.equal(attemptBudget.owner, OWNER.ACTIVE_GATE);
     assert.equal(attemptBudget.boundary, BOUNDARY.SNAPSHOT_COVERAGE);
     assert.equal(attemptBudget.ownershipState, BUDGET_OWNERSHIP_STATE.CLASSIFIED);
-    assert.equal(workflowBudget.state, BUDGET_STATE.UNKNOWN);
+    assert.equal(attemptBudget.progressState, PROGRESS_STATE_TERMINAL);
+    assert.equal(attemptBudget.reason, REASON_ACTIVE_GATE_TERMINAL);
+    assert.equal(workflowBudget.state, BUDGET_STATE.WITHIN);
     assert.equal(workflowBudget.owner, OWNER.OPERATION_WORKFLOW);
     assert.equal(workflowBudget.boundary, BOUNDARY.WORKFLOW_PROGRESS);
     assert.equal(workflowBudget.ownershipState, BUDGET_OWNERSHIP_STATE.CLASSIFIED);
-    assert.equal(readinessBudget.state, BUDGET_STATE.UNBOUNDED);
+    assert.equal(workflowBudget.progressState, PROGRESS_STATE_BOUNDED);
+    assert.equal(workflowBudget.progressMechanism, PROGRESS_MECHANISM_NEXT_ATTEMPT);
+    assert.equal(workflowBudget.reason, REASON_RETRY_SCHEDULED);
+    assert.equal(workflowBudget.nextAttemptInMs, CURRENT_WORKFLOW_RETRY_AFTER_MS);
+    assert.equal(readinessBudget.state, BUDGET_STATE.EXHAUSTED);
     assert.equal(readinessBudget.owner, OWNER.READINESS);
     assert.equal(readinessBudget.boundary, BOUNDARY.STARTUP_SUPPORT_EVIDENCE);
     assert.equal(readinessBudget.ownershipState, BUDGET_OWNERSHIP_STATE.CLASSIFIED);
+    assert.equal(readinessBudget.progressState, PROGRESS_STATE_TERMINAL);
+    assert.equal(
+      readinessBudget.progressMechanism,
+      PROGRESS_MECHANISM_TERMINAL_CLASSIFICATION,
+    );
+    assert.equal(readinessBudget.reason, REASON_READINESS_TERMINAL);
+    assert.equal(accounting.summary.boundedProgressCount, THREE_COUNT);
+    assert.equal(accounting.summary.terminalProgressCount, TWO_COUNT);
+    assert.equal(accounting.summary.unboundedCount, ZERO_COUNT);
+    assert.equal(accounting.summary.unknownCount, ZERO_COUNT);
     assert.equal(accounting.summary.ownershipGapCount, ZERO_COUNT);
     assertNoNullOrUndefined(accounting);
+  });
+
+  it('keeps observed workflow limits as bounded progress evidence', () => {
+    const accounting = accountBudgets(readArtifact(ACTIVE_FAILURE_BUNDLE_PATH));
+    const workflowBudget = findBudget(accounting, BUDGET_KIND.WORKFLOW_STEP_TIMEOUT);
+
+    assert.equal(workflowBudget.state, BUDGET_STATE.EXHAUSTED);
+    assert.equal(workflowBudget.progressState, PROGRESS_STATE_BOUNDED);
+    assert.equal(
+      workflowBudget.progressMechanism,
+      PROGRESS_MECHANISM_OBSERVED_LIMIT,
+    );
+    assert.equal(accounting.summary.boundedProgressCount, THREE_COUNT);
+    assert.equal(accounting.summary.terminalProgressCount, TWO_COUNT);
+    assert.equal(accounting.cascades.length, ONE_COUNT);
   });
 });
