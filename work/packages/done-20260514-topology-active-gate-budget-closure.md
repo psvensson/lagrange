@@ -284,7 +284,6 @@ rather than the state label alone.
 
 Required at closure.
 
-1. [x] Focused package commit: pending-closure-commit.
-2. [x] Pushed to: pending-closure-push.
-3. [x] Commit contains only package-owned files/package-status/allowed sprint
-   handoff: pending-closure-focus-check.
+1. [x] Focused package commit: 270ccb1e79d2a6203afcfd0606579b7b0bb5824d.
+2. [x] Pushed to: origin/codex/pending-ack-eligibility-filter.
+3. [x] Commit contains only package-owned files/package-status/allowed sprint handoff: yes.
