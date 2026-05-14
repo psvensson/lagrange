@@ -4,8 +4,10 @@ import {
   CANONICAL_SCENARIO_MATRIX,
   TOPOLOGY_FAILURE_GATE_MATRIX,
   formatCanonicalScenarioMatrixLines,
+  formatCanonicalTopologyFailureGateExecutionLines,
   formatCanonicalTopologyFailureGateMatrixLines,
   listCanonicalScenarioEntries,
+  listCanonicalTopologyFailureGateExecutionPlan,
   listCanonicalTopologyFailureGateEntries,
   normalizeScenarioConfigName,
   selectCanonicalScenariosForConfig,
@@ -32,6 +34,21 @@ const EXPECTED_LAST_FAILURE_GATE_LINE =
   'rebalance-disruption-split-during-recovery|rebalance_disruption|' +
   'topology_rebalance_owner|split_rebalance_during_recovery|' +
   'split_rebalance_drains_and_converges_durable_placement';
+const EXECUTION_PLAN_RUN_ID = '20260514T000000Z';
+const EXPECTED_FIRST_EXECUTION_LINE =
+  'failure-detection-rolling-restart|local-three-node.json|' +
+  'rolling-restart|test-output/reports/topology-failure-gates/' +
+  '20260514T000000Z/failure-detection-rolling-restart.report.json|' +
+  'topology_control_plane|failure_detection_repair_intent|' +
+  'work/packages/todo-20260514-topology-failure-detection-repair-gate.md|' +
+  'active_gate_active_nodes_5_of_5,snapshot_coverage_5_of_5,' +
+  'missing_published_zero,no_priority_recovery_event_driven_wait,' +
+  'failure_repair_intent_consumed';
+const EXPECTED_LOCAL_THREE_NODE_EXECUTION_GATE_IDS = [
+  'failure-detection-rolling-restart',
+  'remote-handoff-missed-ack',
+  'stale-publication-durable-truth-ahead',
+];
 
 test('scenario-registry tracks the canonical 20-scenario matrix', (t) => {
   assert.equal(CANONICAL_SCENARIO_MATRIX.length, 20);
@@ -134,6 +151,28 @@ test('scenario-registry formats topology failure gate handoff lines', (t) => {
   assert.equal(
     lines[lines.length - 1],
     EXPECTED_LAST_FAILURE_GATE_LINE,
+  );
+  t.end();
+});
+
+test('scenario-registry exposes topology failure gate execution plans', (t) => {
+  const plan = listCanonicalTopologyFailureGateExecutionPlan(
+    EXECUTION_PLAN_RUN_ID,
+    'test/distributed/config/local-three-node.json',
+  );
+
+  assert.deepEqual(
+    plan.map((entry) => entry.gateId),
+    EXPECTED_LOCAL_THREE_NODE_EXECUTION_GATE_IDS,
+  );
+  assert.equal(
+    plan[0].artifactPath,
+    'test-output/reports/topology-failure-gates/20260514T000000Z/' +
+      'failure-detection-rolling-restart.report.json',
+  );
+  assert.equal(
+    formatCanonicalTopologyFailureGateExecutionLines(EXECUTION_PLAN_RUN_ID)[0],
+    EXPECTED_FIRST_EXECUTION_LINE,
   );
   t.end();
 });

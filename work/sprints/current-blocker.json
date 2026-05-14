@@ -2,42 +2,49 @@
   "schema": "current-blocker-v1",
   "generatedBy": "scripts/work-tracker.js",
   "sprint": "work/sprints/active-2026-q2-topology-convergence-residual-closure.md",
-  "package": "work/packages/active-20260514-topology-publication-projection-reconciliation.md",
+  "package": "work/packages/active-20260514-topology-failure-gate-execution-harness.md",
   "status": "active",
-  "lane": "runtime-owner-boundary",
-  "scenario": "rolling-restart",
-  "artifact": "test-output/reports/rolling-restart-green-gate-after-priority-recovery-workflow-progress-after-snapshot-coverage.report.json",
+  "lane": "scenario-release-gate",
+  "scenario": "failure-gate-matrix",
+  "artifact": "test-output/reports/topology-failure-gate-execution-harness.report.json",
   "playback": "none",
-  "owner": "topology_publication_owner",
-  "boundary": "publication_projection_cohort",
-  "dominantReason": "missing_published_nodes_present",
-  "currentState": "Publication convergence is marked satisfied but owner evidence still shows publishedActive=1/5 and four exact missingPublishedNodeIds in the active-gate handoff.",
-  "nextAction": "Reconcile publication owner truth active projection and selected active-gate snapshot so PUBLISHED cannot coexist with missing published active nodes unless the owner emits a typed degraded reason.",
+  "owner": "distributed_test_harness",
+  "boundary": "failure_gate_execution",
+  "dominantReason": "failure_gate_matrix_not_executed",
+  "currentState": "The prior sprint added a canonical failure-gate matrix but recorded no executable gate plan, artifact naming, durable assertion IDs, or red-outcome split package wiring.",
+  "nextAction": "Sharpen the failure-gate harness and sprint observability only: generate deterministic gate execution plans, assertion metadata, artifact paths, and package split rules without fixing rolling-restart runtime behavior.",
   "proof": [
-    "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-green-gate-after-priority-recovery-workflow-progress-after-snapshot-coverage.report.json --explain publication_ack_convergence",
-    "npm run analyze:owner-files -- topology_publication_owner publication_convergence --markdown"
+    "npm run analyze:owner-files -- distributed_test_harness failure_gate_matrix --markdown",
+    "node test/distributed/harness/__tests__/scenario-registry.test.js",
+    "node test/distributed/harness/__tests__/topology-failure-gate-matrix.test.js"
   ],
   "writeScope": [
-    "work/packages/active-20260514-topology-publication-projection-reconciliation.md",
-    "work/sprints/active-2026-q2-topology-convergence-residual-closure.md"
+    "work/packages/active-20260514-topology-failure-gate-execution-harness.md",
+    "work/sprints/active-2026-q2-topology-convergence-residual-closure.md",
+    "work/sprints/current-blocker.json",
+    "work/sprints/current-blocker.md",
+    "test/distributed/harness/topology-failure-gate-matrix.js",
+    "test/distributed/harness/scenario-registry.js",
+    "test/distributed/harness/__tests__/topology-failure-gate-matrix.test.js",
+    "test/distributed/harness/__tests__/scenario-registry.test.js"
   ],
   "handoffFiles": [
-    "work/packages/done-20260514-topology-publication-convergence-after-active-gate-owner-truth.md"
+    "work/packages/done-20260513-topology-failure-scenario-gates.md"
   ],
-  "generatedFiles": [],
-  "candidateRuntimeFiles": [
-    "src/control-plane/publication-owner-decision.js",
-    "src/control-plane/publication-owner-evidence.js",
-    "src/control-plane/publication-owner-state.js",
-    "src/control-plane/publication-recovery-evidence.js",
-    "src/control-plane/publication-recovery-gate.js",
-    "src/control-plane/membership-publication-planning.js",
-    "test/control-plane/publication-recovery-evidence.test.js",
-    "test/admin/admin-control-snapshot.test.js"
+  "generatedFiles": [
+    "work/sprints/current-blocker.json",
+    "work/sprints/current-blocker.md"
   ],
+  "candidateRuntimeFiles": [],
   "commitScope": [
-    "work/packages/active-20260514-topology-publication-projection-reconciliation.md",
-    "work/sprints/active-2026-q2-topology-convergence-residual-closure.md"
+    "work/packages/active-20260514-topology-failure-gate-execution-harness.md",
+    "work/sprints/active-2026-q2-topology-convergence-residual-closure.md",
+    "work/sprints/current-blocker.json",
+    "work/sprints/current-blocker.md",
+    "test/distributed/harness/topology-failure-gate-matrix.js",
+    "test/distributed/harness/scenario-registry.js",
+    "test/distributed/harness/__tests__/topology-failure-gate-matrix.test.js",
+    "test/distributed/harness/__tests__/scenario-registry.test.js"
   ],
   "touchedFiles": [],
   "modelFit": {
@@ -51,32 +58,32 @@
   },
   "representativeResidual": {},
   "causalGovernance": {
-    "hypothesis": "topology_publication_owner / publication_projection_cohort proof should reduce, migrate, or classify missing_published_nodes_present without hiding the sprint representative residual.",
-    "stopConditionCheck": "npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-green-gate-after-priority-recovery-workflow-progress-after-snapshot-coverage.report.json",
-    "expectedCausalModelChange": "missing_published_nodes_present becomes representative-green, reduced, same-frontier, migrated, or classification-only with a named owner-boundary reason.",
+    "hypothesis": "distributed_test_harness / failure_gate_execution proof should reduce, migrate, or classify failure_gate_matrix_not_executed without hiding the sprint representative residual.",
+    "stopConditionCheck": "npm --silent run analyze:causal-model -- test-output/reports/topology-failure-gate-execution-harness.report.json",
+    "expectedCausalModelChange": "failure_gate_matrix_not_executed becomes representative-green, reduced, same-frontier, migrated, or classification-only with a named owner-boundary reason.",
     "representativeOutcome": "pending-before-rerun",
-    "causalDebt": "Until topology_publication_owner / publication_projection_cohort is proven, the sprint representative rolling-restart residual stays open at startup_active_gate_owner / snapshot_coverage.",
-    "crossBoundaryReview": "Required before closure through the runtime-owner-boundary subagent ledger or an allowed waiver recorded in this package."
+    "causalDebt": "Until distributed_test_harness / failure_gate_execution is proven, the sprint representative rolling-restart residual stays open. Runtime rolling-restart fixes are out of scope for this tooling package.",
+    "crossBoundaryReview": "Required before closure through the scenario-release-gate subagent ledger or an allowed waiver recorded in this package."
   },
   "scenarioCausalClosure": {
-    "referenceScenarioOrProbe": "rolling-restart / topology_publication_owner / publication_projection_cohort",
+    "referenceScenarioOrProbe": "failure-gate-matrix / distributed_test_harness / failure_gate_execution",
     "phaseChain": [
       "canonical evidence extraction",
-      "topology_publication_owner / publication_projection_cohort focused proof",
+      "distributed_test_harness / failure_gate_execution focused proof",
       "representative or gate rerun classification"
     ],
-    "currentFirstFrontier": "package-local frontier topology_publication_owner / publication_projection_cohort; sprint representative frontier remains startup_active_gate_owner / snapshot_coverage until fresh evidence changes it",
+    "currentFirstFrontier": "package-local frontier distributed_test_harness / failure_gate_execution; sprint representative frontier remains startup_active_gate_owner / snapshot_coverage until fresh evidence changes it",
     "knownDownstreamBlockers": [
-      "rolling-restart representative active-gate snapshot coverage remains red until green or migrated",
+      "rolling-restart representative publication/snapshot coverage remains red until green or migrated by a later runtime package",
       "runtime or harness fixes discovered outside this owner boundary require a narrower successor package"
     ],
-    "missingCausalEdge": "unproven topology_publication_owner / publication_projection_cohort causal edge for missing_published_nodes_present",
-    "missingCausalEdgeProbe": "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-green-gate-after-priority-recovery-workflow-progress-after-snapshot-coverage.report.json --explain publication_ack_convergence",
-    "boundedProgressProof": "Focused proof must show bounded wake, retry, timeout, reconcile, drain, dispatch, delivery, timer, or advance for topology_publication_owner / publication_projection_cohort.",
-    "boundedProgressProofArtifact": "test-output/reports/rolling-restart-green-gate-after-priority-recovery-workflow-progress-after-snapshot-coverage.report.json",
-    "expectedObservableTransition": "missing_published_nodes_present resolves to green evidence, a reduced residual, same-frontier evidence, migrated owner-boundary proof, or classification-only stop.",
+    "missingCausalEdge": "unproven distributed_test_harness / failure_gate_execution causal edge for failure_gate_matrix_not_executed",
+    "missingCausalEdgeProbe": "npm run analyze:owner-files -- distributed_test_harness failure_gate_matrix --markdown",
+    "boundedProgressProof": "Focused proof must show bounded wake, retry, timeout, reconcile, drain, dispatch, delivery, timer, or advance for distributed_test_harness / failure_gate_execution.",
+    "boundedProgressProofArtifact": "test-output/reports/topology-failure-gate-execution-harness.report.json",
+    "expectedObservableTransition": "failure_gate_matrix_not_executed resolves to executable gate-plan evidence, a reduced residual, same-frontier evidence, migrated owner-boundary proof, or classification-only stop.",
     "maxProgressBound": "one activation cycle: package doctor, extractor/probe, owner-file proof, focused validation, and result classification",
-    "sameFrontierFallback": "keep topology_publication_owner / publication_projection_cohort active and do not broaden the package or claim ship proof",
+    "sameFrontierFallback": "keep distributed_test_harness / failure_gate_execution active and do not broaden the package or claim ship proof",
     "expectedNextFrontier": "representative green evidence or a narrower owner-boundary blocker selected by canonical evidence",
     "resultClassification": "pending-before-probe",
     "stopCondition": "continue-local-fix"

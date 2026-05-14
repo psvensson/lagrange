@@ -4,34 +4,35 @@
 
 Sprint: `work/sprints/active-2026-q2-topology-convergence-residual-closure.md`
 
-Package: `work/packages/active-20260514-topology-publication-projection-reconciliation.md`
+Package: `work/packages/active-20260514-topology-failure-gate-execution-harness.md`
 
-Workflow lane: `runtime-owner-boundary`
+Workflow lane: `scenario-release-gate`
 
-Scenario: `rolling-restart`
+Scenario: `failure-gate-matrix`
 
-Artifact: `test-output/reports/rolling-restart-green-gate-after-priority-recovery-workflow-progress-after-snapshot-coverage.report.json`
+Artifact: `test-output/reports/topology-failure-gate-execution-harness.report.json`
 
 Playback: `none`
 
 ## Boundary
 
-Owner: `topology_publication_owner`
+Owner: `distributed_test_harness`
 
-Boundary: `publication_projection_cohort`
+Boundary: `failure_gate_execution`
 
-Dominant reason: `missing_published_nodes_present`
+Dominant reason: `failure_gate_matrix_not_executed`
 
-Current state: Publication convergence is marked satisfied but owner evidence still shows publishedActive=1/5 and four exact missingPublishedNodeIds in the active-gate handoff.
+Current state: The prior sprint added a canonical failure-gate matrix but recorded no executable gate plan, artifact naming, durable assertion IDs, or red-outcome split package wiring.
 
 ## Next Action
 
-Reconcile publication owner truth active projection and selected active-gate snapshot so PUBLISHED cannot coexist with missing published active nodes unless the owner emits a typed degraded reason.
+Sharpen the failure-gate harness and sprint observability only: generate deterministic gate execution plans, assertion metadata, artifact paths, and package split rules without fixing rolling-restart runtime behavior.
 
 ## Proof Ladder
 
-1. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-green-gate-after-priority-recovery-workflow-progress-after-snapshot-coverage.report.json --explain publication_ack_convergence`
-2. `npm run analyze:owner-files -- topology_publication_owner publication_convergence --markdown`
+1. `npm run analyze:owner-files -- distributed_test_harness failure_gate_matrix --markdown`
+2. `node test/distributed/harness/__tests__/scenario-registry.test.js`
+3. `node test/distributed/harness/__tests__/topology-failure-gate-matrix.test.js`
 
 ## Model Fit
 
@@ -66,48 +67,48 @@ Next action: `unknown`
 
 ## Causal Governance
 
-Causal hypothesis: `topology_publication_owner / publication_projection_cohort proof should reduce, migrate, or classify missing_published_nodes_present without hiding the sprint representative residual.`
+Causal hypothesis: `distributed_test_harness / failure_gate_execution proof should reduce, migrate, or classify failure_gate_matrix_not_executed without hiding the sprint representative residual.`
 
-Stop-condition check: `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-green-gate-after-priority-recovery-workflow-progress-after-snapshot-coverage.report.json`
+Stop-condition check: `npm --silent run analyze:causal-model -- test-output/reports/topology-failure-gate-execution-harness.report.json`
 
-Expected causal-model change: `missing_published_nodes_present becomes representative-green, reduced, same-frontier, migrated, or classification-only with a named owner-boundary reason.`
+Expected causal-model change: `failure_gate_matrix_not_executed becomes representative-green, reduced, same-frontier, migrated, or classification-only with a named owner-boundary reason.`
 
 Representative outcome: `pending-before-rerun`
 
-Causal debt: `Until topology_publication_owner / publication_projection_cohort is proven, the sprint representative rolling-restart residual stays open at startup_active_gate_owner / snapshot_coverage.`
+Causal debt: `Until distributed_test_harness / failure_gate_execution is proven, the sprint representative rolling-restart residual stays open. Runtime rolling-restart fixes are out of scope for this tooling package.`
 
-Cross-boundary review: `Required before closure through the runtime-owner-boundary subagent ledger or an allowed waiver recorded in this package.`
+Cross-boundary review: `Required before closure through the scenario-release-gate subagent ledger or an allowed waiver recorded in this package.`
 
 ## Scenario Causal Closure
 
-Reference scenario/probe: `rolling-restart / topology_publication_owner / publication_projection_cohort`
+Reference scenario/probe: `failure-gate-matrix / distributed_test_harness / failure_gate_execution`
 
 Phase chain:
 
 1. `canonical evidence extraction`
-2. `topology_publication_owner / publication_projection_cohort focused proof`
+2. `distributed_test_harness / failure_gate_execution focused proof`
 3. `representative or gate rerun classification`
 
-Current first frontier: `package-local frontier topology_publication_owner / publication_projection_cohort; sprint representative frontier remains startup_active_gate_owner / snapshot_coverage until fresh evidence changes it`
+Current first frontier: `package-local frontier distributed_test_harness / failure_gate_execution; sprint representative frontier remains startup_active_gate_owner / snapshot_coverage until fresh evidence changes it`
 
 Known downstream blockers:
 
-1. `rolling-restart representative active-gate snapshot coverage remains red until green or migrated`
+1. `rolling-restart representative publication/snapshot coverage remains red until green or migrated by a later runtime package`
 2. `runtime or harness fixes discovered outside this owner boundary require a narrower successor package`
 
-Missing causal edge: `unproven topology_publication_owner / publication_projection_cohort causal edge for missing_published_nodes_present`
+Missing causal edge: `unproven distributed_test_harness / failure_gate_execution causal edge for failure_gate_matrix_not_executed`
 
-Missing causal edge probe: `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-green-gate-after-priority-recovery-workflow-progress-after-snapshot-coverage.report.json --explain publication_ack_convergence`
+Missing causal edge probe: `npm run analyze:owner-files -- distributed_test_harness failure_gate_matrix --markdown`
 
-Bounded progress proof: `Focused proof must show bounded wake, retry, timeout, reconcile, drain, dispatch, delivery, timer, or advance for topology_publication_owner / publication_projection_cohort.`
+Bounded progress proof: `Focused proof must show bounded wake, retry, timeout, reconcile, drain, dispatch, delivery, timer, or advance for distributed_test_harness / failure_gate_execution.`
 
-Bounded progress proof artifact: `test-output/reports/rolling-restart-green-gate-after-priority-recovery-workflow-progress-after-snapshot-coverage.report.json`
+Bounded progress proof artifact: `test-output/reports/topology-failure-gate-execution-harness.report.json`
 
-Expected observable transition: `missing_published_nodes_present resolves to green evidence, a reduced residual, same-frontier evidence, migrated owner-boundary proof, or classification-only stop.`
+Expected observable transition: `failure_gate_matrix_not_executed resolves to executable gate-plan evidence, a reduced residual, same-frontier evidence, migrated owner-boundary proof, or classification-only stop.`
 
 Max progress bound: `one activation cycle: package doctor, extractor/probe, owner-file proof, focused validation, and result classification`
 
-Same-frontier fallback: `keep topology_publication_owner / publication_projection_cohort active and do not broaden the package or claim ship proof`
+Same-frontier fallback: `keep distributed_test_harness / failure_gate_execution active and do not broaden the package or claim ship proof`
 
 Expected next frontier: `representative green evidence or a narrower owner-boundary blocker selected by canonical evidence`
 
@@ -119,32 +120,38 @@ Stop condition: `continue-local-fix`
 
 Write scope:
 
-1. `work/packages/active-20260514-topology-publication-projection-reconciliation.md`
+1. `work/packages/active-20260514-topology-failure-gate-execution-harness.md`
 2. `work/sprints/active-2026-q2-topology-convergence-residual-closure.md`
+3. `work/sprints/current-blocker.json`
+4. `work/sprints/current-blocker.md`
+5. `test/distributed/harness/topology-failure-gate-matrix.js`
+6. `test/distributed/harness/scenario-registry.js`
+7. `test/distributed/harness/__tests__/topology-failure-gate-matrix.test.js`
+8. `test/distributed/harness/__tests__/scenario-registry.test.js`
 
 Handoff files:
 
-1. `work/packages/done-20260514-topology-publication-convergence-after-active-gate-owner-truth.md`
+1. `work/packages/done-20260513-topology-failure-scenario-gates.md`
 
 Generated files:
 
-1. None recorded
+1. `work/sprints/current-blocker.json`
+2. `work/sprints/current-blocker.md`
 
 Candidate runtime files:
 
-1. `src/control-plane/publication-owner-decision.js`
-2. `src/control-plane/publication-owner-evidence.js`
-3. `src/control-plane/publication-owner-state.js`
-4. `src/control-plane/publication-recovery-evidence.js`
-5. `src/control-plane/publication-recovery-gate.js`
-6. `src/control-plane/membership-publication-planning.js`
-7. `test/control-plane/publication-recovery-evidence.test.js`
-8. `test/admin/admin-control-snapshot.test.js`
+1. None recorded
 
 Commit scope:
 
-1. `work/packages/active-20260514-topology-publication-projection-reconciliation.md`
+1. `work/packages/active-20260514-topology-failure-gate-execution-harness.md`
 2. `work/sprints/active-2026-q2-topology-convergence-residual-closure.md`
+3. `work/sprints/current-blocker.json`
+4. `work/sprints/current-blocker.md`
+5. `test/distributed/harness/topology-failure-gate-matrix.js`
+6. `test/distributed/harness/scenario-registry.js`
+7. `test/distributed/harness/__tests__/topology-failure-gate-matrix.test.js`
+8. `test/distributed/harness/__tests__/scenario-registry.test.js`
 
 Legacy touched files:
 

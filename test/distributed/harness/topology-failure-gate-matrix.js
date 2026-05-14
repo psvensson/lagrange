@@ -1,10 +1,22 @@
 import {basename} from 'node:path';
+import {join as joinPosix} from 'node:path/posix';
 
 const TOPOLOGY_FAILURE_GATE_TYPEOF_STRING = 'string';
 const TOPOLOGY_FAILURE_GATE_TEXT_EMPTY = '';
 const TOPOLOGY_FAILURE_GATE_FIELD_SEPARATOR = '|';
+const TOPOLOGY_FAILURE_GATE_ASSERTION_SEPARATOR = ',';
 const TOPOLOGY_FAILURE_GATE_ZERO = 0;
 const TOPOLOGY_FAILURE_GATE_EMPTY_LIST = Object.freeze([]);
+const TOPOLOGY_FAILURE_GATE_DEFAULT_RUN_ID = 'RUN_ID';
+const TOPOLOGY_FAILURE_GATE_RUNNER_COMMAND = 'node';
+const TOPOLOGY_FAILURE_GATE_RUNNER_SCRIPT = 'test/distributed/run.js';
+const TOPOLOGY_FAILURE_GATE_CONFIG_DIRECTORY = 'test/distributed/config';
+const TOPOLOGY_FAILURE_GATE_OUTPUT_DIRECTORY =
+  'test-output/reports/topology-failure-gates';
+const TOPOLOGY_FAILURE_GATE_REPORT_SUFFIX = '.report.json';
+const TOPOLOGY_FAILURE_GATE_CONFIG_FLAG = '--config';
+const TOPOLOGY_FAILURE_GATE_SCENARIO_FLAG = '--scenario';
+const TOPOLOGY_FAILURE_GATE_OUTPUT_FLAG = '--output';
 
 const TOPOLOGY_FAILURE_GATE_CONFIG = Object.freeze({
   LOCAL: 'local.json',
@@ -139,6 +151,54 @@ const TOPOLOGY_FAILURE_GATE_REASON = Object.freeze({
   WORKFLOW_TERMINAL_STATE: 'workflow_terminal_state',
 });
 
+const TOPOLOGY_FAILURE_GATE_ASSERTION = Object.freeze({
+  ACK_ABSENCE_DETECTED: 'ack_absence_detected',
+  ACK_OR_TIMEOUT_TERMINAL: 'ack_or_timeout_terminal',
+  ACTIVE_ADMISSION_OWNER_TRUTH: 'active_admission_owner_truth',
+  ACTIVE_GATE_ACTIVE_NODES_FULL: 'active_gate_active_nodes_5_of_5',
+  ANTI_ENTROPY_OWNER_KEY_REPAIR: 'anti_entropy_owner_key_repair',
+  CAPACITY_DEGRADED_ACCOUNTING: 'capacity_degraded_accounting',
+  DESCRIPTOR_EPOCH_FENCED: 'descriptor_epoch_fenced',
+  DURABLE_JOIN_INTENT_RECORDED: 'durable_join_intent_recorded',
+  DURABLE_OPERATION_REPLAY: 'durable_operation_replay',
+  DURABLE_OWNER_TRUTH_SELECTED: 'durable_owner_truth_selected',
+  FAILURE_REPAIR_INTENT_CONSUMED: 'failure_repair_intent_consumed',
+  FINAL_PLACEMENT_CONVERGENCE: 'final_placement_convergence',
+  LOCAL_SERVICES_REARMED: 'local_services_rearmed',
+  MEMBERSHIP_EPOCH_FENCED: 'membership_epoch_fenced',
+  MISSING_PUBLISHED_ZERO: 'missing_published_zero',
+  NO_PRIORITY_RECOVERY_EVENT_DRIVEN_WAIT:
+    'no_priority_recovery_event_driven_wait',
+  OWNER_KEY_RECONCILE_SCHEDULED: 'owner_key_reconcile_scheduled',
+  POST_RESTORE_RECONCILIATION_COMPLETED:
+    'post_restore_reconciliation_completed',
+  PUBLICATION_CLOSURE_FENCED: 'publication_closure_fenced',
+  REBALANCE_REPAIR_CONVERGED: 'rebalance_repair_converged',
+  REMOTE_WAKEUP_RECORDED: 'remote_wakeup_recorded',
+  RESTORED_MEMBER_REDISCOVERED: 'restored_member_rediscovered',
+  RETRY_OR_TERMINAL_DEGRADED: 'retry_or_terminal_degraded',
+  SNAPSHOT_COVERAGE_FULL: 'snapshot_coverage_5_of_5',
+  STALE_PROJECTION_DETECTED: 'stale_projection_detected',
+  WORKFLOW_TERMINAL_STATUS: 'workflow_terminal_status',
+});
+
+const TOPOLOGY_FAILURE_GATE_SPLIT_PACKAGE = Object.freeze({
+  FAILURE_DETECTION_REPAIR_GATE:
+    'work/packages/todo-20260514-topology-failure-detection-repair-gate.md',
+  KILLED_JOIN_GATE:
+    'work/packages/todo-20260514-topology-killed-join-gate.md',
+  KILLED_REJOIN_GATE:
+    'work/packages/todo-20260514-topology-killed-rejoin-gate.md',
+  MISSED_HANDOFF_ACK_GATE:
+    'work/packages/todo-20260514-topology-missed-handoff-ack-gate.md',
+  REBALANCE_DISRUPTION_RECOVERY_GATE:
+    'work/packages/todo-20260514-topology-rebalance-disruption-recovery-gate.md',
+  REMOTE_COORDINATOR_HANDOFF_GATE:
+    'work/packages/todo-20260514-topology-remote-coordinator-handoff-gate.md',
+  STALE_PUBLICATION_DURABLE_TRUTH_GATE:
+    'work/packages/todo-20260514-topology-stale-publication-durable-truth-gate.md',
+});
+
 const TOPOLOGY_FAILURE_GATE_MATRIX = Object.freeze([
   Object.freeze({
     gateId: 'failure-detection-rolling-restart',
@@ -159,8 +219,17 @@ const TOPOLOGY_FAILURE_GATE_MATRIX = Object.freeze([
       TOPOLOGY_FAILURE_GATE_PROGRESS_MECHANISM.TIMEOUT,
       TOPOLOGY_FAILURE_GATE_PROGRESS_MECHANISM.RECONCILE,
     ]),
+    durableAssertions: Object.freeze([
+      TOPOLOGY_FAILURE_GATE_ASSERTION.ACTIVE_GATE_ACTIVE_NODES_FULL,
+      TOPOLOGY_FAILURE_GATE_ASSERTION.SNAPSHOT_COVERAGE_FULL,
+      TOPOLOGY_FAILURE_GATE_ASSERTION.MISSING_PUBLISHED_ZERO,
+      TOPOLOGY_FAILURE_GATE_ASSERTION.NO_PRIORITY_RECOVERY_EVENT_DRIVEN_WAIT,
+      TOPOLOGY_FAILURE_GATE_ASSERTION.FAILURE_REPAIR_INTENT_CONSUMED,
+    ]),
     fencingRequirement:
       TOPOLOGY_FAILURE_GATE_EPOCH_FENCE.MEMBERSHIP_EPOCH_REQUIRED,
+    splitTargetPackage:
+      TOPOLOGY_FAILURE_GATE_SPLIT_PACKAGE.FAILURE_DETECTION_REPAIR_GATE,
   }),
   Object.freeze({
     gateId: 'join-killed-node-under-load',
@@ -182,8 +251,16 @@ const TOPOLOGY_FAILURE_GATE_MATRIX = Object.freeze([
       TOPOLOGY_FAILURE_GATE_PROGRESS_MECHANISM.RECONCILE,
       TOPOLOGY_FAILURE_GATE_PROGRESS_MECHANISM.TIMEOUT,
     ]),
+    durableAssertions: Object.freeze([
+      TOPOLOGY_FAILURE_GATE_ASSERTION.DURABLE_JOIN_INTENT_RECORDED,
+      TOPOLOGY_FAILURE_GATE_ASSERTION.MEMBERSHIP_EPOCH_FENCED,
+      TOPOLOGY_FAILURE_GATE_ASSERTION.REBALANCE_REPAIR_CONVERGED,
+      TOPOLOGY_FAILURE_GATE_ASSERTION.ACTIVE_ADMISSION_OWNER_TRUTH,
+    ]),
     fencingRequirement:
       TOPOLOGY_FAILURE_GATE_EPOCH_FENCE.MEMBERSHIP_EPOCH_REQUIRED,
+    splitTargetPackage:
+      TOPOLOGY_FAILURE_GATE_SPLIT_PACKAGE.KILLED_JOIN_GATE,
   }),
   Object.freeze({
     gateId: 'rejoin-killed-seed-under-load',
@@ -206,8 +283,16 @@ const TOPOLOGY_FAILURE_GATE_MATRIX = Object.freeze([
       TOPOLOGY_FAILURE_GATE_PROGRESS_MECHANISM.RECONCILE,
       TOPOLOGY_FAILURE_GATE_PROGRESS_MECHANISM.TIMEOUT,
     ]),
+    durableAssertions: Object.freeze([
+      TOPOLOGY_FAILURE_GATE_ASSERTION.RESTORED_MEMBER_REDISCOVERED,
+      TOPOLOGY_FAILURE_GATE_ASSERTION.POST_RESTORE_RECONCILIATION_COMPLETED,
+      TOPOLOGY_FAILURE_GATE_ASSERTION.LOCAL_SERVICES_REARMED,
+      TOPOLOGY_FAILURE_GATE_ASSERTION.ACTIVE_ADMISSION_OWNER_TRUTH,
+    ]),
     fencingRequirement:
       TOPOLOGY_FAILURE_GATE_EPOCH_FENCE.MEMBERSHIP_EPOCH_REQUIRED,
+    splitTargetPackage:
+      TOPOLOGY_FAILURE_GATE_SPLIT_PACKAGE.KILLED_REJOIN_GATE,
   }),
   Object.freeze({
     gateId: 'remote-handoff-replica-operation-coordinator',
@@ -233,8 +318,16 @@ const TOPOLOGY_FAILURE_GATE_MATRIX = Object.freeze([
       TOPOLOGY_FAILURE_GATE_PROGRESS_MECHANISM.DELIVERY,
       TOPOLOGY_FAILURE_GATE_PROGRESS_MECHANISM.TIMEOUT,
     ]),
+    durableAssertions: Object.freeze([
+      TOPOLOGY_FAILURE_GATE_ASSERTION.DURABLE_OPERATION_REPLAY,
+      TOPOLOGY_FAILURE_GATE_ASSERTION.REMOTE_WAKEUP_RECORDED,
+      TOPOLOGY_FAILURE_GATE_ASSERTION.ACK_OR_TIMEOUT_TERMINAL,
+      TOPOLOGY_FAILURE_GATE_ASSERTION.WORKFLOW_TERMINAL_STATUS,
+    ]),
     fencingRequirement:
       TOPOLOGY_FAILURE_GATE_EPOCH_FENCE.OPERATION_EPOCH_REQUIRED,
+    splitTargetPackage:
+      TOPOLOGY_FAILURE_GATE_SPLIT_PACKAGE.REMOTE_COORDINATOR_HANDOFF_GATE,
   }),
   Object.freeze({
     gateId: 'remote-handoff-missed-ack',
@@ -256,8 +349,15 @@ const TOPOLOGY_FAILURE_GATE_MATRIX = Object.freeze([
       TOPOLOGY_FAILURE_GATE_PROGRESS_MECHANISM.DELIVERY,
       TOPOLOGY_FAILURE_GATE_PROGRESS_MECHANISM.TIMER,
     ]),
+    durableAssertions: Object.freeze([
+      TOPOLOGY_FAILURE_GATE_ASSERTION.ACK_ABSENCE_DETECTED,
+      TOPOLOGY_FAILURE_GATE_ASSERTION.RETRY_OR_TERMINAL_DEGRADED,
+      TOPOLOGY_FAILURE_GATE_ASSERTION.PUBLICATION_CLOSURE_FENCED,
+    ]),
     fencingRequirement:
       TOPOLOGY_FAILURE_GATE_EPOCH_FENCE.PUBLICATION_EPOCH_REQUIRED,
+    splitTargetPackage:
+      TOPOLOGY_FAILURE_GATE_SPLIT_PACKAGE.MISSED_HANDOFF_ACK_GATE,
   }),
   Object.freeze({
     gateId: 'stale-publication-durable-truth-ahead',
@@ -280,8 +380,16 @@ const TOPOLOGY_FAILURE_GATE_MATRIX = Object.freeze([
       TOPOLOGY_FAILURE_GATE_PROGRESS_MECHANISM.RECONCILE,
       TOPOLOGY_FAILURE_GATE_PROGRESS_MECHANISM.TIMEOUT,
     ]),
+    durableAssertions: Object.freeze([
+      TOPOLOGY_FAILURE_GATE_ASSERTION.DURABLE_OWNER_TRUTH_SELECTED,
+      TOPOLOGY_FAILURE_GATE_ASSERTION.STALE_PROJECTION_DETECTED,
+      TOPOLOGY_FAILURE_GATE_ASSERTION.OWNER_KEY_RECONCILE_SCHEDULED,
+    ]),
     fencingRequirement:
       TOPOLOGY_FAILURE_GATE_EPOCH_FENCE.PUBLICATION_EPOCH_REQUIRED,
+    splitTargetPackage:
+      TOPOLOGY_FAILURE_GATE_SPLIT_PACKAGE
+        .STALE_PUBLICATION_DURABLE_TRUTH_GATE,
   }),
   Object.freeze({
     gateId: 'rebalance-disruption-split-during-recovery',
@@ -305,8 +413,17 @@ const TOPOLOGY_FAILURE_GATE_MATRIX = Object.freeze([
       TOPOLOGY_FAILURE_GATE_PROGRESS_MECHANISM.RECONCILE,
       TOPOLOGY_FAILURE_GATE_PROGRESS_MECHANISM.BOUNDED_PROGRESS,
     ]),
+    durableAssertions: Object.freeze([
+      TOPOLOGY_FAILURE_GATE_ASSERTION.DESCRIPTOR_EPOCH_FENCED,
+      TOPOLOGY_FAILURE_GATE_ASSERTION.CAPACITY_DEGRADED_ACCOUNTING,
+      TOPOLOGY_FAILURE_GATE_ASSERTION.ANTI_ENTROPY_OWNER_KEY_REPAIR,
+      TOPOLOGY_FAILURE_GATE_ASSERTION.FINAL_PLACEMENT_CONVERGENCE,
+    ]),
     fencingRequirement:
       TOPOLOGY_FAILURE_GATE_EPOCH_FENCE.DESCRIPTOR_EPOCH_REQUIRED,
+    splitTargetPackage:
+      TOPOLOGY_FAILURE_GATE_SPLIT_PACKAGE
+        .REBALANCE_DISRUPTION_RECOVERY_GATE,
   }),
 ]);
 
@@ -337,6 +454,16 @@ function hasTopologyFailureGateBoundedProgressMechanism(entry) {
     TOPOLOGY_FAILURE_GATE_EMPTY_LIST;
   return mechanisms.some((mechanism) =>
     TOPOLOGY_FAILURE_GATE_BOUNDED_PROGRESS_MECHANISM_SET.has(mechanism));
+}
+
+function hasTopologyFailureGateDurableAssertions(entry) {
+  const assertions = Array.isArray(entry?.durableAssertions) ?
+    entry.durableAssertions :
+    TOPOLOGY_FAILURE_GATE_EMPTY_LIST;
+  return assertions.length > TOPOLOGY_FAILURE_GATE_ZERO &&
+    assertions.every((assertion) =>
+      typeof assertion === TOPOLOGY_FAILURE_GATE_TYPEOF_STRING &&
+        assertion.length > TOPOLOGY_FAILURE_GATE_ZERO);
 }
 
 function buildTopologyFailureGateCoverageSnapshot() {
@@ -375,6 +502,78 @@ function formatTopologyFailureGateMatrixLines() {
   ].join(TOPOLOGY_FAILURE_GATE_FIELD_SEPARATOR));
 }
 
+function normalizeTopologyFailureGateRunId(value) {
+  if (typeof value !== TOPOLOGY_FAILURE_GATE_TYPEOF_STRING) {
+    return TOPOLOGY_FAILURE_GATE_DEFAULT_RUN_ID;
+  }
+  const normalized = value.trim();
+  return normalized.length > TOPOLOGY_FAILURE_GATE_ZERO ?
+    normalized :
+    TOPOLOGY_FAILURE_GATE_DEFAULT_RUN_ID;
+}
+
+function buildTopologyFailureGateConfigPath(entry) {
+  return joinPosix(TOPOLOGY_FAILURE_GATE_CONFIG_DIRECTORY, entry.config);
+}
+
+function buildTopologyFailureGateArtifactPath(
+  entry,
+  runId = TOPOLOGY_FAILURE_GATE_DEFAULT_RUN_ID,
+) {
+  const normalizedRunId = normalizeTopologyFailureGateRunId(runId);
+  return joinPosix(
+    TOPOLOGY_FAILURE_GATE_OUTPUT_DIRECTORY,
+    normalizedRunId,
+    entry.gateId + TOPOLOGY_FAILURE_GATE_REPORT_SUFFIX,
+  );
+}
+
+function buildTopologyFailureGateExecutionPlan(
+  runId = TOPOLOGY_FAILURE_GATE_DEFAULT_RUN_ID,
+  configPathOrName = null,
+) {
+  return listTopologyFailureGateEntries(configPathOrName).map((entry) => {
+    const configPath = buildTopologyFailureGateConfigPath(entry);
+    const artifactPath = buildTopologyFailureGateArtifactPath(entry, runId);
+    return Object.freeze({
+      gateId: entry.gateId,
+      config: entry.config,
+      scenario: entry.scenario,
+      command: TOPOLOGY_FAILURE_GATE_RUNNER_COMMAND,
+      args: Object.freeze([
+        TOPOLOGY_FAILURE_GATE_RUNNER_SCRIPT,
+        TOPOLOGY_FAILURE_GATE_CONFIG_FLAG,
+        configPath,
+        TOPOLOGY_FAILURE_GATE_SCENARIO_FLAG,
+        entry.scenario,
+        TOPOLOGY_FAILURE_GATE_OUTPUT_FLAG,
+        artifactPath,
+      ]),
+      artifactPath,
+      owner: entry.owner,
+      boundary: entry.boundary,
+      expectedDurableOutcome: entry.expectedDurableOutcome,
+      durableAssertions: Object.freeze([...entry.durableAssertions]),
+      splitTargetPackage: entry.splitTargetPackage,
+    });
+  });
+}
+
+function formatTopologyFailureGateExecutionLines(
+  runId = TOPOLOGY_FAILURE_GATE_DEFAULT_RUN_ID,
+) {
+  return buildTopologyFailureGateExecutionPlan(runId).map((entry) => [
+    entry.gateId,
+    entry.config,
+    entry.scenario,
+    entry.artifactPath,
+    entry.owner,
+    entry.boundary,
+    entry.splitTargetPackage,
+    entry.durableAssertions.join(TOPOLOGY_FAILURE_GATE_ASSERTION_SEPARATOR),
+  ].join(TOPOLOGY_FAILURE_GATE_FIELD_SEPARATOR));
+}
+
 function normalizeTopologyFailureGateScenarioName(value) {
   return typeof value === TOPOLOGY_FAILURE_GATE_TYPEOF_STRING ?
     value.trim() :
@@ -405,9 +604,12 @@ export {
   TOPOLOGY_FAILURE_GATE_BOUNDED_PROGRESS_MECHANISMS,
   TOPOLOGY_FAILURE_GATE_DIMENSION,
   TOPOLOGY_FAILURE_GATE_MATRIX,
+  buildTopologyFailureGateExecutionPlan,
   buildTopologyFailureGateCoverageSnapshot,
+  formatTopologyFailureGateExecutionLines,
   formatTopologyFailureGateMatrixLines,
   hasTopologyFailureGateBoundedProgressMechanism,
+  hasTopologyFailureGateDurableAssertions,
   listRequiredTopologyFailureGateDimensions,
   listTopologyFailureGateEntries,
   listUniqueTopologyFailureGateScenarioNames,

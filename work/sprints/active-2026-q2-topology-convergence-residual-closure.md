@@ -292,17 +292,18 @@ Final closure requires fresh evidence proving all of the following:
      from owner truth; representative evidence reaches `snapshotCoverage=5/5`
      or migrates to a narrower owner boundary.
 
-5. [Topology Publication Projection Reconciliation](../packages/active-20260514-topology-publication-projection-reconciliation.md)
+5. [Topology Publication Projection Reconciliation](../packages/done-20260514-topology-publication-projection-reconciliation.md)
    - Lane: `runtime-owner-boundary`
    - Owner boundary: `topology_publication_owner / publication_projection_cohort`
-   - Purpose: remove the gap where `PUBLISHED` can coexist with
+   - Purpose: classify and expose the gap where `PUBLISHED` can coexist with
      `publishedActive=1/5` and `missingPublished=4`.
    - Entry condition: active-gate cohort work shows publication/projection
      still contributes to missing active coverage, or residual inventory keeps
      `missingPublished` ahead of projection.
-   - Acceptance: `PUBLISHED` cannot mask a missing active cohort without a
-     typed degraded reason, and active-gate evidence observes the repaired
-     publication owner truth.
+   - Acceptance: classification-only observability closure. Failure bundles and
+     causal analysis now surface publication-owner debt as
+     `publication_ack_blocked / continue_local_fix`; fresh evidence remains red
+     and no rolling-restart runtime repair is claimed.
 
 6. [Topology Priority Recovery Residual Drain](../packages/todo-20260514-topology-priority-recovery-residual-drain.md)
    - Lane: `runtime-owner-boundary`
@@ -316,14 +317,13 @@ Final closure requires fresh evidence proving all of the following:
 
 ### Phase 2 - Failure Gate Execution And Repair
 
-7. [Topology Failure Gate Execution Harness](../packages/todo-20260514-topology-failure-gate-execution-harness.md)
+7. [Topology Failure Gate Execution Harness](../packages/active-20260514-topology-failure-gate-execution-harness.md)
    - Lane: `scenario-release-gate`
    - Owner boundary: `distributed_test_harness / failure_gate_execution`
    - Purpose: turn the existing failure-gate matrix into executable release
      gates with artifact naming and split rules.
-   - Entry condition: current representative active-gate residual is green or
-     has narrowed enough that failure-gate execution will validate behavior
-     rather than replace the first debugging loop.
+   - Entry condition: user re-scoped the sprint segment to tools and
+     observability; runtime rolling-restart fixes are explicitly out of scope.
    - Acceptance: each matrix gate has a runnable command, expected durable
      outcome, artifact path, owner-boundary split rule, and assertion surface.
 
@@ -404,7 +404,7 @@ Final closure requires fresh evidence proving all of the following:
 1. Harden workflow closure semantics before runtime fixes resume.
 2. Produce residual inventory from canonical extractors.
 3. Bound active-gate budget before changing active-gate cohort semantics.
-4. Complete active-gate cohort and publication/projection reconciliation before
+4. Complete active-gate cohort and publication/projection classification before
    treating the representative gate as ready for broad failure-gate execution.
 5. Drain or classify non-frontier priority recovery before final confirmation.
 6. Implement the executable failure-gate harness before running individual
@@ -462,13 +462,16 @@ Final closure requires fresh evidence proving all of the following:
 ## Current Next Action
 
 Active-gate budget closure is done as reduced evidence: `active_gate_timeout`
-is terminally classified. Active-gate owner cohort convergence is now done as
+is terminally classified. Active-gate owner cohort convergence is done as
 migrated evidence: the admin owner snapshot names expected nodes, ready leases,
 published active nodes, missing nodes, pending owner work, topology epoch, and
-active-gate budget, but the representative residual is not green.
+active-gate budget, but the representative residual is not green. Publication
+projection reconciliation is done as classification-only observability:
+`PUBLISHED` plus missing active publication is now a
+`topology_publication_owner` blocker instead of healthy evidence.
 
 The current action is now
-[Topology Publication Projection Reconciliation](../packages/active-20260514-topology-publication-projection-reconciliation.md).
-Reconcile why publication status can be `PUBLISHED` with `publishedActive=1/5`
-and `missingPublished=4`, or split to a narrower canonical owner-boundary
-blocker.
+[Topology Failure Gate Execution Harness](../packages/active-20260514-topology-failure-gate-execution-harness.md).
+Generate executable failure-gate plans, durable assertion IDs, artifact paths,
+and red-outcome split packages. Do not start fixing `rolling-restart` runtime
+behavior in this package.

@@ -7,14 +7,18 @@ import {
   TOPOLOGY_FAILURE_GATE_DIMENSION,
   TOPOLOGY_FAILURE_GATE_MATRIX,
   buildTopologyFailureGateCoverageSnapshot,
+  buildTopologyFailureGateExecutionPlan,
+  formatTopologyFailureGateExecutionLines,
   formatTopologyFailureGateMatrixLines,
   hasTopologyFailureGateBoundedProgressMechanism,
+  hasTopologyFailureGateDurableAssertions,
   listTopologyFailureGateEntries,
   listRequiredTopologyFailureGateDimensions,
   normalizeTopologyFailureGateConfigName,
 } from '../topology-failure-gate-matrix.js';
 
 const EXPECTED_FAILURE_GATE_COUNT = 7;
+const EXECUTION_PLAN_RUN_ID = '20260514T000000Z';
 const EXPECTED_LOCAL_GATE_IDS = [
   'join-killed-node-under-load',
   'rejoin-killed-seed-under-load',
@@ -33,6 +37,7 @@ const REQUIRED_TEXT_FIELDS = [
   'boundary',
   'expectedDurableOutcome',
   'fencingRequirement',
+  'splitTargetPackage',
 ];
 const EXPECTED_COVERAGE_BY_DIMENSION = {
   failure_detection: ['failure-detection-rolling-restart'],
@@ -75,6 +80,71 @@ const EXPECTED_MATRIX_LINES = [
     'rebalance_disruption|topology_rebalance_owner|' +
     'split_rebalance_during_recovery|' +
     'split_rebalance_drains_and_converges_durable_placement',
+];
+const EXPECTED_FIRST_EXECUTION_ARGS = [
+  'test/distributed/run.js',
+  '--config',
+  'test/distributed/config/local-three-node.json',
+  '--scenario',
+  'rolling-restart',
+  '--output',
+  'test-output/reports/topology-failure-gates/20260514T000000Z/' +
+    'failure-detection-rolling-restart.report.json',
+];
+const EXPECTED_EXECUTION_LINES = [
+  'failure-detection-rolling-restart|local-three-node.json|' +
+    'rolling-restart|test-output/reports/topology-failure-gates/' +
+    '20260514T000000Z/failure-detection-rolling-restart.report.json|' +
+    'topology_control_plane|failure_detection_repair_intent|' +
+    'work/packages/todo-20260514-topology-failure-detection-repair-gate.md|' +
+    'active_gate_active_nodes_5_of_5,snapshot_coverage_5_of_5,' +
+    'missing_published_zero,no_priority_recovery_event_driven_wait,' +
+    'failure_repair_intent_consumed',
+  'join-killed-node-under-load|local.json|node-join-under-load|' +
+    'test-output/reports/topology-failure-gates/20260514T000000Z/' +
+    'join-killed-node-under-load.report.json|topology_join_owner|' +
+    'join_admission_rebalance|' +
+    'work/packages/todo-20260514-topology-killed-join-gate.md|' +
+    'durable_join_intent_recorded,membership_epoch_fenced,' +
+    'rebalance_repair_converged,active_admission_owner_truth',
+  'rejoin-killed-seed-under-load|local.json|seed-restart-under-load|' +
+    'test-output/reports/topology-failure-gates/20260514T000000Z/' +
+    'rejoin-killed-seed-under-load.report.json|topology_rejoin_owner|' +
+    'post_restore_reconciliation|' +
+    'work/packages/todo-20260514-topology-killed-rejoin-gate.md|' +
+    'restored_member_rediscovered,post_restore_reconciliation_completed,' +
+    'local_services_rearmed,active_admission_owner_truth',
+  'remote-handoff-replica-operation-coordinator|' +
+    'local-benchmark-7node.json|' +
+    'seven-node-read-write-load-transaction-recovery|' +
+    'test-output/reports/topology-failure-gates/20260514T000000Z/' +
+    'remote-handoff-replica-operation-coordinator.report.json|' +
+    'operation_workflow_owner|replica_operation_coordinator_handoff|' +
+    'work/packages/todo-20260514-topology-remote-coordinator-handoff-gate.md|' +
+    'durable_operation_replay,remote_wakeup_recorded,' +
+    'ack_or_timeout_terminal,workflow_terminal_status',
+  'remote-handoff-missed-ack|local-three-node.json|write-ack-visibility|' +
+    'test-output/reports/topology-failure-gates/20260514T000000Z/' +
+    'remote-handoff-missed-ack.report.json|topology_publication_owner|' +
+    'remote_handoff_ack_closure|' +
+    'work/packages/todo-20260514-topology-missed-handoff-ack-gate.md|' +
+    'ack_absence_detected,retry_or_terminal_degraded,' +
+    'publication_closure_fenced',
+  'stale-publication-durable-truth-ahead|local-three-node.json|' +
+    'write-ack-visibility|test-output/reports/topology-failure-gates/' +
+    '20260514T000000Z/stale-publication-durable-truth-ahead.report.json|' +
+    'topology_publication_owner|publication_truth_ahead_of_projection|' +
+    'work/packages/todo-20260514-topology-stale-publication-durable-truth-gate.md|' +
+    'durable_owner_truth_selected,stale_projection_detected,' +
+    'owner_key_reconcile_scheduled',
+  'rebalance-disruption-split-during-recovery|' +
+    'local-benchmark-7node.json|seven-node-load-during-partitioning|' +
+    'test-output/reports/topology-failure-gates/20260514T000000Z/' +
+    'rebalance-disruption-split-during-recovery.report.json|' +
+    'topology_rebalance_owner|split_rebalance_during_recovery|' +
+    'work/packages/todo-20260514-topology-rebalance-disruption-recovery-gate.md|' +
+    'descriptor_epoch_fenced,capacity_degraded_accounting,' +
+    'anti_entropy_owner_key_repair,final_placement_convergence',
 ];
 const MIN_TEXT_LENGTH = 1;
 const MIN_REASON_COUNT = 1;
@@ -142,6 +212,10 @@ test('topology-failure-gate-matrix requires owner outcome fields', (t) => {
         allowedMechanisms.has(mechanism)),
       `${entry.gateId} must use canonical bounded progress vocabulary`,
     );
+    assert.ok(
+      hasTopologyFailureGateDurableAssertions(entry),
+      `${entry.gateId} must declare durable assertions`,
+    );
   }
   t.end();
 });
@@ -164,6 +238,28 @@ test('topology-failure-gate-matrix formats stable handoff lines', (t) => {
   assert.deepEqual(
     formatTopologyFailureGateMatrixLines(),
     EXPECTED_MATRIX_LINES,
+  );
+  t.end();
+});
+
+test('topology-failure-gate-matrix builds executable gate plans', (t) => {
+  const plan = buildTopologyFailureGateExecutionPlan(EXECUTION_PLAN_RUN_ID);
+
+  assert.equal(plan.length, EXPECTED_FAILURE_GATE_COUNT);
+  assert.equal(plan[0].command, 'node');
+  assert.deepEqual(plan[0].args, EXPECTED_FIRST_EXECUTION_ARGS);
+  assert.equal(
+    plan[0].artifactPath,
+    'test-output/reports/topology-failure-gates/20260514T000000Z/' +
+      'failure-detection-rolling-restart.report.json',
+  );
+  assert.equal(
+    plan[0].splitTargetPackage,
+    'work/packages/todo-20260514-topology-failure-detection-repair-gate.md',
+  );
+  assert.deepEqual(
+    formatTopologyFailureGateExecutionLines(EXECUTION_PLAN_RUN_ID),
+    EXPECTED_EXECUTION_LINES,
   );
   t.end();
 });

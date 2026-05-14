@@ -1,6 +1,8 @@
 import {basename} from 'node:path';
 import {
   TOPOLOGY_FAILURE_GATE_MATRIX,
+  buildTopologyFailureGateExecutionPlan,
+  formatTopologyFailureGateExecutionLines,
   formatTopologyFailureGateMatrixLines,
   listTopologyFailureGateEntries,
   listUniqueTopologyFailureGateScenarioNames,
@@ -130,6 +132,13 @@ function listCanonicalTopologyFailureGateEntries(configPathOrName = null) {
   return listTopologyFailureGateEntries(configPathOrName);
 }
 
+function listCanonicalTopologyFailureGateExecutionPlan(
+  runId,
+  configPathOrName = null,
+) {
+  return buildTopologyFailureGateExecutionPlan(runId, configPathOrName);
+}
+
 function selectCanonicalTopologyFailureGateScenariosForConfig(
   scenarios,
   configPathOrName,
@@ -153,6 +162,10 @@ function formatCanonicalTopologyFailureGateMatrixLines() {
   return formatTopologyFailureGateMatrixLines();
 }
 
+function formatCanonicalTopologyFailureGateExecutionLines(runId) {
+  return formatTopologyFailureGateExecutionLines(runId);
+}
+
 function formatCanonicalScenarioMatrixLines() {
   return CANONICAL_SCENARIO_MATRIX.map((entry) => {
     return `${entry.config}|${entry.name}`;
@@ -163,8 +176,10 @@ export {
   CANONICAL_SCENARIO_MATRIX,
   TOPOLOGY_FAILURE_GATE_MATRIX,
   formatCanonicalScenarioMatrixLines,
+  formatCanonicalTopologyFailureGateExecutionLines,
   formatCanonicalTopologyFailureGateMatrixLines,
   listCanonicalScenarioEntries,
+  listCanonicalTopologyFailureGateExecutionPlan,
   listCanonicalTopologyFailureGateEntries,
   normalizeScenarioConfigName,
   selectCanonicalScenariosForConfig,
