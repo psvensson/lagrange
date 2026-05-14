@@ -485,6 +485,14 @@ evidence did not implicate ACK absence. `pendingAckCount=0`,
 `topology_publication_owner / publication_convergence` with
 `missing_published_nodes_present`, `missingPublishedCount=2`, and
 `publicationPending=true`; priority recovery residual extraction reported zero
-witnesses. Execute and classify the stale publication durable-truth gate as
-observe/classify work only. Do not fix `rolling-restart` runtime behavior in
-this sprint segment.
+witnesses.
+
+Observed stale-publication gate result:
+`test-output/reports/topology-stale-publication-durable-truth-gate.report.json`
+failed after `125041ms` and confirmed classification-only publication
+truth/projection debt. `publicationStatus=PUBLISHED`, `pendingAckCount=0`,
+`missingPublishedCount=2`, `publicationPending=true`, active gate was `ready`
+with snapshot coverage `2/3`, and priority recovery residual extraction again
+reported zero witnesses. Close the stale-publication gate as
+classification-only observability and continue the remaining failure-gate
+packages. Do not fix `rolling-restart` runtime behavior in this sprint segment.

@@ -20,13 +20,13 @@ Owner: `topology_publication_owner`
 
 Boundary: `publication_truth_projection_gate`
 
-Dominant reason: `stale_publication_release_gate_unproven`
+Dominant reason: `missing_published_nodes_present`
 
-Current state: Activated after the missed-ACK gate migrated: write-ack-visibility showed pendingAckCount=0 with publicationStatus=PUBLISHED, missingPublishedCount=2, publicationPending=true, and first frontier topology_publication_owner / publication_convergence. The stale durable-truth gate now owns classifying durable truth versus projection freshness.
+Current state: Observed gate result: write-ack-visibility failed after 125041ms with an Admin API timeout while canonical topology evidence identified topology_publication_owner / publication_convergence as the first frontier. pendingAckCount=0, publicationStatus=PUBLISHED, missingPublishedCount=2, publicationPending=true, activeGateState=ready, snapshotCoverageNodeCount=2/3, and priority recovery residual witnesses=0.
 
 ## Next Action
 
-Execute and classify the stale-publication durable-truth gate only. If the gate is red, record the owner-boundary split; do not fix rolling-restart runtime behavior in this package without explicit re-scope.
+Close this package as classification-only observability and activate the next remaining failure-gate package; do not fix rolling-restart runtime behavior in this package without explicit re-scope.
 
 ## Proof Ladder
 
@@ -76,9 +76,9 @@ Stop-condition check: `npm --silent run analyze:causal-model -- test-output/repo
 
 Expected causal-model change: `stale_publication_release_gate_unproven becomes representative-green, reduced, same-frontier, migrated, or classification-only with a named owner-boundary reason.`
 
-Representative outcome: `pending-before-rerun`
+Representative outcome: `classification-only`
 
-Causal debt: `Until topology_publication_owner / publication_truth_projection_gate is proven, the sprint representative rolling-restart residual stays open. Runtime rolling-restart fixes are out of scope for this observe/classify package.`
+Causal debt: `The stale-publication gate artifact is red and confirms publication truth/projection debt: pendingAckCount=0 with PUBLISHED status still leaves missingPublishedCount=2 and publicationPending=true. This package records the release-gate observation only; runtime rolling-restart fixes remain out of scope.`
 
 Cross-boundary review: `Required before closure through the scenario-release-gate subagent ledger or an allowed waiver recorded in this package.`
 
@@ -92,7 +92,7 @@ Phase chain:
 2. `topology_publication_owner / publication_truth_projection_gate focused proof`
 3. `representative or gate rerun classification`
 
-Current first frontier: `package-local frontier topology_publication_owner / publication_truth_projection_gate; sprint representative frontier remains startup_active_gate_owner / snapshot_coverage until fresh evidence changes it`
+Current first frontier: `package-local topology_publication_owner / publication_truth_projection_gate classified through canonical topology_publication_owner / publication_convergence with missing_published_nodes_present in test-output/reports/topology-stale-publication-durable-truth-gate.report.json`
 
 Known downstream blockers:
 
@@ -107,17 +107,17 @@ Bounded progress proof: `Focused proof must show bounded wake, retry, timeout, r
 
 Bounded progress proof artifact: `test-output/reports/topology-stale-publication-durable-truth-gate.report.json`
 
-Expected observable transition: `stale_publication_release_gate_unproven resolves to green evidence, a reduced residual, same-frontier evidence, migrated owner-boundary proof, or classification-only stop.`
+Expected observable transition: `stale_publication_release_gate_unproven is now a red classification artifact: durable publication status is PUBLISHED with pendingAckCount=0, but missingPublishedCount=2 and publicationPending=true remain visible.`
 
 Max progress bound: `one activation cycle: package doctor, extractor/probe, owner-file proof, focused validation, and result classification`
 
 Same-frontier fallback: `keep topology_publication_owner / publication_truth_projection_gate active and do not broaden the package or claim ship proof`
 
-Expected next frontier: `representative green evidence or a narrower owner-boundary blocker selected by canonical evidence`
+Expected next frontier: `next remaining failure-gate package unless a narrower canonical blocker is explicitly activated`
 
-Result classification: `pending-before-probe`
+Result classification: `classification-only`
 
-Stop condition: `continue-local-fix`
+Stop condition: `classification-only-stop`
 
 ## Scope
 
