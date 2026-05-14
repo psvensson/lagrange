@@ -248,3 +248,9 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 8. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-green-gate-after-priority-recovery-workflow-progress-after-snapshot-coverage.report.json --explain publication_ack_convergence` confirms `missingPublishedCount=5` with `pendingAckCount=0`.
 9. `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-green-gate-after-priority-recovery-workflow-progress-after-snapshot-coverage.report.json` confirms `migrate_owner_boundary`.
 10. `npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-green-gate-after-priority-recovery-workflow-progress-after-snapshot-coverage.report.json --markdown` confirms no priority recovery residual witnesses.
+
+## Commit And Push Ledger
+
+1. Focused package commit: cca514289da78de32388a2fe5dddea269b0cf0ed
+2. Pushed to: origin/codex/pending-ack-eligibility-filter
+3. Commit contains only package-owned files/package-status/allowed sprint handoff: yes
