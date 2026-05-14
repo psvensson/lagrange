@@ -1,9 +1,9 @@
 # Topology Convergence Ship Shape Sprint
 
-Status: active. This sprint is a successor strategy for the failed
-rolling-restart release-gate closure. It must not run beside another active
-package on the same owner boundary unless the current blocker is first closed,
-migrated, superseded, or explicitly reactivated by a human.
+Status: done. Outcome: package queue drained with focused coverage-gate proof;
+representative rolling-restart was not rerun to green in this sprint. This
+sprint is a successor strategy for the failed rolling-restart release-gate
+closure.
 
 ## Goal
 
@@ -153,12 +153,12 @@ Historical sprint pivot completed on May 14, 2026:
    active-gate/diagnostics residuals while the bounded-progress package closes
    only the shared taxonomy and focused owner proof.
 
-Human-directed active sprint-queue pivot on May 14, 2026:
+Final human-directed sprint-queue pivot completed on May 14, 2026:
 
 1. Owner: `distributed_test_harness`.
 2. Boundary: `failure_gate_matrix`.
 3. Dominant reason: `missing_failure_detection_rebalance_gate_coverage`.
-4. Active package:
+4. Completed package:
    `work/packages/done-20260513-topology-failure-scenario-gates.md`.
 5. Focused proof surface:
    `npx tap test/distributed/harness/__tests__/scenario-registry.test.js test/distributed/harness/__tests__/topology-failure-gate-matrix.test.js`.
@@ -533,3 +533,41 @@ This sprint treats the system as ship-shape only when these properties hold:
 5. The final closure note must state whether boot/join/rejoin, failure
    detection, partition descriptors, placement, and rebalancing each satisfy
    the ship-shape definition above.
+
+## Closure Snapshot
+
+1. Work packages left in this sprint: `0`.
+2. Final package:
+   `work/packages/done-20260513-topology-failure-scenario-gates.md`.
+3. Focused final proof:
+   `npx tap test/distributed/harness/__tests__/scenario-registry.test.js test/distributed/harness/__tests__/topology-failure-gate-matrix.test.js`.
+4. Final package commit: `f9362f6e`.
+5. Final package ledger commit: `3b57eb4c`.
+6. Representative rolling-restart status: not rerun to green by this sprint.
+7. Current representative frontier remains
+   `startup_active_gate_owner / snapshot_coverage` with
+   `snapshot_coverage_incomplete` in
+   `test-output/reports/rolling-restart-green-gate-after-priority-recovery-workflow-progress-after-snapshot-coverage.report.json`.
+8. Known residual budget debt remains explicit:
+   `active_gate_timeout` under
+   `startup_active_gate_owner / snapshot_coverage`, with next action
+   `reduce_startup_active_gate_budget_contract`.
+9. Next action: open a successor sprint or active package for focused
+   failure-gate execution, full distributed confirmation, or the remaining
+   active-gate snapshot-coverage residual. Do not treat this closure as
+   representative green evidence.
+
+## Ship-Shape Closure Note
+
+1. Boot/join/rejoin: focused owner contracts now exist for membership epoch
+   fencing and post-rejoin reconciliation; representative green is not claimed.
+2. Failure detection: durable repair-intent focused proof exists, and the
+   final matrix names required failure gates; full failure-gate execution is
+   still downstream.
+3. Partition descriptors: descriptor epoch focused proof exists for split,
+   move, route, and stale-route rejection.
+4. Placement: capacity admission now fails closed or degrades explicitly under
+   focused proof.
+5. Rebalancing: anti-entropy and bounded progress taxonomy proof exists, and
+   the failure-gate matrix covers rebalance disruption; the active-gate timeout
+   residual remains a successor blocker.

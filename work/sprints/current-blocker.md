@@ -2,9 +2,9 @@
 
 # Current Blocker
 
-Sprint: `work/sprints/active-2026-q2-topology-convergence-ship-shape.md`
+Sprint: `work/sprints/done-2026-q2-topology-convergence-ship-shape.md`
 
-Package: `work/packages/active-20260513-topology-failure-scenario-gates.md`
+Package: `work/packages/done-20260513-topology-failure-scenario-gates.md`
 
 Workflow lane: `scenario-release-gate`
 
@@ -22,11 +22,11 @@ Boundary: `failure_gate_matrix`
 
 Dominant reason: `missing_failure_detection_rebalance_gate_coverage`
 
-Current state: Human-directed sprint-queue pivot to focused failure-gate coverage after owner proof. The latest representative rolling-restart artifact still fronts startup_active_gate_owner / snapshot_coverage with snapshot_coverage_incomplete; this package is a coverage-gate handoff, not a runtime first-frontier fix.
+Current state: Closed sprint snapshot. The topology failure-gate matrix package is done and the sprint package queue has zero remaining work packages; the latest representative rolling-restart evidence still fronts startup_active_gate_owner / snapshot_coverage with snapshot_coverage_incomplete.
 
 ## Next Action
 
-Promote join rejoin failure remote handoff and rebalance disruptions into focused release gates while preserving active-gate snapshot coverage as the current representative runtime frontier.
+Open a successor sprint or package for focused failure-gate execution, full distributed confirmation, or the remaining active-gate snapshot-coverage residual. Do not treat this closure as representative green evidence.
 
 ## Proof Ladder
 
@@ -35,7 +35,7 @@ Promote join rejoin failure remote handoff and rebalance disruptions into focuse
 3. `node scripts/check-guideline-literals.js test/distributed/harness/topology-failure-gate-matrix.js test/distributed/harness/scenario-registry.js`
 4. `node scripts/check-guideline-decision-boundaries.js test/distributed/harness/topology-failure-gate-matrix.js test/distributed/harness/scenario-registry.js`
 5. `npm run audit:runtime-grammar:file -- test/distributed/harness/topology-failure-gate-matrix.js test/distributed/harness/scenario-registry.js`
-6. `git diff --check -- test/distributed/harness/topology-failure-gate-matrix.js test/distributed/harness/__tests__/topology-failure-gate-matrix.test.js test/distributed/harness/scenario-registry.js test/distributed/harness/__tests__/scenario-registry.test.js work/packages/active-20260513-topology-failure-scenario-gates.md work/sprints/active-2026-q2-topology-convergence-ship-shape.md work/sprints/current-blocker.json work/sprints/current-blocker.md work/model-ledger.jsonl`
+6. `git diff --check -- test/distributed/harness/topology-failure-gate-matrix.js test/distributed/harness/__tests__/topology-failure-gate-matrix.test.js test/distributed/harness/scenario-registry.js test/distributed/harness/__tests__/scenario-registry.test.js work/packages/done-20260513-topology-failure-scenario-gates.md work/sprints/done-2026-q2-topology-convergence-ship-shape.md work/sprints/current-blocker.json work/sprints/current-blocker.md work/model-ledger.jsonl`
 
 ## Model Fit
 
@@ -112,13 +112,13 @@ Write scope:
 2. `test/distributed/harness/__tests__/topology-failure-gate-matrix.test.js`
 3. `test/distributed/harness/scenario-registry.js`
 4. `test/distributed/harness/__tests__/scenario-registry.test.js`
-5. `work/packages/active-20260513-topology-failure-scenario-gates.md`
+5. `work/packages/done-20260513-topology-failure-scenario-gates.md`
 6. `work/model-ledger.jsonl`
 
 Handoff files:
 
 1. `work/packages/done-20260513-topology-bounded-progress-budgets.md`
-2. `work/sprints/active-2026-q2-topology-convergence-ship-shape.md`
+2. `work/sprints/done-2026-q2-topology-convergence-ship-shape.md`
 3. `work/sprints/current-blocker.md`
 4. `work/sprints/current-blocker.json`
 
@@ -137,10 +137,10 @@ Commit scope:
 2. `test/distributed/harness/__tests__/topology-failure-gate-matrix.test.js`
 3. `test/distributed/harness/scenario-registry.js`
 4. `test/distributed/harness/__tests__/scenario-registry.test.js`
-5. `work/packages/active-20260513-topology-failure-scenario-gates.md`
+5. `work/packages/done-20260513-topology-failure-scenario-gates.md`
 6. `work/packages/done-20260513-topology-failure-scenario-gates.md`
 7. `work/packages/todo-20260513-topology-failure-scenario-gates.md`
-8. `work/sprints/active-2026-q2-topology-convergence-ship-shape.md`
+8. `work/sprints/done-2026-q2-topology-convergence-ship-shape.md`
 9. `work/sprints/current-blocker.md`
 10. `work/sprints/current-blocker.json`
 11. `work/model-ledger.jsonl`
