@@ -14,12 +14,73 @@
   "dominantReason": "partition_map_epoch_missing",
   "currentState": "Partition split, move, route, and diagnostics need one descriptor-version truth surface instead of cache freshness inference.",
   "nextAction": "Make partition descriptors versioned routing truth for split merge move and stale-route rejection",
-  "proof": [],
-  "writeScope": [],
-  "handoffFiles": [],
+  "proof": [
+    "npm run analyze:owner-files -- partition_topology_owner descriptor_epoch --markdown",
+    "npx tap test/partition/partition-descriptor-epoch-contract.test.js test/partition/partition-split-routing.test.js test/partition/managed-split-workflow-transition-persistence.test.js test/rebalancer/move-planner-placement-owner-kernel.test.js",
+    "node scripts/check-guideline-literals.js src/partition/partition-descriptor-epoch-contract.js src/partition/partition-constants.js src/partition/partition-split-routing.js src/partition/partition-service-segment-4-part-1.js src/partition/managed-split-workflow-provisioning-methods.js src/rebalancer/move-planner.js src/rebalancer/move-planner-state-methods.js",
+    "node scripts/check-guideline-decision-boundaries.js src/partition/partition-descriptor-epoch-contract.js src/partition/partition-constants.js src/partition/partition-split-routing.js src/partition/partition-service-segment-4-part-1.js src/partition/managed-split-workflow-provisioning-methods.js src/rebalancer/move-planner.js src/rebalancer/move-planner-state-methods.js",
+    "npm run audit:runtime-grammar:file -- src/partition/partition-descriptor-epoch-contract.js src/partition/partition-constants.js src/partition/partition-split-routing.js src/partition/partition-service-segment-4-part-1.js src/partition/managed-split-workflow-provisioning-methods.js src/rebalancer/move-planner.js src/rebalancer/move-planner-state-methods.js",
+    "git diff --check -- work/packages/active-20260513-topology-partition-descriptor-epoch.md work/packages/done-20260513-topology-post-rejoin-reconciliation.md work/model-ledger.jsonl work/sprints/active-2026-q2-topology-convergence-ship-shape.md work/sprints/current-blocker.json work/sprints/current-blocker.md src/partition/partition-descriptor-epoch-contract.js src/partition/partition-constants.js src/partition/partition-split-routing.js src/partition/partition-service-segment-4-part-1.js src/partition/managed-split-workflow-provisioning-methods.js src/rebalancer/move-planner.js src/rebalancer/move-planner-state-methods.js test/partition/partition-descriptor-epoch-contract.test.js test/partition/partition-split-routing.test.js test/partition/managed-split-workflow-transition-persistence.test.js test/rebalancer/move-planner-placement-owner-kernel.test.js"
+  ],
+  "writeScope": [
+    "work/packages/active-20260513-topology-partition-descriptor-epoch.md",
+    "work/packages/done-20260513-topology-post-rejoin-reconciliation.md",
+    "work/model-ledger.jsonl",
+    "work/sprints/active-2026-q2-topology-convergence-ship-shape.md",
+    "work/sprints/current-blocker.json",
+    "work/sprints/current-blocker.md",
+    "src/partition/partition-descriptor-epoch-contract.js",
+    "src/partition/partition-constants.js",
+    "src/partition/partition-split-routing.js",
+    "src/partition/partition-service-segment-4-part-1.js",
+    "src/partition/managed-split-workflow-provisioning-methods.js",
+    "src/rebalancer/move-planner.js",
+    "src/rebalancer/move-planner-state-methods.js",
+    "test/partition/partition-descriptor-epoch-contract.test.js",
+    "test/partition/partition-split-routing.test.js",
+    "test/partition/managed-split-workflow-transition-persistence.test.js",
+    "test/rebalancer/move-planner-placement-owner-kernel.test.js"
+  ],
+  "handoffFiles": [
+    "work/packages/done-20260513-topology-post-rejoin-reconciliation.md",
+    "work/packages/done-20260513-topology-failure-repair-intents.md",
+    "work/packages/done-20260513-topology-membership-epoch-fencing.md",
+    "src/bootstrap/system-table-schemas-constants.js",
+    "src/partition/partition-service-constants.js",
+    "src/partition/managed-split-workflow.js",
+    "src/partition/partition-service-row-owner.js",
+    "src/partition/partition-split-merge-manager.js",
+    "src/rebalancer/topology-owner-constants.js"
+  ],
   "generatedFiles": [],
-  "candidateRuntimeFiles": [],
-  "commitScope": [],
+  "candidateRuntimeFiles": [
+    "src/partition/partition-descriptor-epoch-contract.js",
+    "src/partition/partition-constants.js",
+    "src/partition/partition-split-routing.js",
+    "src/partition/partition-service-segment-4-part-1.js",
+    "src/partition/managed-split-workflow-provisioning-methods.js",
+    "src/rebalancer/move-planner.js",
+    "src/rebalancer/move-planner-state-methods.js"
+  ],
+  "commitScope": [
+    "work/packages/active-20260513-topology-partition-descriptor-epoch.md",
+    "work/packages/done-20260513-topology-post-rejoin-reconciliation.md",
+    "work/model-ledger.jsonl",
+    "work/sprints/active-2026-q2-topology-convergence-ship-shape.md",
+    "work/sprints/current-blocker.json",
+    "work/sprints/current-blocker.md",
+    "src/partition/partition-descriptor-epoch-contract.js",
+    "src/partition/partition-constants.js",
+    "src/partition/partition-split-routing.js",
+    "src/partition/partition-service-segment-4-part-1.js",
+    "src/partition/managed-split-workflow-provisioning-methods.js",
+    "src/rebalancer/move-planner.js",
+    "src/rebalancer/move-planner-state-methods.js",
+    "test/partition/partition-descriptor-epoch-contract.test.js",
+    "test/partition/partition-split-routing.test.js",
+    "test/partition/managed-split-workflow-transition-persistence.test.js",
+    "test/rebalancer/move-planner-placement-owner-kernel.test.js"
+  ],
   "modelFit": {
     "packageClass": "representative-frontier-closure",
     "intendedMinimumModel": "gpt-5.3-codex",
@@ -28,6 +89,40 @@
       "owned files expand beyond this package",
       "a frozen decision must be reopened"
     ]
+  },
+  "causalGovernance": {
+    "hypothesis": "If partition_topology_owner exposes one descriptor epoch decision for table and partition rows, split, merge, move planning, and write routing can reject stale topology evidence before changing placement or routing state.",
+    "stopConditionCheck": "Do not rerun rolling-restart for this package; npm run analyze:causal-model is cited only as not applicable for scenario:none/artifact:none. Focused stop proof is descriptor-epoch owner tests plus directly affected split-routing and move-planner consumers.",
+    "expectedCausalModelChange": "partition_topology_owner / descriptor_epoch becomes the routing and placement freshness boundary consumed by split, merge, move, and stale-route rejection paths.",
+    "representativeOutcome": "classification-only",
+    "causalDebt": "Later packages must use descriptor epoch outcomes for placement capacity, anti-entropy, bounded budgets, and failure scenario gates without reopening this owner contract.",
+    "crossBoundaryReview": "Review and fix subagents must confirm the post-rejoin predecessor closed cleanly before implementation."
+  },
+  "scenarioCausalClosure": {
+    "referenceScenarioOrProbe": "focused partition descriptor epoch tests",
+    "phaseChain": [
+      "partition descriptor read",
+      "descriptor epoch decision",
+      "split or move admission",
+      "write route acceptance or stale-route rejection"
+    ],
+    "currentFirstFrontier": "systemic sprint frontier: partition_topology_owner / descriptor_epoch / partition_map_epoch_missing",
+    "knownDownstreamBlockers": [
+      "placement capacity",
+      "anti-entropy reconciler",
+      "bounded progress budgets",
+      "failure scenario gates"
+    ],
+    "missingCausalEdge": "Partition consumers infer freshness from cache-visible table and partition rows without one canonical descriptor epoch outcome.",
+    "missingCausalEdgeProbe": "npx tap test/partition/partition-descriptor-epoch-contract.test.js test/partition/partition-split-routing.test.js test/partition/managed-split-workflow-transition-persistence.test.js test/rebalancer/move-planner-placement-owner-kernel.test.js",
+    "boundedProgressProof": "Focused tests must prove stale table/partition descriptor combinations are rejected, matching descriptor epochs are accepted, split routing dispatch rejects stale routes, and move-planner reconcile snapshots consume descriptor epoch outcomes.",
+    "boundedProgressProofArtifact": "test/partition/partition-descriptor-epoch-contract.test.js, test/partition/partition-split-routing.test.js, test/partition/managed-split-workflow-transition-persistence.test.js, and test/rebalancer/move-planner-placement-owner-kernel.test.js",
+    "expectedObservableTransition": "cache-row freshness inference -> descriptor epoch decision with stale-route rejection",
+    "maxProgressBound": "one review subagent, one fix subagent if needed, one implementation subagent, focused owner tests, static guardrails",
+    "sameFrontierFallback": "If scope requires a broad membership epoch or scenario artifact rerun, split that consumer into a later package instead of broadening this one.",
+    "expectedNextFrontier": "topology_placement_owner / capacity_fail_closed",
+    "resultClassification": "classification-only",
+    "stopCondition": "classification-only-stop"
   },
   "predecessor": "work/packages/done-20260513-topology-post-rejoin-reconciliation.md"
 }
@@ -86,14 +181,36 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 - Package class: `representative-frontier-closure`
 - Intended minimum model: `gpt-5.3-codex`
 - Scope shape: `owner-boundary-contraction/current-frontier`
-- Owned files: `work/packages/<this-package>.md`
-- Forbidden files: none selected before activation; activation must name exact
-  runtime write scope and forbidden files.
+- Owned files: `work/packages/active-20260513-topology-partition-descriptor-epoch.md`, `work/packages/done-20260513-topology-post-rejoin-reconciliation.md`, `work/model-ledger.jsonl`, `work/sprints/active-2026-q2-topology-convergence-ship-shape.md`, `work/sprints/current-blocker.json`, `work/sprints/current-blocker.md`, `src/partition/partition-descriptor-epoch-contract.js`, `src/partition/partition-constants.js`, `src/partition/partition-split-routing.js`, `src/partition/partition-service-segment-4-part-1.js`, `src/partition/managed-split-workflow-provisioning-methods.js`, `src/rebalancer/move-planner.js`, `src/rebalancer/move-planner-state-methods.js`, `test/partition/partition-descriptor-epoch-contract.test.js`, `test/partition/partition-split-routing.test.js`, `test/partition/managed-split-workflow-transition-persistence.test.js`, `test/rebalancer/move-planner-placement-owner-kernel.test.js`
+- Forbidden files: membership epoch implementation, user-facing partition
+  management APIs, broad operation workflow owner changes, rolling-restart
+  harness scenarios, Pro behavior, Enterprise behavior.
 - Frozen decisions: package scope and lane stay bounded unless explicitly escalated.
 - Escalation triggers: owned files expand beyond this package, runtime ownership changes, or representative scenario evidence changes.
-- Focused proof: `git diff --check`
+- Focused proof: `npx tap test/partition/partition-descriptor-epoch-contract.test.js test/partition/partition-split-routing.test.js test/partition/managed-split-workflow-transition-persistence.test.js test/rebalancer/move-planner-placement-owner-kernel.test.js`
 - Model ledger advisory: `escalate`
+
+## Subagent Sequencing Ledger
+
+- [x] Review subagent recorded:
+      `Agent Codex (019e2560-da68-74b0-89e3-ce4b07639458) reviewed work/packages/active-20260513-topology-partition-descriptor-epoch.md; result fixes-required`.
+- [x] Fix subagent recorded or explicitly not needed:
+      `Agent Codex (019e2563-6c77-7f51-8e78-84aaf44fef9b) fixed work/packages/active-20260513-topology-partition-descriptor-epoch.md`.
+- [ ] Implementation subagent recorded:
+      pending-before-implementation-starts
 
 ## Validation
 
-1. `git diff --check -- <files>`
+1. `npm run work:context` passed after activation and confirmed this package as
+   the current blocker.
+2. `npm run work:package:doctor -- --suggest work/packages/active-20260513-topology-partition-descriptor-epoch.md`
+   initially found the required Subagent Sequencing Ledger missing.
+3. `npm run analyze:owner-files -- partition_topology_owner descriptor_epoch --markdown`
+   passed and showed the boundary is currently represented only by package and
+   sprint metadata.
+4. Review subagent proof recorded from Heisenberg
+   (`019e2560-da68-74b0-89e3-ce4b07639458`), result `fixes-required`.
+5. Fix subagent proof recorded from Harvey
+   (`019e2563-6c77-7f51-8e78-84aaf44fef9b`) for the predecessor commit ledger.
+6. `git diff --check -- work/packages/active-20260513-topology-partition-descriptor-epoch.md work/packages/done-20260513-topology-post-rejoin-reconciliation.md`
+   passed before implementation subagent starts.
