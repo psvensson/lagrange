@@ -492,9 +492,14 @@ recovery wait. The latest rebalance gate also migrates to publication
 convergence with `missingPublishedCount=6` and zero priority recovery
 witnesses.
 
-Run priority residual drain as observe/classify work: compare the representative
-priority recovery witness against the latest rebalance artifact that has zero
-priority witnesses, then record whether a live operation workflow residual
-remains before final ship confirmation. Do not fix `rolling-restart`,
-publication, active-gate, rebalance, or operation workflow runtime behavior in
-this sprint segment without explicit re-scope.
+Priority residual drain is classification-complete. The representative
+priority extractor still reports one non-frontier
+`operation_workflow_owner / workflow_progress` witness for
+`control_plane_publications-p1` in `spread_satisfied_in_flight`, but causal
+analysis classifies `priority_recovery_partition_progress` as satisfied,
+`priority_recovery_classified` as passed, and `workflow_step_timeout` as within
+budget at `1269/30000ms`. The latest rebalance gate reports zero priority
+recovery witnesses. Close this package as classification-only, then activate
+[Topology Ship Gate Final Confirmation](../packages/todo-20260514-topology-ship-gate-final-confirmation.md).
+Do not fix `rolling-restart`, publication, active-gate, rebalance, or operation
+workflow runtime behavior in this sprint segment without explicit re-scope.

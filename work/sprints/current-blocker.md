@@ -22,11 +22,11 @@ Boundary: `workflow_progress`
 
 Dominant reason: `non_frontier_priority_recovery_residual`
 
-Current state: Activated after contract integration classified focused contracts as not ready for ship. The representative artifact still has one bounded operation_workflow_owner / workflow_progress wait, while the latest rebalance gate reports zero priority recovery witnesses. Publication convergence remains the representative first frontier.
+Current state: Classification proof complete. The representative artifact still has one non-frontier operation_workflow_owner / workflow_progress witness for control_plane_publications-p1 in spread_satisfied_in_flight, but causal analysis classifies priority_recovery_partition_progress as satisfied, priority_recovery_classified as passed, and workflow_step_timeout as within budget at 1269/30000ms. The latest rebalance gate reports zero priority recovery witnesses. Publication convergence remains the representative first frontier.
 
 ## Next Action
 
-Run priority residual extractors against the representative and latest rebalance artifacts and classify whether a live operation workflow residual remains before final ship confirmation. Do not fix operation workflow, publication, active-gate, or rolling-restart runtime behavior without explicit re-scope.
+Close this package as classification-only and activate final ship confirmation. Do not fix operation workflow, publication, active-gate, rebalance, or rolling-restart runtime behavior without explicit re-scope.
 
 ## Proof Ladder
 
@@ -34,6 +34,10 @@ Run priority residual extractors against the representative and latest rebalance
 2. `npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-green-gate-after-priority-recovery-workflow-progress-after-snapshot-coverage.report.json --markdown`
 3. `npm run analyze:priority-recovery-residuals -- test-output/reports/topology-rebalance-disruption-recovery-gate.report.json --markdown`
 4. `npm run analyze:owner-files -- operation_workflow_owner workflow_progress --markdown`
+5. `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-green-gate-after-priority-recovery-workflow-progress-after-snapshot-coverage.report.json`
+6. `node scripts/check-guideline-literals.js src/rebalancer/operation-workflow-owner.js src/rebalancer/operation-workflow-owner-segment-1.js src/rebalancer/operation-workflow-owner-segment-2.js src/rebalancer/operation-workflow-owner-segment-4.js src/rebalancer/operation-workflow-owner-segment-7-stage-shared.js test/rebalancer/coordinator-created-operation-progress-remote-handoff.test.js`
+7. `node scripts/check-guideline-decision-boundaries.js src/rebalancer/operation-workflow-owner.js src/rebalancer/operation-workflow-owner-segment-1.js src/rebalancer/operation-workflow-owner-segment-2.js src/rebalancer/operation-workflow-owner-segment-4.js src/rebalancer/operation-workflow-owner-segment-7-stage-shared.js test/rebalancer/coordinator-created-operation-progress-remote-handoff.test.js`
+8. `npm run audit:runtime-grammar:file -- src/rebalancer/operation-workflow-owner.js src/rebalancer/operation-workflow-owner-segment-1.js src/rebalancer/operation-workflow-owner-segment-2.js src/rebalancer/operation-workflow-owner-segment-4.js src/rebalancer/operation-workflow-owner-segment-7-stage-shared.js test/rebalancer/coordinator-created-operation-progress-remote-handoff.test.js`
 
 ## Model Fit
 
@@ -74,9 +78,9 @@ Stop-condition check: `npm --silent run analyze:causal-model -- test-output/repo
 
 Expected causal-model change: `non_frontier_priority_recovery_residual becomes representative-green, reduced, same-frontier, migrated, or classification-only with a named owner-boundary reason.`
 
-Representative outcome: `pending-before-rerun`
+Representative outcome: `classification-only`
 
-Causal debt: `Until operation_workflow_owner / workflow_progress is classified, the sprint representative residual stays open at topology_publication_owner / publication_convergence. Runtime fixes remain out of scope.`
+Causal debt: `The sprint representative residual stays open at topology_publication_owner / publication_convergence. Runtime fixes remain out of scope.`
 
 Cross-boundary review: `Required before closure through the runtime-owner-boundary subagent ledger or an allowed waiver recorded in this package.`
 
@@ -97,7 +101,7 @@ Known downstream blockers:
 1. `rolling-restart representative active-gate snapshot coverage remains red until green or migrated`
 2. `runtime or harness fixes discovered outside this owner boundary require a narrower successor package`
 
-Missing causal edge: `unproven operation_workflow_owner / workflow_progress causal edge for non_frontier_priority_recovery_residual`
+Missing causal edge: `classified operation_workflow_owner / workflow_progress residual: legacy representative witness is bounded and non-frontier; latest rebalance gate has zero priority witnesses`
 
 Missing causal edge probe: `npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-green-gate-after-priority-recovery-workflow-progress-after-snapshot-coverage.report.json --markdown`
 
@@ -105,15 +109,15 @@ Bounded progress proof: `Focused evidence must show bounded wake, retry, timeout
 
 Bounded progress proof artifact: `test-output/reports/rolling-restart-green-gate-after-priority-recovery-workflow-progress-after-snapshot-coverage.report.json`
 
-Expected observable transition: `non_frontier_priority_recovery_residual resolves to green evidence, a reduced residual, same-frontier evidence, migrated owner-boundary proof, or classification-only stop.`
+Expected observable transition: `non_frontier_priority_recovery_residual resolved to classification-only stop; final ship confirmation remains blocked by publication convergence evidence, not operation workflow evidence.`
 
 Max progress bound: `one activation cycle: package doctor, extractor/probe, owner-file proof, focused validation, and result classification`
 
-Same-frontier fallback: `keep operation_workflow_owner / workflow_progress active and do not broaden the package or claim ship proof`
+Same-frontier fallback: `not used; operation_workflow_owner / workflow_progress is classified without runtime repair and without claiming ship proof`
 
-Expected next frontier: `representative green evidence or a narrower owner-boundary blocker selected by canonical evidence`
+Expected next frontier: `distributed_test_harness / rolling_restart_and_failure_gate_closure final confirmation, with publication convergence still the known representative blocker if final evidence remains red`
 
-Result classification: `pending-before-probe`
+Result classification: `classification-only`
 
 Stop condition: `classification-only-stop`
 

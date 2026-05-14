@@ -11,13 +11,17 @@
   "owner": "operation_workflow_owner",
   "boundary": "workflow_progress",
   "dominantReason": "non_frontier_priority_recovery_residual",
-  "currentState": "Activated after contract integration classified focused contracts as not ready for ship. The representative artifact still has one bounded operation_workflow_owner / workflow_progress wait, while the latest rebalance gate reports zero priority recovery witnesses. Publication convergence remains the representative first frontier.",
-  "nextAction": "Run priority residual extractors against the representative and latest rebalance artifacts and classify whether a live operation workflow residual remains before final ship confirmation. Do not fix operation workflow, publication, active-gate, or rolling-restart runtime behavior without explicit re-scope.",
+  "currentState": "Classification proof complete. The representative artifact still has one non-frontier operation_workflow_owner / workflow_progress witness for control_plane_publications-p1 in spread_satisfied_in_flight, but causal analysis classifies priority_recovery_partition_progress as satisfied, priority_recovery_classified as passed, and workflow_step_timeout as within budget at 1269/30000ms. The latest rebalance gate reports zero priority recovery witnesses. Publication convergence remains the representative first frontier.",
+  "nextAction": "Close this package as classification-only and activate final ship confirmation. Do not fix operation workflow, publication, active-gate, rebalance, or rolling-restart runtime behavior without explicit re-scope.",
   "proof": [
     "npm run work:evidence-summary -- test-output/reports/rolling-restart-green-gate-after-priority-recovery-workflow-progress-after-snapshot-coverage.report.json",
     "npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-green-gate-after-priority-recovery-workflow-progress-after-snapshot-coverage.report.json --markdown",
     "npm run analyze:priority-recovery-residuals -- test-output/reports/topology-rebalance-disruption-recovery-gate.report.json --markdown",
-    "npm run analyze:owner-files -- operation_workflow_owner workflow_progress --markdown"
+    "npm run analyze:owner-files -- operation_workflow_owner workflow_progress --markdown",
+    "npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-green-gate-after-priority-recovery-workflow-progress-after-snapshot-coverage.report.json",
+    "node scripts/check-guideline-literals.js src/rebalancer/operation-workflow-owner.js src/rebalancer/operation-workflow-owner-segment-1.js src/rebalancer/operation-workflow-owner-segment-2.js src/rebalancer/operation-workflow-owner-segment-4.js src/rebalancer/operation-workflow-owner-segment-7-stage-shared.js test/rebalancer/coordinator-created-operation-progress-remote-handoff.test.js",
+    "node scripts/check-guideline-decision-boundaries.js src/rebalancer/operation-workflow-owner.js src/rebalancer/operation-workflow-owner-segment-1.js src/rebalancer/operation-workflow-owner-segment-2.js src/rebalancer/operation-workflow-owner-segment-4.js src/rebalancer/operation-workflow-owner-segment-7-stage-shared.js test/rebalancer/coordinator-created-operation-progress-remote-handoff.test.js",
+    "npm run audit:runtime-grammar:file -- src/rebalancer/operation-workflow-owner.js src/rebalancer/operation-workflow-owner-segment-1.js src/rebalancer/operation-workflow-owner-segment-2.js src/rebalancer/operation-workflow-owner-segment-4.js src/rebalancer/operation-workflow-owner-segment-7-stage-shared.js test/rebalancer/coordinator-created-operation-progress-remote-handoff.test.js"
   ],
   "writeScope": [
     "work/packages/active-20260514-topology-priority-recovery-residual-drain.md",
@@ -72,8 +76,9 @@
     "hypothesis": "operation_workflow_owner / workflow_progress evidence should reduce, migrate, or classify non_frontier_priority_recovery_residual without hiding the sprint representative residual.",
     "stopConditionCheck": "npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-green-gate-after-priority-recovery-workflow-progress-after-snapshot-coverage.report.json",
     "expectedCausalModelChange": "non_frontier_priority_recovery_residual becomes representative-green, reduced, same-frontier, migrated, or classification-only with a named owner-boundary reason.",
-    "representativeOutcome": "pending-before-rerun",
-    "causalDebt": "Until operation_workflow_owner / workflow_progress is classified, the sprint representative residual stays open at topology_publication_owner / publication_convergence. Runtime fixes remain out of scope.",
+    "representativeOutcome": "classification-only",
+    "representativeOutcomeEvidence": "operation_workflow_owner / workflow_progress is non-frontier and bounded in the representative artifact, absent in the latest rebalance gate, and not the current representative blocker.",
+    "causalDebt": "The sprint representative residual stays open at topology_publication_owner / publication_convergence. Runtime fixes remain out of scope.",
     "crossBoundaryReview": "Required before closure through the runtime-owner-boundary subagent ledger or an allowed waiver recorded in this package."
   },
   "scenarioCausalClosure": {
@@ -88,15 +93,16 @@
       "rolling-restart representative active-gate snapshot coverage remains red until green or migrated",
       "runtime or harness fixes discovered outside this owner boundary require a narrower successor package"
     ],
-    "missingCausalEdge": "unproven operation_workflow_owner / workflow_progress causal edge for non_frontier_priority_recovery_residual",
+    "missingCausalEdge": "classified operation_workflow_owner / workflow_progress residual: legacy representative witness is bounded and non-frontier; latest rebalance gate has zero priority witnesses",
     "missingCausalEdgeProbe": "npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-green-gate-after-priority-recovery-workflow-progress-after-snapshot-coverage.report.json --markdown",
     "boundedProgressProof": "Focused evidence must show bounded wake, retry, timeout, reconcile, drain, dispatch, delivery, timer, or advance for operation_workflow_owner / workflow_progress, or classify that no live priority residual remains.",
     "boundedProgressProofArtifact": "test-output/reports/rolling-restart-green-gate-after-priority-recovery-workflow-progress-after-snapshot-coverage.report.json",
-    "expectedObservableTransition": "non_frontier_priority_recovery_residual resolves to green evidence, a reduced residual, same-frontier evidence, migrated owner-boundary proof, or classification-only stop.",
+    "expectedObservableTransition": "non_frontier_priority_recovery_residual resolved to classification-only stop; final ship confirmation remains blocked by publication convergence evidence, not operation workflow evidence.",
     "maxProgressBound": "one activation cycle: package doctor, extractor/probe, owner-file proof, focused validation, and result classification",
-    "sameFrontierFallback": "keep operation_workflow_owner / workflow_progress active and do not broaden the package or claim ship proof",
-    "expectedNextFrontier": "representative green evidence or a narrower owner-boundary blocker selected by canonical evidence",
-    "resultClassification": "pending-before-probe",
+    "sameFrontierFallback": "not used; operation_workflow_owner / workflow_progress is classified without runtime repair and without claiming ship proof",
+    "expectedNextFrontier": "distributed_test_harness / rolling_restart_and_failure_gate_closure final confirmation, with publication convergence still the known representative blocker if final evidence remains red",
+    "resultClassification": "classification-only",
+    "resultClassificationEvidence": "bounded non-frontier legacy witness in representative evidence, zero priority witnesses in the latest rebalance gate, and publication convergence remains the representative blocker",
     "stopCondition": "classification-only-stop"
   },
   "predecessor": null
