@@ -12,10 +12,16 @@ import {
 import {SYSTEM_TABLE_NAME} from '../../src/bootstrap/system-table-schemas-constants.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
+import {
+  POST_REJOIN_RECONCILIATION_DECISION_STATE,
+  POST_REJOIN_RECONCILIATION_EVIDENCE_STATE,
+  POST_REJOIN_RECONCILIATION_REASON_CODE,
+} from '../../src/control-plane/rejoin-reconciliation-contract.js';
 
 const TEST_REINTEGRATION_ADMISSION_STATE_BLOCKED = 'blocked';
 const TEST_REINTEGRATION_BLOCK_REASON =
   'cluster_incarnation_identity_mismatch';
+const TEST_REJOIN_REMOTE_BLOCK_REASON = 'remote_owner_reconciliation_blocked';
 
 // Initialize configuration and logging for tests
 beforeEach(() => {
@@ -75,6 +81,22 @@ function createMockMutationGateway() {
   };
 }
 
+function createRejoinReconciliationService(options = {}) {
+  return {
+    resolvePostRejoinReconciliationEvidence() {
+      return {
+        localTopologyState:
+          options.localTopologyState ||
+          POST_REJOIN_RECONCILIATION_EVIDENCE_STATE.SATISFIED,
+        remoteOperationState:
+          options.remoteOperationState ||
+          POST_REJOIN_RECONCILIATION_EVIDENCE_STATE.SATISFIED,
+        remoteOperationReasonCodes: options.remoteOperationReasonCodes || [],
+      };
+    },
+  };
+}
+
 /**
  * Create a mock system table cache for testing.
  * @param {Object} data - Initial cache data.
@@ -122,6 +144,7 @@ test('NodeReintegrationService - initialize', async (t) => {
     nodeId: 'test-node',
     systemTableCache: mockCache,
     cdcIntegrationService: mockCDC,
+    rejoinReconciliationService: createRejoinReconciliationService(),
   });
 
   service.initialize();
@@ -138,6 +161,7 @@ test('NodeReintegrationService - initialize accepts control-plane mutation gatew
       nodeId: 'test-node',
       systemTableCache: mockCache,
       controlPlaneSystemTableGateway: mockGateway,
+      rejoinReconciliationService: createRejoinReconciliationService(),
     });
 
     service.initialize();
@@ -164,6 +188,7 @@ test('NodeReintegrationService - start and stop', async (t) => {
     nodeId: 'test-node',
     systemTableCache: mockCache,
     cdcIntegrationService: mockCDC,
+    rejoinReconciliationService: createRejoinReconciliationService(),
   });
   service.initialize();
 
@@ -192,6 +217,7 @@ test('NodeReintegrationService - idle cadence backs off and resets on activity',
       nodeId: 'test-node',
       systemTableCache: mockCache,
       cdcIntegrationService: mockCDC,
+      rejoinReconciliationService: createRejoinReconciliationService(),
     });
     service.initialize();
 
@@ -244,6 +270,7 @@ test('NodeReintegrationService - reintegrates recovering node', async (t) => {
     nodeId: 'test-node',
     systemTableCache: mockCache,
     cdcIntegrationService: mockCDC,
+    rejoinReconciliationService: createRejoinReconciliationService(),
   });
 
   // Use minimal health checks for testing
@@ -288,6 +315,7 @@ test('NodeReintegrationService - routes reintegration writes through control-pla
       nodeId: 'test-node',
       systemTableCache: mockCache,
       controlPlaneSystemTableGateway: mockGateway,
+      rejoinReconciliationService: createRejoinReconciliationService(),
     });
     service.initialize();
 
@@ -440,6 +468,7 @@ test('NodeReintegrationService - skips stale reintegration completion overwrite'
       nodeId: 'test-node',
       systemTableCache: mockCache,
       cdcIntegrationService: mockCDC,
+      rejoinReconciliationService: createRejoinReconciliationService(),
     });
     service.initialize();
 
@@ -535,6 +564,110 @@ test('NodeReintegrationService - defers reintegration when startup authority blo
       service.pendingReintegrations.get('node-1')?.blockedReasonCode,
       TEST_REINTEGRATION_BLOCK_REASON,
       'blocked startup authority should retain the canonical block reason',
+    );
+
+    service.shutdown();
+  });
+
+test('NodeReintegrationService - defers active admission while rejoin reconciliation is pending',
+  async (t) => {
+    const now = Date.now();
+    const mockCache = createMockCache();
+    const mockGateway = createMockMutationGateway();
+    const service = new NodeReintegrationService({
+      nodeId: 'test-node',
+      systemTableCache: mockCache,
+      controlPlaneSystemTableGateway: mockGateway,
+      rejoinReconciliationService: createRejoinReconciliationService({
+        remoteOperationState:
+          POST_REJOIN_RECONCILIATION_EVIDENCE_STATE.PENDING,
+      }),
+    });
+    service.initialize();
+    service.pendingReintegrations.set('node-1', {
+      status: ReintegrationStatus.IN_PROGRESS,
+      startedAt: now - 1000,
+    });
+    const events = [];
+    service.on('nodeReintegrated', (event) =>
+      events.push({type: 'nodeReintegrated', event}));
+    service.on('triggerRebalancing', (event) =>
+      events.push({type: 'triggerRebalancing', event}));
+
+    await service.completeReintegration({
+      node_id: 'node-1',
+      status: NodeStatus.RECOVERING,
+      last_heartbeat: now - 1000,
+      recovered_at: now - 5000,
+    });
+
+    t.equal(mockGateway.operations.length, 0);
+    t.same(events, []);
+    t.equal(
+      service.pendingReintegrations.get('node-1')?.status,
+      ReintegrationStatus.PENDING,
+    );
+    t.equal(
+      service.pendingReintegrations.get('node-1')?.rejoinReconciliationState,
+      POST_REJOIN_RECONCILIATION_DECISION_STATE.PENDING,
+    );
+    t.ok(
+      service.pendingReintegrations
+        .get('node-1')
+        ?.rejoinReconciliationReasonCodes.includes(
+          POST_REJOIN_RECONCILIATION_REASON_CODE.RECONCILIATION_PENDING,
+        ),
+    );
+
+    service.shutdown();
+  });
+
+test('NodeReintegrationService - defers active admission while rejoin reconciliation is blocked',
+  async (t) => {
+    const now = Date.now();
+    const mockCache = createMockCache();
+    const mockGateway = createMockMutationGateway();
+    const service = new NodeReintegrationService({
+      nodeId: 'test-node',
+      systemTableCache: mockCache,
+      controlPlaneSystemTableGateway: mockGateway,
+      rejoinReconciliationService: createRejoinReconciliationService({
+        remoteOperationState:
+          POST_REJOIN_RECONCILIATION_EVIDENCE_STATE.BLOCKED,
+        remoteOperationReasonCodes: [TEST_REJOIN_REMOTE_BLOCK_REASON],
+      }),
+    });
+    service.initialize();
+    service.pendingReintegrations.set('node-1', {
+      status: ReintegrationStatus.IN_PROGRESS,
+      startedAt: now - 1000,
+    });
+    const events = [];
+    service.on('nodeReintegrated', (event) =>
+      events.push({type: 'nodeReintegrated', event}));
+    service.on('triggerRebalancing', (event) =>
+      events.push({type: 'triggerRebalancing', event}));
+
+    await service.completeReintegration({
+      node_id: 'node-1',
+      status: NodeStatus.RECOVERING,
+      last_heartbeat: now - 1000,
+      recovered_at: now - 5000,
+    });
+
+    t.equal(mockGateway.operations.length, 0);
+    t.same(events, []);
+    t.equal(
+      service.pendingReintegrations.get('node-1')?.status,
+      ReintegrationStatus.PENDING,
+    );
+    t.equal(
+      service.pendingReintegrations.get('node-1')?.rejoinReconciliationState,
+      POST_REJOIN_RECONCILIATION_DECISION_STATE.BLOCKED,
+    );
+    t.equal(
+      service.pendingReintegrations.get('node-1')?.blockedReasonCode,
+      TEST_REJOIN_REMOTE_BLOCK_REASON,
     );
 
     service.shutdown();

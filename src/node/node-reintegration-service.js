@@ -19,6 +19,11 @@ import {PRESSURE_WORK_CLASS} from '../control-plane/pressure-governor.js';
 import {
   STARTUP_AUTHORITY_STATE,
 } from '../control-plane/startup-authority-snapshot-owner.js';
+import {
+  POST_REJOIN_RECONCILIATION_EVIDENCE_STATE,
+  buildPostRejoinReconciliationDecision,
+  isPostRejoinReconciliationSatisfied,
+} from '../control-plane/rejoin-reconciliation-contract.js';
 import {assertCritical} from '../utils/assert.js';
 import {
   NODE_REINTEGRATION_DEFAULT,
@@ -33,6 +38,8 @@ import {
 
 const LOCAL_STR_STRING = 'string';
 const LOCAL_NUM_ZERO = 0;
+const LOCAL_STR_EMPTY = '';
+const LOCAL_STR_CRITICAL = 'critical';
 
 const NodeStatus = NODE_STATUS;
 const ReintegrationStatus = NODE_REINTEGRATION_STATUS;
@@ -86,6 +93,8 @@ class NodeReintegrationService extends EventEmitter {
       options.controlPlaneSystemTableGateway || null;
     this.controlPlaneReadinessService =
       options.controlPlaneReadinessService || null;
+    this.rejoinReconciliationService =
+      options.rejoinReconciliationService || null;
     this.nodeId = options.nodeId || null;
 
     // Configuration
@@ -134,6 +143,9 @@ class NodeReintegrationService extends EventEmitter {
     }
     if (options.controlPlaneReadinessService) {
       this.controlPlaneReadinessService = options.controlPlaneReadinessService;
+    }
+    if (options.rejoinReconciliationService) {
+      this.rejoinReconciliationService = options.rejoinReconciliationService;
     }
     if (options.nodeId) {
       this.nodeId = options.nodeId;
@@ -397,6 +409,20 @@ class NodeReintegrationService extends EventEmitter {
     pending.blockedAt = now;
   }
 
+  recordPendingReintegrationReconciliationDecision(nodeId, decision, now) {
+    const pending = this.pendingReintegrations.get(nodeId);
+    if (!pending) {
+      return;
+    }
+    pending.status = ReintegrationStatus.PENDING;
+    pending.rejoinReconciliationState = decision.state;
+    pending.rejoinReconciliationReasonCodes = decision.reasonCodes;
+    pending.blockedReasonCode =
+      decision.reasonCodes[NUM.ZERO] ||
+      NODE_REINTEGRATION_REASON.REJOIN_RECONCILIATION_PENDING;
+    pending.blockedAt = now;
+  }
+
   recordPendingReintegrationCompleted(nodeId, now) {
     const pending = this.pendingReintegrations.get(nodeId);
     if (!pending) {
@@ -415,14 +441,31 @@ class NodeReintegrationService extends EventEmitter {
   async completeReintegration(node) {
     const nodeId = node.node_id;
     const now = Date.now();
-    const admissionBlock = this.resolveStartupAuthorityAdmissionBlock(nodeId);
+    const rejoinReconciliationDecision =
+      await this.resolvePostRejoinReconciliationDecision(node, now);
 
-    if (admissionBlock) {
-      this.recordPendingReintegrationAdmissionBlock(
+    if (!isPostRejoinReconciliationSatisfied(rejoinReconciliationDecision)) {
+      this.recordPendingReintegrationReconciliationDecision(
         nodeId,
-        admissionBlock,
+        rejoinReconciliationDecision,
         now,
       );
+      this.logger.info(
+        NODE_REINTEGRATION_LOG_MSG.REINTEGRATION_RECONCILIATION_DEFERRED,
+        {
+          nodeId,
+          rejoinReconciliationState: rejoinReconciliationDecision.state,
+          reasonCodes: rejoinReconciliationDecision.reasonCodes,
+        },
+      );
+      return;
+    }
+
+    const admissionBlock =
+      this.resolveStartupAuthorityAdmissionBlockFromReconciliationDecision(
+        rejoinReconciliationDecision,
+      );
+    if (admissionBlock.blocked === true) {
       this.logger.info(NODE_REINTEGRATION_LOG_MSG.REINTEGRATION_ADMISSION_BLOCKED, {
         nodeId,
         startupAuthorityState: admissionBlock.startupAuthorityState,
@@ -449,7 +492,7 @@ class NodeReintegrationService extends EventEmitter {
         },
       }, {
         workClass: PRESSURE_WORK_CLASS.INTERACTIVE,
-        deliveryPriority: 'critical',
+        deliveryPriority: LOCAL_STR_CRITICAL,
       });
       if (!guardedUpdateApplied(result)) {
         this.logger.debug(NODE_REINTEGRATION_LOG_MSG.STALE_COMPLETION_UPDATE, {
@@ -530,11 +573,11 @@ class NodeReintegrationService extends EventEmitter {
           data: {
             status: NodeStatus.FAILED,
             updated_at: Date.now(),
-          },
-        }, {
-          workClass: PRESSURE_WORK_CLASS.INTERACTIVE,
-          deliveryPriority: 'critical',
-        });
+        },
+      }, {
+        workClass: PRESSURE_WORK_CLASS.INTERACTIVE,
+        deliveryPriority: LOCAL_STR_CRITICAL,
+      });
         if (!guardedUpdateApplied(result)) {
           this.logger.debug(NODE_REINTEGRATION_LOG_MSG.STALE_FAILURE_UPDATE, {
             nodeId,
@@ -664,11 +707,21 @@ class NodeReintegrationService extends EventEmitter {
   }
 
   resolveStartupAuthorityAdmissionBlock(nodeId) {
+    const evidence = this.resolveStartupAuthorityAdmissionEvidence(nodeId);
+    return this.resolveStartupAuthorityAdmissionBlockFromEvidence(evidence);
+  }
+
+  resolveStartupAuthorityAdmissionEvidence(nodeId) {
     const readinessService = this.controlPlaneReadinessService;
     if (!readinessService ||
         typeof readinessService.getStartupAuthoritySnapshotSync !==
           TYPEOF.FUNCTION) {
-      return null;
+      return {
+        startupAdmissionState:
+          POST_REJOIN_RECONCILIATION_EVIDENCE_STATE.SATISFIED,
+        startupAuthorityState: LOCAL_STR_EMPTY,
+        reasonCodes: [],
+      };
     }
 
     try {
@@ -679,25 +732,97 @@ class NodeReintegrationService extends EventEmitter {
         startupAuthority?.admission &&
           typeof startupAuthority.admission === TYPEOF.OBJECT ?
           startupAuthority.admission :
-          null;
+          {};
       const blocked =
         startupAuthority?.state === STARTUP_AUTHORITY_STATE.BLOCKED ||
         admission?.admitted === false;
-      if (blocked !== true) {
-        return null;
-      }
+      const startupAdmissionState = blocked === true ?
+        POST_REJOIN_RECONCILIATION_EVIDENCE_STATE.BLOCKED :
+        POST_REJOIN_RECONCILIATION_EVIDENCE_STATE.SATISFIED;
       const reasonCode =
         Array.isArray(admission?.reasonCodes) &&
           admission.reasonCodes.length > NUM.ZERO ?
           admission.reasonCodes[NUM.ZERO] :
           NODE_REINTEGRATION_REASON.ADMISSION_BLOCKED;
       return {
-        reasonCode,
-        startupAuthorityState: startupAuthority?.state || null,
+        startupAdmissionState,
+        startupAuthorityState: startupAuthority?.state || LOCAL_STR_EMPTY,
+        reasonCodes: blocked === true ? [reasonCode] : [],
       };
     } catch (_error) {
-      return null;
+      return {
+        startupAdmissionState:
+          POST_REJOIN_RECONCILIATION_EVIDENCE_STATE.PENDING,
+        startupAuthorityState: LOCAL_STR_EMPTY,
+        reasonCodes: [NODE_REINTEGRATION_REASON.ADMISSION_BLOCKED],
+      };
     }
+  }
+
+  resolveStartupAuthorityAdmissionBlockFromEvidence(evidence = {}) {
+    return {
+      blocked:
+        evidence.startupAdmissionState ===
+          POST_REJOIN_RECONCILIATION_EVIDENCE_STATE.BLOCKED,
+      reasonCode:
+        evidence.reasonCodes?.[NUM.ZERO] ||
+        NODE_REINTEGRATION_REASON.ADMISSION_BLOCKED,
+      startupAuthorityState: evidence.startupAuthorityState || LOCAL_STR_EMPTY,
+    };
+  }
+
+  resolveStartupAuthorityAdmissionBlockFromReconciliationDecision(decision) {
+    return this.resolveStartupAuthorityAdmissionBlockFromEvidence({
+      startupAdmissionState: decision.evidence.startupAdmission.state,
+      startupAuthorityState: LOCAL_STR_EMPTY,
+      reasonCodes: decision.evidence.startupAdmission.reasonCodes,
+    });
+  }
+
+  async readPostRejoinReconciliationEvidence(node, observedAt) {
+    const nodeId = node.node_id;
+    const reconciliationService = this.rejoinReconciliationService;
+    const context = {node, nodeId, observedAt};
+    const readerRule = Object.freeze([
+      Object.freeze({
+        matches:
+          typeof reconciliationService?.resolvePostRejoinReconciliationEvidence ===
+          TYPEOF.FUNCTION,
+        read: () =>
+          reconciliationService.resolvePostRejoinReconciliationEvidence(context),
+      }),
+      Object.freeze({
+        matches:
+          typeof reconciliationService?.getPostRejoinReconciliationEvidenceSync ===
+          TYPEOF.FUNCTION,
+        read: () =>
+          reconciliationService.getPostRejoinReconciliationEvidenceSync(context),
+      }),
+      Object.freeze({
+        matches: true,
+        read: () => ({}),
+      }),
+    ]).find((rule) => rule.matches === true);
+    return readerRule.read();
+  }
+
+  async resolvePostRejoinReconciliationDecision(node, observedAt) {
+    const reconciliationEvidence =
+      await this.readPostRejoinReconciliationEvidence(node, observedAt);
+    const startupAdmissionEvidence =
+      this.resolveStartupAuthorityAdmissionEvidence(node.node_id);
+    return buildPostRejoinReconciliationDecision({
+      ...(reconciliationEvidence || {}),
+      nodeId: node.node_id,
+      observedAt,
+      localTopologyState:
+        reconciliationEvidence?.localTopologyState ||
+        POST_REJOIN_RECONCILIATION_EVIDENCE_STATE.SATISFIED,
+      startupAdmissionState:
+        startupAdmissionEvidence.startupAdmissionState,
+      startupAdmissionReasonCodes:
+        startupAdmissionEvidence.reasonCodes,
+    });
   }
 
   /**

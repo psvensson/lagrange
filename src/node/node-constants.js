@@ -241,6 +241,7 @@ const NODE_REINTEGRATION_REASON = Object.freeze({
   ADMISSION_BLOCKED: 'admission_blocked',
   HEALTH_CHECK_FAILED: 'health_check_failed',
   NODE_REINTEGRATION: 'node_reintegration',
+  REJOIN_RECONCILIATION_PENDING: 'rejoin_reconciliation_pending',
 });
 
 const NODE_REINTEGRATION_LOG_MSG = Object.freeze({
@@ -255,6 +256,8 @@ const NODE_REINTEGRATION_LOG_MSG = Object.freeze({
   COMPLETING_REINTEGRATION: 'Completing node reintegration',
   REINTEGRATION_ADMISSION_BLOCKED:
     'Deferred node reintegration because startup authority blocked admission',
+  REINTEGRATION_RECONCILIATION_DEFERRED:
+    'Deferred node reintegration because post-rejoin reconciliation is not satisfied',
   MARK_NODE_ACTIVE_FAILED: 'Failed to mark node as active',
   REINTEGRATION_COMPLETED: 'Node reintegration completed',
   REINTEGRATION_FAILED: 'Node reintegration failed',

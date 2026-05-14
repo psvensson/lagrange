@@ -13,13 +13,56 @@
   "boundary": "rejoin_reconciliation",
   "dominantReason": "rejoin_restore_lacks_remote_operation_reconcile",
   "currentState": "Durable rejoin restores local services, but full active admission still needs explicit reconciliation of local topology and coordinated remote operation state.",
-  "nextAction": "Require post-rejoin reconciliation of local services and coordinated remote operations before full active admission",
-  "proof": [],
-  "writeScope": [],
-  "handoffFiles": [],
+  "nextAction": "Introduce a canonical post-rejoin reconciliation outcome and require NodeReintegrationService to observe a satisfied reconciliation decision before marking a recovering node active.",
+  "proof": [
+    "npm run analyze:owner-files -- topology_membership_owner rejoin_reconciliation --markdown",
+    "npx tap test/control-plane/rejoin-reconciliation-contract.test.js test/node/node-reintegration-service.test.js",
+    "node scripts/check-guideline-literals.js src/control-plane/rejoin-reconciliation-contract.js src/node/node-reintegration-service.js src/node/node-constants.js",
+    "node scripts/check-guideline-decision-boundaries.js src/control-plane/rejoin-reconciliation-contract.js src/node/node-reintegration-service.js src/node/node-constants.js",
+    "npm run audit:runtime-grammar:file -- src/control-plane/rejoin-reconciliation-contract.js src/node/node-reintegration-service.js src/node/node-constants.js",
+    "git diff --check -- work/packages/active-20260513-topology-post-rejoin-reconciliation.md work/model-ledger.jsonl work/sprints/active-2026-q2-topology-convergence-ship-shape.md work/sprints/current-blocker.json work/sprints/current-blocker.md src/control-plane/rejoin-reconciliation-contract.js src/node/node-reintegration-service.js src/node/node-constants.js test/control-plane/rejoin-reconciliation-contract.test.js test/node/node-reintegration-service.test.js"
+  ],
+  "writeScope": [
+    "work/packages/active-20260513-topology-post-rejoin-reconciliation.md",
+    "work/model-ledger.jsonl",
+    "work/sprints/active-2026-q2-topology-convergence-ship-shape.md",
+    "work/sprints/current-blocker.json",
+    "work/sprints/current-blocker.md",
+    "src/control-plane/rejoin-reconciliation-contract.js",
+    "src/node/node-reintegration-service.js",
+    "src/node/node-constants.js",
+    "test/control-plane/rejoin-reconciliation-contract.test.js",
+    "test/node/node-reintegration-service.test.js"
+  ],
+  "handoffFiles": [
+    "work/packages/done-20260513-topology-failure-repair-intents.md",
+    "work/packages/done-20260513-topology-membership-epoch-fencing.md",
+    "src/bootstrap/shared/durable-rejoin-partition-restore-planner.js",
+    "src/bootstrap/node-joining-service-segment-5.js",
+    "src/control-plane/membership-lifecycle-controller.js",
+    "src/control-plane/membership-epoch-contract.js",
+    "test/bootstrap/durable-rejoin-partition-restore-planner.test.js",
+    "test/bootstrap/node-joining-service.test-part-4.js",
+    "test/control-plane/membership-lifecycle-controller.test.js"
+  ],
   "generatedFiles": [],
-  "candidateRuntimeFiles": [],
-  "commitScope": [],
+  "candidateRuntimeFiles": [
+    "src/control-plane/rejoin-reconciliation-contract.js",
+    "src/node/node-reintegration-service.js",
+    "src/node/node-constants.js"
+  ],
+  "commitScope": [
+    "work/packages/active-20260513-topology-post-rejoin-reconciliation.md",
+    "work/model-ledger.jsonl",
+    "work/sprints/active-2026-q2-topology-convergence-ship-shape.md",
+    "work/sprints/current-blocker.json",
+    "work/sprints/current-blocker.md",
+    "src/control-plane/rejoin-reconciliation-contract.js",
+    "src/node/node-reintegration-service.js",
+    "src/node/node-constants.js",
+    "test/control-plane/rejoin-reconciliation-contract.test.js",
+    "test/node/node-reintegration-service.test.js"
+  ],
   "modelFit": {
     "packageClass": "representative-frontier-closure",
     "intendedMinimumModel": "gpt-5.3-codex",
@@ -28,6 +71,41 @@
       "owned files expand beyond this package",
       "a frozen decision must be reopened"
     ]
+  },
+  "causalGovernance": {
+    "hypothesis": "If topology_membership_owner emits one canonical rejoin reconciliation decision before NodeReintegrationService marks a recovering node active, full active admission and rebalance wakeups cannot race ahead of local restore, startup authority, or coordinated operation reconciliation evidence.",
+    "stopConditionCheck": "Do not rerun rolling-restart for this package; npm run analyze:causal-model is cited only as not applicable for scenario:none/artifact:none. Focused stop proof is npx tap test/control-plane/rejoin-reconciliation-contract.test.js test/node/node-reintegration-service.test.js.",
+    "expectedCausalModelChange": "topology_membership_owner / rejoin_reconciliation becomes the active-admission gate consumed by node reintegration before rebalance wake events.",
+    "representativeOutcome": "classification-only",
+    "causalDebt": "Later packages must wire broader partition descriptor, placement, anti-entropy, bounded-budget, and failure-gate consumers to this rejoin reconciliation outcome.",
+    "crossBoundaryReview": "Review and fix subagents must confirm the failure repair intent predecessor closed cleanly before implementation."
+  },
+  "scenarioCausalClosure": {
+    "referenceScenarioOrProbe": "focused rejoin reconciliation contract and node reintegration tests",
+    "phaseChain": [
+      "durable rejoin restore",
+      "post-rejoin reconciliation decision",
+      "recovering node active admission",
+      "rebalance wake signal"
+    ],
+    "currentFirstFrontier": "systemic sprint frontier: topology_membership_owner / rejoin_reconciliation / rejoin_restore_lacks_remote_operation_reconcile",
+    "knownDownstreamBlockers": [
+      "partition descriptor epoch",
+      "placement capacity",
+      "anti-entropy reconciler",
+      "bounded progress budgets",
+      "failure scenario gates"
+    ],
+    "missingCausalEdge": "A recovering node can be marked active and trigger rebalancing without one canonical post-rejoin reconciliation outcome.",
+    "missingCausalEdgeProbe": "npx tap test/control-plane/rejoin-reconciliation-contract.test.js test/node/node-reintegration-service.test.js",
+    "boundedProgressProof": "Focused tests prove the reconcile mechanism: pending or blocked rejoin reconciliation suppresses active admission and rebalance wakeups, while satisfied reconciliation advances reintegration.",
+    "boundedProgressProofArtifact": "test/control-plane/rejoin-reconciliation-contract.test.js and test/node/node-reintegration-service.test.js",
+    "expectedObservableTransition": "health-only recovery admission -> rejoin reconciliation gated recovery admission",
+    "maxProgressBound": "one review subagent, one fix subagent if needed, one implementation subagent, focused owner tests, static guardrails",
+    "sameFrontierFallback": "If scope requires partition descriptor or broad operation-owner consumption, split that consumer into the next package instead of broadening this one.",
+    "expectedNextFrontier": "partition_topology_owner / descriptor_epoch",
+    "resultClassification": "classification-only",
+    "stopCondition": "classification-only-stop"
   },
   "predecessor": "work/packages/done-20260513-topology-failure-repair-intents.md"
 }
@@ -86,14 +164,58 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 - Package class: `representative-frontier-closure`
 - Intended minimum model: `gpt-5.3-codex`
 - Scope shape: `owner-boundary-contraction/current-frontier`
-- Owned files: `work/packages/<this-package>.md`
-- Forbidden files: none selected before activation; activation must name exact
-  runtime write scope and forbidden files.
+- Owned files: `work/packages/active-20260513-topology-post-rejoin-reconciliation.md`, `work/model-ledger.jsonl`, `work/sprints/active-2026-q2-topology-convergence-ship-shape.md`, `work/sprints/current-blocker.json`, `work/sprints/current-blocker.md`, `src/control-plane/rejoin-reconciliation-contract.js`, `src/node/node-reintegration-service.js`, `src/node/node-constants.js`, `test/control-plane/rejoin-reconciliation-contract.test.js`, `test/node/node-reintegration-service.test.js`
+- Forbidden files: membership epoch definition, durable failure repair intent
+  creation, partition descriptor epoch, placement capacity, anti-entropy scans,
+  failure scenario gates, Pro behavior, Enterprise behavior
 - Frozen decisions: package scope and lane stay bounded unless explicitly escalated.
 - Escalation triggers: owned files expand beyond this package, runtime ownership changes, or representative scenario evidence changes.
-- Focused proof: `git diff --check`
+- Focused proof: `npx tap test/control-plane/rejoin-reconciliation-contract.test.js test/node/node-reintegration-service.test.js`
 - Model ledger advisory: `escalate`
+
+## Subagent Sequencing Ledger
+
+- [x] Review subagent recorded:
+      `Agent Schrodinger (019e254a-f738-78a2-abf9-9609bec11e71) reviewed work/packages/active-20260513-topology-post-rejoin-reconciliation.md; result fixes-required`.
+- [x] Fix subagent recorded or explicitly not needed:
+      `Agent Pascal (019e254c-8dae-7f61-bfe4-a6da80a3a966) fixed work/packages/active-20260513-topology-post-rejoin-reconciliation.md`.
+- [x] Implementation subagent recorded:
+      `Agent Avicenna (019e2551-ed31-78a0-b2b4-234aaca9e8d3) implemented work/packages/active-20260513-topology-post-rejoin-reconciliation.md`.
 
 ## Validation
 
-1. `git diff --check -- <files>`
+1. `npm run work:context` passed after activation and confirmed this package as
+   the current blocker.
+2. `npm run work:package:doctor -- --suggest work/packages/active-20260513-topology-post-rejoin-reconciliation.md`
+   initially found the required Subagent Sequencing Ledger missing.
+3. `npm run analyze:owner-files -- topology_membership_owner rejoin_reconciliation --markdown`
+   passed and showed this boundary is currently represented by package/sprint
+   metadata plus the membership epoch contract, so the package must create the
+   focused rejoin reconciliation contract.
+4. Review subagent proof recorded from Schrodinger
+   (`019e254a-f738-78a2-abf9-9609bec11e71`), result `fixes-required`.
+5. Fix subagent proof recorded from Pascal
+   (`019e254c-8dae-7f61-bfe4-a6da80a3a966`).
+6. Implementation subagent proof recorded from Avicenna
+   (`019e2551-ed31-78a0-b2b4-234aaca9e8d3`).
+7. Implementation introduced `src/control-plane/rejoin-reconciliation-contract.js`
+   with one normalized post-rejoin reconciliation snapshot and decision model
+   for local topology, remote operation, and startup admission evidence.
+8. `NodeReintegrationService.completeReintegration()` now requires a satisfied
+   post-rejoin reconciliation decision before the active node write,
+   `nodeReintegrated` event, and `triggerRebalancing` event; pending or blocked
+   decisions leave pending reintegration retryable.
+9. `npm run analyze:owner-files -- topology_membership_owner rejoin_reconciliation --markdown`
+   passed and now reports the new contract as an owner-boundary file.
+10. `npx tap test/control-plane/rejoin-reconciliation-contract.test.js test/node/node-reintegration-service.test.js`
+   passed with 70 assertions.
+11. `node scripts/check-guideline-literals.js src/control-plane/rejoin-reconciliation-contract.js src/node/node-reintegration-service.js src/node/node-constants.js`
+    passed after naming one empty-string fallback constant.
+12. `node scripts/check-guideline-decision-boundaries.js src/control-plane/rejoin-reconciliation-contract.js src/node/node-reintegration-service.js src/node/node-constants.js`
+    passed.
+13. `npm run audit:runtime-grammar:file -- src/control-plane/rejoin-reconciliation-contract.js src/node/node-reintegration-service.js src/node/node-constants.js`
+    passed.
+14. `git diff --check -- work/packages/active-20260513-topology-post-rejoin-reconciliation.md work/model-ledger.jsonl work/sprints/active-2026-q2-topology-convergence-ship-shape.md work/sprints/current-blocker.json work/sprints/current-blocker.md src/control-plane/rejoin-reconciliation-contract.js src/node/node-reintegration-service.js src/node/node-constants.js test/control-plane/rejoin-reconciliation-contract.test.js test/node/node-reintegration-service.test.js`
+    passed.
+15. `npm run work:validate -- --pre-impl work/packages/active-20260513-topology-post-rejoin-reconciliation.md`
+    passed.
