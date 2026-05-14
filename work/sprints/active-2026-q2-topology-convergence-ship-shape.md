@@ -37,26 +37,40 @@ Seed artifact:
 Current representative artifact:
 `test-output/reports/rolling-restart-green-gate-after-priority-recovery-workflow-progress-after-snapshot-coverage.report.json`.
 
-Current first frontier from canonical evidence on May 14, 2026:
+Latest representative artifact and handoff context on May 14, 2026:
 
-1. Owner: `startup_active_gate_owner`.
-2. Boundary: `snapshot_coverage`.
-3. Dominant reason: `snapshot_coverage_incomplete`.
-4. Residual state: publication owner-truth proof preserves active-gate best
-   publication evidence across timeout samples, and the representative now
-   fronts active-gate snapshot coverage with `snapshotCoverage=2/5`,
-   `publicationStatus=PUBLISHED`, `pendingAckCount=0`, `publishedActive=1/5`,
-   and exact `missingPublishedNodeIds` for the remaining four nodes.
-5. Priority recovery: residual extraction now shows no priority recovery
-   witnesses.
-6. Downstream readiness support: deferred behind active-gate snapshot coverage
+1. The latest rolling-restart artifact remains the most recent representative
+   evidence handoff.
+2. That artifact historically fronts `startup_active_gate_owner /
+   snapshot_coverage` with dominant reason `snapshot_coverage_incomplete`.
+3. Historical residual state: publication owner-truth proof preserves
+   active-gate best publication evidence across timeout samples, and the
+   representative fronts active-gate snapshot coverage with
+   `snapshotCoverage=2/5`, `publicationStatus=PUBLISHED`,
+   `pendingAckCount=0`, `publishedActive=1/5`, and exact
+   `missingPublishedNodeIds` for the remaining four nodes.
+4. Priority recovery: residual extraction shows no priority recovery witnesses.
+5. Downstream readiness support: deferred behind active-gate snapshot coverage
    with no-progress terminal evidence.
+
+Human-directed active sprint pivot on May 14, 2026:
+
+1. Owner: `topology_membership_owner`.
+2. Boundary: `membership_epoch`.
+3. Dominant reason: `membership_topology_epoch_missing`.
+4. Active package:
+   `work/packages/active-20260513-topology-membership-epoch-fencing.md`.
+5. Focused proof surface:
+   `npx tap test/control-plane/membership-epoch-contract.test.js`.
+6. Rolling-restart and active-gate snapshot coverage remain historical
+   representative context, not the active sprint target.
 
 The immediate missing causal edge is:
 
-1. Active-gate snapshot coverage must connect the selected admin-ready snapshot
-   and owner-truth active cohort so coverage does not stall at `2/5` after
-   publication convergence is satisfied.
+1. Membership publication owner must expose one canonical membership epoch
+   snapshot and fence result so downstream boot, join, rejoin, failure,
+   placement, active-gate, and rebalancer consumers do not reconstruct freshness
+   locally.
 
 ## Ship-Shape Definition
 

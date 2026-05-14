@@ -30,6 +30,7 @@ import {
   deriveMembershipPublicationCandidate as deriveMembershipPublicationCandidateCore,
   shouldPreferAuthoritativeMembershipState as shouldPreferAuthoritativeMembershipStateCore,
 } from './membership-publication-planning.js';
+import {buildMembershipEpochSnapshot} from './membership-epoch-contract.js';
 import {MEMBERSHIP_PUBLICATION_COORDINATOR_LITERAL, MEMBERSHIP_PUBLICATION_KIND, MEMBERSHIP_PUBLICATION_PLANNING_EVIDENCE_KEY_FIELDS_BY_TABLE, MEMBERSHIP_PUBLICATION_PLANNING_EVIDENCE_VERSION_FIELDS, MEMBERSHIP_PUBLICATION_READ_PROFILE, MEMBERSHIP_PUBLICATION_STATUS, buildMembershipPublicationTargetNodeDecision, buildTransitionHistoryEntry, didOptionalSourceVersionChange, listEquals, normalizeLatestPublicationRow, normalizeNodeIdList, normalizePositiveInteger, normalizeStringList, resolveCarriedAcknowledgedNodeIds} from './membership-publication-coordinator-stage-1.js';
 import {closeAcknowledgedMetadataRefreshRow} from './membership-publication-coordinator-stage-3.js';
 
@@ -275,6 +276,12 @@ function buildMembershipPublicationEvidenceSnapshot(options = {}) {
     acknowledgedNodeIds: normalizeNodeIdList(options.acknowledgedNodeIds),
     sourceTopologyEpoch: options.sourceTopologyEpoch,
     sourceSnapshotVersion: options.sourceSnapshotVersion,
+    membershipEpochSnapshot: buildMembershipEpochSnapshot({
+      latestPublicationRow: options.latestPublicationRow,
+      latestPublishedPublicationRow: options.latestPublishedPublicationRow,
+      sourceTopologyEpoch: options.sourceTopologyEpoch,
+      sourceSnapshotVersion: options.sourceSnapshotVersion,
+    }),
     priorityPartitionSummary:
       options.priorityPartitionSummary &&
       typeof options.priorityPartitionSummary === TYPEOF.OBJECT ?

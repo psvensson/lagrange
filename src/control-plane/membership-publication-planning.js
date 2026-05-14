@@ -33,6 +33,10 @@ import {
   resolvePriorityControlPlanePartitionIds,
 } from '../bootstrap/system-partition-classification.js';
 import {RAFT_ROLE} from '../raft/constants.js';
+import {
+  buildMembershipEpochFence,
+  buildMembershipEpochSnapshot,
+} from './membership-epoch-contract.js';
 
 const LOCAL_STR_EMPTY = '';
 
@@ -1371,6 +1375,20 @@ function deriveMembershipPublicationCandidate(options = {}, helperFns = {}) {
     changed ?
       baselineEpoch + NUM.ONE :
       Math.max(baselineEpoch, NUM.ONE);
+  const membershipEpochSnapshot =
+    planningSnapshot.membershipEpochSnapshot &&
+    typeof planningSnapshot.membershipEpochSnapshot === TYPEOF.OBJECT ?
+      planningSnapshot.membershipEpochSnapshot :
+      buildMembershipEpochSnapshot({
+        latestPublicationRow,
+        latestPublishedPublicationRow,
+        sourceTopologyEpoch,
+        sourceSnapshotVersion,
+      });
+  const membershipEpochFence = buildMembershipEpochFence({
+    membershipEpochSnapshot,
+    publicationEpoch: candidatePublicationEpoch,
+  });
   const candidatePublicationStatus = resolveCandidatePublicationStatus({
     changed,
     latestPublicationRow,
@@ -1522,6 +1540,8 @@ function deriveMembershipPublicationCandidate(options = {}, helperFns = {}) {
     publisherNodeId: planningSnapshot.publisherNodeId,
     sourceTopologyEpoch,
     sourceSnapshotVersion,
+    membershipEpochSnapshot,
+    membershipEpochFence,
     publishedPlanningEpoch: recoveryProtocolSnapshot.publishedPlanningEpoch,
     publishedActiveNodeIdsPresent: recoveryProtocolSnapshot.publishedActiveNodeIdsPresent,
     publishedActiveNodeIds,
