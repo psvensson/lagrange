@@ -68,6 +68,12 @@ Canonical extractor state on sprint creation:
    `diagnostics_owner / causal_analysis_framework`.
 10. The topology failure-gate matrix exists, but no failure-gate execution
     artifact is recorded.
+11. Residual inventory decision: the next runtime package is
+    [Topology Active Gate Budget Closure](../packages/active-20260514-topology-active-gate-budget-closure.md),
+    followed by
+    [Topology Active Gate Owner Cohort Convergence](../packages/todo-20260514-topology-active-gate-owner-cohort-convergence.md)
+    after active-gate timeout, attempts, and next-attempt/terminal semantics are
+    bounded or explicitly classified.
 
 ## Residual Inventory
 
@@ -98,6 +104,61 @@ These are the residuals this sprint must close or split explicitly:
    partition descriptor epoch, capacity admission, anti-entropy, and bounded
    progress were proven in focused packages but not as one integrated release
    gate chain.
+
+## Residual Inventory Decision
+
+Canonical extractor run set:
+`work:evidence-summary`, `analyze:topology-convergence`,
+`analyze:priority-recovery-residuals --markdown`, `analyze:causal-model`, and
+`analyze:distributed-failure` against
+`test-output/reports/rolling-restart-green-gate-after-priority-recovery-workflow-progress-after-snapshot-coverage.report.json`.
+
+The sprint representative first frontier remains
+`startup_active_gate_owner / snapshot_coverage` with edge
+`active_gate_snapshot_coverage` and dominant reason
+`snapshot_coverage_incomplete`. `rolling-restart` failed after `149490ms`.
+Topology convergence reports `nodeCount=5`, `edgeCount=5`,
+`frontierCount=1`, `activeGateState=stalled`,
+`snapshotCoverageComplete=false`, `snapshotCoverageNodeCount=2`,
+`expectedNodeCount=5`, and blockers
+`inactive_nodes=5,snapshot_coverage=2/5`.
+
+Publication ACK convergence is satisfied, not first frontier:
+`publicationStatus=PUBLISHED`, `pendingAckCount=0`, and
+`pendingAckNodeIds=[]`. That ACK witness coexists with incomplete active
+cohort evidence: `publishedActive=1/5`, `missingPublishedCount=4`,
+`publicationPending=true`, and missing nodes
+`11601fe0-72d6-5853-8590-ec2881853e72`,
+`35a891b8-c1a0-5064-9c6e-2acfba61c2a7`,
+`8be8d30f-4499-5eed-865c-71b4d529a67a`, and
+`ebc4aa0b-06c6-506d-93ea-1dd2deca3f58`.
+
+The legacy distributed-failure dominant reason
+`publication_missing_active_node=11601fe0-72d6-5853-8590-ec2881853e72` is
+reconciled as a symptom of active-gate snapshot/active-cohort incompleteness,
+not as a replacement for the causal first frontier. The non-frontier priority
+recovery residue remains one `operation_workflow_owner / workflow_progress`
+witness for partition `control_plane_publications-p1` in
+`spread_satisfied_in_flight`, `splitRequired=false`.
+
+Budget accounting selects package order. `active_gate_timeout` is unbounded
+under `startup_active_gate_owner / snapshot_coverage` (`87249ms`, no limit),
+`active_gate_attempts` is exhausted at `9/8`, `readiness_retry_window` is
+exhausted at `8/8`, `workflow_step_timeout` is within budget at `1269/30000`,
+and `scenario_duration` remains unbounded under
+`diagnostics_owner / causal_analysis_framework` (`149490ms`, no limit).
+Therefore the next package is active-gate budget closure first, active-gate
+owner cohort convergence second, publication projection reconciliation only if
+missing active publication persists after cohort evidence no longer dominates,
+and priority recovery residual drain after active-gate/publication no longer
+hide or explain the tail witness.
+
+Failure-gate matrix status remains unexecuted. The seven promoted gates map to
+the sprint packages already queued: failure detection repair, killed join,
+killed rejoin, remote coordinator handoff, missed handoff ACK, stale
+publication durable truth, and rebalance disruption recovery. The failure-gate
+execution harness package owns making those gates runnable before individual
+gate packages claim release proof.
 
 ## Working Rules
 
@@ -193,7 +254,7 @@ Final closure requires fresh evidence proving all of the following:
      representative residual until green evidence or a narrower active blocker
      exists.
 
-2. [Topology Residual Evidence Inventory](../packages/active-20260514-topology-residual-evidence-inventory.md)
+2. [Topology Residual Evidence Inventory](../packages/done-20260514-topology-residual-evidence-inventory.md)
    - Lane: `causal-escalation`
    - Owner boundary: `diagnostics_owner / residual_inventory`
    - Purpose: produce the canonical residual ledger before runtime work starts.
@@ -203,7 +264,7 @@ Final closure requires fresh evidence proving all of the following:
 
 ### Phase 1 - Current Representative Runtime Frontier
 
-3. [Topology Active Gate Budget Closure](../packages/todo-20260514-topology-active-gate-budget-closure.md)
+3. [Topology Active Gate Budget Closure](../packages/active-20260514-topology-active-gate-budget-closure.md)
    - Lane: `runtime-owner-boundary`
    - Owner boundary: `startup_active_gate_owner / snapshot_coverage_budget`
    - Purpose: make active-gate elapsed time, retry, next-attempt, and terminal
@@ -392,7 +453,9 @@ Final closure requires fresh evidence proving all of the following:
 
 ## Current Next Action
 
-Start with
-[Topology Residual Closure Workflow Hardening](../packages/done-20260514-topology-residual-closure-workflow-hardening.md),
-then regenerate `work:sprints/current-blocker.*` so future handoffs point to
-this successor sprint instead of the completed coverage-only package.
+Finish
+[Topology Residual Evidence Inventory](../packages/done-20260514-topology-residual-evidence-inventory.md)
+as classification-only evidence inventory, then activate
+[Topology Active Gate Budget Closure](../packages/active-20260514-topology-active-gate-budget-closure.md).
+Do not skip directly to cohort convergence while `active_gate_timeout` is
+unbounded and active-gate attempts are exhausted.

@@ -4,9 +4,9 @@
 
 Sprint: `work/sprints/active-2026-q2-topology-convergence-residual-closure.md`
 
-Package: `work/packages/active-20260514-topology-residual-evidence-inventory.md`
+Package: `work/packages/active-20260514-topology-active-gate-budget-closure.md`
 
-Workflow lane: `causal-escalation`
+Workflow lane: `runtime-owner-boundary`
 
 Scenario: `rolling-restart`
 
@@ -16,25 +16,23 @@ Playback: `none`
 
 ## Boundary
 
-Owner: `diagnostics_owner`
+Owner: `startup_active_gate_owner`
 
-Boundary: `residual_inventory`
+Boundary: `snapshot_coverage_budget`
 
-Dominant reason: `residual_inventory_incomplete`
+Dominant reason: `active_gate_timeout_unbounded`
 
-Current state: Latest representative evidence remains red with active_gate_snapshot_coverage first frontier and failure-gate matrix execution pending.
+Current state: Causal model reports active_gate_timeout unbounded with observed elapsed active-gate time and absent limit while snapshot coverage is incomplete.
 
 ## Next Action
 
-Produce one canonical residual ledger from evidence-summary topology-convergence priority-recovery residuals causal-model and distributed-failure analyzers before runtime fixes continue.
+Make active-gate elapsed time retry window next-attempt and terminal degraded classification bounded and owned by the startup active-gate decision snapshot.
 
 ## Proof Ladder
 
-1. `npm run work:evidence-summary -- test-output/reports/rolling-restart-green-gate-after-priority-recovery-workflow-progress-after-snapshot-coverage.report.json`
-2. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-green-gate-after-priority-recovery-workflow-progress-after-snapshot-coverage.report.json`
-3. `npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-green-gate-after-priority-recovery-workflow-progress-after-snapshot-coverage.report.json --markdown`
-4. `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-green-gate-after-priority-recovery-workflow-progress-after-snapshot-coverage.report.json`
-5. `npm run analyze:distributed-failure -- --report test-output/reports/rolling-restart-green-gate-after-priority-recovery-workflow-progress-after-snapshot-coverage.report.json`
+1. `npm run analyze:owner-files -- startup_active_gate_owner snapshot_coverage --markdown`
+2. `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-green-gate-after-priority-recovery-workflow-progress-after-snapshot-coverage.report.json`
+3. `npx tap test/diagnostics/budget-timeout-accounting.test.js`
 
 ## Model Fit
 
@@ -51,66 +49,66 @@ Escalation triggers:
 
 ## Representative Residual
 
-Status: `unknown`
+Status: `red`
 
-Scenario: `unknown`
+Scenario: `rolling-restart`
 
-Artifact: `unknown`
+Artifact: `test-output/reports/rolling-restart-green-gate-after-priority-recovery-workflow-progress-after-snapshot-coverage.report.json`
 
-Frontier: `unknown`
+Frontier: `active_gate_snapshot_coverage`
 
-Owner: `unknown`
+Owner: `startup_active_gate_owner`
 
-Boundary: `unknown`
+Boundary: `snapshot_coverage`
 
-Dominant reason: `unknown`
+Dominant reason: `snapshot_coverage_incomplete`
 
-Next action: `unknown`
+Next action: `Bound active-gate timeout, retry, next-attempt, and terminal degraded classification before active-gate cohort convergence.`
 
 ## Causal Governance
 
-Causal hypothesis: `diagnostics_owner / residual_inventory proof should reduce, migrate, or classify residual_inventory_incomplete without hiding the sprint representative residual.`
+Causal hypothesis: `startup_active_gate_owner / snapshot_coverage_budget proof should reduce, migrate, or classify active_gate_timeout_unbounded without hiding the sprint representative residual.`
 
 Stop-condition check: `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-green-gate-after-priority-recovery-workflow-progress-after-snapshot-coverage.report.json`
 
-Expected causal-model change: `residual_inventory_incomplete becomes representative-green, reduced, same-frontier, migrated, or classification-only with a named owner-boundary reason.`
+Expected causal-model change: `active_gate_timeout_unbounded becomes representative-green, reduced, same-frontier, migrated, or classification-only with a named owner-boundary reason.`
 
 Representative outcome: `pending-before-rerun`
 
-Causal debt: `Until diagnostics_owner / residual_inventory is proven, the sprint representative rolling-restart residual stays open at startup_active_gate_owner / snapshot_coverage.`
+Causal debt: `Until startup_active_gate_owner / snapshot_coverage_budget is proven, the sprint representative rolling-restart residual stays open at startup_active_gate_owner / snapshot_coverage.`
 
-Cross-boundary review: `Required before closure through the causal-escalation subagent ledger or an allowed waiver recorded in this package.`
+Cross-boundary review: `Required before closure through the runtime-owner-boundary subagent ledger or an allowed waiver recorded in this package.`
 
 ## Scenario Causal Closure
 
-Reference scenario/probe: `rolling-restart / diagnostics_owner / residual_inventory`
+Reference scenario/probe: `rolling-restart / startup_active_gate_owner / snapshot_coverage_budget`
 
 Phase chain:
 
 1. `canonical evidence extraction`
-2. `diagnostics_owner / residual_inventory focused proof`
+2. `startup_active_gate_owner / snapshot_coverage_budget focused proof`
 3. `representative or gate rerun classification`
 
-Current first frontier: `package-local frontier diagnostics_owner / residual_inventory; sprint representative frontier remains startup_active_gate_owner / snapshot_coverage until fresh evidence changes it`
+Current first frontier: `package-local frontier startup_active_gate_owner / snapshot_coverage_budget; sprint representative frontier remains startup_active_gate_owner / snapshot_coverage until fresh evidence changes it`
 
 Known downstream blockers:
 
 1. `rolling-restart representative active-gate snapshot coverage remains red until green or migrated`
 2. `runtime or harness fixes discovered outside this owner boundary require a narrower successor package`
 
-Missing causal edge: `unproven diagnostics_owner / residual_inventory causal edge for residual_inventory_incomplete`
+Missing causal edge: `unproven startup_active_gate_owner / snapshot_coverage_budget causal edge for active_gate_timeout_unbounded`
 
-Missing causal edge probe: `npm run work:evidence-summary -- test-output/reports/rolling-restart-green-gate-after-priority-recovery-workflow-progress-after-snapshot-coverage.report.json`
+Missing causal edge probe: `npm run analyze:owner-files -- startup_active_gate_owner snapshot_coverage --markdown`
 
-Bounded progress proof: `Focused proof must show bounded wake, retry, timeout, reconcile, drain, dispatch, delivery, timer, or advance for diagnostics_owner / residual_inventory.`
+Bounded progress proof: `Focused proof must show bounded wake, retry, timeout, reconcile, drain, dispatch, delivery, timer, or advance for startup_active_gate_owner / snapshot_coverage_budget.`
 
 Bounded progress proof artifact: `test-output/reports/rolling-restart-green-gate-after-priority-recovery-workflow-progress-after-snapshot-coverage.report.json`
 
-Expected observable transition: `residual_inventory_incomplete resolves to green evidence, a reduced residual, same-frontier evidence, migrated owner-boundary proof, or classification-only stop.`
+Expected observable transition: `active_gate_timeout_unbounded resolves to green evidence, a reduced residual, same-frontier evidence, migrated owner-boundary proof, or classification-only stop.`
 
 Max progress bound: `one activation cycle: package doctor, extractor/probe, owner-file proof, focused validation, and result classification`
 
-Same-frontier fallback: `keep diagnostics_owner / residual_inventory active and do not broaden the package or claim ship proof`
+Same-frontier fallback: `keep startup_active_gate_owner / snapshot_coverage_budget active and do not broaden the package or claim ship proof`
 
 Expected next frontier: `representative green evidence or a narrower owner-boundary blocker selected by canonical evidence`
 
@@ -122,29 +120,29 @@ Stop condition: `continue-local-fix`
 
 Write scope:
 
-1. `work/packages/active-20260514-topology-residual-evidence-inventory.md`
+1. `work/packages/active-20260514-topology-active-gate-budget-closure.md`
 2. `work/sprints/active-2026-q2-topology-convergence-residual-closure.md`
 
 Handoff files:
 
-1. `work/sprints/done-2026-q2-topology-convergence-ship-shape.md`
-2. `work/packages/done-20260513-topology-failure-scenario-gates.md`
+1. `work/packages/done-20260513-topology-bounded-progress-budgets.md`
+2. `test-output/reports/rolling-restart-green-gate-after-priority-recovery-workflow-progress-after-snapshot-coverage.report.json`
 
 Generated files:
 
-1. `work/sprints/current-blocker.md`
-2. `work/sprints/current-blocker.json`
+1. None recorded
 
 Candidate runtime files:
 
-1. None recorded
+1. `src/diagnostics/budget-timeout-accounting.js`
+2. `src/bootstrap/bootstrap-api-runtime-methods.js`
+3. `src/bootstrap/bootstrap-service-runtime-methods.js`
+4. `test/diagnostics/budget-timeout-accounting.test.js`
 
 Commit scope:
 
-1. `work/packages/active-20260514-topology-residual-evidence-inventory.md`
+1. `work/packages/active-20260514-topology-active-gate-budget-closure.md`
 2. `work/sprints/active-2026-q2-topology-convergence-residual-closure.md`
-3. `work/sprints/current-blocker.md`
-4. `work/sprints/current-blocker.json`
 
 Legacy touched files:
 

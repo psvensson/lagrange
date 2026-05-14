@@ -10,6 +10,7 @@ import {
   validateCommitAndPushLedger,
   validateCurrentBlockerSnapshot,
   validateModelFitContract,
+  validateRepresentativeResidualContract,
   validateScenarioCausalClosureContract,
   validateScenarioFrontierOwnerBoundaryContract,
   validateSubagentSequencingLedger,
@@ -85,6 +86,48 @@ const SCENARIO_CAUSAL_CLOSURE_VALID_METADATA = Object.freeze({
 const SCENARIO_CAUSAL_CLOSURE_MISSING_METADATA = Object.freeze({
   status: WORK_TRACKER_ACTIVE_STATUS,
   scenario: 'rolling-restart',
+});
+const REPRESENTATIVE_RESIDUAL_VALID_METADATA = Object.freeze({
+  status: WORK_TRACKER_ACTIVE_STATUS,
+  lane: 'causal-escalation',
+  scenario: 'rolling-restart',
+  owner: 'diagnostics_owner',
+  boundary: 'residual_inventory',
+  dominantReason: 'residual_inventory_incomplete',
+  causalGovernance: Object.freeze({
+    causalDebt:
+      'The sprint representative rolling-restart residual stays open at ' +
+      'startup_active_gate_owner / snapshot_coverage.',
+  }),
+  representativeResidual: Object.freeze({
+    status: 'red',
+    scenario: 'rolling-restart',
+    artifact:
+      'test-output/reports/rolling-restart-green-gate-after-priority-recovery-workflow-progress-after-snapshot-coverage.report.json',
+    frontier: 'active_gate_snapshot_coverage',
+    owner: 'startup_active_gate_owner',
+    boundary: 'snapshot_coverage',
+    dominantReason: 'snapshot_coverage_incomplete',
+    nextAction:
+      'activate active-gate budget or coverage unless fresh evidence migrates',
+  }),
+});
+const REPRESENTATIVE_RESIDUAL_MISSING_METADATA = Object.freeze({
+  ...REPRESENTATIVE_RESIDUAL_VALID_METADATA,
+  representativeResidual: undefined,
+});
+const REPRESENTATIVE_RESIDUAL_INVALID_METADATA = Object.freeze({
+  ...REPRESENTATIVE_RESIDUAL_VALID_METADATA,
+  representativeResidual: Object.freeze({
+    status: 'unknown',
+    scenario: 'other-scenario',
+    artifact: 'not a report artifact',
+    frontier: '<frontier>',
+    owner: 'unknown',
+    boundary: 'todo',
+    dominantReason: 'pending-before-implementation-resumes',
+    nextAction: '',
+  }),
 });
 const SCENARIO_CAUSAL_CLOSURE_INVALID_METADATA = Object.freeze({
   status: WORK_TRACKER_ACTIVE_STATUS,
@@ -211,6 +254,21 @@ const WORK_TRACKER_LEDGER_PRE_IMPL_CONTENT = [
   `      Agent Fix (${FIX_AGENT_ID}) fixed`,
   '      `work/packages/done-test-package.md`.',
   '- [ ] Implementation subagent recorded:',
+  '      pending-before-implementation-starts',
+  '',
+].join('\n');
+const WORK_TRACKER_LEDGER_NUMBERED_PRE_IMPL_CONTENT = [
+  '# Test Package',
+  '',
+  '## Subagent Sequencing Ledger',
+  '',
+  '1. [x] Review subagent recorded:',
+  `      Agent Review (${REVIEW_AGENT_ID}) reviewed`,
+  '      `work/packages/done-test-package.md`; result `fixes-required`.',
+  '2. [x] Fix subagent recorded or explicitly not needed:',
+  `      Agent Fix (${FIX_AGENT_ID}) fixed`,
+  '      `work/packages/done-test-package.md`.',
+  '3. [ ] Implementation subagent recorded:',
   '      pending-before-implementation-starts',
   '',
 ].join('\n');
@@ -541,6 +599,21 @@ describe('work tracker subagent sequencing ledger validation', () => {
 
     assert.deepEqual(errors, []);
   });
+
+  it('accepts numbered checklist ledger entries at pre-implementation validation',
+    () => {
+      const errors = validateSubagentSequencingLedger(
+        WORK_TRACKER_LEDGER_NUMBERED_PRE_IMPL_CONTENT,
+        WORK_TRACKER_LEDGER_TEST_FILE,
+        {
+          requiresLedger: true,
+          requiresStrictEntries: true,
+          allowOpenImplementation: true,
+        },
+      );
+
+      assert.deepEqual(errors, []);
+    });
 
   it('allows unavailable subagent states before closure but not as closure proof', () => {
     const preImplErrors = validateSubagentSequencingLedger(
@@ -933,6 +1006,110 @@ describe('work tracker causal governance validation', () => {
       assert.match(errors.join('\n'), /causalDebt/u);
       assert.match(errors.join('\n'), /closed packages must classify/u);
       assert.match(errors.join('\n'), /analyze:causal-model/u);
+    });
+});
+
+describe('work tracker representative residual validation', () => {
+  it('requires representative residual metadata when active diagnostics keeps the sprint residual live',
+    () => {
+      const errors = validateRepresentativeResidualContract(
+        REPRESENTATIVE_RESIDUAL_MISSING_METADATA,
+        WORK_TRACKER_LEDGER_TEST_FILE,
+        {requiresLedger: true, status: WORK_TRACKER_ACTIVE_STATUS},
+      );
+
+      assert.equal(errors.length, 1);
+      assert.match(errors[0], /representativeResidual is required/u);
+      assert.match(errors[0], /sprint representative residual live/u);
+    });
+
+  it('accepts concrete representative residual metadata', () => {
+    const errors = validateRepresentativeResidualContract(
+      REPRESENTATIVE_RESIDUAL_VALID_METADATA,
+      WORK_TRACKER_LEDGER_TEST_FILE,
+      {requiresLedger: true, status: WORK_TRACKER_ACTIVE_STATUS},
+    );
+
+    assert.deepEqual(errors, []);
+  });
+
+  it('rejects placeholder representative residual fields', () => {
+    const errors = validateRepresentativeResidualContract(
+      REPRESENTATIVE_RESIDUAL_INVALID_METADATA,
+      WORK_TRACKER_LEDGER_TEST_FILE,
+      {requiresLedger: true, status: WORK_TRACKER_ACTIVE_STATUS},
+    );
+    const rendered = errors.join('\n');
+
+    assert.match(rendered, /representativeResidual.status/u);
+    assert.match(rendered, /representativeResidual.artifact/u);
+    assert.match(rendered, /representativeResidual.frontier/u);
+    assert.match(rendered, /representativeResidual.owner/u);
+    assert.match(rendered, /representativeResidual.boundary/u);
+    assert.match(rendered, /representativeResidual.dominantReason/u);
+    assert.match(rendered, /representativeResidual.nextAction/u);
+    assert.match(rendered, /scenario must match/u);
+  });
+
+  it('surfaces missing representative residual metadata in package doctor output',
+    () => {
+      const metadata = {
+        schema: 'work-package-v1',
+        status: 'active',
+        lane: 'causal-escalation',
+        scenario: 'rolling-restart',
+        owner: 'diagnostics_owner',
+        boundary: 'residual_inventory',
+        dominantReason: 'residual_inventory_incomplete',
+        currentState:
+          'The sprint representative rolling-restart residual remains red.',
+        nextAction: 'Record the residual before runtime fixes continue.',
+        proof: ['node --test test/scripts/work-tracker-subagent-ledger.test.js'],
+        writeScope: ['work/packages/active-test-package.md'],
+        commitScope: ['work/packages/active-test-package.md'],
+        modelFit: {
+          packageClass: 'representative-frontier-closure',
+          intendedMinimumModel: 'gpt-5.3-codex',
+          scopeShape: 'owner-boundary-contraction/current-frontier',
+          escalationTriggers: ['representative scenario evidence changes'],
+        },
+        causalGovernance: CAUSAL_GOVERNANCE_VALID_METADATA.causalGovernance,
+        scenarioCausalClosure: {
+          ...SCENARIO_CAUSAL_CLOSURE_VALID_METADATA.scenarioCausalClosure,
+          currentFirstFrontier:
+            'diagnostics_owner / residual_inventory package-local proof; ' +
+            'the sprint representative residual remains red.',
+        },
+      };
+      const content = [
+        '# Test Package',
+        '',
+        '<!-- work-package',
+        JSON.stringify(metadata, null, 2),
+        '-->',
+        '',
+        '## Model Fit',
+        '',
+        '- Package class: `representative-frontier-closure`',
+        '- Intended minimum model: `gpt-5.3-codex`',
+        '- Scope shape: `owner-boundary-contraction/current-frontier`',
+        '- Owned files: `work/packages/active-test-package.md`',
+        '- Forbidden files: `src/`, `test/distributed/harness/`',
+        '- Frozen decisions: diagnostics package keeps scope fixed.',
+        '- Escalation triggers: representative scenario evidence changes.',
+        '- Focused proof: `node --test test/scripts/work-tracker-subagent-ledger.test.js`',
+        '',
+        WORK_TRACKER_LEDGER_CLEAN_CONTENT.split('\n').slice(2).join('\n'),
+      ].join('\n');
+      const report = buildPackageDoctorLines(
+        WORK_TRACKER_LEDGER_TEST_FILE,
+        content,
+      );
+
+      assert.match(
+        report.errors.join('\n'),
+        /metadata representativeResidual is required/u,
+      );
     });
 });
 

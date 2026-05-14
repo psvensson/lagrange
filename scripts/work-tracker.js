@@ -62,7 +62,7 @@ const CURRENT_BLOCKER_MARKDOWN_PATH = path.join(
 const MARKDOWN_EXTENSION = '.md';
 const PACKAGE_METADATA_OPEN = '<!-- work-package';
 const PACKAGE_METADATA_CLOSE = '-->';
-const CHECKBOX_OPEN_PATTERN = /- \[ \]/u;
+const CHECKBOX_OPEN_PATTERN = /(?:^|\n)(?:-|\d+\.) \[ \]/u;
 const PACKAGE_STATUS_PATTERN = /^(active|done|superseded|todo)-.+\.md$/u;
 const SPRINT_STATUS_PATTERN = /^(active|done|todo)-.+\.md$/u;
 const ACTIVE_PACKAGE_LINK_PATTERN =
@@ -105,6 +105,28 @@ const SCENARIO_NONE = 'none';
 const SCENARIO_UNKNOWN = 'unknown';
 const SCENARIO_TEMPLATE_VALUE = 'scenario-or-none';
 const REPRESENTATIVE_RESIDUAL_METADATA_FIELD = 'representativeResidual';
+const REPRESENTATIVE_RESIDUAL_STATUS_FIELD = 'status';
+const REPRESENTATIVE_RESIDUAL_SCENARIO_FIELD = 'scenario';
+const REPRESENTATIVE_RESIDUAL_ARTIFACT_FIELD = 'artifact';
+const REPRESENTATIVE_RESIDUAL_FRONTIER_FIELD = 'frontier';
+const REPRESENTATIVE_RESIDUAL_OWNER_FIELD = 'owner';
+const REPRESENTATIVE_RESIDUAL_BOUNDARY_FIELD = 'boundary';
+const REPRESENTATIVE_RESIDUAL_DOMINANT_REASON_FIELD = 'dominantReason';
+const REPRESENTATIVE_RESIDUAL_NEXT_ACTION_FIELD = 'nextAction';
+const REPRESENTATIVE_RESIDUAL_REQUIRED_FIELDS = Object.freeze([
+  REPRESENTATIVE_RESIDUAL_STATUS_FIELD,
+  REPRESENTATIVE_RESIDUAL_SCENARIO_FIELD,
+  REPRESENTATIVE_RESIDUAL_ARTIFACT_FIELD,
+  REPRESENTATIVE_RESIDUAL_FRONTIER_FIELD,
+  REPRESENTATIVE_RESIDUAL_OWNER_FIELD,
+  REPRESENTATIVE_RESIDUAL_BOUNDARY_FIELD,
+  REPRESENTATIVE_RESIDUAL_DOMINANT_REASON_FIELD,
+  REPRESENTATIVE_RESIDUAL_NEXT_ACTION_FIELD,
+]);
+const REPRESENTATIVE_RESIDUAL_LIVE_CLAIM_PATTERN =
+  /\brepresentative\b(?:\s+\S+){0,16}\s+\b(?:remains?|stays?|still|live|open|red)\b|\b(?:remains?|stays?|still|live|open|red)\b(?:\s+\S+){0,16}\s+\brepresentative\b/iu;
+const DIAGNOSTICS_CLASSIFICATION_METADATA_PATTERN =
+  /\b(?:diagnostics|classification|residual_inventory|causal-escalation)\b/iu;
 const CAUSAL_GOVERNANCE_METADATA_FIELD = 'causalGovernance';
 const CAUSAL_GOVERNANCE_HYPOTHESIS_FIELD = 'hypothesis';
 const CAUSAL_GOVERNANCE_STOP_CONDITION_FIELD = 'stopConditionCheck';
@@ -191,8 +213,8 @@ const MODEL_FIT_OPEN_ENDED_FRONTIER_PATTERNS = Object.freeze([
   /\bfrontier\s+(?:appears|emerges|wherever|whatever)\b/iu,
   /\brepresentative\b[\s\S]{0,120}\b(?:expand|broaden|continue|chase|fix)\b[\s\S]{0,80}\bscope\b/iu,
 ]);
-const CHECKBOX_DONE_PREFIX_PATTERN = '- \\[[xX]\\] ';
-const CHECKBOX_ANY_PREFIX = '- [';
+const CHECKBOX_DONE_PREFIX_PATTERN = '(?:-|\\d+\\.) \\[[xX]\\] ';
+const CHECKBOX_ANY_ITEM_PATTERN = /\n(?:-|\d+\.) \[[ xX]\] /gu;
 const LEDGER_VALIDATION_REQUIRES_LEDGER = 'requiresLedger';
 const LEDGER_VALIDATION_REQUIRES_STRICT_ENTRIES = 'requiresStrictEntries';
 const LEDGER_VALIDATION_ALLOW_PENDING_SUBAGENT_LEDGER =
@@ -353,10 +375,9 @@ function findCheckedSubagentLedgerEntry(ledger, label) {
     return null;
   }
   const itemStart = match.index;
-  const nextItemIndex = ledger.indexOf(
-    `${NEWLINE}${CHECKBOX_ANY_PREFIX}`,
-    itemStart + match[NUM_ZERO].length,
-  );
+  CHECKBOX_ANY_ITEM_PATTERN.lastIndex = itemStart + match[NUM_ZERO].length;
+  const nextItemMatch = CHECKBOX_ANY_ITEM_PATTERN.exec(ledger);
+  const nextItemIndex = nextItemMatch?.index ?? NUM_ZERO - NUM_ONE;
   const content = nextItemIndex < NUM_ZERO ?
     ledger.slice(itemStart) :
     ledger.slice(itemStart, nextItemIndex);
@@ -368,7 +389,7 @@ function findCheckedSubagentLedgerEntry(ledger, label) {
 
 function findOpenSubagentLedgerEntry(ledger, label) {
   const openLabelPattern = new RegExp(
-    `- \\[ \\] ${escapeRegExp(label)}:`,
+    `(?:-|\\d+\\.) \\[ \\] ${escapeRegExp(label)}:`,
     'u',
   );
   return openLabelPattern.test(ledger);
@@ -1033,6 +1054,51 @@ function isScenarioDrivenMetadata(metadata) {
     scenario !== SCENARIO_TEMPLATE_VALUE;
 }
 
+function collectMetadataText(value, texts = []) {
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      collectMetadataText(item, texts);
+    }
+    return texts;
+  }
+  if (isObjectRecord(value)) {
+    for (const item of Object.values(value)) {
+      collectMetadataText(item, texts);
+    }
+    return texts;
+  }
+  if (value !== null && value !== undefined) {
+    const text = normalizeLedgerText(value);
+    if (text.length > NUM_ZERO) {
+      texts.push(text);
+    }
+  }
+  return texts;
+}
+
+function metadataIsDiagnosticsOrClassification(metadata) {
+  const metadataKind = [
+    metadataLane(metadata),
+    metadata?.owner,
+    metadata?.boundary,
+    metadata?.dominantReason,
+  ].map(normalizeLedgerText).join(' ');
+  return DIAGNOSTICS_CLASSIFICATION_METADATA_PATTERN.test(metadataKind);
+}
+
+function metadataKeepsRepresentativeResidualLive(metadata) {
+  return REPRESENTATIVE_RESIDUAL_LIVE_CLAIM_PATTERN.test(
+    collectMetadataText(metadata).join(' '),
+  );
+}
+
+function metadataRequiresRepresentativeResidual(metadata, fileStatus) {
+  return fileStatus === STATUS_ACTIVE &&
+    metadata !== null &&
+    metadataIsDiagnosticsOrClassification(metadata) &&
+    metadataKeepsRepresentativeResidualLive(metadata);
+}
+
 function textMentionsValue(text, value) {
   const normalizedText = normalizeLedgerText(text).toLowerCase();
   const normalizedValue = normalizeLedgerText(value).toLowerCase();
@@ -1064,6 +1130,91 @@ function validateCausalGovernanceField(filePath, fieldName, value) {
     ];
   }
   return [];
+}
+
+function validateRepresentativeResidualField(filePath, fieldName, value) {
+  const normalizedValue = normalizeLedgerText(value);
+  if (
+    normalizedValue.length === NUM_ZERO ||
+    MODEL_FIT_EMPTY_VALUE_PATTERN.test(normalizedValue) ||
+    LEDGER_TEMPLATE_PLACEHOLDER_PATTERN.test(normalizedValue) ||
+    normalizedValue.includes(LEDGER_PENDING_BEFORE_IMPLEMENTATION_MARKER)
+  ) {
+    return [
+      `${filePath}: representativeResidual.${fieldName} must be a ` +
+      'concrete value.',
+    ];
+  }
+  return [];
+}
+
+export function validateRepresentativeResidualContract(
+  metadata,
+  filePath,
+  options = {},
+) {
+  const requiresResidual =
+    options[LEDGER_VALIDATION_REQUIRES_LEDGER] === true;
+  const representativeResidual =
+    metadata?.[REPRESENTATIVE_RESIDUAL_METADATA_FIELD];
+  if (!representativeResidual) {
+    return requiresResidual ?
+      [
+        `${filePath}: metadata representativeResidual is required because ` +
+        'this active diagnostics/classification package keeps the sprint ' +
+        'representative residual live.',
+      ] :
+      [];
+  }
+  if (!isObjectRecord(representativeResidual)) {
+    return [
+      `${filePath}: metadata representativeResidual must be an object.`,
+    ];
+  }
+
+  const errors = [];
+  for (const fieldName of REPRESENTATIVE_RESIDUAL_REQUIRED_FIELDS) {
+    errors.push(
+      ...validateRepresentativeResidualField(
+        filePath,
+        fieldName,
+        representativeResidual[fieldName],
+      ),
+    );
+  }
+
+  const artifact = normalizeLedgerText(
+    representativeResidual[REPRESENTATIVE_RESIDUAL_ARTIFACT_FIELD],
+  );
+  if (
+    artifact.length > NUM_ZERO &&
+    !SCENARIO_CAUSAL_CLOSURE_ARTIFACT_PATH_PATTERN.test(artifact)
+  ) {
+    errors.push(
+      `${filePath}: representativeResidual.artifact must name a report ` +
+      'or proof artifact path.',
+    );
+  }
+
+  const packageScenario = normalizeLedgerText(metadata?.scenario).toLowerCase();
+  const residualScenario = normalizeLedgerText(
+    representativeResidual[REPRESENTATIVE_RESIDUAL_SCENARIO_FIELD],
+  ).toLowerCase();
+  if (
+    packageScenario.length > NUM_ZERO &&
+    residualScenario.length > NUM_ZERO &&
+    packageScenario !== SCENARIO_NONE &&
+    packageScenario !== SCENARIO_UNKNOWN &&
+    packageScenario !== SCENARIO_TEMPLATE_VALUE &&
+    packageScenario !== residualScenario
+  ) {
+    errors.push(
+      `${filePath}: representativeResidual.scenario must match package ` +
+      'scenario.',
+    );
+  }
+
+  return errors;
 }
 
 export function validateCausalGovernanceContract(
@@ -1605,6 +1756,11 @@ async function validatePackageFile(filePath, options = {}) {
     [LEDGER_VALIDATION_REQUIRES_LEDGER]:
       fileStatus === STATUS_ACTIVE && metadata !== null,
   }));
+  errors.push(...validateRepresentativeResidualContract(metadata, relativePath, {
+    [LEDGER_VALIDATION_REQUIRES_LEDGER]:
+      metadataRequiresRepresentativeResidual(metadata, fileStatus),
+    status: fileStatus,
+  }));
   errors.push(...validateCausalGovernanceContract(metadata, relativePath, {
     [LEDGER_VALIDATION_REQUIRES_LEDGER]:
       fileStatus === STATUS_ACTIVE &&
@@ -1935,6 +2091,12 @@ function buildDoctorSuggestion(error) {
       'files, push the branch, and record commit SHA, remote/branch, and ' +
       '`yes` for focused-slice containment.';
   }
+  if (/metadata representativeResidual is required/iu.test(error)) {
+    return 'Add concrete `representativeResidual` metadata with status, ' +
+      'scenario, artifact, frontier, owner, boundary, dominantReason, and ' +
+      'nextAction when diagnostic or classification work keeps a sprint ' +
+      'representative residual live.';
+  }
   if (/scenarioCausalClosure\.currentFirstFrontier/iu.test(error)) {
     return 'Update the package owner/boundary to the canonical first frontier, ' +
       'or add `ownerBoundaryMigrationProof` with from/to owner-boundary and ' +
@@ -2008,6 +2170,11 @@ export function buildPackageDoctorLines(filePath, content, options = {}) {
   errors.push(...validateModelFitContract(content, relativePath, {
     [LEDGER_VALIDATION_REQUIRES_LEDGER]:
       fileStatus === STATUS_ACTIVE && metadata !== null,
+  }));
+  errors.push(...validateRepresentativeResidualContract(metadata, relativePath, {
+    [LEDGER_VALIDATION_REQUIRES_LEDGER]:
+      metadataRequiresRepresentativeResidual(metadata, fileStatus),
+    status: fileStatus,
   }));
   errors.push(...validateCausalGovernanceContract(metadata, relativePath, {
     [LEDGER_VALIDATION_REQUIRES_LEDGER]:
