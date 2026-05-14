@@ -3,7 +3,7 @@
 <!-- work-package
 {
   "schema": "work-package-v1",
-  "status": "todo",
+  "status": "active",
   "opened": "2026-05-14",
   "lane": "runtime-owner-boundary",
   "scenario": "rolling-restart",
@@ -20,11 +20,11 @@
     "npm --silent run analyze:causal-model -- test-output/reports/topology-ship-gate-final-rolling-restart.report.json"
   ],
   "writeScope": [
-    "work/packages/todo-20260514-topology-publication-convergence-final-blocker.md",
+    "work/packages/active-20260514-topology-publication-convergence-final-blocker.md",
     "work/sprints/active-2026-q2-topology-convergence-residual-closure.md"
   ],
   "handoffFiles": [
-    "work/packages/active-20260514-topology-ship-gate-final-confirmation.md",
+    "work/packages/done-20260514-topology-ship-gate-final-confirmation.md",
     "work/packages/done-20260514-topology-priority-recovery-residual-drain.md",
     "work/packages/done-20260514-topology-contract-integration-reconciliation.md"
   ],
@@ -34,7 +34,7 @@
   ],
   "candidateRuntimeFiles": [],
   "commitScope": [
-    "work/packages/todo-20260514-topology-publication-convergence-final-blocker.md",
+    "work/packages/active-20260514-topology-publication-convergence-final-blocker.md",
     "work/sprints/active-2026-q2-topology-convergence-residual-closure.md",
     "work/sprints/current-blocker.md",
     "work/sprints/current-blocker.json"
@@ -145,12 +145,27 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 3. active-gate-runtime-fixes
 4. harness-timeout-stretching
 
+## Subagent Sequencing Ledger
+
+Required when this package is activated because it is a runtime owner-boundary
+package.
+
+1. [x] Review subagent recorded:
+   blocked-by-environment-policy reason:
+   subagent-spawn-requires-explicit-user-request-for-publication-convergence-final-review
+2. [x] Fix subagent recorded or explicitly not needed:
+   blocked-by-environment-policy reason:
+   subagent-spawn-requires-explicit-user-request-for-publication-convergence-final-fix
+3. [x] Implementation subagent recorded:
+   blocked-by-environment-policy reason:
+   subagent-spawn-requires-explicit-user-request-for-publication-convergence-final-implementation
+
 ## Model Fit
 
 - Package class: `representative-frontier-closure`
 - Intended minimum model: `gpt-5.3-codex`
 - Scope shape: `owner-boundary-contraction/current-frontier`
-- Owned files: `work/packages/todo-20260514-topology-publication-convergence-final-blocker.md`, `work/sprints/active-2026-q2-topology-convergence-residual-closure.md`
+- Owned files: `work/packages/active-20260514-topology-publication-convergence-final-blocker.md`, `work/sprints/active-2026-q2-topology-convergence-residual-closure.md`
 - Forbidden files: `rolling-restart-runtime-fixes-without-explicit-rescope`, `operation-workflow-runtime-fixes`, `active-gate-runtime-fixes`, `harness-timeout-stretching`
 - Frozen decisions: package scope and lane stay bounded unless explicitly escalated.
 - Escalation triggers: owned files expand beyond this package, runtime ownership changes, or representative scenario evidence changes.

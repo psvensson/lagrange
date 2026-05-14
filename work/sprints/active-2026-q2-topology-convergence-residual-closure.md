@@ -400,7 +400,7 @@ Final closure requires fresh evidence proving all of the following:
       descriptor epoch, capacity admission, anti-entropy, and budgets produce
       one coherent owner-key reconciliation chain without local fallback repair.
 
-16. [Topology Ship Gate Final Confirmation](../packages/active-20260514-topology-ship-gate-final-confirmation.md)
+16. [Topology Ship Gate Final Confirmation](../packages/done-20260514-topology-ship-gate-final-confirmation.md)
     - Lane: `scenario-release-gate`
     - Owner boundary: `distributed_test_harness / rolling_restart_and_failure_gate_closure`
     - Purpose: run final representative confirmation.
@@ -409,7 +409,7 @@ Final closure requires fresh evidence proving all of the following:
       `topology_publication_owner / publication_convergence` with
       `missing_published_nodes_present`, and runtime behavior was not changed.
 
-17. [Topology Publication Convergence Final Blocker](../packages/todo-20260514-topology-publication-convergence-final-blocker.md)
+17. [Topology Publication Convergence Final Blocker](../packages/active-20260514-topology-publication-convergence-final-blocker.md)
     - Lane: `runtime-owner-boundary`
     - Owner boundary: `topology_publication_owner / publication_convergence`
     - Purpose: hold the fresh final-gate publication convergence blocker until
@@ -491,7 +491,7 @@ projection reconciliation is done as classification-only observability:
 `topology_publication_owner` blocker instead of healthy evidence.
 
 The current action is now
-[Topology Ship Gate Final Confirmation](../packages/active-20260514-topology-ship-gate-final-confirmation.md).
+[Topology Publication Convergence Final Blocker](../packages/active-20260514-topology-publication-convergence-final-blocker.md).
 The predecessor
 [Topology Contract Integration Reconciliation](../packages/done-20260514-topology-contract-integration-reconciliation.md)
 closed as classification-only work: focused membership epoch, failure repair,
@@ -523,7 +523,8 @@ recovery is not the first frontier, but final evidence has two non-frontier
 `operation_workflow_owner / workflow_progress` witnesses in
 `spread_satisfied_in_flight`.
 
-Close final confirmation as a migrated red gate and activate
-[Topology Publication Convergence Final Blocker](../packages/todo-20260514-topology-publication-convergence-final-blocker.md).
-Do not fix `rolling-restart`, publication, active-gate, rebalance, or operation
-workflow runtime behavior in this sprint segment without explicit re-scope.
+Final confirmation is closed as a migrated red gate. Hold on
+[Topology Publication Convergence Final Blocker](../packages/active-20260514-topology-publication-convergence-final-blocker.md)
+until runtime publication-convergence work is explicitly re-scoped. Do not fix
+`rolling-restart`, publication, active-gate, rebalance, or operation workflow
+runtime behavior in this sprint segment without explicit re-scope.

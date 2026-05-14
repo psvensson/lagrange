@@ -2,34 +2,30 @@
   "schema": "current-blocker-v1",
   "generatedBy": "scripts/work-tracker.js",
   "sprint": "work/sprints/active-2026-q2-topology-convergence-residual-closure.md",
-  "package": "work/packages/active-20260514-topology-ship-gate-final-confirmation.md",
+  "package": "work/packages/active-20260514-topology-publication-convergence-final-blocker.md",
   "status": "active",
-  "lane": "scenario-release-gate",
+  "lane": "runtime-owner-boundary",
   "scenario": "rolling-restart",
   "artifact": "test-output/reports/topology-ship-gate-final-rolling-restart.report.json",
   "playback": "none",
-  "owner": "distributed_test_harness",
-  "boundary": "rolling_restart_and_failure_gate_closure",
-  "dominantReason": "ship_criteria_unproven",
-  "currentState": "Final rolling-restart confirmation ran and failed in 114789ms. Ship criteria are not met: active=0/5, snapshotCoverage=2/5, publication=PUBLISHED, pendingAck=0, missingPublished=4, and the canonical first frontier is topology_publication_owner / publication_convergence with missing_published_nodes_present. Priority recovery also reappeared as a non-frontier operation_workflow_owner / workflow_progress tail with two spread_satisfied_in_flight witnesses.",
-  "nextAction": "Close this package as migrated red confirmation and activate the publication convergence final blocker. Do not fix rolling-restart runtime behavior in this package.",
+  "owner": "topology_publication_owner",
+  "boundary": "publication_convergence",
+  "dominantReason": "missing_published_nodes_present",
+  "currentState": "Final ship confirmation failed and selected publication_ack_convergence as the first frontier. The final artifact reports active=0/5, snapshotCoverage=2/5, publication=PUBLISHED, pendingAck=0, missingPublished=4, missingPublishedIds=11601fe0-72d6-5853-8590-ec2881853e72|35a891b8-c1a0-5064-9c6e-2acfba61c2a7|8be8d30f-4499-5eed-865c-71b4d529a67a|ebc4aa0b-06c6-506d-93ea-1dd2deca3f58. Priority recovery remains a non-frontier tail with two operation_workflow_owner / workflow_progress witnesses.",
+  "nextAction": "Hold the sprint on this narrow publication convergence blocker. Do not fix rolling-restart runtime behavior without explicit re-scope; use this package as the handoff for future topology_publication_owner / publication_convergence work.",
   "proof": [
-    "node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/topology-ship-gate-final-rolling-restart.report.json --verbose",
     "npm run work:evidence-summary -- test-output/reports/topology-ship-gate-final-rolling-restart.report.json",
     "npm run analyze:topology-convergence -- test-output/reports/topology-ship-gate-final-rolling-restart.report.json",
-    "npm run analyze:priority-recovery-residuals -- test-output/reports/topology-ship-gate-final-rolling-restart.report.json --markdown",
-    "npm --silent run analyze:causal-model -- test-output/reports/topology-ship-gate-final-rolling-restart.report.json",
-    "npm run analyze:distributed-failure -- --report test-output/reports/topology-ship-gate-final-rolling-restart.report.json"
+    "npm --silent run analyze:causal-model -- test-output/reports/topology-ship-gate-final-rolling-restart.report.json"
   ],
   "writeScope": [
-    "work/packages/active-20260514-topology-ship-gate-final-confirmation.md",
+    "work/packages/active-20260514-topology-publication-convergence-final-blocker.md",
     "work/sprints/active-2026-q2-topology-convergence-residual-closure.md"
   ],
   "handoffFiles": [
-    "work/packages/done-20260514-topology-failure-gate-execution-harness.md",
-    "work/packages/done-20260514-topology-contract-integration-reconciliation.md",
+    "work/packages/done-20260514-topology-ship-gate-final-confirmation.md",
     "work/packages/done-20260514-topology-priority-recovery-residual-drain.md",
-    "work/packages/todo-20260514-topology-publication-convergence-final-blocker.md"
+    "work/packages/done-20260514-topology-contract-integration-reconciliation.md"
   ],
   "generatedFiles": [
     "work/sprints/current-blocker.md",
@@ -37,7 +33,7 @@
   ],
   "candidateRuntimeFiles": [],
   "commitScope": [
-    "work/packages/active-20260514-topology-ship-gate-final-confirmation.md",
+    "work/packages/active-20260514-topology-publication-convergence-final-blocker.md",
     "work/sprints/active-2026-q2-topology-convergence-residual-closure.md",
     "work/sprints/current-blocker.md",
     "work/sprints/current-blocker.json"
@@ -60,37 +56,37 @@
     "owner": "topology_publication_owner",
     "boundary": "publication_convergence",
     "dominantReason": "missing_published_nodes_present",
-    "nextAction": "Activate the publication convergence final blocker; no runtime fix is part of this package."
+    "nextAction": "Future work may fix or further split publication convergence only after explicit re-scope."
   },
   "causalGovernance": {
-    "hypothesis": "distributed_test_harness / rolling_restart_and_failure_gate_closure proof should reduce, migrate, or classify ship_criteria_unproven without hiding the sprint representative residual.",
+    "hypothesis": "topology_publication_owner / publication_convergence work should reduce, migrate, or classify missing_published_nodes_present without hiding active-gate snapshot coverage or priority recovery tails.",
     "stopConditionCheck": "npm --silent run analyze:causal-model -- test-output/reports/topology-ship-gate-final-rolling-restart.report.json",
-    "expectedCausalModelChange": "ship_criteria_unproven becomes representative-green, reduced, same-frontier, migrated, or classification-only with a named owner-boundary reason.",
-    "representativeOutcome": "migrated",
-    "causalDebt": "Final confirmation is red and migrates the sprint to topology_publication_owner / publication_convergence. Runtime fixes remain out of scope until explicitly re-scoped.",
-    "crossBoundaryReview": "Required before closure through the scenario-release-gate subagent ledger or an allowed waiver recorded in this package."
+    "expectedCausalModelChange": "missing_published_nodes_present becomes representative-green, reduced, same-frontier, migrated, or classification-only with a named owner-boundary reason.",
+    "representativeOutcome": "pending-before-rerun",
+    "causalDebt": "Final confirmation proved the sprint is not ship-ready. Runtime fixes remain out of scope until explicitly re-scoped.",
+    "crossBoundaryReview": "Required before implementation through the runtime-owner-boundary subagent ledger or an allowed waiver recorded in this package."
   },
   "scenarioCausalClosure": {
-    "referenceScenarioOrProbe": "rolling-restart / distributed_test_harness / rolling_restart_and_failure_gate_closure",
+    "referenceScenarioOrProbe": "rolling-restart / topology_publication_owner / publication_convergence",
     "phaseChain": [
-      "canonical evidence extraction",
-      "distributed_test_harness / rolling_restart_and_failure_gate_closure focused proof",
-      "representative or gate rerun classification"
+      "canonical final confirmation extraction",
+      "topology_publication_owner / publication_convergence focused proof",
+      "representative rerun classification"
     ],
-    "currentFirstFrontier": "package-local frontier distributed_test_harness / rolling_restart_and_failure_gate_closure; sprint representative frontier remains topology_publication_owner / publication_convergence until fresh evidence changes it",
+    "currentFirstFrontier": "topology_publication_owner / publication_convergence from final confirmation artifact",
     "knownDownstreamBlockers": [
-      "rolling-restart representative publication convergence remains red until green or migrated",
-      "runtime or harness fixes discovered outside this owner boundary require a narrower successor package"
+      "active-gate snapshot coverage remains 2/5 after publication convergence",
+      "priority recovery has two non-frontier operation workflow witnesses in final evidence"
     ],
-    "missingCausalEdge": "final confirmation proved ship_criteria_unproven and selected topology_publication_owner / publication_convergence as the next owner boundary",
-    "missingCausalEdgeProbe": "node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/topology-ship-gate-final-rolling-restart.report.json --verbose",
-    "boundedProgressProof": "Focused proof must show bounded wake, retry, timeout, reconcile, drain, dispatch, delivery, timer, or advance for distributed_test_harness / rolling_restart_and_failure_gate_closure.",
+    "missingCausalEdge": "publication PUBLISHED with pendingAck=0 still coexists with missingPublished=4 and active=0/5",
+    "missingCausalEdgeProbe": "npm run analyze:topology-convergence -- test-output/reports/topology-ship-gate-final-rolling-restart.report.json",
+    "boundedProgressProof": "Future work must prove publication convergence through owner truth, typed missing-published reasons, retry/reconcile evidence, or terminal classification.",
     "boundedProgressProofArtifact": "test-output/reports/topology-ship-gate-final-rolling-restart.report.json",
-    "expectedObservableTransition": "ship_criteria_unproven migrated to topology_publication_owner / publication_convergence with fresh final-gate evidence.",
-    "maxProgressBound": "one activation cycle: package doctor, extractor/probe, owner-file proof, focused validation, and result classification",
-    "sameFrontierFallback": "not used; final confirmation selected a narrower successor blocker and did not claim ship proof",
-    "expectedNextFrontier": "work/packages/todo-20260514-topology-publication-convergence-final-blocker.md",
-    "resultClassification": "migrated",
+    "expectedObservableTransition": "missing_published_nodes_present resolves to green evidence, reduced residual, same-frontier proof, migrated owner-boundary proof, or classification-only stop.",
+    "maxProgressBound": "not executed in this sprint segment; this package is an active handoff until runtime work is explicitly re-scoped",
+    "sameFrontierFallback": "keep topology_publication_owner / publication_convergence active and do not broaden into rolling-restart runtime fixes",
+    "expectedNextFrontier": "publication convergence green or a narrower topology publication owner blocker",
+    "resultClassification": "pending-before-probe",
     "stopCondition": "continue-local-fix"
   },
   "predecessor": null

@@ -41,7 +41,7 @@
     "work/packages/done-20260514-topology-stale-publication-durable-truth-gate.md",
     "work/packages/done-20260514-topology-rebalance-disruption-recovery-gate.md",
     "work/packages/done-20260514-topology-contract-integration-reconciliation.md",
-    "work/packages/active-20260514-topology-ship-gate-final-confirmation.md",
+    "work/packages/done-20260514-topology-ship-gate-final-confirmation.md",
     "work/sprints/active-2026-q2-topology-convergence-residual-closure.md",
     "scripts/work-tracker.js",
     "scripts/work-context.js",
@@ -77,7 +77,7 @@
     "work/packages/done-20260514-topology-stale-publication-durable-truth-gate.md",
     "work/packages/done-20260514-topology-rebalance-disruption-recovery-gate.md",
     "work/packages/done-20260514-topology-contract-integration-reconciliation.md",
-    "work/packages/active-20260514-topology-ship-gate-final-confirmation.md",
+    "work/packages/done-20260514-topology-ship-gate-final-confirmation.md",
     "work/sprints/active-2026-q2-topology-convergence-residual-closure.md",
     "scripts/work-tracker.js",
     "scripts/work-context.js",
@@ -169,7 +169,7 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 13. work/packages/done-20260514-topology-stale-publication-durable-truth-gate.md
 14. work/packages/done-20260514-topology-rebalance-disruption-recovery-gate.md
 15. work/packages/done-20260514-topology-contract-integration-reconciliation.md
-16. work/packages/active-20260514-topology-ship-gate-final-confirmation.md
+16. work/packages/done-20260514-topology-ship-gate-final-confirmation.md
 17. work/sprints/active-2026-q2-topology-convergence-residual-closure.md
 18. scripts/work-tracker.js
 19. scripts/work-context.js

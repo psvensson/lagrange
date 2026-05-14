@@ -3,7 +3,7 @@
 <!-- work-package
 {
   "schema": "work-package-v1",
-  "status": "active",
+  "status": "done",
   "opened": "2026-05-14",
   "lane": "scenario-release-gate",
   "scenario": "rolling-restart",
@@ -23,14 +23,14 @@
     "npm run analyze:distributed-failure -- --report test-output/reports/topology-ship-gate-final-rolling-restart.report.json"
   ],
   "writeScope": [
-    "work/packages/active-20260514-topology-ship-gate-final-confirmation.md",
+    "work/packages/done-20260514-topology-ship-gate-final-confirmation.md",
     "work/sprints/active-2026-q2-topology-convergence-residual-closure.md"
   ],
   "handoffFiles": [
     "work/packages/done-20260514-topology-failure-gate-execution-harness.md",
     "work/packages/done-20260514-topology-contract-integration-reconciliation.md",
     "work/packages/done-20260514-topology-priority-recovery-residual-drain.md",
-    "work/packages/todo-20260514-topology-publication-convergence-final-blocker.md"
+    "work/packages/active-20260514-topology-publication-convergence-final-blocker.md"
   ],
   "generatedFiles": [
     "work/sprints/current-blocker.md",
@@ -38,7 +38,7 @@
   ],
   "candidateRuntimeFiles": [],
   "commitScope": [
-    "work/packages/active-20260514-topology-ship-gate-final-confirmation.md",
+    "work/packages/done-20260514-topology-ship-gate-final-confirmation.md",
     "work/sprints/active-2026-q2-topology-convergence-residual-closure.md",
     "work/sprints/current-blocker.md",
     "work/sprints/current-blocker.json"
@@ -79,7 +79,7 @@
     "expectedObservableTransition": "ship_criteria_unproven migrated to topology_publication_owner / publication_convergence with fresh final-gate evidence.",
     "maxProgressBound": "one activation cycle: package doctor, extractor/probe, owner-file proof, focused validation, and result classification",
     "sameFrontierFallback": "not used; final confirmation selected a narrower successor blocker and did not claim ship proof",
-    "expectedNextFrontier": "work/packages/todo-20260514-topology-publication-convergence-final-blocker.md",
+    "expectedNextFrontier": "work/packages/active-20260514-topology-publication-convergence-final-blocker.md",
     "resultClassification": "migrated",
     "stopCondition": "continue-local-fix"
   },
@@ -100,7 +100,10 @@
     "toBoundary": "publication_convergence",
     "reason": "Final confirmation failed and canonical evidence selected publication_ack_convergence as the first frontier.",
     "evidence": "npm run work:evidence-summary -- test-output/reports/topology-ship-gate-final-rolling-restart.report.json and npm run analyze:topology-convergence -- test-output/reports/topology-ship-gate-final-rolling-restart.report.json report firstFrontierEdgeId=publication_ack_convergence, owner=topology_publication_owner, boundary=publication_convergence, dominantReason=missing_published_nodes_present, pendingAckCount=0, missingPublishedCount=4."
-  }
+  },
+  "closed": "2026-05-14",
+  "commitAndPushLedgerRequired": true,
+  "successor": "work/packages/active-20260514-topology-publication-convergence-final-blocker.md"
 }
 -->
 
@@ -212,7 +215,7 @@ The sprint can close only when final evidence proves:
 
 Required before this package moves from `todo` to `active`:
 
-1. Run `npm run work:package:doctor -- --fix-dry-run work/packages/active-20260514-topology-ship-gate-final-confirmation.md` and keep `causalGovernance`, `scenarioCausalClosure`, Model Fit, and scope fields concrete before implementation starts.
+1. Run `npm run work:package:doctor -- --fix-dry-run work/packages/done-20260514-topology-ship-gate-final-confirmation.md` and keep `causalGovernance`, `scenarioCausalClosure`, Model Fit, and scope fields concrete before implementation starts.
 2. `candidateRuntimeFiles` is empty; any new runtime or harness write requires a narrower package or an explicit metadata update before implementation.
 3. Replace the Subagent Sequencing Ledger placeholders with real review/fix/implementation proof, or an allowed waiver, before pre-implementation and closure validation.
 4. Preserve the package artifact path `test-output/reports/topology-ship-gate-final-rolling-restart.report.json`; if fresh evidence changes owner, boundary, or dominant reason, classify as `migrated`, `same-frontier`, or split instead of widening scope.
@@ -240,7 +243,7 @@ package.
 - Package class: `representative-frontier-closure`
 - Intended minimum model: `gpt-5.3-codex`
 - Scope shape: `owner-boundary-contraction/current-frontier`
-- Owned files: `work/packages/active-20260514-topology-ship-gate-final-confirmation.md`, `work/sprints/active-2026-q2-topology-convergence-residual-closure.md`
+- Owned files: `work/packages/done-20260514-topology-ship-gate-final-confirmation.md`, `work/sprints/active-2026-q2-topology-convergence-residual-closure.md`
 - Forbidden files: `closure-on-focused-proof-only`, `closure-on-coverage-matrix-only`, `harness-timeout-stretching-without-owner-proof`
 - Frozen decisions: package scope and lane stay bounded unless explicitly escalated.
 - Escalation triggers: owned files expand beyond this package, runtime ownership changes, or representative scenario evidence changes.
@@ -249,18 +252,18 @@ package.
 
 ## Validation Ladder
 
-1. npm run work:package:doctor -- --suggest work/packages/active-20260514-topology-ship-gate-final-confirmation.md
-2. npm run work:package:doctor -- --fix-dry-run work/packages/active-20260514-topology-ship-gate-final-confirmation.md
+1. npm run work:package:doctor -- --suggest work/packages/done-20260514-topology-ship-gate-final-confirmation.md
+2. npm run work:package:doctor -- --fix-dry-run work/packages/done-20260514-topology-ship-gate-final-confirmation.md
 3. node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/topology-ship-gate-final-rolling-restart.report.json --verbose
 4. npm run work:evidence-summary -- test-output/reports/topology-ship-gate-final-rolling-restart.report.json
 5. npm run analyze:topology-convergence -- test-output/reports/topology-ship-gate-final-rolling-restart.report.json
 6. npm run analyze:priority-recovery-residuals -- test-output/reports/topology-ship-gate-final-rolling-restart.report.json --markdown
 7. npm --silent run analyze:causal-model -- test-output/reports/topology-ship-gate-final-rolling-restart.report.json
 8. npm run analyze:distributed-failure -- --report test-output/reports/topology-ship-gate-final-rolling-restart.report.json
-9. npm run work:validate -- --entry work/packages/active-20260514-topology-ship-gate-final-confirmation.md
-10. npm run work:validate -- --pre-impl work/packages/active-20260514-topology-ship-gate-final-confirmation.md
-11. npm run work:validate -- --closure work/packages/active-20260514-topology-ship-gate-final-confirmation.md
-12. git diff --check -- work/packages/active-20260514-topology-ship-gate-final-confirmation.md work/sprints/active-2026-q2-topology-convergence-residual-closure.md work/sprints/current-blocker.md work/sprints/current-blocker.json
+9. npm run work:validate -- --entry work/packages/done-20260514-topology-ship-gate-final-confirmation.md
+10. npm run work:validate -- --pre-impl work/packages/done-20260514-topology-ship-gate-final-confirmation.md
+11. npm run work:validate -- --closure work/packages/done-20260514-topology-ship-gate-final-confirmation.md
+12. git diff --check -- work/packages/done-20260514-topology-ship-gate-final-confirmation.md work/sprints/active-2026-q2-topology-convergence-residual-closure.md work/sprints/current-blocker.md work/sprints/current-blocker.json
 13. Final deep-dive proof: rerun the package extractor/probe, compare against the sprint representative residual, and record the result classification before closure.
 
 ## Split Rules
@@ -288,7 +291,7 @@ package.
 
 Required at closure.
 
-1. [ ] Focused package commit: pending.
-2. [ ] Pushed to: pending.
-3. [ ] Commit contains only package-owned files/package-status/allowed sprint
-   handoff: pending.
+1. [x] Focused package commit:
+   `87fa4d0c25db566cf53bb39fce7c86706627f130`
+2. [x] Pushed to: `origin/codex/pending-ack-eligibility-filter`
+3. [x] Commit contains only package-owned files/package-status/allowed sprint handoff: yes.
