@@ -178,3 +178,9 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 3. Active-gate runtime and harness diffs were removed before continuing.
 4. Representative `rolling-restart` was not rerun after the human stop
    instruction.
+
+## Commit And Push Ledger
+
+1. Focused package commit: `1bb25e22`
+2. Pushed to: `origin/codex/pending-ack-eligibility-filter`
+3. Commit contains only package-owned files/package-status/allowed sprint handoff: `yes`
