@@ -495,9 +495,18 @@ failed invariant `publication_ack_closed`, and stop condition
 `owner_boundary_migration`. Priority recovery residual extraction reports zero
 witnesses and `splitRequired=false`.
 
-Run contract integration as observe/classify work: reconcile the focused
-contracts, the prior representative residual, and the latest failure-gate
-artifacts into one integration matrix. Record `ready-for-ship-gate` only if the
-chain is coherent; otherwise record the exact owner-boundary blocker. Do not
-fix `rolling-restart`, publication, active-gate, or rebalance runtime behavior
-in this sprint segment without explicit re-scope.
+Contract integration has now been classified: focused membership epoch, failure
+repair, rejoin, descriptor, capacity, anti-entropy, and budget contracts exist,
+but they are not release-ready while current evidence still blocks at
+`topology_publication_owner / publication_convergence`. The representative
+artifact first frontier is `publication_ack_convergence` with
+`missing_published_nodes_present`, `pendingAckCount=0`, `missingPublishedCount=4`,
+next expected active-gate snapshot coverage `2/5`, and one bounded priority
+recovery wait. The latest rebalance gate also migrates to publication
+convergence with `missingPublishedCount=6` and zero priority recovery
+witnesses.
+
+Close contract integration as classification-only and activate priority
+recovery residual drain before final ship confirmation. Do not fix
+`rolling-restart`, publication, active-gate, or rebalance runtime behavior in
+this sprint segment without explicit re-scope.

@@ -12,8 +12,8 @@
   "owner": "topology_control_plane",
   "boundary": "contract_integration_reconcile",
   "dominantReason": "focused_contracts_not_integrated_by_scenario",
-  "currentState": "Activated after rebalance disruption recovery gate migration. All promoted failure gates have executable observe/classify artifacts or completed harness mapping, but the latest rebalance gate still migrated before its owner boundary to topology_publication_owner / publication_convergence with missing_published_nodes_present, publicationStatus=PUBLISHED, pendingAckCount=0, missingPublishedCount=6, publicationPending=true, activeGateState=ready, snapshotCoverageNodeCount=2/7, activeNodeCount=7/7, and zero priority recovery witnesses. Focused contracts still need one integration reconciliation before final ship confirmation.",
-  "nextAction": "Run a focused integration reconciliation across the focused contracts and latest gate evidence. Record ready-for-ship-gate only if the chain is coherent; otherwise record the exact owner-boundary blocker. Do not fix rolling-restart, publication, active-gate, or rebalance runtime behavior without explicit re-scope.",
+  "currentState": "Classification-only integration result: focused membership epoch, failure repair, rejoin, descriptor, capacity, anti-entropy, and budget contracts exist, but current representative and promoted gate evidence are not ready for ship. The representative artifact first frontier is topology_publication_owner / publication_convergence with publication_ack_convergence deferred, missing_published_nodes_present, pendingAckCount=0, missingPublishedCount=4, next expected active_gate_snapshot_coverage at 2/5, and one bounded priority recovery wait. The latest rebalance gate also migrates to topology_publication_owner / publication_convergence with missingPublishedCount=6 and zero priority recovery witnesses.",
+  "nextAction": "Close this package as classification-only and activate priority recovery residual drain before final ship confirmation. Do not fix rolling-restart, publication, active-gate, or rebalance runtime behavior without explicit re-scope.",
   "proof": [
     "npm run work:evidence-summary -- test-output/reports/rolling-restart-green-gate-after-priority-recovery-workflow-progress-after-snapshot-coverage.report.json",
     "npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-green-gate-after-priority-recovery-workflow-progress-after-snapshot-coverage.report.json",
@@ -70,18 +70,18 @@
     "status": "live-red",
     "scenario": "rolling-restart",
     "artifact": "test-output/reports/rolling-restart-green-gate-after-priority-recovery-workflow-progress-after-snapshot-coverage.report.json",
-    "frontier": "active_gate_snapshot_coverage",
-    "owner": "startup_active_gate_owner",
-    "boundary": "snapshot_coverage",
-    "dominantReason": "snapshot_coverage_incomplete",
-    "nextAction": "Keep the representative residual live while contract integration classifies whether focused topology contracts are ready for final ship confirmation or must point at a narrower owner-boundary blocker."
+    "frontier": "publication_ack_convergence",
+    "owner": "topology_publication_owner",
+    "boundary": "publication_convergence",
+    "dominantReason": "missing_published_nodes_present",
+    "nextAction": "Keep the representative residual live; current evidence blocks final ship at publication convergence, with active-gate snapshot coverage and priority recovery as downstream checks."
   },
   "causalGovernance": {
     "hypothesis": "topology_control_plane / contract_integration_reconcile evidence should reduce, migrate, or classify focused_contracts_not_integrated_by_scenario without hiding the sprint representative residual.",
     "stopConditionCheck": "npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-green-gate-after-priority-recovery-workflow-progress-after-snapshot-coverage.report.json",
     "expectedCausalModelChange": "focused_contracts_not_integrated_by_scenario becomes representative-green, reduced, same-frontier, migrated, or classification-only with a named owner-boundary reason.",
-    "representativeOutcome": "pending-before-rerun",
-    "causalDebt": "Until topology_control_plane / contract_integration_reconcile is classified, the sprint representative rolling-restart residual stays open. Latest gate evidence still names topology_publication_owner / publication_convergence before final ship proof; runtime fixes remain out of scope.",
+    "representativeOutcome": "classification-only",
+    "causalDebt": "The integration reconciliation does not claim ready-for-ship. Current representative evidence blocks at topology_publication_owner / publication_convergence, active-gate snapshot coverage remains downstream, and priority recovery residual drain remains queued before final confirmation. Runtime fixes remain out of scope.",
     "crossBoundaryReview": "Required before closure through the causal-escalation subagent ledger or an allowed waiver recorded in this package."
   },
   "scenarioCausalClosure": {
@@ -91,7 +91,7 @@
       "topology_control_plane / contract_integration_reconcile focused proof",
       "representative or gate rerun classification"
     ],
-    "currentFirstFrontier": "package-local frontier topology_control_plane / contract_integration_reconcile; sprint representative frontier remains startup_active_gate_owner / snapshot_coverage until fresh evidence changes it",
+    "currentFirstFrontier": "classification-only integration package; current representative frontier remains topology_publication_owner / publication_convergence with missing_published_nodes_present until fresh evidence changes it",
     "knownDownstreamBlockers": [
       "rolling-restart representative active-gate snapshot coverage remains red until green or migrated",
       "runtime or harness fixes discovered outside this owner boundary require a narrower successor package"
@@ -100,13 +100,25 @@
     "missingCausalEdgeProbe": "npm run work:evidence-summary -- test-output/reports/rolling-restart-green-gate-after-priority-recovery-workflow-progress-after-snapshot-coverage.report.json",
     "boundedProgressProof": "Focused evidence must show the cross-contract chain is bounded and diagnosable, or classify the first owner boundary that prevents final ship confirmation.",
     "boundedProgressProofArtifact": "test-output/reports/rolling-restart-green-gate-after-priority-recovery-workflow-progress-after-snapshot-coverage.report.json",
-    "expectedObservableTransition": "focused_contracts_not_integrated_by_scenario resolves to green evidence, a reduced residual, same-frontier evidence, migrated owner-boundary proof, or classification-only stop.",
+    "expectedObservableTransition": "focused_contracts_not_integrated_by_scenario resolves to classification-only: focused contracts are not sufficient for ship while publication convergence remains the current frontier and priority residual drain is still queued.",
     "maxProgressBound": "one activation cycle: package doctor, extractor/probe, owner-file proof, focused validation, and result classification",
     "sameFrontierFallback": "keep topology_control_plane / contract_integration_reconcile active and do not broaden the package or claim ship proof",
-    "expectedNextFrontier": "ready-for-ship-gate or a narrower owner-boundary blocker selected by canonical evidence",
-    "resultClassification": "pending-before-probe",
+    "expectedNextFrontier": "priority recovery residual drain, then final ship confirmation if no residual remains",
+    "resultClassification": "classification-only",
     "stopCondition": "classification-only-stop"
-  }
+  },
+  "ownerBoundaryMigrationProof": {
+    "fromOwner": "topology_control_plane",
+    "fromBoundary": "contract_integration_reconcile",
+    "toOwner": "topology_publication_owner",
+    "toBoundary": "publication_convergence",
+    "reason": "contract integration is a bounded diagnostic/support classification package; canonical representative and latest gate evidence both name publication convergence before final ship proof can be claimed",
+    "evidence": [
+      "test-output/reports/rolling-restart-green-gate-after-priority-recovery-workflow-progress-after-snapshot-coverage.report.json",
+      "test-output/reports/topology-rebalance-disruption-recovery-gate.report.json"
+    ]
+  },
+  "successor": "work/packages/todo-20260514-topology-priority-recovery-residual-drain.md"
 }
 -->
 
@@ -277,6 +289,29 @@ Required when this package is activated because it is a causal-escalation packag
    fallback repair remains unowned.
 3. Active sprint records either `ready-for-ship-gate` or exact package to run
    next.
+
+## Integration Matrix Result
+
+| Area | Result | Evidence |
+| --- | --- | --- |
+| Membership/topology epoch | Focused-only pass | `done-20260513-topology-membership-epoch-fencing.md` focused proof exists; release evidence still red downstream. |
+| Failure repair intents | Focused-only pass | `done-20260513-topology-failure-repair-intents.md` and failure-gate observe/classify packages exist; no runtime repair in this segment. |
+| Post-rejoin reconciliation | Focused-only pass | `done-20260513-topology-post-rejoin-reconciliation.md` and killed-rejoin gate focused proof exist; gate evidence migrated before rejoin owner. |
+| Partition descriptors | Focused-only pass | Descriptor epoch focused tests exist; rebalance disruption gate did not reach descriptor/rebalance owner. |
+| Placement capacity | Focused-only pass | Capacity fail-closed focused tests exist; latest rebalance scenario failed before a release-green placement result. |
+| Anti-entropy | Focused-only pass | Reconciler focused proof exists; no release artifact shows anti-entropy as first blocker. |
+| Budgets | Classified, not ship-green | Representative causal model has active-gate terminal accounting but scenario duration remains unbounded; latest rebalance gate has owner-boundary migration. |
+| Publication and active gate | Blocker | Representative first frontier is `topology_publication_owner / publication_convergence` with `missing_published_nodes_present`, and next expected active-gate snapshot coverage is `2/5`. |
+| Operation workflow | Queued classification | Representative causal model still has one bounded `priority_recovery:event_driven` wait; latest rebalance gate has zero priority witnesses. Run priority residual drain before final confirmation. |
+
+## Classification Result
+
+Contract integration is not ready for ship-gate closure. Focused contracts are
+present and individually proven, but current release evidence still blocks at
+`topology_publication_owner / publication_convergence`. The package therefore
+closes as classification-only and hands off to
+`topology-priority-recovery-residual-drain` before final ship confirmation.
+No runtime behavior was changed.
 
 ## Commit And Push Ledger
 
