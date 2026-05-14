@@ -3,7 +3,7 @@
 <!-- work-package
 {
   "schema": "work-package-v1",
-  "status": "active",
+  "status": "done",
   "opened": "2026-05-14",
   "lane": "scenario-release-gate",
   "scenario": "node-join-under-load",
@@ -23,7 +23,7 @@
     "npm run analyze:priority-recovery-residuals -- test-output/reports/topology-killed-join-gate.report.json --markdown"
   ],
   "writeScope": [
-    "work/packages/active-20260514-topology-killed-join-gate.md",
+    "work/packages/done-20260514-topology-killed-join-gate.md",
     "work/sprints/active-2026-q2-topology-convergence-residual-closure.md",
     "work/sprints/current-blocker.json",
     "work/sprints/current-blocker.md"
@@ -45,7 +45,7 @@
     "test/bootstrap/node-joining-service.test.js"
   ],
   "commitScope": [
-    "work/packages/active-20260514-topology-killed-join-gate.md",
+    "work/packages/done-20260514-topology-killed-join-gate.md",
     "work/sprints/active-2026-q2-topology-convergence-residual-closure.md",
     "work/sprints/current-blocker.json",
     "work/sprints/current-blocker.md"
@@ -97,7 +97,10 @@
     "toBoundary": "publication_convergence",
     "reason": "fresh node-join-under-load gate first frontier is publication_ack_convergence / missing_published_nodes_present before killed-join release-gate evidence can be evaluated",
     "evidence": "test-output/reports/topology-killed-join-gate.report.json"
-  }
+  },
+  "closed": "2026-05-14",
+  "commitAndPushLedgerRequired": true,
+  "successor": "work/packages/active-20260514-topology-killed-rejoin-gate.md"
 }
 -->
 
@@ -180,7 +183,7 @@ gate must prove:
 
 Required before this package moves from `todo` to `active`:
 
-1. Run `npm run work:package:doctor -- --fix-dry-run work/packages/active-20260514-topology-killed-join-gate.md` and keep `causalGovernance`, `scenarioCausalClosure`, Model Fit, and scope fields concrete before implementation starts.
+1. Run `npm run work:package:doctor -- --fix-dry-run work/packages/done-20260514-topology-killed-join-gate.md` and keep `causalGovernance`, `scenarioCausalClosure`, Model Fit, and scope fields concrete before implementation starts.
 2. Promote only these proven candidates into `writeScope` and `commitScope` after owner-file proof: `src/bootstrap/node-joining-service-segment-1.js`, `src/bootstrap/node-joining-service-segment-2.js`, `src/bootstrap/join-readiness-evaluator-tail-methods.js`, `src/control-plane/membership-epoch-contract.js`, `test/bootstrap/node-joining-service.test.js`.
 3. Replace the Subagent Sequencing Ledger placeholders with real review/fix/implementation proof, or an allowed waiver, before pre-implementation and closure validation.
 4. Preserve the package artifact path `test-output/reports/topology-killed-join-gate.report.json`; if fresh evidence changes owner, boundary, or dominant reason, classify as `migrated`, `same-frontier`, or split instead of widening scope.
@@ -205,7 +208,7 @@ package.
 - Package class: `representative-frontier-closure`
 - Intended minimum model: `gpt-5.3-codex`
 - Scope shape: `owner-boundary-contraction/current-frontier`
-- Owned files: `work/packages/active-20260514-topology-killed-join-gate.md`, `work/sprints/active-2026-q2-topology-convergence-residual-closure.md`, `work/sprints/current-blocker.json`, `work/sprints/current-blocker.md`
+- Owned files: `work/packages/done-20260514-topology-killed-join-gate.md`, `work/sprints/active-2026-q2-topology-convergence-residual-closure.md`, `work/sprints/current-blocker.json`, `work/sprints/current-blocker.md`
 - Forbidden files: `pro-or-enterprise-behavior`, `admission-success-from-degraded-evidence`
 - Frozen decisions: package scope and lane stay bounded unless explicitly escalated.
 - Escalation triggers: owned files expand beyond this package, runtime ownership changes, or representative scenario evidence changes.
@@ -214,8 +217,8 @@ package.
 
 ## Validation Ladder
 
-1. npm run work:package:doctor -- --suggest work/packages/active-20260514-topology-killed-join-gate.md
-2. npm run work:package:doctor -- --fix-dry-run work/packages/active-20260514-topology-killed-join-gate.md
+1. npm run work:package:doctor -- --suggest work/packages/done-20260514-topology-killed-join-gate.md
+2. npm run work:package:doctor -- --fix-dry-run work/packages/done-20260514-topology-killed-join-gate.md
 3. node test/distributed/run.js --config test/distributed/config/local.json --scenario node-join-under-load --output test-output/reports/topology-killed-join-gate.report.json --verbose
 4. npm run work:evidence-summary -- test-output/reports/topology-killed-join-gate.report.json
 5. npm run analyze:distributed-failure -- --report test-output/reports/topology-killed-join-gate.report.json
@@ -225,10 +228,10 @@ package.
 9. node scripts/check-guideline-literals.js src/bootstrap/node-joining-service-segment-1.js src/bootstrap/node-joining-service-segment-2.js src/bootstrap/join-readiness-evaluator-tail-methods.js src/control-plane/membership-epoch-contract.js test/bootstrap/node-joining-service.test.js
 10. node scripts/check-guideline-decision-boundaries.js src/bootstrap/node-joining-service-segment-1.js src/bootstrap/node-joining-service-segment-2.js src/bootstrap/join-readiness-evaluator-tail-methods.js src/control-plane/membership-epoch-contract.js test/bootstrap/node-joining-service.test.js
 11. npm run audit:runtime-grammar:file -- src/bootstrap/node-joining-service-segment-1.js src/bootstrap/node-joining-service-segment-2.js src/bootstrap/join-readiness-evaluator-tail-methods.js src/control-plane/membership-epoch-contract.js test/bootstrap/node-joining-service.test.js
-12. npm run work:validate -- --entry work/packages/active-20260514-topology-killed-join-gate.md
-13. npm run work:validate -- --pre-impl work/packages/active-20260514-topology-killed-join-gate.md
-14. npm run work:validate -- --closure work/packages/active-20260514-topology-killed-join-gate.md
-15. git diff --check -- work/packages/active-20260514-topology-killed-join-gate.md work/sprints/active-2026-q2-topology-convergence-residual-closure.md work/sprints/current-blocker.json work/sprints/current-blocker.md
+12. npm run work:validate -- --entry work/packages/done-20260514-topology-killed-join-gate.md
+13. npm run work:validate -- --pre-impl work/packages/done-20260514-topology-killed-join-gate.md
+14. npm run work:validate -- --closure work/packages/done-20260514-topology-killed-join-gate.md
+15. git diff --check -- work/packages/done-20260514-topology-killed-join-gate.md work/sprints/active-2026-q2-topology-convergence-residual-closure.md work/sprints/current-blocker.json work/sprints/current-blocker.md
 16. Final deep-dive proof: rerun the package extractor/probe, compare against the sprint representative residual, and record the result classification before closure.
 
 ## Split Rules
@@ -267,7 +270,6 @@ into a join-owner or rolling-restart runtime repair.
 
 Required at closure.
 
-1. [ ] Focused package commit: pending.
-2. [ ] Pushed to: pending.
-3. [ ] Commit contains only package-owned files/package-status/allowed sprint
-   handoff: pending.
+1. [x] Focused package commit: 9b0f9705225680465d9a7d2e18badc2b711812ae.
+2. [x] Pushed to: origin/codex/pending-ack-eligibility-filter.
+3. [x] Commit contains only package-owned files/package-status/allowed sprint handoff: yes.

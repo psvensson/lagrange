@@ -338,7 +338,7 @@ Final closure requires fresh evidence proving all of the following:
      is `topology_publication_owner / publication_convergence` with
      `publication_pending`; no runtime behavior was changed.
 
-9. [Topology Killed Join Gate](../packages/active-20260514-topology-killed-join-gate.md)
+9. [Topology Killed Join Gate](../packages/done-20260514-topology-killed-join-gate.md)
    - Lane: `scenario-release-gate`
    - Owner boundary: `topology_join_owner / join_admission_rebalance_gate`
    - Purpose: prove a node killed during join converges through durable join
@@ -346,7 +346,7 @@ Final closure requires fresh evidence proving all of the following:
    - Acceptance: joining member is admitted, fenced, or terminally classified
      by owner truth without degraded evidence promoting readiness.
 
-10. [Topology Killed Rejoin Gate](../packages/todo-20260514-topology-killed-rejoin-gate.md)
+10. [Topology Killed Rejoin Gate](../packages/active-20260514-topology-killed-rejoin-gate.md)
     - Lane: `scenario-release-gate`
     - Owner boundary: `topology_rejoin_owner / post_restore_reconciliation_gate`
     - Purpose: prove killed-rejoin recovery performs post-restore
@@ -476,18 +476,10 @@ projection reconciliation is done as classification-only observability:
 `topology_publication_owner` blocker instead of healthy evidence.
 
 The current action is now
-[Topology Killed Join Gate](../packages/active-20260514-topology-killed-join-gate.md).
+[Topology Killed Rejoin Gate](../packages/active-20260514-topology-killed-rejoin-gate.md).
 The predecessor
-[Topology Stale Publication Durable Truth Gate](../packages/done-20260514-topology-stale-publication-durable-truth-gate.md)
-closed as classification-only observability:
-`test-output/reports/topology-stale-publication-durable-truth-gate.report.json`
-failed after `125041ms` with `publicationStatus=PUBLISHED`,
-`pendingAckCount=0`, `missingPublishedCount=2`, `publicationPending=true`,
-active gate `ready`, snapshot coverage `2/3`, and zero priority recovery
-residual witnesses. Execute and classify the killed-join gate as
-observe/classify work only.
-
-Observed killed-join gate result:
+[Topology Killed Join Gate](../packages/done-20260514-topology-killed-join-gate.md)
+migrated:
 `test-output/reports/topology-killed-join-gate.report.json` failed after
 `108325ms` while waiting for `benchmark_events` partition visibility. Canonical
 evidence did not reach `topology_join_owner / join_admission_rebalance_gate`;
@@ -495,5 +487,5 @@ the first frontier migrated to `topology_publication_owner /
 publication_convergence` with `missing_published_nodes_present`,
 `missingPublishedCount=4`, `publicationPending=true`, active gate `timed_out`,
 snapshot coverage `1/5`, and zero priority recovery residual witnesses. Close
-the killed-join gate as migrated and continue the remaining failure-gate
-packages. Do not fix `rolling-restart` runtime behavior in this sprint segment.
+the killed-rejoin gate as observe/classify work only. Do not fix
+`rolling-restart` runtime behavior in this sprint segment.

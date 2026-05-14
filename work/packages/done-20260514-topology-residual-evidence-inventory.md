@@ -238,9 +238,9 @@ queue rather than treated as release proof:
 1. Failure detection repair: unexecuted; owner package
    `todo-20260514-topology-failure-detection-repair-gate.md`.
 2. Killed join: unexecuted; owner package
-   `active-20260514-topology-killed-join-gate.md`.
+   `done-20260514-topology-killed-join-gate.md`.
 3. Killed rejoin: unexecuted; owner package
-   `todo-20260514-topology-killed-rejoin-gate.md`.
+   `active-20260514-topology-killed-rejoin-gate.md`.
 4. Remote coordinator handoff: unexecuted; owner package
    `todo-20260514-topology-remote-coordinator-handoff-gate.md`.
 5. Missed handoff ACK: unexecuted; owner package

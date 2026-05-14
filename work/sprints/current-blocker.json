@@ -2,49 +2,50 @@
   "schema": "current-blocker-v1",
   "generatedBy": "scripts/work-tracker.js",
   "sprint": "work/sprints/active-2026-q2-topology-convergence-residual-closure.md",
-  "package": "work/packages/active-20260514-topology-killed-join-gate.md",
+  "package": "work/packages/active-20260514-topology-killed-rejoin-gate.md",
   "status": "active",
   "lane": "scenario-release-gate",
-  "scenario": "node-join-under-load",
-  "artifact": "test-output/reports/topology-killed-join-gate.report.json",
+  "scenario": "seed-restart-under-load",
+  "artifact": "test-output/reports/topology-killed-rejoin-gate.report.json",
   "playback": "none",
-  "owner": "topology_join_owner",
-  "boundary": "join_admission_rebalance_gate",
-  "dominantReason": "missing_published_nodes_present",
-  "currentState": "Observed gate result: node-join-under-load failed after 108325ms waiting for benchmark_events partition visibility. Canonical topology evidence did not reach topology_join_owner / join_admission_rebalance_gate; the first frontier is topology_publication_owner / publication_convergence with missingPublishedCount=4, publicationPending=true, activeGateState=timed_out, snapshotCoverageNodeCount=1/5, and priority recovery residual witnesses=0.",
-  "nextAction": "Close this package as migrated and activate the next remaining failure-gate package; do not fix rolling-restart runtime behavior in this package without explicit re-scope.",
+  "owner": "topology_rejoin_owner",
+  "boundary": "post_restore_reconciliation_gate",
+  "dominantReason": "killed_rejoin_release_gate_unproven",
+  "currentState": "Activated after killed-join gate migration. Post-rejoin reconciliation gates active admission in focused proof, but killed-rejoin distributed convergence still needs release-gate classification.",
+  "nextAction": "Execute and classify the killed-rejoin gate only. If the gate is red, record the owner-boundary split; do not fix rolling-restart runtime behavior in this package without explicit re-scope.",
   "proof": [
-    "node test/distributed/run.js --config test/distributed/config/local.json --scenario node-join-under-load --output test-output/reports/topology-killed-join-gate.report.json --verbose",
-    "npm run work:evidence-summary -- test-output/reports/topology-killed-join-gate.report.json",
-    "npm run analyze:distributed-failure -- --report test-output/reports/topology-killed-join-gate.report.json",
-    "npm run analyze:topology-convergence -- test-output/reports/topology-killed-join-gate.report.json",
-    "npm --silent run analyze:causal-model -- test-output/reports/topology-killed-join-gate.report.json",
-    "npm run analyze:priority-recovery-residuals -- test-output/reports/topology-killed-join-gate.report.json --markdown"
+    "npx tap test/control-plane/rejoin-reconciliation-contract.test.js test/node/node-reintegration-service.test.js",
+    "node test/distributed/run.js --config test/distributed/config/local.json --scenario seed-restart-under-load --output test-output/reports/topology-killed-rejoin-gate.report.json --verbose",
+    "npm run work:evidence-summary -- test-output/reports/topology-killed-rejoin-gate.report.json",
+    "npm run analyze:distributed-failure -- --report test-output/reports/topology-killed-rejoin-gate.report.json",
+    "npm run analyze:topology-convergence -- test-output/reports/topology-killed-rejoin-gate.report.json",
+    "npm --silent run analyze:causal-model -- test-output/reports/topology-killed-rejoin-gate.report.json",
+    "npm run analyze:priority-recovery-residuals -- test-output/reports/topology-killed-rejoin-gate.report.json --markdown"
   ],
   "writeScope": [
-    "work/packages/active-20260514-topology-killed-join-gate.md",
+    "work/packages/active-20260514-topology-killed-rejoin-gate.md",
     "work/sprints/active-2026-q2-topology-convergence-residual-closure.md",
     "work/sprints/current-blocker.json",
     "work/sprints/current-blocker.md"
   ],
   "handoffFiles": [
-    "work/packages/done-20260513-topology-membership-epoch-fencing.md",
-    "work/packages/done-20260513-topology-active-gate-owner-truth.md",
-    "work/packages/done-20260514-topology-stale-publication-durable-truth-gate.md"
+    "work/packages/done-20260513-topology-post-rejoin-reconciliation.md",
+    "work/packages/done-20260513-topology-failure-repair-intents.md",
+    "work/packages/done-20260514-topology-killed-join-gate.md"
   ],
   "generatedFiles": [
     "work/sprints/current-blocker.json",
     "work/sprints/current-blocker.md"
   ],
   "candidateRuntimeFiles": [
-    "src/bootstrap/node-joining-service-segment-1.js",
-    "src/bootstrap/node-joining-service-segment-2.js",
-    "src/bootstrap/join-readiness-evaluator-tail-methods.js",
-    "src/control-plane/membership-epoch-contract.js",
-    "test/bootstrap/node-joining-service.test.js"
+    "src/control-plane/rejoin-reconciliation-contract.js",
+    "src/node/node-reintegration-service.js",
+    "src/node/node-constants.js",
+    "test/control-plane/rejoin-reconciliation-contract.test.js",
+    "test/node/node-reintegration-service.test.js"
   ],
   "commitScope": [
-    "work/packages/active-20260514-topology-killed-join-gate.md",
+    "work/packages/active-20260514-topology-killed-rejoin-gate.md",
     "work/sprints/active-2026-q2-topology-convergence-residual-closure.md",
     "work/sprints/current-blocker.json",
     "work/sprints/current-blocker.md"
@@ -61,35 +62,35 @@
   },
   "representativeResidual": {},
   "causalGovernance": {
-    "hypothesis": "topology_join_owner / join_admission_rebalance_gate proof should reduce, migrate, or classify killed_join_release_gate_unproven without hiding the sprint representative residual.",
-    "stopConditionCheck": "npm --silent run analyze:causal-model -- test-output/reports/topology-killed-join-gate.report.json",
-    "expectedCausalModelChange": "killed_join_release_gate_unproven becomes representative-green, reduced, same-frontier, migrated, or classification-only with a named owner-boundary reason.",
-    "representativeOutcome": "migrated",
-    "causalDebt": "The killed-join gate artifact is red, but canonical evidence does not implicate topology_join_owner / join_admission_rebalance_gate. The first frontier migrated to topology_publication_owner / publication_convergence with missing_published_nodes_present; runtime rolling-restart fixes remain out of scope.",
+    "hypothesis": "topology_rejoin_owner / post_restore_reconciliation_gate proof should reduce, migrate, or classify killed_rejoin_release_gate_unproven without hiding the sprint representative residual.",
+    "stopConditionCheck": "npm --silent run analyze:causal-model -- test-output/reports/topology-killed-rejoin-gate.report.json",
+    "expectedCausalModelChange": "killed_rejoin_release_gate_unproven becomes representative-green, reduced, same-frontier, migrated, or classification-only with a named owner-boundary reason.",
+    "representativeOutcome": "pending-before-rerun",
+    "causalDebt": "Until topology_rejoin_owner / post_restore_reconciliation_gate is proven, the sprint representative rolling-restart residual stays open. Runtime rolling-restart fixes are out of scope for this observe/classify package.",
     "crossBoundaryReview": "Required before closure through the scenario-release-gate subagent ledger or an allowed waiver recorded in this package."
   },
   "scenarioCausalClosure": {
-    "referenceScenarioOrProbe": "node-join-under-load / topology_join_owner / join_admission_rebalance_gate",
+    "referenceScenarioOrProbe": "seed-restart-under-load / topology_rejoin_owner / post_restore_reconciliation_gate",
     "phaseChain": [
       "canonical evidence extraction",
-      "topology_join_owner / join_admission_rebalance_gate focused proof",
+      "topology_rejoin_owner / post_restore_reconciliation_gate focused proof",
       "representative or gate rerun classification"
     ],
-    "currentFirstFrontier": "migrated frontier topology_publication_owner / publication_convergence with missing_published_nodes_present in test-output/reports/topology-killed-join-gate.report.json",
+    "currentFirstFrontier": "package-local frontier topology_rejoin_owner / post_restore_reconciliation_gate; sprint representative frontier remains startup_active_gate_owner / snapshot_coverage until fresh evidence changes it",
     "knownDownstreamBlockers": [
       "rolling-restart representative active-gate snapshot coverage remains red until green or migrated",
       "runtime or harness fixes discovered outside this owner boundary require a narrower successor package"
     ],
-    "missingCausalEdge": "unproven topology_join_owner / join_admission_rebalance_gate causal edge for killed_join_release_gate_unproven",
-    "missingCausalEdgeProbe": "node test/distributed/run.js --config test/distributed/config/local.json --scenario node-join-under-load --output test-output/reports/topology-killed-join-gate.report.json --verbose",
-    "boundedProgressProof": "Focused proof must show bounded wake, retry, timeout, reconcile, drain, dispatch, delivery, timer, or advance for topology_join_owner / join_admission_rebalance_gate.",
-    "boundedProgressProofArtifact": "test-output/reports/topology-killed-join-gate.report.json",
-    "expectedObservableTransition": "killed_join_release_gate_unproven migrated before the join owner boundary: publicationStatus=PUBLISHED with pendingAckCount=0, missingPublishedCount=4, publicationPending=true, and activeGateState=timed_out.",
+    "missingCausalEdge": "unproven topology_rejoin_owner / post_restore_reconciliation_gate causal edge for killed_rejoin_release_gate_unproven",
+    "missingCausalEdgeProbe": "npx tap test/control-plane/rejoin-reconciliation-contract.test.js test/node/node-reintegration-service.test.js",
+    "boundedProgressProof": "Focused proof must show bounded wake, retry, timeout, reconcile, drain, dispatch, delivery, timer, or advance for topology_rejoin_owner / post_restore_reconciliation_gate.",
+    "boundedProgressProofArtifact": "test-output/reports/topology-killed-rejoin-gate.report.json",
+    "expectedObservableTransition": "killed_rejoin_release_gate_unproven resolves to green evidence, a reduced residual, same-frontier evidence, migrated owner-boundary proof, or classification-only stop.",
     "maxProgressBound": "one activation cycle: package doctor, extractor/probe, owner-file proof, focused validation, and result classification",
-    "sameFrontierFallback": "keep topology_join_owner / join_admission_rebalance_gate active and do not broaden the package or claim ship proof",
-    "expectedNextFrontier": "next remaining failure-gate package unless a narrower canonical blocker is explicitly activated",
-    "resultClassification": "migrated",
-    "stopCondition": "migrate-owner-boundary"
+    "sameFrontierFallback": "keep topology_rejoin_owner / post_restore_reconciliation_gate active and do not broaden the package or claim ship proof",
+    "expectedNextFrontier": "representative green evidence or a narrower owner-boundary blocker selected by canonical evidence",
+    "resultClassification": "pending-before-probe",
+    "stopCondition": "continue-local-fix"
   },
   "predecessor": null
 }
