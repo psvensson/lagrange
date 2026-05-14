@@ -11,9 +11,9 @@
   "playback": "none",
   "owner": "topology_join_owner",
   "boundary": "join_admission_rebalance_gate",
-  "dominantReason": "killed_join_release_gate_unproven",
-  "currentState": "Activated after stale-publication gate classification-only closure. Join admission and membership epoch contracts have focused proof, but killed-join convergence still needs a durable release-gate artifact.",
-  "nextAction": "Execute and classify the killed-join gate only. If the gate is red, record the owner-boundary split; do not fix rolling-restart runtime behavior in this package without explicit re-scope.",
+  "dominantReason": "missing_published_nodes_present",
+  "currentState": "Observed gate result: node-join-under-load failed after 108325ms waiting for benchmark_events partition visibility. Canonical topology evidence did not reach topology_join_owner / join_admission_rebalance_gate; the first frontier is topology_publication_owner / publication_convergence with missingPublishedCount=4, publicationPending=true, activeGateState=timed_out, snapshotCoverageNodeCount=1/5, and priority recovery residual witnesses=0.",
+  "nextAction": "Close this package as migrated and activate the next remaining failure-gate package; do not fix rolling-restart runtime behavior in this package without explicit re-scope.",
   "proof": [
     "node test/distributed/run.js --config test/distributed/config/local.json --scenario node-join-under-load --output test-output/reports/topology-killed-join-gate.report.json --verbose",
     "npm run work:evidence-summary -- test-output/reports/topology-killed-join-gate.report.json",
@@ -63,8 +63,8 @@
     "hypothesis": "topology_join_owner / join_admission_rebalance_gate proof should reduce, migrate, or classify killed_join_release_gate_unproven without hiding the sprint representative residual.",
     "stopConditionCheck": "npm --silent run analyze:causal-model -- test-output/reports/topology-killed-join-gate.report.json",
     "expectedCausalModelChange": "killed_join_release_gate_unproven becomes representative-green, reduced, same-frontier, migrated, or classification-only with a named owner-boundary reason.",
-    "representativeOutcome": "pending-before-rerun",
-    "causalDebt": "Until topology_join_owner / join_admission_rebalance_gate is proven, the sprint representative rolling-restart residual stays open. Runtime rolling-restart fixes are out of scope for this observe/classify package.",
+    "representativeOutcome": "migrated",
+    "causalDebt": "The killed-join gate artifact is red, but canonical evidence does not implicate topology_join_owner / join_admission_rebalance_gate. The first frontier migrated to topology_publication_owner / publication_convergence with missing_published_nodes_present; runtime rolling-restart fixes remain out of scope.",
     "crossBoundaryReview": "Required before closure through the scenario-release-gate subagent ledger or an allowed waiver recorded in this package."
   },
   "scenarioCausalClosure": {
@@ -74,7 +74,7 @@
       "topology_join_owner / join_admission_rebalance_gate focused proof",
       "representative or gate rerun classification"
     ],
-    "currentFirstFrontier": "package-local frontier topology_join_owner / join_admission_rebalance_gate; sprint representative frontier remains startup_active_gate_owner / snapshot_coverage until fresh evidence changes it",
+    "currentFirstFrontier": "migrated frontier topology_publication_owner / publication_convergence with missing_published_nodes_present in test-output/reports/topology-killed-join-gate.report.json",
     "knownDownstreamBlockers": [
       "rolling-restart representative active-gate snapshot coverage remains red until green or migrated",
       "runtime or harness fixes discovered outside this owner boundary require a narrower successor package"
@@ -83,12 +83,20 @@
     "missingCausalEdgeProbe": "node test/distributed/run.js --config test/distributed/config/local.json --scenario node-join-under-load --output test-output/reports/topology-killed-join-gate.report.json --verbose",
     "boundedProgressProof": "Focused proof must show bounded wake, retry, timeout, reconcile, drain, dispatch, delivery, timer, or advance for topology_join_owner / join_admission_rebalance_gate.",
     "boundedProgressProofArtifact": "test-output/reports/topology-killed-join-gate.report.json",
-    "expectedObservableTransition": "killed_join_release_gate_unproven resolves to green evidence, a reduced residual, same-frontier evidence, migrated owner-boundary proof, or classification-only stop.",
+    "expectedObservableTransition": "killed_join_release_gate_unproven migrated before the join owner boundary: publicationStatus=PUBLISHED with pendingAckCount=0, missingPublishedCount=4, publicationPending=true, and activeGateState=timed_out.",
     "maxProgressBound": "one activation cycle: package doctor, extractor/probe, owner-file proof, focused validation, and result classification",
     "sameFrontierFallback": "keep topology_join_owner / join_admission_rebalance_gate active and do not broaden the package or claim ship proof",
-    "expectedNextFrontier": "representative green evidence or a narrower owner-boundary blocker selected by canonical evidence",
-    "resultClassification": "pending-before-probe",
-    "stopCondition": "continue-local-fix"
+    "expectedNextFrontier": "next remaining failure-gate package unless a narrower canonical blocker is explicitly activated",
+    "resultClassification": "migrated",
+    "stopCondition": "migrate-owner-boundary"
+  },
+  "ownerBoundaryMigrationProof": {
+    "fromOwner": "topology_join_owner",
+    "fromBoundary": "join_admission_rebalance_gate",
+    "toOwner": "topology_publication_owner",
+    "toBoundary": "publication_convergence",
+    "reason": "fresh node-join-under-load gate first frontier is publication_ack_convergence / missing_published_nodes_present before killed-join release-gate evidence can be evaluated",
+    "evidence": "test-output/reports/topology-killed-join-gate.report.json"
   }
 }
 -->
@@ -236,6 +244,24 @@ package.
 2. Join owner diagnostics include node, epoch, durable intent, repair work,
    next-attempt, and terminal/degraded reason.
 3. No admission success is inferred from degraded or stale evidence.
+
+## Observed Gate Result
+
+`node-join-under-load` failed after `108325ms` while waiting for
+`benchmark_events` table partition visibility. The last create error was an
+Admin API query timeout on node
+`7493b0ab-a054-5fad-a91b-5e331db29304`.
+
+Canonical topology evidence did not reach the killed-join owner boundary. The
+first frontier is `topology_publication_owner / publication_convergence` with
+`missing_published_nodes_present`, `publicationStatus=PUBLISHED`,
+`pendingAckCount=0`, `missingPublishedCount=4`, and `publicationPending=true`.
+The next expected frontier is active-gate snapshot coverage, blocked with
+`activeGateState=timed_out` and snapshot coverage `1/5`.
+
+Priority recovery residual extraction reported `Witnesses: 0` and
+`Split required: false`. This package is therefore migrated rather than widened
+into a join-owner or rolling-restart runtime repair.
 
 ## Commit And Push Ledger
 

@@ -485,5 +485,15 @@ failed after `125041ms` with `publicationStatus=PUBLISHED`,
 `pendingAckCount=0`, `missingPublishedCount=2`, `publicationPending=true`,
 active gate `ready`, snapshot coverage `2/3`, and zero priority recovery
 residual witnesses. Execute and classify the killed-join gate as
-observe/classify work only. Do not fix `rolling-restart` runtime behavior in
-this sprint segment.
+observe/classify work only.
+
+Observed killed-join gate result:
+`test-output/reports/topology-killed-join-gate.report.json` failed after
+`108325ms` while waiting for `benchmark_events` partition visibility. Canonical
+evidence did not reach `topology_join_owner / join_admission_rebalance_gate`;
+the first frontier migrated to `topology_publication_owner /
+publication_convergence` with `missing_published_nodes_present`,
+`missingPublishedCount=4`, `publicationPending=true`, active gate `timed_out`,
+snapshot coverage `1/5`, and zero priority recovery residual witnesses. Close
+the killed-join gate as migrated and continue the remaining failure-gate
+packages. Do not fix `rolling-restart` runtime behavior in this sprint segment.
