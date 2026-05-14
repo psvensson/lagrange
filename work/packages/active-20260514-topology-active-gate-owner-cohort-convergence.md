@@ -180,7 +180,7 @@ snapshot must be the authority and must include:
 
 ## Activation Contract
 
-Required before this package moves from `todo` to `active`:
+Required before implementation continues in this active package:
 
 1. Run `npm run work:package:doctor -- --fix-dry-run work/packages/active-20260514-topology-active-gate-owner-cohort-convergence.md` and keep `causalGovernance`, `scenarioCausalClosure`, Model Fit, and scope fields concrete before implementation starts.
 2. Promote only these proven candidates into `writeScope` and `commitScope` after owner-file proof: `src/admin/admin-control-snapshot-class-part-1.js`, `src/admin/admin-control-snapshot-class-part-3.js`, `src/admin/admin-control-snapshot-class-part-5.js`, `src/control-plane/active-node-projection.js`, `src/bootstrap/bootstrap-api.js`, `test/admin/admin-control-snapshot.test.js`.
@@ -195,9 +195,8 @@ Required before this package moves from `todo` to `active`:
 Required when this package is activated because it is a runtime owner-boundary
 package.
 
-1. [ ] Review subagent recorded: pending until package activation.
-2. [ ] Fix subagent recorded or explicitly not needed: pending until review
-   result.
+1. [x] Review subagent recorded: Agent Codex (019e2672-0488-71c3-b2b5-6244c3b5515e) reviewed work/packages/done-20260514-topology-active-gate-budget-closure.md; result fixes-required.
+2. [x] Fix subagent recorded or explicitly not needed: Agent Codex (019e2675-a55f-7101-94ab-4b2af3bdb06f) fixed work/packages/done-20260514-topology-active-gate-budget-closure.md.
 3. [ ] Implementation subagent recorded: pending until pre-implementation proof
    is clean.
 

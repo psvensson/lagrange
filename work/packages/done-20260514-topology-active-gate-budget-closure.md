@@ -266,7 +266,7 @@ reports `state=exhausted`, `observed=87249`, `limit=87249`,
 `nextAttemptInMs=absent`. `active_gate_attempts` remains exhausted at `9/8`
 and now carries the same terminal degraded classification.
 
-Validation run by implementation subagent:
+Validation and closure verification:
 
 1. `npm run work:package:doctor -- --fix-dry-run work/packages/done-20260514-topology-active-gate-budget-closure.md` - passed, no deterministic suggestions.
 2. `npm run analyze:owner-files -- startup_active_gate_owner snapshot_coverage --markdown` - selected this package and diagnostics/test candidates as the bounded owner surface.
@@ -274,6 +274,11 @@ Validation run by implementation subagent:
 4. `npx tap test/diagnostics/budget-timeout-accounting.test.js` - completed with `SKIP no tests found`; this file is a `node:test` suite.
 5. `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-green-gate-after-priority-recovery-workflow-progress-after-snapshot-coverage.report.json` - active-gate timeout changed from unbounded to exhausted terminal accounting; sprint first frontier remains `startup_active_gate_owner / snapshot_coverage`.
 6. `npm run work:validate -- --pre-impl work/packages/done-20260514-topology-active-gate-budget-closure.md` - passed.
+7. `node scripts/check-guideline-literals.js src/diagnostics/budget-timeout-accounting.js test/diagnostics/budget-timeout-accounting.test.js` - passed.
+8. `node scripts/check-guideline-decision-boundaries.js src/diagnostics/budget-timeout-accounting.js test/diagnostics/budget-timeout-accounting.test.js` - passed.
+9. `npm run audit:runtime-grammar:file -- src/diagnostics/budget-timeout-accounting.js test/diagnostics/budget-timeout-accounting.test.js` - passed.
+10. `npm run work:validate -- --closure work/packages/done-20260514-topology-active-gate-budget-closure.md` - passed.
+11. `git diff --check -- src/diagnostics/budget-timeout-accounting.js test/diagnostics/budget-timeout-accounting.test.js work/packages/done-20260514-topology-active-gate-budget-closure.md work/sprints/active-2026-q2-topology-convergence-residual-closure.md` - passed.
 
 Parent-session review added a regression for the overclassification edge: plain
 `state=stalled` without a terminal reason or exhausted attempt/cycle budget
