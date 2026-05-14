@@ -3,7 +3,7 @@
 <!-- work-package
 {
   "schema": "work-package-v1",
-  "status": "active",
+  "status": "done",
   "opened": "2026-05-13",
   "lane": "runtime-owner-boundary",
   "scenario": "none",
@@ -20,10 +20,10 @@
     "node scripts/check-guideline-literals.js src/control-plane/rejoin-reconciliation-contract.js src/node/node-reintegration-service.js src/node/node-constants.js",
     "node scripts/check-guideline-decision-boundaries.js src/control-plane/rejoin-reconciliation-contract.js src/node/node-reintegration-service.js src/node/node-constants.js",
     "npm run audit:runtime-grammar:file -- src/control-plane/rejoin-reconciliation-contract.js src/node/node-reintegration-service.js src/node/node-constants.js",
-    "git diff --check -- work/packages/active-20260513-topology-post-rejoin-reconciliation.md work/model-ledger.jsonl work/sprints/active-2026-q2-topology-convergence-ship-shape.md work/sprints/current-blocker.json work/sprints/current-blocker.md src/control-plane/rejoin-reconciliation-contract.js src/node/node-reintegration-service.js src/node/node-constants.js test/control-plane/rejoin-reconciliation-contract.test.js test/node/node-reintegration-service.test.js"
+    "git diff --check -- work/packages/done-20260513-topology-post-rejoin-reconciliation.md work/model-ledger.jsonl work/sprints/active-2026-q2-topology-convergence-ship-shape.md work/sprints/current-blocker.json work/sprints/current-blocker.md src/control-plane/rejoin-reconciliation-contract.js src/node/node-reintegration-service.js src/node/node-constants.js test/control-plane/rejoin-reconciliation-contract.test.js test/node/node-reintegration-service.test.js"
   ],
   "writeScope": [
-    "work/packages/active-20260513-topology-post-rejoin-reconciliation.md",
+    "work/packages/done-20260513-topology-post-rejoin-reconciliation.md",
     "work/model-ledger.jsonl",
     "work/sprints/active-2026-q2-topology-convergence-ship-shape.md",
     "work/sprints/current-blocker.json",
@@ -52,7 +52,7 @@
     "src/node/node-constants.js"
   ],
   "commitScope": [
-    "work/packages/active-20260513-topology-post-rejoin-reconciliation.md",
+    "work/packages/done-20260513-topology-post-rejoin-reconciliation.md",
     "work/model-ledger.jsonl",
     "work/sprints/active-2026-q2-topology-convergence-ship-shape.md",
     "work/sprints/current-blocker.json",
@@ -107,7 +107,9 @@
     "resultClassification": "classification-only",
     "stopCondition": "classification-only-stop"
   },
-  "predecessor": "work/packages/done-20260513-topology-failure-repair-intents.md"
+  "predecessor": "work/packages/done-20260513-topology-failure-repair-intents.md",
+  "closed": "2026-05-14",
+  "commitAndPushLedgerRequired": true
 }
 -->
 
@@ -164,7 +166,7 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 - Package class: `representative-frontier-closure`
 - Intended minimum model: `gpt-5.3-codex`
 - Scope shape: `owner-boundary-contraction/current-frontier`
-- Owned files: `work/packages/active-20260513-topology-post-rejoin-reconciliation.md`, `work/model-ledger.jsonl`, `work/sprints/active-2026-q2-topology-convergence-ship-shape.md`, `work/sprints/current-blocker.json`, `work/sprints/current-blocker.md`, `src/control-plane/rejoin-reconciliation-contract.js`, `src/node/node-reintegration-service.js`, `src/node/node-constants.js`, `test/control-plane/rejoin-reconciliation-contract.test.js`, `test/node/node-reintegration-service.test.js`
+- Owned files: `work/packages/done-20260513-topology-post-rejoin-reconciliation.md`, `work/model-ledger.jsonl`, `work/sprints/active-2026-q2-topology-convergence-ship-shape.md`, `work/sprints/current-blocker.json`, `work/sprints/current-blocker.md`, `src/control-plane/rejoin-reconciliation-contract.js`, `src/node/node-reintegration-service.js`, `src/node/node-constants.js`, `test/control-plane/rejoin-reconciliation-contract.test.js`, `test/node/node-reintegration-service.test.js`
 - Forbidden files: membership epoch definition, durable failure repair intent
   creation, partition descriptor epoch, placement capacity, anti-entropy scans,
   failure scenario gates, Pro behavior, Enterprise behavior
@@ -176,17 +178,17 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 ## Subagent Sequencing Ledger
 
 - [x] Review subagent recorded:
-      `Agent Schrodinger (019e254a-f738-78a2-abf9-9609bec11e71) reviewed work/packages/active-20260513-topology-post-rejoin-reconciliation.md; result fixes-required`.
+      `Agent Schrodinger (019e254a-f738-78a2-abf9-9609bec11e71) reviewed work/packages/done-20260513-topology-post-rejoin-reconciliation.md; result fixes-required`.
 - [x] Fix subagent recorded or explicitly not needed:
-      `Agent Pascal (019e254c-8dae-7f61-bfe4-a6da80a3a966) fixed work/packages/active-20260513-topology-post-rejoin-reconciliation.md`.
+      `Agent Pascal (019e254c-8dae-7f61-bfe4-a6da80a3a966) fixed work/packages/done-20260513-topology-post-rejoin-reconciliation.md`.
 - [x] Implementation subagent recorded:
-      `Agent Avicenna (019e2551-ed31-78a0-b2b4-234aaca9e8d3) implemented work/packages/active-20260513-topology-post-rejoin-reconciliation.md`.
+      `Agent Avicenna (019e2551-ed31-78a0-b2b4-234aaca9e8d3) implemented work/packages/done-20260513-topology-post-rejoin-reconciliation.md`.
 
 ## Validation
 
 1. `npm run work:context` passed after activation and confirmed this package as
    the current blocker.
-2. `npm run work:package:doctor -- --suggest work/packages/active-20260513-topology-post-rejoin-reconciliation.md`
+2. `npm run work:package:doctor -- --suggest work/packages/done-20260513-topology-post-rejoin-reconciliation.md`
    initially found the required Subagent Sequencing Ledger missing.
 3. `npm run analyze:owner-files -- topology_membership_owner rejoin_reconciliation --markdown`
    passed and showed this boundary is currently represented by package/sprint
@@ -215,7 +217,13 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
     passed.
 13. `npm run audit:runtime-grammar:file -- src/control-plane/rejoin-reconciliation-contract.js src/node/node-reintegration-service.js src/node/node-constants.js`
     passed.
-14. `git diff --check -- work/packages/active-20260513-topology-post-rejoin-reconciliation.md work/model-ledger.jsonl work/sprints/active-2026-q2-topology-convergence-ship-shape.md work/sprints/current-blocker.json work/sprints/current-blocker.md src/control-plane/rejoin-reconciliation-contract.js src/node/node-reintegration-service.js src/node/node-constants.js test/control-plane/rejoin-reconciliation-contract.test.js test/node/node-reintegration-service.test.js`
+14. `git diff --check -- work/packages/done-20260513-topology-post-rejoin-reconciliation.md work/model-ledger.jsonl work/sprints/active-2026-q2-topology-convergence-ship-shape.md work/sprints/current-blocker.json work/sprints/current-blocker.md src/control-plane/rejoin-reconciliation-contract.js src/node/node-reintegration-service.js src/node/node-constants.js test/control-plane/rejoin-reconciliation-contract.test.js test/node/node-reintegration-service.test.js`
     passed.
-15. `npm run work:validate -- --pre-impl work/packages/active-20260513-topology-post-rejoin-reconciliation.md`
+15. `npm run work:validate -- --pre-impl work/packages/done-20260513-topology-post-rejoin-reconciliation.md`
     passed.
+
+## Commit And Push Ledger
+
+1. Focused package commit: `e89f04da`
+2. Pushed to: `origin/codex/pending-ack-eligibility-filter`
+3. Commit contains only package-owned files/package-status/allowed sprint handoff: `yes`

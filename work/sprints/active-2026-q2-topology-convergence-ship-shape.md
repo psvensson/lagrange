@@ -77,23 +77,36 @@ Historical sprint pivot completed on May 14, 2026:
 6. Failure repair intent is historical/completed sprint context, not the active
    sprint target.
 
-Human-directed active sprint pivot on May 14, 2026:
+Historical sprint pivot completed on May 14, 2026:
 
 1. Owner: `topology_membership_owner`.
 2. Boundary: `rejoin_reconciliation`.
 3. Dominant reason: `rejoin_restore_lacks_remote_operation_reconcile`.
+4. Completed package:
+   `work/packages/done-20260513-topology-post-rejoin-reconciliation.md`.
+5. Focused proof surface:
+   `npx tap test/control-plane/rejoin-reconciliation-contract.test.js test/node/node-reintegration-service.test.js`.
+6. Post-rejoin reconciliation is historical/completed sprint context, not the
+   active sprint target.
+
+Human-directed active sprint pivot on May 14, 2026:
+
+1. Owner: `partition_topology_owner`.
+2. Boundary: `descriptor_epoch`.
+3. Dominant reason: `partition_map_epoch_missing`.
 4. Active package:
-   `work/packages/active-20260513-topology-post-rejoin-reconciliation.md`.
+   `work/packages/active-20260513-topology-partition-descriptor-epoch.md`.
 5. Focused proof surface:
    to be finalized by the active package metadata before implementation.
 6. Rolling-restart, active-gate snapshot coverage, publication owner truth,
-   membership epoch fencing, and failure repair intents remain historical
-   representative context, not the active sprint target.
+   membership epoch fencing, failure repair intents, and post-rejoin
+   reconciliation remain historical representative context, not the active
+   sprint target.
 
 The immediate missing causal edge is:
 
-1. Durable rejoin restore does not yet gate full active admission on explicit
-   reconciliation of local topology and coordinated remote operation state.
+1. Partition, split, move, route, and stale-route decisions do not yet consume
+   one canonical partition descriptor epoch.
 
 ## Ship-Shape Definition
 
@@ -305,7 +318,7 @@ This sprint treats the system as ship-shape only when these properties hold:
      partition replica failure, and message-group replica failure intents
      before emitting wake events.
 
-11. [Topology Post Rejoin Reconciliation](../packages/active-20260513-topology-post-rejoin-reconciliation.md)
+11. [Topology Post Rejoin Reconciliation](../packages/done-20260513-topology-post-rejoin-reconciliation.md)
    - Lane: `runtime-owner-boundary`
    - Owner boundary: `topology_membership_owner / rejoin_reconciliation`
    - Recommendation covered: add post-rejoin reconciliation.
@@ -318,8 +331,11 @@ This sprint treats the system as ship-shape only when these properties hold:
      operations, repair missing local service state through owners, and do not
      become placement targets until reconciliation reaches a typed owner
      outcome.
+   - Implementation note: canonical post-rejoin reconciliation decisions now
+     gate node reintegration before active-node writes and rebalance wake
+     events.
 
-12. [Topology Partition Descriptor Epoch](../packages/todo-20260513-topology-partition-descriptor-epoch.md)
+12. [Topology Partition Descriptor Epoch](../packages/active-20260513-topology-partition-descriptor-epoch.md)
    - Lane: `runtime-owner-boundary`
    - Owner boundary: `partition_topology_owner / descriptor_epoch`
    - Recommendation covered: make partition descriptors versioned and central.

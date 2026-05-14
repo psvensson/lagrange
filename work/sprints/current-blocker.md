@@ -4,7 +4,7 @@
 
 Sprint: `work/sprints/active-2026-q2-topology-convergence-ship-shape.md`
 
-Package: `work/packages/active-20260513-topology-post-rejoin-reconciliation.md`
+Package: `work/packages/active-20260513-topology-partition-descriptor-epoch.md`
 
 Workflow lane: `runtime-owner-boundary`
 
@@ -16,26 +16,21 @@ Playback: `none`
 
 ## Boundary
 
-Owner: `topology_membership_owner`
+Owner: `partition_topology_owner`
 
-Boundary: `rejoin_reconciliation`
+Boundary: `descriptor_epoch`
 
-Dominant reason: `rejoin_restore_lacks_remote_operation_reconcile`
+Dominant reason: `partition_map_epoch_missing`
 
-Current state: Durable rejoin restores local services, but full active admission still needs explicit reconciliation of local topology and coordinated remote operation state.
+Current state: Partition split, move, route, and diagnostics need one descriptor-version truth surface instead of cache freshness inference.
 
 ## Next Action
 
-Introduce a canonical post-rejoin reconciliation outcome and require NodeReintegrationService to observe a satisfied reconciliation decision before marking a recovering node active.
+Make partition descriptors versioned routing truth for split merge move and stale-route rejection
 
 ## Proof Ladder
 
-1. `npm run analyze:owner-files -- topology_membership_owner rejoin_reconciliation --markdown`
-2. `npx tap test/control-plane/rejoin-reconciliation-contract.test.js test/node/node-reintegration-service.test.js`
-3. `node scripts/check-guideline-literals.js src/control-plane/rejoin-reconciliation-contract.js src/node/node-reintegration-service.js src/node/node-constants.js`
-4. `node scripts/check-guideline-decision-boundaries.js src/control-plane/rejoin-reconciliation-contract.js src/node/node-reintegration-service.js src/node/node-constants.js`
-5. `npm run audit:runtime-grammar:file -- src/control-plane/rejoin-reconciliation-contract.js src/node/node-reintegration-service.js src/node/node-constants.js`
-6. `git diff --check -- work/packages/active-20260513-topology-post-rejoin-reconciliation.md work/model-ledger.jsonl work/sprints/active-2026-q2-topology-convergence-ship-shape.md work/sprints/current-blocker.json work/sprints/current-blocker.md src/control-plane/rejoin-reconciliation-contract.js src/node/node-reintegration-service.js src/node/node-constants.js test/control-plane/rejoin-reconciliation-contract.test.js test/node/node-reintegration-service.test.js`
+1. None recorded
 
 ## Model Fit
 
@@ -52,85 +47,61 @@ Escalation triggers:
 
 ## Causal Governance
 
-Causal hypothesis: `If topology_membership_owner emits one canonical rejoin reconciliation decision before NodeReintegrationService marks a recovering node active, full active admission and rebalance wakeups cannot race ahead of local restore, startup authority, or coordinated operation reconciliation evidence.`
+Causal hypothesis: `unknown`
 
-Stop-condition check: `Do not rerun rolling-restart for this package; npm run analyze:causal-model is cited only as not applicable for scenario:none/artifact:none. Focused stop proof is npx tap test/control-plane/rejoin-reconciliation-contract.test.js test/node/node-reintegration-service.test.js.`
+Stop-condition check: `unknown`
 
-Expected causal-model change: `topology_membership_owner / rejoin_reconciliation becomes the active-admission gate consumed by node reintegration before rebalance wake events.`
+Expected causal-model change: `unknown`
 
-Representative outcome: `classification-only`
+Representative outcome: `unknown`
 
-Causal debt: `Later packages must wire broader partition descriptor, placement, anti-entropy, bounded-budget, and failure-gate consumers to this rejoin reconciliation outcome.`
+Causal debt: `unknown`
 
-Cross-boundary review: `Review and fix subagents must confirm the failure repair intent predecessor closed cleanly before implementation.`
+Cross-boundary review: `unknown`
 
 ## Scenario Causal Closure
 
-Reference scenario/probe: `focused rejoin reconciliation contract and node reintegration tests`
+Reference scenario/probe: `unknown`
 
 Phase chain:
 
-1. `durable rejoin restore`
-2. `post-rejoin reconciliation decision`
-3. `recovering node active admission`
-4. `rebalance wake signal`
+1. None recorded
 
-Current first frontier: `systemic sprint frontier: topology_membership_owner / rejoin_reconciliation / rejoin_restore_lacks_remote_operation_reconcile`
+Current first frontier: `unknown`
 
 Known downstream blockers:
 
-1. `partition descriptor epoch`
-2. `placement capacity`
-3. `anti-entropy reconciler`
-4. `bounded progress budgets`
-5. `failure scenario gates`
+1. None recorded
 
-Missing causal edge: `A recovering node can be marked active and trigger rebalancing without one canonical post-rejoin reconciliation outcome.`
+Missing causal edge: `unknown`
 
-Missing causal edge probe: `npx tap test/control-plane/rejoin-reconciliation-contract.test.js test/node/node-reintegration-service.test.js`
+Missing causal edge probe: `unknown`
 
-Bounded progress proof: `Focused tests prove the reconcile mechanism: pending or blocked rejoin reconciliation suppresses active admission and rebalance wakeups, while satisfied reconciliation advances reintegration.`
+Bounded progress proof: `unknown`
 
-Bounded progress proof artifact: `test/control-plane/rejoin-reconciliation-contract.test.js and test/node/node-reintegration-service.test.js`
+Bounded progress proof artifact: `unknown`
 
-Expected observable transition: `health-only recovery admission -> rejoin reconciliation gated recovery admission`
+Expected observable transition: `unknown`
 
-Max progress bound: `one review subagent, one fix subagent if needed, one implementation subagent, focused owner tests, static guardrails`
+Max progress bound: `unknown`
 
-Same-frontier fallback: `If scope requires partition descriptor or broad operation-owner consumption, split that consumer into the next package instead of broadening this one.`
+Same-frontier fallback: `unknown`
 
-Expected next frontier: `partition_topology_owner / descriptor_epoch`
+Expected next frontier: `unknown`
 
-Result classification: `classification-only`
+Result classification: `unknown`
 
-Stop condition: `classification-only-stop`
+Stop condition: `unknown`
 
 ## Scope
 
 Write scope:
 
-1. `work/packages/active-20260513-topology-post-rejoin-reconciliation.md`
-2. `work/model-ledger.jsonl`
-3. `work/sprints/active-2026-q2-topology-convergence-ship-shape.md`
-4. `work/sprints/current-blocker.json`
-5. `work/sprints/current-blocker.md`
-6. `src/control-plane/rejoin-reconciliation-contract.js`
-7. `src/node/node-reintegration-service.js`
-8. `src/node/node-constants.js`
-9. `test/control-plane/rejoin-reconciliation-contract.test.js`
-10. `test/node/node-reintegration-service.test.js`
+1. None recorded
 
 Handoff files:
 
-1. `work/packages/done-20260513-topology-failure-repair-intents.md`
-2. `work/packages/done-20260513-topology-membership-epoch-fencing.md`
-3. `src/bootstrap/shared/durable-rejoin-partition-restore-planner.js`
-4. `src/bootstrap/node-joining-service-segment-5.js`
-5. `src/control-plane/membership-lifecycle-controller.js`
-6. `src/control-plane/membership-epoch-contract.js`
-7. `test/bootstrap/durable-rejoin-partition-restore-planner.test.js`
-8. `test/bootstrap/node-joining-service.test-part-4.js`
-9. `test/control-plane/membership-lifecycle-controller.test.js`
+1. None recorded
 
 Generated files:
 
@@ -138,22 +109,11 @@ Generated files:
 
 Candidate runtime files:
 
-1. `src/control-plane/rejoin-reconciliation-contract.js`
-2. `src/node/node-reintegration-service.js`
-3. `src/node/node-constants.js`
+1. None recorded
 
 Commit scope:
 
-1. `work/packages/active-20260513-topology-post-rejoin-reconciliation.md`
-2. `work/model-ledger.jsonl`
-3. `work/sprints/active-2026-q2-topology-convergence-ship-shape.md`
-4. `work/sprints/current-blocker.json`
-5. `work/sprints/current-blocker.md`
-6. `src/control-plane/rejoin-reconciliation-contract.js`
-7. `src/node/node-reintegration-service.js`
-8. `src/node/node-constants.js`
-9. `test/control-plane/rejoin-reconciliation-contract.test.js`
-10. `test/node/node-reintegration-service.test.js`
+1. None recorded
 
 Legacy touched files:
 
