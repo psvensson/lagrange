@@ -26,11 +26,16 @@ Current state: Failure detection marks node/service state and emits events, but 
 
 ## Next Action
 
-Convert node lifecycle transitions into durable owner-key repair intents instead of event-only wakeups
+Record canonical durable repair intents for failure-detector node and replica transitions while keeping events as wake signals only.
 
 ## Proof Ladder
 
-1. None recorded
+1. `npm run analyze:owner-files -- failure_detector durable_repair_intent --markdown`
+2. `npx tap test/node/failure-repair-intent-contract.test.js test/node/failure-detector.test.js`
+3. `node scripts/check-guideline-literals.js src/node/failure-repair-intent-contract.js src/node/failure-detector.js src/node/node-constants.js`
+4. `node scripts/check-guideline-decision-boundaries.js src/node/failure-repair-intent-contract.js src/node/failure-detector.js src/node/node-constants.js`
+5. `npm run audit:runtime-grammar:file -- src/node/failure-repair-intent-contract.js src/node/failure-detector.js src/node/node-constants.js`
+6. `git diff --check -- work/packages/active-20260513-topology-failure-repair-intents.md work/model-ledger.jsonl work/sprints/active-2026-q2-topology-convergence-ship-shape.md work/sprints/current-blocker.json work/sprints/current-blocker.md src/node/failure-repair-intent-contract.js src/node/failure-detector.js src/node/node-constants.js test/node/failure-repair-intent-contract.test.js test/node/failure-detector.test.js`
 
 ## Model Fit
 
@@ -47,61 +52,82 @@ Escalation triggers:
 
 ## Causal Governance
 
-Causal hypothesis: `unknown`
+Causal hypothesis: `If failure_detector records canonical durable repair intents before emitting wake events, downstream repair owners can reconcile missed node failure and recovery transitions from durable owner-key evidence instead of depending on event delivery.`
 
-Stop-condition check: `unknown`
+Stop-condition check: `Do not rerun rolling-restart for this package; npm run analyze:causal-model is cited only as not applicable for scenario:none/artifact:none. Focused stop proof is npx tap test/node/failure-repair-intent-contract.test.js test/node/failure-detector.test.js.`
 
-Expected causal-model change: `unknown`
+Expected causal-model change: `failure_detector / durable_repair_intent becomes a concrete owner boundary consumed by later post-rejoin, anti-entropy, and failure-gate packages.`
 
-Representative outcome: `unknown`
+Representative outcome: `classification-only`
 
-Causal debt: `unknown`
+Causal debt: `Later packages must consume the durable repair intents for partition, message-group, replica-operation, rejoin, anti-entropy, and failure-scenario gates.`
 
-Cross-boundary review: `unknown`
+Cross-boundary review: `Required before implementation: review the closed membership epoch package and this active failure repair intent scope.`
 
 ## Scenario Causal Closure
 
-Reference scenario/probe: `unknown`
+Reference scenario/probe: `focused failure detector repair intent tests`
 
 Phase chain:
 
-1. None recorded
+1. `failure detection transition`
+2. `durable repair intent record`
+3. `event wake signal`
+4. `downstream owner reconcile`
 
-Current first frontier: `unknown`
+Current first frontier: `systemic sprint frontier: failure_detector / durable_repair_intent / failure_detection_not_causal_for_repair`
 
 Known downstream blockers:
 
-1. None recorded
+1. `post-rejoin reconciliation`
+2. `partition descriptor epoch`
+3. `placement capacity`
+4. `anti-entropy reconciler`
+5. `bounded progress budgets`
+6. `failure scenario gates`
 
-Missing causal edge: `unknown`
+Missing causal edge: `Failure detection emits status changes and events without one durable owner-key repair-intent record.`
 
-Missing causal edge probe: `unknown`
+Missing causal edge probe: `npx tap test/node/failure-repair-intent-contract.test.js test/node/failure-detector.test.js`
 
-Bounded progress proof: `unknown`
+Bounded progress proof: `Focused tests prove durable intent recording for node failure, node recovery, partition replica failure, and message-group replica failure before event wake signals.`
 
-Bounded progress proof artifact: `unknown`
+Bounded progress proof artifact: `test/node/failure-repair-intent-contract.test.js and test/node/failure-detector.test.js`
 
-Expected observable transition: `unknown`
+Expected observable transition: `event-only failure continuation -> durable repair intent plus wake event`
 
-Max progress bound: `unknown`
+Max progress bound: `one review subagent, one fix subagent if needed, one implementation subagent, focused owner tests, static guardrails`
 
-Same-frontier fallback: `unknown`
+Same-frontier fallback: `If scope requires new system-table schema or broad rebalancer consumption, split that consumer into the next package instead of expanding this one.`
 
-Expected next frontier: `unknown`
+Expected next frontier: `topology_membership_owner / rejoin_reconciliation`
 
-Result classification: `unknown`
+Result classification: `classification-only`
 
-Stop condition: `unknown`
+Stop condition: `classification-only-stop`
 
 ## Scope
 
 Write scope:
 
-1. None recorded
+1. `work/packages/active-20260513-topology-failure-repair-intents.md`
+2. `work/model-ledger.jsonl`
+3. `work/sprints/active-2026-q2-topology-convergence-ship-shape.md`
+4. `work/sprints/current-blocker.json`
+5. `work/sprints/current-blocker.md`
+6. `src/node/failure-repair-intent-contract.js`
+7. `src/node/failure-detector.js`
+8. `src/node/node-constants.js`
+9. `test/node/failure-repair-intent-contract.test.js`
+10. `test/node/failure-detector.test.js`
 
 Handoff files:
 
-1. None recorded
+1. `work/packages/done-20260513-topology-membership-epoch-fencing.md`
+2. `src/node/node-lifecycle-service.js`
+3. `src/node/replica-recovery-service.js`
+4. `src/workflow/owner-key-reconcile-queue.js`
+5. `src/bootstrap/system-table-schemas-constants.js`
 
 Generated files:
 
@@ -109,11 +135,22 @@ Generated files:
 
 Candidate runtime files:
 
-1. None recorded
+1. `src/node/failure-repair-intent-contract.js`
+2. `src/node/failure-detector.js`
+3. `src/node/node-constants.js`
 
 Commit scope:
 
-1. None recorded
+1. `work/packages/active-20260513-topology-failure-repair-intents.md`
+2. `work/model-ledger.jsonl`
+3. `work/sprints/active-2026-q2-topology-convergence-ship-shape.md`
+4. `work/sprints/current-blocker.json`
+5. `work/sprints/current-blocker.md`
+6. `src/node/failure-repair-intent-contract.js`
+7. `src/node/failure-detector.js`
+8. `src/node/node-constants.js`
+9. `test/node/failure-repair-intent-contract.test.js`
+10. `test/node/failure-detector.test.js`
 
 Legacy touched files:
 

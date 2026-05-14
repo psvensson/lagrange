@@ -13,13 +13,52 @@
   "boundary": "durable_repair_intent",
   "dominantReason": "failure_detection_not_causal_for_repair",
   "currentState": "Failure detection marks node/service state and emits events, but repair continuation is not yet durable owner-key work.",
-  "nextAction": "Convert node lifecycle transitions into durable owner-key repair intents instead of event-only wakeups",
-  "proof": [],
-  "writeScope": [],
-  "handoffFiles": [],
+  "nextAction": "Record canonical durable repair intents for failure-detector node and replica transitions while keeping events as wake signals only.",
+  "proof": [
+    "npm run analyze:owner-files -- failure_detector durable_repair_intent --markdown",
+    "npx tap test/node/failure-repair-intent-contract.test.js test/node/failure-detector.test.js",
+    "node scripts/check-guideline-literals.js src/node/failure-repair-intent-contract.js src/node/failure-detector.js src/node/node-constants.js",
+    "node scripts/check-guideline-decision-boundaries.js src/node/failure-repair-intent-contract.js src/node/failure-detector.js src/node/node-constants.js",
+    "npm run audit:runtime-grammar:file -- src/node/failure-repair-intent-contract.js src/node/failure-detector.js src/node/node-constants.js",
+    "git diff --check -- work/packages/active-20260513-topology-failure-repair-intents.md work/model-ledger.jsonl work/sprints/active-2026-q2-topology-convergence-ship-shape.md work/sprints/current-blocker.json work/sprints/current-blocker.md src/node/failure-repair-intent-contract.js src/node/failure-detector.js src/node/node-constants.js test/node/failure-repair-intent-contract.test.js test/node/failure-detector.test.js"
+  ],
+  "writeScope": [
+    "work/packages/active-20260513-topology-failure-repair-intents.md",
+    "work/model-ledger.jsonl",
+    "work/sprints/active-2026-q2-topology-convergence-ship-shape.md",
+    "work/sprints/current-blocker.json",
+    "work/sprints/current-blocker.md",
+    "src/node/failure-repair-intent-contract.js",
+    "src/node/failure-detector.js",
+    "src/node/node-constants.js",
+    "test/node/failure-repair-intent-contract.test.js",
+    "test/node/failure-detector.test.js"
+  ],
+  "handoffFiles": [
+    "work/packages/done-20260513-topology-membership-epoch-fencing.md",
+    "src/node/node-lifecycle-service.js",
+    "src/node/replica-recovery-service.js",
+    "src/workflow/owner-key-reconcile-queue.js",
+    "src/bootstrap/system-table-schemas-constants.js"
+  ],
   "generatedFiles": [],
-  "candidateRuntimeFiles": [],
-  "commitScope": [],
+  "candidateRuntimeFiles": [
+    "src/node/failure-repair-intent-contract.js",
+    "src/node/failure-detector.js",
+    "src/node/node-constants.js"
+  ],
+  "commitScope": [
+    "work/packages/active-20260513-topology-failure-repair-intents.md",
+    "work/model-ledger.jsonl",
+    "work/sprints/active-2026-q2-topology-convergence-ship-shape.md",
+    "work/sprints/current-blocker.json",
+    "work/sprints/current-blocker.md",
+    "src/node/failure-repair-intent-contract.js",
+    "src/node/failure-detector.js",
+    "src/node/node-constants.js",
+    "test/node/failure-repair-intent-contract.test.js",
+    "test/node/failure-detector.test.js"
+  ],
   "modelFit": {
     "packageClass": "representative-frontier-closure",
     "intendedMinimumModel": "gpt-5.3-codex",
@@ -28,7 +67,44 @@
       "owned files expand beyond this package",
       "a frozen decision must be reopened"
     ]
-  }
+  },
+  "causalGovernance": {
+    "hypothesis": "If failure_detector records canonical durable repair intents before emitting wake events, downstream repair owners can reconcile missed node failure and recovery transitions from durable owner-key evidence instead of depending on event delivery.",
+    "stopConditionCheck": "Do not rerun rolling-restart for this package; npm run analyze:causal-model is cited only as not applicable for scenario:none/artifact:none. Focused stop proof is npx tap test/node/failure-repair-intent-contract.test.js test/node/failure-detector.test.js.",
+    "expectedCausalModelChange": "failure_detector / durable_repair_intent becomes a concrete owner boundary consumed by later post-rejoin, anti-entropy, and failure-gate packages.",
+    "representativeOutcome": "classification-only",
+    "causalDebt": "Later packages must consume the durable repair intents for partition, message-group, replica-operation, rejoin, anti-entropy, and failure-scenario gates.",
+    "crossBoundaryReview": "Required before implementation: review the closed membership epoch package and this active failure repair intent scope."
+  },
+  "scenarioCausalClosure": {
+    "referenceScenarioOrProbe": "focused failure detector repair intent tests",
+    "phaseChain": [
+      "failure detection transition",
+      "durable repair intent record",
+      "event wake signal",
+      "downstream owner reconcile"
+    ],
+    "currentFirstFrontier": "systemic sprint frontier: failure_detector / durable_repair_intent / failure_detection_not_causal_for_repair",
+    "knownDownstreamBlockers": [
+      "post-rejoin reconciliation",
+      "partition descriptor epoch",
+      "placement capacity",
+      "anti-entropy reconciler",
+      "bounded progress budgets",
+      "failure scenario gates"
+    ],
+    "missingCausalEdge": "Failure detection emits status changes and events without one durable owner-key repair-intent record.",
+    "missingCausalEdgeProbe": "npx tap test/node/failure-repair-intent-contract.test.js test/node/failure-detector.test.js",
+    "boundedProgressProof": "Focused tests prove durable intent recording for node failure, node recovery, partition replica failure, and message-group replica failure before event wake signals.",
+    "boundedProgressProofArtifact": "test/node/failure-repair-intent-contract.test.js and test/node/failure-detector.test.js",
+    "expectedObservableTransition": "event-only failure continuation -> durable repair intent plus wake event",
+    "maxProgressBound": "one review subagent, one fix subagent if needed, one implementation subagent, focused owner tests, static guardrails",
+    "sameFrontierFallback": "If scope requires new system-table schema or broad rebalancer consumption, split that consumer into the next package instead of expanding this one.",
+    "expectedNextFrontier": "topology_membership_owner / rejoin_reconciliation",
+    "resultClassification": "classification-only",
+    "stopCondition": "classification-only-stop"
+  },
+  "predecessor": "work/packages/done-20260513-topology-membership-epoch-fencing.md"
 }
 -->
 
@@ -43,7 +119,7 @@ partition or replica recovery.
 
 Roadmap Phase `0.1 - Internal Coherence`: topology workflow stabilization,
 failure simulations, and production guarantees. This package belongs to
-`work/sprints/todo-2026-q2-topology-convergence-ship-shape.md`.
+`work/sprints/active-2026-q2-topology-convergence-ship-shape.md`.
 
 ## Workflow Lane
 
@@ -83,14 +159,40 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 - Package class: `representative-frontier-closure`
 - Intended minimum model: `gpt-5.3-codex`
 - Scope shape: `owner-boundary-contraction/current-frontier`
-- Owned files: `work/packages/<this-package>.md`
-- Forbidden files: none selected before activation; activation must name exact
-  runtime write scope and forbidden files.
+- Owned files: `work/packages/active-20260513-topology-failure-repair-intents.md`, `work/model-ledger.jsonl`, `work/sprints/active-2026-q2-topology-convergence-ship-shape.md`, `work/sprints/current-blocker.json`, `work/sprints/current-blocker.md`, `src/node/failure-repair-intent-contract.js`, `src/node/failure-detector.js`, `src/node/node-constants.js`, `test/node/failure-repair-intent-contract.test.js`, `test/node/failure-detector.test.js`
+- Forbidden files: new system-table schema, post-rejoin admission,
+  anti-entropy scans, partition descriptor epoch, placement capacity,
+  failure scenario gates, Pro behavior, Enterprise behavior
 - Frozen decisions: package scope and lane stay bounded unless explicitly escalated.
 - Escalation triggers: owned files expand beyond this package, runtime ownership changes, or representative scenario evidence changes.
-- Focused proof: `git diff --check`
+- Focused proof: `npx tap test/node/failure-repair-intent-contract.test.js test/node/failure-detector.test.js`
 - Model ledger advisory: `escalate`
+
+## Subagent Sequencing Ledger
+
+- [x] Review subagent recorded:
+      `Agent Kuhn (019e2537-9500-73a0-9062-57caf19743fc) reviewed work/packages/active-20260513-topology-failure-repair-intents.md; result fixes-required`.
+- [x] Fix subagent recorded or explicitly not needed:
+      `Agent Laplace (019e2539-0aed-7010-93cb-10cac665ab5f) fixed work/packages/active-20260513-topology-failure-repair-intents.md`.
+- [x] Implementation subagent recorded:
+      `Agent Aquinas (019e253b-6c42-79d2-b5a1-4f1946a305d8) implemented work/packages/active-20260513-topology-failure-repair-intents.md`.
 
 ## Validation
 
-1. `git diff --check -- <files>`
+1. `npm run work:context` passed after activation and confirmed this package as
+   the current blocker.
+2. `npm run analyze:owner-files -- failure_detector durable_repair_intent --markdown`
+   passed and confirmed the runtime durable repair intent boundary is not yet
+   represented outside this package.
+3. Implementation subagent proof recorded from Aquinas
+   (`019e253b-6c42-79d2-b5a1-4f1946a305d8`).
+4. `npx tap test/node/failure-repair-intent-contract.test.js test/node/failure-detector.test.js`
+   passed with 74 assertions.
+5. `node scripts/check-guideline-literals.js src/node/failure-repair-intent-contract.js src/node/failure-detector.js src/node/node-constants.js`
+   passed.
+6. `node scripts/check-guideline-decision-boundaries.js src/node/failure-repair-intent-contract.js src/node/failure-detector.js src/node/node-constants.js`
+   passed.
+7. `npm run audit:runtime-grammar:file -- src/node/failure-repair-intent-contract.js src/node/failure-detector.js src/node/node-constants.js`
+   passed.
+8. `npm run work:validate -- --closure work/packages/active-20260513-topology-failure-repair-intents.md`
+   passed after recording the real implementation subagent entry.

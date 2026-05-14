@@ -6,11 +6,24 @@
 import {test, beforeEach, afterEach} from '../../src/test-helpers/tap.js';
 import {FailureDetector} from '../../src/node/failure-detector.js';
 import {NODE_STATUS as NodeStatus} from '../../src/node/node-constants.js';
-import {FAILURE_DETECTOR_SQL} from '../../src/node/node-constants.js';
+import {
+  FAILURE_DETECTOR_REPLICA_TYPE,
+  FAILURE_DETECTOR_SQL,
+} from '../../src/node/node-constants.js';
+import {
+  FAILURE_REPAIR_INTENT_ABSENT_VALUE,
+  FAILURE_REPAIR_INTENT_REASON_CODE,
+  FAILURE_REPAIR_INTENT_TRANSITION_TYPE,
+} from '../../src/node/failure-repair-intent-contract.js';
 import {ReplicaStatus} from '../../src/rebalancer/replica-status.js';
 import {SYSTEM_TABLE_NAME} from '../../src/bootstrap/system-table-schemas-constants.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
+
+const TEST_EVENT_NODE_FAILURE = 'event:nodeFailure';
+const TEST_EVENT_NODE_RECOVERY = 'event:nodeRecovery';
+const TEST_EVENT_PREFIX = 'event';
+const TEST_INTENT_PREFIX = 'intent';
 
 // Initialize configuration and logging for tests
 beforeEach(() => {
@@ -99,6 +112,20 @@ function createMockMutationGateway(sqlQueryEngine = null, cdcIntegrationService 
     };
   }
   return gateway;
+}
+
+function createRepairIntentRecorder(sequence = []) {
+  const records = [];
+  return {
+    records,
+    async recordIntent(record) {
+      records.push(record);
+      sequence.push(
+        `${TEST_INTENT_PREFIX}:${record.transitionType}:${record.serviceId}`,
+      );
+      return record;
+    },
+  };
 }
 
 /**
@@ -366,6 +393,8 @@ test('FailureDetector - skips stale suspicion overwrite when heartbeat advanced 
 
 test('FailureDetector - detects node failure', async (t) => {
   const mockCDC = createMockCDCService();
+  const sequence = [];
+  const repairIntentRecorder = createRepairIntentRecorder(sequence);
   const now = Date.now();
 
   const mockEngine = createMockSqlEngine({
@@ -384,11 +413,15 @@ test('FailureDetector - detects node failure', async (t) => {
     sqlQueryEngine: mockEngine,
     cdcIntegrationService: mockCDC,
     controlPlaneSystemTableGateway: createMockMutationGateway(mockEngine, mockCDC),
+    failureRepairIntentRecorder: repairIntentRecorder,
   });
   detector.initialize();
 
   const events = [];
-  detector.on('nodeFailure', (e) => events.push(e));
+  detector.on('nodeFailure', (e) => {
+    sequence.push(TEST_EVENT_NODE_FAILURE);
+    events.push(e);
+  });
 
   await detector.checkNodeHealth();
 
@@ -397,11 +430,33 @@ test('FailureDetector - detects node failure', async (t) => {
   t.ok(mockCDC.operations.some((op) =>
     op.data.status === NodeStatus.FAILED,
   ), 'should update status to failed');
+  t.equal(repairIntentRecorder.records.length, 1,
+    'should record one node failure repair intent');
+  t.equal(
+    repairIntentRecorder.records[0].transitionType,
+    FAILURE_REPAIR_INTENT_TRANSITION_TYPE.NODE_FAILURE,
+    'should record node failure transition type',
+  );
+  t.equal(
+    repairIntentRecorder.records[0].reasonCode,
+    FAILURE_REPAIR_INTENT_REASON_CODE.NODE_FAILURE_CONFIRMED,
+    'should record node failure reason code',
+  );
+  t.ok(
+    sequence.indexOf(
+      `${TEST_INTENT_PREFIX}:` +
+        `${FAILURE_REPAIR_INTENT_TRANSITION_TYPE.NODE_FAILURE}:` +
+        FAILURE_REPAIR_INTENT_ABSENT_VALUE,
+    ) < sequence.indexOf(TEST_EVENT_NODE_FAILURE),
+    'should record durable node failure intent before wake event',
+  );
   t.end();
 });
 
 test('FailureDetector - marks replicas as failed on node failure', async (t) => {
   const mockCDC = createMockCDCService();
+  const sequence = [];
+  const repairIntentRecorder = createRepairIntentRecorder(sequence);
   const now = Date.now();
 
   const mockEngine = createMockSqlEngine({
@@ -442,11 +497,15 @@ test('FailureDetector - marks replicas as failed on node failure', async (t) => 
     sqlQueryEngine: mockEngine,
     cdcIntegrationService: mockCDC,
     controlPlaneSystemTableGateway: createMockMutationGateway(mockEngine, mockCDC),
+    failureRepairIntentRecorder: repairIntentRecorder,
   });
   detector.initialize();
 
   const replicaEvents = [];
-  detector.on('replicaFailed', (e) => replicaEvents.push(e));
+  detector.on('replicaFailed', (e) => {
+    sequence.push(`${TEST_EVENT_PREFIX}:${e.type}:${e.serviceId}`);
+    replicaEvents.push(e);
+  });
 
   await detector.checkNodeHealth();
 
@@ -462,11 +521,49 @@ test('FailureDetector - marks replicas as failed on node failure', async (t) => 
     op.data.status === ReplicaStatus.FAILED,
   );
   t.equal(replicaUpdates.length, 2, 'should have 2 replica status updates');
+  t.ok(repairIntentRecorder.records.some((record) =>
+    record.transitionType ===
+      FAILURE_REPAIR_INTENT_TRANSITION_TYPE.PARTITION_REPLICA_FAILURE &&
+    record.reasonCode ===
+      FAILURE_REPAIR_INTENT_REASON_CODE.PARTITION_REPLICA_ON_FAILED_NODE &&
+    record.serviceId === 'service-1',
+  ), 'should record partition replica failure repair intent');
+  t.ok(repairIntentRecorder.records.some((record) =>
+    record.transitionType ===
+      FAILURE_REPAIR_INTENT_TRANSITION_TYPE.MESSAGE_GROUP_REPLICA_FAILURE &&
+    record.reasonCode ===
+      FAILURE_REPAIR_INTENT_REASON_CODE.MESSAGE_GROUP_REPLICA_ON_FAILED_NODE &&
+    record.serviceId === 'service-2',
+  ), 'should record message-group replica failure repair intent');
+  t.ok(
+    sequence.indexOf(
+      `${TEST_INTENT_PREFIX}:` +
+        `${FAILURE_REPAIR_INTENT_TRANSITION_TYPE.PARTITION_REPLICA_FAILURE}:` +
+        'service-1',
+    ) < sequence.indexOf(
+      `${TEST_EVENT_PREFIX}:` +
+        `${FAILURE_DETECTOR_REPLICA_TYPE.PARTITION}:service-1`,
+    ),
+    'should record durable partition replica intent before wake event',
+  );
+  t.ok(
+    sequence.indexOf(
+      `${TEST_INTENT_PREFIX}:` +
+        `${FAILURE_REPAIR_INTENT_TRANSITION_TYPE.MESSAGE_GROUP_REPLICA_FAILURE}:` +
+        'service-2',
+    ) < sequence.indexOf(
+      `${TEST_EVENT_PREFIX}:` +
+        `${FAILURE_DETECTOR_REPLICA_TYPE.MESSAGE_GROUP}:service-2`,
+    ),
+    'should record durable message-group replica intent before wake event',
+  );
   t.end();
 });
 
 test('FailureDetector - detects node recovery', async (t) => {
   const mockCDC = createMockCDCService();
+  const sequence = [];
+  const repairIntentRecorder = createRepairIntentRecorder(sequence);
   const now = Date.now();
 
   const mockEngine = createMockSqlEngine({
@@ -485,11 +582,15 @@ test('FailureDetector - detects node recovery', async (t) => {
     sqlQueryEngine: mockEngine,
     cdcIntegrationService: mockCDC,
     controlPlaneSystemTableGateway: createMockMutationGateway(mockEngine, mockCDC),
+    failureRepairIntentRecorder: repairIntentRecorder,
   });
   detector.initialize();
 
   const events = [];
-  detector.on('nodeRecovery', (e) => events.push(e));
+  detector.on('nodeRecovery', (e) => {
+    sequence.push(TEST_EVENT_NODE_RECOVERY);
+    events.push(e);
+  });
 
   await detector.checkNodeHealth();
 
@@ -498,6 +599,26 @@ test('FailureDetector - detects node recovery', async (t) => {
   t.ok(mockCDC.operations.some((op) =>
     op.data.status === NodeStatus.RECOVERING,
   ), 'should update status to recovering');
+  t.equal(repairIntentRecorder.records.length, 1,
+    'should record one node recovery repair intent');
+  t.equal(
+    repairIntentRecorder.records[0].transitionType,
+    FAILURE_REPAIR_INTENT_TRANSITION_TYPE.NODE_RECOVERY,
+    'should record node recovery transition type',
+  );
+  t.equal(
+    repairIntentRecorder.records[0].reasonCode,
+    FAILURE_REPAIR_INTENT_REASON_CODE.NODE_RECOVERY_CONFIRMED,
+    'should record node recovery reason code',
+  );
+  t.ok(
+    sequence.indexOf(
+      `${TEST_INTENT_PREFIX}:` +
+        `${FAILURE_REPAIR_INTENT_TRANSITION_TYPE.NODE_RECOVERY}:` +
+        FAILURE_REPAIR_INTENT_ABSENT_VALUE,
+    ) < sequence.indexOf(TEST_EVENT_NODE_RECOVERY),
+    'should record durable node recovery intent before wake event',
+  );
   t.end();
 });
 

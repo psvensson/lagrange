@@ -53,24 +53,35 @@ Latest representative artifact and handoff context on May 14, 2026:
 5. Downstream readiness support: deferred behind active-gate snapshot coverage
    with no-progress terminal evidence.
 
-Human-directed active sprint pivot on May 14, 2026:
+Historical sprint pivot completed on May 14, 2026:
 
 1. Owner: `topology_membership_owner`.
 2. Boundary: `membership_epoch`.
 3. Dominant reason: `membership_topology_epoch_missing`.
-4. Active package:
+4. Completed package:
    `work/packages/done-20260513-topology-membership-epoch-fencing.md`.
 5. Focused proof surface:
    `npx tap test/control-plane/membership-epoch-contract.test.js`.
-6. Rolling-restart and active-gate snapshot coverage remain historical
-   representative context, not the active sprint target.
+6. Membership epoch is historical/completed sprint context, not the active
+   sprint target.
+
+Human-directed active sprint pivot on May 14, 2026:
+
+1. Owner: `failure_detector`.
+2. Boundary: `durable_repair_intent`.
+3. Dominant reason: `failure_detection_not_causal_for_repair`.
+4. Active package:
+   `work/packages/active-20260513-topology-failure-repair-intents.md`.
+5. Focused proof surface:
+   `npx tap test/node/failure-repair-intent-contract.test.js test/node/failure-detector.test.js`.
+6. Rolling-restart, active-gate snapshot coverage, publication owner truth,
+   and membership epoch fencing remain historical representative context, not
+   the active sprint target.
 
 The immediate missing causal edge is:
 
-1. Membership publication owner must expose one canonical membership epoch
-   snapshot and fence result so downstream boot, join, rejoin, failure,
-   placement, active-gate, and rebalancer consumers do not reconstruct freshness
-   locally.
+1. Failure detection emits status changes and events without one durable
+   owner-key repair-intent record.
 
 ## Ship-Shape Definition
 

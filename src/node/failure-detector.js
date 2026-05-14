@@ -30,6 +30,12 @@ import {
   FAILURE_DETECTOR_SUBSYSTEM,
   NODE_STATUS,
 } from './node-constants.js';
+import {
+  FAILURE_REPAIR_INTENT_RECORDER_METHOD,
+  FAILURE_REPAIR_INTENT_TRANSITION_TYPE,
+  buildFailureRepairIntentRecord,
+  createInMemoryFailureRepairIntentRecorder,
+} from './failure-repair-intent-contract.js';
 
 const LOCAL_NUM_ZERO = 0;
 
@@ -102,6 +108,9 @@ class FailureDetector extends EventEmitter {
     this.cdcIntegrationService = options.cdcIntegrationService || null;
     this.controlPlaneSystemTableGateway =
       options.controlPlaneSystemTableGateway || null;
+    this.failureRepairIntentRecorder =
+      options.failureRepairIntentRecorder ||
+      createInMemoryFailureRepairIntentRecorder();
     this.nodeId = options.nodeId || null;
 
     // Configuration
@@ -156,6 +165,9 @@ class FailureDetector extends EventEmitter {
     }
     if (options.controlPlaneSystemTableGateway) {
       this.controlPlaneSystemTableGateway = options.controlPlaneSystemTableGateway;
+    }
+    if (options.failureRepairIntentRecorder) {
+      this.failureRepairIntentRecorder = options.failureRepairIntentRecorder;
     }
     if (options.nodeId) {
       this.nodeId = options.nodeId;
@@ -403,6 +415,12 @@ class FailureDetector extends EventEmitter {
       throw error;
     }
 
+    await this.recordDurableRepairIntent({
+      transitionType: FAILURE_REPAIR_INTENT_TRANSITION_TYPE.NODE_FAILURE,
+      nodeId: node.node_id,
+      observedAt: now,
+    });
+
     // Mark all replicas on this node as failed
     await this.markReplicasAsFailed(node.node_id, now);
 
@@ -454,6 +472,12 @@ class FailureDetector extends EventEmitter {
       });
       throw error;
     }
+
+    await this.recordDurableRepairIntent({
+      transitionType: FAILURE_REPAIR_INTENT_TRANSITION_TYPE.NODE_RECOVERY,
+      nodeId: node.node_id,
+      observedAt: now,
+    });
 
     this.emit(FAILURE_DETECTOR_EVENT.NODE_RECOVERY, {
       nodeId: node.node_id,
@@ -529,6 +553,16 @@ class FailureDetector extends EventEmitter {
         nodeId,
       });
 
+      await this.recordDurableRepairIntent({
+        transitionType:
+          FAILURE_REPAIR_INTENT_TRANSITION_TYPE.PARTITION_REPLICA_FAILURE,
+        nodeId,
+        serviceId: replica.service_id,
+        partitionId: replica.partition_id,
+        replicaType: FAILURE_DETECTOR_REPLICA_TYPE.PARTITION,
+        observedAt: now,
+      });
+
       this.emit(FAILURE_DETECTOR_EVENT.REPLICA_FAILED, {
         type: FAILURE_DETECTOR_REPLICA_TYPE.PARTITION,
         serviceId: replica.service_id,
@@ -588,6 +622,16 @@ class FailureDetector extends EventEmitter {
           nodeId,
         },
       );
+
+      await this.recordDurableRepairIntent({
+        transitionType:
+          FAILURE_REPAIR_INTENT_TRANSITION_TYPE.MESSAGE_GROUP_REPLICA_FAILURE,
+        nodeId,
+        serviceId: replica.service_id,
+        groupId: replica.group_id,
+        replicaType: FAILURE_DETECTOR_REPLICA_TYPE.MESSAGE_GROUP,
+        observedAt: now,
+      });
 
       this.emit(FAILURE_DETECTOR_EVENT.REPLICA_FAILED, {
         type: FAILURE_DETECTOR_REPLICA_TYPE.MESSAGE_GROUP,
@@ -773,6 +817,35 @@ class FailureDetector extends EventEmitter {
       isRunning: this.checkTimer !== null,
       initialized: this.initialized,
     };
+  }
+
+  /**
+   * Get in-memory repair intents when the default diagnostic recorder is used.
+   * @return {Array<Object>} Recorded durable repair intent records.
+   */
+  getFailureRepairIntentRecords() {
+    if (
+      typeof this.failureRepairIntentRecorder?.getRecords === TYPEOF.FUNCTION
+    ) {
+      return this.failureRepairIntentRecorder.getRecords();
+    }
+    return [];
+  }
+
+  /**
+   * Record a canonical durable repair intent before wake events are emitted.
+   * @param {Object} options - Repair intent record options.
+   * @return {Promise<Object>} Recorded repair intent.
+   * @private
+   */
+  async recordDurableRepairIntent(options) {
+    const repairIntentRecord = buildFailureRepairIntentRecord({
+      ...options,
+      sourceNodeId: this.nodeId,
+    });
+    return this.failureRepairIntentRecorder[
+      FAILURE_REPAIR_INTENT_RECORDER_METHOD.RECORD_INTENT
+    ](repairIntentRecord);
   }
 
   /**
