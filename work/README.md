@@ -7,6 +7,17 @@ Internal execution planning, work packages, and sprint tracking live under
 
 ## Directory Layout
 
+- `work/releases/`
+  - Release-level planning programs. These sit above tracks, sprints, and
+    packages. They record release thesis, non-goals, release gates, and
+    cross-track dependencies. They do not activate implementation work.
+- `work/tracks/`
+  - Durable tracks for long-lived workstreams that span multiple sprints.
+    Tracks are generic: they are not tied to one release, version, feature, or
+    sprint type. A track can contain development, bugfix, stabilization,
+    release-gate, and maintenance sprints. Tracks record proven patterns,
+    local divergences, target invariants, acceptance proof, sprint membership,
+    and next package pointers. They do not replace packages or sprints.
 - `work/ideas/`
   - Human ideas before they are approved for implementation work.
 - `work/packages/`
@@ -20,13 +31,28 @@ Internal execution planning, work packages, and sprint tracking live under
 
 ## Recommended Workflow
 
-Use one simple path:
+Use one simple path for executable work:
 
 1. Capture the human idea.
 2. Triage it.
 3. Either sharpen `roadmap.md` first or create a direct work package.
 4. Work the package until done.
 5. Rename the file to mark completion.
+
+For release-scale stabilization, keep the layers distinct:
+
+```text
+work package -> sprint -> track -> release program
+```
+
+The release program owns release thesis and gates. Tracks own long-lived
+workstreams and cross-sprint invariants. Sprints group active execution and can
+be development, bugfix, stabilization, release-gate, or maintenance oriented.
+Packages remain the only executable unit and the only place to record package
+proof, validation, commit, and push ledgers.
+
+For a compact dependency view between release tracks, sprints, and the active
+package, use `work/releases/0.1-dependency-map.md`.
 
 Use the tracker utility for current sprint/package mechanics:
 
