@@ -242,13 +242,13 @@ queue rather than treated as release proof:
 3. Killed rejoin: unexecuted; owner package
    `done-20260514-topology-killed-rejoin-gate.md`.
 4. Remote coordinator handoff: unexecuted; owner package
-   `active-20260514-topology-remote-coordinator-handoff-gate.md`.
+   `done-20260514-topology-remote-coordinator-handoff-gate.md`.
 5. Missed handoff ACK: unexecuted; owner package
    `todo-20260514-topology-missed-handoff-ack-gate.md`.
 6. Stale publication durable truth: unexecuted; owner package
    `done-20260514-topology-stale-publication-durable-truth-gate.md`.
 7. Rebalance disruption recovery: unexecuted; owner package
-   `todo-20260514-topology-rebalance-disruption-recovery-gate.md`.
+   `active-20260514-topology-rebalance-disruption-recovery-gate.md`.
 
 The executable harness package
 `todo-20260514-topology-failure-gate-execution-harness.md` owns turning the

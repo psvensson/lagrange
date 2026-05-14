@@ -3,7 +3,7 @@
 <!-- work-package
 {
   "schema": "work-package-v1",
-  "status": "active",
+  "status": "done",
   "opened": "2026-05-14",
   "lane": "scenario-release-gate",
   "scenario": "seven-node-read-write-load-transaction-recovery",
@@ -28,7 +28,7 @@
     "npm run audit:runtime-grammar:file -- src/rebalancer/operation-workflow-owner.js src/rebalancer/operation-workflow-owner-segment-7-stage-shared.js src/rebalancer/operation-workflow-owner-segment-7-stage-5.js test/rebalancer/coordinator-created-operation-progress-remote-handoff.test.js"
   ],
   "writeScope": [
-    "work/packages/active-20260514-topology-remote-coordinator-handoff-gate.md",
+    "work/packages/done-20260514-topology-remote-coordinator-handoff-gate.md",
     "work/sprints/active-2026-q2-topology-convergence-residual-closure.md",
     "work/sprints/current-blocker.json",
     "work/sprints/current-blocker.md"
@@ -49,7 +49,7 @@
     "test/rebalancer/coordinator-created-operation-progress-remote-handoff.test.js"
   ],
   "commitScope": [
-    "work/packages/active-20260514-topology-remote-coordinator-handoff-gate.md",
+    "work/packages/done-20260514-topology-remote-coordinator-handoff-gate.md",
     "work/sprints/active-2026-q2-topology-convergence-residual-closure.md",
     "work/sprints/current-blocker.json",
     "work/sprints/current-blocker.md"
@@ -101,7 +101,10 @@
     "toBoundary": "publication_convergence",
     "reason": "fresh seven-node-read-write-load-transaction-recovery gate first frontier is publication_ack_convergence / missing_published_nodes_present before remote-coordinator handoff release-gate evidence can be evaluated",
     "evidence": "test-output/reports/topology-remote-coordinator-handoff-gate.report.json"
-  }
+  },
+  "closed": "2026-05-14",
+  "commitAndPushLedgerRequired": true,
+  "successor": "work/packages/active-20260514-topology-rebalance-disruption-recovery-gate.md"
 }
 -->
 
@@ -188,7 +191,7 @@ remote handoff. The gate must prove:
 
 Required before this package moves from `todo` to `active`:
 
-1. Run `npm run work:package:doctor -- --fix-dry-run work/packages/active-20260514-topology-remote-coordinator-handoff-gate.md` and keep `causalGovernance`, `scenarioCausalClosure`, Model Fit, and scope fields concrete before implementation starts.
+1. Run `npm run work:package:doctor -- --fix-dry-run work/packages/done-20260514-topology-remote-coordinator-handoff-gate.md` and keep `causalGovernance`, `scenarioCausalClosure`, Model Fit, and scope fields concrete before implementation starts.
 2. Promote only these proven candidates into `writeScope` and `commitScope` after owner-file proof: `src/rebalancer/operation-workflow-owner.js`, `src/rebalancer/operation-workflow-owner-segment-7-stage-shared.js`, `src/rebalancer/operation-workflow-owner-segment-7-stage-5.js`, `test/rebalancer/coordinator-created-operation-progress-remote-handoff.test.js`.
 3. Replace the Subagent Sequencing Ledger placeholders with real review/fix/implementation proof, or an allowed waiver, before pre-implementation and closure validation.
 4. Preserve the package artifact path `test-output/reports/topology-remote-coordinator-handoff-gate.report.json`; if fresh evidence changes owner, boundary, or dominant reason, classify as `migrated`, `same-frontier`, or split instead of widening scope.
@@ -216,7 +219,7 @@ package.
 - Package class: `representative-frontier-closure`
 - Intended minimum model: `gpt-5.3-codex`
 - Scope shape: `owner-boundary-contraction/current-frontier`
-- Owned files: `work/packages/active-20260514-topology-remote-coordinator-handoff-gate.md`, `work/sprints/active-2026-q2-topology-convergence-residual-closure.md`, `work/sprints/current-blocker.json`, `work/sprints/current-blocker.md`
+- Owned files: `work/packages/done-20260514-topology-remote-coordinator-handoff-gate.md`, `work/sprints/active-2026-q2-topology-convergence-residual-closure.md`, `work/sprints/current-blocker.json`, `work/sprints/current-blocker.md`
 - Forbidden files: `event-only-wait-final-state`, `owner-bypass-delivery`
 - Frozen decisions: package scope and lane stay bounded unless explicitly escalated.
 - Escalation triggers: owned files expand beyond this package, runtime ownership changes, or representative scenario evidence changes.
@@ -225,8 +228,8 @@ package.
 
 ## Validation Ladder
 
-1. npm run work:package:doctor -- --suggest work/packages/active-20260514-topology-remote-coordinator-handoff-gate.md
-2. npm run work:package:doctor -- --fix-dry-run work/packages/active-20260514-topology-remote-coordinator-handoff-gate.md
+1. npm run work:package:doctor -- --suggest work/packages/done-20260514-topology-remote-coordinator-handoff-gate.md
+2. npm run work:package:doctor -- --fix-dry-run work/packages/done-20260514-topology-remote-coordinator-handoff-gate.md
 3. npx tap test/rebalancer/coordinator-created-operation-progress-remote-handoff.test.js
 4. node test/rebalancer/coordinator-created-operation-progress-remote-handoff.test.js
 5. node test/distributed/run.js --config test/distributed/config/local-benchmark-7node.json --scenario seven-node-read-write-load-transaction-recovery --output test-output/reports/topology-remote-coordinator-handoff-gate.report.json --verbose
@@ -238,10 +241,10 @@ package.
 11. node scripts/check-guideline-literals.js src/rebalancer/operation-workflow-owner.js src/rebalancer/operation-workflow-owner-segment-7-stage-shared.js src/rebalancer/operation-workflow-owner-segment-7-stage-5.js test/rebalancer/coordinator-created-operation-progress-remote-handoff.test.js
 12. node scripts/check-guideline-decision-boundaries.js src/rebalancer/operation-workflow-owner.js src/rebalancer/operation-workflow-owner-segment-7-stage-shared.js src/rebalancer/operation-workflow-owner-segment-7-stage-5.js test/rebalancer/coordinator-created-operation-progress-remote-handoff.test.js
 13. npm run audit:runtime-grammar:file -- src/rebalancer/operation-workflow-owner.js src/rebalancer/operation-workflow-owner-segment-7-stage-shared.js src/rebalancer/operation-workflow-owner-segment-7-stage-5.js test/rebalancer/coordinator-created-operation-progress-remote-handoff.test.js
-14. npm run work:validate -- --entry work/packages/active-20260514-topology-remote-coordinator-handoff-gate.md
-15. npm run work:validate -- --pre-impl work/packages/active-20260514-topology-remote-coordinator-handoff-gate.md
-16. npm run work:validate -- --closure work/packages/active-20260514-topology-remote-coordinator-handoff-gate.md
-17. git diff --check -- work/packages/active-20260514-topology-remote-coordinator-handoff-gate.md work/sprints/active-2026-q2-topology-convergence-residual-closure.md work/sprints/current-blocker.json work/sprints/current-blocker.md
+14. npm run work:validate -- --entry work/packages/done-20260514-topology-remote-coordinator-handoff-gate.md
+15. npm run work:validate -- --pre-impl work/packages/done-20260514-topology-remote-coordinator-handoff-gate.md
+16. npm run work:validate -- --closure work/packages/done-20260514-topology-remote-coordinator-handoff-gate.md
+17. git diff --check -- work/packages/done-20260514-topology-remote-coordinator-handoff-gate.md work/sprints/active-2026-q2-topology-convergence-residual-closure.md work/sprints/current-blocker.json work/sprints/current-blocker.md
 18. Final deep-dive proof: rerun the package extractor/probe, compare against the sprint representative residual, and record the result classification before closure.
 
 ## Split Rules
@@ -288,7 +291,6 @@ remote-coordinator handoff or rolling-restart runtime repair.
 
 Required at closure.
 
-1. [ ] Focused package commit: pending.
-2. [ ] Pushed to: pending.
-3. [ ] Commit contains only package-owned files/package-status/allowed sprint
-   handoff: pending.
+1. [x] Focused package commit: 11f300bc3e8dadb20d079c85134941e9578484e2.
+2. [x] Pushed to: origin/codex/pending-ack-eligibility-filter.
+3. [x] Commit contains only package-owned files/package-status/allowed sprint handoff: yes.

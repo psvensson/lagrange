@@ -2,53 +2,50 @@
   "schema": "current-blocker-v1",
   "generatedBy": "scripts/work-tracker.js",
   "sprint": "work/sprints/active-2026-q2-topology-convergence-residual-closure.md",
-  "package": "work/packages/active-20260514-topology-remote-coordinator-handoff-gate.md",
+  "package": "work/packages/active-20260514-topology-rebalance-disruption-recovery-gate.md",
   "status": "active",
   "lane": "scenario-release-gate",
-  "scenario": "seven-node-read-write-load-transaction-recovery",
-  "artifact": "test-output/reports/topology-remote-coordinator-handoff-gate.report.json",
+  "scenario": "seven-node-load-during-partitioning",
+  "artifact": "test-output/reports/topology-rebalance-disruption-recovery-gate.report.json",
   "playback": "none",
-  "owner": "operation_workflow_owner",
-  "boundary": "replica_operation_coordinator_handoff_gate",
-  "dominantReason": "missing_published_nodes_present",
-  "currentState": "Observed gate result: focused remote handoff tests pass under direct Node execution, but seven-node-read-write-load-transaction-recovery failed after 235174ms. Canonical topology evidence did not reach operation_workflow_owner / replica_operation_coordinator_handoff_gate; the first frontier is topology_publication_owner / publication_convergence with publication_ack_convergence deferred, publicationStatus=PUBLISHED, pendingAckCount=0, missingPublishedCount=4, publicationPending=true, activeGateState=timed_out, snapshotCoverageNodeCount=3/7, activeNodeCount=6/7, and priority recovery residual splitRequired=false.",
-  "nextAction": "Close this package as migrated and activate the next remaining failure-gate package; do not fix rolling-restart runtime behavior in this package without explicit re-scope.",
+  "owner": "topology_rebalance_owner",
+  "boundary": "split_rebalance_recovery_gate",
+  "dominantReason": "rebalance_disruption_release_gate_unproven",
+  "currentState": "Activated after remote-coordinator handoff gate migration. Remote handoff focused proof passed, but fresh seven-node evidence migrated before that owner boundary to topology_publication_owner / publication_convergence with missing_published_nodes_present, publicationStatus=PUBLISHED, pendingAckCount=0, missingPublishedCount=4, publicationPending=true, activeGateState=timed_out, snapshotCoverageNodeCount=3/7, activeNodeCount=6/7, and priority recovery residual splitRequired=false. Split/rebalance during recovery still needs observe/classify release-gate evidence.",
+  "nextAction": "Execute and classify the split/rebalance recovery gate using canonical evidence extractors. If red, record the owner-boundary split or migration evidence; do not fix rolling-restart runtime behavior or broaden into runtime repair without explicit re-scope.",
   "proof": [
-    "npx tap test/rebalancer/coordinator-created-operation-progress-remote-handoff.test.js",
-    "node test/rebalancer/coordinator-created-operation-progress-remote-handoff.test.js",
-    "node test/distributed/run.js --config test/distributed/config/local-benchmark-7node.json --scenario seven-node-read-write-load-transaction-recovery --output test-output/reports/topology-remote-coordinator-handoff-gate.report.json --verbose",
-    "npm run work:evidence-summary -- test-output/reports/topology-remote-coordinator-handoff-gate.report.json",
-    "npm run analyze:distributed-failure -- --report test-output/reports/topology-remote-coordinator-handoff-gate.report.json",
-    "npm run analyze:topology-convergence -- test-output/reports/topology-remote-coordinator-handoff-gate.report.json",
-    "npm --silent run analyze:causal-model -- test-output/reports/topology-remote-coordinator-handoff-gate.report.json",
-    "npm run analyze:priority-recovery-residuals -- test-output/reports/topology-remote-coordinator-handoff-gate.report.json --markdown",
-    "node scripts/check-guideline-literals.js src/rebalancer/operation-workflow-owner.js src/rebalancer/operation-workflow-owner-segment-7-stage-shared.js src/rebalancer/operation-workflow-owner-segment-7-stage-5.js test/rebalancer/coordinator-created-operation-progress-remote-handoff.test.js",
-    "node scripts/check-guideline-decision-boundaries.js src/rebalancer/operation-workflow-owner.js src/rebalancer/operation-workflow-owner-segment-7-stage-shared.js src/rebalancer/operation-workflow-owner-segment-7-stage-5.js test/rebalancer/coordinator-created-operation-progress-remote-handoff.test.js",
-    "npm run audit:runtime-grammar:file -- src/rebalancer/operation-workflow-owner.js src/rebalancer/operation-workflow-owner-segment-7-stage-shared.js src/rebalancer/operation-workflow-owner-segment-7-stage-5.js test/rebalancer/coordinator-created-operation-progress-remote-handoff.test.js"
+    "node test/distributed/run.js --config test/distributed/config/local-benchmark-7node.json --scenario seven-node-load-during-partitioning --output test-output/reports/topology-rebalance-disruption-recovery-gate.report.json --verbose",
+    "npm run work:evidence-summary -- test-output/reports/topology-rebalance-disruption-recovery-gate.report.json",
+    "npm run analyze:distributed-failure -- --report test-output/reports/topology-rebalance-disruption-recovery-gate.report.json",
+    "npm run analyze:topology-convergence -- test-output/reports/topology-rebalance-disruption-recovery-gate.report.json",
+    "npm --silent run analyze:causal-model -- test-output/reports/topology-rebalance-disruption-recovery-gate.report.json",
+    "npm run analyze:priority-recovery-residuals -- test-output/reports/topology-rebalance-disruption-recovery-gate.report.json --markdown"
   ],
   "writeScope": [
-    "work/packages/active-20260514-topology-remote-coordinator-handoff-gate.md",
+    "work/packages/active-20260514-topology-rebalance-disruption-recovery-gate.md",
     "work/sprints/active-2026-q2-topology-convergence-residual-closure.md",
     "work/sprints/current-blocker.json",
     "work/sprints/current-blocker.md"
   ],
   "handoffFiles": [
-    "work/packages/done-20260513-topology-remote-handoff-convergence.md",
-    "work/packages/done-20260513-priority-recovery-operation-workflow-owner-workflow-progress-after-snapshot-coverage.md",
-    "work/packages/done-20260514-topology-killed-rejoin-gate.md"
+    "work/packages/done-20260513-topology-partition-descriptor-epoch.md",
+    "work/packages/done-20260513-topology-placement-capacity-fail-closed.md",
+    "work/packages/done-20260513-topology-anti-entropy-reconciler.md",
+    "work/packages/done-20260514-topology-remote-coordinator-handoff-gate.md"
   ],
   "generatedFiles": [
     "work/sprints/current-blocker.json",
     "work/sprints/current-blocker.md"
   ],
   "candidateRuntimeFiles": [
-    "src/rebalancer/operation-workflow-owner.js",
-    "src/rebalancer/operation-workflow-owner-segment-7-stage-shared.js",
-    "src/rebalancer/operation-workflow-owner-segment-7-stage-5.js",
-    "test/rebalancer/coordinator-created-operation-progress-remote-handoff.test.js"
+    "src/partition/partition-descriptor-epoch-contract.js",
+    "src/partition/partition-split-routing.js",
+    "src/rebalancer/move-planner.js",
+    "src/rebalancer/storage-admission-service.js",
+    "test/rebalancer/move-planner-placement-owner-kernel.test.js"
   ],
   "commitScope": [
-    "work/packages/active-20260514-topology-remote-coordinator-handoff-gate.md",
+    "work/packages/active-20260514-topology-rebalance-disruption-recovery-gate.md",
     "work/sprints/active-2026-q2-topology-convergence-residual-closure.md",
     "work/sprints/current-blocker.json",
     "work/sprints/current-blocker.md"
@@ -65,35 +62,35 @@
   },
   "representativeResidual": {},
   "causalGovernance": {
-    "hypothesis": "operation_workflow_owner / replica_operation_coordinator_handoff_gate proof should reduce, migrate, or classify remote_coordinator_handoff_release_gate_unproven without hiding the sprint representative residual.",
-    "stopConditionCheck": "npm --silent run analyze:causal-model -- test-output/reports/topology-remote-coordinator-handoff-gate.report.json",
-    "expectedCausalModelChange": "remote_coordinator_handoff_release_gate_unproven becomes representative-green, reduced, same-frontier, migrated, or classification-only with a named owner-boundary reason.",
-    "representativeOutcome": "migrated",
-    "causalDebt": "The remote-coordinator gate artifact is red, but canonical evidence does not implicate operation_workflow_owner / replica_operation_coordinator_handoff_gate. The first frontier migrated to topology_publication_owner / publication_convergence with missing_published_nodes_present; runtime rolling-restart fixes remain out of scope.",
+    "hypothesis": "topology_rebalance_owner / split_rebalance_recovery_gate evidence should reduce, migrate, or classify rebalance_disruption_release_gate_unproven without hiding the sprint representative residual.",
+    "stopConditionCheck": "npm --silent run analyze:causal-model -- test-output/reports/topology-rebalance-disruption-recovery-gate.report.json",
+    "expectedCausalModelChange": "rebalance_disruption_release_gate_unproven becomes representative-green, reduced, same-frontier, migrated, or classification-only with a named owner-boundary reason.",
+    "representativeOutcome": "pending-before-rerun",
+    "causalDebt": "Until topology_rebalance_owner / split_rebalance_recovery_gate is observed and classified, the sprint representative rolling-restart residual stays open at startup_active_gate_owner / snapshot_coverage. Runtime rolling-restart fixes remain out of scope for this package.",
     "crossBoundaryReview": "Required before closure through the scenario-release-gate subagent ledger or an allowed waiver recorded in this package."
   },
   "scenarioCausalClosure": {
-    "referenceScenarioOrProbe": "seven-node-read-write-load-transaction-recovery / operation_workflow_owner / replica_operation_coordinator_handoff_gate",
+    "referenceScenarioOrProbe": "seven-node-load-during-partitioning / topology_rebalance_owner / split_rebalance_recovery_gate",
     "phaseChain": [
       "canonical evidence extraction",
-      "operation_workflow_owner / replica_operation_coordinator_handoff_gate focused proof",
+      "topology_rebalance_owner / split_rebalance_recovery_gate focused proof",
       "representative or gate rerun classification"
     ],
-    "currentFirstFrontier": "migrated frontier topology_publication_owner / publication_convergence with missing_published_nodes_present in test-output/reports/topology-remote-coordinator-handoff-gate.report.json",
+    "currentFirstFrontier": "package-local frontier topology_rebalance_owner / split_rebalance_recovery_gate; sprint representative frontier remains startup_active_gate_owner / snapshot_coverage until fresh evidence changes it",
     "knownDownstreamBlockers": [
       "rolling-restart representative active-gate snapshot coverage remains red until green or migrated",
       "runtime or harness fixes discovered outside this owner boundary require a narrower successor package"
     ],
-    "missingCausalEdge": "unproven operation_workflow_owner / replica_operation_coordinator_handoff_gate causal edge for remote_coordinator_handoff_release_gate_unproven",
-    "missingCausalEdgeProbe": "npx tap test/rebalancer/coordinator-created-operation-progress-remote-handoff.test.js",
-    "boundedProgressProof": "Focused proof must show bounded wake, retry, timeout, reconcile, drain, dispatch, delivery, timer, or advance for operation_workflow_owner / replica_operation_coordinator_handoff_gate.",
-    "boundedProgressProofArtifact": "test-output/reports/topology-remote-coordinator-handoff-gate.report.json",
-    "expectedObservableTransition": "remote_coordinator_handoff_release_gate_unproven migrated before the operation workflow owner boundary: publicationStatus=PUBLISHED with pendingAckCount=0, missingPublishedCount=4, publicationPending=true, activeGateState=timed_out, snapshotCoverageNodeCount=3/7, and activeNodeCount=6/7.",
+    "missingCausalEdge": "unproven topology_rebalance_owner / split_rebalance_recovery_gate causal edge for rebalance_disruption_release_gate_unproven",
+    "missingCausalEdgeProbe": "node test/distributed/run.js --config test/distributed/config/local-benchmark-7node.json --scenario seven-node-load-during-partitioning --output test-output/reports/topology-rebalance-disruption-recovery-gate.report.json --verbose",
+    "boundedProgressProof": "Focused evidence must show bounded wake, retry, timeout, reconcile, drain, dispatch, delivery, timer, or advance for topology_rebalance_owner / split_rebalance_recovery_gate, or classify the first earlier owner boundary.",
+    "boundedProgressProofArtifact": "test-output/reports/topology-rebalance-disruption-recovery-gate.report.json",
+    "expectedObservableTransition": "rebalance_disruption_release_gate_unproven resolves to green evidence, a reduced residual, same-frontier evidence, migrated owner-boundary proof, or classification-only stop.",
     "maxProgressBound": "one activation cycle: package doctor, extractor/probe, owner-file proof, focused validation, and result classification",
-    "sameFrontierFallback": "keep operation_workflow_owner / replica_operation_coordinator_handoff_gate active and do not broaden the package or claim ship proof",
-    "expectedNextFrontier": "next remaining failure-gate package unless a narrower canonical blocker is explicitly activated",
-    "resultClassification": "migrated",
-    "stopCondition": "migrate-owner-boundary"
+    "sameFrontierFallback": "keep topology_rebalance_owner / split_rebalance_recovery_gate active and do not broaden the package or claim ship proof",
+    "expectedNextFrontier": "representative green evidence or a narrower owner-boundary blocker selected by canonical evidence",
+    "resultClassification": "pending-before-probe",
+    "stopCondition": "classification-only-stop"
   },
   "predecessor": null
 }
