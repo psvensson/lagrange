@@ -284,18 +284,18 @@ than replace the first debugging loop.
 
 ## Next Package Selection
 
-Decision: activate
-`active-20260514-topology-active-gate-budget-closure.md` next. The canonical
-reason is `active_gate_timeout` unbounded plus `active_gate_attempts` exhausted
-inside the current first frontier
-`startup_active_gate_owner / snapshot_coverage`.
+Decision recorded on closure: the budget package was activated first and is now
+`done-20260514-topology-active-gate-budget-closure.md`. The canonical reason
+was `active_gate_timeout` unbounded plus `active_gate_attempts` exhausted inside
+the current first frontier `startup_active_gate_owner / snapshot_coverage`.
 
-After the budget contract is bounded or terminally classified, activate
-`todo-20260514-topology-active-gate-owner-cohort-convergence.md` to close
-snapshot coverage and active cohort truth. Publication projection reconciliation
-follows only if missing active publication remains after active-gate cohort
-evidence no longer dominates. Priority recovery residual drain remains
-non-frontier until active-gate/publication work no longer hides or explains it.
+After the budget contract is terminally classified, continue with
+`active-20260514-topology-active-gate-owner-cohort-convergence.md` to close
+snapshot coverage and active cohort truth. Publication projection
+reconciliation follows only if missing active publication remains after
+active-gate cohort evidence no longer dominates. Priority recovery residual
+drain remains non-frontier until active-gate/publication work no longer hides or
+explains it.
 
 ## Residual Ledger Coverage
 
@@ -376,9 +376,9 @@ Required now because this active package is a causal-escalation package.
 ## Split Rules
 
 1. If first frontier is still `startup_active_gate_owner / snapshot_coverage`,
-   activate `active-20260514-topology-active-gate-budget-closure.md` first when
-   budget remains unbounded; otherwise activate
-   `todo-20260514-topology-active-gate-owner-cohort-convergence.md`.
+   use `done-20260514-topology-active-gate-budget-closure.md` as the budget
+   classification proof and continue with
+   `active-20260514-topology-active-gate-owner-cohort-convergence.md`.
 2. If publication is the first durable blocker, activate
    `todo-20260514-topology-publication-projection-reconciliation.md`.
 3. If operation workflow residual becomes first frontier, activate

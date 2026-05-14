@@ -3,7 +3,7 @@
 <!-- work-package
 {
   "schema": "work-package-v1",
-  "status": "todo",
+  "status": "active",
   "opened": "2026-05-14",
   "lane": "runtime-owner-boundary",
   "scenario": "rolling-restart",
@@ -20,7 +20,7 @@
     "npm run analyze:owner-files -- startup_active_gate_owner snapshot_coverage --markdown"
   ],
   "writeScope": [
-    "work/packages/todo-20260514-topology-active-gate-owner-cohort-convergence.md",
+    "work/packages/active-20260514-topology-active-gate-owner-cohort-convergence.md",
     "work/sprints/active-2026-q2-topology-convergence-residual-closure.md"
   ],
   "handoffFiles": [
@@ -37,7 +37,7 @@
     "test/admin/admin-control-snapshot.test.js"
   ],
   "commitScope": [
-    "work/packages/todo-20260514-topology-active-gate-owner-cohort-convergence.md",
+    "work/packages/active-20260514-topology-active-gate-owner-cohort-convergence.md",
     "work/sprints/active-2026-q2-topology-convergence-residual-closure.md"
   ],
   "modelFit": {
@@ -48,6 +48,16 @@
       "owned files expand beyond this package",
       "a frozen decision must be reopened"
     ]
+  },
+  "representativeResidual": {
+    "status": "red",
+    "scenario": "rolling-restart",
+    "artifact": "test-output/reports/rolling-restart-green-gate-after-priority-recovery-workflow-progress-after-snapshot-coverage.report.json",
+    "frontier": "active_gate_snapshot_coverage",
+    "owner": "startup_active_gate_owner",
+    "boundary": "snapshot_coverage",
+    "dominantReason": "snapshot_coverage_incomplete",
+    "nextAction": "Complete active-gate owner-truth cohort convergence now that active-gate budget accounting is terminally classified."
   },
   "causalGovernance": {
     "hypothesis": "startup_active_gate_owner / snapshot_coverage proof should reduce, migrate, or classify snapshot_coverage_incomplete without hiding the sprint representative residual.",
@@ -172,7 +182,7 @@ snapshot must be the authority and must include:
 
 Required before this package moves from `todo` to `active`:
 
-1. Run `npm run work:package:doctor -- --fix-dry-run work/packages/todo-20260514-topology-active-gate-owner-cohort-convergence.md` and keep `causalGovernance`, `scenarioCausalClosure`, Model Fit, and scope fields concrete before implementation starts.
+1. Run `npm run work:package:doctor -- --fix-dry-run work/packages/active-20260514-topology-active-gate-owner-cohort-convergence.md` and keep `causalGovernance`, `scenarioCausalClosure`, Model Fit, and scope fields concrete before implementation starts.
 2. Promote only these proven candidates into `writeScope` and `commitScope` after owner-file proof: `src/admin/admin-control-snapshot-class-part-1.js`, `src/admin/admin-control-snapshot-class-part-3.js`, `src/admin/admin-control-snapshot-class-part-5.js`, `src/control-plane/active-node-projection.js`, `src/bootstrap/bootstrap-api.js`, `test/admin/admin-control-snapshot.test.js`.
 3. Replace the Subagent Sequencing Ledger placeholders with real review/fix/implementation proof, or an allowed waiver, before pre-implementation and closure validation.
 4. Preserve the package artifact path `test-output/reports/rolling-restart-green-gate-after-priority-recovery-workflow-progress-after-snapshot-coverage.report.json`; if fresh evidence changes owner, boundary, or dominant reason, classify as `migrated`, `same-frontier`, or split instead of widening scope.
@@ -196,7 +206,7 @@ package.
 - Package class: `representative-frontier-closure`
 - Intended minimum model: `gpt-5.3-codex`
 - Scope shape: `owner-boundary-contraction/current-frontier`
-- Owned files: `work/packages/todo-20260514-topology-active-gate-owner-cohort-convergence.md`, `work/sprints/active-2026-q2-topology-convergence-residual-closure.md`
+- Owned files: `work/packages/active-20260514-topology-active-gate-owner-cohort-convergence.md`, `work/sprints/active-2026-q2-topology-convergence-residual-closure.md`
 - Forbidden files: `priority-recovery-runtime-changes-without-frontier-evidence`, `harness-timeout-increases`
 - Frozen decisions: package scope and lane stay bounded unless explicitly escalated.
 - Escalation triggers: owned files expand beyond this package, runtime ownership changes, or representative scenario evidence changes.
@@ -205,18 +215,18 @@ package.
 
 ## Validation Ladder
 
-1. npm run work:package:doctor -- --suggest work/packages/todo-20260514-topology-active-gate-owner-cohort-convergence.md
-2. npm run work:package:doctor -- --fix-dry-run work/packages/todo-20260514-topology-active-gate-owner-cohort-convergence.md
+1. npm run work:package:doctor -- --suggest work/packages/active-20260514-topology-active-gate-owner-cohort-convergence.md
+2. npm run work:package:doctor -- --fix-dry-run work/packages/active-20260514-topology-active-gate-owner-cohort-convergence.md
 3. npm run work:evidence-summary -- test-output/reports/rolling-restart-green-gate-after-priority-recovery-workflow-progress-after-snapshot-coverage.report.json
 4. npm run analyze:topology-convergence -- test-output/reports/rolling-restart-green-gate-after-priority-recovery-workflow-progress-after-snapshot-coverage.report.json --explain active_gate_snapshot_coverage
 5. npm run analyze:owner-files -- startup_active_gate_owner snapshot_coverage --markdown
 6. node scripts/check-guideline-literals.js src/admin/admin-control-snapshot-class-part-1.js src/admin/admin-control-snapshot-class-part-3.js src/admin/admin-control-snapshot-class-part-5.js src/control-plane/active-node-projection.js src/bootstrap/bootstrap-api.js test/admin/admin-control-snapshot.test.js
 7. node scripts/check-guideline-decision-boundaries.js src/admin/admin-control-snapshot-class-part-1.js src/admin/admin-control-snapshot-class-part-3.js src/admin/admin-control-snapshot-class-part-5.js src/control-plane/active-node-projection.js src/bootstrap/bootstrap-api.js test/admin/admin-control-snapshot.test.js
 8. npm run audit:runtime-grammar:file -- src/admin/admin-control-snapshot-class-part-1.js src/admin/admin-control-snapshot-class-part-3.js src/admin/admin-control-snapshot-class-part-5.js src/control-plane/active-node-projection.js src/bootstrap/bootstrap-api.js test/admin/admin-control-snapshot.test.js
-9. npm run work:validate -- --entry work/packages/todo-20260514-topology-active-gate-owner-cohort-convergence.md
-10. npm run work:validate -- --pre-impl work/packages/todo-20260514-topology-active-gate-owner-cohort-convergence.md
-11. npm run work:validate -- --closure work/packages/todo-20260514-topology-active-gate-owner-cohort-convergence.md
-12. git diff --check -- work/packages/todo-20260514-topology-active-gate-owner-cohort-convergence.md work/sprints/active-2026-q2-topology-convergence-residual-closure.md
+9. npm run work:validate -- --entry work/packages/active-20260514-topology-active-gate-owner-cohort-convergence.md
+10. npm run work:validate -- --pre-impl work/packages/active-20260514-topology-active-gate-owner-cohort-convergence.md
+11. npm run work:validate -- --closure work/packages/active-20260514-topology-active-gate-owner-cohort-convergence.md
+12. git diff --check -- work/packages/active-20260514-topology-active-gate-owner-cohort-convergence.md work/sprints/active-2026-q2-topology-convergence-residual-closure.md
 13. Final deep-dive proof: rerun the package extractor/probe, compare against the sprint representative residual, and record the result classification before closure.
 
 ## Split Rules

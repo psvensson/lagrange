@@ -2,39 +2,41 @@
   "schema": "current-blocker-v1",
   "generatedBy": "scripts/work-tracker.js",
   "sprint": "work/sprints/active-2026-q2-topology-convergence-residual-closure.md",
-  "package": "work/packages/active-20260514-topology-active-gate-budget-closure.md",
+  "package": "work/packages/active-20260514-topology-active-gate-owner-cohort-convergence.md",
   "status": "active",
   "lane": "runtime-owner-boundary",
   "scenario": "rolling-restart",
   "artifact": "test-output/reports/rolling-restart-green-gate-after-priority-recovery-workflow-progress-after-snapshot-coverage.report.json",
   "playback": "none",
   "owner": "startup_active_gate_owner",
-  "boundary": "snapshot_coverage_budget",
-  "dominantReason": "active_gate_timeout_unbounded",
-  "currentState": "Causal model reports active_gate_timeout unbounded with observed elapsed active-gate time and absent limit while snapshot coverage is incomplete.",
-  "nextAction": "Make active-gate elapsed time retry window next-attempt and terminal degraded classification bounded and owned by the startup active-gate decision snapshot.",
+  "boundary": "snapshot_coverage",
+  "dominantReason": "snapshot_coverage_incomplete",
+  "currentState": "Latest representative active gate is stalled with snapshotCoverage=2/5 expectedNodeCount=5 publicationStatus=PUBLISHED pendingAckCount=0 publishedActive=1/5 and missingPublished=4.",
+  "nextAction": "Complete active-gate owner-truth convergence so expected nodes ready leased nodes published active nodes missing nodes pending repairs and topology epoch produce active=5/5 snapshotCoverage=5/5 missingPublished=0 or a narrower canonical blocker.",
   "proof": [
-    "npm run analyze:owner-files -- startup_active_gate_owner snapshot_coverage --markdown",
-    "npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-green-gate-after-priority-recovery-workflow-progress-after-snapshot-coverage.report.json",
-    "npx tap test/diagnostics/budget-timeout-accounting.test.js"
+    "npm run work:evidence-summary -- test-output/reports/rolling-restart-green-gate-after-priority-recovery-workflow-progress-after-snapshot-coverage.report.json",
+    "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-green-gate-after-priority-recovery-workflow-progress-after-snapshot-coverage.report.json --explain active_gate_snapshot_coverage",
+    "npm run analyze:owner-files -- startup_active_gate_owner snapshot_coverage --markdown"
   ],
   "writeScope": [
-    "work/packages/active-20260514-topology-active-gate-budget-closure.md",
+    "work/packages/active-20260514-topology-active-gate-owner-cohort-convergence.md",
     "work/sprints/active-2026-q2-topology-convergence-residual-closure.md"
   ],
   "handoffFiles": [
-    "work/packages/done-20260513-topology-bounded-progress-budgets.md",
-    "test-output/reports/rolling-restart-green-gate-after-priority-recovery-workflow-progress-after-snapshot-coverage.report.json"
+    "work/packages/done-20260513-topology-active-gate-snapshot-coverage-after-workflow-progress.md",
+    "work/packages/done-20260514-topology-publication-convergence-after-active-gate-owner-truth.md"
   ],
   "generatedFiles": [],
   "candidateRuntimeFiles": [
-    "src/diagnostics/budget-timeout-accounting.js",
-    "src/bootstrap/bootstrap-api-runtime-methods.js",
-    "src/bootstrap/bootstrap-service-runtime-methods.js",
-    "test/diagnostics/budget-timeout-accounting.test.js"
+    "src/admin/admin-control-snapshot-class-part-1.js",
+    "src/admin/admin-control-snapshot-class-part-3.js",
+    "src/admin/admin-control-snapshot-class-part-5.js",
+    "src/control-plane/active-node-projection.js",
+    "src/bootstrap/bootstrap-api.js",
+    "test/admin/admin-control-snapshot.test.js"
   ],
   "commitScope": [
-    "work/packages/active-20260514-topology-active-gate-budget-closure.md",
+    "work/packages/active-20260514-topology-active-gate-owner-cohort-convergence.md",
     "work/sprints/active-2026-q2-topology-convergence-residual-closure.md"
   ],
   "touchedFiles": [],
@@ -55,35 +57,35 @@
     "owner": "startup_active_gate_owner",
     "boundary": "snapshot_coverage",
     "dominantReason": "snapshot_coverage_incomplete",
-    "nextAction": "Bound active-gate timeout, retry, next-attempt, and terminal degraded classification before active-gate cohort convergence."
+    "nextAction": "Complete active-gate owner-truth cohort convergence now that active-gate budget accounting is terminally classified."
   },
   "causalGovernance": {
-    "hypothesis": "startup_active_gate_owner / snapshot_coverage_budget proof should reduce, migrate, or classify active_gate_timeout_unbounded without hiding the sprint representative residual.",
+    "hypothesis": "startup_active_gate_owner / snapshot_coverage proof should reduce, migrate, or classify snapshot_coverage_incomplete without hiding the sprint representative residual.",
     "stopConditionCheck": "npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-green-gate-after-priority-recovery-workflow-progress-after-snapshot-coverage.report.json",
-    "expectedCausalModelChange": "active_gate_timeout_unbounded becomes representative-green, reduced, same-frontier, migrated, or classification-only with a named owner-boundary reason.",
+    "expectedCausalModelChange": "snapshot_coverage_incomplete becomes representative-green, reduced, same-frontier, migrated, or classification-only with a named owner-boundary reason.",
     "representativeOutcome": "pending-before-rerun",
-    "causalDebt": "Until startup_active_gate_owner / snapshot_coverage_budget is proven, the sprint representative rolling-restart residual stays open at startup_active_gate_owner / snapshot_coverage.",
+    "causalDebt": "Until startup_active_gate_owner / snapshot_coverage is proven, the sprint representative rolling-restart residual stays open at startup_active_gate_owner / snapshot_coverage.",
     "crossBoundaryReview": "Required before closure through the runtime-owner-boundary subagent ledger or an allowed waiver recorded in this package."
   },
   "scenarioCausalClosure": {
-    "referenceScenarioOrProbe": "rolling-restart / startup_active_gate_owner / snapshot_coverage_budget",
+    "referenceScenarioOrProbe": "rolling-restart / startup_active_gate_owner / snapshot_coverage",
     "phaseChain": [
       "canonical evidence extraction",
-      "startup_active_gate_owner / snapshot_coverage_budget focused proof",
+      "startup_active_gate_owner / snapshot_coverage focused proof",
       "representative or gate rerun classification"
     ],
-    "currentFirstFrontier": "package-local frontier startup_active_gate_owner / snapshot_coverage_budget; sprint representative frontier remains startup_active_gate_owner / snapshot_coverage until fresh evidence changes it",
+    "currentFirstFrontier": "package-local frontier startup_active_gate_owner / snapshot_coverage; sprint representative frontier remains startup_active_gate_owner / snapshot_coverage until fresh evidence changes it",
     "knownDownstreamBlockers": [
       "rolling-restart representative active-gate snapshot coverage remains red until green or migrated",
       "runtime or harness fixes discovered outside this owner boundary require a narrower successor package"
     ],
-    "missingCausalEdge": "unproven startup_active_gate_owner / snapshot_coverage_budget causal edge for active_gate_timeout_unbounded",
-    "missingCausalEdgeProbe": "npm run analyze:owner-files -- startup_active_gate_owner snapshot_coverage --markdown",
-    "boundedProgressProof": "Focused proof must show bounded wake, retry, timeout, reconcile, drain, dispatch, delivery, timer, or advance for startup_active_gate_owner / snapshot_coverage_budget.",
+    "missingCausalEdge": "unproven startup_active_gate_owner / snapshot_coverage causal edge for snapshot_coverage_incomplete",
+    "missingCausalEdgeProbe": "npm run work:evidence-summary -- test-output/reports/rolling-restart-green-gate-after-priority-recovery-workflow-progress-after-snapshot-coverage.report.json",
+    "boundedProgressProof": "Focused proof must show bounded wake, retry, timeout, reconcile, drain, dispatch, delivery, timer, or advance for startup_active_gate_owner / snapshot_coverage.",
     "boundedProgressProofArtifact": "test-output/reports/rolling-restart-green-gate-after-priority-recovery-workflow-progress-after-snapshot-coverage.report.json",
-    "expectedObservableTransition": "active_gate_timeout_unbounded resolves to green evidence, a reduced residual, same-frontier evidence, migrated owner-boundary proof, or classification-only stop.",
+    "expectedObservableTransition": "snapshot_coverage_incomplete resolves to green evidence, a reduced residual, same-frontier evidence, migrated owner-boundary proof, or classification-only stop.",
     "maxProgressBound": "one activation cycle: package doctor, extractor/probe, owner-file proof, focused validation, and result classification",
-    "sameFrontierFallback": "keep startup_active_gate_owner / snapshot_coverage_budget active and do not broaden the package or claim ship proof",
+    "sameFrontierFallback": "keep startup_active_gate_owner / snapshot_coverage active and do not broaden the package or claim ship proof",
     "expectedNextFrontier": "representative green evidence or a narrower owner-boundary blocker selected by canonical evidence",
     "resultClassification": "pending-before-probe",
     "stopCondition": "continue-local-fix"

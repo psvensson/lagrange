@@ -69,9 +69,9 @@ Canonical extractor state on sprint creation:
 10. The topology failure-gate matrix exists, but no failure-gate execution
     artifact is recorded.
 11. Residual inventory decision: the next runtime package is
-    [Topology Active Gate Budget Closure](../packages/active-20260514-topology-active-gate-budget-closure.md),
+    [Topology Active Gate Budget Closure](../packages/done-20260514-topology-active-gate-budget-closure.md),
     followed by
-    [Topology Active Gate Owner Cohort Convergence](../packages/todo-20260514-topology-active-gate-owner-cohort-convergence.md)
+    [Topology Active Gate Owner Cohort Convergence](../packages/active-20260514-topology-active-gate-owner-cohort-convergence.md)
     after active-gate timeout, attempts, and next-attempt/terminal semantics are
     bounded or explicitly classified.
 
@@ -152,6 +152,14 @@ owner cohort convergence second, publication projection reconciliation only if
 missing active publication persists after cohort evidence no longer dominates,
 and priority recovery residual drain after active-gate/publication no longer
 hide or explain the tail witness.
+
+Implementation note for active-gate budget closure: local causal-model proof
+against the same representative artifact now classifies `active_gate_timeout`
+as exhausted terminal active-gate accounting with `observed=87249`,
+`limit=87249`, and `terminalState=terminal_degraded`. The representative first
+frontier remains `startup_active_gate_owner / snapshot_coverage` for incomplete
+snapshot coverage, so the follow-on cohort convergence package still owns the
+remaining runtime blocker.
 
 Failure-gate matrix status remains unexecuted. The seven promoted gates map to
 the sprint packages already queued: failure detection repair, killed join,
@@ -264,7 +272,7 @@ Final closure requires fresh evidence proving all of the following:
 
 ### Phase 1 - Current Representative Runtime Frontier
 
-3. [Topology Active Gate Budget Closure](../packages/active-20260514-topology-active-gate-budget-closure.md)
+3. [Topology Active Gate Budget Closure](../packages/done-20260514-topology-active-gate-budget-closure.md)
    - Lane: `runtime-owner-boundary`
    - Owner boundary: `startup_active_gate_owner / snapshot_coverage_budget`
    - Purpose: make active-gate elapsed time, retry, next-attempt, and terminal
@@ -274,7 +282,7 @@ Final closure requires fresh evidence proving all of the following:
    - Acceptance: causal-model budget accounting no longer reports
      `active_gate_timeout` as unbounded for the current active-gate residual.
 
-4. [Topology Active Gate Owner Cohort Convergence](../packages/todo-20260514-topology-active-gate-owner-cohort-convergence.md)
+4. [Topology Active Gate Owner Cohort Convergence](../packages/active-20260514-topology-active-gate-owner-cohort-convergence.md)
    - Lane: `runtime-owner-boundary`
    - Owner boundary: `startup_active_gate_owner / snapshot_coverage`
    - Purpose: complete the active-gate owner-truth cohort.
@@ -453,10 +461,12 @@ Final closure requires fresh evidence proving all of the following:
 
 ## Current Next Action
 
-Residual inventory is done as classification-only evidence inventory. The
-current action is now
-[Topology Active Gate Budget Closure](../packages/active-20260514-topology-active-gate-budget-closure.md).
-Keep active-gate budget closure before
-[Topology Active Gate Owner Cohort Convergence](../packages/todo-20260514-topology-active-gate-owner-cohort-convergence.md)
-while `active_gate_timeout` is unbounded and active-gate attempts are
-exhausted.
+Active-gate budget closure is done as reduced evidence: `active_gate_timeout`
+is terminally classified, but the representative first frontier remains
+`startup_active_gate_owner / snapshot_coverage`.
+
+The current action is now
+[Topology Active Gate Owner Cohort Convergence](../packages/active-20260514-topology-active-gate-owner-cohort-convergence.md).
+Complete owner-truth cohort convergence for `snapshotCoverage=2/5`,
+`publishedActive=1/5`, and `missingPublished=4`, or split to a narrower
+canonical owner-boundary blocker.

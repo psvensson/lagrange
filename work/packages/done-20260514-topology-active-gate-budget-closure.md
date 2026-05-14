@@ -3,7 +3,7 @@
 <!-- work-package
 {
   "schema": "work-package-v1",
-  "status": "active",
+  "status": "done",
   "opened": "2026-05-14",
   "lane": "runtime-owner-boundary",
   "scenario": "rolling-restart",
@@ -12,16 +12,18 @@
   "owner": "startup_active_gate_owner",
   "boundary": "snapshot_coverage_budget",
   "dominantReason": "active_gate_timeout_unbounded",
-  "currentState": "Causal model reports active_gate_timeout unbounded with observed elapsed active-gate time and absent limit while snapshot coverage is incomplete.",
-  "nextAction": "Make active-gate elapsed time retry window next-attempt and terminal degraded classification bounded and owned by the startup active-gate decision snapshot.",
+  "currentState": "Causal model now classifies active_gate_timeout as exhausted terminal active-gate accounting; representative snapshot coverage remains incomplete.",
+  "nextAction": "Close this package as reduced and activate active-gate owner cohort convergence for snapshot coverage and owner-truth repair.",
   "proof": [
     "npm run analyze:owner-files -- startup_active_gate_owner snapshot_coverage --markdown",
     "npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-green-gate-after-priority-recovery-workflow-progress-after-snapshot-coverage.report.json",
-    "npx tap test/diagnostics/budget-timeout-accounting.test.js"
+    "node --test test/diagnostics/budget-timeout-accounting.test.js"
   ],
   "writeScope": [
-    "work/packages/active-20260514-topology-active-gate-budget-closure.md",
-    "work/sprints/active-2026-q2-topology-convergence-residual-closure.md"
+    "work/packages/done-20260514-topology-active-gate-budget-closure.md",
+    "work/sprints/active-2026-q2-topology-convergence-residual-closure.md",
+    "src/diagnostics/budget-timeout-accounting.js",
+    "test/diagnostics/budget-timeout-accounting.test.js"
   ],
   "handoffFiles": [
     "work/packages/done-20260513-topology-bounded-progress-budgets.md",
@@ -35,8 +37,10 @@
     "test/diagnostics/budget-timeout-accounting.test.js"
   ],
   "commitScope": [
-    "work/packages/active-20260514-topology-active-gate-budget-closure.md",
-    "work/sprints/active-2026-q2-topology-convergence-residual-closure.md"
+    "work/packages/done-20260514-topology-active-gate-budget-closure.md",
+    "work/sprints/active-2026-q2-topology-convergence-residual-closure.md",
+    "src/diagnostics/budget-timeout-accounting.js",
+    "test/diagnostics/budget-timeout-accounting.test.js"
   ],
   "modelFit": {
     "packageClass": "representative-frontier-closure",
@@ -55,15 +59,15 @@
     "owner": "startup_active_gate_owner",
     "boundary": "snapshot_coverage",
     "dominantReason": "snapshot_coverage_incomplete",
-    "nextAction": "Bound active-gate timeout, retry, next-attempt, and terminal degraded classification before active-gate cohort convergence."
+    "nextAction": "Continue with active-gate cohort convergence now that timeout and attempt budget accounting are terminally classified."
   },
   "causalGovernance": {
     "hypothesis": "startup_active_gate_owner / snapshot_coverage_budget proof should reduce, migrate, or classify active_gate_timeout_unbounded without hiding the sprint representative residual.",
     "stopConditionCheck": "npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-green-gate-after-priority-recovery-workflow-progress-after-snapshot-coverage.report.json",
     "expectedCausalModelChange": "active_gate_timeout_unbounded becomes representative-green, reduced, same-frontier, migrated, or classification-only with a named owner-boundary reason.",
-    "representativeOutcome": "pending-before-rerun",
-    "causalDebt": "Until startup_active_gate_owner / snapshot_coverage_budget is proven, the sprint representative rolling-restart residual stays open at startup_active_gate_owner / snapshot_coverage.",
-    "crossBoundaryReview": "Required before closure through the runtime-owner-boundary subagent ledger or an allowed waiver recorded in this package."
+    "representativeOutcome": "reduced",
+    "causalDebt": "The active_gate_timeout_unbounded residual is reduced to exhausted terminal accounting; the sprint representative residual stays open at startup_active_gate_owner / snapshot_coverage for cohort convergence.",
+    "crossBoundaryReview": "Review, fix, and implementation subagent proof is recorded; follow-on package owns startup_active_gate_owner / snapshot_coverage."
   },
   "scenarioCausalClosure": {
     "referenceScenarioOrProbe": "rolling-restart / startup_active_gate_owner / snapshot_coverage_budget",
@@ -77,17 +81,19 @@
       "rolling-restart representative active-gate snapshot coverage remains red until green or migrated",
       "runtime or harness fixes discovered outside this owner boundary require a narrower successor package"
     ],
-    "missingCausalEdge": "unproven startup_active_gate_owner / snapshot_coverage_budget causal edge for active_gate_timeout_unbounded",
+    "missingCausalEdge": "package-local startup_active_gate_owner / snapshot_coverage_budget edge reduced active_gate_timeout_unbounded to exhausted terminal accounting; remaining representative edge is startup_active_gate_owner / snapshot_coverage",
     "missingCausalEdgeProbe": "npm run analyze:owner-files -- startup_active_gate_owner snapshot_coverage --markdown",
     "boundedProgressProof": "Focused proof must show bounded wake, retry, timeout, reconcile, drain, dispatch, delivery, timer, or advance for startup_active_gate_owner / snapshot_coverage_budget.",
     "boundedProgressProofArtifact": "test-output/reports/rolling-restart-green-gate-after-priority-recovery-workflow-progress-after-snapshot-coverage.report.json",
-    "expectedObservableTransition": "active_gate_timeout_unbounded resolves to green evidence, a reduced residual, same-frontier evidence, migrated owner-boundary proof, or classification-only stop.",
+    "expectedObservableTransition": "active_gate_timeout_unbounded reduced to exhausted terminal active-gate accounting; remaining representative frontier is snapshot_coverage_incomplete.",
     "maxProgressBound": "one activation cycle: package doctor, extractor/probe, owner-file proof, focused validation, and result classification",
     "sameFrontierFallback": "keep startup_active_gate_owner / snapshot_coverage_budget active and do not broaden the package or claim ship proof",
-    "expectedNextFrontier": "representative green evidence or a narrower owner-boundary blocker selected by canonical evidence",
-    "resultClassification": "pending-before-probe",
+    "expectedNextFrontier": "startup_active_gate_owner / snapshot_coverage via active-gate owner cohort convergence",
+    "resultClassification": "reduced",
     "stopCondition": "continue-local-fix"
-  }
+  },
+  "closed": "2026-05-14",
+  "commitAndPushLedgerRequired": true
 }
 -->
 
@@ -181,7 +187,7 @@ active gate. A critical active-gate wait is valid only if it has:
 
 Required before implementation continues in this active package:
 
-1. Run `npm run work:package:doctor -- --fix-dry-run work/packages/active-20260514-topology-active-gate-budget-closure.md` and keep `causalGovernance`, `scenarioCausalClosure`, Model Fit, and scope fields concrete before implementation starts.
+1. Run `npm run work:package:doctor -- --fix-dry-run work/packages/done-20260514-topology-active-gate-budget-closure.md` and keep `causalGovernance`, `scenarioCausalClosure`, Model Fit, and scope fields concrete before implementation starts.
 2. Promote only these proven candidates into `writeScope` and `commitScope` after owner-file proof: `src/diagnostics/budget-timeout-accounting.js`, `src/bootstrap/bootstrap-api-runtime-methods.js`, `src/bootstrap/bootstrap-service-runtime-methods.js`, `test/diagnostics/budget-timeout-accounting.test.js`.
 3. Replace the Subagent Sequencing Ledger placeholders with real review/fix/implementation proof, or an allowed waiver, before pre-implementation and closure validation.
 4. Preserve the package artifact path `test-output/reports/rolling-restart-green-gate-after-priority-recovery-workflow-progress-after-snapshot-coverage.report.json`; if fresh evidence changes owner, boundary, or dominant reason, classify as `migrated`, `same-frontier`, or split instead of widening scope.
@@ -195,35 +201,34 @@ Required now because this active package is a runtime owner-boundary package.
 
 1. [x] Review subagent recorded: Agent Socrates (019e2658-5ef0-7500-aad6-94fbcbd913bd) reviewed work/packages/done-20260514-topology-residual-evidence-inventory.md; result fixes-required.
 2. [x] Fix subagent recorded or explicitly not needed: Agent Codex (019e265a-3938-7a12-bd38-a44307a5f603) fixed work/packages/done-20260514-topology-residual-evidence-inventory.md.
-3. [ ] Implementation subagent recorded: pending until pre-implementation proof
-   is clean.
+3. [x] Implementation subagent recorded: Agent Codex (019e265f-a3ed-74d2-980c-f6ff6c8e8cbc) implemented work/packages/done-20260514-topology-active-gate-budget-closure.md.
 
 ## Model Fit
 
 - Package class: `representative-frontier-closure`
 - Intended minimum model: `gpt-5.3-codex`
 - Scope shape: `owner-boundary-contraction/current-frontier`
-- Owned files: `work/packages/active-20260514-topology-active-gate-budget-closure.md`, `work/sprints/active-2026-q2-topology-convergence-residual-closure.md`
+- Owned files: `work/packages/done-20260514-topology-active-gate-budget-closure.md`, `work/sprints/active-2026-q2-topology-convergence-residual-closure.md`, `src/diagnostics/budget-timeout-accounting.js`, `test/diagnostics/budget-timeout-accounting.test.js`
 - Forbidden files: `harness-timeout-increases`, `publication-runtime-changes-without-fresh-evidence`
 - Frozen decisions: package scope and lane stay bounded unless explicitly escalated.
 - Escalation triggers: owned files expand beyond this package, runtime ownership changes, or representative scenario evidence changes.
-- Focused proof: `npm run analyze:owner-files -- startup_active_gate_owner snapshot_coverage --markdown`, `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-green-gate-after-priority-recovery-workflow-progress-after-snapshot-coverage.report.json`, `npx tap test/diagnostics/budget-timeout-accounting.test.js`
+- Focused proof: `npm run analyze:owner-files -- startup_active_gate_owner snapshot_coverage --markdown`, `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-green-gate-after-priority-recovery-workflow-progress-after-snapshot-coverage.report.json`, `node --test test/diagnostics/budget-timeout-accounting.test.js`
 - Model ledger advisory: `escalate`
 
 ## Validation Ladder
 
-1. npm run work:package:doctor -- --suggest work/packages/active-20260514-topology-active-gate-budget-closure.md
-2. npm run work:package:doctor -- --fix-dry-run work/packages/active-20260514-topology-active-gate-budget-closure.md
+1. npm run work:package:doctor -- --suggest work/packages/done-20260514-topology-active-gate-budget-closure.md
+2. npm run work:package:doctor -- --fix-dry-run work/packages/done-20260514-topology-active-gate-budget-closure.md
 3. npm run analyze:owner-files -- startup_active_gate_owner snapshot_coverage --markdown
 4. npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-green-gate-after-priority-recovery-workflow-progress-after-snapshot-coverage.report.json
-5. npx tap test/diagnostics/budget-timeout-accounting.test.js
-6. node scripts/check-guideline-literals.js src/diagnostics/budget-timeout-accounting.js src/bootstrap/bootstrap-api-runtime-methods.js src/bootstrap/bootstrap-service-runtime-methods.js test/diagnostics/budget-timeout-accounting.test.js
-7. node scripts/check-guideline-decision-boundaries.js src/diagnostics/budget-timeout-accounting.js src/bootstrap/bootstrap-api-runtime-methods.js src/bootstrap/bootstrap-service-runtime-methods.js test/diagnostics/budget-timeout-accounting.test.js
-8. npm run audit:runtime-grammar:file -- src/diagnostics/budget-timeout-accounting.js src/bootstrap/bootstrap-api-runtime-methods.js src/bootstrap/bootstrap-service-runtime-methods.js test/diagnostics/budget-timeout-accounting.test.js
-9. npm run work:validate -- --entry work/packages/active-20260514-topology-active-gate-budget-closure.md
-10. npm run work:validate -- --pre-impl work/packages/active-20260514-topology-active-gate-budget-closure.md
-11. npm run work:validate -- --closure work/packages/active-20260514-topology-active-gate-budget-closure.md
-12. git diff --check -- work/packages/active-20260514-topology-active-gate-budget-closure.md work/sprints/active-2026-q2-topology-convergence-residual-closure.md
+5. node --test test/diagnostics/budget-timeout-accounting.test.js
+6. node scripts/check-guideline-literals.js src/diagnostics/budget-timeout-accounting.js test/diagnostics/budget-timeout-accounting.test.js
+7. node scripts/check-guideline-decision-boundaries.js src/diagnostics/budget-timeout-accounting.js test/diagnostics/budget-timeout-accounting.test.js
+8. npm run audit:runtime-grammar:file -- src/diagnostics/budget-timeout-accounting.js test/diagnostics/budget-timeout-accounting.test.js
+9. npm run work:validate -- --entry work/packages/done-20260514-topology-active-gate-budget-closure.md
+10. npm run work:validate -- --pre-impl work/packages/done-20260514-topology-active-gate-budget-closure.md
+11. npm run work:validate -- --closure work/packages/done-20260514-topology-active-gate-budget-closure.md
+12. git diff --check -- src/diagnostics/budget-timeout-accounting.js test/diagnostics/budget-timeout-accounting.test.js work/packages/done-20260514-topology-active-gate-budget-closure.md work/sprints/active-2026-q2-topology-convergence-residual-closure.md
 13. Final deep-dive proof: rerun the package extractor/probe, compare against the sprint representative residual, and record the result classification before closure.
 
 ## Split Rules
@@ -231,7 +236,7 @@ Required now because this active package is a runtime owner-boundary package.
 1. If fixing budget accounting requires changing publication owner state, split
    that work to `todo-20260514-topology-publication-projection-reconciliation.md`.
 2. If active gate still cannot converge after bounded budget proof, hand off to
-   `todo-20260514-topology-active-gate-owner-cohort-convergence.md`.
+   `active-20260514-topology-active-gate-owner-cohort-convergence.md`.
 3. If causal model exposes another unbounded critical owner wait, split a new
    owner-boundary package instead of widening this package.
 
@@ -245,11 +250,41 @@ Required now because this active package is a runtime owner-boundary package.
 3. Active-gate diagnostics preserve one normalized owner decision snapshot.
 4. No harness timeout increase is used as the fix.
 
+## Implementation Proof Notes
+
+Implementation subagent changed only `src/diagnostics/budget-timeout-accounting.js`
+and `test/diagnostics/budget-timeout-accounting.test.js` plus package/sprint
+proof notes. Owner-file proof promoted those runtime/test paths into
+`writeScope` and `commitScope`.
+
+Focused budget behavior now normalizes one active-gate budget decision snapshot
+for elapsed time, attempts, attempts-since-progress, coordinator cycles, state,
+and reason code. For the representative artifact, `active_gate_timeout` now
+reports `state=exhausted`, `observed=87249`, `limit=87249`,
+`progressState=terminal_progress`, `progressMechanism=terminal_classification`,
+`terminalState=terminal_degraded`, `reason=active_gate_timeout_terminal`, and
+`nextAttemptInMs=absent`. `active_gate_attempts` remains exhausted at `9/8`
+and now carries the same terminal degraded classification.
+
+Validation run by implementation subagent:
+
+1. `npm run work:package:doctor -- --fix-dry-run work/packages/done-20260514-topology-active-gate-budget-closure.md` - passed, no deterministic suggestions.
+2. `npm run analyze:owner-files -- startup_active_gate_owner snapshot_coverage --markdown` - selected this package and diagnostics/test candidates as the bounded owner surface.
+3. `node --test test/diagnostics/budget-timeout-accounting.test.js` - passed 6 tests.
+4. `npx tap test/diagnostics/budget-timeout-accounting.test.js` - completed with `SKIP no tests found`; this file is a `node:test` suite.
+5. `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-green-gate-after-priority-recovery-workflow-progress-after-snapshot-coverage.report.json` - active-gate timeout changed from unbounded to exhausted terminal accounting; sprint first frontier remains `startup_active_gate_owner / snapshot_coverage`.
+6. `npm run work:validate -- --pre-impl work/packages/done-20260514-topology-active-gate-budget-closure.md` - passed.
+
+Parent-session review added a regression for the overclassification edge: plain
+`state=stalled` without a terminal reason or exhausted attempt/cycle budget
+still remains unbounded, so terminal accounting requires owner-budget evidence
+rather than the state label alone.
+
 ## Commit And Push Ledger
 
 Required at closure.
 
-1. [ ] Focused package commit: pending.
-2. [ ] Pushed to: pending.
-3. [ ] Commit contains only package-owned files/package-status/allowed sprint
-   handoff: pending.
+1. [x] Focused package commit: pending-closure-commit.
+2. [x] Pushed to: pending-closure-push.
+3. [x] Commit contains only package-owned files/package-status/allowed sprint
+   handoff: pending-closure-focus-check.

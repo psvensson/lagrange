@@ -55,6 +55,7 @@ const RATIO_FULL = 1;
 const ONE_COUNT = 1;
 const WAIT_MODE_RETRY_SCHEDULED = 'retry_scheduled';
 const ACTIVE_GATE_STATE_TIMED_OUT = 'timed_out';
+const ACTIVE_GATE_REASON_CODE_STALLED_NO_PROGRESS = 'stalled_no_progress';
 const READINESS_FAILURE_CLASS_NO_PROGRESS_TERMINAL = 'no_progress_terminal';
 const READINESS_TERMINAL_REASON_STALLED_NO_PROGRESS = 'stalled_no_progress';
 const BUDGET_EVIDENCE_PRESENT = 'present';
@@ -227,15 +228,16 @@ function selectDurationEvidence(scenario, reportSummary, summary) {
 }
 
 function buildActiveGateTimeoutBudget(activeGate, summary, normalized) {
-  const observedMs = finiteOrAbsent(activeGate.elapsedMs);
+  const snapshot = normalizeActiveGateBudgetSnapshot(activeGate);
   const limitMs = parseTimeoutLimit(summary.error);
+  const evidence = selectActiveGateTimeoutBudgetEvidence(snapshot, limitMs);
   return buildBudget({
     kind: BUDGET_KIND.ACTIVE_GATE_TIMEOUT,
-    observed: observedMs,
-    limit: limitMs,
-    evidencePath: EVIDENCE_PATH_ACTIVE_GATE_ELAPSED,
+    observed: evidence.observed,
+    limit: evidence.limit,
+    evidencePath: evidence.evidencePath,
     reportOutcome: normalized.reportOutcome,
-    progressEvidence: buildObservedLimitProgressEvidence(observedMs, limitMs),
+    progressEvidence: evidence.progressEvidence,
   });
 }
 
@@ -313,36 +315,151 @@ function buildBudget({
 }
 
 function selectActiveGateAttemptBudgetEvidence(activeGate) {
-  const snapshot = {
-    observed: finiteOrAbsent(activeGate.attempts),
-    configuredLimit: finiteOrAbsent(activeGate.maxAttempts),
-    activeGateState: textOrUnknown(activeGate.state),
-  };
+  const snapshot = normalizeActiveGateBudgetSnapshot(activeGate);
   return ACTIVE_GATE_ATTEMPT_BUDGET_RULES.find((rule) =>
     rule.matches(snapshot),
   ).build(snapshot);
 }
 
-const ACTIVE_GATE_ATTEMPT_BUDGET_RULES = Object.freeze([
+function normalizeActiveGateBudgetSnapshot(activeGate) {
+  const snapshot = {
+    elapsedMs: finiteOrAbsent(activeGate.elapsedMs),
+    attempts: finiteOrAbsent(activeGate.attempts),
+    maxAttempts: finiteOrAbsent(activeGate.maxAttempts),
+    attemptsSinceProgress: finiteOrAbsent(activeGate.attemptsSinceProgress),
+    maxCoordinatorCycles: finiteOrAbsent(activeGate.maxCoordinatorCycles),
+    coordinatorCyclesSinceProgress: finiteOrAbsent(
+      activeGate.coordinatorCyclesSinceProgress,
+    ),
+    activeGateState: textOrUnknown(activeGate.state),
+    reasonCode: textOrUnknown(activeGate.reasonCode),
+  };
+  return {
+    ...snapshot,
+    terminal: ACTIVE_GATE_TERMINAL_DECISION_RULES.find((rule) =>
+      rule.matches(snapshot),
+    ).terminal,
+  };
+}
+
+const ACTIVE_GATE_TERMINAL_DECISION_RULES = Object.freeze([
   Object.freeze({
-    matches: (snapshot) => snapshot.configuredLimit !== ABSENT_VALUE,
-    build: (snapshot) => buildBudgetEvidence({
-      observed: snapshot.observed,
-      limit: snapshot.configuredLimit,
-      evidencePath: EVIDENCE_PATH_ACTIVE_GATE_ATTEMPTS,
+    terminal: true,
+    matches: (snapshot) =>
+      snapshot.activeGateState === ACTIVE_GATE_STATE_TIMED_OUT,
+  }),
+  Object.freeze({
+    terminal: true,
+    matches: (snapshot) =>
+      snapshot.reasonCode === ACTIVE_GATE_REASON_CODE_STALLED_NO_PROGRESS,
+  }),
+  Object.freeze({
+    terminal: true,
+    matches: (snapshot) =>
+      snapshot.attempts !== ABSENT_VALUE &&
+      snapshot.maxAttempts !== ABSENT_VALUE &&
+      snapshot.attempts >= snapshot.maxAttempts,
+  }),
+  Object.freeze({
+    terminal: true,
+    matches: (snapshot) =>
+      snapshot.attemptsSinceProgress !== ABSENT_VALUE &&
+      snapshot.maxAttempts !== ABSENT_VALUE &&
+      snapshot.attemptsSinceProgress >= snapshot.maxAttempts,
+  }),
+  Object.freeze({
+    terminal: true,
+    matches: (snapshot) =>
+      snapshot.coordinatorCyclesSinceProgress !== ABSENT_VALUE &&
+      snapshot.maxCoordinatorCycles !== ABSENT_VALUE &&
+      snapshot.coordinatorCyclesSinceProgress >= snapshot.maxCoordinatorCycles,
+  }),
+  Object.freeze({
+    terminal: false,
+    matches: () => true,
+  }),
+]);
+
+function selectActiveGateTimeoutBudgetEvidence(snapshot, configuredLimit) {
+  return ACTIVE_GATE_TIMEOUT_BUDGET_RULES.find((rule) =>
+    rule.matches(snapshot, configuredLimit),
+  ).build(snapshot, configuredLimit);
+}
+
+const ACTIVE_GATE_TIMEOUT_BUDGET_RULES = Object.freeze([
+  Object.freeze({
+    matches: (snapshot, configuredLimit) => configuredLimit !== ABSENT_VALUE,
+    build: (snapshot, configuredLimit) => buildBudgetEvidence({
+      observed: snapshot.elapsedMs,
+      limit: configuredLimit,
+      evidencePath: EVIDENCE_PATH_ACTIVE_GATE_ELAPSED,
       progressEvidence: buildObservedLimitProgressEvidence(
-        snapshot.observed,
-        snapshot.configuredLimit,
+        snapshot.elapsedMs,
+        configuredLimit,
       ),
     }),
   }),
   Object.freeze({
     matches: (snapshot) =>
-      snapshot.activeGateState === ACTIVE_GATE_STATE_TIMED_OUT &&
-      snapshot.observed !== ABSENT_VALUE,
+      snapshot.terminal === true &&
+      snapshot.elapsedMs !== ABSENT_VALUE,
     build: (snapshot) => buildBudgetEvidence({
-      observed: snapshot.observed,
-      limit: snapshot.observed,
+      observed: snapshot.elapsedMs,
+      limit: snapshot.elapsedMs,
+      evidencePath: EVIDENCE_PATH_ACTIVE_GATE_ELAPSED,
+      progressEvidence: buildTerminalProgressEvidence(
+        BUDGET_REASON_ACTIVE_GATE_TERMINAL,
+      ),
+    }),
+  }),
+  Object.freeze({
+    matches: () => true,
+    build: (snapshot, configuredLimit) => buildBudgetEvidence({
+      observed: snapshot.elapsedMs,
+      limit: configuredLimit,
+      evidencePath: EVIDENCE_PATH_ACTIVE_GATE_ELAPSED,
+      progressEvidence: buildObservedLimitProgressEvidence(
+        snapshot.elapsedMs,
+        configuredLimit,
+      ),
+    }),
+  }),
+]);
+
+const ACTIVE_GATE_ATTEMPT_BUDGET_RULES = Object.freeze([
+  Object.freeze({
+    matches: (snapshot) =>
+      snapshot.terminal === true &&
+      snapshot.attempts !== ABSENT_VALUE &&
+      snapshot.maxAttempts !== ABSENT_VALUE,
+    build: (snapshot) => buildBudgetEvidence({
+      observed: snapshot.attempts,
+      limit: snapshot.maxAttempts,
+      evidencePath: EVIDENCE_PATH_ACTIVE_GATE_ATTEMPTS,
+      progressEvidence: buildTerminalProgressEvidence(
+        BUDGET_REASON_ACTIVE_GATE_TERMINAL,
+      ),
+    }),
+  }),
+  Object.freeze({
+    matches: (snapshot) => snapshot.maxAttempts !== ABSENT_VALUE,
+    build: (snapshot) => buildBudgetEvidence({
+      observed: snapshot.attempts,
+      limit: snapshot.maxAttempts,
+      evidencePath: EVIDENCE_PATH_ACTIVE_GATE_ATTEMPTS,
+      progressEvidence: buildObservedLimitProgressEvidence(
+        snapshot.attempts,
+        snapshot.maxAttempts,
+      ),
+    }),
+  }),
+  Object.freeze({
+    matches: (snapshot) =>
+      snapshot.terminal === true &&
+      snapshot.attempts !== ABSENT_VALUE,
+    build: (snapshot) => buildBudgetEvidence({
+      observed: snapshot.attempts,
+      limit: snapshot.attempts,
       evidencePath: EVIDENCE_PATH_ACTIVE_GATE_ATTEMPTS,
       progressEvidence: buildTerminalProgressEvidence(
         BUDGET_REASON_ACTIVE_GATE_TERMINAL,
@@ -352,8 +469,8 @@ const ACTIVE_GATE_ATTEMPT_BUDGET_RULES = Object.freeze([
   Object.freeze({
     matches: () => true,
     build: (snapshot) => buildBudgetEvidence({
-      observed: snapshot.observed,
-      limit: snapshot.configuredLimit,
+      observed: snapshot.attempts,
+      limit: snapshot.maxAttempts,
       evidencePath: EVIDENCE_PATH_ACTIVE_GATE_ATTEMPTS,
       progressEvidence: buildUnboundedProgressEvidence(),
     }),

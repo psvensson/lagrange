@@ -16,24 +16,44 @@ const ACTIVE_FAILURE_BUNDLE_PATH =
   'test-output/reports/.playback/rolling-restart-spec-led-runtime-modularization-active-gate-snapshot-coverage-reachability/rolling-restart/failure-bundle.json';
 const CURRENT_REPORT_PATH =
   'test-output/reports/rolling-restart-spec-led-runtime-modularization-active-gate-snapshot-coverage-publication-lag.report.json';
+const CURRENT_ACTIVE_GATE_BUDGET_REPORT_PATH =
+  'test-output/reports/rolling-restart-green-gate-after-priority-recovery-workflow-progress-after-snapshot-coverage.report.json';
 const JSON_ENCODING_UTF8 = 'utf8';
 const ZERO_COUNT = 0;
 const ONE_COUNT = 1;
 const TWO_COUNT = 2;
 const THREE_COUNT = 3;
+const CURRENT_ACTIVE_GATE_ELAPSED_MS = 87249;
+const CURRENT_ACTIVE_GATE_ATTEMPTS = 9;
+const CURRENT_ACTIVE_GATE_MAX_ATTEMPTS = 8;
+const DIRECT_STALLED_ACTIVE_GATE_ELAPSED_MS = 250;
+const DIRECT_STALLED_ACTIVE_GATE_ATTEMPTS = 1;
 const CURRENT_WORKFLOW_RETRY_AFTER_MS = 1000;
 const NULL_VALUE = null;
 const UNDEFINED_VALUE = undefined;
 const PROGRESS_STATE_BOUNDED = 'bounded_progress';
+const PROGRESS_STATE_UNBOUNDED = 'unbounded_progress';
 const PROGRESS_STATE_TERMINAL = 'terminal_progress';
 const PROGRESS_MECHANISM_OBSERVED_LIMIT = 'observed_limit';
 const PROGRESS_MECHANISM_NEXT_ATTEMPT = 'next_attempt';
 const PROGRESS_MECHANISM_TERMINAL_CLASSIFICATION =
   'terminal_classification';
 const TERMINAL_STATE_DEGRADED = 'terminal_degraded';
+const TERMINAL_STATE_NON_TERMINAL = 'non_terminal';
+const ACTIVE_GATE_STATE_STALLED = 'stalled';
 const REASON_ACTIVE_GATE_TERMINAL = 'active_gate_timeout_terminal';
+const REASON_LIMIT_UNKNOWN = 'limit_unknown';
 const REASON_READINESS_TERMINAL = 'readiness_terminal';
 const REASON_RETRY_SCHEDULED = 'retry_scheduled';
+const DIRECT_STALLED_ACTIVE_GATE_REPORT = Object.freeze({
+  publicationConvergence: Object.freeze({
+    activeGate: Object.freeze({
+      state: ACTIVE_GATE_STATE_STALLED,
+      elapsedMs: DIRECT_STALLED_ACTIVE_GATE_ELAPSED_MS,
+      attempts: DIRECT_STALLED_ACTIVE_GATE_ATTEMPTS,
+    }),
+  }),
+});
 
 function readArtifact(artifactPath) {
   return JSON.parse(fs.readFileSync(artifactPath, JSON_ENCODING_UTF8));
@@ -135,6 +155,46 @@ describe('BudgetTimeoutAccounting', () => {
     assert.equal(accounting.summary.unboundedCount, ZERO_COUNT);
     assert.equal(accounting.summary.unknownCount, ZERO_COUNT);
     assert.equal(accounting.summary.ownershipGapCount, ZERO_COUNT);
+    assertNoNullOrUndefined(accounting);
+  });
+
+  it('uses stalled active-gate snapshot evidence as bounded terminal timeout accounting', () => {
+    const accounting = accountBudgets(readArtifact(CURRENT_ACTIVE_GATE_BUDGET_REPORT_PATH));
+    const timeoutBudget = findBudget(accounting, BUDGET_KIND.ACTIVE_GATE_TIMEOUT);
+    const attemptBudget = findBudget(accounting, BUDGET_KIND.ACTIVE_GATE_ATTEMPTS);
+
+    assert.equal(timeoutBudget.state, BUDGET_STATE.EXHAUSTED);
+    assert.equal(timeoutBudget.observed, CURRENT_ACTIVE_GATE_ELAPSED_MS);
+    assert.equal(timeoutBudget.limit, CURRENT_ACTIVE_GATE_ELAPSED_MS);
+    assert.equal(timeoutBudget.owner, OWNER.ACTIVE_GATE);
+    assert.equal(timeoutBudget.boundary, BOUNDARY.SNAPSHOT_COVERAGE);
+    assert.equal(timeoutBudget.ownershipState, BUDGET_OWNERSHIP_STATE.CLASSIFIED);
+    assert.equal(timeoutBudget.progressState, PROGRESS_STATE_TERMINAL);
+    assert.equal(
+      timeoutBudget.progressMechanism,
+      PROGRESS_MECHANISM_TERMINAL_CLASSIFICATION,
+    );
+    assert.equal(timeoutBudget.terminalState, TERMINAL_STATE_DEGRADED);
+    assert.equal(timeoutBudget.reason, REASON_ACTIVE_GATE_TERMINAL);
+    assert.equal(attemptBudget.state, BUDGET_STATE.EXHAUSTED);
+    assert.equal(attemptBudget.observed, CURRENT_ACTIVE_GATE_ATTEMPTS);
+    assert.equal(attemptBudget.limit, CURRENT_ACTIVE_GATE_MAX_ATTEMPTS);
+    assert.equal(attemptBudget.progressState, PROGRESS_STATE_TERMINAL);
+    assert.equal(attemptBudget.terminalState, TERMINAL_STATE_DEGRADED);
+    assert.equal(accounting.summary.unboundedCount, ONE_COUNT);
+    assert.equal(accounting.summary.terminalProgressCount, TWO_COUNT);
+    assertNoNullOrUndefined(accounting);
+  });
+
+  it('does not treat stalled active-gate state alone as terminal budget proof', () => {
+    const accounting = accountBudgets(DIRECT_STALLED_ACTIVE_GATE_REPORT);
+    const timeoutBudget = findBudget(accounting, BUDGET_KIND.ACTIVE_GATE_TIMEOUT);
+
+    assert.equal(timeoutBudget.state, BUDGET_STATE.UNBOUNDED);
+    assert.equal(timeoutBudget.observed, DIRECT_STALLED_ACTIVE_GATE_ELAPSED_MS);
+    assert.equal(timeoutBudget.progressState, PROGRESS_STATE_UNBOUNDED);
+    assert.equal(timeoutBudget.terminalState, TERMINAL_STATE_NON_TERMINAL);
+    assert.equal(timeoutBudget.reason, REASON_LIMIT_UNKNOWN);
     assertNoNullOrUndefined(accounting);
   });
 
