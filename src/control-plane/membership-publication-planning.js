@@ -1034,6 +1034,32 @@ function buildPublicationAckProjectionDiagnostics(
   };
 }
 
+function hasRecoveryEligiblePublicationRepairEvidence(options = {}, helperFns = {}) {
+  const publishedBaselineNodeIds = helperFns.normalizeNodeIdList(
+    options.publishedBaselineNodeIds,
+  );
+  const publishableRecoveryActiveNodeIds = helperFns.normalizeNodeIdList(
+    options.publishableRecoveryActiveNodeIds,
+  );
+  const readinessByNodeId =
+    options.readinessByNodeId && typeof options.readinessByNodeId === TYPEOF.OBJECT ?
+      options.readinessByNodeId :
+      {};
+  const publishedBaselineNodeIdSet = new Set(publishedBaselineNodeIds);
+
+  return publishableRecoveryActiveNodeIds.some((nodeId) => {
+    if (publishedBaselineNodeIdSet.has(nodeId)) {
+      return false;
+    }
+    const dimensions = readinessByNodeId[nodeId]?.dimensions;
+    return dimensions &&
+      typeof dimensions === TYPEOF.OBJECT &&
+      dimensions[
+        CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE
+      ] === true;
+  });
+}
+
 function buildMembershipPublicationAckCompletionSnapshot(options = {}, helperFns = {}) {
   const requiredAckNodeIds = helperFns.normalizeNodeIdList(
     options.requiredAckNodeIds,
@@ -1271,11 +1297,22 @@ function deriveMembershipPublicationCandidate(options = {}, helperFns = {}) {
         !publishedBaselineNodeIds.includes(nodeId) &&
         publicationProjectionNodeRowIds.has(nodeId),
     );
+  const recoveryEligiblePublicationRepairEvidence =
+    hasRecoveryEligiblePublicationRepairEvidence(
+      {
+        publishedBaselineNodeIds,
+        publishableRecoveryActiveNodeIds:
+          publicationAckTargetSnapshot.publishableRecoveryActiveNodeIds,
+        readinessByNodeId,
+      },
+      helperFns,
+    );
   const retainPublishedDurableTarget =
     latestPublicationStatus === MEMBERSHIP_PUBLICATION_STATUS.PUBLISHED &&
     priorityRecoverySpreadGapPending !== true &&
     publicationWideningProjection === true &&
-    publicationWideningHasNodeRowEvidence !== true;
+    publicationWideningHasNodeRowEvidence !== true &&
+    recoveryEligiblePublicationRepairEvidence !== true;
   const publicationTargetSnapshot = buildMembershipPublicationTargetSnapshot(
     {
       explicitPublishedNodeIds:

@@ -6,21 +6,30 @@
   "status": "active",
   "lane": "runtime-owner-boundary",
   "scenario": "rolling-restart",
-  "artifact": "test-output/reports/topology-ship-gate-final-rolling-restart.report.json",
+  "artifact": "test-output/reports/topology-publication-convergence-final-blocker-after-repair.report.json",
   "playback": "none",
   "owner": "topology_publication_owner",
   "boundary": "publication_convergence",
   "dominantReason": "missing_published_nodes_present",
-  "currentState": "Final ship confirmation failed and selected publication_ack_convergence as the first frontier. The final artifact reports active=0/5, snapshotCoverage=2/5, publication=PUBLISHED, pendingAck=0, missingPublished=4, missingPublishedIds=11601fe0-72d6-5853-8590-ec2881853e72|35a891b8-c1a0-5064-9c6e-2acfba61c2a7|8be8d30f-4499-5eed-865c-71b4d529a67a|ebc4aa0b-06c6-506d-93ea-1dd2deca3f58. Priority recovery remains a non-frontier tail with two operation_workflow_owner / workflow_progress witnesses.",
-  "nextAction": "Hold the sprint on this narrow publication convergence blocker. Do not fix rolling-restart runtime behavior without explicit re-scope; use this package as the handoff for future topology_publication_owner / publication_convergence work.",
+  "currentState": "Focused publication-owner repair landed and representative rerun reduced the blocker but did not close it. Fresh artifact reports active=2/5, snapshotCoverage=3/5, publication=PUBLISHED, pendingAck=0, missingPublished=2, missingPublishedIds=8be8d30f-4499-5eed-865c-71b4d529a67a|ebc4aa0b-06c6-506d-93ea-1dd2deca3f58. Priority recovery remains non-frontier and causally classified; failed-phase node reasons show the two remaining missing nodes under PRIORITY_CONTROL_PLANE_RECOVERY_PENDING.",
+  "nextAction": "Continue the same topology_publication_owner / publication_convergence blocker. Inspect why priority-control-plane-recovery-pending nodes stay outside the published cohort after the count-only ACK repair; split only if owner evidence proves the remaining blocker belongs to operation workflow, startup active gate, or readiness ownership.",
   "proof": [
     "npm run work:evidence-summary -- test-output/reports/topology-ship-gate-final-rolling-restart.report.json",
     "npm run analyze:topology-convergence -- test-output/reports/topology-ship-gate-final-rolling-restart.report.json",
-    "npm --silent run analyze:causal-model -- test-output/reports/topology-ship-gate-final-rolling-restart.report.json"
+    "npm --silent run analyze:causal-model -- test-output/reports/topology-ship-gate-final-rolling-restart.report.json",
+    "node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/topology-publication-convergence-final-blocker-after-repair.report.json --fast-local --verbose",
+    "npm run work:evidence-summary -- test-output/reports/topology-publication-convergence-final-blocker-after-repair.report.json",
+    "npm run analyze:topology-convergence -- test-output/reports/topology-publication-convergence-final-blocker-after-repair.report.json",
+    "npm --silent run analyze:causal-model -- test-output/reports/topology-publication-convergence-final-blocker-after-repair.report.json",
+    "npm run analyze:priority-recovery-residuals -- test-output/reports/topology-publication-convergence-final-blocker-after-repair.report.json --markdown",
+    "npm run analyze:distributed-failure -- --report test-output/reports/topology-publication-convergence-final-blocker-after-repair.report.json"
   ],
   "writeScope": [
     "work/packages/active-20260514-topology-publication-convergence-final-blocker.md",
-    "work/sprints/active-2026-q2-topology-convergence-residual-closure.md"
+    "work/sprints/active-2026-q2-topology-convergence-residual-closure.md",
+    "work/model-ledger.jsonl",
+    "src/control-plane/membership-publication-planning.js",
+    "test/control-plane/membership-publication-coordinator-main-stage-2.js"
   ],
   "handoffFiles": [
     "work/packages/done-20260514-topology-ship-gate-final-confirmation.md",
@@ -31,12 +40,21 @@
     "work/sprints/current-blocker.md",
     "work/sprints/current-blocker.json"
   ],
-  "candidateRuntimeFiles": [],
+  "candidateRuntimeFiles": [
+    "src/control-plane/publication-recovery-gate.js",
+    "src/control-plane/publication-owner-state.js",
+    "src/control-plane/publication-owner-decision.js",
+    "src/control-plane/publication-owner-evidence.js",
+    "src/control-plane/membership-publication-coordinator-class-stage-2.js"
+  ],
   "commitScope": [
     "work/packages/active-20260514-topology-publication-convergence-final-blocker.md",
     "work/sprints/active-2026-q2-topology-convergence-residual-closure.md",
     "work/sprints/current-blocker.md",
-    "work/sprints/current-blocker.json"
+    "work/sprints/current-blocker.json",
+    "work/model-ledger.jsonl",
+    "src/control-plane/membership-publication-planning.js",
+    "test/control-plane/membership-publication-coordinator-main-stage-2.js"
   ],
   "touchedFiles": [],
   "modelFit": {
@@ -45,25 +63,26 @@
     "scopeShape": "owner-boundary-contraction/current-frontier",
     "escalationTriggers": [
       "owned files expand beyond this package",
-      "a frozen decision must be reopened"
+      "a frozen decision must be reopened",
+      "repair requires operation workflow, active-gate runtime, or harness timeout changes"
     ]
   },
   "representativeResidual": {
     "status": "live-red",
     "scenario": "rolling-restart",
-    "artifact": "test-output/reports/topology-ship-gate-final-rolling-restart.report.json",
+    "artifact": "test-output/reports/topology-publication-convergence-final-blocker-after-repair.report.json",
     "frontier": "publication_ack_convergence",
     "owner": "topology_publication_owner",
     "boundary": "publication_convergence",
     "dominantReason": "missing_published_nodes_present",
-    "nextAction": "Future work may fix or further split publication convergence only after explicit re-scope."
+    "nextAction": "Continue the same publication convergence owner boundary against the reduced missingPublished=2 residual."
   },
   "causalGovernance": {
     "hypothesis": "topology_publication_owner / publication_convergence work should reduce, migrate, or classify missing_published_nodes_present without hiding active-gate snapshot coverage or priority recovery tails.",
-    "stopConditionCheck": "npm --silent run analyze:causal-model -- test-output/reports/topology-ship-gate-final-rolling-restart.report.json",
-    "expectedCausalModelChange": "missing_published_nodes_present becomes representative-green, reduced, same-frontier, migrated, or classification-only with a named owner-boundary reason.",
-    "representativeOutcome": "pending-before-rerun",
-    "causalDebt": "Final confirmation proved the sprint is not ship-ready. Runtime fixes remain out of scope until explicitly re-scoped.",
+    "stopConditionCheck": "npm --silent run analyze:causal-model -- test-output/reports/topology-publication-convergence-final-blocker-after-repair.report.json",
+    "expectedCausalModelChange": "missing_published_nodes_present reduced from missingPublished=4 to missingPublished=2 while staying in topology_publication_owner / publication_convergence.",
+    "representativeOutcome": "reduced",
+    "causalDebt": "The count-only ACK repair reduced the representative residual but did not close it; the same owner boundary remains active for the two priority-control-plane-recovery-pending missing nodes.",
     "crossBoundaryReview": "Required before implementation through the runtime-owner-boundary subagent ledger or an allowed waiver recorded in this package."
   },
   "scenarioCausalClosure": {
@@ -71,22 +90,23 @@
     "phaseChain": [
       "canonical final confirmation extraction",
       "topology_publication_owner / publication_convergence focused proof",
-      "representative rerun classification"
+      "representative rerun classification",
+      "same-owner reduced residual continuation"
     ],
-    "currentFirstFrontier": "topology_publication_owner / publication_convergence from final confirmation artifact",
+    "currentFirstFrontier": "topology_publication_owner / publication_convergence from the reduced after-repair artifact",
     "knownDownstreamBlockers": [
-      "active-gate snapshot coverage remains 2/5 after publication convergence",
-      "priority recovery has two non-frontier operation workflow witnesses in final evidence"
+      "active-gate snapshot coverage remains 3/5 after publication convergence",
+      "priority recovery has three non-frontier operation workflow witnesses in after-repair evidence"
     ],
-    "missingCausalEdge": "publication PUBLISHED with pendingAck=0 still coexists with missingPublished=4 and active=0/5",
-    "missingCausalEdgeProbe": "npm run analyze:topology-convergence -- test-output/reports/topology-ship-gate-final-rolling-restart.report.json",
-    "boundedProgressProof": "Future work must prove publication convergence through owner truth, typed missing-published reasons, retry/reconcile evidence, or terminal classification.",
-    "boundedProgressProofArtifact": "test-output/reports/topology-ship-gate-final-rolling-restart.report.json",
+    "missingCausalEdge": "publication PUBLISHED with pendingAck=0 still coexists with missingPublished=2 and active=2/5",
+    "missingCausalEdgeProbe": "npm run analyze:topology-convergence -- test-output/reports/topology-publication-convergence-final-blocker-after-repair.report.json",
+    "boundedProgressProof": "Focused repair proved bounded progress by advancing publicationEpoch to 3 and reducing missingPublished from 4 to 2; next work must close, split, or further reduce the two remaining missing published members.",
+    "boundedProgressProofArtifact": "test-output/reports/topology-publication-convergence-final-blocker-after-repair.report.json",
     "expectedObservableTransition": "missing_published_nodes_present resolves to green evidence, reduced residual, same-frontier proof, migrated owner-boundary proof, or classification-only stop.",
-    "maxProgressBound": "not executed in this sprint segment; this package is an active handoff until runtime work is explicitly re-scoped",
+    "maxProgressBound": "representative rolling-restart rerun failed after 209230ms but reduced active=0/5 to 2/5, snapshotCoverage=2/5 to 3/5, publishedActive=1/5 to 3/5, and missingPublished=4 to 2",
     "sameFrontierFallback": "keep topology_publication_owner / publication_convergence active and do not broaden into rolling-restart runtime fixes",
-    "expectedNextFrontier": "publication convergence green or a narrower topology publication owner blocker",
-    "resultClassification": "pending-before-probe",
+    "expectedNextFrontier": "same owner boundary for remaining missing nodes 8be8d30f-4499-5eed-865c-71b4d529a67a and ebc4aa0b-06c6-506d-93ea-1dd2deca3f58 unless owner evidence forces a split",
+    "resultClassification": "reduced",
     "stopCondition": "continue-local-fix"
   },
   "predecessor": null

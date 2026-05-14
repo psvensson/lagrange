@@ -5,7 +5,23 @@ import {
   CONTROL_PLANE_READINESS_DIMENSION,
   CONTROL_PLANE_READINESS_REASON,
 } from '../../src/control-plane/control-plane-readiness-constants.js';
+import {
+  CONTROL_PLANE_PUBLICATION_STATUS,
+} from '../../src/control-plane/control-plane-publication-merge.js';
 import {MEMBERSHIP_PUBLICATION_ACK_DEFERRAL_CONNECTION_STATE_CONNECTED, MEMBERSHIP_PUBLICATION_ACK_DEFERRAL_NOW_MS, MEMBERSHIP_PUBLICATION_ACK_DEFERRAL_PROCESS_DEAD_NODE_ID, MEMBERSHIP_PUBLICATION_ACK_DEFERRAL_PUBLICATION_EPOCH, MEMBERSHIP_PUBLICATION_ACK_DEFERRAL_PUBLISHED_NODE_ID, MEMBERSHIP_PUBLICATION_ACK_DEFERRAL_PUBLISHER_NODE_ID, MEMBERSHIP_PUBLICATION_ACK_DEFERRAL_STATUS_ACK_PENDING, MEMBERSHIP_PUBLICATION_TRIM_CONNECTION_STATE_READY, MEMBERSHIP_PUBLICATION_TRIM_STATUS_PUBLISHED, buildMembershipPublicationAckDeferralNodeRow, buildMembershipPublicationTrimEndpointRow, buildMembershipPublicationTrimServiceRow} from './membership-publication-coordinator-main-stage-1.js';
+
+const PUBLICATION_CONVERGENCE_STALE_PUBLISHED_EPOCH = 29;
+const PUBLICATION_CONVERGENCE_REPAIR_NOW_MS = 1000;
+const PUBLICATION_CONVERGENCE_REPAIR_PUBLISHER_NODE_ID = 'seed-node';
+const PUBLICATION_CONVERGENCE_REPAIR_PUBLISHED_NODE_ID = 'node-1';
+const PUBLICATION_CONVERGENCE_REPAIR_MISSING_NODE_ID = 'node-2';
+const PUBLICATION_CONVERGENCE_REPAIR_ENDPOINT_ID = 'node-1-ws';
+const PUBLICATION_CONVERGENCE_REPAIR_SERVICE_ID = 'svc-1';
+const PUBLICATION_CONVERGENCE_REPAIR_ENDPOINT_ADDRESS = 'ws://node-1:8082';
+const PUBLICATION_CONVERGENCE_REPAIR_TRANSPORT = 'ws';
+const PUBLICATION_CONVERGENCE_REPAIR_ACTIVE_STATUS = 'active';
+const PUBLICATION_CONVERGENCE_REPAIR_READY_CONNECTION = 'ready';
+const PUBLICATION_CONVERGENCE_REPAIR_READY_LEASE_EXPIRES_AT = 5000;
 
 test('deriveMembershipPublicationCandidate promotes healthy projected members while publication acknowledgements are still pending',
   async (t) => {
@@ -850,4 +866,132 @@ test('deriveMembershipPublicationCandidate reopens a stale published membership 
       },
       'the publication candidate should preserve canonical node participation states',
     );
+  });
+
+test('deriveMembershipPublicationCandidate reopens count-only ACK complete publication when recovery eligibility proves missing members',
+  async (t) => {
+    const candidate = deriveMembershipPublicationCandidate({
+      publisherNodeId: PUBLICATION_CONVERGENCE_REPAIR_PUBLISHER_NODE_ID,
+      latestPublicationRow: {
+        publication_epoch: PUBLICATION_CONVERGENCE_STALE_PUBLISHED_EPOCH,
+        status: CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED,
+        published_active_node_ids: [
+          PUBLICATION_CONVERGENCE_REPAIR_PUBLISHED_NODE_ID,
+        ],
+        required_ack_node_ids: [
+          PUBLICATION_CONVERGENCE_REPAIR_PUBLISHED_NODE_ID,
+        ],
+        acknowledged_node_ids: [
+          PUBLICATION_CONVERGENCE_REPAIR_PUBLISHED_NODE_ID,
+        ],
+      },
+      latestPublishedPublicationRow: {
+        publication_epoch: PUBLICATION_CONVERGENCE_STALE_PUBLISHED_EPOCH,
+        status: CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED,
+        published_active_node_ids: [
+          PUBLICATION_CONVERGENCE_REPAIR_PUBLISHED_NODE_ID,
+        ],
+        required_ack_node_ids: [
+          PUBLICATION_CONVERGENCE_REPAIR_PUBLISHED_NODE_ID,
+        ],
+        acknowledged_node_ids: [
+          PUBLICATION_CONVERGENCE_REPAIR_PUBLISHED_NODE_ID,
+        ],
+      },
+      nodeRows: [
+        {
+          node_id: PUBLICATION_CONVERGENCE_REPAIR_PUBLISHED_NODE_ID,
+          status: PUBLICATION_CONVERGENCE_REPAIR_ACTIVE_STATUS,
+          connection_state: PUBLICATION_CONVERGENCE_REPAIR_READY_CONNECTION,
+          ready_lease_expires_at:
+            PUBLICATION_CONVERGENCE_REPAIR_READY_LEASE_EXPIRES_AT,
+        },
+      ],
+      readinessEntries: [
+        {
+          nodeId: PUBLICATION_CONVERGENCE_REPAIR_PUBLISHED_NODE_ID,
+          dimensions: {
+            [CONTROL_PLANE_READINESS_DIMENSION.CLUSTER_MEMBER_HEALTHY]: true,
+            [CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_PUBLISHED]: true,
+            [CONTROL_PLANE_READINESS_DIMENSION
+              .CONTROL_PLANE_RECOVERY_ELIGIBLE]: true,
+            [CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_WRITABLE]: true,
+            [CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE]: true,
+            [CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE]: true,
+          },
+        },
+        {
+          nodeId: PUBLICATION_CONVERGENCE_REPAIR_MISSING_NODE_ID,
+          dimensions: {
+            [CONTROL_PLANE_READINESS_DIMENSION.CLUSTER_MEMBER_HEALTHY]: false,
+            [CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_PUBLISHED]: false,
+            [CONTROL_PLANE_READINESS_DIMENSION
+              .CONTROL_PLANE_RECOVERY_ELIGIBLE]: true,
+            [CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_WRITABLE]: true,
+            [CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE]: true,
+            [CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE]: true,
+          },
+        },
+      ],
+      nodeEndpointRows: [
+        {
+          endpoint_id: PUBLICATION_CONVERGENCE_REPAIR_ENDPOINT_ID,
+          node_id: PUBLICATION_CONVERGENCE_REPAIR_PUBLISHED_NODE_ID,
+          transport_type: PUBLICATION_CONVERGENCE_REPAIR_TRANSPORT,
+          status: PUBLICATION_CONVERGENCE_REPAIR_ACTIVE_STATUS,
+          address: PUBLICATION_CONVERGENCE_REPAIR_ENDPOINT_ADDRESS,
+        },
+      ],
+      serviceRows: [
+        {
+          service_id: PUBLICATION_CONVERGENCE_REPAIR_SERVICE_ID,
+          node_id: PUBLICATION_CONVERGENCE_REPAIR_PUBLISHED_NODE_ID,
+          status: PUBLICATION_CONVERGENCE_REPAIR_ACTIVE_STATUS,
+        },
+      ],
+      nowMs: PUBLICATION_CONVERGENCE_REPAIR_NOW_MS,
+    });
+
+    t.equal(
+      candidate.changed,
+      true,
+      'the publication owner should schedule a bounded repair publication',
+    );
+    t.equal(
+      candidate.publicationEpoch,
+      PUBLICATION_CONVERGENCE_STALE_PUBLISHED_EPOCH + 1,
+      'the repair publication should advance the stale published epoch',
+    );
+    t.equal(
+      candidate.publicationStatus,
+      CONTROL_PLANE_PUBLICATION_STATUS.OPEN,
+      'missing published members must not remain classified as a closed published publication',
+    );
+    t.same(
+      candidate.publishedActiveNodeIds,
+      [
+        PUBLICATION_CONVERGENCE_REPAIR_PUBLISHED_NODE_ID,
+        PUBLICATION_CONVERGENCE_REPAIR_MISSING_NODE_ID,
+      ],
+      'recovery-eligible readiness is the bounded owner evidence for the missing member',
+    );
+    t.same(
+      candidate.requiredAckNodeIds,
+      [
+        PUBLICATION_CONVERGENCE_REPAIR_PUBLISHED_NODE_ID,
+        PUBLICATION_CONVERGENCE_REPAIR_MISSING_NODE_ID,
+      ],
+      'the reopened publication should require ACK evidence from the repaired cohort',
+    );
+    t.match(
+      candidate.membershipLifecycleSummary?.projectionDiagnostics,
+      {
+        recoveryEligibleProjectionEnabled: true,
+        recoveryEligibleIncludedNodeIds: [
+          PUBLICATION_CONVERGENCE_REPAIR_MISSING_NODE_ID,
+        ],
+      },
+      'the repair evidence should be visible in owner diagnostics',
+    );
+    t.end();
   });
