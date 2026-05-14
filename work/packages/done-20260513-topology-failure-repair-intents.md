@@ -3,7 +3,7 @@
 <!-- work-package
 {
   "schema": "work-package-v1",
-  "status": "active",
+  "status": "done",
   "opened": "2026-05-13",
   "lane": "runtime-owner-boundary",
   "scenario": "none",
@@ -20,10 +20,10 @@
     "node scripts/check-guideline-literals.js src/node/failure-repair-intent-contract.js src/node/failure-detector.js src/node/node-constants.js",
     "node scripts/check-guideline-decision-boundaries.js src/node/failure-repair-intent-contract.js src/node/failure-detector.js src/node/node-constants.js",
     "npm run audit:runtime-grammar:file -- src/node/failure-repair-intent-contract.js src/node/failure-detector.js src/node/node-constants.js",
-    "git diff --check -- work/packages/active-20260513-topology-failure-repair-intents.md work/model-ledger.jsonl work/sprints/active-2026-q2-topology-convergence-ship-shape.md work/sprints/current-blocker.json work/sprints/current-blocker.md src/node/failure-repair-intent-contract.js src/node/failure-detector.js src/node/node-constants.js test/node/failure-repair-intent-contract.test.js test/node/failure-detector.test.js"
+    "git diff --check -- work/packages/done-20260513-topology-failure-repair-intents.md work/model-ledger.jsonl work/sprints/active-2026-q2-topology-convergence-ship-shape.md work/sprints/current-blocker.json work/sprints/current-blocker.md src/node/failure-repair-intent-contract.js src/node/failure-detector.js src/node/node-constants.js test/node/failure-repair-intent-contract.test.js test/node/failure-detector.test.js"
   ],
   "writeScope": [
-    "work/packages/active-20260513-topology-failure-repair-intents.md",
+    "work/packages/done-20260513-topology-failure-repair-intents.md",
     "work/model-ledger.jsonl",
     "work/sprints/active-2026-q2-topology-convergence-ship-shape.md",
     "work/sprints/current-blocker.json",
@@ -48,7 +48,7 @@
     "src/node/node-constants.js"
   ],
   "commitScope": [
-    "work/packages/active-20260513-topology-failure-repair-intents.md",
+    "work/packages/done-20260513-topology-failure-repair-intents.md",
     "work/model-ledger.jsonl",
     "work/sprints/active-2026-q2-topology-convergence-ship-shape.md",
     "work/sprints/current-blocker.json",
@@ -104,7 +104,9 @@
     "resultClassification": "classification-only",
     "stopCondition": "classification-only-stop"
   },
-  "predecessor": "work/packages/done-20260513-topology-membership-epoch-fencing.md"
+  "predecessor": "work/packages/done-20260513-topology-membership-epoch-fencing.md",
+  "closed": "2026-05-14",
+  "commitAndPushLedgerRequired": true
 }
 -->
 
@@ -159,7 +161,7 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 - Package class: `representative-frontier-closure`
 - Intended minimum model: `gpt-5.3-codex`
 - Scope shape: `owner-boundary-contraction/current-frontier`
-- Owned files: `work/packages/active-20260513-topology-failure-repair-intents.md`, `work/model-ledger.jsonl`, `work/sprints/active-2026-q2-topology-convergence-ship-shape.md`, `work/sprints/current-blocker.json`, `work/sprints/current-blocker.md`, `src/node/failure-repair-intent-contract.js`, `src/node/failure-detector.js`, `src/node/node-constants.js`, `test/node/failure-repair-intent-contract.test.js`, `test/node/failure-detector.test.js`
+- Owned files: `work/packages/done-20260513-topology-failure-repair-intents.md`, `work/model-ledger.jsonl`, `work/sprints/active-2026-q2-topology-convergence-ship-shape.md`, `work/sprints/current-blocker.json`, `work/sprints/current-blocker.md`, `src/node/failure-repair-intent-contract.js`, `src/node/failure-detector.js`, `src/node/node-constants.js`, `test/node/failure-repair-intent-contract.test.js`, `test/node/failure-detector.test.js`
 - Forbidden files: new system-table schema, post-rejoin admission,
   anti-entropy scans, partition descriptor epoch, placement capacity,
   failure scenario gates, Pro behavior, Enterprise behavior
@@ -171,11 +173,11 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 ## Subagent Sequencing Ledger
 
 - [x] Review subagent recorded:
-      `Agent Kuhn (019e2537-9500-73a0-9062-57caf19743fc) reviewed work/packages/active-20260513-topology-failure-repair-intents.md; result fixes-required`.
+      `Agent Kuhn (019e2537-9500-73a0-9062-57caf19743fc) reviewed work/packages/done-20260513-topology-failure-repair-intents.md; result fixes-required`.
 - [x] Fix subagent recorded or explicitly not needed:
-      `Agent Laplace (019e2539-0aed-7010-93cb-10cac665ab5f) fixed work/packages/active-20260513-topology-failure-repair-intents.md`.
+      `Agent Laplace (019e2539-0aed-7010-93cb-10cac665ab5f) fixed work/packages/done-20260513-topology-failure-repair-intents.md`.
 - [x] Implementation subagent recorded:
-      `Agent Aquinas (019e253b-6c42-79d2-b5a1-4f1946a305d8) implemented work/packages/active-20260513-topology-failure-repair-intents.md`.
+      `Agent Aquinas (019e253b-6c42-79d2-b5a1-4f1946a305d8) implemented work/packages/done-20260513-topology-failure-repair-intents.md`.
 
 ## Validation
 
@@ -194,5 +196,11 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
    passed.
 7. `npm run audit:runtime-grammar:file -- src/node/failure-repair-intent-contract.js src/node/failure-detector.js src/node/node-constants.js`
    passed.
-8. `npm run work:validate -- --closure work/packages/active-20260513-topology-failure-repair-intents.md`
+8. `npm run work:validate -- --closure work/packages/done-20260513-topology-failure-repair-intents.md`
    passed after recording the real implementation subagent entry.
+
+## Commit And Push Ledger
+
+1. Focused package commit: `07817961`
+2. Pushed to: `origin/codex/pending-ack-eligibility-filter`
+3. Commit contains only package-owned files/package-status/allowed sprint handoff: `yes`

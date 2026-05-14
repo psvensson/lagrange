@@ -2,62 +2,23 @@
   "schema": "current-blocker-v1",
   "generatedBy": "scripts/work-tracker.js",
   "sprint": "work/sprints/active-2026-q2-topology-convergence-ship-shape.md",
-  "package": "work/packages/active-20260513-topology-failure-repair-intents.md",
+  "package": "work/packages/active-20260513-topology-post-rejoin-reconciliation.md",
   "status": "active",
   "lane": "runtime-owner-boundary",
   "scenario": "none",
   "artifact": "none",
   "playback": "none",
-  "owner": "failure_detector",
-  "boundary": "durable_repair_intent",
-  "dominantReason": "failure_detection_not_causal_for_repair",
-  "currentState": "Failure detection marks node/service state and emits events, but repair continuation is not yet durable owner-key work.",
-  "nextAction": "Record canonical durable repair intents for failure-detector node and replica transitions while keeping events as wake signals only.",
-  "proof": [
-    "npm run analyze:owner-files -- failure_detector durable_repair_intent --markdown",
-    "npx tap test/node/failure-repair-intent-contract.test.js test/node/failure-detector.test.js",
-    "node scripts/check-guideline-literals.js src/node/failure-repair-intent-contract.js src/node/failure-detector.js src/node/node-constants.js",
-    "node scripts/check-guideline-decision-boundaries.js src/node/failure-repair-intent-contract.js src/node/failure-detector.js src/node/node-constants.js",
-    "npm run audit:runtime-grammar:file -- src/node/failure-repair-intent-contract.js src/node/failure-detector.js src/node/node-constants.js",
-    "git diff --check -- work/packages/active-20260513-topology-failure-repair-intents.md work/model-ledger.jsonl work/sprints/active-2026-q2-topology-convergence-ship-shape.md work/sprints/current-blocker.json work/sprints/current-blocker.md src/node/failure-repair-intent-contract.js src/node/failure-detector.js src/node/node-constants.js test/node/failure-repair-intent-contract.test.js test/node/failure-detector.test.js"
-  ],
-  "writeScope": [
-    "work/packages/active-20260513-topology-failure-repair-intents.md",
-    "work/model-ledger.jsonl",
-    "work/sprints/active-2026-q2-topology-convergence-ship-shape.md",
-    "work/sprints/current-blocker.json",
-    "work/sprints/current-blocker.md",
-    "src/node/failure-repair-intent-contract.js",
-    "src/node/failure-detector.js",
-    "src/node/node-constants.js",
-    "test/node/failure-repair-intent-contract.test.js",
-    "test/node/failure-detector.test.js"
-  ],
-  "handoffFiles": [
-    "work/packages/done-20260513-topology-membership-epoch-fencing.md",
-    "src/node/node-lifecycle-service.js",
-    "src/node/replica-recovery-service.js",
-    "src/workflow/owner-key-reconcile-queue.js",
-    "src/bootstrap/system-table-schemas-constants.js"
-  ],
+  "owner": "topology_membership_owner",
+  "boundary": "rejoin_reconciliation",
+  "dominantReason": "rejoin_restore_lacks_remote_operation_reconcile",
+  "currentState": "Durable rejoin restores local services, but full active admission still needs explicit reconciliation of local topology and coordinated remote operation state.",
+  "nextAction": "Require post-rejoin reconciliation of local services and coordinated remote operations before full active admission",
+  "proof": [],
+  "writeScope": [],
+  "handoffFiles": [],
   "generatedFiles": [],
-  "candidateRuntimeFiles": [
-    "src/node/failure-repair-intent-contract.js",
-    "src/node/failure-detector.js",
-    "src/node/node-constants.js"
-  ],
-  "commitScope": [
-    "work/packages/active-20260513-topology-failure-repair-intents.md",
-    "work/model-ledger.jsonl",
-    "work/sprints/active-2026-q2-topology-convergence-ship-shape.md",
-    "work/sprints/current-blocker.json",
-    "work/sprints/current-blocker.md",
-    "src/node/failure-repair-intent-contract.js",
-    "src/node/failure-detector.js",
-    "src/node/node-constants.js",
-    "test/node/failure-repair-intent-contract.test.js",
-    "test/node/failure-detector.test.js"
-  ],
+  "candidateRuntimeFiles": [],
+  "commitScope": [],
   "touchedFiles": [],
   "modelFit": {
     "packageClass": "representative-frontier-closure",
@@ -68,41 +29,7 @@
       "a frozen decision must be reopened"
     ]
   },
-  "causalGovernance": {
-    "hypothesis": "If failure_detector records canonical durable repair intents before emitting wake events, downstream repair owners can reconcile missed node failure and recovery transitions from durable owner-key evidence instead of depending on event delivery.",
-    "stopConditionCheck": "Do not rerun rolling-restart for this package; npm run analyze:causal-model is cited only as not applicable for scenario:none/artifact:none. Focused stop proof is npx tap test/node/failure-repair-intent-contract.test.js test/node/failure-detector.test.js.",
-    "expectedCausalModelChange": "failure_detector / durable_repair_intent becomes a concrete owner boundary consumed by later post-rejoin, anti-entropy, and failure-gate packages.",
-    "representativeOutcome": "classification-only",
-    "causalDebt": "Later packages must consume the durable repair intents for partition, message-group, replica-operation, rejoin, anti-entropy, and failure-scenario gates.",
-    "crossBoundaryReview": "Required before implementation: review the closed membership epoch package and this active failure repair intent scope."
-  },
-  "scenarioCausalClosure": {
-    "referenceScenarioOrProbe": "focused failure detector repair intent tests",
-    "phaseChain": [
-      "failure detection transition",
-      "durable repair intent record",
-      "event wake signal",
-      "downstream owner reconcile"
-    ],
-    "currentFirstFrontier": "systemic sprint frontier: failure_detector / durable_repair_intent / failure_detection_not_causal_for_repair",
-    "knownDownstreamBlockers": [
-      "post-rejoin reconciliation",
-      "partition descriptor epoch",
-      "placement capacity",
-      "anti-entropy reconciler",
-      "bounded progress budgets",
-      "failure scenario gates"
-    ],
-    "missingCausalEdge": "Failure detection emits status changes and events without one durable owner-key repair-intent record.",
-    "missingCausalEdgeProbe": "npx tap test/node/failure-repair-intent-contract.test.js test/node/failure-detector.test.js",
-    "boundedProgressProof": "Focused tests prove durable intent recording for node failure, node recovery, partition replica failure, and message-group replica failure before event wake signals.",
-    "boundedProgressProofArtifact": "test/node/failure-repair-intent-contract.test.js and test/node/failure-detector.test.js",
-    "expectedObservableTransition": "event-only failure continuation -> durable repair intent plus wake event",
-    "maxProgressBound": "one review subagent, one fix subagent if needed, one implementation subagent, focused owner tests, static guardrails",
-    "sameFrontierFallback": "If scope requires new system-table schema or broad rebalancer consumption, split that consumer into the next package instead of expanding this one.",
-    "expectedNextFrontier": "topology_membership_owner / rejoin_reconciliation",
-    "resultClassification": "classification-only",
-    "stopCondition": "classification-only-stop"
-  },
-  "predecessor": "work/packages/done-20260513-topology-membership-epoch-fencing.md"
+  "causalGovernance": {},
+  "scenarioCausalClosure": {},
+  "predecessor": "work/packages/done-20260513-topology-failure-repair-intents.md"
 }

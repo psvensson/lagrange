@@ -65,23 +65,35 @@ Historical sprint pivot completed on May 14, 2026:
 6. Membership epoch is historical/completed sprint context, not the active
    sprint target.
 
-Human-directed active sprint pivot on May 14, 2026:
+Historical sprint pivot completed on May 14, 2026:
 
 1. Owner: `failure_detector`.
 2. Boundary: `durable_repair_intent`.
 3. Dominant reason: `failure_detection_not_causal_for_repair`.
-4. Active package:
-   `work/packages/active-20260513-topology-failure-repair-intents.md`.
+4. Completed package:
+   `work/packages/done-20260513-topology-failure-repair-intents.md`.
 5. Focused proof surface:
    `npx tap test/node/failure-repair-intent-contract.test.js test/node/failure-detector.test.js`.
+6. Failure repair intent is historical/completed sprint context, not the active
+   sprint target.
+
+Human-directed active sprint pivot on May 14, 2026:
+
+1. Owner: `topology_membership_owner`.
+2. Boundary: `rejoin_reconciliation`.
+3. Dominant reason: `rejoin_restore_lacks_remote_operation_reconcile`.
+4. Active package:
+   `work/packages/active-20260513-topology-post-rejoin-reconciliation.md`.
+5. Focused proof surface:
+   to be finalized by the active package metadata before implementation.
 6. Rolling-restart, active-gate snapshot coverage, publication owner truth,
-   and membership epoch fencing remain historical representative context, not
-   the active sprint target.
+   membership epoch fencing, and failure repair intents remain historical
+   representative context, not the active sprint target.
 
 The immediate missing causal edge is:
 
-1. Failure detection emits status changes and events without one durable
-   owner-key repair-intent record.
+1. Durable rejoin restore does not yet gate full active admission on explicit
+   reconciliation of local topology and coordinated remote operation state.
 
 ## Ship-Shape Definition
 
@@ -275,7 +287,7 @@ This sprint treats the system as ship-shape only when these properties hold:
      current, stale, future, and unknown fence outcomes plus publication
      evidence and candidate exposure.
 
-10. [Topology Failure Repair Intents](../packages/active-20260513-topology-failure-repair-intents.md)
+10. [Topology Failure Repair Intents](../packages/done-20260513-topology-failure-repair-intents.md)
    - Lane: `runtime-owner-boundary`
    - Owner boundary: `failure_detector / durable_repair_intent`
    - Recommendation covered: make failure detection enqueue durable repair work.
@@ -288,8 +300,12 @@ This sprint treats the system as ship-shape only when these properties hold:
      events, but durable repair intent is the authority; each affected
      partition, message group, and replica operation is named or explicitly
      classified as not affected.
+   - Implementation note: canonical failure repair intent owner/workflow keys
+     now exist, and failure detector records node failure, node recovery,
+     partition replica failure, and message-group replica failure intents
+     before emitting wake events.
 
-11. [Topology Post Rejoin Reconciliation](../packages/todo-20260513-topology-post-rejoin-reconciliation.md)
+11. [Topology Post Rejoin Reconciliation](../packages/active-20260513-topology-post-rejoin-reconciliation.md)
    - Lane: `runtime-owner-boundary`
    - Owner boundary: `topology_membership_owner / rejoin_reconciliation`
    - Recommendation covered: add post-rejoin reconciliation.
