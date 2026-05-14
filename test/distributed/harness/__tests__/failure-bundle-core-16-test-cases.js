@@ -315,9 +315,15 @@ export function registerFailureBundleCore16Tests(context) {
       const ACTIVE_GATE_STATE_TIMED_OUT = 'timed_out';
       const ACTIVE_GATE_TERMINAL_REASON = 'stalled_no_progress';
       const PENDING_ACKS_PRESENT_REASON = 'pending_acks_present';
-      const ACTIVE_GATE_SNAPSHOT_COVERAGE_EDGE_ID =
-        'active_gate_snapshot_coverage';
-      const ACTIVE_GATE_TIMED_OUT_REASON = 'active_gate_timed_out';
+      const PUBLICATION_ACK_CONVERGENCE_EDGE_ID =
+        'publication_ack_convergence';
+      const MISSING_PUBLISHED_NODES_PRESENT_REASON =
+        'missing_published_nodes_present';
+      const PUBLICATION_OWNER_STREAM_OUTCOME_STALE = 'stale';
+      const PUBLICATION_OWNER_FRESHNESS_FENCE_CONSUMER_LAG =
+        'consumer_lag';
+      const PUBLICATION_OWNER_RECOVERY_OUTCOME_WAITING_FOR_CONSUMER =
+        'waiting_for_consumer';
       const ACTIVE_GATE_COVERAGE_BLOCKER = 'snapshot_coverage=1/5';
       const BEST_PROGRESS_COVERAGE_BLOCKER = 'snapshot_coverage=2/5';
       const ACTIVE_GATE_INACTIVE_BLOCKER = 'inactive_nodes=2';
@@ -473,12 +479,24 @@ export function registerFailureBundleCore16Tests(context) {
         RECOVERY_PROTOCOL_STEADY_PUBLISHED,
       );
       assert.equal(
+        publicationConvergence.streamOutcome,
+        PUBLICATION_OWNER_STREAM_OUTCOME_STALE,
+      );
+      assert.equal(
+        publicationConvergence.freshnessFence,
+        PUBLICATION_OWNER_FRESHNESS_FENCE_CONSUMER_LAG,
+      );
+      assert.equal(
+        publicationConvergence.recoveryOutcome,
+        PUBLICATION_OWNER_RECOVERY_OUTCOME_WAITING_FOR_CONSUMER,
+      );
+      assert.equal(
         ownerContract.dominantWitness.edgeId,
-        ACTIVE_GATE_SNAPSHOT_COVERAGE_EDGE_ID,
+        PUBLICATION_ACK_CONVERGENCE_EDGE_ID,
       );
       assert.equal(
         ownerContract.dominantWitness.dominantReason,
-        ACTIVE_GATE_TIMED_OUT_REASON,
+        MISSING_PUBLISHED_NODES_PRESENT_REASON,
       );
       assert.equal(
         scenarioBundle.diagnostics.failure.reasonCounts[

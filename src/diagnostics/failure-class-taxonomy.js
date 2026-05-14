@@ -104,7 +104,7 @@ const FAILURE_RULES = Object.freeze([
     classify: ({graph}) => classifyTopologyEdge({
       graph,
       edgeId: EDGE_PUBLICATION_ACK,
-      stateSet: [EDGE_STATE.BLOCKED],
+      stateSet: [EDGE_STATE.BLOCKED, EDGE_STATE.DEFERRED],
       failureClass: FAILURE_CLASS.PUBLICATION_ACK_BLOCKED,
       reason: REASON_PUBLICATION_ACK_BLOCKED,
     }),

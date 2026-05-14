@@ -17,7 +17,7 @@ const REASON_ALL_INVARIANTS_PASSED = 'all_invariants_passed';
 const REASON_BUDGET_TIMEOUT_CASCADE = 'budget_timeout_cascade';
 const REASON_STARTUP_READINESS_BOUNDARY = 'startup_readiness_boundary';
 const REASON_PRIORITY_RECOVERY_BACKPRESSURE = 'priority_recovery_backpressure';
-const REASON_ACTIVE_GATE_LOCAL_BLOCKER = 'active_gate_local_blocker';
+const REASON_LOCAL_RUNTIME_OWNER_BLOCKER = 'local_runtime_owner_blocker';
 const REASON_INSUFFICIENT_EVIDENCE = 'insufficient_evidence';
 const LOCAL_BLOCKER_FAILURE_CLASSES = Object.freeze([
   FAILURE_CLASS.ACTIVE_GATE_SNAPSHOT_COVERAGE_INCOMPLETE,
@@ -55,7 +55,7 @@ const STOP_CONDITION_RULES = Object.freeze([
   }),
   Object.freeze({
     condition: STOP_CONDITION.CLASSIFIED_LOCAL_BLOCKER,
-    reasons: Object.freeze([REASON_ACTIVE_GATE_LOCAL_BLOCKER]),
+    reasons: Object.freeze([REASON_LOCAL_RUNTIME_OWNER_BLOCKER]),
     matches: (snapshot) => hasLocalBlocker(snapshot.failureClasses),
   }),
   Object.freeze({

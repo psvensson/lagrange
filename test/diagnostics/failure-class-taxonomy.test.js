@@ -10,6 +10,8 @@ const ACTIVE_GATE_NO_PROGRESS_REPORT_PATH =
   'test-output/reports/rolling-restart-spec-led-runtime-modularization-active-gate-snapshot-coverage-publication-lag.report.json';
 const CURRENT_STARTUP_READINESS_SUPPORT_REPORT_PATH =
   'test-output/reports/rolling-restart-current-release-gate-after-workflow-progress-direct-chain-owner-proof.report.json';
+const CURRENT_PUBLICATION_PROJECTION_REPORT_PATH =
+  'test-output/reports/rolling-restart-green-gate-after-priority-recovery-workflow-progress-after-snapshot-coverage.report.json';
 const PASSED_REPORT_PATH = 'test-output/reports/canary-rolling-restart-local-latest.report.json';
 const JSON_ENCODING_UTF8 = 'utf8';
 const SCENARIO_ROLLING_RESTART = 'rolling-restart';
@@ -48,6 +50,12 @@ function readActiveGateNoProgressReport() {
 function readCurrentStartupReadinessSupportReport() {
   return JSON.parse(
     fs.readFileSync(CURRENT_STARTUP_READINESS_SUPPORT_REPORT_PATH, JSON_ENCODING_UTF8),
+  );
+}
+
+function readCurrentPublicationProjectionReport() {
+  return JSON.parse(
+    fs.readFileSync(CURRENT_PUBLICATION_PROJECTION_REPORT_PATH, JSON_ENCODING_UTF8),
   );
 }
 
@@ -167,6 +175,16 @@ describe('FailureClassTaxonomy', () => {
       ),
     );
     assert.equal(failureClasses.includes(FAILURE_CLASS.STARTUP_READINESS_BLOCKED), false);
+    assert.equal(taxonomy.resolutionStrategy, RESOLUTION_STRATEGY.LOCAL_RUNTIME_OWNER_FIX);
+    assertNoNullOrUndefined(taxonomy);
+  });
+
+  it('classifies deferred publication ACK frontier as a local publication blocker', () => {
+    const taxonomy = classifyFailures(readCurrentPublicationProjectionReport());
+    const failureClasses = taxonomy.classes.map((entry) => entry.failureClass);
+
+    assert.ok(failureClasses.includes(FAILURE_CLASS.PUBLICATION_ACK_BLOCKED));
+    assert.equal(taxonomy.dominantFailureClass, FAILURE_CLASS.PUBLICATION_ACK_BLOCKED);
     assert.equal(taxonomy.resolutionStrategy, RESOLUTION_STRATEGY.LOCAL_RUNTIME_OWNER_FIX);
     assertNoNullOrUndefined(taxonomy);
   });

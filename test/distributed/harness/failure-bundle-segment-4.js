@@ -27,6 +27,9 @@ import {
   RECOVERY_PROTOCOL_STATE,
 } from '../../../src/control-plane/membership-lifecycle-constants.js';
 import {
+  buildPublicationRecoveryGateSnapshot,
+} from '../../../src/control-plane/publication-recovery-gate.js';
+import {
   CONTROL_PLANE_PRIORITY_RECOVERY_REASON,
   CONTROL_PLANE_READINESS_REASON,
 } from '../../../src/control-plane/control-plane-readiness-constants.js';
@@ -2609,6 +2612,7 @@ function buildPublicationMissingPublishedEvidence({
   const coverageCanonicalCount = rawCoverageCanonicalEvidenceAvailable === true ?
     Math.max(
       rawCoverageCanonicalCount,
+      coverageCanonicalNodeIds.length,
       currentActiveGateSelectedMembershipDeficitOpen === true ?
         activeGateSelectedPublicationMembershipDeficitNodeIds.length :
         ZERO,
@@ -3309,16 +3313,46 @@ function buildPublicationConvergenceSummary(controlPlane) {
         priorityRecoveryPartitionWitnesses,
       }) :
       null;
-  return {
-    publicationEpoch:
-      newerBestProgressPendingAckClosure === true ?
-        bestProgressSnapshot?.publicationEpoch ?? null :
-        priorityRecoveryObservation?.publicationEpoch ??
+  const publicationEpoch =
+    newerBestProgressPendingAckClosure === true ?
+      bestProgressSnapshot?.publicationEpoch ?? null :
+      priorityRecoveryObservation?.publicationEpoch ??
       publicationConvergence?.publicationEpoch ??
       activeGateProgress?.publicationEpoch ??
       bestProgressSnapshot?.publicationEpoch ??
-      null,
+      null;
+  const publicationRecoveryGate = buildPublicationRecoveryGateSnapshot({
+    publicationEpoch,
     publicationStatus,
+    recoveryProtocolState,
+    priorityRecoveryReasonCodes,
+    priorityPartitionSummary:
+      priorityRecoveryObservation?.priorityPartitionSummary ||
+      decisionClosureWitness?.refreshedPriorityPartitionSummary ||
+      priorityRecoveryDecisionSnapshots?.priorityPartitionSummary ||
+      null,
+    pendingAckNodeIds,
+    pendingAckCount,
+    missingPublishedNodeIds,
+    missingPublishedCount,
+  });
+  const publicationOwnerStream = publicationRecoveryGate.publicationOwnerStream;
+  return {
+    publicationEpoch,
+    publicationStatus,
+    ...(publicationOwnerStream ? {publicationOwnerStream} : {}),
+    ...(publicationOwnerStream ?
+      {
+        streamOutcome: publicationOwnerStream.streamOutcome || null,
+        ackState: publicationOwnerStream.ackState || null,
+        freshnessFence: publicationOwnerStream.freshnessFence || null,
+        recoveryOutcome: publicationOwnerStream.recoveryOutcome || null,
+        publicationOwnerReasonCodes: normalizeDistinctStringArray(
+          publicationOwnerStream.reasonCodes,
+        ),
+      } :
+      {}),
+    ...(publicationRecoveryGate ? {publicationRecoveryGate} : {}),
     pendingAckNodeIds,
     pendingAckCount,
     blockedNodeIds,

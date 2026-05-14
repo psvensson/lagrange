@@ -15,6 +15,8 @@ const ACTIVE_GATE_NO_PROGRESS_REPORT_PATH =
   'test-output/reports/rolling-restart-spec-led-runtime-modularization-active-gate-snapshot-coverage-publication-lag.report.json';
 const CURRENT_STARTUP_READINESS_SUPPORT_REPORT_PATH =
   'test-output/reports/rolling-restart-current-release-gate-after-workflow-progress-direct-chain-owner-proof.report.json';
+const CURRENT_PUBLICATION_PROJECTION_REPORT_PATH =
+  'test-output/reports/rolling-restart-green-gate-after-priority-recovery-workflow-progress-after-snapshot-coverage.report.json';
 const PASSED_REPORT_PATH = 'test-output/reports/canary-rolling-restart-local-latest.report.json';
 const JSON_ENCODING_UTF8 = 'utf8';
 const NODE_COMMAND = 'node';
@@ -34,6 +36,7 @@ const READINESS_CAUSE_SNAPSHOT_TIMEOUT = 'snapshot_timeout';
 const SNAPSHOT_COVERAGE_COUNT = 1;
 const EXPECTED_NODE_COUNT = 5;
 const BLOCKER_SNAPSHOT_COVERAGE_ONE_OF_FIVE = 'snapshot_coverage=1/5';
+const LOCAL_RUNTIME_OWNER_BLOCKER_REASON = 'local_runtime_owner_blocker';
 const NULL_VALUE = null;
 const UNDEFINED_VALUE = undefined;
 
@@ -52,6 +55,12 @@ function readActiveGateNoProgressReport() {
 function readCurrentStartupReadinessSupportReport() {
   return JSON.parse(
     fs.readFileSync(CURRENT_STARTUP_READINESS_SUPPORT_REPORT_PATH, JSON_ENCODING_UTF8),
+  );
+}
+
+function readCurrentPublicationProjectionReport() {
+  return JSON.parse(
+    fs.readFileSync(CURRENT_PUBLICATION_PROJECTION_REPORT_PATH, JSON_ENCODING_UTF8),
   );
 }
 
@@ -173,6 +182,21 @@ describe('StopConditionDecision', () => {
       ),
     );
     assert.equal(failureClasses.includes(FAILURE_CLASS.STARTUP_READINESS_BLOCKED), false);
+    assertNoNullOrUndefined(artifact);
+  });
+
+  it('keeps deferred publication ACK frontier as a classified local blocker', () => {
+    const artifact = buildCausalAnalysis(readCurrentPublicationProjectionReport());
+    const failureClasses = artifact.failureTaxonomy.classes.map((entry) => entry.failureClass);
+
+    assert.equal(artifact.stopDecision.outcome, STOP_OUTCOME.CONTINUE_LOCAL_FIX);
+    assert.equal(artifact.stopDecision.condition, STOP_CONDITION.CLASSIFIED_LOCAL_BLOCKER);
+    assert.deepEqual(artifact.stopDecision.reasons, [
+      LOCAL_RUNTIME_OWNER_BLOCKER_REASON,
+    ]);
+    assert.equal(artifact.summary.outcome, STOP_OUTCOME.CONTINUE_LOCAL_FIX);
+    assert.ok(failureClasses.includes(FAILURE_CLASS.PUBLICATION_ACK_BLOCKED));
+    assert.equal(artifact.failureTaxonomy.dominantFailureClass, FAILURE_CLASS.PUBLICATION_ACK_BLOCKED);
     assertNoNullOrUndefined(artifact);
   });
 

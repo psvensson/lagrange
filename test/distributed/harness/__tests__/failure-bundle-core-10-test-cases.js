@@ -30,6 +30,8 @@ export function registerFailureBundleCore10Tests(context) {
     'suppresses active-gate pending ACK reentry while waiting on operation-workflow progress';
   const CURRENT_PROGRESS_IGNORES_STALE_BEST_PROGRESS_PUBLICATION_TEST_NAME =
     'ignores stale best-progress missing publication evidence when current active-gate progress is clean';
+  const STEADY_PUBLISHED_CONSUMER_LAG_OWNER_STREAM_TEST_NAME =
+    'surfaces typed publication owner consumer lag for steady-published missing members';
 
   it(
     ACTIVE_GATE_CANONICAL_MISSING_WITH_STALE_CLOSURE_TEST_NAME,
@@ -1091,6 +1093,141 @@ export function registerFailureBundleCore10Tests(context) {
         PENDING_ACK_COUNT,
       );
       assert.deepEqual(publicationConvergence.pendingAckNodeIds, []);
+    },
+  );
+
+  it(
+    STEADY_PUBLISHED_CONSUMER_LAG_OWNER_STREAM_TEST_NAME,
+    () => {
+      const PUBLICATION_EPOCH = 98;
+      const PUBLICATION_STATUS_PUBLISHED = 'PUBLISHED';
+      const RECOVERY_PROTOCOL_STEADY_PUBLISHED = 'steady_published';
+      const PUBLICATION_OWNER_STREAM_OUTCOME_STALE = 'stale';
+      const PUBLICATION_OWNER_ACK_STATE_ACKNOWLEDGED = 'acknowledged';
+      const PUBLICATION_OWNER_FRESHNESS_FENCE_CONSUMER_LAG =
+        'consumer_lag';
+      const PUBLICATION_OWNER_RECOVERY_OUTCOME_WAITING_FOR_CONSUMER =
+        'waiting_for_consumer';
+      const PUBLICATION_OWNER_REASON_MISSING_PUBLISHED_MEMBERS =
+        'missing_published_members';
+      const PUBLICATION_RECOVERY_GATE_STATE_CONSUMER_LAG = 'consumer_lag';
+      const ACTIVE_GATE_MODE_STARTUP = 'startup';
+      const PUBLISHED_NODE_ID = 'published-node-a';
+      const MISSING_NODE_ONE = 'missing-node-a';
+      const MISSING_NODE_TWO = 'missing-node-b';
+      const SNAPSHOT_COVERAGE_BLOCKER = 'snapshot_coverage=1/3';
+      const INACTIVE_NODES_BLOCKER = 'inactive_nodes=3';
+      const EXPECTED_NODE_COUNT = 3;
+      const ACTIVE_NODE_COUNT = 0;
+      const INACTIVE_NODE_COUNT = 3;
+      const SNAPSHOT_COVERAGE_NODE_COUNT = 1;
+      const ZERO_COUNT = 0;
+      const ONE_COUNT = 1;
+      const TWO_COUNT = 2;
+      const controlPlane = {
+        publicationConvergence: {
+          publicationEpoch: PUBLICATION_EPOCH,
+          publicationStatus: PUBLICATION_STATUS_PUBLISHED,
+          recoveryProtocolState: RECOVERY_PROTOCOL_STEADY_PUBLISHED,
+          publishedActiveNodeIds: [PUBLISHED_NODE_ID],
+          pendingAckNodeIds: [],
+          pendingAckCount: ZERO_COUNT,
+          missingPublishedNodeIds: [],
+          missingPublishedCount: ZERO_COUNT,
+          publicationPending: false,
+          prioritySpreadPending: false,
+          priorityRecoveryReasonCodes: [],
+        },
+        priorityRecoveryObservation: {
+          publicationEpoch: PUBLICATION_EPOCH,
+          publicationStatus: PUBLICATION_STATUS_PUBLISHED,
+          recoveryProtocolState: RECOVERY_PROTOCOL_STEADY_PUBLISHED,
+          publishedActiveNodeIds: [PUBLISHED_NODE_ID],
+          pendingAckNodeIds: [],
+          pendingAckCount: ZERO_COUNT,
+          missingPublishedNodeIds: [MISSING_NODE_ONE, MISSING_NODE_TWO],
+          missingPublishedCount: TWO_COUNT,
+          publicationPending: false,
+          prioritySpreadPending: false,
+          priorityRecoveryReasonCodes: [],
+        },
+        activeGate: {
+          mode: ACTIVE_GATE_MODE_STARTUP,
+          progress: {
+            expectedNodeCount: EXPECTED_NODE_COUNT,
+            activeNodeCount: ACTIVE_NODE_COUNT,
+            inactiveNodeCount: INACTIVE_NODE_COUNT,
+            snapshotCoverageNodeCount: SNAPSHOT_COVERAGE_NODE_COUNT,
+            snapshotCoverageComplete: false,
+            publicationStatus: PUBLICATION_STATUS_PUBLISHED,
+            publicationEpoch: PUBLICATION_EPOCH,
+            recoveryProtocolState: RECOVERY_PROTOCOL_STEADY_PUBLISHED,
+            selectedPublishedActiveNodeIds: [PUBLISHED_NODE_ID],
+            selectedPublishedActiveCount: ONE_COUNT,
+            selectedMissingPublishedNodeIds: [
+              MISSING_NODE_ONE,
+              MISSING_NODE_TWO,
+            ],
+            pendingAckCount: ZERO_COUNT,
+            missingPublishedCount: TWO_COUNT,
+            prioritySpreadSatisfied: true,
+            priorityRecoveryProgressClasses: {
+              unresolvedClassCount: ZERO_COUNT,
+              unresolvedSemanticStateCount: ZERO_COUNT,
+              blockedPartitionCount: ZERO_COUNT,
+            },
+            blockers: [
+              INACTIVE_NODES_BLOCKER,
+              SNAPSHOT_COVERAGE_BLOCKER,
+            ],
+          },
+        },
+      };
+
+      const publicationConvergence =
+        buildPublicationConvergenceSummary(controlPlane);
+
+      assert.equal(publicationConvergence.missingPublishedCount, TWO_COUNT);
+      assert.deepEqual(publicationConvergence.missingPublishedNodeIds, [
+        MISSING_NODE_ONE,
+        MISSING_NODE_TWO,
+      ]);
+      assert.equal(
+        publicationConvergence.streamOutcome,
+        PUBLICATION_OWNER_STREAM_OUTCOME_STALE,
+      );
+      assert.equal(
+        publicationConvergence.ackState,
+        PUBLICATION_OWNER_ACK_STATE_ACKNOWLEDGED,
+      );
+      assert.equal(
+        publicationConvergence.freshnessFence,
+        PUBLICATION_OWNER_FRESHNESS_FENCE_CONSUMER_LAG,
+      );
+      assert.equal(
+        publicationConvergence.recoveryOutcome,
+        PUBLICATION_OWNER_RECOVERY_OUTCOME_WAITING_FOR_CONSUMER,
+      );
+      assert.equal(
+        publicationConvergence.publicationOwnerReasonCodes.includes(
+          PUBLICATION_OWNER_REASON_MISSING_PUBLISHED_MEMBERS,
+        ),
+        true,
+      );
+      assert.equal(
+        publicationConvergence.publicationOwnerStream.reasonCodes.includes(
+          PUBLICATION_OWNER_REASON_MISSING_PUBLISHED_MEMBERS,
+        ),
+        true,
+      );
+      assert.equal(
+        publicationConvergence.publicationRecoveryGate.state,
+        PUBLICATION_RECOVERY_GATE_STATE_CONSUMER_LAG,
+      );
+      assert.equal(
+        publicationConvergence.publicationRecoveryGate.publicationPending,
+        false,
+      );
     },
   );
 
