@@ -35,8 +35,8 @@
     "work/packages/todo-20260514-topology-failure-gate-execution-harness.md",
     "work/packages/todo-20260514-topology-failure-detection-repair-gate.md",
     "work/packages/done-20260514-topology-killed-join-gate.md",
-    "work/packages/active-20260514-topology-killed-rejoin-gate.md",
-    "work/packages/todo-20260514-topology-remote-coordinator-handoff-gate.md",
+    "work/packages/done-20260514-topology-killed-rejoin-gate.md",
+    "work/packages/active-20260514-topology-remote-coordinator-handoff-gate.md",
     "work/packages/todo-20260514-topology-missed-handoff-ack-gate.md",
     "work/packages/done-20260514-topology-stale-publication-durable-truth-gate.md",
     "work/packages/todo-20260514-topology-rebalance-disruption-recovery-gate.md",
@@ -71,8 +71,8 @@
     "work/packages/todo-20260514-topology-failure-gate-execution-harness.md",
     "work/packages/todo-20260514-topology-failure-detection-repair-gate.md",
     "work/packages/done-20260514-topology-killed-join-gate.md",
-    "work/packages/active-20260514-topology-killed-rejoin-gate.md",
-    "work/packages/todo-20260514-topology-remote-coordinator-handoff-gate.md",
+    "work/packages/done-20260514-topology-killed-rejoin-gate.md",
+    "work/packages/active-20260514-topology-remote-coordinator-handoff-gate.md",
     "work/packages/todo-20260514-topology-missed-handoff-ack-gate.md",
     "work/packages/done-20260514-topology-stale-publication-durable-truth-gate.md",
     "work/packages/todo-20260514-topology-rebalance-disruption-recovery-gate.md",
@@ -163,8 +163,8 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 7. work/packages/todo-20260514-topology-failure-gate-execution-harness.md
 8. work/packages/todo-20260514-topology-failure-detection-repair-gate.md
 9. work/packages/done-20260514-topology-killed-join-gate.md
-10. work/packages/active-20260514-topology-killed-rejoin-gate.md
-11. work/packages/todo-20260514-topology-remote-coordinator-handoff-gate.md
+10. work/packages/done-20260514-topology-killed-rejoin-gate.md
+11. work/packages/active-20260514-topology-remote-coordinator-handoff-gate.md
 12. work/packages/todo-20260514-topology-missed-handoff-ack-gate.md
 13. work/packages/done-20260514-topology-stale-publication-durable-truth-gate.md
 14. work/packages/todo-20260514-topology-rebalance-disruption-recovery-gate.md

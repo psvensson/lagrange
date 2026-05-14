@@ -3,7 +3,7 @@
 <!-- work-package
 {
   "schema": "work-package-v1",
-  "status": "active",
+  "status": "done",
   "opened": "2026-05-14",
   "lane": "scenario-release-gate",
   "scenario": "seed-restart-under-load",
@@ -29,7 +29,7 @@
     "npm run audit:runtime-grammar:file -- src/control-plane/rejoin-reconciliation-contract.js src/node/node-reintegration-service.js src/node/node-constants.js test/control-plane/rejoin-reconciliation-contract.test.js test/node/node-reintegration-service.test.js"
   ],
   "writeScope": [
-    "work/packages/active-20260514-topology-killed-rejoin-gate.md",
+    "work/packages/done-20260514-topology-killed-rejoin-gate.md",
     "work/sprints/active-2026-q2-topology-convergence-residual-closure.md",
     "work/sprints/current-blocker.json",
     "work/sprints/current-blocker.md"
@@ -51,7 +51,7 @@
     "test/node/node-reintegration-service.test.js"
   ],
   "commitScope": [
-    "work/packages/active-20260514-topology-killed-rejoin-gate.md",
+    "work/packages/done-20260514-topology-killed-rejoin-gate.md",
     "work/sprints/active-2026-q2-topology-convergence-residual-closure.md",
     "work/sprints/current-blocker.json",
     "work/sprints/current-blocker.md"
@@ -103,7 +103,10 @@
     "toBoundary": "publication_convergence",
     "reason": "fresh seed-restart-under-load gate first frontier is publication_ack_convergence / missing_published_nodes_present before killed-rejoin release-gate evidence can be evaluated",
     "evidence": "test-output/reports/topology-killed-rejoin-gate.report.json"
-  }
+  },
+  "closed": "2026-05-14",
+  "commitAndPushLedgerRequired": true,
+  "successor": "work/packages/active-20260514-topology-remote-coordinator-handoff-gate.md"
 }
 -->
 
@@ -187,7 +190,7 @@ placement-active admission. The gate must prove:
 
 Required before this package moves from `todo` to `active`:
 
-1. Run `npm run work:package:doctor -- --fix-dry-run work/packages/active-20260514-topology-killed-rejoin-gate.md` and keep `causalGovernance`, `scenarioCausalClosure`, Model Fit, and scope fields concrete before implementation starts.
+1. Run `npm run work:package:doctor -- --fix-dry-run work/packages/done-20260514-topology-killed-rejoin-gate.md` and keep `causalGovernance`, `scenarioCausalClosure`, Model Fit, and scope fields concrete before implementation starts.
 2. Promote only these proven candidates into `writeScope` and `commitScope` after owner-file proof: `src/control-plane/rejoin-reconciliation-contract.js`, `src/node/node-reintegration-service.js`, `src/node/node-constants.js`, `test/control-plane/rejoin-reconciliation-contract.test.js`, `test/node/node-reintegration-service.test.js`.
 3. Replace the Subagent Sequencing Ledger placeholders with real review/fix/implementation proof, or an allowed waiver, before pre-implementation and closure validation.
 4. Preserve the package artifact path `test-output/reports/topology-killed-rejoin-gate.report.json`; if fresh evidence changes owner, boundary, or dominant reason, classify as `migrated`, `same-frontier`, or split instead of widening scope.
@@ -212,7 +215,7 @@ package.
 - Package class: `representative-frontier-closure`
 - Intended minimum model: `gpt-5.3-codex`
 - Scope shape: `owner-boundary-contraction/current-frontier`
-- Owned files: `work/packages/active-20260514-topology-killed-rejoin-gate.md`, `work/sprints/active-2026-q2-topology-convergence-residual-closure.md`, `work/sprints/current-blocker.json`, `work/sprints/current-blocker.md`
+- Owned files: `work/packages/done-20260514-topology-killed-rejoin-gate.md`, `work/sprints/active-2026-q2-topology-convergence-residual-closure.md`, `work/sprints/current-blocker.json`, `work/sprints/current-blocker.md`
 - Forbidden files: `placement-target-before-reconciliation`, `local-fallback-repair-mutation`
 - Frozen decisions: package scope and lane stay bounded unless explicitly escalated.
 - Escalation triggers: owned files expand beyond this package, runtime ownership changes, or representative scenario evidence changes.
@@ -221,8 +224,8 @@ package.
 
 ## Validation Ladder
 
-1. npm run work:package:doctor -- --suggest work/packages/active-20260514-topology-killed-rejoin-gate.md
-2. npm run work:package:doctor -- --fix-dry-run work/packages/active-20260514-topology-killed-rejoin-gate.md
+1. npm run work:package:doctor -- --suggest work/packages/done-20260514-topology-killed-rejoin-gate.md
+2. npm run work:package:doctor -- --fix-dry-run work/packages/done-20260514-topology-killed-rejoin-gate.md
 3. npx tap test/control-plane/rejoin-reconciliation-contract.test.js test/node/node-reintegration-service.test.js
 4. node test/control-plane/rejoin-reconciliation-contract.test.js
 5. node test/node/node-reintegration-service.test.js
@@ -235,10 +238,10 @@ package.
 12. node scripts/check-guideline-literals.js src/control-plane/rejoin-reconciliation-contract.js src/node/node-reintegration-service.js src/node/node-constants.js test/control-plane/rejoin-reconciliation-contract.test.js test/node/node-reintegration-service.test.js
 13. node scripts/check-guideline-decision-boundaries.js src/control-plane/rejoin-reconciliation-contract.js src/node/node-reintegration-service.js src/node/node-constants.js test/control-plane/rejoin-reconciliation-contract.test.js test/node/node-reintegration-service.test.js
 14. npm run audit:runtime-grammar:file -- src/control-plane/rejoin-reconciliation-contract.js src/node/node-reintegration-service.js src/node/node-constants.js test/control-plane/rejoin-reconciliation-contract.test.js test/node/node-reintegration-service.test.js
-15. npm run work:validate -- --entry work/packages/active-20260514-topology-killed-rejoin-gate.md
-16. npm run work:validate -- --pre-impl work/packages/active-20260514-topology-killed-rejoin-gate.md
-17. npm run work:validate -- --closure work/packages/active-20260514-topology-killed-rejoin-gate.md
-18. git diff --check -- work/packages/active-20260514-topology-killed-rejoin-gate.md work/sprints/active-2026-q2-topology-convergence-residual-closure.md work/sprints/current-blocker.json work/sprints/current-blocker.md
+15. npm run work:validate -- --entry work/packages/done-20260514-topology-killed-rejoin-gate.md
+16. npm run work:validate -- --pre-impl work/packages/done-20260514-topology-killed-rejoin-gate.md
+17. npm run work:validate -- --closure work/packages/done-20260514-topology-killed-rejoin-gate.md
+18. git diff --check -- work/packages/done-20260514-topology-killed-rejoin-gate.md work/sprints/active-2026-q2-topology-convergence-residual-closure.md work/sprints/current-blocker.json work/sprints/current-blocker.md
 19. Final deep-dive proof: rerun the package extractor/probe, compare against the sprint representative residual, and record the result classification before closure.
 
 ## Split Rules
@@ -285,7 +288,6 @@ rolling-restart runtime repair.
 
 Required at closure.
 
-1. [ ] Focused package commit: pending.
-2. [ ] Pushed to: pending.
-3. [ ] Commit contains only package-owned files/package-status/allowed sprint
-   handoff: pending.
+1. [x] Focused package commit: 2b05e45dcc101153fa3090308d7648440f4f949e.
+2. [x] Pushed to: origin/codex/pending-ack-eligibility-filter.
+3. [x] Commit contains only package-owned files/package-status/allowed sprint handoff: yes.

@@ -218,7 +218,7 @@ package.
 ## Split Rules
 
 1. If the residual requires distributed remote coordinator failure proof,
-   activate `todo-20260514-topology-remote-coordinator-handoff-gate.md`.
+   activate `active-20260514-topology-remote-coordinator-handoff-gate.md`.
 2. If the residual is a missed ACK publication problem, activate
    `todo-20260514-topology-missed-handoff-ack-gate.md`.
 3. If active-gate remains first frontier, keep this package pending and record

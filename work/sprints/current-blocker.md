@@ -4,44 +4,39 @@
 
 Sprint: `work/sprints/active-2026-q2-topology-convergence-residual-closure.md`
 
-Package: `work/packages/active-20260514-topology-killed-rejoin-gate.md`
+Package: `work/packages/active-20260514-topology-remote-coordinator-handoff-gate.md`
 
 Workflow lane: `scenario-release-gate`
 
-Scenario: `seed-restart-under-load`
+Scenario: `seven-node-read-write-load-transaction-recovery`
 
-Artifact: `test-output/reports/topology-killed-rejoin-gate.report.json`
+Artifact: `test-output/reports/topology-remote-coordinator-handoff-gate.report.json`
 
 Playback: `none`
 
 ## Boundary
 
-Owner: `topology_rejoin_owner`
+Owner: `operation_workflow_owner`
 
-Boundary: `post_restore_reconciliation_gate`
+Boundary: `replica_operation_coordinator_handoff_gate`
 
-Dominant reason: `missing_published_nodes_present`
+Dominant reason: `remote_coordinator_handoff_release_gate_unproven`
 
-Current state: Observed gate result: focused rejoin contract tests pass under direct Node execution, but seed-restart-under-load failed after 132499ms. Canonical topology evidence did not reach topology_rejoin_owner / post_restore_reconciliation_gate; the first frontier is topology_publication_owner / publication_convergence with publication_ack_convergence deferred, publicationStatus=PUBLISHED, pendingAckCount=0, missingPublishedCount=4, publicationPending=true, activeGateState=timed_out, snapshotCoverageNodeCount=3/5, and priority recovery residual splitRequired=false.
+Current state: Activated after killed-rejoin gate migration. Coordinator-created remote operation handoff has focused progress proof, but killed coordinator handoff still needs release-gate classification.
 
 ## Next Action
 
-Close this package as migrated and activate the next remaining failure-gate package; do not fix rolling-restart runtime behavior in this package without explicit re-scope.
+Execute and classify the remote-coordinator handoff gate only. If the gate is red, record the owner-boundary split; do not fix rolling-restart runtime behavior in this package without explicit re-scope.
 
 ## Proof Ladder
 
-1. `npx tap test/control-plane/rejoin-reconciliation-contract.test.js test/node/node-reintegration-service.test.js`
-2. `node test/control-plane/rejoin-reconciliation-contract.test.js`
-3. `node test/node/node-reintegration-service.test.js`
-4. `node test/distributed/run.js --config test/distributed/config/local.json --scenario seed-restart-under-load --output test-output/reports/topology-killed-rejoin-gate.report.json --verbose`
-5. `npm run work:evidence-summary -- test-output/reports/topology-killed-rejoin-gate.report.json`
-6. `npm run analyze:distributed-failure -- --report test-output/reports/topology-killed-rejoin-gate.report.json`
-7. `npm run analyze:topology-convergence -- test-output/reports/topology-killed-rejoin-gate.report.json`
-8. `npm --silent run analyze:causal-model -- test-output/reports/topology-killed-rejoin-gate.report.json`
-9. `npm run analyze:priority-recovery-residuals -- test-output/reports/topology-killed-rejoin-gate.report.json --markdown`
-10. `node scripts/check-guideline-literals.js src/control-plane/rejoin-reconciliation-contract.js src/node/node-reintegration-service.js src/node/node-constants.js test/control-plane/rejoin-reconciliation-contract.test.js test/node/node-reintegration-service.test.js`
-11. `node scripts/check-guideline-decision-boundaries.js src/control-plane/rejoin-reconciliation-contract.js src/node/node-reintegration-service.js src/node/node-constants.js test/control-plane/rejoin-reconciliation-contract.test.js test/node/node-reintegration-service.test.js`
-12. `npm run audit:runtime-grammar:file -- src/control-plane/rejoin-reconciliation-contract.js src/node/node-reintegration-service.js src/node/node-constants.js test/control-plane/rejoin-reconciliation-contract.test.js test/node/node-reintegration-service.test.js`
+1. `npx tap test/rebalancer/coordinator-created-operation-progress-remote-handoff.test.js`
+2. `node test/distributed/run.js --config test/distributed/config/local-benchmark-7node.json --scenario seven-node-read-write-load-transaction-recovery --output test-output/reports/topology-remote-coordinator-handoff-gate.report.json --verbose`
+3. `npm run work:evidence-summary -- test-output/reports/topology-remote-coordinator-handoff-gate.report.json`
+4. `npm run analyze:distributed-failure -- --report test-output/reports/topology-remote-coordinator-handoff-gate.report.json`
+5. `npm run analyze:topology-convergence -- test-output/reports/topology-remote-coordinator-handoff-gate.report.json`
+6. `npm --silent run analyze:causal-model -- test-output/reports/topology-remote-coordinator-handoff-gate.report.json`
+7. `npm run analyze:priority-recovery-residuals -- test-output/reports/topology-remote-coordinator-handoff-gate.report.json --markdown`
 
 ## Model Fit
 
@@ -76,69 +71,69 @@ Next action: `unknown`
 
 ## Causal Governance
 
-Causal hypothesis: `topology_rejoin_owner / post_restore_reconciliation_gate proof should reduce, migrate, or classify killed_rejoin_release_gate_unproven without hiding the sprint representative residual.`
+Causal hypothesis: `operation_workflow_owner / replica_operation_coordinator_handoff_gate proof should reduce, migrate, or classify remote_coordinator_handoff_release_gate_unproven without hiding the sprint representative residual.`
 
-Stop-condition check: `npm --silent run analyze:causal-model -- test-output/reports/topology-killed-rejoin-gate.report.json`
+Stop-condition check: `npm --silent run analyze:causal-model -- test-output/reports/topology-remote-coordinator-handoff-gate.report.json`
 
-Expected causal-model change: `killed_rejoin_release_gate_unproven becomes representative-green, reduced, same-frontier, migrated, or classification-only with a named owner-boundary reason.`
+Expected causal-model change: `remote_coordinator_handoff_release_gate_unproven becomes representative-green, reduced, same-frontier, migrated, or classification-only with a named owner-boundary reason.`
 
-Representative outcome: `migrated`
+Representative outcome: `pending-before-rerun`
 
-Causal debt: `The killed-rejoin gate artifact is red, but canonical evidence does not implicate topology_rejoin_owner / post_restore_reconciliation_gate. The first frontier migrated to topology_publication_owner / publication_convergence with missing_published_nodes_present; runtime rolling-restart fixes remain out of scope.`
+Causal debt: `Until operation_workflow_owner / replica_operation_coordinator_handoff_gate is proven, the sprint representative rolling-restart residual stays open at startup_active_gate_owner / snapshot_coverage. Runtime rolling-restart fixes are out of scope for this observe/classify package.`
 
 Cross-boundary review: `Required before closure through the scenario-release-gate subagent ledger or an allowed waiver recorded in this package.`
 
 ## Scenario Causal Closure
 
-Reference scenario/probe: `seed-restart-under-load / topology_rejoin_owner / post_restore_reconciliation_gate`
+Reference scenario/probe: `seven-node-read-write-load-transaction-recovery / operation_workflow_owner / replica_operation_coordinator_handoff_gate`
 
 Phase chain:
 
 1. `canonical evidence extraction`
-2. `topology_rejoin_owner / post_restore_reconciliation_gate focused proof`
+2. `operation_workflow_owner / replica_operation_coordinator_handoff_gate focused proof`
 3. `representative or gate rerun classification`
 
-Current first frontier: `migrated frontier topology_publication_owner / publication_convergence with missing_published_nodes_present in test-output/reports/topology-killed-rejoin-gate.report.json`
+Current first frontier: `package-local frontier operation_workflow_owner / replica_operation_coordinator_handoff_gate; sprint representative frontier remains startup_active_gate_owner / snapshot_coverage until fresh evidence changes it`
 
 Known downstream blockers:
 
 1. `rolling-restart representative active-gate snapshot coverage remains red until green or migrated`
 2. `runtime or harness fixes discovered outside this owner boundary require a narrower successor package`
 
-Missing causal edge: `unproven topology_rejoin_owner / post_restore_reconciliation_gate causal edge for killed_rejoin_release_gate_unproven`
+Missing causal edge: `unproven operation_workflow_owner / replica_operation_coordinator_handoff_gate causal edge for remote_coordinator_handoff_release_gate_unproven`
 
-Missing causal edge probe: `npx tap test/control-plane/rejoin-reconciliation-contract.test.js test/node/node-reintegration-service.test.js`
+Missing causal edge probe: `npx tap test/rebalancer/coordinator-created-operation-progress-remote-handoff.test.js`
 
-Bounded progress proof: `Focused proof must show bounded wake, retry, timeout, reconcile, drain, dispatch, delivery, timer, or advance for topology_rejoin_owner / post_restore_reconciliation_gate.`
+Bounded progress proof: `Focused proof must show bounded wake, retry, timeout, reconcile, drain, dispatch, delivery, timer, or advance for operation_workflow_owner / replica_operation_coordinator_handoff_gate.`
 
-Bounded progress proof artifact: `test-output/reports/topology-killed-rejoin-gate.report.json`
+Bounded progress proof artifact: `test-output/reports/topology-remote-coordinator-handoff-gate.report.json`
 
-Expected observable transition: `killed_rejoin_release_gate_unproven migrated before the rejoin owner boundary: publicationStatus=PUBLISHED with pendingAckCount=0, missingPublishedCount=4, publicationPending=true, activeGateState=timed_out, and snapshotCoverageNodeCount=3/5.`
+Expected observable transition: `remote_coordinator_handoff_release_gate_unproven resolves to green evidence, a reduced residual, same-frontier evidence, migrated owner-boundary proof, or classification-only stop.`
 
 Max progress bound: `one activation cycle: package doctor, extractor/probe, owner-file proof, focused validation, and result classification`
 
-Same-frontier fallback: `keep topology_rejoin_owner / post_restore_reconciliation_gate active and do not broaden the package or claim ship proof`
+Same-frontier fallback: `keep operation_workflow_owner / replica_operation_coordinator_handoff_gate active and do not broaden the package or claim ship proof`
 
-Expected next frontier: `next remaining failure-gate package unless a narrower canonical blocker is explicitly activated`
+Expected next frontier: `representative green evidence or a narrower owner-boundary blocker selected by canonical evidence`
 
-Result classification: `migrated`
+Result classification: `pending-before-probe`
 
-Stop condition: `migrate-owner-boundary`
+Stop condition: `continue-local-fix`
 
 ## Scope
 
 Write scope:
 
-1. `work/packages/active-20260514-topology-killed-rejoin-gate.md`
+1. `work/packages/active-20260514-topology-remote-coordinator-handoff-gate.md`
 2. `work/sprints/active-2026-q2-topology-convergence-residual-closure.md`
 3. `work/sprints/current-blocker.json`
 4. `work/sprints/current-blocker.md`
 
 Handoff files:
 
-1. `work/packages/done-20260513-topology-post-rejoin-reconciliation.md`
-2. `work/packages/done-20260513-topology-failure-repair-intents.md`
-3. `work/packages/done-20260514-topology-killed-join-gate.md`
+1. `work/packages/done-20260513-topology-remote-handoff-convergence.md`
+2. `work/packages/done-20260513-priority-recovery-operation-workflow-owner-workflow-progress-after-snapshot-coverage.md`
+3. `work/packages/done-20260514-topology-killed-rejoin-gate.md`
 
 Generated files:
 
@@ -147,15 +142,14 @@ Generated files:
 
 Candidate runtime files:
 
-1. `src/control-plane/rejoin-reconciliation-contract.js`
-2. `src/node/node-reintegration-service.js`
-3. `src/node/node-constants.js`
-4. `test/control-plane/rejoin-reconciliation-contract.test.js`
-5. `test/node/node-reintegration-service.test.js`
+1. `src/rebalancer/operation-workflow-owner.js`
+2. `src/rebalancer/operation-workflow-owner-segment-7-stage-shared.js`
+3. `src/rebalancer/operation-workflow-owner-segment-7-stage-5.js`
+4. `test/rebalancer/coordinator-created-operation-progress-remote-handoff.test.js`
 
 Commit scope:
 
-1. `work/packages/active-20260514-topology-killed-rejoin-gate.md`
+1. `work/packages/active-20260514-topology-remote-coordinator-handoff-gate.md`
 2. `work/sprints/active-2026-q2-topology-convergence-residual-closure.md`
 3. `work/sprints/current-blocker.json`
 4. `work/sprints/current-blocker.md`

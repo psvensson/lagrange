@@ -346,7 +346,7 @@ Final closure requires fresh evidence proving all of the following:
    - Acceptance: joining member is admitted, fenced, or terminally classified
      by owner truth without degraded evidence promoting readiness.
 
-10. [Topology Killed Rejoin Gate](../packages/active-20260514-topology-killed-rejoin-gate.md)
+10. [Topology Killed Rejoin Gate](../packages/done-20260514-topology-killed-rejoin-gate.md)
     - Lane: `scenario-release-gate`
     - Owner boundary: `topology_rejoin_owner / post_restore_reconciliation_gate`
     - Purpose: prove killed-rejoin recovery performs post-restore
@@ -354,7 +354,7 @@ Final closure requires fresh evidence proving all of the following:
     - Acceptance: local services, durable topology truth, coordinated
       operations, and active admission reconcile through owner outcomes.
 
-11. [Topology Remote Coordinator Handoff Gate](../packages/todo-20260514-topology-remote-coordinator-handoff-gate.md)
+11. [Topology Remote Coordinator Handoff Gate](../packages/active-20260514-topology-remote-coordinator-handoff-gate.md)
     - Lane: `scenario-release-gate`
     - Owner boundary: `operation_workflow_owner / replica_operation_coordinator_handoff_gate`
     - Purpose: prove killed coordinator-created operations reach dispatch,
@@ -476,8 +476,10 @@ projection reconciliation is done as classification-only observability:
 `topology_publication_owner` blocker instead of healthy evidence.
 
 The current action is now
-[Topology Killed Rejoin Gate](../packages/active-20260514-topology-killed-rejoin-gate.md).
-It has now been observed and should be closed as migrated:
+[Topology Remote Coordinator Handoff Gate](../packages/active-20260514-topology-remote-coordinator-handoff-gate.md).
+The predecessor
+[Topology Killed Rejoin Gate](../packages/done-20260514-topology-killed-rejoin-gate.md)
+migrated:
 `test-output/reports/topology-killed-rejoin-gate.report.json` failed after
 `132499ms` because not all nodes reached `ACTIVE` within `60000ms`. Focused
 direct Node proof for rejoin reconciliation passed, but canonical evidence did
@@ -488,6 +490,6 @@ with `publication_ack_convergence`, `missing_published_nodes_present`,
 `publicationPending=true`, active gate `timed_out`, and snapshot coverage
 `3/5`. Priority recovery residual extraction reported three
 `operation_workflow_owner / workflow_progress` witnesses with
-`splitRequired=false`. Close killed-rejoin as observe/classify work only and
-activate the next remaining failure-gate package. Do not fix
-`rolling-restart` runtime behavior in this sprint segment.
+`splitRequired=false`. Execute the remote-coordinator handoff gate as
+observe/classify work only. Do not fix `rolling-restart` runtime behavior in
+this sprint segment.

@@ -240,9 +240,9 @@ queue rather than treated as release proof:
 2. Killed join: unexecuted; owner package
    `done-20260514-topology-killed-join-gate.md`.
 3. Killed rejoin: unexecuted; owner package
-   `active-20260514-topology-killed-rejoin-gate.md`.
+   `done-20260514-topology-killed-rejoin-gate.md`.
 4. Remote coordinator handoff: unexecuted; owner package
-   `todo-20260514-topology-remote-coordinator-handoff-gate.md`.
+   `active-20260514-topology-remote-coordinator-handoff-gate.md`.
 5. Missed handoff ACK: unexecuted; owner package
    `todo-20260514-topology-missed-handoff-ack-gate.md`.
 6. Stale publication durable truth: unexecuted; owner package
