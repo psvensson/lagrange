@@ -4,6 +4,9 @@ import {TABLES} from '../../src/constants/index.js';
 import {
   CONTROL_PLANE_READINESS_DIMENSION,
 } from '../../src/control-plane/control-plane-readiness-constants.js';
+import {
+  buildCanonicalPublicationRecoveryEvidence,
+} from '../../src/control-plane/publication-recovery-evidence.js';
 import {registerAdminControlSnapshotTailTests} from './admin-control-snapshot-tail-test-cases.js';
 
 const COMPLETED_REPLACE_CONTROL_SNAPSHOT_FIXTURE = Object.freeze({
@@ -48,6 +51,20 @@ const ACTIVE_GATE_OWNER_TRUTH_LOCAL_ENDPOINT_ID = 'node-1-ws';
 const ACTIVE_GATE_OWNER_TRUTH_LOCAL_ENDPOINT_TRANSPORT = 'ws';
 const ACTIVE_GATE_OWNER_TRUTH_LOCAL_ENDPOINT_ADDRESS = 'ws://node-1:8082';
 const ACTIVE_GATE_OWNER_TRUTH_PRIORITY_PARTITION_COUNT = 0;
+const ACTIVE_GATE_OWNER_TRUTH_PENDING_ACK_COUNT = 0;
+const ACTIVE_GATE_OWNER_TRUTH_SELECTED_PUBLISHED_COUNT = 1;
+const ACTIVE_GATE_OWNER_TRUTH_CURRENT_MISSING_COUNT = 5;
+const ACTIVE_GATE_OWNER_TRUTH_BEST_MISSING_COUNT = 4;
+const ACTIVE_GATE_OWNER_TRUTH_EXPECTED_NODE_COUNT = 5;
+const ACTIVE_GATE_OWNER_TRUTH_PUBLICATION_EVIDENCE_UNPUBLISHED =
+  'unpublished_observation';
+const ACTIVE_GATE_OWNER_TRUTH_PUBLICATION_EVIDENCE_STEADY =
+  'steady_published';
+const ACTIVE_GATE_OWNER_TRUTH_PUBLICATION_EVIDENCE_ABSENT = '';
+const ACTIVE_GATE_OWNER_TRUTH_FRESHNESS_FENCE_CONSUMER_LAG = 'consumer_lag';
+const ACTIVE_GATE_OWNER_TRUTH_RECOVERY_OUTCOME_WAITING_FOR_CONSUMER =
+  'waiting_for_consumer';
+const ACTIVE_GATE_OWNER_TRUTH_STREAM_OUTCOME_STALE = 'stale';
 const ACTIVE_GATE_OWNER_TRUTH_RECENT_HEARTBEAT_DELTA_MS = 1000;
 const ACTIVE_GATE_OWNER_TRUTH_STALE_HEARTBEAT_DELTA_MS = 61000;
 const ACTIVE_GATE_OWNER_TRUTH_NODE_IDS = Object.freeze([
@@ -278,6 +295,87 @@ test('AdminControlSnapshot widens owner truth from missing published recovery no
       activeNodeViews.effectiveSource,
       ACTIVE_GATE_OWNER_TRUTH_EFFECTIVE_SOURCE,
       'diagnostics should identify owner truth as the effective source',
+    );
+  });
+
+test('canonical publication evidence retains active-gate best publication owner truth after a timeout sample',
+  async (t) => {
+    const evidence = buildCanonicalPublicationRecoveryEvidence({
+      publicationConvergence: {
+        publicationEpoch: ACTIVE_GATE_OWNER_TRUTH_PUBLICATION_EPOCH,
+        pendingAckNodeIds: [],
+        pendingAckCount: ACTIVE_GATE_OWNER_TRUTH_PENDING_ACK_COUNT,
+        activeGate: {
+          progress: {
+            expectedNodeCount: ACTIVE_GATE_OWNER_TRUTH_EXPECTED_NODE_COUNT,
+            publicationStatus: ACTIVE_GATE_OWNER_TRUTH_PUBLICATION_EVIDENCE_ABSENT,
+            recoveryProtocolState:
+              ACTIVE_GATE_OWNER_TRUTH_PUBLICATION_EVIDENCE_UNPUBLISHED,
+            selectedPublishedActiveNodeIds: [],
+            selectedPublishedActiveCount: ACTIVE_GATE_OWNER_TRUTH_PENDING_ACK_COUNT,
+            selectedMissingPublishedNodeIds: [],
+            pendingAckCount: ACTIVE_GATE_OWNER_TRUTH_PENDING_ACK_COUNT,
+            missingPublishedCount: ACTIVE_GATE_OWNER_TRUTH_CURRENT_MISSING_COUNT,
+          },
+          bestProgress: {
+            expectedNodeCount: ACTIVE_GATE_OWNER_TRUTH_EXPECTED_NODE_COUNT,
+            publicationStatus: ACTIVE_GATE_OWNER_TRUTH_PUBLICATION_STATUS,
+            recoveryProtocolState:
+              ACTIVE_GATE_OWNER_TRUTH_PUBLICATION_EVIDENCE_STEADY,
+            selectedPublishedActiveNodeIds: [
+              ACTIVE_GATE_OWNER_TRUTH_LOCAL_NODE_ID,
+            ],
+            selectedPublishedActiveCount:
+              ACTIVE_GATE_OWNER_TRUTH_SELECTED_PUBLISHED_COUNT,
+            selectedMissingPublishedNodeIds: [
+              ...ACTIVE_GATE_OWNER_TRUTH_RECENT_NODE_IDS,
+            ],
+            pendingAckCount: ACTIVE_GATE_OWNER_TRUTH_PENDING_ACK_COUNT,
+            missingPublishedCount: ACTIVE_GATE_OWNER_TRUTH_BEST_MISSING_COUNT,
+            prioritySpreadSatisfied: true,
+            priorityRecoveryProgressClasses: {
+              unresolvedClassCount: ACTIVE_GATE_OWNER_TRUTH_PENDING_ACK_COUNT,
+              unresolvedSemanticStateCount:
+                ACTIVE_GATE_OWNER_TRUTH_PENDING_ACK_COUNT,
+              blockedPartitionCount:
+                ACTIVE_GATE_OWNER_TRUTH_PENDING_ACK_COUNT,
+            },
+          },
+        },
+      },
+    });
+
+    t.match(
+      evidence.publicationConvergence,
+      {
+        publicationStatus: ACTIVE_GATE_OWNER_TRUTH_PUBLICATION_STATUS,
+        recoveryProtocolState:
+          ACTIVE_GATE_OWNER_TRUTH_PUBLICATION_EVIDENCE_STEADY,
+        pendingAckCount: ACTIVE_GATE_OWNER_TRUTH_PENDING_ACK_COUNT,
+        publishedActiveNodeIds: [ACTIVE_GATE_OWNER_TRUTH_LOCAL_NODE_ID],
+        missingPublishedNodeIds: [
+          ...ACTIVE_GATE_OWNER_TRUTH_RECENT_NODE_IDS,
+        ],
+        missingPublishedCount: ACTIVE_GATE_OWNER_TRUTH_BEST_MISSING_COUNT,
+        freshnessFence: ACTIVE_GATE_OWNER_TRUTH_FRESHNESS_FENCE_CONSUMER_LAG,
+        recoveryOutcome:
+          ACTIVE_GATE_OWNER_TRUTH_RECOVERY_OUTCOME_WAITING_FOR_CONSUMER,
+        streamOutcome: ACTIVE_GATE_OWNER_TRUTH_STREAM_OUTCOME_STALE,
+      },
+      'best active-gate publication evidence should keep the exact owner-truth publication blocker',
+    );
+    t.match(
+      evidence.publicationConvergenceGate,
+      {
+        publicationStatus: ACTIVE_GATE_OWNER_TRUTH_PUBLICATION_STATUS,
+        recoveryProtocolState:
+          ACTIVE_GATE_OWNER_TRUTH_PUBLICATION_EVIDENCE_STEADY,
+        missingPublishedNodeIds: [
+          ...ACTIVE_GATE_OWNER_TRUTH_RECENT_NODE_IDS,
+        ],
+        missingPublishedCount: ACTIVE_GATE_OWNER_TRUTH_BEST_MISSING_COUNT,
+      },
+      'publication gate evidence should not let the timeout sample inflate the owner blocker',
     );
   });
 
