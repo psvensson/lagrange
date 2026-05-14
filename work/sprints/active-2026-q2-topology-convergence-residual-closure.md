@@ -71,7 +71,7 @@ Canonical extractor state on sprint creation:
 11. Residual inventory decision: the next runtime package is
     [Topology Active Gate Budget Closure](../packages/done-20260514-topology-active-gate-budget-closure.md),
     followed by
-    [Topology Active Gate Owner Cohort Convergence](../packages/active-20260514-topology-active-gate-owner-cohort-convergence.md)
+    [Topology Active Gate Owner Cohort Convergence](../packages/done-20260514-topology-active-gate-owner-cohort-convergence.md)
     after active-gate timeout, attempts, and next-attempt/terminal semantics are
     bounded or explicitly classified.
 
@@ -282,7 +282,7 @@ Final closure requires fresh evidence proving all of the following:
    - Acceptance: causal-model budget accounting no longer reports
      `active_gate_timeout` as unbounded for the current active-gate residual.
 
-4. [Topology Active Gate Owner Cohort Convergence](../packages/active-20260514-topology-active-gate-owner-cohort-convergence.md)
+4. [Topology Active Gate Owner Cohort Convergence](../packages/done-20260514-topology-active-gate-owner-cohort-convergence.md)
    - Lane: `runtime-owner-boundary`
    - Owner boundary: `startup_active_gate_owner / snapshot_coverage`
    - Purpose: complete the active-gate owner-truth cohort.
@@ -292,7 +292,7 @@ Final closure requires fresh evidence proving all of the following:
      from owner truth; representative evidence reaches `snapshotCoverage=5/5`
      or migrates to a narrower owner boundary.
 
-5. [Topology Publication Projection Reconciliation](../packages/todo-20260514-topology-publication-projection-reconciliation.md)
+5. [Topology Publication Projection Reconciliation](../packages/active-20260514-topology-publication-projection-reconciliation.md)
    - Lane: `runtime-owner-boundary`
    - Owner boundary: `topology_publication_owner / publication_projection_cohort`
    - Purpose: remove the gap where `PUBLISHED` can coexist with
@@ -462,11 +462,13 @@ Final closure requires fresh evidence proving all of the following:
 ## Current Next Action
 
 Active-gate budget closure is done as reduced evidence: `active_gate_timeout`
-is terminally classified, but the representative first frontier remains
-`startup_active_gate_owner / snapshot_coverage`.
+is terminally classified. Active-gate owner cohort convergence is now done as
+migrated evidence: the admin owner snapshot names expected nodes, ready leases,
+published active nodes, missing nodes, pending owner work, topology epoch, and
+active-gate budget, but the representative residual is not green.
 
 The current action is now
-[Topology Active Gate Owner Cohort Convergence](../packages/active-20260514-topology-active-gate-owner-cohort-convergence.md).
-Complete owner-truth cohort convergence for `snapshotCoverage=2/5`,
-`publishedActive=1/5`, and `missingPublished=4`, or split to a narrower
-canonical owner-boundary blocker.
+[Topology Publication Projection Reconciliation](../packages/active-20260514-topology-publication-projection-reconciliation.md).
+Reconcile why publication status can be `PUBLISHED` with `publishedActive=1/5`
+and `missingPublished=4`, or split to a narrower canonical owner-boundary
+blocker.

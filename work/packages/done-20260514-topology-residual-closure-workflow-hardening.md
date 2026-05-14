@@ -29,8 +29,8 @@
     "work/packages/done-20260514-topology-residual-closure-workflow-hardening.md",
     "work/packages/done-20260514-topology-residual-evidence-inventory.md",
     "work/packages/done-20260514-topology-active-gate-budget-closure.md",
-    "work/packages/active-20260514-topology-active-gate-owner-cohort-convergence.md",
-    "work/packages/todo-20260514-topology-publication-projection-reconciliation.md",
+    "work/packages/done-20260514-topology-active-gate-owner-cohort-convergence.md",
+    "work/packages/active-20260514-topology-publication-projection-reconciliation.md",
     "work/packages/todo-20260514-topology-priority-recovery-residual-drain.md",
     "work/packages/todo-20260514-topology-failure-gate-execution-harness.md",
     "work/packages/todo-20260514-topology-failure-detection-repair-gate.md",
@@ -65,8 +65,8 @@
     "work/packages/done-20260514-topology-residual-closure-workflow-hardening.md",
     "work/packages/done-20260514-topology-residual-evidence-inventory.md",
     "work/packages/done-20260514-topology-active-gate-budget-closure.md",
-    "work/packages/active-20260514-topology-active-gate-owner-cohort-convergence.md",
-    "work/packages/todo-20260514-topology-publication-projection-reconciliation.md",
+    "work/packages/done-20260514-topology-active-gate-owner-cohort-convergence.md",
+    "work/packages/active-20260514-topology-publication-projection-reconciliation.md",
     "work/packages/todo-20260514-topology-priority-recovery-residual-drain.md",
     "work/packages/todo-20260514-topology-failure-gate-execution-harness.md",
     "work/packages/todo-20260514-topology-failure-detection-repair-gate.md",
@@ -157,8 +157,8 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 1. work/packages/done-20260514-topology-residual-closure-workflow-hardening.md
 2. work/packages/done-20260514-topology-residual-evidence-inventory.md
 3. work/packages/done-20260514-topology-active-gate-budget-closure.md
-4. work/packages/active-20260514-topology-active-gate-owner-cohort-convergence.md
-5. work/packages/todo-20260514-topology-publication-projection-reconciliation.md
+4. work/packages/done-20260514-topology-active-gate-owner-cohort-convergence.md
+5. work/packages/active-20260514-topology-publication-projection-reconciliation.md
 6. work/packages/todo-20260514-topology-priority-recovery-residual-drain.md
 7. work/packages/todo-20260514-topology-failure-gate-execution-harness.md
 8. work/packages/todo-20260514-topology-failure-detection-repair-gate.md

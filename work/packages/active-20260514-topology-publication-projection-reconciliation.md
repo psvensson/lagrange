@@ -3,7 +3,7 @@
 <!-- work-package
 {
   "schema": "work-package-v1",
-  "status": "todo",
+  "status": "active",
   "opened": "2026-05-14",
   "lane": "runtime-owner-boundary",
   "scenario": "rolling-restart",
@@ -19,7 +19,7 @@
     "npm run analyze:owner-files -- topology_publication_owner publication_convergence --markdown"
   ],
   "writeScope": [
-    "work/packages/todo-20260514-topology-publication-projection-reconciliation.md",
+    "work/packages/active-20260514-topology-publication-projection-reconciliation.md",
     "work/sprints/active-2026-q2-topology-convergence-residual-closure.md"
   ],
   "handoffFiles": [
@@ -37,7 +37,7 @@
     "test/admin/admin-control-snapshot.test.js"
   ],
   "commitScope": [
-    "work/packages/todo-20260514-topology-publication-projection-reconciliation.md",
+    "work/packages/active-20260514-topology-publication-projection-reconciliation.md",
     "work/sprints/active-2026-q2-topology-convergence-residual-closure.md"
   ],
   "modelFit": {
@@ -169,7 +169,7 @@ projection. A publication snapshot must distinguish:
 
 Required before this package moves from `todo` to `active`:
 
-1. Run `npm run work:package:doctor -- --fix-dry-run work/packages/todo-20260514-topology-publication-projection-reconciliation.md` and keep `causalGovernance`, `scenarioCausalClosure`, Model Fit, and scope fields concrete before implementation starts.
+1. Run `npm run work:package:doctor -- --fix-dry-run work/packages/active-20260514-topology-publication-projection-reconciliation.md` and keep `causalGovernance`, `scenarioCausalClosure`, Model Fit, and scope fields concrete before implementation starts.
 2. Promote only these proven candidates into `writeScope` and `commitScope` after owner-file proof: `src/control-plane/publication-owner-decision.js`, `src/control-plane/publication-owner-evidence.js`, `src/control-plane/publication-owner-state.js`, `src/control-plane/publication-recovery-evidence.js`, `src/control-plane/publication-recovery-gate.js`, `src/control-plane/membership-publication-planning.js`, `test/control-plane/publication-recovery-evidence.test.js`, `test/admin/admin-control-snapshot.test.js`.
 3. Replace the Subagent Sequencing Ledger placeholders with real review/fix/implementation proof, or an allowed waiver, before pre-implementation and closure validation.
 4. Preserve the package artifact path `test-output/reports/rolling-restart-green-gate-after-priority-recovery-workflow-progress-after-snapshot-coverage.report.json`; if fresh evidence changes owner, boundary, or dominant reason, classify as `migrated`, `same-frontier`, or split instead of widening scope.
@@ -193,7 +193,7 @@ package.
 - Package class: `representative-frontier-closure`
 - Intended minimum model: `gpt-5.3-codex`
 - Scope shape: `owner-boundary-contraction/current-frontier`
-- Owned files: `work/packages/todo-20260514-topology-publication-projection-reconciliation.md`, `work/sprints/active-2026-q2-topology-convergence-residual-closure.md`
+- Owned files: `work/packages/active-20260514-topology-publication-projection-reconciliation.md`, `work/sprints/active-2026-q2-topology-convergence-residual-closure.md`
 - Forbidden files: `active-gate-runtime-changes-without-fresh-frontier-evidence`, `harness-timeout-increases`
 - Frozen decisions: package scope and lane stay bounded unless explicitly escalated.
 - Escalation triggers: owned files expand beyond this package, runtime ownership changes, or representative scenario evidence changes.
@@ -202,17 +202,17 @@ package.
 
 ## Validation Ladder
 
-1. npm run work:package:doctor -- --suggest work/packages/todo-20260514-topology-publication-projection-reconciliation.md
-2. npm run work:package:doctor -- --fix-dry-run work/packages/todo-20260514-topology-publication-projection-reconciliation.md
+1. npm run work:package:doctor -- --suggest work/packages/active-20260514-topology-publication-projection-reconciliation.md
+2. npm run work:package:doctor -- --fix-dry-run work/packages/active-20260514-topology-publication-projection-reconciliation.md
 3. npm run analyze:topology-convergence -- test-output/reports/rolling-restart-green-gate-after-priority-recovery-workflow-progress-after-snapshot-coverage.report.json --explain publication_ack_convergence
 4. npm run analyze:owner-files -- topology_publication_owner publication_convergence --markdown
 5. node scripts/check-guideline-literals.js src/control-plane/publication-owner-decision.js src/control-plane/publication-owner-evidence.js src/control-plane/publication-owner-state.js src/control-plane/publication-recovery-evidence.js src/control-plane/publication-recovery-gate.js src/control-plane/membership-publication-planning.js test/control-plane/publication-recovery-evidence.test.js test/admin/admin-control-snapshot.test.js
 6. node scripts/check-guideline-decision-boundaries.js src/control-plane/publication-owner-decision.js src/control-plane/publication-owner-evidence.js src/control-plane/publication-owner-state.js src/control-plane/publication-recovery-evidence.js src/control-plane/publication-recovery-gate.js src/control-plane/membership-publication-planning.js test/control-plane/publication-recovery-evidence.test.js test/admin/admin-control-snapshot.test.js
 7. npm run audit:runtime-grammar:file -- src/control-plane/publication-owner-decision.js src/control-plane/publication-owner-evidence.js src/control-plane/publication-owner-state.js src/control-plane/publication-recovery-evidence.js src/control-plane/publication-recovery-gate.js src/control-plane/membership-publication-planning.js test/control-plane/publication-recovery-evidence.test.js test/admin/admin-control-snapshot.test.js
-8. npm run work:validate -- --entry work/packages/todo-20260514-topology-publication-projection-reconciliation.md
-9. npm run work:validate -- --pre-impl work/packages/todo-20260514-topology-publication-projection-reconciliation.md
-10. npm run work:validate -- --closure work/packages/todo-20260514-topology-publication-projection-reconciliation.md
-11. git diff --check -- work/packages/todo-20260514-topology-publication-projection-reconciliation.md work/sprints/active-2026-q2-topology-convergence-residual-closure.md
+8. npm run work:validate -- --entry work/packages/active-20260514-topology-publication-projection-reconciliation.md
+9. npm run work:validate -- --pre-impl work/packages/active-20260514-topology-publication-projection-reconciliation.md
+10. npm run work:validate -- --closure work/packages/active-20260514-topology-publication-projection-reconciliation.md
+11. git diff --check -- work/packages/active-20260514-topology-publication-projection-reconciliation.md work/sprints/active-2026-q2-topology-convergence-residual-closure.md
 12. Final deep-dive proof: rerun the package extractor/probe, compare against the sprint representative residual, and record the result classification before closure.
 
 ## Split Rules

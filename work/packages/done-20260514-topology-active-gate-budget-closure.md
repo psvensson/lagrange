@@ -234,9 +234,9 @@ Required now because this active package is a runtime owner-boundary package.
 ## Split Rules
 
 1. If fixing budget accounting requires changing publication owner state, split
-   that work to `todo-20260514-topology-publication-projection-reconciliation.md`.
+   that work to `active-20260514-topology-publication-projection-reconciliation.md`.
 2. If active gate still cannot converge after bounded budget proof, hand off to
-   `active-20260514-topology-active-gate-owner-cohort-convergence.md`.
+   `done-20260514-topology-active-gate-owner-cohort-convergence.md`.
 3. If causal model exposes another unbounded critical owner wait, split a new
    owner-boundary package instead of widening this package.
 

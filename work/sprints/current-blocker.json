@@ -2,41 +2,41 @@
   "schema": "current-blocker-v1",
   "generatedBy": "scripts/work-tracker.js",
   "sprint": "work/sprints/active-2026-q2-topology-convergence-residual-closure.md",
-  "package": "work/packages/active-20260514-topology-active-gate-owner-cohort-convergence.md",
+  "package": "work/packages/active-20260514-topology-publication-projection-reconciliation.md",
   "status": "active",
   "lane": "runtime-owner-boundary",
   "scenario": "rolling-restart",
   "artifact": "test-output/reports/rolling-restart-green-gate-after-priority-recovery-workflow-progress-after-snapshot-coverage.report.json",
   "playback": "none",
-  "owner": "startup_active_gate_owner",
-  "boundary": "snapshot_coverage",
-  "dominantReason": "snapshot_coverage_incomplete",
-  "currentState": "Latest representative active gate is stalled with snapshotCoverage=2/5 expectedNodeCount=5 publicationStatus=PUBLISHED pendingAckCount=0 publishedActive=1/5 and missingPublished=4.",
-  "nextAction": "Complete active-gate owner-truth convergence so expected nodes ready leased nodes published active nodes missing nodes pending repairs and topology epoch produce active=5/5 snapshotCoverage=5/5 missingPublished=0 or a narrower canonical blocker.",
+  "owner": "topology_publication_owner",
+  "boundary": "publication_projection_cohort",
+  "dominantReason": "missing_published_nodes_present",
+  "currentState": "Publication convergence is marked satisfied but owner evidence still shows publishedActive=1/5 and four exact missingPublishedNodeIds in the active-gate handoff.",
+  "nextAction": "Reconcile publication owner truth active projection and selected active-gate snapshot so PUBLISHED cannot coexist with missing published active nodes unless the owner emits a typed degraded reason.",
   "proof": [
-    "npm run work:evidence-summary -- test-output/reports/rolling-restart-green-gate-after-priority-recovery-workflow-progress-after-snapshot-coverage.report.json",
-    "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-green-gate-after-priority-recovery-workflow-progress-after-snapshot-coverage.report.json --explain active_gate_snapshot_coverage",
-    "npm run analyze:owner-files -- startup_active_gate_owner snapshot_coverage --markdown"
+    "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-green-gate-after-priority-recovery-workflow-progress-after-snapshot-coverage.report.json --explain publication_ack_convergence",
+    "npm run analyze:owner-files -- topology_publication_owner publication_convergence --markdown"
   ],
   "writeScope": [
-    "work/packages/active-20260514-topology-active-gate-owner-cohort-convergence.md",
+    "work/packages/active-20260514-topology-publication-projection-reconciliation.md",
     "work/sprints/active-2026-q2-topology-convergence-residual-closure.md"
   ],
   "handoffFiles": [
-    "work/packages/done-20260513-topology-active-gate-snapshot-coverage-after-workflow-progress.md",
     "work/packages/done-20260514-topology-publication-convergence-after-active-gate-owner-truth.md"
   ],
   "generatedFiles": [],
   "candidateRuntimeFiles": [
-    "src/admin/admin-control-snapshot-class-part-1.js",
-    "src/admin/admin-control-snapshot-class-part-3.js",
-    "src/admin/admin-control-snapshot-class-part-5.js",
-    "src/control-plane/active-node-projection.js",
-    "src/bootstrap/bootstrap-api.js",
+    "src/control-plane/publication-owner-decision.js",
+    "src/control-plane/publication-owner-evidence.js",
+    "src/control-plane/publication-owner-state.js",
+    "src/control-plane/publication-recovery-evidence.js",
+    "src/control-plane/publication-recovery-gate.js",
+    "src/control-plane/membership-publication-planning.js",
+    "test/control-plane/publication-recovery-evidence.test.js",
     "test/admin/admin-control-snapshot.test.js"
   ],
   "commitScope": [
-    "work/packages/active-20260514-topology-active-gate-owner-cohort-convergence.md",
+    "work/packages/active-20260514-topology-publication-projection-reconciliation.md",
     "work/sprints/active-2026-q2-topology-convergence-residual-closure.md"
   ],
   "touchedFiles": [],
@@ -49,43 +49,34 @@
       "a frozen decision must be reopened"
     ]
   },
-  "representativeResidual": {
-    "status": "red",
-    "scenario": "rolling-restart",
-    "artifact": "test-output/reports/rolling-restart-green-gate-after-priority-recovery-workflow-progress-after-snapshot-coverage.report.json",
-    "frontier": "active_gate_snapshot_coverage",
-    "owner": "startup_active_gate_owner",
-    "boundary": "snapshot_coverage",
-    "dominantReason": "snapshot_coverage_incomplete",
-    "nextAction": "Complete active-gate owner-truth cohort convergence now that active-gate budget accounting is terminally classified."
-  },
+  "representativeResidual": {},
   "causalGovernance": {
-    "hypothesis": "startup_active_gate_owner / snapshot_coverage proof should reduce, migrate, or classify snapshot_coverage_incomplete without hiding the sprint representative residual.",
+    "hypothesis": "topology_publication_owner / publication_projection_cohort proof should reduce, migrate, or classify missing_published_nodes_present without hiding the sprint representative residual.",
     "stopConditionCheck": "npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-green-gate-after-priority-recovery-workflow-progress-after-snapshot-coverage.report.json",
-    "expectedCausalModelChange": "snapshot_coverage_incomplete becomes representative-green, reduced, same-frontier, migrated, or classification-only with a named owner-boundary reason.",
+    "expectedCausalModelChange": "missing_published_nodes_present becomes representative-green, reduced, same-frontier, migrated, or classification-only with a named owner-boundary reason.",
     "representativeOutcome": "pending-before-rerun",
-    "causalDebt": "Until startup_active_gate_owner / snapshot_coverage is proven, the sprint representative rolling-restart residual stays open at startup_active_gate_owner / snapshot_coverage.",
+    "causalDebt": "Until topology_publication_owner / publication_projection_cohort is proven, the sprint representative rolling-restart residual stays open at startup_active_gate_owner / snapshot_coverage.",
     "crossBoundaryReview": "Required before closure through the runtime-owner-boundary subagent ledger or an allowed waiver recorded in this package."
   },
   "scenarioCausalClosure": {
-    "referenceScenarioOrProbe": "rolling-restart / startup_active_gate_owner / snapshot_coverage",
+    "referenceScenarioOrProbe": "rolling-restart / topology_publication_owner / publication_projection_cohort",
     "phaseChain": [
       "canonical evidence extraction",
-      "startup_active_gate_owner / snapshot_coverage focused proof",
+      "topology_publication_owner / publication_projection_cohort focused proof",
       "representative or gate rerun classification"
     ],
-    "currentFirstFrontier": "package-local frontier startup_active_gate_owner / snapshot_coverage; sprint representative frontier remains startup_active_gate_owner / snapshot_coverage until fresh evidence changes it",
+    "currentFirstFrontier": "package-local frontier topology_publication_owner / publication_projection_cohort; sprint representative frontier remains startup_active_gate_owner / snapshot_coverage until fresh evidence changes it",
     "knownDownstreamBlockers": [
       "rolling-restart representative active-gate snapshot coverage remains red until green or migrated",
       "runtime or harness fixes discovered outside this owner boundary require a narrower successor package"
     ],
-    "missingCausalEdge": "unproven startup_active_gate_owner / snapshot_coverage causal edge for snapshot_coverage_incomplete",
-    "missingCausalEdgeProbe": "npm run work:evidence-summary -- test-output/reports/rolling-restart-green-gate-after-priority-recovery-workflow-progress-after-snapshot-coverage.report.json",
-    "boundedProgressProof": "Focused proof must show bounded wake, retry, timeout, reconcile, drain, dispatch, delivery, timer, or advance for startup_active_gate_owner / snapshot_coverage.",
+    "missingCausalEdge": "unproven topology_publication_owner / publication_projection_cohort causal edge for missing_published_nodes_present",
+    "missingCausalEdgeProbe": "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-green-gate-after-priority-recovery-workflow-progress-after-snapshot-coverage.report.json --explain publication_ack_convergence",
+    "boundedProgressProof": "Focused proof must show bounded wake, retry, timeout, reconcile, drain, dispatch, delivery, timer, or advance for topology_publication_owner / publication_projection_cohort.",
     "boundedProgressProofArtifact": "test-output/reports/rolling-restart-green-gate-after-priority-recovery-workflow-progress-after-snapshot-coverage.report.json",
-    "expectedObservableTransition": "snapshot_coverage_incomplete resolves to green evidence, a reduced residual, same-frontier evidence, migrated owner-boundary proof, or classification-only stop.",
+    "expectedObservableTransition": "missing_published_nodes_present resolves to green evidence, a reduced residual, same-frontier evidence, migrated owner-boundary proof, or classification-only stop.",
     "maxProgressBound": "one activation cycle: package doctor, extractor/probe, owner-file proof, focused validation, and result classification",
-    "sameFrontierFallback": "keep startup_active_gate_owner / snapshot_coverage active and do not broaden the package or claim ship proof",
+    "sameFrontierFallback": "keep topology_publication_owner / publication_projection_cohort active and do not broaden the package or claim ship proof",
     "expectedNextFrontier": "representative green evidence or a narrower owner-boundary blocker selected by canonical evidence",
     "resultClassification": "pending-before-probe",
     "stopCondition": "continue-local-fix"

@@ -269,7 +269,7 @@ than replace the first debugging loop.
    `publishedActive=1/5` and `missingPublished=4`. Reconciliation: publication
    ACK convergence is satisfied, but projection/cohort completeness is not
    ship evidence. The downstream package remains
-   `todo-20260514-topology-publication-projection-reconciliation.md` after
+   `active-20260514-topology-publication-projection-reconciliation.md` after
    active-gate budget/cohort work.
 3. Priority recovery is both classified as satisfied by topology convergence
    and still has a `spread_satisfied_in_flight` witness. Reconciliation: it is
@@ -290,7 +290,7 @@ was `active_gate_timeout` unbounded plus `active_gate_attempts` exhausted inside
 the current first frontier `startup_active_gate_owner / snapshot_coverage`.
 
 After the budget contract is terminally classified, continue with
-`active-20260514-topology-active-gate-owner-cohort-convergence.md` to close
+`done-20260514-topology-active-gate-owner-cohort-convergence.md` to close
 snapshot coverage and active cohort truth. Publication projection
 reconciliation follows only if missing active publication remains after
 active-gate cohort evidence no longer dominates. Priority recovery residual
@@ -378,9 +378,9 @@ Required now because this active package is a causal-escalation package.
 1. If first frontier is still `startup_active_gate_owner / snapshot_coverage`,
    use `done-20260514-topology-active-gate-budget-closure.md` as the budget
    classification proof and continue with
-   `active-20260514-topology-active-gate-owner-cohort-convergence.md`.
+   `done-20260514-topology-active-gate-owner-cohort-convergence.md`.
 2. If publication is the first durable blocker, activate
-   `todo-20260514-topology-publication-projection-reconciliation.md`.
+   `active-20260514-topology-publication-projection-reconciliation.md`.
 3. If operation workflow residual becomes first frontier, activate
    `todo-20260514-topology-priority-recovery-residual-drain.md` or split a
    narrower operation package if the owner/boundary has changed.
