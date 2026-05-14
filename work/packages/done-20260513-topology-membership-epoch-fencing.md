@@ -3,7 +3,7 @@
 <!-- work-package
 {
   "schema": "work-package-v1",
-  "status": "active",
+  "status": "done",
   "opened": "2026-05-13",
   "lane": "runtime-owner-boundary",
   "scenario": "none",
@@ -20,10 +20,10 @@
     "node scripts/check-guideline-literals.js src/control-plane/membership-epoch-contract.js src/control-plane/membership-publication-planning.js src/control-plane/membership-publication-coordinator-stage-2.js",
     "node scripts/check-guideline-decision-boundaries.js src/control-plane/membership-epoch-contract.js src/control-plane/membership-publication-planning.js src/control-plane/membership-publication-coordinator-stage-2.js",
     "npm run audit:runtime-grammar:file -- src/control-plane/membership-epoch-contract.js src/control-plane/membership-publication-planning.js src/control-plane/membership-publication-coordinator-stage-2.js",
-    "git diff --check -- work/packages/active-20260513-topology-membership-epoch-fencing.md work/model-ledger.jsonl work/sprints/active-2026-q2-topology-convergence-ship-shape.md work/sprints/current-blocker.json work/sprints/current-blocker.md src/control-plane/membership-epoch-contract.js src/control-plane/membership-publication-planning.js src/control-plane/membership-publication-coordinator-stage-2.js test/control-plane/membership-epoch-contract.test.js"
+    "git diff --check -- work/packages/done-20260513-topology-membership-epoch-fencing.md work/model-ledger.jsonl work/sprints/active-2026-q2-topology-convergence-ship-shape.md work/sprints/current-blocker.json work/sprints/current-blocker.md src/control-plane/membership-epoch-contract.js src/control-plane/membership-publication-planning.js src/control-plane/membership-publication-coordinator-stage-2.js test/control-plane/membership-epoch-contract.test.js"
   ],
   "writeScope": [
-    "work/packages/active-20260513-topology-membership-epoch-fencing.md",
+    "work/packages/done-20260513-topology-membership-epoch-fencing.md",
     "work/model-ledger.jsonl",
     "work/sprints/active-2026-q2-topology-convergence-ship-shape.md",
     "work/sprints/current-blocker.json",
@@ -47,7 +47,7 @@
     "src/control-plane/membership-publication-coordinator-stage-2.js"
   ],
   "commitScope": [
-    "work/packages/active-20260513-topology-membership-epoch-fencing.md",
+    "work/packages/done-20260513-topology-membership-epoch-fencing.md",
     "work/model-ledger.jsonl",
     "work/sprints/active-2026-q2-topology-convergence-ship-shape.md",
     "work/sprints/current-blocker.json",
@@ -102,7 +102,9 @@
     "resultClassification": "classification-only",
     "stopCondition": "classification-only-stop"
   },
-  "predecessor": "work/packages/superseded-20260514-topology-active-gate-snapshot-coverage-after-publication-owner-truth.md"
+  "predecessor": "work/packages/superseded-20260514-topology-active-gate-snapshot-coverage-after-publication-owner-truth.md",
+  "closed": "2026-05-14",
+  "commitAndPushLedgerRequired": true
 }
 -->
 
@@ -161,7 +163,7 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 - Package class: `representative-frontier-closure`
 - Intended minimum model: `gpt-5.3-codex`
 - Scope shape: `owner-boundary-contraction/current-frontier`
-- Owned files: `work/packages/active-20260513-topology-membership-epoch-fencing.md`, `work/model-ledger.jsonl`, `work/sprints/active-2026-q2-topology-convergence-ship-shape.md`, `work/sprints/current-blocker.json`, `work/sprints/current-blocker.md`, `src/control-plane/membership-epoch-contract.js`, `src/control-plane/membership-publication-planning.js`, `src/control-plane/membership-publication-coordinator-stage-2.js`, `test/control-plane/membership-epoch-contract.test.js`
+- Owned files: `work/packages/done-20260513-topology-membership-epoch-fencing.md`, `work/model-ledger.jsonl`, `work/sprints/active-2026-q2-topology-convergence-ship-shape.md`, `work/sprints/current-blocker.json`, `work/sprints/current-blocker.md`, `src/control-plane/membership-epoch-contract.js`, `src/control-plane/membership-publication-planning.js`, `src/control-plane/membership-publication-coordinator-stage-2.js`, `test/control-plane/membership-epoch-contract.test.js`
 - Forbidden files: failure repair intent implementation, post-rejoin
   reconciliation, partition descriptor epoch, placement capacity, anti-entropy,
   progress budgets, failure scenario gates, Pro behavior, Enterprise behavior
@@ -173,11 +175,11 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 ## Subagent Sequencing Ledger
 
 - [x] Review subagent recorded:
-      `Agent Jason (019e2522-a647-7002-881b-9c3edf2c73ea) reviewed work/packages/active-20260513-topology-membership-epoch-fencing.md; result fixes-required`.
+      `Agent Jason (019e2522-a647-7002-881b-9c3edf2c73ea) reviewed work/packages/done-20260513-topology-membership-epoch-fencing.md; result fixes-required`.
 - [x] Fix subagent recorded or explicitly not needed:
-      `Agent Popper (019e2524-948b-7b80-86aa-d32045cb7557) fixed work/packages/active-20260513-topology-membership-epoch-fencing.md`.
+      `Agent Popper (019e2524-948b-7b80-86aa-d32045cb7557) fixed work/packages/done-20260513-topology-membership-epoch-fencing.md`.
 - [x] Implementation subagent recorded:
-      `Agent Gibbs (019e2528-03b6-7170-a61f-79e409c81482) implemented work/packages/active-20260513-topology-membership-epoch-fencing.md`.
+      `Agent Gibbs (019e2528-03b6-7170-a61f-79e409c81482) implemented work/packages/done-20260513-topology-membership-epoch-fencing.md`.
 
 ## Validation
 
@@ -188,3 +190,19 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
    focused publication-owner contract.
 3. Implementation subagent proof recorded from Gibbs
    (`019e2528-03b6-7170-a61f-79e409c81482`).
+4. `npx tap test/control-plane/membership-epoch-contract.test.js` passed with
+   13 assertions.
+5. `node scripts/check-guideline-literals.js src/control-plane/membership-epoch-contract.js src/control-plane/membership-publication-planning.js src/control-plane/membership-publication-coordinator-stage-2.js`
+   passed.
+6. `node scripts/check-guideline-decision-boundaries.js src/control-plane/membership-epoch-contract.js src/control-plane/membership-publication-planning.js src/control-plane/membership-publication-coordinator-stage-2.js`
+   passed.
+7. `npm run audit:runtime-grammar:file -- src/control-plane/membership-epoch-contract.js src/control-plane/membership-publication-planning.js src/control-plane/membership-publication-coordinator-stage-2.js`
+   passed.
+8. `git diff --check -- work/packages/done-20260513-topology-membership-epoch-fencing.md work/model-ledger.jsonl work/sprints/active-2026-q2-topology-convergence-ship-shape.md work/sprints/current-blocker.json work/sprints/current-blocker.md src/control-plane/membership-epoch-contract.js src/control-plane/membership-publication-planning.js src/control-plane/membership-publication-coordinator-stage-2.js test/control-plane/membership-epoch-contract.test.js`
+   passed.
+
+## Commit And Push Ledger
+
+1. Focused package commit: `bad2fe44`
+2. Pushed to: `origin/codex/pending-ack-eligibility-filter`
+3. Commit contains only package-owned files/package-status/allowed sprint handoff: `yes`

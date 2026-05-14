@@ -59,7 +59,7 @@ Human-directed active sprint pivot on May 14, 2026:
 2. Boundary: `membership_epoch`.
 3. Dominant reason: `membership_topology_epoch_missing`.
 4. Active package:
-   `work/packages/active-20260513-topology-membership-epoch-fencing.md`.
+   `work/packages/done-20260513-topology-membership-epoch-fencing.md`.
 5. Focused proof surface:
    `npx tap test/control-plane/membership-epoch-contract.test.js`.
 6. Rolling-restart and active-gate snapshot coverage remain historical
@@ -247,7 +247,7 @@ This sprint treats the system as ship-shape only when these properties hold:
      the owner-truth active cohort, or rolling-restart migrates to a fresh
      narrower owner-boundary blocker with canonical evidence.
 
-9. [Topology Membership Epoch Fencing](../packages/active-20260513-topology-membership-epoch-fencing.md)
+9. [Topology Membership Epoch Fencing](../packages/done-20260513-topology-membership-epoch-fencing.md)
    - Lane: `runtime-owner-boundary`
    - Owner boundary: `topology_membership_owner / membership_epoch`
    - Recommendation covered: add a membership/topology epoch.
@@ -259,8 +259,12 @@ This sprint treats the system as ship-shape only when these properties hold:
    - Acceptance: stale join, rejoin, failure, placement, and publication
      observations are fenced by epoch checks; diagnostics expose the evaluated
      epoch and rejection reason.
+   - Implementation note: canonical membership epoch snapshot and fence
+     vocabulary now live at the publication owner boundary; focused proof covers
+     current, stale, future, and unknown fence outcomes plus publication
+     evidence and candidate exposure.
 
-10. [Topology Failure Repair Intents](../packages/todo-20260513-topology-failure-repair-intents.md)
+10. [Topology Failure Repair Intents](../packages/active-20260513-topology-failure-repair-intents.md)
    - Lane: `runtime-owner-boundary`
    - Owner boundary: `failure_detector / durable_repair_intent`
    - Recommendation covered: make failure detection enqueue durable repair work.

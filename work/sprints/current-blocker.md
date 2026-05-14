@@ -4,7 +4,7 @@
 
 Sprint: `work/sprints/active-2026-q2-topology-convergence-ship-shape.md`
 
-Package: `work/packages/active-20260513-topology-membership-epoch-fencing.md`
+Package: `work/packages/active-20260513-topology-failure-repair-intents.md`
 
 Workflow lane: `runtime-owner-boundary`
 
@@ -16,26 +16,21 @@ Playback: `none`
 
 ## Boundary
 
-Owner: `topology_membership_owner`
+Owner: `failure_detector`
 
-Boundary: `membership_epoch`
+Boundary: `durable_repair_intent`
 
-Dominant reason: `membership_topology_epoch_missing`
+Dominant reason: `failure_detection_not_causal_for_repair`
 
-Current state: Boot, join, rejoin, failure detection, placement, and gates do not yet share one explicit monotonic membership/topology epoch contract.
+Current state: Failure detection marks node/service state and emits events, but repair continuation is not yet durable owner-key work.
 
 ## Next Action
 
-Introduce the membership epoch contract at the publication owner boundary, expose it through membership publication planning snapshots, and prove stale/fresh fence decisions with focused tests.
+Convert node lifecycle transitions into durable owner-key repair intents instead of event-only wakeups
 
 ## Proof Ladder
 
-1. `npm run analyze:owner-files -- topology_membership_owner membership_epoch --markdown`
-2. `npx tap test/control-plane/membership-epoch-contract.test.js`
-3. `node scripts/check-guideline-literals.js src/control-plane/membership-epoch-contract.js src/control-plane/membership-publication-planning.js src/control-plane/membership-publication-coordinator-stage-2.js`
-4. `node scripts/check-guideline-decision-boundaries.js src/control-plane/membership-epoch-contract.js src/control-plane/membership-publication-planning.js src/control-plane/membership-publication-coordinator-stage-2.js`
-5. `npm run audit:runtime-grammar:file -- src/control-plane/membership-epoch-contract.js src/control-plane/membership-publication-planning.js src/control-plane/membership-publication-coordinator-stage-2.js`
-6. `git diff --check -- work/packages/active-20260513-topology-membership-epoch-fencing.md work/model-ledger.jsonl work/sprints/active-2026-q2-topology-convergence-ship-shape.md work/sprints/current-blocker.json work/sprints/current-blocker.md src/control-plane/membership-epoch-contract.js src/control-plane/membership-publication-planning.js src/control-plane/membership-publication-coordinator-stage-2.js test/control-plane/membership-epoch-contract.test.js`
+1. None recorded
 
 ## Model Fit
 
@@ -52,81 +47,61 @@ Escalation triggers:
 
 ## Causal Governance
 
-Causal hypothesis: `If topology_membership_owner / membership_epoch is formalized at the publication owner boundary, downstream packages can fence stale join, rejoin, failure, placement, active-gate, and rebalancer observations against one explicit epoch snapshot instead of reconstructing freshness locally.`
+Causal hypothesis: `unknown`
 
-Stop-condition check: `Do not rerun rolling-restart for this package; npm run analyze:causal-model is cited only as not applicable for scenario:none/artifact:none. Focused stop proof is npx tap test/control-plane/membership-epoch-contract.test.js.`
+Stop-condition check: `unknown`
 
-Expected causal-model change: `membership epoch vocabulary becomes available to downstream runtime-owner packages without running representative rolling-restart.`
+Expected causal-model change: `unknown`
 
-Representative outcome: `classification-only`
+Representative outcome: `unknown`
 
-Causal debt: `Downstream packages must consume the contract in failure repair intents, rejoin reconciliation, partition descriptors, placement, anti-entropy, budgets, and final failure gates.`
+Causal debt: `unknown`
 
-Cross-boundary review: `Required before implementation: review the last sprint state and active package pivot, then implement this membership epoch contract slice.`
+Cross-boundary review: `unknown`
 
 ## Scenario Causal Closure
 
-Reference scenario/probe: `focused membership epoch contract tests`
+Reference scenario/probe: `unknown`
 
 Phase chain:
 
-1. `membership publication planning`
-2. `membership epoch fence`
-3. `downstream topology consumers`
+1. None recorded
 
-Current first frontier: `systemic sprint frontier: topology_membership_owner / membership_epoch / membership_topology_epoch_missing`
+Current first frontier: `unknown`
 
 Known downstream blockers:
 
-1. `failure repair intent`
-2. `post-rejoin reconciliation`
-3. `partition descriptor epoch`
-4. `placement capacity`
-5. `anti-entropy reconciler`
-6. `bounded progress budgets`
-7. `failure scenario gates`
+1. None recorded
 
-Missing causal edge: `Membership publication owner does not expose one canonical epoch/fence result for downstream consumers.`
+Missing causal edge: `unknown`
 
-Missing causal edge probe: `npx tap test/control-plane/membership-epoch-contract.test.js`
+Missing causal edge probe: `unknown`
 
-Bounded progress proof: `Focused tests prove current, stale, future, and unknown epoch fence outcomes and membership publication snapshot exposure.`
+Bounded progress proof: `unknown`
 
-Bounded progress proof artifact: `test/control-plane/membership-epoch-contract.test.js`
+Bounded progress proof artifact: `unknown`
 
-Expected observable transition: `epoch contract absent -> canonical membershipEpochSnapshot and membershipEpochFence available`
+Expected observable transition: `unknown`
 
-Max progress bound: `one review subagent, one fix subagent if needed, one implementation subagent, focused owner tests, static guardrails`
+Max progress bound: `unknown`
 
-Same-frontier fallback: `If scope expands beyond the publication owner boundary, split the affected consumer into the next sprint package instead of broadening this package.`
+Same-frontier fallback: `unknown`
 
-Expected next frontier: `failure_detector / durable_repair_intent`
+Expected next frontier: `unknown`
 
-Result classification: `classification-only`
+Result classification: `unknown`
 
-Stop condition: `classification-only-stop`
+Stop condition: `unknown`
 
 ## Scope
 
 Write scope:
 
-1. `work/packages/active-20260513-topology-membership-epoch-fencing.md`
-2. `work/model-ledger.jsonl`
-3. `work/sprints/active-2026-q2-topology-convergence-ship-shape.md`
-4. `work/sprints/current-blocker.json`
-5. `work/sprints/current-blocker.md`
-6. `src/control-plane/membership-epoch-contract.js`
-7. `src/control-plane/membership-publication-planning.js`
-8. `src/control-plane/membership-publication-coordinator-stage-2.js`
-9. `test/control-plane/membership-epoch-contract.test.js`
+1. None recorded
 
 Handoff files:
 
-1. `work/packages/superseded-20260514-topology-active-gate-snapshot-coverage-after-publication-owner-truth.md`
-2. `src/control-plane/README.md`
-3. `src/bootstrap/rejoin-hints-constants.js`
-4. `src/control-plane/membership-lifecycle-constants.js`
-5. `src/rebalancer/rebalancer-constants.js`
+1. None recorded
 
 Generated files:
 
@@ -134,21 +109,11 @@ Generated files:
 
 Candidate runtime files:
 
-1. `src/control-plane/membership-epoch-contract.js`
-2. `src/control-plane/membership-publication-planning.js`
-3. `src/control-plane/membership-publication-coordinator-stage-2.js`
+1. None recorded
 
 Commit scope:
 
-1. `work/packages/active-20260513-topology-membership-epoch-fencing.md`
-2. `work/model-ledger.jsonl`
-3. `work/sprints/active-2026-q2-topology-convergence-ship-shape.md`
-4. `work/sprints/current-blocker.json`
-5. `work/sprints/current-blocker.md`
-6. `src/control-plane/membership-epoch-contract.js`
-7. `src/control-plane/membership-publication-planning.js`
-8. `src/control-plane/membership-publication-coordinator-stage-2.js`
-9. `test/control-plane/membership-epoch-contract.test.js`
+1. None recorded
 
 Legacy touched files:
 
