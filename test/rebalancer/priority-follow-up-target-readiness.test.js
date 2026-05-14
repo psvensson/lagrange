@@ -505,9 +505,6 @@ test(
     rebalancer.movePlanner.calculateMoves = () => ([
       {
         type: MoveType.REPLACE,
-        partitionId: TEST_PARTITION_ID,
-        entityType: TEST_SERVICE_TYPE,
-        entityId: TEST_PARTITION_ID,
         nodeId: TEST_RECOVERY_ONLY_NODE_ID,
         sourceNodeId: TEST_NODE_ID_A,
         replicaId: TEST_REPLICA_ID_A,
@@ -536,6 +533,11 @@ test(
         createdOperations[0]?.nodeId,
         TEST_RECOVERY_ONLY_NODE_ID,
         'scheduled follow-up should keep the recovery-only target node',
+      );
+      t.equal(
+        createdOperations[0]?.partitionId,
+        TEST_PARTITION_ID,
+        'raw planner-created follow-up should resolve to the current priority partition',
       );
       t.equal(
         result.moves[0]?.success,

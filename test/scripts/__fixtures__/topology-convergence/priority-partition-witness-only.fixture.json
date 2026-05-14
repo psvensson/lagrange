@@ -1,0 +1,50 @@
+{
+  "scenarios": [
+    {
+      "scenario": "rolling-restart",
+      "summary": {
+        "dominantReason": "priority_recovery_workflow_progress_event_driven",
+        "failureClass": "priority_recovery_progress_blocked"
+      },
+      "publicationConvergence": {
+        "publicationStatus": "PUBLISHED",
+        "pendingAckCount": 0,
+        "blockedNodeCount": 0,
+        "missingPublishedCount": 0,
+        "activeGate": {
+          "state": "timed_out",
+          "ready": false,
+          "progress": {
+            "expectedNodeCount": 5,
+            "snapshotCoverageNodeCount": 1,
+            "snapshotCoverageComplete": false,
+            "priorityBlockedPartitionCount": 0
+          }
+        },
+        "priorityRecoveryPartitionWitnesses": [
+          {
+            "partitionId": "control_plane_publications-p1",
+            "semanticStateId": "spread_satisfied_in_flight",
+            "currentOwner": "operation_workflow_owner",
+            "blockingBoundary": "workflow_progress",
+            "waitMode": "event_driven",
+            "nextRequiredAction": "wait_for_operation_progress",
+            "actuationState": "dispatched_waiting_progress"
+          }
+        ],
+        "priorityRecoveryProgressSummary": {
+          "dominantWitness": {
+            "partitionId": "control_plane_publications-p1",
+            "semanticStateId": "spread_satisfied_in_flight",
+            "currentOwner": "operation_workflow_owner",
+            "blockingBoundary": "workflow_progress",
+            "waitMode": "event_driven",
+            "nextRequiredAction": "wait_for_operation_progress",
+            "actuationState": "dispatched_waiting_progress"
+          },
+          "priorityBlockedPartitionCount": 0
+        }
+      }
+    }
+  ]
+}

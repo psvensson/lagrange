@@ -2,21 +2,20 @@
   "summary": {
     "frontierCount": 1,
     "firstFrontierEdgeId": "priority_recovery_partition_progress",
-    "firstFrontierState": "blocked",
+    "firstFrontierState": "retryable",
     "firstFrontierOwner": "operation_workflow_owner",
     "firstFrontierBoundary": "workflow_progress",
-    "firstFrontierReason": "priority_recovery_progress_blocked"
+    "firstFrontierReason": "priority_recovery_event_driven_wait"
   },
   "frontier": [
     {
       "id": "priority_recovery_partition_progress",
-      "state": "blocked",
+      "state": "retryable",
       "owner": "operation_workflow_owner",
       "boundary": "workflow_progress",
       "dominantReason": "priority_recovery_workflow_progress_event_driven",
-      "evidencePath": "report.scenarios[0].publicationConvergence.activeGate.progress.priorityRecoveryProgressClasses",
+      "evidencePath": "report.scenarios[0].publicationConvergence.priorityRecoveryPartitionWitnesses",
       "reasons": [
-        "priority_recovery_progress_blocked",
         "priority_recovery_event_driven_wait"
       ]
     }
@@ -25,19 +24,21 @@
     "edgeId": "priority_recovery_partition_progress",
     "owner": "operation_workflow_owner",
     "boundary": "workflow_progress",
-    "state": "blocked",
-    "frontierState": "blocked",
-    "dominantReason": "priority_recovery_progress_blocked",
+    "state": "retryable",
+    "frontierState": "retryable",
+    "dominantReason": "priority_recovery_event_driven_wait",
     "reasons": [
-      "priority_recovery_progress_blocked",
       "priority_recovery_event_driven_wait"
     ],
-    "evidencePath": "report.scenarios[0].publicationConvergence.activeGate.progress.priorityRecoveryProgressClasses",
+    "evidencePath": "report.scenarios[0].publicationConvergence.priorityRecoveryPartitionWitnesses",
     "source": {
-      "unresolvedSemanticStateIds": "operation_stalled,recovering_in_flight",
-      "blockedPartitionIds": "replica_operations-p1,sql_transactions-p1",
+      "unresolvedSemanticStateIds": "spread_satisfied_in_flight",
+      "blockedPartitionIds": "control_plane_publications-p1",
       "dominantReason": "priority_recovery_workflow_progress_event_driven",
-      "failureClass": "priority_recovery_progress_blocked"
+      "failureClass": "priority_recovery_progress_blocked",
+      "waitModes": "event_driven",
+      "nextRequiredActions": "wait_for_operation_progress",
+      "actuationStates": "dispatched_waiting_progress"
     },
     "rootCauseClass": "topology"
   }

@@ -17,6 +17,7 @@ const CONTROL_PLANE_WRITE_HEALTH_DEFAULT = Object.freeze({
 const CONTROL_PLANE_WRITE_HEALTH_STATE = Object.freeze({
   HEALTHY: 'healthy',
   BACKGROUND_BACKLOG_CONTAINED: 'background_backlog_contained',
+  RECOVERY_WRITE_DEFERRED: 'recovery_write_deferred',
   CRITICAL_WRITE_UNHEALTHY: 'critical_write_unhealthy',
 });
 
@@ -154,6 +155,13 @@ function resolveControlPlaneWriteHealthState(snapshot) {
   if (snapshot.consecutiveFailures < snapshot.failureThreshold) {
     return CONTROL_PLANE_WRITE_HEALTH_STATE.HEALTHY;
   }
+  if (
+    snapshot.publicationMode ===
+      CONTROL_PLANE_NODE_STATE_PUBLICATION_MODE.HEARTBEAT_RECOVERY &&
+    snapshot.controlPlanePressureSummary?.backpressured !== true
+  ) {
+    return CONTROL_PLANE_WRITE_HEALTH_STATE.RECOVERY_WRITE_DEFERRED;
+  }
   if (BACKGROUND_PUBLICATION_MODE_SET.has(snapshot.publicationMode) &&
       snapshot.controlPlanePressureSummary?.backpressured !== true &&
       snapshot.backgroundBacklogContained === true) {
@@ -183,7 +191,8 @@ function buildControlPlaneWriteHealthOutcome(snapshot, state) {
       details: baseDetails,
     };
   } else if (
-    state === CONTROL_PLANE_WRITE_HEALTH_STATE.BACKGROUND_BACKLOG_CONTAINED
+    state === CONTROL_PLANE_WRITE_HEALTH_STATE.BACKGROUND_BACKLOG_CONTAINED ||
+    state === CONTROL_PLANE_WRITE_HEALTH_STATE.RECOVERY_WRITE_DEFERRED
   ) {
     return {
       healthy: false,

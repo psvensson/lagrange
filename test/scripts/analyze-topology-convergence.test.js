@@ -52,6 +52,10 @@ const PRIORITY_WORKFLOW_PROGRESS_RECOVERING_IN_FLIGHT_FIXTURE_PATH =
   `${FIXTURE_DIRECTORY}/priority-workflow-progress-recovering-in-flight.fixture.json`;
 const PRIORITY_WORKFLOW_PROGRESS_RECOVERING_IN_FLIGHT_EXPECTED_PATH =
   `${FIXTURE_DIRECTORY}/priority-workflow-progress-recovering-in-flight.expected.json`;
+const PRIORITY_PARTITION_WITNESS_ONLY_FIXTURE_PATH =
+  `${FIXTURE_DIRECTORY}/priority-partition-witness-only.fixture.json`;
+const PRIORITY_PARTITION_WITNESS_ONLY_EXPECTED_PATH =
+  `${FIXTURE_DIRECTORY}/priority-partition-witness-only.expected.json`;
 const ABSENT_VALUE = 'absent';
 const PRIORITY_EDGE_ALIAS = 'priority';
 const PRIORITY_EDGE_ID = 'priority_recovery_partition_progress';
@@ -65,8 +69,8 @@ const PACKAGE_EVIDENCE_HEADING = '## Generated Owner Evidence Block';
 const OWNER_DOMINANT_REASON = 'priority_recovery_progress_blocked';
 const EDGE_STATE_BLOCKED = 'blocked';
 const BLOCKED_REASONS = ['priority_recovery_progress_blocked'];
-const PRIORITY_RECOVERY_DOMINANT_WITNESS_PATH =
-  'report.scenarios[0].publicationConvergence.priorityRecoveryProgressSummary.dominantWitness';
+const PRIORITY_RECOVERY_PROGRESS_CLASSES_PATH =
+  'report.scenarios[0].publicationConvergence.activeGate.progress.priorityRecoveryProgressClasses';
 
 describe('analyze-topology-convergence CLI', () => {
   it('prints help text', () => {
@@ -154,6 +158,13 @@ describe('analyze-topology-convergence CLI', () => {
     assert.deepEqual(projectGoldenFrontier(output), expected);
   });
 
+  it('matches golden frontier fixture for partition-witness-only workflow progress', () => {
+    const output = runAnalyzerJson(PRIORITY_PARTITION_WITNESS_ONLY_FIXTURE_PATH);
+    const expected = readJson(PRIORITY_PARTITION_WITNESS_ONLY_EXPECTED_PATH);
+
+    assert.deepEqual(projectGoldenFrontier(output), expected);
+  });
+
   it('keeps dominant witness owner and boundary when report summary omits progress classes', () => {
     const output = runAnalyzerJson(PRIORITY_DOMINANT_WITNESS_FIXTURE_PATH);
     const graph = buildTopologyConvergenceGraph(
@@ -167,7 +178,7 @@ describe('analyze-topology-convergence CLI', () => {
     assert.equal(output.frontier[0].state, EDGE_STATE_BLOCKED);
     assert.equal(
       output.frontier[0].evidencePath,
-      PRIORITY_RECOVERY_DOMINANT_WITNESS_PATH,
+      PRIORITY_RECOVERY_PROGRESS_CLASSES_PATH,
     );
     assert.deepEqual(output.frontier[0].reasons, BLOCKED_REASONS);
     assert.equal(output.dominantWitness.owner, REBALANCER_LEADER_OWNER);
@@ -175,7 +186,7 @@ describe('analyze-topology-convergence CLI', () => {
     assert.equal(output.dominantWitness.dominantReason, OWNER_DOMINANT_REASON);
     assert.equal(
       output.dominantWitness.evidencePath,
-      PRIORITY_RECOVERY_DOMINANT_WITNESS_PATH,
+      PRIORITY_RECOVERY_PROGRESS_CLASSES_PATH,
     );
     assert.equal(priorityNode?.owner, REBALANCER_LEADER_OWNER);
     assert.equal(priorityNode?.boundary, OPERATION_SCHEDULING_BOUNDARY);
@@ -225,7 +236,7 @@ describe('analyze-topology-convergence CLI', () => {
     assert.equal(output.decisionTable.owner, OPERATION_WORKFLOW_OWNER);
   });
 
-  it('explains dominant witness owner and evidence path consistently', () => {
+  it('explains dominant witness owner with progress-class evidence path consistently', () => {
     const output = runAnalyzerJson(
       PRIORITY_DOMINANT_WITNESS_FIXTURE_PATH,
       ARG_EXPLAIN,
@@ -238,7 +249,7 @@ describe('analyze-topology-convergence CLI', () => {
     assert.equal(output.evidenceSnapshot.boundary, OPERATION_SCHEDULING_BOUNDARY);
     assert.equal(
       output.evidenceSnapshot.evidencePath,
-      PRIORITY_RECOVERY_DOMINANT_WITNESS_PATH,
+      PRIORITY_RECOVERY_PROGRESS_CLASSES_PATH,
     );
     assert.equal(output.decisionOutcome.state, EDGE_STATE_BLOCKED);
     assert.equal(output.decisionOutcome.frontier, true);
@@ -252,7 +263,7 @@ describe('analyze-topology-convergence CLI', () => {
     );
     assert.equal(
       output.decisionOutcome.dominantWitness.evidencePath,
-      PRIORITY_RECOVERY_DOMINANT_WITNESS_PATH,
+      PRIORITY_RECOVERY_PROGRESS_CLASSES_PATH,
     );
     assert.equal(output.decisionTable.edgeId, PRIORITY_EDGE_ID);
     assert.equal(output.decisionTable.owner, REBALANCER_LEADER_OWNER);

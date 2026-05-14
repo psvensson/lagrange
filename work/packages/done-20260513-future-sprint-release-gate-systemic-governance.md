@@ -96,7 +96,7 @@ package templates, and sprint planning only.
 ## Active Sprint Isolation
 
 - Active package/sprint used only as handoff context:
-  `work/packages/active-20260513-rolling-restart-green-gate-workflow-progress-recovery.md`
+  `work/packages/done-20260513-rolling-restart-green-gate-workflow-progress-recovery.md`
   and
   `work/sprints/active-2026-q2-phase-0-1-rolling-restart-release-gate-closure.md`.
 - Evidence that may be read but not mutated: the recent rolling-restart
@@ -168,7 +168,7 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 1. src/
 2. test/rebalancer/
 3. test/control-plane/
-4. work/packages/active-20260513-rolling-restart-green-gate-workflow-progress-recovery.md
+4. work/packages/done-20260513-rolling-restart-green-gate-workflow-progress-recovery.md
 5. work/sprints/active-2026-q2-phase-0-1-rolling-restart-release-gate-closure.md
 6. Representative rolling-restart reruns.
 7. Closing or modifying the current active release-gate package.
@@ -228,7 +228,7 @@ active rolling-restart runtime package. Its package queue covers:
 - Intended minimum model: `gpt-5.3-codex`
 - Scope shape: `repo-wide-governance/higher-order-release-gate-contract`
 - Owned files: `work/sprints/todo-2026-q2-future-sprint-release-gate-systemic-governance.md`, `work/packages/done-20260513-future-sprint-release-gate-systemic-governance.md`, `work/packages/todo-20260513-release-gate-blocker-path-ledger-template.md`, `work/packages/todo-20260513-rolling-restart-resume-activation-brief.md`, `work/packages/todo-20260513-release-gate-architecture-contract-template.md`, `work/packages/todo-20260513-release-gate-fixture-first-policy.md`, `work/packages/todo-20260513-release-gate-bounded-progress-governance.md`, `work/packages/todo-20260513-release-gate-runtime-architecture-backlog.md`, `work/README.md`, `work/templates/work-package-template.md`
-- Forbidden files: `src/`, `test/rebalancer/`, `test/control-plane/`, `work/packages/active-20260513-rolling-restart-green-gate-workflow-progress-recovery.md`, `work/sprints/active-2026-q2-phase-0-1-rolling-restart-release-gate-closure.md`
+- Forbidden files: `src/`, `test/rebalancer/`, `test/control-plane/`, `work/packages/done-20260513-rolling-restart-green-gate-workflow-progress-recovery.md`, `work/sprints/active-2026-q2-phase-0-1-rolling-restart-release-gate-closure.md`
 - Frozen decisions: package scope and lane stay bounded; this package must not
   fix the active rolling-restart blocker.
 - Escalation triggers: runtime ownership changes, representative scenario

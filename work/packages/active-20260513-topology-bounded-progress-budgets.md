@@ -14,12 +14,41 @@
   "dominantReason": "retryable_waits_lack_terminal_bounds",
   "currentState": "Critical topology diagnostics still expose unknown or unbounded progress budgets in paths that can affect release-gate closure.",
   "nextAction": "Require bounded retry timeout reconcile and terminal classifications for critical topology workflows",
-  "proof": [],
-  "writeScope": [],
-  "handoffFiles": [],
+  "proof": [
+    "npm run analyze:owner-files -- topology_control_plane progress_budget_taxonomy --markdown",
+    "npx tap test/rebalancer/topology-owner-contracts.test.js test/diagnostics/budget-timeout-accounting.test.js",
+    "node scripts/check-guideline-literals.js src/rebalancer/topology-owner-constants.js src/diagnostics/budget-timeout-accounting.js",
+    "node scripts/check-guideline-decision-boundaries.js src/rebalancer/topology-owner-constants.js src/diagnostics/budget-timeout-accounting.js",
+    "npm run audit:runtime-grammar:file -- src/rebalancer/topology-owner-constants.js src/diagnostics/budget-timeout-accounting.js",
+    "git diff --check -- src/rebalancer/topology-owner-constants.js src/diagnostics/budget-timeout-accounting.js test/rebalancer/topology-owner-contracts.test.js test/diagnostics/budget-timeout-accounting.test.js work/packages/active-20260513-topology-bounded-progress-budgets.md"
+  ],
+  "writeScope": [
+    "src/rebalancer/topology-owner-constants.js",
+    "src/diagnostics/budget-timeout-accounting.js",
+    "test/rebalancer/topology-owner-contracts.test.js",
+    "test/diagnostics/budget-timeout-accounting.test.js",
+    "work/packages/active-20260513-topology-bounded-progress-budgets.md",
+    "work/model-ledger.jsonl"
+  ],
+  "handoffFiles": [
+    "work/packages/done-20260513-topology-anti-entropy-reconciler.md",
+    "work/sprints/active-2026-q2-topology-convergence-ship-shape.md",
+    "work/sprints/current-blocker.md",
+    "work/sprints/current-blocker.json"
+  ],
   "generatedFiles": [],
-  "candidateRuntimeFiles": [],
-  "commitScope": [],
+  "candidateRuntimeFiles": [
+    "src/rebalancer/topology-owner-constants.js",
+    "src/diagnostics/budget-timeout-accounting.js"
+  ],
+  "commitScope": [
+    "src/rebalancer/topology-owner-constants.js",
+    "src/diagnostics/budget-timeout-accounting.js",
+    "test/rebalancer/topology-owner-contracts.test.js",
+    "test/diagnostics/budget-timeout-accounting.test.js",
+    "work/packages/active-20260513-topology-bounded-progress-budgets.md",
+    "work/model-ledger.jsonl"
+  ],
   "modelFit": {
     "packageClass": "representative-frontier-closure",
     "intendedMinimumModel": "gpt-5.3-codex",
@@ -86,14 +115,55 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 - Package class: `representative-frontier-closure`
 - Intended minimum model: `gpt-5.3-codex`
 - Scope shape: `owner-boundary-contraction/current-frontier`
-- Owned files: `work/packages/<this-package>.md`
-- Forbidden files: none selected before activation; activation must name exact
-  runtime write scope and forbidden files.
+- Owned files: `src/rebalancer/topology-owner-constants.js`,
+  `src/diagnostics/budget-timeout-accounting.js`,
+  `test/rebalancer/topology-owner-contracts.test.js`,
+  `test/diagnostics/budget-timeout-accounting.test.js`,
+  `work/packages/active-20260513-topology-bounded-progress-budgets.md`,
+  `work/model-ledger.jsonl`
+- Forbidden files: rolling-restart scenarios/artifacts, topology convergence
+  golden fixtures already dirty before this package, Pro behavior, Enterprise
+  behavior.
 - Frozen decisions: package scope and lane stay bounded unless explicitly escalated.
 - Escalation triggers: owned files expand beyond this package, runtime ownership changes, or representative scenario evidence changes.
-- Focused proof: `git diff --check`
+- Focused proof: `npx tap test/rebalancer/topology-owner-contracts.test.js test/diagnostics/budget-timeout-accounting.test.js`
 - Model ledger advisory: `escalate`
+
+## Shared Boundary Contract
+
+- Semantic owner: `topology_control_plane`
+- Canonical contract shape / vocabulary: progress budget outcomes normalize
+  retry windows, next-attempt timestamps, attempt bounds, elapsed workflow
+  budgets, terminal degraded classifications, and diagnostic reasons.
+- Allowed consumers: topology control-plane owner contracts, operation retry
+  and resume diagnostics, and read-only budget accounting reports.
+- Prohibited reinterpretations: event-driven waits, cache visibility, timer
+  text, incidental row absence, or timeout strings must not be treated as
+  bounded progress without an explicit owner budget outcome.
+- Primary diagnostics / proof surfaces:
+  `test/rebalancer/topology-owner-contracts.test.js` and
+  `test/diagnostics/budget-timeout-accounting.test.js`.
+
+## Subagent Sequencing Ledger
+
+- [x] Review subagent recorded:
+      `Agent Codex (019e25ad-657d-7a23-8b65-e60bf5b607e4) reviewed work/packages/done-20260513-topology-anti-entropy-reconciler.md; result clean`.
+- [x] Fix subagent recorded or explicitly not needed: `not-needed`.
+- [ ] Implementation subagent recorded:
+      pending-before-implementation-starts
 
 ## Validation
 
-1. `git diff --check -- <files>`
+1. `npm run work:context` passed and confirmed this package as the current
+   blocker.
+2. `npm run work:llm-start` passed and loaded package doctor, dirty-scope, and
+   model-ledger context.
+3. `npm run work:package:doctor -- --suggest work/packages/done-20260513-topology-anti-entropy-reconciler.md`
+   passed in the review subagent.
+4. `npm run work:validate -- --closure work/packages/done-20260513-topology-anti-entropy-reconciler.md`
+   passed in the review subagent.
+5. `npm run analyze:owner-files -- topology_control_plane progress_budget_taxonomy --markdown`
+   passed and identified the topology owner constants plus current package
+   handoff as the owner surface.
+6. Review subagent proof recorded from Gauss
+   (`019e25ad-657d-7a23-8b65-e60bf5b607e4`), result `clean`.

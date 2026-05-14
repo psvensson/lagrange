@@ -149,7 +149,7 @@
   "predecessor": "work/packages/done-20260513-topology-readiness-stalled-support.md",
   "closed": "2026-05-13",
   "commitAndPushLedgerRequired": true,
-  "successor": "work/packages/active-20260513-priority-recovery-operation-workflow-owner-workflow-progress-after-snapshot-coverage.md"
+  "successor": "work/packages/done-20260513-priority-recovery-operation-workflow-owner-workflow-progress-after-snapshot-coverage.md"
 }
 -->
 

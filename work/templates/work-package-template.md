@@ -221,6 +221,11 @@ non-frontier with prose alone.
 - Reference scenario/probe:
 - Phase chain:
 - Current first frontier:
+  must name the same owner and boundary as package metadata. If this package is
+  only a bounded diagnostic/support-role package while the first frontier stays
+  elsewhere, add metadata `ownerBoundaryMigrationProof` with concrete
+  `fromOwner`, `fromBoundary`, `toOwner`, `toBoundary`, `reason`, and
+  `evidence` fields.
 - Known downstream blockers:
 - Missing causal edge:
 - Missing causal edge probe:

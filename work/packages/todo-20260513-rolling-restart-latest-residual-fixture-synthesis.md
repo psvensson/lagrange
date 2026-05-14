@@ -142,7 +142,7 @@ Focused fixture proof was rerun on May 13, 2026:
    passed 33 tests.
 
 Closure is intentionally deferred because the passing fixture surface overlaps
-`work/packages/active-20260513-rolling-restart-green-gate-workflow-progress-recovery.md`
+`work/packages/done-20260513-rolling-restart-green-gate-workflow-progress-recovery.md`
 write scope, including topology fixtures and analyzer tests. Committing those
 files from this package would make the active runtime package harder to review
 as one focused startup active-gate slice.

@@ -2,8 +2,8 @@
 
 Load for test-first workflow, reliability harness work, and regression policy.
 
-Generated rules: 95
-Estimated tokens: 3895
+Generated rules: 96
+Estimated tokens: 3987
 Domains: testing
 
 ## Rules
@@ -76,30 +76,31 @@ Domains: testing
 66. [TEST-0066] A scenario-driven package that changes runtime meaning, decision meaning, or presentation meaning must prove the current blocker in this order: owner-decision fixture or blocker probe, focused owner tests, affected presentation tests, then the representative scenario.
 67. [TEST-0067] Presentation tests are required when failure bundles, triage summaries, admin summaries, active gates, or report writers consume the changed contract. A green owner test alone is not sufficient if presentation can still classify the same evidence under a different blocker.
 68. [TEST-0068] A fresh artifact with different counts, node ids, epochs, or timing does not by itself prove blocker migration. Treat it as the same blocker until the normalized evidence shows a different semantic owner, owner boundary, or next required action.
-69. [TEST-0069] When a package classifies a retryable or backpressure state as bounded rather than fixing runtime code, the validation must prove why the state is not the first frontier, which downstream blockers remain, and which stop condition prevents another local patch. That classification cannot rest on prose alone: it must name the focused probe command, proof artifact path, expected observable transition, maximum progress bound, and same-frontier fallback.
-70. [TEST-0070] When repeated scenario runs keep failing after local fixes or classification-only reductions, the next validation package must establish a causal-analysis boundary before more runtime fixes. At minimum it must validate the end-to-end phase model, cross-entity causal graph, budget/timeout accounting, invariant review, failure-class taxonomy, and architecture-level stop conditions.
-71. [TEST-0071] A runtime fix that follows causal-analysis escalation must cite the causal model or artifact it uses, then prove that its local regression changes the relevant causal edge rather than only improving the immediate symptom.
-72. [TEST-0072] Manual evidence summaries are allowed only when no extractor exists or the extractor output is insufficient. They must preserve the normalized owner fields from the artifact rather than reclassifying from raw logs, and the package must record why the extractor was not enough.
-73. [TEST-0073] The review must check package closure evidence, residual inventory, guardrail ledger, blocker migration notes, sprint snapshot consistency, and whether the last package's stated next action still matches current artifact evidence.
-74. [TEST-0074] Slow-dependency resilience — inject artificial latency into a dependency (mock that resolves after a delay) and prove the component does not fail, corrupt state, or drop work. It may be slower, but it must remain correct.
-75. [TEST-0075] A representative rerun should not be the next debugging step while the current owner-decision fixture or narrow blocker probe is missing.
-76. [TEST-0076] The test should capture the exact failure scenario from the bug report
-77. [TEST-0077] The failure message should match the reported error
-78. [TEST-0078] The fix should make the failing test pass
-79. [TEST-0079] Is the current problem a repeated pattern? If so, is there a shared abstraction that should exist but does not?
-80. [TEST-0080] When a bug depends on stale cache truth, stale routing, delayed authoritative visibility, no-handler witnesses, or other cross-time evidence races, the regression must replay the witness order that triggered the bug rather than asserting only the final steady state.
-81. [TEST-0081] Implementation work should start only after the current owner boundary and smallest proof surface are named.
-82. [TEST-0082] For control-plane, readiness, topology, and other shared distributed-boundary work, the normal debugging loop must follow one validation ladder instead of jumping straight from unit failures to repeated full distributed reruns.
-83. [TEST-0083] Distributed artifact triage must start with npm run work:evidence-summary -- <artifact>, the focused extractor for the failure class such as npm run analyze:priority-recovery-residuals -- <artifact>, and npm run analyze:owner-files -- <owner> [boundary] before broad text search, raw JSON slicing, ad hoc jq, or raw logs.
-84. [TEST-0084] No other tests should break
-85. [TEST-0085] All non-trivial implementation work should have validation owned by its active work package.
-86. [TEST-0086] Runtime packages that touch already oversized files should record whether they are adding local size debt or extracting a smaller owner/helper boundary.
-87. [TEST-0087] These tests should be small and targeted.
-88. [TEST-0088] Work packages should list their targeted owner tests, the relevant boundary-transition scenarios, and the final distributed checkpoint command in that same order.
-89. [TEST-0089] Only return to suite-local fixes after the shared runner boundary is shown stable.
-90. [TEST-0090] Only restore higher parallelism after the aggregate gate is proven stable at the new boundary.
-91. [TEST-0091] Are multiple recent bugs clustering around the same boundary or component? That may indicate a design-level issue worth addressing instead of patching each symptom individually.
-92. [TEST-0092] Only after the artifact summaries and relevant extractors have been read may raw container logs, node logs, raw JSON slicing, or ad hoc jq become the primary debugging surface.
-93. [TEST-0093] A separate implementation sub-agent may start the current work package only after the previous-package review is clean or the review findings have been fixed.
-94. [TEST-0094] Local execution may use scripts/run-distributed-validation-ladder.js to make this order explicit.
-95. [TEST-0095] Only run the complete test suite (npm test) at: - Checkpoint tasks explicitly marked in the task list; - Final integration verification; - When explicitly requested by the user
+69. [TEST-0069] The active scenario package owner and boundary must match the canonical current first frontier recorded in scenarioCausalClosure. If a package intentionally owns a diagnostic/support role while the first frontier stays elsewhere, it must record explicit ownerBoundaryMigrationProof metadata with from/to owner-boundary, reason, and focused evidence.
+70. [TEST-0070] When a package classifies a retryable or backpressure state as bounded rather than fixing runtime code, the validation must prove why the state is not the first frontier, which downstream blockers remain, and which stop condition prevents another local patch. That classification cannot rest on prose alone: it must name the focused probe command, proof artifact path, expected observable transition, maximum progress bound, and same-frontier fallback.
+71. [TEST-0071] When repeated scenario runs keep failing after local fixes or classification-only reductions, the next validation package must establish a causal-analysis boundary before more runtime fixes. At minimum it must validate the end-to-end phase model, cross-entity causal graph, budget/timeout accounting, invariant review, failure-class taxonomy, and architecture-level stop conditions.
+72. [TEST-0072] A runtime fix that follows causal-analysis escalation must cite the causal model or artifact it uses, then prove that its local regression changes the relevant causal edge rather than only improving the immediate symptom.
+73. [TEST-0073] Manual evidence summaries are allowed only when no extractor exists or the extractor output is insufficient. They must preserve the normalized owner fields from the artifact rather than reclassifying from raw logs, and the package must record why the extractor was not enough.
+74. [TEST-0074] The review must check package closure evidence, residual inventory, guardrail ledger, blocker migration notes, sprint snapshot consistency, and whether the last package's stated next action still matches current artifact evidence.
+75. [TEST-0075] Slow-dependency resilience — inject artificial latency into a dependency (mock that resolves after a delay) and prove the component does not fail, corrupt state, or drop work. It may be slower, but it must remain correct.
+76. [TEST-0076] A representative rerun should not be the next debugging step while the current owner-decision fixture or narrow blocker probe is missing.
+77. [TEST-0077] The test should capture the exact failure scenario from the bug report
+78. [TEST-0078] The failure message should match the reported error
+79. [TEST-0079] The fix should make the failing test pass
+80. [TEST-0080] Is the current problem a repeated pattern? If so, is there a shared abstraction that should exist but does not?
+81. [TEST-0081] When a bug depends on stale cache truth, stale routing, delayed authoritative visibility, no-handler witnesses, or other cross-time evidence races, the regression must replay the witness order that triggered the bug rather than asserting only the final steady state.
+82. [TEST-0082] Implementation work should start only after the current owner boundary and smallest proof surface are named.
+83. [TEST-0083] For control-plane, readiness, topology, and other shared distributed-boundary work, the normal debugging loop must follow one validation ladder instead of jumping straight from unit failures to repeated full distributed reruns.
+84. [TEST-0084] Distributed artifact triage must start with npm run work:evidence-summary -- <artifact>, the focused extractor for the failure class such as npm run analyze:priority-recovery-residuals -- <artifact>, and npm run analyze:owner-files -- <owner> [boundary] before broad text search, raw JSON slicing, ad hoc jq, or raw logs.
+85. [TEST-0085] No other tests should break
+86. [TEST-0086] All non-trivial implementation work should have validation owned by its active work package.
+87. [TEST-0087] Runtime packages that touch already oversized files should record whether they are adding local size debt or extracting a smaller owner/helper boundary.
+88. [TEST-0088] These tests should be small and targeted.
+89. [TEST-0089] Work packages should list their targeted owner tests, the relevant boundary-transition scenarios, and the final distributed checkpoint command in that same order.
+90. [TEST-0090] Only return to suite-local fixes after the shared runner boundary is shown stable.
+91. [TEST-0091] Only restore higher parallelism after the aggregate gate is proven stable at the new boundary.
+92. [TEST-0092] Are multiple recent bugs clustering around the same boundary or component? That may indicate a design-level issue worth addressing instead of patching each symptom individually.
+93. [TEST-0093] Only after the artifact summaries and relevant extractors have been read may raw container logs, node logs, raw JSON slicing, or ad hoc jq become the primary debugging surface.
+94. [TEST-0094] A separate implementation sub-agent may start the current work package only after the previous-package review is clean or the review findings have been fixed.
+95. [TEST-0095] Local execution may use scripts/run-distributed-validation-ladder.js to make this order explicit.
+96. [TEST-0096] Only run the complete test suite (npm test) at: - Checkpoint tasks explicitly marked in the task list; - Final integration verification; - When explicitly requested by the user

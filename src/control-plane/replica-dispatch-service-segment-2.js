@@ -34,6 +34,25 @@ const DISPATCH_REPLAY_READY_NODE_PHASE = Object.freeze({
   NOT_REPLAYABLE: 'not_replayable',
 });
 
+const PRIORITY_RECOVERY_DISPATCH_RETRY_FIELD = Object.freeze({
+  ACTIVE_GATE: 'activeGate',
+  BLOCKED_PARTITIONS: 'blockedPartitions',
+  MISSING_PARTITION_IDS: 'missingPartitionIds',
+  OPERATION_ID: 'operationId',
+  OPERATION_IDS: 'operationIds',
+  PARTITION_ID: 'partitionId',
+  PRIORITY_PARTITION_SUMMARY: 'priorityPartitionSummary',
+  PRIORITY_RECOVERY_PARTITION_WITNESSES:
+    'priorityRecoveryPartitionWitnesses',
+  PROGRESS: 'progress',
+});
+
+const READY_NODE_DISPATCH_RETRY_CONTEXT_FIELD = Object.freeze({
+  FORCE_READY_WATERMARK: 'forceReadyWatermark',
+});
+
+const PRIORITY_RECOVERY_DISPATCH_RETRY_EMPTY_TEXT = '';
+
 const RETRYABLE_DISPATCH_SKIPPED_REASONS = Object.freeze(
   new Set([
     OPERATION_WORKFLOW_OWNER_REASON.SHUTDOWN_IN_PROGRESS,
@@ -65,6 +84,167 @@ function mergeDispatchRetryRowsByOperationId(
     appendRow(row);
   }
   return rows;
+}
+
+function normalizePriorityRecoveryDispatchRetryPartitionId(value) {
+  if (typeof value !== TYPEOF.STRING) {
+    return PRIORITY_RECOVERY_DISPATCH_RETRY_EMPTY_TEXT;
+  }
+  return value.trim();
+}
+
+function normalizePriorityRecoveryDispatchRetryOperationId(value) {
+  if (typeof value !== TYPEOF.STRING) {
+    return PRIORITY_RECOVERY_DISPATCH_RETRY_EMPTY_TEXT;
+  }
+  return value.trim();
+}
+
+function getPriorityRecoveryDispatchRetryBlockedPartitionIds(
+  publicationConvergence,
+) {
+  const priorityPartitionSummary =
+    publicationConvergence?.[
+      PRIORITY_RECOVERY_DISPATCH_RETRY_FIELD.PRIORITY_PARTITION_SUMMARY
+    ];
+  if (!priorityPartitionSummary || typeof priorityPartitionSummary !==
+    TYPEOF.OBJECT) {
+    return [];
+  }
+  const partitionIds = new Set();
+  const blockedPartitions = Array.isArray(
+    priorityPartitionSummary[
+      PRIORITY_RECOVERY_DISPATCH_RETRY_FIELD.BLOCKED_PARTITIONS
+    ],
+  ) ?
+    priorityPartitionSummary[
+      PRIORITY_RECOVERY_DISPATCH_RETRY_FIELD.BLOCKED_PARTITIONS
+    ] :
+    [];
+  for (const partition of blockedPartitions) {
+    const partitionId = normalizePriorityRecoveryDispatchRetryPartitionId(
+      partition?.[PRIORITY_RECOVERY_DISPATCH_RETRY_FIELD.PARTITION_ID],
+    );
+    if (partitionId.length > NUM.ZERO) {
+      partitionIds.add(partitionId);
+    }
+  }
+  const missingPartitionIds = Array.isArray(
+    priorityPartitionSummary[
+      PRIORITY_RECOVERY_DISPATCH_RETRY_FIELD.MISSING_PARTITION_IDS
+    ],
+  ) ?
+    priorityPartitionSummary[
+      PRIORITY_RECOVERY_DISPATCH_RETRY_FIELD.MISSING_PARTITION_IDS
+    ] :
+    [];
+  for (const partitionIdValue of missingPartitionIds) {
+    const partitionId =
+      normalizePriorityRecoveryDispatchRetryPartitionId(partitionIdValue);
+    if (partitionId.length > NUM.ZERO) {
+      partitionIds.add(partitionId);
+    }
+  }
+  return [...partitionIds];
+}
+
+function addPriorityRecoveryDispatchRetryOperationId(operationIds, value) {
+  const operationId = normalizePriorityRecoveryDispatchRetryOperationId(value);
+  if (operationId.length > NUM.ZERO) {
+    operationIds.add(operationId);
+  }
+}
+
+function addPriorityRecoveryDispatchRetryOperationIds(operationIds, values) {
+  if (!Array.isArray(values)) {
+    return;
+  }
+  for (const value of values) {
+    addPriorityRecoveryDispatchRetryOperationId(operationIds, value);
+  }
+}
+
+function getPriorityRecoveryDispatchRetryWitnesses(publicationConvergence) {
+  const witnesses = [];
+  const topLevelWitnesses = Array.isArray(
+    publicationConvergence?.[
+      PRIORITY_RECOVERY_DISPATCH_RETRY_FIELD
+        .PRIORITY_RECOVERY_PARTITION_WITNESSES
+    ],
+  ) ?
+    publicationConvergence[
+      PRIORITY_RECOVERY_DISPATCH_RETRY_FIELD
+        .PRIORITY_RECOVERY_PARTITION_WITNESSES
+    ] :
+    [];
+  const activeGateProgressWitnesses = Array.isArray(
+    publicationConvergence?.[
+      PRIORITY_RECOVERY_DISPATCH_RETRY_FIELD.ACTIVE_GATE
+    ]?.[
+      PRIORITY_RECOVERY_DISPATCH_RETRY_FIELD.PROGRESS
+    ]?.[
+      PRIORITY_RECOVERY_DISPATCH_RETRY_FIELD
+        .PRIORITY_RECOVERY_PARTITION_WITNESSES
+    ],
+  ) ?
+    publicationConvergence[
+      PRIORITY_RECOVERY_DISPATCH_RETRY_FIELD.ACTIVE_GATE
+    ][
+      PRIORITY_RECOVERY_DISPATCH_RETRY_FIELD.PROGRESS
+    ][
+      PRIORITY_RECOVERY_DISPATCH_RETRY_FIELD
+        .PRIORITY_RECOVERY_PARTITION_WITNESSES
+    ] :
+    [];
+  witnesses.push(...topLevelWitnesses);
+  witnesses.push(...activeGateProgressWitnesses);
+  return witnesses;
+}
+
+function getPriorityRecoveryDispatchRetryBlockedOperationIds(
+  publicationConvergence,
+) {
+  const operationIds = new Set();
+  for (const witness of getPriorityRecoveryDispatchRetryWitnesses(
+    publicationConvergence,
+  )) {
+    addPriorityRecoveryDispatchRetryOperationId(
+      operationIds,
+      witness?.[PRIORITY_RECOVERY_DISPATCH_RETRY_FIELD.OPERATION_ID],
+    );
+    addPriorityRecoveryDispatchRetryOperationIds(
+      operationIds,
+      witness?.[PRIORITY_RECOVERY_DISPATCH_RETRY_FIELD.OPERATION_IDS],
+    );
+  }
+  return [...operationIds];
+}
+
+function getDispatchRetryRowPartitionIds(dispatchRows = []) {
+  const partitionIds = new Set();
+  for (const row of dispatchRows) {
+    const partitionId = normalizePriorityRecoveryDispatchRetryPartitionId(
+      row?.[COLUMN.PARTITION_ID],
+    );
+    if (partitionId.length > NUM.ZERO) {
+      partitionIds.add(partitionId);
+    }
+  }
+  return partitionIds;
+}
+
+function getDispatchRetryRowOperationIds(dispatchRows = []) {
+  const operationIds = new Set();
+  for (const row of dispatchRows) {
+    const operationId = normalizePriorityRecoveryDispatchRetryOperationId(
+      row?.[COLUMN.OPERATION_ID] ||
+        row?.[PRIORITY_RECOVERY_DISPATCH_RETRY_FIELD.OPERATION_ID],
+    );
+    if (operationId.length > NUM.ZERO) {
+      operationIds.add(operationId);
+    }
+  }
+  return operationIds;
 }
 
 class ReplicaDispatchServiceSegment2 extends ReplicaDispatchServiceSegment1 {
@@ -268,6 +448,17 @@ class ReplicaDispatchServiceSegment2 extends ReplicaDispatchServiceSegment1 {
           dispatchResult?.reason ===
           REPLICA_DISPATCH_SERVICE_LITERAL.DEFERRED_RETRY_PENDING
         ) {
+          const retryableDispatchError =
+            this.buildRetryableSkippedDispatchError(dispatchResult);
+          if (
+            this.deferOperationDispatchRetry(
+              operationId,
+              retryableDispatchError,
+              row,
+            )
+          ) {
+            return;
+          }
           return;
         }
         if (this.shouldRetrySkippedDispatchResult(dispatchResult)) {
@@ -807,7 +998,10 @@ class ReplicaDispatchServiceSegment2 extends ReplicaDispatchServiceSegment1 {
           await membershipPublicationService.getDispatchRetryRowsForNode(
             nodeId,
           );
-        return Array.isArray(dispatchRows) ? dispatchRows : [];
+        return this.mergeAuthoritativePriorityRecoveryDispatchRowsForNode(
+          nodeId,
+          Array.isArray(dispatchRows) ? dispatchRows : [],
+        );
       } catch (error) {
         this.logger.warn(DISPATCH_LOG_MSG.DISPATCH_LOOKUP_FAILED, {
           nodeId,
@@ -833,20 +1027,100 @@ class ReplicaDispatchServiceSegment2 extends ReplicaDispatchServiceSegment1 {
         this.isDispatchReplayableOperationRow(row)
       );
     });
-    if (dispatchRows.length > NUM.ZERO) {
-      return dispatchRows;
-    }
 
+    return this.mergeAuthoritativePriorityRecoveryDispatchRowsForNode(
+      nodeId,
+      dispatchRows,
+    );
+  }
+
+  async mergeAuthoritativePriorityRecoveryDispatchRowsForNode(
+    nodeId,
+    dispatchRows,
+  ) {
+    const coverage =
+      await this.resolvePriorityRecoveryDispatchRetryCacheCoverage(
+        nodeId,
+        dispatchRows,
+      );
     if (
-      !(await this.shouldUseAuthoritativePriorityRecoveryRediscovery(nodeId))
+      !(await this.shouldUseAuthoritativePriorityRecoveryRediscovery(
+        nodeId,
+        {
+          cacheVisible: coverage.cacheVisible,
+          publicationConvergence: coverage.publicationConvergence,
+        },
+      ))
     ) {
       return dispatchRows;
     }
-
     return mergeDispatchRetryRowsByOperationId(
       await this.getAuthoritativeDispatchRetryRowsForNode(nodeId),
       dispatchRows,
     );
+  }
+
+  async hasCompletePriorityRecoveryDispatchRetryCacheCoverage(
+    nodeId,
+    dispatchRows,
+  ) {
+    return (
+      await this.resolvePriorityRecoveryDispatchRetryCacheCoverage(
+        nodeId,
+        dispatchRows,
+      )
+    ).cacheVisible;
+  }
+
+  async resolvePriorityRecoveryDispatchRetryCacheCoverage(
+    nodeId,
+    dispatchRows,
+  ) {
+    const readinessService = this.controlPlaneReadinessService;
+    const canResolveCoverage =
+      Array.isArray(dispatchRows) &&
+      dispatchRows.length > NUM.ZERO &&
+      readinessService &&
+      typeof readinessService === TYPEOF.OBJECT;
+    const publicationConvergence = canResolveCoverage ?
+      await this.resolvePriorityRecoveryPublicationConvergence(
+        readinessService,
+        nodeId,
+      ) :
+      null;
+    const blockedPartitionIds = canResolveCoverage ?
+      getPriorityRecoveryDispatchRetryBlockedPartitionIds(
+        publicationConvergence,
+      ) :
+      [];
+    const blockedOperationIds = canResolveCoverage ?
+      getPriorityRecoveryDispatchRetryBlockedOperationIds(
+        publicationConvergence,
+      ) :
+      [];
+    const dispatchPartitionIds = getDispatchRetryRowPartitionIds(
+      dispatchRows,
+    );
+    const dispatchOperationIds = getDispatchRetryRowOperationIds(
+      dispatchRows,
+    );
+    const partitionCoverageComplete =
+      blockedPartitionIds.length === NUM.ZERO ||
+      blockedPartitionIds.every((partitionId) =>
+        dispatchPartitionIds.has(partitionId),
+      );
+    const operationCoverageComplete =
+      blockedOperationIds.length === NUM.ZERO ||
+      blockedOperationIds.every((operationId) =>
+        dispatchOperationIds.has(operationId),
+      );
+    return {
+      cacheVisible:
+        canResolveCoverage &&
+        partitionCoverageComplete &&
+        operationCoverageComplete,
+      publicationConvergence,
+    };
   }
 
   /**
@@ -868,20 +1142,27 @@ class ReplicaDispatchServiceSegment2 extends ReplicaDispatchServiceSegment1 {
    * @return {Promise<boolean>}
    * @private
    */
-  async shouldUseAuthoritativePriorityRecoveryRediscovery(nodeId) {
+  async shouldUseAuthoritativePriorityRecoveryRediscovery(
+    nodeId,
+    options = {},
+  ) {
     const readinessService = this.controlPlaneReadinessService;
     if (!readinessService || typeof readinessService !== TYPEOF.OBJECT) {
       return false;
     }
 
     try {
-      return shouldUseAuthoritativePriorityRecoveryRediscovery(nodeId, {
-        cacheVisible: false,
-        publicationConvergence:
+      const publicationConvergence =
+        options?.publicationConvergence &&
+        typeof options.publicationConvergence === TYPEOF.OBJECT ?
+          options.publicationConvergence :
           await this.resolvePriorityRecoveryPublicationConvergence(
             readinessService,
             nodeId,
-          ),
+          );
+      return shouldUseAuthoritativePriorityRecoveryRediscovery(nodeId, {
+        cacheVisible: options?.cacheVisible === true,
+        publicationConvergence,
       });
     } catch (error) {
       this.logger.warn(DISPATCH_LOG_MSG.MEMBERSHIP_PUBLICATION_REFRESH_FAILED, {
@@ -1024,7 +1305,11 @@ class ReplicaDispatchServiceSegment2 extends ReplicaDispatchServiceSegment1 {
    */
   async retryPendingDispatchesForReadyNode(options = {}) {
     const nodeId = options.nodeId;
-    if (!nodeId || !this.isNodeReady(nodeId)) {
+    const readyForDispatchRetry =
+      typeof this.isNodeReadyForDispatchRetry === TYPEOF.FUNCTION ?
+        this.isNodeReadyForDispatchRetry(nodeId) :
+        this.isNodeReady(nodeId);
+    if (!nodeId || !readyForDispatchRetry) {
       this.clearNodeReadyRetryWatermark(nodeId);
       return false;
     }
@@ -1042,7 +1327,12 @@ class ReplicaDispatchServiceSegment2 extends ReplicaDispatchServiceSegment1 {
       return false;
     }
 
-    if (!this.shouldRetryNodeReadyWatermark(nodeId, nodeRow)) {
+    if (
+      options?.[
+        READY_NODE_DISPATCH_RETRY_CONTEXT_FIELD.FORCE_READY_WATERMARK
+      ] !== true &&
+      !this.shouldRetryNodeReadyWatermark(nodeId, nodeRow)
+    ) {
       this.logger.debug(DISPATCH_LOG_MSG.RETRY_READY_TRIGGER_SKIPPED, {
         nodeId,
         source: options.source || null,
@@ -1139,7 +1429,44 @@ class ReplicaDispatchServiceSegment2 extends ReplicaDispatchServiceSegment1 {
     await this.retryPendingDispatchesForReadyNode({
       nodeId,
       nodeRow,
+      source: context?.source || null,
+      [READY_NODE_DISPATCH_RETRY_CONTEXT_FIELD.FORCE_READY_WATERMARK]:
+        context?.[
+          READY_NODE_DISPATCH_RETRY_CONTEXT_FIELD.FORCE_READY_WATERMARK
+        ] === true,
     });
+  }
+
+  /**
+   * Enqueue a local READY-node dispatch rediscovery trigger that bypasses the
+   * heartbeat watermark. Publication updates can reveal or advance recovery
+   * work without changing the node row itself.
+   * @param {string} reason - Reconcile reason for the trigger.
+   * @param {Object} [context] - Additional retry context.
+   * @return {boolean} True when a retry was enqueued.
+   * @private
+   */
+  enqueueLocalReadyNodeDispatchRetry(reason, context = {}) {
+    const nodeId = this.nodeId;
+    const readyForDispatchRetry =
+      typeof this.isNodeReadyForDispatchRetry === TYPEOF.FUNCTION ?
+        this.isNodeReadyForDispatchRetry(nodeId) :
+        this.isNodeReady(nodeId);
+    if (!nodeId || !readyForDispatchRetry) {
+      return false;
+    }
+    const retryContext =
+      context && typeof context === TYPEOF.OBJECT ? context : {};
+    this.nodeReadyRetryQueue.enqueue(
+      nodeId,
+      reason,
+      {
+        ...retryContext,
+        source: reason,
+        [READY_NODE_DISPATCH_RETRY_CONTEXT_FIELD.FORCE_READY_WATERMARK]: true,
+      },
+    );
+    return true;
   }
 
   /**
@@ -1200,6 +1527,9 @@ class ReplicaDispatchServiceSegment2 extends ReplicaDispatchServiceSegment1 {
       this.scheduleLocalReadyNodeMembershipPublicationAdvance(
         RECONCILE_REASON.CONTROL_PLANE_PUBLICATION_CACHE_UPDATE,
         record,
+      );
+      this.enqueueLocalReadyNodeDispatchRetry(
+        RECONCILE_REASON.CONTROL_PLANE_PUBLICATION_CACHE_UPDATE,
       );
       return;
     }

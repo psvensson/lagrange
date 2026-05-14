@@ -41,6 +41,7 @@ import {OperationType} from '../../src/rebalancer/replica-status.js';
 
 const {
   OPERATION_WORKFLOW_OWNER_REASON,
+  REBALANCER_SKIP_REASON,
 } = OPERATION_WORKFLOW_OWNER_SHARED;
 
 const READY_RETRY_TARGET_NODE_ID = 'node-2';
@@ -61,9 +62,60 @@ const READY_RETRY_QUEUE_DRAIN_START = 0;
 const READY_RETRY_QUEUE_DRAIN_INCREMENT = 1;
 const READY_RETRY_OWNER_STARTING_OPERATION_ID =
   'op-priority-retry-owner-starting';
+const READY_RETRY_OWNER_DEFERRED_OPERATION_ID =
+  'op-priority-retry-owner-deferred';
 const READY_RETRY_OWNER_STARTING_TEST_NAME =
   'ReplicaDispatchService retries ready-node rediscovered PENDING rows ' +
   'when workflow owner initialization is still catching up';
+const READY_RETRY_OWNER_DEFERRED_TEST_NAME =
+  'ReplicaDispatchService retains direct wake-up rows when workflow owner ' +
+  'has a deferred retry pending';
+const READY_RETRY_PARTIAL_CACHE_TEST_NAME =
+  'ReplicaDispatchService ready-node retry merges authoritative priority ' +
+  'rows when cache coverage is partial';
+const READY_RETRY_OPERATION_WITNESS_TEST_NAME =
+  'ReplicaDispatchService ready-node retry rediscovers the priority witness ' +
+  'operation when its partition is cache-visible';
+const READY_RETRY_PARTIAL_CACHE_VISIBLE_OPERATION_ID =
+  'op-priority-retry-cache-visible';
+const READY_RETRY_PARTIAL_CACHE_SECOND_OPERATION_ID =
+  'op-priority-retry-cache-visible-2';
+const READY_RETRY_PARTIAL_CACHE_MISSING_OPERATION_ID =
+  'op-priority-retry-cache-missing';
+const READY_RETRY_OPERATION_WITNESS_VISIBLE_OPERATION_ID =
+  'op-priority-retry-witness-visible';
+const READY_RETRY_OPERATION_WITNESS_BLOCKED_OPERATION_ID =
+  'b81411d7-43b0-4fd2-8803-46d413628e9d';
+const READY_RETRY_PARTIAL_CACHE_SECOND_PARTITION_ID =
+  'sql_transactions-p1';
+const READY_RETRY_PARTIAL_CACHE_MISSING_PARTITION_ID =
+  'sql_transaction_participants-p1';
+const READY_RETRY_OPERATION_WITNESS_PARTITION_ID =
+  'sql_write_operations-p1';
+const READY_RETRY_PARTIAL_CACHE_EXPECTED_QUEUE_COUNT = 3;
+const READY_RETRY_OPERATION_WITNESS_EXPECTED_QUEUE_COUNT = 2;
+const READY_RETRY_PUBLICATION_FORCE_TEST_NAME =
+  'ReplicaDispatchService publication updates force ready-node retry after ' +
+  'an unchanged ready watermark';
+const READY_RETRY_PUBLICATION_FORCE_OPERATION_ID =
+  'op-priority-retry-publication-force';
+const READY_RETRY_PUBLICATION_FORCE_PARTITION_ID =
+  'control_plane_publications-p1';
+const READY_RETRY_PUBLICATION_FORCE_ID =
+  'publication-ready-retry-force';
+const READY_RETRY_ASSERT_PARTIAL_AUTHORITY_READ =
+  'partial priority cache coverage should query authoritative operations';
+const READY_RETRY_ASSERT_PARTIAL_QUEUE_IDS =
+  'partial priority cache coverage should enqueue cached and authoritative rows';
+const READY_RETRY_ASSERT_WITNESS_AUTHORITY_READ =
+  'operation-level priority witness coverage should query authoritative rows';
+const READY_RETRY_ASSERT_WITNESS_QUEUE_IDS =
+  'operation-level priority witness coverage should enqueue the blocked row';
+const READY_RETRY_ASSERT_PUBLICATION_FORCE_AUTHORITY_READ =
+  'publication updates should force authoritative rediscovery after an ' +
+  'unchanged ready watermark';
+const READY_RETRY_ASSERT_PUBLICATION_FORCE_QUEUE =
+  'publication updates should re-enter dispatch for newly visible operations';
 const READY_RETRY_ASSERT_INITIAL_DISPATCH =
   'ready-node rediscovery should attempt dispatch once before owner ' +
   'initialization finishes';
@@ -80,6 +132,10 @@ const READY_RETRY_ASSERT_RETRY_REENTRY =
   'rediscovered PENDING row';
 const READY_RETRY_ASSERT_RETRY_SLOT_CLEARED =
   'retry enqueue should clear the deferred dispatch slot before re-entry';
+const READY_RETRY_ASSERT_OWNER_DEFERRED_RETRY_ARMED =
+  'owner-deferred dispatch should keep the direct wake-up row in the retry lane';
+const READY_RETRY_ASSERT_OWNER_DEFERRED_REENTRY =
+  'owner-deferred dispatch retry should re-enter with the original wake-up row';
 
 async function waitForOperationDispatchQueueDrain(service = null) {
   for (
@@ -150,7 +206,7 @@ function createService(options = {}) {
   };
 
   const service = new ReplicaDispatchService({
-    nodeId: 'node-1',
+    nodeId: options.nodeId || 'node-1',
     messageRouter: options.messageRouter || {},
     cdcIntegrationService,
     controlPlaneSystemTableGateway,
@@ -600,7 +656,9 @@ test('ReplicaDispatchService ready-node retry re-enters operationDispatchQueue',
           return {
             nodeId,
             dimensions: {
-              [CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE]: true,
+              [CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE]: false,
+              [CONTROL_PLANE_READINESS_DIMENSION
+                .CONTROL_PLANE_RECOVERY_ELIGIBLE]: true,
             },
           };
         },
@@ -1061,7 +1119,9 @@ async (t) => {
         return {
           nodeId,
           dimensions: {
-            [CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE]: true,
+            [CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE]: false,
+            [CONTROL_PLANE_READINESS_DIMENSION
+              .CONTROL_PLANE_RECOVERY_ELIGIBLE]: true,
           },
         };
       },
@@ -1159,6 +1219,139 @@ async (t) => {
       },
     }],
     READY_RETRY_ASSERT_RETRY_REENTRY,
+  );
+  t.equal(
+    service.operationDispatchDeferredRetries.size,
+    NUM.ZERO,
+    READY_RETRY_ASSERT_RETRY_SLOT_CLEARED,
+  );
+
+  service.operationDispatchQueue = originalOperationDispatchQueue;
+  service.stop();
+});
+
+test(READY_RETRY_OWNER_DEFERRED_TEST_NAME, async (t) => {
+  initEnv();
+
+  const now = Date.now();
+  const readyNode = {
+    node_id: READY_RETRY_TARGET_NODE_ID,
+    status: SERVICE_STATUS.ACTIVE,
+    connection_state: STATE.READY,
+    last_heartbeat: now,
+    ready_lease_expires_at: now + TIME_MS.MINUTE,
+  };
+  const operationRow = {
+    operation_id: READY_RETRY_OWNER_DEFERRED_OPERATION_ID,
+    type: OperationType.REPLACE,
+    partition_id: READY_RETRY_PUBLICATION_FORCE_PARTITION_ID,
+    replica_id: READY_RETRY_PUBLICATION_FORCE_PARTITION_ID,
+    source_node_id: READY_RETRY_SOURCE_NODE_ID,
+    target_node_id: READY_RETRY_TARGET_NODE_ID,
+    status: READY_RETRY_PENDING_STATUS,
+    workflow_step: WORKFLOW_STEP.PENDING,
+    created_at: now - TIME_MS.MINUTE,
+    updated_at: now - TIME_MS.MINUTE,
+    completed_at: undefined,
+    error_message: undefined,
+    steps_history: READY_RETRY_EMPTY_STEPS_HISTORY,
+    entity_type: undefined,
+    entity_id: undefined,
+  };
+  const deferredTimers = [];
+  const dispatchCalls = [];
+  const service = createService({
+    nodeId: READY_RETRY_TARGET_NODE_ID,
+    cacheNodes: [readyNode],
+    cdcIntegrationService: {
+      updateSystemTableRow: async () => ({success: true}),
+      upsertSystemTableRow: async () => ({success: true}),
+    },
+    operationDispatchRetryAfterMs: READY_RETRY_DEFERRED_RETRY_AFTER_MS,
+    setTimeoutFn(callback, delayMs) {
+      const handle = {callback, delayMs};
+      deferredTimers.push(handle);
+      return handle;
+    },
+    clearTimeoutFn(handle) {
+      const timerIndex = deferredTimers.indexOf(handle);
+      if (timerIndex >= NUM.ZERO) {
+        deferredTimers.splice(timerIndex, NUM.ONE);
+      }
+    },
+    rebalanceCoordinator: {
+      dispatchOperation(operation) {
+        dispatchCalls.push(operation);
+        return {
+          success: false,
+          skipped: true,
+          reason: REBALANCER_SKIP_REASON.DEFERRED_RETRY_PENDING,
+        };
+      },
+      isOperationLocallyOwned(operation) {
+        return (
+          operation?.targetNodeId === READY_RETRY_TARGET_NODE_ID ||
+          operation?.target_node_id === READY_RETRY_TARGET_NODE_ID
+        );
+      },
+      resolveOperationOwnerNodeId(operation) {
+        return operation?.targetNodeId || operation?.target_node_id || null;
+      },
+    },
+    controlPlaneReadinessService: {
+      getNodeReadinessSync(nodeId) {
+        return {
+          nodeId,
+          dimensions: {
+            [CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE]: true,
+            [CONTROL_PLANE_READINESS_DIMENSION
+              .CONTROL_PLANE_RECOVERY_ELIGIBLE]: true,
+          },
+        };
+      },
+    },
+  });
+
+  await service.dispatchOperationRow(operationRow, {
+    readyNodeId: READY_RETRY_TARGET_NODE_ID,
+    readyNodeRow: readyNode,
+  });
+
+  t.equal(
+    dispatchCalls.length,
+    READY_RETRY_EXPECTED_SINGLE_CALL,
+    READY_RETRY_ASSERT_INITIAL_DISPATCH,
+  );
+  t.equal(
+    deferredTimers.length,
+    READY_RETRY_EXPECTED_SINGLE_CALL,
+    READY_RETRY_ASSERT_OWNER_DEFERRED_RETRY_ARMED,
+  );
+  t.equal(
+    service.operationDispatchDeferredRetries.size,
+    READY_RETRY_EXPECTED_SINGLE_CALL,
+    READY_RETRY_ASSERT_OWNER_DEFERRED_RETRY_ARMED,
+  );
+
+  const retryEnqueues = [];
+  const originalOperationDispatchQueue = service.operationDispatchQueue;
+  service.operationDispatchQueue = {
+    enqueue(operationId, reason, context) {
+      retryEnqueues.push({operationId, reason, context});
+    },
+  };
+  deferredTimers[READY_RETRY_QUEUE_DRAIN_START].callback();
+
+  t.same(
+    retryEnqueues,
+    [{
+      operationId: READY_RETRY_OWNER_DEFERRED_OPERATION_ID,
+      reason: RECONCILE_REASON.RETRYABLE_OPERATION_DISPATCH,
+      context: {
+        row: operationRow,
+      },
+    }],
+    READY_RETRY_ASSERT_OWNER_DEFERRED_REENTRY,
   );
   t.equal(
     service.operationDispatchDeferredRetries.size,
@@ -1347,6 +1540,414 @@ test('ReplicaDispatchService ready-node retry prefers cache-visible rows over au
     service.operationDispatchQueue = originalOperationDispatchQueue;
     service.stop();
   });
+
+test(READY_RETRY_PARTIAL_CACHE_TEST_NAME, async (t) => {
+  initEnv();
+
+  const now = Date.now();
+  const readyNode = {
+    node_id: READY_RETRY_TARGET_NODE_ID,
+    status: SERVICE_STATUS.ACTIVE,
+    connection_state: STATE.READY,
+    last_heartbeat: now,
+    ready_lease_expires_at: now + TIME_MS.MINUTE,
+  };
+  const visibleRow = {
+    operation_id: READY_RETRY_PARTIAL_CACHE_VISIBLE_OPERATION_ID,
+    source_node_id: READY_RETRY_SOURCE_NODE_ID,
+    target_node_id: READY_RETRY_TARGET_NODE_ID,
+    workflow_step: WORKFLOW_STEP.PENDING,
+    status: READY_RETRY_PENDING_STATUS,
+    type: OperationType.REPLACE,
+    partition_id: READY_RETRY_PARTITION_ID,
+  };
+  const secondVisibleRow = {
+    operation_id: READY_RETRY_PARTIAL_CACHE_SECOND_OPERATION_ID,
+    source_node_id: READY_RETRY_SOURCE_NODE_ID,
+    target_node_id: READY_RETRY_TARGET_NODE_ID,
+    workflow_step: WORKFLOW_STEP.PENDING,
+    status: READY_RETRY_PENDING_STATUS,
+    type: OperationType.REPLACE,
+    partition_id: READY_RETRY_PARTIAL_CACHE_SECOND_PARTITION_ID,
+  };
+  const missingAuthoritativeOperation = {
+    operationId: READY_RETRY_PARTIAL_CACHE_MISSING_OPERATION_ID,
+    partitionId: READY_RETRY_PARTIAL_CACHE_MISSING_PARTITION_ID,
+    type: OperationType.REPLACE,
+    sourceNodeId: READY_RETRY_SOURCE_NODE_ID,
+    targetNodeId: READY_RETRY_TARGET_NODE_ID,
+    status: READY_RETRY_PENDING_STATUS,
+    workflowStep: WORKFLOW_STEP.PENDING,
+    stepsHistory: [],
+  };
+  let authoritativeQueryCount = NUM.ZERO;
+  const enqueueCalls = [];
+  const blockedPartitions = [
+    READY_RETRY_PARTITION_ID,
+    READY_RETRY_PARTIAL_CACHE_SECOND_PARTITION_ID,
+    READY_RETRY_PARTIAL_CACHE_MISSING_PARTITION_ID,
+  ].map((partitionId) => ({
+    partitionId,
+    requiredDistinctNodeCount: READY_RETRY_REQUIRED_DISTINCT_NODE_COUNT,
+    readyDistinctNodeCount: READY_RETRY_READY_DISTINCT_NODE_COUNT,
+    spreadGap: READY_RETRY_SPREAD_GAP,
+  }));
+  const service = createService({
+    nodeId: READY_RETRY_TARGET_NODE_ID,
+    cacheNodes: [readyNode],
+    cacheReplicaOperations: [visibleRow, secondVisibleRow],
+    cdcIntegrationService: {
+      updateSystemTableRow: async () => ({success: true}),
+      upsertSystemTableRow: async () => ({success: true}),
+    },
+    rebalanceCoordinator: {
+      resolveOperationOwnerNodeId(operation) {
+        return operation?.targetNodeId || operation?.target_node_id || null;
+      },
+      repository: {
+        async queryIncompleteOperations() {
+          authoritativeQueryCount += READY_RETRY_QUEUE_DRAIN_INCREMENT;
+          return [
+            missingAuthoritativeOperation,
+            {
+              operationId: READY_RETRY_PARTIAL_CACHE_VISIBLE_OPERATION_ID,
+              partitionId: READY_RETRY_PARTITION_ID,
+              type: OperationType.REPLACE,
+              sourceNodeId: READY_RETRY_SOURCE_NODE_ID,
+              targetNodeId: READY_RETRY_TARGET_NODE_ID,
+              status: READY_RETRY_PENDING_STATUS,
+              workflowStep: WORKFLOW_STEP.PENDING,
+              stepsHistory: [],
+            },
+          ];
+        },
+      },
+    },
+    controlPlaneReadinessService: {
+      getNodeReadinessSync(nodeId) {
+        return {
+          nodeId,
+          dimensions: {
+            [CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE]: false,
+            [CONTROL_PLANE_READINESS_DIMENSION
+              .CONTROL_PLANE_RECOVERY_ELIGIBLE]: true,
+          },
+        };
+      },
+      getMembershipPublicationDiagnosticsSync() {
+        return {
+          publicationEpoch: READY_RETRY_PUBLICATION_EPOCH,
+          publicationStatus: READY_RETRY_PUBLICATION_STATUS,
+          publishedActiveNodeIds: [READY_RETRY_SOURCE_NODE_ID],
+          priorityPartitionSummary: {
+            requiredDistinctNodeCount:
+              READY_RETRY_REQUIRED_DISTINCT_NODE_COUNT,
+            readyEligibleNodeCount: READY_RETRY_READY_ELIGIBLE_NODE_COUNT,
+            blockedPartitions,
+            missingPartitionIds: blockedPartitions.map(
+              (partition) => partition.partitionId,
+            ),
+          },
+          membershipLifecycleSummary: {
+            locallyEligibleNodeIds: [READY_RETRY_TARGET_NODE_ID],
+            projectedServingNodeIds: [READY_RETRY_TARGET_NODE_ID],
+          },
+        };
+      },
+    },
+  });
+  const originalOperationDispatchQueue = service.operationDispatchQueue;
+  service.operationDispatchQueue = {
+    enqueue(operationId, reason, context) {
+      enqueueCalls.push({operationId, reason, context});
+    },
+  };
+
+  await service.retryPendingDispatchesForReadyNode({
+    nodeId: READY_RETRY_TARGET_NODE_ID,
+    nodeRow: readyNode,
+  });
+
+  t.equal(
+    authoritativeQueryCount,
+    READY_RETRY_EXPECTED_SINGLE_CALL,
+    READY_RETRY_ASSERT_PARTIAL_AUTHORITY_READ,
+  );
+  t.same(
+    enqueueCalls.map((call) => call.operationId).sort(),
+    [
+      READY_RETRY_PARTIAL_CACHE_MISSING_OPERATION_ID,
+      READY_RETRY_PARTIAL_CACHE_SECOND_OPERATION_ID,
+      READY_RETRY_PARTIAL_CACHE_VISIBLE_OPERATION_ID,
+    ].sort(),
+    READY_RETRY_ASSERT_PARTIAL_QUEUE_IDS,
+  );
+  t.equal(
+    enqueueCalls.length,
+    READY_RETRY_PARTIAL_CACHE_EXPECTED_QUEUE_COUNT,
+    READY_RETRY_ASSERT_PARTIAL_QUEUE_IDS,
+  );
+
+  service.operationDispatchQueue = originalOperationDispatchQueue;
+  service.stop();
+});
+
+test(READY_RETRY_OPERATION_WITNESS_TEST_NAME, async (t) => {
+  initEnv();
+
+  const now = Date.now();
+  const readyNode = {
+    node_id: READY_RETRY_TARGET_NODE_ID,
+    status: SERVICE_STATUS.ACTIVE,
+    connection_state: STATE.READY,
+    last_heartbeat: now,
+    ready_lease_expires_at: now + TIME_MS.MINUTE,
+  };
+  const visibleRow = {
+    operation_id: READY_RETRY_OPERATION_WITNESS_VISIBLE_OPERATION_ID,
+    source_node_id: READY_RETRY_SOURCE_NODE_ID,
+    target_node_id: READY_RETRY_TARGET_NODE_ID,
+    workflow_step: WORKFLOW_STEP.PENDING,
+    status: READY_RETRY_PENDING_STATUS,
+    type: OperationType.REPLACE,
+    partition_id: READY_RETRY_OPERATION_WITNESS_PARTITION_ID,
+  };
+  const blockedAuthoritativeOperation = {
+    operationId: READY_RETRY_OPERATION_WITNESS_BLOCKED_OPERATION_ID,
+    partitionId: READY_RETRY_OPERATION_WITNESS_PARTITION_ID,
+    type: OperationType.REPLACE,
+    sourceNodeId: READY_RETRY_SOURCE_NODE_ID,
+    targetNodeId: READY_RETRY_TARGET_NODE_ID,
+    status: READY_RETRY_PENDING_STATUS,
+    workflowStep: WORKFLOW_STEP.PENDING,
+    stepsHistory: [],
+  };
+  let authoritativeQueryCount = NUM.ZERO;
+  const enqueueCalls = [];
+  const service = createService({
+    nodeId: READY_RETRY_TARGET_NODE_ID,
+    cacheNodes: [readyNode],
+    cacheReplicaOperations: [visibleRow],
+    cdcIntegrationService: {
+      updateSystemTableRow: async () => ({success: true}),
+      upsertSystemTableRow: async () => ({success: true}),
+    },
+    rebalanceCoordinator: {
+      resolveOperationOwnerNodeId(operation) {
+        return operation?.targetNodeId || operation?.target_node_id || null;
+      },
+      repository: {
+        async queryIncompleteOperations() {
+          authoritativeQueryCount += READY_RETRY_QUEUE_DRAIN_INCREMENT;
+          return [blockedAuthoritativeOperation];
+        },
+      },
+    },
+    controlPlaneReadinessService: {
+      getNodeReadinessSync(nodeId) {
+        return {
+          nodeId,
+          dimensions: {
+            [CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE]: false,
+            [CONTROL_PLANE_READINESS_DIMENSION
+              .CONTROL_PLANE_RECOVERY_ELIGIBLE]: true,
+          },
+        };
+      },
+      getMembershipPublicationDiagnosticsSync() {
+        return {
+          publicationEpoch: READY_RETRY_PUBLICATION_EPOCH,
+          publicationStatus: READY_RETRY_PUBLICATION_STATUS,
+          publishedActiveNodeIds: [READY_RETRY_SOURCE_NODE_ID],
+          priorityPartitionSummary: {
+            requiredDistinctNodeCount:
+              READY_RETRY_REQUIRED_DISTINCT_NODE_COUNT,
+            readyEligibleNodeCount: READY_RETRY_READY_ELIGIBLE_NODE_COUNT,
+            blockedPartitions: [{
+              partitionId: READY_RETRY_OPERATION_WITNESS_PARTITION_ID,
+              requiredDistinctNodeCount:
+                READY_RETRY_REQUIRED_DISTINCT_NODE_COUNT,
+              readyDistinctNodeCount: READY_RETRY_READY_DISTINCT_NODE_COUNT,
+              spreadGap: READY_RETRY_SPREAD_GAP,
+            }],
+            missingPartitionIds: [
+              READY_RETRY_OPERATION_WITNESS_PARTITION_ID,
+            ],
+          },
+          priorityRecoveryPartitionWitnesses: [{
+            partitionId: READY_RETRY_OPERATION_WITNESS_PARTITION_ID,
+            operationIds: [
+              READY_RETRY_OPERATION_WITNESS_BLOCKED_OPERATION_ID,
+            ],
+          }],
+          membershipLifecycleSummary: {
+            locallyEligibleNodeIds: [READY_RETRY_TARGET_NODE_ID],
+            projectedServingNodeIds: [READY_RETRY_TARGET_NODE_ID],
+          },
+        };
+      },
+    },
+  });
+  const originalOperationDispatchQueue = service.operationDispatchQueue;
+  service.operationDispatchQueue = {
+    enqueue(operationId, reason, context) {
+      enqueueCalls.push({operationId, reason, context});
+    },
+  };
+
+  await service.retryPendingDispatchesForReadyNode({
+    nodeId: READY_RETRY_TARGET_NODE_ID,
+    nodeRow: readyNode,
+  });
+
+  t.equal(
+    authoritativeQueryCount,
+    READY_RETRY_EXPECTED_SINGLE_CALL,
+    READY_RETRY_ASSERT_WITNESS_AUTHORITY_READ,
+  );
+  t.same(
+    enqueueCalls.map((call) => call.operationId).sort(),
+    [
+      READY_RETRY_OPERATION_WITNESS_BLOCKED_OPERATION_ID,
+      READY_RETRY_OPERATION_WITNESS_VISIBLE_OPERATION_ID,
+    ].sort(),
+    READY_RETRY_ASSERT_WITNESS_QUEUE_IDS,
+  );
+  t.equal(
+    enqueueCalls.length,
+    READY_RETRY_OPERATION_WITNESS_EXPECTED_QUEUE_COUNT,
+    READY_RETRY_ASSERT_WITNESS_QUEUE_IDS,
+  );
+
+  service.operationDispatchQueue = originalOperationDispatchQueue;
+  service.stop();
+});
+
+test(READY_RETRY_PUBLICATION_FORCE_TEST_NAME, async (t) => {
+  initEnv();
+
+  const now = Date.now();
+  const readyNode = {
+    node_id: READY_RETRY_TARGET_NODE_ID,
+    status: SERVICE_STATUS.ACTIVE,
+    connection_state: STATE.READY,
+    last_heartbeat: now,
+    ready_lease_expires_at: now + TIME_MS.MINUTE,
+  };
+  const authoritativeOperation = {
+    operationId: READY_RETRY_PUBLICATION_FORCE_OPERATION_ID,
+    partitionId: READY_RETRY_PUBLICATION_FORCE_PARTITION_ID,
+    type: OperationType.REPLACE,
+    sourceNodeId: READY_RETRY_SOURCE_NODE_ID,
+    targetNodeId: READY_RETRY_TARGET_NODE_ID,
+    status: READY_RETRY_PENDING_STATUS,
+    workflowStep: WORKFLOW_STEP.PENDING,
+    stepsHistory: [],
+  };
+  const authoritativeRowsByRead = [
+    [],
+    [authoritativeOperation],
+  ];
+  let authoritativeQueryCount = NUM.ZERO;
+  const enqueueCalls = [];
+  const service = createService({
+    nodeId: READY_RETRY_TARGET_NODE_ID,
+    cacheNodes: [readyNode],
+    cacheReplicaOperations: [],
+    cdcIntegrationService: {
+      updateSystemTableRow: async () => ({success: true}),
+      upsertSystemTableRow: async () => ({success: true}),
+    },
+    rebalanceCoordinator: {
+      resolveOperationOwnerNodeId(operation) {
+        return operation?.targetNodeId || operation?.target_node_id || null;
+      },
+      repository: {
+        async queryIncompleteOperations() {
+          const rows =
+            authoritativeRowsByRead[authoritativeQueryCount] || [];
+          authoritativeQueryCount += READY_RETRY_QUEUE_DRAIN_INCREMENT;
+          return rows;
+        },
+      },
+    },
+    controlPlaneReadinessService: {
+      getNodeReadinessSync(nodeId) {
+        return {
+          nodeId,
+          dimensions: {
+            [CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE]: false,
+            [CONTROL_PLANE_READINESS_DIMENSION
+              .CONTROL_PLANE_RECOVERY_ELIGIBLE]: true,
+          },
+        };
+      },
+      getMembershipPublicationDiagnosticsSync() {
+        return {
+          publicationEpoch: READY_RETRY_PUBLICATION_EPOCH,
+          publicationStatus: READY_RETRY_PUBLICATION_STATUS,
+          publishedActiveNodeIds: [READY_RETRY_SOURCE_NODE_ID],
+          priorityPartitionSummary: {
+            requiredDistinctNodeCount:
+              READY_RETRY_REQUIRED_DISTINCT_NODE_COUNT,
+            readyEligibleNodeCount: READY_RETRY_READY_ELIGIBLE_NODE_COUNT,
+            blockedPartitions: [{
+              partitionId: READY_RETRY_PUBLICATION_FORCE_PARTITION_ID,
+              requiredDistinctNodeCount:
+                READY_RETRY_REQUIRED_DISTINCT_NODE_COUNT,
+              readyDistinctNodeCount: READY_RETRY_READY_DISTINCT_NODE_COUNT,
+              spreadGap: READY_RETRY_SPREAD_GAP,
+            }],
+            missingPartitionIds: [READY_RETRY_PUBLICATION_FORCE_PARTITION_ID],
+          },
+          membershipLifecycleSummary: {
+            locallyEligibleNodeIds: [READY_RETRY_TARGET_NODE_ID],
+            projectedServingNodeIds: [READY_RETRY_TARGET_NODE_ID],
+          },
+        };
+      },
+    },
+  });
+  const originalOperationDispatchQueue = service.operationDispatchQueue;
+  service.operationDispatchQueue = {
+    enqueue(operationId, reason, context) {
+      enqueueCalls.push({operationId, reason, context});
+    },
+  };
+
+  await service.retryPendingDispatchesForReadyNode({
+    nodeId: READY_RETRY_TARGET_NODE_ID,
+    nodeRow: readyNode,
+  });
+  await service.handleCdcApplied(null, {
+    tableName: 'control_plane_publications',
+    data: {
+      publication_id: READY_RETRY_PUBLICATION_FORCE_ID,
+      status: READY_RETRY_PUBLICATION_STATUS,
+    },
+  });
+  await service.nodeReadyRetryQueue.drain();
+  await waitForOperationDispatchQueueDrain(service);
+
+  t.equal(
+    authoritativeQueryCount,
+    READY_RETRY_REQUIRED_DISTINCT_NODE_COUNT,
+    READY_RETRY_ASSERT_PUBLICATION_FORCE_AUTHORITY_READ,
+  );
+  t.same(
+    enqueueCalls.map((call) => call.operationId),
+    [READY_RETRY_PUBLICATION_FORCE_OPERATION_ID],
+    READY_RETRY_ASSERT_PUBLICATION_FORCE_QUEUE,
+  );
+  t.same(
+    enqueueCalls.map((call) => call.reason),
+    [RECONCILE_REASON.NODE_READY_DISPATCH_RETRY],
+    READY_RETRY_ASSERT_PUBLICATION_FORCE_QUEUE,
+  );
+
+  service.operationDispatchQueue = originalOperationDispatchQueue;
+  service.stop();
+});
 
 test('ReplicaDispatchService ready-node retry wakes remote owners for ' +
   'remote-owned pending operations',

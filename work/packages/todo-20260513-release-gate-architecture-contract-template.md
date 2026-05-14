@@ -71,7 +71,7 @@ explicitly expands scope.
 ## Active Sprint Isolation
 
 - Active package/sprint used only as handoff context:
-  `work/packages/active-20260513-rolling-restart-green-gate-workflow-progress-recovery.md`
+  `work/packages/done-20260513-rolling-restart-green-gate-workflow-progress-recovery.md`
   and
   `work/sprints/active-2026-q2-phase-0-1-rolling-restart-release-gate-closure.md`.
 - Evidence that may be read but not mutated: the current active sprint's

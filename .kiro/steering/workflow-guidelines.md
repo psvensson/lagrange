@@ -397,6 +397,13 @@ and names:
 - subordinate evidence that must not drive edit scope
 - next required owner proof or action
 
+`work/sprints/current-blocker.json` is generated handoff state, but it must not
+be stale. Default `work:validate` checks that the snapshot package exists,
+uses an `active-...` filename, has `status: active`, and matches the discovered
+active package and active sprint. If it fails, regenerate it with
+`npm run work:current-blocker -- --write` before using `work:llm-start` or
+continuing package work.
+
 Long migration history belongs below the snapshot as a ledger.
 
 ## Sub-Agent Sequencing
@@ -484,6 +491,12 @@ Required fields:
 12. Expected next frontier
 13. Result classification
 14. Stop condition
+
+The active scenario package owner and boundary must appear in
+`scenarioCausalClosure.currentFirstFrontier`. A package may diverge only when it
+records metadata `ownerBoundaryMigrationProof` with concrete from/to owner and
+boundary, reason, and focused evidence proving a bounded diagnostic/support role
+or owner-boundary migration.
 
 Allowed result classifications:
 

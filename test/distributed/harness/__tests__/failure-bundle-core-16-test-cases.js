@@ -27,6 +27,8 @@ export function registerFailureBundleCore16Tests(context) {
   };
   const ACK_CLOSURE_TEST_NAME =
     'keeps current active-gate ACK closure ahead of stale best-progress debt';
+  const NEWER_BEST_PROGRESS_ACK_CLOSURE_TEST_NAME =
+    'keeps newer best-progress ACK closure ahead of stale current active-gate debt';
   const DIRECT_PENDING_ACK_PUBLICATION_TEST_NAME =
     'keeps direct ACK-pending publication blockers canonical over missing-published startup support';
   const DIRECT_BLOCKER_TEST_NAME =
@@ -297,6 +299,192 @@ export function registerFailureBundleCore16Tests(context) {
         publicationConvergence.publicationConvergenceGateReasons.includes(
           MISSING_NODE_REASON_ONE,
         ),
+      );
+    },
+  );
+
+  it(
+    NEWER_BEST_PROGRESS_ACK_CLOSURE_TEST_NAME,
+    async () => {
+      refreshState();
+      const SCENARIO_NAME = 'rolling-restart';
+      const PUBLICATION_STATUS_PUBLISHED = 'PUBLISHED';
+      const RECOVERY_PROTOCOL_PUBLICATION_PENDING = 'publication_pending';
+      const RECOVERY_PROTOCOL_STEADY_PUBLISHED = 'steady_published';
+      const ACTIVE_GATE_MODE_STARTUP = 'startup';
+      const ACTIVE_GATE_STATE_TIMED_OUT = 'timed_out';
+      const ACTIVE_GATE_TERMINAL_REASON = 'stalled_no_progress';
+      const PENDING_ACKS_PRESENT_REASON = 'pending_acks_present';
+      const ACTIVE_GATE_SNAPSHOT_COVERAGE_EDGE_ID =
+        'active_gate_snapshot_coverage';
+      const ACTIVE_GATE_TIMED_OUT_REASON = 'active_gate_timed_out';
+      const ACTIVE_GATE_COVERAGE_BLOCKER = 'snapshot_coverage=1/5';
+      const BEST_PROGRESS_COVERAGE_BLOCKER = 'snapshot_coverage=2/5';
+      const ACTIVE_GATE_INACTIVE_BLOCKER = 'inactive_nodes=2';
+      const SEED_NODE_ID = 'seed-node';
+      const ACK_CLOSED_NODE_ID = 'ack-closed-node';
+      const CURRENT_STALE_NODE_ID = 'current-stale-node';
+      const MISSING_NODE_ONE = 'missing-node-one';
+      const MISSING_NODE_TWO = 'missing-node-two';
+      const MISSING_NODE_THREE = 'missing-node-three';
+      const MISSING_NODE_FOUR = 'missing-node-four';
+      const STALE_PUBLICATION_EPOCH = 1;
+      const CLOSED_PUBLICATION_EPOCH = 2;
+      const EXPECTED_NODE_COUNT = 5;
+      const ACTIVE_NODE_COUNT = 3;
+      const INACTIVE_NODE_COUNT = 2;
+      const STALE_SNAPSHOT_COVERAGE_COUNT = 1;
+      const CLOSED_SNAPSHOT_COVERAGE_COUNT = 2;
+      const STALE_PENDING_ACK_COUNT = 1;
+      const ZERO_COUNT = 0;
+      const ONE_COUNT = 1;
+      const BENCHMARK_GATE_STATUS_SKIPPED = 'skipped';
+      const scenarios = [{
+        scenario: SCENARIO_NAME,
+        passed: false,
+        error: 'Not all nodes reached ACTIVE state within 120000ms',
+        details: {
+          diagnostics: {
+            failure: {
+              rootCauseClass: ROOT_CAUSE_CLASS_TOPOLOGY,
+              dominantReason: PENDING_ACKS_PRESENT_REASON,
+              reasonCounts: {
+                [PENDING_ACKS_PRESENT_REASON]: ONE_COUNT,
+              },
+            },
+            controlPlaneDiagnostics: {
+              publicationConvergence: {
+                publicationEpoch: STALE_PUBLICATION_EPOCH,
+                publicationStatus: PUBLICATION_STATUS_PUBLISHED,
+                pendingAckNodeIds: [],
+                pendingAckCount: STALE_PENDING_ACK_COUNT,
+                missingPublishedNodeIds: [
+                  ACK_CLOSED_NODE_ID,
+                  CURRENT_STALE_NODE_ID,
+                  MISSING_NODE_ONE,
+                  MISSING_NODE_TWO,
+                ],
+                missingPublishedCount: EXPECTED_NODE_COUNT - ONE_COUNT,
+                publicationPending: true,
+                prioritySpreadPending: false,
+                recoveryProtocolState:
+                  RECOVERY_PROTOCOL_PUBLICATION_PENDING,
+              },
+              activeGate: {
+                mode: ACTIVE_GATE_MODE_STARTUP,
+                state: ACTIVE_GATE_STATE_TIMED_OUT,
+                ready: false,
+                reasonCode: ACTIVE_GATE_TERMINAL_REASON,
+                progress: {
+                  expectedNodeCount: EXPECTED_NODE_COUNT,
+                  activeNodeCount: ACTIVE_NODE_COUNT,
+                  inactiveNodeCount: INACTIVE_NODE_COUNT,
+                  snapshotCoverageNodeCount: STALE_SNAPSHOT_COVERAGE_COUNT,
+                  snapshotCoverageComplete: false,
+                  publicationStatus: PUBLICATION_STATUS_PUBLISHED,
+                  publicationEpoch: STALE_PUBLICATION_EPOCH,
+                  recoveryProtocolState:
+                    RECOVERY_PROTOCOL_PUBLICATION_PENDING,
+                  selectedPublishedActiveNodeIds: [SEED_NODE_ID],
+                  selectedMissingPublishedNodeIds: [
+                    ACK_CLOSED_NODE_ID,
+                    CURRENT_STALE_NODE_ID,
+                    MISSING_NODE_ONE,
+                    MISSING_NODE_TWO,
+                  ],
+                  pendingAckCount: STALE_PENDING_ACK_COUNT,
+                  missingPublishedCount: EXPECTED_NODE_COUNT - ONE_COUNT,
+                  gateReasons: [],
+                  prioritySpreadSatisfied: true,
+                  prioritySpreadGap: ZERO_COUNT,
+                  priorityBlockedPartitionCount: ZERO_COUNT,
+                  blockers: [
+                    ACTIVE_GATE_INACTIVE_BLOCKER,
+                    ACTIVE_GATE_COVERAGE_BLOCKER,
+                  ],
+                },
+                bestProgress: {
+                  expectedNodeCount: EXPECTED_NODE_COUNT,
+                  activeNodeCount: ACTIVE_NODE_COUNT,
+                  inactiveNodeCount: INACTIVE_NODE_COUNT,
+                  snapshotCoverageNodeCount: CLOSED_SNAPSHOT_COVERAGE_COUNT,
+                  snapshotCoverageComplete: false,
+                  publicationStatus: PUBLICATION_STATUS_PUBLISHED,
+                  publicationEpoch: CLOSED_PUBLICATION_EPOCH,
+                  recoveryProtocolState:
+                    RECOVERY_PROTOCOL_PUBLICATION_PENDING,
+                  selectedPublishedActiveNodeIds: [
+                    SEED_NODE_ID,
+                    ACK_CLOSED_NODE_ID,
+                  ],
+                  selectedMissingPublishedNodeIds: [
+                    CURRENT_STALE_NODE_ID,
+                    MISSING_NODE_ONE,
+                    MISSING_NODE_TWO,
+                    MISSING_NODE_THREE,
+                  ],
+                  pendingAckNodeIds: [],
+                  pendingAckCount: ZERO_COUNT,
+                  missingPublishedCount: EXPECTED_NODE_COUNT -
+                    CLOSED_SNAPSHOT_COVERAGE_COUNT,
+                  gateReasons: [],
+                  prioritySpreadSatisfied: true,
+                  prioritySpreadGap: ZERO_COUNT,
+                  priorityBlockedPartitionCount: ZERO_COUNT,
+                  blockers: [
+                    ACTIVE_GATE_INACTIVE_BLOCKER,
+                    BEST_PROGRESS_COVERAGE_BLOCKER,
+                  ],
+                },
+              },
+            },
+          },
+        },
+      }];
+
+      const {scenarioBundles} = await writeFailureBundlesForReport({
+        scenarios,
+        reportOutputPath: reportPath,
+        outputDir: tempDir,
+        reportSummary: {total: ONE_COUNT, fail: ONE_COUNT, pass: ZERO_COUNT},
+        standardSummary: {scenarios: []},
+        benchmarkRegressionGate: {status: BENCHMARK_GATE_STATUS_SKIPPED},
+        workspaceRoot: tempDir,
+      });
+      const scenarioBundle = JSON.parse(
+        await readFile(
+          resolve(tempDir, scenarioBundles[ZERO_COUNT].links.jsonPath),
+          UTF8_ENCODING,
+        ),
+      );
+      const publicationConvergence = scenarioBundle.publicationConvergence;
+      const ownerContract =
+        scenarioBundle.diagnostics.failure.ownerContract;
+
+      assert.equal(
+        publicationConvergence.publicationEpoch,
+        CLOSED_PUBLICATION_EPOCH,
+      );
+      assert.equal(publicationConvergence.pendingAckCount, ZERO_COUNT);
+      assert.deepEqual(publicationConvergence.pendingAckNodeIds, []);
+      assert.equal(publicationConvergence.publicationPending, false);
+      assert.equal(
+        publicationConvergence.recoveryProtocolState,
+        RECOVERY_PROTOCOL_STEADY_PUBLISHED,
+      );
+      assert.equal(
+        ownerContract.dominantWitness.edgeId,
+        ACTIVE_GATE_SNAPSHOT_COVERAGE_EDGE_ID,
+      );
+      assert.equal(
+        ownerContract.dominantWitness.dominantReason,
+        ACTIVE_GATE_TIMED_OUT_REASON,
+      );
+      assert.equal(
+        scenarioBundle.diagnostics.failure.reasonCounts[
+          PENDING_ACKS_PRESENT_REASON
+        ],
+        undefined,
       );
     },
   );

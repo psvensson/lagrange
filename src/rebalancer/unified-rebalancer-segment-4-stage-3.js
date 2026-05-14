@@ -433,12 +433,21 @@ class UnifiedRebalancerSegment4Stage3 extends UnifiedRebalancerSegment4Stage2 {
   }
 
   resolvePriorityRecoveryCurrentFollowUpPartitionId(move = {}) {
-    return String(
+    const explicitPartitionId = String(
       move?.[PRIORITY_RECOVERY_FOLLOW_UP_FIELD.PARTITION_ID] ||
         move?.[PRIORITY_RECOVERY_FOLLOW_UP_FIELD.PARTITION_ID_SNAKE] ||
         move?.[PRIORITY_RECOVERY_FOLLOW_UP_FIELD.ENTITY_ID] ||
         UNIFIED_REBALANCER_LITERAL.EMPTY_STRING,
     ).trim();
+    if (explicitPartitionId.length > NUM.ZERO) {
+      return explicitPartitionId;
+    }
+    if (move?.type === MoveType.ADD || move?.type === MoveType.REPLACE) {
+      return String(
+        this.entityId || UNIFIED_REBALANCER_LITERAL.EMPTY_STRING,
+      ).trim();
+    }
+    return UNIFIED_REBALANCER_LITERAL.EMPTY_STRING;
   }
 
   isPriorityRecoveryCurrentFollowUpMove(

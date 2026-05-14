@@ -14,7 +14,7 @@
       "owner": "operation_workflow_owner",
       "boundary": "workflow_timeout",
       "dominantReason": "priority_recovery_workflow_timeout_transition_deferred",
-      "evidencePath": "report.scenarios[0].publicationConvergence.priorityRecoveryProgressSummary.dominantWitness",
+      "evidencePath": "report.scenarios[0].publicationConvergence.activeGate.progress.priorityRecoveryProgressClasses",
       "reasons": [
         "priority_recovery_progress_blocked",
         "priority_recovery_event_driven_wait"
@@ -32,7 +32,7 @@
       "priority_recovery_progress_blocked",
       "priority_recovery_event_driven_wait"
     ],
-    "evidencePath": "report.scenarios[0].publicationConvergence.priorityRecoveryProgressSummary.dominantWitness",
+    "evidencePath": "report.scenarios[0].publicationConvergence.activeGate.progress.priorityRecoveryProgressClasses",
     "source": {
       "unresolvedSemanticStateIds": "operation_stalled,recovering_in_flight",
       "blockedPartitionIds": "control_plane_publications-p1,replica_operations-p1,sql_transaction_participants-p1",

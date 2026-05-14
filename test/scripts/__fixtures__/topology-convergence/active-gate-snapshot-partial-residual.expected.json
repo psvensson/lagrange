@@ -14,7 +14,7 @@
       "owner": "operation_workflow_owner",
       "boundary": "rebalancer_handoff",
       "dominantReason": "unknown",
-      "evidencePath": "report.scenarios[0].publicationConvergence.priorityRecoveryProgressSummary.dominantWitness",
+      "evidencePath": "report.scenarios[0].publicationConvergence.activeGate.progress.priorityRecoveryProgressClasses",
       "reasons": [
         "priority_recovery_event_driven_wait"
       ]
@@ -30,7 +30,7 @@
     "reasons": [
       "priority_recovery_event_driven_wait"
     ],
-    "evidencePath": "report.scenarios[0].publicationConvergence.priorityRecoveryProgressSummary.dominantWitness",
+    "evidencePath": "report.scenarios[0].publicationConvergence.activeGate.progress.priorityRecoveryProgressClasses",
     "source": {
       "unresolvedSemanticStateIds": "recovering_in_flight",
       "blockedPartitionIds": "control_plane_publications-p1,sql_transaction_participants-p1,sql_transactions-p1",

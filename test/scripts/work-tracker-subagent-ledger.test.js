@@ -8,8 +8,10 @@ import {
   renderCurrentBlockerMarkdown,
   validateCausalGovernanceContract,
   validateCommitAndPushLedger,
+  validateCurrentBlockerSnapshot,
   validateModelFitContract,
   validateScenarioCausalClosureContract,
+  validateScenarioFrontierOwnerBoundaryContract,
   validateSubagentSequencingLedger,
 } from '../../scripts/work-tracker.js';
 
@@ -683,6 +685,12 @@ describe('work tracker package doctor', () => {
       '"scenario": "none"',
       '"scenario": "rolling-restart"',
     ).replace(
+      '"owner": "workflow_tooling_owner"',
+      '"owner": "operation_workflow_owner"',
+    ).replace(
+      '"boundary": "package_doctor"',
+      '"boundary": "workflow_progress"',
+    ).replace(
       '"modelFit": {',
       '"causalGovernance": ' +
         JSON.stringify(CAUSAL_GOVERNANCE_VALID_METADATA.causalGovernance) +
@@ -872,6 +880,64 @@ describe('work tracker scenario causal closure validation', () => {
     assert.deepEqual(errors, []);
   });
 
+  it('requires active scenario package owner-boundary to match the first frontier',
+    () => {
+      const matchingMetadata = {
+        ...SCENARIO_CAUSAL_CLOSURE_VALID_METADATA,
+        owner: 'operation_workflow_owner',
+        boundary: 'workflow_progress',
+      };
+      const driftedMetadata = {
+        ...SCENARIO_CAUSAL_CLOSURE_VALID_METADATA,
+        owner: 'startup_active_gate_owner',
+        boundary: 'snapshot_coverage',
+      };
+
+      assert.deepEqual(
+        validateScenarioFrontierOwnerBoundaryContract(
+          matchingMetadata,
+          WORK_TRACKER_LEDGER_TEST_FILE,
+          {requiresLedger: true, status: WORK_TRACKER_ACTIVE_STATUS},
+        ),
+        [],
+      );
+      assert.match(
+        validateScenarioFrontierOwnerBoundaryContract(
+          driftedMetadata,
+          WORK_TRACKER_LEDGER_TEST_FILE,
+          {requiresLedger: true, status: WORK_TRACKER_ACTIVE_STATUS},
+        ).join('\n'),
+        /owner\/boundary must appear/u,
+      );
+    });
+
+  it('allows first-frontier owner drift only with explicit migration proof',
+    () => {
+      const metadata = {
+        ...SCENARIO_CAUSAL_CLOSURE_VALID_METADATA,
+        owner: 'startup_active_gate_owner',
+        boundary: 'snapshot_coverage',
+        ownerBoundaryMigrationProof: {
+          fromOwner: 'operation_workflow_owner',
+          fromBoundary: 'workflow_progress',
+          toOwner: 'startup_active_gate_owner',
+          toBoundary: 'snapshot_coverage',
+          reason: 'focused evidence migrated the first frontier',
+          evidence:
+            'npm run analyze:topology-convergence -- report.json --explain edge',
+        },
+      };
+
+      assert.deepEqual(
+        validateScenarioFrontierOwnerBoundaryContract(
+          metadata,
+          WORK_TRACKER_LEDGER_TEST_FILE,
+          {requiresLedger: true, status: WORK_TRACKER_ACTIVE_STATUS},
+        ),
+        [],
+      );
+    });
+
   it('rejects placeholders, empty arrays, invalid classifications, and missing progress proof',
     () => {
       const errors = validateScenarioCausalClosureContract(
@@ -945,5 +1011,64 @@ describe('work tracker scenario causal closure validation', () => {
       assert.match(rendered, /Max progress bound/u);
       assert.match(rendered, /Same-frontier fallback/u);
       assert.match(rendered, /classification-only-stop/u);
+    });
+});
+
+describe('work tracker current blocker snapshot validation', () => {
+  it('accepts a current-blocker snapshot that matches the active package', () => {
+    const errors = validateCurrentBlockerSnapshot(
+      {
+        schema: 'current-blocker-v1',
+        sprint: 'work/sprints/active-test.md',
+        package: WORK_TRACKER_LEDGER_TEST_FILE,
+        status: WORK_TRACKER_ACTIVE_STATUS,
+      },
+      {
+        activeSprintFile: 'work/sprints/active-test.md',
+        activePackageFile: WORK_TRACKER_LEDGER_TEST_FILE,
+        packageExists: true,
+      },
+    );
+
+    assert.deepEqual(errors, []);
+  });
+
+  it('reports stale current-blocker package paths with the repair command', () => {
+    const errors = validateCurrentBlockerSnapshot(
+      {
+        schema: 'current-blocker-v1',
+        sprint: 'work/sprints/active-test.md',
+        package: WORK_TRACKER_DONE_TEST_FILE,
+        status: WORK_TRACKER_DONE_STATUS,
+      },
+      {
+        activeSprintFile: 'work/sprints/active-test.md',
+        activePackageFile: WORK_TRACKER_LEDGER_TEST_FILE,
+        packageExists: false,
+      },
+    ).join('\n');
+
+    assert.match(errors, /does not exist/u);
+    assert.match(errors, /must be an active-\*/u);
+    assert.match(errors, /does not match discovered active package/u);
+    assert.match(errors, /npm run work:current-blocker -- --write/u);
+  });
+
+  it('allows a failed current-blocker handoff when no active sprint is open',
+    () => {
+      const errors = validateCurrentBlockerSnapshot(
+        {
+          schema: 'current-blocker-v1',
+          sprint: 'work/sprints/archived/done-test-failed.md',
+          package: 'work/packages/todo-test-package.md',
+          status: 'failed',
+        },
+        {
+          allowClosed: true,
+          packageExists: true,
+        },
+      );
+
+      assert.deepEqual(errors, []);
     });
 });

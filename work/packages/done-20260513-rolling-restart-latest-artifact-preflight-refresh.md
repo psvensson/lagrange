@@ -30,7 +30,7 @@
     "work/sprints/todo-2026-q2-rolling-restart-llm-preflight-and-code-risk-closure.md"
   ],
   "handoffFiles": [
-    "work/packages/active-20260513-rolling-restart-green-gate-workflow-progress-recovery.md",
+    "work/packages/done-20260513-rolling-restart-green-gate-workflow-progress-recovery.md",
     "work/sprints/active-2026-q2-phase-0-1-rolling-restart-release-gate-closure.md",
     "test-output/reports/rolling-restart-green-gate-after-dispatch-retry-recovery-readiness.report.json"
   ],

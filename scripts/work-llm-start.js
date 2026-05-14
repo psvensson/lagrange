@@ -26,11 +26,16 @@ const DEFAULT_CURRENT_BLOCKER_PATH = path.join(
 const DEFAULT_MODEL_LEDGER_PATH = path.join('work', 'model-ledger.jsonl');
 const FLAG_PACKAGE = '--package';
 const FLAG_LEDGER = '--ledger';
+const FLAG_CURRENT_BLOCKER = '--current-blocker';
 const EMPTY_TEXT = '';
 const NEWLINE = '\n';
 const PATH_NONE = 'none';
 const PATH_UNKNOWN = 'unknown';
 const TITLE = '# LLM Start';
+const STATUS_ACTIVE = 'active';
+const ACTIVE_PACKAGE_FILE_PATTERN = /^active-.+\.md$/u;
+const CURRENT_BLOCKER_REPAIR_COMMAND =
+  'npm run work:current-blocker -- --write';
 
 function normalizeText(value) {
   return String(value || EMPTY_TEXT).trim();
@@ -52,6 +57,20 @@ async function readJsonFile(filePath) {
   return JSON.parse(await readTextFile(filePath));
 }
 
+async function readCurrentBlockerJson(filePath) {
+  try {
+    return await readJsonFile(filePath);
+  } catch (error) {
+    if (error.code === 'ENOENT') {
+      throw new Error(
+        `Current blocker snapshot ${filePath} is missing. Run ` +
+        `${CURRENT_BLOCKER_REPAIR_COMMAND}, then rerun npm run work:llm-start.`,
+      );
+    }
+    throw error;
+  }
+}
+
 function pathHasRealValue(filePath) {
   const normalized = normalizeText(filePath);
   return normalized.length > 0 &&
@@ -59,15 +78,48 @@ function pathHasRealValue(filePath) {
     normalized !== PATH_UNKNOWN;
 }
 
+function packagePathLooksActive(filePath) {
+  return ACTIVE_PACKAGE_FILE_PATTERN.test(path.basename(normalizeText(filePath)));
+}
+
+async function readCurrentBlockerPackageContent(currentBlocker) {
+  if (!pathHasRealValue(currentBlocker.package)) {
+    throw new Error(
+      'Current blocker snapshot does not name a package. Run ' +
+      `${CURRENT_BLOCKER_REPAIR_COMMAND}, then rerun npm run work:llm-start.`,
+    );
+  }
+  if (
+    currentBlocker.status !== STATUS_ACTIVE ||
+    !packagePathLooksActive(currentBlocker.package)
+  ) {
+    throw new Error(
+      `Current blocker package ${currentBlocker.package} is not active. Run ` +
+      `${CURRENT_BLOCKER_REPAIR_COMMAND}, then rerun npm run work:llm-start.`,
+    );
+  }
+  try {
+    return await readTextFile(currentBlocker.package);
+  } catch (error) {
+    if (error.code === 'ENOENT') {
+      throw new Error(
+        `Current blocker package ${currentBlocker.package} is missing. Run ` +
+        `${CURRENT_BLOCKER_REPAIR_COMMAND}, then rerun npm run work:llm-start.`,
+      );
+    }
+    throw error;
+  }
+}
+
 async function readCurrentBlocker(args = []) {
   const packageOverride = parseOptionValue(args, FLAG_PACKAGE);
   if (packageOverride) {
     return buildCurrentBlockerFromPackage(packageOverride);
   }
-  const currentBlocker = await readJsonFile(DEFAULT_CURRENT_BLOCKER_PATH);
-  const packageContent = pathHasRealValue(currentBlocker.package) ?
-    await readTextFile(currentBlocker.package) :
-    EMPTY_TEXT;
+  const currentBlockerPath =
+    parseOptionValue(args, FLAG_CURRENT_BLOCKER) || DEFAULT_CURRENT_BLOCKER_PATH;
+  const currentBlocker = await readCurrentBlockerJson(currentBlockerPath);
+  const packageContent = await readCurrentBlockerPackageContent(currentBlocker);
   return {currentBlocker, packageContent};
 }
 

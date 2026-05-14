@@ -24,9 +24,9 @@ Recommended load strategy:
 | --- | --- | ---: | ---: |
 | core | manual | 21 | 1291 |
 | architecture | generated | 109 | 3511 |
-| testing | generated | 95 | 3802 |
+| testing | generated | 96 | 3893 |
 | style | generated | 8 | 203 |
-| governance | generated | 47 | 1923 |
+| governance | generated | 50 | 2036 |
 
 ## Notes
 

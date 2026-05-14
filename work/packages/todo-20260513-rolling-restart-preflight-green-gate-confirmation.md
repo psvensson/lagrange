@@ -131,7 +131,7 @@ Before this package runs the full scenario:
 
 This package must not edit or commit:
 
-1. `work/packages/active-20260513-rolling-restart-green-gate-workflow-progress-recovery.md`
+1. `work/packages/done-20260513-rolling-restart-green-gate-workflow-progress-recovery.md`
 2. `work/sprints/active-2026-q2-phase-0-1-rolling-restart-release-gate-closure.md`
 3. `work/sprints/current-blocker.json`
 4. `work/sprints/current-blocker.md`

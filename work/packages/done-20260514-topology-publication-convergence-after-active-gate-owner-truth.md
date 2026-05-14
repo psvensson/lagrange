@@ -133,7 +133,7 @@
   "predecessor": "work/packages/done-20260513-topology-active-gate-snapshot-coverage-after-workflow-progress.md",
   "closed": "2026-05-14",
   "commitAndPushLedgerRequired": true,
-  "successor": "work/packages/active-20260514-topology-active-gate-snapshot-coverage-after-publication-owner-truth.md"
+  "successor": "work/packages/superseded-20260514-topology-active-gate-snapshot-coverage-after-publication-owner-truth.md"
 }
 -->
 

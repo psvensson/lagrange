@@ -24,7 +24,7 @@
     "work/sprints/todo-2026-q2-future-sprint-release-gate-systemic-governance.md"
   ],
   "handoffFiles": [
-    "work/packages/active-20260513-rolling-restart-green-gate-workflow-progress-recovery.md",
+    "work/packages/done-20260513-rolling-restart-green-gate-workflow-progress-recovery.md",
     "work/sprints/active-2026-q2-phase-0-1-rolling-restart-release-gate-closure.md",
     "work/packages/todo-20260513-release-gate-blocker-path-ledger-template.md",
     "work/packages/todo-20260513-release-gate-architecture-contract-template.md",
@@ -80,7 +80,7 @@ without a roadmap change because it creates a handoff and activation rule only.
 ## Active Sprint Isolation
 
 - Active package/sprint used only as handoff context:
-  `work/packages/active-20260513-rolling-restart-green-gate-workflow-progress-recovery.md`
+  `work/packages/done-20260513-rolling-restart-green-gate-workflow-progress-recovery.md`
   and
   `work/sprints/active-2026-q2-phase-0-1-rolling-restart-release-gate-closure.md`.
 - Evidence that may be read but not mutated: active artifact names, current

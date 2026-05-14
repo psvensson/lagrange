@@ -558,6 +558,9 @@ class ReplicaDispatchServiceSegment1 extends EventEmitter {
         RECONCILE_REASON.CONTROL_PLANE_PUBLICATION_CDC_UPDATE,
         event?.data,
       );
+      this.enqueueLocalReadyNodeDispatchRetry(
+        RECONCILE_REASON.CONTROL_PLANE_PUBLICATION_CDC_UPDATE,
+      );
       return;
     }
 

@@ -807,7 +807,6 @@ test('ReplicaDispatchService defers retryable replica operation dispatch ' +
       last_heartbeat: now,
       ready_lease_expires_at: now + 30000,
     }],
-    cacheReplicaOperations: [operationRow],
     cdcIntegrationService: {
       upsertSystemTableRow: async () => ({success: true}),
       updateSystemTableRow: async () => ({success: true}),

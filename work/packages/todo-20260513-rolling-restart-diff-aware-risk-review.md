@@ -26,7 +26,7 @@
     "work/sprints/todo-2026-q2-rolling-restart-llm-preflight-and-code-risk-closure.md"
   ],
   "handoffFiles": [
-    "work/packages/active-20260513-rolling-restart-green-gate-workflow-progress-recovery.md",
+    "work/packages/done-20260513-rolling-restart-green-gate-workflow-progress-recovery.md",
     "work/sprints/current-blocker.md",
     "work/sprints/current-blocker.json"
   ],
@@ -89,7 +89,7 @@ Executed on May 13, 2026.
 
 | Class | Dirty entries | Decision |
 | --- | ---: | --- |
-| `package-owned` | 23 | Owned by `work/packages/active-20260513-rolling-restart-green-gate-workflow-progress-recovery.md`; keep focused proof there and do not commit from this package. |
+| `package-owned` | 23 | Owned by `work/packages/done-20260513-rolling-restart-green-gate-workflow-progress-recovery.md`; keep focused proof there and do not commit from this package. |
 | `sprint-owned` | 7 | Metadata/package-status cleanup from this sprint: moved latest-artifact refresh to `done`, moved two priority-recovery packages to `superseded`, and updated package references. Safe to commit with this package as package-status cleanup. |
 | `tracker-generated` | 0 | No generated tracker entries in this review. |
 | `split-required` | 14 | Runtime/test edits in control-plane, node, rebalancer, and failure-bundle files are outside the active startup package and outside this review package. |

@@ -13,7 +13,7 @@
   "boundary": "snapshot_coverage",
   "dominantReason": "snapshot_coverage_incomplete",
   "currentState": "Focused owner-truth proof widened control-snapshot projection from missingPublishedRecoveryActiveNodeIds while keeping durable published membership distinct. The representative rerun no longer fronts startup_active_gate_owner / snapshot_coverage; canonical evidence migrated the first frontier to publication_ack_convergence under topology_publication_owner / publication_convergence with missing_published_nodes_present.",
-  "nextAction": "Close this package as migrated and continue in work/packages/active-20260514-topology-publication-convergence-after-active-gate-owner-truth.md.",
+  "nextAction": "Close this package as migrated and continue in work/packages/done-20260514-topology-publication-convergence-after-active-gate-owner-truth.md.",
   "proof": [
     "npx tap test/admin/admin-control-snapshot.test.js --grep \"(exposes publication owner-truth|widens owner truth|projects recovery-eligible readiness)\"",
     "npm test -- test/control-plane/active-node-projection.test.js",
@@ -124,7 +124,7 @@
     "expectedObservableTransition": "Observed: active-gate owner truth includes missing published recovery nodes in focused proof, and representative first frontier moved to topology_publication_owner / publication_convergence.",
     "maxProgressBound": "one predecessor review subagent, one fix subagent if review finds fixes, one implementation subagent, focused owner proof, and one representative rolling-restart rerun",
     "sameFrontierFallback": "not used; active_gate_snapshot_coverage is no longer the first representative frontier.",
-    "expectedNextFrontier": "topology_publication_owner / publication_convergence remains the first frontier in work/packages/active-20260514-topology-publication-convergence-after-active-gate-owner-truth.md.",
+    "expectedNextFrontier": "topology_publication_owner / publication_convergence remains the first frontier in work/packages/done-20260514-topology-publication-convergence-after-active-gate-owner-truth.md.",
     "resultClassification": "migrated",
     "stopCondition": "migrate-owner-boundary"
   },
@@ -144,7 +144,7 @@
   "predecessor": "work/packages/done-20260513-priority-recovery-operation-workflow-owner-workflow-progress-after-snapshot-coverage.md",
   "closed": "2026-05-14",
   "commitAndPushLedgerRequired": true,
-  "successor": "work/packages/active-20260514-topology-publication-convergence-after-active-gate-owner-truth.md"
+  "successor": "work/packages/done-20260514-topology-publication-convergence-after-active-gate-owner-truth.md"
 }
 -->
 

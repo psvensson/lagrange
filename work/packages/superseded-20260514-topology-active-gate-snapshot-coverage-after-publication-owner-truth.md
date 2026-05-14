@@ -13,7 +13,7 @@
   "boundary": "snapshot_coverage",
   "dominantReason": "snapshot_coverage_incomplete",
   "currentState": "Superseded by human direction on 2026-05-14: this sprint is the systemic topology ship-shape sprint, not a rolling-restart blocker chase. The rolling-restart artifact remains handoff context only.",
-  "nextAction": "Continue with work/packages/active-20260513-topology-membership-epoch-fencing.md and do not run rolling-restart again until the systemic sprint pieces are in place.",
+  "nextAction": "Continue with work/packages/done-20260513-topology-membership-epoch-fencing.md and do not run rolling-restart again until the systemic sprint pieces are in place.",
   "proof": [
     "npm run work:evidence-summary -- test-output/reports/rolling-restart-green-gate-after-priority-recovery-workflow-progress-after-snapshot-coverage.report.json",
     "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-green-gate-after-priority-recovery-workflow-progress-after-snapshot-coverage.report.json --explain active_gate_snapshot_coverage",
@@ -26,7 +26,7 @@
     "work/sprints/active-2026-q2-topology-convergence-ship-shape.md",
     "work/sprints/current-blocker.json",
     "work/sprints/current-blocker.md",
-    "work/packages/active-20260513-topology-membership-epoch-fencing.md"
+    "work/packages/done-20260513-topology-membership-epoch-fencing.md"
   ],
   "handoffFiles": [
     "work/packages/done-20260514-topology-publication-convergence-after-active-gate-owner-truth.md",
@@ -43,7 +43,7 @@
     "work/sprints/active-2026-q2-topology-convergence-ship-shape.md",
     "work/sprints/current-blocker.json",
     "work/sprints/current-blocker.md",
-    "work/packages/active-20260513-topology-membership-epoch-fencing.md"
+    "work/packages/done-20260513-topology-membership-epoch-fencing.md"
   ],
   "modelFit": {
     "packageClass": "representative-frontier-closure",
@@ -130,7 +130,7 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 - Any uncommitted active-gate runtime and harness edits from this package were
   removed before the membership-epoch package continued.
 - The active package is now
-  `work/packages/active-20260513-topology-membership-epoch-fencing.md`.
+  `work/packages/done-20260513-topology-membership-epoch-fencing.md`.
 
 ## Subagent Sequencing Ledger
 
@@ -147,7 +147,7 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 2. work/sprints/active-2026-q2-topology-convergence-ship-shape.md
 3. work/sprints/current-blocker.json
 4. work/sprints/current-blocker.md
-5. work/packages/active-20260513-topology-membership-epoch-fencing.md
+5. work/packages/done-20260513-topology-membership-epoch-fencing.md
 
 ## Out Of Scope
 
@@ -162,11 +162,11 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 - Package class: `representative-frontier-closure`
 - Intended minimum model: `gpt-5.3-codex`
 - Scope shape: `owner-boundary-contraction/current-frontier`
-- Owned files: `work/packages/superseded-20260514-topology-active-gate-snapshot-coverage-after-publication-owner-truth.md`, `work/sprints/active-2026-q2-topology-convergence-ship-shape.md`, `work/sprints/current-blocker.json`, `work/sprints/current-blocker.md`, `work/packages/active-20260513-topology-membership-epoch-fencing.md`
+- Owned files: `work/packages/superseded-20260514-topology-active-gate-snapshot-coverage-after-publication-owner-truth.md`, `work/sprints/active-2026-q2-topology-convergence-ship-shape.md`, `work/sprints/current-blocker.json`, `work/sprints/current-blocker.md`, `work/packages/done-20260513-topology-membership-epoch-fencing.md`
 - Forbidden files: `harness timeout increases`, `publication convergence runtime changes unless fresh evidence delegates back`, `operation workflow runtime changes unless fresh evidence delegates back`, `Pro behavior`, `Enterprise behavior`
 - Frozen decisions: package scope and lane stay bounded unless explicitly escalated.
 - Escalation triggers: owned files expand beyond this package, runtime ownership changes, or representative scenario evidence changes.
-- Focused proof: `npm run work:context`, `npm run work:current-blocker -- --write`, `git diff --check -- work/packages/superseded-20260514-topology-active-gate-snapshot-coverage-after-publication-owner-truth.md work/packages/active-20260513-topology-membership-epoch-fencing.md work/sprints/active-2026-q2-topology-convergence-ship-shape.md work/sprints/current-blocker.json work/sprints/current-blocker.md`
+- Focused proof: `npm run work:context`, `npm run work:current-blocker -- --write`, `git diff --check -- work/packages/superseded-20260514-topology-active-gate-snapshot-coverage-after-publication-owner-truth.md work/packages/done-20260513-topology-membership-epoch-fencing.md work/sprints/active-2026-q2-topology-convergence-ship-shape.md work/sprints/current-blocker.json work/sprints/current-blocker.md`
 - Model ledger advisory: `escalate`
 
 ## Validation
@@ -174,7 +174,7 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 1. `npm run work:current-blocker -- --write` passed and regenerated the
    current blocker to the active membership-epoch package.
 2. `npm run work:context` passed and confirmed the active package is
-   `work/packages/active-20260513-topology-membership-epoch-fencing.md`.
+   `work/packages/done-20260513-topology-membership-epoch-fencing.md`.
 3. Active-gate runtime and harness diffs were removed before continuing.
 4. Representative `rolling-restart` was not rerun after the human stop
    instruction.

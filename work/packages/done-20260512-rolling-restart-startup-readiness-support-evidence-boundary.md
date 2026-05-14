@@ -13,7 +13,7 @@
   "boundary": "startup_support_evidence",
   "dominantReason": "startup_readiness_blocked",
   "currentState": "Focused startup-readiness support-evidence implementation reduced the weak readiness terminal evidence. The current report still has priority_recovery_partition_progress retryable under operation_workflow_owner / workflow_progress, but readiness_startup_support is now deferred with supportPath inherited_active_gate_no_progress instead of terminal_failed readiness ownership. Publication ACK convergence remains satisfied, and startup_active_gate_owner / snapshot_coverage remains the projected downstream topology edge after priority progress closes.",
-  "nextAction": "This package is predecessor proof only. The May 13, 2026 green-only rerun invalidated sprint closure and restored operation_workflow_owner / workflow_progress as the active handoff in work/packages/active-20260513-rolling-restart-green-gate-workflow-progress-recovery.md. Do not present this package as final runtime handoff, and do not implement operation_workflow_owner / workflow_progress or startup_active_gate_owner / snapshot_coverage runtime behavior from it.",
+  "nextAction": "This package is predecessor proof only. The May 13, 2026 green-only rerun invalidated sprint closure and restored operation_workflow_owner / workflow_progress as the active handoff in work/packages/done-20260513-rolling-restart-green-gate-workflow-progress-recovery.md. Do not present this package as final runtime handoff, and do not implement operation_workflow_owner / workflow_progress or startup_active_gate_owner / snapshot_coverage runtime behavior from it.",
   "proof": [
     "npm run work:subagent-prompt -- --role implementation --package work/packages/done-20260512-rolling-restart-startup-readiness-support-evidence-boundary.md",
     "npm run work:evidence-summary -- test-output/reports/rolling-restart-current-release-gate-after-workflow-progress-direct-chain-owner-proof.report.json",
@@ -132,7 +132,7 @@ behavior from this package.
 This closed package is predecessor proof only. The May 13, 2026 green-only
 `rolling-restart` rerun invalidated sprint closure and restored
 `operation_workflow_owner / workflow_progress` as the active handoff in
-[Rolling Restart Green Gate Workflow Progress Recovery](active-20260513-rolling-restart-green-gate-workflow-progress-recovery.md).
+[Rolling Restart Green Gate Workflow Progress Recovery](done-20260513-rolling-restart-green-gate-workflow-progress-recovery.md).
 
 Do not use this package as final runtime handoff or sprint-exit proof. Its
 `reduced` and `classification-only-stop` results remain package-local history;

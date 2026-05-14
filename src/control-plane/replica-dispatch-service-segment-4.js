@@ -50,6 +50,10 @@ const LOCAL_DISPATCH_HANDLER_ADDRESS = Object.freeze({
     handlerId: RUNTIME_SERVICE_HANDLER_ADDRESS.HANDLER_ID,
   }),
 });
+const DISPATCH_RETRY_READY_NODE_DIMENSIONS = Object.freeze([
+  CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE,
+  CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
+]);
 
 class ReplicaDispatchServiceSegment4 extends ReplicaDispatchServiceSegment3 {
   replaceDeferredNodeStateUpdatePayload(nodeId, payload) {
@@ -392,7 +396,7 @@ class ReplicaDispatchServiceSegment4 extends ReplicaDispatchServiceSegment3 {
    * @return {boolean} True if node is ready.
    * @private
    */
-  isNodeReady(nodeId) {
+  isNodeReady(nodeId, options = {}) {
     if (
       !nodeId ||
       typeof this.controlPlaneReadinessService.getNodeReadinessSync !==
@@ -401,7 +405,11 @@ class ReplicaDispatchServiceSegment4 extends ReplicaDispatchServiceSegment3 {
       return false;
     }
 
-    const decisionDimension = this.resolveDispatchReadinessDecisionDimension();
+    const decisionDimension =
+      typeof options?.decisionDimension === TYPEOF.STRING &&
+      options.decisionDimension.length > NUM.ZERO ?
+        options.decisionDimension :
+        this.resolveDispatchReadinessDecisionDimension();
     const readiness = this.controlPlaneReadinessService.getNodeReadinessSync(
       nodeId,
       {
@@ -409,6 +417,12 @@ class ReplicaDispatchServiceSegment4 extends ReplicaDispatchServiceSegment3 {
       },
     );
     return this.isReadinessDimensionSatisfied(readiness, decisionDimension);
+  }
+
+  isNodeReadyForDispatchRetry(nodeId) {
+    return DISPATCH_RETRY_READY_NODE_DIMENSIONS.some((decisionDimension) =>
+      this.isNodeReady(nodeId, {decisionDimension}),
+    );
   }
 
   /**

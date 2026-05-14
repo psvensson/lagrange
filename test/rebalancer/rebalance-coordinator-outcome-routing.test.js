@@ -34,6 +34,7 @@ import {
   ReplicaStatus,
 } from '../../src/rebalancer/replica-status.js';
 import {
+  ReplicaOperationField,
   ReplicaOperationMessageType,
   ReplicaOperationResponseStatus,
 } from '../../src/rebalancer/replica-operation-constants.js';
@@ -65,6 +66,7 @@ const TEST_MG_RETRYABLE_CREATE_FAILURE_MESSAGE =
 const TEST_MG_RETRYABLE_CREATE_FAILURE_RETRY_AFTER_MS = 5000;
 const TEST_DEFERRED_OUTCOME_RETRY_AFTER_MS = 1;
 const TEST_DEFERRED_OUTCOME_STATE = 'deferred';
+const TEST_EMPTY_OUTCOME_STATE = 'empty';
 const TEST_PRESENT_OUTCOME_STATE = 'present';
 const TEST_DEFERRED_OUTCOME_COMPLETION_STATE =
   'authoritative_operation_read_deferred';
@@ -632,6 +634,97 @@ test('Executor outcome routing through owner-key reconcile path',
     );
 
     await t.test(
+      'empty visibility retains fresh create-active outcome until visible',
+      async (t) => {
+        const operation = buildTestOperation({
+          workflowStep: WORKFLOW_STEP.SYNCING,
+          status: ReplicaStatus.SYNCING,
+        });
+        const scheduledTimers = [];
+        const {coordinator} =
+          createTestCoordinator({
+            operation,
+            setTimeoutFn(callback, delayMs) {
+              const timerHandle = {callback, delayMs};
+              scheduledTimers.push(timerHandle);
+              return timerHandle;
+            },
+            clearTimeoutFn(timerHandle) {
+              timerHandle.cleared = true;
+            },
+          });
+        let visibilityState = TEST_EMPTY_OUTCOME_STATE;
+        coordinator.repository.getOperationByIdVisibilityObservation =
+          async () => {
+            if (visibilityState === TEST_EMPTY_OUTCOME_STATE) {
+              return {
+                state: TEST_EMPTY_OUTCOME_STATE,
+                operation: null,
+                deferredOutcome: null,
+                retryAfterMs: null,
+              };
+            }
+            return {
+              state: TEST_PRESENT_OUTCOME_STATE,
+              operation,
+              deferredOutcome: null,
+              retryAfterMs: null,
+            };
+          };
+
+        try {
+          await coordinator.workflowOwner.reconcileExecutorOutcome(
+            Object.freeze({
+              ...buildExecutorOutcomePayload(
+                EXECUTOR_OUTCOME_TYPE.REPLICA_CREATE_ACTIVE,
+                WORKFLOW_STEP.ACTIVE,
+              ),
+              [EXECUTOR_OUTCOME_FIELD.REPLICA_ID]: TEST_REPLICA_ID,
+              [EXECUTOR_OUTCOME_FIELD.TIMESTAMP]: Date.now(),
+            }),
+          );
+          const retainedRetryPayload =
+            await waitForExecutorOutcomeRetryPayload(
+              coordinator,
+              TEST_OPERATION_ID,
+              WORKFLOW_STEP.ACTIVE,
+            );
+
+          t.equal(
+            scheduledTimers.length,
+            1,
+            'fresh empty visibility should retain one retry timer',
+          );
+          t.equal(
+            retainedRetryPayload?.workflowStep,
+            WORKFLOW_STEP.ACTIVE,
+            'fresh empty visibility should retain the ACTIVE outcome',
+          );
+
+          visibilityState = TEST_PRESENT_OUTCOME_STATE;
+          const completedEventPromise = waitForCoordinatorEvent(
+            coordinator,
+            REBALANCE_COORDINATOR_EVENT.OPERATION_COMPLETED,
+          );
+          await scheduledTimers[0].callback();
+          const completedEvent = await completedEventPromise;
+
+          t.equal(
+            completedEvent.operation.workflowStep,
+            WORKFLOW_STEP.ACTIVE,
+            'retained ACTIVE outcome should complete once the row appears',
+          );
+          t.ok(
+            completedEvent.operation.completedAt,
+            'retained ACTIVE outcome should not be skipped',
+          );
+        } finally {
+          await coordinator.shutdown();
+        }
+      },
+    );
+
+    await t.test(
       'REPLICA_CREATE_ACTIVE resumes source removal for REPLACE ' +
       'instead of completing terminally',
       async (t) => {
@@ -1141,6 +1234,74 @@ async (t) => {
       operation.status,
       ReplicaStatus.SYNCING,
       'in-progress create dispatch should persist the reconciled target status',
+    );
+  } finally {
+    await coordinator.shutdown();
+  }
+});
+
+test('priority recovery in-progress create dispatch uses response target ' +
+  'status when cache is unavailable',
+async (t) => {
+  const deliveries = [];
+  const scheduledTimers = [];
+  const operation = buildTestOperation({
+    type: OperationType.REPLACE,
+    partitionId: TEST_PRIORITY_RECOVERY_PARTITION_ID,
+    entityId: TEST_PRIORITY_RECOVERY_PARTITION_ID,
+    replicaId: TEST_PRIORITY_RECOVERY_REPLICA_ID,
+    sourceNodeId: TEST_PRIORITY_RECOVERY_SOURCE_NODE_ID,
+    targetNodeId: TEST_PRIORITY_RECOVERY_TARGET_NODE_ID,
+    workflowStep: WORKFLOW_STEP.CREATING,
+    status: ReplicaStatus.CREATING,
+  });
+  const {coordinator} = createTestCoordinator({
+    operation,
+    setTimeoutFn(callback, delayMs) {
+      const timerHandle = {callback, delayMs};
+      scheduledTimers.push(timerHandle);
+      return timerHandle;
+    },
+    clearTimeoutFn(timerHandle) {
+      timerHandle.cleared = true;
+    },
+  });
+  coordinator.messageRouter = {
+    async deliver(target, payload, options) {
+      deliveries.push({target, payload, options});
+      return {
+        acknowledged: true,
+        status: ReplicaOperationResponseStatus.IN_PROGRESS,
+        [ReplicaOperationField.REPLICA_STATUS]: ReplicaStatus.SYNCING,
+      };
+    },
+  };
+  coordinator.workflowOwner.messageRouter = coordinator.messageRouter;
+  coordinator.workflowOwner.repository.getObservedReplicaStatusFromCache =
+    () => null;
+
+  try {
+    await coordinator.workflowOwner.dispatchOperationInternal(operation);
+
+    t.equal(
+      deliveries.length,
+      1,
+      'create rearm should still issue one dispatch request',
+    );
+    t.equal(
+      operation.workflowStep,
+      WORKFLOW_STEP.SYNCING,
+      'response target status should advance without services-cache coverage',
+    );
+    t.equal(
+      operation.status,
+      ReplicaStatus.SYNCING,
+      'response target status should persist the reconciled workflow status',
+    );
+    t.equal(
+      scheduledTimers.length,
+      1,
+      'SYNCING response progress should arm observed-progress recheck',
     );
   } finally {
     await coordinator.shutdown();

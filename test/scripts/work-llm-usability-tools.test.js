@@ -13,9 +13,14 @@ const TEMP_ROOT = 'test-output/work-llm-usability-tools';
 const TEMP_OWNER_ROOT = path.join(TEMP_ROOT, 'owner-index');
 const TEMP_PACKAGE_ROOT = path.join(TEMP_ROOT, 'packages');
 const TEMP_LEDGER_PATH = path.join(TEMP_ROOT, 'missing-ledger.jsonl');
+const TEMP_CURRENT_BLOCKER_PATH = path.join(TEMP_ROOT, 'current-blocker.json');
 const TEMP_PACKAGE_PATH = path.join(
   TEMP_PACKAGE_ROOT,
   'todo-20260512-llm-usability-test.md',
+);
+const TEMP_MISSING_ACTIVE_PACKAGE_PATH = path.join(
+  TEMP_PACKAGE_ROOT,
+  'active-20260512-missing-package.md',
 );
 const OWNER_NAME = 'operation_workflow_owner';
 const BOUNDARY_NAME = 'workflow_progress';
@@ -51,6 +56,8 @@ test('shared package schema lists validator enums for LLM scaffolding', (t) => {
   t.match(rendered, /tool-unavailable/u);
   t.match(rendered, /pending-before-rerun/u);
   t.match(rendered, /classification-only-stop/u);
+  t.match(rendered, /ownerBoundaryMigrationProof/u);
+  t.match(rendered, /fromOwner/u);
   t.end();
 });
 
@@ -180,4 +187,32 @@ test('llm-start combines context, doctor, dirty scope, model ledger, and evidenc
     t.match(rendered, /## Dirty Scope/u);
     t.match(rendered, /## Model Ledger/u);
     t.match(rendered, /## Representative Evidence/u);
+  });
+
+test('llm-start gives a repair command for stale current-blocker packages',
+  async (t) => {
+    await fs.mkdir(TEMP_ROOT, {recursive: true});
+    await fs.writeFile(
+      TEMP_CURRENT_BLOCKER_PATH,
+      `${JSON.stringify({
+        schema: 'current-blocker-v1',
+        sprint: 'work/sprints/active-test.md',
+        package: TEMP_MISSING_ACTIVE_PACKAGE_PATH,
+        status: 'active',
+      })}\n`,
+      'utf8',
+    );
+
+    try {
+      await buildLlmStartLines([
+        '--current-blocker',
+        TEMP_CURRENT_BLOCKER_PATH,
+        '--ledger',
+        TEMP_LEDGER_PATH,
+      ]);
+      t.fail('expected stale current-blocker package to fail');
+    } catch (error) {
+      t.match(error.message, /Current blocker package .* is missing/u);
+      t.match(error.message, /npm run work:current-blocker -- --write/u);
+    }
   });

@@ -7,6 +7,9 @@ import {fileURLToPath} from 'node:url';
 import {
   CAUSAL_GOVERNANCE_PENDING_OUTCOME,
   CAUSAL_GOVERNANCE_VALID_OUTCOMES,
+  OWNER_BOUNDARY_MIGRATION_PROOF_EVIDENCE_FIELD,
+  OWNER_BOUNDARY_MIGRATION_PROOF_FIELD,
+  OWNER_BOUNDARY_MIGRATION_PROOF_FIELDS,
   SCENARIO_CAUSAL_CLOSURE_VALID_RESULT_CLASSIFICATIONS,
   SCENARIO_CAUSAL_CLOSURE_VALID_STOP_CONDITIONS,
   SCOPE_FIELD_CANDIDATE_RUNTIME_FILES,
@@ -34,6 +37,7 @@ const EXIT_SUCCESS = 0;
 const EXIT_FAILURE = 1;
 const STATUS_ACTIVE = 'active';
 const STATUS_DONE = 'done';
+const STATUS_FAILED = 'failed';
 const STATUS_SUPERSEDED = 'superseded';
 const STATUS_TODO = 'todo';
 const METADATA_LANE_FIELD = 'lane';
@@ -44,6 +48,13 @@ const CURRENT_BLOCKER_JSON_PATH = path.join(
   WORK_SPRINTS_DIR,
   'current-blocker.json',
 );
+const CURRENT_BLOCKER_SCHEMA = 'current-blocker-v1';
+const CURRENT_BLOCKER_REPAIR_COMMAND =
+  'npm run work:current-blocker -- --write';
+const CURRENT_BLOCKER_CLOSED_STATUSES = Object.freeze([
+  STATUS_DONE,
+  STATUS_FAILED,
+]);
 const CURRENT_BLOCKER_MARKDOWN_PATH = path.join(
   WORK_SPRINTS_DIR,
   'current-blocker.md',
@@ -955,6 +966,13 @@ function isScenarioDrivenMetadata(metadata) {
     scenario !== SCENARIO_TEMPLATE_VALUE;
 }
 
+function textMentionsValue(text, value) {
+  const normalizedText = normalizeLedgerText(text).toLowerCase();
+  const normalizedValue = normalizeLedgerText(value).toLowerCase();
+  return normalizedValue.length > NUM_ZERO &&
+    normalizedText.includes(normalizedValue);
+}
+
 function metadataLane(metadata) {
   return normalizeLedgerText(metadata?.[METADATA_LANE_FIELD]).toLowerCase();
 }
@@ -1202,6 +1220,97 @@ export function validateScenarioCausalClosureContract(
   return errors;
 }
 
+function validateOwnerBoundaryMigrationProof(filePath, proof) {
+  if (!isObjectRecord(proof)) {
+    return [
+      `${filePath}: metadata ${OWNER_BOUNDARY_MIGRATION_PROOF_FIELD} ` +
+      'must be an object.',
+    ];
+  }
+  const errors = [];
+  for (const fieldName of OWNER_BOUNDARY_MIGRATION_PROOF_FIELDS) {
+    const normalizedValue = normalizeLedgerText(proof[fieldName]);
+    if (
+      normalizedValue.length === NUM_ZERO ||
+      MODEL_FIT_EMPTY_VALUE_PATTERN.test(normalizedValue) ||
+      LEDGER_TEMPLATE_PLACEHOLDER_PATTERN.test(normalizedValue) ||
+      normalizedValue.includes(LEDGER_PENDING_BEFORE_IMPLEMENTATION_MARKER)
+    ) {
+      errors.push(
+        `${filePath}: ${OWNER_BOUNDARY_MIGRATION_PROOF_FIELD}.` +
+        `${fieldName} must be a concrete value.`,
+      );
+    }
+  }
+  const evidence = normalizeLedgerText(
+    proof[OWNER_BOUNDARY_MIGRATION_PROOF_EVIDENCE_FIELD],
+  );
+  if (
+    evidence.length > NUM_ZERO &&
+    !MODEL_FIT_FOCUSED_PROOF_COMMAND_PATTERN.test(evidence) &&
+    !SCENARIO_CAUSAL_CLOSURE_ARTIFACT_PATH_PATTERN.test(evidence)
+  ) {
+    errors.push(
+      `${filePath}: ${OWNER_BOUNDARY_MIGRATION_PROOF_FIELD}.evidence ` +
+      'must name a focused command or artifact path.',
+    );
+  }
+  return errors;
+}
+
+export function validateScenarioFrontierOwnerBoundaryContract(
+  metadata,
+  filePath,
+  options = {},
+) {
+  const requiresContract =
+    options[LEDGER_VALIDATION_REQUIRES_LEDGER] === true;
+  const proof = metadata?.[OWNER_BOUNDARY_MIGRATION_PROOF_FIELD];
+  const errors = proof === undefined ?
+    [] :
+    validateOwnerBoundaryMigrationProof(filePath, proof);
+
+  if (!requiresContract || !metadata) {
+    return errors;
+  }
+
+  const scenarioCausalClosure =
+    metadata[SCENARIO_CAUSAL_CLOSURE_METADATA_FIELD];
+  if (!isObjectRecord(scenarioCausalClosure)) {
+    return errors;
+  }
+
+  const currentFirstFrontier = normalizeLedgerText(
+    scenarioCausalClosure[SCENARIO_CAUSAL_CLOSURE_CURRENT_FRONTIER_FIELD],
+  );
+  const owner = normalizeLedgerText(metadata.owner);
+  const boundary = normalizeLedgerText(metadata.boundary);
+  if (
+    currentFirstFrontier.length === NUM_ZERO ||
+    owner.length === NUM_ZERO ||
+    boundary.length === NUM_ZERO
+  ) {
+    return errors;
+  }
+
+  if (
+    textMentionsValue(currentFirstFrontier, owner) &&
+    textMentionsValue(currentFirstFrontier, boundary)
+  ) {
+    return errors;
+  }
+
+  if (proof === undefined) {
+    errors.push(
+      `${filePath}: metadata owner/boundary must appear in ` +
+      'scenarioCausalClosure.currentFirstFrontier, or ' +
+      `${OWNER_BOUNDARY_MIGRATION_PROOF_FIELD} must explain the bounded ` +
+      'diagnostic/support-role or owner-boundary migration proof.',
+    );
+  }
+  return errors;
+}
+
 function normalizeCliPath(filePath) {
   return path.normalize(
     path.isAbsolute(filePath) ? filePath : path.join(process.cwd(), filePath),
@@ -1230,8 +1339,21 @@ async function readTextFile(filePath) {
   return fs.readFile(filePath, ENCODING_UTF8);
 }
 
+async function readJsonFile(filePath) {
+  return JSON.parse(await readTextFile(filePath));
+}
+
 async function writeTextFile(filePath, content) {
   await fs.writeFile(filePath, content, ENCODING_UTF8);
+}
+
+async function pathExists(filePath) {
+  try {
+    await fs.access(filePath);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 async function listMarkdownFiles(directoryPath) {
@@ -1428,6 +1550,17 @@ async function validatePackageFile(filePath, options = {}) {
       isScenarioDrivenMetadata(metadata),
     status: fileStatus,
   }));
+  errors.push(...validateScenarioFrontierOwnerBoundaryContract(
+    metadata,
+    relativePath,
+    {
+      [LEDGER_VALIDATION_REQUIRES_LEDGER]:
+        fileStatus === STATUS_ACTIVE &&
+        metadata !== null &&
+        isScenarioDrivenMetadata(metadata),
+      status: fileStatus,
+    },
+  ));
   errors.push(...validateCommitAndPushLedger(content, relativePath, {
     [LEDGER_VALIDATION_REQUIRES_LEDGER]:
       metadata !== null &&
@@ -1478,10 +1611,161 @@ async function resolveValidationTargets(args) {
   return [...new Set([...activePackages, ...metadataPackages])];
 }
 
+function hasExplicitValidationTargets(args) {
+  return args.some((arg) => !arg.startsWith('--'));
+}
+
+function normalizeSnapshotPathValue(filePath) {
+  const normalizedPath = normalizeLedgerText(filePath);
+  return normalizedPath.length > NUM_ZERO ?
+    normalizeRelativePath(normalizeCliPath(normalizedPath)) :
+    EMPTY_TEXT;
+}
+
+export function validateCurrentBlockerSnapshot(currentBlocker, options = {}) {
+  const snapshotPath = options.snapshotPath || CURRENT_BLOCKER_JSON_PATH;
+  const allowClosedSnapshot = options.allowClosed === true;
+  const errors = [];
+  if (!isObjectRecord(currentBlocker)) {
+    return [`${snapshotPath}: current-blocker snapshot must be an object.`];
+  }
+
+  if (currentBlocker.schema !== CURRENT_BLOCKER_SCHEMA) {
+    errors.push(
+      `${snapshotPath}: current-blocker schema must be ` +
+      `${CURRENT_BLOCKER_SCHEMA}.`,
+    );
+  }
+
+  const packagePath = normalizeSnapshotPathValue(currentBlocker.package);
+  if (packagePath.length === NUM_ZERO) {
+    errors.push(
+      `${snapshotPath}: current-blocker package is required; run ` +
+      `${CURRENT_BLOCKER_REPAIR_COMMAND}.`,
+    );
+  } else {
+    if (options.packageExists === false) {
+      errors.push(
+        `${snapshotPath}: package ${packagePath} does not exist; run ` +
+        `${CURRENT_BLOCKER_REPAIR_COMMAND}.`,
+      );
+    }
+    const packageStatus = getPackageStatusFromPath(packagePath);
+    const isClosedSnapshot =
+      allowClosedSnapshot &&
+      CURRENT_BLOCKER_CLOSED_STATUSES.includes(currentBlocker.status);
+    if (isClosedSnapshot && packageStatus === STATUS_ACTIVE) {
+      errors.push(
+        `${snapshotPath}: closed current-blocker snapshot must not point to ` +
+        `an active-* package; run ${CURRENT_BLOCKER_REPAIR_COMMAND} after ` +
+        'opening a new sprint.',
+      );
+    } else if (
+      !isClosedSnapshot &&
+      (packageStatus !== STATUS_ACTIVE || currentBlocker.status !== STATUS_ACTIVE)
+    ) {
+      errors.push(
+        `${snapshotPath}: current-blocker package must be an active-* ` +
+        `package with status active; run ${CURRENT_BLOCKER_REPAIR_COMMAND}.`,
+      );
+    }
+  }
+
+  const activePackagePath = normalizeSnapshotPathValue(options.activePackageFile);
+  if (
+    packagePath.length > NUM_ZERO &&
+    activePackagePath.length > NUM_ZERO &&
+    packagePath !== activePackagePath
+  ) {
+    errors.push(
+      `${snapshotPath}: package ${packagePath} does not match discovered ` +
+      `active package ${activePackagePath}; run ` +
+      `${CURRENT_BLOCKER_REPAIR_COMMAND}.`,
+    );
+  }
+
+  const sprintPath = normalizeSnapshotPathValue(currentBlocker.sprint);
+  if (sprintPath.length === NUM_ZERO) {
+    errors.push(
+      `${snapshotPath}: current-blocker sprint is required; run ` +
+      `${CURRENT_BLOCKER_REPAIR_COMMAND}.`,
+    );
+  }
+  const activeSprintPath = normalizeSnapshotPathValue(options.activeSprintFile);
+  if (
+    sprintPath.length > NUM_ZERO &&
+    activeSprintPath.length > NUM_ZERO &&
+    sprintPath !== activeSprintPath
+  ) {
+    errors.push(
+      `${snapshotPath}: sprint ${sprintPath} does not match discovered ` +
+      `active sprint ${activeSprintPath}; run ` +
+      `${CURRENT_BLOCKER_REPAIR_COMMAND}.`,
+    );
+  }
+
+  return errors;
+}
+
+async function validateCurrentBlockerFreshness() {
+  if (!(await pathExists(CURRENT_BLOCKER_JSON_PATH))) {
+    return [
+      `${CURRENT_BLOCKER_JSON_PATH}: generated current-blocker snapshot is ` +
+      `missing; run ${CURRENT_BLOCKER_REPAIR_COMMAND}.`,
+    ];
+  }
+
+  let currentBlocker = null;
+  try {
+    currentBlocker = await readJsonFile(CURRENT_BLOCKER_JSON_PATH);
+  } catch (error) {
+    return [
+      `${CURRENT_BLOCKER_JSON_PATH}: current-blocker snapshot is not valid ` +
+      `JSON: ${error.message}; run ${CURRENT_BLOCKER_REPAIR_COMMAND}.`,
+    ];
+  }
+
+  const errors = [];
+  const activeSprintFile = await findActiveSprintFile();
+  const allowClosedSnapshot =
+    !activeSprintFile &&
+    CURRENT_BLOCKER_CLOSED_STATUSES.includes(currentBlocker.status);
+  if (!activeSprintFile && !allowClosedSnapshot) {
+    errors.push(
+      `${CURRENT_BLOCKER_JSON_PATH}: ${ERROR_NO_ACTIVE_SPRINT} Run ` +
+      `${CURRENT_BLOCKER_REPAIR_COMMAND} after activating a sprint.`,
+    );
+  }
+  const activePackageFile = activeSprintFile ?
+    await findActivePackageFile(activeSprintFile) :
+    null;
+  if (!activePackageFile && !allowClosedSnapshot) {
+    errors.push(
+      `${CURRENT_BLOCKER_JSON_PATH}: ${ERROR_NO_ACTIVE_PACKAGE} Run ` +
+      `${CURRENT_BLOCKER_REPAIR_COMMAND} after activating a package.`,
+    );
+  }
+  const packagePath = normalizeSnapshotPathValue(currentBlocker.package);
+  const packageExists = packagePath.length > NUM_ZERO ?
+    await pathExists(packagePath) :
+    false;
+  errors.push(...validateCurrentBlockerSnapshot(currentBlocker, {
+    activePackageFile,
+    activeSprintFile,
+    allowClosed: allowClosedSnapshot,
+    packageExists,
+    snapshotPath: CURRENT_BLOCKER_JSON_PATH,
+  }));
+  return errors;
+}
+
 async function validateCommand(args) {
   const phase = resolveValidationPhase(args);
   const targets = await resolveValidationTargets(args);
   const errors = [];
+  if (!hasExplicitValidationTargets(args)) {
+    errors.push(...(await validateCurrentBlockerFreshness()));
+  }
   for (const filePath of targets) {
     if (filePath.includes(`${path.sep}sprints${path.sep}`)) {
       errors.push(...(await validateSprintFile(filePath)));
@@ -1577,6 +1861,11 @@ function buildDoctorSuggestion(error) {
       'files, push the branch, and record commit SHA, remote/branch, and ' +
       '`yes` for focused-slice containment.';
   }
+  if (/scenarioCausalClosure\.currentFirstFrontier/iu.test(error)) {
+    return 'Update the package owner/boundary to the canonical first frontier, ' +
+      'or add `ownerBoundaryMigrationProof` with from/to owner-boundary and ' +
+      'focused evidence when the package is only diagnostic/support work.';
+  }
   return EMPTY_TEXT;
 }
 
@@ -1658,6 +1947,17 @@ export function buildPackageDoctorLines(filePath, content, options = {}) {
       isScenarioDrivenMetadata(metadata),
     status: fileStatus,
   }));
+  errors.push(...validateScenarioFrontierOwnerBoundaryContract(
+    metadata,
+    relativePath,
+    {
+      [LEDGER_VALIDATION_REQUIRES_LEDGER]:
+        fileStatus === STATUS_ACTIVE &&
+        metadata !== null &&
+        isScenarioDrivenMetadata(metadata),
+      status: fileStatus,
+    },
+  ));
   errors.push(...validateCommitAndPushLedger(content, relativePath, {
     [LEDGER_VALIDATION_REQUIRES_LEDGER]:
       metadata !== null &&

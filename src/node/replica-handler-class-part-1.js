@@ -457,6 +457,7 @@ class ReplicaHandlerPart1 extends EventEmitter {
           ReplicaOperationResponseStatus.ALREADY_EXISTS,
           {
             replicaId: existingReplica.replicaId,
+            [ReplicaOperationField.REPLICA_STATUS]: ReplicaStatus.ACTIVE,
             nodeId: this.nodeId,
           },
         );
@@ -479,6 +480,7 @@ class ReplicaHandlerPart1 extends EventEmitter {
           ReplicaOperationResponseStatus.IN_PROGRESS,
           {
             replicaId: existingReplica.replicaId,
+            [ReplicaOperationField.REPLICA_STATUS]: existingReplica.status,
             nodeId: this.nodeId,
           },
         );

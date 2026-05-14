@@ -197,6 +197,38 @@ test('createControlPlaneWriteHealthProvider contains background backlog when cri
   cleanupTestEnvironment();
 });
 
+test('createControlPlaneWriteHealthProvider keeps recovery heartbeat failures soft when critical reserve remains available', async (t) => {
+  initializeTestEnvironment();
+
+  const provider = createControlPlaneWriteHealthProvider(buildOwner({
+    consecutiveFailures: 5,
+    publicationMode:
+      CONTROL_PLANE_NODE_STATE_PUBLICATION_MODE.HEARTBEAT_RECOVERY,
+  }), {
+    failureThreshold: 3,
+  });
+  const health = provider();
+
+  t.equal(health.healthy, false, 'recovery write failures remain degraded evidence');
+  t.equal(
+    health.classification,
+    LIFECYCLE_DEPENDENCY_CLASS.SOFT,
+    'recovery heartbeat failures should not hard-block readiness while reserve remains available',
+  );
+  t.equal(
+    health.state,
+    CONTROL_PLANE_WRITE_HEALTH_STATE.RECOVERY_WRITE_DEFERRED,
+    'recovery heartbeat failures should use the explicit deferred state',
+  );
+  t.equal(
+    health.details?.pressureSummary?.backpressured,
+    false,
+    'control-plane partition should remain admissible while recovery writes retry',
+  );
+
+  cleanupTestEnvironment();
+});
+
 test('createControlPlaneWriteHealthProvider hard-blocks when critical control-plane capacity is exhausted', async (t) => {
   initializeTestEnvironment();
 

@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-05-12T18:57:00.960Z",
+  "generatedAt": "2026-05-13T14:37:30.220Z",
   "packs": [
     {
       "name": "core",
@@ -30,8 +30,8 @@
       "name": "testing",
       "title": "Testing Steering Pack",
       "description": "Load for test-first workflow, reliability harness work, and regression policy.",
-      "ruleCount": 95,
-      "estimatedTokens": 3802,
+      "ruleCount": 96,
+      "estimatedTokens": 3893,
       "domains": [
         "testing"
       ],
@@ -52,8 +52,8 @@
       "name": "governance",
       "title": "Governance Steering Pack",
       "description": "Load for roadmap and edition-scope checks.",
-      "ruleCount": 47,
-      "estimatedTokens": 1923,
+      "ruleCount": 50,
+      "estimatedTokens": 2036,
       "domains": [
         "governance"
       ],

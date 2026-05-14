@@ -14,7 +14,7 @@
       "owner": "operation_workflow_owner",
       "boundary": "rebalancer_handoff",
       "dominantReason": "priority_recovery_rebalancer_handoff_retry_scheduled",
-      "evidencePath": "report.scenarios[0].publicationConvergence.priorityRecoveryProgressSummary.dominantWitness",
+      "evidencePath": "report.scenarios[0].publicationConvergence.activeGate.progress.priorityRecoveryProgressClasses",
       "reasons": [
         "priority_recovery_progress_blocked"
       ]
@@ -30,7 +30,7 @@
     "reasons": [
       "priority_recovery_progress_blocked"
     ],
-    "evidencePath": "report.scenarios[0].publicationConvergence.priorityRecoveryProgressSummary.dominantWitness",
+    "evidencePath": "report.scenarios[0].publicationConvergence.activeGate.progress.priorityRecoveryProgressClasses",
     "source": {
       "unresolvedSemanticStateIds": "needs_operation,operation_stalled",
       "blockedPartitionIds": "replica_operations-p1,sql_transactions-p1,sql_write_operations-p1",

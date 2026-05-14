@@ -64,6 +64,9 @@ export function registerMembershipPublicationCoordinatorTailMoreTests({
   INITIAL_PARTITION_IDS[SYSTEM_TABLE_NAME.SQL_TRANSACTIONS];
   const PRIORITY_REFRESH_STALE_READ_SOURCE = 'authoritative';
   const PRIORITY_REFRESH_FRESH_READ_SOURCE = 'cache';
+  const UNCHANGED_PUBLISHED_METADATA_REFRESH_COUNT = 1;
+  const UNCHANGED_PUBLISHED_METADATA_REFRESH_ASSERTION =
+    'unchanged published membership should refresh lifecycle metadata without reopening publication';
   const DISPATCH_RETRY_SOURCE_NODE_ID = 'node-source';
   const DISPATCH_RETRY_TARGET_NODE_ID = 'node-target';
   const DISPATCH_RETRY_PARTITION_ID =
@@ -661,8 +664,8 @@ export function registerMembershipPublicationCoordinatorTailMoreTests({
 
       t.equal(
         upsertCallCount,
-        0,
-        'unchanged published membership should not be rewritten through the publication owner',
+        UNCHANGED_PUBLISHED_METADATA_REFRESH_COUNT,
+        UNCHANGED_PUBLISHED_METADATA_REFRESH_ASSERTION,
       );
       t.match(
         result.publicationRow,

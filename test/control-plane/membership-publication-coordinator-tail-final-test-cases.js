@@ -14,6 +14,10 @@ export function registerMembershipPublicationCoordinatorTailFinalTests({
   CONTROL_PLANE_AUTHORITATIVE_READ_MODE,
   ControlPlanePublicationsOwner,
 }) {
+  const AUTHORITATIVE_FALLBACK_METADATA_REFRESH_COUNT = NUM.ONE;
+  const AUTHORITATIVE_FALLBACK_METADATA_REFRESH_ASSERTION =
+    'authoritative published row should refresh lifecycle metadata without opening a duplicate epoch';
+
   test('reconcileClusterMembership enables recovery-eligible projection while priority spread remains blocked even when discovery rows lag',
     async (t) => {
       const latestPublicationRow = {
@@ -597,8 +601,8 @@ export function registerMembershipPublicationCoordinatorTailFinalTests({
       );
       t.equal(
         upsertCallCount,
-        0,
-        'the authoritative published row should prevent opening a duplicate epoch',
+        AUTHORITATIVE_FALLBACK_METADATA_REFRESH_COUNT,
+        AUTHORITATIVE_FALLBACK_METADATA_REFRESH_ASSERTION,
       );
       t.match(
         result.publicationRow,

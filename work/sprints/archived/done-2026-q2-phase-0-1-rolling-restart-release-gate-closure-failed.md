@@ -1,30 +1,39 @@
 # Phase 0.1 Rolling Restart Release Gate Closure Sprint
 
-Status: active. This sprint was reopened on May 13, 2026 because the fresh
-representative `rolling-restart` run is red. The only sprint success measure is
-a passing `rolling-restart` run.
+Status: done. Outcome: failed. This sprint was closed on May 13, 2026 because
+the representative `rolling-restart` run remained red after the focused SQL
+write dispatch retry proof. The sprint's only success measure was a passing
+`rolling-restart` run, and that measure was not met.
 
 ## Current Result
 
-This sprint is not complete. Classified closure, accepted backpressure, reduced
-evidence, or owner-boundary migration cannot close it unless the representative
-`rolling-restart` gate is green.
+This sprint failed. Classified closure, accepted backpressure, reduced evidence,
+or owner-boundary migration did not satisfy the sprint contract because the
+representative `rolling-restart` gate remained red.
 
 Fresh red proof:
 
 1. Latest representative artifact:
-   `test-output/reports/rolling-restart-green-only-baseline-20260513.report.json`.
+   `test-output/reports/rolling-restart-green-gate-after-sql-write-dispatch-retry-progress.report.json`.
 2. Report result: `0/1` passed, `1` failed.
-3. Active gate: `active=3/5` before the `120000ms` limit.
-4. Publication ACK convergence remains satisfied with `PUBLISHED` and zero
-   pending acknowledgements.
-5. Priority recovery remains local gate work:
-   `priorityRecoveryState=needs_operation` and
-   `priorityRecovery=eligible_but_no_operation_created`.
-6. Canonical first frontier:
+3. Canonical first frontier:
    `operation_workflow_owner / workflow_progress` on
-   `priority_recovery_partition_progress`, state `blocked`, dominant reason
-   `priority_recovery_progress_blocked`.
+   `priority_recovery_partition_progress`, state `retryable`, dominant reason
+   `priority_recovery_event_driven_wait`.
+4. Focused dispatch-retry proof passed, but the representative rerun stayed
+   same-frontier.
+5. Residual shape: retry-deferred / recovering-in-flight
+   coordinator-created remote handoff ACK failures across
+   `replica_operations-p1`, `sql_transaction_participants-p1`,
+   `sql_transactions-p1`, and `sql_write_operations-p1`; the residual
+   extractor also reports a `rebalancer_handoff` split group.
+6. Publication ACK convergence is not the current first frontier in canonical
+   evidence.
+7. Projected downstream frontier: active-gate snapshot coverage is not current.
+8. Active gate: `active=2/5`, `snapshotCoverage=2/5`, depending on priority
+   progress.
+9. Startup readiness support remains downstream of active-gate progress, not
+   the current owner boundary.
 
 ## Goal
 
@@ -64,13 +73,18 @@ failures. It is one convergence chain:
 3. `operation_workflow_owner / workflow_progress` exposed
    `coordination_mismatch`, `recovering_in_flight`, and
    `advance_existing_operation` evidence.
-4. `startup_active_gate_owner / snapshot_coverage` remains downstream and may
-   become the true first frontier only after priority recovery progress clears.
-5. Startup readiness support evidence must stay explanatory and must not close
+4. `startup_active_gate_owner / snapshot_coverage` was the prior projected
+   frontier after priority recovery cleared, but the latest canonical evidence
+   promotes priority recovery back to the current first frontier.
+5. `operation_workflow_owner / workflow_progress` stayed current after focused
+   SQL write dispatch retry proof, now exposing retry-deferred remote handoff
+   ACK failures.
+6. Startup readiness support evidence must stay explanatory and must not close
    the sprint while `rolling-restart` is red.
 
-Execution therefore proceeds as a vertical priority-recovery convergence
-program inside this active sprint:
+Execution therefore proceeds on the priority-recovery coordinator-created
+remote handoff retry/ACK frontier while preserving the SQL write dispatch retry
+package as same-frontier predecessor evidence:
 
 1. **Current blocker fixture and burn-down.** Freeze the May 13, 2026 artifact
    into a replayable priority-recovery fixture that records witness count,
@@ -113,25 +127,28 @@ program inside this active sprint:
 
 The first executable proof surface has been created:
 
-1. [Priority Recovery Current Artifact Fixture And Burndown](../packages/todo-20260513-priority-recovery-current-artifact-fixture-and-burndown.md)
+1. [Priority Recovery Current Artifact Fixture And Burndown](../../packages/todo-20260513-priority-recovery-current-artifact-fixture-and-burndown.md)
 2. Fixture:
    `test/scripts/__fixtures__/topology-convergence/rolling-restart-green-only-baseline-priority-recovery.fixture.json`
 3. Test:
    `node --test test/scripts/priority-recovery-current-artifact-fixture.test.js`
 
-This first package remains a sprint work item until it is either promoted into
-the current active package closure proof or activated as its own focused
-diagnostics package. The current runtime package still owns the active
-`operation_workflow_owner / workflow_progress` fix.
+This first package remains predecessor evidence. The latest artifact promoted
+priority recovery back to the first frontier, and the final parked package
+preserves the `operation_workflow_owner / workflow_progress` SQL write dispatch
+retry proof plus the same-frontier failure evidence.
 
 ## Package Queue
 
-1. Active:
-   [Rolling Restart Green Gate Workflow Progress Recovery](../packages/active-20260513-rolling-restart-green-gate-workflow-progress-recovery.md)
+1. Parked at failed sprint closure:
+   [Priority Recovery SQL Write Dispatch Retry Progress](../../packages/todo-20260513-priority-recovery-sql-write-dispatch-retry-progress.md)
 2. Todo:
-   [Priority Recovery Current Artifact Fixture And Burndown](../packages/todo-20260513-priority-recovery-current-artifact-fixture-and-burndown.md)
-3. Next package to create after the current active package resolves or remains
-   same-frontier: `Priority Recovery Operation Progress Kernel`.
+   [Priority Recovery Current Artifact Fixture And Burndown](../../packages/todo-20260513-priority-recovery-current-artifact-fixture-and-burndown.md)
+3. No next package is active in this failed sprint. A future strategy may create
+   coordinator-created remote handoff retry/ACK progress under
+   `operation_workflow_owner`, or an active-gate snapshot-coverage successor
+   only if fresh canonical evidence first closes priority progress and promotes
+   active gate.
 4. Then: `Priority Recovery Ledger Projection`.
 5. Then: `Priority Recovery Owner-Key Reconcile Loop`.
 6. Then: `Control Plane Direct Wake-Up Transport Contract`.
@@ -140,33 +157,35 @@ diagnostics package. The current runtime package still owns the active
 9. Then: `Release Gate Budget Inheritance`.
 10. Then: `Rolling Restart Green-Gate Confirmation`.
 
-## Active Snapshot
+## Closure Snapshot
 
-- Active package:
-  [Rolling Restart Green Gate Workflow Progress Recovery](../packages/active-20260513-rolling-restart-green-gate-workflow-progress-recovery.md)
+- Parked package:
+  [Priority Recovery SQL Write Dispatch Retry Progress](../../packages/todo-20260513-priority-recovery-sql-write-dispatch-retry-progress.md)
 - Latest artifact:
-  `test-output/reports/rolling-restart-green-gate-after-direct-wakeup-transport-contract.report.json`
-- Latest playback:
-  `test-output/reports/.playback/rolling-restart-green-gate-after-direct-wakeup-transport-contract/rolling-restart/`
+  `test-output/reports/rolling-restart-green-gate-after-sql-write-dispatch-retry-progress.report.json`
+- Latest playback: none recorded for the parked package handoff.
 - Representative gate: `rolling-restart`
 - Owner boundary: `operation_workflow_owner / workflow_progress`
-- Canonical blocker: `priority_recovery_partition_progress` is retryable
-  under `operation_workflow_owner / workflow_progress`, with three
-  target-owned `PENDING` system-table operations still waiting for deterministic
-  dispatch progression.
-- Subordinate evidence: `startup_active_gate_owner / snapshot_coverage` remains
-  downstream until priority recovery progress closes.
-- Next action: continue the active workflow-progress package by forcing
-  target-owned `PENDING` priority recovery operations through dispatch, retry,
-  reconcile, or bounded migration, then rerun `rolling-restart`.
+- Canonical blocker: `priority_recovery_partition_progress` is retryable with
+  dominant reason `priority_recovery_event_driven_wait`.
+- Focused residual: retry-deferred / recovering-in-flight
+  coordinator-created remote handoff ACK failures across
+  `replica_operations-p1`, `sql_transaction_participants-p1`,
+  `sql_transactions-p1`, and `sql_write_operations-p1`.
+- Subordinate evidence: active-gate snapshot coverage is downstream/projected
+  at `active=2/5` and `snapshotCoverage=2/5`, dependent on priority progress.
+- Next action: do not continue the package queue in this sprint. Start a new
+  strategy or successor sprint before reactivating priority-recovery remote
+  handoff retry/ACK work.
 - Proof ladder:
-  `npm run work:llm-start -- --package work/packages/active-20260513-rolling-restart-green-gate-workflow-progress-recovery.md`,
-  `npm run work:evidence-summary -- test-output/reports/rolling-restart-green-gate-after-direct-wakeup-transport-contract.report.json`,
-  `npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-green-gate-after-direct-wakeup-transport-contract.report.json --markdown`,
-  `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-green-gate-after-direct-wakeup-transport-contract.report.json --explain priority_recovery_partition_progress`,
-  `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-green-gate-after-direct-wakeup-transport-contract.report.json`,
-  focused operation-workflow tests,
-  `node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-green-gate-after-workflow-progress-recovery.report.json --fast-local --verbose`.
+  `npm run work:llm-start`,
+  `npm run work:package:doctor -- --suggest work/packages/todo-20260513-priority-recovery-sql-write-dispatch-retry-progress.md`,
+  `npm run work:evidence-summary -- test-output/reports/rolling-restart-green-gate-after-sql-write-dispatch-retry-progress.report.json`,
+  `npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-green-gate-after-sql-write-dispatch-retry-progress.report.json --markdown`,
+  `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-green-gate-after-sql-write-dispatch-retry-progress.report.json --explain priority_recovery_partition_progress`,
+  `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-green-gate-after-sql-write-dispatch-retry-progress.report.json`,
+  focused control-plane dispatch retry tests,
+  `node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-green-gate-after-sql-write-dispatch-retry-progress.report.json --fast-local --verbose`.
 
 ## Artifact History
 
@@ -200,6 +219,11 @@ trail is:
 25. `test-output/reports/rolling-restart-current-release-gate-after-workflow-progress-direct-chain-owner-proof.report.json`
 26. `test-output/reports/rolling-restart-green-only-baseline-20260513.report.json`
 27. `test-output/reports/rolling-restart-green-gate-after-direct-wakeup-transport-contract.report.json`
+28. `test-output/reports/rolling-restart-green-gate-after-dispatch-retry-recovery-readiness.report.json`
+29. `test-output/reports/rolling-restart-green-gate-after-startup-active-gate-recovery.report.json`
+30. `test-output/reports/rolling-restart-green-gate-after-priority-recovery-sql-dispatch-deadline.report.json`
+31. `test-output/reports/rolling-restart-green-gate-after-active-gate-register-service-timeout.report.json`
+32. `test-output/reports/rolling-restart-green-gate-after-sql-write-dispatch-retry-progress.report.json`
 
 The matching playback is:
 
@@ -230,29 +254,35 @@ The matching playback is:
 25. `test-output/reports/.playback/rolling-restart-current-release-gate-after-workflow-progress-direct-chain-owner-proof/rolling-restart/`
 26. `test-output/reports/.playback/rolling-restart-green-only-baseline-20260513/rolling-restart/`
 27. `test-output/reports/.playback/rolling-restart-green-gate-after-direct-wakeup-transport-contract/rolling-restart/`
+28. `test-output/reports/.playback/rolling-restart-green-gate-after-dispatch-retry-recovery-readiness/rolling-restart/`
+29. `test-output/reports/.playback/rolling-restart-green-gate-after-startup-active-gate-recovery/rolling-restart/`
+30. `test-output/reports/.playback/rolling-restart-green-gate-after-priority-recovery-sql-dispatch-deadline/rolling-restart/`
+
+The parked package records no playback path for
+`test-output/reports/rolling-restart-green-gate-after-sql-write-dispatch-retry-progress.report.json`.
 
 ## Current Blocker Detail Ledger
 
-Active package:
+Parked package:
 
-1. [Rolling Restart Green Gate Workflow Progress Recovery](../packages/active-20260513-rolling-restart-green-gate-workflow-progress-recovery.md)
+1. [Priority Recovery SQL Write Dispatch Retry Progress](../../packages/todo-20260513-priority-recovery-sql-write-dispatch-retry-progress.md)
 
 Latest closed package:
 
-1. [Rolling Restart Startup Readiness Support Evidence Boundary](../packages/done-20260512-rolling-restart-startup-readiness-support-evidence-boundary.md)
+1. [Rolling Restart Active Gate Snapshot Coverage After Readiness Support Reduction](../../packages/done-20260513-rolling-restart-active-gate-snapshot-coverage-after-readiness-support-reduction.md)
 
 Recent completed packages:
 
-1. [Rolling Restart Operation Workflow Progress Direct Chain After Owner Proof](../packages/done-20260512-rolling-restart-operation-workflow-progress-direct-chain-after-owner-proof.md)
-2. [Rolling Restart Operation Workflow Progress Serial Wait Event Driven Advance](../packages/done-20260512-rolling-restart-operation-workflow-progress-serial-wait-event-driven-advance.md)
-3. [Rolling Restart Operation Workflow Progress Coordinator Excludes Node](../packages/done-20260512-rolling-restart-operation-workflow-progress-coordinator-excludes-node.md)
-4. [Rolling Restart Operation Workflow Rebalancer Handoff Needs Operation Coordination Mismatch Classification](../packages/done-20260512-rolling-restart-operation-workflow-rebalancer-handoff-needs-operation-coordination-mismatch-classification.md)
-5. [Rolling Restart Operation Workflow Rebalancer Handoff Priority Recovery Retry Scheduled](../packages/done-20260512-rolling-restart-operation-workflow-rebalancer-handoff-priority-recovery-retry-scheduled.md)
-6. [Rolling Restart Operation Workflow Progress Priority Recovery Event Wait](../packages/done-20260512-rolling-restart-operation-workflow-progress-priority-recovery-event-wait.md)
-7. [Rolling Restart Rebalancer Leader Operation Scheduling Priority Recovery](../packages/done-20260512-rolling-restart-rebalancer-leader-operation-scheduling-priority-recovery.md)
-8. [Rolling Restart Operation Workflow Progress Stage3 Timeout Progression](../packages/done-20260512-rolling-restart-operation-workflow-progress-stage3-timeout-progression.md)
+1. [Rolling Restart Operation Workflow Progress Direct Chain After Owner Proof](../../packages/done-20260512-rolling-restart-operation-workflow-progress-direct-chain-after-owner-proof.md)
+2. [Rolling Restart Operation Workflow Progress Serial Wait Event Driven Advance](../../packages/done-20260512-rolling-restart-operation-workflow-progress-serial-wait-event-driven-advance.md)
+3. [Rolling Restart Operation Workflow Progress Coordinator Excludes Node](../../packages/done-20260512-rolling-restart-operation-workflow-progress-coordinator-excludes-node.md)
+4. [Rolling Restart Operation Workflow Rebalancer Handoff Needs Operation Coordination Mismatch Classification](../../packages/done-20260512-rolling-restart-operation-workflow-rebalancer-handoff-needs-operation-coordination-mismatch-classification.md)
+5. [Rolling Restart Operation Workflow Rebalancer Handoff Priority Recovery Retry Scheduled](../../packages/done-20260512-rolling-restart-operation-workflow-rebalancer-handoff-priority-recovery-retry-scheduled.md)
+6. [Rolling Restart Operation Workflow Progress Priority Recovery Event Wait](../../packages/done-20260512-rolling-restart-operation-workflow-progress-priority-recovery-event-wait.md)
+7. [Rolling Restart Rebalancer Leader Operation Scheduling Priority Recovery](../../packages/done-20260512-rolling-restart-rebalancer-leader-operation-scheduling-priority-recovery.md)
+8. [Rolling Restart Operation Workflow Progress Stage3 Timeout Progression](../../packages/done-20260512-rolling-restart-operation-workflow-progress-stage3-timeout-progression.md)
 
-Reopen action:
+Closure action:
 
 1. Preserve all predecessor packages as proof, not as sprint closure.
 2. The closed startup-readiness package no longer represents sprint exit
@@ -260,35 +290,35 @@ Reopen action:
 3. Keep the direct-chain workflow-progress package as predecessor proof only.
 4. Parked split successor remains parked until fresh first-frontier evidence
    promotes it:
-   [Rolling Restart Rebalancer Leader Operation Scheduling Control Plane Publications Create Recovery Operation](../packages/todo-20260512-rolling-restart-rebalancer-leader-operation-scheduling-control-plane-publications-create-recovery-operation.md)
-5. Implement and rerun the active package until `rolling-restart` passes.
+   [Rolling Restart Rebalancer Leader Operation Scheduling Control Plane Publications Create Recovery Operation](../../packages/todo-20260512-rolling-restart-rebalancer-leader-operation-scheduling-control-plane-publications-create-recovery-operation.md)
+5. Stop this sprint instead of implementing another same-scenario package in
+   the existing queue.
 
 Latest representative evidence:
 
 1. Scenario: `rolling-restart`
 2. Artifact:
-   `test-output/reports/rolling-restart-green-gate-after-direct-wakeup-transport-contract.report.json`
+   `test-output/reports/rolling-restart-green-gate-after-sql-write-dispatch-retry-progress.report.json`
 3. Report total/passed/failed: `1/0/1`
-4. Duration: approximately `137970ms`
-5. Active gate: failed; not all nodes active within `120000ms`
-6. Priority recovery invariants: passed after the reusable direct wake-up
-   transport contract.
-7. Publication: `PUBLISHED`
-8. Pending acknowledgements: `0`
-9. Current frontier: `priority_recovery_partition_progress` under
-   `operation_workflow_owner / workflow_progress`, state `retryable`,
-   dominant reason `priority_recovery_event_driven_wait`.
-10. Residual semantic states: `recovering_in_flight`.
-11. Residual partitions: `replica_operations-p1`,
-    `sql_transaction_participants-p1`, and `sql_transactions-p1`.
-12. Residual shape: three target-owned system-table `REPLACE` operations are
-    persisted as `PENDING` with actuation state `persisted_not_dispatched`,
-    target node `35a891b8-c1a0-5064-9c6e-2acfba61c2a7`, and source node
-    `7493b0ab-a054-5fad-a91b-5e331db29304`.
-13. Representative outcome: red. No non-green classification is a sprint
+4. Duration: approximately one rolling-restart timeout window.
+5. Current frontier: `priority_recovery_partition_progress` under
+   `operation_workflow_owner / workflow_progress`, state `retryable`, dominant
+   reason `priority_recovery_event_driven_wait`.
+6. Focused residual shape: retry-deferred / recovering-in-flight
+   coordinator-created remote handoff ACK failures across
+   `replica_operations-p1`, `sql_transaction_participants-p1`,
+   `sql_transactions-p1`, and `sql_write_operations-p1`.
+7. Active gate: downstream/projected; `active=2/5`, `snapshotCoverage=2/5`,
+   depending on priority progress.
+8. Publication convergence: not the current first frontier in canonical
+   evidence.
+9. Startup readiness support: downstream of active-gate progress, not the
+   current owner boundary.
+10. Projected next frontier: `active_gate_snapshot_coverage` only after
+    priority recovery progress closes.
+11. Representative outcome: red. No non-green classification is a sprint
     success measure.
-14. Startup active-gate snapshot coverage remains downstream at
-    `snapshotCoverage=2/5` until priority recovery progress closes.
+12. Priority recovery workflow progress is the active first frontier.
 
 The publication-convergence package still holds the prior
 `topology_publication_owner / publication_convergence` reduction:
@@ -296,15 +326,15 @@ The publication-convergence package still holds the prior
 zero-ACK, zero-blocked-node, priority-spread-pending case without canonical
 missing-active publication debt.
 
-The workflow-progress priority recovery packages remain predecessor reductions,
-but the fresh green-only run restores `operation_workflow_owner /
-workflow_progress` as the active first frontier with blocked evidence.
+The workflow-progress priority recovery packages remain predecessor reductions.
+The latest canonical topology keeps priority recovery workflow progress as the
+first frontier and moves the next package direction from control-plane dispatch
+retry coverage to coordinator-created remote handoff retry/ACK progress.
 
-Raw distributed-failure presentation still reports active-node readiness
-failures, but canonical topology keeps the current blocker at
-`priority_recovery_partition_progress` under
-`operation_workflow_owner / workflow_progress`. Treat presentation evidence as
-downstream until canonical extractors promote it.
+Raw distributed-failure presentation reports active-node readiness failures.
+Treat readiness as downstream until active-gate coverage improves or canonical
+extractors promote it. Treat active-gate as downstream until priority recovery
+progress closes or canonical extractors promote it.
 
 ## Scope Basis
 
@@ -322,9 +352,9 @@ Edition matrix status: Community / AGPL repo.
    passes.
 2. The publication-convergence package is locally closed. Its representative
    rerun reduced `publication_ack_convergence` to satisfied/non-frontier and
-   migrated the next focused successor back to `operation_workflow_owner /
-   workflow_progress` on `priority_recovery_partition_progress`; fresh evidence
-   still keeps publication convergence non-frontier.
+   later workflow-progress proof reduced priority recovery to non-frontier;
+   fresh evidence keeps publication non-frontier but promotes priority
+   recovery back to the current first frontier.
 3. Preserve the completed priority recovery owner-path packages as predecessor
    proof, not as the current owner.
 4. Keep sustained throughput and 7-node stress confirmation behind the current
@@ -386,8 +416,8 @@ Edition matrix status: Community / AGPL repo.
     causal stop migrated to `startup_readiness_owner /
     startup_support_evidence`.
 14. Reopen the sprint from the May 13, 2026 green-only baseline because the
-    representative `rolling-restart` run is red and the active first frontier
-    is again `operation_workflow_owner / workflow_progress`.
+    representative `rolling-restart` run is red; a prior representative
+    frontier moved to `startup_active_gate_owner / snapshot_coverage`.
 15. Final implementation work proved `readiness_startup_support` with focused
     fixtures and analyzer probes, using `active_gate_snapshot_coverage` only as
     explanatory/projected evidence.
@@ -397,47 +427,50 @@ Edition matrix status: Community / AGPL repo.
 17. Implement the reusable direct wake-up transport contract so system-table
     replica dispatch wake-ups carry explicit target-node critical routing
     metadata for any future release-gate sprint, not only rolling-restart.
-18. Continue the same workflow-progress package on the post-fix residual:
-    target-owned `PENDING` system-table operations must deterministically
-    dispatch, retry, reconcile, or migrate instead of waiting indefinitely on
-    event-driven progress.
-19. If `rolling-restart` passes, run sustained throughput and 7-node stress
+18. Preserve the priority-recovery SQL dispatch-deadline proof as migrated
+    predecessor evidence.
+19. Preserve the active-gate snapshot-coverage package as predecessor evidence
+    after the latest representative report promoted priority recovery back to
+    `operation_workflow_owner / workflow_progress`.
+20. Preserve the priority-recovery SQL write dispatch retry progress package as
+    same-frontier evidence after the representative rerun exposed
+    coordinator-created remote handoff ACK failures.
+21. If `rolling-restart` passes, run sustained throughput and 7-node stress
     confirmation for `0.1`.
 
 ## Validation Ladder
 
-1. `npm run work:llm-start -- --package work/packages/active-20260513-rolling-restart-green-gate-workflow-progress-recovery.md`
-2. `npm run work:package:doctor -- --suggest work/packages/active-20260513-rolling-restart-green-gate-workflow-progress-recovery.md`
-3. `npm run work:evidence-summary -- test-output/reports/rolling-restart-green-gate-after-direct-wakeup-transport-contract.report.json`
-4. `npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-green-gate-after-direct-wakeup-transport-contract.report.json --markdown`
-5. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-green-gate-after-direct-wakeup-transport-contract.report.json --explain priority_recovery_partition_progress`
-6. `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-green-gate-after-direct-wakeup-transport-contract.report.json`
-7. `npm run analyze:owner-files -- operation_workflow_owner workflow_progress --markdown`
-8. Focused `operation_workflow_owner / workflow_progress` validation before
-   the representative rerun, including the active package's focused rebalancer
-   tests and runtime guardrails.
-9. Fixture burn-down proof:
-   `node --test test/scripts/priority-recovery-current-artifact-fixture.test.js`.
-10. Final representative green rerun:
-   `node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-green-gate-after-workflow-progress-recovery.report.json --fast-local --verbose`.
-   Any non-green result continues or opens active same-scenario work; it does
-   not close this sprint.
-11. `npm run work:current-blocker`
-12. `npm run work:validate -- --pre-impl --all`
-13. `git diff --check`
-14. Sustained throughput and 7-node stress confirmation after
+1. `npm run work:llm-start`
+2. `npm run work:package:doctor -- --suggest work/packages/todo-20260513-priority-recovery-sql-write-dispatch-retry-progress.md`
+3. `npm run work:evidence-summary -- test-output/reports/rolling-restart-green-gate-after-sql-write-dispatch-retry-progress.report.json`
+4. `npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-green-gate-after-sql-write-dispatch-retry-progress.report.json --markdown`
+5. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-green-gate-after-sql-write-dispatch-retry-progress.report.json --explain priority_recovery_partition_progress`
+6. `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-green-gate-after-sql-write-dispatch-retry-progress.report.json`
+7. `npm run analyze:distributed-failure -- --report test-output/reports/rolling-restart-green-gate-after-sql-write-dispatch-retry-progress.report.json`
+8. `npm run analyze:owner-files -- operation_workflow_owner workflow_progress --markdown`
+9. `npm run analyze:owner-files -- operation_workflow_owner rebalancer_handoff --markdown`
+10. Focused control-plane dispatch retry validation before the representative
+   rerun, including package guardrails.
+11. Diagnostics proof:
+   `node --test test/diagnostics/topology-convergence-graph.test.js test/scripts/analyze-topology-convergence.test.js`.
+12. Final representative green rerun:
+   `node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-green-gate-after-sql-write-dispatch-retry-progress.report.json --fast-local --verbose`.
+   This rerun stayed non-green and is the failed sprint closure artifact.
+13. `npm run work:current-blocker`
+14. `npm run work:validate -- --pre-impl --all`
+15. `git diff --check`
+16. Sustained throughput and 7-node stress confirmation after
     `rolling-restart` passes.
 
-## Done When
+## Failed Exit Criteria
 
-1. `rolling-restart` passes for the `0.1` release gate. Migration, reduction,
-   classification, or owner-boundary successor evidence may only continue or
-   open active sprint work while the representative gate is non-green.
-2. Priority recovery no longer reports stale priority operations without an
-   owner dispatch, progress, retry, or timeout-reconcile path.
-3. Publication convergence is either green or reduced to non-frontier before
-   any successor operation-workflow package starts.
-4. Current-blocker handoff names the latest representative evidence and next
-   successor package action.
-5. No Phase `0.5`, Phase `1.0`, or paid-edition queue item outranks the active
-   `0.1` representative release gate.
+1. Not met: `rolling-restart` did not pass for the `0.1` release gate.
+2. Not met: priority recovery still reports retry-deferred
+   coordinator-created remote handoff ACK progress debt.
+3. Partially met: publication convergence is not the current first frontier,
+   but downstream active-gate snapshot coverage remains red once priority
+   progress is resolved.
+4. Met: the closure handoff names the latest representative evidence and parks
+   the same-frontier package.
+5. Met: no Phase `0.5`, Phase `1.0`, or paid-edition queue item was promoted
+   into this sprint.
