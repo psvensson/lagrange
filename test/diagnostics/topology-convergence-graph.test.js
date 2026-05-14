@@ -74,11 +74,15 @@ const REPORT_ARTIFACT_PATH_CURRENT_READINESS_SUPPORT =
   'test-output/reports/rolling-restart-current-release-gate-after-workflow-progress-direct-chain-owner-proof.report.json';
 const REPORT_ARTIFACT_PATH_ACTIVE_GATE_OWNER_TRUTH =
   'test-output/reports/rolling-restart-green-gate-after-active-gate-owner-truth.report.json';
+const REPORT_ARTIFACT_PATH_PUBLICATION_PROJECTION_RECONCILIATION =
+  'test-output/reports/rolling-restart-green-gate-after-priority-recovery-workflow-progress-after-snapshot-coverage.report.json';
 const PUBLICATION_ACK_PENDING_STATUS = 'ACK_PENDING';
 const PUBLICATION_UNKNOWN_STATUS = 'UNKNOWN';
 const PUBLICATION_PENDING_REASON = 'publication_pending';
 const PUBLICATION_PUBLISHED_REASON = 'publication_published';
 const RECOVERY_PROTOCOL_STEADY_PUBLISHED = 'steady_published';
+const MISSING_PUBLISHED_NODES_PRESENT_REASON =
+  'missing_published_nodes_present';
 const PENDING_ACKS_PRESENT_REASON = 'pending_acks_present';
 const ACTIVE_GATE_TIMED_OUT_REASON = 'active_gate_timed_out';
 const SNAPSHOT_COVERAGE_INCOMPLETE_REASON = 'snapshot_coverage_incomplete';
@@ -93,6 +97,7 @@ const READINESS_SUPPORT_PATH_INHERITED_ACTIVE_GATE_NO_PROGRESS =
 const ARTIFACT_PRIORITY_RECOVERY_OWNER = 'artifact_priority_owner';
 const ARTIFACT_PRIORITY_RECOVERY_BOUNDARY = 'artifact_priority_boundary';
 const OWNER_STARTUP_ACTIVE_GATE = 'startup_active_gate_owner';
+const BOUNDARY_PUBLICATION_CONVERGENCE = 'publication_convergence';
 const PRIORITY_RECOVERY_WAIT_MODE_EVENT_DRIVEN = 'event_driven';
 const PRIORITY_RECOVERY_ACTION_WAIT_FOR_OPERATION_PROGRESS =
   'wait_for_operation_progress';
@@ -110,6 +115,8 @@ const PUBLICATION_ACK_FRONTIER_MISSING_NODE_IDS = Object.freeze([
   'ebc4aa0b-06c6-506d-93ea-1dd2deca3f58',
 ]);
 const SNAPSHOT_COVERAGE_TWO_OF_FIVE_BLOCKER = 'snapshot_coverage=2/5';
+const CURRENT_ARTIFACT_MISSING_PUBLISHED_COUNT = 4;
+const CURRENT_ARTIFACT_PUBLISHED_ACTIVE_COUNT = 1;
 
 function buildFixtureFailureBundle() {
   return {
@@ -509,7 +516,7 @@ describe('TopologyConvergenceGraph', () => {
       assertNoNullOrUndefined(graph);
     });
 
-  it('keeps steady published missing nodes behind startup snapshot coverage',
+  it('surfaces steady published missing nodes as publication owner evidence',
     () => {
       const fixture = buildHealthyFixtureFailureBundle();
       const graph = buildTopologyConvergenceGraphFromArtifacts({
@@ -547,17 +554,21 @@ describe('TopologyConvergenceGraph', () => {
         presentation,
       );
 
-      assert.equal(graph.summary.firstFrontierEdgeId, EDGE_SNAPSHOT_COVERAGE);
-      assert.equal(graph.summary.firstFrontierOwner, OWNER_STARTUP_ACTIVE_GATE);
-      assert.equal(dominantWitness.edgeId, EDGE_SNAPSHOT_COVERAGE);
-      assert.equal(dominantWitness.owner, OWNER_STARTUP_ACTIVE_GATE);
+      assert.equal(
+        graph.summary.firstFrontierEdgeId,
+        EDGE_PUBLICATION_ACK_CONVERGENCE,
+      );
+      assert.equal(graph.summary.firstFrontierOwner, OWNER_TOPOLOGY_PUBLICATION);
+      assert.equal(dominantWitness.edgeId, EDGE_PUBLICATION_ACK_CONVERGENCE);
+      assert.equal(dominantWitness.owner, OWNER_TOPOLOGY_PUBLICATION);
       assert.equal(
         dominantWitness.dominantReason,
-        ACTIVE_GATE_TIMED_OUT_REASON,
+        MISSING_PUBLISHED_NODES_PRESENT_REASON,
       );
-      assert.equal(publicationWitness.state, EDGE_STATE.SATISFIED);
+      assert.equal(publicationWitness.state, EDGE_STATE.DEFERRED);
       assert.deepEqual(publicationWitness.reasons, [
         PUBLICATION_PUBLISHED_REASON,
+        MISSING_PUBLISHED_NODES_PRESENT_REASON,
       ]);
       assert.equal(
         publicationWitness.source.recoveryProtocolState,
@@ -566,6 +577,63 @@ describe('TopologyConvergenceGraph', () => {
       assert.equal(
         publicationWitness.source.missingPublishedCount,
         PUBLICATION_ACK_FRONTIER_MISSING_NODE_IDS.length,
+      );
+      assertNoNullOrUndefined(graph);
+    });
+
+  it('projects current steady-published missing active nodes under the publication owner',
+    () => {
+      const artifact = JSON.parse(
+        fs.readFileSync(
+          REPORT_ARTIFACT_PATH_PUBLICATION_PROJECTION_RECONCILIATION,
+          JSON_ENCODING_UTF8,
+        ),
+      );
+      const graph = buildTopologyConvergenceGraph(artifact);
+      const publicationWitness = graph.ownerWitnesses.find((witness) =>
+        witness.edgeId === EDGE_PUBLICATION_ACK_CONVERGENCE,
+      );
+      const presentation = buildTopologyConvergenceOwnerPresentation(graph);
+      const dominantWitness = selectTopologyConvergenceDominantWitness(
+        presentation,
+      );
+
+      assert.equal(
+        graph.summary.firstFrontierEdgeId,
+        EDGE_PUBLICATION_ACK_CONVERGENCE,
+      );
+      assert.equal(graph.summary.firstFrontierOwner, OWNER_TOPOLOGY_PUBLICATION);
+      assert.equal(dominantWitness.edgeId, EDGE_PUBLICATION_ACK_CONVERGENCE);
+      assert.equal(dominantWitness.owner, OWNER_TOPOLOGY_PUBLICATION);
+      assert.equal(dominantWitness.boundary, BOUNDARY_PUBLICATION_CONVERGENCE);
+      assert.equal(dominantWitness.state, EDGE_STATE.DEFERRED);
+      assert.equal(
+        dominantWitness.dominantReason,
+        MISSING_PUBLISHED_NODES_PRESENT_REASON,
+      );
+      assert.deepEqual(dominantWitness.reasons, [
+        PUBLICATION_PUBLISHED_REASON,
+        MISSING_PUBLISHED_NODES_PRESENT_REASON,
+      ]);
+      assert.equal(
+        publicationWitness.source.publicationStatus,
+        PUBLICATION_STATUS_PUBLISHED,
+      );
+      assert.equal(
+        publicationWitness.source.recoveryProtocolState,
+        RECOVERY_PROTOCOL_STEADY_PUBLISHED,
+      );
+      assert.equal(
+        publicationWitness.source.publishedActiveNodeIds.length,
+        CURRENT_ARTIFACT_PUBLISHED_ACTIVE_COUNT,
+      );
+      assert.equal(
+        publicationWitness.source.missingPublishedNodeIds.length,
+        CURRENT_ARTIFACT_MISSING_PUBLISHED_COUNT,
+      );
+      assert.equal(
+        publicationWitness.source.missingPublishedCount,
+        CURRENT_ARTIFACT_MISSING_PUBLISHED_COUNT,
       );
       assertNoNullOrUndefined(graph);
     });

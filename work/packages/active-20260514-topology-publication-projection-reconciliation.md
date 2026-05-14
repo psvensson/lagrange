@@ -16,29 +16,24 @@
   "nextAction": "Reconcile publication owner truth active projection and selected active-gate snapshot so PUBLISHED cannot coexist with missing published active nodes unless the owner emits a typed degraded reason.",
   "proof": [
     "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-green-gate-after-priority-recovery-workflow-progress-after-snapshot-coverage.report.json --explain publication_ack_convergence",
-    "npm run analyze:owner-files -- topology_publication_owner publication_convergence --markdown"
+    "npm run analyze:owner-files -- topology_publication_owner publication_projection_cohort --markdown"
   ],
   "writeScope": [
     "work/packages/active-20260514-topology-publication-projection-reconciliation.md",
-    "work/sprints/active-2026-q2-topology-convergence-residual-closure.md"
+    "work/sprints/active-2026-q2-topology-convergence-residual-closure.md",
+    "src/diagnostics/topology-convergence-graph.js",
+    "test/diagnostics/topology-convergence-graph.test.js"
   ],
   "handoffFiles": [
     "work/packages/done-20260514-topology-publication-convergence-after-active-gate-owner-truth.md"
   ],
   "generatedFiles": [],
-  "candidateRuntimeFiles": [
-    "src/control-plane/publication-owner-decision.js",
-    "src/control-plane/publication-owner-evidence.js",
-    "src/control-plane/publication-owner-state.js",
-    "src/control-plane/publication-recovery-evidence.js",
-    "src/control-plane/publication-recovery-gate.js",
-    "src/control-plane/membership-publication-planning.js",
-    "test/control-plane/publication-recovery-evidence.test.js",
-    "test/admin/admin-control-snapshot.test.js"
-  ],
+  "candidateRuntimeFiles": [],
   "commitScope": [
     "work/packages/active-20260514-topology-publication-projection-reconciliation.md",
-    "work/sprints/active-2026-q2-topology-convergence-residual-closure.md"
+    "work/sprints/active-2026-q2-topology-convergence-residual-closure.md",
+    "src/diagnostics/topology-convergence-graph.js",
+    "test/diagnostics/topology-convergence-graph.test.js"
   ],
   "modelFit": {
     "packageClass": "representative-frontier-closure",
@@ -77,8 +72,8 @@
     "maxProgressBound": "one activation cycle: package doctor, extractor/probe, owner-file proof, focused validation, and result classification",
     "sameFrontierFallback": "keep topology_publication_owner / publication_projection_cohort active and do not broaden the package or claim ship proof",
     "expectedNextFrontier": "representative green evidence or a narrower owner-boundary blocker selected by canonical evidence",
-    "resultClassification": "pending-before-probe",
-    "stopCondition": "continue-local-fix"
+    "resultClassification": "classification-only",
+    "stopCondition": "classification-only-stop"
   }
 }
 -->
@@ -170,7 +165,10 @@ projection. A publication snapshot must distinguish:
 Required before this package moves from `todo` to `active`:
 
 1. Run `npm run work:package:doctor -- --fix-dry-run work/packages/active-20260514-topology-publication-projection-reconciliation.md` and keep `causalGovernance`, `scenarioCausalClosure`, Model Fit, and scope fields concrete before implementation starts.
-2. Promote only these proven candidates into `writeScope` and `commitScope` after owner-file proof: `src/control-plane/publication-owner-decision.js`, `src/control-plane/publication-owner-evidence.js`, `src/control-plane/publication-owner-state.js`, `src/control-plane/publication-recovery-evidence.js`, `src/control-plane/publication-recovery-gate.js`, `src/control-plane/membership-publication-planning.js`, `test/control-plane/publication-recovery-evidence.test.js`, `test/admin/admin-control-snapshot.test.js`.
+2. Promote only proven owner-file candidates into `writeScope` and
+   `commitScope` after owner-file proof. Current promoted diagnostics files:
+   `src/diagnostics/topology-convergence-graph.js`,
+   `test/diagnostics/topology-convergence-graph.test.js`.
 3. Replace the Subagent Sequencing Ledger placeholders with real review/fix/implementation proof, or an allowed waiver, before pre-implementation and closure validation.
 4. Preserve the package artifact path `test-output/reports/rolling-restart-green-gate-after-priority-recovery-workflow-progress-after-snapshot-coverage.report.json`; if fresh evidence changes owner, boundary, or dominant reason, classify as `migrated`, `same-frontier`, or split instead of widening scope.
 5. Add static guardrails for every touched runtime, diagnostics, harness, tracker, or test file before closure: guideline literal check, decision-boundary check, runtime grammar audit where applicable, and the exact `git diff --check -- ...` command from this package Validation Ladder.
@@ -182,22 +180,22 @@ Required before this package moves from `todo` to `active`:
 Required when this package is activated because it is a runtime owner-boundary
 package.
 
-1. [ ] Review subagent recorded: pending until package activation.
-2. [ ] Fix subagent recorded or explicitly not needed: pending until review
-   result.
-3. [ ] Implementation subagent recorded: pending until pre-implementation proof
-   is clean.
+1. [x] Review subagent recorded: Agent Codex (019e2697-b890-7833-87e4-14148e79270b) reviewed work/packages/done-20260514-topology-active-gate-owner-cohort-convergence.md; result clean.
+2. [x] Fix subagent recorded or explicitly not needed: not-needed.
+3. [x] Implementation subagent recorded: Agent Codex
+   (019e269c-7b47-7081-b77f-f30cfcce13e2) implemented
+   work/packages/active-20260514-topology-publication-projection-reconciliation.md.
 
 ## Model Fit
 
 - Package class: `representative-frontier-closure`
 - Intended minimum model: `gpt-5.3-codex`
 - Scope shape: `owner-boundary-contraction/current-frontier`
-- Owned files: `work/packages/active-20260514-topology-publication-projection-reconciliation.md`, `work/sprints/active-2026-q2-topology-convergence-residual-closure.md`
+- Owned files: `work/packages/active-20260514-topology-publication-projection-reconciliation.md`, `work/sprints/active-2026-q2-topology-convergence-residual-closure.md`, `src/diagnostics/topology-convergence-graph.js`, `test/diagnostics/topology-convergence-graph.test.js`
 - Forbidden files: `active-gate-runtime-changes-without-fresh-frontier-evidence`, `harness-timeout-increases`
 - Frozen decisions: package scope and lane stay bounded unless explicitly escalated.
 - Escalation triggers: owned files expand beyond this package, runtime ownership changes, or representative scenario evidence changes.
-- Focused proof: `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-green-gate-after-priority-recovery-workflow-progress-after-snapshot-coverage.report.json --explain publication_ack_convergence`, `npm run analyze:owner-files -- topology_publication_owner publication_convergence --markdown`
+- Focused proof: `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-green-gate-after-priority-recovery-workflow-progress-after-snapshot-coverage.report.json --explain publication_ack_convergence`, `npm run analyze:owner-files -- topology_publication_owner publication_projection_cohort --markdown`
 - Model ledger advisory: `escalate`
 
 ## Validation Ladder
@@ -205,15 +203,16 @@ package.
 1. npm run work:package:doctor -- --suggest work/packages/active-20260514-topology-publication-projection-reconciliation.md
 2. npm run work:package:doctor -- --fix-dry-run work/packages/active-20260514-topology-publication-projection-reconciliation.md
 3. npm run analyze:topology-convergence -- test-output/reports/rolling-restart-green-gate-after-priority-recovery-workflow-progress-after-snapshot-coverage.report.json --explain publication_ack_convergence
-4. npm run analyze:owner-files -- topology_publication_owner publication_convergence --markdown
-5. node scripts/check-guideline-literals.js src/control-plane/publication-owner-decision.js src/control-plane/publication-owner-evidence.js src/control-plane/publication-owner-state.js src/control-plane/publication-recovery-evidence.js src/control-plane/publication-recovery-gate.js src/control-plane/membership-publication-planning.js test/control-plane/publication-recovery-evidence.test.js test/admin/admin-control-snapshot.test.js
-6. node scripts/check-guideline-decision-boundaries.js src/control-plane/publication-owner-decision.js src/control-plane/publication-owner-evidence.js src/control-plane/publication-owner-state.js src/control-plane/publication-recovery-evidence.js src/control-plane/publication-recovery-gate.js src/control-plane/membership-publication-planning.js test/control-plane/publication-recovery-evidence.test.js test/admin/admin-control-snapshot.test.js
-7. npm run audit:runtime-grammar:file -- src/control-plane/publication-owner-decision.js src/control-plane/publication-owner-evidence.js src/control-plane/publication-owner-state.js src/control-plane/publication-recovery-evidence.js src/control-plane/publication-recovery-gate.js src/control-plane/membership-publication-planning.js test/control-plane/publication-recovery-evidence.test.js test/admin/admin-control-snapshot.test.js
-8. npm run work:validate -- --entry work/packages/active-20260514-topology-publication-projection-reconciliation.md
-9. npm run work:validate -- --pre-impl work/packages/active-20260514-topology-publication-projection-reconciliation.md
-10. npm run work:validate -- --closure work/packages/active-20260514-topology-publication-projection-reconciliation.md
-11. git diff --check -- work/packages/active-20260514-topology-publication-projection-reconciliation.md work/sprints/active-2026-q2-topology-convergence-residual-closure.md
-12. Final deep-dive proof: rerun the package extractor/probe, compare against the sprint representative residual, and record the result classification before closure.
+4. npm run analyze:owner-files -- topology_publication_owner publication_projection_cohort --markdown
+5. node --test test/diagnostics/topology-convergence-graph.test.js
+6. node scripts/check-guideline-literals.js src/diagnostics/topology-convergence-graph.js test/diagnostics/topology-convergence-graph.test.js
+7. node scripts/check-guideline-decision-boundaries.js src/diagnostics/topology-convergence-graph.js test/diagnostics/topology-convergence-graph.test.js
+8. npm run audit:runtime-grammar:file -- src/diagnostics/topology-convergence-graph.js test/diagnostics/topology-convergence-graph.test.js
+9. npm run work:validate -- --entry work/packages/active-20260514-topology-publication-projection-reconciliation.md
+10. npm run work:validate -- --pre-impl work/packages/active-20260514-topology-publication-projection-reconciliation.md
+11. npm run work:validate -- --closure work/packages/active-20260514-topology-publication-projection-reconciliation.md
+12. git diff --check -- work/packages/active-20260514-topology-publication-projection-reconciliation.md work/sprints/active-2026-q2-topology-convergence-residual-closure.md src/diagnostics/topology-convergence-graph.js test/diagnostics/topology-convergence-graph.test.js
+13. Final deep-dive proof: rerun the package extractor/probe, compare against the sprint representative residual, and record the result classification before closure.
 
 ## Split Rules
 
@@ -232,6 +231,24 @@ package.
    missing nodes, pending work, and degraded reason.
 3. Active-gate representative evidence reaches `missingPublished=0` after
    composed rerun, or this package records a narrower owner/boundary blocker.
+
+## Implementation Proof
+
+- Implementation subagent: Agent Codex
+  (019e269c-7b47-7081-b77f-f30cfcce13e2) implemented this package.
+- Focused change: `src/diagnostics/topology-convergence-graph.js` now treats
+  `PUBLISHED` plus positive `missingPublishedCount` or non-empty
+  `missingPublishedNodeIds` as publication-owner deferred evidence unless
+  `prioritySpreadPending` supplies the stronger modeled owner reason.
+- Focused tests: `node --test test/diagnostics/topology-convergence-graph.test.js`
+  passed with the current report artifact covered.
+- Extractor proof: `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-green-gate-after-priority-recovery-workflow-progress-after-snapshot-coverage.report.json --explain publication_ack_convergence`
+  now reports `publication_ack_convergence` as `deferred`, `frontier: true`,
+  and dominant reason `missing_published_nodes_present` under
+  `topology_publication_owner`.
+- Classification: classification-only diagnostics correction. The current
+  artifact is no longer collapsed to `publication_published`; it remains a
+  topology publication frontier until runtime evidence changes.
 
 ## Commit And Push Ledger
 
