@@ -477,9 +477,12 @@ projection reconciliation is done as classification-only observability:
 
 The current action is now
 [Topology Missed Handoff ACK Gate](../packages/active-20260514-topology-missed-handoff-ack-gate.md).
-Run and classify the publication-owner missed-ACK gate as an observability
-gate. The predecessor failure-detection gate artifact
-`test-output/reports/topology-failure-detection-repair-gate.report.json`
-migrated to `topology_publication_owner / publication_convergence` with
-`publication_pending`. Do not fix `rolling-restart` runtime behavior in this
-package.
+Observed result: `write-ack-visibility` failed after `173275ms`, but canonical
+evidence did not implicate ACK absence. `pendingAckCount=0`,
+`publicationStatus=PUBLISHED`, and the first frontier is
+`topology_publication_owner / publication_convergence` with
+`missing_published_nodes_present`, `missingPublishedCount=2`, and
+`publicationPending=true`; priority recovery residual extraction reported zero
+witnesses. Close this package as migrated and activate
+[Topology Stale Publication Durable Truth Gate](../packages/todo-20260514-topology-stale-publication-durable-truth-gate.md)
+next. Do not fix `rolling-restart` runtime behavior in this sprint segment.

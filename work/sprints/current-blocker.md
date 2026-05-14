@@ -20,18 +20,22 @@ Owner: `topology_publication_owner`
 
 Boundary: `remote_handoff_ack_closure_gate`
 
-Dominant reason: `missed_handoff_ack_release_gate_unproven`
+Dominant reason: `missing_published_nodes_present`
 
-Current state: Fresh failure-detection gate observation migrated to topology_publication_owner / publication_convergence with publication_pending before the failure-detector boundary could be evaluated. Publication-owner gate evidence is needed next.
+Current state: Observed gate result: write-ack-visibility failed after 173275ms with an Admin API timeout while canonical topology evidence identified topology_publication_owner / publication_convergence as the first frontier. pendingAckCount=0, publicationStatus=PUBLISHED, missingPublishedCount=2, publicationPending=true, and priority recovery residual witnesses=0.
 
 ## Next Action
 
-Execute and classify the missed-ACK publication-owner gate evidence only. If the gate is red, record the owner-boundary split; do not fix rolling-restart runtime behavior in this package without explicit re-scope.
+Close this package as migrated and activate the stale publication durable-truth gate; do not fix rolling-restart runtime behavior in this package without explicit re-scope.
 
 ## Proof Ladder
 
 1. `node test/distributed/run.js --config test/distributed/config/local-three-node.json --scenario write-ack-visibility --output test-output/reports/topology-missed-handoff-ack-gate.report.json --verbose`
-2. `npm run analyze:distributed-failure -- --report test-output/reports/topology-missed-handoff-ack-gate.report.json`
+2. `npm run work:evidence-summary -- test-output/reports/topology-missed-handoff-ack-gate.report.json`
+3. `npm run analyze:distributed-failure -- --report test-output/reports/topology-missed-handoff-ack-gate.report.json`
+4. `npm run analyze:topology-convergence -- test-output/reports/topology-missed-handoff-ack-gate.report.json`
+5. `npm --silent run analyze:causal-model -- test-output/reports/topology-missed-handoff-ack-gate.report.json`
+6. `npm run analyze:priority-recovery-residuals -- test-output/reports/topology-missed-handoff-ack-gate.report.json --markdown`
 
 ## Model Fit
 
@@ -72,9 +76,9 @@ Stop-condition check: `npm --silent run analyze:causal-model -- test-output/repo
 
 Expected causal-model change: `missed_handoff_ack_release_gate_unproven becomes representative-green, reduced, same-frontier, migrated, or classification-only with a named owner-boundary reason.`
 
-Representative outcome: `pending-before-rerun`
+Representative outcome: `migrated`
 
-Causal debt: `Until topology_publication_owner / remote_handoff_ack_closure_gate is proven, the sprint representative rolling-restart residual stays open. Runtime rolling-restart fixes are out of scope for this observe/classify package.`
+Causal debt: `The missed-ACK gate artifact is red, but canonical evidence does not implicate ACK absence: pendingAckCount=0 and the first frontier is topology_publication_owner / publication_convergence with missing_published_nodes_present. Runtime rolling-restart fixes remain out of scope.`
 
 Cross-boundary review: `Required before closure through the scenario-release-gate subagent ledger or an allowed waiver recorded in this package.`
 
@@ -88,7 +92,7 @@ Phase chain:
 2. `topology_publication_owner / remote_handoff_ack_closure_gate focused proof`
 3. `representative or gate rerun classification`
 
-Current first frontier: `package-local frontier topology_publication_owner / remote_handoff_ack_closure_gate; sprint representative frontier remains startup_active_gate_owner / snapshot_coverage until fresh evidence changes it`
+Current first frontier: `migrated frontier topology_publication_owner / publication_convergence with missing_published_nodes_present in test-output/reports/topology-missed-handoff-ack-gate.report.json`
 
 Known downstream blockers:
 
@@ -103,17 +107,17 @@ Bounded progress proof: `Focused proof must show bounded wake, retry, timeout, r
 
 Bounded progress proof artifact: `test-output/reports/topology-missed-handoff-ack-gate.report.json`
 
-Expected observable transition: `missed_handoff_ack_release_gate_unproven resolves to green evidence, a reduced residual, same-frontier evidence, migrated owner-boundary proof, or classification-only stop.`
+Expected observable transition: `missed_handoff_ack_release_gate_unproven migrated to publication convergence/projection evidence without ACK absence: pendingAckCount=0, missingPublishedCount=2, and publicationPending=true.`
 
 Max progress bound: `one activation cycle: package doctor, extractor/probe, owner-file proof, focused validation, and result classification`
 
 Same-frontier fallback: `keep topology_publication_owner / remote_handoff_ack_closure_gate active and do not broaden the package or claim ship proof`
 
-Expected next frontier: `representative green evidence or a narrower owner-boundary blocker selected by canonical evidence`
+Expected next frontier: `stale publication durable-truth gate selected by canonical evidence`
 
-Result classification: `pending-before-probe`
+Result classification: `migrated`
 
-Stop condition: `continue-local-fix`
+Stop condition: `migrate-owner-boundary`
 
 ## Scope
 
