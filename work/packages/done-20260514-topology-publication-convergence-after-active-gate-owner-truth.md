@@ -240,3 +240,9 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 11. `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-green-gate-after-priority-recovery-workflow-progress-after-snapshot-coverage.report.json` confirms `active_gate_snapshot_coverage` as the first critical path node.
 12. `npm run analyze:distributed-failure -- --report test-output/reports/rolling-restart-green-gate-after-priority-recovery-workflow-progress-after-snapshot-coverage.report.json` confirms `publication=PUBLISHED`, `pendingAck=0`, `missingPublished=4`, and exact `missingPublishedIds`.
 13. `npm run work:model-ledger -- record --package work/packages/done-20260514-topology-publication-convergence-after-active-gate-owner-truth.md --model gpt-5.3-codex --reasoning-effort high --task-class distributed-runtime --package-class representative-frontier-closure --intended-minimum-model gpt-5.3-codex --scope-shape owner-boundary-contraction/current-frontier --escalated true --bailout-reason migrated-to-active-gate-snapshot-coverage --outcome migrated --validation-status focused-green-representative-migrated --correction-loops 1 --review-findings 0 --notes ...` recorded the package experience.
+
+## Commit And Push Ledger
+
+1. Focused package commit: ac2f1a34c1cbb032507ffd5d085fb5d850017b6c
+2. Pushed to: origin/codex/pending-ack-eligibility-filter
+3. Commit contains only package-owned files/package-status/allowed sprint handoff: yes
