@@ -437,19 +437,45 @@ function normalizeReadinessReasonCodes(readinessEntry = null) {
   ]);
 }
 
-function hasPriorityRecoveryPendingReasonOnlyEvidence(readinessEntry = null) {
+function resolveReadinessDimensions(readinessEntry = null) {
+  return readinessEntry?.dimensions &&
+    typeof readinessEntry.dimensions === TYPEOF.OBJECT ?
+    readinessEntry.dimensions :
+    null;
+}
+
+function hasPriorityRecoveryPendingPublicationRepairEvidence(
+  readinessEntry = null,
+) {
   if (!readinessEntry || typeof readinessEntry !== TYPEOF.OBJECT) {
     return false;
   }
-  if (
-    readinessEntry.dimensions &&
-    typeof readinessEntry.dimensions === TYPEOF.OBJECT
-  ) {
-    return false;
-  }
-  return normalizeReadinessReasonCodes(readinessEntry).includes(
+  const priorityRecoveryPending = normalizeReadinessReasonCodes(
+    readinessEntry,
+  ).includes(
     CONTROL_PLANE_READINESS_REASON.PRIORITY_CONTROL_PLANE_RECOVERY_PENDING,
   );
+  if (priorityRecoveryPending !== true) {
+    return false;
+  }
+  const dimensions = resolveReadinessDimensions(readinessEntry);
+  return dimensions?.[CONTROL_PLANE_READINESS_DIMENSION.PROCESS_ALIVE] !==
+    false;
+}
+
+function buildPublicationPlanningReadinessEntry(readinessEntry = null) {
+  if (
+    hasPriorityRecoveryPendingPublicationRepairEvidence(readinessEntry) !== true
+  ) {
+    return readinessEntry;
+  }
+  return {
+    ...readinessEntry,
+    dimensions: {
+      ...(resolveReadinessDimensions(readinessEntry) || {}),
+      ...PRIORITY_RECOVERY_PENDING_PUBLICATION_DIMENSIONS,
+    },
+  };
 }
 
 function buildPublicationPlanningReadinessByNodeId(options = {}) {
@@ -457,15 +483,9 @@ function buildPublicationPlanningReadinessByNodeId(options = {}) {
   return Object.keys(readinessByNodeId)
     .sort()
     .reduce((accumulator, nodeId) => {
-      const readinessEntry = readinessByNodeId[nodeId];
-      accumulator[nodeId] = hasPriorityRecoveryPendingReasonOnlyEvidence(
-        readinessEntry,
-      ) ?
-        {
-          ...readinessEntry,
-          dimensions: PRIORITY_RECOVERY_PENDING_PUBLICATION_DIMENSIONS,
-        } :
-        readinessEntry;
+      accumulator[nodeId] = buildPublicationPlanningReadinessEntry(
+        readinessByNodeId[nodeId],
+      );
       return accumulator;
     }, {});
 }

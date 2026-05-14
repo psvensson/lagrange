@@ -1099,3 +1099,123 @@ test('deriveMembershipPublicationCandidate reopens count-only ACK complete publi
     );
     t.end();
   });
+
+test('deriveMembershipPublicationCandidate reopens count-only ACK complete publication from priority recovery pending blocked readiness evidence',
+  async (t) => {
+    const candidate = deriveMembershipPublicationCandidate({
+      publisherNodeId: PUBLICATION_CONVERGENCE_REPAIR_PUBLISHER_NODE_ID,
+      latestPublicationRow: {
+        publication_epoch: PUBLICATION_CONVERGENCE_STALE_PUBLISHED_EPOCH,
+        status: CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED,
+        published_active_node_ids: [
+          PUBLICATION_CONVERGENCE_REPAIR_PUBLISHED_NODE_ID,
+        ],
+        required_ack_node_ids: [
+          PUBLICATION_CONVERGENCE_REPAIR_PUBLISHED_NODE_ID,
+        ],
+        acknowledged_node_ids: [
+          PUBLICATION_CONVERGENCE_REPAIR_PUBLISHED_NODE_ID,
+        ],
+      },
+      latestPublishedPublicationRow: {
+        publication_epoch: PUBLICATION_CONVERGENCE_STALE_PUBLISHED_EPOCH,
+        status: CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED,
+        published_active_node_ids: [
+          PUBLICATION_CONVERGENCE_REPAIR_PUBLISHED_NODE_ID,
+        ],
+        required_ack_node_ids: [
+          PUBLICATION_CONVERGENCE_REPAIR_PUBLISHED_NODE_ID,
+        ],
+        acknowledged_node_ids: [
+          PUBLICATION_CONVERGENCE_REPAIR_PUBLISHED_NODE_ID,
+        ],
+      },
+      nodeRows: [
+        {
+          node_id: PUBLICATION_CONVERGENCE_REPAIR_PUBLISHED_NODE_ID,
+          status: PUBLICATION_CONVERGENCE_REPAIR_ACTIVE_STATUS,
+          connection_state: PUBLICATION_CONVERGENCE_REPAIR_READY_CONNECTION,
+          ready_lease_expires_at:
+            PUBLICATION_CONVERGENCE_REPAIR_READY_LEASE_EXPIRES_AT,
+        },
+      ],
+      readinessEntries: [
+        {
+          nodeId: PUBLICATION_CONVERGENCE_REPAIR_PUBLISHED_NODE_ID,
+          dimensions: {
+            [CONTROL_PLANE_READINESS_DIMENSION.PROCESS_ALIVE]: true,
+            [CONTROL_PLANE_READINESS_DIMENSION.CLUSTER_MEMBER_HEALTHY]: true,
+            [CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_PUBLISHED]: true,
+            [CONTROL_PLANE_READINESS_DIMENSION
+              .CONTROL_PLANE_RECOVERY_ELIGIBLE]: true,
+          },
+        },
+        {
+          nodeId: PUBLICATION_CONVERGENCE_REPAIR_MISSING_NODE_ID,
+          dimensions: {
+            [CONTROL_PLANE_READINESS_DIMENSION.PROCESS_ALIVE]: true,
+            [CONTROL_PLANE_READINESS_DIMENSION.CLUSTER_MEMBER_HEALTHY]: false,
+            [CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_PUBLISHED]: false,
+            [CONTROL_PLANE_READINESS_DIMENSION
+              .CONTROL_PLANE_RECOVERY_ELIGIBLE]: false,
+            [CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_WRITABLE]: false,
+            [CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE]: false,
+            [CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE]: false,
+          },
+          reasons: [
+            {
+              code: CONTROL_PLANE_READINESS_REASON
+                .PRIORITY_CONTROL_PLANE_RECOVERY_PENDING,
+            },
+          ],
+        },
+      ],
+      nodeEndpointRows: [
+        {
+          endpoint_id: PUBLICATION_CONVERGENCE_REPAIR_ENDPOINT_ID,
+          node_id: PUBLICATION_CONVERGENCE_REPAIR_PUBLISHED_NODE_ID,
+          transport_type: PUBLICATION_CONVERGENCE_REPAIR_TRANSPORT,
+          status: PUBLICATION_CONVERGENCE_REPAIR_ACTIVE_STATUS,
+          address: PUBLICATION_CONVERGENCE_REPAIR_ENDPOINT_ADDRESS,
+        },
+      ],
+      serviceRows: [
+        {
+          service_id: PUBLICATION_CONVERGENCE_REPAIR_SERVICE_ID,
+          node_id: PUBLICATION_CONVERGENCE_REPAIR_PUBLISHED_NODE_ID,
+          status: PUBLICATION_CONVERGENCE_REPAIR_ACTIVE_STATUS,
+        },
+      ],
+      nowMs: PUBLICATION_CONVERGENCE_REPAIR_NOW_MS,
+    });
+
+    t.equal(
+      candidate.changed,
+      true,
+      'priority recovery pending readiness should reopen stale published membership even when serve dimensions are blocked',
+    );
+    t.equal(
+      candidate.publicationStatus,
+      CONTROL_PLANE_PUBLICATION_STATUS.OPEN,
+      'blocked serve readiness should become an open repair publication instead of retaining stale published truth',
+    );
+    t.same(
+      candidate.publishedActiveNodeIds,
+      [
+        PUBLICATION_CONVERGENCE_REPAIR_PUBLISHED_NODE_ID,
+        PUBLICATION_CONVERGENCE_REPAIR_MISSING_NODE_ID,
+      ],
+      'priority recovery pending readiness should enter the repair cohort',
+    );
+    t.match(
+      candidate.projectionDiagnostics,
+      {
+        recoveryEligibleProjectionEnabled: true,
+        recoveryEligibleIncludedNodeIds: [
+          PUBLICATION_CONVERGENCE_REPAIR_MISSING_NODE_ID,
+        ],
+      },
+      'publication diagnostics should identify the blocked readiness recovery projection',
+    );
+    t.end();
+  });
