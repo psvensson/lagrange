@@ -806,6 +806,22 @@ describe('work tracker commit and push ledger validation', () => {
     assert.deepEqual(errors, []);
   });
 
+  it('ignores inline mentions of ledger headings before the real heading', () => {
+    const errors = validateCommitAndPushLedger(
+      [
+        '# Test Package',
+        '',
+        'This prose mentions `## Commit And Push Ledger` before closure.',
+        '',
+        WORK_TRACKER_COMMIT_LEDGER_VALID_CONTENT,
+      ].join('\n'),
+      WORK_TRACKER_DONE_TEST_FILE,
+      {requiresLedger: true},
+    );
+
+    assert.deepEqual(errors, []);
+  });
+
   it('accepts the legacy closure commit proof heading as an alias', () => {
     const errors = validateCommitAndPushLedger(
       WORK_TRACKER_COMMIT_LEDGER_LEGACY_VALID_CONTENT,

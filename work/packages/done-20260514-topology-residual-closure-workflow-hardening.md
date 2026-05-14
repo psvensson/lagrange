@@ -280,7 +280,6 @@ scenario successor packages carry their own required sequencing ledgers.
 
 Required at closure.
 
-1. [ ] Focused package commit: pending.
-2. [ ] Pushed to: pending.
-3. [ ] Commit contains only package-owned files/package-status/allowed sprint
-   handoff: pending.
+1. Focused package commit: b51e23cda80600ef4d26ae6cff7c890c528f8b91
+2. Pushed to: origin/codex/pending-ack-eligibility-filter
+3. Commit contains only package-owned files/package-status/allowed sprint handoff: yes

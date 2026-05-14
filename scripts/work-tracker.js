@@ -306,10 +306,16 @@ function escapeRegExp(value) {
 }
 
 function extractMarkdownLevelTwoSection(content, heading) {
-  const headingIndex = content.indexOf(heading);
-  if (headingIndex < NUM_ZERO) {
+  const headingPattern = new RegExp(
+    `(^|${NEWLINE})${escapeRegExp(heading)}(?:${NEWLINE}|$)`,
+    'u',
+  );
+  const headingMatch = headingPattern.exec(content);
+  if (!headingMatch) {
     return null;
   }
+  const headingIndex = headingMatch.index +
+    (headingMatch[NUM_ONE] === NEWLINE ? NUM_ONE : NUM_ZERO);
   const nextHeadingIndex = content.indexOf(
     `${NEWLINE}${MARKDOWN_LEVEL_TWO_HEADING_PREFIX}`,
     headingIndex + heading.length,
