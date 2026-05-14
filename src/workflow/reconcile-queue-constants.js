@@ -32,6 +32,7 @@ const RECONCILE_REASON = Object.freeze({
     'control_plane_publication_cache_update',
   CONTROL_PLANE_PUBLICATION_ACK_RETRY:
     'control_plane_publication_ack_retry',
+  TOPOLOGY_DURABLE_TRUTH_SCAN: 'topology_durable_truth_scan',
 
   // Rebalance: planning-level reasons
   PERIODIC_CHECK: 'periodic_check',
