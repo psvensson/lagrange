@@ -97,11 +97,11 @@ or produces a narrower owner-boundary blocker selected by canonical evidence.
 - Active sprint:
   `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md`
 - Active package:
-  `work/packages/active-20260515-rolling-restart-canonical-frontier-steering-repair.md`
+  `work/packages/active-20260515-publication-active-gate-reconcile-bridge-simplification.md`
 - Artifact:
   `test-output/reports/rolling-restart-after-create-in-progress-owner-progress-20260515-codex.report.json`
 - Current package-local owner boundary:
-  `startup_active_gate_owner / snapshot_coverage`
+  `startup_active_gate_owner / publication_reconcile_bridge`
 - Representative owner boundary:
   `startup_active_gate_owner / snapshot_coverage`
 - Extractor summary:
@@ -135,7 +135,7 @@ publication-evidence replay code rather than by the runtime owner alone.
 | --- | --- | --- | --- |
 | `work/sprints/done-2026-q2-topology-convergence-residual-closure.md` | `bugfix` / `stabilization` | stopped | Stopped on 2026-05-15 by human direction. Retained as residual context only. |
 | `work/sprints/done-2026-q2-topology-convergence-complexity-reduction.md` | `stabilization` / `complexity-reduction` | done reduced | Canonical publication-to-active-gate handoff contract implemented end to end; representative run remains red at startup active-gate snapshot coverage. |
-| `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md` | `stabilization` / `green-gate` | active | Current package repairs canonical frontier tracking before runtime work resumes; representative first frontier remains startup active-gate snapshot coverage. |
+| `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md` | `stabilization` / `green-gate` | active | Current package is the startup active-gate publication reconcile bridge simplification; representative first frontier remains startup active-gate snapshot coverage. |
 
 ## Owner Boundaries
 
@@ -189,10 +189,10 @@ These are context candidates, not write authorization:
 
 ## Entry Condition
 
-Continue with the active canonical frontier steering repair package. Do not
-open or resume runtime topology work until this repair closes, fresh context
-confirms the next bounded concern, and any runtime package records real review
-subagent proof.
+Continue with the active publication active-gate reconcile bridge package.
+Do not edit runtime files until fresh context confirms the bounded concern,
+review subagent proof is recorded, and exact runtime files are promoted into
+package write scope.
 
 ## Exit Condition
 
@@ -205,5 +205,5 @@ canonical owner-boundary evidence.
 Current package:
 
 ```text
-work/packages/active-20260515-rolling-restart-canonical-frontier-steering-repair.md
+work/packages/active-20260515-publication-active-gate-reconcile-bridge-simplification.md
 ```

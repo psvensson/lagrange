@@ -92,7 +92,7 @@ Pro or Enterprise behavior.
    - Result: `reduced`. Duplicate CREATE_REPLICA idempotency for local
      `PENDING`/`CREATING` replicas now emits canonical owner progress, and
      fresh representative evidence drains the `rebalancer_handoff` residual.
-3. [Rolling Restart Canonical Frontier Steering Repair](../packages/active-20260515-rolling-restart-canonical-frontier-steering-repair.md)
+3. [Rolling Restart Canonical Frontier Steering Repair](../packages/done-20260515-rolling-restart-canonical-frontier-steering-repair.md)
    - Lane: `causal-escalation`
    - Owner boundary:
      `startup_active_gate_owner / snapshot_coverage`
@@ -124,8 +124,8 @@ Pro or Enterprise behavior.
    - Acceptance on future activation: workflow-progress witnesses drain, split,
      or become the next representative owner boundary after handoff progress is
      settled.
-5. [Publication Active-Gate Reconcile Bridge Simplification](../packages/todo-20260515-publication-active-gate-reconcile-bridge-simplification.md)
-   - Lane: `runtime-owner-boundary`
+5. [Publication Active-Gate Reconcile Bridge Simplification](../packages/active-20260515-publication-active-gate-reconcile-bridge-simplification.md)
+   - Lane: `causal-escalation`
    - Owner boundary:
      `startup_active_gate_owner / publication_reconcile_bridge`
    - Purpose: after the active owner-reconcile closure package lands,
@@ -135,6 +135,10 @@ Pro or Enterprise behavior.
    - Entry condition: the active steering repair package is done and fresh
      context confirms the duplicate bridge shape remains in scope, or a
      successor startup active-gate package explicitly promotes this bridge.
+   - Activation result: active after the steering repair closed; fresh
+     handoff-probe evidence still requires
+     `reconcile_owner_membership_publication` with
+     `runtimePromotionAllowed=false`.
    - Acceptance: the bridge has one canonical target helper, admin callers
      submit owner reconcile intent without reconstructing handoff semantics,
      focused admin/publication tests stay green, and representative
@@ -172,18 +176,17 @@ changes the semantic owner, boundary, or next required action.
 
 1. `npm run work:context`
 2. `npm run work:llm-start`
-3. `npm run work:package:schema`
-4. `npm run work:evidence-summary -- test-output/reports/rolling-restart-after-create-in-progress-owner-progress-20260515-codex.report.json`
-5. `npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-after-create-in-progress-owner-progress-20260515-codex.report.json --markdown`
+3. `npm run work:package:doctor -- --suggest work/packages/active-20260515-publication-active-gate-reconcile-bridge-simplification.md`
+4. `npm run work:validate -- --entry work/packages/active-20260515-publication-active-gate-reconcile-bridge-simplification.md`
+5. `npm run work:evidence-summary -- test-output/reports/rolling-restart-after-create-in-progress-owner-progress-20260515-codex.report.json`
 6. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-create-in-progress-owner-progress-20260515-codex.report.json --handoff-probe`
 7. `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-create-in-progress-owner-progress-20260515-codex.report.json`
-8. `npm run work:current-blocker -- --write`
-9. `npm run work:validate -- --entry work/packages/active-20260515-rolling-restart-canonical-frontier-steering-repair.md`
-10. `git diff --check -- work/packages/active-20260515-rolling-restart-canonical-frontier-steering-repair.md work/packages/active-20260515-priority-recovery-operation-workflow-owner-workflow-progress.md work/packages/todo-20260515-priority-recovery-operation-workflow-owner-workflow-progress.md work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md work/sprints/current-blocker.md work/sprints/current-blocker.json work/tracks/topology-convergence.md work/releases/0.1-stabilization.md work/releases/0.1-dependency-map.md work/model-ledger.jsonl`
-11. Focused commit and push for the steering repair.
-12. Before any runtime package resumes:
-   `npm run work:subagent-prompt -- --role review --package <package>` and a
-   real review subagent ledger entry in that runtime package.
+8. `npm run analyze:owner-files -- startup_active_gate_owner publication_reconcile_bridge --markdown`
+9. `npm run work:current-blocker -- --write`
+10. `npm run work:subagent-prompt -- --role review --package work/packages/active-20260515-publication-active-gate-reconcile-bridge-simplification.md`
+11. Real review subagent proof before runtime implementation starts.
+12. Focused bridge/admin tests and representative `rolling-restart` after the
+    package has implementation proof.
 
 ## Closure Rules
 
@@ -203,16 +206,15 @@ The sprint cannot close until:
 
 ## Current Next Action
 
-Continue with the active steering package:
+Continue with the active bridge simplification package:
 
 ```text
-work/packages/active-20260515-rolling-restart-canonical-frontier-steering-repair.md
+work/packages/active-20260515-publication-active-gate-reconcile-bridge-simplification.md
 ```
 
 The rebalancer handoff package is closed as reduced. The workflow-progress
 package is parked as dependent sub-frontier evidence because the canonical
-first frontier remains `startup_active_gate_owner / snapshot_coverage`. Do not
-start bridge simplification or workflow-progress runtime work until this
-steering repair closes and fresh context confirms the next bounded runtime
-concern. Any runtime package that starts next must record real review subagent
-proof before implementation.
+first frontier remains `startup_active_gate_owner / snapshot_coverage`. The
+steering repair is closed. Before runtime edits in the bridge package, record
+real review subagent proof and promote exact runtime files from
+`candidateRuntimeFiles` into `writeScope` and `commitScope`.

@@ -3,7 +3,7 @@
 <!-- work-package
 {
   "schema": "work-package-v1",
-  "status": "active",
+  "status": "done",
   "opened": "2026-05-15",
   "lane": "causal-escalation",
   "scenario": "rolling-restart",
@@ -23,11 +23,11 @@
     "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-create-in-progress-owner-progress-20260515-codex.report.json --handoff-probe",
     "npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-create-in-progress-owner-progress-20260515-codex.report.json",
     "npm run work:current-blocker -- --write",
-    "npm run work:validate -- --entry work/packages/active-20260515-rolling-restart-canonical-frontier-steering-repair.md",
-    "git diff --check -- work/packages/active-20260515-rolling-restart-canonical-frontier-steering-repair.md work/packages/active-20260515-priority-recovery-operation-workflow-owner-workflow-progress.md work/packages/todo-20260515-priority-recovery-operation-workflow-owner-workflow-progress.md work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md work/sprints/current-blocker.md work/sprints/current-blocker.json work/tracks/topology-convergence.md work/releases/0.1-stabilization.md work/releases/0.1-dependency-map.md work/model-ledger.jsonl"
+    "npm run work:validate -- --entry work/packages/done-20260515-rolling-restart-canonical-frontier-steering-repair.md",
+    "git diff --check -- work/packages/done-20260515-rolling-restart-canonical-frontier-steering-repair.md work/packages/active-20260515-priority-recovery-operation-workflow-owner-workflow-progress.md work/packages/todo-20260515-priority-recovery-operation-workflow-owner-workflow-progress.md work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md work/sprints/current-blocker.md work/sprints/current-blocker.json work/tracks/topology-convergence.md work/releases/0.1-stabilization.md work/releases/0.1-dependency-map.md work/model-ledger.jsonl"
   ],
   "writeScope": [
-    "work/packages/active-20260515-rolling-restart-canonical-frontier-steering-repair.md",
+    "work/packages/done-20260515-rolling-restart-canonical-frontier-steering-repair.md",
     "work/packages/active-20260515-priority-recovery-operation-workflow-owner-workflow-progress.md",
     "work/packages/todo-20260515-priority-recovery-operation-workflow-owner-workflow-progress.md",
     "work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md",
@@ -41,7 +41,7 @@
   "handoffFiles": [
     "work/packages/done-20260515-priority-recovery-operation-workflow-owner-rebalancer-handoff.md",
     "work/packages/done-20260515-startup-active-gate-snapshot-coverage-owner-reconcile-closure.md",
-    "work/packages/todo-20260515-publication-active-gate-reconcile-bridge-simplification.md"
+    "work/packages/active-20260515-publication-active-gate-reconcile-bridge-simplification.md"
   ],
   "generatedFiles": [
     "work/sprints/current-blocker.md",
@@ -49,7 +49,7 @@
   ],
   "candidateRuntimeFiles": [],
   "commitScope": [
-    "work/packages/active-20260515-rolling-restart-canonical-frontier-steering-repair.md",
+    "work/packages/done-20260515-rolling-restart-canonical-frontier-steering-repair.md",
     "work/packages/active-20260515-priority-recovery-operation-workflow-owner-workflow-progress.md",
     "work/packages/todo-20260515-priority-recovery-operation-workflow-owner-workflow-progress.md",
     "work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md",
@@ -122,7 +122,9 @@
     ],
     "oscillationCheck": "This package prevents owner-boundary oscillation by requiring the active package to match the canonical first frontier before runtime work resumes.",
     "handoffInvariant": "Active-gate admission stays strict while runtimePromotionAllowed=false; publication handoff truth remains owned by the canonical contract."
-  }
+  },
+  "closed": "2026-05-15",
+  "commitAndPushLedgerRequired": true
 }
 -->
 
@@ -235,11 +237,11 @@ scenario-release-gate package must start with:
 ## Subagent Sequencing Ledger
 
 - [x] Review subagent recorded:
-      `Agent Heisenberg (019e2c5f-b801-71c0-934f-7d1668f69ef5) reviewed work/packages/active-20260515-rolling-restart-canonical-frontier-steering-repair.md; result fixes-required`
+      `Agent Heisenberg (019e2c5f-b801-71c0-934f-7d1668f69ef5) reviewed work/packages/done-20260515-rolling-restart-canonical-frontier-steering-repair.md; result fixes-required`
 - [x] Fix subagent recorded or explicitly not needed:
-      `Agent Euclid (019e2c62-a62e-7c92-b859-b12a58bcd81d) fixed work/packages/active-20260515-rolling-restart-canonical-frontier-steering-repair.md`
+      `Agent Euclid (019e2c62-a62e-7c92-b859-b12a58bcd81d) fixed work/packages/done-20260515-rolling-restart-canonical-frontier-steering-repair.md`
 - [x] Implementation subagent recorded:
-      `Agent Codex (019e2c67-2115-7dd0-817b-e48392351a21) implemented work/packages/active-20260515-rolling-restart-canonical-frontier-steering-repair.md`
+      `Agent Codex (019e2c67-2115-7dd0-817b-e48392351a21) implemented work/packages/done-20260515-rolling-restart-canonical-frontier-steering-repair.md`
 
 ## Model Fit
 
@@ -247,11 +249,11 @@ scenario-release-gate package must start with:
 - Intended minimum model: `gpt-5.3-codex`
 - Scope shape: `sprint-steering/canonical-frontier`
 - Output profile: `medium`
-- Owned files: `work/packages/active-20260515-rolling-restart-canonical-frontier-steering-repair.md`, `work/packages/active-20260515-priority-recovery-operation-workflow-owner-workflow-progress.md`, `work/packages/todo-20260515-priority-recovery-operation-workflow-owner-workflow-progress.md`, `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md`, `work/sprints/current-blocker.md`, `work/sprints/current-blocker.json`, `work/tracks/topology-convergence.md`, `work/releases/0.1-stabilization.md`, `work/releases/0.1-dependency-map.md`, `work/model-ledger.jsonl`
+- Owned files: `work/packages/done-20260515-rolling-restart-canonical-frontier-steering-repair.md`, `work/packages/active-20260515-priority-recovery-operation-workflow-owner-workflow-progress.md`, `work/packages/todo-20260515-priority-recovery-operation-workflow-owner-workflow-progress.md`, `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md`, `work/sprints/current-blocker.md`, `work/sprints/current-blocker.json`, `work/tracks/topology-convergence.md`, `work/releases/0.1-stabilization.md`, `work/releases/0.1-dependency-map.md`, `work/model-ledger.jsonl`
 - Forbidden files: `src`, `test`
 - Frozen decisions: package scope and lane stay bounded unless explicitly escalated.
 - Escalation triggers: owned files expand beyond this package, runtime ownership changes, or representative scenario evidence changes.
-- Focused proof: `npm run work:context`, `npm run work:llm-start`, `npm run work:package:schema`, `npm run work:evidence-summary -- test-output/reports/rolling-restart-after-create-in-progress-owner-progress-20260515-codex.report.json`, `npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-after-create-in-progress-owner-progress-20260515-codex.report.json --markdown`, `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-create-in-progress-owner-progress-20260515-codex.report.json --handoff-probe`, `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-create-in-progress-owner-progress-20260515-codex.report.json`, `npm run work:current-blocker -- --write`, `npm run work:validate -- --entry work/packages/active-20260515-rolling-restart-canonical-frontier-steering-repair.md`, `git diff --check -- work/packages/active-20260515-rolling-restart-canonical-frontier-steering-repair.md work/packages/active-20260515-priority-recovery-operation-workflow-owner-workflow-progress.md work/packages/todo-20260515-priority-recovery-operation-workflow-owner-workflow-progress.md work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md work/sprints/current-blocker.md work/sprints/current-blocker.json work/tracks/topology-convergence.md work/releases/0.1-stabilization.md work/releases/0.1-dependency-map.md work/model-ledger.jsonl`
+- Focused proof: `npm run work:context`, `npm run work:llm-start`, `npm run work:package:schema`, `npm run work:evidence-summary -- test-output/reports/rolling-restart-after-create-in-progress-owner-progress-20260515-codex.report.json`, `npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-after-create-in-progress-owner-progress-20260515-codex.report.json --markdown`, `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-create-in-progress-owner-progress-20260515-codex.report.json --handoff-probe`, `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-create-in-progress-owner-progress-20260515-codex.report.json`, `npm run work:current-blocker -- --write`, `npm run work:validate -- --entry work/packages/done-20260515-rolling-restart-canonical-frontier-steering-repair.md`, `git diff --check -- work/packages/done-20260515-rolling-restart-canonical-frontier-steering-repair.md work/packages/active-20260515-priority-recovery-operation-workflow-owner-workflow-progress.md work/packages/todo-20260515-priority-recovery-operation-workflow-owner-workflow-progress.md work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md work/sprints/current-blocker.md work/sprints/current-blocker.json work/tracks/topology-convergence.md work/releases/0.1-stabilization.md work/releases/0.1-dependency-map.md work/model-ledger.jsonl`
 - Model ledger advisory: `escalate`
 
 ## Validation
@@ -264,5 +266,23 @@ scenario-release-gate package must start with:
 6. npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-create-in-progress-owner-progress-20260515-codex.report.json --handoff-probe
 7. npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-create-in-progress-owner-progress-20260515-codex.report.json
 8. npm run work:current-blocker -- --write
-9. npm run work:validate -- --entry work/packages/active-20260515-rolling-restart-canonical-frontier-steering-repair.md
-10. git diff --check -- work/packages/active-20260515-rolling-restart-canonical-frontier-steering-repair.md work/packages/active-20260515-priority-recovery-operation-workflow-owner-workflow-progress.md work/packages/todo-20260515-priority-recovery-operation-workflow-owner-workflow-progress.md work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md work/sprints/current-blocker.md work/sprints/current-blocker.json work/tracks/topology-convergence.md work/releases/0.1-stabilization.md work/releases/0.1-dependency-map.md work/model-ledger.jsonl
+9. npm run work:validate -- --entry work/packages/done-20260515-rolling-restart-canonical-frontier-steering-repair.md
+10. git diff --check -- work/packages/done-20260515-rolling-restart-canonical-frontier-steering-repair.md work/packages/active-20260515-priority-recovery-operation-workflow-owner-workflow-progress.md work/packages/todo-20260515-priority-recovery-operation-workflow-owner-workflow-progress.md work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md work/sprints/current-blocker.md work/sprints/current-blocker.json work/tracks/topology-convergence.md work/releases/0.1-stabilization.md work/releases/0.1-dependency-map.md work/model-ledger.jsonl
+
+## Implementation Result
+
+- Result classification: `classification-only`.
+- Steering result: sprint, track, release, and current-blocker state were
+  repaired to keep the canonical representative frontier on
+  `startup_active_gate_owner / snapshot_coverage`.
+- Dependency result: the workflow-progress package is parked as subordinate
+  evidence until canonical extractors promote it.
+- Runtime result: no runtime or test files were edited.
+
+## Commit And Push Ledger
+
+Required at closure.
+
+1. [x] Focused package commit: 9b1a50a4335a08fcd37e387d8ae4007495216d3a.
+2. [x] Pushed to: origin/codex/pending-ack-eligibility-filter.
+3. [x] Commit contains only package-owned files/package-status/allowed sprint handoff: yes.
