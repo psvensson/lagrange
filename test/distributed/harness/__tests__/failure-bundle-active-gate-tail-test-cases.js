@@ -1075,7 +1075,7 @@ export function registerFailureBundleActiveGateTailTests({
                 blockedNodeCount: ZERO_COUNT,
                 missingPublishedNodeIds: [],
                 missingPublishedCount: ZERO_COUNT,
-                publicationPending: false,
+                publicationPending: true,
                 prioritySpreadPending: false,
               },
               activeGate: {
@@ -1132,15 +1132,15 @@ export function registerFailureBundleActiveGateTailTests({
 
       assert.equal(
         ownerContract.dominantWitness.edgeId,
-        'publication_ack_convergence',
+        EDGE_ACTIVE_GATE_SNAPSHOT_COVERAGE,
       );
       assert.equal(
         ownerContract.dominantWitness.owner,
-        'topology_publication_owner',
+        OWNER_STARTUP_ACTIVE_GATE,
       );
       assert.equal(
         ownerContract.dominantWitness.boundary,
-        'publication_convergence',
+        BOUNDARY_SNAPSHOT_COVERAGE,
       );
       assert.equal(
         ownerContract.dominantWitness.state,
@@ -1148,10 +1148,11 @@ export function registerFailureBundleActiveGateTailTests({
       );
       assert.equal(
         ownerContract.dominantWitness.dominantReason,
-        'publication_pending',
+        ACTIVE_GATE_TIMED_OUT_REASON,
       );
       assert.deepEqual(ownerContract.dominantWitness.reasons, [
-        'publication_pending',
+        ACTIVE_GATE_TIMED_OUT_REASON,
+        SNAPSHOT_COVERAGE_INCOMPLETE_REASON,
       ]);
     },
   );

@@ -30,6 +30,9 @@ import {
   buildPublicationRecoveryGateSnapshot,
 } from '../../../src/control-plane/publication-recovery-gate.js';
 import {
+  PUBLICATION_OWNER_TEXT,
+} from '../../../src/control-plane/publication-owner-constants.js';
+import {
   CONTROL_PLANE_PRIORITY_RECOVERY_REASON,
   CONTROL_PLANE_READINESS_REASON,
 } from '../../../src/control-plane/control-plane-readiness-constants.js';
@@ -2639,13 +2642,13 @@ function buildPublicationMissingPublishedEvidence({
     (
       currentActiveGateSelectedMembershipDeficitOpen === true ?
         true :
-      rawCoverageCanonicalEvidenceAvailable !== true ?
-        true :
-      coverageCanonicalNodeIds.length === ZERO ?
-        coverageCanonicalMissingActiveNodeReasonNodeIds.length > ZERO :
-        coverageCanonicalNodeIds.some((nodeId) =>
-          coverageCanonicalMissingActiveNodeReasonNodeIds.includes(nodeId),
-        )
+        rawCoverageCanonicalEvidenceAvailable !== true ?
+          true :
+          coverageCanonicalNodeIds.length === ZERO ?
+            coverageCanonicalMissingActiveNodeReasonNodeIds.length > ZERO :
+            coverageCanonicalNodeIds.some((nodeId) =>
+              coverageCanonicalMissingActiveNodeReasonNodeIds.includes(nodeId),
+            )
     );
   const hasCanonicalMissingPublishedPublicationDebt =
     rawCoverageCanonicalNodeIds.length > ZERO &&
@@ -3109,17 +3112,21 @@ function buildPublicationConvergenceSummary(controlPlane) {
     ZERO :
     newerBestProgressPendingAckClosure ?
       ZERO :
-    currentPendingAckNodeIds !== null ?
-      pendingAckNodeIds.length :
-      hasCurrentActiveGatePendingAckClosure(activeGateProgress) === true ?
-        ZERO :
-      Math.max(
-        normalizeNonNegativeCount(priorityRecoveryObservation?.pendingAckCount),
-        normalizeNonNegativeCount(publicationConvergence?.pendingAckCount),
-        normalizeNonNegativeCount(publicationConvergenceGate?.pendingAckCount),
-        normalizeNonNegativeCount(activeGateProgress?.pendingAckCount),
-        normalizeNonNegativeCount(bestProgressSnapshot?.pendingAckCount),
-      );
+      currentPendingAckNodeIds !== null ?
+        pendingAckNodeIds.length :
+        hasCurrentActiveGatePendingAckClosure(activeGateProgress) === true ?
+          ZERO :
+          Math.max(
+            normalizeNonNegativeCount(
+              priorityRecoveryObservation?.pendingAckCount,
+            ),
+            normalizeNonNegativeCount(publicationConvergence?.pendingAckCount),
+            normalizeNonNegativeCount(
+              publicationConvergenceGate?.pendingAckCount,
+            ),
+            normalizeNonNegativeCount(activeGateProgress?.pendingAckCount),
+            normalizeNonNegativeCount(bestProgressSnapshot?.pendingAckCount),
+          );
   const missingPublishedEvidence = buildPublicationMissingPublishedEvidence({
     activeGateSnapshotCoveragePending,
     activeGatePriorityRecoveryActuationEvidenceOpen,
@@ -3337,6 +3344,34 @@ function buildPublicationConvergenceSummary(controlPlane) {
     missingPublishedCount,
   });
   const publicationOwnerStream = publicationRecoveryGate.publicationOwnerStream;
+  const shouldUseClosedUnknownPublicationGate =
+    publicationRecoveryGate.publicationPending !== true &&
+    publicationRecoveryGate.pendingAckCount === ZERO &&
+    publicationRecoveryGate.missingPublishedCount === ZERO &&
+    publicationRecoveryGate.publicationStatusNormalized ===
+      PUBLICATION_OWNER_TEXT.UNKNOWN &&
+    publicationRecoveryGate.recoveryProtocolState ===
+      RECOVERY_PROTOCOL_STATE.UNPUBLISHED_OBSERVATION;
+  const effectivePublicationPendingOpen =
+    shouldUseClosedUnknownPublicationGate === true ?
+      false :
+      publicationPendingOpen;
+  const shouldRetireStalePublicationEpochReason =
+    shouldUseClosedUnknownPublicationGate === true;
+  const effectivePriorityRecoveryReasonCodes =
+    shouldRetireStalePublicationEpochReason === true ?
+      priorityRecoveryReasonCodes.filter((reason) =>
+        reason !==
+          CONTROL_PLANE_PRIORITY_RECOVERY_REASON.PUBLICATION_EPOCH_PENDING,
+      ) :
+      priorityRecoveryReasonCodes;
+  const effectivePublicationConvergenceGateReasons =
+    shouldRetireStalePublicationEpochReason === true ?
+      publicationConvergenceGateReasons.filter((reason) =>
+        reason !==
+          CONTROL_PLANE_PRIORITY_RECOVERY_REASON.PUBLICATION_EPOCH_PENDING,
+      ) :
+      publicationConvergenceGateReasons;
   return {
     publicationEpoch,
     publicationStatus,
@@ -3372,10 +3407,10 @@ function buildPublicationConvergenceSummary(controlPlane) {
     publishedAt: publicationConvergence?.publishedAt || null,
     updatedAt: publicationConvergence?.updatedAt || null,
     recoveryProtocolState,
-    priorityRecoveryReasonCodes,
-    publicationPending: publicationPendingOpen,
+    priorityRecoveryReasonCodes: effectivePriorityRecoveryReasonCodes,
+    publicationPending: effectivePublicationPendingOpen,
     prioritySpreadPending: prioritySpreadPendingOpen,
-    publicationConvergenceGateReasons,
+    publicationConvergenceGateReasons: effectivePublicationConvergenceGateReasons,
     ...(activeGate ? {activeGate} : {}),
     activeGateProgress,
     activeGateSnapshotCoveragePending,

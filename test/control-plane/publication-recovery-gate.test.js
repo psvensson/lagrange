@@ -8,6 +8,7 @@ import {
   PUBLICATION_OWNER_FRESHNESS_FENCE,
   PUBLICATION_OWNER_RECOVERY_OUTCOME,
   PUBLICATION_OWNER_STREAM_OUTCOME,
+  PUBLICATION_OWNER_TEXT,
 } from '../../src/control-plane/publication-owner-constants.js';
 import {
   RECOVERY_PROTOCOL_STATE,
@@ -27,6 +28,7 @@ import {
 } from '../../src/control-plane/publication-owner-state.js';
 
 const TEST_PUBLICATION_EPOCH = 7;
+const TEST_UNAVAILABLE_PUBLICATION_EPOCH = 0;
 const TEST_CONFLICTING_PUBLICATION_EPOCH = 3;
 const TEST_PUBLICATION_DEBT_COUNT = 1;
 const TEST_EMPTY_NODE_IDS = Object.freeze([]);
@@ -166,6 +168,99 @@ test('buildPublicationRecoveryGateSnapshot closes stale ACK status when the requ
     t.equal(
       gate.pendingAckEvidenceState,
       PUBLICATION_RECOVERY_PENDING_ACK_EVIDENCE_STATE.REQUIRED_ACK_NODE_LIST,
+    );
+    t.same(gate.reasonCodes, []);
+    t.end();
+  });
+
+test('buildPublicationRecoveryGateSnapshot does not treat UNKNOWN no-debt unpublished observation as pending',
+  (t) => {
+    const gate = buildPublicationRecoveryGateSnapshot({
+      publicationEpoch: TEST_UNAVAILABLE_PUBLICATION_EPOCH,
+      publicationStatus: PUBLICATION_OWNER_TEXT.UNKNOWN,
+      recoveryProtocolState: RECOVERY_PROTOCOL_STATE.UNPUBLISHED_OBSERVATION,
+      pendingAckNodeIds: TEST_EMPTY_NODE_IDS,
+      pendingAckCount: 0,
+      missingPublishedNodeIds: TEST_EMPTY_NODE_IDS,
+      missingPublishedCount: 0,
+      priorityPartitionSummary: TEST_PRIORITY_PARTITION_SUMMARY.SATISFIED,
+    });
+
+    t.equal(
+      gate.state,
+      PUBLICATION_RECOVERY_GATE_STATE.UNPUBLISHED_OBSERVATION,
+    );
+    t.equal(gate.ready, false);
+    t.equal(gate.publicationPending, false);
+    t.equal(gate.ackPending, false);
+    t.equal(gate.pendingAckCount, 0);
+    t.equal(
+      gate.pendingAckEvidenceState,
+      PUBLICATION_RECOVERY_PENDING_ACK_EVIDENCE_STATE.REQUIRED_ACK_NODE_LIST,
+    );
+    t.equal(gate.ackState, PUBLICATION_OWNER_ACK_STATE.NOT_REQUIRED);
+    t.equal(
+      gate.freshnessFence,
+      PUBLICATION_OWNER_FRESHNESS_FENCE.NO_REVISION,
+    );
+    t.equal(
+      gate.recoveryOutcome,
+      PUBLICATION_OWNER_RECOVERY_OUTCOME.NOT_STARTED,
+    );
+    t.equal(
+      gate.streamOutcome,
+      PUBLICATION_OWNER_STREAM_OUTCOME.NOT_STARTED,
+    );
+    t.same(gate.reasonCodes, []);
+    t.end();
+  });
+
+test('buildPublicationRecoveryGateSnapshot does not let supplied NOT_STARTED stream reopen UNKNOWN no-debt observation',
+  (t) => {
+    const publicationOwnerStream = buildPublicationOwnerStreamState({
+      publicationStatus: PUBLICATION_OWNER_TEXT.UNKNOWN,
+      requiredAckNodeIds: TEST_EMPTY_NODE_IDS,
+      acknowledgedNodeIds: TEST_EMPTY_NODE_IDS,
+      pendingAckNodeIds: TEST_EMPTY_NODE_IDS,
+      pendingAckCount: 0,
+      missingPublishedNodeIds: TEST_EMPTY_NODE_IDS,
+      missingPublishedCount: 0,
+    });
+
+    const gate = buildPublicationRecoveryGateSnapshot({
+      publicationOwnerStream,
+      publicationEpoch: TEST_CONFLICTING_PUBLICATION_EPOCH,
+      publicationStatus: CONTROL_PLANE_PUBLICATION_STATUS.ACK_PENDING,
+      recoveryProtocolState: RECOVERY_PROTOCOL_STATE.PUBLICATION_PENDING,
+      pendingAckCount: 0,
+      priorityPartitionSummary: TEST_PRIORITY_PARTITION_SUMMARY.SATISFIED,
+    });
+
+    t.equal(gate.publicationOwnerStream, publicationOwnerStream);
+    t.equal(
+      publicationOwnerStream.streamOutcome,
+      PUBLICATION_OWNER_STREAM_OUTCOME.NOT_STARTED,
+    );
+    t.equal(gate.state, PUBLICATION_RECOVERY_GATE_STATE.UNPUBLISHED_OBSERVATION);
+    t.equal(gate.publicationPending, false);
+    t.equal(gate.ackPending, false);
+    t.equal(gate.pendingAckCount, 0);
+    t.equal(
+      gate.recoveryProtocolState,
+      RECOVERY_PROTOCOL_STATE.UNPUBLISHED_OBSERVATION,
+    );
+    t.equal(gate.ackState, PUBLICATION_OWNER_ACK_STATE.NOT_REQUIRED);
+    t.equal(
+      gate.freshnessFence,
+      PUBLICATION_OWNER_FRESHNESS_FENCE.NO_REVISION,
+    );
+    t.equal(
+      gate.recoveryOutcome,
+      PUBLICATION_OWNER_RECOVERY_OUTCOME.NOT_STARTED,
+    );
+    t.equal(
+      gate.streamOutcome,
+      PUBLICATION_OWNER_STREAM_OUTCOME.NOT_STARTED,
     );
     t.same(gate.reasonCodes, []);
     t.end();

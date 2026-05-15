@@ -9,6 +9,7 @@ import {
   PUBLICATION_OWNER_RECOVERY_OUTCOME,
   PUBLICATION_OWNER_SEMANTIC_OWNER,
   PUBLICATION_OWNER_STREAM_OUTCOME,
+  PUBLICATION_OWNER_TEXT,
 } from './publication-owner-constants.js';
 import {
   buildPublicationOwnerStreamState,
@@ -161,6 +162,44 @@ function normalizePublicationStatus(status) {
     EMPTY_STRING;
 }
 
+function hasPublicationStatusPendingMeaning(publicationStatusNormalized) {
+  return publicationStatusNormalized.length > NUM.ZERO &&
+    publicationStatusNormalized !== PUBLICATION_OWNER_TEXT.UNKNOWN;
+}
+
+function isClosedNotStartedPublicationOwnerStream(
+  publicationOwnerStream,
+  pendingAckCount,
+  missingPublishedCount,
+) {
+  const publicationStatusNormalized = normalizePublicationStatus(
+    publicationOwnerStream?.publicationStatus,
+  );
+  return publicationOwnerStream?.streamOutcome ===
+    PUBLICATION_OWNER_STREAM_OUTCOME.NOT_STARTED &&
+    publicationOwnerStream?.recoveryOutcome ===
+      PUBLICATION_OWNER_RECOVERY_OUTCOME.NOT_STARTED &&
+    publicationOwnerStream?.ackState ===
+      PUBLICATION_OWNER_ACK_STATE.NOT_REQUIRED &&
+    normalizeNonNegativeInteger(pendingAckCount) === NUM.ZERO &&
+    normalizeNonNegativeInteger(missingPublishedCount) === NUM.ZERO &&
+    hasPublicationStatusPendingMeaning(publicationStatusNormalized) !== true;
+}
+
+function isPublicationOwnerStreamPendingForRecoveryGate(
+  publicationOwnerStream,
+  pendingAckCount,
+  missingPublishedCount,
+) {
+  return isClosedNotStartedPublicationOwnerStream(
+    publicationOwnerStream,
+    pendingAckCount,
+    missingPublishedCount,
+  ) ?
+    false :
+    isPublicationOwnerStreamPublicationPending(publicationOwnerStream);
+}
+
 function normalizeNonNegativeInteger(value) {
   return Number.isFinite(value) && value >= NUM.ZERO ?
     Math.floor(value) :
@@ -253,6 +292,24 @@ function resolvePendingAckNodeIds(requiredAckNodeIds = [], acknowledgedNodeIds =
   );
 }
 
+function hasClosedUnpublishedPendingAckEvidence(options = {}) {
+  const explicitPendingAckNodeIds = normalizeDistinctStringArray(
+    options.pendingAckNodeIds,
+  );
+  const publicationStatusNormalized = normalizePublicationStatus(
+    options.publicationStatus,
+  );
+  const recoveryProtocolState = normalizeOptionalString(
+    options.recoveryProtocolState,
+  );
+  return Array.isArray(options.pendingAckNodeIds) &&
+    explicitPendingAckNodeIds.length === NUM.ZERO &&
+    normalizeNonNegativeInteger(options.pendingAckCount) === NUM.ZERO &&
+    normalizeNonNegativeInteger(options.missingPublishedCount) === NUM.ZERO &&
+    hasPublicationStatusPendingMeaning(publicationStatusNormalized) !== true &&
+    recoveryProtocolState === RECOVERY_PROTOCOL_STATE.UNPUBLISHED_OBSERVATION;
+}
+
 function resolvePendingAckEvidenceState(options = {}) {
   if (
     options.pendingAckEvidenceState ===
@@ -273,11 +330,16 @@ function resolvePendingAckEvidenceState(options = {}) {
   const explicitPendingAckNodeIds = normalizeDistinctStringArray(
     options.pendingAckNodeIds,
   );
-  return Array.isArray(options.requiredAckNodeIds) &&
+  const hasRequiredAckNodeListEvidence =
+    Array.isArray(options.requiredAckNodeIds) &&
     (
       requiredAckNodeIds.length > NUM.ZERO ||
       explicitPendingAckNodeIds.length === NUM.ZERO
-    ) ?
+    );
+  const hasClosedPendingAckNodeListEvidence =
+    hasClosedUnpublishedPendingAckEvidence(options);
+  return hasRequiredAckNodeListEvidence ||
+    hasClosedPendingAckNodeListEvidence ?
     PUBLICATION_RECOVERY_PENDING_ACK_EVIDENCE_STATE.REQUIRED_ACK_NODE_LIST :
     PUBLICATION_RECOVERY_PENDING_ACK_EVIDENCE_STATE.COUNT_ONLY;
 }
@@ -381,7 +443,11 @@ function buildPublicationStreamCompatibilityEvidence(options = {}) {
         true :
         options.prioritySpreadEvidenceUnavailable;
   const publicationPending =
-    isPublicationOwnerStreamPublicationPending(publicationOwnerStream) ||
+    isPublicationOwnerStreamPendingForRecoveryGate(
+      publicationOwnerStream,
+      pendingAckCount,
+      missingPublishedCount,
+    ) ||
     pendingAckCount > NUM.ZERO;
   const recoveryProtocolState = resolvePublicationRecoveryProtocolState({
     publicationOwnerStream,
@@ -644,7 +710,7 @@ function resolvePublicationPending(options = {}) {
   ) {
     return ackClosureSatisfied !== true;
   }
-  if (publicationStatusNormalized.length > NUM.ZERO) {
+  if (hasPublicationStatusPendingMeaning(publicationStatusNormalized)) {
     return publicationStatusNormalized !==
       CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED;
   }

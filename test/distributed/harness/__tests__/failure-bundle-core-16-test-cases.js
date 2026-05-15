@@ -315,10 +315,9 @@ export function registerFailureBundleCore16Tests(context) {
       const ACTIVE_GATE_STATE_TIMED_OUT = 'timed_out';
       const ACTIVE_GATE_TERMINAL_REASON = 'stalled_no_progress';
       const PENDING_ACKS_PRESENT_REASON = 'pending_acks_present';
-      const PUBLICATION_ACK_CONVERGENCE_EDGE_ID =
-        'publication_ack_convergence';
-      const MISSING_PUBLISHED_NODES_PRESENT_REASON =
-        'missing_published_nodes_present';
+      const ACTIVE_GATE_SNAPSHOT_COVERAGE_EDGE_ID =
+        'active_gate_snapshot_coverage';
+      const ACTIVE_GATE_TIMED_OUT_REASON = 'active_gate_timed_out';
       const PUBLICATION_OWNER_STREAM_OUTCOME_STALE = 'stale';
       const PUBLICATION_OWNER_FRESHNESS_FENCE_CONSUMER_LAG =
         'consumer_lag';
@@ -333,7 +332,6 @@ export function registerFailureBundleCore16Tests(context) {
       const MISSING_NODE_ONE = 'missing-node-one';
       const MISSING_NODE_TWO = 'missing-node-two';
       const MISSING_NODE_THREE = 'missing-node-three';
-      const MISSING_NODE_FOUR = 'missing-node-four';
       const STALE_PUBLICATION_EPOCH = 1;
       const CLOSED_PUBLICATION_EPOCH = 2;
       const EXPECTED_NODE_COUNT = 5;
@@ -492,11 +490,11 @@ export function registerFailureBundleCore16Tests(context) {
       );
       assert.equal(
         ownerContract.dominantWitness.edgeId,
-        PUBLICATION_ACK_CONVERGENCE_EDGE_ID,
+        ACTIVE_GATE_SNAPSHOT_COVERAGE_EDGE_ID,
       );
       assert.equal(
         ownerContract.dominantWitness.dominantReason,
-        MISSING_PUBLISHED_NODES_PRESENT_REASON,
+        ACTIVE_GATE_TIMED_OUT_REASON,
       );
       assert.equal(
         scenarioBundle.diagnostics.failure.reasonCounts[

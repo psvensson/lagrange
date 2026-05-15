@@ -22,11 +22,11 @@ Boundary: `publication_convergence`
 
 Dominant reason: `publication_pending`
 
-Current state: Fresh representative evidence after the active-gate forced-snapshot refresh-debt fallback is still red and moves first frontier back to publication_ack_convergence under topology_publication_owner / publication_convergence with publication_pending. Active-gate snapshot coverage is now downstream with snapshotCoverage=0/5 and a forced authoritative snapshot repair error. The sprint re-entry gate requires one cross-boundary causal package before more tactical runtime edits.
+Current state: Focused publication recovery gate and failure-bundle projection repair now classify fallback-built and supplied-stream UNKNOWN/no-debt unpublished observations as not_started/not_required and prevent stale top-level publicationPending from reopening the publication frontier. The fresh representative rerun remains red, but canonical topology evidence marks publication_ack_convergence satisfied and selects active_gate_snapshot_coverage under startup_active_gate_owner / snapshot_coverage as the first frontier.
 
 ## Next Action
 
-Use the fresh oscillation artifact to build a replayable publication-to-active-gate handoff probe before promoting more runtime files; explain why publication_ack_convergence returns to first frontier after active-gate forced repair wakes authoritative snapshot repair.
+Close this cross-boundary handoff slice as migrated/reduced and continue with a startup_active_gate_owner / snapshot_coverage successor package using the fresh representative artifact.
 
 ## Proof Ladder
 
@@ -35,8 +35,19 @@ Use the fresh oscillation artifact to build a replayable publication-to-active-g
 3. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-forced-snapshot-refresh-debt-fallback-20260515-codex.report.json --explain active_gate_snapshot_coverage`
 4. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-forced-snapshot-refresh-debt-fallback-20260515-codex.report.json --handoff-probe`
 5. `node --test test/scripts/analyze-topology-convergence.test.js`
-6. `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-forced-snapshot-refresh-debt-fallback-20260515-codex.report.json`
-7. `npm run analyze:distributed-failure -- --report test-output/reports/rolling-restart-after-forced-snapshot-refresh-debt-fallback-20260515-codex.report.json`
+6. `node --test test/control-plane/publication-recovery-gate.test.js`
+7. `node --test test/control-plane/publication-owner-stream.test.js test/control-plane/publication-recovery-evidence.test.js test/control-plane/publication-recovery-evidence-open-membership.test.js`
+8. `node --test test/distributed/harness/__tests__/failure-bundle.test.js`
+9. `npx eslint --no-ignore src/control-plane/publication-recovery-gate.js test/control-plane/publication-recovery-gate.test.js test/distributed/harness/failure-bundle-segment-4.js test/distributed/harness/__tests__/failure-bundle-active-gate-tail-test-cases.js test/distributed/harness/__tests__/failure-bundle-core-16-test-cases.js`
+10. `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-forced-snapshot-refresh-debt-fallback-20260515-codex.report.json`
+11. `npm run analyze:distributed-failure -- --report test-output/reports/rolling-restart-after-forced-snapshot-refresh-debt-fallback-20260515-codex.report.json`
+12. `node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-after-publication-supplied-stream-closure-20260515-codex.report.json --verbose`
+13. `npm run work:evidence-summary -- test-output/reports/rolling-restart-after-publication-supplied-stream-closure-20260515-codex.report.json`
+14. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-publication-supplied-stream-closure-20260515-codex.report.json`
+15. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-publication-supplied-stream-closure-20260515-codex.report.json --explain active_gate_snapshot_coverage`
+16. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-publication-supplied-stream-closure-20260515-codex.report.json --explain publication_ack_convergence`
+17. `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-publication-supplied-stream-closure-20260515-codex.report.json`
+18. `npm run analyze:distributed-failure -- --report test-output/reports/rolling-restart-after-publication-supplied-stream-closure-20260515-codex.report.json`
 
 ## Model Fit
 
@@ -46,6 +57,8 @@ Intended minimum model: `gpt-5.3-codex`
 
 Scope shape: `scenario-causal-escalation`
 
+Output profile: `medium`
+
 Escalation triggers:
 
 1. `runtime files are promoted before a replayable missing-edge probe is named`
@@ -54,21 +67,21 @@ Escalation triggers:
 
 ## Representative Residual
 
-Status: `live-red`
+Status: `live-red-migrated`
 
 Scenario: `rolling-restart`
 
-Artifact: `test-output/reports/rolling-restart-after-forced-snapshot-refresh-debt-fallback-20260515-codex.report.json`
+Artifact: `test-output/reports/rolling-restart-after-publication-supplied-stream-closure-20260515-codex.report.json`
 
-Frontier: `publication_ack_convergence`
+Frontier: `active_gate_snapshot_coverage`
 
-Owner: `topology_publication_owner`
+Owner: `startup_active_gate_owner`
 
-Boundary: `publication_convergence`
+Boundary: `snapshot_coverage`
 
-Dominant reason: `publication_pending`
+Dominant reason: `active_gate_timed_out`
 
-Next action: `Build a replayable missing-edge probe for the publication-to-active-gate handoff before promoting runtime files.`
+Next action: `Continue with startup_active_gate_owner / snapshot_coverage. Publication ACK convergence is satisfied with publicationPending=false, pendingAck=0, missingPublished=0, ack not_required, no_revision, and stream not_started.`
 
 ## Causal Governance
 
@@ -78,9 +91,9 @@ Stop-condition check: `npm --silent run analyze:causal-model -- test-output/repo
 
 Expected causal-model change: `publication_ack_convergence and active_gate_snapshot_coverage become a single replayable handoff fixture with a named missing edge, or the package classifies why no bounded runtime fix should proceed.`
 
-Representative outcome: `pending-before-rerun`
+Representative outcome: `migrated`
 
-Causal debt: `The frontier has oscillated between topology_publication_owner / publication_convergence and startup_active_gate_owner / snapshot_coverage across successive focused fixes. The latest active-gate fix removed stale repair-deferred evidence but exposed publication_pending again, with active-gate coverage downstream at 0/5.`
+Causal debt: `The cross-boundary publication handoff is now monotonic for the UNKNOWN/no-debt unpublished observation shape: publication ACK convergence is satisfied, top-level publicationPending is false, and stale publication_epoch_pending reasons are retired from the failure-bundle projection. The fresh representative run remains red because active_gate_snapshot_coverage is blocked with snapshotCoverage=0/5 and selected snapshot timeout/repair failure.`
 
 Cross-boundary review: `Review/fix/implementation subagent sequencing is required before implementation. Runtime files remain candidates only until the package records a replayable missing-edge probe.`
 
@@ -96,34 +109,35 @@ Phase chain:
 4. `publication-to-active-gate missing-edge probe`
 5. `focused handoff repair or architecture-gap classification`
 
-Current first frontier: `publication_ack_convergence under topology_publication_owner / publication_convergence with publication_pending in test-output/reports/rolling-restart-after-forced-snapshot-refresh-debt-fallback-20260515-codex.report.json`
+Current first frontier: `fresh representative rerun first frontier moved to active_gate_snapshot_coverage under startup_active_gate_owner / snapshot_coverage with active_gate_timed_out, snapshotCoverage=0/5, and selected snapshot timeout/forced repair failure`
 
 Known downstream blockers:
 
-1. `active_gate_snapshot_coverage remains blocked downstream with activeGate=timed_out, snapshotCoverage=0/5, and forced authoritative snapshot repair error`
-2. `readiness_startup_support is deferred as inherited_active_gate_no_progress`
-3. `scenario_duration and active_gate_timeout budgets are exhausted`
-4. `priority_recovery_partition_progress remains classified as satisfied`
+1. `publication_ack_convergence is satisfied with publicationPending=false, pendingAck=0, missingPublished=0, ack not_required, no_revision, and stream not_started`
+2. `active_gate_snapshot_coverage remains blocked as first frontier with activeGate=timed_out, snapshotCoverage=0/5, and forced authoritative snapshot repair error`
+3. `readiness_startup_support is deferred as inherited_active_gate_no_progress`
+4. `scenario_duration and active_gate_timeout budgets are exhausted`
+5. `priority_recovery_partition_progress remains classified as satisfied`
 
-Missing causal edge: `Publication ACK convergence, forced authoritative snapshot repair, and active-gate coverage do not produce a monotonic handoff in the same representative run.`
+Missing causal edge: `The publication-to-active-gate handoff now closes; the next missing edge is active-gate selected snapshot coverage not advancing from 0/5 before active-gate timeout after forced repair fails.`
 
-Missing causal edge probe: `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-forced-snapshot-refresh-debt-fallback-20260515-codex.report.json --handoff-probe`
+Missing causal edge probe: `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-publication-supplied-stream-closure-20260515-codex.report.json --explain active_gate_snapshot_coverage`
 
-Bounded progress proof: `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-forced-snapshot-refresh-debt-fallback-20260515-codex.report.json --handoff-probe emits publication_ack_to_active_gate_reconcile_missing with requiredProgressMechanism=reconcile and runtimePromotionAllowed=false; node --test test/scripts/analyze-topology-convergence.test.js covers the replay fixture.`
+Bounded progress proof: `Focused gate and failure-bundle regressions prove the bounded reconcile mechanism for UNKNOWN/no-debt unpublished observation: it no longer reopens publication pending, and stale publication_epoch_pending reasons are retired from projection. Fresh representative proof moves publication_ack_convergence to satisfied and selects active_gate_snapshot_coverage as first frontier, so this package closes as migrated/reduced rather than green.`
 
-Bounded progress proof artifact: `test-output/reports/rolling-restart-after-forced-snapshot-refresh-debt-fallback-20260515-codex.report.json`
+Bounded progress proof artifact: `test-output/reports/rolling-restart-after-publication-supplied-stream-closure-20260515-codex.report.json`
 
-Expected observable transition: `publication_pending with activeGate=timed_out and snapshotCoverage=0/5 becomes a named publication_ack_to_active_gate_reconcile_missing probe result before any runtime file is promoted.`
+Expected observable transition: `Observed: UNKNOWN publicationStatus with unpublished_observation, pendingAckCount=0, pendingAckNodeIds=[], missingPublishedCount=0, and owner stream not_started/not_required stops emitting top-level publication_pending; representative evidence migrated the first frontier to active_gate_snapshot_coverage.`
 
 Max progress bound: `one cross-boundary causal package slice with canonical extractors, subagent sequencing, focused missing-edge probe, and representative result classification`
 
-Same-frontier fallback: `If fresh evidence still selects publication_ack_convergence with the same downstream active-gate forced repair error, keep this package active rather than creating another publication-only successor.`
+Same-frontier fallback: `not used; publication_ack_convergence is no longer the representative first frontier in the fresh artifact.`
 
-Expected next frontier: `a named publication-to-active-gate missing-edge probe, not another tactical owner-only package`
+Expected next frontier: `startup_active_gate_owner / snapshot_coverage`
 
-Result classification: `classification-only`
+Result classification: `migrated`
 
-Stop condition: `continue-local-fix`
+Stop condition: `migrate-owner-boundary`
 
 Recent frontier history:
 
@@ -131,9 +145,9 @@ Recent frontier history:
 2. `work/packages/done-20260515-topology-publication-convergence-after-active-gate-migration.md / topology_publication_owner / publication_convergence / migrated-to-active-gate`
 3. `work/packages/done-20260515-topology-active-gate-snapshot-coverage-after-publication-owner-stream-fix.md / startup_active_gate_owner / snapshot_coverage / migrated-to-publication`
 
-Oscillation check: `This package exists because the frontier returned from active_gate_snapshot_coverage to publication_ack_convergence after focused active-gate repair. Do not split again unless canonical evidence stops oscillating or a new first-frontier owner appears.`
+Oscillation check: `The cross-boundary package stopped the stale publication_pending reentry for the current representative shape; the frontier moved to active_gate_snapshot_coverage with publication satisfied. Continue in a startup active-gate successor instead of reopening publication.`
 
-Handoff invariant: `No runtime implementation starts until the package records a replayable publication-to-active-gate handoff probe or explicitly classifies why the probe cannot be built.`
+Handoff invariant: `Do not reopen topology_publication_owner / publication_convergence unless fresh canonical extraction promotes publication_ack_convergence back to the first frontier with non-stale publication debt.`
 
 ## Scope
 
@@ -142,12 +156,17 @@ Write scope:
 1. `work/packages/active-20260515-topology-publication-active-gate-handoff-oscillation.md`
 2. `work/sprints/active-2026-q2-topology-convergence-residual-closure.md`
 3. `work/model-ledger.jsonl`
-4. `scripts/analyze-topology-convergence.js`
-5. `test/scripts/analyze-topology-convergence.test.js`
-6. `test/scripts/__fixtures__/topology-convergence/publication-active-gate-handoff-oscillation.fixture.json`
-7. `test/scripts/__fixtures__/topology-convergence/active-gate-snapshot.expected.json`
-8. `test/scripts/__fixtures__/topology-convergence/active-gate-snapshot-reachability.expected.json`
-9. `test/scripts/__fixtures__/topology-convergence/publication-count-only-ack.expected.json`
+4. `src/control-plane/publication-recovery-gate.js`
+5. `test/control-plane/publication-recovery-gate.test.js`
+6. `test/distributed/harness/failure-bundle-segment-4.js`
+7. `test/distributed/harness/__tests__/failure-bundle-active-gate-tail-test-cases.js`
+8. `test/distributed/harness/__tests__/failure-bundle-core-16-test-cases.js`
+9. `scripts/analyze-topology-convergence.js`
+10. `test/scripts/analyze-topology-convergence.test.js`
+11. `test/scripts/__fixtures__/topology-convergence/publication-active-gate-handoff-oscillation.fixture.json`
+12. `test/scripts/__fixtures__/topology-convergence/active-gate-snapshot.expected.json`
+13. `test/scripts/__fixtures__/topology-convergence/active-gate-snapshot-reachability.expected.json`
+14. `test/scripts/__fixtures__/topology-convergence/publication-count-only-ack.expected.json`
 
 Handoff files:
 
@@ -175,12 +194,17 @@ Commit scope:
 3. `work/sprints/current-blocker.md`
 4. `work/sprints/current-blocker.json`
 5. `work/model-ledger.jsonl`
-6. `scripts/analyze-topology-convergence.js`
-7. `test/scripts/analyze-topology-convergence.test.js`
-8. `test/scripts/__fixtures__/topology-convergence/publication-active-gate-handoff-oscillation.fixture.json`
-9. `test/scripts/__fixtures__/topology-convergence/active-gate-snapshot.expected.json`
-10. `test/scripts/__fixtures__/topology-convergence/active-gate-snapshot-reachability.expected.json`
-11. `test/scripts/__fixtures__/topology-convergence/publication-count-only-ack.expected.json`
+6. `src/control-plane/publication-recovery-gate.js`
+7. `test/control-plane/publication-recovery-gate.test.js`
+8. `test/distributed/harness/failure-bundle-segment-4.js`
+9. `test/distributed/harness/__tests__/failure-bundle-active-gate-tail-test-cases.js`
+10. `test/distributed/harness/__tests__/failure-bundle-core-16-test-cases.js`
+11. `scripts/analyze-topology-convergence.js`
+12. `test/scripts/analyze-topology-convergence.test.js`
+13. `test/scripts/__fixtures__/topology-convergence/publication-active-gate-handoff-oscillation.fixture.json`
+14. `test/scripts/__fixtures__/topology-convergence/active-gate-snapshot.expected.json`
+15. `test/scripts/__fixtures__/topology-convergence/active-gate-snapshot-reachability.expected.json`
+16. `test/scripts/__fixtures__/topology-convergence/publication-count-only-ack.expected.json`
 
 Legacy touched files:
 
