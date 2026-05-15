@@ -3,7 +3,7 @@
 <!-- work-package
 {
   "schema": "work-package-v1",
-  "status": "active",
+  "status": "done",
   "opened": "2026-05-15",
   "lane": "causal-escalation",
   "scenario": "rolling-restart",
@@ -17,7 +17,7 @@
   "proof": [
     "npm run work:context",
     "npm run work:llm-start",
-    "npm run work:package:doctor -- --suggest work/packages/active-20260515-startup-active-gate-final-owner-publication-target-proof.md",
+    "npm run work:package:doctor -- --suggest work/packages/done-20260515-startup-active-gate-final-owner-publication-target-proof.md",
     "npm run work:evidence-summary -- test-output/reports/rolling-restart-after-publication-diagnostics-fallback-20260515-codex.report.json",
     "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-publication-diagnostics-fallback-20260515-codex.report.json --handoff-probe",
     "npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-publication-diagnostics-fallback-20260515-codex.report.json",
@@ -39,7 +39,7 @@
     "src/admin/admin-control-snapshot-class-part-5.js",
     "src/admin/admin-control-snapshot-readiness-diagnostics-methods.js",
     "test/admin/admin-control-snapshot.test.js",
-    "work/packages/active-20260515-startup-active-gate-final-owner-publication-target-proof.md",
+    "work/packages/done-20260515-startup-active-gate-final-owner-publication-target-proof.md",
     "work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md",
     "work/sprints/current-blocker.md",
     "work/sprints/current-blocker.json",
@@ -69,7 +69,7 @@
     "src/admin/admin-control-snapshot-class-part-5.js",
     "src/admin/admin-control-snapshot-readiness-diagnostics-methods.js",
     "test/admin/admin-control-snapshot.test.js",
-    "work/packages/active-20260515-startup-active-gate-final-owner-publication-target-proof.md",
+    "work/packages/done-20260515-startup-active-gate-final-owner-publication-target-proof.md",
     "work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md",
     "work/sprints/current-blocker.md",
     "work/sprints/current-blocker.json",
@@ -138,7 +138,9 @@
     "oscillationCheck": "workflow_progress is visible as three subordinate residual witnesses but is not first frontier in topology or causal summaries; do not implement it without ownerBoundaryMigrationProof.",
     "handoffInvariant": "Active-gate admission stays strict while runtimePromotionAllowed=false; publication handoff truth remains owned by the canonical contract."
   },
-  "predecessor": "work/packages/done-20260515-startup-active-gate-remaining-publication-lag-proof.md"
+  "predecessor": "work/packages/done-20260515-startup-active-gate-remaining-publication-lag-proof.md",
+  "closed": "2026-05-15",
+  "commitAndPushLedgerRequired": true
 }
 -->
 
@@ -187,7 +189,7 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 
 ## In Scope
 
-1. work/packages/active-20260515-startup-active-gate-final-owner-publication-target-proof.md
+1. work/packages/done-20260515-startup-active-gate-final-owner-publication-target-proof.md
 2. src/admin/admin-control-snapshot-class-part-5.js
 3. src/admin/admin-control-snapshot-readiness-diagnostics-methods.js
 4. test/admin/admin-control-snapshot.test.js
@@ -209,9 +211,9 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 Required before implementation because this is a causal-escalation runtime
 owner-boundary package.
 
-- [x] Review subagent recorded: Agent Averroes (019e2d5a-46a5-7fd3-b3d9-5818a941ddc2) reviewed work/packages/active-20260515-startup-active-gate-final-owner-publication-target-proof.md; result fixes-required.
-- [x] Fix subagent recorded or explicitly not needed: Agent Huygens (019e2d5e-5e21-75a2-8bc2-a60e899323ab) fixed work/packages/active-20260515-startup-active-gate-final-owner-publication-target-proof.md.
-- [x] Implementation subagent recorded: Agent Dalton (019e2d64-0544-7640-8654-5179dea00413) implemented work/packages/active-20260515-startup-active-gate-final-owner-publication-target-proof.md.
+- [x] Review subagent recorded: Agent Averroes (019e2d5a-46a5-7fd3-b3d9-5818a941ddc2) reviewed work/packages/done-20260515-startup-active-gate-final-owner-publication-target-proof.md; result fixes-required.
+- [x] Fix subagent recorded or explicitly not needed: Agent Huygens (019e2d5e-5e21-75a2-8bc2-a60e899323ab) fixed work/packages/done-20260515-startup-active-gate-final-owner-publication-target-proof.md.
+- [x] Implementation subagent recorded: Agent Dalton (019e2d64-0544-7640-8654-5179dea00413) implemented work/packages/done-20260515-startup-active-gate-final-owner-publication-target-proof.md.
 
 ## Model Fit
 
@@ -219,7 +221,7 @@ owner-boundary package.
 - Intended minimum model: `gpt-5.3-codex`
 - Scope shape: `owner-boundary-contraction/current-frontier`
 - Output profile: `medium`
-- Owned files: `src/admin/admin-control-snapshot-class-part-5.js`, `src/admin/admin-control-snapshot-readiness-diagnostics-methods.js`, `test/admin/admin-control-snapshot.test.js`, `work/packages/active-20260515-startup-active-gate-final-owner-publication-target-proof.md`, `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md`, `work/sprints/current-blocker.md`, `work/sprints/current-blocker.json`, `work/model-ledger.jsonl`
+- Owned files: `src/admin/admin-control-snapshot-class-part-5.js`, `src/admin/admin-control-snapshot-readiness-diagnostics-methods.js`, `test/admin/admin-control-snapshot.test.js`, `work/packages/done-20260515-startup-active-gate-final-owner-publication-target-proof.md`, `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md`, `work/sprints/current-blocker.md`, `work/sprints/current-blocker.json`, `work/model-ledger.jsonl`
 - Forbidden files: `timeout increases`, `active-gate admission relaxation while runtimePromotionAllowed=false`, `workflow-progress implementation unless canonical extractors promote it`, `broad diagnostics-only success path`, `Pro or Enterprise behavior`
 - Frozen decisions: package scope and lane stay bounded unless explicitly escalated.
 - Escalation triggers: owned files expand beyond this package, runtime ownership changes, or representative scenario evidence changes.
@@ -230,7 +232,7 @@ owner-boundary package.
 
 1. npm run work:context
 2. npm run work:llm-start
-3. npm run work:package:doctor -- --suggest work/packages/active-20260515-startup-active-gate-final-owner-publication-target-proof.md
+3. npm run work:package:doctor -- --suggest work/packages/done-20260515-startup-active-gate-final-owner-publication-target-proof.md
 4. npm run work:evidence-summary -- test-output/reports/rolling-restart-after-publication-diagnostics-fallback-20260515-codex.report.json
 5. npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-publication-diagnostics-fallback-20260515-codex.report.json --handoff-probe
 6. npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-publication-diagnostics-fallback-20260515-codex.report.json
@@ -288,3 +290,9 @@ above and record one of these outcomes before closure:
 
 No bridge, diagnostics, or admin projection patch is allowed unless the table
 selects that path as the canonical owner mechanism.
+
+## Commit And Push Ledger
+
+1. Focused package commit: 1047df0c
+2. Pushed to: origin/codex/pending-ack-eligibility-filter
+3. Commit contains only package-owned files/package-status/allowed sprint handoff: yes

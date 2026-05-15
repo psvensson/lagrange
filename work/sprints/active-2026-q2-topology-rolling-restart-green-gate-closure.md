@@ -221,7 +221,7 @@ Pro or Enterprise behavior.
      `35a891b8-c1a0-5064-9c6e-2acfba61c2a7`, while producer published
      membership remains seed-only with `missingPublishedCount=4` and snapshot
      coverage remains `2/5`.
-9. [Startup Active Gate Final Owner Publication Target Proof](../packages/active-20260515-startup-active-gate-final-owner-publication-target-proof.md)
+9. [Startup Active Gate Final Owner Publication Target Proof](../packages/done-20260515-startup-active-gate-final-owner-publication-target-proof.md)
    - Lane: `causal-escalation`
    - Owner boundary:
      `startup_active_gate_owner / snapshot_coverage`
@@ -278,14 +278,14 @@ changes the semantic owner, boundary, or next required action.
 
 1. `npm run work:context`
 2. `npm run work:llm-start`
-3. `npm run work:package:doctor -- --suggest work/packages/active-20260515-startup-active-gate-final-owner-publication-target-proof.md`
+3. `npm run work:package:doctor -- --suggest work/packages/done-20260515-startup-active-gate-final-owner-publication-target-proof.md`
 4. `npm run work:evidence-summary -- test-output/reports/rolling-restart-after-publication-diagnostics-fallback-20260515-codex.report.json`
 5. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-publication-diagnostics-fallback-20260515-codex.report.json --handoff-probe`
 6. `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-publication-diagnostics-fallback-20260515-codex.report.json`
 7. `npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-after-publication-diagnostics-fallback-20260515-codex.report.json --markdown`
 8. `npm run analyze:owner-files -- startup_active_gate_owner snapshot_coverage --markdown`
 9. `npm run analyze:distributed-failure -- --report test-output/reports/rolling-restart-after-publication-diagnostics-fallback-20260515-codex.report.json`
-10. `npm run work:subagent-prompt -- --role review --package work/packages/active-20260515-startup-active-gate-final-owner-publication-target-proof.md`
+10. `npm run work:subagent-prompt -- --role review --package work/packages/done-20260515-startup-active-gate-final-owner-publication-target-proof.md`
 11. Real review/fix/implementation subagent proof before runtime implementation starts.
 12. Focused owner tests, static guardrails, and representative `rolling-restart`
     after the package has implementation proof.
@@ -311,7 +311,7 @@ The sprint cannot close until:
 Continue with the active final owner publication target proof package:
 
 ```text
-work/packages/active-20260515-startup-active-gate-final-owner-publication-target-proof.md
+work/packages/done-20260515-startup-active-gate-final-owner-publication-target-proof.md
 ```
 
 Run the required review/fix/implementation subagent sequence before runtime
