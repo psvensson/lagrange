@@ -147,7 +147,8 @@
     "oscillationCheck": "This package is the parked paired split that became eligible only after rebalancer_handoff drained. It must not reopen the active-gate bridge unless focused evidence proves workflow progress is non-frontier.",
     "handoffInvariant": "Active-gate admission stays strict while runtimePromotionAllowed=false; publication handoff truth remains owned by the canonical contract."
   },
-  "predecessor": "work/packages/done-20260515-startup-active-gate-remaining-publication-visibility-target-proof.md"
+  "predecessor": "work/packages/done-20260515-startup-active-gate-remaining-publication-visibility-target-proof.md",
+  "commitAndPushLedgerRequired": true
 }
 -->
 
@@ -342,3 +343,11 @@ blocks are not valid closure proof for this package.
   `active_gate_snapshot_coverage_incomplete`.
 - `git diff --check -- src/rebalancer/operation-workflow-owner.js src/rebalancer/operation-workflow-owner-segment-7-stage-3.js src/rebalancer/operation-workflow-owner-segment-7-stage-5.js test/rebalancer/operation-workflow-progress-event-driven-reentry.test.js test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js work/packages/done-20260515-priority-recovery-operation-workflow-owner-workflow-progress.md work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md work/sprints/current-blocker.md work/sprints/current-blocker.json`:
   passed.
+
+## Commit And Push Ledger
+
+Required at closure.
+
+1. [x] Focused package commit: a9eba217.
+2. [x] Pushed to: origin/codex/pending-ack-eligibility-filter.
+3. [x] Commit contains only package-owned files/package-status/allowed sprint handoff: yes.
