@@ -1,9 +1,10 @@
+# Startup Active Gate Final Owner Publication Target Proof
+
+<!-- work-package
 {
-  "schema": "current-blocker-v1",
-  "generatedBy": "scripts/work-tracker.js",
-  "sprint": "work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md",
-  "package": "work/packages/active-20260515-startup-active-gate-final-owner-publication-target-proof.md",
+  "schema": "work-package-v1",
   "status": "active",
+  "opened": "2026-05-15",
   "lane": "causal-escalation",
   "scenario": "rolling-restart",
   "artifact": "test-output/reports/rolling-restart-after-publication-diagnostics-fallback-20260515-codex.report.json",
@@ -58,7 +59,6 @@
     "work/sprints/current-blocker.json",
     "work/model-ledger.jsonl"
   ],
-  "touchedFiles": [],
   "modelFit": {
     "packageClass": "representative-frontier-closure",
     "intendedMinimumModel": "gpt-5.3-codex",
@@ -123,3 +123,108 @@
   },
   "predecessor": "work/packages/done-20260515-startup-active-gate-remaining-publication-lag-proof.md"
 }
+-->
+
+## Why
+
+The publication diagnostics fallback package made a real reduction, but the
+representative gate is still red. The latest artifact keeps
+`active_gate_snapshot_coverage` as the first frontier with snapshot coverage
+`2/5`, producer published membership still seed-only, and one remaining
+consumer handoff reconcile target:
+`35a891b8-c1a0-5064-9c6e-2acfba61c2a7`.
+
+This package owns the final pending target proof. It must classify the causal
+edge before editing runtime files: producer durable publication truth,
+active-gate observation, or a canonical workflow-progress migration.
+
+## Scope Basis
+
+Roadmap Phase `0.1 - Internal Coherence`, especially topology workflow
+stabilization and production guarantees.
+
+Edition scope: Community / AGPL repo only. No Pro or Enterprise behavior is in
+scope.
+
+## Workflow Lane
+
+- Selected lane: `causal-escalation`
+- Why this lane is sufficient: the representative scenario remains red on the
+  same first frontier after a focused reduction, and this package must prove
+  the next causal edge before runtime scope expands.
+- Escalation trigger to a heavier lane: canonical evidence promotes
+  workflow_progress, publication convergence, readiness support, or an
+  architecture stop ahead of startup active-gate snapshot coverage.
+
+## LLM Tool-First Contract
+
+Before raw JSON, raw logs, broad file search, oversized segment files, or ad hoc `jq`, use the canonical workflow command that owns the question:
+
+1. Package metadata or ledger edits: `npm run work:package:doctor -- --suggest <package>`, `npm run work:package:doctor -- --fix-dry-run <package>`, `npm run work:package:schema`, or `npm run work:package:new -- ...`.
+2. Representative evidence: `npm run work:evidence-summary -- <artifact>` plus any focused extractor for this failure class.
+3. Owner discovery: `npm run analyze:owner-files -- <owner> [boundary]`.
+4. Subagent sequencing: `npm run work:subagent-prompt -- --role <role> --package <package>`.
+5. Large-file cleanup: `npm run work:oversized-next -- --markdown`.
+
+If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which canonical extractor was tried and why it was insufficient.
+
+## In Scope
+
+1. work/packages/active-20260515-startup-active-gate-final-owner-publication-target-proof.md
+2. work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md
+3. work/sprints/current-blocker.md
+4. work/sprints/current-blocker.json
+5. work/model-ledger.jsonl
+
+## Out Of Scope
+
+1. timeout increases
+2. active-gate admission relaxation while runtimePromotionAllowed=false
+3. workflow-progress implementation unless canonical extractors promote it
+4. broad diagnostics-only success path
+5. Pro or Enterprise behavior
+
+## Subagent Sequencing Ledger
+
+Required before implementation because this is a causal-escalation runtime
+owner-boundary package.
+
+- [ ] Review subagent recorded: pending-before-implementation-resumes.
+- [ ] Fix subagent recorded or explicitly not needed: pending-before-review.
+- [ ] Implementation subagent recorded: pending-before-implementation-resumes.
+
+## Model Fit
+
+- Package class: `representative-frontier-closure`
+- Intended minimum model: `gpt-5.3-codex`
+- Scope shape: `owner-boundary-contraction/current-frontier`
+- Output profile: `medium`
+- Owned files: `work/packages/active-20260515-startup-active-gate-final-owner-publication-target-proof.md`, `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md`, `work/sprints/current-blocker.md`, `work/sprints/current-blocker.json`, `work/model-ledger.jsonl`
+- Forbidden files: `timeout increases`, `active-gate admission relaxation while runtimePromotionAllowed=false`, `workflow-progress implementation unless canonical extractors promote it`, `broad diagnostics-only success path`, `Pro or Enterprise behavior`
+- Frozen decisions: package scope and lane stay bounded unless explicitly escalated.
+- Escalation triggers: owned files expand beyond this package, runtime ownership changes, or representative scenario evidence changes.
+- Focused proof: `npm run work:context`, `npm run work:llm-start`, `npm run work:package:doctor -- --suggest work/packages/active-20260515-startup-active-gate-final-owner-publication-target-proof.md`, `npm run work:evidence-summary -- test-output/reports/rolling-restart-after-publication-diagnostics-fallback-20260515-codex.report.json`, `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-publication-diagnostics-fallback-20260515-codex.report.json --handoff-probe`, `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-publication-diagnostics-fallback-20260515-codex.report.json`, `npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-after-publication-diagnostics-fallback-20260515-codex.report.json --markdown`, `npm run analyze:distributed-failure -- --report test-output/reports/rolling-restart-after-publication-diagnostics-fallback-20260515-codex.report.json`, `npm run analyze:owner-files -- startup_active_gate_owner snapshot_coverage --markdown`
+- Model ledger advisory: `escalate`
+
+## Validation
+
+1. npm run work:context
+2. npm run work:llm-start
+3. npm run work:package:doctor -- --suggest work/packages/active-20260515-startup-active-gate-final-owner-publication-target-proof.md
+4. npm run work:evidence-summary -- test-output/reports/rolling-restart-after-publication-diagnostics-fallback-20260515-codex.report.json
+5. npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-publication-diagnostics-fallback-20260515-codex.report.json --handoff-probe
+6. npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-publication-diagnostics-fallback-20260515-codex.report.json
+7. npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-after-publication-diagnostics-fallback-20260515-codex.report.json --markdown
+8. npm run analyze:distributed-failure -- --report test-output/reports/rolling-restart-after-publication-diagnostics-fallback-20260515-codex.report.json
+9. npm run analyze:owner-files -- startup_active_gate_owner snapshot_coverage --markdown
+
+## Causal Edge Table
+
+Complete this table before promoting runtime files from `candidateRuntimeFiles`
+into `writeScope`.
+
+| Surface | Expected truth | Observed truth | Owner / boundary | Evidence command | Runtime promotion rule |
+| --- | --- | --- | --- | --- | --- |
+| Producer durable publication truth | Published active membership includes the owner target and expected active cohort. | `publishedActiveNodeIds` is seed-only; `missingPublishedCount=4`. | `topology_publication_owner / publication_convergence` | `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-publication-diagnostics-fallback-20260515-codex.report.json --handoff-probe` | Promote publication owner files only if this surface is stale or incomplete. |
+| Active-gate observation | Active-gate consumes durable truth and reaches full snapshot coverage. | `pendingReconcileCount=1`, pending node `35a891b8-c1a0-5064-9c6e-2acfba61c2a7`, snapshot coverage `2/5`. | `startup_active_gate_owner / snapshot_coverage` | `npm run work:evidence-summary -- test-output/reports/rolling-restart-after-publication-diagnostics-fallback-20260515-codex.report.json` | Promote active-gate/admin observation files only if producer truth is correct but this surface samples stale or partial truth. |
+| Workflow progress | Workflow progress remains subordinate unless it blocks publication visibility or active-gate observation. | One `operation_workflow_owner / workflow_progress` witness on `control_plane_publications-p1`. | `operation_workflow_owner / workflow_progress` | `npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-after-publication-diagnostics-fallback-20260515-codex.report.json --markdown` | Promote workflow files only with owner-boundary migration proof. |
