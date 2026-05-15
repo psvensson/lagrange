@@ -16,6 +16,16 @@ For a release-specific compact dependency view, use the dependency map under
 that release. The current 0.1 consumer uses
 [`../releases/0.1-dependency-map.md`](../releases/0.1-dependency-map.md).
 
+For a generated current table across all track files, run:
+
+```bash
+npm run work:tracks
+```
+
+The table reports each track's current status, active sprints, upcoming
+sprints, and the sprint-to-track relation recorded in the track membership
+table or release dependency attachment.
+
 ## Relationship
 
 ```text

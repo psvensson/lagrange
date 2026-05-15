@@ -17,6 +17,18 @@ const COMMAND_GROUPS = Object.freeze([
         description: 'Report dirty worktree entries grouped as package-owned, tracker-generated, or unrelated.',
       }),
       Object.freeze({
+        command: 'npm run work:tracks',
+        description: 'Print current tracks with status, active sprints, upcoming sprints, and track relation.',
+      }),
+      Object.freeze({
+        command: 'npm run work:sprint:remaining',
+        description: 'Print active and todo packages left in the current sprint.',
+      }),
+      Object.freeze({
+        command: 'npm run work:sprint:push -- <git-push-args>',
+        description: 'Push with git, then print packages left in the current sprint after a successful push.',
+      }),
+      Object.freeze({
         command: 'npm run work:model-ledger -- summary',
         description: 'Summarize recent model and reasoning-effort fit signals.',
       }),

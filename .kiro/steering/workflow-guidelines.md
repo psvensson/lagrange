@@ -160,6 +160,11 @@ Required patterns:
 Every completed work-package slice MUST end in a focused commit and push before
 the next slice starts.
 
+For sprint package pushes, use `npm run work:sprint:push -- <git-push-args>`
+instead of raw `git push`. The wrapper runs `git push` and then prints
+`npm run work:sprint:remaining` after a successful push so the remaining sprint
+package queue is visible before the next slice starts.
+
 Commit-and-push ledger for current packages:
 
 1. `Focused package commit: <sha>`

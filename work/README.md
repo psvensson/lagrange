@@ -68,57 +68,69 @@ Use the tracker utility for current sprint/package mechanics:
    grouped into package-owned, tracker-generated, and unrelated entries. Add
    `-- --package work/packages/active-...md` to scope the report to a package
    other than the generated current blocker.
-5. `npm run work:model-ledger -- summary` prints recent model, reasoning
+5. `npm run work:tracks` prints a compact table of the current tracks, their
+   current status, active sprints, upcoming sprints, and each listed sprint's
+   relation to the track. It reads `work/tracks/`, the 0.1 dependency map, and
+   `work/sprints/current-blocker.json` when present.
+6. `npm run work:sprint:remaining` prints active and todo packages left in the
+   current active sprint.
+7. `npm run work:sprint:push -- <git-push-args>` runs `git push` with the
+   provided arguments and then runs `npm run work:sprint:remaining` after a
+   successful push. Use this wrapper for sprint package pushes so the remaining
+   sprint work is visible immediately after the push.
+8. `npm run work:model-ledger -- summary` prints recent model, reasoning
    effort, task class, package class, intended minimum model, scope shape,
    escalation, bailout, outcome, validation, correction-loop, and
     review-finding signals with a simple advisory recommendation to escalate,
     de-escalate, or hold effort.
-6. `npm run work:package:doctor -- work/packages/active-...md` prints a compact
+9. `npm run work:package:doctor -- work/packages/active-...md` prints a compact
    package summary plus the same validation findings used by the tracker. It is
    a local diagnostic aid only; it does not replace real subagent sequencing.
    Add `-- --suggest` or `-- --fix-dry-run` when validation failed and the LLM
    needs concrete schema or ledger guidance before editing the package.
-7. `npm run work:package:schema` prints the shared status, lane,
+10. `npm run work:package:schema` prints the shared status, lane,
    causal-outcome, scenario-classification, stop-condition, and bounded-progress
    enums used by templates and validation.
-8. `npm run work:package:new -- --lane <lane> --title <title> --slug <slug>
+11. `npm run work:package:new -- --lane <lane> --title <title> --slug <slug>
    --owner <owner> --boundary <boundary> --dominant-reason <reason>
    --next-action <action>` scaffolds a schema-valid work package. The
    scaffolder pre-fills Model Fit from the lane and model-ledger summary unless
    explicit Model Fit flags are provided.
-9. `npm run work:evidence-summary -- <artifact>` prints a compact deterministic
+12. `npm run work:evidence-summary -- <artifact>` prints a compact deterministic
    topology plus causal-model summary for LLM handoff before reading raw logs or
    large harness segment files.
-10. `npm run analyze:owner-files -- <owner> [boundary]` prints a ranked
+13. `npm run analyze:owner-files -- <owner> [boundary]` prints a ranked
     owner-to-files index so agents can inspect likely owner files before broad
     text search.
-11. `npm run analyze:priority-recovery-residuals -- <artifact>` extracts
+14. `npm run analyze:priority-recovery-residuals -- <artifact>` extracts
     priority-recovery partition witnesses by owner and boundary and prints
     package scaffolding commands for deliberate residual splits.
-12. `npm run work:subagent-prompt -- --role review|fix|implementation
+15. `npm run work:subagent-prompt -- --role review|fix|implementation
     --package work/packages/active-...md` generates bounded role prompts and
     the ledger-line shape to record after a real subagent returns.
-13. `npm run work:oversized-next -- --markdown` turns oversized
+16. `npm run work:oversized-next -- --markdown` turns oversized
     owner-boundary segment files into package-ready extraction candidates so
     file-size debt stays actionable rather than a broad background concern.
-14. `npm run work:validate -- --entry|--pre-impl|--closure` checks active and
+17. `npm run work:validate -- --entry|--pre-impl|--closure` checks active and
    metadata-bearing packages for filename/header drift, stale open checklist
    items, and lane-required Subagent Sequencing Ledgers at the requested phase.
    The default phase is `--pre-impl`.
-15. `npm run work:package:close -- --write work/packages/active-...md` renames a
+18. `npm run work:package:close -- --write work/packages/active-...md` renames a
     package to `done-...` only after open checklist items are closed.
-16. `npm run work:package:migrate -- --write work/packages/active-...md`
+19. `npm run work:package:migrate -- --write work/packages/active-...md`
     `work/packages/active-successor.md` performs the same closure gate while
     recording a successor handoff.
-17. `npm run work:package:move -- --write work/packages/todo-...md --to active`
+20. `npm run work:package:move -- --write work/packages/todo-...md --to active`
     performs non-terminal state moves.
-18. `npm run work:package:evidence-block -- <artifact>` generates a Markdown
+21. `npm run work:package:evidence-block -- <artifact>` generates a Markdown
     owner/evidence block from topology-convergence analyzer output for package
     migration or contraction notes.
-19. After each completed package slice, create one focused git commit containing
+22. After each completed package slice, create one focused git commit containing
     only that slice's package-owned changes and push the current branch before
-    starting the next slice.
-20. If the slice cannot be pushed because the remote or credentials are
+    starting the next slice. Use `npm run work:sprint:push -- <git-push-args>`
+    for sprint pushes so the remaining package list is printed after a
+    successful push.
+23. If the slice cannot be pushed because the remote or credentials are
     unavailable, record the unpushed commit SHA and reason in the package or
    sprint handoff. If package-owned and unrelated dirty changes cannot be
    separated safely, stop for human direction instead of committing a mixed
@@ -644,7 +656,10 @@ Required workflow:
 3. Review the dirty worktree and separate unrelated changes.
 4. Commit only the package-owned files, package-status updates, and sprint
    handoff updates for the slice.
-5. Push the current branch before starting the next package slice.
+5. Push the current branch before starting the next package slice. For sprint
+   pushes, use `npm run work:sprint:push -- <git-push-args>` instead of raw
+   `git push`; the wrapper runs `npm run work:sprint:remaining` after a
+   successful push so the remaining package queue is visible.
 6. If push is blocked by remote or credential state, record the unpushed commit
    SHA and reason in the package or sprint handoff.
 7. If unrelated dirty changes cannot be safely separated from package-owned

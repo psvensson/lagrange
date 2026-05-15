@@ -89,6 +89,8 @@ contracts, or representative scenario evidence can change.
     `tool-unavailable`, or `blocked-by-environment-policy` with a reason; do
     not use that as closure proof.
 21. Commit and push focused package slices before starting the next package.
-    Do not sweep unrelated dirty worktree changes into the slice.
+    Use `npm run work:sprint:push -- <git-push-args>` for sprint pushes so the
+    remaining sprint package list prints after a successful push. Do not sweep
+    unrelated dirty worktree changes into the slice.
 22. If a local fix feels hard because the boundary is porous, reduce the
     boundary or raise the abstraction instead of adding another symptom patch.

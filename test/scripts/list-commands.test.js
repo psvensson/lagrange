@@ -14,6 +14,9 @@ const REPORT_TRIAGE_GROUP_TITLE = 'Report And Triage';
 const WORK_CONTEXT_COMMAND = 'npm run work:context';
 const WORK_LLM_START_COMMAND = 'npm run work:llm-start';
 const WORK_DIRTY_SCOPE_COMMAND = 'npm run work:dirty-scope';
+const WORK_TRACKS_COMMAND = 'npm run work:tracks';
+const WORK_SPRINT_REMAINING_COMMAND = 'npm run work:sprint:remaining';
+const WORK_SPRINT_PUSH_COMMAND = 'npm run work:sprint:push -- <git-push-args>';
 const MODEL_LEDGER_SUMMARY_COMMAND = 'npm run work:model-ledger -- summary';
 const PACKAGE_NEW_COMMAND =
   'npm run work:package:new -- --lane <lane> --title <title> --slug <slug> --owner <owner> --boundary <boundary> --dominant-reason <reason> --next-action <action>';
@@ -59,6 +62,12 @@ const STATE_MACHINE_PRESSURE_COMMAND = 'npm run audit:state-machine-pressure';
 const GUIDELINE_GUARDRAILS_GROUP_TITLE = 'Guideline Guardrails';
 const WORK_DIRTY_SCOPE_DESCRIPTION =
   'Report dirty worktree entries grouped as package-owned, tracker-generated, or unrelated.';
+const WORK_TRACKS_DESCRIPTION =
+  'Print current tracks with status, active sprints, upcoming sprints, and track relation.';
+const WORK_SPRINT_REMAINING_DESCRIPTION =
+  'Print active and todo packages left in the current sprint.';
+const WORK_SPRINT_PUSH_DESCRIPTION =
+  'Push with git, then print packages left in the current sprint after a successful push.';
 const OWNER_BOUNDARY_SEGMENTS_DESCRIPTION =
   'Print extraction guidance for oversized owner-boundary segment files.';
 const DISTRIBUTED_FAILURE_DESCRIPTION =
@@ -99,6 +108,12 @@ const LLM_START_ORIENTATION_MESSAGE =
   'combined llm-start handoff should be discoverable from orientation';
 const DIRTY_SCOPE_ORIENTATION_MESSAGE =
   'dirty-scope report should be discoverable from orientation';
+const WORK_TRACKS_ORIENTATION_MESSAGE =
+  'track status summary should be discoverable from orientation';
+const WORK_SPRINT_REMAINING_ORIENTATION_MESSAGE =
+  'sprint remaining package summary should be discoverable from orientation';
+const WORK_SPRINT_PUSH_ORIENTATION_MESSAGE =
+  'sprint push wrapper should be discoverable from orientation';
 const GUIDELINE_LITERALS_GROUP_MESSAGE =
   'literal guideline checks should be discoverable from guideline guardrails';
 const GUIDELINE_DECISION_BOUNDARY_GROUP_MESSAGE =
@@ -138,6 +153,13 @@ const ANALYZE_OWNER_GLOSSARY_SCRIPT_COMMAND =
   'node scripts/analyze-topology-convergence.js --glossary';
 const WORK_DIRTY_SCOPE_SCRIPT = 'work:dirty-scope';
 const WORK_DIRTY_SCOPE_SCRIPT_COMMAND = 'node scripts/work-context.js --dirty-scope';
+const WORK_TRACKS_SCRIPT = 'work:tracks';
+const WORK_TRACKS_SCRIPT_COMMAND = 'node scripts/work-track-summary.js';
+const WORK_SPRINT_REMAINING_SCRIPT = 'work:sprint:remaining';
+const WORK_SPRINT_REMAINING_SCRIPT_COMMAND =
+  'node scripts/work-sprint-remaining.js';
+const WORK_SPRINT_PUSH_SCRIPT = 'work:sprint:push';
+const WORK_SPRINT_PUSH_SCRIPT_COMMAND = 'node scripts/work-sprint-push.js';
 const WORK_LLM_START_SCRIPT = 'work:llm-start';
 const WORK_LLM_START_SCRIPT_COMMAND = 'node scripts/work-llm-start.js';
 const WORK_PACKAGE_NEW_SCRIPT = 'work:package:new';
@@ -184,6 +206,9 @@ test(ORIENTATION_GUARDRAILS_TEST_NAME, (t) => {
   t.match(rendered, WORK_CONTEXT_COMMAND);
   t.match(rendered, WORK_LLM_START_COMMAND);
   t.match(rendered, WORK_DIRTY_SCOPE_COMMAND);
+  t.match(rendered, WORK_TRACKS_COMMAND);
+  t.match(rendered, WORK_SPRINT_REMAINING_COMMAND);
+  t.match(rendered, WORK_SPRINT_PUSH_COMMAND);
   t.match(rendered, MODEL_LEDGER_SUMMARY_COMMAND);
   t.match(rendered, PACKAGE_NEW_COMMAND);
   t.match(rendered, PACKAGE_SCHEMA_COMMAND);
@@ -222,6 +247,21 @@ test(ORIENTATION_GUARDRAILS_TEST_NAME, (t) => {
     DIRTY_SCOPE_ORIENTATION_MESSAGE,
   );
   t.equal(
+    findCommandEntry(WORK_TRACKS_COMMAND).group.title,
+    ORIENTATION_GROUP_TITLE,
+    WORK_TRACKS_ORIENTATION_MESSAGE,
+  );
+  t.equal(
+    findCommandEntry(WORK_SPRINT_REMAINING_COMMAND).group.title,
+    ORIENTATION_GROUP_TITLE,
+    WORK_SPRINT_REMAINING_ORIENTATION_MESSAGE,
+  );
+  t.equal(
+    findCommandEntry(WORK_SPRINT_PUSH_COMMAND).group.title,
+    ORIENTATION_GROUP_TITLE,
+    WORK_SPRINT_PUSH_ORIENTATION_MESSAGE,
+  );
+  t.equal(
     findCommandEntry(GUIDELINE_LITERALS_COMMAND).group.title,
     GUIDELINE_GUARDRAILS_GROUP_TITLE,
     GUIDELINE_LITERALS_GROUP_MESSAGE,
@@ -250,6 +290,21 @@ test(ORIENTATION_GUARDRAILS_TEST_NAME, (t) => {
     rendered,
     `${WORK_DIRTY_SCOPE_COMMAND}\`${COMMAND_ENTRY_SEPARATOR}` +
       WORK_DIRTY_SCOPE_DESCRIPTION,
+  );
+  t.match(
+    rendered,
+    `${WORK_TRACKS_COMMAND}\`${COMMAND_ENTRY_SEPARATOR}` +
+      WORK_TRACKS_DESCRIPTION,
+  );
+  t.match(
+    rendered,
+    `${WORK_SPRINT_REMAINING_COMMAND}\`${COMMAND_ENTRY_SEPARATOR}` +
+      WORK_SPRINT_REMAINING_DESCRIPTION,
+  );
+  t.match(
+    rendered,
+    `${WORK_SPRINT_PUSH_COMMAND}\`${COMMAND_ENTRY_SEPARATOR}` +
+      WORK_SPRINT_PUSH_DESCRIPTION,
   );
   t.match(
     rendered,
@@ -386,6 +441,18 @@ test(RUNTIME_GRAMMAR_TEST_NAME,
     t.equal(
       scripts[WORK_DIRTY_SCOPE_SCRIPT],
       WORK_DIRTY_SCOPE_SCRIPT_COMMAND,
+    );
+    t.equal(
+      scripts[WORK_TRACKS_SCRIPT],
+      WORK_TRACKS_SCRIPT_COMMAND,
+    );
+    t.equal(
+      scripts[WORK_SPRINT_REMAINING_SCRIPT],
+      WORK_SPRINT_REMAINING_SCRIPT_COMMAND,
+    );
+    t.equal(
+      scripts[WORK_SPRINT_PUSH_SCRIPT],
+      WORK_SPRINT_PUSH_SCRIPT_COMMAND,
     );
     t.equal(
       scripts[WORK_LLM_START_SCRIPT],

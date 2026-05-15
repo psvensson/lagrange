@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-05-15T06:57:21.117Z",
+  "generatedAt": "2026-05-15T07:06:27.787Z",
   "sourceDir": ".kiro/steering",
   "llmDir": ".kiro/steering/llm",
   "sourceFiles": [
@@ -1576,7 +1576,7 @@
       "sources": [
         {
           "file": "workflow-guidelines.md",
-          "line": 263,
+          "line": 268,
           "section": "Workflow Guidelines Detail > Scenario Failure Migration"
         }
       ]
@@ -1593,7 +1593,7 @@
       "sources": [
         {
           "file": "workflow-guidelines.md",
-          "line": 288,
+          "line": 293,
           "section": "Workflow Guidelines Detail > Frontier Oscillation Escalation"
         }
       ]
@@ -2289,7 +2289,7 @@
       "sources": [
         {
           "file": "workflow-guidelines.md",
-          "line": 169,
+          "line": 174,
           "section": "Workflow Guidelines Detail > Package Status And Closure"
         }
       ]
@@ -2306,7 +2306,7 @@
       "sources": [
         {
           "file": "workflow-guidelines.md",
-          "line": 218,
+          "line": 223,
           "section": "Workflow Guidelines Detail > Residual Closure Inventory"
         }
       ]
@@ -2321,7 +2321,7 @@
       "sources": [
         {
           "file": "workflow-guidelines.md",
-          "line": 345,
+          "line": 350,
           "section": "Workflow Guidelines Detail > Static Drift Ledger"
         }
       ]
@@ -2340,7 +2340,7 @@
       "sources": [
         {
           "file": "workflow-guidelines.md",
-          "line": 345,
+          "line": 350,
           "section": "Workflow Guidelines Detail > Static Drift Ledger"
         }
       ]
@@ -2355,7 +2355,7 @@
       "sources": [
         {
           "file": "workflow-guidelines.md",
-          "line": 435,
+          "line": 440,
           "section": "Workflow Guidelines Detail > LLM Tool-First Triage"
         }
       ]
@@ -2370,7 +2370,7 @@
       "sources": [
         {
           "file": "workflow-guidelines.md",
-          "line": 466,
+          "line": 471,
           "section": "Workflow Guidelines Detail > Sub-Agent Sequencing"
         }
       ]
@@ -2387,7 +2387,7 @@
       "sources": [
         {
           "file": "workflow-guidelines.md",
-          "line": 569,
+          "line": 574,
           "section": "Workflow Guidelines Detail > Roadmap And Work-Tracker Truth"
         }
       ]
@@ -3511,7 +3511,7 @@
       "sources": [
         {
           "file": "workflow-guidelines.md",
-          "line": 172,
+          "line": 177,
           "section": "Workflow Guidelines Detail > Package Status And Closure"
         }
       ]
@@ -3528,7 +3528,7 @@
       "sources": [
         {
           "file": "workflow-guidelines.md",
-          "line": 535,
+          "line": 540,
           "section": "Workflow Guidelines Detail > Scenario Causal Closure Ledger"
         }
       ]
@@ -4091,7 +4091,7 @@
       "sources": [
         {
           "file": "workflow-guidelines.md",
-          "line": 378,
+          "line": 383,
           "section": "Workflow Guidelines Detail > LLM Tool-First Triage"
         }
       ]
@@ -4285,7 +4285,7 @@
       "sources": [
         {
           "file": "workflow-guidelines.md",
-          "line": 415,
+          "line": 420,
           "section": "Workflow Guidelines Detail > LLM Tool-First Triage"
         }
       ]
@@ -4332,7 +4332,7 @@
       "sources": [
         {
           "file": "workflow-guidelines.md",
-          "line": 214,
+          "line": 219,
           "section": "Workflow Guidelines Detail > Residual Closure Inventory"
         }
       ]
@@ -4347,7 +4347,7 @@
       "sources": [
         {
           "file": "workflow-guidelines.md",
-          "line": 303,
+          "line": 308,
           "section": "Workflow Guidelines Detail > Frontier Oscillation Escalation"
         }
       ]
@@ -4362,7 +4362,7 @@
       "sources": [
         {
           "file": "workflow-guidelines.md",
-          "line": 466,
+          "line": 471,
           "section": "Workflow Guidelines Detail > Sub-Agent Sequencing"
         }
       ]
@@ -4411,7 +4411,7 @@
       "sources": [
         {
           "file": "workflow-guidelines.md",
-          "line": 410,
+          "line": 415,
           "section": "Workflow Guidelines Detail > LLM Tool-First Triage"
         }
       ]
@@ -4428,7 +4428,7 @@
       "sources": [
         {
           "file": "workflow-guidelines.md",
-          "line": 535,
+          "line": 540,
           "section": "Workflow Guidelines Detail > Scenario Causal Closure Ledger"
         }
       ]

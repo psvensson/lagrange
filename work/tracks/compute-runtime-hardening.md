@@ -76,11 +76,28 @@ Known implementation context:
 - `src/service/service-dispatcher.js`
 - `src/node/runtime-service-handler.js`
 
+## Codebase Analysis Notes
+
+The in-process runtime adapter is explicitly a foundation layer, not a full
+preemption boundary. Current timeout behavior is based on Promise racing and
+cooperative adapter behavior; it should not be used as proof against CPU-bound
+synchronous handlers.
+
+The track also includes module availability, runtime manifest validation,
+operation lifecycle persistence, replicated WASM service groups, service
+type adapters, and node runtime-service dispatch outcomes. Those areas must be
+in scope if a release claims programmable compute as working rather than
+experimental.
+
 ## Owner Boundaries
 
 Candidate boundaries:
 
 - `compute_runtime_owner / resource_isolation`
+- `wasm_runtime_owner / runtime_adapter_isolation`
+- `module_mirror_owner / module_availability`
+- `runtime_service_owner / executor_outcomes`
+- `wasm_service_replica_owner / replicated_service_state`
 - `service_lifecycle_owner / idempotent_reconcile`
 - `service_dispatch_owner / leader_routed_delivery`
 
@@ -94,11 +111,24 @@ sprints may attach here after the release scope decision.
 These are context candidates, not write authorization:
 
 - `src/wasm-service/wasm-executor.js`
+- `src/wasm-service/module-mirror.js`
+- `src/wasm-service/operation-lifecycle.js`
+- `src/wasm-service/wasm-service-replica.js`
+- `src/wasm-service/wasm-service-lifecycle.js`
+- `src/wasm-service/manifest-runtime-validator.js`
 - `src/debug-runtime/wasm-runtime-adapter.js`
+- `src/service/adapters/runtime-service-adapter.js`
 - `src/service/service-lifecycle-manager.js`
 - `src/service/service-reconciler.js`
 - `src/service/service-dispatcher.js`
 - `src/node/runtime-service-handler.js`
+- `test/wasm-service/wasm-executor-runtime-adapter-parity.test.js`
+- `test/debug-runtime/wasm-runtime-adapter.test.js`
+- `test/node/runtime-service-handler.test.js`
+- `test/service/service-lifecycle-manager.test.js`
+- `test/service/service-reconciler.test.js`
+- `test/service/service-dispatcher.test.js`
+- `test/distributed/scenarios/wasm-service-failover.js`
 
 ## Entry Condition
 

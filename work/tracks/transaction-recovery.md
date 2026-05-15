@@ -71,6 +71,23 @@ Known implementation context:
 - `src/partition/partition-service-segment-2-part-2.js`
 - `src/partition/partition-service-segment-2-part-1.js`
 
+`npm run analyze:owner-files -- distributed_transaction_owner coordinator_recovery --markdown`
+currently returns no indexed matches. Treat the owner-boundary names below as
+candidate vocabulary until a package formalizes them in evidence, package
+metadata, or diagnostics.
+
+## Codebase Analysis Notes
+
+The durable coordinator hooks already exist in the SQL engine segment and in the
+distributed transaction coordinator. SQL engine persistence covers transaction
+rows, participant rows, and write-operation rows.
+
+The partition side still has local transactional state in memory for conflict
+and visibility decisions, including prepared-state reconstruction,
+`committedWriteLog`, and row commit epochs. `partition-transaction-handler` is
+also relevant as local or legacy transaction context even if the distributed
+coordinator is the release-facing owner.
+
 ## Owner Boundaries
 
 Candidate boundaries:
@@ -90,10 +107,17 @@ attach here after package evidence selects this boundary.
 These are context candidates, not write authorization:
 
 - `src/query/distributed/distributed-transaction-coordinator.js`
+- `src/query/distributed/distributed-transaction-coordinator-constants.js`
+- `src/query/sql-query-engine-segment-1.js`
 - `src/query/sql-query-engine.js`
 - `src/partition/partition-service-segment-2-part-1.js`
 - `src/partition/partition-service-segment-2-part-2.js`
+- `src/partition/partition-transaction-handler.js`
 - `src/query/distributed/distributed-write-coordinator.js`
+- `test/query/distributed-transaction-coordinator.test.js`
+- `test/query/distributed-transaction-coordinator.property.test.js`
+- `test/distributed/scenarios/seven-node-read-write-load-transaction-recovery.js`
+- `test/distributed/harness/__tests__/seven-node-read-write-load-transaction-recovery-scenario.test.js`
 
 ## Entry Condition
 
