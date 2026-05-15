@@ -447,7 +447,7 @@ export function registerClusterPart6Core01Tests(context) {
       );
     });
 
-  test('Unit: _waitForAllActive falls back to local snapshot reads after one forced repair attempt',
+  test('Unit: _waitForAllActive keeps forced repair active after threshold',
     async () => {
       const cluster = createCluster({
         size: 1,
@@ -459,7 +459,7 @@ export function registerClusterPart6Core01Tests(context) {
       });
 
       const forceRepairCalls = [];
-      let warmedSnapshotCache = false;
+      let forcedRepairCount = 0;
 
       cluster._sleep = async () => {};
       cluster._collectFailureLogs = async () => {
@@ -469,9 +469,9 @@ export function registerClusterPart6Core01Tests(context) {
         const forceRepair = options?.forceRepair === true;
         forceRepairCalls.push(forceRepair);
         if (forceRepair) {
-          warmedSnapshotCache = true;
+          forcedRepairCount += 1;
           return {
-            allActive: false,
+            allActive: forcedRepairCount > 1,
             nodeDiagnostics: [],
             snapshotCoverage: null,
             publicationConvergenceGate: null,
@@ -479,7 +479,7 @@ export function registerClusterPart6Core01Tests(context) {
           };
         }
         return {
-          allActive: warmedSnapshotCache === true,
+          allActive: false,
           nodeDiagnostics: [],
           snapshotCoverage: null,
           publicationConvergenceGate: null,
@@ -491,8 +491,8 @@ export function registerClusterPart6Core01Tests(context) {
 
       assert.deepEqual(
         forceRepairCalls,
-        [true, false],
-        'ACTIVE wait should issue one forced repair probe, then return to local snapshot reads',
+        [true, true],
+        'ACTIVE wait should keep forced repair enabled after the threshold until convergence',
       );
     });
 

@@ -117,6 +117,7 @@ const REASON = Object.freeze({
   MISSING_PUBLISHED: 'missing_published_nodes_present',
   PRIORITY_SPREAD_PENDING: 'priority_spread_pending',
   SNAPSHOT_COVERAGE_INCOMPLETE: 'snapshot_coverage_incomplete',
+  SNAPSHOT_REPAIR_DEFERRED: 'snapshot_repair_deferred',
   ACTIVE_GATE_TIMED_OUT: 'active_gate_timed_out',
   ACTIVE_GATE_READY: 'active_gate_ready',
   PRIORITY_RECOVERY_PROGRESS_BLOCKED: 'priority_recovery_progress_blocked',
@@ -972,6 +973,22 @@ function buildActiveGateSnapshotEdge(normalized) {
         progress.selectedError,
         progress.readinessDelay?.error,
       ),
+      selectedSnapshotObservationMode:
+        textOrUnknown(progress.selectedSnapshotObservationMode),
+      selectedSnapshotObservationState:
+        textOrUnknown(progress.selectedSnapshotObservationState),
+      selectedSnapshotObservationContractState:
+        textOrUnknown(progress.selectedSnapshotObservationContractState),
+      selectedSnapshotObservationRefreshState:
+        textOrUnknown(progress.selectedSnapshotObservationRefreshState),
+      selectedSnapshotObservationNextAction:
+        textOrUnknown(progress.selectedSnapshotObservationNextAction),
+      selectedSnapshotObservationReasonCodes: joinValues(
+        arrayOrEmpty(progress.selectedSnapshotObservationReasonCodes),
+      ),
+      selectedSnapshotRepairDeferred: booleanVariant(
+        progress.selectedSnapshotRepairDeferred,
+      ),
       readinessDelayCause: textOrUnknown(progress.readinessDelay?.cause),
       blockers: joinValues(arrayOrEmpty(progress.blockers)),
     },
@@ -1537,6 +1554,9 @@ function resolveActiveGateSnapshotState(activeGate, progress, reasons) {
   if (activeGate.state === ACTIVE_GATE_STATE_TIMED_OUT) {
     reasons.push(REASON.ACTIVE_GATE_TIMED_OUT);
     reasons.push(REASON.SNAPSHOT_COVERAGE_INCOMPLETE);
+    if (progress.selectedSnapshotRepairDeferred === true) {
+      reasons.push(REASON.SNAPSHOT_REPAIR_DEFERRED);
+    }
     return EDGE_STATE.BLOCKED;
   }
   if (Object.keys(progress).length === SOURCE_ORDER_BASE) {
@@ -1544,6 +1564,9 @@ function resolveActiveGateSnapshotState(activeGate, progress, reasons) {
     return EDGE_STATE.UNKNOWN;
   }
   reasons.push(REASON.SNAPSHOT_COVERAGE_INCOMPLETE);
+  if (progress.selectedSnapshotRepairDeferred === true) {
+    reasons.push(REASON.SNAPSHOT_REPAIR_DEFERRED);
+  }
   return EDGE_STATE.DEFERRED;
 }
 

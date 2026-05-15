@@ -738,7 +738,6 @@ class Cluster extends Cluster5 {
         this._resolveActiveWaitNoProgressMaxAttempts(options, timeout) :
         null;
     const forceRepairThreshold = Date.now() + forceRepairAfterMs;
-    let forcedRepairIssued = false;
     const inactiveSummaryCounts = new Map();
     const blockerHistoryBySignature = new Map();
     let bestProgressSnapshot = null;
@@ -967,11 +966,7 @@ class Cluster extends Cluster5 {
         intervalMs: ACTIVE_POLL_INTERVAL_MS,
         sleep: (ms) => this._sleep(ms),
         probe: () => {
-          const forceRepair =
-            forcedRepairIssued === false && Date.now() >= forceRepairThreshold;
-          if (forceRepair) {
-            forcedRepairIssued = true;
-          }
+          const forceRepair = Date.now() >= forceRepairThreshold;
           return this._probeClusterActiveState(deadline, {
             mode: readinessMode,
             forceRepair,
@@ -1185,6 +1180,7 @@ class Cluster extends Cluster5 {
                 attempts,
                 elapsedMs,
                 ...waitingProgress.waitingDetails,
+                ...stalledActiveGateDetails,
               },
             );
             const stalledError = new Error(

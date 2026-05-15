@@ -29,6 +29,13 @@ const {
 
 const BOOTSTRAP_JOIN_PROJECTION_READINESS_FIELD =
   'bootstrapJoinProjection';
+const ACTIVE_WAIT_PROGRESS_OBSERVATION_SEPARATOR = '/';
+const ACTIVE_WAIT_PROGRESS_REASON_SEPARATOR = '|';
+const ACTIVE_WAIT_PROGRESS_VALUE_NONE = 'none';
+const ACTIVE_WAIT_PROGRESS_SNAPSHOT_REPAIR_DEFERRED =
+  '#repairDeferred=true';
+const ACTIVE_WAIT_PROGRESS_SNAPSHOT_REASON_PREFIX = '#reasons=';
+const ACTIVE_WAIT_PROGRESS_SNAPSHOT_RETRY_AFTER_PREFIX = '#retryAfterMs=';
 
 function scoreActiveWaitProgress(progressSnapshot) {
   if (!progressSnapshot || typeof progressSnapshot !== 'object') {
@@ -125,6 +132,32 @@ function formatActiveWaitProgressSnapshot(progressSnapshot) {
   ) ?
     progressSnapshot.selectedMissingPublishedNodeIds :
     [];
+  const selectedSnapshotObservationReasonCodes = Array.isArray(
+    progressSnapshot?.selectedSnapshotObservationReasonCodes,
+  ) ?
+    progressSnapshot.selectedSnapshotObservationReasonCodes :
+    [];
+  const selectedSnapshotObservationFields = [
+    progressSnapshot?.selectedSnapshotObservationMode,
+    progressSnapshot?.selectedSnapshotObservationState,
+    progressSnapshot?.selectedSnapshotObservationContractState,
+    progressSnapshot?.selectedSnapshotObservationRefreshState,
+    progressSnapshot?.selectedSnapshotObservationNextAction,
+  ].filter((value) => typeof value === 'string' && value.length > ZERO);
+  const selectedSnapshotObservationSummary =
+    selectedSnapshotObservationFields.length > ZERO ?
+      selectedSnapshotObservationFields.join(
+        ACTIVE_WAIT_PROGRESS_OBSERVATION_SEPARATOR,
+      ) :
+      ACTIVE_WAIT_PROGRESS_VALUE_NONE;
+  const selectedSnapshotObservationRetryAfterMs = Number.isFinite(
+    progressSnapshot?.selectedSnapshotObservationRetryAfterMs,
+  ) ?
+    Math.max(
+      ZERO,
+      Math.floor(progressSnapshot.selectedSnapshotObservationRetryAfterMs),
+    ) :
+    null;
   const ownerQueuePendingWrites = Number.isFinite(
     progressSnapshot?.selectedControlPlaneOwnerQueueDepth?.pendingWrites,
   ) ?
@@ -177,6 +210,21 @@ function formatActiveWaitProgressSnapshot(progressSnapshot) {
       '') +
     (progressSnapshot.selectedSnapshotError ? '#snapshotError' : '') +
     (progressSnapshot.selectedSnapshotReachabilityError ? '#adminError' : '') +
+    ',snapshotObservation=' +
+    selectedSnapshotObservationSummary +
+    (progressSnapshot.selectedSnapshotRepairDeferred === true ?
+      ACTIVE_WAIT_PROGRESS_SNAPSHOT_REPAIR_DEFERRED :
+      '') +
+    (selectedSnapshotObservationReasonCodes.length > ZERO ?
+      ACTIVE_WAIT_PROGRESS_SNAPSHOT_REASON_PREFIX +
+        selectedSnapshotObservationReasonCodes.join(
+          ACTIVE_WAIT_PROGRESS_REASON_SEPARATOR,
+        ) :
+      '') +
+    (selectedSnapshotObservationRetryAfterMs !== null ?
+      ACTIVE_WAIT_PROGRESS_SNAPSHOT_RETRY_AFTER_PREFIX +
+        String(selectedSnapshotObservationRetryAfterMs) :
+      '') +
     ',epoch=' +
     String(progressSnapshot.publicationEpoch ?? 'unknown') +
     ',publishedActive=' +

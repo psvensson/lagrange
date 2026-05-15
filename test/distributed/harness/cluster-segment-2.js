@@ -1177,6 +1177,47 @@ function buildActiveWaitProgressSnapshot(
     snapshotCoverage.selectedReachabilityError.length > ZERO ?
       snapshotCoverage.selectedReachabilityError :
       null;
+  const selectedSnapshotObservationMode =
+    typeof snapshotCoverage?.selectedSnapshotObservationMode === 'string' &&
+    snapshotCoverage.selectedSnapshotObservationMode.length > ZERO ?
+      snapshotCoverage.selectedSnapshotObservationMode :
+      null;
+  const selectedSnapshotObservationState =
+    typeof snapshotCoverage?.selectedSnapshotObservationState === 'string' &&
+    snapshotCoverage.selectedSnapshotObservationState.length > ZERO ?
+      snapshotCoverage.selectedSnapshotObservationState :
+      null;
+  const selectedSnapshotObservationContractState =
+    typeof snapshotCoverage?.selectedSnapshotObservationContractState ===
+      'string' &&
+    snapshotCoverage.selectedSnapshotObservationContractState.length > ZERO ?
+      snapshotCoverage.selectedSnapshotObservationContractState :
+      null;
+  const selectedSnapshotObservationRefreshState =
+    typeof snapshotCoverage?.selectedSnapshotObservationRefreshState ===
+      'string' &&
+    snapshotCoverage.selectedSnapshotObservationRefreshState.length > ZERO ?
+      snapshotCoverage.selectedSnapshotObservationRefreshState :
+      null;
+  const selectedSnapshotObservationNextAction =
+    typeof snapshotCoverage?.selectedSnapshotObservationNextAction ===
+      'string' &&
+    snapshotCoverage.selectedSnapshotObservationNextAction.length > ZERO ?
+      snapshotCoverage.selectedSnapshotObservationNextAction :
+      null;
+  const selectedSnapshotObservationReasonCodes = normalizeDistinctStringArray(
+    snapshotCoverage?.selectedSnapshotObservationReasonCodes,
+  );
+  const selectedSnapshotObservationRetryAfterMs = Number.isFinite(
+    snapshotCoverage?.selectedSnapshotObservationRetryAfterMs,
+  ) ?
+    Math.max(
+      ZERO,
+      Math.floor(snapshotCoverage.selectedSnapshotObservationRetryAfterMs),
+    ) :
+    null;
+  const selectedSnapshotRepairDeferred =
+    snapshotCoverage?.selectedSnapshotRepairDeferred === true;
   const selectedControlPlaneOwnerQueueDepth =
     snapshotCoverage?.selectedControlPlaneOwnerQueueDepth &&
     typeof snapshotCoverage.selectedControlPlaneOwnerQueueDepth === 'object' ?
@@ -1359,6 +1400,14 @@ function buildActiveWaitProgressSnapshot(
       selectedSnapshotReachableBy,
       selectedSnapshotError,
       selectedSnapshotReachabilityError,
+      selectedSnapshotObservationMode,
+      selectedSnapshotObservationState,
+      selectedSnapshotObservationContractState,
+      selectedSnapshotObservationRefreshState,
+      selectedSnapshotObservationNextAction,
+      selectedSnapshotObservationReasonCodes,
+      selectedSnapshotObservationRetryAfterMs,
+      selectedSnapshotRepairDeferred,
     },
     publicationConvergence,
     publicationConvergenceGate,
@@ -1403,6 +1452,14 @@ function buildActiveWaitProgressSnapshot(
     selectedSnapshotReachableBy,
     selectedSnapshotError,
     selectedSnapshotReachabilityError,
+    selectedSnapshotObservationMode,
+    selectedSnapshotObservationState,
+    selectedSnapshotObservationContractState,
+    selectedSnapshotObservationRefreshState,
+    selectedSnapshotObservationNextAction,
+    selectedSnapshotObservationReasonCodes,
+    selectedSnapshotObservationRetryAfterMs,
+    selectedSnapshotRepairDeferred,
     selectedControlPlaneOwnerQueueDepth,
     selectedCdcReplayLag,
     perNodePublicationDisagreementSet,

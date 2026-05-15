@@ -93,6 +93,7 @@ const MISSING_PUBLISHED_NODES_PRESENT_REASON =
 const PENDING_ACKS_PRESENT_REASON = 'pending_acks_present';
 const ACTIVE_GATE_TIMED_OUT_REASON = 'active_gate_timed_out';
 const SNAPSHOT_COVERAGE_INCOMPLETE_REASON = 'snapshot_coverage_incomplete';
+const SNAPSHOT_REPAIR_DEFERRED_REASON = 'snapshot_repair_deferred';
 const PRIORITY_RECOVERY_BLOCKED_REASON = 'priority_recovery_progress_blocked';
 const PRIORITY_RECOVERY_RETRYABLE_REASON =
   'priority_recovery_event_driven_wait';
@@ -124,6 +125,13 @@ const PUBLICATION_ACK_FRONTIER_MISSING_NODE_IDS = Object.freeze([
 const SNAPSHOT_COVERAGE_TWO_OF_FIVE_BLOCKER = 'snapshot_coverage=2/5';
 const CURRENT_ARTIFACT_MISSING_PUBLISHED_COUNT = 4;
 const CURRENT_ARTIFACT_PUBLISHED_ACTIVE_COUNT = 1;
+const SELECTED_SNAPSHOT_OBSERVATION_MODE_REPAIR_DEFERRED = 'repair_deferred';
+const SELECTED_SNAPSHOT_OBSERVATION_STATE_STALE = 'stale_usable';
+const SELECTED_SNAPSHOT_OBSERVATION_CONTRACT_PENDING = 'pending';
+const SELECTED_SNAPSHOT_OBSERVATION_REFRESH_IDLE = 'idle';
+const SELECTED_SNAPSHOT_OBSERVATION_NEXT_ACTION_WAIT = 'wait';
+const SELECTED_SNAPSHOT_OBSERVATION_REASON_COVERAGE_GAP =
+  'discovery_node_coverage_gap';
 
 function buildFixtureFailureBundle() {
   return {
@@ -623,6 +631,20 @@ describe('TopologyConvergenceGraph', () => {
                 ...fixture.publicationConvergence.activeGate.progress,
                 snapshotCoverageNodeCount: FIXTURE_SNAPSHOT_COVERAGE_COUNT,
                 snapshotCoverageComplete: false,
+                selectedSnapshotObservationMode:
+                  SELECTED_SNAPSHOT_OBSERVATION_MODE_REPAIR_DEFERRED,
+                selectedSnapshotObservationState:
+                  SELECTED_SNAPSHOT_OBSERVATION_STATE_STALE,
+                selectedSnapshotObservationContractState:
+                  SELECTED_SNAPSHOT_OBSERVATION_CONTRACT_PENDING,
+                selectedSnapshotObservationRefreshState:
+                  SELECTED_SNAPSHOT_OBSERVATION_REFRESH_IDLE,
+                selectedSnapshotObservationNextAction:
+                  SELECTED_SNAPSHOT_OBSERVATION_NEXT_ACTION_WAIT,
+                selectedSnapshotObservationReasonCodes: [
+                  SELECTED_SNAPSHOT_OBSERVATION_REASON_COVERAGE_GAP,
+                ],
+                selectedSnapshotRepairDeferred: true,
                 blockers: [SNAPSHOT_COVERAGE_TWO_OF_FIVE_BLOCKER],
               },
             },
@@ -642,6 +664,23 @@ describe('TopologyConvergenceGraph', () => {
       assert.equal(dominantWitness.edgeId, EDGE_SNAPSHOT_COVERAGE);
       assert.equal(dominantWitness.owner, OWNER_STARTUP_ACTIVE_GATE);
       assert.equal(publicationWitness.state, EDGE_STATE.SATISFIED);
+      assert.deepEqual(dominantWitness.reasons, [
+        ACTIVE_GATE_TIMED_OUT_REASON,
+        SNAPSHOT_COVERAGE_INCOMPLETE_REASON,
+        SNAPSHOT_REPAIR_DEFERRED_REASON,
+      ]);
+      assert.equal(
+        dominantWitness.source.selectedSnapshotObservationMode,
+        SELECTED_SNAPSHOT_OBSERVATION_MODE_REPAIR_DEFERRED,
+      );
+      assert.equal(
+        dominantWitness.source.selectedSnapshotObservationReasonCodes,
+        SELECTED_SNAPSHOT_OBSERVATION_REASON_COVERAGE_GAP,
+      );
+      assert.equal(
+        dominantWitness.source.selectedSnapshotRepairDeferred,
+        'true',
+      );
       assert.deepEqual(publicationWitness.reasons, [
         PUBLICATION_PUBLISHED_REASON,
       ]);

@@ -1864,6 +1864,16 @@ test('Unit: _waitForAllActive carries selected snapshot witness into no-progress
           selectedNodeId: 'seed-1',
           selectedAdminReady: true,
           selectedReachableBy: 'admin_health',
+          selectedSnapshotObservationMode: 'repair_deferred',
+          selectedSnapshotObservationState: 'stale_usable',
+          selectedSnapshotObservationContractState: 'pending',
+          selectedSnapshotObservationRefreshState: 'idle',
+          selectedSnapshotObservationNextAction: 'wait',
+          selectedSnapshotObservationReasonCodes: [
+            'discovery_node_coverage_gap',
+          ],
+          selectedSnapshotObservationRetryAfterMs: 250,
+          selectedSnapshotRepairDeferred: true,
           selectedPublicationConvergence: {
             publicationEpoch: 14,
             publicationStatus: 'PUBLISHED',
@@ -1896,10 +1906,24 @@ test('Unit: _waitForAllActive carries selected snapshot witness into no-progress
       async () => cluster._waitForAllActive({mode: 'load'}),
       (error) => {
         assert.match(error.message, /snapshotNode=seed-1#adminReady=true/);
+        assert.match(
+          error.message,
+          /snapshotObservation=repair_deferred\/stale_usable\/pending\/idle\/wait#repairDeferred=true#reasons=discovery_node_coverage_gap#retryAfterMs=250/,
+        );
         assert.match(error.message, /missingPublishedIds=joiner-1/);
         assert.equal(
           error?.diagnostics?.noProgress?.currentProgress?.selectedSnapshotNodeId,
           'seed-1',
+        );
+        assert.deepStrictEqual(
+          error?.diagnostics?.noProgress?.currentProgress
+            ?.selectedSnapshotObservationReasonCodes,
+          ['discovery_node_coverage_gap'],
+        );
+        assert.strictEqual(
+          error?.diagnostics?.noProgress?.currentProgress
+            ?.selectedSnapshotRepairDeferred,
+          true,
         );
         assert.deepStrictEqual(
           error?.diagnostics?.noProgress?.currentProgress
@@ -2372,7 +2396,11 @@ test(ACTIVE_GATE_REACHABILITY_DELAY_TEST_NAME,
         reasons: [],
         publicationStatus: ACTIVE_GATE_REACHABILITY_DELAY_PUBLICATION_STATUS,
         pendingAckNodeIds: [],
-        missingPublishedNodeIds: [],
+        missingPublishedNodeIds: Array.isArray(
+          snapshotCoverage?.selectedMissingPublishedNodeIds,
+        ) ?
+          snapshotCoverage.selectedMissingPublishedNodeIds :
+          [],
         recoveryProtocolState:
           ACTIVE_GATE_REACHABILITY_DELAY_RECOVERY_PROTOCOL_STATE,
         priorityPartitionSummary: {
@@ -2440,7 +2468,10 @@ test(ACTIVE_GATE_REACHABILITY_DELAY_TEST_NAME,
       selectedReachabilityError: null,
       selectedPublicationConvergence: null,
       selectedPublishedActiveNodeIds: [],
-      selectedMissingPublishedNodeIds: [],
+      selectedMissingPublishedNodeIds:
+        ACTIVE_GATE_REACHABILITY_DELAY_NODE_IDS.slice(
+          ACTIVE_GATE_REACHABILITY_DELAY_SELECTED_COVERAGE_COUNT,
+        ),
       selectedError: null,
     });
     const probeResults = [

@@ -428,12 +428,18 @@ Final closure requires fresh evidence proving all of the following:
 18. [Topology Active Gate Snapshot Coverage After Publication Consumer Lag](../packages/active-20260515-topology-active-gate-snapshot-coverage-after-publication-consumer-lag.md)
     - Lane: `runtime-owner-boundary`
     - Owner boundary: `startup_active_gate_owner / snapshot_coverage`
-    - Purpose: continue the current first frontier after publication
-      convergence migrated by consumer-lag classification.
-    - Acceptance: active handoff. Start from
-      `test-output/reports/topology-publication-convergence-final-blocker-after-authoritative-refresh-repair.report.json`
-      with `active_gate_timed_out`, `inactive_nodes=3`, and
-      `snapshotCoverage=2/5`.
+    - Purpose: record the active-gate package migration after publication
+      convergence became the current representative first frontier.
+    - Acceptance: migrated handoff. Focused active-gate repair sustained
+      forced snapshot repair after the no-progress threshold and improved
+      selected snapshot owner-observation diagnostics, but representative
+      evidence moved the first frontier to
+      `topology_publication_owner / publication_convergence` with
+      `publication_pending`. Use
+      `test-output/reports/rolling-restart-after-active-gate-persistent-repair-20260515-codex.report.json`
+      for the successor publication-convergence package; do not direct more
+      work at `startup_active_gate_owner / snapshot_coverage` unless fresh
+      canonical evidence promotes it back to first frontier.
 
 ## Dependency Order
 
@@ -506,20 +512,25 @@ projection reconciliation is done as classification-only observability:
 `PUBLISHED` plus missing active publication is now a
 `topology_publication_owner` blocker instead of healthy evidence.
 
-The current action is now
-[Topology Active Gate Snapshot Coverage After Publication Consumer Lag](../packages/active-20260515-topology-active-gate-snapshot-coverage-after-publication-consumer-lag.md).
+The current action is to record the migrated result for
+[Topology Active Gate Snapshot Coverage After Publication Consumer Lag](../packages/active-20260515-topology-active-gate-snapshot-coverage-after-publication-consumer-lag.md)
+and open the successor publication-convergence package.
 The predecessor
 [Topology Contract Integration Reconciliation](../packages/done-20260514-topology-contract-integration-reconciliation.md)
 closed as classification-only work: focused membership epoch, failure repair,
 rejoin, descriptor, capacity, anti-entropy, and budget contracts exist, but
-they are not release-ready while current evidence still blocks at
-`startup_active_gate_owner / snapshot_coverage`. The current representative
-artifact first frontier is `active_gate_snapshot_coverage` with
-`active_gate_timed_out`, `inactive_nodes=3`, `snapshotCoverage=2/5`, and
-publication ACK convergence satisfied by current, acknowledged,
-consumer-lag-fenced owner evidence. The latest rebalance gate still has its own
-publication-convergence migration evidence and must remain a separate gate
-package unless promoted by fresh canonical extraction.
+they are not release-ready while current evidence remains red. The current
+representative artifact is
+`test-output/reports/rolling-restart-after-active-gate-persistent-repair-20260515-codex.report.json`;
+its first frontier is `publication_ack_convergence` under
+`topology_publication_owner / publication_convergence` with
+`publication_pending`. Active-gate snapshot coverage is now downstream with
+`snapshotCoverage=0/5` and selected snapshot forced-repair error evidence, so
+the next runtime package must own publication convergence unless fresh
+canonical extraction promotes active-gate snapshot coverage back to first
+frontier. The latest rebalance gate still has its own publication-convergence
+migration evidence and must remain a separate gate package unless promoted by
+fresh canonical extraction.
 
 Priority residual drain is classification-complete and closed. The
 representative priority extractor still reports one non-frontier
@@ -547,11 +558,12 @@ Final confirmation is closed as a migrated red gate. The publication
 convergence final blocker is now closed as migrated by consumer-lag
 classification. Continue
 [Topology Active Gate Snapshot Coverage After Publication Consumer Lag](../packages/active-20260515-topology-active-gate-snapshot-coverage-after-publication-consumer-lag.md)
-against the current active-gate residual. Earlier implementation added a
-bounded publication-planning repair for readiness entries that expose only
-`PRIORITY_CONTROL_PLANE_RECOVERY_PENDING`; focused proof is green. The
-consumer-lag classification proof moved the current representative checkpoint
-to `startup_active_gate_owner / snapshot_coverage`. Do not fix
-`rolling-restart`, rebalance, publication convergence, or operation workflow
-runtime behavior in this sprint segment unless owner evidence proves the
-remaining blocker has split or migrated.
+as a migrated result, not an active-gate successor. Earlier implementation
+added a bounded publication-planning repair for readiness entries that expose
+only `PRIORITY_CONTROL_PLANE_RECOVERY_PENDING`; focused proof is green. The
+active-gate package then sustained forced snapshot repair and migrated the
+current representative checkpoint to
+`topology_publication_owner / publication_convergence`. Do not keep fixing
+active-gate snapshot coverage in this sprint segment unless owner evidence
+promotes it back to first frontier, and do not implement publication
+convergence until a successor package owns that boundary.
