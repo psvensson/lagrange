@@ -3,7 +3,7 @@
 <!-- work-package
 {
   "schema": "work-package-v1",
-  "status": "active",
+  "status": "done",
   "opened": "2026-05-15",
   "lane": "causal-escalation",
   "scenario": "rolling-restart",
@@ -17,18 +17,18 @@
   "proof": [
     "npm run work:context",
     "npm run work:llm-start",
-    "npm run work:package:doctor -- --suggest work/packages/active-20260515-startup-active-gate-snapshot-coverage-final-reconcile-target.md",
+    "npm run work:package:doctor -- --suggest work/packages/done-20260515-startup-active-gate-snapshot-coverage-final-reconcile-target.md",
     "npm run work:evidence-summary -- test-output/reports/rolling-restart-after-awaited-reconcile-bridge-20260515-codex.report.json",
     "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-awaited-reconcile-bridge-20260515-codex.report.json --handoff-probe",
     "npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-awaited-reconcile-bridge-20260515-codex.report.json",
     "npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-after-awaited-reconcile-bridge-20260515-codex.report.json --markdown",
     "npm run analyze:owner-files -- startup_active_gate_owner snapshot_coverage --markdown",
-    "npm run work:subagent-prompt -- --role implementation --package work/packages/active-20260515-startup-active-gate-snapshot-coverage-final-reconcile-target.md",
+    "npm run work:subagent-prompt -- --role implementation --package work/packages/done-20260515-startup-active-gate-snapshot-coverage-final-reconcile-target.md",
     "npx tap --grep \"AdminControlSnapshot (build snapshot forwards handoff pending reconcile target|repair-deferred shared owner attempts publication catch-up before returning|repair-deferred no-attempt path still attempts publication catch-up|repair-deferred shared owner skips publication catch-up for owner recovery waits|repair-deferred shared owner skips publication catch-up without pending reconcile evidence)\" test/admin/admin-control-snapshot.test.js",
     "npm run audit:runtime-grammar:file -- src/admin/admin-control-snapshot-class-part-6.js",
     "node scripts/check-guideline-decision-boundaries.js src/admin/admin-control-snapshot-class-part-6.js",
-    "git diff --check -- src/admin/admin-control-snapshot-class-part-6.js test/admin/admin-control-snapshot.test.js work/packages/active-20260515-startup-active-gate-snapshot-coverage-final-reconcile-target.md",
-    "npm run work:validate -- --pre-impl work/packages/active-20260515-startup-active-gate-snapshot-coverage-final-reconcile-target.md",
+    "git diff --check -- src/admin/admin-control-snapshot-class-part-6.js test/admin/admin-control-snapshot.test.js work/packages/done-20260515-startup-active-gate-snapshot-coverage-final-reconcile-target.md",
+    "npm run work:validate -- --pre-impl work/packages/done-20260515-startup-active-gate-snapshot-coverage-final-reconcile-target.md",
     "node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-after-final-reconcile-readback-20260515-codex.report.json --fast-local --verbose",
     "npm run work:evidence-summary -- test-output/reports/rolling-restart-after-final-reconcile-readback-20260515-codex.report.json",
     "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-final-reconcile-readback-20260515-codex.report.json --handoff-probe",
@@ -36,7 +36,7 @@
     "npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-after-final-reconcile-readback-20260515-codex.report.json --markdown"
   ],
   "writeScope": [
-    "work/packages/active-20260515-startup-active-gate-snapshot-coverage-final-reconcile-target.md",
+    "work/packages/done-20260515-startup-active-gate-snapshot-coverage-final-reconcile-target.md",
     "work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md",
     "work/sprints/current-blocker.md",
     "work/sprints/current-blocker.json",
@@ -65,7 +65,7 @@
     "test/control-plane/membership-publication-coordinator-main-stage-2.js"
   ],
   "commitScope": [
-    "work/packages/active-20260515-startup-active-gate-snapshot-coverage-final-reconcile-target.md",
+    "work/packages/done-20260515-startup-active-gate-snapshot-coverage-final-reconcile-target.md",
     "work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md",
     "work/sprints/current-blocker.md",
     "work/sprints/current-blocker.json",
@@ -187,7 +187,7 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 
 ## In Scope
 
-1. work/packages/active-20260515-startup-active-gate-snapshot-coverage-final-reconcile-target.md
+1. work/packages/done-20260515-startup-active-gate-snapshot-coverage-final-reconcile-target.md
 2. work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md
 3. work/sprints/current-blocker.md
 4. work/sprints/current-blocker.json
@@ -211,9 +211,9 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 Required before implementation because this is a causal-escalation runtime
 owner-boundary package.
 
-- [x] Review subagent recorded: Agent Plato (019e2cf9-e5f5-7821-a676-a56879a594f6) reviewed work/packages/active-20260515-startup-active-gate-snapshot-coverage-final-reconcile-target.md; result fixes-required.
-- [x] Fix subagent recorded or explicitly not needed: Agent Peirce (019e2cfc-afdc-7310-b678-a428a0ddf964) fixed work/packages/active-20260515-startup-active-gate-snapshot-coverage-final-reconcile-target.md.
-- [x] Implementation subagent recorded: Agent Noether (3072b5ff-d20a-438a-ac20-ce15f3c87db1) implemented work/packages/active-20260515-startup-active-gate-snapshot-coverage-final-reconcile-target.md.
+- [x] Review subagent recorded: Agent Plato (019e2cf9-e5f5-7821-a676-a56879a594f6) reviewed work/packages/done-20260515-startup-active-gate-snapshot-coverage-final-reconcile-target.md; result fixes-required.
+- [x] Fix subagent recorded or explicitly not needed: Agent Peirce (019e2cfc-afdc-7310-b678-a428a0ddf964) fixed work/packages/done-20260515-startup-active-gate-snapshot-coverage-final-reconcile-target.md.
+- [x] Implementation subagent recorded: Agent Noether (3072b5ff-d20a-438a-ac20-ce15f3c87db1) implemented work/packages/done-20260515-startup-active-gate-snapshot-coverage-final-reconcile-target.md.
 
 ## Model Fit
 
@@ -221,11 +221,11 @@ owner-boundary package.
 - Intended minimum model: `gpt-5.3-codex`
 - Scope shape: `owner-boundary-contraction/current-frontier`
 - Output profile: `medium`
-- Owned files: `work/packages/active-20260515-startup-active-gate-snapshot-coverage-final-reconcile-target.md`, `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md`, `work/sprints/current-blocker.md`, `work/sprints/current-blocker.json`, `work/model-ledger.jsonl`, `src/admin/admin-control-snapshot-class-part-6.js`, `test/admin/admin-control-snapshot.test.js`
+- Owned files: `work/packages/done-20260515-startup-active-gate-snapshot-coverage-final-reconcile-target.md`, `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md`, `work/sprints/current-blocker.md`, `work/sprints/current-blocker.json`, `work/model-ledger.jsonl`, `src/admin/admin-control-snapshot-class-part-6.js`, `test/admin/admin-control-snapshot.test.js`
 - Forbidden files: `timeout increases`, `active-gate admission relaxation while runtimePromotionAllowed=false`, `workflow-progress implementation unless canonical extractors promote it`, `broad diagnostics-only success path`
 - Frozen decisions: package scope and lane stay bounded unless explicitly escalated.
 - Escalation triggers: owned files expand beyond this package, runtime ownership changes, or representative scenario evidence changes.
-- Focused proof: `npm run work:context`, `npm run work:llm-start`, `npm run work:package:doctor -- --suggest work/packages/active-20260515-startup-active-gate-snapshot-coverage-final-reconcile-target.md`, `npm run work:evidence-summary -- test-output/reports/rolling-restart-after-awaited-reconcile-bridge-20260515-codex.report.json`, `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-awaited-reconcile-bridge-20260515-codex.report.json --handoff-probe`, `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-awaited-reconcile-bridge-20260515-codex.report.json`, `npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-after-awaited-reconcile-bridge-20260515-codex.report.json --markdown`, `npm run analyze:owner-files -- startup_active_gate_owner snapshot_coverage --markdown`
+- Focused proof: `npm run work:context`, `npm run work:llm-start`, `npm run work:package:doctor -- --suggest work/packages/done-20260515-startup-active-gate-snapshot-coverage-final-reconcile-target.md`, `npm run work:evidence-summary -- test-output/reports/rolling-restart-after-awaited-reconcile-bridge-20260515-codex.report.json`, `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-awaited-reconcile-bridge-20260515-codex.report.json --handoff-probe`, `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-awaited-reconcile-bridge-20260515-codex.report.json`, `npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-after-awaited-reconcile-bridge-20260515-codex.report.json --markdown`, `npm run analyze:owner-files -- startup_active_gate_owner snapshot_coverage --markdown`
 - Model ledger advisory: `escalate`
 
 ## Evidence
@@ -265,9 +265,17 @@ Promoted runtime/test files:
 
 1. npm run work:context
 2. npm run work:llm-start
-3. npm run work:package:doctor -- --suggest work/packages/active-20260515-startup-active-gate-snapshot-coverage-final-reconcile-target.md
+3. npm run work:package:doctor -- --suggest work/packages/done-20260515-startup-active-gate-snapshot-coverage-final-reconcile-target.md
 4. npm run work:evidence-summary -- test-output/reports/rolling-restart-after-awaited-reconcile-bridge-20260515-codex.report.json
 5. npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-awaited-reconcile-bridge-20260515-codex.report.json --handoff-probe
 6. npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-awaited-reconcile-bridge-20260515-codex.report.json
 7. npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-after-awaited-reconcile-bridge-20260515-codex.report.json --markdown
 8. npm run analyze:owner-files -- startup_active_gate_owner snapshot_coverage --markdown
+
+## Commit And Push Ledger
+
+Required at closure.
+
+1. [x] Focused package commit: 5e84d72bc9612e9562a58ddf6b8570830219c144.
+2. [x] Pushed to: origin/codex/pending-ack-eligibility-filter.
+3. [x] Commit contains only package-owned files/package-status/allowed sprint handoff: yes.

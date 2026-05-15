@@ -154,7 +154,7 @@ Pro or Enterprise behavior.
      preferred when available, and fresh representative evidence reduces the
      handoff to one pending reconcile target while remaining red on
      `startup_active_gate_owner / snapshot_coverage`.
-6. [Startup Active Gate Snapshot Coverage Final Reconcile Target](../packages/active-20260515-startup-active-gate-snapshot-coverage-final-reconcile-target.md)
+6. [Startup Active Gate Snapshot Coverage Final Reconcile Target](../packages/done-20260515-startup-active-gate-snapshot-coverage-final-reconcile-target.md)
    - Lane: `causal-escalation`
    - Owner boundary:
      `startup_active_gate_owner / snapshot_coverage`
@@ -173,6 +173,21 @@ Pro or Enterprise behavior.
      but fresh representative evidence still reports snapshot coverage `2/5`,
      seed-only published active membership, `pendingReconcileCount=4`, and
      `runtimePromotionAllowed=false`.
+7. [Startup Active Gate Seed Publication Visibility Proof](../packages/active-20260515-startup-active-gate-seed-publication-visibility-proof.md)
+   - Lane: `causal-escalation`
+   - Owner boundary:
+     `startup_active_gate_owner / snapshot_coverage`
+   - Purpose: prove why durable membership publication visibility remains
+     seed-only after awaited diagnostics-grade reconcile readback, before any
+     broader runtime edit or workflow-progress activation.
+   - Entry condition: final reconcile readback package is pushed as
+     same-frontier; fresh evidence still selects `active_gate_snapshot_coverage`
+     with `missingPublishedCount=4`, `pendingReconcileCount=4`,
+     `snapshotCoverage=2/5`, and subordinate workflow-progress witnesses.
+   - Acceptance: representative `rolling-restart` is green, durable
+     publication visibility or snapshot coverage improves with focused owner
+     proof, or canonical evidence migrates to a narrower owner boundary with
+     concrete next action.
 
 No additional package may be added merely to defer owner-key reconcile from
 the original active-gate owner package. That package is now closed as migrated.
@@ -206,23 +221,16 @@ changes the semantic owner, boundary, or next required action.
 
 1. `npm run work:context`
 2. `npm run work:llm-start`
-3. `npm run work:package:doctor -- --suggest work/packages/active-20260515-startup-active-gate-snapshot-coverage-final-reconcile-target.md`
-4. `npm run work:evidence-summary -- test-output/reports/rolling-restart-after-awaited-reconcile-bridge-20260515-codex.report.json`
-5. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-awaited-reconcile-bridge-20260515-codex.report.json --handoff-probe`
-6. `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-awaited-reconcile-bridge-20260515-codex.report.json`
-7. `npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-after-awaited-reconcile-bridge-20260515-codex.report.json --markdown`
+3. `npm run work:package:doctor -- --suggest work/packages/active-20260515-startup-active-gate-seed-publication-visibility-proof.md`
+4. `npm run work:evidence-summary -- test-output/reports/rolling-restart-after-final-reconcile-readback-20260515-codex.report.json`
+5. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-final-reconcile-readback-20260515-codex.report.json --handoff-probe`
+6. `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-final-reconcile-readback-20260515-codex.report.json`
+7. `npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-after-final-reconcile-readback-20260515-codex.report.json --markdown`
 8. `npm run analyze:owner-files -- startup_active_gate_owner snapshot_coverage --markdown`
-9. `npm run work:subagent-prompt -- --role implementation --package work/packages/active-20260515-startup-active-gate-snapshot-coverage-final-reconcile-target.md`
-10. `npx tap --grep "AdminControlSnapshot (build snapshot forwards handoff pending reconcile target|repair-deferred shared owner attempts publication catch-up before returning|repair-deferred no-attempt path still attempts publication catch-up|repair-deferred shared owner skips publication catch-up for owner recovery waits|repair-deferred shared owner skips publication catch-up without pending reconcile evidence)" test/admin/admin-control-snapshot.test.js`
-11. `npm run audit:runtime-grammar:file -- src/admin/admin-control-snapshot-class-part-6.js`
-12. `node scripts/check-guideline-decision-boundaries.js src/admin/admin-control-snapshot-class-part-6.js`
-13. `git diff --check -- src/admin/admin-control-snapshot-class-part-6.js test/admin/admin-control-snapshot.test.js work/packages/active-20260515-startup-active-gate-snapshot-coverage-final-reconcile-target.md`
-14. `npm run work:validate -- --pre-impl work/packages/active-20260515-startup-active-gate-snapshot-coverage-final-reconcile-target.md`
-15. `node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-after-final-reconcile-readback-20260515-codex.report.json --fast-local --verbose`
-16. `npm run work:evidence-summary -- test-output/reports/rolling-restart-after-final-reconcile-readback-20260515-codex.report.json`
-17. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-final-reconcile-readback-20260515-codex.report.json --handoff-probe`
-18. `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-final-reconcile-readback-20260515-codex.report.json`
-19. `npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-after-final-reconcile-readback-20260515-codex.report.json --markdown`
+9. `npm run work:subagent-prompt -- --role review --package work/packages/active-20260515-startup-active-gate-seed-publication-visibility-proof.md`
+10. Real review/fix/implementation subagent proof before runtime implementation starts.
+11. Focused owner tests, static guardrails, and representative `rolling-restart`
+    after the package has implementation proof.
 
 ## Closure Rules
 
@@ -242,12 +250,13 @@ The sprint cannot close until:
 
 ## Current Next Action
 
-Continue with the active snapshot-coverage final reconcile target package:
+Continue with the active seed publication visibility proof package:
 
 ```text
-work/packages/active-20260515-startup-active-gate-snapshot-coverage-final-reconcile-target.md
+work/packages/active-20260515-startup-active-gate-seed-publication-visibility-proof.md
 ```
 
-Record the package as same-frontier evidence and do not broaden runtime edits
-inside this slice. The workflow-progress package remains parked unless
-canonical evidence promotes it ahead of active-gate snapshot coverage.
+Run the required review/fix/implementation subagent sequence before runtime
+edits. The workflow-progress package remains parked unless canonical evidence
+promotes it ahead of active-gate snapshot coverage or this package records
+owner-boundary migration proof.
