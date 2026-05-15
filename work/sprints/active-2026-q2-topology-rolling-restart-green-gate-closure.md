@@ -20,9 +20,9 @@ success is in scope.
 ## Current Blocker Snapshot
 
 Latest representative artifact:
-`test-output/reports/rolling-restart-after-final-reconcile-readback-20260515-codex.report.json`.
+`test-output/reports/rolling-restart-after-publication-diagnostics-fallback-20260515-codex.report.json`.
 
-Canonical state after the admin publication-owner readback proof:
+Canonical state after the publication diagnostics fallback proof:
 
 1. `work:evidence-summary` selects `active_gate_snapshot_coverage` as the first
    frontier.
@@ -32,23 +32,24 @@ Canonical state after the admin publication-owner readback proof:
 4. Current reasons:
    `active_gate_timed_out`, `owner_reconcile_pending`,
    `snapshot_coverage_incomplete`, and `snapshot_repair_deferred`.
-5. Publication ACK convergence is satisfied, but published active membership
-   remains seed-only with `missingPublishedCount=4`.
+5. Producer publication ACK convergence is satisfied, but
+   `publishedActiveNodeIds` remains seed-only with
+   `7493b0ab-a054-5fad-a91b-5e331db29304`; producer
+   `missingPublishedCount=4`.
 6. The canonical handoff probe reports `missingEdge=null` and
    `contractEdge=publication_active_gate_handoff_contract`.
 7. Handoff contract state is `pending` with
    `nextAction=reconcile_owner_membership_publication`,
-   `pendingReconcileCount=4`, pending nodes
-   `11601fe0-72d6-5853-8590-ec2881853e72`,
-   `35a891b8-c1a0-5064-9c6e-2acfba61c2a7`,
-   `8be8d30f-4499-5eed-865c-71b4d529a67a`, and
-   `ebc4aa0b-06c6-506d-93ea-1dd2deca3f58`, and
+   consumer `pendingReconcileCount=1`, pending node
+   `35a891b8-c1a0-5064-9c6e-2acfba61c2a7`, and
    `runtimePromotionAllowed=false`.
-8. Selected snapshot observation remains `repair_deferred` with
-   `cache_stale_watermark`, `discovery_node_coverage_gap`, and
-   `stale_replica_operations_in_flight`.
-9. `analyze:priority-recovery-residuals` reports `Split required: false` with
-   three subordinate `operation_workflow_owner / workflow_progress` witnesses.
+8. Active-gate snapshot coverage remains `2/5`; selected snapshot observation
+   remains `repair_deferred` / `stale_usable` / `pending` / `idle` / `wait`
+   with `cache_stale_watermark`.
+9. `analyze:priority-recovery-residuals` reports one subordinate
+   `operation_workflow_owner / workflow_progress` witness on
+   `control_plane_publications-p1`, semantic state
+   `spread_satisfied_in_flight`, and `Split required: false`.
 10. The workflow-progress package remains parked because `work:evidence-summary`
     and causal model still select active-gate snapshot coverage as the first
     frontier.
@@ -213,6 +214,14 @@ Pro or Enterprise behavior.
      missingPublishedCount or consumer pendingReconcileCount is reduced with
      focused owner proof, snapshot coverage improves, or canonical evidence
      migrates to a narrower owner boundary with concrete next action.
+   - Current result: `reduced`. The active-gate publication diagnostics
+     selector now prefers a newer or wider durable published fallback over
+     stale seed-only readiness diagnostics when readiness has no owner recovery
+     evidence. Focused admin tests and guardrails pass. Fresh representative
+     evidence reduces the consumer handoff to `pendingReconcileCount=1` for
+     `35a891b8-c1a0-5064-9c6e-2acfba61c2a7`, while producer published
+     membership remains seed-only with `missingPublishedCount=4` and snapshot
+     coverage remains `2/5`.
 
 No additional package may be added merely to defer owner-key reconcile from
 the original active-gate owner package. That package is now closed as migrated.
@@ -275,12 +284,13 @@ The sprint cannot close until:
 
 ## Current Next Action
 
-Continue with the active remaining publication lag proof package:
+Commit and push the active remaining publication lag proof package, then open
+the next bounded startup-active-gate snapshot-coverage package for the final
+pending owner reconcile target:
 
 ```text
 work/packages/active-20260515-startup-active-gate-remaining-publication-lag-proof.md
 ```
 
-Run the required review/fix/implementation subagent sequence before runtime
-edits. The workflow-progress package remains parked because the latest
-priority-recovery residual extractor reports zero witnesses.
+The workflow-progress package remains parked because the latest topology and
+causal extractors keep active-gate snapshot coverage as the first frontier.

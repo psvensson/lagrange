@@ -116,6 +116,7 @@ const ACTIVE_GATE_HANDOFF_RECONCILE_PENDING_NODE_IDS = Object.freeze(
 );
 const ACTIVE_GATE_HANDOFF_RECONCILE_PENDING_COUNT =
   ACTIVE_GATE_HANDOFF_RECONCILE_PENDING_NODE_IDS.length;
+const ACTIVE_GATE_HANDOFF_RECONCILE_CLEARED_PENDING_COUNT = 0;
 const ACTIVE_GATE_HANDOFF_RECONCILE_AUTHORITATIVE_READ = true;
 const ACTIVE_GATE_HANDOFF_RECONCILE_AUTHORITATIVE_RECONCILE = true;
 const ACTIVE_GATE_HANDOFF_RECONCILE_ALLOW_PENDING_VISIBILITY = true;
@@ -211,6 +212,172 @@ test('AdminControlSnapshot routes publication convergence through the shared rec
         },
       },
       'admin convergence diagnostics should preserve canonical node participation',
+    );
+  });
+
+test('AdminControlSnapshot uses authoritative published fallback when readiness has stale seed-only publication',
+  async (t) => {
+    const snapshot = new AdminControlSnapshot({
+      nodeId: ACTIVE_GATE_HANDOFF_RECONCILE_LOCAL_NODE_ID,
+      nowFn: () => ACTIVE_GATE_OWNER_TRUTH_NOW_MS,
+    });
+
+    const diagnostics = snapshot.resolvePublicationConvergenceDiagnostics(
+      [{
+        nodeId: ACTIVE_GATE_HANDOFF_RECONCILE_LOCAL_NODE_ID,
+        membershipPublication: {
+          publicationEpoch: ACTIVE_GATE_HANDOFF_RECONCILE_PUBLICATION_EPOCH,
+          status: ACTIVE_GATE_OWNER_TRUTH_PUBLICATION_STATUS,
+          publishedActiveNodeIds: [
+            ...ACTIVE_GATE_HANDOFF_RECONCILE_PUBLISHED_NODE_IDS,
+          ],
+          requiredAckNodeIds: [
+            ...ACTIVE_GATE_HANDOFF_RECONCILE_PUBLISHED_NODE_IDS,
+          ],
+          acknowledgedNodeIds: [
+            ...ACTIVE_GATE_HANDOFF_RECONCILE_PUBLISHED_NODE_IDS,
+          ],
+        },
+      }],
+      {
+        publication_id:
+          ACTIVE_GATE_HANDOFF_RECONCILE_RESULT_PUBLICATION_ID,
+        publication_kind:
+          ACTIVE_GATE_HANDOFF_RECONCILE_PUBLICATION_KIND,
+        publication_epoch:
+          ACTIVE_GATE_HANDOFF_RECONCILE_RESULT_PUBLICATION_EPOCH,
+        status:
+          ACTIVE_GATE_OWNER_TRUTH_PUBLICATION_STATUS,
+        published_active_node_ids: [
+          ...ACTIVE_GATE_HANDOFF_RECONCILE_NODE_IDS,
+        ],
+        required_ack_node_ids: [
+          ...ACTIVE_GATE_HANDOFF_RECONCILE_NODE_IDS,
+        ],
+        acknowledged_node_ids: [
+          ...ACTIVE_GATE_HANDOFF_RECONCILE_NODE_IDS,
+        ],
+      },
+    );
+
+    t.match(
+      diagnostics,
+      {
+        publicationEpoch:
+          ACTIVE_GATE_HANDOFF_RECONCILE_RESULT_PUBLICATION_EPOCH,
+        status:
+          ACTIVE_GATE_OWNER_TRUTH_PUBLICATION_STATUS,
+        publishedActiveNodeIds: [
+          ...ACTIVE_GATE_HANDOFF_RECONCILE_NODE_IDS,
+        ],
+      },
+      'producer convergence diagnostics should prefer the wider durable published fallback over stale readiness publication',
+    );
+  });
+
+test('AdminControlSnapshot carries authoritative published fallback through local snapshot diagnostics',
+  async (t) => {
+    const nodeRows = ACTIVE_GATE_HANDOFF_RECONCILE_NODE_IDS.map((nodeId) => ({
+      node_id: nodeId,
+      status: ACTIVE_GATE_OWNER_TRUTH_NODE_STATUS,
+      connection_state: ACTIVE_GATE_OWNER_TRUTH_CONNECTION_STATE,
+      ready_lease_expires_at:
+        ACTIVE_GATE_OWNER_TRUTH_NOW_MS +
+        ACTIVE_GATE_OWNER_TRUTH_READY_LEASE_DELTA_MS,
+    }));
+    const serviceRows = ACTIVE_GATE_HANDOFF_RECONCILE_NODE_IDS.map(
+      (nodeId) => ({
+        service_id: nodeId,
+        node_id: nodeId,
+        status: ACTIVE_GATE_OWNER_TRUTH_NODE_STATUS,
+      }),
+    );
+    const durablePublishedPublicationRow = {
+      publication_id:
+        ACTIVE_GATE_HANDOFF_RECONCILE_RESULT_PUBLICATION_ID,
+      publication_kind:
+        ACTIVE_GATE_HANDOFF_RECONCILE_PUBLICATION_KIND,
+      publication_epoch:
+        ACTIVE_GATE_HANDOFF_RECONCILE_RESULT_PUBLICATION_EPOCH,
+      status:
+        ACTIVE_GATE_OWNER_TRUTH_PUBLICATION_STATUS,
+      published_active_node_ids: [
+        ...ACTIVE_GATE_HANDOFF_RECONCILE_NODE_IDS,
+      ],
+      required_ack_node_ids: [
+        ...ACTIVE_GATE_HANDOFF_RECONCILE_NODE_IDS,
+      ],
+      acknowledged_node_ids: [
+        ...ACTIVE_GATE_HANDOFF_RECONCILE_NODE_IDS,
+      ],
+    };
+    const snapshot = new AdminControlSnapshot({
+      nodeId: ACTIVE_GATE_HANDOFF_RECONCILE_LOCAL_NODE_ID,
+      nowFn: () => ACTIVE_GATE_OWNER_TRUTH_NOW_MS,
+      systemTableCache: {
+        getAll(tableName) {
+          if (tableName === TABLES.NODES) {
+            return nodeRows;
+          }
+          if (tableName === TABLES.SERVICES) {
+            return serviceRows;
+          }
+          return ACTIVE_GATE_HANDOFF_RECONCILE_EMPTY_ROWS;
+        },
+      },
+      controlPlaneReadinessService: {
+        async getAllNodeReadiness() {
+          return [{
+            nodeId: ACTIVE_GATE_HANDOFF_RECONCILE_LOCAL_NODE_ID,
+            dimensions: {
+              [CONTROL_PLANE_READINESS_DIMENSION.CLUSTER_MEMBER_HEALTHY]:
+                true,
+            },
+            membershipPublication: {
+              publicationEpoch: ACTIVE_GATE_HANDOFF_RECONCILE_PUBLICATION_EPOCH,
+              status: ACTIVE_GATE_OWNER_TRUTH_PUBLICATION_STATUS,
+              publishedActiveNodeIds: [
+                ...ACTIVE_GATE_HANDOFF_RECONCILE_PUBLISHED_NODE_IDS,
+              ],
+              requiredAckNodeIds: [
+                ...ACTIVE_GATE_HANDOFF_RECONCILE_PUBLISHED_NODE_IDS,
+              ],
+              acknowledgedNodeIds: [
+                ...ACTIVE_GATE_HANDOFF_RECONCILE_PUBLISHED_NODE_IDS,
+              ],
+            },
+          }];
+        },
+        membershipPublicationService: {
+          getLatestClusterPublicationSync() {
+            return durablePublishedPublicationRow;
+          },
+          getLatestPublishedClusterPublicationSync() {
+            return durablePublishedPublicationRow;
+          },
+        },
+      },
+    });
+
+    const result = await snapshot.buildLocalControlSnapshot();
+
+    t.same(
+      result.controlPlaneDiagnostics.publicationConvergence
+        ?.publishedActiveNodeIds,
+      [...ACTIVE_GATE_HANDOFF_RECONCILE_NODE_IDS],
+      'producer diagnostics should carry durable published membership through local snapshot assembly',
+    );
+    t.same(
+      result.controlPlaneDiagnostics.publishedMembershipObservation
+        ?.publishedActiveNodeIds,
+      [...ACTIVE_GATE_HANDOFF_RECONCILE_NODE_IDS],
+      'strict published membership observation should remain aligned with producer diagnostics',
+    );
+    t.equal(
+      result.controlPlaneDiagnostics.publicationActiveGateHandoff
+        ?.pendingReconcileCount,
+      ACTIVE_GATE_HANDOFF_RECONCILE_CLEARED_PENDING_COUNT,
+      'active-gate handoff should not retain reconcile debt after producer diagnostics observe durable membership',
     );
   });
 

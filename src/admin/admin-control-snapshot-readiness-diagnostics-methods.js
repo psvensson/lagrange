@@ -1,4 +1,35 @@
 const LOCAL_STR_CONSTRUCTOR = 'constructor';
+const LOCAL_PUBLICATION_DIAGNOSTIC_STATE = Object.freeze({
+  AVAILABLE: 'available',
+  KNOWN: 'known',
+  UNAVAILABLE: 'unavailable',
+});
+const LOCAL_PUBLICATION_SELECTION_DECISION = Object.freeze({
+  FALLBACK: 'fallback',
+  READINESS: 'readiness',
+  UNAVAILABLE: 'unavailable',
+});
+const LOCAL_PUBLICATION_SELECTION_EMPTY_COUNT = 0;
+const LOCAL_PUBLICATION_SELECTION_EMPTY_SOURCE = Object.freeze({});
+const LOCAL_PUBLICATION_SELECTION_ORDER_UNAVAILABLE = Number.NEGATIVE_INFINITY;
+const LOCAL_PUBLICATION_SELECTION_DECISION_TABLE = Object.freeze([
+  Object.freeze({
+    decision: LOCAL_PUBLICATION_SELECTION_DECISION.FALLBACK,
+    matches: (evidence) => evidence.useDurablePublishedFallback === true,
+  }),
+  Object.freeze({
+    decision: LOCAL_PUBLICATION_SELECTION_DECISION.READINESS,
+    matches: (evidence) => evidence.readinessAvailable === true,
+  }),
+  Object.freeze({
+    decision: LOCAL_PUBLICATION_SELECTION_DECISION.FALLBACK,
+    matches: (evidence) => evidence.fallbackAvailable === true,
+  }),
+  Object.freeze({
+    decision: LOCAL_PUBLICATION_SELECTION_DECISION.UNAVAILABLE,
+    matches: () => true,
+  }),
+]);
 
 function assignAdminControlSnapshotReadinessDiagnosticsMethods(
   AdminControlSnapshot,
@@ -123,12 +154,29 @@ function assignAdminControlSnapshotReadinessDiagnosticsMethods(
       fallbackPublication = null,
     ) {
       const unavailablePublicationDiagnostics = Object.freeze({
-        publicationObservation: Object.freeze({state: 'unavailable'}),
+        publicationObservation: Object.freeze(
+          {state: LOCAL_PUBLICATION_DIAGNOSTIC_STATE.UNAVAILABLE},
+        ),
         timestamps: Object.freeze({
-          publishedAt: Object.freeze({state: 'unavailable'}),
-          updatedAt: Object.freeze({state: 'unavailable'}),
+          publishedAt: Object.freeze({
+            state: LOCAL_PUBLICATION_DIAGNOSTIC_STATE.UNAVAILABLE,
+          }),
+          updatedAt: Object.freeze({
+            state: LOCAL_PUBLICATION_DIAGNOSTIC_STATE.UNAVAILABLE,
+          }),
         }),
       });
+      const normalizePublicationStatus = (value) =>
+        String(value || ADMIN_CONTROL_SNAPSHOT_LITERAL.VALUE).toUpperCase();
+      const resolvePublicationOrderingValue = (...values) => {
+        for (const value of values) {
+          const normalized = Number(value);
+          if (Number.isFinite(normalized)) {
+            return normalized;
+          }
+        }
+        return LOCAL_PUBLICATION_SELECTION_ORDER_UNAVAILABLE;
+      };
       const buildPublicationDiagnostics = (
         membershipPublication,
         timestampFields = {},
@@ -147,7 +195,7 @@ function assignAdminControlSnapshotReadinessDiagnosticsMethods(
         const updatedAtKnown = Number.isFinite(timestampFields.updatedAt);
         return {
           publicationObservation: {
-            state: 'available',
+            state: LOCAL_PUBLICATION_DIAGNOSTIC_STATE.AVAILABLE,
             epoch: publicationSnapshot.publicationEpoch,
             status: publicationSnapshot.publicationStatus,
           },
@@ -167,18 +215,14 @@ function assignAdminControlSnapshotReadinessDiagnosticsMethods(
           sourceTopologyEpoch: publicationSnapshot.sourceTopologyEpoch,
           sourceSnapshotVersion: publicationSnapshot.sourceSnapshotVersion,
           timestamps: {
-            publishedAt: publishedAtKnown ?
-              {
-                state: 'known',
-                value: timestampFields.publishedAt,
-              } :
-              {state: 'unavailable'},
-            updatedAt: updatedAtKnown ?
-              {
-                state: 'known',
-                value: timestampFields.updatedAt,
-              } :
-              {state: 'unavailable'},
+            publishedAt: publishedAtKnown ? {
+              state: LOCAL_PUBLICATION_DIAGNOSTIC_STATE.KNOWN,
+              value: timestampFields.publishedAt,
+            } : {state: LOCAL_PUBLICATION_DIAGNOSTIC_STATE.UNAVAILABLE},
+            updatedAt: updatedAtKnown ? {
+              state: LOCAL_PUBLICATION_DIAGNOSTIC_STATE.KNOWN,
+              value: timestampFields.updatedAt,
+            } : {state: LOCAL_PUBLICATION_DIAGNOSTIC_STATE.UNAVAILABLE},
           },
           ...(publishedAtKnown ?
             {publishedAt: timestampFields.publishedAt} :
@@ -201,6 +245,73 @@ function assignAdminControlSnapshotReadinessDiagnosticsMethods(
           publicationRecoveryGate: publicationSnapshot.publicationRecoveryGate,
         };
       };
+      const buildPublicationCandidate = (
+        membershipPublication,
+        timestampFields = {},
+        sourceEvidence = {},
+      ) => {
+        const diagnostics = buildPublicationDiagnostics(
+          membershipPublication,
+          timestampFields,
+        );
+        const publishedActiveNodeIds =
+          Array.isArray(diagnostics.publishedActiveNodeIds) ?
+            diagnostics.publishedActiveNodeIds : [];
+        const priorityPartitionSummary =
+          diagnostics.priorityPartitionSummary &&
+          typeof diagnostics.priorityPartitionSummary === TYPEOF.OBJECT ?
+            diagnostics.priorityPartitionSummary :
+            LOCAL_PUBLICATION_SELECTION_EMPTY_SOURCE;
+        const hasSourcePriorityControlPlaneRecovery =
+          Boolean(
+            sourceEvidence.priorityControlPlaneRecovery &&
+            typeof sourceEvidence.priorityControlPlaneRecovery ===
+              TYPEOF.OBJECT,
+          );
+        const ownerRecoveryEvidenceAvailable =
+          hasSourcePriorityControlPlaneRecovery === true ||
+          priorityPartitionSummary?.satisfied === false ||
+          (
+            Array.isArray(priorityPartitionSummary?.missingPartitionIds) &&
+            priorityPartitionSummary.missingPartitionIds.length >
+              LOCAL_PUBLICATION_SELECTION_EMPTY_COUNT
+          ) ||
+          (
+            Array.isArray(priorityPartitionSummary?.blockedPartitions) &&
+            priorityPartitionSummary.blockedPartitions.length >
+              LOCAL_PUBLICATION_SELECTION_EMPTY_COUNT
+          );
+        return Object.freeze({
+          diagnostics,
+          available: diagnostics.publicationObservation?.state ===
+            LOCAL_PUBLICATION_DIAGNOSTIC_STATE.AVAILABLE,
+          ownerRecoveryEvidenceAvailable,
+          publicationStatus: normalizePublicationStatus(
+            diagnostics.publicationStatus || diagnostics.status),
+          publicationEpoch:
+            resolvePublicationOrderingValue(diagnostics.publicationEpoch),
+          publishedAt: resolvePublicationOrderingValue(
+            timestampFields.publishedAt,
+            diagnostics.publishedAt),
+          updatedAt: resolvePublicationOrderingValue(
+            timestampFields.updatedAt,
+            diagnostics.updatedAt),
+          publishedActiveNodeCount: publishedActiveNodeIds.length,
+        });
+      };
+      const unavailablePublicationCandidate = Object.freeze({
+        diagnostics: unavailablePublicationDiagnostics,
+        available: false,
+        ownerRecoveryEvidenceAvailable: false,
+        publicationStatus: normalizePublicationStatus(
+          unavailablePublicationDiagnostics.publicationObservation?.state,
+        ),
+        publicationEpoch: LOCAL_PUBLICATION_SELECTION_ORDER_UNAVAILABLE,
+        publishedAt: LOCAL_PUBLICATION_SELECTION_ORDER_UNAVAILABLE,
+        updatedAt: LOCAL_PUBLICATION_SELECTION_ORDER_UNAVAILABLE,
+        publishedActiveNodeCount: LOCAL_PUBLICATION_SELECTION_EMPTY_COUNT,
+      });
+      let readinessCandidate = unavailablePublicationCandidate;
       for (const readiness of Array.isArray(readinessEntries) ?
         readinessEntries :
         []) {
@@ -211,18 +322,50 @@ function assignAdminControlSnapshotReadinessDiagnosticsMethods(
         ) {
           continue;
         }
-        return buildPublicationDiagnostics(membershipPublication, {
+        readinessCandidate = buildPublicationCandidate(membershipPublication, {
           publishedAt: membershipPublication.publishedAt,
           updatedAt: membershipPublication.updatedAt,
+        }, {
+          priorityControlPlaneRecovery:
+            readiness.priorityControlPlaneRecovery,
         });
+        break;
       }
+      let fallbackCandidate = unavailablePublicationCandidate;
       if (fallbackPublication && typeof fallbackPublication === TYPEOF.OBJECT) {
-        return buildPublicationDiagnostics(fallbackPublication, {
+        fallbackCandidate = buildPublicationCandidate(fallbackPublication, {
           publishedAt:
             fallbackPublication.publishedAt ?? fallbackPublication.published_at,
           updatedAt:
             fallbackPublication.updatedAt ?? fallbackPublication.updated_at,
         });
+      }
+      const readinessPublished = readinessCandidate?.available === true &&
+        readinessCandidate.publicationStatus ===
+          ADMIN_CONTROL_SNAPSHOT_LITERAL.PUBLISHED;
+      const fallbackPublished = fallbackCandidate?.available === true &&
+        fallbackCandidate.publicationStatus ===
+          ADMIN_CONTROL_SNAPSHOT_LITERAL.PUBLISHED;
+      const bothPublished = readinessPublished && fallbackPublished;
+      const selectionEvidence = Object.freeze({
+        readinessAvailable: readinessCandidate.available === true,
+        fallbackAvailable: fallbackCandidate.available === true,
+        useDurablePublishedFallback: bothPublished &&
+          readinessCandidate.ownerRecoveryEvidenceAvailable !== true && (
+          fallbackCandidate.publishedActiveNodeCount >
+            readinessCandidate.publishedActiveNodeCount ||
+          fallbackCandidate.publicationEpoch > readinessCandidate.publicationEpoch ||
+          fallbackCandidate.publishedAt > readinessCandidate.publishedAt ||
+          fallbackCandidate.updatedAt > readinessCandidate.updatedAt),
+      });
+      const selectedDecision = LOCAL_PUBLICATION_SELECTION_DECISION_TABLE
+        .find((row) => row.matches(selectionEvidence))?.decision ||
+        LOCAL_PUBLICATION_SELECTION_DECISION.UNAVAILABLE;
+      if (selectedDecision === LOCAL_PUBLICATION_SELECTION_DECISION.READINESS) {
+        return readinessCandidate.diagnostics;
+      }
+      if (selectedDecision === LOCAL_PUBLICATION_SELECTION_DECISION.FALLBACK) {
+        return fallbackCandidate.diagnostics;
       }
       return unavailablePublicationDiagnostics;
     }
