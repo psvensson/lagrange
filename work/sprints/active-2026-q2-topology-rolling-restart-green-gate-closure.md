@@ -176,7 +176,7 @@ Pro or Enterprise behavior.
      but fresh representative evidence still reports snapshot coverage `2/5`,
      seed-only published active membership, `pendingReconcileCount=4`, and
      `runtimePromotionAllowed=false`.
-7. [Startup Active Gate Seed Publication Visibility Proof](../packages/active-20260515-startup-active-gate-seed-publication-visibility-proof.md)
+7. [Startup Active Gate Seed Publication Visibility Proof](../packages/done-20260515-startup-active-gate-seed-publication-visibility-proof.md)
    - Lane: `causal-escalation`
    - Owner boundary:
      `startup_active_gate_owner / snapshot_coverage`
@@ -191,6 +191,28 @@ Pro or Enterprise behavior.
      publication visibility or snapshot coverage improves with focused owner
      proof, or canonical evidence migrates to a narrower owner boundary with
      concrete next action.
+   - Result: `reduced`. The coordinator returns the durable readback row for
+     explicit handoff targets, admin snapshots carry the awaited reconcile
+     observation before stale diagnostics reads, focused tests and guardrails
+     pass, and the representative rerun reduces consumer
+     `pendingReconcileCount` from `4` to `3` while clearing workflow-progress
+     residual witnesses. The gate remains red on `active_gate_snapshot_coverage`
+     with producer published membership still seed-only.
+8. [Startup Active Gate Remaining Publication Lag Proof](../packages/active-20260515-startup-active-gate-remaining-publication-lag-proof.md)
+   - Lane: `causal-escalation`
+   - Owner boundary:
+     `startup_active_gate_owner / snapshot_coverage`
+   - Purpose: prove why producer publication convergence remains seed-only
+     after the awaited handoff reconcile readback path can return and carry a
+     widened publication row.
+   - Entry condition: seed publication visibility package is pushed as
+     reduced; fresh evidence still selects `active_gate_snapshot_coverage`,
+     producer `missingPublishedCount=4`, consumer `pendingReconcileCount=3`,
+     `snapshotCoverage=2/5`, and zero workflow-progress residual witnesses.
+   - Acceptance: representative `rolling-restart` is green, producer
+     missingPublishedCount or consumer pendingReconcileCount is reduced with
+     focused owner proof, snapshot coverage improves, or canonical evidence
+     migrates to a narrower owner boundary with concrete next action.
 
 No additional package may be added merely to defer owner-key reconcile from
 the original active-gate owner package. That package is now closed as migrated.
@@ -224,13 +246,13 @@ changes the semantic owner, boundary, or next required action.
 
 1. `npm run work:context`
 2. `npm run work:llm-start`
-3. `npm run work:package:doctor -- --suggest work/packages/active-20260515-startup-active-gate-seed-publication-visibility-proof.md`
-4. `npm run work:evidence-summary -- test-output/reports/rolling-restart-after-final-reconcile-readback-20260515-codex.report.json`
-5. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-final-reconcile-readback-20260515-codex.report.json --handoff-probe`
-6. `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-final-reconcile-readback-20260515-codex.report.json`
-7. `npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-after-final-reconcile-readback-20260515-codex.report.json --markdown`
+3. `npm run work:package:doctor -- --suggest work/packages/active-20260515-startup-active-gate-remaining-publication-lag-proof.md`
+4. `npm run work:evidence-summary -- test-output/reports/rolling-restart-after-seed-publication-visibility-proof-20260515-codex.report.json`
+5. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-seed-publication-visibility-proof-20260515-codex.report.json --handoff-probe`
+6. `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-seed-publication-visibility-proof-20260515-codex.report.json`
+7. `npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-after-seed-publication-visibility-proof-20260515-codex.report.json --markdown`
 8. `npm run analyze:owner-files -- startup_active_gate_owner snapshot_coverage --markdown`
-9. `npm run work:subagent-prompt -- --role review --package work/packages/active-20260515-startup-active-gate-seed-publication-visibility-proof.md`
+9. `npm run work:subagent-prompt -- --role review --package work/packages/active-20260515-startup-active-gate-remaining-publication-lag-proof.md`
 10. Real review/fix/implementation subagent proof before runtime implementation starts.
 11. Focused owner tests, static guardrails, and representative `rolling-restart`
     after the package has implementation proof.
@@ -253,13 +275,12 @@ The sprint cannot close until:
 
 ## Current Next Action
 
-Continue with the active seed publication visibility proof package:
+Continue with the active remaining publication lag proof package:
 
 ```text
-work/packages/active-20260515-startup-active-gate-seed-publication-visibility-proof.md
+work/packages/active-20260515-startup-active-gate-remaining-publication-lag-proof.md
 ```
 
 Run the required review/fix/implementation subagent sequence before runtime
-edits. The workflow-progress package remains parked unless canonical evidence
-promotes it ahead of active-gate snapshot coverage or this package records
-owner-boundary migration proof.
+edits. The workflow-progress package remains parked because the latest
+priority-recovery residual extractor reports zero witnesses.

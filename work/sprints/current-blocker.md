@@ -4,13 +4,13 @@
 
 Sprint: `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md`
 
-Package: `work/packages/active-20260515-startup-active-gate-seed-publication-visibility-proof.md`
+Package: `work/packages/active-20260515-startup-active-gate-remaining-publication-lag-proof.md`
 
 Workflow lane: `causal-escalation`
 
 Scenario: `rolling-restart`
 
-Artifact: `test-output/reports/rolling-restart-after-final-reconcile-readback-20260515-codex.report.json`
+Artifact: `test-output/reports/rolling-restart-after-seed-publication-visibility-proof-20260515-codex.report.json`
 
 Playback: `none`
 
@@ -22,21 +22,21 @@ Boundary: `snapshot_coverage`
 
 Dominant reason: `active_gate_timed_out`
 
-Current state: The final reconcile readback slice is pushed as same-frontier evidence. The latest representative artifact still selects active_gate_snapshot_coverage with snapshot coverage 2/5, seed-only published membership, missingPublishedCount=4, pendingReconcileCount=4, runtimePromotionAllowed=false, and subordinate operation_workflow_owner / workflow_progress witnesses that are not the first frontier.
+Current state: The seed publication visibility slice is pushed as reduced evidence. The latest representative artifact still selects active_gate_snapshot_coverage with snapshot coverage 2/5 and producer seed-only published membership; the consumer handoff is narrowed to pendingReconcileCount=3, runtimePromotionAllowed=false, and priority-recovery residual extraction reports zero workflow_progress witnesses.
 
 ## Next Action
 
-Prove why durable membership publication visibility remains seed-only after awaited non-deferred diagnostics readback reconcile; identify whether the missing edge is publication owner write visibility, active-gate snapshot observation, or canonical workflow-progress promotion before any runtime edit.
+Prove the remaining durable publication lag: explain why producer publishedActiveNodeIds remains seed-only while the consumer handoff has three pending reconcile nodes after awaited readback carry, then promote exact runtime files only after review/fix proof.
 
 ## Proof Ladder
 
 1. `npm run work:context`
 2. `npm run work:llm-start`
-3. `npm run work:package:doctor -- --suggest work/packages/active-20260515-startup-active-gate-seed-publication-visibility-proof.md`
-4. `npm run work:evidence-summary -- test-output/reports/rolling-restart-after-final-reconcile-readback-20260515-codex.report.json`
-5. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-final-reconcile-readback-20260515-codex.report.json --handoff-probe`
-6. `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-final-reconcile-readback-20260515-codex.report.json`
-7. `npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-after-final-reconcile-readback-20260515-codex.report.json --markdown`
+3. `npm run work:package:doctor -- --suggest work/packages/active-20260515-startup-active-gate-remaining-publication-lag-proof.md`
+4. `npm run work:evidence-summary -- test-output/reports/rolling-restart-after-seed-publication-visibility-proof-20260515-codex.report.json`
+5. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-seed-publication-visibility-proof-20260515-codex.report.json --handoff-probe`
+6. `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-seed-publication-visibility-proof-20260515-codex.report.json`
+7. `npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-after-seed-publication-visibility-proof-20260515-codex.report.json --markdown`
 8. `npm run analyze:owner-files -- startup_active_gate_owner snapshot_coverage --markdown`
 
 ## Model Fit
@@ -60,7 +60,7 @@ Status: `live-red-scenario-release-gate`
 
 Scenario: `rolling-restart`
 
-Artifact: `test-output/reports/rolling-restart-after-final-reconcile-readback-20260515-codex.report.json`
+Artifact: `test-output/reports/rolling-restart-after-seed-publication-visibility-proof-20260515-codex.report.json`
 
 Frontier: `active_gate_snapshot_coverage`
 
@@ -70,58 +70,58 @@ Boundary: `snapshot_coverage`
 
 Dominant reason: `active_gate_timed_out`
 
-Next action: `Prove why durable membership publication visibility remains seed-only after awaited diagnostics-grade reconcile readback while topology and causal summaries still select active-gate snapshot coverage.`
+Next action: `Prove the remaining durable publication lag after the seed visibility slice reduced consumer pendingReconcileCount to 3 and cleared workflow-progress witnesses.`
 
 ## Causal Governance
 
-Causal hypothesis: `The active-gate owner still observes seed-only durable published membership because the reconciled publication target is not becoming consumer-visible before the active-gate snapshot owner samples coverage, or because canonical evidence should now promote the subordinate workflow-progress witness.`
+Causal hypothesis: `The active-gate owner still observes seed-only producer publication visibility because the final publication owner surface selected by topology convergence is not the same durable row returned by the awaited reconcile, or because a snapshot observation path is still sampling stale publication history after the carried readback.`
 
-Stop-condition check: `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-final-reconcile-readback-20260515-codex.report.json`
+Stop-condition check: `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-seed-publication-visibility-proof-20260515-codex.report.json`
 
-Expected causal-model change: `Focused proof either makes rolling-restart green, reduces pendingReconcileCount or snapshot coverage debt, migrates to a narrower durable publication visibility boundary, or records owner-boundary migration proof to workflow_progress.`
+Expected causal-model change: `Focused proof either makes rolling-restart green, reduces remaining pendingReconcileCount or producer missingPublishedCount, migrates to a narrower durable publication visibility boundary, or records why the producer/consumer publication surfaces disagree.`
 
 Representative outcome: `pending-before-rerun`
 
-Causal debt: `The readback slice tightened the admin catch-up bridge but the representative run regressed to four pending reconcile nodes and seed-only published membership; another runtime edit must prove the exact missing visibility edge before broadening.`
+Causal debt: `The prior slice proved durable readback can be carried to admin observation and reduced consumer handoff debt, but producer publication convergence still reports seed-only durable membership.`
 
 Cross-boundary review: `Do not edit runtime files until review/fix proof is clean and exact runtime write-scope promotion is recorded.`
 
 ## Scenario Causal Closure
 
-Reference scenario/probe: `rolling-restart / seed-only durable membership publication visibility after final reconcile readback`
+Reference scenario/probe: `rolling-restart / remaining active-gate publication lag after seed visibility proof`
 
 Phase chain:
 
-1. `consume final reconcile readback same-frontier proof`
-2. `rerun canonical evidence on the final readback artifact`
-3. `prove whether publication owner write visibility, active-gate snapshot observation, or workflow_progress owns the next progress edge`
+1. `consume seed publication visibility reduced proof`
+2. `rerun canonical evidence on the latest artifact`
+3. `prove the producer seed-only publication surface versus the consumer three-node pending reconcile surface`
 4. `promote exact runtime files only after review/fix proof`
 5. `prove focused owner behavior and representative rolling-restart`
 
-Current first frontier: `active_gate_snapshot_coverage remains the first representative frontier in test-output/reports/rolling-restart-after-final-reconcile-readback-20260515-codex.report.json, owned by startup_active_gate_owner / snapshot_coverage.`
+Current first frontier: `active_gate_snapshot_coverage remains the first representative frontier in test-output/reports/rolling-restart-after-seed-publication-visibility-proof-20260515-codex.report.json, owned by startup_active_gate_owner / snapshot_coverage.`
 
 Known downstream blockers:
 
-1. `publication handoff remains pending with pendingReconcileCount=4 and runtimePromotionAllowed=false`
-2. `publishedActiveNodeIds remains seed-only while missingPublishedCount=4`
-3. `selected snapshot coverage is 2/5 with repair_deferred/deferred_refresh/deferred/deferred/retry`
-4. `priority-recovery residual extraction reports three operation_workflow_owner / workflow_progress witnesses, but work:evidence-summary and causal-model still keep active_gate_snapshot_coverage as first frontier`
+1. `producer publication convergence still reports publishedActiveNodeIds as seed-only and missingPublishedCount=4`
+2. `consumer handoff contract is narrowed to pendingReconcileCount=3 and runtimePromotionAllowed=false`
+3. `selected snapshot coverage remains 2/5 with repair_deferred/deferred_refresh/deferred/deferred/retry`
+4. `priority-recovery residual extraction reports zero workflow_progress witnesses, so the parked workflow package remains inactive`
 
-Missing causal edge: `The package must prove whether awaited publication reconcile writes are not durable-visible, active-gate snapshot observation is sampling the wrong publication surface, or workflow_progress has become the true promoted owner boundary.`
+Missing causal edge: `The package must prove why the producer publication convergence surface remains seed-only after the awaited handoff reconcile readback path can return and carry a widened publication row.`
 
-Missing causal edge probe: `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-final-reconcile-readback-20260515-codex.report.json --handoff-probe`
+Missing causal edge probe: `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-seed-publication-visibility-proof-20260515-codex.report.json --handoff-probe`
 
-Bounded progress proof: `Use focused source and owner-file evidence to prove the reconcile visibility mechanism before another representative rerun; active-gate admission remains strict while runtimePromotionAllowed=false.`
+Bounded progress proof: `Use focused source and owner-file evidence to trace the durable producer publication reconcile visibility mechanism before another runtime edit; active-gate admission remains strict while runtimePromotionAllowed=false.`
 
-Bounded progress proof artifact: `test-output/reports/rolling-restart-after-final-reconcile-readback-20260515-codex.report.json`
+Bounded progress proof artifact: `test-output/reports/rolling-restart-after-seed-publication-visibility-proof-20260515-codex.report.json`
 
-Expected observable transition: `pendingReconcileCount reaches 0, snapshotCoverage moves toward 5/5, durable published membership includes the expected active cohort, or canonical extraction migrates to a narrower owner boundary with concrete next action.`
+Expected observable transition: `pendingReconcileCount reaches 0 or below 3, producer missingPublishedCount drops below 4, snapshotCoverage moves toward 5/5, durable published membership includes more of the active cohort, or canonical extraction migrates to a narrower owner boundary with concrete next action.`
 
 Max progress bound: `one startup_active_gate_owner / snapshot_coverage package slice; no timeout increases, active-gate admission relaxation, diagnostics-only success path, or workflow-progress implementation without canonical promotion`
 
-Same-frontier fallback: `If active_gate_snapshot_coverage remains red after focused proof, record whether seed-only publication visibility stayed local or migrated before opening another runtime slice.`
+Same-frontier fallback: `If active_gate_snapshot_coverage remains red after focused proof, record whether producer seed-only publication visibility, consumer handoff reconcile debt, or snapshot observation remains local before opening another runtime slice.`
 
-Expected next frontier: `readiness_startup_support after active-gate coverage improves, otherwise same-frontier active-gate evidence or a canonical workflow_progress migration`
+Expected next frontier: `readiness_startup_support after active-gate coverage improves, otherwise same-frontier active-gate evidence`
 
 Result classification: `pending-before-probe`
 
@@ -129,11 +129,11 @@ Stop condition: `continue-local-fix`
 
 Recent frontier history:
 
-1. `work/packages/done-20260515-startup-active-gate-snapshot-coverage-final-reconcile-target.md / startup_active_gate_owner / snapshot_coverage / same-frontier`
-2. `work/packages/done-20260515-publication-active-gate-reconcile-bridge-simplification.md / startup_active_gate_owner / publication_reconcile_bridge / same-frontier-reduced`
-3. `work/packages/done-20260515-rolling-restart-canonical-frontier-steering-repair.md / startup_active_gate_owner / snapshot_coverage / classification-only`
+1. `work/packages/done-20260515-startup-active-gate-seed-publication-visibility-proof.md / startup_active_gate_owner / snapshot_coverage / reduced`
+2. `work/packages/done-20260515-startup-active-gate-snapshot-coverage-final-reconcile-target.md / startup_active_gate_owner / snapshot_coverage / same-frontier`
+3. `work/packages/done-20260515-publication-active-gate-reconcile-bridge-simplification.md / startup_active_gate_owner / publication_reconcile_bridge / same-frontier-reduced`
 
-Oscillation check: `workflow_progress is visible again as subordinate evidence but is not promoted by topology or causal summaries; do not implement it from this package without owner-boundary migration proof.`
+Oscillation check: `workflow_progress is parked because the latest priority-recovery residual extraction reports zero witnesses and topology/causal summaries keep active_gate_snapshot_coverage first.`
 
 Handoff invariant: `Active-gate admission stays strict while runtimePromotionAllowed=false; publication handoff truth remains owned by the canonical contract.`
 
@@ -141,20 +141,15 @@ Handoff invariant: `Active-gate admission stays strict while runtimePromotionAll
 
 Write scope:
 
-1. `work/packages/active-20260515-startup-active-gate-seed-publication-visibility-proof.md`
-2. `work/packages/done-20260515-startup-active-gate-snapshot-coverage-final-reconcile-target.md`
-3. `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md`
-4. `work/sprints/current-blocker.md`
-5. `work/sprints/current-blocker.json`
-6. `work/model-ledger.jsonl`
-7. `src/control-plane/membership-publication-coordinator-class-stage-2.js`
-8. `src/admin/admin-control-snapshot-class-part-6.js`
-9. `test/control-plane/membership-publication-coordinator-main-stage-2.js`
-10. `test/admin/admin-control-snapshot.test.js`
+1. `work/packages/active-20260515-startup-active-gate-remaining-publication-lag-proof.md`
+2. `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md`
+3. `work/sprints/current-blocker.md`
+4. `work/sprints/current-blocker.json`
+5. `work/model-ledger.jsonl`
 
 Handoff files:
 
-1. `work/packages/done-20260515-publication-active-gate-reconcile-bridge-simplification.md`
+1. `work/packages/done-20260515-startup-active-gate-seed-publication-visibility-proof.md`
 
 Generated files:
 
@@ -168,23 +163,19 @@ Candidate runtime files:
 3. `src/control-plane/membership-publication-coordinator-stage-2.js`
 4. `src/control-plane/membership-publication-planning.js`
 5. `src/control-plane/control-plane-system-table-gateway.js`
-6. `src/admin/admin-control-snapshot-class-part-6.js`
-7. `src/control-plane/publication-active-gate-handoff-contract.js`
-8. `test/control-plane/membership-publication-coordinator-main-stage-2.js`
-9. `test/admin/admin-control-snapshot.test.js`
+6. `src/admin/admin-control-snapshot-class-part-5.js`
+7. `src/admin/admin-control-snapshot-class-part-6.js`
+8. `src/control-plane/publication-active-gate-handoff-contract.js`
+9. `test/control-plane/membership-publication-coordinator-main-stage-2.js`
+10. `test/admin/admin-control-snapshot.test.js`
 
 Commit scope:
 
-1. `work/packages/active-20260515-startup-active-gate-seed-publication-visibility-proof.md`
-2. `work/packages/done-20260515-startup-active-gate-snapshot-coverage-final-reconcile-target.md`
-3. `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md`
-4. `work/sprints/current-blocker.md`
-5. `work/sprints/current-blocker.json`
-6. `work/model-ledger.jsonl`
-7. `src/control-plane/membership-publication-coordinator-class-stage-2.js`
-8. `src/admin/admin-control-snapshot-class-part-6.js`
-9. `test/control-plane/membership-publication-coordinator-main-stage-2.js`
-10. `test/admin/admin-control-snapshot.test.js`
+1. `work/packages/active-20260515-startup-active-gate-remaining-publication-lag-proof.md`
+2. `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md`
+3. `work/sprints/current-blocker.md`
+4. `work/sprints/current-blocker.json`
+5. `work/model-ledger.jsonl`
 
 Legacy touched files:
 
