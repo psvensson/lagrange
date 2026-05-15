@@ -20,11 +20,11 @@ success is in scope.
 ## Current Blocker Snapshot
 
 Latest representative artifact:
-`test-output/reports/rolling-restart-after-replica-operation-router-replace-pending-20260515-codex.report.json`.
+`test-output/reports/rolling-restart-after-create-in-progress-owner-progress-20260515-codex.report.json`.
 
-Canonical state at sprint creation:
+Canonical state after the rebalancer-handoff package and steering repair:
 
-1. `work:evidence-summary` selects `active_gate_snapshot_coverage` as first
+1. `work:evidence-summary` selects `active_gate_snapshot_coverage` as the first
    frontier.
 2. Representative owner boundary:
    `startup_active_gate_owner / snapshot_coverage`.
@@ -32,29 +32,23 @@ Canonical state at sprint creation:
 4. Current reasons:
    `active_gate_timed_out`, `owner_reconcile_pending`,
    `snapshot_coverage_incomplete`, and `snapshot_repair_deferred`.
-5. Publication ACK convergence is satisfied.
+5. Publication ACK convergence is satisfied and priority recovery is classified
+   as satisfied in the causal topology graph.
 6. The canonical handoff probe reports `missingEdge=null` and
    `contractEdge=publication_active_gate_handoff_contract`.
 7. Handoff contract state is `pending` with
    `nextAction=reconcile_owner_membership_publication`,
-   `pendingReconcileCount=3`, and `runtimePromotionAllowed=false`.
-8. Active-gate admission must remain strict until the owner reconcile path
-   produces durable coverage.
-
-Current blocker after the first package:
-
-1. The active-gate owner reconcile package closed as `migrated`.
-2. All five nodes still report active, and the selected active-gate snapshot no
-   longer reports `stale_replica_operations_in_flight`.
-3. The canonical handoff contract remains pending with
-   `publicationActiveGateHandoffPendingReconcileCount=3`.
-4. `analyze:priority-recovery-residuals` reports `Split required: true`.
-5. First split package:
-   `operation_workflow_owner / rebalancer_handoff` with
-   `recovering_in_flight` witnesses.
-6. Parked paired split:
-   `operation_workflow_owner / workflow_progress` with
-   `spread_satisfied_in_flight` witnesses.
+   `pendingReconcileCount=4`, and `runtimePromotionAllowed=false`.
+8. Selected snapshot observation remains `repair_deferred` with
+   `stale_replica_operations_in_flight`.
+9. `analyze:priority-recovery-residuals` reports `Split required: false` with
+   one subordinate `operation_workflow_owner / workflow_progress` witness on
+   `control_plane_publications-p1` in `spread_satisfied_in_flight`.
+10. The workflow-progress package is parked as dependency/sub-frontier evidence
+    unless focused extractors promote it back to the representative first
+    frontier.
+11. Active-gate admission must remain strict until the owner reconcile path
+    produces durable coverage.
 
 ## Scope Basis
 
@@ -98,18 +92,39 @@ Pro or Enterprise behavior.
    - Result: `reduced`. Duplicate CREATE_REPLICA idempotency for local
      `PENDING`/`CREATING` replicas now emits canonical owner progress, and
      fresh representative evidence drains the `rebalancer_handoff` residual.
-3. [Priority Recovery operation_workflow_owner workflow_progress Residual](../packages/active-20260515-priority-recovery-operation-workflow-owner-workflow-progress.md)
+3. [Rolling Restart Canonical Frontier Steering Repair](../packages/active-20260515-rolling-restart-canonical-frontier-steering-repair.md)
+   - Lane: `causal-escalation`
+   - Owner boundary:
+     `startup_active_gate_owner / snapshot_coverage`
+   - Purpose: repair sprint, track, release, and current-blocker state after
+     fresh canonical evidence kept the representative first frontier on
+     active-gate snapshot coverage while the priority-recovery extractor
+     reported only subordinate workflow-progress evidence.
+   - Entry condition: previous package pushed with the sprint pointing at
+     `operation_workflow_owner / workflow_progress` as active work despite
+     `work:evidence-summary` and `analyze:causal-model` selecting
+     `active_gate_snapshot_coverage`.
+   - Acceptance: exactly one active package remains, current-blocker names
+     `startup_active_gate_owner / snapshot_coverage`, workflow-progress is
+     parked as dependency/sub-frontier evidence, and runtime resume requires
+     real review subagent proof.
+4. [Priority Recovery operation_workflow_owner workflow_progress Residual](../packages/todo-20260515-priority-recovery-operation-workflow-owner-workflow-progress.md)
    - Lane: `causal-escalation`
    - Owner boundary:
      `operation_workflow_owner / workflow_progress`
-   - Purpose: prove or split the remaining `spread_satisfied_in_flight`
-     workflow-progress witness on `control_plane_publications-p1`.
+   - Purpose: parked dependency package for the remaining
+     `spread_satisfied_in_flight` workflow-progress witness on
+     `control_plane_publications-p1`.
    - Entry condition: the rebalancer handoff package closed as reduced; fresh
      evidence reports `Split required: false` with one
      `operation_workflow_owner / workflow_progress` witness.
-   - Acceptance: workflow-progress witnesses drain, split, or become the next
-     representative owner boundary after handoff progress is settled.
-4. [Publication Active-Gate Reconcile Bridge Simplification](../packages/todo-20260515-publication-active-gate-reconcile-bridge-simplification.md)
+   - Activation gate: fresh canonical evidence must promote workflow progress
+     ahead of active-gate snapshot coverage or record owner-boundary migration
+     proof; a real review subagent must run before implementation starts.
+   - Acceptance on future activation: workflow-progress witnesses drain, split,
+     or become the next representative owner boundary after handoff progress is
+     settled.
+5. [Publication Active-Gate Reconcile Bridge Simplification](../packages/todo-20260515-publication-active-gate-reconcile-bridge-simplification.md)
    - Lane: `runtime-owner-boundary`
    - Owner boundary:
      `startup_active_gate_owner / publication_reconcile_bridge`
@@ -117,9 +132,9 @@ Pro or Enterprise behavior.
      centralize canonical handoff target selection, narrow reconcile-only
      catch-up signaling, and remove broad repair-deferred snapshot rebuild as
      the reconcile mechanism.
-   - Entry condition: the active package is done, explicitly split, or
-     superseded with canonical evidence; fresh context confirms the duplicate
-     bridge shape remains in scope.
+   - Entry condition: the active steering repair package is done and fresh
+     context confirms the duplicate bridge shape remains in scope, or a
+     successor startup active-gate package explicitly promotes this bridge.
    - Acceptance: the bridge has one canonical target helper, admin callers
      submit owner reconcile intent without reconstructing handoff semantics,
      focused admin/publication tests stay green, and representative
@@ -128,10 +143,11 @@ Pro or Enterprise behavior.
 No additional package may be added merely to defer owner-key reconcile from
 the original active-gate owner package. That package is now closed as migrated.
 The queued bridge simplification package is a follow-on only; it must not start
-until the operation workflow residual is green, reduced, explicitly split, or
-superseded with canonical evidence. Any other split is allowed only when
-canonical evidence changes the semantic owner, boundary, or next required
-action.
+until the steering repair closes and fresh context confirms the bridge remains
+the next startup active-gate concern. The parked workflow-progress package must
+not start unless canonical evidence promotes it or records owner-boundary
+migration proof. Any other split is allowed only when canonical evidence
+changes the semantic owner, boundary, or next required action.
 
 ## Working Rules
 
@@ -156,23 +172,18 @@ action.
 
 1. `npm run work:context`
 2. `npm run work:llm-start`
-3. `npm run work:evidence-summary -- test-output/reports/rolling-restart-after-replica-operation-router-replace-pending-20260515-codex.report.json`
-4. `npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-after-replica-operation-router-replace-pending-20260515-codex.report.json --markdown`
-5. `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-replica-operation-router-replace-pending-20260515-codex.report.json`
-6. `npm run analyze:owner-files -- operation_workflow_owner rebalancer_handoff --markdown`
-7. `npm run work:subagent-prompt -- --role implementation --package <package>`
-8. Focused operation workflow handoff and replica lifecycle tests selected by
-   the package.
-9. Focused active-gate consumer proof only if the handoff fix changes
-   admission-facing evidence.
-10. Static guardrails on touched runtime, node, rebalancer, and tests.
-11. Representative `rolling-restart`.
-12. `npm run work:evidence-summary -- <fresh-report>`
-13. `npm run analyze:topology-convergence -- <fresh-report> --handoff-probe`
-14. `npm --silent run analyze:causal-model -- <fresh-report>`
-15. `git diff --check -- <commitScope>`
-16. `npm run work:validate -- --closure <package>`
-17. Focused commit and push.
+3. `npm run work:package:schema`
+4. `npm run work:evidence-summary -- test-output/reports/rolling-restart-after-create-in-progress-owner-progress-20260515-codex.report.json`
+5. `npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-after-create-in-progress-owner-progress-20260515-codex.report.json --markdown`
+6. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-create-in-progress-owner-progress-20260515-codex.report.json --handoff-probe`
+7. `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-create-in-progress-owner-progress-20260515-codex.report.json`
+8. `npm run work:current-blocker -- --write`
+9. `npm run work:validate -- --entry work/packages/active-20260515-rolling-restart-canonical-frontier-steering-repair.md`
+10. `git diff --check -- work/packages/active-20260515-rolling-restart-canonical-frontier-steering-repair.md work/packages/active-20260515-priority-recovery-operation-workflow-owner-workflow-progress.md work/packages/todo-20260515-priority-recovery-operation-workflow-owner-workflow-progress.md work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md work/sprints/current-blocker.md work/sprints/current-blocker.json work/tracks/topology-convergence.md work/releases/0.1-stabilization.md work/releases/0.1-dependency-map.md work/model-ledger.jsonl`
+11. Focused commit and push for the steering repair.
+12. Before any runtime package resumes:
+   `npm run work:subagent-prompt -- --role review --package <package>` and a
+   real review subagent ledger entry in that runtime package.
 
 ## Closure Rules
 
@@ -192,14 +203,16 @@ The sprint cannot close until:
 
 ## Current Next Action
 
-Continue with the active package:
+Continue with the active steering package:
 
 ```text
-work/packages/active-20260515-priority-recovery-operation-workflow-owner-workflow-progress.md
+work/packages/active-20260515-rolling-restart-canonical-frontier-steering-repair.md
 ```
 
-The rebalancer handoff package is closed as reduced and the workflow-progress
-package is active. Do not start bridge simplification until workflow progress is
-green, reduced, migrated, split, or proven non-frontier. Subagent roles are
-recorded as `blocked-by-environment-policy` unless the user explicitly asks for
-delegation.
+The rebalancer handoff package is closed as reduced. The workflow-progress
+package is parked as dependent sub-frontier evidence because the canonical
+first frontier remains `startup_active_gate_owner / snapshot_coverage`. Do not
+start bridge simplification or workflow-progress runtime work until this
+steering repair closes and fresh context confirms the next bounded runtime
+concern. Any runtime package that starts next must record real review subagent
+proof before implementation.

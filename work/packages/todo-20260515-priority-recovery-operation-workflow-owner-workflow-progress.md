@@ -3,7 +3,7 @@
 <!-- work-package
 {
   "schema": "work-package-v1",
-  "status": "active",
+  "status": "todo",
   "opened": "2026-05-15",
   "lane": "causal-escalation",
   "scenario": "rolling-restart",
@@ -12,8 +12,8 @@
   "owner": "operation_workflow_owner",
   "boundary": "workflow_progress",
   "dominantReason": "priority_recovery_progress_blocked",
-  "currentState": "The rebalancer_handoff package reduced the split residual: fresh priority-recovery extraction reports one remaining operation_workflow_owner / workflow_progress witness on control_plane_publications-p1 with semantic state spread_satisfied_in_flight. The topology model still selects startup_active_gate_owner / snapshot_coverage as the outer red gate because stale replica operation progress defers snapshot repair.",
-  "nextAction": "Prove or split the remaining workflow_progress witness with focused operation workflow evidence before starting the publication-active-gate bridge simplification package.",
+  "currentState": "Paused by the canonical frontier steering repair. Fresh representative evidence still reports one operation_workflow_owner / workflow_progress witness on control_plane_publications-p1 with semantic state spread_satisfied_in_flight, but work:evidence-summary and the causal model select startup_active_gate_owner / snapshot_coverage as the first frontier. This package is parked as dependent evidence until focused proof promotes it back to the active implementation boundary.",
+  "nextAction": "Do not implement while parked. On activation, rerun canonical extractors, record owner-boundary migration proof if workflow_progress becomes the first frontier, and run a real review subagent before runtime implementation starts.",
   "proof": [
     "npm run work:context",
     "npm run work:llm-start",
@@ -24,7 +24,7 @@
     "npm run analyze:owner-files -- operation_workflow_owner workflow_progress --markdown"
   ],
   "writeScope": [
-    "work/packages/active-20260515-priority-recovery-operation-workflow-owner-workflow-progress.md",
+    "work/packages/todo-20260515-priority-recovery-operation-workflow-owner-workflow-progress.md",
     "work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md",
     "work/sprints/current-blocker.md",
     "work/sprints/current-blocker.json"
@@ -47,7 +47,7 @@
     "test/rebalancer/coordinator-created-operation-progress-remote-handoff.test.js"
   ],
   "commitScope": [
-    "work/packages/active-20260515-priority-recovery-operation-workflow-owner-workflow-progress.md",
+    "work/packages/todo-20260515-priority-recovery-operation-workflow-owner-workflow-progress.md",
     "work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md",
     "work/sprints/current-blocker.md",
     "work/sprints/current-blocker.json"
@@ -63,14 +63,14 @@
     ]
   },
   "representativeResidual": {
-    "status": "live-red-scenario-release-gate",
+    "status": "parked-sub-frontier-dependency",
     "scenario": "rolling-restart",
     "artifact": "test-output/reports/rolling-restart-after-create-in-progress-owner-progress-20260515-codex.report.json",
     "frontier": "priority_recovery_partition_progress",
     "owner": "operation_workflow_owner",
     "boundary": "workflow_progress",
     "dominantReason": "priority_recovery_progress_blocked",
-    "nextAction": "Prove or split the spread_satisfied_in_flight workflow_progress witness that still leaves active-gate snapshot repair deferred by stale replica operation progress."
+    "nextAction": "Remain parked until fresh canonical evidence promotes workflow_progress ahead of active_gate_snapshot_coverage or records owner-boundary migration proof."
   },
   "causalGovernance": {
     "hypothesis": "The direct rebalancer handoff is now drained, but one workflow_progress operation remains spread_satisfied_in_flight long enough for active-gate snapshot coverage to defer repair on stale replica operation progress.",
@@ -126,10 +126,15 @@ making duplicate create idempotency report owner progress. Fresh representative
 evidence is still red, but the operation-workflow residual is now narrowed to
 one `workflow_progress` witness on `control_plane_publications-p1`.
 
-This package owns that final operation-workflow question before the sprint can
-start the active-gate bridge simplification: either the workflow owner drains
-the witness, proves it is not causal, or migrates the remaining red evidence to
-a narrower owner boundary with concrete proof.
+This package no longer owns the current active implementation slot. The
+workflow-progress witness remains useful dependency evidence, but canonical
+representative extractors keep the first frontier on
+`startup_active_gate_owner / snapshot_coverage`.
+
+It can be activated only if fresh evidence promotes
+`operation_workflow_owner / workflow_progress` back to the current first
+frontier, or if owner-boundary migration proof shows the active-gate blocker is
+caused by this workflow-progress boundary and no narrower owner should own it.
 
 ## Scope Basis
 
@@ -175,21 +180,31 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 4. Publication-active-gate bridge simplification implementation.
 5. Pro or Enterprise behavior.
 
+## Activation Gate
+
+This package is parked. Before it can move back to `active`:
+
+1. `npm run work:context` and `npm run work:llm-start` must point at this
+   package or a successor package.
+2. `work:evidence-summary` and `analyze:causal-model` must either select
+   `operation_workflow_owner / workflow_progress` as the first frontier or the
+   active package must record owner-boundary migration proof.
+3. `analyze:priority-recovery-residuals` must still show a focused
+   workflow-progress witness that has not been reduced or superseded.
+4. Runtime files must be promoted from `candidateRuntimeFiles` into
+   `writeScope` and `commitScope` before editing.
+5. A real review subagent must run before implementation because delegation has
+   been explicitly authorized.
+
 ## Subagent Sequencing Ledger
 
-Required because this is a causal-escalation runtime package. Subagent
-execution is blocked in this host unless the user explicitly asks for
-delegation.
+Required on activation because this is a causal-escalation runtime package.
+The user has explicitly authorized delegation, so placeholder environment
+blocks are not valid closure proof for this package.
 
-- [x] Review subagent recorded:
-      blocked-by-environment-policy; reason: developer policy allows spawning
-      subagents only when the user explicitly asks for delegation.
-- [x] Fix subagent recorded or explicitly not needed:
-      blocked-by-environment-policy; reason: review role is blocked by the
-      same environment policy, so no separate fix role can be truthfully run.
-- [x] Implementation subagent recorded:
-      blocked-by-environment-policy; reason: developer policy allows spawning
-      subagents only when the user explicitly asks for delegation.
+- [ ] Review subagent recorded: pending-on-activation
+- [ ] Fix subagent recorded or explicitly not needed: pending-on-review
+- [ ] Implementation subagent recorded: pending-on-clean-review
 
 ## Model Fit
 

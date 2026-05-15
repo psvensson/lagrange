@@ -54,19 +54,21 @@ duplicated reconstruction paths.
 Latest current handoff state:
 
 - artifact:
-  `test-output/reports/rolling-restart-after-forced-snapshot-local-fallback-20260515-codex.report.json`
+  `test-output/reports/rolling-restart-after-create-in-progress-owner-progress-20260515-codex.report.json`
 - first frontier: `active_gate_snapshot_coverage`
 - owner boundary: `startup_active_gate_owner / snapshot_coverage`
-- dominant reason: `snapshot_coverage_incomplete`
-- active-gate snapshot coverage is reduced but still blocked with
-  `snapshotCoverage=2/5`, owner-reconcile-pending selected snapshot evidence,
-  and `runtimePromotionAllowed=false`
-- publication is `PUBLISHED` with `pendingAck=0`, but active cohort projection
-  still shows `publishedActive=1/5` and `missingPublished=4`
-- the handoff probe reports `publication_ack_to_active_gate_reconcile_missing`,
-  `consumer=active_gate_snapshot_coverage`, and
-  `nextOwnerPath=startup_active_gate_owner / snapshot_coverage`
-- priority recovery remains classified as satisfied and subordinate
+- dominant reason: `active_gate_timed_out`
+- active-gate snapshot coverage is blocked with `snapshotCoverage=2/5`,
+  `owner_reconcile_pending`, `snapshot_coverage_incomplete`,
+  `snapshot_repair_deferred`, and `runtimePromotionAllowed=false`
+- publication ACK convergence is satisfied; the handoff contract is present
+  with `missingEdge=null`,
+  `contractEdge=publication_active_gate_handoff_contract`,
+  `nextAction=reconcile_owner_membership_publication`, and
+  `pendingReconcileCount=4`
+- priority recovery has one subordinate
+  `operation_workflow_owner / workflow_progress` witness, but canonical
+  evidence keeps it off the first frontier
 
 ## Target Invariant
 
@@ -95,9 +97,9 @@ or produces a narrower owner-boundary blocker selected by canonical evidence.
 - Active sprint:
   `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md`
 - Active package:
-  `work/packages/active-20260515-startup-active-gate-snapshot-coverage-owner-reconcile-closure.md`
+  `work/packages/active-20260515-rolling-restart-canonical-frontier-steering-repair.md`
 - Artifact:
-  `test-output/reports/rolling-restart-after-handoff-contract-consolidation-20260515-codex.report.json`
+  `test-output/reports/rolling-restart-after-create-in-progress-owner-progress-20260515-codex.report.json`
 - Current package-local owner boundary:
   `startup_active_gate_owner / snapshot_coverage`
 - Representative owner boundary:
@@ -108,11 +110,13 @@ or produces a narrower owner-boundary blocker selected by canonical evidence.
   `missingEdge=null`, `contractEdge=publication_active_gate_handoff_contract`,
   `state=pending`, `reasonCode=owner_reconcile_pending`,
   `nextAction=reconcile_owner_membership_publication`, and
-  `runtimePromotionAllowed=false`. The handoff-contract complexity is reduced;
-  the remaining red evidence belongs to startup active-gate snapshot coverage.
+  `runtimePromotionAllowed=false`, with `pendingReconcileCount=4`. The
+  handoff-contract complexity is reduced; the remaining red evidence belongs
+  to startup active-gate snapshot coverage.
 - Priority recovery residuals:
-  subordinate unless fresh canonical evidence promotes
-  `operation_workflow_owner / workflow_progress` ahead of the handoff contract.
+  one subordinate `operation_workflow_owner / workflow_progress` witness on
+  `control_plane_publications-p1`; it remains parked unless fresh canonical
+  evidence promotes it ahead of active-gate snapshot coverage.
 
 ## Codebase Analysis Notes
 
@@ -131,7 +135,7 @@ publication-evidence replay code rather than by the runtime owner alone.
 | --- | --- | --- | --- |
 | `work/sprints/done-2026-q2-topology-convergence-residual-closure.md` | `bugfix` / `stabilization` | stopped | Stopped on 2026-05-15 by human direction. Retained as residual context only. |
 | `work/sprints/done-2026-q2-topology-convergence-complexity-reduction.md` | `stabilization` / `complexity-reduction` | done reduced | Canonical publication-to-active-gate handoff contract implemented end to end; representative run remains red at startup active-gate snapshot coverage. |
-| `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md` | `stabilization` / `green-gate` | active | Owns startup active-gate snapshot coverage owner reconcile until rolling-restart is green or narrowed. |
+| `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md` | `stabilization` / `green-gate` | active | Current package repairs canonical frontier tracking before runtime work resumes; representative first frontier remains startup active-gate snapshot coverage. |
 
 ## Owner Boundaries
 
@@ -185,9 +189,10 @@ These are context candidates, not write authorization:
 
 ## Entry Condition
 
-Continue with the active startup active-gate owner reconcile package. Do not
-open a second topology package unless canonical evidence changes semantic
-owner, boundary, or next required action.
+Continue with the active canonical frontier steering repair package. Do not
+open or resume runtime topology work until this repair closes, fresh context
+confirms the next bounded concern, and any runtime package records real review
+subagent proof.
 
 ## Exit Condition
 
@@ -200,5 +205,5 @@ canonical owner-boundary evidence.
 Current package:
 
 ```text
-work/packages/active-20260515-startup-active-gate-snapshot-coverage-owner-reconcile-closure.md
+work/packages/active-20260515-rolling-restart-canonical-frontier-steering-repair.md
 ```
