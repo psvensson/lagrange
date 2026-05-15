@@ -244,6 +244,7 @@ function assignReplicaOperationRepositoryMutationMethods(
         return false;
       }
       if (options.confirmPersistence === false) {
+        this.recordOwnerPersistedTransitionVisibilityWitness(operation);
         this.syncIncompleteOperationObservation(operation);
         return true;
       }

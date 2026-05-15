@@ -20,9 +20,9 @@ success is in scope.
 ## Current Blocker Snapshot
 
 Latest representative artifact:
-`test-output/reports/rolling-restart-after-handoff-reconcile-fallback-20260515-codex.report.json`.
+`test-output/reports/rolling-restart-after-control-plane-publication-pending-20260515-codex.report.json`.
 
-Canonical state after the handoff reconcile fallback proof:
+Canonical state after the control-plane publication pending proof:
 
 1. `work:evidence-summary` selects `active_gate_snapshot_coverage` as the first
    frontier.
@@ -39,30 +39,22 @@ Canonical state after the handoff reconcile fallback proof:
    `contractEdge=publication_active_gate_handoff_contract`.
 8. Handoff contract state is `pending` with
    `nextAction=reconcile_owner_membership_publication`,
-   consumer `pendingReconcileCount=4`, pending nodes
-   `11601fe0-72d6-5853-8590-ec2881853e72`,
+   consumer `pendingReconcileCount=2`, pending nodes
    `35a891b8-c1a0-5064-9c6e-2acfba61c2a7`,
-   `8be8d30f-4499-5eed-865c-71b4d529a67a`, and
-   `ebc4aa0b-06c6-506d-93ea-1dd2deca3f58`, with
+   and `8be8d30f-4499-5eed-865c-71b4d529a67a`, with
    `runtimePromotionAllowed=false`.
 9. Active-gate snapshot coverage remains `2/5`; selected snapshot observation
    remains `repair_deferred` / `deferred_refresh` / `deferred` / `deferred` /
    `retry` with
    `cache_stale_watermark|discovery_node_coverage_gap|stale_replica_operations_in_flight`.
-10. `analyze:priority-recovery-residuals` now reports one subordinate
-    `operation_workflow_owner / workflow_progress` witness on
-    `control_plane_publications-p1` after the workflow-progress re-entry slice
-    reduced the three-witness group.
-11. The reduced workflow-progress package records that the remaining witness is
-    operation `0a3b14cf-b731-4279-a07b-3a755ead1a17`: `PENDING`,
-    `persisted_not_dispatched`, `dispatch_pending`,
-    `timeoutReconcileDue=true`, target node
-    `11601fe0-72d6-5853-8590-ec2881853e72`, and target visibility `absent`.
-12. The active package is
-    `work/packages/active-20260515-priority-recovery-operation-workflow-owner-control-plane-publication-pending.md`;
-    it must run the required review/fix/implementation sequence, then prove or
-    split the single `control_plane_publications-p1` workflow-progress witness
-    without timeout, active-gate admission, or publication handoff changes.
+10. `analyze:priority-recovery-residuals` now reports zero witnesses; the
+    workflow-progress residual is drained.
+11. `causal-model` marks `priority_recovery_partition_progress` satisfied and
+    keeps `active_gate_snapshot_coverage` as the first critical path.
+12. The closed package is
+    `work/packages/done-20260515-priority-recovery-operation-workflow-owner-control-plane-publication-pending.md`;
+    the next package should own `startup_active_gate_owner / snapshot_coverage`
+    for the remaining owner membership publication reconcile path.
 13. Active-gate admission must remain strict until the owner reconcile path
     produces durable coverage.
 
@@ -146,7 +138,7 @@ Pro or Enterprise behavior.
      normalized operation-owner snapshot and selected witness operation. Fresh
      representative evidence reduced the workflow-progress residual from three
      witnesses to one `control_plane_publications-p1` witness.
-5. [Priority Recovery operation_workflow_owner workflow_progress Control Plane Publication Pending](../packages/active-20260515-priority-recovery-operation-workflow-owner-control-plane-publication-pending.md)
+5. [Priority Recovery operation_workflow_owner workflow_progress Control Plane Publication Pending](../packages/done-20260515-priority-recovery-operation-workflow-owner-control-plane-publication-pending.md)
    - Lane: `causal-escalation`
    - Owner boundary:
      `operation_workflow_owner / workflow_progress`
@@ -164,6 +156,12 @@ Pro or Enterprise behavior.
      splits to a narrower workflow/repository/dispatch owner, or becomes proven
      non-frontier without timeout increases, active-gate admission relaxation,
      or publication handoff rewrites.
+   - Result: `migrated`. No-confirm transition persistence now records the
+     owner-persisted transition visibility witness before syncing incomplete
+     operation observation. Fresh representative evidence reports zero
+     priority-recovery residual witnesses and migrates the blocker back to
+     `startup_active_gate_owner / snapshot_coverage` with
+     `pendingReconcileCount=2`.
 6. [Publication Active-Gate Reconcile Bridge Simplification](../packages/done-20260515-publication-active-gate-reconcile-bridge-simplification.md)
    - Lane: `causal-escalation`
    - Owner boundary:
