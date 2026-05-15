@@ -81,7 +81,7 @@ Pro or Enterprise behavior.
    - Result: `migrated`. Focused owner-key reconcile, bounded remote wake-up,
      and replica operation router replacement-key proof passed; fresh
      representative evidence promoted a split operation workflow residual.
-2. [Priority Recovery operation_workflow_owner rebalancer_handoff Residual](../packages/active-20260515-priority-recovery-operation-workflow-owner-rebalancer-handoff.md)
+2. [Priority Recovery operation_workflow_owner rebalancer_handoff Residual](../packages/done-20260515-priority-recovery-operation-workflow-owner-rebalancer-handoff.md)
    - Lane: `causal-escalation`
    - Owner boundary:
      `operation_workflow_owner / rebalancer_handoff`
@@ -95,13 +95,18 @@ Pro or Enterprise behavior.
      to `operation_workflow_owner / workflow_progress`, or fresh evidence
      migrates/classifies to a narrower replica lifecycle owner with concrete
      operation and handler state.
-3. [Priority Recovery operation_workflow_owner workflow_progress Residual](../packages/todo-20260515-priority-recovery-operation-workflow-owner-workflow-progress.md)
+   - Result: `reduced`. Duplicate CREATE_REPLICA idempotency for local
+     `PENDING`/`CREATING` replicas now emits canonical owner progress, and
+     fresh representative evidence drains the `rebalancer_handoff` residual.
+3. [Priority Recovery operation_workflow_owner workflow_progress Residual](../packages/active-20260515-priority-recovery-operation-workflow-owner-workflow-progress.md)
    - Lane: `causal-escalation`
    - Owner boundary:
      `operation_workflow_owner / workflow_progress`
-   - Purpose: parked paired split for `spread_satisfied_in_flight` witnesses.
-   - Entry condition: the rebalancer handoff package is green, reduced, split,
-     or explicitly superseded by fresher canonical evidence.
+   - Purpose: prove or split the remaining `spread_satisfied_in_flight`
+     workflow-progress witness on `control_plane_publications-p1`.
+   - Entry condition: the rebalancer handoff package closed as reduced; fresh
+     evidence reports `Split required: false` with one
+     `operation_workflow_owner / workflow_progress` witness.
    - Acceptance: workflow-progress witnesses drain, split, or become the next
      representative owner boundary after handoff progress is settled.
 4. [Publication Active-Gate Reconcile Bridge Simplification](../packages/todo-20260515-publication-active-gate-reconcile-bridge-simplification.md)
@@ -190,9 +195,11 @@ The sprint cannot close until:
 Continue with the active package:
 
 ```text
-work/packages/active-20260515-priority-recovery-operation-workflow-owner-rebalancer-handoff.md
+work/packages/active-20260515-priority-recovery-operation-workflow-owner-workflow-progress.md
 ```
 
-Implementation continues under the active rebalancer handoff package. Subagent
-roles are recorded as `blocked-by-environment-policy` unless the user
-explicitly asks for delegation.
+The rebalancer handoff package is closed as reduced and the workflow-progress
+package is active. Do not start bridge simplification until workflow progress is
+green, reduced, migrated, split, or proven non-frontier. Subagent roles are
+recorded as `blocked-by-environment-policy` unless the user explicitly asks for
+delegation.

@@ -3,17 +3,17 @@
 <!-- work-package
 {
   "schema": "work-package-v1",
-  "status": "active",
+  "status": "done",
   "opened": "2026-05-15",
   "lane": "causal-escalation",
   "scenario": "rolling-restart",
-  "artifact": "test-output/reports/rolling-restart-after-replica-operation-router-replace-pending-20260515-codex.report.json",
+  "artifact": "test-output/reports/rolling-restart-after-create-in-progress-owner-progress-20260515-codex.report.json",
   "playback": "none",
   "owner": "operation_workflow_owner",
   "boundary": "rebalancer_handoff",
   "dominantReason": "priority_recovery_progress_blocked",
-  "currentState": "Fresh rolling-restart evidence after the active-gate owner reconcile slice reports a split priority-recovery residual. The first split group is operation_workflow_owner / rebalancer_handoff with three recovering_in_flight witnesses across control_plane_publications-p1 and sql_transaction_participants-p1. Raw fallback after canonical extractors showed the control-plane publication replica CREATE_REPLICA wake reaches the handler, but duplicate create handling reports service status creating while the replica state machine times out in pending.",
-  "nextAction": "Prove or split the rebalancer_handoff residual by focusing the replica lifecycle idempotency/progress path for recovering_in_flight control-plane publication and transaction participant replicas.",
+  "currentState": "Closed as reduced. Duplicate CREATE_REPLICA idempotency for local pending/creating replicas now emits canonical owner progress, and the fresh rolling-restart rerun no longer reports the rebalancer_handoff residual group.",
+  "nextAction": "Activate operation_workflow_owner / workflow_progress with the fresh representative artifact; active-gate snapshot coverage remains the outer red gate until stale operation progress drains.",
   "proof": [
     "npm run work:context",
     "npm run work:evidence-summary -- test-output/reports/rolling-restart-after-replica-operation-router-replace-pending-20260515-codex.report.json",
@@ -36,10 +36,11 @@
     "src/rebalancer/operation-workflow-owner-segment-7-stage-3.js",
     "test/node/replica-handler.test.js",
     "test/rebalancer/rebalance-coordinator-outcome-routing.test.js",
-    "work/packages/active-20260515-priority-recovery-operation-workflow-owner-rebalancer-handoff.md",
+    "work/packages/done-20260515-priority-recovery-operation-workflow-owner-rebalancer-handoff.md",
     "work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md",
     "work/sprints/current-blocker.md",
-    "work/sprints/current-blocker.json"
+    "work/sprints/current-blocker.json",
+    "work/model-ledger.jsonl"
   ],
   "handoffFiles": [
     "work/packages/done-20260515-startup-active-gate-snapshot-coverage-owner-reconcile-closure.md"
@@ -64,10 +65,11 @@
     "src/rebalancer/operation-workflow-owner-segment-7-stage-3.js",
     "test/node/replica-handler.test.js",
     "test/rebalancer/rebalance-coordinator-outcome-routing.test.js",
-    "work/packages/active-20260515-priority-recovery-operation-workflow-owner-rebalancer-handoff.md",
+    "work/packages/done-20260515-priority-recovery-operation-workflow-owner-rebalancer-handoff.md",
     "work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md",
     "work/sprints/current-blocker.md",
-    "work/sprints/current-blocker.json"
+    "work/sprints/current-blocker.json",
+    "work/model-ledger.jsonl"
   ],
   "modelFit": {
     "packageClass": "representative-frontier-closure",
@@ -139,7 +141,8 @@
     ],
     "oscillationCheck": "This package follows a canonical split from priority-recovery residual evidence, not a return to publication or active-gate handoff ownership.",
     "handoffInvariant": "The package must preserve strict active-gate admission and the canonical publication-active-gate handoff contract while focusing only operation workflow handoff progress."
-  }
+  },
+  "commitAndPushLedgerRequired": true
 }
 -->
 
@@ -267,3 +270,11 @@ delegation.
   `rebalancer_handoff` residual group. The remaining operation workflow
   evidence is the parked `workflow_progress` witness, while the outer scenario
   remains red at active-gate snapshot coverage.
+
+## Commit And Push Ledger
+
+Required at closure.
+
+1. [x] Focused package commit: 5fba8a352eaa3deade0f792d68fff27b8f70f722.
+2. [x] Pushed to: origin/codex/pending-ack-eligibility-filter.
+3. [x] Commit contains only package-owned files/package-status/allowed sprint handoff: yes.
