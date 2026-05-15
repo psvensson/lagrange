@@ -3,7 +3,7 @@
 <!-- work-package
 {
   "schema": "work-package-v1",
-  "status": "active",
+  "status": "done",
   "opened": "2026-05-15",
   "lane": "causal-escalation",
   "scenario": "rolling-restart",
@@ -12,21 +12,22 @@
   "owner": "startup_active_gate_owner",
   "boundary": "snapshot_coverage",
   "dominantReason": "active_gate_timed_out",
-  "currentState": "The prior active-gate observation selector slice is closed as reduced and pushed in commit 1047df0c. The latest representative artifact still selects active_gate_snapshot_coverage with active=5/5, snapshot coverage 2/5, selected producer membership seed-only, missingPublishedCount=4, repair_deferred/deferred_refresh, and a single pending handoff reconcile target 11601fe0-72d6-5853-8590-ec2881853e72. Priority-recovery residual extraction now reports three subordinate workflow_progress witnesses.",
-  "nextAction": "Prove why 11601fe0-72d6-5853-8590-ec2881853e72 remains outside selected publication coverage after all nodes reach ACTIVE and active-gate handoff reconcile fallback is honored.",
+  "currentState": "Canonical evidence refreshed on 2026-05-15 keeps active_gate_snapshot_coverage as the topology and causal first frontier with active=5/5, snapshotCoverage=2/5, producer publishedActiveNodeIds seed-only, missingPublishedCount=4, and pendingReconcileCount=1 for 11601fe0-72d6-5853-8590-ec2881853e72. The causal graph also records an operation_workflow_owner / workflow_progress wait with nextRequiredAction=advance_existing_operation, and priority-recovery residual extraction reports one unsplit operation_workflow_owner / workflow_progress group with three spread_satisfied_in_flight witnesses on control_plane_publications-p1, replica_operations-p1, and sql_transaction_participants-p1. Selected outcome: workflow-progress-migration.",
+  "nextAction": "Stop runtime edits in this startup active-gate package and activate or continue the parked operation_workflow_owner / workflow_progress residual package for the three priority-recovery witnesses; keep active-gate admission strict and do not promote startup runtime files from this package.",
   "proof": [
     "npm run work:context",
     "npm run work:llm-start",
-    "npm run work:package:doctor -- --suggest work/packages/active-20260515-startup-active-gate-remaining-publication-visibility-target-proof.md",
+    "npm run work:package:doctor -- --suggest work/packages/done-20260515-startup-active-gate-remaining-publication-visibility-target-proof.md",
     "npm run work:evidence-summary -- test-output/reports/rolling-restart-after-handoff-reconcile-fallback-20260515-codex.report.json",
     "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-handoff-reconcile-fallback-20260515-codex.report.json --handoff-probe",
     "npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-handoff-reconcile-fallback-20260515-codex.report.json",
     "npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-after-handoff-reconcile-fallback-20260515-codex.report.json --markdown",
     "npm run analyze:distributed-failure -- --report test-output/reports/rolling-restart-after-handoff-reconcile-fallback-20260515-codex.report.json",
-    "npm run analyze:owner-files -- startup_active_gate_owner snapshot_coverage --markdown"
+    "npm run analyze:owner-files -- startup_active_gate_owner snapshot_coverage --markdown",
+    "npm run analyze:owner-files -- operation_workflow_owner workflow_progress --markdown"
   ],
   "writeScope": [
-    "work/packages/active-20260515-startup-active-gate-remaining-publication-visibility-target-proof.md",
+    "work/packages/done-20260515-startup-active-gate-remaining-publication-visibility-target-proof.md",
     "work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md",
     "work/sprints/current-blocker.md",
     "work/sprints/current-blocker.json",
@@ -54,7 +55,7 @@
     "test/admin/admin-control-snapshot.test.js"
   ],
   "commitScope": [
-    "work/packages/active-20260515-startup-active-gate-remaining-publication-visibility-target-proof.md",
+    "work/packages/done-20260515-startup-active-gate-remaining-publication-visibility-target-proof.md",
     "work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md",
     "work/sprints/current-blocker.md",
     "work/sprints/current-blocker.json",
@@ -79,15 +80,15 @@
     "owner": "startup_active_gate_owner",
     "boundary": "snapshot_coverage",
     "dominantReason": "active_gate_timed_out",
-    "nextAction": "Prove whether the remaining one-node publication visibility target is still active-gate observation, producer publication truth, or a workflow-progress owner-boundary migration."
+    "nextAction": "Causal-edge proof selected workflow-progress-migration: active-gate remains the visible timeout surface, but the bounded next owner path is operation_workflow_owner / workflow_progress for the three spread_satisfied_in_flight witnesses."
   },
   "causalGovernance": {
     "hypothesis": "The remaining red state is caused by one of three bounded edges: producer publication truth remains seed-only after handoff reconcile, active-gate observation samples a stale or partial publication projection after all nodes are active, or the subordinate workflow_progress witnesses block publication visibility and must be migrated.",
     "stopConditionCheck": "npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-handoff-reconcile-fallback-20260515-codex.report.json",
     "expectedCausalModelChange": "Focused proof either makes rolling-restart green, drains pendingReconcileCount to 0, reduces producer missingPublishedCount or snapshotCoverage debt, migrates to topology_publication_owner/publication_convergence or operation_workflow_owner/workflow_progress with owner-boundary proof, or records a bounded same-frontier successor.",
-    "representativeOutcome": "pending-before-rerun",
-    "causalDebt": "The prior slice reduced startup activity to active=5/5, but selected producer membership remains seed-only, snapshot coverage remains 2/5, and the remaining active-gate handoff target is 11601fe0-72d6-5853-8590-ec2881853e72.",
-    "crossBoundaryReview": "Do not edit runtime files until review/fix proof is clean, the causal edge table names one owner, and exact runtime write-scope promotion is recorded."
+    "representativeOutcome": "migrated",
+    "causalDebt": "The refreshed artifact still exposes active-gate timeout symptoms, but the producer handoff probe reports missingEdge=null and the residual extractor now reports one unsplit operation_workflow_owner / workflow_progress group with three spread_satisfied_in_flight witnesses. This package records migration proof instead of promoting startup active-gate runtime files.",
+    "crossBoundaryReview": "Review, fix, and implementation proof are recorded with real subagent identities. No startup active-gate runtime files were promoted because the causal edge selected workflow-progress migration."
   },
   "scenarioCausalClosure": {
     "referenceScenarioOrProbe": "rolling-restart / remaining publication visibility target after active-gate observation selector reduction",
@@ -98,32 +99,50 @@
       "promote exact runtime files only after review/fix proof and owner selection",
       "prove focused owner behavior and representative rolling-restart"
     ],
-    "currentFirstFrontier": "active_gate_snapshot_coverage remains the first representative frontier in test-output/reports/rolling-restart-after-handoff-reconcile-fallback-20260515-codex.report.json, owned by startup_active_gate_owner / snapshot_coverage.",
+    "currentFirstFrontier": "active_gate_snapshot_coverage remains the first representative frontier in test-output/reports/rolling-restart-after-handoff-reconcile-fallback-20260515-codex.report.json, but the causal-edge proof selects operation_workflow_owner / workflow_progress as the next bounded owner because the active-gate surface is fed by an operation workflow wait and three unsplit priority-recovery witnesses.",
     "knownDownstreamBlockers": [
       "producer publication convergence still reports publishedActiveNodeIds as seed-only and missingPublishedCount=4",
       "consumer handoff contract is narrowed to pendingReconcileCount=1 for 11601fe0-72d6-5853-8590-ec2881853e72 and runtimePromotionAllowed=false",
       "selected snapshot coverage remains 2/5 with repair_deferred/deferred_refresh/deferred/deferred/retry and cache_stale_watermark|discovery_node_coverage_gap|stale_replica_operations_in_flight",
-      "priority-recovery residual extraction reports three subordinate operation_workflow_owner / workflow_progress witnesses on control_plane_publications-p1, replica_operations-p1, and sql_transaction_participants-p1"
+      "priority-recovery residual extraction reports three subordinate operation_workflow_owner / workflow_progress witnesses on control_plane_publications-p1, replica_operations-p1, and sql_transaction_participants-p1 with semantic state spread_satisfied_in_flight and Split required: false",
+      "causal-model wait priority_recovery:event_driven is active under operation_workflow_owner / workflow_progress with nextRequiredAction=advance_existing_operation and workflow_step_timeout observed at 33560ms/30000ms"
     ],
-    "missingCausalEdge": "This package must prove whether the remaining publication visibility target is caused by producer publication durable truth, active-gate snapshot observation, or promoted workflow progress before any runtime edit.",
+    "missingCausalEdge": "The remaining publication visibility target is not promoted as producer durable truth or startup observation work in this package; it migrates to operation_workflow_owner / workflow_progress because the canonical residual group is unsplit and owns the bounded advance_existing_operation path.",
     "missingCausalEdgeProbe": "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-handoff-reconcile-fallback-20260515-codex.report.json --handoff-probe",
-    "boundedProgressProof": "Use canonical evidence and focused owner-file review to identify the bounded reconcile, retry, dispatch, delivery, or workflow advance mechanism that owns the remaining target; active-gate admission remains strict while runtimePromotionAllowed=false.",
+    "boundedProgressProof": "Canonical residual extraction identifies one operation_workflow_owner / workflow_progress group with three spread_satisfied_in_flight witnesses and no split required; causal-model wait evidence names advance_existing_operation as the bounded progress mechanism.",
     "boundedProgressProofArtifact": "test-output/reports/rolling-restart-after-handoff-reconcile-fallback-20260515-codex.report.json",
-    "expectedObservableTransition": "pendingReconcileCount reaches 0, producer missingPublishedCount drops below 4, snapshotCoverage moves above 2/5, durable published membership includes 11601fe0-72d6-5853-8590-ec2881853e72, or canonical extraction migrates to a narrower owner boundary with concrete proof.",
-    "maxProgressBound": "one startup_active_gate_owner / snapshot_coverage package slice unless the causal edge table records owner-boundary migration proof; no timeout increases, active-gate admission relaxation, diagnostics-only success path, or workflow-progress implementation without canonical promotion",
-    "sameFrontierFallback": "If active_gate_snapshot_coverage remains red after focused proof, record whether producer durable truth, active-gate observation, or workflow_progress owns the next package before opening another runtime slice.",
-    "expectedNextFrontier": "readiness_startup_support after active-gate coverage improves, otherwise same-frontier active-gate evidence or a canonical owner-boundary migration",
-    "resultClassification": "pending-before-probe",
-    "stopCondition": "continue-local-fix",
+    "expectedObservableTransition": "Activate the parked operation_workflow_owner / workflow_progress package and prove the three spread_satisfied_in_flight witnesses advance, drain, split, or expose a narrower workflow owner boundary; do not edit startup active-gate runtime files in this package.",
+    "maxProgressBound": "one metadata/proof-only startup_active_gate_owner / snapshot_coverage slice ending in owner-boundary migration proof; no timeout increases, active-gate admission relaxation, diagnostics-only success path, or startup runtime promotion",
+    "sameFrontierFallback": "not used; this package records workflow-progress migration proof rather than another same-frontier startup active-gate runtime slice.",
+    "expectedNextFrontier": "operation_workflow_owner / workflow_progress parked successor",
+    "resultClassification": "migrated",
+    "stopCondition": "migrate-owner-boundary",
     "recentFrontierHistory": [
       "work/packages/done-20260515-startup-active-gate-final-owner-publication-target-proof.md / startup_active_gate_owner / snapshot_coverage / reduced",
       "work/packages/done-20260515-startup-active-gate-remaining-publication-lag-proof.md / startup_active_gate_owner / snapshot_coverage / reduced",
       "work/packages/done-20260515-startup-active-gate-seed-publication-visibility-proof.md / startup_active_gate_owner / snapshot_coverage / reduced"
     ],
-    "oscillationCheck": "workflow_progress is visible as three subordinate residual witnesses but is not first frontier in topology or causal summaries; do not implement it without ownerBoundaryMigrationProof.",
+    "oscillationCheck": "workflow_progress is visible as three subordinate residual witnesses and is now selected by ownerBoundaryMigrationProof; implementation belongs in the parked operation_workflow_owner / workflow_progress package, not this startup active-gate package.",
     "handoffInvariant": "Active-gate admission stays strict while runtimePromotionAllowed=false; publication handoff truth remains owned by the canonical contract."
   },
-  "predecessor": "work/packages/done-20260515-startup-active-gate-final-owner-publication-target-proof.md"
+  "ownerBoundaryMigrationProof": {
+    "fromOwner": "startup_active_gate_owner",
+    "fromBoundary": "snapshot_coverage",
+    "toOwner": "operation_workflow_owner",
+    "toBoundary": "workflow_progress",
+    "reason": "The active-gate handoff probe still reports pending reconcile symptoms for 11601fe0-72d6-5853-8590-ec2881853e72, but canonical priority-recovery residual extraction reports one unsplit operation_workflow_owner / workflow_progress group with three spread_satisfied_in_flight witnesses, and causal-model wait evidence names advance_existing_operation under operation_workflow_owner / workflow_progress.",
+    "evidence": [
+      "npm run work:evidence-summary -- test-output/reports/rolling-restart-after-handoff-reconcile-fallback-20260515-codex.report.json",
+      "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-handoff-reconcile-fallback-20260515-codex.report.json --handoff-probe",
+      "npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-handoff-reconcile-fallback-20260515-codex.report.json",
+      "npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-after-handoff-reconcile-fallback-20260515-codex.report.json --markdown",
+      "npm run analyze:owner-files -- operation_workflow_owner workflow_progress --markdown"
+    ]
+  },
+  "predecessor": "work/packages/done-20260515-startup-active-gate-final-owner-publication-target-proof.md",
+  "closed": "2026-05-15",
+  "commitAndPushLedgerRequired": true,
+  "successor": "work/packages/active-20260515-priority-recovery-operation-workflow-owner-workflow-progress.md"
 }
 -->
 
@@ -135,9 +154,11 @@ red because selected publication coverage is seed-only, snapshot coverage is
 `2/5`, and the handoff contract has one remaining reconcile target:
 `11601fe0-72d6-5853-8590-ec2881853e72`.
 
-This package owns the next proof boundary. It must classify whether that
-remaining target belongs to producer publication truth, active-gate observation,
-or a canonical workflow-progress migration before editing runtime files.
+This package owns the causal-edge proof boundary. The refreshed evidence
+selects `workflow-progress-migration`: startup active-gate remains the visible
+timeout surface, but the bounded next owner is `operation_workflow_owner /
+workflow_progress` for the three `spread_satisfied_in_flight` priority-recovery
+witnesses.
 
 ## Scope Basis
 
@@ -171,7 +192,7 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 
 ## In Scope
 
-1. work/packages/active-20260515-startup-active-gate-remaining-publication-visibility-target-proof.md
+1. work/packages/done-20260515-startup-active-gate-remaining-publication-visibility-target-proof.md
 2. work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md
 3. work/sprints/current-blocker.md
 4. work/sprints/current-blocker.json
@@ -190,9 +211,16 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 Required before implementation because this is a causal-escalation runtime
 owner-boundary package.
 
-- [ ] Review subagent recorded: pending-before-implementation-resumes.
-- [ ] Fix subagent recorded or explicitly not needed: pending-before-review.
-- [ ] Implementation subagent recorded: pending-before-implementation-resumes.
+- [x] Review subagent recorded:
+      Agent Pasteur (019e2d72-0d99-7ac2-9eb8-f2b0f8092371) reviewed
+      `work/packages/done-20260515-startup-active-gate-remaining-publication-visibility-target-proof.md`;
+      result `fixes-required`.
+- [x] Fix subagent recorded or explicitly not needed:
+      Agent Goodall (019e2d73-ff17-7320-8cfe-13e7fcad3dd4) fixed
+      `work/packages/done-20260515-startup-active-gate-remaining-publication-visibility-target-proof.md`.
+- [x] Implementation subagent recorded:
+      Agent Carver (019e2d76-b68c-7d32-a337-c0e2ca43a95e) implemented
+      `work/packages/done-20260515-startup-active-gate-remaining-publication-visibility-target-proof.md`.
 
 ## Model Fit
 
@@ -200,24 +228,25 @@ owner-boundary package.
 - Intended minimum model: `gpt-5.3-codex`
 - Scope shape: `owner-boundary-contraction/current-frontier`
 - Output profile: `medium`
-- Owned files: `work/packages/active-20260515-startup-active-gate-remaining-publication-visibility-target-proof.md`, `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md`, `work/sprints/current-blocker.md`, `work/sprints/current-blocker.json`, `work/model-ledger.jsonl`
+- Owned files: `work/packages/done-20260515-startup-active-gate-remaining-publication-visibility-target-proof.md`, `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md`, `work/sprints/current-blocker.md`, `work/sprints/current-blocker.json`, `work/model-ledger.jsonl`
 - Forbidden files: `timeout increases`, `active-gate admission relaxation while runtimePromotionAllowed=false`, `workflow-progress implementation unless canonical extractors promote it`, `broad diagnostics-only success path`, `Pro or Enterprise behavior`
 - Frozen decisions: package scope and lane stay bounded unless explicitly escalated.
 - Escalation triggers: owned files expand beyond this package, runtime ownership changes, or representative scenario evidence changes.
-- Focused proof: `npm run work:context`, `npm run work:llm-start`, `npm run work:package:doctor -- --suggest work/packages/active-20260515-startup-active-gate-remaining-publication-visibility-target-proof.md`, `npm run work:evidence-summary -- test-output/reports/rolling-restart-after-handoff-reconcile-fallback-20260515-codex.report.json`, `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-handoff-reconcile-fallback-20260515-codex.report.json --handoff-probe`, `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-handoff-reconcile-fallback-20260515-codex.report.json`, `npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-after-handoff-reconcile-fallback-20260515-codex.report.json --markdown`, `npm run analyze:distributed-failure -- --report test-output/reports/rolling-restart-after-handoff-reconcile-fallback-20260515-codex.report.json`, `npm run analyze:owner-files -- startup_active_gate_owner snapshot_coverage --markdown`
+- Focused proof: `npm run work:context`, `npm run work:llm-start`, `npm run work:package:doctor -- --suggest work/packages/done-20260515-startup-active-gate-remaining-publication-visibility-target-proof.md`, `npm run work:evidence-summary -- test-output/reports/rolling-restart-after-handoff-reconcile-fallback-20260515-codex.report.json`, `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-handoff-reconcile-fallback-20260515-codex.report.json --handoff-probe`, `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-handoff-reconcile-fallback-20260515-codex.report.json`, `npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-after-handoff-reconcile-fallback-20260515-codex.report.json --markdown`, `npm run analyze:distributed-failure -- --report test-output/reports/rolling-restart-after-handoff-reconcile-fallback-20260515-codex.report.json`, `npm run analyze:owner-files -- startup_active_gate_owner snapshot_coverage --markdown`, `npm run analyze:owner-files -- operation_workflow_owner workflow_progress --markdown`
 - Model ledger advisory: `escalate`
 
 ## Validation
 
 1. npm run work:context
 2. npm run work:llm-start
-3. npm run work:package:doctor -- --suggest work/packages/active-20260515-startup-active-gate-remaining-publication-visibility-target-proof.md
+3. npm run work:package:doctor -- --suggest work/packages/done-20260515-startup-active-gate-remaining-publication-visibility-target-proof.md
 4. npm run work:evidence-summary -- test-output/reports/rolling-restart-after-handoff-reconcile-fallback-20260515-codex.report.json
 5. npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-handoff-reconcile-fallback-20260515-codex.report.json --handoff-probe
 6. npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-handoff-reconcile-fallback-20260515-codex.report.json
 7. npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-after-handoff-reconcile-fallback-20260515-codex.report.json --markdown
 8. npm run analyze:distributed-failure -- --report test-output/reports/rolling-restart-after-handoff-reconcile-fallback-20260515-codex.report.json
 9. npm run analyze:owner-files -- startup_active_gate_owner snapshot_coverage --markdown
+10. npm run analyze:owner-files -- operation_workflow_owner workflow_progress --markdown
 
 ## Causal Edge Table
 
@@ -228,7 +257,7 @@ into `writeScope`.
 | --- | --- | --- | --- | --- | --- |
 | Producer durable publication truth | Published active membership includes the remaining owner target and expected active cohort. | `publishedActiveNodeIds` is seed-only; `missingPublishedCount=4`; `publicationOwnerFreshnessFence=consumer_lag`; `publicationOwnerStreamOutcome=stale`. | `topology_publication_owner / publication_convergence` | `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-handoff-reconcile-fallback-20260515-codex.report.json --handoff-probe` | Promote publication owner files only if this surface is stale or incomplete after source review. |
 | Active-gate observation | Active-gate consumes durable truth and reaches full snapshot coverage. | `active=5/5`, `snapshotCoverage=2/5`, `pendingReconcileCount=1`, pending node `11601fe0-72d6-5853-8590-ec2881853e72`, repair deferred retry. | `startup_active_gate_owner / snapshot_coverage` | `npm run work:evidence-summary -- test-output/reports/rolling-restart-after-handoff-reconcile-fallback-20260515-codex.report.json` | Promote active-gate/admin observation files only if producer truth is correct but this surface samples stale or partial truth. |
-| Workflow progress | Workflow progress remains subordinate unless it blocks publication visibility or active-gate observation. | Three `operation_workflow_owner / workflow_progress` witnesses on `control_plane_publications-p1`, `replica_operations-p1`, and `sql_transaction_participants-p1`. | `operation_workflow_owner / workflow_progress` | `npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-after-handoff-reconcile-fallback-20260515-codex.report.json --markdown` | Promote workflow files only with owner-boundary migration proof. |
+| Workflow progress | Workflow progress remains subordinate unless it blocks publication visibility or active-gate observation. | Selected outcome: `workflow-progress-migration`. Three `operation_workflow_owner / workflow_progress` witnesses on `control_plane_publications-p1`, `replica_operations-p1`, and `sql_transaction_participants-p1`, semantic state `spread_satisfied_in_flight`, `Split required: false`; causal wait `priority_recovery:event_driven` requires `advance_existing_operation`. | `operation_workflow_owner / workflow_progress` | `npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-after-handoff-reconcile-fallback-20260515-codex.report.json --markdown`; `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-handoff-reconcile-fallback-20260515-codex.report.json` | Do not promote startup runtime files. Continue in the parked `operation_workflow_owner / workflow_progress` package or a narrower successor. |
 
 ## Runtime Promotion Gate
 

@@ -1,9 +1,10 @@
+# Priority Recovery operation_workflow_owner workflow_progress Residual
+
+<!-- work-package
 {
-  "schema": "current-blocker-v1",
-  "generatedBy": "scripts/work-tracker.js",
-  "sprint": "work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md",
-  "package": "work/packages/active-20260515-priority-recovery-operation-workflow-owner-workflow-progress.md",
+  "schema": "work-package-v1",
   "status": "active",
+  "opened": "2026-05-15",
   "lane": "causal-escalation",
   "scenario": "rolling-restart",
   "artifact": "test-output/reports/rolling-restart-after-handoff-reconcile-fallback-20260515-codex.report.json",
@@ -56,7 +57,6 @@
     "work/sprints/current-blocker.md",
     "work/sprints/current-blocker.json"
   ],
-  "touchedFiles": [],
   "modelFit": {
     "packageClass": "representative-frontier-closure",
     "intendedMinimumModel": "gpt-5.3-codex",
@@ -123,3 +123,116 @@
   },
   "predecessor": "work/packages/done-20260515-startup-active-gate-remaining-publication-visibility-target-proof.md"
 }
+-->
+
+## Why
+
+The previous startup active-gate proof selected
+`workflow-progress-migration`. Fresh representative evidence is still red on
+the visible active-gate surface, but the bounded implementation owner is now
+`operation_workflow_owner / workflow_progress`.
+
+The current residual is an unsplit group of three
+`spread_satisfied_in_flight` witnesses on `control_plane_publications-p1`,
+`replica_operations-p1`, and `sql_transaction_participants-p1`. This package
+must prove whether those operations advance, drain, or split to a narrower
+workflow/repository/dispatch owner.
+
+## Scope Basis
+
+Roadmap Phase `0.1 - Internal Coherence`, under topology workflow
+stabilization, failure simulations, and production guarantees.
+
+## Workflow Lane
+
+- Selected lane: `causal-escalation`
+- Why this lane is sufficient: canonical residual evidence names one owner
+  boundary and one semantic state.
+- Escalation trigger to a heavier lane: the fix needs publication handoff
+  semantics, active-gate admission changes, timeout changes, or broad bridge
+  simplification.
+
+## LLM Tool-First Contract
+
+Before raw JSON, raw logs, broad file search, oversized segment files, or ad hoc `jq`, use the canonical workflow command that owns the question:
+
+1. Package metadata or ledger edits: `npm run work:package:doctor -- --suggest <package>`, `npm run work:package:doctor -- --fix-dry-run <package>`, `npm run work:package:schema`, or `npm run work:package:new -- ...`.
+2. Representative evidence: `npm run work:evidence-summary -- <artifact>` plus any focused extractor for this failure class.
+3. Owner discovery: `npm run analyze:owner-files -- <owner> [boundary]`.
+4. Subagent sequencing: `npm run work:subagent-prompt -- --role <role> --package <package>`.
+5. Large-file cleanup: `npm run work:oversized-next -- --markdown`.
+
+If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which canonical extractor was tried and why it was insufficient.
+
+## In Scope
+
+1. Inspect the remaining workflow progress witness with canonical extractors.
+2. Promote exact runtime/test files into `writeScope` only after focused owner
+   evidence confirms the boundary.
+3. Implement one bounded workflow progress fix, or split/migrate with concrete
+   operation, repository, dispatch, or diagnostics evidence.
+4. Rerun focused tests, static guardrails, and representative
+   `rolling-restart`.
+
+## Out Of Scope
+
+1. Timeout increases.
+2. Active-gate admission relaxation.
+3. Publication handoff contract rewrites.
+4. Publication-active-gate bridge simplification implementation.
+5. Pro or Enterprise behavior.
+
+## Activation Evidence
+
+This package is active because
+`work/packages/done-20260515-startup-active-gate-remaining-publication-visibility-target-proof.md`
+records owner-boundary migration proof from
+`startup_active_gate_owner / snapshot_coverage` to
+`operation_workflow_owner / workflow_progress`.
+
+Before runtime editing:
+
+1. Run a real review subagent and record the result.
+2. Record a fix subagent or explicit not-needed result.
+3. Promote exact runtime/test files from `candidateRuntimeFiles` into
+   `writeScope` and `commitScope`.
+4. Run a real implementation subagent for the selected bounded slice.
+
+## Subagent Sequencing Ledger
+
+Required on activation because this is a causal-escalation runtime package.
+The user has explicitly authorized delegation, so placeholder environment
+blocks are not valid closure proof for this package.
+
+- [ ] Review subagent recorded: pending-before-implementation-resumes
+- [ ] Fix subagent recorded or explicitly not needed: pending-before-review
+- [ ] Implementation subagent recorded: pending-before-implementation-resumes
+
+## Model Fit
+
+- Package class: `representative-frontier-closure`
+- Intended minimum model: `gpt-5.3-codex`
+- Scope shape: `owner-boundary-contraction/current-frontier`
+- Output profile: `medium`
+- Owned files: `work/packages/active-20260515-priority-recovery-operation-workflow-owner-workflow-progress.md`,
+  `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md`,
+  `work/sprints/current-blocker.md`, and `work/sprints/current-blocker.json`.
+  Runtime files are promoted only after review/fix proof is clean and focused
+  owner evidence selects the exact bounded implementation path.
+- Forbidden files: timeout increases, active-gate admission relaxation,
+  publication handoff contract rewrites, bridge simplification implementation,
+  Pro or Enterprise behavior.
+- Frozen decisions: package scope and lane stay bounded unless explicitly escalated.
+- Escalation triggers: owned files expand beyond this package, runtime ownership changes, or representative scenario evidence changes.
+- Focused proof: `npm run work:context`, `npm run work:llm-start`, `npm run work:evidence-summary -- test-output/reports/rolling-restart-after-handoff-reconcile-fallback-20260515-codex.report.json`, `npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-after-handoff-reconcile-fallback-20260515-codex.report.json --markdown`, `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-handoff-reconcile-fallback-20260515-codex.report.json --handoff-probe`, `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-handoff-reconcile-fallback-20260515-codex.report.json`, `npm run analyze:owner-files -- operation_workflow_owner workflow_progress --markdown`
+- Model ledger advisory: `escalate`
+
+## Validation
+
+1. npm run work:context
+2. npm run work:llm-start
+3. npm run work:evidence-summary -- test-output/reports/rolling-restart-after-handoff-reconcile-fallback-20260515-codex.report.json
+4. npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-after-handoff-reconcile-fallback-20260515-codex.report.json --markdown
+5. npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-handoff-reconcile-fallback-20260515-codex.report.json --handoff-probe
+6. npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-handoff-reconcile-fallback-20260515-codex.report.json
+7. npm run analyze:owner-files -- operation_workflow_owner workflow_progress --markdown
