@@ -244,7 +244,7 @@ class AdminControlSnapshotPart5 extends AdminControlSnapshotPart4 {
       await this.ensureMembershipPublicationObservation({
         preferAuthoritativeRead:
           options.preferAuthoritativePublicationRead === true,
-        reconcileAuthoritativeMembership:
+        reconcileAuthoritativeMembershipPublication:
           options.reconcileAuthoritativeMembershipPublication === true,
       });
     let observedPublishedMembership =

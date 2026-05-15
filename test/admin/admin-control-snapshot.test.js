@@ -2205,6 +2205,71 @@ test('AdminControlSnapshot forced authoritative membership observation runs publ
     );
   });
 
+test('AdminControlSnapshot build snapshot forwards authoritative membership reconcile',
+  async (t) => {
+    let observedReconcileOptions = null;
+    let latestPublicationReadCount = 0;
+    const snapshot = new AdminControlSnapshot({
+      nodeId: 'node-2',
+      nowFn: () => 1000,
+      systemTableCache: {
+        getAll() {
+          return [];
+        },
+      },
+      controlPlaneReadinessService: {
+        async getAllNodeReadiness() {
+          return [];
+        },
+        membershipPublicationService: {
+          async getLatestClusterPublication() {
+            latestPublicationReadCount += 1;
+            return null;
+          },
+          async reconcileClusterMembership(options = {}) {
+            observedReconcileOptions = options;
+            return {
+              publicationRow: {
+                publication_id: 'publication-3',
+                publication_kind: 'cluster_membership',
+                publication_epoch: 3,
+                status: 'OPEN',
+                published_active_node_ids: ['node-1', 'node-2'],
+                required_ack_node_ids: ['node-1', 'node-2'],
+                acknowledged_node_ids: ['node-1'],
+              },
+            };
+          },
+        },
+      },
+    });
+
+    const result = await snapshot.buildLocalControlSnapshot({
+      preferAuthoritativePublicationRead: true,
+      reconcileAuthoritativeMembershipPublication: true,
+    });
+
+    t.same(
+      observedReconcileOptions,
+      {preferAuthoritativeRead: true},
+      'buildLocalControlSnapshot should forward the reconcile option to the publication owner',
+    );
+    t.equal(
+      latestPublicationReadCount,
+      0,
+      'the reconciled publication row should avoid a stale follow-up publication read',
+    );
+    t.match(
+      result.controlPlaneDiagnostics.publicationConvergence,
+      {
+        publicationEpoch: 3,
+        status: 'OPEN',
+        publishedActiveNodeIds: ['node-1', 'node-2'],
+      },
+      'the reconciled publication row should drive the diagnostics publication observation',
+    );
+  });
+
 test('AdminControlSnapshot repair-deferred shared owner emits retry action after attempted repair',
   async (t) => {
     const localSnapshot = {
@@ -2266,6 +2331,180 @@ test('AdminControlSnapshot repair-deferred shared owner emits retry action after
         },
       },
       'attempted repair deferral should expose a legal retry action instead of wait-only stale evidence',
+    );
+  });
+
+test('AdminControlSnapshot repair-deferred shared owner attempts publication catch-up before returning',
+  async (t) => {
+    const buildOptions = [];
+    const staleSnapshot = {
+      nodes: ['node-1'],
+      controlPlaneDiagnostics: {
+        activeGateOwnerCohort: {
+          state: 'pending',
+          reasonCode: 'owner_reconcile_pending',
+          pendingReconcileCount: 1,
+          pendingReconcileNodeIds: ['node-2'],
+        },
+        publicationConvergence: {
+          publicationEpoch: 1,
+          status: 'PUBLISHED',
+          publishedActiveNodeIds: ['node-1'],
+        },
+      },
+    };
+    const catchupSnapshot = {
+      nodes: ['node-1', 'node-2'],
+      controlPlaneDiagnostics: {
+        publicationConvergence: {
+          publicationEpoch: 2,
+          status: 'OPEN',
+          publishedActiveNodeIds: ['node-1', 'node-2'],
+        },
+      },
+    };
+    const snapshot = new AdminControlSnapshot({
+      nodeId: 'node-1',
+    });
+    snapshot.controlPlaneSnapshotOwner = new ControlPlaneSnapshotOwner({
+      controlSnapshot: snapshot,
+    });
+    snapshot.buildLocalControlSnapshot = async (options = {}) => {
+      buildOptions.push(options);
+      return buildOptions.length === 1 ? staleSnapshot : catchupSnapshot;
+    };
+    snapshot.canRunAuthoritativeControlSnapshotRepair = () => true;
+    snapshot.evaluateAuthoritativeControlSnapshotRepair = () => ({
+      shouldRepair: true,
+      triggerCodes: ['discovery_node_coverage_gap'],
+      nodeCoverage: {
+        activeProjection: {
+          hasCoverageGap: false,
+        },
+      },
+    });
+    snapshot.ensureAuthoritativeDiscoveryCacheRepair = async () => ({
+      applied: false,
+      failedTables: [TABLES.SERVICES],
+      causeChain: ['control_plane_backpressure'],
+      retryAfterMs: 12000,
+      localQueryTransport: {
+        state: 'ready',
+        ready: true,
+      },
+      errors: ['control_plane_pressure_degraded'],
+    });
+
+    const result = await snapshot.resolveLocalControlSnapshot({
+      allowAuthoritativeRepair: true,
+    });
+
+    t.match(
+      buildOptions[1],
+      {
+        preferAuthoritativePublicationRead: true,
+        reconcileAuthoritativeMembershipPublication: true,
+      },
+      'repair-deferred degradation should attempt publication-owner catch-up before returning',
+    );
+    t.same(
+      result.nodes,
+      ['node-1', 'node-2'],
+      'the returned deferred snapshot should use the publication catch-up snapshot when it succeeds',
+    );
+    t.match(
+      result,
+      {
+        snapshotObservation: {
+          state: 'deferred_refresh',
+          contractState: 'deferred',
+          nextAction: 'retry',
+          retryAfterMs: 12000,
+        },
+        controlPlaneDiagnostics: {
+          publicationConvergence: {
+            publicationEpoch: 2,
+            status: 'OPEN',
+            publishedActiveNodeIds: ['node-1', 'node-2'],
+          },
+        },
+        observationMode: 'repair_deferred',
+      },
+      'the catch-up snapshot should keep the structured deferred retry outcome',
+    );
+  });
+
+test('AdminControlSnapshot repair-deferred shared owner skips publication catch-up without pending reconcile evidence',
+  async (t) => {
+    const buildOptions = [];
+    const localSnapshot = {
+      nodes: ['node-1'],
+      controlPlaneDiagnostics: {
+        publicationConvergence: {
+          publicationEpoch: 1,
+          status: 'PUBLISHED',
+          publishedActiveNodeIds: ['node-1'],
+        },
+      },
+    };
+    const snapshot = new AdminControlSnapshot({
+      nodeId: 'node-1',
+    });
+    snapshot.controlPlaneSnapshotOwner = new ControlPlaneSnapshotOwner({
+      controlSnapshot: snapshot,
+    });
+    snapshot.buildLocalControlSnapshot = async (options = {}) => {
+      buildOptions.push(options);
+      return localSnapshot;
+    };
+    snapshot.canRunAuthoritativeControlSnapshotRepair = () => true;
+    snapshot.evaluateAuthoritativeControlSnapshotRepair = () => ({
+      shouldRepair: true,
+      triggerCodes: ['discovery_node_coverage_gap'],
+      nodeCoverage: {
+        activeProjection: {
+          hasCoverageGap: false,
+        },
+      },
+    });
+    snapshot.ensureAuthoritativeDiscoveryCacheRepair = async () => ({
+      applied: false,
+      failedTables: [TABLES.SERVICES],
+      causeChain: ['control_plane_backpressure'],
+      retryAfterMs: 12000,
+      localQueryTransport: {
+        state: 'ready',
+        ready: true,
+      },
+      errors: ['control_plane_pressure_degraded'],
+    });
+
+    const result = await snapshot.resolveLocalControlSnapshot({
+      allowAuthoritativeRepair: true,
+    });
+
+    t.equal(
+      buildOptions.length,
+      1,
+      'repair-deferred degradation should not run publication catch-up without owner-reconcile evidence',
+    );
+    t.same(
+      result.nodes,
+      ['node-1'],
+      'the deferred snapshot should stay on the original local snapshot',
+    );
+    t.match(
+      result,
+      {
+        snapshotObservation: {
+          state: 'deferred_refresh',
+          contractState: 'deferred',
+          nextAction: 'retry',
+          retryAfterMs: 12000,
+        },
+        observationMode: 'repair_deferred',
+      },
+      'the local deferred retry outcome should remain structured',
     );
   });
 

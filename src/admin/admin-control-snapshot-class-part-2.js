@@ -62,6 +62,17 @@ const CONTROL_SNAPSHOT_PUBLICATION_READ_REPAIR_ERROR_FRAGMENTS = Object.freeze([
   'partition_service_not_found',
   'partition service not found',
 ]);
+const CONTROL_SNAPSHOT_PUBLICATION_OWNER_CATCHUP_OPTIONS = Object.freeze({
+  preferAuthoritativePublicationRead: true,
+  reconcileAuthoritativeMembershipPublication: true,
+});
+const CONTROL_SNAPSHOT_CONTROL_PLANE_DIAGNOSTICS_FIELD =
+  'controlPlaneDiagnostics';
+const CONTROL_SNAPSHOT_ACTIVE_GATE_OWNER_COHORT_FIELD =
+  'activeGateOwnerCohort';
+const CONTROL_SNAPSHOT_ACTIVE_GATE_OWNER_COHORT_STATE_PENDING = 'pending';
+const CONTROL_SNAPSHOT_ACTIVE_GATE_OWNER_COHORT_REASON_OWNER_RECONCILE_PENDING =
+  'owner_reconcile_pending';
 /**
  * Normalize one arbitrary value to a non-negative integer.
  * @param {*} value
@@ -143,6 +154,39 @@ function attachAuthoritativeRepairDiagnostics(snapshot, options = {}) {
       ADMIN_CACHE_DUMP.EMPTY,
   };
   return snapshot;
+}
+function hasPublicationOwnerCatchupSignal(snapshot = null) {
+  const controlPlaneDiagnostics =
+    snapshot?.[CONTROL_SNAPSHOT_CONTROL_PLANE_DIAGNOSTICS_FIELD];
+  const activeGateOwnerCohort =
+    controlPlaneDiagnostics?.[CONTROL_SNAPSHOT_ACTIVE_GATE_OWNER_COHORT_FIELD];
+  if (!activeGateOwnerCohort ||
+      typeof activeGateOwnerCohort !== TYPEOF.OBJECT) {
+    return false;
+  }
+  const state = String(
+    activeGateOwnerCohort.state || ADMIN_CONTROL_SNAPSHOT_LITERAL.VALUE,
+  );
+  const reasonCode = String(
+    activeGateOwnerCohort.reasonCode ||
+      ADMIN_CONTROL_SNAPSHOT_LITERAL.VALUE,
+  );
+  const pendingReconcileCount = Number(
+    activeGateOwnerCohort.pendingReconcileCount,
+  );
+  return (
+    state === CONTROL_SNAPSHOT_ACTIVE_GATE_OWNER_COHORT_STATE_PENDING ||
+    reasonCode ===
+      CONTROL_SNAPSHOT_ACTIVE_GATE_OWNER_COHORT_REASON_OWNER_RECONCILE_PENDING ||
+    (
+      Number.isFinite(pendingReconcileCount) &&
+      pendingReconcileCount > NUM.ZERO
+    ) ||
+    (
+      Array.isArray(activeGateOwnerCohort.pendingReconcileNodeIds) &&
+      activeGateOwnerCohort.pendingReconcileNodeIds.length > NUM.ZERO
+    )
+  );
 }
 // ── AdminControlSnapshot class ──────────────────────────────────────────────
 /**
@@ -255,7 +299,12 @@ class AdminControlSnapshotPart2 extends AdminControlSnapshotPart1 {
       });
     } catch (error) {
       if (canDegradeRepairFailure) {
-        return this.resolveSharedControlSnapshot(snapshot, {
+        const catchupSnapshot =
+          await this.rebuildControlSnapshotWithPublicationOwnerCatchup(
+            snapshot,
+            options,
+          );
+        return this.resolveSharedControlSnapshot(catchupSnapshot, {
           ...options,
           observationMode:
             ADMIN_CONTROL_SNAPSHOT_OBSERVATION_MODE.REPAIR_DEFERRED,
@@ -271,25 +320,20 @@ class AdminControlSnapshotPart2 extends AdminControlSnapshotPart1 {
       );
     }
     if (repair?.applied !== true) {
-      if (canDegradeRepairFailure) {
-        return this.resolveSharedControlSnapshot(snapshot, {
-          ...options,
-          observationMode:
-            ADMIN_CONTROL_SNAPSHOT_OBSERVATION_MODE.REPAIR_DEFERRED,
-          repair,
-          repairEvaluation,
-          repairAttempted: true,
-          repairDeferred: true,
-        });
-      }
-      if (
+      const canDegradeUnappliedRepair =
+        canDegradeRepairFailure === true ||
         this.canDegradeAuthoritativeControlSnapshotRepairFailure({
           forceAuthoritativeRepair,
           repairEvaluation,
           repair,
-        })
-      ) {
-        return this.resolveSharedControlSnapshot(snapshot, {
+        });
+      if (canDegradeUnappliedRepair) {
+        const catchupSnapshot =
+          await this.rebuildControlSnapshotWithPublicationOwnerCatchup(
+            snapshot,
+            options,
+          );
+        return this.resolveSharedControlSnapshot(catchupSnapshot, {
           ...options,
           observationMode:
             ADMIN_CONTROL_SNAPSHOT_OBSERVATION_MODE.REPAIR_DEFERRED,
@@ -330,6 +374,22 @@ class AdminControlSnapshotPart2 extends AdminControlSnapshotPart1 {
         repairEvaluation: repairedEvaluation,
       },
     );
+  }
+  async rebuildControlSnapshotWithPublicationOwnerCatchup(
+    snapshot,
+    options = {},
+  ) {
+    if (hasPublicationOwnerCatchupSignal(snapshot) !== true) {
+      return snapshot;
+    }
+    try {
+      return await this.buildLocalControlSnapshot({
+        ...options,
+        ...CONTROL_SNAPSHOT_PUBLICATION_OWNER_CATCHUP_OPTIONS,
+      });
+    } catch (_error) {
+      return snapshot;
+    }
   }
   canDegradeAuthoritativeControlSnapshotRepairFailure(options = {}) {
     if (

@@ -22,11 +22,11 @@ Boundary: `snapshot_coverage`
 
 Dominant reason: `active_gate_timed_out`
 
-Current state: Fresh representative evidence keeps rolling-restart red but reduces the active-gate handoff again. All five nodes reach ACTIVE by status, publication ACK convergence is satisfied, and the selected snapshot still has coverage 2/5, but attempted repair deferral now emits repair_deferred/deferred_refresh/deferred/deferred/retry with retryAfterMs=14976 instead of wait-only stale evidence. The topology frontier remains active_gate_snapshot_coverage blocked with reasons active_gate_timed_out, owner_reconcile_pending, snapshot_coverage_incomplete, and snapshot_repair_deferred. The active-gate owner cohort is pending with owner_reconcile_pending and two pending reconcile node IDs on the selected snapshot, while the producer publication view still shows PUBLISHED, pendingAck=0, publishedActive=1/5, and missingPublished=4. The replayable handoff fixture now captures this retryable shape and the analyzer surfaces selectedSnapshotObservationRetryAfterMs when present.
+Current state: Publication catch-up is now reachable from repair-deferred active-gate snapshots with owner_reconcile_pending evidence, but fresh representative evidence remains same-frontier red: all five nodes are active by status, selected snapshot coverage is 2/5, producer publication remains PUBLISHED with pendingAck=0, publishedActive=1/5, and missingPublished=4, and activeGateOwnerCohort still reports two pending reconcile node IDs. The selected snapshot exposes repair_deferred/deferred_refresh/deferred/deferred/retry with retryAfterMs=14976 and reason codes cache_stale_watermark, discovery_node_coverage_gap, and stale_replica_operations_in_flight. Canonical priority recovery extraction now names a subordinate operation_workflow_owner / workflow_progress witness on control_plane_publications-p1 with actuationState=persisted_not_dispatched and nextRequiredAction=advance_existing_operation.
 
 ## Next Action
 
-Use the replayable handoff fixture to implement the catch-up-before-promotion mechanism behind startup_active_gate_owner / snapshot_coverage: the active-gate owner cohort must reconcile pending published-active nodes into durable publication/snapshot coverage before timeout, without relaxing active-gate admission while runtimePromotionAllowed=false.
+Do not relax active-gate admission. Use the same artifact to split or promote the subordinate operation_workflow_owner / workflow_progress residual if the active-gate publication catch-up remains same-frontier after this slice; otherwise continue the active-gate owner path only with owner-file proof.
 
 ## Proof Ladder
 
@@ -44,7 +44,9 @@ Use the replayable handoff fixture to implement the catch-up-before-promotion me
 12. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-forced-snapshot-local-fallback-20260515-codex.report.json --handoff-probe`
 13. `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-forced-snapshot-local-fallback-20260515-codex.report.json`
 14. `npm run analyze:distributed-failure -- --report test-output/reports/rolling-restart-after-forced-snapshot-local-fallback-20260515-codex.report.json`
-15. `node --test test/scripts/analyze-topology-convergence.test.js`
+15. `npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-after-forced-snapshot-local-fallback-20260515-codex.report.json`
+16. `./node_modules/.bin/tap --grep "repair-deferred shared owner|forced authoritative membership observation|build snapshot forwards authoritative membership reconcile|auto-repaired snapshots use authoritative membership publication|active-gate owner cohort|owner-truth active cohort" test/admin/admin-control-snapshot.test.js`
+17. `node --test test/scripts/analyze-topology-convergence.test.js`
 
 ## Model Fit
 
@@ -63,7 +65,7 @@ Escalation triggers:
 
 ## Representative Residual
 
-Status: `live-red-reduced`
+Status: `live-red-same-frontier`
 
 Scenario: `rolling-restart`
 
@@ -77,7 +79,7 @@ Boundary: `snapshot_coverage`
 
 Dominant reason: `active_gate_timed_out`
 
-Next action: `Use the owner_reconcile_pending active-gate cohort evidence to implement the catch-up-before-promotion repair instead of another diagnostic slice.`
+Next action: `Use the priority-recovery residual extractor result to split or promote the operation_workflow_owner / workflow_progress tail if active-gate catch-up remains same-frontier.`
 
 ## Causal Governance
 
@@ -87,11 +89,11 @@ Stop-condition check: `npm --silent run analyze:causal-model -- test-output/repo
 
 Expected causal-model change: `active_gate_snapshot_coverage becomes representative-green, reduced, same-frontier, migrated, or classification-only with a named owner-boundary reason.`
 
-Representative outcome: `reduced`
+Representative outcome: `same-frontier`
 
-Causal debt: `The hard selected snapshot authoritative repair failure is reduced to a structured repair_deferred/deferred_refresh/deferred/deferred/retry snapshot observation with retryAfterMs, snapshotCoverage remains 2/5, and the active-gate consumer now exposes owner_reconcile_pending with two pending reconcile node IDs. The remaining debt is no longer diagnostic visibility; it is the publication-to-active-gate catch-up mechanism that should reconcile producer PUBLISHED/pendingAck=0/missingPublished=4 into consumer snapshot coverage before the active-gate timeout.`
+Causal debt: `The publication catch-up hook is reachable from repair-deferred active-gate snapshots with owner_reconcile_pending evidence, but representative evidence remains same-frontier red: snapshotCoverage stays 2/5, producer publication stays PUBLISHED with pendingAck=0, publishedActive=1/5, and missingPublished=4, and activeGateOwnerCohort still has two pending reconcile node IDs. Canonical priority recovery extraction names the likely subordinate residual as operation_workflow_owner / workflow_progress on control_plane_publications-p1 with actuationState=persisted_not_dispatched and nextRequiredAction=advance_existing_operation.`
 
-Cross-boundary review: `Subagent sequencing for the focused fallback slice is complete. Related-work guidance now points at the owner-reconcile catch-up mechanism itself; no active admission relaxation is allowed while runtimePromotionAllowed=false.`
+Cross-boundary review: `Subagent review confirmed the bypass and recommended gating catch-up to owner_reconcile_pending evidence. The fix keeps diagnostics as a trigger for the publication owner path and does not relax active admission while runtimePromotionAllowed=false.`
 
 ## Scenario Causal Closure
 
@@ -112,25 +114,25 @@ Known downstream blockers:
 1. `publication_ack_convergence is satisfied, but the handoff probe producer shows publication=PUBLISHED, pendingAck=0, publishedActive=1/5, missingPublished=4, publicationPending=true, and nextOwnerPath startup_active_gate_owner / snapshot_coverage with runtimePromotionAllowed=false`
 2. `readiness_startup_support is deferred as inherited_active_gate_no_progress`
 3. `scenario_duration, active_gate_timeout, active_gate_attempts, and readiness_retry_window budgets are exhausted or terminal-classified`
-4. `priority_recovery_partition_progress remains classified as satisfied`
+4. `priority_recovery_partition_progress remains classified as satisfied in the topology graph, but analyze:priority-recovery-residuals reports operation_workflow_owner / workflow_progress for control_plane_publications-p1 with actuationState=persisted_not_dispatched`
 
 Missing causal edge: `The selected snapshot now exposes retryable repair-deferred evidence plus activeGateOwnerCohort owner_reconcile_pending, and the replayable handoff fixture captures this shape. The next proof must make pending reconcile node IDs advance into durable published active membership and selected snapshot coverage.`
 
 Missing causal edge probe: `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-forced-snapshot-local-fallback-20260515-codex.report.json --handoff-probe`
 
-Bounded progress proof: `Focused fallback and diagnostic handoff proof pass. Fresh representative evidence is still red, but it reaches all five ACTIVE-by-status nodes, keeps selectedSnapshotError unknown instead of a hard forced-repair failure, reports selectedSnapshotRepairDeferred=true with selectedSnapshotObservationNextAction=retry and retryAfterMs=14976, and preserves snapshotCoverageNodeCount=2/5. The fresh handoff probe detects publication_ack_to_active_gate_reconcile missing and the active-gate consumer now carries owner_reconcile_pending with two pending reconcile node IDs. The replayable handoff fixture now matches that retryable shape.`
+Bounded progress proof: `Focused fallback, diagnostic handoff, and publication-owner catch-up wiring proof pass. Fresh representative evidence is still same-frontier red: all five nodes are ACTIVE by status, selectedSnapshotError is unknown, selectedSnapshotRepairDeferred=true with selectedSnapshotObservationNextAction=retry and retryAfterMs=14976, snapshotCoverageNodeCount=2/5, and the handoff probe still detects publication_ack_to_active_gate_reconcile_missing with owner_reconcile_pending. The priority residual extractor now exposes operation_workflow_owner / workflow_progress on control_plane_publications-p1 as the likely subordinate mechanism blocking durable publication catch-up.`
 
 Bounded progress proof artifact: `test-output/reports/rolling-restart-after-forced-snapshot-local-fallback-20260515-codex.report.json`
 
-Expected observable transition: `Next proof should make the publication-to-active-gate reconcile edge explicit: either durable publication truth, active node projection, snapshot coverage, and expected cohort catch up before active admission, or the owner emits a step witness, timeout, and legal next action.`
+Expected observable transition: `Next proof should make the operation workflow tail explicit or drain it: control_plane_publications-p1 must move beyond persisted_not_dispatched/advance_existing_operation, after which durable publication truth, active node projection, snapshot coverage, and expected cohort should catch up before active admission.`
 
 Max progress bound: `one focused active-gate snapshot coverage package slice with canonical extractors, owner-file proof, subagent sequencing, focused validation, and representative result classification`
 
-Same-frontier fallback: `Fresh evidence still selects startup_active_gate_owner / snapshot_coverage. The failure shape is now blocked active_gate_timed_out with owner_reconcile_pending and repair_deferred/deferred_refresh/deferred/deferred/retry. Continue local fix on the catch-up mechanism, not another diagnostics-only successor.`
+Same-frontier fallback: `Fresh evidence still selects startup_active_gate_owner / snapshot_coverage, but the local catch-up bypass is closed. Do not add another diagnostics-only successor; split or promote the operation_workflow_owner / workflow_progress residual if the same active-gate handoff remains blocked.`
 
 Expected next frontier: `readiness_startup_support after active-gate coverage improves, otherwise same-frontier active-gate evidence`
 
-Result classification: `reduced`
+Result classification: `same-frontier`
 
 Stop condition: `continue-local-fix`
 
@@ -163,13 +165,14 @@ Write scope:
 13. `test/distributed/harness/__tests__/active-gate-closure-classification.test.js`
 14. `src/admin/admin-control-snapshot-class-part-2.js`
 15. `src/admin/admin-control-snapshot-class-part-3.js`
-16. `src/admin/admin-control-snapshot-class-part-6.js`
-17. `src/control-plane/control-plane-snapshot-owner.js`
-18. `src/diagnostics/topology-convergence-graph.js`
-19. `test/admin/admin-control-snapshot.test.js`
-20. `scripts/analyze-topology-convergence.js`
-21. `test/scripts/analyze-topology-convergence.test.js`
-22. `test/scripts/__fixtures__/topology-convergence/publication-active-gate-reduced-handoff.fixture.json`
+16. `src/admin/admin-control-snapshot-class-part-5.js`
+17. `src/admin/admin-control-snapshot-class-part-6.js`
+18. `src/control-plane/control-plane-snapshot-owner.js`
+19. `src/diagnostics/topology-convergence-graph.js`
+20. `test/admin/admin-control-snapshot.test.js`
+21. `scripts/analyze-topology-convergence.js`
+22. `test/scripts/analyze-topology-convergence.test.js`
+23. `test/scripts/__fixtures__/topology-convergence/publication-active-gate-reduced-handoff.fixture.json`
 
 Handoff files:
 
@@ -214,13 +217,14 @@ Commit scope:
 15. `test/distributed/harness/__tests__/active-gate-closure-classification.test.js`
 16. `src/admin/admin-control-snapshot-class-part-2.js`
 17. `src/admin/admin-control-snapshot-class-part-3.js`
-18. `src/admin/admin-control-snapshot-class-part-6.js`
-19. `src/control-plane/control-plane-snapshot-owner.js`
-20. `src/diagnostics/topology-convergence-graph.js`
-21. `test/admin/admin-control-snapshot.test.js`
-22. `scripts/analyze-topology-convergence.js`
-23. `test/scripts/analyze-topology-convergence.test.js`
-24. `test/scripts/__fixtures__/topology-convergence/publication-active-gate-reduced-handoff.fixture.json`
+18. `src/admin/admin-control-snapshot-class-part-5.js`
+19. `src/admin/admin-control-snapshot-class-part-6.js`
+20. `src/control-plane/control-plane-snapshot-owner.js`
+21. `src/diagnostics/topology-convergence-graph.js`
+22. `test/admin/admin-control-snapshot.test.js`
+23. `scripts/analyze-topology-convergence.js`
+24. `test/scripts/analyze-topology-convergence.test.js`
+25. `test/scripts/__fixtures__/topology-convergence/publication-active-gate-reduced-handoff.fixture.json`
 
 Legacy touched files:
 
