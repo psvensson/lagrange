@@ -42,7 +42,7 @@
           "streamOutcome": "stale"
         },
         "activeGate": {
-          "state": "stalled",
+          "state": "timed_out",
           "ready": false,
           "attempts": 9,
           "elapsedMs": 84457,
@@ -51,10 +51,11 @@
             "snapshotCoverageNodeCount": 2,
             "snapshotCoverageComplete": false,
             "selectedSnapshotObservationMode": "repair_deferred",
-            "selectedSnapshotObservationState": "stale_usable",
-            "selectedSnapshotObservationContractState": "pending",
-            "selectedSnapshotObservationRefreshState": "idle",
-            "selectedSnapshotObservationNextAction": "wait",
+            "selectedSnapshotObservationState": "deferred_refresh",
+            "selectedSnapshotObservationContractState": "deferred",
+            "selectedSnapshotObservationRefreshState": "deferred",
+            "selectedSnapshotObservationNextAction": "retry",
+            "selectedSnapshotObservationRetryAfterMs": 14976,
             "selectedSnapshotObservationReasonCodes": [
               "cache_stale_watermark",
               "discovery_node_coverage_gap",
@@ -65,20 +66,16 @@
             "activeGateOwnerCohortReasonCode": "owner_reconcile_pending",
             "activeGateOwnerCohortMissingPublishedNodeIds": [
               "node-2",
-              "node-3",
-              "node-4",
-              "node-5"
+              "node-3"
             ],
-            "activeGateOwnerCohortMissingPublishedCount": 4,
+            "activeGateOwnerCohortMissingPublishedCount": 2,
             "activeGateOwnerCohortPendingRecoveryNodeIds": [],
             "activeGateOwnerCohortPendingRecoveryCount": 0,
             "activeGateOwnerCohortPendingReconcileNodeIds": [
               "node-2",
-              "node-3",
-              "node-4",
-              "node-5"
+              "node-3"
             ],
-            "activeGateOwnerCohortPendingReconcileCount": 4,
+            "activeGateOwnerCohortPendingReconcileCount": 2,
             "priorityRecoveryProgressClasses": {
               "unresolvedSemanticStateIds": [],
               "blockedPartitionIds": []

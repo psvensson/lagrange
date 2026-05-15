@@ -100,14 +100,19 @@ const SNAPSHOT_COVERAGE_ZERO_OF_FIVE = 0;
 const SNAPSHOT_COVERAGE_TWO_OF_FIVE = 2;
 const EXPECTED_NODE_COUNT = 5;
 const MISSING_PUBLISHED_COUNT = 4;
-const EDGE_STATE_DEFERRED = 'deferred';
 const RUNTIME_PROMOTION_ALLOWED_FALSE = false;
 const HANDOFF_DETECTED_TRUE = true;
 const ACTIVE_GATE_OWNER_COHORT_STATE_PENDING = 'pending';
+const ACTIVE_GATE_OWNER_COHORT_PENDING_RECONCILE_COUNT = 2;
 const ACTIVE_GATE_OWNER_COHORT_PENDING_RECONCILE_NODE_IDS =
-  'node-2,node-3,node-4,node-5';
+  'node-2,node-3';
 const HANDOFF_NEXT_REQUIRED_ACTION_BUILD_REPLAYABLE_FIXTURE =
   'build_replayable_handoff_fixture';
+const SNAPSHOT_OBSERVATION_STATE_DEFERRED_REFRESH = 'deferred_refresh';
+const SNAPSHOT_OBSERVATION_CONTRACT_STATE_DEFERRED = 'deferred';
+const SNAPSHOT_OBSERVATION_REFRESH_STATE_DEFERRED = 'deferred';
+const SNAPSHOT_OBSERVATION_NEXT_ACTION_RETRY = 'retry';
+const SNAPSHOT_OBSERVATION_RETRY_AFTER_MS = 14976;
 
 describe('analyze-topology-convergence CLI', () => {
   it('prints help text', () => {
@@ -372,8 +377,9 @@ describe('analyze-topology-convergence CLI', () => {
       assert.equal(output.consumer.edge, ACTIVE_GATE_EDGE_ID);
       assert.equal(output.consumer.owner, STARTUP_ACTIVE_GATE_OWNER);
       assert.equal(output.consumer.boundary, SNAPSHOT_COVERAGE_BOUNDARY);
-      assert.equal(output.consumer.state, EDGE_STATE_DEFERRED);
+      assert.equal(output.consumer.state, EDGE_STATE_BLOCKED);
       assert.deepEqual(output.consumer.reasons, [
+        ACTIVE_GATE_TIMED_OUT_REASON,
         OWNER_RECONCILE_PENDING_REASON,
         SNAPSHOT_COVERAGE_INCOMPLETE_REASON,
         SNAPSHOT_REPAIR_DEFERRED_REASON,
@@ -396,11 +402,31 @@ describe('analyze-topology-convergence CLI', () => {
       );
       assert.equal(
         output.consumer.source.activeGateOwnerCohortPendingReconcileCount,
-        MISSING_PUBLISHED_COUNT,
+        ACTIVE_GATE_OWNER_COHORT_PENDING_RECONCILE_COUNT,
       );
       assert.equal(
         output.consumer.source.activeGateOwnerCohortPendingReconcileNodeIds,
         ACTIVE_GATE_OWNER_COHORT_PENDING_RECONCILE_NODE_IDS,
+      );
+      assert.equal(
+        output.consumer.source.selectedSnapshotObservationState,
+        SNAPSHOT_OBSERVATION_STATE_DEFERRED_REFRESH,
+      );
+      assert.equal(
+        output.consumer.source.selectedSnapshotObservationContractState,
+        SNAPSHOT_OBSERVATION_CONTRACT_STATE_DEFERRED,
+      );
+      assert.equal(
+        output.consumer.source.selectedSnapshotObservationRefreshState,
+        SNAPSHOT_OBSERVATION_REFRESH_STATE_DEFERRED,
+      );
+      assert.equal(
+        output.consumer.source.selectedSnapshotObservationNextAction,
+        SNAPSHOT_OBSERVATION_NEXT_ACTION_RETRY,
+      );
+      assert.equal(
+        output.consumer.source.selectedSnapshotObservationRetryAfterMs,
+        SNAPSHOT_OBSERVATION_RETRY_AFTER_MS,
       );
       assert.deepEqual(output.nextOwnerPath, {
         edge: ACTIVE_GATE_EDGE_ID,

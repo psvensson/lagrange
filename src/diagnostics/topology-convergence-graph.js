@@ -988,6 +988,7 @@ function buildActiveGateSnapshotEdge(normalized) {
         textOrUnknown(progress.selectedSnapshotObservationRefreshState),
       selectedSnapshotObservationNextAction:
         textOrUnknown(progress.selectedSnapshotObservationNextAction),
+      ...buildSelectedSnapshotObservationRetrySource(progress),
       selectedSnapshotObservationReasonCodes: joinValues(
         arrayOrEmpty(progress.selectedSnapshotObservationReasonCodes),
       ),
@@ -1550,6 +1551,16 @@ function buildPriorityRecoveryWitnessSource(evidence) {
     witnessSource.actuationStates = joinValues(evidence.actuationStates);
   }
   return witnessSource;
+}
+
+function buildSelectedSnapshotObservationRetrySource(progress) {
+  const retryAfterMs = numberOrUnknown(
+    progress.selectedSnapshotObservationRetryAfterMs,
+  );
+  if (retryAfterMs === UNKNOWN_VALUE) {
+    return {};
+  }
+  return {selectedSnapshotObservationRetryAfterMs: retryAfterMs};
 }
 
 function buildActiveGateOwnerCohortSource(progress) {

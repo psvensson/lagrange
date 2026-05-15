@@ -12,8 +12,8 @@
   "owner": "startup_active_gate_owner",
   "boundary": "snapshot_coverage",
   "dominantReason": "active_gate_timed_out",
-  "currentState": "Fresh representative evidence keeps rolling-restart red but reduces the active-gate handoff again. All five nodes reach ACTIVE by status, publication ACK convergence is satisfied, and the selected snapshot still has coverage 2/5, but attempted repair deferral now emits repair_deferred/deferred_refresh/deferred/deferred/retry with retryAfterMs=14976 instead of wait-only stale evidence. The topology frontier remains active_gate_snapshot_coverage blocked with reasons active_gate_timed_out, owner_reconcile_pending, snapshot_coverage_incomplete, and snapshot_repair_deferred. The active-gate owner cohort is pending with owner_reconcile_pending and two pending reconcile node IDs on the selected snapshot, while the producer publication view still shows PUBLISHED, pendingAck=0, publishedActive=1/5, and missingPublished=4. The handoff probe still reports runtimePromotionAllowed=false and requiredAction=build_replayable_handoff_fixture.",
-  "nextAction": "Build the replayable handoff fixture and then implement the catch-up-before-promotion mechanism behind startup_active_gate_owner / snapshot_coverage: the active-gate owner cohort must reconcile pending published-active nodes into durable publication/snapshot coverage before timeout, without relaxing active-gate admission while runtimePromotionAllowed=false.",
+  "currentState": "Fresh representative evidence keeps rolling-restart red but reduces the active-gate handoff again. All five nodes reach ACTIVE by status, publication ACK convergence is satisfied, and the selected snapshot still has coverage 2/5, but attempted repair deferral now emits repair_deferred/deferred_refresh/deferred/deferred/retry with retryAfterMs=14976 instead of wait-only stale evidence. The topology frontier remains active_gate_snapshot_coverage blocked with reasons active_gate_timed_out, owner_reconcile_pending, snapshot_coverage_incomplete, and snapshot_repair_deferred. The active-gate owner cohort is pending with owner_reconcile_pending and two pending reconcile node IDs on the selected snapshot, while the producer publication view still shows PUBLISHED, pendingAck=0, publishedActive=1/5, and missingPublished=4. The replayable handoff fixture now captures this retryable shape and the analyzer surfaces selectedSnapshotObservationRetryAfterMs when present.",
+  "nextAction": "Use the replayable handoff fixture to implement the catch-up-before-promotion mechanism behind startup_active_gate_owner / snapshot_coverage: the active-gate owner cohort must reconcile pending published-active nodes into durable publication/snapshot coverage before timeout, without relaxing active-gate admission while runtimePromotionAllowed=false.",
   "proof": [
     "npm run work:evidence-summary -- test-output/reports/rolling-restart-after-publication-supplied-stream-closure-20260515-codex.report.json",
     "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-publication-supplied-stream-closure-20260515-codex.report.json --explain active_gate_snapshot_coverage",
@@ -146,13 +146,13 @@
       "scenario_duration, active_gate_timeout, active_gate_attempts, and readiness_retry_window budgets are exhausted or terminal-classified",
       "priority_recovery_partition_progress remains classified as satisfied"
     ],
-    "missingCausalEdge": "The selected snapshot now exposes retryable repair-deferred evidence plus activeGateOwnerCohort owner_reconcile_pending. The next proof must make pending reconcile node IDs advance into durable published active membership and selected snapshot coverage, or build the replayable handoff fixture required by the probe before the runtime catch-up mechanism is edited.",
+    "missingCausalEdge": "The selected snapshot now exposes retryable repair-deferred evidence plus activeGateOwnerCohort owner_reconcile_pending, and the replayable handoff fixture captures this shape. The next proof must make pending reconcile node IDs advance into durable published active membership and selected snapshot coverage.",
     "missingCausalEdgeProbe": "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-forced-snapshot-local-fallback-20260515-codex.report.json --handoff-probe",
-    "boundedProgressProof": "Focused fallback and diagnostic handoff proof pass. Fresh representative evidence is still red, but it reaches all five ACTIVE-by-status nodes, keeps selectedSnapshotError unknown instead of a hard forced-repair failure, reports selectedSnapshotRepairDeferred=true with selectedSnapshotObservationNextAction=retry and retryAfterMs=14976, and preserves snapshotCoverageNodeCount=2/5. The fresh handoff probe detects publication_ack_to_active_gate_reconcile missing and the active-gate consumer now carries owner_reconcile_pending with two pending reconcile node IDs.",
+    "boundedProgressProof": "Focused fallback and diagnostic handoff proof pass. Fresh representative evidence is still red, but it reaches all five ACTIVE-by-status nodes, keeps selectedSnapshotError unknown instead of a hard forced-repair failure, reports selectedSnapshotRepairDeferred=true with selectedSnapshotObservationNextAction=retry and retryAfterMs=14976, and preserves snapshotCoverageNodeCount=2/5. The fresh handoff probe detects publication_ack_to_active_gate_reconcile missing and the active-gate consumer now carries owner_reconcile_pending with two pending reconcile node IDs. The replayable handoff fixture now matches that retryable shape.",
     "boundedProgressProofArtifact": "test-output/reports/rolling-restart-after-forced-snapshot-local-fallback-20260515-codex.report.json",
     "expectedObservableTransition": "Next proof should make the publication-to-active-gate reconcile edge explicit: either durable publication truth, active node projection, snapshot coverage, and expected cohort catch up before active admission, or the owner emits a step witness, timeout, and legal next action.",
     "maxProgressBound": "one focused active-gate snapshot coverage package slice with canonical extractors, owner-file proof, subagent sequencing, focused validation, and representative result classification",
-    "sameFrontierFallback": "Fresh evidence still selects startup_active_gate_owner / snapshot_coverage. The failure shape is now blocked active_gate_timed_out with owner_reconcile_pending and repair_deferred/deferred_refresh/deferred/deferred/retry. Continue local fix on the replayable handoff fixture and catch-up mechanism, not another diagnostics-only successor.",
+    "sameFrontierFallback": "Fresh evidence still selects startup_active_gate_owner / snapshot_coverage. The failure shape is now blocked active_gate_timed_out with owner_reconcile_pending and repair_deferred/deferred_refresh/deferred/deferred/retry. Continue local fix on the catch-up mechanism, not another diagnostics-only successor.",
     "expectedNextFrontier": "readiness_startup_support after active-gate coverage improves, otherwise same-frontier active-gate evidence",
     "resultClassification": "reduced",
     "stopCondition": "continue-local-fix",
@@ -186,8 +186,9 @@ repair deferral is now
 `repair_deferred / deferred_refresh / deferred / deferred / retry` with
 `retryAfterMs=14976`, and the selected owner cohort has two pending reconcile
 node IDs. The remaining edge is still
-`publication_ack_to_active_gate_reconcile_missing`; the handoff probe requires
-a replayable handoff fixture before runtime promotion is allowed.
+`publication_ack_to_active_gate_reconcile_missing`; the replayable handoff
+fixture now captures this shape so the next slice can use it before editing
+the runtime catch-up path.
 
 ## Related Work Recheck
 
