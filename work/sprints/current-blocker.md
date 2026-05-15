@@ -4,47 +4,36 @@
 
 Sprint: `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md`
 
-Package: `work/packages/active-20260515-startup-active-gate-snapshot-coverage-owner-reconcile-closure.md`
+Package: `work/packages/active-20260515-priority-recovery-operation-workflow-owner-rebalancer-handoff.md`
 
 Workflow lane: `causal-escalation`
 
 Scenario: `rolling-restart`
 
-Artifact: `test-output/reports/rolling-restart-after-handoff-contract-consolidation-20260515-codex.report.json`
+Artifact: `test-output/reports/rolling-restart-after-replica-operation-router-replace-pending-20260515-codex.report.json`
 
 Playback: `none`
 
 ## Boundary
 
-Owner: `startup_active_gate_owner`
+Owner: `operation_workflow_owner`
 
-Boundary: `snapshot_coverage`
+Boundary: `rebalancer_handoff`
 
-Dominant reason: `owner_reconcile_pending`
+Dominant reason: `priority_recovery_progress_blocked`
 
-Current state: Fresh rolling-restart evidence after handoff contract consolidation remains red at active_gate_snapshot_coverage: all five nodes report active, publication ACK is satisfied, the canonical handoff contract is present, snapshot coverage is 2/5, pending reconcile remains visible, and runtimePromotionAllowed=false.
+Current state: Fresh rolling-restart evidence after the active-gate owner reconcile slice reports a split priority-recovery residual. The first split group is operation_workflow_owner / rebalancer_handoff with three recovering_in_flight witnesses across control_plane_publications-p1 and sql_transaction_participants-p1. Raw fallback after canonical extractors showed the control-plane publication replica CREATE_REPLICA wake reaches the handler, but duplicate create handling reports service status creating while the replica state machine times out in pending.
 
 ## Next Action
 
-Implement the owner-key publication reconcile path required by nextAction=reconcile_owner_membership_publication so rolling-restart reaches active=5/5, snapshotCoverage=5/5, missingPublished=0 without timeout increases or active-gate admission relaxation.
+Prove or split the rebalancer_handoff residual by focusing the replica lifecycle idempotency/progress path for recovering_in_flight control-plane publication and transaction participant replicas.
 
 ## Proof Ladder
 
 1. `npm run work:context`
-2. `npm run work:llm-start`
-3. `npm run work:evidence-summary -- test-output/reports/rolling-restart-after-handoff-contract-consolidation-20260515-codex.report.json`
-4. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-handoff-contract-consolidation-20260515-codex.report.json --handoff-probe`
-5. `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-handoff-contract-consolidation-20260515-codex.report.json`
-6. `npm run analyze:owner-files -- startup_active_gate_owner snapshot_coverage --markdown`
-7. `npm run work:package:doctor -- --suggest work/packages/active-20260515-startup-active-gate-snapshot-coverage-owner-reconcile-closure.md`
-8. `npm run work:package:doctor -- --fix-dry-run work/packages/active-20260515-startup-active-gate-snapshot-coverage-owner-reconcile-closure.md`
-9. `npm run work:validate -- --entry work/packages/active-20260515-startup-active-gate-snapshot-coverage-owner-reconcile-closure.md`
-10. `npm run work:validate -- --pre-impl work/packages/active-20260515-startup-active-gate-snapshot-coverage-owner-reconcile-closure.md`
-11. `node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-after-owner-reconcile-closure-20260515-codex.report.json --fast-local --verbose`
-12. `npm run work:evidence-summary -- test-output/reports/rolling-restart-after-owner-reconcile-closure-20260515-codex.report.json`
-13. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-owner-reconcile-closure-20260515-codex.report.json --handoff-probe`
-14. `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-owner-reconcile-closure-20260515-codex.report.json`
-15. `npm run work:validate -- --closure work/packages/active-20260515-startup-active-gate-snapshot-coverage-owner-reconcile-closure.md`
+2. `npm run work:evidence-summary -- test-output/reports/rolling-restart-after-replica-operation-router-replace-pending-20260515-codex.report.json`
+3. `npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-after-replica-operation-router-replace-pending-20260515-codex.report.json --markdown`
+4. `npm run analyze:owner-files -- operation_workflow_owner rebalancer_handoff --markdown`
 
 ## Model Fit
 
@@ -52,9 +41,9 @@ Package class: `representative-frontier-closure`
 
 Intended minimum model: `gpt-5.3-codex`
 
-Scope shape: `scenario-green-gate/current-frontier`
+Scope shape: `owner-boundary-contraction/current-frontier`
 
-Output profile: `high`
+Output profile: `medium`
 
 Escalation triggers:
 
@@ -67,70 +56,69 @@ Status: `live-red-scenario-release-gate`
 
 Scenario: `rolling-restart`
 
-Artifact: `test-output/reports/rolling-restart-after-handoff-contract-consolidation-20260515-codex.report.json`
+Artifact: `test-output/reports/rolling-restart-after-replica-operation-router-replace-pending-20260515-codex.report.json`
 
-Frontier: `active_gate_snapshot_coverage`
+Frontier: `priority_recovery_partition_progress`
 
-Owner: `startup_active_gate_owner`
+Owner: `operation_workflow_owner`
 
-Boundary: `snapshot_coverage`
+Boundary: `rebalancer_handoff`
 
-Dominant reason: `active_gate_timed_out`
+Dominant reason: `priority_recovery_progress_blocked`
 
-Next action: `Implement owner-key publication reconcile from the canonical handoff contract so snapshot coverage reaches 5/5 and missingPublished reaches 0 without relaxing active-gate admission.`
+Next action: `Prove or split recovering_in_flight rebalancer handoff witnesses before starting workflow_progress.`
 
 ## Causal Governance
 
-Causal hypothesis: `After the publication-to-active-gate handoff contract is explicit, startup_active_gate_owner / snapshot_coverage must drain owner_reconcile_pending by running the owner-key publication reconcile path and producing durable active membership visibility for the expected cohort.`
+Causal hypothesis: `The remaining active-gate snapshot timeout is blocked by operation workflow recovery handoff progress: recovering_in_flight replicas receive remote handoff wake-ups but do not advance their replica lifecycle out of pending/creating quickly enough to clear priority recovery.`
 
-Stop-condition check: `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-handoff-contract-consolidation-20260515-codex.report.json`
+Stop-condition check: `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-replica-operation-router-replace-pending-20260515-codex.report.json`
 
-Expected causal-model change: `rolling-restart becomes representative-green with active=5/5, snapshotCoverage=5/5, missingPublished=0, or the package migrates to a narrower owner boundary with concrete evidence and next action.`
+Expected causal-model change: `rolling-restart becomes representative-green, the residual reduces to operation_workflow_owner / workflow_progress only, or this package splits to a narrower replica lifecycle owner with concrete operation and handler evidence.`
 
 Representative outcome: `pending-before-rerun`
 
-Causal debt: `The handoff-contract sprint removed duplicate handoff truth, but fresh representative evidence still times out at active_gate_snapshot_coverage. The handoff contract is present and pending with nextAction=reconcile_owner_membership_publication, pendingReconcileCount=3, and runtimePromotionAllowed=false. Leaving this unresolved keeps rolling-restart red even though publication ACK and node activity are otherwise visible.`
+Causal debt: `The predecessor moved stale operation dispatch out of the active-gate owner path. This package owns the remaining handoff/progress gap for recovering_in_flight replicas so active-gate coverage is not forced to wait on an opaque lifecycle stall.`
 
-Cross-boundary review: `This package starts after the handoff-contract simplification sprint. It must not reopen publication handoff ownership unless canonical evidence promotes publication_ack_convergence again; diagnostics and analyzer surfaces remain observation-only.`
+Cross-boundary review: `Do not reopen publication handoff truth, owner-key membership reconcile, or active-gate admission. The only runtime candidates are operation workflow handoff and replica lifecycle progress for the recovered replicas named by canonical residual evidence.`
 
 ## Scenario Causal Closure
 
-Reference scenario/probe: `rolling-restart / startup active-gate snapshot coverage owner reconcile closure`
+Reference scenario/probe: `rolling-restart / priority recovery operation workflow rebalancer handoff residual`
 
 Phase chain:
 
-1. `freeze latest reduced handoff evidence`
-2. `prepare subagent review/fix/implementation sequencing`
-3. `identify exact owner-key reconcile path`
-4. `implement bounded owner reconcile without admission relaxation`
-5. `prove focused owner/consumer tests and static guardrails`
-6. `rerun representative rolling-restart until green or narrowed`
+1. `freeze predecessor migration evidence`
+2. `prepare subagent sequencing ledger under environment-policy constraints`
+3. `inspect rebalancer handoff owner files and replica lifecycle idempotency path`
+4. `implement one bounded handoff or lifecycle progress fix if evidence stays local`
+5. `prove focused owner tests and static guardrails`
+6. `rerun representative rolling-restart until green, reduced, or split`
 
-Current first frontier: `active_gate_snapshot_coverage under startup_active_gate_owner / snapshot_coverage with state blocked and dominant reason active_gate_timed_out in test-output/reports/rolling-restart-after-handoff-contract-consolidation-20260515-codex.report.json`
+Current first frontier: `priority_recovery_partition_progress split residual under operation_workflow_owner / rebalancer_handoff and operation_workflow_owner / workflow_progress in test-output/reports/rolling-restart-after-replica-operation-router-replace-pending-20260515-codex.report.json`
 
 Known downstream blockers:
 
-1. `publication ACK convergence is satisfied and the canonical handoff contract exists`
-2. `snapshot coverage remains 2/5 while expectedNodeCount=5`
-3. `handoffContract.state=pending with reasonCode=owner_reconcile_pending and nextAction=reconcile_owner_membership_publication`
-4. `runtimePromotionAllowed=false, so active-gate admission must stay strict`
-5. `readiness_startup_support is deferred as inherited_active_gate_no_progress`
+1. `operation_workflow_owner / rebalancer_handoff has three recovering_in_flight witnesses`
+2. `control_plane_publications-p1 direct wake-up reaches CREATE_REPLICA handling but lifecycle remains pending/creating until timeout`
+3. `operation_workflow_owner / workflow_progress has paired spread_satisfied_in_flight witnesses and remains parked behind this first split package`
+4. `active-gate admission must remain strict while publication handoff remains partial`
 
-Missing causal edge: `The remaining missing edge is bounded owner-key reconcile from the canonical handoff pending-reconcile cohort into durable published active membership and selected snapshot coverage.`
+Missing causal edge: `Recovered replica handoff must either advance duplicate CREATE_REPLICA lifecycle progress or classify a narrower replica lifecycle state-machine blocker.`
 
-Missing causal edge probe: `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-handoff-contract-consolidation-20260515-codex.report.json --handoff-probe`
+Missing causal edge probe: `npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-after-replica-operation-router-replace-pending-20260515-codex.report.json --markdown`
 
-Bounded progress proof: `Current probe proves a concrete reconcile mechanism: missingEdge=null, contractEdge=publication_active_gate_handoff_contract, nextAction=reconcile_owner_membership_publication, pendingReconcileCount=3, and runtimePromotionAllowed=false. This package must make that reconcile advance or classify a narrower owner blocker.`
+Bounded progress proof: `The package must prove bounded handoff progress through wake, retry, dispatch, timeout, or lifecycle advance evidence for recovering_in_flight replicas, or split to the narrower lifecycle owner with a concrete operation id and handler state.`
 
-Bounded progress proof artifact: `test-output/reports/rolling-restart-after-handoff-contract-consolidation-20260515-codex.report.json`
+Bounded progress proof artifact: `test-output/reports/rolling-restart-after-replica-operation-router-replace-pending-20260515-codex.report.json`
 
-Expected observable transition: `Representative rolling-restart reaches active=5/5, snapshotCoverage=5/5, missingPublished=0, or moves to a new first frontier with a narrower owner boundary and no duplicate handoff truth.`
+Expected observable transition: `Recovering_in_flight handoff witnesses drain, rerun evidence reduces to workflow_progress only, representative rolling-restart becomes green, or a narrower lifecycle blocker is recorded.`
 
-Max progress bound: `one green-gate package slice; no planned split may defer owner-key reconcile, focused tests, static guardrails, representative rerun, or closure classification`
+Max progress bound: `one rebalancer_handoff owner package slice; no timeout increases, active-gate admission relaxation, or publication handoff rewrites`
 
-Same-frontier fallback: `If active_gate_snapshot_coverage remains first frontier after implementation, record whether owner reconcile advanced, stalled, or exposed a narrower runtime owner; do not reopen the completed handoff-contract package by default.`
+Same-frontier fallback: `If rebalancer_handoff remains, record whether wake delivery, duplicate create idempotency, state-machine progress, or persistence failed; do not start workflow_progress until the direct handoff blocker is reduced or split.`
 
-Expected next frontier: `representative-green, readiness_startup_support after active-gate coverage improves, migrated operation_workflow_owner / workflow_progress if canonical evidence promotes it, or same-frontier with a narrower owner-key reconcile blocker`
+Expected next frontier: `operation_workflow_owner / workflow_progress after rebalancer_handoff drains, or a narrower replica lifecycle owner if canonical/focused evidence promotes it`
 
 Result classification: `pending-before-probe`
 
@@ -138,31 +126,26 @@ Stop condition: `continue-local-fix`
 
 Recent frontier history:
 
-1. `work/packages/done-20260515-topology-publication-active-gate-handoff-contract-consolidation.md / topology_publication_owner / publication_active_gate_handoff_contract / reduced`
-2. `work/packages/todo-20260515-topology-active-gate-snapshot-coverage-after-publication-handoff.md / startup_active_gate_owner / snapshot_coverage / dormant stopped-sprint context`
-3. `work/packages/done-20260515-topology-publication-active-gate-handoff-oscillation.md / topology_publication_owner / publication_convergence / migrated`
+1. `work/packages/done-20260515-startup-active-gate-snapshot-coverage-owner-reconcile-closure.md / startup_active_gate_owner / snapshot_coverage / migrated`
+2. `work/packages/done-20260515-topology-publication-active-gate-handoff-contract-consolidation.md / topology_publication_owner / publication_active_gate_handoff_contract / reduced`
+3. `work/packages/done-20260512-rolling-restart-operation-workflow-rebalancer-handoff-priority-recovery-retry-scheduled.md / operation_workflow_owner / rebalancer_handoff / reduced`
 
-Oscillation check: `The prior oscillation boundary was reduced by the canonical handoff contract. This package owns the current active-gate snapshot coverage gate and must not duplicate handoff truth.`
+Oscillation check: `This package follows a canonical split from priority-recovery residual evidence, not a return to publication or active-gate handoff ownership.`
 
-Handoff invariant: `Active-gate admission stays strict while runtimePromotionAllowed=false; consumers must use the canonical handoff contract rather than reconstructing publication truth.`
+Handoff invariant: `The package must preserve strict active-gate admission and the canonical publication-active-gate handoff contract while focusing only operation workflow handoff progress.`
 
 ## Scope
 
 Write scope:
 
-1. `work/packages/active-20260515-startup-active-gate-snapshot-coverage-owner-reconcile-closure.md`
+1. `work/packages/active-20260515-priority-recovery-operation-workflow-owner-rebalancer-handoff.md`
 2. `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md`
 3. `work/sprints/current-blocker.md`
 4. `work/sprints/current-blocker.json`
-5. `work/tracks/topology-convergence.md`
-6. `work/releases/0.1-dependency-map.md`
-7. `work/releases/0.1-stabilization.md`
-8. `work/model-ledger.jsonl`
 
 Handoff files:
 
-1. `work/packages/done-20260515-topology-publication-active-gate-handoff-contract-consolidation.md`
-2. `work/packages/todo-20260515-topology-active-gate-snapshot-coverage-after-publication-handoff.md`
+1. `work/packages/done-20260515-startup-active-gate-snapshot-coverage-owner-reconcile-closure.md`
 
 Generated files:
 
@@ -171,33 +154,17 @@ Generated files:
 
 Candidate runtime files:
 
-1. `src/control-plane/control-plane-snapshot-owner.js`
-2. `src/control-plane/authoritative-node-evidence-reconciler.js`
-3. `src/control-plane/publication-active-gate-handoff-contract.js`
-4. `src/admin/admin-control-snapshot-class-part-2.js`
-5. `src/admin/admin-control-snapshot-class-part-3.js`
-6. `src/admin/admin-control-snapshot-class-part-5.js`
-7. `src/admin/admin-control-snapshot-class-part-6.js`
-8. `src/diagnostics/topology-convergence-graph.js`
-9. `scripts/analyze-topology-convergence.js`
-10. `test/admin/admin-control-snapshot.test.js`
-11. `test/distributed/harness/cluster-segment-2.js`
-12. `test/distributed/harness/cluster-segment-7-class-4.js`
-13. `test/distributed/harness/cluster-segment-7-class-5.js`
-14. `test/distributed/harness/__tests__/active-gate-closure-classification.test.js`
-15. `test/scripts/analyze-topology-convergence.test.js`
-16. `test/scripts/__fixtures__/topology-convergence/publication-active-gate-reduced-handoff.fixture.json`
+1. `src/node/replica-handler-class-part-1.js`
+2. `src/node/replica-handler-runtime-methods.js`
+3. `src/node/replica-state-machine.js`
+4. `test/rebalancer/coordinator-created-operation-progress-remote-handoff.test.js`
 
 Commit scope:
 
-1. `work/packages/active-20260515-startup-active-gate-snapshot-coverage-owner-reconcile-closure.md`
+1. `work/packages/active-20260515-priority-recovery-operation-workflow-owner-rebalancer-handoff.md`
 2. `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md`
 3. `work/sprints/current-blocker.md`
 4. `work/sprints/current-blocker.json`
-5. `work/tracks/topology-convergence.md`
-6. `work/releases/0.1-dependency-map.md`
-7. `work/releases/0.1-stabilization.md`
-8. `work/model-ledger.jsonl`
 
 Legacy touched files:
 

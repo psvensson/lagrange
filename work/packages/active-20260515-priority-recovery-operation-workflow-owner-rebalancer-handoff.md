@@ -1,9 +1,10 @@
+# Priority Recovery operation_workflow_owner rebalancer_handoff Residual
+
+<!-- work-package
 {
-  "schema": "current-blocker-v1",
-  "generatedBy": "scripts/work-tracker.js",
-  "sprint": "work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md",
-  "package": "work/packages/active-20260515-priority-recovery-operation-workflow-owner-rebalancer-handoff.md",
+  "schema": "work-package-v1",
   "status": "active",
+  "opened": "2026-05-15",
   "lane": "causal-escalation",
   "scenario": "rolling-restart",
   "artifact": "test-output/reports/rolling-restart-after-replica-operation-router-replace-pending-20260515-codex.report.json",
@@ -44,7 +45,6 @@
     "work/sprints/current-blocker.md",
     "work/sprints/current-blocker.json"
   ],
-  "touchedFiles": [],
   "modelFit": {
     "packageClass": "representative-frontier-closure",
     "intendedMinimumModel": "gpt-5.3-codex",
@@ -107,6 +107,102 @@
     ],
     "oscillationCheck": "This package follows a canonical split from priority-recovery residual evidence, not a return to publication or active-gate handoff ownership.",
     "handoffInvariant": "The package must preserve strict active-gate admission and the canonical publication-active-gate handoff contract while focusing only operation workflow handoff progress."
-  },
-  "predecessor": null
+  }
 }
+-->
+
+## Why
+
+Fresh representative evidence split the remaining red residual after the
+active-gate owner reconcile package. This package owns the first split group:
+`operation_workflow_owner / rebalancer_handoff` with `recovering_in_flight`
+witnesses.
+
+The observed control-plane publication operation is no longer a lost wake-up:
+the direct CREATE_REPLICA wake reaches the handler. The remaining handoff
+question is whether duplicate create idempotency should advance the replica
+lifecycle out of pending/creating, or whether that evidence promotes a narrower
+replica lifecycle owner.
+
+## Scope Basis
+
+Roadmap Phase `0.1 - Internal Coherence`, under topology workflow
+stabilization, failure simulations, and production guarantees.
+
+## Workflow Lane
+
+- Selected lane: `causal-escalation`
+- Why this lane is sufficient: the package starts from canonical representative
+  split evidence and owns one runtime owner boundary.
+- Escalation trigger to a heavier lane: focused evidence promotes a separate
+  replica lifecycle owner, requires timeout increases, or reopens publication
+  handoff truth.
+
+## LLM Tool-First Contract
+
+Before raw JSON, raw logs, broad file search, oversized segment files, or ad hoc `jq`, use the canonical workflow command that owns the question:
+
+1. Package metadata or ledger edits: `npm run work:package:doctor -- --suggest <package>`, `npm run work:package:doctor -- --fix-dry-run <package>`, `npm run work:package:schema`, or `npm run work:package:new -- ...`.
+2. Representative evidence: `npm run work:evidence-summary -- <artifact>` plus any focused extractor for this failure class.
+3. Owner discovery: `npm run analyze:owner-files -- <owner> [boundary]`.
+4. Subagent sequencing: `npm run work:subagent-prompt -- --role <role> --package <package>`.
+5. Large-file cleanup: `npm run work:oversized-next -- --markdown`.
+
+If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which canonical extractor was tried and why it was insufficient.
+
+## In Scope
+
+1. Freeze the predecessor migration evidence.
+2. Inspect the operation workflow rebalancer handoff files and replica
+   lifecycle idempotency path named by residual evidence.
+3. Promote exact runtime/test files into `writeScope` only after focused owner
+   evidence confirms the local boundary.
+4. Implement one bounded wake, retry, dispatch, timeout, or lifecycle-advance
+   fix, or split to a narrower lifecycle owner with concrete evidence.
+5. Rerun focused tests, static guardrails, and representative
+   `rolling-restart`.
+
+## Out Of Scope
+
+1. Timeout increases.
+2. Active-gate admission relaxation.
+3. Publication handoff contract rewrites.
+4. Starting `operation_workflow_owner / workflow_progress` before this direct
+   rebalancer handoff residual is reduced or split.
+5. Pro or Enterprise behavior.
+
+## Subagent Sequencing Ledger
+
+Required because this is a causal-escalation runtime package. Subagent
+execution is blocked in this host unless the user explicitly asks for
+delegation.
+
+- [x] Review subagent recorded:
+      blocked-by-environment-policy; reason: developer policy allows spawning
+      subagents only when the user explicitly asks for delegation.
+- [x] Fix subagent recorded or explicitly not needed:
+      blocked-by-environment-policy; reason: review role is blocked by the
+      same environment policy, so no separate fix role can be truthfully run.
+- [x] Implementation subagent recorded:
+      blocked-by-environment-policy; reason: developer policy allows spawning
+      subagents only when the user explicitly asks for delegation.
+
+## Model Fit
+
+- Package class: `representative-frontier-closure`
+- Intended minimum model: `gpt-5.3-codex`
+- Scope shape: `owner-boundary-contraction/current-frontier`
+- Output profile: `medium`
+- Owned files: `work/packages/active-20260515-priority-recovery-operation-workflow-owner-rebalancer-handoff.md`, `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md`, `work/sprints/current-blocker.md`, `work/sprints/current-blocker.json`; candidate runtime files stay gated until focused owner evidence promotes exact paths.
+- Forbidden files: timeout increases, active-gate admission relaxation, publication handoff contract rewrites, Pro or Enterprise behavior.
+- Frozen decisions: package scope and lane stay bounded unless explicitly escalated.
+- Escalation triggers: owned files expand beyond this package, runtime ownership changes, or representative scenario evidence changes.
+- Focused proof: `npm run work:context`, `npm run work:evidence-summary -- test-output/reports/rolling-restart-after-replica-operation-router-replace-pending-20260515-codex.report.json`, `npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-after-replica-operation-router-replace-pending-20260515-codex.report.json --markdown`, `npm run analyze:owner-files -- operation_workflow_owner rebalancer_handoff --markdown`
+- Model ledger advisory: `escalate`
+
+## Validation
+
+1. npm run work:context
+2. npm run work:evidence-summary -- test-output/reports/rolling-restart-after-replica-operation-router-replace-pending-20260515-codex.report.json
+3. npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-after-replica-operation-router-replace-pending-20260515-codex.report.json --markdown
+4. npm run analyze:owner-files -- operation_workflow_owner rebalancer_handoff --markdown

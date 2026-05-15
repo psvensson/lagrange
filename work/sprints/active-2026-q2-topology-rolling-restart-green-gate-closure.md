@@ -20,7 +20,7 @@ success is in scope.
 ## Current Blocker Snapshot
 
 Latest representative artifact:
-`test-output/reports/rolling-restart-after-handoff-contract-consolidation-20260515-codex.report.json`.
+`test-output/reports/rolling-restart-after-replica-operation-router-replace-pending-20260515-codex.report.json`.
 
 Canonical state at sprint creation:
 
@@ -41,6 +41,21 @@ Canonical state at sprint creation:
 8. Active-gate admission must remain strict until the owner reconcile path
    produces durable coverage.
 
+Current blocker after the first package:
+
+1. The active-gate owner reconcile package closed as `migrated`.
+2. All five nodes still report active, and the selected active-gate snapshot no
+   longer reports `stale_replica_operations_in_flight`.
+3. The canonical handoff contract remains pending with
+   `publicationActiveGateHandoffPendingReconcileCount=3`.
+4. `analyze:priority-recovery-residuals` reports `Split required: true`.
+5. First split package:
+   `operation_workflow_owner / rebalancer_handoff` with
+   `recovering_in_flight` witnesses.
+6. Parked paired split:
+   `operation_workflow_owner / workflow_progress` with
+   `spread_satisfied_in_flight` witnesses.
+
 ## Scope Basis
 
 Roadmap Phase `0.1 - Internal Coherence`, especially:
@@ -54,7 +69,7 @@ Pro or Enterprise behavior.
 
 ## Package Queue
 
-1. [Startup Active Gate Snapshot Coverage Owner Reconcile Closure](../packages/active-20260515-startup-active-gate-snapshot-coverage-owner-reconcile-closure.md)
+1. [Startup Active Gate Snapshot Coverage Owner Reconcile Closure](../packages/done-20260515-startup-active-gate-snapshot-coverage-owner-reconcile-closure.md)
    - Lane: `causal-escalation`
    - Owner boundary:
      `startup_active_gate_owner / snapshot_coverage`
@@ -63,10 +78,33 @@ Pro or Enterprise behavior.
      `reconcile_owner_membership_publication`.
    - Entry condition: handoff-contract sprint closed as reduced; fresh
      representative evidence still times out at active-gate snapshot coverage.
-   - Acceptance: representative `rolling-restart` is green, or fresh evidence
-     migrates/classifies the residual to a narrower owner boundary with
-     concrete next action.
-2. [Publication Active-Gate Reconcile Bridge Simplification](../packages/todo-20260515-publication-active-gate-reconcile-bridge-simplification.md)
+   - Result: `migrated`. Focused owner-key reconcile, bounded remote wake-up,
+     and replica operation router replacement-key proof passed; fresh
+     representative evidence promoted a split operation workflow residual.
+2. [Priority Recovery operation_workflow_owner rebalancer_handoff Residual](../packages/active-20260515-priority-recovery-operation-workflow-owner-rebalancer-handoff.md)
+   - Lane: `causal-escalation`
+   - Owner boundary:
+     `operation_workflow_owner / rebalancer_handoff`
+   - Purpose: prove or split the `recovering_in_flight` handoff residual now
+     blocking priority recovery after bounded direct wake-ups reach replica
+     CREATE_REPLICA handling.
+   - Entry condition: predecessor package closed as migrated; canonical
+     priority residual extraction reports a split and this is the first split
+     group.
+   - Acceptance: representative `rolling-restart` is green, residual reduces
+     to `operation_workflow_owner / workflow_progress`, or fresh evidence
+     migrates/classifies to a narrower replica lifecycle owner with concrete
+     operation and handler state.
+3. [Priority Recovery operation_workflow_owner workflow_progress Residual](../packages/todo-20260515-priority-recovery-operation-workflow-owner-workflow-progress.md)
+   - Lane: `causal-escalation`
+   - Owner boundary:
+     `operation_workflow_owner / workflow_progress`
+   - Purpose: parked paired split for `spread_satisfied_in_flight` witnesses.
+   - Entry condition: the rebalancer handoff package is green, reduced, split,
+     or explicitly superseded by fresher canonical evidence.
+   - Acceptance: workflow-progress witnesses drain, split, or become the next
+     representative owner boundary after handoff progress is settled.
+4. [Publication Active-Gate Reconcile Bridge Simplification](../packages/todo-20260515-publication-active-gate-reconcile-bridge-simplification.md)
    - Lane: `runtime-owner-boundary`
    - Owner boundary:
      `startup_active_gate_owner / publication_reconcile_bridge`
@@ -83,9 +121,10 @@ Pro or Enterprise behavior.
      `rolling-restart` intent is preserved.
 
 No additional package may be added merely to defer owner-key reconcile from
-the active package. The queued bridge simplification package is a follow-on
-only; it must not start until the active package is closed, explicitly split,
-or superseded with canonical evidence. Any other split is allowed only when
+the original active-gate owner package. That package is now closed as migrated.
+The queued bridge simplification package is a follow-on only; it must not start
+until the operation workflow residual is green, reduced, explicitly split, or
+superseded with canonical evidence. Any other split is allowed only when
 canonical evidence changes the semantic owner, boundary, or next required
 action.
 
@@ -112,15 +151,16 @@ action.
 
 1. `npm run work:context`
 2. `npm run work:llm-start`
-3. `npm run work:evidence-summary -- test-output/reports/rolling-restart-after-handoff-contract-consolidation-20260515-codex.report.json`
-4. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-handoff-contract-consolidation-20260515-codex.report.json --handoff-probe`
-5. `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-handoff-contract-consolidation-20260515-codex.report.json`
-6. `npm run analyze:owner-files -- startup_active_gate_owner snapshot_coverage --markdown`
+3. `npm run work:evidence-summary -- test-output/reports/rolling-restart-after-replica-operation-router-replace-pending-20260515-codex.report.json`
+4. `npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-after-replica-operation-router-replace-pending-20260515-codex.report.json --markdown`
+5. `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-replica-operation-router-replace-pending-20260515-codex.report.json`
+6. `npm run analyze:owner-files -- operation_workflow_owner rebalancer_handoff --markdown`
 7. `npm run work:subagent-prompt -- --role implementation --package <package>`
-8. Focused owner-key reconcile tests selected by the package.
-9. Focused active-gate consumer and diagnostics/harness tests.
-10. Static guardrails on touched runtime, admin, diagnostics, analyzer,
-    harness, and tests.
+8. Focused operation workflow handoff and replica lifecycle tests selected by
+   the package.
+9. Focused active-gate consumer proof only if the handoff fix changes
+   admission-facing evidence.
+10. Static guardrails on touched runtime, node, rebalancer, and tests.
 11. Representative `rolling-restart`.
 12. `npm run work:evidence-summary -- <fresh-report>`
 13. `npm run analyze:topology-convergence -- <fresh-report> --handoff-probe`
@@ -150,8 +190,9 @@ The sprint cannot close until:
 Continue with the active package:
 
 ```text
-work/packages/active-20260515-startup-active-gate-snapshot-coverage-owner-reconcile-closure.md
+work/packages/active-20260515-priority-recovery-operation-workflow-owner-rebalancer-handoff.md
 ```
 
-Implementation starts after the required subagent implementation role is run
-for this package.
+Implementation continues under the active rebalancer handoff package. Subagent
+roles are recorded as `blocked-by-environment-policy` unless the user
+explicitly asks for delegation.

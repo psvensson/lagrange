@@ -3,7 +3,7 @@
 <!-- work-package
 {
   "schema": "work-package-v1",
-  "status": "active",
+  "status": "done",
   "opened": "2026-05-15",
   "lane": "causal-escalation",
   "scenario": "rolling-restart",
@@ -21,15 +21,15 @@
     "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-handoff-contract-consolidation-20260515-codex.report.json --handoff-probe",
     "npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-handoff-contract-consolidation-20260515-codex.report.json",
     "npm run analyze:owner-files -- startup_active_gate_owner snapshot_coverage --markdown",
-    "npm run work:package:doctor -- --suggest work/packages/active-20260515-startup-active-gate-snapshot-coverage-owner-reconcile-closure.md",
-    "npm run work:package:doctor -- --fix-dry-run work/packages/active-20260515-startup-active-gate-snapshot-coverage-owner-reconcile-closure.md",
-    "npm run work:validate -- --entry work/packages/active-20260515-startup-active-gate-snapshot-coverage-owner-reconcile-closure.md",
-    "npm run work:validate -- --pre-impl work/packages/active-20260515-startup-active-gate-snapshot-coverage-owner-reconcile-closure.md",
+    "npm run work:package:doctor -- --suggest work/packages/done-20260515-startup-active-gate-snapshot-coverage-owner-reconcile-closure.md",
+    "npm run work:package:doctor -- --fix-dry-run work/packages/done-20260515-startup-active-gate-snapshot-coverage-owner-reconcile-closure.md",
+    "npm run work:validate -- --entry work/packages/done-20260515-startup-active-gate-snapshot-coverage-owner-reconcile-closure.md",
+    "npm run work:validate -- --pre-impl work/packages/done-20260515-startup-active-gate-snapshot-coverage-owner-reconcile-closure.md",
     "node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-after-owner-reconcile-closure-20260515-codex.report.json --fast-local --verbose",
     "npm run work:evidence-summary -- test-output/reports/rolling-restart-after-owner-reconcile-closure-20260515-codex.report.json",
     "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-owner-reconcile-closure-20260515-codex.report.json --handoff-probe",
     "npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-owner-reconcile-closure-20260515-codex.report.json",
-    "npm run work:validate -- --closure work/packages/active-20260515-startup-active-gate-snapshot-coverage-owner-reconcile-closure.md",
+    "npm run work:validate -- --closure work/packages/done-20260515-startup-active-gate-snapshot-coverage-owner-reconcile-closure.md",
     "./node_modules/.bin/tap --grep \"retries bounded remote direct dispatch wake-ups|sends direct remote wake-up|registers a direct dispatch wake-up handler|heartbeat-only update reaches a node missing|READY node-state updates enqueue cluster membership reconcile|handoff pending reconcile target|repair-deferred no-attempt path|explicit handoff target|merges pending explicit handoff targets|ControlPlanePublicationsOwner|buildOperationMutationQueryOptions scopes|replica_operations writes by row identity|persistOperationUpdate uses canonical gateway mutation ingress\" test/control-plane/replica-dispatch-node-state-update.test-part-4.js test/control-plane/replica-dispatch-node-state-update.test.js test/admin/admin-control-snapshot.test.js test/control-plane/membership-publication-coordinator-main-stage-2.js test/control-plane/system-metadata-owner-modules.test.js test/control-plane/control-plane-system-table-gateway.test.js test/rebalancer/replica-operation-repository.test.js",
     "git diff --check",
     "npm run audit:runtime-grammar:file -- src/admin/admin-control-snapshot-class-part-1.js src/admin/admin-control-snapshot-class-part-2.js src/admin/admin-control-snapshot-class-part-5.js src/admin/admin-control-snapshot-class-part-6.js src/control-plane/control-plane-system-table-gateway-segment-1.js src/control-plane/control-plane-system-table-gateway-segment-3.js src/control-plane/control-plane-system-table-gateway-shared.js src/control-plane/membership-publication-coordinator-class-stage-2.js src/control-plane/membership-publication-coordinator-class-stage-3.js src/control-plane/membership-publication-coordinator-stage-2.js src/control-plane/owners/control-plane-publications-owner.js src/control-plane/replica-dispatch-service-segment-1.js src/control-plane/replica-dispatch-service-segment-2.js src/control-plane/replica-dispatch-service-segment-3.js src/control-plane/replica-dispatch-service-shared.js src/rebalancer/replica-operation-repository-mutation-methods.js",
@@ -65,7 +65,7 @@
     "test/control-plane/system-metadata-owner-modules.test.js",
     "test/rebalancer/replica-operation-repository-tail-test-cases.js",
     "test/rebalancer/replica-operation-repository.test.js",
-    "work/packages/active-20260515-startup-active-gate-snapshot-coverage-owner-reconcile-closure.md",
+    "work/packages/done-20260515-startup-active-gate-snapshot-coverage-owner-reconcile-closure.md",
     "work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md",
     "work/sprints/current-blocker.md",
     "work/sprints/current-blocker.json",
@@ -125,7 +125,7 @@
     "test/control-plane/system-metadata-owner-modules.test.js",
     "test/rebalancer/replica-operation-repository-tail-test-cases.js",
     "test/rebalancer/replica-operation-repository.test.js",
-    "work/packages/active-20260515-startup-active-gate-snapshot-coverage-owner-reconcile-closure.md",
+    "work/packages/done-20260515-startup-active-gate-snapshot-coverage-owner-reconcile-closure.md",
     "work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md",
     "work/sprints/current-blocker.md",
     "work/sprints/current-blocker.json",
@@ -206,7 +206,8 @@
     "oscillationCheck": "The prior oscillation boundary was reduced by the canonical handoff contract. This package owns the current active-gate snapshot coverage gate and must not duplicate handoff truth.",
     "handoffInvariant": "Active-gate admission stays strict while runtimePromotionAllowed=false; consumers must use the canonical handoff contract rather than reconstructing publication truth."
   },
-  "predecessor": "work/packages/done-20260515-topology-publication-active-gate-handoff-contract-consolidation.md"
+  "predecessor": "work/packages/done-20260515-topology-publication-active-gate-handoff-contract-consolidation.md",
+  "commitAndPushLedgerRequired": true
 }
 -->
 
@@ -300,7 +301,7 @@ This is the first package in the new sprint.
 - Forbidden files: `timeout increases`, `active-gate admission relaxation while runtimePromotionAllowed=false`, `publication handoff contract rewrites unless canonical evidence promotes that owner again`, `Pro or Enterprise behavior`
 - Frozen decisions: package scope and lane stay bounded unless explicitly escalated.
 - Escalation triggers: owned files expand beyond this package, runtime ownership changes, or representative scenario evidence changes.
-- Focused proof: `npm run work:context`, `npm run work:llm-start`, `npm run work:evidence-summary -- test-output/reports/rolling-restart-after-handoff-contract-consolidation-20260515-codex.report.json`, `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-handoff-contract-consolidation-20260515-codex.report.json --handoff-probe`, `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-handoff-contract-consolidation-20260515-codex.report.json`, `npm run analyze:owner-files -- startup_active_gate_owner snapshot_coverage --markdown`, `npm run work:package:doctor -- --suggest work/packages/active-20260515-startup-active-gate-snapshot-coverage-owner-reconcile-closure.md`, `npm run work:package:doctor -- --fix-dry-run work/packages/active-20260515-startup-active-gate-snapshot-coverage-owner-reconcile-closure.md`, `npm run work:validate -- --entry work/packages/active-20260515-startup-active-gate-snapshot-coverage-owner-reconcile-closure.md`, `npm run work:validate -- --pre-impl work/packages/active-20260515-startup-active-gate-snapshot-coverage-owner-reconcile-closure.md`, `node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-after-owner-reconcile-closure-20260515-codex.report.json --fast-local --verbose`, `npm run work:evidence-summary -- test-output/reports/rolling-restart-after-owner-reconcile-closure-20260515-codex.report.json`, `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-owner-reconcile-closure-20260515-codex.report.json --handoff-probe`, `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-owner-reconcile-closure-20260515-codex.report.json`, `npm run work:validate -- --closure work/packages/active-20260515-startup-active-gate-snapshot-coverage-owner-reconcile-closure.md`
+- Focused proof: `npm run work:context`, `npm run work:llm-start`, `npm run work:evidence-summary -- test-output/reports/rolling-restart-after-handoff-contract-consolidation-20260515-codex.report.json`, `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-handoff-contract-consolidation-20260515-codex.report.json --handoff-probe`, `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-handoff-contract-consolidation-20260515-codex.report.json`, `npm run analyze:owner-files -- startup_active_gate_owner snapshot_coverage --markdown`, `npm run work:package:doctor -- --suggest work/packages/done-20260515-startup-active-gate-snapshot-coverage-owner-reconcile-closure.md`, `npm run work:package:doctor -- --fix-dry-run work/packages/done-20260515-startup-active-gate-snapshot-coverage-owner-reconcile-closure.md`, `npm run work:validate -- --entry work/packages/done-20260515-startup-active-gate-snapshot-coverage-owner-reconcile-closure.md`, `npm run work:validate -- --pre-impl work/packages/done-20260515-startup-active-gate-snapshot-coverage-owner-reconcile-closure.md`, `node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-after-owner-reconcile-closure-20260515-codex.report.json --fast-local --verbose`, `npm run work:evidence-summary -- test-output/reports/rolling-restart-after-owner-reconcile-closure-20260515-codex.report.json`, `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-owner-reconcile-closure-20260515-codex.report.json --handoff-probe`, `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-owner-reconcile-closure-20260515-codex.report.json`, `npm run work:validate -- --closure work/packages/done-20260515-startup-active-gate-snapshot-coverage-owner-reconcile-closure.md`
 - Model ledger advisory: `escalate`
 
 ## Validation
@@ -311,10 +312,10 @@ This is the first package in the new sprint.
 4. npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-handoff-contract-consolidation-20260515-codex.report.json --handoff-probe
 5. npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-handoff-contract-consolidation-20260515-codex.report.json
 6. npm run analyze:owner-files -- startup_active_gate_owner snapshot_coverage --markdown
-7. npm run work:package:doctor -- --suggest work/packages/active-20260515-startup-active-gate-snapshot-coverage-owner-reconcile-closure.md
-8. npm run work:package:doctor -- --fix-dry-run work/packages/active-20260515-startup-active-gate-snapshot-coverage-owner-reconcile-closure.md
-9. npm run work:validate -- --entry work/packages/active-20260515-startup-active-gate-snapshot-coverage-owner-reconcile-closure.md
-10. npm run work:validate -- --pre-impl work/packages/active-20260515-startup-active-gate-snapshot-coverage-owner-reconcile-closure.md
+7. npm run work:package:doctor -- --suggest work/packages/done-20260515-startup-active-gate-snapshot-coverage-owner-reconcile-closure.md
+8. npm run work:package:doctor -- --fix-dry-run work/packages/done-20260515-startup-active-gate-snapshot-coverage-owner-reconcile-closure.md
+9. npm run work:validate -- --entry work/packages/done-20260515-startup-active-gate-snapshot-coverage-owner-reconcile-closure.md
+10. npm run work:validate -- --pre-impl work/packages/done-20260515-startup-active-gate-snapshot-coverage-owner-reconcile-closure.md
 11. Focused owner/admin/repository regression suite:
     `./node_modules/.bin/tap --grep "retries bounded remote direct dispatch wake-ups|sends direct remote wake-up|registers a direct dispatch wake-up handler|heartbeat-only update reaches a node missing|READY node-state updates enqueue cluster membership reconcile|handoff pending reconcile target|repair-deferred no-attempt path|explicit handoff target|merges pending explicit handoff targets|ControlPlanePublicationsOwner|buildOperationMutationQueryOptions scopes|replica_operations writes by row identity|persistOperationUpdate uses canonical gateway mutation ingress" test/control-plane/replica-dispatch-node-state-update.test-part-4.js test/control-plane/replica-dispatch-node-state-update.test.js test/admin/admin-control-snapshot.test.js test/control-plane/membership-publication-coordinator-main-stage-2.js test/control-plane/system-metadata-owner-modules.test.js test/control-plane/control-plane-system-table-gateway.test.js test/rebalancer/replica-operation-repository.test.js`
 12. `git diff --check`
@@ -368,3 +369,9 @@ This is the first package in the new sprint.
 Result classification: `migrated`.
 
 Stop condition: `migrate-owner-boundary`.
+
+## Commit And Push Ledger
+
+1. Focused package commit: `150daceae9bf6d0de6dc46734e3977d1137f02b1`
+2. Pushed to: `origin/codex/pending-ack-eligibility-filter`
+3. Commit contains only package-owned files/package-status/allowed sprint handoff: yes
