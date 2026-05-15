@@ -194,7 +194,9 @@ Required workflow:
 18. If representative evidence oscillates between two related owner
     boundaries, the next validation surface must be a replayable handoff
     fixture or missing-edge probe that includes both boundaries. Focused owner
-    tests for either boundary alone are insufficient.
+    tests for either boundary alone are insufficient. The fixture or probe must
+    decide which owner owns progress, defer, retry, or terminal classification
+    for the handoff before another owner-local runtime patch starts.
 19. When repeated scenario runs keep failing after local fixes or
     classification-only reductions, the next validation package must establish a
     causal-analysis boundary before more runtime fixes. At minimum it must

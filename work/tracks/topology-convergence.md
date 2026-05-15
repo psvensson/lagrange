@@ -27,32 +27,48 @@ passes.
 Controllers also need bounded progress contracts: attempt count, next attempt,
 deadline, retry/wake path, terminal classification, and last blocking reason.
 
+## Comparative Guidance
+
+These systems are design references, not scope commitments. This track extracts
+stable distributed-systems patterns and maps them to local owner contracts.
+
+| System | Stable pattern | Local analogue | Constraint for this track | Not copying |
+| --- | --- | --- | --- | --- |
+| etcd | Learners catch up before promotion. | Restarting or joining nodes before active admission. | Active-gate success requires durable freshness and coverage evidence before a node is admitted as ready. | etcd membership or quorum model. |
+| TiKV / PD | Scheduling operators carry step witnesses and are followed by heartbeat evidence. | Publication, recovery, and repair operations. | In-flight topology work exposes step, witness, timeout, and legal next action instead of timeout-only failure. | PD scheduling architecture. |
+| CockroachDB | System ranges receive stronger availability expectations than ordinary data. | Control-plane partitions, publications, and active-gate cohorts. | Control-plane convergence uses stricter proof than ordinary partition convergence. | Feature parity or user-facing SQL behavior. |
+| FoundationDB | Deterministic simulation and status are core correctness tools. | Boundary fixtures, causal extractors, and topology convergence reports. | Repeated full reruns must be preceded by replayable handoff fixtures or missing-edge probes. | FoundationDB architecture or simulation stack. |
+
+These references constrain validation vocabulary and owner-boundary proof only.
+Packages still require AGPL roadmap or edition scope and local evidence.
+
 ## Local Divergence
 
-Current representative evidence can show publication ACK completion while active
-projection remains incomplete.
+Current representative evidence oscillates between publication convergence and
+active-gate snapshot coverage. The active sprint now treats that as one
+producer-consumer handoff problem rather than independent single-owner
+residuals.
 
 Latest current handoff state:
 
-- `publicationStatus=PUBLISHED`
-- `pendingAckCount=0`
-- `active=0/5`
-- `publishedActive` remains incomplete through publication diagnostics
-- `missingPublishedCount=4`
-- `snapshotCoverageNodeCount=2`
-- `expectedNodeCount=5`
-- first frontier is now `publication_ack_convergence`
-- owner boundary is now `topology_publication_owner / publication_convergence`
-- priority recovery remains a non-frontier tail
+- artifact:
+  `test-output/reports/rolling-restart-after-forced-snapshot-refresh-debt-fallback-20260515-codex.report.json`
+- first frontier: `publication_ack_convergence`
+- owner boundary: `topology_publication_owner / publication_convergence`
+- dominant reason: `publication_pending`
+- downstream active-gate snapshot coverage remains blocked with
+  `snapshotCoverage=0/5` and forced authoritative snapshot repair error
+- priority recovery remains classified as satisfied and subordinate
 
 ## Target Invariant
 
-Active-gate readiness is derived from one owner-truth snapshot and one bounded
-projection contract.
+Active-gate readiness is derived from one owner-truth snapshot, one bounded
+projection contract, and one producer-consumer handoff edge.
 
 A gate may pass only when durable publication truth, active node projection,
-snapshot coverage, and expected node cohort are from compatible epochs or the
-owner emits a narrower canonical blocker.
+snapshot coverage, and expected node cohort are compatible by one
+publication-to-active-gate freshness, revision, or ACK edge, or the owner emits
+a narrower canonical blocker.
 
 ## Gate Or Acceptance Proof
 
@@ -71,29 +87,28 @@ or produces a narrower owner-boundary blocker selected by canonical evidence.
 - Active sprint:
   `work/sprints/active-2026-q2-topology-convergence-residual-closure.md`
 - Active package:
-  `work/packages/active-20260514-topology-publication-convergence-final-blocker.md`
+  `work/packages/active-20260515-topology-publication-active-gate-handoff-oscillation.md`
 - Artifact:
-  `test-output/reports/topology-ship-gate-final-rolling-restart.report.json`
+  `test-output/reports/rolling-restart-after-forced-snapshot-refresh-debt-fallback-20260515-codex.report.json`
 - Current package-local owner boundary:
   `topology_publication_owner / publication_convergence`
 - Representative owner boundary:
   `topology_publication_owner / publication_convergence`
 - Extractor summary:
   `publication_ack_convergence` is the first frontier with dominant reason
-  `missing_published_nodes_present`. Current evidence has
-  `publicationStatus=PUBLISHED`, `pendingAckCount=0`, `missingPublishedCount=4`,
-  `snapshotCoverageNodeCount=2`, and `expectedNodeCount=5`.
+  `publication_pending`. Downstream active-gate snapshot coverage remains
+  blocked at `0/5`; the active package must build a replayable
+  publication-to-active-gate missing-edge probe before runtime file promotion.
 - Priority recovery residuals:
-  two `operation_workflow_owner / workflow_progress` witnesses remain in the
-  tail, but canonical evidence keeps them subordinate to publication
-  convergence.
+  classified as satisfied and subordinate to the publication-to-active-gate
+  handoff residual.
 
 ## Codebase Analysis Notes
 
-The implementation is broader than the initial file list. Publication
-convergence spans the runtime publication owner, the staged membership
-publication coordinator modules, active-node projection, admin control-snapshot
-projection, and distributed harness evidence replay.
+The implementation is broader than the initial file list. The current handoff
+spans the runtime publication owner, the staged membership publication
+coordinator modules, active-gate snapshot coverage, control-plane/admin
+snapshot projection, and distributed harness evidence replay.
 
 Diagnostics are also part of the track surface. The current artifact is
 classified through topology convergence graph, causal model, failure-bundle, and
@@ -103,7 +118,7 @@ publication-evidence replay code rather than by the runtime owner alone.
 
 | Sprint | Sprint kind | Status | Notes |
 | --- | --- | --- | --- |
-| `work/sprints/active-2026-q2-topology-convergence-residual-closure.md` | `bugfix` / `stabilization` | active | Current package is `topology_publication_owner / publication_convergence`. |
+| `work/sprints/active-2026-q2-topology-convergence-residual-closure.md` | `bugfix` / `stabilization` | active | Current package is the publication-to-active-gate handoff oscillation; publication and active-gate evidence are treated as one causal handoff. |
 
 ## Owner Boundaries
 
@@ -157,8 +172,9 @@ These are context candidates, not write authorization:
 
 ## Entry Condition
 
-Continue with the current active package. Do not open a second active package on
-this boundary while the active package remains unresolved.
+Continue with the current active handoff package. Do not open a second active
+package on topology convergence while the publication-to-active-gate probe
+remains unresolved.
 
 ## Exit Condition
 
@@ -171,5 +187,5 @@ canonical owner-boundary evidence.
 Current package:
 
 ```text
-work/packages/active-20260514-topology-publication-convergence-final-blocker.md
+work/packages/active-20260515-topology-publication-active-gate-handoff-oscillation.md
 ```

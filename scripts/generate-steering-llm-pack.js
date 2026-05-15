@@ -799,7 +799,8 @@ function buildManifest(
 
     const rules = selectedByOutput.get(output.name) || [];
     const estimatedRuleTokens = estimateTokens(
-      rules.map((rule) => `[${rule.id}] ${rule.text}`).join('\n'),
+      rules.map((rule, index) => `${index + 1}. [${rule.id}] ${rule.text}`)
+        .join('\n'),
     );
 
     return {

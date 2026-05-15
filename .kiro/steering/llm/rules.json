@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-05-15T07:06:27.787Z",
+  "generatedAt": "2026-05-15T07:53:18.406Z",
   "sourceDir": ".kiro/steering",
   "llmDir": ".kiro/steering/llm",
   "sourceFiles": [
@@ -45,10 +45,10 @@
     }
   ],
   "stats": {
-    "candidateCount": 267,
-    "dedupedRuleCount": 267,
-    "exportedRuleCount": 267,
-    "estimatedAllRulesTokens": 9689
+    "candidateCount": 271,
+    "dedupedRuleCount": 271,
+    "exportedRuleCount": 271,
+    "estimatedAllRulesTokens": 9963
   },
   "rules": [
     {
@@ -814,7 +814,7 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 286,
+          "line": 288,
           "section": "Testing Guidelines > Reuse-First Fix Strategy > When fixing a bug"
         }
       ]
@@ -829,7 +829,7 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 340,
+          "line": 342,
           "section": "Testing Guidelines > Bug-Cluster Escalation Policy"
         }
       ]
@@ -846,7 +846,7 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 388,
+          "line": 390,
           "section": "Testing Guidelines > System Guideline Conformance Gate for New and Existing Tests"
         }
       ]
@@ -861,7 +861,7 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 423,
+          "line": 425,
           "section": "Testing Guidelines > Deterministic Control-Loop Regression Policy"
         }
       ]
@@ -878,7 +878,7 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 503,
+          "line": 505,
           "section": "Testing Guidelines > Test Duration Hard Limit"
         }
       ]
@@ -893,7 +893,7 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 571,
+          "line": 573,
           "section": "Testing Guidelines > No Skipped Tests Policy"
         }
       ]
@@ -910,7 +910,7 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 572,
+          "line": 574,
           "section": "Testing Guidelines > No Skipped Tests Policy"
         }
       ]
@@ -927,7 +927,7 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 573,
+          "line": 575,
           "section": "Testing Guidelines > No Skipped Tests Policy"
         }
       ]
@@ -944,7 +944,7 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 587,
+          "line": 589,
           "section": "Testing Guidelines > No Test-Only Code Paths in Production Code"
         }
       ]
@@ -961,7 +961,7 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 589,
+          "line": 591,
           "section": "Testing Guidelines > No Test-Only Code Paths in Production Code"
         }
       ]
@@ -978,7 +978,7 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 591,
+          "line": 593,
           "section": "Testing Guidelines > No Test-Only Code Paths in Production Code"
         }
       ]
@@ -995,7 +995,7 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 593,
+          "line": 595,
           "section": "Testing Guidelines > No Test-Only Code Paths in Production Code"
         }
       ]
@@ -1012,7 +1012,7 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 595,
+          "line": 597,
           "section": "Testing Guidelines > No Test-Only Code Paths in Production Code"
         }
       ]
@@ -1029,7 +1029,7 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 616,
+          "line": 618,
           "section": "Testing Guidelines > Fix Failing Tests Immediately"
         }
       ]
@@ -1044,7 +1044,7 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 617,
+          "line": 619,
           "section": "Testing Guidelines > Fix Failing Tests Immediately"
         }
       ]
@@ -1062,7 +1062,7 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 640,
+          "line": 642,
           "section": "Testing Guidelines > System-Table Mutation Test Requirements"
         }
       ]
@@ -1077,7 +1077,7 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 673,
+          "line": 675,
           "section": "Testing Guidelines > Baseline-Discovered Bug Closure Policy"
         }
       ]
@@ -1094,7 +1094,7 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 679,
+          "line": 681,
           "section": "Testing Guidelines > Baseline-Discovered Bug Closure Policy"
         }
       ]
@@ -1111,7 +1111,7 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 803,
+          "line": 805,
           "section": "Testing Guidelines > Agent And Sub-Agent Validation Handoff Policy"
         }
       ]
@@ -1128,7 +1128,7 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 807,
+          "line": 809,
           "section": "Testing Guidelines > Agent And Sub-Agent Validation Handoff Policy"
         }
       ]
@@ -1433,7 +1433,7 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 578,
+          "line": 580,
           "section": "Testing Guidelines > No Test-Only Code Paths in Production Code"
         }
       ]
@@ -1448,7 +1448,7 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 629,
+          "line": 631,
           "section": "Testing Guidelines > Fix Failing Tests Immediately"
         }
       ]
@@ -1465,7 +1465,7 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 645,
+          "line": 647,
           "section": "Testing Guidelines > System-Table Mutation Test Requirements"
         }
       ]
@@ -1571,12 +1571,12 @@
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
-      "rule": "Do not open a new package merely because artifact epoch, node ids, counts, timestamps, or presentation shape changed.",
+      "rule": "Do not open a new package merely because artifact path, epoch, node ids, counts, attempts, timings, timestamps, or presentation shape changed.",
       "score": 220,
       "sources": [
         {
           "file": "workflow-guidelines.md",
-          "line": 268,
+          "line": 270,
           "section": "Workflow Guidelines Detail > Scenario Failure Migration"
         }
       ]
@@ -1593,7 +1593,7 @@
       "sources": [
         {
           "file": "workflow-guidelines.md",
-          "line": 293,
+          "line": 295,
           "section": "Workflow Guidelines Detail > Frontier Oscillation Escalation"
         }
       ]
@@ -1774,7 +1774,7 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 252,
+          "line": 254,
           "section": "Testing Guidelines > Test-First Bug Fix Policy"
         }
       ]
@@ -1789,7 +1789,7 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 342,
+          "line": 344,
           "section": "Testing Guidelines > Bug-Cluster Escalation Policy"
         }
       ]
@@ -1980,7 +1980,7 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 569,
+          "line": 571,
           "section": "Testing Guidelines > No Skipped Tests Policy"
         }
       ]
@@ -2124,7 +2124,7 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 770,
+          "line": 772,
           "section": "Testing Guidelines > Artifact-First Distributed Failure Triage Policy"
         }
       ]
@@ -2141,7 +2141,7 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 788,
+          "line": 790,
           "section": "Testing Guidelines > Agent And Sub-Agent Validation Handoff Policy"
         }
       ]
@@ -2158,7 +2158,7 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 809,
+          "line": 811,
           "section": "Testing Guidelines > Agent And Sub-Agent Validation Handoff Policy"
         }
       ]
@@ -2175,7 +2175,7 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 917,
+          "line": 919,
           "section": "Testing Guidelines > Availability Under Pressure Test Policy > Test structure"
         }
       ]
@@ -2321,7 +2321,7 @@
       "sources": [
         {
           "file": "workflow-guidelines.md",
-          "line": 350,
+          "line": 358,
           "section": "Workflow Guidelines Detail > Static Drift Ledger"
         }
       ]
@@ -2340,7 +2340,7 @@
       "sources": [
         {
           "file": "workflow-guidelines.md",
-          "line": 350,
+          "line": 358,
           "section": "Workflow Guidelines Detail > Static Drift Ledger"
         }
       ]
@@ -2355,7 +2355,7 @@
       "sources": [
         {
           "file": "workflow-guidelines.md",
-          "line": 440,
+          "line": 448,
           "section": "Workflow Guidelines Detail > LLM Tool-First Triage"
         }
       ]
@@ -2370,7 +2370,7 @@
       "sources": [
         {
           "file": "workflow-guidelines.md",
-          "line": 471,
+          "line": 479,
           "section": "Workflow Guidelines Detail > Sub-Agent Sequencing"
         }
       ]
@@ -2387,7 +2387,7 @@
       "sources": [
         {
           "file": "workflow-guidelines.md",
-          "line": 574,
+          "line": 582,
           "section": "Workflow Guidelines Detail > Roadmap And Work-Tracker Truth"
         }
       ]
@@ -2653,7 +2653,7 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 247,
+          "line": 249,
           "section": "Testing Guidelines > Test-First Bug Fix Policy"
         }
       ]
@@ -2668,7 +2668,7 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 321,
+          "line": 323,
           "section": "Testing Guidelines > Bug-Cluster Escalation Policy"
         }
       ]
@@ -2687,7 +2687,7 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 347,
+          "line": 349,
           "section": "Testing Guidelines > Owner-Path Regression Policy"
         }
       ]
@@ -2704,7 +2704,7 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 372,
+          "line": 374,
           "section": "Testing Guidelines > System Guideline Conformance Gate for New and Existing Tests"
         }
       ]
@@ -2721,7 +2721,7 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 399,
+          "line": 401,
           "section": "Testing Guidelines > Gateway Boundary Regression Policy"
         }
       ]
@@ -2741,7 +2741,7 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 415,
+          "line": 417,
           "section": "Testing Guidelines > Deterministic Control-Loop Regression Policy"
         }
       ]
@@ -2760,7 +2760,7 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 465,
+          "line": 467,
           "section": "Testing Guidelines > Continuity And Lifetime Regression Policy"
         }
       ]
@@ -2778,7 +2778,7 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 542,
+          "line": 544,
           "section": "Testing Guidelines > Timeout Budget and Classification Policy"
         }
       ]
@@ -2795,7 +2795,7 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 569,
+          "line": 571,
           "section": "Testing Guidelines > No Skipped Tests Policy"
         }
       ]
@@ -2812,7 +2812,7 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 581,
+          "line": 583,
           "section": "Testing Guidelines > No Test-Only Code Paths in Production Code"
         }
       ]
@@ -2829,7 +2829,7 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 606,
+          "line": 608,
           "section": "Testing Guidelines > No Test-Only Code Paths in Production Code"
         }
       ]
@@ -2846,7 +2846,7 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 611,
+          "line": 613,
           "section": "Testing Guidelines > Fix Failing Tests Immediately"
         }
       ]
@@ -2863,7 +2863,7 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 783,
+          "line": 785,
           "section": "Testing Guidelines > Agent And Sub-Agent Validation Handoff Policy"
         }
       ]
@@ -2881,7 +2881,7 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 820,
+          "line": 822,
           "section": "Testing Guidelines > Structured Deferred-Outcome Regression Policy"
         }
       ]
@@ -2899,7 +2899,7 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 842,
+          "line": 844,
           "section": "Testing Guidelines > Read-Side Repair Separation Regression Policy"
         }
       ]
@@ -2916,7 +2916,7 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 882,
+          "line": 884,
           "section": "Testing Guidelines > Availability Under Pressure Test Policy"
         }
       ]
@@ -2982,6 +2982,23 @@
           "file": "roadmap.md",
           "line": 75,
           "section": "Roadmap Steering Pointer > Work Intake And Execution Flow"
+        }
+      ]
+    },
+    {
+      "id": "GOV-0029",
+      "domain": "governance",
+      "strength": "must",
+      "tags": [
+        "ownership"
+      ],
+      "rule": "If the same owner boundary and next required action remain dominant, append normalized evidence to the current package and update the sprint blocker snapshot.",
+      "score": 202,
+      "sources": [
+        {
+          "file": "workflow-guidelines.md",
+          "line": 267,
+          "section": "Workflow Guidelines Detail > Scenario Failure Migration"
         }
       ]
     },
@@ -3135,7 +3152,7 @@
       ]
     },
     {
-      "id": "GOV-0029",
+      "id": "GOV-0030",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -3150,7 +3167,7 @@
       ]
     },
     {
-      "id": "GOV-0030",
+      "id": "GOV-0031",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -3168,7 +3185,7 @@
       ]
     },
     {
-      "id": "GOV-0031",
+      "id": "GOV-0032",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -3186,7 +3203,7 @@
       ]
     },
     {
-      "id": "GOV-0032",
+      "id": "GOV-0033",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -3379,7 +3396,7 @@
         "ownership",
         "testing"
       ],
-      "rule": "If representative evidence oscillates between two related owner boundaries, the next validation surface must be a replayable handoff fixture or missing-edge probe that includes both boundaries. Focused owner tests for either boundary alone are insufficient.",
+      "rule": "If representative evidence oscillates between two related owner boundaries, the next validation surface must be a replayable handoff fixture or missing-edge probe that includes both boundaries. Focused owner tests for either boundary alone are insufficient. The fixture or probe must decide which owner owns progress, defer, retry, or terminal classification for the handoff before another owner-local runtime patch starts.",
       "score": 194,
       "sources": [
         {
@@ -3402,7 +3419,7 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 198,
+          "line": 200,
           "section": "Testing Guidelines > Scenario-Driven Failure Migration Validation Policy"
         }
       ]
@@ -3417,13 +3434,13 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 204,
+          "line": 206,
           "section": "Testing Guidelines > Scenario-Driven Failure Migration Validation Policy"
         }
       ]
     },
     {
-      "id": "GOV-0033",
+      "id": "GOV-0034",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -3440,7 +3457,7 @@
       ]
     },
     {
-      "id": "GOV-0034",
+      "id": "GOV-0035",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -3455,7 +3472,7 @@
       ]
     },
     {
-      "id": "GOV-0035",
+      "id": "GOV-0036",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -3472,7 +3489,7 @@
       ]
     },
     {
-      "id": "GOV-0036",
+      "id": "GOV-0037",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -3487,7 +3504,7 @@
       ]
     },
     {
-      "id": "GOV-0037",
+      "id": "GOV-0038",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -3502,7 +3519,7 @@
       ]
     },
     {
-      "id": "GOV-0038",
+      "id": "GOV-0039",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -3517,7 +3534,7 @@
       ]
     },
     {
-      "id": "GOV-0039",
+      "id": "GOV-0040",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -3528,7 +3545,7 @@
       "sources": [
         {
           "file": "workflow-guidelines.md",
-          "line": 540,
+          "line": 548,
           "section": "Workflow Guidelines Detail > Scenario Causal Closure Ledger"
         }
       ]
@@ -3545,7 +3562,7 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 773,
+          "line": 775,
           "section": "Testing Guidelines > Artifact-First Distributed Failure Triage Policy"
         }
       ]
@@ -3560,7 +3577,7 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 793,
+          "line": 795,
           "section": "Testing Guidelines > Agent And Sub-Agent Validation Handoff Policy"
         }
       ]
@@ -3575,7 +3592,7 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 897,
+          "line": 899,
           "section": "Testing Guidelines > Availability Under Pressure Test Policy > Required coverage patterns"
         }
       ]
@@ -3711,7 +3728,7 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 253,
+          "line": 255,
           "section": "Testing Guidelines > Test-First Bug Fix Policy"
         }
       ]
@@ -3726,7 +3743,7 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 257,
+          "line": 259,
           "section": "Testing Guidelines > Test-First Bug Fix Policy"
         }
       ]
@@ -3743,7 +3760,7 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 261,
+          "line": 263,
           "section": "Testing Guidelines > Test-First Bug Fix Policy"
         }
       ]
@@ -3758,13 +3775,13 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 308,
+          "line": 310,
           "section": "Testing Guidelines > Reuse-First Fix Strategy > Periodic architecture check"
         }
       ]
     },
     {
-      "id": "GOV-0040",
+      "id": "GOV-0041",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -3810,7 +3827,7 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 443,
+          "line": 445,
           "section": "Testing Guidelines > Temporal Witness Replay Policy"
         }
       ]
@@ -3827,7 +3844,7 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 805,
+          "line": 807,
           "section": "Testing Guidelines > Agent And Sub-Agent Validation Handoff Policy"
         }
       ]
@@ -3844,7 +3861,7 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 725,
+          "line": 727,
           "section": "Testing Guidelines > Distributed Validation Ladder Policy"
         }
       ]
@@ -3861,7 +3878,7 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 747,
+          "line": 749,
           "section": "Testing Guidelines > Artifact-First Distributed Failure Triage Policy"
         }
       ]
@@ -3886,6 +3903,23 @@
       ]
     },
     {
+      "id": "GOV-0042",
+      "domain": "governance",
+      "strength": "must",
+      "tags": [
+        "ownership"
+      ],
+      "rule": "Split one follow-on package only when canonical extraction shows semantic movement: first-frontier edge, semantic owner, owner boundary, or next required action changes. A dominant reason change qualifies only when it changes the next required action.",
+      "score": 178,
+      "sources": [
+        {
+          "file": "workflow-guidelines.md",
+          "line": 263,
+          "section": "Workflow Guidelines Detail > Scenario Failure Migration"
+        }
+      ]
+    },
+    {
       "id": "TEST-0086",
       "domain": "testing",
       "strength": "should",
@@ -3897,7 +3931,7 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 262,
+          "line": 264,
           "section": "Testing Guidelines > Test-First Bug Fix Policy"
         }
       ]
@@ -3994,7 +4028,7 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 367,
+          "line": 369,
           "section": "Testing Guidelines > Owner-Path Regression Policy"
         }
       ]
@@ -4029,7 +4063,7 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 740,
+          "line": 742,
           "section": "Testing Guidelines > Distributed Validation Ladder Policy"
         }
       ]
@@ -4044,7 +4078,7 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 220,
+          "line": 222,
           "section": "Testing Guidelines > Runner Stability Boundary Policy"
         }
       ]
@@ -4059,7 +4093,7 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 239,
+          "line": 241,
           "section": "Testing Guidelines > Runner Parallelism Budget Policy"
         }
       ]
@@ -4074,13 +4108,30 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 312,
+          "line": 314,
           "section": "Testing Guidelines > Reuse-First Fix Strategy > Periodic architecture check"
         }
       ]
     },
     {
-      "id": "GOV-0041",
+      "id": "GOV-0043",
+      "domain": "governance",
+      "strength": "must",
+      "tags": [
+        "ownership"
+      ],
+      "rule": "If the same two boundaries alternate again without representative green or monotonic reduction, the next validation surface must be a replayable handoff fixture or missing-edge probe that includes both owners before more runtime edits start.",
+      "score": 168,
+      "sources": [
+        {
+          "file": "workflow-guidelines.md",
+          "line": 313,
+          "section": "Workflow Guidelines Detail > Frontier Oscillation Escalation"
+        }
+      ]
+    },
+    {
+      "id": "GOV-0044",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -4091,7 +4142,7 @@
       "sources": [
         {
           "file": "workflow-guidelines.md",
-          "line": 383,
+          "line": 391,
           "section": "Workflow Guidelines Detail > LLM Tool-First Triage"
         }
       ]
@@ -4106,7 +4157,7 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 764,
+          "line": 766,
           "section": "Testing Guidelines > Artifact-First Distributed Failure Triage Policy"
         }
       ]
@@ -4121,7 +4172,7 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 800,
+          "line": 802,
           "section": "Testing Guidelines > Agent And Sub-Agent Validation Handoff Policy"
         }
       ]
@@ -4191,7 +4242,7 @@
       ]
     },
     {
-      "id": "GOV-0042",
+      "id": "GOV-0045",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -4208,7 +4259,7 @@
       ]
     },
     {
-      "id": "GOV-0043",
+      "id": "GOV-0046",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -4225,7 +4276,7 @@
       ]
     },
     {
-      "id": "GOV-0044",
+      "id": "GOV-0047",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -4251,7 +4302,7 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 740,
+          "line": 742,
           "section": "Testing Guidelines > Distributed Validation Ladder Policy"
         }
       ]
@@ -4268,13 +4319,13 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 861,
+          "line": 863,
           "section": "Testing Guidelines > When to Run Full Test Suite"
         }
       ]
     },
     {
-      "id": "GOV-0045",
+      "id": "GOV-0048",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -4285,7 +4336,7 @@
       "sources": [
         {
           "file": "workflow-guidelines.md",
-          "line": 420,
+          "line": 428,
           "section": "Workflow Guidelines Detail > LLM Tool-First Triage"
         }
       ]
@@ -4306,7 +4357,7 @@
       ]
     },
     {
-      "id": "GOV-0046",
+      "id": "GOV-0049",
       "domain": "governance",
       "strength": "may",
       "tags": [],
@@ -4321,7 +4372,7 @@
       ]
     },
     {
-      "id": "GOV-0047",
+      "id": "GOV-0050",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -4338,7 +4389,25 @@
       ]
     },
     {
-      "id": "GOV-0048",
+      "id": "GOV-0051",
+      "domain": "governance",
+      "strength": "may",
+      "tags": [
+        "ownership",
+        "readiness"
+      ],
+      "rule": "If an active package is already in the causal-escalation lane, it may continue only when it explicitly owns that handoff, names the missing cross-boundary causal edge, and keeps same-owner evidence in the same package.",
+      "score": 144,
+      "sources": [
+        {
+          "file": "workflow-guidelines.md",
+          "line": 298,
+          "section": "Workflow Guidelines Detail > Frontier Oscillation Escalation"
+        }
+      ]
+    },
+    {
+      "id": "GOV-0052",
       "domain": "governance",
       "strength": "may",
       "tags": [],
@@ -4347,13 +4416,13 @@
       "sources": [
         {
           "file": "workflow-guidelines.md",
-          "line": 308,
+          "line": 313,
           "section": "Workflow Guidelines Detail > Frontier Oscillation Escalation"
         }
       ]
     },
     {
-      "id": "GOV-0049",
+      "id": "GOV-0053",
       "domain": "governance",
       "strength": "may",
       "tags": [],
@@ -4362,7 +4431,7 @@
       "sources": [
         {
           "file": "workflow-guidelines.md",
-          "line": 471,
+          "line": 479,
           "section": "Workflow Guidelines Detail > Sub-Agent Sequencing"
         }
       ]
@@ -4383,7 +4452,7 @@
       ]
     },
     {
-      "id": "GOV-0050",
+      "id": "GOV-0054",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -4400,7 +4469,7 @@
       ]
     },
     {
-      "id": "GOV-0051",
+      "id": "GOV-0055",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -4411,13 +4480,13 @@
       "sources": [
         {
           "file": "workflow-guidelines.md",
-          "line": 415,
+          "line": 423,
           "section": "Workflow Guidelines Detail > LLM Tool-First Triage"
         }
       ]
     },
     {
-      "id": "GOV-0052",
+      "id": "GOV-0056",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -4428,7 +4497,7 @@
       "sources": [
         {
           "file": "workflow-guidelines.md",
-          "line": 540,
+          "line": 548,
           "section": "Workflow Guidelines Detail > Scenario Causal Closure Ledger"
         }
       ]

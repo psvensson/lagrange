@@ -254,8 +254,9 @@ Before any package in this sprint moves from `todo` to `active`:
    same-frontier fallback, and result classification.
 4. Promote exact runtime/harness candidates into `writeScope` and `commitScope`
    only after canonical owner-file or focused probe evidence names them.
-5. Replace subagent placeholders with real review/fix/implementation proof, or
-   an allowed waiver, before pre-implementation validation.
+5. Replace review/fix subagent placeholders with real proof, or an allowed
+   waiver, before pre-implementation validation. Implementation proof may remain
+   open until closure validation.
 6. Preserve the named artifact path. If fresh evidence changes owner,
    boundary, or dominant reason, classify the package as `migrated`,
    `same-frontier`, or split to a narrower successor.

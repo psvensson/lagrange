@@ -2,8 +2,8 @@
 
 Load for roadmap and edition-scope checks.
 
-Generated rules: 52
-Estimated tokens: 2159
+Generated rules: 56
+Estimated tokens: 2398
 Domains: governance
 
 ## Rules
@@ -14,7 +14,7 @@ Domains: governance
 4. [GOV-0004] Escalate to causal analysis when repeated local fixes or classifications do not make the representative gate pass.
 5. [GOV-0005] Do not create heading, directory, checkbox, or sidecar status systems that contradict the filename.
 6. [GOV-0006] Do not archive package files into a second package-status directory.
-7. [GOV-0007] Do not open a new package merely because artifact epoch, node ids, counts, timestamps, or presentation shape changed.
+7. [GOV-0007] Do not open a new package merely because artifact path, epoch, node ids, counts, attempts, timings, timestamps, or presentation shape changed.
 8. [GOV-0008] Two focused fixes in adjacent owner boundaries are green locally but do not produce representative green or monotonic representative reduction.
 9. [GOV-0009] Sprint files do not replace work packages.
 10. [GOV-0010] docs/ is reserved for end-user or operator-facing documentation. Internal planning, work-package execution, and sprint tracking must not live there.
@@ -36,27 +36,31 @@ Domains: governance
 26. [GOV-0026] Such examples must not define implementation tasks in this repository unless the active package explicitly limits the work to AGPL-owned substrate and excludes paid-only behavior, operator flows, and control surfaces.
 27. [GOV-0027] Escalate to scenario/release-gate when the work is driven by a failing representative artifact or must prove what that scenario does next.
 28. [GOV-0028] Completed work packages are renamed to done-... in the filename, then committed and pushed as a focused package slice before the next slice starts. Packages closed under the current tracker workflow carry a Commit And Push Ledger naming the focused package commit SHA, pushed remote/branch, and package-only commit confirmation. Historical closed-package proof must not be backfilled by invention; if a package is reopened, migrated, or closed again, the current proof rules apply.
-29. [GOV-0029] Scenario-driven sprint files must keep a compact current blocker snapshot near the top of the document.
-30. [GOV-0030] The snapshot must identify the latest artifact, representative gate, current representative package, owner boundary, canonical blocker, prior blocker status, subordinate evidence, and next focused proof surface.
-31. [GOV-0031] Residual packages that are not currently being executed must be renamed to todo-... or superseded-... unless they are actively worked with explicitly disjoint owner and file scope.
-32. [GOV-0032] Roadmap status must be reconciled with current work-tracker and representative scenario evidence.
-33. [GOV-0033] This lane is required when runtime behavior, shared metadata, control-plane progression, owner contracts, diagnostics grammar, guardrails, or affected runtime consumers can change.
-34. [GOV-0034] Representative scenario proof is required when a scenario artifact drove the work; otherwise focused proof may be sufficient.
-35. [GOV-0035] This lane is required when work is driven by a distributed, integration, load, or release-gate artifact.
-36. [GOV-0036] This lane is required when the representative gate remains red after repeated related local fixes or classification-only reductions.
-37. [GOV-0037] Every completed work-package slice MUST end in a focused commit and push before the next slice starts.
-38. [GOV-0038] Stop for human direction when package-owned and unrelated changes cannot be separated safely, when no push target exists, or when credentials/policy prevent the required push.
-39. [GOV-0039] The active scenario package owner and boundary must appear in scenarioCausalClosure.currentFirstFrontier.
-40. [GOV-0040] If a package discovers that a completed roadmap row still has an active representative blocker, the package must classify the mismatch as one of: - capability-complete but gate-open; - status-overstated and requiring roadmap correction; - new maintenance concern outside the original row
-41. [GOV-0041] LLM-driven work across all packages and sub-agent tasks must use canonical workflow and artifact tools before raw JSON or log slicing: work:llm-start, work:evidence-summary, work:package:doctor -- --suggest, work:package:schema, work:package:new, analyze:owner-files, focused scenario extractors such as analyze:priority-recovery-residuals, work:subagent-prompt, and work:oversized-next.
-42. [GOV-0042] A row may move to active implementation only when the intended behavior is sharp enough to produce tasks without inventing scope locally.
-43. [GOV-0043] A roadmap row may be treated as complete only when no active package or active sprint is still fixing the same declared exit criterion.
-44. [GOV-0044] A sprint may not close while ../../roadmap.md says a relevant exit criterion is complete and the sprint's current package says that same criterion still fails.
-45. [GOV-0045] Use validation phases deliberately: npm run work:validate -- --entry for package shape, --pre-impl when review/fix proof is complete and implementation may still be pending, and --closure before close/commit.
-46. [GOV-0046] At most one package in a sprint may own the current representative re-entry gate.
-47. [GOV-0047] A package may not close with open in-scope residuals.
-48. [GOV-0048] No further runtime patch in either oscillating boundary may start until that handoff package identifies the failing causal edge.
-49. [GOV-0049] Before closure, an implementation environment may record human-waived, tool-unavailable, or blocked-by-environment-policy with a reason: ... note so unavailable delegation is explicit instead of disguised as agent proof.
-50. [GOV-0050] Architecture documents may mention Pro or Enterprise services only as examples of external consumers of AGPL substrate.
-51. [GOV-0051] Use explicit metadata scope fields for new packages: writeScope for files the package may edit, handoffFiles for read-only context, generatedFiles for deterministic outputs, candidateRuntimeFiles for files gated by a focused probe, and commitScope for focused commit containment. touchedFiles is legacy compatibility only.
-52. [GOV-0052] A package may diverge only when it records metadata ownerBoundaryMigrationProof with concrete from/to owner and boundary, reason, and focused evidence proving a bounded diagnostic/support role or owner-boundary migration.
+29. [GOV-0029] If the same owner boundary and next required action remain dominant, append normalized evidence to the current package and update the sprint blocker snapshot.
+30. [GOV-0030] Scenario-driven sprint files must keep a compact current blocker snapshot near the top of the document.
+31. [GOV-0031] The snapshot must identify the latest artifact, representative gate, current representative package, owner boundary, canonical blocker, prior blocker status, subordinate evidence, and next focused proof surface.
+32. [GOV-0032] Residual packages that are not currently being executed must be renamed to todo-... or superseded-... unless they are actively worked with explicitly disjoint owner and file scope.
+33. [GOV-0033] Roadmap status must be reconciled with current work-tracker and representative scenario evidence.
+34. [GOV-0034] This lane is required when runtime behavior, shared metadata, control-plane progression, owner contracts, diagnostics grammar, guardrails, or affected runtime consumers can change.
+35. [GOV-0035] Representative scenario proof is required when a scenario artifact drove the work; otherwise focused proof may be sufficient.
+36. [GOV-0036] This lane is required when work is driven by a distributed, integration, load, or release-gate artifact.
+37. [GOV-0037] This lane is required when the representative gate remains red after repeated related local fixes or classification-only reductions.
+38. [GOV-0038] Every completed work-package slice MUST end in a focused commit and push before the next slice starts.
+39. [GOV-0039] Stop for human direction when package-owned and unrelated changes cannot be separated safely, when no push target exists, or when credentials/policy prevent the required push.
+40. [GOV-0040] The active scenario package owner and boundary must appear in scenarioCausalClosure.currentFirstFrontier.
+41. [GOV-0041] If a package discovers that a completed roadmap row still has an active representative blocker, the package must classify the mismatch as one of: - capability-complete but gate-open; - status-overstated and requiring roadmap correction; - new maintenance concern outside the original row
+42. [GOV-0042] Split one follow-on package only when canonical extraction shows semantic movement: first-frontier edge, semantic owner, owner boundary, or next required action changes. A dominant reason change qualifies only when it changes the next required action.
+43. [GOV-0043] If the same two boundaries alternate again without representative green or monotonic reduction, the next validation surface must be a replayable handoff fixture or missing-edge probe that includes both owners before more runtime edits start.
+44. [GOV-0044] LLM-driven work across all packages and sub-agent tasks must use canonical workflow and artifact tools before raw JSON or log slicing: work:llm-start, work:evidence-summary, work:package:doctor -- --suggest, work:package:schema, work:package:new, analyze:owner-files, focused scenario extractors such as analyze:priority-recovery-residuals, work:subagent-prompt, and work:oversized-next.
+45. [GOV-0045] A row may move to active implementation only when the intended behavior is sharp enough to produce tasks without inventing scope locally.
+46. [GOV-0046] A roadmap row may be treated as complete only when no active package or active sprint is still fixing the same declared exit criterion.
+47. [GOV-0047] A sprint may not close while ../../roadmap.md says a relevant exit criterion is complete and the sprint's current package says that same criterion still fails.
+48. [GOV-0048] Use validation phases deliberately: npm run work:validate -- --entry for package shape, --pre-impl when review/fix proof is complete and implementation may still be pending, and --closure before close/commit.
+49. [GOV-0049] At most one package in a sprint may own the current representative re-entry gate.
+50. [GOV-0050] A package may not close with open in-scope residuals.
+51. [GOV-0051] If an active package is already in the causal-escalation lane, it may continue only when it explicitly owns that handoff, names the missing cross-boundary causal edge, and keeps same-owner evidence in the same package.
+52. [GOV-0052] No further runtime patch in either oscillating boundary may start until that handoff package identifies the failing causal edge.
+53. [GOV-0053] Before closure, an implementation environment may record human-waived, tool-unavailable, or blocked-by-environment-policy with a reason: ... note so unavailable delegation is explicit instead of disguised as agent proof.
+54. [GOV-0054] Architecture documents may mention Pro or Enterprise services only as examples of external consumers of AGPL substrate.
+55. [GOV-0055] Use explicit metadata scope fields for new packages: writeScope for files the package may edit, handoffFiles for read-only context, generatedFiles for deterministic outputs, candidateRuntimeFiles for files gated by a focused probe, and commitScope for focused commit containment. touchedFiles is legacy compatibility only.
+56. [GOV-0056] A package may diverge only when it records metadata ownerBoundaryMigrationProof with concrete from/to owner and boundary, reason, and focused evidence proving a bounded diagnostic/support role or owner-boundary migration.

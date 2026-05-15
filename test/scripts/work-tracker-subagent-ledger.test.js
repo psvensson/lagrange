@@ -8,6 +8,7 @@ import {
   renderCurrentBlockerMarkdown,
   validateCausalGovernanceContract,
   validateCommitAndPushLedger,
+  validateCurrentBlockerPayloadFreshness,
   validateCurrentBlockerSnapshot,
   validateFrontierOscillationContract,
   validateModelFitContract,
@@ -447,7 +448,11 @@ const WORK_TRACKER_DOCTOR_CONTENT = [
   JSON.stringify({
     schema: 'work-package-v1',
     status: 'active',
+    opened: '2026-05-15',
+    lane: LANE_LIGHTWEIGHT_MAINTENANCE,
     scenario: 'none',
+    artifact: 'test-output/reports/package-doctor.report.json',
+    playback: 'none',
     owner: 'workflow_tooling_owner',
     boundary: 'package_doctor',
     dominantReason: 'doctor_needed',
@@ -455,6 +460,9 @@ const WORK_TRACKER_DOCTOR_CONTENT = [
     nextAction: 'Run package doctor.',
     proof: ['node --test test/scripts/work-tracker-subagent-ledger.test.js'],
     writeScope: ['scripts/work-tracker.js'],
+    handoffFiles: [],
+    generatedFiles: [],
+    candidateRuntimeFiles: [],
     commitScope: ['scripts/work-tracker.js'],
     modelFit: {
       packageClass: 'bounded-implementation',
@@ -1424,6 +1432,55 @@ describe('work tracker current blocker snapshot validation', () => {
     assert.deepEqual(errors, []);
   });
 
+  it('reports stale current-blocker field values with the repair command', () => {
+    const expectedPayload = buildCurrentBlockerPayload(
+      'work/sprints/active-test.md',
+      WORK_TRACKER_LEDGER_TEST_FILE,
+      {
+        ...SCENARIO_CAUSAL_CLOSURE_VALID_METADATA,
+        schema: 'work-package-v1',
+        status: WORK_TRACKER_ACTIVE_STATUS,
+        lane: LANE_CAUSAL_ESCALATION,
+        artifact: 'test-output/reports/current.report.json',
+        playback: 'none',
+        owner: 'topology_publication_owner',
+        boundary: 'publication_convergence',
+        dominantReason: 'publication_pending',
+        currentState: 'Current package state.',
+        nextAction: 'Build focused proof.',
+        proof: ['npm run work:evidence-summary -- test-output/reports/current.report.json'],
+        writeScope: ['work/packages/active-test-package.md'],
+        handoffFiles: [],
+        generatedFiles: ['work/sprints/current-blocker.json'],
+        candidateRuntimeFiles: [],
+        commitScope: ['work/packages/active-test-package.md'],
+        modelFit: {
+          packageClass: 'representative-frontier-closure',
+          intendedMinimumModel: 'gpt-5.3-codex',
+          scopeShape: 'scenario-causal-escalation',
+          escalationTriggers: ['scope expands'],
+        },
+      },
+    );
+    const stalePayload = {
+      ...expectedPayload,
+      artifact: 'test-output/reports/stale.report.json',
+      modelFit: {
+        ...expectedPayload.modelFit,
+        packageClass: 'unknown',
+      },
+    };
+    const errors = validateCurrentBlockerPayloadFreshness(
+      stalePayload,
+      expectedPayload,
+    ).join('\n');
+
+    assert.match(errors, /current-blocker snapshot is stale/u);
+    assert.match(errors, /artifact/u);
+    assert.match(errors, /modelFit\.packageClass/u);
+    assert.match(errors, /npm run work:current-blocker -- --write/u);
+  });
+
   it('reports stale current-blocker package paths with the repair command', () => {
     const errors = validateCurrentBlockerSnapshot(
       {
@@ -1461,5 +1518,46 @@ describe('work tracker current blocker snapshot validation', () => {
       );
 
       assert.deepEqual(errors, []);
+    });
+});
+
+describe('work tracker active scenario metadata shape', () => {
+  it('reports missing handoff metadata before current-blocker renders unknowns',
+    () => {
+      const content = [
+        '# Active Scenario Package',
+        '',
+        '<!-- work-package',
+        JSON.stringify({
+          schema: 'work-package-v1',
+          status: WORK_TRACKER_ACTIVE_STATUS,
+          opened: '2026-05-15',
+          lane: LANE_CAUSAL_ESCALATION,
+          scenario: 'rolling-restart',
+          owner: 'topology_publication_owner',
+          boundary: 'publication_convergence',
+          currentState: 'Package has enough prose to render.',
+          nextAction: 'Repair metadata before generating handoff.',
+          proof: [],
+          writeScope: [],
+          handoffFiles: [],
+          generatedFiles: [],
+          candidateRuntimeFiles: [],
+          commitScope: [],
+        }, null, 2),
+        '-->',
+        '',
+      ].join('\n');
+      const result = buildPackageDoctorLines(
+        WORK_TRACKER_ACTIVE_DOCTOR_FILE,
+        content,
+      );
+      const errors = result.errors.join('\n');
+
+      assert.match(errors, /metadata artifact must be concrete/u);
+      assert.match(errors, /metadata playback must be concrete/u);
+      assert.match(errors, /metadata dominantReason must be concrete/u);
+      assert.match(errors, /metadata proof must not be empty/u);
+      assert.match(errors, /metadata modelFit must be an object/u);
     });
 });

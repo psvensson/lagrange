@@ -3,7 +3,7 @@
 Load for test-first workflow, reliability harness work, and regression policy.
 
 Generated rules: 97
-Estimated tokens: 4055
+Estimated tokens: 4097
 Domains: testing
 
 ## Rules
@@ -78,7 +78,7 @@ Domains: testing
 68. [TEST-0068] A fresh artifact with different counts, node ids, epochs, or timing does not by itself prove blocker migration. Treat it as the same blocker until the normalized evidence shows a different semantic owner, owner boundary, or next required action.
 69. [TEST-0069] The active scenario package owner and boundary must match the canonical current first frontier recorded in scenarioCausalClosure. If a package intentionally owns a diagnostic/support role while the first frontier stays elsewhere, it must record explicit ownerBoundaryMigrationProof metadata with from/to owner-boundary, reason, and focused evidence.
 70. [TEST-0070] When a package classifies a retryable or backpressure state as bounded rather than fixing runtime code, the validation must prove why the state is not the first frontier, which downstream blockers remain, and which stop condition prevents another local patch. That classification cannot rest on prose alone: it must name the focused probe command, proof artifact path, expected observable transition, maximum progress bound, and same-frontier fallback.
-71. [TEST-0071] If representative evidence oscillates between two related owner boundaries, the next validation surface must be a replayable handoff fixture or missing-edge probe that includes both boundaries. Focused owner tests for either boundary alone are insufficient.
+71. [TEST-0071] If representative evidence oscillates between two related owner boundaries, the next validation surface must be a replayable handoff fixture or missing-edge probe that includes both boundaries. Focused owner tests for either boundary alone are insufficient. The fixture or probe must decide which owner owns progress, defer, retry, or terminal classification for the handoff before another owner-local runtime patch starts.
 72. [TEST-0072] When repeated scenario runs keep failing after local fixes or classification-only reductions, the next validation package must establish a causal-analysis boundary before more runtime fixes. At minimum it must validate the end-to-end phase model, cross-entity causal graph, budget/timeout accounting, invariant review, failure-class taxonomy, and architecture-level stop conditions.
 73. [TEST-0073] A runtime fix that follows causal-analysis escalation must cite the causal model or artifact it uses, then prove that its local regression changes the relevant causal edge rather than only improving the immediate symptom.
 74. [TEST-0074] Manual evidence summaries are allowed only when no extractor exists or the extractor output is insufficient. They must preserve the normalized owner fields from the artifact rather than reclassifying from raw logs, and the package must record why the extractor was not enough.

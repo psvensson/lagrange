@@ -260,13 +260,15 @@ Required workflow:
 1. Name the current dominant blocker, owner, and boundary.
 2. After focused proof is green, rerun the original scenario or the narrowest
    representative blocker probe.
-3. If dominant failure class, reason, owner, or boundary changes materially,
-   update the active package or split one follow-on package in the same work
-   cycle.
-4. If the same owner boundary remains dominant, append normalized evidence to
-   the current package and update the sprint blocker snapshot.
-5. Do not open a new package merely because artifact epoch, node ids, counts,
-   timestamps, or presentation shape changed.
+3. Split one follow-on package only when canonical extraction shows semantic
+   movement: first-frontier edge, semantic owner, owner boundary, or next
+   required action changes. A dominant reason change qualifies only when it
+   changes the next required action.
+4. If the same owner boundary and next required action remain dominant, append
+   normalized evidence to the current package and update the sprint blocker
+   snapshot.
+5. Do not open a new package merely because artifact path, epoch, node ids,
+   counts, attempts, timings, timestamps, or presentation shape changed.
 
 Progress notes distinguish:
 
@@ -294,7 +296,10 @@ Escalate when any of these happen:
    produce representative green or monotonic representative reduction.
 
 The next package uses the `causal-escalation` lane and owns the handoff between
-the oscillating boundaries, not either boundary in isolation.
+the oscillating boundaries, not either boundary in isolation. If an active
+package is already in the `causal-escalation` lane, it may continue only when it
+explicitly owns that handoff, names the missing cross-boundary causal edge, and
+keeps same-owner evidence in the same package.
 
 That package defines:
 
@@ -306,7 +311,10 @@ That package defines:
 6. the stop condition that permits a later local runtime fix
 
 No further runtime patch in either oscillating boundary may start until that
-handoff package identifies the failing causal edge.
+handoff package identifies the failing causal edge. If the same two boundaries
+alternate again without representative green or monotonic reduction, the next
+validation surface must be a replayable handoff fixture or missing-edge probe
+that includes both owners before more runtime edits start.
 
 ## Lifecycle Progress Grammar
 

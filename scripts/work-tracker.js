@@ -57,6 +57,7 @@ const CURRENT_BLOCKER_JSON_PATH = path.join(
 const CURRENT_BLOCKER_SCHEMA = 'current-blocker-v1';
 const CURRENT_BLOCKER_REPAIR_COMMAND =
   'npm run work:current-blocker -- --write';
+const CURRENT_BLOCKER_STALE_FIELD_LIMIT = 8;
 const CURRENT_BLOCKER_CLOSED_STATUSES = Object.freeze([
   STATUS_DONE,
   STATUS_FAILED,
@@ -73,6 +74,8 @@ const PACKAGE_STATUS_PATTERN = /^(active|done|superseded|todo)-.+\.md$/u;
 const SPRINT_STATUS_PATTERN = /^(active|done|todo)-.+\.md$/u;
 const ACTIVE_PACKAGE_LINK_PATTERN =
   /\]\((\.\.\/packages\/active-[^)]+\.md)\)/u;
+const CURRENT_ACTIVE_PACKAGE_LINK_PATTERN =
+  /(?:current\s+active\s+package|active\s+package|continue)\s*:?\s*(?:\n\s*)?\[[^\]]+\]\((\.\.\/packages\/active-[^)]+\.md)\)/iu;
 const SUBAGENT_LEDGER_HEADING = '## Subagent Sequencing Ledger';
 const MARKDOWN_LEVEL_TWO_HEADING_PREFIX = '## ';
 const SUBAGENT_LEDGER_REVIEW_LABEL = 'Review subagent recorded';
@@ -107,6 +110,40 @@ const MODEL_FIT_FOCUSED_PROOF_LABEL = 'Focused proof';
 const MODEL_FIT_SPARK_SAFE_CLASS = 'spark-safe';
 const MODEL_FIT_SPARK_MODEL = 'gpt-5.3-codex-spark';
 const MODEL_FIT_LEAF_SLICE_SCOPE = 'leaf-slice';
+const METADATA_FIELD_OPENED = 'opened';
+const METADATA_FIELD_CURRENT_STATE = 'currentState';
+const METADATA_FIELD_PROOF = 'proof';
+const METADATA_FIELD_ARTIFACT = 'artifact';
+const METADATA_FIELD_PLAYBACK = 'playback';
+const METADATA_FIELD_MODEL_FIT = 'modelFit';
+const MODEL_FIT_METADATA_PACKAGE_CLASS_FIELD = 'packageClass';
+const MODEL_FIT_METADATA_INTENDED_MINIMUM_MODEL_FIELD =
+  'intendedMinimumModel';
+const MODEL_FIT_METADATA_SCOPE_SHAPE_FIELD = 'scopeShape';
+const MODEL_FIT_METADATA_ESCALATION_TRIGGERS_FIELD = 'escalationTriggers';
+const ACTIVE_PACKAGE_REQUIRED_TEXT_METADATA_FIELDS = Object.freeze([
+  METADATA_FIELD_OPENED,
+  METADATA_LANE_FIELD,
+  METADATA_FIELD_CURRENT_STATE,
+]);
+const ACTIVE_SCENARIO_REQUIRED_TEXT_METADATA_FIELDS = Object.freeze([
+  METADATA_FIELD_ARTIFACT,
+  METADATA_FIELD_PLAYBACK,
+  'dominantReason',
+]);
+const ACTIVE_SCENARIO_REQUIRED_ARRAY_METADATA_FIELDS = Object.freeze([
+  METADATA_FIELD_PROOF,
+  SCOPE_FIELD_WRITE_SCOPE,
+  SCOPE_FIELD_HANDOFF_FILES,
+  SCOPE_FIELD_GENERATED_FILES,
+  SCOPE_FIELD_CANDIDATE_RUNTIME_FILES,
+  SCOPE_FIELD_COMMIT_SCOPE,
+]);
+const ACTIVE_SCENARIO_REQUIRED_MODEL_FIT_METADATA_FIELDS = Object.freeze([
+  MODEL_FIT_METADATA_PACKAGE_CLASS_FIELD,
+  MODEL_FIT_METADATA_INTENDED_MINIMUM_MODEL_FIELD,
+  MODEL_FIT_METADATA_SCOPE_SHAPE_FIELD,
+]);
 const SCENARIO_NONE = 'none';
 const SCENARIO_UNKNOWN = 'unknown';
 const SCENARIO_TEMPLATE_VALUE = 'scenario-or-none';
@@ -1917,6 +1954,94 @@ function replacePackageMetadata(content, metadata) {
   ].join('');
 }
 
+function isConcreteMetadataText(value, options = {}) {
+  const normalizedValue = normalizeLedgerText(value);
+  if (
+    normalizedValue.length === NUM_ZERO ||
+    LEDGER_TEMPLATE_PLACEHOLDER_PATTERN.test(normalizedValue) ||
+    normalizedValue.includes(LEDGER_PENDING_BEFORE_IMPLEMENTATION_MARKER)
+  ) {
+    return false;
+  }
+  return options.allowEmptyKeyword === true ||
+    !MODEL_FIT_EMPTY_VALUE_PATTERN.test(normalizedValue);
+}
+
+function validateConcreteMetadataField(filePath, metadata, fieldName, options = {}) {
+  if (isConcreteMetadataText(metadata?.[fieldName], options)) {
+    return [];
+  }
+  return [
+    `${filePath}: metadata ${fieldName} must be concrete for active ` +
+    'current-blocker handoff generation.',
+  ];
+}
+
+function validateRequiredMetadataArray(filePath, metadata, fieldName, options = {}) {
+  const value = metadata?.[fieldName];
+  if (!Array.isArray(value)) {
+    return [
+      `${filePath}: metadata ${fieldName} must be an array for active ` +
+      'current-blocker handoff generation.',
+    ];
+  }
+  if (options.allowEmpty === false && value.length === NUM_ZERO) {
+    return [
+      `${filePath}: metadata ${fieldName} must not be empty for active ` +
+      'current-blocker handoff generation.',
+    ];
+  }
+  return [];
+}
+
+function validateActivePackageMetadataShape(filePath, metadata) {
+  const errors = [];
+  for (const fieldName of ACTIVE_PACKAGE_REQUIRED_TEXT_METADATA_FIELDS) {
+    errors.push(...validateConcreteMetadataField(filePath, metadata, fieldName));
+  }
+  return errors;
+}
+
+function validateActiveScenarioModelFitMetadata(filePath, metadata) {
+  const modelFit = metadata?.[METADATA_FIELD_MODEL_FIT];
+  if (!isObjectRecord(modelFit)) {
+    return [
+      `${filePath}: metadata modelFit must be an object for active ` +
+      'scenario current-blocker handoff generation.',
+    ];
+  }
+  const errors = [];
+  for (const fieldName of ACTIVE_SCENARIO_REQUIRED_MODEL_FIT_METADATA_FIELDS) {
+    errors.push(...validateConcreteMetadataField(filePath, modelFit, fieldName));
+  }
+  errors.push(...validateRequiredMetadataArray(
+    filePath,
+    modelFit,
+    MODEL_FIT_METADATA_ESCALATION_TRIGGERS_FIELD,
+    {allowEmpty: false},
+  ));
+  return errors;
+}
+
+function validateActiveScenarioMetadataShape(filePath, metadata) {
+  if (!isScenarioDrivenMetadata(metadata)) {
+    return [];
+  }
+  const errors = [];
+  for (const fieldName of ACTIVE_SCENARIO_REQUIRED_TEXT_METADATA_FIELDS) {
+    errors.push(...validateConcreteMetadataField(filePath, metadata, fieldName, {
+      allowEmptyKeyword: fieldName === METADATA_FIELD_PLAYBACK,
+    }));
+  }
+  for (const fieldName of ACTIVE_SCENARIO_REQUIRED_ARRAY_METADATA_FIELDS) {
+    errors.push(...validateRequiredMetadataArray(filePath, metadata, fieldName, {
+      allowEmpty: fieldName !== METADATA_FIELD_PROOF,
+    }));
+  }
+  errors.push(...validateActiveScenarioModelFitMetadata(filePath, metadata));
+  return errors;
+}
+
 function validatePackageMetadataShape(filePath, fileStatus, metadata) {
   const errors = [];
   if (!metadata) {
@@ -1955,6 +2080,10 @@ function validatePackageMetadataShape(filePath, fileStatus, metadata) {
     if (metadata[scopeField] !== undefined && !Array.isArray(metadata[scopeField])) {
       errors.push(`${filePath}: metadata ${scopeField} must be an array.`);
     }
+  }
+  if (fileStatus === STATUS_ACTIVE) {
+    errors.push(...validateActivePackageMetadataShape(filePath, metadata));
+    errors.push(...validateActiveScenarioMetadataShape(filePath, metadata));
   }
   return errors;
 }
@@ -2138,6 +2267,91 @@ function normalizeSnapshotPathValue(filePath) {
     EMPTY_TEXT;
 }
 
+function normalizePayloadForCompare(value) {
+  if (Array.isArray(value)) {
+    return value.map(normalizePayloadForCompare);
+  }
+  if (isObjectRecord(value)) {
+    return Object.fromEntries(
+      Object.keys(value)
+        .sort()
+        .map((key) => [key, normalizePayloadForCompare(value[key])]),
+    );
+  }
+  return value;
+}
+
+function payloadValuesMatch(actual, expected) {
+  return JSON.stringify(normalizePayloadForCompare(actual)) ===
+    JSON.stringify(normalizePayloadForCompare(expected));
+}
+
+function appendPayloadDifference(differences, pathLabel) {
+  if (differences.length >= CURRENT_BLOCKER_STALE_FIELD_LIMIT) {
+    return;
+  }
+  differences.push(pathLabel || 'root');
+}
+
+function collectCurrentBlockerPayloadDifferences(
+  actual,
+  expected,
+  pathLabel = EMPTY_TEXT,
+  differences = [],
+) {
+  if (payloadValuesMatch(actual, expected)) {
+    return differences;
+  }
+  if (
+    differences.length >= CURRENT_BLOCKER_STALE_FIELD_LIMIT ||
+    Array.isArray(actual) ||
+    Array.isArray(expected) ||
+    !isObjectRecord(actual) ||
+    !isObjectRecord(expected)
+  ) {
+    appendPayloadDifference(differences, pathLabel);
+    return differences;
+  }
+  const keys = [
+    ...new Set([...Object.keys(actual), ...Object.keys(expected)]),
+  ].sort();
+  for (const key of keys) {
+    const nextPath = pathLabel.length > NUM_ZERO ? `${pathLabel}.${key}` : key;
+    collectCurrentBlockerPayloadDifferences(
+      actual[key],
+      expected[key],
+      nextPath,
+      differences,
+    );
+    if (differences.length >= CURRENT_BLOCKER_STALE_FIELD_LIMIT) {
+      break;
+    }
+  }
+  return differences;
+}
+
+export function validateCurrentBlockerPayloadFreshness(
+  currentBlocker,
+  expectedPayload,
+  options = {},
+) {
+  if (payloadValuesMatch(currentBlocker, expectedPayload)) {
+    return [];
+  }
+  const snapshotPath = options.snapshotPath || CURRENT_BLOCKER_JSON_PATH;
+  const differences = collectCurrentBlockerPayloadDifferences(
+    currentBlocker,
+    expectedPayload,
+  );
+  const suffix = differences.length >= CURRENT_BLOCKER_STALE_FIELD_LIMIT ?
+    ', ...' :
+    EMPTY_TEXT;
+  return [
+    `${snapshotPath}: current-blocker snapshot is stale for fields: ` +
+    `${differences.join(', ')}${suffix}; run ${CURRENT_BLOCKER_REPAIR_COMMAND}.`,
+  ];
+}
+
 export function validateCurrentBlockerSnapshot(currentBlocker, options = {}) {
   const snapshotPath = options.snapshotPath || CURRENT_BLOCKER_JSON_PATH;
   const allowClosedSnapshot = options.allowClosed === true;
@@ -2272,6 +2486,40 @@ async function validateCurrentBlockerFreshness() {
     packageExists,
     snapshotPath: CURRENT_BLOCKER_JSON_PATH,
   }));
+  if (activeSprintFile && activePackageFile && !allowClosedSnapshot) {
+    const activePackageRelativePath = normalizeRelativePath(activePackageFile);
+    try {
+      const packageContent = await readTextFile(activePackageFile);
+      const metadata = parsePackageMetadata(
+        packageContent,
+        activePackageRelativePath,
+      );
+      if (!metadata) {
+        errors.push(
+          `${CURRENT_BLOCKER_JSON_PATH}: active package ` +
+          `${activePackageRelativePath} has no work-package metadata; run ` +
+          `${CURRENT_BLOCKER_REPAIR_COMMAND} after repairing the package.`,
+        );
+      } else {
+        const expectedPayload = buildCurrentBlockerPayload(
+          activeSprintFile,
+          activePackageFile,
+          metadata,
+        );
+        errors.push(...validateCurrentBlockerPayloadFreshness(
+          currentBlocker,
+          expectedPayload,
+          {snapshotPath: CURRENT_BLOCKER_JSON_PATH},
+        ));
+      }
+    } catch (error) {
+      errors.push(
+        `${CURRENT_BLOCKER_JSON_PATH}: cannot rebuild current-blocker from ` +
+        `${activePackageRelativePath}: ${error.message}; run ` +
+        `${CURRENT_BLOCKER_REPAIR_COMMAND} after repairing the package.`,
+      );
+    }
+  }
   return errors;
 }
 
@@ -2596,14 +2844,23 @@ async function doctorCommand(args) {
   }
 }
 
-async function findActiveSprintFile() {
+export async function findActiveSprintFile() {
   const sprintFiles = await listSprintFiles();
   return sprintFiles.find((filePath) =>
     getSprintStatusFromPath(filePath) === STATUS_ACTIVE,
   ) || null;
 }
 
-async function findActivePackageFile(activeSprintFile) {
+function findActivePackageLinkInSprint(content) {
+  const currentMatch = content.match(CURRENT_ACTIVE_PACKAGE_LINK_PATTERN);
+  if (currentMatch) {
+    return currentMatch[NUM_ONE];
+  }
+  const match = content.match(ACTIVE_PACKAGE_LINK_PATTERN);
+  return match ? match[NUM_ONE] : null;
+}
+
+export async function findActivePackageFile(activeSprintFile) {
   const packageFiles = await listPackageFiles();
   const activePackages = packageFiles.filter((filePath) =>
     getPackageStatusFromPath(filePath) === STATUS_ACTIVE,
@@ -2615,11 +2872,11 @@ async function findActivePackageFile(activeSprintFile) {
     return null;
   }
   const sprintContent = await readTextFile(activeSprintFile);
-  const match = sprintContent.match(ACTIVE_PACKAGE_LINK_PATTERN);
-  if (!match) {
+  const packageLink = findActivePackageLinkInSprint(sprintContent);
+  if (!packageLink) {
     return null;
   }
-  return path.normalize(path.join(path.dirname(activeSprintFile), match[NUM_ONE]));
+  return path.normalize(path.join(path.dirname(activeSprintFile), packageLink));
 }
 
 function metadataArray(metadata, fieldName) {
@@ -2894,6 +3151,21 @@ async function currentBlockerCommand(args) {
     throw new Error(
       `${normalizeRelativePath(activePackageFile)} has no work-package metadata.`,
     );
+  }
+  const relativePackagePath = normalizeRelativePath(activePackageFile);
+  const generationErrors = [
+    ...validatePackageMetadataShape(relativePackagePath, STATUS_ACTIVE, metadata),
+    ...validateCausalGovernanceContract(metadata, relativePackagePath, {
+      [LEDGER_VALIDATION_REQUIRES_LEDGER]: isScenarioDrivenMetadata(metadata),
+      status: STATUS_ACTIVE,
+    }),
+    ...validateScenarioCausalClosureContract(metadata, relativePackagePath, {
+      [LEDGER_VALIDATION_REQUIRES_LEDGER]: isScenarioDrivenMetadata(metadata),
+      status: STATUS_ACTIVE,
+    }),
+  ];
+  if (generationErrors.length > NUM_ZERO) {
+    throw new Error(generationErrors.join(NEWLINE));
   }
   const payload = buildCurrentBlockerPayload(
     activeSprintFile,

@@ -7,6 +7,9 @@ import process from 'node:process';
 import {fileURLToPath} from 'node:url';
 import {promisify} from 'node:util';
 import {
+  buildCurrentBlockerPayload,
+  findActivePackageFile,
+  findActiveSprintFile,
   metadataRequiresSubagentSequencing,
   validateSubagentSequencingLedger,
 } from './work-tracker.js';
@@ -455,6 +458,27 @@ async function buildCurrentBlockerFromPackage(packagePath) {
       scenarioCausalClosure: metadataScenarioCausalClosure(metadata),
       predecessor: metadataText(metadata, METADATA_FIELD_PREDECESSOR),
     },
+    packageContent: content,
+  };
+}
+
+async function buildCurrentBlockerFromActivePackage() {
+  const activeSprintFile = await findActiveSprintFile();
+  if (!activeSprintFile) {
+    throw new Error(MESSAGE_CURRENT_BLOCKER_MISSING);
+  }
+  const activePackageFile = await findActivePackageFile(activeSprintFile);
+  if (!activePackageFile) {
+    throw new Error(MESSAGE_CURRENT_BLOCKER_MISSING);
+  }
+  const content = await readTextFile(activePackageFile);
+  const metadata = parsePackageMetadata(content, activePackageFile);
+  return {
+    currentBlocker: buildCurrentBlockerPayload(
+      activeSprintFile,
+      activePackageFile,
+      metadata,
+    ),
     packageContent: content,
   };
 }
@@ -1670,11 +1694,21 @@ async function main() {
     }
   } else {
     try {
-      currentBlocker = await readJsonFile(CURRENT_BLOCKER_JSON_PATH);
-    } catch (_error) {
-      console.error(MESSAGE_CURRENT_BLOCKER_MISSING);
-      console.error(MESSAGE_CURRENT_BLOCKER_HINT);
-      return EXIT_FAILURE;
+      const packageBlocker = await buildCurrentBlockerFromActivePackage();
+      currentBlocker = packageBlocker.currentBlocker;
+      packageContent = packageBlocker.packageContent;
+    } catch (activeError) {
+      if (activeError.message !== MESSAGE_CURRENT_BLOCKER_MISSING) {
+        console.error(activeError.message);
+        return EXIT_FAILURE;
+      }
+      try {
+        currentBlocker = await readJsonFile(CURRENT_BLOCKER_JSON_PATH);
+      } catch (_error) {
+        console.error(activeError.message || MESSAGE_CURRENT_BLOCKER_MISSING);
+        console.error(MESSAGE_CURRENT_BLOCKER_HINT);
+        return EXIT_FAILURE;
+      }
     }
   }
 
@@ -1705,6 +1739,7 @@ if (isDirectRun()) {
 export {
   buildContextLines,
   buildCommitScope,
+  buildCurrentBlockerFromActivePackage,
   buildCurrentBlockerFromPackage,
   buildDirtyScopeLines,
   buildFirstReadPaths,

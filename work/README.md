@@ -427,8 +427,9 @@ before implementation starts. At minimum, activation must:
 3. promote exact files from `candidateRuntimeFiles` into `writeScope` and
    `commitScope` only after focused owner-file proof such as
    `npm run analyze:owner-files -- <owner> [boundary] --markdown`
-4. replace subagent placeholders with real review/fix/implementation proof, or
-   an allowed waiver, before pre-implementation and closure validation
+4. replace review/fix subagent placeholders with real proof, or an allowed
+   waiver, before pre-implementation validation; replace implementation proof
+   before closure validation
 5. keep the package artifact path explicit and classify fresh evidence as
    `representative-green`, `reduced`, `same-frontier`, `migrated`, or
    `classification-only`
