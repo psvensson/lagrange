@@ -77,15 +77,18 @@ contracts, or representative scenario evidence can change.
 17. Scenario artifacts migrate only when normalized evidence changes owner,
     boundary, or next required action; new counts, node ids, epochs, or timing
     alone do not justify package churn.
-18. A package is not done while in-scope residuals, tail consumers, guardrail
+18. If a representative frontier returns to a recently closed related owner
+    boundary or alternates between two related boundaries, stop local runtime
+    patching and open a causal-escalation handoff package.
+19. A package is not done while in-scope residuals, tail consumers, guardrail
     drift, or unnamed scenario migration evidence remain.
-19. Sub-agents are mandatory for runtime owner-boundary and scenario/release-gate
+20. Sub-agents are mandatory for runtime owner-boundary and scenario/release-gate
     packages; they are optional for read/review/doc-only and lightweight
     maintenance lanes unless the package declares otherwise. If the host cannot
     expose delegation before implementation, record `human-waived`,
     `tool-unavailable`, or `blocked-by-environment-policy` with a reason; do
     not use that as closure proof.
-20. Commit and push focused package slices before starting the next package.
+21. Commit and push focused package slices before starting the next package.
     Do not sweep unrelated dirty worktree changes into the slice.
-21. If a local fix feels hard because the boundary is porous, reduce the
+22. If a local fix feels hard because the boundary is porous, reduce the
     boundary or raise the abstraction instead of adding another symptom patch.

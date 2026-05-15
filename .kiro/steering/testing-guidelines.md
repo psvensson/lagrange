@@ -191,13 +191,17 @@ Required workflow:
 17. Repeated crossings of the same owner boundary must escalate to a causal
     analysis package or architecture-gap classification unless the package
     includes a focused probe for the missing causal edge.
-18. When repeated scenario runs keep failing after local fixes or
+18. If representative evidence oscillates between two related owner
+    boundaries, the next validation surface must be a replayable handoff
+    fixture or missing-edge probe that includes both boundaries. Focused owner
+    tests for either boundary alone are insufficient.
+19. When repeated scenario runs keep failing after local fixes or
     classification-only reductions, the next validation package must establish a
     causal-analysis boundary before more runtime fixes. At minimum it must
     validate the end-to-end phase model, cross-entity causal graph,
     budget/timeout accounting, invariant review, failure-class taxonomy, and
     architecture-level stop conditions.
-19. A runtime fix that follows causal-analysis escalation must cite the causal
+20. A runtime fix that follows causal-analysis escalation must cite the causal
     model or artifact it uses, then prove that its local regression changes the
     relevant causal edge rather than only improving the immediate symptom.
 

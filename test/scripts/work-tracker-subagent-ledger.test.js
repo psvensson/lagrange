@@ -9,6 +9,7 @@ import {
   validateCausalGovernanceContract,
   validateCommitAndPushLedger,
   validateCurrentBlockerSnapshot,
+  validateFrontierOscillationContract,
   validateModelFitContract,
   validateRepresentativeResidualContract,
   validateScenarioCausalClosureContract,
@@ -34,6 +35,7 @@ const WORK_TRACKER_DONE_STATUS = 'done';
 const LANE_READ_REVIEW_DOC_ONLY = 'read-review-doc-only';
 const LANE_LIGHTWEIGHT_MAINTENANCE = 'lightweight-maintenance';
 const LANE_RUNTIME_OWNER_BOUNDARY = 'runtime-owner-boundary';
+const LANE_CAUSAL_ESCALATION = 'causal-escalation';
 const CAUSAL_GOVERNANCE_VALID_METADATA = Object.freeze({
   status: WORK_TRACKER_ACTIVE_STATUS,
   scenario: 'rolling-restart',
@@ -1191,6 +1193,123 @@ describe('work tracker scenario causal closure validation', () => {
         ),
         [],
       );
+    });
+
+  it('requires causal escalation when a frontier returns to a recent boundary',
+    () => {
+      const metadata = {
+        ...SCENARIO_CAUSAL_CLOSURE_VALID_METADATA,
+        lane: LANE_RUNTIME_OWNER_BOUNDARY,
+        owner: 'startup_active_gate_owner',
+        boundary: 'snapshot_coverage',
+      };
+      const history = [
+        {
+          filePath: 'work/packages/done-20260514-active-gate.md',
+          metadata: {
+            scenario: 'rolling-restart',
+            owner: 'startup_active_gate_owner',
+            boundary: 'snapshot_coverage',
+            scenarioCausalClosure: {
+              resultClassification: 'migrated',
+            },
+          },
+        },
+      ];
+
+      const errors = validateFrontierOscillationContract(
+        metadata,
+        WORK_TRACKER_LEDGER_TEST_FILE,
+        {
+          packageHistoryEntries: history,
+          status: WORK_TRACKER_ACTIVE_STATUS,
+        },
+      );
+
+      assert.match(errors.join('\n'), /frontier oscillation detected/u);
+      assert.match(errors.join('\n'), /causal-escalation/u);
+    });
+
+  it('accepts causal escalation when oscillation handoff fields are recorded',
+    () => {
+      const metadata = {
+        ...SCENARIO_CAUSAL_CLOSURE_VALID_METADATA,
+        lane: LANE_CAUSAL_ESCALATION,
+        owner: 'startup_active_gate_owner',
+        boundary: 'snapshot_coverage',
+        scenarioCausalClosure: {
+          ...SCENARIO_CAUSAL_CLOSURE_VALID_METADATA.scenarioCausalClosure,
+          recentFrontierHistory: [
+            'startup_active_gate_owner / snapshot_coverage migrated',
+            'topology_publication_owner / publication_convergence migrated',
+          ],
+          oscillationCheck:
+            'frontier returned to startup_active_gate_owner / snapshot_coverage',
+          handoffInvariant:
+            'publication owner outcome must be fresh before active-gate snapshot selection',
+        },
+      };
+      const history = [
+        {
+          filePath: 'work/packages/done-20260514-active-gate.md',
+          metadata: {
+            scenario: 'rolling-restart',
+            owner: 'startup_active_gate_owner',
+            boundary: 'snapshot_coverage',
+            scenarioCausalClosure: {
+              resultClassification: 'migrated',
+            },
+          },
+        },
+      ];
+
+      const errors = validateFrontierOscillationContract(
+        metadata,
+        WORK_TRACKER_LEDGER_TEST_FILE,
+        {
+          packageHistoryEntries: history,
+          status: WORK_TRACKER_ACTIVE_STATUS,
+        },
+      );
+
+      assert.deepEqual(errors, []);
+    });
+
+  it('requires handoff fields on causal escalation oscillation packages',
+    () => {
+      const metadata = {
+        ...SCENARIO_CAUSAL_CLOSURE_VALID_METADATA,
+        lane: LANE_CAUSAL_ESCALATION,
+        owner: 'startup_active_gate_owner',
+        boundary: 'snapshot_coverage',
+      };
+      const history = [
+        {
+          filePath: 'work/packages/done-20260514-active-gate.md',
+          metadata: {
+            scenario: 'rolling-restart',
+            owner: 'startup_active_gate_owner',
+            boundary: 'snapshot_coverage',
+            scenarioCausalClosure: {
+              resultClassification: 'migrated',
+            },
+          },
+        },
+      ];
+
+      const errors = validateFrontierOscillationContract(
+        metadata,
+        WORK_TRACKER_LEDGER_TEST_FILE,
+        {
+          packageHistoryEntries: history,
+          status: WORK_TRACKER_ACTIVE_STATUS,
+        },
+      );
+      const rendered = errors.join('\n');
+
+      assert.match(rendered, /recentFrontierHistory/u);
+      assert.match(rendered, /oscillationCheck/u);
+      assert.match(rendered, /handoffInvariant/u);
     });
 
   it('rejects placeholders, empty arrays, invalid classifications, and missing progress proof',

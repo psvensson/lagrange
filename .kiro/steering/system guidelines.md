@@ -330,6 +330,9 @@ Required contract:
    tracker, roadmap, or architecture record in the same closure cycle.
 7. Architectural exceptions must be explicit, owned, time-bounded, and recorded
    in an active spec or architecture note with a removal checkpoint.
+8. If a representative blocker returns to a recently closed owner boundary,
+   stop local patching and raise a causal-escalation package for the
+   cross-boundary handoff.
 
 ## 14. Stop Checklist Before Writing Code
 
@@ -351,6 +354,8 @@ Stop before implementation if any answer is yes:
    of structured retry, defer, or backpressure?
 9. Am I closing a package while residuals, guardrail drift, tail consumers, or
    scenario migration evidence remain unnamed?
+10. Am I starting another local runtime patch after the representative frontier
+    returned to a recently closed related owner boundary?
 
 If a local fix feels hard because the boundary is porous, reduce the boundary
 or raise the abstraction rather than adding another symptom patch.

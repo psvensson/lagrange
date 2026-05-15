@@ -7,9 +7,13 @@ import {fileURLToPath} from 'node:url';
 import {
   CAUSAL_GOVERNANCE_PENDING_OUTCOME,
   CAUSAL_GOVERNANCE_VALID_OUTCOMES,
+  LANE_CAUSAL_ESCALATION,
   OWNER_BOUNDARY_MIGRATION_PROOF_EVIDENCE_FIELD,
   OWNER_BOUNDARY_MIGRATION_PROOF_FIELD,
   OWNER_BOUNDARY_MIGRATION_PROOF_FIELDS,
+  SCENARIO_CAUSAL_CLOSURE_HANDOFF_INVARIANT_FIELD,
+  SCENARIO_CAUSAL_CLOSURE_OSCILLATION_CHECK_FIELD,
+  SCENARIO_CAUSAL_CLOSURE_RECENT_FRONTIER_HISTORY_FIELD,
   SCENARIO_CAUSAL_CLOSURE_VALID_RESULT_CLASSIFICATIONS,
   SCENARIO_CAUSAL_CLOSURE_VALID_STOP_CONDITIONS,
   SCOPE_FIELD_CANDIDATE_RUNTIME_FILES,
@@ -32,6 +36,8 @@ const EMPTY_TEXT = '';
 const NUM_ZERO = 0;
 const NUM_ONE = 1;
 const NUM_TWO = 2;
+const NUM_THREE = 3;
+const NUM_FOUR = 4;
 const DATE_SLICE_END = 10;
 const EXIT_SUCCESS = 0;
 const EXIT_FAILURE = 1;
@@ -184,6 +190,27 @@ const SCENARIO_CAUSAL_CLOSURE_TEXT_FIELDS = Object.freeze([
 const SCENARIO_CAUSAL_CLOSURE_ARRAY_FIELDS = Object.freeze([
   SCENARIO_CAUSAL_CLOSURE_PHASE_CHAIN_FIELD,
   SCENARIO_CAUSAL_CLOSURE_DOWNSTREAM_BLOCKERS_FIELD,
+]);
+const SCENARIO_CAUSAL_CLOSURE_FRONTIER_OSCILLATION_ARRAY_FIELDS =
+  Object.freeze([
+    SCENARIO_CAUSAL_CLOSURE_RECENT_FRONTIER_HISTORY_FIELD,
+  ]);
+const SCENARIO_CAUSAL_CLOSURE_FRONTIER_OSCILLATION_TEXT_FIELDS =
+  Object.freeze([
+    SCENARIO_CAUSAL_CLOSURE_OSCILLATION_CHECK_FIELD,
+    SCENARIO_CAUSAL_CLOSURE_HANDOFF_INVARIANT_FIELD,
+  ]);
+const FRONTIER_OSCILLATION_RECENT_HISTORY_LIMIT = NUM_FOUR;
+const FRONTIER_OSCILLATION_RELATED_PACKAGE_LIMIT = NUM_TWO;
+const FRONTIER_OSCILLATION_SEQUENCE_MINIMUM = NUM_THREE;
+const FRONTIER_OSCILLATION_DATE_DASH_PATTERN =
+  /\b(20\d{2})-(\d{2})-(\d{2})\b/u;
+const FRONTIER_OSCILLATION_DATE_COMPACT_PATTERN = /\b(20\d{6})\b/u;
+const FRONTIER_OSCILLATION_MATERIAL_RESULTS = Object.freeze([
+  'migrated',
+  'same-frontier',
+  'reduced',
+  'classification-only',
 ]);
 const SCENARIO_CAUSAL_CLOSURE_PROGRESS_MECHANISM_PATTERN =
   /\b(?:wake|retry|timeout|reconcile|drain|dispatch|delivery|timer|advance|bounded)\b/iu;
@@ -1110,6 +1137,84 @@ function metadataLane(metadata) {
   return normalizeLedgerText(metadata?.[METADATA_LANE_FIELD]).toLowerCase();
 }
 
+function metadataScenarioKey(metadata) {
+  return normalizeLedgerText(metadata?.scenario).toLowerCase();
+}
+
+function ownerBoundaryKey(owner, boundary) {
+  const normalizedOwner = normalizeLedgerText(owner).toLowerCase();
+  const normalizedBoundary = normalizeLedgerText(boundary).toLowerCase();
+  if (
+    normalizedOwner.length === NUM_ZERO ||
+    normalizedBoundary.length === NUM_ZERO
+  ) {
+    return EMPTY_TEXT;
+  }
+  return `${normalizedOwner}/${normalizedBoundary}`;
+}
+
+function metadataOwnerBoundaryKey(metadata) {
+  return ownerBoundaryKey(metadata?.owner, metadata?.boundary);
+}
+
+function scenarioClosureResult(metadata) {
+  return normalizeLedgerText(
+    metadata?.[SCENARIO_CAUSAL_CLOSURE_METADATA_FIELD]?.[
+      SCENARIO_CAUSAL_CLOSURE_RESULT_CLASSIFICATION_FIELD
+    ] ||
+      metadata?.[CAUSAL_GOVERNANCE_METADATA_FIELD]?.[
+        CAUSAL_GOVERNANCE_REPRESENTATIVE_OUTCOME_FIELD
+      ],
+  ).toLowerCase();
+}
+
+function isMaterialOscillationResult(metadata) {
+  const result = scenarioClosureResult(metadata);
+  return result.length === NUM_ZERO ||
+    FRONTIER_OSCILLATION_MATERIAL_RESULTS.includes(result);
+}
+
+function extractFrontierOscillationDateKey(value) {
+  const text = normalizeLedgerText(value);
+  const dashMatch = FRONTIER_OSCILLATION_DATE_DASH_PATTERN.exec(text);
+  if (dashMatch) {
+    return `${dashMatch[NUM_ONE]}${dashMatch[NUM_TWO]}${dashMatch[NUM_THREE]}`;
+  }
+  const compactMatch = FRONTIER_OSCILLATION_DATE_COMPACT_PATTERN.exec(text);
+  return compactMatch ? compactMatch[NUM_ONE] : EMPTY_TEXT;
+}
+
+function frontierHistorySortKey(entry = {}) {
+  const metadata = entry.metadata || {};
+  return [
+    extractFrontierOscillationDateKey(metadata.closed),
+    extractFrontierOscillationDateKey(metadata.opened),
+    extractFrontierOscillationDateKey(entry.filePath),
+    normalizeLedgerText(entry.filePath),
+  ].join('|');
+}
+
+function normalizeFrontierHistoryEntry(entry = {}) {
+  const metadata = entry.metadata || {};
+  return {
+    filePath: normalizeLedgerText(entry.filePath),
+    metadata,
+    ownerBoundaryKey: metadataOwnerBoundaryKey(metadata),
+    scenarioKey: metadataScenarioKey(metadata),
+    sortKey: normalizeLedgerText(entry.sortKey) || frontierHistorySortKey(entry),
+  };
+}
+
+function sortedFrontierHistoryEntries(entries = []) {
+  return entries
+    .map(normalizeFrontierHistoryEntry)
+    .filter((entry) =>
+      entry.filePath.length > NUM_ZERO &&
+      entry.ownerBoundaryKey.length > NUM_ZERO &&
+      entry.scenarioKey.length > NUM_ZERO)
+    .sort((left, right) => right.sortKey.localeCompare(left.sortKey));
+}
+
 export function metadataRequiresSubagentSequencing(metadata) {
   if (!metadata) {
     return false;
@@ -1529,6 +1634,156 @@ export function validateScenarioFrontierOwnerBoundaryContract(
   return errors;
 }
 
+function validateFrontierOscillationClosureFields(
+  metadata,
+  filePath,
+  requiresFields,
+) {
+  if (!requiresFields) {
+    return [];
+  }
+  const scenarioCausalClosure =
+    metadata?.[SCENARIO_CAUSAL_CLOSURE_METADATA_FIELD];
+  if (!isObjectRecord(scenarioCausalClosure)) {
+    return [];
+  }
+  const errors = [];
+  for (const fieldName of SCENARIO_CAUSAL_CLOSURE_FRONTIER_OSCILLATION_ARRAY_FIELDS) {
+    errors.push(
+      ...validateScenarioCausalClosureArrayField(
+        filePath,
+        fieldName,
+        scenarioCausalClosure[fieldName],
+      ),
+    );
+  }
+  for (const fieldName of SCENARIO_CAUSAL_CLOSURE_FRONTIER_OSCILLATION_TEXT_FIELDS) {
+    errors.push(
+      ...validateScenarioCausalClosureConcreteValue(
+        filePath,
+        fieldName,
+        scenarioCausalClosure[fieldName],
+      ),
+    );
+  }
+  return errors;
+}
+
+function frontierHistoryEntrySummary(entry) {
+  const metadata = entry.metadata || {};
+  return [
+    normalizeLedgerText(entry.filePath),
+    normalizeLedgerText(metadata.owner),
+    normalizeLedgerText(metadata.boundary),
+    scenarioClosureResult(metadata) || DEFAULT_UNKNOWN,
+  ].filter((value) => value.length > NUM_ZERO).join(' / ');
+}
+
+function detectFrontierOscillation(metadata, filePath, packageHistoryEntries) {
+  const currentKey = metadataOwnerBoundaryKey(metadata);
+  const scenarioKey = metadataScenarioKey(metadata);
+  if (currentKey.length === NUM_ZERO || scenarioKey.length === NUM_ZERO) {
+    return null;
+  }
+
+  const normalizedFilePath = normalizeRelativePath(filePath);
+  const recentEntries = sortedFrontierHistoryEntries(packageHistoryEntries)
+    .filter((entry) =>
+      entry.filePath !== normalizedFilePath &&
+      entry.scenarioKey === scenarioKey &&
+      isMaterialOscillationResult(entry.metadata))
+    .slice(NUM_ZERO, FRONTIER_OSCILLATION_RECENT_HISTORY_LIMIT);
+  const sameBoundaryEntry = recentEntries.find((entry) =>
+    entry.ownerBoundaryKey === currentKey);
+  if (sameBoundaryEntry) {
+    return {
+      reason: 'frontier returned to a recently closed related boundary',
+      relatedEntries: [sameBoundaryEntry, ...recentEntries
+        .filter((entry) => entry !== sameBoundaryEntry)
+        .slice(NUM_ZERO, FRONTIER_OSCILLATION_RELATED_PACKAGE_LIMIT)],
+    };
+  }
+
+  const alternatingEntries = recentEntries.slice(
+    NUM_ZERO,
+    FRONTIER_OSCILLATION_RELATED_PACKAGE_LIMIT,
+  );
+  if (
+    alternatingEntries.length === FRONTIER_OSCILLATION_RELATED_PACKAGE_LIMIT &&
+    alternatingEntries[NUM_ZERO].ownerBoundaryKey !==
+      alternatingEntries[NUM_ONE].ownerBoundaryKey &&
+    alternatingEntries[NUM_ONE].ownerBoundaryKey === currentKey
+  ) {
+    return {
+      reason: 'frontier alternated between two related owner boundaries',
+      relatedEntries: alternatingEntries,
+    };
+  }
+
+  const recentSequence = [
+    currentKey,
+    ...recentEntries.map((entry) => entry.ownerBoundaryKey),
+  ].slice(NUM_ZERO, FRONTIER_OSCILLATION_SEQUENCE_MINIMUM);
+  const uniqueBoundaries = new Set(recentSequence);
+  if (
+    recentSequence.length === FRONTIER_OSCILLATION_SEQUENCE_MINIMUM &&
+    uniqueBoundaries.size === FRONTIER_OSCILLATION_RELATED_PACKAGE_LIMIT
+  ) {
+    return {
+      reason: 'adjacent owner-boundary fixes did not close the representative gate',
+      relatedEntries: recentEntries.slice(
+        NUM_ZERO,
+        FRONTIER_OSCILLATION_RELATED_PACKAGE_LIMIT,
+      ),
+    };
+  }
+
+  return null;
+}
+
+export function validateFrontierOscillationContract(
+  metadata,
+  filePath,
+  options = {},
+) {
+  const fileStatus = options.status || normalizeLedgerText(metadata?.status);
+  if (
+    fileStatus !== STATUS_ACTIVE ||
+    !metadata ||
+    !isScenarioDrivenMetadata(metadata)
+  ) {
+    return [];
+  }
+
+  const detection = detectFrontierOscillation(
+    metadata,
+    filePath,
+    options.packageHistoryEntries || [],
+  );
+  if (!detection) {
+    return [];
+  }
+
+  const errors = [];
+  if (metadataLane(metadata) !== LANE_CAUSAL_ESCALATION) {
+    errors.push(
+      `${filePath}: frontier oscillation detected (${detection.reason}); ` +
+      'use the causal-escalation lane and a cross-boundary handoff package ' +
+      'before another local runtime patch. Recent related packages: ' +
+      detection.relatedEntries.map(frontierHistoryEntrySummary).join('; ') +
+      '.',
+    );
+    return errors;
+  }
+
+  errors.push(...validateFrontierOscillationClosureFields(
+    metadata,
+    filePath,
+    true,
+  ));
+  return errors;
+}
+
 function normalizeCliPath(filePath) {
   return path.normalize(
     path.isAbsolute(filePath) ? filePath : path.join(process.cwd(), filePath),
@@ -1584,6 +1839,29 @@ async function listMarkdownFiles(directoryPath) {
 
 async function listPackageFiles() {
   return listMarkdownFiles(WORK_PACKAGES_DIR);
+}
+
+async function collectPackageHistoryEntries() {
+  const packageFiles = await listPackageFiles();
+  const entries = [];
+  for (const filePath of packageFiles) {
+    const relativePath = normalizeRelativePath(filePath);
+    let metadata = null;
+    try {
+      metadata = parsePackageMetadata(await readTextFile(filePath), relativePath);
+    } catch {
+      continue;
+    }
+    if (!metadata || !isScenarioDrivenMetadata(metadata)) {
+      continue;
+    }
+    entries.push({
+      filePath: relativePath,
+      metadata,
+      status: getPackageStatusFromPath(filePath) || DEFAULT_UNKNOWN,
+    });
+  }
+  return entries;
 }
 
 async function listSprintFiles() {
@@ -1783,6 +2061,14 @@ async function validatePackageFile(filePath, options = {}) {
         fileStatus === STATUS_ACTIVE &&
         metadata !== null &&
         isScenarioDrivenMetadata(metadata),
+      status: fileStatus,
+    },
+  ));
+  errors.push(...validateFrontierOscillationContract(
+    metadata,
+    relativePath,
+    {
+      packageHistoryEntries: options.packageHistoryEntries || [],
       status: fileStatus,
     },
   ));
@@ -1992,6 +2278,7 @@ async function validateCurrentBlockerFreshness() {
 async function validateCommand(args) {
   const phase = resolveValidationPhase(args);
   const targets = await resolveValidationTargets(args);
+  const packageHistoryEntries = await collectPackageHistoryEntries();
   const errors = [];
   if (!hasExplicitValidationTargets(args)) {
     errors.push(...(await validateCurrentBlockerFreshness()));
@@ -2001,7 +2288,10 @@ async function validateCommand(args) {
       errors.push(...(await validateSprintFile(filePath)));
       continue;
     }
-    const result = await validatePackageFile(filePath, {phase});
+    const result = await validatePackageFile(filePath, {
+      phase,
+      packageHistoryEntries,
+    });
     errors.push(...result.errors);
   }
   if (errors.length > NUM_ZERO) {
@@ -2102,6 +2392,12 @@ function buildDoctorSuggestion(error) {
       'or add `ownerBoundaryMigrationProof` with from/to owner-boundary and ' +
       'focused evidence when the package is only diagnostic/support work.';
   }
+  if (/frontier oscillation detected/iu.test(error)) {
+    return 'Open or convert the next package to the `causal-escalation` lane, ' +
+      'record `recentFrontierHistory`, `oscillationCheck`, and ' +
+      '`handoffInvariant`, and prove the producer-consumer missing edge before ' +
+      'another local runtime patch.';
+  }
   return EMPTY_TEXT;
 }
 
@@ -2201,6 +2497,14 @@ export function buildPackageDoctorLines(filePath, content, options = {}) {
       status: fileStatus,
     },
   ));
+  errors.push(...validateFrontierOscillationContract(
+    metadata,
+    relativePath,
+    {
+      packageHistoryEntries: options.packageHistoryEntries || [],
+      status: fileStatus,
+    },
+  ));
   const requiresCommitLedger =
     metadata !== null &&
     metadata[METADATA_COMMIT_AND_PUSH_LEDGER_REQUIRED] === true;
@@ -2279,8 +2583,10 @@ async function doctorCommand(args) {
   const phase = resolveValidationPhase(args);
   const packagePath = await resolveDoctorPackagePath(args);
   const content = await readTextFile(packagePath);
+  const packageHistoryEntries = await collectPackageHistoryEntries();
   const report = buildPackageDoctorLines(packagePath, content, {
     phase,
+    packageHistoryEntries,
     suggest: args.includes(CLI_FLAG_SUGGEST),
     fixDryRun: args.includes(CLI_FLAG_FIX_DRY_RUN),
   });
@@ -2528,6 +2834,18 @@ export function renderCurrentBlockerMarkdown(payload) {
     '',
     'Stop condition: ' +
       `\`${payload.scenarioCausalClosure?.stopCondition || DEFAULT_UNKNOWN}\``,
+    '',
+    'Recent frontier history:',
+    '',
+    formatMarkdownList(
+      payload.scenarioCausalClosure?.recentFrontierHistory || [],
+    ),
+    '',
+    'Oscillation check: ' +
+      `\`${payload.scenarioCausalClosure?.oscillationCheck || DEFAULT_UNKNOWN}\``,
+    '',
+    'Handoff invariant: ' +
+      `\`${payload.scenarioCausalClosure?.handoffInvariant || DEFAULT_UNKNOWN}\``,
     '',
     '## Scope',
     '',

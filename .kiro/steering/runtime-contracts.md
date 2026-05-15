@@ -188,6 +188,31 @@ Forbidden patterns:
   timeout inflation
 - inferring handoff from elapsed time or "good enough" cache visibility
 
+## Producer Consumer Handoff Invariants
+
+When one owner produces control-plane truth that another owner consumes, the
+handoff is a runtime contract rather than two independent local contracts.
+
+Required patterns:
+
+1. The producer declares its durable outcome, revision, freshness, and
+   acknowledgement vocabulary.
+2. The consumer declares the precondition that makes the producer outcome
+   admissible for selection, activation, repair, readiness, or publication.
+3. The handoff exposes one freshness, revision, or acknowledgement edge that
+   proves the consumer is not reading pre-handoff truth.
+4. Diagnostics serialize both sides of the handoff and the deciding edge in one
+   grammar.
+
+Forbidden patterns:
+
+- treating producer publication and consumer readiness as independently fixed
+  when representative evidence alternates between them
+- letting a consumer select, repair, or admit from an owner stream that has not
+  published the required durable handoff edge
+- proving the producer and consumer with separate focused tests while no
+  replayable handoff fixture or missing-edge probe covers their interaction
+
 ## Deterministic Control-Plane Progression
 
 Dispatch, rebalance, split, admission progression, and operation timeout

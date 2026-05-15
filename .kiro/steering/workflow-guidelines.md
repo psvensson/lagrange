@@ -37,7 +37,10 @@ Lane selection rules:
    representative artifact or must prove what that scenario does next.
 5. Escalate to causal analysis when repeated local fixes or classifications do
    not make the representative gate pass.
-6. When lane choice is ambiguous, record why the lighter lane is sufficient or
+6. Escalate to causal analysis when the representative frontier returns to a
+   recently closed related owner boundary or alternates between two related
+   owner boundaries.
+7. When lane choice is ambiguous, record why the lighter lane is sufficient or
    use the heavier lane.
 
 ## Lane Requirements
@@ -270,6 +273,36 @@ Evidence copied from distributed or integration artifacts uses canonical
 extractors when they exist. Manual summaries name source artifact paths and
 preserve normalized owner fields.
 
+## Frontier Oscillation Escalation
+
+When a representative scenario frontier alternates between two related owner
+boundaries, or returns to a recently closed boundary, stop opening ordinary
+successor runtime packages.
+
+Escalate when any of these happen:
+
+1. The same representative scenario remains red and the first frontier moves
+   A -> B -> A, or B -> A -> B.
+2. A package closes as `migrated` to an owner boundary that was active or done
+   within the last two related packages.
+3. Two focused fixes in adjacent owner boundaries are green locally but do not
+   produce representative green or monotonic representative reduction.
+
+The next package uses the `causal-escalation` lane and owns the handoff between
+the oscillating boundaries, not either boundary in isolation.
+
+That package defines:
+
+1. the cross-boundary invariant
+2. the producer owner outcome
+3. the consumer owner precondition
+4. the handoff freshness, revision, or acknowledgement rule
+5. the exact missing-edge probe or replay fixture
+6. the stop condition that permits a later local runtime fix
+
+No further runtime patch in either oscillating boundary may start until that
+handoff package identifies the failing causal edge.
+
 ## Lifecycle Progress Grammar
 
 Packages touching startup, join, rejoin, readiness, admission, recovery,
@@ -337,6 +370,8 @@ Required workflow:
    split a contraction package around the current owner contract.
 8. Broad representative reruns are acceptance proof only after owner fixtures,
    focused owner tests, and affected presentation tests are green.
+9. Frontier oscillation across related packages starts from a causal-escalation
+   package, not another local owner-boundary runtime patch.
 
 ## LLM Tool-First Triage
 
@@ -455,6 +490,8 @@ Escalate when:
 3. package review identifies local tactical treatment as the risk
 4. residual evidence is classified as intentional backpressure but the
    representative gate remains red
+5. the first frontier returns to a recently closed related boundary or
+   alternates between two related boundaries
 
 A causal-analysis package produces or updates durable diagnostic or architecture
 material covering:
@@ -491,6 +528,9 @@ Required fields:
 12. Expected next frontier
 13. Result classification
 14. Stop condition
+15. Recent frontier history when frontier oscillation is possible
+16. Oscillation check when a related boundary recently closed or migrated
+17. Handoff invariant when producer and consumer owners can disagree
 
 The active scenario package owner and boundary must appear in
 `scenarioCausalClosure.currentFirstFrontier`. A package may diverge only when it

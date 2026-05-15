@@ -68,7 +68,13 @@
     "sameFrontierFallback": "named same-frontier action if the probe does not move",
     "expectedNextFrontier": "expected next owner boundary after this package",
     "resultClassification": "pending-before-probe",
-    "stopCondition": "continue-local-fix"
+    "stopCondition": "continue-local-fix",
+    "recentFrontierHistory": [
+      "most recent owner / boundary / result",
+      "previous related owner / boundary / result"
+    ],
+    "oscillationCheck": "state whether the frontier returned to or alternated with a recently closed related boundary",
+    "handoffInvariant": "producer outcome + consumer precondition + freshness/revision/ack edge"
   },
   "predecessor": "work/packages/done-predecessor.md"
 }
