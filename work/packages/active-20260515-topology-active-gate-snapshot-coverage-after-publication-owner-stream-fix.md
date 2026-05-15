@@ -1,9 +1,10 @@
+# Topology Active Gate Snapshot Coverage After Publication Owner Stream Fix
+
+<!-- work-package
 {
-  "schema": "current-blocker-v1",
-  "generatedBy": "scripts/work-tracker.js",
-  "sprint": "work/sprints/active-2026-q2-topology-convergence-residual-closure.md",
-  "package": "work/packages/active-20260515-topology-active-gate-snapshot-coverage-after-publication-owner-stream-fix.md",
+  "schema": "work-package-v1",
   "status": "active",
+  "opened": "2026-05-15",
   "lane": "causal-escalation",
   "scenario": "rolling-restart",
   "artifact": "test-output/reports/rolling-restart-after-publication-owner-publishing-fence-20260515-codex.report.json",
@@ -49,7 +50,6 @@
     "work/sprints/current-blocker.json",
     "work/model-ledger.jsonl"
   ],
-  "touchedFiles": [],
   "modelFit": {
     "packageClass": "representative-frontier-closure",
     "intendedMinimumModel": "gpt-5.3-codex",
@@ -114,3 +114,97 @@
   },
   "predecessor": "work/packages/done-20260515-topology-publication-convergence-after-active-gate-migration.md"
 }
+-->
+
+## Why
+
+The publication owner-stream fix produced the desired representative movement:
+publication ACK convergence is now satisfied, and the current live blocker is
+again active-gate snapshot coverage. This package owns the next edge, not
+publication parity work.
+
+The active-gate evidence is narrower than before: snapshot coverage is `2/5`,
+the selected snapshot is `repair_deferred / stale_usable / pending / idle /
+wait`, and the reason codes are `cache_stale_watermark` and
+`stale_replica_operations_in_flight`.
+
+## Scope Basis
+
+AGPL topology convergence release-gate closure. Ship criteria still require
+`active=5/5`, `snapshotCoverage=5/5`, and `missingPublished=0`. This package
+is bounded to the current canonical first frontier and may promote runtime
+files into write scope only after owner-file proof or a focused probe names
+the exact files.
+
+## Workflow Lane
+
+- Selected lane: `causal-escalation`
+- Why this lane is sufficient: the first frontier has oscillated between
+  publication convergence and active gate, so the package must preserve the
+  migration proof and then work the active-gate owner boundary.
+- Escalation trigger to a heavier lane: fresh representative evidence promotes
+  publication convergence, operation workflow progress, or readiness support
+  ahead of active-gate snapshot coverage.
+
+## LLM Tool-First Contract
+
+Before raw JSON, raw logs, broad file search, oversized segment files, or ad hoc `jq`, use the canonical workflow command that owns the question:
+
+1. Package metadata or ledger edits: `npm run work:package:doctor -- --suggest <package>`, `npm run work:package:doctor -- --fix-dry-run <package>`, `npm run work:package:schema`, or `npm run work:package:new -- ...`.
+2. Representative evidence: `npm run work:evidence-summary -- <artifact>` plus any focused extractor for this failure class.
+3. Owner discovery: `npm run analyze:owner-files -- <owner> [boundary]`.
+4. Subagent sequencing: `npm run work:subagent-prompt -- --role <role> --package <package>`.
+5. Large-file cleanup: `npm run work:oversized-next -- --markdown`.
+
+If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which canonical extractor was tried and why it was insufficient.
+
+## In Scope
+
+1. work/packages/active-20260515-topology-active-gate-snapshot-coverage-after-publication-owner-stream-fix.md
+2. work/sprints/active-2026-q2-topology-convergence-residual-closure.md
+3. work/model-ledger.jsonl
+
+## Out Of Scope
+
+1. topology_publication_owner / publication_convergence unless fresh canonical evidence promotes it back to first frontier
+2. operation_workflow_owner / workflow_progress unless fresh canonical evidence promotes it to first frontier
+3. scenario_timeout_defaults
+
+## Subagent Sequencing Ledger
+
+Required before implementation because this is a runtime owner-boundary and
+causal-escalation package.
+
+- [ ] Review subagent recorded:
+      pending-before-implementation-resumes
+- [ ] Fix subagent recorded or explicitly not needed:
+      pending-before-review
+- [ ] Implementation subagent recorded:
+      pending-before-review
+
+## Model Fit
+
+- Package class: `representative-frontier-closure`
+- Intended minimum model: `gpt-5.3-codex`
+- Scope shape: `scenario-causal-escalation`
+- Owned files: `work/packages/active-20260515-topology-active-gate-snapshot-coverage-after-publication-owner-stream-fix.md`, `work/sprints/active-2026-q2-topology-convergence-residual-closure.md`, `work/model-ledger.jsonl`
+- Forbidden files: runtime files until owner-file proof or a focused probe promotes exact paths into write scope
+- Frozen decisions: publication_ack_convergence is satisfied in the fresh artifact; active_gate_snapshot_coverage is the current first frontier.
+- Escalation triggers: owned files expand beyond metadata without owner-file proof, runtime ownership changes, or representative evidence changes first frontier.
+- Focused proof: `npm run work:evidence-summary -- test-output/reports/rolling-restart-after-publication-owner-publishing-fence-20260515-codex.report.json`, `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-publication-owner-publishing-fence-20260515-codex.report.json --explain active_gate_snapshot_coverage`, `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-publication-owner-publishing-fence-20260515-codex.report.json`, `npm run analyze:owner-files -- startup_active_gate_owner snapshot_coverage --markdown`
+- Model ledger advisory: `escalate`
+
+## Validation
+
+1. npm run work:evidence-summary -- test-output/reports/rolling-restart-after-publication-owner-publishing-fence-20260515-codex.report.json
+2. npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-publication-owner-publishing-fence-20260515-codex.report.json --explain active_gate_snapshot_coverage
+3. npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-publication-owner-publishing-fence-20260515-codex.report.json
+4. npm run analyze:distributed-failure -- --report test-output/reports/rolling-restart-after-publication-owner-publishing-fence-20260515-codex.report.json
+5. npm run analyze:owner-files -- startup_active_gate_owner snapshot_coverage --markdown
+6. npm run work:validate -- --entry
+
+## Commit And Push Ledger
+
+1. Focused package commit: pending-before-focused-commit
+2. Pushed to: pending-before-push
+3. Commit contains only package-owned files/package-status/allowed sprint handoff: pending-before-focused-commit

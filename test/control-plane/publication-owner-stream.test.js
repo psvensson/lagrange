@@ -8,6 +8,7 @@ import {
   PUBLICATION_OWNER_REASON,
   PUBLICATION_OWNER_REVISION_STATE,
   PUBLICATION_OWNER_STREAM_OUTCOME,
+  PUBLICATION_OWNER_TEXT,
 } from '../../src/control-plane/publication-owner-constants.js';
 import {
   buildPublicationOwnerStreamState,
@@ -35,6 +36,7 @@ const TEST_NODE_ID = Object.freeze({
 });
 const TEST_PUBLICATION_RECOVERY_PROTOCOL = Object.freeze({
   PUBLICATION_PENDING: 'publication_pending',
+  UNPUBLISHED_OBSERVATION: 'unpublished_observation',
 });
 const TEST_PUBLICATION_PUBLISHED_FRONTIER = Object.freeze({
   EPOCH: 2,
@@ -204,6 +206,40 @@ test('publication owner stream settles published count-only ACK frontier',
     t.same(
       stream.missingPublishedNodeIds,
       TEST_PUBLICATION_PUBLISHED_FRONTIER.MISSING_NODE_IDS,
+    );
+    t.end();
+  });
+
+test('publication owner stream classifies pending unpublished revision as publishing',
+  (t) => {
+    const stream = buildPublicationOwnerStreamState({
+      publicationStatus: PUBLICATION_OWNER_TEXT.UNKNOWN,
+      pendingAckNodeIds: [],
+      pendingAckCount: TEST_PUBLICATION_COUNT.PUBLISHED_FRONTIER_PENDING_ACK,
+      recoveryProtocolState:
+        TEST_PUBLICATION_RECOVERY_PROTOCOL.UNPUBLISHED_OBSERVATION,
+      publicationPending: true,
+      prioritySpreadPending: false,
+    });
+
+    t.equal(stream.ackState, PUBLICATION_OWNER_ACK_STATE.UNAVAILABLE);
+    t.equal(stream.freshnessFence, PUBLICATION_OWNER_FRESHNESS_FENCE.PUBLISHING);
+    t.equal(stream.streamOutcome, PUBLICATION_OWNER_STREAM_OUTCOME.PUBLISHING);
+    t.equal(
+      stream.recoveryOutcome,
+      PUBLICATION_OWNER_RECOVERY_OUTCOME.WAITING_FOR_PUBLICATION,
+    );
+    t.equal(
+      stream.reasonCodes.includes(
+        PUBLICATION_OWNER_REASON.PUBLICATION_PENDING_HINT,
+      ),
+      true,
+    );
+    t.equal(
+      stream.reasonCodes.includes(
+        PUBLICATION_OWNER_REASON.UNPUBLISHED_OBSERVATION,
+      ),
+      true,
     );
     t.end();
   });

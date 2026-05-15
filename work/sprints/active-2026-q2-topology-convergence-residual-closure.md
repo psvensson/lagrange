@@ -441,7 +441,7 @@ Final closure requires fresh evidence proving all of the following:
       work at `startup_active_gate_owner / snapshot_coverage` unless fresh
       canonical evidence promotes it back to first frontier.
 
-19. [Topology Publication Convergence After Active Gate Migration](../packages/active-20260515-topology-publication-convergence-after-active-gate-migration.md)
+19. [Topology Publication Convergence After Active Gate Migration](../packages/done-20260515-topology-publication-convergence-after-active-gate-migration.md)
     - Lane: `runtime-owner-boundary`
     - Owner boundary: `topology_publication_owner / publication_convergence`
     - Purpose: own the publication-convergence successor frontier exposed by
@@ -450,9 +450,28 @@ Final closure requires fresh evidence proving all of the following:
       migrated and named
       `test-output/reports/rolling-restart-after-active-gate-persistent-repair-20260515-codex.report.json`
       as the successor artifact.
-    - Acceptance: publication_pending is repaired, reduced, migrated, or
-      classified with canonical evidence before active-gate snapshot coverage
-      is treated as the live first blocker again.
+    - Acceptance: migrated handoff. Focused owner-stream proof now classifies
+      pending unpublished revision evidence as `publishing /
+      waiting_for_publication` instead of `no_revision / not_started`. Fresh
+      representative evidence in
+      `test-output/reports/rolling-restart-after-publication-owner-publishing-fence-20260515-codex.report.json`
+      satisfies publication ACK convergence and promotes
+      `startup_active_gate_owner / snapshot_coverage` back to first frontier
+      with `active_gate_timed_out`, `snapshotCoverage=2/5`, and selected
+      snapshot `repair_deferred / stale_usable / pending / idle / wait`.
+
+20. [Topology Active Gate Snapshot Coverage After Publication Owner Stream Fix](../packages/active-20260515-topology-active-gate-snapshot-coverage-after-publication-owner-stream-fix.md)
+    - Lane: `causal-escalation`
+    - Owner boundary: `startup_active_gate_owner / snapshot_coverage`
+    - Purpose: own the fresh active-gate snapshot coverage frontier exposed
+      after publication ACK convergence became satisfied.
+    - Entry condition: publication-convergence successor closed as migrated
+      by the fresh representative artifact
+      `test-output/reports/rolling-restart-after-publication-owner-publishing-fence-20260515-codex.report.json`.
+    - Acceptance: selected snapshot repair-deferred/stale-usable evidence is
+      repaired, reduced, migrated, or classified with canonical evidence
+      before readiness or operation-workflow residuals are treated as first
+      frontier.
 
 ## Dependency Order
 
@@ -525,8 +544,8 @@ projection reconciliation is done as classification-only observability:
 `PUBLISHED` plus missing active publication is now a
 `topology_publication_owner` blocker instead of healthy evidence.
 
-The current action is to implement
-[Topology Publication Convergence After Active Gate Migration](../packages/active-20260515-topology-publication-convergence-after-active-gate-migration.md).
+The current action is to start
+[Topology Active Gate Snapshot Coverage After Publication Owner Stream Fix](../packages/active-20260515-topology-active-gate-snapshot-coverage-after-publication-owner-stream-fix.md).
 The migrated active-gate predecessor is
 [Topology Active Gate Snapshot Coverage After Publication Consumer Lag](../packages/done-20260515-topology-active-gate-snapshot-coverage-after-publication-consumer-lag.md).
 The predecessor
@@ -545,6 +564,13 @@ canonical extraction promotes active-gate snapshot coverage back to first
 frontier. The latest rebalance gate still has its own publication-convergence
 migration evidence and must remain a separate gate package unless promoted by
 fresh canonical extraction.
+
+Implementation note for publication convergence after active-gate migration:
+focused owner-stream proof now classifies pending unpublished revision evidence
+as `publishing / waiting_for_publication` instead of
+`no_revision / not_started`. The active package remains open pending a fresh
+representative rerun or canonical extraction that shows whether the
+publication frontier reduced, migrated, or stayed same-boundary.
 
 Priority residual drain is classification-complete and closed. The
 representative priority extractor still reports one non-frontier
@@ -572,7 +598,15 @@ Final confirmation is closed as a migrated red gate. The publication
 convergence final blocker is now closed as migrated by consumer-lag
 classification. The active-gate package then sustained forced snapshot repair
 and migrated the current representative checkpoint to
-`topology_publication_owner / publication_convergence`. Continue the active
-successor publication-convergence package; do not keep fixing active-gate
-snapshot coverage in this sprint segment unless owner evidence promotes it
-back to first frontier.
+`topology_publication_owner / publication_convergence`. The publication
+successor now closes as migrated: fresh evidence after the owner-stream fix
+satisfies publication ACK convergence and promotes
+`startup_active_gate_owner / snapshot_coverage` back to first frontier with
+`active=4/5`, `snapshotCoverage=2/5`, selected snapshot
+`repair_deferred / stale_usable / pending / idle / wait`, and reason codes
+`cache_stale_watermark` plus `stale_replica_operations_in_flight`.
+
+Continue the active-gate successor package. Its first step is review/fix
+subagent sequencing for the just-closed publication package, then focused
+analysis of the selected snapshot repair-deferred path before any runtime
+file is promoted into write scope.

@@ -4,36 +4,37 @@
 
 Sprint: `work/sprints/active-2026-q2-topology-convergence-residual-closure.md`
 
-Package: `work/packages/active-20260515-topology-publication-convergence-after-active-gate-migration.md`
+Package: `work/packages/active-20260515-topology-active-gate-snapshot-coverage-after-publication-owner-stream-fix.md`
 
 Workflow lane: `causal-escalation`
 
 Scenario: `rolling-restart`
 
-Artifact: `test-output/reports/rolling-restart-after-active-gate-persistent-repair-20260515-codex.report.json`
+Artifact: `test-output/reports/rolling-restart-after-publication-owner-publishing-fence-20260515-codex.report.json`
 
 Playback: `none`
 
 ## Boundary
 
-Owner: `topology_publication_owner`
+Owner: `startup_active_gate_owner`
 
-Boundary: `publication_convergence`
+Boundary: `snapshot_coverage`
 
-Dominant reason: `publication_pending`
+Dominant reason: `active_gate_timed_out`
 
-Current state: Successor package opened from the migrated active-gate snapshot coverage package. Canonical evidence on test-output/reports/rolling-restart-after-active-gate-persistent-repair-20260515-codex.report.json now selects publication_ack_convergence under topology_publication_owner / publication_convergence with publication_pending; active_gate_snapshot_coverage is downstream with snapshotCoverage=0/5 and selected snapshot forced-repair error.
+Current state: Fresh representative evidence after the publication owner-stream fix satisfies publication_ack_convergence and priority_recovery_partition_progress. The first frontier is active_gate_snapshot_coverage under startup_active_gate_owner / snapshot_coverage with active_gate_timed_out, snapshotCoverage=2/5, expectedNodeCount=5, selected snapshot observation repair_deferred / stale_usable / pending / idle / wait, reason codes cache_stale_watermark and stale_replica_operations_in_flight, active=4/5, pendingAck=0, and missingPublished=4.
 
 ## Next Action
 
-Analyze publication_pending in the new representative artifact with canonical topology and causal extractors, then repair or classify topology_publication_owner / publication_convergence without reopening active-gate snapshot coverage unless fresh evidence promotes it back to first frontier.
+Review the previous publication-convergence package, then analyze the active-gate selected snapshot repair-deferred/stale-usable path and repair or classify why snapshot coverage remains 2/5 before active-gate timeout.
 
 ## Proof Ladder
 
-1. `npm run work:evidence-summary -- test-output/reports/rolling-restart-after-active-gate-persistent-repair-20260515-codex.report.json`
-2. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-active-gate-persistent-repair-20260515-codex.report.json --explain publication_ack_convergence`
-3. `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-active-gate-persistent-repair-20260515-codex.report.json`
-4. `npm run analyze:owner-files -- topology_publication_owner publication_convergence --markdown`
+1. `npm run work:evidence-summary -- test-output/reports/rolling-restart-after-publication-owner-publishing-fence-20260515-codex.report.json`
+2. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-publication-owner-publishing-fence-20260515-codex.report.json --explain active_gate_snapshot_coverage`
+3. `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-publication-owner-publishing-fence-20260515-codex.report.json`
+4. `npm run analyze:distributed-failure -- --report test-output/reports/rolling-restart-after-publication-owner-publishing-fence-20260515-codex.report.json`
+5. `npm run analyze:owner-files -- startup_active_gate_owner snapshot_coverage --markdown`
 
 ## Model Fit
 
@@ -45,8 +46,9 @@ Scope shape: `scenario-causal-escalation`
 
 Escalation triggers:
 
-1. `owned files expand beyond this package`
-2. `a frozen decision must be reopened`
+1. `owned files expand beyond package metadata before owner-file proof promotes them`
+2. `selected snapshot repair-deferred path spans publication or operation workflow ownership`
+3. `fresh evidence promotes publication_ack_convergence or priority_recovery_partition_progress back to first frontier`
 
 ## Representative Residual
 
@@ -54,66 +56,68 @@ Status: `live-red`
 
 Scenario: `rolling-restart`
 
-Artifact: `test-output/reports/rolling-restart-after-active-gate-persistent-repair-20260515-codex.report.json`
+Artifact: `test-output/reports/rolling-restart-after-publication-owner-publishing-fence-20260515-codex.report.json`
 
-Frontier: `publication_ack_convergence`
+Frontier: `active_gate_snapshot_coverage`
 
-Owner: `topology_publication_owner`
+Owner: `startup_active_gate_owner`
 
-Boundary: `publication_convergence`
+Boundary: `snapshot_coverage`
 
-Dominant reason: `publication_pending`
+Dominant reason: `active_gate_timed_out`
 
-Next action: `Analyze why the publication owner stream is unavailable/no_revision/not_started in the migrated representative artifact before active-gate snapshot coverage can converge.`
+Next action: `Analyze active-gate selected snapshot repair_deferred/stale_usable evidence and determine whether the owner should wake, retry, refresh, advance, or classify terminal coverage debt.`
 
 ## Causal Governance
 
-Causal hypothesis: `topology_publication_owner / publication_convergence must publish or classify the usable owner stream before active-gate forced snapshot repair can select a converged snapshot source.`
+Causal hypothesis: `startup_active_gate_owner / snapshot_coverage must advance or explicitly classify selected snapshot repair_deferred stale_usable evidence before active-gate timeout can reach 5/5 coverage.`
 
-Stop-condition check: `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-active-gate-persistent-repair-20260515-codex.report.json`
+Stop-condition check: `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-publication-owner-publishing-fence-20260515-codex.report.json`
 
-Expected causal-model change: `publication_ack_convergence becomes representative-green, reduced, same-frontier, migrated, or classification-only with a named owner-boundary reason.`
+Expected causal-model change: `active_gate_snapshot_coverage becomes representative-green, reduced, same-frontier, migrated, or classification-only with a named owner-boundary reason.`
 
 Representative outcome: `pending-before-rerun`
 
-Causal debt: `The active-gate package migrated the representative residual to publication_ack_convergence / publication_pending. Active-gate snapshot coverage is downstream with snapshotCoverage=0/5 and selected snapshot forced-repair error.`
+Causal debt: `The prior publication owner-stream package closed publication_ack_convergence as satisfied in fresh evidence. The current live blocker is active_gate_snapshot_coverage with snapshotCoverage=2/5 and selected snapshot repair_deferred/stale_usable/pending/idle/wait evidence.`
 
-Cross-boundary review: `Review and fix subagent proof are recorded for the causal-escalation handoff; implementation proof is required before runtime changes.`
+Cross-boundary review: `Review and fix subagent proof must be clean before runtime implementation. Candidate runtime files remain read-only until owner-file proof or a focused probe promotes exact files into writeScope and commitScope.`
 
 ## Scenario Causal Closure
 
-Reference scenario/probe: `rolling-restart / topology_publication_owner / publication_convergence after active-gate migration`
+Reference scenario/probe: `rolling-restart / startup_active_gate_owner / snapshot_coverage after publication owner-stream fix`
 
 Phase chain:
 
-1. `active-gate bounded retry proof`
-2. `representative rerun classification`
-3. `publication convergence extraction`
-4. `successor publication owner analysis`
+1. `publication owner-stream migration proof`
+2. `active-gate snapshot coverage extraction`
+3. `selected snapshot repair-deferred analysis`
+4. `focused active-gate repair or classification`
+5. `representative rerun classification`
 
-Current first frontier: `publication_ack_convergence under topology_publication_owner / publication_convergence with publication_pending`
+Current first frontier: `active_gate_snapshot_coverage under startup_active_gate_owner / snapshot_coverage with active_gate_timed_out, snapshotCoverage=2/5, expectedNodeCount=5, and selected snapshot repair_deferred / stale_usable / pending / idle / wait evidence`
 
 Known downstream blockers:
 
-1. `active_gate_snapshot_coverage remains downstream with snapshotCoverage=0/5 and selected snapshot forced-repair error`
-2. `readiness_startup_support remains deferred through inherited_active_gate_no_progress`
-3. `scenario_duration and active_gate_timeout budgets are exhausted in the migrated artifact`
+1. `readiness_startup_support is deferred as inherited_active_gate_no_progress`
+2. `scenario_duration and active_gate_timeout budgets are exhausted`
+3. `workflow_step_timeout is exhausted for a non-frontier operation_workflow_owner / workflow_progress wait`
+4. `missingPublished=4 remains observable but publication_ack_convergence is satisfied in canonical topology evidence`
 
-Missing causal edge: `publication convergence did not produce a usable owner stream before active-gate forced repair selected the snapshot source.`
+Missing causal edge: `Selected snapshot repair_deferred/stale_usable evidence did not refresh or advance enough coverage before active gate timeout.`
 
-Missing causal edge probe: `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-active-gate-persistent-repair-20260515-codex.report.json --explain publication_ack_convergence`
+Missing causal edge probe: `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-publication-owner-publishing-fence-20260515-codex.report.json --explain active_gate_snapshot_coverage`
 
-Bounded progress proof: `Pending implementation; expected proof must show bounded retry, timeout classification, reconcile, or advance behavior for topology_publication_owner / publication_convergence.`
+Bounded progress proof: `Pending implementation; expected proof must show wake, retry, refresh, advance, bounded terminal classification, or owner-boundary migration for selected snapshot repair-deferred coverage.`
 
-Bounded progress proof artifact: `test-output/reports/rolling-restart-after-active-gate-persistent-repair-20260515-codex.report.json`
+Bounded progress proof artifact: `test-output/reports/rolling-restart-after-publication-owner-publishing-fence-20260515-codex.report.json`
 
-Expected observable transition: `publication_pending resolves to green evidence, reduced residual, same-frontier proof, migrated owner-boundary proof, or classification-only stop.`
+Expected observable transition: `active_gate_timed_out resolves to green evidence, reduced residual, same-frontier proof, migrated owner-boundary proof, or classification-only stop.`
 
-Max progress bound: `one focused publication-convergence package slice with canonical extractors, owner-file proof, focused validation, and representative result classification`
+Max progress bound: `one focused active-gate snapshot coverage package slice with canonical extractors, owner-file proof, subagent sequencing, focused validation, and representative result classification`
 
-Same-frontier fallback: `keep topology_publication_owner / publication_convergence active and do not absorb active-gate, operation workflow, or generic harness timeout changes without canonical promotion.`
+Same-frontier fallback: `keep startup_active_gate_owner / snapshot_coverage active and do not absorb publication convergence, operation workflow, or generic harness timeout changes without canonical promotion.`
 
-Expected next frontier: `startup_active_gate_owner / snapshot_coverage after publication convergence improves, or a narrower publication owner boundary`
+Expected next frontier: `readiness_startup_support after coverage improves, or a narrower startup_active_gate_owner selected-snapshot boundary`
 
 Result classification: `pending-before-probe`
 
@@ -123,23 +127,24 @@ Recent frontier history:
 
 1. `work/packages/done-20260514-topology-publication-convergence-final-blocker.md / topology_publication_owner / publication_convergence / migrated`
 2. `work/packages/done-20260515-topology-active-gate-snapshot-coverage-after-publication-consumer-lag.md / startup_active_gate_owner / snapshot_coverage / migrated`
-3. `work/packages/active-20260515-topology-publication-convergence-after-active-gate-migration.md / topology_publication_owner / publication_convergence / pending-before-probe`
+3. `work/packages/done-20260515-topology-publication-convergence-after-active-gate-migration.md / topology_publication_owner / publication_convergence / migrated`
 
-Oscillation check: `The first frontier returned to topology_publication_owner / publication_convergence after active-gate bounded retry proof, so this package uses the causal-escalation lane before another local runtime patch.`
+Oscillation check: `The frontier returned to active_gate_snapshot_coverage only after publication ACK convergence became satisfied, so this package stays causal-escalation and must preserve the fresh first-frontier proof before runtime edits.`
 
-Handoff invariant: `Prove the producer-consumer missing edge with canonical evidence before patching publication runtime; keep active-gate snapshot coverage downstream unless fresh extraction promotes it back to first frontier.`
+Handoff invariant: `Do not reopen topology_publication_owner / publication_convergence or operation_workflow_owner / workflow_progress unless fresh canonical evidence promotes those edges to first frontier.`
 
 ## Scope
 
 Write scope:
 
-1. `work/packages/active-20260515-topology-publication-convergence-after-active-gate-migration.md`
+1. `work/packages/active-20260515-topology-active-gate-snapshot-coverage-after-publication-owner-stream-fix.md`
 2. `work/sprints/active-2026-q2-topology-convergence-residual-closure.md`
 3. `work/model-ledger.jsonl`
 
 Handoff files:
 
-1. None recorded
+1. `work/packages/done-20260515-topology-publication-convergence-after-active-gate-migration.md`
+2. `work/packages/done-20260515-topology-active-gate-snapshot-coverage-after-publication-consumer-lag.md`
 
 Generated files:
 
@@ -148,16 +153,17 @@ Generated files:
 
 Candidate runtime files:
 
-1. `src/control-plane/publication-recovery-gate.js`
-2. `src/control-plane/publication-owner-state.js`
-3. `src/control-plane/publication-owner-decision.js`
-4. `src/control-plane/publication-owner-evidence.js`
-5. `src/control-plane/membership-publication-planning.js`
-6. `src/control-plane/membership-publication-coordinator-class-stage-2.js`
+1. `test/distributed/harness/cluster-segment-7.js`
+2. `test/distributed/harness/cluster-segment-2.js`
+3. `test/distributed/harness/cluster-segment-3.js`
+4. `src/diagnostics/topology-convergence-graph.js`
+5. `src/admin/admin-control-snapshot-class-part-5.js`
+6. `src/admin/admin-control-snapshot-class-part-3.js`
+7. `src/control-plane/authoritative-node-evidence-reconciler.js`
 
 Commit scope:
 
-1. `work/packages/active-20260515-topology-publication-convergence-after-active-gate-migration.md`
+1. `work/packages/active-20260515-topology-active-gate-snapshot-coverage-after-publication-owner-stream-fix.md`
 2. `work/sprints/active-2026-q2-topology-convergence-residual-closure.md`
 3. `work/sprints/current-blocker.md`
 4. `work/sprints/current-blocker.json`

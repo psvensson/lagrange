@@ -161,7 +161,10 @@ const PUBLICATION_OWNER_FRESHNESS_RULES = Object.freeze([
   Object.freeze({
     fence: PUBLICATION_OWNER_FRESHNESS_FENCE.NO_REVISION,
     matches: (snapshot) =>
-      isPublicationOwnerUnpublishedObservation(snapshot.evidence) ||
+      (
+        isPublicationOwnerUnpublishedObservation(snapshot.evidence) &&
+        hasPublicationOwnerPublicationPending(snapshot.evidence) !== true
+      ) ||
       (
         hasPublicationOwnerRevision(snapshot.evidence) !== true &&
         snapshot.evidence.publicationPendingHint !== true &&
