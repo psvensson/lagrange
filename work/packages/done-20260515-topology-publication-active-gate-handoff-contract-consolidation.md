@@ -359,6 +359,6 @@ This package cannot close until all of the following are true:
 
 ## Commit And Push Ledger
 
-- Focused package commit: pending-before-implementation-resumes
-- Pushed to: pending-before-implementation-resumes
-- Commit contains only package-owned files/package-status/allowed sprint handoff: pending-before-implementation-resumes
+- Focused package commit: 3b6d3e4698fb0076dccac4f7977d27df1f2b6408
+- Pushed to: origin/codex/pending-ack-eligibility-filter
+- Commit contains only package-owned files/package-status/allowed sprint handoff: yes
