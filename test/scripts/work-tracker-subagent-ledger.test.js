@@ -177,6 +177,7 @@ const MODEL_FIT_VALID_SPARK_SAFE_CONTENT = [
   '- Package class: `bounded-implementation`',
   '- Intended minimum model: `gpt-5.3-codex-spark`',
   '- Scope shape: `leaf-slice`',
+  '- Output profile: `medium`',
   '- Owned files: `scripts/work-tracker.js`, `test/scripts/work-tracker-subagent-ledger.test.js`',
   '- Forbidden files: `src/`, `test/distributed/harness/`',
   '- Frozen decisions: active package metadata requires the section.',
@@ -193,6 +194,7 @@ const MODEL_FIT_INCOMPLETE_SPARK_SAFE_CONTENT = [
   '- Package class: `spark-safe`',
   '- Intended minimum model: `gpt-5`',
   '- Scope shape: `broad-frontier`',
+  '- Output profile: `verbose`',
   '- Owned files: `scripts/work-tracker.js`',
   '- Forbidden files: `src/`',
   '- Frozen decisions: tracker metadata only.',
@@ -468,6 +470,7 @@ const WORK_TRACKER_DOCTOR_CONTENT = [
       packageClass: 'bounded-implementation',
       intendedMinimumModel: 'gpt-5.3-codex-spark',
       scopeShape: 'leaf-slice',
+      outputProfile: 'medium',
       escalationTriggers: ['package doctor expands beyond work tracker'],
     },
   }, null, 2),
@@ -478,6 +481,7 @@ const WORK_TRACKER_DOCTOR_CONTENT = [
   '- Package class: `bounded-implementation`',
   '- Intended minimum model: `gpt-5.3-codex-spark`',
   '- Scope shape: `leaf-slice`',
+  '- Output profile: `medium`',
   '- Owned files: `scripts/work-tracker.js`',
   '- Forbidden files: `src/`',
   '- Frozen decisions: package doctor is a validation summary only.',
@@ -771,6 +775,7 @@ describe('work tracker package doctor', () => {
     assert.deepEqual(report.errors, []);
     assert.match(rendered, /# Work Package Doctor/u);
     assert.match(rendered, /Owner: workflow_tooling_owner/u);
+    assert.match(rendered, /Output profile: medium/u);
     assert.match(rendered, /Write scope: 1/u);
     assert.match(rendered, /Legacy touched files: 0/u);
     assert.match(rendered, /Validation: ok/u);
@@ -1081,6 +1086,7 @@ describe('work tracker representative residual validation', () => {
           packageClass: 'representative-frontier-closure',
           intendedMinimumModel: 'gpt-5.3-codex',
           scopeShape: 'owner-boundary-contraction/current-frontier',
+          outputProfile: 'medium',
           escalationTriggers: ['representative scenario evidence changes'],
         },
         causalGovernance: CAUSAL_GOVERNANCE_VALID_METADATA.causalGovernance,
@@ -1103,6 +1109,7 @@ describe('work tracker representative residual validation', () => {
         '- Package class: `representative-frontier-closure`',
         '- Intended minimum model: `gpt-5.3-codex`',
         '- Scope shape: `owner-boundary-contraction/current-frontier`',
+        '- Output profile: `medium`',
         '- Owned files: `work/packages/active-test-package.md`',
         '- Forbidden files: `src/`, `test/distributed/harness/`',
         '- Frozen decisions: diagnostics package keeps scope fixed.',
@@ -1359,6 +1366,13 @@ describe('work tracker scenario causal closure validation', () => {
         generatedFiles: ['work/sprints/current-blocker.md'],
         candidateRuntimeFiles: ['src/example.js'],
         commitScope: ['scripts/work-tracker.js', 'work/sprints/current-blocker.md'],
+        modelFit: {
+          packageClass: 'representative-frontier-closure',
+          intendedMinimumModel: 'gpt-5.3-codex',
+          scopeShape: 'owner-boundary-contraction/current-frontier',
+          outputProfile: 'medium',
+          escalationTriggers: ['scope expands'],
+        },
         representativeResidual: {
           status: 'red',
           scenario: 'rolling-restart',
@@ -1382,6 +1396,7 @@ describe('work tracker scenario causal closure validation', () => {
         'classification-only',
       );
       assert.equal(payload.lane, LANE_RUNTIME_OWNER_BOUNDARY);
+      assert.equal(payload.modelFit.outputProfile, 'medium');
       assert.deepEqual(payload.writeScope, ['scripts/work-tracker.js']);
       assert.deepEqual(payload.handoffFiles, ['work/packages/done-test-package.md']);
       assert.deepEqual(payload.generatedFiles, ['work/sprints/current-blocker.md']);
@@ -1396,6 +1411,7 @@ describe('work tracker scenario causal closure validation', () => {
         'active_gate_snapshot_coverage',
       );
       assert.match(rendered, /Workflow lane/u);
+      assert.match(rendered, /Output profile/u);
       assert.match(rendered, /## Scope/u);
       assert.match(rendered, /Write scope/u);
       assert.match(rendered, /Commit scope/u);
@@ -1458,6 +1474,7 @@ describe('work tracker current blocker snapshot validation', () => {
           packageClass: 'representative-frontier-closure',
           intendedMinimumModel: 'gpt-5.3-codex',
           scopeShape: 'scenario-causal-escalation',
+          outputProfile: 'medium',
           escalationTriggers: ['scope expands'],
         },
       },

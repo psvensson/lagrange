@@ -4,6 +4,10 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import process from 'node:process';
 import {fileURLToPath} from 'node:url';
+import {
+  OUTPUT_PROFILE_MEDIUM,
+  VALID_OUTPUT_PROFILES,
+} from './work-package-schema.js';
 
 const ENCODING_UTF8 = 'utf8';
 const EXIT_SUCCESS = 0;
@@ -24,6 +28,7 @@ const FLAG_RECENT = 'recent';
 const FLAG_PACKAGE = 'package';
 const FLAG_MODEL = 'model';
 const FLAG_REASONING_EFFORT = 'reasoning-effort';
+const FLAG_OUTPUT_PROFILE = 'output-profile';
 const FLAG_TASK_CLASS = 'task-class';
 const FLAG_PACKAGE_CLASS = 'package-class';
 const FLAG_INTENDED_MINIMUM_MODEL = 'intended-minimum-model';
@@ -39,6 +44,7 @@ const RECORD_FIELD_RECORDED_AT = 'recordedAt';
 const RECORD_FIELD_PACKAGE = 'package';
 const RECORD_FIELD_MODEL = 'model';
 const RECORD_FIELD_REASONING_EFFORT = 'reasoningEffort';
+const RECORD_FIELD_OUTPUT_PROFILE = 'outputProfile';
 const RECORD_FIELD_TASK_CLASS = 'taskClass';
 const RECORD_FIELD_PACKAGE_CLASS = 'packageClass';
 const RECORD_FIELD_INTENDED_MINIMUM_MODEL = 'intendedMinimumModel';
@@ -63,7 +69,6 @@ const RECOMMEND_ESCALATE = 'escalate';
 const RECOMMEND_DEESCALATE = 'de-escalate';
 const RECOMMEND_HOLD = 'hold';
 const EMPTY_TEXT = '';
-const SPACE = ' ';
 const NEWLINE = '\n';
 const FLAG_PREFIX = '--';
 const LABEL_SEPARATOR = ': ';
@@ -73,7 +78,7 @@ const COUNT_JOINER = ', ';
 const SUMMARY_TITLE = '# Model Ledger Summary';
 const HELP_TEXT = [
   'Usage:',
-  '  node scripts/model-ledger.js record --package <path> --model <name> --reasoning-effort <effort> --task-class <class> --package-class <class> --intended-minimum-model <model> --scope-shape <shape> --escalated <true|false> --bailout-reason <reason|none> --outcome <outcome> --validation-status <status> --correction-loops <count> --review-findings <count> --notes <text>',
+  '  node scripts/model-ledger.js record --package <path> --model <name> --reasoning-effort <effort> [--output-profile <small|medium|high|extra-high>] --task-class <class> --package-class <class> --intended-minimum-model <model> --scope-shape <shape> --escalated <true|false> --bailout-reason <reason|none> --outcome <outcome> --validation-status <status> --correction-loops <count> --review-findings <count> --notes <text>',
   '  node scripts/model-ledger.js summary [--recent <count>]',
   '',
   'Options:',
@@ -85,6 +90,7 @@ const RECORD_FLAG_TO_FIELD = Object.freeze({
   [FLAG_PACKAGE]: RECORD_FIELD_PACKAGE,
   [FLAG_MODEL]: RECORD_FIELD_MODEL,
   [FLAG_REASONING_EFFORT]: RECORD_FIELD_REASONING_EFFORT,
+  [FLAG_OUTPUT_PROFILE]: RECORD_FIELD_OUTPUT_PROFILE,
   [FLAG_TASK_CLASS]: RECORD_FIELD_TASK_CLASS,
   [FLAG_PACKAGE_CLASS]: RECORD_FIELD_PACKAGE_CLASS,
   [FLAG_INTENDED_MINIMUM_MODEL]: RECORD_FIELD_INTENDED_MINIMUM_MODEL,
@@ -172,6 +178,17 @@ function parseBoolean(value, fieldName) {
   throw new Error(`${fieldName} must be true or false.`);
 }
 
+function parseOutputProfile(value = OUTPUT_PROFILE_MEDIUM) {
+  const normalized = normalizeLookupValue(value) || OUTPUT_PROFILE_MEDIUM;
+  if (!VALID_OUTPUT_PROFILES.includes(normalized)) {
+    throw new Error(
+      `${RECORD_FIELD_OUTPUT_PROFILE} must be one of ` +
+      `${VALID_OUTPUT_PROFILES.join(COUNT_JOINER)}.`,
+    );
+  }
+  return normalized;
+}
+
 function normalizeLookupValue(value) {
   return normalizeText(value).toLowerCase();
 }
@@ -239,6 +256,10 @@ function buildLedgerRecord(flags = {}, recordedAt = new Date().toISOString()) {
     }
     if (field === RECORD_FIELD_ESCALATED) {
       record[field] = parseBoolean(flags[flag], field);
+      continue;
+    }
+    if (field === RECORD_FIELD_OUTPUT_PROFILE) {
+      record[field] = parseOutputProfile(flags[flag]);
       continue;
     }
     record[field] = normalizeText(flags[flag]);
@@ -421,6 +442,7 @@ function buildSummary(entries = [], options = {}) {
     recentLimit: limit,
     models: countBy(recentEntries, RECORD_FIELD_MODEL),
     reasoningEfforts: countBy(recentEntries, RECORD_FIELD_REASONING_EFFORT),
+    outputProfiles: countBy(recentEntries, RECORD_FIELD_OUTPUT_PROFILE),
     taskClasses: countBy(recentEntries, RECORD_FIELD_TASK_CLASS),
     packageClasses: countBy(recentEntries, RECORD_FIELD_PACKAGE_CLASS),
     intendedMinimumModels: countBy(
@@ -458,6 +480,8 @@ function renderSummary(summary = {}, ledgerPath = DEFAULT_LEDGER_PATH) {
     `${LIST_PREFIX}Models${LABEL_SEPARATOR}${renderCounts(summary.models)}`,
     `${LIST_PREFIX}Reasoning efforts${LABEL_SEPARATOR}` +
       renderCounts(summary.reasoningEfforts),
+    `${LIST_PREFIX}Output profiles${LABEL_SEPARATOR}` +
+      renderCounts(summary.outputProfiles),
     `${LIST_PREFIX}Task classes${LABEL_SEPARATOR}` +
       renderCounts(summary.taskClasses),
     `${LIST_PREFIX}Package classes${LABEL_SEPARATOR}` +

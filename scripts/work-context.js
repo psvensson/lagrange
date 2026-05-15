@@ -193,6 +193,7 @@ const FIELD_LABELS = Object.freeze({
   MODEL_FIT_PACKAGE_CLASS: 'Package class',
   NEXT_ACTION: 'Next action',
   OWNER: 'Owner',
+  OUTPUT_PROFILE: 'Output profile',
   PACKAGE: 'Package',
   PACKAGE_TITLE: 'Package title',
   PLAYBACK: 'Playback',
@@ -278,10 +279,12 @@ const METADATA_FIELD_SCENARIO_CAUSAL_CLOSURE = 'scenarioCausalClosure';
 const MODEL_FIT_FIELD_PACKAGE_CLASS = 'packageClass';
 const MODEL_FIT_FIELD_INTENDED_MINIMUM_MODEL = 'intendedMinimumModel';
 const MODEL_FIT_FIELD_SCOPE_SHAPE = 'scopeShape';
+const MODEL_FIT_FIELD_OUTPUT_PROFILE = 'outputProfile';
 const MODEL_FIT_FIELD_ESCALATION_TRIGGERS = 'escalationTriggers';
 const MODEL_FIT_LABEL_PACKAGE_CLASS = 'Package class';
 const MODEL_FIT_LABEL_INTENDED_MINIMUM_MODEL = 'Intended minimum model';
 const MODEL_FIT_LABEL_SCOPE_SHAPE = 'Scope shape';
+const MODEL_FIT_LABEL_OUTPUT_PROFILE = 'Output profile';
 const MODEL_FIT_LABEL_ESCALATION_TRIGGERS = 'Escalation triggers';
 const CAUSAL_GOVERNANCE_FIELD_HYPOTHESIS = 'hypothesis';
 const CAUSAL_GOVERNANCE_FIELD_STOP_CONDITION_CHECK = 'stopConditionCheck';
@@ -505,6 +508,8 @@ function metadataModelFit(metadata) {
       metadataText(modelFit, MODEL_FIT_FIELD_INTENDED_MINIMUM_MODEL),
     [MODEL_FIT_FIELD_SCOPE_SHAPE]:
       metadataText(modelFit, MODEL_FIT_FIELD_SCOPE_SHAPE),
+    [MODEL_FIT_FIELD_OUTPUT_PROFILE]:
+      metadataText(modelFit, MODEL_FIT_FIELD_OUTPUT_PROFILE),
     [MODEL_FIT_FIELD_ESCALATION_TRIGGERS]:
       metadataList(modelFit, MODEL_FIT_FIELD_ESCALATION_TRIGGERS),
   };
@@ -809,6 +814,10 @@ function buildModelFitContext(currentBlocker = {}, packageContent = EMPTY_STRING
     [MODEL_FIT_FIELD_SCOPE_SHAPE]:
       findMarkdownFieldValue(section, MODEL_FIT_LABEL_SCOPE_SHAPE) ||
       metadataModel[MODEL_FIT_FIELD_SCOPE_SHAPE] ||
+      DEFAULT_UNKNOWN,
+    [MODEL_FIT_FIELD_OUTPUT_PROFILE]:
+      findMarkdownFieldValue(section, MODEL_FIT_LABEL_OUTPUT_PROFILE) ||
+      metadataModel[MODEL_FIT_FIELD_OUTPUT_PROFILE] ||
       DEFAULT_UNKNOWN,
     [MODEL_FIT_FIELD_ESCALATION_TRIGGERS]: triggers,
   };
@@ -1447,6 +1456,11 @@ async function buildContextLines(currentBlocker, packageContent) {
     modelFit[MODEL_FIT_FIELD_INTENDED_MINIMUM_MODEL],
   );
   appendKeyValue(lines, FIELD_LABELS.SCOPE_SHAPE, modelFit[MODEL_FIT_FIELD_SCOPE_SHAPE]);
+  appendKeyValue(
+    lines,
+    FIELD_LABELS.OUTPUT_PROFILE,
+    modelFit[MODEL_FIT_FIELD_OUTPUT_PROFILE],
+  );
   appendKeyValue(
     lines,
     FIELD_LABELS.ESCALATION_TRIGGERS,

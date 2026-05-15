@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-05-15T07:53:18.406Z",
+  "generatedAt": "2026-05-15T09:13:51.836Z",
   "sourceDir": ".kiro/steering",
   "llmDir": ".kiro/steering/llm",
   "sourceFiles": [
@@ -45,10 +45,10 @@
     }
   ],
   "stats": {
-    "candidateCount": 271,
-    "dedupedRuleCount": 271,
-    "exportedRuleCount": 271,
-    "estimatedAllRulesTokens": 9963
+    "candidateCount": 272,
+    "dedupedRuleCount": 272,
+    "exportedRuleCount": 272,
+    "estimatedAllRulesTokens": 10093
   },
   "rules": [
     {
@@ -88,7 +88,7 @@
       "domain": "architecture",
       "strength": "must_not",
       "tags": [],
-      "rule": "The model ledger is advisory only. It never replaces validation, review sub-agents, package sequencing, closure proof, or focused commits.",
+      "rule": "The model ledger is advisory only for model, reasoning-effort, and output-profile choice. It never replaces validation, review sub-agents, package sequencing, closure proof, or focused commits.",
       "score": 256,
       "sources": [
         {
@@ -110,7 +110,7 @@
       "sources": [
         {
           "file": "system guidelines.md",
-          "line": 94,
+          "line": 95,
           "section": "System Guidelines — Mandatory Implementation Contract > 2. One Semantic Owner Per Concern"
         }
       ]
@@ -127,7 +127,7 @@
       "sources": [
         {
           "file": "system guidelines.md",
-          "line": 96,
+          "line": 97,
           "section": "System Guidelines — Mandatory Implementation Contract > 2. One Semantic Owner Per Concern"
         }
       ]
@@ -144,7 +144,7 @@
       "sources": [
         {
           "file": "system guidelines.md",
-          "line": 120,
+          "line": 121,
           "section": "System Guidelines — Mandatory Implementation Contract > 3. One Path Per Semantic Decision"
         }
       ]
@@ -159,7 +159,7 @@
       "sources": [
         {
           "file": "system guidelines.md",
-          "line": 148,
+          "line": 149,
           "section": "System Guidelines — Mandatory Implementation Contract > 4. Scalars, State, And Naming Have Owners"
         }
       ]
@@ -174,7 +174,7 @@
       "sources": [
         {
           "file": "system guidelines.md",
-          "line": 151,
+          "line": 152,
           "section": "System Guidelines — Mandatory Implementation Contract > 4. Scalars, State, And Naming Have Owners"
         }
       ]
@@ -191,7 +191,7 @@
       "sources": [
         {
           "file": "system guidelines.md",
-          "line": 187,
+          "line": 188,
           "section": "System Guidelines — Mandatory Implementation Contract > 6. Tables, Cache, And Metadata Follow One Authority Chain"
         }
       ]
@@ -209,7 +209,7 @@
       "sources": [
         {
           "file": "system guidelines.md",
-          "line": 194,
+          "line": 195,
           "section": "System Guidelines — Mandatory Implementation Contract > 6. Tables, Cache, And Metadata Follow One Authority Chain"
         }
       ]
@@ -226,7 +226,7 @@
       "sources": [
         {
           "file": "system guidelines.md",
-          "line": 212,
+          "line": 213,
           "section": "System Guidelines — Mandatory Implementation Contract > 7. Phase Code Must Hand Off To Runtime Owners"
         }
       ]
@@ -243,7 +243,7 @@
       "sources": [
         {
           "file": "system guidelines.md",
-          "line": 219,
+          "line": 220,
           "section": "System Guidelines — Mandatory Implementation Contract > 7. Phase Code Must Hand Off To Runtime Owners"
         }
       ]
@@ -260,7 +260,7 @@
       "sources": [
         {
           "file": "system guidelines.md",
-          "line": 237,
+          "line": 238,
           "section": "System Guidelines — Mandatory Implementation Contract > 8. Control-Plane Work Uses Shared Primitives"
         }
       ]
@@ -277,7 +277,7 @@
       "sources": [
         {
           "file": "system guidelines.md",
-          "line": 242,
+          "line": 243,
           "section": "System Guidelines — Mandatory Implementation Contract > 8. Control-Plane Work Uses Shared Primitives"
         }
       ]
@@ -292,7 +292,7 @@
       "sources": [
         {
           "file": "system guidelines.md",
-          "line": 255,
+          "line": 256,
           "section": "System Guidelines — Mandatory Implementation Contract > 9. Load May Slow The System, Not Break It"
         }
       ]
@@ -307,7 +307,7 @@
       "sources": [
         {
           "file": "system guidelines.md",
-          "line": 256,
+          "line": 257,
           "section": "System Guidelines — Mandatory Implementation Contract > 9. Load May Slow The System, Not Break It"
         }
       ]
@@ -324,7 +324,7 @@
       "sources": [
         {
           "file": "system guidelines.md",
-          "line": 260,
+          "line": 261,
           "section": "System Guidelines — Mandatory Implementation Contract > 9. Load May Slow The System, Not Break It"
         }
       ]
@@ -339,7 +339,7 @@
       "sources": [
         {
           "file": "system guidelines.md",
-          "line": 261,
+          "line": 262,
           "section": "System Guidelines — Mandatory Implementation Contract > 9. Load May Slow The System, Not Break It"
         }
       ]
@@ -354,7 +354,7 @@
       "sources": [
         {
           "file": "system guidelines.md",
-          "line": 277,
+          "line": 278,
           "section": "System Guidelines — Mandatory Implementation Contract > 10. Communication Has One Replicated Data Path"
         }
       ]
@@ -372,7 +372,7 @@
       "sources": [
         {
           "file": "system guidelines.md",
-          "line": 302,
+          "line": 303,
           "section": "System Guidelines — Mandatory Implementation Contract > 12. User-Facing Model Stays Small"
         }
       ]
@@ -387,7 +387,7 @@
       "sources": [
         {
           "file": "system guidelines.md",
-          "line": 170,
+          "line": 171,
           "section": "System Guidelines — Mandatory Implementation Contract > 5. Shared Runtime Contracts Have One Shape"
         }
       ]
@@ -402,7 +402,7 @@
       "sources": [
         {
           "file": "system guidelines.md",
-          "line": 197,
+          "line": 198,
           "section": "System Guidelines — Mandatory Implementation Contract > 6. Tables, Cache, And Metadata Follow One Authority Chain"
         }
       ]
@@ -419,7 +419,7 @@
       "sources": [
         {
           "file": "system guidelines.md",
-          "line": 203,
+          "line": 204,
           "section": "System Guidelines — Mandatory Implementation Contract > 7. Phase Code Must Hand Off To Runtime Owners"
         }
       ]
@@ -555,7 +555,7 @@
       "sources": [
         {
           "file": "system guidelines.md",
-          "line": 189,
+          "line": 190,
           "section": "System Guidelines — Mandatory Implementation Contract > 6. Tables, Cache, And Metadata Follow One Authority Chain"
         }
       ]
@@ -574,7 +574,7 @@
       "sources": [
         {
           "file": "system guidelines.md",
-          "line": 209,
+          "line": 210,
           "section": "System Guidelines — Mandatory Implementation Contract > 7. Phase Code Must Hand Off To Runtime Owners"
         }
       ]
@@ -591,7 +591,7 @@
       "sources": [
         {
           "file": "system guidelines.md",
-          "line": 318,
+          "line": 319,
           "section": "System Guidelines — Mandatory Implementation Contract > 13. Closure Requires Proof, Review, And Truth Repair"
         }
       ]
@@ -608,7 +608,7 @@
       "sources": [
         {
           "file": "system guidelines.md",
-          "line": 319,
+          "line": 320,
           "section": "System Guidelines — Mandatory Implementation Contract > 13. Closure Requires Proof, Review, And Truth Repair"
         }
       ]
@@ -625,7 +625,7 @@
       "sources": [
         {
           "file": "system guidelines.md",
-          "line": 321,
+          "line": 322,
           "section": "System Guidelines — Mandatory Implementation Contract > 13. Closure Requires Proof, Review, And Truth Repair"
         }
       ]
@@ -642,7 +642,7 @@
       "sources": [
         {
           "file": "system guidelines.md",
-          "line": 324,
+          "line": 325,
           "section": "System Guidelines — Mandatory Implementation Contract > 13. Closure Requires Proof, Review, And Truth Repair"
         }
       ]
@@ -657,7 +657,7 @@
       "sources": [
         {
           "file": "system guidelines.md",
-          "line": 326,
+          "line": 327,
           "section": "System Guidelines — Mandatory Implementation Contract > 13. Closure Requires Proof, Review, And Truth Repair"
         }
       ]
@@ -672,7 +672,7 @@
       "sources": [
         {
           "file": "system guidelines.md",
-          "line": 331,
+          "line": 332,
           "section": "System Guidelines — Mandatory Implementation Contract > 13. Closure Requires Proof, Review, And Truth Repair"
         }
       ]
@@ -1195,7 +1195,7 @@
       "sources": [
         {
           "file": "system guidelines.md",
-          "line": 86,
+          "line": 87,
           "section": "System Guidelines — Mandatory Implementation Contract > 2. One Semantic Owner Per Concern"
         }
       ]
@@ -1210,7 +1210,7 @@
       "sources": [
         {
           "file": "system guidelines.md",
-          "line": 114,
+          "line": 115,
           "section": "System Guidelines — Mandatory Implementation Contract > 3. One Path Per Semantic Decision"
         }
       ]
@@ -1228,7 +1228,7 @@
       "sources": [
         {
           "file": "system guidelines.md",
-          "line": 197,
+          "line": 198,
           "section": "System Guidelines — Mandatory Implementation Contract > 6. Tables, Cache, And Metadata Follow One Authority Chain"
         }
       ]
@@ -1243,7 +1243,7 @@
       "sources": [
         {
           "file": "system guidelines.md",
-          "line": 250,
+          "line": 251,
           "section": "System Guidelines — Mandatory Implementation Contract > 9. Load May Slow The System, Not Break It"
         }
       ]
@@ -1258,7 +1258,7 @@
       "sources": [
         {
           "file": "system guidelines.md",
-          "line": 285,
+          "line": 286,
           "section": "System Guidelines — Mandatory Implementation Contract > 11. Mutations Are Idempotent"
         }
       ]
@@ -1407,21 +1407,6 @@
       ]
     },
     {
-      "id": "ARCH-0052",
-      "domain": "architecture",
-      "strength": "must_not",
-      "tags": [],
-      "rule": "Use the model ledger as an advisory feedback loop for future model and reasoning-effort choice when a package produces useful evidence. It must not replace validation, review, sequencing, or closure proof.",
-      "score": 225,
-      "sources": [
-        {
-          "file": "doctrine.md",
-          "line": 272,
-          "section": "Lagrange Engineering Doctrine > 11. Sharpen Work Before Changing Code"
-        }
-      ]
-    },
-    {
       "id": "TEST-0025",
       "domain": "testing",
       "strength": "must_not",
@@ -1471,7 +1456,7 @@
       ]
     },
     {
-      "id": "ARCH-0053",
+      "id": "ARCH-0052",
       "domain": "architecture",
       "strength": "must",
       "tags": [
@@ -1488,7 +1473,7 @@
       ]
     },
     {
-      "id": "ARCH-0054",
+      "id": "ARCH-0053",
       "domain": "architecture",
       "strength": "must",
       "tags": [
@@ -1505,7 +1490,7 @@
       ]
     },
     {
-      "id": "ARCH-0055",
+      "id": "ARCH-0054",
       "domain": "architecture",
       "strength": "must",
       "tags": [
@@ -1795,7 +1780,7 @@
       ]
     },
     {
-      "id": "ARCH-0056",
+      "id": "ARCH-0055",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [
@@ -1812,7 +1797,7 @@
       ]
     },
     {
-      "id": "ARCH-0057",
+      "id": "ARCH-0056",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [
@@ -1829,7 +1814,7 @@
       ]
     },
     {
-      "id": "ARCH-0058",
+      "id": "ARCH-0057",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [
@@ -1846,7 +1831,7 @@
       ]
     },
     {
-      "id": "ARCH-0059",
+      "id": "ARCH-0058",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [],
@@ -1861,7 +1846,7 @@
       ]
     },
     {
-      "id": "ARCH-0060",
+      "id": "ARCH-0059",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [
@@ -1879,7 +1864,7 @@
       ]
     },
     {
-      "id": "ARCH-0061",
+      "id": "ARCH-0060",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [],
@@ -1894,7 +1879,7 @@
       ]
     },
     {
-      "id": "ARCH-0062",
+      "id": "ARCH-0061",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [],
@@ -1909,7 +1894,7 @@
       ]
     },
     {
-      "id": "ARCH-0063",
+      "id": "ARCH-0062",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [],
@@ -1924,7 +1909,7 @@
       ]
     },
     {
-      "id": "ARCH-0064",
+      "id": "ARCH-0063",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [],
@@ -1986,7 +1971,7 @@
       ]
     },
     {
-      "id": "ARCH-0065",
+      "id": "ARCH-0064",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [
@@ -1997,13 +1982,13 @@
       "sources": [
         {
           "file": "doctrine.md",
-          "line": 292,
+          "line": 294,
           "section": "Lagrange Engineering Doctrine > 11. One Contract Shape Per Concern"
         }
       ]
     },
     {
-      "id": "ARCH-0066",
+      "id": "ARCH-0065",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [],
@@ -2012,13 +1997,13 @@
       "sources": [
         {
           "file": "doctrine.md",
-          "line": 306,
+          "line": 308,
           "section": "Lagrange Engineering Doctrine > 12. Normalize Boundary Impedance Once"
         }
       ]
     },
     {
-      "id": "ARCH-0067",
+      "id": "ARCH-0066",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [],
@@ -2027,13 +2012,13 @@
       "sources": [
         {
           "file": "doctrine.md",
-          "line": 320,
+          "line": 322,
           "section": "Lagrange Engineering Doctrine > 13. Prefer Named Modes Over Combinable Flags"
         }
       ]
     },
     {
-      "id": "ARCH-0068",
+      "id": "ARCH-0067",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [
@@ -2045,13 +2030,13 @@
       "sources": [
         {
           "file": "doctrine.md",
-          "line": 335,
+          "line": 337,
           "section": "Lagrange Engineering Doctrine > 14. Shared Surfaces Must Name Consumers"
         }
       ]
     },
     {
-      "id": "ARCH-0069",
+      "id": "ARCH-0068",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [],
@@ -2060,13 +2045,13 @@
       "sources": [
         {
           "file": "doctrine.md",
-          "line": 353,
+          "line": 355,
           "section": "Lagrange Engineering Doctrine > 15. Lifecycle Boundaries Must Publish One Progress Grammar"
         }
       ]
     },
     {
-      "id": "ARCH-0070",
+      "id": "ARCH-0069",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [
@@ -2077,13 +2062,13 @@
       "sources": [
         {
           "file": "doctrine.md",
-          "line": 371,
+          "line": 373,
           "section": "Lagrange Engineering Doctrine > 16. Treat Failure Migration As Boundary Evidence"
         }
       ]
     },
     {
-      "id": "ARCH-0071",
+      "id": "ARCH-0070",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [],
@@ -2092,13 +2077,13 @@
       "sources": [
         {
           "file": "doctrine.md",
-          "line": 388,
+          "line": 390,
           "section": "Lagrange Engineering Doctrine > 17. Sprint Execution Has One Current Boundary"
         }
       ]
     },
     {
-      "id": "ARCH-0072",
+      "id": "ARCH-0071",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [],
@@ -2107,7 +2092,7 @@
       "sources": [
         {
           "file": "doctrine.md",
-          "line": 396,
+          "line": 398,
           "section": "Lagrange Engineering Doctrine > 17. Sprint Execution Has One Current Boundary"
         }
       ]
@@ -2181,7 +2166,7 @@
       ]
     },
     {
-      "id": "ARCH-0073",
+      "id": "ARCH-0072",
       "domain": "architecture",
       "strength": "must",
       "tags": [
@@ -2199,7 +2184,7 @@
       ]
     },
     {
-      "id": "ARCH-0074",
+      "id": "ARCH-0073",
       "domain": "architecture",
       "strength": "must",
       "tags": [
@@ -2233,7 +2218,7 @@
       ]
     },
     {
-      "id": "ARCH-0075",
+      "id": "ARCH-0074",
       "domain": "architecture",
       "strength": "must",
       "tags": [],
@@ -2248,7 +2233,7 @@
       ]
     },
     {
-      "id": "ARCH-0076",
+      "id": "ARCH-0075",
       "domain": "architecture",
       "strength": "must",
       "tags": [],
@@ -2355,7 +2340,7 @@
       "sources": [
         {
           "file": "workflow-guidelines.md",
-          "line": 448,
+          "line": 450,
           "section": "Workflow Guidelines Detail > LLM Tool-First Triage"
         }
       ]
@@ -2370,7 +2355,7 @@
       "sources": [
         {
           "file": "workflow-guidelines.md",
-          "line": 479,
+          "line": 481,
           "section": "Workflow Guidelines Detail > Sub-Agent Sequencing"
         }
       ]
@@ -2387,13 +2372,13 @@
       "sources": [
         {
           "file": "workflow-guidelines.md",
-          "line": 582,
+          "line": 584,
           "section": "Workflow Guidelines Detail > Roadmap And Work-Tracker Truth"
         }
       ]
     },
     {
-      "id": "ARCH-0077",
+      "id": "ARCH-0076",
       "domain": "architecture",
       "strength": "must",
       "tags": [],
@@ -2408,7 +2393,7 @@
       ]
     },
     {
-      "id": "ARCH-0078",
+      "id": "ARCH-0077",
       "domain": "architecture",
       "strength": "must",
       "tags": [
@@ -2426,7 +2411,7 @@
       ]
     },
     {
-      "id": "ARCH-0079",
+      "id": "ARCH-0078",
       "domain": "architecture",
       "strength": "must",
       "tags": [
@@ -2443,7 +2428,7 @@
       ]
     },
     {
-      "id": "ARCH-0080",
+      "id": "ARCH-0079",
       "domain": "architecture",
       "strength": "must",
       "tags": [],
@@ -2922,7 +2907,7 @@
       ]
     },
     {
-      "id": "ARCH-0081",
+      "id": "ARCH-0080",
       "domain": "architecture",
       "strength": "should",
       "tags": [],
@@ -2931,7 +2916,7 @@
       "sources": [
         {
           "file": "system guidelines.md",
-          "line": 306,
+          "line": 307,
           "section": "System Guidelines — Mandatory Implementation Contract > 12. User-Facing Model Stays Small"
         }
       ]
@@ -3003,7 +2988,7 @@
       ]
     },
     {
-      "id": "ARCH-0082",
+      "id": "ARCH-0081",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [
@@ -3015,6 +3000,21 @@
         {
           "file": "doctrine.md",
           "line": 262,
+          "section": "Lagrange Engineering Doctrine > 11. Sharpen Work Before Changing Code"
+        }
+      ]
+    },
+    {
+      "id": "ARCH-0082",
+      "domain": "architecture",
+      "strength": "must_not",
+      "tags": [],
+      "rule": "Use the model ledger as an advisory feedback loop for future model, reasoning-effort, and output-profile choice when a package produces useful evidence. Output profile controls final-response and handoff verbosity, not reasoning depth. It must not replace validation, review, sequencing, or closure proof.",
+      "score": 201,
+      "sources": [
+        {
+          "file": "doctrine.md",
+          "line": 272,
           "section": "Lagrange Engineering Doctrine > 11. Sharpen Work Before Changing Code"
         }
       ]
@@ -3229,7 +3229,7 @@
       "sources": [
         {
           "file": "doctrine.md",
-          "line": 377,
+          "line": 379,
           "section": "Lagrange Engineering Doctrine > 17. Sprint Execution Has One Current Boundary"
         }
       ]
@@ -3246,7 +3246,7 @@
       "sources": [
         {
           "file": "doctrine.md",
-          "line": 391,
+          "line": 393,
           "section": "Lagrange Engineering Doctrine > 17. Sprint Execution Has One Current Boundary"
         }
       ]
@@ -3263,7 +3263,7 @@
       "sources": [
         {
           "file": "system guidelines.md",
-          "line": 271,
+          "line": 272,
           "section": "System Guidelines — Mandatory Implementation Contract > 10. Communication Has One Replicated Data Path"
         }
       ]
@@ -3545,7 +3545,7 @@
       "sources": [
         {
           "file": "workflow-guidelines.md",
-          "line": 548,
+          "line": 550,
           "section": "Workflow Guidelines Detail > Scenario Causal Closure Ledger"
         }
       ]
@@ -3609,7 +3609,7 @@
       "sources": [
         {
           "file": "system guidelines.md",
-          "line": 99,
+          "line": 100,
           "section": "System Guidelines — Mandatory Implementation Contract > 2. One Semantic Owner Per Concern"
         }
       ]
@@ -3626,7 +3626,7 @@
       "sources": [
         {
           "file": "system guidelines.md",
-          "line": 126,
+          "line": 127,
           "section": "System Guidelines — Mandatory Implementation Contract > 3. One Path Per Semantic Decision"
         }
       ]
@@ -3644,7 +3644,7 @@
       "sources": [
         {
           "file": "system guidelines.md",
-          "line": 192,
+          "line": 193,
           "section": "System Guidelines — Mandatory Implementation Contract > 6. Tables, Cache, And Metadata Follow One Authority Chain"
         }
       ]
@@ -3661,7 +3661,7 @@
       "sources": [
         {
           "file": "system guidelines.md",
-          "line": 214,
+          "line": 215,
           "section": "System Guidelines — Mandatory Implementation Contract > 7. Phase Code Must Hand Off To Runtime Owners"
         }
       ]
@@ -3676,7 +3676,7 @@
       "sources": [
         {
           "file": "system guidelines.md",
-          "line": 304,
+          "line": 305,
           "section": "System Guidelines — Mandatory Implementation Contract > 12. User-Facing Model Stays Small"
         }
       ]
@@ -3897,7 +3897,7 @@
       "sources": [
         {
           "file": "system guidelines.md",
-          "line": 203,
+          "line": 204,
           "section": "System Guidelines — Mandatory Implementation Contract > 7. Phase Code Must Hand Off To Runtime Owners"
         }
       ]
@@ -3916,6 +3916,21 @@
           "file": "workflow-guidelines.md",
           "line": 263,
           "section": "Workflow Guidelines Detail > Scenario Failure Migration"
+        }
+      ]
+    },
+    {
+      "id": "GOV-0043",
+      "domain": "governance",
+      "strength": "must",
+      "tags": [],
+      "rule": "Use npm run work:subagent-prompt -- --role <role> --package <package> to prepare bounded sub-agent tasks; the generated text assists the real sub-agent sequence but does not replace real returned agent ids. The prompt must carry the package Model Fit output profile so sub-agents know expected response verbosity separately from model or reasoning effort.",
+      "score": 178,
+      "sources": [
+        {
+          "file": "workflow-guidelines.md",
+          "line": 418,
+          "section": "Workflow Guidelines Detail > LLM Tool-First Triage"
         }
       ]
     },
@@ -4114,7 +4129,7 @@
       ]
     },
     {
-      "id": "GOV-0043",
+      "id": "GOV-0044",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -4131,7 +4146,7 @@
       ]
     },
     {
-      "id": "GOV-0044",
+      "id": "GOV-0045",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -4219,7 +4234,7 @@
       "sources": [
         {
           "file": "doctrine.md",
-          "line": 396,
+          "line": 398,
           "section": "Lagrange Engineering Doctrine > 17. Sprint Execution Has One Current Boundary"
         }
       ]
@@ -4242,7 +4257,7 @@
       ]
     },
     {
-      "id": "GOV-0045",
+      "id": "GOV-0046",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -4259,7 +4274,7 @@
       ]
     },
     {
-      "id": "GOV-0046",
+      "id": "GOV-0047",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -4276,7 +4291,7 @@
       ]
     },
     {
-      "id": "GOV-0047",
+      "id": "GOV-0048",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -4325,7 +4340,7 @@
       ]
     },
     {
-      "id": "GOV-0048",
+      "id": "GOV-0049",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -4336,7 +4351,7 @@
       "sources": [
         {
           "file": "workflow-guidelines.md",
-          "line": 428,
+          "line": 430,
           "section": "Workflow Guidelines Detail > LLM Tool-First Triage"
         }
       ]
@@ -4357,7 +4372,7 @@
       ]
     },
     {
-      "id": "GOV-0049",
+      "id": "GOV-0050",
       "domain": "governance",
       "strength": "may",
       "tags": [],
@@ -4372,7 +4387,7 @@
       ]
     },
     {
-      "id": "GOV-0050",
+      "id": "GOV-0051",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -4389,7 +4404,7 @@
       ]
     },
     {
-      "id": "GOV-0051",
+      "id": "GOV-0052",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -4407,7 +4422,7 @@
       ]
     },
     {
-      "id": "GOV-0052",
+      "id": "GOV-0053",
       "domain": "governance",
       "strength": "may",
       "tags": [],
@@ -4422,7 +4437,7 @@
       ]
     },
     {
-      "id": "GOV-0053",
+      "id": "GOV-0054",
       "domain": "governance",
       "strength": "may",
       "tags": [],
@@ -4431,7 +4446,7 @@
       "sources": [
         {
           "file": "workflow-guidelines.md",
-          "line": 479,
+          "line": 481,
           "section": "Workflow Guidelines Detail > Sub-Agent Sequencing"
         }
       ]
@@ -4452,7 +4467,7 @@
       ]
     },
     {
-      "id": "GOV-0054",
+      "id": "GOV-0055",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -4469,7 +4484,7 @@
       ]
     },
     {
-      "id": "GOV-0055",
+      "id": "GOV-0056",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -4480,13 +4495,13 @@
       "sources": [
         {
           "file": "workflow-guidelines.md",
-          "line": 423,
+          "line": 425,
           "section": "Workflow Guidelines Detail > LLM Tool-First Triage"
         }
       ]
     },
     {
-      "id": "GOV-0056",
+      "id": "GOV-0057",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -4497,7 +4512,7 @@
       "sources": [
         {
           "file": "workflow-guidelines.md",
-          "line": 548,
+          "line": 550,
           "section": "Workflow Guidelines Detail > Scenario Causal Closure Ledger"
         }
       ]

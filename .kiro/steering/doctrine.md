@@ -269,9 +269,11 @@ Implementation work should be as explicit and bounded as the runtime design.
 - A package is not complete when the narrow change lands; it is complete only
   after a final deep dive across the affected owner boundaries confirms the
   area is free of known doctrine and system-guideline violations.
-- Use the model ledger as an advisory feedback loop for future model and
-  reasoning-effort choice when a package produces useful evidence. It must not
-  replace validation, review, sequencing, or closure proof.
+- Use the model ledger as an advisory feedback loop for future model,
+  reasoning-effort, and output-profile choice when a package produces useful
+  evidence. Output profile controls final-response and handoff verbosity, not
+  reasoning depth. It must not replace validation, review, sequencing, or
+  closure proof.
 
 If the proposed change cannot be described as one bounded concern with clear
 ownership, invariants, and completion criteria, it is not ready for active

@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-05-15T07:53:18.406Z",
+  "generatedAt": "2026-05-15T09:13:51.836Z",
   "packs": [
     {
       "name": "core",
@@ -20,7 +20,7 @@
       "title": "Architecture Steering Pack",
       "description": "Load for bootstrap/join/rebalance/control-plane/runtime ownership and lifecycle work.",
       "ruleCount": 110,
-      "estimatedTokens": 3660,
+      "estimatedTokens": 3699,
       "domains": [
         "architecture"
       ],
@@ -52,8 +52,8 @@
       "name": "governance",
       "title": "Governance Steering Pack",
       "description": "Load for roadmap and edition-scope checks.",
-      "ruleCount": 56,
-      "estimatedTokens": 2398,
+      "ruleCount": 57,
+      "estimatedTokens": 2491,
       "domains": [
         "governance"
       ],

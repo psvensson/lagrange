@@ -2,8 +2,8 @@
 
 Load for roadmap and edition-scope checks.
 
-Generated rules: 56
-Estimated tokens: 2398
+Generated rules: 57
+Estimated tokens: 2491
 Domains: governance
 
 ## Rules
@@ -50,17 +50,18 @@ Domains: governance
 40. [GOV-0040] The active scenario package owner and boundary must appear in scenarioCausalClosure.currentFirstFrontier.
 41. [GOV-0041] If a package discovers that a completed roadmap row still has an active representative blocker, the package must classify the mismatch as one of: - capability-complete but gate-open; - status-overstated and requiring roadmap correction; - new maintenance concern outside the original row
 42. [GOV-0042] Split one follow-on package only when canonical extraction shows semantic movement: first-frontier edge, semantic owner, owner boundary, or next required action changes. A dominant reason change qualifies only when it changes the next required action.
-43. [GOV-0043] If the same two boundaries alternate again without representative green or monotonic reduction, the next validation surface must be a replayable handoff fixture or missing-edge probe that includes both owners before more runtime edits start.
-44. [GOV-0044] LLM-driven work across all packages and sub-agent tasks must use canonical workflow and artifact tools before raw JSON or log slicing: work:llm-start, work:evidence-summary, work:package:doctor -- --suggest, work:package:schema, work:package:new, analyze:owner-files, focused scenario extractors such as analyze:priority-recovery-residuals, work:subagent-prompt, and work:oversized-next.
-45. [GOV-0045] A row may move to active implementation only when the intended behavior is sharp enough to produce tasks without inventing scope locally.
-46. [GOV-0046] A roadmap row may be treated as complete only when no active package or active sprint is still fixing the same declared exit criterion.
-47. [GOV-0047] A sprint may not close while ../../roadmap.md says a relevant exit criterion is complete and the sprint's current package says that same criterion still fails.
-48. [GOV-0048] Use validation phases deliberately: npm run work:validate -- --entry for package shape, --pre-impl when review/fix proof is complete and implementation may still be pending, and --closure before close/commit.
-49. [GOV-0049] At most one package in a sprint may own the current representative re-entry gate.
-50. [GOV-0050] A package may not close with open in-scope residuals.
-51. [GOV-0051] If an active package is already in the causal-escalation lane, it may continue only when it explicitly owns that handoff, names the missing cross-boundary causal edge, and keeps same-owner evidence in the same package.
-52. [GOV-0052] No further runtime patch in either oscillating boundary may start until that handoff package identifies the failing causal edge.
-53. [GOV-0053] Before closure, an implementation environment may record human-waived, tool-unavailable, or blocked-by-environment-policy with a reason: ... note so unavailable delegation is explicit instead of disguised as agent proof.
-54. [GOV-0054] Architecture documents may mention Pro or Enterprise services only as examples of external consumers of AGPL substrate.
-55. [GOV-0055] Use explicit metadata scope fields for new packages: writeScope for files the package may edit, handoffFiles for read-only context, generatedFiles for deterministic outputs, candidateRuntimeFiles for files gated by a focused probe, and commitScope for focused commit containment. touchedFiles is legacy compatibility only.
-56. [GOV-0056] A package may diverge only when it records metadata ownerBoundaryMigrationProof with concrete from/to owner and boundary, reason, and focused evidence proving a bounded diagnostic/support role or owner-boundary migration.
+43. [GOV-0043] Use npm run work:subagent-prompt -- --role <role> --package <package> to prepare bounded sub-agent tasks; the generated text assists the real sub-agent sequence but does not replace real returned agent ids. The prompt must carry the package Model Fit output profile so sub-agents know expected response verbosity separately from model or reasoning effort.
+44. [GOV-0044] If the same two boundaries alternate again without representative green or monotonic reduction, the next validation surface must be a replayable handoff fixture or missing-edge probe that includes both owners before more runtime edits start.
+45. [GOV-0045] LLM-driven work across all packages and sub-agent tasks must use canonical workflow and artifact tools before raw JSON or log slicing: work:llm-start, work:evidence-summary, work:package:doctor -- --suggest, work:package:schema, work:package:new, analyze:owner-files, focused scenario extractors such as analyze:priority-recovery-residuals, work:subagent-prompt, and work:oversized-next.
+46. [GOV-0046] A row may move to active implementation only when the intended behavior is sharp enough to produce tasks without inventing scope locally.
+47. [GOV-0047] A roadmap row may be treated as complete only when no active package or active sprint is still fixing the same declared exit criterion.
+48. [GOV-0048] A sprint may not close while ../../roadmap.md says a relevant exit criterion is complete and the sprint's current package says that same criterion still fails.
+49. [GOV-0049] Use validation phases deliberately: npm run work:validate -- --entry for package shape, --pre-impl when review/fix proof is complete and implementation may still be pending, and --closure before close/commit.
+50. [GOV-0050] At most one package in a sprint may own the current representative re-entry gate.
+51. [GOV-0051] A package may not close with open in-scope residuals.
+52. [GOV-0052] If an active package is already in the causal-escalation lane, it may continue only when it explicitly owns that handoff, names the missing cross-boundary causal edge, and keeps same-owner evidence in the same package.
+53. [GOV-0053] No further runtime patch in either oscillating boundary may start until that handoff package identifies the failing causal edge.
+54. [GOV-0054] Before closure, an implementation environment may record human-waived, tool-unavailable, or blocked-by-environment-policy with a reason: ... note so unavailable delegation is explicit instead of disguised as agent proof.
+55. [GOV-0055] Architecture documents may mention Pro or Enterprise services only as examples of external consumers of AGPL substrate.
+56. [GOV-0056] Use explicit metadata scope fields for new packages: writeScope for files the package may edit, handoffFiles for read-only context, generatedFiles for deterministic outputs, candidateRuntimeFiles for files gated by a focused probe, and commitScope for focused commit containment. touchedFiles is legacy compatibility only.
+57. [GOV-0057] A package may diverge only when it records metadata ownerBoundaryMigrationProof with concrete from/to owner and boundary, reason, and focused evidence proving a bounded diagnostic/support role or owner-boundary migration.

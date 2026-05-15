@@ -417,7 +417,9 @@ Required workflow:
    residual extraction.
 7. Use `npm run work:subagent-prompt -- --role <role> --package <package>` to
    prepare bounded sub-agent tasks; the generated text assists the real
-   sub-agent sequence but does not replace real returned agent ids.
+   sub-agent sequence but does not replace real returned agent ids. The prompt
+   must carry the package Model Fit output profile so sub-agents know expected
+   response verbosity separately from model or reasoning effort.
 8. Use `npm run work:oversized-next -- --markdown` before inventing file-size
    cleanup packages from raw line counts.
 9. Use explicit metadata scope fields for new packages: `writeScope` for files

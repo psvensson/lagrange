@@ -13,6 +13,7 @@ import {
   SCOPE_FIELD_HANDOFF_FILES,
   SCOPE_FIELD_WRITE_SCOPE,
   VALID_PACKAGE_STATUSES,
+  VALID_OUTPUT_PROFILES,
   WORKFLOW_LANES,
   WORK_PACKAGE_METADATA_SCHEMA,
   defaultModelFitForLane,
@@ -60,6 +61,7 @@ const FLAG_PREDECESSOR = 'predecessor';
 const FLAG_PACKAGE_CLASS = 'package-class';
 const FLAG_INTENDED_MINIMUM_MODEL = 'intended-minimum-model';
 const FLAG_SCOPE_SHAPE = 'scope-shape';
+const FLAG_OUTPUT_PROFILE = 'output-profile';
 const FLAG_LEDGER = 'ledger';
 const FLAG_SCHEMA = 'schema';
 const FLAG_HELP = 'help';
@@ -100,6 +102,7 @@ const HELP_TEXT = [
   '  --touched-file <path>  Legacy alias for --write-scope',
   '  --owned-file <path>    Legacy alias for --write-scope and Model Fit',
   '  --forbidden-file <path>',
+  '  --output-profile <small|medium|high|extra-high>',
   '',
   'Use --schema to print the shared work-package schema reference.',
 ].join(NEWLINE);
@@ -158,6 +161,16 @@ function validateFlags(flags = {}) {
   if (!VALID_PACKAGE_STATUSES.includes(status)) {
     throw new Error(
       `--${FLAG_STATUS} must be one of ${VALID_PACKAGE_STATUSES.join(', ')}.`,
+    );
+  }
+  const outputProfile = normalizeText(flags[FLAG_OUTPUT_PROFILE]);
+  if (
+    outputProfile.length > NUM_ZERO &&
+    !VALID_OUTPUT_PROFILES.includes(outputProfile)
+  ) {
+    throw new Error(
+      `--${FLAG_OUTPUT_PROFILE} must be one of ` +
+      `${VALID_OUTPUT_PROFILES.join(', ')}.`,
     );
   }
   const slug = normalizeText(flags[FLAG_SLUG]);
@@ -246,6 +259,9 @@ async function buildPackageContent(flags = {}) {
       scopeShape:
         normalizeText(flags[FLAG_SCOPE_SHAPE]) ||
         modelFitDefaults.scopeShape,
+      outputProfile:
+        normalizeText(flags[FLAG_OUTPUT_PROFILE]) ||
+        modelFitDefaults.outputProfile,
       escalationTriggers: [
         'owned files expand beyond this package',
         'a frozen decision must be reopened',
@@ -303,6 +319,7 @@ async function buildPackageContent(flags = {}) {
     `- Package class: \`${metadata.modelFit.packageClass}\``,
     `- Intended minimum model: \`${metadata.modelFit.intendedMinimumModel}\``,
     `- Scope shape: \`${metadata.modelFit.scopeShape}\``,
+    `- Output profile: \`${metadata.modelFit.outputProfile}\``,
     `- Owned files: ${markdownInlineCodeList(ownedFiles, '`work/packages/<this-package>.md`')}`,
     `- Forbidden files: ${markdownInlineCodeList(forbiddenFiles, '`src/`')}`,
     '- Frozen decisions: package scope and lane stay bounded unless explicitly escalated.',

@@ -19,6 +19,7 @@ const TEST_PACKAGE_PATH =
   'work/packages/active-20260507-work-model-ledger-and-steering-policy.md';
 const TEST_MODEL = 'gpt-5-codex';
 const TEST_REASONING_EFFORT = 'medium';
+const TEST_OUTPUT_PROFILE = 'medium';
 const TEST_TASK_CLASS = 'workflow-tooling';
 const TEST_PACKAGE_CLASS = 'bounded-implementation';
 const TEST_INTENDED_MINIMUM_MODEL = 'gpt-5.3-codex-spark';
@@ -36,6 +37,7 @@ const COMMAND_SUMMARY = 'summary';
 const FLAG_PACKAGE = '--package';
 const FLAG_MODEL = '--model';
 const FLAG_REASONING_EFFORT = '--reasoning-effort';
+const FLAG_OUTPUT_PROFILE = '--output-profile';
 const FLAG_TASK_CLASS = '--task-class';
 const FLAG_PACKAGE_CLASS = '--package-class';
 const FLAG_INTENDED_MINIMUM_MODEL = '--intended-minimum-model';
@@ -54,6 +56,7 @@ const SUMMARY_RECOMMEND_DEESCALATE = 'Recommendation: de-escalate';
 const SUMMARY_RECOMMEND_HOLD = 'Recommendation: hold';
 const SUMMARY_ENTRIES_EMPTY = 'No entries found.';
 const SUMMARY_MODEL_COUNT = 'Models: gpt-5-codex=1';
+const SUMMARY_OUTPUT_PROFILE_COUNT = 'Output profiles: medium=1';
 const SUMMARY_PACKAGE_CLASS_COUNT = 'Package classes: bounded-implementation=1';
 const SUMMARY_MINIMUM_MODEL_COUNT =
   'Intended minimum models: gpt-5.3-codex-spark=1';
@@ -73,6 +76,8 @@ function buildRecordArgs(ledgerPath) {
     TEST_MODEL,
     FLAG_REASONING_EFFORT,
     TEST_REASONING_EFFORT,
+    FLAG_OUTPUT_PROFILE,
+    TEST_OUTPUT_PROFILE,
     FLAG_TASK_CLASS,
     TEST_TASK_CLASS,
     FLAG_PACKAGE_CLASS,
@@ -109,6 +114,7 @@ test('record command writes explicit JSONL entries', async (t) => {
   t.equal(entries[0].package, TEST_PACKAGE_PATH);
   t.equal(entries[0].model, TEST_MODEL);
   t.equal(entries[0].reasoningEffort, TEST_REASONING_EFFORT);
+  t.equal(entries[0].outputProfile, TEST_OUTPUT_PROFILE);
   t.equal(entries[0].taskClass, TEST_TASK_CLASS);
   t.equal(entries[0].packageClass, TEST_PACKAGE_CLASS);
   t.equal(entries[0].intendedMinimumModel, TEST_INTENDED_MINIMUM_MODEL);
@@ -149,6 +155,13 @@ test('record builder requires explicit package and proof flags', (t) => {
     }, TEST_RECORDED_AT),
     /escalated must be true or false/u,
   );
+  t.throws(
+    () => buildLedgerRecord({
+      ...parsed.flags,
+      'output-profile': 'verbose',
+    }, TEST_RECORDED_AT),
+    /outputProfile must be one of/u,
+  );
   t.end();
 });
 
@@ -181,6 +194,7 @@ test('summary recommends escalation for recent failed proof', (t) => {
     {
       model: TEST_MODEL,
       reasoningEffort: TEST_REASONING_EFFORT,
+      outputProfile: TEST_OUTPUT_PROFILE,
       taskClass: TEST_TASK_CLASS,
       packageClass: TEST_PACKAGE_CLASS,
       intendedMinimumModel: TEST_INTENDED_MINIMUM_MODEL,
@@ -196,6 +210,7 @@ test('summary recommends escalation for recent failed proof', (t) => {
   const rendered = renderSummary(summary, 'work/model-ledger.jsonl');
 
   t.match(rendered, SUMMARY_MODEL_COUNT);
+  t.match(rendered, SUMMARY_OUTPUT_PROFILE_COUNT);
   t.match(rendered, SUMMARY_PACKAGE_CLASS_COUNT);
   t.match(rendered, SUMMARY_MINIMUM_MODEL_COUNT);
   t.match(rendered, SUMMARY_ESCALATED_FALSE_COUNT);

@@ -3,14 +3,14 @@
 Load for bootstrap/join/rebalance/control-plane/runtime ownership and lifecycle work.
 
 Generated rules: 110
-Estimated tokens: 3660
+Estimated tokens: 3699
 Domains: architecture
 
 ## Rules
 
 1. [ARCH-0001] Lightweight maintenance: use one focused package and focused proof. Do not require causal ledgers, representative reruns, or sub-agent sequencing unless runtime ownership or shared contracts can change.
 2. [ARCH-0002] Package status lives in the filename: idea-, todo-, active-, done-, or superseded-. Do not create a second status system.
-3. [ARCH-0003] The model ledger is advisory only. It never replaces validation, review sub-agents, package sequencing, closure proof, or focused commits.
+3. [ARCH-0003] The model ledger is advisory only for model, reasoning-effort, and output-profile choice. It never replaces validation, review sub-agents, package sequencing, closure proof, or focused commits.
 4. [ARCH-0004] If the existing owner lacks one capability, extend that owner. Do not fork a feature-local implementation.
 5. [ARCH-0005] Callers submit intent to owners. They do not reproduce owner logic locally.
 6. [ARCH-0006] Runtime logic consumes normalized state; it must not reopen raw storage, transport, bootstrap, cache, or wire shapes.
@@ -59,37 +59,37 @@ Domains: architecture
 49. [ARCH-0049] Never let degraded evidence promote a blocked entity to ready or admitted.
 50. [ARCH-0050] Broad ideas must not go straight into code.
 51. [ARCH-0051] Do not treat a package as complete when only the hot path is fixed. A package is complete only when the hot path, tail consumers, diagnostics or reporting, deletion work, and required proof are all closed.
-52. [ARCH-0052] Use the model ledger as an advisory feedback loop for future model and reasoning-effort choice when a package produces useful evidence. It must not replace validation, review, sequencing, or closure proof.
-53. [ARCH-0053] Components constructed with owner dependencies must route owned behavior through those dependencies.
-54. [ARCH-0054] A transitional delegator must have a removal task, target owner, and structural guard preventing new callers from binding to it.
-55. [ARCH-0055] Forbidden patterns: letting a consumer select, repair, or admit from an owner stream that has not published the required durable handoff edge
-56. [ARCH-0056] Callers do not reproduce the owner's logic locally, and callers do not keep shadow state for the same concern.
-57. [ARCH-0057] There may be multiple semantic owners, but there must not be many equivalent runtime ingress paths.
-58. [ARCH-0058] Bootstrap may hydrate initial state, but bootstrap code must not remain the runtime dissemination owner.
-59. [ARCH-0059] The system must not become less correct.
-60. [ARCH-0060] The owner outcome must not degrade into empty collections, null-shaped absence, or timeout-only silence.
-61. [ARCH-0061] Callers may consume or propagate that deferred outcome, but they must not silently reinterpret it as success, empty visibility, or unknown absence.
-62. [ARCH-0062] Readers must not run synchronous multi-table authoritative repair inline on the hot read path.
-63. [ARCH-0063] Do not keep patching symptoms while leaving the boundary porous.
-64. [ARCH-0064] Do not respond to repeated distributed failures by adding more scattered local special cases.
-65. [ARCH-0065] Do not let observed, published, retained, cached, repaired, or fast-path variants drift into several interchangeable authorities.
-66. [ARCH-0066] Do not let row nullability, protocol-specific fields, or bootstrap-only shapes become semantic runtime contracts inside the system.
-67. [ARCH-0067] Do not encode semantic policy as independent booleans that callers can combine into overlapping or contradictory behavior.
-68. [ARCH-0068] Do not let diagnostics views, retained owner state, bootstrap-normalized ingress state, or cache-local observations drift into a second operational authority by convention.
-69. [ARCH-0069] Do not force readers to reconstruct progress from object existence, local booleans, timestamps, or log strings.
-70. [ARCH-0070] Do not treat hot-path green tests as analysis closure while the original scenario now fails for a different named reason.
-71. [ARCH-0071] Do not let old migration history, stale residual packages, or several sub-agents create competing active interpretations of the same blocker.
-72. [ARCH-0072] Parent-session notes, local/manual labels, and arbitrary text without a real agent id do not satisfy these roles unless the user explicitly disables sub-agents for that task.
-73. [ARCH-0073] Shared truth surfaces such as startup, readiness, admin snapshot, service discovery, and harness convergence must have one snapshot owner.
-74. [ARCH-0074] Runtime shared-metadata access must cross canonical ingress owners.
-75. [ARCH-0075] The system may slow under pressure, but it must remain correct.
-76. [ARCH-0076] State-mutating operations must be safe under retry and redelivery.
-77. [ARCH-0077] Query-plane traffic may use a separate ingress from metadata/control-plane traffic, but both planes must share the same pressure/admission contract.
-78. [ARCH-0078] A phase-scoped bridge must either become a runtime-owned bridge or be replaced before teardown.
-79. [ARCH-0079] Completion of a phase must reduce temporary machinery, not strand it.
-80. [ARCH-0080] Pressure must become admission, defer, reject, or coalescing signals.
-81. [ARCH-0081] New features should strengthen tables, services, policies, and canonical execution paths before introducing new user-visible concepts.
-82. [ARCH-0082] Do not begin the next package on the same architectural boundary while the current package still has unresolved in-scope residuals. Either finish the residuals in the current package or split them explicitly into a new package before moving on.
+52. [ARCH-0052] Components constructed with owner dependencies must route owned behavior through those dependencies.
+53. [ARCH-0053] A transitional delegator must have a removal task, target owner, and structural guard preventing new callers from binding to it.
+54. [ARCH-0054] Forbidden patterns: letting a consumer select, repair, or admit from an owner stream that has not published the required durable handoff edge
+55. [ARCH-0055] Callers do not reproduce the owner's logic locally, and callers do not keep shadow state for the same concern.
+56. [ARCH-0056] There may be multiple semantic owners, but there must not be many equivalent runtime ingress paths.
+57. [ARCH-0057] Bootstrap may hydrate initial state, but bootstrap code must not remain the runtime dissemination owner.
+58. [ARCH-0058] The system must not become less correct.
+59. [ARCH-0059] The owner outcome must not degrade into empty collections, null-shaped absence, or timeout-only silence.
+60. [ARCH-0060] Callers may consume or propagate that deferred outcome, but they must not silently reinterpret it as success, empty visibility, or unknown absence.
+61. [ARCH-0061] Readers must not run synchronous multi-table authoritative repair inline on the hot read path.
+62. [ARCH-0062] Do not keep patching symptoms while leaving the boundary porous.
+63. [ARCH-0063] Do not respond to repeated distributed failures by adding more scattered local special cases.
+64. [ARCH-0064] Do not let observed, published, retained, cached, repaired, or fast-path variants drift into several interchangeable authorities.
+65. [ARCH-0065] Do not let row nullability, protocol-specific fields, or bootstrap-only shapes become semantic runtime contracts inside the system.
+66. [ARCH-0066] Do not encode semantic policy as independent booleans that callers can combine into overlapping or contradictory behavior.
+67. [ARCH-0067] Do not let diagnostics views, retained owner state, bootstrap-normalized ingress state, or cache-local observations drift into a second operational authority by convention.
+68. [ARCH-0068] Do not force readers to reconstruct progress from object existence, local booleans, timestamps, or log strings.
+69. [ARCH-0069] Do not treat hot-path green tests as analysis closure while the original scenario now fails for a different named reason.
+70. [ARCH-0070] Do not let old migration history, stale residual packages, or several sub-agents create competing active interpretations of the same blocker.
+71. [ARCH-0071] Parent-session notes, local/manual labels, and arbitrary text without a real agent id do not satisfy these roles unless the user explicitly disables sub-agents for that task.
+72. [ARCH-0072] Shared truth surfaces such as startup, readiness, admin snapshot, service discovery, and harness convergence must have one snapshot owner.
+73. [ARCH-0073] Runtime shared-metadata access must cross canonical ingress owners.
+74. [ARCH-0074] The system may slow under pressure, but it must remain correct.
+75. [ARCH-0075] State-mutating operations must be safe under retry and redelivery.
+76. [ARCH-0076] Query-plane traffic may use a separate ingress from metadata/control-plane traffic, but both planes must share the same pressure/admission contract.
+77. [ARCH-0077] A phase-scoped bridge must either become a runtime-owned bridge or be replaced before teardown.
+78. [ARCH-0078] Completion of a phase must reduce temporary machinery, not strand it.
+79. [ARCH-0079] Pressure must become admission, defer, reject, or coalescing signals.
+80. [ARCH-0080] New features should strengthen tables, services, policies, and canonical execution paths before introducing new user-visible concepts.
+81. [ARCH-0081] Do not begin the next package on the same architectural boundary while the current package still has unresolved in-scope residuals. Either finish the residuals in the current package or split them explicitly into a new package before moving on.
+82. [ARCH-0082] Use the model ledger as an advisory feedback loop for future model, reasoning-effort, and output-profile choice when a package produces useful evidence. Output profile controls final-response and handoff verbosity, not reasoning depth. It must not replace validation, review, sequencing, or closure proof.
 83. [ARCH-0083] Every durable concern must have one semantic owner.
 84. [ARCH-0084] Bootstrap, join, and recovery phases may initialize runtime mechanisms, but they must hand off to steady-state owners before phase completion.
 85. [ARCH-0085] When an owner-path read or write is unresolved because pressure, authority establishment, or recovery completion is still in flight, the owner must emit one structured deferred outcome.

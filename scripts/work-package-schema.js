@@ -25,6 +25,10 @@ const MODEL_FIT_CAUSAL_CLASS = 'architecture-gap-analysis';
 const MODEL_FIT_RUNTIME_SCOPE = 'owner-boundary-contraction';
 const MODEL_FIT_SCENARIO_SCOPE = 'owner-boundary-contraction/current-frontier';
 const MODEL_FIT_CAUSAL_SCOPE = 'scenario-causal-escalation';
+const OUTPUT_PROFILE_SMALL = 'small';
+const OUTPUT_PROFILE_MEDIUM = 'medium';
+const OUTPUT_PROFILE_HIGH = 'high';
+const OUTPUT_PROFILE_EXTRA_HIGH = 'extra-high';
 const WORK_PACKAGE_METADATA_SCHEMA = 'work-package-v1';
 const CAUSAL_GOVERNANCE_PENDING_OUTCOME = 'pending-before-rerun';
 const SCOPE_FIELD_WRITE_SCOPE = 'writeScope';
@@ -158,6 +162,13 @@ const VALIDATION_PHASES = Object.freeze([
   VALIDATION_PHASE_CLOSURE,
 ]);
 
+const VALID_OUTPUT_PROFILES = Object.freeze([
+  OUTPUT_PROFILE_SMALL,
+  OUTPUT_PROFILE_MEDIUM,
+  OUTPUT_PROFILE_HIGH,
+  OUTPUT_PROFILE_EXTRA_HIGH,
+]);
+
 const SUBAGENT_UNAVAILABLE_STATES = Object.freeze([
   SUBAGENT_UNAVAILABLE_HUMAN_WAIVED,
   SUBAGENT_UNAVAILABLE_TOOL_UNAVAILABLE,
@@ -169,26 +180,31 @@ const DEFAULT_MODEL_FIT_BY_LANE = Object.freeze({
     packageClass: MODEL_FIT_LIGHTWEIGHT_CLASS,
     intendedMinimumModel: MODEL_FIT_SPARK_MODEL,
     scopeShape: MODEL_FIT_LEAF_SLICE_SCOPE,
+    outputProfile: OUTPUT_PROFILE_SMALL,
   }),
   [LANE_LIGHTWEIGHT_MAINTENANCE]: Object.freeze({
     packageClass: MODEL_FIT_LIGHTWEIGHT_CLASS,
     intendedMinimumModel: MODEL_FIT_SPARK_MODEL,
     scopeShape: MODEL_FIT_LEAF_SLICE_SCOPE,
+    outputProfile: OUTPUT_PROFILE_MEDIUM,
   }),
   [LANE_RUNTIME_OWNER_BOUNDARY]: Object.freeze({
     packageClass: MODEL_FIT_RUNTIME_CLASS,
     intendedMinimumModel: MODEL_FIT_DEFAULT_FRONTIER_MODEL,
     scopeShape: MODEL_FIT_RUNTIME_SCOPE,
+    outputProfile: OUTPUT_PROFILE_MEDIUM,
   }),
   [LANE_SCENARIO_RELEASE_GATE]: Object.freeze({
     packageClass: MODEL_FIT_SCENARIO_CLASS,
     intendedMinimumModel: MODEL_FIT_DEFAULT_FRONTIER_MODEL,
     scopeShape: MODEL_FIT_SCENARIO_SCOPE,
+    outputProfile: OUTPUT_PROFILE_MEDIUM,
   }),
   [LANE_CAUSAL_ESCALATION]: Object.freeze({
     packageClass: MODEL_FIT_CAUSAL_CLASS,
     intendedMinimumModel: MODEL_FIT_DEFAULT_FRONTIER_MODEL,
     scopeShape: MODEL_FIT_CAUSAL_SCOPE,
+    outputProfile: OUTPUT_PROFILE_MEDIUM,
   }),
 });
 
@@ -223,9 +239,18 @@ function defaultModelFitForLane(lane, modelLedgerSummary = {}) {
       MODEL_FIT_DEFAULT_FRONTIER_MODEL :
       defaults.intendedMinimumModel,
     scopeShape: shouldEscalate ? dominantScopeShape : defaults.scopeShape,
+    outputProfile: defaults.outputProfile,
     ledgerRecommendation:
       normalizeText(modelLedgerSummary.recommendation) || 'hold',
   };
+}
+
+function defaultOutputProfileForLane(lane) {
+  const normalizedLane = normalizeText(lane) || LANE_LIGHTWEIGHT_MAINTENANCE;
+  return (
+    DEFAULT_MODEL_FIT_BY_LANE[normalizedLane] ||
+    DEFAULT_MODEL_FIT_BY_LANE[LANE_LIGHTWEIGHT_MAINTENANCE]
+  ).outputProfile;
 }
 
 function renderEnumList(values = []) {
@@ -245,6 +270,10 @@ function renderSchemaReference() {
     '## Workflow Lanes',
     EMPTY_TEXT,
     renderEnumList(WORKFLOW_LANES),
+    EMPTY_TEXT,
+    '## Output Profiles',
+    EMPTY_TEXT,
+    renderEnumList(VALID_OUTPUT_PROFILES),
     EMPTY_TEXT,
     '## Scope Fields',
     EMPTY_TEXT,
@@ -311,6 +340,7 @@ export {
   MODEL_FIT_DEFAULT_FRONTIER_MODEL,
   MODEL_FIT_LEAF_SLICE_SCOPE,
   MODEL_FIT_SPARK_MODEL,
+  OUTPUT_PROFILE_MEDIUM,
   OWNER_BOUNDARY_MIGRATION_PROOF_EVIDENCE_FIELD,
   OWNER_BOUNDARY_MIGRATION_PROOF_FIELD,
   OWNER_BOUNDARY_MIGRATION_PROOF_FIELDS,
@@ -336,6 +366,7 @@ export {
   SUBAGENT_OPTIONAL_LANES,
   SUBAGENT_UNAVAILABLE_STATES,
   VALID_PACKAGE_STATUSES,
+  VALID_OUTPUT_PROFILES,
   VALIDATION_PHASES,
   VALIDATION_PHASE_CLOSURE,
   VALIDATION_PHASE_ENTRY,
@@ -343,6 +374,7 @@ export {
   WORK_PACKAGE_SCOPE_FIELDS,
   WORKFLOW_LANES,
   WORK_PACKAGE_METADATA_SCHEMA,
+  defaultOutputProfileForLane,
   defaultModelFitForLane,
   renderSchemaReference,
 };

@@ -12,12 +12,12 @@ Use that output as the current handoff. It names the active blocker, first files
 to read, proof ladder, useful commands, and dirty worktree summary.
 
 Use `npm run work:model-ledger -- summary` as an advisory signal when choosing
-model and reasoning effort for a package. Record the final package experience
-with `npm run work:model-ledger -- record ...` before closure when the work
-adds useful evidence, including package class, intended minimum canonical
-OpenAI model id, scope shape, escalation result, and bailout reason. The ledger
-informs future choices; it does not replace validation, review subagents,
-package sequencing, or closure proof.
+model, reasoning effort, and output profile for a package. Record the final
+package experience with `npm run work:model-ledger -- record ...` before
+closure when the work adds useful evidence, including package class, intended
+minimum canonical OpenAI model id, scope shape, output profile, escalation
+result, and bailout reason. The ledger informs future choices; it does not
+replace validation, review subagents, package sequencing, or closure proof.
 
 For steering context, load the compact LLM pack first:
 - `.kiro/steering/llm/README.md`
@@ -125,9 +125,14 @@ mandatory:
 
 Active metadata-bearing packages must carry a `## Model Fit` section. The
 section records the package class, intended minimum canonical OpenAI model id,
-scope shape, owned files, forbidden files, frozen decisions, escalation
-triggers, and focused proof when the package is meant to be runnable by
-`gpt-5.3-codex-spark`.
+scope shape, output profile, owned files, forbidden files, frozen decisions,
+escalation triggers, and focused proof when the package is meant to be runnable
+by `gpt-5.3-codex-spark`.
+
+`Output profile` records expected final-response and handoff verbosity, not
+reasoning depth. Use `medium` by default for runtime, scenario, and causal
+packages; reserve `high` and `extra-high` for explicit audit, architecture, or
+retrospective artifacts.
 
 Packages whose intended minimum model is `gpt-5.3-codex-spark` must be bounded
 leaf slices. They must not contain open-ended frontier language, and a

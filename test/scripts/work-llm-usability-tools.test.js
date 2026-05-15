@@ -32,16 +32,16 @@ const FIXTURE_PATH =
 async function writeTempPackage() {
   await fs.mkdir(TEMP_PACKAGE_ROOT, {recursive: true});
   const content = await buildPackageContent({
-    title: TEST_TITLE,
-    slug: TEST_SLUG,
-    lane: 'lightweight-maintenance',
-    owner: 'workflow_tooling_owner',
-    boundary: 'llm_usability_handoff',
+    'title': TEST_TITLE,
+    'slug': TEST_SLUG,
+    'lane': 'lightweight-maintenance',
+    'owner': 'workflow_tooling_owner',
+    'boundary': 'llm_usability_handoff',
     'dominant-reason': 'test_package',
     'next-action': 'Render LLM start output.',
-    proof: ['node --test test/scripts/work-llm-usability-tools.test.js'],
+    'proof': ['node --test test/scripts/work-llm-usability-tools.test.js'],
     'write-scope': ['scripts/work-package-new.js'],
-    ledger: TEMP_LEDGER_PATH,
+    'ledger': TEMP_LEDGER_PATH,
   });
   await fs.writeFile(TEMP_PACKAGE_PATH, `${content}\n`, 'utf8');
   return content;
@@ -51,6 +51,8 @@ test('shared package schema lists validator enums for LLM scaffolding', (t) => {
   const rendered = renderSchemaReference();
 
   t.match(rendered, /scenario-release-gate/u);
+  t.match(rendered, /Output Profiles/u);
+  t.match(rendered, /extra-high/u);
   t.match(rendered, /writeScope/u);
   t.match(rendered, /pre-impl/u);
   t.match(rendered, /tool-unavailable/u);
@@ -63,23 +65,25 @@ test('shared package schema lists validator enums for LLM scaffolding', (t) => {
 
 test('package scaffolder pre-fills Model Fit from schema defaults', async (t) => {
   const content = await buildPackageContent({
-    title: TEST_TITLE,
-    slug: TEST_SLUG,
-    lane: 'lightweight-maintenance',
-    owner: 'workflow_tooling_owner',
-    boundary: 'llm_usability_handoff',
+    'title': TEST_TITLE,
+    'slug': TEST_SLUG,
+    'lane': 'lightweight-maintenance',
+    'owner': 'workflow_tooling_owner',
+    'boundary': 'llm_usability_handoff',
     'dominant-reason': 'test_package',
     'next-action': 'Create a package.',
-    proof: ['git diff --check'],
+    'proof': ['git diff --check'],
     'write-scope': ['scripts/work-package-new.js'],
-    ledger: TEMP_LEDGER_PATH,
+    'ledger': TEMP_LEDGER_PATH,
   });
 
   t.match(content, /"schema": "work-package-v1"/u);
   t.match(content, /"lane": "lightweight-maintenance"/u);
   t.match(content, /"writeScope": \[/u);
   t.match(content, /"commitScope": \[/u);
+  t.match(content, /"outputProfile": "medium"/u);
   t.match(content, /Intended minimum model: `gpt-5\.3-codex-spark`/u);
+  t.match(content, /Output profile: `medium`/u);
   t.match(content, /Model ledger advisory: `hold`/u);
   t.match(content, /## LLM Tool-First Contract/u);
   t.match(content, /work:evidence-summary/u);
@@ -162,6 +166,9 @@ test('subagent prompt generator emits bounded task and ledger guidance',
     t.match(prompt, /workflow_tooling_owner/u);
     t.match(prompt, /Predecessor: `none`/u);
     t.match(prompt, /Do not widen beyond the write scope/u);
+    t.match(prompt, /## Output Budget/u);
+    t.match(prompt, /Profile: `medium`/u);
+    t.match(prompt, /More output is not evidence/u);
     t.match(prompt, /## Tool-First Workflow/u);
     t.match(prompt, /## Write Scope/u);
     t.match(prompt, /## Commit Scope/u);

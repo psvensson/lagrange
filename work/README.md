@@ -79,10 +79,10 @@ Use the tracker utility for current sprint/package mechanics:
    successful push. Use this wrapper for sprint package pushes so the remaining
    sprint work is visible immediately after the push.
 8. `npm run work:model-ledger -- summary` prints recent model, reasoning
-   effort, task class, package class, intended minimum model, scope shape,
-   escalation, bailout, outcome, validation, correction-loop, and
-    review-finding signals with a simple advisory recommendation to escalate,
-    de-escalate, or hold effort.
+   effort, output profile, task class, package class, intended minimum model,
+   scope shape, escalation, bailout, outcome, validation, correction-loop, and
+   review-finding signals with a simple advisory recommendation to escalate,
+   de-escalate, or hold effort.
 9. `npm run work:package:doctor -- work/packages/active-...md` prints a compact
    package summary plus the same validation findings used by the tracker. It is
    a local diagnostic aid only; it does not replace real subagent sequencing.
@@ -169,6 +169,7 @@ npm run work:model-ledger -- record \
   --package work/packages/active-YYYYMMDD-slug.md \
   --model gpt-5-codex \
   --reasoning-effort medium \
+  --output-profile medium \
   --task-class workflow-tooling \
   --package-class bounded-implementation \
   --intended-minimum-model gpt-5.3-codex-spark \
@@ -182,9 +183,9 @@ npm run work:model-ledger -- record \
   --notes "short package-specific note"
 ```
 
-The ledger is advisory. It helps future agents choose a model and reasoning
-effort, but it never replaces `npm run work:validate`, lane selection, focused
-validation, package closure, or commit discipline.
+The ledger is advisory. It helps future agents choose a model, reasoning
+effort, and output profile, but it never replaces `npm run work:validate`, lane
+selection, focused validation, package closure, or commit discipline.
 
 ## Subagent Sequencing By Lane
 
@@ -582,6 +583,13 @@ Required fields for every active metadata-bearing package:
 1. `Package class`
 2. `Intended minimum model`
 3. `Scope shape`
+4. `Output profile`
+
+`Output profile` controls final-response and handoff verbosity, not reasoning
+depth. Valid values are `small`, `medium`, `high`, and `extra-high`. Default to
+`medium` for runtime, scenario, and causal packages; use `high` or
+`extra-high` only when the package explicitly asks for an audit, architecture
+review, or retrospective artifact.
 
 Packages whose intended minimum model is `gpt-5.3-codex-spark` are linted as
 bounded leaf slices. They must also name:

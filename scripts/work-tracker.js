@@ -24,6 +24,7 @@ import {
   SUBAGENT_OPTIONAL_LANES,
   SUBAGENT_UNAVAILABLE_STATES,
   VALID_PACKAGE_STATUSES,
+  VALID_OUTPUT_PROFILES,
   VALIDATION_PHASE_CLOSURE,
   VALIDATION_PHASE_ENTRY,
   VALIDATION_PHASE_PRE_IMPL,
@@ -102,6 +103,7 @@ const COMMIT_LEDGER_FOCUSED_SLICE_LABEL =
 const MODEL_FIT_PACKAGE_CLASS_LABEL = 'Package class';
 const MODEL_FIT_INTENDED_MINIMUM_MODEL_LABEL = 'Intended minimum model';
 const MODEL_FIT_SCOPE_SHAPE_LABEL = 'Scope shape';
+const MODEL_FIT_OUTPUT_PROFILE_LABEL = 'Output profile';
 const MODEL_FIT_OWNED_FILES_LABEL = 'Owned files';
 const MODEL_FIT_FORBIDDEN_FILES_LABEL = 'Forbidden files';
 const MODEL_FIT_FROZEN_DECISIONS_LABEL = 'Frozen decisions';
@@ -120,6 +122,7 @@ const MODEL_FIT_METADATA_PACKAGE_CLASS_FIELD = 'packageClass';
 const MODEL_FIT_METADATA_INTENDED_MINIMUM_MODEL_FIELD =
   'intendedMinimumModel';
 const MODEL_FIT_METADATA_SCOPE_SHAPE_FIELD = 'scopeShape';
+const MODEL_FIT_METADATA_OUTPUT_PROFILE_FIELD = 'outputProfile';
 const MODEL_FIT_METADATA_ESCALATION_TRIGGERS_FIELD = 'escalationTriggers';
 const ACTIVE_PACKAGE_REQUIRED_TEXT_METADATA_FIELDS = Object.freeze([
   METADATA_FIELD_OPENED,
@@ -143,6 +146,7 @@ const ACTIVE_SCENARIO_REQUIRED_MODEL_FIT_METADATA_FIELDS = Object.freeze([
   MODEL_FIT_METADATA_PACKAGE_CLASS_FIELD,
   MODEL_FIT_METADATA_INTENDED_MINIMUM_MODEL_FIELD,
   MODEL_FIT_METADATA_SCOPE_SHAPE_FIELD,
+  MODEL_FIT_METADATA_OUTPUT_PROFILE_FIELD,
 ]);
 const SCENARIO_NONE = 'none';
 const SCENARIO_UNKNOWN = 'unknown';
@@ -1062,6 +1066,10 @@ export function validateModelFitContract(content, filePath, options = {}) {
       section,
       MODEL_FIT_SCOPE_SHAPE_LABEL,
     ),
+    [MODEL_FIT_OUTPUT_PROFILE_LABEL]: findModelFitField(
+      section,
+      MODEL_FIT_OUTPUT_PROFILE_LABEL,
+    ),
     [MODEL_FIT_OWNED_FILES_LABEL]: findModelFitField(
       section,
       MODEL_FIT_OWNED_FILES_LABEL,
@@ -1100,6 +1108,25 @@ export function validateModelFitContract(content, filePath, options = {}) {
       fields[MODEL_FIT_SCOPE_SHAPE_LABEL],
     ),
   ];
+  if (
+    options[LEDGER_VALIDATION_REQUIRES_LEDGER] ||
+    fields[MODEL_FIT_OUTPUT_PROFILE_LABEL] !== null
+  ) {
+    errors.push(...validateModelFitField(
+      filePath,
+      MODEL_FIT_OUTPUT_PROFILE_LABEL,
+      fields[MODEL_FIT_OUTPUT_PROFILE_LABEL],
+    ));
+  }
+  if (
+    fields[MODEL_FIT_OUTPUT_PROFILE_LABEL] &&
+    !VALID_OUTPUT_PROFILES.includes(fields[MODEL_FIT_OUTPUT_PROFILE_LABEL])
+  ) {
+    errors.push(
+      `${filePath}: Model Fit ${MODEL_FIT_OUTPUT_PROFILE_LABEL} must be one ` +
+      `of ${VALID_OUTPUT_PROFILES.join(', ')}.`,
+    );
+  }
   if (isSparkSafeModelFit(fields)) {
     errors.push(...validateSparkSafeModelFit(content, filePath, fields));
   }
@@ -2014,6 +2041,18 @@ function validateActiveScenarioModelFitMetadata(filePath, metadata) {
   for (const fieldName of ACTIVE_SCENARIO_REQUIRED_MODEL_FIT_METADATA_FIELDS) {
     errors.push(...validateConcreteMetadataField(filePath, modelFit, fieldName));
   }
+  const outputProfile = normalizeLedgerText(
+    modelFit[MODEL_FIT_METADATA_OUTPUT_PROFILE_FIELD],
+  );
+  if (
+    outputProfile.length > NUM_ZERO &&
+    !VALID_OUTPUT_PROFILES.includes(outputProfile)
+  ) {
+    errors.push(
+      `${filePath}: metadata modelFit.outputProfile must be one of ` +
+      `${VALID_OUTPUT_PROFILES.join(', ')}.`,
+    );
+  }
   errors.push(...validateRequiredMetadataArray(
     filePath,
     modelFit,
@@ -2557,6 +2596,9 @@ function appendDoctorField(lines, label, value) {
 }
 
 function summarizeDoctorMetadata(metadata = {}) {
+  const modelFit = isObjectRecord(metadata[METADATA_FIELD_MODEL_FIT]) ?
+    metadata[METADATA_FIELD_MODEL_FIT] :
+    {};
   return {
     lane: metadata[METADATA_LANE_FIELD] || DEFAULT_UNKNOWN,
     scenario: metadata.scenario || DEFAULT_UNKNOWN,
@@ -2587,6 +2629,8 @@ function summarizeDoctorMetadata(metadata = {}) {
       metadata.touchedFiles.length :
       NUM_ZERO,
     proofCount: Array.isArray(metadata.proof) ? metadata.proof.length : NUM_ZERO,
+    outputProfile:
+      modelFit[MODEL_FIT_METADATA_OUTPUT_PROFILE_FIELD] || DEFAULT_UNKNOWN,
   };
 }
 
@@ -2773,6 +2817,7 @@ export function buildPackageDoctorLines(filePath, content, options = {}) {
   appendDoctorField(lines, 'Owner', metadataSummary.owner);
   appendDoctorField(lines, 'Boundary', metadataSummary.boundary);
   appendDoctorField(lines, 'Dominant reason', metadataSummary.dominantReason);
+  appendDoctorField(lines, 'Output profile', metadataSummary.outputProfile);
   appendDoctorField(lines, 'Validation phase', phase);
   appendDoctorField(
     lines,
@@ -2995,6 +3040,8 @@ export function renderCurrentBlockerMarkdown(payload) {
       `\`${payload.modelFit?.intendedMinimumModel || DEFAULT_UNKNOWN}\``,
     '',
     `Scope shape: \`${payload.modelFit?.scopeShape || DEFAULT_UNKNOWN}\``,
+    '',
+    `Output profile: \`${payload.modelFit?.outputProfile || DEFAULT_UNKNOWN}\``,
     '',
     'Escalation triggers:',
     '',

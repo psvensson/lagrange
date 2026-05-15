@@ -3,6 +3,10 @@
 import fs from 'node:fs/promises';
 import process from 'node:process';
 import {fileURLToPath} from 'node:url';
+import {
+  VALID_OUTPUT_PROFILES,
+  defaultOutputProfileForLane,
+} from './work-package-schema.js';
 
 const ENCODING_UTF8 = 'utf8';
 const EXIT_SUCCESS = 0;
@@ -27,11 +31,26 @@ const METADATA_FIELD_WRITE_SCOPE = 'writeScope';
 const METADATA_FIELD_HANDOFF_FILES = 'handoffFiles';
 const METADATA_FIELD_CANDIDATE_RUNTIME_FILES = 'candidateRuntimeFiles';
 const METADATA_FIELD_COMMIT_SCOPE = 'commitScope';
+const MODEL_FIT_FIELD_OUTPUT_PROFILE = 'outputProfile';
+const OUTPUT_PROFILE_SMALL = 'small';
+const OUTPUT_PROFILE_MEDIUM = 'medium';
+const OUTPUT_PROFILE_HIGH = 'high';
+const OUTPUT_PROFILE_EXTRA_HIGH = 'extra-high';
 const VALID_ROLES = Object.freeze([
   ROLE_REVIEW,
   ROLE_FIX,
   ROLE_IMPLEMENTATION,
 ]);
+const OUTPUT_GUIDANCE_BY_PROFILE = Object.freeze({
+  [OUTPUT_PROFILE_SMALL]:
+    'Return only findings or changes, validation, and blockers.',
+  [OUTPUT_PROFILE_MEDIUM]:
+    'Keep the final response compact: summarize changes, validation, and blockers; avoid long background.',
+  [OUTPUT_PROFILE_HIGH]:
+    'Use more detail only for explicit audit, architecture, or retrospective findings.',
+  [OUTPUT_PROFILE_EXTRA_HIGH]:
+    'Reserve full audit-level narrative for packages that explicitly request it.',
+});
 const HELP_TEXT = [
   'Usage:',
   '  node scripts/work-subagent-prompt.js --role review|fix|implementation --package <package.md>',
@@ -88,6 +107,21 @@ function scopeList(metadata, fieldName, fallbackFieldName = null) {
     [];
 }
 
+function outputProfileForMetadata(metadata = {}) {
+  const explicitProfile = normalizeText(
+    metadata.modelFit?.[MODEL_FIT_FIELD_OUTPUT_PROFILE],
+  );
+  if (VALID_OUTPUT_PROFILES.includes(explicitProfile)) {
+    return explicitProfile;
+  }
+  return defaultOutputProfileForLane(metadata.lane);
+}
+
+function outputGuidance(profile) {
+  return OUTPUT_GUIDANCE_BY_PROFILE[profile] ||
+    OUTPUT_GUIDANCE_BY_PROFILE[OUTPUT_PROFILE_MEDIUM];
+}
+
 function packageTitle(content) {
   const firstHeading = content
     .split(/\r?\n/u)
@@ -136,6 +170,7 @@ function ledgerLine(role, packagePath, flags = {}) {
 
 function buildSubagentPrompt(role, packagePath, content, args = []) {
   const metadata = parseMetadata(content, packagePath);
+  const outputProfile = outputProfileForMetadata(metadata);
   return [
     `# ${role} Subagent Prompt`,
     EMPTY_TEXT,
@@ -161,6 +196,12 @@ function buildSubagentPrompt(role, packagePath, content, args = []) {
     '## Next Action',
     EMPTY_TEXT,
     metadata.nextAction || 'Unknown.',
+    EMPTY_TEXT,
+    '## Output Budget',
+    EMPTY_TEXT,
+    `Profile: \`${outputProfile}\``,
+    outputGuidance(outputProfile),
+    'More output is not evidence; prefer canonical tool output and package proof over narrative volume.',
     EMPTY_TEXT,
     '## Tool-First Workflow',
     EMPTY_TEXT,

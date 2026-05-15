@@ -31,6 +31,7 @@ const TEST_PACKAGE_CONTENT = [
   '- Package class: `bounded-implementation`',
   '- Intended minimum model: `gpt-5.3-codex-spark`',
   '- Scope shape: `leaf-slice`',
+  '- Output profile: `medium`',
   '- Escalation triggers: package scope expands beyond bootstrap files.',
   '',
   '## Out Of Scope',
@@ -212,6 +213,7 @@ const TEST_BLOCKER = Object.freeze({
     packageClass: 'bounded-implementation',
     intendedMinimumModel: 'gpt-5.3-codex-spark',
     scopeShape: 'leaf-slice',
+    outputProfile: 'medium',
     escalationTriggers: ['package scope expands beyond bootstrap files'],
   },
   representativeResidual: {
@@ -385,6 +387,7 @@ test('work context advertises triage commands before raw artifact reads',
     t.ok(rendered.includes('Commit scope: ' + TEST_BOOTSTRAP_SOURCE_PATH));
     t.ok(rendered.includes('Intended minimum model: gpt-5.3-codex-spark'));
     t.ok(rendered.includes('Scope shape: leaf-slice'));
+    t.ok(rendered.includes('Output profile: medium'));
     t.ok(rendered.includes('Escalation triggers: package scope expands'));
     t.ok(rendered.includes('Causal hypothesis: Causal edge should reduce.'));
     t.ok(rendered.includes('Representative outcome: pending-before-rerun'));
@@ -429,6 +432,7 @@ test('work context extracts model fit from package metadata and section text',
     t.equal(modelFit.packageClass, 'bounded-implementation');
     t.equal(modelFit.intendedMinimumModel, 'gpt-5.3-codex-spark');
     t.equal(modelFit.scopeShape, 'leaf-slice');
+    t.equal(modelFit.outputProfile, 'medium');
     t.same(modelFit.escalationTriggers, [
       'package scope expands beyond bootstrap files.',
     ]);

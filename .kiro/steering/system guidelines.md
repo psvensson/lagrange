@@ -73,8 +73,9 @@ Required contract:
    `done-`, or `superseded-`. Do not create a second status system.
 6. `docs/` is reserved for end-user or operator-facing documentation. Internal
    planning and package execution live under `work/`.
-7. The model ledger is advisory only. It never replaces validation, review
-   sub-agents, package sequencing, closure proof, or focused commits.
+7. The model ledger is advisory only for model, reasoning-effort, and
+   output-profile choice. It never replaces validation, review sub-agents,
+   package sequencing, closure proof, or focused commits.
 8. Completed package slices are renamed to `done-...`, committed, and pushed as
    focused slices before the next package starts.
 

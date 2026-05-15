@@ -30,7 +30,7 @@ const COMMAND_GROUPS = Object.freeze([
       }),
       Object.freeze({
         command: 'npm run work:model-ledger -- summary',
-        description: 'Summarize recent model and reasoning-effort fit signals.',
+        description: 'Summarize recent model, reasoning-effort, and output-profile fit signals.',
       }),
       Object.freeze({
         command: 'npm run work:validate -- --entry|--pre-impl|--closure',
