@@ -119,12 +119,11 @@ Pro or Enterprise behavior.
    - Owner boundary:
      `operation_workflow_owner / workflow_progress`
    - Purpose: parked dependency package for the current residual inventory:
-     three `spread_satisfied_in_flight` workflow-progress witnesses on
-     `control_plane_publications-p1`, `replica_operations-p1`, and
-     `sql_transaction_participants-p1`.
-   - Entry condition: the rebalancer handoff package closed as reduced; fresh
-     evidence reports `Split required: false` with three subordinate
-     `operation_workflow_owner / workflow_progress` witnesses.
+     latest representative extraction reports one `spread_satisfied_in_flight`
+     workflow-progress witness on `control_plane_publications-p1`.
+   - Entry condition: the rebalancer handoff package closed as reduced; latest
+     evidence reports `Split required: false` with one subordinate
+     `operation_workflow_owner / workflow_progress` witness.
    - Activation gate: fresh canonical evidence must promote workflow progress
      ahead of active-gate snapshot coverage or record owner-boundary migration
      proof; a real review subagent must run before implementation starts.
@@ -238,6 +237,10 @@ Pro or Enterprise behavior.
      `pendingReconcileCount` reaches `0`, producer `missingPublishedCount` or
      snapshot coverage improves with focused owner proof, or canonical evidence
      migrates to a narrower owner boundary with concrete next action.
+   - Runtime promotion rule: the package must refresh the causal edge table
+     first and then promote only the runtime files owned by the selected
+     surface: producer publication truth, active-gate observation,
+     workflow-progress migration, or architecture-gap handoff.
 
 No additional package may be added merely to defer owner-key reconcile from
 the original active-gate owner package. That package is now closed as migrated.

@@ -228,3 +228,23 @@ into `writeScope`.
 | Producer durable publication truth | Published active membership includes the owner target and expected active cohort. | `publishedActiveNodeIds` is seed-only; `missingPublishedCount=4`. | `topology_publication_owner / publication_convergence` | `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-publication-diagnostics-fallback-20260515-codex.report.json --handoff-probe` | Promote publication owner files only if this surface is stale or incomplete. |
 | Active-gate observation | Active-gate consumes durable truth and reaches full snapshot coverage. | `pendingReconcileCount=1`, pending node `35a891b8-c1a0-5064-9c6e-2acfba61c2a7`, snapshot coverage `2/5`. | `startup_active_gate_owner / snapshot_coverage` | `npm run work:evidence-summary -- test-output/reports/rolling-restart-after-publication-diagnostics-fallback-20260515-codex.report.json` | Promote active-gate/admin observation files only if producer truth is correct but this surface samples stale or partial truth. |
 | Workflow progress | Workflow progress remains subordinate unless it blocks publication visibility or active-gate observation. | One `operation_workflow_owner / workflow_progress` witness on `control_plane_publications-p1`. | `operation_workflow_owner / workflow_progress` | `npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-after-publication-diagnostics-fallback-20260515-codex.report.json --markdown` | Promote workflow files only with owner-boundary migration proof. |
+
+## Runtime Promotion Gate
+
+This package starts with a completed entry table, but it has not selected a
+runtime owner yet. The review/fix/implementation sequence must refresh the
+evidence commands above and record one of these outcomes before adding runtime
+files to `writeScope` or `commitScope`:
+
+1. `producer-publication-truth`: promote only publication-owner files and fix
+   durable membership publication write/read visibility.
+2. `active-gate-observation`: promote only active-gate/admin observation files
+   and fix stale or partial snapshot sampling after producer truth is proven
+   correct.
+3. `workflow-progress-migration`: record `ownerBoundaryMigrationProof` and move
+   the work to the parked workflow-progress package or a narrower successor.
+4. `architecture-gap`: stop runtime edits and open a causal handoff package
+   when the table cannot identify a single owner.
+
+No bridge, diagnostics, or admin projection patch is allowed unless the table
+selects that path as the canonical owner mechanism.
