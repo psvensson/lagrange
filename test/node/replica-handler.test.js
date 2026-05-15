@@ -1481,8 +1481,78 @@ test('ReplicaHandler', async (t) => {
         'replicaId in response');
       t.same(
         emittedOutcomes,
-        [],
-        'creating idempotency should not emit a workflow progress outcome',
+        [
+          {
+            outcomeType: EXECUTOR_OUTCOME_TYPE.REPLICA_CREATE_CREATING,
+            operationId: TEST_IN_PROGRESS_OPERATION_ID,
+            workflowStep: WORKFLOW_STEP.CREATING,
+            options: {
+              replicaId: TEST_IN_PROGRESS_REPLICA_ID,
+            },
+          },
+        ],
+        'creating idempotency should emit canonical owner progress',
+      );
+
+      handler.shutdown();
+    });
+
+  t.test('handleCreateReplica - emits creating outcome for pending replica',
+    async (t) => {
+      const cache = createSeededCache();
+      const mockCDC = createMockCDCService(cache);
+      const emittedOutcomes = [];
+
+      const handler = new ReplicaHandler({
+        nodeId: 'test-node',
+        dataDir: tempDir,
+        systemTableCache: cache,
+        cdcIntegrationService: mockCDC,
+        createPartitionService: createMockPartitionServiceFactory(),
+        executorOutcomeEmitter: {
+          emitOutcome(outcomeType, operationId, workflowStep, options) {
+            emittedOutcomes.push({
+              outcomeType,
+              operationId,
+              workflowStep,
+              options,
+            });
+          },
+        },
+      });
+
+      handler.initialize();
+
+      handler.localReplicas.set(TEST_IN_PROGRESS_REPLICA_ID, {
+        replicaId: TEST_IN_PROGRESS_REPLICA_ID,
+        partitionId: TEST_IN_PROGRESS_PARTITION_ID,
+        status: ReplicaStatus.PENDING,
+      });
+
+      const response = await handler.handleCreateReplica({
+        operationId: TEST_IN_PROGRESS_OPERATION_ID,
+        partitionId: TEST_IN_PROGRESS_PARTITION_ID,
+        replicaId: TEST_IN_PROGRESS_REPLICA_ID,
+      });
+
+      t.equal(
+        response.status,
+        ReplicaOperationResponseStatus.IN_PROGRESS,
+        'in_progress',
+      );
+      t.same(
+        emittedOutcomes,
+        [
+          {
+            outcomeType: EXECUTOR_OUTCOME_TYPE.REPLICA_CREATE_CREATING,
+            operationId: TEST_IN_PROGRESS_OPERATION_ID,
+            workflowStep: WORKFLOW_STEP.CREATING,
+            options: {
+              replicaId: TEST_IN_PROGRESS_REPLICA_ID,
+            },
+          },
+        ],
+        'pending idempotency should emit accepted create progress',
       );
 
       handler.shutdown();

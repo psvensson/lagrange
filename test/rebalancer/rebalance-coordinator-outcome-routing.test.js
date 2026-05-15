@@ -331,6 +331,69 @@ test('Executor outcome routing through owner-key reconcile path',
     );
 
     await t.test(
+      'REPLICA_CREATE_CREATING routes through runExclusive and ' +
+      'calls updateStep with CREATING',
+      async (t) => {
+        const operation = buildTestOperation({
+          workflowStep: WORKFLOW_STEP.SENDING,
+          status: ReplicaStatus.PENDING,
+          stepsHistory: [
+            {
+              step: WORKFLOW_STEP.SENDING,
+              timestamp: Date.now(),
+            },
+          ],
+        });
+        const {coordinator, emitter, ownerKeys} =
+          createTestCoordinator({operation});
+
+        try {
+          const routedEventPromise = waitForCoordinatorEvent(
+            coordinator,
+            REBALANCE_COORDINATOR_EVENT.OUTCOME_ROUTED,
+          );
+          emitter.emitOutcome(
+            EXECUTOR_OUTCOME_TYPE.REPLICA_CREATE_CREATING,
+            TEST_OPERATION_ID,
+            WORKFLOW_STEP.CREATING,
+          );
+          const routedEvent = await routedEventPromise;
+
+          t.ok(
+            ownerKeys.length > 0,
+            'outcome must be routed through runExclusive',
+          );
+          t.ok(
+            ownerKeys[0].includes(TEST_OPERATION_ID),
+            'owner key must contain the operationId',
+          );
+          t.equal(
+            routedEvent.action,
+            EXECUTOR_OUTCOME_ACTION.UPDATE_STEP,
+            'action should be updateStep',
+          );
+          t.equal(
+            routedEvent.outcomeType,
+            EXECUTOR_OUTCOME_TYPE.REPLICA_CREATE_CREATING,
+            'outcomeType should match',
+          );
+          t.equal(
+            operation.workflowStep,
+            WORKFLOW_STEP.CREATING,
+            'operation should advance to the accepted create step',
+          );
+          t.equal(
+            operation.status,
+            ReplicaStatus.CREATING,
+            'operation status should advance with the workflow step',
+          );
+        } finally {
+          await coordinator.shutdown();
+        }
+      },
+    );
+
+    await t.test(
       'REPLICA_CREATE_SYNCING reconciles already-active REPLACE target',
       async (t) => {
         const deliveries = [];

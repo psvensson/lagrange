@@ -52,6 +52,20 @@ const REPLICA_HANDLER_LITERAL = Object.freeze({
 const REPLICA_CREATE_IN_PROGRESS_OUTCOME_BY_STATUS = Object.freeze(
   new Map([
     [
+      ReplicaStatus.PENDING,
+      Object.freeze({
+        outcomeType: EXECUTOR_OUTCOME_TYPE.REPLICA_CREATE_CREATING,
+        workflowStep: WORKFLOW_STEP.CREATING,
+      }),
+    ],
+    [
+      ReplicaStatus.CREATING,
+      Object.freeze({
+        outcomeType: EXECUTOR_OUTCOME_TYPE.REPLICA_CREATE_CREATING,
+        workflowStep: WORKFLOW_STEP.CREATING,
+      }),
+    ],
+    [
       ReplicaStatus.SYNCING,
       Object.freeze({
         outcomeType: EXECUTOR_OUTCOME_TYPE.REPLICA_CREATE_SYNCING,

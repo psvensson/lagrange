@@ -18,9 +18,24 @@
     "npm run work:context",
     "npm run work:evidence-summary -- test-output/reports/rolling-restart-after-replica-operation-router-replace-pending-20260515-codex.report.json",
     "npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-after-replica-operation-router-replace-pending-20260515-codex.report.json --markdown",
-    "npm run analyze:owner-files -- operation_workflow_owner rebalancer_handoff --markdown"
+    "npm run analyze:owner-files -- operation_workflow_owner rebalancer_handoff --markdown",
+    "./node_modules/.bin/tap test/node/replica-handler.test.js test/rebalancer/rebalance-coordinator-outcome-routing.test.js",
+    "git diff --check -- src/node/replica-handler-class-part-1.js src/rebalancer/executor-outcome-constants.js src/rebalancer/operation-workflow-owner-segment-7-stage-3.js test/node/replica-handler.test.js test/rebalancer/rebalance-coordinator-outcome-routing.test.js work/packages/active-20260515-priority-recovery-operation-workflow-owner-rebalancer-handoff.md work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md work/sprints/current-blocker.md work/sprints/current-blocker.json",
+    "npm run audit:runtime-grammar:file -- src/node/replica-handler-class-part-1.js src/rebalancer/executor-outcome-constants.js src/rebalancer/operation-workflow-owner-segment-7-stage-3.js",
+    "node scripts/check-guideline-decision-boundaries.js src/node/replica-handler-class-part-1.js src/rebalancer/executor-outcome-constants.js src/rebalancer/operation-workflow-owner-segment-7-stage-3.js",
+    "node scripts/check-guideline-literals.js src/node/replica-handler-class-part-1.js src/rebalancer/executor-outcome-constants.js src/rebalancer/operation-workflow-owner-segment-7-stage-3.js",
+    "node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-after-create-in-progress-owner-progress-20260515-codex.report.json --fast-local --verbose",
+    "npm run work:evidence-summary -- test-output/reports/rolling-restart-after-create-in-progress-owner-progress-20260515-codex.report.json",
+    "npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-after-create-in-progress-owner-progress-20260515-codex.report.json --markdown",
+    "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-create-in-progress-owner-progress-20260515-codex.report.json --handoff-probe",
+    "npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-create-in-progress-owner-progress-20260515-codex.report.json"
   ],
   "writeScope": [
+    "src/node/replica-handler-class-part-1.js",
+    "src/rebalancer/executor-outcome-constants.js",
+    "src/rebalancer/operation-workflow-owner-segment-7-stage-3.js",
+    "test/node/replica-handler.test.js",
+    "test/rebalancer/rebalance-coordinator-outcome-routing.test.js",
     "work/packages/active-20260515-priority-recovery-operation-workflow-owner-rebalancer-handoff.md",
     "work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md",
     "work/sprints/current-blocker.md",
@@ -37,9 +52,18 @@
     "src/node/replica-handler-class-part-1.js",
     "src/node/replica-handler-runtime-methods.js",
     "src/node/replica-state-machine.js",
+    "src/rebalancer/executor-outcome-constants.js",
+    "src/rebalancer/operation-workflow-owner-segment-7-stage-3.js",
+    "test/node/replica-handler.test.js",
+    "test/rebalancer/rebalance-coordinator-outcome-routing.test.js",
     "test/rebalancer/coordinator-created-operation-progress-remote-handoff.test.js"
   ],
   "commitScope": [
+    "src/node/replica-handler-class-part-1.js",
+    "src/rebalancer/executor-outcome-constants.js",
+    "src/rebalancer/operation-workflow-owner-segment-7-stage-3.js",
+    "test/node/replica-handler.test.js",
+    "test/rebalancer/rebalance-coordinator-outcome-routing.test.js",
     "work/packages/active-20260515-priority-recovery-operation-workflow-owner-rebalancer-handoff.md",
     "work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md",
     "work/sprints/current-blocker.md",
@@ -56,21 +80,29 @@
     ]
   },
   "representativeResidual": {
-    "status": "live-red-scenario-release-gate",
+    "status": "live-red-scenario-release-gate-reduced",
     "scenario": "rolling-restart",
-    "artifact": "test-output/reports/rolling-restart-after-replica-operation-router-replace-pending-20260515-codex.report.json",
-    "frontier": "priority_recovery_partition_progress",
+    "artifact": "test-output/reports/rolling-restart-after-create-in-progress-owner-progress-20260515-codex.report.json",
+    "frontier": "active_gate_snapshot_coverage",
     "owner": "operation_workflow_owner",
     "boundary": "rebalancer_handoff",
-    "dominantReason": "priority_recovery_progress_blocked",
-    "nextAction": "Prove or split recovering_in_flight rebalancer handoff witnesses before starting workflow_progress."
+    "dominantReason": "rebalancer_handoff_reduced_to_workflow_progress",
+    "nextAction": "Close this package as reduced and activate the parked operation_workflow_owner / workflow_progress residual with the fresh representative artifact."
+  },
+  "ownerBoundaryMigrationProof": {
+    "fromOwner": "operation_workflow_owner",
+    "fromBoundary": "rebalancer_handoff",
+    "toOwner": "operation_workflow_owner",
+    "toBoundary": "workflow_progress",
+    "reason": "Fresh representative evidence drained the recovering_in_flight rebalancer_handoff group. The focused priority residual extractor now reports one workflow_progress witness, while the topology model keeps active-gate snapshot coverage red because stale replica operation progress still defers repair.",
+    "evidence": "npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-after-create-in-progress-owner-progress-20260515-codex.report.json --markdown"
   },
   "causalGovernance": {
     "hypothesis": "The remaining active-gate snapshot timeout is blocked by operation workflow recovery handoff progress: recovering_in_flight replicas receive remote handoff wake-ups but do not advance their replica lifecycle out of pending/creating quickly enough to clear priority recovery.",
     "stopConditionCheck": "npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-replica-operation-router-replace-pending-20260515-codex.report.json",
     "expectedCausalModelChange": "rolling-restart becomes representative-green, the residual reduces to operation_workflow_owner / workflow_progress only, or this package splits to a narrower replica lifecycle owner with concrete operation and handler evidence.",
-    "representativeOutcome": "pending-before-rerun",
-    "causalDebt": "The predecessor moved stale operation dispatch out of the active-gate owner path. This package owns the remaining handoff/progress gap for recovering_in_flight replicas so active-gate coverage is not forced to wait on an opaque lifecycle stall.",
+    "representativeOutcome": "reduced",
+    "causalDebt": "The predecessor moved stale operation dispatch out of the active-gate owner path. This package reduced the recovering_in_flight handoff gap by making duplicate CREATE_REPLICA pending/creating idempotency emit owner progress. The remaining red evidence is no longer rebalancer_handoff; it is the parked workflow_progress witness plus active-gate snapshot coverage still waiting on operation drain.",
     "crossBoundaryReview": "Do not reopen publication handoff truth, owner-key membership reconcile, or active-gate admission. The only runtime candidates are operation workflow handoff and replica lifecycle progress for the recovered replicas named by canonical residual evidence."
   },
   "scenarioCausalClosure": {
@@ -93,13 +125,13 @@
     "missingCausalEdge": "Recovered replica handoff must either advance duplicate CREATE_REPLICA lifecycle progress or classify a narrower replica lifecycle state-machine blocker.",
     "missingCausalEdgeProbe": "npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-after-replica-operation-router-replace-pending-20260515-codex.report.json --markdown",
     "boundedProgressProof": "The package must prove bounded handoff progress through wake, retry, dispatch, timeout, or lifecycle advance evidence for recovering_in_flight replicas, or split to the narrower lifecycle owner with a concrete operation id and handler state.",
-    "boundedProgressProofArtifact": "test-output/reports/rolling-restart-after-replica-operation-router-replace-pending-20260515-codex.report.json",
-    "expectedObservableTransition": "Recovering_in_flight handoff witnesses drain, rerun evidence reduces to workflow_progress only, representative rolling-restart becomes green, or a narrower lifecycle blocker is recorded.",
+    "boundedProgressProofArtifact": "test-output/reports/rolling-restart-after-create-in-progress-owner-progress-20260515-codex.report.json",
+    "expectedObservableTransition": "Fresh rolling-restart evidence drained the recovering_in_flight rebalancer_handoff witnesses. The focused priority extractor now reports only operation_workflow_owner / workflow_progress, and the topology model reports active_gate_snapshot_coverage as the outer red gate.",
     "maxProgressBound": "one rebalancer_handoff owner package slice; no timeout increases, active-gate admission relaxation, or publication handoff rewrites",
     "sameFrontierFallback": "If rebalancer_handoff remains, record whether wake delivery, duplicate create idempotency, state-machine progress, or persistence failed; do not start workflow_progress until the direct handoff blocker is reduced or split.",
-    "expectedNextFrontier": "operation_workflow_owner / workflow_progress after rebalancer_handoff drains, or a narrower replica lifecycle owner if canonical/focused evidence promotes it",
-    "resultClassification": "pending-before-probe",
-    "stopCondition": "continue-local-fix",
+    "expectedNextFrontier": "operation_workflow_owner / workflow_progress, with startup_active_gate_owner / snapshot_coverage remaining the outer active-gate red gate until stale operation progress drains",
+    "resultClassification": "reduced",
+    "stopCondition": "migrate-owner-boundary",
     "recentFrontierHistory": [
       "work/packages/done-20260515-startup-active-gate-snapshot-coverage-owner-reconcile-closure.md / startup_active_gate_owner / snapshot_coverage / migrated",
       "work/packages/done-20260515-topology-publication-active-gate-handoff-contract-consolidation.md / topology_publication_owner / publication_active_gate_handoff_contract / reduced",
@@ -155,7 +187,7 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 1. Freeze the predecessor migration evidence.
 2. Inspect the operation workflow rebalancer handoff files and replica
    lifecycle idempotency path named by residual evidence.
-3. Promote exact runtime/test files into `writeScope` only after focused owner
+3. Promote exact runtime/test files into `writeScope` after focused owner
    evidence confirms the local boundary.
 4. Implement one bounded wake, retry, dispatch, timeout, or lifecycle-advance
    fix, or split to a narrower lifecycle owner with concrete evidence.
@@ -193,7 +225,9 @@ delegation.
 - Intended minimum model: `gpt-5.3-codex`
 - Scope shape: `owner-boundary-contraction/current-frontier`
 - Output profile: `medium`
-- Owned files: `work/packages/active-20260515-priority-recovery-operation-workflow-owner-rebalancer-handoff.md`, `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md`, `work/sprints/current-blocker.md`, `work/sprints/current-blocker.json`; candidate runtime files stay gated until focused owner evidence promotes exact paths.
+- Owned files: package/sprint handoff files; replica handler create idempotency;
+  executor outcome constants/routing; focused replica handler and outcome
+  routing tests.
 - Forbidden files: timeout increases, active-gate admission relaxation, publication handoff contract rewrites, Pro or Enterprise behavior.
 - Frozen decisions: package scope and lane stay bounded unless explicitly escalated.
 - Escalation triggers: owned files expand beyond this package, runtime ownership changes, or representative scenario evidence changes.
@@ -206,3 +240,30 @@ delegation.
 2. npm run work:evidence-summary -- test-output/reports/rolling-restart-after-replica-operation-router-replace-pending-20260515-codex.report.json
 3. npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-after-replica-operation-router-replace-pending-20260515-codex.report.json --markdown
 4. npm run analyze:owner-files -- operation_workflow_owner rebalancer_handoff --markdown
+5. Focused failing proof:
+   `./node_modules/.bin/tap --grep "creating idempotency|REPLICA_CREATE_CREATING" test/node/replica-handler.test.js test/rebalancer/rebalance-coordinator-outcome-routing.test.js`
+6. `./node_modules/.bin/tap --grep "creating idempotency|pending replica|REPLICA_CREATE_CREATING" test/node/replica-handler.test.js test/rebalancer/rebalance-coordinator-outcome-routing.test.js` - passed but skipped nested cases because this tap filter matched only top-level test names.
+7. `./node_modules/.bin/tap test/node/replica-handler.test.js test/rebalancer/rebalance-coordinator-outcome-routing.test.js` - passed, `265/265`.
+8. `git diff --check -- src/node/replica-handler-class-part-1.js src/rebalancer/executor-outcome-constants.js src/rebalancer/operation-workflow-owner-segment-7-stage-3.js test/node/replica-handler.test.js test/rebalancer/rebalance-coordinator-outcome-routing.test.js work/packages/active-20260515-priority-recovery-operation-workflow-owner-rebalancer-handoff.md work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md work/sprints/current-blocker.md work/sprints/current-blocker.json` - passed.
+9. `npm run audit:runtime-grammar:file -- src/node/replica-handler-class-part-1.js src/rebalancer/executor-outcome-constants.js src/rebalancer/operation-workflow-owner-segment-7-stage-3.js` - passed.
+10. `node scripts/check-guideline-decision-boundaries.js src/node/replica-handler-class-part-1.js src/rebalancer/executor-outcome-constants.js src/rebalancer/operation-workflow-owner-segment-7-stage-3.js` - passed.
+11. `node scripts/check-guideline-literals.js src/node/replica-handler-class-part-1.js src/rebalancer/executor-outcome-constants.js src/rebalancer/operation-workflow-owner-segment-7-stage-3.js` - passed.
+12. `node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-after-create-in-progress-owner-progress-20260515-codex.report.json --fast-local --verbose` - failed `0/1` after `137.3s`; reduced from split rebalancer handoff residual to active-gate snapshot coverage red with priority recovery topology satisfied and one remaining workflow_progress residual witness.
+13. `npm run work:evidence-summary -- test-output/reports/rolling-restart-after-create-in-progress-owner-progress-20260515-codex.report.json` - first frontier `active_gate_snapshot_coverage`; owner `startup_active_gate_owner`; boundary `snapshot_coverage`; priority recovery edge satisfied.
+14. `npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-after-create-in-progress-owner-progress-20260515-codex.report.json --markdown` - split required `false`; one group remains: `operation_workflow_owner / workflow_progress`.
+15. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-create-in-progress-owner-progress-20260515-codex.report.json --handoff-probe` - handoff contract pending with `pendingReconcileCount=4`, `runtimePromotionAllowed=false`.
+16. `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-create-in-progress-owner-progress-20260515-codex.report.json` - outcome `continue_local_fix`; dominant failure class `active_gate_snapshot_coverage_incomplete`.
+
+## Implementation Result
+
+- Result classification: `reduced`.
+- Runtime change: duplicate `CREATE_REPLICA` idempotency for local
+  `PENDING` and `CREATING` replicas now emits
+  `REPLICA_CREATE_CREATING` / `WORKFLOW_STEP.CREATING` into the
+  operation workflow owner path.
+- Owner proof: `REPLICA_CREATE_CREATING` maps to `UPDATE_STEP` and retries
+  through empty visibility like the existing create progress outcomes.
+- Representative proof: fresh rolling-restart evidence no longer reports the
+  `rebalancer_handoff` residual group. The remaining operation workflow
+  evidence is the parked `workflow_progress` witness, while the outer scenario
+  remains red at active-gate snapshot coverage.
