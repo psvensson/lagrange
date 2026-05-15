@@ -3,7 +3,7 @@
 <!-- work-package
 {
   "schema": "work-package-v1",
-  "status": "active",
+  "status": "done",
   "opened": "2026-05-15",
   "lane": "runtime-owner-boundary",
   "scenario": "rolling-restart",
@@ -28,10 +28,10 @@
     "node scripts/check-guideline-literals.js ./test/distributed/harness/cluster-segment-7.js ./test/distributed/harness/cluster-segment-2.js ./test/distributed/harness/cluster-segment-3.js src/diagnostics/topology-convergence-graph.js",
     "node scripts/check-guideline-decision-boundaries.js ./test/distributed/harness/cluster-segment-7.js ./test/distributed/harness/cluster-segment-2.js ./test/distributed/harness/cluster-segment-3.js src/diagnostics/topology-convergence-graph.js",
     "npm run audit:runtime-grammar:file -- ./test/distributed/harness/cluster-segment-7.js ./test/distributed/harness/cluster-segment-2.js ./test/distributed/harness/cluster-segment-3.js src/diagnostics/topology-convergence-graph.js",
-    "git diff --check -- work/packages/active-20260515-topology-active-gate-snapshot-coverage-after-publication-consumer-lag.md work/sprints/current-blocker.md work/sprints/current-blocker.json test/distributed/harness/cluster-segment-7.js test/distributed/harness/cluster-segment-2.js test/distributed/harness/cluster-segment-3.js test/distributed/harness/__tests__/cluster-part-6-core-01-test-cases.js test/distributed/harness/__tests__/cluster.test-part-5.js src/diagnostics/topology-convergence-graph.js test/diagnostics/topology-convergence-graph.test.js"
+    "git diff --check -- work/packages/done-20260515-topology-active-gate-snapshot-coverage-after-publication-consumer-lag.md work/sprints/current-blocker.md work/sprints/current-blocker.json test/distributed/harness/cluster-segment-7.js test/distributed/harness/cluster-segment-2.js test/distributed/harness/cluster-segment-3.js test/distributed/harness/__tests__/cluster-part-6-core-01-test-cases.js test/distributed/harness/__tests__/cluster.test-part-5.js src/diagnostics/topology-convergence-graph.js test/diagnostics/topology-convergence-graph.test.js"
   ],
   "writeScope": [
-    "work/packages/active-20260515-topology-active-gate-snapshot-coverage-after-publication-consumer-lag.md",
+    "work/packages/done-20260515-topology-active-gate-snapshot-coverage-after-publication-consumer-lag.md",
     "work/sprints/active-2026-q2-topology-convergence-residual-closure.md",
     "work/model-ledger.jsonl",
     "test/distributed/harness/cluster-segment-7.js",
@@ -60,7 +60,7 @@
     "src/admin/admin-control-snapshot-class-part-5.js"
   ],
   "commitScope": [
-    "work/packages/active-20260515-topology-active-gate-snapshot-coverage-after-publication-consumer-lag.md",
+    "work/packages/done-20260515-topology-active-gate-snapshot-coverage-after-publication-consumer-lag.md",
     "work/sprints/active-2026-q2-topology-convergence-residual-closure.md",
     "work/sprints/current-blocker.md",
     "work/sprints/current-blocker.json",
@@ -199,22 +199,22 @@ Required before implementation because this is a runtime owner-boundary
 package.
 
 - [x] Review subagent recorded:
-      Agent Nietzsche (019e2a5b-e9d5-7273-a6f2-dae250b9711b) reviewed work/packages/active-20260515-topology-active-gate-snapshot-coverage-after-publication-consumer-lag.md; result fixes-required
+      Agent Nietzsche (019e2a5b-e9d5-7273-a6f2-dae250b9711b) reviewed work/packages/done-20260515-topology-active-gate-snapshot-coverage-after-publication-consumer-lag.md; result fixes-required
 - [x] Fix subagent recorded or explicitly not needed:
-      Agent Archimedes (019e2a5f-8cac-7373-9cc8-7b4049b8ae71) fixed work/packages/active-20260515-topology-active-gate-snapshot-coverage-after-publication-consumer-lag.md
+      Agent Archimedes (019e2a5f-8cac-7373-9cc8-7b4049b8ae71) fixed work/packages/done-20260515-topology-active-gate-snapshot-coverage-after-publication-consumer-lag.md
 - [x] Implementation subagent recorded:
-      Agent Copernicus (019e2a63-33b5-7093-9935-6d5d7fd03e67) implemented work/packages/active-20260515-topology-active-gate-snapshot-coverage-after-publication-consumer-lag.md
+      Agent Copernicus (019e2a63-33b5-7093-9935-6d5d7fd03e67) implemented work/packages/done-20260515-topology-active-gate-snapshot-coverage-after-publication-consumer-lag.md
 
 ## Model Fit
 
 - Package class: `representative-frontier-closure`
 - Intended minimum model: `gpt-5.3-codex`
 - Scope shape: `owner-boundary-contraction/current-frontier`
-- Owned files: `work/packages/active-20260515-topology-active-gate-snapshot-coverage-after-publication-consumer-lag.md`, `work/sprints/active-2026-q2-topology-convergence-residual-closure.md`, `work/model-ledger.jsonl`, `test/distributed/harness/cluster-segment-7.js`, `test/distributed/harness/cluster-segment-2.js`, `test/distributed/harness/cluster-segment-3.js`, `test/distributed/harness/__tests__/cluster-part-6-core-01-test-cases.js`, `test/distributed/harness/__tests__/cluster.test-part-5.js`, `src/diagnostics/topology-convergence-graph.js`, `test/diagnostics/topology-convergence-graph.test.js`
+- Owned files: `work/packages/done-20260515-topology-active-gate-snapshot-coverage-after-publication-consumer-lag.md`, `work/sprints/active-2026-q2-topology-convergence-residual-closure.md`, `work/model-ledger.jsonl`, `test/distributed/harness/cluster-segment-7.js`, `test/distributed/harness/cluster-segment-2.js`, `test/distributed/harness/cluster-segment-3.js`, `test/distributed/harness/__tests__/cluster-part-6-core-01-test-cases.js`, `test/distributed/harness/__tests__/cluster.test-part-5.js`, `src/diagnostics/topology-convergence-graph.js`, `test/diagnostics/topology-convergence-graph.test.js`
 - Forbidden files: `src/admin/`, operation workflow runtime, publication owner runtime, scenario timeout defaults
 - Frozen decisions: package scope and lane stay bounded unless explicitly escalated; do not reopen publication convergence or stretch generic timeouts.
 - Escalation triggers: owned files expand beyond active-gate wait cadence, active-gate progress evidence, or topology explain projection; runtime ownership changes; representative scenario evidence changes.
-- Focused proof: `npm run work:evidence-summary -- test-output/reports/topology-publication-convergence-final-blocker-after-authoritative-refresh-repair.report.json`, `npm run analyze:topology-convergence -- test-output/reports/topology-publication-convergence-final-blocker-after-authoritative-refresh-repair.report.json`, `npm --silent run analyze:causal-model -- test-output/reports/topology-publication-convergence-final-blocker-after-authoritative-refresh-repair.report.json`, `npm run analyze:owner-files -- startup_active_gate_owner snapshot_coverage`, `node test/distributed/harness/__tests__/cluster.test-part-5.js`, `node test/distributed/harness/__tests__/cluster.test-part-6.js`, `node --test test/diagnostics/topology-convergence-graph.test.js`, `node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-after-active-gate-persistent-repair-20260515-codex.report.json --fast-local --verbose`, `npm run work:evidence-summary -- test-output/reports/rolling-restart-after-active-gate-persistent-repair-20260515-codex.report.json`, `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-active-gate-persistent-repair-20260515-codex.report.json --explain publication_ack_convergence`, `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-active-gate-persistent-repair-20260515-codex.report.json --explain active_gate_snapshot_coverage`, `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-active-gate-persistent-repair-20260515-codex.report.json`, `node scripts/check-guideline-literals.js ./test/distributed/harness/cluster-segment-7.js ./test/distributed/harness/cluster-segment-2.js ./test/distributed/harness/cluster-segment-3.js src/diagnostics/topology-convergence-graph.js`, `node scripts/check-guideline-decision-boundaries.js ./test/distributed/harness/cluster-segment-7.js ./test/distributed/harness/cluster-segment-2.js ./test/distributed/harness/cluster-segment-3.js src/diagnostics/topology-convergence-graph.js`, `npm run audit:runtime-grammar:file -- ./test/distributed/harness/cluster-segment-7.js ./test/distributed/harness/cluster-segment-2.js ./test/distributed/harness/cluster-segment-3.js src/diagnostics/topology-convergence-graph.js`, `git diff --check -- work/packages/active-20260515-topology-active-gate-snapshot-coverage-after-publication-consumer-lag.md work/sprints/current-blocker.md work/sprints/current-blocker.json test/distributed/harness/cluster-segment-7.js test/distributed/harness/cluster-segment-2.js test/distributed/harness/cluster-segment-3.js test/distributed/harness/__tests__/cluster-part-6-core-01-test-cases.js test/distributed/harness/__tests__/cluster.test-part-5.js src/diagnostics/topology-convergence-graph.js test/diagnostics/topology-convergence-graph.test.js`
+- Focused proof: `npm run work:evidence-summary -- test-output/reports/topology-publication-convergence-final-blocker-after-authoritative-refresh-repair.report.json`, `npm run analyze:topology-convergence -- test-output/reports/topology-publication-convergence-final-blocker-after-authoritative-refresh-repair.report.json`, `npm --silent run analyze:causal-model -- test-output/reports/topology-publication-convergence-final-blocker-after-authoritative-refresh-repair.report.json`, `npm run analyze:owner-files -- startup_active_gate_owner snapshot_coverage`, `node test/distributed/harness/__tests__/cluster.test-part-5.js`, `node test/distributed/harness/__tests__/cluster.test-part-6.js`, `node --test test/diagnostics/topology-convergence-graph.test.js`, `node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-after-active-gate-persistent-repair-20260515-codex.report.json --fast-local --verbose`, `npm run work:evidence-summary -- test-output/reports/rolling-restart-after-active-gate-persistent-repair-20260515-codex.report.json`, `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-active-gate-persistent-repair-20260515-codex.report.json --explain publication_ack_convergence`, `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-active-gate-persistent-repair-20260515-codex.report.json --explain active_gate_snapshot_coverage`, `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-active-gate-persistent-repair-20260515-codex.report.json`, `node scripts/check-guideline-literals.js ./test/distributed/harness/cluster-segment-7.js ./test/distributed/harness/cluster-segment-2.js ./test/distributed/harness/cluster-segment-3.js src/diagnostics/topology-convergence-graph.js`, `node scripts/check-guideline-decision-boundaries.js ./test/distributed/harness/cluster-segment-7.js ./test/distributed/harness/cluster-segment-2.js ./test/distributed/harness/cluster-segment-3.js src/diagnostics/topology-convergence-graph.js`, `npm run audit:runtime-grammar:file -- ./test/distributed/harness/cluster-segment-7.js ./test/distributed/harness/cluster-segment-2.js ./test/distributed/harness/cluster-segment-3.js src/diagnostics/topology-convergence-graph.js`, `git diff --check -- work/packages/done-20260515-topology-active-gate-snapshot-coverage-after-publication-consumer-lag.md work/sprints/current-blocker.md work/sprints/current-blocker.json test/distributed/harness/cluster-segment-7.js test/distributed/harness/cluster-segment-2.js test/distributed/harness/cluster-segment-3.js test/distributed/harness/__tests__/cluster-part-6-core-01-test-cases.js test/distributed/harness/__tests__/cluster.test-part-5.js src/diagnostics/topology-convergence-graph.js test/diagnostics/topology-convergence-graph.test.js`
 - Model ledger advisory: `escalate`
 
 ## Validation
@@ -235,4 +235,10 @@ package.
 14. node scripts/check-guideline-literals.js ./test/distributed/harness/cluster-segment-7.js ./test/distributed/harness/cluster-segment-2.js ./test/distributed/harness/cluster-segment-3.js src/diagnostics/topology-convergence-graph.js
 15. node scripts/check-guideline-decision-boundaries.js ./test/distributed/harness/cluster-segment-7.js ./test/distributed/harness/cluster-segment-2.js ./test/distributed/harness/cluster-segment-3.js src/diagnostics/topology-convergence-graph.js
 16. npm run audit:runtime-grammar:file -- ./test/distributed/harness/cluster-segment-7.js ./test/distributed/harness/cluster-segment-2.js ./test/distributed/harness/cluster-segment-3.js src/diagnostics/topology-convergence-graph.js
-17. git diff --check -- work/packages/active-20260515-topology-active-gate-snapshot-coverage-after-publication-consumer-lag.md work/sprints/current-blocker.md work/sprints/current-blocker.json test/distributed/harness/cluster-segment-7.js test/distributed/harness/cluster-segment-2.js test/distributed/harness/cluster-segment-3.js test/distributed/harness/__tests__/cluster-part-6-core-01-test-cases.js test/distributed/harness/__tests__/cluster.test-part-5.js src/diagnostics/topology-convergence-graph.js test/diagnostics/topology-convergence-graph.test.js
+17. git diff --check -- work/packages/done-20260515-topology-active-gate-snapshot-coverage-after-publication-consumer-lag.md work/sprints/current-blocker.md work/sprints/current-blocker.json test/distributed/harness/cluster-segment-7.js test/distributed/harness/cluster-segment-2.js test/distributed/harness/cluster-segment-3.js test/distributed/harness/__tests__/cluster-part-6-core-01-test-cases.js test/distributed/harness/__tests__/cluster.test-part-5.js src/diagnostics/topology-convergence-graph.js test/diagnostics/topology-convergence-graph.test.js
+
+## Commit And Push Ledger
+
+1. Focused package commit: `303bc562144929f42bcfab06c7cd7add176d8aae`
+2. Pushed to: `origin/codex/pending-ack-eligibility-filter`
+3. Commit contains only package-owned files/package-status/allowed sprint handoff: yes
