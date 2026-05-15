@@ -260,7 +260,9 @@ class AdminControlSnapshotPart2 extends AdminControlSnapshotPart1 {
           observationMode:
             ADMIN_CONTROL_SNAPSHOT_OBSERVATION_MODE.REPAIR_DEFERRED,
           repairEvaluation,
+          repairAttempted: true,
           repairDeferred: true,
+          retryAfterMs: error?.retryAfterMs,
         });
       }
       throw buildAuthoritativeControlSnapshotRepairFailure(
@@ -276,6 +278,7 @@ class AdminControlSnapshotPart2 extends AdminControlSnapshotPart1 {
             ADMIN_CONTROL_SNAPSHOT_OBSERVATION_MODE.REPAIR_DEFERRED,
           repair,
           repairEvaluation,
+          repairAttempted: true,
           repairDeferred: true,
         });
       }
@@ -292,6 +295,7 @@ class AdminControlSnapshotPart2 extends AdminControlSnapshotPart1 {
             ADMIN_CONTROL_SNAPSHOT_OBSERVATION_MODE.REPAIR_DEFERRED,
           repair,
           repairEvaluation,
+          repairAttempted: true,
           repairDeferred: true,
         });
       }

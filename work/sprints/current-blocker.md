@@ -22,11 +22,11 @@ Boundary: `snapshot_coverage`
 
 Dominant reason: `active_gate_timed_out`
 
-Current state: Fresh representative evidence keeps rolling-restart red but removes ambiguity from the active-gate handoff. All five nodes reach ACTIVE by status, publication ACK convergence is satisfied, and the selected snapshot still has coverage 2/5 with repair_deferred/stale_usable evidence. The topology frontier is now active_gate_snapshot_coverage blocked with reasons active_gate_timed_out, owner_reconcile_pending, snapshot_coverage_incomplete, and snapshot_repair_deferred. The active-gate owner cohort is pending with owner_reconcile_pending and three pending reconcile node IDs on the selected snapshot, while the producer publication view still shows PUBLISHED, pendingAck=0, publishedActive=1/5, and missingPublished=4.
+Current state: Fresh representative evidence keeps rolling-restart red but reduces the active-gate handoff again. All five nodes reach ACTIVE by status, publication ACK convergence is satisfied, and the selected snapshot still has coverage 2/5, but attempted repair deferral now emits repair_deferred/deferred_refresh/deferred/deferred/retry with retryAfterMs=14976 instead of wait-only stale evidence. The topology frontier remains active_gate_snapshot_coverage blocked with reasons active_gate_timed_out, owner_reconcile_pending, snapshot_coverage_incomplete, and snapshot_repair_deferred. The active-gate owner cohort is pending with owner_reconcile_pending and two pending reconcile node IDs on the selected snapshot, while the producer publication view still shows PUBLISHED, pendingAck=0, publishedActive=1/5, and missingPublished=4. The handoff probe still reports runtimePromotionAllowed=false and requiredAction=build_replayable_handoff_fixture.
 
 ## Next Action
 
-Implement the catch-up-before-promotion mechanism behind startup_active_gate_owner / snapshot_coverage: the active-gate owner cohort must either reconcile pending published-active nodes into snapshot coverage before timeout or expose a legal non-wait next operator action for the owner-reconcile edge. Keep runtimePromotionAllowed=false while producer publication and consumer owner-cohort counts disagree.
+Build the replayable handoff fixture and then implement the catch-up-before-promotion mechanism behind startup_active_gate_owner / snapshot_coverage: the active-gate owner cohort must reconcile pending published-active nodes into durable publication/snapshot coverage before timeout, without relaxing active-gate admission while runtimePromotionAllowed=false.
 
 ## Proof Ladder
 
@@ -89,7 +89,7 @@ Expected causal-model change: `active_gate_snapshot_coverage becomes representat
 
 Representative outcome: `reduced`
 
-Causal debt: `The hard selected snapshot authoritative repair failure is reduced to a structured repair_deferred/stale_usable snapshot observation, snapshotCoverage remains 2/5, and the active-gate consumer now exposes owner_reconcile_pending with pending reconcile node IDs. The remaining debt is no longer diagnostic visibility; it is the publication-to-active-gate catch-up mechanism that should reconcile producer PUBLISHED/pendingAck=0/missingPublished=4 into consumer snapshot coverage before the active-gate timeout.`
+Causal debt: `The hard selected snapshot authoritative repair failure is reduced to a structured repair_deferred/deferred_refresh/deferred/deferred/retry snapshot observation with retryAfterMs, snapshotCoverage remains 2/5, and the active-gate consumer now exposes owner_reconcile_pending with two pending reconcile node IDs. The remaining debt is no longer diagnostic visibility; it is the publication-to-active-gate catch-up mechanism that should reconcile producer PUBLISHED/pendingAck=0/missingPublished=4 into consumer snapshot coverage before the active-gate timeout.`
 
 Cross-boundary review: `Subagent sequencing for the focused fallback slice is complete. Related-work guidance now points at the owner-reconcile catch-up mechanism itself; no active admission relaxation is allowed while runtimePromotionAllowed=false.`
 
@@ -114,11 +114,11 @@ Known downstream blockers:
 3. `scenario_duration, active_gate_timeout, active_gate_attempts, and readiness_retry_window budgets are exhausted or terminal-classified`
 4. `priority_recovery_partition_progress remains classified as satisfied`
 
-Missing causal edge: `The selected snapshot now exposes stale usable repair-deferred evidence plus activeGateOwnerCohort owner_reconcile_pending. The next proof must make pending reconcile node IDs advance into durable published active membership and selected snapshot coverage, or emit a legal next operator action inside the exact startup_active_gate_owner / snapshot_coverage file boundary.`
+Missing causal edge: `The selected snapshot now exposes retryable repair-deferred evidence plus activeGateOwnerCohort owner_reconcile_pending. The next proof must make pending reconcile node IDs advance into durable published active membership and selected snapshot coverage, or build the replayable handoff fixture required by the probe before the runtime catch-up mechanism is edited.`
 
 Missing causal edge probe: `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-forced-snapshot-local-fallback-20260515-codex.report.json --handoff-probe`
 
-Bounded progress proof: `Focused fallback and diagnostic handoff proof pass. Fresh representative evidence is still red, but it reaches all five ACTIVE-by-status nodes, keeps selectedSnapshotError unknown instead of a hard forced-repair failure, reports selectedSnapshotRepairDeferred=true, and preserves snapshotCoverageNodeCount=2/5. The fresh handoff probe detects publication_ack_to_active_gate_reconcile missing and the active-gate consumer now carries owner_reconcile_pending with pending reconcile node IDs.`
+Bounded progress proof: `Focused fallback and diagnostic handoff proof pass. Fresh representative evidence is still red, but it reaches all five ACTIVE-by-status nodes, keeps selectedSnapshotError unknown instead of a hard forced-repair failure, reports selectedSnapshotRepairDeferred=true with selectedSnapshotObservationNextAction=retry and retryAfterMs=14976, and preserves snapshotCoverageNodeCount=2/5. The fresh handoff probe detects publication_ack_to_active_gate_reconcile missing and the active-gate consumer now carries owner_reconcile_pending with two pending reconcile node IDs.`
 
 Bounded progress proof artifact: `test-output/reports/rolling-restart-after-forced-snapshot-local-fallback-20260515-codex.report.json`
 
@@ -126,7 +126,7 @@ Expected observable transition: `Next proof should make the publication-to-activ
 
 Max progress bound: `one focused active-gate snapshot coverage package slice with canonical extractors, owner-file proof, subagent sequencing, focused validation, and representative result classification`
 
-Same-frontier fallback: `Fresh evidence still selects startup_active_gate_owner / snapshot_coverage. The failure shape is now blocked active_gate_timed_out with owner_reconcile_pending and repair_deferred/stale_usable. Continue local fix on the catch-up mechanism, not another diagnostics-only successor.`
+Same-frontier fallback: `Fresh evidence still selects startup_active_gate_owner / snapshot_coverage. The failure shape is now blocked active_gate_timed_out with owner_reconcile_pending and repair_deferred/deferred_refresh/deferred/deferred/retry. Continue local fix on the replayable handoff fixture and catch-up mechanism, not another diagnostics-only successor.`
 
 Expected next frontier: `readiness_startup_support after active-gate coverage improves, otherwise same-frontier active-gate evidence`
 
@@ -159,13 +159,17 @@ Write scope:
 9. `test/distributed/harness/cluster-segment-7-class-5.js`
 10. `test/distributed/harness/__tests__/cluster.test-part-3.js`
 11. `test/distributed/harness/__tests__/cluster.test-part-4.js`
-12. `test/distributed/harness/__tests__/active-gate-closure-classification.test.js`
-13. `src/admin/admin-control-snapshot-class-part-3.js`
-14. `src/diagnostics/topology-convergence-graph.js`
-15. `test/admin/admin-control-snapshot.test.js`
-16. `scripts/analyze-topology-convergence.js`
-17. `test/scripts/analyze-topology-convergence.test.js`
-18. `test/scripts/__fixtures__/topology-convergence/publication-active-gate-reduced-handoff.fixture.json`
+12. `test/distributed/harness/__tests__/cluster.test-part-5.js`
+13. `test/distributed/harness/__tests__/active-gate-closure-classification.test.js`
+14. `src/admin/admin-control-snapshot-class-part-2.js`
+15. `src/admin/admin-control-snapshot-class-part-3.js`
+16. `src/admin/admin-control-snapshot-class-part-6.js`
+17. `src/control-plane/control-plane-snapshot-owner.js`
+18. `src/diagnostics/topology-convergence-graph.js`
+19. `test/admin/admin-control-snapshot.test.js`
+20. `scripts/analyze-topology-convergence.js`
+21. `test/scripts/analyze-topology-convergence.test.js`
+22. `test/scripts/__fixtures__/topology-convergence/publication-active-gate-reduced-handoff.fixture.json`
 
 Handoff files:
 
@@ -183,10 +187,13 @@ Candidate runtime files:
 3. `test/distributed/harness/cluster-segment-2.js`
 4. `test/distributed/harness/cluster-segment-7-class-4.js`
 5. `test/distributed/harness/cluster-segment-7-class-5.js`
-6. `src/admin/admin-control-snapshot-class-part-3.js`
-7. `src/admin/admin-control-snapshot-class-part-5.js`
-8. `src/diagnostics/topology-convergence-graph.js`
-9. `src/control-plane/authoritative-node-evidence-reconciler.js`
+6. `src/admin/admin-control-snapshot-class-part-2.js`
+7. `src/admin/admin-control-snapshot-class-part-3.js`
+8. `src/admin/admin-control-snapshot-class-part-5.js`
+9. `src/admin/admin-control-snapshot-class-part-6.js`
+10. `src/control-plane/control-plane-snapshot-owner.js`
+11. `src/diagnostics/topology-convergence-graph.js`
+12. `src/control-plane/authoritative-node-evidence-reconciler.js`
 
 Commit scope:
 
@@ -203,13 +210,17 @@ Commit scope:
 11. `test/distributed/harness/cluster-segment-7-class-5.js`
 12. `test/distributed/harness/__tests__/cluster.test-part-3.js`
 13. `test/distributed/harness/__tests__/cluster.test-part-4.js`
-14. `test/distributed/harness/__tests__/active-gate-closure-classification.test.js`
-15. `src/admin/admin-control-snapshot-class-part-3.js`
-16. `src/diagnostics/topology-convergence-graph.js`
-17. `test/admin/admin-control-snapshot.test.js`
-18. `scripts/analyze-topology-convergence.js`
-19. `test/scripts/analyze-topology-convergence.test.js`
-20. `test/scripts/__fixtures__/topology-convergence/publication-active-gate-reduced-handoff.fixture.json`
+14. `test/distributed/harness/__tests__/cluster.test-part-5.js`
+15. `test/distributed/harness/__tests__/active-gate-closure-classification.test.js`
+16. `src/admin/admin-control-snapshot-class-part-2.js`
+17. `src/admin/admin-control-snapshot-class-part-3.js`
+18. `src/admin/admin-control-snapshot-class-part-6.js`
+19. `src/control-plane/control-plane-snapshot-owner.js`
+20. `src/diagnostics/topology-convergence-graph.js`
+21. `test/admin/admin-control-snapshot.test.js`
+22. `scripts/analyze-topology-convergence.js`
+23. `test/scripts/analyze-topology-convergence.test.js`
+24. `test/scripts/__fixtures__/topology-convergence/publication-active-gate-reduced-handoff.fixture.json`
 
 Legacy touched files:
 

@@ -40,6 +40,9 @@ const ADMIN_CONTROL_SNAPSHOT_LITERAL = Object.freeze({
 });
 const MEMBERSHIP_PUBLICATION_KIND = 'cluster_membership';
 const MEMBERSHIP_PUBLICATION_READ_PROFILE_DIAGNOSTICS = 'diagnostics';
+const MEMBERSHIP_PUBLICATION_RECONCILE_OPTIONS = Object.freeze({
+  preferAuthoritativeRead: true,
+});
 /**
  * Normalize one arbitrary value to a non-negative integer.
  * @param {*} value
@@ -52,6 +55,27 @@ function buildMembershipPublicationReadOptions(options = {}) {
       readProfile: MEMBERSHIP_PUBLICATION_READ_PROFILE_DIAGNOSTICS,
     } :
     {readProfile: MEMBERSHIP_PUBLICATION_READ_PROFILE_DIAGNOSTICS};
+}
+async function maybeReconcileAuthoritativeMembershipPublication(
+  membershipPublicationService,
+  options = {},
+) {
+  if (
+    options.reconcileAuthoritativeMembershipPublication !== true ||
+    !membershipPublicationService ||
+    typeof membershipPublicationService.reconcileClusterMembership !==
+      TYPEOF.FUNCTION
+  ) {
+    return null;
+  }
+  const outcome =
+    await membershipPublicationService.reconcileClusterMembership(
+      MEMBERSHIP_PUBLICATION_RECONCILE_OPTIONS,
+    );
+  return outcome?.publicationRow &&
+    typeof outcome.publicationRow === TYPEOF.OBJECT ?
+    outcome.publicationRow :
+    null;
 }
 function resolvePublicationOrderingValue(row, keys = []) {
   for (const key of keys) {
@@ -147,6 +171,14 @@ class AdminControlSnapshotPart6 extends AdminControlSnapshotPart5 {
       membershipPublicationService &&
       typeof membershipPublicationService === TYPEOF.OBJECT;
     const preferAuthoritativeRead = options.preferAuthoritativeRead === true;
+    const reconciledPublicationRow =
+      await maybeReconcileAuthoritativeMembershipPublication(
+        membershipPublicationService,
+        options,
+      );
+    if (reconciledPublicationRow) {
+      return reconciledPublicationRow;
+    }
     if (
       !preferAuthoritativeRead &&
       typeof readinessService?.getLatestMembershipPublicationRowSync ===

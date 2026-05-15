@@ -59,6 +59,14 @@ function normalizeRetryAfterMs(value) {
   return Math.floor(parsedValue);
 }
 
+function resolveRepairDeferredRetryAfterMs(options = {}) {
+  return normalizeRetryAfterMs(
+    options.repair?.retryAfterMs ??
+      options.repair?.localQueryTransport?.retryAfterMs ??
+      options.retryAfterMs,
+  );
+}
+
 function buildSnapshotObservation(snapshot, options = {}) {
   const revisionMetadata = resolveControlPlaneSnapshotRevisionMetadata(
     snapshot,
@@ -246,6 +254,28 @@ class ControlPlaneSnapshotOwner {
         CONTROL_PLANE_SNAPSHOT_REPAIR_REASON.CONTROL_SNAPSHOT,
       );
       return forcedSnapshot;
+    }
+    if (
+      resolvedOptions.repairDeferred === true &&
+      resolvedOptions.repairAttempted === true
+    ) {
+      const observedSnapshot = attachSnapshotObservation(
+        localSnapshot,
+        buildDeferredSnapshotObservation(
+          localSnapshot,
+          reasonCodes,
+          {
+            retryAfterMs: resolveRepairDeferredRetryAfterMs(resolvedOptions),
+            expectedMinimumRevision: resolvedOptions.expectedMinimumRevision,
+            expectedResumeToken: resolvedOptions.expectedResumeToken,
+          },
+        ),
+      );
+      this.recordObservedExpectation(
+        observedSnapshot,
+        CONTROL_PLANE_SNAPSHOT_REPAIR_REASON.CONTROL_SNAPSHOT,
+      );
+      return observedSnapshot;
     }
     if (repairEvaluation?.shouldRepair !== true) {
       const observedSnapshot = attachSnapshotObservation(

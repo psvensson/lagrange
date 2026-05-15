@@ -1241,6 +1241,7 @@ test('Unit: _probeControlSnapshotCoverage surfaces stringified publication diagn
         snapshotObservationReasonCodes: [],
         snapshotObservationRetryAfterMs: null,
         snapshotRepairDeferred: false,
+        activeGateOwnerCohort: null,
         publicationEpoch: 18,
         publicationStatus: 'OPEN',
         publishedActiveNodeIds: ['node-a', 'node-b'],

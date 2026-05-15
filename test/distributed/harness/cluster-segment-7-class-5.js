@@ -484,12 +484,16 @@ class Cluster5 extends Cluster4 {
     }
     const selectedReachabilityFallback =
       hasControlSnapshotReachabilityFallback(selectedResult);
+    const selectedAdminReady =
+      selectedResult?.adminReady === true || selectedReachabilityFallback;
     const selectedReachableBy =
       selectedResult?.reachableBy ||
       (selectedReachabilityFallback ?
         CONTROL_SNAPSHOT_REACHABILITY_SOURCE :
         null);
-    const selectedReachabilityError = selectedResult?.reachabilityError || null;
+    const selectedReachabilityError = selectedReachabilityFallback ?
+      null :
+      selectedResult?.reachabilityError || null;
     const publicationDisagreementByNodeId = {};
     for (const result of snapshotProbeResults) {
       publicationDisagreementByNodeId[result.nodeId] = Array.isArray(
@@ -505,8 +509,8 @@ class Cluster5 extends Cluster4 {
       forceRepair: options.forceRepair === true,
       selectedNodeId: selectedResult?.nodeId || null,
       selectedSnapshotNodeId: selectedResult?.nodeId || null,
-      selectedAdminReady: selectedResult?.adminReady === true,
-      selectedSnapshotAdminReady: selectedResult?.adminReady === true,
+      selectedAdminReady,
+      selectedSnapshotAdminReady: selectedAdminReady,
       selectedReachable:
         selectedResult?.reachable === true || selectedReachabilityFallback,
       selectedReachableBy,
