@@ -120,7 +120,8 @@ const ACTIVE_GATE_HANDOFF_RECONCILE_AUTHORITATIVE_READ = true;
 const ACTIVE_GATE_HANDOFF_RECONCILE_AUTHORITATIVE_RECONCILE = true;
 const ACTIVE_GATE_HANDOFF_RECONCILE_ALLOW_PENDING_VISIBILITY = true;
 const ACTIVE_GATE_HANDOFF_RECONCILE_ALLOW_PRESSURE_DEFER = false;
-const ACTIVE_GATE_HANDOFF_RECONCILE_SKIP_WRITE_READBACK = true;
+const ACTIVE_GATE_HANDOFF_RECONCILE_SKIP_WRITE_READBACK = false;
+const ACTIVE_GATE_HANDOFF_RECONCILE_READ_PROFILE = 'diagnostics';
 const ACTIVE_GATE_HANDOFF_RECONCILE_PUBLICATION_KIND =
   'cluster_membership';
 const ACTIVE_GATE_HANDOFF_RECONCILE_PUBLICATION_EPOCH = 3;
@@ -2409,6 +2410,8 @@ test('AdminControlSnapshot build snapshot forwards handoff pending reconcile tar
           ACTIVE_GATE_HANDOFF_RECONCILE_ALLOW_PENDING_VISIBILITY,
         allowPressureDefer:
           ACTIVE_GATE_HANDOFF_RECONCILE_ALLOW_PRESSURE_DEFER,
+        readProfile:
+          ACTIVE_GATE_HANDOFF_RECONCILE_READ_PROFILE,
         skipPublicationWriteReadback:
           ACTIVE_GATE_HANDOFF_RECONCILE_SKIP_WRITE_READBACK,
       },
@@ -2567,7 +2570,9 @@ test('AdminControlSnapshot repair-deferred shared owner attempts publication cat
         acknowledgedNodeIds: ['node-1', 'node-2'],
         allowPendingVisibility: true,
         allowPressureDefer: false,
-        skipPublicationWriteReadback: true,
+        readProfile: ACTIVE_GATE_HANDOFF_RECONCILE_READ_PROFILE,
+        skipPublicationWriteReadback:
+          ACTIVE_GATE_HANDOFF_RECONCILE_SKIP_WRITE_READBACK,
       },
       'repair-deferred degradation should perform a narrow publication-owner reconcile before rebuilding the snapshot view',
     );
@@ -2679,7 +2684,9 @@ test('AdminControlSnapshot repair-deferred no-attempt path still attempts public
         acknowledgedNodeIds: ['node-1', 'node-2'],
         allowPendingVisibility: true,
         allowPressureDefer: false,
-        skipPublicationWriteReadback: true,
+        readProfile: ACTIVE_GATE_HANDOFF_RECONCILE_READ_PROFILE,
+        skipPublicationWriteReadback:
+          ACTIVE_GATE_HANDOFF_RECONCILE_SKIP_WRITE_READBACK,
       },
       'repair-deferred no-attempt path should perform the narrow publication-owner reconcile',
     );

@@ -3,7 +3,7 @@
 <!-- work-package
 {
   "schema": "work-package-v1",
-  "status": "active",
+  "status": "done",
   "opened": "2026-05-15",
   "lane": "causal-escalation",
   "scenario": "rolling-restart",
@@ -17,8 +17,8 @@
   "proof": [
     "npm run work:context",
     "npm run work:llm-start",
-    "npm run work:package:doctor -- --suggest work/packages/active-20260515-publication-active-gate-reconcile-bridge-simplification.md",
-    "npm run work:validate -- --entry work/packages/active-20260515-publication-active-gate-reconcile-bridge-simplification.md",
+    "npm run work:package:doctor -- --suggest work/packages/done-20260515-publication-active-gate-reconcile-bridge-simplification.md",
+    "npm run work:validate -- --entry work/packages/done-20260515-publication-active-gate-reconcile-bridge-simplification.md",
     "npm run work:evidence-summary -- test-output/reports/rolling-restart-after-create-in-progress-owner-progress-20260515-codex.report.json",
     "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-create-in-progress-owner-progress-20260515-codex.report.json --handoff-probe",
     "npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-create-in-progress-owner-progress-20260515-codex.report.json",
@@ -33,10 +33,10 @@
     "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-awaited-reconcile-bridge-20260515-codex.report.json --handoff-probe",
     "npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-awaited-reconcile-bridge-20260515-codex.report.json",
     "npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-after-awaited-reconcile-bridge-20260515-codex.report.json --markdown",
-    "npm run work:validate -- --closure work/packages/active-20260515-publication-active-gate-reconcile-bridge-simplification.md"
+    "npm run work:validate -- --closure work/packages/done-20260515-publication-active-gate-reconcile-bridge-simplification.md"
   ],
   "writeScope": [
-    "work/packages/active-20260515-publication-active-gate-reconcile-bridge-simplification.md",
+    "work/packages/done-20260515-publication-active-gate-reconcile-bridge-simplification.md",
     "work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md",
     "work/sprints/current-blocker.md",
     "work/sprints/current-blocker.json",
@@ -70,7 +70,7 @@
     "test/control-plane/membership-publication-coordinator-main-stage-2.js"
   ],
   "commitScope": [
-    "work/packages/active-20260515-publication-active-gate-reconcile-bridge-simplification.md",
+    "work/packages/done-20260515-publication-active-gate-reconcile-bridge-simplification.md",
     "work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md",
     "work/sprints/current-blocker.md",
     "work/sprints/current-blocker.json",
@@ -259,10 +259,10 @@ This package is active. Before runtime implementation starts:
 Required before implementation because this is a causal-escalation package.
 
 - [x] Review subagent recorded:
-      `Agent Codex Review (019e2cce-0817-74f3-873f-e0631aec7735) reviewed work/packages/active-20260515-publication-active-gate-reconcile-bridge-simplification.md; result clean`
+      `Agent Codex Review (019e2cce-0817-74f3-873f-e0631aec7735) reviewed work/packages/done-20260515-publication-active-gate-reconcile-bridge-simplification.md; result clean`
 - [x] Fix subagent recorded or explicitly not needed: not-needed.
 - [x] Implementation subagent recorded:
-      `Agent Codex Implementation (6e08407b-e675-44b8-bc48-c844b1016cdf) implemented work/packages/active-20260515-publication-active-gate-reconcile-bridge-simplification.md`
+      `Agent Codex Implementation (6e08407b-e675-44b8-bc48-c844b1016cdf) implemented work/packages/done-20260515-publication-active-gate-reconcile-bridge-simplification.md`
 
 ## Model Fit
 
@@ -270,19 +270,19 @@ Required before implementation because this is a causal-escalation package.
 - Intended minimum model: `gpt-5.3-codex`
 - Scope shape: `owner-boundary-contraction/follow-on`
 - Output profile: `medium`
-- Owned files: `work/packages/active-20260515-publication-active-gate-reconcile-bridge-simplification.md`, `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md`, `work/sprints/current-blocker.md`, `work/sprints/current-blocker.json`, `work/tracks/topology-convergence.md`, `work/releases/0.1-dependency-map.md`, `work/releases/0.1-stabilization.md`, `work/model-ledger.jsonl`, `src/control-plane/publication-active-gate-handoff-contract.js`, `src/admin/admin-control-snapshot-class-part-2.js`, `src/admin/admin-control-snapshot-class-part-6.js`, `test/admin/admin-control-snapshot.test.js`
+- Owned files: `work/packages/done-20260515-publication-active-gate-reconcile-bridge-simplification.md`, `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md`, `work/sprints/current-blocker.md`, `work/sprints/current-blocker.json`, `work/tracks/topology-convergence.md`, `work/releases/0.1-dependency-map.md`, `work/releases/0.1-stabilization.md`, `work/model-ledger.jsonl`, `src/control-plane/publication-active-gate-handoff-contract.js`, `src/admin/admin-control-snapshot-class-part-2.js`, `src/admin/admin-control-snapshot-class-part-6.js`, `test/admin/admin-control-snapshot.test.js`
 - Forbidden files: `timeout increases`, `active-gate admission relaxation while runtimePromotionAllowed=false`, `new diagnostics-only success path`, `broad admin snapshot rebuild as the reconcile mechanism`
 - Frozen decisions: package scope and lane stay bounded unless explicitly escalated.
 - Escalation triggers: owned files expand beyond this package, runtime ownership changes, or representative scenario evidence changes.
-- Focused proof: `npm run work:context`, `npm run work:llm-start`, `npm run work:package:doctor -- --suggest work/packages/active-20260515-publication-active-gate-reconcile-bridge-simplification.md`, `npm run work:validate -- --entry work/packages/active-20260515-publication-active-gate-reconcile-bridge-simplification.md`, `npm run work:evidence-summary -- test-output/reports/rolling-restart-after-create-in-progress-owner-progress-20260515-codex.report.json`, `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-create-in-progress-owner-progress-20260515-codex.report.json --handoff-probe`, `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-create-in-progress-owner-progress-20260515-codex.report.json`, `npm run analyze:owner-files -- startup_active_gate_owner publication_reconcile_bridge --markdown`, `node --test test/control-plane/membership-publication-coordinator-main-stage-2.js test/control-plane/publication-active-gate-handoff-contract.test.js`, `npx tap --grep "AdminControlSnapshot (forced authoritative membership observation stays read-only without handoff target|build snapshot keeps broad authoritative membership observation read-only|build snapshot forwards handoff pending reconcile target|repair-deferred shared owner attempts publication catch-up before returning|repair-deferred no-attempt path still attempts publication catch-up|repair-deferred shared owner skips publication catch-up for owner recovery waits|repair-deferred shared owner skips publication catch-up without pending reconcile evidence)" test/admin/admin-control-snapshot.test.js`, `node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-after-reconcile-bridge-simplification-20260515-codex.report.json --fast-local --verbose`, `npm run work:evidence-summary -- test-output/reports/rolling-restart-after-reconcile-bridge-simplification-20260515-codex.report.json`, `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-reconcile-bridge-simplification-20260515-codex.report.json --handoff-probe`, `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-reconcile-bridge-simplification-20260515-codex.report.json`, `node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-after-awaited-reconcile-bridge-20260515-codex.report.json --fast-local --verbose`, `npm run work:evidence-summary -- test-output/reports/rolling-restart-after-awaited-reconcile-bridge-20260515-codex.report.json`, `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-awaited-reconcile-bridge-20260515-codex.report.json --handoff-probe`, `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-awaited-reconcile-bridge-20260515-codex.report.json`, `npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-after-awaited-reconcile-bridge-20260515-codex.report.json --markdown`, `npm run work:validate -- --closure work/packages/active-20260515-publication-active-gate-reconcile-bridge-simplification.md`
+- Focused proof: `npm run work:context`, `npm run work:llm-start`, `npm run work:package:doctor -- --suggest work/packages/done-20260515-publication-active-gate-reconcile-bridge-simplification.md`, `npm run work:validate -- --entry work/packages/done-20260515-publication-active-gate-reconcile-bridge-simplification.md`, `npm run work:evidence-summary -- test-output/reports/rolling-restart-after-create-in-progress-owner-progress-20260515-codex.report.json`, `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-create-in-progress-owner-progress-20260515-codex.report.json --handoff-probe`, `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-create-in-progress-owner-progress-20260515-codex.report.json`, `npm run analyze:owner-files -- startup_active_gate_owner publication_reconcile_bridge --markdown`, `node --test test/control-plane/membership-publication-coordinator-main-stage-2.js test/control-plane/publication-active-gate-handoff-contract.test.js`, `npx tap --grep "AdminControlSnapshot (forced authoritative membership observation stays read-only without handoff target|build snapshot keeps broad authoritative membership observation read-only|build snapshot forwards handoff pending reconcile target|repair-deferred shared owner attempts publication catch-up before returning|repair-deferred no-attempt path still attempts publication catch-up|repair-deferred shared owner skips publication catch-up for owner recovery waits|repair-deferred shared owner skips publication catch-up without pending reconcile evidence)" test/admin/admin-control-snapshot.test.js`, `node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-after-reconcile-bridge-simplification-20260515-codex.report.json --fast-local --verbose`, `npm run work:evidence-summary -- test-output/reports/rolling-restart-after-reconcile-bridge-simplification-20260515-codex.report.json`, `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-reconcile-bridge-simplification-20260515-codex.report.json --handoff-probe`, `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-reconcile-bridge-simplification-20260515-codex.report.json`, `node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-after-awaited-reconcile-bridge-20260515-codex.report.json --fast-local --verbose`, `npm run work:evidence-summary -- test-output/reports/rolling-restart-after-awaited-reconcile-bridge-20260515-codex.report.json`, `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-awaited-reconcile-bridge-20260515-codex.report.json --handoff-probe`, `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-awaited-reconcile-bridge-20260515-codex.report.json`, `npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-after-awaited-reconcile-bridge-20260515-codex.report.json --markdown`, `npm run work:validate -- --closure work/packages/done-20260515-publication-active-gate-reconcile-bridge-simplification.md`
 - Model ledger advisory: `escalate`
 
 ## Validation
 
 1. npm run work:context
 2. npm run work:llm-start
-3. npm run work:package:doctor -- --suggest work/packages/active-20260515-publication-active-gate-reconcile-bridge-simplification.md
-4. npm run work:validate -- --entry work/packages/active-20260515-publication-active-gate-reconcile-bridge-simplification.md
+3. npm run work:package:doctor -- --suggest work/packages/done-20260515-publication-active-gate-reconcile-bridge-simplification.md
+4. npm run work:validate -- --entry work/packages/done-20260515-publication-active-gate-reconcile-bridge-simplification.md
 5. npm run work:evidence-summary -- test-output/reports/rolling-restart-after-create-in-progress-owner-progress-20260515-codex.report.json
 6. npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-create-in-progress-owner-progress-20260515-codex.report.json --handoff-probe
 7. npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-create-in-progress-owner-progress-20260515-codex.report.json
@@ -297,7 +297,7 @@ Required before implementation because this is a causal-escalation package.
 16. npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-awaited-reconcile-bridge-20260515-codex.report.json --handoff-probe
 17. npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-awaited-reconcile-bridge-20260515-codex.report.json
 18. npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-after-awaited-reconcile-bridge-20260515-codex.report.json --markdown
-19. npm run work:validate -- --closure work/packages/active-20260515-publication-active-gate-reconcile-bridge-simplification.md
+19. npm run work:validate -- --closure work/packages/done-20260515-publication-active-gate-reconcile-bridge-simplification.md
 
 ## Implementation Evidence
 
@@ -327,3 +327,11 @@ publication-control partition `control_plane_publications-p1` is initially
 Because the canonical priority residual extractor reports no promoted
 workflow-progress witness, this package records the raw observation as
 subordinate evidence rather than activating workflow-progress work here.
+
+## Commit And Push Ledger
+
+Required at closure.
+
+1. [x] Focused package commit: dacf4ced25d69e9018a737770d5603f8db4e2896.
+2. [x] Pushed to: origin/codex/pending-ack-eligibility-filter.
+3. [x] Commit contains only package-owned files/package-status/allowed sprint handoff: yes.
