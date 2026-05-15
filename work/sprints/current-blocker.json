@@ -25,13 +25,13 @@
   ],
   "writeScope": [
     "work/packages/active-20260515-startup-active-gate-seed-publication-visibility-proof.md",
+    "work/packages/done-20260515-startup-active-gate-snapshot-coverage-final-reconcile-target.md",
     "work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md",
     "work/sprints/current-blocker.md",
     "work/sprints/current-blocker.json",
     "work/model-ledger.jsonl"
   ],
   "handoffFiles": [
-    "work/packages/done-20260515-startup-active-gate-snapshot-coverage-final-reconcile-target.md",
     "work/packages/done-20260515-publication-active-gate-reconcile-bridge-simplification.md"
   ],
   "generatedFiles": [
@@ -51,6 +51,7 @@
   ],
   "commitScope": [
     "work/packages/active-20260515-startup-active-gate-seed-publication-visibility-proof.md",
+    "work/packages/done-20260515-startup-active-gate-snapshot-coverage-final-reconcile-target.md",
     "work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md",
     "work/sprints/current-blocker.md",
     "work/sprints/current-blocker.json",

@@ -142,15 +142,15 @@ Handoff invariant: `Active-gate admission stays strict while runtimePromotionAll
 Write scope:
 
 1. `work/packages/active-20260515-startup-active-gate-seed-publication-visibility-proof.md`
-2. `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md`
-3. `work/sprints/current-blocker.md`
-4. `work/sprints/current-blocker.json`
-5. `work/model-ledger.jsonl`
+2. `work/packages/done-20260515-startup-active-gate-snapshot-coverage-final-reconcile-target.md`
+3. `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md`
+4. `work/sprints/current-blocker.md`
+5. `work/sprints/current-blocker.json`
+6. `work/model-ledger.jsonl`
 
 Handoff files:
 
-1. `work/packages/done-20260515-startup-active-gate-snapshot-coverage-final-reconcile-target.md`
-2. `work/packages/done-20260515-publication-active-gate-reconcile-bridge-simplification.md`
+1. `work/packages/done-20260515-publication-active-gate-reconcile-bridge-simplification.md`
 
 Generated files:
 
@@ -172,10 +172,11 @@ Candidate runtime files:
 Commit scope:
 
 1. `work/packages/active-20260515-startup-active-gate-seed-publication-visibility-proof.md`
-2. `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md`
-3. `work/sprints/current-blocker.md`
-4. `work/sprints/current-blocker.json`
-5. `work/model-ledger.jsonl`
+2. `work/packages/done-20260515-startup-active-gate-snapshot-coverage-final-reconcile-target.md`
+3. `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md`
+4. `work/sprints/current-blocker.md`
+5. `work/sprints/current-blocker.json`
+6. `work/model-ledger.jsonl`
 
 Legacy touched files:
 

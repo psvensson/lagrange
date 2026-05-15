@@ -132,7 +132,7 @@
       "work/packages/done-20260515-rolling-restart-canonical-frontier-steering-repair.md / startup_active_gate_owner / snapshot_coverage / classification-only",
       "work/packages/done-20260515-publication-active-gate-reconcile-bridge-simplification.md / startup_active_gate_owner / publication_reconcile_bridge / same-frontier-reduced"
     ],
-    "oscillationCheck": "The package starts only after the bridge slice reduced the handoff; workflow_progress remains parked because canonical priority-recovery extraction reports zero witnesses.",
+    "oscillationCheck": "The package starts only after the bridge slice reduced the handoff; priority-recovery extraction now reports three subordinate operation_workflow_owner / workflow_progress witnesses, but they remain parked because active_gate_snapshot_coverage stays the first frontier.",
     "handoffInvariant": "Active-gate admission stays strict while runtimePromotionAllowed=false; publication handoff truth remains owned by the canonical contract."
   },
   "predecessor": "work/packages/done-20260515-publication-active-gate-reconcile-bridge-simplification.md"

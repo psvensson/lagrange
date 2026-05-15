@@ -117,12 +117,13 @@ Pro or Enterprise behavior.
    - Lane: `causal-escalation`
    - Owner boundary:
      `operation_workflow_owner / workflow_progress`
-   - Purpose: parked dependency package for the remaining
-     `spread_satisfied_in_flight` workflow-progress witness on
-     `control_plane_publications-p1`.
+   - Purpose: parked dependency package for the current residual inventory:
+     three `spread_satisfied_in_flight` workflow-progress witnesses on
+     `control_plane_publications-p1`, `replica_operations-p1`, and
+     `sql_transaction_participants-p1`.
    - Entry condition: the rebalancer handoff package closed as reduced; fresh
-     evidence reports `Split required: false` with one
-     `operation_workflow_owner / workflow_progress` witness.
+     evidence reports `Split required: false` with three subordinate
+     `operation_workflow_owner / workflow_progress` witnesses.
    - Activation gate: fresh canonical evidence must promote workflow progress
      ahead of active-gate snapshot coverage or record owner-boundary migration
      proof; a real review subagent must run before implementation starts.
@@ -164,7 +165,9 @@ Pro or Enterprise behavior.
    - Entry condition: bridge simplification pushed as same-frontier-reduced;
      fresh evidence still selects `active_gate_snapshot_coverage`,
      `pendingReconcileCount=1`, and `runtimePromotionAllowed=false`, while
-     priority-recovery residual extraction reports zero witnesses.
+     priority-recovery residual extraction now reports three subordinate
+     `operation_workflow_owner / workflow_progress` witnesses that remain
+     parked because active-gate snapshot coverage is still the first frontier.
    - Acceptance: representative `rolling-restart` is green, pending reconcile
      and snapshot coverage are reduced with focused owner proof, or fresh
      canonical evidence migrates to a narrower owner boundary with concrete

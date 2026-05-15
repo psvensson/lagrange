@@ -26,13 +26,13 @@
   ],
   "writeScope": [
     "work/packages/active-20260515-startup-active-gate-seed-publication-visibility-proof.md",
+    "work/packages/done-20260515-startup-active-gate-snapshot-coverage-final-reconcile-target.md",
     "work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md",
     "work/sprints/current-blocker.md",
     "work/sprints/current-blocker.json",
     "work/model-ledger.jsonl"
   ],
   "handoffFiles": [
-    "work/packages/done-20260515-startup-active-gate-snapshot-coverage-final-reconcile-target.md",
     "work/packages/done-20260515-publication-active-gate-reconcile-bridge-simplification.md"
   ],
   "generatedFiles": [
@@ -52,6 +52,7 @@
   ],
   "commitScope": [
     "work/packages/active-20260515-startup-active-gate-seed-publication-visibility-proof.md",
+    "work/packages/done-20260515-startup-active-gate-snapshot-coverage-final-reconcile-target.md",
     "work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md",
     "work/sprints/current-blocker.md",
     "work/sprints/current-blocker.json",
@@ -168,10 +169,11 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 ## In Scope
 
 1. work/packages/active-20260515-startup-active-gate-seed-publication-visibility-proof.md
-2. work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md
-3. work/sprints/current-blocker.md
-4. work/sprints/current-blocker.json
-5. work/model-ledger.jsonl
+2. work/packages/done-20260515-startup-active-gate-snapshot-coverage-final-reconcile-target.md
+3. work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md
+4. work/sprints/current-blocker.md
+5. work/sprints/current-blocker.json
+6. work/model-ledger.jsonl
 
 ## Out Of Scope
 
@@ -186,8 +188,8 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 Required before implementation because this is a causal-escalation runtime
 owner-boundary package.
 
-- [ ] Review subagent recorded: pending-before-implementation
-- [ ] Fix subagent recorded or explicitly not needed: pending-on-review
+- [x] Review subagent recorded: Agent Laplace (019e2d18-978d-7f11-ae07-752c58250da3) reviewed work/packages/active-20260515-startup-active-gate-seed-publication-visibility-proof.md; result fixes-required.
+- [x] Fix subagent recorded or explicitly not needed: Agent Codex (019e2d1a-6841-7060-82f7-7de60ca8846c) fixed work/packages/active-20260515-startup-active-gate-seed-publication-visibility-proof.md.
 - [ ] Implementation subagent recorded: pending-on-clean-review
 
 ## Model Fit
@@ -196,7 +198,7 @@ owner-boundary package.
 - Intended minimum model: `gpt-5.3-codex`
 - Scope shape: `owner-boundary-contraction/current-frontier`
 - Output profile: `medium`
-- Owned files: `work/packages/active-20260515-startup-active-gate-seed-publication-visibility-proof.md`, `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md`, `work/sprints/current-blocker.md`, `work/sprints/current-blocker.json`, `work/model-ledger.jsonl`
+- Owned files: `work/packages/active-20260515-startup-active-gate-seed-publication-visibility-proof.md`, `work/packages/done-20260515-startup-active-gate-snapshot-coverage-final-reconcile-target.md`, `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md`, `work/sprints/current-blocker.md`, `work/sprints/current-blocker.json`, `work/model-ledger.jsonl`
 - Forbidden files: `timeout increases`, `active-gate admission relaxation while runtimePromotionAllowed=false`, `workflow-progress implementation unless canonical extractors promote it`, `broad diagnostics-only success path`, `Pro or Enterprise behavior`
 - Frozen decisions: package scope and lane stay bounded unless explicitly escalated.
 - Escalation triggers: owned files expand beyond this package, runtime ownership changes, or representative scenario evidence changes.
