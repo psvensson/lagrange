@@ -33,8 +33,10 @@ Use the fresh oscillation artifact to build a replayable publication-to-active-g
 1. `npm run work:evidence-summary -- test-output/reports/rolling-restart-after-forced-snapshot-refresh-debt-fallback-20260515-codex.report.json`
 2. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-forced-snapshot-refresh-debt-fallback-20260515-codex.report.json --explain publication_ack_convergence`
 3. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-forced-snapshot-refresh-debt-fallback-20260515-codex.report.json --explain active_gate_snapshot_coverage`
-4. `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-forced-snapshot-refresh-debt-fallback-20260515-codex.report.json`
-5. `npm run analyze:distributed-failure -- --report test-output/reports/rolling-restart-after-forced-snapshot-refresh-debt-fallback-20260515-codex.report.json`
+4. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-forced-snapshot-refresh-debt-fallback-20260515-codex.report.json --handoff-probe`
+5. `node --test test/scripts/analyze-topology-convergence.test.js`
+6. `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-forced-snapshot-refresh-debt-fallback-20260515-codex.report.json`
+7. `npm run analyze:distributed-failure -- --report test-output/reports/rolling-restart-after-forced-snapshot-refresh-debt-fallback-20260515-codex.report.json`
 
 ## Model Fit
 
@@ -105,13 +107,13 @@ Known downstream blockers:
 
 Missing causal edge: `Publication ACK convergence, forced authoritative snapshot repair, and active-gate coverage do not produce a monotonic handoff in the same representative run.`
 
-Missing causal edge probe: `Initial extractor proof is npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-forced-snapshot-refresh-debt-fallback-20260515-codex.report.json --explain publication_ack_convergence; replayable publication-to-active-gate handoff probe remains pending-before-runtime-promotion and must be constructed before runtime files are promoted.`
+Missing causal edge probe: `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-forced-snapshot-refresh-debt-fallback-20260515-codex.report.json --handoff-probe`
 
-Bounded progress proof: `Pending implementation; first proof must name a replayable wake/retry/reconcile/advance handoff probe before runtime files are promoted.`
+Bounded progress proof: `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-forced-snapshot-refresh-debt-fallback-20260515-codex.report.json --handoff-probe emits publication_ack_to_active_gate_reconcile_missing with requiredProgressMechanism=reconcile and runtimePromotionAllowed=false; node --test test/scripts/analyze-topology-convergence.test.js covers the replay fixture.`
 
 Bounded progress proof artifact: `test-output/reports/rolling-restart-after-forced-snapshot-refresh-debt-fallback-20260515-codex.report.json`
 
-Expected observable transition: `The package either creates a replayable handoff probe and reduces the oscillation, or closes as architecture-gap/classification-only with a named missing-edge reason.`
+Expected observable transition: `publication_pending with activeGate=timed_out and snapshotCoverage=0/5 becomes a named publication_ack_to_active_gate_reconcile_missing probe result before any runtime file is promoted.`
 
 Max progress bound: `one cross-boundary causal package slice with canonical extractors, subagent sequencing, focused missing-edge probe, and representative result classification`
 
@@ -119,7 +121,7 @@ Same-frontier fallback: `If fresh evidence still selects publication_ack_converg
 
 Expected next frontier: `a named publication-to-active-gate missing-edge probe, not another tactical owner-only package`
 
-Result classification: `pending-before-probe`
+Result classification: `classification-only`
 
 Stop condition: `continue-local-fix`
 
@@ -140,6 +142,12 @@ Write scope:
 1. `work/packages/active-20260515-topology-publication-active-gate-handoff-oscillation.md`
 2. `work/sprints/active-2026-q2-topology-convergence-residual-closure.md`
 3. `work/model-ledger.jsonl`
+4. `scripts/analyze-topology-convergence.js`
+5. `test/scripts/analyze-topology-convergence.test.js`
+6. `test/scripts/__fixtures__/topology-convergence/publication-active-gate-handoff-oscillation.fixture.json`
+7. `test/scripts/__fixtures__/topology-convergence/active-gate-snapshot.expected.json`
+8. `test/scripts/__fixtures__/topology-convergence/active-gate-snapshot-reachability.expected.json`
+9. `test/scripts/__fixtures__/topology-convergence/publication-count-only-ack.expected.json`
 
 Handoff files:
 
@@ -167,6 +175,12 @@ Commit scope:
 3. `work/sprints/current-blocker.md`
 4. `work/sprints/current-blocker.json`
 5. `work/model-ledger.jsonl`
+6. `scripts/analyze-topology-convergence.js`
+7. `test/scripts/analyze-topology-convergence.test.js`
+8. `test/scripts/__fixtures__/topology-convergence/publication-active-gate-handoff-oscillation.fixture.json`
+9. `test/scripts/__fixtures__/topology-convergence/active-gate-snapshot.expected.json`
+10. `test/scripts/__fixtures__/topology-convergence/active-gate-snapshot-reachability.expected.json`
+11. `test/scripts/__fixtures__/topology-convergence/publication-count-only-ack.expected.json`
 
 Legacy touched files:
 

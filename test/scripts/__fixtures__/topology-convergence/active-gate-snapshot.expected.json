@@ -39,6 +39,13 @@
       "snapshotCoverageNodeCount": 0,
       "expectedNodeCount": 5,
       "selectedSnapshotError": "Admin API query timed out for node 11601fe0-72d6-5853-8590-ec2881853e72 on lane snapshot after 100ms",
+      "selectedSnapshotObservationMode": "unknown",
+      "selectedSnapshotObservationState": "unknown",
+      "selectedSnapshotObservationContractState": "unknown",
+      "selectedSnapshotObservationRefreshState": "unknown",
+      "selectedSnapshotObservationNextAction": "unknown",
+      "selectedSnapshotObservationReasonCodes": "absent",
+      "selectedSnapshotRepairDeferred": "unknown",
       "readinessDelayCause": "snapshot_timeout",
       "blockers": "inactive_nodes=1,snapshot_coverage=0/5,snapshot_error"
     },

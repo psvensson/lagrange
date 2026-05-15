@@ -1,0 +1,67 @@
+{
+  "scenarios": [
+    {
+      "scenario": "rolling-restart",
+      "passed": false,
+      "duration": 133277,
+      "readinessFailure": {
+        "mode": "startup",
+        "classCode": "no_progress_terminal",
+        "recoverability": "unknown",
+        "terminalReason": "stalled_no_progress",
+        "source": "unknown",
+        "cause": "none",
+        "attemptsSinceProgress": 4
+      },
+      "publicationConvergence": {
+        "publicationEpoch": 0,
+        "publicationStatus": "UNKNOWN",
+        "pendingAckNodeIds": [],
+        "pendingAckCount": 0,
+        "blockedNodeCount": 0,
+        "publishedActiveNodeIds": [],
+        "missingPublishedNodeIds": [],
+        "missingPublishedCount": 0,
+        "publicationPending": true,
+        "recoveryProtocolState": "unpublished_observation",
+        "prioritySpreadPending": false,
+        "publicationOwnerStream": {
+          "ackState": "unavailable",
+          "freshnessFence": "publishing",
+          "recoveryOutcome": "waiting_for_publication",
+          "revision": {
+            "state": "unavailable"
+          },
+          "streamOutcome": "publishing"
+        },
+        "activeGate": {
+          "state": "timed_out",
+          "ready": false,
+          "attempts": 7,
+          "elapsedMs": 121316,
+          "progress": {
+            "expectedNodeCount": 5,
+            "snapshotCoverageNodeCount": 0,
+            "snapshotCoverageComplete": false,
+            "selectedSnapshotError": "Authoritative control snapshot repair failed: nodes:Distributed operation failed due to participant failures",
+            "selectedSnapshotObservationMode": "unknown",
+            "selectedSnapshotObservationState": "unknown",
+            "selectedSnapshotObservationContractState": "unknown",
+            "selectedSnapshotObservationRefreshState": "unknown",
+            "selectedSnapshotObservationNextAction": "unknown",
+            "selectedSnapshotRepairDeferred": false,
+            "priorityRecoveryProgressClasses": {
+              "unresolvedSemanticStateIds": [],
+              "blockedPartitionIds": []
+            },
+            "blockers": [
+              "inactive_nodes=1",
+              "snapshot_coverage=0/5",
+              "snapshot_error"
+            ]
+          }
+        }
+      }
+    }
+  ]
+}

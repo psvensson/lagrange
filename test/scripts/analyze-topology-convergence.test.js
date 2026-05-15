@@ -10,6 +10,7 @@ const ARG_HELP = '--help';
 const ARG_DECISION_TABLE = '--decision-table';
 const ARG_GLOSSARY = '--glossary';
 const ARG_EXPLAIN = '--explain';
+const ARG_HANDOFF_PROBE = '--handoff-probe';
 const ARG_PACKAGE_EVIDENCE_BLOCK = '--package-evidence-block';
 const ENCODING_UTF8 = 'utf8';
 const HELP_USAGE_PATTERN = /Usage: node scripts\/analyze-topology-convergence\.js/u;
@@ -34,6 +35,8 @@ const PUBLICATION_COUNT_ONLY_ACK_FIXTURE_PATH =
   `${FIXTURE_DIRECTORY}/publication-count-only-ack.fixture.json`;
 const PUBLICATION_COUNT_ONLY_ACK_EXPECTED_PATH =
   `${FIXTURE_DIRECTORY}/publication-count-only-ack.expected.json`;
+const PUBLICATION_ACTIVE_GATE_HANDOFF_FIXTURE_PATH =
+  `${FIXTURE_DIRECTORY}/publication-active-gate-handoff-oscillation.fixture.json`;
 const PRIORITY_DOMINANT_WITNESS_FIXTURE_PATH =
   `${FIXTURE_DIRECTORY}/priority-dominant-witness-owner-boundary.fixture.json`;
 const PRIORITY_REBALANCER_HANDOFF_FIXTURE_PATH =
@@ -71,6 +74,28 @@ const EDGE_STATE_BLOCKED = 'blocked';
 const BLOCKED_REASONS = ['priority_recovery_progress_blocked'];
 const PRIORITY_RECOVERY_PROGRESS_CLASSES_PATH =
   'report.scenarios[0].publicationConvergence.activeGate.progress.priorityRecoveryProgressClasses';
+const HANDOFF_PROBE_SCHEMA =
+  'topology-publication-active-gate-handoff-probe-v1';
+const HANDOFF_MISSING_EDGE_ID =
+  'publication_ack_to_active_gate_reconcile_missing';
+const HANDOFF_MISSING_EDGE_NAME =
+  'publication_ack_to_active_gate_reconcile';
+const HANDOFF_RESULT_CLASSIFICATION =
+  'publication_ack_to_active_gate_reconcile_missing';
+const HANDOFF_REQUIRED_PROGRESS_MECHANISM = 'reconcile';
+const PUBLICATION_EDGE_ID = 'publication_ack_convergence';
+const ACTIVE_GATE_EDGE_ID = 'active_gate_snapshot_coverage';
+const TOPOLOGY_PUBLICATION_OWNER = 'topology_publication_owner';
+const STARTUP_ACTIVE_GATE_OWNER = 'startup_active_gate_owner';
+const PUBLICATION_CONVERGENCE_BOUNDARY = 'publication_convergence';
+const SNAPSHOT_COVERAGE_BOUNDARY = 'snapshot_coverage';
+const PUBLICATION_PENDING_REASON = 'publication_pending';
+const ACTIVE_GATE_TIMED_OUT_REASON = 'active_gate_timed_out';
+const SNAPSHOT_COVERAGE_INCOMPLETE_REASON = 'snapshot_coverage_incomplete';
+const SNAPSHOT_COVERAGE_ZERO_OF_FIVE = 0;
+const EXPECTED_NODE_COUNT = 5;
+const RUNTIME_PROMOTION_ALLOWED_FALSE = false;
+const HANDOFF_DETECTED_TRUE = true;
 
 describe('analyze-topology-convergence CLI', () => {
   it('prints help text', () => {
@@ -268,6 +293,48 @@ describe('analyze-topology-convergence CLI', () => {
     assert.equal(output.decisionTable.edgeId, PRIORITY_EDGE_ID);
     assert.equal(output.decisionTable.owner, REBALANCER_LEADER_OWNER);
     assert.equal(output.decisionTable.boundary, OPERATION_SCHEDULING_BOUNDARY);
+  });
+
+  it('prints a replayable publication-to-active-gate handoff probe', () => {
+    const output = runAnalyzerJson(
+      PUBLICATION_ACTIVE_GATE_HANDOFF_FIXTURE_PATH,
+      ARG_HANDOFF_PROBE,
+    );
+
+    assert.equal(output.schemaVersion, HANDOFF_PROBE_SCHEMA);
+    assert.equal(output.detected, HANDOFF_DETECTED_TRUE);
+    assert.deepEqual(output.missingEdge, {
+      id: HANDOFF_MISSING_EDGE_ID,
+      name: HANDOFF_MISSING_EDGE_NAME,
+    });
+    assert.equal(
+      output.resultClassification,
+      HANDOFF_RESULT_CLASSIFICATION,
+    );
+    assert.equal(
+      output.requiredProgressMechanism,
+      HANDOFF_REQUIRED_PROGRESS_MECHANISM,
+    );
+    assert.equal(
+      output.runtimePromotionAllowed,
+      RUNTIME_PROMOTION_ALLOWED_FALSE,
+    );
+    assert.equal(output.producer.edge, PUBLICATION_EDGE_ID);
+    assert.equal(output.producer.owner, TOPOLOGY_PUBLICATION_OWNER);
+    assert.equal(output.producer.boundary, PUBLICATION_CONVERGENCE_BOUNDARY);
+    assert.deepEqual(output.producer.reasons, [PUBLICATION_PENDING_REASON]);
+    assert.equal(output.consumer.edge, ACTIVE_GATE_EDGE_ID);
+    assert.equal(output.consumer.owner, STARTUP_ACTIVE_GATE_OWNER);
+    assert.equal(output.consumer.boundary, SNAPSHOT_COVERAGE_BOUNDARY);
+    assert.deepEqual(output.consumer.reasons, [
+      ACTIVE_GATE_TIMED_OUT_REASON,
+      SNAPSHOT_COVERAGE_INCOMPLETE_REASON,
+    ]);
+    assert.equal(
+      output.consumer.source.snapshotCoverageNodeCount,
+      SNAPSHOT_COVERAGE_ZERO_OF_FIVE,
+    );
+    assert.equal(output.consumer.source.expectedNodeCount, EXPECTED_NODE_COUNT);
   });
 
   it('generates a package migration evidence block from analyzer output', () => {

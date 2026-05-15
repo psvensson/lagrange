@@ -51,7 +51,12 @@
       "missingPublishedCount": 3,
       "publicationPending": "true",
       "recoveryProtocolState": "publication_pending",
-      "prioritySpreadPending": "true"
+      "prioritySpreadPending": "true",
+      "publicationOwnerAckState": "unknown",
+      "publicationOwnerFreshnessFence": "unknown",
+      "publicationOwnerRecoveryOutcome": "unknown",
+      "publicationOwnerRevisionState": "unknown",
+      "publicationOwnerStreamOutcome": "unknown"
     },
     "rootCauseClass": "topology"
   }

@@ -19,6 +19,7 @@ const ARG_HELP_LONG = '--help';
 const ARG_DECISION_TABLE = '--decision-table';
 const ARG_GLOSSARY = '--glossary';
 const ARG_EXPLAIN = '--explain';
+const ARG_HANDOFF_PROBE = '--handoff-probe';
 const ARG_PACKAGE_EVIDENCE_BLOCK = '--package-evidence-block';
 const ENCODING_UTF8 = 'utf8';
 const JSON_INDENT_SPACES = 2;
@@ -43,8 +44,24 @@ const MODE_SUMMARY = 'summary';
 const MODE_DECISION_TABLE = 'decision-table';
 const MODE_GLOSSARY = 'glossary';
 const MODE_EXPLAIN = 'explain';
+const MODE_HANDOFF_PROBE = 'handoff-probe';
 const MODE_PACKAGE_EVIDENCE_BLOCK = 'package-evidence-block';
 const SCHEMA_VERSION_TOPOLOGY_OWNER_EXPLAIN_V1 = 'topology-owner-explain-v1';
+const SCHEMA_VERSION_PUBLICATION_ACTIVE_GATE_HANDOFF_PROBE_V1 =
+  'topology-publication-active-gate-handoff-probe-v1';
+const MISSING_EDGE_PUBLICATION_ACK_TO_ACTIVE_GATE_RECONCILE =
+  'publication_ack_to_active_gate_reconcile_missing';
+const MISSING_EDGE_NAME_PUBLICATION_ACK_TO_ACTIVE_GATE_RECONCILE =
+  'publication_ack_to_active_gate_reconcile';
+const REQUIRED_PROGRESS_MECHANISM_RECONCILE = 'reconcile';
+const RESULT_CLASSIFICATION_PUBLICATION_ACTIVE_GATE_RECONCILE_MISSING =
+  'publication_ack_to_active_gate_reconcile_missing';
+const RESULT_CLASSIFICATION_PUBLICATION_ACTIVE_GATE_HANDOFF_NOT_DETECTED =
+  'publication_active_gate_handoff_not_detected';
+const EDGE_STATE_BLOCKED = 'blocked';
+const HANDOFF_DETECTED = true;
+const HANDOFF_NOT_DETECTED = false;
+const RUNTIME_PROMOTION_DISALLOWED = false;
 const MARKDOWN_SECTION_OWNER_EVIDENCE_BLOCK =
   '## Generated Owner Evidence Block';
 const MARKDOWN_LIST_PREFIX = '- ';
@@ -67,7 +84,7 @@ const EDGE_ALIAS_SNAPSHOT = 'snapshot';
 const EDGE_ALIAS_READINESS = 'readiness';
 const LIST_SEPARATOR = ', ';
 const HELP_TEXT = [
-  'Usage: node scripts/analyze-topology-convergence.js <artifact.json> [--explain <edge-id-or-alias>] [--package-evidence-block]',
+  'Usage: node scripts/analyze-topology-convergence.js <artifact.json> [--explain <edge-id-or-alias>] [--handoff-probe] [--package-evidence-block]',
   '       node scripts/analyze-topology-convergence.js --decision-table',
   '       node scripts/analyze-topology-convergence.js --glossary',
   '',
@@ -80,6 +97,7 @@ const HELP_TEXT = [
   '  npm run analyze:topology-convergence -- test-output/reports/.playback/run/rolling-restart/failure-bundle.json',
   '  node scripts/analyze-topology-convergence.js test-output/reports/run.report.json',
   '  npm run analyze:topology-convergence -- test-output/reports/run.report.json --explain priority',
+  '  npm run analyze:topology-convergence -- test-output/reports/run.report.json --handoff-probe',
   '  npm run analyze:topology-convergence -- --decision-table',
   '  npm run analyze:topology-convergence -- --glossary',
 ].join(STDOUT_NEWLINE);
@@ -122,6 +140,12 @@ function main(argv) {
     if (parsedArgs.mode === MODE_EXPLAIN) {
       process.stdout.write(
         `${JSON.stringify(selectExplainOutput(graph, parsedArgs.edgeId), null, JSON_INDENT_SPACES)}\n`,
+      );
+      return EXIT_SUCCESS;
+    }
+    if (parsedArgs.mode === MODE_HANDOFF_PROBE) {
+      process.stdout.write(
+        `${JSON.stringify(selectHandoffProbeOutput(graph), null, JSON_INDENT_SPACES)}\n`,
       );
       return EXIT_SUCCESS;
     }
@@ -172,6 +196,10 @@ function parseCliArgs(args) {
         edgeId = nextArg;
         index += ARGUMENT_SKIP_NEXT;
       }
+      continue;
+    }
+    if (arg === ARG_HANDOFF_PROBE) {
+      mode = MODE_HANDOFF_PROBE;
       continue;
     }
     positional.push(arg);
@@ -282,6 +310,68 @@ function normalizeRequestedEdgeId(requestedEdgeId) {
 
 function selectDominantFrontierEdge(graph) {
   return graph.frontier[NUM_ZERO] || null;
+}
+
+function selectHandoffProbeOutput(graph) {
+  const producer = selectGraphEdge(
+    graph.edges,
+    EDGE_ID.PUBLICATION_ACK_CONVERGENCE,
+  );
+  const consumer = selectGraphEdge(
+    graph.nextExpectedFrontier,
+    EDGE_ID.ACTIVE_GATE_SNAPSHOT_COVERAGE,
+  );
+  const handoffDetected = isPublicationActiveGateHandoffDetected(
+    graph,
+    producer,
+    consumer,
+  );
+
+  return {
+    schemaVersion: SCHEMA_VERSION_PUBLICATION_ACTIVE_GATE_HANDOFF_PROBE_V1,
+    scenario: graph.scenario,
+    missingEdge: {
+      id: MISSING_EDGE_PUBLICATION_ACK_TO_ACTIVE_GATE_RECONCILE,
+      name: MISSING_EDGE_NAME_PUBLICATION_ACK_TO_ACTIVE_GATE_RECONCILE,
+    },
+    detected: handoffDetected ? HANDOFF_DETECTED : HANDOFF_NOT_DETECTED,
+    producer: buildProbeWitness(producer),
+    consumer: buildProbeWitness(consumer),
+    requiredProgressMechanism: REQUIRED_PROGRESS_MECHANISM_RECONCILE,
+    resultClassification: handoffDetected ?
+      RESULT_CLASSIFICATION_PUBLICATION_ACTIVE_GATE_RECONCILE_MISSING :
+      RESULT_CLASSIFICATION_PUBLICATION_ACTIVE_GATE_HANDOFF_NOT_DETECTED,
+    runtimePromotionAllowed: RUNTIME_PROMOTION_DISALLOWED,
+  };
+}
+
+function selectGraphEdge(edges, edgeId) {
+  return arrayOrEmpty(edges).find((edge) => edge.id === edgeId);
+}
+
+function isPublicationActiveGateHandoffDetected(graph, producer, consumer) {
+  return graph.summary.firstFrontierEdgeId ===
+      EDGE_ID.PUBLICATION_ACK_CONVERGENCE &&
+    producer?.state === EDGE_STATE_BLOCKED &&
+    consumer?.state === EDGE_STATE_BLOCKED;
+}
+
+function buildProbeWitness(edge) {
+  const witness = buildTopologyConvergenceOwnerWitness(edge);
+  return {
+    edge: witness.edgeId,
+    owner: witness.owner,
+    boundary: witness.boundary,
+    state: witness.state,
+    dominantReason: witness.dominantReason,
+    reasons: witness.reasons,
+    evidencePath: witness.evidencePath,
+    source: witness.source,
+  };
+}
+
+function arrayOrEmpty(value) {
+  return Array.isArray(value) ? value : [];
 }
 
 function renderPackageEvidenceBlock(graph, artifactPath) {

@@ -39,6 +39,13 @@
       "snapshotCoverageNodeCount": 3,
       "expectedNodeCount": 5,
       "selectedSnapshotError": "Control snapshot reachability probe timed out for 35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+      "selectedSnapshotObservationMode": "unknown",
+      "selectedSnapshotObservationState": "unknown",
+      "selectedSnapshotObservationContractState": "unknown",
+      "selectedSnapshotObservationRefreshState": "unknown",
+      "selectedSnapshotObservationNextAction": "unknown",
+      "selectedSnapshotObservationReasonCodes": "absent",
+      "selectedSnapshotRepairDeferred": "unknown",
       "readinessDelayCause": "snapshot_reachability_timeout",
       "blockers": "inactive_nodes=3,snapshot_coverage=3/5"
     },
