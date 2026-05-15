@@ -1,9 +1,10 @@
+# Topology Publication Active Gate Handoff Oscillation
+
+<!-- work-package
 {
-  "schema": "current-blocker-v1",
-  "generatedBy": "scripts/work-tracker.js",
-  "sprint": "work/sprints/active-2026-q2-topology-convergence-residual-closure.md",
-  "package": "work/packages/active-20260515-topology-publication-active-gate-handoff-oscillation.md",
+  "schema": "work-package-v1",
   "status": "active",
+  "opened": "2026-05-15",
   "lane": "causal-escalation",
   "scenario": "rolling-restart",
   "artifact": "test-output/reports/rolling-restart-after-forced-snapshot-refresh-debt-fallback-20260515-codex.report.json",
@@ -48,7 +49,6 @@
     "work/sprints/current-blocker.json",
     "work/model-ledger.jsonl"
   ],
-  "touchedFiles": [],
   "modelFit": {
     "packageClass": "representative-frontier-closure",
     "intendedMinimumModel": "gpt-5.3-codex",
@@ -113,3 +113,91 @@
   },
   "predecessor": "work/packages/done-20260515-topology-active-gate-snapshot-coverage-after-publication-owner-stream-fix.md"
 }
+-->
+
+## Why
+
+The last two focused runtime packages alternated the representative first
+frontier between publication convergence and active-gate snapshot coverage. The
+latest active-gate package fixed a real local symptom: forced snapshot repair
+now escalates repair-deferred refresh debt instead of reusing stale local
+snapshot evidence. The fresh representative artifact still fails, but it fails
+earlier at publication convergence while active-gate coverage is downstream.
+
+This package owns the cross-boundary handoff. Its first deliverable is not a
+runtime patch; it is a replayable missing-edge probe that explains why
+publication ACK state, forced authoritative snapshot repair, and active-gate
+coverage do not move monotonically in one run.
+
+## Scope Basis
+
+AGPL topology convergence release-gate closure. The work is bounded to the
+rolling-restart causal chain and may promote runtime files only after the
+missing-edge probe names the exact owner boundary and write scope.
+
+## Workflow Lane
+
+- Selected lane: `causal-escalation`
+- Why this lane is sufficient: the representative evidence now spans two
+  runtime owners and the sprint re-entry gate requires cross-boundary causal
+  proof before more tactical runtime edits.
+- Escalation trigger to a heavier lane: the missing-edge probe cannot be built
+  from existing artifacts, or fresh evidence promotes operation workflow to the
+  canonical first frontier.
+
+## LLM Tool-First Contract
+
+Before raw JSON, raw logs, broad file search, oversized segment files, or ad hoc `jq`, use the canonical workflow command that owns the question:
+
+1. Package metadata or ledger edits: `npm run work:package:doctor -- --suggest <package>`, `npm run work:package:doctor -- --fix-dry-run <package>`, `npm run work:package:schema`, or `npm run work:package:new -- ...`.
+2. Representative evidence: `npm run work:evidence-summary -- <artifact>` plus any focused extractor for this failure class.
+3. Owner discovery: `npm run analyze:owner-files -- <owner> [boundary]`.
+4. Subagent sequencing: `npm run work:subagent-prompt -- --role <role> --package <package>`.
+5. Large-file cleanup: `npm run work:oversized-next -- --markdown`.
+
+If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which canonical extractor was tried and why it was insufficient.
+
+## In Scope
+
+1. work/packages/active-20260515-topology-publication-active-gate-handoff-oscillation.md
+2. work/sprints/active-2026-q2-topology-convergence-residual-closure.md
+3. work/model-ledger.jsonl
+
+## Out Of Scope
+
+1. Runtime ownership changes before replayable missing-edge proof exists.
+2. Another single-owner publication or active-gate package unless canonical
+   evidence stops oscillating.
+
+## Subagent Sequencing Ledger
+
+Required before implementation because this causal package spans runtime owner
+boundaries.
+
+- [x] Review subagent recorded:
+      Agent Singer (019e2ab2-1507-7f71-b478-50b0861eafc7) reviewed work/packages/active-20260515-topology-publication-active-gate-handoff-oscillation.md; result fixes-required
+- [x] Fix subagent recorded or explicitly not needed:
+      Agent Plato (019e2ab5-acfe-76e2-9138-eec7ae823b7d) fixed work/packages/active-20260515-topology-publication-active-gate-handoff-oscillation.md
+- [ ] Implementation subagent recorded:
+      pending-before-implementation
+
+## Model Fit
+
+- Package class: `representative-frontier-closure`
+- Intended minimum model: `gpt-5.3-codex`
+- Scope shape: `scenario-causal-escalation`
+- Owned files: `work/packages/active-20260515-topology-publication-active-gate-handoff-oscillation.md`, `work/sprints/active-2026-q2-topology-convergence-residual-closure.md`, `work/model-ledger.jsonl`
+- Forbidden files: runtime files until the missing-edge probe promotes exact paths into write scope
+- Frozen decisions: active-gate forced snapshot refresh-debt fallback is closed; current frontier oscillation must be handled cross-boundary.
+- Escalation triggers: runtime files promoted before probe, fresh evidence selects operation_workflow_owner first, or the handoff cannot be replayed from available artifacts.
+- Focused proof: `npm run work:evidence-summary -- test-output/reports/rolling-restart-after-forced-snapshot-refresh-debt-fallback-20260515-codex.report.json`, `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-forced-snapshot-refresh-debt-fallback-20260515-codex.report.json --explain publication_ack_convergence`, `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-forced-snapshot-refresh-debt-fallback-20260515-codex.report.json --explain active_gate_snapshot_coverage`, `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-forced-snapshot-refresh-debt-fallback-20260515-codex.report.json`, `npm run analyze:distributed-failure -- --report test-output/reports/rolling-restart-after-forced-snapshot-refresh-debt-fallback-20260515-codex.report.json`
+- Model ledger advisory: `escalate`
+
+## Validation
+
+1. npm run work:evidence-summary -- test-output/reports/rolling-restart-after-forced-snapshot-refresh-debt-fallback-20260515-codex.report.json
+2. npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-forced-snapshot-refresh-debt-fallback-20260515-codex.report.json --explain publication_ack_convergence
+3. npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-forced-snapshot-refresh-debt-fallback-20260515-codex.report.json --explain active_gate_snapshot_coverage
+4. npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-forced-snapshot-refresh-debt-fallback-20260515-codex.report.json
+5. npm run analyze:distributed-failure -- --report test-output/reports/rolling-restart-after-forced-snapshot-refresh-debt-fallback-20260515-codex.report.json
+6. npm run work:validate -- --entry

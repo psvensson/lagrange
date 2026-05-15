@@ -222,6 +222,25 @@ patching and open or convert to one cross-boundary causal package. That package
 must name a replayable publication-to-active-gate handoff fixture or
 missing-edge probe before more runtime files are edited.
 
+## Comparative Guidance For This Sprint
+
+This sprint applies only these prior-art constraints. They guide validation and
+owner proof, not feature parity.
+
+1. Catch-up before promotion: active-gate readiness cannot pass from partial or
+   stale owner truth.
+2. Explicit operator progress: publication, recovery, and repair work must
+   expose step, witness, timeout, and legal next action; timeout-only failure is
+   not closure.
+3. Stronger control-plane proof: control-plane publications and active-gate
+   cohorts require stricter proof than ordinary partition convergence.
+4. Handoff fixture before more local patches: if publication and active-gate
+   evidence oscillate, prove the producer-consumer handoff in a replayable
+   fixture or missing-edge probe before editing either owner locally.
+
+Out of scope: implementing feature parity with etcd, TiKV/PD, CockroachDB,
+FoundationDB, or commercial systems.
+
 ## Activation Contract For Queued Packages
 
 Before any package in this sprint moves from `todo` to `active`:
@@ -499,6 +518,18 @@ Final closure requires fresh evidence proving all of the following:
       cross-boundary causal package instead of another tactical single-owner
       package.
 
+21. [Topology Publication Active Gate Handoff Oscillation](../packages/active-20260515-topology-publication-active-gate-handoff-oscillation.md)
+    - Lane: `causal-escalation`
+    - Owner boundary: `topology_publication_owner / publication_convergence`
+    - Purpose: own the repeated publication/active-gate frontier oscillation
+      as one causal handoff, not another single-owner tactical package.
+    - Entry condition: active-gate refresh-debt fallback package closed as
+      migrated with fresh evidence in
+      `test-output/reports/rolling-restart-after-forced-snapshot-refresh-debt-fallback-20260515-codex.report.json`.
+    - Acceptance: a replayable publication-to-active-gate missing-edge probe
+      exists before runtime file promotion, or the package closes as
+      architecture-gap/classification-only with a named reason.
+
 ## Dependency Order
 
 1. Harden workflow closure semantics before runtime fixes resume.
@@ -571,8 +602,17 @@ is still red and canonical extraction again selects
 stale `repair_deferred / stale_usable / pending / idle / wait` symptom is no
 longer selected.
 
-Next action: open one cross-boundary causal package for the
-publication-to-active-gate handoff. It must name a replayable missing-edge probe
-before more runtime files are edited, because the frontier has now oscillated
-between publication convergence and active-gate snapshot coverage without
-representative green closure.
+Continue
+[Topology Publication Active Gate Handoff Oscillation](../packages/active-20260515-topology-publication-active-gate-handoff-oscillation.md).
+
+- Artifact: `test-output/reports/rolling-restart-after-forced-snapshot-refresh-debt-fallback-20260515-codex.report.json`
+- First frontier: `publication_ack_convergence`
+- Owner: `topology_publication_owner`
+- Boundary: `publication_convergence`
+- Dominant reason: `publication_pending`
+- Downstream blocker: `active_gate_snapshot_coverage` remains blocked with
+  `snapshotCoverage=0/5` and a forced authoritative repair error.
+
+Next action: run review/fix subagent sequencing, then build a replayable
+publication-to-active-gate missing-edge probe before any runtime file is
+promoted into write scope.
