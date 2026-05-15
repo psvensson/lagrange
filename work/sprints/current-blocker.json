@@ -29,7 +29,11 @@
     "work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md",
     "work/sprints/current-blocker.md",
     "work/sprints/current-blocker.json",
-    "work/model-ledger.jsonl"
+    "work/model-ledger.jsonl",
+    "src/control-plane/membership-publication-coordinator-class-stage-2.js",
+    "src/admin/admin-control-snapshot-class-part-6.js",
+    "test/control-plane/membership-publication-coordinator-main-stage-2.js",
+    "test/admin/admin-control-snapshot.test.js"
   ],
   "handoffFiles": [
     "work/packages/done-20260515-publication-active-gate-reconcile-bridge-simplification.md"
@@ -55,7 +59,11 @@
     "work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md",
     "work/sprints/current-blocker.md",
     "work/sprints/current-blocker.json",
-    "work/model-ledger.jsonl"
+    "work/model-ledger.jsonl",
+    "src/control-plane/membership-publication-coordinator-class-stage-2.js",
+    "src/admin/admin-control-snapshot-class-part-6.js",
+    "test/control-plane/membership-publication-coordinator-main-stage-2.js",
+    "test/admin/admin-control-snapshot.test.js"
   ],
   "touchedFiles": [],
   "modelFit": {

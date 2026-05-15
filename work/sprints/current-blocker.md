@@ -147,6 +147,10 @@ Write scope:
 4. `work/sprints/current-blocker.md`
 5. `work/sprints/current-blocker.json`
 6. `work/model-ledger.jsonl`
+7. `src/control-plane/membership-publication-coordinator-class-stage-2.js`
+8. `src/admin/admin-control-snapshot-class-part-6.js`
+9. `test/control-plane/membership-publication-coordinator-main-stage-2.js`
+10. `test/admin/admin-control-snapshot.test.js`
 
 Handoff files:
 
@@ -177,6 +181,10 @@ Commit scope:
 4. `work/sprints/current-blocker.md`
 5. `work/sprints/current-blocker.json`
 6. `work/model-ledger.jsonl`
+7. `src/control-plane/membership-publication-coordinator-class-stage-2.js`
+8. `src/admin/admin-control-snapshot-class-part-6.js`
+9. `test/control-plane/membership-publication-coordinator-main-stage-2.js`
+10. `test/admin/admin-control-snapshot.test.js`
 
 Legacy touched files:
 

@@ -30,7 +30,11 @@
     "work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md",
     "work/sprints/current-blocker.md",
     "work/sprints/current-blocker.json",
-    "work/model-ledger.jsonl"
+    "work/model-ledger.jsonl",
+    "src/control-plane/membership-publication-coordinator-class-stage-2.js",
+    "src/admin/admin-control-snapshot-class-part-6.js",
+    "test/control-plane/membership-publication-coordinator-main-stage-2.js",
+    "test/admin/admin-control-snapshot.test.js"
   ],
   "handoffFiles": [
     "work/packages/done-20260515-publication-active-gate-reconcile-bridge-simplification.md"
@@ -56,7 +60,11 @@
     "work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md",
     "work/sprints/current-blocker.md",
     "work/sprints/current-blocker.json",
-    "work/model-ledger.jsonl"
+    "work/model-ledger.jsonl",
+    "src/control-plane/membership-publication-coordinator-class-stage-2.js",
+    "src/admin/admin-control-snapshot-class-part-6.js",
+    "test/control-plane/membership-publication-coordinator-main-stage-2.js",
+    "test/admin/admin-control-snapshot.test.js"
   ],
   "modelFit": {
     "packageClass": "representative-frontier-closure",
@@ -174,6 +182,18 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 4. work/sprints/current-blocker.md
 5. work/sprints/current-blocker.json
 6. work/model-ledger.jsonl
+7. `src/control-plane/membership-publication-coordinator-class-stage-2.js`,
+   promoted after the proof localized the awaited reconcile result to the
+   owner publication write/readback path.
+8. `src/admin/admin-control-snapshot-class-part-6.js`, promoted after the
+   proof localized the stale seed-only observation to the admin publication
+   observation bridge after handoff reconcile.
+9. `test/control-plane/membership-publication-coordinator-main-stage-2.js`,
+   promoted for the focused owner-path regression around returning the
+   persisted publication row.
+10. `test/admin/admin-control-snapshot.test.js`, promoted for the focused
+   consumer regression around preserving the awaited handoff reconcile
+   observation across the deferred snapshot rebuild.
 
 ## Out Of Scope
 
@@ -190,7 +210,7 @@ owner-boundary package.
 
 - [x] Review subagent recorded: Agent Laplace (019e2d18-978d-7f11-ae07-752c58250da3) reviewed work/packages/active-20260515-startup-active-gate-seed-publication-visibility-proof.md; result fixes-required.
 - [x] Fix subagent recorded or explicitly not needed: Agent Codex (019e2d1a-6841-7060-82f7-7de60ca8846c) fixed work/packages/active-20260515-startup-active-gate-seed-publication-visibility-proof.md.
-- [ ] Implementation subagent recorded: pending-on-clean-review
+- [x] Implementation subagent recorded: Agent Codex (019e2d25-e2c8-7da1-89e7-430ff3852147) implemented work/packages/active-20260515-startup-active-gate-seed-publication-visibility-proof.md
 
 ## Model Fit
 
@@ -198,7 +218,7 @@ owner-boundary package.
 - Intended minimum model: `gpt-5.3-codex`
 - Scope shape: `owner-boundary-contraction/current-frontier`
 - Output profile: `medium`
-- Owned files: `work/packages/active-20260515-startup-active-gate-seed-publication-visibility-proof.md`, `work/packages/done-20260515-startup-active-gate-snapshot-coverage-final-reconcile-target.md`, `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md`, `work/sprints/current-blocker.md`, `work/sprints/current-blocker.json`, `work/model-ledger.jsonl`
+- Owned files: `work/packages/active-20260515-startup-active-gate-seed-publication-visibility-proof.md`, `work/packages/done-20260515-startup-active-gate-snapshot-coverage-final-reconcile-target.md`, `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md`, `work/sprints/current-blocker.md`, `work/sprints/current-blocker.json`, `work/model-ledger.jsonl`, `src/control-plane/membership-publication-coordinator-class-stage-2.js`, `src/admin/admin-control-snapshot-class-part-6.js`, `test/control-plane/membership-publication-coordinator-main-stage-2.js`, `test/admin/admin-control-snapshot.test.js`
 - Forbidden files: `timeout increases`, `active-gate admission relaxation while runtimePromotionAllowed=false`, `workflow-progress implementation unless canonical extractors promote it`, `broad diagnostics-only success path`, `Pro or Enterprise behavior`
 - Frozen decisions: package scope and lane stay bounded unless explicitly escalated.
 - Escalation triggers: owned files expand beyond this package, runtime ownership changes, or representative scenario evidence changes.

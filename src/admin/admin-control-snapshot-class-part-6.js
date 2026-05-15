@@ -50,6 +50,20 @@ const MEMBERSHIP_PUBLICATION_RECONCILE_REASON =
   'admin_control_snapshot_publication_handoff';
 const MEMBERSHIP_PUBLICATION_HANDOFF_ALLOW_PRESSURE_DEFER = false;
 const MEMBERSHIP_PUBLICATION_HANDOFF_SKIP_WRITE_READBACK = false;
+const MEMBERSHIP_PUBLICATION_RECONCILE_OBSERVATION_STATE = Object.freeze({
+  ABSENT: 'absent',
+  OBSERVED: 'observed',
+});
+const MEMBERSHIP_PUBLICATION_RECONCILE_OBSERVATION_FIELD = Object.freeze({
+  PUBLICATION_ROW: 'publicationRow',
+  STATE: 'state',
+});
+const MEMBERSHIP_PUBLICATION_RECONCILE_OBSERVATION_PROPERTY =
+  'membershipPublicationReconcileObservation';
+const MEMBERSHIP_PUBLICATION_RECONCILE_OBSERVATION_EMPTY = Object.freeze({
+  [MEMBERSHIP_PUBLICATION_RECONCILE_OBSERVATION_FIELD.STATE]:
+    MEMBERSHIP_PUBLICATION_RECONCILE_OBSERVATION_STATE.ABSENT,
+});
 const MEMBERSHIP_PUBLICATION_RECONCILE_FIELD = Object.freeze({
   ACKNOWLEDGED_NODE_IDS: 'acknowledgedNodeIds',
   ALLOW_PENDING_VISIBILITY: 'allowPendingVisibility',
@@ -162,6 +176,38 @@ function isMembershipPublicationRow(row) {
     publicationKind === MEMBERSHIP_PUBLICATION_KIND
   );
 }
+function isObservedMembershipPublicationReconcileRow(row) {
+  const normalizedRow = normalizeControlPlanePublicationRow(row);
+  return (
+    String(
+      normalizedRow.status || ADMIN_CONTROL_SNAPSHOT_LITERAL.VALUE,
+    ).toUpperCase() === ADMIN_CONTROL_SNAPSHOT_LITERAL.PUBLISHED &&
+    Array.isArray(normalizedRow.publishedActiveNodeIds) &&
+    normalizedRow.publishedActiveNodeIds.length > NUM.ZERO
+  );
+}
+function buildMembershipPublicationReconcileObservation(publicationRow) {
+  if (isObservedMembershipPublicationReconcileRow(publicationRow) !== true) {
+    return MEMBERSHIP_PUBLICATION_RECONCILE_OBSERVATION_EMPTY;
+  }
+  return Object.freeze({
+    [MEMBERSHIP_PUBLICATION_RECONCILE_OBSERVATION_FIELD.STATE]:
+      MEMBERSHIP_PUBLICATION_RECONCILE_OBSERVATION_STATE.OBSERVED,
+    [MEMBERSHIP_PUBLICATION_RECONCILE_OBSERVATION_FIELD.PUBLICATION_ROW]:
+      normalizeControlPlanePublicationRow(publicationRow),
+  });
+}
+function isMembershipPublicationReconcileObservation(value) {
+  return (
+    value &&
+    typeof value === TYPEOF.OBJECT &&
+    value[MEMBERSHIP_PUBLICATION_RECONCILE_OBSERVATION_FIELD.STATE] ===
+      MEMBERSHIP_PUBLICATION_RECONCILE_OBSERVATION_STATE.OBSERVED &&
+    isObservedMembershipPublicationReconcileRow(
+      value[MEMBERSHIP_PUBLICATION_RECONCILE_OBSERVATION_FIELD.PUBLICATION_ROW],
+    )
+  );
+}
 function resolveLatestMembershipPublicationRow(
   publicationRows = [],
   options = {},
@@ -229,13 +275,34 @@ function resolveLatestMembershipPublicationRow(
  * as functions so this module has no back-reference to AdminWebSocketAPI.
  */
 class AdminControlSnapshotPart6 extends AdminControlSnapshotPart5 {
+  rememberMembershipPublicationReconcileObservation(publicationRow) {
+    const observation =
+      buildMembershipPublicationReconcileObservation(publicationRow);
+    this[MEMBERSHIP_PUBLICATION_RECONCILE_OBSERVATION_PROPERTY] =
+      observation;
+    return observation;
+  }
+  consumeMembershipPublicationReconcileObservation(options = {}) {
+    if (options.preferAuthoritativeRead !== true) {
+      return MEMBERSHIP_PUBLICATION_RECONCILE_OBSERVATION_EMPTY;
+    }
+    const observation =
+      this[MEMBERSHIP_PUBLICATION_RECONCILE_OBSERVATION_PROPERTY] ||
+      MEMBERSHIP_PUBLICATION_RECONCILE_OBSERVATION_EMPTY;
+    this[MEMBERSHIP_PUBLICATION_RECONCILE_OBSERVATION_PROPERTY] =
+      MEMBERSHIP_PUBLICATION_RECONCILE_OBSERVATION_EMPTY;
+    if (isMembershipPublicationReconcileObservation(observation)) {
+      return observation;
+    }
+    return MEMBERSHIP_PUBLICATION_RECONCILE_OBSERVATION_EMPTY;
+  }
   async reconcileAuthoritativeMembershipPublicationFromHandoff(
     publicationActiveGateHandoff,
     options = {},
   ) {
     const membershipPublicationService =
       this.controlPlaneReadinessService?.membershipPublicationService || null;
-    return maybeReconcileAuthoritativeMembershipPublication(
+    const publicationRow = await maybeReconcileAuthoritativeMembershipPublication(
       membershipPublicationService,
       {
         ...options,
@@ -243,6 +310,8 @@ class AdminControlSnapshotPart6 extends AdminControlSnapshotPart5 {
         publicationActiveGateHandoff,
       },
     );
+    this.rememberMembershipPublicationReconcileObservation(publicationRow);
+    return publicationRow;
   }
   async ensureMembershipPublicationObservation(options = {}) {
     const readinessService = this.controlPlaneReadinessService || null;
@@ -259,6 +328,19 @@ class AdminControlSnapshotPart6 extends AdminControlSnapshotPart5 {
       );
     if (reconciledPublicationRow) {
       return reconciledPublicationRow;
+    }
+    const carriedReconcilePublicationRow =
+      this.consumeMembershipPublicationReconcileObservation({
+        preferAuthoritativeRead,
+      });
+    if (
+      isMembershipPublicationReconcileObservation(
+        carriedReconcilePublicationRow,
+      )
+    ) {
+      return carriedReconcilePublicationRow[
+        MEMBERSHIP_PUBLICATION_RECONCILE_OBSERVATION_FIELD.PUBLICATION_ROW
+      ];
     }
     if (
       !preferAuthoritativeRead &&

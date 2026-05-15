@@ -51,10 +51,15 @@ const PUBLICATION_CONVERGENCE_HANDOFF_TARGET_PUBLICATION_ID =
 const PUBLICATION_CONVERGENCE_HANDOFF_TARGET_EPOCH = 41;
 const PUBLICATION_CONVERGENCE_HANDOFF_TARGET_NEXT_EPOCH = 42;
 const PUBLICATION_CONVERGENCE_HANDOFF_TARGET_NOW_MS = 3200;
+const PUBLICATION_CONVERGENCE_HANDOFF_TARGET_DURABLE_UPDATED_AT = 3201;
 const PUBLICATION_CONVERGENCE_HANDOFF_TARGET_AUTHORITATIVE_READ_ERROR =
   'explicit handoff target should not require authoritative node repair';
 const PUBLICATION_CONVERGENCE_HANDOFF_TARGET_ALLOW_PENDING_VISIBILITY = true;
 const PUBLICATION_CONVERGENCE_HANDOFF_TARGET_ALLOW_PRESSURE_DEFER = false;
+const PUBLICATION_CONVERGENCE_HANDOFF_TARGET_READ_PROFILE =
+  'diagnostics';
+const PUBLICATION_CONVERGENCE_HANDOFF_TARGET_DURABLE_REASON_CODE =
+  'durable_handoff_readback';
 const PUBLICATION_CONVERGENCE_HANDOFF_TARGET_NODE_IDS = Object.freeze([
   'node-handoff-seed',
   'node-handoff-a',
@@ -265,11 +270,26 @@ test('reconcileClusterMembership publishes explicit handoff target without autho
     const readinessRefreshModes = [];
     const persistedRows = [];
     const persistOptions = [];
+    const publicationReadOptions = [];
     const coordinator = new MembershipPublicationCoordinator({
       nodeId: PUBLICATION_CONVERGENCE_HANDOFF_TARGET_NODE_IDS[0],
       controlPlanePublicationsOwner: {
         async listPublications() {
           return {rows: [latestPublicationRow]};
+        },
+        async getPublication(_publicationId, options = {}) {
+          publicationReadOptions.push(options);
+          const persistedRow = persistedRows[persistedRows.length - 1];
+          if (!persistedRow) {
+            return latestPublicationRow;
+          }
+          return {
+            ...persistedRow,
+            reason_code:
+              PUBLICATION_CONVERGENCE_HANDOFF_TARGET_DURABLE_REASON_CODE,
+            updated_at:
+              PUBLICATION_CONVERGENCE_HANDOFF_TARGET_DURABLE_UPDATED_AT,
+          };
         },
         async upsertPublication(row, options = {}) {
           persistedRows.push(row);
@@ -332,6 +352,8 @@ test('reconcileClusterMembership publishes explicit handoff target without autho
       acknowledgedNodeIds: [
         ...PUBLICATION_CONVERGENCE_HANDOFF_TARGET_NODE_IDS,
       ],
+      readProfile:
+        PUBLICATION_CONVERGENCE_HANDOFF_TARGET_READ_PROFILE,
       allowPendingVisibility:
         PUBLICATION_CONVERGENCE_HANDOFF_TARGET_ALLOW_PENDING_VISIBILITY,
       allowPressureDefer:
@@ -351,19 +373,21 @@ test('reconcileClusterMembership publishes explicit handoff target without autho
     t.match(
       outcome.publicationRow,
       {
-        publication_epoch: PUBLICATION_CONVERGENCE_HANDOFF_TARGET_NEXT_EPOCH,
+        publicationEpoch: PUBLICATION_CONVERGENCE_HANDOFF_TARGET_NEXT_EPOCH,
         status: CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED,
-        published_active_node_ids: [
+        publishedActiveNodeIds: [
           ...PUBLICATION_CONVERGENCE_HANDOFF_TARGET_SORTED_NODE_IDS,
         ],
-        required_ack_node_ids: [
+        requiredAckNodeIds: [
           ...PUBLICATION_CONVERGENCE_HANDOFF_TARGET_SORTED_NODE_IDS,
         ],
-        acknowledged_node_ids: [
+        acknowledgedNodeIds: [
           ...PUBLICATION_CONVERGENCE_HANDOFF_TARGET_SORTED_NODE_IDS,
         ],
+        reasonCode:
+          PUBLICATION_CONVERGENCE_HANDOFF_TARGET_DURABLE_REASON_CODE,
       },
-      'explicit handoff target should drive the replacement publication row',
+      'explicit handoff target should return the durable readback publication row',
     );
     t.match(
       persistedRows[0],
@@ -391,6 +415,16 @@ test('reconcileClusterMembership publishes explicit handoff target without autho
       persistOptions[0]?.allowPressureDefer,
       PUBLICATION_CONVERGENCE_HANDOFF_TARGET_ALLOW_PRESSURE_DEFER,
       'explicit handoff target should bypass pressure deferral on the publication write',
+    );
+    t.match(
+      publicationReadOptions[publicationReadOptions.length - 1],
+      {
+        readProfile:
+          PUBLICATION_CONVERGENCE_HANDOFF_TARGET_READ_PROFILE,
+        authoritativeReadMode:
+          CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED,
+      },
+      'explicit handoff target should verify the write through the diagnostics owner readback path',
     );
   });
 

@@ -445,7 +445,7 @@ class MembershipPublicationCoordinatorClassStage2 extends
             candidate,
             nowMs: this.now(),
           });
-          await this.persistPublicationRow(row, options);
+          const persistedRow = await this.persistPublicationRow(row, options);
           await this.workflowCoordinator.transitionStep(
             workflow.workflowId,
             {
@@ -465,7 +465,7 @@ class MembershipPublicationCoordinatorClassStage2 extends
           );
           return {
             candidate,
-            publicationRow: row,
+            publicationRow: normalizeControlPlanePublicationRow(persistedRow),
             workflow,
           };
         }),

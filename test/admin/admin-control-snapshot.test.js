@@ -125,6 +125,8 @@ const ACTIVE_GATE_HANDOFF_RECONCILE_READ_PROFILE = 'diagnostics';
 const ACTIVE_GATE_HANDOFF_RECONCILE_PUBLICATION_KIND =
   'cluster_membership';
 const ACTIVE_GATE_HANDOFF_RECONCILE_PUBLICATION_EPOCH = 3;
+const ACTIVE_GATE_HANDOFF_RECONCILE_STALE_PUBLICATION_ID =
+  'publication-3';
 const ACTIVE_GATE_HANDOFF_RECONCILE_RESULT_PUBLICATION_ID =
   'publication-4';
 const ACTIVE_GATE_HANDOFF_RECONCILE_RESULT_PUBLICATION_EPOCH = 4;
@@ -2421,6 +2423,115 @@ test('AdminControlSnapshot build snapshot forwards handoff pending reconcile tar
       enqueueAttempted,
       false,
       'awaited owner reconcile should be preferred over queue-only catch-up when the coordinator exposes it',
+    );
+  });
+
+test('AdminControlSnapshot preserves awaited handoff reconcile observation before stale diagnostics reads',
+  async (t) => {
+    let latestPublicationReadAttempted = false;
+    const snapshot = new AdminControlSnapshot({
+      nodeId: ACTIVE_GATE_HANDOFF_RECONCILE_LOCAL_NODE_ID,
+      nowFn: () => ACTIVE_GATE_OWNER_TRUTH_NOW_MS,
+      controlPlaneReadinessService: {
+        membershipPublicationService: {
+          async reconcileClusterMembership() {
+            return {
+              publicationRow: {
+                publication_id:
+                  ACTIVE_GATE_HANDOFF_RECONCILE_RESULT_PUBLICATION_ID,
+                publication_kind:
+                  ACTIVE_GATE_HANDOFF_RECONCILE_PUBLICATION_KIND,
+                publication_epoch:
+                  ACTIVE_GATE_HANDOFF_RECONCILE_RESULT_PUBLICATION_EPOCH,
+                status:
+                  ACTIVE_GATE_OWNER_TRUTH_PUBLICATION_STATUS,
+                published_active_node_ids: [
+                  ...ACTIVE_GATE_HANDOFF_RECONCILE_NODE_IDS,
+                ],
+                required_ack_node_ids: [
+                  ...ACTIVE_GATE_HANDOFF_RECONCILE_NODE_IDS,
+                ],
+                acknowledged_node_ids: [
+                  ...ACTIVE_GATE_HANDOFF_RECONCILE_NODE_IDS,
+                ],
+              },
+            };
+          },
+          async getLatestClusterPublication() {
+            latestPublicationReadAttempted = true;
+            return {
+              publication_id:
+                ACTIVE_GATE_HANDOFF_RECONCILE_STALE_PUBLICATION_ID,
+              publication_kind:
+                ACTIVE_GATE_HANDOFF_RECONCILE_PUBLICATION_KIND,
+              publication_epoch:
+                ACTIVE_GATE_HANDOFF_RECONCILE_PUBLICATION_EPOCH,
+              status:
+                ACTIVE_GATE_OWNER_TRUTH_PUBLICATION_STATUS,
+              published_active_node_ids: [
+                ...ACTIVE_GATE_HANDOFF_RECONCILE_PUBLISHED_NODE_IDS,
+              ],
+              required_ack_node_ids: [
+                ...ACTIVE_GATE_HANDOFF_RECONCILE_PUBLISHED_NODE_IDS,
+              ],
+              acknowledged_node_ids: [
+                ...ACTIVE_GATE_HANDOFF_RECONCILE_PUBLISHED_NODE_IDS,
+              ],
+            };
+          },
+        },
+      },
+    });
+
+    await snapshot.reconcileAuthoritativeMembershipPublicationFromHandoff(
+      {
+        schemaVersion: ACTIVE_GATE_OWNER_COHORT_SCHEMA_VERSION,
+        publicationEpoch: ACTIVE_GATE_HANDOFF_RECONCILE_PUBLICATION_EPOCH,
+        expectedNodeIds: [
+          ...ACTIVE_GATE_HANDOFF_RECONCILE_NODE_IDS,
+        ],
+        publishedActiveNodeIds: [
+          ...ACTIVE_GATE_HANDOFF_RECONCILE_PUBLISHED_NODE_IDS,
+        ],
+        missingPublishedNodeIds: [
+          ...ACTIVE_GATE_HANDOFF_RECONCILE_PENDING_NODE_IDS,
+        ],
+        pendingReconcileNodeIds: [
+          ...ACTIVE_GATE_HANDOFF_RECONCILE_PENDING_NODE_IDS,
+        ],
+        pendingReconcileCount:
+          ACTIVE_GATE_HANDOFF_RECONCILE_PENDING_COUNT,
+        runtimePromotionAllowed:
+          ACTIVE_GATE_HANDOFF_RUNTIME_PROMOTION_ALLOWED_FALSE,
+        state: ACTIVE_GATE_OWNER_COHORT_STATE_PENDING,
+        reasonCode: ACTIVE_GATE_OWNER_COHORT_REASON_OWNER_RECONCILE_PENDING,
+        nextAction: ACTIVE_GATE_HANDOFF_NEXT_ACTION_RECONCILE,
+      },
+    );
+
+    const observedPublication =
+      await snapshot.ensureMembershipPublicationObservation({
+        preferAuthoritativeRead:
+          ACTIVE_GATE_HANDOFF_RECONCILE_AUTHORITATIVE_READ,
+      });
+
+    t.equal(
+      latestPublicationReadAttempted,
+      false,
+      'the just-awaited reconcile observation should be consumed before stale publication list reads',
+    );
+    t.match(
+      observedPublication,
+      {
+        publicationEpoch:
+          ACTIVE_GATE_HANDOFF_RECONCILE_RESULT_PUBLICATION_EPOCH,
+        status:
+          ACTIVE_GATE_OWNER_TRUTH_PUBLICATION_STATUS,
+        publishedActiveNodeIds: [
+          ...ACTIVE_GATE_HANDOFF_RECONCILE_NODE_IDS,
+        ],
+      },
+      'the carried reconcile observation should expose the widened durable publication target',
     );
   });
 
