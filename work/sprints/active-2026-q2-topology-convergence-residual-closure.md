@@ -413,19 +413,21 @@ Final closure requires fresh evidence proving all of the following:
     - Lane: `runtime-owner-boundary`
     - Owner boundary: `topology_publication_owner / publication_convergence`
     - Purpose: continue the publication convergence blocker after focused
-      publication-planning repairs proved reason-only and blocked
-      `PRIORITY_CONTROL_PLANE_RECOVERY_PENDING` readiness handling locally but
-      did not close representative evidence.
+      publication-planning repairs proved reason-only, blocked
+      `PRIORITY_CONTROL_PLANE_RECOVERY_PENDING`, and lifecycle-thin
+      `PUBLISHED` authoritative-refresh handling locally but did not close
+      representative evidence.
     - Acceptance: active same-frontier red package. Focused planner proof is
       green locally, but representative artifact
-      `test-output/reports/topology-publication-convergence-final-blocker-after-blocked-readiness-repair.report.json`
-      failed in `143500ms` with `active=0/5`, current
-      `snapshotCoverage=1/5`, best `snapshotCoverage=2/5`,
+      `test-output/reports/topology-publication-convergence-final-blocker-after-authoritative-refresh-repair.report.json`
+      failed in `128672ms` with `active=2/5`,
+      `snapshotCoverage=2/5`,
       `publishedActive=1/5`, `pendingAck=0`, `missingPublished=4`, and
       one non-frontier `operation_workflow_owner / workflow_progress`
-      witness. Raw playback shows the missing-node evidence lives in
-      active-gate/bootstrap diagnostics rather than the runtime publication
-      owner planning stream.
+      witness. Raw fallback shows the scenario-level publication owner stream
+      remains count-only without lifecycle/projection evidence; a broader
+      always-authoritative `PUBLISHED` probe regressed under SQL/query pressure
+      and was not kept.
 
 ## Dependency Order
 

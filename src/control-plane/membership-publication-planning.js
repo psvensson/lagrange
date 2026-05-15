@@ -375,6 +375,44 @@ function hasMembershipLifecycleSummaryProjectionAdvance(
   ].some(Boolean);
 }
 
+function hasMembershipLifecycleSummaryProjectionEvidence(summary, helperFns = {}) {
+  if (!summary || typeof summary !== TYPEOF.OBJECT) {
+    return false;
+  }
+  const projectionDiagnostics =
+    summary.projectionDiagnostics &&
+      typeof summary.projectionDiagnostics === TYPEOF.OBJECT ?
+      summary.projectionDiagnostics :
+      {};
+  return [
+    summary.projectedServingNodeIds,
+    summary.locallyEligibleNodeIds,
+    summary.recoveryActiveNodeIds,
+    summary.missingPublishedRecoveryActiveNodeIds,
+    projectionDiagnostics.recoveryEligibleIncludedNodeIds,
+    projectionDiagnostics.livenessFallbackIncludedNodeIds,
+    projectionDiagnostics.runtimeAuthorityIncludedNodeIds,
+  ].some((nodeIds) =>
+    helperFns.normalizeNodeIdList(nodeIds).length > NUM.ZERO,
+  );
+}
+
+function hasPublishedMembershipAuthoritativeRefreshDebt(
+  publicationRow,
+  helperFns = {},
+) {
+  const publishedActiveNodeIds = helperFns.normalizeNodeIdList(
+    publicationRow?.publishedActiveNodeIds,
+  );
+  if (publishedActiveNodeIds.length === NUM.ZERO) {
+    return false;
+  }
+  return hasMembershipLifecycleSummaryProjectionEvidence(
+    publicationRow?.membershipLifecycleSummary,
+    helperFns,
+  ) !== true;
+}
+
 function chooseMembershipLifecycleSummaryBase(
   planningMembershipLifecycleSummary,
   derivedMembershipLifecycleSummary,
@@ -847,7 +885,10 @@ function shouldPreferAuthoritativeMembershipState(options = {}, helperFns = {}) 
     }
     const publicationStatus = String(row.status || '').toUpperCase();
     if (publicationStatus === MEMBERSHIP_PUBLICATION_STATUS.PUBLISHED) {
-      return hasPriorityRecoverySpreadGap(row.priorityPartitionSummary);
+      return (
+        hasPriorityRecoverySpreadGap(row.priorityPartitionSummary) ||
+        hasPublishedMembershipAuthoritativeRefreshDebt(row, helperFns)
+      );
     }
     if (
       publicationStatus === MEMBERSHIP_PUBLICATION_STATUS.ABANDONED ||

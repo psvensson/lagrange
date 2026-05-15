@@ -1,5 +1,15 @@
 import {test} from '../../src/test-helpers/tap.js';
-import {deriveMembershipPublicationCandidate} from '../../src/control-plane/membership-publication-coordinator.js';
+import {
+  deriveMembershipPublicationCandidate,
+  MembershipPublicationCoordinator,
+} from '../../src/control-plane/membership-publication-coordinator.js';
+import {COLUMN, TABLES} from '../../src/constants/index.js';
+import {
+  CONTROL_PLANE_AUTHORITATIVE_READ_MODE,
+} from '../../src/control-plane/control-plane-system-table-gateway.js';
+import {
+  shouldPreferAuthoritativeMembershipState,
+} from '../../src/control-plane/membership-publication-coordinator-stage-2.js';
 import {MEMBERSHIP_LIFECYCLE_STATE} from '../../src/control-plane/membership-lifecycle-constants.js';
 import {
   CONTROL_PLANE_READINESS_DIMENSION,
@@ -22,6 +32,178 @@ const PUBLICATION_CONVERGENCE_REPAIR_TRANSPORT = 'ws';
 const PUBLICATION_CONVERGENCE_REPAIR_ACTIVE_STATUS = 'active';
 const PUBLICATION_CONVERGENCE_REPAIR_READY_CONNECTION = 'ready';
 const PUBLICATION_CONVERGENCE_REPAIR_READY_LEASE_EXPIRES_AT = 5000;
+const PUBLICATION_CONVERGENCE_AUTH_REFRESH_EPOCH = 31;
+const PUBLICATION_CONVERGENCE_AUTH_REFRESH_NODE_ID = 'node-auth-refresh';
+const PUBLICATION_CONVERGENCE_AUTH_REFRESH_PRIORITY_SUMMARY = Object.freeze({
+  satisfied: true,
+  readyEligibleNodeCount: 1,
+  totalPriorityPartitionCount: 1,
+  blockedPartitionCount: 0,
+});
+const PUBLICATION_CONVERGENCE_AUTH_REFRESH_PUBLICATION_ID =
+  'publication-auth-refresh';
+const PUBLICATION_CONVERGENCE_AUTH_REFRESH_MISSING_NODE_ID =
+  'node-auth-refresh-missing';
+const PUBLICATION_CONVERGENCE_AUTH_REFRESH_READY_LEASE_EXPIRES_AT = 5000;
+const PUBLICATION_CONVERGENCE_AUTH_REFRESH_NOW_MS = 2500;
+
+test('shouldPreferAuthoritativeMembershipState refreshes published count-only rows without lifecycle projection evidence',
+  async (t) => {
+    const preferAuthoritativeRead = shouldPreferAuthoritativeMembershipState({
+      latestPublicationRow: {
+        publication_epoch: PUBLICATION_CONVERGENCE_AUTH_REFRESH_EPOCH,
+        status: CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED,
+        published_active_node_ids: [
+          PUBLICATION_CONVERGENCE_AUTH_REFRESH_NODE_ID,
+        ],
+        priority_partition_summary:
+          PUBLICATION_CONVERGENCE_AUTH_REFRESH_PRIORITY_SUMMARY,
+      },
+    });
+    const steadyProjectionRead =
+      shouldPreferAuthoritativeMembershipState({
+        latestPublicationRow: {
+          publication_epoch: PUBLICATION_CONVERGENCE_AUTH_REFRESH_EPOCH,
+          status: CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED,
+          published_active_node_ids: [
+            PUBLICATION_CONVERGENCE_AUTH_REFRESH_NODE_ID,
+          ],
+          required_ack_node_ids: [
+            PUBLICATION_CONVERGENCE_AUTH_REFRESH_NODE_ID,
+          ],
+          acknowledged_node_ids: [
+            PUBLICATION_CONVERGENCE_AUTH_REFRESH_NODE_ID,
+          ],
+          priority_partition_summary:
+            PUBLICATION_CONVERGENCE_AUTH_REFRESH_PRIORITY_SUMMARY,
+          membership_lifecycle_summary: {
+            publishedActiveNodeIds: [
+              PUBLICATION_CONVERGENCE_AUTH_REFRESH_NODE_ID,
+            ],
+            projectedServingNodeIds: [
+              PUBLICATION_CONVERGENCE_AUTH_REFRESH_NODE_ID,
+            ],
+            locallyEligibleNodeIds: [
+              PUBLICATION_CONVERGENCE_AUTH_REFRESH_NODE_ID,
+            ],
+          },
+        },
+      });
+
+    t.equal(
+      preferAuthoritativeRead,
+      true,
+      'count-only published rows without lifecycle projection evidence should refresh owner planning inputs',
+    );
+    t.equal(
+      steadyProjectionRead,
+      false,
+      'published rows with explicit ACK and lifecycle projection evidence can stay on local planning inputs',
+    );
+    t.end();
+  });
+
+test('readPublicationPlanningSnapshot uses authoritative membership evidence for published rows without lifecycle projection evidence',
+  async (t) => {
+    const latestPublicationRow = {
+      publication_id: PUBLICATION_CONVERGENCE_AUTH_REFRESH_PUBLICATION_ID,
+      publication_kind: 'cluster_membership',
+      publication_epoch: PUBLICATION_CONVERGENCE_AUTH_REFRESH_EPOCH,
+      status: CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED,
+      published_active_node_ids: [
+        PUBLICATION_CONVERGENCE_AUTH_REFRESH_NODE_ID,
+      ],
+      priority_partition_summary:
+        PUBLICATION_CONVERGENCE_AUTH_REFRESH_PRIORITY_SUMMARY,
+    };
+    const cachedNodeRows = [{
+      [COLUMN.NODE_ID]: PUBLICATION_CONVERGENCE_AUTH_REFRESH_NODE_ID,
+      [COLUMN.STATUS]: PUBLICATION_CONVERGENCE_REPAIR_ACTIVE_STATUS,
+      [COLUMN.CONNECTION_STATE]: PUBLICATION_CONVERGENCE_REPAIR_READY_CONNECTION,
+      [COLUMN.READY_LEASE_EXPIRES_AT]:
+        PUBLICATION_CONVERGENCE_AUTH_REFRESH_READY_LEASE_EXPIRES_AT,
+    }];
+    const authoritativeNodeRows = [
+      ...cachedNodeRows,
+      {
+        [COLUMN.NODE_ID]: PUBLICATION_CONVERGENCE_AUTH_REFRESH_MISSING_NODE_ID,
+        [COLUMN.STATUS]: PUBLICATION_CONVERGENCE_REPAIR_ACTIVE_STATUS,
+        [COLUMN.CONNECTION_STATE]:
+          PUBLICATION_CONVERGENCE_REPAIR_READY_CONNECTION,
+        [COLUMN.READY_LEASE_EXPIRES_AT]:
+          PUBLICATION_CONVERGENCE_AUTH_REFRESH_READY_LEASE_EXPIRES_AT,
+      },
+    ];
+    const readinessRefreshModes = [];
+    const coordinator = new MembershipPublicationCoordinator({
+      nodeId: PUBLICATION_CONVERGENCE_AUTH_REFRESH_NODE_ID,
+      controlPlanePublicationsOwner: {
+        async listPublications() {
+          return {rows: [latestPublicationRow]};
+        },
+      },
+      authoritativeControlPlaneView: {
+        canRead() {
+          return true;
+        },
+        async readRows(tableName, _sql, _params, options) {
+          if (tableName !== TABLES.NODES) {
+            return {success: true, rows: []};
+          }
+          return {
+            success: true,
+            rows:
+              options.authoritativeReadMode ===
+                CONTROL_PLANE_AUTHORITATIVE_READ_MODE
+                  .OWNER_RPC_PREFERRED_SQL_FALLBACK ?
+                authoritativeNodeRows :
+                cachedNodeRows,
+          };
+        },
+      },
+      controlPlaneReadinessService: {
+        async getAllNodeReadiness(options = {}) {
+          readinessRefreshModes.push(options.allowAuthoritativeRefresh === true);
+          return [];
+        },
+        getRecoveryEpochHistoryByNodeId() {
+          return {};
+        },
+        async getMembershipPublicationPlanningSnapshotBestEffort() {
+          return null;
+        },
+      },
+      systemTableCache: {
+        getAll(tableName) {
+          if (tableName === TABLES.NODES) {
+            return cachedNodeRows;
+          }
+          if (tableName === TABLES.CONTROL_PLANE_PUBLICATIONS) {
+            return [latestPublicationRow];
+          }
+          return [];
+        },
+      },
+      now: () => PUBLICATION_CONVERGENCE_AUTH_REFRESH_NOW_MS,
+    });
+
+    const snapshot = await coordinator.readPublicationPlanningSnapshot();
+
+    t.same(
+      readinessRefreshModes,
+      [true],
+      'lifecycle-thin published rows should ask readiness for authoritative planning evidence',
+    );
+    t.same(
+      snapshot.nodeRows.map((row) => row[COLUMN.NODE_ID]).sort(),
+      [
+        PUBLICATION_CONVERGENCE_AUTH_REFRESH_NODE_ID,
+        PUBLICATION_CONVERGENCE_AUTH_REFRESH_MISSING_NODE_ID,
+      ],
+      'planning should merge authoritative node rows instead of retaining the stale local cache only',
+    );
+    t.end();
+  });
 
 test('deriveMembershipPublicationCandidate promotes healthy projected members while publication acknowledgements are still pending',
   async (t) => {

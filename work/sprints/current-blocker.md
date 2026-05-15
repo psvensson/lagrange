@@ -10,7 +10,7 @@ Workflow lane: `runtime-owner-boundary`
 
 Scenario: `rolling-restart`
 
-Artifact: `test-output/reports/topology-publication-convergence-final-blocker-after-blocked-readiness-repair.report.json`
+Artifact: `test-output/reports/topology-publication-convergence-final-blocker-after-authoritative-refresh-repair.report.json`
 
 Playback: `none`
 
@@ -22,11 +22,11 @@ Boundary: `publication_convergence`
 
 Dominant reason: `missing_published_nodes_present`
 
-Current state: Current implementation role widened the bounded publication-planning repair from reason-only to blocked PRIORITY_CONTROL_PLANE_RECOVERY_PENDING readiness evidence while preserving process-dead fail-closed behavior. Focused owner tests and static guardrails pass. Representative checkpoint test-output/reports/topology-publication-convergence-final-blocker-after-blocked-readiness-repair.report.json remains same-frontier red: active=0/5, snapshotCoverage=1/5, publication=PUBLISHED, publicationEpoch=1, pendingAck=0, publishedActive=1/5, missingPublished=4, and first frontier topology_publication_owner / publication_convergence with missing_published_nodes_present. Raw playback after canonical extractors shows the selected runtime publication owner still carries only the seed node in membershipLifecycleSummary/projectionDiagnostics; the missing-node evidence lives in active-gate/bootstrap diagnostics while a non-frontier control_plane_publications operation workflow witness remains persisted_not_dispatched.
+Current state: Current implementation role added a bounded authoritative planning refresh for lifecycle-thin PUBLISHED publication rows. Focused owner tests and static guardrails pass. Representative checkpoint test-output/reports/topology-publication-convergence-final-blocker-after-authoritative-refresh-repair.report.json remains same-frontier red but shows bounded active-gate progress versus the prior checkpoint: active=2/5, snapshotCoverage=2/5, publication=PUBLISHED, publicationEpoch=1, pendingAck=0, publishedActive=1/5, missingPublished=4, and first frontier topology_publication_owner / publication_convergence with missing_published_nodes_present. Raw fallback after canonical extractors shows the runtime publication owner stream still reports ack_evidence_count_only and no membershipLifecycleSummary/projectionDiagnostics at the scenario-level owner stream. A broader always-authoritative PUBLISHED-row probe was rejected because it increased SQL/query pressure and regressed to active=0/5 while retaining the same frontier.
 
 ## Next Action
 
-Continue from the after-blocked-readiness same-frontier representative artifact, but do not keep broadening the publication planner without new owner evidence. The focused planner proof now covers reason-only and blocked PRIORITY_CONTROL_PLANE_RECOVERY_PENDING readiness entries; representative runtime evidence instead shows the coordinator planning stream lacks those missing-node readiness entries. Next work should either prove a bounded publication-owner ingestion path for runtime-ready/bootstrap evidence, or split/migrate to the operation_workflow_owner / workflow_progress witness if canonical owner evidence is updated to make that the first frontier.
+Continue from the after-authoritative-refresh same-frontier representative artifact. The committed repair only covers lifecycle-thin published rows; the next bounded step should prove a publication-owner ingestion path for active-gate/discovery coverage gaps when selected publication diagnostics are self-contained to the seed, without using blanket authoritative reads that increase query pressure. Keep operation workflow and active-gate runtime changes split unless canonical evidence promotes a different first frontier.
 
 ## Proof Ladder
 
@@ -59,6 +59,16 @@ Continue from the after-blocked-readiness same-frontier representative artifact,
 27. `npm --silent run analyze:causal-model -- test-output/reports/topology-publication-convergence-final-blocker-after-blocked-readiness-repair.report.json`
 28. `npm run analyze:priority-recovery-residuals -- test-output/reports/topology-publication-convergence-final-blocker-after-blocked-readiness-repair.report.json --markdown`
 29. `npm run analyze:distributed-failure -- --report test-output/reports/topology-publication-convergence-final-blocker-after-blocked-readiness-repair.report.json`
+30. `node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/topology-publication-convergence-final-blocker-after-authoritative-refresh-repair.report.json --fast-local --verbose`
+31. `npm run work:evidence-summary -- test-output/reports/topology-publication-convergence-final-blocker-after-authoritative-refresh-repair.report.json`
+32. `npm run analyze:topology-convergence -- test-output/reports/topology-publication-convergence-final-blocker-after-authoritative-refresh-repair.report.json`
+33. `npm --silent run analyze:causal-model -- test-output/reports/topology-publication-convergence-final-blocker-after-authoritative-refresh-repair.report.json`
+34. `npm run analyze:priority-recovery-residuals -- test-output/reports/topology-publication-convergence-final-blocker-after-authoritative-refresh-repair.report.json --markdown`
+35. `npm run analyze:distributed-failure -- --report test-output/reports/topology-publication-convergence-final-blocker-after-authoritative-refresh-repair.report.json`
+36. `node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/topology-publication-convergence-final-blocker-after-published-authoritative-read-repair.report.json --fast-local --verbose`
+37. `npm run work:evidence-summary -- test-output/reports/topology-publication-convergence-final-blocker-after-published-authoritative-read-repair.report.json`
+38. `npm run analyze:topology-convergence -- test-output/reports/topology-publication-convergence-final-blocker-after-published-authoritative-read-repair.report.json`
+39. `npm --silent run analyze:causal-model -- test-output/reports/topology-publication-convergence-final-blocker-after-published-authoritative-read-repair.report.json`
 
 ## Model Fit
 
@@ -80,7 +90,7 @@ Status: `live-red`
 
 Scenario: `rolling-restart`
 
-Artifact: `test-output/reports/topology-publication-convergence-final-blocker-after-blocked-readiness-repair.report.json`
+Artifact: `test-output/reports/topology-publication-convergence-final-blocker-after-authoritative-refresh-repair.report.json`
 
 Frontier: `publication_ack_convergence`
 
@@ -90,19 +100,19 @@ Boundary: `publication_convergence`
 
 Dominant reason: `missing_published_nodes_present`
 
-Next action: `Continue with bounded owner evidence: the blocked-readiness focused proof passed, but representative runtime evidence stayed red with missingPublished=4 and did not expose the missing nodes in the publication owner planning stream.`
+Next action: `Continue with bounded owner evidence: the lifecycle-thin authoritative refresh focused proof passed, but representative runtime evidence stayed red with missingPublished=4 and still did not expose the missing nodes in the scenario-level publication owner stream.`
 
 ## Causal Governance
 
 Causal hypothesis: `topology_publication_owner / publication_convergence work should reduce, migrate, or classify missing_published_nodes_present without hiding active-gate snapshot coverage or priority recovery tails.`
 
-Stop-condition check: `npm --silent run analyze:causal-model -- test-output/reports/topology-publication-convergence-final-blocker-after-blocked-readiness-repair.report.json`
+Stop-condition check: `npm --silent run analyze:causal-model -- test-output/reports/topology-publication-convergence-final-blocker-after-authoritative-refresh-repair.report.json`
 
-Expected causal-model change: `The blocked-readiness focused repair should reduce, migrate, or classify missing_published_nodes_present; representative evidence instead stayed same-frontier red with missingPublished=4.`
+Expected causal-model change: `The lifecycle-thin authoritative refresh repair should reduce, migrate, or classify missing_published_nodes_present; representative evidence instead stayed same-frontier red with missingPublished=4 while active/snapshot coverage improved to 2/5.`
 
 Representative outcome: `same-frontier`
 
-Causal debt: `The focused reason-only and blocked-readiness repairs are green locally, but representative evidence remains red at topology_publication_owner / publication_convergence with publicationEpoch=1, count-only ACK completion, consumer_lag, and four missing published nodes. Raw fallback evidence shows those missing nodes are absent from the runtime publication owner planning stream and appear only in active-gate/bootstrap diagnostics.`
+Causal debt: `The focused reason-only, blocked-readiness, and lifecycle-thin authoritative refresh repairs are green locally, but representative evidence remains red at topology_publication_owner / publication_convergence with publicationEpoch=1, count-only ACK completion, and four missing published nodes. Raw fallback evidence shows those missing nodes are absent from the scenario-level publication owner stream; a broader always-authoritative published-row probe increased SQL pressure and did not reduce the frontier.`
 
 Cross-boundary review: `Required before implementation through the runtime-owner-boundary subagent ledger or an allowed waiver recorded in this package.`
 
@@ -117,24 +127,24 @@ Phase chain:
 3. `representative rerun classification`
 4. `same-owner reduced residual continuation`
 
-Current first frontier: `topology_publication_owner / publication_convergence from the after-blocked-readiness representative artifact`
+Current first frontier: `topology_publication_owner / publication_convergence from the after-authoritative-refresh representative artifact`
 
 Known downstream blockers:
 
-1. `active-gate snapshot coverage remains 1/5 in the current progress sample and 2/5 at best after publication convergence`
-2. `priority recovery has one non-frontier operation_workflow_owner / workflow_progress witness in after-blocked-readiness evidence for control_plane_publications-p1`
+1. `active-gate snapshot coverage remains 2/5 after publication convergence`
+2. `priority recovery has one non-frontier operation_workflow_owner / workflow_progress witness in after-authoritative-refresh evidence for control_plane_publications-p1`
 
-Missing causal edge: `publication PUBLISHED with count-only pendingAck=0 still coexists with missingPublished=4 and active=0/5 after the blocked-readiness focused repair, while selected runtime publication diagnostics still contain only the seed node projection.`
+Missing causal edge: `publication PUBLISHED with count-only pendingAck=0 still coexists with missingPublished=4 after the lifecycle-thin authoritative refresh repair, while scenario-level publication owner diagnostics still contain no membershipLifecycleSummary/projectionDiagnostics for the missing nodes.`
 
-Missing causal edge probe: `npm run analyze:topology-convergence -- test-output/reports/topology-publication-convergence-final-blocker-after-blocked-readiness-repair.report.json`
+Missing causal edge probe: `npm run analyze:topology-convergence -- test-output/reports/topology-publication-convergence-final-blocker-after-authoritative-refresh-repair.report.json`
 
-Bounded progress proof: `Focused owner proof now covers publication retry/advance paths for reason-only and blocked priority recovery pending readiness, but representative rolling-restart did not reduce; raw playback shows the missing-node evidence is not present in the runtime publication owner planning input.`
+Bounded progress proof: `Focused owner proof now covers publication retry/advance paths for reason-only, blocked priority recovery pending readiness, and lifecycle-thin published rows; representative rolling-restart improved active and snapshot coverage to 2/5 but stayed same-frontier. Raw playback shows selected publication diagnostics can be self-contained to the seed and the scenario-level owner stream remains count-only.`
 
-Bounded progress proof artifact: `test-output/reports/topology-publication-convergence-final-blocker-after-blocked-readiness-repair.report.json`
+Bounded progress proof artifact: `test-output/reports/topology-publication-convergence-final-blocker-after-authoritative-refresh-repair.report.json`
 
 Expected observable transition: `missing_published_nodes_present resolves to green evidence, reduced residual, same-frontier proof, migrated owner-boundary proof, or classification-only stop.`
 
-Max progress bound: `representative rolling-restart rerun failed after 143500ms with active=0/5, snapshotCoverage=1/5 current and 2/5 best, publishedActive=1/5, pendingAck=0, missingPublished=4, and one non-frontier operation_workflow_owner / workflow_progress witness`
+Max progress bound: `representative rolling-restart rerun failed after 128672ms with active=2/5, snapshotCoverage=2/5, publishedActive=1/5, pendingAck=0, missingPublished=4, and one non-frontier operation_workflow_owner / workflow_progress witness`
 
 Same-frontier fallback: `keep topology_publication_owner / publication_convergence active only for bounded evidence-ingestion work; do not broaden this package into operation workflow or active-gate runtime fixes without an explicit split`
 
