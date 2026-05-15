@@ -3,7 +3,7 @@
 <!-- work-package
 {
   "schema": "work-package-v1",
-  "status": "active",
+  "status": "done",
   "opened": "2026-05-15",
   "lane": "causal-escalation",
   "scenario": "rolling-restart",
@@ -35,7 +35,7 @@
     "npm run analyze:distributed-failure -- --report test-output/reports/rolling-restart-after-publication-supplied-stream-closure-20260515-codex.report.json"
   ],
   "writeScope": [
-    "work/packages/active-20260515-topology-publication-active-gate-handoff-oscillation.md",
+    "work/packages/done-20260515-topology-publication-active-gate-handoff-oscillation.md",
     "work/sprints/active-2026-q2-topology-convergence-residual-closure.md",
     "work/model-ledger.jsonl",
     "src/control-plane/publication-recovery-gate.js",
@@ -67,7 +67,7 @@
     "test/distributed/harness/cluster-segment-7-class-5.js"
   ],
   "commitScope": [
-    "work/packages/active-20260515-topology-publication-active-gate-handoff-oscillation.md",
+    "work/packages/done-20260515-topology-publication-active-gate-handoff-oscillation.md",
     "work/sprints/active-2026-q2-topology-convergence-residual-closure.md",
     "work/sprints/current-blocker.md",
     "work/sprints/current-blocker.json",
@@ -163,7 +163,10 @@
       "npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-publication-supplied-stream-closure-20260515-codex.report.json"
     ]
   },
-  "predecessor": "work/packages/done-20260515-topology-active-gate-snapshot-coverage-after-publication-owner-stream-fix.md"
+  "predecessor": "work/packages/done-20260515-topology-active-gate-snapshot-coverage-after-publication-owner-stream-fix.md",
+  "closed": "2026-05-15",
+  "commitAndPushLedgerRequired": true,
+  "successor": "work/packages/active-20260515-topology-active-gate-snapshot-coverage-after-publication-handoff.md"
 }
 -->
 
@@ -211,7 +214,7 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 
 ## In Scope
 
-1. work/packages/active-20260515-topology-publication-active-gate-handoff-oscillation.md
+1. work/packages/done-20260515-topology-publication-active-gate-handoff-oscillation.md
 2. work/sprints/active-2026-q2-topology-convergence-residual-closure.md
 3. work/model-ledger.jsonl
 4. src/control-plane/publication-recovery-gate.js
@@ -254,7 +257,7 @@ boundaries.
 - Intended minimum model: `gpt-5.3-codex`
 - Scope shape: `scenario-causal-escalation`
 - Output profile: `medium`
-- Owned files: `work/packages/active-20260515-topology-publication-active-gate-handoff-oscillation.md`, `work/sprints/active-2026-q2-topology-convergence-residual-closure.md`, `work/model-ledger.jsonl`, `src/control-plane/publication-recovery-gate.js`, `test/control-plane/publication-recovery-gate.test.js`, `test/distributed/harness/failure-bundle-segment-4.js`, `test/distributed/harness/__tests__/failure-bundle-active-gate-tail-test-cases.js`, `test/distributed/harness/__tests__/failure-bundle-core-16-test-cases.js`, `scripts/analyze-topology-convergence.js`, `test/scripts/analyze-topology-convergence.test.js`, `test/scripts/__fixtures__/topology-convergence/publication-active-gate-handoff-oscillation.fixture.json`, `test/scripts/__fixtures__/topology-convergence/active-gate-snapshot.expected.json`, `test/scripts/__fixtures__/topology-convergence/active-gate-snapshot-reachability.expected.json`, `test/scripts/__fixtures__/topology-convergence/publication-count-only-ack.expected.json`
+- Owned files: `work/packages/done-20260515-topology-publication-active-gate-handoff-oscillation.md`, `work/sprints/active-2026-q2-topology-convergence-residual-closure.md`, `work/model-ledger.jsonl`, `src/control-plane/publication-recovery-gate.js`, `test/control-plane/publication-recovery-gate.test.js`, `test/distributed/harness/failure-bundle-segment-4.js`, `test/distributed/harness/__tests__/failure-bundle-active-gate-tail-test-cases.js`, `test/distributed/harness/__tests__/failure-bundle-core-16-test-cases.js`, `scripts/analyze-topology-convergence.js`, `test/scripts/analyze-topology-convergence.test.js`, `test/scripts/__fixtures__/topology-convergence/publication-active-gate-handoff-oscillation.fixture.json`, `test/scripts/__fixtures__/topology-convergence/active-gate-snapshot.expected.json`, `test/scripts/__fixtures__/topology-convergence/active-gate-snapshot-reachability.expected.json`, `test/scripts/__fixtures__/topology-convergence/publication-count-only-ack.expected.json`
 - Forbidden files: admin, active-gate, or snapshot owner runtime files until fresh evidence promotes exact paths into write scope
 - Frozen decisions: active-gate forced snapshot refresh-debt fallback is closed; current frontier oscillation must be handled cross-boundary.
 - Escalation triggers: runtime files promoted before probe, fresh evidence selects operation_workflow_owner first, or the handoff cannot be replayed from available artifacts.
@@ -273,4 +276,10 @@ boundaries.
 8. npx eslint --no-ignore src/control-plane/publication-recovery-gate.js test/control-plane/publication-recovery-gate.test.js test/distributed/harness/failure-bundle-segment-4.js test/distributed/harness/__tests__/failure-bundle-active-gate-tail-test-cases.js test/distributed/harness/__tests__/failure-bundle-core-16-test-cases.js
 9. npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-forced-snapshot-refresh-debt-fallback-20260515-codex.report.json
 10. npm run analyze:distributed-failure -- --report test-output/reports/rolling-restart-after-forced-snapshot-refresh-debt-fallback-20260515-codex.report.json
-11. npm run work:validate -- --pre-impl work/packages/active-20260515-topology-publication-active-gate-handoff-oscillation.md
+11. npm run work:validate -- --closure work/packages/done-20260515-topology-publication-active-gate-handoff-oscillation.md
+
+## Commit And Push Ledger
+
+1. Focused package commit: `5cee8cd89f08249f4119c1381d4cb86ac8b88f17`
+2. Pushed to: `origin/codex/pending-ack-eligibility-filter`
+3. Commit contains only package-owned files/package-status/allowed sprint handoff: yes

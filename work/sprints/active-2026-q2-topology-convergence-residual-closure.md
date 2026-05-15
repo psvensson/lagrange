@@ -519,7 +519,7 @@ Final closure requires fresh evidence proving all of the following:
       cross-boundary causal package instead of another tactical single-owner
       package.
 
-21. [Topology Publication Active Gate Handoff Oscillation](../packages/active-20260515-topology-publication-active-gate-handoff-oscillation.md)
+21. [Topology Publication Active Gate Handoff Oscillation](../packages/done-20260515-topology-publication-active-gate-handoff-oscillation.md)
     - Lane: `causal-escalation`
     - Owner boundary: `topology_publication_owner / publication_convergence`
     - Purpose: own the repeated publication/active-gate frontier oscillation
@@ -527,9 +527,29 @@ Final closure requires fresh evidence proving all of the following:
     - Entry condition: active-gate refresh-debt fallback package closed as
       migrated with fresh evidence in
       `test-output/reports/rolling-restart-after-forced-snapshot-refresh-debt-fallback-20260515-codex.report.json`.
-    - Acceptance: a replayable publication-to-active-gate missing-edge probe
-      exists before runtime file promotion, or the package closes as
-      architecture-gap/classification-only with a named reason.
+    - Acceptance: migrated handoff. Focused publication recovery gate and
+      failure-bundle projection repair now classify fallback-built and
+      supplied-stream `UNKNOWN`/no-debt unpublished observations as
+      `not_started` / `not_required` and prevent stale top-level
+      `publicationPending` from reopening the publication frontier. Fresh
+      representative evidence in
+      `test-output/reports/rolling-restart-after-publication-supplied-stream-closure-20260515-codex.report.json`
+      marks `publication_ack_convergence` satisfied and selects
+      `active_gate_snapshot_coverage` under
+      `startup_active_gate_owner / snapshot_coverage` as first frontier.
+
+22. [Topology Active Gate Snapshot Coverage After Publication Handoff](../packages/active-20260515-topology-active-gate-snapshot-coverage-after-publication-handoff.md)
+    - Lane: `causal-escalation`
+    - Owner boundary: `startup_active_gate_owner / snapshot_coverage`
+    - Purpose: own the active-gate selected snapshot timeout and
+      authoritative repair failure exposed after the publication handoff
+      closed.
+    - Entry condition: publication handoff package closed as migrated by
+      fresh evidence in
+      `test-output/reports/rolling-restart-after-publication-supplied-stream-closure-20260515-codex.report.json`.
+    - Acceptance: focused owner-file proof, subagent sequencing, and either a
+      bounded active-gate snapshot coverage repair or same-frontier
+      classification on a fresh representative rerun.
 
 ## Dependency Order
 
@@ -593,27 +613,24 @@ Final closure requires fresh evidence proving all of the following:
 
 ## Current Next Action
 
-The active-gate refresh-debt fallback package is closed as migrated:
-`test-output/reports/rolling-restart-after-forced-snapshot-refresh-debt-fallback-20260515-codex.report.json`
-is still red and canonical extraction again selects
-`publication_ack_convergence` under
-`topology_publication_owner / publication_convergence` with
-`publication_pending`. Active-gate snapshot coverage is downstream with
-`snapshotCoverage=0/5` and a forced authoritative repair error, and the prior
-stale `repair_deferred / stale_usable / pending / idle / wait` symptom is no
-longer selected.
+The publication handoff package is closed as migrated:
+`test-output/reports/rolling-restart-after-publication-supplied-stream-closure-20260515-codex.report.json`
+is still red, but canonical extraction marks `publication_ack_convergence`
+satisfied and selects `active_gate_snapshot_coverage` under
+`startup_active_gate_owner / snapshot_coverage` with
+`active_gate_timed_out`.
 
 Continue
-[Topology Publication Active Gate Handoff Oscillation](../packages/active-20260515-topology-publication-active-gate-handoff-oscillation.md).
+[Topology Active Gate Snapshot Coverage After Publication Handoff](../packages/active-20260515-topology-active-gate-snapshot-coverage-after-publication-handoff.md).
 
-- Artifact: `test-output/reports/rolling-restart-after-forced-snapshot-refresh-debt-fallback-20260515-codex.report.json`
-- First frontier: `publication_ack_convergence`
-- Owner: `topology_publication_owner`
-- Boundary: `publication_convergence`
-- Dominant reason: `publication_pending`
-- Downstream blocker: `active_gate_snapshot_coverage` remains blocked with
-  `snapshotCoverage=0/5` and a forced authoritative repair error.
+- Artifact: `test-output/reports/rolling-restart-after-publication-supplied-stream-closure-20260515-codex.report.json`
+- First frontier: `active_gate_snapshot_coverage`
+- Owner: `startup_active_gate_owner`
+- Boundary: `snapshot_coverage`
+- Dominant reason: `active_gate_timed_out`
+- Current blocker: selected snapshot timeout / authoritative repair failure
+  leaves `snapshotCoverage=0/5` while publication is satisfied.
 
-Next action: run review/fix subagent sequencing, then build a replayable
-publication-to-active-gate missing-edge probe before any runtime file is
-promoted into write scope.
+Next action: run required review/fix/implementation subagent sequencing, then
+promote the exact active-gate snapshot coverage owner path before
+implementation.
