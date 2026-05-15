@@ -4,7 +4,7 @@
 
 Sprint: `work/sprints/active-2026-q2-topology-convergence-residual-closure.md`
 
-Package: `work/packages/active-20260514-topology-publication-convergence-final-blocker.md`
+Package: `work/packages/active-20260515-topology-active-gate-snapshot-coverage-after-publication-consumer-lag.md`
 
 Workflow lane: `runtime-owner-boundary`
 
@@ -16,59 +16,24 @@ Playback: `none`
 
 ## Boundary
 
-Owner: `topology_publication_owner`
+Owner: `startup_active_gate_owner`
 
-Boundary: `publication_convergence`
+Boundary: `snapshot_coverage`
 
-Dominant reason: `missing_published_nodes_present`
+Dominant reason: `active_gate_timed_out`
 
-Current state: Current implementation role added a bounded authoritative planning refresh for lifecycle-thin PUBLISHED publication rows. Focused owner tests and static guardrails pass. Representative checkpoint test-output/reports/topology-publication-convergence-final-blocker-after-authoritative-refresh-repair.report.json remains same-frontier red but shows bounded active-gate progress versus the prior checkpoint: active=2/5, snapshotCoverage=2/5, publication=PUBLISHED, publicationEpoch=1, pendingAck=0, publishedActive=1/5, missingPublished=4, and first frontier topology_publication_owner / publication_convergence with missing_published_nodes_present. Raw fallback after canonical extractors shows the runtime publication owner stream still reports ack_evidence_count_only and no membershipLifecycleSummary/projectionDiagnostics at the scenario-level owner stream. A broader always-authoritative PUBLISHED-row probe was rejected because it increased SQL/query pressure and regressed to active=0/5 while retaining the same frontier.
+Current state: Successor package opened after the publication-convergence consumer-lag classification repair. Canonical evidence on test-output/reports/topology-publication-convergence-final-blocker-after-authoritative-refresh-repair.report.json now marks publication_ack_convergence and priority_recovery_partition_progress satisfied, with first frontier active_gate_snapshot_coverage under startup_active_gate_owner / snapshot_coverage: activeGate=timed_out, inactive_nodes=3, snapshotCoverage=2/5, expectedNodeCount=5, readinessDelayCause=none.
 
 ## Next Action
 
-Continue from the after-authoritative-refresh same-frontier representative artifact. The committed repair only covers lifecycle-thin published rows; the next bounded step should prove a publication-owner ingestion path for active-gate/discovery coverage gaps when selected publication diagnostics are self-contained to the seed, without using blanket authoritative reads that increase query pressure. Keep operation workflow and active-gate runtime changes split unless canonical evidence promotes a different first frontier.
+Continue from test-output/reports/topology-publication-convergence-final-blocker-after-authoritative-refresh-repair.report.json after publication consumer-lag classification moved the first frontier to active_gate_snapshot_coverage. Analyze inactive_nodes=3 and snapshotCoverage=2/5 under startup_active_gate_owner without reopening publication convergence.
 
 ## Proof Ladder
 
-1. `npm run work:evidence-summary -- test-output/reports/topology-ship-gate-final-rolling-restart.report.json`
-2. `npm run analyze:topology-convergence -- test-output/reports/topology-ship-gate-final-rolling-restart.report.json`
-3. `npm --silent run analyze:causal-model -- test-output/reports/topology-ship-gate-final-rolling-restart.report.json`
-4. `node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/topology-publication-convergence-final-blocker-after-repair.report.json --fast-local --verbose`
-5. `npm run work:evidence-summary -- test-output/reports/topology-publication-convergence-final-blocker-after-repair.report.json`
-6. `npm run analyze:topology-convergence -- test-output/reports/topology-publication-convergence-final-blocker-after-repair.report.json`
-7. `npm --silent run analyze:causal-model -- test-output/reports/topology-publication-convergence-final-blocker-after-repair.report.json`
-8. `npm run analyze:priority-recovery-residuals -- test-output/reports/topology-publication-convergence-final-blocker-after-repair.report.json --markdown`
-9. `npm run analyze:distributed-failure -- --report test-output/reports/topology-publication-convergence-final-blocker-after-repair.report.json`
-10. `node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/topology-publication-convergence-final-blocker-after-reason-only-repair.report.json --fast-local --verbose`
-11. `npm run work:evidence-summary -- test-output/reports/topology-publication-convergence-final-blocker-after-reason-only-repair.report.json`
-12. `npm run analyze:topology-convergence -- test-output/reports/topology-publication-convergence-final-blocker-after-reason-only-repair.report.json`
-13. `npm --silent run analyze:causal-model -- test-output/reports/topology-publication-convergence-final-blocker-after-reason-only-repair.report.json`
-14. `npm run analyze:priority-recovery-residuals -- test-output/reports/topology-publication-convergence-final-blocker-after-reason-only-repair.report.json --markdown`
-15. `npm run analyze:distributed-failure -- --report test-output/reports/topology-publication-convergence-final-blocker-after-reason-only-repair.report.json`
-16. `node test/control-plane/membership-publication-coordinator-main-stage-2.js`
-17. `node test/control-plane/publication-recovery-gate.test.js`
-18. `npx eslint src/control-plane/membership-publication-planning.js test/control-plane/membership-publication-coordinator-main-stage-2.js`
-19. `node scripts/check-guideline-literals.js src/control-plane/membership-publication-planning.js`
-20. `node scripts/check-guideline-decision-boundaries.js src/control-plane/membership-publication-planning.js`
-21. `npm run audit:runtime-grammar:file -- src/control-plane/membership-publication-planning.js`
-22. `npm run guard:guideline:constant-names:file -- src/control-plane/membership-publication-planning.js`
-23. `npm run guard:guideline:constant-names:file -- test/control-plane/membership-publication-coordinator-main-stage-2.js`
-24. `node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/topology-publication-convergence-final-blocker-after-blocked-readiness-repair.report.json --fast-local --verbose`
-25. `npm run work:evidence-summary -- test-output/reports/topology-publication-convergence-final-blocker-after-blocked-readiness-repair.report.json`
-26. `npm run analyze:topology-convergence -- test-output/reports/topology-publication-convergence-final-blocker-after-blocked-readiness-repair.report.json`
-27. `npm --silent run analyze:causal-model -- test-output/reports/topology-publication-convergence-final-blocker-after-blocked-readiness-repair.report.json`
-28. `npm run analyze:priority-recovery-residuals -- test-output/reports/topology-publication-convergence-final-blocker-after-blocked-readiness-repair.report.json --markdown`
-29. `npm run analyze:distributed-failure -- --report test-output/reports/topology-publication-convergence-final-blocker-after-blocked-readiness-repair.report.json`
-30. `node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/topology-publication-convergence-final-blocker-after-authoritative-refresh-repair.report.json --fast-local --verbose`
-31. `npm run work:evidence-summary -- test-output/reports/topology-publication-convergence-final-blocker-after-authoritative-refresh-repair.report.json`
-32. `npm run analyze:topology-convergence -- test-output/reports/topology-publication-convergence-final-blocker-after-authoritative-refresh-repair.report.json`
-33. `npm --silent run analyze:causal-model -- test-output/reports/topology-publication-convergence-final-blocker-after-authoritative-refresh-repair.report.json`
-34. `npm run analyze:priority-recovery-residuals -- test-output/reports/topology-publication-convergence-final-blocker-after-authoritative-refresh-repair.report.json --markdown`
-35. `npm run analyze:distributed-failure -- --report test-output/reports/topology-publication-convergence-final-blocker-after-authoritative-refresh-repair.report.json`
-36. `node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/topology-publication-convergence-final-blocker-after-published-authoritative-read-repair.report.json --fast-local --verbose`
-37. `npm run work:evidence-summary -- test-output/reports/topology-publication-convergence-final-blocker-after-published-authoritative-read-repair.report.json`
-38. `npm run analyze:topology-convergence -- test-output/reports/topology-publication-convergence-final-blocker-after-published-authoritative-read-repair.report.json`
-39. `npm --silent run analyze:causal-model -- test-output/reports/topology-publication-convergence-final-blocker-after-published-authoritative-read-repair.report.json`
+1. `npm run work:evidence-summary -- test-output/reports/topology-publication-convergence-final-blocker-after-authoritative-refresh-repair.report.json`
+2. `npm run analyze:topology-convergence -- test-output/reports/topology-publication-convergence-final-blocker-after-authoritative-refresh-repair.report.json`
+3. `npm --silent run analyze:causal-model -- test-output/reports/topology-publication-convergence-final-blocker-after-authoritative-refresh-repair.report.json`
+4. `npm run analyze:owner-files -- startup_active_gate_owner snapshot_coverage`
 
 ## Model Fit
 
@@ -82,7 +47,6 @@ Escalation triggers:
 
 1. `owned files expand beyond this package`
 2. `a frozen decision must be reopened`
-3. `repair requires operation workflow, active-gate runtime, or harness timeout changes`
 
 ## Representative Residual
 
@@ -92,65 +56,65 @@ Scenario: `rolling-restart`
 
 Artifact: `test-output/reports/topology-publication-convergence-final-blocker-after-authoritative-refresh-repair.report.json`
 
-Frontier: `publication_ack_convergence`
+Frontier: `active_gate_snapshot_coverage`
 
-Owner: `topology_publication_owner`
+Owner: `startup_active_gate_owner`
 
-Boundary: `publication_convergence`
+Boundary: `snapshot_coverage`
 
-Dominant reason: `missing_published_nodes_present`
+Dominant reason: `active_gate_timed_out`
 
-Next action: `Continue with bounded owner evidence: the lifecycle-thin authoritative refresh focused proof passed, but representative runtime evidence stayed red with missingPublished=4 and still did not expose the missing nodes in the scenario-level publication owner stream.`
+Next action: `Analyze why active-gate snapshot coverage remains at 2/5 with inactive_nodes=3 after publication and priority recovery are classified satisfied.`
 
 ## Causal Governance
 
-Causal hypothesis: `topology_publication_owner / publication_convergence work should reduce, migrate, or classify missing_published_nodes_present without hiding active-gate snapshot coverage or priority recovery tails.`
+Causal hypothesis: `startup_active_gate_owner / snapshot_coverage work should reduce, migrate, or classify active_gate_timed_out without reopening publication convergence when the owner stream is current and fenced by consumer_lag.`
 
 Stop-condition check: `npm --silent run analyze:causal-model -- test-output/reports/topology-publication-convergence-final-blocker-after-authoritative-refresh-repair.report.json`
 
-Expected causal-model change: `The lifecycle-thin authoritative refresh repair should reduce, migrate, or classify missing_published_nodes_present; representative evidence instead stayed same-frontier red with missingPublished=4 while active/snapshot coverage improved to 2/5.`
+Expected causal-model change: `active_gate_snapshot_coverage becomes representative-green, reduced, same-frontier, migrated, or classification-only with a named owner-boundary reason.`
 
-Representative outcome: `same-frontier`
+Representative outcome: `pending-before-rerun`
 
-Causal debt: `The focused reason-only, blocked-readiness, and lifecycle-thin authoritative refresh repairs are green locally, but representative evidence remains red at topology_publication_owner / publication_convergence with publicationEpoch=1, count-only ACK completion, and four missing published nodes. Raw fallback evidence shows those missing nodes are absent from the scenario-level publication owner stream; a broader always-authoritative published-row probe increased SQL pressure and did not reduce the frontier.`
+Causal debt: `Publication ACK convergence and priority recovery are satisfied in canonical evidence. The remaining blocker is active-gate timeout with inactive_nodes=3 and snapshotCoverage=2/5.`
 
 Cross-boundary review: `Required before implementation through the runtime-owner-boundary subagent ledger or an allowed waiver recorded in this package.`
 
 ## Scenario Causal Closure
 
-Reference scenario/probe: `rolling-restart / topology_publication_owner / publication_convergence`
+Reference scenario/probe: `rolling-restart / startup_active_gate_owner / snapshot_coverage after publication consumer-lag classification`
 
 Phase chain:
 
-1. `canonical final confirmation extraction`
-2. `topology_publication_owner / publication_convergence focused proof`
-3. `representative rerun classification`
-4. `same-owner reduced residual continuation`
+1. `publication consumer-lag classification`
+2. `active-gate snapshot coverage extraction`
+3. `startup active-gate owner analysis`
+4. `representative rerun classification`
 
-Current first frontier: `topology_publication_owner / publication_convergence from the after-authoritative-refresh representative artifact`
+Current first frontier: `active_gate_snapshot_coverage under startup_active_gate_owner / snapshot_coverage with active_gate_timed_out`
 
 Known downstream blockers:
 
-1. `active-gate snapshot coverage remains 2/5 after publication convergence`
-2. `priority recovery has one non-frontier operation_workflow_owner / workflow_progress witness in after-authoritative-refresh evidence for control_plane_publications-p1`
+1. `readiness_startup_support is deferred as inherited_active_gate_no_progress`
+2. `scenario_duration and active_gate_timeout budgets are exhausted in the current artifact`
 
-Missing causal edge: `publication PUBLISHED with count-only pendingAck=0 still coexists with missingPublished=4 after the lifecycle-thin authoritative refresh repair, while scenario-level publication owner diagnostics still contain no membershipLifecycleSummary/projectionDiagnostics for the missing nodes.`
+Missing causal edge: `active-gate snapshot coverage remains incomplete at 2/5 while publication ACK and priority recovery are satisfied.`
 
-Missing causal edge probe: `npm run analyze:topology-convergence -- test-output/reports/topology-publication-convergence-final-blocker-after-authoritative-refresh-repair.report.json`
+Missing causal edge probe: `npm run analyze:topology-convergence -- test-output/reports/topology-publication-convergence-final-blocker-after-authoritative-refresh-repair.report.json --explain active_gate_snapshot_coverage`
 
-Bounded progress proof: `Focused owner proof now covers publication retry/advance paths for reason-only, blocked priority recovery pending readiness, and lifecycle-thin published rows; representative rolling-restart improved active and snapshot coverage to 2/5 but stayed same-frontier. Raw playback shows selected publication diagnostics can be self-contained to the seed and the scenario-level owner stream remains count-only.`
+Bounded progress proof: `Pending implementation; expected proof must show bounded retry, timeout classification, reconcile, or advance behavior for startup_active_gate_owner / snapshot_coverage.`
 
 Bounded progress proof artifact: `test-output/reports/topology-publication-convergence-final-blocker-after-authoritative-refresh-repair.report.json`
 
-Expected observable transition: `missing_published_nodes_present resolves to green evidence, reduced residual, same-frontier proof, migrated owner-boundary proof, or classification-only stop.`
+Expected observable transition: `active_gate_timed_out resolves to green evidence, reduced residual, same-frontier proof, migrated owner-boundary proof, or classification-only stop.`
 
-Max progress bound: `representative rolling-restart rerun failed after 128672ms with active=2/5, snapshotCoverage=2/5, publishedActive=1/5, pendingAck=0, missingPublished=4, and one non-frontier operation_workflow_owner / workflow_progress witness`
+Max progress bound: `one focused active-gate package slice with canonical extractors, owner-file proof, focused validation, and representative result classification`
 
-Same-frontier fallback: `keep topology_publication_owner / publication_convergence active only for bounded evidence-ingestion work; do not broaden this package into operation workflow or active-gate runtime fixes without an explicit split`
+Same-frontier fallback: `keep startup_active_gate_owner / snapshot_coverage active and do not absorb publication convergence, operation workflow, or generic harness timeout changes without canonical promotion.`
 
-Expected next frontier: `same owner boundary for missing nodes 11601fe0-72d6-5853-8590-ec2881853e72, 35a891b8-c1a0-5064-9c6e-2acfba61c2a7, 8be8d30f-4499-5eed-865c-71b4d529a67a, and ebc4aa0b-06c6-506d-93ea-1dd2deca3f58 unless the next canonical extraction or package split promotes operation_workflow_owner / workflow_progress for control_plane_publications-p1`
+Expected next frontier: `startup_readiness_owner / startup_support_evidence after snapshot coverage improves, or a narrower active-gate owner boundary`
 
-Result classification: `same-frontier`
+Result classification: `pending-before-probe`
 
 Stop condition: `continue-local-fix`
 
@@ -158,17 +122,15 @@ Stop condition: `continue-local-fix`
 
 Write scope:
 
-1. `work/packages/active-20260514-topology-publication-convergence-final-blocker.md`
+1. `work/packages/active-20260515-topology-active-gate-snapshot-coverage-after-publication-consumer-lag.md`
 2. `work/sprints/active-2026-q2-topology-convergence-residual-closure.md`
 3. `work/model-ledger.jsonl`
-4. `src/control-plane/membership-publication-planning.js`
-5. `test/control-plane/membership-publication-coordinator-main-stage-2.js`
 
 Handoff files:
 
-1. `work/packages/done-20260514-topology-ship-gate-final-confirmation.md`
-2. `work/packages/done-20260514-topology-priority-recovery-residual-drain.md`
-3. `work/packages/done-20260514-topology-contract-integration-reconciliation.md`
+1. `work/packages/done-20260514-topology-publication-convergence-final-blocker.md`
+2. `work/packages/done-20260514-topology-active-gate-owner-cohort-convergence.md`
+3. `work/packages/done-20260514-topology-active-gate-budget-closure.md`
 
 Generated files:
 
@@ -177,21 +139,20 @@ Generated files:
 
 Candidate runtime files:
 
-1. `src/control-plane/publication-recovery-gate.js`
-2. `src/control-plane/publication-owner-state.js`
-3. `src/control-plane/publication-owner-decision.js`
-4. `src/control-plane/publication-owner-evidence.js`
-5. `src/control-plane/membership-publication-coordinator-class-stage-2.js`
+1. `test/distributed/harness/cluster-segment-7.js`
+2. `test/distributed/harness/cluster-segment-7-class-2.js`
+3. `test/distributed/harness/cluster-segment-6.js`
+4. `src/admin/admin-control-snapshot-class-part-1.js`
+5. `src/admin/admin-control-snapshot-class-part-3.js`
+6. `src/admin/admin-control-snapshot-class-part-5.js`
 
 Commit scope:
 
-1. `work/packages/active-20260514-topology-publication-convergence-final-blocker.md`
+1. `work/packages/active-20260515-topology-active-gate-snapshot-coverage-after-publication-consumer-lag.md`
 2. `work/sprints/active-2026-q2-topology-convergence-residual-closure.md`
 3. `work/sprints/current-blocker.md`
 4. `work/sprints/current-blocker.json`
 5. `work/model-ledger.jsonl`
-6. `src/control-plane/membership-publication-planning.js`
-7. `test/control-plane/membership-publication-coordinator-main-stage-2.js`
 
 Legacy touched files:
 

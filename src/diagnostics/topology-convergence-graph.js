@@ -32,6 +32,12 @@ const PUBLICATION_STATUS_OPEN = 'OPEN';
 const PUBLICATION_STATUS_ACK_PENDING = 'ACK_PENDING';
 const PUBLICATION_RECOVERY_PROTOCOL_PUBLICATION_PENDING =
   'publication_pending';
+const PUBLICATION_OWNER_ACK_STATE_ACKNOWLEDGED = 'acknowledged';
+const PUBLICATION_OWNER_FRESHNESS_FENCE_CONSUMER_LAG = 'consumer_lag';
+const PUBLICATION_OWNER_RECOVERY_OUTCOME_WAITING_FOR_CONSUMER =
+  'waiting_for_consumer';
+const PUBLICATION_OWNER_REVISION_STATE_CURRENT = 'current';
+const PUBLICATION_OWNER_STREAM_OUTCOME_STALE = 'stale';
 const PRIORITY_RECOVERY_SEMANTIC_RECOVERING_IN_FLIGHT = 'recovering_in_flight';
 const PRIORITY_RECOVERY_SEMANTIC_SPREAD_SATISFIED_IN_FLIGHT =
   'spread_satisfied_in_flight';
@@ -1195,12 +1201,25 @@ function isPublicationPendingFlagEvidence(evidence) {
 
 function isPublicationMissingPublishedEvidence(evidence) {
   return hasPublicationMissingPublishedEvidence(evidence) &&
-    evidence.prioritySpreadPending !== true;
+    evidence.prioritySpreadPending !== true &&
+    isPublicationConsumerLagEvidence(evidence) !== true;
 }
 
 function hasPublicationMissingPublishedEvidence(evidence) {
   return evidence.missingPublishedCount > SOURCE_ORDER_BASE ||
     evidence.missingPublishedNodeIds.length > SOURCE_ORDER_BASE;
+}
+
+function isPublicationConsumerLagEvidence(evidence) {
+  return evidence.publicationStatus === PUBLICATION_STATUS_PUBLISHED &&
+    evidence.pendingAckCount === SOURCE_ORDER_BASE &&
+    evidence.ackState === PUBLICATION_OWNER_ACK_STATE_ACKNOWLEDGED &&
+    evidence.revisionState === PUBLICATION_OWNER_REVISION_STATE_CURRENT &&
+    evidence.streamOutcome === PUBLICATION_OWNER_STREAM_OUTCOME_STALE &&
+    evidence.freshnessFence ===
+      PUBLICATION_OWNER_FRESHNESS_FENCE_CONSUMER_LAG &&
+    evidence.recoveryOutcome ===
+      PUBLICATION_OWNER_RECOVERY_OUTCOME_WAITING_FOR_CONSUMER;
 }
 
 function normalizePriorityRecoveryEvidence(normalized) {
@@ -1552,7 +1571,29 @@ function resolveReadinessState(readiness, activeGate, reasons) {
   return EDGE_STATE.RETRYABLE;
 }
 
+function normalizePublicationOwnerStreamEvidence(publication) {
+  const publicationOwnerStream = asRecord(publication.publicationOwnerStream);
+  const revision = asRecord(publicationOwnerStream.revision);
+  return {
+    ackState: textOrUnknown(
+      publication.ackState || publicationOwnerStream.ackState,
+    ),
+    freshnessFence: textOrUnknown(
+      publication.freshnessFence || publicationOwnerStream.freshnessFence,
+    ),
+    recoveryOutcome: textOrUnknown(
+      publication.recoveryOutcome || publicationOwnerStream.recoveryOutcome,
+    ),
+    revisionState: textOrUnknown(revision.state),
+    streamOutcome: textOrUnknown(
+      publication.streamOutcome || publicationOwnerStream.streamOutcome,
+    ),
+  };
+}
+
 function normalizePublicationEvidence(publication) {
+  const ownerStreamEvidence =
+    normalizePublicationOwnerStreamEvidence(publication);
   return {
     publicationStatus: textOrUnknown(publication.publicationStatus),
     publicationPending: publication.publicationPending === true,
@@ -1562,6 +1603,7 @@ function normalizePublicationEvidence(publication) {
     missingPublishedCount: numberOrZero(publication.missingPublishedCount),
     missingPublishedNodeIds: arrayOrEmpty(publication.missingPublishedNodeIds),
     prioritySpreadPending: publication.prioritySpreadPending === true,
+    ...ownerStreamEvidence,
     source: {
       publicationEpoch: numberOrUnknown(publication.publicationEpoch),
       publicationStatus: textOrUnknown(publication.publicationStatus),
@@ -1574,6 +1616,11 @@ function normalizePublicationEvidence(publication) {
       publicationPending: booleanVariant(publication.publicationPending),
       recoveryProtocolState: textOrUnknown(publication.recoveryProtocolState),
       prioritySpreadPending: booleanVariant(publication.prioritySpreadPending),
+      publicationOwnerAckState: ownerStreamEvidence.ackState,
+      publicationOwnerFreshnessFence: ownerStreamEvidence.freshnessFence,
+      publicationOwnerRecoveryOutcome: ownerStreamEvidence.recoveryOutcome,
+      publicationOwnerRevisionState: ownerStreamEvidence.revisionState,
+      publicationOwnerStreamOutcome: ownerStreamEvidence.streamOutcome,
     },
   };
 }

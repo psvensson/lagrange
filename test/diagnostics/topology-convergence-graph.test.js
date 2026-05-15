@@ -51,6 +51,13 @@ const ACTIVE_GATE_STATE_TIMED_OUT = 'timed_out';
 const ACTIVE_GATE_STATE_READY = 'ready';
 const PUBLICATION_STATUS_PUBLISHED = 'PUBLISHED';
 const RECOVERY_PROTOCOL_PRIORITY_SPREAD_PENDING = 'priority_spread_pending';
+const PUBLICATION_OWNER_ACK_STATE_ACKNOWLEDGED = 'acknowledged';
+const PUBLICATION_OWNER_FRESHNESS_FENCE_CONSUMER_LAG = 'consumer_lag';
+const PUBLICATION_OWNER_RECOVERY_OUTCOME_WAITING_FOR_CONSUMER =
+  'waiting_for_consumer';
+const PUBLICATION_OWNER_REVISION_STATE_CURRENT = 'current';
+const PUBLICATION_OWNER_STREAM_OUTCOME_STALE = 'stale';
+const PUBLICATION_OWNER_SEMANTIC_OWNER = 'publication_owner';
 const EDGE_PRIORITY_RECOVERY = 'priority_recovery_partition_progress';
 const EDGE_PUBLICATION_ACK_CONVERGENCE = 'publication_ack_convergence';
 const EDGE_SNAPSHOT_COVERAGE = 'active_gate_snapshot_coverage';
@@ -573,6 +580,78 @@ describe('TopologyConvergenceGraph', () => {
       assert.equal(
         publicationWitness.source.recoveryProtocolState,
         RECOVERY_PROTOCOL_STEADY_PUBLISHED,
+      );
+      assert.equal(
+        publicationWitness.source.missingPublishedCount,
+        PUBLICATION_ACK_FRONTIER_MISSING_NODE_IDS.length,
+      );
+      assertNoNullOrUndefined(graph);
+    });
+
+  it('moves consumer-lag missing published evidence to snapshot coverage',
+    () => {
+      const fixture = buildHealthyFixtureFailureBundle();
+      const graph = buildTopologyConvergenceGraphFromArtifacts({
+        failureBundle: {
+          ...fixture,
+          publicationConvergence: {
+            ...fixture.publicationConvergence,
+            publicationPending: true,
+            recoveryProtocolState: RECOVERY_PROTOCOL_STEADY_PUBLISHED,
+            prioritySpreadPending: false,
+            missingPublishedCount:
+              PUBLICATION_ACK_FRONTIER_MISSING_NODE_IDS.length,
+            missingPublishedNodeIds: [
+              ...PUBLICATION_ACK_FRONTIER_MISSING_NODE_IDS,
+            ],
+            publicationOwnerStream: {
+              semanticOwner: PUBLICATION_OWNER_SEMANTIC_OWNER,
+              revision: {
+                state: PUBLICATION_OWNER_REVISION_STATE_CURRENT,
+              },
+              ackState: PUBLICATION_OWNER_ACK_STATE_ACKNOWLEDGED,
+              freshnessFence: PUBLICATION_OWNER_FRESHNESS_FENCE_CONSUMER_LAG,
+              recoveryOutcome:
+                PUBLICATION_OWNER_RECOVERY_OUTCOME_WAITING_FOR_CONSUMER,
+              streamOutcome: PUBLICATION_OWNER_STREAM_OUTCOME_STALE,
+            },
+            activeGate: {
+              ...fixture.publicationConvergence.activeGate,
+              state: ACTIVE_GATE_STATE_TIMED_OUT,
+              ready: false,
+              progress: {
+                ...fixture.publicationConvergence.activeGate.progress,
+                snapshotCoverageNodeCount: FIXTURE_SNAPSHOT_COVERAGE_COUNT,
+                snapshotCoverageComplete: false,
+                blockers: [SNAPSHOT_COVERAGE_TWO_OF_FIVE_BLOCKER],
+              },
+            },
+          },
+        },
+      });
+      const publicationWitness = graph.ownerWitnesses.find((witness) =>
+        witness.edgeId === EDGE_PUBLICATION_ACK_CONVERGENCE,
+      );
+      const presentation = buildTopologyConvergenceOwnerPresentation(graph);
+      const dominantWitness = selectTopologyConvergenceDominantWitness(
+        presentation,
+      );
+
+      assert.equal(graph.summary.firstFrontierEdgeId, EDGE_SNAPSHOT_COVERAGE);
+      assert.equal(graph.summary.firstFrontierOwner, OWNER_STARTUP_ACTIVE_GATE);
+      assert.equal(dominantWitness.edgeId, EDGE_SNAPSHOT_COVERAGE);
+      assert.equal(dominantWitness.owner, OWNER_STARTUP_ACTIVE_GATE);
+      assert.equal(publicationWitness.state, EDGE_STATE.SATISFIED);
+      assert.deepEqual(publicationWitness.reasons, [
+        PUBLICATION_PUBLISHED_REASON,
+      ]);
+      assert.equal(
+        publicationWitness.source.publicationOwnerFreshnessFence,
+        PUBLICATION_OWNER_FRESHNESS_FENCE_CONSUMER_LAG,
+      );
+      assert.equal(
+        publicationWitness.source.publicationOwnerStreamOutcome,
+        PUBLICATION_OWNER_STREAM_OUTCOME_STALE,
       );
       assert.equal(
         publicationWitness.source.missingPublishedCount,

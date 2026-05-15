@@ -30,7 +30,7 @@
     "work/packages/done-20260514-topology-failure-gate-execution-harness.md",
     "work/packages/done-20260514-topology-contract-integration-reconciliation.md",
     "work/packages/done-20260514-topology-priority-recovery-residual-drain.md",
-    "work/packages/active-20260514-topology-publication-convergence-final-blocker.md"
+    "work/packages/done-20260514-topology-publication-convergence-final-blocker.md"
   ],
   "generatedFiles": [
     "work/sprints/current-blocker.md",
@@ -79,7 +79,7 @@
     "expectedObservableTransition": "ship_criteria_unproven migrated to topology_publication_owner / publication_convergence with fresh final-gate evidence.",
     "maxProgressBound": "one activation cycle: package doctor, extractor/probe, owner-file proof, focused validation, and result classification",
     "sameFrontierFallback": "not used; final confirmation selected a narrower successor blocker and did not claim ship proof",
-    "expectedNextFrontier": "work/packages/active-20260514-topology-publication-convergence-final-blocker.md",
+    "expectedNextFrontier": "work/packages/done-20260514-topology-publication-convergence-final-blocker.md",
     "resultClassification": "migrated",
     "stopCondition": "continue-local-fix"
   },
@@ -103,7 +103,7 @@
   },
   "closed": "2026-05-14",
   "commitAndPushLedgerRequired": true,
-  "successor": "work/packages/active-20260514-topology-publication-convergence-final-blocker.md"
+  "successor": "work/packages/done-20260514-topology-publication-convergence-final-blocker.md"
 }
 -->
 

@@ -1,9 +1,10 @@
+# Topology Active Gate Snapshot Coverage After Publication Consumer Lag
+
+<!-- work-package
 {
-  "schema": "current-blocker-v1",
-  "generatedBy": "scripts/work-tracker.js",
-  "sprint": "work/sprints/active-2026-q2-topology-convergence-residual-closure.md",
-  "package": "work/packages/active-20260515-topology-active-gate-snapshot-coverage-after-publication-consumer-lag.md",
+  "schema": "work-package-v1",
   "status": "active",
+  "opened": "2026-05-15",
   "lane": "runtime-owner-boundary",
   "scenario": "rolling-restart",
   "artifact": "test-output/reports/topology-publication-convergence-final-blocker-after-authoritative-refresh-repair.report.json",
@@ -48,7 +49,6 @@
     "work/sprints/current-blocker.json",
     "work/model-ledger.jsonl"
   ],
-  "touchedFiles": [],
   "modelFit": {
     "packageClass": "representative-frontier-closure",
     "intendedMinimumModel": "gpt-5.3-codex",
@@ -99,6 +99,82 @@
     "expectedNextFrontier": "startup_readiness_owner / startup_support_evidence after snapshot coverage improves, or a narrower active-gate owner boundary",
     "resultClassification": "pending-before-probe",
     "stopCondition": "continue-local-fix"
-  },
-  "predecessor": null
+  }
 }
+-->
+
+## Why
+
+The publication-convergence package now classifies the current representative
+artifact as producer-side publication satisfied: the publication owner stream
+is current and acknowledged, and the remaining missing-published signal is
+fenced as consumer lag. The first actionable frontier is therefore active-gate
+snapshot coverage.
+
+This package owns the next blocker: active gate timed out with
+`inactive_nodes=3` and `snapshotCoverage=2/5`.
+
+## Scope Basis
+
+AGPL topology convergence release-gate closure. Ship criteria still require
+`active=5/5`, `snapshotCoverage=5/5`, and `missingPublished=0`.
+
+## Workflow Lane
+
+- Selected lane: `runtime-owner-boundary`
+- Why this lane is sufficient: the canonical first frontier is one owner
+  boundary, `startup_active_gate_owner / snapshot_coverage`.
+- Escalation trigger to a heavier lane: runtime ownership, shared contract, or representative scenario evidence changes.
+
+## LLM Tool-First Contract
+
+Before raw JSON, raw logs, broad file search, oversized segment files, or ad hoc `jq`, use the canonical workflow command that owns the question:
+
+1. Package metadata or ledger edits: `npm run work:package:doctor -- --suggest <package>`, `npm run work:package:doctor -- --fix-dry-run <package>`, `npm run work:package:schema`, or `npm run work:package:new -- ...`.
+2. Representative evidence: `npm run work:evidence-summary -- <artifact>` plus any focused extractor for this failure class.
+3. Owner discovery: `npm run analyze:owner-files -- <owner> [boundary]`.
+4. Subagent sequencing: `npm run work:subagent-prompt -- --role <role> --package <package>`.
+5. Large-file cleanup: `npm run work:oversized-next -- --markdown`.
+
+If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which canonical extractor was tried and why it was insufficient.
+
+## In Scope
+
+1. Maintain package, sprint, current-blocker, and model-ledger handoff.
+2. Analyze active-gate snapshot coverage from canonical extractors before raw
+   logs.
+3. Promote focused runtime files only after owner-file proof and package scope
+   update.
+
+## Out Of Scope
+
+1. Reopening `topology_publication_owner / publication_convergence` without
+   fresh canonical evidence.
+2. Operation workflow runtime fixes.
+3. Generic harness timeout stretching.
+4. Pro or Enterprise behavior.
+
+## Subagent Sequencing Ledger
+
+Required before implementation because this is a runtime owner-boundary
+package. This package is currently an active handoff only; no implementation
+has started.
+
+## Model Fit
+
+- Package class: `representative-frontier-closure`
+- Intended minimum model: `gpt-5.3-codex`
+- Scope shape: `owner-boundary-contraction/current-frontier`
+- Owned files: `work/packages/active-20260515-topology-active-gate-snapshot-coverage-after-publication-consumer-lag.md`, `work/sprints/active-2026-q2-topology-convergence-residual-closure.md`, `work/model-ledger.jsonl`
+- Forbidden files: `src/`
+- Frozen decisions: package scope and lane stay bounded unless explicitly escalated.
+- Escalation triggers: owned files expand beyond this package, runtime ownership changes, or representative scenario evidence changes.
+- Focused proof: `npm run work:evidence-summary -- test-output/reports/topology-publication-convergence-final-blocker-after-authoritative-refresh-repair.report.json`, `npm run analyze:topology-convergence -- test-output/reports/topology-publication-convergence-final-blocker-after-authoritative-refresh-repair.report.json`, `npm --silent run analyze:causal-model -- test-output/reports/topology-publication-convergence-final-blocker-after-authoritative-refresh-repair.report.json`, `npm run analyze:owner-files -- startup_active_gate_owner snapshot_coverage`
+- Model ledger advisory: `escalate`
+
+## Validation
+
+1. npm run work:evidence-summary -- test-output/reports/topology-publication-convergence-final-blocker-after-authoritative-refresh-repair.report.json
+2. npm run analyze:topology-convergence -- test-output/reports/topology-publication-convergence-final-blocker-after-authoritative-refresh-repair.report.json
+3. npm --silent run analyze:causal-model -- test-output/reports/topology-publication-convergence-final-blocker-after-authoritative-refresh-repair.report.json
+4. npm run analyze:owner-files -- startup_active_gate_owner snapshot_coverage

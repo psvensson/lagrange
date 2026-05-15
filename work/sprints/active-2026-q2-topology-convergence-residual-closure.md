@@ -409,7 +409,7 @@ Final closure requires fresh evidence proving all of the following:
       `topology_publication_owner / publication_convergence` with
       `missing_published_nodes_present`, and runtime behavior was not changed.
 
-17. [Topology Publication Convergence Final Blocker](../packages/active-20260514-topology-publication-convergence-final-blocker.md)
+17. [Topology Publication Convergence Final Blocker](../packages/done-20260514-topology-publication-convergence-final-blocker.md)
     - Lane: `runtime-owner-boundary`
     - Owner boundary: `topology_publication_owner / publication_convergence`
     - Purpose: continue the publication convergence blocker after focused
@@ -417,17 +417,23 @@ Final closure requires fresh evidence proving all of the following:
       `PRIORITY_CONTROL_PLANE_RECOVERY_PENDING`, and lifecycle-thin
       `PUBLISHED` authoritative-refresh handling locally but did not close
       representative evidence.
-    - Acceptance: active same-frontier red package. Focused planner proof is
-      green locally, but representative artifact
+    - Acceptance: migrated. Focused planner proof and consumer-lag
+      classification are green locally. The representative artifact
       `test-output/reports/topology-publication-convergence-final-blocker-after-authoritative-refresh-repair.report.json`
-      failed in `128672ms` with `active=2/5`,
-      `snapshotCoverage=2/5`,
-      `publishedActive=1/5`, `pendingAck=0`, `missingPublished=4`, and
-      one non-frontier `operation_workflow_owner / workflow_progress`
-      witness. Raw fallback shows the scenario-level publication owner stream
-      remains count-only without lifecycle/projection evidence; a broader
-      always-authoritative `PUBLISHED` probe regressed under SQL/query pressure
-      and was not kept.
+      now selects `startup_active_gate_owner / snapshot_coverage` with
+      `active_gate_timed_out`, `inactive_nodes=3`, and
+      `snapshotCoverage=2/5`; publication ACK convergence is satisfied when
+      the owner stream is current, acknowledged, and fenced by `consumer_lag`.
+
+18. [Topology Active Gate Snapshot Coverage After Publication Consumer Lag](../packages/active-20260515-topology-active-gate-snapshot-coverage-after-publication-consumer-lag.md)
+    - Lane: `runtime-owner-boundary`
+    - Owner boundary: `startup_active_gate_owner / snapshot_coverage`
+    - Purpose: continue the current first frontier after publication
+      convergence migrated by consumer-lag classification.
+    - Acceptance: active handoff. Start from
+      `test-output/reports/topology-publication-convergence-final-blocker-after-authoritative-refresh-repair.report.json`
+      with `active_gate_timed_out`, `inactive_nodes=3`, and
+      `snapshotCoverage=2/5`.
 
 ## Dependency Order
 
@@ -501,19 +507,19 @@ projection reconciliation is done as classification-only observability:
 `topology_publication_owner` blocker instead of healthy evidence.
 
 The current action is now
-[Topology Publication Convergence Final Blocker](../packages/active-20260514-topology-publication-convergence-final-blocker.md).
+[Topology Active Gate Snapshot Coverage After Publication Consumer Lag](../packages/active-20260515-topology-active-gate-snapshot-coverage-after-publication-consumer-lag.md).
 The predecessor
 [Topology Contract Integration Reconciliation](../packages/done-20260514-topology-contract-integration-reconciliation.md)
 closed as classification-only work: focused membership epoch, failure repair,
 rejoin, descriptor, capacity, anti-entropy, and budget contracts exist, but
 they are not release-ready while current evidence still blocks at
-`topology_publication_owner / publication_convergence`. The representative
-artifact first frontier is `publication_ack_convergence` with
-`missing_published_nodes_present`, `pendingAckCount=0`, `missingPublishedCount=4`,
-next expected active-gate snapshot coverage `2/5`, and one bounded priority
-recovery wait. The latest rebalance gate also migrates to publication
-convergence with `missingPublishedCount=6` and zero priority recovery
-witnesses.
+`startup_active_gate_owner / snapshot_coverage`. The current representative
+artifact first frontier is `active_gate_snapshot_coverage` with
+`active_gate_timed_out`, `inactive_nodes=3`, `snapshotCoverage=2/5`, and
+publication ACK convergence satisfied by current, acknowledged,
+consumer-lag-fenced owner evidence. The latest rebalance gate still has its own
+publication-convergence migration evidence and must remain a separate gate
+package unless promoted by fresh canonical extraction.
 
 Priority residual drain is classification-complete and closed. The
 representative priority extractor still reports one non-frontier
@@ -537,12 +543,15 @@ frontier, but after-repair evidence has three non-frontier
 `operation_workflow_owner / workflow_progress` witnesses in
 `spread_satisfied_in_flight`.
 
-Final confirmation is closed as a migrated red gate. Continue
-[Topology Publication Convergence Final Blocker](../packages/active-20260514-topology-publication-convergence-final-blocker.md)
-against the same-owner residual. The current implementation step added a
+Final confirmation is closed as a migrated red gate. The publication
+convergence final blocker is now closed as migrated by consumer-lag
+classification. Continue
+[Topology Active Gate Snapshot Coverage After Publication Consumer Lag](../packages/active-20260515-topology-active-gate-snapshot-coverage-after-publication-consumer-lag.md)
+against the current active-gate residual. Earlier implementation added a
 bounded publication-planning repair for readiness entries that expose only
-`PRIORITY_CONTROL_PLANE_RECOVERY_PENDING`; focused proof is green, but the
-representative checkpoint stayed same-frontier red with
-`missingPublished=4`. Do not fix `rolling-restart`, active-gate, rebalance, or
-operation workflow runtime behavior in this sprint segment unless owner
-evidence proves the remaining blocker has split or migrated.
+`PRIORITY_CONTROL_PLANE_RECOVERY_PENDING`; focused proof is green. The
+consumer-lag classification proof moved the current representative checkpoint
+to `startup_active_gate_owner / snapshot_coverage`. Do not fix
+`rolling-restart`, rebalance, publication convergence, or operation workflow
+runtime behavior in this sprint segment unless owner evidence proves the
+remaining blocker has split or migrated.
