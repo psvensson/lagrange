@@ -244,6 +244,6 @@ causal-escalation package.
 
 ## Commit And Push Ledger
 
-1. Focused package commit: pending-before-focused-commit
-2. Pushed to: pending-before-push
-3. Commit contains only package-owned files/package-status/allowed sprint handoff: pending-before-focused-commit
+1. Focused package commit: `f3c8a3ff35c5300396bffe79acf5a1142010d8f2`
+2. Pushed to: `origin/codex/pending-ack-eligibility-filter`
+3. Commit contains only package-owned files/package-status/allowed sprint handoff: yes
