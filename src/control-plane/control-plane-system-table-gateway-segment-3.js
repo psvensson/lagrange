@@ -92,6 +92,7 @@ function applyReplicaOperationMutationCoalescingFallback(
   return {
     ...options,
     coalescingKey,
+    replacePendingKey: coalescingKey,
   };
 }
 

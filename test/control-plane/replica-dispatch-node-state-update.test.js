@@ -51,6 +51,15 @@ const HEARTBEAT_PUBLICATION_GAP_STALE_DELTA_MS = 1000;
 const HEARTBEAT_PUBLICATION_GAP_CREATED_STALE_DELTA_MS = 10000;
 const HEARTBEAT_PUBLICATION_GAP_NO_PUBLICATION_ROW = null;
 const HEARTBEAT_PUBLICATION_GAP_NO_READY_LEASE = null;
+const HEARTBEAT_PUBLICATION_GAP_ALLOW_PENDING_VISIBILITY = true;
+const HEARTBEAT_PUBLICATION_GAP_ALLOW_PRESSURE_DEFER = false;
+const HEARTBEAT_PUBLICATION_GAP_SKIP_WRITE_READBACK = true;
+const HEARTBEAT_PUBLICATION_GAP_TARGET_NODE_IDS = Object.freeze(
+  [
+    HEARTBEAT_PUBLICATION_GAP_NODE_ID,
+    HEARTBEAT_PUBLICATION_GAP_PUBLISHED_NODE_ID,
+  ].sort((left, right) => left.localeCompare(right)),
+);
 
 function initEnv() {
   ConfigurationManager.resetInstance();
@@ -688,6 +697,36 @@ async (t) => {
     reconcileCalls[0]?.context?.nodeRow?.connection_state,
     STATE.READY,
     'publication repair should carry the visible READY row shape',
+  );
+  t.same(
+    reconcileCalls[0]?.context?.publishedActiveNodeIds,
+    [...HEARTBEAT_PUBLICATION_GAP_TARGET_NODE_IDS],
+    'publication repair should carry an explicit published-active target',
+  );
+  t.same(
+    reconcileCalls[0]?.context?.requiredAckNodeIds,
+    [...HEARTBEAT_PUBLICATION_GAP_TARGET_NODE_IDS],
+    'publication repair should close required ACKs for the explicit target',
+  );
+  t.same(
+    reconcileCalls[0]?.context?.acknowledgedNodeIds,
+    [...HEARTBEAT_PUBLICATION_GAP_TARGET_NODE_IDS],
+    'publication repair should mark the visible READY target acknowledged',
+  );
+  t.equal(
+    reconcileCalls[0]?.context?.allowPendingVisibility,
+    HEARTBEAT_PUBLICATION_GAP_ALLOW_PENDING_VISIBILITY,
+    'publication repair should accept pending visibility for the explicit target',
+  );
+  t.equal(
+    reconcileCalls[0]?.context?.allowPressureDefer,
+    HEARTBEAT_PUBLICATION_GAP_ALLOW_PRESSURE_DEFER,
+    'publication repair should bypass pressure deferral for the explicit target',
+  );
+  t.equal(
+    reconcileCalls[0]?.context?.skipPublicationWriteReadback,
+    HEARTBEAT_PUBLICATION_GAP_SKIP_WRITE_READBACK,
+    'publication repair should avoid readback while durable visibility is pending',
   );
   t.same(
     acknowledgementCalls,
@@ -1452,10 +1491,17 @@ test('ReplicaDispatchService READY node-state updates enqueue cluster ' +
   initEnv();
 
   const now = Date.now();
+  const nodeId = 'node-publication-reconcile';
+  const nodeAddress = 'localhost:8089';
+  const publicationPeerNodeId = 'node-publication-reconcile-peer';
+  const publicationTargetNodeIds = [
+    nodeId,
+    publicationPeerNodeId,
+  ].sort((left, right) => left.localeCompare(right));
   const reconcileEnqueues = [];
   const cacheNode = {
-    node_id: 'node-publication-reconcile',
-    node_address: 'localhost:8089',
+    node_id: nodeId,
+    node_address: nodeAddress,
     cpu_cores: 8,
     memory_mb: 16384,
     disk_gb: 500,
@@ -1477,6 +1523,15 @@ test('ReplicaDispatchService READY node-state updates enqueue cluster ' +
     },
     controlPlaneReadinessService: {
       membershipPublicationService: {
+        getLatestPublicationForNodeSync() {
+          return HEARTBEAT_PUBLICATION_GAP_NO_PUBLICATION_ROW;
+        },
+        getLatestPublicationRowSync() {
+          return {
+            status: TEST_MEMBERSHIP_PUBLICATION_STATUS.PUBLISHED,
+            publishedActiveNodeIds: [publicationPeerNodeId],
+          };
+        },
         enqueueClusterMembershipReconcile(reason, context) {
           reconcileEnqueues.push({reason, context});
           return true;
@@ -1487,8 +1542,8 @@ test('ReplicaDispatchService READY node-state updates enqueue cluster ' +
 
   await service.handleNodeStateUpdate({
     [ControlPlaneField.TYPE]: ControlPlaneMessageType.NODE_STATE_UPDATE,
-    [ControlPlaneField.NODE_ID]: 'node-publication-reconcile',
-    [ControlPlaneField.NODE_ADDRESS]: 'localhost:8089',
+    [ControlPlaneField.NODE_ID]: nodeId,
+    [ControlPlaneField.NODE_ADDRESS]: nodeAddress,
     [ControlPlaneField.STATE]: STATE.READY,
     [ControlPlaneField.HEARTBEAT_AT]: now,
   });
@@ -1500,8 +1555,18 @@ test('ReplicaDispatchService READY node-state updates enqueue cluster ' +
   );
   t.equal(
     reconcileEnqueues[0]?.context?.nodeId,
-    'node-publication-reconcile',
+    nodeId,
     'reconcile enqueue should preserve the ready node id',
+  );
+  t.same(
+    reconcileEnqueues[0]?.context?.publishedActiveNodeIds,
+    publicationTargetNodeIds,
+    'ready reconcile should carry an explicit published-active target',
+  );
+  t.equal(
+    reconcileEnqueues[0]?.context?.allowPressureDefer,
+    HEARTBEAT_PUBLICATION_GAP_ALLOW_PRESSURE_DEFER,
+    'ready reconcile should bypass pressure deferral for the explicit target',
   );
 
   service.stop();

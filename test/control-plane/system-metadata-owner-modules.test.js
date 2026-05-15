@@ -25,6 +25,9 @@ import {
 const TEST_PUBLICATION_READ_PROFILE_DIAGNOSTICS = 'diagnostics';
 const TEST_PUBLICATION_READ_PROFILE_PLANNING = 'planning';
 const TEST_PUBLICATION_ID = 'publication-1';
+const TEST_PUBLICATION_STATUS_OPEN = 'OPEN';
+const TEST_PUBLICATION_MUTATION_ALLOW_PRESSURE_DEFER = true;
+const TEST_PUBLICATION_MUTATION_BLOCK_PRESSURE_DEFER = false;
 
 test('System metadata owner modules exist for each shared metadata family',
   async (t) => {
@@ -100,8 +103,8 @@ test('ControlPlanePublicationsOwner marks publication mutations as ' +
   });
 
   await owner.upsertPublication({
-    publication_id: 'publication-1',
-    status: 'OPEN',
+    publication_id: TEST_PUBLICATION_ID,
+    status: TEST_PUBLICATION_STATUS_OPEN,
   });
 
   t.equal(
@@ -126,7 +129,7 @@ test('ControlPlanePublicationsOwner marks publication mutations as ' +
   );
   t.equal(
     gatewayCalls[0]?.options?.allowPressureDefer,
-    true,
+    TEST_PUBLICATION_MUTATION_ALLOW_PRESSURE_DEFER,
     'publication mutations should defer behind transport pressure',
   );
   t.equal(
@@ -138,6 +141,46 @@ test('ControlPlanePublicationsOwner marks publication mutations as ' +
     gatewayCalls[0]?.options?.workloadClass,
     CONTROL_PLANE_WORKLOAD_CLASS.PUBLICATION_MUTATION,
     'publication mutations should carry the shared membership-publication workload class',
+  );
+});
+
+test('ControlPlanePublicationsOwner honors explicit non-deferred ' +
+  'publication mutations', async (t) => {
+  const gatewayCalls = [];
+  const gateway = {
+    async upsertSystemTableRow(tableName, row, options) {
+      gatewayCalls.push({
+        tableName,
+        row,
+        options,
+      });
+      return {success: true};
+    },
+  };
+
+  const owner = new ControlPlanePublicationsOwner({
+    controlPlaneSystemTableGateway: gateway,
+  });
+
+  await owner.upsertPublication(
+    {
+      publication_id: TEST_PUBLICATION_ID,
+      status: TEST_PUBLICATION_STATUS_OPEN,
+    },
+    {
+      allowPressureDefer: TEST_PUBLICATION_MUTATION_BLOCK_PRESSURE_DEFER,
+    },
+  );
+
+  t.equal(
+    gatewayCalls[0]?.options?.allowPressureDefer,
+    TEST_PUBLICATION_MUTATION_BLOCK_PRESSURE_DEFER,
+    'explicit publication owner writes should bypass pressure deferral',
+  );
+  t.equal(
+    gatewayCalls[0]?.options?.workloadClass,
+    CONTROL_PLANE_WORKLOAD_CLASS.PUBLICATION_MUTATION,
+    'non-deferred publication writes should keep the publication workload class',
   );
 });
 

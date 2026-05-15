@@ -22,6 +22,7 @@ import {
   buildPublicationMetadataRefreshRow,
   buildPublicationReadOptions,
   deriveMembershipPublicationCandidate,
+  hasExplicitMembershipPublicationTarget,
   mergePublicationRows,
   serializeMembershipPublicationRow,
   shouldPreferAuthoritativeMembershipState,
@@ -76,11 +77,13 @@ class MembershipPublicationCoordinatorClassStage2 extends
       MEMBERSHIP_PUBLICATION_STATUS.PUBLISHED ?
         latestPublicationRow :
         await this.getLatestPublishedPublicationRow(planningReadOptions));
-    const preferAuthoritativeMembershipState = shouldPreferAuthoritativeMembershipState({
-      ...options,
-      latestPublicationRow,
-      latestPublishedPublicationRow,
-    });
+    const preferAuthoritativeMembershipState =
+      hasExplicitMembershipPublicationTarget(options) !== true &&
+      shouldPreferAuthoritativeMembershipState({
+        ...options,
+        latestPublicationRow,
+        latestPublishedPublicationRow,
+      });
     const nodeRows = await this.readTableRows(TABLES.NODES, {
       ...planningReadOptions,
       preferAuthoritativeRead: preferAuthoritativeMembershipState,

@@ -377,6 +377,7 @@ class AdminControlSnapshotPart1 {
         tableRows,
         preferAuthoritativePublicationRead,
         reconcileAuthoritativeMembershipPublication,
+        publicationActiveGateHandoff: options.publicationActiveGateHandoff,
         allowAuthoritativeReadinessRefresh:
           options.allowAuthoritativeReadinessRefresh,
         allowStaleReadinessOnCacheChange:

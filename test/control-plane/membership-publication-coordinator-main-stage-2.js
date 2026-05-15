@@ -46,6 +46,43 @@ const PUBLICATION_CONVERGENCE_AUTH_REFRESH_MISSING_NODE_ID =
   'node-auth-refresh-missing';
 const PUBLICATION_CONVERGENCE_AUTH_REFRESH_READY_LEASE_EXPIRES_AT = 5000;
 const PUBLICATION_CONVERGENCE_AUTH_REFRESH_NOW_MS = 2500;
+const PUBLICATION_CONVERGENCE_HANDOFF_TARGET_PUBLICATION_ID =
+  'publication-handoff-target';
+const PUBLICATION_CONVERGENCE_HANDOFF_TARGET_EPOCH = 41;
+const PUBLICATION_CONVERGENCE_HANDOFF_TARGET_NEXT_EPOCH = 42;
+const PUBLICATION_CONVERGENCE_HANDOFF_TARGET_NOW_MS = 3200;
+const PUBLICATION_CONVERGENCE_HANDOFF_TARGET_AUTHORITATIVE_READ_ERROR =
+  'explicit handoff target should not require authoritative node repair';
+const PUBLICATION_CONVERGENCE_HANDOFF_TARGET_ALLOW_PENDING_VISIBILITY = true;
+const PUBLICATION_CONVERGENCE_HANDOFF_TARGET_ALLOW_PRESSURE_DEFER = false;
+const PUBLICATION_CONVERGENCE_HANDOFF_TARGET_NODE_IDS = Object.freeze([
+  'node-handoff-seed',
+  'node-handoff-a',
+  'node-handoff-b',
+]);
+const PUBLICATION_CONVERGENCE_HANDOFF_TARGET_SORTED_NODE_IDS = Object.freeze(
+  [...PUBLICATION_CONVERGENCE_HANDOFF_TARGET_NODE_IDS].sort((left, right) =>
+    left.localeCompare(right),
+  ),
+);
+const PUBLICATION_CONVERGENCE_HANDOFF_TARGET_PUBLISHED_NODE_IDS =
+  Object.freeze([
+    PUBLICATION_CONVERGENCE_HANDOFF_TARGET_NODE_IDS[0],
+  ]);
+const PUBLICATION_CONVERGENCE_HANDOFF_TARGET_EMPTY_ROWS = Object.freeze([]);
+const PUBLICATION_CONVERGENCE_HANDOFF_TARGET_QUEUE_REASON_A =
+  'ready-node-handoff-a';
+const PUBLICATION_CONVERGENCE_HANDOFF_TARGET_QUEUE_REASON_B =
+  'ready-node-handoff-b';
+const PUBLICATION_CONVERGENCE_HANDOFF_TARGET_QUEUE_NEWER_EPOCH = 43;
+const PUBLICATION_CONVERGENCE_HANDOFF_TARGET_QUEUE_NODE_A_IDS = Object.freeze([
+  PUBLICATION_CONVERGENCE_HANDOFF_TARGET_NODE_IDS[0],
+  PUBLICATION_CONVERGENCE_HANDOFF_TARGET_NODE_IDS[1],
+]);
+const PUBLICATION_CONVERGENCE_HANDOFF_TARGET_QUEUE_NODE_B_IDS = Object.freeze([
+  PUBLICATION_CONVERGENCE_HANDOFF_TARGET_NODE_IDS[0],
+  PUBLICATION_CONVERGENCE_HANDOFF_TARGET_NODE_IDS[2],
+]);
 
 test('shouldPreferAuthoritativeMembershipState refreshes published count-only rows without lifecycle projection evidence',
   async (t) => {
@@ -203,6 +240,259 @@ test('readPublicationPlanningSnapshot uses authoritative membership evidence for
       'planning should merge authoritative node rows instead of retaining the stale local cache only',
     );
     t.end();
+  });
+
+test('reconcileClusterMembership publishes explicit handoff target without authoritative node repair',
+  async (t) => {
+    const latestPublicationRow = {
+      publication_id: PUBLICATION_CONVERGENCE_HANDOFF_TARGET_PUBLICATION_ID,
+      publication_kind: 'cluster_membership',
+      publication_epoch: PUBLICATION_CONVERGENCE_HANDOFF_TARGET_EPOCH,
+      status: CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED,
+      published_active_node_ids: [
+        ...PUBLICATION_CONVERGENCE_HANDOFF_TARGET_PUBLISHED_NODE_IDS,
+      ],
+      required_ack_node_ids: [
+        ...PUBLICATION_CONVERGENCE_HANDOFF_TARGET_PUBLISHED_NODE_IDS,
+      ],
+      acknowledged_node_ids: [
+        ...PUBLICATION_CONVERGENCE_HANDOFF_TARGET_PUBLISHED_NODE_IDS,
+      ],
+      priority_partition_summary:
+        PUBLICATION_CONVERGENCE_AUTH_REFRESH_PRIORITY_SUMMARY,
+    };
+    const nodeReadModes = [];
+    const readinessRefreshModes = [];
+    const persistedRows = [];
+    const persistOptions = [];
+    const coordinator = new MembershipPublicationCoordinator({
+      nodeId: PUBLICATION_CONVERGENCE_HANDOFF_TARGET_NODE_IDS[0],
+      controlPlanePublicationsOwner: {
+        async listPublications() {
+          return {rows: [latestPublicationRow]};
+        },
+        async upsertPublication(row, options = {}) {
+          persistedRows.push(row);
+          persistOptions.push(options);
+        },
+      },
+      authoritativeControlPlaneView: {
+        canRead() {
+          return true;
+        },
+        async readRows(tableName, _sql, _params, options) {
+          if (tableName === TABLES.NODES) {
+            nodeReadModes.push(options.authoritativeReadMode);
+            if (
+              options.authoritativeReadMode !==
+              CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_LOCAL_ONLY
+            ) {
+              throw new Error(
+                PUBLICATION_CONVERGENCE_HANDOFF_TARGET_AUTHORITATIVE_READ_ERROR,
+              );
+            }
+          }
+          return {
+            success: true,
+            rows: [...PUBLICATION_CONVERGENCE_HANDOFF_TARGET_EMPTY_ROWS],
+          };
+        },
+      },
+      controlPlaneReadinessService: {
+        async getAllNodeReadiness(options = {}) {
+          readinessRefreshModes.push(options.allowAuthoritativeRefresh === true);
+          return [...PUBLICATION_CONVERGENCE_HANDOFF_TARGET_EMPTY_ROWS];
+        },
+        getRecoveryEpochHistoryByNodeId() {
+          return {};
+        },
+        async getMembershipPublicationPlanningSnapshotBestEffort() {
+          return null;
+        },
+      },
+      systemTableCache: {
+        getAll(tableName) {
+          if (tableName === TABLES.CONTROL_PLANE_PUBLICATIONS) {
+            return [latestPublicationRow];
+          }
+          return [...PUBLICATION_CONVERGENCE_HANDOFF_TARGET_EMPTY_ROWS];
+        },
+      },
+      now: () => PUBLICATION_CONVERGENCE_HANDOFF_TARGET_NOW_MS,
+    });
+
+    const outcome = await coordinator.reconcileClusterMembership({
+      preferAuthoritativeRead: true,
+      publishedActiveNodeIds: [
+        ...PUBLICATION_CONVERGENCE_HANDOFF_TARGET_NODE_IDS,
+      ],
+      requiredAckNodeIds: [
+        ...PUBLICATION_CONVERGENCE_HANDOFF_TARGET_NODE_IDS,
+      ],
+      acknowledgedNodeIds: [
+        ...PUBLICATION_CONVERGENCE_HANDOFF_TARGET_NODE_IDS,
+      ],
+      allowPendingVisibility:
+        PUBLICATION_CONVERGENCE_HANDOFF_TARGET_ALLOW_PENDING_VISIBILITY,
+      allowPressureDefer:
+        PUBLICATION_CONVERGENCE_HANDOFF_TARGET_ALLOW_PRESSURE_DEFER,
+    });
+
+    t.same(
+      nodeReadModes,
+      [CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_LOCAL_ONLY],
+      'explicit handoff reconcile should avoid authoritative node repair reads',
+    );
+    t.same(
+      readinessRefreshModes,
+      [false],
+      'explicit handoff reconcile should not ask readiness for authoritative refresh',
+    );
+    t.match(
+      outcome.publicationRow,
+      {
+        publication_epoch: PUBLICATION_CONVERGENCE_HANDOFF_TARGET_NEXT_EPOCH,
+        status: CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED,
+        published_active_node_ids: [
+          ...PUBLICATION_CONVERGENCE_HANDOFF_TARGET_SORTED_NODE_IDS,
+        ],
+        required_ack_node_ids: [
+          ...PUBLICATION_CONVERGENCE_HANDOFF_TARGET_SORTED_NODE_IDS,
+        ],
+        acknowledged_node_ids: [
+          ...PUBLICATION_CONVERGENCE_HANDOFF_TARGET_SORTED_NODE_IDS,
+        ],
+      },
+      'explicit handoff target should drive the replacement publication row',
+    );
+    t.match(
+      persistedRows[0],
+      {
+        publication_epoch: PUBLICATION_CONVERGENCE_HANDOFF_TARGET_NEXT_EPOCH,
+        status: CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED,
+        published_active_node_ids: [
+          ...PUBLICATION_CONVERGENCE_HANDOFF_TARGET_SORTED_NODE_IDS,
+        ],
+        required_ack_node_ids: [
+          ...PUBLICATION_CONVERGENCE_HANDOFF_TARGET_SORTED_NODE_IDS,
+        ],
+        acknowledged_node_ids: [
+          ...PUBLICATION_CONVERGENCE_HANDOFF_TARGET_SORTED_NODE_IDS,
+        ],
+      },
+      'explicit handoff target should be persisted as the durable publication target',
+    );
+    t.equal(
+      persistOptions[0]?.allowPendingVisibility,
+      PUBLICATION_CONVERGENCE_HANDOFF_TARGET_ALLOW_PENDING_VISIBILITY,
+      'explicit handoff target should preserve pending visibility on the publication write',
+    );
+    t.equal(
+      persistOptions[0]?.allowPressureDefer,
+      PUBLICATION_CONVERGENCE_HANDOFF_TARGET_ALLOW_PRESSURE_DEFER,
+      'explicit handoff target should bypass pressure deferral on the publication write',
+    );
+  });
+
+test('enqueueClusterMembershipReconcile merges pending explicit handoff targets',
+  async (t) => {
+    const pending = new Map();
+    const enqueued = [];
+    const reconcileQueue = {
+      pending,
+      enqueue(ownerKey, reason, context, options) {
+        enqueued.push({ownerKey, reason, context, options});
+        const pendingEntry = pending.get(ownerKey);
+        if (pendingEntry) {
+          pendingEntry.context = context;
+          return false;
+        }
+        pending.set(ownerKey, {context});
+        return true;
+      },
+    };
+    const coordinator = new MembershipPublicationCoordinator({
+      nodeId: PUBLICATION_CONVERGENCE_HANDOFF_TARGET_NODE_IDS[0],
+      reconcileQueue,
+    });
+    const ownerKey = coordinator.buildOwnerKey();
+
+    coordinator.enqueueClusterMembershipReconcile(
+      PUBLICATION_CONVERGENCE_HANDOFF_TARGET_QUEUE_REASON_A,
+      {
+        latestPublicationRow: {
+          publication_epoch: PUBLICATION_CONVERGENCE_HANDOFF_TARGET_EPOCH,
+        },
+        publishedActiveNodeIds: [
+          ...PUBLICATION_CONVERGENCE_HANDOFF_TARGET_QUEUE_NODE_A_IDS,
+        ],
+        requiredAckNodeIds: [
+          ...PUBLICATION_CONVERGENCE_HANDOFF_TARGET_QUEUE_NODE_A_IDS,
+        ],
+        acknowledgedNodeIds: [
+          ...PUBLICATION_CONVERGENCE_HANDOFF_TARGET_QUEUE_NODE_A_IDS,
+        ],
+        allowPendingVisibility:
+          PUBLICATION_CONVERGENCE_HANDOFF_TARGET_ALLOW_PENDING_VISIBILITY,
+        allowPressureDefer:
+          PUBLICATION_CONVERGENCE_HANDOFF_TARGET_ALLOW_PRESSURE_DEFER,
+      },
+    );
+    coordinator.enqueueClusterMembershipReconcile(
+      PUBLICATION_CONVERGENCE_HANDOFF_TARGET_QUEUE_REASON_B,
+      {
+        latestPublicationRow: {
+          publication_epoch:
+            PUBLICATION_CONVERGENCE_HANDOFF_TARGET_QUEUE_NEWER_EPOCH,
+        },
+        publishedActiveNodeIds: [
+          ...PUBLICATION_CONVERGENCE_HANDOFF_TARGET_QUEUE_NODE_B_IDS,
+        ],
+        requiredAckNodeIds: [
+          ...PUBLICATION_CONVERGENCE_HANDOFF_TARGET_QUEUE_NODE_B_IDS,
+        ],
+        acknowledgedNodeIds: [
+          ...PUBLICATION_CONVERGENCE_HANDOFF_TARGET_QUEUE_NODE_B_IDS,
+        ],
+      },
+    );
+
+    const mergedContext = pending.get(ownerKey)?.context;
+    t.equal(
+      enqueued.length,
+      2,
+      'both enqueue calls should reach the owner queue',
+    );
+    t.same(
+      mergedContext?.publishedActiveNodeIds,
+      [...PUBLICATION_CONVERGENCE_HANDOFF_TARGET_SORTED_NODE_IDS],
+      'pending context should union explicit publication targets',
+    );
+    t.same(
+      mergedContext?.requiredAckNodeIds,
+      [...PUBLICATION_CONVERGENCE_HANDOFF_TARGET_SORTED_NODE_IDS],
+      'pending context should union explicit ACK targets',
+    );
+    t.same(
+      mergedContext?.acknowledgedNodeIds,
+      [...PUBLICATION_CONVERGENCE_HANDOFF_TARGET_SORTED_NODE_IDS],
+      'pending context should union explicit acknowledged nodes',
+    );
+    t.equal(
+      mergedContext?.latestPublicationRow?.publication_epoch,
+      PUBLICATION_CONVERGENCE_HANDOFF_TARGET_QUEUE_NEWER_EPOCH,
+      'pending context should retain the newest known publication row',
+    );
+    t.equal(
+      mergedContext?.allowPendingVisibility,
+      PUBLICATION_CONVERGENCE_HANDOFF_TARGET_ALLOW_PENDING_VISIBILITY,
+      'pending context should retain pending visibility permission',
+    );
+    t.equal(
+      mergedContext?.allowPressureDefer,
+      PUBLICATION_CONVERGENCE_HANDOFF_TARGET_ALLOW_PRESSURE_DEFER,
+      'pending context should retain the explicit non-deferred write option',
+    );
   });
 
 test('deriveMembershipPublicationCandidate promotes healthy projected members while publication acknowledgements are still pending',

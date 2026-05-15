@@ -48,6 +48,9 @@ export function registerReplicaOperationRepositoryTailTests({
   PARTITION_SERVICE_ERROR_MSG,
   createTestCoordinator,
 }) {
+  const TEST_REPLICA_OPERATION_WRITE_REPLACE_PENDING_KEY =
+    `replica-operation:${TEST_OPERATION_ID}`;
+
   test('getReplaceTargetReplicaId returns null when same as source', async (t) => {
     const repo = createTestRepository();
     const op = {
@@ -757,6 +760,11 @@ export function registerReplicaOperationRepositoryTailTests({
         gatewayMutations[0]?.options?.allowPressureDefer,
         false,
         'replica_operations mutations should remain non-deferrable under pressure',
+      );
+      t.equal(
+        gatewayMutations[0]?.options?.replacePendingKey,
+        TEST_REPLICA_OPERATION_WRITE_REPLACE_PENDING_KEY,
+        'replica_operations mutations should replace stale queued router writes by operation id',
       );
     },
   );

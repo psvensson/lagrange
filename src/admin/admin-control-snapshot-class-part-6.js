@@ -12,6 +12,9 @@
  */
 import {NUM, TABLES, TYPEOF} from '../constants/index.js';
 import {normalizeControlPlanePublicationRow} from '../control-plane/system-row-normalizers.js';
+import {
+  normalizePublicationActiveGateHandoffContract,
+} from '../control-plane/publication-active-gate-handoff-contract.js';
 import {AdminControlSnapshotPart5} from './admin-control-snapshot-class-part-5.js';
 // ── file-local constants ────────────────────────────────────────────────────
 const ADMIN_CONTROL_SNAPSHOT_LITERAL = Object.freeze({
@@ -43,6 +46,17 @@ const MEMBERSHIP_PUBLICATION_READ_PROFILE_DIAGNOSTICS = 'diagnostics';
 const MEMBERSHIP_PUBLICATION_RECONCILE_OPTIONS = Object.freeze({
   preferAuthoritativeRead: true,
 });
+const MEMBERSHIP_PUBLICATION_HANDOFF_ALLOW_PRESSURE_DEFER = false;
+const MEMBERSHIP_PUBLICATION_RECONCILE_FIELD = Object.freeze({
+  ACKNOWLEDGED_NODE_IDS: 'acknowledgedNodeIds',
+  ALLOW_PENDING_VISIBILITY: 'allowPendingVisibility',
+  ALLOW_PRESSURE_DEFER: 'allowPressureDefer',
+  PUBLICATION_ACTIVE_GATE_HANDOFF: 'publicationActiveGateHandoff',
+  PUBLISHED_ACTIVE_NODE_IDS: 'publishedActiveNodeIds',
+  REQUIRED_ACK_NODE_IDS: 'requiredAckNodeIds',
+  SKIP_PUBLICATION_WRITE_READBACK: 'skipPublicationWriteReadback',
+});
+const MEMBERSHIP_PUBLICATION_RECONCILE_EMPTY_LIST = Object.freeze([]);
 /**
  * Normalize one arbitrary value to a non-negative integer.
  * @param {*} value
@@ -55,6 +69,56 @@ function buildMembershipPublicationReadOptions(options = {}) {
       readProfile: MEMBERSHIP_PUBLICATION_READ_PROFILE_DIAGNOSTICS,
     } :
     {readProfile: MEMBERSHIP_PUBLICATION_READ_PROFILE_DIAGNOSTICS};
+}
+function normalizeMembershipPublicationReconcileNodeIds(values = []) {
+  return [
+    ...new Set(
+      (Array.isArray(values) ?
+        values :
+        MEMBERSHIP_PUBLICATION_RECONCILE_EMPTY_LIST)
+        .map((value) =>
+          String(value || ADMIN_CONTROL_SNAPSHOT_LITERAL.VALUE).trim(),
+        )
+        .filter((value) => value.length > NUM.ZERO),
+    ),
+  ].sort((left, right) => left.localeCompare(right));
+}
+function buildMembershipPublicationReconcileOptions(options = {}) {
+  const handoffContract = normalizePublicationActiveGateHandoffContract(
+    options[
+      MEMBERSHIP_PUBLICATION_RECONCILE_FIELD
+        .PUBLICATION_ACTIVE_GATE_HANDOFF
+    ],
+  );
+  if (
+    !handoffContract ||
+    handoffContract.pendingReconcileNodeIds.length === NUM.ZERO
+  ) {
+    return MEMBERSHIP_PUBLICATION_RECONCILE_OPTIONS;
+  }
+  const publishedActiveNodeIds =
+    normalizeMembershipPublicationReconcileNodeIds([
+      ...handoffContract.publishedActiveNodeIds,
+      ...handoffContract.pendingReconcileNodeIds,
+    ]);
+  if (publishedActiveNodeIds.length === NUM.ZERO) {
+    return MEMBERSHIP_PUBLICATION_RECONCILE_OPTIONS;
+  }
+  return {
+    ...MEMBERSHIP_PUBLICATION_RECONCILE_OPTIONS,
+    [MEMBERSHIP_PUBLICATION_RECONCILE_FIELD.PUBLISHED_ACTIVE_NODE_IDS]:
+      publishedActiveNodeIds,
+    [MEMBERSHIP_PUBLICATION_RECONCILE_FIELD.REQUIRED_ACK_NODE_IDS]:
+      publishedActiveNodeIds,
+    [MEMBERSHIP_PUBLICATION_RECONCILE_FIELD.ACKNOWLEDGED_NODE_IDS]:
+      publishedActiveNodeIds,
+    [MEMBERSHIP_PUBLICATION_RECONCILE_FIELD.ALLOW_PENDING_VISIBILITY]:
+      true,
+    [MEMBERSHIP_PUBLICATION_RECONCILE_FIELD.ALLOW_PRESSURE_DEFER]:
+      MEMBERSHIP_PUBLICATION_HANDOFF_ALLOW_PRESSURE_DEFER,
+    [MEMBERSHIP_PUBLICATION_RECONCILE_FIELD.SKIP_PUBLICATION_WRITE_READBACK]:
+      true,
+  };
 }
 async function maybeReconcileAuthoritativeMembershipPublication(
   membershipPublicationService,
@@ -70,7 +134,7 @@ async function maybeReconcileAuthoritativeMembershipPublication(
   }
   const outcome =
     await membershipPublicationService.reconcileClusterMembership(
-      MEMBERSHIP_PUBLICATION_RECONCILE_OPTIONS,
+      buildMembershipPublicationReconcileOptions(options),
     );
   return outcome?.publicationRow &&
     typeof outcome.publicationRow === TYPEOF.OBJECT ?

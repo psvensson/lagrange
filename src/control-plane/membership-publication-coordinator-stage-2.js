@@ -217,6 +217,11 @@ function buildPublicationAcknowledgementReadOptions(options = {}) {
   };
 }
 
+function hasExplicitMembershipPublicationTarget(options = {}) {
+  return normalizeNodeIdList(options.publishedActiveNodeIds).length > NUM.ZERO &&
+    normalizeNodeIdList(options.requiredAckNodeIds).length > NUM.ZERO;
+}
+
 function resolveMembershipEvidenceAuthoritativeReadMode(options = {}) {
   if (
     options.preferAuthoritativeRead === true ||
@@ -595,6 +600,7 @@ export {
   countPlanningEvidenceRowFields,
   deriveMembershipPublicationCandidate,
   deriveMembershipPublicationId,
+  hasExplicitMembershipPublicationTarget,
   mergePlanningEvidenceRows,
   mergePublicationRows,
   normalizeReplicaOperationView,

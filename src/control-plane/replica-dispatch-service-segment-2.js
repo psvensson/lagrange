@@ -346,7 +346,7 @@ class ReplicaDispatchServiceSegment2 extends ReplicaDispatchServiceSegment1 {
 
     const operationId = row.operation_id;
     if (!this.isReplicaOperationLocallyOwned(row)) {
-      this.clearDeferredOperationDispatchRetry(operationId);
+      await this.sendDirectDispatchWakeup(this.buildOperationFromRow(row));
       return;
     }
 

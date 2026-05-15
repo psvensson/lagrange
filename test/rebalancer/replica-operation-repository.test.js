@@ -83,6 +83,8 @@ const TEST_REPLICA_OPERATION_MUTATION_COALESCING_KEY =
   'replica-operation:op-1';
 const TEST_REPLICA_OPERATION_MUTATION_DELIVERY_SOURCE =
   'control-plane:write:replica_operations:replica-operation:op-1';
+const TEST_REPLICA_OPERATION_MUTATION_REPLACE_PENDING_KEY =
+  TEST_REPLICA_OPERATION_MUTATION_COALESCING_KEY;
 const TEST_REPLICA_OPERATION_READ_COALESCING_KEY =
   'replica-operation:op-1';
 const TEST_REPLICA_OPERATION_READ_DELIVERY_SOURCE =
@@ -192,6 +194,11 @@ test('buildOperationMutationQueryOptions scopes replica operation writes by owne
       queryOptions.deliverySource,
       TEST_REPLICA_OPERATION_MUTATION_DELIVERY_SOURCE,
       'replica operation mutations should use an operation-scoped delivery source',
+    );
+    t.equal(
+      queryOptions.replacePendingKey,
+      TEST_REPLICA_OPERATION_MUTATION_REPLACE_PENDING_KEY,
+      'replica operation mutations should replace queued routed writes by operation id',
     );
   });
 

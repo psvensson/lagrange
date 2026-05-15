@@ -85,6 +85,36 @@ const AUTHORITATIVE_CREATING_RETRY_ASSERT_QUERY =
   'authoritative retry discovery should query the repository owner path';
 const AUTHORITATIVE_CREATING_RETRY_ASSERT_ROW =
   'authoritative CREATING system-table rows should remain retryable';
+const DIRECT_WAKEUP_RETRY_TEST_NAME =
+  'ReplicaDispatchService retries bounded remote direct dispatch wake-ups';
+const DIRECT_WAKEUP_RETRY_OPERATION_ID = 'op-remote-wakeup-retry-1';
+const DIRECT_WAKEUP_RETRY_PARTITION_ID = 'control_plane_publications-p1';
+const DIRECT_WAKEUP_RETRY_REPLICA_ID = 'control_plane_publications-p1-r4';
+const DIRECT_WAKEUP_RETRY_SOURCE_NODE_ID = 'node-1';
+const DIRECT_WAKEUP_RETRY_TARGET_NODE_ID = 'node-2';
+const DIRECT_WAKEUP_RETRY_TARGET_ADDRESS =
+  'node-2/service/replica-dispatch';
+const DIRECT_WAKEUP_RETRY_STEPS_HISTORY_JSON = '[]';
+const DIRECT_WAKEUP_RETRY_CREATED_AT = 1700000000000;
+const DIRECT_WAKEUP_RETRY_UPDATED_AT = 1700000000100;
+const DIRECT_WAKEUP_RETRY_TIMEOUT_MS = 17;
+const DIRECT_WAKEUP_RETRY_AFTER_MS = 23;
+const DIRECT_WAKEUP_RETRY_DELIVERY_SOURCE =
+  'coordinator_created_remote_handoff';
+const DIRECT_WAKEUP_RETRY_DELIVERY_PRIORITY = 'critical';
+const DIRECT_WAKEUP_RETRY_ERROR = 'Message timeout';
+const DIRECT_WAKEUP_RETRY_EXPECTED_SINGLE_CALL = 1;
+const DIRECT_WAKEUP_RETRY_EXPECTED_TWO_CALLS = 2;
+const DIRECT_WAKEUP_RETRY_ASSERT_FIRST_DELIVERY =
+  'initial remote wake-up should use bounded target-owner delivery';
+const DIRECT_WAKEUP_RETRY_ASSERT_RETRY_ARMED =
+  'retryable remote wake-up failure should stay on the dispatch retry lane';
+const DIRECT_WAKEUP_RETRY_ASSERT_RETRY_DELAY =
+  'remote wake-up retry should honor the transport retry-after';
+const DIRECT_WAKEUP_RETRY_ASSERT_RETRY_REENTRY =
+  'retry timer should re-enter the remote direct wake-up path';
+const DIRECT_WAKEUP_RETRY_ASSERT_RETRY_CLEARED =
+  'successful remote wake-up retry should clear the deferred dispatch slot';
 
 function initEnv() {
   ConfigurationManager.resetInstance();
@@ -149,6 +179,8 @@ function createService(options = {}) {
     clearTimeoutFn: options.clearTimeoutFn,
     nodeStateUpdateRetryAfterMs: options.nodeStateUpdateRetryAfterMs,
     operationDispatchRetryAfterMs: options.operationDispatchRetryAfterMs,
+    replicaOperationDispatchTimeoutMs:
+      options.replicaOperationDispatchTimeoutMs,
     dispatchReadinessRefreshTimeoutMs:
       options.dispatchReadinessRefreshTimeoutMs,
     systemTableCache: {
@@ -1720,6 +1752,160 @@ test('ReplicaDispatchService sends direct remote wake-up for target-owned ' +
       }],
       'remote-owned coordinator creates should wake the target owner directly',
     );
+  } finally {
+    service.stop();
+  }
+});
+
+test(DIRECT_WAKEUP_RETRY_TEST_NAME, async (t) => {
+  initEnv();
+
+  const deliveries = [];
+  const deferredTimers = [];
+  const service = createService({
+    replicaOperationDispatchTimeoutMs: DIRECT_WAKEUP_RETRY_TIMEOUT_MS,
+    operationDispatchRetryAfterMs: DIRECT_WAKEUP_RETRY_AFTER_MS,
+    messageRouter: {
+      async deliver(address, payload, options) {
+        deliveries.push({address, payload, options});
+        if (deliveries.length === DIRECT_WAKEUP_RETRY_EXPECTED_SINGLE_CALL) {
+          return {
+            error: DIRECT_WAKEUP_RETRY_ERROR,
+            deferRetry: true,
+            retryAfterMs: DIRECT_WAKEUP_RETRY_AFTER_MS,
+          };
+        }
+        return {acknowledged: true};
+      },
+    },
+    cdcIntegrationService: {
+      upsertSystemTableRow: async () => ({success: true}),
+      updateSystemTableRow: async () => ({success: true}),
+    },
+    rebalanceCoordinator: {
+      async dispatchOperation() {
+        t.fail('remote-owned direct wake retry should not dispatch locally');
+      },
+      isOperationLocallyOwned() {
+        return false;
+      },
+    },
+    setTimeoutFn(callback, delayMs) {
+      const handle = {callback, delayMs};
+      deferredTimers.push(handle);
+      return handle;
+    },
+    clearTimeoutFn(handle) {
+      if (handle) {
+        handle.cleared = true;
+      }
+    },
+  });
+
+  try {
+    await service.handleCoordinatorOperationCreated({
+      operationId: DIRECT_WAKEUP_RETRY_OPERATION_ID,
+      partitionId: DIRECT_WAKEUP_RETRY_PARTITION_ID,
+      replicaId: DIRECT_WAKEUP_RETRY_REPLICA_ID,
+      type: OperationType.REPLACE,
+      workflowStep: WORKFLOW_STEP.PENDING,
+      sourceNodeId: DIRECT_WAKEUP_RETRY_SOURCE_NODE_ID,
+      targetNodeId: DIRECT_WAKEUP_RETRY_TARGET_NODE_ID,
+      createdAt: DIRECT_WAKEUP_RETRY_CREATED_AT,
+      updatedAt: DIRECT_WAKEUP_RETRY_UPDATED_AT,
+      stepsHistory: [],
+    });
+
+    t.equal(
+      deliveries.length,
+      DIRECT_WAKEUP_RETRY_EXPECTED_SINGLE_CALL,
+      DIRECT_WAKEUP_RETRY_ASSERT_FIRST_DELIVERY,
+    );
+    t.same(
+      deliveries[NUM.ZERO],
+      {
+        address: DIRECT_WAKEUP_RETRY_TARGET_ADDRESS,
+        payload: {
+          type: ControlPlaneMessageType.REPLICA_OPERATION_DISPATCH,
+          [ControlPlaneField.OPERATION_ID]: DIRECT_WAKEUP_RETRY_OPERATION_ID,
+          [ControlPlaneField.OPERATION_ROW]: {
+            operation_id: DIRECT_WAKEUP_RETRY_OPERATION_ID,
+            type: OperationType.REPLACE,
+            partition_id: DIRECT_WAKEUP_RETRY_PARTITION_ID,
+            replica_id: DIRECT_WAKEUP_RETRY_REPLICA_ID,
+            source_node_id: DIRECT_WAKEUP_RETRY_SOURCE_NODE_ID,
+            target_node_id: DIRECT_WAKEUP_RETRY_TARGET_NODE_ID,
+            status: undefined,
+            workflow_step: WORKFLOW_STEP.PENDING,
+            created_at: DIRECT_WAKEUP_RETRY_CREATED_AT,
+            updated_at: DIRECT_WAKEUP_RETRY_UPDATED_AT,
+            completed_at: undefined,
+            error_message: undefined,
+            steps_history: DIRECT_WAKEUP_RETRY_STEPS_HISTORY_JSON,
+            entity_type: undefined,
+            entity_id: undefined,
+          },
+        },
+        options: {
+          targetNodeId: DIRECT_WAKEUP_RETRY_TARGET_NODE_ID,
+          timeoutMs: DIRECT_WAKEUP_RETRY_TIMEOUT_MS,
+          deliverySource: DIRECT_WAKEUP_RETRY_DELIVERY_SOURCE,
+          deliveryPriority: DIRECT_WAKEUP_RETRY_DELIVERY_PRIORITY,
+        },
+      },
+      DIRECT_WAKEUP_RETRY_ASSERT_FIRST_DELIVERY,
+    );
+    t.equal(
+      service.operationDispatchDeferredRetries.size,
+      DIRECT_WAKEUP_RETRY_EXPECTED_SINGLE_CALL,
+      DIRECT_WAKEUP_RETRY_ASSERT_RETRY_ARMED,
+    );
+    t.equal(
+      deferredTimers[NUM.ZERO]?.delayMs,
+      DIRECT_WAKEUP_RETRY_AFTER_MS,
+      DIRECT_WAKEUP_RETRY_ASSERT_RETRY_DELAY,
+    );
+
+    let retryPromise = null;
+    const retryEnqueues = [];
+    const originalQueue = service.operationDispatchQueue;
+    service.operationDispatchQueue = {
+      enqueue(operationId, reason, context) {
+        retryEnqueues.push({operationId, reason, context});
+        retryPromise = service.reconcileOperationDispatch(
+          operationId,
+          context,
+        );
+      },
+      shutdown() {},
+    };
+
+    deferredTimers[NUM.ZERO].callback();
+    await retryPromise;
+
+    t.same(
+      retryEnqueues.map((entry) => ({
+        operationId: entry.operationId,
+        reason: entry.reason,
+      })),
+      [{
+        operationId: DIRECT_WAKEUP_RETRY_OPERATION_ID,
+        reason: RECONCILE_REASON.RETRYABLE_OPERATION_DISPATCH,
+      }],
+      DIRECT_WAKEUP_RETRY_ASSERT_RETRY_REENTRY,
+    );
+    t.equal(
+      deliveries.length,
+      DIRECT_WAKEUP_RETRY_EXPECTED_TWO_CALLS,
+      DIRECT_WAKEUP_RETRY_ASSERT_RETRY_REENTRY,
+    );
+    t.equal(
+      service.operationDispatchDeferredRetries.size,
+      NUM.ZERO,
+      DIRECT_WAKEUP_RETRY_ASSERT_RETRY_CLEARED,
+    );
+
+    service.operationDispatchQueue = originalQueue;
   } finally {
     service.stop();
   }

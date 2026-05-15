@@ -62,6 +62,8 @@ const GATEWAY_REPLICA_OPERATION_WRITE_DELIVERY_SOURCE = [
   TABLES.REPLICA_OPERATIONS,
   GATEWAY_REPLICA_OPERATION_WRITE_COALESCING_KEY,
 ].join(GATEWAY_DELIVERY_SOURCE_SEPARATOR);
+const GATEWAY_REPLICA_OPERATION_WRITE_REPLACE_PENDING_KEY =
+  GATEWAY_REPLICA_OPERATION_WRITE_COALESCING_KEY;
 
 test('ControlPlaneSystemTableGateway readRows uses authoritative recovery-' +
   'eligible defaults', async (t) => {
@@ -1079,6 +1081,11 @@ test('ControlPlaneSystemTableGateway updateSystemTableRow scopes ' +
     updateCalls[0].options.deliverySource,
     GATEWAY_REPLICA_OPERATION_WRITE_DELIVERY_SOURCE,
     'replica operation gateway writes should use an operation-scoped delivery source',
+  );
+  t.equal(
+    updateCalls[0].options.replacePendingKey,
+    GATEWAY_REPLICA_OPERATION_WRITE_REPLACE_PENDING_KEY,
+    'replica operation gateway writes should forward the router replacement key',
   );
 });
 

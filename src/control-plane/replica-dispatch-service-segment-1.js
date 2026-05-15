@@ -20,6 +20,7 @@ const {
   LoggingService,
   MESSAGE_GROUP_CDC_INGRESS_ACTION,
   NUM,
+  OPERATION_WORKFLOW_OWNER_LITERAL,
   OwnerKeyReconcileQueue,
   REBALANCE_COORDINATOR_EVENT,
   RECONCILE_REASON,
@@ -31,12 +32,27 @@ const {
   TYPEOF,
   WORKFLOW_STEP,
   assertCritical,
+  classifyTransportDeliveryOutcome,
   createControlPlaneRuntimeBundle,
   getControlPlaneMessageRequiredTables,
   getNodeHeartbeatWatermark,
+  isDeliveredTransportDeliveryOutcome,
+  isPriorityControlPlanePartition,
   isRetryableControlPlaneError,
   wasNodeRecordReadyWhenWritten,
+  REPLICA_OPERATION_DISPATCH_TIMEOUT_MS,
 } = REPLICA_DISPATCH_SERVICE_SHARED;
+
+const DIRECT_DISPATCH_WAKEUP_EMPTY_VALUE = null;
+const DIRECT_DISPATCH_WAKEUP_DELIVERY_OPTION_FIELD = Object.freeze({
+  DELIVERY_PRIORITY: 'deliveryPriority',
+  DELIVERY_SOURCE: 'deliverySource',
+  TARGET_NODE_ID: 'targetNodeId',
+  TIMEOUT_MS: 'timeoutMs',
+});
+const DIRECT_DISPATCH_WAKEUP_CLASSIFY_OPTION_FIELD = Object.freeze({
+  DEFAULT_RETRY_AFTER_MS: 'defaultRetryAfterMs',
+});
 
 class ReplicaDispatchServiceSegment1 extends EventEmitter {
   constructor(options = {}) {
@@ -126,6 +142,10 @@ class ReplicaDispatchServiceSegment1 extends EventEmitter {
     this.operationDispatchRetryAfterMs =
       this.normalizeOperationDispatchRetryAfterMs(
         options.operationDispatchRetryAfterMs,
+      );
+    this.replicaOperationDispatchTimeoutMs =
+      this.normalizeReplicaOperationDispatchTimeoutMs(
+        options.replicaOperationDispatchTimeoutMs,
       );
     this.operationDispatchQueueShardCount =
       this.normalizeOperationDispatchQueueShardCount(
@@ -634,10 +654,38 @@ class ReplicaDispatchServiceSegment1 extends EventEmitter {
   }
 
   /**
-   * Send one best-effort direct owner wake-up when a newly created operation
-   * is owned by another node and CDC/cache visibility may lag.
+   * Build bounded transport options for direct replica-dispatch wake-ups.
    * @param {Object} operation
-   * @return {Promise<void>}
+   * @param {string} ownerNodeId
+   * @return {Object}
+   * @private
+   */
+  buildDirectDispatchWakeupDeliveryOptions(operation, ownerNodeId) {
+    const deliveryOptions = {
+      [DIRECT_DISPATCH_WAKEUP_DELIVERY_OPTION_FIELD.TARGET_NODE_ID]:
+        ownerNodeId,
+      [DIRECT_DISPATCH_WAKEUP_DELIVERY_OPTION_FIELD.TIMEOUT_MS]:
+        this.replicaOperationDispatchTimeoutMs,
+      [DIRECT_DISPATCH_WAKEUP_DELIVERY_OPTION_FIELD.DELIVERY_SOURCE]:
+        OPERATION_WORKFLOW_OWNER_LITERAL.COORDINATOR_CREATED_REMOTE_HANDOFF,
+    };
+    const partitionId =
+      operation?.partitionId ||
+      operation?.partition_id ||
+      DIRECT_DISPATCH_WAKEUP_EMPTY_VALUE;
+    if (isPriorityControlPlanePartition({partitionId})) {
+      deliveryOptions[
+        DIRECT_DISPATCH_WAKEUP_DELIVERY_OPTION_FIELD.DELIVERY_PRIORITY
+      ] = OPERATION_WORKFLOW_OWNER_LITERAL.CRITICAL;
+    }
+    return deliveryOptions;
+  }
+
+  /**
+   * Send one bounded direct owner wake-up when a newly created operation is
+   * owned by another node and CDC/cache visibility may lag.
+   * @param {Object} operation
+   * @return {Promise<boolean>}
    * @private
    */
   async sendDirectDispatchWakeup(operation) {
@@ -646,22 +694,50 @@ class ReplicaDispatchServiceSegment1 extends EventEmitter {
       !this.messageRouter ||
       typeof this.messageRouter.deliver !== TYPEOF.FUNCTION
     ) {
-      return;
+      return false;
     }
     const operationRow = this.buildOperationRowFromCoordinator(operation);
     const ownerNodeId = this.resolveReplicaOperationOwnerNodeId(operation);
     const targetAddress = this.buildDirectDispatchServiceAddress(ownerNodeId);
     if (!targetAddress) {
-      return;
+      return false;
     }
     try {
-      await this.messageRouter.deliver(targetAddress, {
-        type: ControlPlaneMessageType.REPLICA_OPERATION_DISPATCH,
-        [ControlPlaneField.OPERATION_ID]: operation.operationId,
-        [ControlPlaneField.OPERATION_ROW]: operationRow,
-      });
-    } catch (_error) {
-      // Best-effort wake-up only. CDC/cache visibility remains the fallback.
+      const deliveryOutcome = classifyTransportDeliveryOutcome(
+        await this.messageRouter.deliver(
+          targetAddress,
+          {
+            type: ControlPlaneMessageType.REPLICA_OPERATION_DISPATCH,
+            [ControlPlaneField.OPERATION_ID]: operation.operationId,
+            [ControlPlaneField.OPERATION_ROW]: operationRow,
+          },
+          this.buildDirectDispatchWakeupDeliveryOptions(
+            operation,
+            ownerNodeId,
+          ),
+        ),
+        {
+          [DIRECT_DISPATCH_WAKEUP_CLASSIFY_OPTION_FIELD.DEFAULT_RETRY_AFTER_MS]:
+            this.operationDispatchRetryAfterMs,
+        },
+      );
+      if (isDeliveredTransportDeliveryOutcome(deliveryOutcome)) {
+        this.clearDeferredOperationDispatchRetry(operation.operationId);
+        return true;
+      }
+      this.deferOperationDispatchRetry(
+        operation.operationId,
+        deliveryOutcome,
+        operationRow,
+      );
+      return false;
+    } catch (error) {
+      this.deferOperationDispatchRetry(
+        operation.operationId,
+        error,
+        operationRow,
+      );
+      return false;
     }
   }
 
@@ -807,13 +883,27 @@ class ReplicaDispatchServiceSegment1 extends EventEmitter {
           requireActiveStatus: true,
         })
       ) {
+        const publicationAdvancement =
+          typeof this.resolveReadyNodePublicationAdvancement ===
+            TYPEOF.FUNCTION ?
+            this.resolveReadyNodePublicationAdvancement(nodeId) :
+            null;
+        const publicationReconcileContext =
+          typeof this.buildReadyNodePublicationReconcileContext ===
+            TYPEOF.FUNCTION ?
+            this.buildReadyNodePublicationReconcileContext(
+              nodeId,
+              existing,
+              publicationAdvancement,
+            ) :
+            {
+              nodeId,
+              state: STATE.READY,
+              nodeRow: existing,
+            };
         this.enqueueMembershipPublicationReconcile(
           RECONCILE_REASON.NODE_STATE_UPDATE_READY,
-          {
-            nodeId,
-            state: STATE.READY,
-            nodeRow: existing,
-          },
+          publicationReconcileContext,
         );
         this.nodeReadyRetryQueue.enqueue(
           nodeId,
@@ -870,27 +960,38 @@ class ReplicaDispatchServiceSegment1 extends EventEmitter {
     }
 
     if (nextState === STATE.READY && !isHeartbeatOnly) {
+      const publicationNodeRow = {
+        ...existing,
+        [COLUMN.NODE_ID]: nodeId,
+        ...baseRow,
+      };
+      const publicationAdvancement =
+        typeof this.resolveReadyNodePublicationAdvancement ===
+          TYPEOF.FUNCTION ?
+          this.resolveReadyNodePublicationAdvancement(nodeId) :
+          null;
+      const publicationReconcileContext =
+        typeof this.buildReadyNodePublicationReconcileContext ===
+          TYPEOF.FUNCTION ?
+          this.buildReadyNodePublicationReconcileContext(
+            nodeId,
+            publicationNodeRow,
+            publicationAdvancement,
+          ) :
+          {
+            nodeId,
+            state: nextState,
+            nodeRow: publicationNodeRow,
+          };
       this.enqueueMembershipPublicationReconcile(
         RECONCILE_REASON.NODE_STATE_UPDATE_READY,
-        {
-          nodeId,
-          state: nextState,
-          nodeRow: {
-            ...existing,
-            [COLUMN.NODE_ID]: nodeId,
-            ...baseRow,
-          },
-        },
+        publicationReconcileContext,
       );
       this.nodeReadyRetryQueue.enqueue(
         nodeId,
         RECONCILE_REASON.NODE_STATE_UPDATE_READY,
         {
-          nodeRow: {
-            ...existing,
-            [COLUMN.NODE_ID]: nodeId,
-            ...baseRow,
-          },
+          nodeRow: publicationNodeRow,
         },
       );
       await this.acknowledgeMembershipPublicationForNode(nodeId);

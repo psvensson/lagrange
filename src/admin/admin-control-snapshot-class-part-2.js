@@ -71,6 +71,12 @@ const CONTROL_SNAPSHOT_PUBLICATION_OWNER_CATCHUP_OPTIONS = Object.freeze({
 });
 const CONTROL_SNAPSHOT_CONTROL_PLANE_DIAGNOSTICS_FIELD =
   'controlPlaneDiagnostics';
+const CONTROL_SNAPSHOT_PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD =
+  'publicationActiveGateHandoff';
+const CONTROL_SNAPSHOT_PUBLICATION_CONVERGENCE_FIELD =
+  'publicationConvergence';
+const CONTROL_SNAPSHOT_ACTIVE_GATE_OWNER_COHORT_FIELD =
+  'activeGateOwnerCohort';
 /**
  * Normalize one arbitrary value to a non-negative integer.
  * @param {*} value
@@ -160,6 +166,22 @@ function hasPublicationOwnerCatchupSignal(snapshot = null) {
     controlPlaneDiagnostics,
   );
 }
+function selectPublicationOwnerCatchupHandoff(snapshot = null) {
+  const controlPlaneDiagnostics =
+    snapshot?.[CONTROL_SNAPSHOT_CONTROL_PLANE_DIAGNOSTICS_FIELD];
+  if (!controlPlaneDiagnostics || typeof controlPlaneDiagnostics !==
+      TYPEOF.OBJECT) {
+    return null;
+  }
+  return controlPlaneDiagnostics[
+    CONTROL_SNAPSHOT_PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD
+  ] ||
+    controlPlaneDiagnostics[CONTROL_SNAPSHOT_PUBLICATION_CONVERGENCE_FIELD]?.[
+      CONTROL_SNAPSHOT_PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD
+    ] ||
+    controlPlaneDiagnostics[CONTROL_SNAPSHOT_ACTIVE_GATE_OWNER_COHORT_FIELD] ||
+    null;
+}
 // ── AdminControlSnapshot class ──────────────────────────────────────────────
 /**
  * Control snapshot builder.
@@ -244,8 +266,15 @@ class AdminControlSnapshotPart2 extends AdminControlSnapshotPart1 {
         allowAuthoritativeRepair,
       })
     ) {
+      const catchupSnapshot =
+        repairEvaluation?.shouldRepair === true ?
+          await this.rebuildControlSnapshotWithPublicationOwnerCatchup(
+            snapshot,
+            options,
+          ) :
+          snapshot;
       return this.resolveSharedControlSnapshot(
-        snapshot,
+        catchupSnapshot,
         repairEvaluation?.shouldRepair === true ?
           {
             ...options,
@@ -358,6 +387,8 @@ class AdminControlSnapshotPart2 extends AdminControlSnapshotPart1 {
       return await this.buildLocalControlSnapshot({
         ...options,
         ...CONTROL_SNAPSHOT_PUBLICATION_OWNER_CATCHUP_OPTIONS,
+        publicationActiveGateHandoff:
+          selectPublicationOwnerCatchupHandoff(snapshot),
       });
     } catch (_error) {
       return snapshot;

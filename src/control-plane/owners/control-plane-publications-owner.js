@@ -11,6 +11,10 @@ import {SystemMetadataOwnerBase} from './system-metadata-owner-base.js';
 const CONTROL_PLANE_PUBLICATION_DELIVERY_PRIORITY = 'critical';
 const CONTROL_PLANE_PUBLICATIONS_OWNER_NAME =
   'control-plane-publications-owner';
+const CONTROL_PLANE_PUBLICATION_MUTATION_OPTION_FIELD = Object.freeze({
+  ALLOW_PRESSURE_DEFER: 'allowPressureDefer',
+});
+const CONTROL_PLANE_PUBLICATION_PRESSURE_DEFER_DISABLED = false;
 
 class ControlPlanePublicationsOwner extends SystemMetadataOwnerBase {
   static OWNER_NAME = CONTROL_PLANE_PUBLICATIONS_OWNER_NAME;
@@ -20,9 +24,16 @@ class ControlPlanePublicationsOwner extends SystemMetadataOwnerBase {
     const workloadProfile = buildControlPlaneWorkloadProfile(
       CONTROL_PLANE_WORKLOAD_CLASS.PUBLICATION_MUTATION,
     );
+    const allowPressureDefer =
+      options[
+        CONTROL_PLANE_PUBLICATION_MUTATION_OPTION_FIELD.ALLOW_PRESSURE_DEFER
+      ] === CONTROL_PLANE_PUBLICATION_PRESSURE_DEFER_DISABLED ?
+        CONTROL_PLANE_PUBLICATION_PRESSURE_DEFER_DISABLED :
+        workloadProfile.allowPressureDefer;
     return {
       ...options,
-      allowPressureDefer: workloadProfile.allowPressureDefer,
+      [CONTROL_PLANE_PUBLICATION_MUTATION_OPTION_FIELD.ALLOW_PRESSURE_DEFER]:
+        allowPressureDefer,
       deliveryPriority: CONTROL_PLANE_PUBLICATION_DELIVERY_PRIORITY,
       routingReadinessDimension:
         CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,

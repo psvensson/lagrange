@@ -18,6 +18,7 @@ const {
   READY_NODE_PUBLICATION_ADVANCEMENT_STATE,
   RECONCILE_REASON,
   REPLICA_DISPATCH_SERVICE_LITERAL,
+  REPLICA_OPERATION_DISPATCH_TIMEOUT_MS,
   STATE,
   TYPEOF,
   WORKFLOW_STEP,
@@ -36,9 +37,37 @@ const {
 
 const READY_NODE_PUBLICATION_ADVANCEMENT_EMPTY_OPTIONS = Object.freeze({});
 const READY_NODE_PUBLICATION_ADVANCEMENT_NODE_ROW_UNAVAILABLE = null;
+const READY_NODE_PUBLICATION_RECONCILE_ALLOW_PENDING_VISIBILITY = true;
+const READY_NODE_PUBLICATION_RECONCILE_ALLOW_PRESSURE_DEFER = false;
+const READY_NODE_PUBLICATION_RECONCILE_SKIP_WRITE_READBACK = true;
+const READY_NODE_PUBLICATION_RECONCILE_EMPTY_LIST = Object.freeze([]);
 const READY_NODE_PUBLICATION_ADVANCEMENT_OPTION = Object.freeze({
   PUBLICATION_ROWS: 'publicationRows',
 });
+const READY_NODE_PUBLICATION_RECONCILE_FIELD = Object.freeze({
+  ACKNOWLEDGED_NODE_IDS: 'acknowledgedNodeIds',
+  ALLOW_PENDING_VISIBILITY: 'allowPendingVisibility',
+  ALLOW_PRESSURE_DEFER: 'allowPressureDefer',
+  LATEST_PUBLICATION_ROW: 'latestPublicationRow',
+  PUBLISHED_ACTIVE_NODE_IDS: 'publishedActiveNodeIds',
+  PUBLISHED_ACTIVE_NODE_IDS_SNAKE: 'published_active_node_ids',
+  REQUIRED_ACK_NODE_IDS: 'requiredAckNodeIds',
+  SKIP_PUBLICATION_WRITE_READBACK: 'skipPublicationWriteReadback',
+});
+
+function normalizeReadyNodePublicationReconcileNodeIds(values = []) {
+  return [
+    ...new Set(
+      (Array.isArray(values) ?
+        values :
+        READY_NODE_PUBLICATION_RECONCILE_EMPTY_LIST)
+        .map((value) =>
+          String(value || REPLICA_DISPATCH_SERVICE_LITERAL.EMPTY_STRING).trim(),
+        )
+        .filter((value) => value.length > NUM.ZERO),
+    ),
+  ].sort((left, right) => left.localeCompare(right));
+}
 
 class ReplicaDispatchServiceSegment3 extends ReplicaDispatchServiceSegment2 {
   enqueueReplicaOperationRow(row, reasons) {
@@ -336,6 +365,20 @@ class ReplicaDispatchServiceSegment3 extends ReplicaDispatchServiceSegment2 {
     const numeric = Number(value);
     if (!Number.isFinite(numeric) || numeric <= NUM.ZERO) {
       return DISPATCH_DEFAULT.OPERATION_DISPATCH_RETRY_AFTER_MS;
+    }
+    return Math.max(NUM.ONE, Math.floor(numeric));
+  }
+
+  /**
+   * Normalize the bounded transport deadline for remote dispatch wake-ups.
+   * @param {*} value
+   * @return {number}
+   * @private
+   */
+  normalizeReplicaOperationDispatchTimeoutMs(value) {
+    const numeric = Number(value);
+    if (!Number.isFinite(numeric) || numeric <= NUM.ZERO) {
+      return REPLICA_OPERATION_DISPATCH_TIMEOUT_MS;
     }
     return Math.max(NUM.ONE, Math.floor(numeric));
   }
@@ -715,12 +758,69 @@ class ReplicaDispatchServiceSegment3 extends ReplicaDispatchServiceSegment2 {
         READY_NODE_PUBLICATION_ADVANCEMENT_STATE.PUBLISHED_NODE_VISIBLE ||
       nodePublicationStatus !== MEMBERSHIP_PUBLICATION_STATUS.PUBLISHED;
     return Object.freeze({
+      latestPublicationRow,
+      latestPublicationForNode,
       latestPublicationStatus,
       nodePublicationStatus,
       advancementState,
+      publishedActiveNodeIds: normalizeReadyNodePublicationReconcileNodeIds(
+        latestPublicationRow?.[
+          READY_NODE_PUBLICATION_RECONCILE_FIELD.PUBLISHED_ACTIVE_NODE_IDS
+        ] ||
+          latestPublicationRow?.[
+            READY_NODE_PUBLICATION_RECONCILE_FIELD
+              .PUBLISHED_ACTIVE_NODE_IDS_SNAKE
+          ],
+      ),
       needsAcknowledgement,
       needsReconcile,
     });
+  }
+
+  buildReadyNodePublicationReconcileContext(
+    nodeId,
+    nodeRow,
+    publicationAdvancement = {},
+  ) {
+    const context = {
+      nodeId,
+      state: STATE.READY,
+      nodeRow,
+    };
+    if (
+      publicationAdvancement.advancementState !==
+        READY_NODE_PUBLICATION_ADVANCEMENT_STATE.PUBLISHED_NODE_MISSING ||
+      publicationAdvancement.latestPublicationStatus !==
+        MEMBERSHIP_PUBLICATION_STATUS.PUBLISHED
+    ) {
+      return context;
+    }
+    const publishedActiveNodeIds = normalizeReadyNodePublicationReconcileNodeIds([
+      ...normalizeReadyNodePublicationReconcileNodeIds(
+        publicationAdvancement.publishedActiveNodeIds,
+      ),
+      nodeId,
+    ]);
+    if (publishedActiveNodeIds.length === NUM.ZERO) {
+      return context;
+    }
+    return {
+      ...context,
+      [READY_NODE_PUBLICATION_RECONCILE_FIELD.LATEST_PUBLICATION_ROW]:
+        publicationAdvancement.latestPublicationRow,
+      [READY_NODE_PUBLICATION_RECONCILE_FIELD.PUBLISHED_ACTIVE_NODE_IDS]:
+        publishedActiveNodeIds,
+      [READY_NODE_PUBLICATION_RECONCILE_FIELD.REQUIRED_ACK_NODE_IDS]:
+        publishedActiveNodeIds,
+      [READY_NODE_PUBLICATION_RECONCILE_FIELD.ACKNOWLEDGED_NODE_IDS]:
+        publishedActiveNodeIds,
+      [READY_NODE_PUBLICATION_RECONCILE_FIELD.ALLOW_PENDING_VISIBILITY]:
+        READY_NODE_PUBLICATION_RECONCILE_ALLOW_PENDING_VISIBILITY,
+      [READY_NODE_PUBLICATION_RECONCILE_FIELD.ALLOW_PRESSURE_DEFER]:
+        READY_NODE_PUBLICATION_RECONCILE_ALLOW_PRESSURE_DEFER,
+      [READY_NODE_PUBLICATION_RECONCILE_FIELD.SKIP_PUBLICATION_WRITE_READBACK]:
+        READY_NODE_PUBLICATION_RECONCILE_SKIP_WRITE_READBACK,
+    };
   }
 
   async maybeAdvanceReadyNodeMembershipPublication(
@@ -734,11 +834,14 @@ class ReplicaDispatchServiceSegment3 extends ReplicaDispatchServiceSegment2 {
     if (publicationAdvancement.needsReconcile !== true) {
       return false;
     }
-    this.enqueueMembershipPublicationReconcile(reason, {
-      nodeId,
-      state: STATE.READY,
-      nodeRow,
-    });
+    this.enqueueMembershipPublicationReconcile(
+      reason,
+      this.buildReadyNodePublicationReconcileContext(
+        nodeId,
+        nodeRow,
+        publicationAdvancement,
+      ),
+    );
     if (publicationAdvancement.needsAcknowledgement === true) {
       await this.acknowledgeMembershipPublicationForNode(nodeId, options);
     }

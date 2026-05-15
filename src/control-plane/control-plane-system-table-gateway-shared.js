@@ -98,6 +98,7 @@ const CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL = Object.freeze({
   READ: 'read',
   READOUTCOMECOUNTS: 'readOutcomeCounts',
   RECOVERYCANDIDATESELECTIONKEY: 'recoveryCandidateSelectionKey',
+  REPLACEPENDINGKEY: 'replacePendingKey',
   REQUIREAUTHORITATIVE: 'requireAuthoritative',
   REQUIREOWNERRPCREAD: 'requireOwnerRpcRead',
   RESOURCEKEYS: 'resourceKeys',

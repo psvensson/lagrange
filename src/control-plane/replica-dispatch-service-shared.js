@@ -84,7 +84,12 @@ import {OwnerKeyReconcileQueue} from '../workflow/owner-key-reconcile-queue.js';
 import {RECONCILE_REASON} from '../workflow/reconcile-queue-constants.js';
 
 const {
+  OPERATION_WORKFLOW_OWNER_LITERAL,
   OPERATION_WORKFLOW_OWNER_REASON,
+  REPLICA_OPERATION_DISPATCH_TIMEOUT_MS,
+  classifyTransportDeliveryOutcome,
+  isDeliveredTransportDeliveryOutcome,
+  isPriorityControlPlanePartition,
 } = OPERATION_WORKFLOW_OWNER_SHARED;
 const REPLICA_DISPATCH_SERVICE_LITERAL = Object.freeze({
   AUTHORITATIVE: 'authoritative',
@@ -226,6 +231,7 @@ export const REPLICA_DISPATCH_SERVICE_SHARED = {
   NODE_STATE_UPDATE_RETRY_POLICY,
   NUM,
   OPERATION_METADATA_KEY,
+  OPERATION_WORKFLOW_OWNER_LITERAL,
   OPERATION_WORKFLOW_OWNER_REASON,
   OperationType,
   OwnerKeyReconcileQueue,
@@ -257,7 +263,9 @@ export const REPLICA_DISPATCH_SERVICE_SHARED = {
   getOperationMetadataString,
   getOperationMetadataStringArray,
   isCoordinatorOwnedOperationType,
+  isDeliveredTransportDeliveryOutcome,
   isHeartbeatEscalatedControlPlaneNodeStatePublicationMode,
+  isPriorityControlPlanePartition,
   isRetryableControlPlaneError,
   isSystemTablePartition,
   isTerminalMembershipPublicationStatus,
@@ -267,4 +275,6 @@ export const REPLICA_DISPATCH_SERVICE_SHARED = {
   shouldUseAuthoritativePriorityRecoveryRediscovery,
   unwrapRowReadResult,
   wasNodeRecordReadyWhenWritten,
+  REPLICA_OPERATION_DISPATCH_TIMEOUT_MS,
+  classifyTransportDeliveryOutcome,
 };

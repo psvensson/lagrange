@@ -999,6 +999,11 @@ class ControlPlaneSystemTableGatewaySegment1 {
       options,
       CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.RECOVERYCANDIDATESELECTIONKEY,
     );
+    writeOptions = copyOption(
+      writeOptions,
+      options,
+      CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.REPLACEPENDINGKEY,
+    );
     writeOptions = applyMutationWorkloadProfileDefaults(writeOptions, options);
     if (typeof deliverySource === TYPEOF.STRING &&
       deliverySource.length > CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.ZERO) {

@@ -1184,6 +1184,7 @@ function assignReplicaOperationRepositoryMutationMethods(
         controlPlaneOperationKind: REPLICA_OPERATION_REPOSITORY_LITERAL.WRITE,
         ...(coalescingKey ? {coalescingKey} : {}),
         ...(deliverySource ? {deliverySource} : {}),
+        ...(coalescingKey ? {replacePendingKey: coalescingKey} : {}),
       };
     }
     /**
