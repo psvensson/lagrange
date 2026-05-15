@@ -13,7 +13,7 @@
 import {NUM, TABLES, TYPEOF} from '../constants/index.js';
 import {normalizeControlPlanePublicationRow} from '../control-plane/system-row-normalizers.js';
 import {
-  normalizePublicationActiveGateHandoffContract,
+  resolvePublicationActiveGateMembershipPublicationTarget,
 } from '../control-plane/publication-active-gate-handoff-contract.js';
 import {AdminControlSnapshotPart5} from './admin-control-snapshot-class-part-5.js';
 // ── file-local constants ────────────────────────────────────────────────────
@@ -46,6 +46,8 @@ const MEMBERSHIP_PUBLICATION_READ_PROFILE_DIAGNOSTICS = 'diagnostics';
 const MEMBERSHIP_PUBLICATION_RECONCILE_OPTIONS = Object.freeze({
   preferAuthoritativeRead: true,
 });
+const MEMBERSHIP_PUBLICATION_RECONCILE_REASON =
+  'admin_control_snapshot_publication_handoff';
 const MEMBERSHIP_PUBLICATION_HANDOFF_ALLOW_PRESSURE_DEFER = false;
 const MEMBERSHIP_PUBLICATION_RECONCILE_FIELD = Object.freeze({
   ACKNOWLEDGED_NODE_IDS: 'acknowledgedNodeIds',
@@ -56,7 +58,6 @@ const MEMBERSHIP_PUBLICATION_RECONCILE_FIELD = Object.freeze({
   REQUIRED_ACK_NODE_IDS: 'requiredAckNodeIds',
   SKIP_PUBLICATION_WRITE_READBACK: 'skipPublicationWriteReadback',
 });
-const MEMBERSHIP_PUBLICATION_RECONCILE_EMPTY_LIST = Object.freeze([]);
 /**
  * Normalize one arbitrary value to a non-negative integer.
  * @param {*} value
@@ -70,48 +71,27 @@ function buildMembershipPublicationReadOptions(options = {}) {
     } :
     {readProfile: MEMBERSHIP_PUBLICATION_READ_PROFILE_DIAGNOSTICS};
 }
-function normalizeMembershipPublicationReconcileNodeIds(values = []) {
-  return [
-    ...new Set(
-      (Array.isArray(values) ?
-        values :
-        MEMBERSHIP_PUBLICATION_RECONCILE_EMPTY_LIST)
-        .map((value) =>
-          String(value || ADMIN_CONTROL_SNAPSHOT_LITERAL.VALUE).trim(),
-        )
-        .filter((value) => value.length > NUM.ZERO),
-    ),
-  ].sort((left, right) => left.localeCompare(right));
-}
 function buildMembershipPublicationReconcileOptions(options = {}) {
-  const handoffContract = normalizePublicationActiveGateHandoffContract(
+  const membershipPublicationTarget =
+    resolvePublicationActiveGateMembershipPublicationTarget(
     options[
       MEMBERSHIP_PUBLICATION_RECONCILE_FIELD
         .PUBLICATION_ACTIVE_GATE_HANDOFF
     ],
   );
   if (
-    !handoffContract ||
-    handoffContract.pendingReconcileNodeIds.length === NUM.ZERO
+    membershipPublicationTarget.reconcileRequired !== true
   ) {
-    return MEMBERSHIP_PUBLICATION_RECONCILE_OPTIONS;
-  }
-  const publishedActiveNodeIds =
-    normalizeMembershipPublicationReconcileNodeIds([
-      ...handoffContract.publishedActiveNodeIds,
-      ...handoffContract.pendingReconcileNodeIds,
-    ]);
-  if (publishedActiveNodeIds.length === NUM.ZERO) {
     return MEMBERSHIP_PUBLICATION_RECONCILE_OPTIONS;
   }
   return {
     ...MEMBERSHIP_PUBLICATION_RECONCILE_OPTIONS,
     [MEMBERSHIP_PUBLICATION_RECONCILE_FIELD.PUBLISHED_ACTIVE_NODE_IDS]:
-      publishedActiveNodeIds,
+      membershipPublicationTarget.publishedActiveNodeIds,
     [MEMBERSHIP_PUBLICATION_RECONCILE_FIELD.REQUIRED_ACK_NODE_IDS]:
-      publishedActiveNodeIds,
+      membershipPublicationTarget.requiredAckNodeIds,
     [MEMBERSHIP_PUBLICATION_RECONCILE_FIELD.ACKNOWLEDGED_NODE_IDS]:
-      publishedActiveNodeIds,
+      membershipPublicationTarget.acknowledgedNodeIds,
     [MEMBERSHIP_PUBLICATION_RECONCILE_FIELD.ALLOW_PENDING_VISIBILITY]:
       true,
     [MEMBERSHIP_PUBLICATION_RECONCILE_FIELD.ALLOW_PRESSURE_DEFER]:
@@ -126,20 +106,38 @@ async function maybeReconcileAuthoritativeMembershipPublication(
 ) {
   if (
     options.reconcileAuthoritativeMembershipPublication !== true ||
-    !membershipPublicationService ||
-    typeof membershipPublicationService.reconcileClusterMembership !==
-      TYPEOF.FUNCTION
+    !membershipPublicationService
   ) {
     return null;
   }
-  const outcome =
-    await membershipPublicationService.reconcileClusterMembership(
-      buildMembershipPublicationReconcileOptions(options),
+  const reconcileOptions = buildMembershipPublicationReconcileOptions(options);
+  if (reconcileOptions === MEMBERSHIP_PUBLICATION_RECONCILE_OPTIONS) {
+    return null;
+  }
+  if (
+    typeof membershipPublicationService.reconcileClusterMembership ===
+    TYPEOF.FUNCTION
+  ) {
+    const outcome =
+      await membershipPublicationService.reconcileClusterMembership(
+        reconcileOptions,
+      );
+    return outcome?.publicationRow &&
+      typeof outcome.publicationRow === TYPEOF.OBJECT ?
+      normalizeControlPlanePublicationRow(outcome.publicationRow) :
+      null;
+  }
+  if (
+    typeof membershipPublicationService.enqueueClusterMembershipReconcile ===
+    TYPEOF.FUNCTION
+  ) {
+    membershipPublicationService.enqueueClusterMembershipReconcile(
+      MEMBERSHIP_PUBLICATION_RECONCILE_REASON,
+      reconcileOptions,
     );
-  return outcome?.publicationRow &&
-    typeof outcome.publicationRow === TYPEOF.OBJECT ?
-    outcome.publicationRow :
-    null;
+    return null;
+  }
+  return null;
 }
 function resolvePublicationOrderingValue(row, keys = []) {
   for (const key of keys) {
@@ -227,6 +225,21 @@ function resolveLatestMembershipPublicationRow(
  * as functions so this module has no back-reference to AdminWebSocketAPI.
  */
 class AdminControlSnapshotPart6 extends AdminControlSnapshotPart5 {
+  async reconcileAuthoritativeMembershipPublicationFromHandoff(
+    publicationActiveGateHandoff,
+    options = {},
+  ) {
+    const membershipPublicationService =
+      this.controlPlaneReadinessService?.membershipPublicationService || null;
+    return maybeReconcileAuthoritativeMembershipPublication(
+      membershipPublicationService,
+      {
+        ...options,
+        reconcileAuthoritativeMembershipPublication: true,
+        publicationActiveGateHandoff,
+      },
+    );
+  }
   async ensureMembershipPublicationObservation(options = {}) {
     const readinessService = this.controlPlaneReadinessService || null;
     const membershipPublicationService =

@@ -2182,7 +2182,7 @@ test('AdminControlSnapshot authoritative membership observation stays read-only 
     );
   });
 
-test('AdminControlSnapshot forced authoritative membership observation runs publication owner reconcile',
+test('AdminControlSnapshot forced authoritative membership observation stays read-only without handoff target',
   async (t) => {
     let observedReconcileOptions = null;
     let latestPublicationReadCount = 0;
@@ -2229,13 +2229,13 @@ test('AdminControlSnapshot forced authoritative membership observation runs publ
 
     t.same(
       observedReconcileOptions,
-      {preferAuthoritativeRead: true},
-      'forced authoritative repair should use the owner reconcile path without diagnostics read-profile escalation',
+      null,
+      'forced authoritative repair should not reconcile without a handoff target',
     );
     t.equal(
       latestPublicationReadCount,
-      0,
-      'the reconciled publication row should satisfy the observation without a stale follow-up read',
+      1,
+      'read-only authoritative observation should fall back to the publication read path',
     );
     t.equal(
       observedAckPublicationRow,
@@ -2244,16 +2244,12 @@ test('AdminControlSnapshot forced authoritative membership observation runs publ
     );
     t.match(
       publicationRow,
-      {
-        publication_id: 'publication-2',
-        publication_epoch: 2,
-        status: 'OPEN',
-      },
-      'the reconciled publication row should become the snapshot observation',
+      null,
+      'no publication row should be synthesized from diagnostics-only reconcile',
     );
   });
 
-test('AdminControlSnapshot build snapshot forwards authoritative membership reconcile',
+test('AdminControlSnapshot build snapshot keeps broad authoritative membership observation read-only',
   async (t) => {
     let observedReconcileOptions = null;
     let latestPublicationReadCount = 0;
@@ -2299,28 +2295,28 @@ test('AdminControlSnapshot build snapshot forwards authoritative membership reco
 
     t.same(
       observedReconcileOptions,
-      {preferAuthoritativeRead: true},
-      'buildLocalControlSnapshot should forward the reconcile option to the publication owner',
+      null,
+      'buildLocalControlSnapshot should not run broad publication reconcile without handoff target',
     );
     t.equal(
       latestPublicationReadCount,
-      0,
-      'the reconciled publication row should avoid a stale follow-up publication read',
+      1,
+      'broad authoritative observation should use the read path after reconcile is skipped',
     );
     t.match(
       result.controlPlaneDiagnostics.publicationConvergence,
       {
-        publicationEpoch: 3,
-        status: 'OPEN',
-        publishedActiveNodeIds: ['node-1', 'node-2'],
+        status: null,
+        publishedActiveNodeIds: [],
       },
-      'the reconciled publication row should drive the diagnostics publication observation',
+      'diagnostics should not synthesize publication success from a skipped broad reconcile',
     );
   });
 
 test('AdminControlSnapshot build snapshot forwards handoff pending reconcile target',
   async (t) => {
     let observedReconcileOptions;
+    let enqueueAttempted = false;
     const snapshot = new AdminControlSnapshot({
       nodeId: ACTIVE_GATE_HANDOFF_RECONCILE_LOCAL_NODE_ID,
       nowFn: () => ACTIVE_GATE_OWNER_TRUTH_NOW_MS,
@@ -2353,10 +2349,13 @@ test('AdminControlSnapshot build snapshot forwards handoff pending reconcile tar
                   ...ACTIVE_GATE_HANDOFF_RECONCILE_NODE_IDS,
                 ],
                 acknowledged_node_ids: [
-                  ...ACTIVE_GATE_HANDOFF_RECONCILE_PUBLISHED_NODE_IDS,
+                  ...ACTIVE_GATE_HANDOFF_RECONCILE_NODE_IDS,
                 ],
               },
             };
+          },
+          enqueueClusterMembershipReconcile() {
+            enqueueAttempted = true;
           },
         },
       },
@@ -2415,6 +2414,11 @@ test('AdminControlSnapshot build snapshot forwards handoff pending reconcile tar
       },
       'owner reconcile should use the canonical handoff pending-reconcile cohort as the publication target',
     );
+    t.equal(
+      enqueueAttempted,
+      false,
+      'awaited owner reconcile should be preferred over queue-only catch-up when the coordinator exposes it',
+    );
   });
 
 test('AdminControlSnapshot repair-deferred shared owner emits retry action after attempted repair',
@@ -2465,7 +2469,7 @@ test('AdminControlSnapshot repair-deferred shared owner emits retry action after
           state: 'deferred_refresh',
           contractState: 'deferred',
           nextAction: 'retry',
-          reasonCodes: ['discovery_node_coverage_gap'],
+          reasonCodes: ['cache_stale_watermark'],
           retryAfterMs: 16000,
           refreshState: 'deferred',
         },
@@ -2484,6 +2488,7 @@ test('AdminControlSnapshot repair-deferred shared owner emits retry action after
 test('AdminControlSnapshot repair-deferred shared owner attempts publication catch-up before returning',
   async (t) => {
     const buildOptions = [];
+    let reconcileOptions = null;
     const staleSnapshot = {
       nodes: ['node-1'],
       controlPlaneDiagnostics: {
@@ -2512,6 +2517,13 @@ test('AdminControlSnapshot repair-deferred shared owner attempts publication cat
     };
     const snapshot = new AdminControlSnapshot({
       nodeId: 'node-1',
+      controlPlaneReadinessService: {
+        membershipPublicationService: {
+          enqueueClusterMembershipReconcile(_reason, context = {}) {
+            reconcileOptions = context;
+          },
+        },
+      },
     });
     snapshot.controlPlaneSnapshotOwner = new ControlPlaneSnapshotOwner({
       controlSnapshot: snapshot,
@@ -2547,14 +2559,29 @@ test('AdminControlSnapshot repair-deferred shared owner attempts publication cat
     });
 
     t.match(
+      reconcileOptions,
+      {
+        preferAuthoritativeRead: true,
+        publishedActiveNodeIds: ['node-1', 'node-2'],
+        requiredAckNodeIds: ['node-1', 'node-2'],
+        acknowledgedNodeIds: ['node-1', 'node-2'],
+        allowPendingVisibility: true,
+        allowPressureDefer: false,
+        skipPublicationWriteReadback: true,
+      },
+      'repair-deferred degradation should perform a narrow publication-owner reconcile before rebuilding the snapshot view',
+    );
+    t.match(
       buildOptions[1],
       {
         preferAuthoritativePublicationRead: true,
-        reconcileAuthoritativeMembershipPublication: true,
-        publicationActiveGateHandoff:
-          staleSnapshot.controlPlaneDiagnostics.activeGateOwnerCohort,
       },
-      'repair-deferred degradation should attempt publication-owner catch-up before returning',
+      'repair-deferred degradation should rebuild only as an authoritative publication observation after reconcile',
+    );
+    t.equal(
+      buildOptions[1].reconcileAuthoritativeMembershipPublication,
+      undefined,
+      'the catch-up rebuild should not be the publication reconcile mechanism',
     );
     t.same(
       result.nodes,
@@ -2586,6 +2613,7 @@ test('AdminControlSnapshot repair-deferred shared owner attempts publication cat
 test('AdminControlSnapshot repair-deferred no-attempt path still attempts publication catch-up',
   async (t) => {
     const buildOptions = [];
+    let reconcileOptions = null;
     const staleSnapshot = {
       nodes: ['node-1'],
       controlPlaneDiagnostics: {
@@ -2614,6 +2642,13 @@ test('AdminControlSnapshot repair-deferred no-attempt path still attempts public
     };
     const snapshot = new AdminControlSnapshot({
       nodeId: 'node-1',
+      controlPlaneReadinessService: {
+        membershipPublicationService: {
+          enqueueClusterMembershipReconcile(_reason, context = {}) {
+            reconcileOptions = context;
+          },
+        },
+      },
     });
     snapshot.controlPlaneSnapshotOwner = new ControlPlaneSnapshotOwner({
       controlSnapshot: snapshot,
@@ -2636,14 +2671,29 @@ test('AdminControlSnapshot repair-deferred no-attempt path still attempts public
     const result = await snapshot.resolveLocalControlSnapshot();
 
     t.match(
+      reconcileOptions,
+      {
+        preferAuthoritativeRead: true,
+        publishedActiveNodeIds: ['node-1', 'node-2'],
+        requiredAckNodeIds: ['node-1', 'node-2'],
+        acknowledgedNodeIds: ['node-1', 'node-2'],
+        allowPendingVisibility: true,
+        allowPressureDefer: false,
+        skipPublicationWriteReadback: true,
+      },
+      'repair-deferred no-attempt path should perform the narrow publication-owner reconcile',
+    );
+    t.match(
       buildOptions[1],
       {
         preferAuthoritativePublicationRead: true,
-        reconcileAuthoritativeMembershipPublication: true,
-        publicationActiveGateHandoff:
-          staleSnapshot.controlPlaneDiagnostics.activeGateOwnerCohort,
       },
-      'repair-deferred no-attempt path should still run publication-owner catch-up',
+      'repair-deferred no-attempt path should observe the reconciled publication without re-running reconcile through snapshot rebuild',
+    );
+    t.equal(
+      buildOptions[1].reconcileAuthoritativeMembershipPublication,
+      undefined,
+      'the no-attempt catch-up rebuild should not be the reconcile mechanism',
     );
     t.same(
       result.nodes,
@@ -2661,6 +2711,76 @@ test('AdminControlSnapshot repair-deferred no-attempt path still attempts public
         observationMode: 'repair_deferred',
       },
       'the no-attempt deferred path should keep the shared-owner stale outcome',
+    );
+  });
+
+test('AdminControlSnapshot repair-deferred shared owner skips publication catch-up for owner recovery waits',
+  async (t) => {
+    const buildOptions = [];
+    let reconcileAttempted = false;
+    const localSnapshot = {
+      nodes: ['node-1'],
+      controlPlaneDiagnostics: {
+        activeGateOwnerCohort: {
+          state: 'pending',
+          reasonCode: 'owner_reconcile_pending',
+          nextAction: 'wait_owner_recovery',
+          pendingRecoveryCount: 1,
+          pendingRecoveryNodeIds: ['node-2'],
+          pendingReconcileCount: 0,
+          pendingReconcileNodeIds: [],
+        },
+        publicationConvergence: {
+          publicationEpoch: 1,
+          status: 'PUBLISHED',
+          publishedActiveNodeIds: ['node-1'],
+        },
+      },
+    };
+    const snapshot = new AdminControlSnapshot({
+      nodeId: 'node-1',
+      controlPlaneReadinessService: {
+        membershipPublicationService: {
+          enqueueClusterMembershipReconcile() {
+            reconcileAttempted = true;
+          },
+        },
+      },
+    });
+    snapshot.controlPlaneSnapshotOwner = new ControlPlaneSnapshotOwner({
+      controlSnapshot: snapshot,
+    });
+    snapshot.buildLocalControlSnapshot = async (options = {}) => {
+      buildOptions.push(options);
+      return localSnapshot;
+    };
+    snapshot.canRunAuthoritativeControlSnapshotRepair = () => true;
+    snapshot.evaluateAuthoritativeControlSnapshotRepair = () => ({
+      shouldRepair: true,
+      triggerCodes: ['cache_stale_watermark'],
+      nodeCoverage: {
+        activeProjection: {
+          hasCoverageGap: false,
+        },
+      },
+    });
+
+    const result = await snapshot.resolveLocalControlSnapshot();
+
+    t.equal(
+      buildOptions.length,
+      1,
+      'wait_owner_recovery should not schedule publication catch-up from repair-deferred admin reads',
+    );
+    t.equal(
+      reconcileAttempted,
+      false,
+      'wait_owner_recovery should not be treated as a publication reconcile target',
+    );
+    t.same(
+      result.nodes,
+      ['node-1'],
+      'the deferred snapshot should stay on the original local snapshot',
     );
   });
 

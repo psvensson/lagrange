@@ -20,9 +20,10 @@ success is in scope.
 ## Current Blocker Snapshot
 
 Latest representative artifact:
-`test-output/reports/rolling-restart-after-create-in-progress-owner-progress-20260515-codex.report.json`.
+`test-output/reports/rolling-restart-after-awaited-reconcile-bridge-20260515-codex.report.json`.
 
-Canonical state after the rebalancer-handoff package and steering repair:
+Canonical state after the bridge simplification and awaited direct owner
+reconcile:
 
 1. `work:evidence-summary` selects `active_gate_snapshot_coverage` as the first
    frontier.
@@ -38,12 +39,14 @@ Canonical state after the rebalancer-handoff package and steering repair:
    `contractEdge=publication_active_gate_handoff_contract`.
 7. Handoff contract state is `pending` with
    `nextAction=reconcile_owner_membership_publication`,
-   `pendingReconcileCount=4`, and `runtimePromotionAllowed=false`.
+   `pendingReconcileCount=1`, pending node
+   `35a891b8-c1a0-5064-9c6e-2acfba61c2a7`, and
+   `runtimePromotionAllowed=false`.
 8. Selected snapshot observation remains `repair_deferred` with
+   `cache_stale_watermark`, `discovery_node_coverage_gap`, and
    `stale_replica_operations_in_flight`.
 9. `analyze:priority-recovery-residuals` reports `Split required: false` with
-   one subordinate `operation_workflow_owner / workflow_progress` witness on
-   `control_plane_publications-p1` in `spread_satisfied_in_flight`.
+   zero witnesses.
 10. The workflow-progress package is parked as dependency/sub-frontier evidence
     unless focused extractors promote it back to the representative first
     frontier.
@@ -143,6 +146,12 @@ Pro or Enterprise behavior.
      submit owner reconcile intent without reconstructing handoff semantics,
      focused admin/publication tests stay green, and representative
      `rolling-restart` intent is preserved.
+   - Result: `same-frontier-reduced`. Canonical handoff target selection is
+     centralized, broad repair-deferred snapshot rebuild catch-up is replaced
+     by a narrow owner publication reconcile path, awaited direct reconcile is
+     preferred when available, and fresh representative evidence reduces the
+     handoff to one pending reconcile target while remaining red on
+     `startup_active_gate_owner / snapshot_coverage`.
 
 No additional package may be added merely to defer owner-key reconcile from
 the original active-gate owner package. That package is now closed as migrated.
@@ -212,9 +221,8 @@ Continue with the active bridge simplification package:
 work/packages/active-20260515-publication-active-gate-reconcile-bridge-simplification.md
 ```
 
-The rebalancer handoff package is closed as reduced. The workflow-progress
-package is parked as dependent sub-frontier evidence because the canonical
-first frontier remains `startup_active_gate_owner / snapshot_coverage`. The
-steering repair is closed. Before runtime edits in the bridge package, record
-real review subagent proof and promote exact runtime files from
-`candidateRuntimeFiles` into `writeScope` and `commitScope`.
+Close and push the bridge simplification slice as same-frontier-reduced, then
+continue the representative gate on `startup_active_gate_owner /
+snapshot_coverage`. The workflow-progress package remains parked because the
+latest priority-recovery extractor reports zero witnesses; do not activate it
+unless canonical evidence promotes it.

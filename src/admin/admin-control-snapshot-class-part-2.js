@@ -24,6 +24,7 @@ import {
 } from './admin-authoritative-repair-evaluation.js';
 import {
   hasPublicationActiveGateOwnerReconcileSignal,
+  selectPublicationActiveGateHandoffContract,
 } from '../control-plane/publication-active-gate-handoff-contract.js';
 import {AdminControlSnapshotPart1} from './admin-control-snapshot-class-part-1.js';
 // ── file-local constants ────────────────────────────────────────────────────
@@ -67,16 +68,9 @@ const CONTROL_SNAPSHOT_PUBLICATION_READ_REPAIR_ERROR_FRAGMENTS = Object.freeze([
 ]);
 const CONTROL_SNAPSHOT_PUBLICATION_OWNER_CATCHUP_OPTIONS = Object.freeze({
   preferAuthoritativePublicationRead: true,
-  reconcileAuthoritativeMembershipPublication: true,
 });
 const CONTROL_SNAPSHOT_CONTROL_PLANE_DIAGNOSTICS_FIELD =
   'controlPlaneDiagnostics';
-const CONTROL_SNAPSHOT_PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD =
-  'publicationActiveGateHandoff';
-const CONTROL_SNAPSHOT_PUBLICATION_CONVERGENCE_FIELD =
-  'publicationConvergence';
-const CONTROL_SNAPSHOT_ACTIVE_GATE_OWNER_COHORT_FIELD =
-  'activeGateOwnerCohort';
 /**
  * Normalize one arbitrary value to a non-negative integer.
  * @param {*} value
@@ -169,18 +163,7 @@ function hasPublicationOwnerCatchupSignal(snapshot = null) {
 function selectPublicationOwnerCatchupHandoff(snapshot = null) {
   const controlPlaneDiagnostics =
     snapshot?.[CONTROL_SNAPSHOT_CONTROL_PLANE_DIAGNOSTICS_FIELD];
-  if (!controlPlaneDiagnostics || typeof controlPlaneDiagnostics !==
-      TYPEOF.OBJECT) {
-    return null;
-  }
-  return controlPlaneDiagnostics[
-    CONTROL_SNAPSHOT_PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD
-  ] ||
-    controlPlaneDiagnostics[CONTROL_SNAPSHOT_PUBLICATION_CONVERGENCE_FIELD]?.[
-      CONTROL_SNAPSHOT_PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD
-    ] ||
-    controlPlaneDiagnostics[CONTROL_SNAPSHOT_ACTIVE_GATE_OWNER_COHORT_FIELD] ||
-    null;
+  return selectPublicationActiveGateHandoffContract(controlPlaneDiagnostics);
 }
 // ── AdminControlSnapshot class ──────────────────────────────────────────────
 /**
@@ -383,12 +366,24 @@ class AdminControlSnapshotPart2 extends AdminControlSnapshotPart1 {
     if (hasPublicationOwnerCatchupSignal(snapshot) !== true) {
       return snapshot;
     }
+    const publicationActiveGateHandoff =
+      selectPublicationOwnerCatchupHandoff(snapshot);
     try {
+      if (
+        typeof this.reconcileAuthoritativeMembershipPublicationFromHandoff ===
+        TYPEOF.FUNCTION
+      ) {
+        await this.reconcileAuthoritativeMembershipPublicationFromHandoff(
+          publicationActiveGateHandoff,
+          options,
+        );
+      }
       return await this.buildLocalControlSnapshot({
         ...options,
-        ...CONTROL_SNAPSHOT_PUBLICATION_OWNER_CATCHUP_OPTIONS,
-        publicationActiveGateHandoff:
-          selectPublicationOwnerCatchupHandoff(snapshot),
+        preferAuthoritativePublicationRead:
+          CONTROL_SNAPSHOT_PUBLICATION_OWNER_CATCHUP_OPTIONS
+            .preferAuthoritativePublicationRead,
+        publicationActiveGateHandoff,
       });
     } catch (_error) {
       return snapshot;

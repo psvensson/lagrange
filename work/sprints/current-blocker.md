@@ -10,7 +10,7 @@ Workflow lane: `causal-escalation`
 
 Scenario: `rolling-restart`
 
-Artifact: `test-output/reports/rolling-restart-after-create-in-progress-owner-progress-20260515-codex.report.json`
+Artifact: `test-output/reports/rolling-restart-after-awaited-reconcile-bridge-20260515-codex.report.json`
 
 Playback: `none`
 
@@ -22,11 +22,11 @@ Boundary: `publication_reconcile_bridge`
 
 Dominant reason: `duplicate_handoff_reconcile_projection`
 
-Current state: Activated after canonical frontier steering repair closed. Fresh evidence still selects active_gate_snapshot_coverage, and the handoff probe keeps the next required action on reconcile_owner_membership_publication with pendingReconcileCount=4 and runtimePromotionAllowed=false. The package owns the startup active-gate publication reconcile bridge only after review subagent proof is recorded.
+Current state: Implemented the publication-active-gate reconcile bridge simplification. Canonical handoff target selection now lives in the handoff contract, broad repair-deferred snapshot rebuild catch-up is replaced by a narrow owner publication reconcile path, and awaited direct owner reconcile is preferred when the coordinator exposes it with enqueue fallback only when direct reconcile is absent. Focused bridge/admin tests pass. The representative rolling-restart run remains red on active_gate_snapshot_coverage; the handoff probe reduced pendingReconcileCount from 4 to 3 after bridge simplification and to 1 after awaited direct reconcile, with runtimePromotionAllowed=false.
 
 ## Next Action
 
-Run required review/fix subagent sequencing, promote exact runtime files from candidateRuntimeFiles only after focused owner-file evidence, then centralize canonical handoff target selection and replace broad repair-deferred snapshot rebuild catch-up with a narrow owner publication reconcile path while preserving admin diagnostics and rolling-restart intent.
+Treat the bridge package as same-frontier-reduced evidence. The next bounded owner boundary remains startup_active_gate_owner / snapshot_coverage, with publication handoff still pending for one reconcile target and priority-recovery residual extraction reporting zero witnesses; do not expand into workflow_progress unless canonical extractors promote it.
 
 ## Proof Ladder
 
@@ -38,11 +38,17 @@ Run required review/fix subagent sequencing, promote exact runtime files from ca
 6. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-create-in-progress-owner-progress-20260515-codex.report.json --handoff-probe`
 7. `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-create-in-progress-owner-progress-20260515-codex.report.json`
 8. `npm run analyze:owner-files -- startup_active_gate_owner publication_reconcile_bridge --markdown`
-9. `node --test test/control-plane/membership-publication-coordinator-main-stage-2.js`
-10. `node --test test/admin/admin-control-snapshot.test.js`
-11. `node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-after-reconcile-bridge-simplification-20260515-codex.report.json --fast-local --verbose`
-12. `npm run work:evidence-summary -- test-output/reports/rolling-restart-after-reconcile-bridge-simplification-20260515-codex.report.json`
-13. `npm run work:validate -- --closure work/packages/active-20260515-publication-active-gate-reconcile-bridge-simplification.md`
+9. `node --test test/control-plane/membership-publication-coordinator-main-stage-2.js test/control-plane/publication-active-gate-handoff-contract.test.js`
+10. `npx tap --grep "AdminControlSnapshot (forced authoritative membership observation stays read-only without handoff target|build snapshot keeps broad authoritative membership observation read-only|build snapshot forwards handoff pending reconcile target|repair-deferred shared owner attempts publication catch-up before returning|repair-deferred no-attempt path still attempts publication catch-up|repair-deferred shared owner skips publication catch-up for owner recovery waits|repair-deferred shared owner skips publication catch-up without pending reconcile evidence)" test/admin/admin-control-snapshot.test.js`
+11. `node --test test/admin/admin-control-snapshot.test.js # known pre-existing priority-recovery failures remain outside bridge scope`
+12. `node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-after-reconcile-bridge-simplification-20260515-codex.report.json --fast-local --verbose`
+13. `npm run work:evidence-summary -- test-output/reports/rolling-restart-after-reconcile-bridge-simplification-20260515-codex.report.json`
+14. `node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-after-awaited-reconcile-bridge-20260515-codex.report.json --fast-local --verbose`
+15. `npm run work:evidence-summary -- test-output/reports/rolling-restart-after-awaited-reconcile-bridge-20260515-codex.report.json`
+16. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-awaited-reconcile-bridge-20260515-codex.report.json --handoff-probe`
+17. `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-awaited-reconcile-bridge-20260515-codex.report.json`
+18. `npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-after-awaited-reconcile-bridge-20260515-codex.report.json --markdown`
+19. `npm run work:validate -- --closure work/packages/active-20260515-publication-active-gate-reconcile-bridge-simplification.md`
 
 ## Model Fit
 
@@ -65,7 +71,7 @@ Status: `live-red-scenario-release-gate`
 
 Scenario: `rolling-restart`
 
-Artifact: `test-output/reports/rolling-restart-after-create-in-progress-owner-progress-20260515-codex.report.json`
+Artifact: `test-output/reports/rolling-restart-after-awaited-reconcile-bridge-20260515-codex.report.json`
 
 Frontier: `active_gate_snapshot_coverage`
 
@@ -75,7 +81,7 @@ Boundary: `snapshot_coverage`
 
 Dominant reason: `active_gate_timed_out`
 
-Next action: `Use the publication-active-gate handoff probe to prove or remove the reconcile bridge boundary while active-gate admission remains strict.`
+Next action: `Continue with startup_active_gate_owner / snapshot_coverage. The reconcile bridge was narrowed and direct owner reconcile reduced the handoff to one pending target, but canonical evidence still reports publication_active_gate_handoff_contract_pending with pendingReconcileCount=1 and runtimePromotionAllowed=false.`
 
 ## Causal Governance
 
@@ -85,7 +91,7 @@ Stop-condition check: `npm --silent run analyze:causal-model -- test-output/repo
 
 Expected causal-model change: `Focused bridge proof either reduces active_gate_snapshot_coverage, migrates to a narrower startup active-gate owner boundary, or keeps the blocker on snapshot_coverage with the bridge proven non-causal.`
 
-Representative outcome: `pending-before-rerun`
+Representative outcome: `same-frontier`
 
 Causal debt: `Starting bridge runtime edits without a causal handoff would continue the recent oscillation between publication and active-gate boundaries.`
 
@@ -107,9 +113,9 @@ Current first frontier: `active_gate_snapshot_coverage remains the first represe
 
 Known downstream blockers:
 
-1. `handoff contract is pending with pendingReconcileCount=4 and runtimePromotionAllowed=false`
+1. `handoff contract is pending with pendingReconcileCount=1 and runtimePromotionAllowed=false after awaited direct reconcile`
 2. `selected snapshot observation remains repair_deferred with stale_replica_operations_in_flight`
-3. `workflow_progress remains parked as subordinate evidence until canonical extractors promote it`
+3. `priority-recovery residual extraction reports zero witnesses, so workflow_progress remains parked until canonical extractors promote it`
 
 Missing causal edge: `The package must prove whether the bridge already has one canonical reconcile target path or still reconstructs handoff truth through admin snapshot repair-deferred catch-up.`
 
@@ -117,7 +123,7 @@ Missing causal edge probe: `npm run analyze:topology-convergence -- test-output/
 
 Bounded progress proof: `Focused bridge work must make reconcile target selection canonical without relaxing active-gate admission or using broad snapshot rebuild as the mechanism.`
 
-Bounded progress proof artifact: `test-output/reports/rolling-restart-after-create-in-progress-owner-progress-20260515-codex.report.json`
+Bounded progress proof artifact: `test-output/reports/rolling-restart-after-awaited-reconcile-bridge-20260515-codex.report.json`
 
 Expected observable transition: `Bridge proof either reduces the active-gate snapshot coverage blocker, migrates to a narrower startup active-gate owner path, or closes as reduced if the duplicate bridge has already been removed.`
 
@@ -127,7 +133,7 @@ Same-frontier fallback: `If active_gate_snapshot_coverage remains red after focu
 
 Expected next frontier: `startup_active_gate_owner / snapshot_coverage unless bridge proof promotes a narrower owner boundary`
 
-Result classification: `pending-before-probe`
+Result classification: `same-frontier`
 
 Stop condition: `continue-local-fix`
 
@@ -153,6 +159,10 @@ Write scope:
 6. `work/releases/0.1-dependency-map.md`
 7. `work/releases/0.1-stabilization.md`
 8. `work/model-ledger.jsonl`
+9. `src/control-plane/publication-active-gate-handoff-contract.js`
+10. `src/admin/admin-control-snapshot-class-part-2.js`
+11. `src/admin/admin-control-snapshot-class-part-6.js`
+12. `test/admin/admin-control-snapshot.test.js`
 
 Handoff files:
 
@@ -187,6 +197,10 @@ Commit scope:
 6. `work/releases/0.1-dependency-map.md`
 7. `work/releases/0.1-stabilization.md`
 8. `work/model-ledger.jsonl`
+9. `src/control-plane/publication-active-gate-handoff-contract.js`
+10. `src/admin/admin-control-snapshot-class-part-2.js`
+11. `src/admin/admin-control-snapshot-class-part-6.js`
+12. `test/admin/admin-control-snapshot.test.js`
 
 Legacy touched files:
 
