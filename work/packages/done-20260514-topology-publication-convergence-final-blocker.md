@@ -563,3 +563,30 @@ Prior reduced-progress implementation proof:
     `test/control-plane/membership-publication-coordinator-main-stage-2.js`
     997 lines; this package adds local source-file size debt and does not
     perform broad oversized-file cleanup.
+
+Final migration proof:
+
+- Diagnostic classification: `src/diagnostics/topology-convergence-graph.js`
+  now treats steady `PUBLISHED` missing-published evidence as a publication
+  owner blocker unless the owner stream is current, acknowledged, and fenced by
+  `consumer_lag`.
+- Regression: `test/diagnostics/topology-convergence-graph.test.js` proves
+  consumer-lag missing-published evidence moves the first frontier to
+  `active_gate_snapshot_coverage` while the existing steady-published producer
+  missing case remains under `topology_publication_owner`.
+- Current representative classification:
+  `npm run work:evidence-summary -- test-output/reports/topology-publication-convergence-final-blocker-after-authoritative-refresh-repair.report.json`
+  reports first frontier `active_gate_snapshot_coverage`, owner
+  `startup_active_gate_owner`, boundary `snapshot_coverage`, and dominant
+  reason `active_gate_timed_out`.
+- Focused proof passed:
+  `node test/diagnostics/topology-convergence-graph.test.js`,
+  `npx eslint src/diagnostics/topology-convergence-graph.js test/diagnostics/topology-convergence-graph.test.js`,
+  guideline literal/decision checks, runtime grammar audit, constant-name
+  guards, and canonical topology/causal extractors.
+
+## Commit And Push Ledger
+
+1. Focused package commit: e5d92335d9d2ff0e8770e742ed0af6f7c2664e35
+2. Pushed to: origin/codex/pending-ack-eligibility-filter
+3. Commit contains only package-owned files/package-status/allowed sprint handoff: yes
