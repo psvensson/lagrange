@@ -28,11 +28,16 @@ const PUBLICATION_CONVERGENCE_GATE_FIELD = 'publicationConvergenceGate';
 const PUBLICATION_CONVERGENCE_FIELD = 'publicationConvergence';
 const PUBLICATION_RECOVERY_GATE_FIELD = 'publicationRecoveryGate';
 const PUBLICATION_RECOVERY_GATE_READY_FIELD = 'ready';
+const CONTROL_SNAPSHOT_REFRESH_REPAIR_TRIGGER_CODES = Object.freeze([
+  AUTHORITATIVE_REPAIR_TRIGGER.CACHE_STALE_WATERMARK,
+  AUTHORITATIVE_REPAIR_TRIGGER.STALE_REPLICA_OPERATIONS_IN_FLIGHT,
+]);
 const FORCED_CONTROL_SNAPSHOT_FALLBACK_REASON = Object.freeze({
   MISSING_OBSERVATION: 'missing_observation',
   OBSERVATION_FAILED: 'observation_failed',
   OBSERVATION_CONTRACT_FAILED: 'observation_contract_failed',
   REPAIRABLE_COVERAGE_GAP: 'repairable_coverage_gap',
+  REPAIR_DEFERRED_REFRESH_DEBT: 'repair_deferred_refresh_debt',
   PUBLICATION_RECOVERY_GATE_NOT_READY: 'publication_recovery_gate_not_ready',
 });
 
@@ -206,6 +211,12 @@ function hasRepairableCoverageGap(evidence = {}) {
     );
 }
 
+function hasRepairableRefreshDebt(evidence = {}) {
+  return Array.isArray(evidence.reasonCodes) &&
+    CONTROL_SNAPSHOT_REFRESH_REPAIR_TRIGGER_CODES.some((triggerCode) =>
+      evidence.reasonCodes.includes(triggerCode));
+}
+
 function hasRepairableSnapshotObservation(evidence = {}) {
   return (
     evidence.contractState === OWNER_CONTRACT_STATE.PENDING ||
@@ -214,6 +225,29 @@ function hasRepairableSnapshotObservation(evidence = {}) {
     evidence.nextAction === OWNER_CONTRACT_NEXT_ACTION.RETRY ||
     evidence.repairDeferred === true
   );
+}
+
+function hasPendingSnapshotRepairAction(evidence = {}) {
+  return (
+    evidence.contractState === OWNER_CONTRACT_STATE.PENDING ||
+    evidence.contractState === OWNER_CONTRACT_STATE.DEFERRED ||
+    evidence.nextAction === OWNER_CONTRACT_NEXT_ACTION.WAIT ||
+    evidence.nextAction === OWNER_CONTRACT_NEXT_ACTION.RETRY
+  );
+}
+
+function hasNonFailedControlSnapshotObservation(evidence = {}) {
+  return evidence.observationPresent === true &&
+    evidence.observationState !== CONTROL_SNAPSHOT_OBSERVATION_STATE_FAILED &&
+    evidence.contractState !==
+      CONTROL_SNAPSHOT_OBSERVATION_CONTRACT_STATE_FAILED;
+}
+
+function hasRepairDeferredRefreshDebt(evidence = {}) {
+  return hasNonFailedControlSnapshotObservation(evidence) &&
+    evidence.repairDeferred === true &&
+    hasPendingSnapshotRepairAction(evidence) &&
+    hasRepairableRefreshDebt(evidence);
 }
 
 function decideForcedControlSnapshotFallback(evidence = {}) {
@@ -242,6 +276,11 @@ function decideForcedControlSnapshotFallback(evidence = {}) {
   ) {
     reasonCodes.push(
       FORCED_CONTROL_SNAPSHOT_FALLBACK_REASON.REPAIRABLE_COVERAGE_GAP,
+    );
+  }
+  if (hasRepairDeferredRefreshDebt(evidence)) {
+    reasonCodes.push(
+      FORCED_CONTROL_SNAPSHOT_FALLBACK_REASON.REPAIR_DEFERRED_REFRESH_DEBT,
     );
   }
   if (

@@ -10,6 +10,12 @@
 import {test} from '../../../../src/test-helpers/tap.js';
 import assert from 'node:assert';
 import {WebSocketServer} from 'ws';
+import {AUTHORITATIVE_REPAIR_TRIGGER} from
+  '../../../../src/admin/admin-authoritative-repair-policy.js';
+import {
+  OWNER_CONTRACT_NEXT_ACTION,
+  OWNER_CONTRACT_STATE,
+} from '../../../../src/control-plane/owner-contract-outcome.js';
 import {
   ADMIN_QUERY_TRACE_TIMEOUT_TEST_MS,
   createCluster,
@@ -22,10 +28,26 @@ import {
 } from './cluster-test-helpers.js';
 
 const SNAPSHOT_OBSERVATION_STATE_STALE_USABLE = 'stale_usable';
-const SNAPSHOT_OBSERVATION_CONTRACT_STATE_PENDING = 'pending';
+const SNAPSHOT_OBSERVATION_CONTRACT_STATE_PENDING =
+  OWNER_CONTRACT_STATE.PENDING;
+const SNAPSHOT_OBSERVATION_NEXT_ACTION_WAIT = OWNER_CONTRACT_NEXT_ACTION.WAIT;
+const SNAPSHOT_REFRESH_REPAIR_TRIGGER_CODES = Object.freeze([
+  AUTHORITATIVE_REPAIR_TRIGGER.CACHE_STALE_WATERMARK,
+  AUTHORITATIVE_REPAIR_TRIGGER.STALE_REPLICA_OPERATIONS_IN_FLIGHT,
+]);
 const PUBLICATION_RECOVERY_GATE_STATE_READY = 'ready';
 const PUBLICATION_RECOVERY_GATE_STATE_PRIORITY_SPREAD_PENDING =
   'priority_spread_pending';
+const SNAPSHOT_REPAIR_DEFERRED = true;
+const TEST_ADMIN_HOST = '127.0.0.1';
+const TEST_ADMIN_PORT_ANY = 0;
+const TEST_CACHE_DUMP_MESSAGE_TYPE = 'cache_dump';
+const TEST_QUERY_RESULT_MESSAGE_TYPE = 'query_result';
+const TEST_EMPTY_CACHE_DUMP = Object.freeze({});
+const TEST_NODE_ID = 'node-1';
+const TEST_CONTAINER_ID = 'container-1';
+const TEST_CAPTURED_AT = 1;
+const TEST_ADMIN_QUERY_TIMEOUT_MS = 4321;
 
 /**
  * Feature: distributed-testing-framework
@@ -919,6 +941,91 @@ test('Unit: NodeHandle.getControlSnapshot reuses explicit stale observations ' +
       capturedQueries.map((query) => query.sql),
       [NODE_CLIENT_CONTROL_SNAPSHOT_SQL],
       'forced repair should stay on the local control snapshot when the response already carries an explicit non-failed observation',
+    );
+  } finally {
+    node.closeQueryConnection();
+    await new Promise((resolve, reject) => {
+      server.close((err) => {
+        if (err) {
+          reject(err);
+          return;
+        }
+        resolve();
+      });
+    });
+  }
+});
+
+test('Unit: NodeHandle.getControlSnapshot escalates forced repair for ' +
+  'stale refresh debt', async () => {
+  const server = new WebSocketServer({
+    host: TEST_ADMIN_HOST,
+    port: TEST_ADMIN_PORT_ANY,
+  });
+  await new Promise((resolve, reject) => {
+    server.once('listening', resolve);
+    server.once('error', reject);
+  });
+
+  const address = server.address();
+  assert.ok(address && typeof address === 'object',
+    'server should expose listen address');
+  const adminApiPort = address.port;
+
+  const capturedQueries = [];
+  server.on('connection', (socket) => {
+    socket.send(JSON.stringify({
+      type: TEST_CACHE_DUMP_MESSAGE_TYPE,
+      data: TEST_EMPTY_CACHE_DUMP,
+    }));
+    socket.on('message', (data) => {
+      const capturedQuery = JSON.parse(data.toString());
+      capturedQueries.push(capturedQuery);
+      socket.send(JSON.stringify({
+        type: TEST_QUERY_RESULT_MESSAGE_TYPE,
+        queryId: capturedQuery.queryId,
+        results: [{
+          nodeId: TEST_NODE_ID,
+          capturedAt: TEST_CAPTURED_AT,
+          nodes: [],
+          snapshotObservation: {
+            state: SNAPSHOT_OBSERVATION_STATE_STALE_USABLE,
+            contractState: SNAPSHOT_OBSERVATION_CONTRACT_STATE_PENDING,
+            nextAction: SNAPSHOT_OBSERVATION_NEXT_ACTION_WAIT,
+            reasonCodes: SNAPSHOT_REFRESH_REPAIR_TRIGGER_CODES,
+          },
+          adminObservation: {
+            repair: {
+              deferred: SNAPSHOT_REPAIR_DEFERRED,
+              triggerCodes: SNAPSHOT_REFRESH_REPAIR_TRIGGER_CODES,
+            },
+          },
+        }],
+        count: TEST_CAPTURED_AT,
+      }));
+    });
+  });
+
+  const node = new NodeHandle(
+    TEST_NODE_ID,
+    TEST_CONTAINER_ID,
+    TEST_ADMIN_HOST,
+    NODE_ROLES.SEED,
+    {getContainerLogs: async () => ''},
+    adminApiPort,
+    {adminQueryTimeoutMs: TEST_ADMIN_QUERY_TIMEOUT_MS},
+  );
+
+  try {
+    await node.getControlSnapshot({forceRepair: true});
+    assert.deepEqual(
+      capturedQueries.map((query) => query.sql),
+      [
+        NODE_CLIENT_CONTROL_SNAPSHOT_SQL,
+        NODE_CLIENT_CONTROL_SNAPSHOT_FORCE_REPAIR_SQL,
+      ],
+      'forced repair should escalate when repair-deferred local snapshot ' +
+        'evidence carries refresh debt',
     );
   } finally {
     node.closeQueryConnection();

@@ -204,6 +204,24 @@ gate packages claim release proof.
     from the active package when the active package is workflow, diagnostics,
     or classification work.
 
+## Re-Entry Control Gate
+
+A new package may be created only when canonical extraction changes the
+first-frontier edge, owner, boundary, or next required action. Changed artifact
+paths, node IDs, counts, attempts, timings, or timestamps are evidence updates,
+not package boundaries.
+
+Same-boundary evidence stays in the active package. If fresh evidence still
+selects `startup_active_gate_owner / snapshot_coverage` with the same next
+required action, continue the active package instead of opening a successor.
+
+If the frontier returns once more between `startup_active_gate_owner /
+snapshot_coverage` and `topology_publication_owner / publication_convergence`
+without representative green or monotonic reduction, stop tactical runtime
+patching and open or convert to one cross-boundary causal package. That package
+must name a replayable publication-to-active-gate handoff fixture or
+missing-edge probe before more runtime files are edited.
+
 ## Activation Contract For Queued Packages
 
 Before any package in this sprint moves from `todo` to `active`:
@@ -442,7 +460,7 @@ Final closure requires fresh evidence proving all of the following:
       canonical evidence promotes it back to first frontier.
 
 19. [Topology Publication Convergence After Active Gate Migration](../packages/done-20260515-topology-publication-convergence-after-active-gate-migration.md)
-    - Lane: `runtime-owner-boundary`
+    - Lane: `causal-escalation`
     - Owner boundary: `topology_publication_owner / publication_convergence`
     - Purpose: own the publication-convergence successor frontier exposed by
       the migrated active-gate representative rerun.
@@ -460,7 +478,7 @@ Final closure requires fresh evidence proving all of the following:
       with `active_gate_timed_out`, `snapshotCoverage=2/5`, and selected
       snapshot `repair_deferred / stale_usable / pending / idle / wait`.
 
-20. [Topology Active Gate Snapshot Coverage After Publication Owner Stream Fix](../packages/active-20260515-topology-active-gate-snapshot-coverage-after-publication-owner-stream-fix.md)
+20. [Topology Active Gate Snapshot Coverage After Publication Owner Stream Fix](../packages/done-20260515-topology-active-gate-snapshot-coverage-after-publication-owner-stream-fix.md)
     - Lane: `causal-escalation`
     - Owner boundary: `startup_active_gate_owner / snapshot_coverage`
     - Purpose: own the fresh active-gate snapshot coverage frontier exposed
@@ -468,10 +486,18 @@ Final closure requires fresh evidence proving all of the following:
     - Entry condition: publication-convergence successor closed as migrated
       by the fresh representative artifact
       `test-output/reports/rolling-restart-after-publication-owner-publishing-fence-20260515-codex.report.json`.
-    - Acceptance: selected snapshot repair-deferred/stale-usable evidence is
-      repaired, reduced, migrated, or classified with canonical evidence
-      before readiness or operation-workflow residuals are treated as first
-      frontier.
+    - Acceptance: migrated handoff. Focused forced-snapshot fallback now
+      escalates repair-deferred refresh debt instead of reusing a stale local
+      snapshot after the active-gate force-repair threshold. Fresh
+      representative evidence in
+      `test-output/reports/rolling-restart-after-forced-snapshot-refresh-debt-fallback-20260515-codex.report.json`
+      moved first frontier back to
+      `topology_publication_owner / publication_convergence` with
+      `publication_pending`; active-gate snapshot coverage is downstream with
+      `snapshotCoverage=0/5` and a forced authoritative repair error. This is
+      the repeated publication/active-gate oscillation case; continue with one
+      cross-boundary causal package instead of another tactical single-owner
+      package.
 
 ## Dependency Order
 
@@ -535,78 +561,18 @@ Final closure requires fresh evidence proving all of the following:
 
 ## Current Next Action
 
-Active-gate budget closure is done as reduced evidence: `active_gate_timeout`
-is terminally classified. Active-gate owner cohort convergence is done as
-migrated evidence: the admin owner snapshot names expected nodes, ready leases,
-published active nodes, missing nodes, pending owner work, topology epoch, and
-active-gate budget, but the representative residual is not green. Publication
-projection reconciliation is done as classification-only observability:
-`PUBLISHED` plus missing active publication is now a
-`topology_publication_owner` blocker instead of healthy evidence.
-
-The current action is to start
-[Topology Active Gate Snapshot Coverage After Publication Owner Stream Fix](../packages/active-20260515-topology-active-gate-snapshot-coverage-after-publication-owner-stream-fix.md).
-The migrated active-gate predecessor is
-[Topology Active Gate Snapshot Coverage After Publication Consumer Lag](../packages/done-20260515-topology-active-gate-snapshot-coverage-after-publication-consumer-lag.md).
-The predecessor
-[Topology Contract Integration Reconciliation](../packages/done-20260514-topology-contract-integration-reconciliation.md)
-closed as classification-only work: focused membership epoch, failure repair,
-rejoin, descriptor, capacity, anti-entropy, and budget contracts exist, but
-they are not release-ready while current evidence remains red. The current
-representative artifact is
-`test-output/reports/rolling-restart-after-active-gate-persistent-repair-20260515-codex.report.json`;
-its first frontier is `publication_ack_convergence` under
+The active-gate refresh-debt fallback package is closed as migrated:
+`test-output/reports/rolling-restart-after-forced-snapshot-refresh-debt-fallback-20260515-codex.report.json`
+is still red and canonical extraction again selects
+`publication_ack_convergence` under
 `topology_publication_owner / publication_convergence` with
-`publication_pending`. Active-gate snapshot coverage is now downstream with
-`snapshotCoverage=0/5` and selected snapshot forced-repair error evidence, so
-the next runtime package must own publication convergence unless fresh
-canonical extraction promotes active-gate snapshot coverage back to first
-frontier. The latest rebalance gate still has its own publication-convergence
-migration evidence and must remain a separate gate package unless promoted by
-fresh canonical extraction.
+`publication_pending`. Active-gate snapshot coverage is downstream with
+`snapshotCoverage=0/5` and a forced authoritative repair error, and the prior
+stale `repair_deferred / stale_usable / pending / idle / wait` symptom is no
+longer selected.
 
-Implementation note for publication convergence after active-gate migration:
-focused owner-stream proof now classifies pending unpublished revision evidence
-as `publishing / waiting_for_publication` instead of
-`no_revision / not_started`. The active package remains open pending a fresh
-representative rerun or canonical extraction that shows whether the
-publication frontier reduced, migrated, or stayed same-boundary.
-
-Priority residual drain is classification-complete and closed. The
-representative priority extractor still reports one non-frontier
-`operation_workflow_owner / workflow_progress` witness for
-`control_plane_publications-p1` in `spread_satisfied_in_flight`, but causal
-analysis classifies `priority_recovery_partition_progress` as satisfied,
-`priority_recovery_classified` as passed, and `workflow_step_timeout` as within
-budget at `1269/30000ms`. The latest rebalance gate reports zero priority
-recovery witnesses.
-
-Final ship confirmation ran as observe/classify work and did not meet ship
-criteria. The publication convergence runtime re-scope then reduced the
-representative blocker but did not close it. After-repair artifact
-`test-output/reports/topology-publication-convergence-final-blocker-after-repair.report.json`
-reports `active=2/5`, `snapshotCoverage=3/5`,
-`publication=PUBLISHED`, `publishedActive=3/5`, `pendingAck=0`, and
-`missingPublished=2`; the first frontier remains
-`topology_publication_owner / publication_convergence` with
-`missing_published_nodes_present`. Priority recovery is not the first
-frontier, but after-repair evidence has three non-frontier
-`operation_workflow_owner / workflow_progress` witnesses in
-`spread_satisfied_in_flight`.
-
-Final confirmation is closed as a migrated red gate. The publication
-convergence final blocker is now closed as migrated by consumer-lag
-classification. The active-gate package then sustained forced snapshot repair
-and migrated the current representative checkpoint to
-`topology_publication_owner / publication_convergence`. The publication
-successor now closes as migrated: fresh evidence after the owner-stream fix
-satisfies publication ACK convergence and promotes
-`startup_active_gate_owner / snapshot_coverage` back to first frontier with
-`active=4/5`, `snapshotCoverage=2/5`, selected snapshot
-`repair_deferred / stale_usable / pending / idle / wait`, and reason codes
-`cache_stale_watermark` plus `stale_replica_operations_in_flight`.
-
-Continue the active-gate successor package. Its first step is review/fix
-subagent sequencing for the just-closed publication package, then focused
-analysis of the selected snapshot repair-deferred path before any runtime
-file is promoted into write scope.
+Next action: open one cross-boundary causal package for the
+publication-to-active-gate handoff. It must name a replayable missing-edge probe
+before more runtime files are edited, because the frontier has now oscillated
+between publication convergence and active-gate snapshot coverage without
+representative green closure.
