@@ -133,6 +133,11 @@ const ACTIVE_GATE_HANDOFF_RECONCILE_RESULT_PUBLICATION_ID =
 const ACTIVE_GATE_HANDOFF_RECONCILE_RESULT_PUBLICATION_EPOCH = 4;
 const ACTIVE_GATE_HANDOFF_RECONCILE_RESULT_PUBLICATION_STATUS = 'OPEN';
 const ACTIVE_GATE_HANDOFF_RECONCILE_EMPTY_ROWS = Object.freeze([]);
+const ACTIVE_GATE_HANDOFF_RECONCILE_PRIORITY_RECOVERY = Object.freeze({
+  publicationRecoveryGate: Object.freeze({
+    ready: false,
+  }),
+});
 const ACTIVE_GATE_OWNER_TRUTH_PUBLICATION_ROW = Object.freeze({
   publication_id: 'publication-active-gate-owner-truth',
   publication_kind: 'cluster_membership',
@@ -378,6 +383,174 @@ test('AdminControlSnapshot carries authoritative published fallback through loca
         ?.pendingReconcileCount,
       ACTIVE_GATE_HANDOFF_RECONCILE_CLEARED_PENDING_COUNT,
       'active-gate handoff should not retain reconcile debt after producer diagnostics observe durable membership',
+    );
+  });
+
+test('AdminControlSnapshot keeps priority recovery readiness ahead of generic durable fallback without handoff',
+  async (t) => {
+    const snapshot = new AdminControlSnapshot({
+      nodeId: ACTIVE_GATE_HANDOFF_RECONCILE_LOCAL_NODE_ID,
+      nowFn: () => ACTIVE_GATE_OWNER_TRUTH_NOW_MS,
+    });
+
+    const diagnostics = snapshot.resolvePublicationConvergenceDiagnostics(
+      [{
+        nodeId: ACTIVE_GATE_HANDOFF_RECONCILE_LOCAL_NODE_ID,
+        priorityControlPlaneRecovery:
+          ACTIVE_GATE_HANDOFF_RECONCILE_PRIORITY_RECOVERY,
+        membershipPublication: {
+          publicationEpoch: ACTIVE_GATE_HANDOFF_RECONCILE_PUBLICATION_EPOCH,
+          status: ACTIVE_GATE_OWNER_TRUTH_PUBLICATION_STATUS,
+          publishedActiveNodeIds: [
+            ...ACTIVE_GATE_HANDOFF_RECONCILE_PUBLISHED_NODE_IDS,
+          ],
+          requiredAckNodeIds: [
+            ...ACTIVE_GATE_HANDOFF_RECONCILE_PUBLISHED_NODE_IDS,
+          ],
+          acknowledgedNodeIds: [
+            ...ACTIVE_GATE_HANDOFF_RECONCILE_PUBLISHED_NODE_IDS,
+          ],
+        },
+      }],
+      {
+        publication_id:
+          ACTIVE_GATE_HANDOFF_RECONCILE_RESULT_PUBLICATION_ID,
+        publication_kind:
+          ACTIVE_GATE_HANDOFF_RECONCILE_PUBLICATION_KIND,
+        publication_epoch:
+          ACTIVE_GATE_HANDOFF_RECONCILE_RESULT_PUBLICATION_EPOCH,
+        status:
+          ACTIVE_GATE_OWNER_TRUTH_PUBLICATION_STATUS,
+        published_active_node_ids: [
+          ...ACTIVE_GATE_HANDOFF_RECONCILE_NODE_IDS,
+        ],
+        required_ack_node_ids: [
+          ...ACTIVE_GATE_HANDOFF_RECONCILE_NODE_IDS,
+        ],
+        acknowledged_node_ids: [
+          ...ACTIVE_GATE_HANDOFF_RECONCILE_NODE_IDS,
+        ],
+      },
+      {
+        preferAuthoritativePublicationRead:
+          ACTIVE_GATE_HANDOFF_RECONCILE_AUTHORITATIVE_READ,
+      },
+    );
+
+    t.match(
+      diagnostics,
+      {
+        publicationEpoch:
+          ACTIVE_GATE_HANDOFF_RECONCILE_PUBLICATION_EPOCH,
+        status:
+          ACTIVE_GATE_OWNER_TRUTH_PUBLICATION_STATUS,
+        publishedActiveNodeIds: [
+          ...ACTIVE_GATE_HANDOFF_RECONCILE_PUBLISHED_NODE_IDS,
+        ],
+      },
+      'generic durable fallback should not override readiness owner-recovery evidence without an active-gate handoff',
+    );
+  });
+
+test('AdminControlSnapshot uses authoritative handoff reconcile fallback when readiness has priority recovery',
+  async (t) => {
+    const durablePublishedPublicationRow = {
+      publication_id:
+        ACTIVE_GATE_HANDOFF_RECONCILE_RESULT_PUBLICATION_ID,
+      publication_kind:
+        ACTIVE_GATE_HANDOFF_RECONCILE_PUBLICATION_KIND,
+      publication_epoch:
+        ACTIVE_GATE_HANDOFF_RECONCILE_RESULT_PUBLICATION_EPOCH,
+      status:
+        ACTIVE_GATE_OWNER_TRUTH_PUBLICATION_STATUS,
+      published_active_node_ids: [
+        ...ACTIVE_GATE_HANDOFF_RECONCILE_NODE_IDS,
+      ],
+      required_ack_node_ids: [
+        ...ACTIVE_GATE_HANDOFF_RECONCILE_NODE_IDS,
+      ],
+      acknowledged_node_ids: [
+        ...ACTIVE_GATE_HANDOFF_RECONCILE_NODE_IDS,
+      ],
+    };
+    const snapshot = new AdminControlSnapshot({
+      nodeId: ACTIVE_GATE_HANDOFF_RECONCILE_LOCAL_NODE_ID,
+      nowFn: () => ACTIVE_GATE_OWNER_TRUTH_NOW_MS,
+      systemTableCache: {
+        getAll() {
+          return ACTIVE_GATE_HANDOFF_RECONCILE_EMPTY_ROWS;
+        },
+      },
+      controlPlaneReadinessService: {
+        async getAllNodeReadiness() {
+          return [{
+            nodeId: ACTIVE_GATE_HANDOFF_RECONCILE_LOCAL_NODE_ID,
+            priorityControlPlaneRecovery:
+              ACTIVE_GATE_HANDOFF_RECONCILE_PRIORITY_RECOVERY,
+            membershipPublication: {
+              publicationEpoch:
+                ACTIVE_GATE_HANDOFF_RECONCILE_PUBLICATION_EPOCH,
+              status: ACTIVE_GATE_OWNER_TRUTH_PUBLICATION_STATUS,
+              publishedActiveNodeIds: [
+                ...ACTIVE_GATE_HANDOFF_RECONCILE_PUBLISHED_NODE_IDS,
+              ],
+              requiredAckNodeIds: [
+                ...ACTIVE_GATE_HANDOFF_RECONCILE_PUBLISHED_NODE_IDS,
+              ],
+              acknowledgedNodeIds: [
+                ...ACTIVE_GATE_HANDOFF_RECONCILE_PUBLISHED_NODE_IDS,
+              ],
+            },
+          }];
+        },
+        membershipPublicationService: {
+          async getLatestClusterPublication() {
+            return durablePublishedPublicationRow;
+          },
+        },
+      },
+    });
+
+    const result = await snapshot.buildLocalControlSnapshot({
+      preferAuthoritativePublicationRead:
+        ACTIVE_GATE_HANDOFF_RECONCILE_AUTHORITATIVE_READ,
+      publicationActiveGateHandoff: {
+        schemaVersion: ACTIVE_GATE_OWNER_COHORT_SCHEMA_VERSION,
+        publicationEpoch: ACTIVE_GATE_HANDOFF_RECONCILE_PUBLICATION_EPOCH,
+        expectedNodeIds: [
+          ...ACTIVE_GATE_HANDOFF_RECONCILE_NODE_IDS,
+        ],
+        publishedActiveNodeIds: [
+          ...ACTIVE_GATE_HANDOFF_RECONCILE_PUBLISHED_NODE_IDS,
+        ],
+        missingPublishedNodeIds: [
+          ...ACTIVE_GATE_HANDOFF_RECONCILE_PENDING_NODE_IDS,
+        ],
+        pendingReconcileNodeIds: [
+          ...ACTIVE_GATE_HANDOFF_RECONCILE_PENDING_NODE_IDS,
+        ],
+        pendingReconcileCount:
+          ACTIVE_GATE_HANDOFF_RECONCILE_PENDING_COUNT,
+        runtimePromotionAllowed:
+          ACTIVE_GATE_HANDOFF_RUNTIME_PROMOTION_ALLOWED_FALSE,
+        state: ACTIVE_GATE_OWNER_COHORT_STATE_PENDING,
+        reasonCode: ACTIVE_GATE_OWNER_COHORT_REASON_OWNER_RECONCILE_PENDING,
+        nextAction: ACTIVE_GATE_HANDOFF_NEXT_ACTION_RECONCILE,
+      },
+    });
+
+    t.match(
+      result.controlPlaneDiagnostics.publicationConvergence,
+      {
+        publicationEpoch:
+          ACTIVE_GATE_HANDOFF_RECONCILE_RESULT_PUBLICATION_EPOCH,
+        status:
+          ACTIVE_GATE_OWNER_TRUTH_PUBLICATION_STATUS,
+        publishedActiveNodeIds: [
+          ...ACTIVE_GATE_HANDOFF_RECONCILE_NODE_IDS,
+        ],
+      },
+      'authoritative active-gate handoff fallback should override stale readiness owner-recovery publication only when it covers the handoff target',
     );
   });
 

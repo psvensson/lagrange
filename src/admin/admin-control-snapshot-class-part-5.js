@@ -298,6 +298,14 @@ class AdminControlSnapshotPart5 extends AdminControlSnapshotPart4 {
       this.resolvePublicationConvergenceDiagnostics(
         readinessEntries,
         observedMembershipPublication,
+        {
+          preferAuthoritativePublicationRead:
+            options.preferAuthoritativePublicationRead === true,
+          reconcileAuthoritativeMembershipPublication:
+            options.reconcileAuthoritativeMembershipPublication === true,
+          publicationActiveGateHandoff:
+            options.publicationActiveGateHandoff,
+        },
       );
     const readinessTransitionsByNodeId =
       this.resolveReadinessTransitionHistory();
