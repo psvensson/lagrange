@@ -638,6 +638,7 @@ Next action: apply the track comparative guidance before more runtime edits.
 Use the replayable publication-to-active-gate handoff probe/fixture to prove the
 catch-up-before-promotion gap for the fresh `PUBLISHED` plus missing-published
 shape. The current handoff probe reports
-`publication_ack_to_active_gate_reconcile_missing`, `consumer=absent`, and
-`runtimePromotionAllowed=false`; promote another runtime path only after that
-probe names the exact owner and legal next action.
+`publication_ack_to_active_gate_reconcile_missing`,
+`consumer=active_gate_snapshot_coverage`, and
+`nextOwnerPath=startup_active_gate_owner / snapshot_coverage`; promote another
+runtime path only after owner-file proof maps that exact owner path to files.

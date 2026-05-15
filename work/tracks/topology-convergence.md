@@ -62,7 +62,8 @@ Latest current handoff state:
 - publication is `PUBLISHED` with `pendingAck=0`, but active cohort projection
   still shows `publishedActive=1/5` and `missingPublished=4`
 - the handoff probe reports `publication_ack_to_active_gate_reconcile_missing`,
-  `consumer=absent`, and `runtimePromotionAllowed=false`
+  `consumer=active_gate_snapshot_coverage`, and
+  `nextOwnerPath=startup_active_gate_owner / snapshot_coverage`
 - priority recovery remains classified as satisfied and subordinate
 
 ## Target Invariant
@@ -103,9 +104,9 @@ or produces a narrower owner-boundary blocker selected by canonical evidence.
   `active_gate_snapshot_coverage` is the first frontier with dominant reason
   `snapshot_coverage_incomplete`. The focused fallback slice removed the hard
   selected snapshot repair error and improved coverage from `0/5` to `2/5`, but
-  the handoff probe still reports a missing publication-to-active-gate reconcile
-  consumer; the active package must use replayable handoff evidence before any
-  further runtime file promotion.
+  the handoff probe now names the missing publication-to-active-gate reconcile
+  consumer as `startup_active_gate_owner / snapshot_coverage`; the active
+  package must use owner-file proof before any further runtime file promotion.
 - Priority recovery residuals:
   classified as satisfied and subordinate to the publication-to-active-gate
   handoff residual.

@@ -12,8 +12,8 @@
   "owner": "startup_active_gate_owner",
   "boundary": "snapshot_coverage",
   "dominantReason": "snapshot_coverage_incomplete",
-  "currentState": "The promoted NodeHandle fallback preserves a successful local control snapshot when the follow-up forced repair query fails. Fresh representative evidence removes the hard selected snapshot repair error and reaches cluster active, but the load-readiness gate remains red: active_gate_snapshot_coverage is deferred with snapshotCoverage=2/5, repair_deferred/stale_usable selected snapshot evidence, publication=PUBLISHED, pendingAck=0, publishedActive=1/5, and missingPublished=4.",
-  "nextAction": "Apply the topology track related-work rule before more runtime edits: use the replayable publication-to-active-gate handoff probe/fixture to prove the catch-up-before-promotion gap for the fresh PUBLISHED plus missingPublished shape, then promote the exact owner path only if that probe names it.",
+  "currentState": "The promoted NodeHandle fallback preserves a successful local control snapshot when the follow-up forced repair query fails. Fresh representative evidence removes the hard selected snapshot repair error and reaches cluster active, but the load-readiness gate remains red: active_gate_snapshot_coverage is deferred with snapshotCoverage=2/5, repair_deferred/stale_usable selected snapshot evidence, publication=PUBLISHED, pendingAck=0, publishedActive=1/5, and missingPublished=4. The handoff probe now detects this current-frontier shape and names the active-gate consumer as startup_active_gate_owner / snapshot_coverage instead of consumer=absent.",
+  "nextAction": "Use the handoff probe nextOwnerPath to run owner-file proof for startup_active_gate_owner / snapshot_coverage, then promote the exact active-gate consumer path that owns catch-up-before-promotion for PUBLISHED plus missingPublished=4. Keep runtimePromotionAllowed=false until that owner-file proof names the file boundary.",
   "proof": [
     "npm run work:evidence-summary -- test-output/reports/rolling-restart-after-publication-supplied-stream-closure-20260515-codex.report.json",
     "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-publication-supplied-stream-closure-20260515-codex.report.json --explain active_gate_snapshot_coverage",
@@ -25,7 +25,8 @@
     "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-forced-snapshot-local-fallback-20260515-codex.report.json --explain active_gate_snapshot_coverage",
     "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-forced-snapshot-local-fallback-20260515-codex.report.json --handoff-probe",
     "npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-forced-snapshot-local-fallback-20260515-codex.report.json",
-    "npm run analyze:distributed-failure -- --report test-output/reports/rolling-restart-after-forced-snapshot-local-fallback-20260515-codex.report.json"
+    "npm run analyze:distributed-failure -- --report test-output/reports/rolling-restart-after-forced-snapshot-local-fallback-20260515-codex.report.json",
+    "node --test test/scripts/analyze-topology-convergence.test.js"
   ],
   "writeScope": [
     "work/packages/active-20260515-topology-active-gate-snapshot-coverage-after-publication-handoff.md",
@@ -34,7 +35,10 @@
     "work/tracks/topology-convergence.md",
     "work/model-ledger.jsonl",
     "test/distributed/harness/cluster-segment-5.js",
-    "test/distributed/harness/__tests__/cluster.test-part-3.js"
+    "test/distributed/harness/__tests__/cluster.test-part-3.js",
+    "scripts/analyze-topology-convergence.js",
+    "test/scripts/analyze-topology-convergence.test.js",
+    "test/scripts/__fixtures__/topology-convergence/publication-active-gate-reduced-handoff.fixture.json"
   ],
   "handoffFiles": [
     "work/packages/done-20260515-topology-publication-active-gate-handoff-oscillation.md"
@@ -59,7 +63,10 @@
     "work/sprints/current-blocker.json",
     "work/model-ledger.jsonl",
     "test/distributed/harness/cluster-segment-5.js",
-    "test/distributed/harness/__tests__/cluster.test-part-3.js"
+    "test/distributed/harness/__tests__/cluster.test-part-3.js",
+    "scripts/analyze-topology-convergence.js",
+    "test/scripts/analyze-topology-convergence.test.js",
+    "test/scripts/__fixtures__/topology-convergence/publication-active-gate-reduced-handoff.fixture.json"
   ],
   "modelFit": {
     "packageClass": "representative-frontier-closure",
@@ -79,15 +86,15 @@
     "owner": "startup_active_gate_owner",
     "boundary": "snapshot_coverage",
     "dominantReason": "snapshot_coverage_incomplete",
-    "nextAction": "Use the existing handoff probe/fixture before any more runtime promotion; fresh probe output reports publication_ack_to_active_gate_reconcile missing with consumer absent and runtimePromotionAllowed=false."
+    "nextAction": "Use the handoff probe nextOwnerPath, which now names active_gate_snapshot_coverage under startup_active_gate_owner / snapshot_coverage, to promote the exact owner files for the catch-up-before-promotion repair."
   },
   "causalGovernance": {
     "hypothesis": "startup_active_gate_owner / snapshot_coverage must either advance selected snapshot coverage from 0/5 after publication handoff closure or classify the authoritative repair failure as the bounded local blocker.",
     "stopConditionCheck": "npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-forced-snapshot-local-fallback-20260515-codex.report.json",
     "expectedCausalModelChange": "active_gate_snapshot_coverage becomes representative-green, reduced, same-frontier, migrated, or classification-only with a named owner-boundary reason.",
     "representativeOutcome": "reduced",
-    "causalDebt": "The hard selected snapshot authoritative repair failure is reduced to a structured repair_deferred/stale_usable snapshot observation, and snapshotCoverage improved from 0/5 to 2/5. The remaining debt is the publication-to-active-gate catch-up edge: the fresh handoff probe sees producer publication PUBLISHED with pendingAck=0, publishedActive=1/5, missingPublished=4, consumer absent, and runtimePromotionAllowed=false.",
-    "crossBoundaryReview": "Subagent sequencing for the focused fallback slice is complete. Related-work guidance now blocks more tactical runtime edits until a replayable handoff probe or fixture names the exact next owner path."
+    "causalDebt": "The hard selected snapshot authoritative repair failure is reduced to a structured repair_deferred/stale_usable snapshot observation, and snapshotCoverage improved from 0/5 to 2/5. The remaining debt is the publication-to-active-gate catch-up edge: the fresh handoff probe sees producer publication PUBLISHED with pendingAck=0, publishedActive=1/5, missingPublished=4, detects the active-gate consumer, and emits nextOwnerPath startup_active_gate_owner / snapshot_coverage.",
+    "crossBoundaryReview": "Subagent sequencing for the focused fallback slice is complete. Related-work guidance now blocks more tactical runtime edits until owner-file proof promotes the exact active-gate consumer file boundary named by the replayable handoff probe."
   },
   "scenarioCausalClosure": {
     "referenceScenarioOrProbe": "rolling-restart / startup_active_gate_owner / snapshot_coverage after publication handoff closure",
@@ -100,18 +107,18 @@
     ],
     "currentFirstFrontier": "active_gate_snapshot_coverage under startup_active_gate_owner / snapshot_coverage with state deferred and dominant reason snapshot_coverage_incomplete in test-output/reports/rolling-restart-after-forced-snapshot-local-fallback-20260515-codex.report.json",
     "knownDownstreamBlockers": [
-      "publication_ack_convergence is satisfied, but the handoff probe producer shows publication=PUBLISHED, pendingAck=0, publishedActive=1/5, missingPublished=4, publicationPending=true, consumer absent, and runtimePromotionAllowed=false",
+      "publication_ack_convergence is satisfied, but the handoff probe producer shows publication=PUBLISHED, pendingAck=0, publishedActive=1/5, missingPublished=4, publicationPending=true, and nextOwnerPath startup_active_gate_owner / snapshot_coverage with runtimePromotionAllowed=false",
       "readiness_startup_support is deferred as inherited_active_gate_no_progress",
       "scenario_duration, active_gate_timeout, active_gate_attempts, and readiness_retry_window budgets are exhausted or terminal-classified",
       "priority_recovery_partition_progress remains classified as satisfied"
     ],
-    "missingCausalEdge": "The selected snapshot now exposes stale usable repair-deferred evidence instead of a hard repair failure, but the publication ACK to active-gate reconcile consumer is absent for the PUBLISHED plus missingPublished=4 shape. The next proof must show catch-up before promotion or a legal next operator action.",
+    "missingCausalEdge": "The selected snapshot now exposes stale usable repair-deferred evidence instead of a hard repair failure, and the handoff probe now names the active-gate consumer for the PUBLISHED plus missingPublished=4 shape. The next proof must show catch-up before promotion or a legal next operator action inside the exact startup_active_gate_owner / snapshot_coverage file boundary.",
     "missingCausalEdgeProbe": "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-forced-snapshot-local-fallback-20260515-codex.report.json --handoff-probe",
-    "boundedProgressProof": "Focused fallback proof passes and fresh representative evidence reduced the blocker: cluster active is reached, selectedSnapshotError is unknown instead of a hard forced-repair failure, selectedSnapshotRepairDeferred=true, and snapshotCoverageNodeCount is 2/5 instead of 0/5. The fresh handoff probe still reports publication_ack_to_active_gate_reconcile missing with consumer absent and required progress mechanism reconcile, so the next slice must be replayable handoff evidence before more owner runtime edits.",
+    "boundedProgressProof": "Focused fallback proof passes and fresh representative evidence reduced the blocker: cluster active is reached, selectedSnapshotError is unknown instead of a hard forced-repair failure, selectedSnapshotRepairDeferred=true, and snapshotCoverageNodeCount is 2/5 instead of 0/5. The fresh handoff probe now detects publication_ack_to_active_gate_reconcile missing with required progress mechanism reconcile and nextOwnerPath startup_active_gate_owner / snapshot_coverage, so the next slice can promote exact owner files rather than guessing.",
     "boundedProgressProofArtifact": "test-output/reports/rolling-restart-after-forced-snapshot-local-fallback-20260515-codex.report.json",
     "expectedObservableTransition": "Next proof should make the publication-to-active-gate reconcile edge explicit: either durable publication truth, active node projection, snapshot coverage, and expected cohort catch up before active admission, or the owner emits a step witness, timeout, and legal next action.",
     "maxProgressBound": "one focused active-gate snapshot coverage package slice with canonical extractors, owner-file proof, subagent sequencing, focused validation, and representative result classification",
-    "sameFrontierFallback": "Fresh evidence still selects startup_active_gate_owner / snapshot_coverage, but the selected snapshot failure shape changed from hard repair failure to structured repair_deferred/stale_usable. Keep the package active for handoff-probe classification instead of opening another tactical runtime successor.",
+    "sameFrontierFallback": "Fresh evidence still selects startup_active_gate_owner / snapshot_coverage, but the selected snapshot failure shape changed from hard repair failure to structured repair_deferred/stale_usable. Keep the package active and promote the exact owner-file boundary from the handoff probe instead of opening another tactical runtime successor.",
     "expectedNextFrontier": "readiness_startup_support after active-gate coverage improves, otherwise same-frontier active-gate evidence",
     "resultClassification": "reduced",
     "stopCondition": "continue-local-fix",
@@ -121,7 +128,7 @@
       "work/packages/done-20260515-topology-publication-active-gate-handoff-oscillation.md / topology_publication_owner / publication_convergence / migrated"
     ],
     "oscillationCheck": "The cross-boundary publication handoff package closed stale publication_pending reentry. This successor must not reopen publication unless canonical extraction promotes publication_ack_convergence as first frontier again.",
-    "handoffInvariant": "The track related-work constraint now applies: no more active-gate/admin/control-plane runtime files may be edited until the replayable handoff probe or fixture names the exact owner path and promotion reason."
+    "handoffInvariant": "The track related-work constraint now applies: no more active-gate/admin/control-plane runtime files may be edited until owner-file proof promotes the exact file boundary behind handoff-probe nextOwnerPath."
   },
   "predecessor": "work/packages/done-20260515-topology-publication-active-gate-handoff-oscillation.md"
 }
@@ -156,8 +163,9 @@ The topology track comparative guidance changes the next move:
 
 Current proof supports that interpretation:
 `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-forced-snapshot-local-fallback-20260515-codex.report.json --handoff-probe`
-reports `publication_ack_to_active_gate_reconcile_missing`, `consumer=absent`,
-and `runtimePromotionAllowed=false`.
+now reports `publication_ack_to_active_gate_reconcile_missing`,
+`consumer=active_gate_snapshot_coverage`, `nextOwnerPath=startup_active_gate_owner
+/ snapshot_coverage`, and `runtimePromotionAllowed=false`.
 
 ## Scope Basis
 
@@ -194,6 +202,9 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 4. work/model-ledger.jsonl
 5. test/distributed/harness/cluster-segment-5.js
 6. test/distributed/harness/__tests__/cluster.test-part-3.js
+7. scripts/analyze-topology-convergence.js
+8. test/scripts/analyze-topology-convergence.test.js
+9. test/scripts/__fixtures__/topology-convergence/publication-active-gate-reduced-handoff.fixture.json
 
 ## Out Of Scope
 
@@ -220,7 +231,7 @@ owner-boundary package.
 - Intended minimum model: `gpt-5.3-codex`
 - Scope shape: `owner-boundary-contraction/current-frontier`
 - Output profile: `high`
-- Owned files: `work/packages/active-20260515-topology-active-gate-snapshot-coverage-after-publication-handoff.md`, `work/packages/done-20260515-topology-publication-active-gate-handoff-oscillation.md`, `work/sprints/active-2026-q2-topology-convergence-residual-closure.md`, `work/tracks/topology-convergence.md`, `work/model-ledger.jsonl`, `test/distributed/harness/cluster-segment-5.js`, `test/distributed/harness/__tests__/cluster.test-part-3.js`
+- Owned files: `work/packages/active-20260515-topology-active-gate-snapshot-coverage-after-publication-handoff.md`, `work/packages/done-20260515-topology-publication-active-gate-handoff-oscillation.md`, `work/sprints/active-2026-q2-topology-convergence-residual-closure.md`, `work/tracks/topology-convergence.md`, `work/model-ledger.jsonl`, `test/distributed/harness/cluster-segment-5.js`, `test/distributed/harness/__tests__/cluster.test-part-3.js`, `scripts/analyze-topology-convergence.js`, `test/scripts/analyze-topology-convergence.test.js`, `test/scripts/__fixtures__/topology-convergence/publication-active-gate-reduced-handoff.fixture.json`
 - Forbidden files: runtime files outside the promoted NodeHandle
   forced-snapshot fallback slice unless fresh evidence promotes them.
 - Frozen decisions: package scope and lane stay bounded unless explicitly escalated.
@@ -243,7 +254,8 @@ owner-boundary package.
 11. npm run analyze:distributed-failure -- --report test-output/reports/rolling-restart-after-forced-snapshot-local-fallback-20260515-codex.report.json
 12. npm run audit:runtime-grammar:file -- test/distributed/harness/cluster-segment-5.js test/distributed/harness/__tests__/cluster.test-part-3.js
 13. node scripts/check-guideline-decision-boundaries.js test/distributed/harness/cluster-segment-5.js test/distributed/harness/__tests__/cluster.test-part-3.js
-14. git diff --check -- work/packages/active-20260515-topology-active-gate-snapshot-coverage-after-publication-handoff.md work/packages/done-20260515-topology-publication-active-gate-handoff-oscillation.md work/sprints/active-2026-q2-topology-convergence-residual-closure.md work/tracks/topology-convergence.md work/sprints/current-blocker.md work/sprints/current-blocker.json work/model-ledger.jsonl test/distributed/harness/cluster-segment-5.js test/distributed/harness/__tests__/cluster.test-part-3.js
+14. git diff --check -- work/packages/active-20260515-topology-active-gate-snapshot-coverage-after-publication-handoff.md work/packages/done-20260515-topology-publication-active-gate-handoff-oscillation.md work/sprints/active-2026-q2-topology-convergence-residual-closure.md work/tracks/topology-convergence.md work/sprints/current-blocker.md work/sprints/current-blocker.json work/model-ledger.jsonl test/distributed/harness/cluster-segment-5.js test/distributed/harness/__tests__/cluster.test-part-3.js scripts/analyze-topology-convergence.js test/scripts/analyze-topology-convergence.test.js test/scripts/__fixtures__/topology-convergence/publication-active-gate-reduced-handoff.fixture.json
+15. node --test test/scripts/analyze-topology-convergence.test.js
 
 Literal-guideline fallback: `node scripts/check-guideline-literals.js test/distributed/harness/cluster-segment-5.js test/distributed/harness/__tests__/cluster.test-part-3.js`
 currently reports 385 whole-file findings on existing harness/test files without

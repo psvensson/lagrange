@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
 import {
+  EDGE_STATE,
   EDGE_ID,
   buildTopologyConvergenceGraph,
   buildTopologyConvergenceDecisionTable,
@@ -59,6 +60,8 @@ const RESULT_CLASSIFICATION_PUBLICATION_ACTIVE_GATE_RECONCILE_MISSING =
 const RESULT_CLASSIFICATION_PUBLICATION_ACTIVE_GATE_HANDOFF_NOT_DETECTED =
   'publication_active_gate_handoff_not_detected';
 const EDGE_STATE_BLOCKED = 'blocked';
+const HANDOFF_PROBE_TARGET_ACTION_BUILD_REPLAYABLE_FIXTURE =
+  'build_replayable_handoff_fixture';
 const HANDOFF_DETECTED = true;
 const HANDOFF_NOT_DETECTED = false;
 const RUNTIME_PROMOTION_DISALLOWED = false;
@@ -83,6 +86,26 @@ const EDGE_ALIAS_ACTIVE_GATE = 'active-gate';
 const EDGE_ALIAS_SNAPSHOT = 'snapshot';
 const EDGE_ALIAS_READINESS = 'readiness';
 const LIST_SEPARATOR = ', ';
+const HANDOFF_PROBE_CONSUMER_WAITING_STATES = Object.freeze(new Set([
+  EDGE_STATE.BLOCKED,
+  EDGE_STATE.DEFERRED,
+  EDGE_STATE.RETRYABLE,
+]));
+const HANDOFF_PROBE_DETECTION_RULES = Object.freeze([
+  Object.freeze({
+    matches: (snapshot) =>
+      snapshot.firstFrontierEdgeId === EDGE_ID.PUBLICATION_ACK_CONVERGENCE &&
+      snapshot.producerState === EDGE_STATE_BLOCKED &&
+      snapshot.consumerState === EDGE_STATE_BLOCKED,
+  }),
+  Object.freeze({
+    matches: (snapshot) =>
+      snapshot.firstFrontierEdgeId === EDGE_ID.ACTIVE_GATE_SNAPSHOT_COVERAGE &&
+      snapshot.producerState === EDGE_STATE.SATISFIED &&
+      HANDOFF_PROBE_CONSUMER_WAITING_STATES.has(snapshot.consumerState) &&
+      snapshot.missingPublishedCount > NUM_ZERO,
+  }),
+]);
 const HELP_TEXT = [
   'Usage: node scripts/analyze-topology-convergence.js <artifact.json> [--explain <edge-id-or-alias>] [--handoff-probe] [--package-evidence-block]',
   '       node scripts/analyze-topology-convergence.js --decision-table',
@@ -317,15 +340,10 @@ function selectHandoffProbeOutput(graph) {
     graph.edges,
     EDGE_ID.PUBLICATION_ACK_CONVERGENCE,
   );
-  const consumer = selectGraphEdge(
-    graph.nextExpectedFrontier,
-    EDGE_ID.ACTIVE_GATE_SNAPSHOT_COVERAGE,
-  );
-  const handoffDetected = isPublicationActiveGateHandoffDetected(
-    graph,
-    producer,
-    consumer,
-  );
+  const consumer = selectHandoffConsumerEdge(graph);
+  const probeSnapshot = buildHandoffProbeSnapshot(graph, producer, consumer);
+  const handoffDetected = isPublicationActiveGateHandoffDetected(probeSnapshot);
+  const consumerWitness = buildProbeWitness(consumer);
 
   return {
     schemaVersion: SCHEMA_VERSION_PUBLICATION_ACTIVE_GATE_HANDOFF_PROBE_V1,
@@ -336,7 +354,8 @@ function selectHandoffProbeOutput(graph) {
     },
     detected: handoffDetected ? HANDOFF_DETECTED : HANDOFF_NOT_DETECTED,
     producer: buildProbeWitness(producer),
-    consumer: buildProbeWitness(consumer),
+    consumer: consumerWitness,
+    nextOwnerPath: buildProbeNextOwnerPath(consumerWitness),
     requiredProgressMechanism: REQUIRED_PROGRESS_MECHANISM_RECONCILE,
     resultClassification: handoffDetected ?
       RESULT_CLASSIFICATION_PUBLICATION_ACTIVE_GATE_RECONCILE_MISSING :
@@ -345,15 +364,32 @@ function selectHandoffProbeOutput(graph) {
   };
 }
 
+function selectHandoffConsumerEdge(graph) {
+  return selectGraphEdge(
+    graph.nextExpectedFrontier,
+    EDGE_ID.ACTIVE_GATE_SNAPSHOT_COVERAGE,
+  ) ||
+    selectGraphEdge(graph.frontier, EDGE_ID.ACTIVE_GATE_SNAPSHOT_COVERAGE) ||
+    selectGraphEdge(graph.edges, EDGE_ID.ACTIVE_GATE_SNAPSHOT_COVERAGE);
+}
+
 function selectGraphEdge(edges, edgeId) {
   return arrayOrEmpty(edges).find((edge) => edge.id === edgeId);
 }
 
-function isPublicationActiveGateHandoffDetected(graph, producer, consumer) {
-  return graph.summary.firstFrontierEdgeId ===
-      EDGE_ID.PUBLICATION_ACK_CONVERGENCE &&
-    producer?.state === EDGE_STATE_BLOCKED &&
-    consumer?.state === EDGE_STATE_BLOCKED;
+function buildHandoffProbeSnapshot(graph, producer, consumer) {
+  return {
+    firstFrontierEdgeId: graph.summary.firstFrontierEdgeId,
+    producerState: producer?.state || ABSENT_VALUE,
+    consumerState: consumer?.state || ABSENT_VALUE,
+    missingPublishedCount: positiveNumberOrZero(
+      producer?.source?.missingPublishedCount,
+    ),
+  };
+}
+
+function isPublicationActiveGateHandoffDetected(snapshot) {
+  return HANDOFF_PROBE_DETECTION_RULES.some((rule) => rule.matches(snapshot));
 }
 
 function buildProbeWitness(edge) {
@@ -370,8 +406,23 @@ function buildProbeWitness(edge) {
   };
 }
 
+function buildProbeNextOwnerPath(consumerWitness) {
+  return {
+    edge: consumerWitness.edge,
+    owner: consumerWitness.owner,
+    boundary: consumerWitness.boundary,
+    evidencePath: consumerWitness.evidencePath,
+    requiredAction: HANDOFF_PROBE_TARGET_ACTION_BUILD_REPLAYABLE_FIXTURE,
+    runtimePromotionAllowed: RUNTIME_PROMOTION_DISALLOWED,
+  };
+}
+
 function arrayOrEmpty(value) {
   return Array.isArray(value) ? value : [];
+}
+
+function positiveNumberOrZero(value) {
+  return Number.isFinite(value) && value > NUM_ZERO ? value : NUM_ZERO;
 }
 
 function renderPackageEvidenceBlock(graph, artifactPath) {

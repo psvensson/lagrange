@@ -1,0 +1,77 @@
+{
+  "scenarios": [
+    {
+      "scenario": "rolling-restart",
+      "passed": false,
+      "duration": 156675,
+      "readinessFailure": {
+        "mode": "load",
+        "classCode": "no_progress_terminal",
+        "recoverability": "unknown",
+        "terminalReason": "unknown",
+        "source": "unknown",
+        "cause": "none",
+        "attemptsSinceProgress": 8
+      },
+      "publicationConvergence": {
+        "publicationEpoch": 1,
+        "publicationStatus": "PUBLISHED",
+        "pendingAckNodeIds": [],
+        "pendingAckCount": 0,
+        "blockedNodeCount": 0,
+        "publishedActiveNodeIds": [
+          "node-1"
+        ],
+        "missingPublishedNodeIds": [
+          "node-2",
+          "node-3",
+          "node-4",
+          "node-5"
+        ],
+        "missingPublishedCount": 4,
+        "publicationPending": true,
+        "recoveryProtocolState": "steady_published",
+        "prioritySpreadPending": false,
+        "publicationOwnerStream": {
+          "ackState": "acknowledged",
+          "freshnessFence": "consumer_lag",
+          "recoveryOutcome": "waiting_for_consumer",
+          "revision": {
+            "state": "current"
+          },
+          "streamOutcome": "stale"
+        },
+        "activeGate": {
+          "state": "stalled",
+          "ready": false,
+          "attempts": 9,
+          "elapsedMs": 84457,
+          "progress": {
+            "expectedNodeCount": 5,
+            "snapshotCoverageNodeCount": 2,
+            "snapshotCoverageComplete": false,
+            "selectedSnapshotObservationMode": "repair_deferred",
+            "selectedSnapshotObservationState": "stale_usable",
+            "selectedSnapshotObservationContractState": "pending",
+            "selectedSnapshotObservationRefreshState": "idle",
+            "selectedSnapshotObservationNextAction": "wait",
+            "selectedSnapshotObservationReasonCodes": [
+              "cache_stale_watermark",
+              "discovery_node_coverage_gap",
+              "stale_replica_operations_in_flight"
+            ],
+            "selectedSnapshotRepairDeferred": true,
+            "priorityRecoveryProgressClasses": {
+              "unresolvedSemanticStateIds": [],
+              "blockedPartitionIds": []
+            },
+            "blockers": [
+              "inactive_nodes=5",
+              "snapshot_coverage=2/5"
+            ]
+          }
+        }
+      }
+    }
+  ]
+}
