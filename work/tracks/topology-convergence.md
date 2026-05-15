@@ -92,14 +92,14 @@ or produces a narrower owner-boundary blocker selected by canonical evidence.
 
 ## Current Evidence
 
-- Latest sprint:
-  `work/sprints/done-2026-q2-topology-convergence-complexity-reduction.md`
-- Latest package:
-  `work/packages/done-20260515-topology-publication-active-gate-handoff-contract-consolidation.md`
+- Active sprint:
+  `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md`
+- Active package:
+  `work/packages/active-20260515-startup-active-gate-snapshot-coverage-owner-reconcile-closure.md`
 - Artifact:
-  `test-output/reports/rolling-restart-after-forced-snapshot-local-fallback-20260515-codex.report.json`
+  `test-output/reports/rolling-restart-after-handoff-contract-consolidation-20260515-codex.report.json`
 - Current package-local owner boundary:
-  `topology_publication_owner / publication_active_gate_handoff_contract`
+  `startup_active_gate_owner / snapshot_coverage`
 - Representative owner boundary:
   `startup_active_gate_owner / snapshot_coverage`
 - Extractor summary:
@@ -131,6 +131,7 @@ publication-evidence replay code rather than by the runtime owner alone.
 | --- | --- | --- | --- |
 | `work/sprints/done-2026-q2-topology-convergence-residual-closure.md` | `bugfix` / `stabilization` | stopped | Stopped on 2026-05-15 by human direction. Retained as residual context only. |
 | `work/sprints/done-2026-q2-topology-convergence-complexity-reduction.md` | `stabilization` / `complexity-reduction` | done reduced | Canonical publication-to-active-gate handoff contract implemented end to end; representative run remains red at startup active-gate snapshot coverage. |
+| `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md` | `stabilization` / `green-gate` | active | Owns startup active-gate snapshot coverage owner reconcile until rolling-restart is green or narrowed. |
 
 ## Owner Boundaries
 
@@ -184,9 +185,9 @@ These are context candidates, not write authorization:
 
 ## Entry Condition
 
-The handoff-contract consolidation package is closed as reduced. Do not open a
-second topology package unless canonical evidence changes semantic owner,
-boundary, or next required action.
+Continue with the active startup active-gate owner reconcile package. Do not
+open a second topology package unless canonical evidence changes semantic
+owner, boundary, or next required action.
 
 ## Exit Condition
 
@@ -196,8 +197,8 @@ canonical owner-boundary evidence.
 
 ## Next Package
 
-Latest package:
+Current package:
 
 ```text
-work/packages/done-20260515-topology-publication-active-gate-handoff-contract-consolidation.md
+work/packages/active-20260515-startup-active-gate-snapshot-coverage-owner-reconcile-closure.md
 ```

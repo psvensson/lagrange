@@ -1,0 +1,139 @@
+# Topology Rolling-Restart Green Gate Closure Sprint
+
+Status: active. This sprint starts after
+`done-2026-q2-topology-convergence-complexity-reduction.md` reduced the
+publication-to-active-gate handoff complexity.
+
+## Goal
+
+Make representative `rolling-restart` green:
+
+```text
+active=5/5
+snapshotCoverage=5/5
+missingPublished=0
+```
+
+No timeout increase, active-gate admission relaxation, or diagnostics-only
+success is in scope.
+
+## Current Blocker Snapshot
+
+Latest representative artifact:
+`test-output/reports/rolling-restart-after-handoff-contract-consolidation-20260515-codex.report.json`.
+
+Canonical state at sprint creation:
+
+1. `work:evidence-summary` selects `active_gate_snapshot_coverage` as first
+   frontier.
+2. Representative owner boundary:
+   `startup_active_gate_owner / snapshot_coverage`.
+3. Dominant reason: `active_gate_timed_out`.
+4. Current reasons:
+   `active_gate_timed_out`, `owner_reconcile_pending`,
+   `snapshot_coverage_incomplete`, and `snapshot_repair_deferred`.
+5. Publication ACK convergence is satisfied.
+6. The canonical handoff probe reports `missingEdge=null` and
+   `contractEdge=publication_active_gate_handoff_contract`.
+7. Handoff contract state is `pending` with
+   `nextAction=reconcile_owner_membership_publication`,
+   `pendingReconcileCount=3`, and `runtimePromotionAllowed=false`.
+8. Active-gate admission must remain strict until the owner reconcile path
+   produces durable coverage.
+
+## Scope Basis
+
+Roadmap Phase `0.1 - Internal Coherence`, especially:
+
+1. `Topology workflow stabilization`
+2. `Failure simulations`
+3. `Production guarantees`
+
+Edition matrix status: Community / AGPL repo. This sprint must not implement
+Pro or Enterprise behavior.
+
+## Package Queue
+
+1. [Startup Active Gate Snapshot Coverage Owner Reconcile Closure](../packages/active-20260515-startup-active-gate-snapshot-coverage-owner-reconcile-closure.md)
+   - Lane: `causal-escalation`
+   - Owner boundary:
+     `startup_active_gate_owner / snapshot_coverage`
+   - Purpose: consume the completed canonical handoff contract and implement
+     the owner-key reconcile path required by
+     `reconcile_owner_membership_publication`.
+   - Entry condition: handoff-contract sprint closed as reduced; fresh
+     representative evidence still times out at active-gate snapshot coverage.
+   - Acceptance: representative `rolling-restart` is green, or fresh evidence
+     migrates/classifies the residual to a narrower owner boundary with
+     concrete next action.
+
+No additional package may be added merely to defer owner-key reconcile from
+the active package. A split is allowed only when canonical evidence changes the
+semantic owner, boundary, or next required action.
+
+## Working Rules
+
+1. Work one active package at a time.
+2. Start with `npm run work:context`.
+3. Use `npm run work:llm-start` after this sprint/package is active.
+4. Use canonical extractors before raw JSON, broad search, or logs:
+   `work:evidence-summary`, `analyze:topology-convergence`,
+   `analyze:causal-model`, `analyze:owner-files`,
+   `analyze:priority-recovery-residuals`, and `analyze:distributed-failure`.
+5. Required subagent sequencing must be completed before implementation
+   proceeds beyond review/fix readiness.
+6. Runtime files listed as `candidateRuntimeFiles` are read-only until exact
+   owner-file or focused probe evidence promotes them into `writeScope` and
+   `commitScope`.
+7. Active-gate admission must not pass while `runtimePromotionAllowed=false`.
+8. Representative reruns are checkpoints after focused owner/consumer proof.
+9. A package cannot close with unresolved in-scope residuals, duplicate
+   handoff truth, placeholder ledgers, or unpushed focused commits.
+
+## Proof Ladder
+
+1. `npm run work:context`
+2. `npm run work:llm-start`
+3. `npm run work:evidence-summary -- test-output/reports/rolling-restart-after-handoff-contract-consolidation-20260515-codex.report.json`
+4. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-handoff-contract-consolidation-20260515-codex.report.json --handoff-probe`
+5. `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-handoff-contract-consolidation-20260515-codex.report.json`
+6. `npm run analyze:owner-files -- startup_active_gate_owner snapshot_coverage --markdown`
+7. `npm run work:subagent-prompt -- --role implementation --package <package>`
+8. Focused owner-key reconcile tests selected by the package.
+9. Focused active-gate consumer and diagnostics/harness tests.
+10. Static guardrails on touched runtime, admin, diagnostics, analyzer,
+    harness, and tests.
+11. Representative `rolling-restart`.
+12. `npm run work:evidence-summary -- <fresh-report>`
+13. `npm run analyze:topology-convergence -- <fresh-report> --handoff-probe`
+14. `npm --silent run analyze:causal-model -- <fresh-report>`
+15. `git diff --check -- <commitScope>`
+16. `npm run work:validate -- --closure <package>`
+17. Focused commit and push.
+
+## Closure Rules
+
+The sprint cannot close until:
+
+1. The active package is closed as `done-...` with a valid Commit And Push
+   Ledger.
+2. `rolling-restart` is green, or the remaining red evidence is explicitly
+   migrated/classified to a narrower owner boundary.
+3. `work/sprints/current-blocker.*` names final green evidence or the fresh
+   narrower blocker.
+4. No in-scope consumer reconstructs publication-to-active-gate handoff truth
+   independently of the canonical contract.
+5. Active-gate admission remains strict for partial handoff truth.
+6. The final note states whether the original gate is green, migrated,
+   same-frontier, classification-only, or architecture-gap.
+
+## Current Next Action
+
+Continue with the active package:
+
+```text
+work/packages/active-20260515-startup-active-gate-snapshot-coverage-owner-reconcile-closure.md
+```
+
+Implementation starts after the required subagent implementation role is run
+for this package.
