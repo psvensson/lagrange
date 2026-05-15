@@ -159,8 +159,8 @@ class OperationWorkflowOwnerSegment7Stage5 extends OperationWorkflowOwnerSegment
         ) :
         snapshot;
     this.schedulePriorityRecoveryDispatchPendingReentry(
-      snapshot,
-      operations,
+      normalizedSnapshot,
+      operation ? [operation] : operations,
     );
     return normalizedSnapshot;
   }

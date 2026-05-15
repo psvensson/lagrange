@@ -414,7 +414,7 @@ function normalizePriorityRecoveryDispatchPendingOwnerSnapshot(
       ),
     );
   owner.schedulePriorityRecoveryDispatchPendingReentry(
-    snapshot,
+    normalizedSnapshot,
     [operation],
     {allowOwnerLaneRetry: true},
   );

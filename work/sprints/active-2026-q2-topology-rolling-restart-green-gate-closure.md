@@ -39,26 +39,30 @@ Canonical state after the handoff reconcile fallback proof:
    `contractEdge=publication_active_gate_handoff_contract`.
 8. Handoff contract state is `pending` with
    `nextAction=reconcile_owner_membership_publication`,
-   consumer `pendingReconcileCount=1`, pending node
-   `11601fe0-72d6-5853-8590-ec2881853e72`, and
+   consumer `pendingReconcileCount=4`, pending nodes
+   `11601fe0-72d6-5853-8590-ec2881853e72`,
+   `35a891b8-c1a0-5064-9c6e-2acfba61c2a7`,
+   `8be8d30f-4499-5eed-865c-71b4d529a67a`, and
+   `ebc4aa0b-06c6-506d-93ea-1dd2deca3f58`, with
    `runtimePromotionAllowed=false`.
 9. Active-gate snapshot coverage remains `2/5`; selected snapshot observation
    remains `repair_deferred` / `deferred_refresh` / `deferred` / `deferred` /
    `retry` with
    `cache_stale_watermark|discovery_node_coverage_gap|stale_replica_operations_in_flight`.
-10. `analyze:priority-recovery-residuals` reports three subordinate
-    `operation_workflow_owner / workflow_progress` witnesses on
-    `control_plane_publications-p1`, `replica_operations-p1`, and
-    `sql_transaction_participants-p1`.
-11. The causal-edge proof package records owner-boundary migration proof from
-    `startup_active_gate_owner / snapshot_coverage` to
-    `operation_workflow_owner / workflow_progress`: the residual extractor
-    reports one unsplit group with three `spread_satisfied_in_flight`
-    witnesses, and causal-model wait evidence names
-    `advance_existing_operation`.
-12. The workflow-progress package is the next activation target after this
-    metadata/proof package is closed; no startup active-gate runtime file is
-    promoted by this proof slice.
+10. `analyze:priority-recovery-residuals` now reports one subordinate
+    `operation_workflow_owner / workflow_progress` witness on
+    `control_plane_publications-p1` after the workflow-progress re-entry slice
+    reduced the three-witness group.
+11. The reduced workflow-progress package records that the remaining witness is
+    operation `0a3b14cf-b731-4279-a07b-3a755ead1a17`: `PENDING`,
+    `persisted_not_dispatched`, `dispatch_pending`,
+    `timeoutReconcileDue=true`, target node
+    `11601fe0-72d6-5853-8590-ec2881853e72`, and target visibility `absent`.
+12. The active package is
+    `work/packages/active-20260515-priority-recovery-operation-workflow-owner-control-plane-publication-pending.md`;
+    it must run the required review/fix/implementation sequence, then prove or
+    split the single `control_plane_publications-p1` workflow-progress witness
+    without timeout, active-gate admission, or publication handoff changes.
 13. Active-gate admission must remain strict until the owner reconcile path
     produces durable coverage.
 
@@ -120,23 +124,47 @@ Pro or Enterprise behavior.
      `startup_active_gate_owner / snapshot_coverage`, workflow-progress is
      parked as dependency/sub-frontier evidence, and runtime resume requires
      real review subagent proof.
-4. [Priority Recovery operation_workflow_owner workflow_progress Residual](../packages/active-20260515-priority-recovery-operation-workflow-owner-workflow-progress.md)
+4. [Priority Recovery operation_workflow_owner workflow_progress Residual](../packages/done-20260515-priority-recovery-operation-workflow-owner-workflow-progress.md)
    - Lane: `causal-escalation`
    - Owner boundary:
      `operation_workflow_owner / workflow_progress`
-   - Purpose: parked dependency package for the current residual inventory:
-     latest representative extraction reports one `spread_satisfied_in_flight`
-     workflow-progress witness on `control_plane_publications-p1`.
-   - Entry condition: the rebalancer handoff package closed as reduced; latest
-     evidence reports `Split required: false` with one subordinate
-     `operation_workflow_owner / workflow_progress` witness.
-   - Activation gate: fresh canonical evidence must promote workflow progress
-     ahead of active-gate snapshot coverage or record owner-boundary migration
-     proof; a real review subagent must run before implementation starts.
-   - Acceptance on future activation: workflow-progress witnesses drain, split,
-     or become the next representative owner boundary after handoff progress is
-     settled.
-5. [Publication Active-Gate Reconcile Bridge Simplification](../packages/done-20260515-publication-active-gate-reconcile-bridge-simplification.md)
+   - Purpose: workflow-progress package for the prior residual inventory:
+     representative extraction reported one unsplit
+     `operation_workflow_owner / workflow_progress` group with three
+     `spread_satisfied_in_flight` witnesses on
+     `control_plane_publications-p1`, `replica_operations-p1`, and
+     `sql_transaction_participants-p1`.
+   - Entry condition: the remaining publication visibility target proof closed
+     as migrated; latest evidence reports `Split required: false` with three
+     workflow-progress witnesses and causal-model wait evidence names
+     `advance_existing_operation`.
+   - Activation result: activated after owner-boundary migration proof from
+     `startup_active_gate_owner / snapshot_coverage`; a real review subagent,
+     fix subagent or explicit not-needed result, and implementation subagent
+     were recorded before runtime implementation closed.
+   - Result: `reduced`. Dispatch-pending re-entry now schedules from the
+     normalized operation-owner snapshot and selected witness operation. Fresh
+     representative evidence reduced the workflow-progress residual from three
+     witnesses to one `control_plane_publications-p1` witness.
+5. [Priority Recovery operation_workflow_owner workflow_progress Control Plane Publication Pending](../packages/active-20260515-priority-recovery-operation-workflow-owner-control-plane-publication-pending.md)
+   - Lane: `causal-escalation`
+   - Owner boundary:
+     `operation_workflow_owner / workflow_progress`
+   - Purpose: active package for the single remaining
+     `control_plane_publications-p1` `spread_satisfied_in_flight` witness.
+   - Entry condition: predecessor workflow-progress package closed as reduced;
+     fresh representative evidence reports `Split required: false` with one
+     workflow-progress witness and causal-model wait evidence names
+     `advance_existing_operation`.
+   - Activation result: active after reduced proof from the prior
+     workflow-progress package; a real review subagent, fix subagent or
+     explicit not-needed result, and implementation subagent are required before
+     runtime implementation closes.
+   - Acceptance: the remaining `control_plane_publications-p1` witness drains,
+     splits to a narrower workflow/repository/dispatch owner, or becomes proven
+     non-frontier without timeout increases, active-gate admission relaxation,
+     or publication handoff rewrites.
+6. [Publication Active-Gate Reconcile Bridge Simplification](../packages/done-20260515-publication-active-gate-reconcile-bridge-simplification.md)
    - Lane: `causal-escalation`
    - Owner boundary:
      `startup_active_gate_owner / publication_reconcile_bridge`
@@ -287,11 +315,11 @@ Pro or Enterprise behavior.
 No additional package may be added merely to defer owner-key reconcile from
 the original active-gate owner package. That package is now closed as migrated.
 The queued bridge simplification package is a follow-on only; it must not start
-until the steering repair closes and fresh context confirms the bridge remains
-the next startup active-gate concern. The parked workflow-progress package must
-not start unless canonical evidence promotes it or records owner-boundary
-migration proof. Any other split is allowed only when canonical evidence
-changes the semantic owner, boundary, or next required action.
+until fresh context confirms the bridge remains the next startup active-gate
+concern. The workflow-progress package is now active because canonical evidence
+records owner-boundary migration proof; any other split is allowed only when
+canonical evidence changes the semantic owner, boundary, or next required
+action.
 
 ## Working Rules
 
@@ -320,15 +348,15 @@ changes the semantic owner, boundary, or next required action.
 
 1. `npm run work:context`
 2. `npm run work:llm-start`
-3. `npm run work:package:doctor -- --suggest work/packages/done-20260515-startup-active-gate-remaining-publication-visibility-target-proof.md`
-4. `npm run work:evidence-summary -- test-output/reports/rolling-restart-after-handoff-reconcile-fallback-20260515-codex.report.json`
-5. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-handoff-reconcile-fallback-20260515-codex.report.json --handoff-probe`
-6. `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-handoff-reconcile-fallback-20260515-codex.report.json`
-7. `npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-after-handoff-reconcile-fallback-20260515-codex.report.json --markdown`
+3. `npm run work:package:doctor -- --suggest work/packages/active-20260515-priority-recovery-operation-workflow-owner-control-plane-publication-pending.md`
+4. `npm run work:evidence-summary -- test-output/reports/rolling-restart-after-workflow-progress-reentry-20260515-codex.report.json`
+5. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-workflow-progress-reentry-20260515-codex.report.json --handoff-probe`
+6. `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-workflow-progress-reentry-20260515-codex.report.json`
+7. `npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-after-workflow-progress-reentry-20260515-codex.report.json --markdown`
 8. `npm run analyze:owner-files -- startup_active_gate_owner snapshot_coverage --markdown`
-9. `npm run analyze:distributed-failure -- --report test-output/reports/rolling-restart-after-handoff-reconcile-fallback-20260515-codex.report.json`
+9. `npm run analyze:distributed-failure -- --report test-output/reports/rolling-restart-after-workflow-progress-reentry-20260515-codex.report.json`
 10. `npm run analyze:owner-files -- operation_workflow_owner workflow_progress --markdown`
-11. `npm run work:subagent-prompt -- --role review --package work/packages/done-20260515-startup-active-gate-remaining-publication-visibility-target-proof.md`
+11. `npm run work:subagent-prompt -- --role review --package work/packages/active-20260515-priority-recovery-operation-workflow-owner-control-plane-publication-pending.md`
 12. Real review/fix/implementation subagent proof before runtime implementation starts.
 13. Focused owner tests, static guardrails, and representative `rolling-restart`
     after the package has implementation proof.
@@ -351,14 +379,13 @@ The sprint cannot close until:
 
 ## Current Next Action
 
-Continue with the active remaining publication visibility target proof package:
+Continue with the active single-witness workflow-progress package:
 
 ```text
-work/packages/done-20260515-startup-active-gate-remaining-publication-visibility-target-proof.md
+work/packages/active-20260515-priority-recovery-operation-workflow-owner-control-plane-publication-pending.md
 ```
 
-Close or hand off the active proof package after recording the
-`workflow-progress-migration` outcome. The next runtime implementation belongs
-in the parked `operation_workflow_owner / workflow_progress` package or a
-narrower successor for the three `spread_satisfied_in_flight` witnesses; this
-startup active-gate package does not promote runtime files.
+Run the required review/fix/implementation sequence, then prove or split the
+single `control_plane_publications-p1` workflow-progress witness for operation
+`0a3b14cf-b731-4279-a07b-3a755ead1a17` without relaxing active-gate admission,
+rewriting publication handoff truth, or increasing timeouts.

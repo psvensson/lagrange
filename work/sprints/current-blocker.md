@@ -4,13 +4,13 @@
 
 Sprint: `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md`
 
-Package: `work/packages/active-20260515-priority-recovery-operation-workflow-owner-workflow-progress.md`
+Package: `work/packages/active-20260515-priority-recovery-operation-workflow-owner-control-plane-publication-pending.md`
 
 Workflow lane: `causal-escalation`
 
 Scenario: `rolling-restart`
 
-Artifact: `test-output/reports/rolling-restart-after-handoff-reconcile-fallback-20260515-codex.report.json`
+Artifact: `test-output/reports/rolling-restart-after-workflow-progress-reentry-20260515-codex.report.json`
 
 Playback: `none`
 
@@ -22,21 +22,23 @@ Boundary: `workflow_progress`
 
 Dominant reason: `priority_recovery_progress_blocked`
 
-Current state: Activated by owner-boundary migration proof from work/packages/done-20260515-startup-active-gate-remaining-publication-visibility-target-proof.md. The latest representative artifact still exposes active_gate_snapshot_coverage as the outer timeout surface, but the startup active-gate package selected workflow-progress-migration. Priority-recovery residual extraction now reports one unsplit operation_workflow_owner / workflow_progress group with three spread_satisfied_in_flight witnesses on control_plane_publications-p1, replica_operations-p1, and sql_transaction_participants-p1; causal wait evidence names advance_existing_operation.
+Current state: Activated after work/packages/done-20260515-priority-recovery-operation-workflow-owner-workflow-progress.md closed as reduced. Fresh rolling-restart evidence still has active_gate_snapshot_coverage as the outer red surface, but priority-recovery residual extraction now reports one remaining operation_workflow_owner / workflow_progress witness on control_plane_publications-p1. Focused raw fallback identifies operation 0a3b14cf-b731-4279-a07b-3a755ead1a17 as PENDING, persisted_not_dispatched, dispatch_pending, timeoutReconcileDue=true, target 11601fe0-72d6-5853-8590-ec2881853e72, targetVisibilityState=absent.
 
 ## Next Action
 
-Run the required review/fix/implementation sequence, then prove or split the three spread_satisfied_in_flight workflow-progress witnesses without relaxing active-gate admission, rewriting publication handoff truth, or increasing timeouts.
+Prove or split the remaining control_plane_publications-p1 PENDING persisted_not_dispatched workflow-progress witness without relaxing active-gate admission, rewriting publication handoff truth, or increasing timeouts.
 
 ## Proof Ladder
 
 1. `npm run work:context`
 2. `npm run work:llm-start`
-3. `npm run work:evidence-summary -- test-output/reports/rolling-restart-after-handoff-reconcile-fallback-20260515-codex.report.json`
-4. `npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-after-handoff-reconcile-fallback-20260515-codex.report.json --markdown`
-5. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-handoff-reconcile-fallback-20260515-codex.report.json --handoff-probe`
-6. `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-handoff-reconcile-fallback-20260515-codex.report.json`
-7. `npm run analyze:owner-files -- operation_workflow_owner workflow_progress --markdown`
+3. `npm run work:package:doctor -- --suggest work/packages/active-20260515-priority-recovery-operation-workflow-owner-control-plane-publication-pending.md`
+4. `npm run work:evidence-summary -- test-output/reports/rolling-restart-after-workflow-progress-reentry-20260515-codex.report.json`
+5. `npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-after-workflow-progress-reentry-20260515-codex.report.json --markdown`
+6. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-workflow-progress-reentry-20260515-codex.report.json --handoff-probe`
+7. `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-workflow-progress-reentry-20260515-codex.report.json`
+8. `npm run analyze:owner-files -- operation_workflow_owner workflow_progress --markdown`
+9. `node - <<'NODE' ... priorityRecoveryDecisionSnapshots witness extraction ... NODE`
 
 ## Model Fit
 
@@ -59,7 +61,7 @@ Status: `live-red-scenario-release-gate`
 
 Scenario: `rolling-restart`
 
-Artifact: `test-output/reports/rolling-restart-after-handoff-reconcile-fallback-20260515-codex.report.json`
+Artifact: `test-output/reports/rolling-restart-after-workflow-progress-reentry-20260515-codex.report.json`
 
 Frontier: `priority_recovery_partition_progress`
 
@@ -69,60 +71,61 @@ Boundary: `workflow_progress`
 
 Dominant reason: `priority_recovery_progress_blocked`
 
-Next action: `Prove or split the three spread_satisfied_in_flight workflow-progress witnesses that block active-gate repair and publication visibility.`
+Next action: `Prove or split the single remaining control_plane_publications-p1 dispatch-pending workflow-progress witness.`
 
 ## Causal Governance
 
-Causal hypothesis: `The prior startup active-gate slice proved the visible snapshot-coverage timeout is gated by unresolved workflow progress. Three spread_satisfied_in_flight workflow-progress witnesses remain long enough for active-gate snapshot repair to defer on stale replica operation progress.`
+Causal hypothesis: `The previous workflow-progress slice reduced stale operation progress to one remaining control_plane_publications-p1 dispatch-pending operation. Active-gate snapshot coverage stays red because publication membership cannot complete while this operation remains PENDING/persisted_not_dispatched on the workflow owner path.`
 
-Stop-condition check: `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-handoff-reconcile-fallback-20260515-codex.report.json`
+Stop-condition check: `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-workflow-progress-reentry-20260515-codex.report.json`
 
-Expected causal-model change: `rolling-restart becomes representative-green, active-gate snapshot coverage or producer publication coverage improves after workflow drain, the residual reduces to fewer workflow-progress witnesses, or fresh evidence splits to a narrower workflow/repository/dispatch owner.`
+Expected causal-model change: `rolling-restart becomes representative-green, the single workflow-progress witness drains, active-gate snapshot coverage or producer publication coverage improves, or fresh evidence splits to a narrower repository, dispatch, or diagnostics owner.`
 
 Representative outcome: `pending-before-rerun`
 
-Causal debt: `Leaving the three spread_satisfied_in_flight workflow witnesses unresolved keeps the active-gate owner dependent on stale operation progress and prevents durable publication visibility from reaching the remaining handoff target.`
+Causal debt: `Leaving the single control_plane_publications-p1 workflow witness unresolved keeps active-gate snapshot repair deferred on stale replica operation progress and leaves four active nodes missing from published membership.`
 
-Cross-boundary review: `Do not relax active-gate admission or rewrite publication handoff truth. This package may only promote runtime files after focused owner evidence shows workflow progress, repository mutation, or dispatch progress is the relevant local boundary.`
+Cross-boundary review: `Do not relax active-gate admission, rewrite publication handoff truth, or increase timeouts. Runtime promotion is limited to the operation workflow owner path selected by focused evidence.`
 
 ## Scenario Causal Closure
 
-Reference scenario/probe: `rolling-restart / priority recovery operation workflow workflow_progress residual`
+Reference scenario/probe: `rolling-restart / priority recovery control_plane_publications-p1 workflow_progress residual`
 
 Phase chain:
 
-1. `consume startup active-gate owner-boundary migration proof`
+1. `consume workflow-progress reduced proof`
 2. `prepare subagent sequencing ledger with real review/fix/implementation agents`
-3. `inspect workflow_progress owner files and the three current witnesses`
-4. `implement one bounded workflow progress fix if evidence stays local`
-5. `prove focused owner tests and static guardrails`
-6. `rerun representative rolling-restart until green, reduced, migrated, or split`
+3. `inspect the single remaining control_plane_publications-p1 PENDING witness`
+4. `promote exact runtime/test files only after review/fix proof is clean`
+5. `implement one bounded workflow-progress fix if evidence stays local`
+6. `prove focused owner tests and static guardrails`
+7. `rerun representative rolling-restart until green, reduced, migrated, or split`
 
-Current first frontier: `active_gate_snapshot_coverage remains the outer topology frontier in test-output/reports/rolling-restart-after-handoff-reconcile-fallback-20260515-codex.report.json, while owner-boundary migration proof selects operation_workflow_owner / workflow_progress as the active implementation boundary.`
+Current first frontier: `active_gate_snapshot_coverage remains the outer topology frontier in test-output/reports/rolling-restart-after-workflow-progress-reentry-20260515-codex.report.json, while the focused residual is operation_workflow_owner / workflow_progress on control_plane_publications-p1.`
 
 Known downstream blockers:
 
-1. `priority-recovery residual extraction reports split required false with one workflow_progress group and three witnesses`
-2. `the witness partitions are control_plane_publications-p1, replica_operations-p1, and sql_transaction_participants-p1 with semantic state spread_satisfied_in_flight`
-3. `topology convergence handoff probe reports pendingReconcileCount=1 for 11601fe0-72d6-5853-8590-ec2881853e72 and runtimePromotionAllowed=false`
-4. `active-gate snapshot observation remains repair_deferred with stale_replica_operations_in_flight`
-5. `producer publication visibility remains seed-only until workflow progress drains or splits`
+1. `priority-recovery residual extraction reports split required false with one workflow_progress witness`
+2. `the witness partition is control_plane_publications-p1 with semantic state spread_satisfied_in_flight`
+3. `raw witness fallback shows operation 0a3b14cf-b731-4279-a07b-3a755ead1a17 is PENDING, persisted_not_dispatched, dispatch_pending, timeoutReconcileDue=true, stepAgeMs=33637, stepTimeoutMs=30000, target 11601fe0-72d6-5853-8590-ec2881853e72, targetVisibilityState=absent`
+4. `topology convergence handoff probe reports pendingReconcileCount=4 and runtimePromotionAllowed=false`
+5. `active-gate snapshot observation remains repair_deferred with cache_stale_watermark, discovery_node_coverage_gap, and stale_replica_operations_in_flight`
 
-Missing causal edge: `The operation workflow owner must either advance the three spread_satisfied_in_flight witnesses, classify them as non-frontier, or split the remaining red evidence to a narrower workflow/repository/dispatch owner with concrete operation evidence.`
+Missing causal edge: `The operation workflow owner must advance, dispatch, complete, or split the control_plane_publications-p1 PENDING persisted-not-dispatched operation.`
 
-Missing causal edge probe: `npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-after-handoff-reconcile-fallback-20260515-codex.report.json --markdown`
+Missing causal edge probe: `npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-after-workflow-progress-reentry-20260515-codex.report.json --markdown`
 
-Bounded progress proof: `The package must prove bounded workflow progress through dispatch, persistence, retry, completion, or a canonical non-frontier classification for the control_plane_publications-p1, replica_operations-p1, and sql_transaction_participants-p1 witnesses.`
+Bounded progress proof: `The package must prove bounded workflow-owner dispatch-pending progress for operation 0a3b14cf-b731-4279-a07b-3a755ead1a17, or split to a narrower repository, dispatch, completion, or diagnostics owner with concrete evidence.`
 
-Bounded progress proof artifact: `test-output/reports/rolling-restart-after-handoff-reconcile-fallback-20260515-codex.report.json`
+Bounded progress proof artifact: `test-output/reports/rolling-restart-after-workflow-progress-reentry-20260515-codex.report.json`
 
-Expected observable transition: `The workflow_progress witnesses drain or reduce, representative rolling-restart becomes green, active-gate snapshot or producer publication coverage improves, or a narrower workflow/repository/dispatch owner is recorded.`
+Expected observable transition: `The control_plane_publications-p1 workflow-progress witness drains or reduces, representative rolling-restart becomes green, active-gate snapshot or producer publication coverage improves, or a narrower owner is recorded.`
 
-Max progress bound: `one workflow_progress owner package slice; no timeout increases, active-gate admission relaxation, publication handoff rewrites, or bridge simplification implementation inside this package`
+Max progress bound: `one control_plane_publications-p1 workflow-progress owner package slice; no timeout increases, active-gate admission relaxation, publication handoff rewrites, or bridge simplification implementation`
 
-Same-frontier fallback: `If workflow_progress remains, record whether dispatch, repository mutation, completion persistence, retry wake-up, or diagnostics classification failed before broadening scope.`
+Same-frontier fallback: `If workflow_progress remains, record whether dispatch scheduling, repository mutation, completion persistence, remote wake-up, or diagnostics classification failed before broadening scope.`
 
-Expected next frontier: `startup active-gate snapshot coverage or publication convergence only after workflow_progress is green, reduced, migrated, split, or proven non-frontier`
+Expected next frontier: `startup active-gate snapshot coverage or publication convergence only after this final workflow-progress witness is green, reduced, migrated, split, or proven non-frontier`
 
 Result classification: `pending-before-probe`
 
@@ -130,11 +133,11 @@ Stop condition: `continue-local-fix`
 
 Recent frontier history:
 
-1. `work/packages/done-20260515-priority-recovery-operation-workflow-owner-rebalancer-handoff.md / operation_workflow_owner / rebalancer_handoff / reduced`
-2. `work/packages/done-20260515-startup-active-gate-snapshot-coverage-owner-reconcile-closure.md / startup_active_gate_owner / snapshot_coverage / migrated`
-3. `work/packages/done-20260515-topology-publication-active-gate-handoff-contract-consolidation.md / topology_publication_owner / publication_active_gate_handoff_contract / reduced`
+1. `work/packages/done-20260515-priority-recovery-operation-workflow-owner-workflow-progress.md / operation_workflow_owner / workflow_progress / reduced`
+2. `work/packages/done-20260515-priority-recovery-operation-workflow-owner-rebalancer-handoff.md / operation_workflow_owner / rebalancer_handoff / reduced`
+3. `work/packages/done-20260515-startup-active-gate-remaining-publication-visibility-target-proof.md / startup_active_gate_owner / snapshot_coverage / migrated`
 
-Oscillation check: `This package is the parked paired split that became eligible only after rebalancer_handoff drained. It must not reopen the active-gate bridge unless focused evidence proves workflow progress is non-frontier.`
+Oscillation check: `This package narrows the same workflow-progress residual from the previous package and does not reopen active-gate admission or publication handoff ownership.`
 
 Handoff invariant: `Active-gate admission stays strict while runtimePromotionAllowed=false; publication handoff truth remains owned by the canonical contract.`
 
@@ -142,16 +145,16 @@ Handoff invariant: `Active-gate admission stays strict while runtimePromotionAll
 
 Write scope:
 
-1. `work/packages/active-20260515-priority-recovery-operation-workflow-owner-workflow-progress.md`
+1. `work/packages/active-20260515-priority-recovery-operation-workflow-owner-control-plane-publication-pending.md`
 2. `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md`
 3. `work/sprints/current-blocker.md`
 4. `work/sprints/current-blocker.json`
 
 Handoff files:
 
-1. `work/packages/done-20260515-startup-active-gate-remaining-publication-visibility-target-proof.md`
-2. `work/packages/done-20260515-priority-recovery-operation-workflow-owner-rebalancer-handoff.md`
-3. `work/packages/done-20260515-startup-active-gate-snapshot-coverage-owner-reconcile-closure.md`
+1. `work/packages/done-20260515-priority-recovery-operation-workflow-owner-workflow-progress.md`
+2. `work/packages/done-20260515-startup-active-gate-remaining-publication-visibility-target-proof.md`
+3. `work/packages/done-20260515-priority-recovery-operation-workflow-owner-rebalancer-handoff.md`
 
 Generated files:
 
@@ -160,21 +163,18 @@ Generated files:
 
 Candidate runtime files:
 
-1. `src/control-plane/replica-dispatch-service-segment-1.js`
-2. `src/control-plane/replica-dispatch-service-segment-2.js`
-3. `src/rebalancer/operation-workflow-owner.js`
-4. `src/rebalancer/operation-workflow-owner-segment-1.js`
-5. `src/rebalancer/operation-workflow-owner-segment-4.js`
-6. `src/rebalancer/operation-workflow-owner-segment-7-stage-3.js`
-7. `src/rebalancer/operation-workflow-owner-segment-7-stage-shared.js`
-8. `src/rebalancer/replica-operation-repository-mutation-methods.js`
-9. `test/rebalancer/rebalance-coordinator-outcome-routing.test.js`
-10. `test/rebalancer/coordinator-created-operation-progress-remote-handoff.test.js`
-11. `test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js`
+1. `src/rebalancer/operation-workflow-owner.js`
+2. `src/rebalancer/operation-workflow-owner-segment-7-stage-3.js`
+3. `src/rebalancer/operation-workflow-owner-segment-7-stage-5.js`
+4. `src/rebalancer/operation-workflow-owner-segment-7-stage-shared.js`
+5. `src/rebalancer/replica-operation-repository-mutation-methods.js`
+6. `test/rebalancer/operation-workflow-progress-event-driven-reentry.test.js`
+7. `test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js`
+8. `test/rebalancer/coordinator-created-operation-progress-remote-handoff.test.js`
 
 Commit scope:
 
-1. `work/packages/active-20260515-priority-recovery-operation-workflow-owner-workflow-progress.md`
+1. `work/packages/active-20260515-priority-recovery-operation-workflow-owner-control-plane-publication-pending.md`
 2. `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md`
 3. `work/sprints/current-blocker.md`
 4. `work/sprints/current-blocker.json`
