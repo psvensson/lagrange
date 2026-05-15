@@ -47,6 +47,8 @@ const {
   resolvePositiveTimeoutMs,
 } = CLUSTER_SEGMENT_1;
 
+const TYPEOF_OBJECT = 'object';
+const TYPEOF_STRING = 'string';
 const PRIORITY_RECOVERY_DECISION_SNAPSHOT_PROGRESS_FIELD = Object.freeze({
   COMPLETED_AT_MS: 'completedAtMs',
   CREATED_AT_MS: 'createdAtMs',
@@ -95,6 +97,16 @@ const PUBLICATION_CONVERGENCE_GATE_SUMMARY_DECISION_TABLE = Object.freeze([
 const ACTIVE_WAIT_RECOVERY_PROTOCOL_STATE = Object.freeze({
   STEADY_PUBLISHED: 'steady_published',
 });
+const ACTIVE_GATE_OWNER_COHORT_FIELD = Object.freeze({
+  MISSING_PUBLISHED_COUNT: 'missingPublishedCount',
+  MISSING_PUBLISHED_NODE_IDS: 'missingPublishedNodeIds',
+  PENDING_RECOVERY_COUNT: 'pendingRecoveryCount',
+  PENDING_RECOVERY_NODE_IDS: 'pendingRecoveryNodeIds',
+  PENDING_RECONCILE_COUNT: 'pendingReconcileCount',
+  PENDING_RECONCILE_NODE_IDS: 'pendingReconcileNodeIds',
+  REASON_CODE: 'reasonCode',
+  STATE: 'state',
+});
 
 /**
  * Preserve a small but meaningful timeout floor for deadline-driven
@@ -138,6 +150,28 @@ function normalizeDistinctStringArray(values) {
         .filter((value) => value.length > ZERO),
     ),
   ].sort((left, right) => left.localeCompare(right));
+}
+
+function normalizeActiveGateOwnerCohortRecord(value) {
+  return value && typeof value === TYPEOF_OBJECT && !Array.isArray(value) ?
+    value :
+    null;
+}
+
+function normalizeActiveGateOwnerCohortString(value) {
+  return typeof value === TYPEOF_STRING && value.length > ZERO ? value : null;
+}
+
+function normalizeActiveGateOwnerCohortNodeIds(record, fieldName) {
+  return normalizeDistinctStringArray(record?.[fieldName]);
+}
+
+function normalizeActiveGateOwnerCohortCount(record, countField, nodeIds) {
+  const explicitCount =
+    Number.isInteger(record?.[countField]) && record[countField] >= ZERO ?
+      record[countField] :
+      ZERO;
+  return Math.max(nodeIds.length, explicitCount);
 }
 
 function resolveSteadyPublishedSelectedMissingCount({
@@ -1228,6 +1262,49 @@ function buildActiveWaitProgressSnapshot(
     typeof snapshotCoverage.selectedCdcReplayLag === 'object' ?
       snapshotCoverage.selectedCdcReplayLag :
       null;
+  const activeGateOwnerCohort = normalizeActiveGateOwnerCohortRecord(
+    snapshotCoverage?.selectedActiveGateOwnerCohort,
+  );
+  const activeGateOwnerCohortState = normalizeActiveGateOwnerCohortString(
+    activeGateOwnerCohort?.[ACTIVE_GATE_OWNER_COHORT_FIELD.STATE],
+  );
+  const activeGateOwnerCohortReasonCode =
+    normalizeActiveGateOwnerCohortString(
+      activeGateOwnerCohort?.[ACTIVE_GATE_OWNER_COHORT_FIELD.REASON_CODE],
+    );
+  const activeGateOwnerCohortMissingPublishedNodeIds =
+    normalizeActiveGateOwnerCohortNodeIds(
+      activeGateOwnerCohort,
+      ACTIVE_GATE_OWNER_COHORT_FIELD.MISSING_PUBLISHED_NODE_IDS,
+    );
+  const activeGateOwnerCohortMissingPublishedCount =
+    normalizeActiveGateOwnerCohortCount(
+      activeGateOwnerCohort,
+      ACTIVE_GATE_OWNER_COHORT_FIELD.MISSING_PUBLISHED_COUNT,
+      activeGateOwnerCohortMissingPublishedNodeIds,
+    );
+  const activeGateOwnerCohortPendingRecoveryNodeIds =
+    normalizeActiveGateOwnerCohortNodeIds(
+      activeGateOwnerCohort,
+      ACTIVE_GATE_OWNER_COHORT_FIELD.PENDING_RECOVERY_NODE_IDS,
+    );
+  const activeGateOwnerCohortPendingRecoveryCount =
+    normalizeActiveGateOwnerCohortCount(
+      activeGateOwnerCohort,
+      ACTIVE_GATE_OWNER_COHORT_FIELD.PENDING_RECOVERY_COUNT,
+      activeGateOwnerCohortPendingRecoveryNodeIds,
+    );
+  const activeGateOwnerCohortPendingReconcileNodeIds =
+    normalizeActiveGateOwnerCohortNodeIds(
+      activeGateOwnerCohort,
+      ACTIVE_GATE_OWNER_COHORT_FIELD.PENDING_RECONCILE_NODE_IDS,
+    );
+  const activeGateOwnerCohortPendingReconcileCount =
+    normalizeActiveGateOwnerCohortCount(
+      activeGateOwnerCohort,
+      ACTIVE_GATE_OWNER_COHORT_FIELD.PENDING_RECONCILE_COUNT,
+      activeGateOwnerCohortPendingReconcileNodeIds,
+    );
   const perNodePublicationDisagreementSet =
     snapshotCoverage?.publicationDisagreementByNodeId &&
     typeof snapshotCoverage.publicationDisagreementByNodeId === 'object' ?
@@ -1408,6 +1485,14 @@ function buildActiveWaitProgressSnapshot(
       selectedSnapshotObservationReasonCodes,
       selectedSnapshotObservationRetryAfterMs,
       selectedSnapshotRepairDeferred,
+      activeGateOwnerCohortState,
+      activeGateOwnerCohortReasonCode,
+      activeGateOwnerCohortMissingPublishedNodeIds,
+      activeGateOwnerCohortMissingPublishedCount,
+      activeGateOwnerCohortPendingRecoveryNodeIds,
+      activeGateOwnerCohortPendingRecoveryCount,
+      activeGateOwnerCohortPendingReconcileNodeIds,
+      activeGateOwnerCohortPendingReconcileCount,
     },
     publicationConvergence,
     publicationConvergenceGate,
@@ -1462,6 +1547,14 @@ function buildActiveWaitProgressSnapshot(
     selectedSnapshotRepairDeferred,
     selectedControlPlaneOwnerQueueDepth,
     selectedCdcReplayLag,
+    activeGateOwnerCohortState,
+    activeGateOwnerCohortReasonCode,
+    activeGateOwnerCohortMissingPublishedNodeIds,
+    activeGateOwnerCohortMissingPublishedCount,
+    activeGateOwnerCohortPendingRecoveryNodeIds,
+    activeGateOwnerCohortPendingRecoveryCount,
+    activeGateOwnerCohortPendingReconcileNodeIds,
+    activeGateOwnerCohortPendingReconcileCount,
     perNodePublicationDisagreementSet,
     selectedPublishedActiveNodeIds,
     selectedPublishedActiveCount: selectedPublishedActiveNodeIds.length,

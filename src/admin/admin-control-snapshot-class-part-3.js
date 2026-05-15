@@ -353,14 +353,6 @@ function decideControlSnapshotActiveGateOwnerCohort(evidence) {
           .EXPECTED_COHORT_UNAVAILABLE,
     });
   }
-  if (evidence.missingPublishedNodeIds.length > NUM.ZERO) {
-    return Object.freeze({
-      state: CONTROL_SNAPSHOT_ACTIVE_GATE_OWNER_COHORT_STATE.DEGRADED,
-      reasonCode:
-        CONTROL_SNAPSHOT_ACTIVE_GATE_OWNER_COHORT_REASON
-          .PUBLISHED_ACTIVE_COVERAGE_INCOMPLETE,
-    });
-  }
   if (
     evidence.pendingRecoveryNodeIds.length > NUM.ZERO ||
     evidence.pendingReconcileNodeIds.length > NUM.ZERO
@@ -370,6 +362,14 @@ function decideControlSnapshotActiveGateOwnerCohort(evidence) {
       reasonCode:
         CONTROL_SNAPSHOT_ACTIVE_GATE_OWNER_COHORT_REASON
           .OWNER_RECONCILE_PENDING,
+    });
+  }
+  if (evidence.missingPublishedNodeIds.length > NUM.ZERO) {
+    return Object.freeze({
+      state: CONTROL_SNAPSHOT_ACTIVE_GATE_OWNER_COHORT_STATE.DEGRADED,
+      reasonCode:
+        CONTROL_SNAPSHOT_ACTIVE_GATE_OWNER_COHORT_REASON
+          .PUBLISHED_ACTIVE_COVERAGE_INCOMPLETE,
     });
   }
   return Object.freeze({

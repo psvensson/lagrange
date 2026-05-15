@@ -268,6 +268,7 @@ class Cluster5 extends Cluster4 {
           publicationConvergenceGate,
           publishedMembershipObservation:
             snapshotDiagnostics.publishedMembershipObservation,
+          activeGateOwnerCohort: snapshotDiagnostics.activeGateOwnerCohort,
           priorityRecoveryObservation:
             snapshotDiagnostics.priorityRecoveryObservation,
           priorityRecoveryDecisionSnapshots:
@@ -313,6 +314,7 @@ class Cluster5 extends Cluster4 {
           publicationConvergence: null,
           publicationConvergenceGate: null,
           publishedMembershipObservation: null,
+          activeGateOwnerCohort: null,
           priorityRecoveryObservation: null,
           priorityRecoveryDecisionSnapshots: null,
           controlPlaneOwnerQueueDepth: null,
@@ -487,10 +489,7 @@ class Cluster5 extends Cluster4 {
       (selectedReachabilityFallback ?
         CONTROL_SNAPSHOT_REACHABILITY_SOURCE :
         null);
-    const selectedReachabilityError =
-      selectedReachabilityFallback ?
-        null :
-        selectedResult?.reachabilityError || null;
+    const selectedReachabilityError = selectedResult?.reachabilityError || null;
     const publicationDisagreementByNodeId = {};
     for (const result of snapshotProbeResults) {
       publicationDisagreementByNodeId[result.nodeId] = Array.isArray(
@@ -506,10 +505,8 @@ class Cluster5 extends Cluster4 {
       forceRepair: options.forceRepair === true,
       selectedNodeId: selectedResult?.nodeId || null,
       selectedSnapshotNodeId: selectedResult?.nodeId || null,
-      selectedAdminReady:
-        selectedResult?.adminReady === true || selectedReachabilityFallback,
-      selectedSnapshotAdminReady:
-        selectedResult?.adminReady === true || selectedReachabilityFallback,
+      selectedAdminReady: selectedResult?.adminReady === true,
+      selectedSnapshotAdminReady: selectedResult?.adminReady === true,
       selectedReachable:
         selectedResult?.reachable === true || selectedReachabilityFallback,
       selectedReachableBy,
@@ -605,6 +602,8 @@ class Cluster5 extends Cluster4 {
         selectedResult?.publicationConvergenceGate || null,
       selectedPublishedMembershipObservation:
         selectedResult?.publishedMembershipObservation || null,
+      selectedActiveGateOwnerCohort:
+        selectedResult?.activeGateOwnerCohort || null,
       selectedPriorityRecoveryObservation:
         selectedResult?.priorityRecoveryObservation || null,
       selectedPriorityRecoveryDecisionSnapshots:
@@ -662,6 +661,7 @@ class Cluster5 extends Cluster4 {
             Math.floor(result.snapshotObservationRetryAfterMs) :
             null,
           snapshotRepairDeferred: result.snapshotRepairDeferred === true,
+          activeGateOwnerCohort: result.activeGateOwnerCohort || null,
           publicationEpoch: Number.isFinite(
             result?.publicationConvergence?.publicationEpoch,
           ) ?

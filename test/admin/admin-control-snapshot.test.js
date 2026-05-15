@@ -59,9 +59,9 @@ const ACTIVE_GATE_OWNER_TRUTH_CURRENT_MISSING_COUNT = 5;
 const ACTIVE_GATE_OWNER_TRUTH_BEST_MISSING_COUNT = 4;
 const ACTIVE_GATE_OWNER_TRUTH_EXPECTED_NODE_COUNT = 5;
 const ACTIVE_GATE_OWNER_COHORT_SCHEMA_VERSION = 1;
-const ACTIVE_GATE_OWNER_COHORT_STATE_DEGRADED = 'degraded';
-const ACTIVE_GATE_OWNER_COHORT_REASON_PUBLISHED_INCOMPLETE =
-  'published_active_coverage_incomplete';
+const ACTIVE_GATE_OWNER_COHORT_STATE_PENDING = 'pending';
+const ACTIVE_GATE_OWNER_COHORT_REASON_OWNER_RECONCILE_PENDING =
+  'owner_reconcile_pending';
 const ACTIVE_GATE_OWNER_COHORT_BUDGET_STATE_AVAILABLE = 'available';
 const ACTIVE_GATE_OWNER_COHORT_BUDGET_STATE_UNAVAILABLE = 'unavailable';
 const ACTIVE_GATE_OWNER_COHORT_GATE_STATE_STALLED = 'stalled';
@@ -248,8 +248,8 @@ test('AdminControlSnapshot exposes publication owner-truth active cohort in cont
       result.controlPlaneDiagnostics.activeGateOwnerCohort,
       {
         schemaVersion: ACTIVE_GATE_OWNER_COHORT_SCHEMA_VERSION,
-        state: ACTIVE_GATE_OWNER_COHORT_STATE_DEGRADED,
-        reasonCode: ACTIVE_GATE_OWNER_COHORT_REASON_PUBLISHED_INCOMPLETE,
+        state: ACTIVE_GATE_OWNER_COHORT_STATE_PENDING,
+        reasonCode: ACTIVE_GATE_OWNER_COHORT_REASON_OWNER_RECONCILE_PENDING,
         topologyEpoch: ACTIVE_GATE_OWNER_TRUTH_PUBLICATION_EPOCH,
         expectedNodeIds: [...ACTIVE_GATE_OWNER_TRUTH_NODE_IDS],
         expectedNodeCount: ACTIVE_GATE_OWNER_TRUTH_EXPECTED_NODE_COUNT,
@@ -334,8 +334,8 @@ test('AdminControlSnapshot normalizes active-gate owner cohort budget state',
     t.match(
       activeGateOwnerCohort,
       {
-        state: ACTIVE_GATE_OWNER_COHORT_STATE_DEGRADED,
-        reasonCode: ACTIVE_GATE_OWNER_COHORT_REASON_PUBLISHED_INCOMPLETE,
+        state: ACTIVE_GATE_OWNER_COHORT_STATE_PENDING,
+        reasonCode: ACTIVE_GATE_OWNER_COHORT_REASON_OWNER_RECONCILE_PENDING,
         pendingRecoveryNodeIds: [ACTIVE_GATE_OWNER_TRUTH_RECENT_NODE_IDS[0]],
         pendingReconcileNodeIds: [],
         activeGateBudget: {

@@ -93,6 +93,7 @@ const PUBLICATION_CONVERGENCE_BOUNDARY = 'publication_convergence';
 const SNAPSHOT_COVERAGE_BOUNDARY = 'snapshot_coverage';
 const PUBLICATION_PENDING_REASON = 'publication_pending';
 const ACTIVE_GATE_TIMED_OUT_REASON = 'active_gate_timed_out';
+const OWNER_RECONCILE_PENDING_REASON = 'owner_reconcile_pending';
 const SNAPSHOT_COVERAGE_INCOMPLETE_REASON = 'snapshot_coverage_incomplete';
 const SNAPSHOT_REPAIR_DEFERRED_REASON = 'snapshot_repair_deferred';
 const SNAPSHOT_COVERAGE_ZERO_OF_FIVE = 0;
@@ -102,6 +103,9 @@ const MISSING_PUBLISHED_COUNT = 4;
 const EDGE_STATE_DEFERRED = 'deferred';
 const RUNTIME_PROMOTION_ALLOWED_FALSE = false;
 const HANDOFF_DETECTED_TRUE = true;
+const ACTIVE_GATE_OWNER_COHORT_STATE_PENDING = 'pending';
+const ACTIVE_GATE_OWNER_COHORT_PENDING_RECONCILE_NODE_IDS =
+  'node-2,node-3,node-4,node-5';
 const HANDOFF_NEXT_REQUIRED_ACTION_BUILD_REPLAYABLE_FIXTURE =
   'build_replayable_handoff_fixture';
 
@@ -370,6 +374,7 @@ describe('analyze-topology-convergence CLI', () => {
       assert.equal(output.consumer.boundary, SNAPSHOT_COVERAGE_BOUNDARY);
       assert.equal(output.consumer.state, EDGE_STATE_DEFERRED);
       assert.deepEqual(output.consumer.reasons, [
+        OWNER_RECONCILE_PENDING_REASON,
         SNAPSHOT_COVERAGE_INCOMPLETE_REASON,
         SNAPSHOT_REPAIR_DEFERRED_REASON,
       ]);
@@ -380,6 +385,22 @@ describe('analyze-topology-convergence CLI', () => {
       assert.equal(
         output.consumer.source.expectedNodeCount,
         EXPECTED_NODE_COUNT,
+      );
+      assert.equal(
+        output.consumer.source.activeGateOwnerCohortState,
+        ACTIVE_GATE_OWNER_COHORT_STATE_PENDING,
+      );
+      assert.equal(
+        output.consumer.source.activeGateOwnerCohortReasonCode,
+        OWNER_RECONCILE_PENDING_REASON,
+      );
+      assert.equal(
+        output.consumer.source.activeGateOwnerCohortPendingReconcileCount,
+        MISSING_PUBLISHED_COUNT,
+      );
+      assert.equal(
+        output.consumer.source.activeGateOwnerCohortPendingReconcileNodeIds,
+        ACTIVE_GATE_OWNER_COHORT_PENDING_RECONCILE_NODE_IDS,
       );
       assert.deepEqual(output.nextOwnerPath, {
         edge: ACTIVE_GATE_EDGE_ID,

@@ -68,6 +68,28 @@ const STARTUP_SNAPSHOT_PROJECTION_TEST_INACTIVE_STATUS = 503;
 const STARTUP_SNAPSHOT_PROJECTION_TEST_INACTIVE_STATE = 'init';
 const STARTUP_SNAPSHOT_PROJECTION_TEST_INACTIVE_REASON = 'BOOTSTRAP_NOT_READY';
 const STARTUP_SNAPSHOT_PROJECTION_TEST_PARTIAL_COVERAGE_COUNT = 2;
+const CONTROL_SNAPSHOT_COVERAGE_TEST_NODE_A = 'node-a';
+const CONTROL_SNAPSHOT_COVERAGE_TEST_NODE_B = 'node-b';
+const CONTROL_SNAPSHOT_COVERAGE_TEST_TIMEOUT_MS = 1000;
+const CONTROL_SNAPSHOT_COVERAGE_TEST_PENDING_RECONCILE_COUNT = 1;
+const CONTROL_SNAPSHOT_COVERAGE_TEST_NODE_IDS = Object.freeze([
+  CONTROL_SNAPSHOT_COVERAGE_TEST_NODE_A,
+  CONTROL_SNAPSHOT_COVERAGE_TEST_NODE_B,
+]);
+const CONTROL_SNAPSHOT_COVERAGE_TEST_PENDING_RECONCILE_NODE_IDS =
+  Object.freeze([CONTROL_SNAPSHOT_COVERAGE_TEST_NODE_B]);
+const CONTROL_SNAPSHOT_COVERAGE_TEST_OWNER_COHORT_STATE = 'pending';
+const CONTROL_SNAPSHOT_COVERAGE_TEST_OWNER_COHORT_REASON =
+  'owner_reconcile_pending';
+const CONTROL_SNAPSHOT_COVERAGE_TEST_OWNER_COHORT = Object.freeze({
+  state: CONTROL_SNAPSHOT_COVERAGE_TEST_OWNER_COHORT_STATE,
+  reasonCode: CONTROL_SNAPSHOT_COVERAGE_TEST_OWNER_COHORT_REASON,
+  pendingRecoveryNodeIds: Object.freeze([]),
+  pendingRecoveryCount: 0,
+  pendingReconcileNodeIds:
+    CONTROL_SNAPSHOT_COVERAGE_TEST_PENDING_RECONCILE_NODE_IDS,
+  pendingReconcileCount: CONTROL_SNAPSHOT_COVERAGE_TEST_PENDING_RECONCILE_COUNT,
+});
 
 /**
  * Feature: distributed-testing-framework
@@ -1782,7 +1804,11 @@ test('Unit: _probeClusterActiveState requires control snapshot coverage even whe
       async getControlSnapshot() {
         return {
           rows: [{
-            nodes: ['node-a'],
+            nodes: [CONTROL_SNAPSHOT_COVERAGE_TEST_NODE_A],
+            controlPlaneDiagnostics: {
+              activeGateOwnerCohort:
+                CONTROL_SNAPSHOT_COVERAGE_TEST_OWNER_COHORT,
+            },
           }],
         };
       },
@@ -1791,10 +1817,18 @@ test('Unit: _probeClusterActiveState requires control snapshot coverage even whe
       },
     });
 
-    cluster._nodes.set('node-a', createNode('node-a'));
-    cluster._nodes.set('node-b', createNode('node-b'));
+    cluster._nodes.set(
+      CONTROL_SNAPSHOT_COVERAGE_TEST_NODE_A,
+      createNode(CONTROL_SNAPSHOT_COVERAGE_TEST_NODE_A),
+    );
+    cluster._nodes.set(
+      CONTROL_SNAPSHOT_COVERAGE_TEST_NODE_B,
+      createNode(CONTROL_SNAPSHOT_COVERAGE_TEST_NODE_B),
+    );
 
-    const probeResult = await cluster._probeClusterActiveState(Date.now() + 1000);
+    const probeResult = await cluster._probeClusterActiveState(
+      Date.now() + CONTROL_SNAPSHOT_COVERAGE_TEST_TIMEOUT_MS,
+    );
     assert.strictEqual(
       probeResult.allActive,
       false,
@@ -1803,6 +1837,20 @@ test('Unit: _probeClusterActiveState requires control snapshot coverage even whe
     assert.ok(
       probeResult.snapshotCoverage,
       'startup probe should include snapshot coverage diagnostics',
+    );
+    assert.deepStrictEqual(
+      probeResult.snapshotCoverage.selectedActiveGateOwnerCohort,
+      CONTROL_SNAPSHOT_COVERAGE_TEST_OWNER_COHORT,
+      'selected coverage should preserve active-gate owner cohort evidence',
+    );
+    assert.deepStrictEqual(
+      probeResult.snapshotCoverage.probeWitnesses.map(
+        (witness) => witness.activeGateOwnerCohort,
+      ),
+      CONTROL_SNAPSHOT_COVERAGE_TEST_NODE_IDS.map(
+        () => CONTROL_SNAPSHOT_COVERAGE_TEST_OWNER_COHORT,
+      ),
+      'probe witnesses should preserve per-node active-gate cohort evidence',
     );
   });
 

@@ -56,6 +56,7 @@ import {Cluster3} from './cluster-segment-7-class-3.js';
 
 const TYPEOF_OBJECT = 'object';
 const TYPEOF_STRING = 'string';
+const ACTIVE_GATE_OWNER_COHORT_FIELD = 'activeGateOwnerCohort';
 const EMPTY_STRING = '';
 const LOAD_PUBLICATION_GATE_WITNESS_READY = 'ready';
 const LOAD_PUBLICATION_GATE_WITNESS_CANONICAL_SNAPSHOT =
@@ -166,17 +167,6 @@ const PARTIAL_COVERAGE_CONVERGENCE_DECISION_TABLE = Object.freeze([
       evidence.publicationGateReady === true &&
       evidence.snapshotCoverageComplete !== true &&
       evidence.bestCoverageNodeCount > ZERO &&
-      evidence.selectedSnapshotErrorPresent !== true,
-  }),
-  Object.freeze({
-    outcome: PARTIAL_COVERAGE_CONVERGENCE_OUTCOME_APPLY,
-    matches: (evidence) =>
-      evidence.readinessMode === CLUSTER_READINESS_MODE_STARTUP &&
-      evidence.activeByStatus === true &&
-      evidence.publicationGateReady === true &&
-      evidence.snapshotCoverageComplete !== true &&
-      evidence.bestCoverageNodeCount > ZERO &&
-      evidence.selectedSnapshotAdminReady === true &&
       evidence.selectedSnapshotErrorPresent !== true,
   }),
 ]);
@@ -1402,6 +1392,16 @@ class Cluster4 extends Cluster3 {
           ),
         ) :
         null;
+    const activeGateOwnerCohort =
+      controlPlaneDiagnostics?.[ACTIVE_GATE_OWNER_COHORT_FIELD] &&
+      typeof controlPlaneDiagnostics[ACTIVE_GATE_OWNER_COHORT_FIELD] ===
+        TYPEOF_OBJECT ?
+        JSON.parse(
+          JSON.stringify(
+            controlPlaneDiagnostics[ACTIVE_GATE_OWNER_COHORT_FIELD],
+          ),
+        ) :
+        null;
     const logsTable =
       controlPlaneDiagnostics?.logsTable &&
       typeof controlPlaneDiagnostics.logsTable === 'object' ?
@@ -1502,6 +1502,7 @@ class Cluster4 extends Cluster3 {
       publishedMembershipObservation: this._summarizeControlSnapshotPublication(
         controlPlaneDiagnostics?.publishedMembershipObservation || null,
       ),
+      activeGateOwnerCohort,
       priorityRecoveryObservation,
       priorityRecoveryDecisionSnapshots,
       controlPlaneOwnerQueueDepth,

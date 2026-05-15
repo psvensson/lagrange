@@ -24,6 +24,9 @@ const ACTIVE_GATE_SELECTED_NODE_COUNT = 5;
 const ACTIVE_GATE_PARTIAL_SNAPSHOT_COVERAGE_COUNT = 3;
 const ACTIVE_GATE_MISSING_PUBLISHED_COUNT = 3;
 const ACTIVE_GATE_ZERO = 0;
+const ACTIVE_GATE_OWNER_COHORT_STATE_PENDING = 'pending';
+const ACTIVE_GATE_OWNER_COHORT_REASON_OWNER_RECONCILE_PENDING =
+  'owner_reconcile_pending';
 const ACTIVE_GATE_PRIORITY_SPREAD_TEST_NAME =
   'active gate classifies publication-closed priority spread as closure witness';
 const ACTIVE_GATE_STARTUP_PUBLICATION_LAG_TEST_NAME =
@@ -134,6 +137,16 @@ test(ACTIVE_GATE_STARTUP_PUBLICATION_LAG_OWNER_PATH_TEST_NAME,
           selectedPublishedActiveNodeIds: ACTIVE_GATE_PUBLISHED_NODE_IDS,
           selectedMissingPublishedNodeIds:
             ACTIVE_GATE_MISSING_PUBLISHED_NODE_IDS,
+          selectedActiveGateOwnerCohort: {
+            state: ACTIVE_GATE_OWNER_COHORT_STATE_PENDING,
+            reasonCode: ACTIVE_GATE_OWNER_COHORT_REASON_OWNER_RECONCILE_PENDING,
+            missingPublishedNodeIds: ACTIVE_GATE_MISSING_PUBLISHED_NODE_IDS,
+            missingPublishedCount: ACTIVE_GATE_MISSING_PUBLISHED_COUNT,
+            pendingRecoveryNodeIds: [],
+            pendingRecoveryCount: ACTIVE_GATE_ZERO,
+            pendingReconcileNodeIds: ACTIVE_GATE_MISSING_PUBLISHED_NODE_IDS,
+            pendingReconcileCount: ACTIVE_GATE_MISSING_PUBLISHED_COUNT,
+          },
           selectedPublicationConvergence: {
             publicationStatus: ACTIVE_GATE_PUBLICATION_STATUS_PUBLISHED,
           },
@@ -157,6 +170,22 @@ test(ACTIVE_GATE_STARTUP_PUBLICATION_LAG_OWNER_PATH_TEST_NAME,
     );
     assert.deepEqual(
       progressSnapshot.selectedMissingPublishedNodeIds,
+      ACTIVE_GATE_MISSING_PUBLISHED_NODE_IDS,
+    );
+    assert.equal(
+      progressSnapshot.activeGateOwnerCohortState,
+      ACTIVE_GATE_OWNER_COHORT_STATE_PENDING,
+    );
+    assert.equal(
+      progressSnapshot.activeGateOwnerCohortReasonCode,
+      ACTIVE_GATE_OWNER_COHORT_REASON_OWNER_RECONCILE_PENDING,
+    );
+    assert.equal(
+      progressSnapshot.activeGateOwnerCohortPendingReconcileCount,
+      ACTIVE_GATE_MISSING_PUBLISHED_COUNT,
+    );
+    assert.deepEqual(
+      progressSnapshot.activeGateOwnerCohortPendingReconcileNodeIds,
       ACTIVE_GATE_MISSING_PUBLISHED_NODE_IDS,
     );
   });

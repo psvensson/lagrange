@@ -46,6 +46,9 @@ const PRIORITY_RECOVERY_NEXT_REQUIRED_ACTION_WAIT_FOR_OPERATION_PROGRESS =
   'wait_for_operation_progress';
 const ACTIVE_GATE_STATE_TIMED_OUT = 'timed_out';
 const ACTIVE_GATE_STATE_STALLED = 'stalled';
+const ACTIVE_GATE_OWNER_COHORT_STATE_PENDING = 'pending';
+const ACTIVE_GATE_OWNER_COHORT_REASON_OWNER_RECONCILE_PENDING =
+  'owner_reconcile_pending';
 const READINESS_RECOVERABILITY_TERMINAL = 'terminal';
 const READINESS_FAILURE_CLASS_NO_PROGRESS_TERMINAL = 'no_progress_terminal';
 const READINESS_FAILURE_CLASS_SNAPSHOT_TIMEOUT = 'snapshot_timeout';
@@ -116,6 +119,8 @@ const REASON = Object.freeze({
   BLOCKED_NODES: 'blocked_publication_nodes_present',
   MISSING_PUBLISHED: 'missing_published_nodes_present',
   PRIORITY_SPREAD_PENDING: 'priority_spread_pending',
+  OWNER_RECONCILE_PENDING:
+    ACTIVE_GATE_OWNER_COHORT_REASON_OWNER_RECONCILE_PENDING,
   SNAPSHOT_COVERAGE_INCOMPLETE: 'snapshot_coverage_incomplete',
   SNAPSHOT_REPAIR_DEFERRED: 'snapshot_repair_deferred',
   ACTIVE_GATE_TIMED_OUT: 'active_gate_timed_out',
@@ -989,6 +994,7 @@ function buildActiveGateSnapshotEdge(normalized) {
       selectedSnapshotRepairDeferred: booleanVariant(
         progress.selectedSnapshotRepairDeferred,
       ),
+      ...buildActiveGateOwnerCohortSource(progress),
       readinessDelayCause: textOrUnknown(progress.readinessDelay?.cause),
       blockers: joinValues(arrayOrEmpty(progress.blockers)),
     },
@@ -1546,6 +1552,76 @@ function buildPriorityRecoveryWitnessSource(evidence) {
   return witnessSource;
 }
 
+function buildActiveGateOwnerCohortSource(progress) {
+  const source = {};
+  const state = textOrUnknown(progress.activeGateOwnerCohortState);
+  if (state !== UNKNOWN_VALUE) {
+    source.activeGateOwnerCohortState = state;
+  }
+  const reasonCode = textOrUnknown(progress.activeGateOwnerCohortReasonCode);
+  if (reasonCode !== UNKNOWN_VALUE) {
+    source.activeGateOwnerCohortReasonCode = reasonCode;
+  }
+  const missingPublishedCount = numberOrUnknown(
+    progress.activeGateOwnerCohortMissingPublishedCount,
+  );
+  if (missingPublishedCount !== UNKNOWN_VALUE) {
+    source.activeGateOwnerCohortMissingPublishedCount = missingPublishedCount;
+  }
+  const missingPublishedNodeIds = arrayOrEmpty(
+    progress.activeGateOwnerCohortMissingPublishedNodeIds,
+  );
+  if (missingPublishedNodeIds.length > SOURCE_ORDER_BASE) {
+    source.activeGateOwnerCohortMissingPublishedNodeIds = joinValues(
+      missingPublishedNodeIds,
+    );
+  }
+  const pendingRecoveryCount = numberOrUnknown(
+    progress.activeGateOwnerCohortPendingRecoveryCount,
+  );
+  if (pendingRecoveryCount !== UNKNOWN_VALUE) {
+    source.activeGateOwnerCohortPendingRecoveryCount = pendingRecoveryCount;
+  }
+  const pendingRecoveryNodeIds = arrayOrEmpty(
+    progress.activeGateOwnerCohortPendingRecoveryNodeIds,
+  );
+  if (pendingRecoveryNodeIds.length > SOURCE_ORDER_BASE) {
+    source.activeGateOwnerCohortPendingRecoveryNodeIds = joinValues(
+      pendingRecoveryNodeIds,
+    );
+  }
+  const pendingReconcileCount = numberOrUnknown(
+    progress.activeGateOwnerCohortPendingReconcileCount,
+  );
+  if (pendingReconcileCount !== UNKNOWN_VALUE) {
+    source.activeGateOwnerCohortPendingReconcileCount = pendingReconcileCount;
+  }
+  const pendingReconcileNodeIds = arrayOrEmpty(
+    progress.activeGateOwnerCohortPendingReconcileNodeIds,
+  );
+  if (pendingReconcileNodeIds.length > SOURCE_ORDER_BASE) {
+    source.activeGateOwnerCohortPendingReconcileNodeIds = joinValues(
+      pendingReconcileNodeIds,
+    );
+  }
+  return source;
+}
+
+function hasActiveGateOwnerReconcilePending(progress) {
+  return (
+    textOrUnknown(progress.activeGateOwnerCohortState) ===
+      ACTIVE_GATE_OWNER_COHORT_STATE_PENDING ||
+    textOrUnknown(progress.activeGateOwnerCohortReasonCode) ===
+      ACTIVE_GATE_OWNER_COHORT_REASON_OWNER_RECONCILE_PENDING
+  );
+}
+
+function appendActiveGateOwnerCohortReason(progress, reasons) {
+  if (hasActiveGateOwnerReconcilePending(progress)) {
+    reasons.push(REASON.OWNER_RECONCILE_PENDING);
+  }
+}
+
 function resolveActiveGateSnapshotState(activeGate, progress, reasons) {
   if (progress.snapshotCoverageComplete === true || activeGate.ready === true) {
     reasons.push(REASON.ACTIVE_GATE_READY);
@@ -1553,6 +1629,7 @@ function resolveActiveGateSnapshotState(activeGate, progress, reasons) {
   }
   if (activeGate.state === ACTIVE_GATE_STATE_TIMED_OUT) {
     reasons.push(REASON.ACTIVE_GATE_TIMED_OUT);
+    appendActiveGateOwnerCohortReason(progress, reasons);
     reasons.push(REASON.SNAPSHOT_COVERAGE_INCOMPLETE);
     if (progress.selectedSnapshotRepairDeferred === true) {
       reasons.push(REASON.SNAPSHOT_REPAIR_DEFERRED);
@@ -1563,6 +1640,7 @@ function resolveActiveGateSnapshotState(activeGate, progress, reasons) {
     reasons.push(REASON.EVIDENCE_MISSING);
     return EDGE_STATE.UNKNOWN;
   }
+  appendActiveGateOwnerCohortReason(progress, reasons);
   reasons.push(REASON.SNAPSHOT_COVERAGE_INCOMPLETE);
   if (progress.selectedSnapshotRepairDeferred === true) {
     reasons.push(REASON.SNAPSHOT_REPAIR_DEFERRED);

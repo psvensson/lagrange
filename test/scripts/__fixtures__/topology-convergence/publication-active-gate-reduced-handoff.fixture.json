@@ -61,6 +61,24 @@
               "stale_replica_operations_in_flight"
             ],
             "selectedSnapshotRepairDeferred": true,
+            "activeGateOwnerCohortState": "pending",
+            "activeGateOwnerCohortReasonCode": "owner_reconcile_pending",
+            "activeGateOwnerCohortMissingPublishedNodeIds": [
+              "node-2",
+              "node-3",
+              "node-4",
+              "node-5"
+            ],
+            "activeGateOwnerCohortMissingPublishedCount": 4,
+            "activeGateOwnerCohortPendingRecoveryNodeIds": [],
+            "activeGateOwnerCohortPendingRecoveryCount": 0,
+            "activeGateOwnerCohortPendingReconcileNodeIds": [
+              "node-2",
+              "node-3",
+              "node-4",
+              "node-5"
+            ],
+            "activeGateOwnerCohortPendingReconcileCount": 4,
             "priorityRecoveryProgressClasses": {
               "unresolvedSemanticStateIds": [],
               "blockedPartitionIds": []
