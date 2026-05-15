@@ -289,6 +289,6 @@ Required on activation because this is a causal-escalation runtime package.
 
 Required at closure.
 
-1. [ ] Focused package commit: pending.
-2. [ ] Pushed to: pending.
-3. [ ] Commit contains only package-owned files/package-status/allowed sprint handoff: pending.
+1. [x] Focused package commit: 64249c30.
+2. [x] Pushed to: origin/codex/pending-ack-eligibility-filter.
+3. [x] Commit contains only package-owned files/package-status/allowed sprint handoff: yes.
