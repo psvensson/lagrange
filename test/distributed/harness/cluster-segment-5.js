@@ -902,12 +902,13 @@ class NodeHandle {
     }
 
     let localSnapshotError = null;
+    let localSnapshotResult = null;
     try {
-      const localSnapshot = await querySnapshot(
+      localSnapshotResult = await querySnapshot(
         NODE_CLIENT_CONTROL_SNAPSHOT_SQL,
       );
-      if (!shouldFallbackToForcedControlSnapshot(localSnapshot)) {
-        return localSnapshot;
+      if (!shouldFallbackToForcedControlSnapshot(localSnapshotResult)) {
+        return localSnapshotResult;
       }
     } catch (error) {
       localSnapshotError = error;
@@ -917,7 +918,7 @@ class NodeHandle {
       return await querySnapshot(NODE_CLIENT_CONTROL_SNAPSHOT_FORCE_REPAIR_SQL);
     } catch (forcedSnapshotError) {
       if (!localSnapshotError) {
-        throw forcedSnapshotError;
+        return localSnapshotResult;
       }
       throw new Error(
         String(localSnapshotError?.message || localSnapshotError) +

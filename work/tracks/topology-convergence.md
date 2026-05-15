@@ -52,12 +52,17 @@ residuals.
 Latest current handoff state:
 
 - artifact:
-  `test-output/reports/rolling-restart-after-forced-snapshot-refresh-debt-fallback-20260515-codex.report.json`
-- first frontier: `publication_ack_convergence`
-- owner boundary: `topology_publication_owner / publication_convergence`
-- dominant reason: `publication_pending`
-- downstream active-gate snapshot coverage remains blocked with
-  `snapshotCoverage=0/5` and forced authoritative snapshot repair error
+  `test-output/reports/rolling-restart-after-forced-snapshot-local-fallback-20260515-codex.report.json`
+- first frontier: `active_gate_snapshot_coverage`
+- owner boundary: `startup_active_gate_owner / snapshot_coverage`
+- dominant reason: `snapshot_coverage_incomplete`
+- active-gate snapshot coverage is reduced but still blocked with
+  `snapshotCoverage=2/5` and `repair_deferred / stale_usable` selected snapshot
+  evidence
+- publication is `PUBLISHED` with `pendingAck=0`, but active cohort projection
+  still shows `publishedActive=1/5` and `missingPublished=4`
+- the handoff probe reports `publication_ack_to_active_gate_reconcile_missing`,
+  `consumer=absent`, and `runtimePromotionAllowed=false`
 - priority recovery remains classified as satisfied and subordinate
 
 ## Target Invariant
@@ -87,18 +92,20 @@ or produces a narrower owner-boundary blocker selected by canonical evidence.
 - Active sprint:
   `work/sprints/active-2026-q2-topology-convergence-residual-closure.md`
 - Active package:
-  `work/packages/active-20260515-topology-publication-active-gate-handoff-oscillation.md`
+  `work/packages/active-20260515-topology-active-gate-snapshot-coverage-after-publication-handoff.md`
 - Artifact:
-  `test-output/reports/rolling-restart-after-forced-snapshot-refresh-debt-fallback-20260515-codex.report.json`
+  `test-output/reports/rolling-restart-after-forced-snapshot-local-fallback-20260515-codex.report.json`
 - Current package-local owner boundary:
-  `topology_publication_owner / publication_convergence`
+  `startup_active_gate_owner / snapshot_coverage`
 - Representative owner boundary:
-  `topology_publication_owner / publication_convergence`
+  `startup_active_gate_owner / snapshot_coverage`
 - Extractor summary:
-  `publication_ack_convergence` is the first frontier with dominant reason
-  `publication_pending`. Downstream active-gate snapshot coverage remains
-  blocked at `0/5`; the active package must build a replayable
-  publication-to-active-gate missing-edge probe before runtime file promotion.
+  `active_gate_snapshot_coverage` is the first frontier with dominant reason
+  `snapshot_coverage_incomplete`. The focused fallback slice removed the hard
+  selected snapshot repair error and improved coverage from `0/5` to `2/5`, but
+  the handoff probe still reports a missing publication-to-active-gate reconcile
+  consumer; the active package must use replayable handoff evidence before any
+  further runtime file promotion.
 - Priority recovery residuals:
   classified as satisfied and subordinate to the publication-to-active-gate
   handoff residual.
@@ -173,8 +180,8 @@ These are context candidates, not write authorization:
 ## Entry Condition
 
 Continue with the current active handoff package. Do not open a second active
-package on topology convergence while the publication-to-active-gate probe
-remains unresolved.
+package on topology convergence while the fresh publication-to-active-gate
+handoff probe decision remains unresolved.
 
 ## Exit Condition
 
@@ -187,5 +194,5 @@ canonical owner-boundary evidence.
 Current package:
 
 ```text
-work/packages/active-20260515-topology-publication-active-gate-handoff-oscillation.md
+work/packages/active-20260515-topology-active-gate-snapshot-coverage-after-publication-handoff.md
 ```

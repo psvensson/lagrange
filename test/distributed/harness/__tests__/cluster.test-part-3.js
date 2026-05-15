@@ -48,6 +48,24 @@ const TEST_NODE_ID = 'node-1';
 const TEST_CONTAINER_ID = 'container-1';
 const TEST_CAPTURED_AT = 1;
 const TEST_ADMIN_QUERY_TIMEOUT_MS = 4321;
+const TEST_FORCED_REPAIR_FAILURE =
+  'Distributed operation failed due to participant failures';
+const TEST_FORCED_REPAIR_ERROR_CODE = 'DISTRIBUTED_PARTICIPANT_FAILURE';
+const TEST_LOCAL_STALE_PUBLICATION_GATE_SNAPSHOT_ROW = Object.freeze({
+  nodeId: TEST_NODE_ID,
+  capturedAt: TEST_CAPTURED_AT,
+  nodes: Object.freeze([]),
+  snapshotObservation: Object.freeze({
+    state: SNAPSHOT_OBSERVATION_STATE_STALE_USABLE,
+    contractState: SNAPSHOT_OBSERVATION_CONTRACT_STATE_PENDING,
+  }),
+  controlPlaneDiagnostics: Object.freeze({
+    publicationConvergenceGate: Object.freeze({
+      ready: false,
+      state: PUBLICATION_RECOVERY_GATE_STATE_PRIORITY_SPREAD_PENDING,
+    }),
+  }),
+});
 
 /**
  * Feature: distributed-testing-framework
@@ -1113,6 +1131,92 @@ test('Unit: NodeHandle.getControlSnapshot escalates forced repair for a ' +
       ],
       'forced repair should escalate when the local publication recovery ' +
         'gate is not ready',
+    );
+  } finally {
+    node.closeQueryConnection();
+    await new Promise((resolve, reject) => {
+      server.close((err) => {
+        if (err) {
+          reject(err);
+          return;
+        }
+        resolve();
+      });
+    });
+  }
+});
+
+test('Unit: NodeHandle.getControlSnapshot returns the local snapshot when ' +
+  'forced repair fails after escalation', async () => {
+  const server = new WebSocketServer({
+    host: TEST_ADMIN_HOST,
+    port: TEST_ADMIN_PORT_ANY,
+  });
+  await new Promise((resolve, reject) => {
+    server.once('listening', resolve);
+    server.once('error', reject);
+  });
+
+  const address = server.address();
+  assert.ok(address && typeof address === 'object',
+    'server should expose listen address');
+  const adminApiPort = address.port;
+
+  const capturedQueries = [];
+  server.on('connection', (socket) => {
+    socket.send(JSON.stringify({
+      type: TEST_CACHE_DUMP_MESSAGE_TYPE,
+      data: TEST_EMPTY_CACHE_DUMP,
+    }));
+    socket.on('message', (data) => {
+      const capturedQuery = JSON.parse(data.toString());
+      capturedQueries.push(capturedQuery);
+      const forcedRepairQuery =
+        capturedQuery.sql === NODE_CLIENT_CONTROL_SNAPSHOT_FORCE_REPAIR_SQL;
+      if (forcedRepairQuery) {
+        socket.send(JSON.stringify({
+          type: TEST_QUERY_RESULT_MESSAGE_TYPE,
+          queryId: capturedQuery.queryId,
+          error: TEST_FORCED_REPAIR_FAILURE,
+          errorCode: TEST_FORCED_REPAIR_ERROR_CODE,
+        }));
+        return;
+      }
+      socket.send(JSON.stringify({
+        type: TEST_QUERY_RESULT_MESSAGE_TYPE,
+        queryId: capturedQuery.queryId,
+        results: [TEST_LOCAL_STALE_PUBLICATION_GATE_SNAPSHOT_ROW],
+        count: TEST_CAPTURED_AT,
+      }));
+    });
+  });
+
+  const node = new NodeHandle(
+    TEST_NODE_ID,
+    TEST_CONTAINER_ID,
+    TEST_ADMIN_HOST,
+    NODE_ROLES.SEED,
+    {getContainerLogs: async () => ''},
+    adminApiPort,
+    {adminQueryTimeoutMs: TEST_ADMIN_QUERY_TIMEOUT_MS},
+  );
+
+  try {
+    const result = await node.getControlSnapshot({forceRepair: true});
+    assert.deepEqual(
+      capturedQueries.map((query) => query.sql),
+      [
+        NODE_CLIENT_CONTROL_SNAPSHOT_SQL,
+        NODE_CLIENT_CONTROL_SNAPSHOT_FORCE_REPAIR_SQL,
+      ],
+      'forced repair should still be attempted before returning the local ' +
+        'snapshot fallback',
+    );
+    assert.deepStrictEqual(
+      result.rows,
+      [TEST_LOCAL_STALE_PUBLICATION_GATE_SNAPSHOT_ROW],
+      'local snapshot should be returned when forced repair fails after a ' +
+        'successful local query',
     );
   } finally {
     node.closeQueryConnection();

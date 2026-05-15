@@ -613,24 +613,31 @@ Final closure requires fresh evidence proving all of the following:
 
 ## Current Next Action
 
-The publication handoff package is closed as migrated:
-`test-output/reports/rolling-restart-after-publication-supplied-stream-closure-20260515-codex.report.json`
-is still red, but canonical extraction marks `publication_ack_convergence`
-satisfied and selects `active_gate_snapshot_coverage` under
-`startup_active_gate_owner / snapshot_coverage` with
-`active_gate_timed_out`.
+The active-gate forced-snapshot fallback slice reduced the current blocker:
+`test-output/reports/rolling-restart-after-forced-snapshot-local-fallback-20260515-codex.report.json`
+is still red, but the hard selected snapshot repair error is gone and the run
+reaches cluster active. Canonical extraction still selects
+`active_gate_snapshot_coverage` under
+`startup_active_gate_owner / snapshot_coverage`, now with
+`snapshot_coverage_incomplete` and `snapshot_repair_deferred`.
 
 Continue
 [Topology Active Gate Snapshot Coverage After Publication Handoff](../packages/active-20260515-topology-active-gate-snapshot-coverage-after-publication-handoff.md).
 
-- Artifact: `test-output/reports/rolling-restart-after-publication-supplied-stream-closure-20260515-codex.report.json`
+- Artifact: `test-output/reports/rolling-restart-after-forced-snapshot-local-fallback-20260515-codex.report.json`
 - First frontier: `active_gate_snapshot_coverage`
 - Owner: `startup_active_gate_owner`
 - Boundary: `snapshot_coverage`
-- Dominant reason: `active_gate_timed_out`
-- Current blocker: selected snapshot timeout / authoritative repair failure
-  leaves `snapshotCoverage=0/5` while publication is satisfied.
+- Dominant reason: `snapshot_coverage_incomplete`
+- Current blocker: active gate observes `snapshotCoverage=2/5` and
+  `repair_deferred / stale_usable`; publication reports `PUBLISHED` with
+  `pendingAck=0`, but active cohort projection still shows `publishedActive=1/5`
+  and `missingPublished=4`.
 
-Next action: run required review/fix/implementation subagent sequencing, then
-promote the exact active-gate snapshot coverage owner path before
-implementation.
+Next action: apply the track comparative guidance before more runtime edits.
+Use the replayable publication-to-active-gate handoff probe/fixture to prove the
+catch-up-before-promotion gap for the fresh `PUBLISHED` plus missing-published
+shape. The current handoff probe reports
+`publication_ack_to_active_gate_reconcile_missing`, `consumer=absent`, and
+`runtimePromotionAllowed=false`; promote another runtime path only after that
+probe names the exact owner and legal next action.
