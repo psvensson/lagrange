@@ -66,10 +66,28 @@ Pro or Enterprise behavior.
    - Acceptance: representative `rolling-restart` is green, or fresh evidence
      migrates/classifies the residual to a narrower owner boundary with
      concrete next action.
+2. [Publication Active-Gate Reconcile Bridge Simplification](../packages/todo-20260515-publication-active-gate-reconcile-bridge-simplification.md)
+   - Lane: `runtime-owner-boundary`
+   - Owner boundary:
+     `startup_active_gate_owner / publication_reconcile_bridge`
+   - Purpose: after the active owner-reconcile closure package lands,
+     centralize canonical handoff target selection, narrow reconcile-only
+     catch-up signaling, and remove broad repair-deferred snapshot rebuild as
+     the reconcile mechanism.
+   - Entry condition: the active package is done, explicitly split, or
+     superseded with canonical evidence; fresh context confirms the duplicate
+     bridge shape remains in scope.
+   - Acceptance: the bridge has one canonical target helper, admin callers
+     submit owner reconcile intent without reconstructing handoff semantics,
+     focused admin/publication tests stay green, and representative
+     `rolling-restart` intent is preserved.
 
 No additional package may be added merely to defer owner-key reconcile from
-the active package. A split is allowed only when canonical evidence changes the
-semantic owner, boundary, or next required action.
+the active package. The queued bridge simplification package is a follow-on
+only; it must not start until the active package is closed, explicitly split,
+or superseded with canonical evidence. Any other split is allowed only when
+canonical evidence changes the semantic owner, boundary, or next required
+action.
 
 ## Working Rules
 
