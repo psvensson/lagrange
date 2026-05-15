@@ -105,6 +105,8 @@ const ACTIVE_GATE_OWNER_COHORT_FIELD = Object.freeze({
   PENDING_RECONCILE_COUNT: 'pendingReconcileCount',
   PENDING_RECONCILE_NODE_IDS: 'pendingReconcileNodeIds',
   REASON_CODE: 'reasonCode',
+  NEXT_ACTION: 'nextAction',
+  RUNTIME_PROMOTION_ALLOWED: 'runtimePromotionAllowed',
   STATE: 'state',
 });
 
@@ -1262,9 +1264,23 @@ function buildActiveWaitProgressSnapshot(
     typeof snapshotCoverage.selectedCdcReplayLag === 'object' ?
       snapshotCoverage.selectedCdcReplayLag :
       null;
-  const activeGateOwnerCohort = normalizeActiveGateOwnerCohortRecord(
-    snapshotCoverage?.selectedActiveGateOwnerCohort,
+  const publicationActiveGateHandoff = normalizeActiveGateOwnerCohortRecord(
+    snapshotCoverage?.selectedPublicationActiveGateHandoff,
   );
+  const activeGateOwnerCohort = normalizeActiveGateOwnerCohortRecord(
+    publicationActiveGateHandoff ||
+      snapshotCoverage?.selectedActiveGateOwnerCohort,
+  );
+  const publicationActiveGateHandoffNextAction =
+    normalizeActiveGateOwnerCohortString(
+      publicationActiveGateHandoff?.[
+        ACTIVE_GATE_OWNER_COHORT_FIELD.NEXT_ACTION
+      ],
+    );
+  const publicationActiveGateHandoffRuntimePromotionAllowed =
+    publicationActiveGateHandoff?.[
+      ACTIVE_GATE_OWNER_COHORT_FIELD.RUNTIME_PROMOTION_ALLOWED
+    ] === true;
   const activeGateOwnerCohortState = normalizeActiveGateOwnerCohortString(
     activeGateOwnerCohort?.[ACTIVE_GATE_OWNER_COHORT_FIELD.STATE],
   );
@@ -1322,11 +1338,16 @@ function buildActiveWaitProgressSnapshot(
       {};
   const selectedPublishedActiveNodeIds = normalizeDistinctStringArray(
     snapshotCoverage?.selectedPublishedActiveNodeIds ||
+      publicationActiveGateHandoff?.publishedActiveNodeIds ||
       publicationConvergence?.publishedActiveNodeIds,
   );
   const selectedMissingPublishedNodeIds =
     Array.isArray(snapshotCoverage?.selectedMissingPublishedNodeIds) ?
       normalizeDistinctStringArray(snapshotCoverage.selectedMissingPublishedNodeIds) :
+      Array.isArray(publicationActiveGateHandoff?.missingPublishedNodeIds) ?
+        normalizeDistinctStringArray(
+          publicationActiveGateHandoff.missingPublishedNodeIds,
+        ) :
       normalizeDistinctStringArray(publicationConvergenceGate?.missingPublishedNodeIds);
   const pendingAckNodeIds = normalizeDistinctStringArray(
     snapshotCoverage?.selectedPendingAckNodeIds ||
@@ -1485,6 +1506,15 @@ function buildActiveWaitProgressSnapshot(
       selectedSnapshotObservationReasonCodes,
       selectedSnapshotObservationRetryAfterMs,
       selectedSnapshotRepairDeferred,
+      publicationActiveGateHandoffState: activeGateOwnerCohortState,
+      publicationActiveGateHandoffReasonCode:
+        activeGateOwnerCohortReasonCode,
+      publicationActiveGateHandoffNextAction,
+      publicationActiveGateHandoffRuntimePromotionAllowed,
+      publicationActiveGateHandoffPendingReconcileNodeIds:
+        activeGateOwnerCohortPendingReconcileNodeIds,
+      publicationActiveGateHandoffPendingReconcileCount:
+        activeGateOwnerCohortPendingReconcileCount,
       activeGateOwnerCohortState,
       activeGateOwnerCohortReasonCode,
       activeGateOwnerCohortMissingPublishedNodeIds,
@@ -1547,6 +1577,14 @@ function buildActiveWaitProgressSnapshot(
     selectedSnapshotRepairDeferred,
     selectedControlPlaneOwnerQueueDepth,
     selectedCdcReplayLag,
+    publicationActiveGateHandoffState: activeGateOwnerCohortState,
+    publicationActiveGateHandoffReasonCode: activeGateOwnerCohortReasonCode,
+    publicationActiveGateHandoffNextAction,
+    publicationActiveGateHandoffRuntimePromotionAllowed,
+    publicationActiveGateHandoffPendingReconcileNodeIds:
+      activeGateOwnerCohortPendingReconcileNodeIds,
+    publicationActiveGateHandoffPendingReconcileCount:
+      activeGateOwnerCohortPendingReconcileCount,
     activeGateOwnerCohortState,
     activeGateOwnerCohortReasonCode,
     activeGateOwnerCohortMissingPublishedNodeIds,

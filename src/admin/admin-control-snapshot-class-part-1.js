@@ -63,6 +63,8 @@ const CONTROL_SNAPSHOT_FIELD_SNAPSHOT_REVISION = 'snapshotRevision';
 const CONTROL_SNAPSHOT_PUBLICATION_CONVERGENCE_FIELD =
   'publicationConvergence';
 const CONTROL_SNAPSHOT_PUBLICATION_EPOCH_FIELD = 'publicationEpoch';
+const CONTROL_SNAPSHOT_PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD =
+  'publicationActiveGateHandoff';
 const CONTROL_SNAPSHOT_ACTIVE_GATE_OWNER_COHORT_FIELD =
   'activeGateOwnerCohort';
 const CONTROL_SNAPSHOT_AUTHORITY_INTEGER_STATE_AVAILABLE = 'available';
@@ -413,10 +415,34 @@ class AdminControlSnapshotPart1 {
       controlPlaneDiagnostics &&
       typeof controlPlaneDiagnostics === TYPEOF.OBJECT
     ) {
+      const publicationActiveGateHandoff =
+        this.resolvePublicationActiveGateHandoffContract({
+          nodeRows,
+          activeNodeViews,
+          controlPlaneDiagnostics,
+          nowMs: capturedAt,
+        });
+      controlPlaneDiagnostics[
+        CONTROL_SNAPSHOT_PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD
+      ] = publicationActiveGateHandoff;
+      if (
+        controlPlaneDiagnostics[
+          CONTROL_SNAPSHOT_PUBLICATION_CONVERGENCE_FIELD
+        ] &&
+        typeof controlPlaneDiagnostics[
+          CONTROL_SNAPSHOT_PUBLICATION_CONVERGENCE_FIELD
+        ] === TYPEOF.OBJECT
+      ) {
+        controlPlaneDiagnostics[
+          CONTROL_SNAPSHOT_PUBLICATION_CONVERGENCE_FIELD
+        ][CONTROL_SNAPSHOT_PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD] =
+          publicationActiveGateHandoff;
+      }
       controlPlaneDiagnostics[CONTROL_SNAPSHOT_ACTIVE_GATE_OWNER_COHORT_FIELD] =
         this.resolveActiveGateOwnerCohortSnapshot({
           nodeRows,
           activeNodeViews,
+          publicationActiveGateHandoff,
           controlPlaneDiagnostics,
           nowMs: capturedAt,
         });

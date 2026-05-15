@@ -3,7 +3,7 @@
 <!-- work-package
 {
   "schema": "work-package-v1",
-  "status": "active",
+  "status": "todo",
   "opened": "2026-05-15",
   "lane": "causal-escalation",
   "scenario": "rolling-restart",
@@ -34,9 +34,9 @@
     "node --test test/scripts/analyze-topology-convergence.test.js"
   ],
   "writeScope": [
-    "work/packages/active-20260515-topology-active-gate-snapshot-coverage-after-publication-handoff.md",
+    "work/packages/todo-20260515-topology-active-gate-snapshot-coverage-after-publication-handoff.md",
     "work/packages/done-20260515-topology-publication-active-gate-handoff-oscillation.md",
-    "work/sprints/active-2026-q2-topology-convergence-residual-closure.md",
+    "work/sprints/done-2026-q2-topology-convergence-residual-closure.md",
     "work/tracks/topology-convergence.md",
     "work/model-ledger.jsonl",
     "test/distributed/harness/cluster-segment-5.js",
@@ -80,9 +80,9 @@
     "src/control-plane/authoritative-node-evidence-reconciler.js"
   ],
   "commitScope": [
-    "work/packages/active-20260515-topology-active-gate-snapshot-coverage-after-publication-handoff.md",
+    "work/packages/todo-20260515-topology-active-gate-snapshot-coverage-after-publication-handoff.md",
     "work/packages/done-20260515-topology-publication-active-gate-handoff-oscillation.md",
-    "work/sprints/active-2026-q2-topology-convergence-residual-closure.md",
+    "work/sprints/done-2026-q2-topology-convergence-residual-closure.md",
     "work/tracks/topology-convergence.md",
     "work/sprints/current-blocker.md",
     "work/sprints/current-blocker.json",
@@ -174,6 +174,12 @@
 
 ## Why
 
+This package is no longer active. Human direction on 2026-05-15 stopped the
+residual-closure sprint before this package reached closure. It remains as
+dormant context for the complexity-reduction successor and must not be resumed
+inside the new sprint unless canonical evidence explicitly reactivates the
+same owner boundary.
+
 Publication handoff closure moved the representative first frontier back to
 active-gate snapshot coverage. This package owns the next local blocker:
 `startup_active_gate_owner / snapshot_coverage` with active gate timed out,
@@ -244,8 +250,8 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 
 ## In Scope
 
-1. work/packages/active-20260515-topology-active-gate-snapshot-coverage-after-publication-handoff.md
-2. work/sprints/active-2026-q2-topology-convergence-residual-closure.md
+1. work/packages/todo-20260515-topology-active-gate-snapshot-coverage-after-publication-handoff.md
+2. work/sprints/done-2026-q2-topology-convergence-residual-closure.md
 3. work/tracks/topology-convergence.md
 4. work/model-ledger.jsonl
 5. test/distributed/harness/cluster-segment-5.js
@@ -280,11 +286,11 @@ Required before implementation because this is a causal-escalation runtime
 owner-boundary package.
 
 - [x] Review subagent recorded:
-      Agent Cicero (019e2afe-d34a-7a42-890f-097a2e9a824c) reviewed work/packages/active-20260515-topology-active-gate-snapshot-coverage-after-publication-handoff.md; result fixes-required
+      Agent Cicero (019e2afe-d34a-7a42-890f-097a2e9a824c) reviewed work/packages/todo-20260515-topology-active-gate-snapshot-coverage-after-publication-handoff.md; result fixes-required
 - [x] Fix subagent recorded or explicitly not needed:
-      Agent Codex (019e2b00-fbfd-7db3-a2c2-1297f208d7b8) fixed work/packages/active-20260515-topology-active-gate-snapshot-coverage-after-publication-handoff.md
+      Agent Codex (019e2b00-fbfd-7db3-a2c2-1297f208d7b8) fixed work/packages/todo-20260515-topology-active-gate-snapshot-coverage-after-publication-handoff.md
 - [x] Implementation subagent recorded:
-      Agent Codex (019e2b05-507c-78d1-85a4-67f2ea47f518) implemented work/packages/active-20260515-topology-active-gate-snapshot-coverage-after-publication-handoff.md
+      Agent Codex (019e2b05-507c-78d1-85a4-67f2ea47f518) implemented work/packages/todo-20260515-topology-active-gate-snapshot-coverage-after-publication-handoff.md
 
 ## Model Fit
 
@@ -292,7 +298,7 @@ owner-boundary package.
 - Intended minimum model: `gpt-5.3-codex`
 - Scope shape: `owner-boundary-contraction/current-frontier`
 - Output profile: `high`
-- Owned files: `work/packages/active-20260515-topology-active-gate-snapshot-coverage-after-publication-handoff.md`, `work/packages/done-20260515-topology-publication-active-gate-handoff-oscillation.md`, `work/sprints/active-2026-q2-topology-convergence-residual-closure.md`, `work/tracks/topology-convergence.md`, `work/model-ledger.jsonl`, `test/distributed/harness/cluster-segment-5.js`, `test/distributed/harness/cluster-segment-2.js`, `test/distributed/harness/cluster-segment-7-class-4.js`, `test/distributed/harness/cluster-segment-7-class-5.js`, `test/distributed/harness/__tests__/cluster.test-part-3.js`, `test/distributed/harness/__tests__/cluster.test-part-4.js`, `test/distributed/harness/__tests__/cluster.test-part-5.js`, `test/distributed/harness/__tests__/active-gate-closure-classification.test.js`, `src/admin/admin-control-snapshot-class-part-2.js`, `src/admin/admin-control-snapshot-class-part-3.js`, `src/admin/admin-control-snapshot-class-part-5.js`, `src/admin/admin-control-snapshot-class-part-6.js`, `src/control-plane/control-plane-snapshot-owner.js`, `src/diagnostics/topology-convergence-graph.js`, `test/admin/admin-control-snapshot.test.js`, `scripts/analyze-topology-convergence.js`, `test/scripts/analyze-topology-convergence.test.js`, `test/scripts/__fixtures__/topology-convergence/publication-active-gate-reduced-handoff.fixture.json`
+- Owned files: `work/packages/todo-20260515-topology-active-gate-snapshot-coverage-after-publication-handoff.md`, `work/packages/done-20260515-topology-publication-active-gate-handoff-oscillation.md`, `work/sprints/done-2026-q2-topology-convergence-residual-closure.md`, `work/tracks/topology-convergence.md`, `work/model-ledger.jsonl`, `test/distributed/harness/cluster-segment-5.js`, `test/distributed/harness/cluster-segment-2.js`, `test/distributed/harness/cluster-segment-7-class-4.js`, `test/distributed/harness/cluster-segment-7-class-5.js`, `test/distributed/harness/__tests__/cluster.test-part-3.js`, `test/distributed/harness/__tests__/cluster.test-part-4.js`, `test/distributed/harness/__tests__/cluster.test-part-5.js`, `test/distributed/harness/__tests__/active-gate-closure-classification.test.js`, `src/admin/admin-control-snapshot-class-part-2.js`, `src/admin/admin-control-snapshot-class-part-3.js`, `src/admin/admin-control-snapshot-class-part-5.js`, `src/admin/admin-control-snapshot-class-part-6.js`, `src/control-plane/control-plane-snapshot-owner.js`, `src/diagnostics/topology-convergence-graph.js`, `test/admin/admin-control-snapshot.test.js`, `scripts/analyze-topology-convergence.js`, `test/scripts/analyze-topology-convergence.test.js`, `test/scripts/__fixtures__/topology-convergence/publication-active-gate-reduced-handoff.fixture.json`
 - Forbidden files: runtime files outside the promoted NodeHandle
   forced-snapshot fallback slice unless fresh evidence promotes them.
 - Frozen decisions: package scope and lane stay bounded unless explicitly escalated.
@@ -347,7 +353,7 @@ likely package boundary if the active-gate handoff stays same-frontier.
 17. node --test test/scripts/analyze-topology-convergence.test.js
 18. npm run audit:runtime-grammar:file -- test/distributed/harness/cluster-segment-5.js test/distributed/harness/cluster-segment-2.js test/distributed/harness/cluster-segment-7-class-4.js test/distributed/harness/cluster-segment-7-class-5.js test/distributed/harness/__tests__/cluster.test-part-3.js test/distributed/harness/__tests__/cluster.test-part-4.js test/distributed/harness/__tests__/cluster.test-part-5.js test/distributed/harness/__tests__/active-gate-closure-classification.test.js src/admin/admin-control-snapshot-class-part-2.js src/admin/admin-control-snapshot-class-part-3.js src/admin/admin-control-snapshot-class-part-5.js src/admin/admin-control-snapshot-class-part-6.js src/control-plane/control-plane-snapshot-owner.js src/diagnostics/topology-convergence-graph.js test/admin/admin-control-snapshot.test.js test/scripts/analyze-topology-convergence.test.js
 19. node scripts/check-guideline-decision-boundaries.js test/distributed/harness/cluster-segment-5.js test/distributed/harness/cluster-segment-2.js test/distributed/harness/cluster-segment-7-class-4.js test/distributed/harness/cluster-segment-7-class-5.js test/distributed/harness/__tests__/cluster.test-part-3.js test/distributed/harness/__tests__/cluster.test-part-4.js test/distributed/harness/__tests__/cluster.test-part-5.js test/distributed/harness/__tests__/active-gate-closure-classification.test.js src/admin/admin-control-snapshot-class-part-2.js src/admin/admin-control-snapshot-class-part-3.js src/admin/admin-control-snapshot-class-part-5.js src/admin/admin-control-snapshot-class-part-6.js src/control-plane/control-plane-snapshot-owner.js src/diagnostics/topology-convergence-graph.js test/admin/admin-control-snapshot.test.js test/scripts/analyze-topology-convergence.test.js
-20. git diff --check -- work/packages/active-20260515-topology-active-gate-snapshot-coverage-after-publication-handoff.md work/packages/done-20260515-topology-publication-active-gate-handoff-oscillation.md work/sprints/active-2026-q2-topology-convergence-residual-closure.md work/tracks/topology-convergence.md work/sprints/current-blocker.md work/sprints/current-blocker.json work/model-ledger.jsonl test/distributed/harness/cluster-segment-5.js test/distributed/harness/cluster-segment-2.js test/distributed/harness/cluster-segment-7-class-4.js test/distributed/harness/cluster-segment-7-class-5.js test/distributed/harness/__tests__/cluster.test-part-3.js test/distributed/harness/__tests__/cluster.test-part-4.js test/distributed/harness/__tests__/cluster.test-part-5.js test/distributed/harness/__tests__/active-gate-closure-classification.test.js src/admin/admin-control-snapshot-class-part-2.js src/admin/admin-control-snapshot-class-part-3.js src/admin/admin-control-snapshot-class-part-5.js src/admin/admin-control-snapshot-class-part-6.js src/control-plane/control-plane-snapshot-owner.js src/diagnostics/topology-convergence-graph.js test/admin/admin-control-snapshot.test.js scripts/analyze-topology-convergence.js test/scripts/analyze-topology-convergence.test.js test/scripts/__fixtures__/topology-convergence/publication-active-gate-reduced-handoff.fixture.json
+20. git diff --check -- work/packages/todo-20260515-topology-active-gate-snapshot-coverage-after-publication-handoff.md work/packages/done-20260515-topology-publication-active-gate-handoff-oscillation.md work/sprints/done-2026-q2-topology-convergence-residual-closure.md work/tracks/topology-convergence.md work/sprints/current-blocker.md work/sprints/current-blocker.json work/model-ledger.jsonl test/distributed/harness/cluster-segment-5.js test/distributed/harness/cluster-segment-2.js test/distributed/harness/cluster-segment-7-class-4.js test/distributed/harness/cluster-segment-7-class-5.js test/distributed/harness/__tests__/cluster.test-part-3.js test/distributed/harness/__tests__/cluster.test-part-4.js test/distributed/harness/__tests__/cluster.test-part-5.js test/distributed/harness/__tests__/active-gate-closure-classification.test.js src/admin/admin-control-snapshot-class-part-2.js src/admin/admin-control-snapshot-class-part-3.js src/admin/admin-control-snapshot-class-part-5.js src/admin/admin-control-snapshot-class-part-6.js src/control-plane/control-plane-snapshot-owner.js src/diagnostics/topology-convergence-graph.js test/admin/admin-control-snapshot.test.js scripts/analyze-topology-convergence.js test/scripts/analyze-topology-convergence.test.js test/scripts/__fixtures__/topology-convergence/publication-active-gate-reduced-handoff.fixture.json
 
 Literal-guideline fallback: `node scripts/check-guideline-literals.js test/distributed/harness/cluster-segment-5.js test/distributed/harness/__tests__/cluster.test-part-3.js`
 currently reports 385 whole-file findings on existing harness/test files without

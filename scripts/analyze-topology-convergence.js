@@ -54,17 +54,31 @@ const MISSING_EDGE_PUBLICATION_ACK_TO_ACTIVE_GATE_RECONCILE =
   'publication_ack_to_active_gate_reconcile_missing';
 const MISSING_EDGE_NAME_PUBLICATION_ACK_TO_ACTIVE_GATE_RECONCILE =
   'publication_ack_to_active_gate_reconcile';
+const CONTRACT_EDGE_PUBLICATION_ACTIVE_GATE_HANDOFF =
+  'publication_active_gate_handoff_contract';
+const CONTRACT_EDGE_NAME_PUBLICATION_ACTIVE_GATE_HANDOFF =
+  'publication_active_gate_handoff_contract';
 const REQUIRED_PROGRESS_MECHANISM_RECONCILE = 'reconcile';
 const RESULT_CLASSIFICATION_PUBLICATION_ACTIVE_GATE_RECONCILE_MISSING =
   'publication_ack_to_active_gate_reconcile_missing';
+const RESULT_CLASSIFICATION_PUBLICATION_ACTIVE_GATE_HANDOFF_CONTRACT_PENDING =
+  'publication_active_gate_handoff_contract_pending';
+const RESULT_CLASSIFICATION_PUBLICATION_ACTIVE_GATE_HANDOFF_CONTRACT_COMPLETE =
+  'publication_active_gate_handoff_contract_complete';
 const RESULT_CLASSIFICATION_PUBLICATION_ACTIVE_GATE_HANDOFF_NOT_DETECTED =
   'publication_active_gate_handoff_not_detected';
 const EDGE_STATE_BLOCKED = 'blocked';
 const HANDOFF_PROBE_TARGET_ACTION_BUILD_REPLAYABLE_FIXTURE =
   'build_replayable_handoff_fixture';
+const HANDOFF_CONTRACT_NEXT_ACTION_RECONCILE_OWNER_MEMBERSHIP_PUBLICATION =
+  'reconcile_owner_membership_publication';
+const HANDOFF_CONTRACT_REASON_OWNER_RECONCILE_PENDING =
+  'owner_reconcile_pending';
+const HANDOFF_CONTRACT_STATE_COMPLETE = 'complete';
 const HANDOFF_DETECTED = true;
 const HANDOFF_NOT_DETECTED = false;
 const RUNTIME_PROMOTION_DISALLOWED = false;
+const BOOLEAN_TRUE_TEXT = 'true';
 const MARKDOWN_SECTION_OWNER_EVIDENCE_BLOCK =
   '## Generated Owner Evidence Block';
 const MARKDOWN_LIST_PREFIX = '- ';
@@ -91,6 +105,14 @@ const HANDOFF_PROBE_CONSUMER_WAITING_STATES = Object.freeze(new Set([
   EDGE_STATE.DEFERRED,
   EDGE_STATE.RETRYABLE,
 ]));
+const HANDOFF_CONTRACT_ABSENT = Object.freeze({
+  state: ABSENT_VALUE,
+  reasonCode: ABSENT_VALUE,
+  nextAction: ABSENT_VALUE,
+  runtimePromotionAllowed: RUNTIME_PROMOTION_DISALLOWED,
+  pendingReconcileCount: NUM_ZERO,
+  pendingReconcileNodeIds: [],
+});
 const HANDOFF_PROBE_DETECTION_RULES = Object.freeze([
   Object.freeze({
     matches: (snapshot) =>
@@ -344,23 +366,26 @@ function selectHandoffProbeOutput(graph) {
   const probeSnapshot = buildHandoffProbeSnapshot(graph, producer, consumer);
   const handoffDetected = isPublicationActiveGateHandoffDetected(probeSnapshot);
   const consumerWitness = buildProbeWitness(consumer);
+  const handoffContract = buildProbeHandoffContract(consumerWitness);
+  const handoffContractDetected = isProbeHandoffContractDetected(handoffContract);
 
   return {
     schemaVersion: SCHEMA_VERSION_PUBLICATION_ACTIVE_GATE_HANDOFF_PROBE_V1,
     scenario: graph.scenario,
-    missingEdge: {
-      id: MISSING_EDGE_PUBLICATION_ACK_TO_ACTIVE_GATE_RECONCILE,
-      name: MISSING_EDGE_NAME_PUBLICATION_ACK_TO_ACTIVE_GATE_RECONCILE,
-    },
+    missingEdge: buildProbeMissingEdge(handoffDetected, handoffContractDetected),
+    contractEdge: buildProbeContractEdge(handoffContractDetected),
     detected: handoffDetected ? HANDOFF_DETECTED : HANDOFF_NOT_DETECTED,
     producer: buildProbeWitness(producer),
     consumer: consumerWitness,
-    nextOwnerPath: buildProbeNextOwnerPath(consumerWitness),
+    handoffContract,
+    nextOwnerPath: buildProbeNextOwnerPath(consumerWitness, handoffContract),
     requiredProgressMechanism: REQUIRED_PROGRESS_MECHANISM_RECONCILE,
-    resultClassification: handoffDetected ?
-      RESULT_CLASSIFICATION_PUBLICATION_ACTIVE_GATE_RECONCILE_MISSING :
-      RESULT_CLASSIFICATION_PUBLICATION_ACTIVE_GATE_HANDOFF_NOT_DETECTED,
-    runtimePromotionAllowed: RUNTIME_PROMOTION_DISALLOWED,
+    resultClassification: classifyProbeResult(
+      handoffDetected,
+      handoffContract,
+      handoffContractDetected,
+    ),
+    runtimePromotionAllowed: handoffContract.runtimePromotionAllowed,
   };
 }
 
@@ -406,19 +431,123 @@ function buildProbeWitness(edge) {
   };
 }
 
-function buildProbeNextOwnerPath(consumerWitness) {
+function buildProbeHandoffContract(consumerWitness) {
+  const source = consumerWitness?.source || {};
+  const contractState =
+    source.publicationActiveGateHandoffState ||
+    source.activeGateOwnerCohortState ||
+    ABSENT_VALUE;
+  const contractReasonCode =
+    source.publicationActiveGateHandoffReasonCode ||
+    source.activeGateOwnerCohortReasonCode ||
+    ABSENT_VALUE;
+  const pendingReconcileNodeIds = splitProbeNodeIds(
+    source.publicationActiveGateHandoffPendingReconcileNodeIds ||
+      source.activeGateOwnerCohortPendingReconcileNodeIds,
+  );
+  const pendingReconcileCount = positiveNumberOrZero(
+    source.publicationActiveGateHandoffPendingReconcileCount ??
+      source.activeGateOwnerCohortPendingReconcileCount,
+  );
+  const nextAction =
+    source.publicationActiveGateHandoffNextAction ||
+    (
+      contractReasonCode ===
+        HANDOFF_CONTRACT_REASON_OWNER_RECONCILE_PENDING ||
+      pendingReconcileCount > NUM_ZERO ?
+        HANDOFF_CONTRACT_NEXT_ACTION_RECONCILE_OWNER_MEMBERSHIP_PUBLICATION :
+        ABSENT_VALUE
+    );
+  return {
+    ...HANDOFF_CONTRACT_ABSENT,
+    state: contractState,
+    reasonCode: contractReasonCode,
+    nextAction,
+    runtimePromotionAllowed: probeBoolean(
+      source.publicationActiveGateHandoffRuntimePromotionAllowed,
+    ),
+    pendingReconcileCount,
+    pendingReconcileNodeIds,
+  };
+}
+
+function buildProbeMissingEdge(handoffDetected, handoffContractDetected) {
+  if (!handoffDetected || handoffContractDetected) {
+    return null;
+  }
+  return {
+    id: MISSING_EDGE_PUBLICATION_ACK_TO_ACTIVE_GATE_RECONCILE,
+    name: MISSING_EDGE_NAME_PUBLICATION_ACK_TO_ACTIVE_GATE_RECONCILE,
+  };
+}
+
+function buildProbeContractEdge(handoffContractDetected) {
+  if (!handoffContractDetected) {
+    return null;
+  }
+  return {
+    id: CONTRACT_EDGE_PUBLICATION_ACTIVE_GATE_HANDOFF,
+    name: CONTRACT_EDGE_NAME_PUBLICATION_ACTIVE_GATE_HANDOFF,
+  };
+}
+
+function buildProbeNextOwnerPath(consumerWitness, handoffContract) {
+  const requiredAction = isProbeHandoffContractDetected(handoffContract) ?
+    handoffContract.nextAction :
+    HANDOFF_PROBE_TARGET_ACTION_BUILD_REPLAYABLE_FIXTURE;
   return {
     edge: consumerWitness.edge,
     owner: consumerWitness.owner,
     boundary: consumerWitness.boundary,
     evidencePath: consumerWitness.evidencePath,
-    requiredAction: HANDOFF_PROBE_TARGET_ACTION_BUILD_REPLAYABLE_FIXTURE,
-    runtimePromotionAllowed: RUNTIME_PROMOTION_DISALLOWED,
+    requiredAction,
+    runtimePromotionAllowed: handoffContract.runtimePromotionAllowed,
   };
+}
+
+function classifyProbeResult(
+  handoffDetected,
+  handoffContract,
+  handoffContractDetected,
+) {
+  if (!handoffDetected) {
+    return RESULT_CLASSIFICATION_PUBLICATION_ACTIVE_GATE_HANDOFF_NOT_DETECTED;
+  }
+  if (!handoffContractDetected) {
+    return RESULT_CLASSIFICATION_PUBLICATION_ACTIVE_GATE_RECONCILE_MISSING;
+  }
+  if (
+    handoffContract.state === HANDOFF_CONTRACT_STATE_COMPLETE &&
+    handoffContract.runtimePromotionAllowed
+  ) {
+    return RESULT_CLASSIFICATION_PUBLICATION_ACTIVE_GATE_HANDOFF_CONTRACT_COMPLETE;
+  }
+  return RESULT_CLASSIFICATION_PUBLICATION_ACTIVE_GATE_HANDOFF_CONTRACT_PENDING;
+}
+
+function isProbeHandoffContractDetected(handoffContract) {
+  return Boolean(handoffContract) &&
+    handoffContract.state !== ABSENT_VALUE &&
+    handoffContract.reasonCode !== ABSENT_VALUE &&
+    handoffContract.nextAction !== ABSENT_VALUE;
 }
 
 function arrayOrEmpty(value) {
   return Array.isArray(value) ? value : [];
+}
+
+function splitProbeNodeIds(value) {
+  return String(value || EMPTY_TEXT)
+    .split(',')
+    .map((nodeId) => nodeId.trim())
+    .filter((nodeId) => nodeId.length > NUM_ZERO);
+}
+
+function probeBoolean(value) {
+  if (value === true || value === BOOLEAN_TRUE_TEXT) {
+    return true;
+  }
+  return RUNTIME_PROMOTION_DISALLOWED;
 }
 
 function positiveNumberOrZero(value) {

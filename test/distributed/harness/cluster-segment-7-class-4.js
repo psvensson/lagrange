@@ -1209,6 +1209,9 @@ class Cluster4 extends Cluster3 {
     const publicationRecoveryGateRaw =
       parseJsonObjectField(publication.publicationRecoveryGate) ??
       parseJsonObjectField(publication.publication_recovery_gate);
+    const publicationActiveGateHandoffRaw =
+      parseJsonObjectField(publication.publicationActiveGateHandoff) ??
+      parseJsonObjectField(publication.publication_active_gate_handoff);
     const membershipLifecycleSummary = membershipLifecycleSummaryRaw ?
       {
         lifecycleState:
@@ -1321,6 +1324,12 @@ class Cluster4 extends Cluster3 {
           priorityRecoveryReasonCodes,
         } :
         {}),
+      ...(publicationActiveGateHandoffRaw ?
+        {
+          publicationActiveGateHandoff:
+            JSON.parse(JSON.stringify(publicationActiveGateHandoffRaw)),
+        } :
+        {}),
       ...(publicationRecoveryGateRaw ?
         {
           publicationRecoveryGate: buildPublicationRecoveryGateSnapshot({
@@ -1392,6 +1401,10 @@ class Cluster4 extends Cluster3 {
           ),
         ) :
         null;
+    const rawPublicationConvergence =
+      this._summarizeControlSnapshotPublication(
+        controlPlaneDiagnostics?.publicationConvergence || null,
+      );
     const activeGateOwnerCohort =
       controlPlaneDiagnostics?.[ACTIVE_GATE_OWNER_COHORT_FIELD] &&
       typeof controlPlaneDiagnostics[ACTIVE_GATE_OWNER_COHORT_FIELD] ===
@@ -1402,6 +1415,14 @@ class Cluster4 extends Cluster3 {
           ),
         ) :
         null;
+    const publicationActiveGateHandoff =
+      controlPlaneDiagnostics?.publicationActiveGateHandoff &&
+      typeof controlPlaneDiagnostics.publicationActiveGateHandoff ===
+        TYPEOF_OBJECT ?
+        JSON.parse(
+          JSON.stringify(controlPlaneDiagnostics.publicationActiveGateHandoff),
+        ) :
+        rawPublicationConvergence?.publicationActiveGateHandoff || null;
     const logsTable =
       controlPlaneDiagnostics?.logsTable &&
       typeof controlPlaneDiagnostics.logsTable === 'object' ?
@@ -1473,10 +1494,6 @@ class Cluster4 extends Cluster3 {
       .map(([nodeId]) => String(nodeId))
       .filter((nodeId) => nodeId.length > ZERO)
       .sort();
-    const rawPublicationConvergence =
-      this._summarizeControlSnapshotPublication(
-        controlPlaneDiagnostics?.publicationConvergence || null,
-      );
     const publicationEvidence = buildCanonicalPublicationEvidenceFromControlPlane({
       publicationConvergence: rawPublicationConvergence,
       publicationConvergenceGate: publicationConvergenceGateRaw,
@@ -1502,6 +1519,7 @@ class Cluster4 extends Cluster3 {
       publishedMembershipObservation: this._summarizeControlSnapshotPublication(
         controlPlaneDiagnostics?.publishedMembershipObservation || null,
       ),
+      publicationActiveGateHandoff,
       activeGateOwnerCohort,
       priorityRecoveryObservation,
       priorityRecoveryDecisionSnapshots,

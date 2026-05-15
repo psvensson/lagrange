@@ -1,9 +1,10 @@
+# Topology Publication Active Gate Handoff Contract Consolidation
+
+<!-- work-package
 {
-  "schema": "current-blocker-v1",
-  "generatedBy": "scripts/work-tracker.js",
-  "sprint": "work/sprints/done-2026-q2-topology-convergence-complexity-reduction.md",
-  "package": "work/packages/done-20260515-topology-publication-active-gate-handoff-contract-consolidation.md",
+  "schema": "work-package-v1",
   "status": "done",
+  "opened": "2026-05-15",
   "lane": "causal-escalation",
   "scenario": "rolling-restart",
   "artifact": "test-output/reports/rolling-restart-after-forced-snapshot-local-fallback-20260515-codex.report.json",
@@ -12,7 +13,7 @@
   "boundary": "publication_active_gate_handoff_contract",
   "dominantReason": "publication_active_gate_handoff_complexity",
   "currentState": "The canonical publication-to-active-gate handoff contract is implemented across producer, admin projection, diagnostics, analyzer, harness replay, fixtures, and focused tests. Fresh rolling-restart evidence remains red at active_gate_snapshot_coverage, but the handoff probe now reports missingEdge=null, contractEdge=publication_active_gate_handoff_contract, state=pending, reasonCode=owner_reconcile_pending, nextAction=reconcile_owner_membership_publication, and runtimePromotionAllowed=false.",
-  "nextAction": "Closed as reduced/classification-only. The remaining representative blocker is startup_active_gate_owner / snapshot_coverage with owner-key publication reconcile required; it is outside the completed handoff-contract simplification sprint scope.",
+  "nextAction": "Close this complexity-reduction package as reduced/classification-only after closure validation, focused commit, and push. The remaining representative blocker is startup_active_gate_owner / snapshot_coverage with owner-key publication reconcile required; it is outside the completed handoff-contract simplification scope.",
   "proof": [
     "npm run work:context",
     "npm run work:llm-start",
@@ -121,7 +122,6 @@
     "test/distributed/harness/cluster-segment-7-class-5.js",
     "test/distributed/harness/__tests__/active-gate-closure-classification.test.js"
   ],
-  "touchedFiles": [],
   "modelFit": {
     "packageClass": "representative-frontier-closure",
     "intendedMinimumModel": "gpt-5.3-codex",
@@ -186,5 +186,179 @@
     "oscillationCheck": "The new sprint intentionally stops tactical oscillation and owns the cross-boundary handoff contract as the simplification surface.",
     "handoffInvariant": "Active-gate admission stays strict until the canonical contract shows durable publication truth, active projection, selected snapshot coverage, and expected cohort are compatible."
   },
-  "predecessor": "work/packages/todo-20260515-topology-active-gate-snapshot-coverage-after-publication-handoff.md"
+  "predecessor": "work/packages/todo-20260515-topology-active-gate-snapshot-coverage-after-publication-handoff.md",
+  "closed": "2026-05-15",
+  "commitAndPushLedgerRequired": true
 }
+-->
+
+## Why
+
+The stopped sprint was still chasing the same boundary through narrower local
+repairs. The deeper issue is that publication, active-gate, admin snapshot,
+diagnostics, and harness code can each reconstruct nearby versions of the same
+handoff truth. That makes the system harder to reason about and lets ACK
+closure, published active cohort, selected snapshot coverage, and admission
+eligibility drift apart.
+
+This package owns the simplification. It must replace those overlapping
+reconstruction paths with one canonical publication-to-active-gate handoff
+contract, then cut all affected consumers over to it.
+
+## Scope Basis
+
+Roadmap Phase `0.1 - Internal Coherence`, under the AGPL-owned topology
+workflow stabilization, failure simulation, and production guarantee work.
+
+Edition scope: Community / AGPL repo only. No Pro or Enterprise behavior is in
+scope.
+
+## Workflow Lane
+
+- Selected lane: `causal-escalation`
+- Why this lane is sufficient: repeated representative evidence crossed the
+  publication and active-gate boundary without closing the gate; the package
+  now owns one cross-boundary contract instead of another local owner patch.
+- Escalation trigger to a heavier lane: implementation proves the correct
+  owner is outside publication-to-active-gate handoff, or representative
+  evidence promotes a fresh owner boundary before any contract cutover.
+
+## LLM Tool-First Contract
+
+Before raw JSON, raw logs, broad file search, oversized segment files, or ad
+hoc `jq`, use the canonical workflow command that owns the question:
+
+1. Package metadata or ledger edits: `npm run work:package:doctor -- --suggest <package>`, `npm run work:package:doctor -- --fix-dry-run <package>`, `npm run work:package:schema`, or `npm run work:package:new -- ...`.
+2. Representative evidence: `npm run work:evidence-summary -- <artifact>` plus the focused handoff probe.
+3. Owner discovery: `npm run analyze:owner-files -- <owner> [boundary] --markdown`.
+4. Subagent sequencing: `npm run work:subagent-prompt -- --role <role> --package <package>`.
+5. Large-file cleanup: `npm run work:oversized-next -- --markdown`.
+
+If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which
+canonical extractor was tried and why it was insufficient.
+
+## In Scope
+
+1. Define one canonical owner-emitted handoff shape with these fields at
+   minimum: `publicationEpoch`, `expectedNodeIds`, `publishedActiveNodeIds`,
+   `missingPublishedNodeIds`, `pendingRecoveryNodeIds`,
+   `pendingReconcileNodeIds`, `runtimePromotionAllowed`, `state`,
+   `reasonCode`, and `nextAction`.
+2. Make the publication owner emit that handoff or a narrower explicit owner
+   blocker.
+3. Make active-gate snapshot coverage consume the handoff instead of
+   reconstructing equivalent publication/cohort truth from scattered inputs.
+4. Move admin snapshot behavior to observation-only projection plus owner-key
+   reconcile scheduling; admin must not become a second authority for handoff
+   truth.
+5. Collapse duplicated active membership vocabulary into one decision table or
+   equivalent explicit state model.
+6. Cut diagnostics and failure-bundle logic to ranked owner witnesses; they
+   must not re-decide runtime truth by stitching lower-layer fragments.
+7. Cut harness replay, handoff fixtures, and analyzer tests to the same
+   grammar.
+8. Delete superseded reconstruction paths, or add structural guardrails when a
+   temporary delegator remains.
+9. Update sprint, track, current-blocker, and model-ledger state as the package
+   produces evidence.
+
+## Out Of Scope
+
+1. Timeout increases.
+2. Active-gate admission relaxation while `runtimePromotionAllowed=false`.
+3. Diagnostics-only success or presentation-only reclassification.
+4. Pro or Enterprise features.
+5. Feature parity with etcd, TiKV/PD, CockroachDB, FoundationDB, or any
+   external system.
+
+## Subagent Sequencing Ledger
+
+Required before implementation because this is a causal-escalation
+owner-boundary package. The user explicitly authorized subagents during
+closure, and a fresh implementation subagent confirmed the package state.
+
+- [x] Review subagent recorded:
+      not-needed (first-package-in-sprint)
+- [x] Fix subagent recorded or explicitly not needed: not-needed.
+- [x] Implementation subagent recorded:
+      Agent Zeno (019e2bad-d0f3-7450-b72e-677478a4f121) implemented work/packages/done-20260515-topology-publication-active-gate-handoff-contract-consolidation.md.
+
+## Model Fit
+
+- Package class: `representative-frontier-closure`
+- Intended minimum model: `gpt-5.3-codex`
+- Scope shape: `owner-boundary-contraction/current-frontier`
+- Output profile: `high`
+- Owned files: package/sprint handoff files, `src/control-plane/publication-active-gate-handoff-contract.js`, `src/admin/admin-control-snapshot-class-part-1.js`, `src/admin/admin-control-snapshot-class-part-2.js`, `src/admin/admin-control-snapshot-class-part-3.js`, `src/diagnostics/topology-convergence-graph.js`, `scripts/analyze-topology-convergence.js`, focused admin/analyzer/contract/harness tests and fixtures, and `work/model-ledger.jsonl`
+- Forbidden files: timeout increases, active-gate admission relaxation, diagnostics-only success, Pro or Enterprise behavior.
+- Frozen decisions: this is not an inventory-only or scaffold package; closure requires producer, consumer, admin, diagnostics, harness, deletion/guardrail, and representative proof.
+- Escalation triggers: owned files expand beyond this package without owner-file proof, a frozen decision must be reopened, or canonical evidence promotes another first owner boundary.
+- Focused proof: `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-forced-snapshot-local-fallback-20260515-codex.report.json --handoff-probe`, focused owner/consumer tests, static guardrails, representative `rolling-restart`, and `npm run work:validate -- --closure`.
+- Model ledger advisory: `escalate`
+
+## Activation Checklist
+
+- [x] `npm run work:context` read current stopped-sprint state.
+- [x] Compact steering loaded: core, architecture, testing, style, and governance.
+- [x] `npm run work:package:schema` and `npm run work:package:new -- --help` used before package creation.
+- [x] Previous active package moved to `superseded-...`.
+- [x] Implementation subagent proof recorded before runtime edits start.
+- [x] Exact runtime files promoted from `candidateRuntimeFiles` into
+      `writeScope` and `commitScope` after owner-file proof.
+- [x] Producer, consumer, admin, diagnostics, harness, and deletion/guardrail
+      work implemented in this package.
+
+## Validation
+
+1. `npm run work:package:doctor -- --suggest work/packages/done-20260515-topology-publication-active-gate-handoff-contract-consolidation.md`
+2. `npm run work:evidence-summary -- test-output/reports/rolling-restart-after-forced-snapshot-local-fallback-20260515-codex.report.json`
+3. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-forced-snapshot-local-fallback-20260515-codex.report.json --handoff-probe`
+4. `npm run analyze:owner-files -- topology_publication_owner publication_active_gate_handoff_contract --markdown`
+5. `npm run analyze:owner-files -- startup_active_gate_owner snapshot_coverage --markdown`
+6. Focused producer contract tests for the canonical handoff shape:
+   `node test/control-plane/publication-active-gate-handoff-contract.test.js`
+   passed.
+7. Focused active-gate consumer tests proving admission remains blocked from
+   partial handoff truth.
+8. Focused admin snapshot tests proving observation-only behavior and owner-key
+   reconcile scheduling. Direct `node test/admin/admin-control-snapshot.test.js`
+   executes the touched assertions successfully; unrelated existing tail
+   expectations remain red in the full file and were not changed by this
+   package.
+9. Focused diagnostics/analyzer tests proving witness ranking without
+   re-deciding runtime truth.
+10. Harness replay and handoff fixture tests using the same contract grammar.
+11. Static guardrails on all touched runtime, admin, diagnostics, harness, and
+    analyzer files.
+12. Representative `rolling-restart` rerun:
+    `node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-after-handoff-contract-consolidation-20260515-codex.report.json --fast-local --verbose`
+13. `npm run work:evidence-summary -- test-output/reports/rolling-restart-after-handoff-contract-consolidation-20260515-codex.report.json`
+14. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-handoff-contract-consolidation-20260515-codex.report.json --handoff-probe`
+    reports `missingEdge=null`, `contractEdge=publication_active_gate_handoff_contract`,
+    `resultClassification=publication_active_gate_handoff_contract_pending`,
+    and `nextOwnerPath.requiredAction=reconcile_owner_membership_publication`.
+15. `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-handoff-contract-consolidation-20260515-codex.report.json`
+16. `git diff --check -- <commitScope>`
+17. `npm run work:validate -- --closure work/packages/done-20260515-topology-publication-active-gate-handoff-contract-consolidation.md`
+
+## Closure Rules
+
+This package cannot close until all of the following are true:
+
+1. No in-scope consumer reconstructs the publication-to-active-gate handoff
+   from local booleans, cache fragments, or diagnostics-only evidence.
+2. The canonical handoff contract is the shared runtime/admin/diagnostics/harness
+   grammar.
+3. Active-gate admission remains strict and derives from the canonical contract.
+4. Superseded paths are deleted or structurally guarded with a named removal
+   checkpoint.
+5. Fresh representative evidence is classified as representative-green,
+   reduced, migrated, classification-only, or architecture-gap with a concrete
+   owner boundary and next action.
+6. Commit and push ledger proof is recorded with one focused package slice.
+
+## Commit And Push Ledger
+
+- Focused package commit: pending-before-implementation-resumes
+- Pushed to: pending-before-implementation-resumes
+- Commit contains only package-owned files/package-status/allowed sprint handoff: pending-before-implementation-resumes

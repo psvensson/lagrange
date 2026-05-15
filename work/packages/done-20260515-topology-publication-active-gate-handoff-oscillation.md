@@ -166,7 +166,7 @@
   "predecessor": "work/packages/done-20260515-topology-active-gate-snapshot-coverage-after-publication-owner-stream-fix.md",
   "closed": "2026-05-15",
   "commitAndPushLedgerRequired": true,
-  "successor": "work/packages/active-20260515-topology-active-gate-snapshot-coverage-after-publication-handoff.md"
+  "successor": "work/packages/todo-20260515-topology-active-gate-snapshot-coverage-after-publication-handoff.md"
 }
 -->
 

@@ -4,6 +4,9 @@
  * The graph is derived from parsed failure-bundle, triage-summary, or report
  * artifacts. It does not mutate runtime state or reinterpret owner decisions.
  */
+import {
+  PUBLICATION_ACTIVE_GATE_HANDOFF_REASON,
+} from '../control-plane/publication-active-gate-handoff-contract.js';
 
 const ABSENT_VALUE = 'absent';
 const UNKNOWN_VALUE = 'unknown';
@@ -158,6 +161,8 @@ const SOURCE_PATH = Object.freeze({
   PRIORITY_RECOVERY_DOMINANT_WITNESS:
     'publicationConvergence.priorityRecoveryProgressSummary.dominantWitness',
   ACTIVE_GATE_PROGRESS: 'publicationConvergence.activeGate.progress',
+  PUBLICATION_ACTIVE_GATE_HANDOFF:
+    'publicationConvergence.publicationActiveGateHandoff',
   READINESS_FAILURE: 'summary.readinessFailure',
   TOP_REASONS: 'summary.topReasons',
 });
@@ -174,6 +179,7 @@ const SOURCE_FIELD = Object.freeze({
   PRIORITY_RECOVERY_PROGRESS_CLASSES: 'priorityRecoveryProgressClasses',
   PRIORITY_RECOVERY_PROGRESS_SUMMARY: 'priorityRecoveryProgressSummary',
   PRIORITY_RECOVERY_PARTITION_WITNESSES: 'priorityRecoveryPartitionWitnesses',
+  PUBLICATION_ACTIVE_GATE_HANDOFF: 'publicationActiveGateHandoff',
   READINESS_FAILURE: 'readinessFailure',
   PARTITION_ID: 'partitionId',
   SEMANTIC_STATE_ID: 'semanticStateId',
@@ -801,6 +807,24 @@ function normalizeTopologyConvergenceInput(input) {
     recordCandidate(scenario.priorityRecoveryProgressSummary, SOURCE_PATH.REPORT_SCENARIO),
   );
   const progress = progressEvidence.record;
+  const publicationActiveGateHandoffEvidence = firstRecordWithSource(
+    recordCandidate(
+      publication[SOURCE_FIELD.PUBLICATION_ACTIVE_GATE_HANDOFF],
+      flattenEvidencePath(
+        publicationEvidence.sourcePath,
+        SOURCE_FIELD.PUBLICATION_ACTIVE_GATE_HANDOFF,
+      ),
+    ),
+    recordCandidate(
+      progress[SOURCE_FIELD.PUBLICATION_ACTIVE_GATE_HANDOFF],
+      flattenEvidencePath(
+        progressEvidence.sourcePath,
+        SOURCE_FIELD.PUBLICATION_ACTIVE_GATE_HANDOFF,
+      ),
+    ),
+  );
+  const publicationActiveGateHandoff =
+    publicationActiveGateHandoffEvidence.record;
   const progressSummaryEvidence = firstRecordWithSource(
     recordCandidate(
       publication.priorityRecoveryProgressSummary,
@@ -875,6 +899,7 @@ function normalizeTopologyConvergenceInput(input) {
     publication,
     activeGate,
     progress,
+    publicationActiveGateHandoff,
     progressSummary,
     priorityRecoveryPartitionWitnesses:
       priorityRecoveryPartitionWitnessesEvidence.items,
@@ -898,6 +923,8 @@ function normalizeTopologyConvergenceInput(input) {
       priorityRecoveryPartitionWitnesses:
         priorityRecoveryPartitionWitnessesEvidence.sourcePath,
       activeGateProgress: progressEvidence.sourcePath,
+      publicationActiveGateHandoff:
+        publicationActiveGateHandoffEvidence.sourcePath,
       readinessFailure: readinessFailureEvidence.sourcePath,
     },
     topReasons: normalizeTopReasons(firstArray(summary.topReasons, topFailures.topReasons)),
@@ -957,8 +984,14 @@ function buildPriorityRecoveryEdge(normalized) {
 
 function buildActiveGateSnapshotEdge(normalized) {
   const progress = normalized.progress;
+  const publicationActiveGateHandoff = normalized.publicationActiveGateHandoff;
   const reasons = [];
-  const state = resolveActiveGateSnapshotState(normalized.activeGate, progress, reasons);
+  const state = resolveActiveGateSnapshotState(
+    normalized.activeGate,
+    progress,
+    publicationActiveGateHandoff,
+    reasons,
+  );
 
   return buildEdge({
     id: EDGE_ID.ACTIVE_GATE_SNAPSHOT_COVERAGE,
@@ -994,6 +1027,10 @@ function buildActiveGateSnapshotEdge(normalized) {
       ),
       selectedSnapshotRepairDeferred: booleanVariant(
         progress.selectedSnapshotRepairDeferred,
+      ),
+      ...buildPublicationActiveGateHandoffSource(
+        publicationActiveGateHandoff,
+        progress,
       ),
       ...buildActiveGateOwnerCohortSource(progress),
       readinessDelayCause: textOrUnknown(progress.readinessDelay?.cause),
@@ -1563,6 +1600,57 @@ function buildSelectedSnapshotObservationRetrySource(progress) {
   return {selectedSnapshotObservationRetryAfterMs: retryAfterMs};
 }
 
+function buildPublicationActiveGateHandoffSource(handoff, progress) {
+  const source = {};
+  const state = firstText(
+    handoff.state,
+    progress.publicationActiveGateHandoffState,
+  );
+  if (state !== UNKNOWN_VALUE) {
+    source.publicationActiveGateHandoffState = state;
+  }
+  const reasonCode = firstText(
+    handoff.reasonCode,
+    progress.publicationActiveGateHandoffReasonCode,
+  );
+  if (reasonCode !== UNKNOWN_VALUE) {
+    source.publicationActiveGateHandoffReasonCode = reasonCode;
+  }
+  const nextAction = firstText(
+    handoff.nextAction,
+    progress.publicationActiveGateHandoffNextAction,
+  );
+  if (nextAction !== UNKNOWN_VALUE) {
+    source.publicationActiveGateHandoffNextAction = nextAction;
+  }
+  const runtimePromotionAllowed = booleanVariant(
+    handoff.runtimePromotionAllowed ??
+      progress.publicationActiveGateHandoffRuntimePromotionAllowed,
+  );
+  if (runtimePromotionAllowed !== UNKNOWN_VALUE) {
+    source.publicationActiveGateHandoffRuntimePromotionAllowed =
+      runtimePromotionAllowed;
+  }
+  const pendingReconcileCount = numberOrUnknown(
+    handoff.pendingReconcileCount ??
+      progress.publicationActiveGateHandoffPendingReconcileCount,
+  );
+  if (pendingReconcileCount !== UNKNOWN_VALUE) {
+    source.publicationActiveGateHandoffPendingReconcileCount =
+      pendingReconcileCount;
+  }
+  const pendingReconcileNodeIds = arrayOrEmpty(
+    handoff.pendingReconcileNodeIds ||
+      progress.publicationActiveGateHandoffPendingReconcileNodeIds,
+  );
+  if (pendingReconcileNodeIds.length > SOURCE_ORDER_BASE) {
+    source.publicationActiveGateHandoffPendingReconcileNodeIds = joinValues(
+      pendingReconcileNodeIds,
+    );
+  }
+  return source;
+}
+
 function buildActiveGateOwnerCohortSource(progress) {
   const source = {};
   const state = textOrUnknown(progress.activeGateOwnerCohortState);
@@ -1618,8 +1706,10 @@ function buildActiveGateOwnerCohortSource(progress) {
   return source;
 }
 
-function hasActiveGateOwnerReconcilePending(progress) {
+function hasActiveGateOwnerReconcilePending(progress, handoff = {}) {
   return (
+    textOrUnknown(handoff.reasonCode) ===
+      PUBLICATION_ACTIVE_GATE_HANDOFF_REASON.OWNER_RECONCILE_PENDING ||
     textOrUnknown(progress.activeGateOwnerCohortState) ===
       ACTIVE_GATE_OWNER_COHORT_STATE_PENDING ||
     textOrUnknown(progress.activeGateOwnerCohortReasonCode) ===
@@ -1627,20 +1717,20 @@ function hasActiveGateOwnerReconcilePending(progress) {
   );
 }
 
-function appendActiveGateOwnerCohortReason(progress, reasons) {
-  if (hasActiveGateOwnerReconcilePending(progress)) {
+function appendActiveGateOwnerCohortReason(progress, handoff, reasons) {
+  if (hasActiveGateOwnerReconcilePending(progress, handoff)) {
     reasons.push(REASON.OWNER_RECONCILE_PENDING);
   }
 }
 
-function resolveActiveGateSnapshotState(activeGate, progress, reasons) {
+function resolveActiveGateSnapshotState(activeGate, progress, handoff, reasons) {
   if (progress.snapshotCoverageComplete === true || activeGate.ready === true) {
     reasons.push(REASON.ACTIVE_GATE_READY);
     return EDGE_STATE.SATISFIED;
   }
   if (activeGate.state === ACTIVE_GATE_STATE_TIMED_OUT) {
     reasons.push(REASON.ACTIVE_GATE_TIMED_OUT);
-    appendActiveGateOwnerCohortReason(progress, reasons);
+    appendActiveGateOwnerCohortReason(progress, handoff, reasons);
     reasons.push(REASON.SNAPSHOT_COVERAGE_INCOMPLETE);
     if (progress.selectedSnapshotRepairDeferred === true) {
       reasons.push(REASON.SNAPSHOT_REPAIR_DEFERRED);
@@ -1651,7 +1741,7 @@ function resolveActiveGateSnapshotState(activeGate, progress, reasons) {
     reasons.push(REASON.EVIDENCE_MISSING);
     return EDGE_STATE.UNKNOWN;
   }
-  appendActiveGateOwnerCohortReason(progress, reasons);
+  appendActiveGateOwnerCohortReason(progress, handoff, reasons);
   reasons.push(REASON.SNAPSHOT_COVERAGE_INCOMPLETE);
   if (progress.selectedSnapshotRepairDeferred === true) {
     reasons.push(REASON.SNAPSHOT_REPAIR_DEFERRED);

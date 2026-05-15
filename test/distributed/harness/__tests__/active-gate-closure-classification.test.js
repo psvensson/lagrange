@@ -27,6 +27,9 @@ const ACTIVE_GATE_ZERO = 0;
 const ACTIVE_GATE_OWNER_COHORT_STATE_PENDING = 'pending';
 const ACTIVE_GATE_OWNER_COHORT_REASON_OWNER_RECONCILE_PENDING =
   'owner_reconcile_pending';
+const ACTIVE_GATE_HANDOFF_NEXT_ACTION_RECONCILE =
+  'reconcile_owner_membership_publication';
+const ACTIVE_GATE_HANDOFF_RUNTIME_PROMOTION_ALLOWED_FALSE = false;
 const ACTIVE_GATE_PRIORITY_SPREAD_TEST_NAME =
   'active gate classifies publication-closed priority spread as closure witness';
 const ACTIVE_GATE_STARTUP_PUBLICATION_LAG_TEST_NAME =
@@ -137,9 +140,12 @@ test(ACTIVE_GATE_STARTUP_PUBLICATION_LAG_OWNER_PATH_TEST_NAME,
           selectedPublishedActiveNodeIds: ACTIVE_GATE_PUBLISHED_NODE_IDS,
           selectedMissingPublishedNodeIds:
             ACTIVE_GATE_MISSING_PUBLISHED_NODE_IDS,
-          selectedActiveGateOwnerCohort: {
+          selectedPublicationActiveGateHandoff: {
             state: ACTIVE_GATE_OWNER_COHORT_STATE_PENDING,
             reasonCode: ACTIVE_GATE_OWNER_COHORT_REASON_OWNER_RECONCILE_PENDING,
+            nextAction: ACTIVE_GATE_HANDOFF_NEXT_ACTION_RECONCILE,
+            runtimePromotionAllowed:
+              ACTIVE_GATE_HANDOFF_RUNTIME_PROMOTION_ALLOWED_FALSE,
             missingPublishedNodeIds: ACTIVE_GATE_MISSING_PUBLISHED_NODE_IDS,
             missingPublishedCount: ACTIVE_GATE_MISSING_PUBLISHED_COUNT,
             pendingRecoveryNodeIds: [],
@@ -187,5 +193,13 @@ test(ACTIVE_GATE_STARTUP_PUBLICATION_LAG_OWNER_PATH_TEST_NAME,
     assert.deepEqual(
       progressSnapshot.activeGateOwnerCohortPendingReconcileNodeIds,
       ACTIVE_GATE_MISSING_PUBLISHED_NODE_IDS,
+    );
+    assert.equal(
+      progressSnapshot.publicationActiveGateHandoffNextAction,
+      ACTIVE_GATE_HANDOFF_NEXT_ACTION_RECONCILE,
+    );
+    assert.equal(
+      progressSnapshot.publicationActiveGateHandoffRuntimePromotionAllowed,
+      ACTIVE_GATE_HANDOFF_RUNTIME_PROMOTION_ALLOWED_FALSE,
     );
   });

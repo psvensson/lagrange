@@ -604,6 +604,8 @@ class Cluster5 extends Cluster4 {
         selectedResult?.publicationConvergence || null,
       selectedPublicationConvergenceGate:
         selectedResult?.publicationConvergenceGate || null,
+      selectedPublicationActiveGateHandoff:
+        selectedResult?.publicationActiveGateHandoff || null,
       selectedPublishedMembershipObservation:
         selectedResult?.publishedMembershipObservation || null,
       selectedActiveGateOwnerCohort:
@@ -665,6 +667,8 @@ class Cluster5 extends Cluster4 {
             Math.floor(result.snapshotObservationRetryAfterMs) :
             null,
           snapshotRepairDeferred: result.snapshotRepairDeferred === true,
+          publicationActiveGateHandoff:
+            result.publicationActiveGateHandoff || null,
           activeGateOwnerCohort: result.activeGateOwnerCohort || null,
           publicationEpoch: Number.isFinite(
             result?.publicationConvergence?.publicationEpoch,

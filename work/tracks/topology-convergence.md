@@ -44,10 +44,12 @@ Packages still require AGPL roadmap or edition scope and local evidence.
 
 ## Local Divergence
 
-Current representative evidence oscillates between publication convergence and
-active-gate snapshot coverage. The active sprint now treats that as one
-producer-consumer handoff problem rather than independent single-owner
-residuals.
+Current representative evidence has repeatedly oscillated between publication
+convergence and active-gate snapshot coverage. The stopped residual-closure
+sprint proved that local single-owner patches reduce symptoms without reducing
+the boundary. The active sprint now treats the issue as a complexity problem:
+one canonical publication-to-active-gate handoff contract must replace the
+duplicated reconstruction paths.
 
 Latest current handoff state:
 
@@ -57,8 +59,8 @@ Latest current handoff state:
 - owner boundary: `startup_active_gate_owner / snapshot_coverage`
 - dominant reason: `snapshot_coverage_incomplete`
 - active-gate snapshot coverage is reduced but still blocked with
-  `snapshotCoverage=2/5` and `repair_deferred / stale_usable` selected snapshot
-  evidence
+  `snapshotCoverage=2/5`, owner-reconcile-pending selected snapshot evidence,
+  and `runtimePromotionAllowed=false`
 - publication is `PUBLISHED` with `pendingAck=0`, but active cohort projection
   still shows `publishedActive=1/5` and `missingPublished=4`
 - the handoff probe reports `publication_ack_to_active_gate_reconcile_missing`,
@@ -90,26 +92,27 @@ or produces a narrower owner-boundary blocker selected by canonical evidence.
 
 ## Current Evidence
 
-- Active sprint:
-  `work/sprints/active-2026-q2-topology-convergence-residual-closure.md`
-- Active package:
-  `work/packages/active-20260515-topology-active-gate-snapshot-coverage-after-publication-handoff.md`
+- Latest sprint:
+  `work/sprints/done-2026-q2-topology-convergence-complexity-reduction.md`
+- Latest package:
+  `work/packages/done-20260515-topology-publication-active-gate-handoff-contract-consolidation.md`
 - Artifact:
   `test-output/reports/rolling-restart-after-forced-snapshot-local-fallback-20260515-codex.report.json`
 - Current package-local owner boundary:
-  `startup_active_gate_owner / snapshot_coverage`
+  `topology_publication_owner / publication_active_gate_handoff_contract`
 - Representative owner boundary:
   `startup_active_gate_owner / snapshot_coverage`
 - Extractor summary:
-  `active_gate_snapshot_coverage` is the first frontier with dominant reason
-  `snapshot_coverage_incomplete`. The focused fallback slice removed the hard
-  selected snapshot repair error and improved coverage from `0/5` to `2/5`, but
-  the handoff probe now names the missing publication-to-active-gate reconcile
-  consumer as `startup_active_gate_owner / snapshot_coverage`; the active
-  package must use owner-file proof before any further runtime file promotion.
+  `active_gate_snapshot_coverage` remains the first frontier with dominant
+  reason `active_gate_timed_out`. The handoff probe now reports
+  `missingEdge=null`, `contractEdge=publication_active_gate_handoff_contract`,
+  `state=pending`, `reasonCode=owner_reconcile_pending`,
+  `nextAction=reconcile_owner_membership_publication`, and
+  `runtimePromotionAllowed=false`. The handoff-contract complexity is reduced;
+  the remaining red evidence belongs to startup active-gate snapshot coverage.
 - Priority recovery residuals:
-  classified as satisfied and subordinate to the publication-to-active-gate
-  handoff residual.
+  subordinate unless fresh canonical evidence promotes
+  `operation_workflow_owner / workflow_progress` ahead of the handoff contract.
 
 ## Codebase Analysis Notes
 
@@ -126,7 +129,8 @@ publication-evidence replay code rather than by the runtime owner alone.
 
 | Sprint | Sprint kind | Status | Notes |
 | --- | --- | --- | --- |
-| `work/sprints/active-2026-q2-topology-convergence-residual-closure.md` | `bugfix` / `stabilization` | active | Current package is the publication-to-active-gate handoff oscillation; publication and active-gate evidence are treated as one causal handoff. |
+| `work/sprints/done-2026-q2-topology-convergence-residual-closure.md` | `bugfix` / `stabilization` | stopped | Stopped on 2026-05-15 by human direction. Retained as residual context only. |
+| `work/sprints/done-2026-q2-topology-convergence-complexity-reduction.md` | `stabilization` / `complexity-reduction` | done reduced | Canonical publication-to-active-gate handoff contract implemented end to end; representative run remains red at startup active-gate snapshot coverage. |
 
 ## Owner Boundaries
 
@@ -180,9 +184,9 @@ These are context candidates, not write authorization:
 
 ## Entry Condition
 
-Continue with the current active handoff package. Do not open a second active
-package on topology convergence while the fresh publication-to-active-gate
-handoff probe decision remains unresolved.
+The handoff-contract consolidation package is closed as reduced. Do not open a
+second topology package unless canonical evidence changes semantic owner,
+boundary, or next required action.
 
 ## Exit Condition
 
@@ -192,8 +196,8 @@ canonical owner-boundary evidence.
 
 ## Next Package
 
-Current package:
+Latest package:
 
 ```text
-work/packages/active-20260515-topology-active-gate-snapshot-coverage-after-publication-handoff.md
+work/packages/done-20260515-topology-publication-active-gate-handoff-contract-consolidation.md
 ```

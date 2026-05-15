@@ -28,8 +28,9 @@ import {
   isCanonicallyActiveNode,
 } from '../control-plane/active-node-projection.js';
 import {
-  CONTROL_PLANE_READINESS_REASON,
-} from '../control-plane/control-plane-readiness-constants.js';
+  buildPublicationActiveGateHandoffContract,
+  projectPublicationActiveGateHandoffToOwnerCohort,
+} from '../control-plane/publication-active-gate-handoff-contract.js';
 import {evaluateSharedMetadataNodeCoverage} from './admin-shared-metadata-consistency.js';
 import {
   shouldAttemptAuthoritativeRepair,
@@ -62,10 +63,6 @@ const ADMIN_CONTROL_SNAPSHOT_LITERAL = Object.freeze({
   NODE_ID: 'node_id',
   READY_LEASE_EXPIRES_AT: 'ready_lease_expires_at',
   READY_LEASE_EXPIRES_AT_CAMEL: 'readyLeaseExpiresAt',
-  REASON_CODE: 'reasonCode',
-  REASON_CODES: 'reasonCodes',
-  REASONS: 'reasons',
-  CODE: 'code',
 });
 const CONTROL_SNAPSHOT_CACHE_STALE_THRESHOLD_MS = 5000;
 /**
@@ -81,29 +78,10 @@ const CONTROL_SNAPSHOT_RECOVERY_PROTOCOL_STATE_PRIORITY_SPREAD_PENDING =
   'priority_spread_pending';
 const CONTROL_SNAPSHOT_ACTIVE_NODE_VIEW_SOURCE_PUBLICATION_OWNER_TRUTH =
   'publication_owner_truth';
-const CONTROL_SNAPSHOT_ACTIVE_GATE_OWNER_COHORT_BUDGET_FIELD =
-  'activeGateBudget';
-const CONTROL_SNAPSHOT_ACTIVE_GATE_OWNER_COHORT_SCHEMA_VERSION = 1;
-const CONTROL_SNAPSHOT_ACTIVE_GATE_OWNER_COHORT_STATE = Object.freeze({
-  COMPLETE: 'complete',
-  DEGRADED: 'degraded',
-  PENDING: 'pending',
-  UNAVAILABLE: 'unavailable',
-});
-const CONTROL_SNAPSHOT_ACTIVE_GATE_OWNER_COHORT_REASON = Object.freeze({
-  COMPLETE: 'owner_cohort_complete',
-  EXPECTED_COHORT_UNAVAILABLE: 'expected_cohort_unavailable',
-  OWNER_RECONCILE_PENDING: 'owner_reconcile_pending',
-  PUBLISHED_ACTIVE_COVERAGE_INCOMPLETE:
-    'published_active_coverage_incomplete',
-});
 const CONTROL_SNAPSHOT_ACTIVE_GATE_BUDGET_STATE = Object.freeze({
   AVAILABLE: 'available',
   UNAVAILABLE: 'unavailable',
 });
-const CONTROL_SNAPSHOT_ACTIVE_GATE_PENDING_OWNER_REASON_CODES = Object.freeze([
-  CONTROL_PLANE_READINESS_REASON.PRIORITY_CONTROL_PLANE_RECOVERY_PENDING,
-]);
 function normalizeControlSnapshotNodeIdList(values = ADMIN_CACHE_DUMP.EMPTY) {
   return uniqueSorted(
     (Array.isArray(values) ? values : ADMIN_CACHE_DUMP.EMPTY)
@@ -163,132 +141,6 @@ function resolveControlSnapshotReadyLeaseNodeIds(nodeRows, nowMs) {
   }
   return normalizeControlSnapshotNodeIdList(readyLeaseNodeIds);
 }
-function resolveControlSnapshotReadinessReasonCodes(readinessEntry) {
-  if (!isControlSnapshotRecord(readinessEntry)) {
-    return ADMIN_CACHE_DUMP.EMPTY;
-  }
-  const reasonCodes = [
-    ...(Array.isArray(
-      readinessEntry[ADMIN_CONTROL_SNAPSHOT_LITERAL.REASON_CODES],
-    ) ?
-      readinessEntry[ADMIN_CONTROL_SNAPSHOT_LITERAL.REASON_CODES] :
-      ADMIN_CACHE_DUMP.EMPTY),
-    ...(Array.isArray(
-      readinessEntry[ADMIN_CONTROL_SNAPSHOT_LITERAL.REASONS],
-    ) ?
-      readinessEntry[ADMIN_CONTROL_SNAPSHOT_LITERAL.REASONS].map((reason) =>
-        isControlSnapshotRecord(reason) ?
-          reason[ADMIN_CONTROL_SNAPSHOT_LITERAL.CODE] :
-          reason,
-      ) :
-      ADMIN_CACHE_DUMP.EMPTY),
-    readinessEntry[ADMIN_CONTROL_SNAPSHOT_LITERAL.REASON_CODE],
-  ];
-  return normalizeControlSnapshotNodeIdList(reasonCodes);
-}
-function hasControlSnapshotPendingOwnerWork(readinessEntry) {
-  const reasonCodes = resolveControlSnapshotReadinessReasonCodes(
-    readinessEntry,
-  );
-  return CONTROL_SNAPSHOT_ACTIVE_GATE_PENDING_OWNER_REASON_CODES.some(
-    (reasonCode) => reasonCodes.includes(reasonCode),
-  );
-}
-function normalizeControlSnapshotPublishedActiveNodeIds(activeNodeViews) {
-  return normalizeControlSnapshotNodeIdList(
-    Array.isArray(activeNodeViews?.publishedActiveNodeIds) ?
-      activeNodeViews.publishedActiveNodeIds :
-      ADMIN_CACHE_DUMP.EMPTY,
-  );
-}
-function resolveControlSnapshotPublicationNodeIds(publicationConvergence) {
-  const membershipLifecycleSummary =
-    isControlSnapshotRecord(publicationConvergence?.membershipLifecycleSummary) ?
-      publicationConvergence.membershipLifecycleSummary :
-      null;
-  return normalizeControlSnapshotNodeIdList([
-    ...(Array.isArray(publicationConvergence?.publishedActiveNodeIds) ?
-      publicationConvergence.publishedActiveNodeIds :
-      ADMIN_CACHE_DUMP.EMPTY),
-    ...(Array.isArray(publicationConvergence?.missingPublishedNodeIds) ?
-      publicationConvergence.missingPublishedNodeIds :
-      ADMIN_CACHE_DUMP.EMPTY),
-    ...(Array.isArray(
-      publicationConvergence?.missingPublishedRecoveryActiveNodeIds,
-    ) ?
-      publicationConvergence.missingPublishedRecoveryActiveNodeIds :
-      ADMIN_CACHE_DUMP.EMPTY),
-    ...(Array.isArray(publicationConvergence?.recoveryActiveNodeIds) ?
-      publicationConvergence.recoveryActiveNodeIds :
-      ADMIN_CACHE_DUMP.EMPTY),
-    ...(Array.isArray(membershipLifecycleSummary?.publishedActiveNodeIds) ?
-      membershipLifecycleSummary.publishedActiveNodeIds :
-      ADMIN_CACHE_DUMP.EMPTY),
-    ...(Array.isArray(membershipLifecycleSummary?.projectedServingNodeIds) ?
-      membershipLifecycleSummary.projectedServingNodeIds :
-      ADMIN_CACHE_DUMP.EMPTY),
-    ...(Array.isArray(membershipLifecycleSummary?.locallyEligibleNodeIds) ?
-      membershipLifecycleSummary.locallyEligibleNodeIds :
-      ADMIN_CACHE_DUMP.EMPTY),
-    ...(Array.isArray(membershipLifecycleSummary?.recoveryActiveNodeIds) ?
-      membershipLifecycleSummary.recoveryActiveNodeIds :
-      ADMIN_CACHE_DUMP.EMPTY),
-    ...(Array.isArray(
-      membershipLifecycleSummary?.missingPublishedRecoveryActiveNodeIds,
-    ) ?
-      membershipLifecycleSummary.missingPublishedRecoveryActiveNodeIds :
-      ADMIN_CACHE_DUMP.EMPTY),
-  ]);
-}
-function resolveControlSnapshotExpectedNodeIds(options = {}) {
-  const activeNodeViews = options.activeNodeViews || {};
-  return normalizeControlSnapshotNodeIdList([
-    ...Object.keys(options.readinessByNodeId || {}),
-    ...(Array.isArray(options.nodeRows) ?
-      options.nodeRows.map(resolveControlSnapshotNodeRowId) :
-      ADMIN_CACHE_DUMP.EMPTY),
-    ...(Array.isArray(activeNodeViews.authoritativeActiveNodeIds) ?
-      activeNodeViews.authoritativeActiveNodeIds :
-      ADMIN_CACHE_DUMP.EMPTY),
-    ...(Array.isArray(activeNodeViews.effectiveActiveNodeIds) ?
-      activeNodeViews.effectiveActiveNodeIds :
-      ADMIN_CACHE_DUMP.EMPTY),
-    ...(Array.isArray(activeNodeViews.projectedActiveNodeIds) ?
-      activeNodeViews.projectedActiveNodeIds :
-      ADMIN_CACHE_DUMP.EMPTY),
-    ...(Array.isArray(activeNodeViews.projectedServingNodeIds) ?
-      activeNodeViews.projectedServingNodeIds :
-      ADMIN_CACHE_DUMP.EMPTY),
-    ...(Array.isArray(activeNodeViews.locallyEligibleNodeIds) ?
-      activeNodeViews.locallyEligibleNodeIds :
-      ADMIN_CACHE_DUMP.EMPTY),
-    ...(Array.isArray(activeNodeViews.suspectedOrTransitioningNodeIds) ?
-      activeNodeViews.suspectedOrTransitioningNodeIds :
-      ADMIN_CACHE_DUMP.EMPTY),
-    ...normalizeControlSnapshotPublishedActiveNodeIds(activeNodeViews),
-    ...resolveControlSnapshotPublicationNodeIds(
-      options.publicationConvergence,
-    ),
-  ]);
-}
-function resolveControlSnapshotPendingRecoveryNodeIds(
-  expectedNodeIds,
-  readinessByNodeId,
-) {
-  return normalizeControlSnapshotNodeIdList(
-    expectedNodeIds.filter((nodeId) =>
-      hasControlSnapshotPendingOwnerWork(readinessByNodeId?.[nodeId]),
-    ),
-  );
-}
-function resolveControlSnapshotPendingReconcileNodeIds(options = {}) {
-  const pendingRecoveryNodeIdSet = new Set(options.pendingRecoveryNodeIds);
-  return normalizeControlSnapshotNodeIdList(
-    options.missingPublishedNodeIds.filter((nodeId) =>
-      !pendingRecoveryNodeIdSet.has(nodeId),
-    ),
-  );
-}
 function normalizeControlSnapshotActiveGateBudget(activeGate = null) {
   if (!isControlSnapshotRecord(activeGate)) {
     return Object.freeze({
@@ -333,50 +185,6 @@ function normalizeControlSnapshotActiveGateBudget(activeGate = null) {
       {}),
   });
 }
-function resolveControlSnapshotTopologyEpoch(publicationConvergence) {
-  const sourceTopologyEpoch = normalizeControlSnapshotOptionalInteger(
-    publicationConvergence?.sourceTopologyEpoch,
-  );
-  if (sourceTopologyEpoch !== null) {
-    return sourceTopologyEpoch;
-  }
-  return normalizeControlSnapshotOptionalInteger(
-    publicationConvergence?.publicationEpoch,
-  );
-}
-function decideControlSnapshotActiveGateOwnerCohort(evidence) {
-  if (evidence.expectedNodeIds.length === NUM.ZERO) {
-    return Object.freeze({
-      state: CONTROL_SNAPSHOT_ACTIVE_GATE_OWNER_COHORT_STATE.UNAVAILABLE,
-      reasonCode:
-        CONTROL_SNAPSHOT_ACTIVE_GATE_OWNER_COHORT_REASON
-          .EXPECTED_COHORT_UNAVAILABLE,
-    });
-  }
-  if (
-    evidence.pendingRecoveryNodeIds.length > NUM.ZERO ||
-    evidence.pendingReconcileNodeIds.length > NUM.ZERO
-  ) {
-    return Object.freeze({
-      state: CONTROL_SNAPSHOT_ACTIVE_GATE_OWNER_COHORT_STATE.PENDING,
-      reasonCode:
-        CONTROL_SNAPSHOT_ACTIVE_GATE_OWNER_COHORT_REASON
-          .OWNER_RECONCILE_PENDING,
-    });
-  }
-  if (evidence.missingPublishedNodeIds.length > NUM.ZERO) {
-    return Object.freeze({
-      state: CONTROL_SNAPSHOT_ACTIVE_GATE_OWNER_COHORT_STATE.DEGRADED,
-      reasonCode:
-        CONTROL_SNAPSHOT_ACTIVE_GATE_OWNER_COHORT_REASON
-          .PUBLISHED_ACTIVE_COVERAGE_INCOMPLETE,
-    });
-  }
-  return Object.freeze({
-    state: CONTROL_SNAPSHOT_ACTIVE_GATE_OWNER_COHORT_STATE.COMPLETE,
-    reasonCode: CONTROL_SNAPSHOT_ACTIVE_GATE_OWNER_COHORT_REASON.COMPLETE,
-  });
-}
 function resolveControlSnapshotActiveGateBudgetSource(
   controlPlaneDiagnostics = null,
 ) {
@@ -390,81 +198,33 @@ function resolveControlSnapshotActiveGateBudgetSource(
   ];
   return sources.find(isControlSnapshotRecord) || null;
 }
-function buildControlSnapshotActiveGateOwnerCohort(options = {}) {
+function buildControlSnapshotPublicationActiveGateHandoff(options = {}) {
   const readinessByNodeId = buildReadinessByNodeId({
     readinessByNodeId: options.readinessByNodeId || null,
   });
-  const expectedNodeIds = resolveControlSnapshotExpectedNodeIds({
+  return buildPublicationActiveGateHandoffContract({
     nodeRows: options.nodeRows,
     activeNodeViews: options.activeNodeViews,
     publicationConvergence: options.publicationConvergence,
     readinessByNodeId,
   });
+}
+function buildControlSnapshotActiveGateOwnerCohort(options = {}) {
+  const publicationActiveGateHandoff =
+    options.publicationActiveGateHandoff ||
+    buildControlSnapshotPublicationActiveGateHandoff(options);
   const readyLeaseNodeIds = resolveControlSnapshotReadyLeaseNodeIds(
     options.nodeRows,
     options.nowMs,
   );
-  const publishedActiveNodeIds =
-    normalizeControlSnapshotPublishedActiveNodeIds(options.activeNodeViews);
-  const publishedActiveNodeIdSet = new Set(publishedActiveNodeIds);
-  const explicitMissingPublishedNodeIds = normalizeControlSnapshotNodeIdList([
-    ...(Array.isArray(options.publicationConvergence?.missingPublishedNodeIds) ?
-      options.publicationConvergence.missingPublishedNodeIds :
-      ADMIN_CACHE_DUMP.EMPTY),
-    ...(Array.isArray(
-      options.publicationConvergence?.missingPublishedRecoveryActiveNodeIds,
-    ) ?
-      options.publicationConvergence.missingPublishedRecoveryActiveNodeIds :
-      ADMIN_CACHE_DUMP.EMPTY),
-    ...(Array.isArray(
-      options.publicationConvergence?.membershipLifecycleSummary
-        ?.missingPublishedRecoveryActiveNodeIds,
-    ) ?
-      options.publicationConvergence.membershipLifecycleSummary
-        .missingPublishedRecoveryActiveNodeIds :
-      ADMIN_CACHE_DUMP.EMPTY),
-  ]);
-  const missingPublishedNodeIds = normalizeControlSnapshotNodeIdList([
-    ...expectedNodeIds.filter((nodeId) => !publishedActiveNodeIdSet.has(nodeId)),
-    ...explicitMissingPublishedNodeIds,
-  ]);
-  const pendingRecoveryNodeIds = resolveControlSnapshotPendingRecoveryNodeIds(
-    expectedNodeIds,
-    readinessByNodeId,
+  return projectPublicationActiveGateHandoffToOwnerCohort(
+    publicationActiveGateHandoff,
+    {
+      readyLeaseNodeIds,
+      activeGateBudget:
+        normalizeControlSnapshotActiveGateBudget(options.activeGate),
+    },
   );
-  const pendingReconcileNodeIds = resolveControlSnapshotPendingReconcileNodeIds({
-    missingPublishedNodeIds,
-    pendingRecoveryNodeIds,
-  });
-  const evidence = Object.freeze({
-    expectedNodeIds,
-    missingPublishedNodeIds,
-    pendingRecoveryNodeIds,
-    pendingReconcileNodeIds,
-  });
-  const decision = decideControlSnapshotActiveGateOwnerCohort(evidence);
-  return Object.freeze({
-    schemaVersion: CONTROL_SNAPSHOT_ACTIVE_GATE_OWNER_COHORT_SCHEMA_VERSION,
-    state: decision.state,
-    reasonCode: decision.reasonCode,
-    topologyEpoch: resolveControlSnapshotTopologyEpoch(
-      options.publicationConvergence,
-    ),
-    expectedNodeIds,
-    expectedNodeCount: expectedNodeIds.length,
-    readyLeaseNodeIds,
-    readyLeaseNodeCount: readyLeaseNodeIds.length,
-    publishedActiveNodeIds,
-    publishedActiveNodeCount: publishedActiveNodeIds.length,
-    missingPublishedNodeIds,
-    missingPublishedCount: missingPublishedNodeIds.length,
-    pendingRecoveryNodeIds,
-    pendingRecoveryCount: pendingRecoveryNodeIds.length,
-    pendingReconcileNodeIds,
-    pendingReconcileCount: pendingReconcileNodeIds.length,
-    [CONTROL_SNAPSHOT_ACTIVE_GATE_OWNER_COHORT_BUDGET_FIELD]:
-      normalizeControlSnapshotActiveGateBudget(options.activeGate),
-  });
 }
 function hasDurablePublishedMembershipObservation(
   publicationDiagnostics = null,
@@ -718,9 +478,28 @@ class AdminControlSnapshotPart3 extends AdminControlSnapshotPart2 {
       ),
     };
   }
+  resolvePublicationActiveGateHandoffContract(options = {}) {
+    return buildControlSnapshotPublicationActiveGateHandoff({
+      ...options,
+      publicationConvergence:
+        options.publicationConvergence ||
+        options.controlPlaneDiagnostics?.publicationConvergence ||
+        null,
+      readinessByNodeId:
+        options.readinessByNodeId ||
+        options.controlPlaneDiagnostics?.readinessByNodeId ||
+        null,
+    });
+  }
   resolveActiveGateOwnerCohortSnapshot(options = {}) {
     return buildControlSnapshotActiveGateOwnerCohort({
       ...options,
+      publicationActiveGateHandoff:
+        options.publicationActiveGateHandoff ||
+        options.controlPlaneDiagnostics?.publicationActiveGateHandoff ||
+        options.controlPlaneDiagnostics?.publicationConvergence
+          ?.publicationActiveGateHandoff ||
+        null,
       activeGate:
         options.activeGate ||
         resolveControlSnapshotActiveGateBudgetSource(

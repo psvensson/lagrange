@@ -41,6 +41,38 @@
           },
           "streamOutcome": "stale"
         },
+        "publicationActiveGateHandoff": {
+          "schemaVersion": 1,
+          "publicationEpoch": 1,
+          "expectedNodeIds": [
+            "node-1",
+            "node-2",
+            "node-3",
+            "node-4",
+            "node-5"
+          ],
+          "expectedNodeCount": 5,
+          "publishedActiveNodeIds": [
+            "node-1"
+          ],
+          "publishedActiveNodeCount": 1,
+          "missingPublishedNodeIds": [
+            "node-2",
+            "node-3"
+          ],
+          "missingPublishedCount": 2,
+          "pendingRecoveryNodeIds": [],
+          "pendingRecoveryCount": 0,
+          "pendingReconcileNodeIds": [
+            "node-2",
+            "node-3"
+          ],
+          "pendingReconcileCount": 2,
+          "runtimePromotionAllowed": false,
+          "state": "pending",
+          "reasonCode": "owner_reconcile_pending",
+          "nextAction": "reconcile_owner_membership_publication"
+        },
         "activeGate": {
           "state": "timed_out",
           "ready": false,
@@ -62,6 +94,15 @@
               "stale_replica_operations_in_flight"
             ],
             "selectedSnapshotRepairDeferred": true,
+            "publicationActiveGateHandoffState": "pending",
+            "publicationActiveGateHandoffReasonCode": "owner_reconcile_pending",
+            "publicationActiveGateHandoffNextAction": "reconcile_owner_membership_publication",
+            "publicationActiveGateHandoffRuntimePromotionAllowed": false,
+            "publicationActiveGateHandoffPendingReconcileNodeIds": [
+              "node-2",
+              "node-3"
+            ],
+            "publicationActiveGateHandoffPendingReconcileCount": 2,
             "activeGateOwnerCohortState": "pending",
             "activeGateOwnerCohortReasonCode": "owner_reconcile_pending",
             "activeGateOwnerCohortMissingPublishedNodeIds": [

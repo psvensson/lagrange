@@ -22,6 +22,9 @@ import {
   isReplicaOperationsOnlyTableSet,
   shouldAttemptAuthoritativeRepair,
 } from './admin-authoritative-repair-evaluation.js';
+import {
+  hasPublicationActiveGateOwnerReconcileSignal,
+} from '../control-plane/publication-active-gate-handoff-contract.js';
 import {AdminControlSnapshotPart1} from './admin-control-snapshot-class-part-1.js';
 // ── file-local constants ────────────────────────────────────────────────────
 const ADMIN_CONTROL_SNAPSHOT_LITERAL = Object.freeze({
@@ -68,11 +71,6 @@ const CONTROL_SNAPSHOT_PUBLICATION_OWNER_CATCHUP_OPTIONS = Object.freeze({
 });
 const CONTROL_SNAPSHOT_CONTROL_PLANE_DIAGNOSTICS_FIELD =
   'controlPlaneDiagnostics';
-const CONTROL_SNAPSHOT_ACTIVE_GATE_OWNER_COHORT_FIELD =
-  'activeGateOwnerCohort';
-const CONTROL_SNAPSHOT_ACTIVE_GATE_OWNER_COHORT_STATE_PENDING = 'pending';
-const CONTROL_SNAPSHOT_ACTIVE_GATE_OWNER_COHORT_REASON_OWNER_RECONCILE_PENDING =
-  'owner_reconcile_pending';
 /**
  * Normalize one arbitrary value to a non-negative integer.
  * @param {*} value
@@ -158,34 +156,8 @@ function attachAuthoritativeRepairDiagnostics(snapshot, options = {}) {
 function hasPublicationOwnerCatchupSignal(snapshot = null) {
   const controlPlaneDiagnostics =
     snapshot?.[CONTROL_SNAPSHOT_CONTROL_PLANE_DIAGNOSTICS_FIELD];
-  const activeGateOwnerCohort =
-    controlPlaneDiagnostics?.[CONTROL_SNAPSHOT_ACTIVE_GATE_OWNER_COHORT_FIELD];
-  if (!activeGateOwnerCohort ||
-      typeof activeGateOwnerCohort !== TYPEOF.OBJECT) {
-    return false;
-  }
-  const state = String(
-    activeGateOwnerCohort.state || ADMIN_CONTROL_SNAPSHOT_LITERAL.VALUE,
-  );
-  const reasonCode = String(
-    activeGateOwnerCohort.reasonCode ||
-      ADMIN_CONTROL_SNAPSHOT_LITERAL.VALUE,
-  );
-  const pendingReconcileCount = Number(
-    activeGateOwnerCohort.pendingReconcileCount,
-  );
-  return (
-    state === CONTROL_SNAPSHOT_ACTIVE_GATE_OWNER_COHORT_STATE_PENDING ||
-    reasonCode ===
-      CONTROL_SNAPSHOT_ACTIVE_GATE_OWNER_COHORT_REASON_OWNER_RECONCILE_PENDING ||
-    (
-      Number.isFinite(pendingReconcileCount) &&
-      pendingReconcileCount > NUM.ZERO
-    ) ||
-    (
-      Array.isArray(activeGateOwnerCohort.pendingReconcileNodeIds) &&
-      activeGateOwnerCohort.pendingReconcileNodeIds.length > NUM.ZERO
-    )
+  return hasPublicationActiveGateOwnerReconcileSignal(
+    controlPlaneDiagnostics,
   );
 }
 // ── AdminControlSnapshot class ──────────────────────────────────────────────

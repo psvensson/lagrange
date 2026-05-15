@@ -65,6 +65,9 @@ const ACTIVE_GATE_OWNER_COHORT_SCHEMA_VERSION = 1;
 const ACTIVE_GATE_OWNER_COHORT_STATE_PENDING = 'pending';
 const ACTIVE_GATE_OWNER_COHORT_REASON_OWNER_RECONCILE_PENDING =
   'owner_reconcile_pending';
+const ACTIVE_GATE_HANDOFF_NEXT_ACTION_RECONCILE =
+  'reconcile_owner_membership_publication';
+const ACTIVE_GATE_HANDOFF_RUNTIME_PROMOTION_ALLOWED_FALSE = false;
 const ACTIVE_GATE_OWNER_COHORT_BUDGET_STATE_AVAILABLE = 'available';
 const ACTIVE_GATE_OWNER_COHORT_BUDGET_STATE_UNAVAILABLE = 'unavailable';
 const ACTIVE_GATE_OWNER_COHORT_GATE_STATE_STALLED = 'stalled';
@@ -270,6 +273,23 @@ test('AdminControlSnapshot exposes publication owner-truth active cohort in cont
         },
       },
       'active-gate owner cohort diagnostics should keep published coverage distinct from PUBLISHED status',
+    );
+    t.match(
+      result.controlPlaneDiagnostics.publicationActiveGateHandoff,
+      {
+        schemaVersion: ACTIVE_GATE_OWNER_COHORT_SCHEMA_VERSION,
+        publicationEpoch: ACTIVE_GATE_OWNER_TRUTH_PUBLICATION_EPOCH,
+        expectedNodeIds: [...ACTIVE_GATE_OWNER_TRUTH_NODE_IDS],
+        publishedActiveNodeIds: [ACTIVE_GATE_OWNER_TRUTH_LOCAL_NODE_ID],
+        missingPublishedNodeIds: [...ACTIVE_GATE_OWNER_TRUTH_RECENT_NODE_IDS],
+        pendingReconcileNodeIds: [...ACTIVE_GATE_OWNER_TRUTH_RECENT_NODE_IDS],
+        runtimePromotionAllowed:
+          ACTIVE_GATE_HANDOFF_RUNTIME_PROMOTION_ALLOWED_FALSE,
+        state: ACTIVE_GATE_OWNER_COHORT_STATE_PENDING,
+        reasonCode: ACTIVE_GATE_OWNER_COHORT_REASON_OWNER_RECONCILE_PENDING,
+        nextAction: ACTIVE_GATE_HANDOFF_NEXT_ACTION_RECONCILE,
+      },
+      'control-plane diagnostics should expose the canonical publication-to-active-gate handoff contract',
     );
   });
 
