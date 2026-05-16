@@ -4,7 +4,7 @@
 
 Sprint: `work/sprints/active-2026-q2-topology-convergence-systems-pattern-hardening.md`
 
-Package: `work/packages/active-20260516-etcd-style-active-gate-admission-catchup-fence.md`
+Package: `work/packages/active-20260516-tikv-pd-style-topology-operator-step-witness-ledger.md`
 
 Workflow lane: `runtime-owner-boundary`
 
@@ -16,23 +16,23 @@ Playback: `none`
 
 ## Boundary
 
-Owner: `startup_active_gate_owner`
+Owner: `operation_workflow_owner`
 
-Boundary: `active_gate_admission_catchup_fence`
+Boundary: `topology_operator_step_witnesses`
 
-Dominant reason: `admission_requires_durable_catchup_proof`
+Dominant reason: `topology_work_lacks_step_witness_contract`
 
-Current state: Active-gate admission is strict today, but the gate has repeatedly needed patches around whether durable publication truth, active node projection, and snapshot coverage are caught up. This package turns that repeated implicit rule into one explicit catch-up fence.
+Current state: Topology work currently exposes some next actions and workflow-progress witnesses, but publication, recovery, and repair progress can still collapse into timeout-only or generic pending evidence. This package adds a shared operator-step witness contract.
 
 ## Next Action
 
-Add an explicit catch-up fence that keeps nodes out of active-gate success until durable publication and snapshot coverage prove the cohort is caught up.
+Represent publication, recovery, and repair progress as owner operators with explicit steps, current step, witness source, next legal action, and heartbeat or retry evidence.
 
 ## Proof Ladder
 
-1. `npm run analyze:owner-files -- startup_active_gate_owner snapshot_coverage --markdown`
-2. `node --test test/control-plane/publication-active-gate-handoff-contract.test.js`
-3. `node scripts/check-guideline-decision-boundaries.js src/control-plane/publication-active-gate-handoff-contract.js src/admin/admin-control-snapshot-class-part-1.js src/admin/admin-control-snapshot-class-part-2.js`
+1. `npm run analyze:owner-files -- operation_workflow_owner workflow_progress --markdown`
+2. `node --test test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js`
+3. `node scripts/check-guideline-decision-boundaries.js src/rebalancer/operation-workflow-owner-segment-2.js src/rebalancer/operation-workflow-owner-segment-3.js`
 
 ## Model Fit
 
@@ -127,17 +127,18 @@ Handoff invariant: `unknown`
 
 Write scope:
 
-1. `work/packages/active-20260516-etcd-style-active-gate-admission-catchup-fence.md`
-2. `src/control-plane/publication-active-gate-handoff-contract.js`
-3. `src/admin/admin-control-snapshot-class-part-1.js`
-4. `src/admin/admin-control-snapshot-class-part-2.js`
-5. `src/admin/admin-control-snapshot-class-part-3.js`
-6. `test/control-plane/publication-active-gate-handoff-contract.test.js`
-7. `test/admin/admin-control-snapshot.test.js`
-8. `work/sprints/current-blocker.md`
-9. `work/sprints/current-blocker.json`
-10. `work/tracks/topology-convergence.md`
-11. `work/model-ledger.jsonl`
+1. `work/packages/active-20260516-tikv-pd-style-topology-operator-step-witness-ledger.md`
+2. `src/rebalancer/operation-workflow-owner-segment-2.js`
+3. `src/rebalancer/operation-workflow-owner-segment-3.js`
+4. `src/rebalancer/operation-workflow-owner-segment-4.js`
+5. `src/rebalancer/operation-workflow-owner-shared.js`
+6. `src/diagnostics/topology-convergence-graph.js`
+7. `test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js`
+8. `test/distributed/harness/cluster-segment-3.js`
+9. `work/sprints/current-blocker.md`
+10. `work/sprints/current-blocker.json`
+11. `work/tracks/topology-convergence.md`
+12. `work/model-ledger.jsonl`
 
 Handoff files:
 
@@ -150,26 +151,28 @@ Generated files:
 
 Candidate runtime files:
 
-1. `src/control-plane/publication-active-gate-handoff-contract.js`
-2. `src/admin/admin-control-snapshot-class-part-1.js`
-3. `src/admin/admin-control-snapshot-class-part-2.js`
-4. `src/admin/admin-control-snapshot-class-part-3.js`
-5. `test/control-plane/publication-active-gate-handoff-contract.test.js`
-6. `test/admin/admin-control-snapshot.test.js`
+1. `src/rebalancer/operation-workflow-owner-segment-2.js`
+2. `src/rebalancer/operation-workflow-owner-segment-3.js`
+3. `src/rebalancer/operation-workflow-owner-segment-4.js`
+4. `src/rebalancer/operation-workflow-owner-shared.js`
+5. `src/diagnostics/topology-convergence-graph.js`
+6. `test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js`
+7. `test/distributed/harness/cluster-segment-3.js`
 
 Commit scope:
 
-1. `work/packages/active-20260516-etcd-style-active-gate-admission-catchup-fence.md`
-2. `src/control-plane/publication-active-gate-handoff-contract.js`
-3. `src/admin/admin-control-snapshot-class-part-1.js`
-4. `src/admin/admin-control-snapshot-class-part-2.js`
-5. `src/admin/admin-control-snapshot-class-part-3.js`
-6. `test/control-plane/publication-active-gate-handoff-contract.test.js`
-7. `test/admin/admin-control-snapshot.test.js`
-8. `work/sprints/current-blocker.md`
-9. `work/sprints/current-blocker.json`
-10. `work/tracks/topology-convergence.md`
-11. `work/model-ledger.jsonl`
+1. `work/packages/active-20260516-tikv-pd-style-topology-operator-step-witness-ledger.md`
+2. `src/rebalancer/operation-workflow-owner-segment-2.js`
+3. `src/rebalancer/operation-workflow-owner-segment-3.js`
+4. `src/rebalancer/operation-workflow-owner-segment-4.js`
+5. `src/rebalancer/operation-workflow-owner-shared.js`
+6. `src/diagnostics/topology-convergence-graph.js`
+7. `test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js`
+8. `test/distributed/harness/cluster-segment-3.js`
+9. `work/sprints/current-blocker.md`
+10. `work/sprints/current-blocker.json`
+11. `work/tracks/topology-convergence.md`
+12. `work/model-ledger.jsonl`
 
 Legacy touched files:
 

@@ -85,7 +85,7 @@ Primary references:
      replay fixtures before repeated same-frontier runtime patches.
    - Acceptance: replay fixture reproduces owner, boundary, dominant reason,
      and next action through existing topology convergence code.
-4. [Etcd Style Active Gate Admission Catchup Fence](../packages/active-20260516-etcd-style-active-gate-admission-catchup-fence.md)
+4. [Etcd Style Active Gate Admission Catchup Fence](../packages/done-20260516-etcd-style-active-gate-admission-catchup-fence.md)
    - Lane: `runtime-owner-boundary`
    - Owner boundary: `startup_active_gate_owner /
      active_gate_admission_catchup_fence`
@@ -93,7 +93,7 @@ Primary references:
      fence rather than caller-local readiness reconstruction.
    - Acceptance: focused tests prove pending, blocked, and allowed promotion
      outcomes from durable publication and snapshot coverage evidence.
-5. [TiKV PD Style Topology Operator Step Witness Ledger](../packages/todo-20260516-tikv-pd-style-topology-operator-step-witness-ledger.md)
+5. [TiKV PD Style Topology Operator Step Witness Ledger](../packages/active-20260516-tikv-pd-style-topology-operator-step-witness-ledger.md)
    - Lane: `runtime-owner-boundary`
    - Owner boundary: `operation_workflow_owner /
      topology_operator_step_witnesses`

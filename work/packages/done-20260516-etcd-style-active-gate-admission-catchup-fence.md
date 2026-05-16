@@ -3,7 +3,7 @@
 <!-- work-package
 {
   "schema": "work-package-v1",
-  "status": "active",
+  "status": "done",
   "opened": "2026-05-16",
   "lane": "runtime-owner-boundary",
   "scenario": "none",
@@ -20,7 +20,7 @@
     "node scripts/check-guideline-decision-boundaries.js src/control-plane/publication-active-gate-handoff-contract.js src/admin/admin-control-snapshot-class-part-1.js src/admin/admin-control-snapshot-class-part-2.js"
   ],
   "writeScope": [
-    "work/packages/active-20260516-etcd-style-active-gate-admission-catchup-fence.md",
+    "work/packages/done-20260516-etcd-style-active-gate-admission-catchup-fence.md",
     "src/control-plane/publication-active-gate-handoff-contract.js",
     "src/admin/admin-control-snapshot-class-part-1.js",
     "src/admin/admin-control-snapshot-class-part-2.js",
@@ -48,7 +48,7 @@
     "test/admin/admin-control-snapshot.test.js"
   ],
   "commitScope": [
-    "work/packages/active-20260516-etcd-style-active-gate-admission-catchup-fence.md",
+    "work/packages/done-20260516-etcd-style-active-gate-admission-catchup-fence.md",
     "src/control-plane/publication-active-gate-handoff-contract.js",
     "src/admin/admin-control-snapshot-class-part-1.js",
     "src/admin/admin-control-snapshot-class-part-2.js",
@@ -69,7 +69,9 @@
       "owned files expand beyond this package",
       "a frozen decision must be reopened"
     ]
-  }
+  },
+  "closed": "2026-05-16",
+  "commitAndPushLedgerRequired": true
 }
 -->
 
@@ -159,9 +161,9 @@ package. The review subagent must review
 `work/packages/done-20260516-foundationdb-style-deterministic-missing-edge-replay.md`
 and this package's active metadata before implementation starts.
 
-- [x] Review subagent recorded: Agent Galileo (019e303a-092c-7b02-97ba-d5ca71be173e) reviewed work/packages/active-20260516-etcd-style-active-gate-admission-catchup-fence.md; result fixes-required
-- [x] Fix subagent recorded or explicitly not needed: Agent Beauvoir (019e303d-5d72-79a2-8e66-069549c6da7c) fixed work/packages/active-20260516-etcd-style-active-gate-admission-catchup-fence.md
-- [x] Implementation subagent recorded: Agent Copernicus (019e3040-6181-7bd3-bc91-4a9c966f4894) implemented work/packages/active-20260516-etcd-style-active-gate-admission-catchup-fence.md
+- [x] Review subagent recorded: Agent Galileo (019e303a-092c-7b02-97ba-d5ca71be173e) reviewed work/packages/done-20260516-etcd-style-active-gate-admission-catchup-fence.md; result fixes-required
+- [x] Fix subagent recorded or explicitly not needed: Agent Beauvoir (019e303d-5d72-79a2-8e66-069549c6da7c) fixed work/packages/done-20260516-etcd-style-active-gate-admission-catchup-fence.md
+- [x] Implementation subagent recorded: Agent Copernicus (019e3040-6181-7bd3-bc91-4a9c966f4894) implemented work/packages/done-20260516-etcd-style-active-gate-admission-catchup-fence.md
 
 ## Borrowing Details
 
@@ -208,7 +210,7 @@ Local implementation shape:
 
 1. [x] `npm run analyze:owner-files -- startup_active_gate_owner snapshot_coverage --markdown`
    - Passed; owner file index loaded before code edits.
-2. [x] `npm run work:package:doctor -- --suggest work/packages/active-20260516-etcd-style-active-gate-admission-catchup-fence.md`
+2. [x] `npm run work:package:doctor -- --suggest work/packages/done-20260516-etcd-style-active-gate-admission-catchup-fence.md`
    - Passed; package doctor reported validation ok and no deterministic suggestions.
 3. [x] `npm run work:validate -- --pre-impl`
    - Passed before and after implementation; review/fix proof was accepted and implementation remained the next role.
@@ -226,7 +228,7 @@ Local implementation shape:
    as closure proof. The unfiltered file run still fails in existing
    priority-recovery/tail expectations outside this package's active-gate
    fence carry-through; the focused grep proof above passed.
-10. [x] `git diff --check -- work/packages/active-20260516-etcd-style-active-gate-admission-catchup-fence.md src/control-plane/publication-active-gate-handoff-contract.js src/admin/admin-control-snapshot-class-part-1.js test/control-plane/publication-active-gate-handoff-contract.test.js test/admin/admin-control-snapshot.test.js work/model-ledger.jsonl`
+10. [x] `git diff --check -- work/packages/done-20260516-etcd-style-active-gate-admission-catchup-fence.md src/control-plane/publication-active-gate-handoff-contract.js src/admin/admin-control-snapshot-class-part-1.js test/control-plane/publication-active-gate-handoff-contract.test.js test/admin/admin-control-snapshot.test.js work/model-ledger.jsonl`
     - Passed.
 11. [x] `npm run work:model-ledger -- record ...`
     - Recorded package evidence with outcome `implemented` and validation status `focused-green-broad-admin-red`.
@@ -244,3 +246,9 @@ Local implementation shape:
   `publicationConvergence.activeGateCatchupFence`, and
   `activeGateOwnerCohort.activeGateCatchupFence` without deriving a second
   local promotion model.
+
+## Commit And Push Ledger
+
+1. Focused package commit: 2534e5fa
+2. Pushed to: origin/codex/pending-ack-eligibility-filter
+3. Commit contains only package-owned files/package-status/allowed sprint handoff: yes

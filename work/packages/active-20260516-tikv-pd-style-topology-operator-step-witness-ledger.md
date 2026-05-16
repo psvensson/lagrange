@@ -3,7 +3,7 @@
 <!-- work-package
 {
   "schema": "work-package-v1",
-  "status": "todo",
+  "status": "active",
   "opened": "2026-05-16",
   "lane": "runtime-owner-boundary",
   "scenario": "none",
@@ -19,11 +19,27 @@
     "node --test test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js",
     "node scripts/check-guideline-decision-boundaries.js src/rebalancer/operation-workflow-owner-segment-2.js src/rebalancer/operation-workflow-owner-segment-3.js"
   ],
-  "writeScope": [],
+  "writeScope": [
+    "work/packages/active-20260516-tikv-pd-style-topology-operator-step-witness-ledger.md",
+    "src/rebalancer/operation-workflow-owner-segment-2.js",
+    "src/rebalancer/operation-workflow-owner-segment-3.js",
+    "src/rebalancer/operation-workflow-owner-segment-4.js",
+    "src/rebalancer/operation-workflow-owner-shared.js",
+    "src/diagnostics/topology-convergence-graph.js",
+    "test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js",
+    "test/distributed/harness/cluster-segment-3.js",
+    "work/sprints/current-blocker.md",
+    "work/sprints/current-blocker.json",
+    "work/tracks/topology-convergence.md",
+    "work/model-ledger.jsonl"
+  ],
   "handoffFiles": [
     "work/tracks/topology-convergence.md"
   ],
-  "generatedFiles": [],
+  "generatedFiles": [
+    "work/sprints/current-blocker.md",
+    "work/sprints/current-blocker.json"
+  ],
   "candidateRuntimeFiles": [
     "src/rebalancer/operation-workflow-owner-segment-2.js",
     "src/rebalancer/operation-workflow-owner-segment-3.js",
@@ -33,7 +49,20 @@
     "test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js",
     "test/distributed/harness/cluster-segment-3.js"
   ],
-  "commitScope": [],
+  "commitScope": [
+    "work/packages/active-20260516-tikv-pd-style-topology-operator-step-witness-ledger.md",
+    "src/rebalancer/operation-workflow-owner-segment-2.js",
+    "src/rebalancer/operation-workflow-owner-segment-3.js",
+    "src/rebalancer/operation-workflow-owner-segment-4.js",
+    "src/rebalancer/operation-workflow-owner-shared.js",
+    "src/diagnostics/topology-convergence-graph.js",
+    "test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js",
+    "test/distributed/harness/cluster-segment-3.js",
+    "work/sprints/current-blocker.md",
+    "work/sprints/current-blocker.json",
+    "work/tracks/topology-convergence.md",
+    "work/model-ledger.jsonl"
+  ],
   "modelFit": {
     "packageClass": "runtime-owner-boundary",
     "intendedMinimumModel": "gpt-5.3-codex",
@@ -120,6 +149,17 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 2. New partition placement behavior.
 3. Broad workflow rewrites.
 4. Treating diagnostics as the owner of progress.
+
+## Subagent Sequencing Ledger
+
+Required before implementation because this is a runtime-owner-boundary
+package. The review subagent must review
+`work/packages/done-20260516-etcd-style-active-gate-admission-catchup-fence.md`
+and this package's active metadata before implementation starts.
+
+- [ ] Review subagent recorded: pending real review agent.
+- [ ] Fix subagent recorded or explicitly not needed: pending review result.
+- [ ] Implementation subagent recorded: pending implementation agent.
 
 ## Borrowing Details
 
