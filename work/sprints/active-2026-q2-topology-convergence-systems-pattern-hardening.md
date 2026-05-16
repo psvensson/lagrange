@@ -101,7 +101,7 @@ Primary references:
      follow-up witness and next legal action.
    - Acceptance: diagnostics and harness prefer `topologyOperatorWitness` over
      timeout-only inference when it is present.
-6. [Cockroach Style Control Plane Priority Convergence Class](../packages/active-20260516-cockroach-style-control-plane-priority-convergence-class.md)
+6. [Cockroach Style Control Plane Priority Convergence Class](../packages/done-20260516-cockroach-style-control-plane-priority-convergence-class.md)
    - Lane: `runtime-owner-boundary`
    - Owner boundary: `topology_publication_owner /
      control_plane_priority_convergence_class`
@@ -110,7 +110,7 @@ Primary references:
    - Acceptance: focused pressure tests prove critical convergence is admitted,
      deferred, or rejected with typed owner outcomes and is never silently
      dropped.
-7. [Topology Owner Boundary File Size Reduction](../packages/todo-20260516-topology-owner-boundary-file-size-reduction.md)
+7. [Topology Owner Boundary File Size Reduction](../packages/active-20260516-topology-owner-boundary-file-size-reduction.md)
    - Lane: `lightweight-maintenance`
    - Owner boundary: `workflow_tooling_owner / topology_owner_file_size_debt`
    - Purpose: reduce review risk by extracting one coherent topology owner

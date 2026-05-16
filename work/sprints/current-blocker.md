@@ -4,45 +4,45 @@
 
 Sprint: `work/sprints/active-2026-q2-topology-convergence-systems-pattern-hardening.md`
 
-Package: `work/packages/active-20260516-cockroach-style-control-plane-priority-convergence-class.md`
+Package: `work/packages/active-20260516-topology-owner-boundary-file-size-reduction.md`
 
-Workflow lane: `runtime-owner-boundary`
+Workflow lane: `lightweight-maintenance`
 
-Scenario: `rolling-restart`
+Scenario: `none`
 
-Artifact: `test-output/reports/rolling-restart-after-admin-owner-readiness-handoff-20260516.report.json`
+Artifact: `none`
 
 Playback: `none`
 
 ## Boundary
 
-Owner: `topology_publication_owner`
+Owner: `workflow_tooling_owner`
 
-Boundary: `control_plane_priority_convergence_class`
+Boundary: `topology_owner_file_size_debt`
 
-Dominant reason: `control_plane_progress_competes_with_ordinary_repair`
+Dominant reason: `oversized_files_raise_release_gate_risk`
 
-Current state: Control-plane publication and active-gate convergence can be delayed by the same pressure and repair machinery used by broader diagnostics. This package makes critical topology convergence an explicit priority class with typed pressure outcomes.
+Current state: The topology release-gate slice touches several oversized runtime and test files. Large files are not the root cause, but they increase review risk, make owner boundaries harder to see, and make repeated fixes more expensive.
 
 ## Next Action
 
-Create a control-plane convergence class with stricter admission and pressure semantics for publication and active-gate critical work.
+Extract one topology owner helper at a time from oversized runtime or test files without changing behavior.
 
 ## Proof Ladder
 
-1. `npm run analyze:owner-files -- topology_publication_owner publication_convergence --markdown`
-2. `npm run analyze:owner-files -- startup_active_gate_owner snapshot_coverage --markdown`
-3. `node scripts/check-guideline-decision-boundaries.js src/control-plane/membership-publication-coordinator-class-stage-2.js src/admin/admin-control-snapshot-class-part-2.js`
+1. `npm run work:oversized-next -- --markdown`
+2. `npm run audit:owner-boundary-segments -- src/rebalancer/operation-workflow-owner-segment-2.js`
+3. `git diff --check -- src/rebalancer/operation-workflow-owner-segment-2.js test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js`
 
 ## Model Fit
 
-Package class: `runtime-owner-boundary`
+Package class: `bounded-implementation`
 
-Intended minimum model: `gpt-5.3-codex`
+Intended minimum model: `gpt-5.3-codex-spark`
 
-Scope shape: `owner-boundary-contraction/follow-on`
+Scope shape: `leaf-slice`
 
-Output profile: `medium`
+Output profile: `small`
 
 Escalation triggers:
 
@@ -51,72 +51,69 @@ Escalation triggers:
 
 ## Representative Residual
 
-Status: `live-red`
+Status: `unknown`
 
-Scenario: `rolling-restart`
+Scenario: `unknown`
 
-Artifact: `test-output/reports/rolling-restart-after-admin-owner-readiness-handoff-20260516.report.json`
+Artifact: `unknown`
 
-Frontier: `publication_ack_convergence`
+Frontier: `unknown`
 
-Owner: `topology_publication_owner`
+Owner: `unknown`
 
-Boundary: `publication_convergence`
+Boundary: `unknown`
 
-Dominant reason: `publication_ack_blocked`
+Dominant reason: `unknown`
 
-Next action: `Keep the active package bounded to the control-plane priority convergence class while representative evidence remains fronted by publication ACK convergence; priority-recovery evidence is subordinate unless fresh canonical extraction promotes it.`
+Next action: `unknown`
 
 ## Causal Governance
 
-Causal hypothesis: `A distinct control-plane priority convergence class should reduce or migrate publication_ack_convergence by making critical publication, ACK, active-gate handoff, and owner-recovery wake work observable under typed pressure semantics instead of ordinary repair deferral.`
+Causal hypothesis: `unknown`
 
-Stop-condition check: `npm run analyze:causal-model -- test-output/reports/rolling-restart-after-admin-owner-readiness-handoff-20260516.report.json`
+Stop-condition check: `unknown`
 
-Expected causal-model change: `After implementation proof, representative evidence should reduce, migrate, or remain same-frontier at publication_ack_convergence with priority-recovery residuals kept subordinate unless canonical extractors promote them.`
+Expected causal-model change: `unknown`
 
-Representative outcome: `pending-before-rerun`
+Representative outcome: `unknown`
 
-Causal debt: `Pauli review fixes only repaired representative metadata and track notes; no runtime implementation has started and the live representative residual remains publication_ack_convergence.`
+Causal debt: `unknown`
 
-Cross-boundary review: `Review subagent Pauli (019e3065-9e5a-70c1-a43a-a279ba9836da) required metadata and track-note fixes before implementation; separate implementation proof is still required.`
+Cross-boundary review: `unknown`
 
 ## Scenario Causal Closure
 
-Reference scenario/probe: `rolling-restart / topology_publication_owner publication_convergence`
+Reference scenario/probe: `unknown`
 
 Phase chain:
 
-1. `repair package representative metadata from Pauli review`
-2. `classify subordinate priority-recovery residual evidence`
-3. `implement bounded control-plane priority convergence class only after sequencing proof`
+1. None recorded
 
-Current first frontier: `Package-local frontier topology_publication_owner / control_plane_priority_convergence_class is the bounded support role for the representative publication_ack_convergence first frontier in test-output/reports/rolling-restart-after-admin-owner-readiness-handoff-20260516.report.json under topology_publication_owner / publication_convergence with dominant reason publication_ack_blocked.`
+Current first frontier: `unknown`
 
 Known downstream blockers:
 
-1. `priority-recovery residual extraction reports operation_workflow_owner / rebalancer_handoff as subordinate evidence`
-2. `active-gate owner reconcile is drained with pendingReconcileCount=0 in the current handoff`
+1. None recorded
 
-Missing causal edge: `The package must prove whether typed critical admission and bounded retry/wake semantics let publication ACK convergence advance before ordinary repair deferral evidence can hide critical control-plane progress.`
+Missing causal edge: `unknown`
 
-Missing causal edge probe: `npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-after-admin-owner-readiness-handoff-20260516.report.json`
+Missing causal edge probe: `unknown`
 
-Bounded progress proof: `Focused proof must show bounded wake, retry, reconcile, or dispatch behavior for critical publication and active-gate handoff work without treating ordinary repair deferral as success.`
+Bounded progress proof: `unknown`
 
-Bounded progress proof artifact: `test-output/reports/rolling-restart-after-admin-owner-readiness-handoff-20260516.report.json`
+Bounded progress proof artifact: `unknown`
 
-Expected observable transition: `No transition claimed by this fix-only pass; implementation proof should reduce, migrate, or preserve same-frontier publication_ack_convergence with explicit priority-class evidence.`
+Expected observable transition: `unknown`
 
-Max progress bound: `one runtime-owner-boundary package slice; no user-visible priority controls, Pro or Enterprise policy, unlimited queues, or hidden retries`
+Max progress bound: `unknown`
 
-Same-frontier fallback: `If focused proof leaves publication_ack_convergence at topology_publication_owner / publication_convergence, keep the same representative frontier and do not promote subordinate priority-recovery evidence without fresh canonical extraction.`
+Same-frontier fallback: `unknown`
 
-Expected next frontier: `publication_ack_convergence reduced or migrated after priority-class implementation; otherwise same-frontier publication convergence evidence`
+Expected next frontier: `unknown`
 
-Result classification: `pending-before-probe`
+Result classification: `unknown`
 
-Stop condition: `continue-local-fix`
+Stop condition: `unknown`
 
 Recent frontier history:
 
@@ -130,18 +127,8 @@ Handoff invariant: `unknown`
 
 Write scope:
 
-1. `work/packages/active-20260516-cockroach-style-control-plane-priority-convergence-class.md`
-2. `src/control-plane/membership-publication-coordinator-class-stage-2.js`
-3. `src/control-plane/membership-publication-coordinator-class-stage-3.js`
-4. `src/control-plane/control-plane-error-classification.js`
-5. `src/admin/admin-control-snapshot-class-part-2.js`
-6. `src/admin/admin-websocket-api-segment-3.js`
-7. `test/control-plane/membership-publication-coordinator-main-stage-2.js`
-8. `test/admin/admin-control-snapshot.test.js`
-9. `work/sprints/current-blocker.md`
-10. `work/sprints/current-blocker.json`
-11. `work/tracks/topology-convergence.md`
-12. `work/model-ledger.jsonl`
+1. `src/rebalancer/operation-workflow-owner-segment-2.js`
+2. `test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js`
 
 Handoff files:
 
@@ -149,33 +136,16 @@ Handoff files:
 
 Generated files:
 
-1. `work/sprints/current-blocker.md`
-2. `work/sprints/current-blocker.json`
+1. None recorded
 
 Candidate runtime files:
 
-1. `src/control-plane/membership-publication-coordinator-class-stage-2.js`
-2. `src/control-plane/membership-publication-coordinator-class-stage-3.js`
-3. `src/control-plane/control-plane-error-classification.js`
-4. `src/admin/admin-control-snapshot-class-part-2.js`
-5. `src/admin/admin-websocket-api-segment-3.js`
-6. `test/control-plane/membership-publication-coordinator-main-stage-2.js`
-7. `test/admin/admin-control-snapshot.test.js`
+1. None recorded
 
 Commit scope:
 
-1. `work/packages/active-20260516-cockroach-style-control-plane-priority-convergence-class.md`
-2. `src/control-plane/membership-publication-coordinator-class-stage-2.js`
-3. `src/control-plane/membership-publication-coordinator-class-stage-3.js`
-4. `src/control-plane/control-plane-error-classification.js`
-5. `src/admin/admin-control-snapshot-class-part-2.js`
-6. `src/admin/admin-websocket-api-segment-3.js`
-7. `test/control-plane/membership-publication-coordinator-main-stage-2.js`
-8. `test/admin/admin-control-snapshot.test.js`
-9. `work/sprints/current-blocker.md`
-10. `work/sprints/current-blocker.json`
-11. `work/tracks/topology-convergence.md`
-12. `work/model-ledger.jsonl`
+1. `src/rebalancer/operation-workflow-owner-segment-2.js`
+2. `test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js`
 
 Legacy touched files:
 

@@ -3,7 +3,7 @@
 <!-- work-package
 {
   "schema": "work-package-v1",
-  "status": "active",
+  "status": "done",
   "opened": "2026-05-16",
   "lane": "runtime-owner-boundary",
   "scenario": "rolling-restart",
@@ -20,7 +20,7 @@
     "node scripts/check-guideline-decision-boundaries.js src/control-plane/membership-publication-coordinator-class-stage-2.js src/admin/admin-control-snapshot-class-part-2.js"
   ],
   "writeScope": [
-    "work/packages/active-20260516-cockroach-style-control-plane-priority-convergence-class.md",
+    "work/packages/done-20260516-cockroach-style-control-plane-priority-convergence-class.md",
     "src/control-plane/membership-publication-coordinator-class-stage-2.js",
     "src/control-plane/membership-publication-coordinator-class-stage-3.js",
     "src/control-plane/control-plane-error-classification.js",
@@ -50,7 +50,7 @@
     "test/admin/admin-control-snapshot.test.js"
   ],
   "commitScope": [
-    "work/packages/active-20260516-cockroach-style-control-plane-priority-convergence-class.md",
+    "work/packages/done-20260516-cockroach-style-control-plane-priority-convergence-class.md",
     "src/control-plane/membership-publication-coordinator-class-stage-2.js",
     "src/control-plane/membership-publication-coordinator-class-stage-3.js",
     "src/control-plane/control-plane-error-classification.js",
@@ -87,9 +87,9 @@
     "hypothesis": "A distinct control-plane priority convergence class should reduce or migrate publication_ack_convergence by making critical publication, ACK, active-gate handoff, and owner-recovery wake work observable under typed pressure semantics instead of ordinary repair deferral.",
     "stopConditionCheck": "npm run analyze:causal-model -- test-output/reports/rolling-restart-after-admin-owner-readiness-handoff-20260516.report.json",
     "expectedCausalModelChange": "After implementation proof, representative evidence should reduce, migrate, or remain same-frontier at publication_ack_convergence with priority-recovery residuals kept subordinate unless canonical extractors promote them.",
-    "representativeOutcome": "pending-before-rerun",
-    "causalDebt": "Pauli review fixes only repaired representative metadata and track notes; no runtime implementation has started and the live representative residual remains publication_ack_convergence.",
-    "crossBoundaryReview": "Review subagent Pauli (019e3065-9e5a-70c1-a43a-a279ba9836da) required metadata and track-note fixes before implementation; separate implementation proof is still required."
+    "representativeOutcome": "same-frontier",
+    "causalDebt": "Focused implementation added typed critical convergence admission evidence, but no representative rolling-restart rerun was claimed in this lightweight closure handoff; the live representative residual remains publication_ack_convergence until a scenario package reruns it.",
+    "crossBoundaryReview": "Review subagent Pauli (019e3065-9e5a-70c1-a43a-a279ba9836da) required metadata and track-note fixes before implementation; implementation subagent Rawls (019e306d-a608-79b0-bc46-670b8125bb73) completed the bounded priority-class slice."
   },
   "scenarioCausalClosure": {
     "referenceScenarioOrProbe": "rolling-restart / topology_publication_owner publication_convergence",
@@ -111,9 +111,11 @@
     "maxProgressBound": "one runtime-owner-boundary package slice; no user-visible priority controls, Pro or Enterprise policy, unlimited queues, or hidden retries",
     "sameFrontierFallback": "If focused proof leaves publication_ack_convergence at topology_publication_owner / publication_convergence, keep the same representative frontier and do not promote subordinate priority-recovery evidence without fresh canonical extraction.",
     "expectedNextFrontier": "publication_ack_convergence reduced or migrated after priority-class implementation; otherwise same-frontier publication convergence evidence",
-    "resultClassification": "pending-before-probe",
+    "resultClassification": "same-frontier",
     "stopCondition": "continue-local-fix"
-  }
+  },
+  "closed": "2026-05-16",
+  "commitAndPushLedgerRequired": true
 }
 -->
 
@@ -196,9 +198,9 @@ package. The review subagent must review
 `work/packages/done-20260516-tikv-pd-style-topology-operator-step-witness-ledger.md`
 and this package's active metadata before implementation starts.
 
-- [x] Review subagent recorded: Agent Pauli (019e3065-9e5a-70c1-a43a-a279ba9836da) reviewed work/packages/active-20260516-cockroach-style-control-plane-priority-convergence-class.md; result fixes-required
-- [x] Fix subagent recorded or explicitly not needed: Agent Hubble (019e3069-1773-75a1-85d6-3dfe7f3a576c) fixed work/packages/active-20260516-cockroach-style-control-plane-priority-convergence-class.md
-- [x] Implementation subagent recorded: Agent Rawls (019e306d-a608-79b0-bc46-670b8125bb73) implemented work/packages/active-20260516-cockroach-style-control-plane-priority-convergence-class.md
+- [x] Review subagent recorded: Agent Pauli (019e3065-9e5a-70c1-a43a-a279ba9836da) reviewed work/packages/done-20260516-cockroach-style-control-plane-priority-convergence-class.md; result fixes-required
+- [x] Fix subagent recorded or explicitly not needed: Agent Hubble (019e3069-1773-75a1-85d6-3dfe7f3a576c) fixed work/packages/done-20260516-cockroach-style-control-plane-priority-convergence-class.md
+- [x] Implementation subagent recorded: Agent Rawls (019e306d-a608-79b0-bc46-670b8125bb73) implemented work/packages/done-20260516-cockroach-style-control-plane-priority-convergence-class.md
 
 ## Borrowing Details
 
@@ -273,8 +275,8 @@ Local implementation shape:
 - PASS: `node scripts/check-guideline-literals.js src/control-plane/membership-publication-coordinator-class-stage-2.js src/control-plane/membership-publication-coordinator-class-stage-3.js src/control-plane/control-plane-error-classification.js src/admin/admin-control-snapshot-class-part-2.js src/admin/admin-websocket-api-segment-3.js`
 - PASS: `npm run audit:runtime-grammar:file -- src/control-plane/membership-publication-coordinator-class-stage-2.js src/control-plane/membership-publication-coordinator-class-stage-3.js src/control-plane/control-plane-error-classification.js src/admin/admin-control-snapshot-class-part-2.js src/admin/admin-websocket-api-segment-3.js`
 - PASS: `npm run guard:guideline:constant-names:file -- src/control-plane/membership-publication-coordinator-class-stage-2.js src/control-plane/membership-publication-coordinator-class-stage-3.js src/control-plane/control-plane-error-classification.js src/admin/admin-control-snapshot-class-part-2.js src/admin/admin-websocket-api-segment-3.js`
-- PASS: `npm run work:validate -- --pre-impl work/packages/active-20260516-cockroach-style-control-plane-priority-convergence-class.md`
-- PASS: `git diff --check -- work/packages/active-20260516-cockroach-style-control-plane-priority-convergence-class.md src/control-plane/membership-publication-coordinator-class-stage-2.js src/control-plane/membership-publication-coordinator-class-stage-3.js src/control-plane/control-plane-error-classification.js src/admin/admin-control-snapshot-class-part-2.js src/admin/admin-websocket-api-segment-3.js test/control-plane/membership-publication-coordinator-main-stage-2.js test/admin/admin-control-snapshot.test.js work/model-ledger.jsonl`
+- PASS: `npm run work:validate -- --pre-impl work/packages/done-20260516-cockroach-style-control-plane-priority-convergence-class.md`
+- PASS: `git diff --check -- work/packages/done-20260516-cockroach-style-control-plane-priority-convergence-class.md src/control-plane/membership-publication-coordinator-class-stage-2.js src/control-plane/membership-publication-coordinator-class-stage-3.js src/control-plane/control-plane-error-classification.js src/admin/admin-control-snapshot-class-part-2.js src/admin/admin-websocket-api-segment-3.js test/control-plane/membership-publication-coordinator-main-stage-2.js test/admin/admin-control-snapshot.test.js work/model-ledger.jsonl`
 - RED: `node test/admin/admin-control-snapshot.test.js` remains red in
   pre-existing priority-recovery tail assertions unrelated to this package's
   critical convergence assertions; failing subtests include
@@ -282,3 +284,9 @@ Local implementation shape:
   recovery readiness` and several
   `AdminControlSnapshot ... priority-recovery decision snapshots ...` tail
   cases.
+
+## Commit And Push Ledger
+
+1. Focused package commit: `05bf26ba`
+2. Pushed to: `origin/codex/pending-ack-eligibility-filter`
+3. Commit contains only package-owned files/package-status/allowed sprint handoff: yes
