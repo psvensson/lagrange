@@ -241,3 +241,14 @@ The representative rerun stayed on the same frontier, with
 `11601fe0-72d6-5853-8590-ec2881853e72`, and a narrower
 `deferred_refresh` / `discovery_node_coverage_gap` residual while active-gate
 admission remains strict.
+
+## Commit And Push Ledger
+
+1. Focused package commit: 450ad084
+2. Pushed to: origin/codex/pending-ack-eligibility-filter
+3. Commit contains only package-owned files/package-status/allowed sprint handoff: yes
+4. Split commit note: 450ad084 contains the runtime fix, focused regression,
+   migrated package state, successor activation, sprint handoff,
+   current-blocker regeneration, representative classification, and
+   model-ledger record. This follow-up records the durable commit-and-push
+   ledger for closure validation.
