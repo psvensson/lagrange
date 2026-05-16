@@ -157,8 +157,8 @@ package. The review subagent must review
 `work/packages/done-20260516-etcd-style-active-gate-admission-catchup-fence.md`
 and this package's active metadata before implementation starts.
 
-- [ ] Review subagent recorded: pending real review agent.
-- [ ] Fix subagent recorded or explicitly not needed: pending review result.
+- [x] Review subagent recorded: Agent Boyle (019e304f-f7eb-75a0-82c0-ee87d9627f54) reviewed work/packages/active-20260516-tikv-pd-style-topology-operator-step-witness-ledger.md; result clean
+- [x] Fix subagent recorded or explicitly not needed: not-needed
 - [ ] Implementation subagent recorded: pending implementation agent.
 
 ## Borrowing Details
