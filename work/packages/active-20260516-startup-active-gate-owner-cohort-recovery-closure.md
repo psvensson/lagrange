@@ -1,9 +1,10 @@
+# Startup Active Gate Owner Cohort Recovery Closure
+
+<!-- work-package
 {
-  "schema": "current-blocker-v1",
-  "generatedBy": "scripts/work-tracker.js",
-  "sprint": "work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md",
-  "package": "work/packages/active-20260516-startup-active-gate-owner-cohort-recovery-closure.md",
+  "schema": "work-package-v1",
   "status": "active",
+  "opened": "2026-05-16",
   "lane": "causal-escalation",
   "scenario": "rolling-restart",
   "artifact": "test-output/reports/rolling-restart-after-top-level-publication-projection-20260516.report.json",
@@ -66,7 +67,6 @@
     "work/sprints/current-blocker.json",
     "work/model-ledger.jsonl"
   ],
-  "touchedFiles": [],
   "modelFit": {
     "packageClass": "representative-frontier-closure",
     "intendedMinimumModel": "gpt-5.3-codex",
@@ -135,3 +135,92 @@
   },
   "predecessor": "work/packages/done-20260516-topology-publication-count-only-ack-closure.md"
 }
+-->
+
+## Why
+
+The publication package moved the representative frontier out of ACK
+convergence. The remaining release-gate blocker is now the active-gate owner
+cohort: one node is still missing from published recovery and selected snapshot
+coverage is `2/5`, while the handoff contract reports no pending reconcile
+targets.
+
+## Scope Basis
+
+Roadmap Phase `0.1 - Internal Coherence`, specifically topology workflow
+stabilization, failure simulations, and production guarantees for the AGPL
+runtime.
+
+## Workflow Lane
+
+- Selected lane: `causal-escalation`
+- Why this lane is required: the representative scenario is red on a runtime
+  owner boundary after a cross-owner migration.
+- Escalation trigger to a heavier lane: canonical evidence promotes a different
+  owner, or the fix requires timeout increases, admission relaxation, or
+  reopening publication ACK convergence.
+
+## Subagent Sequencing Requirement
+
+Required before implementation because this is a scenario-driven runtime
+owner-boundary package.
+
+## Subagent Sequencing Ledger
+
+- [ ] Review subagent recorded:
+- [ ] Fix subagent recorded or explicitly not needed:
+- [ ] Implementation subagent recorded:
+
+## LLM Tool-First Contract
+
+Before raw JSON, raw logs, broad file search, oversized segment files, or ad hoc
+`jq`, use the canonical workflow command that owns the question:
+
+1. Package metadata or ledger edits: `npm run work:package:doctor -- --suggest <package>`, `npm run work:package:doctor -- --fix-dry-run <package>`, `npm run work:package:schema`, or `npm run work:package:new -- ...`.
+2. Representative evidence: `npm run work:evidence-summary -- <artifact>` plus any focused extractor for this failure class.
+3. Owner discovery: `npm run analyze:owner-files -- <owner> [boundary]`.
+4. Subagent sequencing: `npm run work:subagent-prompt -- --role <role> --package <package>`.
+5. Large-file cleanup: `npm run work:oversized-next -- --markdown`.
+
+If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which
+canonical extractor was tried and why it was insufficient.
+
+## In Scope
+
+1. Work package, sprint, track, current-blocker, and model ledger handoff files.
+2. Candidate runtime files only after required subagent proof promotes exact
+   write ownership.
+
+## Out Of Scope
+
+1. Representative timeout budget changes
+2. Active-gate admission relaxation
+3. Publication ACK convergence rewrites unless canonical evidence selects it
+   again
+
+## Model Fit
+
+- Package class: `representative-frontier-closure`
+- Intended minimum model: `gpt-5.3-codex`
+- Scope shape: `owner-boundary-contraction/current-frontier`
+- Output profile: `medium`
+- Owned files: `work/packages/active-20260516-startup-active-gate-owner-cohort-recovery-closure.md`, `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md`, `work/tracks/topology-convergence.md`, `work/sprints/current-blocker.md`, `work/sprints/current-blocker.json`, `work/model-ledger.jsonl`
+- Forbidden files: `representative-timeout-budget`, `active-gate-admission-relaxation`
+- Frozen decisions: active-gate admission remains strict while `runtimePromotionAllowed=false`.
+- Escalation triggers: owned files expand beyond this package, runtime ownership changes, representative scenario evidence changes, or startup active-gate admission would be relaxed.
+- Focused proof: `npm run work:context`, `npm run work:evidence-summary -- test-output/reports/rolling-restart-after-top-level-publication-projection-20260516.report.json`, `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-top-level-publication-projection-20260516.report.json --handoff-probe`, `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-top-level-publication-projection-20260516.report.json`, `npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-after-top-level-publication-projection-20260516.report.json --markdown`, `npm run analyze:owner-files -- startup_active_gate_owner snapshot_coverage --markdown`, required subagent sequencing, focused owner tests, static guardrails, and representative rerun after implementation.
+- Model ledger advisory: `escalate`
+
+## Validation
+
+1. npm run work:context
+2. npm run work:package:doctor -- --suggest work/packages/active-20260516-startup-active-gate-owner-cohort-recovery-closure.md
+3. npm run work:validate -- --entry work/packages/active-20260516-startup-active-gate-owner-cohort-recovery-closure.md
+4. npm run work:evidence-summary -- test-output/reports/rolling-restart-after-top-level-publication-projection-20260516.report.json
+5. npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-top-level-publication-projection-20260516.report.json --handoff-probe
+6. npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-top-level-publication-projection-20260516.report.json
+7. npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-after-top-level-publication-projection-20260516.report.json --markdown
+8. npm run analyze:owner-files -- startup_active_gate_owner snapshot_coverage --markdown
+9. npm run work:subagent-prompt -- --role review --package work/packages/active-20260516-startup-active-gate-owner-cohort-recovery-closure.md
+10. npm run work:subagent-prompt -- --role fix --package work/packages/active-20260516-startup-active-gate-owner-cohort-recovery-closure.md
+11. npm run work:subagent-prompt -- --role implementation --package work/packages/active-20260516-startup-active-gate-owner-cohort-recovery-closure.md

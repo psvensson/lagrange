@@ -3,7 +3,7 @@
 <!-- work-package
 {
   "schema": "work-package-v1",
-  "status": "active",
+  "status": "done",
   "opened": "2026-05-16",
   "lane": "causal-escalation",
   "scenario": "rolling-restart",
@@ -16,24 +16,24 @@
   "nextAction": "Close this publication package as migrated and continue with a focused startup_active_gate_owner / snapshot_coverage successor using test-output/reports/rolling-restart-after-top-level-publication-projection-20260516.report.json. Do not relax active-gate admission, increase timeouts, or reopen publication ACK debt while publication_ack_convergence remains satisfied.",
   "proof": [
     "npm run work:context",
-    "npm run work:package:doctor -- --suggest work/packages/active-20260516-topology-publication-count-only-ack-closure.md",
-    "npm run work:validate -- --entry work/packages/active-20260516-topology-publication-count-only-ack-closure.md",
+    "npm run work:package:doctor -- --suggest work/packages/done-20260516-topology-publication-count-only-ack-closure.md",
+    "npm run work:validate -- --entry work/packages/done-20260516-topology-publication-count-only-ack-closure.md",
     "npm run work:llm-start",
     "npm run work:evidence-summary -- test-output/reports/rolling-restart-post-systems-pattern-checkpoint-20260516.report.json",
     "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-post-systems-pattern-checkpoint-20260516.report.json --handoff-probe",
     "npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-post-systems-pattern-checkpoint-20260516.report.json",
     "npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-post-systems-pattern-checkpoint-20260516.report.json --markdown",
     "npm run analyze:owner-files -- topology_publication_owner publication_convergence --markdown",
-    "npm run work:subagent-prompt -- --role review --package work/packages/active-20260516-topology-publication-count-only-ack-closure.md",
-    "npm run work:subagent-prompt -- --role fix --package work/packages/active-20260516-topology-publication-count-only-ack-closure.md",
-    "npm run work:subagent-prompt -- --role implementation --package work/packages/active-20260516-topology-publication-count-only-ack-closure.md",
-    "npm run work:validate -- --pre-impl work/packages/active-20260516-topology-publication-count-only-ack-closure.md",
+    "npm run work:subagent-prompt -- --role review --package work/packages/done-20260516-topology-publication-count-only-ack-closure.md",
+    "npm run work:subagent-prompt -- --role fix --package work/packages/done-20260516-topology-publication-count-only-ack-closure.md",
+    "npm run work:subagent-prompt -- --role implementation --package work/packages/done-20260516-topology-publication-count-only-ack-closure.md",
+    "npm run work:validate -- --pre-impl work/packages/done-20260516-topology-publication-count-only-ack-closure.md",
     "node --test test/control-plane/publication-owner-stream.test.js test/control-plane/publication-recovery-gate.test.js test/control-plane/publication-recovery-evidence.test.js",
     "node --test test/distributed/harness/__tests__/failure-bundle.test.js",
     "node scripts/check-guideline-literals.js src/control-plane/publication-owner-evidence.js src/control-plane/publication-owner-decision.js src/control-plane/publication-recovery-gate.js src/control-plane/publication-recovery-evidence.js src/diagnostics/topology-convergence-graph.js",
     "node scripts/check-guideline-decision-boundaries.js src/control-plane/publication-owner-evidence.js src/control-plane/publication-owner-decision.js src/control-plane/publication-recovery-gate.js src/control-plane/publication-recovery-evidence.js src/diagnostics/topology-convergence-graph.js",
     "npm run audit:runtime-grammar:file -- src/control-plane/publication-owner-evidence.js src/control-plane/publication-owner-decision.js src/control-plane/publication-recovery-gate.js src/control-plane/publication-recovery-evidence.js src/diagnostics/topology-convergence-graph.js",
-    "git diff --check -- work/packages/active-20260516-topology-publication-count-only-ack-closure.md work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md work/tracks/topology-convergence.md work/sprints/current-blocker.md work/sprints/current-blocker.json work/model-ledger.jsonl src/control-plane/publication-owner-evidence.js src/control-plane/publication-owner-decision.js src/control-plane/publication-recovery-gate.js src/control-plane/publication-recovery-evidence.js test/control-plane/publication-owner-stream.test.js test/control-plane/publication-recovery-gate.test.js test/control-plane/publication-recovery-evidence.test.js test/distributed/harness/publication-evidence-contract.js test/distributed/harness/failure-bundle-segment-4.js test/distributed/harness/__tests__/failure-bundle-core-10-test-cases.js src/diagnostics/topology-convergence-graph.js",
+    "git diff --check -- work/packages/done-20260516-topology-publication-count-only-ack-closure.md work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md work/tracks/topology-convergence.md work/sprints/current-blocker.md work/sprints/current-blocker.json work/model-ledger.jsonl src/control-plane/publication-owner-evidence.js src/control-plane/publication-owner-decision.js src/control-plane/publication-recovery-gate.js src/control-plane/publication-recovery-evidence.js test/control-plane/publication-owner-stream.test.js test/control-plane/publication-recovery-gate.test.js test/control-plane/publication-recovery-evidence.test.js test/distributed/harness/publication-evidence-contract.js test/distributed/harness/failure-bundle-segment-4.js test/distributed/harness/__tests__/failure-bundle-core-10-test-cases.js src/diagnostics/topology-convergence-graph.js",
     "node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-after-top-level-publication-projection-20260516.report.json --verbose",
     "npm run work:evidence-summary -- test-output/reports/rolling-restart-after-top-level-publication-projection-20260516.report.json",
     "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-top-level-publication-projection-20260516.report.json --handoff-probe",
@@ -42,7 +42,7 @@
     "npm run analyze:owner-files -- startup_active_gate_owner snapshot_coverage --markdown"
   ],
   "writeScope": [
-    "work/packages/active-20260516-topology-publication-count-only-ack-closure.md",
+    "work/packages/done-20260516-topology-publication-count-only-ack-closure.md",
     "work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md",
     "work/tracks/topology-convergence.md",
     "work/sprints/current-blocker.md",
@@ -79,7 +79,7 @@
     "src/diagnostics/topology-convergence-graph.js"
   ],
   "commitScope": [
-    "work/packages/active-20260516-topology-publication-count-only-ack-closure.md",
+    "work/packages/done-20260516-topology-publication-count-only-ack-closure.md",
     "work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md",
     "work/tracks/topology-convergence.md",
     "work/sprints/current-blocker.md",
@@ -174,7 +174,10 @@
       "npm run analyze:owner-files -- startup_active_gate_owner snapshot_coverage --markdown"
     ]
   },
-  "predecessor": "work/packages/done-20260516-rolling-restart-post-systems-pattern-checkpoint.md"
+  "predecessor": "work/packages/done-20260516-rolling-restart-post-systems-pattern-checkpoint.md",
+  "closed": "2026-05-16",
+  "commitAndPushLedgerRequired": true,
+  "successor": "work/packages/active-20260516-startup-active-gate-owner-cohort-recovery-closure.md"
 }
 -->
 
@@ -208,9 +211,9 @@ runtime owner-boundary package under the oscillation guard.
 
 ## Subagent Sequencing Ledger
 
-- [x] Review subagent recorded: Agent Hooke (019e30e4-b7e5-7ed3-b6ef-b2da2315bc0b) reviewed work/packages/active-20260516-topology-publication-count-only-ack-closure.md; result fixes-required.
-- [x] Fix subagent recorded or explicitly not needed: Agent Epicurus (019e30e7-660a-7173-955b-e0694d50c30a) fixed work/packages/active-20260516-topology-publication-count-only-ack-closure.md.
-- [x] Implementation subagent recorded: Agent Codex (be6e02e6-c909-43b4-9c47-a8c2b1b7de04) implemented work/packages/active-20260516-topology-publication-count-only-ack-closure.md.
+- [x] Review subagent recorded: Agent Hooke (019e30e4-b7e5-7ed3-b6ef-b2da2315bc0b) reviewed work/packages/done-20260516-topology-publication-count-only-ack-closure.md; result fixes-required.
+- [x] Fix subagent recorded or explicitly not needed: Agent Epicurus (019e30e7-660a-7173-955b-e0694d50c30a) fixed work/packages/done-20260516-topology-publication-count-only-ack-closure.md.
+- [x] Implementation subagent recorded: Agent Codex (be6e02e6-c909-43b4-9c47-a8c2b1b7de04) implemented work/packages/done-20260516-topology-publication-count-only-ack-closure.md.
 
 ## LLM Tool-First Contract
 
@@ -252,7 +255,7 @@ canonical extractor was tried and why it was insufficient.
 - Intended minimum model: `gpt-5.3-codex`
 - Scope shape: `owner-boundary-contraction/current-frontier`
 - Output profile: `medium`
-- Owned files: `work/packages/active-20260516-topology-publication-count-only-ack-closure.md`, `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md`, `work/tracks/topology-convergence.md`, `work/sprints/current-blocker.md`, `work/sprints/current-blocker.json`, `work/model-ledger.jsonl`, `src/control-plane/publication-owner-evidence.js`, `src/control-plane/publication-owner-decision.js`, `src/control-plane/publication-recovery-gate.js`, `src/control-plane/publication-recovery-evidence.js`, `test/control-plane/publication-owner-stream.test.js`, `test/control-plane/publication-recovery-gate.test.js`, `test/control-plane/publication-recovery-evidence.test.js`, `test/distributed/harness/publication-evidence-contract.js`, `test/distributed/harness/failure-bundle-segment-4.js`, `test/distributed/harness/__tests__/failure-bundle-core-10-test-cases.js`, `src/diagnostics/topology-convergence-graph.js`
+- Owned files: `work/packages/done-20260516-topology-publication-count-only-ack-closure.md`, `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md`, `work/tracks/topology-convergence.md`, `work/sprints/current-blocker.md`, `work/sprints/current-blocker.json`, `work/model-ledger.jsonl`, `src/control-plane/publication-owner-evidence.js`, `src/control-plane/publication-owner-decision.js`, `src/control-plane/publication-recovery-gate.js`, `src/control-plane/publication-recovery-evidence.js`, `test/control-plane/publication-owner-stream.test.js`, `test/control-plane/publication-recovery-gate.test.js`, `test/control-plane/publication-recovery-evidence.test.js`, `test/distributed/harness/publication-evidence-contract.js`, `test/distributed/harness/failure-bundle-segment-4.js`, `test/distributed/harness/__tests__/failure-bundle-core-10-test-cases.js`, `src/diagnostics/topology-convergence-graph.js`
 - Forbidden files: `src/startup-active-gate`, `representative-timeout-budget`, `active-gate-admission-relaxation`
 - Frozen decisions: package scope and lane stay bounded unless explicitly escalated.
 - Escalation triggers: runtime ownership changes, representative scenario evidence changes, or files outside the publication convergence consumer/reporting scope.
@@ -262,10 +265,10 @@ canonical extractor was tried and why it was insufficient.
 ## Validation
 
 1. npm run work:context
-2. npm run work:package:doctor -- --suggest work/packages/active-20260516-topology-publication-count-only-ack-closure.md
-3. npm run work:validate -- --entry work/packages/active-20260516-topology-publication-count-only-ack-closure.md
+2. npm run work:package:doctor -- --suggest work/packages/done-20260516-topology-publication-count-only-ack-closure.md
+3. npm run work:validate -- --entry work/packages/done-20260516-topology-publication-count-only-ack-closure.md
 4. npm run work:llm-start
-5. npm run work:validate -- --pre-impl work/packages/active-20260516-topology-publication-count-only-ack-closure.md
+5. npm run work:validate -- --pre-impl work/packages/done-20260516-topology-publication-count-only-ack-closure.md
 6. node --test test/control-plane/publication-owner-stream.test.js test/control-plane/publication-recovery-gate.test.js test/control-plane/publication-recovery-evidence.test.js
 7. node --test test/distributed/harness/__tests__/failure-bundle.test.js
 8. node scripts/check-guideline-literals.js src/control-plane/publication-owner-evidence.js src/control-plane/publication-owner-decision.js src/control-plane/publication-recovery-gate.js src/control-plane/publication-recovery-evidence.js src/diagnostics/topology-convergence-graph.js
@@ -303,3 +306,9 @@ at zero, and `active_gate_snapshot_coverage` blocked under
 - Successor should investigate the mismatch between handoff
   `pendingReconcileCount=0` and `activeGateOwnerCohort` reporting one pending
   recovery target for `11601fe0-72d6-5853-8590-ec2881853e72`.
+
+## Commit And Push Ledger
+
+1. Focused package commit: b3b04d73e1f0f72ea163dfe463e4e6475d09d7ff
+2. Pushed to: origin/codex/pending-ack-eligibility-filter
+3. Commit contains only package-owned files/package-status/allowed sprint handoff: yes

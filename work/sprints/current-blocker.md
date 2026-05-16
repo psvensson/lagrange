@@ -4,7 +4,7 @@
 
 Sprint: `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md`
 
-Package: `work/packages/active-20260516-topology-publication-count-only-ack-closure.md`
+Package: `work/packages/active-20260516-startup-active-gate-owner-cohort-recovery-closure.md`
 
 Workflow lane: `causal-escalation`
 
@@ -16,45 +16,31 @@ Playback: `none`
 
 ## Boundary
 
-Owner: `topology_publication_owner`
+Owner: `startup_active_gate_owner`
 
-Boundary: `publication_convergence`
+Boundary: `snapshot_coverage`
 
-Dominant reason: `pending_acks_present`
+Dominant reason: `active_gate_timed_out`
 
-Current state: Focused publication owner, recovery gate, recovery evidence, harness projection, and topology graph fixes closed the stale count-only ACK edge. The latest rolling-restart artifact now marks publication_ack_convergence satisfied: publication is PUBLISHED, pendingAckCount=0, pendingAckNodeIds=[], publicationOwnerAckState=not_required, freshnessFence=consumer_lag, recoveryOutcome=waiting_for_consumer, streamOutcome=stale, and priority recovery has zero residual witnesses. The representative scenario remains red after migration: active_gate_snapshot_coverage is blocked under startup_active_gate_owner / snapshot_coverage with active_gate_timed_out, owner_reconcile_pending, snapshot_coverage_incomplete, and snapshot_repair_deferred.
+Current state: Publication ACK convergence is satisfied and priority recovery has zero residual witnesses in the latest rolling-restart artifact. The active first frontier is active_gate_snapshot_coverage under startup_active_gate_owner / snapshot_coverage: activeGateState=timed_out, snapshotCoverageNodeCount=2, expectedNodeCount=5, selected snapshot repair is deferred with cache_stale_watermark, discovery_node_coverage_gap, and stale_replica_operations_in_flight, handoff pendingReconcileCount=0, and activeGateOwnerCohort reports one missing published recovery target 11601fe0-72d6-5853-8590-ec2881853e72.
 
 ## Next Action
 
-Close this publication package as migrated and continue with a focused startup_active_gate_owner / snapshot_coverage successor using test-output/reports/rolling-restart-after-top-level-publication-projection-20260516.report.json. Do not relax active-gate admission, increase timeouts, or reopen publication ACK debt while publication_ack_convergence remains satisfied.
+Run required review/fix/implementation subagents, then explain and repair the one-node activeGateOwnerCohort pending recovery target while publication ACK convergence and priority recovery are satisfied. Do not relax active-gate admission, increase timeouts, or reopen publication ACK debt.
 
 ## Proof Ladder
 
 1. `npm run work:context`
-2. `npm run work:package:doctor -- --suggest work/packages/active-20260516-topology-publication-count-only-ack-closure.md`
-3. `npm run work:validate -- --entry work/packages/active-20260516-topology-publication-count-only-ack-closure.md`
-4. `npm run work:llm-start`
-5. `npm run work:evidence-summary -- test-output/reports/rolling-restart-post-systems-pattern-checkpoint-20260516.report.json`
-6. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-post-systems-pattern-checkpoint-20260516.report.json --handoff-probe`
-7. `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-post-systems-pattern-checkpoint-20260516.report.json`
-8. `npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-post-systems-pattern-checkpoint-20260516.report.json --markdown`
-9. `npm run analyze:owner-files -- topology_publication_owner publication_convergence --markdown`
-10. `npm run work:subagent-prompt -- --role review --package work/packages/active-20260516-topology-publication-count-only-ack-closure.md`
-11. `npm run work:subagent-prompt -- --role fix --package work/packages/active-20260516-topology-publication-count-only-ack-closure.md`
-12. `npm run work:subagent-prompt -- --role implementation --package work/packages/active-20260516-topology-publication-count-only-ack-closure.md`
-13. `npm run work:validate -- --pre-impl work/packages/active-20260516-topology-publication-count-only-ack-closure.md`
-14. `node --test test/control-plane/publication-owner-stream.test.js test/control-plane/publication-recovery-gate.test.js test/control-plane/publication-recovery-evidence.test.js`
-15. `node --test test/distributed/harness/__tests__/failure-bundle.test.js`
-16. `node scripts/check-guideline-literals.js src/control-plane/publication-owner-evidence.js src/control-plane/publication-owner-decision.js src/control-plane/publication-recovery-gate.js src/control-plane/publication-recovery-evidence.js src/diagnostics/topology-convergence-graph.js`
-17. `node scripts/check-guideline-decision-boundaries.js src/control-plane/publication-owner-evidence.js src/control-plane/publication-owner-decision.js src/control-plane/publication-recovery-gate.js src/control-plane/publication-recovery-evidence.js src/diagnostics/topology-convergence-graph.js`
-18. `npm run audit:runtime-grammar:file -- src/control-plane/publication-owner-evidence.js src/control-plane/publication-owner-decision.js src/control-plane/publication-recovery-gate.js src/control-plane/publication-recovery-evidence.js src/diagnostics/topology-convergence-graph.js`
-19. `git diff --check -- work/packages/active-20260516-topology-publication-count-only-ack-closure.md work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md work/tracks/topology-convergence.md work/sprints/current-blocker.md work/sprints/current-blocker.json work/model-ledger.jsonl src/control-plane/publication-owner-evidence.js src/control-plane/publication-owner-decision.js src/control-plane/publication-recovery-gate.js src/control-plane/publication-recovery-evidence.js test/control-plane/publication-owner-stream.test.js test/control-plane/publication-recovery-gate.test.js test/control-plane/publication-recovery-evidence.test.js test/distributed/harness/publication-evidence-contract.js test/distributed/harness/failure-bundle-segment-4.js test/distributed/harness/__tests__/failure-bundle-core-10-test-cases.js src/diagnostics/topology-convergence-graph.js`
-20. `node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-after-top-level-publication-projection-20260516.report.json --verbose`
-21. `npm run work:evidence-summary -- test-output/reports/rolling-restart-after-top-level-publication-projection-20260516.report.json`
-22. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-top-level-publication-projection-20260516.report.json --handoff-probe`
-23. `npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-after-top-level-publication-projection-20260516.report.json --markdown`
-24. `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-top-level-publication-projection-20260516.report.json`
-25. `npm run analyze:owner-files -- startup_active_gate_owner snapshot_coverage --markdown`
+2. `npm run work:package:doctor -- --suggest work/packages/active-20260516-startup-active-gate-owner-cohort-recovery-closure.md`
+3. `npm run work:validate -- --entry work/packages/active-20260516-startup-active-gate-owner-cohort-recovery-closure.md`
+4. `npm run work:evidence-summary -- test-output/reports/rolling-restart-after-top-level-publication-projection-20260516.report.json`
+5. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-top-level-publication-projection-20260516.report.json --handoff-probe`
+6. `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-top-level-publication-projection-20260516.report.json`
+7. `npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-after-top-level-publication-projection-20260516.report.json --markdown`
+8. `npm run analyze:owner-files -- startup_active_gate_owner snapshot_coverage --markdown`
+9. `npm run work:subagent-prompt -- --role review --package work/packages/active-20260516-startup-active-gate-owner-cohort-recovery-closure.md`
+10. `npm run work:subagent-prompt -- --role fix --package work/packages/active-20260516-startup-active-gate-owner-cohort-recovery-closure.md`
+11. `npm run work:subagent-prompt -- --role implementation --package work/packages/active-20260516-startup-active-gate-owner-cohort-recovery-closure.md`
 
 ## Model Fit
 
@@ -68,13 +54,14 @@ Output profile: `medium`
 
 Escalation triggers:
 
-1. `runtime ownership changes`
-2. `representative scenario evidence changes`
-3. `files outside the publication convergence consumer/reporting scope`
+1. `owned files expand beyond this package`
+2. `runtime ownership changes`
+3. `representative scenario evidence changes`
+4. `startup active-gate admission would be relaxed`
 
 ## Representative Residual
 
-Status: `migrated`
+Status: `live-red-scenario-release-gate`
 
 Scenario: `rolling-restart`
 
@@ -88,135 +75,121 @@ Boundary: `snapshot_coverage`
 
 Dominant reason: `active_gate_timed_out`
 
-Next action: `Continue with startup_active_gate_owner / snapshot_coverage. Required progress mechanism is reconcile; handoff has pendingReconcileCount=0 but activeGateOwnerCohort reports one missing published recovery target.`
+Next action: `Explain why activeGateOwnerCohort has one pending recovery target while handoff pendingReconcileCount is 0, then reduce, repair, split, or migrate that target with focused proof.`
 
 ## Causal Governance
 
-Causal hypothesis: `A PUBLISHED publication with an explicit empty pending ACK node list should close stale count-only ACK debt and allow missing published membership to classify as consumer lag rather than pending ACK convergence.`
+Causal hypothesis: `The remaining red gate is caused by a startup active-gate owner cohort recovery gap: the consumer still needs reconcile progress for one missing published target even though the publication ACK producer and priority recovery are satisfied.`
 
-Stop-condition check: `Run focused owner/gate/harness tests, static guardrails, representative rolling-restart, work:evidence-summary, handoff-probe, priority residual extraction, npm run analyze:causal-model, and owner-files on the fresh artifact.`
+Stop-condition check: `Run npm run analyze:causal-model and the topology handoff probe on the latest artifact, then run required subagents before promoting exact runtime files.`
 
-Expected causal-model change: `publication_ack_convergence becomes satisfied and the first actionable frontier migrates to active_gate_snapshot_coverage, or the package remains on a concrete non-count-only publication edge.`
+Expected causal-model change: `Focused proof either makes rolling-restart green, reduces activeGateOwnerCohort pending recovery or snapshot coverage debt, keeps the same active-gate frontier with a narrower target, or migrates to a narrower owner boundary selected by canonical extractors.`
 
-Representative outcome: `migrated`
+Representative outcome: `pending-before-rerun`
 
-Causal debt: `The latest artifact satisfies publication ACK convergence and priority recovery, but active-gate snapshot coverage remains blocked with snapshotCoverage=2/5, expectedNodeCount=5, selected snapshot repair_deferred, publicationActiveGateHandoffState=pending, pendingReconcileCount=0, and activeGateOwnerCohortMissingPublishedCount=1 for 11601fe0-72d6-5853-8590-ec2881853e72.`
+Causal debt: `Active-gate handoff has pendingReconcileCount=0 and nextAction=wait_owner_recovery, but activeGateOwnerCohort reports activeGateOwnerCohortMissingPublishedCount=1 and pending recovery node 11601fe0-72d6-5853-8590-ec2881853e72 while snapshot coverage is only 2/5.`
 
-Cross-boundary review: `Review, fix, and implementation proof are recorded with real agent identities. Do not continue editing publication ACK evidence after the canonical extractors mark publication_ack_convergence satisfied.`
+Cross-boundary review: `Publication ACK convergence is closed and pushed as the predecessor. This package must not reopen publication ACK evidence unless canonical extractors promote it again.`
 
 ## Scenario Causal Closure
 
-Reference scenario/probe: `rolling-restart after top-level publication projection repair`
+Reference scenario/probe: `rolling-restart after publication ACK convergence migration`
 
 Phase chain:
 
-1. `fresh checkpoint reselected publication_ack_convergence`
-2. `focused publication owner and recovery gate repair closed PUBLISHED empty ACK-list debt`
-3. `harness top-level projection and topology graph accepted not_required ACK closure`
-4. `representative rolling-restart rerun`
-5. `canonical extractors migrated the first frontier to active-gate snapshot coverage`
+1. `consume publication ACK convergence migration proof`
+2. `classify active-gate snapshot coverage as the current first frontier`
+3. `run review, fix if required, and implementation subagents before runtime edits`
+4. `promote exact owner files only after subagent proof and focused probes`
+5. `rerun representative rolling-restart and classify green, reduced, same-frontier, migrated, or split`
 
 Current first frontier: `active_gate_snapshot_coverage in test-output/reports/rolling-restart-after-top-level-publication-projection-20260516.report.json, owned by startup_active_gate_owner / snapshot_coverage.`
 
 Known downstream blockers:
 
-1. `publication_ack_convergence is satisfied with publication PUBLISHED, pendingAckCount=0, pendingAckNodeIds=[], publicationOwnerAckState=not_required, freshnessFence=consumer_lag, recoveryOutcome=waiting_for_consumer, streamOutcome=stale`
-2. `priority-recovery residual extraction reports zero witnesses`
-3. `active-gate snapshot coverage is blocked with activeGateState=timed_out, snapshotCoverageNodeCount=2, expectedNodeCount=5, selectedSnapshotObservationMode=repair_deferred, and reason codes cache_stale_watermark, discovery_node_coverage_gap, stale_replica_operations_in_flight`
-4. `handoff contract remains pending with reason owner_reconcile_pending, nextAction=wait_owner_recovery, runtimePromotionAllowed=false, pendingReconcileCount=0, and activeGateOwnerCohort pending recovery for node 11601fe0-72d6-5853-8590-ec2881853e72`
+1. `publication_ack_convergence is satisfied with pendingAckCount=0 and pendingAckNodeIds=[]`
+2. `priority recovery residual extraction reports zero witnesses`
+3. `activeGateState=timed_out, activeNodeCount=4, expectedNodeCount=5, snapshotCoverageNodeCount=2`
+4. `selected snapshot observation is repair_deferred/deferred_refresh/deferred/deferred/retry with retryAfterMs=6989 and reason codes cache_stale_watermark, discovery_node_coverage_gap, stale_replica_operations_in_flight`
+5. `publicationActiveGateHandoffState=pending, reason owner_reconcile_pending, nextAction wait_owner_recovery, runtimePromotionAllowed=false, pendingReconcileCount=0`
+6. `activeGateOwnerCohortState=pending with missing/pending recovery node 11601fe0-72d6-5853-8590-ec2881853e72`
 
-Missing causal edge: `The next package must explain why activeGateOwnerCohort has one missing published recovery target while the active-gate handoff pendingReconcileCount is 0, then make that target publish, recover, split, or migrate.`
+Missing causal edge: `The owner cohort recovery state still needs one reconcile progress path even though the handoff target list is empty; the package must identify whether the gap is in active-gate observation, owner cohort derivation, publication readback, or a narrower runtime owner.`
 
 Missing causal edge probe: `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-top-level-publication-projection-20260516.report.json --handoff-probe`
 
-Bounded progress proof: `Focused publication repair made publication_ack_convergence satisfied and priority recovery clean; npm run analyze:causal-model now reports active_gate_snapshot_coverage_incomplete with outcome continue_local_fix and the handoff probe names reconcile as the required progress mechanism.`
+Bounded progress proof: `The current handoff probe names reconcile as the required progress mechanism and identifies one concrete activeGateOwnerCohort recovery target.`
 
 Bounded progress proof artifact: `test-output/reports/rolling-restart-after-top-level-publication-projection-20260516.report.json`
 
-Expected observable transition: `The successor should reduce the one active-gate owner cohort recovery target, improve selected snapshot coverage, or migrate to a narrower owner with canonical evidence.`
+Expected observable transition: `The next representative rerun should make the one-node owner cohort recovery target publish/recover, improve snapshotCoverage, or classify a narrower owner boundary with canonical evidence.`
 
-Max progress bound: `one focused publication convergence package slice and one representative rerun before owner-boundary migration.`
+Max progress bound: `one focused startup active-gate owner package slice after required subagent sequencing; no timeout increases, active-gate admission relaxation, or publication ACK rewrites.`
 
-Same-frontier fallback: `Not used; publication_ack_convergence is satisfied in canonical evidence.`
+Same-frontier fallback: `If active_gate_snapshot_coverage remains first frontier, preserve the concrete target and split the active-gate owner cohort edge instead of reopening publication convergence.`
 
-Expected next frontier: `startup_active_gate_owner / snapshot_coverage`
+Expected next frontier: `representative green, reduced active-gate snapshot coverage debt, or a narrower startup active-gate owner boundary`
 
-Result classification: `migrated`
+Result classification: `pending-before-probe`
 
-Stop condition: `migrate-owner-boundary`
+Stop condition: `continue-local-fix`
 
 Recent frontier history:
 
-1. `work/packages/done-20260516-rolling-restart-post-systems-pattern-checkpoint.md / topology_publication_owner / publication_convergence / same-frontier`
-2. `work/packages/done-20260516-topology-publication-convergence-frontier-causal-edge.md / topology_publication_owner / publication_convergence / classification-only`
-3. `work/packages/done-20260516-foundationdb-style-deterministic-missing-edge-replay.md / diagnostics_owner / deterministic_missing_edge_replay / migrated`
+1. `work/packages/done-20260516-topology-publication-count-only-ack-closure.md / topology_publication_owner / publication_convergence / migrated`
+2. `work/packages/done-20260515-startup-active-gate-final-owner-publication-target-proof.md / startup_active_gate_owner / snapshot_coverage / reduced`
+3. `work/packages/done-20260515-startup-active-gate-snapshot-coverage-owner-reconcile-remaining-targets.md / startup_active_gate_owner / snapshot_coverage / reduced`
 
-Oscillation check: `This package re-entered publication convergence only because fresh evidence selected pending ACK convergence. It closes after canonical evidence migrates to active-gate snapshot coverage.`
+Oscillation check: `This package is allowed because the immediately preceding publication package satisfied publication_ack_convergence and migrated the first frontier to startup_active_gate_owner / snapshot_coverage.`
 
-Handoff invariant: `Active-gate admission remains strict while runtimePromotionAllowed=false; publication handoff truth remains owned by canonical recovery evidence and topology graph classification.`
+Handoff invariant: `Active-gate admission stays strict while runtimePromotionAllowed=false; publication ACK debt remains closed unless canonical evidence selects it again.`
 
 ## Scope
 
 Write scope:
 
-1. `work/packages/active-20260516-topology-publication-count-only-ack-closure.md`
+1. `work/packages/active-20260516-startup-active-gate-owner-cohort-recovery-closure.md`
 2. `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md`
 3. `work/tracks/topology-convergence.md`
 4. `work/sprints/current-blocker.md`
 5. `work/sprints/current-blocker.json`
 6. `work/model-ledger.jsonl`
-7. `src/control-plane/publication-owner-evidence.js`
-8. `src/control-plane/publication-owner-decision.js`
-9. `src/control-plane/publication-recovery-gate.js`
-10. `src/control-plane/publication-recovery-evidence.js`
-11. `test/control-plane/publication-owner-stream.test.js`
-12. `test/control-plane/publication-recovery-gate.test.js`
-13. `test/control-plane/publication-recovery-evidence.test.js`
-14. `test/distributed/harness/publication-evidence-contract.js`
-15. `test/distributed/harness/failure-bundle-segment-4.js`
-16. `test/distributed/harness/__tests__/failure-bundle-core-10-test-cases.js`
-17. `src/diagnostics/topology-convergence-graph.js`
 
 Handoff files:
 
-1. `work/packages/done-20260516-rolling-restart-post-systems-pattern-checkpoint.md`
-2. `work/packages/done-20260516-topology-publication-convergence-frontier-causal-edge.md`
-3. `test-output/reports/rolling-restart-post-systems-pattern-checkpoint-20260516.report.json`
+1. `work/packages/done-20260516-topology-publication-count-only-ack-closure.md`
+2. `work/packages/done-20260515-startup-active-gate-snapshot-coverage-owner-reconcile-closure.md`
+3. `work/packages/done-20260515-startup-active-gate-snapshot-coverage-owner-reconcile-remaining-targets.md`
+4. `work/packages/done-20260515-startup-active-gate-final-owner-publication-target-proof.md`
+5. `test-output/reports/rolling-restart-after-top-level-publication-projection-20260516.report.json`
 
 Generated files:
 
-1. `test-output/reports/rolling-restart-after-count-only-ack-closure-20260516.report.json`
-2. `test-output/reports/rolling-restart-after-top-level-publication-projection-20260516.report.json`
-3. `work/sprints/current-blocker.md`
-4. `work/sprints/current-blocker.json`
+1. `work/sprints/current-blocker.md`
+2. `work/sprints/current-blocker.json`
+3. `test-output/reports/rolling-restart-after-top-level-publication-projection-20260516.report.json`
 
 Candidate runtime files:
 
-1. `src/control-plane/publication-owner-evidence.js`
-2. `src/control-plane/publication-owner-decision.js`
-3. `src/control-plane/publication-recovery-gate.js`
-4. `src/control-plane/publication-recovery-evidence.js`
-5. `src/diagnostics/topology-convergence-graph.js`
+1. `src/admin/admin-control-snapshot-class-part-2.js`
+2. `src/admin/admin-control-snapshot-class-part-5.js`
+3. `src/admin/admin-control-snapshot-class-part-6.js`
+4. `src/control-plane/control-plane-snapshot-owner.js`
+5. `src/control-plane/publication-active-gate-handoff-contract.js`
+6. `src/diagnostics/topology-convergence-graph.js`
+7. `scripts/analyze-topology-convergence.js`
+8. `test/admin/admin-control-snapshot.test.js`
+9. `test/distributed/harness/active-gate-contract.js`
+10. `test/scripts/analyze-topology-convergence.test.js`
 
 Commit scope:
 
-1. `work/packages/active-20260516-topology-publication-count-only-ack-closure.md`
+1. `work/packages/active-20260516-startup-active-gate-owner-cohort-recovery-closure.md`
 2. `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md`
 3. `work/tracks/topology-convergence.md`
 4. `work/sprints/current-blocker.md`
 5. `work/sprints/current-blocker.json`
 6. `work/model-ledger.jsonl`
-7. `src/control-plane/publication-owner-evidence.js`
-8. `src/control-plane/publication-owner-decision.js`
-9. `src/control-plane/publication-recovery-gate.js`
-10. `src/control-plane/publication-recovery-evidence.js`
-11. `test/control-plane/publication-owner-stream.test.js`
-12. `test/control-plane/publication-recovery-gate.test.js`
-13. `test/control-plane/publication-recovery-evidence.test.js`
-14. `test/distributed/harness/publication-evidence-contract.js`
-15. `test/distributed/harness/failure-bundle-segment-4.js`
-16. `test/distributed/harness/__tests__/failure-bundle-core-10-test-cases.js`
-17. `src/diagnostics/topology-convergence-graph.js`
 
 Legacy touched files:
 

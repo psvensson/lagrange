@@ -50,9 +50,9 @@ Canonical state after the top-level publication projection closure:
 9. The active-gate owner cohort reports one missing/pending recovery target:
    `11601fe0-72d6-5853-8590-ec2881853e72`, while handoff
    `pendingReconcileCount=0`.
-10. The current package is closing as migrated from
-   `topology_publication_owner / publication_convergence`; the next active
-   package must continue on `startup_active_gate_owner / snapshot_coverage`
+10. The current active package is
+   `work/packages/active-20260516-startup-active-gate-owner-cohort-recovery-closure.md`;
+   it must continue on `startup_active_gate_owner / snapshot_coverage`
    without relaxing active-gate admission or increasing timeouts.
 
 ## Scope Basis
@@ -444,11 +444,10 @@ The sprint cannot close until:
 
 ## Current Next Action
 
-Close and push the publication ACK package as migrated, then continue with a
-fresh active-gate successor package:
+Continue with the active-gate successor package:
 
 ```text
-startup_active_gate_owner / snapshot_coverage
+work/packages/active-20260516-startup-active-gate-owner-cohort-recovery-closure.md
 test-output/reports/rolling-restart-after-top-level-publication-projection-20260516.report.json
 ```
 

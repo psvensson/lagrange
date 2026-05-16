@@ -76,8 +76,9 @@ Latest current handoff state:
 - the active-gate owner cohort still reports one pending recovery target for
   `11601fe0-72d6-5853-8590-ec2881853e72` despite handoff
   `pendingReconcileCount=0`
-- the publication package is closing as migrated; the next package should focus
-  `startup_active_gate_owner / snapshot_coverage`
+- the active package is
+  `work/packages/active-20260516-startup-active-gate-owner-cohort-recovery-closure.md`
+  and focuses `startup_active_gate_owner / snapshot_coverage`
 
 ## Target Invariant
 
@@ -106,8 +107,7 @@ or produces a narrower owner-boundary blocker selected by canonical evidence.
 - Continuation sprint context:
   `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md`
 - Active successor package:
-  `startup_active_gate_owner / snapshot_coverage` package after the publication
-  package is committed and pushed
+  `work/packages/active-20260516-startup-active-gate-owner-cohort-recovery-closure.md`
 - Artifact:
   `test-output/reports/rolling-restart-after-top-level-publication-projection-20260516.report.json`
 - Closed checkpoint predecessor:
@@ -200,8 +200,7 @@ These are context candidates, not write authorization:
 
 ## Entry Condition
 
-When the rolling-restart gate is resumed, close and push the publication ACK
-package as migrated, then continue with a focused
+When the rolling-restart gate is resumed, continue with the focused
 `startup_active_gate_owner / snapshot_coverage` successor using
 `test-output/reports/rolling-restart-after-top-level-publication-projection-20260516.report.json`.
 
@@ -216,5 +215,5 @@ canonical owner-boundary evidence.
 Next continuation package:
 
 ```text
-startup_active_gate_owner / snapshot_coverage
+work/packages/active-20260516-startup-active-gate-owner-cohort-recovery-closure.md
 ```
