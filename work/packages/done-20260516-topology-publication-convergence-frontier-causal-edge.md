@@ -3,7 +3,7 @@
 <!-- work-package
 {
   "schema": "work-package-v1",
-  "status": "active",
+  "status": "done",
   "opened": "2026-05-16",
   "lane": "causal-escalation",
   "scenario": "rolling-restart",
@@ -23,7 +23,7 @@
     "npm run analyze:owner-files -- topology_publication_owner publication_convergence --markdown"
   ],
   "writeScope": [
-    "work/packages/active-20260516-topology-publication-convergence-frontier-causal-edge.md",
+    "work/packages/done-20260516-topology-publication-convergence-frontier-causal-edge.md",
     "work/packages/todo-20260516-topology-publication-convergence-frontier-causal-edge.md",
     "work/sprints/current-blocker.md",
     "work/sprints/current-blocker.json",
@@ -51,7 +51,7 @@
     "test/distributed/harness/cluster-segment-7-class-5.js"
   ],
   "commitScope": [
-    "work/packages/active-20260516-topology-publication-convergence-frontier-causal-edge.md",
+    "work/packages/done-20260516-topology-publication-convergence-frontier-causal-edge.md",
     "work/packages/todo-20260516-topology-publication-convergence-frontier-causal-edge.md",
     "work/sprints/current-blocker.md",
     "work/sprints/current-blocker.json",
@@ -121,7 +121,9 @@
     ],
     "oscillationCheck": "This package is allowed because the immediately preceding package migrated out of startup_active_gate_owner after active-gate owner reconcile drained.",
     "handoffInvariant": "Active-gate admission stays strict and the paused rolling-restart sprint remains closed; this package only classifies the successor frontier."
-  }
+  },
+  "closed": "2026-05-16",
+  "commitAndPushLedgerRequired": true
 }
 -->
 
@@ -213,13 +215,12 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 ## Subagent Sequencing Ledger
 
 Required before runtime implementation because this is a causal-escalation
-package. This package is currently classification-only; runtime implementation
-must not start until a human explicitly authorizes subagent delegation or the
-environment policy changes.
+package. This package is currently classification-only; no runtime or test
+files are promoted by this slice.
 
-- [x] Review subagent recorded: blocked-by-environment-policy reason: subagent-delegation-requires-explicit-user-request-before-runtime-implementation
-- [x] Fix subagent recorded or explicitly not needed: blocked-by-environment-policy reason: subagent-delegation-requires-explicit-user-request-before-runtime-implementation
-- [x] Implementation subagent recorded: blocked-by-environment-policy reason: subagent-delegation-requires-explicit-user-request-before-runtime-implementation
+- [x] Review subagent recorded: Agent Bernoulli (019e3018-8a11-7861-a22b-10da899ad167) reviewed work/packages/done-20260516-topology-publication-convergence-frontier-causal-edge.md; result fixes-required
+- [x] Fix subagent recorded or explicitly not needed: Agent Archimedes (019e301b-5ac1-7df2-8aef-549412ab4751) fixed work/packages/done-20260516-topology-publication-convergence-frontier-causal-edge.md
+- [x] Implementation subagent recorded: Agent Harvey (019e301d-25bc-7a73-8e25-d01da8137fd5) implemented work/packages/done-20260516-topology-publication-convergence-frontier-causal-edge.md
 
 ## Borrowed Pattern Hook
 
@@ -289,3 +290,9 @@ owner stream edge before runtime implementation.
 4. PASS: npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-after-admin-owner-readiness-handoff-20260516.report.json --markdown
 5. PASS: npm run analyze:distributed-failure -- --report test-output/reports/rolling-restart-after-admin-owner-readiness-handoff-20260516.report.json
 6. PASS: npm run analyze:owner-files -- topology_publication_owner publication_convergence --markdown
+
+## Commit And Push Ledger
+
+1. Focused package commit: 424ec635
+2. Pushed to: origin/codex/pending-ack-eligibility-filter
+3. Commit contains only package-owned files/package-status/allowed sprint handoff: yes

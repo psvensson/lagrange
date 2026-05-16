@@ -70,7 +70,7 @@ Primary references:
    - Acceptance: `work:current-blocker -- --write`, `work:validate
      -- --pre-impl`, and `work:dirty-scope` agree with the latest active
      package and artifact.
-2. [Topology Publication Convergence Frontier Causal Edge](../packages/active-20260516-topology-publication-convergence-frontier-causal-edge.md)
+2. [Topology Publication Convergence Frontier Causal Edge](../packages/done-20260516-topology-publication-convergence-frontier-causal-edge.md)
    - Lane: `causal-escalation`
    - Owner boundary: `topology_publication_owner / publication_convergence`
    - Purpose: classify the latest `publication_ack_convergence` frontier after
@@ -78,7 +78,7 @@ Primary references:
    - Acceptance: one next owner is selected from publication convergence,
      readiness support, or operation workflow handoff, with a causal edge table
      explaining the decision.
-3. [FoundationDB Style Deterministic Missing Edge Replay](../packages/todo-20260516-foundationdb-style-deterministic-missing-edge-replay.md)
+3. [FoundationDB Style Deterministic Missing Edge Replay](../packages/active-20260516-foundationdb-style-deterministic-missing-edge-replay.md)
    - Lane: `scenario-release-gate`
    - Owner boundary: `diagnostics_owner / deterministic_missing_edge_replay`
    - Purpose: turn representative topology frontier artifacts into compact

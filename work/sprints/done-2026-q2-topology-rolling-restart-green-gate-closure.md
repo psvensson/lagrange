@@ -406,7 +406,7 @@ The sprint cannot close until:
 1. Final package:
    `work/packages/done-20260515-startup-active-gate-snapshot-coverage-owner-reconcile-remaining-targets.md`.
 2. Successor package:
-   `work/packages/active-20260516-topology-publication-convergence-frontier-causal-edge.md`.
+   `work/packages/done-20260516-topology-publication-convergence-frontier-causal-edge.md`.
 3. Final representative artifact:
    `test-output/reports/rolling-restart-after-admin-owner-readiness-handoff-20260516.report.json`.
 4. Result: migrated. The active-gate owner-reconcile path no longer reports
@@ -422,20 +422,22 @@ The sprint cannot close until:
 
 ## Current Next Action
 
-Continue in the successor systems-pattern hardening sprint after the final
-startup active-gate snapshot coverage package:
+Continue in the successor systems-pattern hardening sprint from the final
+representative artifact:
 
 ```text
-work/packages/done-20260515-startup-active-gate-snapshot-coverage-owner-reconcile-remaining-targets.md
+test-output/reports/rolling-restart-after-admin-owner-readiness-handoff-20260516.report.json
 ```
 
-Review, fix, and implementation subagent proof are recorded in the active
-package. Continue from the latest representative residual: focused owner tests
-prove the owner command and seed-only fixture, but rolling-restart still reports
-generic `owner_reconcile_pending` and does not surface
-`membershipPublicationHandoffOutcome` or one of the structured owner outcomes.
-The next action is to trace the representative active-gate handoff path that
-should consume or display that owner outcome for pending nodes
-`11601fe0-72d6-5853-8590-ec2881853e72` and
-`35a891b8-c1a0-5064-9c6e-2acfba61c2a7`, without relaxing active-gate admission,
-rewriting publication handoff truth, or increasing timeouts.
+The completed startup active-gate package drained the owner-reconcile handoff
+path: `pendingReconcileCount=0` and `nextAction=wait_owner_recovery`. Do not
+resume the old pending-reconcile active-gate trace.
+
+The remaining representative frontier is `publication_ack_convergence /
+topology_publication_owner / publication_convergence`, with dominant reason
+`publication_ack_blocked`. Next work should prove the topology publication
+owner recovery wake / stale owner stream edge: publication is `PUBLISHED` and
+acknowledged, but active publication coverage remains incomplete while the owner
+reports consumer lag, waiting for consumer, and stale stream. Focus future work
+there before any runtime implementation, without relaxing active-gate
+admission, rewriting publication handoff truth, or increasing timeouts.
