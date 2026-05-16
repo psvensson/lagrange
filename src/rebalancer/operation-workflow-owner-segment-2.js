@@ -301,6 +301,19 @@ class OperationWorkflowOwnerSegment2 extends OperationWorkflowOwnerSegment1 {
     );
   }
 
+  deferCoordinatorCreatedOperationTransitionRetry(operationId, operation, error, options = {}) {
+    return this.deferTransitionRetry(operationId, error, {
+      boundary: OPERATION_WORKFLOW_OWNER_LITERAL.COORDINATOR_CREATED_OPERATION,
+      workflowStep: operation?.workflowStep || null,
+      partitionId: options.partitionId || operation?.partitionId || null,
+      updatedAt: operation?.updatedAt,
+      createdAt: operation?.createdAt,
+      ...(options.includeOperationSnapshot === true ?
+        {operationSnapshot: operation} :
+        {}),
+    });
+  }
+
   /**
    * @param {Object|null} operation
    * @param {Error|Object} error
@@ -469,14 +482,9 @@ class OperationWorkflowOwnerSegment2 extends OperationWorkflowOwnerSegment1 {
               );
             } catch (error) {
               if (
-                this.deferTransitionRetry(operationId, error, {
-                  boundary:
-                    OPERATION_WORKFLOW_OWNER_LITERAL.COORDINATOR_CREATED_OPERATION,
-                  workflowStep: operationInput?.workflowStep || null,
-                  partitionId,
-                  updatedAt: operationInput?.updatedAt,
-                  createdAt: operationInput?.createdAt,
-                })
+                this.deferCoordinatorCreatedOperationTransitionRetry(
+                  operationId, operationInput, error, {partitionId},
+                )
               ) {
                 return false;
               }
@@ -499,15 +507,10 @@ class OperationWorkflowOwnerSegment2 extends OperationWorkflowOwnerSegment1 {
               );
             } catch (error) {
               if (
-                this.deferTransitionRetry(operationId, error, {
-                  boundary:
-                    OPERATION_WORKFLOW_OWNER_LITERAL.COORDINATOR_CREATED_OPERATION,
-                  workflowStep: operation?.workflowStep || null,
-                  partitionId,
-                  updatedAt: operation?.updatedAt,
-                  createdAt: operation?.createdAt,
-                  operationSnapshot: operation,
-                })
+                this.deferCoordinatorCreatedOperationTransitionRetry(
+                  operationId, operation, error,
+                  {includeOperationSnapshot: true, partitionId},
+                )
               ) {
                 return false;
               }
@@ -1393,12 +1396,6 @@ class OperationWorkflowOwnerSegment2 extends OperationWorkflowOwnerSegment1 {
     }
   }
 
-  /**
-   * Load authoritative in-flight transaction state for one transition session
-   * when the local coordinator cache has already dropped that session.
-   * @param {string} sessionId
-   * @return {Promise<Object|null>}
-   */
 }
 
 export {OperationWorkflowOwnerSegment2};
