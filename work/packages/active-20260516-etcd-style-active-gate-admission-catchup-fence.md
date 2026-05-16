@@ -3,7 +3,7 @@
 <!-- work-package
 {
   "schema": "work-package-v1",
-  "status": "todo",
+  "status": "active",
   "opened": "2026-05-16",
   "lane": "runtime-owner-boundary",
   "scenario": "none",
@@ -19,11 +19,26 @@
     "node --test test/control-plane/publication-active-gate-handoff-contract.test.js",
     "node scripts/check-guideline-decision-boundaries.js src/control-plane/publication-active-gate-handoff-contract.js src/admin/admin-control-snapshot-class-part-1.js src/admin/admin-control-snapshot-class-part-2.js"
   ],
-  "writeScope": [],
+  "writeScope": [
+    "work/packages/active-20260516-etcd-style-active-gate-admission-catchup-fence.md",
+    "src/control-plane/publication-active-gate-handoff-contract.js",
+    "src/admin/admin-control-snapshot-class-part-1.js",
+    "src/admin/admin-control-snapshot-class-part-2.js",
+    "src/admin/admin-control-snapshot-class-part-3.js",
+    "test/control-plane/publication-active-gate-handoff-contract.test.js",
+    "test/admin/admin-control-snapshot.test.js",
+    "work/sprints/current-blocker.md",
+    "work/sprints/current-blocker.json",
+    "work/tracks/topology-convergence.md",
+    "work/model-ledger.jsonl"
+  ],
   "handoffFiles": [
     "work/tracks/topology-convergence.md"
   ],
-  "generatedFiles": [],
+  "generatedFiles": [
+    "work/sprints/current-blocker.md",
+    "work/sprints/current-blocker.json"
+  ],
   "candidateRuntimeFiles": [
     "src/control-plane/publication-active-gate-handoff-contract.js",
     "src/admin/admin-control-snapshot-class-part-1.js",
@@ -32,7 +47,19 @@
     "test/control-plane/publication-active-gate-handoff-contract.test.js",
     "test/admin/admin-control-snapshot.test.js"
   ],
-  "commitScope": [],
+  "commitScope": [
+    "work/packages/active-20260516-etcd-style-active-gate-admission-catchup-fence.md",
+    "src/control-plane/publication-active-gate-handoff-contract.js",
+    "src/admin/admin-control-snapshot-class-part-1.js",
+    "src/admin/admin-control-snapshot-class-part-2.js",
+    "src/admin/admin-control-snapshot-class-part-3.js",
+    "test/control-plane/publication-active-gate-handoff-contract.test.js",
+    "test/admin/admin-control-snapshot.test.js",
+    "work/sprints/current-blocker.md",
+    "work/sprints/current-blocker.json",
+    "work/tracks/topology-convergence.md",
+    "work/model-ledger.jsonl"
+  ],
   "modelFit": {
     "packageClass": "runtime-owner-boundary",
     "intendedMinimumModel": "gpt-5.3-codex",
@@ -124,6 +151,17 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 2. Relaxing active-gate admission.
 3. Raising timeouts to hide catch-up latency.
 4. Implementing etcd membership/quorum behavior.
+
+## Subagent Sequencing Ledger
+
+Required before implementation because this is a runtime-owner-boundary
+package. The review subagent must review
+`work/packages/done-20260516-foundationdb-style-deterministic-missing-edge-replay.md`
+and this package's active metadata before implementation starts.
+
+- [ ] Review subagent recorded: pending real review agent.
+- [ ] Fix subagent recorded or explicitly not needed: pending review result.
+- [ ] Implementation subagent recorded: pending implementation agent.
 
 ## Borrowing Details
 

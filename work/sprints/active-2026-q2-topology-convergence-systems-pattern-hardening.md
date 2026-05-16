@@ -78,14 +78,14 @@ Primary references:
    - Acceptance: one next owner is selected from publication convergence,
      readiness support, or operation workflow handoff, with a causal edge table
      explaining the decision.
-3. [FoundationDB Style Deterministic Missing Edge Replay](../packages/active-20260516-foundationdb-style-deterministic-missing-edge-replay.md)
+3. [FoundationDB Style Deterministic Missing Edge Replay](../packages/done-20260516-foundationdb-style-deterministic-missing-edge-replay.md)
    - Lane: `scenario-release-gate`
    - Owner boundary: `diagnostics_owner / deterministic_missing_edge_replay`
    - Purpose: turn representative topology frontier artifacts into compact
      replay fixtures before repeated same-frontier runtime patches.
    - Acceptance: replay fixture reproduces owner, boundary, dominant reason,
      and next action through existing topology convergence code.
-4. [Etcd Style Active Gate Admission Catchup Fence](../packages/todo-20260516-etcd-style-active-gate-admission-catchup-fence.md)
+4. [Etcd Style Active Gate Admission Catchup Fence](../packages/active-20260516-etcd-style-active-gate-admission-catchup-fence.md)
    - Lane: `runtime-owner-boundary`
    - Owner boundary: `startup_active_gate_owner /
      active_gate_admission_catchup_fence`

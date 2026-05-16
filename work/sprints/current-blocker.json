@@ -2,58 +2,58 @@
   "schema": "current-blocker-v1",
   "generatedBy": "scripts/work-tracker.js",
   "sprint": "work/sprints/active-2026-q2-topology-convergence-systems-pattern-hardening.md",
-  "package": "work/packages/active-20260516-foundationdb-style-deterministic-missing-edge-replay.md",
+  "package": "work/packages/active-20260516-etcd-style-active-gate-admission-catchup-fence.md",
   "status": "active",
-  "lane": "scenario-release-gate",
-  "scenario": "rolling-restart",
-  "artifact": "test-output/reports/rolling-restart-after-admin-owner-readiness-handoff-20260516.report.json",
+  "lane": "runtime-owner-boundary",
+  "scenario": "none",
+  "artifact": "none",
   "playback": "none",
-  "owner": "diagnostics_owner",
-  "boundary": "deterministic_missing_edge_replay",
-  "dominantReason": "representative_reruns_precede_replayable_probe",
-  "currentState": "Topology debugging still depends on expensive representative rolling-restart reruns after local fixes. The current track already has extractors and replay-adjacent harness code; this package turns latest frontier evidence into deterministic missing-edge fixtures before broad reruns drive more runtime patches.",
-  "nextAction": "Turn latest rolling-restart frontier artifacts into deterministic replay fixtures before any broad representative rerun is used as the next debugging step.",
+  "owner": "startup_active_gate_owner",
+  "boundary": "active_gate_admission_catchup_fence",
+  "dominantReason": "admission_requires_durable_catchup_proof",
+  "currentState": "Active-gate admission is strict today, but the gate has repeatedly needed patches around whether durable publication truth, active node projection, and snapshot coverage are caught up. This package turns that repeated implicit rule into one explicit catch-up fence.",
+  "nextAction": "Add an explicit catch-up fence that keeps nodes out of active-gate success until durable publication and snapshot coverage prove the cohort is caught up.",
   "proof": [
-    "npm run work:evidence-summary -- test-output/reports/rolling-restart-after-admin-owner-readiness-handoff-20260516.report.json",
-    "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-admin-owner-readiness-handoff-20260516.report.json",
-    "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-admin-owner-readiness-handoff-20260516.report.json --replay-fixture",
-    "npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-admin-owner-readiness-handoff-20260516.report.json",
-    "node --test test/distributed/harness/__tests__/active-gate-closure-classification.test.js"
+    "npm run analyze:owner-files -- startup_active_gate_owner snapshot_coverage --markdown",
+    "node --test test/control-plane/publication-active-gate-handoff-contract.test.js",
+    "node scripts/check-guideline-decision-boundaries.js src/control-plane/publication-active-gate-handoff-contract.js src/admin/admin-control-snapshot-class-part-1.js src/admin/admin-control-snapshot-class-part-2.js"
   ],
   "writeScope": [
-    "work/packages/active-20260516-foundationdb-style-deterministic-missing-edge-replay.md",
-    "scripts/analyze-topology-convergence.js",
-    "src/diagnostics/topology-convergence-graph.js",
-    "test/distributed/harness/publication-evidence-replay.js",
-    "test/distributed/harness/publication-evidence-contract.js",
-    "test/distributed/harness/__tests__/publication-evidence-replay.test.js",
-    "test/distributed/harness/__tests__/active-gate-closure-classification.test.js",
+    "work/packages/active-20260516-etcd-style-active-gate-admission-catchup-fence.md",
+    "src/control-plane/publication-active-gate-handoff-contract.js",
+    "src/admin/admin-control-snapshot-class-part-1.js",
+    "src/admin/admin-control-snapshot-class-part-2.js",
+    "src/admin/admin-control-snapshot-class-part-3.js",
+    "test/control-plane/publication-active-gate-handoff-contract.test.js",
+    "test/admin/admin-control-snapshot.test.js",
     "work/sprints/current-blocker.md",
     "work/sprints/current-blocker.json",
     "work/tracks/topology-convergence.md",
     "work/model-ledger.jsonl"
   ],
   "handoffFiles": [
-    "test-output/reports/rolling-restart-after-admin-owner-readiness-handoff-20260516.report.json",
     "work/tracks/topology-convergence.md"
   ],
-  "generatedFiles": [],
+  "generatedFiles": [
+    "work/sprints/current-blocker.md",
+    "work/sprints/current-blocker.json"
+  ],
   "candidateRuntimeFiles": [
-    "scripts/analyze-topology-convergence.js",
-    "src/diagnostics/topology-convergence-graph.js",
-    "test/distributed/harness/publication-evidence-replay.js",
-    "test/distributed/harness/publication-evidence-contract.js",
-    "test/distributed/harness/__tests__/active-gate-closure-classification.test.js",
-    "test/distributed/harness/__tests__/cluster.test-part-5.js"
+    "src/control-plane/publication-active-gate-handoff-contract.js",
+    "src/admin/admin-control-snapshot-class-part-1.js",
+    "src/admin/admin-control-snapshot-class-part-2.js",
+    "src/admin/admin-control-snapshot-class-part-3.js",
+    "test/control-plane/publication-active-gate-handoff-contract.test.js",
+    "test/admin/admin-control-snapshot.test.js"
   ],
   "commitScope": [
-    "work/packages/active-20260516-foundationdb-style-deterministic-missing-edge-replay.md",
-    "scripts/analyze-topology-convergence.js",
-    "src/diagnostics/topology-convergence-graph.js",
-    "test/distributed/harness/publication-evidence-replay.js",
-    "test/distributed/harness/publication-evidence-contract.js",
-    "test/distributed/harness/__tests__/publication-evidence-replay.test.js",
-    "test/distributed/harness/__tests__/active-gate-closure-classification.test.js",
+    "work/packages/active-20260516-etcd-style-active-gate-admission-catchup-fence.md",
+    "src/control-plane/publication-active-gate-handoff-contract.js",
+    "src/admin/admin-control-snapshot-class-part-1.js",
+    "src/admin/admin-control-snapshot-class-part-2.js",
+    "src/admin/admin-control-snapshot-class-part-3.js",
+    "test/control-plane/publication-active-gate-handoff-contract.test.js",
+    "test/admin/admin-control-snapshot.test.js",
     "work/sprints/current-blocker.md",
     "work/sprints/current-blocker.json",
     "work/tracks/topology-convergence.md",
@@ -61,65 +61,17 @@
   ],
   "touchedFiles": [],
   "modelFit": {
-    "packageClass": "representative-frontier-closure",
+    "packageClass": "runtime-owner-boundary",
     "intendedMinimumModel": "gpt-5.3-codex",
-    "scopeShape": "owner-boundary-contraction/current-frontier",
+    "scopeShape": "owner-boundary-contraction/follow-on",
     "outputProfile": "medium",
     "escalationTriggers": [
       "owned files expand beyond this package",
       "a frozen decision must be reopened"
     ]
   },
-  "representativeResidual": {
-    "status": "live-red-scenario-release-gate",
-    "scenario": "rolling-restart",
-    "artifact": "test-output/reports/rolling-restart-after-admin-owner-readiness-handoff-20260516.report.json",
-    "frontier": "publication_ack_convergence",
-    "owner": "diagnostics_owner",
-    "boundary": "deterministic_missing_edge_replay",
-    "dominantReason": "representative_reruns_precede_replayable_probe",
-    "nextAction": "Create a deterministic replay fixture that preserves topology_publication_owner / publication_convergence and the publication owner recovery wake / stale stream edge before any broad rerun."
-  },
-  "causalGovernance": {
-    "hypothesis": "Repeated rolling-restart reruns should not drive another runtime patch until a compact replay fixture proves the selected publication convergence frontier and next action are reproducible.",
-    "stopConditionCheck": "npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-admin-owner-readiness-handoff-20260516.report.json",
-    "expectedCausalModelChange": "No runtime causal model change; diagnostics replay should encode the selected owner-boundary, dominant reason, and next action from the representative artifact.",
-    "representativeOutcome": "pending-before-rerun",
-    "causalDebt": "Without deterministic replay, future fixes can mix publication convergence, active-gate handoff, readiness, and priority recovery evidence across expensive broad reruns.",
-    "crossBoundaryReview": "Do not edit topology publication runtime, active-gate admission, readiness, or operation workflow code in this package; migrate only if replay evidence contradicts the selected frontier."
-  },
-  "scenarioCausalClosure": {
-    "referenceScenarioOrProbe": "rolling-restart / deterministic replay for publication owner recovery wake and stale owner stream",
-    "phaseChain": [
-      "consume topology publication convergence classification",
-      "extract compact fixture fields from the representative artifact",
-      "replay fixture through topology convergence classification",
-      "assert owner, boundary, dominant reason, and next action remain stable",
-      "permit runtime follow-up only after replay proof is green"
-    ],
-    "currentFirstFrontier": "publication_ack_convergence in test-output/reports/rolling-restart-after-admin-owner-readiness-handoff-20260516.report.json, selected by the preceding topology publication convergence package; this diagnostics_owner / deterministic_missing_edge_replay support package must preserve that frontier.",
-    "knownDownstreamBlockers": [
-      "publication is PUBLISHED and acknowledged but active node publication coverage remains incomplete",
-      "publication owner reports consumer_lag, waiting_for_consumer, and stale stream",
-      "active-gate owner reconcile is drained with pendingReconcileCount=0",
-      "startup readiness and priority recovery evidence remain downstream unless replay promotes them"
-    ],
-    "missingCausalEdge": "A replayable diagnostics fixture for the publication owner recovery wake / stale owner stream edge.",
-    "missingCausalEdgeProbe": "npm run work:evidence-summary -- test-output/reports/rolling-restart-after-admin-owner-readiness-handoff-20260516.report.json; npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-admin-owner-readiness-handoff-20260516.report.json; npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-admin-owner-readiness-handoff-20260516.report.json --replay-fixture; node --test test/distributed/harness/__tests__/active-gate-closure-classification.test.js",
-    "boundedProgressProof": "A compact fixture replay reproduces topology_publication_owner / publication_convergence, publication_ack_blocked, and the wait_owner_recovery wake next action without reading raw distributed logs.",
-    "boundedProgressProofArtifact": "test-output/reports/rolling-restart-after-admin-owner-readiness-handoff-20260516.report.json",
-    "expectedObservableTransition": "Replay validation becomes the next local proof before any representative rolling-restart rerun or runtime patch.",
-    "maxProgressBound": "one diagnostics and harness replay package; no runtime semantic edits, timeout increases, or active-gate admission changes",
-    "sameFrontierFallback": "If compact replay cannot preserve the edge, record the extractor gap and keep the next package in diagnostics_owner rather than broad rerunning.",
-    "expectedNextFrontier": "topology_publication_owner / publication_convergence runtime work only after deterministic replay confirms the edge.",
-    "resultClassification": "pending-before-probe",
-    "stopCondition": "continue-local-fix",
-    "recentFrontierHistory": [
-      "work/packages/done-20260516-topology-publication-convergence-frontier-causal-edge.md / topology_publication_owner / publication_convergence / classification-only",
-      "work/packages/done-20260515-startup-active-gate-snapshot-coverage-owner-reconcile-remaining-targets.md / startup_active_gate_owner / snapshot_coverage / migrated"
-    ],
-    "oscillationCheck": "This package is allowed because the immediately preceding package selected deterministic replay as the next proof before runtime implementation.",
-    "handoffInvariant": "The paused rolling-restart sprint stays closed; this package borrows replayability only and must not relax active-gate admission or rewrite runtime publication truth."
-  },
+  "representativeResidual": {},
+  "causalGovernance": {},
+  "scenarioCausalClosure": {},
   "predecessor": null
 }

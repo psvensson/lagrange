@@ -3,7 +3,7 @@
 <!-- work-package
 {
   "schema": "work-package-v1",
-  "status": "active",
+  "status": "done",
   "opened": "2026-05-16",
   "lane": "scenario-release-gate",
   "scenario": "rolling-restart",
@@ -22,7 +22,7 @@
     "node --test test/distributed/harness/__tests__/active-gate-closure-classification.test.js"
   ],
   "writeScope": [
-    "work/packages/active-20260516-foundationdb-style-deterministic-missing-edge-replay.md",
+    "work/packages/done-20260516-foundationdb-style-deterministic-missing-edge-replay.md",
     "scripts/analyze-topology-convergence.js",
     "src/diagnostics/topology-convergence-graph.js",
     "test/distributed/harness/publication-evidence-replay.js",
@@ -48,7 +48,7 @@
     "test/distributed/harness/__tests__/cluster.test-part-5.js"
   ],
   "commitScope": [
-    "work/packages/active-20260516-foundationdb-style-deterministic-missing-edge-replay.md",
+    "work/packages/done-20260516-foundationdb-style-deterministic-missing-edge-replay.md",
     "scripts/analyze-topology-convergence.js",
     "src/diagnostics/topology-convergence-graph.js",
     "test/distributed/harness/publication-evidence-replay.js",
@@ -96,7 +96,7 @@
     "hypothesis": "Repeated rolling-restart reruns should not drive another runtime patch until a compact replay fixture proves the selected publication convergence frontier and next action are reproducible.",
     "stopConditionCheck": "npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-admin-owner-readiness-handoff-20260516.report.json",
     "expectedCausalModelChange": "No runtime causal model change; diagnostics replay should encode the selected owner-boundary, dominant reason, and next action from the representative artifact.",
-    "representativeOutcome": "pending-before-rerun",
+    "representativeOutcome": "classification-only",
     "causalDebt": "Without deterministic replay, future fixes can mix publication convergence, active-gate handoff, readiness, and priority recovery evidence across expensive broad reruns.",
     "crossBoundaryReview": "Do not edit topology publication runtime, active-gate admission, readiness, or operation workflow code in this package; migrate only if replay evidence contradicts the selected frontier."
   },
@@ -132,7 +132,9 @@
     ],
     "oscillationCheck": "This package is allowed because the immediately preceding package selected deterministic replay as the next proof before runtime implementation.",
     "handoffInvariant": "The paused rolling-restart sprint stays closed; this package borrows replayability only and must not relax active-gate admission or rewrite runtime publication truth."
-  }
+  },
+  "closed": "2026-05-16",
+  "commitAndPushLedgerRequired": true
 }
 -->
 
@@ -207,9 +209,9 @@ The review subagent must review
 `work/packages/done-20260516-topology-publication-convergence-frontier-causal-edge.md`
 and this package's active metadata before implementation starts.
 
-- [x] Review subagent recorded: Agent Banach (019e3024-6218-71a2-a745-118f62138aa3) reviewed work/packages/active-20260516-foundationdb-style-deterministic-missing-edge-replay.md; result fixes-required
-- [x] Fix subagent recorded or explicitly not needed: Agent Averroes (019e3026-e4e8-7a00-8d36-9d56b1a101ae) fixed work/packages/active-20260516-foundationdb-style-deterministic-missing-edge-replay.md
-- [x] Implementation subagent recorded: Agent Huygens (019e302b-5b29-7420-8d1e-532a4ca96f48) implemented work/packages/active-20260516-foundationdb-style-deterministic-missing-edge-replay.md
+- [x] Review subagent recorded: Agent Banach (019e3024-6218-71a2-a745-118f62138aa3) reviewed work/packages/done-20260516-foundationdb-style-deterministic-missing-edge-replay.md; result fixes-required
+- [x] Fix subagent recorded or explicitly not needed: Agent Averroes (019e3026-e4e8-7a00-8d36-9d56b1a101ae) fixed work/packages/done-20260516-foundationdb-style-deterministic-missing-edge-replay.md
+- [x] Implementation subagent recorded: Agent Huygens (019e302b-5b29-7420-8d1e-532a4ca96f48) implemented work/packages/done-20260516-foundationdb-style-deterministic-missing-edge-replay.md
 
 ## Borrowing Details
 
@@ -259,10 +261,14 @@ Local implementation shape:
 
 ## Implementation Validation Notes
 
-- Pending parent reconciliation: implementation ledger entry remains unchecked
-  so the parent session can add the real returned agent id.
 - Added replay proof target:
   `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-admin-owner-readiness-handoff-20260516.report.json --replay-fixture`
   emits `publication_ack_convergence`, `topology_publication_owner /
   publication_convergence`, `publication_ack_blocked`, and
   `wait_owner_recovery`.
+
+## Commit And Push Ledger
+
+1. Focused package commit: c7422184
+2. Pushed to: origin/codex/pending-ack-eligibility-filter
+3. Commit contains only package-owned files/package-status/allowed sprint handoff: yes
