@@ -415,29 +415,52 @@ The sprint cannot close until:
 5. Remaining red frontier:
    `publication_ack_convergence / topology_publication_owner /
    publication_convergence`, with dominant reason `publication_ack_blocked`.
-6. Next action: continue in
-   `work/sprints/active-2026-q2-topology-convergence-systems-pattern-hardening.md`
-   after handoff hygiene regenerates current-blocker state and dirty-scope
-   proof.
+6. Post-detour update: systems-pattern hardening and completion closure are now
+   done. The next continuation step is no longer the systems-pattern sprint;
+   it is the checkpoint package
+   `work/packages/todo-20260516-rolling-restart-post-systems-pattern-checkpoint.md`.
+
+## Post-Systems-Pattern Continuation Package
+
+[Rolling Restart Post Systems Pattern Checkpoint](../packages/todo-20260516-rolling-restart-post-systems-pattern-checkpoint.md)
+
+- Lane: `scenario-release-gate`
+- Owner boundary:
+  `release_gate_owner / rolling_restart_post_systems_pattern_checkpoint`
+- Purpose: run and classify one fresh `rolling-restart` representative artifact
+  after systems-pattern hardening and completion closure landed.
+- Entry condition: the rolling-restart gate is explicitly resumed, the package
+  is moved from `todo` to `active`, and current-blocker is regenerated from the
+  active package before `npm run work:llm-start`.
+- Acceptance: representative `rolling-restart` is green, or canonical
+  extractors select a fresh owner-boundary successor package from the new
+  artifact.
+- Guardrail: the old pending-reconcile active-gate trace is historical because
+  the final pre-detour handoff had `pendingReconcileCount=0` and
+  `nextAction=wait_owner_recovery`.
 
 ## Current Next Action
 
-Continue in the successor systems-pattern hardening sprint from the final
-representative artifact:
+When the paused rolling-restart gate is resumed, start with:
+
+```text
+work/packages/todo-20260516-rolling-restart-post-systems-pattern-checkpoint.md
+```
+
+Use the final pre-detour representative artifact only as handoff context:
 
 ```text
 test-output/reports/rolling-restart-after-admin-owner-readiness-handoff-20260516.report.json
 ```
 
 The completed startup active-gate package drained the owner-reconcile handoff
-path: `pendingReconcileCount=0` and `nextAction=wait_owner_recovery`. Do not
-resume the old pending-reconcile active-gate trace.
+path: `pendingReconcileCount=0` and `nextAction=wait_owner_recovery`. The
+systems-pattern hardening sprint and completion closure are now both done, so
+the next work must produce a fresh post-detour representative artifact before
+runtime implementation resumes.
 
-The remaining representative frontier is `publication_ack_convergence /
-topology_publication_owner / publication_convergence`, with dominant reason
-`publication_ack_blocked`. Next work should prove the topology publication
-owner recovery wake / stale owner stream edge: publication is `PUBLISHED` and
-acknowledged, but active publication coverage remains incomplete while the owner
-reports consumer lag, waiting for consumer, and stale stream. Focus future work
-there before any runtime implementation, without relaxing active-gate
-admission, rewriting publication handoff truth, or increasing timeouts.
+If fresh evidence remains red on `publication_ack_convergence /
+topology_publication_owner / publication_convergence`, continue there using the
+new artifact. If it selects a different owner boundary, open or activate that
+successor instead. Do not relax active-gate admission, rewrite publication
+handoff truth, or increase timeouts.

@@ -48,9 +48,9 @@ Current representative evidence has repeatedly oscillated between publication
 convergence and active-gate snapshot coverage. The stopped residual-closure
 sprint proved that local single-owner patches reduce symptoms without reducing
 the boundary. The systems-pattern hardening sprint turned successful
-distributed-systems patterns into local owner contracts; the active completion
-closure now hardens the live TiKV witness path, broad Cockroach admin proof, and
-handoff validation before the paused topology sprint resumes.
+distributed-systems patterns into local owner contracts, and the completion
+closure proved the live TiKV witness path, broad Cockroach admin tail proof, and
+stale active-reference validation before the paused topology sprint resumes.
 
 Latest current handoff state:
 
@@ -68,9 +68,9 @@ Latest current handoff state:
 - priority recovery remains classified; reopen
   `operation_workflow_owner / workflow_progress` only if fresh canonical
   residual extractors promote it ahead of publication convergence
-- completion closure active on 2026-05-16:
-  `work/sprints/done-2026-q2-topology-systems-pattern-completion-closure.md`
-  / `work/packages/done-20260516-topology-systems-pattern-completion-closure.md`
+- no fresh representative artifact exists after systems-pattern completion
+  closure; the continuation package is
+  `work/packages/todo-20260516-rolling-restart-post-systems-pattern-checkpoint.md`
 
 ## Target Invariant
 
@@ -96,14 +96,14 @@ or produces a narrower owner-boundary blocker selected by canonical evidence.
 
 ## Current Evidence
 
-- Active sprint:
-  `work/sprints/done-2026-q2-topology-systems-pattern-completion-closure.md`
-- Active package:
-  `work/packages/done-20260516-topology-systems-pattern-completion-closure.md`
+- Continuation sprint context:
+  `work/sprints/done-2026-q2-topology-rolling-restart-green-gate-closure.md`
+- Next continuation package:
+  `work/packages/todo-20260516-rolling-restart-post-systems-pattern-checkpoint.md`
 - Artifact:
   `test-output/reports/rolling-restart-after-admin-owner-readiness-handoff-20260516.report.json`
-- Current package-local owner boundary:
-  `topology_convergence_owner / systems_pattern_contract_completion`
+- Checkpoint owner boundary:
+  `release_gate_owner / rolling_restart_post_systems_pattern_checkpoint`
 - Representative owner boundary:
   `topology_publication_owner / publication_convergence`
 - Extractor summary:
@@ -112,11 +112,14 @@ or produces a narrower owner-boundary blocker selected by canonical evidence.
   `topology_publication_owner / publication_convergence`; active-gate handoff
   `pendingReconcileCount=0` and next action `wait_owner_recovery` mean the
   drained owner-reconcile path should not be treated as the active blocker.
+  Because the systems-pattern completion closure landed after this artifact,
+  the next step is a fresh representative checkpoint, not runtime work from
+  the stale artifact.
 - Priority recovery residuals:
-  the completed TiKV/PD topology-operator witness slice added the proof surface,
-  but no newer representative artifact proves the residual drained. Keep this
-  evidence subordinate unless fresh canonical extraction promotes it ahead of
-  `publication_ack_convergence`.
+  the completed TiKV/PD topology-operator witness live path added the proof
+  surface, but no newer representative artifact proves the residual drained.
+  Keep this evidence subordinate unless fresh canonical extraction promotes it
+  ahead of `publication_ack_convergence`.
 
 ## Codebase Analysis Notes
 
@@ -191,9 +194,10 @@ These are context candidates, not write authorization:
 
 ## Entry Condition
 
-Continue with the active systems-pattern completion closure package. Runtime
-edits stay bounded to the selected priority-recovery witness, publication/admin
-consumer, diagnostics/harness summary, and tracker-validation surfaces.
+When the rolling-restart gate is resumed, activate
+`work/packages/todo-20260516-rolling-restart-post-systems-pattern-checkpoint.md`
+and regenerate current-blocker before runtime implementation. Runtime edits are
+not in scope until the fresh checkpoint selects an owner boundary.
 
 ## Exit Condition
 
@@ -203,8 +207,8 @@ canonical owner-boundary evidence.
 
 ## Next Package
 
-Current package:
+Next continuation package:
 
 ```text
-work/packages/done-20260516-topology-systems-pattern-completion-closure.md
+work/packages/todo-20260516-rolling-restart-post-systems-pattern-checkpoint.md
 ```
