@@ -1,8 +1,9 @@
 # Topology Convergence Systems Pattern Hardening Sprint
 
-Status: todo. This sprint is not active while
-`work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md`
-owns the representative `rolling-restart` gate.
+Status: active. This sprint starts after
+`work/sprints/done-2026-q2-topology-rolling-restart-green-gate-closure.md`
+migrated the representative `rolling-restart` blocker to
+`topology_publication_owner / publication_convergence`.
 
 ## Goal
 
@@ -60,7 +61,7 @@ Primary references:
 
 ## Package Queue
 
-1. [Topology Sprint Handoff Hygiene](../packages/todo-20260516-topology-sprint-handoff-hygiene.md)
+1. [Topology Sprint Handoff Hygiene](../packages/active-20260516-topology-sprint-handoff-hygiene.md)
    - Lane: `lightweight-maintenance`
    - Owner boundary: `workflow_tooling_owner / sprint_handoff_integrity`
    - Purpose: make current-blocker files, scope fields, and dirty-scope

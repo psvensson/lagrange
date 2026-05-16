@@ -2,277 +2,162 @@
 
 # Current Blocker
 
-Sprint: `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md`
+Sprint: `work/sprints/active-2026-q2-topology-convergence-systems-pattern-hardening.md`
 
-Package: `work/packages/active-20260515-startup-active-gate-snapshot-coverage-owner-reconcile-remaining-targets.md`
+Package: `work/packages/active-20260516-topology-sprint-handoff-hygiene.md`
 
-Workflow lane: `causal-escalation`
+Workflow lane: `lightweight-maintenance`
 
-Scenario: `rolling-restart`
+Scenario: `none`
 
-Artifact: `test-output/reports/rolling-restart-after-admin-owner-readiness-handoff-20260516.report.json`
+Artifact: `none`
 
 Playback: `none`
 
 ## Boundary
 
-Owner: `startup_active_gate_owner`
+Owner: `workflow_tooling_owner`
 
-Boundary: `snapshot_coverage`
+Boundary: `sprint_handoff_integrity`
 
-Dominant reason: `owner_reconcile_pending`
+Dominant reason: `stale_handoff_and_dirty_scope_risk`
 
-Current state: The package reduced the active-gate owner-reconcile blocker. Representative artifact test-output/reports/rolling-restart-after-handoff-error-outcome-20260516.report.json first surfaced a structured handoff outcome, write_deferred#reason=owner_reconcile_service_unavailable. After wiring the admin runtime to retain the live owner readiness service and prefer readiness services with membershipPublicationService, representative artifact test-output/reports/rolling-restart-after-admin-owner-readiness-handoff-20260516.report.json no longer reports owner_reconcile_service_unavailable. The active-gate handoff contract now has pendingReconcileCount=0 and nextAction=wait_owner_recovery; priority recovery remains classified, but the scenario is still red with first frontier publication_ack_convergence / topology_publication_owner / publication_convergence and a seed readiness timeout shape.
+Current state: Recent topology work carried stale current-blocker scope fields, large dirty scope, and sprint/package text that could lag canonical extractor output. This maintenance package makes tracker state mechanically trustworthy before the next runtime package activates.
 
 ## Next Action
 
-Migrate the next package to topology_publication_owner / publication_convergence or the canonical priority-recovery residual if successor evidence selects operation_workflow_owner / rebalancer_handoff; do not continue treating the drained handoff owner-reconcile path as the active blocker.
+Make tracker state, scope fields, and dirty-scope separation mechanically verifiable before the next topology runtime package activates.
 
 ## Proof Ladder
 
-1. `npm run work:context`
-2. `npm run work:llm-start`
-3. `npm run work:package:doctor -- --suggest work/packages/active-20260515-startup-active-gate-snapshot-coverage-owner-reconcile-remaining-targets.md`
-4. `npm run work:evidence-summary -- test-output/reports/rolling-restart-after-control-plane-publication-pending-20260515-codex.report.json`
-5. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-control-plane-publication-pending-20260515-codex.report.json --handoff-probe`
-6. `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-control-plane-publication-pending-20260515-codex.report.json`
-7. `npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-after-control-plane-publication-pending-20260515-codex.report.json --markdown`
-8. `npm run analyze:owner-files -- startup_active_gate_owner snapshot_coverage --markdown`
-9. `npm run work:evidence-summary -- test-output/reports/rolling-restart-after-catchup-rebuild-retry-20260515-codex.report.json`
-10. `npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-after-catchup-rebuild-retry-20260515-codex.report.json --markdown`
-11. `npm run analyze:owner-files -- operation_workflow_owner workflow_progress --markdown`
-12. `npm run work:evidence-summary -- test-output/reports/rolling-restart-after-transition-retry-context-20260515-codex.report.json`
-13. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-transition-retry-context-20260515-codex.report.json --handoff-probe`
-14. `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-transition-retry-context-20260515-codex.report.json`
-15. `npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-after-transition-retry-context-20260515-codex.report.json --markdown`
-16. `npm run analyze:owner-files -- startup_active_gate_owner snapshot_coverage --markdown`
-17. `npm run analyze:distributed-failure -- --report test-output/reports/rolling-restart-after-transition-retry-context-20260515-codex.report.json`
-18. `PASS: node --test test/control-plane/membership-publication-coordinator-main-stage-2.js`
-19. `PASS: node --test test/control-plane/publication-active-gate-handoff-contract.test.js`
-20. `PASS: node scripts/check-guideline-literals.js src/control-plane/membership-publication-coordinator-class-stage-2.js src/control-plane/membership-publication-coordinator-class-stage-3.js src/control-plane/publication-active-gate-handoff-contract.js src/admin/admin-control-snapshot-class-part-1.js src/admin/admin-control-snapshot-class-part-2.js src/admin/admin-control-snapshot-class-part-6.js`
-21. `PASS: node scripts/check-runtime-grammar-contracts.js src/control-plane/membership-publication-coordinator-class-stage-2.js src/control-plane/membership-publication-coordinator-class-stage-3.js src/control-plane/publication-active-gate-handoff-contract.js src/admin/admin-control-snapshot-class-part-1.js src/admin/admin-control-snapshot-class-part-2.js src/admin/admin-control-snapshot-class-part-6.js`
-22. `PASS: node scripts/check-guideline-decision-boundaries.js src/control-plane/membership-publication-coordinator-class-stage-2.js src/control-plane/membership-publication-coordinator-class-stage-3.js src/control-plane/publication-active-gate-handoff-contract.js src/admin/admin-control-snapshot-class-part-1.js src/admin/admin-control-snapshot-class-part-2.js src/admin/admin-control-snapshot-class-part-6.js`
-23. `FAIL: node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-after-owner-trigger-only-handoff-20260516.report.json --fast-local --verbose`
-24. `npm run work:evidence-summary -- test-output/reports/rolling-restart-after-owner-trigger-only-handoff-20260516.report.json`
-25. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-owner-trigger-only-handoff-20260516.report.json --handoff-probe`
-26. `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-owner-trigger-only-handoff-20260516.report.json`
-27. `npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-after-owner-trigger-only-handoff-20260516.report.json --markdown`
-28. `rg -n "membershipPublicationHandoffOutcome|published_visible|write_deferred|pressure_deferred|target_blocked|no_change|active_gate_handoff_owner_reconcile" test-output/reports/rolling-restart-after-owner-trigger-only-handoff-20260516.report.json`
-29. `PASS: npx tap --grep "setSQLQueryEngine" test/admin/admin-websocket-api.test-part-7.js`
-30. `PASS: node scripts/check-guideline-literals.js src/entrypoint-runtime-helpers.js src/admin/admin-websocket-api-shared.js src/admin/admin-websocket-api-segment-3.js`
-31. `PASS: node scripts/check-runtime-grammar-contracts.js src/entrypoint-runtime-helpers.js src/admin/admin-websocket-api-shared.js src/admin/admin-websocket-api-segment-3.js`
-32. `PASS: node scripts/check-guideline-decision-boundaries.js src/entrypoint-runtime-helpers.js src/admin/admin-websocket-api-shared.js src/admin/admin-websocket-api-segment-3.js`
-33. `FAIL: node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-after-admin-owner-readiness-handoff-20260516.report.json --fast-local --verbose`
-34. `npm run work:evidence-summary -- test-output/reports/rolling-restart-after-admin-owner-readiness-handoff-20260516.report.json`
-35. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-admin-owner-readiness-handoff-20260516.report.json --handoff-probe`
-36. `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-admin-owner-readiness-handoff-20260516.report.json`
-37. `npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-after-admin-owner-readiness-handoff-20260516.report.json --markdown`
-38. `npm run analyze:distributed-failure -- --report test-output/reports/rolling-restart-after-admin-owner-readiness-handoff-20260516.report.json`
-39. `npm run analyze:owner-files -- topology_publication_owner publication_convergence --markdown`
+1. `npm run work:current-blocker -- --write`
+2. `npm run work:validate -- --pre-impl`
+3. `npm run work:dirty-scope`
+4. `git diff --check -- work/sprints/current-blocker.md work/sprints/current-blocker.json work/tracks/topology-convergence.md`
 
 ## Model Fit
 
-Package class: `representative-frontier-closure`
+Package class: `bounded-implementation`
 
-Intended minimum model: `gpt-5.3-codex`
+Intended minimum model: `gpt-5.3-codex-spark`
 
-Scope shape: `owner-boundary-contraction/current-frontier`
+Scope shape: `leaf-slice`
 
 Output profile: `medium`
 
 Escalation triggers:
 
-1. `runtime ownership changes beyond canonical active-gate handoff target or membership publication owner command outcome`
+1. `owned files expand beyond tracker handoff/status files`
 2. `a frozen decision must be reopened`
 
 ## Representative Residual
 
-Status: `live-red-scenario-release-gate`
+Status: `unknown`
 
-Scenario: `rolling-restart`
+Scenario: `unknown`
 
-Artifact: `test-output/reports/rolling-restart-after-admin-owner-readiness-handoff-20260516.report.json`
+Artifact: `unknown`
 
-Frontier: `publication_ack_convergence`
+Frontier: `unknown`
 
-Owner: `topology_publication_owner`
+Owner: `unknown`
 
-Boundary: `publication_convergence`
+Boundary: `unknown`
 
-Dominant reason: `publication_ack_blocked`
+Dominant reason: `unknown`
 
-Next action: `Open or activate a successor package for publication convergence unless canonical residual triage selects operation_workflow_owner / rebalancer_handoff first.`
+Next action: `unknown`
 
 ## Causal Governance
 
-Causal hypothesis: `After workflow progress drains, active-gate snapshot coverage remains red because owner membership publication reconcile is pending for two active nodes while selected publication membership remains seed-only.`
+Causal hypothesis: `unknown`
 
-Stop-condition check: `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-owner-trigger-only-handoff-20260516.report.json`
+Stop-condition check: `unknown`
 
-Expected causal-model change: `rolling-restart becomes representative-green, pendingReconcileCount or missingPublishedCount reduces, snapshotCoverage improves, or fresh evidence migrates to a narrower active-gate publication reconcile boundary.`
+Expected causal-model change: `unknown`
 
-Representative outcome: `migrated`
+Representative outcome: `unknown`
 
-Causal debt: `The owner command works in focused fixture proof and the latest representative artifact drains active-gate handoff pendingReconcileCount to 0. Remaining red evidence is no longer the owner_reconcile_service_unavailable path; it is publication convergence/readiness evidence with wait_owner_recovery and a seed readiness timeout.`
+Causal debt: `unknown`
 
-Cross-boundary review: `Do not relax active-gate admission, rewrite publication handoff truth, increase timeouts, or reopen workflow_progress unless canonical residual extractors promote it again.`
+Cross-boundary review: `unknown`
 
 ## Scenario Causal Closure
 
-Reference scenario/probe: `rolling-restart / publication active-gate handoff pending owner reconcile`
+Reference scenario/probe: `unknown`
 
 Phase chain:
 
-1. `consume zero priority-recovery residual proof`
-2. `inspect active-gate handoff pending owner reconcile evidence`
-3. `run required review/fix/implementation subagents before runtime edits`
-4. `promote exact runtime/test files only after owner evidence selects the bounded path`
-5. `prove focused active-gate or publication-reconcile tests and static guardrails`
-6. `rerun representative rolling-restart until green, reduced, migrated, or split`
+1. None recorded
 
-Current first frontier: `active_gate_snapshot_coverage is the first topology frontier in test-output/reports/rolling-restart-after-owner-trigger-only-handoff-20260516.report.json, owned by startup_active_gate_owner / snapshot_coverage, while priority_recovery_partition_progress is satisfied at the active-gate summary.`
+Current first frontier: `unknown`
 
 Known downstream blockers:
 
-1. `producer publication_ack_convergence is satisfied with publicationStatus PUBLISHED and pendingAckCount 0`
-2. `selected producer publishedActiveNodeIds remains seed-only at 1/5 with missingPublishedCount 4`
-3. `consumer active-gate snapshot coverage is 2/5 with selected snapshot observation repair_deferred/deferred_refresh/deferred/deferred/retry`
-4. `handoff contract is pending with pendingReconcileCount 2 for 11601fe0-72d6-5853-8590-ec2881853e72 and 35a891b8-c1a0-5064-9c6e-2acfba61c2a7`
-5. `focused owner-command fixture writes or classifies the widened publication row, but the representative report contains no membershipPublicationHandoffOutcome or structured owner outcome`
-6. `one subordinate operation_workflow_owner / workflow_progress witness remains parked because active_gate_snapshot_coverage is still the first frontier`
+1. None recorded
 
-Missing causal edge: `The representative active-gate handoff path must submit the target set to the membership publication owner and consume or surface one structured owner outcome instead of leaving the evidence at generic owner_reconcile_pending.`
+Missing causal edge: `unknown`
 
-Missing causal edge probe: `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-owner-trigger-only-handoff-20260516.report.json --handoff-probe plus rg for membershipPublicationHandoffOutcome and owner outcome values in the same report.`
+Missing causal edge probe: `unknown`
 
-Bounded progress proof: `This package must surface one structured owner handoff reconcile outcome in representative evidence and either reduce pendingReconcileCount, missingPublishedCount, or snapshot coverage, or classify the single owner outcome that blocks publication visibility.`
+Bounded progress proof: `unknown`
 
-Bounded progress proof artifact: `test-output/reports/rolling-restart-after-owner-trigger-only-handoff-20260516.report.json`
+Bounded progress proof artifact: `unknown`
 
-Expected observable transition: `representative evidence names published_visible, write_deferred, pressure_deferred, target_blocked, or no_change for the handoff command; if the gate remains red, the next blocker is that single owner outcome.`
+Expected observable transition: `unknown`
 
-Max progress bound: `one startup active-gate snapshot coverage package slice; no timeout increases, active-gate admission relaxation, publication handoff rewrites, or workflow-progress implementation`
+Max progress bound: `unknown`
 
-Same-frontier fallback: `If active_gate_snapshot_coverage remains red, record which one membership publication owner outcome failed before broadening scope; do not bounce between admin snapshot, active gate, and workflow progress.`
+Same-frontier fallback: `unknown`
 
-Expected next frontier: `readiness_startup_support after active-gate coverage improves`
+Expected next frontier: `unknown`
 
-Result classification: `same-frontier`
+Result classification: `unknown`
 
-Stop condition: `continue-local-fix`
+Stop condition: `unknown`
 
 Recent frontier history:
 
-1. `work/packages/done-20260515-priority-recovery-operation-workflow-owner-control-plane-publication-pending.md / operation_workflow_owner / workflow_progress / migrated`
-2. `work/packages/done-20260515-priority-recovery-operation-workflow-owner-workflow-progress.md / operation_workflow_owner / workflow_progress / reduced`
-3. `work/packages/done-20260515-startup-active-gate-remaining-publication-visibility-target-proof.md / startup_active_gate_owner / snapshot_coverage / migrated`
+1. None recorded
 
-Oscillation check: `This package is allowed to return to startup_active_gate_owner / snapshot_coverage because the immediately preceding workflow-progress package proved priority recovery is satisfied.`
+Oscillation check: `unknown`
 
-Handoff invariant: `Active-gate admission stays strict while runtimePromotionAllowed=false; publication handoff truth remains owned by the canonical contract.`
+Handoff invariant: `unknown`
 
 ## Scope
 
 Write scope:
 
-1. `work/packages/active-20260515-startup-active-gate-snapshot-coverage-owner-reconcile-remaining-targets.md`
-2. `work/tracks/topology-convergence.md`
-3. `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md`
-4. `work/sprints/current-blocker.md`
-5. `work/sprints/current-blocker.json`
-6. `src/entrypoint-runtime-helpers.js`
-7. `src/control-plane/publication-active-gate-handoff-contract.js`
-8. `src/control-plane/membership-publication-coordinator-class-stage-2.js`
-9. `src/control-plane/membership-publication-coordinator-class-stage-3.js`
-10. `src/admin/admin-control-snapshot-class-part-1.js`
-11. `src/admin/admin-control-snapshot-class-part-2.js`
-12. `src/admin/admin-control-snapshot-class-part-5.js`
-13. `src/admin/admin-control-snapshot-class-part-6.js`
-14. `src/admin/admin-websocket-api-shared.js`
-15. `src/admin/admin-websocket-api-segment-3.js`
-16. `src/rebalancer/operation-workflow-owner-segment-2.js`
-17. `src/rebalancer/operation-workflow-owner-segment-3.js`
-18. `test/admin/admin-control-snapshot.test.js`
-19. `test/admin/admin-websocket-api.test-part-7.js`
-20. `test/control-plane/membership-publication-coordinator-main-stage-2.js`
-21. `test/control-plane/publication-active-gate-handoff-contract.test.js`
-22. `test/distributed/harness/cluster-segment-2.js`
-23. `test/distributed/harness/cluster-segment-3.js`
-24. `test/distributed/harness/cluster-segment-7-class-4.js`
-25. `test/distributed/harness/cluster-segment-7-class-5.js`
-26. `test/distributed/harness/__tests__/active-gate-closure-classification.test.js`
-27. `test/distributed/harness/__tests__/cluster.test-part-5.js`
-28. `test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js`
+1. `work/sprints/current-blocker.md`
+2. `work/sprints/current-blocker.json`
+3. `work/tracks/topology-convergence.md`
+4. `work/sprints/active-2026-q2-topology-convergence-systems-pattern-hardening.md`
+5. `work/sprints/todo-2026-q2-topology-convergence-systems-pattern-hardening.md`
+6. `work/packages/active-20260516-topology-sprint-handoff-hygiene.md`
+7. `work/packages/todo-20260516-topology-sprint-handoff-hygiene.md`
 
 Handoff files:
 
-1. `work/packages/done-20260515-priority-recovery-operation-workflow-owner-control-plane-publication-pending.md`
-2. `work/packages/done-20260515-publication-active-gate-reconcile-bridge-simplification.md`
-3. `work/packages/done-20260515-startup-active-gate-remaining-publication-lag-proof.md`
+1. `work/sprints/done-2026-q2-topology-rolling-restart-green-gate-closure.md`
+2. `work/packages/done-20260515-startup-active-gate-snapshot-coverage-owner-reconcile-remaining-targets.md`
 
 Generated files:
 
-1. `work/sprints/current-blocker.md`
-2. `work/sprints/current-blocker.json`
+1. None recorded
 
 Candidate runtime files:
 
-1. `src/control-plane/publication-active-gate-handoff-contract.js`
-2. `src/entrypoint-runtime-helpers.js`
-3. `src/control-plane/membership-publication-coordinator-class-stage-2.js`
-4. `src/control-plane/membership-publication-coordinator-class-stage-3.js`
-5. `src/admin/admin-control-snapshot-readiness-diagnostics-methods.js`
-6. `src/admin/admin-control-snapshot-class-part-1.js`
-7. `src/admin/admin-control-snapshot-class-part-2.js`
-8. `src/admin/admin-control-snapshot-class-part-3.js`
-9. `src/admin/admin-control-snapshot-class-part-5.js`
-10. `src/admin/admin-control-snapshot-class-part-6.js`
-11. `src/admin/admin-websocket-api-shared.js`
-12. `src/admin/admin-websocket-api-segment-3.js`
-13. `src/rebalancer/operation-workflow-owner-segment-2.js`
-14. `src/rebalancer/operation-workflow-owner-segment-3.js`
-15. `test/admin/admin-control-snapshot.test.js`
-16. `test/admin/admin-websocket-api.test-part-7.js`
-17. `test/control-plane/membership-publication-coordinator-main-stage-2.js`
-18. `test/control-plane/publication-active-gate-handoff-contract.test.js`
-19. `test/distributed/harness/cluster-segment-2.js`
-20. `test/distributed/harness/cluster-segment-3.js`
-21. `test/distributed/harness/cluster-segment-7-class-4.js`
-22. `test/distributed/harness/cluster-segment-7-class-5.js`
-23. `test/distributed/harness/__tests__/active-gate-closure-classification.test.js`
-24. `test/distributed/harness/__tests__/cluster.test-part-5.js`
-25. `test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js`
+1. None recorded
 
 Commit scope:
 
-1. `work/packages/active-20260515-startup-active-gate-snapshot-coverage-owner-reconcile-remaining-targets.md`
-2. `work/tracks/topology-convergence.md`
-3. `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md`
-4. `work/sprints/current-blocker.md`
-5. `work/sprints/current-blocker.json`
-6. `src/entrypoint-runtime-helpers.js`
-7. `src/control-plane/publication-active-gate-handoff-contract.js`
-8. `src/control-plane/membership-publication-coordinator-class-stage-2.js`
-9. `src/control-plane/membership-publication-coordinator-class-stage-3.js`
-10. `src/admin/admin-control-snapshot-class-part-1.js`
-11. `src/admin/admin-control-snapshot-class-part-2.js`
-12. `src/admin/admin-control-snapshot-class-part-5.js`
-13. `src/admin/admin-control-snapshot-class-part-6.js`
-14. `src/admin/admin-websocket-api-shared.js`
-15. `src/admin/admin-websocket-api-segment-3.js`
-16. `src/rebalancer/operation-workflow-owner-segment-2.js`
-17. `src/rebalancer/operation-workflow-owner-segment-3.js`
-18. `test/admin/admin-control-snapshot.test.js`
-19. `test/admin/admin-websocket-api.test-part-7.js`
-20. `test/control-plane/membership-publication-coordinator-main-stage-2.js`
-21. `test/control-plane/publication-active-gate-handoff-contract.test.js`
-22. `test/distributed/harness/cluster-segment-2.js`
-23. `test/distributed/harness/cluster-segment-3.js`
-24. `test/distributed/harness/cluster-segment-7-class-4.js`
-25. `test/distributed/harness/cluster-segment-7-class-5.js`
-26. `test/distributed/harness/__tests__/active-gate-closure-classification.test.js`
-27. `test/distributed/harness/__tests__/cluster.test-part-5.js`
-28. `test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js`
+1. `work/sprints/current-blocker.md`
+2. `work/sprints/current-blocker.json`
+3. `work/tracks/topology-convergence.md`
+4. `work/sprints/active-2026-q2-topology-convergence-systems-pattern-hardening.md`
+5. `work/sprints/todo-2026-q2-topology-convergence-systems-pattern-hardening.md`
+6. `work/packages/active-20260516-topology-sprint-handoff-hygiene.md`
+7. `work/packages/todo-20260516-topology-sprint-handoff-hygiene.md`
 
 Legacy touched files:
 

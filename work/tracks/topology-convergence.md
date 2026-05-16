@@ -47,33 +47,26 @@ Packages still require AGPL roadmap or edition scope and local evidence.
 Current representative evidence has repeatedly oscillated between publication
 convergence and active-gate snapshot coverage. The stopped residual-closure
 sprint proved that local single-owner patches reduce symptoms without reducing
-the boundary. The active sprint now treats the issue as a complexity problem:
-one canonical publication-to-active-gate handoff contract must replace the
-duplicated reconstruction paths.
+the boundary. The systems-pattern hardening sprint now turns successful
+distributed-systems patterns into local owner contracts before another broad
+runtime patch.
 
 Latest current handoff state:
 
 - artifact:
-  `test-output/reports/rolling-restart-after-owner-trigger-only-handoff-20260516.report.json`
-- first frontier: `active_gate_snapshot_coverage`
-- owner boundary: `startup_active_gate_owner / snapshot_coverage`
-- dominant reason: `owner_reconcile_pending`
-- active-gate snapshot coverage is blocked with `snapshotCoverage=2/5`,
-  `owner_reconcile_pending`, `snapshot_coverage_incomplete`,
-  `snapshot_repair_deferred`, and `runtimePromotionAllowed=false`
-- publication ACK convergence is satisfied; the handoff contract is present
-  with `missingEdge=null`,
-  `contractEdge=publication_active_gate_handoff_contract`,
-  `nextAction=reconcile_owner_membership_publication`, and
-  `pendingReconcileCount=2` for
-  `11601fe0-72d6-5853-8590-ec2881853e72` and
-  `35a891b8-c1a0-5064-9c6e-2acfba61c2a7`
-- focused owner-command proof now passes for the seed-only widened publication
-  fixture, while the representative report does not expose
-  `membershipPublicationHandoffOutcome` or one structured owner outcome
-- priority recovery is satisfied at the active-gate summary; one subordinate
-  `operation_workflow_owner / workflow_progress` witness remains parked
-  because canonical evidence keeps active-gate snapshot coverage first
+  `test-output/reports/rolling-restart-after-admin-owner-readiness-handoff-20260516.report.json`
+- first frontier: `publication_ack_convergence`
+- owner boundary: `topology_publication_owner / publication_convergence`
+- dominant reason: `publication_ack_blocked`
+- active-gate owner reconcile reduced: the representative handoff no longer
+  reports `owner_reconcile_service_unavailable`, and the active-gate handoff
+  contract now has `pendingReconcileCount=0`
+- next action from handoff evidence is `wait_owner_recovery`; the remaining red
+  evidence is publication convergence/readiness with a seed readiness timeout
+  shape
+- priority recovery remains classified; reopen
+  `operation_workflow_owner / workflow_progress` only if fresh canonical
+  residual extractors promote it ahead of publication convergence
 
 ## Target Invariant
 
@@ -100,29 +93,25 @@ or produces a narrower owner-boundary blocker selected by canonical evidence.
 ## Current Evidence
 
 - Active sprint:
-  `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md`
+  `work/sprints/active-2026-q2-topology-convergence-systems-pattern-hardening.md`
 - Active package:
-  `work/packages/active-20260515-startup-active-gate-snapshot-coverage-owner-reconcile-remaining-targets.md`
+  `work/packages/active-20260516-topology-sprint-handoff-hygiene.md`
 - Artifact:
-  `test-output/reports/rolling-restart-after-owner-trigger-only-handoff-20260516.report.json`
+  `test-output/reports/rolling-restart-after-admin-owner-readiness-handoff-20260516.report.json`
 - Current package-local owner boundary:
-  `startup_active_gate_owner / snapshot_coverage`
+  `workflow_tooling_owner / sprint_handoff_integrity`
 - Representative owner boundary:
-  `startup_active_gate_owner / snapshot_coverage`
+  `topology_publication_owner / publication_convergence`
 - Extractor summary:
-  `active_gate_snapshot_coverage` remains the first frontier with dominant
-  reason `owner_reconcile_pending`. The handoff probe now reports
-  `missingEdge=null`, `contractEdge=publication_active_gate_handoff_contract`,
-  `state=pending`, `reasonCode=owner_reconcile_pending`,
-  `nextAction=reconcile_owner_membership_publication`, and
-  `runtimePromotionAllowed=false`, with `pendingReconcileCount=2`. Focused
-  owner-command proof is green; the remaining red evidence is that
-  representative active-gate output does not surface one membership
-  publication owner outcome.
+  The prior active-gate owner-reconcile path is migrated. The latest
+  representative artifact selects `publication_ack_convergence` with owner
+  `topology_publication_owner / publication_convergence`; active-gate handoff
+  `pendingReconcileCount=0` and next action `wait_owner_recovery` mean the
+  drained owner-reconcile path should not be treated as the active blocker.
 - Priority recovery residuals:
-  one subordinate `operation_workflow_owner / workflow_progress` witness on
-  `control_plane_publications-p1`; it remains parked unless fresh canonical
-  evidence promotes it ahead of active-gate snapshot coverage.
+  classified but subordinate unless fresh canonical evidence promotes
+  `operation_workflow_owner / workflow_progress` ahead of publication
+  convergence.
 
 ## Codebase Analysis Notes
 
@@ -141,8 +130,8 @@ publication-evidence replay code rather than by the runtime owner alone.
 | --- | --- | --- | --- |
 | `work/sprints/done-2026-q2-topology-convergence-residual-closure.md` | `bugfix` / `stabilization` | stopped | Stopped on 2026-05-15 by human direction. Retained as residual context only. |
 | `work/sprints/done-2026-q2-topology-convergence-complexity-reduction.md` | `stabilization` / `complexity-reduction` | done reduced | Canonical publication-to-active-gate handoff contract implemented end to end; representative run remains red at startup active-gate snapshot coverage. |
-| `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md` | `stabilization` / `green-gate` | active | Current package is the startup active-gate snapshot coverage owner reconcile remaining-targets package; representative first frontier remains startup active-gate snapshot coverage and the next proof surface is the missing structured owner outcome. |
-| `work/sprints/todo-2026-q2-topology-convergence-systems-pattern-hardening.md` | `stabilization` / `systems-pattern-hardening` | todo | Future sprint with package-ready hardening slices for handoff hygiene, publication-convergence causal selection, deterministic replay, active-gate catch-up fencing, topology operator witnesses, critical control-plane convergence, and owner-boundary file-size reduction. Not active until the current release-gate package closes or migrates. |
+| `work/sprints/done-2026-q2-topology-rolling-restart-green-gate-closure.md` | `stabilization` / `green-gate` | done migrated | Final package migrated the blocker after active-gate owner reconcile drained; successor evidence selects publication convergence. |
+| `work/sprints/active-2026-q2-topology-convergence-systems-pattern-hardening.md` | `stabilization` / `systems-pattern-hardening` | active | Package-ready hardening slices for handoff hygiene, publication-convergence causal selection, deterministic replay, active-gate catch-up fencing, topology operator witnesses, critical control-plane convergence, and owner-boundary file-size reduction. |
 
 ## Owner Boundaries
 
@@ -196,10 +185,10 @@ These are context candidates, not write authorization:
 
 ## Entry Condition
 
-Continue with the active startup active-gate snapshot coverage package. Focused
-owner-command proof is already recorded; further runtime edits must stay within
-the active package scope and explain why representative active-gate evidence
-does not surface a structured membership publication owner outcome.
+Continue with the active handoff-hygiene package. Runtime edits resume only
+after current-blocker state and dirty-scope proof are clean, then the next
+runtime package should select or activate
+`topology_publication_owner / publication_convergence`.
 
 ## Exit Condition
 
@@ -212,5 +201,5 @@ canonical owner-boundary evidence.
 Current package:
 
 ```text
-work/packages/active-20260515-startup-active-gate-snapshot-coverage-owner-reconcile-remaining-targets.md
+work/packages/active-20260516-topology-sprint-handoff-hygiene.md
 ```
