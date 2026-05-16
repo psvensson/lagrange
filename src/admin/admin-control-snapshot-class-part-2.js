@@ -77,6 +77,15 @@ const CONTROL_SNAPSHOT_ACTIVE_GATE_OWNER_COHORT_FIELD =
   'activeGateOwnerCohort';
 const CONTROL_SNAPSHOT_MEMBERSHIP_PUBLICATION_HANDOFF_OUTCOME_FIELD =
   'membershipPublicationHandoffOutcome';
+const CONTROL_SNAPSHOT_MEMBERSHIP_PUBLICATION_HANDOFF_OUTCOME_STATE =
+  Object.freeze({
+    PUBLISHED_VISIBLE: 'published_visible',
+  });
+const CONTROL_SNAPSHOT_MEMBERSHIP_PUBLICATION_HANDOFF_OUTCOME_DATA_FIELD =
+  Object.freeze({
+    PUBLICATION_ROW: 'publicationRow',
+    STATE: 'state',
+  });
 const CONTROL_SNAPSHOT_CONTROL_PLANE_CONVERGENCE_FIELD =
   'controlPlaneConvergence';
 const CONTROL_SNAPSHOT_CRITICAL_CONVERGENCE_DEFERRED_FIELD =
@@ -84,6 +93,14 @@ const CONTROL_SNAPSHOT_CRITICAL_CONVERGENCE_DEFERRED_FIELD =
 const CONTROL_SNAPSHOT_ORDINARY_REPAIR_DEFERRED_FIELD =
   'ordinaryRepairDeferred';
 const CONTROL_SNAPSHOT_PRESSURE_OUTCOME_FIELD = 'pressureOutcome';
+const CONTROL_SNAPSHOT_NODES_FIELD = 'nodes';
+const CONTROL_SNAPSHOT_REFRESH_OPTION_FIELD = Object.freeze({
+  ALLOW_AUTHORITATIVE_READINESS_REFRESH: 'allowAuthoritativeReadinessRefresh',
+  PREFER_AUTHORITATIVE_PUBLICATION_READ: 'preferAuthoritativePublicationRead',
+  PUBLICATION_ACTIVE_GATE_HANDOFF: 'publicationActiveGateHandoff',
+  RECONCILE_AUTHORITATIVE_MEMBERSHIP_PUBLICATION:
+    'reconcileAuthoritativeMembershipPublication',
+});
 const CONTROL_SNAPSHOT_REPAIR_FAILURE_DETAIL_SEPARATOR = ':';
 const CONTROL_SNAPSHOT_REPAIR_FAILURE_PARTICIPANT_ERROR_FIELD = 'error';
 const CONTROL_SNAPSHOT_REPAIR_FAILURE_PARTICIPANT_MESSAGE_FIELD = 'message';
@@ -360,6 +377,73 @@ function attachMembershipPublicationHandoffOutcome(snapshot, outcome) {
   return snapshot;
 }
 
+function selectMembershipPublicationHandoffOutcome(snapshot = null) {
+  const controlPlaneDiagnostics =
+    snapshot?.[CONTROL_SNAPSHOT_CONTROL_PLANE_DIAGNOSTICS_FIELD];
+  if (
+    !controlPlaneDiagnostics ||
+    typeof controlPlaneDiagnostics !== TYPEOF.OBJECT ||
+    Array.isArray(controlPlaneDiagnostics)
+  ) {
+    return null;
+  }
+  const outcomeCandidates = [
+    controlPlaneDiagnostics[
+      CONTROL_SNAPSHOT_MEMBERSHIP_PUBLICATION_HANDOFF_OUTCOME_FIELD
+    ],
+    controlPlaneDiagnostics[
+      CONTROL_SNAPSHOT_PUBLICATION_CONVERGENCE_FIELD
+    ]?.[CONTROL_SNAPSHOT_MEMBERSHIP_PUBLICATION_HANDOFF_OUTCOME_FIELD],
+    controlPlaneDiagnostics[
+      CONTROL_SNAPSHOT_ACTIVE_GATE_OWNER_COHORT_FIELD
+    ]?.[CONTROL_SNAPSHOT_MEMBERSHIP_PUBLICATION_HANDOFF_OUTCOME_FIELD],
+  ];
+  return outcomeCandidates.find((candidate) =>
+    candidate &&
+    typeof candidate === TYPEOF.OBJECT &&
+    !Array.isArray(candidate),
+  ) || null;
+}
+
+function isVisibleMembershipPublicationHandoffOutcome(outcome = null) {
+  return (
+    outcome &&
+    typeof outcome === TYPEOF.OBJECT &&
+    !Array.isArray(outcome) &&
+    outcome[
+      CONTROL_SNAPSHOT_MEMBERSHIP_PUBLICATION_HANDOFF_OUTCOME_DATA_FIELD.STATE
+    ] ===
+      CONTROL_SNAPSHOT_MEMBERSHIP_PUBLICATION_HANDOFF_OUTCOME_STATE
+        .PUBLISHED_VISIBLE &&
+    outcome[
+      CONTROL_SNAPSHOT_MEMBERSHIP_PUBLICATION_HANDOFF_OUTCOME_DATA_FIELD
+        .PUBLICATION_ROW
+    ] &&
+    typeof outcome[
+      CONTROL_SNAPSHOT_MEMBERSHIP_PUBLICATION_HANDOFF_OUTCOME_DATA_FIELD
+        .PUBLICATION_ROW
+    ] === TYPEOF.OBJECT &&
+    !Array.isArray(
+      outcome[
+        CONTROL_SNAPSHOT_MEMBERSHIP_PUBLICATION_HANDOFF_OUTCOME_DATA_FIELD
+          .PUBLICATION_ROW
+      ],
+    )
+  );
+}
+
+function resolveControlSnapshotCoverageNodeCount(snapshot = null) {
+  const nodeIds = snapshot?.[CONTROL_SNAPSHOT_NODES_FIELD];
+  return Array.isArray(nodeIds) ? nodeIds.length : NUM.ZERO;
+}
+
+function buildControlSnapshotHandoffRefreshResult(snapshot, refreshed) {
+  return Object.freeze({
+    snapshot,
+    refreshed,
+  });
+}
+
 function attachOrdinaryRepairDeferralDiagnostics(snapshot, repairDeferred) {
   if (!snapshot || typeof snapshot !== TYPEOF.OBJECT) {
     return snapshot;
@@ -397,6 +481,52 @@ function attachOrdinaryRepairDeferralDiagnostics(snapshot, repairDeferred) {
  * as functions so this module has no back-reference to AdminWebSocketAPI.
  */
 class AdminControlSnapshotPart2 extends AdminControlSnapshotPart1 {
+  async prepareVisibleMembershipPublicationHandoffRefresh(
+    snapshot = null,
+    options = {},
+  ) {
+    const outcome = selectMembershipPublicationHandoffOutcome(snapshot);
+    if (isVisibleMembershipPublicationHandoffOutcome(outcome) !== true) {
+      return buildControlSnapshotHandoffRefreshResult(snapshot, false);
+    }
+    const controlPlaneDiagnostics =
+      snapshot?.[CONTROL_SNAPSHOT_CONTROL_PLANE_DIAGNOSTICS_FIELD];
+    const publicationActiveGateHandoff =
+      selectPublicationActiveGateHandoffContract(controlPlaneDiagnostics) ||
+      options[
+        CONTROL_SNAPSHOT_REFRESH_OPTION_FIELD.PUBLICATION_ACTIVE_GATE_HANDOFF
+      ];
+    let refreshedSnapshot = null;
+    try {
+      refreshedSnapshot = await this.buildLocalControlSnapshot({
+        ...options,
+        [CONTROL_SNAPSHOT_REFRESH_OPTION_FIELD
+          .PREFER_AUTHORITATIVE_PUBLICATION_READ]: true,
+        [CONTROL_SNAPSHOT_REFRESH_OPTION_FIELD
+          .ALLOW_AUTHORITATIVE_READINESS_REFRESH]: false,
+        [CONTROL_SNAPSHOT_REFRESH_OPTION_FIELD
+          .RECONCILE_AUTHORITATIVE_MEMBERSHIP_PUBLICATION]: false,
+        ...(publicationActiveGateHandoff ?
+          {
+            [CONTROL_SNAPSHOT_REFRESH_OPTION_FIELD
+              .PUBLICATION_ACTIVE_GATE_HANDOFF]: publicationActiveGateHandoff,
+          } :
+          {}),
+      });
+    } catch (_error) {
+      return buildControlSnapshotHandoffRefreshResult(snapshot, false);
+    }
+    const refreshedWithOutcome =
+      attachMembershipPublicationHandoffOutcome(refreshedSnapshot, outcome);
+    const refreshed =
+      resolveControlSnapshotCoverageNodeCount(refreshedWithOutcome) >
+      resolveControlSnapshotCoverageNodeCount(snapshot);
+    return buildControlSnapshotHandoffRefreshResult(
+      refreshed === true ? refreshedWithOutcome : snapshot,
+      refreshed,
+    );
+  }
+
   async triggerMembershipPublicationHandoffOwnerCommand(
     snapshot = null,
     options = {},
@@ -509,7 +639,15 @@ class AdminControlSnapshotPart2 extends AdminControlSnapshotPart1 {
           snapshot,
           options,
         );
-      return this.resolveSharedControlSnapshot(triggeredSnapshot, options);
+      const handoffRefresh =
+        await this.prepareVisibleMembershipPublicationHandoffRefresh(
+          triggeredSnapshot,
+          options,
+        );
+      return this.resolveSharedControlSnapshot(
+        handoffRefresh.snapshot,
+        options,
+      );
     }
     if (
       forceAuthoritativeRepair !== true &&
@@ -524,20 +662,31 @@ class AdminControlSnapshotPart2 extends AdminControlSnapshotPart1 {
           snapshot,
           options,
         );
-      return this.resolveSharedControlSnapshot(
-        attachOrdinaryRepairDeferralDiagnostics(
+      const handoffRefresh =
+        await this.prepareVisibleMembershipPublicationHandoffRefresh(
           triggeredSnapshot,
-          repairEvaluation?.shouldRepair === true,
-        ),
-        repairEvaluation?.shouldRepair === true ?
-          {
-            ...options,
-            observationMode:
-                ADMIN_CONTROL_SNAPSHOT_OBSERVATION_MODE.REPAIR_DEFERRED,
-            repairEvaluation,
-            repairDeferred: true,
-          } :
           options,
+        );
+      const sharedSnapshotOptions =
+        handoffRefresh.refreshed === true ?
+          options :
+          (repairEvaluation?.shouldRepair === true ?
+            {
+              ...options,
+              observationMode:
+                ADMIN_CONTROL_SNAPSHOT_OBSERVATION_MODE.REPAIR_DEFERRED,
+              repairEvaluation,
+              repairDeferred: true,
+            } :
+            options);
+      return this.resolveSharedControlSnapshot(
+        handoffRefresh.refreshed === true ?
+          handoffRefresh.snapshot :
+          attachOrdinaryRepairDeferralDiagnostics(
+            handoffRefresh.snapshot,
+            repairEvaluation?.shouldRepair === true,
+          ),
+        sharedSnapshotOptions,
       );
     }
     const canDegradeRepairFailure =
@@ -560,9 +709,19 @@ class AdminControlSnapshotPart2 extends AdminControlSnapshotPart1 {
             snapshot,
             options,
           );
+        const handoffRefresh =
+          await this.prepareVisibleMembershipPublicationHandoffRefresh(
+            triggeredSnapshot,
+            options,
+          );
         return this.resolveSharedControlSnapshot(
-          attachOrdinaryRepairDeferralDiagnostics(triggeredSnapshot, true),
-          {
+          handoffRefresh.refreshed === true ?
+            handoffRefresh.snapshot :
+            attachOrdinaryRepairDeferralDiagnostics(
+              handoffRefresh.snapshot,
+              true,
+            ),
+          handoffRefresh.refreshed === true ? options : {
             ...options,
             observationMode:
               ADMIN_CONTROL_SNAPSHOT_OBSERVATION_MODE.REPAIR_DEFERRED,
@@ -592,9 +751,19 @@ class AdminControlSnapshotPart2 extends AdminControlSnapshotPart1 {
             snapshot,
             options,
           );
+        const handoffRefresh =
+          await this.prepareVisibleMembershipPublicationHandoffRefresh(
+            triggeredSnapshot,
+            options,
+          );
         return this.resolveSharedControlSnapshot(
-          attachOrdinaryRepairDeferralDiagnostics(triggeredSnapshot, true),
-          {
+          handoffRefresh.refreshed === true ?
+            handoffRefresh.snapshot :
+            attachOrdinaryRepairDeferralDiagnostics(
+              handoffRefresh.snapshot,
+              true,
+            ),
+          handoffRefresh.refreshed === true ? options : {
             ...options,
             observationMode:
               ADMIN_CONTROL_SNAPSHOT_OBSERVATION_MODE.REPAIR_DEFERRED,

@@ -22,9 +22,9 @@ success is in scope.
 ## Current Blocker Snapshot
 
 Latest representative artifact:
-`test-output/reports/rolling-restart-priority-workflow-progress-20260516T180829Z.report.json`.
+`test-output/reports/rolling-restart-after-owner-reconcile-selected-evidence-20260516T195857Z.report.json`.
 
-Canonical state after the priority recovery repeat package:
+Canonical state for the current deferred-refresh discovery-gap package:
 
 1. `work:evidence-summary` selects `active_gate_snapshot_coverage` as the first
    frontier.
@@ -34,11 +34,12 @@ Canonical state after the priority recovery repeat package:
 4. Priority recovery is satisfied with zero residual witnesses.
 5. Publication ACK convergence remains satisfied with `pendingAckCount=0`.
 6. Active-gate snapshot coverage is blocked with `snapshotCoverageNodeCount=2`,
-   `expectedNodeCount=5`, `owner_reconcile_pending`, and
-   `snapshot_repair_deferred`.
-7. The owner-reconcile selected-evidence package closed as same-frontier; the
-   current active package is
-   `work/packages/active-20260516-startup-active-gate-snapshot-coverage-deferred-refresh-discovery-gap.md`.
+   `expectedNodeCount=5`, `pendingReconcileCount=3`, selected source
+   `11601fe0-72d6-5853-8590-ec2881853e72`, and selected snapshot observation
+   `repair_deferred` / `deferred_refresh` / `deferred` / `retry` with
+   `discovery_node_coverage_gap`.
+7. The current active package is
+   `work/packages/done-20260516-startup-active-gate-snapshot-coverage-deferred-refresh-discovery-gap.md`.
    It must separate deferred-refresh discovery-node coverage from
    snapshot-source selection, forced repair stalls, authoritative query
    pressure, and inherited readiness support without reopening priority
@@ -437,7 +438,7 @@ Continue with the active-gate snapshot coverage deferred-refresh discovery-gap
 package:
 
 ```text
-work/packages/active-20260516-startup-active-gate-snapshot-coverage-deferred-refresh-discovery-gap.md
+work/packages/done-20260516-startup-active-gate-snapshot-coverage-deferred-refresh-discovery-gap.md
 test-output/reports/rolling-restart-after-owner-reconcile-selected-evidence-20260516T195857Z.report.json
 ```
 
@@ -460,9 +461,13 @@ The repeated priority recovery workflow-progress package drained the
 `spread_satisfied_in_flight` witnesses to zero and fresh representative evidence
 marks `priority_recovery_partition_progress` satisfied. The current
 representative first frontier is `active_gate_snapshot_coverage` under
-`startup_active_gate_owner / snapshot_coverage`, with
-`owner_reconcile_pending` on node `35a891b8-c1a0-5064-9c6e-2acfba61c2a7` and
-snapshot coverage still at 2/5. The next work is to run the required subagent
-sequence for the active startup active-gate package, then reduce or split that
-owner-reconcile snapshot coverage edge. Keep publication ACK convergence and
-priority recovery frozen unless canonical evidence selects them again.
+`startup_active_gate_owner / snapshot_coverage`, with `pendingReconcileCount=3`,
+selected source `11601fe0-72d6-5853-8590-ec2881853e72`, and snapshot coverage
+still at 2/5. The selected snapshot observation is
+`repair_deferred` / `deferred_refresh` / `deferred` / `retry` with
+`discovery_node_coverage_gap`. The next work is to run the required subagent
+sequence for the active startup active-gate package, then prove whether
+`deferred_refresh` discovery-node coverage is owned by snapshot-source
+selection, forced repair stall, authoritative nodes query pressure, or inherited
+readiness support. Keep publication ACK convergence and priority recovery frozen
+unless canonical evidence selects them again.

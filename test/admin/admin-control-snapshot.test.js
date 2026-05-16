@@ -4446,11 +4446,11 @@ test('AdminControlSnapshot repair-deferred shared owner attempts publication cat
     );
   });
 
-test('AdminControlSnapshot repair-deferred trigger surfaces awaited owner publication outcome',
+test('AdminControlSnapshot repair-deferred trigger refreshes after visible owner publication',
   async (t) => {
     const buildOptions = [];
     let reconcileOptions = null;
-    let latestPublicationReadAttempted = false;
+    let latestPublicationReadOptions = null;
     const staleSnapshot = {
       nodes: [ACTIVE_GATE_HANDOFF_RECONCILE_NODE_IDS[0]],
       controlPlaneDiagnostics: {
@@ -4572,24 +4572,24 @@ test('AdminControlSnapshot repair-deferred trigger surfaces awaited owner public
               },
             };
           },
-          async getLatestClusterPublication() {
-            latestPublicationReadAttempted = true;
+          async getLatestClusterPublication(options = {}) {
+            latestPublicationReadOptions = options;
             return {
-              publication_id:
-                ACTIVE_GATE_HANDOFF_RECONCILE_STALE_PUBLICATION_ID,
-              publication_kind:
+              publicationId:
+                ACTIVE_GATE_HANDOFF_RECONCILE_RESULT_PUBLICATION_ID,
+              publicationKind:
                 ACTIVE_GATE_HANDOFF_RECONCILE_PUBLICATION_KIND,
-              publication_epoch:
-                ACTIVE_GATE_HANDOFF_RECONCILE_PUBLICATION_EPOCH,
+              publicationEpoch:
+                ACTIVE_GATE_HANDOFF_RECONCILE_RESULT_PUBLICATION_EPOCH,
               status: ACTIVE_GATE_OWNER_TRUTH_PUBLICATION_STATUS,
-              published_active_node_ids: [
-                ...ACTIVE_GATE_HANDOFF_RECONCILE_PUBLISHED_NODE_IDS,
+              publishedActiveNodeIds: [
+                ...ACTIVE_GATE_HANDOFF_RECONCILE_NODE_IDS,
               ],
-              required_ack_node_ids: [
-                ...ACTIVE_GATE_HANDOFF_RECONCILE_PUBLISHED_NODE_IDS,
+              requiredAckNodeIds: [
+                ...ACTIVE_GATE_HANDOFF_RECONCILE_NODE_IDS,
               ],
-              acknowledged_node_ids: [
-                ...ACTIVE_GATE_HANDOFF_RECONCILE_PUBLISHED_NODE_IDS,
+              acknowledgedNodeIds: [
+                ...ACTIVE_GATE_HANDOFF_RECONCILE_NODE_IDS,
               ],
             };
           },
@@ -4650,18 +4650,28 @@ test('AdminControlSnapshot repair-deferred trigger surfaces awaited owner public
     );
     t.equal(
       buildOptions.length,
-      1,
-      'the trigger-only path should not rebuild the snapshot after an owner outcome',
+      2,
+      'a visible owner outcome should get one bounded authoritative snapshot rebuild',
     );
     t.same(
       result.nodes,
-      [ACTIVE_GATE_HANDOFF_RECONCILE_NODE_IDS[0]],
-      'the returned deferred snapshot should keep the original snapshot coverage',
+      [...ACTIVE_GATE_HANDOFF_RECONCILE_NODE_IDS],
+      'the visible owner outcome should improve returned snapshot coverage',
+    );
+    t.same(
+      latestPublicationReadOptions,
+      {
+        preferAuthoritativeRead:
+          ACTIVE_GATE_HANDOFF_RECONCILE_AUTHORITATIVE_READ,
+        readProfile:
+          ACTIVE_GATE_HANDOFF_RECONCILE_READ_PROFILE,
+      },
+      'the bounded rebuild should use authoritative publication reads',
     );
     t.equal(
-      latestPublicationReadAttempted,
-      false,
-      'the owner outcome trigger should not run publication observation reads',
+      buildOptions[1].allowAuthoritativeReadinessRefresh,
+      ACTIVE_GATE_HANDOFF_CATCHUP_READINESS_REFRESH,
+      'the bounded rebuild should not reopen authoritative readiness refresh',
     );
     t.match(
       result.controlPlaneDiagnostics.publicationConvergence
@@ -4817,8 +4827,8 @@ test('AdminControlSnapshot repair-deferred trigger preserves original snapshot a
     );
     t.equal(
       buildOptions.length,
-      1,
-      'repair-deferred trigger should not attempt an authoritative publication rebuild after owner outcome',
+      2,
+      'repair-deferred trigger should try one bounded rebuild after visible owner outcome',
     );
     t.same(
       result.nodes,
