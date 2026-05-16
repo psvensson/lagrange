@@ -13,7 +13,8 @@ const LOCAL_STR_EMPTY = '';
 const LOCAL_NUM_ZERO = 0;
 const LOCAL_STR_OBJECT = 'object';
 const LOCAL_STR_FUNCTION = 'function';
-const LOCAL_STR_PHT46 = 'Authoritative service discovery repair failed';
+const CONTROL_PLANE_SNAPSHOT_SERVICE_DISCOVERY_REPAIR_FAILED_MESSAGE =
+  'Authoritative service discovery repair failed';
 
 const CONTROL_PLANE_SNAPSHOT_OBSERVATION_STATE = Object.freeze({
   FRESH: 'fresh',
@@ -244,17 +245,6 @@ class ControlPlaneSnapshotOwner {
     const reasonCodes = normalizeDistinctStringArray(
       repairEvaluation?.triggerCodes,
     );
-    if (resolvedOptions.forceAuthoritativeRepair === true) {
-      const forcedSnapshot = await this.forceControlSnapshotRepair(
-        resolvedOptions,
-        repairEvaluation,
-      );
-      this.recordObservedExpectation(
-        forcedSnapshot,
-        CONTROL_PLANE_SNAPSHOT_REPAIR_REASON.CONTROL_SNAPSHOT,
-      );
-      return forcedSnapshot;
-    }
     if (
       resolvedOptions.repairDeferred === true &&
       resolvedOptions.repairAttempted === true
@@ -276,6 +266,17 @@ class ControlPlaneSnapshotOwner {
         CONTROL_PLANE_SNAPSHOT_REPAIR_REASON.CONTROL_SNAPSHOT,
       );
       return observedSnapshot;
+    }
+    if (resolvedOptions.forceAuthoritativeRepair === true) {
+      const forcedSnapshot = await this.forceControlSnapshotRepair(
+        resolvedOptions,
+        repairEvaluation,
+      );
+      this.recordObservedExpectation(
+        forcedSnapshot,
+        CONTROL_PLANE_SNAPSHOT_REPAIR_REASON.CONTROL_SNAPSHOT,
+      );
+      return forcedSnapshot;
     }
     if (repairEvaluation?.shouldRepair !== true) {
       const observedSnapshot = attachSnapshotObservation(
@@ -533,7 +534,9 @@ class ControlPlaneSnapshotOwner {
         triggerCodes: reasonCodes,
       });
     if (repair?.applied !== true) {
-      throw new Error(LOCAL_STR_PHT46);
+      throw new Error(
+        CONTROL_PLANE_SNAPSHOT_SERVICE_DISCOVERY_REPAIR_FAILED_MESSAGE,
+      );
     }
     const repairedSnapshot =
       await this.serviceDiscovery.buildLocalServiceDiscoverySnapshot(options);

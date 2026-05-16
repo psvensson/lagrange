@@ -59,6 +59,8 @@ const CONTROL_SNAPSHOT_REPAIR_REASON = 'control_snapshot';
 const AUTHORITATIVE_REPAIR_CAUSE_LEADER_RESOLUTION_GAP =
   'leader_resolution_gap';
 const AUTHORITATIVE_REPAIR_CAUSE_QUERY_TIMEOUT = 'query_timeout';
+const AUTHORITATIVE_REPAIR_CAUSE_QUERY_PARTICIPANT_FAILURE =
+  'query_participant_failure';
 const AUTHORITATIVE_REPAIR_CAUSE_CONTROL_PLANE_BACKPRESSURE =
   'control_plane_backpressure';
 const CONTROL_SNAPSHOT_PUBLICATION_READ_REPAIR_ERROR_FRAGMENTS = Object.freeze([
@@ -111,6 +113,8 @@ const CONTROL_SNAPSHOT_REPAIR_FAILURE_PARTICIPANT_TABLE_NAME_FIELD =
 const CONTROL_SNAPSHOT_REPAIR_FAILURE_SKIPPED_DETAIL = 'repair_skipped';
 const CONTROL_SNAPSHOT_REPAIR_FAILURE_NOT_APPLIED_DETAIL =
   'repair_not_applied';
+const CONTROL_SNAPSHOT_REPAIR_DEFERRED_MIN_NODE_COVERAGE = NUM.THREE;
+const CONTROL_SNAPSHOT_FORCED_REPAIR_QUERY_TIMEOUT_DIVISOR = NUM.TWO;
 function hasOnlyLeaderResolutionGapRepairCause(repair = null) {
   const causeChain = Array.isArray(repair?.causeChain) ?
     repair.causeChain.filter(
@@ -134,6 +138,66 @@ function hasPressureOrTimeoutRepairCause(repair = null) {
     causeChain.includes(AUTHORITATIVE_REPAIR_CAUSE_QUERY_TIMEOUT) ||
     causeChain.includes(AUTHORITATIVE_REPAIR_CAUSE_CONTROL_PLANE_BACKPRESSURE)
   );
+}
+function hasParticipantFailureRepairCause(repair = null) {
+  const causeChain = Array.isArray(repair?.causeChain) ?
+    repair.causeChain.filter(
+      (value) => typeof value === TYPEOF.STRING && value.length > NUM.ZERO,
+    ) :
+    ADMIN_CACHE_DUMP.EMPTY;
+  return (
+    causeChain.includes(
+      AUTHORITATIVE_REPAIR_CAUSE_QUERY_PARTICIPANT_FAILURE,
+    ) ||
+    (
+      repair?.firstFailedParticipant &&
+      typeof repair.firstFailedParticipant === TYPEOF.OBJECT &&
+      !Array.isArray(repair.firstFailedParticipant)
+    )
+  );
+}
+function hasDeferredRepairLocalControlSnapshotCoverage(snapshot = null) {
+  return resolveControlSnapshotCoverageNodeCount(snapshot) >=
+    CONTROL_SNAPSHOT_REPAIR_DEFERRED_MIN_NODE_COVERAGE;
+}
+function hasForcedRepairDeferredFailureCause(repair = null) {
+  return (
+    hasParticipantFailureRepairCause(repair) ||
+    hasPressureOrTimeoutRepairCause(repair)
+  );
+}
+function shouldAttemptForcedRepairFailureLocalFallback(options = {}) {
+  return (
+    options.forceAuthoritativeRepair === true &&
+    hasForcedRepairDeferredFailureCause(options.repair)
+  );
+}
+function resolveAuthoritativeRepairQueryTimeoutMs(options = {}) {
+  const queryTimeoutMs = Number(options.queryTimeoutMs);
+  if (
+    options.forceAuthoritativeRepair !== true ||
+    !Number.isFinite(queryTimeoutMs) ||
+    queryTimeoutMs <= NUM.ONE
+  ) {
+    return options.queryTimeoutMs;
+  }
+  return Math.max(
+    NUM.ONE,
+    Math.floor(
+      queryTimeoutMs / CONTROL_SNAPSHOT_FORCED_REPAIR_QUERY_TIMEOUT_DIVISOR,
+    ),
+  );
+}
+function buildRepairFailureLocalSnapshotOptions(options = {}) {
+  return {
+    ...options,
+    [CONTROL_SNAPSHOT_REFRESH_OPTION_FIELD
+      .PREFER_AUTHORITATIVE_PUBLICATION_READ]: false,
+    [CONTROL_SNAPSHOT_REFRESH_OPTION_FIELD
+      .ALLOW_AUTHORITATIVE_READINESS_REFRESH]: false,
+    [CONTROL_SNAPSHOT_REFRESH_OPTION_FIELD
+      .RECONCILE_AUTHORITATIVE_MEMBERSHIP_PUBLICATION]: false,
+  };
 }
 function isRecoverableControlSnapshotPublicationReadError(error = null) {
   const message = String(error?.message || error || '').toLowerCase();
@@ -481,6 +545,16 @@ function attachOrdinaryRepairDeferralDiagnostics(snapshot, repairDeferred) {
  * as functions so this module has no back-reference to AdminWebSocketAPI.
  */
 class AdminControlSnapshotPart2 extends AdminControlSnapshotPart1 {
+  async buildForcedRepairFailureLocalFallbackSnapshot(options = {}) {
+    try {
+      return await this.buildLocalControlSnapshot(
+        buildRepairFailureLocalSnapshotOptions(options),
+      );
+    } catch (_error) {
+      return null;
+    }
+  }
+
   async prepareVisibleMembershipPublicationHandoffRefresh(
     snapshot = null,
     options = {},
@@ -595,7 +669,10 @@ class AdminControlSnapshotPart2 extends AdminControlSnapshotPart1 {
         repair = await this.ensureAuthoritativeDiscoveryCacheRepair({
           reason: CONTROL_SNAPSHOT_REPAIR_REASON,
           bypassReuse: true,
-          queryTimeoutMs: options.queryTimeoutMs,
+          queryTimeoutMs: resolveAuthoritativeRepairQueryTimeoutMs({
+            forceAuthoritativeRepair,
+            queryTimeoutMs: options.queryTimeoutMs,
+          }),
         });
       } catch (repairError) {
         throw buildAuthoritativeControlSnapshotRepairFailure(
@@ -604,6 +681,36 @@ class AdminControlSnapshotPart2 extends AdminControlSnapshotPart1 {
         );
       }
       if (repair?.applied !== true) {
+        if (
+          shouldAttemptForcedRepairFailureLocalFallback({
+            forceAuthoritativeRepair,
+            repair,
+          }) === true
+        ) {
+          const fallbackSnapshot =
+            await this.buildForcedRepairFailureLocalFallbackSnapshot(options);
+          if (hasDeferredRepairLocalControlSnapshotCoverage(fallbackSnapshot)) {
+            const fallbackEvaluation =
+              this.evaluateAuthoritativeControlSnapshotRepair(
+                fallbackSnapshot,
+              );
+            return this.resolveSharedControlSnapshot(
+              attachOrdinaryRepairDeferralDiagnostics(
+                fallbackSnapshot,
+                true,
+              ),
+              {
+                ...options,
+                observationMode:
+                  ADMIN_CONTROL_SNAPSHOT_OBSERVATION_MODE.REPAIR_DEFERRED,
+                repair,
+                repairEvaluation: fallbackEvaluation,
+                repairAttempted: true,
+                repairDeferred: true,
+              },
+            );
+          }
+        }
         throw buildAuthoritativeControlSnapshotRepairFailure(
           resolveControlSnapshotRepairFailureDetail(repair),
           repair,
@@ -699,11 +806,22 @@ class AdminControlSnapshotPart2 extends AdminControlSnapshotPart1 {
       repair = await this.ensureAuthoritativeDiscoveryCacheRepair({
         reason: CONTROL_SNAPSHOT_REPAIR_REASON,
         bypassReuse: forceAuthoritativeRepair,
-        queryTimeoutMs: options.queryTimeoutMs,
+        queryTimeoutMs: resolveAuthoritativeRepairQueryTimeoutMs({
+          forceAuthoritativeRepair,
+          queryTimeoutMs: options.queryTimeoutMs,
+        }),
         triggerCodes: repairEvaluation?.triggerCodes,
       });
     } catch (error) {
-      if (canDegradeRepairFailure) {
+      const canDegradeThrownRepairFailure =
+        canDegradeRepairFailure === true ||
+        this.canDegradeAuthoritativeControlSnapshotRepairFailure({
+          forceAuthoritativeRepair,
+          localSnapshot: snapshot,
+          repair: error,
+          repairEvaluation,
+        });
+      if (canDegradeThrownRepairFailure) {
         const triggeredSnapshot =
           await this.triggerMembershipPublicationHandoffOwnerCommand(
             snapshot,
@@ -742,6 +860,7 @@ class AdminControlSnapshotPart2 extends AdminControlSnapshotPart1 {
         canDegradeRepairFailure === true ||
         this.canDegradeAuthoritativeControlSnapshotRepairFailure({
           forceAuthoritativeRepair,
+          localSnapshot: snapshot,
           repairEvaluation,
           repair,
         });
@@ -803,6 +922,13 @@ class AdminControlSnapshotPart2 extends AdminControlSnapshotPart1 {
     );
   }
   canDegradeAuthoritativeControlSnapshotRepairFailure(options = {}) {
+    if (
+      options.forceAuthoritativeRepair === true &&
+      hasForcedRepairDeferredFailureCause(options.repair) &&
+      hasDeferredRepairLocalControlSnapshotCoverage(options.localSnapshot)
+    ) {
+      return true;
+    }
     if (
       options.forceAuthoritativeRepair !== true &&
       hasOnlyLeaderResolutionGapRepairCause(options.repair) &&
