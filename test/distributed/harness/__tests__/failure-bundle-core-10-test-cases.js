@@ -32,6 +32,8 @@ export function registerFailureBundleCore10Tests(context) {
     'ignores stale best-progress missing publication evidence when current active-gate progress is clean';
   const STEADY_PUBLISHED_CONSUMER_LAG_OWNER_STREAM_TEST_NAME =
     'surfaces typed publication owner consumer lag for steady-published missing members';
+  const PUBLISHED_EMPTY_ACK_LIST_CLEARS_STALE_COUNT_TEST_NAME =
+    'clears stale count-only ACK projection when published membership has an empty pending ACK list';
 
   it(
     ACTIVE_GATE_CANONICAL_MISSING_WITH_STALE_CLOSURE_TEST_NAME,
@@ -1103,7 +1105,7 @@ export function registerFailureBundleCore10Tests(context) {
       const PUBLICATION_STATUS_PUBLISHED = 'PUBLISHED';
       const RECOVERY_PROTOCOL_STEADY_PUBLISHED = 'steady_published';
       const PUBLICATION_OWNER_STREAM_OUTCOME_STALE = 'stale';
-      const PUBLICATION_OWNER_ACK_STATE_ACKNOWLEDGED = 'acknowledged';
+      const PUBLICATION_OWNER_ACK_STATE_NOT_REQUIRED = 'not_required';
       const PUBLICATION_OWNER_FRESHNESS_FENCE_CONSUMER_LAG =
         'consumer_lag';
       const PUBLICATION_OWNER_RECOVERY_OUTCOME_WAITING_FOR_CONSUMER =
@@ -1198,7 +1200,7 @@ export function registerFailureBundleCore10Tests(context) {
       );
       assert.equal(
         publicationConvergence.ackState,
-        PUBLICATION_OWNER_ACK_STATE_ACKNOWLEDGED,
+        PUBLICATION_OWNER_ACK_STATE_NOT_REQUIRED,
       );
       assert.equal(
         publicationConvergence.freshnessFence,
@@ -1227,6 +1229,101 @@ export function registerFailureBundleCore10Tests(context) {
       assert.equal(
         publicationConvergence.publicationRecoveryGate.publicationPending,
         false,
+      );
+    },
+  );
+
+  it(
+    PUBLISHED_EMPTY_ACK_LIST_CLEARS_STALE_COUNT_TEST_NAME,
+    () => {
+      const PUBLICATION_EPOCH = 100;
+      const PUBLICATION_STATUS_PUBLISHED = 'PUBLISHED';
+      const RECOVERY_PROTOCOL_STEADY_PUBLISHED = 'steady_published';
+      const PUBLICATION_OWNER_ACK_STATE_NOT_REQUIRED = 'not_required';
+      const PUBLICATION_RECOVERY_GATE_STATE_CONSUMER_LAG = 'consumer_lag';
+      const ACTIVE_GATE_MODE_STARTUP = 'startup';
+      const PUBLISHED_NODE_ID = 'published-node-count-only';
+      const MISSING_NODE_ID = 'missing-node-count-only';
+      const SNAPSHOT_COVERAGE_BLOCKER = 'snapshot_coverage=1/2';
+      const EXPECTED_NODE_COUNT = 2;
+      const ACTIVE_NODE_COUNT = 1;
+      const INACTIVE_NODE_COUNT = 1;
+      const SNAPSHOT_COVERAGE_NODE_COUNT = 1;
+      const ZERO_COUNT = 0;
+      const ONE_COUNT = 1;
+      const controlPlane = {
+        publicationConvergence: {
+          publicationEpoch: PUBLICATION_EPOCH,
+          publicationStatus: PUBLICATION_STATUS_PUBLISHED,
+          recoveryProtocolState: RECOVERY_PROTOCOL_STEADY_PUBLISHED,
+          publishedActiveNodeIds: [PUBLISHED_NODE_ID],
+          pendingAckNodeIds: [],
+          pendingAckCount: ONE_COUNT,
+          missingPublishedNodeIds: [MISSING_NODE_ID],
+          missingPublishedCount: ONE_COUNT,
+          publicationPending: true,
+          prioritySpreadPending: false,
+          priorityRecoveryReasonCodes: [],
+        },
+        priorityRecoveryObservation: {
+          publicationEpoch: PUBLICATION_EPOCH,
+          publicationStatus: PUBLICATION_STATUS_PUBLISHED,
+          recoveryProtocolState: RECOVERY_PROTOCOL_STEADY_PUBLISHED,
+          publishedActiveNodeIds: [PUBLISHED_NODE_ID],
+          pendingAckNodeIds: [],
+          pendingAckCount: ONE_COUNT,
+          missingPublishedNodeIds: [MISSING_NODE_ID],
+          missingPublishedCount: ONE_COUNT,
+          publicationPending: true,
+          prioritySpreadPending: false,
+          priorityRecoveryReasonCodes: [],
+          activeGate: {
+            mode: ACTIVE_GATE_MODE_STARTUP,
+            progress: {
+              expectedNodeCount: EXPECTED_NODE_COUNT,
+              activeNodeCount: ACTIVE_NODE_COUNT,
+              inactiveNodeCount: INACTIVE_NODE_COUNT,
+              snapshotCoverageNodeCount: SNAPSHOT_COVERAGE_NODE_COUNT,
+              snapshotCoverageComplete: false,
+              publicationStatus: PUBLICATION_STATUS_PUBLISHED,
+              publicationEpoch: PUBLICATION_EPOCH,
+              recoveryProtocolState: RECOVERY_PROTOCOL_STEADY_PUBLISHED,
+              selectedPublishedActiveNodeIds: [PUBLISHED_NODE_ID],
+              selectedMissingPublishedNodeIds: [MISSING_NODE_ID],
+              pendingAckNodeIds: [],
+              pendingAckCount: ONE_COUNT,
+              missingPublishedCount: ONE_COUNT,
+              prioritySpreadSatisfied: true,
+              blockers: [SNAPSHOT_COVERAGE_BLOCKER],
+            },
+          },
+        },
+      };
+
+      const publicationConvergence =
+        buildPublicationConvergenceSummary(controlPlane);
+
+      assert.equal(publicationConvergence.pendingAckCount, ZERO_COUNT);
+      assert.deepEqual(publicationConvergence.pendingAckNodeIds, []);
+      assert.equal(
+        publicationConvergence.ackState,
+        PUBLICATION_OWNER_ACK_STATE_NOT_REQUIRED,
+      );
+      assert.equal(
+        publicationConvergence.publicationRecoveryGate.pendingAckCount,
+        ZERO_COUNT,
+      );
+      assert.equal(
+        publicationConvergence.publicationRecoveryGate.publicationPending,
+        false,
+      );
+      assert.equal(
+        publicationConvergence.publicationRecoveryGate.state,
+        PUBLICATION_RECOVERY_GATE_STATE_CONSUMER_LAG,
+      );
+      assert.equal(
+        publicationConvergence.activeGateSnapshotCoveragePending,
+        true,
       );
     },
   );

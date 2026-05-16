@@ -710,6 +710,67 @@ test('buildCanonicalPublicationRecoveryEvidence preserves count-only ACK debt ac
     t.end();
   });
 
+test('buildCanonicalPublicationRecoveryEvidence closes published empty pending ACK list reentry debt',
+  (t) => {
+    const evidence = buildCanonicalPublicationRecoveryEvidence({
+      publicationConvergence: {
+        publicationEpoch: TEST_PUBLICATION_EPOCH,
+        publicationStatus: CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED,
+        recoveryProtocolState: RECOVERY_PROTOCOL_STATE.STEADY_PUBLISHED,
+        pendingAckNodeIds: TEST_EMPTY_NODE_IDS,
+        pendingAckCount: TEST_PUBLICATION_DEBT_COUNT,
+        missingPublishedNodeIds: [TEST_NODE_ID.SECOND],
+        missingPublishedCount: TEST_PUBLICATION_DEBT_COUNT,
+        priorityRecoveryReasonCodes: [TEST_PUBLICATION_PENDING_REASON_CODE],
+        priorityPartitionSummary: TEST_SATISFIED_PRIORITY_PARTITION_SUMMARY,
+      },
+    });
+
+    t.equal(
+      evidence.publicationConvergenceGate.state,
+      PUBLICATION_RECOVERY_GATE_STATE.CONSUMER_LAG,
+    );
+    t.equal(evidence.publicationConvergenceGate.pendingAckCount, 0);
+    t.same(
+      evidence.publicationConvergenceGate.pendingAckNodeIds,
+      TEST_EMPTY_NODE_IDS,
+    );
+    t.equal(
+      evidence.publicationConvergenceGate.pendingAckEvidenceState,
+      PUBLICATION_RECOVERY_PENDING_ACK_EVIDENCE_STATE.REQUIRED_ACK_NODE_LIST,
+    );
+    t.equal(evidence.publicationConvergenceGate.publicationPending, false);
+    t.equal(
+      evidence.publicationConvergenceGate.reasonCodes.includes(
+        TEST_PUBLICATION_PENDING_REASON_CODE,
+      ),
+      false,
+    );
+    t.equal(evidence.priorityRecoveryObservation.pendingAckCount, 0);
+    t.same(
+      evidence.priorityRecoveryObservation.pendingAckNodeIds,
+      TEST_EMPTY_NODE_IDS,
+    );
+    t.equal(evidence.publicationConvergence.pendingAckCount, 0);
+    t.same(
+      evidence.publicationConvergence.pendingAckNodeIds,
+      TEST_EMPTY_NODE_IDS,
+    );
+    t.equal(
+      evidence.publicationConvergence.freshnessFence,
+      PUBLICATION_OWNER_FRESHNESS_FENCE.CONSUMER_LAG,
+    );
+    t.equal(
+      evidence.publicationConvergence.recoveryOutcome,
+      PUBLICATION_OWNER_RECOVERY_OUTCOME.WAITING_FOR_CONSUMER,
+    );
+    t.equal(
+      evidence.publicationConvergence.streamOutcome,
+      PUBLICATION_OWNER_STREAM_OUTCOME.STALE,
+    );
+    t.end();
+  });
+
 test('buildCanonicalPublicationRecoveryEvidence carries pending ACK targets from priority decision snapshots',
   (t) => {
     const evidence = buildCanonicalPublicationRecoveryEvidence({

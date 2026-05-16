@@ -170,6 +170,49 @@ test('publication owner stream preserves count-only ACK debt without pending nod
     t.end();
   });
 
+test('publication owner stream settles published empty pending ACK list debt',
+  (t) => {
+    const stream = buildPublicationOwnerStreamState({
+      publicationRevision: TEST_PUBLICATION_PUBLISHED_FRONTIER.EPOCH,
+      publicationStatus: CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED,
+      pendingAckNodeIds: [],
+      pendingAckCount: TEST_PUBLICATION_COUNT.FRONTIER_PENDING_ACK,
+      missingPublishedNodeIds:
+        TEST_PUBLICATION_PUBLISHED_FRONTIER.MISSING_NODE_IDS,
+      missingPublishedCount: TEST_PUBLICATION_PUBLISHED_FRONTIER.MISSING_COUNT,
+      recoveryProtocolState:
+        TEST_PUBLICATION_RECOVERY_PROTOCOL.PUBLICATION_PENDING,
+      publicationPending: true,
+      prioritySpreadPending: true,
+    });
+
+    t.equal(
+      stream.pendingAckEvidenceState,
+      PUBLICATION_OWNER_ACK_EVIDENCE_STATE.REQUIRED_ACK_NODE_LIST,
+    );
+    t.equal(
+      stream.pendingAckCount,
+      TEST_PUBLICATION_COUNT.PUBLISHED_FRONTIER_PENDING_ACK,
+    );
+    t.same(stream.pendingAckNodeIds, []);
+    t.equal(stream.ackState, PUBLICATION_OWNER_ACK_STATE.NOT_REQUIRED);
+    t.equal(
+      stream.freshnessFence,
+      PUBLICATION_OWNER_FRESHNESS_FENCE.CONSUMER_LAG,
+    );
+    t.equal(stream.streamOutcome, PUBLICATION_OWNER_STREAM_OUTCOME.STALE);
+    t.equal(
+      stream.recoveryOutcome,
+      PUBLICATION_OWNER_RECOVERY_OUTCOME.WAITING_FOR_CONSUMER,
+    );
+    t.equal(isPublicationOwnerStreamPublicationPending(stream), false);
+    t.same(
+      stream.missingPublishedNodeIds,
+      TEST_PUBLICATION_PUBLISHED_FRONTIER.MISSING_NODE_IDS,
+    );
+    t.end();
+  });
+
 test('publication owner stream settles published count-only ACK frontier',
   (t) => {
     const stream = buildPublicationOwnerStreamState({
@@ -186,7 +229,7 @@ test('publication owner stream settles published count-only ACK frontier',
       prioritySpreadPending: true,
     });
 
-    t.equal(stream.ackState, PUBLICATION_OWNER_ACK_STATE.ACKNOWLEDGED);
+    t.equal(stream.ackState, PUBLICATION_OWNER_ACK_STATE.NOT_REQUIRED);
     t.equal(
       stream.freshnessFence,
       PUBLICATION_OWNER_FRESHNESS_FENCE.CONSUMER_LAG,

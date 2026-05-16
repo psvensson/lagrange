@@ -268,17 +268,24 @@ function hasOpenPublicationEvidence({
   priorityRecoveryObservation = null,
   priorityRecoveryDecisionSnapshots = null,
 } = {}) {
-  const pendingAckNodeIds = normalizeDistinctStringArray(
-    priorityRecoveryObservation?.pendingAckNodeIds ??
-      publicationConvergenceGate?.pendingAckNodeIds ??
-      publicationConvergence?.pendingAckNodeIds ??
-      PUBLICATION_EVIDENCE_EMPTY_LIST,
-  );
-  const pendingAckCount =
+  const currentPendingAckNodeIds = resolveCurrentPendingAckNodeIds({
+    priorityRecoveryObservation,
+    publicationConvergenceGate,
+    publicationConvergence,
+  });
+  const pendingAckNodeIds =
+    currentPendingAckNodeIds ?? normalizeDistinctStringArray(
+      priorityRecoveryObservation?.pendingAckNodeIds ??
+        publicationConvergenceGate?.pendingAckNodeIds ??
+        publicationConvergence?.pendingAckNodeIds ??
+        PUBLICATION_EVIDENCE_EMPTY_LIST,
+    );
+  const pendingAckCount = currentPendingAckNodeIds !== null ?
+    pendingAckNodeIds.length :
     normalizeNonNegativeInteger(priorityRecoveryObservation?.pendingAckCount) ??
-    normalizeNonNegativeInteger(publicationConvergenceGate?.pendingAckCount) ??
-    normalizeNonNegativeInteger(publicationConvergence?.pendingAckCount) ??
-    pendingAckNodeIds.length;
+      normalizeNonNegativeInteger(publicationConvergenceGate?.pendingAckCount) ??
+      normalizeNonNegativeInteger(publicationConvergence?.pendingAckCount) ??
+      pendingAckNodeIds.length;
   const publicationStatus =
     normalizeOptionalString(priorityRecoveryObservation?.publicationStatus) ||
     normalizeOptionalString(publicationConvergenceGate?.publicationStatus) ||
@@ -892,6 +899,23 @@ function resolvePendingRequiredAckNodeIds(pendingAckSource = null) {
     null;
 }
 
+function hasPublishedPendingAckNodeListClosure(pendingAckSource = null) {
+  const publicationStatus =
+    normalizeOptionalString(pendingAckSource?.publicationStatus) ||
+    normalizeOptionalString(pendingAckSource?.status);
+  const pendingAckNodeIds = normalizeDistinctStringArray(
+    pendingAckSource?.pendingAckNodeIds,
+  );
+  const pendingAckCount =
+    normalizeNonNegativeInteger(pendingAckSource?.pendingAckCount) ??
+    PUBLICATION_EVIDENCE_ZERO;
+  return publicationStatus ===
+      PUBLICATION_EVIDENCE_PUBLICATION_STATUS_PUBLISHED &&
+    Array.isArray(pendingAckSource?.pendingAckNodeIds) &&
+    pendingAckNodeIds.length === PUBLICATION_EVIDENCE_ZERO &&
+    pendingAckCount > PUBLICATION_EVIDENCE_ZERO;
+}
+
 function hasCurrentActiveGatePendingAckClosure(progress = null) {
   if (!isRecord(progress)) {
     return false;
@@ -943,6 +967,9 @@ function resolveCurrentPendingAckNodeIds({
       pendingAckSource.pendingAckNodeIds,
     );
     if (pendingAckNodeIds.length > PUBLICATION_EVIDENCE_ZERO) {
+      return pendingAckNodeIds;
+    }
+    if (hasPublishedPendingAckNodeListClosure(pendingAckSource)) {
       return pendingAckNodeIds;
     }
     const pendingRequiredAckNodeIds =

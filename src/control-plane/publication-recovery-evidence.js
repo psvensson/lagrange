@@ -210,7 +210,13 @@ function normalizePublicationRecoveryAckEvidence(options = {}) {
   const explicitPendingAckNodeIds = normalizeDistinctStringArray(
     options.pendingAckNodeIds,
   );
+  const publicationStatus = normalizeOptionalString(options.publicationStatus);
+  const hasClosedPublishedPendingAckList =
+    publicationStatus === PUBLICATION_RECOVERY_PUBLICATION_STATUS.PUBLISHED &&
+    Array.isArray(options.pendingAckNodeIds) &&
+    explicitPendingAckNodeIds.length === NUM.ZERO;
   const evidenceState =
+    hasClosedPublishedPendingAckList ||
     isPublicationRecoveryAckNodeListProvided(requiredAckNodeListInput) &&
       (
         requiredAckNodeIds.length > NUM.ZERO ||
@@ -835,6 +841,12 @@ function buildCanonicalPublicationConvergenceGate(options = {}) {
   const pendingAckEvidence = normalizePublicationRecoveryAckEvidence({
     requiredAckNodeListInput,
     acknowledgedNodeIds: acknowledgedNodeListInput.value,
+    publicationStatus:
+      rawPublicationConvergenceGate?.publicationStatus ??
+      publicationConvergence?.publicationStatus ??
+      publicationConvergence?.status ??
+      priorityRecoveryObservation?.publicationStatus ??
+      activeGatePublicationStatus,
     pendingAckNodeIds: resolvePublicationRecoveryPendingAckNodeIds({
       requiredAckNodeListInput,
       ownerPendingAckNodeIds: [
@@ -1459,6 +1471,7 @@ function buildCanonicalPublicationConvergence(options = {}) {
   const pendingAckEvidence = normalizePublicationRecoveryAckEvidence({
     requiredAckNodeListInput,
     acknowledgedNodeIds: acknowledgedNodeListInput.value,
+    publicationStatus,
     pendingAckNodeIds: resolvePublicationRecoveryPendingAckNodeIds({
       requiredAckNodeListInput,
       ownerPendingAckNodeIds: [

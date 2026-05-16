@@ -22,41 +22,38 @@ success is in scope.
 ## Current Blocker Snapshot
 
 Latest representative artifact:
-`test-output/reports/rolling-restart-post-systems-pattern-checkpoint-20260516.report.json`.
+`test-output/reports/rolling-restart-after-top-level-publication-projection-20260516.report.json`.
 
-Canonical state after the post-systems-pattern checkpoint:
+Canonical state after the top-level publication projection closure:
 
-1. `work:evidence-summary` selects `publication_ack_convergence` as the first
+1. `work:evidence-summary` selects `active_gate_snapshot_coverage` as the first
    frontier.
 2. Representative owner boundary:
-   `topology_publication_owner / publication_convergence`.
-3. Dominant reason: `publication_ack_blocked` / `pending_acks_present`.
-4. The scenario is red: all nodes reached `ACTIVE` (`5/5`), but the active-gate
-   timed out with `snapshotCoverage=2/5`.
-5. Publication is `PUBLISHED` with `pendingAck=1`,
-   `pendingAckNodeIds=[]`, `missingPublishedCount=4`,
-   `publishedActiveNodeIds=1/5` seed-only,
-   `publicationOwnerAckState=waiting_for_ack`, `freshnessFence=ack_lag`,
-   `recoveryOutcome=waiting_for_ack`, and
-   `streamOutcome=waiting_for_ack`.
-6. The canonical handoff probe reports `missingEdge=null`,
+   `startup_active_gate_owner / snapshot_coverage`.
+3. Dominant reasons: `active_gate_timed_out`, `owner_reconcile_pending`,
+   `snapshot_coverage_incomplete`, and `snapshot_repair_deferred`.
+4. The scenario is red: `4/5` nodes reached `ACTIVE`, one seed node remained
+   inactive, and active-gate timed out with `snapshotCoverage=2/5`.
+5. Publication ACK convergence is satisfied: publication is `PUBLISHED`,
+   `pendingAckCount=0`, `pendingAckNodeIds=[]`,
+   `publicationOwnerAckState=not_required`, `freshnessFence=consumer_lag`,
+   `recoveryOutcome=waiting_for_consumer`, and `streamOutcome=stale`.
+6. Priority recovery is satisfied and `analyze:priority-recovery-residuals`
+   reports zero witnesses.
+7. The canonical handoff probe reports `missingEdge=null`,
    `contractEdge=publication_active_gate_handoff_contract`,
    `nextAction=wait_owner_recovery`, `pendingReconcileCount=0`, and
    `runtimePromotionAllowed=false`.
-7. Causal-model outcome is `accept_classified_backpressure`, while dominant
-   failure class remains `publication_ack_blocked`; priority recovery
-   backpressure is subordinate to publication ACK convergence.
-8. Priority recovery is subordinate: residual extraction reports two
-   `operation_workflow_owner / workflow_progress` witnesses on
-   `control_plane_publications-p1` and `sql_transaction_participants-p1`, while
-   causal-model keeps `publication_ack_convergence` as the first critical path.
-   Split required is `false`; do not promote this boundary unless future
-   canonical evidence selects it.
-9. The current checkpoint package is
-   `work/packages/done-20260516-rolling-restart-post-systems-pattern-checkpoint.md`.
-10. The next package must continue through
-   `topology_publication_owner / publication_convergence` using the fresh
-   checkpoint artifact before any runtime edit.
+8. The active-gate consumer reports selected snapshot repair deferred with
+   reason codes `cache_stale_watermark`, `discovery_node_coverage_gap`, and
+   `stale_replica_operations_in_flight`.
+9. The active-gate owner cohort reports one missing/pending recovery target:
+   `11601fe0-72d6-5853-8590-ec2881853e72`, while handoff
+   `pendingReconcileCount=0`.
+10. The current package is closing as migrated from
+   `topology_publication_owner / publication_convergence`; the next active
+   package must continue on `startup_active_gate_owner / snapshot_coverage`
+   without relaxing active-gate admission or increasing timeouts.
 
 ## Scope Basis
 
@@ -411,9 +408,8 @@ The sprint cannot close until:
    `publication_ack_convergence / topology_publication_owner /
    publication_convergence`, with dominant reason `publication_ack_blocked`.
 6. Post-detour update: systems-pattern hardening and completion closure are now
-   done. The next continuation step is no longer the systems-pattern sprint;
-   it is the checkpoint package
-   `work/packages/done-20260516-rolling-restart-post-systems-pattern-checkpoint.md`.
+   done. The publication ACK continuation package is closing as migrated, and
+   the active continuation returns to startup active-gate snapshot coverage.
 
 ## Post-Systems-Pattern Continuation Package
 
@@ -448,22 +444,32 @@ The sprint cannot close until:
 
 ## Current Next Action
 
-When the paused rolling-restart gate is resumed, start with:
+Close and push the publication ACK package as migrated, then continue with a
+fresh active-gate successor package:
+
+```text
+startup_active_gate_owner / snapshot_coverage
+test-output/reports/rolling-restart-after-top-level-publication-projection-20260516.report.json
+```
+
+Keep the completed post-systems-pattern checkpoint package and artifact as
+predecessor/context:
 
 ```text
 work/packages/done-20260516-rolling-restart-post-systems-pattern-checkpoint.md
+test-output/reports/rolling-restart-post-systems-pattern-checkpoint-20260516.report.json
 ```
 
-Use the final pre-detour representative artifact only as handoff context:
+Use the final pre-detour representative artifact only as historical handoff
+context:
 
 ```text
 test-output/reports/rolling-restart-after-admin-owner-readiness-handoff-20260516.report.json
 ```
 
 The completed startup active-gate package drained the owner-reconcile handoff
-path: `pendingReconcileCount=0` and `nextAction=wait_owner_recovery`. The fresh
-post-detour representative artifact has now reselected
-`publication_ack_convergence / topology_publication_owner /
-publication_convergence`, so the next work continues there using the new
-artifact. Do not relax active-gate admission, rewrite publication handoff truth,
-or increase timeouts.
+path: `pendingReconcileCount=0` and `nextAction=wait_owner_recovery`. The
+publication ACK package then closed stale count-only ACK debt and migrated the
+representative first frontier to active-gate snapshot coverage. The next work
+must explain the remaining one-node active-gate owner cohort recovery target
+while preserving strict active-gate admission.

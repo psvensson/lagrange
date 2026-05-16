@@ -55,30 +55,29 @@ stale active-reference validation before the paused topology sprint resumes.
 Latest current handoff state:
 
 - artifact:
-  `test-output/reports/rolling-restart-post-systems-pattern-checkpoint-20260516.report.json`
-- first frontier: `publication_ack_convergence`
-- owner boundary: `topology_publication_owner / publication_convergence`
-- dominant reason: `publication_ack_blocked` / `pending_acks_present`
-- active-gate owner reconcile reduced: the representative handoff no longer
-  reports `owner_reconcile_service_unavailable`, and the active-gate handoff
-  contract now has `pendingReconcileCount=0`
-- next action from handoff evidence is `wait_owner_recovery`; the remaining red
-  evidence is publication ACK convergence with `pendingAck=1`,
-  `pendingAckNodeIds=[]`, `publishedActiveNodeIds` seed-only,
-  `missingPublishedCount=4`, `publicationOwnerAckState=waiting_for_ack`,
-  `freshnessFence=ack_lag`, `recoveryOutcome=waiting_for_ack`,
-  `streamOutcome=waiting_for_ack`, active nodes `5/5`, and snapshot coverage
-  `2/5`
-- causal-model outcome is `accept_classified_backpressure`, while the dominant
-  failure class remains `publication_ack_blocked`; priority recovery
-  backpressure is subordinate to publication ACK convergence
-- priority recovery remains subordinate with two
-  `operation_workflow_owner / workflow_progress` witnesses and split required
-  `false`; reopen that boundary only if a later canonical residual extractor
-  promotes it ahead of publication convergence
-- the fresh representative artifact after systems-pattern completion closure
-  reselected the same publication frontier; the continuation package is
-  `work/packages/done-20260516-rolling-restart-post-systems-pattern-checkpoint.md`
+  `test-output/reports/rolling-restart-after-top-level-publication-projection-20260516.report.json`
+- first frontier: `active_gate_snapshot_coverage`
+- owner boundary: `startup_active_gate_owner / snapshot_coverage`
+- dominant reasons: `active_gate_timed_out`, `owner_reconcile_pending`,
+  `snapshot_coverage_incomplete`, and `snapshot_repair_deferred`
+- active-gate owner reconcile remains reduced: the handoff contract has
+  `pendingReconcileCount=0`, `nextAction=wait_owner_recovery`, and
+  `runtimePromotionAllowed=false`
+- the publication ACK closure implementation now satisfies the producer edge:
+  `pendingAckCount=0`, `pendingAckNodeIds=[]`,
+  `publicationOwnerAckState=not_required`,
+  `freshnessFence=consumer_lag`, `recoveryOutcome=waiting_for_consumer`,
+  and `streamOutcome=stale`
+- priority recovery has no residual witnesses in the latest artifact
+- the remaining red evidence is active-gate snapshot coverage: active nodes
+  `4/5`, snapshot coverage `2/5`, selected snapshot repair deferred with
+  `cache_stale_watermark`, `discovery_node_coverage_gap`, and
+  `stale_replica_operations_in_flight`
+- the active-gate owner cohort still reports one pending recovery target for
+  `11601fe0-72d6-5853-8590-ec2881853e72` despite handoff
+  `pendingReconcileCount=0`
+- the publication package is closing as migrated; the next package should focus
+  `startup_active_gate_owner / snapshot_coverage`
 
 ## Target Invariant
 
@@ -106,33 +105,27 @@ or produces a narrower owner-boundary blocker selected by canonical evidence.
 
 - Continuation sprint context:
   `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md`
-- Next continuation package:
-  `work/packages/done-20260516-rolling-restart-post-systems-pattern-checkpoint.md`
+- Active successor package:
+  `startup_active_gate_owner / snapshot_coverage` package after the publication
+  package is committed and pushed
 - Artifact:
-  `test-output/reports/rolling-restart-post-systems-pattern-checkpoint-20260516.report.json`
-- Checkpoint package:
+  `test-output/reports/rolling-restart-after-top-level-publication-projection-20260516.report.json`
+- Closed checkpoint predecessor:
   `work/packages/done-20260516-rolling-restart-post-systems-pattern-checkpoint.md`
 - Representative owner boundary:
-  `topology_publication_owner / publication_convergence`
+  `startup_active_gate_owner / snapshot_coverage`
 - Extractor summary:
-  The post-systems-pattern checkpoint is red. `work:evidence-summary` and
-  `causal-model` select `publication_ack_convergence` with owner
-  `topology_publication_owner / publication_convergence`; active-gate handoff
-  `pendingReconcileCount=0` and next action `wait_owner_recovery` mean the
-  drained owner-reconcile path should not be treated as the active blocker.
-  All five nodes reached `ACTIVE`, but the active gate timed out at
-  `snapshotCoverage=2/5`. The producer is waiting for ACK with
-  `pendingAck=1`, `pendingAckNodeIds=[]`, seed-only `publishedActiveNodeIds`,
-  `missingPublishedCount=4`, `publicationOwnerAckState=waiting_for_ack`,
-  `freshnessFence=ack_lag`, `recoveryOutcome=waiting_for_ack`, and
-  `streamOutcome=waiting_for_ack`. The successor should use the fresh
-  checkpoint artifact rather than the stale pre-detour artifact.
+  The latest artifact is red. `work:evidence-summary` and
+  `causal-model` select `active_gate_snapshot_coverage` with owner
+  `startup_active_gate_owner / snapshot_coverage`. Publication ACK convergence
+  is satisfied, priority recovery reports zero witnesses, and the handoff probe
+  names reconcile as the required progress mechanism. The active-gate owner
+  cohort reports one pending recovery target while handoff
+  `pendingReconcileCount=0`.
 - Priority recovery residuals:
   the completed TiKV/PD topology-operator witness live path added the proof
-  surface, and the fresh artifact reports two workflow-progress witnesses.
-  `analyze:priority-recovery-residuals` reports split required `false`.
-  Keep this evidence subordinate unless fresh canonical extraction promotes it
-  ahead of `publication_ack_convergence`.
+  surface, but the latest artifact reports zero workflow-progress witnesses.
+  Keep this evidence subordinate unless fresh canonical extraction promotes it.
 
 ## Codebase Analysis Notes
 
@@ -207,10 +200,10 @@ These are context candidates, not write authorization:
 
 ## Entry Condition
 
-When the rolling-restart gate is resumed, activate
-`work/packages/done-20260516-rolling-restart-post-systems-pattern-checkpoint.md`
-and regenerate current-blocker before runtime implementation. Runtime edits are
-not in scope until the fresh checkpoint selects an owner boundary.
+When the rolling-restart gate is resumed, close and push the publication ACK
+package as migrated, then continue with a focused
+`startup_active_gate_owner / snapshot_coverage` successor using
+`test-output/reports/rolling-restart-after-top-level-publication-projection-20260516.report.json`.
 
 ## Exit Condition
 
@@ -223,5 +216,5 @@ canonical owner-boundary evidence.
 Next continuation package:
 
 ```text
-work/packages/done-20260516-rolling-restart-post-systems-pattern-checkpoint.md
+startup_active_gate_owner / snapshot_coverage
 ```

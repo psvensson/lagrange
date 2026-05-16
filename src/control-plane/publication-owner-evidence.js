@@ -125,7 +125,20 @@ function resolvePublicationOwnerPendingAckNodeIds(
   );
 }
 
+function hasPublishedPublicationOwnerClosedPendingAckList(options = {}) {
+  const explicitPendingAckNodeIds = normalizePublicationOwnerNodeIds(
+    options.pendingAckNodeIds,
+  );
+  return options.publicationStatus ===
+      CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED &&
+    Array.isArray(options.pendingAckNodeIds) &&
+    explicitPendingAckNodeIds.length === NUM.ZERO;
+}
+
 function resolvePublicationOwnerAckEvidenceState(options = {}) {
+  if (hasPublishedPublicationOwnerClosedPendingAckList(options)) {
+    return PUBLICATION_OWNER_ACK_EVIDENCE_STATE.REQUIRED_ACK_NODE_LIST;
+  }
   if (
     options.pendingAckEvidenceState ===
       PUBLICATION_OWNER_ACK_EVIDENCE_STATE.COUNT_ONLY
@@ -200,13 +213,16 @@ function buildPublicationOwnerAckEvidence(options = {}) {
 
 function buildPublicationOwnerEvidence(options = {}) {
   const revisionEvidence = normalizePublicationOwnerRevisionInputs(options);
-  const ackEvidence = buildPublicationOwnerAckEvidence(options);
+  const publicationStatus = normalizePublicationOwnerStatus(
+    options.publicationStatus ?? options.status,
+  );
+  const ackEvidence = buildPublicationOwnerAckEvidence({
+    ...options,
+    publicationStatus,
+  });
   const missingPublishedNodeIds = normalizePublicationOwnerNodeIds(
     options.missingPublishedNodeIds ??
       options.missingPublishedRecoveryActiveNodeIds,
-  );
-  const publicationStatus = normalizePublicationOwnerStatus(
-    options.publicationStatus ?? options.status,
   );
 
   return Object.freeze({

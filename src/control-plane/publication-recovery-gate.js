@@ -265,26 +265,6 @@ function resolvePublicationOwnerStreamNodeIds(value, fallbackValue) {
     fallbackValue;
 }
 
-function resolvePublicationOwnerStreamPendingAckEvidenceState(
-  publicationOwnerStream,
-  fallbackValue,
-) {
-  if (
-    publicationOwnerStream?.pendingAckEvidenceState ===
-      PUBLICATION_RECOVERY_PENDING_ACK_EVIDENCE_STATE.COUNT_ONLY
-  ) {
-    return PUBLICATION_RECOVERY_PENDING_ACK_EVIDENCE_STATE.COUNT_ONLY;
-  }
-  if (
-    publicationOwnerStream?.pendingAckEvidenceState ===
-      PUBLICATION_RECOVERY_PENDING_ACK_EVIDENCE_STATE.REQUIRED_ACK_NODE_LIST
-  ) {
-    return PUBLICATION_RECOVERY_PENDING_ACK_EVIDENCE_STATE
-      .REQUIRED_ACK_NODE_LIST;
-  }
-  return fallbackValue;
-}
-
 function resolvePendingAckNodeIds(requiredAckNodeIds = [], acknowledgedNodeIds = []) {
   const acknowledgedNodeIdSet = new Set(acknowledgedNodeIds);
   return Object.freeze(
@@ -310,7 +290,24 @@ function hasClosedUnpublishedPendingAckEvidence(options = {}) {
     recoveryProtocolState === RECOVERY_PROTOCOL_STATE.UNPUBLISHED_OBSERVATION;
 }
 
+function hasClosedPublishedPendingAckEvidence(options = {}) {
+  const explicitPendingAckNodeIds = normalizeDistinctStringArray(
+    options.pendingAckNodeIds,
+  );
+  const publicationStatusNormalized = normalizePublicationStatus(
+    options.publicationStatus,
+  );
+  return publicationStatusNormalized ===
+      CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED &&
+    Array.isArray(options.pendingAckNodeIds) &&
+    explicitPendingAckNodeIds.length === NUM.ZERO;
+}
+
 function resolvePendingAckEvidenceState(options = {}) {
+  if (hasClosedPublishedPendingAckEvidence(options)) {
+    return PUBLICATION_RECOVERY_PENDING_ACK_EVIDENCE_STATE
+      .REQUIRED_ACK_NODE_LIST;
+  }
   if (
     options.pendingAckEvidenceState ===
       PUBLICATION_RECOVERY_PENDING_ACK_EVIDENCE_STATE.COUNT_ONLY
@@ -407,12 +404,21 @@ function buildPublicationStreamCompatibilityEvidence(options = {}) {
     publicationOwnerStream?.pendingAckCount,
     null,
   );
-  const pendingAckCount =
-    streamPendingAckCount !== null ?
-      Math.max(pendingAckNodeIds.length, streamPendingAckCount) :
-      Array.isArray(publicationOwnerStream?.pendingAckNodeIds) ?
-        pendingAckNodeIds.length :
-        pendingAckEvidence.pendingAckCount;
+  const streamPendingAckEvidence = buildPendingAckEvidence({
+    publicationStatus:
+      publicationOwnerStream?.publicationStatus ?? options.publicationStatus,
+    requiredAckNodeIds,
+    acknowledgedNodeIds,
+    pendingAckNodeIds,
+    pendingAckCount:
+      streamPendingAckCount !== null ?
+        streamPendingAckCount :
+        pendingAckEvidence.pendingAckCount,
+    pendingAckEvidenceState:
+      publicationOwnerStream?.pendingAckEvidenceState ??
+      pendingAckEvidence.evidenceState,
+  });
+  const pendingAckCount = streamPendingAckEvidence.pendingAckCount;
   const missingPublishedNodeIds = resolvePublicationOwnerStreamNodeIds(
     publicationOwnerStream?.missingPublishedNodeIds,
     fallbackMissingPublishedNodeIds,
@@ -472,15 +478,11 @@ function buildPublicationStreamCompatibilityEvidence(options = {}) {
         options.publicationObservationState,
       ),
     recoveryProtocolState,
-    requiredAckNodeIds,
-    acknowledgedNodeIds,
-    pendingAckNodeIds,
+    requiredAckNodeIds: streamPendingAckEvidence.requiredAckNodeIds,
+    acknowledgedNodeIds: streamPendingAckEvidence.acknowledgedNodeIds,
+    pendingAckNodeIds: streamPendingAckEvidence.pendingAckNodeIds,
     pendingAckCount,
-    pendingAckEvidenceState:
-      resolvePublicationOwnerStreamPendingAckEvidenceState(
-        publicationOwnerStream,
-        pendingAckEvidence.evidenceState,
-      ),
+    pendingAckEvidenceState: streamPendingAckEvidence.evidenceState,
     missingPublishedNodeIds,
     missingPublishedCount,
     publicationPending,

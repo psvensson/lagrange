@@ -44,6 +44,7 @@ const PUBLICATION_STATUS_ACK_PENDING = 'ACK_PENDING';
 const PUBLICATION_RECOVERY_PROTOCOL_PUBLICATION_PENDING =
   'publication_pending';
 const PUBLICATION_OWNER_ACK_STATE_ACKNOWLEDGED = 'acknowledged';
+const PUBLICATION_OWNER_ACK_STATE_NOT_REQUIRED = 'not_required';
 const PUBLICATION_OWNER_FRESHNESS_FENCE_CONSUMER_LAG = 'consumer_lag';
 const PUBLICATION_OWNER_RECOVERY_OUTCOME_WAITING_FOR_CONSUMER =
   'waiting_for_consumer';
@@ -1699,13 +1700,18 @@ function hasPublicationMissingPublishedEvidence(evidence) {
 function isPublicationConsumerLagEvidence(evidence) {
   return evidence.publicationStatus === PUBLICATION_STATUS_PUBLISHED &&
     evidence.pendingAckCount === SOURCE_ORDER_BASE &&
-    evidence.ackState === PUBLICATION_OWNER_ACK_STATE_ACKNOWLEDGED &&
+    isClosedPublicationOwnerAckState(evidence.ackState) &&
     evidence.revisionState === PUBLICATION_OWNER_REVISION_STATE_CURRENT &&
     evidence.streamOutcome === PUBLICATION_OWNER_STREAM_OUTCOME_STALE &&
     evidence.freshnessFence ===
       PUBLICATION_OWNER_FRESHNESS_FENCE_CONSUMER_LAG &&
     evidence.recoveryOutcome ===
       PUBLICATION_OWNER_RECOVERY_OUTCOME_WAITING_FOR_CONSUMER;
+}
+
+function isClosedPublicationOwnerAckState(ackState) {
+  return ackState === PUBLICATION_OWNER_ACK_STATE_ACKNOWLEDGED ||
+    ackState === PUBLICATION_OWNER_ACK_STATE_NOT_REQUIRED;
 }
 
 function normalizePriorityRecoveryEvidence(normalized) {

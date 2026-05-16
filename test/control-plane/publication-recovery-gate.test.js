@@ -125,6 +125,49 @@ test('buildPublicationRecoveryGateSnapshot preserves count-only publication debt
     t.end();
   });
 
+test('buildPublicationRecoveryGateSnapshot treats published empty pending ACK list as consumer lag',
+  (t) => {
+    const gate = buildPublicationRecoveryGateSnapshot({
+      publicationEpoch: TEST_PUBLICATION_EPOCH,
+      publicationStatus: CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED,
+      recoveryProtocolState: RECOVERY_PROTOCOL_STATE.STEADY_PUBLISHED,
+      pendingAckNodeIds: TEST_EMPTY_NODE_IDS,
+      pendingAckCount: TEST_PUBLICATION_DEBT_COUNT,
+      missingPublishedNodeIds: [TEST_NODE_ID.SECOND],
+      missingPublishedCount: TEST_PUBLICATION_DEBT_COUNT,
+      priorityRecoveryReasonCodes: [
+        CONTROL_PLANE_PRIORITY_RECOVERY_REASON.PUBLICATION_EPOCH_PENDING,
+      ],
+      priorityPartitionSummary: TEST_PRIORITY_PARTITION_SUMMARY.SATISFIED,
+    });
+
+    t.equal(gate.state, PUBLICATION_RECOVERY_GATE_STATE.CONSUMER_LAG);
+    t.equal(gate.ready, false);
+    t.equal(gate.pendingAckCount, 0);
+    t.same(gate.pendingAckNodeIds, TEST_EMPTY_NODE_IDS);
+    t.equal(gate.ackPending, false);
+    t.equal(gate.publicationPending, false);
+    t.equal(
+      gate.pendingAckEvidenceState,
+      PUBLICATION_RECOVERY_PENDING_ACK_EVIDENCE_STATE.REQUIRED_ACK_NODE_LIST,
+    );
+    t.equal(
+      gate.freshnessFence,
+      PUBLICATION_OWNER_FRESHNESS_FENCE.CONSUMER_LAG,
+    );
+    t.equal(
+      gate.recoveryOutcome,
+      PUBLICATION_OWNER_RECOVERY_OUTCOME.WAITING_FOR_CONSUMER,
+    );
+    t.equal(
+      gate.reasonCodes.includes(
+        CONTROL_PLANE_PRIORITY_RECOVERY_REASON.PUBLICATION_EPOCH_PENDING,
+      ),
+      false,
+    );
+    t.end();
+  });
+
 test('buildPublicationRecoveryGateSnapshot preserves reason-only publication debt',
   (t) => {
     const gate = buildPublicationRecoveryGateSnapshot({
