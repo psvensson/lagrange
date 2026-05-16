@@ -22,38 +22,35 @@ success is in scope.
 ## Current Blocker Snapshot
 
 Latest representative artifact:
-`test-output/reports/rolling-restart-after-top-level-publication-projection-20260516.report.json`.
+`test-output/reports/rolling-restart-after-active-gate-owner-cohort-recovery-closure-20260516.report.json`.
 
-Canonical state after the top-level publication projection closure:
+Canonical state after the active-gate owner cohort closure:
 
-1. `work:evidence-summary` selects `active_gate_snapshot_coverage` as the first
-   frontier.
+1. `work:evidence-summary` selects `priority_recovery_partition_progress` as
+   the first frontier.
 2. Representative owner boundary:
-   `startup_active_gate_owner / snapshot_coverage`.
-3. Dominant reasons: `active_gate_timed_out`, `owner_reconcile_pending`,
-   `snapshot_coverage_incomplete`, and `snapshot_repair_deferred`.
-4. The scenario is red: `4/5` nodes reached `ACTIVE`, one seed node remained
-   inactive, and active-gate timed out with `snapshotCoverage=2/5`.
-5. Publication ACK convergence is satisfied: publication is `PUBLISHED`,
-   `pendingAckCount=0`, `pendingAckNodeIds=[]`,
-   `publicationOwnerAckState=not_required`, `freshnessFence=consumer_lag`,
-   `recoveryOutcome=waiting_for_consumer`, and `streamOutcome=stale`.
-6. Priority recovery is satisfied and `analyze:priority-recovery-residuals`
-   reports zero witnesses.
-7. The canonical handoff probe reports `missingEdge=null`,
-   `contractEdge=publication_active_gate_handoff_contract`,
-   `nextAction=wait_owner_recovery`, `pendingReconcileCount=0`, and
-   `runtimePromotionAllowed=false`.
-8. The active-gate consumer reports selected snapshot repair deferred with
-   reason codes `cache_stale_watermark`, `discovery_node_coverage_gap`, and
-   `stale_replica_operations_in_flight`.
-9. The active-gate owner cohort reports one missing/pending recovery target:
-   `11601fe0-72d6-5853-8590-ec2881853e72`, while handoff
-   `pendingReconcileCount=0`.
+   `operation_workflow_owner / workflow_progress`.
+3. Dominant reason: `priority_recovery_event_driven_wait`.
+4. Publication ACK convergence is satisfied: publication is `PUBLISHED`,
+   `pendingAckCount=0`, `pendingAckNodeIds=[]`, and published membership is
+   `5/5`.
+5. Active-gate snapshot coverage is satisfied:
+   `snapshotCoverageNodeCount=5`, `expectedNodeCount=5`, and
+   `missingPublished=0`.
+6. Priority spread remains pending with gap `5`.
+7. Priority recovery residual extraction reports seven witnesses and
+   `split required: true`.
+8. The first residual group is
+   `operation_workflow_owner / workflow_progress` with four witnesses across
+   `replica_operations-p1`, `sql_transaction_participants-p1`,
+   `sql_transactions-p1`, and `sql_write_operations-p1`.
+9. Secondary residual groups are
+   `operation_workflow_owner / rebalancer_handoff` and
+   `rebalancer_leader / operation_scheduling`.
 10. The current active package is
-   `work/packages/active-20260516-startup-active-gate-owner-cohort-recovery-closure.md`;
-   it must continue on `startup_active_gate_owner / snapshot_coverage`
-   without relaxing active-gate admission or increasing timeouts.
+    `work/packages/active-20260516-priority-recovery-workflow-progress-after-active-gate-cohort.md`;
+    it must preserve the closed publication and active-gate edges while proving
+    or splitting workflow progress.
 
 ## Scope Basis
 
@@ -444,11 +441,11 @@ The sprint cannot close until:
 
 ## Current Next Action
 
-Continue with the active-gate successor package:
+Continue with the priority recovery workflow-progress package:
 
 ```text
-work/packages/active-20260516-startup-active-gate-owner-cohort-recovery-closure.md
-test-output/reports/rolling-restart-after-top-level-publication-projection-20260516.report.json
+work/packages/active-20260516-priority-recovery-workflow-progress-after-active-gate-cohort.md
+test-output/reports/rolling-restart-after-active-gate-owner-cohort-recovery-closure-20260516.report.json
 ```
 
 Keep the completed post-systems-pattern checkpoint package and artifact as
@@ -469,6 +466,8 @@ test-output/reports/rolling-restart-after-admin-owner-readiness-handoff-20260516
 The completed startup active-gate package drained the owner-reconcile handoff
 path: `pendingReconcileCount=0` and `nextAction=wait_owner_recovery`. The
 publication ACK package then closed stale count-only ACK debt and migrated the
-representative first frontier to active-gate snapshot coverage. The next work
-must explain the remaining one-node active-gate owner cohort recovery target
-while preserving strict active-gate admission.
+representative first frontier to active-gate snapshot coverage. The active-gate
+owner cohort package then satisfied snapshot coverage and migrated the
+representative first frontier to priority recovery workflow progress. The next
+work must prove or split that residual while preserving strict active-gate
+admission and closed publication ACK convergence.

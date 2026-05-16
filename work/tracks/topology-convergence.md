@@ -55,30 +55,24 @@ stale active-reference validation before the paused topology sprint resumes.
 Latest current handoff state:
 
 - artifact:
-  `test-output/reports/rolling-restart-after-top-level-publication-projection-20260516.report.json`
-- first frontier: `active_gate_snapshot_coverage`
-- owner boundary: `startup_active_gate_owner / snapshot_coverage`
-- dominant reasons: `active_gate_timed_out`, `owner_reconcile_pending`,
-  `snapshot_coverage_incomplete`, and `snapshot_repair_deferred`
-- active-gate owner reconcile remains reduced: the handoff contract has
-  `pendingReconcileCount=0`, `nextAction=wait_owner_recovery`, and
-  `runtimePromotionAllowed=false`
-- the publication ACK closure implementation now satisfies the producer edge:
-  `pendingAckCount=0`, `pendingAckNodeIds=[]`,
-  `publicationOwnerAckState=not_required`,
-  `freshnessFence=consumer_lag`, `recoveryOutcome=waiting_for_consumer`,
-  and `streamOutcome=stale`
-- priority recovery has no residual witnesses in the latest artifact
-- the remaining red evidence is active-gate snapshot coverage: active nodes
-  `4/5`, snapshot coverage `2/5`, selected snapshot repair deferred with
-  `cache_stale_watermark`, `discovery_node_coverage_gap`, and
-  `stale_replica_operations_in_flight`
-- the active-gate owner cohort still reports one pending recovery target for
-  `11601fe0-72d6-5853-8590-ec2881853e72` despite handoff
-  `pendingReconcileCount=0`
+  `test-output/reports/rolling-restart-after-active-gate-owner-cohort-recovery-closure-20260516.report.json`
+- first frontier: `priority_recovery_partition_progress`
+- owner boundary: `operation_workflow_owner / workflow_progress`
+- dominant reason: `priority_recovery_event_driven_wait`
+- publication ACK convergence remains satisfied with publication `PUBLISHED`,
+  `pendingAckCount=0`, and published membership `5/5`
+- active-gate snapshot coverage is satisfied with snapshot coverage `5/5`,
+  expected nodes `5`, and `missingPublished=0`
+- priority spread remains pending with gap `5`
+- priority recovery residual extraction reports seven witnesses and split
+  required
+- the first residual group is
+  `operation_workflow_owner / workflow_progress` with four witnesses across
+  `replica_operations-p1`, `sql_transaction_participants-p1`,
+  `sql_transactions-p1`, and `sql_write_operations-p1`
 - the active package is
-  `work/packages/active-20260516-startup-active-gate-owner-cohort-recovery-closure.md`
-  and focuses `startup_active_gate_owner / snapshot_coverage`
+  `work/packages/active-20260516-priority-recovery-workflow-progress-after-active-gate-cohort.md`
+  and focuses `operation_workflow_owner / workflow_progress`
 
 ## Target Invariant
 
@@ -107,25 +101,25 @@ or produces a narrower owner-boundary blocker selected by canonical evidence.
 - Continuation sprint context:
   `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md`
 - Active successor package:
-  `work/packages/active-20260516-startup-active-gate-owner-cohort-recovery-closure.md`
+  `work/packages/active-20260516-priority-recovery-workflow-progress-after-active-gate-cohort.md`
 - Artifact:
-  `test-output/reports/rolling-restart-after-top-level-publication-projection-20260516.report.json`
+  `test-output/reports/rolling-restart-after-active-gate-owner-cohort-recovery-closure-20260516.report.json`
 - Closed checkpoint predecessor:
   `work/packages/done-20260516-rolling-restart-post-systems-pattern-checkpoint.md`
 - Representative owner boundary:
-  `startup_active_gate_owner / snapshot_coverage`
+  `operation_workflow_owner / workflow_progress`
 - Extractor summary:
-  The latest artifact is red. `work:evidence-summary` and
-  `causal-model` select `active_gate_snapshot_coverage` with owner
-  `startup_active_gate_owner / snapshot_coverage`. Publication ACK convergence
-  is satisfied, priority recovery reports zero witnesses, and the handoff probe
-  names reconcile as the required progress mechanism. The active-gate owner
-  cohort reports one pending recovery target while handoff
-  `pendingReconcileCount=0`.
+  The latest artifact is red. `work:evidence-summary` selects
+  `priority_recovery_partition_progress` with owner
+  `operation_workflow_owner / workflow_progress`. Publication ACK convergence
+  and active-gate snapshot coverage are satisfied. The causal model classifies
+  the current blocker as `priority_recovery_event_wait`.
 - Priority recovery residuals:
-  the completed TiKV/PD topology-operator witness live path added the proof
-  surface, but the latest artifact reports zero workflow-progress witnesses.
-  Keep this evidence subordinate unless fresh canonical extraction promotes it.
+  the latest artifact reports seven witnesses, split required. The first
+  owner-boundary group is `operation_workflow_owner / workflow_progress` with
+  four witnesses. Secondary groups are
+  `operation_workflow_owner / rebalancer_handoff` and
+  `rebalancer_leader / operation_scheduling`.
 
 ## Codebase Analysis Notes
 
@@ -201,8 +195,8 @@ These are context candidates, not write authorization:
 ## Entry Condition
 
 When the rolling-restart gate is resumed, continue with the focused
-`startup_active_gate_owner / snapshot_coverage` successor using
-`test-output/reports/rolling-restart-after-top-level-publication-projection-20260516.report.json`.
+`operation_workflow_owner / workflow_progress` successor using
+`test-output/reports/rolling-restart-after-active-gate-owner-cohort-recovery-closure-20260516.report.json`.
 
 ## Exit Condition
 
@@ -215,5 +209,5 @@ canonical owner-boundary evidence.
 Next continuation package:
 
 ```text
-work/packages/active-20260516-startup-active-gate-owner-cohort-recovery-closure.md
+work/packages/active-20260516-priority-recovery-workflow-progress-after-active-gate-cohort.md
 ```
