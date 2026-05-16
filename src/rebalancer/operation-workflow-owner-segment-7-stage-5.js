@@ -1,13 +1,23 @@
 import {OperationWorkflowOwnerSegment7Stage4} from './operation-workflow-owner-segment-7-stage-4.js';
 import {OPERATION_WORKFLOW_OWNER_SEGMENT_7_STAGE_SHARED as SHARED} from './operation-workflow-owner-segment-7-stage-shared.js';
+import {
+  INITIAL_PARTITION_IDS,
+  SYSTEM_TABLE_NAME,
+} from '../bootstrap/system-table-schemas-constants.js';
 
 const {
   NUM,
+  OPERATION_LIFECYCLE_ACTION,
   OPERATION_WORKFLOW_OWNER_LITERAL,
   OperationType,
+  PRIORITY_RECOVERY_COMPLETION_STATE,
   PRIORITY_RECOVERY_ACTUATION_STATE,
   PRIORITY_RECOVERY_BLOCKING_BOUNDARY,
   PRIORITY_RECOVERY_NEXT_REQUIRED_ACTION,
+  PRIORITY_RECOVERY_OPERATION_DRAIN_ACTION_BY_STATE,
+  PRIORITY_RECOVERY_OPERATION_DRAIN_COMPLETION_STATE_UNAVAILABLE,
+  PRIORITY_RECOVERY_OPERATION_DRAIN_SOURCE_STATE,
+  PRIORITY_RECOVERY_OPERATION_DRAIN_STATE,
   PRIORITY_RECOVERY_PROGRESS_OWNER,
   PRIORITY_RECOVERY_WAIT_MODE,
   PRIORITY_RECOVERY_WORKFLOW_PROGRESS_PHASE,
@@ -19,6 +29,7 @@ const {
   TRANSITION_RETRY_DELAY_MS,
   TYPEOF,
   WORKFLOW_STEP,
+  normalizeNodeIdList,
 } = SHARED;
 
 const PRIORITY_RECOVERY_DISPATCH_PENDING_REENTRY_STATE = Object.freeze({
@@ -67,6 +78,20 @@ const PRIORITY_RECOVERY_DISPATCH_PENDING_REENTRY_ACTUATION_STATES =
     new Set([
       PRIORITY_RECOVERY_ACTUATION_STATE.PERSISTED_NOT_DISPATCHED,
       PRIORITY_RECOVERY_ACTUATION_STATE.DISPATCHED_WAITING_PROGRESS,
+    ]),
+  );
+
+const PRIORITY_RECOVERY_DISPATCH_PENDING_DRAIN_COMPLETION_STATES =
+  Object.freeze(
+    new Set([
+      PRIORITY_RECOVERY_COMPLETION_STATE.CONVERGED,
+      PRIORITY_RECOVERY_COMPLETION_STATE.SPREAD_SATISFIED_IN_FLIGHT,
+    ]),
+  );
+const PRIORITY_RECOVERY_DISPATCH_PENDING_DRAIN_PARTITION_IDS =
+  Object.freeze(
+    new Set([
+      INITIAL_PARTITION_IDS[SYSTEM_TABLE_NAME.CONTROL_PLANE_PUBLICATIONS],
     ]),
   );
 
@@ -309,12 +334,19 @@ class OperationWorkflowOwnerSegment7Stage5 extends OperationWorkflowOwnerSegment
     );
   }
 
-  applyPriorityRecoveryDispatchPendingReentryAction(operation, action) {
+  applyPriorityRecoveryDispatchPendingReentryAction(
+    operation,
+    action,
+    decisionSnapshot = null,
+  ) {
     if (
       action ===
       PRIORITY_RECOVERY_DISPATCH_PENDING_REENTRY_ACTION.ARM_NOW
     ) {
-      this.armCoordinatorCreatedOperation(operation).catch((error) => {
+      this.applyPriorityRecoveryDispatchPendingOwnerProgress(
+        operation,
+        decisionSnapshot,
+      ).catch((error) => {
         this.handleDeferredCoordinatorCreatedRemoteHandoffRetryFailure(
           operation,
           error,
@@ -335,6 +367,185 @@ class OperationWorkflowOwnerSegment7Stage5 extends OperationWorkflowOwnerSegment
     return false;
   }
 
+  async applyPriorityRecoveryDispatchPendingOwnerProgress(
+    operation,
+    decisionSnapshot,
+  ) {
+    if (
+      this.shouldReconcilePriorityRecoveryDispatchPendingDrain(
+        decisionSnapshot,
+      ) &&
+      await this.reconcilePriorityRecoveryDispatchPendingDrain(
+        operation,
+        decisionSnapshot,
+      )
+    ) {
+      return true;
+    }
+    return this.armCoordinatorCreatedOperation(operation);
+  }
+
+  buildPriorityRecoveryDispatchPendingDrainEvidence(decisionSnapshot) {
+    return Object.freeze({
+      completionAccepted:
+        PRIORITY_RECOVERY_DISPATCH_PENDING_DRAIN_COMPLETION_STATES.has(
+          decisionSnapshot?.completion?.state,
+        ),
+      persistedNotDispatched:
+        decisionSnapshot?.actuation?.state ===
+          PRIORITY_RECOVERY_ACTUATION_STATE.PERSISTED_NOT_DISPATCHED,
+      dispatchPending:
+        decisionSnapshot?.actuation?.workflowProgressPhaseId ===
+          PRIORITY_RECOVERY_WORKFLOW_PROGRESS_PHASE.DISPATCH_PENDING &&
+        decisionSnapshot?.progress?.workflowProgressPhaseId ===
+          PRIORITY_RECOVERY_WORKFLOW_PROGRESS_PHASE.DISPATCH_PENDING,
+      ownerAdvance:
+        decisionSnapshot?.progress?.currentOwner ===
+          PRIORITY_RECOVERY_PROGRESS_OWNER.OPERATION_WORKFLOW_OWNER &&
+        decisionSnapshot?.progress?.nextRequiredAction ===
+          PRIORITY_RECOVERY_NEXT_REQUIRED_ACTION.ADVANCE_EXISTING_OPERATION,
+      workflowProgressBoundary:
+        decisionSnapshot?.progress?.blockingBoundary ===
+          PRIORITY_RECOVERY_BLOCKING_BOUNDARY.WORKFLOW_PROGRESS &&
+        decisionSnapshot?.progress?.waitMode ===
+          PRIORITY_RECOVERY_WAIT_MODE.EVENT_DRIVEN,
+      controlPlanePublicationPartition:
+        PRIORITY_RECOVERY_DISPATCH_PENDING_DRAIN_PARTITION_IDS.has(
+          decisionSnapshot?.partitionId,
+        ),
+    });
+  }
+
+  shouldReconcilePriorityRecoveryDispatchPendingDrain(decisionSnapshot) {
+    const evidence =
+      this.buildPriorityRecoveryDispatchPendingDrainEvidence(decisionSnapshot);
+    return (
+      evidence.completionAccepted === true &&
+      evidence.persistedNotDispatched === true &&
+      evidence.dispatchPending === true &&
+      evidence.ownerAdvance === true &&
+      evidence.workflowProgressBoundary === true &&
+      evidence.controlPlanePublicationPartition === true
+    );
+  }
+
+  buildPriorityRecoveryDispatchPendingDrainContext(decisionSnapshot) {
+    return Object.freeze({
+      decisionSnapshot,
+      completion: decisionSnapshot?.completion || null,
+      effectiveEligibleNodeIds: Object.freeze(normalizeNodeIdList(
+        decisionSnapshot?.admission?.effectiveEligibleNodeIds,
+      )),
+      planningSnapshot: null,
+      priorityPartitionSummary: null,
+    });
+  }
+
+  async buildPriorityRecoveryDispatchPendingDrainSnapshot(
+    operation,
+    decisionSnapshot,
+  ) {
+    if (!this.isPriorityRecoveryOperationDrainCandidate(operation)) {
+      const action =
+        PRIORITY_RECOVERY_OPERATION_DRAIN_ACTION_BY_STATE.get(
+          PRIORITY_RECOVERY_OPERATION_DRAIN_STATE.NOT_APPLICABLE,
+        ) || OPERATION_LIFECYCLE_ACTION.NOOP;
+      const ownerState =
+        this.resolvePriorityRecoveryOperationDrainOwnerState(
+          operation,
+          action,
+        );
+      return Object.freeze({
+        state: PRIORITY_RECOVERY_OPERATION_DRAIN_STATE.NOT_APPLICABLE,
+        action,
+        ownerState,
+        ownerAction:
+          this.resolvePriorityRecoveryOperationDrainOwnerAction(ownerState),
+        completionState:
+          PRIORITY_RECOVERY_OPERATION_DRAIN_COMPLETION_STATE_UNAVAILABLE,
+      });
+    }
+    const priorityRecoveryContext =
+      this.buildPriorityRecoveryDispatchPendingDrainContext(decisionSnapshot);
+    const completion =
+      priorityRecoveryContext.completion ||
+      null;
+    const supersededTargetError =
+      this.resolvePriorityRecoveryRemoteSupersededTargetDrainError(
+        operation,
+        priorityRecoveryContext,
+      );
+    const supersededTargetState =
+      supersededTargetError ?
+        PRIORITY_RECOVERY_OPERATION_DRAIN_STATE.SUPERSEDED_TARGET :
+        null;
+    const completionState =
+      completion?.state ||
+      PRIORITY_RECOVERY_OPERATION_DRAIN_COMPLETION_STATE_UNAVAILABLE;
+    const sourceSnapshot =
+      supersededTargetState ?
+        Object.freeze({
+          state: PRIORITY_RECOVERY_OPERATION_DRAIN_SOURCE_STATE.NOT_REQUIRED,
+          sourceReplicaId: null,
+          observationState: null,
+          lifecycleStatus: null,
+        }) :
+        await this.buildPriorityRecoveryOperationDrainSourceSnapshot(
+          operation,
+          completionState,
+          priorityRecoveryContext,
+        );
+    const releaseEvidence =
+      this.buildPriorityRecoveryOperationDrainReleaseEvidence(
+        operation,
+        completion,
+        sourceSnapshot,
+      );
+    const state =
+      supersededTargetState ||
+      this.resolvePriorityRecoveryOperationDrainState(
+        completion,
+        sourceSnapshot,
+        releaseEvidence,
+      );
+    const action =
+      PRIORITY_RECOVERY_OPERATION_DRAIN_ACTION_BY_STATE.get(state) ||
+      OPERATION_LIFECYCLE_ACTION.NOOP;
+    const ownerState =
+      this.resolvePriorityRecoveryOperationDrainOwnerState(
+        operation,
+        action,
+      );
+    return Object.freeze({
+      state,
+      action,
+      ownerState,
+      ownerAction:
+        this.resolvePriorityRecoveryOperationDrainOwnerAction(ownerState),
+      completionState,
+      sourceState: sourceSnapshot.state,
+      sourceReplicaId: sourceSnapshot.sourceReplicaId,
+      sourceObservationState: sourceSnapshot.observationState,
+      sourceLifecycleStatus: sourceSnapshot.lifecycleStatus,
+      supersededTargetError,
+    });
+  }
+
+  async reconcilePriorityRecoveryDispatchPendingDrain(
+    operation,
+    decisionSnapshot,
+  ) {
+    const drainSnapshot =
+      await this.buildPriorityRecoveryDispatchPendingDrainSnapshot(
+        operation,
+        decisionSnapshot,
+      );
+    return this.reconcilePriorityRecoveryOperationDrain(
+      operation,
+      drainSnapshot,
+    );
+  }
+
   schedulePriorityRecoveryDispatchPendingReentry(
     snapshot,
     operations = [],
@@ -353,6 +564,7 @@ class OperationWorkflowOwnerSegment7Stage5 extends OperationWorkflowOwnerSegment
     return this.applyPriorityRecoveryDispatchPendingReentryAction(
       operation,
       action,
+      snapshot,
     );
   }
 

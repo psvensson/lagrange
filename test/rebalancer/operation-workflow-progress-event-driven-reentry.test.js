@@ -31,12 +31,22 @@ import {createMockCache} from './test-helpers.js';
 
 const TEST_PARTITION_ID = 'sql_transactions-p1';
 const TEST_SQL_WRITE_PARTITION_ID = 'sql_write_operations-p1';
+const TEST_CONTROL_PLANE_PUBLICATION_PARTITION_ID =
+  'control_plane_publications-p1';
 const TEST_OPERATION_ID = 'event-driven-progress-operation';
+const TEST_CONTROL_PLANE_PUBLICATION_OPERATION_ID =
+  'event-driven-control-plane-publication-operation';
 const TEST_REPLICA_ID = 'sql_transactions-p1-r4';
 const TEST_SQL_WRITE_REPLICA_ID = 'sql_write_operations-p1-r4';
+const TEST_CONTROL_PLANE_PUBLICATION_REPLICA_ID =
+  'control_plane_publications-p1-r4';
 const TEST_OBSERVER_NODE_ID = 'node-observer';
 const TEST_SOURCE_NODE_ID = 'node-source';
 const TEST_TARGET_NODE_ID = 'node-target';
+const TEST_CONTROL_PLANE_PUBLICATION_SOURCE_NODE_ID =
+  'control-plane-publication-source-node';
+const TEST_CONTROL_PLANE_PUBLICATION_TARGET_NODE_ID =
+  'control-plane-publication-target-node';
 const TEST_PUBLICATION_EPOCH = 2;
 const TEST_CAPTURED_AT_MS = 1000000;
 const TEST_CREATED_AT_MS = 900000;
@@ -63,6 +73,9 @@ const TEST_REENTRY_TEST_NAME =
   'operation owner outcome';
 const TEST_PENDING_REENTRY_TEST_NAME =
   'persisted-not-dispatched PENDING workflow progress re-enters through ' +
+  'the operation owner outcome';
+const TEST_SPREAD_SATISFIED_REENTRY_TEST_NAME =
+  'spread-satisfied control-plane PENDING dispatch waits drain through ' +
   'the operation owner outcome';
 const TEST_DIRECT_BUILD_REENTRY_TEST_NAME =
   'direct owner snapshot build enqueues dispatch-pending workflow progress ' +
@@ -103,6 +116,11 @@ const TEST_ASSERT_LOCAL_INITIALIZATION_RETRY_NO_DELIVERY =
   'local uninitialized owner should not deliver before initialization';
 const TEST_ASSERT_LOCAL_INITIALIZATION_RETRY_RESUMES =
   'local initialization retry drains the transition retry slot';
+const TEST_ASSERT_SPREAD_SATISFIED_DRAIN =
+  'spread-satisfied persisted-not-dispatched control-plane rows should drain';
+const TEST_ASSERT_SPREAD_SATISFIED_NO_REMOTE_WAKE =
+  'spread-satisfied persisted-not-dispatched control-plane rows should not ' +
+  'wake the remote target owner';
 
 function buildEventDrivenOperation(overrides = {}) {
   return Object.freeze({
@@ -141,6 +159,8 @@ function buildEventDrivenOperationRow(overrides = {}) {
 }
 
 function buildEventDrivenPlanningSnapshot(options = {}) {
+  const partitionId = options.partitionId || TEST_PARTITION_ID;
+  const operationId = options.operationId || TEST_OPERATION_ID;
   const workflowStep = options.workflowStep || WORKFLOW_STEP.SENDING;
   const actuationState =
     options.actuationState ||
@@ -153,9 +173,13 @@ function buildEventDrivenPlanningSnapshot(options = {}) {
   const nextRequiredAction =
     options.nextRequiredAction ||
     PRIORITY_RECOVERY_NEXT_REQUIRED_ACTION.ADVANCE_EXISTING_OPERATION;
+  const completionState = options.completionState || 'blocked';
+  const spreadGap = Number.isFinite(options.spreadGap) ?
+    options.spreadGap :
+    TEST_READY_DISTINCT_NODE_COUNT;
   const coordinatorOperation = options.coordinatorOperation || null;
   const coordinatorSnapshot = {
-    operationIds: Object.freeze([TEST_OPERATION_ID]),
+    operationIds: Object.freeze([operationId]),
     ...(coordinatorOperation ? {operation: coordinatorOperation} : {}),
   };
   return Object.freeze({
@@ -172,14 +196,14 @@ function buildEventDrivenPlanningSnapshot(options = {}) {
       publicationEpoch: TEST_PUBLICATION_EPOCH,
       snapshots: Object.freeze([
         Object.freeze({
-          partitionId: TEST_PARTITION_ID,
-          operationId: TEST_OPERATION_ID,
+          partitionId,
+          operationId,
           blockerReasons: Object.freeze([
             PRIORITY_RECOVERY_BLOCKER_REASON.OPERATION_NO_TRANSITIONS,
           ]),
           semanticState: PRIORITY_RECOVERY_SEMANTIC_STATE.OPERATION_STALLED,
           completion: Object.freeze({
-            state: 'blocked',
+            state: completionState,
           }),
           observation: Object.freeze({
             workflowState: 'in_flight',
@@ -223,9 +247,11 @@ function buildEventDrivenPlanningSnapshot(options = {}) {
     priorityPartitionSummary: Object.freeze({
       blockedPartitions: Object.freeze([
         Object.freeze({
-          partitionId: TEST_PARTITION_ID,
-          readyDistinctNodeCount: TEST_READY_DISTINCT_NODE_COUNT,
+          partitionId,
+          readyDistinctNodeCount:
+            options.readyDistinctNodeCount || TEST_READY_DISTINCT_NODE_COUNT,
           requiredDistinctNodeCount: TEST_REQUIRED_DISTINCT_NODE_COUNT,
+          spreadGap,
         }),
       ]),
     }),
@@ -574,6 +600,99 @@ test(TEST_PENDING_REENTRY_TEST_NAME, async (t) => {
       deferredTimers.length,
       NUM.ONE,
       'the focused PENDING witness should arm the bounded handoff verification lane',
+    );
+  } finally {
+    Date.now = originalDateNow;
+    await coordinator.shutdown();
+  }
+});
+
+test(TEST_SPREAD_SATISFIED_REENTRY_TEST_NAME, async (t) => {
+  const completedOperationIds = [];
+  const deliveries = [];
+  const deferredTimers = [];
+  const operation = buildEventDrivenOperation({
+    operationId: TEST_CONTROL_PLANE_PUBLICATION_OPERATION_ID,
+    partitionId: TEST_CONTROL_PLANE_PUBLICATION_PARTITION_ID,
+    entityId: TEST_CONTROL_PLANE_PUBLICATION_PARTITION_ID,
+    replicaId: TEST_CONTROL_PLANE_PUBLICATION_REPLICA_ID,
+    sourceNodeId: TEST_CONTROL_PLANE_PUBLICATION_SOURCE_NODE_ID,
+    targetNodeId: TEST_CONTROL_PLANE_PUBLICATION_TARGET_NODE_ID,
+    workflowStep: WORKFLOW_STEP.PENDING,
+  });
+  const operationRow = buildEventDrivenOperationRow({
+    operation_id: TEST_CONTROL_PLANE_PUBLICATION_OPERATION_ID,
+    partition_id: TEST_CONTROL_PLANE_PUBLICATION_PARTITION_ID,
+    entity_id: TEST_CONTROL_PLANE_PUBLICATION_PARTITION_ID,
+    replica_id: TEST_CONTROL_PLANE_PUBLICATION_REPLICA_ID,
+    source_node_id: TEST_CONTROL_PLANE_PUBLICATION_SOURCE_NODE_ID,
+    target_node_id: TEST_CONTROL_PLANE_PUBLICATION_TARGET_NODE_ID,
+    workflow_step: WORKFLOW_STEP.PENDING,
+  });
+  const coordinator = createEventDrivenCoordinator(
+    deliveries,
+    deferredTimers,
+    operationRow,
+    {
+      operationId: TEST_CONTROL_PLANE_PUBLICATION_OPERATION_ID,
+      partitionId: TEST_CONTROL_PLANE_PUBLICATION_PARTITION_ID,
+      workflowStep: WORKFLOW_STEP.PENDING,
+      actuationState:
+        PRIORITY_RECOVERY_ACTUATION_STATE.PERSISTED_NOT_DISPATCHED,
+      completionState: 'converged',
+      spreadGap: NUM.ZERO,
+    },
+  );
+  const originalDateNow = Date.now;
+  Date.now = () => TEST_CAPTURED_AT_MS;
+
+  try {
+    coordinator.initialize();
+    coordinator.workflowOwner.completeOperation = async (completedOperation) => {
+      completedOperationIds.push(completedOperation.operationId);
+      return true;
+    };
+    coordinator.workflowOwner.repository
+      .getOperationsByEntityAuthoritativeObservation = async () => {
+        return Object.freeze({
+          state: 'present',
+          operationCount: NUM.ONE,
+          operations: Object.freeze([operation]),
+          deferredOutcome: null,
+          retryAfterMs: null,
+        });
+      };
+
+    const snapshot =
+      await coordinator.workflowOwner
+        .getPriorityRecoveryDecisionSnapshotForPartitionOperations(
+          TEST_CONTROL_PLANE_PUBLICATION_PARTITION_ID,
+          [operation],
+        );
+    await new Promise((resolve) => {
+      setTimeout(resolve, NUM.ZERO);
+    });
+
+    t.equal(
+      snapshot?.partitionId,
+      TEST_CONTROL_PLANE_PUBLICATION_PARTITION_ID,
+      'the focused fixture should preserve the control-plane publication partition',
+    );
+    t.ok(
+      completedOperationIds.includes(
+        TEST_CONTROL_PLANE_PUBLICATION_OPERATION_ID,
+      ),
+      TEST_ASSERT_SPREAD_SATISFIED_DRAIN,
+    );
+    t.equal(
+      deliveries.length,
+      NUM.ZERO,
+      TEST_ASSERT_SPREAD_SATISFIED_NO_REMOTE_WAKE,
+    );
+    t.equal(
+      deferredTimers.length,
+      NUM.ZERO,
+      TEST_ASSERT_SPREAD_SATISFIED_NO_REMOTE_WAKE,
     );
   } finally {
     Date.now = originalDateNow;
