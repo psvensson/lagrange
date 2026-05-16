@@ -93,6 +93,8 @@ const FORCED_REPAIR_SNAPSHOT_CAUSE_TIMEOUT =
   'forced_repair_snapshot_timeout';
 const AUTHORITATIVE_CONTROL_SNAPSHOT_QUERY_CAUSE_TIMEOUT =
   'authoritative_control_snapshot_query_timeout';
+const AUTHORITATIVE_CONTROL_SNAPSHOT_QUERY_CAUSE_PRESSURE =
+  'authoritative_control_snapshot_query_pressure';
 const ACTIVE_GATE_SNAPSHOT_OWNER_EDGE_SELECTED_SOURCE =
   'selected_snapshot_source_selection';
 const ACTIVE_GATE_SNAPSHOT_OWNER_EDGE_FORCED_REPAIR =
@@ -107,6 +109,8 @@ const SELECTED_SNAPSHOT_AUTHORITATIVE_REPAIR_FAILURE_FRAGMENT =
   'Authoritative control snapshot repair failed:';
 const SELECTED_SNAPSHOT_AUTHORITATIVE_NODES_TIMEOUT_FRAGMENT =
   'nodes:Query timeout after ';
+const SELECTED_SNAPSHOT_AUTHORITATIVE_NODES_PARTICIPANT_FAILURE_FRAGMENT =
+  'nodes:Distributed operation failed due to participant failures';
 
 const EDGE_STATE = Object.freeze({
   SATISFIED: 'satisfied',
@@ -175,6 +179,8 @@ const REASON = Object.freeze({
     FORCED_REPAIR_SNAPSHOT_CAUSE_TIMEOUT,
   AUTHORITATIVE_CONTROL_SNAPSHOT_QUERY_TIMEOUT:
     AUTHORITATIVE_CONTROL_SNAPSHOT_QUERY_CAUSE_TIMEOUT,
+  AUTHORITATIVE_CONTROL_SNAPSHOT_QUERY_PRESSURE:
+    AUTHORITATIVE_CONTROL_SNAPSHOT_QUERY_CAUSE_PRESSURE,
   ACTIVE_GATE_TIMED_OUT: 'active_gate_timed_out',
   ACTIVE_GATE_READY: 'active_gate_ready',
   PRIORITY_RECOVERY_PROGRESS_BLOCKED: 'priority_recovery_progress_blocked',
@@ -297,13 +303,21 @@ const ACTIVE_GATE_SNAPSHOT_CAUSE_RULES = Object.freeze([
     matches: (evidence) =>
       evidence.authoritativeControlSnapshotQueryTimeout === true,
   }),
+  Object.freeze({
+    reason: REASON.AUTHORITATIVE_CONTROL_SNAPSHOT_QUERY_PRESSURE,
+    sourceField: 'authoritativeControlSnapshotQueryCause',
+    cause: AUTHORITATIVE_CONTROL_SNAPSHOT_QUERY_CAUSE_PRESSURE,
+    matches: (evidence) =>
+      evidence.authoritativeControlSnapshotQueryPressure === true,
+  }),
 ]);
 
 const ACTIVE_GATE_SNAPSHOT_OWNER_EDGE_RULES = Object.freeze([
   Object.freeze({
     ownerEdge: ACTIVE_GATE_SNAPSHOT_OWNER_EDGE_AUTHORITATIVE_QUERY,
     matches: (evidence) =>
-      evidence.authoritativeControlSnapshotQueryTimeout === true,
+      evidence.authoritativeControlSnapshotQueryTimeout === true ||
+      evidence.authoritativeControlSnapshotQueryPressure === true,
   }),
   Object.freeze({
     ownerEdge: ACTIVE_GATE_SNAPSHOT_OWNER_EDGE_FORCED_REPAIR,
@@ -2377,6 +2391,12 @@ function normalizeActiveGateSnapshotCauseEvidence(progress) {
     selectedSnapshotError.includes(
       SELECTED_SNAPSHOT_AUTHORITATIVE_NODES_TIMEOUT_FRAGMENT,
     );
+  const authoritativeControlSnapshotQueryPressure =
+    authoritativeControlSnapshotQueryTimeout !== true &&
+    forcedRepairSnapshotTimeout === true &&
+    selectedSnapshotError.includes(
+      SELECTED_SNAPSHOT_AUTHORITATIVE_NODES_PARTICIPANT_FAILURE_FRAGMENT,
+    );
 
   return Object.freeze({
     selectedSnapshotError,
@@ -2385,6 +2405,7 @@ function normalizeActiveGateSnapshotCauseEvidence(progress) {
     selectedSnapshotSourceTimeout,
     forcedRepairSnapshotTimeout,
     authoritativeControlSnapshotQueryTimeout,
+    authoritativeControlSnapshotQueryPressure,
   });
 }
 

@@ -84,6 +84,16 @@ const CONTROL_SNAPSHOT_CRITICAL_CONVERGENCE_DEFERRED_FIELD =
 const CONTROL_SNAPSHOT_ORDINARY_REPAIR_DEFERRED_FIELD =
   'ordinaryRepairDeferred';
 const CONTROL_SNAPSHOT_PRESSURE_OUTCOME_FIELD = 'pressureOutcome';
+const CONTROL_SNAPSHOT_REPAIR_FAILURE_DETAIL_SEPARATOR = ':';
+const CONTROL_SNAPSHOT_REPAIR_FAILURE_PARTICIPANT_ERROR_FIELD = 'error';
+const CONTROL_SNAPSHOT_REPAIR_FAILURE_PARTICIPANT_MESSAGE_FIELD = 'message';
+const CONTROL_SNAPSHOT_REPAIR_FAILURE_PARTICIPANT_FAILED_TABLE_FIELD =
+  'failedTable';
+const CONTROL_SNAPSHOT_REPAIR_FAILURE_PARTICIPANT_TABLE_NAME_FIELD =
+  'tableName';
+const CONTROL_SNAPSHOT_REPAIR_FAILURE_SKIPPED_DETAIL = 'repair_skipped';
+const CONTROL_SNAPSHOT_REPAIR_FAILURE_NOT_APPLIED_DETAIL =
+  'repair_not_applied';
 function hasOnlyLeaderResolutionGapRepairCause(repair = null) {
   const causeChain = Array.isArray(repair?.causeChain) ?
     repair.causeChain.filter(
@@ -126,6 +136,91 @@ function buildAuthoritativeControlSnapshotRepairFailure(detail, cause = null) {
     error.cause = cause;
   }
   return error;
+}
+function normalizeControlSnapshotRepairDetailList(values = []) {
+  return (Array.isArray(values) ? values : ADMIN_CACHE_DUMP.EMPTY)
+    .map((value) =>
+      typeof value === TYPEOF.STRING ?
+        value.trim() :
+        ADMIN_CONTROL_SNAPSHOT_LITERAL.VALUE,
+    )
+    .filter((value) => value.length > NUM.ZERO);
+}
+function firstControlSnapshotRepairDetail(...values) {
+  for (const value of values) {
+    if (typeof value === TYPEOF.STRING && value.trim().length > NUM.ZERO) {
+      return value.trim();
+    }
+  }
+  return null;
+}
+function extractControlSnapshotRepairTableNameFromDetail(detail = null) {
+  const normalizedDetail = firstControlSnapshotRepairDetail(detail);
+  if (!normalizedDetail) {
+    return null;
+  }
+  const separatorIndex = normalizedDetail.indexOf(
+    CONTROL_SNAPSHOT_REPAIR_FAILURE_DETAIL_SEPARATOR,
+  );
+  if (separatorIndex <= NUM.ZERO) {
+    return null;
+  }
+  return normalizedDetail.slice(NUM.ZERO, separatorIndex);
+}
+function resolveControlSnapshotRepairFailureTableName(repair = null) {
+  const errorDetails = normalizeControlSnapshotRepairDetailList(
+    repair?.errors,
+  );
+  const failedTables = normalizeControlSnapshotRepairDetailList(
+    repair?.failedTables,
+  );
+  return firstControlSnapshotRepairDetail(
+    repair?.firstFailedParticipant?.[
+      CONTROL_SNAPSHOT_REPAIR_FAILURE_PARTICIPANT_FAILED_TABLE_FIELD
+    ],
+    repair?.firstFailedParticipant?.[
+      CONTROL_SNAPSHOT_REPAIR_FAILURE_PARTICIPANT_TABLE_NAME_FIELD
+    ],
+    failedTables[NUM.ZERO],
+    extractControlSnapshotRepairTableNameFromDetail(errorDetails[NUM.ZERO]),
+  );
+}
+function resolveControlSnapshotRepairParticipantFailureDetail(repair = null) {
+  const participantError = firstControlSnapshotRepairDetail(
+    repair?.firstFailedParticipant?.[
+      CONTROL_SNAPSHOT_REPAIR_FAILURE_PARTICIPANT_ERROR_FIELD
+    ],
+    repair?.firstFailedParticipant?.[
+      CONTROL_SNAPSHOT_REPAIR_FAILURE_PARTICIPANT_MESSAGE_FIELD
+    ],
+  );
+  if (!participantError) {
+    return null;
+  }
+  const tableName = resolveControlSnapshotRepairFailureTableName(repair);
+  return tableName ?
+    `${tableName}${CONTROL_SNAPSHOT_REPAIR_FAILURE_DETAIL_SEPARATOR}` +
+      participantError :
+    participantError;
+}
+function resolveControlSnapshotRepairFailureDetail(repair = null) {
+  const participantFailureDetail =
+    resolveControlSnapshotRepairParticipantFailureDetail(repair);
+  if (participantFailureDetail) {
+    return participantFailureDetail;
+  }
+  const errorDetails = normalizeControlSnapshotRepairDetailList(
+    repair?.errors,
+  );
+  return firstControlSnapshotRepairDetail(
+    errorDetails[NUM.ZERO],
+    repair?.error,
+  ) ||
+    (
+      repair?.skipped === true ?
+        CONTROL_SNAPSHOT_REPAIR_FAILURE_SKIPPED_DETAIL :
+        CONTROL_SNAPSHOT_REPAIR_FAILURE_NOT_APPLIED_DETAIL
+    );
 }
 function isReadyLocalQueryTransportDiagnostic(localQueryTransport = null) {
   if (!localQueryTransport || typeof localQueryTransport !== TYPEOF.OBJECT) {
@@ -379,14 +474,10 @@ class AdminControlSnapshotPart2 extends AdminControlSnapshotPart1 {
         );
       }
       if (repair?.applied !== true) {
-        const errors = Array.isArray(repair?.errors) ?
-          repair.errors :
-          ADMIN_CACHE_DUMP.EMPTY;
-        const detail =
-          errors[NUM.ZERO] ||
-          repair?.error ||
-          (repair?.skipped === true ? 'repair_skipped' : 'repair_not_applied');
-        throw buildAuthoritativeControlSnapshotRepairFailure(detail);
+        throw buildAuthoritativeControlSnapshotRepairFailure(
+          resolveControlSnapshotRepairFailureDetail(repair),
+          repair,
+        );
       }
       const repairedSnapshot = await this.buildLocalControlSnapshot({
         ...options,
@@ -514,14 +605,10 @@ class AdminControlSnapshotPart2 extends AdminControlSnapshotPart1 {
           },
         );
       }
-      const errors = Array.isArray(repair?.errors) ?
-        repair.errors :
-        ADMIN_CACHE_DUMP.EMPTY;
-      const detail =
-        errors[NUM.ZERO] ||
-        repair?.error ||
-        (repair?.skipped === true ? 'repair_skipped' : 'repair_not_applied');
-      throw buildAuthoritativeControlSnapshotRepairFailure(detail);
+      throw buildAuthoritativeControlSnapshotRepairFailure(
+        resolveControlSnapshotRepairFailureDetail(repair),
+        repair,
+      );
     }
     const repairedSnapshot = await this.buildLocalControlSnapshot({
       ...options,

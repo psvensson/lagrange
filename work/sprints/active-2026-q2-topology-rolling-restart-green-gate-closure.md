@@ -22,7 +22,7 @@ success is in scope.
 ## Current Blocker Snapshot
 
 Latest representative artifact:
-`test-output/reports/rolling-restart-after-workflow-progress-pending-coordination-gate-20260516.report.json`.
+`test-output/reports/rolling-restart-after-priority-workflow-progress-20260516.report.json`.
 
 Canonical state after the priority recovery workflow-progress closure:
 
@@ -38,13 +38,17 @@ Canonical state after the priority recovery workflow-progress closure:
    `snapshotCoverageNodeCount=0`, `expectedNodeCount=5`, and
    `activeGateState=timed_out`.
 7. The selected snapshot source is
-   `11601fe0-72d6-5853-8590-ec2881853e72`, and selected admin snapshot capture
-   timed out; forced repair snapshot capture also timed out.
+   `11601fe0-72d6-5853-8590-ec2881853e72`, selected snapshot source capture
+   timed out, and forced repair snapshot capture also timed out through the
+   authoritative control snapshot repair path.
 8. Readiness support is deferred as inherited active-gate no progress with
    snapshot timeout evidence.
 9. The current active package is
-   `work/packages/done-20260516-startup-active-gate-admin-snapshot-timeout-after-priority-recovery.md`;
-   it must identify the startup active-gate snapshot coverage edge without
+   `work/packages/active-20260516-startup-active-gate-snapshot-timeout-handoff-fixture.md`;
+   it has built the replayable handoff/snapshot fixture that separates
+   selected snapshot-source selection, forced repair path stalls, authoritative
+   control snapshot query pressure, and readiness support inherited from
+   active-gate no progress. The next proof is one representative rerun without
    timeout increases, active-gate admission relaxation, publication ACK
    rewrites, or priority recovery rewrites.
 
@@ -437,11 +441,12 @@ The sprint cannot close until:
 
 ## Current Next Action
 
-Continue with the startup active-gate admin snapshot timeout package:
+Continue with closure validation and one representative rerun for the startup
+active-gate snapshot timeout handoff fixture package:
 
 ```text
-work/packages/done-20260516-startup-active-gate-admin-snapshot-timeout-after-priority-recovery.md
-test-output/reports/rolling-restart-after-workflow-progress-pending-coordination-gate-20260516.report.json
+work/packages/active-20260516-startup-active-gate-snapshot-timeout-handoff-fixture.md
+test-output/reports/rolling-restart-after-priority-workflow-progress-20260516.report.json
 ```
 
 Keep the completed post-systems-pattern checkpoint package and artifact as
