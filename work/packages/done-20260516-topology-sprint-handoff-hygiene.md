@@ -3,7 +3,7 @@
 <!-- work-package
 {
   "schema": "work-package-v1",
-  "status": "active",
+  "status": "done",
   "opened": "2026-05-16",
   "lane": "lightweight-maintenance",
   "scenario": "none",
@@ -26,8 +26,9 @@
     "work/tracks/topology-convergence.md",
     "work/sprints/active-2026-q2-topology-convergence-systems-pattern-hardening.md",
     "work/sprints/todo-2026-q2-topology-convergence-systems-pattern-hardening.md",
-    "work/packages/active-20260516-topology-sprint-handoff-hygiene.md",
-    "work/packages/todo-20260516-topology-sprint-handoff-hygiene.md"
+    "work/packages/done-20260516-topology-sprint-handoff-hygiene.md",
+    "work/packages/todo-20260516-topology-sprint-handoff-hygiene.md",
+    "work/model-ledger.jsonl"
   ],
   "handoffFiles": [
     "work/sprints/done-2026-q2-topology-rolling-restart-green-gate-closure.md",
@@ -41,8 +42,9 @@
     "work/tracks/topology-convergence.md",
     "work/sprints/active-2026-q2-topology-convergence-systems-pattern-hardening.md",
     "work/sprints/todo-2026-q2-topology-convergence-systems-pattern-hardening.md",
-    "work/packages/active-20260516-topology-sprint-handoff-hygiene.md",
-    "work/packages/todo-20260516-topology-sprint-handoff-hygiene.md"
+    "work/packages/done-20260516-topology-sprint-handoff-hygiene.md",
+    "work/packages/todo-20260516-topology-sprint-handoff-hygiene.md",
+    "work/model-ledger.jsonl"
   ],
   "modelFit": {
     "packageClass": "bounded-implementation",
@@ -53,7 +55,9 @@
       "owned files expand beyond tracker handoff/status files",
       "a frozen decision must be reopened"
     ]
-  }
+  },
+  "closed": "2026-05-16",
+  "commitAndPushLedgerRequired": true
 }
 -->
 
@@ -133,7 +137,7 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 - Intended minimum model: `gpt-5.3-codex-spark`
 - Scope shape: `leaf-slice`
 - Output profile: `medium`
-- Owned files: `work/sprints/current-blocker.md`, `work/sprints/current-blocker.json`, `work/tracks/topology-convergence.md`, the systems-pattern sprint status rename files, and this package's status rename files.
+- Owned files: `work/sprints/current-blocker.md`, `work/sprints/current-blocker.json`, `work/tracks/topology-convergence.md`, the systems-pattern sprint status rename files, this package's status rename files, and `work/model-ledger.jsonl`.
 - Forbidden files: `src/`
 - Frozen decisions: package scope and lane stay bounded unless explicitly escalated.
 - Escalation triggers: owned files expand beyond tracker handoff/status files, runtime ownership changes, or representative scenario evidence changes.
@@ -146,3 +150,9 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 2. npm run work:validate -- --pre-impl
 3. npm run work:dirty-scope
 4. git diff --check -- work/sprints/current-blocker.md work/sprints/current-blocker.json work/tracks/topology-convergence.md
+
+## Commit And Push Ledger
+
+1. [x] Focused package commit: 15a24f1c.
+2. [x] Pushed to: origin/codex/pending-ack-eligibility-filter.
+3. [x] Commit contains only package-owned files/package-status/allowed sprint handoff: yes.
