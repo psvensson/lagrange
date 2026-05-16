@@ -237,3 +237,9 @@ unit fixture instead of raw report-driven surgery.
 15. PASS - `npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-after-authoritative-repair-probe-20260516T214000Z.report.json --markdown`
 16. PASS - `npm run analyze:distributed-failure -- --report test-output/reports/rolling-restart-after-authoritative-repair-probe-20260516T214000Z.report.json`
 17. LIMITED - broad literal guardrail on the large test fixture reports inherited test-file findings; package closure uses runtime literal guardrail plus decision-boundary, grammar, eslint, and diff guardrails for the promoted runtime file and focused fixture.
+
+## Commit And Push Ledger
+
+1. Focused package commit: `59899c54`
+2. Pushed to: `origin/codex/pending-ack-eligibility-filter`
+3. Commit contains only package-owned files/package-status/allowed sprint handoff: yes
