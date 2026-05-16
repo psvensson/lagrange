@@ -24,7 +24,7 @@ success is in scope.
 Latest representative artifact:
 `test-output/reports/rolling-restart-after-forced-repair-local-fallback-20260516T224600Z.report.json`.
 
-Canonical state for the current authoritative repair participant package:
+Canonical state for the current authoritative nodes query pressure package:
 
 1. `work:evidence-summary` selects `active_gate_snapshot_coverage` as the first
    frontier.
@@ -43,9 +43,14 @@ Canonical state for the current authoritative repair participant package:
    selected, forced repair stalls are bounded, inherited readiness support is
    downstream, and the selected edge is authoritative control snapshot nodes
    query pressure.
-9. The current active package is
-   `work/packages/active-20260516-startup-active-gate-authoritative-repair-participant-failure.md`.
-   It is ready to close as `reduced`: `discovery_node_coverage_gap` disappeared
+9. The active package is now
+   `work/packages/active-20260516-startup-active-gate-authoritative-nodes-query-pressure.md`.
+   It must build the replayable authoritative nodes query pressure fixture for
+   source `11601fe0-72d6-5853-8590-ec2881853e72` and edit only the selected
+   owner path without increasing timeout budgets.
+10. The closed predecessor is
+   `work/packages/done-20260516-startup-active-gate-authoritative-repair-participant-failure.md`.
+   It closed as `reduced`: `discovery_node_coverage_gap` disappeared
    from the latest representative report, while snapshot coverage remains
    `0/5` and the selected error is authoritative control snapshot repair
    failing on nodes with `Query timeout after 3000ms`.
@@ -346,7 +351,7 @@ required action.
   The next selected edge is authoritative control snapshot repair participant
   failure.
 
-[Startup Active Gate Authoritative Repair Participant Failure](../packages/active-20260516-startup-active-gate-authoritative-repair-participant-failure.md)
+[Startup Active Gate Authoritative Repair Participant Failure](../packages/done-20260516-startup-active-gate-authoritative-repair-participant-failure.md)
 
 - Lane: `causal-escalation`
 - Owner boundary:
@@ -367,6 +372,24 @@ required action.
   representative report. The next selected owner path is authoritative control
   snapshot nodes query pressure; publication ACK, priority recovery, timeout
   budget increases, and active-gate admission remain frozen.
+
+[Startup Active Gate Authoritative Nodes Query Pressure](../packages/active-20260516-startup-active-gate-authoritative-nodes-query-pressure.md)
+
+- Lane: `causal-escalation`
+- Owner boundary:
+  `startup_active_gate_owner / snapshot_coverage`
+- Purpose: build the replayable authoritative nodes query pressure
+  fixture/probe for selected source
+  `11601fe0-72d6-5853-8590-ec2881853e72`.
+- Entry condition: predecessor closed as `reduced`; fresh representative
+  evidence has `discovery_node_coverage_gap` and
+  `selected_snapshot_source_timeout` absent, snapshot coverage `0/5`, and
+  selected error `Authoritative control snapshot repair failed:
+  nodes:Query timeout after 3000ms`.
+- Acceptance: snapshot coverage improves above `2/5`,
+  `discovery_node_coverage_gap` stays absent and the frontier migrates to a
+  genuinely new owner boundary, or representative `rolling-restart` turns
+  green.
 
 ## Working Rules
 
@@ -395,16 +418,16 @@ required action.
 
 1. `npm run work:context`
 2. `npm run work:llm-start`
-3. `npm run work:package:doctor -- --suggest work/packages/active-20260516-startup-active-gate-authoritative-repair-participant-failure.md`
-4. `npm run work:validate -- --entry work/packages/active-20260516-startup-active-gate-authoritative-repair-participant-failure.md`
-5. `npm run work:evidence-summary -- test-output/reports/rolling-restart-after-authoritative-repair-probe-20260516T214000Z.report.json`
-6. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-authoritative-repair-probe-20260516T214000Z.report.json --explain active_gate_snapshot_coverage`
-7. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-authoritative-repair-probe-20260516T214000Z.report.json --handoff-probe`
-8. `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-authoritative-repair-probe-20260516T214000Z.report.json`
+3. `npm run work:package:doctor -- --suggest work/packages/active-20260516-startup-active-gate-authoritative-nodes-query-pressure.md`
+4. `npm run work:validate -- --entry work/packages/active-20260516-startup-active-gate-authoritative-nodes-query-pressure.md`
+5. `npm run work:evidence-summary -- test-output/reports/rolling-restart-after-forced-repair-local-fallback-20260516T224600Z.report.json`
+6. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-forced-repair-local-fallback-20260516T224600Z.report.json --explain active_gate_snapshot_coverage`
+7. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-forced-repair-local-fallback-20260516T224600Z.report.json --handoff-probe`
+8. `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-forced-repair-local-fallback-20260516T224600Z.report.json`
 9. `npm run analyze:owner-files -- startup_active_gate_owner snapshot_coverage --markdown`
-10. `npm run work:subagent-prompt -- --role review --package work/packages/active-20260516-startup-active-gate-authoritative-repair-participant-failure.md`
+10. `npm run work:subagent-prompt -- --role review --package work/packages/active-20260516-startup-active-gate-authoritative-nodes-query-pressure.md`
 11. Real review/fix/implementation subagent proof before runtime implementation starts.
-12. Focused authoritative repair participant fixture/probe, selected owner tests,
+12. Focused authoritative nodes query pressure fixture/probe, selected owner tests,
     static guardrails, and representative `rolling-restart` after the package
     has implementation proof.
 
@@ -475,11 +498,11 @@ The sprint cannot close until:
 
 ## Current Next Action
 
-Close the active authoritative repair participant package as `reduced`, then
-open the successor on authoritative control snapshot nodes query pressure:
+Continue with the active authoritative control snapshot nodes query pressure
+package:
 
 ```text
-work/packages/active-20260516-startup-active-gate-authoritative-repair-participant-failure.md
+work/packages/active-20260516-startup-active-gate-authoritative-nodes-query-pressure.md
 test-output/reports/rolling-restart-after-forced-repair-local-fallback-20260516T224600Z.report.json
 ```
 

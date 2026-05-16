@@ -125,7 +125,7 @@
   "predecessor": "work/packages/done-20260516-startup-active-gate-snapshot-coverage-deferred-refresh-discovery-gap.md",
   "closed": "2026-05-16",
   "commitAndPushLedgerRequired": true,
-  "successor": "work/packages/active-20260516-startup-active-gate-authoritative-repair-participant-failure.md"
+  "successor": "work/packages/done-20260516-startup-active-gate-authoritative-repair-participant-failure.md"
 }
 -->
 
