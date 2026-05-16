@@ -232,7 +232,7 @@
   "predecessor": "work/packages/done-20260515-priority-recovery-operation-workflow-owner-control-plane-publication-pending.md",
   "closed": "2026-05-16",
   "commitAndPushLedgerRequired": true,
-  "successor": "work/packages/todo-20260516-topology-publication-convergence-frontier-causal-edge.md"
+  "successor": "work/packages/active-20260516-topology-publication-convergence-frontier-causal-edge.md"
 }
 -->
 

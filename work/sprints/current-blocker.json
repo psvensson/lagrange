@@ -2,60 +2,125 @@
   "schema": "current-blocker-v1",
   "generatedBy": "scripts/work-tracker.js",
   "sprint": "work/sprints/active-2026-q2-topology-convergence-systems-pattern-hardening.md",
-  "package": "work/packages/active-20260516-topology-sprint-handoff-hygiene.md",
+  "package": "work/packages/active-20260516-topology-publication-convergence-frontier-causal-edge.md",
   "status": "active",
-  "lane": "lightweight-maintenance",
-  "scenario": "none",
-  "artifact": "none",
+  "lane": "causal-escalation",
+  "scenario": "rolling-restart",
+  "artifact": "test-output/reports/rolling-restart-after-admin-owner-readiness-handoff-20260516.report.json",
   "playback": "none",
-  "owner": "workflow_tooling_owner",
-  "boundary": "sprint_handoff_integrity",
-  "dominantReason": "stale_handoff_and_dirty_scope_risk",
-  "currentState": "Recent topology work carried stale current-blocker scope fields, large dirty scope, and sprint/package text that could lag canonical extractor output. This maintenance package makes tracker state mechanically trustworthy before the next runtime package activates.",
-  "nextAction": "Make tracker state, scope fields, and dirty-scope separation mechanically verifiable before the next topology runtime package activates.",
+  "owner": "topology_publication_owner",
+  "boundary": "publication_convergence",
+  "dominantReason": "publication_ack_blocked",
+  "currentState": "Canonical extractors keep the representative frontier on publication_ack_convergence / topology_publication_owner / publication_convergence. Pending ACK is 0 and publication status is PUBLISHED, but publishedActiveNodeIds is still 1/5, missingPublishedCount is 4, publicationOwnerFreshnessFence is consumer_lag, publicationOwnerRecoveryOutcome is waiting_for_consumer, and publicationOwnerStreamOutcome is stale. Active-gate handoff pendingReconcileCount is 0 and nextAction is wait_owner_recovery, so the drained startup active-gate owner-reconcile path remains closed.",
+  "nextAction": "Stay on topology_publication_owner / publication_convergence and create replayable proof for the publication owner recovery wake / stale owner stream edge before any runtime implementation.",
   "proof": [
-    "npm run work:current-blocker -- --write",
-    "npm run work:validate -- --pre-impl",
-    "npm run work:dirty-scope",
-    "git diff --check -- work/sprints/current-blocker.md work/sprints/current-blocker.json work/tracks/topology-convergence.md"
+    "npm run work:evidence-summary -- test-output/reports/rolling-restart-after-admin-owner-readiness-handoff-20260516.report.json",
+    "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-admin-owner-readiness-handoff-20260516.report.json --handoff-probe",
+    "npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-admin-owner-readiness-handoff-20260516.report.json",
+    "npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-after-admin-owner-readiness-handoff-20260516.report.json --markdown",
+    "npm run analyze:distributed-failure -- --report test-output/reports/rolling-restart-after-admin-owner-readiness-handoff-20260516.report.json",
+    "npm run analyze:owner-files -- topology_publication_owner publication_convergence --markdown"
   ],
   "writeScope": [
+    "work/packages/active-20260516-topology-publication-convergence-frontier-causal-edge.md",
+    "work/packages/todo-20260516-topology-publication-convergence-frontier-causal-edge.md",
     "work/sprints/current-blocker.md",
     "work/sprints/current-blocker.json",
     "work/tracks/topology-convergence.md",
-    "work/sprints/active-2026-q2-topology-convergence-systems-pattern-hardening.md",
-    "work/sprints/todo-2026-q2-topology-convergence-systems-pattern-hardening.md",
-    "work/packages/active-20260516-topology-sprint-handoff-hygiene.md",
-    "work/packages/todo-20260516-topology-sprint-handoff-hygiene.md"
+    "work/model-ledger.jsonl",
+    "work/packages/done-20260515-startup-active-gate-snapshot-coverage-owner-reconcile-remaining-targets.md",
+    "work/sprints/done-2026-q2-topology-rolling-restart-green-gate-closure.md"
   ],
   "handoffFiles": [
-    "work/sprints/done-2026-q2-topology-rolling-restart-green-gate-closure.md",
+    "test-output/reports/rolling-restart-after-admin-owner-readiness-handoff-20260516.report.json",
     "work/packages/done-20260515-startup-active-gate-snapshot-coverage-owner-reconcile-remaining-targets.md"
   ],
-  "generatedFiles": [],
-  "candidateRuntimeFiles": [],
+  "generatedFiles": [
+    "work/sprints/current-blocker.md",
+    "work/sprints/current-blocker.json"
+  ],
+  "candidateRuntimeFiles": [
+    "src/control-plane/membership-publication-coordinator-class-stage-2.js",
+    "src/control-plane/membership-publication-coordinator-class-stage-3.js",
+    "src/control-plane/publication-active-gate-handoff-contract.js",
+    "src/admin/admin-control-snapshot-class-part-1.js",
+    "src/admin/admin-control-snapshot-class-part-2.js",
+    "src/admin/admin-control-snapshot-class-part-6.js",
+    "test/distributed/harness/cluster-segment-7-class-4.js",
+    "test/distributed/harness/cluster-segment-7-class-5.js"
+  ],
   "commitScope": [
+    "work/packages/active-20260516-topology-publication-convergence-frontier-causal-edge.md",
+    "work/packages/todo-20260516-topology-publication-convergence-frontier-causal-edge.md",
     "work/sprints/current-blocker.md",
     "work/sprints/current-blocker.json",
     "work/tracks/topology-convergence.md",
-    "work/sprints/active-2026-q2-topology-convergence-systems-pattern-hardening.md",
-    "work/sprints/todo-2026-q2-topology-convergence-systems-pattern-hardening.md",
-    "work/packages/active-20260516-topology-sprint-handoff-hygiene.md",
-    "work/packages/todo-20260516-topology-sprint-handoff-hygiene.md"
+    "work/model-ledger.jsonl",
+    "work/packages/done-20260515-startup-active-gate-snapshot-coverage-owner-reconcile-remaining-targets.md",
+    "work/sprints/done-2026-q2-topology-rolling-restart-green-gate-closure.md"
   ],
   "touchedFiles": [],
   "modelFit": {
-    "packageClass": "bounded-implementation",
-    "intendedMinimumModel": "gpt-5.3-codex-spark",
-    "scopeShape": "leaf-slice",
+    "packageClass": "representative-frontier-closure",
+    "intendedMinimumModel": "gpt-5.3-codex",
+    "scopeShape": "owner-boundary-contraction/current-frontier",
     "outputProfile": "medium",
     "escalationTriggers": [
-      "owned files expand beyond tracker handoff/status files",
+      "owned files expand beyond this package",
       "a frozen decision must be reopened"
     ]
   },
-  "representativeResidual": {},
-  "causalGovernance": {},
-  "scenarioCausalClosure": {},
+  "representativeResidual": {
+    "status": "live-red-scenario-release-gate",
+    "scenario": "rolling-restart",
+    "artifact": "test-output/reports/rolling-restart-after-admin-owner-readiness-handoff-20260516.report.json",
+    "frontier": "publication_ack_convergence",
+    "owner": "topology_publication_owner",
+    "boundary": "publication_convergence",
+    "dominantReason": "publication_ack_blocked",
+    "nextAction": "Stay on topology_publication_owner / publication_convergence; prove the publication owner recovery wake / stale owner stream edge before runtime implementation."
+  },
+  "causalGovernance": {
+    "hypothesis": "The active-gate owner-reconcile path drained, so the remaining representative red gate is either publication ACK convergence, owner recovery/readiness support, or a lower-priority operation workflow handoff that fresh residual extractors must promote explicitly.",
+    "stopConditionCheck": "npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-admin-owner-readiness-handoff-20260516.report.json",
+    "expectedCausalModelChange": "The package records topology_publication_owner / publication_convergence as the selected next owner-boundary and rejects readiness or operation workflow migration until fresh canonical evidence promotes them.",
+    "representativeOutcome": "classification-only",
+    "causalDebt": "The remaining missing edge is publication owner recovery wake / stale owner stream under consumer_lag, not ACK delivery, active-gate owner reconcile, or priority recovery handoff.",
+    "crossBoundaryReview": "Do not reopen startup active-gate snapshot coverage or paused rolling-restart sprint work unless fresh canonical evidence makes it the first frontier again."
+  },
+  "scenarioCausalClosure": {
+    "referenceScenarioOrProbe": "rolling-restart / publication ACK convergence after active-gate owner reconcile drained",
+    "phaseChain": [
+      "consume handoff-hygiene closure",
+      "run canonical evidence extractors on the latest artifact",
+      "fill the publication/readiness/workflow causal edge table",
+      "select exactly one next owner-boundary",
+      "promote runtime files only after the owner-boundary decision"
+    ],
+    "currentFirstFrontier": "publication_ack_convergence in test-output/reports/rolling-restart-after-admin-owner-readiness-handoff-20260516.report.json, owned by topology_publication_owner / publication_convergence.",
+    "knownDownstreamBlockers": [
+      "active-gate handoff pendingReconcileCount is 0 with nextAction wait_owner_recovery",
+      "owner_reconcile_service_unavailable no longer dominates the representative artifact",
+      "seed readiness timeout shape remains in distributed failure evidence",
+      "priority recovery remains classified unless residual extractors promote operation_workflow_owner / rebalancer_handoff"
+    ],
+    "missingCausalEdge": "Publication owner recovery wake / stale owner stream: publication is PUBLISHED and acknowledged, but only 1/5 active nodes are published while the owner reports consumer_lag, waiting_for_consumer, and stale stream outcome.",
+    "missingCausalEdgeProbe": "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-admin-owner-readiness-handoff-20260516.report.json --handoff-probe plus work:evidence-summary, causal-model, priority-recovery-residuals, distributed-failure, and owner-files on the same artifact.",
+    "boundedProgressProof": "A bounded causal edge table selects topology_publication_owner / publication_convergence and rejects readiness or operation workflow migration for this artifact.",
+    "boundedProgressProofArtifact": "test-output/reports/rolling-restart-after-admin-owner-readiness-handoff-20260516.report.json",
+    "expectedObservableTransition": "The package closes as classification-only before any runtime edit.",
+    "maxProgressBound": "one classification package; no runtime/test edits, timeout increases, or active-gate admission changes before owner selection",
+    "sameFrontierFallback": "Stay on topology_publication_owner / publication_convergence and create replayable proof for the stale owner stream edge before patching runtime.",
+    "expectedNextFrontier": "diagnostics_owner / deterministic_missing_edge_replay as the next proof step, then topology_publication_owner / publication_convergence runtime work if replay confirms the edge.",
+    "resultClassification": "classification-only",
+    "stopCondition": "classification-only-stop",
+    "recentFrontierHistory": [
+      "work/packages/done-20260515-startup-active-gate-snapshot-coverage-owner-reconcile-remaining-targets.md / startup_active_gate_owner / snapshot_coverage / migrated",
+      "work/packages/done-20260515-priority-recovery-operation-workflow-owner-control-plane-publication-pending.md / operation_workflow_owner / workflow_progress / migrated",
+      "work/packages/done-20260515-priority-recovery-operation-workflow-owner-workflow-progress.md / operation_workflow_owner / workflow_progress / reduced"
+    ],
+    "oscillationCheck": "This package is allowed because the immediately preceding package migrated out of startup_active_gate_owner after active-gate owner reconcile drained.",
+    "handoffInvariant": "Active-gate admission stays strict and the paused rolling-restart sprint remains closed; this package only classifies the successor frontier."
+  },
   "predecessor": null
 }

@@ -95,11 +95,11 @@ or produces a narrower owner-boundary blocker selected by canonical evidence.
 - Active sprint:
   `work/sprints/active-2026-q2-topology-convergence-systems-pattern-hardening.md`
 - Active package:
-  `work/packages/active-20260516-topology-sprint-handoff-hygiene.md`
+  `work/packages/active-20260516-topology-publication-convergence-frontier-causal-edge.md`
 - Artifact:
   `test-output/reports/rolling-restart-after-admin-owner-readiness-handoff-20260516.report.json`
 - Current package-local owner boundary:
-  `workflow_tooling_owner / sprint_handoff_integrity`
+  `topology_publication_owner / publication_convergence`
 - Representative owner boundary:
   `topology_publication_owner / publication_convergence`
 - Extractor summary:
@@ -185,10 +185,10 @@ These are context candidates, not write authorization:
 
 ## Entry Condition
 
-Continue with the active handoff-hygiene package. Runtime edits resume only
-after current-blocker state and dirty-scope proof are clean, then the next
-runtime package should select or activate
-`topology_publication_owner / publication_convergence`.
+Continue with the active publication-convergence classification package.
+Runtime edits remain blocked until canonical extractors select exactly one
+owner-boundary and the package records why adjacent readiness and operation
+workflow candidates were rejected or promoted.
 
 ## Exit Condition
 
@@ -201,5 +201,5 @@ canonical owner-boundary evidence.
 Current package:
 
 ```text
-work/packages/active-20260516-topology-sprint-handoff-hygiene.md
+work/packages/active-20260516-topology-publication-convergence-frontier-causal-edge.md
 ```

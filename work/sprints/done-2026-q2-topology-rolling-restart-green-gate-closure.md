@@ -406,7 +406,7 @@ The sprint cannot close until:
 1. Final package:
    `work/packages/done-20260515-startup-active-gate-snapshot-coverage-owner-reconcile-remaining-targets.md`.
 2. Successor package:
-   `work/packages/todo-20260516-topology-publication-convergence-frontier-causal-edge.md`.
+   `work/packages/active-20260516-topology-publication-convergence-frontier-causal-edge.md`.
 3. Final representative artifact:
    `test-output/reports/rolling-restart-after-admin-owner-readiness-handoff-20260516.report.json`.
 4. Result: migrated. The active-gate owner-reconcile path no longer reports

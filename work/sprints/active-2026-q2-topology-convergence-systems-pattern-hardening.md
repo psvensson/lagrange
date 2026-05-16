@@ -61,7 +61,7 @@ Primary references:
 
 ## Package Queue
 
-1. [Topology Sprint Handoff Hygiene](../packages/active-20260516-topology-sprint-handoff-hygiene.md)
+1. [Topology Sprint Handoff Hygiene](../packages/done-20260516-topology-sprint-handoff-hygiene.md)
    - Lane: `lightweight-maintenance`
    - Owner boundary: `workflow_tooling_owner / sprint_handoff_integrity`
    - Purpose: make current-blocker files, scope fields, and dirty-scope
@@ -70,7 +70,7 @@ Primary references:
    - Acceptance: `work:current-blocker -- --write`, `work:validate
      -- --pre-impl`, and `work:dirty-scope` agree with the latest active
      package and artifact.
-2. [Topology Publication Convergence Frontier Causal Edge](../packages/todo-20260516-topology-publication-convergence-frontier-causal-edge.md)
+2. [Topology Publication Convergence Frontier Causal Edge](../packages/active-20260516-topology-publication-convergence-frontier-causal-edge.md)
    - Lane: `causal-escalation`
    - Owner boundary: `topology_publication_owner / publication_convergence`
    - Purpose: classify the latest `publication_ack_convergence` frontier after
