@@ -289,6 +289,18 @@ function resolvePriorityRecoveryEligibleNodeIds(latestPartitionSnapshot) {
   );
 }
 
+function resolvePriorityRecoveryTopologyOperatorWitness(
+  latestPartitionSnapshot,
+) {
+  if (isRecord(latestPartitionSnapshot?.progress?.topologyOperatorWitness)) {
+    return latestPartitionSnapshot.progress.topologyOperatorWitness;
+  }
+  if (isRecord(latestPartitionSnapshot?.topologyOperatorWitness)) {
+    return latestPartitionSnapshot.topologyOperatorWitness;
+  }
+  return null;
+}
+
 function buildPriorityRecoveryPartitionSnapshot(
   partitionId,
   snapshots,
@@ -315,6 +327,8 @@ function buildPriorityRecoveryPartitionSnapshot(
   const latestOperation = isRecord(latestPartitionSnapshot?.coordinator?.operation) ?
     latestPartitionSnapshot.coordinator.operation :
     null;
+  const topologyOperatorWitness =
+    resolvePriorityRecoveryTopologyOperatorWitness(latestPartitionSnapshot);
   const pressureConditions = buildPriorityRecoveryPressureConditions(
     latestPartitionSnapshot?.conditions?.pressure,
   );
@@ -427,6 +441,7 @@ function buildPriorityRecoveryPartitionSnapshot(
         latestPartitionSnapshot?.progress?.evidenceSourceIds,
       ),
     ),
+    ...(topologyOperatorWitness ? {topologyOperatorWitness} : {}),
     decisionDimension:
       normalizePriorityRecoveryObservationStateValue(
         latestPartitionSnapshot?.admission?.decisionDimension,
@@ -572,6 +587,7 @@ export {
   resolvePriorityRecoverySnapshotSortEpoch,
   resolvePriorityRecoverySnapshotSortProgressTimestamp,
   resolvePriorityRecoverySnapshotSortTimestamp,
+  resolvePriorityRecoveryTopologyOperatorWitness,
   resolvePriorityRecoveryWitnessPartitionIds,
   selectLatestPriorityRecoveryPartitionSnapshot,
 };

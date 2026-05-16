@@ -813,7 +813,8 @@ export function registerAdminControlSnapshotTailTests({
       t.same(
         decisionSnapshots.blockerPartitionIdsByReason,
         {
-          eligible_but_no_operation_created: ['orders-p1', 'payments-p1'],
+          priority_operation_serial_wait: [],
+          eligible_but_no_operation_created: ['orders-p1'],
           operation_created_but_no_step_transitions: ['users-p1'],
           learner_active_but_never_promotable: [],
           publication_recovery_eligible_but_coordinator_excludes_node: ['users-p1'],
@@ -825,18 +826,18 @@ export function registerAdminControlSnapshotTailTests({
         {
           converged: [],
           spread_satisfied_in_flight: [],
-          needs_operation: ['orders-p1', 'payments-p1'],
+          needs_operation: ['orders-p1'],
           operation_stalled: [],
           learner_promotion_blocked: [],
           coordination_mismatch: ['users-p1'],
           recovering_in_flight: [],
-          blocked_unclassified: [],
+          blocked_unclassified: ['payments-p1'],
         },
         'decision snapshots should expose canonical partition semantic states',
       );
       t.same(
         decisionSnapshots.unresolvedSemanticStateIds,
-        ['needs_operation', 'coordination_mismatch'],
+        ['needs_operation', 'coordination_mismatch', 'blocked_unclassified'],
         'decision snapshots should report unresolved semantic states',
       );
 
@@ -923,6 +924,7 @@ export function registerAdminControlSnapshotTailTests({
       t.same(
         decisionSnapshots.blockerPartitionIdsByReason,
         {
+          priority_operation_serial_wait: [],
           eligible_but_no_operation_created: ['sql_transaction_participants-p1'],
           operation_created_but_no_step_transitions: [],
           learner_active_but_never_promotable: [],
@@ -1176,6 +1178,7 @@ export function registerAdminControlSnapshotTailTests({
       t.same(
         decisionSnapshots.blockerPartitionIdsByReason,
         {
+          priority_operation_serial_wait: [],
           eligible_but_no_operation_created: [],
           operation_created_but_no_step_transitions: [],
           learner_active_but_never_promotable: [],
@@ -1273,6 +1276,7 @@ export function registerAdminControlSnapshotTailTests({
       t.same(
         decisionSnapshots.blockerPartitionIdsByReason,
         {
+          priority_operation_serial_wait: [],
           eligible_but_no_operation_created: [],
           operation_created_but_no_step_transitions: [],
           learner_active_but_never_promotable: [],
@@ -1379,6 +1383,7 @@ export function registerAdminControlSnapshotTailTests({
       t.same(
         decisionSnapshots.blockerPartitionIdsByReason,
         {
+          priority_operation_serial_wait: [],
           eligible_but_no_operation_created: ['sql_transactions-p1'],
           operation_created_but_no_step_transitions: [],
           learner_active_but_never_promotable: [],

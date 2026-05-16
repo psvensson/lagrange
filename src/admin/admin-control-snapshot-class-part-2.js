@@ -279,10 +279,18 @@ function attachOrdinaryRepairDeferralDiagnostics(snapshot, repairDeferred) {
     controlPlaneDiagnostics[
       CONTROL_SNAPSHOT_CRITICAL_CONVERGENCE_DEFERRED_FIELD
     ] === true;
+  const ordinaryRepairDeferred =
+    repairDeferred === true ||
+    (
+      criticalConvergenceDeferred !== true &&
+      controlPlaneDiagnostics[
+        CONTROL_SNAPSHOT_ORDINARY_REPAIR_DEFERRED_FIELD
+      ] === true
+    );
   snapshot[CONTROL_SNAPSHOT_CONTROL_PLANE_DIAGNOSTICS_FIELD] = {
     ...controlPlaneDiagnostics,
     [CONTROL_SNAPSHOT_ORDINARY_REPAIR_DEFERRED_FIELD]:
-      criticalConvergenceDeferred !== true && repairDeferred === true,
+      ordinaryRepairDeferred,
   };
   return snapshot;
 }

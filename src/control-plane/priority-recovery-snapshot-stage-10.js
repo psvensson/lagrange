@@ -30,6 +30,7 @@ import {
   PRIORITY_RECOVERY_TARGET_SERVICE_TERMINAL_STATE,
   PRIORITY_RECOVERY_TARGET_VISIBILITY_STATE,
 } from './priority-recovery-snapshot-stage-shared.js';
+import {buildTopologyOperatorWitnessFromWorkflowProgress} from './topology-operator-witness.js';
 import {buildPriorityRecoveryPlannerByPartitionId, buildPriorityRecoveryPlannerEntry} from './priority-recovery-snapshot-stage-1.js';
 import {buildPriorityRecoveryConditionsContract, selectLatestPriorityRecoveryOperationContext} from './priority-recovery-snapshot-stage-7.js';
 import {buildPriorityRecoveryActuationContract} from './priority-recovery-snapshot-stage-8.js';
@@ -518,6 +519,29 @@ function buildPriorityRecoveryDecisionReadinessSnapshot(
   };
 }
 
+function shouldAttachPriorityRecoveryTopologyOperatorWitness(snapshot = {}) {
+  return (
+    snapshot?.progress?.currentOwner ===
+    PRIORITY_RECOVERY_PROGRESS_OWNER.OPERATION_WORKFLOW_OWNER
+  );
+}
+
+function attachPriorityRecoveryTopologyOperatorWitness(snapshot = {}) {
+  if (!shouldAttachPriorityRecoveryTopologyOperatorWitness(snapshot)) {
+    return snapshot;
+  }
+  const topologyOperatorWitness =
+    buildTopologyOperatorWitnessFromWorkflowProgress(snapshot);
+  return {
+    ...snapshot,
+    topologyOperatorWitness,
+    progress: {
+      ...snapshot.progress,
+      topologyOperatorWitness,
+    },
+  };
+}
+
 function buildPriorityRecoveryDecisionSnapshot(options = {}) {
   const partitionId = String(options.partitionId || '').trim();
   if (partitionId.length === NUM.ZERO) {
@@ -689,11 +713,13 @@ function buildPriorityRecoveryDecisionSnapshot(options = {}) {
     ),
     blockerReasons: assessment.blockerReasons,
   };
+  const snapshotWithTopologyOperatorWitness =
+    attachPriorityRecoveryTopologyOperatorWitness(snapshot);
   return normalizePriorityRecoveryDispatchPendingDecisionSnapshot(
-    snapshot,
+    snapshotWithTopologyOperatorWitness,
     resolvePriorityRecoveryDecisionOperationOwnerOutcome(
       options,
-      snapshot,
+      snapshotWithTopologyOperatorWitness,
       operationContext || latestOperationContext,
     ),
   );
@@ -773,11 +799,15 @@ function appendPriorityRecoveryPartitionSnapshots(
         operation: operationContext,
       },
     };
+    const snapshotWithTopologyOperatorWitness =
+      attachPriorityRecoveryTopologyOperatorWitness(
+        snapshotWithOperationContext,
+      );
     const appendedSnapshot =
       normalizePriorityRecoveryDispatchPendingDecisionSnapshot(
-        snapshotWithOperationContext,
+        snapshotWithTopologyOperatorWitness,
         buildPriorityRecoveryDispatchPendingDiagnosticOwnerOutcome(
-          snapshotWithOperationContext,
+          snapshotWithTopologyOperatorWitness,
           operationContext,
         ),
       );

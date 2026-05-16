@@ -3,6 +3,8 @@ import {RebalanceCoordinator} from '../../src/rebalancer/rebalance-coordinator.j
 import {NUM, WORKFLOW_STEP} from '../../src/constants/index.js';
 import {buildPriorityRecoveryDecisionSnapshot} from
   '../../src/control-plane/priority-recovery-snapshot.js';
+import {buildPriorityRecoveryObservationSnapshot} from
+  '../../src/control-plane/priority-recovery-observation-snapshot.js';
 import {
   PRIORITY_RECOVERY_ACTUATION_STATE,
   PRIORITY_RECOVERY_BLOCKING_BOUNDARY,
@@ -596,12 +598,7 @@ test('topology operator witness maps dispatch-pending owner progress',
     },
     operationOwnerOutcome: buildRemoteDispatchPendingOperationOwnerOutcome(),
   });
-  const witness =
-    coordinator.workflowOwner.buildTopologyOperatorWitnessFromWorkflowProgress(
-      snapshot,
-    );
-
-  assertTopologyOperatorWitness(t, witness, {
+  const expectedWitness = {
     operatorId: TEST_OPERATION_ID,
     owner: OPERATION_WORKFLOW_OWNER,
     boundary: PRIORITY_RECOVERY_BLOCKING_BOUNDARY.WORKFLOW_PROGRESS,
@@ -614,7 +611,38 @@ test('topology operator witness maps dispatch-pending owner progress',
     nextAction:
       PRIORITY_RECOVERY_NEXT_REQUIRED_ACTION.ADVANCE_EXISTING_OPERATION,
     message: 'dispatch-pending owner progress should produce a step witness',
+  };
+  const liveWitness = snapshot.progress.topologyOperatorWitness;
+  assertTopologyOperatorWitness(t, liveWitness, expectedWitness);
+  t.same(
+    snapshot.topologyOperatorWitness,
+    liveWitness,
+    'decision snapshots should expose the live topology witness at the summary boundary',
+  );
+  const observation = buildPriorityRecoveryObservationSnapshot({
+    publicationConvergence: buildDispatchPendingReentryPlanningSnapshot(),
+    priorityRecoveryDecisionSnapshots: Object.freeze({
+      schemaVersion: NUM.ONE,
+      capturedAt: TEST_CAPTURED_AT_MS,
+      publicationEpoch: TEST_PUBLICATION_EPOCH,
+      snapshots: Object.freeze([snapshot]),
+    }),
   });
+  const partitionWitness =
+    observation.priorityRecoveryPartitionWitnesses.find((entry) =>
+      entry.partitionId === TEST_PARTITION_ID,
+    );
+  assertTopologyOperatorWitness(
+    t,
+    partitionWitness?.topologyOperatorWitness,
+    expectedWitness,
+  );
+  const witness =
+    coordinator.workflowOwner.buildTopologyOperatorWitnessFromWorkflowProgress(
+      snapshot,
+    );
+
+  assertTopologyOperatorWitness(t, witness, expectedWitness);
   t.end();
 });
 

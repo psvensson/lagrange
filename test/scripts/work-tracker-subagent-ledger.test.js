@@ -6,6 +6,7 @@ import {
   isGeneratedCurrentBlockerPath,
   metadataRequiresSubagentSequencing,
   renderCurrentBlockerMarkdown,
+  validateActiveWorkReferences,
   validateCausalGovernanceContract,
   validateCommitAndPushLedger,
   validateCurrentBlockerPayloadFreshness,
@@ -1518,6 +1519,52 @@ describe('work tracker current blocker snapshot validation', () => {
     assert.match(errors, /does not match discovered active package/u);
     assert.match(errors, /npm run work:current-blocker -- --write/u);
   });
+
+  it('reports stale active package and sprint references in track handoffs',
+    () => {
+      const trackContent = [
+        '# Track',
+        '',
+        '- Active sprint: `work/sprints/active-missing-sprint.md`',
+        '- Active package: `work/packages/active-missing-package.md`',
+        '- Existing package: `work/packages/active-existing-package.md`',
+      ].join('\n');
+      const errors = validateActiveWorkReferences(
+        trackContent,
+        'work/tracks/topology-convergence.md',
+        {
+          existingPaths: [
+            'work/packages/active-existing-package.md',
+          ],
+        },
+      ).join('\n');
+
+      assert.match(errors, /active-missing-sprint\.md/u);
+      assert.match(errors, /active-missing-package\.md/u);
+      assert.doesNotMatch(errors, /active-existing-package\.md/u);
+      assert.match(errors, /update track handoffs/u);
+    });
+
+  it('resolves relative active package links from generated handoff markdown',
+    () => {
+      const handoffContent = [
+        '# Current Blocker',
+        '',
+        'Current active package:',
+        '[Package](../packages/active-current-package.md)',
+      ].join('\n');
+      const errors = validateActiveWorkReferences(
+        handoffContent,
+        WORK_TRACKER_CURRENT_BLOCKER_MARKDOWN,
+        {
+          existingPaths: [
+            'work/packages/active-current-package.md',
+          ],
+        },
+      );
+
+      assert.deepEqual(errors, []);
+    });
 
   it('allows a failed current-blocker handoff when no active sprint is open',
     () => {

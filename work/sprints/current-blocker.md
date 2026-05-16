@@ -2,11 +2,11 @@
 
 # Current Blocker
 
-Sprint: `work/sprints/done-2026-q2-topology-convergence-systems-pattern-hardening.md`
+Sprint: `work/sprints/active-2026-q2-topology-systems-pattern-completion-closure.md`
 
-Package: `work/packages/done-20260516-topology-owner-boundary-file-size-reduction.md`
+Package: `work/packages/active-20260516-topology-systems-pattern-completion-closure.md`
 
-Workflow lane: `lightweight-maintenance`
+Workflow lane: `runtime-owner-boundary`
 
 Scenario: `none`
 
@@ -16,33 +16,39 @@ Playback: `none`
 
 ## Boundary
 
-Owner: `workflow_tooling_owner`
+Owner: `topology_convergence_owner`
 
-Boundary: `topology_owner_file_size_debt`
+Boundary: `systems_pattern_contract_completion`
 
-Dominant reason: `oversized_files_raise_release_gate_risk`
+Dominant reason: `pattern_contracts_not_fully_live_or_guarded`
 
-Current state: The topology release-gate slice touches several oversized runtime and test files. Large files are not the root cause, but they increase review risk, make owner boundaries harder to see, and make repeated fixes more expensive.
+Current state: The closed systems-pattern sprint added the TiKV operator witness and Cockroach critical convergence contracts, but follow-up review found the witness is not proven through live emitted owner progress, broad admin tail consumers remain red, and tracker validation allows stale active references after package/sprint status renames.
 
 ## Next Action
 
-Extract one topology owner helper at a time from oversized runtime or test files without changing behavior.
+Make TiKV operator witnesses live through emitted progress, close Cockroach critical convergence tail-consumer proof, and add tracker validation for stale active package/sprint references before resuming the paused topology sprint.
 
 ## Proof Ladder
 
-1. `npm run work:oversized-next -- --markdown`
-2. `npm run audit:owner-boundary-segments -- src/rebalancer/operation-workflow-owner-segment-2.js`
-3. `git diff --check -- src/rebalancer/operation-workflow-owner-segment-2.js test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js`
+1. `npm run work:package:doctor -- --suggest work/packages/active-20260516-topology-systems-pattern-completion-closure.md`
+2. `npm run analyze:owner-files -- operation_workflow_owner workflow_progress --markdown`
+3. `npm run analyze:owner-files -- topology_publication_owner publication_convergence --markdown`
+4. `node --test test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js`
+5. `node --test test/diagnostics/topology-convergence-graph.test.js`
+6. `node test/control-plane/membership-publication-coordinator-main-stage-2.js`
+7. `node --test test/admin/admin-control-snapshot.test.js`
+8. `node --test test/scripts/work-tracker-subagent-ledger.test.js`
+9. `npm run work:validate -- --closure work/packages/active-20260516-topology-systems-pattern-completion-closure.md`
 
 ## Model Fit
 
-Package class: `bounded-implementation`
+Package class: `representative-frontier-closure`
 
-Intended minimum model: `gpt-5.3-codex-spark`
+Intended minimum model: `gpt-5.3-codex`
 
-Scope shape: `leaf-slice`
+Scope shape: `owner-boundary-contraction/current-frontier`
 
-Output profile: `small`
+Output profile: `medium`
 
 Escalation triggers:
 
@@ -127,14 +133,37 @@ Handoff invariant: `unknown`
 
 Write scope:
 
-1. `work/packages/done-20260516-topology-owner-boundary-file-size-reduction.md`
-2. `src/rebalancer/operation-workflow-owner-segment-2.js`
-3. `test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js`
-4. `work/model-ledger.jsonl`
+1. `work/packages/active-20260516-topology-systems-pattern-completion-closure.md`
+2. `work/sprints/active-2026-q2-topology-systems-pattern-completion-closure.md`
+3. `scripts/work-tracker.js`
+4. `src/control-plane/topology-operator-witness.js`
+5. `src/rebalancer/operation-workflow-owner-shared.js`
+6. `src/rebalancer/operation-workflow-owner-segment-2.js`
+7. `src/diagnostics/topology-convergence-graph.js`
+8. `src/control-plane/membership-publication-coordinator-class-stage-2.js`
+9. `src/control-plane/membership-publication-coordinator-class-stage-3.js`
+10. `src/control-plane/priority-recovery-snapshot-stage-10.js`
+11. `src/control-plane/priority-recovery-observation-snapshot-stage-2.js`
+12. `src/control-plane/priority-recovery-observation-snapshot-stage-4.js`
+13. `src/admin/admin-control-snapshot-class-part-2.js`
+14. `src/admin/admin-control-snapshot-class-part-6.js`
+15. `test/distributed/harness/priority-recovery-summary-normalization.js`
+16. `test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js`
+17. `test/diagnostics/topology-convergence-graph.test.js`
+18. `test/control-plane/membership-publication-coordinator-main-stage-2.js`
+19. `test/admin/admin-control-snapshot-tail-test-cases.js`
+20. `test/admin/admin-control-snapshot.test.js`
+21. `test/scripts/work-tracker-subagent-ledger.test.js`
+22. `work/tracks/topology-convergence.md`
+23. `work/sprints/current-blocker.md`
+24. `work/sprints/current-blocker.json`
+25. `work/model-ledger.jsonl`
 
 Handoff files:
 
-1. `work/tracks/topology-convergence.md`
+1. `work/sprints/done-2026-q2-topology-convergence-systems-pattern-hardening.md`
+2. `work/packages/done-20260516-tikv-pd-style-topology-operator-step-witness-ledger.md`
+3. `work/packages/done-20260516-cockroach-style-control-plane-priority-convergence-class.md`
 
 Generated files:
 
@@ -142,14 +171,44 @@ Generated files:
 
 Candidate runtime files:
 
-1. None recorded
+1. `src/control-plane/topology-operator-witness.js`
+2. `src/rebalancer/operation-workflow-owner-shared.js`
+3. `src/diagnostics/topology-convergence-graph.js`
+4. `src/control-plane/membership-publication-coordinator-class-stage-2.js`
+5. `src/control-plane/membership-publication-coordinator-class-stage-3.js`
+6. `src/control-plane/priority-recovery-snapshot-stage-10.js`
+7. `src/control-plane/priority-recovery-observation-snapshot-stage-2.js`
+8. `src/control-plane/priority-recovery-observation-snapshot-stage-4.js`
+9. `src/admin/admin-control-snapshot-class-part-2.js`
+10. `src/admin/admin-control-snapshot-class-part-6.js`
 
 Commit scope:
 
-1. `work/packages/done-20260516-topology-owner-boundary-file-size-reduction.md`
-2. `src/rebalancer/operation-workflow-owner-segment-2.js`
-3. `test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js`
-4. `work/model-ledger.jsonl`
+1. `work/packages/active-20260516-topology-systems-pattern-completion-closure.md`
+2. `work/sprints/active-2026-q2-topology-systems-pattern-completion-closure.md`
+3. `scripts/work-tracker.js`
+4. `src/control-plane/topology-operator-witness.js`
+5. `src/rebalancer/operation-workflow-owner-shared.js`
+6. `src/rebalancer/operation-workflow-owner-segment-2.js`
+7. `src/diagnostics/topology-convergence-graph.js`
+8. `src/control-plane/membership-publication-coordinator-class-stage-2.js`
+9. `src/control-plane/membership-publication-coordinator-class-stage-3.js`
+10. `src/control-plane/priority-recovery-snapshot-stage-10.js`
+11. `src/control-plane/priority-recovery-observation-snapshot-stage-2.js`
+12. `src/control-plane/priority-recovery-observation-snapshot-stage-4.js`
+13. `src/admin/admin-control-snapshot-class-part-2.js`
+14. `src/admin/admin-control-snapshot-class-part-6.js`
+15. `test/distributed/harness/priority-recovery-summary-normalization.js`
+16. `test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js`
+17. `test/diagnostics/topology-convergence-graph.test.js`
+18. `test/control-plane/membership-publication-coordinator-main-stage-2.js`
+19. `test/admin/admin-control-snapshot-tail-test-cases.js`
+20. `test/admin/admin-control-snapshot.test.js`
+21. `test/scripts/work-tracker-subagent-ledger.test.js`
+22. `work/tracks/topology-convergence.md`
+23. `work/sprints/current-blocker.md`
+24. `work/sprints/current-blocker.json`
+25. `work/model-ledger.jsonl`
 
 Legacy touched files:
 

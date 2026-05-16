@@ -13,6 +13,10 @@
 import {NUM, TABLES, TYPEOF} from '../constants/index.js';
 import {normalizeControlPlanePublicationRow} from '../control-plane/system-row-normalizers.js';
 import {
+  CONTROL_PLANE_CONVERGENCE_CLASS,
+  CONTROL_PLANE_CONVERGENCE_PRESSURE_OUTCOME,
+} from '../control-plane/control-plane-error-classification.js';
+import {
   resolvePublicationActiveGateMembershipPublicationTarget,
 } from '../control-plane/publication-active-gate-handoff-contract.js';
 import {AdminControlSnapshotPart5} from './admin-control-snapshot-class-part-5.js';
@@ -54,6 +58,14 @@ const MEMBERSHIP_PUBLICATION_HANDOFF_ALLOW_EMPTY_PRELOADED_ROWS = true;
 const MEMBERSHIP_PUBLICATION_HANDOFF_DISABLE_NESTED_PRIORITY_RECOVERY = true;
 const MEMBERSHIP_PUBLICATION_HANDOFF_EMPTY_ROWS = Object.freeze([]);
 const MEMBERSHIP_PUBLICATION_HANDOFF_OUTCOME_SCHEMA_VERSION = 1;
+const MEMBERSHIP_PUBLICATION_HANDOFF_CONVERGENCE_SCHEMA_VERSION = 1;
+const MEMBERSHIP_PUBLICATION_HANDOFF_CONVERGENCE_QUEUE_BOUND = NUM.ONE;
+const MEMBERSHIP_PUBLICATION_HANDOFF_CONVERGENCE_RETRY_AFTER_MS =
+  NUM.THOUSAND;
+const MEMBERSHIP_PUBLICATION_HANDOFF_CONVERGENCE_OWNER_KEY =
+  'membership-publication:cluster_membership';
+const MEMBERSHIP_PUBLICATION_HANDOFF_CONVERGENCE_OPERATION =
+  'active_gate_handoff';
 const MEMBERSHIP_PUBLICATION_HANDOFF_OUTCOME_STATE = Object.freeze({
   WRITE_DEFERRED: 'write_deferred',
 });
@@ -67,6 +79,11 @@ const MEMBERSHIP_PUBLICATION_SERVICE_FIELD = 'membershipPublicationService';
 const CONTROL_PLANE_READINESS_SERVICE_FIELD = 'controlPlaneReadinessService';
 const REBALANCE_COORDINATOR_FIELD = 'rebalanceCoordinator';
 const STORAGE_ADMISSION_SERVICE_FIELD = 'storageAdmissionService';
+const MEMBERSHIP_PUBLICATION_HANDOFF_CONVERGENCE_FIELD = Object.freeze({
+  CONTROL_PLANE_CONVERGENCE: 'controlPlaneConvergence',
+  CONTROL_PLANE_CONVERGENCE_CLASS: 'controlPlaneConvergenceClass',
+  CONTROL_PLANE_PRESSURE_OUTCOME: 'controlPlanePressureOutcome',
+});
 const MEMBERSHIP_PUBLICATION_RECONCILE_FIELD = Object.freeze({
   ACKNOWLEDGED_NODE_IDS: 'acknowledgedNodeIds',
   ALLOW_EMPTY_PRELOADED_ROWS: 'allowEmptyPreloadedRows',
@@ -89,7 +106,30 @@ const MEMBERSHIP_PUBLICATION_RECONCILE_FIELD = Object.freeze({
   SERVICE_ROWS: 'serviceRows',
   SKIP_PUBLICATION_WRITE_READBACK: 'skipPublicationWriteReadback',
 });
+function buildMembershipPublicationHandoffControlPlaneConvergence(
+  options = {},
+) {
+  const retryAfterMs = Number.isFinite(options.retryAfterMs) &&
+    options.retryAfterMs > NUM.ZERO ?
+    Math.floor(options.retryAfterMs) :
+    MEMBERSHIP_PUBLICATION_HANDOFF_CONVERGENCE_RETRY_AFTER_MS;
+  return Object.freeze({
+    schemaVersion: MEMBERSHIP_PUBLICATION_HANDOFF_CONVERGENCE_SCHEMA_VERSION,
+    convergenceClass: CONTROL_PLANE_CONVERGENCE_CLASS.CRITICAL,
+    pressureOutcome:
+      CONTROL_PLANE_CONVERGENCE_PRESSURE_OUTCOME.CRITICAL_REJECTED,
+    ownerKey: MEMBERSHIP_PUBLICATION_HANDOFF_CONVERGENCE_OWNER_KEY,
+    operation: MEMBERSHIP_PUBLICATION_HANDOFF_CONVERGENCE_OPERATION,
+    queueBound: MEMBERSHIP_PUBLICATION_HANDOFF_CONVERGENCE_QUEUE_BOUND,
+    retryAfterMs,
+  });
+}
 function buildMembershipPublicationHandoffOutcome(state, options = {}) {
+  const controlPlaneConvergence =
+    options.controlPlaneConvergence &&
+      typeof options.controlPlaneConvergence === TYPEOF.OBJECT ?
+      Object.freeze({...options.controlPlaneConvergence}) :
+      null;
   return Object.freeze({
     schemaVersion: MEMBERSHIP_PUBLICATION_HANDOFF_OUTCOME_SCHEMA_VERSION,
     state,
@@ -103,6 +143,18 @@ function buildMembershipPublicationHandoffOutcome(state, options = {}) {
     ...(typeof options.reasonCode === TYPEOF.STRING &&
       options.reasonCode.length > NUM.ZERO ?
       {reasonCode: options.reasonCode} :
+      {}),
+    ...(controlPlaneConvergence ?
+      {
+        [MEMBERSHIP_PUBLICATION_HANDOFF_CONVERGENCE_FIELD
+          .CONTROL_PLANE_CONVERGENCE]: controlPlaneConvergence,
+        [MEMBERSHIP_PUBLICATION_HANDOFF_CONVERGENCE_FIELD
+          .CONTROL_PLANE_CONVERGENCE_CLASS]:
+          controlPlaneConvergence.convergenceClass,
+        [MEMBERSHIP_PUBLICATION_HANDOFF_CONVERGENCE_FIELD
+          .CONTROL_PLANE_PRESSURE_OUTCOME]:
+          controlPlaneConvergence.pressureOutcome,
+      } :
       {}),
   });
 }
@@ -250,6 +302,8 @@ async function maybeReconcileAuthoritativeMembershipPublication(
           target: membershipPublicationTarget,
           reasonCode:
             MEMBERSHIP_PUBLICATION_HANDOFF_OUTCOME_REASON_SERVICE_UNAVAILABLE,
+          controlPlaneConvergence:
+            buildMembershipPublicationHandoffControlPlaneConvergence(),
         },
       ) :
       null;
@@ -279,6 +333,8 @@ async function maybeReconcileAuthoritativeMembershipPublication(
         target: membershipPublicationTarget,
         enqueued: true,
         reasonCode: MEMBERSHIP_PUBLICATION_HANDOFF_OUTCOME_REASON_ENQUEUED,
+        controlPlaneConvergence:
+          buildMembershipPublicationHandoffControlPlaneConvergence(),
       },
     );
   }
@@ -300,6 +356,10 @@ function buildMembershipPublicationHandoffCommandFailureOutcome(
         reasonCode:
           MEMBERSHIP_PUBLICATION_HANDOFF_OUTCOME_REASON_COMMAND_ERROR,
         retryAfterMs: Number(error?.retryAfterMs),
+        controlPlaneConvergence:
+          buildMembershipPublicationHandoffControlPlaneConvergence({
+            retryAfterMs: Number(error?.retryAfterMs),
+          }),
       },
     ) :
     null;

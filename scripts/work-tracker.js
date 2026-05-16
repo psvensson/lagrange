@@ -51,6 +51,7 @@ const METADATA_LANE_FIELD = 'lane';
 const WORK_ROOT = 'work';
 const WORK_PACKAGES_DIR = path.join(WORK_ROOT, 'packages');
 const WORK_SPRINTS_DIR = path.join(WORK_ROOT, 'sprints');
+const WORK_TRACKS_DIR = path.join(WORK_ROOT, 'tracks');
 const CURRENT_BLOCKER_JSON_PATH = path.join(
   WORK_SPRINTS_DIR,
   'current-blocker.json',
@@ -77,6 +78,8 @@ const ACTIVE_PACKAGE_LINK_PATTERN =
   /\]\((\.\.\/packages\/active-[^)]+\.md)\)/u;
 const CURRENT_ACTIVE_PACKAGE_LINK_PATTERN =
   /(?:current\s+active\s+package|active\s+package|continue)\s*:?\s*(?:\n\s*)?\[[^\]]+\]\((\.\.\/packages\/active-[^)]+\.md)\)/iu;
+const ACTIVE_WORK_REFERENCE_PATTERN =
+  /\b((?:work\/(?:packages|sprints)|(?:\.\.\/|\.\/)(?:packages|sprints))\/active-[A-Za-z0-9._-]+\.md)\b/gu;
 const SUBAGENT_LEDGER_HEADING = '## Subagent Sequencing Ledger';
 const MARKDOWN_LEVEL_TWO_HEADING_PREFIX = '## ';
 const SUBAGENT_LEDGER_REVIEW_LABEL = 'Review subagent recorded';
@@ -1933,6 +1936,13 @@ async function listSprintFiles() {
   return sprintFiles.filter((filePath) => !isGeneratedCurrentBlockerPath(filePath));
 }
 
+async function listTrackFiles() {
+  if (!(await pathExists(WORK_TRACKS_DIR))) {
+    return [];
+  }
+  return listMarkdownFiles(WORK_TRACKS_DIR);
+}
+
 export function isGeneratedCurrentBlockerPath(filePath) {
   const normalizedPath = normalizeRelativePath(filePath);
   return normalizedPath === CURRENT_BLOCKER_MARKDOWN_PATH ||
@@ -2391,6 +2401,72 @@ export function validateCurrentBlockerPayloadFreshness(
   ];
 }
 
+function resolveActiveWorkReferencePath(markdownFilePath, referencePath) {
+  const normalizedReferencePath = normalizeLedgerText(referencePath);
+  if (normalizedReferencePath.startsWith(`${WORK_ROOT}/`)) {
+    return normalizeRelativePath(normalizeCliPath(normalizedReferencePath));
+  }
+  return normalizeRelativePath(
+    path.join(
+      path.dirname(normalizeCliPath(markdownFilePath)),
+      normalizedReferencePath,
+    ),
+  );
+}
+
+function collectActiveWorkReferences(content) {
+  const references = [];
+  ACTIVE_WORK_REFERENCE_PATTERN.lastIndex = NUM_ZERO;
+  for (
+    let match = ACTIVE_WORK_REFERENCE_PATTERN.exec(content);
+    match;
+    match = ACTIVE_WORK_REFERENCE_PATTERN.exec(content)
+  ) {
+    references.push(match[NUM_ONE]);
+  }
+  return references;
+}
+
+function buildActiveWorkReferenceFreshnessError(
+  markdownFilePath,
+  referencePath,
+  resolvedPath,
+) {
+  return `${normalizeRelativePath(markdownFilePath)}: active work reference ` +
+    `${referencePath} resolves to missing ${resolvedPath}; run ` +
+    `${CURRENT_BLOCKER_REPAIR_COMMAND} and update track handoffs after ` +
+    'renaming active files.';
+}
+
+export function validateActiveWorkReferences(
+  content,
+  markdownFilePath,
+  options = {},
+) {
+  const existingPathSet = new Set(
+    (Array.isArray(options.existingPaths) ? options.existingPaths : [])
+      .map((filePath) => normalizeRelativePath(normalizeCliPath(filePath))),
+  );
+  const useProvidedExistingPaths = Array.isArray(options.existingPaths);
+  const errors = [];
+  for (const referencePath of collectActiveWorkReferences(content)) {
+    const resolvedPath = resolveActiveWorkReferencePath(
+      markdownFilePath,
+      referencePath,
+    );
+    if (useProvidedExistingPaths && !existingPathSet.has(resolvedPath)) {
+      errors.push(
+        buildActiveWorkReferenceFreshnessError(
+          markdownFilePath,
+          referencePath,
+          resolvedPath,
+        ),
+      );
+    }
+  }
+  return errors;
+}
+
 export function validateCurrentBlockerSnapshot(currentBlocker, options = {}) {
   const snapshotPath = options.snapshotPath || CURRENT_BLOCKER_JSON_PATH;
   const allowClosedSnapshot = options.allowClosed === true;
@@ -2562,6 +2638,35 @@ async function validateCurrentBlockerFreshness() {
   return errors;
 }
 
+async function validateActiveWorkReferenceFreshness() {
+  const markdownFiles = [
+    ...(await listTrackFiles()),
+    ...((await pathExists(CURRENT_BLOCKER_MARKDOWN_PATH)) ?
+      [CURRENT_BLOCKER_MARKDOWN_PATH] :
+      []),
+  ];
+  const errors = [];
+  for (const markdownFilePath of markdownFiles) {
+    const content = await readTextFile(markdownFilePath);
+    for (const referencePath of collectActiveWorkReferences(content)) {
+      const resolvedPath = resolveActiveWorkReferencePath(
+        markdownFilePath,
+        referencePath,
+      );
+      if (!(await pathExists(resolvedPath))) {
+        errors.push(
+          buildActiveWorkReferenceFreshnessError(
+            markdownFilePath,
+            referencePath,
+            resolvedPath,
+          ),
+        );
+      }
+    }
+  }
+  return errors;
+}
+
 async function validateCommand(args) {
   const phase = resolveValidationPhase(args);
   const targets = await resolveValidationTargets(args);
@@ -2569,6 +2674,12 @@ async function validateCommand(args) {
   const errors = [];
   if (!hasExplicitValidationTargets(args)) {
     errors.push(...(await validateCurrentBlockerFreshness()));
+  }
+  if (
+    !hasExplicitValidationTargets(args) ||
+    phase === VALIDATION_PHASE_CLOSURE
+  ) {
+    errors.push(...(await validateActiveWorkReferenceFreshness()));
   }
   for (const filePath of targets) {
     if (filePath.includes(`${path.sep}sprints${path.sep}`)) {
@@ -3246,7 +3357,15 @@ function buildPackageTargetPath(packagePath, targetStatus) {
 async function listWorkMarkdownFiles() {
   const packageFiles = await listPackageFiles();
   const sprintFiles = await listSprintFiles();
-  return [...packageFiles, ...sprintFiles];
+  const trackFiles = await listTrackFiles();
+  return [
+    ...packageFiles,
+    ...sprintFiles,
+    ...trackFiles,
+    ...((await pathExists(CURRENT_BLOCKER_MARKDOWN_PATH)) ?
+      [CURRENT_BLOCKER_MARKDOWN_PATH] :
+      []),
+  ];
 }
 
 async function rewriteWorkReferences(oldPackagePath, newPackagePath) {

@@ -3517,7 +3517,7 @@ test('AdminControlSnapshot handoff reconcile defers when publication readback is
       },
     });
 
-    const publicationRow =
+    const publicationOutcome =
       await snapshot.reconcileAuthoritativeMembershipPublicationFromHandoff({
         schemaVersion: ACTIVE_GATE_OWNER_COHORT_SCHEMA_VERSION,
         publicationEpoch: ACTIVE_GATE_HANDOFF_RECONCILE_PUBLICATION_EPOCH,
@@ -3552,10 +3552,20 @@ test('AdminControlSnapshot handoff reconcile defers when publication readback is
       0,
       'handoff catch-up should not report or patch a write when durable readback is unavailable',
     );
-    t.equal(
-      publicationRow,
-      null,
-      'the awaited handoff reconcile should defer instead of carrying an unverified publication row',
+    t.match(
+      publicationOutcome,
+      {
+        state: ACTIVE_GATE_HANDOFF_RECONCILE_OUTCOME_WRITE_DEFERRED,
+        publicationRow: null,
+        enqueued: true,
+        controlPlaneConvergence: {
+          convergenceClass:
+            CONTROL_PLANE_CONVERGENCE_CLASS.CRITICAL,
+          pressureOutcome:
+            CONTROL_PLANE_CONVERGENCE_PRESSURE_OUTCOME.CRITICAL_REJECTED,
+        },
+      },
+      'the awaited handoff reconcile should return a structured critical defer without carrying an unverified publication row',
     );
   });
 
@@ -3595,7 +3605,7 @@ test('AdminControlSnapshot queues handoff reconcile when awaited owner reconcile
       },
     });
 
-    const publicationRow =
+    const publicationOutcome =
       await snapshot.reconcileAuthoritativeMembershipPublicationFromHandoff({
         schemaVersion: ACTIVE_GATE_OWNER_COHORT_SCHEMA_VERSION,
         publicationEpoch: ACTIVE_GATE_HANDOFF_RECONCILE_PUBLICATION_EPOCH,
@@ -3620,10 +3630,20 @@ test('AdminControlSnapshot queues handoff reconcile when awaited owner reconcile
         nextAction: ACTIVE_GATE_HANDOFF_NEXT_ACTION_RECONCILE,
       });
 
-    t.equal(
-      publicationRow,
-      null,
-      'stale awaited reconcile rows should not be carried as a completed handoff',
+    t.match(
+      publicationOutcome,
+      {
+        state: ACTIVE_GATE_HANDOFF_RECONCILE_OUTCOME_WRITE_DEFERRED,
+        publicationRow: null,
+        enqueued: true,
+        controlPlaneConvergence: {
+          convergenceClass:
+            CONTROL_PLANE_CONVERGENCE_CLASS.CRITICAL,
+          pressureOutcome:
+            CONTROL_PLANE_CONVERGENCE_PRESSURE_OUTCOME.CRITICAL_REJECTED,
+        },
+      },
+      'stale awaited reconcile rows should return a structured critical defer instead of a completed handoff',
     );
     t.match(
       enqueuedContext,

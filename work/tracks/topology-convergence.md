@@ -47,9 +47,10 @@ Packages still require AGPL roadmap or edition scope and local evidence.
 Current representative evidence has repeatedly oscillated between publication
 convergence and active-gate snapshot coverage. The stopped residual-closure
 sprint proved that local single-owner patches reduce symptoms without reducing
-the boundary. The systems-pattern hardening sprint now turns successful
-distributed-systems patterns into local owner contracts before another broad
-runtime patch.
+the boundary. The systems-pattern hardening sprint turned successful
+distributed-systems patterns into local owner contracts; the active completion
+closure now hardens the live TiKV witness path, broad Cockroach admin proof, and
+handoff validation before the paused topology sprint resumes.
 
 Latest current handoff state:
 
@@ -67,6 +68,9 @@ Latest current handoff state:
 - priority recovery remains classified; reopen
   `operation_workflow_owner / workflow_progress` only if fresh canonical
   residual extractors promote it ahead of publication convergence
+- completion closure active on 2026-05-16:
+  `work/sprints/active-2026-q2-topology-systems-pattern-completion-closure.md`
+  / `work/packages/active-20260516-topology-systems-pattern-completion-closure.md`
 
 ## Target Invariant
 
@@ -93,13 +97,13 @@ or produces a narrower owner-boundary blocker selected by canonical evidence.
 ## Current Evidence
 
 - Active sprint:
-  `work/sprints/active-2026-q2-topology-convergence-systems-pattern-hardening.md`
+  `work/sprints/active-2026-q2-topology-systems-pattern-completion-closure.md`
 - Active package:
-  `work/packages/active-20260516-cockroach-style-control-plane-priority-convergence-class.md`
+  `work/packages/active-20260516-topology-systems-pattern-completion-closure.md`
 - Artifact:
   `test-output/reports/rolling-restart-after-admin-owner-readiness-handoff-20260516.report.json`
 - Current package-local owner boundary:
-  `topology_publication_owner / control_plane_priority_convergence_class`
+  `topology_convergence_owner / systems_pattern_contract_completion`
 - Representative owner boundary:
   `topology_publication_owner / publication_convergence`
 - Extractor summary:
@@ -132,7 +136,8 @@ publication-evidence replay code rather than by the runtime owner alone.
 | `work/sprints/done-2026-q2-topology-convergence-residual-closure.md` | `bugfix` / `stabilization` | stopped | Stopped on 2026-05-15 by human direction. Retained as residual context only. |
 | `work/sprints/done-2026-q2-topology-convergence-complexity-reduction.md` | `stabilization` / `complexity-reduction` | done reduced | Canonical publication-to-active-gate handoff contract implemented end to end; representative run remains red at startup active-gate snapshot coverage. |
 | `work/sprints/done-2026-q2-topology-rolling-restart-green-gate-closure.md` | `stabilization` / `green-gate` | done migrated | Final package migrated the blocker after active-gate owner reconcile drained; successor evidence selects publication convergence. |
-| `work/sprints/active-2026-q2-topology-convergence-systems-pattern-hardening.md` | `stabilization` / `systems-pattern-hardening` | active | Package-ready hardening slices for handoff hygiene, publication-convergence causal selection, deterministic replay, active-gate catch-up fencing, topology operator witnesses, critical control-plane convergence, and owner-boundary file-size reduction. |
+| `work/sprints/done-2026-q2-topology-convergence-systems-pattern-hardening.md` | `stabilization` / `systems-pattern-hardening` | done | Added handoff hygiene, publication-convergence causal selection, deterministic replay, active-gate catch-up fencing, topology operator witnesses, critical control-plane convergence, and owner-boundary file-size reduction contracts. |
+| `work/sprints/active-2026-q2-topology-systems-pattern-completion-closure.md` | `stabilization` / `systems-pattern-completion` | active | Closes the live TiKV operator witness summary path, broad Cockroach admin tail proof, and stale active-reference tracker guard before the paused topology sprint resumes. |
 
 ## Owner Boundaries
 
@@ -186,9 +191,9 @@ These are context candidates, not write authorization:
 
 ## Entry Condition
 
-Continue with the active control-plane priority convergence class package.
-Runtime edits stay bounded to the selected publication and active-gate owner
-surfaces, with diagnostics and broad repair kept on the ordinary class.
+Continue with the active systems-pattern completion closure package. Runtime
+edits stay bounded to the selected priority-recovery witness, publication/admin
+consumer, diagnostics/harness summary, and tracker-validation surfaces.
 
 ## Exit Condition
 
@@ -201,5 +206,5 @@ canonical owner-boundary evidence.
 Current package:
 
 ```text
-work/packages/active-20260516-cockroach-style-control-plane-priority-convergence-class.md
+work/packages/active-20260516-topology-systems-pattern-completion-closure.md
 ```

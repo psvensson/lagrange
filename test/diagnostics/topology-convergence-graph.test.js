@@ -111,6 +111,13 @@ const PRIORITY_RECOVERY_ACTION_WAIT_FOR_OPERATION_PROGRESS =
   'wait_for_operation_progress';
 const PRIORITY_RECOVERY_ACTUATION_DISPATCHED_WAITING_PROGRESS =
   'dispatched_waiting_progress';
+const TOPOLOGY_OPERATOR_TEST_ID = 'topology-operator-test';
+const TOPOLOGY_OPERATOR_TEST_KIND = 'replace';
+const TOPOLOGY_OPERATOR_TEST_TARGET_NODE_ID = 'node-target';
+const TOPOLOGY_OPERATOR_TEST_CURRENT_STEP_ID = 'dispatch_pending';
+const TOPOLOGY_OPERATOR_TEST_CURRENT_STEP_STATE = 'planned';
+const TOPOLOGY_OPERATOR_TEST_DEADLINE_MS = 1234;
+const TOPOLOGY_OPERATOR_TEST_LAST_OBSERVED_AT_MS = 1000;
 const PRIORITY_RECOVERY_PARTITION_WITNESS_EVIDENCE_PATH =
   'failureBundle.publicationConvergence.priorityRecoveryPartitionWitnesses';
 const PRIORITY_RECOVERY_PROGRESS_CLASS_EVIDENCE_PATH =
@@ -894,6 +901,75 @@ describe('TopologyConvergenceGraph', () => {
         graph.nextExpectedFrontier.map((edge) => edge.id),
         [EDGE_SNAPSHOT_COVERAGE],
       );
+      assertNoNullOrUndefined(graph);
+    });
+
+  it('prefers topology operator witness records carried by partition witnesses',
+    () => {
+      const fixture = buildFixtureFailureBundle();
+      const topologyOperatorWitness = {
+        operatorId: TOPOLOGY_OPERATOR_TEST_ID,
+        owner: OWNER_OPERATION_WORKFLOW,
+        boundary: BOUNDARY_WORKFLOW_PROGRESS,
+        kind: TOPOLOGY_OPERATOR_TEST_KIND,
+        partitionId: FIXTURE_PARTITION_ID,
+        targetNodeId: TOPOLOGY_OPERATOR_TEST_TARGET_NODE_ID,
+        steps: [{
+          stepId: TOPOLOGY_OPERATOR_TEST_CURRENT_STEP_ID,
+          state: TOPOLOGY_OPERATOR_TEST_CURRENT_STEP_STATE,
+          current: true,
+        }],
+        currentStepId: TOPOLOGY_OPERATOR_TEST_CURRENT_STEP_ID,
+        currentStepState: TOPOLOGY_OPERATOR_TEST_CURRENT_STEP_STATE,
+        witnessSource: PRIORITY_RECOVERY_WAIT_MODE_EVENT_DRIVEN,
+        nextAction: PRIORITY_RECOVERY_ACTION_WAIT_FOR_OPERATION_PROGRESS,
+        deadlineMs: TOPOLOGY_OPERATOR_TEST_DEADLINE_MS,
+        lastObservedAtMs: TOPOLOGY_OPERATOR_TEST_LAST_OBSERVED_AT_MS,
+      };
+      const partitionWitness = {
+        partitionId: FIXTURE_PARTITION_ID,
+        semanticStateId: FIXTURE_PRIORITY_SEMANTIC_STATE,
+        currentOwner: ARTIFACT_PRIORITY_RECOVERY_OWNER,
+        blockingBoundary: ARTIFACT_PRIORITY_RECOVERY_BOUNDARY,
+        topologyOperatorWitness,
+      };
+      const graph = buildTopologyConvergenceGraphFromArtifacts({
+        failureBundle: {
+          ...fixture,
+          publicationConvergence: {
+            ...fixture.publicationConvergence,
+            activeGate: {
+              ...fixture.publicationConvergence.activeGate,
+              progress: {
+                ...fixture.publicationConvergence.activeGate.progress,
+                priorityRecoveryProgressClasses: {},
+              },
+            },
+            priorityRecoveryPartitionWitnesses: [partitionWitness],
+            priorityRecoveryProgressSummary: {
+              dominantWitness: partitionWitness,
+              priorityBlockedPartitionCount: ZERO_COUNT,
+            },
+          },
+        },
+      });
+      const priorityEdge = findEdge(graph.edges, EDGE_PRIORITY_RECOVERY);
+
+      assert.equal(priorityEdge.state, EDGE_STATE.RETRYABLE);
+      assert.equal(priorityEdge.owner, OWNER_OPERATION_WORKFLOW);
+      assert.equal(priorityEdge.boundary, BOUNDARY_WORKFLOW_PROGRESS);
+      assert.equal(priorityEdge.source.topologyOperatorId, TOPOLOGY_OPERATOR_TEST_ID);
+      assert.equal(
+        priorityEdge.source.topologyOperatorCurrentStepId,
+        TOPOLOGY_OPERATOR_TEST_CURRENT_STEP_ID,
+      );
+      assert.equal(
+        priorityEdge.source.topologyOperatorCurrentStepState,
+        TOPOLOGY_OPERATOR_TEST_CURRENT_STEP_STATE,
+      );
+      assert.deepEqual(priorityEdge.reasons, [
+        PRIORITY_RECOVERY_RETRYABLE_REASON,
+      ]);
       assertNoNullOrUndefined(graph);
     });
 

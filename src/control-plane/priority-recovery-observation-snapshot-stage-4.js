@@ -1,10 +1,35 @@
 import {NUM, TYPEOF} from '../constants/index.js';
+import {CONTROL_PLANE_PUBLICATION_STATUS} from './control-plane-publication-merge.js';
+import {RECOVERY_PROTOCOL_STATE} from './membership-lifecycle-constants.js';
 import {buildPriorityRecoveryPressureConditions} from './priority-recovery-helpers.js';
 import {buildTrackedPriorityRecoveryDecisionSnapshots} from
   './priority-recovery-snapshot.js';
 import {LOCAL_EMPTY_LIST, PRIORITY_RECOVERY_CURRENT_SUMMARY_SCOPE, isRecord, normalizeDistinctStringArray, normalizeNonNegativeInteger, normalizePriorityRecoveryInvariantSummary, resolvePendingRequiredAckNodeIds} from './priority-recovery-observation-snapshot-stage-1.js';
 import {buildPriorityRecoveryPartitionWitnesses} from './priority-recovery-observation-snapshot-stage-2.js';
 import {hasSelectedMissingPublishedEvidence, resolveObservationActiveGateContext, resolveObservationClosureField, resolveObservationPriorityPartitionSummary, resolveObservationPriorityRecoveryBlockedPartitionIds, resolveObservationPriorityRecoveryClosureWitness, resolveObservationPriorityRecoveryReasonCodes, resolveObservationPublicationConvergenceGate, resolveProjectionDiagnostics, resolveSelectedMissingPublishedEvidence, shouldApplyObservationClosureWitness} from './priority-recovery-observation-snapshot-stage-3.js';
+
+function resolveObservationRecoveryProtocolState(
+  publicationConvergence = null,
+  publicationConvergenceGate = null,
+  prioritySpreadPending = false,
+) {
+  const publicationStatus = String(
+    publicationConvergence?.publicationStatus ||
+      publicationConvergence?.status ||
+      publicationConvergenceGate?.publicationStatus ||
+      '',
+  ).toUpperCase();
+  if (
+    publicationStatus === CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED &&
+    prioritySpreadPending === true
+  ) {
+    return RECOVERY_PROTOCOL_STATE.PRIORITY_SPREAD_PENDING;
+  }
+  return publicationConvergence?.recoveryProtocolState ||
+    publicationConvergence?.membershipLifecycleSummary?.recoveryProtocolState ||
+    publicationConvergenceGate?.recoveryProtocolState ||
+    null;
+}
 
 function buildPriorityRecoveryObservationSnapshot(options = {}) {
   const publicationConvergence = isRecord(options.publicationConvergence) ?
@@ -168,6 +193,12 @@ function buildPriorityRecoveryObservationSnapshot(options = {}) {
   const pressureConditions = buildPriorityRecoveryPressureConditions(
     options.logsTable,
   );
+  const prioritySpreadPending =
+    publicationConvergenceGate?.prioritySpreadPending === true ||
+    (
+      applyClosureWitness !== true &&
+      priorityPartitionSummary?.satisfied === false
+    );
   return Object.freeze({
     publicationEpoch:
       normalizeNonNegativeInteger(
@@ -179,19 +210,15 @@ function buildPriorityRecoveryObservationSnapshot(options = {}) {
       publicationConvergenceGate?.publicationStatus ||
       null,
     recoveryProtocolState:
-      publicationConvergence?.recoveryProtocolState ||
-      publicationConvergence?.membershipLifecycleSummary?.recoveryProtocolState ||
-      publicationConvergenceGate?.recoveryProtocolState ||
-      null,
+      resolveObservationRecoveryProtocolState(
+        publicationConvergence,
+        publicationConvergenceGate,
+        prioritySpreadPending,
+      ),
     priorityRecoveryReasonCodes,
     publicationPending:
       publicationConvergenceGate?.publicationPending === true,
-    prioritySpreadPending:
-      publicationConvergenceGate?.prioritySpreadPending === true ||
-      (
-        applyClosureWitness !== true &&
-        priorityPartitionSummary?.satisfied === false
-      ),
+    prioritySpreadPending,
     publishedActiveNodeIds: Object.freeze(
       normalizeDistinctStringArray(
         publicationConvergence?.publishedActiveNodeIds,
@@ -296,4 +323,5 @@ const PRIORITY_RECOVERY_OBSERVATION_CLOSURE_FIELD = Object.freeze({
 export {
   PRIORITY_RECOVERY_OBSERVATION_CLOSURE_FIELD,
   buildPriorityRecoveryObservationSnapshot,
+  resolveObservationRecoveryProtocolState,
 };

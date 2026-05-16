@@ -202,6 +202,10 @@ function normalizeStringField(value) {
   return normalizedValue.length > ZERO ? normalizedValue : null;
 }
 
+function isRecord(value) {
+  return value && typeof value === TYPEOF_OBJECT && !Array.isArray(value);
+}
+
 function normalizeDistinctStringArray(values) {
   if (!Array.isArray(values)) {
     return [];
@@ -300,6 +304,14 @@ function normalizePriorityRecoveryPartitionWitnessesForDiagnostics(witnesses) {
         witness?.recoveryEligibleExcludedNodeIds ??
           witness?.recovery_eligible_excluded_node_ids,
       );
+      const topologyOperatorWitness = isRecord(
+        witness?.topologyOperatorWitness ?? witness?.topology_operator_witness,
+      ) ?
+        {
+          ...(witness.topologyOperatorWitness ??
+            witness.topology_operator_witness),
+        } :
+        null;
       const activeLearnerNodeIds = normalizeDistinctStringArray(
         witness?.activeLearnerNodeIds ?? witness?.active_learner_node_ids,
       );
@@ -558,6 +570,7 @@ function normalizePriorityRecoveryPartitionWitnessesForDiagnostics(witnesses) {
         ...(progressEvidenceSourceIds.length > ZERO ?
           {progressEvidenceSourceIds} :
           {}),
+        ...(topologyOperatorWitness ? {topologyOperatorWitness} : {}),
         witnessIds,
         serialWaitOperationIds,
         serialWaitPartitionIds,
@@ -1059,11 +1072,15 @@ function buildPriorityRecoveryProgressSummary(priorityRecoveryObservation) {
     addCount(progressContractStateCounts, witness.progressContractState);
     addCount(pressureStateCounts, witness.pressureState);
   }
+  const dominantWitness = selectDominantPriorityRecoveryPartitionWitness(
+    currentPartitionWitnesses,
+  );
   return {
     partitionCount: currentPartitionWitnesses.length,
-    dominantWitness: selectDominantPriorityRecoveryPartitionWitness(
-      currentPartitionWitnesses,
-    ),
+    dominantWitness,
+    ...(isRecord(dominantWitness?.topologyOperatorWitness) ?
+      {topologyOperatorWitness: dominantWitness.topologyOperatorWitness} :
+      {}),
     ...(Object.keys(actuationStateCounts).length > ZERO ?
       {actuationStateCounts} :
       {}),
