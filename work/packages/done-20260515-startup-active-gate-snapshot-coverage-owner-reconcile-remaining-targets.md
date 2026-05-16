@@ -3,7 +3,7 @@
 <!-- work-package
 {
   "schema": "work-package-v1",
-  "status": "active",
+  "status": "done",
   "opened": "2026-05-15",
   "lane": "causal-escalation",
   "scenario": "rolling-restart",
@@ -17,7 +17,7 @@
   "proof": [
     "npm run work:context",
     "npm run work:llm-start",
-    "npm run work:package:doctor -- --suggest work/packages/active-20260515-startup-active-gate-snapshot-coverage-owner-reconcile-remaining-targets.md",
+    "npm run work:package:doctor -- --suggest work/packages/done-20260515-startup-active-gate-snapshot-coverage-owner-reconcile-remaining-targets.md",
     "npm run work:evidence-summary -- test-output/reports/rolling-restart-after-control-plane-publication-pending-20260515-codex.report.json",
     "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-control-plane-publication-pending-20260515-codex.report.json --handoff-probe",
     "npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-control-plane-publication-pending-20260515-codex.report.json",
@@ -56,7 +56,7 @@
     "npm run analyze:owner-files -- topology_publication_owner publication_convergence --markdown"
   ],
   "writeScope": [
-    "work/packages/active-20260515-startup-active-gate-snapshot-coverage-owner-reconcile-remaining-targets.md",
+    "work/packages/done-20260515-startup-active-gate-snapshot-coverage-owner-reconcile-remaining-targets.md",
     "work/tracks/topology-convergence.md",
     "work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md",
     "work/sprints/current-blocker.md",
@@ -122,7 +122,7 @@
     "test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js"
   ],
   "commitScope": [
-    "work/packages/active-20260515-startup-active-gate-snapshot-coverage-owner-reconcile-remaining-targets.md",
+    "work/packages/done-20260515-startup-active-gate-snapshot-coverage-owner-reconcile-remaining-targets.md",
     "work/tracks/topology-convergence.md",
     "work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md",
     "work/sprints/current-blocker.md",
@@ -229,7 +229,10 @@
     "oscillationCheck": "This package is allowed to return to startup_active_gate_owner / snapshot_coverage because the immediately preceding workflow-progress package proved priority recovery is satisfied.",
     "handoffInvariant": "Active-gate admission stays strict while runtimePromotionAllowed=false; publication handoff truth remains owned by the canonical contract."
   },
-  "predecessor": "work/packages/done-20260515-priority-recovery-operation-workflow-owner-control-plane-publication-pending.md"
+  "predecessor": "work/packages/done-20260515-priority-recovery-operation-workflow-owner-control-plane-publication-pending.md",
+  "closed": "2026-05-16",
+  "commitAndPushLedgerRequired": true,
+  "successor": "work/packages/todo-20260516-topology-publication-convergence-frontier-causal-edge.md"
 }
 -->
 
@@ -383,9 +386,9 @@ continuing to repair the drained owner-reconcile path would be oscillation.
 
 Required on activation because this is a causal-escalation runtime package.
 
-- [x] Review subagent recorded: Agent Popper (019e2dc5-19a6-7012-88d1-cf02e0c2ff69) reviewed work/packages/active-20260515-startup-active-gate-snapshot-coverage-owner-reconcile-remaining-targets.md; result fixes-required
-- [x] Fix subagent recorded or explicitly not needed: Agent Wegener (019e2dc7-0af7-75d3-89e5-3afdbf376027) fixed work/packages/active-20260515-startup-active-gate-snapshot-coverage-owner-reconcile-remaining-targets.md
-- [x] Implementation subagent recorded: Agent Harvey (019e2dd0-a35f-7891-9eba-8aec8f8a9dc4) implemented work/packages/active-20260515-startup-active-gate-snapshot-coverage-owner-reconcile-remaining-targets.md
+- [x] Review subagent recorded: Agent Popper (019e2dc5-19a6-7012-88d1-cf02e0c2ff69) reviewed work/packages/done-20260515-startup-active-gate-snapshot-coverage-owner-reconcile-remaining-targets.md; result fixes-required
+- [x] Fix subagent recorded or explicitly not needed: Agent Wegener (019e2dc7-0af7-75d3-89e5-3afdbf376027) fixed work/packages/done-20260515-startup-active-gate-snapshot-coverage-owner-reconcile-remaining-targets.md
+- [x] Implementation subagent recorded: Agent Harvey (019e2dd0-a35f-7891-9eba-8aec8f8a9dc4) implemented work/packages/done-20260515-startup-active-gate-snapshot-coverage-owner-reconcile-remaining-targets.md
 
 ## Model Fit
 
@@ -393,18 +396,18 @@ Required on activation because this is a causal-escalation runtime package.
 - Intended minimum model: `gpt-5.3-codex`
 - Scope shape: `owner-boundary-contraction/current-frontier`
 - Output profile: `medium`
-- Owned files: `work/packages/active-20260515-startup-active-gate-snapshot-coverage-owner-reconcile-remaining-targets.md`, `work/tracks/topology-convergence.md`, `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md`, `work/sprints/current-blocker.md`, `work/sprints/current-blocker.json`, `src/entrypoint-runtime-helpers.js`, `src/control-plane/publication-active-gate-handoff-contract.js`, `src/control-plane/membership-publication-coordinator-class-stage-2.js`, `src/control-plane/membership-publication-coordinator-class-stage-3.js`, `src/admin/admin-control-snapshot-class-part-1.js`, `src/admin/admin-control-snapshot-class-part-2.js`, `src/admin/admin-control-snapshot-class-part-5.js`, `src/admin/admin-control-snapshot-class-part-6.js`, `src/admin/admin-websocket-api-shared.js`, `src/admin/admin-websocket-api-segment-3.js`, `src/rebalancer/operation-workflow-owner-segment-2.js`, `src/rebalancer/operation-workflow-owner-segment-3.js`, `test/admin/admin-control-snapshot.test.js`, `test/admin/admin-websocket-api.test-part-7.js`, `test/control-plane/membership-publication-coordinator-main-stage-2.js`, `test/control-plane/publication-active-gate-handoff-contract.test.js`, `test/distributed/harness/cluster-segment-2.js`, `test/distributed/harness/cluster-segment-3.js`, `test/distributed/harness/cluster-segment-7-class-4.js`, `test/distributed/harness/cluster-segment-7-class-5.js`, `test/distributed/harness/__tests__/active-gate-closure-classification.test.js`, `test/distributed/harness/__tests__/cluster.test-part-5.js`, `test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js`
+- Owned files: `work/packages/done-20260515-startup-active-gate-snapshot-coverage-owner-reconcile-remaining-targets.md`, `work/tracks/topology-convergence.md`, `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md`, `work/sprints/current-blocker.md`, `work/sprints/current-blocker.json`, `src/entrypoint-runtime-helpers.js`, `src/control-plane/publication-active-gate-handoff-contract.js`, `src/control-plane/membership-publication-coordinator-class-stage-2.js`, `src/control-plane/membership-publication-coordinator-class-stage-3.js`, `src/admin/admin-control-snapshot-class-part-1.js`, `src/admin/admin-control-snapshot-class-part-2.js`, `src/admin/admin-control-snapshot-class-part-5.js`, `src/admin/admin-control-snapshot-class-part-6.js`, `src/admin/admin-websocket-api-shared.js`, `src/admin/admin-websocket-api-segment-3.js`, `src/rebalancer/operation-workflow-owner-segment-2.js`, `src/rebalancer/operation-workflow-owner-segment-3.js`, `test/admin/admin-control-snapshot.test.js`, `test/admin/admin-websocket-api.test-part-7.js`, `test/control-plane/membership-publication-coordinator-main-stage-2.js`, `test/control-plane/publication-active-gate-handoff-contract.test.js`, `test/distributed/harness/cluster-segment-2.js`, `test/distributed/harness/cluster-segment-3.js`, `test/distributed/harness/cluster-segment-7-class-4.js`, `test/distributed/harness/cluster-segment-7-class-5.js`, `test/distributed/harness/__tests__/active-gate-closure-classification.test.js`, `test/distributed/harness/__tests__/cluster.test-part-5.js`, `test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js`
 - Forbidden files: timeout increases, active-gate admission relaxation while `runtimePromotionAllowed=false`, workflow-progress implementation unless canonical extractors promote it, broad diagnostics-only success path, Pro or Enterprise behavior
 - Frozen decisions: package scope and lane stay bounded to canonical active-gate handoff target selection, membership publication owner-command outcome, and admin display/trigger-only behavior unless explicitly escalated.
 - Escalation triggers: runtime ownership changes beyond canonical active-gate handoff target or membership publication owner-command outcome, or a frozen decision must be reopened.
-- Focused proof: `npm run work:context`, `npm run work:llm-start`, `npm run work:package:doctor -- --suggest work/packages/active-20260515-startup-active-gate-snapshot-coverage-owner-reconcile-remaining-targets.md`, `node --test test/control-plane/membership-publication-coordinator-main-stage-2.js`, `node --test test/control-plane/publication-active-gate-handoff-contract.test.js`, static guardrails on the active-gate publication owner files, and `npm run work:evidence-summary -- test-output/reports/rolling-restart-after-owner-trigger-only-handoff-20260516.report.json`
+- Focused proof: `npm run work:context`, `npm run work:llm-start`, `npm run work:package:doctor -- --suggest work/packages/done-20260515-startup-active-gate-snapshot-coverage-owner-reconcile-remaining-targets.md`, `node --test test/control-plane/membership-publication-coordinator-main-stage-2.js`, `node --test test/control-plane/publication-active-gate-handoff-contract.test.js`, static guardrails on the active-gate publication owner files, and `npm run work:evidence-summary -- test-output/reports/rolling-restart-after-owner-trigger-only-handoff-20260516.report.json`
 - Model ledger advisory: `escalate`
 
 ## Validation
 
 1. npm run work:context
 2. npm run work:llm-start
-3. npm run work:package:doctor -- --suggest work/packages/active-20260515-startup-active-gate-snapshot-coverage-owner-reconcile-remaining-targets.md
+3. npm run work:package:doctor -- --suggest work/packages/done-20260515-startup-active-gate-snapshot-coverage-owner-reconcile-remaining-targets.md
 4. npm run work:evidence-summary -- test-output/reports/rolling-restart-after-control-plane-publication-pending-20260515-codex.report.json
 5. npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-control-plane-publication-pending-20260515-codex.report.json --handoff-probe
 6. npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-control-plane-publication-pending-20260515-codex.report.json
@@ -449,3 +452,9 @@ Required on activation because this is a causal-escalation runtime package.
 45. npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-after-admin-owner-readiness-handoff-20260516.report.json --markdown
 46. npm run analyze:distributed-failure -- --report test-output/reports/rolling-restart-after-admin-owner-readiness-handoff-20260516.report.json
 47. npm run analyze:owner-files -- topology_publication_owner publication_convergence --markdown
+
+## Commit And Push Ledger
+
+1. [x] Focused package commit: a70176f9.
+2. [x] Pushed to: origin/codex/pending-ack-eligibility-filter.
+3. [x] Commit contains only package-owned files/package-status/allowed sprint handoff: yes.

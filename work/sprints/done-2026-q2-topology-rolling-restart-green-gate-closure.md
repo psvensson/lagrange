@@ -1,8 +1,10 @@
 # Topology Rolling-Restart Green Gate Closure Sprint
 
-Status: active. This sprint starts after
+Status: done on 2026-05-16. Outcome: migrated. This sprint started after
 `done-2026-q2-topology-convergence-complexity-reduction.md` reduced the
-publication-to-active-gate handoff complexity.
+publication-to-active-gate handoff complexity and closed when fresh evidence
+selected `topology_publication_owner / publication_convergence` as the next
+blocker.
 
 ## Goal
 
@@ -55,8 +57,8 @@ Canonical state after the membership publication owner-command handoff proof:
     the active-gate summary and keeps `active_gate_snapshot_coverage` as the
     first critical path; one subordinate
     `operation_workflow_owner / workflow_progress` witness remains parked.
-11. The active package remains
-    `work/packages/active-20260515-startup-active-gate-snapshot-coverage-owner-reconcile-remaining-targets.md`.
+11. The final package is
+    `work/packages/done-20260515-startup-active-gate-snapshot-coverage-owner-reconcile-remaining-targets.md`.
 12. Active-gate admission must remain strict until the owner reconcile path
     produces durable coverage or reports one typed deferred/blocked owner
     outcome.
@@ -165,7 +167,7 @@ Pro or Enterprise behavior.
      priority-recovery residual witnesses and migrates the blocker back to
      `startup_active_gate_owner / snapshot_coverage` with
      `pendingReconcileCount=2`.
-6. [Startup Active Gate Snapshot Coverage Owner Reconcile Remaining Targets](../packages/active-20260515-startup-active-gate-snapshot-coverage-owner-reconcile-remaining-targets.md)
+6. [Startup Active Gate Snapshot Coverage Owner Reconcile Remaining Targets](../packages/done-20260515-startup-active-gate-snapshot-coverage-owner-reconcile-remaining-targets.md)
    - Lane: `causal-escalation`
    - Owner boundary:
      `startup_active_gate_owner / snapshot_coverage`
@@ -366,14 +368,14 @@ required action.
 
 1. `npm run work:context`
 2. `npm run work:llm-start`
-3. `npm run work:package:doctor -- --suggest work/packages/active-20260515-startup-active-gate-snapshot-coverage-owner-reconcile-remaining-targets.md`
+3. `npm run work:package:doctor -- --suggest work/packages/done-20260515-startup-active-gate-snapshot-coverage-owner-reconcile-remaining-targets.md`
 4. `npm run work:evidence-summary -- test-output/reports/rolling-restart-after-control-plane-publication-pending-20260515-codex.report.json`
 5. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-control-plane-publication-pending-20260515-codex.report.json --handoff-probe`
 6. `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-control-plane-publication-pending-20260515-codex.report.json`
 7. `npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-after-control-plane-publication-pending-20260515-codex.report.json --markdown`
 8. `npm run analyze:owner-files -- startup_active_gate_owner snapshot_coverage --markdown`
 9. `npm run analyze:distributed-failure -- --report test-output/reports/rolling-restart-after-control-plane-publication-pending-20260515-codex.report.json`
-10. `npm run work:subagent-prompt -- --role review --package work/packages/active-20260515-startup-active-gate-snapshot-coverage-owner-reconcile-remaining-targets.md`
+10. `npm run work:subagent-prompt -- --role review --package work/packages/done-20260515-startup-active-gate-snapshot-coverage-owner-reconcile-remaining-targets.md`
 11. Real review/fix/implementation subagent proof before runtime implementation starts.
 12. Focused owner tests, static guardrails, and representative `rolling-restart`
     after the package has implementation proof.
@@ -399,12 +401,32 @@ The sprint cannot close until:
 6. The final note states whether the original gate is green, migrated,
    same-frontier, classification-only, or architecture-gap.
 
+## Closure Snapshot
+
+1. Final package:
+   `work/packages/done-20260515-startup-active-gate-snapshot-coverage-owner-reconcile-remaining-targets.md`.
+2. Successor package:
+   `work/packages/todo-20260516-topology-publication-convergence-frontier-causal-edge.md`.
+3. Final representative artifact:
+   `test-output/reports/rolling-restart-after-admin-owner-readiness-handoff-20260516.report.json`.
+4. Result: migrated. The active-gate owner-reconcile path no longer reports
+   `owner_reconcile_service_unavailable`; the active-gate handoff contract has
+   `pendingReconcileCount=0` and `nextAction=wait_owner_recovery`.
+5. Remaining red frontier:
+   `publication_ack_convergence / topology_publication_owner /
+   publication_convergence`, with dominant reason `publication_ack_blocked`.
+6. Next action: continue in
+   `work/sprints/active-2026-q2-topology-convergence-systems-pattern-hardening.md`
+   after handoff hygiene regenerates current-blocker state and dirty-scope
+   proof.
+
 ## Current Next Action
 
-Continue with the active startup active-gate snapshot coverage package:
+Continue in the successor systems-pattern hardening sprint after the final
+startup active-gate snapshot coverage package:
 
 ```text
-work/packages/active-20260515-startup-active-gate-snapshot-coverage-owner-reconcile-remaining-targets.md
+work/packages/done-20260515-startup-active-gate-snapshot-coverage-owner-reconcile-remaining-targets.md
 ```
 
 Review, fix, and implementation subagent proof are recorded in the active

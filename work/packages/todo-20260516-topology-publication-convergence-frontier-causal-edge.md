@@ -24,7 +24,7 @@
   "writeScope": [],
   "handoffFiles": [
     "test-output/reports/rolling-restart-after-admin-owner-readiness-handoff-20260516.report.json",
-    "work/packages/active-20260515-startup-active-gate-snapshot-coverage-owner-reconcile-remaining-targets.md"
+    "work/packages/done-20260515-startup-active-gate-snapshot-coverage-owner-reconcile-remaining-targets.md"
   ],
   "generatedFiles": [],
   "candidateRuntimeFiles": [
@@ -83,7 +83,7 @@ scope remains Community / AGPL repo.
 ## Active Sprint Isolation
 
 - Active package/sprint used only as handoff context:
-  `work/packages/active-20260515-startup-active-gate-snapshot-coverage-owner-reconcile-remaining-targets.md`
+  `work/packages/done-20260515-startup-active-gate-snapshot-coverage-owner-reconcile-remaining-targets.md`
   and
   `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md`.
 - Evidence that may be read but not mutated:
