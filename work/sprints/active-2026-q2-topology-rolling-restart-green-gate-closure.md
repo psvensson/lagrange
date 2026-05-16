@@ -22,35 +22,28 @@ success is in scope.
 ## Current Blocker Snapshot
 
 Latest representative artifact:
-`test-output/reports/rolling-restart-after-priority-workflow-progress-20260516.report.json`.
+`test-output/reports/rolling-restart-after-snapshot-timeout-handoff-fixture-20260516.report.json`.
 
-Canonical state after the priority recovery workflow-progress closure:
+Canonical state after the active-gate snapshot timeout handoff fixture:
 
-1. `work:evidence-summary` selects `active_gate_snapshot_coverage` as the first
+1. `work:evidence-summary` selects `priority_recovery_partition_progress` as the first
    frontier.
 2. Representative owner boundary:
-   `startup_active_gate_owner / snapshot_coverage`.
-3. Dominant reason: `active_gate_timed_out`.
-4. Publication ACK convergence is not selected; `pendingAckCount=0`.
-5. Priority recovery is satisfied and residual extraction reports zero
-   witnesses.
-6. Active-gate snapshot coverage is blocked:
-   `snapshotCoverageNodeCount=0`, `expectedNodeCount=5`, and
-   `activeGateState=timed_out`.
-7. The selected snapshot source is
-   `11601fe0-72d6-5853-8590-ec2881853e72`, selected snapshot source capture
-   timed out, and forced repair snapshot capture also timed out through the
-   authoritative control snapshot repair path.
-8. Readiness support is deferred as inherited active-gate no progress with
-   snapshot timeout evidence.
+   `operation_workflow_owner / workflow_progress`.
+3. Dominant reason: `priority_recovery_event_driven_wait`.
+4. Publication ACK convergence remains satisfied and is not selected.
+5. Active-gate snapshot coverage is now downstream with
+   `snapshotCoverageNodeCount=2`, `expectedNodeCount=5`, and
+   `snapshot_repair_deferred`.
+6. Priority recovery residual extraction reports three workflow-progress
+   witnesses across `control_plane_publications-p1`, `replica_operations-p1`,
+   and `sql_transaction_participants-p1`.
+7. Readiness support remains deferred as inherited active-gate no progress.
 9. The current active package is
-   `work/packages/active-20260516-startup-active-gate-snapshot-timeout-handoff-fixture.md`;
-   it has built the replayable handoff/snapshot fixture that separates
-   selected snapshot-source selection, forced repair path stalls, authoritative
-   control snapshot query pressure, and readiness support inherited from
-   active-gate no progress. The next proof is one representative rerun without
-   timeout increases, active-gate admission relaxation, publication ACK
-   rewrites, or priority recovery rewrites.
+   `work/packages/active-20260516-priority-recovery-operation-workflow-owner-workflow-progress.md`;
+   it must prove or split the `advance_existing_operation` workflow-progress
+   residual without timeout increases, active-gate admission relaxation,
+   publication ACK rewrites, or active-gate snapshot rewrites.
 
 ## Scope Basis
 
@@ -441,12 +434,11 @@ The sprint cannot close until:
 
 ## Current Next Action
 
-Continue with closure validation and one representative rerun for the startup
-active-gate snapshot timeout handoff fixture package:
+Continue with the priority recovery workflow-progress residual package:
 
 ```text
-work/packages/active-20260516-startup-active-gate-snapshot-timeout-handoff-fixture.md
-test-output/reports/rolling-restart-after-priority-workflow-progress-20260516.report.json
+work/packages/active-20260516-priority-recovery-operation-workflow-owner-workflow-progress.md
+test-output/reports/rolling-restart-after-snapshot-timeout-handoff-fixture-20260516.report.json
 ```
 
 Keep the completed post-systems-pattern checkpoint package and artifact as

@@ -3,7 +3,7 @@
 <!-- work-package
 {
   "schema": "work-package-v1",
-  "status": "active",
+  "status": "done",
   "opened": "2026-05-16",
   "lane": "causal-escalation",
   "scenario": "rolling-restart",
@@ -29,7 +29,7 @@
     "npm run work:model-ledger -- record --package work/packages/active-20260516-startup-active-gate-snapshot-timeout-handoff-fixture.md --model gpt-5-codex --reasoning-effort high --output-profile medium --task-class causal-escalation --package-class representative-frontier-closure --intended-minimum-model gpt-5.3-codex --scope-shape owner-boundary-contraction/current-frontier --escalated true --bailout-reason next-frontier-priority-recovery-workflow-progress --outcome migrated --validation-status focused-green-representative-migrated --correction-loops 1 --review-findings 1 --notes \"Handoff fixture split selected snapshot source timeout, forced repair timeout, authoritative query pressure, and inherited readiness support; representative improved active-gate coverage to 2/5 but migrated first frontier to priority_recovery_partition_progress with event-driven workflow wait residuals.\""
   ],
   "writeScope": [
-    "work/packages/active-20260516-startup-active-gate-snapshot-timeout-handoff-fixture.md",
+    "work/packages/done-20260516-startup-active-gate-snapshot-timeout-handoff-fixture.md",
     "work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md",
     "work/sprints/current-blocker.md",
     "work/sprints/current-blocker.json",
@@ -65,7 +65,7 @@
     "src/diagnostics/topology-convergence-graph.js"
   ],
   "commitScope": [
-    "work/packages/active-20260516-startup-active-gate-snapshot-timeout-handoff-fixture.md",
+    "work/packages/done-20260516-startup-active-gate-snapshot-timeout-handoff-fixture.md",
     "work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md",
     "work/sprints/current-blocker.md",
     "work/sprints/current-blocker.json",
@@ -157,7 +157,10 @@
       "npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-after-snapshot-timeout-handoff-fixture-20260516.report.json --markdown"
     ]
   },
-  "predecessor": "work/packages/done-20260516-priority-recovery-operation-workflow-owner-workflow-progress.md"
+  "predecessor": "work/packages/done-20260516-priority-recovery-operation-workflow-owner-workflow-progress.md",
+  "closed": "2026-05-16",
+  "commitAndPushLedgerRequired": true,
+  "successor": "work/packages/active-20260516-priority-recovery-operation-workflow-owner-workflow-progress.md"
 }
 -->
 
@@ -196,7 +199,7 @@ owner-boundary package.
 
 - [x] Review subagent recorded: Agent Codex (019e31bd-4f1f-7e23-b0f8-106a1a01592f) reviewed work/packages/done-20260516-priority-recovery-operation-workflow-owner-workflow-progress.md; result fixes-required.
 - [x] Fix subagent recorded or explicitly not needed: Agent Codex (019e31bf-2426-7841-81a9-d9648470bd4c) fixed work/packages/done-20260516-priority-recovery-operation-workflow-owner-workflow-progress.md.
-- [x] Implementation subagent recorded: Agent Hume (019e31cf-e9b9-7e13-87ab-13dd9f6acf47) implemented work/packages/active-20260516-startup-active-gate-snapshot-timeout-handoff-fixture.md.
+- [x] Implementation subagent recorded: Agent Hume (019e31cf-e9b9-7e13-87ab-13dd9f6acf47) implemented work/packages/done-20260516-startup-active-gate-snapshot-timeout-handoff-fixture.md.
 
 ## LLM Tool-First Contract
 
@@ -212,7 +215,7 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 
 ## In Scope
 
-1. work/packages/active-20260516-startup-active-gate-snapshot-timeout-handoff-fixture.md
+1. work/packages/done-20260516-startup-active-gate-snapshot-timeout-handoff-fixture.md
 2. work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md
 3. work/sprints/current-blocker.md
 4. work/sprints/current-blocker.json
@@ -241,7 +244,7 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 - Intended minimum model: `gpt-5.3-codex`
 - Scope shape: `owner-boundary-contraction/current-frontier`
 - Output profile: `medium`
-- Owned files: `work/packages/active-20260516-startup-active-gate-snapshot-timeout-handoff-fixture.md`, `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md`, `work/sprints/current-blocker.md`, `work/sprints/current-blocker.json`, `src/admin/admin-control-snapshot-class-part-2.js`, `src/admin/admin-control-snapshot-class-part-3.js`, `src/admin/admin-control-snapshot-class-part-5.js`, `src/admin/admin-control-snapshot-class-part-6.js`, `src/admin/admin-service-discovery-readiness-methods.js`, `src/admin/admin-service-discovery-repair-methods.js`, `src/control-plane/control-plane-snapshot-owner.js`, `src/diagnostics/topology-convergence-graph.js`, `test/admin/admin-control-snapshot.test.js`, `test/admin/admin-service-discovery.test.js`, `work/model-ledger.jsonl`
+- Owned files: `work/packages/done-20260516-startup-active-gate-snapshot-timeout-handoff-fixture.md`, `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md`, `work/sprints/current-blocker.md`, `work/sprints/current-blocker.json`, `src/admin/admin-control-snapshot-class-part-2.js`, `src/admin/admin-control-snapshot-class-part-3.js`, `src/admin/admin-control-snapshot-class-part-5.js`, `src/admin/admin-control-snapshot-class-part-6.js`, `src/admin/admin-service-discovery-readiness-methods.js`, `src/admin/admin-service-discovery-repair-methods.js`, `src/control-plane/control-plane-snapshot-owner.js`, `src/diagnostics/topology-convergence-graph.js`, `test/admin/admin-control-snapshot.test.js`, `test/admin/admin-service-discovery.test.js`, `work/model-ledger.jsonl`
 - Forbidden files: `publication-ack-convergence`, `priority-recovery-workflow-progress`, `representative-timeout-budget`, `active-gate-admission-relaxation`
 - Frozen decisions: publication ACK, timeout budgets, and active-gate admission stay closed unless canonical evidence selects them again; priority recovery is reopened only for the successor package because the representative rerun selected it again.
 - Escalation triggers: owned files expand beyond this package, runtime ownership changes, representative scenario evidence changes, active-gate admission would be relaxed, or timeout budgets would be increased.
@@ -269,3 +272,9 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 17. PASS - `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-snapshot-timeout-handoff-fixture-20260516.report.json`; outcome `accept_classified_backpressure`, dominant failure class `priority_recovery_event_wait`.
 18. PASS - `npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-after-snapshot-timeout-handoff-fixture-20260516.report.json --markdown`; three workflow-progress witnesses under `operation_workflow_owner / workflow_progress`.
 19. PASS - `npm run work:model-ledger -- record --package work/packages/active-20260516-startup-active-gate-snapshot-timeout-handoff-fixture.md --model gpt-5-codex --reasoning-effort high --output-profile medium --task-class causal-escalation --package-class representative-frontier-closure --intended-minimum-model gpt-5.3-codex --scope-shape owner-boundary-contraction/current-frontier --escalated true --bailout-reason next-frontier-priority-recovery-workflow-progress --outcome migrated --validation-status focused-green-representative-migrated --correction-loops 1 --review-findings 1 --notes "Handoff fixture split selected snapshot source timeout, forced repair timeout, authoritative query pressure, and inherited readiness support; representative improved active-gate coverage to 2/5 but migrated first frontier to priority_recovery_partition_progress with event-driven workflow wait residuals."`
+
+## Commit And Push Ledger
+
+1. Focused package commit: 11fb8d24
+2. Pushed to: origin/codex/pending-ack-eligibility-filter
+3. Commit contains only package-owned files/package-status/allowed sprint handoff: yes

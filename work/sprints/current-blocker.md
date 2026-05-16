@@ -4,44 +4,38 @@
 
 Sprint: `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md`
 
-Package: `work/packages/active-20260516-startup-active-gate-snapshot-timeout-handoff-fixture.md`
+Package: `work/packages/active-20260516-priority-recovery-operation-workflow-owner-workflow-progress.md`
 
 Workflow lane: `causal-escalation`
 
 Scenario: `rolling-restart`
 
-Artifact: `test-output/reports/rolling-restart-after-priority-workflow-progress-20260516.report.json`
+Artifact: `test-output/reports/rolling-restart-after-snapshot-timeout-handoff-fixture-20260516.report.json`
 
 Playback: `none`
 
 ## Boundary
 
-Owner: `startup_active_gate_owner`
+Owner: `operation_workflow_owner`
 
-Boundary: `snapshot_coverage`
+Boundary: `workflow_progress`
 
-Dominant reason: `active_gate_timed_out`
+Dominant reason: `priority_recovery_progress_blocked`
 
-Current state: The handoff/snapshot fixture split the active_gate_snapshot_coverage edge: selected source 11601fe0-72d6-5853-8590-ec2881853e72 times out on the snapshot lane after 100ms, forced repair also times out, the legacy artifact owner edge is authoritative_control_snapshot_query_pressure, and readiness support remains inherited from active-gate no progress. The representative rerun improved active-gate coverage to 2/5 and selected priority_recovery_partition_progress under operation_workflow_owner / workflow_progress as the first frontier with priority_recovery_event_driven_wait.
+Current state: The active-gate snapshot timeout handoff fixture split the selected-source, forced-repair, authoritative query-pressure, and inherited readiness causes. The representative rerun remains red and canonical evidence reselected priority_recovery_partition_progress as the first frontier under operation_workflow_owner / workflow_progress with priority_recovery_event_driven_wait. Residual extraction reports three spread_satisfied_in_flight witnesses across control_plane_publications-p1, replica_operations-p1, and sql_transaction_participants-p1.
 
 ## Next Action
 
-Commit and push this focused handoff fixture slice, then open the successor priority recovery workflow-progress package because canonical representative evidence selected that edge again. Do not touch publication ACK, timeout budgets, or active-gate admission unless canonical evidence selects them again.
+Run required review/fix/implementation subagents before runtime edits, then prove or split the priority_recovery_event_driven_wait residual without reopening publication ACK, timeout budgets, or active-gate admission.
 
 ## Proof Ladder
 
-1. `npm run work:evidence-summary -- test-output/reports/rolling-restart-after-priority-workflow-progress-20260516.report.json`
-2. `npm run analyze:distributed-failure -- --report test-output/reports/rolling-restart-after-priority-workflow-progress-20260516.report.json`
-3. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-priority-workflow-progress-20260516.report.json --handoff-probe`
-4. `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-priority-workflow-progress-20260516.report.json`
-5. `npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-after-priority-workflow-progress-20260516.report.json --markdown`
-6. `npm run analyze:owner-files -- startup_active_gate_owner snapshot_coverage`
-7. `node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-after-snapshot-timeout-handoff-fixture-20260516.report.json --verbose`
-8. `npm run work:evidence-summary -- test-output/reports/rolling-restart-after-snapshot-timeout-handoff-fixture-20260516.report.json`
-9. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-snapshot-timeout-handoff-fixture-20260516.report.json --handoff-probe`
-10. `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-snapshot-timeout-handoff-fixture-20260516.report.json`
-11. `npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-after-snapshot-timeout-handoff-fixture-20260516.report.json --markdown`
-12. `npm run work:model-ledger -- record --package work/packages/active-20260516-startup-active-gate-snapshot-timeout-handoff-fixture.md --model gpt-5-codex --reasoning-effort high --output-profile medium --task-class causal-escalation --package-class representative-frontier-closure --intended-minimum-model gpt-5.3-codex --scope-shape owner-boundary-contraction/current-frontier --escalated true --bailout-reason next-frontier-priority-recovery-workflow-progress --outcome migrated --validation-status focused-green-representative-migrated --correction-loops 1 --review-findings 1 --notes "Handoff fixture split selected snapshot source timeout, forced repair timeout, authoritative query pressure, and inherited readiness support; representative improved active-gate coverage to 2/5 but migrated first frontier to priority_recovery_partition_progress with event-driven workflow wait residuals."`
+1. `npm run work:evidence-summary -- test-output/reports/rolling-restart-after-snapshot-timeout-handoff-fixture-20260516.report.json`
+2. `npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-after-snapshot-timeout-handoff-fixture-20260516.report.json --markdown`
+3. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-snapshot-timeout-handoff-fixture-20260516.report.json --explain priority_recovery_partition_progress`
+4. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-snapshot-timeout-handoff-fixture-20260516.report.json --handoff-probe`
+5. `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-snapshot-timeout-handoff-fixture-20260516.report.json`
+6. `npm run analyze:owner-files -- operation_workflow_owner workflow_progress --markdown`
 
 ## Model Fit
 
@@ -57,7 +51,7 @@ Escalation triggers:
 
 1. `owned files expand beyond this package`
 2. `a frozen decision must be reopened`
-3. `runtime implementation is needed after the replay fixture`
+3. `priority recovery residuals split beyond workflow_progress`
 
 ## Representative Residual
 
@@ -75,32 +69,32 @@ Boundary: `workflow_progress`
 
 Dominant reason: `priority_recovery_event_driven_wait`
 
-Next action: `Open the successor priority recovery workflow-progress package for the representative residual selected by canonical evidence.`
+Next action: `Prove or split three spread_satisfied_in_flight workflow-progress witnesses.`
 
 ## Causal Governance
 
-Causal hypothesis: `The current rolling-restart red edge is an active-gate snapshot coverage fixture edge rather than publication ACK or priority recovery. The selected snapshot source 11601fe0-72d6-5853-8590-ec2881853e72 times out on the direct snapshot lane, forced repair then times out while reading nodes through authoritative control snapshot repair, legacy evidence owns the edge as authoritative_control_snapshot_query_pressure, and readiness support inherits active-gate no progress.`
+Causal hypothesis: `The current representative edge is a priority recovery event-driven workflow-progress residual. Three partitions report spread_satisfied_in_flight and topology operator witnesses at dispatch_pending/planned with next action advance_existing_operation.`
 
-Stop-condition check: `Run npm --silent run analyze:causal-model on fresh evidence, the handoff probe, focused admin snapshot tests, focused owner tests for any promoted runtime file, static guardrails, and one representative rolling-restart rerun after implementation.`
+Stop-condition check: `Run the required subagent sequence, npm run analyze:causal-model on fresh evidence, focused priority recovery residual extraction, focused workflow owner tests, static guardrails, and one representative rolling-restart rerun after implementation.`
 
-Expected causal-model change: `Focused proof separates bad snapshot-source selection, forced repair path stalls, authoritative control snapshot query pressure, and readiness inherited from active-gate no progress. The representative rerun migrated to priority_recovery_partition_progress with event-driven workflow wait residuals.`
+Expected causal-model change: `Focused proof should drain or split priority_recovery_event_driven_wait, then either make rolling-restart green or migrate back to the next canonical frontier.`
 
-Representative outcome: `migrated`
+Representative outcome: `pending-before-rerun`
 
-Causal debt: `The representative rerun reports publication_ack_convergence satisfied, active_gate_snapshot_coverage downstream with coverage improved to 2/5 and snapshot_repair_deferred, and first frontier priority_recovery_partition_progress under operation_workflow_owner / workflow_progress with priority_recovery_event_driven_wait.`
+Causal debt: `Publication ACK remains satisfied. Active-gate snapshot coverage is downstream at 2/5 with snapshot_repair_deferred. The current first frontier is priority_recovery_partition_progress with three workflow-progress witnesses.`
 
-Cross-boundary review: `Publication ACK, timeout budgets, and active-gate admission remain closed. Priority recovery is reopened only because fresh canonical representative evidence selected priority_recovery_partition_progress again.`
+Cross-boundary review: `Publication ACK, timeout budgets, and active-gate admission remain closed. Active-gate snapshot coverage stays frozen unless canonical evidence selects it again.`
 
 ## Scenario Causal Closure
 
-Reference scenario/probe: `rolling-restart after priority workflow-progress reduction`
+Reference scenario/probe: `rolling-restart after active-gate snapshot timeout handoff fixture`
 
 Phase chain:
 
-1. `consume priority recovery workflow-progress migration proof`
-2. `classify active_gate_snapshot_coverage as the current first frontier`
+1. `consume active-gate snapshot fixture migration proof`
+2. `classify priority_recovery_partition_progress as the current first frontier`
 3. `run review, fix if required, and implementation subagents before runtime edits`
-4. `build a replayable handoff/snapshot fixture for selected source 11601fe0-72d6-5853-8590-ec2881853e72`
+4. `prove or split three spread_satisfied_in_flight workflow-progress witnesses`
 5. `rerun representative rolling-restart and classify green, reduced, same-frontier, migrated, or split`
 
 Current first frontier: `priority_recovery_partition_progress in test-output/reports/rolling-restart-after-snapshot-timeout-handoff-fixture-20260516.report.json, owned by operation_workflow_owner / workflow_progress.`
@@ -108,66 +102,64 @@ Current first frontier: `priority_recovery_partition_progress in test-output/rep
 Known downstream blockers:
 
 1. `publication_ack_convergence is satisfied`
-2. `active_gate_snapshot_coverage improved to 2/5 and is now downstream of priority recovery`
-3. `selected snapshot observation is repair_deferred with cache_stale_watermark, discovery_node_coverage_gap, and stale_replica_operations_in_flight`
-4. `priority_recovery_partition_progress has three workflow-progress witnesses across control_plane_publications-p1, replica_operations-p1, and sql_transaction_participants-p1`
-5. `readiness support remains inherited from active-gate no progress`
+2. `active_gate_snapshot_coverage is downstream with snapshotCoverageNodeCount=2 and expectedNodeCount=5`
+3. `selected snapshot observation is repair_deferred with stale replica operations in flight`
+4. `priority recovery residual extraction reports three workflow-progress witnesses`
+5. `witness partitions are control_plane_publications-p1, replica_operations-p1, and sql_transaction_participants-p1`
 
-Missing causal edge: `Separated for the active-gate fixture: selected snapshot-source selection and forced repair timeout are present, the legacy artifact owner edge is authoritative_control_snapshot_query_pressure, and readiness support remains inherited downstream evidence. The successor edge is priority_recovery_partition_progress.`
+Missing causal edge: `Prove whether spread_satisfied_in_flight event-driven waits should advance existing operations for the three priority recovery partitions or split by a narrower workflow-progress cause.`
 
 Missing causal edge probe: `npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-after-snapshot-timeout-handoff-fixture-20260516.report.json --markdown`
 
-Bounded progress proof: `This package proves the active-gate snapshot timeout and forced repair reconcile subedge with replayable handoff/snapshot fixtures. The representative rerun migrates to priority recovery workflow-progress residuals.`
+Bounded progress proof: `The predecessor active-gate package split the snapshot handoff edge and representative evidence selected priority recovery again. This package owns only the selected operation_workflow_owner / workflow_progress residual and must prove the advance existing operation progress mechanism.`
 
 Bounded progress proof artifact: `test-output/reports/rolling-restart-after-snapshot-timeout-handoff-fixture-20260516.report.json`
 
-Expected observable transition: `Successor work should prove or split priority_recovery_event_driven_wait without reopening publication ACK, timeout budgets, or active-gate admission.`
+Expected observable transition: `Focused proof should reduce priority recovery witnesses or migrate to the next canonical edge without reopening frozen ACK, budget, or admission edges.`
 
-Max progress bound: `one focused startup_active_gate_owner / snapshot_coverage package slice after required subagent sequencing`
+Max progress bound: `one focused operation_workflow_owner / workflow_progress package slice after required subagent sequencing`
 
-Same-frontier fallback: `If active_gate_snapshot_coverage returns as first frontier, preserve selected source 11601fe0-72d6-5853-8590-ec2881853e72 and split by the exact snapshot/repair/query/readiness subcause.`
+Same-frontier fallback: `If priority_recovery_partition_progress remains first frontier, preserve the three partition witnesses and split by exact workflow-progress cause.`
 
-Expected next frontier: `representative green, reduced priority recovery workflow-progress residual, or active-gate snapshot coverage after priority recovery drains`
+Expected next frontier: `representative green, reduced workflow-progress residual, or active-gate snapshot coverage after priority recovery drains`
 
-Result classification: `migrated`
+Result classification: `pending-before-probe`
 
-Stop condition: `migrate-owner-boundary`
+Stop condition: `continue-local-fix`
 
 Recent frontier history:
 
 1. `work/packages/done-20260516-priority-recovery-operation-workflow-owner-workflow-progress.md / operation_workflow_owner / workflow_progress / migrated`
-2. `work/packages/done-20260516-startup-active-gate-forced-repair-row-source-unavailable.md / startup_active_gate_owner / snapshot_coverage / migrated`
+2. `work/packages/done-20260516-startup-active-gate-snapshot-timeout-handoff-fixture.md / startup_active_gate_owner / snapshot_coverage / migrated`
 3. `work/packages/done-20260516-startup-active-gate-admin-snapshot-timeout-after-priority-recovery.md / startup_active_gate_owner / snapshot_coverage / reduced`
 
-Oscillation check: `This migration is allowed because this package split the active-gate evidence, improved coverage, and fresh canonical representative evidence selected priority_recovery_partition_progress again.`
+Oscillation check: `This priority package is allowed because the immediately preceding active-gate package produced fresh representative evidence selecting priority_recovery_partition_progress again.`
 
-Handoff invariant: `Publication ACK, timeout budgets, and active-gate admission remain closed unless canonical evidence selects them again. Priority recovery is reopened by fresh canonical evidence only.`
+Handoff invariant: `Publication ACK, timeout budgets, and active-gate admission remain closed unless canonical evidence selects them again.`
 
 ## Scope
 
 Write scope:
 
-1. `work/packages/active-20260516-startup-active-gate-snapshot-timeout-handoff-fixture.md`
-2. `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md`
-3. `work/sprints/current-blocker.md`
-4. `work/sprints/current-blocker.json`
-5. `src/admin/admin-control-snapshot-class-part-2.js`
-6. `src/admin/admin-control-snapshot-class-part-3.js`
-7. `src/admin/admin-control-snapshot-class-part-5.js`
-8. `src/admin/admin-control-snapshot-class-part-6.js`
-9. `src/admin/admin-service-discovery-readiness-methods.js`
-10. `src/admin/admin-service-discovery-repair-methods.js`
-11. `src/control-plane/control-plane-snapshot-owner.js`
-12. `src/diagnostics/topology-convergence-graph.js`
-13. `test/admin/admin-control-snapshot.test.js`
-14. `test/admin/admin-service-discovery.test.js`
+1. `work/packages/active-20260516-priority-recovery-operation-workflow-owner-workflow-progress.md`
+2. `work/packages/done-20260516-startup-active-gate-snapshot-timeout-handoff-fixture.md`
+3. `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md`
+4. `work/sprints/current-blocker.md`
+5. `work/sprints/current-blocker.json`
+6. `src/rebalancer/operation-workflow-owner.js`
+7. `src/rebalancer/operation-workflow-owner-segment-7-stage-5.js`
+8. `src/rebalancer/operation-workflow-owner-segment-7-stage-3.js`
+9. `src/rebalancer/operation-workflow-owner-segment-7-stage-2.js`
+10. `src/rebalancer/operation-workflow-owner-ports.js`
+11. `test/rebalancer/operation-workflow-progress-event-driven-reentry.test.js`
+12. `test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js`
+13. `test/rebalancer/coordinator-created-operation-progress-remote-handoff.test.js`
 
 Handoff files:
 
-1. `work/packages/done-20260516-priority-recovery-operation-workflow-owner-workflow-progress.md`
-2. `work/packages/done-20260516-startup-active-gate-forced-repair-row-source-unavailable.md`
-3. `work/packages/done-20260516-startup-active-gate-admin-snapshot-timeout-after-priority-recovery.md`
-4. `test-output/reports/rolling-restart-after-priority-workflow-progress-20260516.report.json`
+1. `work/packages/done-20260516-startup-active-gate-snapshot-timeout-handoff-fixture.md`
+2. `work/packages/done-20260516-priority-recovery-operation-workflow-owner-workflow-progress.md`
+3. `test-output/reports/rolling-restart-after-snapshot-timeout-handoff-fixture-20260516.report.json`
 
 Generated files:
 
@@ -176,32 +168,28 @@ Generated files:
 
 Candidate runtime files:
 
-1. `src/admin/admin-control-snapshot-class-part-2.js`
-2. `src/admin/admin-control-snapshot-class-part-3.js`
-3. `src/admin/admin-control-snapshot-class-part-5.js`
-4. `src/admin/admin-control-snapshot-class-part-6.js`
-5. `src/admin/admin-service-discovery-readiness-methods.js`
-6. `src/admin/admin-service-discovery-repair-methods.js`
-7. `src/control-plane/control-plane-snapshot-owner.js`
-8. `src/diagnostics/topology-convergence-graph.js`
+1. `src/rebalancer/operation-workflow-owner.js`
+2. `src/rebalancer/operation-workflow-owner-segment-7-stage-5.js`
+3. `src/rebalancer/operation-workflow-owner-segment-7-stage-3.js`
+4. `src/rebalancer/operation-workflow-owner-segment-7-stage-2.js`
+5. `src/rebalancer/operation-workflow-owner-ports.js`
 
 Commit scope:
 
-1. `work/packages/active-20260516-startup-active-gate-snapshot-timeout-handoff-fixture.md`
-2. `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md`
-3. `work/sprints/current-blocker.md`
-4. `work/sprints/current-blocker.json`
-5. `src/admin/admin-control-snapshot-class-part-2.js`
-6. `src/admin/admin-control-snapshot-class-part-3.js`
-7. `src/admin/admin-control-snapshot-class-part-5.js`
-8. `src/admin/admin-control-snapshot-class-part-6.js`
-9. `src/admin/admin-service-discovery-readiness-methods.js`
-10. `src/admin/admin-service-discovery-repair-methods.js`
-11. `src/control-plane/control-plane-snapshot-owner.js`
-12. `src/diagnostics/topology-convergence-graph.js`
-13. `test/admin/admin-control-snapshot.test.js`
-14. `test/admin/admin-service-discovery.test.js`
-15. `work/model-ledger.jsonl`
+1. `work/packages/active-20260516-priority-recovery-operation-workflow-owner-workflow-progress.md`
+2. `work/packages/done-20260516-startup-active-gate-snapshot-timeout-handoff-fixture.md`
+3. `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md`
+4. `work/sprints/current-blocker.md`
+5. `work/sprints/current-blocker.json`
+6. `src/rebalancer/operation-workflow-owner.js`
+7. `src/rebalancer/operation-workflow-owner-segment-7-stage-5.js`
+8. `src/rebalancer/operation-workflow-owner-segment-7-stage-3.js`
+9. `src/rebalancer/operation-workflow-owner-segment-7-stage-2.js`
+10. `src/rebalancer/operation-workflow-owner-ports.js`
+11. `test/rebalancer/operation-workflow-progress-event-driven-reentry.test.js`
+12. `test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js`
+13. `test/rebalancer/coordinator-created-operation-progress-remote-handoff.test.js`
+14. `work/model-ledger.jsonl`
 
 Legacy touched files:
 
