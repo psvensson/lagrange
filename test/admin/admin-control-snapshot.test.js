@@ -66,8 +66,13 @@ const ACTIVE_GATE_OWNER_TRUTH_BEST_MISSING_COUNT = 4;
 const ACTIVE_GATE_OWNER_TRUTH_EXPECTED_NODE_COUNT = 5;
 const ACTIVE_GATE_OWNER_COHORT_SCHEMA_VERSION = 1;
 const ACTIVE_GATE_OWNER_COHORT_STATE_PENDING = 'pending';
+const ACTIVE_GATE_CATCHUP_FENCE_STATE_PENDING = 'catchup_pending';
 const ACTIVE_GATE_OWNER_COHORT_REASON_OWNER_RECONCILE_PENDING =
   'owner_reconcile_pending';
+const ACTIVE_GATE_CATCHUP_FENCE_REASON_DURABLE_INCOMPLETE =
+  'durable_publication_incomplete';
+const ACTIVE_GATE_CATCHUP_FENCE_NEXT_ACTION_RECONCILE =
+  'reconcile_owner_membership_publication';
 const ACTIVE_GATE_HANDOFF_NEXT_ACTION_RECONCILE =
   'reconcile_owner_membership_publication';
 const ACTIVE_GATE_HANDOFF_RUNTIME_PROMOTION_ALLOWED_FALSE = false;
@@ -748,6 +753,45 @@ test('AdminControlSnapshot exposes publication owner-truth active cohort in cont
         nextAction: ACTIVE_GATE_HANDOFF_NEXT_ACTION_RECONCILE,
       },
       'control-plane diagnostics should expose the canonical publication-to-active-gate handoff contract',
+    );
+    t.match(
+      result.controlPlaneDiagnostics.activeGateCatchupFence,
+      {
+        schemaVersion: ACTIVE_GATE_OWNER_COHORT_SCHEMA_VERSION,
+        state: ACTIVE_GATE_CATCHUP_FENCE_STATE_PENDING,
+        targetNodeIds: [...ACTIVE_GATE_OWNER_TRUTH_NODE_IDS],
+        durablePublication: {
+          publicationEpoch: ACTIVE_GATE_OWNER_TRUTH_PUBLICATION_EPOCH,
+          nodeIds: [ACTIVE_GATE_OWNER_TRUTH_LOCAL_NODE_ID],
+          missingNodeIds: [...ACTIVE_GATE_OWNER_TRUTH_RECENT_NODE_IDS],
+        },
+        missingProofReasons: [
+          ACTIVE_GATE_CATCHUP_FENCE_REASON_DURABLE_INCOMPLETE,
+        ],
+        nextLegalAction: ACTIVE_GATE_CATCHUP_FENCE_NEXT_ACTION_RECONCILE,
+        promotionAllowed: false,
+      },
+      'control-plane diagnostics should carry the owner-owned active-gate catch-up fence',
+    );
+    t.same(
+      result.controlPlaneDiagnostics.publicationConvergence
+        .activeGateCatchupFence,
+      result.controlPlaneDiagnostics.activeGateCatchupFence,
+      'publication convergence diagnostics should display the same catch-up fence without rebuilding promotion state',
+    );
+    t.match(
+      result.controlPlaneDiagnostics.activeGateOwnerCohort
+        .activeGateCatchupFence,
+      {
+        state: ACTIVE_GATE_CATCHUP_FENCE_STATE_PENDING,
+        targetNodeIds: [...ACTIVE_GATE_OWNER_TRUTH_NODE_IDS],
+        missingProofReasons: [
+          ACTIVE_GATE_CATCHUP_FENCE_REASON_DURABLE_INCOMPLETE,
+        ],
+        nextLegalAction: ACTIVE_GATE_CATCHUP_FENCE_NEXT_ACTION_RECONCILE,
+        promotionAllowed: false,
+      },
+      'active-gate owner cohort diagnostics should carry the same catch-up fence',
     );
   });
 

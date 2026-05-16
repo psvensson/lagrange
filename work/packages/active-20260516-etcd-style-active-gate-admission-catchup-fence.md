@@ -161,7 +161,7 @@ and this package's active metadata before implementation starts.
 
 - [x] Review subagent recorded: Agent Galileo (019e303a-092c-7b02-97ba-d5ca71be173e) reviewed work/packages/active-20260516-etcd-style-active-gate-admission-catchup-fence.md; result fixes-required
 - [x] Fix subagent recorded or explicitly not needed: Agent Beauvoir (019e303d-5d72-79a2-8e66-069549c6da7c) fixed work/packages/active-20260516-etcd-style-active-gate-admission-catchup-fence.md
-- [ ] Implementation subagent recorded: pending implementation agent.
+- [x] Implementation subagent recorded: Agent Copernicus (019e3040-6181-7bd3-bc91-4a9c966f4894) implemented work/packages/active-20260516-etcd-style-active-gate-admission-catchup-fence.md
 
 ## Borrowing Details
 
@@ -206,6 +206,41 @@ Local implementation shape:
 
 ## Validation
 
-1. npm run analyze:owner-files -- startup_active_gate_owner snapshot_coverage --markdown
-2. node --test test/control-plane/publication-active-gate-handoff-contract.test.js
-3. node scripts/check-guideline-decision-boundaries.js src/control-plane/publication-active-gate-handoff-contract.js src/admin/admin-control-snapshot-class-part-1.js src/admin/admin-control-snapshot-class-part-2.js
+1. [x] `npm run analyze:owner-files -- startup_active_gate_owner snapshot_coverage --markdown`
+   - Passed; owner file index loaded before code edits.
+2. [x] `npm run work:package:doctor -- --suggest work/packages/active-20260516-etcd-style-active-gate-admission-catchup-fence.md`
+   - Passed; package doctor reported validation ok and no deterministic suggestions.
+3. [x] `npm run work:validate -- --pre-impl`
+   - Passed before and after implementation; review/fix proof was accepted and implementation remained the next role.
+4. [x] `node --test test/control-plane/publication-active-gate-handoff-contract.test.js`
+   - Passed after implementation.
+5. [x] `npm test -- --grep "AdminControlSnapshot exposes publication owner-truth active cohort" test/admin/admin-control-snapshot.test.js`
+   - Passed; focused admin diagnostic carry-through proof.
+6. [x] `node scripts/check-guideline-decision-boundaries.js src/control-plane/publication-active-gate-handoff-contract.js src/admin/admin-control-snapshot-class-part-1.js src/admin/admin-control-snapshot-class-part-2.js`
+   - Passed.
+7. [x] `node scripts/check-guideline-literals.js src/control-plane/publication-active-gate-handoff-contract.js src/admin/admin-control-snapshot-class-part-1.js src/admin/admin-control-snapshot-class-part-2.js src/admin/admin-control-snapshot-class-part-3.js`
+   - Passed.
+8. [x] `npm run audit:runtime-grammar:file -- src/control-plane/publication-active-gate-handoff-contract.js src/admin/admin-control-snapshot-class-part-1.js src/admin/admin-control-snapshot-class-part-2.js src/admin/admin-control-snapshot-class-part-3.js`
+   - Passed.
+9. NOTE: `node --test test/admin/admin-control-snapshot.test.js` is not used
+   as closure proof. The unfiltered file run still fails in existing
+   priority-recovery/tail expectations outside this package's active-gate
+   fence carry-through; the focused grep proof above passed.
+10. [x] `git diff --check -- work/packages/active-20260516-etcd-style-active-gate-admission-catchup-fence.md src/control-plane/publication-active-gate-handoff-contract.js src/admin/admin-control-snapshot-class-part-1.js test/control-plane/publication-active-gate-handoff-contract.test.js test/admin/admin-control-snapshot.test.js work/model-ledger.jsonl`
+    - Passed.
+11. [x] `npm run work:model-ledger -- record ...`
+    - Recorded package evidence with outcome `implemented` and validation status `focused-green-broad-admin-red`.
+
+## Implementation Evidence
+
+- Added `activeGateCatchupFence` to `publicationActiveGateHandoff` and the
+  projected `activeGateOwnerCohort`.
+- The fence distinguishes target presence, durable publication catch-up, and
+  promotion permission. Promotion remains denied unless durable publication
+  covers the target cohort and non-stale snapshot coverage covers the same
+  target cohort.
+- Admin control snapshots now carry the owner fence under
+  `controlPlaneDiagnostics.activeGateCatchupFence`, nested
+  `publicationConvergence.activeGateCatchupFence`, and
+  `activeGateOwnerCohort.activeGateCatchupFence` without deriving a second
+  local promotion model.

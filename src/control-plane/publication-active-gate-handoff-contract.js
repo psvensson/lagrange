@@ -7,6 +7,7 @@ const PUBLICATION_ACTIVE_GATE_HANDOFF_EMPTY_LIST = Object.freeze([]);
 const PUBLICATION_ACTIVE_GATE_HANDOFF_EMPTY_TEXT = '';
 const PUBLICATION_ACTIVE_GATE_HANDOFF_SCHEMA_VERSION = 1;
 const PUBLICATION_ACTIVE_GATE_HANDOFF_UNKNOWN_EPOCH = 0;
+const PUBLICATION_ACTIVE_GATE_HANDOFF_UNKNOWN_REVISION = 0;
 
 const PUBLICATION_ACTIVE_GATE_HANDOFF_STATE = Object.freeze({
   COMPLETE: 'complete',
@@ -31,6 +32,53 @@ const PUBLICATION_ACTIVE_GATE_HANDOFF_NEXT_ACTION = Object.freeze({
   WAIT_OWNER_RECOVERY: 'wait_owner_recovery',
 });
 
+const PUBLICATION_ACTIVE_GATE_CATCHUP_FENCE_STATE = Object.freeze({
+  CATCHUP_BLOCKED: 'catchup_blocked',
+  CATCHUP_PENDING: 'catchup_pending',
+  CATCHUP_READY: 'catchup_ready',
+  PROMOTION_ALLOWED: 'promotion_allowed',
+  PROMOTION_DENIED: 'promotion_denied',
+});
+
+const PUBLICATION_ACTIVE_GATE_CATCHUP_FENCE_REASON = Object.freeze({
+  DURABLE_PUBLICATION_INCOMPLETE: 'durable_publication_incomplete',
+  DURABLE_PUBLICATION_STALE: 'durable_publication_stale',
+  DURABLE_PUBLICATION_UNAVAILABLE: 'durable_publication_unavailable',
+  SNAPSHOT_COVERAGE_INCOMPLETE: 'snapshot_coverage_incomplete',
+  SNAPSHOT_COVERAGE_STALE: 'snapshot_coverage_stale',
+  SNAPSHOT_COVERAGE_UNAVAILABLE: 'snapshot_coverage_unavailable',
+  TARGET_PRESENCE_INCOMPLETE: 'target_presence_incomplete',
+  TARGETS_UNAVAILABLE: 'targets_unavailable',
+});
+
+const PUBLICATION_ACTIVE_GATE_CATCHUP_FENCE_NEXT_ACTION = Object.freeze({
+  DENY_PROMOTION: 'deny_active_gate_promotion',
+  OBSERVE_ACTIVE_GATE_TARGETS: 'observe_active_gate_targets',
+  OBSERVE_OWNER_HANDOFF: 'observe_owner_handoff',
+  OBSERVE_SNAPSHOT_COVERAGE: 'observe_snapshot_coverage',
+  PROMOTE_ACTIVE_GATE: 'promote_active_gate',
+  RECONCILE_OWNER_MEMBERSHIP_PUBLICATION:
+    'reconcile_owner_membership_publication',
+  REFRESH_SNAPSHOT_COVERAGE: 'refresh_snapshot_coverage',
+});
+
+const PUBLICATION_ACTIVE_GATE_CATCHUP_FENCE_EVIDENCE_STATE = Object.freeze({
+  AVAILABLE: 'available',
+  INCOMPLETE: 'incomplete',
+  STALE: 'stale',
+  UNAVAILABLE: 'unavailable',
+});
+
+const PUBLICATION_ACTIVE_GATE_HANDOFF_PUBLICATION_STATUS = Object.freeze({
+  PUBLISHED: 'PUBLISHED',
+});
+
+const PUBLICATION_ACTIVE_GATE_HANDOFF_STALE_MARKER = Object.freeze({
+  BEHIND: 'behind',
+  STALE: 'stale',
+  STALE_USABLE: 'stale_usable',
+});
+
 const PUBLICATION_ACTIVE_GATE_HANDOFF_BUDGET_STATE = Object.freeze({
   UNAVAILABLE: 'unavailable',
 });
@@ -42,9 +90,12 @@ const PUBLICATION_ACTIVE_GATE_HANDOFF_TARGET_STATE = Object.freeze({
 
 const PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD = Object.freeze({
   ACKNOWLEDGED_NODE_IDS: 'acknowledgedNodeIds',
+  ACTIVE_GATE_CATCHUP_FENCE: 'activeGateCatchupFence',
   ACTIVE_GATE_OWNER_COHORT: 'activeGateOwnerCohort',
+  COVERED_NODE_IDS: 'coveredNodeIds',
   EFFECTIVE_ACTIVE_NODE_IDS: 'effectiveActiveNodeIds',
   EXPECTED_NODE_IDS: 'expectedNodeIds',
+  FRESH: 'fresh',
   ID: 'id',
   LOCALLY_ELIGIBLE_NODE_IDS: 'locallyEligibleNodeIds',
   MEMBERSHIP_LIFECYCLE_SUMMARY: 'membershipLifecycleSummary',
@@ -52,23 +103,41 @@ const PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD = Object.freeze({
   MISSING_PUBLISHED_RECOVERY_ACTIVE_NODE_IDS:
     'missingPublishedRecoveryActiveNodeIds',
   NODE_ID: 'node_id',
+  NODE_IDS: 'nodeIds',
   NODEID: 'nodeId',
   PENDING_ACK_NODE_IDS: 'pendingAckNodeIds',
   PENDING_RECONCILE_COUNT: 'pendingReconcileCount',
   PENDING_RECONCILE_NODE_IDS: 'pendingReconcileNodeIds',
   PROJECTED_ACTIVE_NODE_IDS: 'projectedActiveNodeIds',
   PROJECTED_SERVING_NODE_IDS: 'projectedServingNodeIds',
+  PUBLICATION_ACTIVE_GATE_CATCHUP_FENCE: 'activeGateCatchupFence',
   PUBLICATION_ACTIVE_GATE_HANDOFF: 'publicationActiveGateHandoff',
   PUBLICATION_CONVERGENCE: 'publicationConvergence',
   PUBLICATION_EPOCH: 'publicationEpoch',
+  PUBLICATION_OBSERVATION: 'publicationObservation',
+  PUBLICATION_REVISION: 'publicationRevision',
+  PUBLICATION_STATUS: 'publicationStatus',
   PUBLISHED_ACTIVE_NODE_IDS: 'publishedActiveNodeIds',
   REASON_CODE: 'reasonCode',
   REASON_CODES: 'reasonCodes',
   REASONS: 'reasons',
   RECOVERY_ACTIVE_NODE_IDS: 'recoveryActiveNodeIds',
   REQUIRED_ACK_NODE_IDS: 'requiredAckNodeIds',
+  REVISION: 'revision',
+  REVISION_STATE: 'revisionState',
+  SNAPSHOT_COVERAGE: 'snapshotCoverage',
+  SNAPSHOT_COVERAGE_NODE_IDS: 'snapshotCoverageNodeIds',
+  SNAPSHOT_COVERAGE_REVISION: 'snapshotCoverageRevision',
+  SNAPSHOT_OBSERVATION: 'snapshotObservation',
+  SNAPSHOT_REVISION: 'snapshotRevision',
+  SNAPSHOT_REVISION_STATE: 'snapshotRevisionState',
+  SOURCE_SNAPSHOT_VERSION: 'sourceSnapshotVersion',
+  SOURCE_SNAPSHOT_VERSION_SNAKE: 'source_snapshot_version',
   STATE: 'state',
+  STATUS: 'status',
   SUSPECTED_OR_TRANSITIONING_NODE_IDS: 'suspectedOrTransitioningNodeIds',
+  UPDATED_AT: 'updated_at',
+  UPDATEDAT: 'updatedAt',
 });
 
 const PUBLICATION_ACTIVE_GATE_HANDOFF_READINESS_REASON_FIELD =
@@ -183,6 +252,49 @@ const PUBLICATION_ACTIVE_GATE_HANDOFF_DECISION_RULES = Object.freeze([
     nextAction:
       PUBLICATION_ACTIVE_GATE_HANDOFF_NEXT_ACTION.ADMIT_ACTIVE_GATE,
     runtimePromotionAllowed: true,
+    matches: () => true,
+  }),
+]);
+
+const PUBLICATION_ACTIVE_GATE_CATCHUP_FENCE_DECISION_RULES = Object.freeze([
+  Object.freeze({
+    state: PUBLICATION_ACTIVE_GATE_CATCHUP_FENCE_STATE.CATCHUP_BLOCKED,
+    nextLegalAction:
+      PUBLICATION_ACTIVE_GATE_CATCHUP_FENCE_NEXT_ACTION
+        .OBSERVE_ACTIVE_GATE_TARGETS,
+    matches: (evidence) =>
+      evidence.targetNodeIds.length === NUM.ZERO,
+  }),
+  Object.freeze({
+    state: PUBLICATION_ACTIVE_GATE_CATCHUP_FENCE_STATE.CATCHUP_BLOCKED,
+    nextLegalAction:
+      PUBLICATION_ACTIVE_GATE_CATCHUP_FENCE_NEXT_ACTION
+        .REFRESH_SNAPSHOT_COVERAGE,
+    matches: (evidence) =>
+      evidence.durablePublication.stale === true ||
+      evidence.snapshotCoverage.stale === true,
+  }),
+  Object.freeze({
+    state: PUBLICATION_ACTIVE_GATE_CATCHUP_FENCE_STATE.CATCHUP_PENDING,
+    nextLegalAction:
+      PUBLICATION_ACTIVE_GATE_CATCHUP_FENCE_NEXT_ACTION
+        .RECONCILE_OWNER_MEMBERSHIP_PUBLICATION,
+    matches: (evidence) =>
+      evidence.durablePublication.covered !== true,
+  }),
+  Object.freeze({
+    state: PUBLICATION_ACTIVE_GATE_CATCHUP_FENCE_STATE.PROMOTION_DENIED,
+    nextLegalAction:
+      PUBLICATION_ACTIVE_GATE_CATCHUP_FENCE_NEXT_ACTION
+        .OBSERVE_SNAPSHOT_COVERAGE,
+    matches: (evidence) =>
+      evidence.snapshotCoverage.covered !== true ||
+      evidence.presence.complete !== true,
+  }),
+  Object.freeze({
+    state: PUBLICATION_ACTIVE_GATE_CATCHUP_FENCE_STATE.PROMOTION_ALLOWED,
+    nextLegalAction:
+      PUBLICATION_ACTIVE_GATE_CATCHUP_FENCE_NEXT_ACTION.PROMOTE_ACTIVE_GATE,
     matches: () => true,
   }),
 ]);
@@ -493,6 +605,415 @@ function resolvePublicationActiveGateHandoffPublicationEpoch(
     PUBLICATION_ACTIVE_GATE_HANDOFF_UNKNOWN_EPOCH;
 }
 
+function normalizePublicationActiveGateHandoffInteger(value) {
+  const parsedValue = Number(value);
+  return Number.isFinite(parsedValue) ? Math.floor(parsedValue) : null;
+}
+
+function resolvePublicationActiveGateHandoffFirstInteger(...values) {
+  for (const value of values) {
+    const normalizedValue =
+      normalizePublicationActiveGateHandoffInteger(value);
+    if (normalizedValue !== null) {
+      return normalizedValue;
+    }
+  }
+  return null;
+}
+
+function resolvePublicationActiveGateHandoffPublicationRevision(
+  publicationConvergence = null,
+) {
+  return resolvePublicationActiveGateHandoffFirstInteger(
+    publicationConvergence?.[
+      PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.PUBLICATION_REVISION
+    ],
+    publicationConvergence?.[
+      PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.SOURCE_SNAPSHOT_VERSION
+    ],
+    publicationConvergence?.[
+      PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.SOURCE_SNAPSHOT_VERSION_SNAKE
+    ],
+    publicationConvergence?.[
+      PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.UPDATEDAT
+    ],
+    publicationConvergence?.[
+      PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.UPDATED_AT
+    ],
+    publicationConvergence?.[
+      PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.PUBLICATION_EPOCH
+    ],
+  );
+}
+
+function normalizePublicationActiveGateHandoffStateMarker(value) {
+  return String(
+    value || PUBLICATION_ACTIVE_GATE_HANDOFF_EMPTY_TEXT,
+  ).trim().toLowerCase();
+}
+
+function hasPublicationActiveGateHandoffStaleMarker(...values) {
+  return values
+    .map((value) => normalizePublicationActiveGateHandoffStateMarker(value))
+    .some((value) =>
+      value === PUBLICATION_ACTIVE_GATE_HANDOFF_STALE_MARKER.STALE ||
+      value === PUBLICATION_ACTIVE_GATE_HANDOFF_STALE_MARKER.STALE_USABLE ||
+      value === PUBLICATION_ACTIVE_GATE_HANDOFF_STALE_MARKER.BEHIND,
+    );
+}
+
+function resolvePublicationActiveGateHandoffPublicationStatus(
+  publicationConvergence = null,
+) {
+  return String(
+    publicationConvergence?.[PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.STATUS] ||
+      publicationConvergence?.[
+        PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.PUBLICATION_STATUS
+      ] ||
+      publicationConvergence?.[
+        PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.PUBLICATION_OBSERVATION
+      ]?.[PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.STATUS] ||
+      PUBLICATION_ACTIVE_GATE_HANDOFF_EMPTY_TEXT,
+  ).toUpperCase();
+}
+
+function resolvePublicationActiveGateHandoffDurablePublishedNodeIds(
+  options = {},
+) {
+  const explicitPublishedNodeIds =
+    normalizePublicationActiveGateHandoffNodeIdList(
+      options.publishedActiveNodeIds,
+    );
+  if (explicitPublishedNodeIds.length > NUM.ZERO) {
+    return explicitPublishedNodeIds;
+  }
+  return normalizePublicationActiveGateHandoffNodeIdList(
+    options.publicationConvergence?.[
+      PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.PUBLISHED_ACTIVE_NODE_IDS
+    ],
+  );
+}
+
+function buildPublicationActiveGateHandoffDurablePublicationEvidence({
+  targetNodeIds,
+  options,
+}) {
+  const publicationConvergence = options.publicationConvergence;
+  const nodeIds = resolvePublicationActiveGateHandoffDurablePublishedNodeIds(
+    options,
+  );
+  const missingNodeIds = normalizePublicationActiveGateHandoffNodeIdList(
+    targetNodeIds.filter((nodeId) => !nodeIds.includes(nodeId)),
+  );
+  const publicationEpoch =
+    resolvePublicationActiveGateHandoffPublicationEpoch(publicationConvergence);
+  const publicationRevision =
+    resolvePublicationActiveGateHandoffPublicationRevision(
+      publicationConvergence,
+    );
+  const publicationStatus =
+    resolvePublicationActiveGateHandoffPublicationStatus(
+      publicationConvergence,
+    );
+  const available =
+    nodeIds.length > NUM.ZERO ||
+    publicationEpoch !== PUBLICATION_ACTIVE_GATE_HANDOFF_UNKNOWN_EPOCH ||
+    publicationStatus ===
+      PUBLICATION_ACTIVE_GATE_HANDOFF_PUBLICATION_STATUS.PUBLISHED;
+  const stale = hasPublicationActiveGateHandoffStaleMarker(
+    publicationConvergence?.[PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.STATE],
+    publicationConvergence?.[
+      PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.REVISION_STATE
+    ],
+    publicationConvergence?.[
+      PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.PUBLICATION_OBSERVATION
+    ]?.[PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.STATE],
+  );
+  const covered =
+    available === true &&
+    stale !== true &&
+    targetNodeIds.length > NUM.ZERO &&
+    missingNodeIds.length === NUM.ZERO;
+  return Object.freeze({
+    state: stale === true ?
+      PUBLICATION_ACTIVE_GATE_CATCHUP_FENCE_EVIDENCE_STATE.STALE :
+      (available === true ?
+        (covered === true ?
+          PUBLICATION_ACTIVE_GATE_CATCHUP_FENCE_EVIDENCE_STATE.AVAILABLE :
+          PUBLICATION_ACTIVE_GATE_CATCHUP_FENCE_EVIDENCE_STATE.INCOMPLETE) :
+        PUBLICATION_ACTIVE_GATE_CATCHUP_FENCE_EVIDENCE_STATE.UNAVAILABLE),
+    available,
+    stale,
+    covered,
+    nodeIds,
+    nodeCount: nodeIds.length,
+    missingNodeIds,
+    missingNodeCount: missingNodeIds.length,
+    ...(publicationEpoch !== PUBLICATION_ACTIVE_GATE_HANDOFF_UNKNOWN_EPOCH ?
+      {publicationEpoch} :
+      {}),
+    ...(publicationRevision !== null ?
+      {publicationRevision} :
+      {}),
+  });
+}
+
+function resolvePublicationActiveGateHandoffSnapshotCoverageSource(
+  options = {},
+) {
+  return isPublicationActiveGateHandoffRecord(options.snapshotCoverage) ?
+    options.snapshotCoverage :
+    (
+      isPublicationActiveGateHandoffRecord(options.activeNodeViews) ?
+        options.activeNodeViews :
+        null
+    );
+}
+
+function resolvePublicationActiveGateHandoffSnapshotCoverageNodeIds(
+  options = {},
+) {
+  const coverageSource =
+    resolvePublicationActiveGateHandoffSnapshotCoverageSource(options);
+  if (!coverageSource) {
+    return PUBLICATION_ACTIVE_GATE_HANDOFF_EMPTY_LIST;
+  }
+  return normalizePublicationActiveGateHandoffNodeIdList([
+    ...normalizePublicationActiveGateHandoffNodeIdList(
+      coverageSource[PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.NODE_IDS],
+    ),
+    ...normalizePublicationActiveGateHandoffNodeIdList(
+      coverageSource[PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.COVERED_NODE_IDS],
+    ),
+    ...normalizePublicationActiveGateHandoffNodeIdList(
+      coverageSource[
+        PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.SNAPSHOT_COVERAGE_NODE_IDS
+      ],
+    ),
+    ...normalizePublicationActiveGateHandoffNodeIdList(
+      coverageSource[
+        PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.EFFECTIVE_ACTIVE_NODE_IDS
+      ],
+    ),
+  ]);
+}
+
+function resolvePublicationActiveGateHandoffSnapshotCoverageRevision(
+  options = {},
+) {
+  const coverageSource =
+    resolvePublicationActiveGateHandoffSnapshotCoverageSource(options);
+  return resolvePublicationActiveGateHandoffFirstInteger(
+    coverageSource?.[PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.REVISION],
+    coverageSource?.[
+      PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.SNAPSHOT_COVERAGE_REVISION
+    ],
+    coverageSource?.[PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.SNAPSHOT_REVISION],
+  );
+}
+
+function isPublicationActiveGateHandoffSnapshotCoverageStale(options = {}) {
+  const coverageSource =
+    resolvePublicationActiveGateHandoffSnapshotCoverageSource(options);
+  if (!coverageSource) {
+    return false;
+  }
+  return coverageSource[PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.FRESH] ===
+    false ||
+    hasPublicationActiveGateHandoffStaleMarker(
+      coverageSource[PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.STATE],
+      coverageSource[
+        PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.REVISION_STATE
+      ],
+      coverageSource[
+        PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.SNAPSHOT_REVISION_STATE
+      ],
+      coverageSource[
+        PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.SNAPSHOT_OBSERVATION
+      ]?.[PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.STATE],
+    );
+}
+
+function buildPublicationActiveGateHandoffSnapshotCoverageEvidence({
+  targetNodeIds,
+  options,
+}) {
+  const nodeIds =
+    resolvePublicationActiveGateHandoffSnapshotCoverageNodeIds(options);
+  const missingNodeIds = normalizePublicationActiveGateHandoffNodeIdList(
+    targetNodeIds.filter((nodeId) => !nodeIds.includes(nodeId)),
+  );
+  const revision =
+    resolvePublicationActiveGateHandoffSnapshotCoverageRevision(options);
+  const stale = isPublicationActiveGateHandoffSnapshotCoverageStale(options);
+  const available = nodeIds.length > NUM.ZERO || revision !== null;
+  const covered =
+    available === true &&
+    stale !== true &&
+    targetNodeIds.length > NUM.ZERO &&
+    missingNodeIds.length === NUM.ZERO;
+  return Object.freeze({
+    state: stale === true ?
+      PUBLICATION_ACTIVE_GATE_CATCHUP_FENCE_EVIDENCE_STATE.STALE :
+      (available === true ?
+        (covered === true ?
+          PUBLICATION_ACTIVE_GATE_CATCHUP_FENCE_EVIDENCE_STATE.AVAILABLE :
+          PUBLICATION_ACTIVE_GATE_CATCHUP_FENCE_EVIDENCE_STATE.INCOMPLETE) :
+        PUBLICATION_ACTIVE_GATE_CATCHUP_FENCE_EVIDENCE_STATE.UNAVAILABLE),
+    available,
+    stale,
+    covered,
+    nodeIds,
+    coveredNodeCount: nodeIds.length,
+    missingNodeIds,
+    missingNodeCount: missingNodeIds.length,
+    ...(revision !== null ? {revision} : {}),
+  });
+}
+
+function resolvePublicationActiveGateHandoffPresenceNodeIds(options = {}) {
+  return normalizePublicationActiveGateHandoffNodeIdList([
+    ...collectPublicationActiveGateHandoffNodeRows(options.nodeRows),
+    ...collectPublicationActiveGateHandoffRecordNodeIds(
+      options.activeNodeViews,
+      PUBLICATION_ACTIVE_GATE_HANDOFF_ACTIVE_NODE_VIEW_FIELDS,
+    ),
+    ...resolvePublicationActiveGateHandoffSnapshotCoverageNodeIds(options),
+  ]);
+}
+
+function buildPublicationActiveGateHandoffPresenceEvidence({
+  targetNodeIds,
+  options,
+}) {
+  const presentNodeIds =
+    resolvePublicationActiveGateHandoffPresenceNodeIds(options);
+  const missingNodeIds = normalizePublicationActiveGateHandoffNodeIdList(
+    targetNodeIds.filter((nodeId) => !presentNodeIds.includes(nodeId)),
+  );
+  return Object.freeze({
+    targetNodeIds,
+    presentNodeIds,
+    presentNodeCount: presentNodeIds.length,
+    missingNodeIds,
+    missingNodeCount: missingNodeIds.length,
+    complete:
+      targetNodeIds.length > NUM.ZERO &&
+      missingNodeIds.length === NUM.ZERO,
+  });
+}
+
+function resolvePublicationActiveGateCatchupFenceMissingProofReasons(
+  evidence,
+) {
+  return normalizePublicationActiveGateHandoffNodeIdList([
+    ...(evidence.targetNodeIds.length === NUM.ZERO ?
+      [PUBLICATION_ACTIVE_GATE_CATCHUP_FENCE_REASON.TARGETS_UNAVAILABLE] :
+      PUBLICATION_ACTIVE_GATE_HANDOFF_EMPTY_LIST),
+    ...(evidence.presence.complete !== true ?
+      [
+        PUBLICATION_ACTIVE_GATE_CATCHUP_FENCE_REASON
+          .TARGET_PRESENCE_INCOMPLETE,
+      ] :
+      PUBLICATION_ACTIVE_GATE_HANDOFF_EMPTY_LIST),
+    ...(evidence.durablePublication.available !== true ?
+      [
+        PUBLICATION_ACTIVE_GATE_CATCHUP_FENCE_REASON
+          .DURABLE_PUBLICATION_UNAVAILABLE,
+      ] :
+      PUBLICATION_ACTIVE_GATE_HANDOFF_EMPTY_LIST),
+    ...(evidence.durablePublication.stale === true ?
+      [
+        PUBLICATION_ACTIVE_GATE_CATCHUP_FENCE_REASON
+          .DURABLE_PUBLICATION_STALE,
+      ] :
+      PUBLICATION_ACTIVE_GATE_HANDOFF_EMPTY_LIST),
+    ...(evidence.durablePublication.available === true &&
+      evidence.durablePublication.stale !== true &&
+      evidence.durablePublication.covered !== true ?
+      [
+        PUBLICATION_ACTIVE_GATE_CATCHUP_FENCE_REASON
+          .DURABLE_PUBLICATION_INCOMPLETE,
+      ] :
+      PUBLICATION_ACTIVE_GATE_HANDOFF_EMPTY_LIST),
+    ...(evidence.snapshotCoverage.available !== true ?
+      [
+        PUBLICATION_ACTIVE_GATE_CATCHUP_FENCE_REASON
+          .SNAPSHOT_COVERAGE_UNAVAILABLE,
+      ] :
+      PUBLICATION_ACTIVE_GATE_HANDOFF_EMPTY_LIST),
+    ...(evidence.snapshotCoverage.stale === true ?
+      [
+        PUBLICATION_ACTIVE_GATE_CATCHUP_FENCE_REASON
+          .SNAPSHOT_COVERAGE_STALE,
+      ] :
+      PUBLICATION_ACTIVE_GATE_HANDOFF_EMPTY_LIST),
+    ...(evidence.snapshotCoverage.available === true &&
+      evidence.snapshotCoverage.stale !== true &&
+      evidence.snapshotCoverage.covered !== true ?
+      [
+        PUBLICATION_ACTIVE_GATE_CATCHUP_FENCE_REASON
+          .SNAPSHOT_COVERAGE_INCOMPLETE,
+      ] :
+      PUBLICATION_ACTIVE_GATE_HANDOFF_EMPTY_LIST),
+  ]);
+}
+
+function buildPublicationActiveGateCatchupFence(options = {}) {
+  const targetNodeIds =
+    resolvePublicationActiveGateHandoffExpectedNodeIds(options);
+  const durablePublication =
+    buildPublicationActiveGateHandoffDurablePublicationEvidence({
+      targetNodeIds,
+      options,
+    });
+  const snapshotCoverage =
+    buildPublicationActiveGateHandoffSnapshotCoverageEvidence({
+      targetNodeIds,
+      options,
+    });
+  const presence = buildPublicationActiveGateHandoffPresenceEvidence({
+    targetNodeIds,
+    options,
+  });
+  const evidence = Object.freeze({
+    targetNodeIds,
+    durablePublication,
+    snapshotCoverage,
+    presence,
+  });
+  const decision =
+    PUBLICATION_ACTIVE_GATE_CATCHUP_FENCE_DECISION_RULES.find((rule) =>
+      rule.matches(evidence),
+    );
+  const catchupState =
+    durablePublication.covered === true ?
+      PUBLICATION_ACTIVE_GATE_CATCHUP_FENCE_STATE.CATCHUP_READY :
+      decision.state;
+  const promotionState =
+    decision.state ===
+      PUBLICATION_ACTIVE_GATE_CATCHUP_FENCE_STATE.PROMOTION_ALLOWED ?
+      PUBLICATION_ACTIVE_GATE_CATCHUP_FENCE_STATE.PROMOTION_ALLOWED :
+      PUBLICATION_ACTIVE_GATE_CATCHUP_FENCE_STATE.PROMOTION_DENIED;
+  return Object.freeze({
+    schemaVersion: PUBLICATION_ACTIVE_GATE_HANDOFF_SCHEMA_VERSION,
+    state: decision.state,
+    catchupState,
+    promotionState,
+    targetNodeIds,
+    targetNodeCount: targetNodeIds.length,
+    presence,
+    durablePublication,
+    snapshotCoverage,
+    missingProofReasons:
+      resolvePublicationActiveGateCatchupFenceMissingProofReasons(evidence),
+    nextLegalAction: decision.nextLegalAction,
+    promotionAllowed:
+      promotionState ===
+      PUBLICATION_ACTIVE_GATE_CATCHUP_FENCE_STATE.PROMOTION_ALLOWED,
+  });
+}
+
 function decidePublicationActiveGateHandoff(evidence) {
   return PUBLICATION_ACTIVE_GATE_HANDOFF_DECISION_RULES.find((rule) =>
     rule.matches(evidence),
@@ -539,7 +1060,17 @@ function buildPublicationActiveGateHandoffContract(options = {}) {
     pendingRecoveryNodeIds,
     pendingReconcileNodeIds,
   });
+  const activeGateCatchupFence = buildPublicationActiveGateCatchupFence({
+    ...options,
+    expectedNodeIds,
+  });
   const decision = decidePublicationActiveGateHandoff(evidence);
+  const runtimePromotionAllowed =
+    decision.runtimePromotionAllowed === true &&
+    activeGateCatchupFence.promotionAllowed === true;
+  const promotionDeniedByFence =
+    decision.runtimePromotionAllowed === true &&
+    runtimePromotionAllowed !== true;
   return Object.freeze({
     schemaVersion: PUBLICATION_ACTIVE_GATE_HANDOFF_SCHEMA_VERSION,
     publicationEpoch: resolvePublicationActiveGateHandoffPublicationEpoch(
@@ -555,10 +1086,18 @@ function buildPublicationActiveGateHandoffContract(options = {}) {
     pendingRecoveryCount: pendingRecoveryNodeIds.length,
     pendingReconcileNodeIds,
     pendingReconcileCount: pendingReconcileNodeIds.length,
-    runtimePromotionAllowed: decision.runtimePromotionAllowed,
-    state: decision.state,
-    reasonCode: decision.reasonCode,
-    nextAction: decision.nextAction,
+    activeGateCatchupFence,
+    runtimePromotionAllowed,
+    state: promotionDeniedByFence ?
+      PUBLICATION_ACTIVE_GATE_HANDOFF_STATE.DEGRADED :
+      decision.state,
+    reasonCode: promotionDeniedByFence ?
+      PUBLICATION_ACTIVE_GATE_HANDOFF_REASON
+        .PUBLISHED_ACTIVE_COVERAGE_INCOMPLETE :
+      decision.reasonCode,
+    nextAction: promotionDeniedByFence ?
+      PUBLICATION_ACTIVE_GATE_HANDOFF_NEXT_ACTION.OBSERVE_OWNER_HANDOFF :
+      decision.nextAction,
   });
 }
 
@@ -566,6 +1105,18 @@ function normalizePublicationActiveGateHandoffContract(value) {
   if (!isPublicationActiveGateHandoffRecord(value)) {
     return null;
   }
+  const activeGateCatchupFence =
+    isPublicationActiveGateHandoffRecord(
+      value[
+        PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD
+          .PUBLICATION_ACTIVE_GATE_CATCHUP_FENCE
+      ],
+    ) ?
+      value[
+        PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD
+          .PUBLICATION_ACTIVE_GATE_CATCHUP_FENCE
+      ] :
+      null;
   return buildPublicationActiveGateHandoffContract({
     publicationConvergence: {
       [PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.PUBLICATION_EPOCH]:
@@ -578,6 +1129,11 @@ function normalizePublicationActiveGateHandoffContract(value) {
     expectedNodeIds: value[PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.EXPECTED_NODE_IDS],
     pendingRecoveryNodeIds: value.pendingRecoveryNodeIds,
     pendingReconcileNodeIds: value.pendingReconcileNodeIds,
+    snapshotCoverage: activeGateCatchupFence?.snapshotCoverage,
+    activeNodeViews: {
+      [PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.EFFECTIVE_ACTIVE_NODE_IDS]:
+        activeGateCatchupFence?.presence?.presentNodeIds,
+    },
   });
 }
 
@@ -616,6 +1172,7 @@ function projectPublicationActiveGateHandoffToOwnerCohort(
     pendingRecoveryCount: contract.pendingRecoveryCount,
     pendingReconcileNodeIds: contract.pendingReconcileNodeIds,
     pendingReconcileCount: contract.pendingReconcileCount,
+    activeGateCatchupFence: contract.activeGateCatchupFence,
     runtimePromotionAllowed: contract.runtimePromotionAllowed,
     nextAction: contract.nextAction,
     activeGateBudget,
@@ -812,6 +1369,9 @@ function hasPublicationActiveGateOwnerReconcileSignal(value = null) {
 }
 
 export {
+  PUBLICATION_ACTIVE_GATE_CATCHUP_FENCE_NEXT_ACTION,
+  PUBLICATION_ACTIVE_GATE_CATCHUP_FENCE_REASON,
+  PUBLICATION_ACTIVE_GATE_CATCHUP_FENCE_STATE,
   PUBLICATION_ACTIVE_GATE_HANDOFF_NEXT_ACTION,
   PUBLICATION_ACTIVE_GATE_HANDOFF_REASON,
   PUBLICATION_ACTIVE_GATE_HANDOFF_SCHEMA_VERSION,

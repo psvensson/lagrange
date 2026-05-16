@@ -65,6 +65,8 @@ const CONTROL_SNAPSHOT_PUBLICATION_CONVERGENCE_FIELD =
 const CONTROL_SNAPSHOT_PUBLICATION_EPOCH_FIELD = 'publicationEpoch';
 const CONTROL_SNAPSHOT_PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD =
   'publicationActiveGateHandoff';
+const CONTROL_SNAPSHOT_ACTIVE_GATE_CATCHUP_FENCE_FIELD =
+  'activeGateCatchupFence';
 const CONTROL_SNAPSHOT_ACTIVE_GATE_OWNER_COHORT_FIELD =
   'activeGateOwnerCohort';
 const CONTROL_SNAPSHOT_MEMBERSHIP_PUBLICATION_HANDOFF_OUTCOME_FIELD =
@@ -427,6 +429,8 @@ class AdminControlSnapshotPart1 {
       controlPlaneDiagnostics[
         CONTROL_SNAPSHOT_PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD
       ] = publicationActiveGateHandoff;
+      controlPlaneDiagnostics[CONTROL_SNAPSHOT_ACTIVE_GATE_CATCHUP_FENCE_FIELD] =
+        publicationActiveGateHandoff.activeGateCatchupFence;
       if (
         controlPlaneDiagnostics[
           CONTROL_SNAPSHOT_PUBLICATION_CONVERGENCE_FIELD
@@ -439,6 +443,10 @@ class AdminControlSnapshotPart1 {
           CONTROL_SNAPSHOT_PUBLICATION_CONVERGENCE_FIELD
         ][CONTROL_SNAPSHOT_PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD] =
           publicationActiveGateHandoff;
+        controlPlaneDiagnostics[
+          CONTROL_SNAPSHOT_PUBLICATION_CONVERGENCE_FIELD
+        ][CONTROL_SNAPSHOT_ACTIVE_GATE_CATCHUP_FENCE_FIELD] =
+          publicationActiveGateHandoff.activeGateCatchupFence;
       }
       controlPlaneDiagnostics[CONTROL_SNAPSHOT_ACTIVE_GATE_OWNER_COHORT_FIELD] =
         this.resolveActiveGateOwnerCohortSnapshot({
