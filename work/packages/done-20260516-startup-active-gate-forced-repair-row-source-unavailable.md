@@ -3,7 +3,7 @@
 <!-- work-package
 {
   "schema": "work-package-v1",
-  "status": "active",
+  "status": "done",
   "opened": "2026-05-16",
   "lane": "causal-escalation",
   "scenario": "rolling-restart",
@@ -27,17 +27,17 @@
     "node scripts/check-guideline-literals.js src/admin/admin-service-discovery-readiness-methods.js",
     "node scripts/check-guideline-decision-boundaries.js src/admin/admin-service-discovery-readiness-methods.js",
     "npm run audit:runtime-grammar:file -- src/admin/admin-service-discovery-readiness-methods.js",
-    "npm run work:validate -- --pre-impl work/packages/active-20260516-startup-active-gate-forced-repair-row-source-unavailable.md",
+    "npm run work:validate -- --pre-impl work/packages/done-20260516-startup-active-gate-forced-repair-row-source-unavailable.md",
     "node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-after-forced-repair-row-source-20260516.report.json --verbose",
     "npm run work:evidence-summary -- test-output/reports/rolling-restart-after-forced-repair-row-source-20260516.report.json",
     "npm run analyze:distributed-failure -- --report test-output/reports/rolling-restart-after-forced-repair-row-source-20260516.report.json",
     "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-forced-repair-row-source-20260516.report.json --handoff-probe",
     "npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-forced-repair-row-source-20260516.report.json",
     "npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-after-forced-repair-row-source-20260516.report.json --markdown",
-    "npm run work:model-ledger -- record --package work/packages/active-20260516-startup-active-gate-forced-repair-row-source-unavailable.md --model gpt-5-codex --reasoning-effort high --output-profile medium --task-class causal-escalation --package-class representative-frontier-closure --intended-minimum-model gpt-5.3-codex --scope-shape owner-boundary-contraction/current-frontier --escalated true --bailout-reason migrated-to-operation-workflow-progress --outcome migrated --validation-status focused-green-representative-migrated --correction-loops 1 --review-findings 1 --notes \"Forced repair row-source edge reduced: late authoritative gateway fixture passes, representative moved to priority_recovery_partition_progress with one control_plane_publications-p1 spread_satisfied_in_flight residual.\""
+    "npm run work:model-ledger -- record --package work/packages/done-20260516-startup-active-gate-forced-repair-row-source-unavailable.md --model gpt-5-codex --reasoning-effort high --output-profile medium --task-class causal-escalation --package-class representative-frontier-closure --intended-minimum-model gpt-5.3-codex --scope-shape owner-boundary-contraction/current-frontier --escalated true --bailout-reason migrated-to-operation-workflow-progress --outcome migrated --validation-status focused-green-representative-migrated --correction-loops 1 --review-findings 1 --notes \"Forced repair row-source edge reduced: late authoritative gateway fixture passes, representative moved to priority_recovery_partition_progress with one control_plane_publications-p1 spread_satisfied_in_flight residual.\""
   ],
   "writeScope": [
-    "work/packages/active-20260516-startup-active-gate-forced-repair-row-source-unavailable.md",
+    "work/packages/done-20260516-startup-active-gate-forced-repair-row-source-unavailable.md",
     "work/sprints/current-blocker.md",
     "work/sprints/current-blocker.json",
     "src/admin/admin-service-discovery-readiness-methods.js",
@@ -60,7 +60,7 @@
     "src/diagnostics/topology-convergence-graph.js"
   ],
   "commitScope": [
-    "work/packages/active-20260516-startup-active-gate-forced-repair-row-source-unavailable.md",
+    "work/packages/done-20260516-startup-active-gate-forced-repair-row-source-unavailable.md",
     "work/sprints/current-blocker.md",
     "work/sprints/current-blocker.json",
     "src/admin/admin-service-discovery-readiness-methods.js",
@@ -144,7 +144,10 @@
       "timeout budgets would be increased"
     ]
   },
-  "predecessor": "work/packages/done-20260516-startup-active-gate-admin-snapshot-timeout-after-priority-recovery.md"
+  "predecessor": "work/packages/done-20260516-startup-active-gate-admin-snapshot-timeout-after-priority-recovery.md",
+  "closed": "2026-05-16",
+  "commitAndPushLedgerRequired": true,
+  "successor": "work/packages/active-20260516-priority-recovery-operation-workflow-owner-workflow-progress.md"
 }
 -->
 
@@ -182,7 +185,7 @@ owner-boundary package.
 
 - [x] Review subagent recorded: Agent Hegel (019e3183-a7a0-7513-87aa-38fb8ff7d892) reviewed work/packages/done-20260516-startup-active-gate-admin-snapshot-timeout-after-priority-recovery.md; result fixes-required.
 - [x] Fix subagent recorded or explicitly not needed: Agent Codex (019e3185-451d-7082-9420-73bfb06bfaca) fixed work/packages/done-20260516-startup-active-gate-admin-snapshot-timeout-after-priority-recovery.md.
-- [x] Implementation subagent recorded: Agent Codex (019e3188-e01f-7a50-b0d8-9361cccc7cb7) implemented work/packages/active-20260516-startup-active-gate-forced-repair-row-source-unavailable.md.
+- [x] Implementation subagent recorded: Agent Codex (019e3188-e01f-7a50-b0d8-9361cccc7cb7) implemented work/packages/done-20260516-startup-active-gate-forced-repair-row-source-unavailable.md.
 
 ## LLM Tool-First Contract
 
@@ -198,7 +201,7 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 
 ## In Scope
 
-1. work/packages/active-20260516-startup-active-gate-forced-repair-row-source-unavailable.md
+1. work/packages/done-20260516-startup-active-gate-forced-repair-row-source-unavailable.md
 2. work/sprints/current-blocker.md
 3. work/sprints/current-blocker.json
 4. src/admin/admin-service-discovery-readiness-methods.js
@@ -218,7 +221,7 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 - Intended minimum model: `gpt-5.3-codex`
 - Scope shape: `owner-boundary-contraction/current-frontier`
 - Output profile: `medium`
-- Owned files: `work/packages/active-20260516-startup-active-gate-forced-repair-row-source-unavailable.md`, `work/sprints/current-blocker.md`, `work/sprints/current-blocker.json`, `src/admin/admin-service-discovery-readiness-methods.js`, `test/admin/admin-service-discovery.test.js`, `work/model-ledger.jsonl`
+- Owned files: `work/packages/done-20260516-startup-active-gate-forced-repair-row-source-unavailable.md`, `work/sprints/current-blocker.md`, `work/sprints/current-blocker.json`, `src/admin/admin-service-discovery-readiness-methods.js`, `test/admin/admin-service-discovery.test.js`, `work/model-ledger.jsonl`
 - Forbidden files: `publication ACK convergence`, `priority recovery workflow progress`, `representative timeout budgets`, `active-gate admission relaxation`
 - Frozen decisions: publication ACK convergence and priority recovery workflow progress remain closed; timeout budgets and active-gate admission remain frozen unless canonical evidence selects them again.
 - Escalation triggers: owned files expand beyond this package, runtime ownership changes, representative scenario evidence changes, active-gate admission would be relaxed, or timeout budgets would be increased.
@@ -248,11 +251,17 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 10. node scripts/check-guideline-literals.js src/admin/admin-service-discovery-readiness-methods.js - pass, 0 new violations.
 11. node scripts/check-guideline-decision-boundaries.js src/admin/admin-service-discovery-readiness-methods.js - pass, 0 violations.
 12. npm run audit:runtime-grammar:file -- src/admin/admin-service-discovery-readiness-methods.js - pass, 0 violations.
-13. npm run work:validate -- --pre-impl work/packages/active-20260516-startup-active-gate-forced-repair-row-source-unavailable.md - pass.
+13. npm run work:validate -- --pre-impl work/packages/done-20260516-startup-active-gate-forced-repair-row-source-unavailable.md - pass.
 14. node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-after-forced-repair-row-source-20260516.report.json --verbose - red; migrated to priority recovery workflow progress after reducing forced repair row-source debt.
 15. npm run work:evidence-summary -- test-output/reports/rolling-restart-after-forced-repair-row-source-20260516.report.json - first frontier `priority_recovery_partition_progress`, owner `operation_workflow_owner`, boundary `workflow_progress`.
 16. npm run analyze:distributed-failure -- --report test-output/reports/rolling-restart-after-forced-repair-row-source-20260516.report.json - topology root cause with all nodes active and snapshot coverage 2/5.
 17. npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-forced-repair-row-source-20260516.report.json --handoff-probe - publication ACK satisfied, active-gate handoff pending owner reconcile.
 18. npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-forced-repair-row-source-20260516.report.json - dominant failure class `priority_recovery_event_wait`.
 19. npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-after-forced-repair-row-source-20260516.report.json --markdown - one witness in `operation_workflow_owner / workflow_progress`, partition `control_plane_publications-p1`, semantic state `spread_satisfied_in_flight`.
-20. npm run work:model-ledger -- record --package work/packages/active-20260516-startup-active-gate-forced-repair-row-source-unavailable.md --model gpt-5-codex --reasoning-effort high --output-profile medium --task-class causal-escalation --package-class representative-frontier-closure --intended-minimum-model gpt-5.3-codex --scope-shape owner-boundary-contraction/current-frontier --escalated true --bailout-reason migrated-to-operation-workflow-progress --outcome migrated --validation-status focused-green-representative-migrated --correction-loops 1 --review-findings 1 --notes "Forced repair row-source edge reduced: late authoritative gateway fixture passes, representative moved to priority_recovery_partition_progress with one control_plane_publications-p1 spread_satisfied_in_flight residual." - recorded.
+20. npm run work:model-ledger -- record --package work/packages/done-20260516-startup-active-gate-forced-repair-row-source-unavailable.md --model gpt-5-codex --reasoning-effort high --output-profile medium --task-class causal-escalation --package-class representative-frontier-closure --intended-minimum-model gpt-5.3-codex --scope-shape owner-boundary-contraction/current-frontier --escalated true --bailout-reason migrated-to-operation-workflow-progress --outcome migrated --validation-status focused-green-representative-migrated --correction-loops 1 --review-findings 1 --notes "Forced repair row-source edge reduced: late authoritative gateway fixture passes, representative moved to priority_recovery_partition_progress with one control_plane_publications-p1 spread_satisfied_in_flight residual." - recorded.
+
+## Commit And Push Ledger
+
+1. Focused package commit: 1030e95c
+2. Pushed to: origin/codex/pending-ack-eligibility-filter
+3. Commit contains only package-owned files/package-status/allowed sprint handoff: yes
