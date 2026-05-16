@@ -159,7 +159,7 @@ and this package's active metadata before implementation starts.
 
 - [x] Review subagent recorded: Agent Boyle (019e304f-f7eb-75a0-82c0-ee87d9627f54) reviewed work/packages/active-20260516-tikv-pd-style-topology-operator-step-witness-ledger.md; result clean
 - [x] Fix subagent recorded or explicitly not needed: not-needed
-- [ ] Implementation subagent recorded: pending implementation agent.
+- [x] Implementation subagent recorded: Agent Volta (019e3053-82d5-7d82-8d84-5c128e17f1a8) implemented work/packages/active-20260516-tikv-pd-style-topology-operator-step-witness-ledger.md
 
 ## Borrowing Details
 
@@ -203,3 +203,7 @@ Local implementation shape:
 1. npm run analyze:owner-files -- operation_workflow_owner workflow_progress --markdown
 2. node --test test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js
 3. node scripts/check-guideline-decision-boundaries.js src/rebalancer/operation-workflow-owner-segment-2.js src/rebalancer/operation-workflow-owner-segment-3.js
+4. npm run audit:guideline:literals -- src/rebalancer/operation-workflow-owner-segment-2.js src/rebalancer/operation-workflow-owner-shared.js src/diagnostics/topology-convergence-graph.js
+5. npm run audit:runtime-grammar:file -- src/rebalancer/operation-workflow-owner-segment-2.js src/rebalancer/operation-workflow-owner-shared.js src/diagnostics/topology-convergence-graph.js
+6. npm run guard:guideline:constant-names:file -- src/rebalancer/operation-workflow-owner-segment-2.js src/rebalancer/operation-workflow-owner-shared.js src/diagnostics/topology-convergence-graph.js
+7. node --test test/diagnostics/topology-convergence-graph.test.js

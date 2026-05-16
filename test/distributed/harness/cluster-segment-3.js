@@ -40,6 +40,39 @@ const ACTIVE_WAIT_PROGRESS_HANDOFF_OUTCOME_PREFIX = ',handoffOutcome=';
 const ACTIVE_WAIT_PROGRESS_HANDOFF_REASON_PREFIX = '#reason=';
 const ACTIVE_WAIT_PROGRESS_HANDOFF_ENQUEUED = '#enqueued=true';
 const ACTIVE_WAIT_PROGRESS_HANDOFF_RETRY_AFTER_PREFIX = '#retryAfterMs=';
+const ACTIVE_WAIT_PROGRESS_TOPOLOGY_OPERATOR_PREFIX = ',operator=';
+const ACTIVE_WAIT_PROGRESS_TOPOLOGY_OPERATOR_NEXT_PREFIX = '#next=';
+const ACTIVE_WAIT_PROGRESS_TOPOLOGY_OPERATOR_SEPARATOR = ':';
+const ACTIVE_WAIT_PROGRESS_TOPOLOGY_OPERATOR_STEP_SEPARATOR = '/';
+
+function formatTopologyOperatorWitness(progressSnapshot) {
+  const witness =
+    progressSnapshot?.topologyOperatorWitness &&
+    typeof progressSnapshot.topologyOperatorWitness === 'object' ?
+      progressSnapshot.topologyOperatorWitness :
+      null;
+  if (!witness) {
+    return '';
+  }
+  const kind = String(witness.kind || ACTIVE_WAIT_PROGRESS_VALUE_NONE);
+  const currentStepId = String(
+    witness.currentStepId || ACTIVE_WAIT_PROGRESS_VALUE_NONE,
+  );
+  const currentStepState = String(
+    witness.currentStepState || ACTIVE_WAIT_PROGRESS_VALUE_NONE,
+  );
+  const nextAction = String(
+    witness.nextAction || ACTIVE_WAIT_PROGRESS_VALUE_NONE,
+  );
+  return ACTIVE_WAIT_PROGRESS_TOPOLOGY_OPERATOR_PREFIX +
+    kind +
+    ACTIVE_WAIT_PROGRESS_TOPOLOGY_OPERATOR_SEPARATOR +
+    currentStepId +
+    ACTIVE_WAIT_PROGRESS_TOPOLOGY_OPERATOR_STEP_SEPARATOR +
+    currentStepState +
+    ACTIVE_WAIT_PROGRESS_TOPOLOGY_OPERATOR_NEXT_PREFIX +
+    nextAction;
+}
 
 function scoreActiveWaitProgress(progressSnapshot) {
   if (!progressSnapshot || typeof progressSnapshot !== 'object') {
@@ -190,6 +223,8 @@ function formatActiveWaitProgressSnapshot(progressSnapshot) {
   ).filter((missingNodeIds) => {
     return Array.isArray(missingNodeIds) && missingNodeIds.length > ZERO;
   }).length;
+  const topologyOperatorWitnessSummary =
+    formatTopologyOperatorWitness(progressSnapshot);
   return (
     'active=' +
     String(progressSnapshot.activeNodeCount ?? ZERO) +
@@ -289,6 +324,7 @@ function formatActiveWaitProgressSnapshot(progressSnapshot) {
     (progressSnapshot.closureWitnessClass ?
       '#' + progressSnapshot.closureWitnessClass :
       '') +
+    topologyOperatorWitnessSummary +
     ',gateReasons=' +
     (gateReasons.length > ZERO ? gateReasons.join('|') : 'none')
   );

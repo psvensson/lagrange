@@ -95,7 +95,7 @@ or produces a narrower owner-boundary blocker selected by canonical evidence.
 - Active sprint:
   `work/sprints/active-2026-q2-topology-convergence-systems-pattern-hardening.md`
 - Active package:
-  `work/packages/active-20260516-topology-publication-convergence-frontier-causal-edge.md`
+  `work/packages/active-20260516-tikv-pd-style-topology-operator-step-witness-ledger.md`
 - Artifact:
   `test-output/reports/rolling-restart-after-admin-owner-readiness-handoff-20260516.report.json`
 - Current package-local owner boundary:
@@ -109,9 +109,10 @@ or produces a narrower owner-boundary blocker selected by canonical evidence.
   `pendingReconcileCount=0` and next action `wait_owner_recovery` mean the
   drained owner-reconcile path should not be treated as the active blocker.
 - Priority recovery residuals:
-  classified but subordinate unless fresh canonical evidence promotes
-  `operation_workflow_owner / workflow_progress` ahead of publication
-  convergence.
+  classified as the current systems-pattern hardening slice for
+  `operation_workflow_owner / topology_operator_step_witnesses`; the package
+  adds an operator-step witness record so diagnostics prefer step and next-action
+  evidence over timeout-only workflow-progress classification when present.
 
 ## Codebase Analysis Notes
 
@@ -201,5 +202,5 @@ canonical owner-boundary evidence.
 Current package:
 
 ```text
-work/packages/active-20260516-topology-publication-convergence-frontier-causal-edge.md
+work/packages/active-20260516-tikv-pd-style-topology-operator-step-witness-ledger.md
 ```

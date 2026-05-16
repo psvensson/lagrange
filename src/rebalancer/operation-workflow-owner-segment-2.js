@@ -24,6 +24,7 @@ const {
   TIMEOUT_BUDGET_DEFAULT,
   TYPEOF,
   WORKFLOW_STEP,
+  buildTopologyOperatorWitnessFromWorkflowProgress,
   classifyTransportDeliveryOutcome,
   getControlPlaneRetryAfterMs,
   isDeliveredTransportDeliveryOutcome,
@@ -180,6 +181,13 @@ const COORDINATOR_CREATED_REMOTE_HANDOFF_RETRY_STATE_TABLE = Object.freeze([
 ]);
 
 class OperationWorkflowOwnerSegment2 extends OperationWorkflowOwnerSegment1 {
+  buildTopologyOperatorWitnessFromWorkflowProgress(
+    snapshot = {},
+    options = {},
+  ) {
+    return buildTopologyOperatorWitnessFromWorkflowProgress(snapshot, options);
+  }
+
   /**
    * Remote coordinator-created handoff delivery does not mutate the source
    * owner's local workflow state. Keep local operation advancement gated on

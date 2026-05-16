@@ -283,6 +283,38 @@ const TEST_ASSERT_LOCAL_OWNER_SCHEDULE_REJECTED =
   'local-owner operations should reject direct remote handoff scheduling';
 const TEST_ASSERT_LOCAL_OWNER_TRANSITION_GRACE_REMAINS =
   'local-owner transition retry grace should remain active';
+const TEST_TOPOLOGY_OPERATOR_WITNESS_STATE =
+  STAGE_SHARED.OPERATION_WORKFLOW_OWNER_SHARED
+    .TOPOLOGY_OPERATOR_WITNESS_CURRENT_STEP_STATE;
+const TEST_TOPOLOGY_OPERATOR_CURRENT_STEP_COUNT = 1;
+const TEST_TOPOLOGY_OPERATOR_KIND_PUBLICATION_ACK = 'publication_ack';
+const TEST_TOPOLOGY_OPERATOR_KIND_ACTIVE_GATE_RECONCILE =
+  'active_gate_reconcile';
+const TEST_TOPOLOGY_OPERATOR_PUBLICATION_ACK_STEP =
+  'publication_ack_wait';
+const TEST_TOPOLOGY_OPERATOR_ACTIVE_GATE_RECONCILE_STEP =
+  'active_gate_reconcile';
+const TEST_TOPOLOGY_OPERATOR_PUBLICATION_OWNER =
+  'topology_publication_owner';
+const TEST_TOPOLOGY_OPERATOR_ACTIVE_GATE_OWNER =
+  'startup_active_gate_owner';
+const TEST_TOPOLOGY_OPERATOR_PUBLICATION_BOUNDARY =
+  'publication_convergence';
+const TEST_TOPOLOGY_OPERATOR_ACTIVE_GATE_BOUNDARY = 'snapshot_coverage';
+const TEST_TOPOLOGY_OPERATOR_PUBLICATION_SOURCE =
+  'publication_owner_ack';
+const TEST_TOPOLOGY_OPERATOR_ACTIVE_GATE_SOURCE =
+  'active_gate_owner_reconcile';
+const TEST_TOPOLOGY_OPERATOR_WAIT_FOR_PUBLICATION_ACK =
+  'wait_for_publication_ack';
+const TEST_TOPOLOGY_OPERATOR_RECONCILE_ACTIVE_GATE =
+  'reconcile_active_gate_snapshot';
+const TEST_ASSERT_TOPOLOGY_OPERATOR_REQUIRED_FIELDS =
+  'topology operator witness should expose the required owner contract fields';
+const TEST_ASSERT_TOPOLOGY_OPERATOR_SINGLE_CURRENT_STEP =
+  'topology operator witness should expose exactly one current step';
+const TEST_ASSERT_TOPOLOGY_OPERATOR_SINGLE_NEXT_ACTION =
+  'topology operator witness should expose one scalar next action';
 
 function buildDispatchPendingReentryPlanningSnapshot() {
   return Object.freeze({
@@ -306,6 +338,55 @@ function buildDispatchPendingReentryPlanningSnapshot() {
       readyEligibleNodeCount: TEST_READY_ELIGIBLE_NODE_COUNT,
     }),
   });
+}
+
+function assertTopologyOperatorWitness(t, witness, expected) {
+  const requiredFields = [
+    'operatorId',
+    'owner',
+    'boundary',
+    'kind',
+    'partitionId',
+    'targetNodeId',
+    'steps',
+    'currentStepId',
+    'currentStepState',
+    'witnessSource',
+    'nextAction',
+    'deadlineMs',
+    'lastObservedAtMs',
+  ];
+  t.same(
+    requiredFields.filter((fieldName) =>
+      Object.prototype.hasOwnProperty.call(witness || {}, fieldName),
+    ),
+    requiredFields,
+    TEST_ASSERT_TOPOLOGY_OPERATOR_REQUIRED_FIELDS,
+  );
+  t.equal(witness.operatorId, expected.operatorId, expected.message);
+  t.equal(witness.owner, expected.owner, expected.message);
+  t.equal(witness.boundary, expected.boundary, expected.message);
+  t.equal(witness.kind, expected.kind, expected.message);
+  t.equal(witness.partitionId, expected.partitionId, expected.message);
+  t.equal(witness.targetNodeId, expected.targetNodeId, expected.message);
+  t.equal(witness.currentStepId, expected.currentStepId, expected.message);
+  t.equal(
+    witness.currentStepState,
+    expected.currentStepState,
+    expected.message,
+  );
+  t.equal(witness.witnessSource, expected.witnessSource, expected.message);
+  t.equal(witness.nextAction, expected.nextAction, expected.message);
+  t.equal(
+    witness.steps.filter((step) => step.current === true).length,
+    TEST_TOPOLOGY_OPERATOR_CURRENT_STEP_COUNT,
+    TEST_ASSERT_TOPOLOGY_OPERATOR_SINGLE_CURRENT_STEP,
+  );
+  t.equal(
+    typeof witness.nextAction,
+    'string',
+    TEST_ASSERT_TOPOLOGY_OPERATOR_SINGLE_NEXT_ACTION,
+  );
 }
 
 function buildSerialWaitSourceOperationContext() {
@@ -415,6 +496,37 @@ function createCoordinator(overrides = {}) {
   });
 }
 
+function createTopologyOperatorWitnessCoordinator() {
+  return createCoordinator({
+    nodeId: TEST_TARGET_NODE_ID,
+    systemTableCache: {
+      get() {
+        return TEST_EMPTY_VALUE;
+      },
+      getAll() {
+        return [];
+      },
+      filter() {
+        return [];
+      },
+    },
+    cdcIntegrationService: {
+      async waitForCacheUpdate() {},
+    },
+    messageRouter: {
+      async deliver() {
+        return {acknowledged: true, status: TEST_DELIVERY_STATUS_INITIATED};
+      },
+    },
+    tablePolicyService: {
+      async getPolicyForPartition() {
+        return {minReplicaCount: TEST_MIN_REPLICA_COUNT};
+      },
+    },
+    enableTimeouts: false,
+  });
+}
+
 function buildPendingOperationRow({
   operationId,
   partitionId,
@@ -449,6 +561,188 @@ function buildRetryableTransitionFailure() {
   error.retryAfterMs = TEST_RETRY_AFTER_MS;
   return error;
 }
+
+test('topology operator witness maps dispatch-pending owner progress',
+(t) => {
+  const coordinator = createTopologyOperatorWitnessCoordinator();
+  const snapshot = buildPriorityRecoveryDecisionSnapshot({
+    partitionId: TEST_PARTITION_ID,
+    capturedAt: TEST_CAPTURED_AT_MS,
+    publicationEpoch: TEST_PUBLICATION_EPOCH,
+    publicationConvergence: buildDispatchPendingReentryPlanningSnapshot(),
+    priorityPartitionSummary:
+      buildDispatchPendingReentryPlanningSnapshot().priorityPartitionSummary,
+    operationContexts: [{
+      operationId: TEST_OPERATION_ID,
+      partitionId: TEST_PARTITION_ID,
+      type: TEST_OPERATION_TYPE_REPLACE,
+      status: TEST_STATUS_PENDING,
+      workflowStep: TEST_STEP_PENDING,
+      sourceNodeId: TEST_SOURCE_NODE_ID,
+      targetNodeId: TEST_TARGET_NODE_ID,
+      replicaId: TEST_REPLICA_ID,
+      createdAtMs: TEST_OPERATION_CREATED_AT_MS,
+      updatedAtMs: TEST_OPERATION_CREATED_AT_MS,
+      stepTimeoutMs: TEST_STEP_TIMEOUT_MS,
+      timelineLength: TEST_TIMELINE_LENGTH,
+      timelineStepCount: TEST_TIMELINE_STEP_COUNT,
+      latestTimelineStep: TEST_STEP_PENDING,
+      latestTimelineStatus: TEST_STATUS_PENDING,
+      latestTimelineInFlight: true,
+    }],
+    operationId: TEST_OPERATION_ID,
+    stepTimeoutMsByWorkflowStep: {
+      [TEST_STEP_PENDING]: TEST_STEP_TIMEOUT_MS,
+    },
+    operationOwnerOutcome: buildRemoteDispatchPendingOperationOwnerOutcome(),
+  });
+  const witness =
+    coordinator.workflowOwner.buildTopologyOperatorWitnessFromWorkflowProgress(
+      snapshot,
+    );
+
+  assertTopologyOperatorWitness(t, witness, {
+    operatorId: TEST_OPERATION_ID,
+    owner: OPERATION_WORKFLOW_OWNER,
+    boundary: PRIORITY_RECOVERY_BLOCKING_BOUNDARY.WORKFLOW_PROGRESS,
+    kind: TEST_OPERATION_TYPE_REPLACE,
+    partitionId: TEST_PARTITION_ID,
+    targetNodeId: TEST_TARGET_NODE_ID,
+    currentStepId: PRIORITY_RECOVERY_WORKFLOW_PROGRESS_PHASE.DISPATCH_PENDING,
+    currentStepState: TEST_TOPOLOGY_OPERATOR_WITNESS_STATE.PLANNED,
+    witnessSource: PRIORITY_RECOVERY_WAIT_MODE.EVENT_DRIVEN,
+    nextAction:
+      PRIORITY_RECOVERY_NEXT_REQUIRED_ACTION.ADVANCE_EXISTING_OPERATION,
+    message: 'dispatch-pending owner progress should produce a step witness',
+  });
+  t.end();
+});
+
+test('topology operator witness maps owner retry progress',
+(t) => {
+  const coordinator = createTopologyOperatorWitnessCoordinator();
+  const witness =
+    coordinator.workflowOwner.buildTopologyOperatorWitnessFromWorkflowProgress({
+      operationId: TEST_OPERATION_ID,
+      partitionId: TEST_PARTITION_ID,
+      capturedAt: TEST_CAPTURED_AT_MS,
+      actuation: {
+        state: PRIORITY_RECOVERY_ACTUATION_STATE.DISPATCHED_WAITING_PROGRESS,
+      },
+      coordinator: {
+        operation: {
+          operationId: TEST_OPERATION_ID,
+          partitionId: TEST_PARTITION_ID,
+          targetNodeId: TEST_TARGET_NODE_ID,
+          type: TEST_OPERATION_TYPE_REPLACE,
+          updatedAtMs: TEST_OPERATION_CREATED_AT_MS,
+        },
+      },
+      progress: {
+        currentOwner: OPERATION_WORKFLOW_OWNER,
+        blockingBoundary:
+          PRIORITY_RECOVERY_BLOCKING_BOUNDARY.REBALANCER_HANDOFF,
+        workflowProgressPhaseId:
+          PRIORITY_RECOVERY_WORKFLOW_PROGRESS_PHASE.DISPATCH_PENDING,
+        waitMode: PRIORITY_RECOVERY_WAIT_MODE.RETRY_SCHEDULED,
+        nextRequiredAction:
+          PRIORITY_RECOVERY_NEXT_REQUIRED_ACTION.WAIT_FOR_OPERATION_PROGRESS,
+        stepTimeoutMs: TEST_STEP_TIMEOUT_MS,
+      },
+    });
+
+  assertTopologyOperatorWitness(t, witness, {
+    operatorId: TEST_OPERATION_ID,
+    owner: OPERATION_WORKFLOW_OWNER,
+    boundary: PRIORITY_RECOVERY_BLOCKING_BOUNDARY.REBALANCER_HANDOFF,
+    kind: TEST_OPERATION_TYPE_REPLACE,
+    partitionId: TEST_PARTITION_ID,
+    targetNodeId: TEST_TARGET_NODE_ID,
+    currentStepId: PRIORITY_RECOVERY_WORKFLOW_PROGRESS_PHASE.DISPATCH_PENDING,
+    currentStepState: TEST_TOPOLOGY_OPERATOR_WITNESS_STATE.RETRY_SCHEDULED,
+    witnessSource: PRIORITY_RECOVERY_WAIT_MODE.RETRY_SCHEDULED,
+    nextAction:
+      PRIORITY_RECOVERY_NEXT_REQUIRED_ACTION.WAIT_FOR_OPERATION_PROGRESS,
+    message: 'owner retry progress should produce a retry step witness',
+  });
+  t.end();
+});
+
+test('topology operator witness maps publication ACK progress',
+(t) => {
+  const coordinator = createTopologyOperatorWitnessCoordinator();
+  const witness =
+    coordinator.workflowOwner.buildTopologyOperatorWitnessFromWorkflowProgress(
+      {},
+      {
+        operatorId: String(TEST_PUBLICATION_EPOCH),
+        owner: TEST_TOPOLOGY_OPERATOR_PUBLICATION_OWNER,
+        boundary: TEST_TOPOLOGY_OPERATOR_PUBLICATION_BOUNDARY,
+        kind: TEST_TOPOLOGY_OPERATOR_KIND_PUBLICATION_ACK,
+        partitionId: TEST_LOCAL_OWNER_PARTITION_ID,
+        targetNodeId: TEST_TARGET_NODE_ID,
+        currentStepId: TEST_TOPOLOGY_OPERATOR_PUBLICATION_ACK_STEP,
+        currentStepState: TEST_TOPOLOGY_OPERATOR_WITNESS_STATE.OBSERVED,
+        witnessSource: TEST_TOPOLOGY_OPERATOR_PUBLICATION_SOURCE,
+        nextAction: TEST_TOPOLOGY_OPERATOR_WAIT_FOR_PUBLICATION_ACK,
+        deadlineMs: TEST_CAPTURED_AT_MS + TEST_STEP_TIMEOUT_MS,
+        lastObservedAtMs: TEST_CAPTURED_AT_MS,
+      },
+    );
+
+  assertTopologyOperatorWitness(t, witness, {
+    operatorId: String(TEST_PUBLICATION_EPOCH),
+    owner: TEST_TOPOLOGY_OPERATOR_PUBLICATION_OWNER,
+    boundary: TEST_TOPOLOGY_OPERATOR_PUBLICATION_BOUNDARY,
+    kind: TEST_TOPOLOGY_OPERATOR_KIND_PUBLICATION_ACK,
+    partitionId: TEST_LOCAL_OWNER_PARTITION_ID,
+    targetNodeId: TEST_TARGET_NODE_ID,
+    currentStepId: TEST_TOPOLOGY_OPERATOR_PUBLICATION_ACK_STEP,
+    currentStepState: TEST_TOPOLOGY_OPERATOR_WITNESS_STATE.OBSERVED,
+    witnessSource: TEST_TOPOLOGY_OPERATOR_PUBLICATION_SOURCE,
+    nextAction: TEST_TOPOLOGY_OPERATOR_WAIT_FOR_PUBLICATION_ACK,
+    message: 'publication ACK progress should produce a step witness',
+  });
+  t.end();
+});
+
+test('topology operator witness maps active-gate reconcile progress',
+(t) => {
+  const coordinator = createTopologyOperatorWitnessCoordinator();
+  const witness =
+    coordinator.workflowOwner.buildTopologyOperatorWitnessFromWorkflowProgress(
+      {},
+      {
+        operatorId: TEST_OPERATION_OWNER_CORRELATION_KEY,
+        owner: TEST_TOPOLOGY_OPERATOR_ACTIVE_GATE_OWNER,
+        boundary: TEST_TOPOLOGY_OPERATOR_ACTIVE_GATE_BOUNDARY,
+        kind: TEST_TOPOLOGY_OPERATOR_KIND_ACTIVE_GATE_RECONCILE,
+        partitionId: TEST_LOCAL_OWNER_PARTITION_ID,
+        targetNodeId: TEST_TARGET_NODE_ID,
+        currentStepId: TEST_TOPOLOGY_OPERATOR_ACTIVE_GATE_RECONCILE_STEP,
+        currentStepState: TEST_TOPOLOGY_OPERATOR_WITNESS_STATE.PLANNED,
+        witnessSource: TEST_TOPOLOGY_OPERATOR_ACTIVE_GATE_SOURCE,
+        nextAction: TEST_TOPOLOGY_OPERATOR_RECONCILE_ACTIVE_GATE,
+        deadlineMs: TEST_CAPTURED_AT_MS + TEST_STEP_TIMEOUT_MS,
+        lastObservedAtMs: TEST_CAPTURED_AT_MS,
+      },
+    );
+
+  assertTopologyOperatorWitness(t, witness, {
+    operatorId: TEST_OPERATION_OWNER_CORRELATION_KEY,
+    owner: TEST_TOPOLOGY_OPERATOR_ACTIVE_GATE_OWNER,
+    boundary: TEST_TOPOLOGY_OPERATOR_ACTIVE_GATE_BOUNDARY,
+    kind: TEST_TOPOLOGY_OPERATOR_KIND_ACTIVE_GATE_RECONCILE,
+    partitionId: TEST_LOCAL_OWNER_PARTITION_ID,
+    targetNodeId: TEST_TARGET_NODE_ID,
+    currentStepId: TEST_TOPOLOGY_OPERATOR_ACTIVE_GATE_RECONCILE_STEP,
+    currentStepState: TEST_TOPOLOGY_OPERATOR_WITNESS_STATE.PLANNED,
+    witnessSource: TEST_TOPOLOGY_OPERATOR_ACTIVE_GATE_SOURCE,
+    nextAction: TEST_TOPOLOGY_OPERATOR_RECONCILE_ACTIVE_GATE,
+    message: 'active-gate reconcile progress should produce a step witness',
+  });
+  t.end();
+});
 
 test(TEST_TRANSITION_RETRY_SNAPSHOT_REENTRY_TEST_NAME,
 async (t) => {
