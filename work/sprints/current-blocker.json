@@ -1,9 +1,9 @@
 {
   "schema": "current-blocker-v1",
   "generatedBy": "scripts/work-tracker.js",
-  "sprint": "work/sprints/active-2026-q2-topology-convergence-systems-pattern-hardening.md",
-  "package": "work/packages/active-20260516-topology-owner-boundary-file-size-reduction.md",
-  "status": "active",
+  "sprint": "work/sprints/done-2026-q2-topology-convergence-systems-pattern-hardening.md",
+  "package": "work/packages/done-20260516-topology-owner-boundary-file-size-reduction.md",
+  "status": "done",
   "lane": "lightweight-maintenance",
   "scenario": "none",
   "artifact": "none",
@@ -19,8 +19,10 @@
     "git diff --check -- src/rebalancer/operation-workflow-owner-segment-2.js test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js"
   ],
   "writeScope": [
+    "work/packages/done-20260516-topology-owner-boundary-file-size-reduction.md",
     "src/rebalancer/operation-workflow-owner-segment-2.js",
-    "test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js"
+    "test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js",
+    "work/model-ledger.jsonl"
   ],
   "handoffFiles": [
     "work/tracks/topology-convergence.md"
@@ -28,8 +30,10 @@
   "generatedFiles": [],
   "candidateRuntimeFiles": [],
   "commitScope": [
+    "work/packages/done-20260516-topology-owner-boundary-file-size-reduction.md",
     "src/rebalancer/operation-workflow-owner-segment-2.js",
-    "test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js"
+    "test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js",
+    "work/model-ledger.jsonl"
   ],
   "touchedFiles": [],
   "modelFit": {

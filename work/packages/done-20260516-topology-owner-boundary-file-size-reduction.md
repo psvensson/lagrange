@@ -3,7 +3,7 @@
 <!-- work-package
 {
   "schema": "work-package-v1",
-  "status": "active",
+  "status": "done",
   "opened": "2026-05-16",
   "lane": "lightweight-maintenance",
   "scenario": "none",
@@ -20,8 +20,10 @@
     "git diff --check -- src/rebalancer/operation-workflow-owner-segment-2.js test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js"
   ],
   "writeScope": [
+    "work/packages/done-20260516-topology-owner-boundary-file-size-reduction.md",
     "src/rebalancer/operation-workflow-owner-segment-2.js",
-    "test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js"
+    "test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js",
+    "work/model-ledger.jsonl"
   ],
   "handoffFiles": [
     "work/tracks/topology-convergence.md"
@@ -29,8 +31,10 @@
   "generatedFiles": [],
   "candidateRuntimeFiles": [],
   "commitScope": [
+    "work/packages/done-20260516-topology-owner-boundary-file-size-reduction.md",
     "src/rebalancer/operation-workflow-owner-segment-2.js",
-    "test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js"
+    "test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js",
+    "work/model-ledger.jsonl"
   ],
   "modelFit": {
     "packageClass": "bounded-implementation",
@@ -41,7 +45,9 @@
       "owned files expand beyond this package",
       "a frozen decision must be reopened"
     ]
-  }
+  },
+  "closed": "2026-05-16",
+  "commitAndPushLedgerRequired": true
 }
 -->
 
@@ -132,3 +138,34 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 1. npm run work:oversized-next -- --markdown
 2. npm run audit:owner-boundary-segments -- src/rebalancer/operation-workflow-owner-segment-2.js
 3. git diff --check -- src/rebalancer/operation-workflow-owner-segment-2.js test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js
+
+## Implementation Evidence
+
+- Selected the package-owned oversized source file from the canonical
+  owner-boundary audit: `src/rebalancer/operation-workflow-owner-segment-2.js`.
+- Extracted `deferCoordinatorCreatedOperationTransitionRetry` so the
+  coordinator-created claim and local dispatch paths share one retry option
+  builder without changing transition retry semantics.
+- Removed a stale dangling transition-session JSDoc block at the file tail.
+- Source line count decreased from 1404 to 1401 lines by `wc -l`; the focused
+  test file stayed unchanged.
+
+## Validation Results
+
+- PASS: `npm run work:oversized-next -- --markdown`
+- PASS: `npm run audit:owner-boundary-segments -- src/rebalancer/operation-workflow-owner-segment-2.js`
+- PASS: `node --check src/rebalancer/operation-workflow-owner-segment-2.js`
+- PASS: `node test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js`
+- PASS: `node scripts/check-guideline-decision-boundaries.js src/rebalancer/operation-workflow-owner-segment-2.js`
+- PASS: `node scripts/check-guideline-literals.js src/rebalancer/operation-workflow-owner-segment-2.js`
+- PASS: `npm run audit:runtime-grammar:file -- src/rebalancer/operation-workflow-owner-segment-2.js`
+- PASS: `npm run guard:guideline:constant-names:file -- src/rebalancer/operation-workflow-owner-segment-2.js`
+- PASS: `npm run work:validate -- --pre-impl work/packages/done-20260516-topology-owner-boundary-file-size-reduction.md`
+- PASS: `npm run work:validate -- --closure work/packages/done-20260516-topology-owner-boundary-file-size-reduction.md`
+- PASS: `git diff --check -- src/rebalancer/operation-workflow-owner-segment-2.js test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js`
+
+## Commit And Push Ledger
+
+1. Focused package commit: `090eec8d`
+2. Pushed to: `origin/codex/pending-ack-eligibility-filter`
+3. Commit contains only package-owned files/package-status/allowed sprint handoff: yes

@@ -2,9 +2,9 @@
 
 # Current Blocker
 
-Sprint: `work/sprints/active-2026-q2-topology-convergence-systems-pattern-hardening.md`
+Sprint: `work/sprints/done-2026-q2-topology-convergence-systems-pattern-hardening.md`
 
-Package: `work/packages/active-20260516-topology-owner-boundary-file-size-reduction.md`
+Package: `work/packages/done-20260516-topology-owner-boundary-file-size-reduction.md`
 
 Workflow lane: `lightweight-maintenance`
 
@@ -127,8 +127,10 @@ Handoff invariant: `unknown`
 
 Write scope:
 
-1. `src/rebalancer/operation-workflow-owner-segment-2.js`
-2. `test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js`
+1. `work/packages/done-20260516-topology-owner-boundary-file-size-reduction.md`
+2. `src/rebalancer/operation-workflow-owner-segment-2.js`
+3. `test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js`
+4. `work/model-ledger.jsonl`
 
 Handoff files:
 
@@ -144,8 +146,10 @@ Candidate runtime files:
 
 Commit scope:
 
-1. `src/rebalancer/operation-workflow-owner-segment-2.js`
-2. `test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js`
+1. `work/packages/done-20260516-topology-owner-boundary-file-size-reduction.md`
+2. `src/rebalancer/operation-workflow-owner-segment-2.js`
+3. `test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js`
+4. `work/model-ledger.jsonl`
 
 Legacy touched files:
 

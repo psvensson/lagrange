@@ -1,6 +1,7 @@
 # Topology Convergence Systems Pattern Hardening Sprint
 
-Status: active. This sprint starts after
+Status: done. Closed on 2026-05-16 after all seven linked work packages were
+implemented, validated, committed, and pushed. This sprint started after
 `work/sprints/done-2026-q2-topology-rolling-restart-green-gate-closure.md`
 migrated the representative `rolling-restart` blocker to
 `topology_publication_owner / publication_convergence`.
@@ -110,7 +111,7 @@ Primary references:
    - Acceptance: focused pressure tests prove critical convergence is admitted,
      deferred, or rejected with typed owner outcomes and is never silently
      dropped.
-7. [Topology Owner Boundary File Size Reduction](../packages/active-20260516-topology-owner-boundary-file-size-reduction.md)
+7. [Topology Owner Boundary File Size Reduction](../packages/done-20260516-topology-owner-boundary-file-size-reduction.md)
    - Lane: `lightweight-maintenance`
    - Owner boundary: `workflow_tooling_owner / topology_owner_file_size_debt`
    - Purpose: reduce review risk by extracting one coherent topology owner
