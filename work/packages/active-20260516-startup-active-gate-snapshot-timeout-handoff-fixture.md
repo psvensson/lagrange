@@ -1,9 +1,10 @@
+# Startup Active Gate Snapshot Timeout Handoff Fixture
+
+<!-- work-package
 {
-  "schema": "current-blocker-v1",
-  "generatedBy": "scripts/work-tracker.js",
-  "sprint": "work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md",
-  "package": "work/packages/active-20260516-startup-active-gate-snapshot-timeout-handoff-fixture.md",
+  "schema": "work-package-v1",
   "status": "active",
+  "opened": "2026-05-16",
   "lane": "causal-escalation",
   "scenario": "rolling-restart",
   "artifact": "test-output/reports/rolling-restart-after-priority-workflow-progress-20260516.report.json",
@@ -72,7 +73,6 @@
     "test/admin/admin-service-discovery.test.js",
     "work/model-ledger.jsonl"
   ],
-  "touchedFiles": [],
   "modelFit": {
     "packageClass": "representative-frontier-closure",
     "intendedMinimumModel": "gpt-5.3-codex",
@@ -139,3 +139,100 @@
   },
   "predecessor": "work/packages/done-20260516-priority-recovery-operation-workflow-owner-workflow-progress.md"
 }
+-->
+
+## Why
+
+The priority recovery edge is reduced and the representative gate moved back to
+active-gate snapshot coverage. This package owns the replayable
+handoff/snapshot fixture for selected source
+`11601fe0-72d6-5853-8590-ec2881853e72` and must split the selected snapshot
+source timeout, forced repair timeout, authoritative control snapshot nodes
+query timeout, and inherited readiness support.
+
+## Scope Basis
+
+Roadmap Phase `0.1 - Internal Coherence`, specifically topology workflow
+stabilization, failure simulations, and production guarantees for the AGPL
+runtime.
+
+## Workflow Lane
+
+- Selected lane: `causal-escalation`
+- Why this lane is required: the representative scenario remains red after
+  priority recovery reduced, and canonical evidence moved the first frontier
+  back to startup active-gate snapshot coverage.
+- Escalation trigger to a heavier lane: implementation requires timeout
+  increases, publication ACK rewrites, priority recovery rewrites, active-gate
+  admission relaxation, or a broader architecture change outside the snapshot
+  fixture boundary.
+
+## Subagent Sequencing Requirement
+
+Required before implementation because this is a scenario-driven runtime
+owner-boundary package.
+
+## Subagent Sequencing Ledger
+
+- [ ] Review subagent recorded: pending-before-implementation-resumes.
+- [ ] Fix subagent recorded or explicitly not needed: pending-before-review.
+- [ ] Implementation subagent recorded: pending-before-implementation-resumes.
+
+## LLM Tool-First Contract
+
+Before raw JSON, raw logs, broad file search, oversized segment files, or ad hoc `jq`, use the canonical workflow command that owns the question:
+
+1. Package metadata or ledger edits: `npm run work:package:doctor -- --suggest <package>`, `npm run work:package:doctor -- --fix-dry-run <package>`, `npm run work:package:schema`, or `npm run work:package:new -- ...`.
+2. Representative evidence: `npm run work:evidence-summary -- <artifact>` plus any focused extractor for this failure class.
+3. Owner discovery: `npm run analyze:owner-files -- <owner> [boundary]`.
+4. Subagent sequencing: `npm run work:subagent-prompt -- --role <role> --package <package>`.
+5. Large-file cleanup: `npm run work:oversized-next -- --markdown`.
+
+If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which canonical extractor was tried and why it was insufficient.
+
+## In Scope
+
+1. work/packages/active-20260516-startup-active-gate-snapshot-timeout-handoff-fixture.md
+2. work/sprints/current-blocker.md
+3. work/sprints/current-blocker.json
+4. src/admin/admin-control-snapshot-class-part-2.js
+5. src/admin/admin-control-snapshot-class-part-3.js
+6. src/admin/admin-control-snapshot-class-part-5.js
+7. src/admin/admin-control-snapshot-class-part-6.js
+8. src/admin/admin-service-discovery-readiness-methods.js
+9. src/admin/admin-service-discovery-repair-methods.js
+10. src/control-plane/control-plane-snapshot-owner.js
+11. src/diagnostics/topology-convergence-graph.js
+12. test/admin/admin-control-snapshot.test.js
+13. test/admin/admin-service-discovery.test.js
+14. work/model-ledger.jsonl
+
+## Out Of Scope
+
+1. publication-ack-convergence
+2. priority-recovery-workflow-progress
+3. representative-timeout-budget
+4. active-gate-admission-relaxation
+
+## Model Fit
+
+- Package class: `representative-frontier-closure`
+- Intended minimum model: `gpt-5.3-codex`
+- Scope shape: `owner-boundary-contraction/current-frontier`
+- Output profile: `medium`
+- Owned files: `work/packages/active-20260516-startup-active-gate-snapshot-timeout-handoff-fixture.md`, `work/sprints/current-blocker.md`, `work/sprints/current-blocker.json`, `src/admin/admin-control-snapshot-class-part-2.js`, `src/admin/admin-control-snapshot-class-part-3.js`, `src/admin/admin-control-snapshot-class-part-5.js`, `src/admin/admin-control-snapshot-class-part-6.js`, `src/admin/admin-service-discovery-readiness-methods.js`, `src/admin/admin-service-discovery-repair-methods.js`, `src/control-plane/control-plane-snapshot-owner.js`, `src/diagnostics/topology-convergence-graph.js`, `test/admin/admin-control-snapshot.test.js`, `test/admin/admin-service-discovery.test.js`, `work/model-ledger.jsonl`
+- Forbidden files: `publication-ack-convergence`, `priority-recovery-workflow-progress`, `representative-timeout-budget`, `active-gate-admission-relaxation`
+- Frozen decisions: publication ACK, priority recovery, timeout budgets, and active-gate admission stay closed unless canonical evidence selects them again.
+- Escalation triggers: owned files expand beyond this package, runtime ownership changes, representative scenario evidence changes, active-gate admission would be relaxed, or timeout budgets would be increased.
+- Focused proof: `npm run work:evidence-summary -- test-output/reports/rolling-restart-after-priority-workflow-progress-20260516.report.json`, `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-priority-workflow-progress-20260516.report.json --handoff-probe`, `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-priority-workflow-progress-20260516.report.json`
+- Model ledger advisory: `escalate`
+
+## Validation
+
+1. npm run work:validate -- --entry work/packages/active-20260516-startup-active-gate-snapshot-timeout-handoff-fixture.md
+2. npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-priority-workflow-progress-20260516.report.json --handoff-probe
+3. npm test -- test/admin/admin-control-snapshot.test.js
+4. npm test -- test/admin/admin-service-discovery.test.js
+5. Focused owner tests for the promoted runtime file.
+6. Static guardrails for touched runtime files.
+7. node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-after-snapshot-timeout-handoff-fixture-20260516.report.json --verbose

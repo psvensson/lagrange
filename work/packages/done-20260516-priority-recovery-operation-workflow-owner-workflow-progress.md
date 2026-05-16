@@ -3,7 +3,7 @@
 <!-- work-package
 {
   "schema": "work-package-v1",
-  "status": "active",
+  "status": "done",
   "opened": "2026-05-16",
   "lane": "causal-escalation",
   "scenario": "rolling-restart",
@@ -41,7 +41,7 @@
     "npm run work:model-ledger -- record --package work/packages/active-20260516-priority-recovery-operation-workflow-owner-workflow-progress.md --model gpt-5-codex --reasoning-effort high --output-profile medium --task-class causal-escalation --package-class representative-frontier-closure --intended-minimum-model gpt-5.3-codex --scope-shape owner-boundary-contraction/current-frontier --escalated true --bailout-reason next-frontier-startup-active-gate-snapshot-coverage --outcome migrated --validation-status focused-green-representative-migrated --correction-loops 1 --review-findings 0 --notes \"Priority recovery workflow-progress edge reduced to zero witnesses; representative migrated to active_gate_snapshot_coverage with selected snapshot source timeout and forced repair timeout on source 11601fe0-72d6-5853-8590-ec2881853e72.\""
   ],
   "writeScope": [
-    "work/packages/active-20260516-priority-recovery-operation-workflow-owner-workflow-progress.md",
+    "work/packages/done-20260516-priority-recovery-operation-workflow-owner-workflow-progress.md",
     "work/sprints/current-blocker.md",
     "work/sprints/current-blocker.json",
     "src/rebalancer/operation-workflow-owner.js",
@@ -72,7 +72,7 @@
     "src/rebalancer/operation-workflow-owner-evidence.js"
   ],
   "commitScope": [
-    "work/packages/active-20260516-priority-recovery-operation-workflow-owner-workflow-progress.md",
+    "work/packages/done-20260516-priority-recovery-operation-workflow-owner-workflow-progress.md",
     "work/sprints/current-blocker.md",
     "work/sprints/current-blocker.json",
     "src/rebalancer/operation-workflow-owner.js",
@@ -160,7 +160,10 @@
       "npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-after-priority-workflow-progress-20260516.report.json --markdown"
     ]
   },
-  "predecessor": "work/packages/done-20260516-startup-active-gate-forced-repair-row-source-unavailable.md"
+  "predecessor": "work/packages/done-20260516-startup-active-gate-forced-repair-row-source-unavailable.md",
+  "closed": "2026-05-16",
+  "commitAndPushLedgerRequired": true,
+  "successor": "work/packages/active-20260516-startup-active-gate-snapshot-timeout-handoff-fixture.md"
 }
 -->
 
@@ -213,7 +216,7 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 
 ## In Scope
 
-1. work/packages/active-20260516-priority-recovery-operation-workflow-owner-workflow-progress.md
+1. work/packages/done-20260516-priority-recovery-operation-workflow-owner-workflow-progress.md
 2. work/sprints/current-blocker.md
 3. work/sprints/current-blocker.json
 4. src/rebalancer/operation-workflow-owner.js
@@ -238,7 +241,7 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 - Intended minimum model: `gpt-5.3-codex`
 - Scope shape: `owner-boundary-contraction/current-frontier`
 - Output profile: `medium`
-- Owned files: `work/packages/active-20260516-priority-recovery-operation-workflow-owner-workflow-progress.md`, `work/sprints/current-blocker.md`, `work/sprints/current-blocker.json`, `src/rebalancer/operation-workflow-owner.js`, `src/rebalancer/operation-workflow-owner-segment-7-stage-5.js`, `src/rebalancer/operation-workflow-owner-segment-7-stage-3.js`, `src/rebalancer/operation-workflow-owner-segment-7-stage-2.js`, `src/rebalancer/operation-workflow-owner-ports.js`, `test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js`, `test/rebalancer/operation-workflow-progress-event-driven-reentry.test.js`, `test/rebalancer/coordinator-created-operation-progress-remote-handoff.test.js`, `work/model-ledger.jsonl`
+- Owned files: `work/packages/done-20260516-priority-recovery-operation-workflow-owner-workflow-progress.md`, `work/sprints/current-blocker.md`, `work/sprints/current-blocker.json`, `src/rebalancer/operation-workflow-owner.js`, `src/rebalancer/operation-workflow-owner-segment-7-stage-5.js`, `src/rebalancer/operation-workflow-owner-segment-7-stage-3.js`, `src/rebalancer/operation-workflow-owner-segment-7-stage-2.js`, `src/rebalancer/operation-workflow-owner-ports.js`, `test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js`, `test/rebalancer/operation-workflow-progress-event-driven-reentry.test.js`, `test/rebalancer/coordinator-created-operation-progress-remote-handoff.test.js`, `work/model-ledger.jsonl`
 - Forbidden files: `publication-ack-convergence`, `representative-timeout-budget`, `active-gate-admission-relaxation`
 - Frozen decisions: publication ACK, timeout budgets, and active-gate admission stay closed unless canonical evidence selects them again; priority recovery is open only for the selected workflow-progress residual.
 - Escalation triggers: owned files expand beyond this package, runtime ownership changes, or representative scenario evidence changes.
@@ -278,3 +281,9 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 21. npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-priority-workflow-progress-20260516.report.json - dominant failure class `active_gate_snapshot_coverage_incomplete`.
 22. npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-after-priority-workflow-progress-20260516.report.json --markdown - zero priority recovery witnesses.
 23. npm run work:model-ledger -- record --package work/packages/active-20260516-priority-recovery-operation-workflow-owner-workflow-progress.md --model gpt-5-codex --reasoning-effort high --output-profile medium --task-class causal-escalation --package-class representative-frontier-closure --intended-minimum-model gpt-5.3-codex --scope-shape owner-boundary-contraction/current-frontier --escalated true --bailout-reason next-frontier-startup-active-gate-snapshot-coverage --outcome migrated --validation-status focused-green-representative-migrated --correction-loops 1 --review-findings 0 --notes "Priority recovery workflow-progress edge reduced to zero witnesses; representative migrated to active_gate_snapshot_coverage with selected snapshot source timeout and forced repair timeout on source 11601fe0-72d6-5853-8590-ec2881853e72." - recorded.
+
+## Commit And Push Ledger
+
+1. Focused package commit: 39cefce3
+2. Pushed to: origin/codex/pending-ack-eligibility-filter
+3. Commit contains only package-owned files/package-status/allowed sprint handoff: yes
