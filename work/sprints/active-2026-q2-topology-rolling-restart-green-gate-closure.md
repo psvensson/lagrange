@@ -1,10 +1,10 @@
 # Topology Rolling-Restart Green Gate Closure Sprint
 
-Status: done on 2026-05-16. Outcome: migrated. This sprint started after
-`done-2026-q2-topology-convergence-complexity-reduction.md` reduced the
-publication-to-active-gate handoff complexity and closed when fresh evidence
-selected `topology_publication_owner / publication_convergence` as the next
-blocker.
+Status: active, resumed on 2026-05-16 after a migrated closure. This sprint
+started after `done-2026-q2-topology-convergence-complexity-reduction.md`
+reduced the publication-to-active-gate handoff complexity and first closed when
+fresh evidence selected `topology_publication_owner / publication_convergence`
+as the next blocker.
 
 ## Goal
 
@@ -22,46 +22,41 @@ success is in scope.
 ## Current Blocker Snapshot
 
 Latest representative artifact:
-`test-output/reports/rolling-restart-after-owner-trigger-only-handoff-20260516.report.json`.
+`test-output/reports/rolling-restart-post-systems-pattern-checkpoint-20260516.report.json`.
 
-Canonical state after the membership publication owner-command handoff proof:
+Canonical state after the post-systems-pattern checkpoint:
 
-1. `work:evidence-summary` selects `active_gate_snapshot_coverage` as the first
+1. `work:evidence-summary` selects `publication_ack_convergence` as the first
    frontier.
 2. Representative owner boundary:
-   `startup_active_gate_owner / snapshot_coverage`.
-3. Dominant reason: `owner_reconcile_pending`.
-4. Current reasons: `owner_reconcile_pending`,
-   `snapshot_coverage_incomplete`, and `snapshot_repair_deferred`.
-5. Producer publication ACK convergence is satisfied with `pendingAck=0`, but
-   selected producer membership remains seed-only and producer
-   `missingPublishedCount=4`.
-6. Active-gate snapshot coverage remains `2/5`; selected snapshot observation
-   remains `repair_deferred` / `deferred_refresh` / `deferred` / `deferred` /
-   `retry`.
-7. The canonical handoff probe reports `missingEdge=null`,
+   `topology_publication_owner / publication_convergence`.
+3. Dominant reason: `publication_ack_blocked` / `pending_acks_present`.
+4. The scenario is red: all nodes reached `ACTIVE` (`5/5`), but the active-gate
+   timed out with `snapshotCoverage=2/5`.
+5. Publication is `PUBLISHED` with `pendingAck=1`,
+   `pendingAckNodeIds=[]`, `missingPublishedCount=4`,
+   `publishedActiveNodeIds=1/5` seed-only,
+   `publicationOwnerAckState=waiting_for_ack`, `freshnessFence=ack_lag`,
+   `recoveryOutcome=waiting_for_ack`, and
+   `streamOutcome=waiting_for_ack`.
+6. The canonical handoff probe reports `missingEdge=null`,
    `contractEdge=publication_active_gate_handoff_contract`,
-   `nextAction=reconcile_owner_membership_publication`,
-   `pendingReconcileCount=2`, pending nodes
-   `11601fe0-72d6-5853-8590-ec2881853e72` and
-   `35a891b8-c1a0-5064-9c6e-2acfba61c2a7`, and
+   `nextAction=wait_owner_recovery`, `pendingReconcileCount=0`, and
    `runtimePromotionAllowed=false`.
-8. Focused owner tests now prove the seed-only fixture: the membership
-   publication owner writes or classifies the widened publication row with
-   durable readback, while admin snapshot catch-up is trigger/display only.
-9. The representative report contains no
-   `membershipPublicationHandoffOutcome` and no structured owner outcome value
-   (`published_visible`, `write_deferred`, `pressure_deferred`,
-   `target_blocked`, or `no_change`).
-10. `causal-model` marks `priority_recovery_partition_progress` satisfied at
-    the active-gate summary and keeps `active_gate_snapshot_coverage` as the
-    first critical path; one subordinate
-    `operation_workflow_owner / workflow_progress` witness remains parked.
-11. The final package is
-    `work/packages/done-20260515-startup-active-gate-snapshot-coverage-owner-reconcile-remaining-targets.md`.
-12. Active-gate admission must remain strict until the owner reconcile path
-    produces durable coverage or reports one typed deferred/blocked owner
-    outcome.
+7. Causal-model outcome is `accept_classified_backpressure`, while dominant
+   failure class remains `publication_ack_blocked`; priority recovery
+   backpressure is subordinate to publication ACK convergence.
+8. Priority recovery is subordinate: residual extraction reports two
+   `operation_workflow_owner / workflow_progress` witnesses on
+   `control_plane_publications-p1` and `sql_transaction_participants-p1`, while
+   causal-model keeps `publication_ack_convergence` as the first critical path.
+   Split required is `false`; do not promote this boundary unless future
+   canonical evidence selects it.
+9. The current checkpoint package is
+   `work/packages/active-20260516-rolling-restart-post-systems-pattern-checkpoint.md`.
+10. The next package must continue through
+   `topology_publication_owner / publication_convergence` using the fresh
+   checkpoint artifact before any runtime edit.
 
 ## Scope Basis
 
@@ -418,11 +413,11 @@ The sprint cannot close until:
 6. Post-detour update: systems-pattern hardening and completion closure are now
    done. The next continuation step is no longer the systems-pattern sprint;
    it is the checkpoint package
-   `work/packages/todo-20260516-rolling-restart-post-systems-pattern-checkpoint.md`.
+   `work/packages/active-20260516-rolling-restart-post-systems-pattern-checkpoint.md`.
 
 ## Post-Systems-Pattern Continuation Package
 
-[Rolling Restart Post Systems Pattern Checkpoint](../packages/todo-20260516-rolling-restart-post-systems-pattern-checkpoint.md)
+[Rolling Restart Post Systems Pattern Checkpoint](../packages/active-20260516-rolling-restart-post-systems-pattern-checkpoint.md)
 
 - Lane: `scenario-release-gate`
 - Owner boundary:
@@ -438,13 +433,25 @@ The sprint cannot close until:
 - Guardrail: the old pending-reconcile active-gate trace is historical because
   the final pre-detour handoff had `pendingReconcileCount=0` and
   `nextAction=wait_owner_recovery`.
+- Result: red same-frontier successor selected. The fresh checkpoint report is
+  `test-output/reports/rolling-restart-post-systems-pattern-checkpoint-20260516.report.json`;
+  canonical extractors select `publication_ack_convergence` under
+  `topology_publication_owner / publication_convergence` with
+  `publication_ack_blocked` / `pending_acks_present`. All five nodes reached
+  `ACTIVE`, but the active gate timed out with `snapshotCoverage=2/5`.
+  Producer recovery is waiting for ACK (`publicationOwnerAckState=waiting_for_ack`,
+  `freshnessFence=ack_lag`, `recoveryOutcome=waiting_for_ack`,
+  `streamOutcome=waiting_for_ack`), active-gate handoff has
+  `pendingReconcileCount=0` and `nextAction=wait_owner_recovery`, and
+  priority recovery remains subordinate with two unsplit workflow-progress
+  witnesses.
 
 ## Current Next Action
 
 When the paused rolling-restart gate is resumed, start with:
 
 ```text
-work/packages/todo-20260516-rolling-restart-post-systems-pattern-checkpoint.md
+work/packages/active-20260516-rolling-restart-post-systems-pattern-checkpoint.md
 ```
 
 Use the final pre-detour representative artifact only as handoff context:
@@ -454,13 +461,9 @@ test-output/reports/rolling-restart-after-admin-owner-readiness-handoff-20260516
 ```
 
 The completed startup active-gate package drained the owner-reconcile handoff
-path: `pendingReconcileCount=0` and `nextAction=wait_owner_recovery`. The
-systems-pattern hardening sprint and completion closure are now both done, so
-the next work must produce a fresh post-detour representative artifact before
-runtime implementation resumes.
-
-If fresh evidence remains red on `publication_ack_convergence /
-topology_publication_owner / publication_convergence`, continue there using the
-new artifact. If it selects a different owner boundary, open or activate that
-successor instead. Do not relax active-gate admission, rewrite publication
-handoff truth, or increase timeouts.
+path: `pendingReconcileCount=0` and `nextAction=wait_owner_recovery`. The fresh
+post-detour representative artifact has now reselected
+`publication_ack_convergence / topology_publication_owner /
+publication_convergence`, so the next work continues there using the new
+artifact. Do not relax active-gate admission, rewrite publication handoff truth,
+or increase timeouts.
