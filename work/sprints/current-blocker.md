@@ -4,13 +4,13 @@
 
 Sprint: `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md`
 
-Package: `work/packages/active-20260516-startup-active-gate-snapshot-coverage-owner-reconcile-pending.md`
+Package: `work/packages/active-20260516-startup-active-gate-snapshot-coverage-deferred-refresh-discovery-gap.md`
 
 Workflow lane: `causal-escalation`
 
 Scenario: `rolling-restart`
 
-Artifact: `test-output/reports/rolling-restart-priority-workflow-progress-20260516T180829Z.report.json`
+Artifact: `test-output/reports/rolling-restart-after-owner-reconcile-selected-evidence-20260516T195857Z.report.json`
 
 Playback: `none`
 
@@ -22,18 +22,19 @@ Boundary: `snapshot_coverage`
 
 Dominant reason: `active_gate_timed_out`
 
-Current state: The predecessor priority recovery repeat package drained workflow-progress witnesses to zero. Fresh rolling-restart evidence now selects active_gate_snapshot_coverage under startup_active_gate_owner / snapshot_coverage. The active gate timed out with snapshotCoverageNodeCount=2/5, selected snapshot observation repair_deferred/stale_usable, and owner_reconcile_pending for node 35a891b8-c1a0-5064-9c6e-2acfba61c2a7.
+Current state: Fresh same-frontier rolling-restart evidence keeps active_gate_snapshot_coverage blocked at 2/5. The selected source is 11601fe0-72d6-5853-8590-ec2881853e72, selected snapshot observation is repair_deferred/deferred_refresh/deferred/retry with retryAfterMs=2909, and reason codes include cache_stale_watermark, discovery_node_coverage_gap, and stale_replica_operations_in_flight. Publication ACK and priority recovery remain satisfied by canonical extractors.
 
 ## Next Action
 
-Reduce or split owner_reconcile_pending snapshot coverage after priority recovery is satisfied.
+Prove whether deferred_refresh discovery_node_coverage_gap is owned by snapshot-source selection, forced repair stall, authoritative nodes query pressure, or inherited readiness support; then reduce that exact edge without reopening publication ACK, priority recovery, timeout budgets, or active-gate admission.
 
 ## Proof Ladder
 
-1. `npm run work:evidence-summary -- test-output/reports/rolling-restart-priority-workflow-progress-20260516T180829Z.report.json`
-2. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-priority-workflow-progress-20260516T180829Z.report.json --explain active_gate_snapshot_coverage`
-3. `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-priority-workflow-progress-20260516T180829Z.report.json`
-4. `npm run analyze:owner-files -- startup_active_gate_owner snapshot_coverage --markdown`
+1. `npm run work:evidence-summary -- test-output/reports/rolling-restart-after-owner-reconcile-selected-evidence-20260516T195857Z.report.json`
+2. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-owner-reconcile-selected-evidence-20260516T195857Z.report.json --explain active_gate_snapshot_coverage`
+3. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-owner-reconcile-selected-evidence-20260516T195857Z.report.json --handoff-probe`
+4. `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-owner-reconcile-selected-evidence-20260516T195857Z.report.json`
+5. `npm run analyze:owner-files -- startup_active_gate_owner snapshot_coverage --markdown`
 
 ## Model Fit
 
@@ -49,15 +50,14 @@ Escalation triggers:
 
 1. `owned files expand beyond this package`
 2. `a frozen decision must be reopened`
-3. `priority recovery residuals reappear`
 
 ## Representative Residual
 
-Status: `live-red-scenario-release-gate`
+Status: `live-red-same-frontier`
 
 Scenario: `rolling-restart`
 
-Artifact: `test-output/reports/rolling-restart-priority-workflow-progress-20260516T180829Z.report.json`
+Artifact: `test-output/reports/rolling-restart-after-owner-reconcile-selected-evidence-20260516T195857Z.report.json`
 
 Frontier: `active_gate_snapshot_coverage`
 
@@ -67,59 +67,61 @@ Boundary: `snapshot_coverage`
 
 Dominant reason: `active_gate_timed_out`
 
-Next action: `Reduce or split owner_reconcile_pending snapshot coverage with priority recovery still satisfied.`
+Next action: `Separate deferred_refresh discovery_node_coverage_gap from snapshot-source selection, forced repair stall, authoritative nodes query pressure, and inherited readiness support.`
 
 ## Causal Governance
 
-Causal hypothesis: `The current representative edge is startup active-gate snapshot coverage. Priority recovery is satisfied, publication ACK is satisfied, and the selected remaining blocker is owner_reconcile_pending with snapshot coverage stuck at 2/5.`
+Causal hypothesis: `The remaining representative edge is active-gate snapshot coverage. The selected snapshot source is 11601fe0-72d6-5853-8590-ec2881853e72 and the selected snapshot observation now reports deferred_refresh/retry with discovery_node_coverage_gap.`
 
-Stop-condition check: `Run the required subagent sequence, npm run analyze:causal-model on fresh evidence, explain active_gate_snapshot_coverage, focused startup active-gate owner tests, static guardrails for touched runtime files, and one representative rolling-restart rerun after implementation.`
+Stop-condition check: `Run entry validation, handoff/snapshot probe, npm run analyze:causal-model on fresh evidence, focused admin snapshot tests, focused owner tests for promoted runtime files, static guardrails, and one representative rolling-restart rerun.`
 
-Expected causal-model change: `Focused proof should reduce or split owner_reconcile_pending snapshot coverage, then either make rolling-restart green or migrate to the next canonical frontier.`
+Expected causal-model change: `Focused proof should identify which of the four named causes owns deferred_refresh discovery_node_coverage_gap, then reduce that edge or migrate to the next canonical frontier.`
 
 Representative outcome: `pending-before-rerun`
 
-Causal debt: `Priority recovery has zero witnesses and remains satisfied. Publication ACK has pendingAckCount=0. Active gate snapshot coverage is 2/5 and selected snapshot repair is deferred because of cache_stale_watermark and stale_replica_operations_in_flight.`
+Causal debt: `Publication ACK and priority recovery remain satisfied by canonical extractors. Active-gate snapshot coverage is 2/5, pendingReconcileCount is 3, selected snapshot next action is retry, and authoritative nodes query pressure appears in the failure evidence.`
 
-Cross-boundary review: `Publication ACK and priority recovery stay frozen unless canonical evidence selects them again.`
+Cross-boundary review: `Do not reopen publication ACK, priority recovery, timeout budgets, or active-gate admission unless canonical evidence selects them again.`
 
 ## Scenario Causal Closure
 
-Reference scenario/probe: `rolling-restart after priority workflow-progress repeat fix`
+Reference scenario/probe: `rolling-restart after owner-reconcile selected-evidence handoff fix`
 
 Phase chain:
 
-1. `consume priority recovery repeat migration proof`
-2. `classify active_gate_snapshot_coverage as the current first frontier`
-3. `run review, fix if required, and implementation subagents before runtime edits`
-4. `reduce or split owner_reconcile_pending snapshot coverage`
+1. `consume same-frontier owner-reconcile handoff proof`
+2. `separate snapshot-source selection from forced repair stall`
+3. `separate authoritative control snapshot nodes query pressure`
+4. `confirm readiness support remains inherited from active-gate no progress`
 5. `rerun representative rolling-restart and classify green, reduced, same-frontier, migrated, or split`
 
-Current first frontier: `active_gate_snapshot_coverage in test-output/reports/rolling-restart-priority-workflow-progress-20260516T180829Z.report.json, owned by startup_active_gate_owner / snapshot_coverage.`
+Current first frontier: `active_gate_snapshot_coverage in test-output/reports/rolling-restart-after-owner-reconcile-selected-evidence-20260516T195857Z.report.json, owned by startup_active_gate_owner / snapshot_coverage.`
 
 Known downstream blockers:
 
 1. `priority_recovery_partition_progress is satisfied with zero residual witnesses`
-2. `publication_ack_convergence is satisfied with pendingAckCount=0`
+2. `publication_ack_convergence is satisfied by canonical handoff probe`
 3. `active_gate_snapshot_coverage is blocked with snapshotCoverageNodeCount=2 and expectedNodeCount=5`
-4. `owner_reconcile_pending targets node 35a891b8-c1a0-5064-9c6e-2acfba61c2a7`
-5. `selected snapshot observation is repair_deferred/stale_usable with cache_stale_watermark and stale_replica_operations_in_flight`
+4. `selected source is 11601fe0-72d6-5853-8590-ec2881853e72`
+5. `selected snapshot observation is repair_deferred/deferred_refresh/deferred/retry with retryAfterMs=2909`
+6. `reason codes include cache_stale_watermark, discovery_node_coverage_gap, and stale_replica_operations_in_flight`
+7. `readiness support remains inherited_active_gate_no_progress`
 
-Missing causal edge: `Prove whether owner_reconcile_pending should advance the active-gate publication handoff for the remaining node or split by a narrower snapshot coverage cause.`
+Missing causal edge: `Prove whether deferred_refresh discovery_node_coverage_gap is caused by bad snapshot-source selection, forced repair path stalls, authoritative control snapshot nodes query pressure, or inherited readiness support.`
 
-Missing causal edge probe: `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-priority-workflow-progress-20260516T180829Z.report.json --explain active_gate_snapshot_coverage`
+Missing causal edge probe: `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-owner-reconcile-selected-evidence-20260516T195857Z.report.json --explain active_gate_snapshot_coverage`
 
-Bounded progress proof: `The predecessor proved the dispatch-pending priority recovery drain path, reduced priority recovery to zero witnesses, and canonical evidence selected active-gate snapshot coverage again.`
+Bounded progress proof: `The predecessor preserved selected missing publication evidence and revealed a three-node reconcile cohort, but the representative rerun stayed on active_gate_snapshot_coverage.`
 
-Bounded progress proof artifact: `test-output/reports/rolling-restart-priority-workflow-progress-20260516T180829Z.report.json`
+Bounded progress proof artifact: `test-output/reports/rolling-restart-after-owner-reconcile-selected-evidence-20260516T195857Z.report.json`
 
-Expected observable transition: `Focused proof should reduce owner_reconcile_pending snapshot coverage or migrate to the next canonical edge without reopening priority recovery.`
+Expected observable transition: `Focused proof should reduce deferred_refresh discovery_node_coverage_gap or migrate to the next canonical edge without reopening frozen decisions.`
 
 Max progress bound: `one focused startup_active_gate_owner / snapshot_coverage package slice after required subagent sequencing`
 
-Same-frontier fallback: `If active_gate_snapshot_coverage remains first frontier, preserve owner_reconcile_pending and split by exact snapshot coverage cause.`
+Same-frontier fallback: `If active_gate_snapshot_coverage remains first frontier, split by the exact selected subcause and preserve the four-cause evidence table.`
 
-Expected next frontier: `representative green, reduced active-gate snapshot coverage residual, readiness_startup_support, or another canonical frontier after snapshot coverage improves`
+Expected next frontier: `representative green, reduced discovery_node_coverage_gap residual, readiness_startup_support, or another canonical frontier after snapshot coverage improves`
 
 Result classification: `pending-before-probe`
 
@@ -127,31 +129,28 @@ Stop condition: `continue-local-fix`
 
 Recent frontier history:
 
-1. `work/packages/done-20260516-priority-recovery-operation-workflow-owner-workflow-progress-repeat.md / operation_workflow_owner / workflow_progress / migrated`
-2. `work/packages/done-20260516-startup-active-gate-snapshot-timeout-handoff-fixture.md / startup_active_gate_owner / snapshot_coverage / migrated`
-3. `work/packages/done-20260516-priority-recovery-operation-workflow-owner-workflow-progress.md / operation_workflow_owner / workflow_progress / migrated`
+1. `work/packages/done-20260516-startup-active-gate-snapshot-coverage-owner-reconcile-pending.md / startup_active_gate_owner / snapshot_coverage / same-frontier`
+2. `work/packages/done-20260516-priority-recovery-operation-workflow-owner-workflow-progress-repeat.md / operation_workflow_owner / workflow_progress / migrated`
+3. `work/packages/done-20260516-startup-active-gate-snapshot-timeout-handoff-fixture.md / startup_active_gate_owner / snapshot_coverage / migrated`
 
-Oscillation check: `This active-gate package is allowed because the immediately preceding priority recovery package produced fresh representative evidence selecting active_gate_snapshot_coverage again.`
+Oscillation check: `This same-frontier package is allowed because fresh representative evidence changed the active-gate subcause from stale_usable/wait to deferred_refresh/retry with discovery_node_coverage_gap.`
 
-Handoff invariant: `Priority recovery and publication ACK remain closed unless canonical evidence selects them again.`
+Handoff invariant: `Publication ACK, priority recovery, timeout budgets, and active-gate admission remain frozen unless canonical evidence selects them again.`
 
 ## Scope
 
 Write scope:
 
-1. `work/packages/active-20260516-startup-active-gate-snapshot-coverage-owner-reconcile-pending.md`
-2. `work/packages/done-20260516-priority-recovery-operation-workflow-owner-workflow-progress-repeat.md`
-3. `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md`
-4. `work/sprints/current-blocker.md`
-5. `work/sprints/current-blocker.json`
-6. `src/control-plane/publication-active-gate-handoff-contract.js`
-7. `src/control-plane/startup-authority-snapshot-owner.js`
-8. `src/control-plane/control-plane-readiness-service-segment-4-stage-5.js`
+1. `work/packages/active-20260516-startup-active-gate-snapshot-coverage-deferred-refresh-discovery-gap.md`
+2. `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md`
+3. `work/sprints/current-blocker.md`
+4. `work/sprints/current-blocker.json`
+5. `test/admin/admin-control-snapshot.test.js`
 
 Handoff files:
 
-1. `work/packages/done-20260516-priority-recovery-operation-workflow-owner-workflow-progress-repeat.md`
-2. `test-output/reports/rolling-restart-priority-workflow-progress-20260516T180829Z.report.json`
+1. `work/packages/done-20260516-startup-active-gate-snapshot-coverage-owner-reconcile-pending.md`
+2. `test-output/reports/rolling-restart-after-owner-reconcile-selected-evidence-20260516T195857Z.report.json`
 
 Generated files:
 
@@ -160,20 +159,22 @@ Generated files:
 
 Candidate runtime files:
 
-1. `src/control-plane/publication-active-gate-handoff-contract.js`
-2. `src/control-plane/startup-authority-snapshot-owner.js`
-3. `src/control-plane/control-plane-readiness-service-segment-4-stage-5.js`
+1. `src/admin/admin-control-snapshot-class-part-1.js`
+2. `src/admin/admin-control-snapshot-class-part-6.js`
+3. `src/control-plane/publication-active-gate-handoff-contract.js`
+4. `src/control-plane/control-plane-readiness-service-segment-4-stage-5.js`
 
 Commit scope:
 
-1. `work/packages/active-20260516-startup-active-gate-snapshot-coverage-owner-reconcile-pending.md`
-2. `work/packages/done-20260516-priority-recovery-operation-workflow-owner-workflow-progress-repeat.md`
-3. `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md`
-4. `work/sprints/current-blocker.md`
-5. `work/sprints/current-blocker.json`
-6. `src/control-plane/publication-active-gate-handoff-contract.js`
-7. `src/control-plane/startup-authority-snapshot-owner.js`
-8. `src/control-plane/control-plane-readiness-service-segment-4-stage-5.js`
+1. `work/packages/active-20260516-startup-active-gate-snapshot-coverage-deferred-refresh-discovery-gap.md`
+2. `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md`
+3. `work/sprints/current-blocker.md`
+4. `work/sprints/current-blocker.json`
+5. `test/admin/admin-control-snapshot.test.js`
+6. `src/admin/admin-control-snapshot-class-part-1.js`
+7. `src/admin/admin-control-snapshot-class-part-6.js`
+8. `src/control-plane/publication-active-gate-handoff-contract.js`
+9. `src/control-plane/control-plane-readiness-service-segment-4-stage-5.js`
 
 Legacy touched files:
 

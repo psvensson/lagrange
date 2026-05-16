@@ -141,7 +141,7 @@
     "handoffInvariant": "Publication ACK, timeout budgets, and active-gate admission remain closed unless canonical evidence selects them again."
   },
   "predecessor": "work/packages/done-20260516-startup-active-gate-snapshot-timeout-handoff-fixture.md",
-  "successor": "work/packages/active-20260516-startup-active-gate-snapshot-coverage-owner-reconcile-pending.md",
+  "successor": "work/packages/done-20260516-startup-active-gate-snapshot-coverage-owner-reconcile-pending.md",
   "commitAndPushLedgerRequired": true
 }
 -->

@@ -31,6 +31,20 @@ const TEST_ACTIVE_GATE_BUDGET = Object.freeze({
   activeGateState: 'timed_out',
 });
 const TEST_RECOVERY_WAIT_NODE_IDS = Object.freeze([TEST_NODE_5]);
+const TEST_SEED_PUBLISHED_NODE_IDS = Object.freeze([TEST_NODE_1]);
+const TEST_SELECTED_MISSING_PUBLICATION_NODE_IDS = Object.freeze([
+  TEST_NODE_2,
+  TEST_NODE_3,
+  TEST_NODE_4,
+  TEST_NODE_5,
+]);
+const TEST_SELECTED_HANDOFF_EXPECTED_NODE_IDS = Object.freeze([
+  TEST_NODE_1,
+  TEST_NODE_2,
+  TEST_NODE_3,
+  TEST_NODE_4,
+  TEST_NODE_5,
+]);
 
 test('publication active-gate handoff contract schedules owner reconcile from one decision table',
   async (t) => {
@@ -78,6 +92,62 @@ test('publication active-gate handoff contract schedules owner reconcile from on
           PUBLICATION_ACTIVE_GATE_CATCHUP_FENCE_REASON
             .DURABLE_PUBLICATION_INCOMPLETE,
         ],
+        nextLegalAction:
+          PUBLICATION_ACTIVE_GATE_CATCHUP_FENCE_NEXT_ACTION
+            .RECONCILE_OWNER_MEMBERSHIP_PUBLICATION,
+      },
+    });
+  });
+
+test('publication active-gate handoff preserves nested selected missing publication evidence',
+  async (t) => {
+    const contract = buildPublicationActiveGateHandoffContract({
+      activeNodeViews: {
+        effectiveActiveNodeIds: [TEST_NODE_1, TEST_NODE_2],
+        snapshotCoverageNodeIds: [TEST_NODE_1, TEST_NODE_2],
+        snapshotCoverageRevision: TEST_SNAPSHOT_COVERAGE_REVISION,
+      },
+      publicationConvergence: {
+        publicationEpoch: TEST_PUBLICATION_EPOCH,
+        status: TEST_PUBLICATION_STATUS_PUBLISHED,
+        publishedActiveNodeIds: [...TEST_SEED_PUBLISHED_NODE_IDS],
+        activeGateProgress: {
+          selectedPublishedActiveNodeIds: [
+            ...TEST_SEED_PUBLISHED_NODE_IDS,
+          ],
+          selectedMissingPublishedNodeIds: [
+            ...TEST_SELECTED_MISSING_PUBLICATION_NODE_IDS,
+          ],
+        },
+      },
+    });
+
+    t.match(contract, {
+      expectedNodeIds: [...TEST_SELECTED_HANDOFF_EXPECTED_NODE_IDS],
+      publishedActiveNodeIds: [...TEST_SEED_PUBLISHED_NODE_IDS],
+      missingPublishedNodeIds: [
+        ...TEST_SELECTED_MISSING_PUBLICATION_NODE_IDS,
+      ],
+      pendingReconcileNodeIds: [
+        ...TEST_SELECTED_MISSING_PUBLICATION_NODE_IDS,
+      ],
+      runtimePromotionAllowed: false,
+      state: PUBLICATION_ACTIVE_GATE_HANDOFF_STATE.PENDING,
+      reasonCode:
+        PUBLICATION_ACTIVE_GATE_HANDOFF_REASON.OWNER_RECONCILE_PENDING,
+      nextAction:
+        PUBLICATION_ACTIVE_GATE_HANDOFF_NEXT_ACTION
+          .RECONCILE_OWNER_MEMBERSHIP_PUBLICATION,
+      activeGateCatchupFence: {
+        state:
+          PUBLICATION_ACTIVE_GATE_CATCHUP_FENCE_STATE.CATCHUP_PENDING,
+        targetNodeIds: [...TEST_SELECTED_HANDOFF_EXPECTED_NODE_IDS],
+        durablePublication: {
+          nodeIds: [...TEST_SEED_PUBLISHED_NODE_IDS],
+          missingNodeIds: [
+            ...TEST_SELECTED_MISSING_PUBLICATION_NODE_IDS,
+          ],
+        },
         nextLegalAction:
           PUBLICATION_ACTIVE_GATE_CATCHUP_FENCE_NEXT_ACTION
             .RECONCILE_OWNER_MEMBERSHIP_PUBLICATION,

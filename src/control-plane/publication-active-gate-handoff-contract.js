@@ -144,6 +144,8 @@ const PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD = Object.freeze({
   REQUIRED_ACK_NODE_IDS: 'requiredAckNodeIds',
   REVISION: 'revision',
   REVISION_STATE: 'revisionState',
+  SELECTED_MISSING_PUBLISHED_NODE_IDS: 'selectedMissingPublishedNodeIds',
+  SELECTED_PUBLISHED_ACTIVE_NODE_IDS: 'selectedPublishedActiveNodeIds',
   SNAPSHOT_COVERAGE: 'snapshotCoverage',
   SNAPSHOT_COVERAGE_NODE_IDS: 'snapshotCoverageNodeIds',
   SNAPSHOT_COVERAGE_REVISION: 'snapshotCoverageRevision',
@@ -197,6 +199,8 @@ const PUBLICATION_ACTIVE_GATE_HANDOFF_PUBLICATION_NODE_FIELDS =
     PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.REQUIRED_ACK_NODE_IDS,
     PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.ACKNOWLEDGED_NODE_IDS,
     PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.PENDING_ACK_NODE_IDS,
+    PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.SELECTED_MISSING_PUBLISHED_NODE_IDS,
+    PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.SELECTED_PUBLISHED_ACTIVE_NODE_IDS,
   ]);
 
 const PUBLICATION_ACTIVE_GATE_HANDOFF_LIFECYCLE_NODE_FIELDS =
@@ -221,6 +225,8 @@ const PUBLICATION_ACTIVE_GATE_HANDOFF_TARGET_NODE_FIELDS = Object.freeze([
     .MISSING_PUBLISHED_RECOVERY_ACTIVE_NODE_IDS,
   PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.PENDING_RECONCILE_NODE_IDS,
   PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.RECOVERY_ACTIVE_NODE_IDS,
+  PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.SELECTED_MISSING_PUBLISHED_NODE_IDS,
+  PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.SELECTED_PUBLISHED_ACTIVE_NODE_IDS,
 ]);
 
 const PUBLICATION_ACTIVE_GATE_HANDOFF_TARGET_CONTEXT_FIELDS = Object.freeze([
@@ -450,26 +456,30 @@ function collectPublicationActiveGateHandoffPublicationNodeIds(
   if (!isPublicationActiveGateHandoffRecord(publicationConvergence)) {
     return PUBLICATION_ACTIVE_GATE_HANDOFF_EMPTY_LIST;
   }
-  const lifecycleSummary =
-    isPublicationActiveGateHandoffRecord(
-      publicationConvergence[
-        PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.MEMBERSHIP_LIFECYCLE_SUMMARY
-      ],
-    ) ?
-      publicationConvergence[
-        PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.MEMBERSHIP_LIFECYCLE_SUMMARY
-      ] :
-      {};
-  return [
-    ...collectPublicationActiveGateHandoffRecordNodeIds(
-      publicationConvergence,
-      PUBLICATION_ACTIVE_GATE_HANDOFF_PUBLICATION_NODE_FIELDS,
-    ),
-    ...collectPublicationActiveGateHandoffRecordNodeIds(
-      lifecycleSummary,
-      PUBLICATION_ACTIVE_GATE_HANDOFF_LIFECYCLE_NODE_FIELDS,
-    ),
-  ];
+  return collectPublicationActiveGateHandoffPublicationEvidenceRecords(
+    publicationConvergence,
+  ).flatMap((evidenceRecord) => {
+    const lifecycleSummary =
+      isPublicationActiveGateHandoffRecord(
+        evidenceRecord[
+          PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.MEMBERSHIP_LIFECYCLE_SUMMARY
+        ],
+      ) ?
+        evidenceRecord[
+          PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.MEMBERSHIP_LIFECYCLE_SUMMARY
+        ] :
+        {};
+    return [
+      ...collectPublicationActiveGateHandoffRecordNodeIds(
+        evidenceRecord,
+        PUBLICATION_ACTIVE_GATE_HANDOFF_PUBLICATION_NODE_FIELDS,
+      ),
+      ...collectPublicationActiveGateHandoffRecordNodeIds(
+        lifecycleSummary,
+        PUBLICATION_ACTIVE_GATE_HANDOFF_LIFECYCLE_NODE_FIELDS,
+      ),
+    ];
+  });
 }
 
 function collectPublicationActiveGateHandoffContextNodeIds(targetEvidence) {
@@ -559,35 +569,47 @@ function resolvePublicationActiveGateHandoffExplicitMissingNodeIds(
   if (!isPublicationActiveGateHandoffRecord(publicationConvergence)) {
     return PUBLICATION_ACTIVE_GATE_HANDOFF_EMPTY_LIST;
   }
-  const lifecycleSummary =
-    isPublicationActiveGateHandoffRecord(
-      publicationConvergence[
-        PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.MEMBERSHIP_LIFECYCLE_SUMMARY
-      ],
-    ) ?
-      publicationConvergence[
-        PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.MEMBERSHIP_LIFECYCLE_SUMMARY
-      ] :
-      {};
-  return normalizePublicationActiveGateHandoffNodeIdList([
-    ...normalizePublicationActiveGateHandoffNodeIdList(
-      publicationConvergence[
-        PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.MISSING_PUBLISHED_NODE_IDS
-      ],
-    ),
-    ...normalizePublicationActiveGateHandoffNodeIdList(
-      publicationConvergence[
-        PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD
-          .MISSING_PUBLISHED_RECOVERY_ACTIVE_NODE_IDS
-      ],
-    ),
-    ...normalizePublicationActiveGateHandoffNodeIdList(
-      lifecycleSummary[
-        PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD
-          .MISSING_PUBLISHED_RECOVERY_ACTIVE_NODE_IDS
-      ],
-    ),
-  ]);
+  return normalizePublicationActiveGateHandoffNodeIdList(
+    collectPublicationActiveGateHandoffPublicationEvidenceRecords(
+      publicationConvergence,
+    ).flatMap((evidenceRecord) => {
+      const lifecycleSummary =
+        isPublicationActiveGateHandoffRecord(
+          evidenceRecord[
+            PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.MEMBERSHIP_LIFECYCLE_SUMMARY
+          ],
+        ) ?
+          evidenceRecord[
+            PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.MEMBERSHIP_LIFECYCLE_SUMMARY
+          ] :
+          {};
+      return [
+        ...normalizePublicationActiveGateHandoffNodeIdList(
+          evidenceRecord[
+            PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.MISSING_PUBLISHED_NODE_IDS
+          ],
+        ),
+        ...normalizePublicationActiveGateHandoffNodeIdList(
+          evidenceRecord[
+            PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD
+              .MISSING_PUBLISHED_RECOVERY_ACTIVE_NODE_IDS
+          ],
+        ),
+        ...normalizePublicationActiveGateHandoffNodeIdList(
+          evidenceRecord[
+            PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD
+              .SELECTED_MISSING_PUBLISHED_NODE_IDS
+          ],
+        ),
+        ...normalizePublicationActiveGateHandoffNodeIdList(
+          lifecycleSummary[
+            PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD
+              .MISSING_PUBLISHED_RECOVERY_ACTIVE_NODE_IDS
+          ],
+        ),
+      ];
+    }),
+  );
 }
 
 function resolvePublicationActiveGateHandoffMissingPublishedNodeIds({
@@ -655,6 +677,27 @@ function collectPublicationActiveGateHandoffPriorityRecoveryEvidenceRecords(
     publicationConvergence[
       PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.PRIORITY_RECOVERY_CURRENT_SUMMARY
     ],
+    publicationConvergence[
+      PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.ACTIVE_GATE_PROGRESS
+    ],
+    publicationConvergence[
+      PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.ACTIVE_GATE_BEST_PROGRESS
+    ],
+    activeGate,
+    activeGate?.[PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.PROGRESS],
+  ].filter(isPublicationActiveGateHandoffRecord));
+}
+
+function collectPublicationActiveGateHandoffPublicationEvidenceRecords(
+  publicationConvergence = null,
+) {
+  if (!isPublicationActiveGateHandoffRecord(publicationConvergence)) {
+    return PUBLICATION_ACTIVE_GATE_HANDOFF_EMPTY_LIST;
+  }
+  const activeGate =
+    publicationConvergence[PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.ACTIVE_GATE];
+  return Object.freeze([
+    publicationConvergence,
     publicationConvergence[
       PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.ACTIVE_GATE_PROGRESS
     ],

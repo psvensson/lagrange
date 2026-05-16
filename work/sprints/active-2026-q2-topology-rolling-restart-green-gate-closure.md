@@ -36,10 +36,13 @@ Canonical state after the priority recovery repeat package:
 6. Active-gate snapshot coverage is blocked with `snapshotCoverageNodeCount=2`,
    `expectedNodeCount=5`, `owner_reconcile_pending`, and
    `snapshot_repair_deferred`.
-7. The current active package is
-   `work/packages/active-20260516-startup-active-gate-snapshot-coverage-owner-reconcile-pending.md`;
-   it must reduce or split the owner-reconcile snapshot coverage edge without
-   reopening priority recovery or publication ACK convergence.
+7. The owner-reconcile selected-evidence package closed as same-frontier; the
+   current active package is
+   `work/packages/active-20260516-startup-active-gate-snapshot-coverage-deferred-refresh-discovery-gap.md`.
+   It must separate deferred-refresh discovery-node coverage from
+   snapshot-source selection, forced repair stalls, authoritative query
+   pressure, and inherited readiness support without reopening priority
+   recovery or publication ACK convergence.
 
 ## Scope Basis
 
@@ -430,11 +433,12 @@ The sprint cannot close until:
 
 ## Current Next Action
 
-Continue with the active-gate snapshot coverage owner-reconcile package:
+Continue with the active-gate snapshot coverage deferred-refresh discovery-gap
+package:
 
 ```text
-work/packages/active-20260516-startup-active-gate-snapshot-coverage-owner-reconcile-pending.md
-test-output/reports/rolling-restart-priority-workflow-progress-20260516T180829Z.report.json
+work/packages/active-20260516-startup-active-gate-snapshot-coverage-deferred-refresh-discovery-gap.md
+test-output/reports/rolling-restart-after-owner-reconcile-selected-evidence-20260516T195857Z.report.json
 ```
 
 Keep the completed post-systems-pattern checkpoint package and artifact as

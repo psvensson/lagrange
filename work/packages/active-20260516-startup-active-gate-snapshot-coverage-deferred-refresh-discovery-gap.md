@@ -1,9 +1,10 @@
+# Startup Active Gate Snapshot Coverage Deferred Refresh Discovery Gap
+
+<!-- work-package
 {
-  "schema": "current-blocker-v1",
-  "generatedBy": "scripts/work-tracker.js",
-  "sprint": "work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md",
-  "package": "work/packages/active-20260516-startup-active-gate-snapshot-coverage-deferred-refresh-discovery-gap.md",
+  "schema": "work-package-v1",
   "status": "active",
+  "opened": "2026-05-16",
   "lane": "causal-escalation",
   "scenario": "rolling-restart",
   "artifact": "test-output/reports/rolling-restart-after-owner-reconcile-selected-evidence-20260516T195857Z.report.json",
@@ -52,7 +53,6 @@
     "src/control-plane/publication-active-gate-handoff-contract.js",
     "src/control-plane/control-plane-readiness-service-segment-4-stage-5.js"
   ],
-  "touchedFiles": [],
   "modelFit": {
     "packageClass": "representative-frontier-closure",
     "intendedMinimumModel": "gpt-5.3-codex",
@@ -120,3 +120,88 @@
   },
   "predecessor": "work/packages/done-20260516-startup-active-gate-snapshot-coverage-owner-reconcile-pending.md"
 }
+-->
+
+## Why
+
+Fresh representative evidence stayed on `active_gate_snapshot_coverage`, but it
+now exposes a narrower selected-snapshot subcause:
+`deferred_refresh` / `discovery_node_coverage_gap` for source
+`11601fe0-72d6-5853-8590-ec2881853e72`. This package owns separating that edge
+from the other possible causes before any runtime edit.
+
+## Scope Basis
+
+Roadmap Phase `0.1 - Internal Coherence`, specifically rolling-restart
+topology workflow stabilization and production guarantees for the AGPL runtime.
+
+## Workflow Lane
+
+- Selected lane: `causal-escalation`
+- Why this lane is required: the representative first frontier stayed on
+  startup active-gate snapshot coverage, but the selected subcause changed and
+  must be separated before another runtime change.
+- Escalation trigger to a heavier lane: runtime ownership expands beyond the
+  listed candidate files, a frozen decision must be reopened, or
+  representative evidence contradicts the selected owner boundary.
+
+## Subagent Sequencing Requirement
+
+Required before implementation because this is a scenario-driven runtime
+owner-boundary package.
+
+## Subagent Sequencing Ledger
+
+- [ ] Review subagent recorded: pending-before-implementation-resumes.
+- [ ] Fix subagent recorded or explicitly not needed: pending-before-review.
+- [ ] Implementation subagent recorded: pending-before-implementation-resumes.
+
+## LLM Tool-First Contract
+
+Before raw JSON, raw logs, broad file search, oversized segment files, or ad hoc `jq`, use the canonical workflow command that owns the question:
+
+1. Package metadata or ledger edits: `npm run work:package:doctor -- --suggest <package>`, `npm run work:package:doctor -- --fix-dry-run <package>`, `npm run work:package:schema`, or `npm run work:package:new -- ...`.
+2. Representative evidence: `npm run work:evidence-summary -- <artifact>` plus any focused extractor for this failure class.
+3. Owner discovery: `npm run analyze:owner-files -- <owner> [boundary]`.
+4. Subagent sequencing: `npm run work:subagent-prompt -- --role <role> --package <package>`.
+5. Large-file cleanup: `npm run work:oversized-next -- --markdown`.
+
+If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which canonical extractor was tried and why it was insufficient.
+
+## In Scope
+
+1. work/packages/active-20260516-startup-active-gate-snapshot-coverage-deferred-refresh-discovery-gap.md
+2. work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md
+3. work/sprints/current-blocker.md
+4. work/sprints/current-blocker.json
+5. test/admin/admin-control-snapshot.test.js
+
+## Out Of Scope
+
+1. publication-ack-convergence
+2. priority_recovery_partition_progress
+3. operation_workflow_owner
+4. timeout_budgets
+5. active_gate_admission
+
+## Model Fit
+
+- Package class: `representative-frontier-closure`
+- Intended minimum model: `gpt-5.3-codex`
+- Scope shape: `owner-boundary-contraction/current-frontier`
+- Output profile: `medium`
+- Owned files: `work/packages/active-20260516-startup-active-gate-snapshot-coverage-deferred-refresh-discovery-gap.md`, `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md`, `work/sprints/current-blocker.md`, `work/sprints/current-blocker.json`, `test/admin/admin-control-snapshot.test.js`
+- Forbidden files: `publication-ack-convergence`, `priority_recovery_partition_progress`, `operation_workflow_owner`, `timeout_budgets`, `active_gate_admission`
+- Frozen decisions: publication ACK, priority recovery, timeout budgets, and
+  active-gate admission remain closed unless canonical evidence selects them.
+- Escalation triggers: owned files expand beyond this package, runtime ownership changes, or representative scenario evidence changes.
+- Focused proof: `npm run work:evidence-summary -- test-output/reports/rolling-restart-after-owner-reconcile-selected-evidence-20260516T195857Z.report.json`, `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-owner-reconcile-selected-evidence-20260516T195857Z.report.json --explain active_gate_snapshot_coverage`, `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-owner-reconcile-selected-evidence-20260516T195857Z.report.json --handoff-probe`, `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-owner-reconcile-selected-evidence-20260516T195857Z.report.json`, `npm run analyze:owner-files -- startup_active_gate_owner snapshot_coverage --markdown`
+- Model ledger advisory: `escalate`
+
+## Validation
+
+1. npm run work:evidence-summary -- test-output/reports/rolling-restart-after-owner-reconcile-selected-evidence-20260516T195857Z.report.json
+2. npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-owner-reconcile-selected-evidence-20260516T195857Z.report.json --explain active_gate_snapshot_coverage
+3. npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-owner-reconcile-selected-evidence-20260516T195857Z.report.json --handoff-probe
+4. npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-owner-reconcile-selected-evidence-20260516T195857Z.report.json
+5. npm run analyze:owner-files -- startup_active_gate_owner snapshot_coverage --markdown
