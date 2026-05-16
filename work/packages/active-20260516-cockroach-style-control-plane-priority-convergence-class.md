@@ -3,7 +3,7 @@
 <!-- work-package
 {
   "schema": "work-package-v1",
-  "status": "todo",
+  "status": "active",
   "opened": "2026-05-16",
   "lane": "runtime-owner-boundary",
   "scenario": "none",
@@ -19,11 +19,27 @@
     "npm run analyze:owner-files -- startup_active_gate_owner snapshot_coverage --markdown",
     "node scripts/check-guideline-decision-boundaries.js src/control-plane/membership-publication-coordinator-class-stage-2.js src/admin/admin-control-snapshot-class-part-2.js"
   ],
-  "writeScope": [],
+  "writeScope": [
+    "work/packages/active-20260516-cockroach-style-control-plane-priority-convergence-class.md",
+    "src/control-plane/membership-publication-coordinator-class-stage-2.js",
+    "src/control-plane/membership-publication-coordinator-class-stage-3.js",
+    "src/control-plane/control-plane-error-classification.js",
+    "src/admin/admin-control-snapshot-class-part-2.js",
+    "src/admin/admin-websocket-api-segment-3.js",
+    "test/control-plane/membership-publication-coordinator-main-stage-2.js",
+    "test/admin/admin-control-snapshot.test.js",
+    "work/sprints/current-blocker.md",
+    "work/sprints/current-blocker.json",
+    "work/tracks/topology-convergence.md",
+    "work/model-ledger.jsonl"
+  ],
   "handoffFiles": [
     "work/tracks/topology-convergence.md"
   ],
-  "generatedFiles": [],
+  "generatedFiles": [
+    "work/sprints/current-blocker.md",
+    "work/sprints/current-blocker.json"
+  ],
   "candidateRuntimeFiles": [
     "src/control-plane/membership-publication-coordinator-class-stage-2.js",
     "src/control-plane/membership-publication-coordinator-class-stage-3.js",
@@ -33,7 +49,20 @@
     "test/control-plane/membership-publication-coordinator-main-stage-2.js",
     "test/admin/admin-control-snapshot.test.js"
   ],
-  "commitScope": [],
+  "commitScope": [
+    "work/packages/active-20260516-cockroach-style-control-plane-priority-convergence-class.md",
+    "src/control-plane/membership-publication-coordinator-class-stage-2.js",
+    "src/control-plane/membership-publication-coordinator-class-stage-3.js",
+    "src/control-plane/control-plane-error-classification.js",
+    "src/admin/admin-control-snapshot-class-part-2.js",
+    "src/admin/admin-websocket-api-segment-3.js",
+    "test/control-plane/membership-publication-coordinator-main-stage-2.js",
+    "test/admin/admin-control-snapshot.test.js",
+    "work/sprints/current-blocker.md",
+    "work/sprints/current-blocker.json",
+    "work/tracks/topology-convergence.md",
+    "work/model-ledger.jsonl"
+  ],
   "modelFit": {
     "packageClass": "runtime-owner-boundary",
     "intendedMinimumModel": "gpt-5.3-codex",
@@ -118,6 +147,17 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 2. Pro or Enterprise scheduling policy.
 3. Unlimited queues or hidden retries.
 4. Treating pressure as success.
+
+## Subagent Sequencing Ledger
+
+Required before implementation because this is a runtime-owner-boundary
+package. The review subagent must review
+`work/packages/done-20260516-tikv-pd-style-topology-operator-step-witness-ledger.md`
+and this package's active metadata before implementation starts.
+
+- [ ] Review subagent recorded: pending review agent.
+- [ ] Fix subagent recorded or explicitly not needed: pending review result.
+- [ ] Implementation subagent recorded: pending implementation agent.
 
 ## Borrowing Details
 

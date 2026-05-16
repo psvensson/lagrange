@@ -4,7 +4,7 @@
 
 Sprint: `work/sprints/active-2026-q2-topology-convergence-systems-pattern-hardening.md`
 
-Package: `work/packages/active-20260516-tikv-pd-style-topology-operator-step-witness-ledger.md`
+Package: `work/packages/active-20260516-cockroach-style-control-plane-priority-convergence-class.md`
 
 Workflow lane: `runtime-owner-boundary`
 
@@ -16,23 +16,23 @@ Playback: `none`
 
 ## Boundary
 
-Owner: `operation_workflow_owner`
+Owner: `topology_publication_owner`
 
-Boundary: `topology_operator_step_witnesses`
+Boundary: `control_plane_priority_convergence_class`
 
-Dominant reason: `topology_work_lacks_step_witness_contract`
+Dominant reason: `control_plane_progress_competes_with_ordinary_repair`
 
-Current state: Topology work currently exposes some next actions and workflow-progress witnesses, but publication, recovery, and repair progress can still collapse into timeout-only or generic pending evidence. This package adds a shared operator-step witness contract.
+Current state: Control-plane publication and active-gate convergence can be delayed by the same pressure and repair machinery used by broader diagnostics. This package makes critical topology convergence an explicit priority class with typed pressure outcomes.
 
 ## Next Action
 
-Represent publication, recovery, and repair progress as owner operators with explicit steps, current step, witness source, next legal action, and heartbeat or retry evidence.
+Create a control-plane convergence class with stricter admission and pressure semantics for publication and active-gate critical work.
 
 ## Proof Ladder
 
-1. `npm run analyze:owner-files -- operation_workflow_owner workflow_progress --markdown`
-2. `node --test test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js`
-3. `node scripts/check-guideline-decision-boundaries.js src/rebalancer/operation-workflow-owner-segment-2.js src/rebalancer/operation-workflow-owner-segment-3.js`
+1. `npm run analyze:owner-files -- topology_publication_owner publication_convergence --markdown`
+2. `npm run analyze:owner-files -- startup_active_gate_owner snapshot_coverage --markdown`
+3. `node scripts/check-guideline-decision-boundaries.js src/control-plane/membership-publication-coordinator-class-stage-2.js src/admin/admin-control-snapshot-class-part-2.js`
 
 ## Model Fit
 
@@ -127,14 +127,14 @@ Handoff invariant: `unknown`
 
 Write scope:
 
-1. `work/packages/active-20260516-tikv-pd-style-topology-operator-step-witness-ledger.md`
-2. `src/rebalancer/operation-workflow-owner-segment-2.js`
-3. `src/rebalancer/operation-workflow-owner-segment-3.js`
-4. `src/rebalancer/operation-workflow-owner-segment-4.js`
-5. `src/rebalancer/operation-workflow-owner-shared.js`
-6. `src/diagnostics/topology-convergence-graph.js`
-7. `test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js`
-8. `test/distributed/harness/cluster-segment-3.js`
+1. `work/packages/active-20260516-cockroach-style-control-plane-priority-convergence-class.md`
+2. `src/control-plane/membership-publication-coordinator-class-stage-2.js`
+3. `src/control-plane/membership-publication-coordinator-class-stage-3.js`
+4. `src/control-plane/control-plane-error-classification.js`
+5. `src/admin/admin-control-snapshot-class-part-2.js`
+6. `src/admin/admin-websocket-api-segment-3.js`
+7. `test/control-plane/membership-publication-coordinator-main-stage-2.js`
+8. `test/admin/admin-control-snapshot.test.js`
 9. `work/sprints/current-blocker.md`
 10. `work/sprints/current-blocker.json`
 11. `work/tracks/topology-convergence.md`
@@ -151,24 +151,24 @@ Generated files:
 
 Candidate runtime files:
 
-1. `src/rebalancer/operation-workflow-owner-segment-2.js`
-2. `src/rebalancer/operation-workflow-owner-segment-3.js`
-3. `src/rebalancer/operation-workflow-owner-segment-4.js`
-4. `src/rebalancer/operation-workflow-owner-shared.js`
-5. `src/diagnostics/topology-convergence-graph.js`
-6. `test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js`
-7. `test/distributed/harness/cluster-segment-3.js`
+1. `src/control-plane/membership-publication-coordinator-class-stage-2.js`
+2. `src/control-plane/membership-publication-coordinator-class-stage-3.js`
+3. `src/control-plane/control-plane-error-classification.js`
+4. `src/admin/admin-control-snapshot-class-part-2.js`
+5. `src/admin/admin-websocket-api-segment-3.js`
+6. `test/control-plane/membership-publication-coordinator-main-stage-2.js`
+7. `test/admin/admin-control-snapshot.test.js`
 
 Commit scope:
 
-1. `work/packages/active-20260516-tikv-pd-style-topology-operator-step-witness-ledger.md`
-2. `src/rebalancer/operation-workflow-owner-segment-2.js`
-3. `src/rebalancer/operation-workflow-owner-segment-3.js`
-4. `src/rebalancer/operation-workflow-owner-segment-4.js`
-5. `src/rebalancer/operation-workflow-owner-shared.js`
-6. `src/diagnostics/topology-convergence-graph.js`
-7. `test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js`
-8. `test/distributed/harness/cluster-segment-3.js`
+1. `work/packages/active-20260516-cockroach-style-control-plane-priority-convergence-class.md`
+2. `src/control-plane/membership-publication-coordinator-class-stage-2.js`
+3. `src/control-plane/membership-publication-coordinator-class-stage-3.js`
+4. `src/control-plane/control-plane-error-classification.js`
+5. `src/admin/admin-control-snapshot-class-part-2.js`
+6. `src/admin/admin-websocket-api-segment-3.js`
+7. `test/control-plane/membership-publication-coordinator-main-stage-2.js`
+8. `test/admin/admin-control-snapshot.test.js`
 9. `work/sprints/current-blocker.md`
 10. `work/sprints/current-blocker.json`
 11. `work/tracks/topology-convergence.md`

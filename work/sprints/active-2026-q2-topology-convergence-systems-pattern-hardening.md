@@ -93,7 +93,7 @@ Primary references:
      fence rather than caller-local readiness reconstruction.
    - Acceptance: focused tests prove pending, blocked, and allowed promotion
      outcomes from durable publication and snapshot coverage evidence.
-5. [TiKV PD Style Topology Operator Step Witness Ledger](../packages/active-20260516-tikv-pd-style-topology-operator-step-witness-ledger.md)
+5. [TiKV PD Style Topology Operator Step Witness Ledger](../packages/done-20260516-tikv-pd-style-topology-operator-step-witness-ledger.md)
    - Lane: `runtime-owner-boundary`
    - Owner boundary: `operation_workflow_owner /
      topology_operator_step_witnesses`
@@ -101,7 +101,7 @@ Primary references:
      follow-up witness and next legal action.
    - Acceptance: diagnostics and harness prefer `topologyOperatorWitness` over
      timeout-only inference when it is present.
-6. [Cockroach Style Control Plane Priority Convergence Class](../packages/todo-20260516-cockroach-style-control-plane-priority-convergence-class.md)
+6. [Cockroach Style Control Plane Priority Convergence Class](../packages/active-20260516-cockroach-style-control-plane-priority-convergence-class.md)
    - Lane: `runtime-owner-boundary`
    - Owner boundary: `topology_publication_owner /
      control_plane_priority_convergence_class`

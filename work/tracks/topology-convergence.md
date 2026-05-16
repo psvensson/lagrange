@@ -95,11 +95,11 @@ or produces a narrower owner-boundary blocker selected by canonical evidence.
 - Active sprint:
   `work/sprints/active-2026-q2-topology-convergence-systems-pattern-hardening.md`
 - Active package:
-  `work/packages/active-20260516-tikv-pd-style-topology-operator-step-witness-ledger.md`
+  `work/packages/active-20260516-cockroach-style-control-plane-priority-convergence-class.md`
 - Artifact:
   `test-output/reports/rolling-restart-after-admin-owner-readiness-handoff-20260516.report.json`
 - Current package-local owner boundary:
-  `topology_publication_owner / publication_convergence`
+  `topology_publication_owner / control_plane_priority_convergence_class`
 - Representative owner boundary:
   `topology_publication_owner / publication_convergence`
 - Extractor summary:
@@ -109,10 +109,10 @@ or produces a narrower owner-boundary blocker selected by canonical evidence.
   `pendingReconcileCount=0` and next action `wait_owner_recovery` mean the
   drained owner-reconcile path should not be treated as the active blocker.
 - Priority recovery residuals:
-  classified as the current systems-pattern hardening slice for
-  `operation_workflow_owner / topology_operator_step_witnesses`; the package
-  adds an operator-step witness record so diagnostics prefer step and next-action
-  evidence over timeout-only workflow-progress classification when present.
+- Priority recovery residuals:
+  covered by the completed topology-operator witness slice; current work moves
+  to the control-plane priority convergence class so critical publication and
+  active-gate work cannot be hidden behind ordinary repair deferral.
 
 ## Codebase Analysis Notes
 
@@ -186,10 +186,9 @@ These are context candidates, not write authorization:
 
 ## Entry Condition
 
-Continue with the active publication-convergence classification package.
-Runtime edits remain blocked until canonical extractors select exactly one
-owner-boundary and the package records why adjacent readiness and operation
-workflow candidates were rejected or promoted.
+Continue with the active control-plane priority convergence class package.
+Runtime edits stay bounded to the selected publication and active-gate owner
+surfaces, with diagnostics and broad repair kept on the ordinary class.
 
 ## Exit Condition
 
@@ -202,5 +201,5 @@ canonical owner-boundary evidence.
 Current package:
 
 ```text
-work/packages/active-20260516-tikv-pd-style-topology-operator-step-witness-ledger.md
+work/packages/active-20260516-cockroach-style-control-plane-priority-convergence-class.md
 ```

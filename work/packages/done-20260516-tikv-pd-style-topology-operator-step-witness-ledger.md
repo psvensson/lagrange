@@ -3,7 +3,7 @@
 <!-- work-package
 {
   "schema": "work-package-v1",
-  "status": "active",
+  "status": "done",
   "opened": "2026-05-16",
   "lane": "runtime-owner-boundary",
   "scenario": "none",
@@ -20,7 +20,7 @@
     "node scripts/check-guideline-decision-boundaries.js src/rebalancer/operation-workflow-owner-segment-2.js src/rebalancer/operation-workflow-owner-segment-3.js"
   ],
   "writeScope": [
-    "work/packages/active-20260516-tikv-pd-style-topology-operator-step-witness-ledger.md",
+    "work/packages/done-20260516-tikv-pd-style-topology-operator-step-witness-ledger.md",
     "src/rebalancer/operation-workflow-owner-segment-2.js",
     "src/rebalancer/operation-workflow-owner-segment-3.js",
     "src/rebalancer/operation-workflow-owner-segment-4.js",
@@ -50,7 +50,7 @@
     "test/distributed/harness/cluster-segment-3.js"
   ],
   "commitScope": [
-    "work/packages/active-20260516-tikv-pd-style-topology-operator-step-witness-ledger.md",
+    "work/packages/done-20260516-tikv-pd-style-topology-operator-step-witness-ledger.md",
     "src/rebalancer/operation-workflow-owner-segment-2.js",
     "src/rebalancer/operation-workflow-owner-segment-3.js",
     "src/rebalancer/operation-workflow-owner-segment-4.js",
@@ -72,7 +72,9 @@
       "owned files expand beyond this package",
       "a frozen decision must be reopened"
     ]
-  }
+  },
+  "closed": "2026-05-16",
+  "commitAndPushLedgerRequired": true
 }
 -->
 
@@ -157,9 +159,9 @@ package. The review subagent must review
 `work/packages/done-20260516-etcd-style-active-gate-admission-catchup-fence.md`
 and this package's active metadata before implementation starts.
 
-- [x] Review subagent recorded: Agent Boyle (019e304f-f7eb-75a0-82c0-ee87d9627f54) reviewed work/packages/active-20260516-tikv-pd-style-topology-operator-step-witness-ledger.md; result clean
+- [x] Review subagent recorded: Agent Boyle (019e304f-f7eb-75a0-82c0-ee87d9627f54) reviewed work/packages/done-20260516-tikv-pd-style-topology-operator-step-witness-ledger.md; result clean
 - [x] Fix subagent recorded or explicitly not needed: not-needed
-- [x] Implementation subagent recorded: Agent Volta (019e3053-82d5-7d82-8d84-5c128e17f1a8) implemented work/packages/active-20260516-tikv-pd-style-topology-operator-step-witness-ledger.md
+- [x] Implementation subagent recorded: Agent Volta (019e3053-82d5-7d82-8d84-5c128e17f1a8) implemented work/packages/done-20260516-tikv-pd-style-topology-operator-step-witness-ledger.md
 
 ## Borrowing Details
 
@@ -207,3 +209,9 @@ Local implementation shape:
 5. npm run audit:runtime-grammar:file -- src/rebalancer/operation-workflow-owner-segment-2.js src/rebalancer/operation-workflow-owner-shared.js src/diagnostics/topology-convergence-graph.js
 6. npm run guard:guideline:constant-names:file -- src/rebalancer/operation-workflow-owner-segment-2.js src/rebalancer/operation-workflow-owner-shared.js src/diagnostics/topology-convergence-graph.js
 7. node --test test/diagnostics/topology-convergence-graph.test.js
+
+## Commit And Push Ledger
+
+1. Focused package commit: cebcaf499222de50595cfd20d7a7fc3ef1c5a7fa
+2. Pushed to: origin/codex/pending-ack-eligibility-filter
+3. Commit contains only package-owned files/package-status/allowed sprint handoff: yes
