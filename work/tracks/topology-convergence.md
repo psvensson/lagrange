@@ -67,7 +67,7 @@ Latest current handoff state:
 - forced repair snapshot capture also times out while readiness support is
   deferred as inherited active-gate no progress
 - the active package is
-  `work/packages/active-20260516-startup-active-gate-admin-snapshot-timeout-after-priority-recovery.md`
+  `work/packages/done-20260516-startup-active-gate-admin-snapshot-timeout-after-priority-recovery.md`
   and focuses `startup_active_gate_owner / snapshot_coverage`
 
 ## Target Invariant
@@ -97,7 +97,7 @@ or produces a narrower owner-boundary blocker selected by canonical evidence.
 - Continuation sprint context:
   `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md`
 - Active successor package:
-  `work/packages/active-20260516-startup-active-gate-admin-snapshot-timeout-after-priority-recovery.md`
+  `work/packages/done-20260516-startup-active-gate-admin-snapshot-timeout-after-priority-recovery.md`
 - Artifact:
   `test-output/reports/rolling-restart-after-workflow-progress-pending-coordination-gate-20260516.report.json`
 - Closed checkpoint predecessor:
@@ -201,5 +201,5 @@ canonical owner-boundary evidence.
 Next continuation package:
 
 ```text
-work/packages/active-20260516-startup-active-gate-admin-snapshot-timeout-after-priority-recovery.md
+work/packages/done-20260516-startup-active-gate-admin-snapshot-timeout-after-priority-recovery.md
 ```

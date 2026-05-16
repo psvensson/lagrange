@@ -13,7 +13,7 @@
   "boundary": "workflow_progress",
   "dominantReason": "priority_recovery_progress_blocked",
   "currentState": "The focused workflow-progress implementation now drains the package-owned priority recovery residual: the latest representative rerun reports zero priority recovery residual witnesses and canonical causal evidence marks priority_recovery_partition_progress satisfied. The scenario remains red, but the first frontier migrated to active_gate_snapshot_coverage under startup_active_gate_owner / snapshot_coverage because the selected admin snapshot query timed out and snapshot coverage stayed 0/5.",
-  "nextAction": "Successor package work/packages/active-20260516-startup-active-gate-admin-snapshot-timeout-after-priority-recovery.md owns the migrated startup_active_gate_owner / snapshot_coverage frontier from test-output/reports/rolling-restart-after-workflow-progress-pending-coordination-gate-20260516.report.json.",
+  "nextAction": "Successor package work/packages/done-20260516-startup-active-gate-admin-snapshot-timeout-after-priority-recovery.md owns the migrated startup_active_gate_owner / snapshot_coverage frontier from test-output/reports/rolling-restart-after-workflow-progress-pending-coordination-gate-20260516.report.json.",
   "proof": [
     "npm run work:context",
     "npm run work:package:doctor -- --suggest work/packages/done-20260516-priority-recovery-workflow-progress-after-active-gate-cohort.md",
@@ -149,7 +149,7 @@
   "predecessor": "work/packages/done-20260516-startup-active-gate-owner-cohort-recovery-closure.md",
   "closed": "2026-05-16",
   "commitAndPushLedgerRequired": true,
-  "successor": "work/packages/active-20260516-startup-active-gate-admin-snapshot-timeout-after-priority-recovery.md"
+  "successor": "work/packages/done-20260516-startup-active-gate-admin-snapshot-timeout-after-priority-recovery.md"
 }
 -->
 

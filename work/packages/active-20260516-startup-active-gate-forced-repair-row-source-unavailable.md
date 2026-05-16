@@ -1,9 +1,10 @@
+# Startup Active Gate Forced Repair Row Source Unavailable
+
+<!-- work-package
 {
-  "schema": "current-blocker-v1",
-  "generatedBy": "scripts/work-tracker.js",
-  "sprint": "work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md",
-  "package": "work/packages/active-20260516-startup-active-gate-forced-repair-row-source-unavailable.md",
+  "schema": "work-package-v1",
   "status": "active",
+  "opened": "2026-05-16",
   "lane": "causal-escalation",
   "scenario": "rolling-restart",
   "artifact": "test-output/reports/rolling-restart-after-admin-snapshot-query-pressure-20260516.report.json",
@@ -43,19 +44,6 @@
     "work/sprints/current-blocker.md",
     "work/sprints/current-blocker.json"
   ],
-  "touchedFiles": [],
-  "modelFit": {
-    "packageClass": "representative-frontier-closure",
-    "intendedMinimumModel": "gpt-5.3-codex",
-    "scopeShape": "owner-boundary-contraction/current-frontier",
-    "outputProfile": "medium",
-    "escalationTriggers": [
-      "owned files expand beyond this package",
-      "a frozen decision must be reopened",
-      "active-gate admission would be relaxed",
-      "timeout budgets would be increased"
-    ]
-  },
   "representativeResidual": {
     "status": "live-red-scenario-release-gate",
     "scenario": "rolling-restart",
@@ -109,5 +97,100 @@
     "oscillationCheck": "This package is allowed because the immediate predecessor reduced the selected subcause from authoritative query pressure to forced repair row-source unavailability without reopening closed publication ACK or priority recovery edges.",
     "handoffInvariant": "Publication ACK convergence, priority recovery workflow progress, timeout budgets, and active-gate admission stay closed unless canonical evidence selects them again."
   },
-  "predecessor": null
+  "modelFit": {
+    "packageClass": "representative-frontier-closure",
+    "intendedMinimumModel": "gpt-5.3-codex",
+    "scopeShape": "owner-boundary-contraction/current-frontier",
+    "outputProfile": "medium",
+    "escalationTriggers": [
+      "owned files expand beyond this package",
+      "a frozen decision must be reopened",
+      "active-gate admission would be relaxed",
+      "timeout budgets would be increased"
+    ]
+  },
+  "predecessor": "work/packages/done-20260516-startup-active-gate-admin-snapshot-timeout-after-priority-recovery.md"
 }
+-->
+
+## Why
+
+The predecessor proved the active-gate snapshot timeout was not primarily bad
+snapshot-source selection or authoritative query-pressure timeout after
+bounded timeout propagation. The fresh representative artifact still blocks on
+snapshot coverage, but the selected subcause is now forced repair row-source
+unavailability for the same selected source.
+
+## Scope Basis
+
+Roadmap Phase `0.1 - Internal Coherence`, specifically topology workflow
+stabilization, failure simulations, and production guarantees for the AGPL
+runtime.
+
+## Workflow Lane
+
+- Selected lane: `causal-escalation`
+- Why this lane is required: the representative scenario remains red after the
+  predecessor reduced the selected active-gate snapshot edge to a narrower
+  forced repair path stall.
+- Escalation trigger to a heavier lane: implementation requires timeout
+  increases, active-gate admission relaxation, publication ACK rewrites,
+  priority recovery rewrites, or a broader architecture change outside this
+  forced repair row-source boundary.
+
+## Subagent Sequencing Requirement
+
+Required before implementation because this is a scenario-driven runtime
+owner-boundary package.
+
+## Subagent Sequencing Ledger
+
+- [ ] Review subagent recorded: pending-before-implementation-resumes.
+- [ ] Fix subagent recorded or explicitly not needed: pending-before-review.
+- [ ] Implementation subagent recorded: pending-before-implementation-resumes.
+
+## LLM Tool-First Contract
+
+Before raw JSON, raw logs, broad file search, oversized segment files, or ad hoc `jq`, use the canonical workflow command that owns the question:
+
+1. Package metadata or ledger edits: `npm run work:package:doctor -- --suggest <package>`, `npm run work:package:doctor -- --fix-dry-run <package>`, `npm run work:package:schema`, or `npm run work:package:new -- ...`.
+2. Representative evidence: `npm run work:evidence-summary -- <artifact>` plus any focused extractor for this failure class.
+3. Owner discovery: `npm run analyze:owner-files -- <owner> [boundary]`.
+4. Subagent sequencing: `npm run work:subagent-prompt -- --role <role> --package <package>`.
+5. Large-file cleanup: `npm run work:oversized-next -- --markdown`.
+
+If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which canonical extractor was tried and why it was insufficient.
+
+## In Scope
+
+1. work/packages/active-20260516-startup-active-gate-forced-repair-row-source-unavailable.md
+2. work/sprints/current-blocker.md
+3. work/sprints/current-blocker.json
+
+## Out Of Scope
+
+1. publication ACK convergence
+2. priority recovery workflow progress
+3. representative timeout budgets
+4. active-gate admission relaxation
+
+## Model Fit
+
+- Package class: `representative-frontier-closure`
+- Intended minimum model: `gpt-5.3-codex`
+- Scope shape: `owner-boundary-contraction/current-frontier`
+- Output profile: `medium`
+- Owned files: `work/packages/active-20260516-startup-active-gate-forced-repair-row-source-unavailable.md`, `work/sprints/current-blocker.md`, `work/sprints/current-blocker.json`
+- Forbidden files: `publication ACK convergence`, `priority recovery workflow progress`, `representative timeout budgets`, `active-gate admission relaxation`
+- Frozen decisions: publication ACK convergence and priority recovery workflow progress remain closed; timeout budgets and active-gate admission remain frozen unless canonical evidence selects them again.
+- Escalation triggers: owned files expand beyond this package, runtime ownership changes, representative scenario evidence changes, active-gate admission would be relaxed, or timeout budgets would be increased.
+- Focused proof: `npm run work:context`, `npm run work:evidence-summary -- test-output/reports/rolling-restart-after-admin-snapshot-query-pressure-20260516.report.json`, `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-admin-snapshot-query-pressure-20260516.report.json --handoff-probe`, `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-admin-snapshot-query-pressure-20260516.report.json`, `npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-after-admin-snapshot-query-pressure-20260516.report.json --markdown`
+- Model ledger advisory: `escalate`
+
+## Validation
+
+1. npm run work:context
+2. npm run work:evidence-summary -- test-output/reports/rolling-restart-after-admin-snapshot-query-pressure-20260516.report.json
+3. npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-admin-snapshot-query-pressure-20260516.report.json --handoff-probe
+4. npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-admin-snapshot-query-pressure-20260516.report.json
+5. npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-after-admin-snapshot-query-pressure-20260516.report.json --markdown

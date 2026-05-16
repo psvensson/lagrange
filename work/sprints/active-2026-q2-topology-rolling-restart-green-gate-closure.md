@@ -43,7 +43,7 @@ Canonical state after the priority recovery workflow-progress closure:
 8. Readiness support is deferred as inherited active-gate no progress with
    snapshot timeout evidence.
 9. The current active package is
-   `work/packages/active-20260516-startup-active-gate-admin-snapshot-timeout-after-priority-recovery.md`;
+   `work/packages/done-20260516-startup-active-gate-admin-snapshot-timeout-after-priority-recovery.md`;
    it must identify the startup active-gate snapshot coverage edge without
    timeout increases, active-gate admission relaxation, publication ACK
    rewrites, or priority recovery rewrites.
@@ -440,7 +440,7 @@ The sprint cannot close until:
 Continue with the startup active-gate admin snapshot timeout package:
 
 ```text
-work/packages/active-20260516-startup-active-gate-admin-snapshot-timeout-after-priority-recovery.md
+work/packages/done-20260516-startup-active-gate-admin-snapshot-timeout-after-priority-recovery.md
 test-output/reports/rolling-restart-after-workflow-progress-pending-coordination-gate-20260516.report.json
 ```
 
