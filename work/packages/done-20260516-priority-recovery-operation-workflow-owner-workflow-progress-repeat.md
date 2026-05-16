@@ -258,3 +258,13 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 17. PASS - `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-priority-workflow-progress-20260516T180829Z.report.json`
 18. PASS - `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-priority-workflow-progress-20260516T180829Z.report.json`
 19. PASS - `npm run work:model-ledger -- record --package work/packages/done-20260516-priority-recovery-operation-workflow-owner-workflow-progress-repeat.md --model gpt-5-codex --reasoning-effort high --output-profile medium --task-class causal-escalation --package-class representative-frontier-closure --intended-minimum-model gpt-5.3-codex --scope-shape owner-boundary-contraction/current-frontier --escalated true --bailout-reason next-frontier-startup-active-gate-snapshot-coverage --outcome migrated --validation-status focused-green-representative-migrated --correction-loops 1 --review-findings 2 --notes "Repeated priority workflow-progress residual drained to zero witnesses; representative migrated to active_gate_snapshot_coverage with owner_reconcile_pending snapshot coverage 2/5."`
+
+## Commit And Push Ledger
+
+1. Focused package commit: fa1b3b83
+2. Pushed to: origin/codex/pending-ack-eligibility-filter
+3. Commit contains only package-owned files/package-status/allowed sprint handoff: yes
+4. Split commit note: fa1b3b83 contains the runtime fix, focused regression,
+   migrated package state, successor activation, sprint handoff, current-blocker
+   regeneration, and model-ledger record. This follow-up records the durable
+   commit-and-push ledger for closure validation.
