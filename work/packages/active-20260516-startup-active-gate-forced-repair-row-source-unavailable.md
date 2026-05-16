@@ -12,17 +12,37 @@
   "owner": "startup_active_gate_owner",
   "boundary": "snapshot_coverage",
   "dominantReason": "active_gate_timed_out",
-  "currentState": "The predecessor package reduced the selected active-gate snapshot edge: publication ACK is satisfied, priority recovery residual extraction reports zero witnesses, selected source remains 11601fe0-72d6-5853-8590-ec2881853e72, selected snapshot-source timeout is no longer selected, authoritative control snapshot query timeout is no longer selected, and the fresh handoff probe selects activeGateSnapshotOwnerEdge=forced_repair_path_stall because forced authoritative repair reports authoritative_row_source_unavailable.",
-  "nextAction": "Use the fresh handoff probe from rolling-restart-after-admin-snapshot-query-pressure-20260516 to build a replayable forced-repair row-source unavailable fixture for selected source 11601fe0-72d6-5853-8590-ec2881853e72, then prove or fix the forced repair path stall without reopening publication ACK, priority recovery, timeout budgets, or active-gate admission.",
+  "currentState": "Focused replay for selected source 11601fe0-72d6-5853-8590-ec2881853e72 reproduced forced authoritative repair row-source unavailability and the runtime fix resolved the late authoritative gateway before declaring authoritative_row_source_unavailable. The representative rolling-restart rerun stayed red, but the forced repair row-source edge is reduced: all five nodes reached active, snapshot coverage improved to 2/5, selectedSnapshotError is unknown, and canonical extractors now select priority_recovery_partition_progress under operation_workflow_owner / workflow_progress with one control_plane_publications-p1 residual witness in spread_satisfied_in_flight.",
+  "nextAction": "Commit and push this focused forced-repair reduction, then open the generated successor package for the priority recovery operation_workflow_owner / workflow_progress residual selected by canonical evidence.",
   "proof": [
     "npm run work:context",
     "npm run work:evidence-summary -- test-output/reports/rolling-restart-after-admin-snapshot-query-pressure-20260516.report.json",
     "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-admin-snapshot-query-pressure-20260516.report.json --handoff-probe",
     "npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-admin-snapshot-query-pressure-20260516.report.json",
-    "npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-after-admin-snapshot-query-pressure-20260516.report.json --markdown"
+    "npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-after-admin-snapshot-query-pressure-20260516.report.json --markdown",
+    "npm test -- test/admin/admin-service-discovery.test.js (red before runtime fix: focused late-owner replay failed with authoritative_row_source_unavailable)",
+    "npm test -- test/admin/admin-service-discovery.test.js (pass after runtime fix)",
+    "npm test -- test/admin/admin-control-snapshot.test.js",
+    "npx eslint src/admin/admin-service-discovery-readiness-methods.js test/admin/admin-service-discovery.test.js --ignore-pattern 'test/.gitkeep'",
+    "node scripts/check-guideline-literals.js src/admin/admin-service-discovery-readiness-methods.js",
+    "node scripts/check-guideline-decision-boundaries.js src/admin/admin-service-discovery-readiness-methods.js",
+    "npm run audit:runtime-grammar:file -- src/admin/admin-service-discovery-readiness-methods.js",
+    "npm run work:validate -- --pre-impl work/packages/active-20260516-startup-active-gate-forced-repair-row-source-unavailable.md",
+    "node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-after-forced-repair-row-source-20260516.report.json --verbose",
+    "npm run work:evidence-summary -- test-output/reports/rolling-restart-after-forced-repair-row-source-20260516.report.json",
+    "npm run analyze:distributed-failure -- --report test-output/reports/rolling-restart-after-forced-repair-row-source-20260516.report.json",
+    "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-forced-repair-row-source-20260516.report.json --handoff-probe",
+    "npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-forced-repair-row-source-20260516.report.json",
+    "npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-after-forced-repair-row-source-20260516.report.json --markdown",
+    "npm run work:model-ledger -- record --package work/packages/active-20260516-startup-active-gate-forced-repair-row-source-unavailable.md --model gpt-5-codex --reasoning-effort high --output-profile medium --task-class causal-escalation --package-class representative-frontier-closure --intended-minimum-model gpt-5.3-codex --scope-shape owner-boundary-contraction/current-frontier --escalated true --bailout-reason migrated-to-operation-workflow-progress --outcome migrated --validation-status focused-green-representative-migrated --correction-loops 1 --review-findings 1 --notes \"Forced repair row-source edge reduced: late authoritative gateway fixture passes, representative moved to priority_recovery_partition_progress with one control_plane_publications-p1 spread_satisfied_in_flight residual.\""
   ],
   "writeScope": [
-    "work/packages/active-20260516-startup-active-gate-forced-repair-row-source-unavailable.md"
+    "work/packages/active-20260516-startup-active-gate-forced-repair-row-source-unavailable.md",
+    "work/sprints/current-blocker.md",
+    "work/sprints/current-blocker.json",
+    "src/admin/admin-service-discovery-readiness-methods.js",
+    "test/admin/admin-service-discovery.test.js",
+    "work/model-ledger.jsonl"
   ],
   "handoffFiles": [
     "work/packages/done-20260516-startup-active-gate-admin-snapshot-timeout-after-priority-recovery.md",
@@ -42,25 +62,28 @@
   "commitScope": [
     "work/packages/active-20260516-startup-active-gate-forced-repair-row-source-unavailable.md",
     "work/sprints/current-blocker.md",
-    "work/sprints/current-blocker.json"
+    "work/sprints/current-blocker.json",
+    "src/admin/admin-service-discovery-readiness-methods.js",
+    "test/admin/admin-service-discovery.test.js",
+    "work/model-ledger.jsonl"
   ],
   "representativeResidual": {
     "status": "live-red-scenario-release-gate",
     "scenario": "rolling-restart",
-    "artifact": "test-output/reports/rolling-restart-after-admin-snapshot-query-pressure-20260516.report.json",
-    "frontier": "active_gate_snapshot_coverage",
-    "owner": "startup_active_gate_owner",
-    "boundary": "snapshot_coverage",
-    "dominantReason": "active_gate_timed_out",
-    "nextAction": "Build the forced-repair row-source unavailable fixture for selected source 11601fe0-72d6-5853-8590-ec2881853e72 and prove whether the forced repair path stalls before runtime edits."
+    "artifact": "test-output/reports/rolling-restart-after-forced-repair-row-source-20260516.report.json",
+    "frontier": "priority_recovery_partition_progress",
+    "owner": "operation_workflow_owner",
+    "boundary": "workflow_progress",
+    "dominantReason": "priority_recovery_event_driven_wait",
+    "nextAction": "Open the generated successor package for the single control_plane_publications-p1 residual witness in spread_satisfied_in_flight."
   },
   "causalGovernance": {
     "hypothesis": "The remaining red gate is caused by forced authoritative repair being unable to obtain a row source for selected active-gate snapshot coverage after query-pressure timeout propagation reduced the prior edge.",
     "stopConditionCheck": "Run npm run analyze:causal-model and npm run analyze:topology-convergence on the fresh artifact, then run required subagents before promoting exact runtime files.",
     "expectedCausalModelChange": "Focused proof either makes rolling-restart green, obtains snapshot coverage, keeps the same frontier with a narrower forced repair row-source edge, or migrates to startup readiness support after coverage improves.",
-    "representativeOutcome": "pending-before-rerun",
-    "causalDebt": "Fresh canonical evidence selects active_gate_snapshot_coverage with forced_repair_path_stall on selected source 11601fe0-72d6-5853-8590-ec2881853e72. Publication ACK is satisfied, priority recovery residual extraction has zero witnesses, and the frozen timeout-budget and active-gate admission edges are not selected.",
-    "crossBoundaryReview": "Publication ACK convergence, priority recovery workflow progress, timeout budgets, and active-gate admission remain closed unless canonical evidence selects them again. This package owns only startup active-gate forced repair row-source evidence."
+    "representativeOutcome": "migrated",
+    "causalDebt": "Focused proof reduced the forced repair row-source unavailable edge for selected source 11601fe0-72d6-5853-8590-ec2881853e72 by resolving the late authoritative gateway path before declaring authoritative_row_source_unavailable. The fresh representative rerun no longer selects row-source unavailability: canonical evidence selects priority_recovery_partition_progress with one operation_workflow_owner / workflow_progress witness on control_plane_publications-p1.",
+    "crossBoundaryReview": "Publication ACK remains closed because the topology handoff probe reports publication_ack_convergence satisfied. Priority recovery is no longer frozen because the fresh canonical evidence selects operation_workflow_owner / workflow_progress again. Timeout budgets and active-gate admission remain closed."
   },
   "scenarioCausalClosure": {
     "referenceScenarioOrProbe": "rolling-restart after admin snapshot query pressure reduction",
@@ -71,31 +94,43 @@
       "promote exact owner files only after subagent proof and focused probes",
       "rerun representative rolling-restart and classify green, reduced, same-frontier, migrated, or split"
     ],
-    "currentFirstFrontier": "active_gate_snapshot_coverage in test-output/reports/rolling-restart-after-admin-snapshot-query-pressure-20260516.report.json, owned by startup_active_gate_owner / snapshot_coverage.",
+    "currentFirstFrontier": "priority_recovery_partition_progress in test-output/reports/rolling-restart-after-forced-repair-row-source-20260516.report.json, owned by operation_workflow_owner / workflow_progress.",
     "knownDownstreamBlockers": [
-      "publication_ack_convergence is satisfied and pendingAckCount=0",
-      "priority recovery residual extraction reports zero witnesses",
-      "activeGateState=timed_out, activeNodeCount=4, expectedNodeCount=5, snapshotCoverageNodeCount=0",
-      "selectedSnapshotError reports forced authoritative repair row-source unavailability for 11601fe0-72d6-5853-8590-ec2881853e72",
-      "readiness support remains inherited from active-gate no progress"
+      "publication_ack_convergence is satisfied in the topology handoff extractor",
+      "all five nodes reached active in the representative rerun",
+      "snapshot coverage improved from 0/5 to 2/5 and selectedSnapshotError is unknown",
+      "active-gate handoff remains pending on owner_reconcile_pending with two pending reconcile nodes",
+      "priority recovery residual extraction reports one operation_workflow_owner / workflow_progress witness on control_plane_publications-p1 with semantic state spread_satisfied_in_flight"
     ],
-    "missingCausalEdge": "Forced repair path stall: selected source 11601fe0-72d6-5853-8590-ec2881853e72 reaches the snapshot lane but forced authoritative repair reports authoritative_row_source_unavailable.",
+    "missingCausalEdge": "The forced repair row-source edge is reduced; the selected successor edge is priority_recovery_partition_progress with one event-driven wait witness on control_plane_publications-p1.",
     "missingCausalEdgeProbe": "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-admin-snapshot-query-pressure-20260516.report.json --handoff-probe plus a focused replay fixture before runtime edits.",
-    "boundedProgressProof": "The predecessor drained the query timeout owner edge through bounded timeout propagation and the fresh probe now selects forced repair path stall as the concrete progress mechanism.",
-    "boundedProgressProofArtifact": "test-output/reports/rolling-restart-after-admin-snapshot-query-pressure-20260516.report.json",
-    "expectedObservableTransition": "Focused proof should show why forced authoritative repair has no row source, then either obtain snapshot coverage, expose a narrower repair/read-source owner edge, migrate to startup readiness support after coverage improves, or go green.",
+    "boundedProgressProof": "The predecessor drained the query timeout owner edge, this package resolved the late authoritative gateway path, and the representative rerun moved from forced authoritative_row_source_unavailable with 0/5 coverage to selectedSnapshotError=unknown with 2/5 coverage and a priority recovery workflow-progress first frontier.",
+    "boundedProgressProofArtifact": "test-output/reports/rolling-restart-after-forced-repair-row-source-20260516.report.json",
+    "expectedObservableTransition": "Successor work should resolve or split the control_plane_publications-p1 priority recovery workflow-progress residual without reopening publication ACK, timeout budgets, or active-gate admission.",
     "maxProgressBound": "one focused startup active-gate forced-repair package slice after required subagent sequencing; no timeout increases, active-gate admission relaxation, publication ACK rewrites, or priority recovery rewrites.",
     "sameFrontierFallback": "If active_gate_snapshot_coverage remains first frontier, preserve the selected source and forced repair row-source evidence instead of widening to frozen edges.",
-    "expectedNextFrontier": "representative green, reduced forced repair row-source debt, or a narrower startup active-gate owner boundary",
-    "resultClassification": "pending-before-probe",
-    "stopCondition": "continue-local-fix",
+    "expectedNextFrontier": "priority recovery workflow-progress residual, then active-gate snapshot coverage or representative green",
+    "resultClassification": "migrated",
+    "stopCondition": "migrate-owner-boundary",
     "recentFrontierHistory": [
       "work/packages/done-20260516-startup-active-gate-admin-snapshot-timeout-after-priority-recovery.md / startup_active_gate_owner / snapshot_coverage / reduced",
       "work/packages/done-20260516-priority-recovery-workflow-progress-after-active-gate-cohort.md / operation_workflow_owner / workflow_progress / migrated",
       "work/packages/done-20260516-startup-active-gate-owner-cohort-recovery-closure.md / startup_active_gate_owner / snapshot_coverage / migrated"
     ],
-    "oscillationCheck": "This package is allowed because the immediate predecessor reduced the selected subcause from authoritative query pressure to forced repair row-source unavailability without reopening closed publication ACK or priority recovery edges.",
-    "handoffInvariant": "Publication ACK convergence, priority recovery workflow progress, timeout budgets, and active-gate admission stay closed unless canonical evidence selects them again."
+    "oscillationCheck": "This is a permitted migration, not an arbitrary reopen: the forced repair row-source edge reduced and fresh canonical extractors selected priority_recovery_partition_progress as the first frontier.",
+    "handoffInvariant": "Publication ACK convergence, timeout budgets, and active-gate admission stay closed; priority recovery is reopened only because canonical evidence selected it again."
+  },
+  "ownerBoundaryMigrationProof": {
+    "fromOwner": "startup_active_gate_owner",
+    "fromBoundary": "snapshot_coverage",
+    "toOwner": "operation_workflow_owner",
+    "toBoundary": "workflow_progress",
+    "reason": "The focused forced-repair row-source fixture passed after resolving the late authoritative gateway. The representative rerun removed authoritative_row_source_unavailable, improved snapshot coverage to 2/5, and canonical extractors selected priority_recovery_partition_progress as first frontier.",
+    "evidence": [
+      "npm run work:evidence-summary -- test-output/reports/rolling-restart-after-forced-repair-row-source-20260516.report.json",
+      "npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-forced-repair-row-source-20260516.report.json",
+      "npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-after-forced-repair-row-source-20260516.report.json --markdown"
+    ]
   },
   "modelFit": {
     "packageClass": "representative-frontier-closure",
@@ -145,9 +180,9 @@ owner-boundary package.
 
 ## Subagent Sequencing Ledger
 
-- [ ] Review subagent recorded: pending-before-implementation-resumes.
-- [ ] Fix subagent recorded or explicitly not needed: pending-before-review.
-- [ ] Implementation subagent recorded: pending-before-implementation-resumes.
+- [x] Review subagent recorded: Agent Hegel (019e3183-a7a0-7513-87aa-38fb8ff7d892) reviewed work/packages/done-20260516-startup-active-gate-admin-snapshot-timeout-after-priority-recovery.md; result fixes-required.
+- [x] Fix subagent recorded or explicitly not needed: Agent Codex (019e3185-451d-7082-9420-73bfb06bfaca) fixed work/packages/done-20260516-startup-active-gate-admin-snapshot-timeout-after-priority-recovery.md.
+- [x] Implementation subagent recorded: Agent Codex (019e3188-e01f-7a50-b0d8-9361cccc7cb7) implemented work/packages/active-20260516-startup-active-gate-forced-repair-row-source-unavailable.md.
 
 ## LLM Tool-First Contract
 
@@ -166,6 +201,9 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 1. work/packages/active-20260516-startup-active-gate-forced-repair-row-source-unavailable.md
 2. work/sprints/current-blocker.md
 3. work/sprints/current-blocker.json
+4. src/admin/admin-service-discovery-readiness-methods.js
+5. test/admin/admin-service-discovery.test.js
+6. work/model-ledger.jsonl
 
 ## Out Of Scope
 
@@ -180,12 +218,21 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 - Intended minimum model: `gpt-5.3-codex`
 - Scope shape: `owner-boundary-contraction/current-frontier`
 - Output profile: `medium`
-- Owned files: `work/packages/active-20260516-startup-active-gate-forced-repair-row-source-unavailable.md`, `work/sprints/current-blocker.md`, `work/sprints/current-blocker.json`
+- Owned files: `work/packages/active-20260516-startup-active-gate-forced-repair-row-source-unavailable.md`, `work/sprints/current-blocker.md`, `work/sprints/current-blocker.json`, `src/admin/admin-service-discovery-readiness-methods.js`, `test/admin/admin-service-discovery.test.js`, `work/model-ledger.jsonl`
 - Forbidden files: `publication ACK convergence`, `priority recovery workflow progress`, `representative timeout budgets`, `active-gate admission relaxation`
 - Frozen decisions: publication ACK convergence and priority recovery workflow progress remain closed; timeout budgets and active-gate admission remain frozen unless canonical evidence selects them again.
 - Escalation triggers: owned files expand beyond this package, runtime ownership changes, representative scenario evidence changes, active-gate admission would be relaxed, or timeout budgets would be increased.
 - Focused proof: `npm run work:context`, `npm run work:evidence-summary -- test-output/reports/rolling-restart-after-admin-snapshot-query-pressure-20260516.report.json`, `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-admin-snapshot-query-pressure-20260516.report.json --handoff-probe`, `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-admin-snapshot-query-pressure-20260516.report.json`, `npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-after-admin-snapshot-query-pressure-20260516.report.json --markdown`
 - Model ledger advisory: `escalate`
+
+## Implementation Proof
+
+- Focused replay: `test/admin/admin-service-discovery.test.js` now includes selected source `11601fe0-72d6-5853-8590-ec2881853e72` with an authoritative gateway attached after `AdminServiceDiscovery` construction.
+- Red proof before runtime edit: `npm test -- test/admin/admin-service-discovery.test.js` failed at `readAuthoritativeSystemTableRows` with `authoritative_row_source_unavailable`.
+- Runtime fix: `src/admin/admin-service-discovery-readiness-methods.js` resolves the authoritative read owner from the direct gateway first, then from the late SQL engine or rebalance-owner gateway path, and only then reports row-source unavailable.
+- Result classification: focused `reduced`, representative `migrated` to `operation_workflow_owner / workflow_progress`.
+- Frozen edges preserved: publication ACK, timeout budgets, and active-gate admission were not changed; priority recovery was only reopened by fresh canonical evidence and was not edited in this package.
+- Representative result: `rolling-restart-after-forced-repair-row-source-20260516.report.json` is red, but forced row-source unavailability is gone, all five nodes are active, snapshot coverage improved to 2/5, and canonical evidence selects priority recovery workflow progress.
 
 ## Validation
 
@@ -194,3 +241,18 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 3. npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-admin-snapshot-query-pressure-20260516.report.json --handoff-probe
 4. npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-admin-snapshot-query-pressure-20260516.report.json
 5. npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-after-admin-snapshot-query-pressure-20260516.report.json --markdown
+6. npm test -- test/admin/admin-service-discovery.test.js - red before runtime fix: focused late-owner replay failed with `authoritative_row_source_unavailable`.
+7. npm test -- test/admin/admin-service-discovery.test.js - pass after runtime fix.
+8. npm test -- test/admin/admin-control-snapshot.test.js - pass.
+9. npx eslint src/admin/admin-service-discovery-readiness-methods.js test/admin/admin-service-discovery.test.js --ignore-pattern 'test/.gitkeep' - pass.
+10. node scripts/check-guideline-literals.js src/admin/admin-service-discovery-readiness-methods.js - pass, 0 new violations.
+11. node scripts/check-guideline-decision-boundaries.js src/admin/admin-service-discovery-readiness-methods.js - pass, 0 violations.
+12. npm run audit:runtime-grammar:file -- src/admin/admin-service-discovery-readiness-methods.js - pass, 0 violations.
+13. npm run work:validate -- --pre-impl work/packages/active-20260516-startup-active-gate-forced-repair-row-source-unavailable.md - pass.
+14. node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-after-forced-repair-row-source-20260516.report.json --verbose - red; migrated to priority recovery workflow progress after reducing forced repair row-source debt.
+15. npm run work:evidence-summary -- test-output/reports/rolling-restart-after-forced-repair-row-source-20260516.report.json - first frontier `priority_recovery_partition_progress`, owner `operation_workflow_owner`, boundary `workflow_progress`.
+16. npm run analyze:distributed-failure -- --report test-output/reports/rolling-restart-after-forced-repair-row-source-20260516.report.json - topology root cause with all nodes active and snapshot coverage 2/5.
+17. npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-forced-repair-row-source-20260516.report.json --handoff-probe - publication ACK satisfied, active-gate handoff pending owner reconcile.
+18. npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-forced-repair-row-source-20260516.report.json - dominant failure class `priority_recovery_event_wait`.
+19. npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-after-forced-repair-row-source-20260516.report.json --markdown - one witness in `operation_workflow_owner / workflow_progress`, partition `control_plane_publications-p1`, semantic state `spread_satisfied_in_flight`.
+20. npm run work:model-ledger -- record --package work/packages/active-20260516-startup-active-gate-forced-repair-row-source-unavailable.md --model gpt-5-codex --reasoning-effort high --output-profile medium --task-class causal-escalation --package-class representative-frontier-closure --intended-minimum-model gpt-5.3-codex --scope-shape owner-boundary-contraction/current-frontier --escalated true --bailout-reason migrated-to-operation-workflow-progress --outcome migrated --validation-status focused-green-representative-migrated --correction-loops 1 --review-findings 1 --notes "Forced repair row-source edge reduced: late authoritative gateway fixture passes, representative moved to priority_recovery_partition_progress with one control_plane_publications-p1 spread_satisfied_in_flight residual." - recorded.

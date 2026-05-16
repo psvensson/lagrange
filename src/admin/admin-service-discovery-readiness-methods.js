@@ -493,16 +493,47 @@ function assignAdminServiceDiscoveryReadinessMethods(
         this.partitionServices :
         null;
     } /**
+     * Return true when a gateway can serve authoritative repair reads.
+     * @param {Object|null} gateway
+     * @return {boolean}
+     */
+    isAuthoritativeDiscoveryReadOwner(gateway = null) {
+      return Boolean(
+        gateway &&
+          typeof gateway.executeRead === TYPEOF.FUNCTION,
+      );
+    } /**
+     * Resolve the canonical authoritative read owner, including the late
+     * runtime owner attached after admin construction.
+     * @return {Object|null}
+     */
+    resolveAuthoritativeDiscoveryReadOwner() {
+      if (
+        this.isAuthoritativeDiscoveryReadOwner(
+          this.controlPlaneSystemTableGateway,
+        )
+      ) {
+        return this.controlPlaneSystemTableGateway;
+      }
+      const lateGateway =
+        this.sqlQueryEngine?.controlPlaneSystemTableGateway ||
+        this.sqlQueryEngine?.rebalanceCoordinator
+          ?.controlPlaneSystemTableGateway ||
+        this.controlPlaneSnapshotOwner?.controlSnapshot
+          ?.controlPlaneSystemTableGateway ||
+        null;
+      if (this.isAuthoritativeDiscoveryReadOwner(lateGateway)) {
+        this.controlPlaneSystemTableGateway = lateGateway;
+        return lateGateway;
+      }
+      return null;
+    } /**
      * Return true when the injected authoritative system-table read owner is
      * available.
      * @return {boolean}
      */
     hasAuthoritativeDiscoveryReadOwner() {
-      return Boolean(
-        this.controlPlaneSystemTableGateway &&
-          typeof this.controlPlaneSystemTableGateway.executeRead ===
-            TYPEOF.FUNCTION,
-      );
+      return this.resolveAuthoritativeDiscoveryReadOwner() !== null;
     } /**
      * Return true when authoritative discovery repair can read canonical rows.
      * @return {boolean}
@@ -537,15 +568,13 @@ function assignAdminServiceDiscoveryReadinessMethods(
      * @private
      */
     async readAuthoritativeSystemTableRowsViaOwner(tableName, options = {}) {
-      if (
-        !this.hasAuthoritativeDiscoveryReadOwner() ||
-        typeof this.controlPlaneSystemTableGateway?.executeRead !==
-          TYPEOF.FUNCTION
-      ) {
+      const authoritativeReadOwner =
+        this.resolveAuthoritativeDiscoveryReadOwner();
+      if (!authoritativeReadOwner) {
         return null;
       }
       const now = options.nowMs || Date.now();
-      const queryResult = await this.controlPlaneSystemTableGateway.executeRead(
+      const queryResult = await authoritativeReadOwner.executeRead(
         {
           tableName,
           sql: `SELECT * FROM ${tableName}`,

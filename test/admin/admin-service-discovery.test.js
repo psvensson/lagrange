@@ -31,6 +31,8 @@ const TEST_DISCOVERY_TABLE_ID = 'services-p1';
 const TEST_DISCOVERY_OWNER_MISSING_PARTITION_ID = 'benchmark_events-p1';
 const TEST_DISCOVERY_ROUTING_GAP_OWNER_MISSING = 'owner_missing';
 const TEST_AUTHORITATIVE_REPAIR_QUERY_TIMEOUT_MS = 3349;
+const TEST_SELECTED_SNAPSHOT_SOURCE_NODE_ID =
+  '11601fe0-72d6-5853-8590-ec2881853e72';
 
 test('AdminServiceDiscovery routes authoritative cache repair through the ' +
   'gateway instead of mutating the cache directly', async (t) => {
@@ -1209,3 +1211,97 @@ test(
       'timeout-shaped failures should preserve the explicit timeout classification',
     );
   });
+
+test(
+  'AdminServiceDiscovery resolves a late authoritative row owner for forced repair',
+  async (t) => {
+    const readCalls = [];
+    const reconcileCalls = [];
+    const lateGateway = {
+      async executeRead(readIntent, options = {}) {
+        const tableName = String(readIntent?.tableName || '');
+        readCalls.push({
+          owner: readIntent?.owner,
+          tableName,
+          queryTimeoutMs: options.queryTimeoutMs,
+        });
+        return {
+          success: true,
+          tableName,
+          rows: tableName === TABLES.NODES ?
+            [{
+              node_id: TEST_SELECTED_SNAPSHOT_SOURCE_NODE_ID,
+              status: 'active',
+            }] :
+            [],
+        };
+      },
+      async reconcileAuthoritativeCacheRows(tableName, rows) {
+        reconcileCalls.push({tableName, rows});
+        return {success: true, mutationCount: rows.length};
+      },
+    };
+    const sqlQueryEngine = {
+      rebalanceCoordinator: {
+        controlPlaneSystemTableGateway: null,
+      },
+    };
+    const discovery = new AdminServiceDiscovery({
+      nodeId: TEST_SELECTED_SNAPSHOT_SOURCE_NODE_ID,
+      sqlQueryEngine,
+      systemTableCache: {
+        getAll() {
+          return [];
+        },
+      },
+      cacheMutationTarget: {
+        applySystemTableChange() {},
+      },
+    });
+
+    sqlQueryEngine.rebalanceCoordinator.controlPlaneSystemTableGateway =
+      lateGateway;
+
+    const nodesRead = await discovery.readAuthoritativeSystemTableRows(
+      TABLES.NODES,
+      {
+        reason: TEST_DISCOVERY_SNAPSHOT_REASON,
+        queryTimeoutMs: TEST_AUTHORITATIVE_REPAIR_QUERY_TIMEOUT_MS,
+      },
+    );
+    const repair = await discovery.ensureAuthoritativeDiscoveryCacheRepair({
+      reason: TEST_DISCOVERY_SNAPSHOT_REASON,
+      queryTimeoutMs: TEST_AUTHORITATIVE_REPAIR_QUERY_TIMEOUT_MS,
+      triggerCodes: TEST_TRIGGER_CODES,
+    });
+
+    t.same(
+      nodesRead,
+      {
+        tableName: TABLES.NODES,
+        rows: [{
+          node_id: TEST_SELECTED_SNAPSHOT_SOURCE_NODE_ID,
+          status: 'active',
+        }],
+      },
+      'selected source forced repair should obtain nodes rows from the late owner',
+    );
+    t.equal(
+      repair.applied,
+      true,
+      'forced discovery repair should continue after the late row owner appears',
+    );
+    t.equal(
+      readCalls.every((call) =>
+        call.queryTimeoutMs === TEST_AUTHORITATIVE_REPAIR_QUERY_TIMEOUT_MS,
+      ),
+      true,
+      'late-owner forced repair should preserve caller query timeout',
+    );
+    t.equal(
+      reconcileCalls.length,
+      repair.tableNames.length,
+      'late-owner forced repair should reconcile every requested table',
+    );
+  },
+);
