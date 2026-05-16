@@ -185,6 +185,7 @@ function assignAdminServiceDiscoveryRepairMethods(
                 options.reason || AUTHORITATIVE_DISCOVERY_REPAIR_DEFAULT_REASON,
               tableName: options.tableName || null,
               tableId: options.tableId || null,
+              queryTimeoutMs: options.queryTimeoutMs,
             },
           );
           repairState.authoritativeRowsByTable.set(tableName, {

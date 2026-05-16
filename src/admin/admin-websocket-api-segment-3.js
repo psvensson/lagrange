@@ -179,6 +179,7 @@ class AdminWebSocketAPISegment3 extends AdminWebSocketAPISegment2 {
       );
       return this.buildControlSnapshotQueryResult({
         forceAuthoritativeRepair: controlSnapshotQuery.forceAuthoritativeRepair,
+        queryTimeoutMs: timeoutMs,
         allowAuthoritativeRepair: observationPolicy.allowAuthoritativeRepair,
         allowAuthoritativeReadinessRefresh:
           observationPolicy.allowAuthoritativeReadinessRefresh,

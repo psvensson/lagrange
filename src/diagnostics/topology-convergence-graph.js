@@ -87,6 +87,26 @@ const TOPOLOGY_OPERATOR_CURRENT_STEP_STATE_RETRY_SCHEDULED =
 const TOPOLOGY_OPERATOR_CURRENT_STEP_STATE_BLOCKED = 'blocked';
 const TOPOLOGY_OPERATOR_CURRENT_STEP_STATE_TERMINAL = 'terminal';
 const TOPOLOGY_OPERATOR_WITNESS_FIELD_NAME = 'topologyOperatorWitness';
+const SELECTED_SNAPSHOT_SOURCE_CAUSE_TIMEOUT =
+  'selected_snapshot_source_timeout';
+const FORCED_REPAIR_SNAPSHOT_CAUSE_TIMEOUT =
+  'forced_repair_snapshot_timeout';
+const AUTHORITATIVE_CONTROL_SNAPSHOT_QUERY_CAUSE_TIMEOUT =
+  'authoritative_control_snapshot_query_timeout';
+const ACTIVE_GATE_SNAPSHOT_OWNER_EDGE_SELECTED_SOURCE =
+  'selected_snapshot_source_selection';
+const ACTIVE_GATE_SNAPSHOT_OWNER_EDGE_FORCED_REPAIR =
+  'forced_repair_path_stall';
+const ACTIVE_GATE_SNAPSHOT_OWNER_EDGE_AUTHORITATIVE_QUERY =
+  'authoritative_control_snapshot_query_pressure';
+const SELECTED_SNAPSHOT_ADMIN_QUERY_TIMEOUT_PREFIX =
+  'Admin API query timed out for node ';
+const SELECTED_SNAPSHOT_FORCED_REPAIR_FAILURE_FRAGMENT =
+  'forced repair snapshot failed:';
+const SELECTED_SNAPSHOT_AUTHORITATIVE_REPAIR_FAILURE_FRAGMENT =
+  'Authoritative control snapshot repair failed:';
+const SELECTED_SNAPSHOT_AUTHORITATIVE_NODES_TIMEOUT_FRAGMENT =
+  'nodes:Query timeout after ';
 
 const EDGE_STATE = Object.freeze({
   SATISFIED: 'satisfied',
@@ -149,6 +169,12 @@ const REASON = Object.freeze({
     ACTIVE_GATE_OWNER_COHORT_REASON_OWNER_RECONCILE_PENDING,
   SNAPSHOT_COVERAGE_INCOMPLETE: 'snapshot_coverage_incomplete',
   SNAPSHOT_REPAIR_DEFERRED: 'snapshot_repair_deferred',
+  SELECTED_SNAPSHOT_SOURCE_TIMEOUT:
+    SELECTED_SNAPSHOT_SOURCE_CAUSE_TIMEOUT,
+  FORCED_REPAIR_SNAPSHOT_TIMEOUT:
+    FORCED_REPAIR_SNAPSHOT_CAUSE_TIMEOUT,
+  AUTHORITATIVE_CONTROL_SNAPSHOT_QUERY_TIMEOUT:
+    AUTHORITATIVE_CONTROL_SNAPSHOT_QUERY_CAUSE_TIMEOUT,
   ACTIVE_GATE_TIMED_OUT: 'active_gate_timed_out',
   ACTIVE_GATE_READY: 'active_gate_ready',
   PRIORITY_RECOVERY_PROGRESS_BLOCKED: 'priority_recovery_progress_blocked',
@@ -250,6 +276,44 @@ const OWNER_SUPPORTING_REASON_SET = Object.freeze(new Set([
   REASON.PUBLICATION_PUBLISHED,
   REASON.PUBLICATION_PENDING,
 ]));
+
+const ACTIVE_GATE_SNAPSHOT_CAUSE_RULES = Object.freeze([
+  Object.freeze({
+    reason: REASON.SELECTED_SNAPSHOT_SOURCE_TIMEOUT,
+    sourceField: 'selectedSnapshotSourceCause',
+    cause: SELECTED_SNAPSHOT_SOURCE_CAUSE_TIMEOUT,
+    matches: (evidence) => evidence.selectedSnapshotSourceTimeout === true,
+  }),
+  Object.freeze({
+    reason: REASON.FORCED_REPAIR_SNAPSHOT_TIMEOUT,
+    sourceField: 'forcedRepairSnapshotCause',
+    cause: FORCED_REPAIR_SNAPSHOT_CAUSE_TIMEOUT,
+    matches: (evidence) => evidence.forcedRepairSnapshotTimeout === true,
+  }),
+  Object.freeze({
+    reason: REASON.AUTHORITATIVE_CONTROL_SNAPSHOT_QUERY_TIMEOUT,
+    sourceField: 'authoritativeControlSnapshotQueryCause',
+    cause: AUTHORITATIVE_CONTROL_SNAPSHOT_QUERY_CAUSE_TIMEOUT,
+    matches: (evidence) =>
+      evidence.authoritativeControlSnapshotQueryTimeout === true,
+  }),
+]);
+
+const ACTIVE_GATE_SNAPSHOT_OWNER_EDGE_RULES = Object.freeze([
+  Object.freeze({
+    ownerEdge: ACTIVE_GATE_SNAPSHOT_OWNER_EDGE_AUTHORITATIVE_QUERY,
+    matches: (evidence) =>
+      evidence.authoritativeControlSnapshotQueryTimeout === true,
+  }),
+  Object.freeze({
+    ownerEdge: ACTIVE_GATE_SNAPSHOT_OWNER_EDGE_FORCED_REPAIR,
+    matches: (evidence) => evidence.forcedRepairSnapshotTimeout === true,
+  }),
+  Object.freeze({
+    ownerEdge: ACTIVE_GATE_SNAPSHOT_OWNER_EDGE_SELECTED_SOURCE,
+    matches: (evidence) => evidence.selectedSnapshotSourceTimeout === true,
+  }),
+]);
 
 const PUBLICATION_PENDING_STATUS_SET = Object.freeze(new Set([
   PUBLICATION_STATUS_OPEN,
@@ -986,6 +1050,16 @@ function buildReplayActiveGateProgress(source) {
     snapshotCoverageNodeCount: numberOrZero(source.snapshotCoverageNodeCount),
     expectedNodeCount: numberOrZero(source.expectedNodeCount),
     selectedSnapshotError: textOrUnknown(source.selectedSnapshotError),
+    selectedSnapshotNodeId: textOrUnknown(source.selectedSnapshotNodeId),
+    selectedSnapshotTimeoutMs: numberOrUnknown(source.selectedSnapshotTimeoutMs),
+    selectedSnapshotSourceCause:
+      textOrUnknown(source.selectedSnapshotSourceCause),
+    forcedRepairSnapshotCause:
+      textOrUnknown(source.forcedRepairSnapshotCause),
+    authoritativeControlSnapshotQueryCause:
+      textOrUnknown(source.authoritativeControlSnapshotQueryCause),
+    activeGateSnapshotOwnerEdge:
+      textOrUnknown(source.activeGateSnapshotOwnerEdge),
     selectedSnapshotObservationMode:
       textOrUnknown(source.selectedSnapshotObservationMode),
     selectedSnapshotObservationState:
@@ -1428,6 +1502,7 @@ function buildActiveGateSnapshotEdge(normalized) {
         progress.selectedError,
         progress.readinessDelay?.error,
       ),
+      ...buildActiveGateSnapshotCauseSource(progress),
       selectedSnapshotObservationMode:
         textOrUnknown(progress.selectedSnapshotObservationMode),
       selectedSnapshotObservationState:
@@ -2269,6 +2344,91 @@ function buildActiveGateOwnerCohortSource(progress) {
   return source;
 }
 
+function normalizeActiveGateSnapshotCauseEvidence(progress) {
+  const selectedSnapshotError = firstText(
+    progress.selectedSnapshotError,
+    progress.selectedError,
+    progress.readinessDelay?.error,
+  );
+  const selectedSnapshotNodeId = firstText(
+    progress.selectedSnapshotNodeId,
+    progress.selectedNodeId,
+  );
+  const selectedSnapshotTimeoutMs = numberOrUnknown(
+    progress.selectedSnapshotTimeoutMs,
+  );
+  const selectedSnapshotSourceTimeout =
+    selectedSnapshotError.includes(
+      SELECTED_SNAPSHOT_ADMIN_QUERY_TIMEOUT_PREFIX,
+    ) &&
+    (
+      selectedSnapshotNodeId === UNKNOWN_VALUE ||
+      selectedSnapshotError.includes(selectedSnapshotNodeId)
+    );
+  const forcedRepairSnapshotTimeout =
+    selectedSnapshotError.includes(
+      SELECTED_SNAPSHOT_FORCED_REPAIR_FAILURE_FRAGMENT,
+    ) &&
+    selectedSnapshotError.includes(
+      SELECTED_SNAPSHOT_AUTHORITATIVE_REPAIR_FAILURE_FRAGMENT,
+    );
+  const authoritativeControlSnapshotQueryTimeout =
+    forcedRepairSnapshotTimeout === true &&
+    selectedSnapshotError.includes(
+      SELECTED_SNAPSHOT_AUTHORITATIVE_NODES_TIMEOUT_FRAGMENT,
+    );
+
+  return Object.freeze({
+    selectedSnapshotError,
+    selectedSnapshotNodeId,
+    selectedSnapshotTimeoutMs,
+    selectedSnapshotSourceTimeout,
+    forcedRepairSnapshotTimeout,
+    authoritativeControlSnapshotQueryTimeout,
+  });
+}
+
+function buildActiveGateSnapshotCauseSource(progress) {
+  const evidence = normalizeActiveGateSnapshotCauseEvidence(progress);
+  const matchedRules = ACTIVE_GATE_SNAPSHOT_CAUSE_RULES.filter((rule) =>
+    rule.matches(evidence),
+  );
+  if (matchedRules.length === SOURCE_ORDER_BASE) {
+    return {};
+  }
+  const source = {};
+  if (evidence.selectedSnapshotNodeId !== UNKNOWN_VALUE) {
+    source.selectedSnapshotNodeId = evidence.selectedSnapshotNodeId;
+  }
+  if (evidence.selectedSnapshotTimeoutMs !== UNKNOWN_VALUE) {
+    source.selectedSnapshotTimeoutMs = evidence.selectedSnapshotTimeoutMs;
+  }
+  for (const rule of matchedRules) {
+    source[rule.sourceField] = rule.cause;
+  }
+  source.activeGateSnapshotOwnerEdge =
+    selectActiveGateSnapshotOwnerEdge(evidence);
+  return source;
+}
+
+function selectActiveGateSnapshotOwnerEdge(evidence) {
+  const rule = ACTIVE_GATE_SNAPSHOT_OWNER_EDGE_RULES.find((candidate) =>
+    candidate.matches(evidence),
+  );
+  return rule?.ownerEdge || ABSENT_VALUE;
+}
+
+function selectActiveGateSnapshotCauseReasons(progress) {
+  const evidence = normalizeActiveGateSnapshotCauseEvidence(progress);
+  return ACTIVE_GATE_SNAPSHOT_CAUSE_RULES
+    .filter((rule) => rule.matches(evidence))
+    .map((rule) => rule.reason);
+}
+
+function appendActiveGateSnapshotCauseReasons(progress, reasons) {
+  reasons.push(...selectActiveGateSnapshotCauseReasons(progress));
+}
+
 function hasActiveGateOwnerReconcilePending(progress, handoff = {}) {
   return (
     textOrUnknown(handoff.reasonCode) ===
@@ -2295,6 +2455,7 @@ function resolveActiveGateSnapshotState(activeGate, progress, handoff, reasons) 
     reasons.push(REASON.ACTIVE_GATE_TIMED_OUT);
     appendActiveGateOwnerCohortReason(progress, handoff, reasons);
     reasons.push(REASON.SNAPSHOT_COVERAGE_INCOMPLETE);
+    appendActiveGateSnapshotCauseReasons(progress, reasons);
     if (progress.selectedSnapshotRepairDeferred === true) {
       reasons.push(REASON.SNAPSHOT_REPAIR_DEFERRED);
     }
@@ -2309,6 +2470,7 @@ function resolveActiveGateSnapshotState(activeGate, progress, handoff, reasons) 
   }
   appendActiveGateOwnerCohortReason(progress, handoff, reasons);
   reasons.push(REASON.SNAPSHOT_COVERAGE_INCOMPLETE);
+  appendActiveGateSnapshotCauseReasons(progress, reasons);
   if (progress.selectedSnapshotRepairDeferred === true) {
     reasons.push(REASON.SNAPSHOT_REPAIR_DEFERRED);
   }

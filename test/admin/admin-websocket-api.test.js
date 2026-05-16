@@ -7,6 +7,7 @@ import {test} from '../../src/test-helpers/tap.js';
 import {AdminWebSocketAPI, MessageType, ErrorCode} from
   '../../src/admin/admin-websocket-api.js';
 import {
+  ADMIN_CONTROL_SNAPSHOT,
 } from '../../src/admin/admin-constants.js';
 import {SystemTableCache} from '../../src/cache/system-table-cache.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
@@ -25,6 +26,7 @@ import {
 ConfigurationManager.getInstance().initialize();
 LoggingService.getInstance().initialize({level: 'error'});
 
+const TEST_CONTROL_SNAPSHOT_QUERY_TIMEOUT_MS = 3349;
 
 /**
  * Create a mock SQL query engine.
@@ -453,6 +455,41 @@ test('AdminWebSocketAPI - multiple concurrent connections', async (t) => {
   conn3.ws.close();
   await api.shutdown();
 });
+
+test('AdminWebSocketAPI - control snapshot query preserves requested repair timeout',
+  async (t) => {
+    let controlSnapshotOptions = null;
+    const api = new AdminWebSocketAPI({
+      nodeId: 'test-node',
+      systemTableCache: createPopulatedCache(),
+      sqlQueryEngine: createMockQueryEngine(),
+    });
+    api.buildControlSnapshotQueryResult = async (options = {}) => {
+      controlSnapshotOptions = options;
+      return {
+        success: true,
+        rows: [],
+      };
+    };
+
+    await api.executeLocalQueryEnvelope({
+      queryId: 'q-force-control-snapshot-timeout',
+      sql: ADMIN_CONTROL_SNAPSHOT.QUERY_SQL_FORCE_REPAIR,
+      params: [],
+      timeoutMs: TEST_CONTROL_SNAPSHOT_QUERY_TIMEOUT_MS,
+    });
+
+    t.equal(
+      controlSnapshotOptions?.queryTimeoutMs,
+      TEST_CONTROL_SNAPSHOT_QUERY_TIMEOUT_MS,
+      'control snapshot owner should receive the query timeout requested by the caller',
+    );
+    t.equal(
+      controlSnapshotOptions?.forceAuthoritativeRepair,
+      true,
+      'forced control snapshot should keep the forced repair request',
+    );
+  });
 
 test('AdminWebSocketAPI - query execution SELECT', async (t) => {
   const api = new AdminWebSocketAPI({

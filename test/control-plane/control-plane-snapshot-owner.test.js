@@ -13,6 +13,7 @@ const TEST_TRIGGER_CODES = ['discovery_node_coverage_gap'];
 const TEST_SNAPSHOT_REASON = 'control_snapshot';
 const TEST_CAPTURED_AT = 1000;
 const TEST_CAPTURED_AT_REPAIRED = 2000;
+const TEST_FORCE_REPAIR_QUERY_TIMEOUT_MS = 3349;
 const TEST_CAPTURED_AT_ISO = new Date(TEST_CAPTURED_AT).toISOString();
 const TEST_CAPTURED_AT_REPAIRED_ISO =
   new Date(TEST_CAPTURED_AT_REPAIRED).toISOString();
@@ -189,6 +190,7 @@ test('ControlPlaneSnapshotOwner forced control snapshots still rebuild from auth
           options,
           {
             forceAuthoritativeRepair: true,
+            queryTimeoutMs: TEST_FORCE_REPAIR_QUERY_TIMEOUT_MS,
             expectedMinimumRevision: null,
             expectedResumeToken: null,
             preferAuthoritativePublicationRead: true,
@@ -226,6 +228,7 @@ test('ControlPlaneSnapshotOwner forced control snapshots still rebuild from auth
       },
       {
         forceAuthoritativeRepair: true,
+        queryTimeoutMs: TEST_FORCE_REPAIR_QUERY_TIMEOUT_MS,
       },
     );
 
@@ -239,6 +242,7 @@ test('ControlPlaneSnapshotOwner forced control snapshots still rebuild from auth
       {
         reason: TEST_SNAPSHOT_REASON,
         bypassReuse: true,
+        queryTimeoutMs: TEST_FORCE_REPAIR_QUERY_TIMEOUT_MS,
         triggerCodes: TEST_TRIGGER_CODES,
       },
       'forced repair should bypass reuse and preserve trigger codes',

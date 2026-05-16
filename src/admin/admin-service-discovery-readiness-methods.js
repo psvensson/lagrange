@@ -591,11 +591,16 @@ function assignAdminServiceDiscoveryReadinessMethods(
         this.resolveAuthoritativeDiscoveryReadTransportProfile(
           controlSnapshotRepairRead,
         );
+      const queryTimeoutMs =
+        Number.isFinite(options.queryTimeoutMs) &&
+        options.queryTimeoutMs > NUM.ZERO ?
+          Math.floor(options.queryTimeoutMs) :
+          AUTHORITATIVE_DISCOVERY_REPAIR.QUERY_TIMEOUT_MS;
       const routingReadinessDimension =
         CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE;
       return {
         readProfile: LOCAL_STR_REPAIR_REQUIRED,
-        queryTimeoutMs: AUTHORITATIVE_DISCOVERY_REPAIR.QUERY_TIMEOUT_MS,
+        queryTimeoutMs,
         sessionId: `${reason || LOCAL_STR_REPAIR}:${tableName}:${now}`,
         allowSqlFallback: allowRoutedAuthoritativeFallback,
         allowPressureDegrade: transportProfile.allowPressureDegrade,

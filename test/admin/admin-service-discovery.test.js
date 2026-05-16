@@ -30,6 +30,7 @@ const TEST_DISCOVERY_TABLE_NAME = TABLES.SERVICES;
 const TEST_DISCOVERY_TABLE_ID = 'services-p1';
 const TEST_DISCOVERY_OWNER_MISSING_PARTITION_ID = 'benchmark_events-p1';
 const TEST_DISCOVERY_ROUTING_GAP_OWNER_MISSING = 'owner_missing';
+const TEST_AUTHORITATIVE_REPAIR_QUERY_TIMEOUT_MS = 3349;
 
 test('AdminServiceDiscovery routes authoritative cache repair through the ' +
   'gateway instead of mutating the cache directly', async (t) => {
@@ -205,6 +206,7 @@ test('AdminServiceDiscovery authoritative cache repair reads use control-plane r
         async executeRead(readIntent, options) {
           readCalls.push({
             tableName: readIntent?.tableName,
+            queryTimeoutMs: options?.queryTimeoutMs,
             routingReadinessDimension: options?.routingReadinessDimension,
             workloadClass: options?.workloadClass,
             workClass: options?.workClass,
@@ -224,10 +226,18 @@ test('AdminServiceDiscovery authoritative cache repair reads use control-plane r
 
     await discovery.ensureAuthoritativeDiscoveryCacheRepair({
       reason: 'unit-test-recovery-routing',
+      queryTimeoutMs: TEST_AUTHORITATIVE_REPAIR_QUERY_TIMEOUT_MS,
       triggerCodes: TEST_TRIGGER_CODES,
     });
 
     t.equal(readCalls.length > 0, true);
+    t.equal(
+      readCalls.every((call) =>
+        call.queryTimeoutMs === TEST_AUTHORITATIVE_REPAIR_QUERY_TIMEOUT_MS,
+      ),
+      true,
+      'authoritative discovery repair reads should preserve caller query timeout',
+    );
     t.equal(
       readCalls.every((call) =>
         call.routingReadinessDimension ===

@@ -370,6 +370,7 @@ class AdminControlSnapshotPart2 extends AdminControlSnapshotPart1 {
         repair = await this.ensureAuthoritativeDiscoveryCacheRepair({
           reason: CONTROL_SNAPSHOT_REPAIR_REASON,
           bypassReuse: true,
+          queryTimeoutMs: options.queryTimeoutMs,
         });
       } catch (repairError) {
         throw buildAuthoritativeControlSnapshotRepairFailure(
@@ -458,6 +459,7 @@ class AdminControlSnapshotPart2 extends AdminControlSnapshotPart1 {
       repair = await this.ensureAuthoritativeDiscoveryCacheRepair({
         reason: CONTROL_SNAPSHOT_REPAIR_REASON,
         bypassReuse: forceAuthoritativeRepair,
+        queryTimeoutMs: options.queryTimeoutMs,
         triggerCodes: repairEvaluation?.triggerCodes,
       });
     } catch (error) {

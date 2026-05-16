@@ -33,7 +33,6 @@ const {
   CLUSTER_READINESS_MODE_LOAD,
   CLUSTER_READINESS_MODE_STARTUP,
   INVARIANT_SEVERITY,
-  PRIORITY_RECOVERY_SEMANTIC_STATE,
   PRIORITY_RECOVERY_SEMANTIC_STATE_IDS,
   PRIORITY_RECOVERY_UNRESOLVED_SEMANTIC_STATE_IDS,
   buildPublicationRecoveryGateSnapshot,
@@ -1200,6 +1199,11 @@ function buildActiveWaitProgressSnapshot(
     snapshotCoverage.selectedNodeId.length > ZERO ?
       snapshotCoverage.selectedNodeId :
       null;
+  const selectedSnapshotTimeoutMs = Number.isFinite(
+    snapshotCoverage?.selectedSnapshotTimeoutMs,
+  ) ?
+    Math.max(ZERO, Math.floor(snapshotCoverage.selectedSnapshotTimeoutMs)) :
+    null;
   const selectedSnapshotAdminReady =
     snapshotCoverage?.selectedAdminReady === true ?
       true :
@@ -1398,7 +1402,9 @@ function buildActiveWaitProgressSnapshot(
         normalizeDistinctStringArray(
           publicationActiveGateHandoff.missingPublishedNodeIds,
         ) :
-      normalizeDistinctStringArray(publicationConvergenceGate?.missingPublishedNodeIds);
+        normalizeDistinctStringArray(
+          publicationConvergenceGate?.missingPublishedNodeIds,
+        );
   const pendingAckNodeIds = normalizeDistinctStringArray(
     snapshotCoverage?.selectedPendingAckNodeIds ||
       publicationConvergenceGate?.pendingAckNodeIds ||
@@ -1617,6 +1623,7 @@ function buildActiveWaitProgressSnapshot(
     publicationEpoch,
     recoveryProtocolState,
     selectedSnapshotNodeId,
+    selectedSnapshotTimeoutMs,
     selectedSnapshotAdminReady,
     selectedSnapshotReachableBy,
     selectedSnapshotError,

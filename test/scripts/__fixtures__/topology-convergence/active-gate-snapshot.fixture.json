@@ -20,13 +20,15 @@
             "publicationStatus": "UNKNOWN",
             "pendingAckCount": 0,
             "missingPublishedCount": 0,
-            "selectedSnapshotError": "Admin API query timed out for node 11601fe0-72d6-5853-8590-ec2881853e72 on lane snapshot after 100ms",
+            "selectedSnapshotNodeId": "11601fe0-72d6-5853-8590-ec2881853e72",
+            "selectedSnapshotTimeoutMs": 3349,
+            "selectedSnapshotError": "Admin API query timed out for node 11601fe0-72d6-5853-8590-ec2881853e72 on lane snapshot after 3349ms; forced repair snapshot failed: Admin API query failed for node 11601fe0-72d6-5853-8590-ec2881853e72 on lane snapshot: Authoritative control snapshot repair failed: nodes:Query timeout after 1500ms",
             "readinessDelay": {
               "timedOut": true,
               "cause": "snapshot_timeout",
               "source": "selectedSnapshotError",
               "recoverability": "terminal",
-              "error": "Admin API query timed out for node 11601fe0-72d6-5853-8590-ec2881853e72 on lane snapshot after 100ms"
+              "error": "Admin API query timed out for node 11601fe0-72d6-5853-8590-ec2881853e72 on lane snapshot after 3349ms; forced repair snapshot failed: Admin API query failed for node 11601fe0-72d6-5853-8590-ec2881853e72 on lane snapshot: Authoritative control snapshot repair failed: nodes:Query timeout after 1500ms"
             },
             "blockers": [
               "inactive_nodes=1",
@@ -35,6 +37,14 @@
             ]
           }
         }
+      },
+      "readinessFailure": {
+        "mode": "startup",
+        "classCode": "snapshot_timeout",
+        "recoverability": "terminal",
+        "terminalReason": "stalled_no_progress",
+        "cause": "snapshot_timeout",
+        "source": "selectedSnapshotError"
       }
     }
   ]

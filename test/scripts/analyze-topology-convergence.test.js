@@ -102,8 +102,19 @@ const ACTIVE_GATE_TIMED_OUT_REASON = 'active_gate_timed_out';
 const OWNER_RECONCILE_PENDING_REASON = 'owner_reconcile_pending';
 const SNAPSHOT_COVERAGE_INCOMPLETE_REASON = 'snapshot_coverage_incomplete';
 const SNAPSHOT_REPAIR_DEFERRED_REASON = 'snapshot_repair_deferred';
+const SELECTED_SNAPSHOT_SOURCE_TIMEOUT_REASON =
+  'selected_snapshot_source_timeout';
+const FORCED_REPAIR_SNAPSHOT_TIMEOUT_REASON =
+  'forced_repair_snapshot_timeout';
+const AUTHORITATIVE_CONTROL_SNAPSHOT_QUERY_TIMEOUT_REASON =
+  'authoritative_control_snapshot_query_timeout';
+const ACTIVE_GATE_SNAPSHOT_OWNER_EDGE_AUTHORITATIVE_QUERY =
+  'authoritative_control_snapshot_query_pressure';
 const SNAPSHOT_COVERAGE_ZERO_OF_FIVE = 0;
 const SNAPSHOT_COVERAGE_TWO_OF_FIVE = 2;
+const ACTIVE_GATE_SELECTED_SNAPSHOT_SOURCE =
+  '11601fe0-72d6-5853-8590-ec2881853e72';
+const ACTIVE_GATE_SELECTED_SNAPSHOT_TIMEOUT_MS = 3349;
 const EXPECTED_NODE_COUNT = 5;
 const MISSING_PUBLISHED_COUNT = 4;
 const RUNTIME_PROMOTION_ALLOWED_FALSE = false;
@@ -360,6 +371,55 @@ describe('analyze-topology-convergence CLI', () => {
     );
     assert.equal(output.consumer.source.expectedNodeCount, EXPECTED_NODE_COUNT);
   });
+
+  it('prints active-gate snapshot timeout owner-edge split in handoff probe',
+    () => {
+      const output = runAnalyzerJson(ACTIVE_GATE_FIXTURE_PATH, ARG_HANDOFF_PROBE);
+
+      assert.equal(output.schemaVersion, HANDOFF_PROBE_SCHEMA);
+      assert.equal(output.consumer.edge, ACTIVE_GATE_EDGE_ID);
+      assert.equal(output.consumer.owner, STARTUP_ACTIVE_GATE_OWNER);
+      assert.equal(output.consumer.boundary, SNAPSHOT_COVERAGE_BOUNDARY);
+      assert.deepEqual(output.consumer.reasons, [
+        ACTIVE_GATE_TIMED_OUT_REASON,
+        SNAPSHOT_COVERAGE_INCOMPLETE_REASON,
+        SELECTED_SNAPSHOT_SOURCE_TIMEOUT_REASON,
+        FORCED_REPAIR_SNAPSHOT_TIMEOUT_REASON,
+        AUTHORITATIVE_CONTROL_SNAPSHOT_QUERY_TIMEOUT_REASON,
+      ]);
+      assert.equal(
+        output.consumer.source.snapshotCoverageNodeCount,
+        SNAPSHOT_COVERAGE_ZERO_OF_FIVE,
+      );
+      assert.equal(
+        output.consumer.source.expectedNodeCount,
+        EXPECTED_NODE_COUNT,
+      );
+      assert.equal(
+        output.consumer.source.selectedSnapshotNodeId,
+        ACTIVE_GATE_SELECTED_SNAPSHOT_SOURCE,
+      );
+      assert.equal(
+        output.consumer.source.selectedSnapshotTimeoutMs,
+        ACTIVE_GATE_SELECTED_SNAPSHOT_TIMEOUT_MS,
+      );
+      assert.equal(
+        output.consumer.source.selectedSnapshotSourceCause,
+        SELECTED_SNAPSHOT_SOURCE_TIMEOUT_REASON,
+      );
+      assert.equal(
+        output.consumer.source.forcedRepairSnapshotCause,
+        FORCED_REPAIR_SNAPSHOT_TIMEOUT_REASON,
+      );
+      assert.equal(
+        output.consumer.source.authoritativeControlSnapshotQueryCause,
+        AUTHORITATIVE_CONTROL_SNAPSHOT_QUERY_TIMEOUT_REASON,
+      );
+      assert.equal(
+        output.consumer.source.activeGateSnapshotOwnerEdge,
+        ACTIVE_GATE_SNAPSHOT_OWNER_EDGE_AUTHORITATIVE_QUERY,
+      );
+    });
 
   it('keeps the active-gate consumer when it is the current handoff frontier',
     () => {

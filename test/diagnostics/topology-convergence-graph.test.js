@@ -94,6 +94,14 @@ const PENDING_ACKS_PRESENT_REASON = 'pending_acks_present';
 const ACTIVE_GATE_TIMED_OUT_REASON = 'active_gate_timed_out';
 const SNAPSHOT_COVERAGE_INCOMPLETE_REASON = 'snapshot_coverage_incomplete';
 const SNAPSHOT_REPAIR_DEFERRED_REASON = 'snapshot_repair_deferred';
+const SELECTED_SNAPSHOT_SOURCE_TIMEOUT_REASON =
+  'selected_snapshot_source_timeout';
+const FORCED_REPAIR_SNAPSHOT_TIMEOUT_REASON =
+  'forced_repair_snapshot_timeout';
+const AUTHORITATIVE_CONTROL_SNAPSHOT_QUERY_TIMEOUT_REASON =
+  'authoritative_control_snapshot_query_timeout';
+const ACTIVE_GATE_SNAPSHOT_OWNER_EDGE_AUTHORITATIVE_QUERY =
+  'authoritative_control_snapshot_query_pressure';
 const PRIORITY_RECOVERY_BLOCKED_REASON = 'priority_recovery_progress_blocked';
 const PRIORITY_RECOVERY_RETRYABLE_REASON =
   'priority_recovery_event_driven_wait';
@@ -139,6 +147,26 @@ const SELECTED_SNAPSHOT_OBSERVATION_REFRESH_IDLE = 'idle';
 const SELECTED_SNAPSHOT_OBSERVATION_NEXT_ACTION_WAIT = 'wait';
 const SELECTED_SNAPSHOT_OBSERVATION_REASON_COVERAGE_GAP =
   'discovery_node_coverage_gap';
+const ACTIVE_GATE_TIMEOUT_SELECTED_SNAPSHOT_SOURCE =
+  '11601fe0-72d6-5853-8590-ec2881853e72';
+const ACTIVE_GATE_TIMEOUT_SELECTED_SNAPSHOT_TIMEOUT_MS = 3349;
+const ACTIVE_GATE_TIMEOUT_AUTHORITATIVE_QUERY_TIMEOUT_MS = 1500;
+const ACTIVE_GATE_TIMEOUT_SELECTED_SNAPSHOT_ERROR =
+  'Admin API query timed out for node ' +
+  ACTIVE_GATE_TIMEOUT_SELECTED_SNAPSHOT_SOURCE +
+  ' on lane snapshot after ' +
+  String(ACTIVE_GATE_TIMEOUT_SELECTED_SNAPSHOT_TIMEOUT_MS) +
+  'ms; forced repair snapshot failed: Admin API query failed for node ' +
+  ACTIVE_GATE_TIMEOUT_SELECTED_SNAPSHOT_SOURCE +
+  ' on lane snapshot: Authoritative control snapshot repair failed: ' +
+  'nodes:Query timeout after ' +
+  String(ACTIVE_GATE_TIMEOUT_AUTHORITATIVE_QUERY_TIMEOUT_MS) +
+  'ms';
+const ACTIVE_GATE_TIMEOUT_BLOCKERS = Object.freeze([
+  'inactive_nodes=1',
+  'snapshot_coverage=0/5',
+  'snapshot_error',
+]);
 
 function buildFixtureFailureBundle() {
   return {
@@ -523,7 +551,11 @@ describe('TopologyConvergenceGraph', () => {
       );
       assert.deepEqual(
         dominantWitness.reasons,
-        [ACTIVE_GATE_TIMED_OUT_REASON, SNAPSHOT_COVERAGE_INCOMPLETE_REASON],
+        [
+          ACTIVE_GATE_TIMED_OUT_REASON,
+          SNAPSHOT_COVERAGE_INCOMPLETE_REASON,
+          SELECTED_SNAPSHOT_SOURCE_TIMEOUT_REASON,
+        ],
       );
       assert.equal(publicationWitness.state, EDGE_STATE.SATISFIED);
       assert.deepEqual(publicationWitness.reasons, [
@@ -535,6 +567,110 @@ describe('TopologyConvergenceGraph', () => {
       );
       assert.equal(publicationWitness.source.pendingAckCount, ZERO_COUNT);
       assert.equal(publicationWitness.source.missingPublishedCount, ZERO_COUNT);
+      assertNoNullOrUndefined(graph);
+    });
+
+  it('separates selected snapshot timeout causes from inherited readiness support',
+    () => {
+      const graph = buildTopologyConvergenceGraph({
+        report: {
+          scenarios: [
+            {
+              scenario: SCENARIO_ROLLING_RESTART,
+              publicationConvergence: {
+                publicationStatus: PUBLICATION_UNKNOWN_STATUS,
+                pendingAckCount: ZERO_COUNT,
+                blockedNodeCount: ZERO_COUNT,
+                missingPublishedCount: ZERO_COUNT,
+                activeGate: {
+                  mode: FIXTURE_READINESS_MODE,
+                  state: ACTIVE_GATE_STATE_TIMED_OUT,
+                  ready: false,
+                  progress: {
+                    expectedNodeCount: FIXTURE_EXPECTED_NODE_COUNT,
+                    snapshotCoverageNodeCount: ZERO_COUNT,
+                    snapshotCoverageComplete: false,
+                    selectedSnapshotNodeId:
+                      ACTIVE_GATE_TIMEOUT_SELECTED_SNAPSHOT_SOURCE,
+                    selectedSnapshotTimeoutMs:
+                      ACTIVE_GATE_TIMEOUT_SELECTED_SNAPSHOT_TIMEOUT_MS,
+                    selectedSnapshotError:
+                      ACTIVE_GATE_TIMEOUT_SELECTED_SNAPSHOT_ERROR,
+                    readinessDelay: {
+                      timedOut: true,
+                      cause: FIXTURE_READINESS_SNAPSHOT_TIMEOUT_CAUSE,
+                      source: FIXTURE_READINESS_SELECTED_SNAPSHOT_SOURCE,
+                      recoverability: FIXTURE_READINESS_RECOVERABILITY,
+                      error: ACTIVE_GATE_TIMEOUT_SELECTED_SNAPSHOT_ERROR,
+                    },
+                    priorityRecoveryProgressClasses: {
+                      unresolvedSemanticStateIds: [],
+                      blockedPartitionIds: [],
+                    },
+                    blockers: [...ACTIVE_GATE_TIMEOUT_BLOCKERS],
+                  },
+                },
+              },
+              readinessFailure: {
+                mode: FIXTURE_READINESS_MODE,
+                classCode: FIXTURE_READINESS_SNAPSHOT_TIMEOUT_CLASS,
+                recoverability: FIXTURE_READINESS_RECOVERABILITY,
+                terminalReason: FIXTURE_READINESS_TERMINAL_REASON,
+                cause: FIXTURE_READINESS_SNAPSHOT_TIMEOUT_CAUSE,
+                source: FIXTURE_READINESS_SELECTED_SNAPSHOT_SOURCE,
+              },
+            },
+          ],
+        },
+      });
+      const activeGateWitness = graph.ownerWitnesses.find((witness) =>
+        witness.edgeId === EDGE_SNAPSHOT_COVERAGE,
+      );
+      const readinessWitness = graph.ownerWitnesses.find((witness) =>
+        witness.edgeId === EDGE_READINESS,
+      );
+
+      assert.equal(graph.summary.firstFrontierEdgeId, EDGE_SNAPSHOT_COVERAGE);
+      assert.equal(graph.summary.firstFrontierOwner, OWNER_STARTUP_ACTIVE_GATE);
+      assert.deepEqual(activeGateWitness.reasons, [
+        ACTIVE_GATE_TIMED_OUT_REASON,
+        SNAPSHOT_COVERAGE_INCOMPLETE_REASON,
+        SELECTED_SNAPSHOT_SOURCE_TIMEOUT_REASON,
+        FORCED_REPAIR_SNAPSHOT_TIMEOUT_REASON,
+        AUTHORITATIVE_CONTROL_SNAPSHOT_QUERY_TIMEOUT_REASON,
+      ]);
+      assert.equal(
+        activeGateWitness.source.selectedSnapshotNodeId,
+        ACTIVE_GATE_TIMEOUT_SELECTED_SNAPSHOT_SOURCE,
+      );
+      assert.equal(
+        activeGateWitness.source.selectedSnapshotTimeoutMs,
+        ACTIVE_GATE_TIMEOUT_SELECTED_SNAPSHOT_TIMEOUT_MS,
+      );
+      assert.equal(
+        activeGateWitness.source.selectedSnapshotSourceCause,
+        SELECTED_SNAPSHOT_SOURCE_TIMEOUT_REASON,
+      );
+      assert.equal(
+        activeGateWitness.source.forcedRepairSnapshotCause,
+        FORCED_REPAIR_SNAPSHOT_TIMEOUT_REASON,
+      );
+      assert.equal(
+        activeGateWitness.source.authoritativeControlSnapshotQueryCause,
+        AUTHORITATIVE_CONTROL_SNAPSHOT_QUERY_TIMEOUT_REASON,
+      );
+      assert.equal(
+        activeGateWitness.source.activeGateSnapshotOwnerEdge,
+        ACTIVE_GATE_SNAPSHOT_OWNER_EDGE_AUTHORITATIVE_QUERY,
+      );
+      assert.equal(readinessWitness.state, EDGE_STATE.DEFERRED);
+      assert.deepEqual(readinessWitness.reasons, [
+        READINESS_INHERITED_ACTIVE_GATE_NO_PROGRESS_REASON,
+      ]);
+      assert.equal(
+        readinessWitness.source.supportPath,
+        READINESS_SUPPORT_PATH_INHERITED_ACTIVE_GATE_NO_PROGRESS,
+      );
       assertNoNullOrUndefined(graph);
     });
 

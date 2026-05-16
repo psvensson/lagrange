@@ -17,7 +17,10 @@
       "evidencePath": "report.scenarios[0].publicationConvergence.activeGate.progress",
       "reasons": [
         "active_gate_timed_out",
-        "snapshot_coverage_incomplete"
+        "snapshot_coverage_incomplete",
+        "selected_snapshot_source_timeout",
+        "forced_repair_snapshot_timeout",
+        "authoritative_control_snapshot_query_timeout"
       ]
     }
   ],
@@ -30,7 +33,10 @@
     "dominantReason": "active_gate_timed_out",
     "reasons": [
       "active_gate_timed_out",
-      "snapshot_coverage_incomplete"
+      "snapshot_coverage_incomplete",
+      "selected_snapshot_source_timeout",
+      "forced_repair_snapshot_timeout",
+      "authoritative_control_snapshot_query_timeout"
     ],
     "evidencePath": "report.scenarios[0].publicationConvergence.activeGate.progress",
     "source": {
@@ -38,7 +44,13 @@
       "snapshotCoverageComplete": "false",
       "snapshotCoverageNodeCount": 0,
       "expectedNodeCount": 5,
-      "selectedSnapshotError": "Admin API query timed out for node 11601fe0-72d6-5853-8590-ec2881853e72 on lane snapshot after 100ms",
+      "selectedSnapshotError": "Admin API query timed out for node 11601fe0-72d6-5853-8590-ec2881853e72 on lane snapshot after 3349ms; forced repair snapshot failed: Admin API query failed for node 11601fe0-72d6-5853-8590-ec2881853e72 on lane snapshot: Authoritative control snapshot repair failed: nodes:Query timeout after 1500ms",
+      "selectedSnapshotNodeId": "11601fe0-72d6-5853-8590-ec2881853e72",
+      "selectedSnapshotTimeoutMs": 3349,
+      "selectedSnapshotSourceCause": "selected_snapshot_source_timeout",
+      "forcedRepairSnapshotCause": "forced_repair_snapshot_timeout",
+      "authoritativeControlSnapshotQueryCause": "authoritative_control_snapshot_query_timeout",
+      "activeGateSnapshotOwnerEdge": "authoritative_control_snapshot_query_pressure",
       "selectedSnapshotObservationMode": "unknown",
       "selectedSnapshotObservationState": "unknown",
       "selectedSnapshotObservationContractState": "unknown",

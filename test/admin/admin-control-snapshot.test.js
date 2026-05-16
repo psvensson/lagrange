@@ -179,6 +179,7 @@ const ACTIVE_GATE_HANDOFF_RECONCILE_CONTROL_PLANE_CONVERGENCE =
 const ACTIVE_GATE_HANDOFF_RECONCILE_CRITICAL_OWNER_WAKE =
   'owner_recovery_wake';
 const ACTIVE_GATE_HANDOFF_RECONCILE_COMMAND_RETRY_AFTER_MS = 32000;
+const ACTIVE_GATE_AUTHORITATIVE_REPAIR_QUERY_TIMEOUT_MS = 3349;
 const ACTIVE_GATE_HANDOFF_RECONCILE_EMPTY_ROWS = Object.freeze([]);
 const ACTIVE_GATE_HANDOFF_RECONCILE_PRIORITY_RECOVERY = Object.freeze({
   publicationRecoveryGate: Object.freeze({
@@ -3927,6 +3928,51 @@ test('AdminControlSnapshot repair-deferred shared owner emits retry action after
         },
       },
       'attempted repair deferral should expose a legal retry action instead of wait-only stale evidence',
+    );
+  });
+
+test('AdminControlSnapshot threads caller query timeout into authoritative repair',
+  async (t) => {
+    let repairOptions = null;
+    const localSnapshot = {
+      nodes: ['node-1'],
+      controlPlaneDiagnostics: {
+        publicationConvergence: null,
+      },
+    };
+    const snapshot = new AdminControlSnapshot({
+      nodeId: 'node-1',
+    });
+    snapshot.controlPlaneSnapshotOwner = new ControlPlaneSnapshotOwner({
+      controlSnapshot: snapshot,
+    });
+    snapshot.buildLocalControlSnapshot = async () => localSnapshot;
+    snapshot.canRunAuthoritativeControlSnapshotRepair = () => true;
+    snapshot.evaluateAuthoritativeControlSnapshotRepair = () => ({
+      shouldRepair: true,
+      triggerCodes: ['discovery_node_coverage_gap'],
+      nodeCoverage: {
+        activeProjection: {
+          hasCoverageGap: true,
+        },
+      },
+    });
+    snapshot.ensureAuthoritativeDiscoveryCacheRepair = async (options = {}) => {
+      repairOptions = options;
+      return {
+        applied: true,
+      };
+    };
+
+    await snapshot.resolveLocalControlSnapshot({
+      allowAuthoritativeRepair: true,
+      queryTimeoutMs: ACTIVE_GATE_AUTHORITATIVE_REPAIR_QUERY_TIMEOUT_MS,
+    });
+
+    t.equal(
+      repairOptions?.queryTimeoutMs,
+      ACTIVE_GATE_AUTHORITATIVE_REPAIR_QUERY_TIMEOUT_MS,
+      'authoritative snapshot repair should inherit the caller query budget',
     );
   });
 

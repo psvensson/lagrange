@@ -496,6 +496,7 @@ class ControlPlaneSnapshotOwner {
       await this.serviceDiscovery?.ensureAuthoritativeDiscoveryCacheRepair?.({
         reason: CONTROL_PLANE_SNAPSHOT_REPAIR_REASON.CONTROL_SNAPSHOT,
         bypassReuse: true,
+        queryTimeoutMs: options.queryTimeoutMs,
         triggerCodes: reasonCodes,
       });
     const repairedSnapshot =

@@ -497,6 +497,7 @@ function assignAdminControlSnapshotLocalDiagnosticsMethods(
           {
             forceAuthoritativeRepair: true,
             allowAuthoritativeRepair: options.allowAuthoritativeRepair,
+            queryTimeoutMs: options.queryTimeoutMs,
             allowAuthoritativeReadinessRefresh:
                 options.allowAuthoritativeReadinessRefresh,
             allowStaleReadinessOnCacheChange:
@@ -504,6 +505,7 @@ function assignAdminControlSnapshotLocalDiagnosticsMethods(
           } :
           {
             allowAuthoritativeRepair: options.allowAuthoritativeRepair,
+            queryTimeoutMs: options.queryTimeoutMs,
             allowAuthoritativeReadinessRefresh:
                 options.allowAuthoritativeReadinessRefresh,
             allowStaleReadinessOnCacheChange:
