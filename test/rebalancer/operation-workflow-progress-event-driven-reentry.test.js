@@ -4,6 +4,8 @@ import {
   OWNER_CONTRACT_NEXT_ACTION,
   OWNER_CONTRACT_STATE,
 } from '../../src/control-plane/owner-contract-outcome.js';
+import {PRIORITY_RECOVERY_COMPLETION_STATE} from
+  '../../src/control-plane/priority-recovery-completion.js';
 import {
   PRIORITY_RECOVERY_ACTUATION_STATE,
   PRIORITY_RECOVERY_BLOCKING_BOUNDARY,
@@ -33,13 +35,23 @@ const TEST_PARTITION_ID = 'sql_transactions-p1';
 const TEST_SQL_WRITE_PARTITION_ID = 'sql_write_operations-p1';
 const TEST_CONTROL_PLANE_PUBLICATION_PARTITION_ID =
   'control_plane_publications-p1';
+const TEST_REPLICA_OPERATIONS_PARTITION_ID = 'replica_operations-p1';
+const TEST_SQL_TRANSACTION_PARTICIPANTS_PARTITION_ID =
+  'sql_transaction_participants-p1';
 const TEST_OPERATION_ID = 'event-driven-progress-operation';
 const TEST_CONTROL_PLANE_PUBLICATION_OPERATION_ID =
   'event-driven-control-plane-publication-operation';
+const TEST_REPLICA_OPERATIONS_OPERATION_ID =
+  'event-driven-replica-operations-operation';
+const TEST_SQL_TRANSACTION_PARTICIPANTS_OPERATION_ID =
+  'event-driven-sql-transaction-participants-operation';
 const TEST_REPLICA_ID = 'sql_transactions-p1-r4';
 const TEST_SQL_WRITE_REPLICA_ID = 'sql_write_operations-p1-r4';
 const TEST_CONTROL_PLANE_PUBLICATION_REPLICA_ID =
   'control_plane_publications-p1-r4';
+const TEST_REPLICA_OPERATIONS_REPLICA_ID = 'replica_operations-p1-r4';
+const TEST_SQL_TRANSACTION_PARTICIPANTS_REPLICA_ID =
+  'sql_transaction_participants-p1-r4';
 const TEST_OBSERVER_NODE_ID = 'node-observer';
 const TEST_SOURCE_NODE_ID = 'node-source';
 const TEST_TARGET_NODE_ID = 'node-target';
@@ -47,6 +59,14 @@ const TEST_CONTROL_PLANE_PUBLICATION_SOURCE_NODE_ID =
   'control-plane-publication-source-node';
 const TEST_CONTROL_PLANE_PUBLICATION_TARGET_NODE_ID =
   'control-plane-publication-target-node';
+const TEST_REPLICA_OPERATIONS_SOURCE_NODE_ID =
+  'replica-operations-source-node';
+const TEST_REPLICA_OPERATIONS_TARGET_NODE_ID =
+  'replica-operations-target-node';
+const TEST_SQL_TRANSACTION_PARTICIPANTS_SOURCE_NODE_ID =
+  'sql-transaction-participants-source-node';
+const TEST_SQL_TRANSACTION_PARTICIPANTS_TARGET_NODE_ID =
+  'sql-transaction-participants-target-node';
 const TEST_PUBLICATION_EPOCH = 2;
 const TEST_CAPTURED_AT_MS = 1000000;
 const TEST_CREATED_AT_MS = 900000;
@@ -75,7 +95,7 @@ const TEST_PENDING_REENTRY_TEST_NAME =
   'persisted-not-dispatched PENDING workflow progress re-enters through ' +
   'the operation owner outcome';
 const TEST_SPREAD_SATISFIED_REENTRY_TEST_NAME =
-  'spread-satisfied control-plane PENDING dispatch waits drain through ' +
+  'spread-satisfied priority PENDING dispatch waits drain through ' +
   'the operation owner outcome';
 const TEST_DIRECT_BUILD_REENTRY_TEST_NAME =
   'direct owner snapshot build enqueues dispatch-pending workflow progress ' +
@@ -117,10 +137,33 @@ const TEST_ASSERT_LOCAL_INITIALIZATION_RETRY_NO_DELIVERY =
 const TEST_ASSERT_LOCAL_INITIALIZATION_RETRY_RESUMES =
   'local initialization retry drains the transition retry slot';
 const TEST_ASSERT_SPREAD_SATISFIED_DRAIN =
-  'spread-satisfied persisted-not-dispatched control-plane rows should drain';
+  'spread-satisfied persisted-not-dispatched priority rows should drain';
 const TEST_ASSERT_SPREAD_SATISFIED_NO_REMOTE_WAKE =
-  'spread-satisfied persisted-not-dispatched control-plane rows should not ' +
+  'spread-satisfied persisted-not-dispatched priority rows should not ' +
   'wake the remote target owner';
+const TEST_SPREAD_SATISFIED_DRAIN_WITNESSES = Object.freeze([
+  Object.freeze({
+    operationId: TEST_CONTROL_PLANE_PUBLICATION_OPERATION_ID,
+    partitionId: TEST_CONTROL_PLANE_PUBLICATION_PARTITION_ID,
+    replicaId: TEST_CONTROL_PLANE_PUBLICATION_REPLICA_ID,
+    sourceNodeId: TEST_CONTROL_PLANE_PUBLICATION_SOURCE_NODE_ID,
+    targetNodeId: TEST_CONTROL_PLANE_PUBLICATION_TARGET_NODE_ID,
+  }),
+  Object.freeze({
+    operationId: TEST_REPLICA_OPERATIONS_OPERATION_ID,
+    partitionId: TEST_REPLICA_OPERATIONS_PARTITION_ID,
+    replicaId: TEST_REPLICA_OPERATIONS_REPLICA_ID,
+    sourceNodeId: TEST_REPLICA_OPERATIONS_SOURCE_NODE_ID,
+    targetNodeId: TEST_REPLICA_OPERATIONS_TARGET_NODE_ID,
+  }),
+  Object.freeze({
+    operationId: TEST_SQL_TRANSACTION_PARTICIPANTS_OPERATION_ID,
+    partitionId: TEST_SQL_TRANSACTION_PARTICIPANTS_PARTITION_ID,
+    replicaId: TEST_SQL_TRANSACTION_PARTICIPANTS_REPLICA_ID,
+    sourceNodeId: TEST_SQL_TRANSACTION_PARTICIPANTS_SOURCE_NODE_ID,
+    targetNodeId: TEST_SQL_TRANSACTION_PARTICIPANTS_TARGET_NODE_ID,
+  }),
+]);
 
 function buildEventDrivenOperation(overrides = {}) {
   return Object.freeze({
@@ -609,94 +652,100 @@ test(TEST_PENDING_REENTRY_TEST_NAME, async (t) => {
 
 test(TEST_SPREAD_SATISFIED_REENTRY_TEST_NAME, async (t) => {
   const completedOperationIds = [];
-  const deliveries = [];
-  const deferredTimers = [];
-  const operation = buildEventDrivenOperation({
-    operationId: TEST_CONTROL_PLANE_PUBLICATION_OPERATION_ID,
-    partitionId: TEST_CONTROL_PLANE_PUBLICATION_PARTITION_ID,
-    entityId: TEST_CONTROL_PLANE_PUBLICATION_PARTITION_ID,
-    replicaId: TEST_CONTROL_PLANE_PUBLICATION_REPLICA_ID,
-    sourceNodeId: TEST_CONTROL_PLANE_PUBLICATION_SOURCE_NODE_ID,
-    targetNodeId: TEST_CONTROL_PLANE_PUBLICATION_TARGET_NODE_ID,
-    workflowStep: WORKFLOW_STEP.PENDING,
-  });
-  const operationRow = buildEventDrivenOperationRow({
-    operation_id: TEST_CONTROL_PLANE_PUBLICATION_OPERATION_ID,
-    partition_id: TEST_CONTROL_PLANE_PUBLICATION_PARTITION_ID,
-    entity_id: TEST_CONTROL_PLANE_PUBLICATION_PARTITION_ID,
-    replica_id: TEST_CONTROL_PLANE_PUBLICATION_REPLICA_ID,
-    source_node_id: TEST_CONTROL_PLANE_PUBLICATION_SOURCE_NODE_ID,
-    target_node_id: TEST_CONTROL_PLANE_PUBLICATION_TARGET_NODE_ID,
-    workflow_step: WORKFLOW_STEP.PENDING,
-  });
-  const coordinator = createEventDrivenCoordinator(
-    deliveries,
-    deferredTimers,
-    operationRow,
-    {
-      operationId: TEST_CONTROL_PLANE_PUBLICATION_OPERATION_ID,
-      partitionId: TEST_CONTROL_PLANE_PUBLICATION_PARTITION_ID,
-      workflowStep: WORKFLOW_STEP.PENDING,
-      actuationState:
-        PRIORITY_RECOVERY_ACTUATION_STATE.PERSISTED_NOT_DISPATCHED,
-      completionState: 'converged',
-      spreadGap: NUM.ZERO,
-    },
-  );
   const originalDateNow = Date.now;
   Date.now = () => TEST_CAPTURED_AT_MS;
 
   try {
-    coordinator.initialize();
-    coordinator.workflowOwner.completeOperation = async (completedOperation) => {
-      completedOperationIds.push(completedOperation.operationId);
-      return true;
-    };
-    coordinator.workflowOwner.repository
-      .getOperationsByEntityAuthoritativeObservation = async () => {
-        return Object.freeze({
-          state: 'present',
-          operationCount: NUM.ONE,
-          operations: Object.freeze([operation]),
-          deferredOutcome: null,
-          retryAfterMs: null,
+    for (const witness of TEST_SPREAD_SATISFIED_DRAIN_WITNESSES) {
+      const deliveries = [];
+      const deferredTimers = [];
+      const operation = buildEventDrivenOperation({
+        operationId: witness.operationId,
+        partitionId: witness.partitionId,
+        entityId: witness.partitionId,
+        replicaId: witness.replicaId,
+        sourceNodeId: witness.sourceNodeId,
+        targetNodeId: witness.targetNodeId,
+        workflowStep: WORKFLOW_STEP.PENDING,
+      });
+      const operationRow = buildEventDrivenOperationRow({
+        operation_id: witness.operationId,
+        partition_id: witness.partitionId,
+        entity_id: witness.partitionId,
+        replica_id: witness.replicaId,
+        source_node_id: witness.sourceNodeId,
+        target_node_id: witness.targetNodeId,
+        workflow_step: WORKFLOW_STEP.PENDING,
+      });
+      const coordinator = createEventDrivenCoordinator(
+        deliveries,
+        deferredTimers,
+        operationRow,
+        {
+          operationId: witness.operationId,
+          partitionId: witness.partitionId,
+          workflowStep: WORKFLOW_STEP.PENDING,
+          actuationState:
+            PRIORITY_RECOVERY_ACTUATION_STATE.PERSISTED_NOT_DISPATCHED,
+          completionState:
+            PRIORITY_RECOVERY_COMPLETION_STATE.SPREAD_SATISFIED_IN_FLIGHT,
+          spreadGap: NUM.ZERO,
+        },
+      );
+
+      try {
+        coordinator.initialize();
+        coordinator.workflowOwner.completeOperation =
+          async (completedOperation) => {
+            completedOperationIds.push(completedOperation.operationId);
+            return true;
+          };
+        coordinator.workflowOwner.repository
+          .getOperationsByEntityAuthoritativeObservation = async () => {
+            return Object.freeze({
+              state: 'present',
+              operationCount: NUM.ONE,
+              operations: Object.freeze([operation]),
+              deferredOutcome: null,
+              retryAfterMs: null,
+            });
+          };
+
+        const snapshot =
+          await coordinator.workflowOwner
+            .getPriorityRecoveryDecisionSnapshotForPartitionOperations(
+              witness.partitionId,
+              [operation],
+            );
+        await new Promise((resolve) => {
+          setTimeout(resolve, NUM.ZERO);
         });
-      };
 
-    const snapshot =
-      await coordinator.workflowOwner
-        .getPriorityRecoveryDecisionSnapshotForPartitionOperations(
-          TEST_CONTROL_PLANE_PUBLICATION_PARTITION_ID,
-          [operation],
+        t.equal(
+          snapshot?.partitionId,
+          witness.partitionId,
+          'the focused fixture should preserve the priority partition',
         );
-    await new Promise((resolve) => {
-      setTimeout(resolve, NUM.ZERO);
-    });
-
-    t.equal(
-      snapshot?.partitionId,
-      TEST_CONTROL_PLANE_PUBLICATION_PARTITION_ID,
-      'the focused fixture should preserve the control-plane publication partition',
-    );
-    t.ok(
-      completedOperationIds.includes(
-        TEST_CONTROL_PLANE_PUBLICATION_OPERATION_ID,
-      ),
-      TEST_ASSERT_SPREAD_SATISFIED_DRAIN,
-    );
-    t.equal(
-      deliveries.length,
-      NUM.ZERO,
-      TEST_ASSERT_SPREAD_SATISFIED_NO_REMOTE_WAKE,
-    );
-    t.equal(
-      deferredTimers.length,
-      NUM.ZERO,
-      TEST_ASSERT_SPREAD_SATISFIED_NO_REMOTE_WAKE,
-    );
+        t.ok(
+          completedOperationIds.includes(witness.operationId),
+          TEST_ASSERT_SPREAD_SATISFIED_DRAIN,
+        );
+        t.equal(
+          deliveries.length,
+          NUM.ZERO,
+          TEST_ASSERT_SPREAD_SATISFIED_NO_REMOTE_WAKE,
+        );
+        t.equal(
+          deferredTimers.length,
+          NUM.ZERO,
+          TEST_ASSERT_SPREAD_SATISFIED_NO_REMOTE_WAKE,
+        );
+      } finally {
+        await coordinator.shutdown();
+      }
+    }
   } finally {
     Date.now = originalDateNow;
-    await coordinator.shutdown();
   }
 });
 

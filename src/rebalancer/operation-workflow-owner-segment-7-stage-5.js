@@ -92,6 +92,10 @@ const PRIORITY_RECOVERY_DISPATCH_PENDING_DRAIN_PARTITION_IDS =
   Object.freeze(
     new Set([
       INITIAL_PARTITION_IDS[SYSTEM_TABLE_NAME.CONTROL_PLANE_PUBLICATIONS],
+      INITIAL_PARTITION_IDS[SYSTEM_TABLE_NAME.REPLICA_OPERATIONS],
+      INITIAL_PARTITION_IDS[
+        SYSTEM_TABLE_NAME.SQL_TRANSACTION_PARTICIPANTS
+      ],
     ]),
   );
 
@@ -409,7 +413,7 @@ class OperationWorkflowOwnerSegment7Stage5 extends OperationWorkflowOwnerSegment
           PRIORITY_RECOVERY_BLOCKING_BOUNDARY.WORKFLOW_PROGRESS &&
         decisionSnapshot?.progress?.waitMode ===
           PRIORITY_RECOVERY_WAIT_MODE.EVENT_DRIVEN,
-      controlPlanePublicationPartition:
+      priorityDrainPartition:
         PRIORITY_RECOVERY_DISPATCH_PENDING_DRAIN_PARTITION_IDS.has(
           decisionSnapshot?.partitionId,
         ),
@@ -425,7 +429,7 @@ class OperationWorkflowOwnerSegment7Stage5 extends OperationWorkflowOwnerSegment
       evidence.dispatchPending === true &&
       evidence.ownerAdvance === true &&
       evidence.workflowProgressBoundary === true &&
-      evidence.controlPlanePublicationPartition === true
+      evidence.priorityDrainPartition === true
     );
   }
 

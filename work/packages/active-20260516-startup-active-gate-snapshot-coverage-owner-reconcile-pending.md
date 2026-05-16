@@ -1,9 +1,10 @@
+# Startup Active Gate Snapshot Coverage Owner Reconcile Pending
+
+<!-- work-package
 {
-  "schema": "current-blocker-v1",
-  "generatedBy": "scripts/work-tracker.js",
-  "sprint": "work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md",
-  "package": "work/packages/active-20260516-startup-active-gate-snapshot-coverage-owner-reconcile-pending.md",
+  "schema": "work-package-v1",
   "status": "active",
+  "opened": "2026-05-16",
   "lane": "causal-escalation",
   "scenario": "rolling-restart",
   "artifact": "test-output/reports/rolling-restart-priority-workflow-progress-20260516T180829Z.report.json",
@@ -52,7 +53,6 @@
     "src/control-plane/startup-authority-snapshot-owner.js",
     "src/control-plane/control-plane-readiness-service-segment-4-stage-5.js"
   ],
-  "touchedFiles": [],
   "modelFit": {
     "packageClass": "representative-frontier-closure",
     "intendedMinimumModel": "gpt-5.3-codex",
@@ -119,3 +119,91 @@
   },
   "predecessor": "work/packages/done-20260516-priority-recovery-operation-workflow-owner-workflow-progress-repeat.md"
 }
+-->
+
+## Why
+
+Fresh rolling-restart evidence after the priority recovery repeat fix selects
+`active_gate_snapshot_coverage` as the first frontier. This package owns the
+focused `startup_active_gate_owner / snapshot_coverage` residual with
+`owner_reconcile_pending` and snapshot coverage stuck at 2/5.
+
+## Scope Basis
+
+Roadmap Phase `0.1 - Internal Coherence`, specifically topology workflow
+stabilization, failure simulations, and production guarantees for the AGPL
+runtime.
+
+## Workflow Lane
+
+- Selected lane: `causal-escalation`
+- Why this lane is required: the representative first frontier migrated from
+  priority recovery back to startup active-gate snapshot coverage, so this
+  package must prove the current owner-reconcile edge before runtime edits.
+- Escalation trigger to a heavier lane: runtime ownership expands beyond the
+  listed startup active-gate files, priority recovery reopens, or
+  representative evidence contradicts the selected owner boundary.
+
+## Subagent Sequencing Requirement
+
+Required before implementation because this is a scenario-driven runtime
+owner-boundary package.
+
+## Subagent Sequencing Ledger
+
+- [ ] Review subagent recorded: pending-before-implementation-resumes.
+- [ ] Fix subagent recorded or explicitly not needed: pending-before-review.
+- [ ] Implementation subagent recorded: pending-before-implementation-resumes.
+
+## LLM Tool-First Contract
+
+Before raw JSON, raw logs, broad file search, oversized segment files, or ad hoc `jq`, use the canonical workflow command that owns the question:
+
+1. Package metadata or ledger edits: `npm run work:package:doctor -- --suggest <package>`, `npm run work:package:doctor -- --fix-dry-run <package>`, `npm run work:package:schema`, or `npm run work:package:new -- ...`.
+2. Representative evidence: `npm run work:evidence-summary -- <artifact>` plus any focused extractor for this failure class.
+3. Owner discovery: `npm run analyze:owner-files -- <owner> [boundary]`.
+4. Subagent sequencing: `npm run work:subagent-prompt -- --role <role> --package <package>`.
+5. Large-file cleanup: `npm run work:oversized-next -- --markdown`.
+
+If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which canonical extractor was tried and why it was insufficient.
+
+## In Scope
+
+1. work/packages/active-20260516-startup-active-gate-snapshot-coverage-owner-reconcile-pending.md
+2. work/packages/done-20260516-priority-recovery-operation-workflow-owner-workflow-progress-repeat.md
+3. work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md
+4. work/sprints/current-blocker.md
+5. work/sprints/current-blocker.json
+6. src/control-plane/publication-active-gate-handoff-contract.js
+7. src/control-plane/startup-authority-snapshot-owner.js
+8. src/control-plane/control-plane-readiness-service-segment-4-stage-5.js
+
+## Out Of Scope
+
+1. publication-ack-convergence
+2. priority_recovery_partition_progress
+3. operation_workflow_owner
+
+## Model Fit
+
+- Package class: `representative-frontier-closure`
+- Intended minimum model: `gpt-5.3-codex`
+- Scope shape: `owner-boundary-contraction/current-frontier`
+- Output profile: `medium`
+- Owned files: `work/packages/active-20260516-startup-active-gate-snapshot-coverage-owner-reconcile-pending.md`, `work/packages/done-20260516-priority-recovery-operation-workflow-owner-workflow-progress-repeat.md`, `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md`, `work/sprints/current-blocker.md`, `work/sprints/current-blocker.json`, `src/control-plane/publication-active-gate-handoff-contract.js`, `src/control-plane/startup-authority-snapshot-owner.js`, `src/control-plane/control-plane-readiness-service-segment-4-stage-5.js`
+- Forbidden files: `publication-ack-convergence`, `priority_recovery_partition_progress`, `operation_workflow_owner`
+- Frozen decisions: publication ACK and priority recovery remain closed unless
+  canonical evidence selects them again.
+- Escalation triggers: owned files expand beyond this package, runtime
+  ownership changes, representative scenario evidence changes, or priority
+  recovery residuals reappear.
+- Focused proof: `npm run work:evidence-summary -- test-output/reports/rolling-restart-priority-workflow-progress-20260516T180829Z.report.json`, `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-priority-workflow-progress-20260516T180829Z.report.json --explain active_gate_snapshot_coverage`, `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-priority-workflow-progress-20260516T180829Z.report.json`, `npm run analyze:owner-files -- startup_active_gate_owner snapshot_coverage --markdown`
+- Model ledger advisory: `escalate`
+
+## Validation
+
+1. PASS - `npm run work:evidence-summary -- test-output/reports/rolling-restart-priority-workflow-progress-20260516T180829Z.report.json`
+2. PASS - `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-priority-workflow-progress-20260516T180829Z.report.json --explain active_gate_snapshot_coverage`
+3. PASS - `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-priority-workflow-progress-20260516T180829Z.report.json`
+4. PASS - `npm run analyze:owner-files -- startup_active_gate_owner snapshot_coverage --markdown`
+5. Pending - `npm run work:validate -- --entry work/packages/active-20260516-startup-active-gate-snapshot-coverage-owner-reconcile-pending.md`

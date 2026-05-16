@@ -275,6 +275,10 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 
 ## Commit And Push Ledger
 
-1. Focused package commit: 11fb8d24
+1. Focused package commit: fb7ad15c
 2. Pushed to: origin/codex/pending-ack-eligibility-filter
 3. Commit contains only package-owned files/package-status/allowed sprint handoff: yes
+4. Split commit note: 11fb8d24 carried the focused snapshot timeout handoff
+   fixture implementation and proof; fb7ad15c finalized the done package state
+   and activated the successor priority recovery residual package in the
+   focused tracker handoff.
