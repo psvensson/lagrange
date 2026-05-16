@@ -22,35 +22,31 @@ success is in scope.
 ## Current Blocker Snapshot
 
 Latest representative artifact:
-`test-output/reports/rolling-restart-after-active-gate-owner-cohort-recovery-closure-20260516.report.json`.
+`test-output/reports/rolling-restart-after-workflow-progress-pending-coordination-gate-20260516.report.json`.
 
-Canonical state after the active-gate owner cohort closure:
+Canonical state after the priority recovery workflow-progress closure:
 
-1. `work:evidence-summary` selects `priority_recovery_partition_progress` as
-   the first frontier.
+1. `work:evidence-summary` selects `active_gate_snapshot_coverage` as the first
+   frontier.
 2. Representative owner boundary:
-   `operation_workflow_owner / workflow_progress`.
-3. Dominant reason: `priority_recovery_event_driven_wait`.
-4. Publication ACK convergence is satisfied: publication is `PUBLISHED`,
-   `pendingAckCount=0`, `pendingAckNodeIds=[]`, and published membership is
-   `5/5`.
-5. Active-gate snapshot coverage is satisfied:
-   `snapshotCoverageNodeCount=5`, `expectedNodeCount=5`, and
-   `missingPublished=0`.
-6. Priority spread remains pending with gap `5`.
-7. Priority recovery residual extraction reports seven witnesses and
-   `split required: true`.
-8. The first residual group is
-   `operation_workflow_owner / workflow_progress` with four witnesses across
-   `replica_operations-p1`, `sql_transaction_participants-p1`,
-   `sql_transactions-p1`, and `sql_write_operations-p1`.
-9. Secondary residual groups are
-   `operation_workflow_owner / rebalancer_handoff` and
-   `rebalancer_leader / operation_scheduling`.
-10. The current active package is
-    `work/packages/active-20260516-priority-recovery-workflow-progress-after-active-gate-cohort.md`;
-    it must preserve the closed publication and active-gate edges while proving
-    or splitting workflow progress.
+   `startup_active_gate_owner / snapshot_coverage`.
+3. Dominant reason: `active_gate_timed_out`.
+4. Publication ACK convergence is not selected; `pendingAckCount=0`.
+5. Priority recovery is satisfied and residual extraction reports zero
+   witnesses.
+6. Active-gate snapshot coverage is blocked:
+   `snapshotCoverageNodeCount=0`, `expectedNodeCount=5`, and
+   `activeGateState=timed_out`.
+7. The selected snapshot source is
+   `11601fe0-72d6-5853-8590-ec2881853e72`, and selected admin snapshot capture
+   timed out; forced repair snapshot capture also timed out.
+8. Readiness support is deferred as inherited active-gate no progress with
+   snapshot timeout evidence.
+9. The current active package is
+   `work/packages/active-20260516-startup-active-gate-admin-snapshot-timeout-after-priority-recovery.md`;
+   it must identify the startup active-gate snapshot coverage edge without
+   timeout increases, active-gate admission relaxation, publication ACK
+   rewrites, or priority recovery rewrites.
 
 ## Scope Basis
 
@@ -441,11 +437,11 @@ The sprint cannot close until:
 
 ## Current Next Action
 
-Continue with the priority recovery workflow-progress package:
+Continue with the startup active-gate admin snapshot timeout package:
 
 ```text
-work/packages/active-20260516-priority-recovery-workflow-progress-after-active-gate-cohort.md
-test-output/reports/rolling-restart-after-active-gate-owner-cohort-recovery-closure-20260516.report.json
+work/packages/active-20260516-startup-active-gate-admin-snapshot-timeout-after-priority-recovery.md
+test-output/reports/rolling-restart-after-workflow-progress-pending-coordination-gate-20260516.report.json
 ```
 
 Keep the completed post-systems-pattern checkpoint package and artifact as
@@ -468,6 +464,10 @@ path: `pendingReconcileCount=0` and `nextAction=wait_owner_recovery`. The
 publication ACK package then closed stale count-only ACK debt and migrated the
 representative first frontier to active-gate snapshot coverage. The active-gate
 owner cohort package then satisfied snapshot coverage and migrated the
-representative first frontier to priority recovery workflow progress. The next
-work must prove or split that residual while preserving strict active-gate
-admission and closed publication ACK convergence.
+representative first frontier to priority recovery workflow progress. The
+priority recovery workflow-progress package drained those residual witnesses
+and migrated the representative first frontier back to active-gate snapshot
+coverage with selected admin snapshot timeout evidence. The next work must
+identify or reduce that snapshot coverage edge while preserving strict
+active-gate admission, closed publication ACK convergence, and closed priority
+recovery workflow progress.

@@ -55,24 +55,20 @@ stale active-reference validation before the paused topology sprint resumes.
 Latest current handoff state:
 
 - artifact:
-  `test-output/reports/rolling-restart-after-active-gate-owner-cohort-recovery-closure-20260516.report.json`
-- first frontier: `priority_recovery_partition_progress`
-- owner boundary: `operation_workflow_owner / workflow_progress`
-- dominant reason: `priority_recovery_event_driven_wait`
-- publication ACK convergence remains satisfied with publication `PUBLISHED`,
-  `pendingAckCount=0`, and published membership `5/5`
-- active-gate snapshot coverage is satisfied with snapshot coverage `5/5`,
-  expected nodes `5`, and `missingPublished=0`
-- priority spread remains pending with gap `5`
-- priority recovery residual extraction reports seven witnesses and split
-  required
-- the first residual group is
-  `operation_workflow_owner / workflow_progress` with four witnesses across
-  `replica_operations-p1`, `sql_transaction_participants-p1`,
-  `sql_transactions-p1`, and `sql_write_operations-p1`
+  `test-output/reports/rolling-restart-after-workflow-progress-pending-coordination-gate-20260516.report.json`
+- first frontier: `active_gate_snapshot_coverage`
+- owner boundary: `startup_active_gate_owner / snapshot_coverage`
+- dominant reason: `active_gate_timed_out`
+- publication ACK convergence is not selected and reports `pendingAckCount=0`
+- priority recovery is satisfied and residual extraction reports zero
+  witnesses
+- active-gate snapshot coverage is blocked with snapshot coverage `0/5`,
+  expected nodes `5`, and selected admin snapshot timeout evidence
+- forced repair snapshot capture also times out while readiness support is
+  deferred as inherited active-gate no progress
 - the active package is
-  `work/packages/active-20260516-priority-recovery-workflow-progress-after-active-gate-cohort.md`
-  and focuses `operation_workflow_owner / workflow_progress`
+  `work/packages/active-20260516-startup-active-gate-admin-snapshot-timeout-after-priority-recovery.md`
+  and focuses `startup_active_gate_owner / snapshot_coverage`
 
 ## Target Invariant
 
@@ -101,25 +97,21 @@ or produces a narrower owner-boundary blocker selected by canonical evidence.
 - Continuation sprint context:
   `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md`
 - Active successor package:
-  `work/packages/active-20260516-priority-recovery-workflow-progress-after-active-gate-cohort.md`
+  `work/packages/active-20260516-startup-active-gate-admin-snapshot-timeout-after-priority-recovery.md`
 - Artifact:
-  `test-output/reports/rolling-restart-after-active-gate-owner-cohort-recovery-closure-20260516.report.json`
+  `test-output/reports/rolling-restart-after-workflow-progress-pending-coordination-gate-20260516.report.json`
 - Closed checkpoint predecessor:
   `work/packages/done-20260516-rolling-restart-post-systems-pattern-checkpoint.md`
 - Representative owner boundary:
-  `operation_workflow_owner / workflow_progress`
+  `startup_active_gate_owner / snapshot_coverage`
 - Extractor summary:
   The latest artifact is red. `work:evidence-summary` selects
-  `priority_recovery_partition_progress` with owner
-  `operation_workflow_owner / workflow_progress`. Publication ACK convergence
-  and active-gate snapshot coverage are satisfied. The causal model classifies
-  the current blocker as `priority_recovery_event_wait`.
-- Priority recovery residuals:
-  the latest artifact reports seven witnesses, split required. The first
-  owner-boundary group is `operation_workflow_owner / workflow_progress` with
-  four witnesses. Secondary groups are
-  `operation_workflow_owner / rebalancer_handoff` and
-  `rebalancer_leader / operation_scheduling`.
+  `active_gate_snapshot_coverage` with owner
+  `startup_active_gate_owner / snapshot_coverage`. Priority recovery is
+  satisfied with zero residual witnesses. The causal model classifies the
+  current blocker as `active_gate_snapshot_coverage_incomplete`, with selected
+  admin snapshot timeout and forced repair timeout as the concrete coverage
+  evidence.
 
 ## Codebase Analysis Notes
 
@@ -195,8 +187,8 @@ These are context candidates, not write authorization:
 ## Entry Condition
 
 When the rolling-restart gate is resumed, continue with the focused
-`operation_workflow_owner / workflow_progress` successor using
-`test-output/reports/rolling-restart-after-active-gate-owner-cohort-recovery-closure-20260516.report.json`.
+`startup_active_gate_owner / snapshot_coverage` successor using
+`test-output/reports/rolling-restart-after-workflow-progress-pending-coordination-gate-20260516.report.json`.
 
 ## Exit Condition
 
@@ -209,5 +201,5 @@ canonical owner-boundary evidence.
 Next continuation package:
 
 ```text
-work/packages/active-20260516-priority-recovery-workflow-progress-after-active-gate-cohort.md
+work/packages/active-20260516-startup-active-gate-admin-snapshot-timeout-after-priority-recovery.md
 ```

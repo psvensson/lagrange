@@ -1,9 +1,10 @@
+# Startup Active Gate Admin Snapshot Timeout After Priority Recovery
+
+<!-- work-package
 {
-  "schema": "current-blocker-v1",
-  "generatedBy": "scripts/work-tracker.js",
-  "sprint": "work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md",
-  "package": "work/packages/active-20260516-startup-active-gate-admin-snapshot-timeout-after-priority-recovery.md",
+  "schema": "work-package-v1",
   "status": "active",
+  "opened": "2026-05-16",
   "lane": "causal-escalation",
   "scenario": "rolling-restart",
   "artifact": "test-output/reports/rolling-restart-after-workflow-progress-pending-coordination-gate-20260516.report.json",
@@ -71,7 +72,6 @@
     "work/sprints/current-blocker.json",
     "work/model-ledger.jsonl"
   ],
-  "touchedFiles": [],
   "modelFit": {
     "packageClass": "representative-frontier-closure",
     "intendedMinimumModel": "gpt-5.3-codex",
@@ -140,3 +140,96 @@
   },
   "predecessor": "work/packages/done-20260516-priority-recovery-workflow-progress-after-active-gate-cohort.md"
 }
+-->
+
+## Why
+
+The predecessor drained the priority recovery workflow-progress residual, but
+the representative rolling-restart gate is still red. Canonical evidence now
+selects active-gate snapshot coverage: the selected admin snapshot query and
+forced repair both time out, so the active gate cannot observe coverage after
+priority recovery is satisfied.
+
+## Scope Basis
+
+Roadmap Phase `0.1 - Internal Coherence`, specifically topology workflow
+stabilization, failure simulations, and production guarantees for the AGPL
+runtime.
+
+## Workflow Lane
+
+- Selected lane: `causal-escalation`
+- Why this lane is required: the representative scenario remains red after a
+  related owner-boundary migration, and the frontier returned to active-gate
+  snapshot coverage with a new selected admin snapshot timeout shape.
+- Escalation trigger to a heavier lane: implementation requires timeout
+  increases, active-gate admission relaxation, publication ACK rewrites,
+  priority recovery rewrites, or a broader architecture change outside this
+  snapshot-coverage boundary.
+
+## Subagent Sequencing Requirement
+
+Required before implementation because this is a scenario-driven runtime
+owner-boundary package.
+
+## Subagent Sequencing Ledger
+
+- [ ] Review subagent recorded:
+- [ ] Fix subagent recorded or explicitly not needed:
+- [ ] Implementation subagent recorded:
+
+## LLM Tool-First Contract
+
+Before raw JSON, raw logs, broad file search, oversized segment files, or ad hoc `jq`, use the canonical workflow command that owns the question:
+
+1. Package metadata or ledger edits: `npm run work:package:doctor -- --suggest <package>`, `npm run work:package:doctor -- --fix-dry-run <package>`, `npm run work:package:schema`, or `npm run work:package:new -- ...`.
+2. Representative evidence: `npm run work:evidence-summary -- <artifact>` plus any focused extractor for this failure class.
+3. Owner discovery: `npm run analyze:owner-files -- <owner> [boundary]`.
+4. Subagent sequencing: `npm run work:subagent-prompt -- --role <role> --package <package>`.
+5. Large-file cleanup: `npm run work:oversized-next -- --markdown`.
+
+If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which canonical extractor was tried and why it was insufficient.
+
+## In Scope
+
+1. work/packages/active-20260516-startup-active-gate-admin-snapshot-timeout-after-priority-recovery.md
+2. work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md
+3. work/tracks/topology-convergence.md
+4. work/sprints/current-blocker.md
+5. work/sprints/current-blocker.json
+6. work/model-ledger.jsonl
+
+## Out Of Scope
+
+1. representative-timeout-budget
+2. active-gate-admission-relaxation
+3. publication-ack-convergence-rewrite
+
+## Model Fit
+
+- Package class: `representative-frontier-closure`
+- Intended minimum model: `gpt-5.3-codex`
+- Scope shape: `owner-boundary-contraction/current-frontier`
+- Output profile: `medium`
+- Owned files: `work/packages/active-20260516-startup-active-gate-admin-snapshot-timeout-after-priority-recovery.md`, `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md`, `work/tracks/topology-convergence.md`, `work/sprints/current-blocker.md`, `work/sprints/current-blocker.json`, `work/model-ledger.jsonl`
+- Forbidden files: `representative-timeout-budget`, `active-gate-admission-relaxation`, `publication-ack-convergence-rewrite`
+- Frozen decisions: publication ACK convergence and priority recovery workflow progress remain closed unless canonical evidence selects them again.
+- Escalation triggers: owned files expand beyond this package, runtime ownership changes, representative scenario evidence changes, active-gate admission would be relaxed, or timeout budgets would be increased.
+- Focused proof: `npm run work:context`, `npm run work:llm-start`, `npm run work:package:doctor -- --suggest work/packages/active-20260516-startup-active-gate-admin-snapshot-timeout-after-priority-recovery.md`, `npm run work:validate -- --entry work/packages/active-20260516-startup-active-gate-admin-snapshot-timeout-after-priority-recovery.md`, `npm run work:evidence-summary -- test-output/reports/rolling-restart-after-workflow-progress-pending-coordination-gate-20260516.report.json`, `npm run analyze:distributed-failure -- --report test-output/reports/rolling-restart-after-workflow-progress-pending-coordination-gate-20260516.report.json`, `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-workflow-progress-pending-coordination-gate-20260516.report.json --handoff-probe`, `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-workflow-progress-pending-coordination-gate-20260516.report.json`, `npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-after-workflow-progress-pending-coordination-gate-20260516.report.json --markdown`, `npm run analyze:owner-files -- startup_active_gate_owner snapshot_coverage --markdown`, `npm run work:subagent-prompt -- --role review --package work/packages/active-20260516-startup-active-gate-admin-snapshot-timeout-after-priority-recovery.md`, `npm run work:subagent-prompt -- --role fix --package work/packages/active-20260516-startup-active-gate-admin-snapshot-timeout-after-priority-recovery.md`, `npm run work:subagent-prompt -- --role implementation --package work/packages/active-20260516-startup-active-gate-admin-snapshot-timeout-after-priority-recovery.md`
+- Model ledger advisory: `escalate`
+
+## Validation
+
+1. npm run work:context
+2. npm run work:llm-start
+3. npm run work:package:doctor -- --suggest work/packages/active-20260516-startup-active-gate-admin-snapshot-timeout-after-priority-recovery.md
+4. npm run work:validate -- --entry work/packages/active-20260516-startup-active-gate-admin-snapshot-timeout-after-priority-recovery.md
+5. npm run work:evidence-summary -- test-output/reports/rolling-restart-after-workflow-progress-pending-coordination-gate-20260516.report.json
+6. npm run analyze:distributed-failure -- --report test-output/reports/rolling-restart-after-workflow-progress-pending-coordination-gate-20260516.report.json
+7. npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-workflow-progress-pending-coordination-gate-20260516.report.json --handoff-probe
+8. npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-workflow-progress-pending-coordination-gate-20260516.report.json
+9. npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-after-workflow-progress-pending-coordination-gate-20260516.report.json --markdown
+10. npm run analyze:owner-files -- startup_active_gate_owner snapshot_coverage --markdown
+11. npm run work:subagent-prompt -- --role review --package work/packages/active-20260516-startup-active-gate-admin-snapshot-timeout-after-priority-recovery.md
+12. npm run work:subagent-prompt -- --role fix --package work/packages/active-20260516-startup-active-gate-admin-snapshot-timeout-after-priority-recovery.md
+13. npm run work:subagent-prompt -- --role implementation --package work/packages/active-20260516-startup-active-gate-admin-snapshot-timeout-after-priority-recovery.md

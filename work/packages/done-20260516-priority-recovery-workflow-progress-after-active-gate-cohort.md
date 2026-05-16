@@ -3,7 +3,7 @@
 <!-- work-package
 {
   "schema": "work-package-v1",
-  "status": "active",
+  "status": "done",
   "opened": "2026-05-16",
   "lane": "causal-escalation",
   "scenario": "rolling-restart",
@@ -13,22 +13,22 @@
   "boundary": "workflow_progress",
   "dominantReason": "priority_recovery_progress_blocked",
   "currentState": "The focused workflow-progress implementation now drains the package-owned priority recovery residual: the latest representative rerun reports zero priority recovery residual witnesses and canonical causal evidence marks priority_recovery_partition_progress satisfied. The scenario remains red, but the first frontier migrated to active_gate_snapshot_coverage under startup_active_gate_owner / snapshot_coverage because the selected admin snapshot query timed out and snapshot coverage stayed 0/5.",
-  "nextAction": "Commit and push this focused operation_workflow_owner package slice, then open a successor package for startup_active_gate_owner / snapshot_coverage using test-output/reports/rolling-restart-after-workflow-progress-pending-coordination-gate-20260516.report.json.",
+  "nextAction": "Successor package work/packages/active-20260516-startup-active-gate-admin-snapshot-timeout-after-priority-recovery.md owns the migrated startup_active_gate_owner / snapshot_coverage frontier from test-output/reports/rolling-restart-after-workflow-progress-pending-coordination-gate-20260516.report.json.",
   "proof": [
     "npm run work:context",
-    "npm run work:package:doctor -- --suggest work/packages/active-20260516-priority-recovery-workflow-progress-after-active-gate-cohort.md",
-    "npm run work:validate -- --entry work/packages/active-20260516-priority-recovery-workflow-progress-after-active-gate-cohort.md",
+    "npm run work:package:doctor -- --suggest work/packages/done-20260516-priority-recovery-workflow-progress-after-active-gate-cohort.md",
+    "npm run work:validate -- --entry work/packages/done-20260516-priority-recovery-workflow-progress-after-active-gate-cohort.md",
     "npm run work:evidence-summary -- test-output/reports/rolling-restart-after-active-gate-owner-cohort-recovery-closure-20260516.report.json",
     "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-active-gate-owner-cohort-recovery-closure-20260516.report.json --handoff-probe",
     "npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-active-gate-owner-cohort-recovery-closure-20260516.report.json",
     "npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-after-active-gate-owner-cohort-recovery-closure-20260516.report.json --markdown",
     "npm run analyze:owner-files -- operation_workflow_owner workflow_progress --markdown",
-    "npm run work:subagent-prompt -- --role review --package work/packages/active-20260516-priority-recovery-workflow-progress-after-active-gate-cohort.md",
-    "npm run work:subagent-prompt -- --role fix --package work/packages/active-20260516-priority-recovery-workflow-progress-after-active-gate-cohort.md",
-    "npm run work:subagent-prompt -- --role implementation --package work/packages/active-20260516-priority-recovery-workflow-progress-after-active-gate-cohort.md"
+    "npm run work:subagent-prompt -- --role review --package work/packages/done-20260516-priority-recovery-workflow-progress-after-active-gate-cohort.md",
+    "npm run work:subagent-prompt -- --role fix --package work/packages/done-20260516-priority-recovery-workflow-progress-after-active-gate-cohort.md",
+    "npm run work:subagent-prompt -- --role implementation --package work/packages/done-20260516-priority-recovery-workflow-progress-after-active-gate-cohort.md"
   ],
   "writeScope": [
-    "work/packages/active-20260516-priority-recovery-workflow-progress-after-active-gate-cohort.md",
+    "work/packages/done-20260516-priority-recovery-workflow-progress-after-active-gate-cohort.md",
     "src/control-plane/priority-recovery-snapshot-stage-10.js",
     "work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md",
     "work/tracks/topology-convergence.md",
@@ -71,7 +71,7 @@
     "test/scripts/priority-recovery-current-artifact-fixture.test.js"
   ],
   "commitScope": [
-    "work/packages/active-20260516-priority-recovery-workflow-progress-after-active-gate-cohort.md",
+    "work/packages/done-20260516-priority-recovery-workflow-progress-after-active-gate-cohort.md",
     "src/control-plane/priority-recovery-snapshot-stage-10.js",
     "work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md",
     "work/tracks/topology-convergence.md",
@@ -146,7 +146,10 @@
     "oscillationCheck": "This package is allowed because the immediately preceding active-gate owner package satisfied active_gate_snapshot_coverage and canonical evidence selected operation_workflow_owner / workflow_progress as the new first frontier.",
     "handoffInvariant": "Publication ACK convergence stays closed unless canonical evidence selects it again. Active-gate snapshot coverage may reopen in a successor only because the latest canonical evidence selected it after priority recovery drained."
   },
-  "predecessor": "work/packages/done-20260516-startup-active-gate-owner-cohort-recovery-closure.md"
+  "predecessor": "work/packages/done-20260516-startup-active-gate-owner-cohort-recovery-closure.md",
+  "closed": "2026-05-16",
+  "commitAndPushLedgerRequired": true,
+  "successor": "work/packages/active-20260516-startup-active-gate-admin-snapshot-timeout-after-priority-recovery.md"
 }
 -->
 
@@ -181,7 +184,7 @@ owner-boundary package.
 
 - [x] Review subagent recorded: Agent Codex (019e3136-a952-7313-97db-0c6c6d8b9a4b) reviewed work/packages/done-20260516-startup-active-gate-owner-cohort-recovery-closure.md; result clean.
 - [x] Fix subagent recorded or explicitly not needed: not-needed.
-- [x] Implementation subagent recorded: Agent Codex (019e313a-1498-7fc1-8db2-c042dd05cf74) implemented work/packages/active-20260516-priority-recovery-workflow-progress-after-active-gate-cohort.md.
+- [x] Implementation subagent recorded: Agent Codex (019e313a-1498-7fc1-8db2-c042dd05cf74) implemented work/packages/done-20260516-priority-recovery-workflow-progress-after-active-gate-cohort.md.
 
 ## LLM Tool-First Contract
 
@@ -216,7 +219,7 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 - Intended minimum model: `gpt-5.3-codex`
 - Scope shape: `owner-boundary-contraction/current-frontier`
 - Output profile: `medium`
-- Owned files: `work/packages/active-20260516-priority-recovery-workflow-progress-after-active-gate-cohort.md`, `src/control-plane/priority-recovery-snapshot-stage-10.js`, `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md`, `work/tracks/topology-convergence.md`, `work/sprints/current-blocker.md`, `work/sprints/current-blocker.json`, `work/model-ledger.jsonl`
+- Owned files: `work/packages/done-20260516-priority-recovery-workflow-progress-after-active-gate-cohort.md`, `src/control-plane/priority-recovery-snapshot-stage-10.js`, `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md`, `work/tracks/topology-convergence.md`, `work/sprints/current-blocker.md`, `work/sprints/current-blocker.json`, `work/model-ledger.jsonl`
 - Forbidden files: `representative-timeout-budget`, `active-gate-admission-relaxation`
 - Frozen decisions: publication ACK convergence and active-gate snapshot coverage remain closed unless canonical evidence selects them again.
 - Escalation triggers: owned files expand beyond this package, runtime ownership changes, representative scenario evidence changes, active-gate admission would be relaxed, or timeout budgets would be increased.
@@ -226,16 +229,16 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 ## Validation
 
 1. npm run work:context
-2. npm run work:package:doctor -- --suggest work/packages/active-20260516-priority-recovery-workflow-progress-after-active-gate-cohort.md
-3. npm run work:validate -- --entry work/packages/active-20260516-priority-recovery-workflow-progress-after-active-gate-cohort.md
+2. npm run work:package:doctor -- --suggest work/packages/done-20260516-priority-recovery-workflow-progress-after-active-gate-cohort.md
+3. npm run work:validate -- --entry work/packages/done-20260516-priority-recovery-workflow-progress-after-active-gate-cohort.md
 4. npm run work:evidence-summary -- test-output/reports/rolling-restart-after-active-gate-owner-cohort-recovery-closure-20260516.report.json
 5. npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-active-gate-owner-cohort-recovery-closure-20260516.report.json --handoff-probe
 6. npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-active-gate-owner-cohort-recovery-closure-20260516.report.json
 7. npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-after-active-gate-owner-cohort-recovery-closure-20260516.report.json --markdown
 8. npm run analyze:owner-files -- operation_workflow_owner workflow_progress --markdown
-9. npm run work:subagent-prompt -- --role review --package work/packages/active-20260516-priority-recovery-workflow-progress-after-active-gate-cohort.md
-10. npm run work:subagent-prompt -- --role fix --package work/packages/active-20260516-priority-recovery-workflow-progress-after-active-gate-cohort.md
-11. npm run work:subagent-prompt -- --role implementation --package work/packages/active-20260516-priority-recovery-workflow-progress-after-active-gate-cohort.md
+9. npm run work:subagent-prompt -- --role review --package work/packages/done-20260516-priority-recovery-workflow-progress-after-active-gate-cohort.md
+10. npm run work:subagent-prompt -- --role fix --package work/packages/done-20260516-priority-recovery-workflow-progress-after-active-gate-cohort.md
+11. npm run work:subagent-prompt -- --role implementation --package work/packages/done-20260516-priority-recovery-workflow-progress-after-active-gate-cohort.md
 12. npm test -- test/control-plane/priority-recovery-snapshot-operation-owner-outcome.test.js
 13. npm test -- test/control-plane/priority-recovery-snapshot.test.js
 14. npm test -- test/rebalancer/coordinator-created-operation-progress-remote-handoff.test.js
@@ -243,15 +246,15 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 16. node scripts/check-guideline-literals.js src/control-plane/priority-recovery-snapshot-stage-10.js
 17. node scripts/check-guideline-decision-boundaries.js src/control-plane/priority-recovery-snapshot-stage-10.js
 18. npm run audit:runtime-grammar:file -- src/control-plane/priority-recovery-snapshot-stage-10.js
-19. npm run work:validate -- --pre-impl work/packages/active-20260516-priority-recovery-workflow-progress-after-active-gate-cohort.md
-20. git diff --check -- src/control-plane/priority-recovery-snapshot-stage-10.js work/packages/active-20260516-priority-recovery-workflow-progress-after-active-gate-cohort.md
+19. npm run work:validate -- --pre-impl work/packages/done-20260516-priority-recovery-workflow-progress-after-active-gate-cohort.md
+20. git diff --check -- src/control-plane/priority-recovery-snapshot-stage-10.js work/packages/done-20260516-priority-recovery-workflow-progress-after-active-gate-cohort.md
 21. node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-after-workflow-progress-pending-coordination-gate-20260516.report.json --verbose
 22. npm run work:evidence-summary -- test-output/reports/rolling-restart-after-workflow-progress-pending-coordination-gate-20260516.report.json
 23. npm run analyze:distributed-failure -- --report test-output/reports/rolling-restart-after-workflow-progress-pending-coordination-gate-20260516.report.json
 24. npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-workflow-progress-pending-coordination-gate-20260516.report.json --handoff-probe
 25. npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-workflow-progress-pending-coordination-gate-20260516.report.json
 26. npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-after-workflow-progress-pending-coordination-gate-20260516.report.json --markdown
-27. npm run work:model-ledger -- record --package work/packages/active-20260516-priority-recovery-workflow-progress-after-active-gate-cohort.md --model gpt-5 --reasoning-effort high --output-profile medium --task-class causal-escalation --package-class representative-frontier-closure --intended-minimum-model gpt-5.3-codex --scope-shape owner-boundary-contraction/current-frontier --escalated true --bailout-reason none --outcome migrated --validation-status passed --correction-loops 1 --review-findings 0 --notes "Priority workflow residual drained; representative rerun migrated to startup_active_gate_owner snapshot_coverage after zero priority recovery witnesses."
+27. npm run work:model-ledger -- record --package work/packages/done-20260516-priority-recovery-workflow-progress-after-active-gate-cohort.md --model gpt-5 --reasoning-effort high --output-profile medium --task-class causal-escalation --package-class representative-frontier-closure --intended-minimum-model gpt-5.3-codex --scope-shape owner-boundary-contraction/current-frontier --escalated true --bailout-reason none --outcome migrated --validation-status passed --correction-loops 1 --review-findings 0 --notes "Priority workflow residual drained; representative rerun migrated to startup_active_gate_owner snapshot_coverage after zero priority recovery witnesses."
 
 ## Implementation Result
 
@@ -276,3 +279,9 @@ normalize to the workflow-progress recovery path.
 - Successor should start from the active-gate snapshot coverage handoff probe:
   `startup_active_gate_owner / snapshot_coverage` with dominant reason
   `active_gate_timed_out`, without reopening publication ACK convergence.
+
+## Commit And Push Ledger
+
+1. Focused package commit: ac5482b4
+2. Pushed to: origin/codex/pending-ack-eligibility-filter
+3. Commit contains only package-owned files/package-status/allowed sprint handoff: yes
