@@ -73,6 +73,48 @@ const PRIORITY_RECOVERY_DISPATCH_PENDING_DIAGNOSTIC_OWNER_EXCLUDED_STATES =
     PRIORITY_RECOVERY_SEMANTIC_STATE.COORDINATION_MISMATCH,
   ]));
 
+const PRIORITY_RECOVERY_DISPATCH_PENDING_DIAGNOSTIC_OWNER_ALLOWED_STATE =
+  Object.freeze({
+    ALLOWED: 'diagnostic_dispatch_pending_owner_allowed',
+    PENDING_COORDINATION_MISMATCH:
+      'diagnostic_dispatch_pending_owner_pending_coordination_mismatch',
+    EXCLUDED: 'diagnostic_dispatch_pending_owner_excluded',
+  });
+
+const PRIORITY_RECOVERY_DISPATCH_PENDING_DIAGNOSTIC_OWNER_ALLOWED_STATES =
+  Object.freeze(new Set([
+    PRIORITY_RECOVERY_DISPATCH_PENDING_DIAGNOSTIC_OWNER_ALLOWED_STATE.ALLOWED,
+    PRIORITY_RECOVERY_DISPATCH_PENDING_DIAGNOSTIC_OWNER_ALLOWED_STATE
+      .PENDING_COORDINATION_MISMATCH,
+  ]));
+
+const PRIORITY_RECOVERY_DISPATCH_PENDING_DIAGNOSTIC_OWNER_ALLOWED_TABLE =
+  Object.freeze([
+    Object.freeze({
+      state:
+        PRIORITY_RECOVERY_DISPATCH_PENDING_DIAGNOSTIC_OWNER_ALLOWED_STATE
+          .PENDING_COORDINATION_MISMATCH,
+      matches: (evidence) =>
+        evidence.semanticState ===
+          PRIORITY_RECOVERY_SEMANTIC_STATE.COORDINATION_MISMATCH &&
+        evidence.workflowStep === WORKFLOW_STEP.PENDING,
+    }),
+    Object.freeze({
+      state:
+        PRIORITY_RECOVERY_DISPATCH_PENDING_DIAGNOSTIC_OWNER_ALLOWED_STATE
+          .EXCLUDED,
+      matches: (evidence) =>
+        PRIORITY_RECOVERY_DISPATCH_PENDING_DIAGNOSTIC_OWNER_EXCLUDED_STATES
+          .has(evidence.semanticState),
+    }),
+    Object.freeze({
+      state:
+        PRIORITY_RECOVERY_DISPATCH_PENDING_DIAGNOSTIC_OWNER_ALLOWED_STATE
+          .ALLOWED,
+      matches: () => true,
+    }),
+  ]);
+
 const PRIORITY_RECOVERY_DISPATCH_PENDING_DIAGNOSTIC_TARGET_STATE =
   Object.freeze({
     COMPATIBLE: 'diagnostic_dispatch_pending_target_compatible',
@@ -187,6 +229,13 @@ function resolvePriorityRecoveryDispatchPendingDiagnosticTargetState(
     .find((entry) => entry.matches(evidence)).state;
 }
 
+function resolvePriorityRecoveryDispatchPendingDiagnosticOwnerAllowedState(
+  evidence,
+) {
+  return PRIORITY_RECOVERY_DISPATCH_PENDING_DIAGNOSTIC_OWNER_ALLOWED_TABLE
+    .find((entry) => entry.matches(evidence)).state;
+}
+
 function resolvePriorityRecoveryDiagnosticOwnerRevision(
   snapshot,
   operationContext,
@@ -228,14 +277,21 @@ function buildPriorityRecoveryDispatchPendingDiagnosticOwnerEvidence(
         targetServiceTerminalState,
       }),
     );
+  const ownerAllowedState =
+    resolvePriorityRecoveryDispatchPendingDiagnosticOwnerAllowedState(
+      Object.freeze({
+        semanticState: snapshot?.semanticState,
+        workflowStep,
+      }),
+    );
   return Object.freeze({
     operationContextAvailable:
       operationContext && typeof operationContext === TYPEOF.OBJECT,
     operationOwnerObservationAbsent:
       !isPriorityRecoverySnapshotObject(snapshot?.operationOwnerObservation),
     ownerDiagnosticAllowed:
-      !PRIORITY_RECOVERY_DISPATCH_PENDING_DIAGNOSTIC_OWNER_EXCLUDED_STATES
-        .has(snapshot?.semanticState),
+      PRIORITY_RECOVERY_DISPATCH_PENDING_DIAGNOSTIC_OWNER_ALLOWED_STATES
+        .has(ownerAllowedState),
     workflowStepDispatchPending:
       PRIORITY_RECOVERY_DISPATCH_PENDING_DIAGNOSTIC_WORKFLOW_STEPS.has(
         workflowStep,
