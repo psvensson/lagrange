@@ -2,9 +2,9 @@
 
 # Current Blocker
 
-Sprint: `work/sprints/active-2026-q2-topology-systems-pattern-completion-closure.md`
+Sprint: `work/sprints/done-2026-q2-topology-systems-pattern-completion-closure.md`
 
-Package: `work/packages/active-20260516-topology-systems-pattern-completion-closure.md`
+Package: `work/packages/done-20260516-topology-systems-pattern-completion-closure.md`
 
 Workflow lane: `runtime-owner-boundary`
 
@@ -30,7 +30,7 @@ Make TiKV operator witnesses live through emitted progress, close Cockroach crit
 
 ## Proof Ladder
 
-1. `npm run work:package:doctor -- --suggest work/packages/active-20260516-topology-systems-pattern-completion-closure.md`
+1. `npm run work:package:doctor -- --suggest work/packages/done-20260516-topology-systems-pattern-completion-closure.md`
 2. `npm run analyze:owner-files -- operation_workflow_owner workflow_progress --markdown`
 3. `npm run analyze:owner-files -- topology_publication_owner publication_convergence --markdown`
 4. `node --test test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js`
@@ -38,7 +38,7 @@ Make TiKV operator witnesses live through emitted progress, close Cockroach crit
 6. `node test/control-plane/membership-publication-coordinator-main-stage-2.js`
 7. `node --test test/admin/admin-control-snapshot.test.js`
 8. `node --test test/scripts/work-tracker-subagent-ledger.test.js`
-9. `npm run work:validate -- --closure work/packages/active-20260516-topology-systems-pattern-completion-closure.md`
+9. `npm run work:validate -- --closure work/packages/done-20260516-topology-systems-pattern-completion-closure.md`
 
 ## Model Fit
 
@@ -133,8 +133,8 @@ Handoff invariant: `unknown`
 
 Write scope:
 
-1. `work/packages/active-20260516-topology-systems-pattern-completion-closure.md`
-2. `work/sprints/active-2026-q2-topology-systems-pattern-completion-closure.md`
+1. `work/packages/done-20260516-topology-systems-pattern-completion-closure.md`
+2. `work/sprints/done-2026-q2-topology-systems-pattern-completion-closure.md`
 3. `scripts/work-tracker.js`
 4. `src/control-plane/topology-operator-witness.js`
 5. `src/rebalancer/operation-workflow-owner-shared.js`
@@ -184,8 +184,8 @@ Candidate runtime files:
 
 Commit scope:
 
-1. `work/packages/active-20260516-topology-systems-pattern-completion-closure.md`
-2. `work/sprints/active-2026-q2-topology-systems-pattern-completion-closure.md`
+1. `work/packages/done-20260516-topology-systems-pattern-completion-closure.md`
+2. `work/sprints/done-2026-q2-topology-systems-pattern-completion-closure.md`
 3. `scripts/work-tracker.js`
 4. `src/control-plane/topology-operator-witness.js`
 5. `src/rebalancer/operation-workflow-owner-shared.js`

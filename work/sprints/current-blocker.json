@@ -1,9 +1,9 @@
 {
   "schema": "current-blocker-v1",
   "generatedBy": "scripts/work-tracker.js",
-  "sprint": "work/sprints/active-2026-q2-topology-systems-pattern-completion-closure.md",
-  "package": "work/packages/active-20260516-topology-systems-pattern-completion-closure.md",
-  "status": "active",
+  "sprint": "work/sprints/done-2026-q2-topology-systems-pattern-completion-closure.md",
+  "package": "work/packages/done-20260516-topology-systems-pattern-completion-closure.md",
+  "status": "done",
   "lane": "runtime-owner-boundary",
   "scenario": "none",
   "artifact": "none",
@@ -14,7 +14,7 @@
   "currentState": "The closed systems-pattern sprint added the TiKV operator witness and Cockroach critical convergence contracts, but follow-up review found the witness is not proven through live emitted owner progress, broad admin tail consumers remain red, and tracker validation allows stale active references after package/sprint status renames.",
   "nextAction": "Make TiKV operator witnesses live through emitted progress, close Cockroach critical convergence tail-consumer proof, and add tracker validation for stale active package/sprint references before resuming the paused topology sprint.",
   "proof": [
-    "npm run work:package:doctor -- --suggest work/packages/active-20260516-topology-systems-pattern-completion-closure.md",
+    "npm run work:package:doctor -- --suggest work/packages/done-20260516-topology-systems-pattern-completion-closure.md",
     "npm run analyze:owner-files -- operation_workflow_owner workflow_progress --markdown",
     "npm run analyze:owner-files -- topology_publication_owner publication_convergence --markdown",
     "node --test test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js",
@@ -22,11 +22,11 @@
     "node test/control-plane/membership-publication-coordinator-main-stage-2.js",
     "node --test test/admin/admin-control-snapshot.test.js",
     "node --test test/scripts/work-tracker-subagent-ledger.test.js",
-    "npm run work:validate -- --closure work/packages/active-20260516-topology-systems-pattern-completion-closure.md"
+    "npm run work:validate -- --closure work/packages/done-20260516-topology-systems-pattern-completion-closure.md"
   ],
   "writeScope": [
-    "work/packages/active-20260516-topology-systems-pattern-completion-closure.md",
-    "work/sprints/active-2026-q2-topology-systems-pattern-completion-closure.md",
+    "work/packages/done-20260516-topology-systems-pattern-completion-closure.md",
+    "work/sprints/done-2026-q2-topology-systems-pattern-completion-closure.md",
     "scripts/work-tracker.js",
     "src/control-plane/topology-operator-witness.js",
     "src/rebalancer/operation-workflow-owner-shared.js",
@@ -70,8 +70,8 @@
     "src/admin/admin-control-snapshot-class-part-6.js"
   ],
   "commitScope": [
-    "work/packages/active-20260516-topology-systems-pattern-completion-closure.md",
-    "work/sprints/active-2026-q2-topology-systems-pattern-completion-closure.md",
+    "work/packages/done-20260516-topology-systems-pattern-completion-closure.md",
+    "work/sprints/done-2026-q2-topology-systems-pattern-completion-closure.md",
     "scripts/work-tracker.js",
     "src/control-plane/topology-operator-witness.js",
     "src/rebalancer/operation-workflow-owner-shared.js",

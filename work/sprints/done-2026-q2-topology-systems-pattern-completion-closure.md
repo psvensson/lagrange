@@ -1,6 +1,6 @@
 # Topology Systems Pattern Completion Closure Sprint
 
-Status: active. Opened on 2026-05-16 after review of
+Status: done. Opened and closed on 2026-05-16 after review of
 `work/sprints/done-2026-q2-topology-convergence-systems-pattern-hardening.md`
 found that the TiKV-style operator witness and Cockroach-style critical
 convergence class need live-path completion proof before the paused topology
@@ -9,7 +9,7 @@ sprint resumes.
 ## Current Blocker Snapshot
 
 - Package:
-  [Topology Systems Pattern Completion Closure](../packages/active-20260516-topology-systems-pattern-completion-closure.md)
+  [Topology Systems Pattern Completion Closure](../packages/done-20260516-topology-systems-pattern-completion-closure.md)
 - Owner boundary: `topology_convergence_owner /
   systems_pattern_contract_completion`
 - Dominant reason: `pattern_contracts_not_fully_live_or_guarded`
@@ -42,7 +42,7 @@ another topology runtime sprint depends on those contracts.
 
 ## Package Queue
 
-1. [Topology Systems Pattern Completion Closure](../packages/active-20260516-topology-systems-pattern-completion-closure.md)
+1. [Topology Systems Pattern Completion Closure](../packages/done-20260516-topology-systems-pattern-completion-closure.md)
    - Lane: `runtime-owner-boundary`
    - Acceptance: focused TiKV, Cockroach, admin, diagnostics, tracker, and
      package closure proof is green.

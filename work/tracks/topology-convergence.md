@@ -69,8 +69,8 @@ Latest current handoff state:
   `operation_workflow_owner / workflow_progress` only if fresh canonical
   residual extractors promote it ahead of publication convergence
 - completion closure active on 2026-05-16:
-  `work/sprints/active-2026-q2-topology-systems-pattern-completion-closure.md`
-  / `work/packages/active-20260516-topology-systems-pattern-completion-closure.md`
+  `work/sprints/done-2026-q2-topology-systems-pattern-completion-closure.md`
+  / `work/packages/done-20260516-topology-systems-pattern-completion-closure.md`
 
 ## Target Invariant
 
@@ -97,9 +97,9 @@ or produces a narrower owner-boundary blocker selected by canonical evidence.
 ## Current Evidence
 
 - Active sprint:
-  `work/sprints/active-2026-q2-topology-systems-pattern-completion-closure.md`
+  `work/sprints/done-2026-q2-topology-systems-pattern-completion-closure.md`
 - Active package:
-  `work/packages/active-20260516-topology-systems-pattern-completion-closure.md`
+  `work/packages/done-20260516-topology-systems-pattern-completion-closure.md`
 - Artifact:
   `test-output/reports/rolling-restart-after-admin-owner-readiness-handoff-20260516.report.json`
 - Current package-local owner boundary:
@@ -137,7 +137,7 @@ publication-evidence replay code rather than by the runtime owner alone.
 | `work/sprints/done-2026-q2-topology-convergence-complexity-reduction.md` | `stabilization` / `complexity-reduction` | done reduced | Canonical publication-to-active-gate handoff contract implemented end to end; representative run remains red at startup active-gate snapshot coverage. |
 | `work/sprints/done-2026-q2-topology-rolling-restart-green-gate-closure.md` | `stabilization` / `green-gate` | done migrated | Final package migrated the blocker after active-gate owner reconcile drained; successor evidence selects publication convergence. |
 | `work/sprints/done-2026-q2-topology-convergence-systems-pattern-hardening.md` | `stabilization` / `systems-pattern-hardening` | done | Added handoff hygiene, publication-convergence causal selection, deterministic replay, active-gate catch-up fencing, topology operator witnesses, critical control-plane convergence, and owner-boundary file-size reduction contracts. |
-| `work/sprints/active-2026-q2-topology-systems-pattern-completion-closure.md` | `stabilization` / `systems-pattern-completion` | active | Closes the live TiKV operator witness summary path, broad Cockroach admin tail proof, and stale active-reference tracker guard before the paused topology sprint resumes. |
+| `work/sprints/done-2026-q2-topology-systems-pattern-completion-closure.md` | `stabilization` / `systems-pattern-completion` | done | Closed the live TiKV operator witness summary path, broad Cockroach admin tail proof, and stale active-reference tracker guard before the paused topology sprint resumes. |
 
 ## Owner Boundaries
 
@@ -206,5 +206,5 @@ canonical owner-boundary evidence.
 Current package:
 
 ```text
-work/packages/active-20260516-topology-systems-pattern-completion-closure.md
+work/packages/done-20260516-topology-systems-pattern-completion-closure.md
 ```

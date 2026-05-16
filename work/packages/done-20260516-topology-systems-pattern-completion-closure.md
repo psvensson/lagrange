@@ -3,7 +3,7 @@
 <!-- work-package
 {
   "schema": "work-package-v1",
-  "status": "active",
+  "status": "done",
   "opened": "2026-05-16",
   "lane": "runtime-owner-boundary",
   "scenario": "none",
@@ -15,7 +15,7 @@
   "currentState": "The closed systems-pattern sprint added the TiKV operator witness and Cockroach critical convergence contracts, but follow-up review found the witness is not proven through live emitted owner progress, broad admin tail consumers remain red, and tracker validation allows stale active references after package/sprint status renames.",
   "nextAction": "Make TiKV operator witnesses live through emitted progress, close Cockroach critical convergence tail-consumer proof, and add tracker validation for stale active package/sprint references before resuming the paused topology sprint.",
   "proof": [
-    "npm run work:package:doctor -- --suggest work/packages/active-20260516-topology-systems-pattern-completion-closure.md",
+    "npm run work:package:doctor -- --suggest work/packages/done-20260516-topology-systems-pattern-completion-closure.md",
     "npm run analyze:owner-files -- operation_workflow_owner workflow_progress --markdown",
     "npm run analyze:owner-files -- topology_publication_owner publication_convergence --markdown",
     "node --test test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js",
@@ -23,11 +23,11 @@
     "node test/control-plane/membership-publication-coordinator-main-stage-2.js",
     "node --test test/admin/admin-control-snapshot.test.js",
     "node --test test/scripts/work-tracker-subagent-ledger.test.js",
-    "npm run work:validate -- --closure work/packages/active-20260516-topology-systems-pattern-completion-closure.md"
+    "npm run work:validate -- --closure work/packages/done-20260516-topology-systems-pattern-completion-closure.md"
   ],
   "writeScope": [
-    "work/packages/active-20260516-topology-systems-pattern-completion-closure.md",
-    "work/sprints/active-2026-q2-topology-systems-pattern-completion-closure.md",
+    "work/packages/done-20260516-topology-systems-pattern-completion-closure.md",
+    "work/sprints/done-2026-q2-topology-systems-pattern-completion-closure.md",
     "scripts/work-tracker.js",
     "src/control-plane/topology-operator-witness.js",
     "src/rebalancer/operation-workflow-owner-shared.js",
@@ -71,8 +71,8 @@
     "src/admin/admin-control-snapshot-class-part-6.js"
   ],
   "commitScope": [
-    "work/packages/active-20260516-topology-systems-pattern-completion-closure.md",
-    "work/sprints/active-2026-q2-topology-systems-pattern-completion-closure.md",
+    "work/packages/done-20260516-topology-systems-pattern-completion-closure.md",
+    "work/sprints/done-2026-q2-topology-systems-pattern-completion-closure.md",
     "scripts/work-tracker.js",
     "src/control-plane/topology-operator-witness.js",
     "src/rebalancer/operation-workflow-owner-shared.js",
@@ -106,7 +106,9 @@
       "owned files expand beyond this package",
       "a frozen decision must be reopened"
     ]
-  }
+  },
+  "closed": "2026-05-16",
+  "commitAndPushLedgerRequired": true
 }
 -->
 
@@ -182,9 +184,9 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 
 Required for this runtime-owner-boundary package.
 
-- [x] Review subagent recorded: Agent Fermat (019e30b0-3c61-7ab2-a963-a402dee09ce3) reviewed work/packages/active-20260516-topology-systems-pattern-completion-closure.md; result clean
+- [x] Review subagent recorded: Agent Fermat (019e30b0-3c61-7ab2-a963-a402dee09ce3) reviewed work/packages/done-20260516-topology-systems-pattern-completion-closure.md; result clean
 - [x] Fix subagent recorded or explicitly not needed: `not-needed`.
-- [x] Implementation subagent recorded: Agent Bernoulli (019e30b4-3cd8-7ee2-b3ad-5706e800fc4e) implemented work/packages/active-20260516-topology-systems-pattern-completion-closure.md
+- [x] Implementation subagent recorded: Agent Bernoulli (019e30b4-3cd8-7ee2-b3ad-5706e800fc4e) implemented work/packages/done-20260516-topology-systems-pattern-completion-closure.md
 
 ## Model Fit
 
@@ -192,17 +194,17 @@ Required for this runtime-owner-boundary package.
 - Intended minimum model: `gpt-5.3-codex`
 - Scope shape: `owner-boundary-contraction/current-frontier`
 - Output profile: `medium`
-- Owned files: `work/packages/active-20260516-topology-systems-pattern-completion-closure.md`, `work/sprints/active-2026-q2-topology-systems-pattern-completion-closure.md`, `scripts/work-tracker.js`, `src/control-plane/topology-operator-witness.js`, `src/rebalancer/operation-workflow-owner-shared.js`, `src/rebalancer/operation-workflow-owner-segment-2.js`, `src/diagnostics/topology-convergence-graph.js`, `src/control-plane/membership-publication-coordinator-class-stage-2.js`, `src/control-plane/membership-publication-coordinator-class-stage-3.js`, `src/control-plane/priority-recovery-snapshot-stage-10.js`, `src/control-plane/priority-recovery-observation-snapshot-stage-2.js`, `src/control-plane/priority-recovery-observation-snapshot-stage-4.js`, `src/admin/admin-control-snapshot-class-part-2.js`, `src/admin/admin-control-snapshot-class-part-6.js`, `test/distributed/harness/priority-recovery-summary-normalization.js`, `test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js`, `test/diagnostics/topology-convergence-graph.test.js`, `test/control-plane/membership-publication-coordinator-main-stage-2.js`, `test/admin/admin-control-snapshot-tail-test-cases.js`, `test/admin/admin-control-snapshot.test.js`, `test/scripts/work-tracker-subagent-ledger.test.js`, `work/tracks/topology-convergence.md`, `work/sprints/current-blocker.md`, `work/sprints/current-blocker.json`, `work/model-ledger.jsonl`
+- Owned files: `work/packages/done-20260516-topology-systems-pattern-completion-closure.md`, `work/sprints/done-2026-q2-topology-systems-pattern-completion-closure.md`, `scripts/work-tracker.js`, `src/control-plane/topology-operator-witness.js`, `src/rebalancer/operation-workflow-owner-shared.js`, `src/rebalancer/operation-workflow-owner-segment-2.js`, `src/diagnostics/topology-convergence-graph.js`, `src/control-plane/membership-publication-coordinator-class-stage-2.js`, `src/control-plane/membership-publication-coordinator-class-stage-3.js`, `src/control-plane/priority-recovery-snapshot-stage-10.js`, `src/control-plane/priority-recovery-observation-snapshot-stage-2.js`, `src/control-plane/priority-recovery-observation-snapshot-stage-4.js`, `src/admin/admin-control-snapshot-class-part-2.js`, `src/admin/admin-control-snapshot-class-part-6.js`, `test/distributed/harness/priority-recovery-summary-normalization.js`, `test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js`, `test/diagnostics/topology-convergence-graph.test.js`, `test/control-plane/membership-publication-coordinator-main-stage-2.js`, `test/admin/admin-control-snapshot-tail-test-cases.js`, `test/admin/admin-control-snapshot.test.js`, `test/scripts/work-tracker-subagent-ledger.test.js`, `work/tracks/topology-convergence.md`, `work/sprints/current-blocker.md`, `work/sprints/current-blocker.json`, `work/model-ledger.jsonl`
 - Forbidden files: representative scenario timeout budgets, user-facing topology
   controls, placement policy, scheduler policy, Pro, and Enterprise behavior.
 - Frozen decisions: package scope and lane stay bounded unless explicitly escalated.
 - Escalation triggers: owned files expand beyond this package, runtime ownership changes, or representative scenario evidence changes.
-- Focused proof: `npm run work:package:doctor -- --suggest work/packages/active-20260516-topology-systems-pattern-completion-closure.md`, `npm run analyze:owner-files -- operation_workflow_owner workflow_progress --markdown`, `npm run analyze:owner-files -- topology_publication_owner publication_convergence --markdown`, `node --test test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js`, `node --test test/diagnostics/topology-convergence-graph.test.js`, `node test/control-plane/membership-publication-coordinator-main-stage-2.js`, `node --test test/admin/admin-control-snapshot.test.js`, `node --test test/scripts/work-tracker-subagent-ledger.test.js`, `npm run work:validate -- --closure work/packages/active-20260516-topology-systems-pattern-completion-closure.md`
+- Focused proof: `npm run work:package:doctor -- --suggest work/packages/done-20260516-topology-systems-pattern-completion-closure.md`, `npm run analyze:owner-files -- operation_workflow_owner workflow_progress --markdown`, `npm run analyze:owner-files -- topology_publication_owner publication_convergence --markdown`, `node --test test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js`, `node --test test/diagnostics/topology-convergence-graph.test.js`, `node test/control-plane/membership-publication-coordinator-main-stage-2.js`, `node --test test/admin/admin-control-snapshot.test.js`, `node --test test/scripts/work-tracker-subagent-ledger.test.js`, `npm run work:validate -- --closure work/packages/done-20260516-topology-systems-pattern-completion-closure.md`
 - Model ledger advisory: `escalate`
 
 ## Validation
 
-1. `npm run work:package:doctor -- --suggest work/packages/active-20260516-topology-systems-pattern-completion-closure.md` - passed.
+1. `npm run work:package:doctor -- --suggest work/packages/done-20260516-topology-systems-pattern-completion-closure.md` - passed.
 2. `npm run analyze:owner-files -- operation_workflow_owner workflow_progress --markdown` - passed.
 3. `npm run analyze:owner-files -- topology_publication_owner publication_convergence --markdown` - passed.
 4. `node --test test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js` - passed.
@@ -210,6 +212,12 @@ Required for this runtime-owner-boundary package.
 6. `node test/control-plane/membership-publication-coordinator-main-stage-2.js` - passed.
 7. `node --test test/admin/admin-control-snapshot.test.js` - passed.
 8. `node --test test/scripts/work-tracker-subagent-ledger.test.js` - passed.
-9. `npm run work:validate -- --pre-impl work/packages/active-20260516-topology-systems-pattern-completion-closure.md` - passed.
-10. `npm run work:model-ledger -- record --package work/packages/active-20260516-topology-systems-pattern-completion-closure.md --model gpt-5-codex --reasoning-effort high --output-profile medium --task-class runtime-owner-boundary --package-class representative-frontier-closure --intended-minimum-model gpt-5.3-codex --scope-shape owner-boundary-contraction/current-frontier --escalated false --bailout-reason closure-blocked-subagent-authorization --outcome implemented --validation-status focused-green-closure-blocked-subagent-ledger --correction-loops 2 --review-findings 2 --notes topology-systems-pattern-completion-live-tikv-witness-cockroach-critical-convergence-admin-tail-and-tracker-active-reference-guard-focused-green` - recorded.
-11. `npm run work:validate -- --closure work/packages/active-20260516-topology-systems-pattern-completion-closure.md` - passed after strict subagent proof update.
+9. `npm run work:validate -- --pre-impl work/packages/done-20260516-topology-systems-pattern-completion-closure.md` - passed.
+10. `npm run work:model-ledger -- record --package work/packages/done-20260516-topology-systems-pattern-completion-closure.md --model gpt-5-codex --reasoning-effort high --output-profile medium --task-class runtime-owner-boundary --package-class representative-frontier-closure --intended-minimum-model gpt-5.3-codex --scope-shape owner-boundary-contraction/current-frontier --escalated false --bailout-reason closure-blocked-subagent-authorization --outcome implemented --validation-status focused-green-closure-blocked-subagent-ledger --correction-loops 2 --review-findings 2 --notes topology-systems-pattern-completion-live-tikv-witness-cockroach-critical-convergence-admin-tail-and-tracker-active-reference-guard-focused-green` - recorded.
+11. `npm run work:validate -- --closure work/packages/done-20260516-topology-systems-pattern-completion-closure.md` - passed after strict subagent proof update.
+
+## Commit And Push Ledger
+
+1. Focused package commit: 24a77f4b53e3cf3efd452a55400fb764952c0547
+2. Pushed to: origin/codex/pending-ack-eligibility-filter
+3. Commit contains only package-owned files/package-status/allowed sprint handoff: yes
