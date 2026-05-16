@@ -3,7 +3,7 @@
 <!-- work-package
 {
   "schema": "work-package-v1",
-  "status": "active",
+  "status": "done",
   "opened": "2026-05-16",
   "lane": "causal-escalation",
   "scenario": "rolling-restart",
@@ -16,8 +16,8 @@
   "nextAction": "Continue with a focused topology_publication_owner / publication_convergence successor using test-output/reports/rolling-restart-post-systems-pattern-checkpoint-20260516.report.json as the fresh artifact. Prove or split the pending ACK / publication owner recovery edge before any runtime implementation.",
   "proof": [
     "npm run work:context",
-    "npm run work:package:doctor -- --suggest work/packages/active-20260516-rolling-restart-post-systems-pattern-checkpoint.md",
-    "npm run work:validate -- --entry work/packages/active-20260516-rolling-restart-post-systems-pattern-checkpoint.md",
+    "npm run work:package:doctor -- --suggest work/packages/done-20260516-rolling-restart-post-systems-pattern-checkpoint.md",
+    "npm run work:validate -- --entry work/packages/done-20260516-rolling-restart-post-systems-pattern-checkpoint.md",
     "npm run work:llm-start",
     "node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-post-systems-pattern-checkpoint-20260516.report.json --verbose",
     "npm run work:evidence-summary -- test-output/reports/rolling-restart-post-systems-pattern-checkpoint-20260516.report.json",
@@ -26,11 +26,11 @@
     "npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-post-systems-pattern-checkpoint-20260516.report.json --markdown",
     "npm run analyze:owner-files -- topology_publication_owner publication_convergence --markdown",
     "npm run analyze:distributed-failure -- --report test-output/reports/rolling-restart-post-systems-pattern-checkpoint-20260516.report.json",
-    "npm run work:model-ledger -- record --package work/packages/active-20260516-rolling-restart-post-systems-pattern-checkpoint.md --model gpt-5-codex --reasoning-effort high --output-profile medium --task-class scenario-release-gate --package-class representative-green-confirmation --intended-minimum-model gpt-5.3-codex --scope-shape release-gate-checkpoint/after-support-contract-completion --escalated true --bailout-reason same-frontier --outcome same-frontier --validation-status closure-green --correction-loops 1 --review-findings 0 --notes rolling-restart-post-systems-pattern-checkpoint-reselected-publication-ack-convergence-pending-acks-present",
-    "npm run work:validate -- --closure work/packages/active-20260516-rolling-restart-post-systems-pattern-checkpoint.md"
+    "npm run work:model-ledger -- record --package work/packages/done-20260516-rolling-restart-post-systems-pattern-checkpoint.md --model gpt-5-codex --reasoning-effort high --output-profile medium --task-class scenario-release-gate --package-class representative-green-confirmation --intended-minimum-model gpt-5.3-codex --scope-shape release-gate-checkpoint/after-support-contract-completion --escalated true --bailout-reason same-frontier --outcome same-frontier --validation-status closure-green --correction-loops 1 --review-findings 0 --notes rolling-restart-post-systems-pattern-checkpoint-reselected-publication-ack-convergence-pending-acks-present",
+    "npm run work:validate -- --closure work/packages/done-20260516-rolling-restart-post-systems-pattern-checkpoint.md"
   ],
   "writeScope": [
-    "work/packages/active-20260516-rolling-restart-post-systems-pattern-checkpoint.md",
+    "work/packages/done-20260516-rolling-restart-post-systems-pattern-checkpoint.md",
     "work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md",
     "work/tracks/topology-convergence.md",
     "work/model-ledger.jsonl"
@@ -49,7 +49,7 @@
   ],
   "candidateRuntimeFiles": [],
   "commitScope": [
-    "work/packages/active-20260516-rolling-restart-post-systems-pattern-checkpoint.md",
+    "work/packages/done-20260516-rolling-restart-post-systems-pattern-checkpoint.md",
     "work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md",
     "work/tracks/topology-convergence.md",
     "work/sprints/current-blocker.md",
@@ -130,7 +130,9 @@
     "oscillationCheck": "Treat the old publication/active-gate oscillation as historical until the fresh checkpoint reselects a frontier.",
     "handoffInvariant": "Do not relax active-gate admission, increase timeouts, or rewrite publication handoff truth while the checkpoint is classification-only."
   },
-  "predecessor": "work/packages/done-20260516-topology-systems-pattern-completion-closure.md"
+  "predecessor": "work/packages/done-20260516-topology-systems-pattern-completion-closure.md",
+  "closed": "2026-05-16",
+  "commitAndPushLedgerRequired": true
 }
 -->
 
@@ -217,7 +219,7 @@ activation boundary after the systems-pattern detour closed.
 
 - [x] Review subagent recorded: not-needed (first-package-in-sprint).
 - [x] Fix subagent recorded or explicitly not needed: not-needed.
-- [x] Implementation subagent recorded: Agent Codex Replacement Implementation Subagent (c8d0b014-d13b-4158-8e9b-a2ffc0969277) implemented work/packages/active-20260516-rolling-restart-post-systems-pattern-checkpoint.md.
+- [x] Implementation subagent recorded: Agent Codex Replacement Implementation Subagent (c8d0b014-d13b-4158-8e9b-a2ffc0969277) implemented work/packages/done-20260516-rolling-restart-post-systems-pattern-checkpoint.md.
 
 ## Continuation Decision
 
@@ -242,18 +244,18 @@ The successor should use this fresh artifact, not the stale pre-detour report.
 - Intended minimum model: `gpt-5.3-codex`
 - Scope shape: `release-gate-checkpoint/after-support-contract-completion`
 - Output profile: `medium`
-- Owned files: `work/packages/active-20260516-rolling-restart-post-systems-pattern-checkpoint.md`, `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md`, `work/tracks/topology-convergence.md`, `work/model-ledger.jsonl`
+- Owned files: `work/packages/done-20260516-rolling-restart-post-systems-pattern-checkpoint.md`, `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md`, `work/tracks/topology-convergence.md`, `work/model-ledger.jsonl`
 - Forbidden files: `src/`, `test/`, `representative timeout budget changes`, `active-gate admission relaxation`
 - Frozen decisions: package scope and lane stay bounded unless explicitly escalated.
 - Escalation triggers: owned files expand beyond this package, runtime ownership changes, or representative scenario evidence changes.
-- Focused proof: `npm run work:context`, `npm run work:package:doctor -- --suggest work/packages/active-20260516-rolling-restart-post-systems-pattern-checkpoint.md`, `npm run work:validate -- --entry work/packages/active-20260516-rolling-restart-post-systems-pattern-checkpoint.md`, `npm run work:llm-start`, `node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-post-systems-pattern-checkpoint-20260516.report.json --verbose`, `npm run work:evidence-summary -- test-output/reports/rolling-restart-post-systems-pattern-checkpoint-20260516.report.json`, `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-post-systems-pattern-checkpoint-20260516.report.json --handoff-probe`, `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-post-systems-pattern-checkpoint-20260516.report.json`, `npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-post-systems-pattern-checkpoint-20260516.report.json --markdown`, `npm run analyze:owner-files -- topology_publication_owner publication_convergence --markdown`, `npm run analyze:distributed-failure -- --report test-output/reports/rolling-restart-post-systems-pattern-checkpoint-20260516.report.json`, `npm run work:model-ledger -- record --package work/packages/active-20260516-rolling-restart-post-systems-pattern-checkpoint.md --model gpt-5-codex --reasoning-effort high --output-profile medium --task-class scenario-release-gate --package-class representative-green-confirmation --intended-minimum-model gpt-5.3-codex --scope-shape release-gate-checkpoint/after-support-contract-completion --escalated true --bailout-reason same-frontier --outcome same-frontier --validation-status closure-green --correction-loops 1 --review-findings 0 --notes rolling-restart-post-systems-pattern-checkpoint-reselected-publication-ack-convergence-pending-acks-present`, `npm run work:validate -- --closure work/packages/active-20260516-rolling-restart-post-systems-pattern-checkpoint.md`
+- Focused proof: `npm run work:context`, `npm run work:package:doctor -- --suggest work/packages/done-20260516-rolling-restart-post-systems-pattern-checkpoint.md`, `npm run work:validate -- --entry work/packages/done-20260516-rolling-restart-post-systems-pattern-checkpoint.md`, `npm run work:llm-start`, `node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-post-systems-pattern-checkpoint-20260516.report.json --verbose`, `npm run work:evidence-summary -- test-output/reports/rolling-restart-post-systems-pattern-checkpoint-20260516.report.json`, `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-post-systems-pattern-checkpoint-20260516.report.json --handoff-probe`, `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-post-systems-pattern-checkpoint-20260516.report.json`, `npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-post-systems-pattern-checkpoint-20260516.report.json --markdown`, `npm run analyze:owner-files -- topology_publication_owner publication_convergence --markdown`, `npm run analyze:distributed-failure -- --report test-output/reports/rolling-restart-post-systems-pattern-checkpoint-20260516.report.json`, `npm run work:model-ledger -- record --package work/packages/done-20260516-rolling-restart-post-systems-pattern-checkpoint.md --model gpt-5-codex --reasoning-effort high --output-profile medium --task-class scenario-release-gate --package-class representative-green-confirmation --intended-minimum-model gpt-5.3-codex --scope-shape release-gate-checkpoint/after-support-contract-completion --escalated true --bailout-reason same-frontier --outcome same-frontier --validation-status closure-green --correction-loops 1 --review-findings 0 --notes rolling-restart-post-systems-pattern-checkpoint-reselected-publication-ack-convergence-pending-acks-present`, `npm run work:validate -- --closure work/packages/done-20260516-rolling-restart-post-systems-pattern-checkpoint.md`
 - Model ledger advisory: `escalate`
 
 ## Validation
 
 1. npm run work:context
-2. npm run work:package:doctor -- --suggest work/packages/active-20260516-rolling-restart-post-systems-pattern-checkpoint.md
-3. npm run work:validate -- --entry work/packages/active-20260516-rolling-restart-post-systems-pattern-checkpoint.md
+2. npm run work:package:doctor -- --suggest work/packages/done-20260516-rolling-restart-post-systems-pattern-checkpoint.md
+3. npm run work:validate -- --entry work/packages/done-20260516-rolling-restart-post-systems-pattern-checkpoint.md
 4. npm run work:llm-start
 5. node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-post-systems-pattern-checkpoint-20260516.report.json --verbose
 6. npm run work:evidence-summary -- test-output/reports/rolling-restart-post-systems-pattern-checkpoint-20260516.report.json
@@ -262,8 +264,8 @@ The successor should use this fresh artifact, not the stale pre-detour report.
 9. npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-post-systems-pattern-checkpoint-20260516.report.json --markdown
 10. npm run analyze:owner-files -- topology_publication_owner publication_convergence --markdown
 11. npm run analyze:distributed-failure -- --report test-output/reports/rolling-restart-post-systems-pattern-checkpoint-20260516.report.json
-12. npm run work:model-ledger -- record --package work/packages/active-20260516-rolling-restart-post-systems-pattern-checkpoint.md --model gpt-5-codex --reasoning-effort high --output-profile medium --task-class scenario-release-gate --package-class representative-green-confirmation --intended-minimum-model gpt-5.3-codex --scope-shape release-gate-checkpoint/after-support-contract-completion --escalated true --bailout-reason same-frontier --outcome same-frontier --validation-status closure-green --correction-loops 1 --review-findings 0 --notes rolling-restart-post-systems-pattern-checkpoint-reselected-publication-ack-convergence-pending-acks-present
-13. npm run work:validate -- --closure work/packages/active-20260516-rolling-restart-post-systems-pattern-checkpoint.md
+12. npm run work:model-ledger -- record --package work/packages/done-20260516-rolling-restart-post-systems-pattern-checkpoint.md --model gpt-5-codex --reasoning-effort high --output-profile medium --task-class scenario-release-gate --package-class representative-green-confirmation --intended-minimum-model gpt-5.3-codex --scope-shape release-gate-checkpoint/after-support-contract-completion --escalated true --bailout-reason same-frontier --outcome same-frontier --validation-status closure-green --correction-loops 1 --review-findings 0 --notes rolling-restart-post-systems-pattern-checkpoint-reselected-publication-ack-convergence-pending-acks-present
+13. npm run work:validate -- --closure work/packages/done-20260516-rolling-restart-post-systems-pattern-checkpoint.md
 
 ## Checkpoint Classification
 
@@ -295,3 +297,9 @@ The successor should use this fresh artifact, not the stale pre-detour report.
   summary and exited non-zero because the report is failed and its timeline
   reader hit an `events.ndjson` shape warning; no raw JSON/log fallback was
   needed for owner selection.
+
+## Commit And Push Ledger
+
+1. Focused package commit: b6a9b05bc15f560a57e8a6eea3320fccd452aa8b
+2. Pushed to: origin/codex/pending-ack-eligibility-filter
+3. Commit contains only package-owned files/package-status/allowed sprint handoff: yes

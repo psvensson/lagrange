@@ -78,7 +78,7 @@ Latest current handoff state:
   promotes it ahead of publication convergence
 - the fresh representative artifact after systems-pattern completion closure
   reselected the same publication frontier; the continuation package is
-  `work/packages/active-20260516-rolling-restart-post-systems-pattern-checkpoint.md`
+  `work/packages/done-20260516-rolling-restart-post-systems-pattern-checkpoint.md`
 
 ## Target Invariant
 
@@ -107,11 +107,11 @@ or produces a narrower owner-boundary blocker selected by canonical evidence.
 - Continuation sprint context:
   `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md`
 - Next continuation package:
-  `work/packages/active-20260516-rolling-restart-post-systems-pattern-checkpoint.md`
+  `work/packages/done-20260516-rolling-restart-post-systems-pattern-checkpoint.md`
 - Artifact:
   `test-output/reports/rolling-restart-post-systems-pattern-checkpoint-20260516.report.json`
 - Checkpoint package:
-  `work/packages/active-20260516-rolling-restart-post-systems-pattern-checkpoint.md`
+  `work/packages/done-20260516-rolling-restart-post-systems-pattern-checkpoint.md`
 - Representative owner boundary:
   `topology_publication_owner / publication_convergence`
 - Extractor summary:
@@ -208,7 +208,7 @@ These are context candidates, not write authorization:
 ## Entry Condition
 
 When the rolling-restart gate is resumed, activate
-`work/packages/active-20260516-rolling-restart-post-systems-pattern-checkpoint.md`
+`work/packages/done-20260516-rolling-restart-post-systems-pattern-checkpoint.md`
 and regenerate current-blocker before runtime implementation. Runtime edits are
 not in scope until the fresh checkpoint selects an owner boundary.
 
@@ -223,5 +223,5 @@ canonical owner-boundary evidence.
 Next continuation package:
 
 ```text
-work/packages/active-20260516-rolling-restart-post-systems-pattern-checkpoint.md
+work/packages/done-20260516-rolling-restart-post-systems-pattern-checkpoint.md
 ```

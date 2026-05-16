@@ -4,7 +4,7 @@
 
 Sprint: `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md`
 
-Package: `work/packages/active-20260516-rolling-restart-post-systems-pattern-checkpoint.md`
+Package: `work/packages/done-20260516-rolling-restart-post-systems-pattern-checkpoint.md`
 
 Workflow lane: `causal-escalation`
 
@@ -31,8 +31,8 @@ Continue with a focused topology_publication_owner / publication_convergence suc
 ## Proof Ladder
 
 1. `npm run work:context`
-2. `npm run work:package:doctor -- --suggest work/packages/active-20260516-rolling-restart-post-systems-pattern-checkpoint.md`
-3. `npm run work:validate -- --entry work/packages/active-20260516-rolling-restart-post-systems-pattern-checkpoint.md`
+2. `npm run work:package:doctor -- --suggest work/packages/done-20260516-rolling-restart-post-systems-pattern-checkpoint.md`
+3. `npm run work:validate -- --entry work/packages/done-20260516-rolling-restart-post-systems-pattern-checkpoint.md`
 4. `npm run work:llm-start`
 5. `node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-post-systems-pattern-checkpoint-20260516.report.json --verbose`
 6. `npm run work:evidence-summary -- test-output/reports/rolling-restart-post-systems-pattern-checkpoint-20260516.report.json`
@@ -41,8 +41,8 @@ Continue with a focused topology_publication_owner / publication_convergence suc
 9. `npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-post-systems-pattern-checkpoint-20260516.report.json --markdown`
 10. `npm run analyze:owner-files -- topology_publication_owner publication_convergence --markdown`
 11. `npm run analyze:distributed-failure -- --report test-output/reports/rolling-restart-post-systems-pattern-checkpoint-20260516.report.json`
-12. `npm run work:model-ledger -- record --package work/packages/active-20260516-rolling-restart-post-systems-pattern-checkpoint.md --model gpt-5-codex --reasoning-effort high --output-profile medium --task-class scenario-release-gate --package-class representative-green-confirmation --intended-minimum-model gpt-5.3-codex --scope-shape release-gate-checkpoint/after-support-contract-completion --escalated true --bailout-reason same-frontier --outcome same-frontier --validation-status closure-green --correction-loops 1 --review-findings 0 --notes rolling-restart-post-systems-pattern-checkpoint-reselected-publication-ack-convergence-pending-acks-present`
-13. `npm run work:validate -- --closure work/packages/active-20260516-rolling-restart-post-systems-pattern-checkpoint.md`
+12. `npm run work:model-ledger -- record --package work/packages/done-20260516-rolling-restart-post-systems-pattern-checkpoint.md --model gpt-5-codex --reasoning-effort high --output-profile medium --task-class scenario-release-gate --package-class representative-green-confirmation --intended-minimum-model gpt-5.3-codex --scope-shape release-gate-checkpoint/after-support-contract-completion --escalated true --bailout-reason same-frontier --outcome same-frontier --validation-status closure-green --correction-loops 1 --review-findings 0 --notes rolling-restart-post-systems-pattern-checkpoint-reselected-publication-ack-convergence-pending-acks-present`
+13. `npm run work:validate -- --closure work/packages/done-20260516-rolling-restart-post-systems-pattern-checkpoint.md`
 
 ## Model Fit
 
@@ -145,7 +145,7 @@ Handoff invariant: `Do not relax active-gate admission, increase timeouts, or re
 
 Write scope:
 
-1. `work/packages/active-20260516-rolling-restart-post-systems-pattern-checkpoint.md`
+1. `work/packages/done-20260516-rolling-restart-post-systems-pattern-checkpoint.md`
 2. `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md`
 3. `work/tracks/topology-convergence.md`
 4. `work/model-ledger.jsonl`
@@ -170,7 +170,7 @@ Candidate runtime files:
 
 Commit scope:
 
-1. `work/packages/active-20260516-rolling-restart-post-systems-pattern-checkpoint.md`
+1. `work/packages/done-20260516-rolling-restart-post-systems-pattern-checkpoint.md`
 2. `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md`
 3. `work/tracks/topology-convergence.md`
 4. `work/sprints/current-blocker.md`

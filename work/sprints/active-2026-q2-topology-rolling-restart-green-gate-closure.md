@@ -53,7 +53,7 @@ Canonical state after the post-systems-pattern checkpoint:
    Split required is `false`; do not promote this boundary unless future
    canonical evidence selects it.
 9. The current checkpoint package is
-   `work/packages/active-20260516-rolling-restart-post-systems-pattern-checkpoint.md`.
+   `work/packages/done-20260516-rolling-restart-post-systems-pattern-checkpoint.md`.
 10. The next package must continue through
    `topology_publication_owner / publication_convergence` using the fresh
    checkpoint artifact before any runtime edit.
@@ -413,11 +413,11 @@ The sprint cannot close until:
 6. Post-detour update: systems-pattern hardening and completion closure are now
    done. The next continuation step is no longer the systems-pattern sprint;
    it is the checkpoint package
-   `work/packages/active-20260516-rolling-restart-post-systems-pattern-checkpoint.md`.
+   `work/packages/done-20260516-rolling-restart-post-systems-pattern-checkpoint.md`.
 
 ## Post-Systems-Pattern Continuation Package
 
-[Rolling Restart Post Systems Pattern Checkpoint](../packages/active-20260516-rolling-restart-post-systems-pattern-checkpoint.md)
+[Rolling Restart Post Systems Pattern Checkpoint](../packages/done-20260516-rolling-restart-post-systems-pattern-checkpoint.md)
 
 - Lane: `scenario-release-gate`
 - Owner boundary:
@@ -451,7 +451,7 @@ The sprint cannot close until:
 When the paused rolling-restart gate is resumed, start with:
 
 ```text
-work/packages/active-20260516-rolling-restart-post-systems-pattern-checkpoint.md
+work/packages/done-20260516-rolling-restart-post-systems-pattern-checkpoint.md
 ```
 
 Use the final pre-detour representative artifact only as handoff context:
