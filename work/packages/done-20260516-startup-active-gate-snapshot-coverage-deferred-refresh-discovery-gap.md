@@ -247,3 +247,15 @@ publication handoff before promoting `src/admin/admin-control-snapshot-class-par
 16. PASS - `git diff --check -- work/packages/done-20260516-startup-active-gate-snapshot-coverage-deferred-refresh-discovery-gap.md work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md work/sprints/current-blocker.md work/sprints/current-blocker.json src/admin/admin-control-snapshot-class-part-2.js test/admin/admin-control-snapshot.test.js`
 17. PASS - `npm run work:validate -- --closure work/packages/done-20260516-startup-active-gate-snapshot-coverage-deferred-refresh-discovery-gap.md`
 18. PASS - `npm run work:model-ledger -- record --package work/packages/done-20260516-startup-active-gate-snapshot-coverage-deferred-refresh-discovery-gap.md --model gpt-5-codex --reasoning-effort high --output-profile medium --task-class causal-escalation --package-class representative-frontier-closure --intended-minimum-model gpt-5.3-codex --scope-shape owner-boundary-contraction/current-frontier --escalated true --bailout-reason selected-snapshot-source-timeout --outcome reduced --validation-status focused-green-representative-reduced --correction-loops 2 --review-findings 1`
+19. PASS - `npm run work:validate -- --closure work/packages/done-20260516-startup-active-gate-snapshot-coverage-deferred-refresh-discovery-gap.md` after commit-and-push ledger record.
+
+## Commit And Push Ledger
+
+1. Focused package commit: 41285a3e
+2. Pushed to: origin/codex/pending-ack-eligibility-filter
+3. Commit contains only package-owned files/package-status/allowed sprint handoff: yes
+4. Split commit note: 41285a3e contains the runtime fix, focused regression,
+   migrated package state, successor activation, sprint handoff,
+   current-blocker regeneration, representative classification, and
+   model-ledger record. This follow-up records the durable commit-and-push
+   ledger for closure validation.
