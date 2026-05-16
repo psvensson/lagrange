@@ -57,6 +57,8 @@ import {Cluster3} from './cluster-segment-7-class-3.js';
 const TYPEOF_OBJECT = 'object';
 const TYPEOF_STRING = 'string';
 const ACTIVE_GATE_OWNER_COHORT_FIELD = 'activeGateOwnerCohort';
+const MEMBERSHIP_PUBLICATION_HANDOFF_OUTCOME_FIELD =
+  'membershipPublicationHandoffOutcome';
 const EMPTY_STRING = '';
 const LOAD_PUBLICATION_GATE_WITNESS_READY = 'ready';
 const LOAD_PUBLICATION_GATE_WITNESS_CANONICAL_SNAPSHOT =
@@ -158,6 +160,13 @@ const PARTIAL_COVERAGE_CONVERGENCE_OUTCOME_KEEP = Object.freeze({
 const PARTIAL_COVERAGE_CONVERGENCE_OUTCOME_APPLY = Object.freeze({
   converged: true,
 });
+const PARTIAL_COVERAGE_PUBLICATION_GATE_FIELD = Object.freeze({
+  MISSING_PUBLISHED_NODE_IDS: 'missingPublishedNodeIds',
+  PENDING_ACK_NODE_IDS: 'pendingAckNodeIds',
+  PRIORITY_PARTITION_SUMMARY: 'priorityPartitionSummary',
+  READY: 'ready',
+  SATISFIED: 'satisfied',
+});
 const PARTIAL_COVERAGE_CONVERGENCE_DECISION_TABLE = Object.freeze([
   Object.freeze({
     outcome: PARTIAL_COVERAGE_CONVERGENCE_OUTCOME_APPLY,
@@ -168,6 +177,20 @@ const PARTIAL_COVERAGE_CONVERGENCE_DECISION_TABLE = Object.freeze([
       evidence.snapshotCoverageComplete !== true &&
       evidence.bestCoverageNodeCount > ZERO &&
       evidence.selectedSnapshotErrorPresent !== true,
+  }),
+  Object.freeze({
+    outcome: PARTIAL_COVERAGE_CONVERGENCE_OUTCOME_APPLY,
+    matches: (evidence) =>
+      evidence.readinessMode === CLUSTER_READINESS_MODE_STARTUP &&
+      evidence.activeByStatus === true &&
+      evidence.publicationGateReady === true &&
+      evidence.snapshotCoverageComplete !== true &&
+      evidence.bestCoverageNodeCount > ZERO &&
+      evidence.selectedSnapshotAdminReady === true &&
+      evidence.selectedSnapshotErrorPresent !== true &&
+      evidence.selectedPublicationGateReady === true &&
+      evidence.selectedPendingAckCount === ZERO &&
+      evidence.selectedMissingPublishedCount > ZERO,
   }),
 ]);
 
@@ -453,16 +476,59 @@ function projectStartupSnapshotDiagnostic(diagnostic, projectionContext) {
   };
 }
 
+function countPartialCoveragePublicationGateNodeIds(gate, fieldName) {
+  return normalizeDistinctStringArray(gate?.[fieldName]).length;
+}
+
+function isPartialCoveragePublicationGateReady(gate = null) {
+  if (!gate || typeof gate !== TYPEOF_OBJECT) {
+    return false;
+  }
+  if (gate[PARTIAL_COVERAGE_PUBLICATION_GATE_FIELD.READY] === true) {
+    return true;
+  }
+  return (
+    gate[
+      PARTIAL_COVERAGE_PUBLICATION_GATE_FIELD.PRIORITY_PARTITION_SUMMARY
+    ]?.[PARTIAL_COVERAGE_PUBLICATION_GATE_FIELD.SATISFIED] === true &&
+    countPartialCoveragePublicationGateNodeIds(
+      gate,
+      PARTIAL_COVERAGE_PUBLICATION_GATE_FIELD.PENDING_ACK_NODE_IDS,
+    ) === ZERO &&
+    countPartialCoveragePublicationGateNodeIds(
+      gate,
+      PARTIAL_COVERAGE_PUBLICATION_GATE_FIELD.MISSING_PUBLISHED_NODE_IDS,
+    ) === ZERO
+  );
+}
+
 function normalizePartialCoverageConvergenceEvidence({
   readinessMode,
   activeByStatus,
   snapshotCoverage,
   publicationConvergenceGate,
 }) {
+  const selectedPublicationConvergenceGate =
+    snapshotCoverage?.selectedPublicationConvergenceGate &&
+      typeof snapshotCoverage.selectedPublicationConvergenceGate ===
+        TYPEOF_OBJECT ?
+      snapshotCoverage.selectedPublicationConvergenceGate :
+      snapshotCoverage?.selectedPublicationConvergence?.publicationRecoveryGate &&
+        typeof snapshotCoverage.selectedPublicationConvergence
+          .publicationRecoveryGate === TYPEOF_OBJECT ?
+        snapshotCoverage.selectedPublicationConvergence
+          .publicationRecoveryGate :
+        null;
   const bestCoverageNodeCount =
     Number.isInteger(snapshotCoverage?.bestCoverageNodeCount) ?
       Math.max(ZERO, snapshotCoverage.bestCoverageNodeCount) :
       ZERO;
+  const selectedPendingAckCount = normalizeDistinctStringArray(
+    snapshotCoverage?.selectedPendingAckNodeIds,
+  ).length;
+  const selectedMissingPublishedCount = normalizeDistinctStringArray(
+    snapshotCoverage?.selectedMissingPublishedNodeIds,
+  ).length;
   const selectedSnapshotErrorPresent =
     typeof normalizeOptionalString(snapshotCoverage?.selectedError) ===
       TYPEOF_STRING;
@@ -477,6 +543,12 @@ function normalizePartialCoverageConvergenceEvidence({
     bestCoverageNodeCount,
     selectedSnapshotAdminReady,
     selectedSnapshotErrorPresent,
+    selectedPublicationGateReady:
+      isPartialCoveragePublicationGateReady(
+        selectedPublicationConvergenceGate,
+      ),
+    selectedPendingAckCount,
+    selectedMissingPublishedCount,
   });
 }
 
@@ -1423,6 +1495,45 @@ class Cluster4 extends Cluster3 {
           JSON.stringify(controlPlaneDiagnostics.publicationActiveGateHandoff),
         ) :
         rawPublicationConvergence?.publicationActiveGateHandoff || null;
+    const membershipPublicationHandoffOutcome =
+      controlPlaneDiagnostics?.[MEMBERSHIP_PUBLICATION_HANDOFF_OUTCOME_FIELD] &&
+      typeof controlPlaneDiagnostics[
+        MEMBERSHIP_PUBLICATION_HANDOFF_OUTCOME_FIELD
+      ] === TYPEOF_OBJECT ?
+        JSON.parse(
+          JSON.stringify(
+            controlPlaneDiagnostics[
+              MEMBERSHIP_PUBLICATION_HANDOFF_OUTCOME_FIELD
+            ],
+          ),
+        ) :
+        rawPublicationConvergence?.[
+          MEMBERSHIP_PUBLICATION_HANDOFF_OUTCOME_FIELD
+        ] &&
+          typeof rawPublicationConvergence[
+            MEMBERSHIP_PUBLICATION_HANDOFF_OUTCOME_FIELD
+          ] === TYPEOF_OBJECT ?
+          JSON.parse(
+            JSON.stringify(
+              rawPublicationConvergence[
+                MEMBERSHIP_PUBLICATION_HANDOFF_OUTCOME_FIELD
+              ],
+            ),
+          ) :
+          activeGateOwnerCohort?.[
+            MEMBERSHIP_PUBLICATION_HANDOFF_OUTCOME_FIELD
+          ] &&
+            typeof activeGateOwnerCohort[
+              MEMBERSHIP_PUBLICATION_HANDOFF_OUTCOME_FIELD
+            ] === TYPEOF_OBJECT ?
+            JSON.parse(
+              JSON.stringify(
+                activeGateOwnerCohort[
+                  MEMBERSHIP_PUBLICATION_HANDOFF_OUTCOME_FIELD
+                ],
+              ),
+            ) :
+            null;
     const logsTable =
       controlPlaneDiagnostics?.logsTable &&
       typeof controlPlaneDiagnostics.logsTable === 'object' ?
@@ -1520,6 +1631,7 @@ class Cluster4 extends Cluster3 {
         controlPlaneDiagnostics?.publishedMembershipObservation || null,
       ),
       publicationActiveGateHandoff,
+      membershipPublicationHandoffOutcome,
       activeGateOwnerCohort,
       priorityRecoveryObservation,
       priorityRecoveryDecisionSnapshots,

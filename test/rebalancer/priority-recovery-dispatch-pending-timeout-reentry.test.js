@@ -47,9 +47,11 @@ const TEST_SOURCE_NODE_ID = 'node-source';
 const TEST_TARGET_NODE_ID = 'node-target';
 const TEST_STATUS_PENDING = ReplicaStatus.PENDING;
 const TEST_STATUS_CREATING = ReplicaStatus.CREATING;
+const TEST_STATUS_ACTIVE = ReplicaStatus.ACTIVE;
 const TEST_STEP_PENDING = WORKFLOW_STEP.PENDING;
 const TEST_STEP_SENDING = WORKFLOW_STEP.SENDING;
 const TEST_STEP_CREATING = WORKFLOW_STEP.CREATING;
+const TEST_STEP_ACTIVE = WORKFLOW_STEP.ACTIVE;
 const TEST_STEP_HISTORY_LAG_MS = 1000;
 const TEST_TIMEOUT_OVERRUN_MS = 1;
 const TEST_HANDOFF_TIMEOUT_MS = 7;
@@ -67,12 +69,18 @@ const TEST_REPLICA_DISPATCH_TARGET =
   'node-target/service/replica-dispatch';
 const TEST_REPLICA_HANDLER_DISPATCH_TARGET =
   'node-target/service/replica-handler';
+const TEST_REPLICA_SERVICE_ADDRESS =
+  'node-target/partition/control_plane_publications-p1-r4';
+const TEST_RAFT_ROLE_FOLLOWER = 'follower';
 const TEST_REPLICA_OPERATION_DISPATCH_DELIVERY_SOURCE =
   STAGE_SHARED.OPERATION_WORKFLOW_OWNER_SHARED.OPERATION_WORKFLOW_OWNER_LITERAL
     .REPLICA_OPERATION_DISPATCH;
 const TEST_RETRYABLE_HANDOFF_ERROR = 'handoff retryable timeout';
 const TEST_RETRYABLE_TRANSITION_FAILURE =
   'retryable transition claim failure';
+const TEST_DEFERRED_RETRY_PENDING_REASON =
+  STAGE_SHARED.OPERATION_WORKFLOW_OWNER_SHARED.REBALANCER_SKIP_REASON
+    .DEFERRED_RETRY_PENDING;
 const TEST_COORDINATOR_CREATED_REMOTE_HANDOFF =
   'coordinator_created_remote_handoff';
 const TEST_PUBLICATION_STATUS_PUBLISHED = 'PUBLISHED';
@@ -151,15 +159,70 @@ const TEST_ASSERT_SQL_PRIORITY_STATUS =
 const TEST_ASSERT_SQL_PRIORITY_TRANSITIONS =
   'priority SQL re-dispatch should persist the SENDING and CREATING ' +
   'transitions';
+const TEST_EXPECTED_WORKFLOW_STEP_PARAM_INDEX = 8;
+const TEST_PRIORITY_DISPATCH_TRANSITION_MUTATION_BUDGET_MS =
+  STAGE_SHARED.OPERATION_WORKFLOW_OWNER_SHARED
+    .REPLICA_OPERATION_DISPATCH_TIMEOUT_MS;
+const TEST_ASSERT_SQL_PRIORITY_CLAIM_NO_SESSION =
+  'priority SQL dispatch claim should bypass the routed system write session';
+const TEST_ASSERT_SQL_PRIORITY_CLAIM_SESSION_ABSENT =
+  'priority SQL dispatch claim should not create a routed session id';
+const TEST_ASSERT_SQL_PRIORITY_CLAIM_CAS =
+  'priority SQL dispatch claim should preserve the PENDING compare-and-set guard';
+const TEST_ASSERT_SQL_PRIORITY_CLAIM_BOUNDED_BUDGET =
+  'priority SQL dispatch claim should use a bounded per-attempt mutation budget';
+const TEST_ASSERT_SQL_PRIORITY_CREATING_BOUNDED_BUDGET =
+  'priority SQL dispatch progress should use a bounded per-attempt mutation ' +
+  'budget';
 const TEST_SQL_PRIORITY_STALE_VISIBILITY_REDISPATCH_TEST_NAME =
   'local-owner priority SQL dispatch publishes deferred transition visibility ' +
   'while authoritative reads lag';
+const TEST_SQL_PRIORITY_DEFERRED_CLAIM_DISPATCH_TEST_NAME =
+  'local-owner priority SQL dispatch proceeds when the SENDING claim is ' +
+  'retryably deferred';
+const TEST_SQL_PRIORITY_DEFERRED_PROGRESS_DISPATCH_TEST_NAME =
+  'local-owner priority SQL dispatch publishes deferred CREATING progress ' +
+  'after target delivery';
+const TEST_SQL_PRIORITY_PENDING_WAKE_ACTIVE_RECONCILE_TEST_NAME =
+  'local-owner priority SQL dispatch wake reconciles PENDING rows from active ' +
+  'target evidence';
+const TEST_SQL_PRIORITY_PENDING_WAKE_ACCEPTED_RECONCILE_TEST_NAME =
+  'local-owner priority SQL dispatch wake reconciles PENDING rows from ' +
+  'accepted target evidence';
 const TEST_ASSERT_SQL_PRIORITY_STALE_ROW =
   'the test must keep the authoritative SQL row stale to model lagging ' +
   'visibility';
 const TEST_ASSERT_SQL_PRIORITY_SNAPSHOT_STEP =
   'priority snapshot should consume the owner-persisted transition instead of ' +
   'reclassifying stale PENDING as dispatch-pending';
+const TEST_ASSERT_SQL_PRIORITY_DEFERRED_CLAIM_DISPATCH =
+  'retryable priority claim pressure should not block local target dispatch';
+const TEST_ASSERT_SQL_PRIORITY_DEFERRED_CLAIM_STEP =
+  'the next durable priority transition should advance directly to CREATING';
+const TEST_ASSERT_SQL_PRIORITY_DEFERRED_CLAIM_CAS =
+  'deferred local priority claims should preserve the original PENDING CAS';
+const TEST_ASSERT_SQL_PRIORITY_DEFERRED_PROGRESS_STALE_ROW =
+  'retryable priority progress pressure should leave the durable row stale';
+const TEST_ASSERT_SQL_PRIORITY_DEFERRED_PROGRESS_TIMER =
+  'retryable priority progress pressure should arm one durable retry';
+const TEST_ASSERT_SQL_PRIORITY_DEFERRED_PROGRESS_RETRY =
+  'retryable priority progress pressure should retry the durable transition';
+const TEST_ASSERT_SQL_PRIORITY_DEFERRED_PROGRESS_RETRY_STEP =
+  'retryable priority progress retry should persist CREATING durably';
+const TEST_ASSERT_SQL_PRIORITY_DEFERRED_PROGRESS_RETRY_STATUS =
+  'retryable priority progress retry should persist creating status durably';
+const TEST_ASSERT_SQL_PRIORITY_PENDING_WAKE_NO_CREATE =
+  'active target evidence should preempt duplicate create dispatch';
+const TEST_ASSERT_SQL_PRIORITY_PENDING_WAKE_SUCCESS =
+  'dispatch wake reconciliation should report owner progress';
+const TEST_ASSERT_SQL_PRIORITY_PENDING_WAKE_STEP =
+  'dispatch wake should reconcile the stale PENDING row to ACTIVE';
+const TEST_ASSERT_SQL_PRIORITY_PENDING_WAKE_STATUS =
+  'dispatch wake should persist the active status from target evidence';
+const TEST_ASSERT_SQL_PRIORITY_PENDING_WAKE_ACCEPTED_STEP =
+  'dispatch wake should reconcile accepted target evidence to CREATING';
+const TEST_ASSERT_SQL_PRIORITY_PENDING_WAKE_ACCEPTED_STATUS =
+  'dispatch wake should persist the creating status from accepted target evidence';
 const TEST_SNAPSHOT_REENTRY_TEST_NAME =
   'priority recovery snapshots re-enter stale SENDING pending dispatch-' +
   'pending workflow-timeout operations through the workflow owner';
@@ -196,7 +259,12 @@ const TEST_RETRY_SCHEDULED_REENTRY_TEST_NAME =
 const TEST_TRANSITION_RETRY_SNAPSHOT_REENTRY_TEST_NAME =
   'coordinator-created dispatch-pending transition retries preserve the ' +
   'operation snapshot for deferred visibility re-entry';
+const TEST_LOCAL_OWNER_REMOTE_HANDOFF_GUARD_TEST_NAME =
+  'local-owner coordinator-created transition retries do not arm remote ' +
+  'handoff retries';
 const TEST_DEFERRED_VISIBILITY_STATE = 'deferred_visibility';
+const TEST_DISTRIBUTED_PARTICIPANT_FAILURE =
+  'DISTRIBUTED_PARTICIPANT_FAILURE';
 const TEST_DISPATCH_SUCCESS = Object.freeze({
   success: true,
 });
@@ -207,6 +275,14 @@ const TEST_ASSERT_RETRY_SCHEDULED_REENTRY_TARGET =
   'retry-scheduled handoff re-entry should use the canonical dispatch ingress';
 const TEST_ASSERT_RETRY_SCHEDULED_REENTRY_TIMER =
   'retry-scheduled handoff re-entry should arm bounded handoff verification';
+const TEST_ASSERT_LOCAL_OWNER_HANDOFF_RETRY_CONSUMED =
+  'local-owner retryable pressure should stay consumed by transition retry';
+const TEST_ASSERT_LOCAL_OWNER_NO_HANDOFF_TIMER =
+  'local-owner transition retry should not schedule remote handoff timers';
+const TEST_ASSERT_LOCAL_OWNER_SCHEDULE_REJECTED =
+  'local-owner operations should reject direct remote handoff scheduling';
+const TEST_ASSERT_LOCAL_OWNER_TRANSITION_GRACE_REMAINS =
+  'local-owner transition retry grace should remain active';
 
 function buildDispatchPendingReentryPlanningSnapshot() {
   return Object.freeze({
@@ -512,6 +588,148 @@ async (t) => {
   }
 });
 
+test('dispatch transition retries preserve priority owner context after ' +
+  'the step timeout',
+async (t) => {
+  const deferredTimers = [];
+  const resumedDispatchOperations = [];
+  let claimAttempts = NUM.ZERO;
+  const originalDateNow = Date.now;
+  Date.now = () => TEST_CAPTURED_AT_MS;
+  const operationCreatedAt =
+    TEST_CAPTURED_AT_MS - TEST_STEP_TIMEOUT_MS - TEST_TIMEOUT_OVERRUN_MS;
+  const operation = {
+    operationId: TEST_OPERATION_ID,
+    type: TEST_OPERATION_TYPE_REPLACE,
+    partitionId: TEST_LOCAL_OWNER_PARTITION_ID,
+    entityType: TEST_ENTITY_TYPE_PARTITION,
+    entityId: TEST_LOCAL_OWNER_PARTITION_ID,
+    replicaId: TEST_LOCAL_OWNER_REPLICA_ID,
+    sourceNodeId: TEST_SOURCE_NODE_ID,
+    targetNodeId: TEST_TARGET_NODE_ID,
+    status: TEST_STATUS_PENDING,
+    workflowStep: TEST_STEP_PENDING,
+    createdAt: operationCreatedAt,
+    updatedAt: operationCreatedAt,
+    stepsHistory: [],
+  };
+  const coordinator = createCoordinator({
+    nodeId: TEST_TARGET_NODE_ID,
+    transactionCoordinator: buildTransactionCoordinator(),
+    systemTableCache: {
+      get() {
+        return TEST_EMPTY_VALUE;
+      },
+      getAll() {
+        return [];
+      },
+      filter() {
+        return [];
+      },
+    },
+    cdcIntegrationService: {
+      async waitForCacheUpdate() {},
+    },
+    controlPlaneReadinessService: {
+      getNodeReadinessSync(nodeId) {
+        return {
+          nodeId,
+          dimensions: {
+            controlPlaneRecoveryEligible: true,
+            repairEligible: true,
+            serveEligible: true,
+          },
+        };
+      },
+    },
+    tablePolicyService: {
+      async getPolicyForPartition() {
+        return {minReplicaCount: TEST_MIN_REPLICA_COUNT};
+      },
+    },
+    messageRouter: {
+      async deliver() {
+        return {
+          acknowledged: true,
+          status: TEST_DELIVERY_STATUS_INITIATED,
+        };
+      },
+    },
+    setTimeoutFn(fn, delayMs) {
+      const handle = {fn, delayMs};
+      deferredTimers.push(handle);
+      return handle;
+    },
+    clearTimeoutFn() {},
+    enableTimeouts: false,
+  });
+
+  coordinator.initialize();
+  coordinator.workflowOwner.repository.getOperationByIdVisibilityObservation =
+    async () => Object.freeze({
+      operation: TEST_EMPTY_VALUE,
+      deferredOutcome: Object.freeze({
+        state: TEST_DEFERRED_VISIBILITY_STATE,
+      }),
+    });
+  coordinator.workflowOwner.claimPendingDispatchOperation =
+    async (dispatchOperation) => {
+      claimAttempts += NUM.ONE;
+      if (claimAttempts === NUM.ONE) {
+        throw buildRetryableTransitionFailure();
+      }
+      return {
+        ...dispatchOperation,
+        status: TEST_STATUS_CREATING,
+        workflowStep: TEST_STEP_SENDING,
+      };
+    };
+  coordinator.workflowOwner.executeOperationInternal =
+    async (dispatchOperation) => {
+      resumedDispatchOperations.push(dispatchOperation);
+      return TEST_DISPATCH_SUCCESS;
+    };
+
+  try {
+    const dispatchResult =
+      await coordinator.workflowOwner.dispatchOperation(operation);
+
+    t.equal(
+      dispatchResult?.reason,
+      TEST_DEFERRED_RETRY_PENDING_REASON,
+      'retryable transition pressure should defer the dispatch path',
+    );
+    t.equal(
+      deferredTimers.length,
+      NUM.ONE,
+      'the transition failure should arm one retry timer',
+    );
+    t.equal(
+      coordinator.workflowOwner.hasActiveTransitionRetryGrace(
+        TEST_OPERATION_ID,
+      ),
+      true,
+      'priority control-plane dispatch retries should keep operation-budget grace after the step timeout',
+    );
+
+    await deferredTimers[NUM.ZERO].fn();
+
+    t.equal(
+      resumedDispatchOperations.length,
+      NUM.ONE,
+      'deferred transition retry should re-enter dispatch instead of timeout reconcile',
+    );
+    t.equal(
+      resumedDispatchOperations[NUM.ZERO]?.partitionId,
+      TEST_LOCAL_OWNER_PARTITION_ID,
+      'deferred retry dispatch should preserve the priority partition context',
+    );
+  } finally {
+    Date.now = originalDateNow;
+    await coordinator.shutdown();
+  }
+});
+
 test('checkTimeouts re-wakes restart-discovered remote-owned priority ' +
   'dispatch-pending PENDING rows while the operation budget is still active',
 async (t) => {
@@ -542,7 +760,7 @@ async (t) => {
   };
 
   const sqlQueryEngine = {
-    async executeQuery(sql, params = []) {
+    async executeQuery(sql, params = [], options = {}) {
       const normalizedSql = String(sql);
       if (normalizedSql.includes('FROM replica_operations')) {
         return {
@@ -995,7 +1213,7 @@ async (t) => {
   };
 
   const sqlQueryEngine = {
-    async executeQuery(sql, params = []) {
+    async executeQuery(sql, params = [], options = {}) {
       const normalizedSql = String(sql);
       if (normalizedSql.includes('FROM replica_operations')) {
         return {
@@ -1157,6 +1375,8 @@ async (t) => {
 
 test(TEST_SQL_PRIORITY_TIMEOUT_REDISPATCH_TEST_NAME, async (t) => {
   const deliveries = [];
+  const updateOptions = [];
+  const updateParams = [];
   let updateCount = 0;
   const nowMs = Date.now();
   const operationRow = buildPendingOperationRow({
@@ -1167,7 +1387,7 @@ test(TEST_SQL_PRIORITY_TIMEOUT_REDISPATCH_TEST_NAME, async (t) => {
   });
 
   const sqlQueryEngine = {
-    async executeQuery(sql, params = []) {
+    async executeQuery(sql, params = [], options = {}) {
       const normalizedSql = String(sql);
       if (normalizedSql.includes(TEST_QUERY_REPLICA_OPERATIONS_FRAGMENT)) {
         return {
@@ -1178,6 +1398,8 @@ test(TEST_SQL_PRIORITY_TIMEOUT_REDISPATCH_TEST_NAME, async (t) => {
       }
       if (normalizedSql.startsWith(TEST_UPDATE_REPLICA_OPERATIONS_PREFIX)) {
         updateCount += 1;
+        updateOptions.push({...options});
+        updateParams.push([...params]);
         operationRow.status = params[0];
         operationRow.workflow_step = params[1];
         operationRow.updated_at = params[2];
@@ -1330,12 +1552,211 @@ test(TEST_SQL_PRIORITY_TIMEOUT_REDISPATCH_TEST_NAME, async (t) => {
     2,
     TEST_ASSERT_SQL_PRIORITY_TRANSITIONS,
   );
+  t.equal(
+    updateOptions[NUM.ZERO]?.disableSystemWriteSession,
+    true,
+    TEST_ASSERT_SQL_PRIORITY_CLAIM_NO_SESSION,
+  );
+  t.equal(
+    Object.hasOwn(updateOptions[NUM.ZERO] || {}, 'sessionId'),
+    false,
+    TEST_ASSERT_SQL_PRIORITY_CLAIM_SESSION_ABSENT,
+  );
+  t.equal(
+    updateParams[NUM.ZERO]?.[TEST_EXPECTED_WORKFLOW_STEP_PARAM_INDEX],
+    TEST_STEP_PENDING,
+    TEST_ASSERT_SQL_PRIORITY_CLAIM_CAS,
+  );
+  t.equal(
+    updateOptions[NUM.ZERO]?.timeoutBudget?.configuredBudgetMs,
+    TEST_PRIORITY_DISPATCH_TRANSITION_MUTATION_BUDGET_MS,
+    TEST_ASSERT_SQL_PRIORITY_CLAIM_BOUNDED_BUDGET,
+  );
+  t.ok(
+    updateOptions[NUM.ZERO]?.timeoutMs <=
+      TEST_PRIORITY_DISPATCH_TRANSITION_MUTATION_BUDGET_MS &&
+      updateOptions[NUM.ZERO]?.timeoutMs > NUM.ZERO,
+    TEST_ASSERT_SQL_PRIORITY_CLAIM_BOUNDED_BUDGET,
+  );
+  t.equal(
+    updateOptions[NUM.ONE]?.timeoutBudget?.configuredBudgetMs,
+    TEST_PRIORITY_DISPATCH_TRANSITION_MUTATION_BUDGET_MS,
+    TEST_ASSERT_SQL_PRIORITY_CREATING_BOUNDED_BUDGET,
+  );
+  t.ok(
+    updateOptions[NUM.ONE]?.timeoutMs <=
+      TEST_PRIORITY_DISPATCH_TRANSITION_MUTATION_BUDGET_MS &&
+      updateOptions[NUM.ONE]?.timeoutMs > NUM.ZERO,
+    TEST_ASSERT_SQL_PRIORITY_CREATING_BOUNDED_BUDGET,
+  );
 
   await coordinator.shutdown();
 });
 
-test(TEST_SQL_PRIORITY_STALE_VISIBILITY_REDISPATCH_TEST_NAME, async (t) => {
+test(TEST_SQL_PRIORITY_DEFERRED_CLAIM_DISPATCH_TEST_NAME, async (t) => {
   const deliveries = [];
+  const updateParams = [];
+  let updateCount = 0;
+  const nowMs = Date.now();
+  const operationRow = buildPendingOperationRow({
+    operationId: TEST_SQL_PRIORITY_TIMEOUT_OPERATION_ID,
+    partitionId: TEST_PARTITION_ID,
+    replicaId: TEST_REPLICA_ID,
+    nowMs,
+  });
+
+  const sqlQueryEngine = {
+    async executeQuery(sql, params = []) {
+      const normalizedSql = String(sql);
+      if (normalizedSql.includes(TEST_QUERY_REPLICA_OPERATIONS_FRAGMENT)) {
+        return {
+          success: true,
+          rows: [{...operationRow}],
+          affectedRows: NUM.ONE,
+        };
+      }
+      if (normalizedSql.startsWith(TEST_UPDATE_REPLICA_OPERATIONS_PREFIX)) {
+        updateCount += NUM.ONE;
+        updateParams.push([...params]);
+        if (updateCount === NUM.ONE) {
+          return {
+            success: false,
+            error: TEST_DISTRIBUTED_PARTICIPANT_FAILURE,
+            errorCode: TEST_DISTRIBUTED_PARTICIPANT_FAILURE,
+            participantFailures: [
+              {
+                deferRetry: true,
+                retryAfterMs: TEST_RETRY_AFTER_MS,
+              },
+            ],
+            firstFailedParticipant: {
+              deferRetry: true,
+              retryAfterMs: TEST_RETRY_AFTER_MS,
+            },
+          };
+        }
+        operationRow.status = params[NUM.ZERO];
+        operationRow.workflow_step = params[NUM.ONE];
+        operationRow.updated_at = params[NUM.TWO];
+        operationRow.completed_at = params[NUM.THREE];
+        operationRow.error_message = params[NUM.FOUR];
+        operationRow.steps_history = params[NUM.FIVE];
+        operationRow.replica_id = params[NUM.SIX];
+        return {
+          success: true,
+          affectedRows: NUM.ONE,
+        };
+      }
+      if (normalizedSql.includes(TEST_QUERY_SERVICES_FRAGMENT)) {
+        return {
+          success: true,
+          rows: [],
+          affectedRows: NUM.ZERO,
+        };
+      }
+      return {
+        success: true,
+        rows: [],
+        affectedRows: NUM.ZERO,
+      };
+    },
+  };
+
+  const coordinator = createCoordinator({
+    nodeId: TEST_TARGET_NODE_ID,
+    replicaOperationDispatchTimeoutMs: TEST_HANDOFF_TIMEOUT_MS,
+    sqlQueryEngine,
+    transactionCoordinator: buildTransactionCoordinator(),
+    systemTableCache: {
+      get(tableName, key) {
+        if (tableName !== TEST_REPLICA_OPERATIONS_TABLE) {
+          return null;
+        }
+        return key === TEST_SQL_PRIORITY_TIMEOUT_OPERATION_ID ?
+          operationRow :
+          null;
+      },
+      getAll(tableName) {
+        if (tableName !== TEST_REPLICA_OPERATIONS_TABLE) {
+          return [];
+        }
+        return [operationRow];
+      },
+      filter(tableName, predicate) {
+        if (tableName !== TEST_REPLICA_OPERATIONS_TABLE) {
+          return [];
+        }
+        return [operationRow].filter(predicate);
+      },
+    },
+    cdcIntegrationService: {
+      async waitForCacheUpdate() {},
+    },
+    controlPlaneReadinessService: {
+      getNodeReadinessSync(nodeId) {
+        return {
+          nodeId,
+          dimensions: {
+            controlPlaneRecoveryEligible: true,
+            repairEligible: true,
+            serveEligible: true,
+          },
+        };
+      },
+    },
+    messageRouter: {
+      async deliver(target, payload, options) {
+        deliveries.push({target, payload, options});
+        return {acknowledged: true, status: TEST_DELIVERY_STATUS_INITIATED};
+      },
+    },
+    tablePolicyService: {
+      async getPolicyForPartition() {
+        return {minReplicaCount: TEST_MIN_REPLICA_COUNT};
+      },
+    },
+    enableTimeouts: false,
+  });
+
+  const pendingTimeoutMs = coordinator.getTimeoutForStep(
+    WORKFLOW_STEP.PENDING,
+    {partitionId: TEST_PARTITION_ID},
+  );
+  operationRow.created_at =
+    nowMs - pendingTimeoutMs - TEST_TIMEOUT_OVERRUN_MS;
+  operationRow.updated_at = operationRow.created_at;
+  operationRow.steps_history = JSON.stringify([{
+    step: TEST_STEP_PENDING,
+    timestamp: operationRow.updated_at - TEST_STEP_HISTORY_LAG_MS,
+  }]);
+
+  coordinator.initialize();
+
+  await coordinator.checkTimeouts();
+
+  t.equal(
+    deliveries.length,
+    NUM.ONE,
+    TEST_ASSERT_SQL_PRIORITY_DEFERRED_CLAIM_DISPATCH,
+  );
+  t.equal(
+    operationRow.workflow_step,
+    TEST_STEP_CREATING,
+    TEST_ASSERT_SQL_PRIORITY_DEFERRED_CLAIM_STEP,
+  );
+  t.equal(
+    updateParams[NUM.ONE]?.[TEST_EXPECTED_WORKFLOW_STEP_PARAM_INDEX],
+    TEST_STEP_PENDING,
+    TEST_ASSERT_SQL_PRIORITY_DEFERRED_CLAIM_CAS,
+  );
+
+  await coordinator.shutdown();
+});
+
+test(TEST_SQL_PRIORITY_DEFERRED_PROGRESS_DISPATCH_TEST_NAME, async (t) => {
+  const deliveries = [];
+  const deferredTimers = [];
+  const updateOptions = [];
   let updateCount = 0;
   const originalDateNow = Date.now;
   Date.now = () => TEST_CAPTURED_AT_MS;
@@ -1347,10 +1768,572 @@ test(TEST_SQL_PRIORITY_STALE_VISIBILITY_REDISPATCH_TEST_NAME, async (t) => {
   });
 
   const sqlQueryEngine = {
+    async executeQuery(sql, params = [], options = {}) {
+      const normalizedSql = String(sql);
+      if (normalizedSql.startsWith(TEST_UPDATE_REPLICA_OPERATIONS_PREFIX)) {
+        updateCount += NUM.ONE;
+        updateOptions.push({...options});
+        if (updateCount === NUM.ONE || updateCount === NUM.THREE) {
+          operationRow.status = params[NUM.ZERO];
+          operationRow.workflow_step = params[NUM.ONE];
+          operationRow.updated_at = params[NUM.TWO];
+          operationRow.completed_at = params[NUM.THREE];
+          operationRow.error_message = params[NUM.FOUR];
+          operationRow.steps_history = params[NUM.FIVE];
+          operationRow.replica_id = params[NUM.SIX];
+          return {
+            success: true,
+            affectedRows: NUM.ONE,
+          };
+        }
+        return {
+          success: false,
+          error: TEST_DISTRIBUTED_PARTICIPANT_FAILURE,
+          errorCode: TEST_DISTRIBUTED_PARTICIPANT_FAILURE,
+          participantFailures: [
+            {
+              deferRetry: true,
+              retryAfterMs: TEST_RETRY_AFTER_MS,
+            },
+          ],
+          firstFailedParticipant: {
+            deferRetry: true,
+            retryAfterMs: TEST_RETRY_AFTER_MS,
+          },
+        };
+      }
+      if (
+        normalizedSql.includes(TEST_QUERY_REPLICA_OPERATIONS_FRAGMENT) &&
+        normalizedSql.includes(TEST_QUERY_OPERATION_BY_ID_FRAGMENT)
+      ) {
+        const operationId = params[NUM.ZERO];
+        return {
+          success: true,
+          rows: operationId === TEST_SQL_PRIORITY_TIMEOUT_OPERATION_ID ?
+            [{...operationRow}] :
+            [],
+          affectedRows:
+            operationId === TEST_SQL_PRIORITY_TIMEOUT_OPERATION_ID ?
+              NUM.ONE :
+              NUM.ZERO,
+        };
+      }
+      if (normalizedSql.includes(TEST_QUERY_REPLICA_OPERATIONS_FRAGMENT)) {
+        return {
+          success: true,
+          rows: [{...operationRow}],
+          affectedRows: NUM.ONE,
+        };
+      }
+      if (normalizedSql.includes(TEST_QUERY_SERVICES_FRAGMENT)) {
+        return {
+          success: true,
+          rows: [],
+          affectedRows: NUM.ZERO,
+        };
+      }
+      return {
+        success: true,
+        rows: [],
+        affectedRows: NUM.ZERO,
+      };
+    },
+  };
+
+  const coordinator = createCoordinator({
+    nodeId: TEST_TARGET_NODE_ID,
+    replicaOperationDispatchTimeoutMs: TEST_HANDOFF_TIMEOUT_MS,
+    sqlQueryEngine,
+    transactionCoordinator: buildTransactionCoordinator(),
+    systemTableCache: {
+      get(tableName, key) {
+        if (tableName !== TEST_REPLICA_OPERATIONS_TABLE) {
+          return null;
+        }
+        return key === TEST_SQL_PRIORITY_TIMEOUT_OPERATION_ID ?
+          operationRow :
+          null;
+      },
+      getAll(tableName) {
+        if (tableName !== TEST_REPLICA_OPERATIONS_TABLE) {
+          return [];
+        }
+        return [operationRow];
+      },
+      filter(tableName, predicate) {
+        if (tableName !== TEST_REPLICA_OPERATIONS_TABLE) {
+          return [];
+        }
+        return [operationRow].filter(predicate);
+      },
+    },
+    cdcIntegrationService: {
+      async waitForCacheUpdate() {},
+    },
+    controlPlaneReadinessService: {
+      getPriorityRecoveryPlanningSnapshotBestEffort() {
+        return buildDispatchPendingReentryPlanningSnapshot();
+      },
+      getNodeReadinessSync(nodeId) {
+        return {
+          nodeId,
+          dimensions: {
+            controlPlaneRecoveryEligible: true,
+            repairEligible: true,
+            serveEligible: true,
+          },
+        };
+      },
+    },
+    messageRouter: {
+      async deliver(target, payload, options) {
+        deliveries.push({target, payload, options});
+        return {acknowledged: true, status: TEST_DELIVERY_STATUS_INITIATED};
+      },
+    },
+    tablePolicyService: {
+      async getPolicyForPartition() {
+        return {minReplicaCount: TEST_MIN_REPLICA_COUNT};
+      },
+    },
+    setTimeoutFn(fn, delayMs) {
+      const handle = {fn, delayMs};
+      deferredTimers.push(handle);
+      return handle;
+    },
+    clearTimeoutFn() {},
+    enableTimeouts: false,
+  });
+  coordinator.workflowOwner.repository
+    .replicaOperationAuthoritativeVisibilityTimeoutMs = NUM.ZERO;
+
+  const pendingTimeoutMs = coordinator.getTimeoutForStep(
+    WORKFLOW_STEP.PENDING,
+    {partitionId: TEST_PARTITION_ID},
+  );
+  operationRow.created_at =
+    TEST_CAPTURED_AT_MS - pendingTimeoutMs - TEST_TIMEOUT_OVERRUN_MS;
+  operationRow.updated_at = operationRow.created_at;
+  operationRow.steps_history = JSON.stringify([{
+    step: TEST_STEP_PENDING,
+    timestamp: operationRow.updated_at - TEST_STEP_HISTORY_LAG_MS,
+  }]);
+
+  try {
+    coordinator.initialize();
+
+    await coordinator.checkTimeouts();
+
+    const snapshot =
+      await coordinator.workflowOwner
+        .getPriorityRecoveryDecisionSnapshotForPartitionOperations(
+          TEST_PARTITION_ID,
+          TEST_EMPTY_LIST,
+        );
+
+    t.equal(
+      deliveries.length,
+      NUM.ONE,
+      TEST_ASSERT_SQL_PRIORITY_DISPATCH,
+    );
+    t.equal(
+      updateCount,
+      NUM.TWO,
+      TEST_ASSERT_SQL_PRIORITY_TRANSITIONS,
+    );
+    t.equal(
+      operationRow.workflow_step,
+      TEST_STEP_SENDING,
+      TEST_ASSERT_SQL_PRIORITY_DEFERRED_PROGRESS_STALE_ROW,
+    );
+    t.equal(
+      updateOptions[NUM.ONE]?.timeoutBudget?.configuredBudgetMs,
+      TEST_PRIORITY_DISPATCH_TRANSITION_MUTATION_BUDGET_MS,
+      TEST_ASSERT_SQL_PRIORITY_CREATING_BOUNDED_BUDGET,
+    );
+    t.equal(
+      snapshot?.coordinator?.operation?.workflowStep,
+      TEST_STEP_CREATING,
+      TEST_ASSERT_SQL_PRIORITY_SNAPSHOT_STEP,
+    );
+    t.equal(
+      deferredTimers.length,
+      NUM.ONE,
+      TEST_ASSERT_SQL_PRIORITY_DEFERRED_PROGRESS_TIMER,
+    );
+
+    await deferredTimers[NUM.ZERO].fn();
+
+    t.equal(
+      updateCount,
+      NUM.THREE,
+      TEST_ASSERT_SQL_PRIORITY_DEFERRED_PROGRESS_RETRY,
+    );
+    t.equal(
+      operationRow.workflow_step,
+      TEST_STEP_CREATING,
+      TEST_ASSERT_SQL_PRIORITY_DEFERRED_PROGRESS_RETRY_STEP,
+    );
+    t.equal(
+      operationRow.status,
+      TEST_STATUS_CREATING,
+      TEST_ASSERT_SQL_PRIORITY_DEFERRED_PROGRESS_RETRY_STATUS,
+    );
+  } finally {
+    Date.now = originalDateNow;
+    await coordinator.shutdown();
+  }
+});
+
+test(TEST_SQL_PRIORITY_PENDING_WAKE_ACTIVE_RECONCILE_TEST_NAME, async (t) => {
+  const deliveries = [];
+  let updateCount = NUM.ZERO;
+  const nowMs = Date.now();
+  const operationRow = buildPendingOperationRow({
+    operationId: TEST_SQL_PRIORITY_TIMEOUT_OPERATION_ID,
+    partitionId: TEST_LOCAL_OWNER_PARTITION_ID,
+    replicaId: TEST_LOCAL_OWNER_REPLICA_ID,
+    nowMs,
+  });
+  const serviceRow = {
+    service_id: TEST_LOCAL_OWNER_REPLICA_ID,
+    service_type: TEST_ENTITY_TYPE_PARTITION,
+    node_id: TEST_TARGET_NODE_ID,
+    partition_id: TEST_LOCAL_OWNER_PARTITION_ID,
+    group_id: TEST_EMPTY_VALUE,
+    replica_id: TEST_LOCAL_OWNER_REPLICA_ID,
+    raft_role: TEST_RAFT_ROLE_FOLLOWER,
+    status: TEST_STATUS_ACTIVE,
+    address: TEST_REPLICA_SERVICE_ADDRESS,
+    created_at: nowMs,
+    updated_at: nowMs,
+  };
+
+  const sqlQueryEngine = {
     async executeQuery(sql, params = []) {
       const normalizedSql = String(sql);
       if (normalizedSql.startsWith(TEST_UPDATE_REPLICA_OPERATIONS_PREFIX)) {
+        updateCount += NUM.ONE;
+        operationRow.status = params[NUM.ZERO];
+        operationRow.workflow_step = params[NUM.ONE];
+        operationRow.updated_at = params[NUM.TWO];
+        operationRow.completed_at = params[NUM.THREE];
+        operationRow.error_message = params[NUM.FOUR];
+        operationRow.steps_history = params[NUM.FIVE];
+        operationRow.replica_id = params[NUM.SIX];
+        return {
+          success: true,
+          affectedRows: NUM.ONE,
+        };
+      }
+      if (normalizedSql.includes(TEST_QUERY_REPLICA_OPERATIONS_FRAGMENT)) {
+        return {
+          success: true,
+          rows: [{...operationRow}],
+          affectedRows: NUM.ONE,
+        };
+      }
+      if (normalizedSql.includes(TEST_QUERY_SERVICES_FRAGMENT)) {
+        const requestedReplicaId = params[NUM.ZERO];
+        const requestedNodeId = params[NUM.ONE];
+        const serviceMatches =
+          requestedReplicaId === TEST_LOCAL_OWNER_REPLICA_ID ||
+          requestedNodeId === TEST_TARGET_NODE_ID;
+        return {
+          success: true,
+          rows: serviceMatches ? [{...serviceRow}] : [],
+          affectedRows: serviceMatches ? NUM.ONE : NUM.ZERO,
+        };
+      }
+      return {
+        success: true,
+        rows: [],
+        affectedRows: NUM.ZERO,
+      };
+    },
+  };
+
+  const coordinator = createCoordinator({
+    nodeId: TEST_TARGET_NODE_ID,
+    replicaOperationDispatchTimeoutMs: TEST_HANDOFF_TIMEOUT_MS,
+    sqlQueryEngine,
+    transactionCoordinator: buildTransactionCoordinator(),
+    systemTableCache: {
+      get(tableName, key) {
+        if (tableName !== TEST_REPLICA_OPERATIONS_TABLE) {
+          return TEST_EMPTY_VALUE;
+        }
+        return key === TEST_SQL_PRIORITY_TIMEOUT_OPERATION_ID ?
+          operationRow :
+          TEST_EMPTY_VALUE;
+      },
+      getAll(tableName) {
+        if (tableName !== TEST_REPLICA_OPERATIONS_TABLE) {
+          return [];
+        }
+        return [operationRow];
+      },
+      filter(tableName, predicate) {
+        if (tableName !== TEST_REPLICA_OPERATIONS_TABLE) {
+          return [];
+        }
+        return [operationRow].filter(predicate);
+      },
+    },
+    cdcIntegrationService: {
+      async waitForCacheUpdate() {},
+    },
+    controlPlaneReadinessService: {
+      getNodeReadinessSync(nodeId) {
+        return {
+          nodeId,
+          dimensions: {
+            controlPlaneRecoveryEligible: true,
+            repairEligible: true,
+            serveEligible: true,
+          },
+        };
+      },
+    },
+    messageRouter: {
+      async deliver(target, payload, options) {
+        deliveries.push({target, payload, options});
+        return {acknowledged: true, status: TEST_DELIVERY_STATUS_INITIATED};
+      },
+    },
+    tablePolicyService: {
+      async getPolicyForPartition() {
+        return {minReplicaCount: TEST_MIN_REPLICA_COUNT};
+      },
+    },
+    enableTimeouts: false,
+  });
+
+  try {
+    coordinator.initialize();
+    const pendingWakeOperation =
+      coordinator.repository.rowToOperation(operationRow);
+    const pendingWakeOptions = {
+      cause: TEST_REPLICA_OPERATION_DISPATCH_DELIVERY_SOURCE,
+    };
+
+    const dispatchResult = await coordinator.dispatchOperation(
+      pendingWakeOperation,
+      pendingWakeOptions,
+    );
+
+    t.equal(
+      dispatchResult?.success,
+      true,
+      TEST_ASSERT_SQL_PRIORITY_PENDING_WAKE_SUCCESS,
+    );
+    t.equal(
+      deliveries.length,
+      NUM.ZERO,
+      TEST_ASSERT_SQL_PRIORITY_PENDING_WAKE_NO_CREATE,
+    );
+    t.equal(
+      operationRow.workflow_step,
+      TEST_STEP_ACTIVE,
+      TEST_ASSERT_SQL_PRIORITY_PENDING_WAKE_STEP,
+    );
+    t.equal(
+      operationRow.status,
+      TEST_STATUS_ACTIVE,
+      TEST_ASSERT_SQL_PRIORITY_PENDING_WAKE_STATUS,
+    );
+    t.ok(updateCount >= NUM.ONE, TEST_ASSERT_SQL_PRIORITY_PENDING_WAKE_STEP);
+  } finally {
+    await coordinator.shutdown();
+  }
+});
+
+test(TEST_SQL_PRIORITY_PENDING_WAKE_ACCEPTED_RECONCILE_TEST_NAME,
+  async (t) => {
+    const deliveries = [];
+    let updateCount = NUM.ZERO;
+    const nowMs = Date.now();
+    const operationRow = buildPendingOperationRow({
+      operationId: TEST_SQL_PRIORITY_TIMEOUT_OPERATION_ID,
+      partitionId: TEST_LOCAL_OWNER_PARTITION_ID,
+      replicaId: TEST_LOCAL_OWNER_REPLICA_ID,
+      nowMs,
+    });
+    const serviceRow = {
+      service_id: TEST_LOCAL_OWNER_REPLICA_ID,
+      service_type: TEST_ENTITY_TYPE_PARTITION,
+      node_id: TEST_TARGET_NODE_ID,
+      partition_id: TEST_LOCAL_OWNER_PARTITION_ID,
+      group_id: TEST_EMPTY_VALUE,
+      replica_id: TEST_LOCAL_OWNER_REPLICA_ID,
+      raft_role: TEST_RAFT_ROLE_FOLLOWER,
+      status: TEST_STATUS_PENDING,
+      address: TEST_REPLICA_SERVICE_ADDRESS,
+      created_at: nowMs,
+      updated_at: nowMs,
+    };
+
+    const sqlQueryEngine = {
+      async executeQuery(sql, params = []) {
+        const normalizedSql = String(sql);
+        if (normalizedSql.startsWith(TEST_UPDATE_REPLICA_OPERATIONS_PREFIX)) {
+          updateCount += NUM.ONE;
+          operationRow.status = params[NUM.ZERO];
+          operationRow.workflow_step = params[NUM.ONE];
+          operationRow.updated_at = params[NUM.TWO];
+          operationRow.completed_at = params[NUM.THREE];
+          operationRow.error_message = params[NUM.FOUR];
+          operationRow.steps_history = params[NUM.FIVE];
+          operationRow.replica_id = params[NUM.SIX];
+          return {
+            success: true,
+            affectedRows: NUM.ONE,
+          };
+        }
+        if (normalizedSql.includes(TEST_QUERY_REPLICA_OPERATIONS_FRAGMENT)) {
+          return {
+            success: true,
+            rows: [{...operationRow}],
+            affectedRows: NUM.ONE,
+          };
+        }
+        if (normalizedSql.includes(TEST_QUERY_SERVICES_FRAGMENT)) {
+          const requestedReplicaId = params[NUM.ZERO];
+          const requestedNodeId = params[NUM.ONE];
+          const serviceMatches =
+            requestedReplicaId === TEST_LOCAL_OWNER_REPLICA_ID ||
+            requestedNodeId === TEST_TARGET_NODE_ID;
+          return {
+            success: true,
+            rows: serviceMatches ? [{...serviceRow}] : [],
+            affectedRows: serviceMatches ? NUM.ONE : NUM.ZERO,
+          };
+        }
+        return {
+          success: true,
+          rows: [],
+          affectedRows: NUM.ZERO,
+        };
+      },
+    };
+
+    const coordinator = createCoordinator({
+      nodeId: TEST_TARGET_NODE_ID,
+      replicaOperationDispatchTimeoutMs: TEST_HANDOFF_TIMEOUT_MS,
+      sqlQueryEngine,
+      transactionCoordinator: buildTransactionCoordinator(),
+      systemTableCache: {
+        get(tableName, key) {
+          if (tableName !== TEST_REPLICA_OPERATIONS_TABLE) {
+            return TEST_EMPTY_VALUE;
+          }
+          return key === TEST_SQL_PRIORITY_TIMEOUT_OPERATION_ID ?
+            operationRow :
+            TEST_EMPTY_VALUE;
+        },
+        getAll(tableName) {
+          if (tableName !== TEST_REPLICA_OPERATIONS_TABLE) {
+            return [];
+          }
+          return [operationRow];
+        },
+        filter(tableName, predicate) {
+          if (tableName !== TEST_REPLICA_OPERATIONS_TABLE) {
+            return [];
+          }
+          return [operationRow].filter(predicate);
+        },
+      },
+      cdcIntegrationService: {
+        async waitForCacheUpdate() {},
+      },
+      controlPlaneReadinessService: {
+        getNodeReadinessSync(nodeId) {
+          return {
+            nodeId,
+            dimensions: {
+              controlPlaneRecoveryEligible: true,
+              repairEligible: true,
+              serveEligible: true,
+            },
+          };
+        },
+      },
+      messageRouter: {
+        async deliver(target, payload, options) {
+          deliveries.push({target, payload, options});
+          return {acknowledged: true, status: TEST_DELIVERY_STATUS_INITIATED};
+        },
+      },
+      tablePolicyService: {
+        async getPolicyForPartition() {
+          return {minReplicaCount: TEST_MIN_REPLICA_COUNT};
+        },
+      },
+      enableTimeouts: false,
+    });
+
+    try {
+      coordinator.initialize();
+      const pendingWakeOperation =
+        coordinator.repository.rowToOperation(operationRow);
+      const pendingWakeOptions = {
+        cause: TEST_REPLICA_OPERATION_DISPATCH_DELIVERY_SOURCE,
+      };
+
+      const dispatchResult = await coordinator.dispatchOperation(
+        pendingWakeOperation,
+        pendingWakeOptions,
+      );
+
+      t.equal(
+        dispatchResult?.success,
+        true,
+        TEST_ASSERT_SQL_PRIORITY_PENDING_WAKE_SUCCESS,
+      );
+      t.equal(
+        deliveries.length,
+        NUM.ZERO,
+        TEST_ASSERT_SQL_PRIORITY_PENDING_WAKE_NO_CREATE,
+      );
+      t.equal(
+        operationRow.workflow_step,
+        TEST_STEP_CREATING,
+        TEST_ASSERT_SQL_PRIORITY_PENDING_WAKE_ACCEPTED_STEP,
+      );
+      t.equal(
+        operationRow.status,
+        TEST_STATUS_CREATING,
+        TEST_ASSERT_SQL_PRIORITY_PENDING_WAKE_ACCEPTED_STATUS,
+      );
+      t.ok(
+        updateCount >= NUM.ONE,
+        TEST_ASSERT_SQL_PRIORITY_PENDING_WAKE_ACCEPTED_STEP,
+      );
+    } finally {
+      await coordinator.shutdown();
+    }
+  });
+
+test(TEST_SQL_PRIORITY_STALE_VISIBILITY_REDISPATCH_TEST_NAME, async (t) => {
+  const deliveries = [];
+  const updateOptions = [];
+  let updateCount = 0;
+  const originalDateNow = Date.now;
+  Date.now = () => TEST_CAPTURED_AT_MS;
+  const operationRow = buildPendingOperationRow({
+    operationId: TEST_SQL_PRIORITY_TIMEOUT_OPERATION_ID,
+    partitionId: TEST_PARTITION_ID,
+    replicaId: TEST_REPLICA_ID,
+    nowMs: TEST_CAPTURED_AT_MS,
+  });
+
+  const sqlQueryEngine = {
+    async executeQuery(sql, params = [], options = {}) {
+      const normalizedSql = String(sql);
+      if (normalizedSql.startsWith(TEST_UPDATE_REPLICA_OPERATIONS_PREFIX)) {
         updateCount += 1;
+        updateOptions.push({...options});
         if (updateCount === NUM.ONE) {
           operationRow.status = params[NUM.ZERO];
           operationRow.workflow_step = params[NUM.ONE];
@@ -1502,6 +2485,17 @@ test(TEST_SQL_PRIORITY_STALE_VISIBILITY_REDISPATCH_TEST_NAME, async (t) => {
       operationRow.workflow_step,
       TEST_STEP_SENDING,
       TEST_ASSERT_SQL_PRIORITY_STALE_ROW,
+    );
+    t.equal(
+      updateOptions[NUM.ZERO]?.timeoutBudget?.configuredBudgetMs,
+      TEST_PRIORITY_DISPATCH_TRANSITION_MUTATION_BUDGET_MS,
+      TEST_ASSERT_SQL_PRIORITY_CLAIM_BOUNDED_BUDGET,
+    );
+    t.ok(
+      updateOptions[NUM.ZERO]?.timeoutMs <=
+        TEST_PRIORITY_DISPATCH_TRANSITION_MUTATION_BUDGET_MS &&
+        updateOptions[NUM.ZERO]?.timeoutMs > NUM.ZERO,
+      TEST_ASSERT_SQL_PRIORITY_CLAIM_BOUNDED_BUDGET,
     );
     t.equal(
       snapshot?.coordinator?.operation?.workflowStep,
@@ -2553,6 +3547,136 @@ async (t) => {
     );
   } finally {
     Date.now = originalDateNow;
+    await coordinator.shutdown();
+  }
+});
+
+test(TEST_LOCAL_OWNER_REMOTE_HANDOFF_GUARD_TEST_NAME, async (t) => {
+  const deferredTimers = [];
+  const nowMs = Date.now();
+  const operationRow = {
+    operation_id: TEST_OPERATION_ID,
+    type: TEST_OPERATION_TYPE_REPLACE,
+    partition_id: TEST_LOCAL_OWNER_PARTITION_ID,
+    replica_id: TEST_LOCAL_OWNER_REPLICA_ID,
+    source_node_id: TEST_SOURCE_NODE_ID,
+    target_node_id: TEST_TARGET_NODE_ID,
+    status: TEST_STATUS_PENDING,
+    workflow_step: TEST_STEP_SENDING,
+    created_at: nowMs,
+    updated_at: nowMs,
+    completed_at: TEST_EMPTY_VALUE,
+    error_message: TEST_EMPTY_VALUE,
+    steps_history: JSON.stringify([{
+      step: TEST_STEP_SENDING,
+      timestamp: nowMs - TEST_STEP_HISTORY_LAG_MS,
+    }]),
+    entity_type: TEST_ENTITY_TYPE_PARTITION,
+    entity_id: TEST_LOCAL_OWNER_PARTITION_ID,
+  };
+
+  const coordinator = createCoordinator({
+    nodeId: TEST_TARGET_NODE_ID,
+    transactionCoordinator: buildTransactionCoordinator(),
+    systemTableCache: {
+      get() {
+        return operationRow;
+      },
+      getAll() {
+        return [operationRow];
+      },
+      filter(_tableName, predicate) {
+        return [operationRow].filter(predicate);
+      },
+    },
+    cdcIntegrationService: {
+      async waitForCacheUpdate() {},
+    },
+    controlPlaneReadinessService: {
+      getNodeReadinessSync(nodeId) {
+        return {
+          nodeId,
+          dimensions: {
+            controlPlaneRecoveryEligible: true,
+            repairEligible: true,
+            serveEligible: true,
+          },
+        };
+      },
+    },
+    tablePolicyService: {
+      async getPolicyForPartition() {
+        return {minReplicaCount: TEST_MIN_REPLICA_COUNT};
+      },
+    },
+    messageRouter: {
+      async deliver() {
+        return {acknowledged: true, status: TEST_DELIVERY_STATUS_INITIATED};
+      },
+    },
+    setTimeoutFn(fn, delayMs) {
+      const handle = {fn, delayMs};
+      deferredTimers.push(handle);
+      return handle;
+    },
+    clearTimeoutFn() {},
+    enableTimeouts: false,
+  });
+
+  try {
+    coordinator.initialize();
+    const operation = coordinator.repository.rowToOperation(operationRow);
+    coordinator.workflowOwner.recordTransitionRetryGrace(
+      TEST_OPERATION_ID,
+      {
+        boundary: TEST_REPLICA_OPERATION_DISPATCH_DELIVERY_SOURCE,
+        partitionId: TEST_LOCAL_OWNER_PARTITION_ID,
+        workflowStep: TEST_STEP_SENDING,
+        updatedAt: operationRow.updated_at,
+        createdAt: operationRow.created_at,
+      },
+      TEST_RETRY_AFTER_MS,
+    );
+
+    t.equal(
+      coordinator.workflowOwner.deferCoordinatorCreatedRemoteHandoffRetry(
+        operation,
+        {
+          deferRetry: true,
+          retryAfterMs: TEST_RETRY_AFTER_MS,
+          error: TEST_RETRYABLE_HANDOFF_ERROR,
+        },
+      ),
+      true,
+      TEST_ASSERT_LOCAL_OWNER_HANDOFF_RETRY_CONSUMED,
+    );
+    t.equal(
+      coordinator.workflowOwner.createdOperationHandoffRetryTimerByOperationId
+        .size,
+      NUM.ZERO,
+      TEST_ASSERT_LOCAL_OWNER_NO_HANDOFF_TIMER,
+    );
+    t.equal(
+      deferredTimers.length,
+      NUM.ZERO,
+      TEST_ASSERT_LOCAL_OWNER_NO_HANDOFF_TIMER,
+    );
+    t.equal(
+      coordinator.workflowOwner.scheduleCoordinatorCreatedRemoteHandoffFollowUp(
+        operation,
+        TEST_RETRY_AFTER_MS,
+      ),
+      false,
+      TEST_ASSERT_LOCAL_OWNER_SCHEDULE_REJECTED,
+    );
+    t.equal(
+      coordinator.workflowOwner.hasActiveTransitionRetryGrace(
+        TEST_OPERATION_ID,
+      ),
+      true,
+      TEST_ASSERT_LOCAL_OWNER_TRANSITION_GRACE_REMAINS,
+    );
+  } finally {
     await coordinator.shutdown();
   }
 });

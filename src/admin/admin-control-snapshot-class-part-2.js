@@ -66,16 +66,14 @@ const CONTROL_SNAPSHOT_PUBLICATION_READ_REPAIR_ERROR_FRAGMENTS = Object.freeze([
   'partition_service_not_found',
   'partition service not found',
 ]);
-const CONTROL_SNAPSHOT_PUBLICATION_OWNER_CATCHUP_OPTIONS = Object.freeze({
-  preferAuthoritativePublicationRead: true,
-});
 const CONTROL_SNAPSHOT_CONTROL_PLANE_DIAGNOSTICS_FIELD =
   'controlPlaneDiagnostics';
-/**
- * Normalize one arbitrary value to a non-negative integer.
- * @param {*} value
- * @return {number}
- */
+const CONTROL_SNAPSHOT_PUBLICATION_CONVERGENCE_FIELD =
+  'publicationConvergence';
+const CONTROL_SNAPSHOT_ACTIVE_GATE_OWNER_COHORT_FIELD =
+  'activeGateOwnerCohort';
+const CONTROL_SNAPSHOT_MEMBERSHIP_PUBLICATION_HANDOFF_OUTCOME_FIELD =
+  'membershipPublicationHandoffOutcome';
 function hasOnlyLeaderResolutionGapRepairCause(repair = null) {
   const causeChain = Array.isArray(repair?.causeChain) ?
     repair.causeChain.filter(
@@ -153,17 +151,64 @@ function attachAuthoritativeRepairDiagnostics(snapshot, options = {}) {
   };
   return snapshot;
 }
-function hasPublicationOwnerCatchupSignal(snapshot = null) {
+function attachMembershipPublicationHandoffOutcome(snapshot, outcome) {
+  if (
+    !snapshot ||
+    typeof snapshot !== TYPEOF.OBJECT ||
+    !outcome ||
+    typeof outcome !== TYPEOF.OBJECT
+  ) {
+    return snapshot;
+  }
   const controlPlaneDiagnostics =
-    snapshot?.[CONTROL_SNAPSHOT_CONTROL_PLANE_DIAGNOSTICS_FIELD];
-  return hasPublicationActiveGateOwnerReconcileSignal(
-    controlPlaneDiagnostics,
-  );
-}
-function selectPublicationOwnerCatchupHandoff(snapshot = null) {
-  const controlPlaneDiagnostics =
-    snapshot?.[CONTROL_SNAPSHOT_CONTROL_PLANE_DIAGNOSTICS_FIELD];
-  return selectPublicationActiveGateHandoffContract(controlPlaneDiagnostics);
+    snapshot[CONTROL_SNAPSHOT_CONTROL_PLANE_DIAGNOSTICS_FIELD] &&
+      typeof snapshot[CONTROL_SNAPSHOT_CONTROL_PLANE_DIAGNOSTICS_FIELD] ===
+        TYPEOF.OBJECT ?
+      snapshot[CONTROL_SNAPSHOT_CONTROL_PLANE_DIAGNOSTICS_FIELD] :
+      {};
+  const activeGateOwnerCohort =
+    controlPlaneDiagnostics[CONTROL_SNAPSHOT_ACTIVE_GATE_OWNER_COHORT_FIELD] &&
+      typeof controlPlaneDiagnostics[
+        CONTROL_SNAPSHOT_ACTIVE_GATE_OWNER_COHORT_FIELD
+      ] === TYPEOF.OBJECT ?
+      controlPlaneDiagnostics[
+        CONTROL_SNAPSHOT_ACTIVE_GATE_OWNER_COHORT_FIELD
+      ] :
+      {};
+  const publicationConvergence =
+    controlPlaneDiagnostics[CONTROL_SNAPSHOT_PUBLICATION_CONVERGENCE_FIELD] &&
+      typeof controlPlaneDiagnostics[
+        CONTROL_SNAPSHOT_PUBLICATION_CONVERGENCE_FIELD
+      ] === TYPEOF.OBJECT &&
+      !Array.isArray(
+        controlPlaneDiagnostics[
+          CONTROL_SNAPSHOT_PUBLICATION_CONVERGENCE_FIELD
+        ],
+      ) ?
+      controlPlaneDiagnostics[
+        CONTROL_SNAPSHOT_PUBLICATION_CONVERGENCE_FIELD
+      ] :
+      null;
+  snapshot[CONTROL_SNAPSHOT_CONTROL_PLANE_DIAGNOSTICS_FIELD] = {
+    ...controlPlaneDiagnostics,
+    [CONTROL_SNAPSHOT_MEMBERSHIP_PUBLICATION_HANDOFF_OUTCOME_FIELD]:
+      outcome,
+    ...(publicationConvergence ?
+      {
+        [CONTROL_SNAPSHOT_PUBLICATION_CONVERGENCE_FIELD]: {
+          ...publicationConvergence,
+          [CONTROL_SNAPSHOT_MEMBERSHIP_PUBLICATION_HANDOFF_OUTCOME_FIELD]:
+            outcome,
+        },
+      } :
+      {}),
+    [CONTROL_SNAPSHOT_ACTIVE_GATE_OWNER_COHORT_FIELD]: {
+      ...activeGateOwnerCohort,
+      [CONTROL_SNAPSHOT_MEMBERSHIP_PUBLICATION_HANDOFF_OUTCOME_FIELD]:
+        outcome,
+    },
+  };
+  return snapshot;
 }
 // ── AdminControlSnapshot class ──────────────────────────────────────────────
 /**
@@ -173,6 +218,50 @@ function selectPublicationOwnerCatchupHandoff(snapshot = null) {
  * as functions so this module has no back-reference to AdminWebSocketAPI.
  */
 class AdminControlSnapshotPart2 extends AdminControlSnapshotPart1 {
+  async triggerMembershipPublicationHandoffOwnerCommand(
+    snapshot = null,
+    options = {},
+  ) {
+    const controlPlaneDiagnostics =
+      snapshot?.[CONTROL_SNAPSHOT_CONTROL_PLANE_DIAGNOSTICS_FIELD];
+    if (
+      hasPublicationActiveGateOwnerReconcileSignal(
+        controlPlaneDiagnostics,
+      ) !== true ||
+      typeof this.reconcileAuthoritativeMembershipPublicationFromHandoff !==
+        TYPEOF.FUNCTION
+    ) {
+      return snapshot;
+    }
+    const publicationActiveGateHandoff =
+      selectPublicationActiveGateHandoffContract(controlPlaneDiagnostics) ||
+      controlPlaneDiagnostics;
+    try {
+      const outcome =
+        await this.reconcileAuthoritativeMembershipPublicationFromHandoff(
+          publicationActiveGateHandoff,
+          {
+            ...options,
+            reconcileAuthoritativeMembershipPublication: true,
+          },
+        );
+      return attachMembershipPublicationHandoffOutcome(snapshot, outcome);
+    } catch (_error) {
+      const failureOutcome =
+        typeof this.buildMembershipPublicationHandoffOwnerCommandErrorOutcome ===
+          TYPEOF.FUNCTION ?
+          this.buildMembershipPublicationHandoffOwnerCommandErrorOutcome(
+            _error,
+            publicationActiveGateHandoff,
+          ) :
+          null;
+      return attachMembershipPublicationHandoffOutcome(
+        snapshot,
+        failureOutcome,
+      );
+    }
+  }
+
   /**
    * Resolve one local control snapshot with optional authoritative
    * cache repair when partition topology appears incomplete.
@@ -239,7 +328,12 @@ class AdminControlSnapshotPart2 extends AdminControlSnapshotPart1 {
     const repairEvaluation =
       this.evaluateAuthoritativeControlSnapshotRepair(snapshot);
     if (!this.canRunAuthoritativeControlSnapshotRepair()) {
-      return this.resolveSharedControlSnapshot(snapshot, options);
+      const triggeredSnapshot =
+        await this.triggerMembershipPublicationHandoffOwnerCommand(
+          snapshot,
+          options,
+        );
+      return this.resolveSharedControlSnapshot(triggeredSnapshot, options);
     }
     if (
       forceAuthoritativeRepair !== true &&
@@ -249,15 +343,13 @@ class AdminControlSnapshotPart2 extends AdminControlSnapshotPart1 {
         allowAuthoritativeRepair,
       })
     ) {
-      const catchupSnapshot =
-        repairEvaluation?.shouldRepair === true ?
-          await this.rebuildControlSnapshotWithPublicationOwnerCatchup(
-            snapshot,
-            options,
-          ) :
-          snapshot;
+      const triggeredSnapshot =
+        await this.triggerMembershipPublicationHandoffOwnerCommand(
+          snapshot,
+          options,
+        );
       return this.resolveSharedControlSnapshot(
-        catchupSnapshot,
+        triggeredSnapshot,
         repairEvaluation?.shouldRepair === true ?
           {
             ...options,
@@ -283,12 +375,12 @@ class AdminControlSnapshotPart2 extends AdminControlSnapshotPart1 {
       });
     } catch (error) {
       if (canDegradeRepairFailure) {
-        const catchupSnapshot =
-          await this.rebuildControlSnapshotWithPublicationOwnerCatchup(
+        const triggeredSnapshot =
+          await this.triggerMembershipPublicationHandoffOwnerCommand(
             snapshot,
             options,
           );
-        return this.resolveSharedControlSnapshot(catchupSnapshot, {
+        return this.resolveSharedControlSnapshot(triggeredSnapshot, {
           ...options,
           observationMode:
             ADMIN_CONTROL_SNAPSHOT_OBSERVATION_MODE.REPAIR_DEFERRED,
@@ -312,12 +404,12 @@ class AdminControlSnapshotPart2 extends AdminControlSnapshotPart1 {
           repair,
         });
       if (canDegradeUnappliedRepair) {
-        const catchupSnapshot =
-          await this.rebuildControlSnapshotWithPublicationOwnerCatchup(
+        const triggeredSnapshot =
+          await this.triggerMembershipPublicationHandoffOwnerCommand(
             snapshot,
             options,
           );
-        return this.resolveSharedControlSnapshot(catchupSnapshot, {
+        return this.resolveSharedControlSnapshot(triggeredSnapshot, {
           ...options,
           observationMode:
             ADMIN_CONTROL_SNAPSHOT_OBSERVATION_MODE.REPAIR_DEFERRED,
@@ -358,36 +450,6 @@ class AdminControlSnapshotPart2 extends AdminControlSnapshotPart1 {
         repairEvaluation: repairedEvaluation,
       },
     );
-  }
-  async rebuildControlSnapshotWithPublicationOwnerCatchup(
-    snapshot,
-    options = {},
-  ) {
-    if (hasPublicationOwnerCatchupSignal(snapshot) !== true) {
-      return snapshot;
-    }
-    const publicationActiveGateHandoff =
-      selectPublicationOwnerCatchupHandoff(snapshot);
-    try {
-      if (
-        typeof this.reconcileAuthoritativeMembershipPublicationFromHandoff ===
-        TYPEOF.FUNCTION
-      ) {
-        await this.reconcileAuthoritativeMembershipPublicationFromHandoff(
-          publicationActiveGateHandoff,
-          options,
-        );
-      }
-      return await this.buildLocalControlSnapshot({
-        ...options,
-        preferAuthoritativePublicationRead:
-          CONTROL_SNAPSHOT_PUBLICATION_OWNER_CATCHUP_OPTIONS
-            .preferAuthoritativePublicationRead,
-        publicationActiveGateHandoff,
-      });
-    } catch (_error) {
-      return snapshot;
-    }
   }
   canDegradeAuthoritativeControlSnapshotRepairFailure(options = {}) {
     if (

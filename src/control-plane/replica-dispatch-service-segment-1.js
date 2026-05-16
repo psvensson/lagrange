@@ -722,7 +722,10 @@ class ReplicaDispatchServiceSegment1 extends EventEmitter {
         },
       );
       if (isDeliveredTransportDeliveryOutcome(deliveryOutcome)) {
-        this.clearDeferredOperationDispatchRetry(operation.operationId);
+        this.scheduleRemoteDispatchWakeupVerification(
+          operation.operationId,
+          operationRow,
+        );
         return true;
       }
       this.deferOperationDispatchRetry(

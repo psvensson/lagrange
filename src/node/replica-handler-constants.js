@@ -30,6 +30,10 @@ const REPLICA_HANDLER_LOG_MSG = Object.freeze({
   CREATE_MISSING_FIELDS: 'CREATE_REPLICA missing required fields',
   CREATE_ALREADY_ACTIVE: 'Replica already exists in active state',
   CREATE_IN_PROGRESS: 'Replica creation already in progress',
+  CREATE_RESTARTING_PENDING:
+    'Restarting pending replica creation without live local task',
+  CREATE_STATUS_WRITE_DEFERRED:
+    'Replica create status write deferred after retryable control-plane failure',
   WAITING_METADATA_PROPAGATION:
     'Waiting for partition/table metadata propagation before replica creation',
   HYDRATED_METADATA_FROM_QUERY:

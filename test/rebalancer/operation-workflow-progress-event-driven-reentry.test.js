@@ -16,6 +16,7 @@ import {
 } from '../../src/control-plane/priority-recovery-diagnostics-constants.js';
 import {
   PRIORITY_RECOVERY_TARGET_SERVICE_TERMINAL_STATE,
+  PRIORITY_RECOVERY_TARGET_VISIBILITY_STATE,
 } from '../../src/control-plane/priority-recovery-snapshot-stage-shared.js';
 import {
   OPERATION_WORKFLOW_EFFECT_COMMAND_VALUES,
@@ -71,6 +72,8 @@ const TEST_CACHE_EVENT_REENTRY_TEST_NAME =
   'workflow progress';
 const TEST_TARGET_PROGRESS_REENTRY_TEST_NAME =
   'target-service terminal progress snapshots re-enter workflow progress';
+const TEST_DISPATCH_PENDING_TARGET_PROGRESS_REENTRY_TEST_NAME =
+  'dispatch-pending active target progress snapshots re-enter workflow progress';
 const TEST_LOCAL_INITIALIZATION_RETRY_TEST_NAME =
   'locally owned coordinator-created priority PENDING rows retry after ' +
   'workflow owner initialization';
@@ -91,6 +94,9 @@ const TEST_ASSERT_TARGET_PROGRESS_REENTRY =
   'target terminal progress should re-enter the observed-progress owner lane';
 const TEST_ASSERT_TARGET_PROGRESS_PHASE =
   'target terminal progress fixture should preserve target creation phase';
+const TEST_ASSERT_DISPATCH_PENDING_TARGET_PROGRESS_REENTRY =
+  'dispatch-pending active target progress should re-enter the ' +
+  'observed-progress owner lane';
 const TEST_ASSERT_LOCAL_INITIALIZATION_RETRY_TIMER =
   'local uninitialized owner arms one bounded transition retry';
 const TEST_ASSERT_LOCAL_INITIALIZATION_RETRY_NO_DELIVERY =
@@ -803,6 +809,80 @@ test(TEST_TARGET_PROGRESS_REENTRY_TEST_NAME, async (t) => {
       observedProgressOperationIds,
       [operation.operationId],
       TEST_ASSERT_TARGET_PROGRESS_REENTRY,
+    );
+  } finally {
+    Date.now = originalDateNow;
+    await coordinator.shutdown();
+  }
+});
+
+test(TEST_DISPATCH_PENDING_TARGET_PROGRESS_REENTRY_TEST_NAME, async (t) => {
+  const deliveries = [];
+  const deferredTimers = [];
+  const observedProgressOperationIds = [];
+  const operation = buildEventDrivenOperation({
+    status: ReplicaStatus.PENDING,
+    workflowStep: WORKFLOW_STEP.PENDING,
+    targetNodeId: TEST_OBSERVER_NODE_ID,
+  });
+  const operationWithTargetProgress = Object.freeze({
+    ...operation,
+    targetVisibilityState:
+      PRIORITY_RECOVERY_TARGET_VISIBILITY_STATE.ACTIVE_OPERATIONAL,
+    targetServiceTerminalState:
+      PRIORITY_RECOVERY_TARGET_SERVICE_TERMINAL_STATE.NON_TERMINAL,
+  });
+  const operationRow = buildEventDrivenOperationRow({
+    status: ReplicaStatus.PENDING,
+    workflow_step: WORKFLOW_STEP.PENDING,
+    target_node_id: TEST_OBSERVER_NODE_ID,
+  });
+  const coordinator = createEventDrivenCoordinator(
+    deliveries,
+    deferredTimers,
+    operationRow,
+    {
+      workflowStep: WORKFLOW_STEP.PENDING,
+      latestOperationStatus: ReplicaStatus.PENDING,
+      workflowProgressPhaseId:
+        PRIORITY_RECOVERY_WORKFLOW_PROGRESS_PHASE.DISPATCH_PENDING,
+      nextRequiredAction:
+        PRIORITY_RECOVERY_NEXT_REQUIRED_ACTION.WAIT_FOR_OPERATION_PROGRESS,
+      coordinatorOperation: operationWithTargetProgress,
+    },
+  );
+  const originalDateNow = Date.now;
+  Date.now = () => TEST_CAPTURED_AT_MS;
+
+  try {
+    coordinator.initialize();
+    coordinator.workflowOwner.reconcileObservedProgressOperation =
+      async (operationId) => {
+        observedProgressOperationIds.push(operationId);
+        return true;
+      };
+
+    coordinator.workflowOwner.buildPriorityRecoveryDecisionSnapshotForOperations(
+      operation.partitionId,
+      [operationWithTargetProgress],
+      buildEventDrivenPlanningSnapshot({
+        workflowStep: WORKFLOW_STEP.PENDING,
+        latestOperationStatus: ReplicaStatus.PENDING,
+        workflowProgressPhaseId:
+          PRIORITY_RECOVERY_WORKFLOW_PROGRESS_PHASE.DISPATCH_PENDING,
+        nextRequiredAction:
+          PRIORITY_RECOVERY_NEXT_REQUIRED_ACTION.WAIT_FOR_OPERATION_PROGRESS,
+        coordinatorOperation: operationWithTargetProgress,
+      }),
+    );
+    await new Promise((resolve) => {
+      setTimeout(resolve, NUM.ZERO);
+    });
+
+    t.same(
+      observedProgressOperationIds,
+      [operation.operationId],
+      TEST_ASSERT_DISPATCH_PENDING_TARGET_PROGRESS_REENTRY,
     );
   } finally {
     Date.now = originalDateNow;

@@ -117,6 +117,68 @@ const COORDINATOR_CREATED_OPERATION_ARM_ACTION_BY_STATE = Object.freeze(
   ]),
 );
 
+const COORDINATOR_CREATED_REMOTE_HANDOFF_RETRY_STATE = Object.freeze({
+  INELIGIBLE: 'ineligible',
+  LOCAL_TRANSITION_RETRY_ACTIVE: 'local_transition_retry_active',
+  LOCAL_OWNER: 'local_owner',
+  ACTIVE_HANDOFF_RETRY: 'active_handoff_retry',
+  SCHEDULE_REMOTE_HANDOFF: 'schedule_remote_handoff',
+});
+
+const COORDINATOR_CREATED_REMOTE_HANDOFF_RETRY_ACTION = Object.freeze({
+  REJECT: 'reject',
+  ACCEPT_EXISTING: 'accept_existing',
+  SCHEDULE: 'schedule',
+});
+
+const COORDINATOR_CREATED_REMOTE_HANDOFF_RETRY_ACTION_BY_STATE =
+  Object.freeze(new Map([
+    [
+      COORDINATOR_CREATED_REMOTE_HANDOFF_RETRY_STATE
+        .LOCAL_TRANSITION_RETRY_ACTIVE,
+      COORDINATOR_CREATED_REMOTE_HANDOFF_RETRY_ACTION.ACCEPT_EXISTING,
+    ],
+    [
+      COORDINATOR_CREATED_REMOTE_HANDOFF_RETRY_STATE.ACTIVE_HANDOFF_RETRY,
+      COORDINATOR_CREATED_REMOTE_HANDOFF_RETRY_ACTION.ACCEPT_EXISTING,
+    ],
+    [
+      COORDINATOR_CREATED_REMOTE_HANDOFF_RETRY_STATE.SCHEDULE_REMOTE_HANDOFF,
+      COORDINATOR_CREATED_REMOTE_HANDOFF_RETRY_ACTION.SCHEDULE,
+    ],
+  ]));
+
+const COORDINATOR_CREATED_REMOTE_HANDOFF_RETRY_STATE_TABLE = Object.freeze([
+  Object.freeze({
+    state: COORDINATOR_CREATED_REMOTE_HANDOFF_RETRY_STATE.INELIGIBLE,
+    matches: (evidence) =>
+      evidence.operationAvailable !== true ||
+      evidence.remoteHandoffEligible !== true ||
+      evidence.retryableControlPlaneError !== true,
+  }),
+  Object.freeze({
+    state:
+      COORDINATOR_CREATED_REMOTE_HANDOFF_RETRY_STATE
+        .LOCAL_TRANSITION_RETRY_ACTIVE,
+    matches: (evidence) =>
+      evidence.locallyOwned === true &&
+      evidence.transitionRetryGraceActive === true,
+  }),
+  Object.freeze({
+    state: COORDINATOR_CREATED_REMOTE_HANDOFF_RETRY_STATE.LOCAL_OWNER,
+    matches: (evidence) => evidence.locallyOwned === true,
+  }),
+  Object.freeze({
+    state: COORDINATOR_CREATED_REMOTE_HANDOFF_RETRY_STATE.ACTIVE_HANDOFF_RETRY,
+    matches: (evidence) => evidence.handoffRetryActive === true,
+  }),
+  Object.freeze({
+    state:
+      COORDINATOR_CREATED_REMOTE_HANDOFF_RETRY_STATE.SCHEDULE_REMOTE_HANDOFF,
+    matches: () => true,
+  }),
+]);
+
 class OperationWorkflowOwnerSegment2 extends OperationWorkflowOwnerSegment1 {
   /**
    * Remote coordinator-created handoff delivery does not mutate the source
@@ -137,19 +199,55 @@ class OperationWorkflowOwnerSegment2 extends OperationWorkflowOwnerSegment1 {
     );
   }
 
-  deferCoordinatorCreatedRemoteHandoffRetry(operation, errorLike) {
+  buildCoordinatorCreatedRemoteHandoffRetryEvidence(operation, errorLike) {
     const operationId = operation?.operationId || null;
+    return Object.freeze({
+      operationId,
+      operationAvailable: Boolean(operationId),
+      remoteHandoffEligible:
+        this.shouldRetryCoordinatorCreatedRemoteHandoff(operation),
+      retryableControlPlaneError: isRetryableControlPlaneError(errorLike),
+      locallyOwned: this.isCoordinatorCreatedOperationLocallyOwned(operation),
+      transitionRetryGraceActive:
+        this.hasActiveTransitionRetryGrace(operationId),
+      handoffRetryActive:
+        this.hasActiveCreatedOperationHandoffRetry(operationId),
+    });
+  }
+
+  resolveCoordinatorCreatedRemoteHandoffRetryAction(evidence) {
+    const state =
+      COORDINATOR_CREATED_REMOTE_HANDOFF_RETRY_STATE_TABLE.find((entry) =>
+        entry.matches(evidence),
+      )?.state ||
+      COORDINATOR_CREATED_REMOTE_HANDOFF_RETRY_STATE.INELIGIBLE;
+    return (
+      COORDINATOR_CREATED_REMOTE_HANDOFF_RETRY_ACTION_BY_STATE.get(state) ||
+      COORDINATOR_CREATED_REMOTE_HANDOFF_RETRY_ACTION.REJECT
+    );
+  }
+
+  deferCoordinatorCreatedRemoteHandoffRetry(operation, errorLike) {
+    const evidence =
+      this.buildCoordinatorCreatedRemoteHandoffRetryEvidence(
+        operation,
+        errorLike,
+      );
+    const action =
+      this.resolveCoordinatorCreatedRemoteHandoffRetryAction(evidence);
     if (
-      !operationId ||
-      !this.shouldRetryCoordinatorCreatedRemoteHandoff(operation) ||
-      !isRetryableControlPlaneError(errorLike)
+      action === COORDINATOR_CREATED_REMOTE_HANDOFF_RETRY_ACTION.REJECT
     ) {
       return false;
     }
-    if (this.hasActiveCreatedOperationHandoffRetry(operationId)) {
+    if (
+      action ===
+      COORDINATOR_CREATED_REMOTE_HANDOFF_RETRY_ACTION.ACCEPT_EXISTING
+    ) {
       return true;
     }
 
+    const operationId = evidence.operationId;
     const retryAfterMs = getControlPlaneRetryAfterMs(errorLike);
     const delayMs =
       Number.isFinite(retryAfterMs) && retryAfterMs > NUM.ZERO ?
@@ -177,6 +275,21 @@ class OperationWorkflowOwnerSegment2 extends OperationWorkflowOwnerSegment1 {
     return this.scheduleCoordinatorCreatedRemoteHandoffFollowUp(
       operation,
       delayMs,
+    );
+  }
+
+  scheduleCoordinatorCreatedRemoteHandoffFollowUp(
+    operation,
+    delayMs,
+    options = {},
+  ) {
+    if (this.isCoordinatorCreatedOperationLocallyOwned(operation)) {
+      return false;
+    }
+    return super.scheduleCoordinatorCreatedRemoteHandoffFollowUp(
+      operation,
+      delayMs,
+      options,
     );
   }
 
@@ -768,6 +881,11 @@ class OperationWorkflowOwnerSegment2 extends OperationWorkflowOwnerSegment1 {
   async runOperationOwnerAction(action, operationInput, options = {}) {
     const operationId = this.getOperationIdFromInput(operationInput);
     const ownerLaneHeld = this.isOperationOwnerLaneHeld(operationId);
+    const operationSnapshot =
+      operationInput &&
+      typeof operationInput === OPERATION_WORKFLOW_OWNER_LITERAL.OBJECT ?
+        operationInput :
+        null;
 
     if (ownerLaneHeld && options.skipWhenOwnerLaneHeld === true) {
       return this.buildSkippedOperationResult(
@@ -798,15 +916,13 @@ class OperationWorkflowOwnerSegment2 extends OperationWorkflowOwnerSegment1 {
       if (
         this.deferTransitionRetry(operationId, error, {
           boundary: options.boundary || action,
-          workflowStep: options.workflowStep || null,
-          partitionId: options.partitionId || null,
-          updatedAt: operationInput?.updatedAt,
-          createdAt: operationInput?.createdAt,
-          operationSnapshot:
-            operationInput &&
-            typeof operationInput === OPERATION_WORKFLOW_OWNER_LITERAL.OBJECT ?
-              operationInput :
-              null,
+          workflowStep:
+            options.workflowStep || operationSnapshot?.workflowStep || null,
+          partitionId:
+            options.partitionId || operationSnapshot?.partitionId || null,
+          updatedAt: options.updatedAt || operationSnapshot?.updatedAt,
+          createdAt: options.createdAt || operationSnapshot?.createdAt,
+          operationSnapshot,
         })
       ) {
         return this.buildSkippedOperationResult(

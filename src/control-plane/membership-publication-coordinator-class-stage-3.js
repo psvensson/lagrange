@@ -6,16 +6,23 @@ import {
   MEMBERSHIP_PUBLICATION_COORDINATOR_LITERAL,
   normalizeNodeIdList,
 } from './membership-publication-coordinator-stage-1.js';
-import {MembershipPublicationCoordinatorClassStage2} from './membership-publication-coordinator-class-stage-2.js';
+import {
+  ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_OUTCOME,
+  MembershipPublicationCoordinatorClassStage2,
+} from './membership-publication-coordinator-class-stage-2.js';
 
 const MEMBERSHIP_PUBLICATION_RECONCILE_CONTEXT_FIELD = Object.freeze({
   ACKNOWLEDGED_NODE_IDS: 'acknowledgedNodeIds',
   ALLOW_PENDING_VISIBILITY: 'allowPendingVisibility',
   ALLOW_PRESSURE_DEFER: 'allowPressureDefer',
+  DISABLE_NESTED_PRIORITY_RECOVERY_PLANNING:
+    'disableNestedPriorityRecoveryPlanning',
   LATEST_PUBLICATION_ROW: 'latestPublicationRow',
   PUBLISHED_ACTIVE_NODE_IDS: 'publishedActiveNodeIds',
+  PUBLICATION_ACTIVE_GATE_HANDOFF: 'publicationActiveGateHandoff',
   PUBLICATION_EPOCH: 'publicationEpoch',
   PUBLICATION_EPOCH_SNAKE: 'publication_epoch',
+  READ_PROFILE: 'readProfile',
   REQUIRED_ACK_NODE_IDS: 'requiredAckNodeIds',
   SKIP_PUBLICATION_WRITE_READBACK: 'skipPublicationWriteReadback',
 });
@@ -188,4 +195,7 @@ class MembershipPublicationCoordinatorClassStage3 extends
   }
 }
 
-export {MembershipPublicationCoordinatorClassStage3 as MembershipPublicationCoordinator};
+export {
+  ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_OUTCOME,
+  MembershipPublicationCoordinatorClassStage3 as MembershipPublicationCoordinator,
+};

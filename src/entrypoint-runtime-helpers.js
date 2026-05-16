@@ -80,6 +80,17 @@ const STARTUP_JOIN_DECISION_MODE = Object.freeze({
   JOIN: 'join',
 });
 
+/**
+ * Resolve the live control-plane readiness service from a startup owner.
+ * @param {Object|null} owner
+ * @return {Object|null}
+ */
+function resolveOwnerControlPlaneReadinessService(owner) {
+  return owner?.controlPlaneReadinessService ||
+    owner?.rebalanceCoordinator?.controlPlaneReadinessService ||
+    null;
+}
+
 const EXPLICIT_SEED_DECISION_STATE = Object.freeze({
   IDENTITY_MISMATCH: 'identity_mismatch',
   DURABLE_PROBED_PEER: 'durable_probed_peer',
@@ -299,6 +310,8 @@ function createAdminAPIWithLiveQuery(options) {
     cdcIntegrationService: options.cdcIntegrationService || null,
     messageRouter: options.messageRouter || null,
     serviceDiagnosticsProvider: options.serviceDiagnosticsProvider || null,
+    controlPlaneReadinessService:
+      options.controlPlaneReadinessService || null,
     heartbeatService: options.heartbeatService || null,
     startupRecoveryCoordinator: options.startupRecoveryCoordinator || null,
     bootstrapReadinessState: options.bootstrapReadinessState || null,
@@ -902,8 +915,7 @@ async function createSqlRuntimeComposition(options) {
     nodeId: options.nodeId,
     rebalanceCoordinator: options.owner.rebalanceCoordinator,
     controlPlaneReadinessService:
-      options.owner.rebalanceCoordinator
-        ?.controlPlaneReadinessService || null,
+      resolveOwnerControlPlaneReadinessService(options.owner),
     runtimeDriverRegistry: options.owner.runtimeDriverRegistry,
     serviceRuntimeLifecycle: options.owner.serviceRuntimeLifecycle,
     wasmExecutor,
@@ -972,6 +984,8 @@ async function startAdminRuntimeComposition(options) {
     messageRouter: options.messageRouter,
     serviceDiagnosticsProvider:
       createServiceDiagnosticsProvider(options.owner),
+    controlPlaneReadinessService:
+      resolveOwnerControlPlaneReadinessService(options.owner),
     heartbeatService: options.owner.heartbeatService,
     startupRecoveryCoordinator:
       options.owner.rebalanceCoordinator?.startupRecoveryCoordinator || null,

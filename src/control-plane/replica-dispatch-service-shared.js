@@ -106,6 +106,7 @@ const REPLICA_DISPATCH_SERVICE_LITERAL = Object.freeze({
   CRITICAL: 'critical',
   DEFERRED_RETRY_PENDING: 'deferred_retry_pending',
   DELETE: 'DELETE',
+  DIRECT_WAKEUP_VERIFICATION: 'direct_wakeup_verification',
   DISPATCH_UNSUCCESSFUL: 'dispatch_unsuccessful',
   DUPLICATE_READY_TRIGGER: 'duplicate_ready_trigger',
   EMPTY_STRING: '',
@@ -128,6 +129,7 @@ const REPLICA_DISPATCH_SERVICE_LITERAL = Object.freeze({
     'ReplicaDispatchService requires controlPlaneSystemTableGateway',
   REPLICA_OPERATION_VISIBILITY_LAG: 'REPLICA_OPERATION_VISIBILITY_LAG',
   REPLICA_OPERATION_DISPATCH: 'replica_operation_dispatch',
+  REFRESH_ROW_BEFORE_DISPATCH: 'refreshRowBeforeDispatch',
   SELECT_STAR_FROM_NODES_WHERE_NODE_ID_EQUALS_QUESTION_MARK:
     'SELECT * FROM nodes WHERE node_id = ?',
   SELECT_STAR_FROM_REPLICA_OPERATIONS_WHERE_OPERATION_ID_EQUALS_QUESTION_MARK:

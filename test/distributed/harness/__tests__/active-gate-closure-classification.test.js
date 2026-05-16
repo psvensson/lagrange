@@ -30,6 +30,12 @@ const ACTIVE_GATE_OWNER_COHORT_REASON_OWNER_RECONCILE_PENDING =
 const ACTIVE_GATE_HANDOFF_NEXT_ACTION_RECONCILE =
   'reconcile_owner_membership_publication';
 const ACTIVE_GATE_HANDOFF_RUNTIME_PROMOTION_ALLOWED_FALSE = false;
+const ACTIVE_GATE_HANDOFF_OUTCOME_STATE_PRESSURE_DEFERRED =
+  'pressure_deferred';
+const ACTIVE_GATE_HANDOFF_OUTCOME_REASON_BACKPRESSURE =
+  'control_plane_backpressure';
+const ACTIVE_GATE_HANDOFF_OUTCOME_ENQUEUED = true;
+const ACTIVE_GATE_HANDOFF_OUTCOME_RETRY_AFTER_MS = 1000;
 const ACTIVE_GATE_PRIORITY_SPREAD_TEST_NAME =
   'active gate classifies publication-closed priority spread as closure witness';
 const ACTIVE_GATE_STARTUP_PUBLICATION_LAG_TEST_NAME =
@@ -153,6 +159,12 @@ test(ACTIVE_GATE_STARTUP_PUBLICATION_LAG_OWNER_PATH_TEST_NAME,
             pendingReconcileNodeIds: ACTIVE_GATE_MISSING_PUBLISHED_NODE_IDS,
             pendingReconcileCount: ACTIVE_GATE_MISSING_PUBLISHED_COUNT,
           },
+          selectedMembershipPublicationHandoffOutcome: {
+            state: ACTIVE_GATE_HANDOFF_OUTCOME_STATE_PRESSURE_DEFERRED,
+            reasonCode: ACTIVE_GATE_HANDOFF_OUTCOME_REASON_BACKPRESSURE,
+            enqueued: ACTIVE_GATE_HANDOFF_OUTCOME_ENQUEUED,
+            retryAfterMs: ACTIVE_GATE_HANDOFF_OUTCOME_RETRY_AFTER_MS,
+          },
           selectedPublicationConvergence: {
             publicationStatus: ACTIVE_GATE_PUBLICATION_STATUS_PUBLISHED,
           },
@@ -201,5 +213,21 @@ test(ACTIVE_GATE_STARTUP_PUBLICATION_LAG_OWNER_PATH_TEST_NAME,
     assert.equal(
       progressSnapshot.publicationActiveGateHandoffRuntimePromotionAllowed,
       ACTIVE_GATE_HANDOFF_RUNTIME_PROMOTION_ALLOWED_FALSE,
+    );
+    assert.equal(
+      progressSnapshot.membershipPublicationHandoffOutcomeState,
+      ACTIVE_GATE_HANDOFF_OUTCOME_STATE_PRESSURE_DEFERRED,
+    );
+    assert.equal(
+      progressSnapshot.membershipPublicationHandoffOutcomeReasonCode,
+      ACTIVE_GATE_HANDOFF_OUTCOME_REASON_BACKPRESSURE,
+    );
+    assert.equal(
+      progressSnapshot.membershipPublicationHandoffOutcomeEnqueued,
+      ACTIVE_GATE_HANDOFF_OUTCOME_ENQUEUED,
+    );
+    assert.equal(
+      progressSnapshot.membershipPublicationHandoffOutcomeRetryAfterMs,
+      ACTIVE_GATE_HANDOFF_OUTCOME_RETRY_AFTER_MS,
     );
   });

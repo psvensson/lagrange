@@ -49,6 +49,7 @@ const {
   parseDiscoveryListQuery,
   parseLiveSelect,
   parseServiceDiscoverySqlQuery,
+  resolvePreferredControlPlaneReadinessService,
   resolveRequestedQueryTimeoutMs,
   resolveSqlEngineControlPlaneReadinessService,
   resolveSqlRequestTimeoutBudgetMs,
@@ -1564,14 +1565,20 @@ class AdminWebSocketAPISegment3 extends AdminWebSocketAPISegment2 {
    */
   setSQLQueryEngine(engine) {
     this.sqlQueryEngine = engine;
-    this.controlPlaneReadinessService =
-      this.controlPlaneReadinessService ||
+    const resolvedControlPlaneReadinessService =
       resolveSqlEngineControlPlaneReadinessService(engine);
+    this.controlPlaneReadinessService =
+      resolvePreferredControlPlaneReadinessService(
+        this.controlPlaneReadinessService,
+        resolvedControlPlaneReadinessService,
+      );
     if (this.controlSnapshot) {
       this.controlSnapshot.sqlQueryEngine = engine || null;
       this.controlSnapshot.controlPlaneReadinessService =
-        this.controlSnapshot.controlPlaneReadinessService ||
-        this.controlPlaneReadinessService;
+        resolvePreferredControlPlaneReadinessService(
+          this.controlSnapshot.controlPlaneReadinessService,
+          this.controlPlaneReadinessService,
+        );
     }
     if (this.preflightSnapshot) {
       this.preflightSnapshot.sqlQueryEngine = engine || null;

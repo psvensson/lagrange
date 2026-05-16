@@ -50,30 +50,62 @@ const MEMBERSHIP_PUBLICATION_RECONCILE_REASON =
   'admin_control_snapshot_publication_handoff';
 const MEMBERSHIP_PUBLICATION_HANDOFF_ALLOW_PRESSURE_DEFER = false;
 const MEMBERSHIP_PUBLICATION_HANDOFF_SKIP_WRITE_READBACK = false;
-const MEMBERSHIP_PUBLICATION_RECONCILE_OBSERVATION_STATE = Object.freeze({
-  ABSENT: 'absent',
-  OBSERVED: 'observed',
+const MEMBERSHIP_PUBLICATION_HANDOFF_ALLOW_EMPTY_PRELOADED_ROWS = true;
+const MEMBERSHIP_PUBLICATION_HANDOFF_DISABLE_NESTED_PRIORITY_RECOVERY = true;
+const MEMBERSHIP_PUBLICATION_HANDOFF_EMPTY_ROWS = Object.freeze([]);
+const MEMBERSHIP_PUBLICATION_HANDOFF_OUTCOME_SCHEMA_VERSION = 1;
+const MEMBERSHIP_PUBLICATION_HANDOFF_OUTCOME_STATE = Object.freeze({
+  WRITE_DEFERRED: 'write_deferred',
 });
-const MEMBERSHIP_PUBLICATION_RECONCILE_OBSERVATION_FIELD = Object.freeze({
-  PUBLICATION_ROW: 'publicationRow',
-  STATE: 'state',
-});
-const MEMBERSHIP_PUBLICATION_RECONCILE_OBSERVATION_PROPERTY =
-  'membershipPublicationReconcileObservation';
-const MEMBERSHIP_PUBLICATION_RECONCILE_OBSERVATION_EMPTY = Object.freeze({
-  [MEMBERSHIP_PUBLICATION_RECONCILE_OBSERVATION_FIELD.STATE]:
-    MEMBERSHIP_PUBLICATION_RECONCILE_OBSERVATION_STATE.ABSENT,
-});
+const MEMBERSHIP_PUBLICATION_HANDOFF_OUTCOME_REASON_COMMAND_ERROR =
+  'owner_reconcile_error';
+const MEMBERSHIP_PUBLICATION_HANDOFF_OUTCOME_REASON_ENQUEUED =
+  'owner_reconcile_enqueued';
+const MEMBERSHIP_PUBLICATION_HANDOFF_OUTCOME_REASON_SERVICE_UNAVAILABLE =
+  'owner_reconcile_service_unavailable';
+const MEMBERSHIP_PUBLICATION_SERVICE_FIELD = 'membershipPublicationService';
+const CONTROL_PLANE_READINESS_SERVICE_FIELD = 'controlPlaneReadinessService';
+const REBALANCE_COORDINATOR_FIELD = 'rebalanceCoordinator';
+const STORAGE_ADMISSION_SERVICE_FIELD = 'storageAdmissionService';
 const MEMBERSHIP_PUBLICATION_RECONCILE_FIELD = Object.freeze({
   ACKNOWLEDGED_NODE_IDS: 'acknowledgedNodeIds',
+  ALLOW_EMPTY_PRELOADED_ROWS: 'allowEmptyPreloadedRows',
   ALLOW_PENDING_VISIBILITY: 'allowPendingVisibility',
   ALLOW_PRESSURE_DEFER: 'allowPressureDefer',
+  DISABLE_NESTED_PRIORITY_RECOVERY_PLANNING:
+    'disableNestedPriorityRecoveryPlanning',
+  LATEST_PUBLICATION_ROW: 'latestPublicationRow',
+  NODE_ENDPOINT_ROWS: 'nodeEndpointRows',
+  NODE_ROWS: 'nodeRows',
+  PARTITION_ROWS: 'partitionRows',
   PUBLICATION_ACTIVE_GATE_HANDOFF: 'publicationActiveGateHandoff',
+  PUBLICATION_CONVERGENCE: 'publicationConvergence',
+  PUBLISHED_MEMBERSHIP_OBSERVATION: 'publishedMembershipObservation',
   PUBLISHED_ACTIVE_NODE_IDS: 'publishedActiveNodeIds',
   READ_PROFILE: 'readProfile',
+  READINESS_ENTRIES: 'readinessEntries',
+  REPLICA_OPERATION_ROWS: 'replicaOperationRows',
   REQUIRED_ACK_NODE_IDS: 'requiredAckNodeIds',
+  SERVICE_ROWS: 'serviceRows',
   SKIP_PUBLICATION_WRITE_READBACK: 'skipPublicationWriteReadback',
 });
+function buildMembershipPublicationHandoffOutcome(state, options = {}) {
+  return Object.freeze({
+    schemaVersion: MEMBERSHIP_PUBLICATION_HANDOFF_OUTCOME_SCHEMA_VERSION,
+    state,
+    target: options.target || null,
+    publicationRow: null,
+    enqueued: options.enqueued === true,
+    ...(Number.isFinite(options.retryAfterMs) &&
+      options.retryAfterMs > NUM.ZERO ?
+      {retryAfterMs: Math.floor(options.retryAfterMs)} :
+      {}),
+    ...(typeof options.reasonCode === TYPEOF.STRING &&
+      options.reasonCode.length > NUM.ZERO ?
+      {reasonCode: options.reasonCode} :
+      {}),
+  });
+}
 /**
  * Normalize one arbitrary value to a non-negative integer.
  * @param {*} value
@@ -87,21 +119,49 @@ function buildMembershipPublicationReadOptions(options = {}) {
     } :
     {readProfile: MEMBERSHIP_PUBLICATION_READ_PROFILE_DIAGNOSTICS};
 }
+function resolveMembershipPublicationHandoffLatestPublicationRow(value = null) {
+  if (!value || typeof value !== TYPEOF.OBJECT || Array.isArray(value)) {
+    return null;
+  }
+  return resolveLatestMembershipPublicationRow([
+    value[
+      MEMBERSHIP_PUBLICATION_RECONCILE_FIELD
+        .PUBLISHED_MEMBERSHIP_OBSERVATION
+    ],
+    value[MEMBERSHIP_PUBLICATION_RECONCILE_FIELD.PUBLICATION_CONVERGENCE],
+    value[MEMBERSHIP_PUBLICATION_RECONCILE_FIELD.PUBLICATION_CONVERGENCE]?.[
+      MEMBERSHIP_PUBLICATION_RECONCILE_FIELD
+        .PUBLISHED_MEMBERSHIP_OBSERVATION
+    ],
+  ]);
+}
 function buildMembershipPublicationReconcileOptions(options = {}) {
-  const membershipPublicationTarget =
-    resolvePublicationActiveGateMembershipPublicationTarget(
+  const publicationActiveGateHandoff =
     options[
       MEMBERSHIP_PUBLICATION_RECONCILE_FIELD
         .PUBLICATION_ACTIVE_GATE_HANDOFF
-    ],
-  );
+    ];
+  const membershipPublicationTarget =
+    resolvePublicationActiveGateMembershipPublicationTarget(
+      publicationActiveGateHandoff,
+    );
   if (
     membershipPublicationTarget.reconcileRequired !== true
   ) {
     return MEMBERSHIP_PUBLICATION_RECONCILE_OPTIONS;
   }
+  const latestPublicationRow =
+    resolveMembershipPublicationHandoffLatestPublicationRow(
+      publicationActiveGateHandoff,
+    );
   return {
     ...MEMBERSHIP_PUBLICATION_RECONCILE_OPTIONS,
+    ...(latestPublicationRow ?
+      {
+        [MEMBERSHIP_PUBLICATION_RECONCILE_FIELD.LATEST_PUBLICATION_ROW]:
+          latestPublicationRow,
+      } :
+      {}),
     [MEMBERSHIP_PUBLICATION_RECONCILE_FIELD.PUBLISHED_ACTIVE_NODE_IDS]:
       membershipPublicationTarget.publishedActiveNodeIds,
     [MEMBERSHIP_PUBLICATION_RECONCILE_FIELD.REQUIRED_ACK_NODE_IDS]:
@@ -114,48 +174,135 @@ function buildMembershipPublicationReconcileOptions(options = {}) {
       MEMBERSHIP_PUBLICATION_HANDOFF_ALLOW_PRESSURE_DEFER,
     [MEMBERSHIP_PUBLICATION_RECONCILE_FIELD.READ_PROFILE]:
       MEMBERSHIP_PUBLICATION_READ_PROFILE_DIAGNOSTICS,
+    [MEMBERSHIP_PUBLICATION_RECONCILE_FIELD.ALLOW_EMPTY_PRELOADED_ROWS]:
+      MEMBERSHIP_PUBLICATION_HANDOFF_ALLOW_EMPTY_PRELOADED_ROWS,
+    [MEMBERSHIP_PUBLICATION_RECONCILE_FIELD
+      .DISABLE_NESTED_PRIORITY_RECOVERY_PLANNING]:
+      MEMBERSHIP_PUBLICATION_HANDOFF_DISABLE_NESTED_PRIORITY_RECOVERY,
+    [MEMBERSHIP_PUBLICATION_RECONCILE_FIELD.NODE_ROWS]:
+      MEMBERSHIP_PUBLICATION_HANDOFF_EMPTY_ROWS,
+    [MEMBERSHIP_PUBLICATION_RECONCILE_FIELD.NODE_ENDPOINT_ROWS]:
+      MEMBERSHIP_PUBLICATION_HANDOFF_EMPTY_ROWS,
+    [MEMBERSHIP_PUBLICATION_RECONCILE_FIELD.SERVICE_ROWS]:
+      MEMBERSHIP_PUBLICATION_HANDOFF_EMPTY_ROWS,
+    [MEMBERSHIP_PUBLICATION_RECONCILE_FIELD.PARTITION_ROWS]:
+      MEMBERSHIP_PUBLICATION_HANDOFF_EMPTY_ROWS,
+    [MEMBERSHIP_PUBLICATION_RECONCILE_FIELD.REPLICA_OPERATION_ROWS]:
+      MEMBERSHIP_PUBLICATION_HANDOFF_EMPTY_ROWS,
+    [MEMBERSHIP_PUBLICATION_RECONCILE_FIELD.READINESS_ENTRIES]:
+      MEMBERSHIP_PUBLICATION_HANDOFF_EMPTY_ROWS,
     [MEMBERSHIP_PUBLICATION_RECONCILE_FIELD.SKIP_PUBLICATION_WRITE_READBACK]:
       MEMBERSHIP_PUBLICATION_HANDOFF_SKIP_WRITE_READBACK,
   };
+}
+function enqueueMembershipPublicationReconcileFallback(
+  membershipPublicationService,
+  reconcileOptions,
+) {
+  if (
+    !membershipPublicationService ||
+    typeof membershipPublicationService.enqueueClusterMembershipReconcile !==
+      TYPEOF.FUNCTION
+  ) {
+    return false;
+  }
+  membershipPublicationService.enqueueClusterMembershipReconcile(
+    MEMBERSHIP_PUBLICATION_RECONCILE_REASON,
+    reconcileOptions,
+  );
+  return true;
+}
+function isMembershipPublicationService(value) {
+  return value && typeof value === TYPEOF.OBJECT;
+}
+function resolveMembershipPublicationServiceFromReadinessService(
+  readinessService,
+) {
+  const membershipPublicationService =
+    readinessService?.[MEMBERSHIP_PUBLICATION_SERVICE_FIELD] || null;
+  return isMembershipPublicationService(membershipPublicationService) ?
+    membershipPublicationService :
+    null;
 }
 async function maybeReconcileAuthoritativeMembershipPublication(
   membershipPublicationService,
   options = {},
 ) {
   if (
-    options.reconcileAuthoritativeMembershipPublication !== true ||
-    !membershipPublicationService
+    options.reconcileAuthoritativeMembershipPublication !== true
   ) {
     return null;
+  }
+  const publicationActiveGateHandoff =
+    options[
+      MEMBERSHIP_PUBLICATION_RECONCILE_FIELD
+        .PUBLICATION_ACTIVE_GATE_HANDOFF
+    ];
+  const membershipPublicationTarget =
+    resolvePublicationActiveGateMembershipPublicationTarget(
+      publicationActiveGateHandoff,
+    );
+  if (!membershipPublicationService) {
+    return membershipPublicationTarget.reconcileRequired === true ?
+      buildMembershipPublicationHandoffOutcome(
+        MEMBERSHIP_PUBLICATION_HANDOFF_OUTCOME_STATE.WRITE_DEFERRED,
+        {
+          target: membershipPublicationTarget,
+          reasonCode:
+            MEMBERSHIP_PUBLICATION_HANDOFF_OUTCOME_REASON_SERVICE_UNAVAILABLE,
+        },
+      ) :
+      null;
+  }
+  if (
+    typeof membershipPublicationService.reconcileActiveGateMembershipPublication ===
+      TYPEOF.FUNCTION
+  ) {
+    return await membershipPublicationService.reconcileActiveGateMembershipPublication(
+      publicationActiveGateHandoff,
+      options,
+    );
   }
   const reconcileOptions = buildMembershipPublicationReconcileOptions(options);
   if (reconcileOptions === MEMBERSHIP_PUBLICATION_RECONCILE_OPTIONS) {
     return null;
   }
   if (
-    typeof membershipPublicationService.reconcileClusterMembership ===
-    TYPEOF.FUNCTION
-  ) {
-    const outcome =
-      await membershipPublicationService.reconcileClusterMembership(
-        reconcileOptions,
-      );
-    return outcome?.publicationRow &&
-      typeof outcome.publicationRow === TYPEOF.OBJECT ?
-      normalizeControlPlanePublicationRow(outcome.publicationRow) :
-      null;
-  }
-  if (
-    typeof membershipPublicationService.enqueueClusterMembershipReconcile ===
-    TYPEOF.FUNCTION
-  ) {
-    membershipPublicationService.enqueueClusterMembershipReconcile(
-      MEMBERSHIP_PUBLICATION_RECONCILE_REASON,
+    enqueueMembershipPublicationReconcileFallback(
+      membershipPublicationService,
       reconcileOptions,
+    ) === true
+  ) {
+    return buildMembershipPublicationHandoffOutcome(
+      MEMBERSHIP_PUBLICATION_HANDOFF_OUTCOME_STATE.WRITE_DEFERRED,
+      {
+        target: membershipPublicationTarget,
+        enqueued: true,
+        reasonCode: MEMBERSHIP_PUBLICATION_HANDOFF_OUTCOME_REASON_ENQUEUED,
+      },
     );
-    return null;
   }
   return null;
+}
+function buildMembershipPublicationHandoffCommandFailureOutcome(
+  error,
+  publicationActiveGateHandoff,
+) {
+  const membershipPublicationTarget =
+    resolvePublicationActiveGateMembershipPublicationTarget(
+      publicationActiveGateHandoff,
+    );
+  return membershipPublicationTarget.reconcileRequired === true ?
+    buildMembershipPublicationHandoffOutcome(
+      MEMBERSHIP_PUBLICATION_HANDOFF_OUTCOME_STATE.WRITE_DEFERRED,
+      {
+        target: membershipPublicationTarget,
+        reasonCode:
+          MEMBERSHIP_PUBLICATION_HANDOFF_OUTCOME_REASON_COMMAND_ERROR,
+        retryAfterMs: Number(error?.retryAfterMs),
+      },
+    ) :
+    null;
 }
 function resolvePublicationOrderingValue(row, keys = []) {
   for (const key of keys) {
@@ -174,38 +321,6 @@ function isMembershipPublicationRow(row) {
   return (
     publicationKind.length === NUM.ZERO ||
     publicationKind === MEMBERSHIP_PUBLICATION_KIND
-  );
-}
-function isObservedMembershipPublicationReconcileRow(row) {
-  const normalizedRow = normalizeControlPlanePublicationRow(row);
-  return (
-    String(
-      normalizedRow.status || ADMIN_CONTROL_SNAPSHOT_LITERAL.VALUE,
-    ).toUpperCase() === ADMIN_CONTROL_SNAPSHOT_LITERAL.PUBLISHED &&
-    Array.isArray(normalizedRow.publishedActiveNodeIds) &&
-    normalizedRow.publishedActiveNodeIds.length > NUM.ZERO
-  );
-}
-function buildMembershipPublicationReconcileObservation(publicationRow) {
-  if (isObservedMembershipPublicationReconcileRow(publicationRow) !== true) {
-    return MEMBERSHIP_PUBLICATION_RECONCILE_OBSERVATION_EMPTY;
-  }
-  return Object.freeze({
-    [MEMBERSHIP_PUBLICATION_RECONCILE_OBSERVATION_FIELD.STATE]:
-      MEMBERSHIP_PUBLICATION_RECONCILE_OBSERVATION_STATE.OBSERVED,
-    [MEMBERSHIP_PUBLICATION_RECONCILE_OBSERVATION_FIELD.PUBLICATION_ROW]:
-      normalizeControlPlanePublicationRow(publicationRow),
-  });
-}
-function isMembershipPublicationReconcileObservation(value) {
-  return (
-    value &&
-    typeof value === TYPEOF.OBJECT &&
-    value[MEMBERSHIP_PUBLICATION_RECONCILE_OBSERVATION_FIELD.STATE] ===
-      MEMBERSHIP_PUBLICATION_RECONCILE_OBSERVATION_STATE.OBSERVED &&
-    isObservedMembershipPublicationReconcileRow(
-      value[MEMBERSHIP_PUBLICATION_RECONCILE_OBSERVATION_FIELD.PUBLICATION_ROW],
-    )
   );
 }
 function resolveLatestMembershipPublicationRow(
@@ -275,73 +390,57 @@ function resolveLatestMembershipPublicationRow(
  * as functions so this module has no back-reference to AdminWebSocketAPI.
  */
 class AdminControlSnapshotPart6 extends AdminControlSnapshotPart5 {
-  rememberMembershipPublicationReconcileObservation(publicationRow) {
-    const observation =
-      buildMembershipPublicationReconcileObservation(publicationRow);
-    this[MEMBERSHIP_PUBLICATION_RECONCILE_OBSERVATION_PROPERTY] =
-      observation;
-    return observation;
-  }
-  consumeMembershipPublicationReconcileObservation(options = {}) {
-    if (options.preferAuthoritativeRead !== true) {
-      return MEMBERSHIP_PUBLICATION_RECONCILE_OBSERVATION_EMPTY;
+  resolveMembershipPublicationService() {
+    const readinessServices = [
+      this.controlPlaneReadinessService || null,
+      this.sqlQueryEngine?.[CONTROL_PLANE_READINESS_SERVICE_FIELD] || null,
+      this.sqlQueryEngine?.[REBALANCE_COORDINATOR_FIELD]?.[
+        CONTROL_PLANE_READINESS_SERVICE_FIELD
+      ] || null,
+      this.sqlQueryEngine?.[REBALANCE_COORDINATOR_FIELD]?.[
+        STORAGE_ADMISSION_SERVICE_FIELD
+      ]?.[CONTROL_PLANE_READINESS_SERVICE_FIELD] || null,
+    ];
+    for (const readinessService of readinessServices) {
+      const membershipPublicationService =
+        resolveMembershipPublicationServiceFromReadinessService(
+          readinessService,
+        );
+      if (membershipPublicationService) {
+        return membershipPublicationService;
+      }
     }
-    const observation =
-      this[MEMBERSHIP_PUBLICATION_RECONCILE_OBSERVATION_PROPERTY] ||
-      MEMBERSHIP_PUBLICATION_RECONCILE_OBSERVATION_EMPTY;
-    this[MEMBERSHIP_PUBLICATION_RECONCILE_OBSERVATION_PROPERTY] =
-      MEMBERSHIP_PUBLICATION_RECONCILE_OBSERVATION_EMPTY;
-    if (isMembershipPublicationReconcileObservation(observation)) {
-      return observation;
-    }
-    return MEMBERSHIP_PUBLICATION_RECONCILE_OBSERVATION_EMPTY;
+    return null;
   }
   async reconcileAuthoritativeMembershipPublicationFromHandoff(
     publicationActiveGateHandoff,
     options = {},
   ) {
-    const membershipPublicationService =
-      this.controlPlaneReadinessService?.membershipPublicationService || null;
-    const publicationRow = await maybeReconcileAuthoritativeMembershipPublication(
-      membershipPublicationService,
+    return await maybeReconcileAuthoritativeMembershipPublication(
+      this.resolveMembershipPublicationService(),
       {
         ...options,
         reconcileAuthoritativeMembershipPublication: true,
         publicationActiveGateHandoff,
       },
     );
-    this.rememberMembershipPublicationReconcileObservation(publicationRow);
-    return publicationRow;
+  }
+  buildMembershipPublicationHandoffOwnerCommandErrorOutcome(
+    error,
+    publicationActiveGateHandoff,
+  ) {
+    return buildMembershipPublicationHandoffCommandFailureOutcome(
+      error,
+      publicationActiveGateHandoff,
+    );
   }
   async ensureMembershipPublicationObservation(options = {}) {
     const readinessService = this.controlPlaneReadinessService || null;
     const membershipPublicationService =
-      readinessService?.membershipPublicationService || null;
+      this.resolveMembershipPublicationService();
     const hasMembershipPublicationService =
-      membershipPublicationService &&
-      typeof membershipPublicationService === TYPEOF.OBJECT;
+      isMembershipPublicationService(membershipPublicationService);
     const preferAuthoritativeRead = options.preferAuthoritativeRead === true;
-    const reconciledPublicationRow =
-      await maybeReconcileAuthoritativeMembershipPublication(
-        membershipPublicationService,
-        options,
-      );
-    if (reconciledPublicationRow) {
-      return reconciledPublicationRow;
-    }
-    const carriedReconcilePublicationRow =
-      this.consumeMembershipPublicationReconcileObservation({
-        preferAuthoritativeRead,
-      });
-    if (
-      isMembershipPublicationReconcileObservation(
-        carriedReconcilePublicationRow,
-      )
-    ) {
-      return carriedReconcilePublicationRow[
-        MEMBERSHIP_PUBLICATION_RECONCILE_OBSERVATION_FIELD.PUBLICATION_ROW
-      ];
-    }
     if (
       !preferAuthoritativeRead &&
       typeof readinessService?.getLatestMembershipPublicationRowSync ===
@@ -411,10 +510,9 @@ class AdminControlSnapshotPart6 extends AdminControlSnapshotPart5 {
     }
     const readinessService = this.controlPlaneReadinessService || null;
     const membershipPublicationService =
-      readinessService?.membershipPublicationService || null;
+      this.resolveMembershipPublicationService();
     const hasMembershipPublicationService =
-      membershipPublicationService &&
-      typeof membershipPublicationService === TYPEOF.OBJECT;
+      isMembershipPublicationService(membershipPublicationService);
     if (
       options.preferAuthoritativeRead !== true &&
       typeof readinessService?.getLatestPublishedMembershipPublicationRowSync ===

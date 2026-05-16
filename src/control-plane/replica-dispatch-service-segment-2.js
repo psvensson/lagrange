@@ -1348,6 +1348,29 @@ class ReplicaDispatchServiceSegment2 extends ReplicaDispatchServiceSegment1 {
   }
 
   /**
+   * Resolve the row for one operation-dispatch reconcile. Verification retries
+   * prefer a fresh owner-path row so acknowledged remote wake-ups stop once
+   * durable progress is visible, while still retaining the original wake-up
+   * row if control-plane visibility is temporarily unavailable.
+   *
+   * @param {string} operationId
+   * @param {Object} [context]
+   * @return {Promise<Object|null>}
+   * @private
+   */
+  async resolveOperationDispatchReconcileRow(operationId, context = {}) {
+    const contextRow = context?.row || null;
+    if (
+      context?.[
+        REPLICA_DISPATCH_SERVICE_LITERAL.REFRESH_ROW_BEFORE_DISPATCH
+      ] !== true
+    ) {
+      return contextRow || await this.getReplicaOperationRow(operationId);
+    }
+    return (await this.getReplicaOperationRow(operationId)) || contextRow;
+  }
+
+  /**
    * Reconcile callback for the operation dispatch queue.
    * Resolves the operation row and dispatches or executes it.
    * @param {string} operationId - The operation to reconcile.
@@ -1359,11 +1382,10 @@ class ReplicaDispatchServiceSegment2 extends ReplicaDispatchServiceSegment1 {
       return;
     }
 
-    let row = context?.row || null;
-
-    if (!row) {
-      row = await this.getReplicaOperationRow(operationId);
-    }
+    const row = await this.resolveOperationDispatchReconcileRow(
+      operationId,
+      context,
+    );
 
     if (!row || !row.operation_id) {
       this.clearDeferredOperationDispatchRetry(operationId);

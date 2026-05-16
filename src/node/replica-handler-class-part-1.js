@@ -12,6 +12,9 @@ import {ConfigurationManager} from '../config/configuration-manager.js';
 import {CONFIG_KEY} from '../config/config-constants.js';
 import {NUM, WORKFLOW_STEP} from '../constants/index.js';
 import {assertCritical} from '../utils/assert.js';
+import {
+  isRetryableControlPlaneError,
+} from '../control-plane/control-plane-error-classification.js';
 import {ReplicaStatus} from '../rebalancer/replica-status.js';
 import {EXECUTOR_OUTCOME_TYPE} from '../rebalancer/executor-outcome-constants.js';
 import {
@@ -74,6 +77,10 @@ const REPLICA_CREATE_IN_PROGRESS_OUTCOME_BY_STATUS = Object.freeze(
     ],
   ]),
 );
+const REPLICA_CREATE_PENDING_DECISION = Object.freeze({
+  REPORT_IN_PROGRESS: 'report_in_progress',
+  RESTART_CREATE: 'restart_create',
+});
 /**
  * ReplicaHandler handles replica creation and removal requests on target nodes.
  * Returns immediately with status, then performs async work.
@@ -428,6 +435,16 @@ class ReplicaHandlerPart1 extends EventEmitter {
         request[ReplicaOperationField.BOOTSTRAP_PARTITION_METADATA] :
         null;
     const tableName = request?.tableName || null;
+    const createRequest = {
+      operationId,
+      explicitOperationType,
+      partitionId,
+      replicaId,
+      bootstrapReplicaIds,
+      bootstrapPeerAddresses,
+      bootstrapTableMetadata,
+      bootstrapPartitionMetadata,
+    };
     this.logger.info(REPLICA_HANDLER_LOG_MSG.CREATE_REQUEST, {
       operationId,
       explicitOperationType,
@@ -481,6 +498,37 @@ class ReplicaHandlerPart1 extends EventEmitter {
         existingReplica.status === ReplicaStatus.CREATING ||
         existingReplica.status === ReplicaStatus.SYNCING
       ) {
+        const pendingDecision = this.resolvePendingReplicaCreateDecision(
+          existingReplica,
+          replicaId,
+        );
+        if (
+          pendingDecision === REPLICA_CREATE_PENDING_DECISION.RESTART_CREATE
+        ) {
+          this.logger.info(
+            REPLICA_HANDLER_LOG_MSG.CREATE_RESTARTING_PENDING,
+            {
+              replicaId: existingReplica.replicaId,
+              status: existingReplica.status,
+              nodeId: this.nodeId,
+            },
+          );
+          this.trackReplicaCreateOperation(
+            operationId,
+            partitionId,
+            replicaId,
+            tableName,
+          );
+          this.startCreateReplicaAsync(createRequest);
+          return this.buildReplicaOperationResponse(
+            ReplicaOperationResponseStatus.INITIATED,
+            {
+              operationId,
+              replicaId,
+              nodeId: this.nodeId,
+            },
+          );
+        }
         this.logger.info(REPLICA_HANDLER_LOG_MSG.CREATE_IN_PROGRESS, {
           replicaId: existingReplica.replicaId,
           status: existingReplica.status,
@@ -521,6 +569,126 @@ class ReplicaHandlerPart1 extends EventEmitter {
       tableName,
       status: ReplicaStatus.PENDING,
     });
+    this.trackReplicaCreateOperation(
+      operationId,
+      partitionId,
+      replicaId,
+      tableName,
+    );
+    createRequest.skipLifecycleStatusPersistence = needsReplicaRuntimeRepair;
+    this.startCreateReplicaAsync(createRequest);
+    return this.buildReplicaOperationResponse(
+      ReplicaOperationResponseStatus.INITIATED,
+      {
+        operationId,
+        replicaId,
+        nodeId: this.nodeId,
+      },
+    );
+  }
+  /**
+   * @param {Object|null} existingReplica
+   * @param {string} replicaId
+   * @return {string}
+   * @private
+   */
+  resolvePendingReplicaCreateDecision(existingReplica, replicaId) {
+    const snapshot = {
+      hasPendingStatus: existingReplica?.status === ReplicaStatus.PENDING,
+      hasInProgressCreate: this.hasInProgressReplicaCreation(replicaId),
+      hasTrackedService: Boolean(this.getTrackedService(replicaId)),
+    };
+    if (
+      snapshot.hasPendingStatus &&
+      !snapshot.hasInProgressCreate &&
+      !snapshot.hasTrackedService
+    ) {
+      return REPLICA_CREATE_PENDING_DECISION.RESTART_CREATE;
+    }
+    return REPLICA_CREATE_PENDING_DECISION.REPORT_IN_PROGRESS;
+  }
+  /**
+   * @param {string} replicaId
+   * @return {boolean}
+   * @private
+   */
+  hasInProgressReplicaCreation(replicaId) {
+    for (const operation of this.inProgressOperations.values()) {
+      if (
+        operation?.type === ReplicaOperationMessageType.CREATE_REPLICA &&
+        operation?.replicaId === replicaId
+      ) {
+        return true;
+      }
+    }
+    return false;
+  }
+  /**
+   * @param {Object} options
+   * @param {string} options.operationId
+   * @param {string} options.partitionId
+   * @param {string} options.replicaId
+   * @return {void}
+   * @private
+   */
+  deferRetryableReplicaCreateStatusWrite(options = {}) {
+    const {operationId, partitionId, replicaId, error} = options;
+    if (operationId) {
+      this.inProgressOperations.delete(operationId);
+    }
+    this.localServices.delete(replicaId);
+    this.logger.warn(REPLICA_HANDLER_LOG_MSG.CREATE_STATUS_WRITE_DEFERRED, {
+      operationId,
+      partitionId,
+      replicaId,
+      error: error?.message || this.formatReplicaCreationError(error),
+      retryAfterMs: Number.isFinite(error?.retryAfterMs) ?
+        Math.floor(error.retryAfterMs) :
+        null,
+      nodeId: this.nodeId,
+    });
+  }
+  /**
+   * @param {Object} options
+   * @param {string} options.operationId
+   * @param {string} options.partitionId
+   * @param {string} options.replicaId
+   * @return {Promise<boolean>}
+   * @private
+   */
+  async persistReplicaCreateInitialStatus(options = {}) {
+    const {operationId, partitionId, replicaId} = options;
+    try {
+      await this.updateReplicaStatus(replicaId, ReplicaStatus.PENDING, {
+        partitionId,
+      });
+      this.throwIfShuttingDown();
+      await this.updateReplicaStatus(replicaId, ReplicaStatus.CREATING, {
+        partitionId,
+      });
+      return true;
+    } catch (error) {
+      if (isRetryableControlPlaneError(error) !== true) {
+        throw error;
+      }
+      this.deferRetryableReplicaCreateStatusWrite({
+        operationId,
+        partitionId,
+        replicaId,
+        error,
+      });
+      return false;
+    }
+  }
+  /**
+   * @param {string} operationId
+   * @param {string} partitionId
+   * @param {string} replicaId
+   * @param {string|null} tableName
+   * @return {void}
+   * @private
+   */
+  trackReplicaCreateOperation(operationId, partitionId, replicaId, tableName) {
     this.inProgressOperations.set(operationId, {
       type: ReplicaOperationMessageType.CREATE_REPLICA,
       replicaId,
@@ -528,6 +696,15 @@ class ReplicaHandlerPart1 extends EventEmitter {
       tableName,
       startedAt: Date.now(),
     });
+  }
+  /**
+   * @param {Object} request
+   * @return {void}
+   * @private
+   */
+  startCreateReplicaAsync(request) {
+    const operationId = request?.operationId;
+    const replicaId = request?.replicaId;
     // Start async creation after ACK has returned.
     this.registerOperationTask(
       new Promise((resolve) => {
@@ -540,17 +717,7 @@ class ReplicaHandlerPart1 extends EventEmitter {
             return;
           }
           resolve(
-            this.createReplicaAsync({
-              operationId,
-              explicitOperationType,
-              partitionId,
-              replicaId,
-              bootstrapReplicaIds,
-              bootstrapPeerAddresses,
-              bootstrapTableMetadata,
-              bootstrapPartitionMetadata,
-              skipLifecycleStatusPersistence: needsReplicaRuntimeRepair,
-            }).catch((error) => {
+            this.createReplicaAsync(request).catch((error) => {
               this.logger.error(REPLICA_HANDLER_LOG_MSG.ASYNC_CREATE_FAILED, {
                 operationId,
                 replicaId,
@@ -561,14 +728,6 @@ class ReplicaHandlerPart1 extends EventEmitter {
           );
         });
       }),
-    );
-    return this.buildReplicaOperationResponse(
-      ReplicaOperationResponseStatus.INITIATED,
-      {
-        operationId,
-        replicaId,
-        nodeId: this.nodeId,
-      },
     );
   }
   emitReplicaCreateInProgressOutcome(existingReplica, operationId) {
@@ -613,13 +772,16 @@ class ReplicaHandlerPart1 extends EventEmitter {
     try {
       this.throwIfShuttingDown();
       if (!skipLifecycleStatusPersistence) {
-        await this.updateReplicaStatus(replicaId, ReplicaStatus.PENDING, {
-          partitionId,
-        });
-        this.throwIfShuttingDown();
-        await this.updateReplicaStatus(replicaId, ReplicaStatus.CREATING, {
-          partitionId,
-        });
+        const initialStatusPersisted =
+          await this.persistReplicaCreateInitialStatus({
+            operationId,
+            partitionId,
+            replicaId,
+          });
+        if (initialStatusPersisted !== true) {
+          this.clearReplicaCreationProgress(progress);
+          return;
+        }
       } else {
         this.setLocalReplica(replicaId, {
           replicaId,
@@ -841,18 +1003,21 @@ class ReplicaHandlerPart1 extends EventEmitter {
         WORKFLOW_STEP.FAILED,
         failedOutcomeOptions,
       );
-      await this.updateReplicaStatus(replicaId, ReplicaStatus.FAILED, {
-        partitionId,
-        errorMessage: error.message,
-      });
-      this.setLocalReplica(replicaId, {
-        replicaId,
-        partitionId,
-        status: ReplicaStatus.FAILED,
-      });
-      // Clean up in-progress tracking
-      if (operationId) {
-        this.inProgressOperations.delete(operationId);
+      try {
+        await this.updateReplicaStatus(replicaId, ReplicaStatus.FAILED, {
+          partitionId,
+          errorMessage: error.message,
+        });
+        this.setLocalReplica(replicaId, {
+          replicaId,
+          partitionId,
+          status: ReplicaStatus.FAILED,
+        });
+      } finally {
+        // Clean up in-progress tracking even when FAILED status persistence is deferred.
+        if (operationId) {
+          this.inProgressOperations.delete(operationId);
+        }
       }
       this.emit(REPLICA_HANDLER_EVENT.CREATION_FAILED, {
         operationId,

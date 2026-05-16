@@ -161,6 +161,8 @@ const OPERATION_WORKFLOW_OWNER_LITERAL = Object.freeze({
     'OperationWorkflowOwner requires getActualReplicaStatus()',
   PARTITION_SAFETY_CHECK: ' partition safety check',
   PRIORITY_CLAIM_CAS: 'priority_claim_cas',
+  PRIORITY_CLAIM_DEFERRED_LOCAL: 'priority_claim_deferred_local',
+  PRIORITY_PROGRESS_DEFERRED_LOCAL: 'priority_progress_deferred_local',
   PRIORITY_ACTIVE_REPLACE_RESUME: 'priority_active_replace_resume',
   PRIORITY_CONTROL_DASH_PLANE_PARTITION: 'Priority control-plane partition ',
   PRIORITY_RECOVERY_TARGET_NODE: 'Priority recovery target node ',

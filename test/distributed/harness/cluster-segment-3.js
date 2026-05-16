@@ -36,6 +36,10 @@ const ACTIVE_WAIT_PROGRESS_SNAPSHOT_REPAIR_DEFERRED =
   '#repairDeferred=true';
 const ACTIVE_WAIT_PROGRESS_SNAPSHOT_REASON_PREFIX = '#reasons=';
 const ACTIVE_WAIT_PROGRESS_SNAPSHOT_RETRY_AFTER_PREFIX = '#retryAfterMs=';
+const ACTIVE_WAIT_PROGRESS_HANDOFF_OUTCOME_PREFIX = ',handoffOutcome=';
+const ACTIVE_WAIT_PROGRESS_HANDOFF_REASON_PREFIX = '#reason=';
+const ACTIVE_WAIT_PROGRESS_HANDOFF_ENQUEUED = '#enqueued=true';
+const ACTIVE_WAIT_PROGRESS_HANDOFF_RETRY_AFTER_PREFIX = '#retryAfterMs=';
 
 function scoreActiveWaitProgress(progressSnapshot) {
   if (!progressSnapshot || typeof progressSnapshot !== 'object') {
@@ -239,6 +243,24 @@ function formatActiveWaitProgressSnapshot(progressSnapshot) {
     (selectedMissingPublishedNodeIds.length > ZERO ?
       selectedMissingPublishedNodeIds.join('|') :
       'none') +
+    ACTIVE_WAIT_PROGRESS_HANDOFF_OUTCOME_PREFIX +
+    String(
+      progressSnapshot.membershipPublicationHandoffOutcomeState ||
+        ACTIVE_WAIT_PROGRESS_VALUE_NONE,
+    ) +
+    (progressSnapshot.membershipPublicationHandoffOutcomeReasonCode ?
+      ACTIVE_WAIT_PROGRESS_HANDOFF_REASON_PREFIX +
+        progressSnapshot.membershipPublicationHandoffOutcomeReasonCode :
+      '') +
+    (progressSnapshot.membershipPublicationHandoffOutcomeEnqueued === true ?
+      ACTIVE_WAIT_PROGRESS_HANDOFF_ENQUEUED :
+      '') +
+    (Number.isFinite(
+      progressSnapshot.membershipPublicationHandoffOutcomeRetryAfterMs,
+    ) ?
+      ACTIVE_WAIT_PROGRESS_HANDOFF_RETRY_AFTER_PREFIX +
+        String(progressSnapshot.membershipPublicationHandoffOutcomeRetryAfterMs) :
+      '') +
     ',ownerQueue=' +
     String(ownerQueuePendingWrites ?? 'unknown') +
     ',cdcLag=' +

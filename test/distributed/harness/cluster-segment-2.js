@@ -98,6 +98,8 @@ const ACTIVE_WAIT_RECOVERY_PROTOCOL_STATE = Object.freeze({
   STEADY_PUBLISHED: 'steady_published',
 });
 const ACTIVE_GATE_OWNER_COHORT_FIELD = Object.freeze({
+  MEMBERSHIP_PUBLICATION_HANDOFF_OUTCOME:
+    'membershipPublicationHandoffOutcome',
   MISSING_PUBLISHED_COUNT: 'missingPublishedCount',
   MISSING_PUBLISHED_NODE_IDS: 'missingPublishedNodeIds',
   PENDING_RECOVERY_COUNT: 'pendingRecoveryCount',
@@ -107,6 +109,12 @@ const ACTIVE_GATE_OWNER_COHORT_FIELD = Object.freeze({
   REASON_CODE: 'reasonCode',
   NEXT_ACTION: 'nextAction',
   RUNTIME_PROMOTION_ALLOWED: 'runtimePromotionAllowed',
+  STATE: 'state',
+});
+const MEMBERSHIP_PUBLICATION_HANDOFF_OUTCOME_FIELD = Object.freeze({
+  ENQUEUED: 'enqueued',
+  REASON_CODE: 'reasonCode',
+  RETRY_AFTER_MS: 'retryAfterMs',
   STATE: 'state',
 });
 
@@ -1321,6 +1329,48 @@ function buildActiveWaitProgressSnapshot(
       ACTIVE_GATE_OWNER_COHORT_FIELD.PENDING_RECONCILE_COUNT,
       activeGateOwnerCohortPendingReconcileNodeIds,
     );
+  const membershipPublicationHandoffOutcome =
+    normalizeActiveGateOwnerCohortRecord(
+      snapshotCoverage?.selectedMembershipPublicationHandoffOutcome ||
+        publicationActiveGateHandoff?.[
+          ACTIVE_GATE_OWNER_COHORT_FIELD
+            .MEMBERSHIP_PUBLICATION_HANDOFF_OUTCOME
+        ] ||
+        activeGateOwnerCohort?.[
+          ACTIVE_GATE_OWNER_COHORT_FIELD
+            .MEMBERSHIP_PUBLICATION_HANDOFF_OUTCOME
+        ],
+    );
+  const membershipPublicationHandoffOutcomeState =
+    normalizeActiveGateOwnerCohortString(
+      membershipPublicationHandoffOutcome?.[
+        MEMBERSHIP_PUBLICATION_HANDOFF_OUTCOME_FIELD.STATE
+      ],
+    );
+  const membershipPublicationHandoffOutcomeReasonCode =
+    normalizeActiveGateOwnerCohortString(
+      membershipPublicationHandoffOutcome?.[
+        MEMBERSHIP_PUBLICATION_HANDOFF_OUTCOME_FIELD.REASON_CODE
+      ],
+    );
+  const membershipPublicationHandoffOutcomeEnqueued =
+    membershipPublicationHandoffOutcome?.[
+      MEMBERSHIP_PUBLICATION_HANDOFF_OUTCOME_FIELD.ENQUEUED
+    ] === true;
+  const membershipPublicationHandoffOutcomeRetryAfterMs = Number.isFinite(
+    membershipPublicationHandoffOutcome?.[
+      MEMBERSHIP_PUBLICATION_HANDOFF_OUTCOME_FIELD.RETRY_AFTER_MS
+    ],
+  ) ?
+    Math.max(
+      ZERO,
+      Math.floor(
+        membershipPublicationHandoffOutcome[
+          MEMBERSHIP_PUBLICATION_HANDOFF_OUTCOME_FIELD.RETRY_AFTER_MS
+        ],
+      ),
+    ) :
+    null;
   const perNodePublicationDisagreementSet =
     snapshotCoverage?.publicationDisagreementByNodeId &&
     typeof snapshotCoverage.publicationDisagreementByNodeId === 'object' ?
@@ -1523,6 +1573,10 @@ function buildActiveWaitProgressSnapshot(
       activeGateOwnerCohortPendingRecoveryCount,
       activeGateOwnerCohortPendingReconcileNodeIds,
       activeGateOwnerCohortPendingReconcileCount,
+      membershipPublicationHandoffOutcomeState,
+      membershipPublicationHandoffOutcomeReasonCode,
+      membershipPublicationHandoffOutcomeEnqueued,
+      membershipPublicationHandoffOutcomeRetryAfterMs,
     },
     publicationConvergence,
     publicationConvergenceGate,
@@ -1593,6 +1647,10 @@ function buildActiveWaitProgressSnapshot(
     activeGateOwnerCohortPendingRecoveryCount,
     activeGateOwnerCohortPendingReconcileNodeIds,
     activeGateOwnerCohortPendingReconcileCount,
+    membershipPublicationHandoffOutcomeState,
+    membershipPublicationHandoffOutcomeReasonCode,
+    membershipPublicationHandoffOutcomeEnqueued,
+    membershipPublicationHandoffOutcomeRetryAfterMs,
     perNodePublicationDisagreementSet,
     selectedPublishedActiveNodeIds,
     selectedPublishedActiveCount: selectedPublishedActiveNodeIds.length,

@@ -24,6 +24,7 @@ import {
 import {
   PRIORITY_RECOVERY_PROVENANCE_SOURCE,
   PRIORITY_RECOVERY_TARGET_SERVICE_TERMINAL_STATE,
+  PRIORITY_RECOVERY_TARGET_VISIBILITY_STATE,
 } from '../control-plane/priority-recovery-snapshot-stage-shared.js';
 import {
   OPERATION_WORKFLOW_OWNER_PORT_CONTEXT_CAUSE,
@@ -97,6 +98,13 @@ const OPERATION_WORKFLOW_OWNER_DISPATCH_PENDING_REENTRY_TABLE =
         OPERATION_WORKFLOW_OWNER_DISPATCH_PENDING_REENTRY_STATE
           .NOT_DISPATCH_PENDING,
       matches: (evidence) => evidence.dispatchPending !== true,
+    }),
+    Object.freeze({
+      state:
+        OPERATION_WORKFLOW_OWNER_DISPATCH_PENDING_REENTRY_STATE
+          .NOT_REENTERABLE,
+      matches: (evidence) =>
+        evidence.dispatchPendingTargetProgressReady === true,
     }),
     Object.freeze({
       state:
@@ -184,6 +192,17 @@ const OPERATION_WORKFLOW_OWNER_TARGET_PROGRESS_PHASES = Object.freeze(
   ]),
 );
 
+const OPERATION_WORKFLOW_OWNER_DISPATCH_PENDING_TARGET_PROGRESS_STATES =
+  Object.freeze(new Set([
+    PRIORITY_RECOVERY_TARGET_VISIBILITY_STATE.ACTIVE_OPERATIONAL,
+  ]));
+
+const OPERATION_WORKFLOW_OWNER_DISPATCH_PENDING_TARGET_PROGRESS_ACTIONS =
+  Object.freeze(new Set([
+    PRIORITY_RECOVERY_NEXT_REQUIRED_ACTION.ADVANCE_EXISTING_OPERATION,
+    PRIORITY_RECOVERY_NEXT_REQUIRED_ACTION.WAIT_FOR_OPERATION_PROGRESS,
+  ]));
+
 const OPERATION_WORKFLOW_OWNER_TARGET_PROGRESS_REENTRY_TABLE = Object.freeze([
   Object.freeze({
     state:
@@ -228,6 +247,15 @@ function buildOperationWorkflowOwnerDispatchPendingReentryEvidence(
   operation,
   rebalancerHandoffRetryActive,
 ) {
+  const targetVisibilityState =
+    snapshot?.coordinator?.operation?.targetVisibilityState ||
+    operation?.targetVisibilityState ||
+    OPERATION_WORKFLOW_OWNER_EMPTY_TEXT;
+  const eventDrivenWorkflowProgressBoundary =
+    snapshot?.progress?.blockingBoundary ===
+      PRIORITY_RECOVERY_BLOCKING_BOUNDARY.WORKFLOW_PROGRESS &&
+    snapshot?.progress?.waitMode ===
+      PRIORITY_RECOVERY_WAIT_MODE.EVENT_DRIVEN;
   return Object.freeze({
     operationAvailable: Boolean(operation),
     operationWorkflowOwner:
@@ -243,6 +271,18 @@ function buildOperationWorkflowOwnerDispatchPendingReentryEvidence(
         PRIORITY_RECOVERY_WORKFLOW_PROGRESS_PHASE.DISPATCH_PENDING &&
       snapshot?.progress?.workflowProgressPhaseId ===
         PRIORITY_RECOVERY_WORKFLOW_PROGRESS_PHASE.DISPATCH_PENDING,
+    dispatchPendingTargetProgressReady:
+      snapshot?.actuation?.workflowProgressPhaseId ===
+        PRIORITY_RECOVERY_WORKFLOW_PROGRESS_PHASE.DISPATCH_PENDING &&
+      snapshot?.progress?.workflowProgressPhaseId ===
+        PRIORITY_RECOVERY_WORKFLOW_PROGRESS_PHASE.DISPATCH_PENDING &&
+      eventDrivenWorkflowProgressBoundary === true &&
+      OPERATION_WORKFLOW_OWNER_DISPATCH_PENDING_TARGET_PROGRESS_ACTIONS.has(
+        snapshot?.progress?.nextRequiredAction,
+      ) &&
+      OPERATION_WORKFLOW_OWNER_DISPATCH_PENDING_TARGET_PROGRESS_STATES.has(
+        targetVisibilityState,
+      ),
     persistedNotDispatched:
       snapshot?.actuation?.state ===
         PRIORITY_RECOVERY_ACTUATION_STATE.PERSISTED_NOT_DISPATCHED,
@@ -250,10 +290,7 @@ function buildOperationWorkflowOwnerDispatchPendingReentryEvidence(
     eventDrivenAdvance:
       snapshot?.progress?.nextRequiredAction ===
         PRIORITY_RECOVERY_NEXT_REQUIRED_ACTION.ADVANCE_EXISTING_OPERATION &&
-      snapshot?.progress?.blockingBoundary ===
-        PRIORITY_RECOVERY_BLOCKING_BOUNDARY.WORKFLOW_PROGRESS &&
-      snapshot?.progress?.waitMode ===
-        PRIORITY_RECOVERY_WAIT_MODE.EVENT_DRIVEN,
+      eventDrivenWorkflowProgressBoundary === true,
   });
 }
 
@@ -428,6 +465,37 @@ function buildOperationWorkflowOwnerTargetProgressReentryEvidence(
 ) {
   const operationId =
     normalizeOperationWorkflowOwnerSnapshotOperationId(operation);
+  const targetVisibilityState =
+    snapshot?.coordinator?.operation?.targetVisibilityState ||
+    operation?.targetVisibilityState ||
+    OPERATION_WORKFLOW_OWNER_EMPTY_TEXT;
+  const eventDrivenWorkflowProgressBoundary =
+    snapshot?.progress?.blockingBoundary ===
+      PRIORITY_RECOVERY_BLOCKING_BOUNDARY.WORKFLOW_PROGRESS &&
+    snapshot?.progress?.waitMode ===
+      PRIORITY_RECOVERY_WAIT_MODE.EVENT_DRIVEN;
+  const targetPhaseProgressWait =
+    OPERATION_WORKFLOW_OWNER_TARGET_PROGRESS_PHASES.has(
+      snapshot?.actuation?.workflowProgressPhaseId,
+    ) &&
+    OPERATION_WORKFLOW_OWNER_TARGET_PROGRESS_PHASES.has(
+      snapshot?.progress?.workflowProgressPhaseId,
+    ) &&
+    snapshot?.progress?.nextRequiredAction ===
+      PRIORITY_RECOVERY_NEXT_REQUIRED_ACTION.WAIT_FOR_OPERATION_PROGRESS &&
+    eventDrivenWorkflowProgressBoundary === true;
+  const dispatchPendingTargetProgressWait =
+    snapshot?.actuation?.workflowProgressPhaseId ===
+      PRIORITY_RECOVERY_WORKFLOW_PROGRESS_PHASE.DISPATCH_PENDING &&
+    snapshot?.progress?.workflowProgressPhaseId ===
+      PRIORITY_RECOVERY_WORKFLOW_PROGRESS_PHASE.DISPATCH_PENDING &&
+    eventDrivenWorkflowProgressBoundary === true &&
+    OPERATION_WORKFLOW_OWNER_DISPATCH_PENDING_TARGET_PROGRESS_ACTIONS.has(
+      snapshot?.progress?.nextRequiredAction,
+    ) &&
+    OPERATION_WORKFLOW_OWNER_DISPATCH_PENDING_TARGET_PROGRESS_STATES.has(
+      targetVisibilityState,
+    );
   return Object.freeze({
     operationAvailable: Boolean(operationId),
     operationWorkflowOwner:
@@ -436,23 +504,14 @@ function buildOperationWorkflowOwnerTargetProgressReentryEvidence(
       snapshot?.progress?.currentOwner ===
         PRIORITY_RECOVERY_PROGRESS_OWNER.OPERATION_WORKFLOW_OWNER,
     targetProgressWait:
-      OPERATION_WORKFLOW_OWNER_TARGET_PROGRESS_PHASES.has(
-        snapshot?.actuation?.workflowProgressPhaseId,
-      ) &&
-      OPERATION_WORKFLOW_OWNER_TARGET_PROGRESS_PHASES.has(
-        snapshot?.progress?.workflowProgressPhaseId,
-      ) &&
-      snapshot?.progress?.nextRequiredAction ===
-        PRIORITY_RECOVERY_NEXT_REQUIRED_ACTION.WAIT_FOR_OPERATION_PROGRESS &&
-      snapshot?.progress?.blockingBoundary ===
-        PRIORITY_RECOVERY_BLOCKING_BOUNDARY.WORKFLOW_PROGRESS &&
-      snapshot?.progress?.waitMode ===
-        PRIORITY_RECOVERY_WAIT_MODE.EVENT_DRIVEN,
+      targetPhaseProgressWait === true ||
+      dispatchPendingTargetProgressWait === true,
     targetServiceTerminal:
       snapshot?.coordinator?.operation?.targetServiceTerminalState ===
         PRIORITY_RECOVERY_TARGET_SERVICE_TERMINAL_STATE.TERMINAL ||
       operation?.targetServiceTerminalState ===
-        PRIORITY_RECOVERY_TARGET_SERVICE_TERMINAL_STATE.TERMINAL,
+        PRIORITY_RECOVERY_TARGET_SERVICE_TERMINAL_STATE.TERMINAL ||
+      dispatchPendingTargetProgressWait === true,
     locallyOwned: owner.repository.isOperationLocallyOwned(operation),
     ownerLaneHeld:
       Boolean(operationId) && owner.isOperationOwnerLaneHeld(operationId),
@@ -794,7 +853,7 @@ class OperationWorkflowOwner extends OperationWorkflowOwnerSegment7 {
     );
     this.schedulePriorityRecoveryTargetProgressReentry(
       normalizedSnapshot,
-      [operation],
+      operations,
     );
     return normalizedSnapshot;
   }

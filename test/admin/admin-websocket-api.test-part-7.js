@@ -1225,3 +1225,85 @@ test('setSQLQueryEngine refreshes liveQueryManager when admin runtime starts ear
       'late SQL attachment should surface membership publication convergence',
     );
   });
+
+test('setSQLQueryEngine upgrades stale readiness with publication owner service',
+  async (t) => {
+    const testNodeId = 'test-node';
+    const publicationEpoch = 17;
+    const staleReadinessService = {
+      async getAllNodeReadiness() {
+        return [];
+      },
+    };
+    const membershipPublicationService = {
+      async getLatestClusterPublication() {
+        return {
+          publicationEpoch,
+          status: 'PUBLISHED',
+          publishedActiveNodeIds: [],
+          requiredAckNodeIds: [],
+          acknowledgedNodeIds: [],
+        };
+      },
+      async getLatestPublishedClusterPublication() {
+        return {
+          publicationEpoch,
+          status: 'PUBLISHED',
+          publishedActiveNodeIds: [],
+        };
+      },
+    };
+    const attachedReadinessService = {
+      async getAllNodeReadiness() {
+        return [];
+      },
+      membershipPublicationService,
+    };
+    const api = new AdminWebSocketAPI({
+      systemTableCache: {
+        getAll() {
+          return [];
+        },
+      },
+      sqlQueryEngine: null,
+      nodeId: testNodeId,
+      controlPlaneReadinessService: staleReadinessService,
+    });
+    const engine = {
+      ...createMockQueryEngine(),
+      controlPlaneReadinessService: attachedReadinessService,
+      rebalanceCoordinator: {
+        controlPlaneReadinessService: staleReadinessService,
+      },
+    };
+
+    t.equal(
+      api.controlPlaneReadinessService,
+      staleReadinessService,
+      'constructor should retain the early readiness service before SQL attach',
+    );
+    t.equal(
+      api.controlSnapshot.controlPlaneReadinessService,
+      staleReadinessService,
+      'control snapshot should start with the early readiness service',
+    );
+
+    api.setSQLQueryEngine(engine);
+
+    t.equal(
+      api.controlPlaneReadinessService,
+      attachedReadinessService,
+      'late SQL attachment should prefer readiness with publication owner',
+    );
+    t.equal(
+      api.controlSnapshot.controlPlaneReadinessService,
+      attachedReadinessService,
+      'late SQL attachment should upgrade the control snapshot readiness owner',
+    );
+    t.equal(
+      api.controlSnapshot.controlPlaneReadinessService
+        .membershipPublicationService,
+      membershipPublicationService,
+      'late SQL attachment should expose the membership publication service',
+    );
+  });

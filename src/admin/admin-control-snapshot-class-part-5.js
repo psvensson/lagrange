@@ -50,6 +50,9 @@ const STATUS_ACTIVE = 'active';
 const CONTROL_PLANE_DIAGNOSTICS_SCHEMA_VERSION = 1;
 const CONTROL_PLANE_DIAGNOSTICS_CDC_REPLAY_LIMIT = 5;
 const PRIORITY_RECOVERY_DECISION_SNAPSHOT_SCHEMA_VERSION = 1;
+const PRIORITY_RECOVERY_DISPATCH_PENDING_REENTRY_OPTIONS = Object.freeze({
+  allowOwnerLaneRetry: true,
+});
 /**
  * Normalize one arbitrary value to a non-negative integer.
  * @param {*} value
@@ -351,6 +354,9 @@ class AdminControlSnapshotPart5 extends AdminControlSnapshotPart4 {
         serviceRows,
         logsTable,
       });
+    this.schedulePriorityRecoveryDispatchPendingReentries(
+      priorityRecoveryDecisionSnapshots,
+    );
     const publicationEvidence =
       this.resolveCanonicalPublicationRecoveryEvidenceDiagnostics(
         readinessEntries,
@@ -424,6 +430,48 @@ class AdminControlSnapshotPart5 extends AdminControlSnapshotPart4 {
       ...options,
       schemaVersion: PRIORITY_RECOVERY_DECISION_SNAPSHOT_SCHEMA_VERSION,
     });
+  }
+
+  resolvePriorityRecoveryDispatchPendingWorkflowOwner() {
+    const workflowOwner =
+      this.sqlQueryEngine?.rebalanceCoordinator?.workflowOwner || null;
+    return (
+      workflowOwner &&
+      typeof workflowOwner.schedulePriorityRecoveryDispatchPendingReentry ===
+        TYPEOF.FUNCTION
+    ) ?
+      workflowOwner :
+      null;
+  }
+
+  schedulePriorityRecoveryDispatchPendingReentries(
+    priorityRecoveryDecisionSnapshots,
+  ) {
+    const workflowOwner =
+      this.resolvePriorityRecoveryDispatchPendingWorkflowOwner();
+    if (!workflowOwner) {
+      return NUM.ZERO;
+    }
+    const snapshots = Array.isArray(
+      priorityRecoveryDecisionSnapshots?.snapshots,
+    ) ?
+      priorityRecoveryDecisionSnapshots.snapshots :
+      ADMIN_CACHE_DUMP.EMPTY;
+    let scheduledCount = NUM.ZERO;
+    for (const decisionSnapshot of snapshots) {
+      const operation = decisionSnapshot?.coordinator?.operation || null;
+      const operations = operation ? [operation] : ADMIN_CACHE_DUMP.EMPTY;
+      if (
+        workflowOwner.schedulePriorityRecoveryDispatchPendingReentry(
+          decisionSnapshot,
+          operations,
+          PRIORITY_RECOVERY_DISPATCH_PENDING_REENTRY_OPTIONS,
+        ) === true
+      ) {
+        scheduledCount += NUM.ONE;
+      }
+    }
+    return scheduledCount;
   }
 }
 export {AdminControlSnapshotPart5};

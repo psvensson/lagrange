@@ -20,43 +20,46 @@ success is in scope.
 ## Current Blocker Snapshot
 
 Latest representative artifact:
-`test-output/reports/rolling-restart-after-control-plane-publication-pending-20260515-codex.report.json`.
+`test-output/reports/rolling-restart-after-owner-trigger-only-handoff-20260516.report.json`.
 
-Canonical state after the control-plane publication pending proof:
+Canonical state after the membership publication owner-command handoff proof:
 
 1. `work:evidence-summary` selects `active_gate_snapshot_coverage` as the first
    frontier.
 2. Representative owner boundary:
    `startup_active_gate_owner / snapshot_coverage`.
-3. Dominant reason: `active_gate_timed_out`.
-4. Current reasons:
-   `active_gate_timed_out`, `owner_reconcile_pending`,
+3. Dominant reason: `owner_reconcile_pending`.
+4. Current reasons: `owner_reconcile_pending`,
    `snapshot_coverage_incomplete`, and `snapshot_repair_deferred`.
-5. All nodes now report active: `active=5/5`.
-6. Producer publication ACK convergence is satisfied, but selected producer
-   membership remains seed-only and producer `missingPublishedCount=4`.
-7. The canonical handoff probe reports `missingEdge=null` and
-   `contractEdge=publication_active_gate_handoff_contract`.
-8. Handoff contract state is `pending` with
-   `nextAction=reconcile_owner_membership_publication`,
-   consumer `pendingReconcileCount=2`, pending nodes
-   `35a891b8-c1a0-5064-9c6e-2acfba61c2a7`,
-   and `8be8d30f-4499-5eed-865c-71b4d529a67a`, with
-   `runtimePromotionAllowed=false`.
-9. Active-gate snapshot coverage remains `2/5`; selected snapshot observation
+5. Producer publication ACK convergence is satisfied with `pendingAck=0`, but
+   selected producer membership remains seed-only and producer
+   `missingPublishedCount=4`.
+6. Active-gate snapshot coverage remains `2/5`; selected snapshot observation
    remains `repair_deferred` / `deferred_refresh` / `deferred` / `deferred` /
-   `retry` with
-   `cache_stale_watermark|discovery_node_coverage_gap|stale_replica_operations_in_flight`.
-10. `analyze:priority-recovery-residuals` now reports zero witnesses; the
-    workflow-progress residual is drained.
-11. `causal-model` marks `priority_recovery_partition_progress` satisfied and
-    keeps `active_gate_snapshot_coverage` as the first critical path.
-12. The closed package is
-    `work/packages/done-20260515-priority-recovery-operation-workflow-owner-control-plane-publication-pending.md`;
-    the next package should own `startup_active_gate_owner / snapshot_coverage`
-    for the remaining owner membership publication reconcile path.
-13. Active-gate admission must remain strict until the owner reconcile path
-    produces durable coverage.
+   `retry`.
+7. The canonical handoff probe reports `missingEdge=null`,
+   `contractEdge=publication_active_gate_handoff_contract`,
+   `nextAction=reconcile_owner_membership_publication`,
+   `pendingReconcileCount=2`, pending nodes
+   `11601fe0-72d6-5853-8590-ec2881853e72` and
+   `35a891b8-c1a0-5064-9c6e-2acfba61c2a7`, and
+   `runtimePromotionAllowed=false`.
+8. Focused owner tests now prove the seed-only fixture: the membership
+   publication owner writes or classifies the widened publication row with
+   durable readback, while admin snapshot catch-up is trigger/display only.
+9. The representative report contains no
+   `membershipPublicationHandoffOutcome` and no structured owner outcome value
+   (`published_visible`, `write_deferred`, `pressure_deferred`,
+   `target_blocked`, or `no_change`).
+10. `causal-model` marks `priority_recovery_partition_progress` satisfied at
+    the active-gate summary and keeps `active_gate_snapshot_coverage` as the
+    first critical path; one subordinate
+    `operation_workflow_owner / workflow_progress` witness remains parked.
+11. The active package remains
+    `work/packages/active-20260515-startup-active-gate-snapshot-coverage-owner-reconcile-remaining-targets.md`.
+12. Active-gate admission must remain strict until the owner reconcile path
+    produces durable coverage or reports one typed deferred/blocked owner
+    outcome.
 
 ## Scope Basis
 
@@ -162,6 +165,24 @@ Pro or Enterprise behavior.
      priority-recovery residual witnesses and migrates the blocker back to
      `startup_active_gate_owner / snapshot_coverage` with
      `pendingReconcileCount=2`.
+6. [Startup Active Gate Snapshot Coverage Owner Reconcile Remaining Targets](../packages/active-20260515-startup-active-gate-snapshot-coverage-owner-reconcile-remaining-targets.md)
+   - Lane: `causal-escalation`
+   - Owner boundary:
+     `startup_active_gate_owner / snapshot_coverage`
+   - Purpose: prove or reduce the remaining owner membership publication
+     reconcile path for pending nodes
+     `11601fe0-72d6-5853-8590-ec2881853e72` and
+     `35a891b8-c1a0-5064-9c6e-2acfba61c2a7` after workflow progress drained.
+   - Entry condition: the control-plane publication pending package pushed as
+     migrated; fresh representative evidence reports zero priority-recovery
+     witnesses, `snapshotCoverage=2/5`, producer selected membership
+     seed-only, and handoff `pendingReconcileCount=2`.
+   - Acceptance: representative `rolling-restart` is green,
+     `pendingReconcileCount`, producer selected membership, or snapshot
+     coverage improves with focused owner proof, or canonical evidence reports
+     one membership publication owner outcome:
+     `published_visible`, `write_deferred`, `pressure_deferred`,
+     `target_blocked`, or `no_change`.
 6. [Publication Active-Gate Reconcile Bridge Simplification](../packages/done-20260515-publication-active-gate-reconcile-bridge-simplification.md)
    - Lane: `causal-escalation`
    - Owner boundary:
@@ -310,14 +331,13 @@ Pro or Enterprise behavior.
      evidence names `advance_existing_operation`. No startup active-gate
      runtime file is promoted by this proof package.
 
-No additional package may be added merely to defer owner-key reconcile from
-the original active-gate owner package. That package is now closed as migrated.
-The queued bridge simplification package is a follow-on only; it must not start
-until fresh context confirms the bridge remains the next startup active-gate
-concern. The workflow-progress package is now active because canonical evidence
-records owner-boundary migration proof; any other split is allowed only when
-canonical evidence changes the semantic owner, boundary, or next required
-action.
+No additional package may be added merely to defer owner-key reconcile from the
+active startup active-gate package. The bridge simplification and earlier
+visibility proof packages are closed context. The current package continues on
+the same representative owner boundary until it either makes the active-gate
+handoff consume a structured membership publication owner outcome, turns the
+gate green, or canonical evidence changes the semantic owner, boundary, or next
+required action.
 
 ## Working Rules
 
@@ -346,18 +366,22 @@ action.
 
 1. `npm run work:context`
 2. `npm run work:llm-start`
-3. `npm run work:package:doctor -- --suggest work/packages/active-20260515-priority-recovery-operation-workflow-owner-control-plane-publication-pending.md`
-4. `npm run work:evidence-summary -- test-output/reports/rolling-restart-after-workflow-progress-reentry-20260515-codex.report.json`
-5. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-workflow-progress-reentry-20260515-codex.report.json --handoff-probe`
-6. `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-workflow-progress-reentry-20260515-codex.report.json`
-7. `npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-after-workflow-progress-reentry-20260515-codex.report.json --markdown`
+3. `npm run work:package:doctor -- --suggest work/packages/active-20260515-startup-active-gate-snapshot-coverage-owner-reconcile-remaining-targets.md`
+4. `npm run work:evidence-summary -- test-output/reports/rolling-restart-after-control-plane-publication-pending-20260515-codex.report.json`
+5. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-control-plane-publication-pending-20260515-codex.report.json --handoff-probe`
+6. `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-control-plane-publication-pending-20260515-codex.report.json`
+7. `npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-after-control-plane-publication-pending-20260515-codex.report.json --markdown`
 8. `npm run analyze:owner-files -- startup_active_gate_owner snapshot_coverage --markdown`
-9. `npm run analyze:distributed-failure -- --report test-output/reports/rolling-restart-after-workflow-progress-reentry-20260515-codex.report.json`
-10. `npm run analyze:owner-files -- operation_workflow_owner workflow_progress --markdown`
-11. `npm run work:subagent-prompt -- --role review --package work/packages/active-20260515-priority-recovery-operation-workflow-owner-control-plane-publication-pending.md`
-12. Real review/fix/implementation subagent proof before runtime implementation starts.
-13. Focused owner tests, static guardrails, and representative `rolling-restart`
+9. `npm run analyze:distributed-failure -- --report test-output/reports/rolling-restart-after-control-plane-publication-pending-20260515-codex.report.json`
+10. `npm run work:subagent-prompt -- --role review --package work/packages/active-20260515-startup-active-gate-snapshot-coverage-owner-reconcile-remaining-targets.md`
+11. Real review/fix/implementation subagent proof before runtime implementation starts.
+12. Focused owner tests, static guardrails, and representative `rolling-restart`
     after the package has implementation proof.
+13. `node --test test/control-plane/membership-publication-coordinator-main-stage-2.js`
+14. `node --test test/control-plane/publication-active-gate-handoff-contract.test.js`
+15. `npm run work:evidence-summary -- test-output/reports/rolling-restart-after-owner-trigger-only-handoff-20260516.report.json`
+16. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-owner-trigger-only-handoff-20260516.report.json --handoff-probe`
+17. `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-owner-trigger-only-handoff-20260516.report.json`
 
 ## Closure Rules
 
@@ -377,13 +401,19 @@ The sprint cannot close until:
 
 ## Current Next Action
 
-Continue with the active single-witness workflow-progress package:
+Continue with the active startup active-gate snapshot coverage package:
 
 ```text
-work/packages/active-20260515-priority-recovery-operation-workflow-owner-control-plane-publication-pending.md
+work/packages/active-20260515-startup-active-gate-snapshot-coverage-owner-reconcile-remaining-targets.md
 ```
 
-Run the required review/fix/implementation sequence, then prove or split the
-single `control_plane_publications-p1` workflow-progress witness for operation
-`0a3b14cf-b731-4279-a07b-3a755ead1a17` without relaxing active-gate admission,
+Review, fix, and implementation subagent proof are recorded in the active
+package. Continue from the latest representative residual: focused owner tests
+prove the owner command and seed-only fixture, but rolling-restart still reports
+generic `owner_reconcile_pending` and does not surface
+`membershipPublicationHandoffOutcome` or one of the structured owner outcomes.
+The next action is to trace the representative active-gate handoff path that
+should consume or display that owner outcome for pending nodes
+`11601fe0-72d6-5853-8590-ec2881853e72` and
+`35a891b8-c1a0-5064-9c6e-2acfba61c2a7`, without relaxing active-gate admission,
 rewriting publication handoff truth, or increasing timeouts.

@@ -110,6 +110,25 @@ const PUBLICATION_ACTIVE_GATE_HANDOFF_LIFECYCLE_NODE_FIELDS =
       .MISSING_PUBLISHED_RECOVERY_ACTIVE_NODE_IDS,
   ]);
 
+const PUBLICATION_ACTIVE_GATE_HANDOFF_TARGET_NODE_FIELDS = Object.freeze([
+  PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.EXPECTED_NODE_IDS,
+  PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.EFFECTIVE_ACTIVE_NODE_IDS,
+  PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.PROJECTED_ACTIVE_NODE_IDS,
+  PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.PROJECTED_SERVING_NODE_IDS,
+  PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.LOCALLY_ELIGIBLE_NODE_IDS,
+  PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.MISSING_PUBLISHED_NODE_IDS,
+  PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD
+    .MISSING_PUBLISHED_RECOVERY_ACTIVE_NODE_IDS,
+  PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.PENDING_RECONCILE_NODE_IDS,
+  PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.RECOVERY_ACTIVE_NODE_IDS,
+]);
+
+const PUBLICATION_ACTIVE_GATE_HANDOFF_TARGET_CONTEXT_FIELDS = Object.freeze([
+  PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.ACTIVE_GATE_OWNER_COHORT,
+  PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.PUBLICATION_ACTIVE_GATE_HANDOFF,
+  PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.PUBLICATION_CONVERGENCE,
+]);
+
 const PUBLICATION_ACTIVE_GATE_HANDOFF_PENDING_OWNER_REASON_CODES =
   Object.freeze([
     CONTROL_PLANE_READINESS_REASON.PRIORITY_CONTROL_PLANE_RECOVERY_PENDING,
@@ -259,6 +278,40 @@ function collectPublicationActiveGateHandoffPublicationNodeIds(
       PUBLICATION_ACTIVE_GATE_HANDOFF_LIFECYCLE_NODE_FIELDS,
     ),
   ];
+}
+
+function collectPublicationActiveGateHandoffContextNodeIds(targetEvidence) {
+  return PUBLICATION_ACTIVE_GATE_HANDOFF_TARGET_CONTEXT_FIELDS.flatMap(
+    (fieldName) => {
+      const context = targetEvidence[fieldName];
+      if (!isPublicationActiveGateHandoffRecord(context)) {
+        return PUBLICATION_ACTIVE_GATE_HANDOFF_EMPTY_LIST;
+      }
+      return [
+        ...collectPublicationActiveGateHandoffRecordNodeIds(
+          context,
+          PUBLICATION_ACTIVE_GATE_HANDOFF_TARGET_NODE_FIELDS,
+        ),
+        ...collectPublicationActiveGateHandoffPublicationNodeIds(context),
+      ];
+    },
+  );
+}
+
+function collectPublicationActiveGateHandoffTargetEvidenceNodeIds(
+  targetEvidence,
+) {
+  if (!isPublicationActiveGateHandoffRecord(targetEvidence)) {
+    return PUBLICATION_ACTIVE_GATE_HANDOFF_EMPTY_LIST;
+  }
+  return normalizePublicationActiveGateHandoffNodeIdList([
+    ...collectPublicationActiveGateHandoffRecordNodeIds(
+      targetEvidence,
+      PUBLICATION_ACTIVE_GATE_HANDOFF_TARGET_NODE_FIELDS,
+    ),
+    ...collectPublicationActiveGateHandoffPublicationNodeIds(targetEvidence),
+    ...collectPublicationActiveGateHandoffContextNodeIds(targetEvidence),
+  ]);
 }
 
 function resolvePublicationActiveGateHandoffExpectedNodeIds(options = {}) {
@@ -649,14 +702,38 @@ function buildPublicationActiveGateHandoffEmptyReconcileTarget(
   });
 }
 
+function resolvePublicationActiveGateHandoffReconcileTargetNodeIds(
+  handoffContract,
+  targetEvidence = null,
+) {
+  const pendingRecoveryNodeIdSet = new Set(
+    handoffContract.pendingRecoveryNodeIds,
+  );
+  const expectedTargetNodeIds =
+    normalizePublicationActiveGateHandoffNodeIdList([
+      ...handoffContract.expectedNodeIds,
+      ...collectPublicationActiveGateHandoffTargetEvidenceNodeIds(
+        targetEvidence,
+      ),
+    ]);
+  return normalizePublicationActiveGateHandoffNodeIdList([
+    ...handoffContract.publishedActiveNodeIds,
+    ...handoffContract.pendingReconcileNodeIds,
+    ...expectedTargetNodeIds.filter(
+      (nodeId) => !pendingRecoveryNodeIdSet.has(nodeId),
+    ),
+  ]);
+}
+
 function buildPublicationActiveGateHandoffReconcileTarget(
   handoffContract,
+  targetEvidence = null,
 ) {
   const publishedActiveNodeIds =
-    normalizePublicationActiveGateHandoffNodeIdList([
-      ...handoffContract.publishedActiveNodeIds,
-      ...handoffContract.pendingReconcileNodeIds,
-    ]);
+    resolvePublicationActiveGateHandoffReconcileTargetNodeIds(
+      handoffContract,
+      targetEvidence,
+    );
   if (publishedActiveNodeIds.length === NUM.ZERO) {
     return buildPublicationActiveGateHandoffEmptyReconcileTarget(
       handoffContract,
@@ -675,8 +752,11 @@ function buildPublicationActiveGateHandoffReconcileTarget(
 }
 
 function resolvePublicationActiveGateMembershipPublicationTarget(value = null) {
+  const selectedHandoffContract = selectPublicationActiveGateHandoffContract(
+    value,
+  );
   const handoffContract = normalizePublicationActiveGateHandoffContract(
-    selectPublicationActiveGateHandoffContract(value),
+    selectedHandoffContract,
   );
   if (
     !handoffContract ||
@@ -688,7 +768,10 @@ function resolvePublicationActiveGateMembershipPublicationTarget(value = null) {
       handoffContract,
     );
   }
-  return buildPublicationActiveGateHandoffReconcileTarget(handoffContract);
+  return buildPublicationActiveGateHandoffReconcileTarget(
+    handoffContract,
+    value,
+  );
 }
 
 function hasPublicationActiveGateOwnerReconcileSignal(value = null) {

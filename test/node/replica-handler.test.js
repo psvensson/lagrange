@@ -66,6 +66,22 @@ const TEST_ALREADY_ACTIVE_REPLICA_ID = 'replica-1';
 const TEST_IN_PROGRESS_OPERATION_ID = 'op-in-progress';
 const TEST_IN_PROGRESS_PARTITION_ID = 'partition-1';
 const TEST_IN_PROGRESS_REPLICA_ID = 'replica-1';
+const TEST_PENDING_RESTART_OPERATION_ID = 'op-pending-restart';
+const TEST_PENDING_RESTART_PARTITION_ID = 'partition-1';
+const TEST_PENDING_RESTART_REPLICA_ID = 'replica-pending-restart';
+const TEST_RETRYABLE_CREATE_STATUS_OPERATION_ID =
+  'op-retryable-create-status';
+const TEST_RETRYABLE_CREATE_STATUS_PARTITION_ID = 'partition-1';
+const TEST_RETRYABLE_CREATE_STATUS_REPLICA_ID =
+  'replica-retryable-create-status';
+const TEST_RETRYABLE_CREATE_STATUS_ERROR =
+  'Distributed operation failed due to participant failures';
+const TEST_RETRYABLE_CREATE_STATUS_CODE =
+  'DISTRIBUTED_PARTICIPANT_FAILURE';
+const TEST_RETRYABLE_CREATE_STATUS_RETRY_AFTER_MS = 1000;
+const TEST_WAIT_FOR_CONDITION_TIMEOUT_MS = 100;
+const TEST_WAIT_FOR_CONDITION_POLL_MS = 5;
+const TEST_WAIT_FOR_CONDITION_TIMEOUT_ERROR = 'condition not reached';
 
 /**
  * Create a mock CDC integration service.
@@ -294,6 +310,24 @@ function waitForReplicaEvent(handler, successEvent, failureEvent) {
       reject(new Error(event?.error || 'operation failed'));
     });
   });
+}
+
+/**
+ * Wait for a short-lived async test condition.
+ * @param {Function} predicate - Predicate returning true when ready.
+ * @return {Promise<void>}
+ */
+async function waitForCondition(predicate) {
+  const deadline = Date.now() + TEST_WAIT_FOR_CONDITION_TIMEOUT_MS;
+  while (Date.now() <= deadline) {
+    if (predicate()) {
+      return;
+    }
+    await new Promise((resolve) => {
+      setTimeout(resolve, TEST_WAIT_FOR_CONDITION_POLL_MS);
+    });
+  }
+  throw new Error(TEST_WAIT_FOR_CONDITION_TIMEOUT_ERROR);
 }
 
 test('ReplicaHandler', async (t) => {
@@ -1528,6 +1562,12 @@ test('ReplicaHandler', async (t) => {
         partitionId: TEST_IN_PROGRESS_PARTITION_ID,
         status: ReplicaStatus.PENDING,
       });
+      handler.inProgressOperations.set(TEST_IN_PROGRESS_OPERATION_ID, {
+        type: ReplicaOperationMessageType.CREATE_REPLICA,
+        replicaId: TEST_IN_PROGRESS_REPLICA_ID,
+        partitionId: TEST_IN_PROGRESS_PARTITION_ID,
+        startedAt: Date.now(),
+      });
 
       const response = await handler.handleCreateReplica({
         operationId: TEST_IN_PROGRESS_OPERATION_ID,
@@ -1557,6 +1597,166 @@ test('ReplicaHandler', async (t) => {
 
       handler.shutdown();
     });
+
+  t.test('handleCreateReplica - restarts stale pending replica creation',
+    async (t) => {
+      const cache = createSeededCache({
+        partitionId: TEST_PENDING_RESTART_PARTITION_ID,
+      });
+      seedReplicaOperation(cache, TEST_PENDING_RESTART_OPERATION_ID, {
+        partitionId: TEST_PENDING_RESTART_PARTITION_ID,
+        replicaId: TEST_PENDING_RESTART_REPLICA_ID,
+      });
+      const mockCDC = createMockCDCService(cache);
+      const createCalls = [];
+
+      const handler = new ReplicaHandler({
+        nodeId: 'test-node',
+        dataDir: tempDir,
+        systemTableCache: cache,
+        cdcIntegrationService: mockCDC,
+        createPartitionService: async (options) => {
+          createCalls.push(options);
+          return createMockPartitionServiceFactory()(options);
+        },
+      });
+
+      handler.initialize();
+      handler.localReplicas.set(TEST_PENDING_RESTART_REPLICA_ID, {
+        replicaId: TEST_PENDING_RESTART_REPLICA_ID,
+        partitionId: TEST_PENDING_RESTART_PARTITION_ID,
+        status: ReplicaStatus.PENDING,
+      });
+
+      const created = waitForReplicaEvent(
+        handler,
+        'replicaCreated',
+        'replicaCreationFailed',
+      );
+      const response = await handler.handleCreateReplica({
+        operationId: TEST_PENDING_RESTART_OPERATION_ID,
+        partitionId: TEST_PENDING_RESTART_PARTITION_ID,
+        replicaId: TEST_PENDING_RESTART_REPLICA_ID,
+      });
+
+      t.equal(
+        response.status,
+        ReplicaOperationResponseStatus.INITIATED,
+        'stale pending replica should restart async creation',
+      );
+
+      await created;
+
+      t.equal(createCalls.length, 1, 'stale pending replay creates one service');
+      t.equal(
+        handler.getLocalReplica(TEST_PENDING_RESTART_REPLICA_ID)?.status,
+        ReplicaStatus.ACTIVE,
+        'restarted pending replica converges to active',
+      );
+      t.equal(
+        handler.inProgressOperations.size,
+        0,
+        'restarted pending replica clears operation tracking',
+      );
+
+      handler.shutdown();
+    });
+
+  t.test(
+    'handleCreateReplica - retryable initial status failure allows replay',
+    async (t) => {
+      const cache = createSeededCache({
+        partitionId: TEST_RETRYABLE_CREATE_STATUS_PARTITION_ID,
+      });
+      seedReplicaOperation(cache, TEST_RETRYABLE_CREATE_STATUS_OPERATION_ID, {
+        partitionId: TEST_RETRYABLE_CREATE_STATUS_PARTITION_ID,
+        replicaId: TEST_RETRYABLE_CREATE_STATUS_REPLICA_ID,
+      });
+      const mockCDC = createMockCDCService(cache);
+      let creatingTransitionAttempted = false;
+      let createCallCount = 0;
+
+      const handler = new ReplicaHandler({
+        nodeId: 'test-node',
+        dataDir: tempDir,
+        systemTableCache: cache,
+        cdcIntegrationService: mockCDC,
+        createPartitionService: async (options) => {
+          createCallCount += 1;
+          return createMockPartitionServiceFactory()(options);
+        },
+        replicaStateMachine: {
+          getState() {
+            return null;
+          },
+          async transition(replicaId, newStatus) {
+            if (
+              replicaId === TEST_RETRYABLE_CREATE_STATUS_REPLICA_ID &&
+              newStatus === ReplicaStatus.CREATING
+            ) {
+              creatingTransitionAttempted = true;
+              const error = new Error(TEST_RETRYABLE_CREATE_STATUS_ERROR);
+              error.code = TEST_RETRYABLE_CREATE_STATUS_CODE;
+              error.retryAfterMs =
+                TEST_RETRYABLE_CREATE_STATUS_RETRY_AFTER_MS;
+              throw error;
+            }
+            return true;
+          },
+        },
+      });
+
+      handler.initialize();
+
+      const response = await handler.handleCreateReplica({
+        operationId: TEST_RETRYABLE_CREATE_STATUS_OPERATION_ID,
+        partitionId: TEST_RETRYABLE_CREATE_STATUS_PARTITION_ID,
+        replicaId: TEST_RETRYABLE_CREATE_STATUS_REPLICA_ID,
+      });
+
+      t.equal(
+        response.status,
+        ReplicaOperationResponseStatus.INITIATED,
+        'first create should ACK',
+      );
+
+      await waitForCondition(() => creatingTransitionAttempted === true);
+      await waitForCondition(() => handler.inProgressOperations.size === 0);
+
+      t.equal(
+        handler.getLocalReplica(TEST_RETRYABLE_CREATE_STATUS_REPLICA_ID)
+          ?.status,
+        ReplicaStatus.PENDING,
+        'retryable initial status failure leaves retryable pending state',
+      );
+      t.equal(
+        createCallCount,
+        0,
+        'partition service should not start without CREATING persistence',
+      );
+
+      const replayResponse = await handler.handleCreateReplica({
+        operationId: TEST_RETRYABLE_CREATE_STATUS_OPERATION_ID,
+        partitionId: TEST_RETRYABLE_CREATE_STATUS_PARTITION_ID,
+        replicaId: TEST_RETRYABLE_CREATE_STATUS_REPLICA_ID,
+      });
+
+      t.equal(
+        replayResponse.status,
+        ReplicaOperationResponseStatus.INITIATED,
+        'pending replay should be accepted after deferred status write',
+      );
+      t.equal(
+        handler.inProgressOperations.has(
+          TEST_RETRYABLE_CREATE_STATUS_OPERATION_ID,
+        ),
+        true,
+        'pending replay should re-track the create operation',
+      );
+
+      await handler.shutdown();
+    },
+  );
 
   t.test('handleCreateReplica - emits syncing outcome for syncing replica',
     async (t) => {

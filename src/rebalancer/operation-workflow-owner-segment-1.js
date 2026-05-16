@@ -841,6 +841,7 @@ class OperationWorkflowOwnerSegment1 {
       await this.repository.getOperationByIdVisibilityObservation(operationId, {
         requireOwnerRpcRead: false,
         allowPriorityRecoveryDeferredVisibility: true,
+        allowOwnerPersistedTransitionDeferredVisibility: false,
       });
     return this.resolveDeferredRetryVisibleOperation(
       visibilityObservation,

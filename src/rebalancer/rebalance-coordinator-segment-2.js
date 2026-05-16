@@ -1355,8 +1355,8 @@ class RebalanceCoordinatorSegment2 extends RebalanceCoordinatorSegment1 {
    * @param {string|Object} operationInput - Operation id or payload.
    * @return {Promise<Object>} Execution result or typed skip.
    */
-  async dispatchOperation(operationInput) {
-    return this.workflowOwner.dispatchOperation(operationInput);
+  async dispatchOperation(operationInput, options = {}) {
+    return this.workflowOwner.dispatchOperation(operationInput, options);
   }
 
   /**

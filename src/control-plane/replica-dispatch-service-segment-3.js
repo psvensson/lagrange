@@ -547,6 +547,24 @@ class ReplicaDispatchServiceSegment3 extends ReplicaDispatchServiceSegment2 {
    * @private
    */
   armDeferredOperationDispatchRetry(operationId, delayMs) {
+    return this.armDeferredOperationDispatchRetryWithOptions(
+      operationId,
+      delayMs,
+    );
+  }
+
+  /**
+   * @param {string} operationId
+   * @param {number} delayMs
+   * @param {Object} [options={}]
+   * @return {*}
+   * @private
+   */
+  armDeferredOperationDispatchRetryWithOptions(
+    operationId,
+    delayMs,
+    options = {},
+  ) {
     return this.setTimeoutFn(() => {
       const deferredRetry =
         this.operationDispatchDeferredRetries.get(operationId);
@@ -557,10 +575,23 @@ class ReplicaDispatchServiceSegment3 extends ReplicaDispatchServiceSegment2 {
       const row = deferredRetry?.row ?
         this.cloneDeferredOperationDispatchRow(deferredRetry.row) :
         null;
+      const context = row ? {row} : {};
+      if (
+        options?.[
+          REPLICA_DISPATCH_SERVICE_LITERAL.REFRESH_ROW_BEFORE_DISPATCH
+        ] === true ||
+        deferredRetry?.[
+          REPLICA_DISPATCH_SERVICE_LITERAL.REFRESH_ROW_BEFORE_DISPATCH
+        ] === true
+      ) {
+        context[
+          REPLICA_DISPATCH_SERVICE_LITERAL.REFRESH_ROW_BEFORE_DISPATCH
+        ] = true;
+      }
       this.operationDispatchQueue.enqueue(
         operationId,
         RECONCILE_REASON.RETRYABLE_OPERATION_DISPATCH,
-        row ? {row} : undefined,
+        Object.keys(context).length > NUM.ZERO ? context : undefined,
       );
       this.logger.debug(DISPATCH_LOG_MSG.OPERATION_DISPATCH_DEFERRED_RETRY, {
         nodeId: this.nodeId,
@@ -568,6 +599,42 @@ class ReplicaDispatchServiceSegment3 extends ReplicaDispatchServiceSegment2 {
         retryAfterMs: delayMs,
       });
     }, delayMs);
+  }
+
+  /**
+   * ACK on the remote direct-dispatch ingress means the target accepted a
+   * queue item, not that the durable operation left PENDING. Keep a short
+   * source-side verification wake active until a later row read proves the
+   * operation is no longer dispatch-replayable.
+   *
+   * @param {string} operationId
+   * @param {Object|null} row
+   * @return {boolean}
+   * @private
+   */
+  scheduleRemoteDispatchWakeupVerification(operationId, row = null) {
+    if (!operationId) {
+      return false;
+    }
+    this.clearDeferredOperationDispatchRetry(operationId);
+    const retryAfterMs = this.operationDispatchRetryAfterMs;
+    const deferredRetry = {
+      errorMessage:
+        REPLICA_DISPATCH_SERVICE_LITERAL.DIRECT_WAKEUP_VERIFICATION,
+      nextAttemptAt: Date.now() + retryAfterMs,
+      row: row ? this.cloneDeferredOperationDispatchRow(row) : null,
+      [REPLICA_DISPATCH_SERVICE_LITERAL.REFRESH_ROW_BEFORE_DISPATCH]: true,
+      timeoutHandle: this.armDeferredOperationDispatchRetryWithOptions(
+        operationId,
+        retryAfterMs,
+        {
+          [REPLICA_DISPATCH_SERVICE_LITERAL.REFRESH_ROW_BEFORE_DISPATCH]:
+            true,
+        },
+      ),
+    };
+    this.operationDispatchDeferredRetries.set(operationId, deferredRetry);
+    return true;
   }
 
   /**

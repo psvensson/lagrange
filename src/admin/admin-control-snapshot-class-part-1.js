@@ -67,6 +67,8 @@ const CONTROL_SNAPSHOT_PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD =
   'publicationActiveGateHandoff';
 const CONTROL_SNAPSHOT_ACTIVE_GATE_OWNER_COHORT_FIELD =
   'activeGateOwnerCohort';
+const CONTROL_SNAPSHOT_MEMBERSHIP_PUBLICATION_HANDOFF_OUTCOME_FIELD =
+  'membershipPublicationHandoffOutcome';
 const CONTROL_SNAPSHOT_AUTHORITY_INTEGER_STATE_AVAILABLE = 'available';
 const CONTROL_SNAPSHOT_AUTHORITY_INTEGER_STATE_UNAVAILABLE = 'unavailable';
 const CONTROL_SNAPSHOT_ADMIN_OBSERVATION_SCHEMA_VERSION = 1;
@@ -369,8 +371,7 @@ class AdminControlSnapshotPart1 {
       options.allowAuthoritativeRepair === true ||
       options.forceAuthoritativeRepair === true;
     const reconcileAuthoritativeMembershipPublication =
-      options.reconcileAuthoritativeMembershipPublication === true ||
-      options.forceAuthoritativeRepair === true;
+      options.reconcileAuthoritativeMembershipPublication === true;
     const controlPlaneDiagnostics =
       await this.buildControlPlaneDiagnosticsSnapshot({
         capturedAt,
@@ -447,6 +448,54 @@ class AdminControlSnapshotPart1 {
           controlPlaneDiagnostics,
           nowMs: capturedAt,
         });
+      if (
+        reconcileAuthoritativeMembershipPublication === true &&
+        typeof this.reconcileAuthoritativeMembershipPublicationFromHandoff ===
+          TYPEOF.FUNCTION
+      ) {
+        const membershipPublicationHandoffOutcome =
+          await this.reconcileAuthoritativeMembershipPublicationFromHandoff(
+            publicationActiveGateHandoff,
+            {
+              ...options,
+              reconcileAuthoritativeMembershipPublication: true,
+            },
+          );
+        if (
+          membershipPublicationHandoffOutcome &&
+          typeof membershipPublicationHandoffOutcome === TYPEOF.OBJECT
+        ) {
+          controlPlaneDiagnostics[
+            CONTROL_SNAPSHOT_MEMBERSHIP_PUBLICATION_HANDOFF_OUTCOME_FIELD
+          ] = membershipPublicationHandoffOutcome;
+          const publicationConvergence =
+            controlPlaneDiagnostics[
+              CONTROL_SNAPSHOT_PUBLICATION_CONVERGENCE_FIELD
+            ];
+          if (
+            publicationConvergence &&
+            typeof publicationConvergence === TYPEOF.OBJECT &&
+            !Array.isArray(publicationConvergence)
+          ) {
+            controlPlaneDiagnostics[
+              CONTROL_SNAPSHOT_PUBLICATION_CONVERGENCE_FIELD
+            ] = {
+              ...publicationConvergence,
+              [CONTROL_SNAPSHOT_MEMBERSHIP_PUBLICATION_HANDOFF_OUTCOME_FIELD]:
+                membershipPublicationHandoffOutcome,
+            };
+          }
+          controlPlaneDiagnostics[
+            CONTROL_SNAPSHOT_ACTIVE_GATE_OWNER_COHORT_FIELD
+          ] = {
+            ...controlPlaneDiagnostics[
+              CONTROL_SNAPSHOT_ACTIVE_GATE_OWNER_COHORT_FIELD
+            ],
+            [CONTROL_SNAPSHOT_MEMBERSHIP_PUBLICATION_HANDOFF_OUTCOME_FIELD]:
+              membershipPublicationHandoffOutcome,
+          };
+        }
+      }
       controlPlaneDiagnostics.activeNodeViews = {
         authoritativeSource: activeNodeViews.authoritativeSource,
         authoritativeNodeIds: [...activeNodeViews.authoritativeActiveNodeIds],

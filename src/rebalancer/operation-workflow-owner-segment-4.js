@@ -44,6 +44,7 @@ const DISPATCH_WAKE_PROGRESS_PREEMPT_STATUSES = Object.freeze(
 
 const DISPATCH_WAKE_PROGRESS_PREEMPT_WORKFLOW_STEPS = Object.freeze(
   new Set([
+    WORKFLOW_STEP.PENDING,
     WORKFLOW_STEP.SENDING,
     WORKFLOW_STEP.CREATING,
   ]),
@@ -55,6 +56,7 @@ const DISPATCH_WAKE_PROGRESS_PREEMPT_STATE = Object.freeze({
   NON_WAKE_INPUT: 'non_wake_input',
   PROGRESS_RECONCILER_UNAVAILABLE: 'progress_reconciler_unavailable',
   TARGET_PROGRESS_NOT_OBSERVED: 'target_progress_not_observed',
+  BOUNDED_PENDING_WAKE_RECONCILE: 'bounded_pending_wake_reconcile',
   PREEMPT_RECONCILE: 'preempt_reconcile',
 });
 
@@ -78,7 +80,14 @@ const DISPATCH_WAKE_PROGRESS_PREEMPT_STATE_TABLE = Object.freeze([
   }),
   Object.freeze({
     state: DISPATCH_WAKE_PROGRESS_PREEMPT_STATE.TARGET_PROGRESS_NOT_OBSERVED,
-    matches: (evidence) => evidence.observedPreemptStatus !== true,
+    matches: (evidence) =>
+      evidence.observedPreemptStatus !== true &&
+      evidence.boundedPendingWakeReconcile !== true,
+  }),
+  Object.freeze({
+    state:
+      DISPATCH_WAKE_PROGRESS_PREEMPT_STATE.BOUNDED_PENDING_WAKE_RECONCILE,
+    matches: (evidence) => evidence.boundedPendingWakeReconcile === true,
   }),
   Object.freeze({
     state: DISPATCH_WAKE_PROGRESS_PREEMPT_STATE.PREEMPT_RECONCILE,
@@ -87,8 +96,58 @@ const DISPATCH_WAKE_PROGRESS_PREEMPT_STATE_TABLE = Object.freeze([
 ]);
 
 const DISPATCH_WAKE_PROGRESS_PREEMPT_ALLOWED_STATES = Object.freeze(
-  new Set([DISPATCH_WAKE_PROGRESS_PREEMPT_STATE.PREEMPT_RECONCILE]),
+  new Set([
+    DISPATCH_WAKE_PROGRESS_PREEMPT_STATE.BOUNDED_PENDING_WAKE_RECONCILE,
+    DISPATCH_WAKE_PROGRESS_PREEMPT_STATE.PREEMPT_RECONCILE,
+  ]),
 );
+
+const DISPATCH_WAKE_PENDING_TARGET_PROGRESS_STATE = Object.freeze({
+  OPERATION_UNAVAILABLE: 'operation_unavailable',
+  NON_PENDING_STEP: 'non_pending_step',
+  STATUS_RECONCILER_UNAVAILABLE: 'status_reconciler_unavailable',
+  TARGET_PENDING: 'target_pending',
+  TARGET_SYNCING: 'target_syncing',
+  TARGET_ACTIVE: 'target_active',
+  FALLBACK_RECONCILE: 'fallback_reconcile',
+});
+
+const DISPATCH_WAKE_PENDING_TARGET_PROGRESS_STATE_TABLE = Object.freeze([
+  Object.freeze({
+    state:
+      DISPATCH_WAKE_PENDING_TARGET_PROGRESS_STATE.OPERATION_UNAVAILABLE,
+    matches: (evidence) => evidence.operationAvailable !== true,
+  }),
+  Object.freeze({
+    state: DISPATCH_WAKE_PENDING_TARGET_PROGRESS_STATE.NON_PENDING_STEP,
+    matches: (evidence) => evidence.pendingWorkflowStep !== true,
+  }),
+  Object.freeze({
+    state:
+      DISPATCH_WAKE_PENDING_TARGET_PROGRESS_STATE
+        .STATUS_RECONCILER_UNAVAILABLE,
+    matches: (evidence) => evidence.statusReconcilerAvailable !== true,
+  }),
+  Object.freeze({
+    state: DISPATCH_WAKE_PENDING_TARGET_PROGRESS_STATE.TARGET_PENDING,
+    matches: (evidence) =>
+      evidence.reconciledTargetStatus === ReplicaStatus.PENDING,
+  }),
+  Object.freeze({
+    state: DISPATCH_WAKE_PENDING_TARGET_PROGRESS_STATE.TARGET_SYNCING,
+    matches: (evidence) =>
+      evidence.reconciledTargetStatus === ReplicaStatus.SYNCING,
+  }),
+  Object.freeze({
+    state: DISPATCH_WAKE_PENDING_TARGET_PROGRESS_STATE.TARGET_ACTIVE,
+    matches: (evidence) =>
+      evidence.reconciledTargetStatus === ReplicaStatus.ACTIVE,
+  }),
+  Object.freeze({
+    state: DISPATCH_WAKE_PENDING_TARGET_PROGRESS_STATE.FALLBACK_RECONCILE,
+    matches: () => true,
+  }),
+]);
 
 const CREATE_IN_PROGRESS_OBSERVED_RECONCILE_STATUSES = Object.freeze(
   new Set([
@@ -453,20 +512,30 @@ class OperationWorkflowOwnerSegment4 extends OperationWorkflowOwnerSegment3 {
   ) {
     const observedTargetStatus =
       this.getDispatchWakeObservedTargetStatus(operation);
+    const dispatchWakeInput =
+      this.isOperationRowDispatchWakeInput(operationInput) ||
+      this.isExplicitDispatchWakeProgressInput(options);
     return Object.freeze({
       operationAvailable: Boolean(operation),
       progressWakeWorkflowStep:
         createRearmDispatchPhase === true ||
         DISPATCH_WAKE_PROGRESS_PREEMPT_WORKFLOW_STEPS.has(
-          operation?.workflowStep,
+            operation?.workflowStep,
         ),
-      dispatchWakeInput:
-        this.isOperationRowDispatchWakeInput(operationInput) ||
-        this.isExplicitDispatchWakeProgressInput(options),
+      dispatchWakeInput,
       progressReconcilerAvailable:
         typeof this.reconcileOperationProgress === TYPEOF.FUNCTION,
       observedPreemptStatus:
         DISPATCH_WAKE_PROGRESS_PREEMPT_STATUSES.has(observedTargetStatus),
+      boundedPendingWakeReconcile:
+        dispatchWakeInput === true &&
+        operation?.workflowStep === WORKFLOW_STEP.PENDING &&
+        (
+          this.isCriticalSystemPartition(operation?.partitionId) ||
+          isPriorityControlPlanePartition({
+            partitionId: operation?.partitionId,
+          })
+        ),
       observedTargetStatus,
     });
   }
@@ -520,12 +589,74 @@ class OperationWorkflowOwnerSegment4 extends OperationWorkflowOwnerSegment3 {
    * @private
    */
   async reconcileDispatchWakeOperationProgress(operation) {
+    if (
+      await this.reconcileDispatchWakePendingTargetProgress(operation)
+    ) {
+      return true;
+    }
+    if (typeof this.reconcileOperationLifecycle === TYPEOF.FUNCTION) {
+      return this.reconcileOperationLifecycle(operation, {
+        cause: OPERATION_WORKFLOW_OWNER_LITERAL.OBSERVED_PROGRESS,
+      });
+    }
     if (typeof this.reconcileOperationProgress !== TYPEOF.FUNCTION) {
       return false;
     }
     return this.reconcileOperationProgress(operation, {
       cause: OPERATION_WORKFLOW_OWNER_LITERAL.OBSERVED_PROGRESS,
     });
+  }
+
+  /**
+   * PENDING dispatch wakes with target evidence need only persist the target
+   * progress transition. A target `pending` row proves the create handler
+   * accepted the request, so it advances the durable owner row to CREATING.
+   * Running the full replace execution path here can turn a duplicate-create
+   * guard into a source-removal safety failure.
+   *
+   * @param {Object} operation
+   * @return {Promise<boolean>}
+   * @private
+   */
+  async reconcileDispatchWakePendingTargetProgress(operation) {
+    const statusReconcilerAvailable =
+      typeof this.getReconciledReplicaStatus === TYPEOF.FUNCTION;
+    const actualTargetStatus = statusReconcilerAvailable === true ?
+      await this.getReconciledReplicaStatus(
+        operation?.replicaId,
+        operation?.partitionId,
+        operation?.targetNodeId,
+      ) :
+      OPERATION_WORKFLOW_OWNER_LITERAL.EMPTY_STRING;
+    const reconciledTargetStatus =
+      typeof this.resolveReconciledReplicaStatus === TYPEOF.FUNCTION ?
+        this.resolveReconciledReplicaStatus(operation, actualTargetStatus) :
+        actualTargetStatus;
+    const state =
+      DISPATCH_WAKE_PENDING_TARGET_PROGRESS_STATE_TABLE.find((entry) =>
+        entry.matches(Object.freeze({
+          operationAvailable: Boolean(operation),
+          pendingWorkflowStep:
+            operation?.workflowStep === WORKFLOW_STEP.PENDING,
+          statusReconcilerAvailable,
+          reconciledTargetStatus,
+        })),
+      )?.state ||
+      DISPATCH_WAKE_PENDING_TARGET_PROGRESS_STATE.FALLBACK_RECONCILE;
+
+    if (state === DISPATCH_WAKE_PENDING_TARGET_PROGRESS_STATE.TARGET_PENDING) {
+      await this.updateStep(operation, WORKFLOW_STEP.CREATING);
+      return true;
+    }
+    if (state === DISPATCH_WAKE_PENDING_TARGET_PROGRESS_STATE.TARGET_SYNCING) {
+      await this.updateStep(operation, WORKFLOW_STEP.SYNCING);
+      return true;
+    }
+    if (state === DISPATCH_WAKE_PENDING_TARGET_PROGRESS_STATE.TARGET_ACTIVE) {
+      await this.updateStep(operation, WORKFLOW_STEP.ACTIVE);
+      return true;
+    }
+    return false;
   }
 
   /**
@@ -736,7 +867,23 @@ class OperationWorkflowOwnerSegment4 extends OperationWorkflowOwnerSegment3 {
       !removeStoppingReplayPhase &&
       !createRearmDispatchPhase
     ) {
-      await this.updateStep(operation, WORKFLOW_STEP.SENDING);
+      if (operation.workflowStep === WORKFLOW_STEP.PENDING) {
+        const claimedOperation =
+          await this.claimPendingDispatchOperation(operation);
+        if (!claimedOperation) {
+          const dispatchRetryScheduled =
+            this.dispatchRetryTimerByOperationId.has(operation.operationId);
+          return this.buildSkippedOperationResult(
+            dispatchRetryScheduled ?
+              REBALANCER_SKIP_REASON.DEFERRED_RETRY_PENDING :
+              OPERATION_WORKFLOW_OWNER_REASON.OPERATION_NOT_DISPATCHABLE,
+            operation.operationId,
+          );
+        }
+        operation = claimedOperation;
+      } else {
+        await this.updateStep(operation, WORKFLOW_STEP.SENDING);
+      }
     }
 
     let removeSafetyEvaluation = await this.evaluateRemoveSafety(operation);

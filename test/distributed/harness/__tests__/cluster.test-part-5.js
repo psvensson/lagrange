@@ -41,6 +41,18 @@ const SNAPSHOT_REPLAY_TEST_CONTROL_SNAPSHOT_SOURCE = 'control_snapshot';
 const SNAPSHOT_REPLAY_TEST_REPAIR_TRIGGER_CODE =
   'discovery_node_coverage_gap';
 const SNAPSHOT_REPLAY_TEST_REPAIR_RETRY_AFTER_MS = 250;
+const SNAPSHOT_REPLAY_TEST_HANDOFF_STATE_PENDING = 'pending';
+const SNAPSHOT_REPLAY_TEST_HANDOFF_REASON_OWNER_RECONCILE_PENDING =
+  'owner_reconcile_pending';
+const SNAPSHOT_REPLAY_TEST_HANDOFF_NEXT_ACTION_RECONCILE =
+  'reconcile_owner_membership_publication';
+const SNAPSHOT_REPLAY_TEST_HANDOFF_RUNTIME_PROMOTION_ALLOWED_FALSE = false;
+const SNAPSHOT_REPLAY_TEST_HANDOFF_OUTCOME_STATE_WRITE_DEFERRED =
+  'write_deferred';
+const SNAPSHOT_REPLAY_TEST_HANDOFF_OUTCOME_REASON_READBACK =
+  'durable_readback_pending';
+const SNAPSHOT_REPLAY_TEST_HANDOFF_OUTCOME_ENQUEUED = true;
+const SNAPSHOT_REPLAY_TEST_HANDOFF_OUTCOME_RETRY_AFTER_MS = 1000;
 const SNAPSHOT_REPLAY_TEST_AUTHORITY_TEST_NAME =
   'Unit: _probeControlSnapshotCoverage keeps admin-ready authority over ' +
   'stronger publication when 102455Z coverage ties';
@@ -1524,7 +1536,25 @@ test(SNAPSHOT_REPLAY_TEST_AUTHORITY_TEST_NAME, async () => {
               publishedActiveNodeIds: options.publishedActiveNodeIds,
               pendingAckNodeIds: [],
               acknowledgedNodeIds: options.publishedActiveNodeIds,
+              ...(options.membershipPublicationHandoffOutcome ?
+                {
+                  membershipPublicationHandoffOutcome:
+                    options.membershipPublicationHandoffOutcome,
+                } :
+                {}),
             },
+            ...(options.publicationActiveGateHandoff ?
+              {
+                publicationActiveGateHandoff:
+                  options.publicationActiveGateHandoff,
+              } :
+              {}),
+            ...(options.membershipPublicationHandoffOutcome ?
+              {
+                membershipPublicationHandoffOutcome:
+                  options.membershipPublicationHandoffOutcome,
+              } :
+              {}),
           },
         }],
       };
@@ -1565,6 +1595,28 @@ test(SNAPSHOT_REPLAY_TEST_AUTHORITY_TEST_NAME, async () => {
         publicationEpoch: SNAPSHOT_REPLAY_TEST_STALE_PUBLICATION_EPOCH,
         publishedActiveNodeIds:
           SNAPSHOT_REPLAY_TEST_STALE_PUBLISHED_NODE_IDS,
+        publicationActiveGateHandoff: {
+          state: SNAPSHOT_REPLAY_TEST_HANDOFF_STATE_PENDING,
+          reasonCode:
+            SNAPSHOT_REPLAY_TEST_HANDOFF_REASON_OWNER_RECONCILE_PENDING,
+          nextAction: SNAPSHOT_REPLAY_TEST_HANDOFF_NEXT_ACTION_RECONCILE,
+          runtimePromotionAllowed:
+            SNAPSHOT_REPLAY_TEST_HANDOFF_RUNTIME_PROMOTION_ALLOWED_FALSE,
+          publishedActiveNodeIds:
+            SNAPSHOT_REPLAY_TEST_STALE_PUBLISHED_NODE_IDS,
+          missingPublishedNodeIds:
+            SNAPSHOT_REPLAY_TEST_STALE_MISSING_NODE_IDS,
+          pendingReconcileNodeIds:
+            SNAPSHOT_REPLAY_TEST_STALE_MISSING_NODE_IDS,
+          pendingReconcileCount:
+            SNAPSHOT_REPLAY_TEST_STALE_MISSING_NODE_IDS.length,
+        },
+        membershipPublicationHandoffOutcome: {
+          state: SNAPSHOT_REPLAY_TEST_HANDOFF_OUTCOME_STATE_WRITE_DEFERRED,
+          reasonCode: SNAPSHOT_REPLAY_TEST_HANDOFF_OUTCOME_REASON_READBACK,
+          enqueued: SNAPSHOT_REPLAY_TEST_HANDOFF_OUTCOME_ENQUEUED,
+          retryAfterMs: SNAPSHOT_REPLAY_TEST_HANDOFF_OUTCOME_RETRY_AFTER_MS,
+        },
       },
     ),
   );
@@ -1705,7 +1757,25 @@ test(SNAPSHOT_REPLAY_TEST_DEFERRED_AUTHORITY_TEST_NAME, async () => {
               publishedActiveNodeIds: options.publishedActiveNodeIds,
               pendingAckNodeIds: [],
               acknowledgedNodeIds: options.publishedActiveNodeIds,
+              ...(options.membershipPublicationHandoffOutcome ?
+                {
+                  membershipPublicationHandoffOutcome:
+                    options.membershipPublicationHandoffOutcome,
+                } :
+                {}),
             },
+            ...(options.publicationActiveGateHandoff ?
+              {
+                publicationActiveGateHandoff:
+                  options.publicationActiveGateHandoff,
+              } :
+              {}),
+            ...(options.membershipPublicationHandoffOutcome ?
+              {
+                membershipPublicationHandoffOutcome:
+                  options.membershipPublicationHandoffOutcome,
+              } :
+              {}),
           },
         }],
       };
@@ -1763,6 +1833,28 @@ test(SNAPSHOT_REPLAY_TEST_DEFERRED_AUTHORITY_TEST_NAME, async () => {
         publicationEpoch: SNAPSHOT_REPLAY_TEST_STALE_PUBLICATION_EPOCH,
         publishedActiveNodeIds:
           SNAPSHOT_REPLAY_TEST_STALE_PUBLISHED_NODE_IDS,
+        publicationActiveGateHandoff: {
+          state: SNAPSHOT_REPLAY_TEST_HANDOFF_STATE_PENDING,
+          reasonCode:
+            SNAPSHOT_REPLAY_TEST_HANDOFF_REASON_OWNER_RECONCILE_PENDING,
+          nextAction: SNAPSHOT_REPLAY_TEST_HANDOFF_NEXT_ACTION_RECONCILE,
+          runtimePromotionAllowed:
+            SNAPSHOT_REPLAY_TEST_HANDOFF_RUNTIME_PROMOTION_ALLOWED_FALSE,
+          publishedActiveNodeIds:
+            SNAPSHOT_REPLAY_TEST_STALE_PUBLISHED_NODE_IDS,
+          missingPublishedNodeIds:
+            SNAPSHOT_REPLAY_TEST_STALE_MISSING_NODE_IDS,
+          pendingReconcileNodeIds:
+            SNAPSHOT_REPLAY_TEST_STALE_MISSING_NODE_IDS,
+          pendingReconcileCount:
+            SNAPSHOT_REPLAY_TEST_STALE_MISSING_NODE_IDS.length,
+        },
+        membershipPublicationHandoffOutcome: {
+          state: SNAPSHOT_REPLAY_TEST_HANDOFF_OUTCOME_STATE_WRITE_DEFERRED,
+          reasonCode: SNAPSHOT_REPLAY_TEST_HANDOFF_OUTCOME_REASON_READBACK,
+          enqueued: SNAPSHOT_REPLAY_TEST_HANDOFF_OUTCOME_ENQUEUED,
+          retryAfterMs: SNAPSHOT_REPLAY_TEST_HANDOFF_OUTCOME_RETRY_AFTER_MS,
+        },
       },
     ),
   );
@@ -1812,6 +1904,18 @@ test(SNAPSHOT_REPLAY_TEST_DEFERRED_AUTHORITY_TEST_NAME, async () => {
     SNAPSHOT_REPLAY_TEST_REPAIR_RETRY_AFTER_MS,
   );
   assert.strictEqual(coverage.selectedSnapshotRepairDeferred, true);
+  assert.strictEqual(
+    coverage.selectedPublicationActiveGateHandoff?.nextAction,
+    SNAPSHOT_REPLAY_TEST_HANDOFF_NEXT_ACTION_RECONCILE,
+  );
+  assert.strictEqual(
+    coverage.selectedMembershipPublicationHandoffOutcome?.state,
+    SNAPSHOT_REPLAY_TEST_HANDOFF_OUTCOME_STATE_WRITE_DEFERRED,
+  );
+  assert.strictEqual(
+    coverage.selectedMembershipPublicationHandoffOutcome?.reasonCode,
+    SNAPSHOT_REPLAY_TEST_HANDOFF_OUTCOME_REASON_READBACK,
+  );
   assert.ok(seedWitness);
   assert.strictEqual(
     seedWitness.publicationEpoch,
@@ -1823,6 +1927,14 @@ test(SNAPSHOT_REPLAY_TEST_DEFERRED_AUTHORITY_TEST_NAME, async () => {
     ADMIN_CONTROL_SNAPSHOT_OBSERVATION_MODE.REPAIR_DEFERRED,
   );
   assert.strictEqual(selectedWitness.snapshotRepairDeferred, true);
+  assert.strictEqual(
+    selectedWitness.publicationActiveGateHandoff?.nextAction,
+    SNAPSHOT_REPLAY_TEST_HANDOFF_NEXT_ACTION_RECONCILE,
+  );
+  assert.strictEqual(
+    selectedWitness.membershipPublicationHandoffOutcome?.state,
+    SNAPSHOT_REPLAY_TEST_HANDOFF_OUTCOME_STATE_WRITE_DEFERRED,
+  );
 });
 
 test('Unit: _waitForAllActive carries selected snapshot witness into no-progress diagnostics',

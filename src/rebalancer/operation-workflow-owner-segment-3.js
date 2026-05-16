@@ -17,9 +17,9 @@ const {
   REBALANCE_COORDINATOR_LOG_MSG,
   RECOVERABLE_TRANSITION_COMMIT_STATUS,
   RECOVERABLE_TRANSITION_ROLLBACK_STATUS,
+  REPLICA_OPERATION_DISPATCH_TIMEOUT_MS,
   ReplicaStatus,
   SYSTEM_TABLE_NAME,
-  TIMEOUT_BUDGET_DEFAULT,
   TRANSITION_RECOVERY_READ_OPTIONS,
   TRANSITION_RECOVERY_SQL,
   TRANSITION_STEP_OPTIONS,
@@ -30,8 +30,18 @@ const {
   createTopLevelOperationBudget,
   isCoordinatorOwnedOperationType,
   isPriorityControlPlanePartition,
+  isRetryableControlPlaneError,
   readAuthoritativeControlPlaneRows,
 } = OPERATION_WORKFLOW_OWNER_SHARED;
+
+const PRIORITY_DISPATCH_TRANSITION_MUTATION_BUDGET_MS =
+  REPLICA_OPERATION_DISPATCH_TIMEOUT_MS;
+const PRIORITY_DISPATCH_TRANSITION_MUTATION_STEPS = new Set([
+  WORKFLOW_STEP.SENDING,
+  WORKFLOW_STEP.CREATING,
+]);
+const PRIORITY_DEFERRED_CLAIM_EXPECTED_STEP_FIELD =
+  'priorityDeferredClaimExpectedStep';
 
 class OperationWorkflowOwnerSegment3 extends OperationWorkflowOwnerSegment2 {
   async loadAuthoritativeTransitionExecutionSession(sessionId) {
@@ -432,41 +442,81 @@ class OperationWorkflowOwnerSegment3 extends OperationWorkflowOwnerSegment2 {
       operation.updatedAt = Number.isFinite(previousUpdatedAt) ?
         Math.max(previousUpdatedAt, now) :
         now;
+      if (step === WORKFLOW_STEP.CREATING) {
+        delete operation[PRIORITY_DEFERRED_CLAIM_EXPECTED_STEP_FIELD];
+      }
     };
+
+    const bypassExecutionTransaction =
+      this.shouldBypassTransitionExecutionTransaction(operation);
+    const usePriorityDispatchTransitionBudget =
+      this.shouldUsePriorityDispatchTransitionMutationBudget(operation, step);
 
     const persistFn = async (sessionId) => {
       const persistOptions = this.buildOperationTransitionPersistOptions(
         operation,
         sessionId,
       );
-      const guardedPersistOptions =
-        this.shouldBypassTransitionExecutionTransaction(operation) ?
+      const budgetedPersistOptions =
+        usePriorityDispatchTransitionBudget ?
           {
             ...persistOptions,
-            expectedWorkflowStep: previousStep,
+            timeoutBudget:
+              this.buildPriorityDispatchTransitionMutationBudget(now),
           } :
           persistOptions;
+      const expectedWorkflowStep =
+        this.resolveOperationTransitionExpectedWorkflowStep(
+          operation,
+          previousStep,
+          step,
+        );
+      const guardedPersistOptions =
+        bypassExecutionTransaction ?
+          {
+            ...budgetedPersistOptions,
+            expectedWorkflowStep,
+          } :
+          budgetedPersistOptions;
       return this.repository.persistOperationUpdate(
         projectedOperation,
         guardedPersistOptions,
       );
     };
-    const bypassExecutionTransaction =
-      this.shouldBypassTransitionExecutionTransaction(operation);
 
-    const transitionCommitted = await this.executeAtomicTransition(
-      operation,
-      step,
-      transitionReason,
-      persistFn,
-      {
-        onIdempotentTransition: projectIdempotentTransition,
-        bypassExecutionTransaction,
-        afterCommit: async () => {
-          await this.confirmCommittedTransitionPersistence(projectedOperation);
+    let transitionCommitted;
+    try {
+      transitionCommitted = await this.executeAtomicTransition(
+        operation,
+        step,
+        transitionReason,
+        persistFn,
+        {
+          onIdempotentTransition: projectIdempotentTransition,
+          bypassExecutionTransaction,
+          afterCommit: async () => {
+            await this.confirmCommittedTransitionPersistence(projectedOperation);
+          },
         },
-      },
-    );
+      );
+    } catch (error) {
+      if (
+        !this.shouldUsePriorityDispatchDeferredLocalProgress(
+          operation,
+          step,
+          error,
+        ) ||
+        !this.recordPriorityDispatchDeferredLocalProgress(
+          operation,
+          projectedOperation,
+          step,
+          error,
+        )
+      ) {
+        throw error;
+      }
+      return true;
+    }
 
     if (!transitionCommitted) {
       if (step !== WORKFLOW_STEP.ACTIVE) {
@@ -483,6 +533,9 @@ class OperationWorkflowOwnerSegment3 extends OperationWorkflowOwnerSegment2 {
     operation.updatedAt = now;
     operation.status = persistedStatus;
     operation.stepsHistory.push(stepEntry);
+    if (step === WORKFLOW_STEP.CREATING) {
+      delete operation[PRIORITY_DEFERRED_CLAIM_EXPECTED_STEP_FIELD];
+    }
 
     this.logger.info(REBALANCE_COORDINATOR_LOG_MSG.STEP_CHANGED, {
       operationId: operation.operationId,
@@ -519,6 +572,144 @@ class OperationWorkflowOwnerSegment3 extends OperationWorkflowOwnerSegment2 {
       operation?.workflowStep === WORKFLOW_STEP.PENDING &&
       isPriorityControlPlanePartition({partitionId})
     );
+  }
+
+  /**
+   * Priority control-plane dispatch progress must stay retryable under the
+   * same partition pressure the operation is attempting to repair.
+   *
+   * @param {Object|null} operation
+   * @param {string} step
+   * @return {boolean}
+   * @private
+   */
+  shouldUsePriorityDispatchTransitionMutationBudget(operation, step) {
+    const partitionId = String(operation?.partitionId || '').trim();
+    return (
+      partitionId.length > NUM.ZERO &&
+      isPriorityControlPlanePartition({partitionId}) &&
+      PRIORITY_DISPATCH_TRANSITION_MUTATION_STEPS.has(step)
+    );
+  }
+
+  /**
+   * Priority dispatch may locally skip the SENDING durable intermediate under
+   * retryable replica_operations owner pressure. The next durable transition
+   * must still compare-and-set against the last known authoritative step.
+   *
+   * @param {Object|null} operation
+   * @param {string} previousStep
+   * @param {string} step
+   * @return {string}
+   * @private
+   */
+  resolveOperationTransitionExpectedWorkflowStep(
+    operation,
+    previousStep,
+    step,
+  ) {
+    if (
+      step === WORKFLOW_STEP.CREATING &&
+      this.shouldUsePriorityDispatchTransitionMutationBudget(operation, step) &&
+      typeof operation?.[PRIORITY_DEFERRED_CLAIM_EXPECTED_STEP_FIELD] ===
+        TYPEOF.STRING &&
+      operation[PRIORITY_DEFERRED_CLAIM_EXPECTED_STEP_FIELD].length > NUM.ZERO
+    ) {
+      return operation[PRIORITY_DEFERRED_CLAIM_EXPECTED_STEP_FIELD];
+    }
+    return previousStep;
+  }
+
+  /**
+   * @param {Object|null} operation
+   * @param {Error|Object} errorLike
+   * @return {boolean}
+   * @private
+   */
+  shouldUsePriorityDispatchDeferredLocalClaim(operation, errorLike) {
+    return (
+      this.shouldUsePriorityDispatchClaimNarrowPath(operation) &&
+      isRetryableControlPlaneError(errorLike)
+    );
+  }
+
+  /**
+   * Priority dispatch progress has already reached the target executor before
+   * CREATING is persisted. Under retryable priority-partition pressure, keep
+   * the owner progress visible locally and re-arm the durable transition.
+   *
+   * @param {Object|null} operation
+   * @param {string} step
+   * @param {Error|Object} errorLike
+   * @return {boolean}
+   * @private
+   */
+  shouldUsePriorityDispatchDeferredLocalProgress(operation, step, errorLike) {
+    return (
+      step === WORKFLOW_STEP.CREATING &&
+      this.shouldUsePriorityDispatchTransitionMutationBudget(operation, step) &&
+      isRetryableControlPlaneError(errorLike)
+    );
+  }
+
+  /**
+   * @param {Object} operation
+   * @param {Object} projectedOperation
+   * @param {string} step
+   * @param {Error|Object} errorLike
+   * @return {boolean}
+   * @private
+   */
+  recordPriorityDispatchDeferredLocalProgress(
+    operation,
+    projectedOperation,
+    step,
+    errorLike,
+  ) {
+    if (
+      !this.deferTransitionRetry(operation.operationId, errorLike, {
+        boundary: OPERATION_WORKFLOW_OWNER_LITERAL.DISPATCH,
+        workflowStep: step,
+        partitionId: operation.partitionId,
+        updatedAt: projectedOperation.updatedAt,
+        createdAt: projectedOperation.createdAt,
+        operationSnapshot: projectedOperation,
+        ingress:
+          OPERATION_WORKFLOW_OWNER_LITERAL.PRIORITY_PROGRESS_DEFERRED_LOCAL,
+      })
+    ) {
+      return false;
+    }
+
+    this.repository.recordOwnerPersistedTransitionVisibilityWitness(
+      projectedOperation,
+    );
+    this.repository.syncIncompleteOperationObservation(projectedOperation);
+    operation.workflowStep = projectedOperation.workflowStep;
+    operation.updatedAt = projectedOperation.updatedAt;
+    operation.status = projectedOperation.status;
+    operation.stepsHistory = projectedOperation.stepsHistory;
+    if (step === WORKFLOW_STEP.CREATING) {
+      delete operation[PRIORITY_DEFERRED_CLAIM_EXPECTED_STEP_FIELD];
+    }
+    if (step !== WORKFLOW_STEP.ACTIVE) {
+      this.clearPriorityActiveReplaceRetry(operation.operationId);
+    }
+    return true;
+  }
+
+  /**
+   * Build the per-attempt mutation budget for priority dispatch transitions.
+   *
+   * @param {number} startedAtMs
+   * @return {Object}
+   * @private
+   */
+  buildPriorityDispatchTransitionMutationBudget(startedAtMs) {
+    return createTopLevelOperationBudget({
+      configuredBudgetMs: PRIORITY_DISPATCH_TRANSITION_MUTATION_BUDGET_MS,
+      startedAtMs,
+    });
   }
 
   /**
@@ -618,6 +809,18 @@ class OperationWorkflowOwnerSegment3 extends OperationWorkflowOwnerSegment2 {
           nextOperation.updatedAt = now;
           nextOperation.status = persistedStatus;
           nextOperation.stepsHistory = projectedOperation.stepsHistory;
+          if (
+            typeof projectedOperation[
+              PRIORITY_DEFERRED_CLAIM_EXPECTED_STEP_FIELD
+            ] === TYPEOF.STRING
+          ) {
+            nextOperation[PRIORITY_DEFERRED_CLAIM_EXPECTED_STEP_FIELD] =
+              projectedOperation[
+                PRIORITY_DEFERRED_CLAIM_EXPECTED_STEP_FIELD
+              ];
+          } else {
+            delete nextOperation[PRIORITY_DEFERRED_CLAIM_EXPECTED_STEP_FIELD];
+          }
         };
 
         this.ensureOperationWorkflow(operation);
@@ -638,19 +841,57 @@ class OperationWorkflowOwnerSegment3 extends OperationWorkflowOwnerSegment2 {
           TRANSITION_STEP_OPTIONS.DEFER_COMMITTED_MARK,
         );
 
-        const operationBudget = createTopLevelOperationBudget({
-          configuredBudgetMs:
-            TIMEOUT_BUDGET_DEFAULT.REBALANCE_OPERATION_BUDGET_MS,
-          startedAtMs: Number.isFinite(operation.createdAt) ?
-            operation.createdAt :
-            now,
-        });
-        const transitionCommitted =
-          await this.repository.persistOperationUpdate(projectedOperation, {
-            confirmPersistence: true,
-            expectedWorkflowStep: WORKFLOW_STEP.PENDING,
-            timeoutBudget: operationBudget,
-          });
+        const mutationBudget =
+          this.buildPriorityDispatchTransitionMutationBudget(now);
+        let transitionCommitted;
+        try {
+          transitionCommitted =
+            await this.repository.persistOperationUpdate(projectedOperation, {
+              ...this.buildOperationTransitionPersistOptions(operation, null),
+              confirmPersistence: true,
+              expectedWorkflowStep: WORKFLOW_STEP.PENDING,
+              timeoutBudget: mutationBudget,
+            });
+        } catch (error) {
+          if (!this.shouldUsePriorityDispatchDeferredLocalClaim(
+            operation,
+            error,
+          )) {
+            throw error;
+          }
+          projectedOperation[PRIORITY_DEFERRED_CLAIM_EXPECTED_STEP_FIELD] =
+            previousStep;
+          this.repository.recordOwnerPersistedTransitionVisibilityWitness(
+            projectedOperation,
+          );
+          this.repository.syncIncompleteOperationObservation(
+            projectedOperation,
+          );
+          this.operationWorkflowCoordinator.markTransitionCommitted(
+            operation.operationId,
+            step,
+          );
+          commitProjectedState(operation);
+          this.logger.warn(
+            REBALANCE_COORDINATOR_LOG_MSG.OPERATION_TRANSITION_RETRY_DEFERRED,
+            {
+              operationId: operation.operationId,
+              boundary: OPERATION_WORKFLOW_OWNER_LITERAL.DISPATCH,
+              partitionId: operation.partitionId,
+              workflowStep: previousStep,
+              delayMs: DISPATCH_RETRY_DELAY_MS,
+              errorMessage: this.normalizeErrorMessage(
+                error,
+                OPERATION_WORKFLOW_OWNER_LITERAL
+                  .RETRYABLE_CONTROL_DASH_PLANE_TRANSITION_FAILURE,
+              ),
+              ingress:
+                OPERATION_WORKFLOW_OWNER_LITERAL
+                  .PRIORITY_CLAIM_DEFERRED_LOCAL,
+            },
+          );
+          return operation;
+        }
 
         if (!transitionCommitted) {
           const authoritativeOperation =

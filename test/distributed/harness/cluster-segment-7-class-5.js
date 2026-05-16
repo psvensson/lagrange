@@ -268,6 +268,10 @@ class Cluster5 extends Cluster4 {
           publicationConvergenceGate,
           publishedMembershipObservation:
             snapshotDiagnostics.publishedMembershipObservation,
+          publicationActiveGateHandoff:
+            snapshotDiagnostics.publicationActiveGateHandoff,
+          membershipPublicationHandoffOutcome:
+            snapshotDiagnostics.membershipPublicationHandoffOutcome,
           activeGateOwnerCohort: snapshotDiagnostics.activeGateOwnerCohort,
           priorityRecoveryObservation:
             snapshotDiagnostics.priorityRecoveryObservation,
@@ -314,6 +318,8 @@ class Cluster5 extends Cluster4 {
           publicationConvergence: null,
           publicationConvergenceGate: null,
           publishedMembershipObservation: null,
+          publicationActiveGateHandoff: null,
+          membershipPublicationHandoffOutcome: null,
           activeGateOwnerCohort: null,
           priorityRecoveryObservation: null,
           priorityRecoveryDecisionSnapshots: null,
@@ -606,6 +612,8 @@ class Cluster5 extends Cluster4 {
         selectedResult?.publicationConvergenceGate || null,
       selectedPublicationActiveGateHandoff:
         selectedResult?.publicationActiveGateHandoff || null,
+      selectedMembershipPublicationHandoffOutcome:
+        selectedResult?.membershipPublicationHandoffOutcome || null,
       selectedPublishedMembershipObservation:
         selectedResult?.publishedMembershipObservation || null,
       selectedActiveGateOwnerCohort:
@@ -667,8 +675,18 @@ class Cluster5 extends Cluster4 {
             Math.floor(result.snapshotObservationRetryAfterMs) :
             null,
           snapshotRepairDeferred: result.snapshotRepairDeferred === true,
-          publicationActiveGateHandoff:
-            result.publicationActiveGateHandoff || null,
+          ...(result.publicationActiveGateHandoff ?
+            {
+              publicationActiveGateHandoff:
+                result.publicationActiveGateHandoff,
+            } :
+            {}),
+          ...(result.membershipPublicationHandoffOutcome ?
+            {
+              membershipPublicationHandoffOutcome:
+                result.membershipPublicationHandoffOutcome,
+            } :
+            {}),
           activeGateOwnerCohort: result.activeGateOwnerCohort || null,
           publicationEpoch: Number.isFinite(
             result?.publicationConvergence?.publicationEpoch,

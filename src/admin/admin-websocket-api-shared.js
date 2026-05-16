@@ -281,14 +281,58 @@ function buildLoadLaneAdmissionErrorDetails(admission) {
 }
 
 /**
+ * Check whether one readiness service exposes membership publication owner APIs.
+ * @param {Object|null} controlPlaneReadinessService
+ * @return {boolean}
+ */
+function hasMembershipPublicationService(controlPlaneReadinessService) {
+  return Boolean(controlPlaneReadinessService?.membershipPublicationService);
+}
+
+/**
+ * Prefer the readiness service that can issue membership publication owner work.
+ * @param {Object|null} currentService
+ * @param {Object|null} candidateService
+ * @return {Object|null}
+ */
+function resolvePreferredControlPlaneReadinessService(
+  currentService,
+  candidateService,
+) {
+  if (!currentService) {
+    return candidateService || null;
+  }
+  if (hasMembershipPublicationService(currentService)) {
+    return currentService;
+  }
+  if (hasMembershipPublicationService(candidateService)) {
+    return candidateService;
+  }
+  return currentService;
+}
+
+/**
  * Resolve control-plane readiness service from one SQL engine bundle.
  * @param {Object|null} sqlQueryEngine
  * @return {Object|null}
  */
 function resolveSqlEngineControlPlaneReadinessService(sqlQueryEngine) {
-  return (
+  const directReadinessService =
+    sqlQueryEngine?.controlPlaneReadinessService || null;
+  const coordinatorReadinessService =
+    sqlQueryEngine?.rebalanceCoordinator?.controlPlaneReadinessService || null;
+  const storageAdmissionReadinessService =
     sqlQueryEngine?.rebalanceCoordinator?.storageAdmissionService
-      ?.controlPlaneReadinessService || null
+      ?.controlPlaneReadinessService || null;
+  const coordinatorPreferredService =
+    resolvePreferredControlPlaneReadinessService(
+      coordinatorReadinessService,
+      storageAdmissionReadinessService,
+    );
+
+  return resolvePreferredControlPlaneReadinessService(
+    directReadinessService,
+    coordinatorPreferredService,
   );
 }
 
@@ -532,6 +576,7 @@ export const ADMIN_WEBSOCKET_API_SHARED = {
   parseLiveSelect,
   parseServiceDiscoverySqlQuery,
   resolveLoadLaneQueryAdmissionState,
+  resolvePreferredControlPlaneReadinessService,
   resolveRequestedQueryTimeoutMs,
   resolveSqlEngineControlPlaneReadinessService,
   resolveSqlRequestTimeoutBudgetMs,

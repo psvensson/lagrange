@@ -3,6 +3,9 @@ import {
   deriveMembershipPublicationCandidate,
   MembershipPublicationCoordinator,
 } from '../../src/control-plane/membership-publication-coordinator.js';
+import {
+  ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_OUTCOME,
+} from '../../src/control-plane/membership-publication-coordinator-class-stage-3.js';
 import {COLUMN, TABLES} from '../../src/constants/index.js';
 import {
   CONTROL_PLANE_AUTHORITATIVE_READ_MODE,
@@ -18,6 +21,9 @@ import {
 import {
   CONTROL_PLANE_PUBLICATION_STATUS,
 } from '../../src/control-plane/control-plane-publication-merge.js';
+import {
+  PUBLICATION_ACTIVE_GATE_HANDOFF_NEXT_ACTION,
+} from '../../src/control-plane/publication-active-gate-handoff-contract.js';
 import {MEMBERSHIP_PUBLICATION_ACK_DEFERRAL_CONNECTION_STATE_CONNECTED, MEMBERSHIP_PUBLICATION_ACK_DEFERRAL_NOW_MS, MEMBERSHIP_PUBLICATION_ACK_DEFERRAL_PROCESS_DEAD_NODE_ID, MEMBERSHIP_PUBLICATION_ACK_DEFERRAL_PUBLICATION_EPOCH, MEMBERSHIP_PUBLICATION_ACK_DEFERRAL_PUBLISHED_NODE_ID, MEMBERSHIP_PUBLICATION_ACK_DEFERRAL_PUBLISHER_NODE_ID, MEMBERSHIP_PUBLICATION_ACK_DEFERRAL_STATUS_ACK_PENDING, MEMBERSHIP_PUBLICATION_TRIM_CONNECTION_STATE_READY, MEMBERSHIP_PUBLICATION_TRIM_STATUS_PUBLISHED, buildMembershipPublicationAckDeferralNodeRow, buildMembershipPublicationTrimEndpointRow, buildMembershipPublicationTrimServiceRow} from './membership-publication-coordinator-main-stage-1.js';
 
 const PUBLICATION_CONVERGENCE_STALE_PUBLISHED_EPOCH = 29;
@@ -54,6 +60,8 @@ const PUBLICATION_CONVERGENCE_HANDOFF_TARGET_NOW_MS = 3200;
 const PUBLICATION_CONVERGENCE_HANDOFF_TARGET_DURABLE_UPDATED_AT = 3201;
 const PUBLICATION_CONVERGENCE_HANDOFF_TARGET_AUTHORITATIVE_READ_ERROR =
   'explicit handoff target should not require authoritative node repair';
+const PUBLICATION_CONVERGENCE_HANDOFF_TARGET_BROAD_READ_ERROR =
+  'active-gate owner reconcile should not read broad membership tables';
 const PUBLICATION_CONVERGENCE_HANDOFF_TARGET_ALLOW_PENDING_VISIBILITY = true;
 const PUBLICATION_CONVERGENCE_HANDOFF_TARGET_ALLOW_PRESSURE_DEFER = false;
 const PUBLICATION_CONVERGENCE_HANDOFF_TARGET_READ_PROFILE =
@@ -74,6 +82,9 @@ const PUBLICATION_CONVERGENCE_HANDOFF_TARGET_PUBLISHED_NODE_IDS =
   Object.freeze([
     PUBLICATION_CONVERGENCE_HANDOFF_TARGET_NODE_IDS[0],
   ]);
+const PUBLICATION_CONVERGENCE_HANDOFF_TARGET_PENDING_NODE_IDS = Object.freeze(
+  PUBLICATION_CONVERGENCE_HANDOFF_TARGET_NODE_IDS.slice(1),
+);
 const PUBLICATION_CONVERGENCE_HANDOFF_TARGET_EMPTY_ROWS = Object.freeze([]);
 const PUBLICATION_CONVERGENCE_HANDOFF_TARGET_QUEUE_REASON_A =
   'ready-node-handoff-a';
@@ -425,6 +436,309 @@ test('reconcileClusterMembership publishes explicit handoff target without autho
           CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED,
       },
       'explicit handoff target should verify the write through the diagnostics owner readback path',
+    );
+  });
+
+test('reconcileActiveGateMembershipPublication owns handoff write visibility',
+  async (t) => {
+    const latestPublicationRow = {
+      publication_id: PUBLICATION_CONVERGENCE_HANDOFF_TARGET_PUBLICATION_ID,
+      publication_kind: 'cluster_membership',
+      publication_epoch: PUBLICATION_CONVERGENCE_HANDOFF_TARGET_EPOCH,
+      status: CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED,
+      published_active_node_ids: [
+        ...PUBLICATION_CONVERGENCE_HANDOFF_TARGET_PUBLISHED_NODE_IDS,
+      ],
+      required_ack_node_ids: [
+        ...PUBLICATION_CONVERGENCE_HANDOFF_TARGET_PUBLISHED_NODE_IDS,
+      ],
+      acknowledged_node_ids: [
+        ...PUBLICATION_CONVERGENCE_HANDOFF_TARGET_PUBLISHED_NODE_IDS,
+      ],
+      priority_partition_summary:
+        PUBLICATION_CONVERGENCE_AUTH_REFRESH_PRIORITY_SUMMARY,
+    };
+    const persistedRows = [];
+    const persistOptions = [];
+    const publicationReadOptions = [];
+    const coordinator = new MembershipPublicationCoordinator({
+      nodeId: PUBLICATION_CONVERGENCE_HANDOFF_TARGET_NODE_IDS[0],
+      controlPlanePublicationsOwner: {
+        async listPublications() {
+          return {rows: [latestPublicationRow]};
+        },
+        async getPublication(_publicationId, options = {}) {
+          publicationReadOptions.push(options);
+          const persistedRow = persistedRows[persistedRows.length - 1];
+          return persistedRow ?
+            {
+              ...persistedRow,
+              reason_code:
+                PUBLICATION_CONVERGENCE_HANDOFF_TARGET_DURABLE_REASON_CODE,
+              updated_at:
+                PUBLICATION_CONVERGENCE_HANDOFF_TARGET_DURABLE_UPDATED_AT,
+            } :
+            latestPublicationRow;
+        },
+        async upsertPublication(row, options = {}) {
+          persistedRows.push(row);
+          persistOptions.push(options);
+        },
+      },
+      systemTableCache: {
+        getAll(tableName) {
+          if (tableName === TABLES.CONTROL_PLANE_PUBLICATIONS) {
+            return [latestPublicationRow];
+          }
+          throw new Error(
+            PUBLICATION_CONVERGENCE_HANDOFF_TARGET_BROAD_READ_ERROR,
+          );
+        },
+      },
+      now: () => PUBLICATION_CONVERGENCE_HANDOFF_TARGET_NOW_MS,
+    });
+
+    const outcome =
+      await coordinator.reconcileActiveGateMembershipPublication({
+        publicationEpoch: PUBLICATION_CONVERGENCE_HANDOFF_TARGET_EPOCH,
+        expectedNodeIds: [
+          ...PUBLICATION_CONVERGENCE_HANDOFF_TARGET_NODE_IDS,
+        ],
+        publishedActiveNodeIds: [
+          ...PUBLICATION_CONVERGENCE_HANDOFF_TARGET_PUBLISHED_NODE_IDS,
+        ],
+        pendingReconcileNodeIds:
+          PUBLICATION_CONVERGENCE_HANDOFF_TARGET_NODE_IDS.slice(1),
+        nextAction:
+          PUBLICATION_ACTIVE_GATE_HANDOFF_NEXT_ACTION
+            .RECONCILE_OWNER_MEMBERSHIP_PUBLICATION,
+      });
+
+    t.equal(
+      outcome.state,
+      ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_OUTCOME.PUBLISHED_VISIBLE,
+      'owner handoff reconcile should report only durable visible publication success',
+    );
+    t.match(
+      outcome.publicationRow,
+      {
+        publicationEpoch: PUBLICATION_CONVERGENCE_HANDOFF_TARGET_NEXT_EPOCH,
+        status: CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED,
+        publishedActiveNodeIds: [
+          ...PUBLICATION_CONVERGENCE_HANDOFF_TARGET_SORTED_NODE_IDS,
+        ],
+        requiredAckNodeIds: [
+          ...PUBLICATION_CONVERGENCE_HANDOFF_TARGET_SORTED_NODE_IDS,
+        ],
+        acknowledgedNodeIds: [
+          ...PUBLICATION_CONVERGENCE_HANDOFF_TARGET_SORTED_NODE_IDS,
+        ],
+      },
+      'owner outcome should carry the durable readback row that covers the handoff target',
+    );
+    t.equal(
+      persistOptions[0]?.skipPublicationWriteReadback,
+      false,
+      'active-gate owner reconcile should keep write readback enabled',
+    );
+    t.match(
+      publicationReadOptions[publicationReadOptions.length - 1],
+      {
+        readProfile:
+          PUBLICATION_CONVERGENCE_HANDOFF_TARGET_READ_PROFILE,
+        authoritativeReadMode:
+          CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED,
+      },
+      'active-gate owner reconcile should verify durable visibility through the publication owner',
+    );
+  });
+
+test('reconcileActiveGateMembershipPublication widens seed-only active-gate handoff fixture',
+  async (t) => {
+    const seedOnlyPublicationRow = {
+      publication_id: PUBLICATION_CONVERGENCE_HANDOFF_TARGET_PUBLICATION_ID,
+      publication_kind: 'cluster_membership',
+      publication_epoch: PUBLICATION_CONVERGENCE_HANDOFF_TARGET_EPOCH,
+      status: CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED,
+      published_active_node_ids: [
+        ...PUBLICATION_CONVERGENCE_HANDOFF_TARGET_PUBLISHED_NODE_IDS,
+      ],
+      required_ack_node_ids: [
+        ...PUBLICATION_CONVERGENCE_HANDOFF_TARGET_PUBLISHED_NODE_IDS,
+      ],
+      acknowledged_node_ids: [
+        ...PUBLICATION_CONVERGENCE_HANDOFF_TARGET_PUBLISHED_NODE_IDS,
+      ],
+      priority_partition_summary:
+        PUBLICATION_CONVERGENCE_AUTH_REFRESH_PRIORITY_SUMMARY,
+    };
+    const activeNodeRows =
+      PUBLICATION_CONVERGENCE_HANDOFF_TARGET_NODE_IDS.map((nodeId) => ({
+        node_id: nodeId,
+        status: PUBLICATION_CONVERGENCE_REPAIR_ACTIVE_STATUS,
+        connection_state:
+          PUBLICATION_CONVERGENCE_REPAIR_READY_CONNECTION,
+        ready_lease_expires_at:
+          PUBLICATION_CONVERGENCE_REPAIR_READY_LEASE_EXPIRES_AT,
+      }));
+    const persistedRows = [];
+    const coordinator = new MembershipPublicationCoordinator({
+      nodeId: PUBLICATION_CONVERGENCE_HANDOFF_TARGET_NODE_IDS[0],
+      controlPlanePublicationsOwner: {
+        async listPublications() {
+          return {rows: [seedOnlyPublicationRow]};
+        },
+        async getPublication() {
+          return persistedRows[persistedRows.length - 1] ||
+            seedOnlyPublicationRow;
+        },
+        async upsertPublication(row) {
+          persistedRows.push(row);
+        },
+      },
+      systemTableCache: {
+        getAll(tableName) {
+          if (tableName === TABLES.CONTROL_PLANE_PUBLICATIONS) {
+            return [seedOnlyPublicationRow];
+          }
+          if (tableName === TABLES.NODES) {
+            return [...activeNodeRows];
+          }
+          return [...PUBLICATION_CONVERGENCE_HANDOFF_TARGET_EMPTY_ROWS];
+        },
+      },
+      now: () => PUBLICATION_CONVERGENCE_HANDOFF_TARGET_NOW_MS,
+    });
+
+    const outcome =
+      await coordinator.reconcileActiveGateMembershipPublication(
+        {
+          publicationEpoch: PUBLICATION_CONVERGENCE_HANDOFF_TARGET_EPOCH,
+          expectedNodeIds: [
+            ...PUBLICATION_CONVERGENCE_HANDOFF_TARGET_NODE_IDS,
+          ],
+          publishedActiveNodeIds: [
+            ...PUBLICATION_CONVERGENCE_HANDOFF_TARGET_PUBLISHED_NODE_IDS,
+          ],
+          pendingReconcileNodeIds: [
+            ...PUBLICATION_CONVERGENCE_HANDOFF_TARGET_PENDING_NODE_IDS,
+          ],
+          pendingRecoveryNodeIds: [],
+          nextAction:
+            PUBLICATION_ACTIVE_GATE_HANDOFF_NEXT_ACTION
+              .RECONCILE_OWNER_MEMBERSHIP_PUBLICATION,
+        },
+        {
+          nodeRows: activeNodeRows,
+          priorityPartitionSummary:
+            PUBLICATION_CONVERGENCE_AUTH_REFRESH_PRIORITY_SUMMARY,
+        },
+      );
+
+    t.equal(
+      outcome.state,
+      ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_OUTCOME.PUBLISHED_VISIBLE,
+      'seed-only active-gate fixture should become durable visible owner publication',
+    );
+    t.same(
+      outcome.publicationRow.publishedActiveNodeIds,
+      [...PUBLICATION_CONVERGENCE_HANDOFF_TARGET_SORTED_NODE_IDS],
+      'owner command should widen the published membership to all active handoff nodes',
+    );
+    t.equal(
+      persistedRows.length > 0,
+      true,
+      'owner command should persist the widened publication row',
+    );
+  });
+
+test('reconcileActiveGateMembershipPublication defers stale durable readback',
+  async (t) => {
+    const latestPublicationRow = {
+      publication_id: PUBLICATION_CONVERGENCE_HANDOFF_TARGET_PUBLICATION_ID,
+      publication_kind: 'cluster_membership',
+      publication_epoch: PUBLICATION_CONVERGENCE_HANDOFF_TARGET_EPOCH,
+      status: CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED,
+      published_active_node_ids: [
+        ...PUBLICATION_CONVERGENCE_HANDOFF_TARGET_PUBLISHED_NODE_IDS,
+      ],
+      required_ack_node_ids: [
+        ...PUBLICATION_CONVERGENCE_HANDOFF_TARGET_PUBLISHED_NODE_IDS,
+      ],
+      acknowledged_node_ids: [
+        ...PUBLICATION_CONVERGENCE_HANDOFF_TARGET_PUBLISHED_NODE_IDS,
+      ],
+    };
+    const pending = new Map();
+    const enqueued = [];
+    const coordinator = new MembershipPublicationCoordinator({
+      nodeId: PUBLICATION_CONVERGENCE_HANDOFF_TARGET_NODE_IDS[0],
+      reconcileQueue: {
+        pending,
+        enqueue(ownerKey, reason, context, options) {
+          enqueued.push({ownerKey, reason, context, options});
+          pending.set(ownerKey, {context});
+          return true;
+        },
+      },
+      controlPlanePublicationsOwner: {
+        async listPublications() {
+          return {rows: [latestPublicationRow]};
+        },
+        async getPublication() {
+          return latestPublicationRow;
+        },
+        async upsertPublication(row) {
+          return row;
+        },
+      },
+      systemTableCache: {
+        getAll(tableName) {
+          if (tableName === TABLES.CONTROL_PLANE_PUBLICATIONS) {
+            return [latestPublicationRow];
+          }
+          return [...PUBLICATION_CONVERGENCE_HANDOFF_TARGET_EMPTY_ROWS];
+        },
+      },
+      now: () => PUBLICATION_CONVERGENCE_HANDOFF_TARGET_NOW_MS,
+    });
+
+    const outcome =
+      await coordinator.reconcileActiveGateMembershipPublication({
+        publicationEpoch: PUBLICATION_CONVERGENCE_HANDOFF_TARGET_EPOCH,
+        expectedNodeIds: [
+          ...PUBLICATION_CONVERGENCE_HANDOFF_TARGET_NODE_IDS,
+        ],
+        publishedActiveNodeIds: [
+          ...PUBLICATION_CONVERGENCE_HANDOFF_TARGET_PUBLISHED_NODE_IDS,
+        ],
+        pendingReconcileNodeIds:
+          PUBLICATION_CONVERGENCE_HANDOFF_TARGET_NODE_IDS.slice(1),
+        nextAction:
+          PUBLICATION_ACTIVE_GATE_HANDOFF_NEXT_ACTION
+            .RECONCILE_OWNER_MEMBERSHIP_PUBLICATION,
+      });
+
+    const ownerKey = coordinator.buildOwnerKey();
+    t.equal(
+      outcome.state,
+      ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_OUTCOME.WRITE_DEFERRED,
+      'stale durable readback should remain a deferred owner outcome',
+    );
+    t.equal(
+      enqueued.length,
+      1,
+      'deferred durable visibility should requeue the owner reconcile path',
+    );
+    t.same(
+      pending.get(ownerKey)?.context?.publishedActiveNodeIds,
+      [...PUBLICATION_CONVERGENCE_HANDOFF_TARGET_SORTED_NODE_IDS],
+      'deferred owner context should preserve the complete handoff target',
+    );
+    t.equal(
+      pending.get(ownerKey)?.context?.skipPublicationWriteReadback,
+      false,
+      'deferred owner retry should keep durable readback enabled',
     );
   });
 
