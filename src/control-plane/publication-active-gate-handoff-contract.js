@@ -7,7 +7,6 @@ const PUBLICATION_ACTIVE_GATE_HANDOFF_EMPTY_LIST = Object.freeze([]);
 const PUBLICATION_ACTIVE_GATE_HANDOFF_EMPTY_TEXT = '';
 const PUBLICATION_ACTIVE_GATE_HANDOFF_SCHEMA_VERSION = 1;
 const PUBLICATION_ACTIVE_GATE_HANDOFF_UNKNOWN_EPOCH = 0;
-const PUBLICATION_ACTIVE_GATE_HANDOFF_UNKNOWN_REVISION = 0;
 
 const PUBLICATION_ACTIVE_GATE_HANDOFF_STATE = Object.freeze({
   COMPLETE: 'complete',
@@ -90,8 +89,13 @@ const PUBLICATION_ACTIVE_GATE_HANDOFF_TARGET_STATE = Object.freeze({
 
 const PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD = Object.freeze({
   ACKNOWLEDGED_NODE_IDS: 'acknowledgedNodeIds',
+  ACTIVE_GATE: 'activeGate',
+  ACTIVE_GATE_BEST_PROGRESS: 'activeGateBestProgress',
+  ACTIVE_GATE_PROGRESS: 'activeGateProgress',
   ACTIVE_GATE_CATCHUP_FENCE: 'activeGateCatchupFence',
   ACTIVE_GATE_OWNER_COHORT: 'activeGateOwnerCohort',
+  BLOCKED_PARTITION_COUNT: 'blockedPartitionCount',
+  BLOCKED_PARTITION_IDS: 'blockedPartitionIds',
   COVERED_NODE_IDS: 'coveredNodeIds',
   EFFECTIVE_ACTIVE_NODE_IDS: 'effectiveActiveNodeIds',
   EXPECTED_NODE_IDS: 'expectedNodeIds',
@@ -108,6 +112,21 @@ const PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD = Object.freeze({
   PENDING_ACK_NODE_IDS: 'pendingAckNodeIds',
   PENDING_RECONCILE_COUNT: 'pendingReconcileCount',
   PENDING_RECONCILE_NODE_IDS: 'pendingReconcileNodeIds',
+  PARTITION_WITNESSES: 'partitionWitnesses',
+  PRIORITY_RECOVERY_BLOCKED_PARTITION_COUNT:
+    'priorityRecoveryBlockedPartitionCount',
+  PRIORITY_RECOVERY_CURRENT_SUMMARY: 'priorityRecoveryCurrentSummary',
+  PRIORITY_RECOVERY_INVARIANT_FAILURES: 'priorityRecoveryInvariantFailures',
+  PRIORITY_RECOVERY_OBSERVATION: 'priorityRecoveryObservation',
+  PRIORITY_RECOVERY_PARTITION_WITNESSES:
+    'priorityRecoveryPartitionWitnesses',
+  PRIORITY_RECOVERY_UNRESOLVED_CLASS_COUNT:
+    'priorityRecoveryUnresolvedClassCount',
+  PRIORITY_RECOVERY_UNRESOLVED_PARTITION_COUNT:
+    'priorityRecoveryUnresolvedPartitionCount',
+  PRIORITY_RECOVERY_UNRESOLVED_SEMANTIC_STATE_COUNT:
+    'priorityRecoveryUnresolvedSemanticStateCount',
+  PROGRESS: 'progress',
   PROJECTED_ACTIVE_NODE_IDS: 'projectedActiveNodeIds',
   PROJECTED_SERVING_NODE_IDS: 'projectedServingNodeIds',
   PUBLICATION_ACTIVE_GATE_CATCHUP_FENCE: 'activeGateCatchupFence',
@@ -136,8 +155,20 @@ const PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD = Object.freeze({
   STATE: 'state',
   STATUS: 'status',
   SUSPECTED_OR_TRANSITIONING_NODE_IDS: 'suspectedOrTransitioningNodeIds',
+  UNRESOLVED_CLASS_COUNT: 'unresolvedClassCount',
+  UNRESOLVED_CLASS_IDS: 'unresolvedClassIds',
+  UNRESOLVED_SEMANTIC_STATE_COUNT: 'unresolvedSemanticStateCount',
+  UNRESOLVED_SEMANTIC_STATE_IDS: 'unresolvedSemanticStateIds',
   UPDATED_AT: 'updated_at',
   UPDATEDAT: 'updatedAt',
+  WITNESS_PARTITION_COUNT: 'witnessPartitionCount',
+  WITNESS_PARTITION_IDS: 'witnessPartitionIds',
+});
+
+const PUBLICATION_ACTIVE_GATE_HANDOFF_PRIORITY_RECOVERY_STATE = Object.freeze({
+  CLEAN: 'clean',
+  UNKNOWN: 'unknown',
+  UNRESOLVED: 'unresolved',
 });
 
 const PUBLICATION_ACTIVE_GATE_HANDOFF_READINESS_REASON_FIELD =
@@ -201,6 +232,55 @@ const PUBLICATION_ACTIVE_GATE_HANDOFF_TARGET_CONTEXT_FIELDS = Object.freeze([
 const PUBLICATION_ACTIVE_GATE_HANDOFF_PENDING_OWNER_REASON_CODES =
   Object.freeze([
     CONTROL_PLANE_READINESS_REASON.PRIORITY_CONTROL_PLANE_RECOVERY_PENDING,
+  ]);
+
+const PUBLICATION_ACTIVE_GATE_HANDOFF_PRIORITY_RECOVERY_CLEAN_COUNT_FIELDS =
+  Object.freeze([
+    PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD
+      .PRIORITY_RECOVERY_UNRESOLVED_CLASS_COUNT,
+    PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD
+      .PRIORITY_RECOVERY_UNRESOLVED_SEMANTIC_STATE_COUNT,
+    PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD
+      .PRIORITY_RECOVERY_BLOCKED_PARTITION_COUNT,
+  ]);
+
+const PUBLICATION_ACTIVE_GATE_HANDOFF_PRIORITY_RECOVERY_SUMMARY_CLEAN_FIELDS =
+  Object.freeze([
+    PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.UNRESOLVED_CLASS_COUNT,
+    PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.UNRESOLVED_SEMANTIC_STATE_COUNT,
+    PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.BLOCKED_PARTITION_COUNT,
+  ]);
+
+const PUBLICATION_ACTIVE_GATE_HANDOFF_PRIORITY_RECOVERY_CLEAN_COUNT_GROUPS =
+  Object.freeze([
+    PUBLICATION_ACTIVE_GATE_HANDOFF_PRIORITY_RECOVERY_CLEAN_COUNT_FIELDS,
+    PUBLICATION_ACTIVE_GATE_HANDOFF_PRIORITY_RECOVERY_SUMMARY_CLEAN_FIELDS,
+  ]);
+
+const PUBLICATION_ACTIVE_GATE_HANDOFF_PRIORITY_RECOVERY_BLOCKER_COUNT_FIELDS =
+  Object.freeze([
+    ...PUBLICATION_ACTIVE_GATE_HANDOFF_PRIORITY_RECOVERY_CLEAN_COUNT_FIELDS,
+    PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD
+      .PRIORITY_RECOVERY_UNRESOLVED_PARTITION_COUNT,
+  ]);
+
+const PUBLICATION_ACTIVE_GATE_HANDOFF_PRIORITY_RECOVERY_SUMMARY_BLOCKER_FIELDS =
+  Object.freeze([
+    ...PUBLICATION_ACTIVE_GATE_HANDOFF_PRIORITY_RECOVERY_SUMMARY_CLEAN_FIELDS,
+    PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.WITNESS_PARTITION_COUNT,
+  ]);
+
+const PUBLICATION_ACTIVE_GATE_HANDOFF_PRIORITY_RECOVERY_BLOCKER_LIST_FIELDS =
+  Object.freeze([
+    PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD
+      .PRIORITY_RECOVERY_PARTITION_WITNESSES,
+    PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD
+      .PRIORITY_RECOVERY_INVARIANT_FAILURES,
+    PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.UNRESOLVED_CLASS_IDS,
+    PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.UNRESOLVED_SEMANTIC_STATE_IDS,
+    PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.BLOCKED_PARTITION_IDS,
+    PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.WITNESS_PARTITION_IDS,
+    PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.PARTITION_WITNESSES,
   ]);
 
 const PUBLICATION_ACTIVE_GATE_HANDOFF_DECISION_RULES = Object.freeze([
@@ -559,21 +639,144 @@ function normalizePublicationActiveGateHandoffReasonCodes(readinessEntry) {
   ]);
 }
 
+function collectPublicationActiveGateHandoffPriorityRecoveryEvidenceRecords(
+  publicationConvergence = null,
+) {
+  if (!isPublicationActiveGateHandoffRecord(publicationConvergence)) {
+    return PUBLICATION_ACTIVE_GATE_HANDOFF_EMPTY_LIST;
+  }
+  const activeGate =
+    publicationConvergence[PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.ACTIVE_GATE];
+  return Object.freeze([
+    publicationConvergence,
+    publicationConvergence[
+      PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.PRIORITY_RECOVERY_OBSERVATION
+    ],
+    publicationConvergence[
+      PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.PRIORITY_RECOVERY_CURRENT_SUMMARY
+    ],
+    publicationConvergence[
+      PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.ACTIVE_GATE_PROGRESS
+    ],
+    publicationConvergence[
+      PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.ACTIVE_GATE_BEST_PROGRESS
+    ],
+    activeGate,
+    activeGate?.[PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.PROGRESS],
+  ].filter(isPublicationActiveGateHandoffRecord));
+}
+
+function normalizePublicationActiveGateHandoffPriorityRecoveryEvidenceRecord(
+  evidenceRecord,
+) {
+  const blockerCounts =
+    [
+      ...PUBLICATION_ACTIVE_GATE_HANDOFF_PRIORITY_RECOVERY_BLOCKER_COUNT_FIELDS,
+      ...PUBLICATION_ACTIVE_GATE_HANDOFF_PRIORITY_RECOVERY_SUMMARY_BLOCKER_FIELDS,
+    ]
+      .map((fieldName) =>
+        normalizePublicationActiveGateHandoffInteger(
+          evidenceRecord[fieldName],
+        ))
+      .filter((value) => value !== null);
+  const cleanCountGroups =
+    PUBLICATION_ACTIVE_GATE_HANDOFF_PRIORITY_RECOVERY_CLEAN_COUNT_GROUPS.map(
+      (fieldNames) =>
+        fieldNames
+          .map((fieldName) =>
+            normalizePublicationActiveGateHandoffInteger(
+              evidenceRecord[fieldName],
+            ))
+          .filter((value) => value !== null),
+    );
+  const blockerListLengths =
+    PUBLICATION_ACTIVE_GATE_HANDOFF_PRIORITY_RECOVERY_BLOCKER_LIST_FIELDS
+      .map((fieldName) =>
+        normalizePublicationActiveGateHandoffNodeIdList(
+          evidenceRecord[fieldName],
+        ).length);
+  const hasUnresolvedEvidence = [
+    ...blockerCounts,
+    ...blockerListLengths,
+  ].some((value) => value > NUM.ZERO);
+  if (hasUnresolvedEvidence) {
+    return PUBLICATION_ACTIVE_GATE_HANDOFF_PRIORITY_RECOVERY_STATE.UNRESOLVED;
+  }
+  const hasExplicitCleanEvidence =
+    cleanCountGroups.some((cleanCounts, index) =>
+      cleanCounts.length ===
+        PUBLICATION_ACTIVE_GATE_HANDOFF_PRIORITY_RECOVERY_CLEAN_COUNT_GROUPS[
+          index
+        ].length &&
+      cleanCounts.every((value) => value === NUM.ZERO),
+    );
+  return hasExplicitCleanEvidence ?
+    PUBLICATION_ACTIVE_GATE_HANDOFF_PRIORITY_RECOVERY_STATE.CLEAN :
+    PUBLICATION_ACTIVE_GATE_HANDOFF_PRIORITY_RECOVERY_STATE.UNKNOWN;
+}
+
+function resolvePublicationActiveGateHandoffPriorityRecoveryState(
+  publicationConvergence = null,
+) {
+  const evidenceStates =
+    collectPublicationActiveGateHandoffPriorityRecoveryEvidenceRecords(
+      publicationConvergence,
+    ).map((evidenceRecord) =>
+      normalizePublicationActiveGateHandoffPriorityRecoveryEvidenceRecord(
+        evidenceRecord,
+      ));
+  if (
+    evidenceStates.includes(
+      PUBLICATION_ACTIVE_GATE_HANDOFF_PRIORITY_RECOVERY_STATE.UNRESOLVED,
+    )
+  ) {
+    return PUBLICATION_ACTIVE_GATE_HANDOFF_PRIORITY_RECOVERY_STATE.UNRESOLVED;
+  }
+  return evidenceStates.includes(
+    PUBLICATION_ACTIVE_GATE_HANDOFF_PRIORITY_RECOVERY_STATE.CLEAN,
+  ) ?
+    PUBLICATION_ACTIVE_GATE_HANDOFF_PRIORITY_RECOVERY_STATE.CLEAN :
+    PUBLICATION_ACTIVE_GATE_HANDOFF_PRIORITY_RECOVERY_STATE.UNKNOWN;
+}
+
+function hasPublicationActiveGateHandoffPendingOwnerReasonCode(
+  reasonCode,
+  priorityRecoveryState,
+) {
+  if (
+    reasonCode ===
+      CONTROL_PLANE_READINESS_REASON.PRIORITY_CONTROL_PLANE_RECOVERY_PENDING &&
+    priorityRecoveryState ===
+      PUBLICATION_ACTIVE_GATE_HANDOFF_PRIORITY_RECOVERY_STATE.CLEAN
+  ) {
+    return false;
+  }
+  return PUBLICATION_ACTIVE_GATE_HANDOFF_PENDING_OWNER_REASON_CODES.includes(
+    reasonCode,
+  );
+}
+
 function resolvePublicationActiveGateHandoffPendingRecoveryNodeIds(
   expectedNodeIds,
   readinessByNodeId,
+  publicationConvergence = null,
 ) {
   if (!isPublicationActiveGateHandoffRecord(readinessByNodeId)) {
     return PUBLICATION_ACTIVE_GATE_HANDOFF_EMPTY_LIST;
   }
+  const priorityRecoveryState =
+    resolvePublicationActiveGateHandoffPriorityRecoveryState(
+      publicationConvergence,
+    );
   return normalizePublicationActiveGateHandoffNodeIdList(
     expectedNodeIds.filter((nodeId) => {
       const reasonCodes = normalizePublicationActiveGateHandoffReasonCodes(
         readinessByNodeId[nodeId],
       );
       return reasonCodes.some((reasonCode) =>
-        PUBLICATION_ACTIVE_GATE_HANDOFF_PENDING_OWNER_REASON_CODES.includes(
+        hasPublicationActiveGateHandoffPendingOwnerReasonCode(
           reasonCode,
+          priorityRecoveryState,
         ),
       );
     }),
@@ -1041,6 +1244,7 @@ function buildPublicationActiveGateHandoffContract(options = {}) {
       resolvePublicationActiveGateHandoffPendingRecoveryNodeIds(
         expectedNodeIds,
         options.readinessByNodeId,
+        options.publicationConvergence,
       );
   const pendingReconcileNodeIds =
     normalizePublicationActiveGateHandoffNodeIdList(

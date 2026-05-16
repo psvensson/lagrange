@@ -32,7 +32,9 @@
     "work/tracks/topology-convergence.md",
     "work/sprints/current-blocker.md",
     "work/sprints/current-blocker.json",
-    "work/model-ledger.jsonl"
+    "work/model-ledger.jsonl",
+    "src/control-plane/publication-active-gate-handoff-contract.js",
+    "test/admin/admin-control-snapshot.test.js"
   ],
   "handoffFiles": [
     "work/packages/done-20260516-topology-publication-count-only-ack-closure.md",
@@ -64,7 +66,9 @@
     "work/tracks/topology-convergence.md",
     "work/sprints/current-blocker.md",
     "work/sprints/current-blocker.json",
-    "work/model-ledger.jsonl"
+    "work/model-ledger.jsonl",
+    "src/control-plane/publication-active-gate-handoff-contract.js",
+    "test/admin/admin-control-snapshot.test.js"
   ],
   "touchedFiles": [],
   "modelFit": {

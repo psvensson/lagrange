@@ -33,7 +33,9 @@
     "work/tracks/topology-convergence.md",
     "work/sprints/current-blocker.md",
     "work/sprints/current-blocker.json",
-    "work/model-ledger.jsonl"
+    "work/model-ledger.jsonl",
+    "src/control-plane/publication-active-gate-handoff-contract.js",
+    "test/admin/admin-control-snapshot.test.js"
   ],
   "handoffFiles": [
     "work/packages/done-20260516-topology-publication-count-only-ack-closure.md",
@@ -65,7 +67,9 @@
     "work/tracks/topology-convergence.md",
     "work/sprints/current-blocker.md",
     "work/sprints/current-blocker.json",
-    "work/model-ledger.jsonl"
+    "work/model-ledger.jsonl",
+    "src/control-plane/publication-active-gate-handoff-contract.js",
+    "test/admin/admin-control-snapshot.test.js"
   ],
   "modelFit": {
     "packageClass": "representative-frontier-closure",
@@ -167,9 +171,9 @@ owner-boundary package.
 
 ## Subagent Sequencing Ledger
 
-- [ ] Review subagent recorded:
-- [ ] Fix subagent recorded or explicitly not needed:
-- [ ] Implementation subagent recorded:
+- [x] Review subagent recorded: Agent Codex (019e311a-0f5b-73d1-bea5-6a61d5ea8d84) reviewed work/packages/done-20260516-topology-publication-count-only-ack-closure.md; result clean.
+- [x] Fix subagent recorded or explicitly not needed: not-needed.
+- [x] Implementation subagent recorded: Agent Codex (019e311e-9fd9-7643-86bf-7afe05f899f0) implemented work/packages/active-20260516-startup-active-gate-owner-cohort-recovery-closure.md.
 
 ## LLM Tool-First Contract
 
@@ -188,8 +192,8 @@ canonical extractor was tried and why it was insufficient.
 ## In Scope
 
 1. Work package, sprint, track, current-blocker, and model ledger handoff files.
-2. Candidate runtime files only after required subagent proof promotes exact
-   write ownership.
+2. `src/control-plane/publication-active-gate-handoff-contract.js`
+3. `test/admin/admin-control-snapshot.test.js`
 
 ## Out Of Scope
 
@@ -204,7 +208,7 @@ canonical extractor was tried and why it was insufficient.
 - Intended minimum model: `gpt-5.3-codex`
 - Scope shape: `owner-boundary-contraction/current-frontier`
 - Output profile: `medium`
-- Owned files: `work/packages/active-20260516-startup-active-gate-owner-cohort-recovery-closure.md`, `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md`, `work/tracks/topology-convergence.md`, `work/sprints/current-blocker.md`, `work/sprints/current-blocker.json`, `work/model-ledger.jsonl`
+- Owned files: `work/packages/active-20260516-startup-active-gate-owner-cohort-recovery-closure.md`, `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md`, `work/tracks/topology-convergence.md`, `work/sprints/current-blocker.md`, `work/sprints/current-blocker.json`, `work/model-ledger.jsonl`, `src/control-plane/publication-active-gate-handoff-contract.js`, `test/admin/admin-control-snapshot.test.js`
 - Forbidden files: `representative-timeout-budget`, `active-gate-admission-relaxation`
 - Frozen decisions: active-gate admission remains strict while `runtimePromotionAllowed=false`.
 - Escalation triggers: owned files expand beyond this package, runtime ownership changes, representative scenario evidence changes, or startup active-gate admission would be relaxed.
@@ -224,3 +228,45 @@ canonical extractor was tried and why it was insufficient.
 9. npm run work:subagent-prompt -- --role review --package work/packages/active-20260516-startup-active-gate-owner-cohort-recovery-closure.md
 10. npm run work:subagent-prompt -- --role fix --package work/packages/active-20260516-startup-active-gate-owner-cohort-recovery-closure.md
 11. npm run work:subagent-prompt -- --role implementation --package work/packages/active-20260516-startup-active-gate-owner-cohort-recovery-closure.md
+12. npm test -- test/admin/admin-control-snapshot.test.js
+13. npx eslint src/control-plane/publication-active-gate-handoff-contract.js test/admin/admin-control-snapshot.test.js --ignore-pattern 'test/.gitkeep'
+14. node scripts/check-guideline-literals.js src/control-plane/publication-active-gate-handoff-contract.js
+15. node scripts/check-guideline-decision-boundaries.js src/control-plane/publication-active-gate-handoff-contract.js
+16. npm run audit:runtime-grammar:file -- src/control-plane/publication-active-gate-handoff-contract.js
+17. npm run work:validate -- --pre-impl work/packages/active-20260516-startup-active-gate-owner-cohort-recovery-closure.md
+18. npm run work:package:doctor -- --suggest work/packages/active-20260516-startup-active-gate-owner-cohort-recovery-closure.md
+19. git diff --check -- package-owned files
+20. node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-after-active-gate-owner-cohort-recovery-closure-20260516.report.json --verbose
+21. npm run work:evidence-summary -- test-output/reports/rolling-restart-after-active-gate-owner-cohort-recovery-closure-20260516.report.json
+22. npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-active-gate-owner-cohort-recovery-closure-20260516.report.json --handoff-probe
+23. npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-active-gate-owner-cohort-recovery-closure-20260516.report.json
+24. npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-after-active-gate-owner-cohort-recovery-closure-20260516.report.json --markdown
+
+## Implementation Result
+
+The active-gate handoff contract now treats explicit clean canonical priority
+recovery evidence as closed owner-recovery debt. When priority recovery has no
+unresolved classes, semantic states, or blocked partitions, readiness
+`PRIORITY_CONTROL_PLANE_RECOVERY_PENDING` no longer suppresses the publication
+reconcile target. Unknown or unresolved priority recovery evidence still keeps
+the existing `wait_owner_recovery` behavior.
+
+Focused admin snapshot proof covers the live canonical
+`priorityRecoveryCurrentSummary` shape so the runtime path does not rely on
+diagnostics-only active-gate progress projection.
+
+## Migration Result
+
+- From: `startup_active_gate_owner / snapshot_coverage`
+- To: `operation_workflow_owner / workflow_progress`
+- Reason: representative rerun
+  `test-output/reports/rolling-restart-after-active-gate-owner-cohort-recovery-closure-20260516.report.json`
+  reports publication `PUBLISHED`, `pendingAckCount=0`, `missingPublished=0`,
+  published membership `5/5`, and snapshot coverage `5/5`. Canonical evidence
+  marks `publication_ack_convergence` and `active_gate_snapshot_coverage`
+  satisfied, then selects `priority_recovery_partition_progress` as the first
+  frontier.
+- Successor should start from the priority recovery residual extractor's first
+  owner-boundary group:
+  `operation_workflow_owner / workflow_progress` with dominant reason
+  `priority_recovery_progress_blocked`.

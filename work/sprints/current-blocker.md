@@ -154,6 +154,8 @@ Write scope:
 4. `work/sprints/current-blocker.md`
 5. `work/sprints/current-blocker.json`
 6. `work/model-ledger.jsonl`
+7. `src/control-plane/publication-active-gate-handoff-contract.js`
+8. `test/admin/admin-control-snapshot.test.js`
 
 Handoff files:
 
@@ -190,6 +192,8 @@ Commit scope:
 4. `work/sprints/current-blocker.md`
 5. `work/sprints/current-blocker.json`
 6. `work/model-ledger.jsonl`
+7. `src/control-plane/publication-active-gate-handoff-contract.js`
+8. `test/admin/admin-control-snapshot.test.js`
 
 Legacy touched files:
 

@@ -63,6 +63,7 @@ const ACTIVE_GATE_OWNER_TRUTH_LOCAL_ENDPOINT_TRANSPORT = 'ws';
 const ACTIVE_GATE_OWNER_TRUTH_LOCAL_ENDPOINT_ADDRESS = 'ws://node-1:8082';
 const ACTIVE_GATE_OWNER_TRUTH_PRIORITY_PARTITION_COUNT = 0;
 const ACTIVE_GATE_OWNER_TRUTH_PENDING_ACK_COUNT = 0;
+const ACTIVE_GATE_OWNER_TRUTH_PRIORITY_RECOVERY_CLEAN_COUNT = 0;
 const ACTIVE_GATE_OWNER_TRUTH_READY_LEASE_COUNT = 1;
 const ACTIVE_GATE_OWNER_TRUTH_SELECTED_PUBLISHED_COUNT = 1;
 const ACTIVE_GATE_OWNER_TRUTH_CURRENT_MISSING_COUNT = 5;
@@ -113,6 +114,7 @@ const ACTIVE_GATE_OWNER_TRUTH_LOCAL_NODE_ID =
 const ACTIVE_GATE_OWNER_TRUTH_RECENT_NODE_IDS = Object.freeze(
   ACTIVE_GATE_OWNER_TRUTH_NODE_IDS.slice(1),
 );
+const ACTIVE_GATE_OWNER_TRUTH_EMPTY_NODE_IDS = Object.freeze([]);
 const ACTIVE_GATE_HANDOFF_RECONCILE_NODE_IDS = Object.freeze([
   'node-1',
   'node-2',
@@ -136,14 +138,11 @@ const ACTIVE_GATE_HANDOFF_RECONCILE_PARTIAL_PENDING_COUNT =
 const ACTIVE_GATE_HANDOFF_RECONCILE_CLEARED_PENDING_COUNT = 0;
 const ACTIVE_GATE_HANDOFF_RECONCILE_AUTHORITATIVE_READ = true;
 const ACTIVE_GATE_HANDOFF_RECONCILE_AUTHORITATIVE_RECONCILE = true;
-const ACTIVE_GATE_HANDOFF_RECONCILE_ALLOW_PENDING_VISIBILITY = true;
-const ACTIVE_GATE_HANDOFF_RECONCILE_ALLOW_PRESSURE_DEFER = false;
 const ACTIVE_GATE_HANDOFF_RECONCILE_SKIP_WRITE_READBACK = false;
 const ACTIVE_GATE_HANDOFF_RECONCILE_READ_PROFILE = 'diagnostics';
 const ACTIVE_GATE_HANDOFF_RECONCILE_ALLOW_EMPTY_PRELOADED_ROWS = true;
 const ACTIVE_GATE_HANDOFF_RECONCILE_DISABLE_NESTED_PRIORITY_RECOVERY = true;
 const ACTIVE_GATE_HANDOFF_CATCHUP_READINESS_REFRESH = false;
-const ACTIVE_GATE_HANDOFF_CATCHUP_STALE_READINESS = true;
 const ACTIVE_GATE_HANDOFF_RECONCILE_READBACK_FAILURE =
   'handoff_publication_readback_unavailable';
 const ACTIVE_GATE_HANDOFF_RECONCILE_PUBLICATION_KIND =
@@ -889,6 +888,81 @@ test('AdminControlSnapshot normalizes active-gate owner cohort budget state',
         },
       },
       'active-gate owner cohort diagnostics should normalize bounded budget fields',
+    );
+  });
+
+test('AdminControlSnapshot maps clean priority recovery readiness debt to publication reconcile',
+  async (t) => {
+    const snapshot = new AdminControlSnapshot({
+      nodeId: ACTIVE_GATE_OWNER_TRUTH_LOCAL_NODE_ID,
+      nowFn: () => ACTIVE_GATE_OWNER_TRUTH_NOW_MS,
+    });
+
+    const activeGateOwnerCohort =
+      snapshot.resolveActiveGateOwnerCohortSnapshot({
+        nodeRows: [
+          {
+            node_id: ACTIVE_GATE_OWNER_TRUTH_LOCAL_NODE_ID,
+            status: ACTIVE_GATE_OWNER_TRUTH_NODE_STATUS,
+            connection_state: ACTIVE_GATE_OWNER_TRUTH_CONNECTION_STATE,
+            ready_lease_expires_at:
+              ACTIVE_GATE_OWNER_TRUTH_NOW_MS +
+                ACTIVE_GATE_OWNER_TRUTH_READY_LEASE_DELTA_MS,
+          },
+          {
+            node_id: ACTIVE_GATE_OWNER_TRUTH_RECENT_NODE_IDS[0],
+            status: ACTIVE_GATE_OWNER_TRUTH_NODE_STATUS,
+            connection_state: ACTIVE_GATE_OWNER_TRUTH_CONNECTION_STATE,
+            ready_lease_expires_at:
+              ACTIVE_GATE_OWNER_TRUTH_NOW_MS +
+                ACTIVE_GATE_OWNER_TRUTH_READY_LEASE_DELTA_MS,
+          },
+        ],
+        activeNodeViews: {
+          effectiveActiveNodeIds: [
+            ACTIVE_GATE_OWNER_TRUTH_LOCAL_NODE_ID,
+            ACTIVE_GATE_OWNER_TRUTH_RECENT_NODE_IDS[0],
+          ],
+          publishedActiveNodeIds: [ACTIVE_GATE_OWNER_TRUTH_LOCAL_NODE_ID],
+        },
+        publicationConvergence: {
+          publicationEpoch: ACTIVE_GATE_OWNER_TRUTH_PUBLICATION_EPOCH,
+          publishedActiveNodeIds: [ACTIVE_GATE_OWNER_TRUTH_LOCAL_NODE_ID],
+          missingPublishedNodeIds: [ACTIVE_GATE_OWNER_TRUTH_RECENT_NODE_IDS[0]],
+          priorityRecoveryCurrentSummary: {
+            unresolvedClassCount:
+              ACTIVE_GATE_OWNER_TRUTH_PRIORITY_RECOVERY_CLEAN_COUNT,
+            unresolvedSemanticStateCount:
+              ACTIVE_GATE_OWNER_TRUTH_PRIORITY_RECOVERY_CLEAN_COUNT,
+            blockedPartitionCount:
+              ACTIVE_GATE_OWNER_TRUTH_PRIORITY_RECOVERY_CLEAN_COUNT,
+          },
+        },
+        readinessByNodeId: {
+          [ACTIVE_GATE_OWNER_TRUTH_RECENT_NODE_IDS[0]]: {
+            reasonCodes: [
+              CONTROL_PLANE_READINESS_REASON
+                .PRIORITY_CONTROL_PLANE_RECOVERY_PENDING,
+            ],
+          },
+        },
+      });
+
+    t.match(
+      activeGateOwnerCohort,
+      {
+        state: ACTIVE_GATE_OWNER_COHORT_STATE_PENDING,
+        reasonCode: ACTIVE_GATE_OWNER_COHORT_REASON_OWNER_RECONCILE_PENDING,
+        nextAction: ACTIVE_GATE_HANDOFF_NEXT_ACTION_RECONCILE,
+        pendingRecoveryNodeIds: [
+          ...ACTIVE_GATE_OWNER_TRUTH_EMPTY_NODE_IDS,
+        ],
+        pendingRecoveryCount:
+          ACTIVE_GATE_OWNER_TRUTH_PRIORITY_RECOVERY_CLEAN_COUNT,
+        pendingReconcileNodeIds: [ACTIVE_GATE_OWNER_TRUTH_RECENT_NODE_IDS[0]],
+        pendingReconcileCount: ACTIVE_GATE_OWNER_TRUTH_READY_LEASE_COUNT,
+      },
+      'clean canonical priority recovery evidence should not keep missing publication nodes in owner-recovery wait',
     );
   });
 
