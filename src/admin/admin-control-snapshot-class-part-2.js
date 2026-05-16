@@ -26,6 +26,9 @@ import {
   hasPublicationActiveGateOwnerReconcileSignal,
   selectPublicationActiveGateHandoffContract,
 } from '../control-plane/publication-active-gate-handoff-contract.js';
+import {
+  CONTROL_PLANE_CONVERGENCE_PRESSURE_OUTCOME,
+} from '../control-plane/control-plane-error-classification.js';
 import {AdminControlSnapshotPart1} from './admin-control-snapshot-class-part-1.js';
 // ── file-local constants ────────────────────────────────────────────────────
 const ADMIN_CONTROL_SNAPSHOT_LITERAL = Object.freeze({
@@ -74,6 +77,13 @@ const CONTROL_SNAPSHOT_ACTIVE_GATE_OWNER_COHORT_FIELD =
   'activeGateOwnerCohort';
 const CONTROL_SNAPSHOT_MEMBERSHIP_PUBLICATION_HANDOFF_OUTCOME_FIELD =
   'membershipPublicationHandoffOutcome';
+const CONTROL_SNAPSHOT_CONTROL_PLANE_CONVERGENCE_FIELD =
+  'controlPlaneConvergence';
+const CONTROL_SNAPSHOT_CRITICAL_CONVERGENCE_DEFERRED_FIELD =
+  'criticalConvergenceDeferred';
+const CONTROL_SNAPSHOT_ORDINARY_REPAIR_DEFERRED_FIELD =
+  'ordinaryRepairDeferred';
+const CONTROL_SNAPSHOT_PRESSURE_OUTCOME_FIELD = 'pressureOutcome';
 function hasOnlyLeaderResolutionGapRepairCause(repair = null) {
   const causeChain = Array.isArray(repair?.causeChain) ?
     repair.causeChain.filter(
@@ -189,16 +199,51 @@ function attachMembershipPublicationHandoffOutcome(snapshot, outcome) {
         CONTROL_SNAPSHOT_PUBLICATION_CONVERGENCE_FIELD
       ] :
       null;
+  const controlPlaneConvergence =
+    outcome[CONTROL_SNAPSHOT_CONTROL_PLANE_CONVERGENCE_FIELD] &&
+      typeof outcome[CONTROL_SNAPSHOT_CONTROL_PLANE_CONVERGENCE_FIELD] ===
+        TYPEOF.OBJECT ?
+      outcome[CONTROL_SNAPSHOT_CONTROL_PLANE_CONVERGENCE_FIELD] :
+      null;
+  const pressureOutcome =
+    typeof controlPlaneConvergence?.[
+      CONTROL_SNAPSHOT_PRESSURE_OUTCOME_FIELD
+    ] === TYPEOF.STRING ?
+      controlPlaneConvergence[CONTROL_SNAPSHOT_PRESSURE_OUTCOME_FIELD] :
+      outcome.controlPlanePressureOutcome;
+  const criticalConvergenceDeferred =
+    pressureOutcome ===
+      CONTROL_PLANE_CONVERGENCE_PRESSURE_OUTCOME.CRITICAL_DEFERRED ||
+    pressureOutcome ===
+      CONTROL_PLANE_CONVERGENCE_PRESSURE_OUTCOME.CRITICAL_REJECTED;
   snapshot[CONTROL_SNAPSHOT_CONTROL_PLANE_DIAGNOSTICS_FIELD] = {
     ...controlPlaneDiagnostics,
     [CONTROL_SNAPSHOT_MEMBERSHIP_PUBLICATION_HANDOFF_OUTCOME_FIELD]:
       outcome,
+    ...(controlPlaneConvergence ?
+      {
+        [CONTROL_SNAPSHOT_CONTROL_PLANE_CONVERGENCE_FIELD]:
+          controlPlaneConvergence,
+        [CONTROL_SNAPSHOT_CRITICAL_CONVERGENCE_DEFERRED_FIELD]:
+          criticalConvergenceDeferred,
+        [CONTROL_SNAPSHOT_ORDINARY_REPAIR_DEFERRED_FIELD]: false,
+      } :
+      {}),
     ...(publicationConvergence ?
       {
         [CONTROL_SNAPSHOT_PUBLICATION_CONVERGENCE_FIELD]: {
           ...publicationConvergence,
           [CONTROL_SNAPSHOT_MEMBERSHIP_PUBLICATION_HANDOFF_OUTCOME_FIELD]:
             outcome,
+          ...(controlPlaneConvergence ?
+            {
+              [CONTROL_SNAPSHOT_CONTROL_PLANE_CONVERGENCE_FIELD]:
+                controlPlaneConvergence,
+              [CONTROL_SNAPSHOT_CRITICAL_CONVERGENCE_DEFERRED_FIELD]:
+                criticalConvergenceDeferred,
+              [CONTROL_SNAPSHOT_ORDINARY_REPAIR_DEFERRED_FIELD]: false,
+            } :
+            {}),
         },
       } :
       {}),
@@ -206,7 +251,38 @@ function attachMembershipPublicationHandoffOutcome(snapshot, outcome) {
       ...activeGateOwnerCohort,
       [CONTROL_SNAPSHOT_MEMBERSHIP_PUBLICATION_HANDOFF_OUTCOME_FIELD]:
         outcome,
+      ...(controlPlaneConvergence ?
+        {
+          [CONTROL_SNAPSHOT_CONTROL_PLANE_CONVERGENCE_FIELD]:
+            controlPlaneConvergence,
+          [CONTROL_SNAPSHOT_CRITICAL_CONVERGENCE_DEFERRED_FIELD]:
+            criticalConvergenceDeferred,
+          [CONTROL_SNAPSHOT_ORDINARY_REPAIR_DEFERRED_FIELD]: false,
+        } :
+        {}),
     },
+  };
+  return snapshot;
+}
+
+function attachOrdinaryRepairDeferralDiagnostics(snapshot, repairDeferred) {
+  if (!snapshot || typeof snapshot !== TYPEOF.OBJECT) {
+    return snapshot;
+  }
+  const controlPlaneDiagnostics =
+    snapshot[CONTROL_SNAPSHOT_CONTROL_PLANE_DIAGNOSTICS_FIELD] &&
+      typeof snapshot[CONTROL_SNAPSHOT_CONTROL_PLANE_DIAGNOSTICS_FIELD] ===
+        TYPEOF.OBJECT ?
+      snapshot[CONTROL_SNAPSHOT_CONTROL_PLANE_DIAGNOSTICS_FIELD] :
+      {};
+  const criticalConvergenceDeferred =
+    controlPlaneDiagnostics[
+      CONTROL_SNAPSHOT_CRITICAL_CONVERGENCE_DEFERRED_FIELD
+    ] === true;
+  snapshot[CONTROL_SNAPSHOT_CONTROL_PLANE_DIAGNOSTICS_FIELD] = {
+    ...controlPlaneDiagnostics,
+    [CONTROL_SNAPSHOT_ORDINARY_REPAIR_DEFERRED_FIELD]:
+      criticalConvergenceDeferred !== true && repairDeferred === true,
   };
   return snapshot;
 }
@@ -349,7 +425,10 @@ class AdminControlSnapshotPart2 extends AdminControlSnapshotPart1 {
           options,
         );
       return this.resolveSharedControlSnapshot(
-        triggeredSnapshot,
+        attachOrdinaryRepairDeferralDiagnostics(
+          triggeredSnapshot,
+          repairEvaluation?.shouldRepair === true,
+        ),
         repairEvaluation?.shouldRepair === true ?
           {
             ...options,
@@ -380,15 +459,18 @@ class AdminControlSnapshotPart2 extends AdminControlSnapshotPart1 {
             snapshot,
             options,
           );
-        return this.resolveSharedControlSnapshot(triggeredSnapshot, {
-          ...options,
-          observationMode:
-            ADMIN_CONTROL_SNAPSHOT_OBSERVATION_MODE.REPAIR_DEFERRED,
-          repairEvaluation,
-          repairAttempted: true,
-          repairDeferred: true,
-          retryAfterMs: error?.retryAfterMs,
-        });
+        return this.resolveSharedControlSnapshot(
+          attachOrdinaryRepairDeferralDiagnostics(triggeredSnapshot, true),
+          {
+            ...options,
+            observationMode:
+              ADMIN_CONTROL_SNAPSHOT_OBSERVATION_MODE.REPAIR_DEFERRED,
+            repairEvaluation,
+            repairAttempted: true,
+            repairDeferred: true,
+            retryAfterMs: error?.retryAfterMs,
+          },
+        );
       }
       throw buildAuthoritativeControlSnapshotRepairFailure(
         error?.message || error || ADMIN_CONTROL_SNAPSHOT_LITERAL.UNKNOWN_ERROR,
@@ -409,15 +491,18 @@ class AdminControlSnapshotPart2 extends AdminControlSnapshotPart1 {
             snapshot,
             options,
           );
-        return this.resolveSharedControlSnapshot(triggeredSnapshot, {
-          ...options,
-          observationMode:
-            ADMIN_CONTROL_SNAPSHOT_OBSERVATION_MODE.REPAIR_DEFERRED,
-          repair,
-          repairEvaluation,
-          repairAttempted: true,
-          repairDeferred: true,
-        });
+        return this.resolveSharedControlSnapshot(
+          attachOrdinaryRepairDeferralDiagnostics(triggeredSnapshot, true),
+          {
+            ...options,
+            observationMode:
+              ADMIN_CONTROL_SNAPSHOT_OBSERVATION_MODE.REPAIR_DEFERRED,
+            repair,
+            repairEvaluation,
+            repairAttempted: true,
+            repairDeferred: true,
+          },
+        );
       }
       const errors = Array.isArray(repair?.errors) ?
         repair.errors :

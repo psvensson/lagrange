@@ -14,6 +14,10 @@ import {
 import {
   buildCanonicalPublicationRecoveryEvidence,
 } from '../../src/control-plane/publication-recovery-evidence.js';
+import {
+  CONTROL_PLANE_CONVERGENCE_CLASS,
+  CONTROL_PLANE_CONVERGENCE_PRESSURE_OUTCOME,
+} from '../../src/control-plane/control-plane-error-classification.js';
 import {registerAdminControlSnapshotTailTests} from './admin-control-snapshot-tail-test-cases.js';
 
 const COMPLETED_REPLACE_CONTROL_SNAPSHOT_FIXTURE = Object.freeze({
@@ -168,6 +172,13 @@ const ACTIVE_GATE_HANDOFF_RECONCILE_OUTCOME_COMMAND_ERROR =
   'owner_reconcile_error';
 const ACTIVE_GATE_HANDOFF_RECONCILE_OUTCOME_SERVICE_UNAVAILABLE =
   'owner_reconcile_service_unavailable';
+const ACTIVE_GATE_HANDOFF_RECONCILE_CRITICAL_DEFERRED = true;
+const ACTIVE_GATE_HANDOFF_RECONCILE_ORDINARY_REPAIR_NOT_DEFERRED = false;
+const ACTIVE_GATE_HANDOFF_RECONCILE_ORDINARY_REPAIR_DEFERRED = true;
+const ACTIVE_GATE_HANDOFF_RECONCILE_CONTROL_PLANE_CONVERGENCE =
+  'controlPlaneConvergence';
+const ACTIVE_GATE_HANDOFF_RECONCILE_CRITICAL_OWNER_WAKE =
+  'owner_recovery_wake';
 const ACTIVE_GATE_HANDOFF_RECONCILE_COMMAND_RETRY_AFTER_MS = 32000;
 const ACTIVE_GATE_HANDOFF_RECONCILE_EMPTY_ROWS = Object.freeze([]);
 const ACTIVE_GATE_HANDOFF_RECONCILE_PRIORITY_RECOVERY = Object.freeze({
@@ -3357,6 +3368,100 @@ test('AdminControlSnapshot surfaces handoff command errors as structured outcome
     );
   });
 
+test('AdminControlSnapshot distinguishes critical convergence defer from ordinary repair defer',
+  async (t) => {
+    const staleSnapshot = {
+      nodes: [ACTIVE_GATE_HANDOFF_RECONCILE_NODE_IDS[0]],
+      controlPlaneDiagnostics: {
+        activeGateOwnerCohort: {
+          state: ACTIVE_GATE_OWNER_COHORT_STATE_PENDING,
+          reasonCode: ACTIVE_GATE_OWNER_COHORT_REASON_OWNER_RECONCILE_PENDING,
+          nextAction: ACTIVE_GATE_HANDOFF_NEXT_ACTION_RECONCILE,
+          expectedNodeIds: [
+            ...ACTIVE_GATE_HANDOFF_RECONCILE_NODE_IDS,
+          ],
+          publishedActiveNodeIds: [
+            ...ACTIVE_GATE_HANDOFF_RECONCILE_PUBLISHED_NODE_IDS,
+          ],
+          pendingReconcileCount:
+            ACTIVE_GATE_HANDOFF_RECONCILE_PENDING_COUNT,
+          pendingReconcileNodeIds: [
+            ...ACTIVE_GATE_HANDOFF_RECONCILE_PENDING_NODE_IDS,
+          ],
+        },
+        publicationConvergence: {
+          publicationEpoch: ACTIVE_GATE_HANDOFF_RECONCILE_PUBLICATION_EPOCH,
+          status: ACTIVE_GATE_OWNER_TRUTH_PUBLICATION_STATUS,
+          publishedActiveNodeIds: [
+            ...ACTIVE_GATE_HANDOFF_RECONCILE_PUBLISHED_NODE_IDS,
+          ],
+        },
+      },
+    };
+    const snapshot = new AdminControlSnapshot({
+      nodeId: ACTIVE_GATE_HANDOFF_RECONCILE_LOCAL_NODE_ID,
+      controlPlaneReadinessService: {
+        membershipPublicationService: {
+          async reconcileActiveGateMembershipPublication() {
+            return {
+              schemaVersion: ACTIVE_GATE_OWNER_COHORT_SCHEMA_VERSION,
+              state: ACTIVE_GATE_HANDOFF_RECONCILE_OUTCOME_WRITE_DEFERRED,
+              enqueued: false,
+              target: {
+                reconcileRequired: true,
+              },
+              [ACTIVE_GATE_HANDOFF_RECONCILE_CONTROL_PLANE_CONVERGENCE]: {
+                convergenceClass:
+                  CONTROL_PLANE_CONVERGENCE_CLASS.CRITICAL,
+                pressureOutcome:
+                  CONTROL_PLANE_CONVERGENCE_PRESSURE_OUTCOME
+                    .CRITICAL_DEFERRED,
+                operation:
+                  ACTIVE_GATE_HANDOFF_RECONCILE_CRITICAL_OWNER_WAKE,
+                retryAfterMs:
+                  ACTIVE_GATE_HANDOFF_RECONCILE_COMMAND_RETRY_AFTER_MS,
+              },
+            };
+          },
+        },
+      },
+    });
+
+    const triggeredSnapshot =
+      await snapshot.triggerMembershipPublicationHandoffOwnerCommand(
+        staleSnapshot,
+      );
+
+    t.match(
+      triggeredSnapshot.controlPlaneDiagnostics,
+      {
+        criticalConvergenceDeferred:
+          ACTIVE_GATE_HANDOFF_RECONCILE_CRITICAL_DEFERRED,
+        ordinaryRepairDeferred:
+          ACTIVE_GATE_HANDOFF_RECONCILE_ORDINARY_REPAIR_NOT_DEFERRED,
+        controlPlaneConvergence: {
+          convergenceClass: CONTROL_PLANE_CONVERGENCE_CLASS.CRITICAL,
+          pressureOutcome:
+            CONTROL_PLANE_CONVERGENCE_PRESSURE_OUTCOME.CRITICAL_DEFERRED,
+          operation: ACTIVE_GATE_HANDOFF_RECONCILE_CRITICAL_OWNER_WAKE,
+        },
+        publicationConvergence: {
+          criticalConvergenceDeferred:
+            ACTIVE_GATE_HANDOFF_RECONCILE_CRITICAL_DEFERRED,
+          ordinaryRepairDeferred:
+            ACTIVE_GATE_HANDOFF_RECONCILE_ORDINARY_REPAIR_NOT_DEFERRED,
+        },
+        activeGateOwnerCohort: {
+          criticalConvergenceDeferred:
+            ACTIVE_GATE_HANDOFF_RECONCILE_CRITICAL_DEFERRED,
+          ordinaryRepairDeferred:
+            ACTIVE_GATE_HANDOFF_RECONCILE_ORDINARY_REPAIR_NOT_DEFERRED,
+        },
+      },
+      'critical convergence defer should stay distinct from ordinary repair deferral',
+    );
+  });
+
 test('AdminControlSnapshot handoff reconcile defers when publication readback is unavailable',
   async (t) => {
     let publicationReadbackAttempts = 0;
@@ -3722,6 +3827,10 @@ test('AdminControlSnapshot repair-deferred shared owner emits retry action after
             deferred: true,
           },
         },
+        controlPlaneDiagnostics: {
+          ordinaryRepairDeferred:
+            ACTIVE_GATE_HANDOFF_RECONCILE_ORDINARY_REPAIR_DEFERRED,
+        },
       },
       'attempted repair deferral should expose a legal retry action instead of wait-only stale evidence',
     );
@@ -3836,6 +3945,8 @@ test('AdminControlSnapshot repair-deferred shared owner attempts publication cat
           retryAfterMs: 12000,
         },
         controlPlaneDiagnostics: {
+          ordinaryRepairDeferred:
+            ACTIVE_GATE_HANDOFF_RECONCILE_ORDINARY_REPAIR_DEFERRED,
           publicationConvergence: {
             publicationEpoch: 1,
             status: 'PUBLISHED',

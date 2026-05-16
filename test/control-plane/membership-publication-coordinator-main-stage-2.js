@@ -22,6 +22,10 @@ import {
   CONTROL_PLANE_PUBLICATION_STATUS,
 } from '../../src/control-plane/control-plane-publication-merge.js';
 import {
+  CONTROL_PLANE_CONVERGENCE_CLASS,
+  CONTROL_PLANE_CONVERGENCE_PRESSURE_OUTCOME,
+} from '../../src/control-plane/control-plane-error-classification.js';
+import {
   PUBLICATION_ACTIVE_GATE_HANDOFF_NEXT_ACTION,
 } from '../../src/control-plane/publication-active-gate-handoff-contract.js';
 import {MEMBERSHIP_PUBLICATION_ACK_DEFERRAL_CONNECTION_STATE_CONNECTED, MEMBERSHIP_PUBLICATION_ACK_DEFERRAL_NOW_MS, MEMBERSHIP_PUBLICATION_ACK_DEFERRAL_PROCESS_DEAD_NODE_ID, MEMBERSHIP_PUBLICATION_ACK_DEFERRAL_PUBLICATION_EPOCH, MEMBERSHIP_PUBLICATION_ACK_DEFERRAL_PUBLISHED_NODE_ID, MEMBERSHIP_PUBLICATION_ACK_DEFERRAL_PUBLISHER_NODE_ID, MEMBERSHIP_PUBLICATION_ACK_DEFERRAL_STATUS_ACK_PENDING, MEMBERSHIP_PUBLICATION_TRIM_CONNECTION_STATE_READY, MEMBERSHIP_PUBLICATION_TRIM_STATUS_PUBLISHED, buildMembershipPublicationAckDeferralNodeRow, buildMembershipPublicationTrimEndpointRow, buildMembershipPublicationTrimServiceRow} from './membership-publication-coordinator-main-stage-1.js';
@@ -91,6 +95,18 @@ const PUBLICATION_CONVERGENCE_HANDOFF_TARGET_QUEUE_REASON_A =
 const PUBLICATION_CONVERGENCE_HANDOFF_TARGET_QUEUE_REASON_B =
   'ready-node-handoff-b';
 const PUBLICATION_CONVERGENCE_HANDOFF_TARGET_QUEUE_NEWER_EPOCH = 43;
+const PUBLICATION_CONVERGENCE_CRITICAL_QUEUE_OTHER_OWNER_KEY =
+  'membership-publication:other-cluster';
+const PUBLICATION_CONVERGENCE_CRITICAL_QUEUE_BOUND = 1;
+const PUBLICATION_CONVERGENCE_CRITICAL_QUEUE_EMPTY_ENQUEUE_COUNT = 0;
+const PUBLICATION_CONVERGENCE_CRITICAL_QUEUE_OUTCOME_ENQUEUED =
+  'enqueued';
+const PUBLICATION_CONVERGENCE_CRITICAL_QUEUE_OUTCOME_REJECTED =
+  'rejected';
+const PUBLICATION_CONVERGENCE_CRITICAL_OWNER_RECOVERY_WAKE =
+  'owner_recovery_wake';
+const PUBLICATION_CONVERGENCE_CRITICAL_QUEUE_BOUNDED_REASON =
+  'owner_queue_bounded';
 const PUBLICATION_CONVERGENCE_HANDOFF_TARGET_QUEUE_NODE_A_IDS = Object.freeze([
   PUBLICATION_CONVERGENCE_HANDOFF_TARGET_NODE_IDS[0],
   PUBLICATION_CONVERGENCE_HANDOFF_TARGET_NODE_IDS[1],
@@ -739,6 +755,124 @@ test('reconcileActiveGateMembershipPublication defers stale durable readback',
       pending.get(ownerKey)?.context?.skipPublicationWriteReadback,
       false,
       'deferred owner retry should keep durable readback enabled',
+    );
+    t.match(
+      outcome.controlPlaneConvergence,
+      {
+        convergenceClass: CONTROL_PLANE_CONVERGENCE_CLASS.CRITICAL,
+        pressureOutcome:
+          CONTROL_PLANE_CONVERGENCE_PRESSURE_OUTCOME.CRITICAL_ADMITTED,
+        ownerKey,
+        operation: PUBLICATION_CONVERGENCE_CRITICAL_OWNER_RECOVERY_WAKE,
+        queueBound: PUBLICATION_CONVERGENCE_CRITICAL_QUEUE_BOUND,
+        queueOutcome: PUBLICATION_CONVERGENCE_CRITICAL_QUEUE_OUTCOME_ENQUEUED,
+      },
+      'deferred owner retry should expose the critical convergence queue admission',
+    );
+  });
+
+test('reconcileActiveGateMembershipPublication reports bounded critical queue pressure',
+  async (t) => {
+    const latestPublicationRow = {
+      publication_id: PUBLICATION_CONVERGENCE_HANDOFF_TARGET_PUBLICATION_ID,
+      publication_kind: 'cluster_membership',
+      publication_epoch: PUBLICATION_CONVERGENCE_HANDOFF_TARGET_EPOCH,
+      status: CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED,
+      published_active_node_ids: [
+        ...PUBLICATION_CONVERGENCE_HANDOFF_TARGET_PUBLISHED_NODE_IDS,
+      ],
+      required_ack_node_ids: [
+        ...PUBLICATION_CONVERGENCE_HANDOFF_TARGET_PUBLISHED_NODE_IDS,
+      ],
+      acknowledged_node_ids: [
+        ...PUBLICATION_CONVERGENCE_HANDOFF_TARGET_PUBLISHED_NODE_IDS,
+      ],
+    };
+    const pending = new Map([
+      [PUBLICATION_CONVERGENCE_CRITICAL_QUEUE_OTHER_OWNER_KEY, {
+        context: {},
+      }],
+    ]);
+    const enqueued = [];
+    const coordinator = new MembershipPublicationCoordinator({
+      nodeId: PUBLICATION_CONVERGENCE_HANDOFF_TARGET_NODE_IDS[0],
+      reconcileQueue: {
+        pending,
+        get size() {
+          return pending.size;
+        },
+        has(ownerKey) {
+          return pending.has(ownerKey);
+        },
+        enqueue(ownerKey, reason, context, options) {
+          enqueued.push({ownerKey, reason, context, options});
+          pending.set(ownerKey, {context});
+          return true;
+        },
+      },
+      controlPlanePublicationsOwner: {
+        async listPublications() {
+          return {rows: [latestPublicationRow]};
+        },
+        async getPublication() {
+          return latestPublicationRow;
+        },
+        async upsertPublication(row) {
+          return row;
+        },
+      },
+      systemTableCache: {
+        getAll(tableName) {
+          if (tableName === TABLES.CONTROL_PLANE_PUBLICATIONS) {
+            return [latestPublicationRow];
+          }
+          return [...PUBLICATION_CONVERGENCE_HANDOFF_TARGET_EMPTY_ROWS];
+        },
+      },
+      now: () => PUBLICATION_CONVERGENCE_HANDOFF_TARGET_NOW_MS,
+    });
+
+    const outcome =
+      await coordinator.reconcileActiveGateMembershipPublication({
+        publicationEpoch: PUBLICATION_CONVERGENCE_HANDOFF_TARGET_EPOCH,
+        expectedNodeIds: [
+          ...PUBLICATION_CONVERGENCE_HANDOFF_TARGET_NODE_IDS,
+        ],
+        publishedActiveNodeIds: [
+          ...PUBLICATION_CONVERGENCE_HANDOFF_TARGET_PUBLISHED_NODE_IDS,
+        ],
+        pendingReconcileNodeIds:
+          PUBLICATION_CONVERGENCE_HANDOFF_TARGET_NODE_IDS.slice(1),
+        nextAction:
+          PUBLICATION_ACTIVE_GATE_HANDOFF_NEXT_ACTION
+            .RECONCILE_OWNER_MEMBERSHIP_PUBLICATION,
+      });
+
+    t.equal(
+      enqueued.length,
+      PUBLICATION_CONVERGENCE_CRITICAL_QUEUE_EMPTY_ENQUEUE_COUNT,
+      'saturated critical convergence queue should not enqueue beyond the bound',
+    );
+    t.match(
+      outcome,
+      {
+        state: ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_OUTCOME
+          .WRITE_DEFERRED,
+        enqueued: false,
+        controlPlaneConvergenceClass:
+          CONTROL_PLANE_CONVERGENCE_CLASS.CRITICAL,
+        controlPlanePressureOutcome:
+          CONTROL_PLANE_CONVERGENCE_PRESSURE_OUTCOME.CRITICAL_REJECTED,
+        controlPlaneConvergence: {
+          ownerKey: coordinator.buildOwnerKey(),
+          operation: PUBLICATION_CONVERGENCE_CRITICAL_OWNER_RECOVERY_WAKE,
+          queueBound: PUBLICATION_CONVERGENCE_CRITICAL_QUEUE_BOUND,
+          queueOutcome:
+            PUBLICATION_CONVERGENCE_CRITICAL_QUEUE_OUTCOME_REJECTED,
+          reasonCode: PUBLICATION_CONVERGENCE_CRITICAL_QUEUE_BOUNDED_REASON,
+        },
+      },
+      'bounded critical convergence queue pressure should be typed instead of silently dropped',
     );
   });
 

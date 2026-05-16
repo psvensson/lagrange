@@ -198,7 +198,7 @@ and this package's active metadata before implementation starts.
 
 - [x] Review subagent recorded: Agent Pauli (019e3065-9e5a-70c1-a43a-a279ba9836da) reviewed work/packages/active-20260516-cockroach-style-control-plane-priority-convergence-class.md; result fixes-required
 - [x] Fix subagent recorded or explicitly not needed: Agent Hubble (019e3069-1773-75a1-85d6-3dfe7f3a576c) fixed work/packages/active-20260516-cockroach-style-control-plane-priority-convergence-class.md
-- [ ] Implementation subagent recorded: pending implementation agent.
+- [x] Implementation subagent recorded: Agent Rawls (019e306d-a608-79b0-bc46-670b8125bb73) implemented work/packages/active-20260516-cockroach-style-control-plane-priority-convergence-class.md
 
 ## Borrowing Details
 
@@ -245,3 +245,40 @@ Local implementation shape:
 1. npm run analyze:owner-files -- topology_publication_owner publication_convergence --markdown
 2. npm run analyze:owner-files -- startup_active_gate_owner snapshot_coverage --markdown
 3. node scripts/check-guideline-decision-boundaries.js src/control-plane/membership-publication-coordinator-class-stage-2.js src/admin/admin-control-snapshot-class-part-2.js
+
+## Implementation Evidence
+
+- Added `critical_convergence` / ordinary diagnostic convergence vocabulary and
+  threaded critical convergence metadata through membership publication,
+  publication ACK, active-gate handoff, and owner recovery wake paths.
+- Critical owner wake enqueue now records owner key, bounded queue size,
+  retry-after, queue outcome, and typed pressure outcome; saturated bounded
+  queues return `critical_rejected` instead of silently dropping work.
+- Admin control snapshots and query results now expose
+  `controlPlaneConvergence`, `criticalConvergenceDeferred`, and
+  `ordinaryRepairDeferred` so repair deferral is not confused with critical
+  convergence pressure.
+
+## Validation Results
+
+- PASS: `npm run analyze:owner-files -- topology_publication_owner publication_convergence --markdown`
+- PASS: `npm run analyze:owner-files -- startup_active_gate_owner snapshot_coverage --markdown`
+- PASS: `node --check src/control-plane/membership-publication-coordinator-class-stage-2.js`
+- PASS: `node --check src/control-plane/membership-publication-coordinator-class-stage-3.js`
+- PASS: `node --check src/admin/admin-control-snapshot-class-part-2.js`
+- PASS: `node --check src/admin/admin-websocket-api-segment-3.js`
+- PASS: `node test/control-plane/membership-publication-coordinator-main-stage-2.js`
+- PASS: `npm test -- --grep "AdminControlSnapshot distinguishes critical convergence defer from ordinary repair defer" test/admin/admin-control-snapshot.test.js`
+- PASS: `node scripts/check-guideline-decision-boundaries.js src/control-plane/membership-publication-coordinator-class-stage-2.js src/control-plane/membership-publication-coordinator-class-stage-3.js src/admin/admin-control-snapshot-class-part-2.js`
+- PASS: `node scripts/check-guideline-literals.js src/control-plane/membership-publication-coordinator-class-stage-2.js src/control-plane/membership-publication-coordinator-class-stage-3.js src/control-plane/control-plane-error-classification.js src/admin/admin-control-snapshot-class-part-2.js src/admin/admin-websocket-api-segment-3.js`
+- PASS: `npm run audit:runtime-grammar:file -- src/control-plane/membership-publication-coordinator-class-stage-2.js src/control-plane/membership-publication-coordinator-class-stage-3.js src/control-plane/control-plane-error-classification.js src/admin/admin-control-snapshot-class-part-2.js src/admin/admin-websocket-api-segment-3.js`
+- PASS: `npm run guard:guideline:constant-names:file -- src/control-plane/membership-publication-coordinator-class-stage-2.js src/control-plane/membership-publication-coordinator-class-stage-3.js src/control-plane/control-plane-error-classification.js src/admin/admin-control-snapshot-class-part-2.js src/admin/admin-websocket-api-segment-3.js`
+- PASS: `npm run work:validate -- --pre-impl work/packages/active-20260516-cockroach-style-control-plane-priority-convergence-class.md`
+- PASS: `git diff --check -- work/packages/active-20260516-cockroach-style-control-plane-priority-convergence-class.md src/control-plane/membership-publication-coordinator-class-stage-2.js src/control-plane/membership-publication-coordinator-class-stage-3.js src/control-plane/control-plane-error-classification.js src/admin/admin-control-snapshot-class-part-2.js src/admin/admin-websocket-api-segment-3.js test/control-plane/membership-publication-coordinator-main-stage-2.js test/admin/admin-control-snapshot.test.js work/model-ledger.jsonl`
+- RED: `node test/admin/admin-control-snapshot.test.js` remains red in
+  pre-existing priority-recovery tail assertions unrelated to this package's
+  critical convergence assertions; failing subtests include
+  `AdminControlSnapshot exports publication convergence gate from live priority
+  recovery readiness` and several
+  `AdminControlSnapshot ... priority-recovery decision snapshots ...` tail
+  cases.

@@ -7,9 +7,70 @@ import {
   normalizeNodeIdList,
 } from './membership-publication-coordinator-stage-1.js';
 import {
+  CONTROL_PLANE_CONVERGENCE_CLASS,
+  CONTROL_PLANE_CONVERGENCE_PRESSURE_OUTCOME,
+} from './control-plane-error-classification.js';
+import {
   ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_OUTCOME,
   MembershipPublicationCoordinatorClassStage2,
 } from './membership-publication-coordinator-class-stage-2.js';
+
+const CONTROL_PLANE_CONVERGENCE_OUTCOME_SCHEMA_VERSION = 1;
+const CONTROL_PLANE_CRITICAL_CONVERGENCE_QUEUE_BOUND = NUM.ONE;
+const CONTROL_PLANE_CRITICAL_CONVERGENCE_RETRY_AFTER_MS = NUM.THOUSAND;
+const CONTROL_PLANE_CRITICAL_CONVERGENCE_QUEUE_OUTCOME_ENQUEUED =
+  'enqueued';
+const CONTROL_PLANE_CRITICAL_CONVERGENCE_QUEUE_OUTCOME_MERGED = 'merged';
+const CONTROL_PLANE_CRITICAL_CONVERGENCE_QUEUE_OUTCOME_REJECTED =
+  'rejected';
+const CONTROL_PLANE_CRITICAL_CONVERGENCE_REASON_QUEUE_STOPPED =
+  'owner_queue_stopped';
+const CONTROL_PLANE_CRITICAL_CONVERGENCE_REASON_QUEUE_BOUNDED =
+  'owner_queue_bounded';
+const CONTROL_PLANE_CRITICAL_CONVERGENCE_OPERATION_OWNER_RECOVERY_WAKE =
+  'owner_recovery_wake';
+const CONTROL_PLANE_CONVERGENCE_FIELD = Object.freeze({
+  CONTROL_PLANE_CONVERGENCE: 'controlPlaneConvergence',
+  CONTROL_PLANE_CONVERGENCE_CLASS: 'controlPlaneConvergenceClass',
+  CONTROL_PLANE_CONVERGENCE_OWNER_KEY: 'controlPlaneConvergenceOwnerKey',
+  CONTROL_PLANE_CONVERGENCE_OPERATION: 'controlPlaneConvergenceOperation',
+  CONTROL_PLANE_CONVERGENCE_QUEUE_BOUND:
+    'controlPlaneConvergenceQueueBound',
+  CONTROL_PLANE_PRESSURE_OUTCOME: 'controlPlanePressureOutcome',
+  PRESSURE_RETRY_AFTER_MS: 'pressureRetryAfterMs',
+});
+const CONTROL_PLANE_CRITICAL_CONVERGENCE_QUEUE_DECISION = Object.freeze([
+  Object.freeze({
+    matches: (evidence) => evidence.queueStopped === true,
+    pressureOutcome:
+      CONTROL_PLANE_CONVERGENCE_PRESSURE_OUTCOME.CRITICAL_REJECTED,
+    queueOutcome: CONTROL_PLANE_CRITICAL_CONVERGENCE_QUEUE_OUTCOME_REJECTED,
+    reasonCode: CONTROL_PLANE_CRITICAL_CONVERGENCE_REASON_QUEUE_STOPPED,
+  }),
+  Object.freeze({
+    matches: (evidence) =>
+      evidence.ownerAlreadyPending !== true &&
+      evidence.queueAtBound === true,
+    pressureOutcome:
+      CONTROL_PLANE_CONVERGENCE_PRESSURE_OUTCOME.CRITICAL_REJECTED,
+    queueOutcome: CONTROL_PLANE_CRITICAL_CONVERGENCE_QUEUE_OUTCOME_REJECTED,
+    reasonCode: CONTROL_PLANE_CRITICAL_CONVERGENCE_REASON_QUEUE_BOUNDED,
+  }),
+  Object.freeze({
+    matches: (evidence) => evidence.ownerAlreadyPending === true,
+    pressureOutcome:
+      CONTROL_PLANE_CONVERGENCE_PRESSURE_OUTCOME.CRITICAL_ADMITTED,
+    queueOutcome: CONTROL_PLANE_CRITICAL_CONVERGENCE_QUEUE_OUTCOME_MERGED,
+    reasonCode: null,
+  }),
+  Object.freeze({
+    matches: () => true,
+    pressureOutcome:
+      CONTROL_PLANE_CONVERGENCE_PRESSURE_OUTCOME.CRITICAL_ADMITTED,
+    queueOutcome: CONTROL_PLANE_CRITICAL_CONVERGENCE_QUEUE_OUTCOME_ENQUEUED,
+    reasonCode: null,
+  }),
+]);
 
 const MEMBERSHIP_PUBLICATION_RECONCILE_CONTEXT_FIELD = Object.freeze({
   ACKNOWLEDGED_NODE_IDS: 'acknowledgedNodeIds',
@@ -29,6 +90,69 @@ const MEMBERSHIP_PUBLICATION_RECONCILE_CONTEXT_FIELD = Object.freeze({
 const MEMBERSHIP_PUBLICATION_RECONCILE_CONTEXT_ABSENT = Symbol(
   'membership-publication-reconcile-context-absent',
 );
+
+function normalizeCriticalConvergenceRetryAfterMs(value) {
+  return Number.isFinite(value) && value > NUM.ZERO ?
+    Math.floor(value) :
+    CONTROL_PLANE_CRITICAL_CONVERGENCE_RETRY_AFTER_MS;
+}
+
+function buildCriticalConvergenceQueueOutcome({
+  pressureOutcome,
+  ownerKey,
+  queueOutcome,
+  reasonCode = null,
+  retryAfterMs = CONTROL_PLANE_CRITICAL_CONVERGENCE_RETRY_AFTER_MS,
+}) {
+  return Object.freeze({
+    schemaVersion: CONTROL_PLANE_CONVERGENCE_OUTCOME_SCHEMA_VERSION,
+    convergenceClass: CONTROL_PLANE_CONVERGENCE_CLASS.CRITICAL,
+    pressureOutcome,
+    ownerKey,
+    operation: CONTROL_PLANE_CRITICAL_CONVERGENCE_OPERATION_OWNER_RECOVERY_WAKE,
+    queueBound: CONTROL_PLANE_CRITICAL_CONVERGENCE_QUEUE_BOUND,
+    queueOutcome,
+    retryAfterMs: normalizeCriticalConvergenceRetryAfterMs(retryAfterMs),
+    ...(typeof reasonCode === TYPEOF.STRING && reasonCode.length > NUM.ZERO ?
+      {reasonCode} :
+      {}),
+  });
+}
+
+function buildCriticalConvergenceQueueEvidence(reconcileQueue, ownerKey) {
+  const ownerAlreadyPending =
+    typeof reconcileQueue?.has === TYPEOF.FUNCTION ?
+      reconcileQueue.has(ownerKey) :
+      reconcileQueue?.pending instanceof Map &&
+        reconcileQueue.pending.has(ownerKey);
+  const pendingSize = Number.isFinite(reconcileQueue?.size) ?
+    reconcileQueue.size :
+    (
+      reconcileQueue?.pending instanceof Map ?
+        reconcileQueue.pending.size :
+        NUM.ZERO
+    );
+  return Object.freeze({
+    queueStopped: reconcileQueue?.stopped === true,
+    ownerAlreadyPending,
+    queueAtBound:
+      pendingSize >= CONTROL_PLANE_CRITICAL_CONVERGENCE_QUEUE_BOUND,
+  });
+}
+
+function resolveCriticalConvergenceQueueOutcome(reconcileQueue, ownerKey) {
+  const evidence =
+    buildCriticalConvergenceQueueEvidence(reconcileQueue, ownerKey);
+  const decision = CONTROL_PLANE_CRITICAL_CONVERGENCE_QUEUE_DECISION.find(
+    (entry) => entry.matches(evidence),
+  );
+  return buildCriticalConvergenceQueueOutcome({
+    pressureOutcome: decision.pressureOutcome,
+    ownerKey,
+    queueOutcome: decision.queueOutcome,
+    reasonCode: decision.reasonCode,
+  });
+}
 
 function isMembershipPublicationReconcileContext(value) {
   return value && typeof value === TYPEOF.OBJECT;
@@ -183,13 +307,40 @@ class MembershipPublicationCoordinatorClassStage3 extends
     options = {},
   ) {
     const ownerKey = this.buildOwnerKey();
+    const queueOutcome =
+      resolveCriticalConvergenceQueueOutcome(this.reconcileQueue, ownerKey);
+    this.lastControlPlaneConvergenceQueueOutcome = queueOutcome;
+    if (
+      queueOutcome.pressureOutcome ===
+      CONTROL_PLANE_CONVERGENCE_PRESSURE_OUTCOME.CRITICAL_REJECTED
+    ) {
+      return false;
+    }
     const pendingContext =
       this.reconcileQueue?.pending instanceof Map ?
         this.reconcileQueue.pending.get(ownerKey)?.context :
         MEMBERSHIP_PUBLICATION_RECONCILE_CONTEXT_ABSENT;
     const mergedContext = mergeMembershipPublicationReconcileContext(
       pendingContext,
-      context,
+      {
+        ...context,
+        [CONTROL_PLANE_CONVERGENCE_FIELD.CONTROL_PLANE_CONVERGENCE]:
+          queueOutcome,
+        [CONTROL_PLANE_CONVERGENCE_FIELD.CONTROL_PLANE_CONVERGENCE_CLASS]:
+          CONTROL_PLANE_CONVERGENCE_CLASS.CRITICAL,
+        [CONTROL_PLANE_CONVERGENCE_FIELD.CONTROL_PLANE_CONVERGENCE_OWNER_KEY]:
+          ownerKey,
+        [CONTROL_PLANE_CONVERGENCE_FIELD
+          .CONTROL_PLANE_CONVERGENCE_OPERATION]:
+          CONTROL_PLANE_CRITICAL_CONVERGENCE_OPERATION_OWNER_RECOVERY_WAKE,
+        [CONTROL_PLANE_CONVERGENCE_FIELD
+          .CONTROL_PLANE_CONVERGENCE_QUEUE_BOUND]:
+          CONTROL_PLANE_CRITICAL_CONVERGENCE_QUEUE_BOUND,
+        [CONTROL_PLANE_CONVERGENCE_FIELD.CONTROL_PLANE_PRESSURE_OUTCOME]:
+          queueOutcome.pressureOutcome,
+        [CONTROL_PLANE_CONVERGENCE_FIELD.PRESSURE_RETRY_AFTER_MS]:
+          queueOutcome.retryAfterMs,
+      },
     );
     return this.reconcileQueue.enqueue(ownerKey, reason, mergedContext, options);
   }

@@ -43,6 +43,20 @@ const CONTROL_PLANE_FAILURE_REASON = Object.freeze({
     'unknown',
 });
 
+const CONTROL_PLANE_CONVERGENCE_CLASS = Object.freeze({
+  CRITICAL: 'critical_convergence',
+  ORDINARY_REPAIR: 'ordinary_repair',
+  DIAGNOSTIC_REPAIR: 'diagnostic_repair',
+});
+
+const CONTROL_PLANE_CONVERGENCE_PRESSURE_OUTCOME = Object.freeze({
+  CRITICAL_ADMITTED: 'critical_admitted',
+  CRITICAL_DEFERRED: 'critical_deferred',
+  CRITICAL_REJECTED: 'critical_rejected',
+  ORDINARY_DEFERRED: 'ordinary_deferred',
+  DIAGNOSTIC_DEFERRED: 'diagnostic_deferred',
+});
+
 const CONTROL_PLANE_FAILURE_FRAGMENT = Object.freeze({
   AUTHORITATIVE_ROW_SOURCE_UNAVAILABLE:
     'authoritative_row_source_unavailable',
@@ -258,6 +272,8 @@ function getControlPlaneFailureSummary(value) {
 }
 
 export {
+  CONTROL_PLANE_CONVERGENCE_CLASS,
+  CONTROL_PLANE_CONVERGENCE_PRESSURE_OUTCOME,
   CONTROL_PLANE_FAILURE_REASON,
   getControlPlaneErrorCode,
   getControlPlaneFailureSummary,
