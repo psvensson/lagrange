@@ -129,7 +129,7 @@
   "predecessor": "work/packages/done-20260516-startup-active-gate-snapshot-coverage-owner-reconcile-pending.md",
   "closed": "2026-05-16",
   "commitAndPushLedgerRequired": true,
-  "successor": "work/packages/active-20260516-startup-active-gate-selected-snapshot-source-timeout.md"
+  "successor": "work/packages/done-20260516-startup-active-gate-selected-snapshot-source-timeout.md"
 }
 -->
 

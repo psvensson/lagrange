@@ -361,7 +361,8 @@ test('Unit: _probeControlSnapshotCoverage keeps snapshot-lane failures explicit'
   });
 
 test(
-  'Unit: _probeControlSnapshotCoverage replays forced repair snapshot timeout',
+  'Unit: _probeControlSnapshotCoverage sends forced repair probes through ' +
+    'authoritative snapshot repair',
   async () => {
     const cluster = createCluster({
       size: SNAPSHOT_REPLAY_TEST_CLUSTER_SIZE,
@@ -409,7 +410,20 @@ test(
               timeoutMs: options.timeoutMs,
               lane: options.lane,
               forceRepair: options.forceRepair === true,
+              forceAuthoritativeRepair:
+                options.forceAuthoritativeRepair === true,
             });
+            if (
+              nodeId === SNAPSHOT_REPAIR_TIMEOUT_SELECTED_NODE_ID &&
+              options.forceAuthoritativeRepair === true
+            ) {
+              return {
+                rows: [{
+                  nodes: [...SNAPSHOT_REPLAY_TEST_EXPECTED_NODE_IDS],
+                  capturedAtMs: SNAPSHOT_REPAIR_TIMEOUT_CAPTURED_NOW_MS,
+                }],
+              };
+            }
             if (nodeId === SNAPSHOT_REPAIR_TIMEOUT_SELECTED_NODE_ID) {
               throw new Error(SNAPSHOT_REPAIR_TIMEOUT_SELECTED_ERROR);
             }
@@ -433,7 +447,7 @@ test(
         return witness.nodeId === SNAPSHOT_REPAIR_TIMEOUT_SELECTED_NODE_ID;
       });
 
-      assert.strictEqual(coverage.completeCoverage, false);
+      assert.strictEqual(coverage.completeCoverage, true);
       assert.strictEqual(
         coverage.forceRepair,
         true,
@@ -441,8 +455,8 @@ test(
       );
       assert.strictEqual(
         coverage.bestCoverageNodeCount,
-        0,
-        'fixture should preserve the selected timeout-only coverage failure',
+        SNAPSHOT_REPLAY_TEST_EXPECTED_NODE_IDS.length,
+        'authoritative repair should move the snapshot coverage metric',
       );
       assert.strictEqual(
         coverage.selectedSnapshotNodeId,
@@ -456,26 +470,27 @@ test(
       );
       assert.strictEqual(
         coverage.selectedError,
-        SNAPSHOT_REPAIR_TIMEOUT_SELECTED_ERROR,
-        'fixture should preserve the admin, forced repair, and nodes timeout chain',
+        null,
+        'authoritative repair coverage should replace the selected timeout chain',
       );
       assert.strictEqual(
         selectedWitness?.snapshotQuerySucceeded,
-        false,
-        'selected witness should remain a snapshot query failure',
+        true,
+        'selected witness should come from the authoritative snapshot repair query',
       );
       assert.strictEqual(
         selectedWitness?.error,
-        SNAPSHOT_REPAIR_TIMEOUT_SELECTED_ERROR,
-        'selected witness should expose the exact report-selected error',
+        null,
+        'selected witness should clear the report-selected timeout error',
       );
       assert.ok(
         snapshotProbeCalls.every((call) =>
           call.lane === 'snapshot' &&
           call.forceRepair === true &&
+          call.forceAuthoritativeRepair === true &&
           call.timeoutMs === SNAPSHOT_REPAIR_TIMEOUT_QUERY_TIMEOUT_MS,
         ),
-        'all replayed snapshot probes should stay on the snapshot lane with the late timeout',
+        'forced repair probes should stay on the snapshot lane and use direct authoritative repair',
       );
       assert.ok(
         reachabilityProbeCalls.every((call) =>

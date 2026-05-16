@@ -1,9 +1,10 @@
+# Startup Active Gate Authoritative Repair Participant Failure
+
+<!-- work-package
 {
-  "schema": "current-blocker-v1",
-  "generatedBy": "scripts/work-tracker.js",
-  "sprint": "work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md",
-  "package": "work/packages/active-20260516-startup-active-gate-authoritative-repair-participant-failure.md",
+  "schema": "work-package-v1",
   "status": "active",
+  "opened": "2026-05-16",
   "lane": "causal-escalation",
   "scenario": "rolling-restart",
   "artifact": "test-output/reports/rolling-restart-after-authoritative-repair-probe-20260516T214000Z.report.json",
@@ -52,7 +53,6 @@
     "work/sprints/current-blocker.md",
     "work/sprints/current-blocker.json"
   ],
-  "touchedFiles": [],
   "modelFit": {
     "packageClass": "representative-frontier-closure",
     "intendedMinimumModel": "gpt-5.3-codex",
@@ -121,3 +121,93 @@
   },
   "predecessor": "work/packages/done-20260516-startup-active-gate-selected-snapshot-source-timeout.md"
 }
+-->
+
+## Why
+
+The prior package removed `selected_snapshot_source_timeout` from the
+representative rolling-restart evidence. The active gate still times out with
+`snapshotCoverageNodeCount=0/5`, but the selected error is now authoritative
+control snapshot repair failing while querying nodes because the connection to
+seed `7493b0ab-a054-5fad-a91b-5e331db29304` closed.
+
+This package owns the next metric-moving decision. It must prove whether that
+edge belongs to the authoritative repair participant path, inherited readiness
+no-progress, or authoritative nodes query pressure before runtime edits.
+Success must improve snapshot coverage above `2/5`, migrate the frontier to a
+genuinely new owner boundary, or turn representative rolling-restart green.
+
+## Scope Basis
+
+Roadmap Phase `0.1 - Internal Coherence`, specifically rolling-restart topology
+workflow stabilization and production guarantees for the AGPL runtime.
+
+## Workflow Lane
+
+- Selected lane: `causal-escalation`
+- Why this lane is required: the representative release gate remains red after
+  a metric-moving owner-boundary reduction and now requires a focused causal
+  replay/probe before another runtime edit.
+- Escalation trigger to a heavier lane: runtime ownership expands beyond the
+  listed candidate files, a frozen decision must be reopened, or
+  representative evidence contradicts the selected owner boundary.
+
+## Subagent Sequencing Requirement
+
+Required before implementation because this is a scenario-driven runtime
+owner-boundary package.
+
+## Subagent Sequencing Ledger
+
+- [ ] Review subagent pending-before-implementation.
+- [ ] Fix subagent pending-before-review-result.
+- [ ] Implementation subagent pending-before-review-fix-clean.
+
+## LLM Tool-First Contract
+
+Before raw JSON, raw logs, broad file search, oversized segment files, or ad hoc `jq`, use the canonical workflow command that owns the question:
+
+1. Package metadata or ledger edits: `npm run work:package:doctor -- --suggest <package>`, `npm run work:package:doctor -- --fix-dry-run <package>`, `npm run work:package:schema`, or `npm run work:package:new -- ...`.
+2. Representative evidence: `npm run work:evidence-summary -- <artifact>` plus any focused extractor for this failure class.
+3. Owner discovery: `npm run analyze:owner-files -- <owner> [boundary]`.
+4. Subagent sequencing: `npm run work:subagent-prompt -- --role <role> --package <package>`.
+5. Large-file cleanup: `npm run work:oversized-next -- --markdown`.
+
+If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which canonical extractor was tried and why it was insufficient.
+
+## In Scope
+
+1. work/packages/active-20260516-startup-active-gate-authoritative-repair-participant-failure.md
+2. work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md
+3. work/sprints/current-blocker.md
+4. work/sprints/current-blocker.json
+
+## Out Of Scope
+
+1. publication-ack-convergence
+2. priority_recovery_partition_progress
+3. operation_workflow_owner
+4. timeout_budgets
+5. active_gate_admission
+
+## Model Fit
+
+- Package class: `representative-frontier-closure`
+- Intended minimum model: `gpt-5.3-codex`
+- Scope shape: `owner-boundary-contraction/current-frontier`
+- Output profile: `medium`
+- Owned files: `work/packages/active-20260516-startup-active-gate-authoritative-repair-participant-failure.md`, `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md`, `work/sprints/current-blocker.md`, `work/sprints/current-blocker.json`
+- Forbidden files: `publication-ack-convergence`, `priority_recovery_partition_progress`, `operation_workflow_owner`, `timeout_budgets`, `active_gate_admission`
+- Frozen decisions: package scope and lane stay bounded unless explicitly escalated.
+- Escalation triggers: owned files expand beyond this package, runtime ownership changes, or representative scenario evidence changes.
+- Focused proof: `npm run work:validate -- --entry work/packages/active-20260516-startup-active-gate-authoritative-repair-participant-failure.md`, `npm run work:evidence-summary -- test-output/reports/rolling-restart-after-authoritative-repair-probe-20260516T214000Z.report.json`, `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-authoritative-repair-probe-20260516T214000Z.report.json --explain active_gate_snapshot_coverage`, `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-authoritative-repair-probe-20260516T214000Z.report.json --handoff-probe`, `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-authoritative-repair-probe-20260516T214000Z.report.json`, `npm run analyze:owner-files -- startup_active_gate_owner snapshot_coverage --markdown`
+- Model ledger advisory: `escalate`
+
+## Validation
+
+1. npm run work:validate -- --entry work/packages/active-20260516-startup-active-gate-authoritative-repair-participant-failure.md
+2. npm run work:evidence-summary -- test-output/reports/rolling-restart-after-authoritative-repair-probe-20260516T214000Z.report.json
+3. npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-authoritative-repair-probe-20260516T214000Z.report.json --explain active_gate_snapshot_coverage
+4. npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-authoritative-repair-probe-20260516T214000Z.report.json --handoff-probe
+5. npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-authoritative-repair-probe-20260516T214000Z.report.json
+6. npm run analyze:owner-files -- startup_active_gate_owner snapshot_coverage --markdown

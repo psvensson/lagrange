@@ -4,13 +4,13 @@
 
 Sprint: `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md`
 
-Package: `work/packages/active-20260516-startup-active-gate-selected-snapshot-source-timeout.md`
+Package: `work/packages/active-20260516-startup-active-gate-authoritative-repair-participant-failure.md`
 
 Workflow lane: `causal-escalation`
 
 Scenario: `rolling-restart`
 
-Artifact: `test-output/reports/rolling-restart-after-visible-owner-refresh-20260516T205633Z.report.json`
+Artifact: `test-output/reports/rolling-restart-after-authoritative-repair-probe-20260516T214000Z.report.json`
 
 Playback: `none`
 
@@ -22,19 +22,20 @@ Boundary: `snapshot_coverage`
 
 Dominant reason: `active_gate_timed_out`
 
-Current state: The visible owner-publication refresh slice removed discovery_node_coverage_gap, but representative rolling-restart remains red on active_gate_snapshot_coverage with snapshotCoverageNodeCount=0/5, selected source 11601fe0-72d6-5853-8590-ec2881853e72, selectedSnapshotSourceCause=selected_snapshot_source_timeout, and selectedSnapshotTimeoutMs=3340. Publication ACK and priority recovery are satisfied.
+Current state: Representative selected_snapshot_source_timeout is gone after direct authoritative repair for late forced active-gate snapshot probes. The gate remains red on active_gate_snapshot_coverage with snapshotCoverageNodeCount=0/5; the selected error is authoritative control snapshot repair failure on nodes because connection to seed 7493b0ab-a054-5fad-a91b-5e331db29304 closed. Publication ACK and priority recovery remain satisfied.
 
 ## Next Action
 
-Build the narrow replayable selected-source timeout proof for source 11601fe0-72d6-5853-8590-ec2881853e72, separate snapshot source selection from snapshot query timeout and forced repair timeout, then edit only the selected owner path if the proof selects one.
+Build the narrow fixture/probe that separates authoritative repair participant connection failure from readiness support inherited active-gate no-progress and authoritative nodes query pressure, then edit only the selected owner path.
 
 ## Proof Ladder
 
-1. `npm run work:evidence-summary -- test-output/reports/rolling-restart-after-visible-owner-refresh-20260516T205633Z.report.json`
-2. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-visible-owner-refresh-20260516T205633Z.report.json --explain active_gate_snapshot_coverage`
-3. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-visible-owner-refresh-20260516T205633Z.report.json --handoff-probe`
-4. `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-visible-owner-refresh-20260516T205633Z.report.json`
-5. `npm run analyze:owner-files -- startup_active_gate_owner snapshot_coverage --markdown`
+1. `npm run work:validate -- --entry work/packages/active-20260516-startup-active-gate-authoritative-repair-participant-failure.md`
+2. `npm run work:evidence-summary -- test-output/reports/rolling-restart-after-authoritative-repair-probe-20260516T214000Z.report.json`
+3. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-authoritative-repair-probe-20260516T214000Z.report.json --explain active_gate_snapshot_coverage`
+4. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-authoritative-repair-probe-20260516T214000Z.report.json --handoff-probe`
+5. `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-authoritative-repair-probe-20260516T214000Z.report.json`
+6. `npm run analyze:owner-files -- startup_active_gate_owner snapshot_coverage --markdown`
 
 ## Model Fit
 
@@ -57,7 +58,7 @@ Status: `live-red-scenario-release-gate`
 
 Scenario: `rolling-restart`
 
-Artifact: `test-output/reports/rolling-restart-after-visible-owner-refresh-20260516T205633Z.report.json`
+Artifact: `test-output/reports/rolling-restart-after-authoritative-repair-probe-20260516T214000Z.report.json`
 
 Frontier: `active_gate_snapshot_coverage`
 
@@ -67,62 +68,62 @@ Boundary: `snapshot_coverage`
 
 Dominant reason: `active_gate_timed_out`
 
-Next action: `Reduce selected_snapshot_source_timeout for selected source 11601fe0-72d6-5853-8590-ec2881853e72 without reopening publication ACK, priority recovery, timeout budgets, or active-gate admission.`
+Next action: `Reduce authoritative control snapshot repair participant failure without reopening publication ACK, priority recovery, timeout budgets, or active-gate admission.`
 
 ## Causal Governance
 
-Causal hypothesis: `The representative frontier is no longer deferred_refresh discovery_node_coverage_gap. The selected owner edge is now source 11601fe0-72d6-5853-8590-ec2881853e72 timing out on the selected snapshot query, with forced repair also timing out. A replayable fixture must distinguish bad snapshot-source selection from a real admin snapshot query timeout and forced repair timeout before runtime edits.`
+Causal hypothesis: `The representative frontier is no longer a selected snapshot-source timeout. The active edge is now authoritative control snapshot repair failing while querying nodes because the connection to seed 7493b0ab-a054-5fad-a91b-5e331db29304 closed. A replayable fixture must separate participant connectivity from inherited readiness no-progress and authoritative nodes query pressure before runtime edits.`
 
-Stop-condition check: `Run entry validation, selected-source timeout replay/probe, npm run analyze:causal-model on fresh evidence, focused owner tests for the selected runtime file, static guardrails, and one representative rolling-restart rerun.`
+Stop-condition check: `Run entry validation, authoritative repair participant fixture/probe, npm run analyze:causal-model on fresh evidence, focused owner tests for the selected runtime file, static guardrails, and one representative rolling-restart rerun.`
 
-Expected causal-model change: `Either snapshotCoverage improves above 0/5, discovery_node_coverage_gap stays gone and selected_snapshot_source_timeout disappears, the frontier migrates to a new owner boundary, or representative rolling-restart turns green.`
+Expected causal-model change: `snapshotCoverage improves above 2/5, the representative frontier migrates to a genuinely new owner boundary, or representative rolling-restart turns green.`
 
 Representative outcome: `pending-before-rerun`
 
-Causal debt: `Publication ACK and priority recovery are satisfied. The active red edge is selected_snapshot_source_timeout with selectedSnapshotTimeoutMs=3340 and snapshotCoverageNodeCount=0/5.`
+Causal debt: `Publication ACK and priority recovery are satisfied. Active-gate snapshot coverage remains incomplete; the remaining selected error is authoritative control snapshot repair failure on nodes due to a closed seed connection.`
 
 Cross-boundary review: `Do not reopen publication ACK, priority recovery, timeout budgets, or active-gate admission unless canonical evidence selects them again.`
 
 ## Scenario Causal Closure
 
-Reference scenario/probe: `rolling-restart after visible owner publication refresh`
+Reference scenario/probe: `rolling-restart after direct authoritative repair probe`
 
 Phase chain:
 
-1. `consume reduced deferred-refresh discovery-gap proof`
-2. `build the narrow selected-source timeout replay/probe for source 11601fe0-72d6-5853-8590-ec2881853e72`
-3. `separate snapshot-source selection from selected admin snapshot query timeout`
-4. `separate forced repair timeout from the primary selected-source query timeout`
+1. `consume reduced selected-source timeout proof`
+2. `build the narrow authoritative repair participant replay/probe`
+3. `separate participant connection failure from inherited readiness no-progress`
+4. `separate participant connection failure from authoritative nodes query pressure`
 5. `promote only the selected owner runtime file after the proof selects one`
 6. `rerun representative rolling-restart and classify green, reduced, same-frontier, migrated, or split`
 
-Current first frontier: `active_gate_snapshot_coverage in test-output/reports/rolling-restart-after-visible-owner-refresh-20260516T205633Z.report.json, owned by startup_active_gate_owner / snapshot_coverage.`
+Current first frontier: `active_gate_snapshot_coverage in test-output/reports/rolling-restart-after-authoritative-repair-probe-20260516T214000Z.report.json, owned by startup_active_gate_owner / snapshot_coverage.`
 
 Known downstream blockers:
 
 1. `publication_ack_convergence is satisfied by canonical evidence`
 2. `priority_recovery_partition_progress is satisfied by canonical evidence`
 3. `snapshotCoverageNodeCount is 0 and expectedNodeCount is 5`
-4. `selected source is 11601fe0-72d6-5853-8590-ec2881853e72`
-5. `selectedSnapshotSourceCause is selected_snapshot_source_timeout`
-6. `selectedSnapshotTimeoutMs is 3340`
-7. `selected snapshot error includes primary selected-source timeout and forced repair snapshot timeout`
+4. `selected_snapshot_source_timeout is absent from canonical reasons`
+5. `selected snapshot error is authoritative control snapshot repair failure on nodes`
+6. `authoritative repair failed because connection to seed 7493b0ab-a054-5fad-a91b-5e331db29304 closed`
+7. `readiness support remains inherited_active_gate_no_progress with no_progress_terminal evidence`
 
-Missing causal edge: `Prove whether selected_snapshot_source_timeout is bad snapshot-source selection, a primary admin snapshot query timeout, or a forced repair timeout before runtime edits.`
+Missing causal edge: `Prove whether authoritative repair participant failure is owned by the repair path, readiness support, or authoritative nodes query pressure before runtime edits.`
 
-Missing causal edge probe: `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-visible-owner-refresh-20260516T205633Z.report.json --explain active_gate_snapshot_coverage`
+Missing causal edge probe: `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-authoritative-repair-probe-20260516T214000Z.report.json --explain active_gate_snapshot_coverage`
 
-Bounded progress proof: `The predecessor used one bounded refresh after visible owner publication and removed discovery_node_coverage_gap from representative evidence; this package must move a metric, remove selected_snapshot_source_timeout, migrate to a new owner boundary, or turn rolling-restart green.`
+Bounded progress proof: `The next proof must advance a bounded authoritative repair retry so snapshotCoverage improves above 2/5, the frontier migrates to a genuinely new owner boundary, or rolling-restart turns green.`
 
-Bounded progress proof artifact: `test-output/reports/rolling-restart-after-visible-owner-refresh-20260516T205633Z.report.json`
+Bounded progress proof artifact: `test-output/reports/rolling-restart-after-authoritative-repair-probe-20260516T214000Z.report.json`
 
-Expected observable transition: `snapshotCoverage improves above 0/5, selected_snapshot_source_timeout disappears, the frontier migrates to a new owner boundary, or rolling-restart turns green.`
+Expected observable transition: `snapshotCoverage improves above 2/5, the selected authoritative repair participant failure disappears with a new owner frontier, or representative rolling-restart turns green.`
 
 Max progress bound: `one focused startup_active_gate_owner / snapshot_coverage package slice after required subagent sequencing`
 
-Same-frontier fallback: `If selected_snapshot_source_timeout remains after a focused owner fix, classify same-frontier with the replay/probe evidence instead of reopening frozen edges.`
+Same-frontier fallback: `If the representative stays same-frontier without metric movement, stop and record the fixture evidence instead of reopening frozen edges.`
 
-Expected next frontier: `representative green, reduced selected_snapshot_source_timeout residual, readiness_startup_support, or another canonical frontier after snapshot coverage improves`
+Expected next frontier: `representative green, improved active-gate snapshot coverage above 2/5, or a new canonical owner boundary selected by fresh evidence`
 
 Result classification: `pending-before-probe`
 
@@ -130,11 +131,11 @@ Stop condition: `continue-local-fix`
 
 Recent frontier history:
 
-1. `work/packages/done-20260516-startup-active-gate-snapshot-coverage-deferred-refresh-discovery-gap.md / startup_active_gate_owner / snapshot_coverage / reduced`
-2. `work/packages/done-20260516-startup-active-gate-snapshot-coverage-owner-reconcile-pending.md / startup_active_gate_owner / snapshot_coverage / same-frontier`
-3. `work/packages/done-20260516-priority-recovery-operation-workflow-owner-workflow-progress-repeat.md / operation_workflow_owner / workflow_progress / migrated`
+1. `work/packages/done-20260516-startup-active-gate-selected-snapshot-source-timeout.md / startup_active_gate_owner / snapshot_coverage / reduced`
+2. `work/packages/done-20260516-startup-active-gate-snapshot-coverage-deferred-refresh-discovery-gap.md / startup_active_gate_owner / snapshot_coverage / reduced`
+3. `work/packages/done-20260516-startup-active-gate-snapshot-coverage-owner-reconcile-pending.md / startup_active_gate_owner / snapshot_coverage / same-frontier`
 
-Oscillation check: `This successor is allowed because representative evidence changed the selected subcause from deferred_refresh discovery_node_coverage_gap to selected_snapshot_source_timeout.`
+Oscillation check: `This successor is allowed because representative evidence changed the selected subcause from selected_snapshot_source_timeout to authoritative control snapshot repair participant failure.`
 
 Handoff invariant: `Publication ACK, priority recovery, timeout budgets, and active-gate admission remain frozen unless canonical evidence selects them again.`
 
@@ -142,15 +143,15 @@ Handoff invariant: `Publication ACK, priority recovery, timeout budgets, and act
 
 Write scope:
 
-1. `work/packages/active-20260516-startup-active-gate-selected-snapshot-source-timeout.md`
+1. `work/packages/active-20260516-startup-active-gate-authoritative-repair-participant-failure.md`
 2. `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md`
 3. `work/sprints/current-blocker.md`
 4. `work/sprints/current-blocker.json`
 
 Handoff files:
 
-1. `work/packages/done-20260516-startup-active-gate-snapshot-coverage-deferred-refresh-discovery-gap.md`
-2. `test-output/reports/rolling-restart-after-visible-owner-refresh-20260516T205633Z.report.json`
+1. `work/packages/done-20260516-startup-active-gate-selected-snapshot-source-timeout.md`
+2. `test-output/reports/rolling-restart-after-authoritative-repair-probe-20260516T214000Z.report.json`
 
 Generated files:
 
@@ -159,16 +160,19 @@ Generated files:
 
 Candidate runtime files:
 
-1. `test/distributed/harness/cluster-segment-5.js`
-2. `test/distributed/harness/cluster-segment-7-class-2.js`
-3. `test/distributed/harness/cluster-segment-7-class-4.js`
-4. `test/distributed/harness/__tests__/cluster.test-part-5.js`
-5. `src/admin/admin-control-snapshot-class-part-2.js`
-6. `test/admin/admin-control-snapshot.test.js`
+1. `src/admin/admin-control-snapshot-class-part-2.js`
+2. `src/admin/admin-service-discovery-repair-methods.js`
+3. `src/admin/admin-service-discovery-readiness-methods.js`
+4. `src/control-plane/control-plane-snapshot-owner.js`
+5. `test/distributed/harness/cluster-segment-7-class-5.js`
+6. `test/distributed/harness/cluster-segment-2.js`
+7. `test/admin/admin-control-snapshot.test.js`
+8. `test/admin/admin-service-discovery.test.js`
+9. `test/distributed/harness/__tests__/cluster.test-part-5.js`
 
 Commit scope:
 
-1. `work/packages/active-20260516-startup-active-gate-selected-snapshot-source-timeout.md`
+1. `work/packages/active-20260516-startup-active-gate-authoritative-repair-participant-failure.md`
 2. `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md`
 3. `work/sprints/current-blocker.md`
 4. `work/sprints/current-blocker.json`

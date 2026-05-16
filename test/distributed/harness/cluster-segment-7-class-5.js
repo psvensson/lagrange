@@ -200,6 +200,7 @@ class Cluster5 extends Cluster4 {
           timeoutMs: snapshotTimeoutMs,
           lane: ADMIN_SOCKET_LANE_SNAPSHOT,
           forceRepair: options.forceRepair === true,
+          forceAuthoritativeRepair: options.forceRepair === true,
         });
         const snapshotPayload =
           this._extractControlSnapshotPayload(snapshotResult);

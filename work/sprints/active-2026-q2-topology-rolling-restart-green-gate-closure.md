@@ -22,9 +22,9 @@ success is in scope.
 ## Current Blocker Snapshot
 
 Latest representative artifact:
-`test-output/reports/rolling-restart-after-owner-reconcile-selected-evidence-20260516T195857Z.report.json`.
+`test-output/reports/rolling-restart-after-authoritative-repair-probe-20260516T214000Z.report.json`.
 
-Canonical state for the current deferred-refresh discovery-gap package:
+Canonical state for the current authoritative repair participant package:
 
 1. `work:evidence-summary` selects `active_gate_snapshot_coverage` as the first
    frontier.
@@ -33,17 +33,21 @@ Canonical state for the current deferred-refresh discovery-gap package:
 3. Dominant reason: `active_gate_timed_out`.
 4. Priority recovery is satisfied with zero residual witnesses.
 5. Publication ACK convergence remains satisfied with `pendingAckCount=0`.
-6. Active-gate snapshot coverage is blocked with `snapshotCoverageNodeCount=2`,
-   `expectedNodeCount=5`, `pendingReconcileCount=3`, selected source
-   `11601fe0-72d6-5853-8590-ec2881853e72`, and selected snapshot observation
-   `repair_deferred` / `deferred_refresh` / `deferred` / `retry` with
-   `discovery_node_coverage_gap`.
-7. The current active package is
-   `work/packages/done-20260516-startup-active-gate-snapshot-coverage-deferred-refresh-discovery-gap.md`.
-   It must separate deferred-refresh discovery-node coverage from
-   snapshot-source selection, forced repair stalls, authoritative query
-   pressure, and inherited readiness support without reopening priority
-   recovery or publication ACK convergence.
+6. Active-gate snapshot coverage is blocked with `snapshotCoverageNodeCount=0`,
+   `expectedNodeCount=5`.
+7. The previous package removed `selected_snapshot_source_timeout` from
+   canonical representative evidence by sending late active-gate forced repair
+   probes through direct authoritative snapshot repair without changing timeout
+   budgets.
+8. The selected error is now authoritative control snapshot repair failure on
+   nodes because connection to seed
+   `7493b0ab-a054-5fad-a91b-5e331db29304` closed.
+9. The current active package is
+   `work/packages/active-20260516-startup-active-gate-authoritative-repair-participant-failure.md`.
+   It must build the authoritative repair participant fixture/probe, separating
+   participant connection failure from inherited readiness no-progress and
+   authoritative nodes query pressure without reopening priority recovery,
+   publication ACK convergence, timeout budgets, or active-gate admission.
 
 ## Scope Basis
 
@@ -323,6 +327,41 @@ handoff consume a structured membership publication owner outcome, turns the
 gate green, or canonical evidence changes the semantic owner, boundary, or next
 required action.
 
+## Current Continuation Packages
+
+[Startup Active Gate Selected Snapshot Source Timeout](../packages/done-20260516-startup-active-gate-selected-snapshot-source-timeout.md)
+
+- Lane: `causal-escalation`
+- Owner boundary:
+  `startup_active_gate_owner / snapshot_coverage`
+- Purpose: decide the four-way blocker split after
+  `discovery_node_coverage_gap` disappeared: bad snapshot-source selection,
+  forced repair stall, authoritative nodes query pressure, or inherited
+  readiness no-progress.
+- Result: `reduced`. The focused owner path now advances the late forced
+  active-gate snapshot retry through direct authoritative repair. The
+  representative rerun stayed red, but `selected_snapshot_source_timeout`
+  disappeared while publication ACK and priority recovery stayed satisfied.
+  The next selected edge is authoritative control snapshot repair participant
+  failure.
+
+[Startup Active Gate Authoritative Repair Participant Failure](../packages/active-20260516-startup-active-gate-authoritative-repair-participant-failure.md)
+
+- Lane: `causal-escalation`
+- Owner boundary:
+  `startup_active_gate_owner / snapshot_coverage`
+- Purpose: build the narrow fixture/probe that separates authoritative repair
+  participant connection failure from inherited readiness no-progress and
+  authoritative nodes query pressure.
+- Entry condition: selected-source timeout package closed as `reduced`; fresh
+  representative evidence reports `selected_snapshot_source_timeout` absent,
+  `snapshotCoverageNodeCount=0/5`, and selected error
+  `Authoritative control snapshot repair failed: nodes:Connection to node
+  7493b0ab-a054-5fad-a91b-5e331db29304 closed`.
+- Acceptance: snapshot coverage improves above `2/5`, the representative
+  frontier migrates to a genuinely new owner boundary, or representative
+  `rolling-restart` turns green.
+
 ## Working Rules
 
 1. Work one active package at a time.
@@ -434,12 +473,11 @@ The sprint cannot close until:
 
 ## Current Next Action
 
-Continue with the active-gate snapshot coverage deferred-refresh discovery-gap
-package:
+Continue with the active authoritative repair participant package:
 
 ```text
-work/packages/done-20260516-startup-active-gate-snapshot-coverage-deferred-refresh-discovery-gap.md
-test-output/reports/rolling-restart-after-owner-reconcile-selected-evidence-20260516T195857Z.report.json
+work/packages/active-20260516-startup-active-gate-authoritative-repair-participant-failure.md
+test-output/reports/rolling-restart-after-authoritative-repair-probe-20260516T214000Z.report.json
 ```
 
 Keep the completed post-systems-pattern checkpoint package and artifact as
@@ -461,13 +499,13 @@ The repeated priority recovery workflow-progress package drained the
 `spread_satisfied_in_flight` witnesses to zero and fresh representative evidence
 marks `priority_recovery_partition_progress` satisfied. The current
 representative first frontier is `active_gate_snapshot_coverage` under
-`startup_active_gate_owner / snapshot_coverage`, with `pendingReconcileCount=3`,
-selected source `11601fe0-72d6-5853-8590-ec2881853e72`, and snapshot coverage
-still at 2/5. The selected snapshot observation is
-`repair_deferred` / `deferred_refresh` / `deferred` / `retry` with
-`discovery_node_coverage_gap`. The next work is to run the required subagent
-sequence for the active startup active-gate package, then prove whether
-`deferred_refresh` discovery-node coverage is owned by snapshot-source
-selection, forced repair stall, authoritative nodes query pressure, or inherited
-readiness support. Keep publication ACK convergence and priority recovery frozen
-unless canonical evidence selects them again.
+`startup_active_gate_owner / snapshot_coverage`, with snapshot coverage at
+0/5 and `selected_snapshot_source_timeout` absent. The selected error is now
+authoritative control snapshot repair failure on nodes because connection to
+seed `7493b0ab-a054-5fad-a91b-5e331db29304` closed. The next work is to run the
+required subagent sequence for the active startup active-gate package, then
+build the narrow authoritative repair participant fixture/probe that separates
+participant connection failure from inherited readiness no-progress and
+authoritative nodes query pressure. Keep publication ACK convergence, priority
+recovery, timeout budgets, and active-gate admission frozen unless canonical
+evidence selects them again.
