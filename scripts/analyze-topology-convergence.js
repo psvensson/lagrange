@@ -8,6 +8,7 @@ import {
   EDGE_ID,
   buildTopologyConvergenceGraph,
   buildTopologyConvergenceDecisionTable,
+  buildTopologyConvergenceReplayFixture,
   buildTopologyConvergenceGraphFromArtifacts,
   buildTopologyConvergenceGlossary,
   buildTopologyConvergenceOwnerPresentation,
@@ -22,6 +23,7 @@ const ARG_GLOSSARY = '--glossary';
 const ARG_EXPLAIN = '--explain';
 const ARG_HANDOFF_PROBE = '--handoff-probe';
 const ARG_PACKAGE_EVIDENCE_BLOCK = '--package-evidence-block';
+const ARG_REPLAY_FIXTURE = '--replay-fixture';
 const ENCODING_UTF8 = 'utf8';
 const JSON_INDENT_SPACES = 2;
 const EXIT_SUCCESS = 0;
@@ -47,6 +49,7 @@ const MODE_GLOSSARY = 'glossary';
 const MODE_EXPLAIN = 'explain';
 const MODE_HANDOFF_PROBE = 'handoff-probe';
 const MODE_PACKAGE_EVIDENCE_BLOCK = 'package-evidence-block';
+const MODE_REPLAY_FIXTURE = 'replay-fixture';
 const SCHEMA_VERSION_TOPOLOGY_OWNER_EXPLAIN_V1 = 'topology-owner-explain-v1';
 const SCHEMA_VERSION_PUBLICATION_ACTIVE_GATE_HANDOFF_PROBE_V1 =
   'topology-publication-active-gate-handoff-probe-v1';
@@ -129,7 +132,7 @@ const HANDOFF_PROBE_DETECTION_RULES = Object.freeze([
   }),
 ]);
 const HELP_TEXT = [
-  'Usage: node scripts/analyze-topology-convergence.js <artifact.json> [--explain <edge-id-or-alias>] [--handoff-probe] [--package-evidence-block]',
+  'Usage: node scripts/analyze-topology-convergence.js <artifact.json> [--explain <edge-id-or-alias>] [--handoff-probe] [--replay-fixture] [--package-evidence-block]',
   '       node scripts/analyze-topology-convergence.js --decision-table',
   '       node scripts/analyze-topology-convergence.js --glossary',
   '',
@@ -143,6 +146,7 @@ const HELP_TEXT = [
   '  node scripts/analyze-topology-convergence.js test-output/reports/run.report.json',
   '  npm run analyze:topology-convergence -- test-output/reports/run.report.json --explain priority',
   '  npm run analyze:topology-convergence -- test-output/reports/run.report.json --handoff-probe',
+  '  npm run analyze:topology-convergence -- test-output/reports/run.report.json --replay-fixture',
   '  npm run analyze:topology-convergence -- --decision-table',
   '  npm run analyze:topology-convergence -- --glossary',
 ].join(STDOUT_NEWLINE);
@@ -191,6 +195,18 @@ function main(argv) {
     if (parsedArgs.mode === MODE_HANDOFF_PROBE) {
       process.stdout.write(
         `${JSON.stringify(selectHandoffProbeOutput(graph), null, JSON_INDENT_SPACES)}\n`,
+      );
+      return EXIT_SUCCESS;
+    }
+    if (parsedArgs.mode === MODE_REPLAY_FIXTURE) {
+      process.stdout.write(
+        `${JSON.stringify(
+          buildTopologyConvergenceReplayFixture(graph, {
+            sourceArtifact: parsedArgs.artifactPath,
+          }),
+          null,
+          JSON_INDENT_SPACES,
+        )}\n`,
       );
       return EXIT_SUCCESS;
     }
@@ -245,6 +261,10 @@ function parseCliArgs(args) {
     }
     if (arg === ARG_HANDOFF_PROBE) {
       mode = MODE_HANDOFF_PROBE;
+      continue;
+    }
+    if (arg === ARG_REPLAY_FIXTURE) {
+      mode = MODE_REPLAY_FIXTURE;
       continue;
     }
     positional.push(arg);

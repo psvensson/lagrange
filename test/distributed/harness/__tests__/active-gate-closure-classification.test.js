@@ -9,6 +9,20 @@ import {
   classifyActiveGateClosureWitness,
 } from '../active-gate-closure-classification.js';
 import {
+  buildTopologyConvergenceGraph,
+  buildTopologyConvergenceReplayFixture,
+  EDGE_ID,
+  replayTopologyConvergenceFixture,
+} from '../../../../src/diagnostics/topology-convergence-graph.js';
+import {
+  FAILURE_CLASS,
+} from '../../../../src/diagnostics/causal-analysis-schema.js';
+import {
+  PUBLICATION_ACTIVE_GATE_HANDOFF_NEXT_ACTION,
+  PUBLICATION_ACTIVE_GATE_HANDOFF_REASON,
+  PUBLICATION_ACTIVE_GATE_HANDOFF_STATE,
+} from '../../../../src/control-plane/publication-active-gate-handoff-contract.js';
+import {
   PRIORITY_RECOVERY_DECISION_SET_EXPECTED,
   buildPriorityRecoveryPublicationConvergenceFixture,
 } from '../__fixtures__/priority-recovery-actuation-contract-fixture.js';
@@ -36,6 +50,58 @@ const ACTIVE_GATE_HANDOFF_OUTCOME_REASON_BACKPRESSURE =
   'control_plane_backpressure';
 const ACTIVE_GATE_HANDOFF_OUTCOME_ENQUEUED = true;
 const ACTIVE_GATE_HANDOFF_OUTCOME_RETRY_AFTER_MS = 1000;
+const ACTIVE_GATE_TOPOLOGY_REPLAY_TEST_NAME =
+  'topology convergence replay fixture preserves publication owner recovery wake';
+const ACTIVE_GATE_TOPOLOGY_REPLAY_SCENARIO = 'rolling-restart';
+const ACTIVE_GATE_TOPOLOGY_REPLAY_OWNER = 'topology_publication_owner';
+const ACTIVE_GATE_TOPOLOGY_REPLAY_BOUNDARY = 'publication_convergence';
+const ACTIVE_GATE_TOPOLOGY_REPLAY_PUBLICATION_EPOCH = 1;
+const ACTIVE_GATE_TOPOLOGY_REPLAY_SNAPSHOT_COVERAGE_COUNT = 2;
+const ACTIVE_GATE_TOPOLOGY_REPLAY_MISSING_PUBLISHED_COUNT = 4;
+const ACTIVE_GATE_TOPOLOGY_REPLAY_OWNER_COHORT_PENDING_COUNT = 1;
+const ACTIVE_GATE_TOPOLOGY_REPLAY_ACTIVE_GATE_STATE_TIMED_OUT = 'timed_out';
+const ACTIVE_GATE_TOPOLOGY_REPLAY_RECOVERY_PROTOCOL_STATE =
+  'publication_pending';
+const ACTIVE_GATE_TOPOLOGY_REPLAY_ACK_STATE = 'acknowledged';
+const ACTIVE_GATE_TOPOLOGY_REPLAY_FRESHNESS_FENCE = 'consumer_lag';
+const ACTIVE_GATE_TOPOLOGY_REPLAY_RECOVERY_OUTCOME =
+  'waiting_for_consumer';
+const ACTIVE_GATE_TOPOLOGY_REPLAY_REVISION_STATE = 'current';
+const ACTIVE_GATE_TOPOLOGY_REPLAY_STREAM_OUTCOME = 'stale';
+const ACTIVE_GATE_TOPOLOGY_REPLAY_OBSERVATION_MODE = 'repair_deferred';
+const ACTIVE_GATE_TOPOLOGY_REPLAY_OBSERVATION_STATE = 'deferred_refresh';
+const ACTIVE_GATE_TOPOLOGY_REPLAY_OBSERVATION_CONTRACT_STATE = 'deferred';
+const ACTIVE_GATE_TOPOLOGY_REPLAY_OBSERVATION_REFRESH_STATE = 'deferred';
+const ACTIVE_GATE_TOPOLOGY_REPLAY_OBSERVATION_NEXT_ACTION = 'retry';
+const ACTIVE_GATE_TOPOLOGY_REPLAY_OBSERVATION_RETRY_AFTER_MS = 14639;
+const ACTIVE_GATE_TOPOLOGY_REPLAY_READINESS_CAUSE = 'none';
+const ACTIVE_GATE_TOPOLOGY_REPLAY_READINESS_MODE = 'startup';
+const ACTIVE_GATE_TOPOLOGY_REPLAY_READINESS_CLASS =
+  'no_progress_terminal';
+const ACTIVE_GATE_TOPOLOGY_REPLAY_READINESS_TERMINAL_REASON =
+  'stalled_no_progress';
+const ACTIVE_GATE_TOPOLOGY_REPLAY_READINESS_SOURCE = 'unknown';
+const ACTIVE_GATE_TOPOLOGY_REPLAY_PUBLISHED_NODE_IDS = Object.freeze([
+  '7493b0ab-a054-5fad-a91b-5e331db29304',
+]);
+const ACTIVE_GATE_TOPOLOGY_REPLAY_MISSING_NODE_IDS = Object.freeze([
+  '11601fe0-72d6-5853-8590-ec2881853e72',
+  '35a891b8-c1a0-5064-9c6e-2acfba61c2a7',
+  '8be8d30f-4499-5eed-865c-71b4d529a67a',
+  'ebc4aa0b-06c6-506d-93ea-1dd2deca3f58',
+]);
+const ACTIVE_GATE_TOPOLOGY_REPLAY_OWNER_COHORT_NODE_IDS = Object.freeze([
+  '11601fe0-72d6-5853-8590-ec2881853e72',
+]);
+const ACTIVE_GATE_TOPOLOGY_REPLAY_OBSERVATION_REASONS = Object.freeze([
+  'cache_stale_watermark',
+  'discovery_node_coverage_gap',
+  'stale_replica_operations_in_flight',
+]);
+const ACTIVE_GATE_TOPOLOGY_REPLAY_BLOCKERS = Object.freeze([
+  'inactive_nodes=1',
+  'snapshot_coverage=2/5',
+]);
 const ACTIVE_GATE_PRIORITY_SPREAD_TEST_NAME =
   'active gate classifies publication-closed priority spread as closure witness';
 const ACTIVE_GATE_STARTUP_PUBLICATION_LAG_TEST_NAME =
@@ -53,6 +119,91 @@ const ACTIVE_GATE_MISSING_PUBLISHED_NODE_IDS = Object.freeze([
   '8be8d30f-4499-5eed-865c-71b4d529a67a',
   'ebc4aa0b-06c6-506d-93ea-1dd2deca3f58',
 ]);
+
+function buildTopologyReplaySourceArtifact() {
+  return {
+    scenario: ACTIVE_GATE_TOPOLOGY_REPLAY_SCENARIO,
+    publicationConvergence: {
+      publicationEpoch: ACTIVE_GATE_TOPOLOGY_REPLAY_PUBLICATION_EPOCH,
+      publicationStatus: ACTIVE_GATE_PUBLICATION_STATUS_PUBLISHED,
+      pendingAckNodeIds: [],
+      pendingAckCount: ACTIVE_GATE_ZERO,
+      blockedNodeCount: ACTIVE_GATE_ZERO,
+      publishedActiveNodeIds: ACTIVE_GATE_TOPOLOGY_REPLAY_PUBLISHED_NODE_IDS,
+      missingPublishedNodeIds: ACTIVE_GATE_TOPOLOGY_REPLAY_MISSING_NODE_IDS,
+      missingPublishedCount:
+        ACTIVE_GATE_TOPOLOGY_REPLAY_MISSING_PUBLISHED_COUNT,
+      publicationPending: true,
+      recoveryProtocolState: ACTIVE_GATE_TOPOLOGY_REPLAY_RECOVERY_PROTOCOL_STATE,
+      prioritySpreadPending: false,
+      publicationOwnerStream: {
+        ackState: ACTIVE_GATE_TOPOLOGY_REPLAY_ACK_STATE,
+        freshnessFence: ACTIVE_GATE_TOPOLOGY_REPLAY_FRESHNESS_FENCE,
+        recoveryOutcome: ACTIVE_GATE_TOPOLOGY_REPLAY_RECOVERY_OUTCOME,
+        revision: {
+          state: ACTIVE_GATE_TOPOLOGY_REPLAY_REVISION_STATE,
+        },
+        streamOutcome: ACTIVE_GATE_TOPOLOGY_REPLAY_STREAM_OUTCOME,
+      },
+      activeGate: {
+        state: ACTIVE_GATE_TOPOLOGY_REPLAY_ACTIVE_GATE_STATE_TIMED_OUT,
+        progress: {
+          snapshotCoverageComplete: false,
+          snapshotCoverageNodeCount:
+            ACTIVE_GATE_TOPOLOGY_REPLAY_SNAPSHOT_COVERAGE_COUNT,
+          expectedNodeCount: ACTIVE_GATE_EXPECTED_NODE_COUNT,
+          selectedSnapshotObservationMode:
+            ACTIVE_GATE_TOPOLOGY_REPLAY_OBSERVATION_MODE,
+          selectedSnapshotObservationState:
+            ACTIVE_GATE_TOPOLOGY_REPLAY_OBSERVATION_STATE,
+          selectedSnapshotObservationContractState:
+            ACTIVE_GATE_TOPOLOGY_REPLAY_OBSERVATION_CONTRACT_STATE,
+          selectedSnapshotObservationRefreshState:
+            ACTIVE_GATE_TOPOLOGY_REPLAY_OBSERVATION_REFRESH_STATE,
+          selectedSnapshotObservationNextAction:
+            ACTIVE_GATE_TOPOLOGY_REPLAY_OBSERVATION_NEXT_ACTION,
+          selectedSnapshotObservationRetryAfterMs:
+            ACTIVE_GATE_TOPOLOGY_REPLAY_OBSERVATION_RETRY_AFTER_MS,
+          selectedSnapshotObservationReasonCodes:
+            ACTIVE_GATE_TOPOLOGY_REPLAY_OBSERVATION_REASONS,
+          selectedSnapshotRepairDeferred: true,
+          publicationActiveGateHandoffState:
+            PUBLICATION_ACTIVE_GATE_HANDOFF_STATE.PENDING,
+          publicationActiveGateHandoffReasonCode:
+            PUBLICATION_ACTIVE_GATE_HANDOFF_REASON.OWNER_RECONCILE_PENDING,
+          publicationActiveGateHandoffNextAction:
+            PUBLICATION_ACTIVE_GATE_HANDOFF_NEXT_ACTION.WAIT_OWNER_RECOVERY,
+          publicationActiveGateHandoffRuntimePromotionAllowed:
+            ACTIVE_GATE_HANDOFF_RUNTIME_PROMOTION_ALLOWED_FALSE,
+          publicationActiveGateHandoffPendingReconcileCount: ACTIVE_GATE_ZERO,
+          activeGateOwnerCohortState: ACTIVE_GATE_OWNER_COHORT_STATE_PENDING,
+          activeGateOwnerCohortReasonCode:
+            ACTIVE_GATE_OWNER_COHORT_REASON_OWNER_RECONCILE_PENDING,
+          activeGateOwnerCohortMissingPublishedCount:
+            ACTIVE_GATE_TOPOLOGY_REPLAY_OWNER_COHORT_PENDING_COUNT,
+          activeGateOwnerCohortMissingPublishedNodeIds:
+            ACTIVE_GATE_TOPOLOGY_REPLAY_OWNER_COHORT_NODE_IDS,
+          activeGateOwnerCohortPendingRecoveryCount:
+            ACTIVE_GATE_TOPOLOGY_REPLAY_OWNER_COHORT_PENDING_COUNT,
+          activeGateOwnerCohortPendingRecoveryNodeIds:
+            ACTIVE_GATE_TOPOLOGY_REPLAY_OWNER_COHORT_NODE_IDS,
+          activeGateOwnerCohortPendingReconcileCount: ACTIVE_GATE_ZERO,
+          blockers: ACTIVE_GATE_TOPOLOGY_REPLAY_BLOCKERS,
+        },
+      },
+    },
+    summary: {
+      readinessFailure: {
+        mode: ACTIVE_GATE_TOPOLOGY_REPLAY_READINESS_MODE,
+        classCode: ACTIVE_GATE_TOPOLOGY_REPLAY_READINESS_CLASS,
+        terminalReason:
+          ACTIVE_GATE_TOPOLOGY_REPLAY_READINESS_TERMINAL_REASON,
+        source: ACTIVE_GATE_TOPOLOGY_REPLAY_READINESS_SOURCE,
+        cause: ACTIVE_GATE_TOPOLOGY_REPLAY_READINESS_CAUSE,
+      },
+    },
+  };
+}
 
 test(ACTIVE_GATE_PRIORITY_SPREAD_TEST_NAME,
   () => {
@@ -229,5 +380,46 @@ test(ACTIVE_GATE_STARTUP_PUBLICATION_LAG_OWNER_PATH_TEST_NAME,
     assert.equal(
       progressSnapshot.membershipPublicationHandoffOutcomeRetryAfterMs,
       ACTIVE_GATE_HANDOFF_OUTCOME_RETRY_AFTER_MS,
+    );
+  });
+
+test(ACTIVE_GATE_TOPOLOGY_REPLAY_TEST_NAME,
+  () => {
+    const sourceGraph = buildTopologyConvergenceGraph(
+      buildTopologyReplaySourceArtifact(),
+    );
+    const replayFixture = buildTopologyConvergenceReplayFixture(sourceGraph);
+    const replayResult = replayTopologyConvergenceFixture(replayFixture);
+
+    assert.equal(
+      replayFixture.expected.firstFrontierEdgeId,
+      EDGE_ID.PUBLICATION_ACK_CONVERGENCE,
+    );
+    assert.equal(
+      replayFixture.expected.owner,
+      ACTIVE_GATE_TOPOLOGY_REPLAY_OWNER,
+    );
+    assert.equal(
+      replayFixture.expected.boundary,
+      ACTIVE_GATE_TOPOLOGY_REPLAY_BOUNDARY,
+    );
+    assert.equal(
+      replayFixture.expected.dominantReason,
+      FAILURE_CLASS.PUBLICATION_ACK_BLOCKED,
+    );
+    assert.equal(
+      replayFixture.expected.nextAction,
+      PUBLICATION_ACTIVE_GATE_HANDOFF_NEXT_ACTION.WAIT_OWNER_RECOVERY,
+    );
+    assert.equal(replayResult.matches.preserved, true);
+    assert.deepEqual(replayResult.actual, replayFixture.expected);
+    assert.equal(
+      replayResult.graph.dominantWitness.source
+        .publicationOwnerRecoveryOutcome,
+      ACTIVE_GATE_TOPOLOGY_REPLAY_RECOVERY_OUTCOME,
+    );
+    assert.equal(
+      replayResult.graph.dominantWitness.source.publicationOwnerStreamOutcome,
+      ACTIVE_GATE_TOPOLOGY_REPLAY_STREAM_OUTCOME,
     );
   });

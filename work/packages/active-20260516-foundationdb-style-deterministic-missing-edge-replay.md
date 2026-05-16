@@ -17,6 +17,7 @@
   "proof": [
     "npm run work:evidence-summary -- test-output/reports/rolling-restart-after-admin-owner-readiness-handoff-20260516.report.json",
     "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-admin-owner-readiness-handoff-20260516.report.json",
+    "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-admin-owner-readiness-handoff-20260516.report.json --replay-fixture",
     "npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-admin-owner-readiness-handoff-20260516.report.json",
     "node --test test/distributed/harness/__tests__/active-gate-closure-classification.test.js"
   ],
@@ -116,7 +117,7 @@
       "startup readiness and priority recovery evidence remain downstream unless replay promotes them"
     ],
     "missingCausalEdge": "A replayable diagnostics fixture for the publication owner recovery wake / stale owner stream edge.",
-    "missingCausalEdgeProbe": "npm run work:evidence-summary -- test-output/reports/rolling-restart-after-admin-owner-readiness-handoff-20260516.report.json; npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-admin-owner-readiness-handoff-20260516.report.json; node --test test/distributed/harness/__tests__/active-gate-closure-classification.test.js",
+    "missingCausalEdgeProbe": "npm run work:evidence-summary -- test-output/reports/rolling-restart-after-admin-owner-readiness-handoff-20260516.report.json; npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-admin-owner-readiness-handoff-20260516.report.json; npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-admin-owner-readiness-handoff-20260516.report.json --replay-fixture; node --test test/distributed/harness/__tests__/active-gate-closure-classification.test.js",
     "boundedProgressProof": "A compact fixture replay reproduces topology_publication_owner / publication_convergence, publication_ack_blocked, and the wait_owner_recovery wake next action without reading raw distributed logs.",
     "boundedProgressProofArtifact": "test-output/reports/rolling-restart-after-admin-owner-readiness-handoff-20260516.report.json",
     "expectedObservableTransition": "Replay validation becomes the next local proof before any representative rolling-restart rerun or runtime patch.",
@@ -208,7 +209,7 @@ and this package's active metadata before implementation starts.
 
 - [x] Review subagent recorded: Agent Banach (019e3024-6218-71a2-a745-118f62138aa3) reviewed work/packages/active-20260516-foundationdb-style-deterministic-missing-edge-replay.md; result fixes-required
 - [x] Fix subagent recorded or explicitly not needed: Agent Averroes (019e3026-e4e8-7a00-8d36-9d56b1a101ae) fixed work/packages/active-20260516-foundationdb-style-deterministic-missing-edge-replay.md
-- [ ] Implementation subagent recorded: pending implementation agent.
+- [x] Implementation subagent recorded: Agent Huygens (019e302b-5b29-7420-8d1e-532a4ca96f48) implemented work/packages/active-20260516-foundationdb-style-deterministic-missing-edge-replay.md
 
 ## Borrowing Details
 
@@ -245,12 +246,23 @@ Local implementation shape:
   increases, and Pro or Enterprise behavior.
 - Frozen decisions: package scope and lane stay bounded unless explicitly escalated.
 - Escalation triggers: owned files expand beyond this package, runtime ownership changes, or representative scenario evidence changes.
-- Focused proof: `npm run work:evidence-summary -- test-output/reports/rolling-restart-after-admin-owner-readiness-handoff-20260516.report.json`, `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-admin-owner-readiness-handoff-20260516.report.json`, `node --test test/distributed/harness/__tests__/active-gate-closure-classification.test.js`
+- Focused proof: `npm run work:evidence-summary -- test-output/reports/rolling-restart-after-admin-owner-readiness-handoff-20260516.report.json`, `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-admin-owner-readiness-handoff-20260516.report.json`, `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-admin-owner-readiness-handoff-20260516.report.json --replay-fixture`, `node --test test/distributed/harness/__tests__/active-gate-closure-classification.test.js`
 - Model ledger advisory: `escalate`
 
 ## Validation
 
 1. npm run work:evidence-summary -- test-output/reports/rolling-restart-after-admin-owner-readiness-handoff-20260516.report.json
 2. npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-admin-owner-readiness-handoff-20260516.report.json
-3. npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-admin-owner-readiness-handoff-20260516.report.json
-4. node --test test/distributed/harness/__tests__/active-gate-closure-classification.test.js
+3. npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-admin-owner-readiness-handoff-20260516.report.json --replay-fixture
+4. npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-admin-owner-readiness-handoff-20260516.report.json
+5. node --test test/distributed/harness/__tests__/active-gate-closure-classification.test.js
+
+## Implementation Validation Notes
+
+- Pending parent reconciliation: implementation ledger entry remains unchecked
+  so the parent session can add the real returned agent id.
+- Added replay proof target:
+  `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-admin-owner-readiness-handoff-20260516.report.json --replay-fixture`
+  emits `publication_ack_convergence`, `topology_publication_owner /
+  publication_convergence`, `publication_ack_blocked`, and
+  `wait_owner_recovery`.

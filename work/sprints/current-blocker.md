@@ -32,8 +32,9 @@ Turn latest rolling-restart frontier artifacts into deterministic replay fixture
 
 1. `npm run work:evidence-summary -- test-output/reports/rolling-restart-after-admin-owner-readiness-handoff-20260516.report.json`
 2. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-admin-owner-readiness-handoff-20260516.report.json`
-3. `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-admin-owner-readiness-handoff-20260516.report.json`
-4. `node --test test/distributed/harness/__tests__/active-gate-closure-classification.test.js`
+3. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-admin-owner-readiness-handoff-20260516.report.json --replay-fixture`
+4. `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-admin-owner-readiness-handoff-20260516.report.json`
+5. `node --test test/distributed/harness/__tests__/active-gate-closure-classification.test.js`
 
 ## Model Fit
 
@@ -105,7 +106,7 @@ Known downstream blockers:
 
 Missing causal edge: `A replayable diagnostics fixture for the publication owner recovery wake / stale owner stream edge.`
 
-Missing causal edge probe: `npm run work:evidence-summary -- test-output/reports/rolling-restart-after-admin-owner-readiness-handoff-20260516.report.json; npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-admin-owner-readiness-handoff-20260516.report.json; node --test test/distributed/harness/__tests__/active-gate-closure-classification.test.js`
+Missing causal edge probe: `npm run work:evidence-summary -- test-output/reports/rolling-restart-after-admin-owner-readiness-handoff-20260516.report.json; npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-admin-owner-readiness-handoff-20260516.report.json; npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-admin-owner-readiness-handoff-20260516.report.json --replay-fixture; node --test test/distributed/harness/__tests__/active-gate-closure-classification.test.js`
 
 Bounded progress proof: `A compact fixture replay reproduces topology_publication_owner / publication_convergence, publication_ack_blocked, and the wait_owner_recovery wake next action without reading raw distributed logs.`
 

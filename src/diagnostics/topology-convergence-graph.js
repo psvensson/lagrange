@@ -5,8 +5,12 @@
  * artifacts. It does not mutate runtime state or reinterpret owner decisions.
  */
 import {
+  PUBLICATION_ACTIVE_GATE_HANDOFF_NEXT_ACTION,
   PUBLICATION_ACTIVE_GATE_HANDOFF_REASON,
 } from '../control-plane/publication-active-gate-handoff-contract.js';
+import {
+  FAILURE_CLASS as CAUSAL_FAILURE_CLASS,
+} from './causal-analysis-schema.js';
 
 const ABSENT_VALUE = 'absent';
 const UNKNOWN_VALUE = 'unknown';
@@ -17,6 +21,10 @@ const SOURCE_ORDER_BASE = 0;
 const FIRST_FRONTIER_INDEX = 0;
 const SCHEMA_VERSION_TOPOLOGY_CONVERGENCE_GRAPH_V1 =
   'topology-convergence-graph-v1';
+const SCHEMA_VERSION_TOPOLOGY_CONVERGENCE_REPLAY_FIXTURE_V1 =
+  'topology-convergence-replay-fixture-v1';
+const SCHEMA_VERSION_TOPOLOGY_CONVERGENCE_REPLAY_RESULT_V1 =
+  'topology-convergence-replay-result-v1';
 const SCHEMA_VERSION_TOPOLOGY_CONVERGENCE_DECISION_TABLE_V1 =
   'topology-convergence-owner-decision-table-v1';
 const SCHEMA_VERSION_TOPOLOGY_CONVERGENCE_GLOSSARY_V1 =
@@ -60,6 +68,10 @@ const READINESS_SOURCE_UNKNOWN = 'unknown';
 const READINESS_SOURCE_SELECTED_SNAPSHOT_ERROR = 'selectedSnapshotError';
 const READINESS_CAUSE_NONE = 'none';
 const READINESS_CAUSE_SNAPSHOT_TIMEOUT = 'snapshot_timeout';
+const TOPOLOGY_CONVERGENCE_REPLAY_SOURCE_GRAPH = 'topology_convergence_graph';
+const TOPOLOGY_CONVERGENCE_REPLAY_SOURCE_ARTIFACT =
+  'topology_convergence_artifact';
+const TOPOLOGY_CONVERGENCE_REPLAY_SOURCE_ARTIFACT_ABSENT = 'artifact_absent';
 const PRIORITY_RECOVERY_EVIDENCE_SOURCE_PROGRESS = 'progress';
 const PRIORITY_RECOVERY_EVIDENCE_SOURCE_SUMMARY = 'summary';
 const PRIORITY_RECOVERY_EVIDENCE_SOURCE_PARTITION_WITNESSES =
@@ -557,6 +569,16 @@ const READINESS_INHERITED_ACTIVE_GATE_SUPPORT_RULES = Object.freeze([
   }),
 ]);
 
+const REPLAY_DOMINANT_REASON_RULES = Object.freeze([
+  Object.freeze({
+    reason: CAUSAL_FAILURE_CLASS.PUBLICATION_ACK_BLOCKED,
+    matches: (snapshot) =>
+      snapshot.edgeId === EDGE_ID.PUBLICATION_ACK_CONVERGENCE &&
+      snapshot.frontierState !== EDGE_STATE.SATISFIED &&
+      snapshot.frontierState !== ABSENT_VALUE,
+  }),
+]);
+
 const SEVERITY_RANK = Object.freeze({
   [EDGE_STATE.TERMINAL_FAILED]: 0,
   [EDGE_STATE.BLOCKED]: 1,
@@ -732,6 +754,351 @@ function selectTopologyConvergenceDominantWitness(graphOrPresentation) {
       [];
   return frontierWitnesses[FIRST_FRONTIER_INDEX] ||
     buildAbsentTopologyConvergenceOwnerWitness();
+}
+
+function buildTopologyConvergenceReplayFixture(input = {}, options = {}) {
+  const graph = selectTopologyConvergenceReplayGraph(input);
+  const expected = buildTopologyConvergenceReplayClassification(graph);
+  const sourceArtifact = firstText(
+    options.sourceArtifact,
+    TOPOLOGY_CONVERGENCE_REPLAY_SOURCE_ARTIFACT_ABSENT,
+  );
+
+  return {
+    schemaVersion: SCHEMA_VERSION_TOPOLOGY_CONVERGENCE_REPLAY_FIXTURE_V1,
+    scenario: graph.scenario,
+    source: {
+      type: isTopologyConvergenceGraph(input) ?
+        TOPOLOGY_CONVERGENCE_REPLAY_SOURCE_GRAPH :
+        TOPOLOGY_CONVERGENCE_REPLAY_SOURCE_ARTIFACT,
+      artifact: sourceArtifact,
+      graphSchemaVersion: graph.schemaVersion,
+      generatedFrom: graph.generatedFrom,
+    },
+    expected,
+    publicationConvergence: buildReplayPublicationConvergence(graph),
+    summary: buildReplaySummary(graph),
+  };
+}
+
+function replayTopologyConvergenceFixture(fixture = {}) {
+  const graph = buildTopologyConvergenceGraph(fixture);
+  const expected = asRecord(fixture.expected);
+  const actual = buildTopologyConvergenceReplayClassification(graph);
+
+  return {
+    schemaVersion: SCHEMA_VERSION_TOPOLOGY_CONVERGENCE_REPLAY_RESULT_V1,
+    fixtureSchemaVersion: textOrAbsent(fixture.schemaVersion),
+    scenario: graph.scenario,
+    expected,
+    actual,
+    matches: buildReplayMatchSummary(expected, actual),
+    graph,
+  };
+}
+
+function selectTopologyConvergenceReplayGraph(input) {
+  if (isTopologyConvergenceGraph(input)) {
+    return input;
+  }
+  return buildTopologyConvergenceGraph(input);
+}
+
+function isTopologyConvergenceGraph(input) {
+  return asRecord(input).schemaVersion ===
+      SCHEMA_VERSION_TOPOLOGY_CONVERGENCE_GRAPH_V1 &&
+    Array.isArray(input.edges);
+}
+
+function buildTopologyConvergenceReplayClassification(graph) {
+  const witness = selectTopologyConvergenceDominantWitness(graph);
+  const handoffEdge = selectReplayEdge(
+    graph,
+    EDGE_ID.ACTIVE_GATE_SNAPSHOT_COVERAGE,
+  );
+
+  return {
+    firstFrontierEdgeId: witness.edgeId,
+    owner: witness.owner,
+    boundary: witness.boundary,
+    frontierState: witness.frontierState,
+    topologyDominantReason: witness.dominantReason,
+    dominantReason: selectReplayDominantReason(witness),
+    nextAction: selectReplayHandoffNextAction(handoffEdge),
+  };
+}
+
+function buildReplayMatchSummary(expected, actual) {
+  const firstFrontierEdgeId =
+    expected.firstFrontierEdgeId === actual.firstFrontierEdgeId;
+  const owner = expected.owner === actual.owner;
+  const boundary = expected.boundary === actual.boundary;
+  const dominantReason = expected.dominantReason === actual.dominantReason;
+  const nextAction = expected.nextAction === actual.nextAction;
+
+  return {
+    preserved: [
+      firstFrontierEdgeId,
+      owner,
+      boundary,
+      dominantReason,
+      nextAction,
+    ].every(Boolean),
+    firstFrontierEdgeId,
+    owner,
+    boundary,
+    dominantReason,
+    nextAction,
+  };
+}
+
+function buildReplayPublicationConvergence(graph) {
+  const publicationEdge = selectReplayEdge(
+    graph,
+    EDGE_ID.PUBLICATION_ACK_CONVERGENCE,
+  );
+  const activeGateEdge = selectReplayEdge(
+    graph,
+    EDGE_ID.ACTIVE_GATE_SNAPSHOT_COVERAGE,
+  );
+  const publicationSource = asRecord(publicationEdge.source);
+  const activeGateSource = asRecord(activeGateEdge.source);
+
+  return {
+    publicationEpoch: numberOrUnknown(publicationSource.publicationEpoch),
+    publicationStatus: textOrUnknown(publicationSource.publicationStatus),
+    pendingAckNodeIds: arrayOrEmpty(publicationSource.pendingAckNodeIds),
+    pendingAckCount: numberOrZero(publicationSource.pendingAckCount),
+    blockedNodeCount: numberOrZero(publicationSource.blockedNodeCount),
+    publishedActiveNodeIds: arrayOrEmpty(
+      publicationSource.publishedActiveNodeIds,
+    ),
+    missingPublishedNodeIds: arrayOrEmpty(
+      publicationSource.missingPublishedNodeIds,
+    ),
+    missingPublishedCount: numberOrZero(
+      publicationSource.missingPublishedCount,
+    ),
+    publicationPending: parseBooleanVariant(
+      publicationSource.publicationPending,
+    ),
+    recoveryProtocolState: textOrUnknown(
+      publicationSource.recoveryProtocolState,
+    ),
+    prioritySpreadPending: parseBooleanVariant(
+      publicationSource.prioritySpreadPending,
+    ),
+    publicationOwnerStream: buildReplayPublicationOwnerStream(
+      publicationSource,
+    ),
+    publicationActiveGateHandoff: buildReplayPublicationActiveGateHandoff(
+      activeGateSource,
+    ),
+    priorityRecoveryProgressSummary:
+      buildReplayPriorityRecoveryProgressSummary(graph),
+    activeGate: {
+      state: textOrUnknown(activeGateSource.activeGateState),
+      progress: buildReplayActiveGateProgress(activeGateSource),
+    },
+  };
+}
+
+function buildReplayPublicationOwnerStream(source) {
+  return {
+    ackState: textOrUnknown(source.publicationOwnerAckState),
+    freshnessFence: textOrUnknown(source.publicationOwnerFreshnessFence),
+    recoveryOutcome: textOrUnknown(source.publicationOwnerRecoveryOutcome),
+    revision: {
+      state: textOrUnknown(source.publicationOwnerRevisionState),
+    },
+    streamOutcome: textOrUnknown(source.publicationOwnerStreamOutcome),
+  };
+}
+
+function buildReplayPublicationActiveGateHandoff(source) {
+  return {
+    state: textOrUnknown(source.publicationActiveGateHandoffState),
+    reasonCode: textOrUnknown(source.publicationActiveGateHandoffReasonCode),
+    nextAction: textOrUnknown(source.publicationActiveGateHandoffNextAction),
+    runtimePromotionAllowed: parseBooleanVariant(
+      source.publicationActiveGateHandoffRuntimePromotionAllowed,
+    ),
+    pendingReconcileCount: numberOrZero(
+      source.publicationActiveGateHandoffPendingReconcileCount,
+    ),
+    pendingReconcileNodeIds: splitJoinedValues(
+      source.publicationActiveGateHandoffPendingReconcileNodeIds,
+    ),
+  };
+}
+
+function buildReplayPriorityRecoveryProgressSummary(graph) {
+  const priorityEdge = selectReplayEdge(
+    graph,
+    EDGE_ID.PRIORITY_RECOVERY_PARTITION_PROGRESS,
+  );
+  const source = asRecord(priorityEdge.source);
+
+  return {
+    dominantWitness: {
+      currentOwner: textOrUnknown(priorityEdge.owner),
+      blockingBoundary: textOrUnknown(priorityEdge.boundary),
+    },
+    priorityRecoveryProgressClasses: {
+      unresolvedSemanticStateIds: splitJoinedValues(
+        source.unresolvedSemanticStateIds,
+      ),
+      blockedPartitionIds: splitJoinedValues(source.blockedPartitionIds),
+    },
+  };
+}
+
+function buildReplayActiveGateProgress(source) {
+  return {
+    snapshotCoverageComplete: parseBooleanVariant(
+      source.snapshotCoverageComplete,
+    ),
+    snapshotCoverageNodeCount: numberOrZero(source.snapshotCoverageNodeCount),
+    expectedNodeCount: numberOrZero(source.expectedNodeCount),
+    selectedSnapshotError: textOrUnknown(source.selectedSnapshotError),
+    selectedSnapshotObservationMode:
+      textOrUnknown(source.selectedSnapshotObservationMode),
+    selectedSnapshotObservationState:
+      textOrUnknown(source.selectedSnapshotObservationState),
+    selectedSnapshotObservationContractState:
+      textOrUnknown(source.selectedSnapshotObservationContractState),
+    selectedSnapshotObservationRefreshState:
+      textOrUnknown(source.selectedSnapshotObservationRefreshState),
+    selectedSnapshotObservationNextAction:
+      textOrUnknown(source.selectedSnapshotObservationNextAction),
+    ...buildReplaySelectedSnapshotObservationRetry(source),
+    selectedSnapshotObservationReasonCodes: splitJoinedValues(
+      source.selectedSnapshotObservationReasonCodes,
+    ),
+    selectedSnapshotRepairDeferred: parseBooleanVariant(
+      source.selectedSnapshotRepairDeferred,
+    ),
+    publicationActiveGateHandoffState:
+      textOrUnknown(source.publicationActiveGateHandoffState),
+    publicationActiveGateHandoffReasonCode:
+      textOrUnknown(source.publicationActiveGateHandoffReasonCode),
+    publicationActiveGateHandoffNextAction:
+      textOrUnknown(source.publicationActiveGateHandoffNextAction),
+    publicationActiveGateHandoffRuntimePromotionAllowed:
+      parseBooleanVariant(
+        source.publicationActiveGateHandoffRuntimePromotionAllowed,
+      ),
+    publicationActiveGateHandoffPendingReconcileCount:
+      numberOrZero(source.publicationActiveGateHandoffPendingReconcileCount),
+    publicationActiveGateHandoffPendingReconcileNodeIds: splitJoinedValues(
+      source.publicationActiveGateHandoffPendingReconcileNodeIds,
+    ),
+    activeGateOwnerCohortState:
+      textOrUnknown(source.activeGateOwnerCohortState),
+    activeGateOwnerCohortReasonCode:
+      textOrUnknown(source.activeGateOwnerCohortReasonCode),
+    activeGateOwnerCohortMissingPublishedCount:
+      numberOrZero(source.activeGateOwnerCohortMissingPublishedCount),
+    activeGateOwnerCohortMissingPublishedNodeIds: splitJoinedValues(
+      source.activeGateOwnerCohortMissingPublishedNodeIds,
+    ),
+    activeGateOwnerCohortPendingRecoveryCount:
+      numberOrZero(source.activeGateOwnerCohortPendingRecoveryCount),
+    activeGateOwnerCohortPendingRecoveryNodeIds: splitJoinedValues(
+      source.activeGateOwnerCohortPendingRecoveryNodeIds,
+    ),
+    activeGateOwnerCohortPendingReconcileCount:
+      numberOrZero(source.activeGateOwnerCohortPendingReconcileCount),
+    activeGateOwnerCohortPendingReconcileNodeIds: splitJoinedValues(
+      source.activeGateOwnerCohortPendingReconcileNodeIds,
+    ),
+    readinessDelay: {
+      cause: textOrUnknown(source.readinessDelayCause),
+    },
+    blockers: splitJoinedValues(source.blockers),
+    priorityRecoveryProgressClasses: {},
+  };
+}
+
+function buildReplaySelectedSnapshotObservationRetry(source) {
+  const retryAfterMs = numberOrUnknown(
+    source.selectedSnapshotObservationRetryAfterMs,
+  );
+  if (retryAfterMs === UNKNOWN_VALUE) {
+    return {};
+  }
+  return {selectedSnapshotObservationRetryAfterMs: retryAfterMs};
+}
+
+function buildReplaySummary(graph) {
+  const priorityEdge = selectReplayEdge(
+    graph,
+    EDGE_ID.PRIORITY_RECOVERY_PARTITION_PROGRESS,
+  );
+  const readinessEdge = selectReplayEdge(
+    graph,
+    EDGE_ID.READINESS_STARTUP_SUPPORT,
+  );
+  const prioritySource = asRecord(priorityEdge.source);
+  const readinessSource = asRecord(readinessEdge.source);
+
+  return {
+    dominantReason: textOrUnknown(prioritySource.dominantReason),
+    failureClass: textOrUnknown(prioritySource.failureClass),
+    readinessFailure: {
+      mode: textOrUnknown(readinessSource.mode),
+      classCode: textOrUnknown(readinessSource.classCode),
+      recoverability: textOrUnknown(readinessSource.recoverability),
+      terminalReason: textOrUnknown(readinessSource.terminalReason),
+      cause: textOrUnknown(readinessSource.cause),
+      source: textOrUnknown(readinessSource.source),
+    },
+  };
+}
+
+function selectReplayEdge(graph, edgeId) {
+  return firstRecord(
+    selectReplayEdgeFromList(graph.frontier, edgeId),
+    selectReplayEdgeFromList(graph.nextExpectedFrontier, edgeId),
+    selectReplayEdgeFromList(graph.edges, edgeId),
+  );
+}
+
+function selectReplayEdgeFromList(edges, edgeId) {
+  return arrayOrEmpty(edges).find((edge) => edge.id === edgeId) || {};
+}
+
+function selectReplayDominantReason(witness) {
+  const snapshot = {
+    edgeId: witness.edgeId,
+    frontierState: witness.frontierState,
+  };
+  const rule = REPLAY_DOMINANT_REASON_RULES.find((candidate) =>
+    candidate.matches(snapshot),
+  );
+  return textOrAbsent(rule?.reason || witness.dominantReason);
+}
+
+function selectReplayHandoffNextAction(edge) {
+  const source = asRecord(edge.source);
+  return firstText(
+    source.publicationActiveGateHandoffNextAction,
+    inferReplayHandoffNextAction(source),
+    ABSENT_VALUE,
+  );
+}
+
+function inferReplayHandoffNextAction(source) {
+  if (
+    source.publicationActiveGateHandoffReasonCode ===
+      PUBLICATION_ACTIVE_GATE_HANDOFF_REASON.OWNER_RECONCILE_PENDING ||
+    source.activeGateOwnerCohortReasonCode ===
+      ACTIVE_GATE_OWNER_COHORT_REASON_OWNER_RECONCILE_PENDING
+  ) {
+    return PUBLICATION_ACTIVE_GATE_HANDOFF_NEXT_ACTION
+      .RECONCILE_OWNER_MEMBERSHIP_PUBLICATION;
+  }
+  return ABSENT_VALUE;
 }
 
 function normalizeTopologyConvergenceInput(input) {
@@ -2027,11 +2394,35 @@ function booleanVariant(value) {
   return UNKNOWN_VALUE;
 }
 
+function parseBooleanVariant(value) {
+  if (value === true || value === BOOLEAN_TRUE_TEXT) {
+    return true;
+  }
+  if (value === false || value === BOOLEAN_FALSE_TEXT) {
+    return false;
+  }
+  return UNKNOWN_VALUE;
+}
+
 function joinValues(values) {
   if (values.length === SOURCE_ORDER_BASE) {
     return ABSENT_VALUE;
   }
   return values.map((value) => String(value)).join(LIST_SEPARATOR);
+}
+
+function splitJoinedValues(value) {
+  if (Array.isArray(value)) {
+    return value;
+  }
+  const text = textOrUnknown(value);
+  if (text === ABSENT_VALUE || text === UNKNOWN_VALUE) {
+    return [];
+  }
+  return text
+    .split(LIST_SEPARATOR)
+    .map((entry) => entry.trim())
+    .filter((entry) => entry.length > SOURCE_ORDER_BASE);
 }
 
 function compareNumber(left, right) {
@@ -2146,6 +2537,8 @@ export {
   buildTopologyConvergenceGraphFromArtifacts,
   buildTopologyConvergenceOwnerPresentation,
   buildTopologyConvergenceOwnerWitness,
+  buildTopologyConvergenceReplayFixture,
+  replayTopologyConvergenceFixture,
   selectTopologyConvergenceDominantWitness,
   flattenEvidencePath,
 };
