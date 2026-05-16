@@ -123,9 +123,9 @@
     "expectedObservableTransition": "Replay validation becomes the next local proof before any representative rolling-restart rerun or runtime patch.",
     "maxProgressBound": "one diagnostics and harness replay package; no runtime semantic edits, timeout increases, or active-gate admission changes",
     "sameFrontierFallback": "If compact replay cannot preserve the edge, record the extractor gap and keep the next package in diagnostics_owner rather than broad rerunning.",
-    "expectedNextFrontier": "topology_publication_owner / publication_convergence runtime work only after deterministic replay confirms the edge.",
-    "resultClassification": "pending-before-probe",
-    "stopCondition": "continue-local-fix",
+    "expectedNextFrontier": "startup_active_gate_owner / active_gate_admission_catchup_fence runtime work after deterministic replay preserved topology_publication_owner / publication_convergence, the publication owner recovery wake / stale owner stream edge, and wait_owner_recovery; the next bounded slice consumes durable publication truth and snapshot coverage as active-gate promotion proof before broader rerun/runtime publication work.",
+    "resultClassification": "migrated",
+    "stopCondition": "migrate-owner-boundary",
     "recentFrontierHistory": [
       "work/packages/done-20260516-topology-publication-convergence-frontier-causal-edge.md / topology_publication_owner / publication_convergence / classification-only",
       "work/packages/done-20260515-startup-active-gate-snapshot-coverage-owner-reconcile-remaining-targets.md / startup_active_gate_owner / snapshot_coverage / migrated"
@@ -266,6 +266,11 @@ Local implementation shape:
   emits `publication_ack_convergence`, `topology_publication_owner /
   publication_convergence`, `publication_ack_blocked`, and
   `wait_owner_recovery`.
+- Handoff migration: because replay preserved the publication owner recovery
+  wake / stale stream edge and `wait_owner_recovery`, the next runtime slice is
+  `startup_active_gate_owner / active_gate_admission_catchup_fence`, which
+  consumes durable publication truth and snapshot coverage as promotion proof
+  before broader rerun/runtime publication work.
 
 ## Commit And Push Ledger
 

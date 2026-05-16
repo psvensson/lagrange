@@ -159,8 +159,8 @@ package. The review subagent must review
 `work/packages/done-20260516-foundationdb-style-deterministic-missing-edge-replay.md`
 and this package's active metadata before implementation starts.
 
-- [ ] Review subagent recorded: pending real review agent.
-- [ ] Fix subagent recorded or explicitly not needed: pending review result.
+- [x] Review subagent recorded: Agent Galileo (019e303a-092c-7b02-97ba-d5ca71be173e) reviewed work/packages/active-20260516-etcd-style-active-gate-admission-catchup-fence.md; result fixes-required
+- [x] Fix subagent recorded or explicitly not needed: Agent Beauvoir (019e303d-5d72-79a2-8e66-069549c6da7c) fixed work/packages/active-20260516-etcd-style-active-gate-admission-catchup-fence.md
 - [ ] Implementation subagent recorded: pending implementation agent.
 
 ## Borrowing Details
