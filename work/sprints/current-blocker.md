@@ -8,9 +8,9 @@ Package: `work/packages/active-20260516-cockroach-style-control-plane-priority-c
 
 Workflow lane: `runtime-owner-boundary`
 
-Scenario: `none`
+Scenario: `rolling-restart`
 
-Artifact: `none`
+Artifact: `test-output/reports/rolling-restart-after-admin-owner-readiness-handoff-20260516.report.json`
 
 Playback: `none`
 
@@ -51,69 +51,72 @@ Escalation triggers:
 
 ## Representative Residual
 
-Status: `unknown`
+Status: `live-red`
 
-Scenario: `unknown`
+Scenario: `rolling-restart`
 
-Artifact: `unknown`
+Artifact: `test-output/reports/rolling-restart-after-admin-owner-readiness-handoff-20260516.report.json`
 
-Frontier: `unknown`
+Frontier: `publication_ack_convergence`
 
-Owner: `unknown`
+Owner: `topology_publication_owner`
 
-Boundary: `unknown`
+Boundary: `publication_convergence`
 
-Dominant reason: `unknown`
+Dominant reason: `publication_ack_blocked`
 
-Next action: `unknown`
+Next action: `Keep the active package bounded to the control-plane priority convergence class while representative evidence remains fronted by publication ACK convergence; priority-recovery evidence is subordinate unless fresh canonical extraction promotes it.`
 
 ## Causal Governance
 
-Causal hypothesis: `unknown`
+Causal hypothesis: `A distinct control-plane priority convergence class should reduce or migrate publication_ack_convergence by making critical publication, ACK, active-gate handoff, and owner-recovery wake work observable under typed pressure semantics instead of ordinary repair deferral.`
 
-Stop-condition check: `unknown`
+Stop-condition check: `npm run analyze:causal-model -- test-output/reports/rolling-restart-after-admin-owner-readiness-handoff-20260516.report.json`
 
-Expected causal-model change: `unknown`
+Expected causal-model change: `After implementation proof, representative evidence should reduce, migrate, or remain same-frontier at publication_ack_convergence with priority-recovery residuals kept subordinate unless canonical extractors promote them.`
 
-Representative outcome: `unknown`
+Representative outcome: `pending-before-rerun`
 
-Causal debt: `unknown`
+Causal debt: `Pauli review fixes only repaired representative metadata and track notes; no runtime implementation has started and the live representative residual remains publication_ack_convergence.`
 
-Cross-boundary review: `unknown`
+Cross-boundary review: `Review subagent Pauli (019e3065-9e5a-70c1-a43a-a279ba9836da) required metadata and track-note fixes before implementation; separate implementation proof is still required.`
 
 ## Scenario Causal Closure
 
-Reference scenario/probe: `unknown`
+Reference scenario/probe: `rolling-restart / topology_publication_owner publication_convergence`
 
 Phase chain:
 
-1. None recorded
+1. `repair package representative metadata from Pauli review`
+2. `classify subordinate priority-recovery residual evidence`
+3. `implement bounded control-plane priority convergence class only after sequencing proof`
 
-Current first frontier: `unknown`
+Current first frontier: `Package-local frontier topology_publication_owner / control_plane_priority_convergence_class is the bounded support role for the representative publication_ack_convergence first frontier in test-output/reports/rolling-restart-after-admin-owner-readiness-handoff-20260516.report.json under topology_publication_owner / publication_convergence with dominant reason publication_ack_blocked.`
 
 Known downstream blockers:
 
-1. None recorded
+1. `priority-recovery residual extraction reports operation_workflow_owner / rebalancer_handoff as subordinate evidence`
+2. `active-gate owner reconcile is drained with pendingReconcileCount=0 in the current handoff`
 
-Missing causal edge: `unknown`
+Missing causal edge: `The package must prove whether typed critical admission and bounded retry/wake semantics let publication ACK convergence advance before ordinary repair deferral evidence can hide critical control-plane progress.`
 
-Missing causal edge probe: `unknown`
+Missing causal edge probe: `npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-after-admin-owner-readiness-handoff-20260516.report.json`
 
-Bounded progress proof: `unknown`
+Bounded progress proof: `Focused proof must show bounded wake, retry, reconcile, or dispatch behavior for critical publication and active-gate handoff work without treating ordinary repair deferral as success.`
 
-Bounded progress proof artifact: `unknown`
+Bounded progress proof artifact: `test-output/reports/rolling-restart-after-admin-owner-readiness-handoff-20260516.report.json`
 
-Expected observable transition: `unknown`
+Expected observable transition: `No transition claimed by this fix-only pass; implementation proof should reduce, migrate, or preserve same-frontier publication_ack_convergence with explicit priority-class evidence.`
 
-Max progress bound: `unknown`
+Max progress bound: `one runtime-owner-boundary package slice; no user-visible priority controls, Pro or Enterprise policy, unlimited queues, or hidden retries`
 
-Same-frontier fallback: `unknown`
+Same-frontier fallback: `If focused proof leaves publication_ack_convergence at topology_publication_owner / publication_convergence, keep the same representative frontier and do not promote subordinate priority-recovery evidence without fresh canonical extraction.`
 
-Expected next frontier: `unknown`
+Expected next frontier: `publication_ack_convergence reduced or migrated after priority-class implementation; otherwise same-frontier publication convergence evidence`
 
-Result classification: `unknown`
+Result classification: `pending-before-probe`
 
-Stop condition: `unknown`
+Stop condition: `continue-local-fix`
 
 Recent frontier history:
 

@@ -109,10 +109,10 @@ or produces a narrower owner-boundary blocker selected by canonical evidence.
   `pendingReconcileCount=0` and next action `wait_owner_recovery` mean the
   drained owner-reconcile path should not be treated as the active blocker.
 - Priority recovery residuals:
-- Priority recovery residuals:
-  covered by the completed topology-operator witness slice; current work moves
-  to the control-plane priority convergence class so critical publication and
-  active-gate work cannot be hidden behind ordinary repair deferral.
+  the completed TiKV/PD topology-operator witness slice added the proof surface,
+  but no newer representative artifact proves the residual drained. Keep this
+  evidence subordinate unless fresh canonical extraction promotes it ahead of
+  `publication_ack_convergence`.
 
 ## Codebase Analysis Notes
 

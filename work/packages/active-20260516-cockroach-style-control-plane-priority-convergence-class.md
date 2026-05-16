@@ -6,8 +6,8 @@
   "status": "active",
   "opened": "2026-05-16",
   "lane": "runtime-owner-boundary",
-  "scenario": "none",
-  "artifact": "none",
+  "scenario": "rolling-restart",
+  "artifact": "test-output/reports/rolling-restart-after-admin-owner-readiness-handoff-20260516.report.json",
   "playback": "none",
   "owner": "topology_publication_owner",
   "boundary": "control_plane_priority_convergence_class",
@@ -72,6 +72,47 @@
       "owned files expand beyond this package",
       "a frozen decision must be reopened"
     ]
+  },
+  "representativeResidual": {
+    "status": "live-red",
+    "scenario": "rolling-restart",
+    "artifact": "test-output/reports/rolling-restart-after-admin-owner-readiness-handoff-20260516.report.json",
+    "frontier": "publication_ack_convergence",
+    "owner": "topology_publication_owner",
+    "boundary": "publication_convergence",
+    "dominantReason": "publication_ack_blocked",
+    "nextAction": "Keep the active package bounded to the control-plane priority convergence class while representative evidence remains fronted by publication ACK convergence; priority-recovery evidence is subordinate unless fresh canonical extraction promotes it."
+  },
+  "causalGovernance": {
+    "hypothesis": "A distinct control-plane priority convergence class should reduce or migrate publication_ack_convergence by making critical publication, ACK, active-gate handoff, and owner-recovery wake work observable under typed pressure semantics instead of ordinary repair deferral.",
+    "stopConditionCheck": "npm run analyze:causal-model -- test-output/reports/rolling-restart-after-admin-owner-readiness-handoff-20260516.report.json",
+    "expectedCausalModelChange": "After implementation proof, representative evidence should reduce, migrate, or remain same-frontier at publication_ack_convergence with priority-recovery residuals kept subordinate unless canonical extractors promote them.",
+    "representativeOutcome": "pending-before-rerun",
+    "causalDebt": "Pauli review fixes only repaired representative metadata and track notes; no runtime implementation has started and the live representative residual remains publication_ack_convergence.",
+    "crossBoundaryReview": "Review subagent Pauli (019e3065-9e5a-70c1-a43a-a279ba9836da) required metadata and track-note fixes before implementation; separate implementation proof is still required."
+  },
+  "scenarioCausalClosure": {
+    "referenceScenarioOrProbe": "rolling-restart / topology_publication_owner publication_convergence",
+    "phaseChain": [
+      "repair package representative metadata from Pauli review",
+      "classify subordinate priority-recovery residual evidence",
+      "implement bounded control-plane priority convergence class only after sequencing proof"
+    ],
+    "currentFirstFrontier": "Package-local frontier topology_publication_owner / control_plane_priority_convergence_class is the bounded support role for the representative publication_ack_convergence first frontier in test-output/reports/rolling-restart-after-admin-owner-readiness-handoff-20260516.report.json under topology_publication_owner / publication_convergence with dominant reason publication_ack_blocked.",
+    "knownDownstreamBlockers": [
+      "priority-recovery residual extraction reports operation_workflow_owner / rebalancer_handoff as subordinate evidence",
+      "active-gate owner reconcile is drained with pendingReconcileCount=0 in the current handoff"
+    ],
+    "missingCausalEdge": "The package must prove whether typed critical admission and bounded retry/wake semantics let publication ACK convergence advance before ordinary repair deferral evidence can hide critical control-plane progress.",
+    "missingCausalEdgeProbe": "npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-after-admin-owner-readiness-handoff-20260516.report.json",
+    "boundedProgressProof": "Focused proof must show bounded wake, retry, reconcile, or dispatch behavior for critical publication and active-gate handoff work without treating ordinary repair deferral as success.",
+    "boundedProgressProofArtifact": "test-output/reports/rolling-restart-after-admin-owner-readiness-handoff-20260516.report.json",
+    "expectedObservableTransition": "No transition claimed by this fix-only pass; implementation proof should reduce, migrate, or preserve same-frontier publication_ack_convergence with explicit priority-class evidence.",
+    "maxProgressBound": "one runtime-owner-boundary package slice; no user-visible priority controls, Pro or Enterprise policy, unlimited queues, or hidden retries",
+    "sameFrontierFallback": "If focused proof leaves publication_ack_convergence at topology_publication_owner / publication_convergence, keep the same representative frontier and do not promote subordinate priority-recovery evidence without fresh canonical extraction.",
+    "expectedNextFrontier": "publication_ack_convergence reduced or migrated after priority-class implementation; otherwise same-frontier publication convergence evidence",
+    "resultClassification": "pending-before-probe",
+    "stopCondition": "continue-local-fix"
   }
 }
 -->
@@ -155,8 +196,8 @@ package. The review subagent must review
 `work/packages/done-20260516-tikv-pd-style-topology-operator-step-witness-ledger.md`
 and this package's active metadata before implementation starts.
 
-- [ ] Review subagent recorded: pending review agent.
-- [ ] Fix subagent recorded or explicitly not needed: pending review result.
+- [x] Review subagent recorded: Agent Pauli (019e3065-9e5a-70c1-a43a-a279ba9836da) reviewed work/packages/active-20260516-cockroach-style-control-plane-priority-convergence-class.md; result fixes-required
+- [x] Fix subagent recorded or explicitly not needed: Agent Hubble (019e3069-1773-75a1-85d6-3dfe7f3a576c) fixed work/packages/active-20260516-cockroach-style-control-plane-priority-convergence-class.md
 - [ ] Implementation subagent recorded: pending implementation agent.
 
 ## Borrowing Details
