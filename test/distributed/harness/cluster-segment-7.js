@@ -1105,11 +1105,16 @@ class Cluster extends Cluster5 {
           ) {
             const stalledCoordinatorCycles =
               waitingProgress.attemptsSinceProgress;
+            const stalledProgressSnapshot =
+              selectTerminalActiveWaitProgressSnapshot({
+                currentProgressSnapshot: waitingProgress.progressSnapshot,
+                lastMeaningfulProgressSnapshot,
+              });
             const stalledProgress = buildNoProgressDetails(
               attempts,
               elapsedMs,
               true,
-              waitingProgress.progressSnapshot,
+              stalledProgressSnapshot,
             );
             const stalledNoProgress = {
               ...stalledProgress,
@@ -1162,7 +1167,7 @@ class Cluster extends Cluster5 {
               state: PRIORITY_RECOVERY_ACTIVE_GATE_STATE.STALLED,
               attempts,
               elapsedMs,
-              progressSnapshot: waitingProgress.progressSnapshot,
+              progressSnapshot: stalledProgressSnapshot,
               noProgress: stalledNoProgress,
               readinessFailure: stalledNoProgress.readinessFailure,
               reasonCode: stalledNoProgress.reasonCode,
@@ -1191,7 +1196,7 @@ class Cluster extends Cluster5 {
                 readinessMode +
                 ', progress=' +
                 formatActiveWaitProgressSnapshot(
-                  waitingProgress.progressSnapshot,
+                  stalledProgressSnapshot,
                 ) +
                 ')',
             );
@@ -1756,11 +1761,16 @@ class Cluster extends Cluster5 {
           readinessProgress.attemptsSinceProgress >= noProgressMaxAttempts
         ) {
           const stalledAttempts = readinessProgress.attemptsSinceProgress;
+          const stalledProgressSnapshot =
+            selectTerminalActiveWaitProgressSnapshot({
+              currentProgressSnapshot: readinessProgress.progressSnapshot,
+              lastMeaningfulProgressSnapshot,
+            });
           const stalledProgress = buildLoadReadinessNoProgressDetails(
             attempts,
             elapsedMs,
             true,
-            readinessProgress.progressSnapshot,
+            stalledProgressSnapshot,
           );
           const stalledNoProgress = {
             ...stalledProgress,
@@ -1815,7 +1825,7 @@ class Cluster extends Cluster5 {
             attempts,
             elapsedMs,
             result: lastResult,
-            progressSnapshot: readinessProgress.progressSnapshot,
+            progressSnapshot: stalledProgressSnapshot,
             noProgress: stalledNoProgress,
             readinessFailure: stalledNoProgress.readinessFailure,
             reasonCode: stalledNoProgress.reasonCode,
@@ -1849,7 +1859,7 @@ class Cluster extends Cluster5 {
               CLUSTER_READINESS_MODE_LOAD +
               ', progress=' +
               formatActiveWaitProgressSnapshot(
-                readinessProgress.progressSnapshot,
+                stalledProgressSnapshot,
               ) +
               ')',
           );
@@ -1908,6 +1918,10 @@ class Cluster extends Cluster5 {
         this._nodes.size,
         {readinessMode: CLUSTER_READINESS_MODE_LOAD},
       );
+    const terminalProgressSnapshot = selectTerminalActiveWaitProgressSnapshot({
+      currentProgressSnapshot: finalProgressSnapshot,
+      lastMeaningfulProgressSnapshot,
+    });
     const finalAttemptsSinceProgress = Math.max(
       ZERO,
       pollResult.attempts - (lastMeaningfulProgressAttempt || ZERO),
@@ -1916,7 +1930,7 @@ class Cluster extends Cluster5 {
       pollResult.attempts,
       pollResult.elapsedMs,
       false,
-      finalProgressSnapshot,
+      terminalProgressSnapshot,
     );
     const finalNoProgressWithReasonCode = {
       ...finalNoProgress,
@@ -1936,7 +1950,7 @@ class Cluster extends Cluster5 {
       attempts: pollResult.attempts,
       elapsedMs: pollResult.elapsedMs,
       result: pollResult.lastResult,
-      progressSnapshot: finalProgressSnapshot,
+      progressSnapshot: terminalProgressSnapshot,
       noProgress: finalNoProgressWithReasonCode,
       readinessFailure: finalReadinessFailure,
       reasonCode: ACTIVE_WAIT_NO_PROGRESS_REASON_CODE,

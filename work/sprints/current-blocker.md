@@ -4,38 +4,37 @@
 
 Sprint: `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md`
 
-Package: `work/packages/active-20260517-startup-active-gate-selected-snapshot-source-timeout.md`
+Package: `work/packages/active-20260517-topology-publication-ack-pending-after-forced-repair-owner-command.md`
 
 Workflow lane: `causal-escalation`
 
 Scenario: `rolling-restart`
 
-Artifact: `test-output/reports/rolling-restart-publication-handoff-full-target-20260517T032823Z.report.json`
+Artifact: `test-output/reports/rolling-restart-forced-repair-owner-command-20260517T043738Z.report.json`
 
-Playback: `test-output/reports/.playback/rolling-restart-publication-handoff-full-target-20260517T032823Z/rolling-restart/`
+Playback: `none`
 
 ## Boundary
 
-Owner: `startup_active_gate_owner`
+Owner: `topology_publication_owner`
 
-Boundary: `snapshot_coverage`
+Boundary: `publication_convergence`
 
-Dominant reason: `selected_snapshot_source_timeout`
+Dominant reason: `pending_acks_present`
 
-Current state: Representative rolling-restart after the publication handoff slice selected selected_snapshot_source_timeout on source 11601fe0-72d6-5853-8590-ec2881853e72: snapshotCoverage=0/5, discovery_node_coverage_gap absent, handoff contract absent, and causal-model outcome migrate_owner_boundary.
+Current state: Representative rolling-restart after the active-gate selected-source/forced-repair slice remains red: first frontier publication_ack_convergence, publicationStatus=OPEN, pendingAckCount=1, pendingAckNodeIds empty, prioritySpreadPending=true, active-gate progress repair_deferred with snapshotCoverage=2/5 and discovery_node_coverage_gap, plus a non-splitting operation_workflow_owner / rebalancer_handoff residual witness.
 
 ## Next Action
 
-Build the narrow selected snapshot-source fixture for source 11601fe0-72d6-5853-8590-ec2881853e72 admin snapshot query timeout, prove whether source selection should choose a usable snapshot source before forced repair or readiness inheritance, then edit only the selected startup active-gate snapshot-source owner path.
+Build the narrow replay fixture for publication OPEN with pendingAckCount=1, empty pendingAckNodeIds, prioritySpreadPending=true, and operation_workflow_owner/rebalancer_handoff residual; edit only the selected publication or operation workflow owner path if the fixture proves it, with success defined as snapshotCoverage above 2/5, discovery_node_coverage_gap gone, a new owner boundary migration, or representative rolling-restart green.
 
 ## Proof Ladder
 
-1. `npm run work:validate -- --entry work/packages/active-20260517-startup-active-gate-selected-snapshot-source-timeout.md`
-2. `npm run work:evidence-summary -- test-output/reports/rolling-restart-publication-handoff-full-target-20260517T032823Z.report.json`
-3. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-publication-handoff-full-target-20260517T032823Z.report.json --handoff-probe`
-4. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-publication-handoff-full-target-20260517T032823Z.report.json --replay-fixture`
-5. `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-publication-handoff-full-target-20260517T032823Z.report.json`
-6. `npm run analyze:owner-files -- startup_active_gate_owner snapshot_coverage --markdown`
+1. `npm run work:evidence-summary -- test-output/reports/rolling-restart-forced-repair-owner-command-20260517T043738Z.report.json`
+2. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-forced-repair-owner-command-20260517T043738Z.report.json --handoff-probe`
+3. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-forced-repair-owner-command-20260517T043738Z.report.json --replay-fixture`
+4. `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-forced-repair-owner-command-20260517T043738Z.report.json`
+5. `npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-forced-repair-owner-command-20260517T043738Z.report.json --markdown`
 
 ## Model Fit
 
@@ -43,7 +42,7 @@ Package class: `cross-boundary-causal-escalation`
 
 Intended minimum model: `gpt-5.3-codex`
 
-Scope shape: `oscillation-handoff/selected-snapshot-source`
+Scope shape: `publication-ack/rebalancer-handoff-split`
 
 Output profile: `medium`
 
@@ -58,73 +57,73 @@ Status: `live-red-scenario-release-gate`
 
 Scenario: `rolling-restart`
 
-Artifact: `test-output/reports/rolling-restart-publication-handoff-full-target-20260517T032823Z.report.json`
+Artifact: `test-output/reports/rolling-restart-forced-repair-owner-command-20260517T043738Z.report.json`
 
 Frontier: `publication_ack_convergence`
 
-Owner: `startup_active_gate_owner`
+Owner: `topology_publication_owner`
 
-Boundary: `snapshot_coverage`
+Boundary: `publication_convergence`
 
-Dominant reason: `selected_snapshot_source_timeout`
+Dominant reason: `pending_acks_present`
 
-Next action: `Build the replayable selected snapshot-source timeout fixture for source 11601fe0-72d6-5853-8590-ec2881853e72 before any local runtime edit.`
+Next action: `Build the replayable publication ACK / rebalancer-handoff split fixture before runtime edits.`
 
 ## Causal Governance
 
-Causal hypothesis: `The representative edge now belongs to selected snapshot-source selection: the chosen source 11601fe0-72d6-5853-8590-ec2881853e72 is admin-health reachable but its snapshot-lane admin query times out, leaving snapshotCoverage=0/5 before publication handoff evidence can form.`
+Causal hypothesis: `The active-gate package removed the selected snapshot-source timeout edge but did not move coverage beyond 2/5 because the publication ACK frontier is still OPEN and gated by a concrete rebalancer-handoff residual; the next metric-moving proof must decide whether publication ACK count-only state, operation workflow rebalancer handoff, or downstream active-gate repair owns the edge.`
 
-Stop-condition check: `Use npm run work:evidence-summary, topology handoff/replay fixture, npm run analyze:causal-model, owner-files, and a focused selected-source fixture to prove whether bad snapshot-source selection, forced repair stall, authoritative nodes query pressure, or inherited readiness support owns the edge before runtime edits.`
+Stop-condition check: `Use npm run work:evidence-summary, topology handoff/replay fixture, npm run analyze:causal-model, priority-recovery residuals, and owner-files before any runtime edit. Runtime files remain candidate-only until a focused fixture selects publication or operation workflow ownership.`
 
-Expected causal-model change: `snapshotCoverage improves above 2/5, discovery_node_coverage_gap stays absent while selected_snapshot_source_timeout disappears, the frontier migrates to a genuinely new owner boundary, or representative rolling-restart turns green.`
+Expected causal-model change: `snapshotCoverage improves above 2/5, discovery_node_coverage_gap disappears, the frontier migrates to a genuinely new owner boundary, or representative rolling-restart turns green.`
 
 Representative outcome: `pending-before-rerun`
 
-Causal debt: `This is an oscillation back to startup_active_gate_owner / snapshot_coverage after a publication migration. The package may continue only as a causal-escalation handoff that proves the selected snapshot-source timeout edge before editing runtime.`
+Causal debt: `This is a reopened frozen publication ACK edge, allowed only because canonical evidence reselected publication_ack_convergence after the active-gate slice.`
 
-Cross-boundary review: `Do not reopen timeout budgets, active-gate admission, publication ACK, priority recovery, CDC fallback, reconnect delivery, query routing, or inactive participant routing unless the replay fixture selects them again.`
+Cross-boundary review: `Do not touch timeout budgets, active-gate admission, CDC fallback, reconnect/query routing, or readiness support. Publication ACK and priority recovery are reopened only to the extent selected by the replay fixture.`
 
 ## Scenario Causal Closure
 
-Reference scenario/probe: `rolling-restart selected snapshot-source timeout after publication handoff migration`
+Reference scenario/probe: `rolling-restart forced repair owner command representative rerun`
 
 Phase chain:
 
-1. `consume publication handoff migration proof`
-2. `use evidence summary, handoff probe, replay fixture, causal model, and owner-files to classify selected_snapshot_source_timeout`
-3. `build or reuse the narrow selected snapshot-source fixture for source 11601fe0-72d6-5853-8590-ec2881853e72`
+1. `consume active-gate selected-source migration proof`
+2. `use evidence-summary, handoff probe, replay fixture, causal model, priority residuals, and owner-files to split publication ACK from operation workflow rebalancer handoff`
+3. `build or reuse a focused replay fixture for publication OPEN with pendingAckCount=1, empty pendingAckNodeIds, prioritySpreadPending=true, and sql_transaction_participants-p1 recovering_in_flight`
 4. `run review/fix/implementation subagents before runtime edits`
-5. `edit only the selected owner path if the fixture selects bad source selection`
+5. `edit only the selected owner path`
 6. `rerun representative rolling-restart and classify green, reduced, same-frontier, migrated, or contradictory`
 
-Current first frontier: `publication_ack_convergence remains the topology first frontier, but active_gate_snapshot_coverage is the selected downstream owner edge with selected_snapshot_source_timeout on source 11601fe0-72d6-5853-8590-ec2881853e72.`
+Current first frontier: `publication_ack_convergence in test-output/reports/rolling-restart-forced-repair-owner-command-20260517T043738Z.report.json, owned by topology_publication_owner / publication_convergence with reason pending_acks_present.`
 
 Known downstream blockers:
 
-1. `snapshotCoverage=0/5`
-2. `selectedSnapshotNodeId=11601fe0-72d6-5853-8590-ec2881853e72`
-3. `selectedSnapshotTimeoutMs=3000`
-4. `selectedSnapshotSourceCause=selected_snapshot_source_timeout`
-5. `activeGateSnapshotOwnerEdge=selected_snapshot_source_selection`
-6. `readinessDelayCause=snapshot_timeout`
-7. `publicationActiveGateHandoff absent`
-8. `discovery_node_coverage_gap absent`
+1. `publicationStatus=OPEN`
+2. `pendingAckCount=1`
+3. `pendingAckNodeIds=[]`
+4. `prioritySpreadPending=true`
+5. `active_gate_snapshot_coverage deferred with repair_deferred/deferred_refresh`
+6. `snapshotCoverage=2/5`
+7. `discovery_node_coverage_gap present`
+8. `operation_workflow_owner / rebalancer_handoff residual witness for sql_transaction_participants-p1 recovering_in_flight`
 
-Missing causal edge: `Separate bad snapshot-source selection from forced repair stall, authoritative control snapshot query pressure, and inherited readiness support for the selected 11601fe0 snapshot timeout.`
+Missing causal edge: `Separate publication ACK count-only/open state from operation_workflow_owner rebalancer-handoff residual and downstream active-gate repair deferral.`
 
-Missing causal edge probe: `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-publication-handoff-full-target-20260517T032823Z.report.json --replay-fixture`
+Missing causal edge probe: `npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-forced-repair-owner-command-20260517T043738Z.report.json --markdown`
 
-Bounded progress proof: `Pending bounded timeout/retry proof: selected_snapshot_source_timeout must disappear, snapshotCoverage must improve above 2/5, discovery_node_coverage_gap must stay absent with a new owner boundary, or representative rolling-restart must turn green.`
+Bounded progress proof: `Pending bounded reconcile/drain proof: the focused fixture must show whether publication ACK can close after the owner reconcile command, whether the rebalancer-handoff residual must drain first, or whether active-gate repair remains the owner.`
 
-Bounded progress proof artifact: `test-output/reports/rolling-restart-publication-handoff-full-target-20260517T032823Z.report.json`
+Bounded progress proof artifact: `test-output/reports/rolling-restart-forced-repair-owner-command-20260517T043738Z.report.json`
 
-Expected observable transition: `A selected owner fix should choose or recover a usable active-gate snapshot source without timeout budget increases, active-gate admission relaxation, CDC fallback, reconnect-delivery, query routing, or inactive participant routing changes.`
+Expected observable transition: `snapshotCoverage above 2/5, discovery_node_coverage_gap gone, a genuinely new owner boundary selected, or representative rolling-restart green.`
 
-Max progress bound: `one focused startup_active_gate_owner / snapshot_coverage causal-escalation slice`
+Max progress bound: `one focused topology_publication_owner / publication_convergence causal-escalation slice`
 
-Same-frontier fallback: `If focused tests pass but representative evidence keeps selected_snapshot_source_timeout without metric movement, stop and record same-frontier instead of widening into frozen edges.`
+Same-frontier fallback: `If focused tests pass but representative evidence keeps publication_ack_convergence without metric movement, stop and record same-frontier instead of reopening unrelated frozen edges.`
 
-Expected next frontier: `selected_snapshot_source_timeout gone, snapshotCoverage above 2/5, representative green, or a new owner boundary selected by canonical evidence`
+Expected next frontier: `publication_ack_convergence gone, snapshotCoverage above 2/5, discovery_node_coverage_gap gone, operation_workflow_owner / rebalancer_handoff selected as a new owner boundary, or representative green`
 
 Result classification: `pending-before-probe`
 
@@ -132,28 +131,26 @@ Stop condition: `continue-local-fix`
 
 Recent frontier history:
 
-1. `work/packages/done-20260517-startup-active-gate-snapshot-coverage-authoritative-repair-connection-closed.md / startup_active_gate_owner / snapshot_coverage / migrated`
-2. `work/packages/done-20260517-topology-publication-convergence-reopened-missing-publication.md / topology_publication_owner / publication_convergence / migrated`
+1. `work/packages/done-20260517-topology-publication-convergence-reopened-missing-publication.md / topology_publication_owner / publication_convergence / migrated`
+2. `work/packages/done-20260517-startup-active-gate-selected-snapshot-source-timeout.md / startup_active_gate_owner / snapshot_coverage / migrated`
 
-Oscillation check: `This package is causal-escalation because canonical evidence returned to startup_active_gate_owner / snapshot_coverage after the publication handoff package.`
+Oscillation check: `This package is allowed because fresh canonical evidence reselected publication_ack_convergence after the active-gate package, not because publication ACK was reopened manually.`
 
-Handoff invariant: `Timeout budgets, active-gate admission, publication ACK, priority recovery, CDC fallback, reconnect delivery, query participant routing, and inactive participant routing remain frozen unless canonical evidence selects them again.`
+Handoff invariant: `Timeout budgets, active-gate admission, CDC fallback, reconnect/query routing, and readiness support remain frozen. Publication ACK and priority recovery may be touched only if the focused replay fixture selects them.`
 
 ## Scope
 
 Write scope:
 
-1. `work/packages/active-20260517-startup-active-gate-selected-snapshot-source-timeout.md`
-2. `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md`
-3. `work/sprints/current-blocker.md`
-4. `work/sprints/current-blocker.json`
-5. `work/model-ledger.jsonl`
+1. `work/packages/active-20260517-topology-publication-ack-pending-after-forced-repair-owner-command.md`
+2. `work/sprints/current-blocker.md`
+3. `work/sprints/current-blocker.json`
+4. `work/model-ledger.jsonl`
 
 Handoff files:
 
-1. `work/packages/done-20260517-topology-publication-convergence-reopened-missing-publication.md`
-2. `test-output/reports/rolling-restart-publication-handoff-full-target-20260517T032823Z.report.json`
-3. `test-output/reports/.playback/rolling-restart-publication-handoff-full-target-20260517T032823Z/rolling-restart/`
+1. `work/packages/done-20260517-startup-active-gate-selected-snapshot-source-timeout.md`
+2. `test-output/reports/rolling-restart-forced-repair-owner-command-20260517T043738Z.report.json`
 
 Generated files:
 
@@ -162,18 +159,18 @@ Generated files:
 
 Candidate runtime files:
 
-1. `test/distributed/harness/cluster-segment-7-class-5.js`
-2. `test/distributed/harness/__tests__/cluster.test-part-5.js`
-3. `test/admin/admin-control-snapshot.test.js`
-4. `src/diagnostics/topology-convergence-graph.js`
+1. `src/control-plane/publication-owner-decision.js`
+2. `src/control-plane/publication-active-gate-handoff-contract.js`
+3. `src/workflow/operation-workflow.js`
+4. `src/rebalancer/rebalancer.js`
+5. `src/admin/admin-control-snapshot-class-part-2.js`
 
 Commit scope:
 
-1. `work/packages/active-20260517-startup-active-gate-selected-snapshot-source-timeout.md`
-2. `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md`
-3. `work/sprints/current-blocker.md`
-4. `work/sprints/current-blocker.json`
-5. `work/model-ledger.jsonl`
+1. `work/packages/active-20260517-topology-publication-ack-pending-after-forced-repair-owner-command.md`
+2. `work/sprints/current-blocker.md`
+3. `work/sprints/current-blocker.json`
+4. `work/model-ledger.jsonl`
 
 Legacy touched files:
 

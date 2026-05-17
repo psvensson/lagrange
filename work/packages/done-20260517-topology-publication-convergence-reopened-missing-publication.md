@@ -160,7 +160,7 @@
   "predecessor": "work/packages/done-20260517-startup-active-gate-snapshot-coverage-authoritative-repair-connection-closed.md",
   "closed": "2026-05-17",
   "commitAndPushLedgerRequired": true,
-  "successor": "work/packages/active-20260517-startup-active-gate-selected-snapshot-source-timeout.md"
+  "successor": "work/packages/done-20260517-startup-active-gate-selected-snapshot-source-timeout.md"
 }
 -->
 

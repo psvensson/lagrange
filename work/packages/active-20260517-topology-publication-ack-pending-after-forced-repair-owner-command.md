@@ -1,9 +1,10 @@
+# Topology Publication Ack Pending After Forced Repair Owner Command
+
+<!-- work-package
 {
-  "schema": "current-blocker-v1",
-  "generatedBy": "scripts/work-tracker.js",
-  "sprint": "work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md",
-  "package": "work/packages/active-20260517-topology-publication-ack-pending-after-forced-repair-owner-command.md",
+  "schema": "work-package-v1",
   "status": "active",
+  "opened": "2026-05-17",
   "lane": "causal-escalation",
   "scenario": "rolling-restart",
   "artifact": "test-output/reports/rolling-restart-forced-repair-owner-command-20260517T043738Z.report.json",
@@ -47,7 +48,6 @@
     "work/sprints/current-blocker.json",
     "work/model-ledger.jsonl"
   ],
-  "touchedFiles": [],
   "modelFit": {
     "packageClass": "cross-boundary-causal-escalation",
     "intendedMinimumModel": "gpt-5.3-codex",
@@ -113,6 +113,81 @@
     ],
     "oscillationCheck": "This package is allowed because fresh canonical evidence reselected publication_ack_convergence after the active-gate package, not because publication ACK was reopened manually.",
     "handoffInvariant": "Timeout budgets, active-gate admission, CDC fallback, reconnect/query routing, and readiness support remain frozen. Publication ACK and priority recovery may be touched only if the focused replay fixture selects them."
-  },
-  "predecessor": null
+  }
 }
+-->
+
+## Why
+
+Canonical evidence reselected `publication_ack_convergence` after the
+active-gate selected-source and forced-repair slice. This package owns only the
+replayable split between publication ACK/open state and the
+`operation_workflow_owner / rebalancer_handoff` residual that the same artifact
+reported.
+
+## Scope Basis
+
+Approved maintenance scope or roadmap row.
+
+## Workflow Lane
+
+- Selected lane: `causal-escalation`
+- Why this lane is required: the package reopens a frozen publication/priority
+  edge only because canonical evidence selected it again.
+- Escalation trigger to a heavier lane: the replay fixture selects a different
+  runtime owner or requires files outside the candidate runtime set.
+
+## Subagent Sequencing Requirement
+
+Required before implementation because this is a scenario-driven causal
+escalation package that may edit a runtime owner boundary.
+
+## Subagent Sequencing Ledger
+
+- [ ] Review subagent recorded: pending-before-implementation-resumes.
+- [ ] Fix subagent recorded or explicitly not needed: pending-review-result.
+- [ ] Implementation subagent recorded: pending-before-implementation-resumes.
+
+## LLM Tool-First Contract
+
+Before raw JSON, raw logs, broad file search, oversized segment files, or ad hoc `jq`, use the canonical workflow command that owns the question:
+
+1. Package metadata or ledger edits: `npm run work:package:doctor -- --suggest <package>`, `npm run work:package:doctor -- --fix-dry-run <package>`, `npm run work:package:schema`, or `npm run work:package:new -- ...`.
+2. Representative evidence: `npm run work:evidence-summary -- <artifact>` plus any focused extractor for this failure class.
+3. Owner discovery: `npm run analyze:owner-files -- <owner> [boundary]`.
+4. Subagent sequencing: `npm run work:subagent-prompt -- --role <role> --package <package>`.
+5. Large-file cleanup: `npm run work:oversized-next -- --markdown`.
+
+If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which canonical extractor was tried and why it was insufficient.
+
+## In Scope
+
+1. work/packages/active-20260517-topology-publication-ack-pending-after-forced-repair-owner-command.md
+2. work/sprints/current-blocker.md
+3. work/sprints/current-blocker.json
+4. work/model-ledger.jsonl
+
+## Out Of Scope
+
+1. Runtime ownership changes.
+
+## Model Fit
+
+- Package class: `cross-boundary-causal-escalation`
+- Intended minimum model: `gpt-5.3-codex`
+- Scope shape: `publication-ack/rebalancer-handoff-split`
+- Output profile: `medium`
+- Owned files: `work/packages/active-20260517-topology-publication-ack-pending-after-forced-repair-owner-command.md`, `work/sprints/current-blocker.md`, `work/sprints/current-blocker.json`, `work/model-ledger.jsonl`
+- Forbidden files: timeout budgets, active-gate admission, CDC fallback, reconnect/query routing, readiness support unless canonical evidence reselects them.
+- Frozen decisions: selected-source timeout is closed for this successor; publication ACK and priority recovery are candidate edges only through the new replay fixture.
+- Escalation triggers: owned files expand beyond this package, runtime ownership changes, or representative scenario evidence changes.
+- Focused proof: `npm run work:evidence-summary -- test-output/reports/rolling-restart-forced-repair-owner-command-20260517T043738Z.report.json`, `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-forced-repair-owner-command-20260517T043738Z.report.json --handoff-probe`, `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-forced-repair-owner-command-20260517T043738Z.report.json --replay-fixture`, `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-forced-repair-owner-command-20260517T043738Z.report.json`, `npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-forced-repair-owner-command-20260517T043738Z.report.json --markdown`
+- Model ledger advisory: `escalate`
+
+## Validation
+
+1. npm run work:evidence-summary -- test-output/reports/rolling-restart-forced-repair-owner-command-20260517T043738Z.report.json
+2. npm run analyze:topology-convergence -- test-output/reports/rolling-restart-forced-repair-owner-command-20260517T043738Z.report.json --handoff-probe
+3. npm run analyze:topology-convergence -- test-output/reports/rolling-restart-forced-repair-owner-command-20260517T043738Z.report.json --replay-fixture
+4. npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-forced-repair-owner-command-20260517T043738Z.report.json
+5. npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-forced-repair-owner-command-20260517T043738Z.report.json --markdown

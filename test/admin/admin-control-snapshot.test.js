@@ -4638,6 +4638,199 @@ test('AdminControlSnapshot forced query timeout preserves metric-moving local sn
     );
   });
 
+test('AdminControlSnapshot forced repair deferral triggers handoff owner command before returning',
+  async (t) => {
+    const buildOptions = [];
+    let reconcileOptions = null;
+    const publicationActiveGateHandoff = {
+      state: ACTIVE_GATE_OWNER_COHORT_STATE_PENDING,
+      reasonCode: ACTIVE_GATE_OWNER_COHORT_REASON_OWNER_RECONCILE_PENDING,
+      nextAction: ACTIVE_GATE_HANDOFF_NEXT_ACTION_RECONCILE,
+      expectedNodeIds: [
+        ...ACTIVE_GATE_HANDOFF_RECONCILE_NODE_IDS,
+      ],
+      publishedActiveNodeIds: [
+        ...ACTIVE_GATE_HANDOFF_RECONCILE_PUBLISHED_NODE_IDS,
+      ],
+      pendingReconcileCount:
+        ACTIVE_GATE_HANDOFF_RECONCILE_PENDING_COUNT,
+      pendingReconcileNodeIds: [
+        ...ACTIVE_GATE_HANDOFF_RECONCILE_PENDING_NODE_IDS,
+      ],
+    };
+    const localSnapshot = {
+      nodes: [
+        ACTIVE_GATE_HANDOFF_RECONCILE_NODE_IDS[0],
+        ACTIVE_GATE_HANDOFF_RECONCILE_NODE_IDS[1],
+      ],
+      controlPlaneDiagnostics: {
+        publicationActiveGateHandoff,
+        activeGateOwnerCohort: publicationActiveGateHandoff,
+        publicationConvergence: {
+          publicationEpoch: ACTIVE_GATE_HANDOFF_RECONCILE_PUBLICATION_EPOCH,
+          status: ACTIVE_GATE_OWNER_TRUTH_PUBLICATION_STATUS,
+          publishedActiveNodeIds: [
+            ...ACTIVE_GATE_HANDOFF_RECONCILE_PUBLISHED_NODE_IDS,
+          ],
+          missingPublishedNodeIds: [
+            ...ACTIVE_GATE_HANDOFF_RECONCILE_PENDING_NODE_IDS,
+          ],
+        },
+      },
+    };
+    const fallbackSnapshot = {
+      nodes: [...ACTIVE_GATE_HANDOFF_RECONCILE_NODE_IDS],
+      controlPlaneDiagnostics: {
+        publicationActiveGateHandoff,
+        activeGateOwnerCohort: publicationActiveGateHandoff,
+        publicationConvergence: {
+          publicationEpoch: ACTIVE_GATE_HANDOFF_RECONCILE_PUBLICATION_EPOCH,
+          status: ACTIVE_GATE_OWNER_TRUTH_PUBLICATION_STATUS,
+          publishedActiveNodeIds: [
+            ...ACTIVE_GATE_HANDOFF_RECONCILE_PUBLISHED_NODE_IDS,
+          ],
+          missingPublishedNodeIds: [
+            ...ACTIVE_GATE_HANDOFF_RECONCILE_PENDING_NODE_IDS,
+          ],
+        },
+      },
+    };
+    const catchupSnapshot = {
+      nodes: [...ACTIVE_GATE_HANDOFF_RECONCILE_NODE_IDS],
+      controlPlaneDiagnostics: {
+        publicationConvergence: {
+          publicationEpoch:
+            ACTIVE_GATE_HANDOFF_RECONCILE_RESULT_PUBLICATION_EPOCH,
+          status: ACTIVE_GATE_OWNER_TRUTH_PUBLICATION_STATUS,
+          publishedActiveNodeIds: [
+            ...ACTIVE_GATE_HANDOFF_RECONCILE_NODE_IDS,
+          ],
+        },
+      },
+    };
+    const repairFailure = {
+      applied: false,
+      skipped: false,
+      failedTables: [TABLES.NODES],
+      errors: [ACTIVE_GATE_SNAPSHOT_NODES_QUERY_TIMEOUT_DETAIL],
+      causeChain: [ACTIVE_GATE_SNAPSHOT_QUERY_TIMEOUT_CAUSE],
+      retryAfterMs: ACTIVE_GATE_SNAPSHOT_DIRECT_QUERY_TIMEOUT_MS,
+      localQueryTransport: {
+        state: 'ready',
+        ready: true,
+      },
+    };
+    const snapshot = new AdminControlSnapshot({
+      nodeId: ACTIVE_GATE_SNAPSHOT_TIMEOUT_SELECTED_SOURCE_NODE_ID,
+      controlPlaneReadinessService: {
+        membershipPublicationService: {
+          async reconcileActiveGateMembershipPublication(
+            _publicationActiveGateHandoff,
+            options = {},
+          ) {
+            reconcileOptions = options;
+            return {
+              schemaVersion: ACTIVE_GATE_OWNER_COHORT_SCHEMA_VERSION,
+              state:
+                ACTIVE_GATE_HANDOFF_RECONCILE_OUTCOME_PUBLISHED_VISIBLE,
+              publicationRow: {
+                publication_id:
+                  ACTIVE_GATE_HANDOFF_RECONCILE_RESULT_PUBLICATION_ID,
+                publication_kind:
+                  ACTIVE_GATE_HANDOFF_RECONCILE_PUBLICATION_KIND,
+                publication_epoch:
+                  ACTIVE_GATE_HANDOFF_RECONCILE_RESULT_PUBLICATION_EPOCH,
+                status: ACTIVE_GATE_OWNER_TRUTH_PUBLICATION_STATUS,
+                published_active_node_ids: [
+                  ...ACTIVE_GATE_HANDOFF_RECONCILE_NODE_IDS,
+                ],
+                required_ack_node_ids: [
+                  ...ACTIVE_GATE_HANDOFF_RECONCILE_NODE_IDS,
+                ],
+                acknowledged_node_ids: [
+                  ...ACTIVE_GATE_HANDOFF_RECONCILE_NODE_IDS,
+                ],
+              },
+            };
+          },
+        },
+      },
+    });
+    snapshot.controlPlaneSnapshotOwner = new ControlPlaneSnapshotOwner({
+      controlSnapshot: snapshot,
+    });
+    snapshot.buildLocalControlSnapshot = async (options = {}) => {
+      buildOptions.push(options);
+      if (buildOptions.length === 1) {
+        return localSnapshot;
+      }
+      return buildOptions.length === 2 ? fallbackSnapshot : catchupSnapshot;
+    };
+    snapshot.canRunAuthoritativeControlSnapshotRepair = () => true;
+    snapshot.evaluateAuthoritativeControlSnapshotRepair = () => ({
+      shouldRepair: true,
+      triggerCodes: [
+        ACTIVE_GATE_SNAPSHOT_DISCOVERY_NODE_COVERAGE_GAP_TRIGGER,
+      ],
+      nodeCoverage: {
+        activeProjection: {
+          hasCoverageGap: true,
+          missingNodeIds: [...ACTIVE_GATE_SNAPSHOT_REPAIR_GAP_NODE_IDS],
+        },
+      },
+    });
+    snapshot.ensureAuthoritativeDiscoveryCacheRepair = async () =>
+      repairFailure;
+
+    const result = await snapshot.resolveLocalControlSnapshot({
+      forceAuthoritativeRepair: true,
+      allowAuthoritativeRepair: true,
+      queryTimeoutMs: ACTIVE_GATE_SNAPSHOT_DIRECT_QUERY_TIMEOUT_MS,
+    });
+
+    t.match(
+      reconcileOptions,
+      {
+        reconcileAuthoritativeMembershipPublication:
+          ACTIVE_GATE_HANDOFF_RECONCILE_AUTHORITATIVE_RECONCILE,
+      },
+      'forced repair deferral should trigger the owner command before returning',
+    );
+    t.equal(
+      buildOptions.length,
+      3,
+      'a visible forced-deferral owner outcome should get one bounded snapshot rebuild',
+    );
+    t.match(
+      buildOptions[2],
+      {
+        forceAuthoritativeRepair: true,
+        allowAuthoritativeRepair: true,
+        queryTimeoutMs: ACTIVE_GATE_SNAPSHOT_DIRECT_QUERY_TIMEOUT_MS,
+        preferAuthoritativePublicationRead: true,
+        allowAuthoritativeReadinessRefresh:
+          ACTIVE_GATE_HANDOFF_CATCHUP_READINESS_REFRESH,
+        reconcileAuthoritativeMembershipPublication: false,
+        publicationActiveGateHandoff,
+      },
+      'the bounded rebuild should keep the forced repair context while avoiding readiness refresh',
+    );
+    t.same(
+      result.nodes,
+      [...ACTIVE_GATE_HANDOFF_RECONCILE_NODE_IDS],
+      'visible owner publication should improve the returned snapshot coverage above two-of-five',
+    );
+    t.match(
+      result.controlPlaneDiagnostics.publicationConvergence
+        .membershipPublicationHandoffOutcome,
+      {
+        state:
+          ACTIVE_GATE_HANDOFF_RECONCILE_OUTCOME_PUBLISHED_VISIBLE,
+      },
+      'forced repair deferral should surface the owner outcome in publication convergence',
+    );
+  });
+
 test('AdminControlSnapshot forced repair failures preserve authoritative nodes query timeout replay evidence',
   async (t) => {
     const localSnapshot = {

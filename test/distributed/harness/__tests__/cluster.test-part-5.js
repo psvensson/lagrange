@@ -145,6 +145,25 @@ const SNAPSHOT_REPAIR_TIMEOUT_SELECTED_ERROR =
   'ms';
 const SNAPSHOT_REPAIR_TIMEOUT_UNSELECTED_ERROR_PREFIX =
   'snapshot lane unavailable for ';
+const SELECTED_SNAPSHOT_SOURCE_TIMEOUT_TEST_NAME =
+  'Unit: _probeControlSnapshotCoverage prefers a query-success witness over ' +
+  'selected 11601fe0 snapshot timeout when coverage ties';
+const SELECTED_SNAPSHOT_SOURCE_TIMEOUT_SELECTED_NODE_ID =
+  SNAPSHOT_REPLAY_TEST_NODE_ID.BASELINE;
+const SELECTED_SNAPSHOT_SOURCE_TIMEOUT_FALLBACK_NODE_ID =
+  SNAPSHOT_REPLAY_TEST_NODE_ID.ADMIN_READY_STALE;
+const SELECTED_SNAPSHOT_SOURCE_TIMEOUT_QUERY_TIMEOUT_MS = 3000;
+const SELECTED_SNAPSHOT_SOURCE_TIMEOUT_ERROR =
+  'Admin API query timed out for node ' +
+  SELECTED_SNAPSHOT_SOURCE_TIMEOUT_SELECTED_NODE_ID +
+  ' on lane snapshot after ' +
+  SELECTED_SNAPSHOT_SOURCE_TIMEOUT_QUERY_TIMEOUT_MS +
+  'ms';
+const SELECTED_SNAPSHOT_SOURCE_TIMEOUT_EMPTY_NODE_IDS = Object.freeze([]);
+const SELECTED_SNAPSHOT_SOURCE_TIMEOUT_CAPTURED_AT_MS = 1777976842823;
+const SELECTED_SNAPSHOT_SOURCE_TIMEOUT_UNSELECTED_ERROR_PREFIX =
+  'snapshot lane unavailable for ';
+const SELECTED_SNAPSHOT_SOURCE_TIMEOUT_SNAPSHOT_LANE = 'snapshot';
 const ACTIVE_GATE_REACHABILITY_DELAY_TEST_NAME =
   'Unit: _waitForAllActive keeps terminal reachability delay from selected progress';
 const ACTIVE_GATE_REACHABILITY_DELAY_CLUSTER_SIZE = 5;
@@ -222,6 +241,48 @@ const ACTIVE_GATE_PARTIAL_RESIDUAL_SELECTED_CAPTURED_AT_MS =
   SNAPSHOT_REPLAY_TEST_ADMIN_CAPTURED_AT_MS;
 const ACTIVE_GATE_PARTIAL_RESIDUAL_STALE_CAPTURED_AT_MS =
   SNAPSHOT_REPLAY_TEST_SEED_CAPTURED_AT_MS;
+const ACTIVE_GATE_NO_PROGRESS_BEST_SNAPSHOT_TEST_NAME =
+  'Unit: _waitForAllActive keeps metric-moving snapshot when terminal probe ' +
+  'regresses to selected timeout';
+const ACTIVE_GATE_NO_PROGRESS_TIMEOUT_MS = 200;
+const ACTIVE_GATE_NO_PROGRESS_MAX_ATTEMPTS = 2;
+const ACTIVE_GATE_NO_PROGRESS_EXPECTED_NODE_COUNT = 5;
+const ACTIVE_GATE_NO_PROGRESS_COVERAGE_NODE_COUNT = 2;
+const ACTIVE_GATE_NO_PROGRESS_ZERO_COVERAGE = 0;
+const ACTIVE_GATE_NO_PROGRESS_PUBLICATION_EPOCH = 1;
+const ACTIVE_GATE_NO_PROGRESS_SELECTED_NODE_ID =
+  SNAPSHOT_REPLAY_TEST_NODE_ID.BASELINE;
+const ACTIVE_GATE_NO_PROGRESS_RETRY_AFTER_MS = 25300;
+const ACTIVE_GATE_NO_PROGRESS_TIMEOUT_MS_PER_QUERY = 3000;
+const ACTIVE_GATE_NO_PROGRESS_TIMEOUT_ERROR =
+  'Admin API query timed out for node ' +
+  ACTIVE_GATE_NO_PROGRESS_SELECTED_NODE_ID +
+  ' on lane snapshot after ' +
+  ACTIVE_GATE_NO_PROGRESS_TIMEOUT_MS_PER_QUERY +
+  'ms';
+const ACTIVE_GATE_NO_PROGRESS_PUBLISHED_NODE_IDS = Object.freeze([
+  SNAPSHOT_REPLAY_TEST_NODE_ID.BASELINE,
+]);
+const ACTIVE_GATE_NO_PROGRESS_MISSING_NODE_IDS = Object.freeze([
+  SNAPSHOT_REPLAY_TEST_NODE_ID.BASELINE,
+  SNAPSHOT_REPLAY_TEST_NODE_ID.ADMIN_READY_STALE,
+  SNAPSHOT_REPLAY_TEST_NODE_ID.STRONG_EXTRA,
+  SNAPSHOT_REPLAY_TEST_NODE_ID.STALE_EXTRA,
+]);
+const ACTIVE_GATE_NO_PROGRESS_REASONS = Object.freeze([
+  SNAPSHOT_REPLAY_TEST_REPAIR_TRIGGER_CODE,
+]);
+const ACTIVE_GATE_NO_PROGRESS_TERMINAL_GATE_REASONS = Object.freeze([
+  'publication_convergence_missing',
+  'publication_missing_active_node=' + SNAPSHOT_REPLAY_TEST_NODE_ID.BASELINE,
+]);
+const LOAD_READINESS_NO_PROGRESS_BEST_SNAPSHOT_TEST_NAME =
+  'Unit: waitForLoadReadinessStability keeps metric-moving snapshot when ' +
+  'terminal probe regresses to selected timeout';
+const LOAD_READINESS_NO_PROGRESS_STABLE_WINDOW_MS = 1000;
+const LOAD_READINESS_NO_PROGRESS_TIMEOUT_MS = 200;
+const LOAD_READINESS_NO_PROGRESS_PHASE = 'pre_load';
+const LOAD_READINESS_NO_PROGRESS_STAGE = 'scenario.load-readiness.waiting';
 /**
  * Feature: distributed-testing-framework
  * Property 5: Multi-Host Container Distribution
@@ -359,6 +420,112 @@ test('Unit: _probeControlSnapshotCoverage keeps snapshot-lane failures explicit'
       'coverage summary should preserve the snapshot-lane timeout',
     );
   });
+
+test(SELECTED_SNAPSHOT_SOURCE_TIMEOUT_TEST_NAME, async () => {
+  const cluster = createCluster({
+    size: SNAPSHOT_REPLAY_TEST_CLUSTER_SIZE,
+    docker: {socketPath: SNAPSHOT_REPLAY_TEST_DOCKER_SOCKET_PATH},
+    image: SNAPSHOT_REPLAY_TEST_IMAGE,
+  });
+  const snapshotProbeCalls = [];
+  const reachabilityProbeCalls = [];
+
+  for (const nodeId of SNAPSHOT_REPLAY_TEST_EXPECTED_NODE_IDS) {
+    cluster._nodes.set(nodeId, {
+      id: nodeId,
+      role:
+        nodeId === SNAPSHOT_REPLAY_TEST_NODE_ID.SEED ?
+          NODE_ROLES.SEED :
+          NODE_ROLES.JOINER,
+      async getStatus() {
+        return {rows: [{status: SERVICE_STATUS.ACTIVE}]};
+      },
+      async getReachabilityDiagnostics(options = {}) {
+        reachabilityProbeCalls.push({
+          nodeId,
+          skipBootstrapReadiness: options.skipBootstrapReadiness === true,
+        });
+        return {
+          reachable:
+            nodeId === SELECTED_SNAPSHOT_SOURCE_TIMEOUT_SELECTED_NODE_ID,
+          adminReady:
+            nodeId === SELECTED_SNAPSHOT_SOURCE_TIMEOUT_SELECTED_NODE_ID,
+          reachableBy:
+            nodeId === SELECTED_SNAPSHOT_SOURCE_TIMEOUT_SELECTED_NODE_ID ?
+              SNAPSHOT_REPLAY_TEST_ADMIN_HEALTH_SOURCE :
+              null,
+          lastError: null,
+        };
+      },
+      async getControlSnapshot(options = {}) {
+        snapshotProbeCalls.push({
+          nodeId,
+          lane: options.lane,
+          forceRepair: options.forceRepair === true,
+          forceAuthoritativeRepair:
+            options.forceAuthoritativeRepair === true,
+        });
+        if (nodeId === SELECTED_SNAPSHOT_SOURCE_TIMEOUT_SELECTED_NODE_ID) {
+          throw new Error(SELECTED_SNAPSHOT_SOURCE_TIMEOUT_ERROR);
+        }
+        if (nodeId === SELECTED_SNAPSHOT_SOURCE_TIMEOUT_FALLBACK_NODE_ID) {
+          return {
+            rows: [{
+              nodes: SELECTED_SNAPSHOT_SOURCE_TIMEOUT_EMPTY_NODE_IDS,
+              capturedAtMs: SELECTED_SNAPSHOT_SOURCE_TIMEOUT_CAPTURED_AT_MS,
+            }],
+          };
+        }
+        throw new Error(
+          SELECTED_SNAPSHOT_SOURCE_TIMEOUT_UNSELECTED_ERROR_PREFIX + nodeId,
+        );
+      },
+      async getLogs(_options) {
+        return SNAPSHOT_REPLAY_TEST_EMPTY_LOG;
+      },
+    });
+  }
+
+  const coverage = await cluster._probeControlSnapshotCoverage(
+    Date.now() + SNAPSHOT_REPLAY_TEST_DEADLINE_EXTENSION_MS,
+    SNAPSHOT_REPLAY_TEST_EXPECTED_NODE_IDS,
+  );
+
+  assert.strictEqual(
+    coverage.bestCoverageNodeCount,
+    SELECTED_SNAPSHOT_SOURCE_TIMEOUT_EMPTY_NODE_IDS.length,
+    'fixture should preserve the selected report shape at 0/5 coverage',
+  );
+  assert.strictEqual(
+    coverage.forceRepair,
+    false,
+    'fixture should decide selected-source selection before forced repair',
+  );
+  assert.strictEqual(
+    coverage.selectedSnapshotNodeId,
+    SELECTED_SNAPSHOT_SOURCE_TIMEOUT_FALLBACK_NODE_ID,
+    'selection should choose a snapshot-query-success source over the timed-out 11601fe0 source',
+  );
+  assert.strictEqual(
+    coverage.selectedError,
+    null,
+    'query-success selection should remove selected_snapshot_source_timeout as the owner edge',
+  );
+  assert.ok(
+    snapshotProbeCalls.every((call) =>
+      call.lane === SELECTED_SNAPSHOT_SOURCE_TIMEOUT_SNAPSHOT_LANE &&
+      call.forceRepair === false &&
+      call.forceAuthoritativeRepair === false,
+    ),
+    'fixture must stay on the normal snapshot-source selection path',
+  );
+  assert.ok(
+    reachabilityProbeCalls.every((call) =>
+      call.skipBootstrapReadiness === true,
+    ),
+    'fixture should keep inherited readiness support out of the owner decision',
+  );
+});
 
 test(
   'Unit: _probeControlSnapshotCoverage sends forced repair probes through ' +
@@ -2223,6 +2390,376 @@ test('Unit: _waitForAllActive carries selected snapshot witness into no-progress
       ['joiner-1'],
     );
   });
+
+test(ACTIVE_GATE_NO_PROGRESS_BEST_SNAPSHOT_TEST_NAME, async () => {
+  const cluster = createCluster({
+    size: ACTIVE_GATE_NO_PROGRESS_EXPECTED_NODE_COUNT,
+    docker: {socketPath: SNAPSHOT_REPLAY_TEST_DOCKER_SOCKET_PATH},
+    image: SNAPSHOT_REPLAY_TEST_IMAGE,
+    timeouts: {
+      convergence: ACTIVE_GATE_NO_PROGRESS_TIMEOUT_MS,
+      activeWaitNoProgressMaxAttempts: ACTIVE_GATE_NO_PROGRESS_MAX_ATTEMPTS,
+    },
+  });
+
+  cluster._sleep = async () => {};
+  cluster._collectFailureLogs = async () => {};
+  const recordedStages = [];
+  cluster._recordClusterStage = (stage, details = {}) => {
+    recordedStages.push({stage, details});
+  };
+  const nodeDiagnostics = SNAPSHOT_REPLAY_TEST_EXPECTED_NODE_IDS.map(
+    (nodeId) => ({
+      nodeId,
+      active: false,
+      state: ACTIVE_GATE_REACHABILITY_DELAY_STATE_INACTIVE,
+      reasons: ['PRIORITY_CONTROL_PLANE_RECOVERY_PENDING'],
+    }),
+  );
+  const priorityPartitionSummary = {
+    satisfied: true,
+    totalSpreadGap: ACTIVE_GATE_REACHABILITY_DELAY_ZERO,
+    blockedPartitionCount: ACTIVE_GATE_REACHABILITY_DELAY_ZERO,
+  };
+  const priorityRecoveryInvariants = {
+    invariants: [],
+    failingInvariantIds: [],
+    failingInvariantReasonCodes: [],
+    passed: true,
+  };
+  const metricMovingResult = {
+    allActive: false,
+    nodeDiagnostics,
+    snapshotCoverage: {
+      completeCoverage: false,
+      expectedNodeCount: ACTIVE_GATE_NO_PROGRESS_EXPECTED_NODE_COUNT,
+      bestCoverageNodeCount: ACTIVE_GATE_NO_PROGRESS_COVERAGE_NODE_COUNT,
+      selectedNodeId: ACTIVE_GATE_NO_PROGRESS_SELECTED_NODE_ID,
+      selectedAdminReady: true,
+      selectedReachableBy: SNAPSHOT_REPLAY_TEST_ADMIN_HEALTH_SOURCE,
+      selectedSnapshotTimeoutMs:
+        ACTIVE_GATE_NO_PROGRESS_TIMEOUT_MS_PER_QUERY,
+      selectedSnapshotObservationMode:
+        ADMIN_CONTROL_SNAPSHOT_OBSERVATION_MODE.REPAIR_DEFERRED,
+      selectedSnapshotObservationState:
+        CONTROL_PLANE_SNAPSHOT_OBSERVATION_STATE.DEFERRED_REFRESH,
+      selectedSnapshotObservationContractState: OWNER_CONTRACT_STATE.DEFERRED,
+      selectedSnapshotObservationRefreshState:
+        CONTROL_PLANE_SNAPSHOT_REFRESH_STATE.DEFERRED,
+      selectedSnapshotObservationNextAction: OWNER_CONTRACT_NEXT_ACTION.RETRY,
+      selectedSnapshotObservationReasonCodes: [
+        ...ACTIVE_GATE_NO_PROGRESS_REASONS,
+      ],
+      selectedSnapshotObservationRetryAfterMs:
+        ACTIVE_GATE_NO_PROGRESS_RETRY_AFTER_MS,
+      selectedSnapshotRepairDeferred: true,
+      selectedPublicationConvergence: {
+        publicationEpoch: ACTIVE_GATE_NO_PROGRESS_PUBLICATION_EPOCH,
+        publicationStatus: CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED,
+        recoveryProtocolState: 'steady_published',
+        publishedActiveNodeIds: [
+          ...ACTIVE_GATE_NO_PROGRESS_PUBLISHED_NODE_IDS,
+        ],
+        pendingAckNodeIds: [],
+        priorityPartitionSummary,
+      },
+      selectedPublishedActiveNodeIds: [
+        ...ACTIVE_GATE_NO_PROGRESS_PUBLISHED_NODE_IDS,
+      ],
+      selectedMissingPublishedNodeIds: [
+        ...ACTIVE_GATE_NO_PROGRESS_MISSING_NODE_IDS,
+      ],
+      selectedPublicationActiveGateHandoff: {
+        state: SNAPSHOT_REPLAY_TEST_HANDOFF_STATE_PENDING,
+        reasonCode:
+          SNAPSHOT_REPLAY_TEST_HANDOFF_REASON_OWNER_RECONCILE_PENDING,
+        nextAction: SNAPSHOT_REPLAY_TEST_HANDOFF_NEXT_ACTION_RECONCILE,
+        runtimePromotionAllowed:
+          SNAPSHOT_REPLAY_TEST_HANDOFF_RUNTIME_PROMOTION_ALLOWED_FALSE,
+        publishedActiveNodeIds: [
+          ...ACTIVE_GATE_NO_PROGRESS_PUBLISHED_NODE_IDS,
+        ],
+        missingPublishedNodeIds: [
+          ...ACTIVE_GATE_NO_PROGRESS_MISSING_NODE_IDS,
+        ],
+        pendingReconcileNodeIds: [
+          ...ACTIVE_GATE_NO_PROGRESS_MISSING_NODE_IDS,
+        ],
+        pendingReconcileCount:
+          ACTIVE_GATE_NO_PROGRESS_MISSING_NODE_IDS.length,
+      },
+      selectedMembershipPublicationHandoffOutcome: {
+        state: SNAPSHOT_REPLAY_TEST_HANDOFF_OUTCOME_STATE_WRITE_DEFERRED,
+        reasonCode: SNAPSHOT_REPLAY_TEST_HANDOFF_OUTCOME_REASON_READBACK,
+        enqueued: SNAPSHOT_REPLAY_TEST_HANDOFF_OUTCOME_ENQUEUED,
+        retryAfterMs: SNAPSHOT_REPLAY_TEST_HANDOFF_OUTCOME_RETRY_AFTER_MS,
+      },
+      selectedError: null,
+    },
+    publicationConvergenceGate: {
+      ready: false,
+      reasons: [
+        'publication_missing_active_node=' +
+          ACTIVE_GATE_NO_PROGRESS_SELECTED_NODE_ID,
+      ],
+      publicationStatus: CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED,
+      recoveryProtocolState: 'steady_published',
+      pendingAckNodeIds: [],
+      missingPublishedNodeIds: [
+        ...ACTIVE_GATE_NO_PROGRESS_MISSING_NODE_IDS,
+      ],
+      missingPublishedCount: ACTIVE_GATE_NO_PROGRESS_MISSING_NODE_IDS.length,
+      priorityPartitionSummary,
+    },
+    priorityRecoveryInvariants,
+  };
+  const regressedTimeoutResult = {
+    allActive: false,
+    nodeDiagnostics,
+    snapshotCoverage: {
+      completeCoverage: false,
+      expectedNodeCount: ACTIVE_GATE_NO_PROGRESS_EXPECTED_NODE_COUNT,
+      bestCoverageNodeCount: ACTIVE_GATE_NO_PROGRESS_ZERO_COVERAGE,
+      selectedNodeId: ACTIVE_GATE_NO_PROGRESS_SELECTED_NODE_ID,
+      selectedAdminReady: true,
+      selectedReachableBy: SNAPSHOT_REPLAY_TEST_ADMIN_HEALTH_SOURCE,
+      selectedSnapshotTimeoutMs:
+        ACTIVE_GATE_NO_PROGRESS_TIMEOUT_MS_PER_QUERY,
+      selectedError: ACTIVE_GATE_NO_PROGRESS_TIMEOUT_ERROR,
+    },
+    publicationConvergenceGate: {
+      ready: false,
+      reasons: [...ACTIVE_GATE_NO_PROGRESS_TERMINAL_GATE_REASONS],
+      publicationStatus: null,
+      pendingAckNodeIds: [],
+      missingPublishedNodeIds: [],
+      priorityPartitionSummary: null,
+    },
+    priorityRecoveryInvariants,
+  };
+  let probeCount = ACTIVE_GATE_REACHABILITY_DELAY_ZERO;
+  cluster._probeClusterActiveState = async () => {
+    probeCount += ACTIVE_GATE_REACHABILITY_DELAY_ONE;
+    return probeCount === ACTIVE_GATE_REACHABILITY_DELAY_ONE ?
+      metricMovingResult :
+      regressedTimeoutResult;
+  };
+
+  await assert.rejects(
+    async () => cluster._waitForAllActive({mode: 'load'}),
+    (error) => {
+      assert.match(error.message, /coverage=2\/5/);
+      assert.doesNotMatch(error.message, /snapshotError/);
+      assert.match(
+        error.message,
+        /snapshotObservation=repair_deferred\/deferred_refresh\/deferred\/deferred\/retry/,
+      );
+      assert.strictEqual(
+        error?.diagnostics?.activeGate?.progress?.snapshotCoverageNodeCount,
+        ACTIVE_GATE_NO_PROGRESS_COVERAGE_NODE_COUNT,
+      );
+      assert.strictEqual(
+        error?.diagnostics?.noProgress?.currentProgress
+          ?.snapshotCoverageNodeCount,
+        ACTIVE_GATE_NO_PROGRESS_COVERAGE_NODE_COUNT,
+      );
+      assert.match(
+        error?.diagnostics?.noProgress?.lastProgressEvent?.message || '',
+        /coverage=0\/5/,
+      );
+      return true;
+    },
+  );
+
+  const stalledStage = recordedStages.find((entry) => {
+    return entry.stage === 'setup.cluster.waiting-active' &&
+      entry.details?.activeGate?.state === 'stalled';
+  });
+  assert.ok(stalledStage, 'should record stalled active-gate details');
+  assert.strictEqual(
+    stalledStage.details?.activeGateProgress?.snapshotCoverageNodeCount,
+    ACTIVE_GATE_NO_PROGRESS_COVERAGE_NODE_COUNT,
+  );
+});
+
+test(LOAD_READINESS_NO_PROGRESS_BEST_SNAPSHOT_TEST_NAME, async () => {
+  const cluster = createCluster({
+    size: ACTIVE_GATE_NO_PROGRESS_EXPECTED_NODE_COUNT,
+    docker: {socketPath: SNAPSHOT_REPLAY_TEST_DOCKER_SOCKET_PATH},
+    image: SNAPSHOT_REPLAY_TEST_IMAGE,
+  });
+
+  cluster._sleep = async () => {};
+  cluster._collectFailureLogs = async () => {};
+  const recordedStages = [];
+  cluster._recordClusterStage = (stage, details = {}) => {
+    recordedStages.push({stage, details});
+  };
+  const nodeDiagnostics = SNAPSHOT_REPLAY_TEST_EXPECTED_NODE_IDS.map(
+    (nodeId) => ({
+      nodeId,
+      active: false,
+      state: ACTIVE_GATE_REACHABILITY_DELAY_STATE_INACTIVE,
+      reasons: ['PRIORITY_CONTROL_PLANE_RECOVERY_PENDING'],
+    }),
+  );
+  const priorityPartitionSummary = {
+    satisfied: true,
+    totalSpreadGap: ACTIVE_GATE_REACHABILITY_DELAY_ZERO,
+    blockedPartitionCount: ACTIVE_GATE_REACHABILITY_DELAY_ZERO,
+  };
+  const metricMovingResult = {
+    allActive: false,
+    nodeDiagnostics,
+    snapshotCoverage: {
+      completeCoverage: false,
+      expectedNodeCount: ACTIVE_GATE_NO_PROGRESS_EXPECTED_NODE_COUNT,
+      bestCoverageNodeCount: ACTIVE_GATE_NO_PROGRESS_COVERAGE_NODE_COUNT,
+      selectedNodeId: ACTIVE_GATE_NO_PROGRESS_SELECTED_NODE_ID,
+      selectedAdminReady: true,
+      selectedReachableBy: SNAPSHOT_REPLAY_TEST_ADMIN_HEALTH_SOURCE,
+      selectedSnapshotTimeoutMs:
+        ACTIVE_GATE_NO_PROGRESS_TIMEOUT_MS_PER_QUERY,
+      selectedSnapshotObservationMode:
+        ADMIN_CONTROL_SNAPSHOT_OBSERVATION_MODE.REPAIR_DEFERRED,
+      selectedSnapshotObservationState:
+        CONTROL_PLANE_SNAPSHOT_OBSERVATION_STATE.DEFERRED_REFRESH,
+      selectedSnapshotObservationContractState: OWNER_CONTRACT_STATE.DEFERRED,
+      selectedSnapshotObservationRefreshState:
+        CONTROL_PLANE_SNAPSHOT_REFRESH_STATE.DEFERRED,
+      selectedSnapshotObservationNextAction: OWNER_CONTRACT_NEXT_ACTION.RETRY,
+      selectedSnapshotObservationReasonCodes: [
+        ...ACTIVE_GATE_NO_PROGRESS_REASONS,
+      ],
+      selectedSnapshotObservationRetryAfterMs:
+        ACTIVE_GATE_NO_PROGRESS_RETRY_AFTER_MS,
+      selectedSnapshotRepairDeferred: true,
+      selectedPublicationConvergence: {
+        publicationEpoch: ACTIVE_GATE_NO_PROGRESS_PUBLICATION_EPOCH,
+        publicationStatus: CONTROL_PLANE_PUBLICATION_STATUS.OPEN,
+        recoveryProtocolState: 'publication_pending',
+        publishedActiveNodeIds: [
+          ...ACTIVE_GATE_NO_PROGRESS_PUBLISHED_NODE_IDS,
+        ],
+        pendingAckNodeIds: [ACTIVE_GATE_NO_PROGRESS_SELECTED_NODE_ID],
+        priorityPartitionSummary,
+      },
+      selectedPublishedActiveNodeIds: [
+        ...ACTIVE_GATE_NO_PROGRESS_PUBLISHED_NODE_IDS,
+      ],
+      selectedMissingPublishedNodeIds: [
+        ...ACTIVE_GATE_NO_PROGRESS_MISSING_NODE_IDS,
+      ],
+      selectedPublicationActiveGateHandoff: {
+        state: SNAPSHOT_REPLAY_TEST_HANDOFF_STATE_PENDING,
+        reasonCode:
+          SNAPSHOT_REPLAY_TEST_HANDOFF_REASON_OWNER_RECONCILE_PENDING,
+        nextAction: SNAPSHOT_REPLAY_TEST_HANDOFF_NEXT_ACTION_RECONCILE,
+        runtimePromotionAllowed:
+          SNAPSHOT_REPLAY_TEST_HANDOFF_RUNTIME_PROMOTION_ALLOWED_FALSE,
+        publishedActiveNodeIds: [
+          ...ACTIVE_GATE_NO_PROGRESS_PUBLISHED_NODE_IDS,
+        ],
+        missingPublishedNodeIds: [
+          ...ACTIVE_GATE_NO_PROGRESS_MISSING_NODE_IDS,
+        ],
+        pendingReconcileNodeIds: [
+          ACTIVE_GATE_NO_PROGRESS_SELECTED_NODE_ID,
+        ],
+        pendingReconcileCount: ACTIVE_GATE_REACHABILITY_DELAY_ONE,
+      },
+      selectedMembershipPublicationHandoffOutcome: {
+        state: SNAPSHOT_REPLAY_TEST_HANDOFF_OUTCOME_STATE_WRITE_DEFERRED,
+        reasonCode: SNAPSHOT_REPLAY_TEST_HANDOFF_OUTCOME_REASON_READBACK,
+        enqueued: SNAPSHOT_REPLAY_TEST_HANDOFF_OUTCOME_ENQUEUED,
+        retryAfterMs: SNAPSHOT_REPLAY_TEST_HANDOFF_OUTCOME_RETRY_AFTER_MS,
+      },
+      selectedError: null,
+    },
+    publicationConvergenceGate: {
+      ready: false,
+      reasons: [
+        'publication_pending_ack=' +
+          String(ACTIVE_GATE_REACHABILITY_DELAY_ONE),
+      ],
+      publicationStatus: CONTROL_PLANE_PUBLICATION_STATUS.OPEN,
+      recoveryProtocolState: 'publication_pending',
+      pendingAckNodeIds: [ACTIVE_GATE_NO_PROGRESS_SELECTED_NODE_ID],
+      missingPublishedNodeIds: [
+        ...ACTIVE_GATE_NO_PROGRESS_MISSING_NODE_IDS,
+      ],
+      missingPublishedCount: ACTIVE_GATE_REACHABILITY_DELAY_ONE,
+      priorityPartitionSummary,
+    },
+  };
+  const regressedTimeoutResult = {
+    allActive: false,
+    nodeDiagnostics,
+    snapshotCoverage: {
+      completeCoverage: false,
+      expectedNodeCount: ACTIVE_GATE_NO_PROGRESS_EXPECTED_NODE_COUNT,
+      bestCoverageNodeCount: ACTIVE_GATE_NO_PROGRESS_ZERO_COVERAGE,
+      selectedNodeId: ACTIVE_GATE_NO_PROGRESS_SELECTED_NODE_ID,
+      selectedAdminReady: true,
+      selectedReachableBy: SNAPSHOT_REPLAY_TEST_ADMIN_HEALTH_SOURCE,
+      selectedSnapshotTimeoutMs:
+        ACTIVE_GATE_NO_PROGRESS_TIMEOUT_MS_PER_QUERY,
+      selectedError: ACTIVE_GATE_NO_PROGRESS_TIMEOUT_ERROR,
+    },
+    publicationConvergenceGate: {
+      ready: false,
+      reasons: [...ACTIVE_GATE_NO_PROGRESS_TERMINAL_GATE_REASONS],
+      publicationStatus: null,
+      pendingAckNodeIds: [],
+      missingPublishedNodeIds: [],
+      priorityPartitionSummary: null,
+    },
+  };
+  let probeCount = ACTIVE_GATE_REACHABILITY_DELAY_ZERO;
+  cluster._probeClusterActiveState = async () => {
+    probeCount += ACTIVE_GATE_REACHABILITY_DELAY_ONE;
+    return probeCount === ACTIVE_GATE_REACHABILITY_DELAY_ONE ?
+      metricMovingResult :
+      regressedTimeoutResult;
+  };
+
+  await assert.rejects(
+    async () => cluster.waitForLoadReadinessStability({
+      stableWindowMs: LOAD_READINESS_NO_PROGRESS_STABLE_WINDOW_MS,
+      timeoutMs: LOAD_READINESS_NO_PROGRESS_TIMEOUT_MS,
+      noProgressMaxAttempts: ACTIVE_GATE_NO_PROGRESS_MAX_ATTEMPTS,
+      loadReadinessPhase: LOAD_READINESS_NO_PROGRESS_PHASE,
+    }),
+    (error) => {
+      assert.match(error.message, /coverage=2\/5/);
+      assert.doesNotMatch(error.message, /snapshotError/);
+      assert.strictEqual(
+        error?.diagnostics?.activeGate?.progress?.snapshotCoverageNodeCount,
+        ACTIVE_GATE_NO_PROGRESS_COVERAGE_NODE_COUNT,
+      );
+      assert.strictEqual(
+        error?.diagnostics?.noProgress?.currentProgress
+          ?.snapshotCoverageNodeCount,
+        ACTIVE_GATE_NO_PROGRESS_COVERAGE_NODE_COUNT,
+      );
+      assert.match(
+        error?.diagnostics?.noProgress?.lastProgressEvent?.message || '',
+        /coverage=0\/5/,
+      );
+      return true;
+    },
+  );
+
+  const stalledStage = recordedStages.find((entry) => {
+    return entry.stage === LOAD_READINESS_NO_PROGRESS_STAGE &&
+      entry.details?.activeGate?.state === 'stalled';
+  });
+  assert.ok(stalledStage, 'should record stalled load-readiness details');
+  assert.strictEqual(
+    stalledStage.details?.activeGateProgress?.snapshotCoverageNodeCount,
+    ACTIVE_GATE_NO_PROGRESS_COVERAGE_NODE_COUNT,
+  );
+});
 
 test('Unit: _waitForAllActive treats CL-003 witness as load-mode soft success',
   async () => {

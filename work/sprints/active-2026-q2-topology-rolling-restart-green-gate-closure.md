@@ -31,26 +31,26 @@ Canonical state after the publication handoff package:
    actionable owner edge.
 2. Representative owner boundary:
    `startup_active_gate_owner / snapshot_coverage`.
-3. Dominant reason: `selected_snapshot_source_timeout`.
-4. The selected downstream owner edge is
-   `active_gate_snapshot_coverage / selected_snapshot_source_selection`.
-5. Selected snapshot source `11601fe0-72d6-5853-8590-ec2881853e72` is
-   `adminReady=true` via `admin_health`, but the selected snapshot query timed
-   out after 3000ms.
-6. Snapshot coverage remains `0/5`; `discovery_node_coverage_gap` is absent
-   and `publicationActiveGateHandoff` is absent.
+3. Dominant reason: `pending_acks_present`.
+4. The active-gate selected-source timeout is closed as migrated:
+   `selected_snapshot_source_timeout` disappeared, but coverage stayed `2/5`.
+5. The selected downstream owner edge is now
+   `active_gate_snapshot_coverage / repair_deferred`, with
+   `discovery_node_coverage_gap` present.
+6. `npm run analyze:priority-recovery-residuals` on the latest artifact reports
+   one `operation_workflow_owner / rebalancer_handoff` residual witness.
 7. `npm --silent run analyze:causal-model` on the latest artifact returned
-   `migrate_owner_boundary`.
-8. The publication package closed as migrated and is now the predecessor:
-   `work/packages/done-20260517-topology-publication-convergence-reopened-missing-publication.md`.
+   `continue_local_fix` with first critical node `publication_ack_convergence`.
+8. The active-gate selected-source package closed as migrated and is now the
+   predecessor:
+   `work/packages/done-20260517-startup-active-gate-selected-snapshot-source-timeout.md`.
 9. The current active package is
-   `work/packages/active-20260517-startup-active-gate-selected-snapshot-source-timeout.md`.
-   It must build the narrow selected snapshot-source fixture before any
-   runtime edit.
-10. Timeout budgets, active-gate admission, publication ACK, priority recovery,
-    CDC fallback, reconnect delivery, query participant routing, and inactive
-    participant routing remain frozen unless canonical evidence selects them
-    again.
+   `work/packages/active-20260517-topology-publication-ack-pending-after-forced-repair-owner-command.md`.
+   It must build the narrow publication ACK / rebalancer-handoff split fixture
+   before any runtime edit.
+10. Timeout budgets, active-gate admission, CDC fallback, reconnect delivery,
+    query participant routing, and inactive participant routing remain frozen
+    unless canonical evidence selects them again.
 
 ## Scope Basis
 
@@ -415,14 +415,14 @@ required action.
 
 1. `npm run work:context`
 2. `npm run work:llm-start`
-3. `npm run work:package:doctor -- --suggest work/packages/active-20260517-startup-active-gate-selected-snapshot-source-timeout.md`
-4. `npm run work:validate -- --entry work/packages/active-20260517-startup-active-gate-selected-snapshot-source-timeout.md`
-5. `npm run work:evidence-summary -- test-output/reports/rolling-restart-publication-handoff-full-target-20260517T032823Z.report.json`
-6. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-publication-handoff-full-target-20260517T032823Z.report.json --handoff-probe`
-7. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-publication-handoff-full-target-20260517T032823Z.report.json --replay-fixture`
-8. `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-publication-handoff-full-target-20260517T032823Z.report.json`
-9. `npm run analyze:owner-files -- startup_active_gate_owner snapshot_coverage --markdown`
-10. `npm run work:subagent-prompt -- --role review --package work/packages/active-20260517-startup-active-gate-selected-snapshot-source-timeout.md`
+3. `npm run work:package:doctor -- --suggest work/packages/active-20260517-topology-publication-ack-pending-after-forced-repair-owner-command.md`
+4. `npm run work:validate -- --entry work/packages/active-20260517-topology-publication-ack-pending-after-forced-repair-owner-command.md`
+5. `npm run work:evidence-summary -- test-output/reports/rolling-restart-forced-repair-owner-command-20260517T043738Z.report.json`
+6. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-forced-repair-owner-command-20260517T043738Z.report.json --handoff-probe`
+7. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-forced-repair-owner-command-20260517T043738Z.report.json --replay-fixture`
+8. `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-forced-repair-owner-command-20260517T043738Z.report.json`
+9. `npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-forced-repair-owner-command-20260517T043738Z.report.json --markdown`
+10. `npm run work:subagent-prompt -- --role review --package work/packages/active-20260517-topology-publication-ack-pending-after-forced-repair-owner-command.md`
 11. Real review/fix/implementation subagent proof before runtime implementation starts.
 12. Focused snapshot-coverage replay fixture/probe, selected owner tests,
     static guardrails, and representative `rolling-restart` after the package

@@ -398,6 +398,12 @@ class Cluster5 extends Cluster4 {
         }
         continue;
       }
+      if ((result.error === null) !== (selectedResult.error === null)) {
+        if (result.error === null) {
+          selectedResult = result;
+        }
+        continue;
+      }
       if (
         result.controlPlaneDiagnosticsAvailable !==
         selectedResult.controlPlaneDiagnosticsAvailable

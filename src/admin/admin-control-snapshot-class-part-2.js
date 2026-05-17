@@ -663,12 +663,27 @@ class AdminControlSnapshotPart2 extends AdminControlSnapshotPart1 {
     }
     const deferredEvaluation =
       this.evaluateAuthoritativeControlSnapshotRepair(deferredSnapshot);
+    const triggeredSnapshot =
+      await this.triggerMembershipPublicationHandoffOwnerCommand(
+        attachOrdinaryRepairDeferralDiagnostics(
+          deferredSnapshot,
+          true,
+        ),
+        options,
+      );
+    const handoffRefresh =
+      await this.prepareVisibleMembershipPublicationHandoffRefresh(
+        triggeredSnapshot,
+        options,
+      );
     return this.resolveSharedControlSnapshot(
-      attachOrdinaryRepairDeferralDiagnostics(
-        deferredSnapshot,
-        true,
-      ),
-      {
+      handoffRefresh.refreshed === true ?
+        handoffRefresh.snapshot :
+        attachOrdinaryRepairDeferralDiagnostics(
+          handoffRefresh.snapshot,
+          true,
+        ),
+      handoffRefresh.refreshed === true ? options : {
         ...options,
         observationMode:
           ADMIN_CONTROL_SNAPSHOT_OBSERVATION_MODE.REPAIR_DEFERRED,
