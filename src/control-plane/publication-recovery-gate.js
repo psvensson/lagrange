@@ -303,6 +303,18 @@ function hasClosedPublishedPendingAckEvidence(options = {}) {
     explicitPendingAckNodeIds.length === NUM.ZERO;
 }
 
+function hasOpenCountOnlyPendingAckEvidence(options = {}) {
+  const explicitPendingAckNodeIds = normalizeDistinctStringArray(
+    options.pendingAckNodeIds,
+  );
+  const publicationStatusNormalized = normalizePublicationStatus(
+    options.publicationStatus,
+  );
+  return publicationStatusNormalized === CONTROL_PLANE_PUBLICATION_STATUS.OPEN &&
+    Array.isArray(options.pendingAckNodeIds) &&
+    explicitPendingAckNodeIds.length === NUM.ZERO;
+}
+
 function resolvePendingAckEvidenceState(options = {}) {
   if (hasClosedPublishedPendingAckEvidence(options)) {
     return PUBLICATION_RECOVERY_PENDING_ACK_EVIDENCE_STATE
@@ -365,12 +377,16 @@ function buildPendingAckEvidence(options = {}) {
       explicitPendingAckNodeIds.length > NUM.ZERO ?
         explicitPendingAckNodeIds :
         derivedPendingAckNodeIds;
-  const pendingAckCountByState = Object.freeze({
-    [PUBLICATION_RECOVERY_PENDING_ACK_EVIDENCE_STATE.COUNT_ONLY]:
+  const countOnlyPendingAckCount =
+    hasOpenCountOnlyPendingAckEvidence(options) ?
+      NUM.ZERO :
       Math.max(
         pendingAckNodeIds.length,
         normalizeNonNegativeInteger(options.pendingAckCount),
-      ),
+      );
+  const pendingAckCountByState = Object.freeze({
+    [PUBLICATION_RECOVERY_PENDING_ACK_EVIDENCE_STATE.COUNT_ONLY]:
+      countOnlyPendingAckCount,
     [PUBLICATION_RECOVERY_PENDING_ACK_EVIDENCE_STATE.REQUIRED_ACK_NODE_LIST]:
       pendingAckNodeIds.length,
   });

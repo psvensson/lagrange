@@ -22,17 +22,16 @@ success is in scope.
 ## Current Blocker Snapshot
 
 Latest representative artifact:
-`test-output/reports/rolling-restart-owner-reconcile-refresh-retention-20260517T073616Z.report.json`.
+`test-output/reports/rolling-restart-publication-open-count-only-ack-20260517T084752Z.report.json`.
 
-Canonical state after the startup active-gate owner-reconcile refresh-retention
-package:
+Canonical state after the publication ACK/open count-only package migrated:
 
-1. `publication_ack_convergence` is satisfied and priority recovery residual
-   remains frozen unless canonical evidence selects it again.
+1. `publication_ack_convergence` is satisfied with
+   `publicationStatus=PUBLISHED`, `pendingAckCount=0`,
+   `pendingAckNodeIds=[]`, and
+   `publicationOwnerAckState=not_required`.
 2. The current active package is
-   `work/packages/active-20260517-startup-active-gate-owner-reconcile-write-deferred-residual.md`
-   after the predecessor reduced pending owner reconciliation from three nodes
-   to two.
+   `work/packages/active-20260517-startup-active-gate-snapshot-coverage-after-publication-ack-closure.md`.
 3. Fresh `work:evidence-summary` selects `active_gate_snapshot_coverage` as the
    first frontier.
 4. Representative owner boundary:
@@ -40,19 +39,15 @@ package:
 5. Dominant reason: `active_gate_timed_out` with
    `owner_reconcile_pending`, `snapshot_coverage_incomplete`, and
    `snapshot_repair_deferred`.
-6. Fresh snapshot coverage is `3/5`; selected snapshot observation remains
-   `repair_deferred` / `deferred_refresh` with next action `retry` and reason
-   codes `cache_stale_watermark`, `discovery_node_coverage_gap`, and
-   `stale_replica_operations_in_flight`.
-7. The handoff probe detects the publication active-gate handoff contract with
-   state `pending`, reason `owner_reconcile_pending`, required action
-   `reconcile_owner_membership_publication`, and `pendingReconcileCount=2` for
-   nodes `11601fe0-72d6-5853-8590-ec2881853e72` and
-   `35a891b8-c1a0-5064-9c6e-2acfba61c2a7`.
-8. The next proof must be metric-moving: reduce pending reconcile, remove
-   `discovery_node_coverage_gap`, move snapshot coverage to `5/5`, migrate to a
-   genuinely new owner boundary, or turn representative `rolling-restart`
-   green.
+6. Active-gate snapshot coverage improved to `3/5`; the handoff remains
+   pending with `owner_reconcile_pending`, next action
+   `reconcile_owner_membership_publication`, and
+   `pendingReconcileCount=2`.
+7. Runtime promotion is still not allowed while the handoff is pending.
+8. The next proof must satisfy `active_gate_snapshot_coverage`, reduce
+   `pendingReconcileCount` or improve snapshot coverage with focused owner
+   proof, migrate to a genuinely new owner boundary, or turn representative
+   `rolling-restart` green.
 9. Publication ACK, priority recovery, timeout budgets, active-gate admission,
    selected-source selection, forced repair timeout handling, authoritative
    query-pressure fallback, and readiness support remain frozen unless
@@ -421,22 +416,18 @@ required action.
 
 1. `npm run work:context`
 2. `npm run work:llm-start`
-3. `npm run work:package:doctor -- --suggest work/packages/done-20260517-priority-recovery-workflow-progress-after-publication-handoff.md`
-4. `npm run work:validate -- --entry work/packages/done-20260517-priority-recovery-workflow-progress-after-publication-handoff.md`
-5. `npm run work:validate -- --pre-impl work/packages/done-20260517-priority-recovery-workflow-progress-after-publication-handoff.md`
-6. `npm run work:evidence-summary -- test-output/reports/rolling-restart-after-publication-handoff-flat-progress-20260517.report.json`
-7. `npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-after-publication-handoff-flat-progress-20260517.report.json --markdown`
-8. `npm run analyze:owner-files -- operation_workflow_owner workflow_progress`
-9. `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-publication-handoff-flat-progress-20260517.report.json`
-10. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-publication-handoff-flat-progress-20260517.report.json --handoff-probe`
+3. `npm run work:package:doctor -- --suggest work/packages/active-20260517-startup-active-gate-snapshot-coverage-after-publication-ack-closure.md`
+4. `npm run work:validate -- --entry work/packages/active-20260517-startup-active-gate-snapshot-coverage-after-publication-ack-closure.md`
+5. `npm run work:evidence-summary -- test-output/reports/rolling-restart-publication-open-count-only-ack-20260517T084752Z.report.json`
+6. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-publication-open-count-only-ack-20260517T084752Z.report.json --handoff-probe`
+7. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-publication-open-count-only-ack-20260517T084752Z.report.json --replay-fixture`
+8. `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-publication-open-count-only-ack-20260517T084752Z.report.json`
+9. `npm run analyze:distributed-failure -- --report test-output/reports/rolling-restart-publication-open-count-only-ack-20260517T084752Z.report.json`
+10. `npm run analyze:owner-files -- startup_active_gate_owner snapshot_coverage --markdown`
 11. Real review/fix/implementation subagent proof before runtime implementation starts.
-12. Focused workflow-progress fixture/probe, selected owner tests, static
-    guardrails, and representative `rolling-restart` after the package has
-    implementation proof.
-13. `npm run work:evidence-summary -- test-output/reports/rolling-restart-priority-nonblocking-closure-20260517T055254Z.report.json`
-14. `npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-priority-nonblocking-closure-20260517T055254Z.report.json --markdown`
-15. `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-priority-nonblocking-closure-20260517T055254Z.report.json`
-16. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-priority-nonblocking-closure-20260517T055254Z.report.json --handoff-probe`
+12. Focused active-gate owner-reconcile fixture/probe, selected owner tests,
+    static guardrails, and representative `rolling-restart` after the package
+    has implementation proof.
 
 ## Closure Rules
 
@@ -505,27 +496,26 @@ The sprint cannot close until:
 
 ## Current Next Action
 
-Continue with the owner reconciliation successor selected by the latest
-representative artifact:
+Continue with the active-gate snapshot coverage successor selected by the
+latest representative artifact:
 
 ```text
-work/packages/active-20260517-startup-active-gate-owner-reconcile-write-deferred-residual.md
-test-output/reports/rolling-restart-owner-reconcile-refresh-retention-20260517T073616Z.report.json
+work/packages/active-20260517-startup-active-gate-snapshot-coverage-after-publication-ack-closure.md
+test-output/reports/rolling-restart-publication-open-count-only-ack-20260517T084752Z.report.json
 ```
 
-The current first frontier is `startup_active_gate_owner / snapshot_coverage`:
-fresh evidence reports `active_gate_snapshot_coverage`, `snapshotCoverage=3/5`,
-`snapshot_repair_deferred`, handoff outcome `write_deferred`, and handoff
-contract state `pending` with `owner_reconcile_pending`. The required next
-action is `reconcile_owner_membership_publication` for pending nodes
-`11601fe0-72d6-5853-8590-ec2881853e72` and
-`35a891b8-c1a0-5064-9c6e-2acfba61c2a7`.
+The current first frontier is
+`startup_active_gate_owner / snapshot_coverage`: fresh evidence reports
+`active_gate_snapshot_coverage`, `active_gate_timed_out`,
+`snapshotCoverageNodeCount=3/5`, and handoff evidence
+`owner_reconcile_pending` with `pendingReconcileCount=2` and next action
+`reconcile_owner_membership_publication`.
 
 Run the required review/fix/implementation subagent sequence before runtime
 edits for the successor package. Keep publication ACK, priority recovery,
 timeout budget increases, active-gate admission, selected-source selection,
 forced repair timeout handling, authoritative query-pressure fallback, and
-readiness support frozen unless canonical evidence selects them again. The next
-proof target remains metric-moving: reduce pending reconcile, remove
-`discovery_node_coverage_gap`, move snapshot coverage to `5/5`, migrate to a
+readiness support frozen unless canonical evidence selects them again. The
+next proof target remains metric-moving: satisfy active-gate snapshot coverage,
+reduce pending owner reconcile, improve snapshot coverage, migrate to a
 genuinely new owner boundary, or turn representative `rolling-restart` green.

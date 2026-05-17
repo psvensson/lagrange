@@ -135,6 +135,15 @@ function hasPublishedPublicationOwnerClosedPendingAckList(options = {}) {
     explicitPendingAckNodeIds.length === NUM.ZERO;
 }
 
+function hasOpenPublicationOwnerCountOnlyPendingAckList(options = {}) {
+  const explicitPendingAckNodeIds = normalizePublicationOwnerNodeIds(
+    options.pendingAckNodeIds,
+  );
+  return options.publicationStatus === CONTROL_PLANE_PUBLICATION_STATUS.OPEN &&
+    Array.isArray(options.pendingAckNodeIds) &&
+    explicitPendingAckNodeIds.length === NUM.ZERO;
+}
+
 function resolvePublicationOwnerAckEvidenceState(options = {}) {
   if (hasPublishedPublicationOwnerClosedPendingAckList(options)) {
     return PUBLICATION_OWNER_ACK_EVIDENCE_STATE.REQUIRED_ACK_NODE_LIST;
@@ -192,12 +201,16 @@ function buildPublicationOwnerAckEvidence(options = {}) {
       explicitPendingAckNodeIds.length > NUM.ZERO ?
         explicitPendingAckNodeIds :
         derivedPendingAckNodeIds;
-  const pendingAckCountByEvidenceState = Object.freeze({
-    [PUBLICATION_OWNER_ACK_EVIDENCE_STATE.COUNT_ONLY]:
+  const countOnlyPendingAckCount =
+    hasOpenPublicationOwnerCountOnlyPendingAckList(options) ?
+      NUM.ZERO :
       Math.max(
         pendingAckNodeIds.length,
         normalizePublicationOwnerNonNegativeInteger(options.pendingAckCount),
-      ),
+      );
+  const pendingAckCountByEvidenceState = Object.freeze({
+    [PUBLICATION_OWNER_ACK_EVIDENCE_STATE.COUNT_ONLY]:
+      countOnlyPendingAckCount,
     [PUBLICATION_OWNER_ACK_EVIDENCE_STATE.REQUIRED_ACK_NODE_LIST]:
       pendingAckNodeIds.length,
   });

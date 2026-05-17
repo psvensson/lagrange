@@ -40,10 +40,19 @@ const PUBLICATION_OWNER_PENDING_PUBLICATION_STATUS_SET = Object.freeze(new Set([
   CONTROL_PLANE_PUBLICATION_STATUS.ACK_PENDING,
 ]));
 
+function hasPublicationOwnerOpenCountOnlyPublishDebt(evidence) {
+  return evidence.publicationStatus === CONTROL_PLANE_PUBLICATION_STATUS.OPEN &&
+    evidence.pendingAckEvidenceState ===
+      PUBLICATION_OWNER_ACK_EVIDENCE_STATE.COUNT_ONLY &&
+    evidence.pendingAckNodeIds.length === NUM.ZERO &&
+    evidence.missingPublishedCount > NUM.ZERO;
+}
+
 const PUBLICATION_OWNER_ACK_STATE_RULES = Object.freeze([
   Object.freeze({
     state: PUBLICATION_OWNER_ACK_STATE.WAITING_FOR_ACK,
-    matches: (evidence) => evidence.pendingAckCount > NUM.ZERO,
+    matches: (evidence) => evidence.pendingAckCount > NUM.ZERO &&
+      hasPublicationOwnerOpenCountOnlyPublishDebt(evidence) !== true,
   }),
   Object.freeze({
     state: PUBLICATION_OWNER_ACK_STATE.NOT_REQUIRED,

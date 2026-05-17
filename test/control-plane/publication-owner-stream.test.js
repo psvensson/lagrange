@@ -23,6 +23,7 @@ const TEST_PUBLICATION_REVISION = Object.freeze({
 const TEST_PUBLICATION_COUNT = Object.freeze({
   FRONTIER_PENDING_ACK: 1,
   OPEN_FRONTIER_MISSING_PUBLISHED: 5,
+  OPEN_COUNT_ONLY_ACK_MISSING_PUBLISHED: 4,
   PUBLISHED_FRONTIER_PENDING_ACK: 0,
   FRONTIER_MISSING_PUBLISHED: 3,
 });
@@ -287,6 +288,46 @@ test('publication owner stream classifies open missing active publication as pub
       stream.missingPublishedCount,
       TEST_PUBLICATION_COUNT.OPEN_FRONTIER_MISSING_PUBLISHED,
     );
+    t.end();
+  });
+
+test('publication owner stream does not treat open count-only ACK evidence as ACK lag',
+  (t) => {
+    const stream = buildPublicationOwnerStreamState({
+      publicationStatus: CONTROL_PLANE_PUBLICATION_STATUS.OPEN,
+      pendingAckNodeIds: [],
+      pendingAckCount: TEST_PUBLICATION_COUNT.FRONTIER_PENDING_ACK,
+      missingPublishedNodeIds: [
+        TEST_NODE_ID.FRONTIER_ACK_PENDING,
+        TEST_NODE_ID.FRONTIER_MISSING_FIRST,
+        TEST_NODE_ID.FRONTIER_MISSING_SECOND,
+        TEST_NODE_ID.FRONTIER_MISSING_THIRD,
+      ],
+      missingPublishedCount:
+        TEST_PUBLICATION_COUNT.OPEN_COUNT_ONLY_ACK_MISSING_PUBLISHED,
+      recoveryProtocolState:
+        TEST_PUBLICATION_RECOVERY_PROTOCOL.PUBLICATION_PENDING,
+      publicationPending: true,
+      prioritySpreadPending: false,
+    });
+
+    t.equal(
+      stream.pendingAckEvidenceState,
+      PUBLICATION_OWNER_ACK_EVIDENCE_STATE.COUNT_ONLY,
+    );
+    t.equal(
+      stream.pendingAckCount,
+      TEST_PUBLICATION_COUNT.PUBLISHED_FRONTIER_PENDING_ACK,
+    );
+    t.same(stream.pendingAckNodeIds, []);
+    t.equal(stream.ackState, PUBLICATION_OWNER_ACK_STATE.UNAVAILABLE);
+    t.equal(stream.freshnessFence, PUBLICATION_OWNER_FRESHNESS_FENCE.PUBLISHING);
+    t.equal(stream.streamOutcome, PUBLICATION_OWNER_STREAM_OUTCOME.PUBLISHING);
+    t.equal(
+      stream.recoveryOutcome,
+      PUBLICATION_OWNER_RECOVERY_OUTCOME.WAITING_FOR_PUBLICATION,
+    );
+    t.equal(isPublicationOwnerStreamPublicationPending(stream), true);
     t.end();
   });
 

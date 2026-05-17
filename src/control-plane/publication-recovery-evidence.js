@@ -70,6 +70,7 @@ const PUBLICATION_RECOVERY_EVIDENCE_TEXT = Object.freeze({
   EMPTY: '',
 });
 const PUBLICATION_RECOVERY_PUBLICATION_STATUS = Object.freeze({
+  OPEN: 'OPEN',
   PUBLISHED: 'PUBLISHED',
 });
 const PUBLICATION_RECOVERY_PROTOCOL_STATE = Object.freeze({
@@ -215,6 +216,10 @@ function normalizePublicationRecoveryAckEvidence(options = {}) {
     publicationStatus === PUBLICATION_RECOVERY_PUBLICATION_STATUS.PUBLISHED &&
     Array.isArray(options.pendingAckNodeIds) &&
     explicitPendingAckNodeIds.length === NUM.ZERO;
+  const hasOpenCountOnlyPendingAckList =
+    publicationStatus === PUBLICATION_RECOVERY_PUBLICATION_STATUS.OPEN &&
+    Array.isArray(options.pendingAckNodeIds) &&
+    explicitPendingAckNodeIds.length === NUM.ZERO;
   const evidenceState =
     hasClosedPublishedPendingAckList ||
     isPublicationRecoveryAckNodeListProvided(requiredAckNodeListInput) &&
@@ -237,12 +242,16 @@ function normalizePublicationRecoveryAckEvidence(options = {}) {
         .REQUIRED_ACK_NODE_LIST ?
       derivedPendingAckNodeIds :
       explicitPendingAckNodeIds;
-  const pendingAckCountByState = Object.freeze({
-    [PUBLICATION_RECOVERY_PENDING_ACK_EVIDENCE_STATE.COUNT_ONLY]:
+  const countOnlyPendingAckCount =
+    hasOpenCountOnlyPendingAckList ?
+      NUM.ZERO :
       Math.max(
         pendingAckNodeIds.length,
         normalizeMaximumNonNegativeInteger(options.pendingAckCountValues),
-      ),
+      );
+  const pendingAckCountByState = Object.freeze({
+    [PUBLICATION_RECOVERY_PENDING_ACK_EVIDENCE_STATE.COUNT_ONLY]:
+      countOnlyPendingAckCount,
     [PUBLICATION_RECOVERY_PENDING_ACK_EVIDENCE_STATE.REQUIRED_ACK_NODE_LIST]:
       pendingAckNodeIds.length,
   });

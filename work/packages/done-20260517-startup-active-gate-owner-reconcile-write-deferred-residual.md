@@ -3,7 +3,7 @@
 <!-- work-package
 {
   "schema": "work-package-v1",
-  "status": "active",
+  "status": "done",
   "opened": "2026-05-17",
   "lane": "causal-escalation",
   "scenario": "rolling-restart",
@@ -25,7 +25,7 @@
   "writeScope": [
     "src/control-plane/membership-publication-coordinator-class-stage-2.js",
     "test/control-plane/membership-publication-coordinator-main-stage-2.js",
-    "work/packages/active-20260517-startup-active-gate-owner-reconcile-write-deferred-residual.md",
+    "work/packages/done-20260517-startup-active-gate-owner-reconcile-write-deferred-residual.md",
     "work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md",
     "work/sprints/current-blocker.md",
     "work/sprints/current-blocker.json",
@@ -49,7 +49,7 @@
   "commitScope": [
     "src/control-plane/membership-publication-coordinator-class-stage-2.js",
     "test/control-plane/membership-publication-coordinator-main-stage-2.js",
-    "work/packages/active-20260517-startup-active-gate-owner-reconcile-write-deferred-residual.md",
+    "work/packages/done-20260517-startup-active-gate-owner-reconcile-write-deferred-residual.md",
     "work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md",
     "work/sprints/current-blocker.md",
     "work/sprints/current-blocker.json",
@@ -134,7 +134,10 @@
       "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-owner-reconcile-visible-readback-20260517T081137Z.report.json --handoff-probe",
       "npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-owner-reconcile-visible-readback-20260517T081137Z.report.json"
     ]
-  }
+  },
+  "closed": "2026-05-17",
+  "commitAndPushLedgerRequired": true,
+  "successor": "work/packages/done-20260517-topology-publication-ack-pending-after-owner-reconcile-migration.md"
 }
 -->
 
@@ -174,9 +177,9 @@ owner-boundary package.
 
 ## Subagent Sequencing Ledger
 
-- [x] Review subagent recorded: Agent Ohm (019e34ea-a900-7ec2-9daa-ccb35654a330) reviewed work/packages/active-20260517-startup-active-gate-owner-reconcile-write-deferred-residual.md; result fixes-required.
-- [x] Fix subagent recorded or explicitly not needed: Agent Planck (019e34ec-e188-7360-98b4-83139c93351a) fixed work/packages/active-20260517-startup-active-gate-owner-reconcile-write-deferred-residual.md.
-- [x] Implementation subagent recorded: Agent Erdos (019e34f0-6a2a-78a0-931c-2136cfbcac2e) implemented work/packages/active-20260517-startup-active-gate-owner-reconcile-write-deferred-residual.md.
+- [x] Review subagent recorded: Agent Ohm (019e34ea-a900-7ec2-9daa-ccb35654a330) reviewed work/packages/done-20260517-startup-active-gate-owner-reconcile-write-deferred-residual.md; result fixes-required.
+- [x] Fix subagent recorded or explicitly not needed: Agent Planck (019e34ec-e188-7360-98b4-83139c93351a) fixed work/packages/done-20260517-startup-active-gate-owner-reconcile-write-deferred-residual.md.
+- [x] Implementation subagent recorded: Agent Erdos (019e34f0-6a2a-78a0-931c-2136cfbcac2e) implemented work/packages/done-20260517-startup-active-gate-owner-reconcile-write-deferred-residual.md.
 
 ## LLM Tool-First Contract
 
@@ -194,7 +197,7 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 
 1. src/control-plane/membership-publication-coordinator-class-stage-2.js
 2. test/control-plane/membership-publication-coordinator-main-stage-2.js
-3. work/packages/active-20260517-startup-active-gate-owner-reconcile-write-deferred-residual.md
+3. work/packages/done-20260517-startup-active-gate-owner-reconcile-write-deferred-residual.md
 4. work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md
 5. work/sprints/current-blocker.md
 6. work/sprints/current-blocker.json
@@ -217,7 +220,7 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 - Intended minimum model: `gpt-5.3-codex`
 - Scope shape: `owner-boundary-contraction/current-frontier`
 - Output profile: `medium`
-- Owned files: `src/control-plane/membership-publication-coordinator-class-stage-2.js`, `test/control-plane/membership-publication-coordinator-main-stage-2.js`, `work/packages/active-20260517-startup-active-gate-owner-reconcile-write-deferred-residual.md`, `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md`, `work/sprints/current-blocker.md`, `work/sprints/current-blocker.json`, `work/model-ledger.jsonl`
+- Owned files: `src/control-plane/membership-publication-coordinator-class-stage-2.js`, `test/control-plane/membership-publication-coordinator-main-stage-2.js`, `work/packages/done-20260517-startup-active-gate-owner-reconcile-write-deferred-residual.md`, `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md`, `work/sprints/current-blocker.md`, `work/sprints/current-blocker.json`, `work/model-ledger.jsonl`
 - Forbidden files: `publication_ack_convergence`, `priority_recovery_workflow_progress`, `timeout_budgets`, `active_gate_admission`, `selected_snapshot_source_selection`, `forced_repair_timeout_handling`, `authoritative_query_pressure_fallback`, `readiness_support`
 - Frozen decisions: package scope and lane stay bounded unless explicitly escalated.
 - Escalation triggers: owned files expand beyond this package, runtime ownership changes, or representative scenario evidence changes.
@@ -237,9 +240,15 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 9. PASS - `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-owner-reconcile-visible-readback-20260517T081137Z.report.json --handoff-probe`
 10. PASS - `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-owner-reconcile-visible-readback-20260517T081137Z.report.json`
 11. PASS - `npm run analyze:distributed-failure -- --report test-output/reports/rolling-restart-owner-reconcile-visible-readback-20260517T081137Z.report.json`
-12. PASS - `npm run work:validate -- --pre-impl work/packages/active-20260517-startup-active-gate-owner-reconcile-write-deferred-residual.md`
+12. PASS - `npm run work:validate -- --pre-impl work/packages/done-20260517-startup-active-gate-owner-reconcile-write-deferred-residual.md`
 13. PASS - `git diff --check`
 
 Representative result: red but migrated. First frontier moved to
 `publication_ack_convergence` under `topology_publication_owner /
 publication_convergence` with dominant reason `pending_acks_present`.
+
+## Commit And Push Ledger
+
+1. Focused package commit: `ed0d61025e38006a99844bc6bc4089e1beae5776`
+2. Pushed to: `origin/codex/pending-ack-eligibility-filter`
+3. Commit contains only package-owned files/package-status/allowed sprint handoff: yes

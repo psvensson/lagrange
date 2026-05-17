@@ -31,6 +31,7 @@ const TEST_PUBLICATION_EPOCH = 7;
 const TEST_UNAVAILABLE_PUBLICATION_EPOCH = 0;
 const TEST_CONFLICTING_PUBLICATION_EPOCH = 3;
 const TEST_PUBLICATION_DEBT_COUNT = 1;
+const TEST_EMPTY_PUBLICATION_DEBT_COUNT = 0;
 const TEST_EMPTY_NODE_IDS = Object.freeze([]);
 const TEST_NODE_ID = Object.freeze({
   FIRST: 'node-a',
@@ -118,6 +119,41 @@ test('buildPublicationRecoveryGateSnapshot preserves count-only publication debt
     );
     t.equal(gate.missingPublishedCount, TEST_PUBLICATION_DEBT_COUNT);
     t.equal(gate.ackPending, true);
+    t.equal(gate.publicationPending, true);
+    t.same(gate.reasonCodes, [
+      CONTROL_PLANE_PRIORITY_RECOVERY_REASON.PUBLICATION_EPOCH_PENDING,
+    ]);
+    t.end();
+  });
+
+test('buildPublicationRecoveryGateSnapshot reduces open count-only ACK evidence to publication pending',
+  (t) => {
+    const gate = buildPublicationRecoveryGateSnapshot({
+      publicationEpoch: TEST_PUBLICATION_EPOCH,
+      publicationStatus: CONTROL_PLANE_PUBLICATION_STATUS.OPEN,
+      recoveryProtocolState: RECOVERY_PROTOCOL_STATE.PUBLICATION_PENDING,
+      pendingAckNodeIds: TEST_EMPTY_NODE_IDS,
+      pendingAckCount: TEST_PUBLICATION_DEBT_COUNT,
+      missingPublishedNodeIds: [TEST_NODE_ID.FIRST, TEST_NODE_ID.SECOND],
+      missingPublishedCount: TEST_PUBLICATION_DEBT_COUNT,
+      priorityPartitionSummary: TEST_PRIORITY_PARTITION_SUMMARY.SATISFIED,
+    });
+
+    t.equal(gate.state, PUBLICATION_RECOVERY_GATE_STATE.PUBLICATION_PENDING);
+    t.equal(gate.ready, false);
+    t.equal(gate.pendingAckCount, TEST_EMPTY_PUBLICATION_DEBT_COUNT);
+    t.same(gate.pendingAckNodeIds, TEST_EMPTY_NODE_IDS);
+    t.equal(
+      gate.pendingAckEvidenceState,
+      PUBLICATION_RECOVERY_PENDING_ACK_EVIDENCE_STATE.COUNT_ONLY,
+    );
+    t.equal(gate.ackState, PUBLICATION_OWNER_ACK_STATE.UNAVAILABLE);
+    t.equal(gate.freshnessFence, PUBLICATION_OWNER_FRESHNESS_FENCE.PUBLISHING);
+    t.equal(gate.streamOutcome, PUBLICATION_OWNER_STREAM_OUTCOME.PUBLISHING);
+    t.equal(
+      gate.recoveryOutcome,
+      PUBLICATION_OWNER_RECOVERY_OUTCOME.WAITING_FOR_PUBLICATION,
+    );
     t.equal(gate.publicationPending, true);
     t.same(gate.reasonCodes, [
       CONTROL_PLANE_PRIORITY_RECOVERY_REASON.PUBLICATION_EPOCH_PENDING,

@@ -1,9 +1,10 @@
+# Startup Active Gate Snapshot Coverage After Publication ACK Closure
+
+<!-- work-package
 {
-  "schema": "current-blocker-v1",
-  "generatedBy": "scripts/work-tracker.js",
-  "sprint": "work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md",
-  "package": "work/packages/active-20260517-startup-active-gate-snapshot-coverage-after-publication-ack-closure.md",
+  "schema": "work-package-v1",
   "status": "active",
+  "opened": "2026-05-17",
   "lane": "causal-escalation",
   "scenario": "rolling-restart",
   "artifact": "test-output/reports/rolling-restart-publication-open-count-only-ack-20260517T084752Z.report.json",
@@ -56,7 +57,6 @@
     "test/admin/admin-control-snapshot.test.js",
     "test/distributed/harness/__tests__/active-gate-closure-classification.test.js"
   ],
-  "touchedFiles": [],
   "modelFit": {
     "packageClass": "representative-frontier-closure",
     "intendedMinimumModel": "gpt-5.3-codex",
@@ -122,3 +122,86 @@
   },
   "predecessor": "work/packages/done-20260517-topology-publication-ack-pending-after-owner-reconcile-migration.md"
 }
+-->
+
+## Why
+
+The publication ACK package satisfied `publication_ack_convergence` in the
+fresh representative run. The first remaining frontier is now
+`active_gate_snapshot_coverage` with `snapshotCoverageNodeCount=3/5` and a
+pending owner reconcile handoff for two nodes.
+
+This package owns only that startup active-gate snapshot coverage handoff.
+Publication ACK, priority recovery, timeout budgets, active-gate admission,
+selected-source selection, forced repair timeout handling, authoritative
+query-pressure fallback, and readiness support stay frozen unless canonical
+evidence selects them again.
+
+## Scope Basis
+
+Continuation of the active rolling-restart green-gate closure sprint after
+canonical evidence migrated from `topology_publication_owner /
+publication_convergence` back to `startup_active_gate_owner /
+snapshot_coverage`.
+
+## Workflow Lane
+
+- Selected lane: `causal-escalation`
+- Why this lane is required: the representative release gate remains red and
+  the first frontier selected by canonical evidence is a runtime owner boundary.
+- Escalation trigger to a heavier lane: runtime ownership, shared contract, or representative scenario evidence changes.
+
+## Subagent Sequencing Requirement
+
+Required before implementation because this is a scenario-driven runtime
+owner-boundary package.
+
+## LLM Tool-First Contract
+
+Before raw JSON, raw logs, broad file search, oversized segment files, or ad hoc `jq`, use the canonical workflow command that owns the question:
+
+1. Package metadata or ledger edits: `npm run work:package:doctor -- --suggest <package>`, `npm run work:package:doctor -- --fix-dry-run <package>`, `npm run work:package:schema`, or `npm run work:package:new -- ...`.
+2. Representative evidence: `npm run work:evidence-summary -- <artifact>` plus any focused extractor for this failure class.
+3. Owner discovery: `npm run analyze:owner-files -- <owner> [boundary]`.
+4. Subagent sequencing: `npm run work:subagent-prompt -- --role <role> --package <package>`.
+5. Large-file cleanup: `npm run work:oversized-next -- --markdown`.
+
+If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which canonical extractor was tried and why it was insufficient.
+
+## In Scope
+
+1. work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md
+2. work/sprints/current-blocker.md
+3. work/sprints/current-blocker.json
+4. work/model-ledger.jsonl
+5. src/control-plane/publication-active-gate-handoff-contract.js
+6. src/control-plane/membership-publication-planning.js
+7. test/control-plane/publication-active-gate-handoff-contract.test.js
+8. test/admin/admin-control-snapshot.test.js
+9. test/distributed/harness/__tests__/active-gate-closure-classification.test.js
+
+## Out Of Scope
+
+1. Runtime ownership changes.
+
+## Model Fit
+
+- Package class: `representative-frontier-closure`
+- Intended minimum model: `gpt-5.3-codex`
+- Scope shape: `owner-boundary-contraction/current-frontier`
+- Output profile: `medium`
+- Owned files: `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md`, `work/sprints/current-blocker.md`, `work/sprints/current-blocker.json`, `work/model-ledger.jsonl`, `src/control-plane/publication-active-gate-handoff-contract.js`, `src/control-plane/membership-publication-planning.js`, `test/control-plane/publication-active-gate-handoff-contract.test.js`, `test/admin/admin-control-snapshot.test.js`, `test/distributed/harness/__tests__/active-gate-closure-classification.test.js`
+- Forbidden files: `src/`
+- Frozen decisions: package scope and lane stay bounded unless explicitly escalated.
+- Escalation triggers: owned files expand beyond this package, runtime ownership changes, or representative scenario evidence changes.
+- Focused proof: `npm run work:evidence-summary -- test-output/reports/rolling-restart-publication-open-count-only-ack-20260517T084752Z.report.json`, `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-publication-open-count-only-ack-20260517T084752Z.report.json --handoff-probe`, `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-publication-open-count-only-ack-20260517T084752Z.report.json --replay-fixture`, `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-publication-open-count-only-ack-20260517T084752Z.report.json`, `npm run analyze:distributed-failure -- --report test-output/reports/rolling-restart-publication-open-count-only-ack-20260517T084752Z.report.json`, `npm run analyze:owner-files -- startup_active_gate_owner snapshot_coverage --markdown`
+- Model ledger advisory: `escalate`
+
+## Validation
+
+1. npm run work:evidence-summary -- test-output/reports/rolling-restart-publication-open-count-only-ack-20260517T084752Z.report.json
+2. npm run analyze:topology-convergence -- test-output/reports/rolling-restart-publication-open-count-only-ack-20260517T084752Z.report.json --handoff-probe
+3. npm run analyze:topology-convergence -- test-output/reports/rolling-restart-publication-open-count-only-ack-20260517T084752Z.report.json --replay-fixture
+4. npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-publication-open-count-only-ack-20260517T084752Z.report.json
+5. npm run analyze:distributed-failure -- --report test-output/reports/rolling-restart-publication-open-count-only-ack-20260517T084752Z.report.json
+6. npm run analyze:owner-files -- startup_active_gate_owner snapshot_coverage --markdown

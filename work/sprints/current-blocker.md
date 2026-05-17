@@ -4,13 +4,13 @@
 
 Sprint: `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md`
 
-Package: `work/packages/active-20260517-startup-active-gate-owner-reconcile-write-deferred-residual.md`
+Package: `work/packages/active-20260517-startup-active-gate-snapshot-coverage-after-publication-ack-closure.md`
 
 Workflow lane: `causal-escalation`
 
 Scenario: `rolling-restart`
 
-Artifact: `test-output/reports/rolling-restart-owner-reconcile-visible-readback-20260517T081137Z.report.json`
+Artifact: `test-output/reports/rolling-restart-publication-open-count-only-ack-20260517T084752Z.report.json`
 
 Playback: `none`
 
@@ -22,19 +22,20 @@ Boundary: `snapshot_coverage`
 
 Dominant reason: `active_gate_timed_out`
 
-Current state: Focused owner reconcile proof is green: reconcileActiveGateMembershipPublication now accepts an owner-visible desired publication after a stale write/readback result instead of enqueueing another write_deferred retry. The representative rerun stayed red but migrated the first frontier to publication_ack_convergence under topology_publication_owner / publication_convergence with pending_acks_present.
+Current state: The publication ACK/open count-only slice closed: the representative rerun reports publication_ack_convergence satisfied with publicationStatus=PUBLISHED, pendingAckCount=0, and publicationOwnerAckState=not_required. The first frontier migrated to active_gate_snapshot_coverage under startup_active_gate_owner / snapshot_coverage with active_gate_timed_out, snapshotCoverageNodeCount=3 of expectedNodeCount=5, publicationActiveGateHandoffState=pending, reason owner_reconcile_pending, pendingReconcileCount=2, and nextAction reconcile_owner_membership_publication.
 
 ## Next Action
 
-Open a successor for the canonical migrated frontier: topology_publication_owner / publication_convergence, dominant reason pending_acks_present, from test-output/reports/rolling-restart-owner-reconcile-visible-readback-20260517T081137Z.report.json. Publication ACK is selected again by canonical evidence; other frozen edges stay closed unless selected.
+Continue locally on the active-gate owner-reconcile snapshot coverage path selected by the representative report; reconcile owner membership publication for the two pending nodes while keeping publication ACK and priority recovery frozen.
 
 ## Proof Ladder
 
-1. `npx tap test/control-plane/membership-publication-coordinator-main-stage-2.js --grep "owner-visible publication after stale write readback"`
-2. `npm run work:evidence-summary -- test-output/reports/rolling-restart-owner-reconcile-visible-readback-20260517T081137Z.report.json`
-3. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-owner-reconcile-visible-readback-20260517T081137Z.report.json --handoff-probe`
-4. `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-owner-reconcile-visible-readback-20260517T081137Z.report.json`
-5. `npm run analyze:distributed-failure -- --report test-output/reports/rolling-restart-owner-reconcile-visible-readback-20260517T081137Z.report.json`
+1. `npm run work:evidence-summary -- test-output/reports/rolling-restart-publication-open-count-only-ack-20260517T084752Z.report.json`
+2. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-publication-open-count-only-ack-20260517T084752Z.report.json --handoff-probe`
+3. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-publication-open-count-only-ack-20260517T084752Z.report.json --replay-fixture`
+4. `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-publication-open-count-only-ack-20260517T084752Z.report.json`
+5. `npm run analyze:distributed-failure -- --report test-output/reports/rolling-restart-publication-open-count-only-ack-20260517T084752Z.report.json`
+6. `npm run analyze:owner-files -- startup_active_gate_owner snapshot_coverage --markdown`
 
 ## Model Fit
 
@@ -49,8 +50,7 @@ Output profile: `medium`
 Escalation triggers:
 
 1. `owned files expand beyond this package`
-2. `runtime ownership changes`
-3. `representative scenario evidence changes`
+2. `a frozen decision must be reopened`
 
 ## Representative Residual
 
@@ -58,84 +58,81 @@ Status: `live-red-scenario-release-gate`
 
 Scenario: `rolling-restart`
 
-Artifact: `test-output/reports/rolling-restart-owner-reconcile-visible-readback-20260517T081137Z.report.json`
+Artifact: `test-output/reports/rolling-restart-publication-open-count-only-ack-20260517T084752Z.report.json`
 
-Frontier: `publication_ack_convergence`
+Frontier: `active_gate_snapshot_coverage`
 
-Owner: `topology_publication_owner`
+Owner: `startup_active_gate_owner`
 
-Boundary: `publication_convergence`
+Boundary: `snapshot_coverage`
 
-Dominant reason: `pending_acks_present`
+Dominant reason: `active_gate_timed_out`
 
-Next action: `Open a successor for topology_publication_owner / publication_convergence. Publication ACK is selected again by canonical evidence after this owner-reconcile package migrated.`
+Next action: `Continue locally on the active-gate owner-reconcile snapshot coverage path selected by canonical evidence; reconcile owner membership publication for the two pending nodes while publication ACK and priority recovery remain frozen.`
 
 ## Causal Governance
 
-Causal hypothesis: `The remaining active-gate snapshot coverage gap is now concentrated in owner membership publication reconciliation: the representative artifact reports handoff state pending, reason owner_reconcile_pending, nextAction reconcile_owner_membership_publication, pendingReconcileCount=2, and handoffOutcome write_deferred.`
+Causal hypothesis: `Publication ACK is now satisfied, and the remaining representative blocker is active-gate snapshot coverage: snapshotCoverageNodeCount=3/5, activeGateState=timed_out, publicationActiveGateHandoffState=pending, owner_reconcile_pending, pendingReconcileCount=2, runtimePromotionAllowed=false, and nextAction=reconcile_owner_membership_publication.`
 
-Stop-condition check: `Use work:evidence-summary, topology convergence handoff probe, npm run analyze:causal-model, distributed-failure, and owner-files before runtime edits; then run the required review/fix/implementation subagents before changing promoted runtime files.`
+Stop-condition check: `Use work:evidence-summary, topology convergence handoff probe, replay fixture, npm run analyze:causal-model, distributed-failure, and owner-files before runtime edits; then run required review/fix/implementation subagents before changing promoted runtime files.`
 
-Expected causal-model change: `Achieved for this package: focused owner reconcile proof is green and representative evidence migrated the first frontier to publication_ack_convergence / topology_publication_owner / publication_convergence.`
+Expected causal-model change: `active_gate_snapshot_coverage becomes satisfied, pending owner reconcile count or snapshot coverage improves with focused owner proof, representative rolling-restart turns green, or canonical evidence migrates to a new owner boundary.`
 
-Representative outcome: `migrated`
+Representative outcome: `pending-before-rerun`
 
-Causal debt: `Publication ACK is selected again by canonical evidence in the new representative artifact. Priority recovery, timeout budgets, active-gate admission, selected-source selection, forced repair timeout handling, authoritative query-pressure fallback, and readiness support remain frozen unless canonical evidence selects them again.`
+Causal debt: `Publication ACK and priority recovery are satisfied in the causal graph and remain frozen unless canonical evidence selects them again. Timeout budgets, active-gate admission, selected-source selection, forced repair timeout handling, authoritative query-pressure fallback, and readiness support remain frozen unless selected.`
 
-Cross-boundary review: `This package should stop at the migrated frontier instead of reopening additional frozen edges inside the owner-reconcile slice.`
+Cross-boundary review: `Do not absorb publication ACK or priority workflow evidence into this package; this package owns only the selected startup active-gate snapshot coverage handoff.`
 
 ## Scenario Causal Closure
 
-Reference scenario/probe: `rolling-restart owner reconcile refresh retention rerun`
+Reference scenario/probe: `rolling-restart publication open count-only ACK rerun`
 
 Phase chain:
 
-1. `consume the reduced owner handoff refresh-retention proof`
-2. `use work:evidence-summary and handoff probe on the reduced representative artifact`
-3. `use owner-files to select the narrow remaining owner reconcile write-deferred path`
+1. `consume the migrated publication ACK closure proof`
+2. `use evidence-summary, handoff probe, replay fixture, causal model, distributed failure summary, and owner-files on the new representative artifact`
+3. `build or reuse the narrowest active-gate owner-reconcile fixture for pendingReconcileCount=2 and runtimePromotionAllowed=false`
 4. `run review, fix if required, and implementation subagents before runtime edits`
-5. `edit only the selected owner path after exact owner files are promoted`
-6. `rerun focused owner tests and one representative rolling-restart run`
+5. `edit only the selected active-gate owner path after exact runtime files are promoted`
+6. `rerun focused active-gate owner tests and one representative rolling-restart run`
 
-Current first frontier: `publication_ack_convergence in test-output/reports/rolling-restart-owner-reconcile-visible-readback-20260517T081137Z.report.json, owned by topology_publication_owner / publication_convergence with publicationStatus=OPEN and pending_acks_present.`
+Current first frontier: `active_gate_snapshot_coverage in test-output/reports/rolling-restart-publication-open-count-only-ack-20260517T084752Z.report.json, owned by startup_active_gate_owner / snapshot_coverage with active_gate_timed_out, snapshotCoverageNodeCount=3/5, and pendingReconcileCount=2.`
 
 Known downstream blockers:
 
-1. `publication_ack_convergence is selected again by canonical representative evidence`
-2. `priority_recovery_workflow_progress is frozen unless canonical evidence selects it again`
-3. `snapshotCoverageNodeCount is 2 of expectedNodeCount 5 but active-gate coverage is deferred behind publication_ack_convergence`
+1. `readiness_startup_support is deferred behind active_gate_snapshot_coverage as inherited active-gate no progress`
+2. `publication_ack_convergence is satisfied with publicationStatus=PUBLISHED and pendingAckCount=0`
+3. `priority_recovery_partition_progress is satisfied and must remain frozen unless reselected`
 4. `selectedSnapshotObservationMode is repair_deferred with state deferred_refresh and nextAction retry`
 5. `selectedSnapshotObservationReasonCodes include cache_stale_watermark, discovery_node_coverage_gap, and stale_replica_operations_in_flight`
-6. `publicationActiveGateHandoffState is pending with reason owner_reconcile_pending and nextAction reconcile_owner_membership_publication`
-7. `publicationActiveGateHandoffPendingReconcileCount is 3 in the migrated artifact, but the first frontier is publication_ack_convergence`
-8. `readiness_startup_support remains deferred as inherited active-gate no progress`
 
-Missing causal edge: `The owner reconcile write_deferred stale-readback edge is fixed; the remaining representative edge is publication ACK pending.`
+Missing causal edge: `The selected edge is the active-gate owner-reconcile handoff: pending owner membership publication reconcile remains for two nodes while runtime promotion is not allowed.`
 
-Missing causal edge probe: `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-owner-reconcile-visible-readback-20260517T081137Z.report.json --handoff-probe`
+Missing causal edge probe: `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-publication-open-count-only-ack-20260517T084752Z.report.json --handoff-probe`
 
-Bounded progress proof: `Focused owner reconcile test is green: stale write/readback no longer enqueues another retry when the desired publication is owner-visible, and representative rolling-restart migrated to topology_publication_owner / publication_convergence.`
+Bounded progress proof: `Pending before focused bounded active-gate proof and representative rerun; the selected progress mechanism is owner membership publication reconcile.`
 
-Bounded progress proof artifact: `test-output/reports/rolling-restart-owner-reconcile-visible-readback-20260517T081137Z.report.json`
+Bounded progress proof artifact: `test-output/reports/rolling-restart-publication-open-count-only-ack-20260517T084752Z.report.json`
 
-Expected observable transition: `Successor should target publication_ack_convergence because canonical evidence selected it again.`
+Expected observable transition: `Focused proof should satisfy active_gate_snapshot_coverage, reduce pendingReconcileCount or increase snapshotCoverageNodeCount, migrate to a canonical successor owner, or turn representative rolling-restart green.`
 
-Max progress bound: `one focused startup_active_gate_owner / snapshot_coverage owner-reconcile write-deferred slice`
+Max progress bound: `one focused startup_active_gate_owner / snapshot_coverage owner-reconcile slice`
 
-Same-frontier fallback: `If focused tests pass but representative evidence remains at active_gate_snapshot_coverage with the same pending reconcile count and no metric movement, stop as same-frontier instead of reopening frozen edges.`
+Same-frontier fallback: `If focused tests pass but representative evidence remains on the same active_gate_snapshot_coverage frontier with no metric or evidence movement, stop as same-frontier instead of widening into frozen publication, priority, timeout, or readiness edges.`
 
-Expected next frontier: `topology_publication_owner / publication_convergence`
+Expected next frontier: `active_gate_snapshot_coverage satisfied, reduced to narrower owner-reconcile evidence, representative green, or canonical migration to a successor owner boundary`
 
-Result classification: `migrated`
+Result classification: `pending-before-probe`
 
 Stop condition: `continue-local-fix`
 
 Recent frontier history:
 
-1. `work/packages/done-20260517-startup-active-gate-snapshot-coverage-after-priority-closure.md / startup_active_gate_owner / snapshot_coverage / reduced`
-2. `work/packages/done-20260517-startup-active-gate-owner-reconcile-after-query-pressure-fallback.md / startup_active_gate_owner / snapshot_coverage / reduced`
+1. `work/packages/done-20260517-startup-active-gate-owner-reconcile-write-deferred-residual.md / startup_active_gate_owner / snapshot_coverage / migrated`
+2. `work/packages/done-20260517-topology-publication-ack-pending-after-owner-reconcile-migration.md / topology_publication_owner / publication_convergence / migrated`
 
-Oscillation check: `Allowed because the immediate predecessor reduced pending owner reconciliation from 3 nodes to 2 at the same owner boundary.`
+Oscillation check: `Allowed because fresh representative evidence satisfied publication ACK and selected active_gate_snapshot_coverage as the first frontier with improved snapshot coverage from 2/5 to 3/5 and pending reconcile reduced from 3 to 2.`
 
 Handoff invariant: `Publication ACK, priority recovery, timeout budgets, active-gate admission, selected-source selection, forced repair timeout handling, authoritative query-pressure fallback, and readiness support remain frozen unless canonical evidence selects them again.`
 
@@ -143,19 +140,20 @@ Handoff invariant: `Publication ACK, priority recovery, timeout budgets, active-
 
 Write scope:
 
-1. `src/control-plane/membership-publication-coordinator-class-stage-2.js`
-2. `test/control-plane/membership-publication-coordinator-main-stage-2.js`
-3. `work/packages/active-20260517-startup-active-gate-owner-reconcile-write-deferred-residual.md`
-4. `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md`
-5. `work/sprints/current-blocker.md`
-6. `work/sprints/current-blocker.json`
-7. `work/model-ledger.jsonl`
+1. `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md`
+2. `work/sprints/current-blocker.md`
+3. `work/sprints/current-blocker.json`
+4. `work/model-ledger.jsonl`
+5. `src/control-plane/publication-active-gate-handoff-contract.js`
+6. `src/control-plane/membership-publication-planning.js`
+7. `test/control-plane/publication-active-gate-handoff-contract.test.js`
+8. `test/admin/admin-control-snapshot.test.js`
+9. `test/distributed/harness/__tests__/active-gate-closure-classification.test.js`
 
 Handoff files:
 
-1. `work/packages/done-20260517-startup-active-gate-owner-reconcile-after-query-pressure-fallback.md`
-2. `test-output/reports/rolling-restart-owner-reconcile-refresh-retention-20260517T073616Z.report.json`
-3. `test-output/reports/rolling-restart-owner-reconcile-visible-readback-20260517T081137Z.report.json`
+1. `test-output/reports/rolling-restart-publication-open-count-only-ack-20260517T084752Z.report.json`
+2. `work/packages/done-20260517-topology-publication-ack-pending-after-owner-reconcile-migration.md`
 
 Generated files:
 
@@ -164,20 +162,21 @@ Generated files:
 
 Candidate runtime files:
 
-1. `src/control-plane/membership-publication-coordinator-class-stage-2.js`
-2. `src/admin/admin-control-snapshot-class-part-2.js`
-3. `test/admin/admin-control-snapshot.test.js`
-4. `test/control-plane/membership-publication-coordinator.test.js`
+1. `src/control-plane/publication-active-gate-handoff-contract.js`
+2. `src/control-plane/membership-publication-planning.js`
+3. `src/diagnostics/topology-convergence-graph.js`
 
 Commit scope:
 
-1. `src/control-plane/membership-publication-coordinator-class-stage-2.js`
-2. `test/control-plane/membership-publication-coordinator-main-stage-2.js`
-3. `work/packages/active-20260517-startup-active-gate-owner-reconcile-write-deferred-residual.md`
-4. `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md`
-5. `work/sprints/current-blocker.md`
-6. `work/sprints/current-blocker.json`
-7. `work/model-ledger.jsonl`
+1. `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md`
+2. `work/sprints/current-blocker.md`
+3. `work/sprints/current-blocker.json`
+4. `work/model-ledger.jsonl`
+5. `src/control-plane/publication-active-gate-handoff-contract.js`
+6. `src/control-plane/membership-publication-planning.js`
+7. `test/control-plane/publication-active-gate-handoff-contract.test.js`
+8. `test/admin/admin-control-snapshot.test.js`
+9. `test/distributed/harness/__tests__/active-gate-closure-classification.test.js`
 
 Legacy touched files:
 

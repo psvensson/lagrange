@@ -710,6 +710,53 @@ test('buildCanonicalPublicationRecoveryEvidence preserves count-only ACK debt ac
     t.end();
   });
 
+test('buildCanonicalPublicationRecoveryEvidence reduces open count-only ACK evidence to publishing',
+  (t) => {
+    const evidence = buildCanonicalPublicationRecoveryEvidence({
+      publicationConvergence: {
+        publicationEpoch: TEST_PUBLICATION_EPOCH,
+        publicationStatus: CONTROL_PLANE_PUBLICATION_STATUS.OPEN,
+        recoveryProtocolState: RECOVERY_PROTOCOL_STATE.PUBLICATION_PENDING,
+        pendingAckNodeIds: TEST_EMPTY_NODE_IDS,
+        pendingAckCount: TEST_PUBLICATION_DEBT_COUNT,
+        missingPublishedNodeIds: [TEST_NODE_ID.SECOND],
+        missingPublishedCount: TEST_PUBLICATION_DEBT_COUNT,
+        priorityRecoveryReasonCodes: [TEST_PUBLICATION_PENDING_REASON_CODE],
+        priorityPartitionSummary: TEST_SATISFIED_PRIORITY_PARTITION_SUMMARY,
+      },
+    });
+
+    t.equal(
+      evidence.publicationConvergenceGate.state,
+      PUBLICATION_RECOVERY_GATE_STATE.PUBLICATION_PENDING,
+    );
+    t.equal(
+      evidence.publicationConvergenceGate.pendingAckCount,
+      TEST_EMPTY_PUBLICATION_DEBT_COUNT,
+    );
+    t.same(
+      evidence.publicationConvergenceGate.pendingAckNodeIds,
+      TEST_EMPTY_NODE_IDS,
+    );
+    t.equal(evidence.priorityRecoveryObservation.pendingAckCount,
+      TEST_EMPTY_PUBLICATION_DEBT_COUNT);
+    t.equal(evidence.publicationConvergence.pendingAckCount,
+      TEST_EMPTY_PUBLICATION_DEBT_COUNT);
+    t.equal(
+      evidence.publicationConvergence.streamOutcome,
+      PUBLICATION_OWNER_STREAM_OUTCOME.PUBLISHING,
+    );
+    t.equal(
+      evidence.publicationConvergence.freshnessFence,
+      PUBLICATION_OWNER_FRESHNESS_FENCE.PUBLISHING,
+    );
+    t.equal(
+      evidence.publicationConvergence.recoveryOutcome,
+      PUBLICATION_OWNER_RECOVERY_OUTCOME.WAITING_FOR_PUBLICATION,
+    );
+    t.end();
+  });
+
 test('buildCanonicalPublicationRecoveryEvidence closes published empty pending ACK list reentry debt',
   (t) => {
     const evidence = buildCanonicalPublicationRecoveryEvidence({
