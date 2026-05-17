@@ -499,23 +499,29 @@ The sprint cannot close until:
 
 ## Current Next Action
 
-Continue with the operation workflow successor selected by the metric-moving
-publication ACK handoff artifact:
+Close the active-gate authoritative query-pressure slice as metric-moving, then
+continue with the owner reconciliation successor selected by the latest
+representative artifact:
 
 ```text
-work/packages/done-20260517-priority-recovery-workflow-progress-after-publication-handoff.md
-test-output/reports/rolling-restart-after-publication-handoff-flat-progress-20260517.report.json
+work/packages/active-20260517-startup-active-gate-snapshot-coverage-after-priority-closure.md
+test-output/reports/rolling-restart-active-gate-projected-fallback-20260517T063708Z.report.json
 ```
 
-The current first frontier is one `operation_workflow_owner / workflow_progress`
-priority recovery witness for `control_plane_publications-p1` in
-`spread_satisfied_in_flight`. Success must be metric-moving:
-`priority_recovery_partition_progress` gone, `snapshotCoverage` above `4/5`,
-`discovery_node_coverage_gap` gone, a genuinely new owner boundary selected, or
-representative `rolling-restart` green.
+The current first frontier is `startup_active_gate_owner / snapshot_coverage`:
+fresh evidence reports `active_gate_snapshot_coverage`, `snapshotCoverage=4/5`,
+`snapshot_repair_deferred`, and handoff contract state `pending` with
+`owner_reconcile_pending`. The required next action is
+`reconcile_owner_membership_publication` for pending nodes
+`35a891b8-c1a0-5064-9c6e-2acfba61c2a7`,
+`8be8d30f-4499-5eed-865c-71b4d529a67a`, and
+`ebc4aa0b-06c6-506d-93ea-1dd2deca3f58`.
 
 Run the required review/fix/implementation subagent sequence before runtime
-edits. Keep publication ACK, timeout budget increases, active-gate admission,
-selected-source selection, CDC fallback, message-router reconnect delivery,
-query participant routing, and readiness support frozen unless canonical
-evidence selects them again.
+edits for the successor package. Keep publication ACK, priority recovery,
+timeout budget increases, active-gate admission, CDC fallback, message-router
+reconnect delivery, query participant routing, and readiness support frozen
+unless canonical evidence selects them again. The next proof target remains
+metric-moving: reduce pending reconcile, remove `discovery_node_coverage_gap`,
+move snapshot coverage to `5/5`, migrate to a genuinely new owner boundary, or
+turn representative `rolling-restart` green.

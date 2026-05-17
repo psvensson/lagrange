@@ -4371,6 +4371,251 @@ test('AdminControlSnapshot forced participant repair failure returns a usable fa
     );
   });
 
+test('AdminControlSnapshot thrown forced repair connection failure preserves a metric-moving fallback',
+  async (t) => {
+    const buildOptions = [];
+    let repairOptions = null;
+    let sharedOwnerRepairCalls = 0;
+    const localSnapshot = {
+      nodes: [...ACTIVE_GATE_SNAPSHOT_DEFERRED_REPAIR_NODE_IDS],
+      controlPlaneDiagnostics: {
+        publicationConvergence: null,
+      },
+    };
+    const repairFailure = new Error(
+      ACTIVE_GATE_SNAPSHOT_PARTICIPANT_CONNECTION_DETAIL,
+    );
+    const snapshot = new AdminControlSnapshot({
+      nodeId: ACTIVE_GATE_SNAPSHOT_TIMEOUT_SELECTED_SOURCE_NODE_ID,
+    });
+    snapshot.controlPlaneSnapshotOwner = new ControlPlaneSnapshotOwner({
+      controlSnapshot: snapshot,
+      serviceDiscovery: {
+        async ensureAuthoritativeDiscoveryCacheRepair() {
+          sharedOwnerRepairCalls += 1;
+          throw new Error('shared owner force repair should stay deferred');
+        },
+      },
+    });
+    snapshot.buildLocalControlSnapshot = async (options = {}) => {
+      buildOptions.push(options);
+      if (buildOptions.length === 1) {
+        throw new Error(
+          ACTIVE_GATE_SNAPSHOT_RECOVERABLE_PUBLICATION_READ_ERROR,
+        );
+      }
+      if (
+        options[
+          ACTIVE_GATE_SNAPSHOT_OPTION_FORCE_AUTHORITATIVE_REPAIR
+        ] === true ||
+        options[
+          ACTIVE_GATE_SNAPSHOT_OPTION_ALLOW_AUTHORITATIVE_REPAIR
+        ] === true ||
+        options[
+          ACTIVE_GATE_SNAPSHOT_OPTION_PREFER_AUTHORITATIVE_PUBLICATION_READ
+        ] === true
+      ) {
+        throw new Error(
+          ACTIVE_GATE_SNAPSHOT_RECOVERABLE_PUBLICATION_READ_ERROR,
+        );
+      }
+      return localSnapshot;
+    };
+    snapshot.canRunAuthoritativeControlSnapshotRepair = () => true;
+    snapshot.evaluateAuthoritativeControlSnapshotRepair = () => ({
+      shouldRepair: true,
+      triggerCodes: [
+        ACTIVE_GATE_SNAPSHOT_DISCOVERY_NODE_COVERAGE_GAP_TRIGGER,
+      ],
+      nodeCoverage: {
+        activeProjection: {
+          hasCoverageGap: true,
+          missingNodeIds: [...ACTIVE_GATE_SNAPSHOT_REPAIR_GAP_NODE_IDS],
+        },
+      },
+    });
+    snapshot.ensureAuthoritativeDiscoveryCacheRepair = async (options = {}) => {
+      repairOptions = options;
+      throw repairFailure;
+    };
+
+    const result = await snapshot.resolveLocalControlSnapshot({
+      forceAuthoritativeRepair: true,
+      allowAuthoritativeRepair: true,
+      queryTimeoutMs: ACTIVE_GATE_SNAPSHOT_DIRECT_QUERY_TIMEOUT_MS,
+    });
+
+    t.equal(
+      buildOptions.length,
+      2,
+      'thrown forced repair failure should retry once from the local cache',
+    );
+    t.equal(
+      buildOptions[1][
+        ACTIVE_GATE_SNAPSHOT_OPTION_FORCE_AUTHORITATIVE_REPAIR
+      ],
+      false,
+      'fallback should exit forced repair before reading the local cache',
+    );
+    t.equal(
+      buildOptions[1][
+        ACTIVE_GATE_SNAPSHOT_OPTION_ALLOW_AUTHORITATIVE_REPAIR
+      ],
+      false,
+      'fallback should not allow another authoritative repair while repair is deferred',
+    );
+    t.equal(
+      buildOptions[1][
+        ACTIVE_GATE_SNAPSHOT_OPTION_PREFER_AUTHORITATIVE_PUBLICATION_READ
+      ],
+      false,
+      'fallback should not repeat the failed authoritative publication read',
+    );
+    t.equal(
+      repairOptions?.queryTimeoutMs,
+      ACTIVE_GATE_SNAPSHOT_FORCED_REPAIR_QUERY_TIMEOUT_MS,
+      'forced thrown repair should reserve caller query time for the local fallback',
+    );
+    t.equal(
+      sharedOwnerRepairCalls,
+      0,
+      'the shared snapshot owner should not retry force repair after the thrown participant failure',
+    );
+    t.same(
+      result.nodes,
+      [...ACTIVE_GATE_SNAPSHOT_DEFERRED_REPAIR_NODE_IDS],
+      'thrown participant failure should keep snapshot coverage above two-of-five',
+    );
+    t.match(
+      result,
+      {
+        observationMode:
+          ACTIVE_GATE_SNAPSHOT_REPAIR_DEFERRED_OBSERVATION_MODE,
+        snapshotObservation: {
+          state: ACTIVE_GATE_SNAPSHOT_REPAIR_DEFERRED_STATE,
+          contractState:
+            ACTIVE_GATE_SNAPSHOT_REPAIR_DEFERRED_CONTRACT_STATE,
+          nextAction: ACTIVE_GATE_SNAPSHOT_REPAIR_DEFERRED_NEXT_ACTION,
+          reasonCodes: [
+            ACTIVE_GATE_SNAPSHOT_DISCOVERY_NODE_COVERAGE_GAP_TRIGGER,
+          ],
+        },
+        adminObservation: {
+          repair: {
+            forced: true,
+            deferred: true,
+            applied: false,
+          },
+        },
+        controlPlaneDiagnostics: {
+          ordinaryRepairDeferred: true,
+        },
+      },
+      'thrown connection-closed repair failure should become a structured deferred snapshot',
+    );
+  });
+
+test('AdminControlSnapshot forced repair uses projected fallback coverage under query pressure',
+  async (t) => {
+    const buildOptions = [];
+    const projectedFallbackSnapshot = {
+      nodes: [...ACTIVE_GATE_SNAPSHOT_UNUSABLE_LOCAL_NODE_IDS],
+      projectedNodes: [...ACTIVE_GATE_SNAPSHOT_DEFERRED_REPAIR_NODE_IDS],
+      controlPlaneDiagnostics: {
+        publicationConvergence: null,
+      },
+    };
+    const repairFailure = {
+      applied: false,
+      skipped: false,
+      failedTables: [TABLES.NODES],
+      errors: [ACTIVE_GATE_SNAPSHOT_PARTICIPANT_CONNECTION_DETAIL],
+      causeChain: [ACTIVE_GATE_SNAPSHOT_PARTICIPANT_CAUSE],
+      firstFailedParticipant: {
+        failedTable: TABLES.NODES,
+        participantNodeId:
+          ACTIVE_GATE_SNAPSHOT_PARTICIPANT_CONNECTION_NODE_ID,
+        errorCode: ACTIVE_GATE_SNAPSHOT_PARTICIPANT_FAILURE_CODE,
+        error: ACTIVE_GATE_SNAPSHOT_PARTICIPANT_CONNECTION_FAILURE,
+      },
+    };
+    const snapshot = new AdminControlSnapshot({
+      nodeId: ACTIVE_GATE_SNAPSHOT_TIMEOUT_SELECTED_SOURCE_NODE_ID,
+    });
+    snapshot.controlPlaneSnapshotOwner = new ControlPlaneSnapshotOwner({
+      controlSnapshot: snapshot,
+    });
+    snapshot.buildLocalControlSnapshot = async (options = {}) => {
+      buildOptions.push(options);
+      return projectedFallbackSnapshot;
+    };
+    snapshot.canRunAuthoritativeControlSnapshotRepair = () => true;
+    snapshot.evaluateAuthoritativeControlSnapshotRepair = () => ({
+      shouldRepair: true,
+      triggerCodes: [
+        ACTIVE_GATE_SNAPSHOT_DISCOVERY_NODE_COVERAGE_GAP_TRIGGER,
+      ],
+      nodeCoverage: {
+        activeProjection: {
+          hasCoverageGap: true,
+          missingNodeIds: [...ACTIVE_GATE_SNAPSHOT_REPAIR_GAP_NODE_IDS],
+        },
+      },
+    });
+    snapshot.ensureAuthoritativeDiscoveryCacheRepair = async () =>
+      repairFailure;
+
+    const result = await snapshot.resolveLocalControlSnapshot({
+      forceAuthoritativeRepair: true,
+      allowAuthoritativeRepair: true,
+      queryTimeoutMs: ACTIVE_GATE_SNAPSHOT_DIRECT_QUERY_TIMEOUT_MS,
+    });
+
+    t.equal(
+      buildOptions.length,
+      1,
+      'projected fallback coverage should preserve the already built local snapshot',
+    );
+    t.same(
+      result.nodes,
+      [...ACTIVE_GATE_SNAPSHOT_DEFERRED_REPAIR_NODE_IDS].sort(
+        (left, right) => left.localeCompare(right),
+      ),
+      'deferred repair should promote projected fallback coverage above two-of-five',
+    );
+    t.same(
+      result.projectedNodes,
+      [...ACTIVE_GATE_SNAPSHOT_DEFERRED_REPAIR_NODE_IDS].sort(
+        (left, right) => left.localeCompare(right),
+      ),
+      'deferred repair should keep projected fallback coverage visible to probes',
+    );
+    t.match(
+      result,
+      {
+        observationMode:
+          ACTIVE_GATE_SNAPSHOT_REPAIR_DEFERRED_OBSERVATION_MODE,
+        snapshotObservation: {
+          state: ACTIVE_GATE_SNAPSHOT_REPAIR_DEFERRED_STATE,
+          contractState:
+            ACTIVE_GATE_SNAPSHOT_REPAIR_DEFERRED_CONTRACT_STATE,
+          nextAction: ACTIVE_GATE_SNAPSHOT_REPAIR_DEFERRED_NEXT_ACTION,
+        },
+        adminObservation: {
+          repair: {
+            forced: true,
+            deferred: true,
+            applied: false,
+          },
+        },
+        controlPlaneDiagnostics: {
+          ordinaryRepairDeferred: true,
+        },
+      },
+      'projected forced repair pressure should become a structured deferred snapshot',
+    );
+  });
+
 test('AdminControlSnapshot forced publication read failure preserves a metric-moving local fallback',
   async (t) => {
     const buildOptions = [];

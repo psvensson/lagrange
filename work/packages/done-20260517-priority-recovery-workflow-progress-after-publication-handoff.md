@@ -162,7 +162,7 @@
   "predecessor": "work/packages/done-20260517-topology-publication-ack-pending-after-forced-repair-owner-command.md",
   "closed": "2026-05-17",
   "commitAndPushLedgerRequired": true,
-  "successor": "work/packages/todo-20260515-topology-active-gate-snapshot-coverage-after-publication-handoff.md"
+  "successor": "work/packages/active-20260517-startup-active-gate-snapshot-coverage-after-priority-closure.md"
 }
 -->
 

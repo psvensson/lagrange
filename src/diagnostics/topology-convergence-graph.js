@@ -103,6 +103,9 @@ const ACTIVE_GATE_SNAPSHOT_OWNER_EDGE_AUTHORITATIVE_QUERY =
   'authoritative_control_snapshot_query_pressure';
 const SELECTED_SNAPSHOT_ADMIN_QUERY_TIMEOUT_PREFIX =
   'Admin API query timed out for node ';
+const SELECTED_SNAPSHOT_ADMIN_QUERY_FAILED_PREFIX =
+  'Admin API query failed for node ';
+const SELECTED_SNAPSHOT_ADMIN_QUERY_LANE_MARKER = ' on lane ';
 const SELECTED_SNAPSHOT_FORCED_REPAIR_FAILURE_FRAGMENT =
   'forced repair snapshot failed:';
 const SELECTED_SNAPSHOT_AUTHORITATIVE_REPAIR_FAILURE_FRAGMENT =
@@ -111,6 +114,10 @@ const SELECTED_SNAPSHOT_AUTHORITATIVE_NODES_TIMEOUT_FRAGMENT =
   'nodes:Query timeout after ';
 const SELECTED_SNAPSHOT_AUTHORITATIVE_NODES_PARTICIPANT_FAILURE_FRAGMENT =
   'nodes:Distributed operation failed due to participant failures';
+const SELECTED_SNAPSHOT_AUTHORITATIVE_NODES_CONNECTION_CLOSED_FRAGMENT =
+  'nodes:Connection to node ';
+const SELECTED_SNAPSHOT_AUTHORITATIVE_NODES_CONNECTION_CLOSED_SUFFIX =
+  ' closed';
 
 const EDGE_STATE = Object.freeze({
   SATISFIED: 'satisfied',
@@ -2407,10 +2414,15 @@ function normalizeActiveGateSnapshotCauseEvidence(progress) {
   const selectedSnapshotNodeId = firstText(
     progress.selectedSnapshotNodeId,
     progress.selectedNodeId,
+    selectSnapshotNodeIdFromAdminQueryFailure(selectedSnapshotError),
   );
   const selectedSnapshotTimeoutMs = numberOrUnknown(
     progress.selectedSnapshotTimeoutMs,
   );
+  const authoritativeControlSnapshotRepairFailure =
+    selectedSnapshotError.includes(
+      SELECTED_SNAPSHOT_AUTHORITATIVE_REPAIR_FAILURE_FRAGMENT,
+    );
   const selectedSnapshotSourceTimeout =
     selectedSnapshotError.includes(
       SELECTED_SNAPSHOT_ADMIN_QUERY_TIMEOUT_PREFIX,
@@ -2427,15 +2439,23 @@ function normalizeActiveGateSnapshotCauseEvidence(progress) {
       SELECTED_SNAPSHOT_AUTHORITATIVE_REPAIR_FAILURE_FRAGMENT,
     );
   const authoritativeControlSnapshotQueryTimeout =
-    forcedRepairSnapshotTimeout === true &&
+    authoritativeControlSnapshotRepairFailure === true &&
     selectedSnapshotError.includes(
       SELECTED_SNAPSHOT_AUTHORITATIVE_NODES_TIMEOUT_FRAGMENT,
     );
   const authoritativeControlSnapshotQueryPressure =
     authoritativeControlSnapshotQueryTimeout !== true &&
-    forcedRepairSnapshotTimeout === true &&
-    selectedSnapshotError.includes(
-      SELECTED_SNAPSHOT_AUTHORITATIVE_NODES_PARTICIPANT_FAILURE_FRAGMENT,
+    authoritativeControlSnapshotRepairFailure === true &&
+    (
+      selectedSnapshotError.includes(
+        SELECTED_SNAPSHOT_AUTHORITATIVE_NODES_PARTICIPANT_FAILURE_FRAGMENT,
+      ) ||
+      selectedSnapshotError.includes(
+        SELECTED_SNAPSHOT_AUTHORITATIVE_NODES_CONNECTION_CLOSED_FRAGMENT,
+      ) &&
+      selectedSnapshotError.includes(
+        SELECTED_SNAPSHOT_AUTHORITATIVE_NODES_CONNECTION_CLOSED_SUFFIX,
+      )
     );
 
   return Object.freeze({
@@ -2447,6 +2467,25 @@ function normalizeActiveGateSnapshotCauseEvidence(progress) {
     authoritativeControlSnapshotQueryTimeout,
     authoritativeControlSnapshotQueryPressure,
   });
+}
+
+function selectSnapshotNodeIdFromAdminQueryFailure(selectedSnapshotError) {
+  const prefixIndex = selectedSnapshotError.indexOf(
+    SELECTED_SNAPSHOT_ADMIN_QUERY_FAILED_PREFIX,
+  );
+  if (prefixIndex < SOURCE_ORDER_BASE) {
+    return UNKNOWN_VALUE;
+  }
+  const nodeIdStart =
+    prefixIndex + SELECTED_SNAPSHOT_ADMIN_QUERY_FAILED_PREFIX.length;
+  const laneMarkerIndex = selectedSnapshotError.indexOf(
+    SELECTED_SNAPSHOT_ADMIN_QUERY_LANE_MARKER,
+    nodeIdStart,
+  );
+  if (laneMarkerIndex <= nodeIdStart) {
+    return UNKNOWN_VALUE;
+  }
+  return selectedSnapshotError.slice(nodeIdStart, laneMarkerIndex);
 }
 
 function buildActiveGateSnapshotCauseSource(progress) {

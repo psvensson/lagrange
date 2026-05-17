@@ -2,6 +2,8 @@ import {describe, it} from 'node:test';
 import assert from 'node:assert/strict';
 import {execFileSync} from 'node:child_process';
 import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import {buildTopologyConvergenceGraph} from '../../src/diagnostics/topology-convergence-graph.js';
 
 const NODE_BIN = process.execPath;
@@ -108,12 +110,21 @@ const FORCED_REPAIR_SNAPSHOT_TIMEOUT_REASON =
   'forced_repair_snapshot_timeout';
 const AUTHORITATIVE_CONTROL_SNAPSHOT_QUERY_TIMEOUT_REASON =
   'authoritative_control_snapshot_query_timeout';
+const AUTHORITATIVE_CONTROL_SNAPSHOT_QUERY_PRESSURE_REASON =
+  'authoritative_control_snapshot_query_pressure';
 const ACTIVE_GATE_SNAPSHOT_OWNER_EDGE_AUTHORITATIVE_QUERY =
   'authoritative_control_snapshot_query_pressure';
 const SNAPSHOT_COVERAGE_ZERO_OF_FIVE = 0;
 const SNAPSHOT_COVERAGE_TWO_OF_FIVE = 2;
 const ACTIVE_GATE_SELECTED_SNAPSHOT_SOURCE =
   '11601fe0-72d6-5853-8590-ec2881853e72';
+const ACTIVE_GATE_CONNECTION_CLOSED_PARTICIPANT_NODE =
+  '7493b0ab-a054-5fad-a91b-5e331db29304';
+const ACTIVE_GATE_CONNECTION_CLOSED_SELECTED_SNAPSHOT_ERROR =
+  'Admin API query failed for node ' +
+  `${ACTIVE_GATE_SELECTED_SNAPSHOT_SOURCE} on lane snapshot: ` +
+  'Authoritative control snapshot repair failed: nodes:Connection to node ' +
+  `${ACTIVE_GATE_CONNECTION_CLOSED_PARTICIPANT_NODE} closed`;
 const ACTIVE_GATE_SELECTED_SNAPSHOT_TIMEOUT_MS = 3349;
 const EXPECTED_NODE_COUNT = 5;
 const MISSING_PUBLISHED_COUNT = 4;
@@ -125,11 +136,15 @@ const ACTIVE_GATE_OWNER_COHORT_PENDING_RECONCILE_NODE_IDS =
   'node-2,node-3';
 const HANDOFF_CONTRACT_NEXT_ACTION_RECONCILE =
   'reconcile_owner_membership_publication';
+const HANDOFF_PROBE_TARGET_ACTION_BUILD_REPLAYABLE_FIXTURE =
+  'build_replayable_handoff_fixture';
 const SNAPSHOT_OBSERVATION_STATE_DEFERRED_REFRESH = 'deferred_refresh';
 const SNAPSHOT_OBSERVATION_CONTRACT_STATE_DEFERRED = 'deferred';
 const SNAPSHOT_OBSERVATION_REFRESH_STATE_DEFERRED = 'deferred';
 const SNAPSHOT_OBSERVATION_NEXT_ACTION_RETRY = 'retry';
 const SNAPSHOT_OBSERVATION_RETRY_AFTER_MS = 14976;
+const TEMP_FIXTURE_PREFIX = 'topology-convergence-';
+const TEMP_FIXTURE_SUFFIX = '.json';
 
 describe('analyze-topology-convergence CLI', () => {
   it('prints help text', () => {
@@ -364,6 +379,7 @@ describe('analyze-topology-convergence CLI', () => {
     assert.deepEqual(output.consumer.reasons, [
       ACTIVE_GATE_TIMED_OUT_REASON,
       SNAPSHOT_COVERAGE_INCOMPLETE_REASON,
+      AUTHORITATIVE_CONTROL_SNAPSHOT_QUERY_PRESSURE_REASON,
     ]);
     assert.equal(
       output.consumer.source.snapshotCoverageNodeCount,
@@ -420,6 +436,39 @@ describe('analyze-topology-convergence CLI', () => {
         ACTIVE_GATE_SNAPSHOT_OWNER_EDGE_AUTHORITATIVE_QUERY,
       );
     });
+
+  it('replays connection-closed authoritative snapshot query pressure', () => {
+    const output = runAnalyzerJsonForFixture(
+      buildConnectionClosedActiveGateFixture(),
+      ARG_HANDOFF_PROBE,
+    );
+
+    assert.equal(output.schemaVersion, HANDOFF_PROBE_SCHEMA);
+    assert.equal(output.consumer.edge, ACTIVE_GATE_EDGE_ID);
+    assert.equal(output.consumer.owner, STARTUP_ACTIVE_GATE_OWNER);
+    assert.equal(output.consumer.boundary, SNAPSHOT_COVERAGE_BOUNDARY);
+    assert.deepEqual(output.consumer.reasons, [
+      ACTIVE_GATE_TIMED_OUT_REASON,
+      SNAPSHOT_COVERAGE_INCOMPLETE_REASON,
+      AUTHORITATIVE_CONTROL_SNAPSHOT_QUERY_PRESSURE_REASON,
+    ]);
+    assert.equal(
+      output.consumer.source.selectedSnapshotNodeId,
+      ACTIVE_GATE_SELECTED_SNAPSHOT_SOURCE,
+    );
+    assert.equal(
+      output.consumer.source.authoritativeControlSnapshotQueryCause,
+      AUTHORITATIVE_CONTROL_SNAPSHOT_QUERY_PRESSURE_REASON,
+    );
+    assert.equal(
+      output.consumer.source.activeGateSnapshotOwnerEdge,
+      ACTIVE_GATE_SNAPSHOT_OWNER_EDGE_AUTHORITATIVE_QUERY,
+    );
+    assert.equal(
+      output.nextOwnerPath.requiredAction,
+      HANDOFF_PROBE_TARGET_ACTION_BUILD_REPLAYABLE_FIXTURE,
+    );
+  });
 
   it('keeps the active-gate consumer when it is the current handoff frontier',
     () => {
@@ -531,8 +580,69 @@ describe('analyze-topology-convergence CLI', () => {
   });
 });
 
+function buildConnectionClosedActiveGateFixture() {
+  return {
+    scenarios: [
+      {
+        scenario: 'rolling-restart',
+        publicationConvergence: {
+          publicationStatus: 'UNKNOWN',
+          pendingAckCount: 0,
+          blockedNodeCount: 0,
+          missingPublishedCount: 0,
+          activeGate: {
+            state: 'timed_out',
+            ready: false,
+            progress: {
+              expectedNodeCount: EXPECTED_NODE_COUNT,
+              snapshotCoverageNodeCount: SNAPSHOT_COVERAGE_ZERO_OF_FIVE,
+              snapshotCoverageComplete: false,
+              selectedSnapshotError:
+                ACTIVE_GATE_CONNECTION_CLOSED_SELECTED_SNAPSHOT_ERROR,
+              readinessDelay: {
+                cause: 'none',
+              },
+              blockers: [
+                'inactive_nodes=1',
+                'snapshot_coverage=0/5',
+                'snapshot_error',
+              ],
+            },
+          },
+        },
+        readinessFailure: {
+          mode: 'startup',
+          classCode: 'no_progress_terminal',
+          recoverability: 'terminal',
+          terminalReason: 'stalled_no_progress',
+          cause: 'none',
+          source: 'unknown',
+        },
+      },
+    ],
+  };
+}
+
 function runAnalyzerJson(...args) {
   return JSON.parse(runAnalyzerText(...args));
+}
+
+function runAnalyzerJsonForFixture(fixture, ...args) {
+  const fixturePath = writeTemporaryFixture(fixture);
+  try {
+    return runAnalyzerJson(fixturePath, ...args);
+  } finally {
+    fs.rmSync(fixturePath, {force: true});
+  }
+}
+
+function writeTemporaryFixture(fixture) {
+  const directory = fs.mkdtempSync(
+    path.join(os.tmpdir(), TEMP_FIXTURE_PREFIX),
+  );
+  const fixturePath = path.join(directory, TEMP_FIXTURE_SUFFIX);
+  fs.writeFileSync(fixturePath, JSON.stringify(fixture), ENCODING_UTF8);
+  return fixturePath;
 }
 
 function runAnalyzerText(...args) {

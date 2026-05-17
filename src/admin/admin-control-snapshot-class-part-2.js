@@ -107,6 +107,9 @@ const CONTROL_SNAPSHOT_REFRESH_OPTION_FIELD = Object.freeze({
     'reconcileAuthoritativeMembershipPublication',
 });
 const CONTROL_SNAPSHOT_REPAIR_FAILURE_DETAIL_SEPARATOR = ':';
+const CONTROL_SNAPSHOT_REPAIR_CONNECTION_CLOSED_PREFIX =
+  'Connection to node ';
+const CONTROL_SNAPSHOT_REPAIR_CONNECTION_CLOSED_SUFFIX = ' closed';
 const CONTROL_SNAPSHOT_REPAIR_FAILURE_PARTICIPANT_ERROR_FIELD = 'error';
 const CONTROL_SNAPSHOT_REPAIR_FAILURE_PARTICIPANT_MESSAGE_FIELD = 'message';
 const CONTROL_SNAPSHOT_REPAIR_FAILURE_PARTICIPANT_FAILED_TABLE_FIELD =
@@ -168,11 +171,18 @@ function hasParticipantFailureRepairCause(repair = null) {
     causeChain.includes(
       AUTHORITATIVE_REPAIR_CAUSE_QUERY_PARTICIPANT_FAILURE,
     ) ||
+    hasConnectionClosedParticipantRepairCause(repair) ||
     (
       repair?.firstFailedParticipant &&
       typeof repair.firstFailedParticipant === TYPEOF.OBJECT &&
       !Array.isArray(repair.firstFailedParticipant)
     )
+  );
+}
+function hasConnectionClosedParticipantRepairCause(repair = null) {
+  return normalizeControlSnapshotRepairMessageList(repair).some((message) =>
+    message.includes(CONTROL_SNAPSHOT_REPAIR_CONNECTION_CLOSED_PREFIX) &&
+    message.includes(CONTROL_SNAPSHOT_REPAIR_CONNECTION_CLOSED_SUFFIX),
   );
 }
 function hasDeferredRepairLocalControlSnapshotCoverage(snapshot = null) {
@@ -200,6 +210,9 @@ function projectDeferredRepairCoverageSnapshot(
   const coverageNodeIds = normalizeControlSnapshotNodeIdList([
     ...normalizeControlSnapshotNodeIdList(
       snapshot[CONTROL_SNAPSHOT_NODES_FIELD],
+    ),
+    ...normalizeControlSnapshotNodeIdList(
+      snapshot[CONTROL_SNAPSHOT_PROJECTED_NODES_FIELD],
     ),
     ...selectDeferredRepairProjectionNodeIds(repairEvaluation),
   ]);
@@ -302,6 +315,18 @@ function normalizeControlSnapshotRepairDetailList(values = []) {
         ADMIN_CONTROL_SNAPSHOT_LITERAL.VALUE,
     )
     .filter((value) => value.length > NUM.ZERO);
+}
+function normalizeControlSnapshotRepairMessageList(repair = null) {
+  const repairValue = typeof repair === TYPEOF.STRING ?
+    repair :
+    ADMIN_CONTROL_SNAPSHOT_LITERAL.VALUE;
+  return normalizeControlSnapshotRepairDetailList([
+    repairValue,
+    repair?.message,
+    repair?.error,
+    repair?.cause?.message,
+    repair?.cause?.error,
+  ]);
 }
 function firstControlSnapshotRepairDetail(...values) {
   for (const value of values) {
@@ -815,6 +840,15 @@ class AdminControlSnapshotPart2 extends AdminControlSnapshotPart1 {
           }),
         });
       } catch (repairError) {
+        const forcedRepairDeferredSnapshot =
+          await this.resolveForcedRepairFailureDeferredSnapshot(null, {
+            ...options,
+            forceAuthoritativeRepair,
+            repair: repairError,
+          });
+        if (forcedRepairDeferredSnapshot) {
+          return forcedRepairDeferredSnapshot;
+        }
         throw buildAuthoritativeControlSnapshotRepairFailure(
           repairError?.message || repairError,
           repairError,
