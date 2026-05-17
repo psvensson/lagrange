@@ -59,6 +59,35 @@ const TYPEOF_STRING = 'string';
 const ACTIVE_GATE_OWNER_COHORT_FIELD = 'activeGateOwnerCohort';
 const MEMBERSHIP_PUBLICATION_HANDOFF_OUTCOME_FIELD =
   'membershipPublicationHandoffOutcome';
+const CONTROL_PLANE_DIAGNOSTICS_FIELD = 'controlPlaneDiagnostics';
+const CONTROL_PLANE_PUBLICATION_CONVERGENCE_FIELD = 'publicationConvergence';
+const CONTROL_PLANE_PUBLICATION_CONVERGENCE_SNAKE_FIELD =
+  'publication_convergence';
+const PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD =
+  'publicationActiveGateHandoff';
+const PUBLICATION_ACTIVE_GATE_HANDOFF_SNAKE_FIELD =
+  'publication_active_gate_handoff';
+const PUBLICATION_PUBLISHED_ACTIVE_NODE_IDS_FIELD = 'publishedActiveNodeIds';
+const PUBLICATION_PUBLISHED_ACTIVE_NODE_IDS_SNAKE_FIELD =
+  'published_active_node_ids';
+const PUBLICATION_HANDOFF_STATE_FIELD = 'state';
+const PUBLICATION_HANDOFF_REASON_CODE_FIELD = 'reasonCode';
+const PUBLICATION_HANDOFF_REASON_CODE_SNAKE_FIELD = 'reason_code';
+const PUBLICATION_HANDOFF_NEXT_ACTION_FIELD = 'nextAction';
+const PUBLICATION_HANDOFF_NEXT_ACTION_SNAKE_FIELD = 'next_action';
+const PUBLICATION_HANDOFF_RUNTIME_PROMOTION_ALLOWED_FIELD =
+  'runtimePromotionAllowed';
+const PUBLICATION_HANDOFF_RUNTIME_PROMOTION_ALLOWED_SNAKE_FIELD =
+  'runtime_promotion_allowed';
+const PUBLICATION_HANDOFF_PENDING_RECONCILE_NODE_IDS_FIELD =
+  'pendingReconcileNodeIds';
+const PUBLICATION_HANDOFF_PENDING_RECONCILE_NODE_IDS_SNAKE_FIELD =
+  'pending_reconcile_node_ids';
+const PUBLICATION_HANDOFF_STATE_PENDING = 'pending';
+const PUBLICATION_HANDOFF_REASON_OWNER_RECONCILE_PENDING =
+  'owner_reconcile_pending';
+const PUBLICATION_HANDOFF_NEXT_ACTION_RECONCILE_OWNER_MEMBERSHIP =
+  'reconcile_owner_membership_publication';
 const EMPTY_STRING = '';
 const LOAD_PUBLICATION_GATE_WITNESS_READY = 'ready';
 const LOAD_PUBLICATION_GATE_WITNESS_CANONICAL_SNAPSHOT =
@@ -196,6 +225,92 @@ const PARTIAL_COVERAGE_CONVERGENCE_DECISION_TABLE = Object.freeze([
 
 function normalizeOptionalString(value) {
   return typeof value === TYPEOF_STRING && value.length > ZERO ? value : null;
+}
+
+function extractPublicationProjectionNodeIds(row) {
+  const controlPlaneDiagnostics = parseJsonObjectField(
+    row?.[CONTROL_PLANE_DIAGNOSTICS_FIELD],
+  );
+  const publicationConvergence =
+    parseJsonObjectField(
+      controlPlaneDiagnostics?.[CONTROL_PLANE_PUBLICATION_CONVERGENCE_FIELD],
+    ) ??
+    parseJsonObjectField(
+      controlPlaneDiagnostics?.[
+        CONTROL_PLANE_PUBLICATION_CONVERGENCE_SNAKE_FIELD
+      ],
+    );
+  const publicationActiveGateHandoff =
+    parseJsonObjectField(
+      controlPlaneDiagnostics?.[PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD],
+    ) ??
+    parseJsonObjectField(
+      controlPlaneDiagnostics?.[PUBLICATION_ACTIVE_GATE_HANDOFF_SNAKE_FIELD],
+    ) ??
+    parseJsonObjectField(
+      publicationConvergence?.[PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD],
+    ) ??
+    parseJsonObjectField(
+      publicationConvergence?.[PUBLICATION_ACTIVE_GATE_HANDOFF_SNAKE_FIELD],
+    );
+  const pendingReconcileNodeIds = normalizeDistinctStringArray([
+    ...parseJsonArrayField(
+      publicationActiveGateHandoff?.[
+        PUBLICATION_HANDOFF_PENDING_RECONCILE_NODE_IDS_FIELD
+      ],
+    ),
+    ...parseJsonArrayField(
+      publicationActiveGateHandoff?.[
+        PUBLICATION_HANDOFF_PENDING_RECONCILE_NODE_IDS_SNAKE_FIELD
+      ],
+    ),
+  ]);
+  const reasonCode =
+    normalizeOptionalString(
+      publicationActiveGateHandoff?.[PUBLICATION_HANDOFF_REASON_CODE_FIELD],
+    ) ??
+    normalizeOptionalString(
+      publicationActiveGateHandoff?.[
+        PUBLICATION_HANDOFF_REASON_CODE_SNAKE_FIELD
+      ],
+    );
+  const nextAction =
+    normalizeOptionalString(
+      publicationActiveGateHandoff?.[PUBLICATION_HANDOFF_NEXT_ACTION_FIELD],
+    ) ??
+    normalizeOptionalString(
+      publicationActiveGateHandoff?.[
+        PUBLICATION_HANDOFF_NEXT_ACTION_SNAKE_FIELD
+      ],
+    );
+  const runtimePromotionAllowed =
+    publicationActiveGateHandoff?.[
+      PUBLICATION_HANDOFF_RUNTIME_PROMOTION_ALLOWED_FIELD
+    ] === true ||
+    publicationActiveGateHandoff?.[
+      PUBLICATION_HANDOFF_RUNTIME_PROMOTION_ALLOWED_SNAKE_FIELD
+    ] === true;
+  const projectionAllowed =
+    publicationActiveGateHandoff?.[PUBLICATION_HANDOFF_STATE_FIELD] ===
+      PUBLICATION_HANDOFF_STATE_PENDING &&
+    reasonCode === PUBLICATION_HANDOFF_REASON_OWNER_RECONCILE_PENDING &&
+    nextAction ===
+      PUBLICATION_HANDOFF_NEXT_ACTION_RECONCILE_OWNER_MEMBERSHIP &&
+    runtimePromotionAllowed !== true &&
+    pendingReconcileNodeIds.length > ZERO;
+  if (projectionAllowed !== true) {
+    return [];
+  }
+  return normalizeDistinctStringArray([
+    ...parseJsonArrayField(
+      publicationConvergence?.[PUBLICATION_PUBLISHED_ACTIVE_NODE_IDS_FIELD],
+    ),
+    ...parseJsonArrayField(
+      publicationConvergence?.[
+        PUBLICATION_PUBLISHED_ACTIVE_NODE_IDS_SNAKE_FIELD
+      ],
+    ),
+  ]);
 }
 
 function hasSnapshotPublicationDiagnostics(snapshotCoverage) {
@@ -925,6 +1040,8 @@ class Cluster4 extends Cluster3 {
       typeof controlPlaneDiagnostics.activeNodeViews === 'object' ?
         controlPlaneDiagnostics.activeNodeViews :
         null;
+    const publicationProjectionNodeIds =
+      extractPublicationProjectionNodeIds(row);
     const nodes = normalizeDistinctStringArray([
       ...parseJsonArrayField(row?.[CONTROL_SNAPSHOT_NODES_FIELD]),
       ...parseJsonArrayField(row?.publishedNodes ?? row?.published_nodes),
@@ -937,6 +1054,7 @@ class Cluster4 extends Cluster3 {
       ...parseJsonArrayField(activeNodeViews?.effectiveNodeIds),
       ...parseJsonArrayField(activeNodeViews?.projectedNodeIds),
       ...parseJsonArrayField(activeNodeViews?.publishedNodeIds),
+      ...publicationProjectionNodeIds,
     ]);
     const capturedAtMs =
       parseFiniteNumberField(row?.capturedAtMs) ??
