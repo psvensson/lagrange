@@ -252,3 +252,9 @@ Static guardrails:
 
 1. `npm run audit:runtime-grammar:file` failed only on existing unrelated fixed-hotspot files `src/control-plane/membership-publication-coordinator.js` and `src/rebalancer/operation-workflow-owner-segment-5.js`.
 2. `npm run test:metrics:scoped -- src/bootstrap/phases/create-message-group-phase.js test/bootstrap/node-joining-service.test.js` exited 0 while reporting inherited complexity hotspots in `src/bootstrap/phases/create-message-group-phase.js`.
+
+## Commit And Push Ledger
+
+1. Focused package commit: `40e169ce752f94243f83d70dbc391f6b4857576c`
+2. Pushed to: `origin/codex/pending-ack-eligibility-filter`
+3. Commit contains only package-owned files/package-status/allowed sprint handoff: yes
