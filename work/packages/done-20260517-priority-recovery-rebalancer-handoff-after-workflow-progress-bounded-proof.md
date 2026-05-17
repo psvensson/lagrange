@@ -236,3 +236,9 @@ No runtime file was changed. Representative rolling-restart was not rerun
 because this package only added focused proof; the reference artifact remains
 same-artifact evidence while this boundary stops as bounded retry-scheduled
 backpressure.
+
+## Commit And Push Ledger
+
+1. Focused package commit: `ca22d4770605ae41a67cd3a6a8d95aa43b2e0461`
+2. Pushed to: `origin/codex/pending-ack-eligibility-filter`
+3. Commit contains only package-owned files/package-status/allowed sprint handoff: yes
