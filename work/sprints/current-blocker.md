@@ -6,6 +6,10 @@ Sprint: `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure
 
 Package: `work/packages/done-20260517-startup-active-gate-snapshot-coverage-after-priority-backpressure-classification.md`
 
+No active package remains intentionally after this classification-only stop.
+`work:sprint:remaining` reports zero active or todo packages; open a successor
+only after fresh canonical evidence selects a new boundary or route.
+
 Workflow lane: `causal-escalation`
 
 Scenario: `rolling-restart`

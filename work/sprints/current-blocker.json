@@ -4,6 +4,8 @@
   "sprint": "work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md",
   "package": "work/packages/done-20260517-startup-active-gate-snapshot-coverage-after-priority-backpressure-classification.md",
   "status": "done",
+  "noActivePackage": true,
+  "noActivePackageReason": "classification-only-stop; work:sprint:remaining reports zero active or todo packages, and a successor should open only after fresh canonical evidence selects a new boundary or route.",
   "lane": "causal-escalation",
   "scenario": "rolling-restart",
   "artifact": "test-output/reports/rolling-restart-publication-handoff-edge-20260517T171610Z.report.json",
