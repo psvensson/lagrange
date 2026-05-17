@@ -171,8 +171,8 @@ subagents before editing runtime files.
 
 ## Subagent Sequencing Ledger
 
-- [ ] Review subagent recorded: pending-before-implementation.
-- [ ] Fix subagent recorded or explicitly not needed: pending-before-implementation.
+- [x] Review subagent recorded: Agent Bernoulli (019e3694-7a7a-7193-84c0-a50903ec3c1a) reviewed work/packages/done-20260517-topology-publication-convergence-after-startup-reconcile-migration.md; result fixes-required.
+- [x] Fix subagent recorded or explicitly not needed: Agent Codex (019e3696-4c56-7001-bbf8-ac7d33f3341b) fixed work/packages/done-20260517-topology-publication-convergence-after-startup-reconcile-migration.md.
 - [ ] Implementation subagent recorded: pending-before-implementation.
 
 ## LLM Tool-First Contract
