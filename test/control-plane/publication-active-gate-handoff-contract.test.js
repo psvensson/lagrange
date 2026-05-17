@@ -400,6 +400,74 @@ test('publication active-gate selector preserves joined pending reconcile ids af
     );
   });
 
+test('publication active-gate selector prefers drained explicit handoff over stale flattened progress',
+  async (t) => {
+    const drainedHandoff = {
+      state: PUBLICATION_ACTIVE_GATE_HANDOFF_STATE.COMPLETE,
+      reasonCode: PUBLICATION_ACTIVE_GATE_HANDOFF_REASON.COMPLETE,
+      nextAction:
+        PUBLICATION_ACTIVE_GATE_HANDOFF_NEXT_ACTION.ADMIT_ACTIVE_GATE,
+      runtimePromotionAllowed: true,
+      expectedNodeIds: [...TEST_SELECTED_HANDOFF_EXPECTED_NODE_IDS],
+      publishedActiveNodeIds: [...TEST_SELECTED_HANDOFF_EXPECTED_NODE_IDS],
+      pendingReconcileNodeIds: [...TEST_EMPTY_NODE_IDS],
+      pendingReconcileCount: TEST_PUBLICATION_ACK_CLOSED_COUNT,
+    };
+    const selectedHandoff = selectPublicationActiveGateHandoffContract({
+      publicationConvergence: {
+        publicationEpoch: TEST_PUBLICATION_EPOCH,
+        publicationStatus: TEST_PUBLICATION_STATUS_PUBLISHED,
+        publicationActiveGateHandoff: drainedHandoff,
+        publishedActiveNodeIds: [...TEST_SELECTED_HANDOFF_EXPECTED_NODE_IDS],
+        missingPublishedNodeIds: [...TEST_EMPTY_NODE_IDS],
+        activeGate: {
+          progress: {
+            publicationActiveGateHandoffState:
+              PUBLICATION_ACTIVE_GATE_HANDOFF_STATE.PENDING,
+            publicationActiveGateHandoffReasonCode:
+              PUBLICATION_ACTIVE_GATE_HANDOFF_REASON
+                .OWNER_RECONCILE_PENDING,
+            publicationActiveGateHandoffNextAction:
+              PUBLICATION_ACTIVE_GATE_HANDOFF_NEXT_ACTION
+                .RECONCILE_OWNER_MEMBERSHIP_PUBLICATION,
+            publicationActiveGateHandoffRuntimePromotionAllowed:
+              TEST_RUNTIME_PROMOTION_DENIED,
+            publicationActiveGateHandoffPendingReconcileNodeIds:
+              TEST_JOINED_PENDING_RECONCILE_NODE_IDS,
+            publicationActiveGateHandoffPendingReconcileCount:
+              TEST_JOINED_PENDING_RECONCILE_COUNT,
+          },
+        },
+      },
+    });
+    const target =
+      resolvePublicationActiveGateMembershipPublicationTarget(
+        selectedHandoff,
+      );
+
+    t.match(
+      selectedHandoff,
+      {
+        state: PUBLICATION_ACTIVE_GATE_HANDOFF_STATE.COMPLETE,
+        reasonCode: PUBLICATION_ACTIVE_GATE_HANDOFF_REASON.COMPLETE,
+        nextAction:
+          PUBLICATION_ACTIVE_GATE_HANDOFF_NEXT_ACTION.ADMIT_ACTIVE_GATE,
+        runtimePromotionAllowed: true,
+      },
+      'drained explicit handoff should outrank stale flattened pending progress',
+    );
+    t.equal(
+      hasPublicationActiveGateOwnerReconcileSignal(selectedHandoff),
+      false,
+      'drained explicit handoff should clear the owner reconcile signal',
+    );
+    t.equal(
+      target.reconcileRequired,
+      false,
+      'drained explicit handoff should not schedule another membership publication reconcile',
+    );
+  });
+
 test('publication active-gate handoff keeps recovery-pending nodes out of reconcile',
   async (t) => {
     const contract = buildPublicationActiveGateHandoffContract({

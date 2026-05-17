@@ -13,7 +13,7 @@
   "boundary": "snapshot_coverage",
   "dominantReason": "active_gate_timed_out",
   "currentState": "Focused joined pending reconcile proof is green: flattened joined pending reconcile node ids are preserved when publication ACK is already closed. The representative rerun remains red at active_gate_snapshot_coverage, but it reduced snapshot coverage from 3/5 to 4/5 while publication ACK stayed satisfied with pendingAckCount=0. The active-gate handoff is still pending with owner_reconcile_pending, pendingReconcileCount=3, runtimePromotionAllowed=false, and nextAction=reconcile_owner_membership_publication.",
-  "nextAction": "Close this package as reduced and activate work/packages/active-20260517-startup-active-gate-snapshot-coverage-joined-reconcile-residual.md for the remaining startup_active_gate_owner / snapshot_coverage handoff: coverage 4/5 with pendingReconcileCount=3 while publication ACK and priority recovery remain frozen.",
+  "nextAction": "Close this package as reduced and activate work/packages/done-20260517-startup-active-gate-snapshot-coverage-joined-reconcile-residual.md for the remaining startup_active_gate_owner / snapshot_coverage handoff: coverage 4/5 with pendingReconcileCount=3 while publication ACK and priority recovery remain frozen.",
   "proof": [
     "node --test test/control-plane/publication-active-gate-handoff-contract.test.js test/distributed/harness/__tests__/active-gate-closure-classification.test.js",
     "node --check src/control-plane/publication-active-gate-handoff-contract.js src/control-plane/membership-publication-planning.js test/control-plane/publication-active-gate-handoff-contract.test.js test/distributed/harness/__tests__/active-gate-closure-classification.test.js",
@@ -31,7 +31,7 @@
     "work/packages/active-20260517-startup-active-gate-snapshot-coverage-after-publication-ack-closure.md",
     "work/packages/done-20260517-startup-active-gate-snapshot-coverage-after-publication-ack-closure.md",
     "work/packages/done-20260517-topology-publication-ack-pending-after-owner-reconcile-migration.md",
-    "work/packages/active-20260517-startup-active-gate-snapshot-coverage-joined-reconcile-residual.md",
+    "work/packages/done-20260517-startup-active-gate-snapshot-coverage-joined-reconcile-residual.md",
     "work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md",
     "work/sprints/current-blocker.md",
     "work/sprints/current-blocker.json",
@@ -60,7 +60,7 @@
     "work/packages/active-20260517-startup-active-gate-snapshot-coverage-after-publication-ack-closure.md",
     "work/packages/done-20260517-startup-active-gate-snapshot-coverage-after-publication-ack-closure.md",
     "work/packages/done-20260517-topology-publication-ack-pending-after-owner-reconcile-migration.md",
-    "work/packages/active-20260517-startup-active-gate-snapshot-coverage-joined-reconcile-residual.md",
+    "work/packages/done-20260517-startup-active-gate-snapshot-coverage-joined-reconcile-residual.md",
     "work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md",
     "work/sprints/current-blocker.md",
     "work/sprints/current-blocker.json",
@@ -137,7 +137,7 @@
     "handoffInvariant": "Publication ACK, priority recovery, timeout budgets, active-gate admission, selected-source selection, forced repair timeout handling, authoritative query-pressure fallback, and readiness support remain frozen unless canonical evidence selects them again."
   },
   "predecessor": "work/packages/done-20260517-topology-publication-ack-pending-after-owner-reconcile-migration.md",
-  "successor": "work/packages/active-20260517-startup-active-gate-snapshot-coverage-joined-reconcile-residual.md",
+  "successor": "work/packages/done-20260517-startup-active-gate-snapshot-coverage-joined-reconcile-residual.md",
   "closed": "2026-05-17",
   "commitAndPushLedgerRequired": true
 }
@@ -203,7 +203,7 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 1. work/packages/active-20260517-startup-active-gate-snapshot-coverage-after-publication-ack-closure.md
 2. work/packages/done-20260517-startup-active-gate-snapshot-coverage-after-publication-ack-closure.md
 3. work/packages/done-20260517-topology-publication-ack-pending-after-owner-reconcile-migration.md
-4. work/packages/active-20260517-startup-active-gate-snapshot-coverage-joined-reconcile-residual.md
+4. work/packages/done-20260517-startup-active-gate-snapshot-coverage-joined-reconcile-residual.md
 5. work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md
 6. work/sprints/current-blocker.md
 7. work/sprints/current-blocker.json
@@ -224,8 +224,8 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 - Intended minimum model: `gpt-5.3-codex`
 - Scope shape: `owner-boundary-contraction/current-frontier`
 - Output profile: `medium`
-- Owned files: `work/packages/active-20260517-startup-active-gate-snapshot-coverage-after-publication-ack-closure.md`, `work/packages/done-20260517-startup-active-gate-snapshot-coverage-after-publication-ack-closure.md`, `work/packages/done-20260517-topology-publication-ack-pending-after-owner-reconcile-migration.md`, `work/packages/active-20260517-startup-active-gate-snapshot-coverage-joined-reconcile-residual.md`, `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md`, `work/sprints/current-blocker.md`, `work/sprints/current-blocker.json`, `work/model-ledger.jsonl`, `src/control-plane/publication-active-gate-handoff-contract.js`, `src/control-plane/membership-publication-planning.js`, `test/control-plane/publication-active-gate-handoff-contract.test.js`, `test/admin/admin-control-snapshot.test.js`, `test/distributed/harness/__tests__/active-gate-closure-classification.test.js`
-- Forbidden files: `src/`
+- Owned files: `work/packages/active-20260517-startup-active-gate-snapshot-coverage-after-publication-ack-closure.md`, `work/packages/done-20260517-startup-active-gate-snapshot-coverage-after-publication-ack-closure.md`, `work/packages/done-20260517-topology-publication-ack-pending-after-owner-reconcile-migration.md`, `work/packages/done-20260517-startup-active-gate-snapshot-coverage-joined-reconcile-residual.md`, `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md`, `work/sprints/current-blocker.md`, `work/sprints/current-blocker.json`, `work/model-ledger.jsonl`, `src/control-plane/publication-active-gate-handoff-contract.js`, `src/control-plane/membership-publication-planning.js`, `test/control-plane/publication-active-gate-handoff-contract.test.js`, `test/admin/admin-control-snapshot.test.js`, `test/distributed/harness/__tests__/active-gate-closure-classification.test.js`
+- Forbidden files: `src/` paths outside this package's explicitly named owned or candidate runtime files; runtime ownership changes remain frozen.
 - Frozen decisions: package scope and lane stay bounded unless explicitly escalated.
 - Escalation triggers: owned files expand beyond this package, runtime ownership changes, or representative scenario evidence changes.
 - Focused proof: `node --test test/control-plane/publication-active-gate-handoff-contract.test.js test/distributed/harness/__tests__/active-gate-closure-classification.test.js`, `node --check src/control-plane/publication-active-gate-handoff-contract.js src/control-plane/membership-publication-planning.js test/control-plane/publication-active-gate-handoff-contract.test.js test/distributed/harness/__tests__/active-gate-closure-classification.test.js`, `node scripts/check-guideline-literals.js src/control-plane/publication-active-gate-handoff-contract.js src/control-plane/membership-publication-planning.js test/control-plane/publication-active-gate-handoff-contract.test.js test/distributed/harness/__tests__/active-gate-closure-classification.test.js`, `node scripts/check-guideline-decision-boundaries.js src/control-plane/publication-active-gate-handoff-contract.js src/control-plane/membership-publication-planning.js test/control-plane/publication-active-gate-handoff-contract.test.js test/distributed/harness/__tests__/active-gate-closure-classification.test.js`, `npm run audit:runtime-grammar:file -- src/control-plane/publication-active-gate-handoff-contract.js src/control-plane/membership-publication-planning.js`, `npm run work:evidence-summary -- test-output/reports/rolling-restart-active-gate-joined-reconcile-20260517T091454Z.report.json`, `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-active-gate-joined-reconcile-20260517T091454Z.report.json --handoff-probe`, `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-active-gate-joined-reconcile-20260517T091454Z.report.json --replay-fixture`, `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-active-gate-joined-reconcile-20260517T091454Z.report.json`, `npm run analyze:distributed-failure -- --report test-output/reports/rolling-restart-active-gate-joined-reconcile-20260517T091454Z.report.json`, `git diff --check`

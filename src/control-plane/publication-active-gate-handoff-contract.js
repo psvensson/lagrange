@@ -84,6 +84,13 @@ const PUBLICATION_ACTIVE_GATE_HANDOFF_BUDGET_STATE = Object.freeze({
   UNAVAILABLE: 'unavailable',
 });
 
+const PUBLICATION_ACTIVE_GATE_HANDOFF_STATE_RANK = Object.freeze({
+  [PUBLICATION_ACTIVE_GATE_HANDOFF_STATE.COMPLETE]: NUM.FOUR,
+  [PUBLICATION_ACTIVE_GATE_HANDOFF_STATE.DEGRADED]: NUM.THREE,
+  [PUBLICATION_ACTIVE_GATE_HANDOFF_STATE.PENDING]: NUM.TWO,
+  [PUBLICATION_ACTIVE_GATE_HANDOFF_STATE.UNAVAILABLE]: NUM.ONE,
+});
+
 const PUBLICATION_ACTIVE_GATE_HANDOFF_TARGET_STATE = Object.freeze({
   ABSENT: 'absent',
   SELECTED: 'selected',
@@ -157,6 +164,7 @@ const PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD = Object.freeze({
   REQUIRED_ACK_NODE_IDS: 'requiredAckNodeIds',
   REVISION: 'revision',
   REVISION_STATE: 'revisionState',
+  RUNTIME_PROMOTION_ALLOWED: 'runtimePromotionAllowed',
   SELECTED_MISSING_PUBLISHED_NODE_IDS: 'selectedMissingPublishedNodeIds',
   SELECTED_PUBLISHED_ACTIVE_NODE_IDS: 'selectedPublishedActiveNodeIds',
   SNAPSHOT_COVERAGE: 'snapshotCoverage',
@@ -1645,42 +1653,162 @@ function projectPublicationActiveGateHandoffToOwnerCohort(
   });
 }
 
+function resolvePublicationActiveGateHandoffCandidateStateRank(
+  candidate = null,
+) {
+  return PUBLICATION_ACTIVE_GATE_HANDOFF_STATE_RANK[
+    candidate?.[PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.STATE]
+  ] || NUM.ZERO;
+}
+
+function resolvePublicationActiveGateHandoffCandidatePendingCount(
+  candidate = null,
+) {
+  const explicitCount = normalizePublicationActiveGateHandoffInteger(
+    candidate?.[PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.PENDING_RECONCILE_COUNT],
+  );
+  if (explicitCount !== null) {
+    return explicitCount;
+  }
+  return normalizePublicationActiveGateHandoffNodeIdList(
+    candidate?.[
+      PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.PENDING_RECONCILE_NODE_IDS
+    ],
+  ).length;
+}
+
+function resolvePublicationActiveGateHandoffCandidateNodeCount(
+  candidate = null,
+) {
+  return normalizePublicationActiveGateHandoffNodeIdList([
+    ...normalizePublicationActiveGateHandoffNodeIdList(
+      candidate?.[PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.EXPECTED_NODE_IDS],
+    ),
+    ...normalizePublicationActiveGateHandoffNodeIdList(
+      candidate?.[
+        PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.PUBLISHED_ACTIVE_NODE_IDS
+      ],
+    ),
+    ...normalizePublicationActiveGateHandoffNodeIdList(
+      candidate?.[
+        PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.MISSING_PUBLISHED_NODE_IDS
+      ],
+    ),
+    ...normalizePublicationActiveGateHandoffNodeIdList(
+      candidate?.[
+        PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.PENDING_RECONCILE_NODE_IDS
+      ],
+    ),
+  ]).length;
+}
+
+function buildPublicationActiveGateHandoffCandidateRank(candidate = null) {
+  return Object.freeze({
+    promotionAllowed:
+      candidate?.[
+        PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD
+          .PUBLICATION_ACTIVE_GATE_HANDOFF_RUNTIME_PROMOTION_ALLOWED
+      ] === true ||
+      candidate?.[
+        PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.RUNTIME_PROMOTION_ALLOWED
+      ] === true,
+    stateRank:
+      resolvePublicationActiveGateHandoffCandidateStateRank(candidate),
+    pendingReconcileCount:
+      resolvePublicationActiveGateHandoffCandidatePendingCount(candidate),
+    nodeCount:
+      resolvePublicationActiveGateHandoffCandidateNodeCount(candidate),
+    publicationEpoch: resolvePublicationActiveGateHandoffPublicationEpoch(
+      candidate,
+    ),
+  });
+}
+
+function comparePublicationActiveGateHandoffCandidateRank(
+  candidate,
+  selected,
+) {
+  if (!isPublicationActiveGateHandoffRecord(selected)) {
+    return NUM.ONE;
+  }
+  const candidateRank =
+    buildPublicationActiveGateHandoffCandidateRank(candidate);
+  const selectedRank =
+    buildPublicationActiveGateHandoffCandidateRank(selected);
+  const decisiveDelta = [
+    Number(candidateRank.promotionAllowed) -
+      Number(selectedRank.promotionAllowed),
+    candidateRank.stateRank - selectedRank.stateRank,
+    selectedRank.pendingReconcileCount -
+      candidateRank.pendingReconcileCount,
+    candidateRank.nodeCount - selectedRank.nodeCount,
+    candidateRank.publicationEpoch - selectedRank.publicationEpoch,
+  ].find((delta) => delta !== NUM.ZERO);
+  return typeof decisiveDelta === TYPEOF.NUMBER ?
+    decisiveDelta :
+    NUM.ZERO;
+}
+
+function selectMostAdvancedPublicationActiveGateHandoffCandidate(
+  candidates = PUBLICATION_ACTIVE_GATE_HANDOFF_EMPTY_LIST,
+) {
+  return candidates
+    .filter(isPublicationActiveGateHandoffRecord)
+    .reduce(
+      (selected, candidate) =>
+        comparePublicationActiveGateHandoffCandidateRank(
+          candidate,
+          selected,
+        ) > NUM.ZERO ?
+          candidate :
+          selected,
+      null,
+    );
+}
+
 function selectPublicationActiveGateHandoffContract(value = null) {
   if (!isPublicationActiveGateHandoffRecord(value)) {
     return null;
   }
   const progressHandoff = selectPublicationActiveGateProgressRecord(value);
-  if (progressHandoff) {
-    return buildPublicationActiveGateHandoffContractFromProgress(
+  const progressHandoffContract = progressHandoff ?
+    buildPublicationActiveGateHandoffContractFromProgress(
       value,
       progressHandoff,
-    );
-  }
-  if (
-    isPublicationActiveGateHandoffRecord(
-      value[
-        PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD
-          .PUBLICATION_ACTIVE_GATE_HANDOFF
-      ],
-    )
-  ) {
-    return value[
+    ) :
+    null;
+  const directHandoff =
+    value[
       PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.PUBLICATION_ACTIVE_GATE_HANDOFF
     ];
+  const nestedHandoff =
+    value[
+      PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.PUBLICATION_CONVERGENCE
+    ]?.[
+      PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.PUBLICATION_ACTIVE_GATE_HANDOFF
+    ];
+  if (
+    isPublicationActiveGateHandoffRecord(
+      directHandoff,
+    )
+  ) {
+    return selectMostAdvancedPublicationActiveGateHandoffCandidate([
+      progressHandoffContract,
+      directHandoff,
+    ]);
   }
   if (
     isPublicationActiveGateHandoffRecord(
-      value[
-        PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.PUBLICATION_CONVERGENCE
-      ]?.[
-        PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD
-          .PUBLICATION_ACTIVE_GATE_HANDOFF
-      ],
+      nestedHandoff,
     )
   ) {
-    return value[
-      PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.PUBLICATION_CONVERGENCE
-    ][PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.PUBLICATION_ACTIVE_GATE_HANDOFF];
+    return selectMostAdvancedPublicationActiveGateHandoffCandidate([
+      progressHandoffContract,
+      nestedHandoff,
+    ]);
+  }
+  if (progressHandoffContract) {
+    return progressHandoffContract;
   }
   if (
     isPublicationActiveGateHandoffRecord(
