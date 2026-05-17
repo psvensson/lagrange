@@ -28,9 +28,14 @@ import {
 } from '../../../src/control-plane/membership-lifecycle-constants.js';
 import {
   PUBLICATION_RECOVERY_GATE_STATE,
+  PUBLICATION_RECOVERY_PENDING_ACK_EVIDENCE_STATE,
   buildPublicationRecoveryGateSnapshot,
 } from '../../../src/control-plane/publication-recovery-gate.js';
 import {
+  PUBLICATION_OWNER_ACK_STATE,
+  PUBLICATION_OWNER_FRESHNESS_FENCE,
+  PUBLICATION_OWNER_RECOVERY_OUTCOME,
+  PUBLICATION_OWNER_STREAM_OUTCOME,
   PUBLICATION_OWNER_TEXT,
 } from '../../../src/control-plane/publication-owner-constants.js';
 import {
@@ -2377,6 +2382,36 @@ function hasClosedPublishedPublicationRecoveryGate(publicationRecoveryGate = nul
       CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED;
 }
 
+function shouldUsePublicationRecoveryGatePendingAckCount({
+  publicationRecoveryGate = null,
+  pendingAckCount = ZERO,
+  pendingAckNodeIds = [],
+} = {}) {
+  if (!isRecord(publicationRecoveryGate)) {
+    return false;
+  }
+  const summaryPendingAckNodeIds =
+    normalizeDistinctStringArray(pendingAckNodeIds);
+  const gatePendingAckNodeIds =
+    normalizeDistinctStringArray(publicationRecoveryGate.pendingAckNodeIds);
+  return publicationRecoveryGate.publicationStatusNormalized ===
+      CONTROL_PLANE_PUBLICATION_STATUS.OPEN &&
+    publicationRecoveryGate.pendingAckEvidenceState ===
+      PUBLICATION_RECOVERY_PENDING_ACK_EVIDENCE_STATE.COUNT_ONLY &&
+    publicationRecoveryGate.pendingAckCount === ZERO &&
+    normalizeNonNegativeCount(pendingAckCount) > ZERO &&
+    summaryPendingAckNodeIds.length === ZERO &&
+    gatePendingAckNodeIds.length === ZERO &&
+    publicationRecoveryGate.streamOutcome ===
+      PUBLICATION_OWNER_STREAM_OUTCOME.PUBLISHING &&
+    publicationRecoveryGate.ackState ===
+      PUBLICATION_OWNER_ACK_STATE.UNAVAILABLE &&
+    publicationRecoveryGate.freshnessFence ===
+      PUBLICATION_OWNER_FRESHNESS_FENCE.PUBLISHING &&
+    publicationRecoveryGate.recoveryOutcome ===
+      PUBLICATION_OWNER_RECOVERY_OUTCOME.WAITING_FOR_PUBLICATION;
+}
+
 function resolveActiveGateSelectedPublishedMembershipDeficitNodeIds(
   progress = null,
 ) {
@@ -3357,9 +3392,16 @@ function buildPublicationConvergenceSummary(controlPlane) {
   const publicationOwnerStream = publicationRecoveryGate.publicationOwnerStream;
   const shouldUseClosedPublishedPublicationGate =
     hasClosedPublishedPublicationRecoveryGate(publicationRecoveryGate);
+  const shouldUseRecoveryGatePendingAckCount =
+    shouldUsePublicationRecoveryGatePendingAckCount({
+      publicationRecoveryGate,
+      pendingAckCount,
+      pendingAckNodeIds,
+    });
   const effectivePendingAckCount =
-    shouldUseClosedPublishedPublicationGate === true ?
-      ZERO :
+    shouldUseClosedPublishedPublicationGate === true ||
+    shouldUseRecoveryGatePendingAckCount === true ?
+      publicationRecoveryGate.pendingAckCount :
       pendingAckCount;
   const shouldUseClosedUnknownPublicationGate =
     publicationRecoveryGate.publicationPending !== true &&

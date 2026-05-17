@@ -150,9 +150,11 @@ Write scope:
 7. `src/control-plane/publication-owner-decision.js`
 8. `src/control-plane/publication-recovery-gate.js`
 9. `src/control-plane/publication-recovery-evidence.js`
-10. `test/control-plane/publication-owner-stream.test.js`
-11. `test/control-plane/publication-recovery-gate.test.js`
-12. `test/control-plane/publication-recovery-evidence.test.js`
+10. `test/distributed/harness/failure-bundle-segment-4.js`
+11. `test/distributed/harness/__tests__/failure-bundle-core-16-test-cases.js`
+12. `test/control-plane/publication-owner-stream.test.js`
+13. `test/control-plane/publication-recovery-gate.test.js`
+14. `test/control-plane/publication-recovery-evidence.test.js`
 
 Handoff files:
 
@@ -183,9 +185,11 @@ Commit scope:
 7. `src/control-plane/publication-owner-decision.js`
 8. `src/control-plane/publication-recovery-gate.js`
 9. `src/control-plane/publication-recovery-evidence.js`
-10. `test/control-plane/publication-owner-stream.test.js`
-11. `test/control-plane/publication-recovery-gate.test.js`
-12. `test/control-plane/publication-recovery-evidence.test.js`
+10. `test/distributed/harness/failure-bundle-segment-4.js`
+11. `test/distributed/harness/__tests__/failure-bundle-core-16-test-cases.js`
+12. `test/control-plane/publication-owner-stream.test.js`
+13. `test/control-plane/publication-recovery-gate.test.js`
+14. `test/control-plane/publication-recovery-evidence.test.js`
 
 Legacy touched files:
 

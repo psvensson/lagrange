@@ -31,6 +31,8 @@
     "src/control-plane/publication-owner-decision.js",
     "src/control-plane/publication-recovery-gate.js",
     "src/control-plane/publication-recovery-evidence.js",
+    "test/distributed/harness/failure-bundle-segment-4.js",
+    "test/distributed/harness/__tests__/failure-bundle-core-16-test-cases.js",
     "test/control-plane/publication-owner-stream.test.js",
     "test/control-plane/publication-recovery-gate.test.js",
     "test/control-plane/publication-recovery-evidence.test.js"
@@ -60,6 +62,8 @@
     "src/control-plane/publication-owner-decision.js",
     "src/control-plane/publication-recovery-gate.js",
     "src/control-plane/publication-recovery-evidence.js",
+    "test/distributed/harness/failure-bundle-segment-4.js",
+    "test/distributed/harness/__tests__/failure-bundle-core-16-test-cases.js",
     "test/control-plane/publication-owner-stream.test.js",
     "test/control-plane/publication-recovery-gate.test.js",
     "test/control-plane/publication-recovery-evidence.test.js"
