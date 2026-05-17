@@ -183,8 +183,8 @@ runtime or test implementation edits.
 
 ## Subagent Sequencing Ledger
 
-- [ ] Review subagent recorded: pending-before-implementation-resumes.
-- [ ] Fix subagent recorded or explicitly not needed: pending-before-implementation-resumes.
+- [x] Review subagent recorded: Agent Gauss (019e362c-4914-7c21-be9a-7cbe94034472) reviewed work/packages/done-20260517-startup-active-gate-startup-publication-lag-snapshot-projection.md; result clean.
+- [x] Fix subagent recorded or explicitly not needed: not-needed.
 - [ ] Implementation subagent recorded: pending-before-implementation-resumes.
 
 ## LLM Tool-First Contract
