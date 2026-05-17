@@ -1,9 +1,10 @@
+# Topology Publication Convergence After Startup Reconcile Migration
+
+<!-- work-package
 {
-  "schema": "current-blocker-v1",
-  "generatedBy": "scripts/work-tracker.js",
-  "sprint": "work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md",
-  "package": "work/packages/active-20260517-topology-publication-convergence-after-startup-reconcile-migration.md",
+  "schema": "work-package-v1",
   "status": "active",
+  "opened": "2026-05-17",
   "lane": "causal-escalation",
   "scenario": "rolling-restart",
   "artifact": "test-output/reports/rolling-restart-owner-reconcile-stale-ack-20260517T143948Z.report.json",
@@ -54,7 +55,6 @@
     "work/sprints/current-blocker.json",
     "work/model-ledger.jsonl"
   ],
-  "touchedFiles": [],
   "modelFit": {
     "packageClass": "representative-frontier-closure",
     "intendedMinimumModel": "gpt-5.3-codex",
@@ -64,7 +64,8 @@
       "owned files expand beyond this package",
       "a frozen decision must be reopened"
     ]
-  },
+  }
+  ,
   "representativeResidual": {
     "status": "live-red-scenario-release-gate",
     "scenario": "rolling-restart",
@@ -119,3 +120,89 @@
   },
   "predecessor": "work/packages/done-20260517-startup-active-gate-remaining-handoff-reconcile-node.md"
 }
+-->
+
+## Why
+
+The previous startup active-gate package moved the representative failure out of
+startup active-gate setup and into load-mode publication convergence. Canonical
+evidence now selects `publication_ack_convergence` under
+`topology_publication_owner / publication_convergence`; this package owns the
+next publication-convergence proof and must decide whether the publication owner
+can make progress directly or is correctly blocked behind the
+`operation_workflow_owner / rebalancer_handoff` residual.
+
+## Scope Basis
+
+Approved maintenance scope or roadmap row.
+
+## Workflow Lane
+
+- Selected lane: `causal-escalation`
+- Why this lane is required: the representative release gate remains red and
+  canonical evidence selects a runtime owner boundary after a migrated package.
+- Escalation trigger to a heavier lane: runtime ownership, shared contract, or representative scenario evidence changes.
+
+## LLM Tool-First Contract
+
+Before raw JSON, raw logs, broad file search, oversized segment files, or ad hoc `jq`, use the canonical workflow command that owns the question:
+
+1. Package metadata or ledger edits: `npm run work:package:doctor -- --suggest <package>`, `npm run work:package:doctor -- --fix-dry-run <package>`, `npm run work:package:schema`, or `npm run work:package:new -- ...`.
+2. Representative evidence: `npm run work:evidence-summary -- <artifact>` plus any focused extractor for this failure class.
+3. Owner discovery: `npm run analyze:owner-files -- <owner> [boundary]`.
+4. Subagent sequencing: `npm run work:subagent-prompt -- --role <role> --package <package>`.
+5. Large-file cleanup: `npm run work:oversized-next -- --markdown`.
+
+If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which canonical extractor was tried and why it was insufficient.
+
+## In Scope
+
+1. work/packages/active-20260517-topology-publication-convergence-after-startup-reconcile-migration.md
+2. work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md
+3. work/sprints/current-blocker.md
+4. work/sprints/current-blocker.json
+5. work/model-ledger.jsonl
+
+## Out Of Scope
+
+1. test/distributed/harness/cluster-segment-7-class-4.js
+2. test/distributed/harness/__tests__/cluster.test-part-5.js
+3. timeout_budgets
+4. active_gate_admission
+5. readiness_support
+
+## Model Fit
+
+- Package class: `representative-frontier-closure`
+- Intended minimum model: `gpt-5.3-codex`
+- Scope shape: `owner-boundary-contraction/current-frontier`
+- Output profile: `medium`
+- Owned files: `work/packages/active-20260517-topology-publication-convergence-after-startup-reconcile-migration.md`, `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md`, `work/sprints/current-blocker.md`, `work/sprints/current-blocker.json`, `work/model-ledger.jsonl`
+- Forbidden files: `test/distributed/harness/cluster-segment-7-class-4.js`, `test/distributed/harness/__tests__/cluster.test-part-5.js`, `timeout_budgets`, `active_gate_admission`, `readiness_support`
+- Frozen decisions: package scope and lane stay bounded unless explicitly escalated.
+- Escalation triggers: owned files expand beyond this package, runtime ownership changes, or representative scenario evidence changes.
+- Focused proof: `npm run work:evidence-summary -- test-output/reports/rolling-restart-owner-reconcile-stale-ack-20260517T143948Z.report.json`, `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-owner-reconcile-stale-ack-20260517T143948Z.report.json --handoff-probe`, `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-owner-reconcile-stale-ack-20260517T143948Z.report.json --replay-fixture`, `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-owner-reconcile-stale-ack-20260517T143948Z.report.json`, `npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-owner-reconcile-stale-ack-20260517T143948Z.report.json`, `npm run analyze:owner-files -- topology_publication_owner publication_convergence`, `npm run analyze:owner-files -- operation_workflow_owner rebalancer_handoff`, `git diff --check`
+- Model ledger advisory: `escalate`
+
+## Subagent Sequencing Requirement
+
+Required before implementation because this is a scenario-driven runtime
+owner-boundary package. Run the review/fix/implementation sequence before
+runtime or test implementation edits.
+
+## Subagent Sequencing Ledger
+
+- [x] Review subagent recorded: Agent Codex (019e3672-1c0b-7662-b17d-69c6f0a8eb49) reviewed work/packages/done-20260517-startup-active-gate-remaining-handoff-reconcile-node.md; result fixes-required.
+- [x] Fix subagent recorded or explicitly not needed: Agent Codex (a333baf6-7bc1-49b4-9f4e-5bf47b71ba39) fixed work/packages/done-20260517-startup-active-gate-remaining-handoff-reconcile-node.md.
+- [ ] Implementation subagent recorded: pending-before-implementation.
+
+## Validation
+
+1. npm run work:evidence-summary -- test-output/reports/rolling-restart-owner-reconcile-stale-ack-20260517T143948Z.report.json
+2. npm run analyze:topology-convergence -- test-output/reports/rolling-restart-owner-reconcile-stale-ack-20260517T143948Z.report.json --handoff-probe
+3. npm run analyze:topology-convergence -- test-output/reports/rolling-restart-owner-reconcile-stale-ack-20260517T143948Z.report.json --replay-fixture
+4. npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-owner-reconcile-stale-ack-20260517T143948Z.report.json
+5. npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-owner-reconcile-stale-ack-20260517T143948Z.report.json
+6. npm run analyze:owner-files -- topology_publication_owner publication_convergence
+7. npm run analyze:owner-files -- operation_workflow_owner rebalancer_handoff
+8. git diff --check
