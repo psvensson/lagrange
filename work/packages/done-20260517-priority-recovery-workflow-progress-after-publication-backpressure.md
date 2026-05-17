@@ -206,7 +206,7 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 - Intended minimum model: `gpt-5.3-codex`
 - Scope shape: `owner-boundary-contraction/current-frontier`
 - Output profile: `medium`
-- Owned files: `work/packages/active-20260517-priority-recovery-workflow-progress-after-publication-backpressure.md`, `work/sprints/current-blocker.md`, `work/sprints/current-blocker.json`, `work/model-ledger.jsonl`
+- Owned files: `work/packages/done-20260517-priority-recovery-workflow-progress-after-publication-backpressure.md`, `work/sprints/current-blocker.md`, `work/sprints/current-blocker.json`, `work/model-ledger.jsonl`, `test/rebalancer/operation-workflow-progress-event-driven-reentry.test.js`
 - Forbidden files: `topology_publication_owner implementation`, `startup_active_gate_owner implementation`, `timeout_budgets`, `active_gate_admission`, `readiness_support`, `selected_source_timeout`, `operation_workflow_owner / rebalancer_handoff implementation unless fresh canonical evidence promotes it`
 - Frozen decisions: publication-convergence classification is closed; active-gate snapshot coverage is deferred; rebalancer_handoff is a parked split; this package owns workflow_progress only unless canonical evidence changes owner or boundary.
 - Escalation triggers: owned files expand beyond this package, runtime ownership changes, or representative scenario evidence changes.
@@ -240,3 +240,9 @@ No runtime file was changed. Representative rolling-restart was not rerun
 because this package only added focused proof; the reference artifact remains
 the same-frontier evidence until a runtime change or successor package produces
 a fresh representative artifact.
+
+## Commit And Push Ledger
+
+1. Focused package commit: `bb96c3350a39820fab405512196f0847de9ae4b2`
+2. Pushed to: `origin/codex/pending-ack-eligibility-filter`
+3. Commit contains only package-owned files/package-status/allowed sprint handoff: yes
