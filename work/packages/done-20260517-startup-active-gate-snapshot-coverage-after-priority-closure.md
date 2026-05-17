@@ -3,7 +3,7 @@
 <!-- work-package
 {
   "schema": "work-package-v1",
-  "status": "active",
+  "status": "done",
   "opened": "2026-05-17",
   "lane": "causal-escalation",
   "scenario": "rolling-restart",
@@ -40,7 +40,7 @@
     "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-active-gate-projected-fallback-20260517T063708Z.report.json --handoff-probe"
   ],
   "writeScope": [
-    "work/packages/active-20260517-startup-active-gate-snapshot-coverage-after-priority-closure.md",
+    "work/packages/done-20260517-startup-active-gate-snapshot-coverage-after-priority-closure.md",
     "work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md",
     "work/sprints/current-blocker.md",
     "work/sprints/current-blocker.json",
@@ -73,7 +73,7 @@
     "test/scripts/analyze-topology-convergence.test.js"
   ],
   "commitScope": [
-    "work/packages/active-20260517-startup-active-gate-snapshot-coverage-after-priority-closure.md",
+    "work/packages/done-20260517-startup-active-gate-snapshot-coverage-after-priority-closure.md",
     "work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md",
     "work/sprints/current-blocker.md",
     "work/sprints/current-blocker.json",
@@ -165,7 +165,9 @@
     "oscillationCheck": "This package is allowed only because the predecessor removed the priority-recovery edge and fresh canonical evidence selected startup_active_gate_owner / snapshot_coverage.",
     "handoffInvariant": "Publication ACK, priority recovery, timeout budgets, active-gate admission, and readiness support remain frozen unless canonical evidence selects them again."
   },
-  "predecessor": "work/packages/done-20260517-priority-recovery-workflow-progress-after-publication-handoff.md"
+  "predecessor": "work/packages/done-20260517-priority-recovery-workflow-progress-after-publication-handoff.md",
+  "closed": "2026-05-17",
+  "commitAndPushLedgerRequired": true
 }
 -->
 
@@ -211,7 +213,7 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 
 ## In Scope
 
-1. work/packages/active-20260517-startup-active-gate-snapshot-coverage-after-priority-closure.md
+1. work/packages/done-20260517-startup-active-gate-snapshot-coverage-after-priority-closure.md
 2. work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md
 3. work/sprints/current-blocker.md
 4. work/sprints/current-blocker.json
@@ -230,9 +232,9 @@ owner-boundary package.
 
 ## Subagent Sequencing Ledger
 
-- [x] Review subagent recorded: Agent Euclid (019e348c-a3bb-7821-a9cf-520fc32f625e) reviewed work/packages/active-20260517-startup-active-gate-snapshot-coverage-after-priority-closure.md; result fixes-required.
-- [x] Fix subagent recorded or explicitly not needed: Agent Codex (019e3490-9eaf-73e2-99e8-76e9cdf8ca93) fixed work/packages/active-20260517-startup-active-gate-snapshot-coverage-after-priority-closure.md.
-- [x] Implementation subagent recorded: Agent Euler (019e3496-e373-75d3-8f78-52ff51e8df5c) implemented work/packages/active-20260517-startup-active-gate-snapshot-coverage-after-priority-closure.md.
+- [x] Review subagent recorded: Agent Euclid (019e348c-a3bb-7821-a9cf-520fc32f625e) reviewed work/packages/done-20260517-startup-active-gate-snapshot-coverage-after-priority-closure.md; result fixes-required.
+- [x] Fix subagent recorded or explicitly not needed: Agent Codex (019e3490-9eaf-73e2-99e8-76e9cdf8ca93) fixed work/packages/done-20260517-startup-active-gate-snapshot-coverage-after-priority-closure.md.
+- [x] Implementation subagent recorded: Agent Euler (019e3496-e373-75d3-8f78-52ff51e8df5c) implemented work/packages/done-20260517-startup-active-gate-snapshot-coverage-after-priority-closure.md.
 
 ## Out Of Scope
 
@@ -248,7 +250,7 @@ owner-boundary package.
 - Intended minimum model: `gpt-5.3-codex`
 - Scope shape: `active-gate-snapshot-coverage/authoritative-repair-pressure`
 - Output profile: `medium`
-- Owned files: `work/packages/active-20260517-startup-active-gate-snapshot-coverage-after-priority-closure.md`, `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md`, `work/sprints/current-blocker.md`, `work/sprints/current-blocker.json`, `work/model-ledger.jsonl`, `work/packages/done-20260517-priority-recovery-workflow-progress-after-publication-handoff.md`, `src/diagnostics/topology-convergence-graph.js`, `test/scripts/analyze-topology-convergence.test.js`, `test/scripts/__fixtures__/topology-convergence/priority-partition-witness-only.expected.json`, `src/admin/admin-control-snapshot-class-part-2.js`, `test/admin/admin-control-snapshot.test.js`
+- Owned files: `work/packages/done-20260517-startup-active-gate-snapshot-coverage-after-priority-closure.md`, `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md`, `work/sprints/current-blocker.md`, `work/sprints/current-blocker.json`, `work/model-ledger.jsonl`, `work/packages/done-20260517-priority-recovery-workflow-progress-after-publication-handoff.md`, `src/diagnostics/topology-convergence-graph.js`, `test/scripts/analyze-topology-convergence.test.js`, `test/scripts/__fixtures__/topology-convergence/priority-partition-witness-only.expected.json`, `src/admin/admin-control-snapshot-class-part-2.js`, `test/admin/admin-control-snapshot.test.js`
 - Forbidden files: `publication_ack_convergence`, `timeout_budgets`, `active_gate_admission`, `priority_recovery_workflow_progress`, `readiness_support`
 - Frozen decisions: publication ACK, priority recovery, timeout budgets,
   active-gate admission, and readiness support stay closed unless canonical
@@ -260,7 +262,7 @@ owner-boundary package.
 
 ## Validation
 
-1. PASS - `npm run work:validate -- --pre-impl work/packages/active-20260517-startup-active-gate-snapshot-coverage-after-priority-closure.md`
+1. PASS - `npm run work:validate -- --pre-impl work/packages/done-20260517-startup-active-gate-snapshot-coverage-after-priority-closure.md`
 2. PASS - `npm run work:evidence-summary -- test-output/reports/rolling-restart-priority-nonblocking-closure-20260517T055254Z.report.json`
 3. PASS - `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-priority-nonblocking-closure-20260517T055254Z.report.json --handoff-probe` now reports `authoritativeControlSnapshotQueryCause=authoritative_control_snapshot_query_pressure`.
 4. PASS - `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-priority-nonblocking-closure-20260517T055254Z.report.json --replay-fixture` now preserves selected source `11601fe0-72d6-5853-8590-ec2881853e72` and the authoritative query-pressure owner edge.
@@ -286,7 +288,14 @@ owner-boundary package.
 24. PASS - `node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-active-gate-projected-fallback-20260517T063708Z.report.json --verbose` red but metric-moving: `snapshotCoverage=4/5`.
 25. PASS - `npm run work:evidence-summary -- test-output/reports/rolling-restart-active-gate-projected-fallback-20260517T063708Z.report.json`
 26. PASS - `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-active-gate-projected-fallback-20260517T063708Z.report.json --handoff-probe` reports `publication_active_gate_handoff_contract_pending` and required action `reconcile_owner_membership_publication`.
+27. PASS - `npm run work:validate -- --closure work/packages/done-20260517-startup-active-gate-snapshot-coverage-after-priority-closure.md`
 
 Result classification: `reduced`. The package selected the authoritative query
 pressure owner path and moved representative snapshot coverage from `0/5` to
 `4/5`; the remaining edge is active-gate owner reconciliation.
+
+## Commit And Push Ledger
+
+1. Focused package commit: c2a0a79a
+2. Pushed to: `origin/codex/pending-ack-eligibility-filter`
+3. Commit contains only package-owned files/package-status/allowed sprint handoff: yes

@@ -4,7 +4,7 @@
 
 Sprint: `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md`
 
-Package: `work/packages/active-20260517-startup-active-gate-snapshot-coverage-after-priority-closure.md`
+Package: `work/packages/done-20260517-startup-active-gate-snapshot-coverage-after-priority-closure.md`
 
 Workflow lane: `causal-escalation`
 
@@ -161,7 +161,7 @@ Handoff invariant: `Publication ACK, priority recovery, timeout budgets, active-
 
 Write scope:
 
-1. `work/packages/active-20260517-startup-active-gate-snapshot-coverage-after-priority-closure.md`
+1. `work/packages/done-20260517-startup-active-gate-snapshot-coverage-after-priority-closure.md`
 2. `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md`
 3. `work/sprints/current-blocker.md`
 4. `work/sprints/current-blocker.json`
@@ -198,7 +198,7 @@ Candidate runtime files:
 
 Commit scope:
 
-1. `work/packages/active-20260517-startup-active-gate-snapshot-coverage-after-priority-closure.md`
+1. `work/packages/done-20260517-startup-active-gate-snapshot-coverage-after-priority-closure.md`
 2. `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md`
 3. `work/sprints/current-blocker.md`
 4. `work/sprints/current-blocker.json`

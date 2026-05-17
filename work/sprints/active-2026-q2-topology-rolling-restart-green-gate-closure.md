@@ -504,7 +504,7 @@ continue with the owner reconciliation successor selected by the latest
 representative artifact:
 
 ```text
-work/packages/active-20260517-startup-active-gate-snapshot-coverage-after-priority-closure.md
+work/packages/done-20260517-startup-active-gate-snapshot-coverage-after-priority-closure.md
 test-output/reports/rolling-restart-active-gate-projected-fallback-20260517T063708Z.report.json
 ```
 
