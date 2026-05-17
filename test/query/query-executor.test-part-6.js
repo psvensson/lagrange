@@ -763,6 +763,129 @@ test('QueryExecutor - reconnect delivery deferral falls through to another ' +
     'read should return rows from the live candidate');
 });
 
+test('QueryExecutor - inactive participant routing falls through to live ' +
+  'participant for authoritative nodes read', async (t) => {
+  const inactiveNodeId = '7493b0ab-a054-5fad-a91b-5e331db29304';
+  const liveNodeId = '11601fe0-72d6-5853-8590-ec2881853e72';
+  const partitionId = 'nodes-p1';
+  const inactiveServiceId = `${partitionId}-r1`;
+  const liveServiceId = `${partitionId}-r2`;
+  const inactiveParticipantAddress =
+    `${inactiveNodeId}/partition/${inactiveServiceId}`;
+  const liveParticipantAddress = `${liveNodeId}/partition/${liveServiceId}`;
+  const selectNodesSql = 'SELECT * FROM nodes';
+  const routerConnectionClosedCode = 'ROUTER_CONNECTION_CLOSED';
+  const leaderRole = 'leader';
+  const followerRole = 'follower';
+  const starColumnType = 'star';
+  const queryTimeoutMs = 3000;
+  const connectionClosedError =
+    `Connection to node ${inactiveNodeId} closed`;
+  const liveRows = [{node_id: liveNodeId}];
+  const deliveries = [];
+  const systemCache = {
+    partitions: [
+      {
+        partition_id: partitionId,
+        table_name: TABLES.NODES,
+        leader_node_id: inactiveNodeId,
+      },
+    ],
+    services: [
+      {
+        service_id: inactiveServiceId,
+        service_type: SERVICE_TYPE.PARTITION,
+        partition_id: partitionId,
+        node_id: inactiveNodeId,
+        raft_role: leaderRole,
+        address: inactiveParticipantAddress,
+        status: SERVICE_STATUS.ACTIVE,
+      },
+      {
+        service_id: liveServiceId,
+        service_type: SERVICE_TYPE.PARTITION,
+        partition_id: partitionId,
+        node_id: liveNodeId,
+        raft_role: followerRole,
+        address: liveParticipantAddress,
+        status: SERVICE_STATUS.ACTIVE,
+      },
+    ],
+    get: function(type, key) {
+      if (type === TABLES.PARTITIONS) {
+        return this.partitions.find(
+          (partition) => partition.partition_id === key,
+        ) || null;
+      }
+      return null;
+    },
+    filter: function(type, predicate) {
+      if (type === TABLES.SERVICES) {
+        return this.services.filter(predicate);
+      }
+      if (type === TABLES.PARTITIONS) {
+        return this.partitions.filter(predicate);
+      }
+      return [];
+    },
+  };
+  const messageRouter = {
+    deliver: async (address, message) => {
+      deliveries.push({address, sql: message.sql});
+      if (address === inactiveParticipantAddress) {
+        return {
+          acknowledged: false,
+          success: false,
+          error: connectionClosedError,
+          errorCode: routerConnectionClosedCode,
+        };
+      }
+      return {
+        acknowledged: true,
+        success: true,
+        rows: liveRows,
+      };
+    },
+  };
+  const executor = new QueryExecutor({
+    messageRouter,
+    systemCache,
+  });
+  executor.leaderRetryAttempts = 1;
+  executor.leaderRetryDelayMs = 1;
+
+  const routingSnapshot = executor.getPartitionRoutingSnapshot(partitionId);
+  t.equal(
+    routingSnapshot.routableServiceCount,
+    2,
+    'without readiness owner evidence both active service rows remain eligible',
+  );
+
+  const result = await executor.executeSelect(
+    {
+      columns: [{type: starColumnType}],
+      from: {name: TABLES.NODES},
+      joins: [],
+    },
+    [partitionId],
+    [],
+    {timeoutMs: queryTimeoutMs},
+  );
+
+  t.equal(result.success, true,
+    'authoritative nodes read should fall through to the live participant');
+  t.same(
+    deliveries,
+    [
+      {address: inactiveParticipantAddress, sql: selectNodesSql},
+      {address: liveParticipantAddress, sql: selectNodesSql},
+    ],
+    'the fixture should route first to the inactive row, then to the live peer',
+  );
+  t.same(result.rows, liveRows,
+    'read should return rows from the live participant');
+});
+
 test('QueryExecutor - executeOnPartition returns last error when ' +
   'all read candidates fail with transient errors (§1.12)', async (t) => {
   // Proves: when every candidate fails, the read returns the last

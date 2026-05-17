@@ -22,38 +22,40 @@ success is in scope.
 ## Current Blocker Snapshot
 
 Latest representative artifact:
-`test-output/reports/rolling-restart-after-forced-repair-local-fallback-20260516T224600Z.report.json`.
+`test-output/reports/rolling-restart-query-reconnect-delivery-20260517T001920Z.report.json`.
 
-Canonical state for the current authoritative nodes query pressure package:
+Canonical state after the inactive participant routing package:
 
 1. `work:evidence-summary` selects `active_gate_snapshot_coverage` as the first
    frontier.
 2. Representative owner boundary:
-   `startup_active_gate_owner / snapshot_coverage`.
+   `query_participant_failure / inactive_participant_routing`.
 3. Dominant reason: `active_gate_timed_out`.
 4. Priority recovery is satisfied with zero residual witnesses.
 5. Publication ACK convergence remains satisfied with `pendingAckCount=0`.
 6. Active-gate snapshot coverage is blocked with `snapshotCoverageNodeCount=0`,
    `expectedNodeCount=5`.
-7. The previous package removed `selected_snapshot_source_timeout` from
-   canonical representative evidence by sending late active-gate forced repair
-   probes through direct authoritative snapshot repair without changing timeout
-   budgets.
-8. The four-cause split is decided: bad snapshot-source selection is not
-   selected, forced repair stalls are bounded, inherited readiness support is
-   downstream, and the selected edge is authoritative control snapshot nodes
-   query pressure.
-9. The active package is now
-   `work/packages/done-20260516-startup-active-gate-authoritative-nodes-query-pressure.md`.
-   It must build the replayable authoritative nodes query pressure fixture for
-   source `11601fe0-72d6-5853-8590-ec2881853e72` and edit only the selected
-   owner path without increasing timeout budgets.
+7. The predecessor removed the selected `nodes:Query timeout after 3000ms`
+   reconnect-delivery edge; authoritative nodes repair now reaches
+   `readSource=sql_query_engine`.
+8. Fresh representative evidence selects a participant failure edge:
+   authoritative `SELECT * FROM nodes` for `nodes-p1` reaches inactive
+   participant `7493b0ab-a054-5fad-a91b-5e331db29304` and fails with
+   `ROUTER_CONNECTION_CLOSED`.
+9. The just-closed package is
+   `work/packages/done-20260517-query-participant-failure-inactive-node-routing-coverage.md`.
+   It built the narrowest authoritative `SELECT * FROM nodes`
+   participant-routing fixture for inactive node
+   `7493b0ab-a054-5fad-a91b-5e331db29304` and proved query fallthrough works
+   when a live service candidate exists.
 10. The closed predecessor is
-   `work/packages/done-20260516-startup-active-gate-authoritative-repair-participant-failure.md`.
-   It closed as `reduced`: `discovery_node_coverage_gap` disappeared
-   from the latest representative report, while snapshot coverage remains
-   `0/5` and the selected error is authoritative control snapshot repair
-   failing on nodes with `Query timeout after 3000ms`.
+   `work/packages/done-20260516-query-message-router-reconnect-delivery-snapshot-coverage.md`.
+   It closed as `migrated`: the selected error moved from
+   `nodes:Query timeout after 3000ms` to `nodes:Connection to node
+   7493b0ab-a054-5fad-a91b-5e331db29304 closed`. Publication ACK, priority
+   recovery, timeout budget increases, active-gate admission, CDC fallback,
+   and message-router reconnect delivery remain frozen unless canonical
+   evidence selects them again.
 
 ## Scope Basis
 
@@ -418,16 +420,17 @@ required action.
 
 1. `npm run work:context`
 2. `npm run work:llm-start`
-3. `npm run work:package:doctor -- --suggest work/packages/done-20260516-startup-active-gate-authoritative-nodes-query-pressure.md`
-4. `npm run work:validate -- --entry work/packages/done-20260516-startup-active-gate-authoritative-nodes-query-pressure.md`
-5. `npm run work:evidence-summary -- test-output/reports/rolling-restart-after-forced-repair-local-fallback-20260516T224600Z.report.json`
-6. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-forced-repair-local-fallback-20260516T224600Z.report.json --explain active_gate_snapshot_coverage`
-7. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-forced-repair-local-fallback-20260516T224600Z.report.json --handoff-probe`
-8. `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-forced-repair-local-fallback-20260516T224600Z.report.json`
-9. `npm run analyze:owner-files -- startup_active_gate_owner snapshot_coverage --markdown`
-10. `npm run work:subagent-prompt -- --role review --package work/packages/done-20260516-startup-active-gate-authoritative-nodes-query-pressure.md`
-11. Real review/fix/implementation subagent proof before runtime implementation starts.
-12. Focused authoritative nodes query pressure fixture/probe, selected owner tests,
+3. `npm run work:package:doctor -- --suggest work/packages/done-20260517-query-participant-failure-inactive-node-routing-coverage.md`
+4. `npm run work:validate -- --entry work/packages/done-20260517-query-participant-failure-inactive-node-routing-coverage.md`
+5. `npm run work:evidence-summary -- test-output/reports/rolling-restart-query-reconnect-delivery-20260517T001920Z.report.json`
+6. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-query-reconnect-delivery-20260517T001920Z.report.json --explain active_gate_snapshot_coverage`
+7. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-query-reconnect-delivery-20260517T001920Z.report.json --handoff-probe`
+8. `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-query-reconnect-delivery-20260517T001920Z.report.json`
+9. `npm run analyze:distributed-failure -- --report test-output/reports/rolling-restart-query-reconnect-delivery-20260517T001920Z.report.json`
+10. `npm run analyze:owner-files -- query_participant_failure inactive_participant_routing --markdown`
+11. `npm run work:subagent-prompt -- --role review --package work/packages/done-20260517-query-participant-failure-inactive-node-routing-coverage.md`
+12. Real review/fix/implementation subagent proof before runtime implementation starts.
+13. Focused inactive participant routing fixture/probe, selected owner tests,
     static guardrails, and representative `rolling-restart` after the package
     has implementation proof.
 
@@ -505,10 +508,21 @@ work/packages/done-20260516-query-message-router-reconnect-delivery-snapshot-cov
 test-output/reports/rolling-restart-query-reconnect-delivery-20260517T001920Z.report.json
 ```
 
-Open the next package on the participant/routing successor boundary selected
-by that artifact: authoritative `SELECT * FROM nodes` now fails because
-`nodes-p1` returns `ROUTER_CONNECTION_CLOSED` for inactive participant
-`7493b0ab-a054-5fad-a91b-5e331db29304`, not because the query times out.
+Continue by opening the join/message-group service activation successor package
+selected by that artifact:
+
+```text
+work/packages/done-20260517-query-participant-failure-inactive-node-routing-coverage.md
+test-output/reports/rolling-restart-query-reconnect-delivery-20260517T001920Z.report.json
+```
+
+Authoritative `SELECT * FROM nodes` still observes
+`ROUTER_CONNECTION_CLOSED` for inactive participant
+`7493b0ab-a054-5fad-a91b-5e331db29304`, but the closed fixture proves the
+query path falls through when a live candidate exists. Scoped playback shows
+all `nodes-p1` service rows stay pinned to the seed, and the next owner boundary
+is join/message-group service activation and service-row publication for live
+partition candidates.
 
 Keep the completed post-systems-pattern checkpoint package and artifact as
 predecessor/context:
