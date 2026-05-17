@@ -35,7 +35,7 @@ Canonical state after the selected-source timeout package closed as reduced:
    selected-source timeout regression, and the implementation commit was
    pushed.
 3. The current active package is
-   `work/packages/active-20260517-startup-active-gate-pending-handoff-reconcile-after-selected-timeout-reduction.md`.
+   `work/packages/done-20260517-startup-active-gate-pending-handoff-reconcile-after-selected-timeout-reduction.md`.
 4. Fresh `work:evidence-summary` still selects
    `active_gate_snapshot_coverage` as the first frontier.
 5. Representative owner boundary:
@@ -80,7 +80,7 @@ Allowed stop modes: representative-green, migrated, reduced, same-frontier, clas
 | `done-20260517-topology-publication-ack-pending-after-active-gate-drain-migration.md` | `rolling-restart-publication-open-ack-classified-20260517T104704Z.report.json` | `topology_publication_owner / publication_convergence` -> `startup_active_gate_owner / snapshot_coverage` | `pendingAckCount=1` -> `0`; priority residual witnesses -> `0`; snapshot coverage `6/7` | `migrated` |
 | `done-20260517-startup-active-gate-snapshot-coverage-owner-reconcile-after-ack-drain.md` | `rolling-restart-after-bounded-handoff-retry-20260517T112600Z.report.json` | `startup_active_gate_owner / snapshot_coverage` | `owner_reconcile_pending` drained; `publicationActiveGateHandoffPendingReconcileCount=0`; selected cause moved to `selected_snapshot_source_timeout`; snapshot coverage `0/5` | `reduced` |
 | `done-20260517-startup-active-gate-selected-snapshot-source-timeout-after-bounded-handoff-retry.md` | `rolling-restart-selected-snapshot-source-timeout-fix-20260517T000000Z.report.json` | `startup_active_gate_owner / snapshot_coverage` | selected-source timeout reduced; snapshot coverage `0/5` -> `4/5`; pending handoff reconcile count `3` | `reduced` |
-| `active-20260517-startup-active-gate-pending-handoff-reconcile-after-selected-timeout-reduction.md` | `rolling-restart-selected-snapshot-source-timeout-fix-20260517T000000Z.report.json` | `startup_active_gate_owner / snapshot_coverage` | pending handoff reconcile fixture/probe for three nodes | `pending-before-probe` |
+| `done-20260517-startup-active-gate-pending-handoff-reconcile-after-selected-timeout-reduction.md` | `rolling-restart-selected-snapshot-source-timeout-fix-20260517T000000Z.report.json` | `startup_active_gate_owner / snapshot_coverage` | pending handoff reconcile fixture/probe for three nodes | `pending-before-probe` |
 
 ## Sprint LLM Trap List
 

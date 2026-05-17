@@ -27,7 +27,7 @@
   ],
   "writeScope": [
     "work/packages/done-20260517-startup-active-gate-selected-snapshot-source-timeout-after-bounded-handoff-retry.md",
-    "work/packages/active-20260517-startup-active-gate-pending-handoff-reconcile-after-selected-timeout-reduction.md",
+    "work/packages/done-20260517-startup-active-gate-pending-handoff-reconcile-after-selected-timeout-reduction.md",
     "work/packages/done-20260517-startup-active-gate-snapshot-coverage-owner-reconcile-after-ack-drain.md",
     "work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md",
     "work/sprints/current-blocker.md",
@@ -58,7 +58,7 @@
   ],
   "commitScope": [
     "work/packages/done-20260517-startup-active-gate-selected-snapshot-source-timeout-after-bounded-handoff-retry.md",
-    "work/packages/active-20260517-startup-active-gate-pending-handoff-reconcile-after-selected-timeout-reduction.md",
+    "work/packages/done-20260517-startup-active-gate-pending-handoff-reconcile-after-selected-timeout-reduction.md",
     "work/packages/done-20260517-startup-active-gate-snapshot-coverage-owner-reconcile-after-ack-drain.md",
     "work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md",
     "work/sprints/current-blocker.md",
@@ -136,7 +136,7 @@
   "predecessor": "work/packages/done-20260517-startup-active-gate-snapshot-coverage-owner-reconcile-after-ack-drain.md",
   "closed": "2026-05-17",
   "commitAndPushLedgerRequired": true,
-  "successor": "work/packages/active-20260517-startup-active-gate-pending-handoff-reconcile-after-selected-timeout-reduction.md"
+  "successor": "work/packages/done-20260517-startup-active-gate-pending-handoff-reconcile-after-selected-timeout-reduction.md"
 }
 -->
 
@@ -236,7 +236,7 @@ Implementation gate before runtime edits:
 ## In Scope
 
 1. work/packages/done-20260517-startup-active-gate-selected-snapshot-source-timeout-after-bounded-handoff-retry.md
-2. work/packages/active-20260517-startup-active-gate-pending-handoff-reconcile-after-selected-timeout-reduction.md
+2. work/packages/done-20260517-startup-active-gate-pending-handoff-reconcile-after-selected-timeout-reduction.md
 3. work/packages/done-20260517-startup-active-gate-snapshot-coverage-owner-reconcile-after-ack-drain.md
 4. work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md
 5. work/sprints/current-blocker.md
@@ -272,7 +272,7 @@ Implementation gate before runtime edits:
 - Intended minimum model: `gpt-5.3-codex`
 - Scope shape: `owner-boundary-contraction/current-frontier`
 - Output profile: `medium`
-- Owned files: `work/packages/done-20260517-startup-active-gate-selected-snapshot-source-timeout-after-bounded-handoff-retry.md`, `work/packages/active-20260517-startup-active-gate-pending-handoff-reconcile-after-selected-timeout-reduction.md`, `work/packages/done-20260517-startup-active-gate-snapshot-coverage-owner-reconcile-after-ack-drain.md`, `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md`, `work/sprints/current-blocker.md`, `work/sprints/current-blocker.json`, `work/model-ledger.jsonl`
+- Owned files: `work/packages/done-20260517-startup-active-gate-selected-snapshot-source-timeout-after-bounded-handoff-retry.md`, `work/packages/done-20260517-startup-active-gate-pending-handoff-reconcile-after-selected-timeout-reduction.md`, `work/packages/done-20260517-startup-active-gate-snapshot-coverage-owner-reconcile-after-ack-drain.md`, `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md`, `work/sprints/current-blocker.md`, `work/sprints/current-blocker.json`, `work/model-ledger.jsonl`
 - Forbidden files: `topology_publication_owner`, `operation_workflow_owner`, `timeout_budgets`, `active_gate_admission`, `readiness_support`
 - Frozen decisions: publication ACK, priority recovery, timeout budgets,
   active-gate admission, publication truth, selected-source timeout handling,

@@ -59,6 +59,9 @@ const SNAPSHOT_REPLAY_TEST_AUTHORITY_TEST_NAME =
 const SNAPSHOT_REPLAY_TEST_DEFERRED_AUTHORITY_TEST_NAME =
   'Unit: _probeControlSnapshotCoverage exposes deferred owner observation ' +
   'for admin-ready stale 102455Z witness';
+const SNAPSHOT_REPLAY_TEST_PENDING_HANDOFF_TEST_NAME =
+  'Unit: _probeControlSnapshotCoverage replays pending handoff reconcile ' +
+  'after selected timeout reduction';
 const SNAPSHOT_REPLAY_TEST_AUTHORITY_ASSERTION =
   'same-coverage active-gate selection should keep the admin-ready authority ' +
   'witness';
@@ -109,6 +112,26 @@ const SNAPSHOT_REPLAY_TEST_STRONG_MISSING_NODE_IDS = Object.freeze([
 const SNAPSHOT_REPLAY_TEST_STALE_MISSING_NODE_IDS = Object.freeze([
   SNAPSHOT_REPLAY_TEST_NODE_ID.ADMIN_READY_STALE,
   SNAPSHOT_REPLAY_TEST_NODE_ID.STRONG_EXTRA,
+  SNAPSHOT_REPLAY_TEST_NODE_ID.STALE_EXTRA,
+]);
+const SNAPSHOT_REPLAY_TEST_PENDING_HANDOFF_OBSERVED_NODE_IDS = Object.freeze([
+  SNAPSHOT_REPLAY_TEST_NODE_ID.SEED,
+  SNAPSHOT_REPLAY_TEST_NODE_ID.ADMIN_READY_STALE,
+  SNAPSHOT_REPLAY_TEST_NODE_ID.STRONG_EXTRA,
+  SNAPSHOT_REPLAY_TEST_NODE_ID.STALE_EXTRA,
+]);
+const SNAPSHOT_REPLAY_TEST_PENDING_HANDOFF_PUBLISHED_NODE_IDS = Object.freeze([
+  SNAPSHOT_REPLAY_TEST_NODE_ID.SEED,
+]);
+const SNAPSHOT_REPLAY_TEST_PENDING_HANDOFF_MISSING_NODE_IDS = Object.freeze([
+  SNAPSHOT_REPLAY_TEST_NODE_ID.BASELINE,
+  SNAPSHOT_REPLAY_TEST_NODE_ID.ADMIN_READY_STALE,
+  SNAPSHOT_REPLAY_TEST_NODE_ID.STRONG_EXTRA,
+  SNAPSHOT_REPLAY_TEST_NODE_ID.STALE_EXTRA,
+]);
+const SNAPSHOT_REPLAY_TEST_PENDING_HANDOFF_RECONCILE_NODE_IDS = Object.freeze([
+  SNAPSHOT_REPLAY_TEST_NODE_ID.BASELINE,
+  SNAPSHOT_REPLAY_TEST_NODE_ID.ADMIN_READY_STALE,
   SNAPSHOT_REPLAY_TEST_NODE_ID.STALE_EXTRA,
 ]);
 const SNAPSHOT_REACHABILITY_TIMEOUT_SELECTED_NODE_ID =
@@ -2270,6 +2293,196 @@ test(SNAPSHOT_REPLAY_TEST_DEFERRED_AUTHORITY_TEST_NAME, async () => {
   assert.strictEqual(
     selectedWitness.membershipPublicationHandoffOutcome?.state,
     SNAPSHOT_REPLAY_TEST_HANDOFF_OUTCOME_STATE_WRITE_DEFERRED,
+  );
+});
+
+test(SNAPSHOT_REPLAY_TEST_PENDING_HANDOFF_TEST_NAME, async () => {
+  const cluster = createCluster({
+    size: SNAPSHOT_REPLAY_TEST_CLUSTER_SIZE,
+    docker: {socketPath: SNAPSHOT_REPLAY_TEST_DOCKER_SOCKET_PATH},
+    image: SNAPSHOT_REPLAY_TEST_IMAGE,
+  });
+
+  const createNode = (
+    nodeId,
+    role,
+    options,
+  ) => ({
+    id: nodeId,
+    role,
+    async getStatus() {
+      return {rows: [{status: SERVICE_STATUS.ACTIVE}]};
+    },
+    async getReachabilityDiagnostics() {
+      return {
+        reachable: options.reachable,
+        adminReady: options.adminReady,
+        ...(options.reachableBy ? {reachableBy: options.reachableBy} : {}),
+        ...(options.reachabilityError ?
+          {lastError: options.reachabilityError} :
+          {}),
+      };
+    },
+    async getControlSnapshot() {
+      return {
+        rows: [{
+          nodes: options.observedNodeIds,
+          capturedAtMs: options.capturedAtMs,
+          ...(options.observationMode ?
+            {observationMode: options.observationMode} :
+            {}),
+          ...(options.snapshotObservation ?
+            {snapshotObservation: options.snapshotObservation} :
+            {}),
+          ...(options.adminObservation ?
+            {adminObservation: options.adminObservation} :
+            {}),
+          controlPlaneDiagnostics: {
+            publicationConvergence: {
+              publicationEpoch: options.publicationEpoch,
+              publicationStatus: CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED,
+              publishedActiveNodeIds: options.publishedActiveNodeIds,
+              pendingAckNodeIds: [],
+              acknowledgedNodeIds: options.publishedActiveNodeIds,
+            },
+            publicationActiveGateHandoff:
+              options.publicationActiveGateHandoff,
+          },
+        }],
+      };
+    },
+    async getLogs() {
+      return SNAPSHOT_REPLAY_TEST_EMPTY_LOG;
+    },
+  });
+
+  cluster._nodes.set(
+    SNAPSHOT_REPLAY_TEST_NODE_ID.SEED,
+    createNode(
+      SNAPSHOT_REPLAY_TEST_NODE_ID.SEED,
+      NODE_ROLES.SEED,
+      {
+        reachable: false,
+        adminReady: false,
+        reachabilityError: SNAPSHOT_REPLAY_TEST_SEED_REACHABILITY_ERROR,
+        observedNodeIds: SNAPSHOT_REPLAY_TEST_STRONG_OBSERVED_NODE_IDS,
+        capturedAtMs: SNAPSHOT_REPLAY_TEST_SEED_CAPTURED_AT_MS,
+        publicationEpoch: SNAPSHOT_REPLAY_TEST_STRONG_PUBLICATION_EPOCH,
+        publishedActiveNodeIds:
+          SNAPSHOT_REPLAY_TEST_STRONG_PUBLISHED_NODE_IDS,
+      },
+    ),
+  );
+  cluster._nodes.set(
+    SNAPSHOT_REPLAY_TEST_NODE_ID.ADMIN_READY_STALE,
+    createNode(
+      SNAPSHOT_REPLAY_TEST_NODE_ID.ADMIN_READY_STALE,
+      NODE_ROLES.JOINER,
+      {
+        reachable: true,
+        adminReady: true,
+        reachableBy: SNAPSHOT_REPLAY_TEST_ADMIN_HEALTH_SOURCE,
+        observedNodeIds:
+          SNAPSHOT_REPLAY_TEST_PENDING_HANDOFF_OBSERVED_NODE_IDS,
+        capturedAtMs: SNAPSHOT_REPLAY_TEST_ADMIN_CAPTURED_AT_MS,
+        observationMode:
+          ADMIN_CONTROL_SNAPSHOT_OBSERVATION_MODE.REPAIR_DEFERRED,
+        snapshotObservation: {
+          state:
+            CONTROL_PLANE_SNAPSHOT_OBSERVATION_STATE.DEFERRED_REFRESH,
+          contractState: OWNER_CONTRACT_STATE.DEFERRED,
+          nextAction: OWNER_CONTRACT_NEXT_ACTION.RETRY,
+          reasonCodes: [SNAPSHOT_REPLAY_TEST_REPAIR_TRIGGER_CODE],
+          retryAfterMs: SNAPSHOT_REPLAY_TEST_REPAIR_RETRY_AFTER_MS,
+          refreshState: CONTROL_PLANE_SNAPSHOT_REFRESH_STATE.DEFERRED,
+        },
+        adminObservation: {
+          repair: {
+            deferred: true,
+            triggerCodes: [SNAPSHOT_REPLAY_TEST_REPAIR_TRIGGER_CODE],
+          },
+        },
+        publicationEpoch: SNAPSHOT_REPLAY_TEST_STALE_PUBLICATION_EPOCH,
+        publishedActiveNodeIds:
+          SNAPSHOT_REPLAY_TEST_PENDING_HANDOFF_PUBLISHED_NODE_IDS,
+        publicationActiveGateHandoff: {
+          state: SNAPSHOT_REPLAY_TEST_HANDOFF_STATE_PENDING,
+          reasonCode:
+            SNAPSHOT_REPLAY_TEST_HANDOFF_REASON_OWNER_RECONCILE_PENDING,
+          nextAction: SNAPSHOT_REPLAY_TEST_HANDOFF_NEXT_ACTION_RECONCILE,
+          runtimePromotionAllowed:
+            SNAPSHOT_REPLAY_TEST_HANDOFF_RUNTIME_PROMOTION_ALLOWED_FALSE,
+          publishedActiveNodeIds:
+            SNAPSHOT_REPLAY_TEST_PENDING_HANDOFF_PUBLISHED_NODE_IDS,
+          missingPublishedNodeIds:
+            SNAPSHOT_REPLAY_TEST_PENDING_HANDOFF_RECONCILE_NODE_IDS,
+          pendingReconcileNodeIds:
+            SNAPSHOT_REPLAY_TEST_PENDING_HANDOFF_RECONCILE_NODE_IDS,
+          pendingReconcileCount:
+            SNAPSHOT_REPLAY_TEST_PENDING_HANDOFF_RECONCILE_NODE_IDS.length,
+        },
+      },
+    ),
+  );
+
+  const coverage = await cluster._probeControlSnapshotCoverage(
+    Date.now() + SNAPSHOT_REPLAY_TEST_DEADLINE_EXTENSION_MS,
+    SNAPSHOT_REPLAY_TEST_EXPECTED_NODE_IDS,
+  );
+  const selectedWitness = coverage.probeWitnesses.find((witness) =>
+    witness.nodeId === SNAPSHOT_REPLAY_TEST_NODE_ID.ADMIN_READY_STALE,
+  );
+
+  assert.strictEqual(
+    coverage.bestCoverageNodeCount,
+    SNAPSHOT_REPLAY_TEST_EXPECTED_NODE_IDS.length - 1,
+  );
+  assert.strictEqual(
+    coverage.completeCoverage,
+    false,
+  );
+  assert.strictEqual(
+    coverage.selectedNodeId,
+    SNAPSHOT_REPLAY_TEST_NODE_ID.ADMIN_READY_STALE,
+    SNAPSHOT_REPLAY_TEST_AUTHORITY_ASSERTION,
+  );
+  assert.deepStrictEqual(
+    coverage.selectedMissingPublishedNodeIds,
+    SNAPSHOT_REPLAY_TEST_PENDING_HANDOFF_MISSING_NODE_IDS,
+  );
+  assert.strictEqual(
+    coverage.selectedSnapshotObservationMode,
+    ADMIN_CONTROL_SNAPSHOT_OBSERVATION_MODE.REPAIR_DEFERRED,
+  );
+  assert.strictEqual(
+    coverage.selectedSnapshotObservationState,
+    CONTROL_PLANE_SNAPSHOT_OBSERVATION_STATE.DEFERRED_REFRESH,
+  );
+  assert.deepStrictEqual(
+    coverage.selectedSnapshotObservationReasonCodes,
+    [SNAPSHOT_REPLAY_TEST_REPAIR_TRIGGER_CODE],
+  );
+  assert.strictEqual(
+    coverage.selectedSnapshotObservationRetryAfterMs,
+    SNAPSHOT_REPLAY_TEST_REPAIR_RETRY_AFTER_MS,
+  );
+  assert.strictEqual(
+    coverage.selectedPublicationActiveGateHandoff?.reasonCode,
+    SNAPSHOT_REPLAY_TEST_HANDOFF_REASON_OWNER_RECONCILE_PENDING,
+  );
+  assert.deepStrictEqual(
+    coverage.selectedPublicationActiveGateHandoff?.pendingReconcileNodeIds,
+    SNAPSHOT_REPLAY_TEST_PENDING_HANDOFF_RECONCILE_NODE_IDS,
+  );
+  assert.strictEqual(
+    coverage.selectedPublicationActiveGateHandoff?.pendingReconcileCount,
+    SNAPSHOT_REPLAY_TEST_PENDING_HANDOFF_RECONCILE_NODE_IDS.length,
+  );
+  assert.ok(selectedWitness);
+  assert.strictEqual(selectedWitness.snapshotRepairDeferred, true);
+  assert.deepStrictEqual(
+    selectedWitness.publicationActiveGateHandoff?.pendingReconcileNodeIds,
+    SNAPSHOT_REPLAY_TEST_PENDING_HANDOFF_RECONCILE_NODE_IDS,
   );
 });
 
