@@ -22,33 +22,35 @@ success is in scope.
 ## Current Blocker Snapshot
 
 Latest representative artifact:
-`test-output/reports/rolling-restart-publication-open-count-only-ack-20260517T084752Z.report.json`.
+`test-output/reports/rolling-restart-active-gate-joined-reconcile-20260517T091454Z.report.json`.
 
-Canonical state after the publication ACK/open count-only package migrated:
+Canonical state after the joined pending reconcile package closed as reduced:
 
 1. `publication_ack_convergence` is satisfied with
    `publicationStatus=PUBLISHED`, `pendingAckCount=0`,
    `pendingAckNodeIds=[]`, and
    `publicationOwnerAckState=not_required`.
-2. The current active package is
-   `work/packages/active-20260517-startup-active-gate-snapshot-coverage-after-publication-ack-closure.md`.
-3. Fresh `work:evidence-summary` selects `active_gate_snapshot_coverage` as the
+2. The previous active-gate package closed as reduced by preserving joined
+   pending reconcile node ids after publication ACK closure.
+3. The current active package is
+   `work/packages/active-20260517-startup-active-gate-snapshot-coverage-joined-reconcile-residual.md`.
+4. Fresh `work:evidence-summary` selects `active_gate_snapshot_coverage` as the
    first frontier.
-4. Representative owner boundary:
+5. Representative owner boundary:
    `startup_active_gate_owner / snapshot_coverage`.
-5. Dominant reason: `active_gate_timed_out` with
+6. Dominant reason: `active_gate_timed_out` with
    `owner_reconcile_pending`, `snapshot_coverage_incomplete`, and
    `snapshot_repair_deferred`.
-6. Active-gate snapshot coverage improved to `3/5`; the handoff remains
+7. Active-gate snapshot coverage improved to `4/5`; the handoff remains
    pending with `owner_reconcile_pending`, next action
    `reconcile_owner_membership_publication`, and
-   `pendingReconcileCount=2`.
-7. Runtime promotion is still not allowed while the handoff is pending.
-8. The next proof must satisfy `active_gate_snapshot_coverage`, reduce
+   `pendingReconcileCount=3`.
+8. Runtime promotion is still not allowed while the handoff is pending.
+9. The next proof must satisfy `active_gate_snapshot_coverage`, reduce
    `pendingReconcileCount` or improve snapshot coverage with focused owner
    proof, migrate to a genuinely new owner boundary, or turn representative
    `rolling-restart` green.
-9. Publication ACK, priority recovery, timeout budgets, active-gate admission,
+10. Publication ACK, priority recovery, timeout budgets, active-gate admission,
    selected-source selection, forced repair timeout handling, authoritative
    query-pressure fallback, and readiness support remain frozen unless
    canonical evidence selects them again.
@@ -416,13 +418,13 @@ required action.
 
 1. `npm run work:context`
 2. `npm run work:llm-start`
-3. `npm run work:package:doctor -- --suggest work/packages/active-20260517-startup-active-gate-snapshot-coverage-after-publication-ack-closure.md`
-4. `npm run work:validate -- --entry work/packages/active-20260517-startup-active-gate-snapshot-coverage-after-publication-ack-closure.md`
-5. `npm run work:evidence-summary -- test-output/reports/rolling-restart-publication-open-count-only-ack-20260517T084752Z.report.json`
-6. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-publication-open-count-only-ack-20260517T084752Z.report.json --handoff-probe`
-7. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-publication-open-count-only-ack-20260517T084752Z.report.json --replay-fixture`
-8. `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-publication-open-count-only-ack-20260517T084752Z.report.json`
-9. `npm run analyze:distributed-failure -- --report test-output/reports/rolling-restart-publication-open-count-only-ack-20260517T084752Z.report.json`
+3. `npm run work:package:doctor -- --suggest work/packages/active-20260517-startup-active-gate-snapshot-coverage-joined-reconcile-residual.md`
+4. `npm run work:validate -- --entry work/packages/active-20260517-startup-active-gate-snapshot-coverage-joined-reconcile-residual.md`
+5. `npm run work:evidence-summary -- test-output/reports/rolling-restart-active-gate-joined-reconcile-20260517T091454Z.report.json`
+6. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-active-gate-joined-reconcile-20260517T091454Z.report.json --handoff-probe`
+7. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-active-gate-joined-reconcile-20260517T091454Z.report.json --replay-fixture`
+8. `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-active-gate-joined-reconcile-20260517T091454Z.report.json`
+9. `npm run analyze:distributed-failure -- --report test-output/reports/rolling-restart-active-gate-joined-reconcile-20260517T091454Z.report.json`
 10. `npm run analyze:owner-files -- startup_active_gate_owner snapshot_coverage --markdown`
 11. Real review/fix/implementation subagent proof before runtime implementation starts.
 12. Focused active-gate owner-reconcile fixture/probe, selected owner tests,
@@ -500,15 +502,15 @@ Continue with the active-gate snapshot coverage successor selected by the
 latest representative artifact:
 
 ```text
-work/packages/active-20260517-startup-active-gate-snapshot-coverage-after-publication-ack-closure.md
-test-output/reports/rolling-restart-publication-open-count-only-ack-20260517T084752Z.report.json
+work/packages/active-20260517-startup-active-gate-snapshot-coverage-joined-reconcile-residual.md
+test-output/reports/rolling-restart-active-gate-joined-reconcile-20260517T091454Z.report.json
 ```
 
 The current first frontier is
 `startup_active_gate_owner / snapshot_coverage`: fresh evidence reports
 `active_gate_snapshot_coverage`, `active_gate_timed_out`,
-`snapshotCoverageNodeCount=3/5`, and handoff evidence
-`owner_reconcile_pending` with `pendingReconcileCount=2` and next action
+`snapshotCoverageNodeCount=4/5`, and handoff evidence
+`owner_reconcile_pending` with `pendingReconcileCount=3` and next action
 `reconcile_owner_membership_publication`.
 
 Run the required review/fix/implementation subagent sequence before runtime

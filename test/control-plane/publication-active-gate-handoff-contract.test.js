@@ -47,8 +47,16 @@ const TEST_SELECTED_HANDOFF_EXPECTED_NODE_IDS = Object.freeze([
   TEST_NODE_5,
 ]);
 const TEST_PUBLICATION_STATUS_OPEN = 'OPEN';
+const TEST_PUBLICATION_ACK_CLOSED_COUNT = 0;
 const TEST_PENDING_ACK_COUNT = 1;
+const TEST_JOINED_PENDING_RECONCILE_COUNT = 2;
 const TEST_RUNTIME_PROMOTION_DENIED = false;
+const TEST_JOINED_NODE_ID_SEPARATOR = ',';
+const TEST_EMPTY_NODE_IDS = Object.freeze([]);
+const TEST_JOINED_PENDING_RECONCILE_NODE_IDS = [
+  TEST_NODE_2,
+  TEST_NODE_3,
+].join(TEST_JOINED_NODE_ID_SEPARATOR);
 
 test('publication active-gate handoff contract schedules owner reconcile from one decision table',
   async (t) => {
@@ -337,6 +345,58 @@ test('publication active-gate selector accepts flattened active-gate progress ha
       target.pendingReconcileNodeIds,
       [TEST_NODE_2],
       'flattened active-gate progress should preserve the selected pending reconcile node',
+    );
+  });
+
+test('publication active-gate selector preserves joined pending reconcile ids after publication ack closure',
+  async (t) => {
+    const selectedHandoff = selectPublicationActiveGateHandoffContract({
+      publicationConvergence: {
+        publicationEpoch: TEST_PUBLICATION_EPOCH,
+        publicationStatus: TEST_PUBLICATION_STATUS_PUBLISHED,
+        pendingAckNodeIds: [...TEST_EMPTY_NODE_IDS],
+        pendingAckCount: TEST_PUBLICATION_ACK_CLOSED_COUNT,
+        publishedActiveNodeIds: [TEST_NODE_1],
+        missingPublishedNodeIds: [
+          TEST_NODE_2,
+          TEST_NODE_3,
+          TEST_NODE_4,
+          TEST_NODE_5,
+        ],
+        activeGate: {
+          progress: {
+            publicationActiveGateHandoffState:
+              PUBLICATION_ACTIVE_GATE_HANDOFF_STATE.PENDING,
+            publicationActiveGateHandoffReasonCode:
+              PUBLICATION_ACTIVE_GATE_HANDOFF_REASON
+                .OWNER_RECONCILE_PENDING,
+            publicationActiveGateHandoffNextAction:
+              PUBLICATION_ACTIVE_GATE_HANDOFF_NEXT_ACTION
+                .RECONCILE_OWNER_MEMBERSHIP_PUBLICATION,
+            publicationActiveGateHandoffRuntimePromotionAllowed:
+              TEST_RUNTIME_PROMOTION_DENIED,
+            publicationActiveGateHandoffPendingReconcileNodeIds:
+              TEST_JOINED_PENDING_RECONCILE_NODE_IDS,
+            publicationActiveGateHandoffPendingReconcileCount:
+              TEST_JOINED_PENDING_RECONCILE_COUNT,
+          },
+        },
+      },
+    });
+    const target =
+      resolvePublicationActiveGateMembershipPublicationTarget(
+        selectedHandoff,
+      );
+
+    t.same(
+      target.publishedActiveNodeIds,
+      [...TEST_SELECTED_HANDOFF_EXPECTED_NODE_IDS],
+      'joined active-gate progress should publish the full selected publication cohort',
+    );
+    t.same(
+      target.pendingReconcileNodeIds,
+      [TEST_NODE_2, TEST_NODE_3],
+      'joined active-gate progress should preserve only the selected pending reconcile nodes',
     );
   });
 

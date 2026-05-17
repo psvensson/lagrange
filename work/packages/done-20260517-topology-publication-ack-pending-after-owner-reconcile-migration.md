@@ -28,7 +28,7 @@
   ],
   "writeScope": [
     "work/packages/done-20260517-topology-publication-ack-pending-after-owner-reconcile-migration.md",
-    "work/packages/active-20260517-startup-active-gate-snapshot-coverage-after-publication-ack-closure.md",
+    "work/packages/done-20260517-startup-active-gate-snapshot-coverage-after-publication-ack-closure.md",
     "work/packages/active-20260517-startup-active-gate-owner-reconcile-write-deferred-residual.md",
     "work/packages/done-20260517-startup-active-gate-owner-reconcile-write-deferred-residual.md",
     "work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md",
@@ -63,7 +63,7 @@
   ],
   "commitScope": [
     "work/packages/done-20260517-topology-publication-ack-pending-after-owner-reconcile-migration.md",
-    "work/packages/active-20260517-startup-active-gate-snapshot-coverage-after-publication-ack-closure.md",
+    "work/packages/done-20260517-startup-active-gate-snapshot-coverage-after-publication-ack-closure.md",
     "work/packages/active-20260517-startup-active-gate-owner-reconcile-write-deferred-residual.md",
     "work/packages/done-20260517-startup-active-gate-owner-reconcile-write-deferred-residual.md",
     "work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md",
@@ -159,7 +159,7 @@
   "predecessor": "work/packages/done-20260517-startup-active-gate-owner-reconcile-write-deferred-residual.md",
   "closed": "2026-05-17",
   "commitAndPushLedgerRequired": true,
-  "successor": "work/packages/active-20260517-startup-active-gate-snapshot-coverage-after-publication-ack-closure.md"
+  "successor": "work/packages/done-20260517-startup-active-gate-snapshot-coverage-after-publication-ack-closure.md"
 }
 -->
 
@@ -220,7 +220,7 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 ## In Scope
 
 1. work/packages/done-20260517-topology-publication-ack-pending-after-owner-reconcile-migration.md
-2. work/packages/active-20260517-startup-active-gate-snapshot-coverage-after-publication-ack-closure.md
+2. work/packages/done-20260517-startup-active-gate-snapshot-coverage-after-publication-ack-closure.md
 3. work/packages/active-20260517-startup-active-gate-owner-reconcile-write-deferred-residual.md
 4. work/packages/done-20260517-startup-active-gate-owner-reconcile-write-deferred-residual.md
 5. work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md
@@ -251,7 +251,7 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 - Intended minimum model: `gpt-5.3-codex`
 - Scope shape: `owner-boundary-contraction/current-frontier`
 - Output profile: `medium`
-- Owned files: `work/packages/done-20260517-topology-publication-ack-pending-after-owner-reconcile-migration.md`, `work/packages/active-20260517-startup-active-gate-snapshot-coverage-after-publication-ack-closure.md`, `work/packages/active-20260517-startup-active-gate-owner-reconcile-write-deferred-residual.md`, `work/packages/done-20260517-startup-active-gate-owner-reconcile-write-deferred-residual.md`, `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md`, `work/sprints/current-blocker.md`, `work/sprints/current-blocker.json`, `work/model-ledger.jsonl`, `src/control-plane/publication-recovery-gate.js`, `src/control-plane/publication-recovery-evidence.js`, `src/control-plane/publication-owner-decision.js`, `src/control-plane/publication-owner-evidence.js`, `test/control-plane/publication-recovery-gate.test.js`, `test/control-plane/publication-recovery-evidence.test.js`, `test/control-plane/publication-owner-stream.test.js`
+- Owned files: `work/packages/done-20260517-topology-publication-ack-pending-after-owner-reconcile-migration.md`, `work/packages/done-20260517-startup-active-gate-snapshot-coverage-after-publication-ack-closure.md`, `work/packages/active-20260517-startup-active-gate-owner-reconcile-write-deferred-residual.md`, `work/packages/done-20260517-startup-active-gate-owner-reconcile-write-deferred-residual.md`, `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md`, `work/sprints/current-blocker.md`, `work/sprints/current-blocker.json`, `work/model-ledger.jsonl`, `src/control-plane/publication-recovery-gate.js`, `src/control-plane/publication-recovery-evidence.js`, `src/control-plane/publication-owner-decision.js`, `src/control-plane/publication-owner-evidence.js`, `test/control-plane/publication-recovery-gate.test.js`, `test/control-plane/publication-recovery-evidence.test.js`, `test/control-plane/publication-owner-stream.test.js`
 - Forbidden files: `timeout_budgets`, `active_gate_admission`, `selected_snapshot_source_selection`, `forced_repair_timeout_handling`, `authoritative_query_pressure_fallback`, `readiness_support`, `priority_recovery_workflow_progress`
 - Frozen decisions: package scope and lane stay bounded unless explicitly escalated.
 - Escalation triggers: owned files expand beyond this package, runtime ownership changes, or representative scenario evidence changes.

@@ -5,6 +5,8 @@ import {
 
 const PUBLICATION_ACTIVE_GATE_HANDOFF_EMPTY_LIST = Object.freeze([]);
 const PUBLICATION_ACTIVE_GATE_HANDOFF_EMPTY_TEXT = '';
+const PUBLICATION_ACTIVE_GATE_HANDOFF_JOINED_LIST_SEPARATORS =
+  Object.freeze([',', '|']);
 const PUBLICATION_ACTIVE_GATE_HANDOFF_SCHEMA_VERSION = 1;
 const PUBLICATION_ACTIVE_GATE_HANDOFF_UNKNOWN_EPOCH = 0;
 
@@ -409,15 +411,27 @@ function normalizePublicationActiveGateHandoffNodeId(value) {
   return normalizedValue.length > NUM.ZERO ? normalizedValue : null;
 }
 
+function coercePublicationActiveGateHandoffNodeIdValues(values) {
+  if (Array.isArray(values)) {
+    return values;
+  }
+  if (typeof values !== TYPEOF.STRING) {
+    return PUBLICATION_ACTIVE_GATE_HANDOFF_EMPTY_LIST;
+  }
+  return PUBLICATION_ACTIVE_GATE_HANDOFF_JOINED_LIST_SEPARATORS.reduce(
+    (fragments, separator) =>
+      fragments.flatMap((fragment) => fragment.split(separator)),
+    [values],
+  );
+}
+
 function normalizePublicationActiveGateHandoffNodeIdList(
   values = PUBLICATION_ACTIVE_GATE_HANDOFF_EMPTY_LIST,
 ) {
   return Object.freeze(
     [
       ...new Set(
-        (Array.isArray(values) ?
-          values :
-          PUBLICATION_ACTIVE_GATE_HANDOFF_EMPTY_LIST)
+        coercePublicationActiveGateHandoffNodeIdValues(values)
           .map((value) =>
             normalizePublicationActiveGateHandoffNodeId(value),
           )
