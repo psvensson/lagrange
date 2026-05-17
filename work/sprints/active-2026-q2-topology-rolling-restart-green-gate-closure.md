@@ -22,40 +22,38 @@ success is in scope.
 ## Current Blocker Snapshot
 
 Latest representative artifact:
-`test-output/reports/rolling-restart-query-reconnect-delivery-20260517T001920Z.report.json`.
+`test-output/reports/rolling-restart-active-gate-reference-projection-20260517T023552Z.report.json`.
 
-Canonical state after the inactive participant routing package:
+Canonical state after the active-gate forced-repair package:
 
-1. `work:evidence-summary` selects `active_gate_snapshot_coverage` as the first
+1. `work:evidence-summary` selects `publication_ack_convergence` as the first
    frontier.
 2. Representative owner boundary:
-   `query_participant_failure / inactive_participant_routing`.
-3. Dominant reason: `active_gate_timed_out`.
+   `topology_publication_owner / publication_convergence`.
+3. Dominant reason: `publication_pending`.
 4. Priority recovery is satisfied with zero residual witnesses.
-5. Publication ACK convergence remains satisfied with `pendingAckCount=0`.
-6. Active-gate snapshot coverage is blocked with `snapshotCoverageNodeCount=0`,
-   `expectedNodeCount=5`.
-7. The predecessor removed the selected `nodes:Query timeout after 3000ms`
-   reconnect-delivery edge; authoritative nodes repair now reaches
-   `readSource=sql_query_engine`.
-8. Fresh representative evidence selects a participant failure edge:
-   authoritative `SELECT * FROM nodes` for `nodes-p1` reaches inactive
-   participant `7493b0ab-a054-5fad-a91b-5e331db29304` and fails with
-   `ROUTER_CONNECTION_CLOSED`.
-9. The just-closed package is
-   `work/packages/done-20260517-query-participant-failure-inactive-node-routing-coverage.md`.
-   It built the narrowest authoritative `SELECT * FROM nodes`
-   participant-routing fixture for inactive node
-   `7493b0ab-a054-5fad-a91b-5e331db29304` and proved query fallthrough works
-   when a live service candidate exists.
+5. Publication ACK convergence is reopened by canonical evidence:
+   `publicationStatus=OPEN`, `publishedActiveNodeIds=[]`,
+   `missingPublishedCount=5`, and `pendingAckCount=0`.
+6. Active-gate snapshot coverage is deferred rather than first frontier with
+   `snapshotCoverageNodeCount=0`, `expectedNodeCount=5`, and
+   `selected_snapshot_source_timeout`.
+7. Selected snapshot source `11601fe0-72d6-5853-8590-ec2881853e72` is
+   `adminReady=true` via `admin_health`, but the selected snapshot query timed
+   out after 3000ms.
+8. The active-gate forced-repair package closed as migrated after focused admin
+   tests proved the repair-deferred fallback path.
+9. The current active package is
+    `work/packages/active-20260517-topology-publication-convergence-reopened-missing-publication.md`.
+    It owns the replayable decision for the reopened publication frontier.
 10. The closed predecessor is
-   `work/packages/done-20260516-query-message-router-reconnect-delivery-snapshot-coverage.md`.
-   It closed as `migrated`: the selected error moved from
-   `nodes:Query timeout after 3000ms` to `nodes:Connection to node
-   7493b0ab-a054-5fad-a91b-5e331db29304 closed`. Publication ACK, priority
-   recovery, timeout budget increases, active-gate admission, CDC fallback,
-   and message-router reconnect delivery remain frozen unless canonical
-   evidence selects them again.
+    `work/packages/done-20260517-startup-active-gate-snapshot-coverage-authoritative-repair-connection-closed.md`.
+    Publication ACK is reopened only because canonical evidence selected it
+    again. Priority recovery workflow progress, timeout budget increases,
+    active-gate admission, CDC fallback, message-router reconnect delivery,
+    query participant routing, inactive participant routing, and startup
+    active-gate snapshot coverage remain frozen unless canonical evidence
+    selects them again.
 
 ## Scope Basis
 
@@ -420,17 +418,17 @@ required action.
 
 1. `npm run work:context`
 2. `npm run work:llm-start`
-3. `npm run work:package:doctor -- --suggest work/packages/done-20260517-query-participant-failure-inactive-node-routing-coverage.md`
-4. `npm run work:validate -- --entry work/packages/done-20260517-query-participant-failure-inactive-node-routing-coverage.md`
-5. `npm run work:evidence-summary -- test-output/reports/rolling-restart-query-reconnect-delivery-20260517T001920Z.report.json`
-6. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-query-reconnect-delivery-20260517T001920Z.report.json --explain active_gate_snapshot_coverage`
-7. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-query-reconnect-delivery-20260517T001920Z.report.json --handoff-probe`
-8. `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-query-reconnect-delivery-20260517T001920Z.report.json`
-9. `npm run analyze:distributed-failure -- --report test-output/reports/rolling-restart-query-reconnect-delivery-20260517T001920Z.report.json`
-10. `npm run analyze:owner-files -- query_participant_failure inactive_participant_routing --markdown`
-11. `npm run work:subagent-prompt -- --role review --package work/packages/done-20260517-query-participant-failure-inactive-node-routing-coverage.md`
+3. `npm run work:package:doctor -- --suggest work/packages/active-20260517-topology-publication-convergence-reopened-missing-publication.md`
+4. `npm run work:validate -- --entry work/packages/active-20260517-topology-publication-convergence-reopened-missing-publication.md`
+5. `npm run work:evidence-summary -- test-output/reports/rolling-restart-active-gate-reference-projection-20260517T023552Z.report.json`
+6. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-active-gate-reference-projection-20260517T023552Z.report.json --explain publication_ack_convergence`
+7. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-active-gate-reference-projection-20260517T023552Z.report.json --handoff-probe`
+8. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-active-gate-reference-projection-20260517T023552Z.report.json --replay-fixture`
+9. `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-active-gate-reference-projection-20260517T023552Z.report.json`
+10. `npm run analyze:owner-files -- topology_publication_owner publication_convergence --markdown`
+11. `npm run work:subagent-prompt -- --role review --package work/packages/active-20260517-topology-publication-convergence-reopened-missing-publication.md`
 12. Real review/fix/implementation subagent proof before runtime implementation starts.
-13. Focused inactive participant routing fixture/probe, selected owner tests,
+13. Focused snapshot-coverage replay fixture/probe, selected owner tests,
     static guardrails, and representative `rolling-restart` after the package
     has implementation proof.
 

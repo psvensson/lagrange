@@ -4,44 +4,39 @@
 
 Sprint: `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md`
 
-Package: `work/packages/done-20260517-priority-recovery-operation-workflow-owner-workflow-progress.md`
+Package: `work/packages/active-20260517-topology-publication-convergence-reopened-missing-publication.md`
 
 Workflow lane: `scenario-release-gate`
 
 Scenario: `rolling-restart`
 
-Artifact: `test-output/reports/rolling-restart-join-service-activation-candidate-publication-20260517T011922Z.report.json`
+Artifact: `test-output/reports/rolling-restart-active-gate-reference-projection-20260517T023552Z.report.json`
 
-Playback: `test-output/reports/.playback/rolling-restart-join-service-activation-candidate-publication-20260517T011922Z/rolling-restart/`
+Playback: `test-output/reports/.playback/rolling-restart-active-gate-reference-projection-20260517T023552Z/rolling-restart/`
 
 ## Boundary
 
-Owner: `operation_workflow_owner`
+Owner: `topology_publication_owner`
 
-Boundary: `workflow_progress`
+Boundary: `publication_convergence`
 
-Dominant reason: `priority_recovery_progress_blocked`
+Dominant reason: `publication_pending`
 
-Current state: Join activation publication is closed as migrated; representative rerun moved the first frontier to priority_recovery_partition_progress with one operation_workflow_owner/workflow_progress witness for control_plane_publications-p1.
+Current state: Fresh representative evidence reselected publication_ack_convergence after the active-gate forced-repair slice: publicationStatus=OPEN, publishedActiveNodeIds=[], missingPublishedCount=5, pendingAckCount=0, priority residual witnessCount=0, and active_gate_snapshot_coverage is deferred with selected_snapshot_source_timeout.
 
 ## Next Action
 
-Build or use the narrowest workflow-progress fixture that decides why the persisted_not_dispatched priority recovery operation waits event-driven instead of dispatching progress.
+Build or use the narrowest publication-convergence fixture for OPEN publication with missing published active nodes and selected snapshot source timeout, then edit only the selected publication owner path after review/fix/implementation subagent proof is clean.
 
 ## Proof Ladder
 
-1. `npm run work:validate -- --entry work/packages/done-20260517-priority-recovery-operation-workflow-owner-workflow-progress.md`
-2. `npm run work:validate -- --pre-impl work/packages/done-20260517-priority-recovery-operation-workflow-owner-workflow-progress.md`
-3. `npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-join-service-activation-candidate-publication-20260517T011922Z.report.json`
-4. `npm run analyze:owner-files -- operation_workflow_owner workflow_progress --markdown`
-5. `npx tap test/rebalancer/operation-workflow-progress-event-driven-reentry.test.js -g "WAIT_FOR_OPERATION_PROGRESS|spread-satisfied priority PENDING dispatch waits drain"`
-6. `npx tap test/rebalancer/operation-workflow-progress-event-driven-reentry.test.js`
-7. `npx tap test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js`
-8. `node scripts/check-guideline-literals.js src/rebalancer/operation-workflow-owner-segment-7-stage-5.js`
-9. `node scripts/check-guideline-decision-boundaries.js src/rebalancer/operation-workflow-owner-segment-7-stage-5.js`
-10. `npm run audit:runtime-grammar:file -- src/rebalancer/operation-workflow-owner-segment-7-stage-5.js`
-11. `node --check src/rebalancer/operation-workflow-owner-segment-7-stage-5.js`
-12. `node --check test/rebalancer/operation-workflow-progress-event-driven-reentry.test.js`
+1. `npm run work:validate -- --entry work/packages/active-20260517-topology-publication-convergence-reopened-missing-publication.md`
+2. `npm run work:evidence-summary -- test-output/reports/rolling-restart-active-gate-reference-projection-20260517T023552Z.report.json`
+3. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-active-gate-reference-projection-20260517T023552Z.report.json --explain publication_ack_convergence`
+4. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-active-gate-reference-projection-20260517T023552Z.report.json --handoff-probe`
+5. `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-active-gate-reference-projection-20260517T023552Z.report.json`
+6. `npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-active-gate-reference-projection-20260517T023552Z.report.json`
+7. `npm run analyze:owner-files -- topology_publication_owner publication_convergence --markdown`
 
 ## Model Fit
 
@@ -57,7 +52,6 @@ Escalation triggers:
 
 1. `owned files expand beyond this package`
 2. `a frozen decision must be reopened`
-3. `representative evidence selects a different owner boundary`
 
 ## Representative Residual
 
@@ -65,70 +59,73 @@ Status: `live-red-scenario-release-gate`
 
 Scenario: `rolling-restart`
 
-Artifact: `test-output/reports/rolling-restart-join-service-activation-candidate-publication-20260517T011922Z.report.json`
+Artifact: `test-output/reports/rolling-restart-active-gate-reference-projection-20260517T023552Z.report.json`
 
-Frontier: `priority_recovery_partition_progress`
+Frontier: `publication_ack_convergence`
 
-Owner: `operation_workflow_owner`
+Owner: `topology_publication_owner`
 
-Boundary: `workflow_progress`
+Boundary: `publication_convergence`
 
-Dominant reason: `priority_recovery_event_driven_wait`
+Dominant reason: `publication_pending`
 
-Next action: `Prove or split the event-driven workflow progress residual for control_plane_publications-p1 operation d5ffb401-f539-44d6-a23a-6365606ac232.`
+Next action: `Decide whether the reopened publication frontier is owned by publication owner planning/evidence, membership publication coordinator progress, or only deferred active-gate selected snapshot source timeout evidence.`
 
 ## Causal Governance
 
-Causal hypothesis: `The representative gate is now blocked by a priority recovery operation that is persisted but not dispatched: control_plane_publications-p1 is in spread_satisfied_in_flight with event-driven wait and nextRequiredAction=wait_for_operation_progress.`
+Causal hypothesis: `The representative gate is blocked before active-gate ownership because the publication convergence evidence remains OPEN with no published active nodes, missingPublishedCount=5, pendingAckCount=0, and publicationOwnerStreamOutcome=stale.`
 
-Stop-condition check: `Run entry validation, npm run analyze:priority-recovery-residuals and npm run analyze:causal-model on the representative artifact, the narrowest workflow-progress fixture that decides persisted_not_dispatched dispatch/progress ownership, focused owner tests for the promoted runtime file, static guardrails, and one representative rolling-restart rerun.`
+Stop-condition check: `Run entry validation, evidence summary, topology explain for publication_ack_convergence, handoff probe, npm run analyze:causal-model, priority residual extraction, owner-files, then a replayable publication-convergence fixture before runtime edits.`
 
-Expected causal-model change: `priority_recovery_partition_progress disappears, snapshotCoverage improves above 2/5, discovery_node_coverage_gap disappears/stays absent, the frontier migrates to a genuinely new owner boundary, or representative rolling-restart turns green.`
+Expected causal-model change: `publication_ack_convergence disappears, snapshotCoverage improves above 2/5, the frontier migrates to a genuinely new owner boundary, or representative rolling-restart turns green.`
 
 Representative outcome: `pending-before-rerun`
 
-Causal debt: `Need one replayable workflow-progress decision: prove whether persisted_not_dispatched priority recovery work should dispatch, retry, or be classified under a different owner before editing runtime.`
+Causal debt: `Need one replayable decision separating publication owner planning/evidence, membership publication coordinator progress, and deferred active-gate selected snapshot timeout. Current evidence: publicationStatus=OPEN, publishedActiveNodeIds=[], missingPublishedCount=5, pendingAckCount=0, priority residual witnessCount=0, and active_gate_snapshot_coverage is deferred.`
 
-Cross-boundary review: `Do not reopen publication ACK, timeout budget increases, active-gate admission, CDC fallback, message-router reconnect delivery, query participant routing, or join service activation unless canonical evidence selects them again.`
+Cross-boundary review: `Publication ACK is reopened only because fresh canonical evidence selected it. Do not change timeout budgets, active-gate admission, CDC fallback, reconnect delivery, query participant routing, or startup active-gate snapshot coverage unless canonical evidence selects them again.`
 
 ## Scenario Causal Closure
 
-Reference scenario/probe: `rolling-restart after join/message-group service activation migration`
+Reference scenario/probe: `rolling-restart after active-gate forced repair fallback migration`
 
 Phase chain:
 
-1. `consume the closed join activation publication proof`
-2. `use priority recovery residual extractor to isolate the single workflow-progress witness`
-3. `build or reuse the narrowest workflow-progress fixture for persisted_not_dispatched event-driven wait`
-4. `edit only the selected operation_workflow_owner / workflow_progress path after subagent proof is clean`
+1. `consume the active-gate forced repair fallback migration proof`
+2. `use evidence summary, topology explain, handoff probe, causal model, and priority residual extraction to classify the reopened publication frontier`
+3. `build or reuse the narrowest publication-convergence fixture for OPEN publication with missing active publication`
+4. `edit only the selected topology_publication_owner / publication_convergence path after review/fix/implementation subagent proof is clean`
 5. `rerun representative rolling-restart and classify green, reduced, same-frontier, migrated, or contradictory`
 
-Current first frontier: `priority_recovery_partition_progress in test-output/reports/rolling-restart-join-service-activation-candidate-publication-20260517T011922Z.report.json, canonically owned by operation_workflow_owner / workflow_progress with reason priority_recovery_event_driven_wait.`
+Current first frontier: `publication_ack_convergence in test-output/reports/rolling-restart-active-gate-reference-projection-20260517T023552Z.report.json, owned by topology_publication_owner / publication_convergence with reason publication_pending.`
 
 Known downstream blockers:
 
-1. `publication ACK is satisfied`
-2. `join/message-group activation publication is closed as migrated`
-3. `active_gate_snapshot_coverage is no longer the first frontier`
-4. `representative active gate progress is active=5/5 and snapshot_coverage=2/5`
-5. `the residual has witnessCount=1 and splitRequired=false`
-6. `the selected witness is control_plane_publications-p1 / spread_satisfied_in_flight / persisted_not_dispatched / event_driven`
+1. `publicationStatus=OPEN`
+2. `publishedActiveNodeIds=[]`
+3. `missingPublishedCount=5`
+4. `pendingAckCount=0`
+5. `publicationOwnerFreshnessFence=consumer_lag`
+6. `publicationOwnerRecoveryOutcome=waiting_for_consumer`
+7. `publicationOwnerStreamOutcome=stale`
+8. `priority recovery residual witnessCount=0`
+9. `active_gate_snapshot_coverage is deferred with selected_snapshot_source_timeout and snapshotCoverageNodeCount=0/5`
 
-Missing causal edge: `Prove or split why the control_plane_publications-p1 priority recovery operation remains event-driven with actuationState=persisted_not_dispatched and nextRequiredAction=wait_for_operation_progress.`
+Missing causal edge: `Decide whether publication_pending with zero published active nodes is owned by publication owner evidence/planning, membership publication coordinator progress, or only deferred active-gate selected snapshot source timeout.`
 
-Missing causal edge probe: `npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-join-service-activation-candidate-publication-20260517T011922Z.report.json`
+Missing causal edge probe: `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-active-gate-reference-projection-20260517T023552Z.report.json --replay-fixture`
 
-Bounded progress proof: `Metric-moving proof only with dispatch/retry progress: priority_recovery_partition_progress disappears, snapshotCoverage rises above 2/5, the first frontier migrates to a genuinely new owner boundary, or representative rolling-restart turns green.`
+Bounded progress proof: `Pending bounded publication proof: publication_ack_convergence must disappear, snapshotCoverage must improve above 2/5, the frontier must migrate to a genuinely new owner boundary, or representative rolling-restart must turn green.`
 
-Bounded progress proof artifact: `test-output/reports/rolling-restart-join-service-activation-candidate-publication-20260517T011922Z.report.json plus the focused workflow-progress fixture selected by this package.`
+Bounded progress proof artifact: `test-output/reports/rolling-restart-active-gate-reference-projection-20260517T023552Z.report.json`
 
-Expected observable transition: `the persisted_not_dispatched priority recovery operation dispatches/progresses, the event-driven wait disappears, snapshotCoverage improves beyond 2/5, or canonical evidence selects a new owner boundary.`
+Expected observable transition: `A selected owner fix should publish active membership or classify the edge to a new owner boundary without timeout increases, active-gate admission relaxation, CDC fallback, reconnect-delivery, query routing, or inactive participant routing changes.`
 
-Max progress bound: `one focused operation_workflow_owner / workflow_progress slice`
+Max progress bound: `one focused topology_publication_owner / publication_convergence package slice`
 
-Same-frontier fallback: `If focused tests pass but representative evidence keeps the same priority recovery witness without metric movement, stop and classify same-frontier instead of reopening frozen edges.`
+Same-frontier fallback: `If focused tests pass but representative evidence keeps the same publication frontier without metric movement, stop and record same-frontier instead of widening into frozen edges.`
 
-Expected next frontier: `representative green or a new owner boundary past operation workflow progress`
+Expected next frontier: `publication_ack_convergence gone, snapshotCoverage above 2/5, representative green, or a new owner boundary selected by canonical evidence`
 
 Result classification: `pending-before-probe`
 
@@ -136,30 +133,28 @@ Stop condition: `continue-local-fix`
 
 Recent frontier history:
 
-1. `work/packages/done-20260517-query-participant-failure-inactive-node-routing-coverage.md / query_participant_failure / inactive_participant_routing / migrated`
-2. `work/packages/done-20260517-join-message-group-service-activation-candidate-publication.md / join_message_group_activation_owner / service_row_activation_publication / migrated`
+1. `work/packages/done-20260517-priority-recovery-operation-workflow-owner-workflow-progress.md / operation_workflow_owner / workflow_progress / migrated`
+2. `work/packages/done-20260517-startup-active-gate-snapshot-coverage-authoritative-repair-connection-closed.md / startup_active_gate_owner / snapshot_coverage / migrated`
 
-Oscillation check: `This package is allowed because canonical evidence selected priority_recovery_partition_progress after join activation moved the frontier, not because a closed publication ACK, timeout, active-gate admission, CDC, reconnect-delivery, query-routing, or join activation edge was reopened.`
+Oscillation check: `This package is allowed because fresh canonical evidence reselected publication_ack_convergence after the active-gate package, not because publication ACK was reopened manually.`
 
-Handoff invariant: `Publication ACK, timeout budget increases, active-gate admission, CDC fallback, message-router reconnect delivery, query participant routing, and join service activation remain frozen unless canonical evidence selects them again.`
+Handoff invariant: `Timeout budget increases, active-gate admission relaxation, CDC fallback, message-router reconnect delivery, query participant routing, inactive participant routing, priority recovery workflow progress, and startup active-gate snapshot coverage remain frozen unless canonical evidence selects them again.`
 
 ## Scope
 
 Write scope:
 
-1. `work/packages/done-20260517-priority-recovery-operation-workflow-owner-workflow-progress.md`
+1. `work/packages/active-20260517-topology-publication-convergence-reopened-missing-publication.md`
 2. `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md`
 3. `work/sprints/current-blocker.md`
 4. `work/sprints/current-blocker.json`
 5. `work/model-ledger.jsonl`
-6. `src/rebalancer/operation-workflow-owner-segment-7-stage-5.js`
-7. `test/rebalancer/operation-workflow-progress-event-driven-reentry.test.js`
 
 Handoff files:
 
-1. `work/packages/done-20260517-join-message-group-service-activation-candidate-publication.md`
-2. `test-output/reports/rolling-restart-join-service-activation-candidate-publication-20260517T011922Z.report.json`
-3. `test-output/reports/.playback/rolling-restart-join-service-activation-candidate-publication-20260517T011922Z/rolling-restart/`
+1. `work/packages/done-20260517-startup-active-gate-snapshot-coverage-authoritative-repair-connection-closed.md`
+2. `test-output/reports/rolling-restart-active-gate-reference-projection-20260517T023552Z.report.json`
+3. `test-output/reports/.playback/rolling-restart-active-gate-reference-projection-20260517T023552Z/rolling-restart/`
 
 Generated files:
 
@@ -168,19 +163,26 @@ Generated files:
 
 Candidate runtime files:
 
-1. `src/rebalancer/operation-workflow-owner-segment-7-stage-5.js`
-2. `test/rebalancer/operation-workflow-progress-event-driven-reentry.test.js`
-3. `test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js`
+1. `src/control-plane/publication-owner-evidence.js`
+2. `src/control-plane/publication-owner-decision.js`
+3. `src/control-plane/publication-recovery-gate.js`
+4. `src/control-plane/publication-recovery-evidence.js`
+5. `src/control-plane/membership-publication-planning.js`
+6. `src/control-plane/membership-publication-coordinator-class-stage-2.js`
+7. `test/control-plane/publication-owner-stream.test.js`
+8. `test/control-plane/publication-recovery-gate.test.js`
+9. `test/control-plane/publication-recovery-evidence.test.js`
+10. `test/distributed/harness/publication-evidence-contract.js`
+11. `test/distributed/harness/failure-bundle-segment-4.js`
+12. `src/diagnostics/topology-convergence-graph.js`
 
 Commit scope:
 
-1. `work/packages/done-20260517-priority-recovery-operation-workflow-owner-workflow-progress.md`
+1. `work/packages/active-20260517-topology-publication-convergence-reopened-missing-publication.md`
 2. `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md`
 3. `work/sprints/current-blocker.md`
 4. `work/sprints/current-blocker.json`
 5. `work/model-ledger.jsonl`
-6. `src/rebalancer/operation-workflow-owner-segment-7-stage-5.js`
-7. `test/rebalancer/operation-workflow-progress-event-driven-reentry.test.js`
 
 Legacy touched files:
 

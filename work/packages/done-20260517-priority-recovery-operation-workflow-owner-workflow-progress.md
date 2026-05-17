@@ -120,7 +120,7 @@
     "knownDownstreamBlockers": [
       "publication ACK is satisfied",
       "join/message-group activation publication is closed as migrated",
-      "active_gate_snapshot_coverage is no longer the first frontier",
+      "priority_recovery_partition_progress is no longer the first frontier",
       "representative active gate progress is active=5/5 and snapshot_coverage=2/5",
       "the predecessor residual had witnessCount=1 and splitRequired=false",
       "the focused fixture drains the selected control_plane_publications-p1 / spread_satisfied_in_flight / persisted_not_dispatched / event_driven WAIT_FOR_OPERATION_PROGRESS witness",
