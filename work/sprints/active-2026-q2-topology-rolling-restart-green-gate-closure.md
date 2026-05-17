@@ -513,7 +513,7 @@ Continue with the priority recovery workflow-progress successor selected by
 that artifact:
 
 ```text
-work/packages/active-20260517-priority-recovery-operation-workflow-owner-workflow-progress.md
+work/packages/done-20260517-priority-recovery-operation-workflow-owner-workflow-progress.md
 test-output/reports/rolling-restart-join-service-activation-candidate-publication-20260517T011922Z.report.json
 ```
 

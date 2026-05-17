@@ -403,11 +403,12 @@ class OperationWorkflowOwnerSegment7Stage5 extends OperationWorkflowOwnerSegment
           PRIORITY_RECOVERY_WORKFLOW_PROGRESS_PHASE.DISPATCH_PENDING &&
         decisionSnapshot?.progress?.workflowProgressPhaseId ===
           PRIORITY_RECOVERY_WORKFLOW_PROGRESS_PHASE.DISPATCH_PENDING,
-      ownerAdvance:
+      ownerProgressRequested:
         decisionSnapshot?.progress?.currentOwner ===
           PRIORITY_RECOVERY_PROGRESS_OWNER.OPERATION_WORKFLOW_OWNER &&
-        decisionSnapshot?.progress?.nextRequiredAction ===
-          PRIORITY_RECOVERY_NEXT_REQUIRED_ACTION.ADVANCE_EXISTING_OPERATION,
+        PRIORITY_RECOVERY_DISPATCH_PENDING_REENTRY_OWNER_PROGRESS_STATES.has(
+          decisionSnapshot?.progress?.nextRequiredAction,
+        ),
       workflowProgressBoundary:
         decisionSnapshot?.progress?.blockingBoundary ===
           PRIORITY_RECOVERY_BLOCKING_BOUNDARY.WORKFLOW_PROGRESS &&
@@ -427,7 +428,7 @@ class OperationWorkflowOwnerSegment7Stage5 extends OperationWorkflowOwnerSegment
       evidence.completionAccepted === true &&
       evidence.persistedNotDispatched === true &&
       evidence.dispatchPending === true &&
-      evidence.ownerAdvance === true &&
+      evidence.ownerProgressRequested === true &&
       evidence.workflowProgressBoundary === true &&
       evidence.priorityDrainPartition === true
     );

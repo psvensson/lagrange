@@ -15,15 +15,26 @@
   "nextAction": "Build or use the narrowest workflow-progress fixture that decides why the persisted_not_dispatched priority recovery operation waits event-driven instead of dispatching progress.",
   "proof": [
     "npm run work:validate -- --entry work/packages/active-20260517-priority-recovery-operation-workflow-owner-workflow-progress.md",
+    "npm run work:validate -- --pre-impl work/packages/active-20260517-priority-recovery-operation-workflow-owner-workflow-progress.md",
     "npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-join-service-activation-candidate-publication-20260517T011922Z.report.json",
-    "npm run analyze:owner-files -- operation_workflow_owner workflow_progress --markdown"
+    "npm run analyze:owner-files -- operation_workflow_owner workflow_progress --markdown",
+    "npx tap test/rebalancer/operation-workflow-progress-event-driven-reentry.test.js -g \"WAIT_FOR_OPERATION_PROGRESS|spread-satisfied priority PENDING dispatch waits drain\"",
+    "npx tap test/rebalancer/operation-workflow-progress-event-driven-reentry.test.js",
+    "npx tap test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js",
+    "node scripts/check-guideline-literals.js src/rebalancer/operation-workflow-owner-segment-7-stage-5.js",
+    "node scripts/check-guideline-decision-boundaries.js src/rebalancer/operation-workflow-owner-segment-7-stage-5.js",
+    "npm run audit:runtime-grammar:file -- src/rebalancer/operation-workflow-owner-segment-7-stage-5.js",
+    "node --check src/rebalancer/operation-workflow-owner-segment-7-stage-5.js",
+    "node --check test/rebalancer/operation-workflow-progress-event-driven-reentry.test.js"
   ],
   "writeScope": [
     "work/packages/active-20260517-priority-recovery-operation-workflow-owner-workflow-progress.md",
     "work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md",
     "work/sprints/current-blocker.md",
     "work/sprints/current-blocker.json",
-    "work/model-ledger.jsonl"
+    "work/model-ledger.jsonl",
+    "src/rebalancer/operation-workflow-owner-segment-7-stage-5.js",
+    "test/rebalancer/operation-workflow-progress-event-driven-reentry.test.js"
   ],
   "handoffFiles": [
     "work/packages/done-20260517-join-message-group-service-activation-candidate-publication.md",
@@ -35,8 +46,9 @@
     "work/sprints/current-blocker.json"
   ],
   "candidateRuntimeFiles": [
-    "src/rebalancer/operation-workflow-owner-segment-5.js",
-    "test/rebalancer/coordinator-created-operation-progress-remote-handoff.test.js"
+    "src/rebalancer/operation-workflow-owner-segment-7-stage-5.js",
+    "test/rebalancer/operation-workflow-progress-event-driven-reentry.test.js",
+    "test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js"
   ],
   "commitScope": [
     "work/packages/active-20260517-priority-recovery-operation-workflow-owner-workflow-progress.md",
@@ -44,8 +56,8 @@
     "work/sprints/current-blocker.md",
     "work/sprints/current-blocker.json",
     "work/model-ledger.jsonl",
-    "src/rebalancer/operation-workflow-owner-segment-5.js",
-    "test/rebalancer/coordinator-created-operation-progress-remote-handoff.test.js"
+    "src/rebalancer/operation-workflow-owner-segment-7-stage-5.js",
+    "test/rebalancer/operation-workflow-progress-event-driven-reentry.test.js"
   ],
   "touchedFiles": [],
   "modelFit": {

@@ -41,6 +41,8 @@ const TEST_SQL_TRANSACTION_PARTICIPANTS_PARTITION_ID =
 const TEST_OPERATION_ID = 'event-driven-progress-operation';
 const TEST_CONTROL_PLANE_PUBLICATION_OPERATION_ID =
   'event-driven-control-plane-publication-operation';
+const TEST_REPRESENTATIVE_CONTROL_PLANE_PUBLICATION_OPERATION_ID =
+  'd5ffb401-f539-44d6-a23a-6365606ac232';
 const TEST_REPLICA_OPERATIONS_OPERATION_ID =
   'event-driven-replica-operations-operation';
 const TEST_SQL_TRANSACTION_PARTICIPANTS_OPERATION_ID =
@@ -97,6 +99,9 @@ const TEST_PENDING_REENTRY_TEST_NAME =
 const TEST_SPREAD_SATISFIED_REENTRY_TEST_NAME =
   'spread-satisfied priority PENDING dispatch waits drain through ' +
   'the operation owner outcome';
+const TEST_SPREAD_SATISFIED_WAIT_PROGRESS_REENTRY_TEST_NAME =
+  'control-plane publication WAIT_FOR_OPERATION_PROGRESS ' +
+  'spread-satisfied dispatch wait drains through the operation owner outcome';
 const TEST_DIRECT_BUILD_REENTRY_TEST_NAME =
   'direct owner snapshot build enqueues dispatch-pending workflow progress ' +
   're-entry';
@@ -138,6 +143,11 @@ const TEST_ASSERT_LOCAL_INITIALIZATION_RETRY_RESUMES =
   'local initialization retry drains the transition retry slot';
 const TEST_ASSERT_SPREAD_SATISFIED_DRAIN =
   'spread-satisfied persisted-not-dispatched priority rows should drain';
+const TEST_ASSERT_SPREAD_SATISFIED_WAIT_PROGRESS_DRAIN =
+  'spread-satisfied WAIT_FOR_OPERATION_PROGRESS witness should drain';
+const TEST_ASSERT_SPREAD_SATISFIED_NEXT_ACTION =
+  'spread-satisfied persisted-not-dispatched fixture should preserve the ' +
+  'representative next action';
 const TEST_ASSERT_SPREAD_SATISFIED_NO_REMOTE_WAKE =
   'spread-satisfied persisted-not-dispatched priority rows should not ' +
   'wake the remote target owner';
@@ -646,6 +656,78 @@ test(TEST_PENDING_REENTRY_TEST_NAME, async (t) => {
     );
   } finally {
     Date.now = originalDateNow;
+    await coordinator.shutdown();
+  }
+});
+
+test(TEST_SPREAD_SATISFIED_WAIT_PROGRESS_REENTRY_TEST_NAME, async (t) => {
+  const deliveries = [];
+  const deferredTimers = [];
+  const completedOperationIds = [];
+  const operation = buildEventDrivenOperation({
+    operationId: TEST_REPRESENTATIVE_CONTROL_PLANE_PUBLICATION_OPERATION_ID,
+    partitionId: TEST_CONTROL_PLANE_PUBLICATION_PARTITION_ID,
+    entityId: TEST_CONTROL_PLANE_PUBLICATION_PARTITION_ID,
+    replicaId: TEST_CONTROL_PLANE_PUBLICATION_REPLICA_ID,
+    sourceNodeId: TEST_CONTROL_PLANE_PUBLICATION_SOURCE_NODE_ID,
+    targetNodeId: TEST_CONTROL_PLANE_PUBLICATION_TARGET_NODE_ID,
+    workflowStep: WORKFLOW_STEP.PENDING,
+  });
+  const coordinator = createEventDrivenCoordinator(
+    deliveries,
+    deferredTimers,
+    buildEventDrivenOperationRow(),
+  );
+
+  try {
+    coordinator.initialize();
+    coordinator.workflowOwner.completeOperation = async (completedOperation) => {
+      completedOperationIds.push(completedOperation.operationId);
+      return true;
+    };
+    const planningSnapshot = buildEventDrivenPlanningSnapshot({
+      operationId: TEST_REPRESENTATIVE_CONTROL_PLANE_PUBLICATION_OPERATION_ID,
+      partitionId: TEST_CONTROL_PLANE_PUBLICATION_PARTITION_ID,
+      workflowStep: WORKFLOW_STEP.PENDING,
+      actuationState:
+        PRIORITY_RECOVERY_ACTUATION_STATE.PERSISTED_NOT_DISPATCHED,
+      completionState:
+        PRIORITY_RECOVERY_COMPLETION_STATE.SPREAD_SATISFIED_IN_FLIGHT,
+      spreadGap: NUM.ZERO,
+      nextRequiredAction:
+        PRIORITY_RECOVERY_NEXT_REQUIRED_ACTION.WAIT_FOR_OPERATION_PROGRESS,
+    });
+    const decisionSnapshot =
+      planningSnapshot.priorityRecoveryDecisionSnapshots.snapshots[NUM.ZERO];
+
+    t.equal(
+      decisionSnapshot?.progress?.nextRequiredAction,
+      PRIORITY_RECOVERY_NEXT_REQUIRED_ACTION.WAIT_FOR_OPERATION_PROGRESS,
+      TEST_ASSERT_SPREAD_SATISFIED_NEXT_ACTION,
+    );
+    t.equal(
+      coordinator.workflowOwner.schedulePriorityRecoveryDispatchPendingReentry(
+        decisionSnapshot,
+        [operation],
+      ),
+      true,
+      TEST_ASSERT_SPREAD_SATISFIED_WAIT_PROGRESS_DRAIN,
+    );
+    await new Promise((resolve) => {
+      setTimeout(resolve, NUM.ZERO);
+    });
+
+    t.same(
+      completedOperationIds,
+      [TEST_REPRESENTATIVE_CONTROL_PLANE_PUBLICATION_OPERATION_ID],
+      TEST_ASSERT_SPREAD_SATISFIED_WAIT_PROGRESS_DRAIN,
+    );
+    t.same(
+      [deliveries.length, deferredTimers.length],
+      [NUM.ZERO, NUM.ZERO],
+      TEST_ASSERT_SPREAD_SATISFIED_NO_REMOTE_WAKE,
+    );
+  } finally {
     await coordinator.shutdown();
   }
 });

@@ -145,7 +145,7 @@
   "predecessor": "work/packages/done-20260517-query-participant-failure-inactive-node-routing-coverage.md",
   "closed": "2026-05-17",
   "commitAndPushLedgerRequired": true,
-  "successor": "work/packages/active-20260517-priority-recovery-operation-workflow-owner-workflow-progress.md"
+  "successor": "work/packages/done-20260517-priority-recovery-operation-workflow-owner-workflow-progress.md"
 }
 -->
 

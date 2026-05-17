@@ -4,7 +4,7 @@
 
 Sprint: `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md`
 
-Package: `work/packages/active-20260517-priority-recovery-operation-workflow-owner-workflow-progress.md`
+Package: `work/packages/done-20260517-priority-recovery-operation-workflow-owner-workflow-progress.md`
 
 Workflow lane: `scenario-release-gate`
 
@@ -30,9 +30,18 @@ Build or use the narrowest workflow-progress fixture that decides why the persis
 
 ## Proof Ladder
 
-1. `npm run work:validate -- --entry work/packages/active-20260517-priority-recovery-operation-workflow-owner-workflow-progress.md`
-2. `npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-join-service-activation-candidate-publication-20260517T011922Z.report.json`
-3. `npm run analyze:owner-files -- operation_workflow_owner workflow_progress --markdown`
+1. `npm run work:validate -- --entry work/packages/done-20260517-priority-recovery-operation-workflow-owner-workflow-progress.md`
+2. `npm run work:validate -- --pre-impl work/packages/done-20260517-priority-recovery-operation-workflow-owner-workflow-progress.md`
+3. `npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-join-service-activation-candidate-publication-20260517T011922Z.report.json`
+4. `npm run analyze:owner-files -- operation_workflow_owner workflow_progress --markdown`
+5. `npx tap test/rebalancer/operation-workflow-progress-event-driven-reentry.test.js -g "WAIT_FOR_OPERATION_PROGRESS|spread-satisfied priority PENDING dispatch waits drain"`
+6. `npx tap test/rebalancer/operation-workflow-progress-event-driven-reentry.test.js`
+7. `npx tap test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js`
+8. `node scripts/check-guideline-literals.js src/rebalancer/operation-workflow-owner-segment-7-stage-5.js`
+9. `node scripts/check-guideline-decision-boundaries.js src/rebalancer/operation-workflow-owner-segment-7-stage-5.js`
+10. `npm run audit:runtime-grammar:file -- src/rebalancer/operation-workflow-owner-segment-7-stage-5.js`
+11. `node --check src/rebalancer/operation-workflow-owner-segment-7-stage-5.js`
+12. `node --check test/rebalancer/operation-workflow-progress-event-driven-reentry.test.js`
 
 ## Model Fit
 
@@ -138,11 +147,13 @@ Handoff invariant: `Publication ACK, timeout budget increases, active-gate admis
 
 Write scope:
 
-1. `work/packages/active-20260517-priority-recovery-operation-workflow-owner-workflow-progress.md`
+1. `work/packages/done-20260517-priority-recovery-operation-workflow-owner-workflow-progress.md`
 2. `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md`
 3. `work/sprints/current-blocker.md`
 4. `work/sprints/current-blocker.json`
 5. `work/model-ledger.jsonl`
+6. `src/rebalancer/operation-workflow-owner-segment-7-stage-5.js`
+7. `test/rebalancer/operation-workflow-progress-event-driven-reentry.test.js`
 
 Handoff files:
 
@@ -157,18 +168,19 @@ Generated files:
 
 Candidate runtime files:
 
-1. `src/rebalancer/operation-workflow-owner-segment-5.js`
-2. `test/rebalancer/coordinator-created-operation-progress-remote-handoff.test.js`
+1. `src/rebalancer/operation-workflow-owner-segment-7-stage-5.js`
+2. `test/rebalancer/operation-workflow-progress-event-driven-reentry.test.js`
+3. `test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js`
 
 Commit scope:
 
-1. `work/packages/active-20260517-priority-recovery-operation-workflow-owner-workflow-progress.md`
+1. `work/packages/done-20260517-priority-recovery-operation-workflow-owner-workflow-progress.md`
 2. `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md`
 3. `work/sprints/current-blocker.md`
 4. `work/sprints/current-blocker.json`
 5. `work/model-ledger.jsonl`
-6. `src/rebalancer/operation-workflow-owner-segment-5.js`
-7. `test/rebalancer/coordinator-created-operation-progress-remote-handoff.test.js`
+6. `src/rebalancer/operation-workflow-owner-segment-7-stage-5.js`
+7. `test/rebalancer/operation-workflow-progress-event-driven-reentry.test.js`
 
 Legacy touched files:
 
