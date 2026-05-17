@@ -85,20 +85,35 @@ contracts, or representative scenario evidence can change.
 19. Scenario artifacts migrate only when normalized evidence changes owner,
     boundary, or next required action; new counts, node ids, epochs, or timing
     alone do not justify package churn.
-20. If a representative frontier returns to a recently closed related owner
+20. Same-owner/same-action reductions stay in the current package. Smaller
+    counts, narrower node sets, better coverage, or clearer evidence update the
+    Current Edge Card unless owner, boundary, required action, or stop state
+    changes.
+21. Fixture-first is a package phase, not automatically a package boundary.
+    Split fixture-only work only when it changes the selected edge, proves no
+    runtime edit is justified, or creates reusable tooling.
+22. Package closure is atomic: rename/status, commit ledger, successor or
+    intentional no-active state, `current-blocker`, validation, commit, and push
+    must move together. A `current-blocker` that points at a missing active
+    package is a closure defect.
+23. When one node remains, use a remaining-node fast path: target node,
+    required action, runtime-promotion flag, goal, and forbidden edits.
+24. Representative rerun artifacts use real unique timestamps or run ids, not
+    placeholder names such as `T000000Z`.
+25. If a representative frontier returns to a recently closed related owner
     boundary or alternates between two related boundaries, stop local runtime
     patching and open a causal-escalation handoff package.
-21. A package is not done while in-scope residuals, tail consumers, guardrail
+26. A package is not done while in-scope residuals, tail consumers, guardrail
     drift, or unnamed scenario migration evidence remain.
-22. Sub-agents are mandatory for runtime owner-boundary and scenario/release-gate
+27. Sub-agents are mandatory for runtime owner-boundary and scenario/release-gate
     packages; they are optional for read/review/doc-only and lightweight
     maintenance lanes unless the package declares otherwise. If the host cannot
     expose delegation before implementation, record `human-waived`,
     `tool-unavailable`, or `blocked-by-environment-policy` with a reason; do
     not use that as closure proof.
-23. Commit and push focused package slices before starting the next package.
+28. Commit and push focused package slices before starting the next package.
     Use `npm run work:sprint:push -- <git-push-args>` for sprint pushes so the
     remaining sprint package list prints after a successful push. Do not sweep
     unrelated dirty worktree changes into the slice.
-24. If a local fix feels hard because the boundary is porous, reduce the
+29. If a local fix feels hard because the boundary is porous, reduce the
     boundary or raise the abstraction instead of adding another symptom patch.

@@ -13,14 +13,15 @@
   "boundary": "snapshot_coverage",
   "dominantReason": "owner_reconcile_pending",
   "currentState": "Latest representative evidence still selects active_gate_snapshot_coverage under startup_active_gate_owner / snapshot_coverage. Publication ACK is satisfied with pendingAckCount=0, priority residual extraction reports zero witnesses, and the active-gate handoff is pending owner_reconcile_pending with reconcile_owner_membership_publication, runtimePromotionAllowed=false, pendingReconcileCount=1, and remaining node 35a891b8-c1a0-5064-9c6e-2acfba61c2a7.",
-  "nextAction": "Run the required review/fix/implementation subagent sequence before runtime edits. Target only the remaining reconcile_owner_membership_publication node 35a891b8-c1a0-5064-9c6e-2acfba61c2a7; stop as reduced, migrated, same-frontier, or green based on canonical representative evidence.",
+  "nextAction": "Run the required review/fix/implementation subagent sequence before runtime edits. Target only the remaining reconcile_owner_membership_publication node 35a891b8-c1a0-5064-9c6e-2acfba61c2a7; stop as reduced, migrated, same-frontier, or green based on canonical representative evidence. If proof only changes the pending count or node set under the same owner, boundary, and required action, update this package instead of opening another successor.",
   "proof": [
     "npm run work:evidence-summary -- test-output/reports/rolling-restart-startup-publication-lag-projection-20260517T000000Z.report.json",
     "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-startup-publication-lag-projection-20260517T000000Z.report.json --handoff-probe",
     "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-startup-publication-lag-projection-20260517T000000Z.report.json --replay-fixture",
     "npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-startup-publication-lag-projection-20260517T000000Z.report.json",
     "npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-startup-publication-lag-projection-20260517T000000Z.report.json",
-    "npm run analyze:owner-files -- startup_active_gate_owner snapshot_coverage"
+    "npm run analyze:owner-files -- startup_active_gate_owner snapshot_coverage",
+    "git diff --check"
   ],
   "writeScope": [
     "work/packages/active-20260517-startup-active-gate-remaining-handoff-reconcile-node.md",
@@ -86,7 +87,7 @@
       "run review and fix subagents before implementation starts",
       "run a fresh implementation subagent before runtime edits",
       "promote exact runtime or harness files only if focused proof selects them",
-      "rerun focused active-gate tests and one representative rolling-restart run"
+      "rerun focused active-gate tests and one representative rolling-restart run with a real timestamp or unique run id"
     ],
     "currentFirstFrontier": "active_gate_snapshot_coverage in test-output/reports/rolling-restart-startup-publication-lag-projection-20260517T000000Z.report.json, owned by startup_active_gate_owner / snapshot_coverage with snapshotCoverageNodeCount=2/5, expectedNodeCount=5, selectedSnapshotObservationMode=repair_deferred, publicationActiveGateHandoffState=pending, requiredAction=reconcile_owner_membership_publication, runtimePromotionAllowed=false, and publicationActiveGateHandoffPendingReconcileCount=1.",
     "knownDownstreamBlockers": [
@@ -112,7 +113,7 @@
     "boundedProgressProofArtifact": "test-output/reports/rolling-restart-startup-publication-lag-projection-20260517T000000Z.report.json",
     "expectedObservableTransition": "pendingReconcileCount moves from 1 to 0, snapshot coverage improves beyond 2/5, representative rolling-restart turns green, or canonical evidence migrates to a different owner boundary.",
     "maxProgressBound": "one focused startup_active_gate_owner / snapshot_coverage reconcile_owner_membership_publication slice for node 35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
-    "sameFrontierFallback": "If the successor remains at active_gate_snapshot_coverage with pendingReconcileCount=1 after focused proof, stop as same-frontier or split a narrower edge instead of widening into frozen publication, priority, timeout-budget, admission, selected-source timeout, terminal-progress, or readiness edges.",
+    "sameFrontierFallback": "If the successor remains at active_gate_snapshot_coverage with pendingReconcileCount=1 after focused proof, stop as same-frontier or split a narrower edge instead of widening into frozen publication, priority, timeout-budget, admission, selected-source timeout, terminal-progress, or readiness edges. If evidence only reduces the same owner-boundary-action count, continue in this package instead of opening another successor.",
     "expectedNextFrontier": "startup_active_gate_owner / snapshot_coverage on the remaining node 35a891b8-c1a0-5064-9c6e-2acfba61c2a7 unless canonical evidence selects a new owner boundary",
     "resultClassification": "pending-before-probe",
     "stopCondition": "continue-local-fix",
@@ -120,7 +121,7 @@
       "work/packages/done-20260517-startup-active-gate-startup-publication-lag-snapshot-projection.md / startup_active_gate_owner / snapshot_coverage / reduced",
       "work/packages/done-20260517-startup-active-gate-pending-handoff-reconcile-after-selected-timeout-reduction.md / startup_active_gate_owner / snapshot_coverage / same-frontier"
     ],
-    "oscillationCheck": "Allowed because this successor is the remaining single-node contraction of the same owner-boundary reconcile edge, not a widened or alternate owner-boundary package.",
+    "oscillationCheck": "Allowed because this successor is the remaining single-node contraction of the same owner-boundary reconcile edge, not a widened or alternate owner-boundary package. Further same-owner same-action reductions must update this package edge card instead of creating package churn.",
     "handoffInvariant": "Publication ACK, priority recovery, timeout budgets, active-gate admission, publication truth, selected-source timeout handling, terminal-progress selection, and readiness support remain frozen unless canonical evidence selects them again."
   },
   "predecessor": "work/packages/done-20260517-startup-active-gate-startup-publication-lag-snapshot-projection.md"
@@ -148,8 +149,18 @@ Pending reconcile count: 1
 Pending reconcile node: 35a891b8-c1a0-5064-9c6e-2acfba61c2a7
 Current coverage: 2/5
 Frozen upstream proof: publication ACK pendingAckCount=0; priority residual witnessCount=0
+Goal: pendingReconcileCount 1 -> 0, migrate, or representative green
+Allowed edits: exact runtime or harness files promoted by focused remaining-node proof after review/fix/implementation subagent proof
+Required first proof: npm run analyze:topology-convergence -- test-output/reports/rolling-restart-startup-publication-lag-projection-20260517T000000Z.report.json --handoff-probe
 Allowed stop modes: representative-green, migrated, reduced, same-frontier, classification-only, architecture-gap, human-escalation
 ```
+
+## Same-Owner Reduction Continuation
+
+If this package reduces the remaining node but the owner, boundary, and required
+action stay the same, update this package instead of opening another successor.
+Split only when canonical evidence changes owner, boundary, required action, or
+the stop state.
 
 ## Scope Basis
 
@@ -190,6 +201,18 @@ Before raw JSON, raw logs, broad file search, oversized segment files, or ad hoc
 If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which
 canonical extractor was tried and why it was insufficient.
 
+## LLM Trap List
+
+1. Do not open another successor for count-only reduction on the same owner,
+   boundary, and required action.
+2. Do not reopen publication ACK; it is satisfied with `pendingAckCount=0`.
+3. Do not promote workflow progress; priority residual extraction reports zero
+   witnesses.
+4. Do not widen timeout budgets, active-gate admission, readiness support, or
+   publication truth to hide the remaining owner-reconcile node.
+5. Do not write new representative artifacts with placeholder timestamps such
+   as `T000000Z`; use a real timestamp or unique run id.
+
 ## In Scope
 
 1. work/packages/active-20260517-startup-active-gate-remaining-handoff-reconcile-node.md
@@ -225,7 +248,7 @@ proof and the implementation subagent promote exact edits.
   terminal-progress selection, and readiness support stay frozen unless
   canonical evidence selects them again.
 - Escalation triggers: owned files expand beyond this package, runtime ownership changes, or representative scenario evidence changes.
-- Focused proof: `npm run work:evidence-summary -- test-output/reports/rolling-restart-startup-publication-lag-projection-20260517T000000Z.report.json`, `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-startup-publication-lag-projection-20260517T000000Z.report.json --handoff-probe`, `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-startup-publication-lag-projection-20260517T000000Z.report.json --replay-fixture`, `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-startup-publication-lag-projection-20260517T000000Z.report.json`, `npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-startup-publication-lag-projection-20260517T000000Z.report.json`, `npm run analyze:owner-files -- startup_active_gate_owner snapshot_coverage`
+- Focused proof: `npm run work:evidence-summary -- test-output/reports/rolling-restart-startup-publication-lag-projection-20260517T000000Z.report.json`, `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-startup-publication-lag-projection-20260517T000000Z.report.json --handoff-probe`, `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-startup-publication-lag-projection-20260517T000000Z.report.json --replay-fixture`, `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-startup-publication-lag-projection-20260517T000000Z.report.json`, `npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-startup-publication-lag-projection-20260517T000000Z.report.json`, `npm run analyze:owner-files -- startup_active_gate_owner snapshot_coverage`, `git diff --check`
 - Model ledger advisory: `escalate`
 
 ## Validation
@@ -235,3 +258,4 @@ proof and the implementation subagent promote exact edits.
 3. PASS: `npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-startup-publication-lag-projection-20260517T000000Z.report.json`
 4. PASS: `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-startup-publication-lag-projection-20260517T000000Z.report.json`
 5. PASS: `npm run analyze:owner-files -- startup_active_gate_owner snapshot_coverage`
+6. PASS: `git diff --check`

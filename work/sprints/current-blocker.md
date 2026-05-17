@@ -26,7 +26,7 @@ Current state: Latest representative evidence still selects active_gate_snapshot
 
 ## Next Action
 
-Run the required review/fix/implementation subagent sequence before runtime edits. Target only the remaining reconcile_owner_membership_publication node 35a891b8-c1a0-5064-9c6e-2acfba61c2a7; stop as reduced, migrated, same-frontier, or green based on canonical representative evidence.
+Run the required review/fix/implementation subagent sequence before runtime edits. Target only the remaining reconcile_owner_membership_publication node 35a891b8-c1a0-5064-9c6e-2acfba61c2a7; stop as reduced, migrated, same-frontier, or green based on canonical representative evidence. If proof only changes the pending count or node set under the same owner, boundary, and required action, update this package instead of opening another successor.
 
 ## Proof Ladder
 
@@ -36,6 +36,7 @@ Run the required review/fix/implementation subagent sequence before runtime edit
 4. `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-startup-publication-lag-projection-20260517T000000Z.report.json`
 5. `npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-startup-publication-lag-projection-20260517T000000Z.report.json`
 6. `npm run analyze:owner-files -- startup_active_gate_owner snapshot_coverage`
+7. `git diff --check`
 
 ## Model Fit
 
@@ -97,7 +98,7 @@ Phase chain:
 3. `run review and fix subagents before implementation starts`
 4. `run a fresh implementation subagent before runtime edits`
 5. `promote exact runtime or harness files only if focused proof selects them`
-6. `rerun focused active-gate tests and one representative rolling-restart run`
+6. `rerun focused active-gate tests and one representative rolling-restart run with a real timestamp or unique run id`
 
 Current first frontier: `active_gate_snapshot_coverage in test-output/reports/rolling-restart-startup-publication-lag-projection-20260517T000000Z.report.json, owned by startup_active_gate_owner / snapshot_coverage with snapshotCoverageNodeCount=2/5, expectedNodeCount=5, selectedSnapshotObservationMode=repair_deferred, publicationActiveGateHandoffState=pending, requiredAction=reconcile_owner_membership_publication, runtimePromotionAllowed=false, and publicationActiveGateHandoffPendingReconcileCount=1.`
 
@@ -131,7 +132,7 @@ Expected observable transition: `pendingReconcileCount moves from 1 to 0, snapsh
 
 Max progress bound: `one focused startup_active_gate_owner / snapshot_coverage reconcile_owner_membership_publication slice for node 35a891b8-c1a0-5064-9c6e-2acfba61c2a7`
 
-Same-frontier fallback: `If the successor remains at active_gate_snapshot_coverage with pendingReconcileCount=1 after focused proof, stop as same-frontier or split a narrower edge instead of widening into frozen publication, priority, timeout-budget, admission, selected-source timeout, terminal-progress, or readiness edges.`
+Same-frontier fallback: `If the successor remains at active_gate_snapshot_coverage with pendingReconcileCount=1 after focused proof, stop as same-frontier or split a narrower edge instead of widening into frozen publication, priority, timeout-budget, admission, selected-source timeout, terminal-progress, or readiness edges. If evidence only reduces the same owner-boundary-action count, continue in this package instead of opening another successor.`
 
 Expected next frontier: `startup_active_gate_owner / snapshot_coverage on the remaining node 35a891b8-c1a0-5064-9c6e-2acfba61c2a7 unless canonical evidence selects a new owner boundary`
 
@@ -144,7 +145,7 @@ Recent frontier history:
 1. `work/packages/done-20260517-startup-active-gate-startup-publication-lag-snapshot-projection.md / startup_active_gate_owner / snapshot_coverage / reduced`
 2. `work/packages/done-20260517-startup-active-gate-pending-handoff-reconcile-after-selected-timeout-reduction.md / startup_active_gate_owner / snapshot_coverage / same-frontier`
 
-Oscillation check: `Allowed because this successor is the remaining single-node contraction of the same owner-boundary reconcile edge, not a widened or alternate owner-boundary package.`
+Oscillation check: `Allowed because this successor is the remaining single-node contraction of the same owner-boundary reconcile edge, not a widened or alternate owner-boundary package. Further same-owner same-action reductions must update this package edge card instead of creating package churn.`
 
 Handoff invariant: `Publication ACK, priority recovery, timeout budgets, active-gate admission, publication truth, selected-source timeout handling, terminal-progress selection, and readiness support remain frozen unless canonical evidence selects them again.`
 

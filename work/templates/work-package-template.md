@@ -184,6 +184,24 @@ Implementation gate:
       detail.
 - [ ] Runtime edits wait until the classification gate is satisfied.
 
+## Same-Owner Reduction Continuation
+
+Required for scenario/release-gate and causal-escalation packages after each
+focused proof or representative rerun.
+
+- Current owner:
+- Current boundary:
+- Current required action:
+- Prior metric:
+- New metric:
+- Continue this package when owner, boundary, and required action are unchanged.
+- Split or create successor only when owner, boundary, required action, or
+  intentional stop state changes.
+
+Fixture-first is a phase inside this package unless the fixture proves no
+runtime edit is justified, changes the selected owner/boundary/action, or
+creates reusable tooling.
+
 ## In Scope
 
 1. Item
@@ -297,6 +315,9 @@ non-frontier with prose alone.
   name the maximum retry/timer/dispatch/owner-cycle bound before fallback.
 - Same-frontier fallback:
   name the fallback action if the boundary does not reduce or migrate.
+- Remaining-node fast path:
+  when one node remains, name `Target node`, `Required action`,
+  `Runtime promotion allowed`, `Goal`, and `Forbidden edits`.
 - Expected next frontier:
 - Result classification: one of `pending-before-probe`,
   `representative-green`, `reduced`, `same-frontier`, `migrated`,
@@ -315,6 +336,24 @@ Required when a scenario/release-gate or causal-escalation package closes as
 | Package | Artifact | First frontier | Metric change | Result |
 | --- | --- | --- | --- | --- |
 | This package | path/to/latest.report.json | owner / boundary / edge | before -> after | pending |
+
+## Atomic Closure Transaction
+
+Required before renaming this package to `done-...` or `superseded-...`.
+
+- [ ] Result classification is selected from canonical evidence.
+- [ ] Same-owner/same-action reductions were kept in this package, or the
+      successor split records the changed owner, boundary, required action, or
+      stop state.
+- [ ] Package file is renamed and metadata status matches filename.
+- [ ] Commit And Push Ledger is filled.
+- [ ] Successor active package exists, or the package records that no active
+      package remains intentionally.
+- [ ] `work/sprints/current-blocker.*` points at an existing active package or
+      records no-active intentionally.
+- [ ] `npm run work:validate -- --closure` passes before commit.
+- [ ] Representative artifact names use real unique timestamps or run ids, not
+      placeholders such as `T000000Z`.
 
 ## Static Drift Ledger
 

@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-05-15T09:13:51.836Z",
+  "generatedAt": "2026-05-17T13:34:10.222Z",
   "sourceDir": ".kiro/steering",
   "llmDir": ".kiro/steering/llm",
   "sourceFiles": [
@@ -45,10 +45,10 @@
     }
   ],
   "stats": {
-    "candidateCount": 272,
-    "dedupedRuleCount": 272,
-    "exportedRuleCount": 272,
-    "estimatedAllRulesTokens": 10093
+    "candidateCount": 286,
+    "dedupedRuleCount": 286,
+    "exportedRuleCount": 286,
+    "estimatedAllRulesTokens": 10599
   },
   "rules": [
     {
@@ -1531,7 +1531,7 @@
       "sources": [
         {
           "file": "workflow-guidelines.md",
-          "line": 153,
+          "line": 161,
           "section": "Workflow Guidelines Detail > Package Status And Closure"
         }
       ]
@@ -1546,7 +1546,7 @@
       "sources": [
         {
           "file": "workflow-guidelines.md",
-          "line": 156,
+          "line": 164,
           "section": "Workflow Guidelines Detail > Package Status And Closure"
         }
       ]
@@ -1556,18 +1556,33 @@
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
-      "rule": "Do not open a new package merely because artifact path, epoch, node ids, counts, attempts, timings, timestamps, or presentation shape changed.",
-      "score": 220,
+      "rule": "Run validation before committing so current-blocker never points at a missing active-... package.",
+      "score": 221,
       "sources": [
         {
           "file": "workflow-guidelines.md",
-          "line": 270,
-          "section": "Workflow Guidelines Detail > Scenario Failure Migration"
+          "line": 201,
+          "section": "Workflow Guidelines Detail > Package Status And Closure"
         }
       ]
     },
     {
       "id": "GOV-0008",
+      "domain": "governance",
+      "strength": "must_not",
+      "tags": [],
+      "rule": "Do not open a new package merely because artifact path, epoch, node ids, counts, attempts, timings, timestamps, or presentation shape changed.",
+      "score": 220,
+      "sources": [
+        {
+          "file": "workflow-guidelines.md",
+          "line": 298,
+          "section": "Workflow Guidelines Detail > Scenario Failure Migration"
+        }
+      ]
+    },
+    {
+      "id": "GOV-0009",
       "domain": "governance",
       "strength": "must_not",
       "tags": [
@@ -1578,8 +1593,23 @@
       "sources": [
         {
           "file": "workflow-guidelines.md",
-          "line": 295,
+          "line": 340,
           "section": "Workflow Guidelines Detail > Frontier Oscillation Escalation"
+        }
+      ]
+    },
+    {
+      "id": "GOV-0010",
+      "domain": "governance",
+      "strength": "must_not",
+      "tags": [],
+      "rule": "If the fixture/probe is missing, create the fixture/probe or stop as evidence-incomplete. Do not patch runtime from a representative red run alone.",
+      "score": 220,
+      "sources": [
+        {
+          "file": "workflow-guidelines.md",
+          "line": 465,
+          "section": "Workflow Guidelines Detail > LLM Current Edge Card And Trap List"
         }
       ]
     },
@@ -1924,7 +1954,7 @@
       ]
     },
     {
-      "id": "GOV-0009",
+      "id": "GOV-0011",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -1939,7 +1969,7 @@
       ]
     },
     {
-      "id": "GOV-0010",
+      "id": "GOV-0012",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -2248,7 +2278,7 @@
       ]
     },
     {
-      "id": "GOV-0011",
+      "id": "GOV-0013",
       "domain": "governance",
       "strength": "must_not",
       "tags": [
@@ -2265,7 +2295,7 @@
       ]
     },
     {
-      "id": "GOV-0012",
+      "id": "GOV-0014",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -2274,30 +2304,45 @@
       "sources": [
         {
           "file": "workflow-guidelines.md",
-          "line": 174,
+          "line": 182,
           "section": "Workflow Guidelines Detail > Package Status And Closure"
         }
       ]
     },
     {
-      "id": "GOV-0013",
+      "id": "GOV-0015",
+      "domain": "governance",
+      "strength": "must_not",
+      "tags": [],
+      "rule": "Do not leave the repository between package states.",
+      "score": 211,
+      "sources": [
+        {
+          "file": "workflow-guidelines.md",
+          "line": 189,
+          "section": "Workflow Guidelines Detail > Package Status And Closure"
+        }
+      ]
+    },
+    {
+      "id": "GOV-0016",
       "domain": "governance",
       "strength": "must_not",
       "tags": [
         "governance"
       ],
       "rule": "Do not start a second active package on the same architectural boundary while the first has unresolved in-scope residuals.",
-      "score": 211,
+      "score": 210,
       "sources": [
         {
           "file": "workflow-guidelines.md",
-          "line": 223,
+          "line": 251,
           "section": "Workflow Guidelines Detail > Residual Closure Inventory"
         }
       ]
     },
     {
-      "id": "GOV-0014",
+      "id": "GOV-0017",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -2306,13 +2351,13 @@
       "sources": [
         {
           "file": "workflow-guidelines.md",
-          "line": 358,
+          "line": 403,
           "section": "Workflow Guidelines Detail > Static Drift Ledger"
         }
       ]
     },
     {
-      "id": "GOV-0015",
+      "id": "GOV-0018",
       "domain": "governance",
       "strength": "must_not",
       "tags": [
@@ -2325,43 +2370,75 @@
       "sources": [
         {
           "file": "workflow-guidelines.md",
-          "line": 358,
+          "line": 403,
           "section": "Workflow Guidelines Detail > Static Drift Ledger"
         }
       ]
     },
     {
-      "id": "GOV-0016",
+      "id": "GOV-0019",
       "domain": "governance",
       "strength": "must_not",
-      "tags": [],
-      "rule": "work/sprints/current-blocker.json is generated handoff state, but it must not be stale.",
+      "tags": [
+        "governance"
+      ],
+      "rule": "For LLMs, \"do not edit\" boundaries are higher-signal than a long positive scope list.",
       "score": 210,
       "sources": [
         {
           "file": "workflow-guidelines.md",
-          "line": 450,
+          "line": 451,
+          "section": "Workflow Guidelines Detail > LLM Current Edge Card And Trap List"
+        }
+      ]
+    },
+    {
+      "id": "GOV-0020",
+      "domain": "governance",
+      "strength": "must_not",
+      "tags": [],
+      "rule": "Do not name new representative rerun outputs with placeholder timestamps such as T000000Z; placeholder names make lineage ambiguous and can hide accidental overwrite.",
+      "score": 210,
+      "sources": [
+        {
+          "file": "workflow-guidelines.md",
+          "line": 498,
+          "section": "Workflow Guidelines Detail > LLM Current Edge Card And Trap List"
+        }
+      ]
+    },
+    {
+      "id": "GOV-0021",
+      "domain": "governance",
+      "strength": "must_not",
+      "tags": [],
+      "rule": "work/sprints/current-blocker.json is generated handoff state, but it must not be stale.",
+      "score": 209,
+      "sources": [
+        {
+          "file": "workflow-guidelines.md",
+          "line": 564,
           "section": "Workflow Guidelines Detail > LLM Tool-First Triage"
         }
       ]
     },
     {
-      "id": "GOV-0017",
+      "id": "GOV-0022",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
       "rule": "Parent-session notes, local/manual labels, and arbitrary text without a real agent id do not satisfy review, fix, or implementation roles at closure.",
-      "score": 210,
+      "score": 209,
       "sources": [
         {
           "file": "workflow-guidelines.md",
-          "line": 481,
+          "line": 595,
           "section": "Workflow Guidelines Detail > Sub-Agent Sequencing"
         }
       ]
     },
     {
-      "id": "GOV-0018",
+      "id": "GOV-0023",
       "domain": "governance",
       "strength": "must_not",
       "tags": [
@@ -2372,7 +2449,7 @@
       "sources": [
         {
           "file": "workflow-guidelines.md",
-          "line": 584,
+          "line": 698,
           "section": "Workflow Guidelines Detail > Roadmap And Work-Tracker Truth"
         }
       ]
@@ -2443,7 +2520,7 @@
       ]
     },
     {
-      "id": "GOV-0019",
+      "id": "GOV-0024",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -2460,7 +2537,7 @@
       ]
     },
     {
-      "id": "GOV-0020",
+      "id": "GOV-0025",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -2475,7 +2552,7 @@
       ]
     },
     {
-      "id": "GOV-0021",
+      "id": "GOV-0026",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -2492,7 +2569,7 @@
       ]
     },
     {
-      "id": "GOV-0022",
+      "id": "GOV-0027",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -2510,7 +2587,7 @@
       ]
     },
     {
-      "id": "GOV-0023",
+      "id": "GOV-0028",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -2527,7 +2604,7 @@
       ]
     },
     {
-      "id": "GOV-0024",
+      "id": "GOV-0029",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -2544,7 +2621,7 @@
       ]
     },
     {
-      "id": "GOV-0025",
+      "id": "GOV-0030",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -2922,7 +2999,7 @@
       ]
     },
     {
-      "id": "GOV-0026",
+      "id": "GOV-0031",
       "domain": "governance",
       "strength": "must_not",
       "tags": [
@@ -2939,7 +3016,7 @@
       ]
     },
     {
-      "id": "GOV-0027",
+      "id": "GOV-0032",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -2954,7 +3031,58 @@
       ]
     },
     {
-      "id": "GOV-0028",
+      "id": "GOV-0033",
+      "domain": "governance",
+      "strength": "must",
+      "tags": [
+        "ownership"
+      ],
+      "rule": "Classification and implementation gates before runtime edits: canonical extractors must agree on owner/boundary/cause, then the package must name exact candidate runtime files and focused proof.",
+      "score": 203,
+      "sources": [
+        {
+          "file": "workflow-guidelines.md",
+          "line": 121,
+          "section": "Workflow Guidelines Detail > Lane Requirements > Scenario/Release-Gate Lane"
+        }
+      ]
+    },
+    {
+      "id": "GOV-0034",
+      "domain": "governance",
+      "strength": "must",
+      "tags": [
+        "ownership"
+      ],
+      "rule": "If the same owner, boundary, and required action remain selected, keep the same package active and update its Current Edge Card instead of closing it.",
+      "score": 203,
+      "sources": [
+        {
+          "file": "workflow-guidelines.md",
+          "line": 193,
+          "section": "Workflow Guidelines Detail > Package Status And Closure"
+        }
+      ]
+    },
+    {
+      "id": "GOV-0035",
+      "domain": "governance",
+      "strength": "must",
+      "tags": [
+        "ownership"
+      ],
+      "rule": "Create or activate the successor only when canonical evidence changed owner, boundary, required action, or the work is intentionally finished.",
+      "score": 203,
+      "sources": [
+        {
+          "file": "workflow-guidelines.md",
+          "line": 197,
+          "section": "Workflow Guidelines Detail > Package Status And Closure"
+        }
+      ]
+    },
+    {
+      "id": "GOV-0036",
       "domain": "governance",
       "strength": "must_not",
       "tags": [
@@ -2971,7 +3099,7 @@
       ]
     },
     {
-      "id": "GOV-0029",
+      "id": "GOV-0037",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -2982,7 +3110,7 @@
       "sources": [
         {
           "file": "workflow-guidelines.md",
-          "line": 267,
+          "line": 295,
           "section": "Workflow Guidelines Detail > Scenario Failure Migration"
         }
       ]
@@ -3152,7 +3280,7 @@
       ]
     },
     {
-      "id": "GOV-0030",
+      "id": "GOV-0038",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -3167,7 +3295,7 @@
       ]
     },
     {
-      "id": "GOV-0031",
+      "id": "GOV-0039",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -3185,7 +3313,7 @@
       ]
     },
     {
-      "id": "GOV-0032",
+      "id": "GOV-0040",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -3203,7 +3331,7 @@
       ]
     },
     {
-      "id": "GOV-0033",
+      "id": "GOV-0041",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -3440,7 +3568,7 @@
       ]
     },
     {
-      "id": "GOV-0034",
+      "id": "GOV-0042",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -3457,7 +3585,7 @@
       ]
     },
     {
-      "id": "GOV-0035",
+      "id": "GOV-0043",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -3472,7 +3600,7 @@
       ]
     },
     {
-      "id": "GOV-0036",
+      "id": "GOV-0044",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -3489,7 +3617,7 @@
       ]
     },
     {
-      "id": "GOV-0037",
+      "id": "GOV-0045",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -3498,13 +3626,13 @@
       "sources": [
         {
           "file": "workflow-guidelines.md",
-          "line": 129,
+          "line": 137,
           "section": "Workflow Guidelines Detail > Lane Requirements > Causal Escalation Lane"
         }
       ]
     },
     {
-      "id": "GOV-0038",
+      "id": "GOV-0046",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -3513,13 +3641,13 @@
       "sources": [
         {
           "file": "workflow-guidelines.md",
-          "line": 160,
+          "line": 168,
           "section": "Workflow Guidelines Detail > Package Status And Closure"
         }
       ]
     },
     {
-      "id": "GOV-0039",
+      "id": "GOV-0047",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -3528,13 +3656,77 @@
       "sources": [
         {
           "file": "workflow-guidelines.md",
-          "line": 177,
+          "line": 185,
           "section": "Workflow Guidelines Detail > Package Status And Closure"
         }
       ]
     },
     {
-      "id": "GOV-0040",
+      "id": "GOV-0048",
+      "domain": "governance",
+      "strength": "must",
+      "tags": [
+        "ownership"
+      ],
+      "rule": "Same-owner reductions stay in the current package unless the required action changes.",
+      "score": 192,
+      "sources": [
+        {
+          "file": "workflow-guidelines.md",
+          "line": 301,
+          "section": "Workflow Guidelines Detail > Scenario Failure Migration"
+        }
+      ]
+    },
+    {
+      "id": "GOV-0049",
+      "domain": "governance",
+      "strength": "must",
+      "tags": [],
+      "rule": "Scenario-driven packages and active sprint snapshots must include a compact Current Edge Card that an LLM can keep in working memory without rereading the full package history.",
+      "score": 192,
+      "sources": [
+        {
+          "file": "workflow-guidelines.md",
+          "line": 436,
+          "section": "Workflow Guidelines Detail > LLM Current Edge Card And Trap List"
+        }
+      ]
+    },
+    {
+      "id": "GOV-0050",
+      "domain": "governance",
+      "strength": "must",
+      "tags": [
+        "ownership"
+      ],
+      "rule": "That fast path should avoid a broad package unless canonical evidence changes owner, boundary, or required action.",
+      "score": 192,
+      "sources": [
+        {
+          "file": "workflow-guidelines.md",
+          "line": 495,
+          "section": "Workflow Guidelines Detail > LLM Current Edge Card And Trap List"
+        }
+      ]
+    },
+    {
+      "id": "GOV-0051",
+      "domain": "governance",
+      "strength": "must",
+      "tags": [],
+      "rule": "Representative artifacts must use real unique timestamps or otherwise unique run identifiers.",
+      "score": 192,
+      "sources": [
+        {
+          "file": "workflow-guidelines.md",
+          "line": 498,
+          "section": "Workflow Guidelines Detail > LLM Current Edge Card And Trap List"
+        }
+      ]
+    },
+    {
+      "id": "GOV-0052",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -3545,7 +3737,7 @@
       "sources": [
         {
           "file": "workflow-guidelines.md",
-          "line": 550,
+          "line": 664,
           "section": "Workflow Guidelines Detail > Scenario Causal Closure Ledger"
         }
       ]
@@ -3781,7 +3973,7 @@
       ]
     },
     {
-      "id": "GOV-0041",
+      "id": "GOV-0053",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -3903,7 +4095,22 @@
       ]
     },
     {
-      "id": "GOV-0042",
+      "id": "GOV-0054",
+      "domain": "governance",
+      "strength": "must",
+      "tags": [],
+      "rule": "Final classification: representative-green, reduced, same-frontier, migrated, classification-only, architecture-gap, contradictory, or human escalation. Reduced requires a concrete metric delta; classification-only must name the accepted bounded/backpressure state and stop reason.",
+      "score": 179,
+      "sources": [
+        {
+          "file": "workflow-guidelines.md",
+          "line": 130,
+          "section": "Workflow Guidelines Detail > Lane Requirements > Scenario/Release-Gate Lane"
+        }
+      ]
+    },
+    {
+      "id": "GOV-0055",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -3914,22 +4121,22 @@
       "sources": [
         {
           "file": "workflow-guidelines.md",
-          "line": 263,
+          "line": 291,
           "section": "Workflow Guidelines Detail > Scenario Failure Migration"
         }
       ]
     },
     {
-      "id": "GOV-0043",
+      "id": "GOV-0056",
       "domain": "governance",
       "strength": "must",
       "tags": [],
       "rule": "Use npm run work:subagent-prompt -- --role <role> --package <package> to prepare bounded sub-agent tasks; the generated text assists the real sub-agent sequence but does not replace real returned agent ids. The prompt must carry the package Model Fit output profile so sub-agents know expected response verbosity separately from model or reasoning effort.",
-      "score": 178,
+      "score": 177,
       "sources": [
         {
           "file": "workflow-guidelines.md",
-          "line": 418,
+          "line": 532,
           "section": "Workflow Guidelines Detail > LLM Tool-First Triage"
         }
       ]
@@ -4129,7 +4336,7 @@
       ]
     },
     {
-      "id": "GOV-0044",
+      "id": "GOV-0057",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -4140,24 +4347,24 @@
       "sources": [
         {
           "file": "workflow-guidelines.md",
-          "line": 313,
+          "line": 358,
           "section": "Workflow Guidelines Detail > Frontier Oscillation Escalation"
         }
       ]
     },
     {
-      "id": "GOV-0045",
+      "id": "GOV-0058",
       "domain": "governance",
       "strength": "must",
       "tags": [
         "ownership"
       ],
       "rule": "LLM-driven work across all packages and sub-agent tasks must use canonical workflow and artifact tools before raw JSON or log slicing: work:llm-start, work:evidence-summary, work:package:doctor -- --suggest, work:package:schema, work:package:new, analyze:owner-files, focused scenario extractors such as analyze:priority-recovery-residuals, work:subagent-prompt, and work:oversized-next.",
-      "score": 168,
+      "score": 167,
       "sources": [
         {
           "file": "workflow-guidelines.md",
-          "line": 391,
+          "line": 505,
           "section": "Workflow Guidelines Detail > LLM Tool-First Triage"
         }
       ]
@@ -4257,7 +4464,7 @@
       ]
     },
     {
-      "id": "GOV-0046",
+      "id": "GOV-0059",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -4274,7 +4481,7 @@
       ]
     },
     {
-      "id": "GOV-0047",
+      "id": "GOV-0060",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -4291,7 +4498,7 @@
       ]
     },
     {
-      "id": "GOV-0048",
+      "id": "GOV-0061",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -4340,18 +4547,33 @@
       ]
     },
     {
-      "id": "GOV-0049",
+      "id": "GOV-0062",
+      "domain": "governance",
+      "strength": "may",
+      "tags": [],
+      "rule": "Runtime edits may start only after the classification gate and implementation gate are both satisfied.",
+      "score": 154,
+      "sources": [
+        {
+          "file": "workflow-guidelines.md",
+          "line": 468,
+          "section": "Workflow Guidelines Detail > LLM Current Edge Card And Trap List"
+        }
+      ]
+    },
+    {
+      "id": "GOV-0063",
       "domain": "governance",
       "strength": "may",
       "tags": [
         "lifecycle"
       ],
       "rule": "Use validation phases deliberately: npm run work:validate -- --entry for package shape, --pre-impl when review/fix proof is complete and implementation may still be pending, and --closure before close/commit.",
-      "score": 154,
+      "score": 153,
       "sources": [
         {
           "file": "workflow-guidelines.md",
-          "line": 430,
+          "line": 544,
           "section": "Workflow Guidelines Detail > LLM Tool-First Triage"
         }
       ]
@@ -4372,7 +4594,7 @@
       ]
     },
     {
-      "id": "GOV-0050",
+      "id": "GOV-0064",
       "domain": "governance",
       "strength": "may",
       "tags": [],
@@ -4387,7 +4609,7 @@
       ]
     },
     {
-      "id": "GOV-0051",
+      "id": "GOV-0065",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -4398,13 +4620,13 @@
       "sources": [
         {
           "file": "workflow-guidelines.md",
-          "line": 219,
+          "line": 247,
           "section": "Workflow Guidelines Detail > Residual Closure Inventory"
         }
       ]
     },
     {
-      "id": "GOV-0052",
+      "id": "GOV-0066",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -4416,13 +4638,13 @@
       "sources": [
         {
           "file": "workflow-guidelines.md",
-          "line": 298,
+          "line": 343,
           "section": "Workflow Guidelines Detail > Frontier Oscillation Escalation"
         }
       ]
     },
     {
-      "id": "GOV-0053",
+      "id": "GOV-0067",
       "domain": "governance",
       "strength": "may",
       "tags": [],
@@ -4431,22 +4653,22 @@
       "sources": [
         {
           "file": "workflow-guidelines.md",
-          "line": 313,
+          "line": 358,
           "section": "Workflow Guidelines Detail > Frontier Oscillation Escalation"
         }
       ]
     },
     {
-      "id": "GOV-0054",
+      "id": "GOV-0068",
       "domain": "governance",
       "strength": "may",
       "tags": [],
       "rule": "Before closure, an implementation environment may record human-waived, tool-unavailable, or blocked-by-environment-policy with a reason: ... note so unavailable delegation is explicit instead of disguised as agent proof.",
-      "score": 144,
+      "score": 143,
       "sources": [
         {
           "file": "workflow-guidelines.md",
-          "line": 481,
+          "line": 595,
           "section": "Workflow Guidelines Detail > Sub-Agent Sequencing"
         }
       ]
@@ -4467,7 +4689,7 @@
       ]
     },
     {
-      "id": "GOV-0055",
+      "id": "GOV-0069",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -4484,24 +4706,24 @@
       ]
     },
     {
-      "id": "GOV-0056",
+      "id": "GOV-0070",
       "domain": "governance",
       "strength": "may",
       "tags": [
         "governance"
       ],
       "rule": "Use explicit metadata scope fields for new packages: writeScope for files the package may edit, handoffFiles for read-only context, generatedFiles for deterministic outputs, candidateRuntimeFiles for files gated by a focused probe, and commitScope for focused commit containment. touchedFiles is legacy compatibility only.",
-      "score": 130,
+      "score": 129,
       "sources": [
         {
           "file": "workflow-guidelines.md",
-          "line": 425,
+          "line": 539,
           "section": "Workflow Guidelines Detail > LLM Tool-First Triage"
         }
       ]
     },
     {
-      "id": "GOV-0057",
+      "id": "GOV-0071",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -4512,7 +4734,7 @@
       "sources": [
         {
           "file": "workflow-guidelines.md",
-          "line": 550,
+          "line": 664,
           "section": "Workflow Guidelines Detail > Scenario Causal Closure Ledger"
         }
       ]

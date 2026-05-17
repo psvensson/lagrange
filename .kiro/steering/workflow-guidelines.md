@@ -186,6 +186,26 @@ Stop for human direction when package-owned and unrelated changes cannot be
 separated safely, when no push target exists, or when credentials/policy prevent
 the required push.
 
+Package closure is atomic. Do not leave the repository between package states.
+For scenario and causal-escalation packages, closure order is:
+
+1. Decide the result classification from canonical evidence.
+2. If the same owner, boundary, and required action remain selected, keep the
+   same package active and update its Current Edge Card instead of closing it.
+3. If closure is valid, rename the package, update metadata, and add the Commit
+   And Push Ledger.
+4. Create or activate the successor only when canonical evidence changed
+   owner, boundary, required action, or the work is intentionally finished.
+5. Regenerate `work/sprints/current-blocker.*` after the successor is active,
+   or explicitly record that no active package remains.
+6. Run validation before committing so `current-blocker` never points at a
+   missing `active-...` package.
+7. Commit and push the focused slice.
+
+`done-...` packages without commit/push proof, missing active successors, or a
+`current-blocker` pointing to a non-existent package are closure defects, not
+handoff states.
+
 ## Affected-Area Deep Dive
 
 Every work package ends with an affected-area review before `done-...`.
@@ -277,6 +297,23 @@ Required workflow:
    snapshot.
 5. Do not open a new package merely because artifact path, epoch, node ids,
    counts, attempts, timings, timestamps, or presentation shape changed.
+
+Same-owner reductions stay in the current package unless the required action
+changes. If the only change is a smaller count, narrower node set, better
+coverage, or clearer evidence for the same owner/boundary/action, update the
+Current Edge Card and continue. A reduction such as `pendingReconcileCount=3`
+to `1` is one package phase, not automatic successor-package evidence.
+
+Fixture-first is a phase, not automatically a package boundary. A fixture-only
+package is valid only when the fixture proves no runtime edit is justified,
+changes the selected owner/boundary/action, or creates reusable tooling. When
+the fixture confirms the same selected edge, continue in the same package:
+
+1. classify edge
+2. add or identify replay fixture/probe
+3. run implementation subagent
+4. implement exact promoted files
+5. run focused proof and representative rerun
 
 Progress notes distinguish:
 
@@ -443,6 +480,25 @@ package history:
 
 The ledger is evidence, not a second status system. It exists to help LLMs
 distinguish monotonic reduction from frontier churn.
+
+When a frontier reduces to exactly one remaining node, use the remaining-node
+fast path in the Current Edge Card:
+
+```text
+Target node:
+Required action:
+Runtime promotion allowed:
+Goal:
+Forbidden edits:
+```
+
+That fast path should avoid a broad package unless canonical evidence changes
+owner, boundary, or required action.
+
+Representative artifacts must use real unique timestamps or otherwise unique
+run identifiers. Do not name new representative rerun outputs with placeholder
+timestamps such as `T000000Z`; placeholder names make lineage ambiguous and can
+hide accidental overwrite.
 
 ## LLM Tool-First Triage
 
