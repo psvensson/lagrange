@@ -4,8 +4,10 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import process from 'node:process';
 import {fileURLToPath} from 'node:url';
+import {buildRepresentativeEvidenceSummary} from './summarize-representative-evidence.js';
 import {buildSummary, readLedgerEntries} from './model-ledger.js';
 import {
+  LANE_CAUSAL_ESCALATION,
   LANE_LIGHTWEIGHT_MAINTENANCE,
   SCOPE_FIELD_CANDIDATE_RUNTIME_FILES,
   SCOPE_FIELD_COMMIT_SCOPE,
@@ -26,6 +28,7 @@ const EXIT_FAILURE = 1;
 const NUM_ZERO = 0;
 const NUM_ONE = 1;
 const NUM_TWO = 2;
+const NUM_SIXTY = 60;
 const DATE_SLICE_END = 10;
 const JSON_INDENT_SPACES = 2;
 const DEFAULT_STATUS = 'todo';
@@ -63,6 +66,7 @@ const FLAG_INTENDED_MINIMUM_MODEL = 'intended-minimum-model';
 const FLAG_SCOPE_SHAPE = 'scope-shape';
 const FLAG_OUTPUT_PROFILE = 'output-profile';
 const FLAG_LEDGER = 'ledger';
+const FLAG_FROM_ARTIFACT = 'from-artifact';
 const FLAG_SCHEMA = 'schema';
 const FLAG_HELP = 'help';
 const EMPTY_TEXT = '';
@@ -103,6 +107,7 @@ const HELP_TEXT = [
   '  --owned-file <path>    Legacy alias for --write-scope and Model Fit',
   '  --forbidden-file <path>',
   '  --output-profile <small|medium|high|extra-high>',
+  '  --from-artifact <artifact.json>  Infer owner, boundary, evidence, proof, and defaults from representative evidence.',
   '',
   'Use --schema to print the shared work-package schema reference.',
 ].join(NEWLINE);
@@ -139,6 +144,106 @@ function parseArgs(args = []) {
     index += NUM_ONE;
   }
   return flags;
+}
+
+function readJsonFile(filePath) {
+  return fs.readFile(filePath, ENCODING_UTF8)
+    .then((content) => JSON.parse(content));
+}
+
+function slugPart(value) {
+  return normalizeText(value)
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/gu, '-')
+    .replace(/^-+|-+$/gu, EMPTY_TEXT);
+}
+
+function buildArtifactSlug(summary) {
+  const parts = [
+    summary.scenario,
+    summary.topology?.dominantWitness?.owner,
+    summary.topology?.dominantWitness?.boundary,
+  ].map(slugPart).filter(Boolean);
+  const slug = parts.join('-').slice(NUM_ZERO, NUM_SIXTY)
+    .replace(/-+$/u, EMPTY_TEXT);
+  return slug || 'artifact-triage';
+}
+
+function artifactTitle(summary) {
+  const witness = summary.topology?.dominantWitness || {};
+  return [
+    'Artifact Triage',
+    witness.owner || 'unknown-owner',
+    witness.boundary || 'unknown-boundary',
+  ].join(' - ');
+}
+
+function mergeScalarDefault(flags, fieldName, value) {
+  if (normalizeText(flags[fieldName]).length > NUM_ZERO) {
+    return flags;
+  }
+  return {
+    ...flags,
+    [fieldName]: value,
+  };
+}
+
+function mergeRepeatedDefaults(flags, fieldName, values = []) {
+  const existing = Array.isArray(flags[fieldName]) ? flags[fieldName] : [];
+  return {
+    ...flags,
+    [fieldName]: [...new Set([
+      ...existing,
+      ...values.map(normalizeText).filter(Boolean),
+    ])],
+  };
+}
+
+async function resolveArtifactDefaults(flags = {}) {
+  const artifactPath = normalizeText(flags[FLAG_FROM_ARTIFACT]);
+  if (artifactPath.length === NUM_ZERO) {
+    return flags;
+  }
+  const summary = buildRepresentativeEvidenceSummary(
+    artifactPath,
+    await readJsonFile(artifactPath),
+  );
+  const witness = summary.topology?.dominantWitness || {};
+  const edgeId = summary.topology?.firstFrontierEdgeId || 'first-frontier';
+  const owner = witness.owner || 'unknown_owner';
+  const boundary = witness.boundary || 'unknown_boundary';
+  const dominantReason = witness.dominantReason || summary.causal?.dominantFailureClass ||
+    'representative_evidence';
+  let nextFlags = {...flags};
+  nextFlags = mergeScalarDefault(nextFlags, FLAG_TITLE, artifactTitle(summary));
+  nextFlags = mergeScalarDefault(nextFlags, FLAG_SLUG, buildArtifactSlug(summary));
+  nextFlags = mergeScalarDefault(nextFlags, FLAG_LANE, LANE_CAUSAL_ESCALATION);
+  nextFlags = mergeScalarDefault(nextFlags, FLAG_SCENARIO, summary.scenario);
+  nextFlags = mergeScalarDefault(nextFlags, FLAG_ARTIFACT, artifactPath);
+  nextFlags = mergeScalarDefault(nextFlags, FLAG_OWNER, owner);
+  nextFlags = mergeScalarDefault(nextFlags, FLAG_BOUNDARY, boundary);
+  nextFlags = mergeScalarDefault(
+    nextFlags,
+    FLAG_DOMINANT_REASON,
+    dominantReason,
+  );
+  nextFlags = mergeScalarDefault(
+    nextFlags,
+    FLAG_CURRENT_STATE,
+    `Scaffolded from representative evidence for ${edgeId}.`,
+  );
+  nextFlags = mergeScalarDefault(
+    nextFlags,
+    FLAG_NEXT_ACTION,
+    `Triage ${edgeId} with combined scenario evidence before runtime edits.`,
+  );
+  nextFlags = mergeRepeatedDefaults(nextFlags, FLAG_HANDOFF_FILE, [artifactPath]);
+  nextFlags = mergeRepeatedDefaults(nextFlags, FLAG_PROOF, [
+    `npm run work:evidence-summary -- ${artifactPath}`,
+    `npm run work:scenario-triage -- ${artifactPath} --markdown`,
+    `npm run analyze:priority-recovery-residuals -- ${artifactPath} --markdown`,
+  ]);
+  return nextFlags;
 }
 
 function validateFlags(flags = {}) {
@@ -207,6 +312,7 @@ async function buildModelLedgerSummary(flags = {}) {
 }
 
 async function buildPackageContent(flags = {}) {
+  flags = await resolveArtifactDefaults(flags);
   const lane = normalizeText(flags[FLAG_LANE]) || LANE_LIGHTWEIGHT_MAINTENANCE;
   const modelLedgerSummary = await buildModelLedgerSummary(flags);
   const modelFitDefaults = defaultModelFitForLane(lane, modelLedgerSummary);
@@ -335,13 +441,14 @@ async function buildPackageContent(flags = {}) {
 }
 
 async function runCli(args = process.argv.slice(NUM_TWO)) {
-  const flags = parseArgs(args);
+  let flags = parseArgs(args);
   if (flags[FLAG_HELP]) {
     return `${HELP_TEXT}${NEWLINE}`;
   }
   if (flags[FLAG_SCHEMA]) {
     return renderSchemaReference();
   }
+  flags = await resolveArtifactDefaults(flags);
   validateFlags(flags);
   const opened = normalizeText(flags[FLAG_OPENED]) || todayIsoDate();
   const status = normalizeText(flags[FLAG_STATUS]) || DEFAULT_STATUS;

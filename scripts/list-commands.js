@@ -9,6 +9,10 @@ const COMMAND_GROUPS = Object.freeze([
         description: 'Print current blocker, first-read files, proof ladder, and dirty worktree.',
       }),
       Object.freeze({
+        command: 'npm run work:advance',
+        description: 'Refresh orientation around the active package, doctor findings, validation, and next subagent role.',
+      }),
+      Object.freeze({
         command: 'npm run work:llm-start',
         description: 'Print combined LLM handoff, doctor suggestions, dirty scope, model ledger, and evidence summary.',
       }),
@@ -47,6 +51,10 @@ const COMMAND_GROUPS = Object.freeze([
       Object.freeze({
         command: 'npm run work:subagent-prompt -- --role <role> --package <package>',
         description: 'Generate bounded review, fix, or implementation subagent prompts and ledger line guidance.',
+      }),
+      Object.freeze({
+        command: 'npm run work:subagent-next',
+        description: 'Detect the next required subagent role for the active package and print its bounded prompt.',
       }),
       Object.freeze({
         command: 'npm run steering:llm:pack',
@@ -113,6 +121,10 @@ const COMMAND_GROUPS = Object.freeze([
       Object.freeze({
         command: 'npm run work:package:evidence-block -- <artifact>',
         description: 'Generate a package migration/evidence block from topology analyzer output.',
+      }),
+      Object.freeze({
+        command: 'npm run work:scenario-triage -- <artifact>',
+        description: 'Combine representative evidence and priority residual grouping into one scenario handoff.',
       }),
       Object.freeze({
         command: 'npm run summarize:harness -- --report-dir test-output/reports',

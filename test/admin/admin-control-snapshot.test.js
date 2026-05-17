@@ -58,6 +58,7 @@ const ACTIVE_GATE_OWNER_TRUTH_NOW_MS = 1000;
 const ACTIVE_GATE_OWNER_TRUTH_READY_LEASE_DELTA_MS = 1000;
 const ACTIVE_GATE_OWNER_TRUTH_PUBLICATION_EPOCH = 31;
 const ACTIVE_GATE_OWNER_TRUTH_PUBLICATION_STATUS = 'PUBLISHED';
+const ACTIVE_GATE_OWNER_TRUTH_PUBLICATION_STATUS_OPEN = 'OPEN';
 const ACTIVE_GATE_OWNER_TRUTH_NODE_STATUS = 'active';
 const ACTIVE_GATE_OWNER_TRUTH_CONNECTION_STATE = 'ready';
 const ACTIVE_GATE_OWNER_TRUTH_CONNECTED_STATE = 'connected';
@@ -158,6 +159,7 @@ const ACTIVE_GATE_HANDOFF_RECONCILE_PARTIAL_PENDING_NODE_IDS = Object.freeze([
 const ACTIVE_GATE_HANDOFF_RECONCILE_PARTIAL_PENDING_COUNT =
   ACTIVE_GATE_HANDOFF_RECONCILE_PARTIAL_PENDING_NODE_IDS.length;
 const ACTIVE_GATE_HANDOFF_RECONCILE_CLEARED_PENDING_COUNT = 0;
+const ACTIVE_GATE_HANDOFF_OPEN_PENDING_ACK_COUNT = 1;
 const ACTIVE_GATE_HANDOFF_RECONCILE_AUTHORITATIVE_READ = true;
 const ACTIVE_GATE_HANDOFF_RECONCILE_AUTHORITATIVE_RECONCILE = true;
 const ACTIVE_GATE_HANDOFF_RECONCILE_SKIP_WRITE_READBACK = false;
@@ -258,6 +260,9 @@ const ACTIVE_GATE_SNAPSHOT_AUTHORITATIVE_QUERY_PRESSURE_REASON =
   'authoritative_control_snapshot_query_pressure';
 const ACTIVE_GATE_SNAPSHOT_OWNER_EDGE_AUTHORITATIVE_QUERY =
   'authoritative_control_snapshot_query_pressure';
+const ACTIVE_GATE_HANDOFF_OPEN_PROGRESS_TEST_NAME =
+  'AdminControlSnapshot no-attempt path queues flattened OPEN active-gate ' +
+  'handoff reconcile';
 const ACTIVE_GATE_SNAPSHOT_DISCOVERY_NODE_COVERAGE_GAP_TRIGGER =
   'discovery_node_coverage_gap';
 const ACTIVE_GATE_SNAPSHOT_REPAIR_DEFERRED_OBSERVATION_MODE =
@@ -6549,6 +6554,128 @@ test('AdminControlSnapshot no-attempt path still triggers publication owner comm
       'the no-attempt deferred path should keep the shared-owner stale outcome',
     );
   });
+
+test(ACTIVE_GATE_HANDOFF_OPEN_PROGRESS_TEST_NAME, async (t) => {
+  const buildOptions = [];
+  let reconcileOptions = null;
+  const staleSnapshot = {
+    nodes: [...ACTIVE_GATE_HANDOFF_RECONCILE_PUBLISHED_NODE_IDS],
+    controlPlaneDiagnostics: {
+      publicationConvergence: {
+        publicationEpoch: ACTIVE_GATE_HANDOFF_RECONCILE_PUBLICATION_EPOCH,
+        status: ACTIVE_GATE_OWNER_TRUTH_PUBLICATION_STATUS_OPEN,
+        publicationStatus: ACTIVE_GATE_OWNER_TRUTH_PUBLICATION_STATUS_OPEN,
+        publishedActiveNodeIds: [
+          ...ACTIVE_GATE_HANDOFF_RECONCILE_PUBLISHED_NODE_IDS,
+        ],
+        missingPublishedNodeIds: [
+          ...ACTIVE_GATE_OWNER_TRUTH_RECENT_NODE_IDS,
+        ],
+        pendingAckNodeIds: [
+          ACTIVE_GATE_HANDOFF_RECONCILE_PENDING_NODE_IDS[0],
+        ],
+        pendingAckCount: ACTIVE_GATE_HANDOFF_OPEN_PENDING_ACK_COUNT,
+        activeGate: {
+          progress: {
+            publicationActiveGateHandoffState:
+              ACTIVE_GATE_OWNER_COHORT_STATE_PENDING,
+            publicationActiveGateHandoffReasonCode:
+              ACTIVE_GATE_OWNER_COHORT_REASON_OWNER_RECONCILE_PENDING,
+            publicationActiveGateHandoffNextAction:
+              ACTIVE_GATE_HANDOFF_NEXT_ACTION_RECONCILE,
+            publicationActiveGateHandoffRuntimePromotionAllowed:
+              ACTIVE_GATE_HANDOFF_RUNTIME_PROMOTION_ALLOWED_FALSE,
+            publicationActiveGateHandoffPendingReconcileCount:
+              ACTIVE_GATE_HANDOFF_RECONCILE_PENDING_COUNT,
+            publicationActiveGateHandoffPendingReconcileNodeIds: [
+              ...ACTIVE_GATE_HANDOFF_RECONCILE_PENDING_NODE_IDS,
+            ],
+            selectedPublishedActiveNodeIds: [
+              ...ACTIVE_GATE_HANDOFF_RECONCILE_PUBLISHED_NODE_IDS,
+            ],
+            selectedMissingPublishedNodeIds: [
+              ...ACTIVE_GATE_HANDOFF_RECONCILE_PENDING_NODE_IDS,
+            ],
+          },
+        },
+      },
+    },
+  };
+  const snapshot = new AdminControlSnapshot({
+    nodeId: ACTIVE_GATE_HANDOFF_RECONCILE_LOCAL_NODE_ID,
+    controlPlaneReadinessService: {
+      membershipPublicationService: {
+        enqueueClusterMembershipReconcile(_reason, context = {}) {
+          reconcileOptions = context;
+        },
+      },
+    },
+  });
+  snapshot.controlPlaneSnapshotOwner = new ControlPlaneSnapshotOwner({
+    controlSnapshot: snapshot,
+  });
+  snapshot.buildLocalControlSnapshot = async (options = {}) => {
+    buildOptions.push(options);
+    return staleSnapshot;
+  };
+  snapshot.canRunAuthoritativeControlSnapshotRepair = () => true;
+  snapshot.evaluateAuthoritativeControlSnapshotRepair = () => ({
+    shouldRepair: true,
+    triggerCodes: [ACTIVE_GATE_HANDOFF_RECONCILE_CACHE_STALE_TRIGGER],
+    nodeCoverage: {
+      activeProjection: {
+        hasCoverageGap: false,
+      },
+    },
+  });
+
+  const result = await snapshot.resolveLocalControlSnapshot();
+
+  t.match(
+    reconcileOptions,
+    {
+      publishedActiveNodeIds: [...ACTIVE_GATE_HANDOFF_RECONCILE_NODE_IDS],
+      requiredAckNodeIds: [...ACTIVE_GATE_HANDOFF_RECONCILE_NODE_IDS],
+      acknowledgedNodeIds: [...ACTIVE_GATE_HANDOFF_RECONCILE_NODE_IDS],
+      allowPendingVisibility: true,
+      allowPressureDefer:
+        ACTIVE_GATE_HANDOFF_RECONCILE_ORDINARY_REPAIR_NOT_DEFERRED,
+      readProfile:
+        ACTIVE_GATE_HANDOFF_RECONCILE_READ_PROFILE,
+      skipPublicationWriteReadback:
+        ACTIVE_GATE_HANDOFF_RECONCILE_SKIP_WRITE_READBACK,
+    },
+    'OPEN publication flattened progress should enqueue only the selected owner reconcile cohort',
+  );
+  t.equal(
+    buildOptions.length,
+    1,
+    'OPEN publication owner handoff should not rebuild until the owner outcome is visible',
+  );
+  t.same(
+    result.nodes,
+    [...ACTIVE_GATE_HANDOFF_RECONCILE_PUBLISHED_NODE_IDS],
+    'OPEN publication handoff should preserve the original snapshot coverage while reconcile waits',
+  );
+  t.match(
+    result.controlPlaneDiagnostics.publicationConvergence,
+    {
+      status: ACTIVE_GATE_OWNER_TRUTH_PUBLICATION_STATUS_OPEN,
+      publicationStatus: ACTIVE_GATE_OWNER_TRUTH_PUBLICATION_STATUS_OPEN,
+    },
+    'OPEN publication handoff should not convert publication truth locally',
+  );
+  t.match(
+    result.controlPlaneDiagnostics.publicationConvergence
+      .membershipPublicationHandoffOutcome,
+    {
+      state: ACTIVE_GATE_HANDOFF_RECONCILE_OUTCOME_WRITE_DEFERRED,
+      reasonCode: ACTIVE_GATE_HANDOFF_RECONCILE_OUTCOME_ENQUEUED_REASON,
+      enqueued: true,
+    },
+    'OPEN publication handoff should surface a bounded queued owner outcome',
+  );
+});
 
 test('AdminControlSnapshot repair-unavailable path still triggers publication owner command',
   async (t) => {

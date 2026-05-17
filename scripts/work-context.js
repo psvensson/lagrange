@@ -7,7 +7,9 @@ import process from 'node:process';
 import {fileURLToPath} from 'node:url';
 import {promisify} from 'node:util';
 import {
+  buildArchitectureDecisionGatePayload,
   buildCurrentBlockerPayload,
+  collectPackageHistoryEntries,
   findActivePackageFile,
   findActiveSprintFile,
   metadataRequiresSubagentSequencing,
@@ -54,12 +56,15 @@ const WORK_README_PATH = path.join('work', 'README.md');
 const GIT_COMMAND = 'git';
 const GIT_STATUS_ARGS = Object.freeze(['status', '--short']);
 const NPM_RUN_WORK_CURRENT_BLOCKER_COMMAND = 'npm run work:current-blocker';
+const NPM_RUN_WORK_ADVANCE_COMMAND = 'npm run work:advance';
 const NPM_RUN_WORK_LLM_START_COMMAND = 'npm run work:llm-start';
 const NPM_RUN_WORK_VALIDATE_COMMAND = 'npm run work:validate';
 const NPM_RUN_WORK_PACKAGE_DOCTOR_COMMAND = 'npm run work:package:doctor --';
 const NPM_RUN_WORK_PACKAGE_DOCTOR_SUGGEST_COMMAND =
   'npm run work:package:doctor -- --suggest';
+const NPM_RUN_WORK_SUBAGENT_NEXT_COMMAND = 'npm run work:subagent-next';
 const NPM_RUN_WORK_EVIDENCE_SUMMARY_COMMAND = 'npm run work:evidence-summary --';
+const NPM_RUN_WORK_SCENARIO_TRIAGE_COMMAND = 'npm run work:scenario-triage --';
 const ANALYZE_PRIORITY_RECOVERY_RESIDUALS_COMMAND =
   'npm run analyze:priority-recovery-residuals --';
 const ANALYZE_DISTRIBUTED_FAILURE_COMMAND =
@@ -121,6 +126,7 @@ const SECTION_MODEL_FIT = 'Model Fit';
 const SECTION_REPRESENTATIVE_RESIDUAL = 'Representative Residual';
 const SECTION_CAUSAL_GOVERNANCE = 'Causal Governance';
 const SECTION_SCENARIO_CAUSAL_CLOSURE = 'Scenario Causal Closure';
+const SECTION_ARCHITECTURE_DECISION_GATE = 'Architecture Decision Gate';
 const SECTION_OPEN_CHECKLIST = 'Open Package Checklist';
 const SECTION_OUT_OF_SCOPE = 'Out Of Scope';
 const SECTION_USEFUL_COMMANDS = 'Useful Commands';
@@ -202,6 +208,10 @@ const FIELD_LABELS = Object.freeze({
   SCOPE_SHAPE: 'Scope shape',
   SPRINT: 'Sprint',
   STATUS: 'Status',
+  TRIGGER: 'Trigger',
+  TRIGGER_EVIDENCE: 'Trigger evidence',
+  CHOICES: 'Choices',
+  SELECTED_CHOICE: 'Selected choice',
   WORKFLOW_LANE: 'Workflow lane',
   STOP_CONDITION_CHECK: 'Stop-condition check',
   SUBAGENT_ROLE: 'Next required subagent role',
@@ -276,6 +286,7 @@ const METADATA_FIELD_MODEL_FIT = 'modelFit';
 const METADATA_FIELD_REPRESENTATIVE_RESIDUAL = 'representativeResidual';
 const METADATA_FIELD_CAUSAL_GOVERNANCE = 'causalGovernance';
 const METADATA_FIELD_SCENARIO_CAUSAL_CLOSURE = 'scenarioCausalClosure';
+const METADATA_FIELD_ARCHITECTURE_DECISION_GATE = 'architectureDecisionGate';
 const MODEL_FIT_FIELD_PACKAGE_CLASS = 'packageClass';
 const MODEL_FIT_FIELD_INTENDED_MINIMUM_MODEL = 'intendedMinimumModel';
 const MODEL_FIT_FIELD_SCOPE_SHAPE = 'scopeShape';
@@ -354,6 +365,24 @@ function appendList(lines, values, fallback) {
   }
 }
 
+function architectureGateChoiceLabels(choices = []) {
+  if (!Array.isArray(choices)) {
+    return [];
+  }
+  return choices
+    .map((choice) => {
+      if (!choice || typeof choice !== 'object') {
+        return EMPTY_STRING;
+      }
+      return [
+        normalizeString(choice.id) || DEFAULT_UNKNOWN,
+        `route=${normalizeString(choice.route) || DEFAULT_UNKNOWN}`,
+        normalizeString(choice.summary) || DEFAULT_UNKNOWN,
+      ].join(' ');
+    })
+    .filter((value) => value.length > NUM_ZERO);
+}
+
 function shellQuote(value) {
   const normalizedValue = normalizeString(value);
   if (SHELL_SAFE_PATTERN.test(normalizedValue)) {
@@ -430,6 +459,11 @@ function parseOptionalPackageMetadata(content, filePath) {
 async function buildCurrentBlockerFromPackage(packagePath) {
   const content = await readTextFile(packagePath);
   const metadata = parsePackageMetadata(content, packagePath);
+  const packageHistoryEntries = await collectPackageHistoryEntries();
+  const architectureDecisionGate = metadataObject(
+    metadata,
+    METADATA_FIELD_ARCHITECTURE_DECISION_GATE,
+  );
   return {
     currentBlocker: {
       sprint: DEFAULT_UNKNOWN,
@@ -459,6 +493,14 @@ async function buildCurrentBlockerFromPackage(packagePath) {
       ),
       causalGovernance: metadataCausalGovernance(metadata),
       scenarioCausalClosure: metadataScenarioCausalClosure(metadata),
+      architectureDecisionGate:
+        Object.keys(architectureDecisionGate).length > NUM_ZERO ?
+          architectureDecisionGate :
+          buildArchitectureDecisionGatePayload(
+            metadata,
+            packagePath,
+            {packageHistoryEntries},
+          ),
       predecessor: metadataText(metadata, METADATA_FIELD_PREDECESSOR),
     },
     packageContent: content,
@@ -481,6 +523,7 @@ async function buildCurrentBlockerFromActivePackage() {
       activeSprintFile,
       activePackageFile,
       metadata,
+      {packageHistoryEntries: await collectPackageHistoryEntries()},
     ),
     packageContent: content,
   };
@@ -1158,8 +1201,10 @@ function buildUsefulCommands(currentBlocker) {
   const runtimeTouchedFiles = buildRuntimeTouchedFiles(currentBlocker);
   const commands = [
     NPM_RUN_WORK_CURRENT_BLOCKER_COMMAND,
+    NPM_RUN_WORK_ADVANCE_COMMAND,
     NPM_RUN_WORK_LLM_START_COMMAND,
     NPM_RUN_WORK_VALIDATE_COMMAND,
+    NPM_RUN_WORK_SUBAGENT_NEXT_COMMAND,
   ];
   if (pathHasRealValue(currentBlocker.package)) {
     commands.push(
@@ -1176,6 +1221,11 @@ function buildUsefulCommands(currentBlocker) {
   if (pathHasRealValue(currentBlocker.artifact)) {
     commands.push(
       commandWithPaths(NPM_RUN_WORK_EVIDENCE_SUMMARY_COMMAND, [
+        currentBlocker.artifact,
+      ]),
+    );
+    commands.push(
+      commandWithPaths(NPM_RUN_WORK_SCENARIO_TRIAGE_COMMAND, [
         currentBlocker.artifact,
       ]),
     );
@@ -1624,6 +1674,31 @@ async function buildContextLines(currentBlocker, packageContent) {
     lines,
     FIELD_LABELS.STOP_CONDITION,
     scenarioCausalClosure[SCENARIO_CAUSAL_CLOSURE_FIELD_STOP_CONDITION],
+  );
+
+  const architectureDecisionGate = currentBlocker.architectureDecisionGate || {};
+  appendSection(lines, SECTION_ARCHITECTURE_DECISION_GATE);
+  appendKeyValue(lines, FIELD_LABELS.STATUS, architectureDecisionGate.status);
+  appendKeyValue(lines, FIELD_LABELS.TRIGGER, architectureDecisionGate.trigger);
+  appendKeyValue(
+    lines,
+    FIELD_LABELS.SELECTED_CHOICE,
+    architectureDecisionGate.selectedChoice,
+  );
+  appendKeyValue(
+    lines,
+    FIELD_LABELS.NEXT_ACTION,
+    architectureDecisionGate.nextAction,
+  );
+  appendKeyValue(
+    lines,
+    FIELD_LABELS.TRIGGER_EVIDENCE,
+    normalizeStringList(architectureDecisionGate.triggerEvidence).join(', '),
+  );
+  appendKeyValue(
+    lines,
+    FIELD_LABELS.CHOICES,
+    architectureGateChoiceLabels(architectureDecisionGate.choices).join(', '),
   );
 
   appendSection(lines, SECTION_CURRENT_STATE);

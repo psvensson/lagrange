@@ -272,14 +272,18 @@ const FULL_STEERING_SYSTEM_PATH = '.kiro/steering/system guidelines.md';
 const BOOTSTRAP_OWNER_CARD_PATH = 'src/bootstrap/README.md';
 const PLAYBACK_FAILURE_BUNDLE_PATH = TEST_PLAYBACK_PATH + 'failure-bundle.json';
 const WORK_CONTEXT_COMMAND = 'npm run work:current-blocker';
+const WORK_ADVANCE_COMMAND = 'npm run work:advance';
 const WORK_LLM_START_COMMAND = 'npm run work:llm-start';
 const WORK_VALIDATE_COMMAND = 'npm run work:validate';
+const WORK_SUBAGENT_NEXT_COMMAND = 'npm run work:subagent-next';
 const PACKAGE_DOCTOR_COMMAND =
   'npm run work:package:doctor -- ' + TEST_PACKAGE_PATH;
 const PACKAGE_DOCTOR_SUGGEST_COMMAND =
   'npm run work:package:doctor -- --suggest ' + TEST_PACKAGE_PATH;
 const EVIDENCE_SUMMARY_ARTIFACT_COMMAND =
   'npm run work:evidence-summary -- ' + TEST_ARTIFACT_PATH;
+const SCENARIO_TRIAGE_COMMAND =
+  'npm run work:scenario-triage -- ' + TEST_ARTIFACT_PATH;
 const PRIORITY_RECOVERY_RESIDUALS_COMMAND =
   'npm run analyze:priority-recovery-residuals -- ' + TEST_ARTIFACT_PATH;
 const EVIDENCE_SUMMARY_PLAYBACK_COMMAND =
@@ -305,6 +309,7 @@ const SECTION_MODEL_FIT = '## Model Fit';
 const SECTION_REPRESENTATIVE_RESIDUAL = '## Representative Residual';
 const SECTION_CAUSAL_GOVERNANCE = '## Causal Governance';
 const SECTION_SCENARIO_CAUSAL_CLOSURE = '## Scenario Causal Closure';
+const SECTION_ARCHITECTURE_DECISION_GATE = '## Architecture Decision Gate';
 const DIRTY_SCOPE_TITLE = '# Worktree Package Scope';
 const PACKAGE_STATUS_LINE = ' M ' + TEST_BOOTSTRAP_SOURCE_PATH;
 const TRACKER_STATUS_LINE = ' M work/sprints/current-blocker.json';
@@ -359,11 +364,14 @@ test('work context advertises triage commands before raw artifact reads',
     const rendered = lines.join('\n');
 
     t.equal(commands[0], WORK_CONTEXT_COMMAND);
-    t.equal(commands[1], WORK_LLM_START_COMMAND);
-    t.equal(commands[2], WORK_VALIDATE_COMMAND);
-    t.equal(commands[3], PACKAGE_DOCTOR_COMMAND);
-    t.equal(commands[4], PACKAGE_DOCTOR_SUGGEST_COMMAND);
-    t.equal(commands[5], EVIDENCE_SUMMARY_ARTIFACT_COMMAND);
+    t.equal(commands[1], WORK_ADVANCE_COMMAND);
+    t.equal(commands[2], WORK_LLM_START_COMMAND);
+    t.equal(commands[3], WORK_VALIDATE_COMMAND);
+    t.equal(commands[4], WORK_SUBAGENT_NEXT_COMMAND);
+    t.equal(commands[5], PACKAGE_DOCTOR_COMMAND);
+    t.equal(commands[6], PACKAGE_DOCTOR_SUGGEST_COMMAND);
+    t.equal(commands[7], EVIDENCE_SUMMARY_ARTIFACT_COMMAND);
+    t.equal(commands[8], SCENARIO_TRIAGE_COMMAND);
     t.ok(commands.includes(DISTRIBUTED_FAILURE_COMMAND));
     t.ok(commands.includes(TOPOLOGY_ARTIFACT_COMMAND));
     t.ok(commands.includes(CAUSAL_ARTIFACT_COMMAND));
@@ -379,6 +387,7 @@ test('work context advertises triage commands before raw artifact reads',
     t.ok(rendered.includes(SECTION_REPRESENTATIVE_RESIDUAL));
     t.ok(rendered.includes(SECTION_CAUSAL_GOVERNANCE));
     t.ok(rendered.includes(SECTION_SCENARIO_CAUSAL_CLOSURE));
+    t.ok(rendered.includes(SECTION_ARCHITECTURE_DECISION_GATE));
     t.ok(rendered.includes('Package class: bounded-implementation'));
     t.ok(rendered.includes('Frontier: active_gate_snapshot_coverage'));
     t.ok(rendered.includes('Next action: keep representative residual visible'));

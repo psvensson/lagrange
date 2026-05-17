@@ -862,6 +862,59 @@ async function readJson(filePath) {
   return JSON.parse(raw);
 }
 
+async function readOptionalJson(filePath) {
+  try {
+    return await readJson(filePath);
+  } catch (error) {
+    if (error.code === 'ENOENT') {
+      return null;
+    }
+    return null;
+  }
+}
+
+async function readOptionalText(filePath) {
+  try {
+    return await fs.readFile(filePath, LOCAL_STR_UTF8);
+  } catch (error) {
+    if (error.code === 'ENOENT') {
+      return null;
+    }
+    throw error;
+  }
+}
+
+function withoutGeneratedAt(value) {
+  if (!value || typeof value !== 'object') {
+    return value;
+  }
+  const clone = JSON.parse(JSON.stringify(value));
+  delete clone.generatedAt;
+  return clone;
+}
+
+function generatedPayloadMatches(existingPayload, nextPayload) {
+  return JSON.stringify(withoutGeneratedAt(existingPayload)) ===
+    JSON.stringify(withoutGeneratedAt(nextPayload));
+}
+
+async function writeTextIfChanged(filePath, content) {
+  const existingContent = await readOptionalText(filePath);
+  if (existingContent === content) {
+    return false;
+  }
+  await fs.writeFile(filePath, content, LOCAL_STR_UTF8);
+  return true;
+}
+
+function stableGeneratedAt(existingPayload, nextPayload) {
+  return existingPayload &&
+    existingPayload.generatedAt &&
+    generatedPayloadMatches(existingPayload, nextPayload) ?
+    existingPayload.generatedAt :
+    new Date().toISOString();
+}
+
 async function main() {
   const arg = process.argv[2];
   if (arg === LOCAL_STR_HELP || arg === LOCAL_STR_H) {
@@ -911,10 +964,9 @@ async function main() {
     selectedByOutput.set(output.name, selected);
 
     const markdown = renderPackMarkdown(output, selected);
-    await fs.writeFile(
+    await writeTextIfChanged(
       path.join(llmDir, `${output.name}.md`),
       `${markdown}`,
-      LOCAL_STR_UTF8,
     );
   }
 
@@ -923,8 +975,9 @@ async function main() {
     selectedByOutput,
     manualContentByOutput,
   );
+  const rulesJsonPath = path.join(llmDir, LOCAL_STR_RULES_JSON);
+  const manifestPath = path.join(llmDir, LOCAL_STR_MANIFEST_JSON);
   const rulesJson = {
-    generatedAt: new Date().toISOString(),
     sourceDir: config.sourceDir,
     llmDir: config.llmDir,
     sourceFiles: (config.sources || []).map((entry) => ({
@@ -950,29 +1003,34 @@ async function main() {
       sources: rule.sources,
     })),
   };
+  rulesJson.generatedAt = stableGeneratedAt(
+    await readOptionalJson(rulesJsonPath),
+    rulesJson,
+  );
 
-  await fs.writeFile(
-    path.join(llmDir, LOCAL_STR_RULES_JSON),
+  await writeTextIfChanged(
+    rulesJsonPath,
     `${JSON.stringify(rulesJson, null, JSON_INDENT_SPACES)}\n`,
-    LOCAL_STR_UTF8,
   );
 
   const manifest = {
     generatedAt: rulesJson.generatedAt,
     packs: manifestEntries,
   };
+  manifest.generatedAt = stableGeneratedAt(
+    await readOptionalJson(manifestPath),
+    manifest,
+  );
 
-  await fs.writeFile(
-    path.join(llmDir, LOCAL_STR_MANIFEST_JSON),
+  await writeTextIfChanged(
+    manifestPath,
     `${JSON.stringify(manifest, null, JSON_INDENT_SPACES)}\n`,
-    LOCAL_STR_UTF8,
   );
 
   const readme = renderReadme(manifestEntries);
-  await fs.writeFile(
+  await writeTextIfChanged(
     path.join(llmDir, LOCAL_STR_README_MD),
     `${readme}`,
-    LOCAL_STR_UTF8,
   );
 
   console.log(LOCAL_STR_1WFBO);

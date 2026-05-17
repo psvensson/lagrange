@@ -147,6 +147,9 @@ Required:
 6. Normalized failure-class taxonomy.
 7. Stop conditions for local fix, owner migration, architecture work, or human
    escalation.
+8. Sprint Architecture Decision Gate when the sprint may continue local proof,
+   migrate owner boundary, classify `architecture-gap`, or route broad
+   architecture work.
 
 ## Package Status And Closure
 
@@ -635,6 +638,79 @@ material covering:
 
 Runtime packages that follow cite the causal model, schema, decision table,
 fixture, extractor, or artifact they rely on.
+
+## Sprint Architecture Decision Gate
+
+Use this gate when a scenario-driven or causal-escalation sprint may decide
+between continued local proof, owner-boundary migration, architecture work, or
+human escalation. The gate lets a sprint classify and route work in context; it
+does not authorize broad runtime edits from sprint prose.
+
+Required before the gate can decide:
+
+1. The sprint has a current blocker snapshot and active package for the latest
+   representative artifact.
+2. Canonical extractors agree on the first frontier, owner boundary, cause, and
+   next required action, or the sprint records the exact extractor conflict.
+3. A focused probe, replay fixture, or bounded evidence artifact represents the
+   selected edge, or the sprint records why evidence is incomplete.
+4. A direct code-path review names the concrete files or functions involved and
+   separates existing owner contracts from consumer-local interpretation.
+5. The sprint records a ranked candidate list with trigger evidence, rejected
+   candidates, forbidden edits, and the next package route for each viable
+   candidate.
+6. The sprint states the roadmap and edition scope check before routing broad
+   architecture work.
+
+Allowed gate decisions:
+
+- `continue-local-proof`: the same owner, boundary, and action remain selected,
+  and a focused proof can still reduce, migrate, or turn the representative
+  gate green.
+- `open-contraction-package`: the same edge remains selected, but the next
+  proof needs a narrower package boundary.
+- `open-causal-analysis-package`: repeated reductions or oscillation require a
+  phase/causal analysis package before more runtime edits.
+- `architecture-gap`: the code-path review shows the owner contract is missing,
+  contradictory, or would require a consumer-local reinterpretation to pass.
+- `roadmap-sharpening-required`: the proposed reset is real but too broad for a
+  bounded runtime package and must be converted into roadmap/spec/architecture
+  scope first.
+- `human-escalation`: evidence is contradictory or blocked by policy,
+  credentials, or unavailable proof.
+
+Tracker contract:
+
+- Packages carry `architectureDecisionGate` metadata with `status`, `trigger`,
+  `triggerEvidence`, `choices`, `selectedChoice`, and `nextAction`.
+- `work:current-blocker`, `work:context`, and `work:llm-start` surface the gate
+  so the sprint can stop at the handoff instead of hiding the decision in prose.
+- `status: required` means the tracker has enough evidence to stop and request
+  concrete choices. `status: presented` means choices are visible but no route
+  has been selected. Both states fail pre-implementation validation for active
+  runtime/scenario work.
+- `status: selected` names the human-selected choice and opens the bounded
+  route for the next package or new sprint. The selected route still must carry
+  normal owner, boundary, scope, proof, sub-agent, validation, commit, and push
+  evidence.
+- The tracker infers a required gate from `architecture-gap` or
+  `human-escalation` scenario closure. Frontier oscillation is rendered as
+  `watching`; it becomes a required gate when the next local proof cannot
+  reduce, migrate, or classify the edge without changing architecture.
+
+Limits:
+
+1. The gate cannot authorize edits outside the active package scope.
+2. The gate cannot replace canonical extractor evidence, package closure,
+   required sub-agent sequencing, validation, or focused commit and push proof.
+3. A representative green artifact is not success when it contradicts the
+   selected owner contract; classify it as `architecture-gap`, `migrated`, or
+   `contradictory` instead.
+4. Architecture work opened by the gate still starts from an active package or
+   roadmap-sharpening document with explicit owner, boundary, scope, proof, and
+   forbidden edits.
+5. Refresh the sprint gate card whenever the representative artifact,
+   canonical owner boundary, or required action changes.
 
 ## Scenario Causal Closure Ledger
 

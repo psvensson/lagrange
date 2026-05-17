@@ -5,8 +5,10 @@ import {test} from '../../src/test-helpers/tap.js';
 import {buildOwnerFileIndex} from '../../scripts/analyze-owner-files.js';
 import {buildPriorityRecoveryResiduals} from '../../scripts/analyze-priority-recovery-residuals.js';
 import {buildSubagentPrompt} from '../../scripts/work-subagent-prompt.js';
+import {buildSubagentNextLines} from '../../scripts/work-subagent-next.js';
 import {buildPackageContent, runCli} from '../../scripts/work-package-new.js';
 import {buildLlmStartLines} from '../../scripts/work-llm-start.js';
+import {buildScenarioTriageSummary} from '../../scripts/work-scenario-triage.js';
 import {renderSchemaReference} from '../../scripts/work-package-schema.js';
 
 const TEMP_ROOT = 'test-output/work-llm-usability-tools';
@@ -60,6 +62,8 @@ test('shared package schema lists validator enums for LLM scaffolding', (t) => {
   t.match(rendered, /classification-only-stop/u);
   t.match(rendered, /ownerBoundaryMigrationProof/u);
   t.match(rendered, /fromOwner/u);
+  t.match(rendered, /Architecture Decision Gate/u);
+  t.match(rendered, /architectureDecisionGate/u);
   t.end();
 });
 
@@ -115,6 +119,23 @@ test('package scaffolder uses package filename date convention', async (t) => {
   t.match(rendered, /Path: work\/packages\/todo-20260512-llm-usability-test\.md/u);
 });
 
+test('package scaffolder can infer package defaults from an artifact',
+  async (t) => {
+    const rendered = await runCli([
+      '--from-artifact',
+      FIXTURE_PATH,
+      '--ledger',
+      TEMP_LEDGER_PATH,
+    ]);
+
+    t.match(rendered, /Path: work\/packages\/todo-/u);
+    t.match(rendered, /"lane": "causal-escalation"/u);
+    t.match(rendered, /"artifact": "test\/scripts\/__fixtures__/u);
+    t.match(rendered, /"owner": "operation_workflow_owner"/u);
+    t.match(rendered, /work:scenario-triage/u);
+    t.match(rendered, /analyze:priority-recovery-residuals/u);
+  });
+
 test('owner file index ranks files that mention owner and boundary', async (t) => {
   await fs.rm(TEMP_OWNER_ROOT, {recursive: true, force: true});
   await fs.mkdir(path.join(TEMP_OWNER_ROOT, 'src', 'rebalancer'), {
@@ -153,6 +174,21 @@ test('priority recovery residual extractor groups by owner boundary', async (t) 
   t.ok(summary.suggestedSuccessors[0].command.includes('work:package:new'));
 });
 
+test('scenario triage combines representative and priority residual evidence',
+  async (t) => {
+    const artifact = JSON.parse(await fs.readFile(FIXTURE_PATH, 'utf8'));
+    const summary = buildScenarioTriageSummary(FIXTURE_PATH, artifact);
+
+    t.equal(summary.schemaVersion, 'scenario-triage-v1');
+    t.equal(summary.representativeEvidence.topology.firstFrontierEdgeId,
+      'priority_recovery_partition_progress');
+    t.equal(summary.priorityRecoveryResiduals.schemaVersion,
+      'priority-recovery-residuals-v1');
+    t.match(summary.suggestedPackageCommand, /--from-artifact/u);
+    t.ok(summary.extractorCommands.some((command) =>
+      command.includes('work:scenario-triage')));
+  });
+
 test('subagent prompt generator emits bounded task and ledger guidance',
   async (t) => {
     const content = await writeTempPackage();
@@ -176,6 +212,18 @@ test('subagent prompt generator emits bounded task and ledger guidance',
     t.match(prompt, /ad hoc `jq`/u);
     t.match(prompt, /Add the real returned agent name and id/u);
   });
+
+test('subagent-next emits the next required role and prompt', async (t) => {
+  await writeTempPackage();
+  const lines = await buildSubagentNextLines([
+    '--package',
+    TEMP_PACKAGE_PATH,
+  ]);
+  const rendered = lines.join('\n');
+
+  t.match(rendered, /# Next Subagent/u);
+  t.match(rendered, /Role: `none`|Role: `review`/u);
+});
 
 test('llm-start combines context, doctor, dirty scope, model ledger, and evidence',
   async (t) => {

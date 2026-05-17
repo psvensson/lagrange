@@ -264,6 +264,57 @@ const SCENARIO_CAUSAL_CLOSURE_ARTIFACT_PATH_PATTERN = new RegExp(
     '(?:$|[\\s`\'".,;])',
   'u',
 );
+const ARCHITECTURE_DECISION_GATE_FIELD = 'architectureDecisionGate';
+const ARCHITECTURE_DECISION_GATE_STATUS_NOT_REQUIRED = 'not-required';
+const ARCHITECTURE_DECISION_GATE_STATUS_REQUIRED = 'required';
+const ARCHITECTURE_DECISION_GATE_STATUS_PRESENTED = 'presented';
+const ARCHITECTURE_DECISION_GATE_STATUS_SELECTED = 'selected';
+const ARCHITECTURE_DECISION_GATE_STATUS_WATCHING = 'watching';
+const ARCHITECTURE_DECISION_GATE_TRIGGER_NONE = 'none';
+const ARCHITECTURE_DECISION_GATE_TRIGGER_ARCHITECTURE_GAP =
+  'architecture-gap';
+const ARCHITECTURE_DECISION_GATE_TRIGGER_FRONTIER_OSCILLATION =
+  'frontier-oscillation';
+const ARCHITECTURE_DECISION_GATE_ROUTE_CONTINUE_LOCAL_PROOF =
+  'continue-local-proof';
+const ARCHITECTURE_DECISION_GATE_ROUTE_OWNER_BOUNDARY_MIGRATION =
+  'owner-boundary-migration';
+const ARCHITECTURE_DECISION_GATE_ROUTE_ARCHITECTURE_PACKAGE =
+  'architecture-package';
+const ARCHITECTURE_DECISION_GATE_ROUTE_HUMAN_ESCALATION =
+  'human-escalation';
+const ARCHITECTURE_DECISION_GATE_STATUSES = Object.freeze([
+  ARCHITECTURE_DECISION_GATE_STATUS_NOT_REQUIRED,
+  ARCHITECTURE_DECISION_GATE_STATUS_REQUIRED,
+  ARCHITECTURE_DECISION_GATE_STATUS_PRESENTED,
+  ARCHITECTURE_DECISION_GATE_STATUS_SELECTED,
+  ARCHITECTURE_DECISION_GATE_STATUS_WATCHING,
+]);
+const ARCHITECTURE_DECISION_GATE_TRIGGERS = Object.freeze([
+  ARCHITECTURE_DECISION_GATE_TRIGGER_NONE,
+  ARCHITECTURE_DECISION_GATE_TRIGGER_ARCHITECTURE_GAP,
+  ARCHITECTURE_DECISION_GATE_TRIGGER_FRONTIER_OSCILLATION,
+]);
+const ARCHITECTURE_DECISION_GATE_ROUTES = Object.freeze([
+  ARCHITECTURE_DECISION_GATE_ROUTE_CONTINUE_LOCAL_PROOF,
+  ARCHITECTURE_DECISION_GATE_ROUTE_OWNER_BOUNDARY_MIGRATION,
+  ARCHITECTURE_DECISION_GATE_ROUTE_ARCHITECTURE_PACKAGE,
+  ARCHITECTURE_DECISION_GATE_ROUTE_HUMAN_ESCALATION,
+]);
+const ARCHITECTURE_DECISION_GATE_CHOICE_ID_LOCAL_PROOF =
+  'continue-local-proof';
+const ARCHITECTURE_DECISION_GATE_CHOICE_ID_MIGRATE_OWNER =
+  'migrate-owner-boundary';
+const ARCHITECTURE_DECISION_GATE_CHOICE_ID_ARCHITECTURE_PACKAGE =
+  'open-architecture-package';
+const ARCHITECTURE_DECISION_GATE_CHOICE_ID_HUMAN_ESCALATION =
+  'human-escalation';
+const ARCHITECTURE_DECISION_GATE_NEXT_ACTION_PRESENT =
+  'Present concrete architecture choices to the human before runtime implementation.';
+const ARCHITECTURE_DECISION_GATE_NEXT_ACTION_SELECT =
+  'Wait for a human-selected architecture route before runtime implementation.';
+const ARCHITECTURE_DECISION_GATE_NEXT_ACTION_WATCH =
+  'Watch for repeated frontier oscillation and escalate if another local proof returns here.';
 const MODEL_FIT_EMPTY_VALUE_PATTERN = /^(?:none|n\/a|na|unknown|tbd|todo)$/iu;
 const MODEL_FIT_FOCUSED_PROOF_COMMAND_PATTERN = new RegExp(
   '\\b(?:npm\\s+(?:--silent\\s+)?run|npm\\s+test|' +
@@ -342,6 +393,7 @@ const CLI_FLAG_FIX_DRY_RUN = '--fix-dry-run';
 const CLI_FLAG_ENTRY = '--entry';
 const CLI_FLAG_PRE_IMPL = '--pre-impl';
 const CLI_FLAG_CLOSURE = '--closure';
+const CLI_FLAG_TRANSACTION = '--transaction';
 const CLI_COMMAND_CURRENT_BLOCKER = 'current-blocker';
 const CLI_COMMAND_VALIDATE = 'validate';
 const CLI_COMMAND_DOCTOR = 'doctor';
@@ -364,9 +416,9 @@ function printUsage() {
     '  node scripts/work-tracker.js current-blocker [--write]',
     '  node scripts/work-tracker.js validate [--entry|--pre-impl|--closure] [--all] [paths...]',
     '  node scripts/work-tracker.js doctor [package]',
-    '  node scripts/work-tracker.js close <package> [--write]',
-    '  node scripts/work-tracker.js migrate <package> <successor> [--write]',
-    '  node scripts/work-tracker.js move <package> --to <status> [--write]',
+    '  node scripts/work-tracker.js close <package> [--write] [--transaction]',
+    '  node scripts/work-tracker.js migrate <package> <successor> [--write] [--transaction]',
+    '  node scripts/work-tracker.js move <package> --to <status> [--write] [--transaction]',
   ].join(NEWLINE));
 }
 
@@ -1851,6 +1903,358 @@ export function validateFrontierOscillationContract(
   return errors;
 }
 
+function scenarioClosureStopCondition(metadata = {}) {
+  return normalizeLedgerText(
+    metadata?.[SCENARIO_CAUSAL_CLOSURE_METADATA_FIELD]?.[
+      SCENARIO_CAUSAL_CLOSURE_STOP_CONDITION_FIELD
+    ],
+  ).toLowerCase();
+}
+
+function representativeOutcome(metadata = {}) {
+  return normalizeLedgerText(
+    metadata?.[CAUSAL_GOVERNANCE_METADATA_FIELD]?.[
+      CAUSAL_GOVERNANCE_REPRESENTATIVE_OUTCOME_FIELD
+    ],
+  ).toLowerCase();
+}
+
+function metadataHasArchitectureGap(metadata = {}) {
+  return scenarioClosureResult(metadata) ===
+      ARCHITECTURE_DECISION_GATE_TRIGGER_ARCHITECTURE_GAP ||
+    scenarioClosureStopCondition(metadata) === 'architecture-gap-stop' ||
+    representativeOutcome(metadata) ===
+      ARCHITECTURE_DECISION_GATE_TRIGGER_ARCHITECTURE_GAP;
+}
+
+function architectureGateEvidence(metadata = {}, trigger = EMPTY_TEXT, detection = null) {
+  if (trigger === ARCHITECTURE_DECISION_GATE_TRIGGER_FRONTIER_OSCILLATION) {
+    return [
+      detection?.reason || 'frontier oscillation detected',
+      ...(detection?.relatedEntries || []).map(frontierHistoryEntrySummary),
+    ].filter((value) => normalizeLedgerText(value).length > NUM_ZERO);
+  }
+  const closure = metadata?.[SCENARIO_CAUSAL_CLOSURE_METADATA_FIELD] || {};
+  return [
+    scenarioClosureResult(metadata) ?
+      `scenario result classification: ${scenarioClosureResult(metadata)}` :
+      EMPTY_TEXT,
+    scenarioClosureStopCondition(metadata) ?
+      `scenario stop condition: ${scenarioClosureStopCondition(metadata)}` :
+      EMPTY_TEXT,
+    normalizeLedgerText(closure[SCENARIO_CAUSAL_CLOSURE_MISSING_EDGE_FIELD]),
+    normalizeLedgerText(closure[SCENARIO_CAUSAL_CLOSURE_MISSING_EDGE_PROBE_FIELD]),
+  ].filter((value) => normalizeLedgerText(value).length > NUM_ZERO);
+}
+
+function architectureGateProof(metadata = {}) {
+  const proof = Array.isArray(metadata?.proof) ? metadata.proof : [];
+  const probe = normalizeLedgerText(
+    metadata?.[SCENARIO_CAUSAL_CLOSURE_METADATA_FIELD]?.[
+      SCENARIO_CAUSAL_CLOSURE_MISSING_EDGE_PROBE_FIELD
+    ],
+  );
+  return [...new Set([...proof, probe].filter((value) =>
+    normalizeLedgerText(value).length > NUM_ZERO))];
+}
+
+function architectureGateChoices(metadata = {}) {
+  const proof = architectureGateProof(metadata);
+  const proofOrFallback = proof.length > NUM_ZERO ? proof : [
+    CURRENT_BLOCKER_REPAIR_COMMAND,
+  ];
+  return [
+    {
+      id: ARCHITECTURE_DECISION_GATE_CHOICE_ID_LOCAL_PROOF,
+      summary: 'Continue with a bounded local proof if the missing edge stays inside this owner boundary.',
+      route: ARCHITECTURE_DECISION_GATE_ROUTE_CONTINUE_LOCAL_PROOF,
+      proof: proofOrFallback,
+    },
+    {
+      id: ARCHITECTURE_DECISION_GATE_CHOICE_ID_MIGRATE_OWNER,
+      summary: 'Migrate the active package to the owner boundary named by the first frontier evidence.',
+      route: ARCHITECTURE_DECISION_GATE_ROUTE_OWNER_BOUNDARY_MIGRATION,
+      proof: proofOrFallback,
+    },
+    {
+      id: ARCHITECTURE_DECISION_GATE_CHOICE_ID_ARCHITECTURE_PACKAGE,
+      summary: 'Open a bounded architecture package for the missing owner contract.',
+      route: ARCHITECTURE_DECISION_GATE_ROUTE_ARCHITECTURE_PACKAGE,
+      proof: proofOrFallback,
+    },
+    {
+      id: ARCHITECTURE_DECISION_GATE_CHOICE_ID_HUMAN_ESCALATION,
+      summary: 'Escalate to a human choice before creating or changing runtime packages.',
+      route: ARCHITECTURE_DECISION_GATE_ROUTE_HUMAN_ESCALATION,
+      proof: proofOrFallback,
+    },
+  ];
+}
+
+function normalizeArchitectureGateChoice(choice = {}) {
+  return {
+    id: normalizeLedgerText(choice.id),
+    summary: normalizeLedgerText(choice.summary),
+    route: normalizeLedgerText(choice.route),
+    proof: Array.isArray(choice.proof) ? choice.proof.map(normalizeLedgerText)
+      .filter((value) => value.length > NUM_ZERO) : [],
+  };
+}
+
+function normalizeArchitectureDecisionGate(gate = {}, metadata = {}) {
+  const choices = Array.isArray(gate.choices) ?
+    gate.choices.map(normalizeArchitectureGateChoice) :
+    architectureGateChoices(metadata);
+  return {
+    status: normalizeLedgerText(gate.status) ||
+      ARCHITECTURE_DECISION_GATE_STATUS_REQUIRED,
+    trigger: normalizeLedgerText(gate.trigger) ||
+      ARCHITECTURE_DECISION_GATE_TRIGGER_ARCHITECTURE_GAP,
+    triggerEvidence: Array.isArray(gate.triggerEvidence) ?
+      gate.triggerEvidence.map(normalizeLedgerText)
+        .filter((value) => value.length > NUM_ZERO) :
+      architectureGateEvidence(metadata),
+    choices,
+    selectedChoice: gate.selectedChoice === null ? null :
+      normalizeLedgerText(gate.selectedChoice) || null,
+    nextAction: normalizeLedgerText(gate.nextAction) ||
+      ARCHITECTURE_DECISION_GATE_NEXT_ACTION_PRESENT,
+  };
+}
+
+export function buildArchitectureDecisionGatePayload(
+  metadata = {},
+  filePath = EMPTY_TEXT,
+  options = {},
+) {
+  const existingGate = metadata?.[ARCHITECTURE_DECISION_GATE_FIELD];
+  if (isObjectRecord(existingGate)) {
+    return normalizeArchitectureDecisionGate(existingGate, metadata);
+  }
+
+  if (metadataHasArchitectureGap(metadata)) {
+    return {
+      status: ARCHITECTURE_DECISION_GATE_STATUS_REQUIRED,
+      trigger: ARCHITECTURE_DECISION_GATE_TRIGGER_ARCHITECTURE_GAP,
+      triggerEvidence: architectureGateEvidence(
+        metadata,
+        ARCHITECTURE_DECISION_GATE_TRIGGER_ARCHITECTURE_GAP,
+      ),
+      choices: architectureGateChoices(metadata),
+      selectedChoice: null,
+      nextAction: ARCHITECTURE_DECISION_GATE_NEXT_ACTION_PRESENT,
+    };
+  }
+
+  const detection = detectFrontierOscillation(
+    metadata,
+    filePath,
+    options.packageHistoryEntries || [],
+  );
+  if (detection) {
+    return {
+      status: ARCHITECTURE_DECISION_GATE_STATUS_WATCHING,
+      trigger: ARCHITECTURE_DECISION_GATE_TRIGGER_FRONTIER_OSCILLATION,
+      triggerEvidence: architectureGateEvidence(
+        metadata,
+        ARCHITECTURE_DECISION_GATE_TRIGGER_FRONTIER_OSCILLATION,
+        detection,
+      ),
+      choices: architectureGateChoices(metadata),
+      selectedChoice: null,
+      nextAction: ARCHITECTURE_DECISION_GATE_NEXT_ACTION_WATCH,
+    };
+  }
+
+  return {
+    status: ARCHITECTURE_DECISION_GATE_STATUS_NOT_REQUIRED,
+    trigger: ARCHITECTURE_DECISION_GATE_TRIGGER_NONE,
+    triggerEvidence: [],
+    choices: [],
+    selectedChoice: null,
+    nextAction: 'No architecture decision gate is required for this package.',
+  };
+}
+
+function validateArchitectureGateConcreteText(filePath, fieldName, value) {
+  const normalized = normalizeLedgerText(value);
+  if (
+    normalized.length === NUM_ZERO ||
+    MODEL_FIT_EMPTY_VALUE_PATTERN.test(normalized) ||
+    LEDGER_TEMPLATE_PLACEHOLDER_PATTERN.test(normalized) ||
+    normalized.includes(LEDGER_PENDING_BEFORE_IMPLEMENTATION_MARKER)
+  ) {
+    return [
+      `${filePath}: architectureDecisionGate.${fieldName} must be a concrete value.`,
+    ];
+  }
+  return [];
+}
+
+function validateArchitectureGateChoices(filePath, choices = []) {
+  if (!Array.isArray(choices) || choices.length === NUM_ZERO) {
+    return [
+      `${filePath}: architectureDecisionGate choices must present concrete architecture choices.`,
+    ];
+  }
+  const errors = [];
+  for (let index = NUM_ZERO; index < choices.length; index += NUM_ONE) {
+    const choice = choices[index];
+    if (!isObjectRecord(choice)) {
+      errors.push(
+        `${filePath}: architectureDecisionGate.choices[${index}] must be an object.`,
+      );
+      continue;
+    }
+    for (const fieldName of ['id', 'summary', 'route']) {
+      errors.push(...validateArchitectureGateConcreteText(
+        filePath,
+        `choices[${index}].${fieldName}`,
+        choice[fieldName],
+      ));
+    }
+    const route = normalizeLedgerText(choice.route);
+    if (
+      route.length > NUM_ZERO &&
+      !ARCHITECTURE_DECISION_GATE_ROUTES.includes(route)
+    ) {
+      errors.push(
+        `${filePath}: architectureDecisionGate.choices[${index}].route ` +
+        `must be one of ${ARCHITECTURE_DECISION_GATE_ROUTES.join(', ')}.`,
+      );
+    }
+    if (!Array.isArray(choice.proof) || choice.proof.length === NUM_ZERO) {
+      errors.push(
+        `${filePath}: architectureDecisionGate.choices[${index}].proof ` +
+        'must name at least one focused proof command or artifact.',
+      );
+      continue;
+    }
+    for (let proofIndex = NUM_ZERO; proofIndex < choice.proof.length; proofIndex += NUM_ONE) {
+      errors.push(...validateArchitectureGateConcreteText(
+        filePath,
+        `choices[${index}].proof[${proofIndex}]`,
+        choice.proof[proofIndex],
+      ));
+    }
+  }
+  return errors;
+}
+
+function validateArchitectureGateSelectedChoice(filePath, gate) {
+  const selectedChoice = normalizeLedgerText(gate.selectedChoice);
+  if (selectedChoice.length === NUM_ZERO) {
+    return [
+      `${filePath}: architectureDecisionGate.selectedChoice must name the human-selected architecture route.`,
+    ];
+  }
+  const choices = Array.isArray(gate.choices) ? gate.choices : [];
+  const selected = choices.find((choice) =>
+    isObjectRecord(choice) && normalizeLedgerText(choice.id) === selectedChoice);
+  if (!selected) {
+    return [
+      `${filePath}: architectureDecisionGate.selectedChoice must match a concrete choice id.`,
+    ];
+  }
+  return validateArchitectureGateChoices(filePath, [selected]);
+}
+
+export function validateArchitectureDecisionGateContract(
+  metadata,
+  filePath,
+  options = {},
+) {
+  const fileStatus = options.status || normalizeLedgerText(metadata?.status);
+  const phase = options.phase || VALIDATION_PHASE_PRE_IMPL;
+  const gate = metadata?.[ARCHITECTURE_DECISION_GATE_FIELD];
+  const requiresGate = metadataHasArchitectureGap(metadata);
+  if (!gate) {
+    return requiresGate ? [
+      `${filePath}: metadata architectureDecisionGate is required because ` +
+      'scenario evidence classified an architecture-gap; present concrete ' +
+      'architecture choices before implementation.',
+    ] : [];
+  }
+  if (!isObjectRecord(gate)) {
+    return [`${filePath}: metadata architectureDecisionGate must be an object.`];
+  }
+
+  const errors = [];
+  const status = normalizeLedgerText(gate.status);
+  const trigger = normalizeLedgerText(gate.trigger);
+  if (!ARCHITECTURE_DECISION_GATE_STATUSES.includes(status)) {
+    errors.push(
+      `${filePath}: architectureDecisionGate.status must be one of ` +
+      `${ARCHITECTURE_DECISION_GATE_STATUSES.join(', ')}.`,
+    );
+  }
+  if (!ARCHITECTURE_DECISION_GATE_TRIGGERS.includes(trigger)) {
+    errors.push(
+      `${filePath}: architectureDecisionGate.trigger must be one of ` +
+      `${ARCHITECTURE_DECISION_GATE_TRIGGERS.join(', ')}.`,
+    );
+  }
+  if (
+    trigger !== ARCHITECTURE_DECISION_GATE_TRIGGER_NONE &&
+    (!Array.isArray(gate.triggerEvidence) ||
+      gate.triggerEvidence.length === NUM_ZERO)
+  ) {
+    errors.push(
+      `${filePath}: architectureDecisionGate.triggerEvidence must record ` +
+      'why the gate is active.',
+    );
+  }
+  if (Array.isArray(gate.triggerEvidence)) {
+    for (let index = NUM_ZERO; index < gate.triggerEvidence.length; index += NUM_ONE) {
+      errors.push(...validateArchitectureGateConcreteText(
+        filePath,
+        `triggerEvidence[${index}]`,
+        gate.triggerEvidence[index],
+      ));
+    }
+  }
+  if (
+    status === ARCHITECTURE_DECISION_GATE_STATUS_REQUIRED ||
+    status === ARCHITECTURE_DECISION_GATE_STATUS_PRESENTED ||
+    status === ARCHITECTURE_DECISION_GATE_STATUS_SELECTED
+  ) {
+    errors.push(...validateArchitectureGateChoices(filePath, gate.choices));
+  }
+  if (status === ARCHITECTURE_DECISION_GATE_STATUS_SELECTED) {
+    errors.push(...validateArchitectureGateSelectedChoice(filePath, gate));
+  }
+  if (
+    status === ARCHITECTURE_DECISION_GATE_STATUS_REQUIRED &&
+    phase === VALIDATION_PHASE_PRE_IMPL &&
+    fileStatus === STATUS_ACTIVE
+  ) {
+    errors.push(
+      `${filePath}: architectureDecisionGate status is required; present ` +
+      'concrete architecture choices before implementation.',
+    );
+  }
+  if (
+    status === ARCHITECTURE_DECISION_GATE_STATUS_PRESENTED &&
+    phase === VALIDATION_PHASE_PRE_IMPL &&
+    fileStatus === STATUS_ACTIVE
+  ) {
+    errors.push(
+      `${filePath}: architectureDecisionGate status is presented; runtime ` +
+      'implementation is blocked until a human-selected architecture route is recorded.',
+    );
+  }
+  if (
+    requiresGate &&
+    status === ARCHITECTURE_DECISION_GATE_STATUS_NOT_REQUIRED
+  ) {
+    errors.push(
+      `${filePath}: architectureDecisionGate cannot be not-required when ` +
+      'scenario evidence classified an architecture-gap.',
+    );
+  }
+  return errors;
+}
+
 function normalizeCliPath(filePath) {
   return path.normalize(
     path.isAbsolute(filePath) ? filePath : path.join(process.cwd(), filePath),
@@ -1908,7 +2312,7 @@ async function listPackageFiles() {
   return listMarkdownFiles(WORK_PACKAGES_DIR);
 }
 
-async function collectPackageHistoryEntries() {
+export async function collectPackageHistoryEntries() {
   const packageFiles = await listPackageFiles();
   const entries = [];
   for (const filePath of packageFiles) {
@@ -2250,6 +2654,15 @@ async function validatePackageFile(filePath, options = {}) {
       status: fileStatus,
     },
   ));
+  errors.push(...validateArchitectureDecisionGateContract(
+    metadata,
+    relativePath,
+    {
+      phase,
+      packageHistoryEntries: options.packageHistoryEntries || [],
+      status: fileStatus,
+    },
+  ));
   const requiresCommitLedger =
     metadata !== null &&
     metadata[METADATA_COMMIT_AND_PUSH_LEDGER_REQUIRED] === true;
@@ -2295,14 +2708,7 @@ async function resolveValidationTargets(args) {
   const activePackages = packageFiles.filter((filePath) =>
     getPackageStatusFromPath(filePath) === STATUS_ACTIVE,
   );
-  const metadataPackages = [];
-  for (const filePath of packageFiles) {
-    const content = await readTextFile(filePath);
-    if (parsePackageMetadata(content, normalizeRelativePath(filePath))) {
-      metadataPackages.push(filePath);
-    }
-  }
-  return [...new Set([...activePackages, ...metadataPackages])];
+  return activePackages;
 }
 
 function hasExplicitValidationTargets(args) {
@@ -2620,6 +3026,7 @@ async function validateCurrentBlockerFreshness() {
           activeSprintFile,
           activePackageFile,
           metadata,
+          {packageHistoryEntries: await collectPackageHistoryEntries()},
         );
         errors.push(...validateCurrentBlockerPayloadFreshness(
           currentBlocker,
@@ -2801,6 +3208,12 @@ function buildDoctorSuggestion(error) {
       '`handoffInvariant`, and prove the producer-consumer missing edge before ' +
       'another local runtime patch.';
   }
+  if (/architectureDecisionGate/iu.test(error)) {
+    return 'Record `architectureDecisionGate` with concrete choices, proof, ' +
+      'and a selected human route before runtime implementation resumes. Use ' +
+      '`work:package:new -- --from-artifact <artifact>` for bounded successor ' +
+      'scaffolding when the route is a new package.';
+  }
   return EMPTY_TEXT;
 }
 
@@ -2904,6 +3317,15 @@ export function buildPackageDoctorLines(filePath, content, options = {}) {
     metadata,
     relativePath,
     {
+      packageHistoryEntries: options.packageHistoryEntries || [],
+      status: fileStatus,
+    },
+  ));
+  errors.push(...validateArchitectureDecisionGateContract(
+    metadata,
+    relativePath,
+    {
+      phase,
       packageHistoryEntries: options.packageHistoryEntries || [],
       status: fileStatus,
     },
@@ -3051,6 +3473,7 @@ export function buildCurrentBlockerPayload(
   activeSprintFile,
   activePackageFile,
   metadata,
+  options = {},
 ) {
   const legacyTouchedFiles = metadataArray(metadata, 'touchedFiles');
   const writeScope = metadataScopeArray(
@@ -3096,6 +3519,11 @@ export function buildCurrentBlockerPayload(
     ) ? metadata[REPRESENTATIVE_RESIDUAL_METADATA_FIELD] : {},
     causalGovernance: metadata.causalGovernance || {},
     scenarioCausalClosure: metadata.scenarioCausalClosure || {},
+    architectureDecisionGate: buildArchitectureDecisionGatePayload(
+      metadata,
+      activePackageFile,
+      options,
+    ),
     predecessor: metadata.predecessor || null,
   };
 }
@@ -3105,6 +3533,17 @@ function formatMarkdownList(values) {
     return '1. None recorded';
   }
   return values.map((value, index) => `${index + NUM_ONE}. \`${value}\``).join(NEWLINE);
+}
+
+function formatArchitectureGateChoices(choices) {
+  if (!Array.isArray(choices) || choices.length === NUM_ZERO) {
+    return '1. None recorded';
+  }
+  return choices.map((choice, index) =>
+    `${index + NUM_ONE}. \`${choice.id || DEFAULT_UNKNOWN}\` ` +
+    `route=\`${choice.route || DEFAULT_UNKNOWN}\` - ` +
+    `${choice.summary || DEFAULT_UNKNOWN}`,
+  ).join(NEWLINE);
 }
 
 export function renderCurrentBlockerMarkdown(payload) {
@@ -3262,6 +3701,26 @@ export function renderCurrentBlockerMarkdown(payload) {
     'Handoff invariant: ' +
       `\`${payload.scenarioCausalClosure?.handoffInvariant || DEFAULT_UNKNOWN}\``,
     '',
+    '## Architecture Decision Gate',
+    '',
+    `Status: \`${payload.architectureDecisionGate?.status || DEFAULT_UNKNOWN}\``,
+    '',
+    `Trigger: \`${payload.architectureDecisionGate?.trigger || DEFAULT_UNKNOWN}\``,
+    '',
+    'Trigger evidence:',
+    '',
+    formatMarkdownList(payload.architectureDecisionGate?.triggerEvidence || []),
+    '',
+    'Choices:',
+    '',
+    formatArchitectureGateChoices(payload.architectureDecisionGate?.choices || []),
+    '',
+    'Selected choice: ' +
+      `\`${payload.architectureDecisionGate?.selectedChoice || DEFAULT_UNKNOWN}\``,
+    '',
+    'Gate next action: ' +
+      `${payload.architectureDecisionGate?.nextAction || DEFAULT_UNKNOWN}`,
+    '',
     '## Scope',
     '',
     'Write scope:',
@@ -3311,6 +3770,7 @@ async function currentBlockerCommand(args) {
     );
   }
   const relativePackagePath = normalizeRelativePath(activePackageFile);
+  const packageHistoryEntries = await collectPackageHistoryEntries();
   const generationErrors = [
     ...validatePackageMetadataShape(relativePackagePath, STATUS_ACTIVE, metadata),
     ...validateCausalGovernanceContract(metadata, relativePackagePath, {
@@ -3329,6 +3789,7 @@ async function currentBlockerCommand(args) {
     activeSprintFile,
     activePackageFile,
     metadata,
+    {packageHistoryEntries},
   );
   const jsonContent = `${JSON.stringify(payload, null, NUM_TWO)}${NEWLINE}`;
   const markdownContent = renderCurrentBlockerMarkdown(payload);
@@ -3384,6 +3845,46 @@ async function rewriteWorkReferences(oldPackagePath, newPackagePath) {
   }
 }
 
+async function regenerateCurrentBlockerWhenActivePackageExists() {
+  const activeSprintFile = await findActiveSprintFile();
+  if (!activeSprintFile) {
+    return false;
+  }
+  const activePackageFile = await findActivePackageFile(activeSprintFile);
+  if (!activePackageFile) {
+    return false;
+  }
+  await currentBlockerCommand([CLI_FLAG_WRITE]);
+  return true;
+}
+
+function validationPhaseForTargetStatus(targetStatus) {
+  return targetStatus === STATUS_DONE || targetStatus === STATUS_SUPERSEDED ?
+    VALIDATION_PHASE_CLOSURE :
+    VALIDATION_PHASE_PRE_IMPL;
+}
+
+async function writeValidatedMovedPackage(
+  packagePath,
+  targetPath,
+  nextContent,
+  targetStatus,
+) {
+  if (await pathExists(targetPath)) {
+    throw new Error(`${normalizeRelativePath(targetPath)} already exists.`);
+  }
+  await writeTextFile(targetPath, nextContent);
+  const validation = await validatePackageFile(targetPath, {
+    phase: validationPhaseForTargetStatus(targetStatus),
+    packageHistoryEntries: await collectPackageHistoryEntries(),
+  });
+  if (validation.errors.length > NUM_ZERO) {
+    await fs.rm(targetPath, {force: true});
+    throw new Error(validation.errors.join(NEWLINE));
+  }
+  await fs.unlink(packagePath);
+}
+
 async function movePackageCommand(args, fallbackTargetStatus, requiresSuccessor) {
   const packageArg = args.find((arg) => !arg.startsWith('--'));
   if (!packageArg) {
@@ -3421,8 +3922,8 @@ async function movePackageCommand(args, fallbackTargetStatus, requiresSuccessor)
     }
     return;
   }
-  if (metadata) {
-    const nextMetadata = {
+  const nextContent = metadata ?
+    replacePackageMetadata(content, {
       ...metadata,
       status: targetStatus,
       ...(targetStatus === STATUS_DONE || targetStatus === STATUS_SUPERSEDED ?
@@ -3433,11 +3934,31 @@ async function movePackageCommand(args, fallbackTargetStatus, requiresSuccessor)
         [METADATA_COMMIT_AND_PUSH_LEDGER_REQUIRED]: true} :
         {}),
       ...(successorPath ? {successor: successorPath} : {}),
-    };
-    await writeTextFile(packagePath, replacePackageMetadata(content, nextMetadata));
+    }) :
+    content;
+  if (args.includes(CLI_FLAG_TRANSACTION)) {
+    await writeValidatedMovedPackage(
+      packagePath,
+      targetPath,
+      nextContent,
+      targetStatus,
+    );
+  } else {
+    if (metadata) {
+      await writeTextFile(packagePath, nextContent);
+    }
+    await fs.rename(packagePath, targetPath);
   }
-  await fs.rename(packagePath, targetPath);
   await rewriteWorkReferences(packagePath, targetPath);
+  if (args.includes(CLI_FLAG_TRANSACTION)) {
+    const regenerated = await regenerateCurrentBlockerWhenActivePackageExists();
+    if (regenerated) {
+      const freshnessErrors = await validateCurrentBlockerFreshness();
+      if (freshnessErrors.length > NUM_ZERO) {
+        throw new Error(freshnessErrors.join(NEWLINE));
+      }
+    }
+  }
   console.log(
     `Moved ${normalizeRelativePath(packagePath)} to ${normalizeRelativePath(targetPath)}.`,
   );

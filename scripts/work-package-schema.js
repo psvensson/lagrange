@@ -49,6 +49,25 @@ const SCENARIO_CAUSAL_CLOSURE_OSCILLATION_CHECK_FIELD =
   'oscillationCheck';
 const SCENARIO_CAUSAL_CLOSURE_HANDOFF_INVARIANT_FIELD =
   'handoffInvariant';
+const ARCHITECTURE_DECISION_GATE_FIELD = 'architectureDecisionGate';
+const ARCHITECTURE_DECISION_GATE_STATUSES = Object.freeze([
+  'not-required',
+  'required',
+  'presented',
+  'selected',
+  'watching',
+]);
+const ARCHITECTURE_DECISION_GATE_TRIGGERS = Object.freeze([
+  'none',
+  'architecture-gap',
+  'frontier-oscillation',
+]);
+const ARCHITECTURE_DECISION_GATE_ROUTES = Object.freeze([
+  'continue-local-proof',
+  'owner-boundary-migration',
+  'architecture-package',
+  'human-escalation',
+]);
 const VALIDATION_PHASE_ENTRY = 'entry';
 const VALIDATION_PHASE_PRE_IMPL = 'pre-impl';
 const VALIDATION_PHASE_CLOSURE = 'closure';
@@ -313,6 +332,22 @@ function renderSchemaReference() {
     EMPTY_TEXT,
     renderEnumList(SCENARIO_CAUSAL_CLOSURE_FRONTIER_OSCILLATION_FIELDS),
     EMPTY_TEXT,
+    '## Architecture Decision Gate',
+    EMPTY_TEXT,
+    `- Metadata field: \`${ARCHITECTURE_DECISION_GATE_FIELD}\``,
+    EMPTY_TEXT,
+    'Statuses:',
+    EMPTY_TEXT,
+    renderEnumList(ARCHITECTURE_DECISION_GATE_STATUSES),
+    EMPTY_TEXT,
+    'Triggers:',
+    EMPTY_TEXT,
+    renderEnumList(ARCHITECTURE_DECISION_GATE_TRIGGERS),
+    EMPTY_TEXT,
+    'Routes:',
+    EMPTY_TEXT,
+    renderEnumList(ARCHITECTURE_DECISION_GATE_ROUTES),
+    EMPTY_TEXT,
     '## Bounded Progress Mechanisms',
     EMPTY_TEXT,
     renderEnumList(SCENARIO_CAUSAL_CLOSURE_PROGRESS_MECHANISMS),
@@ -329,6 +364,10 @@ if (isDirectRun()) {
 }
 
 export {
+  ARCHITECTURE_DECISION_GATE_FIELD,
+  ARCHITECTURE_DECISION_GATE_ROUTES,
+  ARCHITECTURE_DECISION_GATE_STATUSES,
+  ARCHITECTURE_DECISION_GATE_TRIGGERS,
   CAUSAL_GOVERNANCE_PENDING_OUTCOME,
   CAUSAL_GOVERNANCE_VALID_OUTCOMES,
   DEFAULT_MODEL_FIT_BY_LANE,

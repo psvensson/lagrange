@@ -22,11 +22,11 @@ Boundary: `snapshot_coverage`
 
 Dominant reason: `owner_reconcile_pending`
 
-Current state: Publication and priority-recovery owner slices are now classification-only or bounded by focused proof. The same representative artifact still exposes deferred startup_active_gate_owner / snapshot_coverage evidence: snapshotCoverageNodeCount=3 of expectedNodeCount=5, publicationActiveGateHandoffState=pending, publicationActiveGateHandoffReasonCode=owner_reconcile_pending, nextAction=reconcile_owner_membership_publication, and two pending reconcile nodes 11601fe0-72d6-5853-8590-ec2881853e72 and 35a891b8-c1a0-5064-9c6e-2acfba61c2a7.
+Current state: Focused proof is classification-only for the deferred startup_active_gate_owner / snapshot_coverage evidence. The reference artifact still shows snapshotCoverageNodeCount=3 of expectedNodeCount=5, publicationActiveGateHandoffState=pending, publicationActiveGateHandoffReasonCode=owner_reconcile_pending, nextAction=reconcile_owner_membership_publication, runtimePromotionAllowed=false, and two pending reconcile nodes 11601fe0-72d6-5853-8590-ec2881853e72 and 35a891b8-c1a0-5064-9c6e-2acfba61c2a7; the focused admin regression proves the existing OPEN-publication flattened active-gate handoff path queues the narrow owner reconcile and surfaces a bounded write_deferred owner outcome without local promotion, publication-truth conversion, or a visibility rebuild.
 
 ## Next Action
 
-Re-enter startup_active_gate_owner / snapshot_coverage from the same representative artifact after publication and priority-recovery backpressure were classified as bounded. Use canonical active-gate evidence to decide whether the pending owner reconcile nodes should advance, classify as bounded, or migrate; keep publication and priority-recovery owner code frozen unless fresh evidence selects them.
+Stop runtime edits for this same-artifact active-gate handoff slice. Treat the two pending active-gate owner reconcile nodes as advancing through the existing bounded owner-command queue; parent closure may record the implementation subagent ledger, then keep publication, priority-recovery, timeout, admission, readiness, selected-source timeout, workflow_progress, and rebalancer_handoff frozen unless fresh canonical evidence selects them.
 
 ## Proof Ladder
 
@@ -36,6 +36,11 @@ Re-enter startup_active_gate_owner / snapshot_coverage from the same representat
 4. `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-publication-handoff-edge-20260517T171610Z.report.json`
 5. `npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-publication-handoff-edge-20260517T171610Z.report.json`
 6. `npm run analyze:owner-files -- startup_active_gate_owner snapshot_coverage`
+7. `npx tap --grep "AdminControlSnapshot no-attempt path queues flattened OPEN active-gate handoff reconcile" test/admin/admin-control-snapshot.test.js`
+8. `npx tap --grep "publication active-gate selector accepts flattened active-gate progress handoff" test/control-plane/publication-active-gate-handoff-contract.test.js`
+9. `node scripts/check-guideline-literals.js test/admin/admin-control-snapshot.test.js`
+10. `node scripts/check-guideline-decision-boundaries.js test/admin/admin-control-snapshot.test.js`
+11. `node scripts/check-guideline-constant-names.js test/admin/admin-control-snapshot.test.js`
 
 ## Model Fit
 
@@ -56,7 +61,7 @@ Escalation triggers:
 
 ## Representative Residual
 
-Status: `live-red-scenario-release-gate`
+Status: `classification-only-focused-proof`
 
 Scenario: `rolling-restart`
 
@@ -70,7 +75,7 @@ Boundary: `snapshot_coverage`
 
 Dominant reason: `owner_reconcile_pending`
 
-Next action: `Use the active-gate handoff probe to decide whether the two pending owner reconcile nodes should advance, classify as bounded, or migrate after publication and priority-recovery backpressure classifications.`
+Next action: `Focused proof classifies the two pending owner reconcile nodes as advancing through the existing bounded owner-command queue; representative rolling-restart was not rerun because no runtime code changed.`
 
 ## Causal Governance
 
@@ -78,11 +83,11 @@ Causal hypothesis: `After the publication and priority-recovery slices stopped a
 
 Stop-condition check: `Use work:evidence-summary, topology convergence explain and handoff probes, npm run analyze:causal-model, priority residual extraction, and owner-files before runtime edits; then run required review/fix/implementation subagents before changing promoted runtime files.`
 
-Expected causal-model change: `Reduce publicationActiveGateHandoffPendingReconcileCount below 2, improve snapshotCoverage beyond 3/5, migrate to a genuinely new owner boundary, classify the active-gate owner reconcile wait as bounded, or turn representative rolling-restart green.`
+Expected causal-model change: `Focused proof classifies the active-gate owner reconcile wait as bounded. Representative rolling-restart was not rerun because this package changed only focused regression proof.`
 
-Representative outcome: `pending-before-rerun`
+Representative outcome: `classification-only`
 
-Causal debt: `Publication convergence and priority recovery remain same-artifact classification-only evidence. Timeout budgets, active-gate admission, readiness support, selected-source timeout handling, workflow_progress, and rebalancer_handoff stay frozen unless canonical evidence selects them again.`
+Causal debt: `Publication convergence and priority recovery remain same-artifact classification-only evidence. The active-gate owner-command queue is bounded by focused proof. Timeout budgets, active-gate admission, readiness support, selected-source timeout handling, workflow_progress, and rebalancer_handoff stay frozen unless canonical evidence selects them again.`
 
 Cross-boundary review: `Review the completed rebalancer_handoff and workflow_progress packages before implementation starts; do not reopen topology_publication_owner or operation_workflow_owner inside this package without fresh canonical evidence.`
 
@@ -120,21 +125,21 @@ Missing causal edge: `Determine whether the two pending active-gate owner reconc
 
 Missing causal edge probe: `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-publication-handoff-edge-20260517T171610Z.report.json --handoff-probe`
 
-Bounded progress proof: `Pending before this package. The predecessor rebalancer_handoff package proved duplicate retry-scheduled priority witnesses preserve one bounded remote handoff retry and do not duplicate remote wakes.`
+Bounded progress proof: `Focused proof added in test/admin/admin-control-snapshot.test.js: an OPEN publication with flattened active-gate progress, runtimePromotionAllowed=false, and two pending reconcile nodes queues only the selected owner reconcile cohort, does not rebuild until the owner outcome is visible, preserves original snapshot coverage while reconcile waits, does not convert publication truth locally, and surfaces write_deferred/enqueued owner outcome.`
 
-Bounded progress proof artifact: `work/packages/done-20260517-priority-recovery-rebalancer-handoff-after-workflow-progress-bounded-proof.md`
+Bounded progress proof artifact: `npx tap --grep "AdminControlSnapshot no-attempt path queues flattened OPEN active-gate handoff reconcile" test/admin/admin-control-snapshot.test.js plus npx tap --grep "publication active-gate selector accepts flattened active-gate progress handoff" test/control-plane/publication-active-gate-handoff-contract.test.js`
 
-Expected observable transition: `Reduce pending reconcile count below 2, improve snapshot coverage above 3/5, migrate to a new owner boundary, classify owner_reconcile_pending as bounded, or turn representative rolling-restart green.`
+Expected observable transition: `Focused observable transition: the two pending active-gate owner reconcile nodes advance through the existing bounded owner-command queue without local promotion or runtime changes. Representative transition is classification-only because no runtime file changed and no representative rerun was required.`
 
 Max progress bound: `one focused startup_active_gate_owner / snapshot_coverage owner-reconcile slice`
 
-Same-frontier fallback: `If focused tests pass but canonical evidence remains at active_gate_snapshot_coverage with pendingReconcileCount=2 and coverage 3/5, stop as same-frontier or classification-only instead of reopening frozen publication, priority, timeout-budget, admission, selected-source timeout, workflow_progress, rebalancer_handoff, or readiness edges.`
+Same-frontier fallback: `Applied: canonical evidence remains at active_gate_snapshot_coverage with pendingReconcileCount=2 and coverage 3/5 in the reference artifact, but focused proof shows bounded owner-command queueing for the OPEN-publication flattened handoff shape. Stop as classification-only instead of reopening frozen publication, priority, timeout-budget, admission, selected-source timeout, workflow_progress, rebalancer_handoff, or readiness edges.`
 
 Expected next frontier: `startup_active_gate_owner / snapshot_coverage unless owner reconciliation drains and canonical evidence selects a new boundary`
 
-Result classification: `pending-before-probe`
+Result classification: `classification-only`
 
-Stop condition: `continue-local-fix`
+Stop condition: `classification-only-stop`
 
 Recent frontier history:
 
@@ -146,14 +151,38 @@ Oscillation check: `This successor is allowed because the rebalancer_handoff pac
 
 Handoff invariant: `Topology publication owner, operation workflow owner, timeout budgets, active-gate admission, readiness support, and selected-source timeout handling remain frozen unless canonical evidence selects them again.`
 
+## Architecture Decision Gate
+
+Status: `watching`
+
+Trigger: `frontier-oscillation`
+
+Trigger evidence:
+
+1. `adjacent owner-boundary fixes did not close the representative gate`
+2. `work/packages/done-20260517-topology-publication-convergence-reopened-missing-publication.md / topology_publication_owner / publication_convergence / migrated`
+3. `work/packages/done-20260517-topology-publication-convergence-after-startup-reconcile-migration.md / topology_publication_owner / publication_convergence / migrated`
+
+Choices:
+
+1. `continue-local-proof` route=`continue-local-proof` - Continue with a bounded local proof if the missing edge stays inside this owner boundary.
+2. `migrate-owner-boundary` route=`owner-boundary-migration` - Migrate the active package to the owner boundary named by the first frontier evidence.
+3. `open-architecture-package` route=`architecture-package` - Open a bounded architecture package for the missing owner contract.
+4. `human-escalation` route=`human-escalation` - Escalate to a human choice before creating or changing runtime packages.
+
+Selected choice: `unknown`
+
+Gate next action: Watch for repeated frontier oscillation and escalate if another local proof returns here.
+
 ## Scope
 
 Write scope:
 
 1. `work/packages/active-20260517-startup-active-gate-snapshot-coverage-after-priority-backpressure-classification.md`
-2. `work/sprints/current-blocker.md`
-3. `work/sprints/current-blocker.json`
-4. `work/model-ledger.jsonl`
+2. `test/admin/admin-control-snapshot.test.js`
+3. `work/sprints/current-blocker.md`
+4. `work/sprints/current-blocker.json`
+5. `work/model-ledger.jsonl`
 
 Handoff files:
 
@@ -179,9 +208,10 @@ Candidate runtime files:
 Commit scope:
 
 1. `work/packages/active-20260517-startup-active-gate-snapshot-coverage-after-priority-backpressure-classification.md`
-2. `work/sprints/current-blocker.md`
-3. `work/sprints/current-blocker.json`
-4. `work/model-ledger.jsonl`
+2. `test/admin/admin-control-snapshot.test.js`
+3. `work/sprints/current-blocker.md`
+4. `work/sprints/current-blocker.json`
+5. `work/model-ledger.jsonl`
 
 Legacy touched files:
 
