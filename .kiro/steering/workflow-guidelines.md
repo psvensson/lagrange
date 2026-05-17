@@ -116,13 +116,21 @@ Required:
 1. Active package naming current dominant blocker, semantic owner, and boundary.
 2. Sub-agent sequencing ledger before implementation.
 3. Causal governance fields and scenario causal closure ledger.
-4. Focused missing-edge probe before broad reruns.
-5. Affected presentation tests when reports, active gates, summaries, or
+4. A compact Current Edge Card near the top of the package that names the
+   selected edge, allowed edits, forbidden edits, first proof, and stop modes.
+5. Classification and implementation gates before runtime edits: canonical
+   extractors must agree on owner/boundary/cause, then the package must name
+   exact candidate runtime files and focused proof.
+6. Focused missing-edge probe or replayable fixture before broad reruns or
+   runtime edits. If the selected edge cannot be represented by a focused
+   probe, stop as evidence-incomplete or create tooling before patching.
+7. Affected presentation tests when reports, active gates, summaries, or
    failure bundles consume the changed contract.
-6. Representative scenario or blocker probe after focused proof.
-7. Final classification: representative-green, reduced, same-frontier,
+8. Representative scenario or blocker probe after focused proof.
+9. Final classification: representative-green, reduced, same-frontier,
    migrated, classification-only, architecture-gap, contradictory, or human
-   escalation.
+   escalation. `Reduced` requires a concrete metric delta; `classification-only`
+   must name the accepted bounded/backpressure state and stop reason.
 
 ### Causal Escalation Lane
 
@@ -385,6 +393,56 @@ Required workflow:
    focused owner tests, and affected presentation tests are green.
 9. Frontier oscillation across related packages starts from a causal-escalation
    package, not another local owner-boundary runtime patch.
+
+## LLM Current Edge Card And Trap List
+
+Scenario-driven packages and active sprint snapshots must include a compact
+Current Edge Card that an LLM can keep in working memory without rereading the
+full package history.
+
+The card names:
+
+1. representative artifact
+2. first frontier edge
+3. semantic owner and boundary
+4. selected cause or dominant reason
+5. allowed edits
+6. forbidden edits
+7. required first proof
+8. allowed stop modes
+
+Put forbidden edits before broad in-scope detail when the package is likely to
+tempt widening. For LLMs, "do not edit" boundaries are higher-signal than a long
+positive scope list.
+
+Every scenario package also keeps a short LLM Trap List for sprint-specific
+mistakes that have already caused churn, such as promoting subordinate evidence,
+chasing a downstream consumer before the producer is satisfied, or widening
+timeout budgets to mask a selected owner failure.
+
+Current Edge Card workflow:
+
+1. Run the canonical extractors and fill the card before runtime edits.
+2. Build or identify the replayable owner-decision fixture or narrow blocker
+   probe before runtime edits.
+3. If the fixture/probe is missing, create the fixture/probe or stop as
+   evidence-incomplete. Do not patch runtime from a representative red run
+   alone.
+4. Runtime edits may start only after the classification gate and
+   implementation gate are both satisfied.
+5. After a representative rerun, record the result as one stop mode:
+   `representative-green`, `migrated`, `reduced`, `same-frontier`,
+   `classification-only`, `architecture-gap`, `contradictory`, or
+   `human-escalation`.
+
+Active sprint snapshots keep a compact Frontier Transition Ledger above long
+package history:
+
+| Package | Artifact | First frontier | Metric change | Result |
+| --- | --- | --- | --- | --- |
+
+The ledger is evidence, not a second status system. It exists to help LLMs
+distinguish monotonic reduction from frontier churn.
 
 ## LLM Tool-First Triage
 

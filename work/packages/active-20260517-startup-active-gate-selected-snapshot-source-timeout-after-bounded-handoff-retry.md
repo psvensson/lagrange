@@ -147,6 +147,20 @@ selectedSnapshotTimeoutMs=806
 This package owns the next startup active-gate slice because the selected
 snapshot source times out before handoff evidence can form.
 
+## Current Edge Card
+
+```text
+Representative artifact: test-output/reports/rolling-restart-after-bounded-handoff-retry-20260517T112600Z.report.json
+First frontier: active_gate_snapshot_coverage
+Owner: startup_active_gate_owner
+Boundary: snapshot_coverage
+Selected cause: selected_snapshot_source_timeout
+Allowed edits: selected-source timeout fixture/probe first; runtime edits only after exact files are promoted by that proof
+Forbidden edits: topology_publication_owner, operation_workflow_owner, timeout_budgets, active_gate_admission, publication truth, readiness_support
+Required first proof: npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-bounded-handoff-retry-20260517T112600Z.report.json --explain active_gate_snapshot_coverage
+Allowed stop modes: representative-green, migrated, reduced, same-frontier, classification-only, architecture-gap, human-escalation
+```
+
 ## Scope Basis
 
 Roadmap Phase `0.1 - Internal Coherence`, specifically rolling-restart topology
@@ -186,6 +200,29 @@ Before raw JSON, raw logs, broad file search, oversized segment files, or ad hoc
 
 If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which canonical extractor was tried and why it was insufficient.
 
+## Classification And Implementation Gates
+
+Classification gate before runtime edits:
+
+- [x] Canonical evidence selects `active_gate_snapshot_coverage` under
+      `startup_active_gate_owner / snapshot_coverage`.
+- [x] Subordinate evidence is frozen: publication ACK is satisfied or not
+      selected, priority residual extraction reports zero witnesses, and
+      readiness support is inherited from active-gate no progress.
+- [ ] Replayable selected-source timeout fixture/probe records node
+      `11601fe0-72d6-5853-8590-ec2881853e72`, timeout `806ms`, and coverage
+      `0/5`.
+
+Implementation gate before runtime edits:
+
+- [ ] Exact runtime files are promoted by the fixture/probe, not by broad
+      representative failure text alone.
+- [ ] Focused startup active-gate tests or probe assertions are named before
+      implementation.
+- [ ] Runtime edits keep publication ACK, priority workflow progress, timeout
+      budgets, active-gate admission, publication truth, and readiness support
+      frozen unless canonical evidence selects them again.
+
 ## In Scope
 
 1. work/packages/active-20260517-startup-active-gate-selected-snapshot-source-timeout-after-bounded-handoff-retry.md
@@ -202,6 +239,19 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 3. timeout_budgets
 4. active_gate_admission
 5. readiness_support
+
+## LLM Trap List
+
+1. Do not reopen publication ACK; the current artifact has no selected
+   publication blocker.
+2. Do not promote `operation_workflow_owner / workflow_progress`; priority
+   residual extraction reports zero witnesses.
+3. Do not widen timeout budgets or active-gate admission to mask the selected
+   snapshot source timeout.
+4. Do not patch readiness support while readiness is inherited from the
+   active-gate snapshot timeout.
+5. Do not start runtime edits until the selected-source timeout is replayable
+   or the package stops as evidence-incomplete.
 
 ## Model Fit
 
@@ -235,3 +285,11 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 | Producer publication durable truth | pending ACK and missing published counts are zero in canonical probes | Frozen unless fresh evidence selects publication |
 | Active-gate observation | selected source timeout on node `11601fe0-72d6-5853-8590-ec2881853e72`; coverage `0/5` | In scope |
 | Workflow progress | priority residual extraction reports zero witnesses | Frozen unless fresh evidence selects workflow progress |
+
+## Frontier Transition Ledger
+
+| Package | Artifact | First frontier | Metric change | Result |
+| --- | --- | --- | --- | --- |
+| `done-20260517-topology-publication-ack-pending-after-active-gate-drain-migration.md` | `rolling-restart-publication-open-ack-classified-20260517T104704Z.report.json` | `topology_publication_owner / publication_convergence` -> `startup_active_gate_owner / snapshot_coverage` | `pendingAckCount=1` -> `0`; priority residual witnesses -> `0`; snapshot coverage `6/7` | `migrated` |
+| `done-20260517-startup-active-gate-snapshot-coverage-owner-reconcile-after-ack-drain.md` | `rolling-restart-after-bounded-handoff-retry-20260517T112600Z.report.json` | `startup_active_gate_owner / snapshot_coverage` | `owner_reconcile_pending` drained; `publicationActiveGateHandoffPendingReconcileCount=0`; selected cause moved to `selected_snapshot_source_timeout`; snapshot coverage `0/5` | `reduced` |
+| This package | `rolling-restart-after-bounded-handoff-retry-20260517T112600Z.report.json` | `startup_active_gate_owner / snapshot_coverage` | pending selected-source timeout fixture/probe for node `11601fe0-72d6-5853-8590-ec2881853e72` | `pending-before-probe` |

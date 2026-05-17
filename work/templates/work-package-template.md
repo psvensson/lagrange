@@ -84,6 +84,26 @@
 
 Describe the problem being solved.
 
+## Current Edge Card
+
+Required for scenario-driven packages and recommended whenever an LLM will
+resume the package.
+
+```text
+Representative artifact:
+First frontier:
+Owner:
+Boundary:
+Selected cause:
+Allowed edits:
+Forbidden edits:
+Required first proof:
+Allowed stop modes:
+```
+
+The card is the one-screen handoff. Keep it current when canonical extractors
+change owner, boundary, selected cause, or next required action.
+
 ## Scope Basis
 
 Link the roadmap row, or state the approved existing subsystem / maintenance
@@ -145,6 +165,25 @@ Before raw JSON, raw logs, broad file search, oversized segment files, or ad hoc
 If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which
 canonical extractor was tried and why it was insufficient.
 
+## Classification And Implementation Gates
+
+Required before runtime edits for scenario-driven packages.
+
+Classification gate:
+
+- [ ] `work:evidence-summary` or a focused extractor identifies the selected
+      owner, boundary, and cause.
+- [ ] The package records which subordinate evidence must not drive edit scope.
+- [ ] The package records the missing-edge probe or replayable fixture command.
+
+Implementation gate:
+
+- [ ] Exact candidate runtime files are known.
+- [ ] Focused owner tests or fixture/probe assertions are named.
+- [ ] Forbidden boundaries are listed before broad in-scope implementation
+      detail.
+- [ ] Runtime edits wait until the classification gate is satisfied.
+
 ## In Scope
 
 1. Item
@@ -156,6 +195,17 @@ canonical extractor was tried and why it was insufficient.
 1. Item
 2. Item
 3. Item
+
+## LLM Trap List
+
+Required for scenario/release-gate and causal-escalation packages. Name the
+sprint-specific mistakes that the next LLM must not repeat.
+
+1. Do not promote subordinate evidence unless canonical extractors select it.
+2. Do not patch downstream consumers while the current producer frontier is
+   unsatisfied.
+3. Do not widen timeout budgets or admission policy to mask a selected owner
+   failure.
 
 ## Invariants
 
@@ -251,9 +301,20 @@ non-frontier with prose alone.
 - Result classification: one of `pending-before-probe`,
   `representative-green`, `reduced`, `same-frontier`, `migrated`,
   `classification-only`, `architecture-gap`, or `contradictory`.
+  `Reduced` requires a concrete metric delta. `Classification-only` must name
+  the accepted bounded/backpressure state and the stop reason.
 - Stop condition: one of `continue-local-fix`, `bounded-non-frontier`,
   `migrate-owner-boundary`, `classification-only-stop`,
   `architecture-gap-stop`, `representative-green`, or `human-escalation`.
+
+## Frontier Transition Ledger
+
+Required when a scenario/release-gate or causal-escalation package closes as
+`migrated`, `reduced`, `same-frontier`, or `classification-only`.
+
+| Package | Artifact | First frontier | Metric change | Result |
+| --- | --- | --- | --- | --- |
+| This package | path/to/latest.report.json | owner / boundary / edge | before -> after | pending |
 
 ## Static Drift Ledger
 

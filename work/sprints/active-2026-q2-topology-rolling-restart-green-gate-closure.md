@@ -48,6 +48,41 @@ Canonical state after the bounded handoff retry package closed as reduced:
    `0/5`, migrate to a genuinely new owner boundary, or turn representative
    `rolling-restart` green.
 
+## Current Edge Card
+
+```text
+Representative artifact: test-output/reports/rolling-restart-after-bounded-handoff-retry-20260517T112600Z.report.json
+First frontier: active_gate_snapshot_coverage
+Owner: startup_active_gate_owner
+Boundary: snapshot_coverage
+Selected cause: selected_snapshot_source_timeout
+Allowed edits: selected-source timeout fixture/probe, then exact files promoted by that proof
+Forbidden edits: topology_publication_owner, operation_workflow_owner, timeout_budgets, active_gate_admission, publication truth, readiness_support
+Required first proof: npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-bounded-handoff-retry-20260517T112600Z.report.json --explain active_gate_snapshot_coverage
+Allowed stop modes: representative-green, migrated, reduced, same-frontier, classification-only, architecture-gap, human-escalation
+```
+
+## Frontier Transition Ledger
+
+| Package | Artifact | First frontier | Metric change | Result |
+| --- | --- | --- | --- | --- |
+| `done-20260517-topology-publication-ack-pending-after-active-gate-drain-migration.md` | `rolling-restart-publication-open-ack-classified-20260517T104704Z.report.json` | `topology_publication_owner / publication_convergence` -> `startup_active_gate_owner / snapshot_coverage` | `pendingAckCount=1` -> `0`; priority residual witnesses -> `0`; snapshot coverage `6/7` | `migrated` |
+| `done-20260517-startup-active-gate-snapshot-coverage-owner-reconcile-after-ack-drain.md` | `rolling-restart-after-bounded-handoff-retry-20260517T112600Z.report.json` | `startup_active_gate_owner / snapshot_coverage` | `owner_reconcile_pending` drained; `publicationActiveGateHandoffPendingReconcileCount=0`; selected cause moved to `selected_snapshot_source_timeout`; snapshot coverage `0/5` | `reduced` |
+| `active-20260517-startup-active-gate-selected-snapshot-source-timeout-after-bounded-handoff-retry.md` | `rolling-restart-after-bounded-handoff-retry-20260517T112600Z.report.json` | `startup_active_gate_owner / snapshot_coverage` | pending selected-source timeout proof for node `11601fe0-72d6-5853-8590-ec2881853e72` | `pending-before-probe` |
+
+## Sprint LLM Trap List
+
+1. Do not reopen publication ACK: canonical evidence has `pendingAckCount=0`,
+   `missingPublishedCount=0`, and publication is not the selected blocker.
+2. Do not promote priority workflow progress: priority residual extraction
+   reports zero witnesses.
+3. Do not widen timeout budgets or active-gate admission to hide the selected
+   source timeout.
+4. Do not chase readiness support until active-gate snapshot coverage improves;
+   readiness is inherited from the active-gate failure.
+5. Do not start runtime edits before the selected-source timeout fixture/probe
+   makes the failing source-selection edge replayable.
+
 ## Scope Basis
 
 Roadmap Phase `0.1 - Internal Coherence`, especially:
