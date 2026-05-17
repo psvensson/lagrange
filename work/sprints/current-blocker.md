@@ -4,7 +4,7 @@
 
 Sprint: `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md`
 
-Package: `work/packages/active-20260516-query-message-router-reconnect-delivery-snapshot-coverage.md`
+Package: `work/packages/done-20260516-query-message-router-reconnect-delivery-snapshot-coverage.md`
 
 Workflow lane: `causal-escalation`
 
@@ -30,7 +30,7 @@ Prove routed SELECT * FROM nodes under reconnect pressure falls through to an el
 
 ## Proof Ladder
 
-1. `npm run work:validate -- --entry work/packages/active-20260516-query-message-router-reconnect-delivery-snapshot-coverage.md`
+1. `npm run work:validate -- --entry work/packages/done-20260516-query-message-router-reconnect-delivery-snapshot-coverage.md`
 2. `npm run work:evidence-summary -- test-output/reports/rolling-restart-cdc-query-timeout-fallback-20260516T233948Z.report.json`
 3. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-cdc-query-timeout-fallback-20260516T233948Z.report.json --explain active_gate_snapshot_coverage`
 4. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-cdc-query-timeout-fallback-20260516T233948Z.report.json --handoff-probe`
@@ -142,7 +142,7 @@ Handoff invariant: `Publication ACK, priority recovery, timeout budget increases
 
 Write scope:
 
-1. `work/packages/active-20260516-query-message-router-reconnect-delivery-snapshot-coverage.md`
+1. `work/packages/done-20260516-query-message-router-reconnect-delivery-snapshot-coverage.md`
 2. `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md`
 3. `work/sprints/current-blocker.md`
 4. `work/sprints/current-blocker.json`
@@ -176,7 +176,7 @@ Candidate runtime files:
 
 Commit scope:
 
-1. `work/packages/active-20260516-query-message-router-reconnect-delivery-snapshot-coverage.md`
+1. `work/packages/done-20260516-query-message-router-reconnect-delivery-snapshot-coverage.md`
 2. `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md`
 3. `work/sprints/current-blocker.md`
 4. `work/sprints/current-blocker.json`

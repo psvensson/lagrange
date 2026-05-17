@@ -906,3 +906,68 @@ t.test('MessageRouter unit tests chunk 1', async (t) => {
       await router.shutdown();
     });
 });
+
+t.test('MessageRouter reconnect delivery defers promptly when delivery budget ' +
+  'is shorter than connect budget', async (t) => {
+  initializeTestEnvironment();
+  const localNodeId = 'test-node';
+  const remoteNodeId = 'remote-node';
+  const remoteAddress = 'ws://remote-node:9999';
+  const targetAddress = `${remoteNodeId}/service/remote-service`;
+  const testMessageType = 'TEST_MESSAGE';
+  const deliveryTimeoutMs = 25;
+  const connectTimeoutMs = 5000;
+  const maxObservedElapsedMs = 500;
+  const router = new MessageRouter({
+    nodeId: localNodeId,
+    connectTimeoutMs,
+  });
+  await router.initialize({startServer: false});
+  t.teardown(async () => {
+    await router.shutdown().catch(() => {});
+    cleanupTestEnvironment();
+  });
+
+  router.setNodeAddressResolver((nodeId) => {
+    return nodeId === remoteNodeId ? remoteAddress : null;
+  });
+
+  let connectCalls = 0;
+  router.connectToNode = async () => {
+    connectCalls += 1;
+    await new Promise((resolve) => setTimeout(resolve, connectTimeoutMs));
+  };
+
+  const startedAt = Date.now();
+  const firstResult = await router.deliver(
+    targetAddress,
+    {type: testMessageType},
+    {timeoutMs: deliveryTimeoutMs},
+  );
+  const elapsedMs = Date.now() - startedAt;
+  const secondResult = await router.deliver(
+    targetAddress,
+    {type: testMessageType},
+    {timeoutMs: deliveryTimeoutMs},
+  );
+
+  t.equal(connectCalls, 0,
+    'short-budget delivery should not start the long cold dial');
+  t.ok(elapsedMs < maxObservedElapsedMs,
+    'short-budget delivery should return before the connect timeout');
+  t.equal(firstResult.acknowledged, false,
+    'short-budget delivery should fail closed');
+  t.equal(firstResult.deferRetry, true,
+    'short-budget delivery should return typed defer semantics');
+  t.equal(firstResult.errorCode, 'ROUTER_CONNECTION_CLOSED',
+    'short-budget delivery should expose reconnect ownership');
+  t.equal(secondResult.deferRetry, true,
+    'second delivery should reuse the armed reconnect owner');
+  t.equal(secondResult.errorCode, 'ROUTER_CONNECTION_CLOSED',
+    'second delivery should preserve the reconnect error code');
+  t.equal(
+    router.nodeConnections.get(remoteNodeId)?.state,
+    ConnectionState.RECONNECTING,
+    'short-budget delivery should arm one reconnect owner for the peer',
+  );
+});

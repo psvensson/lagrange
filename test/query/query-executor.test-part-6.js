@@ -648,6 +648,121 @@ test('QueryExecutor - executeOnPartition retries reads across ' +
   t.end();
 });
 
+test('QueryExecutor - reconnect delivery deferral falls through to another ' +
+  'read candidate inside the query budget', async (t) => {
+  const partitionId = 'p-reconnect-delivery';
+  const firstNodeId = 'node-reconnecting';
+  const secondNodeId = 'node-ready';
+  const firstAddress = `${firstNodeId}/partition/${partitionId}`;
+  const secondAddress = `${secondNodeId}/partition/${partitionId}`;
+  const firstServiceId = `${partitionId}-r1`;
+  const secondServiceId = `${partitionId}-r2`;
+  const leaderRole = 'leader';
+  const followerRole = 'follower';
+  const selectNodesSql = 'SELECT * FROM nodes';
+  const reconnectClosedError =
+    'Connection to node node-reconnecting closed';
+  const reconnectClosedErrorCode = 'ROUTER_CONNECTION_CLOSED';
+  const queryTimeoutMs = 3000;
+  const reconnectRetryAfterMs = 250;
+  const deliveries = [];
+  const deliveryOptions = [];
+  const systemCache = {
+    partitions: [
+      {partition_id: partitionId, leader_node_id: firstNodeId},
+    ],
+    services: [
+      {
+        service_id: firstServiceId,
+        service_type: SERVICE_TYPE.PARTITION,
+        partition_id: partitionId,
+        node_id: firstNodeId,
+        raft_role: leaderRole,
+        address: firstAddress,
+        status: SERVICE_STATUS.ACTIVE,
+      },
+      {
+        service_id: secondServiceId,
+        service_type: SERVICE_TYPE.PARTITION,
+        partition_id: partitionId,
+        node_id: secondNodeId,
+        raft_role: followerRole,
+        address: secondAddress,
+        status: SERVICE_STATUS.ACTIVE,
+      },
+    ],
+    get: function(type, key) {
+      if (type === TABLES.PARTITIONS) {
+        return this.partitions.find(
+          (partition) => partition.partition_id === key,
+        ) || null;
+      }
+      return null;
+    },
+    filter: function(type, predicate) {
+      if (type === TABLES.SERVICES) {
+        return this.services.filter(predicate);
+      }
+      if (type === TABLES.PARTITIONS) {
+        return this.partitions.filter(predicate);
+      }
+      return [];
+    },
+  };
+  const messageRouter = {
+    deliver: async (address, _message, options) => {
+      deliveries.push(address);
+      deliveryOptions.push(options);
+      if (address === firstAddress) {
+        return {
+          acknowledged: false,
+          success: false,
+          error: reconnectClosedError,
+          errorCode: reconnectClosedErrorCode,
+          deferRetry: true,
+          retryAfterMs: reconnectRetryAfterMs,
+        };
+      }
+      return {
+        acknowledged: true,
+        success: true,
+        rows: [{node_id: secondNodeId}],
+      };
+    },
+  };
+  const executor = new QueryExecutor({
+    messageRouter,
+    systemCache,
+  });
+  executor.leaderRetryAttempts = 1;
+  executor.leaderRetryDelayMs = 1;
+
+  const result = await executor.executeOnPartition(
+    partitionId,
+    selectNodesSql,
+    [],
+    true,
+    false,
+    false,
+    {timeoutMs: queryTimeoutMs},
+  );
+
+  t.equal(result.success, true,
+    'read should succeed after a reconnect-deferred candidate');
+  t.same(deliveries, [firstAddress, secondAddress],
+    'read should fall through from reconnect-deferred target to live peer');
+  t.ok(
+    deliveryOptions.every((options) =>
+      Number.isFinite(options?.timeoutMs) &&
+      options.timeoutMs > 0 &&
+      options.timeoutMs <= queryTimeoutMs,
+    ),
+    'candidate deliveries should stay inside the original query budget',
+  );
+  t.same(result.rows, [{node_id: secondNodeId}],
+    'read should return rows from the live candidate');
+});
+
 test('QueryExecutor - executeOnPartition returns last error when ' +
   'all read candidates fail with transient errors (§1.12)', async (t) => {
   // Proves: when every candidate fails, the read returns the last

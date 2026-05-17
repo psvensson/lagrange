@@ -498,13 +498,17 @@ The sprint cannot close until:
 
 ## Current Next Action
 
-Continue with the active authoritative control snapshot nodes query pressure
-package:
+The query/message-router reconnect delivery package closed as migrated:
 
 ```text
-work/packages/done-20260516-startup-active-gate-authoritative-nodes-query-pressure.md
-test-output/reports/rolling-restart-after-forced-repair-local-fallback-20260516T224600Z.report.json
+work/packages/done-20260516-query-message-router-reconnect-delivery-snapshot-coverage.md
+test-output/reports/rolling-restart-query-reconnect-delivery-20260517T001920Z.report.json
 ```
+
+Open the next package on the participant/routing successor boundary selected
+by that artifact: authoritative `SELECT * FROM nodes` now fails because
+`nodes-p1` returns `ROUTER_CONNECTION_CLOSED` for inactive participant
+`7493b0ab-a054-5fad-a91b-5e331db29304`, not because the query times out.
 
 Keep the completed post-systems-pattern checkpoint package and artifact as
 predecessor/context:
@@ -528,7 +532,8 @@ representative first frontier is `active_gate_snapshot_coverage` under
 `startup_active_gate_owner / snapshot_coverage`, with snapshot coverage at
 0/5. `selected_snapshot_source_timeout` and `discovery_node_coverage_gap` are
 absent. The selected error is authoritative control snapshot repair failure on
-nodes with `Query timeout after 3000ms`. The next work must target that
-authoritative nodes query pressure path only. Keep publication ACK convergence,
-priority recovery, timeout budget increases, and active-gate admission frozen
-unless canonical evidence selects them again.
+nodes with `Connection to node
+7493b0ab-a054-5fad-a91b-5e331db29304 closed`. The next work must target the
+participant/routing successor only. Keep publication ACK convergence, priority
+recovery, timeout budget increases, and active-gate admission frozen unless
+canonical evidence selects them again.

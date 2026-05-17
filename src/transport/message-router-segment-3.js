@@ -356,6 +356,7 @@ class MessageRouterSegment3 extends MessageRouterSegment2 {
         messageId,
         payload,
         correlationId,
+        deliveryTimeoutMs,
       });
       if (deferredFailure) {
         this.cancelPendingResponse(messageId, {
@@ -563,6 +564,7 @@ class MessageRouterSegment3 extends MessageRouterSegment2 {
     messageId,
     payload,
     correlationId,
+    deliveryTimeoutMs = null,
   }) {
     if (!error || this.isShuttingDown) {
       return null;
@@ -596,6 +598,7 @@ class MessageRouterSegment3 extends MessageRouterSegment2 {
             payload,
             targetNodeId,
             correlationId,
+            deliveryTimeoutMs,
           );
         } catch (reconnectError) {
           return this.buildDeferredDeliveryFailure(
@@ -811,6 +814,68 @@ class MessageRouterSegment3 extends MessageRouterSegment2 {
     return connection;
   }
   /**
+   * Return true when a caller budget is too short to own a cold reconnect dial.
+   * @param {number|null} timeoutMs
+   * @return {boolean}
+   * @private
+   */
+  shouldDeferColdReconnectForDeliveryBudget(timeoutMs) {
+    if (
+      !Number.isFinite(timeoutMs) ||
+      timeoutMs <= TRANSPORT_NUM.ZERO ||
+      !Number.isFinite(this.connectTimeoutMs) ||
+      this.connectTimeoutMs <= TRANSPORT_NUM.ZERO
+    ) {
+      return false;
+    }
+    return Math.floor(timeoutMs) < Math.floor(this.connectTimeoutMs);
+  }
+  /**
+   * Build one reconnect-deferred result without spending the delivery budget
+   * on a cold socket dial that belongs to the reconnect owner.
+   * @param {string} targetNodeId
+   * @param {string|null} reconnectAddress
+   * @param {string} messageId
+   * @param {string} correlationId
+   * @return {Object|null}
+   * @private
+   */
+  buildColdReconnectBudgetFailure(
+    targetNodeId,
+    reconnectAddress,
+    messageId,
+    correlationId,
+  ) {
+    const existing = this.nodeConnections.get(targetNodeId) || null;
+    if (existing && existing.state === ConnectionState.CONNECTED) {
+      return null;
+    }
+    const reconnectInProgress = this.buildReconnectInProgressFailure(
+      targetNodeId,
+      messageId,
+      correlationId,
+    );
+    if (reconnectInProgress) {
+      return reconnectInProgress;
+    }
+    if (!this.pendingNodeConnections.has(targetNodeId)) {
+      this.armReconnectAfterConnectFailure(targetNodeId, reconnectAddress);
+    }
+    return this.buildReconnectInProgressFailure(
+      targetNodeId,
+      messageId,
+      correlationId,
+    ) || this.buildDeferredDeliveryFailure(
+      messageId,
+      correlationId,
+      ROUTER_ERROR_MSG.connectionClosed(targetNodeId),
+      {
+        errorCode: ROUTER_CONNECTION_CLOSED_ERROR_CODE,
+        retryAfterMs: this.reconnectIntervalMs,
+      },
+    );
+  }
+  /**
    * Ensure a remote node connection exists for delivery recovery.
    * @param {string} targetNodeId
    * @param {string} address
@@ -914,6 +979,17 @@ class MessageRouterSegment3 extends MessageRouterSegment2 {
     correlationId,
     timeoutMs = null,
   ) {
+    if (this.shouldDeferColdReconnectForDeliveryBudget(timeoutMs)) {
+      const reconnectBudgetFailure = this.buildColdReconnectBudgetFailure(
+        targetNodeId,
+        reconnectAddress,
+        messageId,
+        correlationId,
+      );
+      if (reconnectBudgetFailure) {
+        return reconnectBudgetFailure;
+      }
+    }
     const connection = await this.ensureNodeConnection(
       targetNodeId,
       reconnectAddress,
