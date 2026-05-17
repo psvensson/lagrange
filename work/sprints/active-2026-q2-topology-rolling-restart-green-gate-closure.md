@@ -501,28 +501,31 @@ The sprint cannot close until:
 
 ## Current Next Action
 
-The query/message-router reconnect delivery package closed as migrated:
+The join/message-group service activation package is closing as migrated after
+metric-moving representative evidence:
 
 ```text
-work/packages/done-20260516-query-message-router-reconnect-delivery-snapshot-coverage.md
-test-output/reports/rolling-restart-query-reconnect-delivery-20260517T001920Z.report.json
+work/packages/done-20260517-join-message-group-service-activation-candidate-publication.md
+test-output/reports/rolling-restart-join-service-activation-candidate-publication-20260517T011922Z.report.json
 ```
 
-Continue by opening the join/message-group service activation successor package
-selected by that artifact:
+Continue with the priority recovery workflow-progress successor selected by
+that artifact:
 
 ```text
-work/packages/done-20260517-query-participant-failure-inactive-node-routing-coverage.md
-test-output/reports/rolling-restart-query-reconnect-delivery-20260517T001920Z.report.json
+work/packages/active-20260517-priority-recovery-operation-workflow-owner-workflow-progress.md
+test-output/reports/rolling-restart-join-service-activation-candidate-publication-20260517T011922Z.report.json
 ```
 
-Authoritative `SELECT * FROM nodes` still observes
-`ROUTER_CONNECTION_CLOSED` for inactive participant
-`7493b0ab-a054-5fad-a91b-5e331db29304`, but the closed fixture proves the
-query path falls through when a live candidate exists. Scoped playback shows
-all `nodes-p1` service rows stay pinned to the seed, and the next owner boundary
-is join/message-group service activation and service-row publication for live
-partition candidates.
+Focused owner proof now shows MOVE_REPLICA join-created service activation uses
+the control-plane service-row upsert path when preferred, preserves
+`assignment_id`, avoids seed HTTP registration, and seeds the join-time cache
+with assignment metadata. The representative rerun remains red, but the first
+frontier moved from `active_gate_snapshot_coverage` to
+`priority_recovery_partition_progress` under
+`operation_workflow_owner / workflow_progress`. Active-gate coverage is now
+`active=5/5, snapshot_coverage=2/5`; `active_gate_snapshot_coverage` is no
+longer the canonical first frontier.
 
 Keep the completed post-systems-pattern checkpoint package and artifact as
 predecessor/context:
@@ -539,15 +542,13 @@ context:
 test-output/reports/rolling-restart-after-admin-owner-readiness-handoff-20260516.report.json
 ```
 
-The repeated priority recovery workflow-progress package drained the
-`spread_satisfied_in_flight` witnesses to zero and fresh representative evidence
-marks `priority_recovery_partition_progress` satisfied. The current
-representative first frontier is `active_gate_snapshot_coverage` under
-`startup_active_gate_owner / snapshot_coverage`, with snapshot coverage at
-0/5. `selected_snapshot_source_timeout` and `discovery_node_coverage_gap` are
-absent. The selected error is authoritative control snapshot repair failure on
-nodes with `Connection to node
-7493b0ab-a054-5fad-a91b-5e331db29304 closed`. The next work must target the
-participant/routing successor only. Keep publication ACK convergence, priority
-recovery, timeout budget increases, and active-gate admission frozen unless
-canonical evidence selects them again.
+The new selected residual is one priority recovery witness for
+`control_plane_publications-p1`: semantic state `spread_satisfied_in_flight`,
+actuation state `persisted_not_dispatched`, wait mode `event_driven`,
+next action `wait_for_operation_progress`, operation
+`d5ffb401-f539-44d6-a23a-6365606ac232`. The next work must target only
+`operation_workflow_owner / workflow_progress` and prove dispatch/progress for
+that residual or split it to a new owner. Keep publication ACK convergence,
+timeout budget increases, active-gate admission, CDC fallback, message-router
+reconnect delivery, and query participant routing frozen. Priority recovery is
+reopened only because canonical evidence selected it again.

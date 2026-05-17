@@ -1,9 +1,10 @@
+# Priority Recovery operation_workflow_owner workflow_progress Residual
+
+<!-- work-package
 {
-  "schema": "current-blocker-v1",
-  "generatedBy": "scripts/work-tracker.js",
-  "sprint": "work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md",
-  "package": "work/packages/active-20260517-priority-recovery-operation-workflow-owner-workflow-progress.md",
+  "schema": "work-package-v1",
   "status": "active",
+  "opened": "2026-05-17",
   "lane": "scenario-release-gate",
   "scenario": "rolling-restart",
   "artifact": "test-output/reports/rolling-restart-join-service-activation-candidate-publication-20260517T011922Z.report.json",
@@ -47,7 +48,6 @@
     "src/rebalancer/operation-workflow-owner-segment-5.js",
     "test/rebalancer/coordinator-created-operation-progress-remote-handoff.test.js"
   ],
-  "touchedFiles": [],
   "modelFit": {
     "packageClass": "representative-frontier-closure",
     "intendedMinimumModel": "gpt-5.3-codex",
@@ -68,6 +68,19 @@
     "boundary": "workflow_progress",
     "dominantReason": "priority_recovery_event_driven_wait",
     "nextAction": "Prove or split the event-driven workflow progress residual for control_plane_publications-p1 operation d5ffb401-f539-44d6-a23a-6365606ac232."
+  },
+  "ownerBoundaryMigrationProof": {
+    "fromOwner": "join_message_group_activation_owner",
+    "fromBoundary": "service_row_activation_publication",
+    "toOwner": "operation_workflow_owner",
+    "toBoundary": "workflow_progress",
+    "reason": "The predecessor closed the join activation publication edge and the representative rerun moved the first frontier to priority_recovery_partition_progress with one operation_workflow_owner / workflow_progress witness.",
+    "evidence": [
+      "work/packages/done-20260517-join-message-group-service-activation-candidate-publication.md",
+      "test-output/reports/rolling-restart-join-service-activation-candidate-publication-20260517T011922Z.report.json",
+      "npm run work:evidence-summary -- test-output/reports/rolling-restart-join-service-activation-candidate-publication-20260517T011922Z.report.json",
+      "npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-join-service-activation-candidate-publication-20260517T011922Z.report.json"
+    ]
   },
   "causalGovernance": {
     "hypothesis": "The representative gate is now blocked by a priority recovery operation that is persisted but not dispatched: control_plane_publications-p1 is in spread_satisfied_in_flight with event-driven wait and nextRequiredAction=wait_for_operation_progress.",
@@ -114,3 +127,87 @@
   },
   "predecessor": "work/packages/done-20260517-join-message-group-service-activation-candidate-publication.md"
 }
+-->
+
+## Why
+
+The representative gate moved past join/message-group service activation, but
+now stops on one priority recovery workflow-progress witness. The residual is
+not broad: `control_plane_publications-p1` is in
+`spread_satisfied_in_flight`, `persisted_not_dispatched`,
+`event_driven`, with `nextRequiredAction=wait_for_operation_progress`.
+
+This package owns the replayable decision that proves whether that operation
+should dispatch/progress locally or migrate to a different owner.
+
+## Scope Basis
+
+Approved maintenance scope or roadmap row.
+
+## Workflow Lane
+
+- Selected lane: `scenario-release-gate`
+- Why this lane is required: the representative release gate is still red and
+  canonical evidence selected one workflow-progress owner boundary.
+- Escalation trigger to a heavier lane: the residual splits across multiple
+  owner boundaries, a frozen edge must be reopened, or representative scenario
+  evidence changes.
+
+## Subagent Sequencing Requirement
+
+Required before implementation because this is a scenario-driven runtime
+owner-boundary package.
+
+## Subagent Sequencing Ledger
+
+- [ ] Review subagent recorded: pending-before-implementation-resumes.
+- [ ] Fix subagent recorded or explicitly not needed: pending-before-implementation-resumes.
+- [ ] Implementation subagent recorded: pending-before-implementation-resumes.
+
+## LLM Tool-First Contract
+
+Before raw JSON, raw logs, broad file search, oversized segment files, or ad hoc `jq`, use the canonical workflow command that owns the question:
+
+1. Package metadata or ledger edits: `npm run work:package:doctor -- --suggest <package>`, `npm run work:package:doctor -- --fix-dry-run <package>`, `npm run work:package:schema`, or `npm run work:package:new -- ...`.
+2. Representative evidence: `npm run work:evidence-summary -- <artifact>` plus any focused extractor for this failure class.
+3. Owner discovery: `npm run analyze:owner-files -- <owner> [boundary]`.
+4. Subagent sequencing: `npm run work:subagent-prompt -- --role <role> --package <package>`.
+5. Large-file cleanup: `npm run work:oversized-next -- --markdown`.
+
+If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which canonical extractor was tried and why it was insufficient.
+
+## In Scope
+
+1. work/packages/active-20260517-priority-recovery-operation-workflow-owner-workflow-progress.md
+2. work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md
+3. work/sprints/current-blocker.md
+4. work/sprints/current-blocker.json
+5. work/model-ledger.jsonl
+
+## Out Of Scope
+
+1. publication-ack-convergence
+2. timeout_budgets
+3. active_gate_admission
+4. CDC_fallback
+5. query_message_router_owner/reconnect_delivery
+6. query_participant_failure/inactive_participant_routing
+
+## Model Fit
+
+- Package class: `representative-frontier-closure`
+- Intended minimum model: `gpt-5.3-codex`
+- Scope shape: `owner-boundary-contraction/current-frontier`
+- Output profile: `medium`
+- Owned files: `work/packages/active-20260517-priority-recovery-operation-workflow-owner-workflow-progress.md`, `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md`, `work/sprints/current-blocker.md`, `work/sprints/current-blocker.json`, `work/model-ledger.jsonl`
+- Forbidden files: `publication-ack-convergence`, `timeout_budgets`, `active_gate_admission`, `CDC_fallback`, `query_message_router_owner/reconnect_delivery`, `query_participant_failure/inactive_participant_routing`
+- Frozen decisions: package scope and lane stay bounded unless explicitly escalated.
+- Escalation triggers: owned files expand beyond this package, a frozen decision must be reopened, or representative scenario evidence selects a different owner boundary.
+- Focused proof: `npm run work:validate -- --entry work/packages/active-20260517-priority-recovery-operation-workflow-owner-workflow-progress.md`, `npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-join-service-activation-candidate-publication-20260517T011922Z.report.json`, `npm run analyze:owner-files -- operation_workflow_owner workflow_progress --markdown`
+- Model ledger advisory: `escalate`
+
+## Validation
+
+1. npm run work:validate -- --entry work/packages/active-20260517-priority-recovery-operation-workflow-owner-workflow-progress.md
+2. npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-join-service-activation-candidate-publication-20260517T011922Z.report.json
+3. npm run analyze:owner-files -- operation_workflow_owner workflow_progress --markdown

@@ -4,39 +4,35 @@
 
 Sprint: `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md`
 
-Package: `work/packages/done-20260516-query-message-router-reconnect-delivery-snapshot-coverage.md`
+Package: `work/packages/active-20260517-priority-recovery-operation-workflow-owner-workflow-progress.md`
 
-Workflow lane: `causal-escalation`
+Workflow lane: `scenario-release-gate`
 
 Scenario: `rolling-restart`
 
-Artifact: `test-output/reports/rolling-restart-query-reconnect-delivery-20260517T001920Z.report.json`
+Artifact: `test-output/reports/rolling-restart-join-service-activation-candidate-publication-20260517T011922Z.report.json`
 
-Playback: `test-output/reports/.playback/rolling-restart-query-reconnect-delivery-20260517T001920Z/rolling-restart/`
+Playback: `test-output/reports/.playback/rolling-restart-join-service-activation-candidate-publication-20260517T011922Z/rolling-restart/`
 
 ## Boundary
 
-Owner: `query_message_router_owner`
+Owner: `operation_workflow_owner`
 
-Boundary: `reconnect_delivery`
+Boundary: `workflow_progress`
 
-Dominant reason: `active_gate_timed_out`
+Dominant reason: `priority_recovery_progress_blocked`
 
-Current state: The query/message-router reconnect delivery slice is closed as migrated: routed SQL delivery no longer spends the full query budget waiting for a cold reconnect and focused tests prove reconnect-deferred candidates fall through inside the original query budget. Fresh representative evidence remains red at active_gate_snapshot_coverage with snapshotCoverageNodeCount=0/5, but the selected repair error moved from nodes:Query timeout after 3000ms to nodes:Connection to node 7493b0ab-a054-5fad-a91b-5e331db29304 closed with query_participant_failure/control_plane_backpressure evidence.
+Current state: Join activation publication is closed as migrated; representative rerun moved the first frontier to priority_recovery_partition_progress with one operation_workflow_owner/workflow_progress witness for control_plane_publications-p1.
 
 ## Next Action
 
-Open the next owner-boundary package to decide why authoritative SELECT * FROM nodes routes through inactive participant 7493b0ab-a054-5fad-a91b-5e331db29304, then edit only the selected participant/routing owner path for coverage movement or green.
+Build or use the narrowest workflow-progress fixture that decides why the persisted_not_dispatched priority recovery operation waits event-driven instead of dispatching progress.
 
 ## Proof Ladder
 
-1. `npm run work:validate -- --entry work/packages/done-20260516-query-message-router-reconnect-delivery-snapshot-coverage.md`
-2. `npm run work:evidence-summary -- test-output/reports/rolling-restart-query-reconnect-delivery-20260517T001920Z.report.json`
-3. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-query-reconnect-delivery-20260517T001920Z.report.json --explain active_gate_snapshot_coverage`
-4. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-query-reconnect-delivery-20260517T001920Z.report.json --handoff-probe`
-5. `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-query-reconnect-delivery-20260517T001920Z.report.json`
-6. `npm run analyze:distributed-failure -- --report test-output/reports/rolling-restart-query-reconnect-delivery-20260517T001920Z.report.json`
-7. `npm run analyze:owner-files -- query_message_router_owner reconnect_delivery --markdown`
+1. `npm run work:validate -- --entry work/packages/active-20260517-priority-recovery-operation-workflow-owner-workflow-progress.md`
+2. `npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-join-service-activation-candidate-publication-20260517T011922Z.report.json`
+3. `npm run analyze:owner-files -- operation_workflow_owner workflow_progress --markdown`
 
 ## Model Fit
 
@@ -52,7 +48,7 @@ Escalation triggers:
 
 1. `owned files expand beyond this package`
 2. `a frozen decision must be reopened`
-3. `representative evidence reselects publication ACK, priority recovery, timeout budgets, or active-gate admission`
+3. `representative evidence selects a different owner boundary`
 
 ## Representative Residual
 
@@ -60,105 +56,99 @@ Status: `live-red-scenario-release-gate`
 
 Scenario: `rolling-restart`
 
-Artifact: `test-output/reports/rolling-restart-query-reconnect-delivery-20260517T001920Z.report.json`
+Artifact: `test-output/reports/rolling-restart-join-service-activation-candidate-publication-20260517T011922Z.report.json`
 
-Frontier: `active_gate_snapshot_coverage`
+Frontier: `priority_recovery_partition_progress`
 
-Owner: `startup_active_gate_owner`
+Owner: `operation_workflow_owner`
 
-Boundary: `snapshot_coverage`
+Boundary: `workflow_progress`
 
-Dominant reason: `active_gate_timed_out`
+Dominant reason: `priority_recovery_event_driven_wait`
 
-Next action: `Reduce inactive-participant routing for authoritative nodes reads while keeping timeout budgets and active-gate admission frozen.`
+Next action: `Prove or split the event-driven workflow progress residual for control_plane_publications-p1 operation d5ffb401-f539-44d6-a23a-6365606ac232.`
 
 ## Causal Governance
 
-Causal hypothesis: `The active-gate coverage gap is now owned by routed SQL delivery pressure, not CDC owner-RPC fallback. SQL fallback reaches SELECT * FROM nodes, but parallel query delivery waits behind repeated message-router reconnect attempts to a restarted seed until the existing 3000ms query budget expires.`
+Causal hypothesis: `The representative gate is now blocked by a priority recovery operation that is persisted but not dispatched: control_plane_publications-p1 is in spread_satisfied_in_flight with event-driven wait and nextRequiredAction=wait_for_operation_progress.`
 
-Stop-condition check: `Run entry validation, handoff/snapshot probe on the CDC fallback representative, npm --silent run analyze:causal-model on fresh evidence, focused query/message-router reconnect tests, static guardrails, and one representative rolling-restart rerun.`
+Stop-condition check: `Run entry validation, npm run analyze:priority-recovery-residuals and npm run analyze:causal-model on the representative artifact, the narrowest workflow-progress fixture that decides persisted_not_dispatched dispatch/progress ownership, focused owner tests for the promoted runtime file, static guardrails, and one representative rolling-restart rerun.`
 
-Expected causal-model change: `snapshotCoverage improves above 2/5, the authoritative nodes query timeout disappears, the frontier migrates to a genuinely new owner boundary, or representative rolling-restart turns green.`
+Expected causal-model change: `priority_recovery_partition_progress disappears, snapshotCoverage improves above 2/5, discovery_node_coverage_gap disappears/stays absent, the frontier migrates to a genuinely new owner boundary, or representative rolling-restart turns green.`
 
-Representative outcome: `migrated`
+Representative outcome: `pending-before-rerun`
 
-Causal debt: `Resolved for this boundary: the query executor and message-router reconnect path now return typed reconnect-deferred evidence promptly and read delivery falls through to another live candidate inside the original query budget.`
+Causal debt: `Need one replayable workflow-progress decision: prove whether persisted_not_dispatched priority recovery work should dispatch, retry, or be classified under a different owner before editing runtime.`
 
-Cross-boundary review: `Do not reopen publication ACK, priority recovery, timeout budget increases, or active-gate admission unless canonical evidence selects them again.`
+Cross-boundary review: `Do not reopen publication ACK, timeout budget increases, active-gate admission, CDC fallback, message-router reconnect delivery, query participant routing, or join service activation unless canonical evidence selects them again.`
 
 ## Scenario Causal Closure
 
-Reference scenario/probe: `rolling-restart after CDC query timeout fallback`
+Reference scenario/probe: `rolling-restart after join/message-group service activation migration`
 
 Phase chain:
 
-1. `consume the closed CDC fallback migration proof`
-2. `separate query/message-router reconnect delivery from admin degradation and CDC fallback`
-3. `build focused routed SELECT nodes tests under reconnect pressure`
-4. `edit only the selected query/message-router owner path after subagent proof is clean`
+1. `consume the closed join activation publication proof`
+2. `use priority recovery residual extractor to isolate the single workflow-progress witness`
+3. `build or reuse the narrowest workflow-progress fixture for persisted_not_dispatched event-driven wait`
+4. `edit only the selected operation_workflow_owner / workflow_progress path after subagent proof is clean`
 5. `rerun representative rolling-restart and classify green, reduced, same-frontier, migrated, or contradictory`
 
-Current first frontier: `active_gate_snapshot_coverage in test-output/reports/rolling-restart-query-reconnect-delivery-20260517T001920Z.report.json, canonically owned by startup_active_gate_owner / snapshot_coverage with internal evidence now pointing past query_message_router_owner / reconnect_delivery to participant connection closure under query_participant_failure/control_plane_backpressure.`
+Current first frontier: `priority_recovery_partition_progress in test-output/reports/rolling-restart-join-service-activation-candidate-publication-20260517T011922Z.report.json, canonically owned by operation_workflow_owner / workflow_progress with reason priority_recovery_event_driven_wait.`
 
 Known downstream blockers:
 
-1. `publication_ack_convergence is satisfied by canonical evidence`
-2. `priority_recovery_partition_progress is satisfied by canonical evidence`
-3. `discovery_node_coverage_gap is absent`
-4. `selected snapshot source remains 11601fe0-72d6-5853-8590-ec2881853e72 and is admin-ready`
-5. `authoritative repair records readSource=sql_query_engine before failing on nodes with Connection to node 7493b0ab-a054-5fad-a91b-5e331db29304 closed`
-6. `message-router reconnect delivery now returns typed ROUTER_CONNECTION_CLOSED promptly instead of consuming the full query budget`
+1. `publication ACK is satisfied`
+2. `join/message-group activation publication is closed as migrated`
+3. `active_gate_snapshot_coverage is no longer the first frontier`
+4. `representative active gate progress is active=5/5 and snapshot_coverage=2/5`
+5. `the residual has witnessCount=1 and splitRequired=false`
+6. `the selected witness is control_plane_publications-p1 / spread_satisfied_in_flight / persisted_not_dispatched / event_driven`
 
-Missing causal edge: `Prove routed SELECT * FROM nodes under reconnect pressure falls through to another active candidate or returns typed retryable/deferred evidence before the SQL query budget is exhausted.`
+Missing causal edge: `Prove or split why the control_plane_publications-p1 priority recovery operation remains event-driven with actuationState=persisted_not_dispatched and nextRequiredAction=wait_for_operation_progress.`
 
-Missing causal edge probe: `npx tap test/query/query-executor.test-part-6.js -g "reconnect delivery"`
+Missing causal edge probe: `npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-join-service-activation-candidate-publication-20260517T011922Z.report.json`
 
-Bounded progress proof: `Metric-moving proof only: snapshotCoverage above 2/5, authoritative nodes query timeout gone, genuinely new owner boundary, or representative green.`
+Bounded progress proof: `Metric-moving proof only with dispatch/retry progress: priority_recovery_partition_progress disappears, snapshotCoverage rises above 2/5, the first frontier migrates to a genuinely new owner boundary, or representative rolling-restart turns green.`
 
-Bounded progress proof artifact: `test/transport/message-router-main-stage-1.js and test/query/query-executor.test-part-6.js`
+Bounded progress proof artifact: `test-output/reports/rolling-restart-join-service-activation-candidate-publication-20260517T011922Z.report.json plus the focused workflow-progress fixture selected by this package.`
 
-Expected observable transition: `snapshotCoverage improves above 2/5, discovery_node_coverage_gap stays absent, representative rolling-restart turns green, or the frontier migrates to a genuinely new owner boundary after routed SQL delivery is reduced.`
+Expected observable transition: `the persisted_not_dispatched priority recovery operation dispatches/progresses, the event-driven wait disappears, snapshotCoverage improves beyond 2/5, or canonical evidence selects a new owner boundary.`
 
-Max progress bound: `one focused query_message_router_owner / reconnect_delivery slice after required subagent sequencing`
+Max progress bound: `one focused operation_workflow_owner / workflow_progress slice`
 
-Same-frontier fallback: `If focused tests pass but the representative stays same-frontier without metric movement, stop and classify same-frontier instead of reopening frozen edges.`
+Same-frontier fallback: `If focused tests pass but representative evidence keeps the same priority recovery witness without metric movement, stop and classify same-frontier instead of reopening frozen edges.`
 
-Expected next frontier: `representative green or the participant/routing owner boundary for inactive node 7493b0ab-a054-5fad-a91b-5e331db29304`
+Expected next frontier: `representative green or a new owner boundary past operation workflow progress`
 
-Result classification: `migrated`
+Result classification: `pending-before-probe`
 
-Stop condition: `migrate-owner-boundary`
+Stop condition: `continue-local-fix`
 
 Recent frontier history:
 
-1. `work/packages/done-20260516-startup-active-gate-authoritative-repair-participant-failure.md / startup_active_gate_owner / snapshot_coverage / reduced`
-2. `work/packages/done-20260516-startup-active-gate-authoritative-nodes-query-pressure.md / startup_active_gate_owner / snapshot_coverage / migrated`
+1. `work/packages/done-20260517-query-participant-failure-inactive-node-routing-coverage.md / query_participant_failure / inactive_participant_routing / migrated`
+2. `work/packages/done-20260517-join-message-group-service-activation-candidate-publication.md / join_message_group_activation_owner / service_row_activation_publication / migrated`
 
-Oscillation check: `This package is allowed because the predecessor proved CDC owner-RPC fallback now reaches sql_query_engine and the remaining evidence is message-router reconnect delivery, not a reopened publication ACK, priority recovery, timeout budget, or active-gate admission edge.`
+Oscillation check: `This package is allowed because canonical evidence selected priority_recovery_partition_progress after join activation moved the frontier, not because a closed publication ACK, timeout, active-gate admission, CDC, reconnect-delivery, query-routing, or join activation edge was reopened.`
 
-Handoff invariant: `Publication ACK, priority recovery, timeout budget increases, and active-gate admission remain frozen unless canonical evidence selects them again.`
+Handoff invariant: `Publication ACK, timeout budget increases, active-gate admission, CDC fallback, message-router reconnect delivery, query participant routing, and join service activation remain frozen unless canonical evidence selects them again.`
 
 ## Scope
 
 Write scope:
 
-1. `work/packages/done-20260516-query-message-router-reconnect-delivery-snapshot-coverage.md`
+1. `work/packages/active-20260517-priority-recovery-operation-workflow-owner-workflow-progress.md`
 2. `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md`
 3. `work/sprints/current-blocker.md`
 4. `work/sprints/current-blocker.json`
 5. `work/model-ledger.jsonl`
-6. `src/transport/message-router-segment-3.js`
-7. `src/query/query-executor-segment-2-part-1.js`
-8. `src/query/distributed/parallel-query-coordinator.js`
-9. `src/query/sql-query-engine-segment-6.js`
-10. `test/transport/message-router-main-stage-1.js`
-11. `test/query/query-executor.test-part-6.js`
 
 Handoff files:
 
-1. `work/packages/done-20260516-startup-active-gate-authoritative-nodes-query-pressure.md`
-2. `test-output/reports/rolling-restart-cdc-query-timeout-fallback-20260516T233948Z.report.json`
-3. `test-output/reports/.playback/rolling-restart-cdc-query-timeout-fallback-20260516T233948Z/rolling-restart/`
+1. `work/packages/done-20260517-join-message-group-service-activation-candidate-publication.md`
+2. `test-output/reports/rolling-restart-join-service-activation-candidate-publication-20260517T011922Z.report.json`
+3. `test-output/reports/.playback/rolling-restart-join-service-activation-candidate-publication-20260517T011922Z/rolling-restart/`
 
 Generated files:
 
@@ -167,26 +157,18 @@ Generated files:
 
 Candidate runtime files:
 
-1. `src/transport/message-router-segment-3.js`
-2. `src/query/query-executor-segment-2-part-1.js`
-3. `src/query/distributed/parallel-query-coordinator.js`
-4. `src/query/sql-query-engine-segment-6.js`
-5. `test/transport/message-router-main-stage-1.js`
-6. `test/query/query-executor.test-part-6.js`
+1. `src/rebalancer/operation-workflow-owner-segment-5.js`
+2. `test/rebalancer/coordinator-created-operation-progress-remote-handoff.test.js`
 
 Commit scope:
 
-1. `work/packages/done-20260516-query-message-router-reconnect-delivery-snapshot-coverage.md`
+1. `work/packages/active-20260517-priority-recovery-operation-workflow-owner-workflow-progress.md`
 2. `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md`
 3. `work/sprints/current-blocker.md`
 4. `work/sprints/current-blocker.json`
 5. `work/model-ledger.jsonl`
-6. `src/transport/message-router-segment-3.js`
-7. `src/query/query-executor-segment-2-part-1.js`
-8. `src/query/distributed/parallel-query-coordinator.js`
-9. `src/query/sql-query-engine-segment-6.js`
-10. `test/transport/message-router-main-stage-1.js`
-11. `test/query/query-executor.test-part-6.js`
+6. `src/rebalancer/operation-workflow-owner-segment-5.js`
+7. `test/rebalancer/coordinator-created-operation-progress-remote-handoff.test.js`
 
 Legacy touched files:
 
