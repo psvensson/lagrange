@@ -244,3 +244,14 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 10. npm run audit:runtime-grammar:file -- src/rebalancer/operation-workflow-owner-segment-7-stage-5.js
 11. node --check src/rebalancer/operation-workflow-owner-segment-7-stage-5.js
 12. node --check test/rebalancer/operation-workflow-progress-event-driven-reentry.test.js
+
+Representative rerun:
+
+1. `node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-priority-workflow-progress-wait-drain-20260517T014714Z.report.json --verbose`
+2. Result: red but metric-moving. Canonical evidence reports `priority_recovery_partition_progress` satisfied, priority residual `witnessCount=0`, and the first frontier migrated to `startup_active_gate_owner / snapshot_coverage` with snapshot coverage `0/5`.
+
+## Commit And Push Ledger
+
+1. Focused package commit: `2d55ff56312dd1d630d1b55467b87bd4f784873a`
+2. Pushed to: `origin/codex/pending-ack-eligibility-filter`
+3. Commit contains only package-owned files/package-status/allowed sprint handoff: yes
