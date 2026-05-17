@@ -191,8 +191,8 @@ sequentially before editing runtime files.
 
 ## Subagent Sequencing Ledger
 
-- [ ] Review subagent recorded: pending-before-implementation.
-- [ ] Fix subagent recorded or explicitly not needed: pending-before-implementation.
+- [x] Review subagent recorded: Agent Wegener (019e36ce-607e-7782-9690-bd8666f2a9c1) reviewed work/packages/done-20260517-startup-active-gate-selected-snapshot-source-timeout-after-publication-migration.md; result fixes-required.
+- [x] Fix subagent recorded or explicitly not needed: Agent Mill (019e36d2-24dc-7cb3-a758-d11706b541cd) fixed work/packages/done-20260517-startup-active-gate-selected-snapshot-source-timeout-after-publication-migration.md.
 - [ ] Implementation subagent recorded: pending-before-implementation.
 
 ## LLM Tool-First Contract

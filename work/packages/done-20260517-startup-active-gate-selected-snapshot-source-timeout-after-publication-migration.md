@@ -286,6 +286,6 @@ canonical extractor was tried and why it was insufficient.
 
 ## Commit And Push Ledger
 
-1. Focused package commit: `d635d399`
+1. Focused package commit: `97a25b58`
 2. Pushed to: `origin/codex/pending-ack-eligibility-filter`
 3. Commit contains only package-owned files/package-status/allowed sprint handoff: yes
