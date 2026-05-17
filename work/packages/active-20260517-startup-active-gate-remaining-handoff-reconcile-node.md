@@ -1,9 +1,10 @@
+# Startup Active Gate Remaining Handoff Reconcile Node
+
+<!-- work-package
 {
-  "schema": "current-blocker-v1",
-  "generatedBy": "scripts/work-tracker.js",
-  "sprint": "work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md",
-  "package": "work/packages/active-20260517-startup-active-gate-remaining-handoff-reconcile-node.md",
+  "schema": "work-package-v1",
   "status": "active",
+  "opened": "2026-05-17",
   "lane": "causal-escalation",
   "scenario": "rolling-restart",
   "artifact": "test-output/reports/rolling-restart-startup-publication-lag-projection-20260517T000000Z.report.json",
@@ -47,7 +48,6 @@
     "work/sprints/current-blocker.json",
     "work/model-ledger.jsonl"
   ],
-  "touchedFiles": [],
   "modelFit": {
     "packageClass": "representative-frontier-closure",
     "intendedMinimumModel": "gpt-5.3-codex",
@@ -125,3 +125,113 @@
   },
   "predecessor": "work/packages/done-20260517-startup-active-gate-startup-publication-lag-snapshot-projection.md"
 }
+-->
+
+## Why
+
+The predecessor proved a bounded startup active-gate projection and reduced the
+publication active-gate handoff reconcile count from `3` to `1`. The latest
+representative evidence remains red on the same owner boundary, with only node
+`35a891b8-c1a0-5064-9c6e-2acfba61c2a7` left in the pending reconcile set.
+
+## Current Edge Card
+
+```text
+Representative artifact: test-output/reports/rolling-restart-startup-publication-lag-projection-20260517T000000Z.report.json
+First frontier: active_gate_snapshot_coverage
+Owner: startup_active_gate_owner
+Boundary: snapshot_coverage
+Selected cause: owner_reconcile_pending through pending publication active-gate handoff
+Required action: reconcile_owner_membership_publication
+Runtime promotion allowed: false
+Pending reconcile count: 1
+Pending reconcile node: 35a891b8-c1a0-5064-9c6e-2acfba61c2a7
+Current coverage: 2/5
+Frozen upstream proof: publication ACK pendingAckCount=0; priority residual witnessCount=0
+Allowed stop modes: representative-green, migrated, reduced, same-frontier, classification-only, architecture-gap, human-escalation
+```
+
+## Scope Basis
+
+Roadmap Phase `0.1 - Internal Coherence`, specifically rolling-restart topology
+workflow stabilization and production guarantees for the AGPL runtime.
+
+## Workflow Lane
+
+- Selected lane: `causal-escalation`
+- Why this lane is required: the representative release gate remains red and
+  canonical evidence selects a runtime owner boundary.
+- Escalation trigger to a heavier lane: runtime ownership, shared contract, or
+  representative scenario evidence changes.
+
+## Subagent Sequencing Requirement
+
+Required before implementation because this is a scenario-driven runtime
+owner-boundary package. Run the review/fix/implementation sequence before
+runtime or test implementation edits.
+
+## Subagent Sequencing Ledger
+
+- [ ] Review subagent recorded: pending-before-implementation-resumes.
+- [ ] Fix subagent recorded or explicitly not needed: pending-before-implementation-resumes.
+- [ ] Implementation subagent recorded: pending-before-implementation-resumes.
+
+## LLM Tool-First Contract
+
+Before raw JSON, raw logs, broad file search, oversized segment files, or ad hoc
+`jq`, use the canonical workflow command that owns the question:
+
+1. Package metadata or ledger edits: `npm run work:package:doctor -- --suggest <package>`, `npm run work:package:doctor -- --fix-dry-run <package>`, `npm run work:package:schema`, or `npm run work:package:new -- ...`.
+2. Representative evidence: `npm run work:evidence-summary -- <artifact>` plus any focused extractor for this failure class.
+3. Owner discovery: `npm run analyze:owner-files -- <owner> [boundary]`.
+4. Subagent sequencing: `npm run work:subagent-prompt -- --role <role> --package <package>`.
+5. Large-file cleanup: `npm run work:oversized-next -- --markdown`.
+
+If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which
+canonical extractor was tried and why it was insufficient.
+
+## In Scope
+
+1. work/packages/active-20260517-startup-active-gate-remaining-handoff-reconcile-node.md
+2. work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md
+3. work/sprints/current-blocker.md
+4. work/sprints/current-blocker.json
+5. work/model-ledger.jsonl
+
+Candidate runtime files are listed in metadata but stay gated until focused
+proof and the implementation subagent promote exact edits.
+
+## Out Of Scope
+
+1. topology_publication_owner
+2. operation_workflow_owner
+3. timeout_budgets
+4. active_gate_admission
+5. publication_truth
+6. selected-source timeout handling
+7. terminal-progress selection
+8. readiness_support
+
+## Model Fit
+
+- Package class: `representative-frontier-closure`
+- Intended minimum model: `gpt-5.3-codex`
+- Scope shape: `owner-boundary-contraction/current-frontier`
+- Output profile: `medium`
+- Owned files: `work/packages/active-20260517-startup-active-gate-remaining-handoff-reconcile-node.md`, `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md`, `work/sprints/current-blocker.md`, `work/sprints/current-blocker.json`, `work/model-ledger.jsonl`
+- Forbidden files: `topology_publication_owner`, `operation_workflow_owner`, `timeout_budgets`, `active_gate_admission`, `publication_truth`, `selected-source timeout handling`, `terminal-progress selection`, `readiness_support`
+- Frozen decisions: publication ACK, priority recovery, timeout budgets,
+  active-gate admission, publication truth, selected-source timeout handling,
+  terminal-progress selection, and readiness support stay frozen unless
+  canonical evidence selects them again.
+- Escalation triggers: owned files expand beyond this package, runtime ownership changes, or representative scenario evidence changes.
+- Focused proof: `npm run work:evidence-summary -- test-output/reports/rolling-restart-startup-publication-lag-projection-20260517T000000Z.report.json`, `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-startup-publication-lag-projection-20260517T000000Z.report.json --handoff-probe`, `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-startup-publication-lag-projection-20260517T000000Z.report.json --replay-fixture`, `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-startup-publication-lag-projection-20260517T000000Z.report.json`, `npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-startup-publication-lag-projection-20260517T000000Z.report.json`, `npm run analyze:owner-files -- startup_active_gate_owner snapshot_coverage`
+- Model ledger advisory: `escalate`
+
+## Validation
+
+1. PASS: `npm run work:evidence-summary -- test-output/reports/rolling-restart-startup-publication-lag-projection-20260517T000000Z.report.json`
+2. PASS: `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-startup-publication-lag-projection-20260517T000000Z.report.json --handoff-probe`
+3. PASS: `npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-startup-publication-lag-projection-20260517T000000Z.report.json`
+4. PASS: `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-startup-publication-lag-projection-20260517T000000Z.report.json`
+5. PASS: `npm run analyze:owner-files -- startup_active_gate_owner snapshot_coverage`
