@@ -10,9 +10,9 @@ Workflow lane: `causal-escalation`
 
 Scenario: `rolling-restart`
 
-Artifact: `test-output/reports/rolling-restart-cdc-query-timeout-fallback-20260516T233948Z.report.json`
+Artifact: `test-output/reports/rolling-restart-query-reconnect-delivery-20260517T001920Z.report.json`
 
-Playback: `test-output/reports/.playback/rolling-restart-cdc-query-timeout-fallback-20260516T233948Z/rolling-restart/`
+Playback: `test-output/reports/.playback/rolling-restart-query-reconnect-delivery-20260517T001920Z/rolling-restart/`
 
 ## Boundary
 
@@ -22,20 +22,20 @@ Boundary: `reconnect_delivery`
 
 Dominant reason: `active_gate_timed_out`
 
-Current state: The CDC fallback slice is closed as migrated: message-only Query timeout after 3000ms now enters bounded SQL fallback, but the representative remains red at active_gate_snapshot_coverage with snapshotCoverageNodeCount=0/5. The selected repair records readSource=sql_query_engine and fails on SELECT * FROM nodes while message-router repeatedly waits for reconnect to restarted seed 7493b0ab-a054-5fad-a91b-5e331db29304.
+Current state: The query/message-router reconnect delivery slice is closed as migrated: routed SQL delivery no longer spends the full query budget waiting for a cold reconnect and focused tests prove reconnect-deferred candidates fall through inside the original query budget. Fresh representative evidence remains red at active_gate_snapshot_coverage with snapshotCoverageNodeCount=0/5, but the selected repair error moved from nodes:Query timeout after 3000ms to nodes:Connection to node 7493b0ab-a054-5fad-a91b-5e331db29304 closed with query_participant_failure/control_plane_backpressure evidence.
 
 ## Next Action
 
-Prove routed SELECT * FROM nodes under reconnect pressure falls through to an eligible live candidate or returns typed retryable evidence without increasing timeout budgets, then rerun rolling-restart for coverage movement or green.
+Open the next owner-boundary package to decide why authoritative SELECT * FROM nodes routes through inactive participant 7493b0ab-a054-5fad-a91b-5e331db29304, then edit only the selected participant/routing owner path for coverage movement or green.
 
 ## Proof Ladder
 
 1. `npm run work:validate -- --entry work/packages/done-20260516-query-message-router-reconnect-delivery-snapshot-coverage.md`
-2. `npm run work:evidence-summary -- test-output/reports/rolling-restart-cdc-query-timeout-fallback-20260516T233948Z.report.json`
-3. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-cdc-query-timeout-fallback-20260516T233948Z.report.json --explain active_gate_snapshot_coverage`
-4. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-cdc-query-timeout-fallback-20260516T233948Z.report.json --handoff-probe`
-5. `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-cdc-query-timeout-fallback-20260516T233948Z.report.json`
-6. `npm run analyze:distributed-failure -- --report test-output/reports/rolling-restart-cdc-query-timeout-fallback-20260516T233948Z.report.json`
+2. `npm run work:evidence-summary -- test-output/reports/rolling-restart-query-reconnect-delivery-20260517T001920Z.report.json`
+3. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-query-reconnect-delivery-20260517T001920Z.report.json --explain active_gate_snapshot_coverage`
+4. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-query-reconnect-delivery-20260517T001920Z.report.json --handoff-probe`
+5. `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-query-reconnect-delivery-20260517T001920Z.report.json`
+6. `npm run analyze:distributed-failure -- --report test-output/reports/rolling-restart-query-reconnect-delivery-20260517T001920Z.report.json`
 7. `npm run analyze:owner-files -- query_message_router_owner reconnect_delivery --markdown`
 
 ## Model Fit
@@ -60,7 +60,7 @@ Status: `live-red-scenario-release-gate`
 
 Scenario: `rolling-restart`
 
-Artifact: `test-output/reports/rolling-restart-cdc-query-timeout-fallback-20260516T233948Z.report.json`
+Artifact: `test-output/reports/rolling-restart-query-reconnect-delivery-20260517T001920Z.report.json`
 
 Frontier: `active_gate_snapshot_coverage`
 
@@ -70,7 +70,7 @@ Boundary: `snapshot_coverage`
 
 Dominant reason: `active_gate_timed_out`
 
-Next action: `Reduce routed SQL delivery loss under message-router reconnect pressure while keeping timeout budgets and active-gate admission frozen.`
+Next action: `Reduce inactive-participant routing for authoritative nodes reads while keeping timeout budgets and active-gate admission frozen.`
 
 ## Causal Governance
 
@@ -80,9 +80,9 @@ Stop-condition check: `Run entry validation, handoff/snapshot probe on the CDC f
 
 Expected causal-model change: `snapshotCoverage improves above 2/5, the authoritative nodes query timeout disappears, the frontier migrates to a genuinely new owner boundary, or representative rolling-restart turns green.`
 
-Representative outcome: `pending-before-rerun`
+Representative outcome: `migrated`
 
-Causal debt: `The query executor and message-router reconnect path must not spend the full SQL query budget waiting on a reconnecting seed when another live candidate can answer or when the legal outcome is a typed retryable/deferred delivery result.`
+Causal debt: `Resolved for this boundary: the query executor and message-router reconnect path now return typed reconnect-deferred evidence promptly and read delivery falls through to another live candidate inside the original query budget.`
 
 Cross-boundary review: `Do not reopen publication ACK, priority recovery, timeout budget increases, or active-gate admission unless canonical evidence selects them again.`
 
@@ -98,7 +98,7 @@ Phase chain:
 4. `edit only the selected query/message-router owner path after subagent proof is clean`
 5. `rerun representative rolling-restart and classify green, reduced, same-frontier, migrated, or contradictory`
 
-Current first frontier: `active_gate_snapshot_coverage in test-output/reports/rolling-restart-cdc-query-timeout-fallback-20260516T233948Z.report.json, canonically owned by startup_active_gate_owner / snapshot_coverage with internal evidence pointing to query_message_router_owner / reconnect_delivery.`
+Current first frontier: `active_gate_snapshot_coverage in test-output/reports/rolling-restart-query-reconnect-delivery-20260517T001920Z.report.json, canonically owned by startup_active_gate_owner / snapshot_coverage with internal evidence now pointing past query_message_router_owner / reconnect_delivery to participant connection closure under query_participant_failure/control_plane_backpressure.`
 
 Known downstream blockers:
 
@@ -106,8 +106,8 @@ Known downstream blockers:
 2. `priority_recovery_partition_progress is satisfied by canonical evidence`
 3. `discovery_node_coverage_gap is absent`
 4. `selected snapshot source remains 11601fe0-72d6-5853-8590-ec2881853e72 and is admin-ready`
-5. `authoritative repair records readSource=sql_query_engine before timing out on nodes`
-6. `message-router repeatedly logs reconnect timeout to 7493b0ab-a054-5fad-a91b-5e331db29304`
+5. `authoritative repair records readSource=sql_query_engine before failing on nodes with Connection to node 7493b0ab-a054-5fad-a91b-5e331db29304 closed`
+6. `message-router reconnect delivery now returns typed ROUTER_CONNECTION_CLOSED promptly instead of consuming the full query budget`
 
 Missing causal edge: `Prove routed SELECT * FROM nodes under reconnect pressure falls through to another active candidate or returns typed retryable/deferred evidence before the SQL query budget is exhausted.`
 
@@ -123,11 +123,11 @@ Max progress bound: `one focused query_message_router_owner / reconnect_delivery
 
 Same-frontier fallback: `If focused tests pass but the representative stays same-frontier without metric movement, stop and classify same-frontier instead of reopening frozen edges.`
 
-Expected next frontier: `representative green or a new owner boundary past query/message-router reconnect delivery`
+Expected next frontier: `representative green or the participant/routing owner boundary for inactive node 7493b0ab-a054-5fad-a91b-5e331db29304`
 
-Result classification: `pending-before-probe`
+Result classification: `migrated`
 
-Stop condition: `continue-local-fix`
+Stop condition: `migrate-owner-boundary`
 
 Recent frontier history:
 

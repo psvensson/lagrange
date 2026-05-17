@@ -254,3 +254,9 @@ canonical extractor was tried and why it was insufficient.
 16. Passed - `npm run analyze:distributed-failure -- --report test-output/reports/rolling-restart-query-reconnect-delivery-20260517T001920Z.report.json`
 17. Passed - `npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-query-reconnect-delivery-20260517T001920Z.report.json`
 18. Failed as expected for the representative gate, classified as migrated - `node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-query-reconnect-delivery-20260517T001920Z.report.json --verbose`
+
+## Commit And Push Ledger
+
+1. Focused package commit: `d7f6d363fb868e0219ecbabf40e5fdd0843ccbee`
+2. Pushed to: `origin/codex/pending-ack-eligibility-filter`
+3. Commit contains only package-owned files/package-status/allowed sprint handoff: yes
