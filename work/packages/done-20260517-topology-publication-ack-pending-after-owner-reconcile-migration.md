@@ -255,14 +255,31 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 - Forbidden files: `timeout_budgets`, `active_gate_admission`, `selected_snapshot_source_selection`, `forced_repair_timeout_handling`, `authoritative_query_pressure_fallback`, `readiness_support`, `priority_recovery_workflow_progress`
 - Frozen decisions: package scope and lane stay bounded unless explicitly escalated.
 - Escalation triggers: owned files expand beyond this package, runtime ownership changes, or representative scenario evidence changes.
-- Focused proof: `npm run work:evidence-summary -- test-output/reports/rolling-restart-owner-reconcile-visible-readback-20260517T081137Z.report.json`, `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-owner-reconcile-visible-readback-20260517T081137Z.report.json --handoff-probe`, `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-owner-reconcile-visible-readback-20260517T081137Z.report.json --replay-fixture`, `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-owner-reconcile-visible-readback-20260517T081137Z.report.json`, `npm run analyze:distributed-failure -- --report test-output/reports/rolling-restart-owner-reconcile-visible-readback-20260517T081137Z.report.json`, `npm run analyze:owner-files -- topology_publication_owner publication_convergence --markdown`
+- Focused proof: `node --test test/control-plane/publication-owner-stream.test.js test/control-plane/publication-recovery-gate.test.js test/control-plane/publication-recovery-evidence.test.js`, `node scripts/check-guideline-literals.js src/control-plane/publication-owner-evidence.js src/control-plane/publication-owner-decision.js src/control-plane/publication-recovery-gate.js src/control-plane/publication-recovery-evidence.js test/control-plane/publication-owner-stream.test.js test/control-plane/publication-recovery-gate.test.js test/control-plane/publication-recovery-evidence.test.js`, `node scripts/check-guideline-decision-boundaries.js src/control-plane/publication-owner-evidence.js src/control-plane/publication-owner-decision.js src/control-plane/publication-recovery-gate.js src/control-plane/publication-recovery-evidence.js test/control-plane/publication-owner-stream.test.js test/control-plane/publication-recovery-gate.test.js test/control-plane/publication-recovery-evidence.test.js`, `npm run audit:runtime-grammar:file -- src/control-plane/publication-owner-evidence.js src/control-plane/publication-owner-decision.js src/control-plane/publication-recovery-gate.js src/control-plane/publication-recovery-evidence.js`, `npm run work:evidence-summary -- test-output/reports/rolling-restart-publication-open-count-only-ack-20260517T084752Z.report.json`, `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-publication-open-count-only-ack-20260517T084752Z.report.json --handoff-probe`, `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-publication-open-count-only-ack-20260517T084752Z.report.json --replay-fixture`, `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-publication-open-count-only-ack-20260517T084752Z.report.json`, `npm run analyze:distributed-failure -- --report test-output/reports/rolling-restart-publication-open-count-only-ack-20260517T084752Z.report.json`
 - Model ledger advisory: `escalate`
 
 ## Validation
 
-1. npm run work:evidence-summary -- test-output/reports/rolling-restart-owner-reconcile-visible-readback-20260517T081137Z.report.json
-2. npm run analyze:topology-convergence -- test-output/reports/rolling-restart-owner-reconcile-visible-readback-20260517T081137Z.report.json --handoff-probe
-3. npm run analyze:topology-convergence -- test-output/reports/rolling-restart-owner-reconcile-visible-readback-20260517T081137Z.report.json --replay-fixture
-4. npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-owner-reconcile-visible-readback-20260517T081137Z.report.json
-5. npm run analyze:distributed-failure -- --report test-output/reports/rolling-restart-owner-reconcile-visible-readback-20260517T081137Z.report.json
-6. npm run analyze:owner-files -- topology_publication_owner publication_convergence --markdown
+1. PASS - `node --test test/control-plane/publication-owner-stream.test.js test/control-plane/publication-recovery-gate.test.js test/control-plane/publication-recovery-evidence.test.js`
+2. PASS - `node scripts/check-guideline-literals.js src/control-plane/publication-owner-evidence.js src/control-plane/publication-owner-decision.js src/control-plane/publication-recovery-gate.js src/control-plane/publication-recovery-evidence.js test/control-plane/publication-owner-stream.test.js test/control-plane/publication-recovery-gate.test.js test/control-plane/publication-recovery-evidence.test.js`
+3. PASS - `node scripts/check-guideline-decision-boundaries.js src/control-plane/publication-owner-evidence.js src/control-plane/publication-owner-decision.js src/control-plane/publication-recovery-gate.js src/control-plane/publication-recovery-evidence.js test/control-plane/publication-owner-stream.test.js test/control-plane/publication-recovery-gate.test.js test/control-plane/publication-recovery-evidence.test.js`
+4. PASS - `npm run audit:runtime-grammar:file -- src/control-plane/publication-owner-evidence.js src/control-plane/publication-owner-decision.js src/control-plane/publication-recovery-gate.js src/control-plane/publication-recovery-evidence.js`
+5. PASS - `git diff --check`
+6. RED/MIGRATED - `node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-publication-open-count-only-ack-20260517T084752Z.report.json --verbose`
+7. PASS - `npm run work:evidence-summary -- test-output/reports/rolling-restart-publication-open-count-only-ack-20260517T084752Z.report.json`
+8. PASS - `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-publication-open-count-only-ack-20260517T084752Z.report.json --handoff-probe`
+9. PASS - `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-publication-open-count-only-ack-20260517T084752Z.report.json --replay-fixture`
+10. PASS - `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-publication-open-count-only-ack-20260517T084752Z.report.json`
+11. PASS - `npm run analyze:distributed-failure -- --report test-output/reports/rolling-restart-publication-open-count-only-ack-20260517T084752Z.report.json`
+
+Representative result: red but migrated. `publication_ack_convergence` is
+satisfied with `publicationStatus=PUBLISHED` and `pendingAckCount=0`; the first
+frontier moved to `active_gate_snapshot_coverage` under
+`startup_active_gate_owner / snapshot_coverage` with `active_gate_timed_out`,
+`snapshotCoverageNodeCount=3/5`, and `pendingReconcileCount=2`.
+
+## Commit And Push Ledger
+
+1. Focused package commit: `52a3d5b6f09648a94f267eff3ceb218a980b1b3b`
+2. Pushed to: `origin/codex/pending-ack-eligibility-filter`
+3. Commit contains only package-owned files/package-status/allowed sprint handoff: yes
