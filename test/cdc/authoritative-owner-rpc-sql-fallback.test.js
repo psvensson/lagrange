@@ -27,11 +27,18 @@ const TEST_ALLOW_SQL_FALLBACK = true;
 const TEST_TRANSPORT_READY = true;
 const TEST_TIMEOUT_MS = 1234;
 const TEST_RETRY_AFTER_MS = 250;
+const TEST_QUERY_TIMEOUT_AFTER_MS = 3000;
+const TEST_QUERY_TIMEOUT_AFTER_MESSAGE =
+  `${QUERY_ERROR_MSG.QUERY_TIMEOUT_AFTER_PREFIX}${TEST_QUERY_TIMEOUT_AFTER_MS}` +
+  QUERY_ERROR_MSG.QUERY_TIMEOUT_AFTER_SUFFIX;
 const TEST_ROUTED_SQL_SOURCE = 'sql_query_engine';
 const TEST_NODES_SQL = 'SELECT * FROM nodes WHERE node_id = ?';
 const TEST_OWNER_RPC_SQL_FALLBACK_NAME =
   'CDCIntegrationService - owner-RPC preferred SQL fallback recovers ' +
   'timeout-shaped nodes reads through routed SQL';
+const TEST_OWNER_RPC_MESSAGE_ONLY_SQL_FALLBACK_NAME =
+  'CDCIntegrationService - owner-RPC preferred SQL fallback recovers ' +
+  'message-only query-timeout-shaped nodes reads through routed SQL';
 const TEST_ROUTING_SNAPSHOT_SERVICE_ROW_COUNT = 2;
 const TEST_ROUTING_SNAPSHOT_ROUTABLE_SERVICE_COUNT = 2;
 const TEST_LAST_HEARTBEAT_MS = 5000;
@@ -71,7 +78,7 @@ afterEach(() => {
   LoggingService.resetInstance();
 });
 
-test(TEST_OWNER_RPC_SQL_FALLBACK_NAME, async (t) => {
+async function assertOwnerRpcSqlFallbackRecovers(t, ownerRpcFailure) {
   const ownerRpcReads = [];
   const sqlFallbackReads = [];
   const service = new CDCIntegrationService({
@@ -91,13 +98,7 @@ test(TEST_OWNER_RPC_SQL_FALLBACK_NAME, async (t) => {
           options = {},
         ) {
           ownerRpcReads.push({partitionId, sql, params, options});
-          return {
-            success: false,
-            errorCode: QUERY_ERROR_CODE.ROUTER_MESSAGE_TIMEOUT,
-            error: QUERY_ERROR_MSG.MESSAGE_TIMEOUT,
-            retryAfterMs: TEST_RETRY_AFTER_MS,
-            rows: [],
-          };
+          return ownerRpcFailure;
         },
       },
       async executeQuery(sql, params = [], options = {}) {
@@ -174,4 +175,21 @@ test(TEST_OWNER_RPC_SQL_FALLBACK_NAME, async (t) => {
     TEST_TIMEOUT_MS,
     'routed SQL fallback should preserve the query timeout budget',
   );
+}
+
+test(TEST_OWNER_RPC_SQL_FALLBACK_NAME, async (t) => {
+  await assertOwnerRpcSqlFallbackRecovers(t, {
+    success: false,
+    errorCode: QUERY_ERROR_CODE.ROUTER_MESSAGE_TIMEOUT,
+    retryAfterMs: TEST_RETRY_AFTER_MS,
+    rows: [],
+  });
+});
+
+test(TEST_OWNER_RPC_MESSAGE_ONLY_SQL_FALLBACK_NAME, async (t) => {
+  await assertOwnerRpcSqlFallbackRecovers(t, {
+    success: false,
+    error: TEST_QUERY_TIMEOUT_AFTER_MESSAGE,
+    rows: [],
+  });
 });

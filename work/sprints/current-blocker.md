@@ -4,38 +4,39 @@
 
 Sprint: `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md`
 
-Package: `work/packages/active-20260516-startup-active-gate-authoritative-nodes-query-pressure.md`
+Package: `work/packages/active-20260516-query-message-router-reconnect-delivery-snapshot-coverage.md`
 
 Workflow lane: `causal-escalation`
 
 Scenario: `rolling-restart`
 
-Artifact: `test-output/reports/rolling-restart-after-forced-repair-local-fallback-20260516T224600Z.report.json`
+Artifact: `test-output/reports/rolling-restart-cdc-query-timeout-fallback-20260516T233948Z.report.json`
 
-Playback: `none`
+Playback: `test-output/reports/.playback/rolling-restart-cdc-query-timeout-fallback-20260516T233948Z/rolling-restart/`
 
 ## Boundary
 
-Owner: `startup_active_gate_owner`
+Owner: `query_message_router_owner`
 
-Boundary: `snapshot_coverage`
+Boundary: `reconnect_delivery`
 
 Dominant reason: `active_gate_timed_out`
 
-Current state: Representative rolling-restart remains red on active_gate_snapshot_coverage with snapshotCoverageNodeCount=0/5 after the predecessor removed discovery_node_coverage_gap and selected_snapshot_source_timeout. The selected error is authoritative control snapshot repair failing on nodes with Query timeout after 3000ms.
+Current state: The CDC fallback slice is closed as migrated: message-only Query timeout after 3000ms now enters bounded SQL fallback, but the representative remains red at active_gate_snapshot_coverage with snapshotCoverageNodeCount=0/5. The selected repair records readSource=sql_query_engine and fails on SELECT * FROM nodes while message-router repeatedly waits for reconnect to restarted seed 7493b0ab-a054-5fad-a91b-5e331db29304.
 
 ## Next Action
 
-Build a replayable authoritative nodes query pressure fixture for the selected source 11601fe0-72d6-5853-8590-ec2881853e72, then edit only the selected owner path without increasing timeout budgets.
+Prove routed SELECT * FROM nodes under reconnect pressure falls through to an eligible live candidate or returns typed retryable evidence without increasing timeout budgets, then rerun rolling-restart for coverage movement or green.
 
 ## Proof Ladder
 
-1. `npm run work:validate -- --entry work/packages/active-20260516-startup-active-gate-authoritative-nodes-query-pressure.md`
-2. `npm run work:evidence-summary -- test-output/reports/rolling-restart-after-forced-repair-local-fallback-20260516T224600Z.report.json`
-3. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-forced-repair-local-fallback-20260516T224600Z.report.json --explain active_gate_snapshot_coverage`
-4. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-forced-repair-local-fallback-20260516T224600Z.report.json --handoff-probe`
-5. `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-forced-repair-local-fallback-20260516T224600Z.report.json`
-6. `npm run analyze:owner-files -- startup_active_gate_owner snapshot_coverage --markdown`
+1. `npm run work:validate -- --entry work/packages/active-20260516-query-message-router-reconnect-delivery-snapshot-coverage.md`
+2. `npm run work:evidence-summary -- test-output/reports/rolling-restart-cdc-query-timeout-fallback-20260516T233948Z.report.json`
+3. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-cdc-query-timeout-fallback-20260516T233948Z.report.json --explain active_gate_snapshot_coverage`
+4. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-cdc-query-timeout-fallback-20260516T233948Z.report.json --handoff-probe`
+5. `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-cdc-query-timeout-fallback-20260516T233948Z.report.json`
+6. `npm run analyze:distributed-failure -- --report test-output/reports/rolling-restart-cdc-query-timeout-fallback-20260516T233948Z.report.json`
+7. `npm run analyze:owner-files -- query_message_router_owner reconnect_delivery --markdown`
 
 ## Model Fit
 
@@ -51,6 +52,7 @@ Escalation triggers:
 
 1. `owned files expand beyond this package`
 2. `a frozen decision must be reopened`
+3. `representative evidence reselects publication ACK, priority recovery, timeout budgets, or active-gate admission`
 
 ## Representative Residual
 
@@ -58,7 +60,7 @@ Status: `live-red-scenario-release-gate`
 
 Scenario: `rolling-restart`
 
-Artifact: `test-output/reports/rolling-restart-after-forced-repair-local-fallback-20260516T224600Z.report.json`
+Artifact: `test-output/reports/rolling-restart-cdc-query-timeout-fallback-20260516T233948Z.report.json`
 
 Frontier: `active_gate_snapshot_coverage`
 
@@ -68,61 +70,60 @@ Boundary: `snapshot_coverage`
 
 Dominant reason: `active_gate_timed_out`
 
-Next action: `Reduce authoritative control snapshot nodes query pressure without reopening publication ACK, priority recovery, timeout budget increases, or active-gate admission.`
+Next action: `Reduce routed SQL delivery loss under message-router reconnect pressure while keeping timeout budgets and active-gate admission frozen.`
 
 ## Causal Governance
 
-Causal hypothesis: `The representative frontier remains active_gate_snapshot_coverage after discovery_node_coverage_gap disappeared. The selected subcause is authoritative control snapshot repair nodes query pressure: selected source 11601fe0-72d6-5853-8590-ec2881853e72 is reachable and admin-ready, but every active source probe reaches the same authoritative nodes query timeout after 3000ms.`
+Causal hypothesis: `The active-gate coverage gap is now owned by routed SQL delivery pressure, not CDC owner-RPC fallback. SQL fallback reaches SELECT * FROM nodes, but parallel query delivery waits behind repeated message-router reconnect attempts to a restarted seed until the existing 3000ms query budget expires.`
 
-Stop-condition check: `Run entry validation, replayable authoritative nodes query fixture/probe, npm run analyze:causal-model on fresh evidence, focused owner tests for the promoted runtime file, static guardrails, and one representative rolling-restart rerun.`
+Stop-condition check: `Run entry validation, handoff/snapshot probe on the CDC fallback representative, npm --silent run analyze:causal-model on fresh evidence, focused query/message-router reconnect tests, static guardrails, and one representative rolling-restart rerun.`
 
-Expected causal-model change: `snapshotCoverage improves above 2/5, discovery_node_coverage_gap stays absent and the frontier migrates to a genuinely new owner boundary, or representative rolling-restart turns green.`
+Expected causal-model change: `snapshotCoverage improves above 2/5, the authoritative nodes query timeout disappears, the frontier migrates to a genuinely new owner boundary, or representative rolling-restart turns green.`
 
 Representative outcome: `pending-before-rerun`
 
-Causal debt: `Publication ACK and priority recovery are satisfied. Active-gate snapshot coverage remains incomplete at 0/5. The selected error is authoritative control snapshot repair failing on nodes with Query timeout after 3000ms.`
+Causal debt: `The query executor and message-router reconnect path must not spend the full SQL query budget waiting on a reconnecting seed when another live candidate can answer or when the legal outcome is a typed retryable/deferred delivery result.`
 
 Cross-boundary review: `Do not reopen publication ACK, priority recovery, timeout budget increases, or active-gate admission unless canonical evidence selects them again.`
 
 ## Scenario Causal Closure
 
-Reference scenario/probe: `rolling-restart after forced repair local fallback`
+Reference scenario/probe: `rolling-restart after CDC query timeout fallback`
 
 Phase chain:
 
-1. `consume reduced four-cause split proof`
-2. `build the narrow authoritative nodes query pressure replay/probe for source 11601fe0-72d6-5853-8590-ec2881853e72`
-3. `separate authoritative query pressure from source selection, forced repair stall, and inherited readiness support`
-4. `promote only the selected owner runtime file after the probe selects one`
-5. `rerun representative rolling-restart and classify green, reduced, same-frontier, migrated, or split`
+1. `consume the closed CDC fallback migration proof`
+2. `separate query/message-router reconnect delivery from admin degradation and CDC fallback`
+3. `build focused routed SELECT nodes tests under reconnect pressure`
+4. `edit only the selected query/message-router owner path after subagent proof is clean`
+5. `rerun representative rolling-restart and classify green, reduced, same-frontier, migrated, or contradictory`
 
-Current first frontier: `active_gate_snapshot_coverage in test-output/reports/rolling-restart-after-forced-repair-local-fallback-20260516T224600Z.report.json, owned by startup_active_gate_owner / snapshot_coverage.`
+Current first frontier: `active_gate_snapshot_coverage in test-output/reports/rolling-restart-cdc-query-timeout-fallback-20260516T233948Z.report.json, canonically owned by startup_active_gate_owner / snapshot_coverage with internal evidence pointing to query_message_router_owner / reconnect_delivery.`
 
 Known downstream blockers:
 
 1. `publication_ack_convergence is satisfied by canonical evidence`
 2. `priority_recovery_partition_progress is satisfied by canonical evidence`
-3. `selected_snapshot_source_timeout is absent from canonical reasons`
-4. `discovery_node_coverage_gap is absent from the latest representative report`
-5. `snapshotCoverageNodeCount is 0 and expectedNodeCount is 5`
-6. `selected snapshot error is authoritative control snapshot repair failure on nodes due to Query timeout after 3000ms`
-7. `readiness support remains inherited_active_gate_no_progress with no_progress_terminal evidence`
+3. `discovery_node_coverage_gap is absent`
+4. `selected snapshot source remains 11601fe0-72d6-5853-8590-ec2881853e72 and is admin-ready`
+5. `authoritative repair records readSource=sql_query_engine before timing out on nodes`
+6. `message-router repeatedly logs reconnect timeout to 7493b0ab-a054-5fad-a91b-5e331db29304`
 
-Missing causal edge: `Prove the authoritative nodes query pressure owner path before runtime edits.`
+Missing causal edge: `Prove routed SELECT * FROM nodes under reconnect pressure falls through to another active candidate or returns typed retryable/deferred evidence before the SQL query budget is exhausted.`
 
-Missing causal edge probe: `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-forced-repair-local-fallback-20260516T224600Z.report.json --explain active_gate_snapshot_coverage`
+Missing causal edge probe: `npx tap test/query/query-executor.test-part-6.js -g "reconnect delivery"`
 
-Bounded progress proof: `The predecessor bounded forced-repair retry and removed discovery_node_coverage_gap; this package must make the next metric-moving retry on authoritative nodes query pressure.`
+Bounded progress proof: `Metric-moving proof only: snapshotCoverage above 2/5, authoritative nodes query timeout gone, genuinely new owner boundary, or representative green.`
 
-Bounded progress proof artifact: `test-output/reports/rolling-restart-after-forced-repair-local-fallback-20260516T224600Z.report.json`
+Bounded progress proof artifact: `test/transport/message-router-main-stage-1.js and test/query/query-executor.test-part-6.js`
 
-Expected observable transition: `snapshotCoverage improves above 2/5, the authoritative nodes query timeout disappears with a new owner boundary, or representative rolling-restart turns green.`
+Expected observable transition: `snapshotCoverage improves above 2/5, discovery_node_coverage_gap stays absent, representative rolling-restart turns green, or the frontier migrates to a genuinely new owner boundary after routed SQL delivery is reduced.`
 
-Max progress bound: `one focused startup_active_gate_owner / snapshot_coverage package slice after required subagent sequencing`
+Max progress bound: `one focused query_message_router_owner / reconnect_delivery slice after required subagent sequencing`
 
-Same-frontier fallback: `If the representative stays same-frontier without one of the metric-moving outcomes, stop and record the fixture evidence instead of reopening frozen edges.`
+Same-frontier fallback: `If focused tests pass but the representative stays same-frontier without metric movement, stop and classify same-frontier instead of reopening frozen edges.`
 
-Expected next frontier: `representative green, improved active-gate snapshot coverage above 2/5, or authoritative control snapshot nodes query pressure reduced to a narrower owner boundary`
+Expected next frontier: `representative green or a new owner boundary past query/message-router reconnect delivery`
 
 Result classification: `pending-before-probe`
 
@@ -131,10 +132,9 @@ Stop condition: `continue-local-fix`
 Recent frontier history:
 
 1. `work/packages/done-20260516-startup-active-gate-authoritative-repair-participant-failure.md / startup_active_gate_owner / snapshot_coverage / reduced`
-2. `work/packages/done-20260516-startup-active-gate-selected-snapshot-source-timeout.md / startup_active_gate_owner / snapshot_coverage / reduced`
-3. `work/packages/done-20260516-startup-active-gate-snapshot-coverage-deferred-refresh-discovery-gap.md / startup_active_gate_owner / snapshot_coverage / reduced`
+2. `work/packages/done-20260516-startup-active-gate-authoritative-nodes-query-pressure.md / startup_active_gate_owner / snapshot_coverage / migrated`
 
-Oscillation check: `This package is allowed because the predecessor selected authoritative control snapshot nodes query pressure after removing discovery_node_coverage_gap and selected_snapshot_source_timeout.`
+Oscillation check: `This package is allowed because the predecessor proved CDC owner-RPC fallback now reaches sql_query_engine and the remaining evidence is message-router reconnect delivery, not a reopened publication ACK, priority recovery, timeout budget, or active-gate admission edge.`
 
 Handoff invariant: `Publication ACK, priority recovery, timeout budget increases, and active-gate admission remain frozen unless canonical evidence selects them again.`
 
@@ -142,16 +142,23 @@ Handoff invariant: `Publication ACK, priority recovery, timeout budget increases
 
 Write scope:
 
-1. `work/packages/active-20260516-startup-active-gate-authoritative-nodes-query-pressure.md`
+1. `work/packages/active-20260516-query-message-router-reconnect-delivery-snapshot-coverage.md`
 2. `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md`
 3. `work/sprints/current-blocker.md`
 4. `work/sprints/current-blocker.json`
 5. `work/model-ledger.jsonl`
+6. `src/transport/message-router-segment-3.js`
+7. `src/query/query-executor-segment-2-part-1.js`
+8. `src/query/distributed/parallel-query-coordinator.js`
+9. `src/query/sql-query-engine-segment-6.js`
+10. `test/transport/message-router-main-stage-1.js`
+11. `test/query/query-executor.test-part-6.js`
 
 Handoff files:
 
-1. `work/packages/done-20260516-startup-active-gate-authoritative-repair-participant-failure.md`
-2. `test-output/reports/rolling-restart-after-forced-repair-local-fallback-20260516T224600Z.report.json`
+1. `work/packages/done-20260516-startup-active-gate-authoritative-nodes-query-pressure.md`
+2. `test-output/reports/rolling-restart-cdc-query-timeout-fallback-20260516T233948Z.report.json`
+3. `test-output/reports/.playback/rolling-restart-cdc-query-timeout-fallback-20260516T233948Z/rolling-restart/`
 
 Generated files:
 
@@ -160,20 +167,26 @@ Generated files:
 
 Candidate runtime files:
 
-1. `src/admin/admin-control-snapshot-class-part-2.js`
-2. `src/admin/admin-service-discovery-repair-methods.js`
-3. `src/admin/admin-service-discovery-readiness-methods.js`
-4. `src/control-plane/control-plane-snapshot-owner.js`
-5. `test/admin/admin-control-snapshot.test.js`
-6. `test/admin/admin-service-discovery.test.js`
+1. `src/transport/message-router-segment-3.js`
+2. `src/query/query-executor-segment-2-part-1.js`
+3. `src/query/distributed/parallel-query-coordinator.js`
+4. `src/query/sql-query-engine-segment-6.js`
+5. `test/transport/message-router-main-stage-1.js`
+6. `test/query/query-executor.test-part-6.js`
 
 Commit scope:
 
-1. `work/packages/active-20260516-startup-active-gate-authoritative-nodes-query-pressure.md`
+1. `work/packages/active-20260516-query-message-router-reconnect-delivery-snapshot-coverage.md`
 2. `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md`
 3. `work/sprints/current-blocker.md`
 4. `work/sprints/current-blocker.json`
 5. `work/model-ledger.jsonl`
+6. `src/transport/message-router-segment-3.js`
+7. `src/query/query-executor-segment-2-part-1.js`
+8. `src/query/distributed/parallel-query-coordinator.js`
+9. `src/query/sql-query-engine-segment-6.js`
+10. `test/transport/message-router-main-stage-1.js`
+11. `test/query/query-executor.test-part-6.js`
 
 Legacy touched files:
 

@@ -1,9 +1,10 @@
+# Query Message Router Reconnect Delivery Snapshot Coverage
+
+<!-- work-package
 {
-  "schema": "current-blocker-v1",
-  "generatedBy": "scripts/work-tracker.js",
-  "sprint": "work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md",
-  "package": "work/packages/active-20260516-query-message-router-reconnect-delivery-snapshot-coverage.md",
+  "schema": "work-package-v1",
   "status": "active",
+  "opened": "2026-05-16",
   "lane": "causal-escalation",
   "scenario": "rolling-restart",
   "artifact": "test-output/reports/rolling-restart-cdc-query-timeout-fallback-20260516T233948Z.report.json",
@@ -65,7 +66,6 @@
     "test/transport/message-router-main-stage-1.js",
     "test/query/query-executor.test-part-6.js"
   ],
-  "touchedFiles": [],
   "modelFit": {
     "packageClass": "representative-frontier-closure",
     "intendedMinimumModel": "gpt-5.3-codex",
@@ -132,3 +132,101 @@
   },
   "predecessor": "work/packages/done-20260516-startup-active-gate-authoritative-nodes-query-pressure.md"
 }
+-->
+
+## Why
+
+The previous slice improved the owner evidence but did not move the visible
+coverage metric: representative rolling-restart still reports
+`snapshotCoverageNodeCount=0/5`. The useful new fact is that the selected
+repair now reaches `readSource=sql_query_engine`; the remaining timeout is
+inside routed SQL delivery while message-router is reconnecting to the
+restarted seed.
+
+This package is allowed only if it moves one of the requested targets:
+snapshot coverage above `2/5`, disappearance of the authoritative nodes query
+timeout, migration to a new owner boundary, or representative green.
+
+## Scope Basis
+
+Roadmap Phase `0.1 - Internal Coherence`, specifically rolling-restart topology
+workflow stabilization and production guarantees for the AGPL runtime.
+
+## Workflow Lane
+
+- Selected lane: `causal-escalation`
+- Why this lane is required: the representative release gate remains red after
+  a bounded owner migration and now needs a focused runtime owner proof before
+  the next representative rerun.
+- Escalation trigger to a heavier lane: selected runtime ownership expands
+  beyond query/message-router reconnect delivery, a frozen edge must be
+  reopened, or representative evidence contradicts the selected owner boundary.
+
+## Subagent Sequencing Requirement
+
+Required before implementation because this is a scenario-driven runtime
+owner-boundary package.
+
+## Subagent Sequencing Ledger
+
+- [ ] Review subagent recorded: pending-before-review.
+- [ ] Fix subagent recorded or explicitly not needed: pending-review-result.
+- [ ] Implementation subagent recorded: pending-before-implementation.
+
+## LLM Tool-First Contract
+
+Before raw JSON, raw logs, broad file search, oversized segment files, or ad hoc `jq`, use the canonical workflow command that owns the question:
+
+1. Package metadata or ledger edits: `npm run work:package:doctor -- --suggest <package>`, `npm run work:package:doctor -- --fix-dry-run <package>`, `npm run work:package:schema`, or `npm run work:package:new -- ...`.
+2. Representative evidence: `npm run work:evidence-summary -- <artifact>` plus any focused extractor for this failure class.
+3. Owner discovery: `npm run analyze:owner-files -- <owner> [boundary]`.
+4. Subagent sequencing: `npm run work:subagent-prompt -- --role <role> --package <package>`.
+5. Large-file cleanup: `npm run work:oversized-next -- --markdown`.
+
+If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which
+canonical extractor was tried and why it was insufficient.
+
+## In Scope
+
+1. work/packages/active-20260516-query-message-router-reconnect-delivery-snapshot-coverage.md
+2. work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md
+3. work/sprints/current-blocker.md
+4. work/sprints/current-blocker.json
+5. work/model-ledger.jsonl
+6. src/transport/message-router-segment-3.js
+7. src/query/query-executor-segment-2-part-1.js
+8. src/query/distributed/parallel-query-coordinator.js
+9. src/query/sql-query-engine-segment-6.js
+10. test/transport/message-router-main-stage-1.js
+11. test/query/query-executor.test-part-6.js
+
+## Out Of Scope
+
+1. publication-ack-convergence
+2. priority_recovery_partition_progress
+3. timeout_budgets
+4. active_gate_admission
+
+## Model Fit
+
+- Package class: `representative-frontier-closure`
+- Intended minimum model: `gpt-5.3-codex`
+- Scope shape: `owner-boundary-contraction/current-frontier`
+- Output profile: `medium`
+- Owned files: `work/packages/active-20260516-query-message-router-reconnect-delivery-snapshot-coverage.md`, `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md`, `work/sprints/current-blocker.md`, `work/sprints/current-blocker.json`, `work/model-ledger.jsonl`, `src/transport/message-router-segment-3.js`, `src/query/query-executor-segment-2-part-1.js`, `src/query/distributed/parallel-query-coordinator.js`, `src/query/sql-query-engine-segment-6.js`, `test/transport/message-router-main-stage-1.js`, `test/query/query-executor.test-part-6.js`
+- Forbidden files: `publication-ack-convergence`, `priority_recovery_partition_progress`, `timeout_budgets`, `active_gate_admission`
+- Frozen decisions: publication ACK, priority recovery, timeout budgets, and active-gate admission stay closed unless canonical evidence selects them again.
+- Escalation triggers: owned files expand beyond this package, runtime ownership changes, or representative scenario evidence changes.
+- Focused proof: `npm run work:validate -- --entry work/packages/active-20260516-query-message-router-reconnect-delivery-snapshot-coverage.md`, `npm run work:evidence-summary -- test-output/reports/rolling-restart-cdc-query-timeout-fallback-20260516T233948Z.report.json`, `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-cdc-query-timeout-fallback-20260516T233948Z.report.json --explain active_gate_snapshot_coverage`, `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-cdc-query-timeout-fallback-20260516T233948Z.report.json --handoff-probe`, `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-cdc-query-timeout-fallback-20260516T233948Z.report.json`, focused query/message-router tests, static guardrails, and one representative rolling-restart rerun.
+- Model ledger advisory: `escalate`
+
+## Validation
+
+1. Pending - `npm run work:validate -- --entry work/packages/active-20260516-query-message-router-reconnect-delivery-snapshot-coverage.md`
+2. Pending - `npm run work:evidence-summary -- test-output/reports/rolling-restart-cdc-query-timeout-fallback-20260516T233948Z.report.json`
+3. Pending - `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-cdc-query-timeout-fallback-20260516T233948Z.report.json --explain active_gate_snapshot_coverage`
+4. Pending - `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-cdc-query-timeout-fallback-20260516T233948Z.report.json --handoff-probe`
+5. Pending - `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-cdc-query-timeout-fallback-20260516T233948Z.report.json`
+6. Pending - focused query/message-router reconnect tests.
+7. Pending - static guardrails.
+8. Pending - representative rolling-restart rerun.

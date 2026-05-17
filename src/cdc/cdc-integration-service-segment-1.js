@@ -26,6 +26,7 @@ const {
   LoggingService,
   NUM,
   QUERY_ERROR_CODE,
+  QUERY_ERROR_MSG,
   QUERY_TRANSPORT_NOT_READY_ERROR_CODE,
   SERVICE_STATUS,
   SERVICE_TYPE,
@@ -45,6 +46,37 @@ const AUTHORITATIVE_SQL_FALLBACK_RETRYABLE_ERROR_CODES = Object.freeze([
   QUERY_ERROR_CODE.ROUTER_CONNECTION_CLOSED,
   QUERY_ERROR_CODE.ROUTER_MESSAGE_TIMEOUT,
 ]);
+const AUTHORITATIVE_SQL_FALLBACK_QUERY_TIMEOUT_ERROR_MESSAGES = Object.freeze([
+  QUERY_ERROR_MSG.QUERY_TIMEOUT,
+]);
+
+function isAuthoritativeSqlFallbackQueryTimeoutMessage(errorMessage) {
+  if (typeof errorMessage !== TYPEOF.STRING) {
+    return false;
+  }
+  const normalizedMessage = errorMessage.trim();
+  if (
+    AUTHORITATIVE_SQL_FALLBACK_QUERY_TIMEOUT_ERROR_MESSAGES.includes(
+      normalizedMessage,
+    )
+  ) {
+    return true;
+  }
+  if (
+    !normalizedMessage.startsWith(QUERY_ERROR_MSG.QUERY_TIMEOUT_AFTER_PREFIX) ||
+    !normalizedMessage.endsWith(QUERY_ERROR_MSG.QUERY_TIMEOUT_AFTER_SUFFIX)
+  ) {
+    return false;
+  }
+  const timeoutValue = Number(
+    normalizedMessage.slice(
+      QUERY_ERROR_MSG.QUERY_TIMEOUT_AFTER_PREFIX.length,
+      normalizedMessage.length -
+        QUERY_ERROR_MSG.QUERY_TIMEOUT_AFTER_SUFFIX.length,
+    ),
+  );
+  return Number.isInteger(timeoutValue) && timeoutValue > NUM.ZERO;
+}
 
 class CDCIntegrationServiceSegment1 extends EventEmitter {
   constructor(options = {}) {
@@ -854,8 +886,13 @@ class CDCIntegrationServiceSegment1 extends EventEmitter {
     const errorCode = String(
       ownerRpcResult?.errorCode || ownerRpcResult?.code || '',
     ).toUpperCase();
+    const errorMessage =
+      typeof ownerRpcResult?.error === TYPEOF.STRING ?
+        ownerRpcResult.error :
+        ownerRpcResult?.error?.message || ownerRpcResult?.message;
     return (
       AUTHORITATIVE_SQL_FALLBACK_RETRYABLE_ERROR_CODES.includes(errorCode) ||
+      isAuthoritativeSqlFallbackQueryTimeoutMessage(errorMessage) ||
       ownerRpcResult?.deferRetry === true ||
       (
         Number.isFinite(ownerRpcResult?.retryAfterMs) &&

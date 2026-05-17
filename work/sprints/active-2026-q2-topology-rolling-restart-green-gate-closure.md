@@ -44,7 +44,7 @@ Canonical state for the current authoritative nodes query pressure package:
    downstream, and the selected edge is authoritative control snapshot nodes
    query pressure.
 9. The active package is now
-   `work/packages/active-20260516-startup-active-gate-authoritative-nodes-query-pressure.md`.
+   `work/packages/done-20260516-startup-active-gate-authoritative-nodes-query-pressure.md`.
    It must build the replayable authoritative nodes query pressure fixture for
    source `11601fe0-72d6-5853-8590-ec2881853e72` and edit only the selected
    owner path without increasing timeout budgets.
@@ -373,7 +373,7 @@ required action.
   snapshot nodes query pressure; publication ACK, priority recovery, timeout
   budget increases, and active-gate admission remain frozen.
 
-[Startup Active Gate Authoritative Nodes Query Pressure](../packages/active-20260516-startup-active-gate-authoritative-nodes-query-pressure.md)
+[Startup Active Gate Authoritative Nodes Query Pressure](../packages/done-20260516-startup-active-gate-authoritative-nodes-query-pressure.md)
 
 - Lane: `causal-escalation`
 - Owner boundary:
@@ -418,14 +418,14 @@ required action.
 
 1. `npm run work:context`
 2. `npm run work:llm-start`
-3. `npm run work:package:doctor -- --suggest work/packages/active-20260516-startup-active-gate-authoritative-nodes-query-pressure.md`
-4. `npm run work:validate -- --entry work/packages/active-20260516-startup-active-gate-authoritative-nodes-query-pressure.md`
+3. `npm run work:package:doctor -- --suggest work/packages/done-20260516-startup-active-gate-authoritative-nodes-query-pressure.md`
+4. `npm run work:validate -- --entry work/packages/done-20260516-startup-active-gate-authoritative-nodes-query-pressure.md`
 5. `npm run work:evidence-summary -- test-output/reports/rolling-restart-after-forced-repair-local-fallback-20260516T224600Z.report.json`
 6. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-forced-repair-local-fallback-20260516T224600Z.report.json --explain active_gate_snapshot_coverage`
 7. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-forced-repair-local-fallback-20260516T224600Z.report.json --handoff-probe`
 8. `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-forced-repair-local-fallback-20260516T224600Z.report.json`
 9. `npm run analyze:owner-files -- startup_active_gate_owner snapshot_coverage --markdown`
-10. `npm run work:subagent-prompt -- --role review --package work/packages/active-20260516-startup-active-gate-authoritative-nodes-query-pressure.md`
+10. `npm run work:subagent-prompt -- --role review --package work/packages/done-20260516-startup-active-gate-authoritative-nodes-query-pressure.md`
 11. Real review/fix/implementation subagent proof before runtime implementation starts.
 12. Focused authoritative nodes query pressure fixture/probe, selected owner tests,
     static guardrails, and representative `rolling-restart` after the package
@@ -502,7 +502,7 @@ Continue with the active authoritative control snapshot nodes query pressure
 package:
 
 ```text
-work/packages/active-20260516-startup-active-gate-authoritative-nodes-query-pressure.md
+work/packages/done-20260516-startup-active-gate-authoritative-nodes-query-pressure.md
 test-output/reports/rolling-restart-after-forced-repair-local-fallback-20260516T224600Z.report.json
 ```
 
