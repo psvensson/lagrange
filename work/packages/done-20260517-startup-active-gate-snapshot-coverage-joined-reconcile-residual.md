@@ -261,3 +261,9 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 22. PASS - `npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-active-gate-drained-handoff-20260517T095943Z.report.json`
 23. PASS - `npm run analyze:distributed-failure -- --report test-output/reports/rolling-restart-active-gate-drained-handoff-20260517T095943Z.report.json`
 24. PASS - `git diff --check`
+
+## Commit And Push Ledger
+
+1. Focused package commit: `3287008febd4c8681df87fe6bc0fdec577ece852`
+2. Pushed to: `origin/codex/pending-ack-eligibility-filter`
+3. Commit contains only package-owned files/package-status/allowed sprint handoff: yes
