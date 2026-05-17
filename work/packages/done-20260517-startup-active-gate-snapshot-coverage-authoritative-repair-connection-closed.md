@@ -276,6 +276,6 @@ Representative rerun:
 
 ## Commit And Push Ledger
 
-1. Focused package commit: pending-post-commit
-2. Pushed to: pending-post-push
-3. Commit contains only package-owned files/package-status/allowed sprint handoff: pending-post-commit
+1. Focused package commit: `a108e4a0b960ea3a0ed3d3bbe88f906633bcbdf4`
+2. Pushed to: `origin/codex/pending-ack-eligibility-filter`
+3. Commit contains only package-owned files/package-status/allowed sprint handoff: yes
