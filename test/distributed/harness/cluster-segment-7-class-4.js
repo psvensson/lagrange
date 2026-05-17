@@ -36,6 +36,7 @@ const {
   HTTP_OK_UPPER,
   INACTIVE_STATE,
   MIN_TIMEOUT_MS,
+  ONE,
   STARTUP_ADMISSION_STATE_BLOCKED,
   STARTUP_ADMISSION_STATE_DEGRADED,
   STARTUP_ADMISSION_STATE_STRONG_ACTIVE,
@@ -301,6 +302,10 @@ function extractPublicationProjectionNodeIds(row) {
   if (projectionAllowed !== true) {
     return [];
   }
+  const singleReconcileProjectionNodeIds =
+    pendingReconcileNodeIds.length === ONE ?
+      pendingReconcileNodeIds :
+      [];
   return normalizeDistinctStringArray([
     ...parseJsonArrayField(
       publicationConvergence?.[PUBLICATION_PUBLISHED_ACTIVE_NODE_IDS_FIELD],
@@ -310,6 +315,7 @@ function extractPublicationProjectionNodeIds(row) {
         PUBLICATION_PUBLISHED_ACTIVE_NODE_IDS_SNAKE_FIELD
       ],
     ),
+    ...singleReconcileProjectionNodeIds,
   ]);
 }
 

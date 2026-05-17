@@ -22,7 +22,7 @@ success is in scope.
 ## Current Blocker Snapshot
 
 Latest representative artifact:
-`test-output/reports/rolling-restart-startup-publication-lag-projection-20260517T000000Z.report.json`.
+`test-output/reports/rolling-restart-remaining-handoff-reconcile-node-20260517T135205Z.report.json`.
 
 Canonical state after the startup publication lag snapshot projection package
 reduced the pending handoff reconcile count:
@@ -42,7 +42,8 @@ reduced the pending handoff reconcile count:
 5. Representative owner boundary:
    `startup_active_gate_owner / snapshot_coverage`.
 6. Canonical blocker: `active_gate_snapshot_coverage`.
-7. Dominant reason: `owner_reconcile_pending`.
+7. Dominant reason: `active_gate_timed_out` with
+   `owner_reconcile_pending` still present on the same required action.
 8. The selected-source timeout edge is reduced: terminal progress now carries
    `snapshotCoverageNodeCount=4/5` and no longer selects
    `selected_snapshot_source_timeout` as the first subcause.
@@ -50,35 +51,41 @@ reduced the pending handoff reconcile count:
    run remains red, but `publicationActiveGateHandoffPendingReconcileCount`
    moved from `3` to `1`, publication ACK remains satisfied, and priority
    residual extraction still reports zero witnesses.
-10. The active-gate consumer remains blocked with
+10. The remaining-node projection package is reduced: focused part-5 harness
+   proof passed, and the representative rerun improved
+   `snapshotCoverageNodeCount` from `2/5` to `3/5` while publication ACK and
+   priority residuals stayed satisfied.
+11. The active-gate consumer remains blocked with
    `publicationActiveGateHandoffState=pending`,
    `publicationActiveGateHandoffReasonCode=owner_reconcile_pending`,
-   `publicationActiveGateHandoffPendingReconcileCount=1`, pending reconcile
-   node `35a891b8-c1a0-5064-9c6e-2acfba61c2a7`, and repair-deferred snapshot
-   observation with `snapshotCoverageNodeCount=2/5`.
-11. The next focused proof should target the remaining
-   `reconcile_owner_membership_publication` node. It must drain or reduce that
-   target, improve snapshot coverage, migrate to a genuinely new owner
+   `publicationActiveGateHandoffPendingReconcileCount=2`, pending reconcile
+   nodes `11601fe0-72d6-5853-8590-ec2881853e72` and
+   `35a891b8-c1a0-5064-9c6e-2acfba61c2a7`, and repair-deferred snapshot
+   observation with `snapshotCoverageNodeCount=3/5`.
+12. The next focused proof should continue on the same
+   `reconcile_owner_membership_publication` edge. It must drain or reduce that
+   target, improve snapshot coverage again, migrate to a genuinely new owner
    boundary, or turn representative `rolling-restart` green.
-12. If the next proof only reduces the same owner, boundary, and required
+13. If the next proof only reduces the same owner, boundary, and required
     action, keep the current active package open and update its edge card
     instead of opening another successor.
 
 ## Current Edge Card
 
 ```text
-Representative artifact: test-output/reports/rolling-restart-startup-publication-lag-projection-20260517T000000Z.report.json
+Representative artifact: test-output/reports/rolling-restart-remaining-handoff-reconcile-node-20260517T135205Z.report.json
 First frontier: active_gate_snapshot_coverage
 Owner: startup_active_gate_owner
 Boundary: snapshot_coverage
-Selected cause: owner_reconcile_pending through pending publication active-gate handoff
+Selected cause: active_gate_timed_out with owner_reconcile_pending through pending publication active-gate handoff
 Required action: reconcile_owner_membership_publication
 Runtime promotion allowed: false
-Pending reconcile node: 35a891b8-c1a0-5064-9c6e-2acfba61c2a7
-Goal: pendingReconcileCount 1 -> 0, migrate, or representative green
-Allowed edits: exact files promoted by focused remaining-node proof after review/fix/implementation subagent proof
+Pending reconcile nodes: 11601fe0-72d6-5853-8590-ec2881853e72, 35a891b8-c1a0-5064-9c6e-2acfba61c2a7
+Current coverage: 3/5
+Goal: continue same-owner reconcile reduction, migrate, or representative green
+Allowed edits: exact files promoted by focused same-owner proof after review/fix/implementation subagent proof
 Forbidden edits: topology_publication_owner, operation_workflow_owner, timeout_budgets, active_gate_admission, publication truth, selected-source timeout, terminal-progress selection, readiness_support
-Required first proof: npm run analyze:topology-convergence -- test-output/reports/rolling-restart-startup-publication-lag-projection-20260517T000000Z.report.json --handoff-probe
+Required latest proof: npm run analyze:topology-convergence -- test-output/reports/rolling-restart-remaining-handoff-reconcile-node-20260517T135205Z.report.json --handoff-probe
 Allowed stop modes: representative-green, migrated, reduced, same-frontier, classification-only, architecture-gap, human-escalation
 ```
 
@@ -91,7 +98,7 @@ Allowed stop modes: representative-green, migrated, reduced, same-frontier, clas
 | `done-20260517-startup-active-gate-selected-snapshot-source-timeout-after-bounded-handoff-retry.md` | `rolling-restart-selected-snapshot-source-timeout-fix-20260517T000000Z.report.json` | `startup_active_gate_owner / snapshot_coverage` | selected-source timeout reduced; snapshot coverage `0/5` -> `4/5`; pending handoff reconcile count `3` | `reduced` |
 | `done-20260517-startup-active-gate-pending-handoff-reconcile-after-selected-timeout-reduction.md` | `rolling-restart-pending-handoff-reconcile-after-timeout-reduction-20260517T000000Z.report.json` | `startup_active_gate_owner / snapshot_coverage` | replay fixture records the three pending reconcile nodes; representative remains at `pendingReconcileCount=3`, coverage `4/5` | `same-frontier` |
 | `done-20260517-startup-active-gate-startup-publication-lag-snapshot-projection.md` | `rolling-restart-startup-publication-lag-projection-20260517T000000Z.report.json` | `startup_active_gate_owner / snapshot_coverage` | focused harness projection keeps ACK/priority frozen and reduces `pendingReconcileCount=3` -> `1`; remaining node `35a891b8-c1a0-5064-9c6e-2acfba61c2a7` | `reduced` |
-| `active-20260517-startup-active-gate-remaining-handoff-reconcile-node.md` | `rolling-restart-startup-publication-lag-projection-20260517T000000Z.report.json` | `startup_active_gate_owner / snapshot_coverage` | target node `35a891b8-c1a0-5064-9c6e-2acfba61c2a7`; goal `pendingReconcileCount=1` -> `0`, migrate, or representative green; same-owner continuations stay in this package | `pending-before-probe` |
+| `active-20260517-startup-active-gate-remaining-handoff-reconcile-node.md` | `rolling-restart-remaining-handoff-reconcile-node-20260517T135205Z.report.json` | `startup_active_gate_owner / snapshot_coverage` | focused single-node reconcile projection improved snapshot coverage `2/5` -> `3/5`; ACK and priority residuals stayed satisfied; same owner/action remains with pending nodes `11601fe0-72d6-5853-8590-ec2881853e72` and `35a891b8-c1a0-5064-9c6e-2acfba61c2a7` | `reduced` |
 
 ## Sprint LLM Trap List
 
