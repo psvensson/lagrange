@@ -307,13 +307,16 @@ function hasClosedPublishedPendingAckEvidence(options = {}) {
 }
 
 function hasOpenCountOnlyPendingAckEvidence(options = {}) {
+  const openCountOnlyAckIsStale =
+    options.openCountOnlyAckIsStale !== false;
   const explicitPendingAckNodeIds = normalizeDistinctStringArray(
     options.pendingAckNodeIds,
   );
   const publicationStatusNormalized = normalizePublicationStatus(
     options.publicationStatus,
   );
-  return publicationStatusNormalized === CONTROL_PLANE_PUBLICATION_STATUS.OPEN &&
+  return openCountOnlyAckIsStale &&
+    publicationStatusNormalized === CONTROL_PLANE_PUBLICATION_STATUS.OPEN &&
     Array.isArray(options.pendingAckNodeIds) &&
     explicitPendingAckNodeIds.length === NUM.ZERO;
 }

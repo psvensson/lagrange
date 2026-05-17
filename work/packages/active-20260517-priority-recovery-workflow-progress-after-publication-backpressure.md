@@ -1,9 +1,10 @@
+# Priority Recovery Workflow Progress After Publication Backpressure
+
+<!-- work-package
 {
-  "schema": "current-blocker-v1",
-  "generatedBy": "scripts/work-tracker.js",
-  "sprint": "work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md",
-  "package": "work/packages/active-20260517-priority-recovery-workflow-progress-after-publication-backpressure.md",
+  "schema": "work-package-v1",
   "status": "active",
+  "opened": "2026-05-17",
   "lane": "causal-escalation",
   "scenario": "rolling-restart",
   "artifact": "test-output/reports/rolling-restart-publication-handoff-edge-20260517T171610Z.report.json",
@@ -46,7 +47,6 @@
     "work/sprints/current-blocker.json",
     "work/model-ledger.jsonl"
   ],
-  "touchedFiles": [],
   "modelFit": {
     "packageClass": "representative-frontier-closure",
     "intendedMinimumModel": "gpt-5.3-codex",
@@ -56,7 +56,8 @@
       "owned files expand beyond this package",
       "a frozen decision must be reopened"
     ]
-  },
+  }
+  ,
   "representativeResidual": {
     "status": "live-red-scenario-release-gate",
     "scenario": "rolling-restart",
@@ -109,5 +110,103 @@
     "oscillationCheck": "This successor is allowed because fresh causal and priority residual evidence selected operation_workflow_owner / workflow_progress after the publication package classified the remaining wait as priority recovery backpressure.",
     "handoffInvariant": "Publication ACK, publication owner evidence, active-gate snapshot coverage, timeout budgets, admission, readiness, selected-source timeout, and rebalancer_handoff remain frozen unless canonical evidence selects them."
   },
+  "ownerBoundaryMigrationProof": {
+    "fromOwner": "topology_publication_owner",
+    "fromBoundary": "publication_convergence",
+    "toOwner": "operation_workflow_owner",
+    "toBoundary": "workflow_progress",
+    "reason": "Fresh representative evidence after publication-owner canonicalization stops as classified priority-recovery backpressure and names operation_workflow_owner / workflow_progress as the topology next expected frontier.",
+    "evidence": [
+      "work/packages/done-20260517-topology-publication-convergence-after-selected-snapshot-lane-reset-migration.md",
+      "npm run work:evidence-summary -- test-output/reports/rolling-restart-publication-handoff-edge-20260517T171610Z.report.json",
+      "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-publication-handoff-edge-20260517T171610Z.report.json --replay-fixture",
+      "npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-publication-handoff-edge-20260517T171610Z.report.json",
+      "npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-publication-handoff-edge-20260517T171610Z.report.json"
+    ]
+  },
   "predecessor": "work/packages/done-20260517-topology-publication-convergence-after-selected-snapshot-lane-reset-migration.md"
 }
+-->
+
+## Why
+
+Fresh publication-convergence evidence still leaves rolling-restart red, but
+the remaining wait is no longer a publication-owner code change. The causal
+model classifies it as priority-recovery backpressure and the topology graph
+names `operation_workflow_owner / workflow_progress` as the next expected
+frontier.
+
+## Scope Basis
+
+Roadmap Phase `0.1 - Internal Coherence`, specifically rolling-restart topology
+workflow stabilization and production guarantees for the AGPL runtime.
+
+## Workflow Lane
+
+- Selected lane: `causal-escalation`
+- Why this lane is sufficient: bounded representative owner-boundary successor
+  on a single workflow-progress operation witness.
+- Escalation trigger to a heavier lane: runtime ownership, shared contract, or representative scenario evidence changes.
+
+## Subagent Sequencing Requirement
+
+Required before implementation because this is a scenario-driven runtime
+owner-boundary package. Run review, fix if needed, and implementation subagents
+sequentially before editing runtime files.
+
+## Subagent Sequencing Ledger
+
+- [ ] Review subagent recorded: pending-before-implementation.
+- [ ] Fix subagent recorded or explicitly not needed: pending-review-result.
+- [ ] Implementation subagent recorded: pending-before-implementation.
+
+## LLM Tool-First Contract
+
+Before raw JSON, raw logs, broad file search, oversized segment files, or ad hoc `jq`, use the canonical workflow command that owns the question:
+
+1. Package metadata or ledger edits: `npm run work:package:doctor -- --suggest <package>`, `npm run work:package:doctor -- --fix-dry-run <package>`, `npm run work:package:schema`, or `npm run work:package:new -- ...`.
+2. Representative evidence: `npm run work:evidence-summary -- <artifact>` plus any focused extractor for this failure class.
+3. Owner discovery: `npm run analyze:owner-files -- <owner> [boundary]`.
+4. Subagent sequencing: `npm run work:subagent-prompt -- --role <role> --package <package>`.
+5. Large-file cleanup: `npm run work:oversized-next -- --markdown`.
+
+If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which canonical extractor was tried and why it was insufficient.
+
+## In Scope
+
+1. work/packages/active-20260517-priority-recovery-workflow-progress-after-publication-backpressure.md
+2. work/sprints/current-blocker.md
+3. work/sprints/current-blocker.json
+4. work/model-ledger.jsonl
+
+## Out Of Scope
+
+1. topology_publication_owner implementation
+2. startup_active_gate_owner implementation
+3. timeout_budgets
+4. active_gate_admission
+5. readiness_support
+6. selected_source_timeout
+7. operation_workflow_owner / rebalancer_handoff implementation unless fresh canonical evidence promotes it
+
+## Model Fit
+
+- Package class: `representative-frontier-closure`
+- Intended minimum model: `gpt-5.3-codex`
+- Scope shape: `owner-boundary-contraction/current-frontier`
+- Output profile: `medium`
+- Owned files: `work/packages/active-20260517-priority-recovery-workflow-progress-after-publication-backpressure.md`, `work/sprints/current-blocker.md`, `work/sprints/current-blocker.json`, `work/model-ledger.jsonl`
+- Forbidden files: `topology_publication_owner implementation`, `startup_active_gate_owner implementation`, `timeout_budgets`, `active_gate_admission`, `readiness_support`, `selected_source_timeout`, `operation_workflow_owner / rebalancer_handoff implementation unless fresh canonical evidence promotes it`
+- Frozen decisions: publication-convergence classification is closed; active-gate snapshot coverage is deferred; rebalancer_handoff is a parked split; this package owns workflow_progress only unless canonical evidence changes owner or boundary.
+- Escalation triggers: owned files expand beyond this package, runtime ownership changes, or representative scenario evidence changes.
+- Focused proof: `npm run work:evidence-summary -- test-output/reports/rolling-restart-publication-handoff-edge-20260517T171610Z.report.json`, `npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-publication-handoff-edge-20260517T171610Z.report.json`, `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-publication-handoff-edge-20260517T171610Z.report.json --replay-fixture`, `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-publication-handoff-edge-20260517T171610Z.report.json`, `npm run analyze:owner-files -- operation_workflow_owner workflow_progress`, `npm run analyze:owner-files -- operation_workflow_owner rebalancer_handoff`
+- Model ledger advisory: `escalate`
+
+## Validation
+
+1. npm run work:evidence-summary -- test-output/reports/rolling-restart-publication-handoff-edge-20260517T171610Z.report.json
+2. npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-publication-handoff-edge-20260517T171610Z.report.json
+3. npm run analyze:topology-convergence -- test-output/reports/rolling-restart-publication-handoff-edge-20260517T171610Z.report.json --replay-fixture
+4. npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-publication-handoff-edge-20260517T171610Z.report.json
+5. npm run analyze:owner-files -- operation_workflow_owner workflow_progress
+6. npm run analyze:owner-files -- operation_workflow_owner rebalancer_handoff

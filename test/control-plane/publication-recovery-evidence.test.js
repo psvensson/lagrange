@@ -18,6 +18,8 @@ import {buildCanonicalPublicationRecoveryEvidence} from
 const TEST_PUBLICATION_EPOCH = 9;
 const TEST_EMPTY_PUBLICATION_DEBT_COUNT = 0;
 const TEST_PUBLICATION_DEBT_COUNT = 1;
+const TEST_PUBLICATION_SELECTED_SNAPSHOT_FRONTIER_COUNT = 2;
+const TEST_PUBLICATION_SELECTED_HANDOFF_PENDING_COUNT = 3;
 const TEST_PUBLISHED_ACTIVE_NODE_COUNT = 3;
 const TEST_EMPTY_NODE_IDS = Object.freeze([]);
 const TEST_PRIORITY_PARTITION_ID = 'replica_operations-p1';
@@ -41,6 +43,16 @@ const TEST_STALE_PRESENTATION_REASON_CODE = Object.freeze({
   PUBLICATION_NOT_PUBLISHED_OPEN: 'publication_not_published=OPEN',
   PUBLICATION_PENDING_ACK: 'publication_pending_ack=1',
 });
+const TEST_PUBLICATION_ACTIVE_GATE_HANDOFF_STATE = Object.freeze({
+  PENDING: 'pending',
+});
+const TEST_PUBLICATION_ACTIVE_GATE_HANDOFF_REASON = Object.freeze({
+  OWNER_RECONCILE_PENDING: 'owner_reconcile_pending',
+});
+const TEST_PUBLICATION_ACTIVE_GATE_HANDOFF_NEXT_ACTION = Object.freeze({
+  RECONCILE_OWNER_MEMBERSHIP_PUBLICATION:
+    'reconcile_owner_membership_publication',
+});
 const TEST_NON_PRIORITY_PARTITION_ID =
   'tbl-b932fa03-3835-4a50-87b4-bd158daed0ea-p1';
 const TEST_DECISION_SNAPSHOT_ACK_TARGET_ASSERTION =
@@ -59,6 +71,11 @@ const TEST_AUTHORITATIVE_PUBLISHED_NODE_IDS = Object.freeze([
   TEST_NODE_ID.THIRD,
 ]);
 const TEST_SELECTED_ONLY_MISSING_NODE_IDS = Object.freeze([
+  TEST_NODE_ID.FOURTH,
+  TEST_NODE_ID.FIFTH,
+]);
+const TEST_SELECTED_HANDOFF_MISSING_NODE_IDS = Object.freeze([
+  TEST_NODE_ID.SECOND,
   TEST_NODE_ID.FOURTH,
   TEST_NODE_ID.FIFTH,
 ]);
@@ -761,6 +778,161 @@ test('buildCanonicalPublicationRecoveryEvidence reduces open count-only ACK evid
       evidence.publicationConvergence.recoveryOutcome,
       PUBLICATION_OWNER_RECOVERY_OUTCOME.WAITING_FOR_PUBLICATION,
     );
+    t.end();
+  });
+
+test('buildCanonicalPublicationRecoveryEvidence carries flattened active-gate owner reconcile handoff on open publication',
+  (t) => {
+    const evidence = buildCanonicalPublicationRecoveryEvidence({
+      publicationConvergence: {
+        publicationEpoch: TEST_PUBLICATION_EPOCH,
+        publicationStatus: CONTROL_PLANE_PUBLICATION_STATUS.OPEN,
+        recoveryProtocolState: RECOVERY_PROTOCOL_STATE.PUBLICATION_PENDING,
+        publishedActiveNodeIds: [TEST_NODE_ID.FIRST],
+        pendingAckNodeIds: TEST_EMPTY_NODE_IDS,
+        pendingAckCount: TEST_PUBLICATION_DEBT_COUNT,
+        missingPublishedNodeIds: [
+          TEST_NODE_ID.SECOND,
+          TEST_NODE_ID.THIRD,
+          TEST_NODE_ID.FOURTH,
+          TEST_NODE_ID.FIFTH,
+        ],
+        missingPublishedCount: TEST_SELECTED_ONLY_MISSING_NODE_IDS.length +
+          TEST_PUBLICATION_SELECTED_SNAPSHOT_FRONTIER_COUNT,
+        priorityRecoveryReasonCodes: [TEST_PUBLICATION_PENDING_REASON_CODE],
+        priorityPartitionSummary: TEST_SATISFIED_PRIORITY_PARTITION_SUMMARY,
+      },
+      activeGate: {
+        progress: {
+          selectedPublishedActiveNodeIds: [TEST_NODE_ID.FIRST],
+          selectedMissingPublishedNodeIds:
+            TEST_SELECTED_HANDOFF_MISSING_NODE_IDS,
+          publicationActiveGateHandoffState:
+            TEST_PUBLICATION_ACTIVE_GATE_HANDOFF_STATE.PENDING,
+          publicationActiveGateHandoffReasonCode:
+            TEST_PUBLICATION_ACTIVE_GATE_HANDOFF_REASON
+              .OWNER_RECONCILE_PENDING,
+          publicationActiveGateHandoffNextAction:
+            TEST_PUBLICATION_ACTIVE_GATE_HANDOFF_NEXT_ACTION
+              .RECONCILE_OWNER_MEMBERSHIP_PUBLICATION,
+          publicationActiveGateHandoffRuntimePromotionAllowed: false,
+          publicationActiveGateHandoffPendingReconcileNodeIds:
+            TEST_SELECTED_HANDOFF_MISSING_NODE_IDS,
+          publicationActiveGateHandoffPendingReconcileCount:
+            TEST_PUBLICATION_SELECTED_HANDOFF_PENDING_COUNT,
+        },
+      },
+    });
+
+    t.equal(
+      evidence.publicationConvergence.streamOutcome,
+      PUBLICATION_OWNER_STREAM_OUTCOME.PUBLISHING,
+    );
+    t.equal(
+      evidence.publicationConvergence.recoveryOutcome,
+      PUBLICATION_OWNER_RECOVERY_OUTCOME.WAITING_FOR_PUBLICATION,
+    );
+    t.match(evidence.publicationConvergence.publicationActiveGateHandoff, {
+      state: TEST_PUBLICATION_ACTIVE_GATE_HANDOFF_STATE.PENDING,
+      reasonCode:
+        TEST_PUBLICATION_ACTIVE_GATE_HANDOFF_REASON.OWNER_RECONCILE_PENDING,
+      nextAction:
+        TEST_PUBLICATION_ACTIVE_GATE_HANDOFF_NEXT_ACTION
+          .RECONCILE_OWNER_MEMBERSHIP_PUBLICATION,
+      runtimePromotionAllowed: false,
+      pendingReconcileCount:
+        TEST_PUBLICATION_SELECTED_HANDOFF_PENDING_COUNT,
+      pendingReconcileNodeIds: TEST_SELECTED_HANDOFF_MISSING_NODE_IDS,
+    });
+    t.end();
+  });
+
+test('buildCanonicalPublicationRecoveryEvidence closes stale open publication when selected membership proves the cohort',
+  (t) => {
+    const selectedPublicationCohortNodeIds = Object.freeze([
+      TEST_NODE_ID.FIRST,
+      TEST_NODE_ID.SECOND,
+      TEST_NODE_ID.THIRD,
+      TEST_NODE_ID.FOURTH,
+      TEST_NODE_ID.FIFTH,
+    ]);
+    const selectedMissingPublishedNodeIds = Object.freeze([
+      TEST_NODE_ID.SECOND,
+      TEST_NODE_ID.THIRD,
+      TEST_NODE_ID.FOURTH,
+      TEST_NODE_ID.FIFTH,
+    ]);
+    const evidence = buildCanonicalPublicationRecoveryEvidence({
+      publicationConvergence: {
+        publicationEpoch: TEST_PUBLICATION_EPOCH,
+        publicationStatus: CONTROL_PLANE_PUBLICATION_STATUS.OPEN,
+        recoveryProtocolState: RECOVERY_PROTOCOL_STATE.PUBLICATION_PENDING,
+        publishedActiveNodeIds: [TEST_NODE_ID.FIRST],
+        pendingAckNodeIds: TEST_EMPTY_NODE_IDS,
+        pendingAckCount: TEST_PUBLICATION_DEBT_COUNT,
+        missingPublishedNodeIds: selectedMissingPublishedNodeIds,
+        missingPublishedCount: selectedMissingPublishedNodeIds.length,
+        priorityPartitionSummary: TEST_SATISFIED_PRIORITY_PARTITION_SUMMARY,
+      },
+      activeGate: {
+        progress: {
+          expectedNodeCount: selectedPublicationCohortNodeIds.length,
+          selectedPublishedActiveNodeIds: [TEST_NODE_ID.FIRST],
+          selectedPublishedActiveCount: TEST_PUBLICATION_DEBT_COUNT,
+          selectedMissingPublishedNodeIds,
+          pendingAckCount: TEST_PUBLICATION_DEBT_COUNT,
+          missingPublishedCount: selectedMissingPublishedNodeIds.length,
+          prioritySpreadSatisfied: true,
+          priorityRecoveryProgressClasses: {
+            unresolvedClassCount: TEST_EMPTY_PUBLICATION_DEBT_COUNT,
+            unresolvedSemanticStateCount: TEST_EMPTY_PUBLICATION_DEBT_COUNT,
+            blockedPartitionCount: TEST_EMPTY_PUBLICATION_DEBT_COUNT,
+          },
+        },
+      },
+    });
+
+    t.equal(
+      evidence.publicationConvergence.publicationStatus,
+      CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED,
+    );
+    t.equal(
+      evidence.publicationConvergence.recoveryProtocolState,
+      RECOVERY_PROTOCOL_STATE.STEADY_PUBLISHED,
+    );
+    t.same(
+      evidence.publicationConvergence.publishedActiveNodeIds,
+      selectedPublicationCohortNodeIds,
+    );
+    t.equal(
+      evidence.publicationConvergence.pendingAckCount,
+      TEST_EMPTY_PUBLICATION_DEBT_COUNT,
+    );
+    t.same(
+      evidence.publicationConvergence.pendingAckNodeIds,
+      TEST_EMPTY_NODE_IDS,
+    );
+    t.equal(
+      evidence.publicationConvergence.missingPublishedCount,
+      TEST_EMPTY_PUBLICATION_DEBT_COUNT,
+    );
+    t.same(
+      evidence.publicationConvergence.missingPublishedNodeIds,
+      TEST_EMPTY_NODE_IDS,
+    );
+    t.equal(
+      evidence.publicationConvergence.streamOutcome,
+      PUBLICATION_OWNER_STREAM_OUTCOME.PUBLISHED,
+    );
+    t.equal(
+      evidence.publicationConvergence.freshnessFence,
+      PUBLICATION_OWNER_FRESHNESS_FENCE.FRESH,
+    );
+    t.equal(
+      evidence.publicationConvergence.recoveryOutcome,
+      PUBLICATION_OWNER_RECOVERY_OUTCOME.READY,
+    );
+    t.equal(evidence.publicationConvergence.publicationPending, false);
     t.end();
   });
 

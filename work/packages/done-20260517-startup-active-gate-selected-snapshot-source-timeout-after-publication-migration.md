@@ -156,7 +156,7 @@
     ]
   },
   "predecessor": "work/packages/done-20260517-topology-publication-convergence-after-startup-reconcile-migration.md",
-  "successor": "work/packages/active-20260517-topology-publication-convergence-after-selected-snapshot-lane-reset-migration.md",
+  "successor": "work/packages/done-20260517-topology-publication-convergence-after-selected-snapshot-lane-reset-migration.md",
   "closed": "2026-05-17",
   "commitAndPushLedgerRequired": true
 }
