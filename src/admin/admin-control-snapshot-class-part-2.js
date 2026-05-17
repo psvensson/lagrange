@@ -88,6 +88,18 @@ const CONTROL_SNAPSHOT_MEMBERSHIP_PUBLICATION_HANDOFF_OUTCOME_DATA_FIELD =
     PUBLICATION_ROW: 'publicationRow',
     STATE: 'state',
   });
+const CONTROL_SNAPSHOT_PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD = Object.freeze({
+  NEXT_ACTION: 'nextAction',
+  PENDING_RECONCILE_COUNT: 'pendingReconcileCount',
+  PENDING_RECONCILE_NODE_IDS: 'pendingReconcileNodeIds',
+  REASON_CODE: 'reasonCode',
+  RUNTIME_PROMOTION_ALLOWED: 'runtimePromotionAllowed',
+  STATE: 'state',
+});
+const CONTROL_SNAPSHOT_PUBLICATION_ACTIVE_GATE_HANDOFF_REASON =
+  Object.freeze({
+    OWNER_RECONCILE_PENDING: 'owner_reconcile_pending',
+  });
 const CONTROL_SNAPSHOT_CONTROL_PLANE_CONVERGENCE_FIELD =
   'controlPlaneConvergence';
 const CONTROL_SNAPSHOT_CRITICAL_CONVERGENCE_DEFERRED_FIELD =
@@ -609,6 +621,129 @@ function buildControlSnapshotHandoffRefreshResult(snapshot, refreshed) {
   });
 }
 
+function normalizeControlSnapshotHandoffText(value) {
+  return typeof value === TYPEOF.STRING ?
+    value.trim() :
+    ADMIN_CONTROL_SNAPSHOT_LITERAL.VALUE;
+}
+
+function normalizeControlSnapshotHandoffInteger(value, fallback = NUM.ZERO) {
+  const numericValue = Number(value);
+  return Number.isFinite(numericValue) ?
+    Math.max(NUM.ZERO, Math.floor(numericValue)) :
+    fallback;
+}
+
+function selectControlSnapshotHandoffEvidence(snapshot = null) {
+  const handoff = selectPublicationActiveGateHandoffContract(
+    snapshot?.[CONTROL_SNAPSHOT_CONTROL_PLANE_DIAGNOSTICS_FIELD],
+  );
+  const hasHandoff =
+    handoff &&
+    typeof handoff === TYPEOF.OBJECT &&
+    !Array.isArray(handoff);
+  const pendingReconcileNodeIds = hasHandoff ?
+    normalizeControlSnapshotNodeIdList(
+      handoff[
+        CONTROL_SNAPSHOT_PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD
+          .PENDING_RECONCILE_NODE_IDS
+      ],
+    ) :
+    ADMIN_CACHE_DUMP.EMPTY;
+  return Object.freeze({
+    available: hasHandoff === true,
+    state: normalizeControlSnapshotHandoffText(
+      handoff?.[
+        CONTROL_SNAPSHOT_PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.STATE
+      ],
+    ),
+    reasonCode: normalizeControlSnapshotHandoffText(
+      handoff?.[
+        CONTROL_SNAPSHOT_PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.REASON_CODE
+      ],
+    ),
+    nextAction: normalizeControlSnapshotHandoffText(
+      handoff?.[
+        CONTROL_SNAPSHOT_PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.NEXT_ACTION
+      ],
+    ),
+    runtimePromotionAllowed:
+      handoff?.[
+        CONTROL_SNAPSHOT_PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD
+          .RUNTIME_PROMOTION_ALLOWED
+      ] === true,
+    pendingReconcileCount: normalizeControlSnapshotHandoffInteger(
+      handoff?.[
+        CONTROL_SNAPSHOT_PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD
+          .PENDING_RECONCILE_COUNT
+      ],
+      pendingReconcileNodeIds.length,
+    ),
+    pendingReconcileNodeIds,
+  });
+}
+
+function buildControlSnapshotHandoffProgressComparison(
+  snapshot = null,
+  refreshedSnapshot = null,
+) {
+  const current = selectControlSnapshotHandoffEvidence(snapshot);
+  const refreshed = selectControlSnapshotHandoffEvidence(refreshedSnapshot);
+  const comparable = current.available === true && refreshed.available === true;
+  const progressSignals = Object.freeze({
+    pendingReconcileCountDecreased:
+      comparable &&
+      refreshed.pendingReconcileCount < current.pendingReconcileCount,
+    pendingReconcileNodeIdsDecreased:
+      comparable &&
+      refreshed.pendingReconcileNodeIds.length <
+        current.pendingReconcileNodeIds.length,
+    ownerReconcilePendingChanged:
+      comparable &&
+      current.reasonCode ===
+        CONTROL_SNAPSHOT_PUBLICATION_ACTIVE_GATE_HANDOFF_REASON
+          .OWNER_RECONCILE_PENDING &&
+      (
+        refreshed.reasonCode !== current.reasonCode ||
+        refreshed.state !== current.state ||
+        refreshed.nextAction !== current.nextAction
+      ),
+    runtimePromotionAllowed:
+      comparable &&
+      current.runtimePromotionAllowed !== true &&
+      refreshed.runtimePromotionAllowed === true,
+  });
+  return Object.freeze({
+    current,
+    refreshed,
+    progressSignals,
+    handoffProgressed: Object.values(progressSignals).some(
+      (signal) => signal === true,
+    ),
+  });
+}
+
+function buildControlSnapshotHandoffRefreshDecision(
+  snapshot = null,
+  refreshedSnapshot = null,
+) {
+  const handoffComparison =
+    buildControlSnapshotHandoffProgressComparison(snapshot, refreshedSnapshot);
+  const decisionSignals = Object.freeze({
+    coverageIncreased:
+      resolveControlSnapshotCoverageNodeCount(refreshedSnapshot) >
+        resolveControlSnapshotCoverageNodeCount(snapshot),
+    handoffProgressed: handoffComparison.handoffProgressed === true,
+  });
+  return Object.freeze({
+    refreshed: Object.values(decisionSignals).some(
+      (signal) => signal === true,
+    ),
+    decisionSignals,
+    handoffComparison,
+  });
+}
+
 function attachOrdinaryRepairDeferralDiagnostics(snapshot, repairDeferred) {
   if (!snapshot || typeof snapshot !== TYPEOF.OBJECT) {
     return snapshot;
@@ -757,12 +892,13 @@ class AdminControlSnapshotPart2 extends AdminControlSnapshotPart1 {
     }
     const refreshedWithOutcome =
       attachMembershipPublicationHandoffOutcome(refreshedSnapshot, outcome);
-    const refreshed =
-      resolveControlSnapshotCoverageNodeCount(refreshedWithOutcome) >
-      resolveControlSnapshotCoverageNodeCount(snapshot);
+    const refreshDecision = buildControlSnapshotHandoffRefreshDecision(
+      snapshot,
+      refreshedWithOutcome,
+    );
     return buildControlSnapshotHandoffRefreshResult(
-      refreshed === true ? refreshedWithOutcome : snapshot,
-      refreshed,
+      refreshDecision.refreshed === true ? refreshedWithOutcome : snapshot,
+      refreshDecision.refreshed,
     );
   }
 

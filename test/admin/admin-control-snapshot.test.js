@@ -76,16 +76,22 @@ const ACTIVE_GATE_OWNER_TRUTH_BEST_MISSING_COUNT = 4;
 const ACTIVE_GATE_OWNER_TRUTH_EXPECTED_NODE_COUNT = 5;
 const ACTIVE_GATE_OWNER_COHORT_SCHEMA_VERSION = 1;
 const ACTIVE_GATE_OWNER_COHORT_STATE_PENDING = 'pending';
+const ACTIVE_GATE_OWNER_COHORT_STATE_COMPLETE = 'complete';
 const ACTIVE_GATE_CATCHUP_FENCE_STATE_PENDING = 'catchup_pending';
 const ACTIVE_GATE_OWNER_COHORT_REASON_OWNER_RECONCILE_PENDING =
   'owner_reconcile_pending';
+const ACTIVE_GATE_OWNER_COHORT_REASON_COMPLETE =
+  'owner_cohort_complete';
 const ACTIVE_GATE_CATCHUP_FENCE_REASON_DURABLE_INCOMPLETE =
   'durable_publication_incomplete';
 const ACTIVE_GATE_CATCHUP_FENCE_NEXT_ACTION_RECONCILE =
   'reconcile_owner_membership_publication';
 const ACTIVE_GATE_HANDOFF_NEXT_ACTION_RECONCILE =
   'reconcile_owner_membership_publication';
+const ACTIVE_GATE_HANDOFF_NEXT_ACTION_ADMIT_ACTIVE_GATE =
+  'admit_active_gate';
 const ACTIVE_GATE_HANDOFF_RUNTIME_PROMOTION_ALLOWED_FALSE = false;
+const ACTIVE_GATE_HANDOFF_RUNTIME_PROMOTION_ALLOWED_TRUE = true;
 const ACTIVE_GATE_OWNER_COHORT_BUDGET_STATE_AVAILABLE = 'available';
 const ACTIVE_GATE_OWNER_COHORT_BUDGET_STATE_UNAVAILABLE = 'unavailable';
 const ACTIVE_GATE_OWNER_COHORT_GATE_STATE_STALLED = 'stalled';
@@ -125,6 +131,17 @@ const ACTIVE_GATE_HANDOFF_RECONCILE_NODE_IDS = Object.freeze([
   'node-2',
   'node-3',
 ]);
+const ACTIVE_GATE_HANDOFF_FLAT_COVERAGE_NODE_IDS = Object.freeze(
+  ACTIVE_GATE_OWNER_TRUTH_NODE_IDS.slice(0, 4),
+);
+const ACTIVE_GATE_HANDOFF_FLAT_PUBLISHED_NODE_IDS = Object.freeze(
+  ACTIVE_GATE_OWNER_TRUTH_NODE_IDS.slice(0, 2),
+);
+const ACTIVE_GATE_HANDOFF_FLAT_PENDING_NODE_IDS = Object.freeze(
+  ACTIVE_GATE_OWNER_TRUTH_NODE_IDS.slice(2),
+);
+const ACTIVE_GATE_HANDOFF_FLAT_PENDING_COUNT =
+  ACTIVE_GATE_HANDOFF_FLAT_PENDING_NODE_IDS.length;
 const ACTIVE_GATE_HANDOFF_RECONCILE_LOCAL_NODE_ID =
   ACTIVE_GATE_HANDOFF_RECONCILE_NODE_IDS[1];
 const ACTIVE_GATE_HANDOFF_RECONCILE_PUBLISHED_NODE_IDS = Object.freeze([
@@ -5724,6 +5741,173 @@ test('AdminControlSnapshot repair-deferred trigger refreshes after visible owner
           ACTIVE_GATE_HANDOFF_RECONCILE_OUTCOME_PUBLISHED_VISIBLE,
       },
       'the returned publication convergence should display the awaited owner outcome',
+    );
+  });
+
+test('AdminControlSnapshot retains flat coverage refresh when visible owner publication drains handoff',
+  async (t) => {
+    const buildOptions = [];
+    let reconcileOptions = null;
+    const pendingHandoff = {
+      schemaVersion: ACTIVE_GATE_OWNER_COHORT_SCHEMA_VERSION,
+      state: ACTIVE_GATE_OWNER_COHORT_STATE_PENDING,
+      reasonCode: ACTIVE_GATE_OWNER_COHORT_REASON_OWNER_RECONCILE_PENDING,
+      nextAction: ACTIVE_GATE_HANDOFF_NEXT_ACTION_RECONCILE,
+      expectedNodeIds: [
+        ...ACTIVE_GATE_OWNER_TRUTH_NODE_IDS,
+      ],
+      publishedActiveNodeIds: [
+        ...ACTIVE_GATE_HANDOFF_FLAT_PUBLISHED_NODE_IDS,
+      ],
+      pendingReconcileCount: ACTIVE_GATE_HANDOFF_FLAT_PENDING_COUNT,
+      pendingReconcileNodeIds: [
+        ...ACTIVE_GATE_HANDOFF_FLAT_PENDING_NODE_IDS,
+      ],
+      runtimePromotionAllowed:
+        ACTIVE_GATE_HANDOFF_RUNTIME_PROMOTION_ALLOWED_FALSE,
+    };
+    const refreshedHandoff = {
+      ...pendingHandoff,
+      state: ACTIVE_GATE_OWNER_COHORT_STATE_COMPLETE,
+      reasonCode: ACTIVE_GATE_OWNER_COHORT_REASON_COMPLETE,
+      nextAction: ACTIVE_GATE_HANDOFF_NEXT_ACTION_ADMIT_ACTIVE_GATE,
+      publishedActiveNodeIds: [
+        ...ACTIVE_GATE_OWNER_TRUTH_NODE_IDS,
+      ],
+      pendingReconcileCount:
+        ACTIVE_GATE_HANDOFF_RECONCILE_CLEARED_PENDING_COUNT,
+      pendingReconcileNodeIds: [],
+      runtimePromotionAllowed:
+        ACTIVE_GATE_HANDOFF_RUNTIME_PROMOTION_ALLOWED_TRUE,
+    };
+    const staleSnapshot = {
+      nodes: [...ACTIVE_GATE_HANDOFF_FLAT_COVERAGE_NODE_IDS],
+      controlPlaneDiagnostics: {
+        publicationActiveGateHandoff: pendingHandoff,
+        activeGateOwnerCohort: pendingHandoff,
+        publicationConvergence: {
+          publicationEpoch: ACTIVE_GATE_HANDOFF_RECONCILE_PUBLICATION_EPOCH,
+          status: ACTIVE_GATE_OWNER_TRUTH_PUBLICATION_STATUS,
+          publishedActiveNodeIds: [
+            ...ACTIVE_GATE_HANDOFF_FLAT_PUBLISHED_NODE_IDS,
+          ],
+          missingPublishedNodeIds: [
+            ...ACTIVE_GATE_HANDOFF_FLAT_PENDING_NODE_IDS,
+          ],
+        },
+      },
+    };
+    const refreshedSnapshot = {
+      nodes: [...ACTIVE_GATE_HANDOFF_FLAT_COVERAGE_NODE_IDS],
+      controlPlaneDiagnostics: {
+        publicationActiveGateHandoff: refreshedHandoff,
+        activeGateOwnerCohort: refreshedHandoff,
+        publicationConvergence: {
+          publicationEpoch:
+            ACTIVE_GATE_HANDOFF_RECONCILE_RESULT_PUBLICATION_EPOCH,
+          status: ACTIVE_GATE_OWNER_TRUTH_PUBLICATION_STATUS,
+          publishedActiveNodeIds: [
+            ...ACTIVE_GATE_OWNER_TRUTH_NODE_IDS,
+          ],
+          missingPublishedNodeIds: [],
+        },
+      },
+    };
+    const snapshot = new AdminControlSnapshot({
+      nodeId: ACTIVE_GATE_HANDOFF_RECONCILE_LOCAL_NODE_ID,
+      controlPlaneReadinessService: {
+        membershipPublicationService: {
+          async reconcileActiveGateMembershipPublication(
+            _publicationActiveGateHandoff,
+            options = {},
+          ) {
+            reconcileOptions = options;
+            return {
+              schemaVersion: ACTIVE_GATE_OWNER_COHORT_SCHEMA_VERSION,
+              state:
+                ACTIVE_GATE_HANDOFF_RECONCILE_OUTCOME_PUBLISHED_VISIBLE,
+              publicationRow: {
+                publication_id:
+                  ACTIVE_GATE_HANDOFF_RECONCILE_RESULT_PUBLICATION_ID,
+                publication_kind:
+                  ACTIVE_GATE_HANDOFF_RECONCILE_PUBLICATION_KIND,
+                publication_epoch:
+                  ACTIVE_GATE_HANDOFF_RECONCILE_RESULT_PUBLICATION_EPOCH,
+                status: ACTIVE_GATE_OWNER_TRUTH_PUBLICATION_STATUS,
+                published_active_node_ids: [
+                  ...ACTIVE_GATE_OWNER_TRUTH_NODE_IDS,
+                ],
+                required_ack_node_ids: [
+                  ...ACTIVE_GATE_OWNER_TRUTH_NODE_IDS,
+                ],
+                acknowledged_node_ids: [
+                  ...ACTIVE_GATE_OWNER_TRUTH_NODE_IDS,
+                ],
+              },
+            };
+          },
+        },
+      },
+    });
+    snapshot.controlPlaneSnapshotOwner = new ControlPlaneSnapshotOwner({
+      controlSnapshot: snapshot,
+    });
+    snapshot.buildLocalControlSnapshot = async (options = {}) => {
+      buildOptions.push(options);
+      return refreshedSnapshot;
+    };
+
+    const triggeredSnapshot =
+      await snapshot.triggerMembershipPublicationHandoffOwnerCommand(
+        staleSnapshot,
+        {},
+      );
+    const refreshResult =
+      await snapshot.prepareVisibleMembershipPublicationHandoffRefresh(
+        triggeredSnapshot,
+        {},
+      );
+
+    t.equal(
+      reconcileOptions.reconcileAuthoritativeMembershipPublication,
+      true,
+      'visible owner handoff should come from the narrow owner command',
+    );
+    t.equal(
+      buildOptions.length,
+      1,
+      'visible owner handoff should perform one bounded refresh',
+    );
+    t.same(
+      refreshResult.snapshot.nodes,
+      [...ACTIVE_GATE_HANDOFF_FLAT_COVERAGE_NODE_IDS],
+      'the retained refresh should not require node coverage to increase',
+    );
+    t.equal(
+      refreshResult.refreshed,
+      true,
+      'flat coverage refresh should be retained when handoff evidence improves',
+    );
+    t.match(
+      refreshResult.snapshot.controlPlaneDiagnostics
+        .publicationActiveGateHandoff,
+      {
+        pendingReconcileCount:
+          ACTIVE_GATE_HANDOFF_RECONCILE_CLEARED_PENDING_COUNT,
+        pendingReconcileNodeIds: [],
+        runtimePromotionAllowed:
+          ACTIVE_GATE_HANDOFF_RUNTIME_PROMOTION_ALLOWED_TRUE,
+      },
+      'the retained refresh should carry drained owner reconcile evidence',
+    );
+    t.match(
+      refreshResult.snapshot.controlPlaneDiagnostics.publicationConvergence
+        .membershipPublicationHandoffOutcome,
+      {
+        state:
+          ACTIVE_GATE_HANDOFF_RECONCILE_OUTCOME_PUBLISHED_VISIBLE,
+      },
+      'the retained refresh should preserve the visible owner outcome',
     );
   });
 

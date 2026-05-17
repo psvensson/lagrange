@@ -22,32 +22,38 @@ success is in scope.
 ## Current Blocker Snapshot
 
 Latest representative artifact:
-`test-output/reports/rolling-restart-priority-nonblocking-closure-20260517T055254Z.report.json`.
+`test-output/reports/rolling-restart-active-gate-projected-fallback-20260517T063708Z.report.json`.
 
-Canonical state after the priority-recovery workflow-progress package:
+Canonical state after the startup active-gate snapshot coverage
+after-priority closure package:
 
 1. `publication_ack_convergence` is satisfied and priority recovery residual
    extraction reports zero witnesses.
-2. The active package
-   `work/packages/done-20260517-priority-recovery-workflow-progress-after-publication-handoff.md`
-   is closing as migrated after classifying the
-   `control_plane_publications-p1` `spread_satisfied_in_flight` witness as
-   non-blocking closure evidence.
+2. The current active package is
+   `work/packages/active-20260517-startup-active-gate-owner-reconcile-after-query-pressure-fallback.md`
+   after the predecessor moved representative snapshot coverage from `0/5` to
+   `4/5`.
 3. Fresh `work:evidence-summary` selects `active_gate_snapshot_coverage` as the
    first frontier.
 4. Representative owner boundary:
    `startup_active_gate_owner / snapshot_coverage`.
 5. Dominant reason: `active_gate_timed_out` with
-   `snapshot_coverage_incomplete`.
-6. Fresh snapshot coverage is `0/5`; selected snapshot source is
-   `11601fe0-72d6-5853-8590-ec2881853e72`.
-7. The handoff probe reports
-   `publication_active_gate_handoff_not_detected` and selected snapshot error
-   from authoritative control snapshot repair failing against node
-   `7493b0ab-a054-5fad-a91b-5e331db29304`.
-8. The next proof must be metric-moving: improve snapshot coverage, remove the
-   selected authoritative repair/query pressure edge, migrate to a genuinely
-   new owner boundary, or turn representative `rolling-restart` green.
+   `owner_reconcile_pending`, `snapshot_coverage_incomplete`, and
+   `snapshot_repair_deferred`.
+6. Fresh snapshot coverage is `4/5`; selected snapshot observation remains
+   `repair_deferred` / `deferred_refresh` with next action `retry` and reason
+   codes `cache_stale_watermark`, `discovery_node_coverage_gap`, and
+   `stale_replica_operations_in_flight`.
+7. The handoff probe detects the publication active-gate handoff contract with
+   state `pending`, reason `owner_reconcile_pending`, required action
+   `reconcile_owner_membership_publication`, and `pendingReconcileCount=3` for
+   nodes `35a891b8-c1a0-5064-9c6e-2acfba61c2a7`,
+   `8be8d30f-4499-5eed-865c-71b4d529a67a`, and
+   `ebc4aa0b-06c6-506d-93ea-1dd2deca3f58`.
+8. The next proof must be metric-moving: reduce pending reconcile, remove
+   `discovery_node_coverage_gap`, move snapshot coverage to `5/5`, migrate to a
+   genuinely new owner boundary, or turn representative `rolling-restart`
+   green.
 9. Publication ACK, timeout budgets, active-gate admission, CDC fallback,
    reconnect delivery, query participant routing, and readiness support remain
    frozen unless canonical evidence selects them again.
@@ -499,12 +505,11 @@ The sprint cannot close until:
 
 ## Current Next Action
 
-Close the active-gate authoritative query-pressure slice as metric-moving, then
-continue with the owner reconciliation successor selected by the latest
+Continue with the owner reconciliation successor selected by the latest
 representative artifact:
 
 ```text
-work/packages/done-20260517-startup-active-gate-snapshot-coverage-after-priority-closure.md
+work/packages/active-20260517-startup-active-gate-owner-reconcile-after-query-pressure-fallback.md
 test-output/reports/rolling-restart-active-gate-projected-fallback-20260517T063708Z.report.json
 ```
 

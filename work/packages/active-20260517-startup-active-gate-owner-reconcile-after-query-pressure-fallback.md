@@ -1,9 +1,10 @@
+# Startup Active Gate Owner Reconcile After Query Pressure Fallback
+
+<!-- work-package
 {
-  "schema": "current-blocker-v1",
-  "generatedBy": "scripts/work-tracker.js",
-  "sprint": "work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md",
-  "package": "work/packages/active-20260517-startup-active-gate-owner-reconcile-after-query-pressure-fallback.md",
+  "schema": "work-package-v1",
   "status": "active",
+  "opened": "2026-05-17",
   "lane": "causal-escalation",
   "scenario": "rolling-restart",
   "artifact": "test-output/reports/rolling-restart-active-gate-projected-fallback-20260517T063708Z.report.json",
@@ -54,7 +55,6 @@
     "work/sprints/current-blocker.json",
     "work/model-ledger.jsonl"
   ],
-  "touchedFiles": [],
   "modelFit": {
     "packageClass": "cross-boundary-causal-escalation",
     "intendedMinimumModel": "gpt-5.3-codex",
@@ -123,3 +123,126 @@
   },
   "predecessor": "work/packages/done-20260517-startup-active-gate-snapshot-coverage-after-priority-closure.md"
 }
+-->
+
+## Why
+
+The previous package moved the active-gate snapshot coverage metric from `0/5`
+to `4/5`. The remaining red edge is no longer the four-cause snapshot-source
+decision; canonical handoff evidence now selects active-gate owner
+reconciliation for three pending cohort nodes.
+
+This package owns that narrow reconcile path and must not reopen publication
+ACK, priority recovery, timeout budgets, active-gate admission, selected-source
+selection, forced repair timeout handling, authoritative query-pressure
+fallback, or readiness support unless canonical evidence selects them again.
+
+## Scope Basis
+
+Approved maintenance scope or roadmap row.
+
+## Workflow Lane
+
+- Selected lane: `causal-escalation`
+- Why this lane is sufficient: bounded workflow/tooling scope unless changed.
+- Escalation trigger to a heavier lane: runtime ownership, shared contract, or representative scenario evidence changes.
+
+## Subagent Sequencing Requirement
+
+Required before implementation because this is a scenario-driven runtime
+owner-boundary package.
+
+## Subagent Sequencing Ledger
+
+- [x] Review subagent recorded: Agent Codex (019e34b4-f0af-7782-b395-7a68b2237c73) reviewed work/packages/done-20260517-startup-active-gate-snapshot-coverage-after-priority-closure.md; result fixes-required.
+- [x] Fix subagent recorded or explicitly not needed: Agent Codex (019e34b7-787d-7251-8bed-e291ced5ab34) fixed work/packages/done-20260517-startup-active-gate-snapshot-coverage-after-priority-closure.md.
+- [x] Implementation subagent recorded: Agent Pasteur (019e34d2-bd36-7701-bf1c-afc67f68e466) implemented work/packages/active-20260517-startup-active-gate-owner-reconcile-after-query-pressure-fallback.md.
+
+## LLM Tool-First Contract
+
+Before raw JSON, raw logs, broad file search, oversized segment files, or ad hoc `jq`, use the canonical workflow command that owns the question:
+
+1. Package metadata or ledger edits: `npm run work:package:doctor -- --suggest <package>`, `npm run work:package:doctor -- --fix-dry-run <package>`, `npm run work:package:schema`, or `npm run work:package:new -- ...`.
+2. Representative evidence: `npm run work:evidence-summary -- <artifact>` plus any focused extractor for this failure class.
+3. Owner discovery: `npm run analyze:owner-files -- <owner> [boundary]`.
+4. Subagent sequencing: `npm run work:subagent-prompt -- --role <role> --package <package>`.
+5. Large-file cleanup: `npm run work:oversized-next -- --markdown`.
+
+If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which canonical extractor was tried and why it was insufficient.
+
+## In Scope
+
+1. work/packages/active-20260517-startup-active-gate-owner-reconcile-after-query-pressure-fallback.md
+2. src/admin/admin-control-snapshot-class-part-2.js
+3. test/admin/admin-control-snapshot.test.js
+4. work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md
+5. work/sprints/current-blocker.md
+6. work/sprints/current-blocker.json
+7. work/model-ledger.jsonl
+
+## Out Of Scope
+
+1. publication_ack_convergence
+2. priority_recovery_workflow_progress
+3. timeout_budgets
+4. active_gate_admission
+5. selected_snapshot_source_selection
+6. forced_repair_timeout_handling
+7. authoritative_query_pressure_fallback
+8. readiness_support
+
+## Model Fit
+
+- Package class: `cross-boundary-causal-escalation`
+- Intended minimum model: `gpt-5.3-codex`
+- Scope shape: `active-gate-snapshot-coverage/owner-reconcile`
+- Output profile: `medium`
+- Owned files: `work/packages/active-20260517-startup-active-gate-owner-reconcile-after-query-pressure-fallback.md`, `src/admin/admin-control-snapshot-class-part-2.js`, `test/admin/admin-control-snapshot.test.js`, `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md`, `work/sprints/current-blocker.md`, `work/sprints/current-blocker.json`, `work/model-ledger.jsonl`
+- Forbidden files: `publication_ack_convergence`, `priority_recovery_workflow_progress`, `timeout_budgets`, `active_gate_admission`, `selected_snapshot_source_selection`, `forced_repair_timeout_handling`, `authoritative_query_pressure_fallback`, `readiness_support`
+- Frozen decisions: publication ACK, priority recovery, timeout budgets,
+  active-gate admission, selected-source selection, forced repair timeout
+  handling, authoritative query-pressure fallback, and readiness support remain
+  closed unless canonical evidence selects them again.
+- Escalation triggers: owned files expand beyond this package, runtime ownership changes, or representative scenario evidence changes.
+- Focused proof: `npm run work:evidence-summary -- test-output/reports/rolling-restart-active-gate-projected-fallback-20260517T063708Z.report.json`, `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-active-gate-projected-fallback-20260517T063708Z.report.json --handoff-probe`, `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-active-gate-projected-fallback-20260517T063708Z.report.json`, `npm run analyze:owner-files -- startup_active_gate_owner snapshot_coverage --markdown`
+- Model ledger advisory: `escalate`
+
+## Validation
+
+1. npm run work:evidence-summary -- test-output/reports/rolling-restart-active-gate-projected-fallback-20260517T063708Z.report.json
+2. npm run analyze:topology-convergence -- test-output/reports/rolling-restart-active-gate-projected-fallback-20260517T063708Z.report.json --handoff-probe
+3. npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-active-gate-projected-fallback-20260517T063708Z.report.json
+4. npm run analyze:owner-files -- startup_active_gate_owner snapshot_coverage --markdown
+
+## Implementation Notes
+
+Focused refresh-retention proof implemented in the admin owner refresh path.
+The new fixture first failed against the coverage-only retention rule:
+`prepareVisibleMembershipPublicationHandoffRefresh()` discarded a refreshed
+snapshot with flat `nodes.length` even though visible owner publication drained
+handoff reconcile evidence. The fix adds a single comparison helper in
+`src/admin/admin-control-snapshot-class-part-2.js` that retains refreshes when
+coverage increases or owner handoff evidence improves. Improvement is limited
+to decreased pending reconcile count, decreased pending reconcile node list,
+movement away from `owner_reconcile_pending`, or runtime promotion becoming
+allowed.
+
+No publication ACK, priority recovery, timeout budget, active-gate admission,
+selected-source, forced repair timeout, authoritative query-pressure fallback,
+readiness support, or membership publication coordinator files were reopened.
+
+## Validation Results
+
+- `npm --silent test -- test/admin/admin-control-snapshot.test.js --grep "retains flat coverage refresh"` failed before the runtime fix with `refreshed=false` and stale pending reconcile evidence retained.
+- `npm --silent test -- test/admin/admin-control-snapshot.test.js --grep "retains flat coverage refresh"` passed after the runtime fix.
+- `npm --silent test -- test/admin/admin-control-snapshot.test.js --grep "visible owner publication|flat coverage refresh|preserves original snapshot after owner outcome"` passed.
+- `node --check src/admin/admin-control-snapshot-class-part-2.js` passed.
+- `node --check test/admin/admin-control-snapshot.test.js` passed.
+- `node scripts/check-guideline-literals.js src/admin/admin-control-snapshot-class-part-2.js test/admin/admin-control-snapshot.test.js` passed with 0 new violations.
+- `node scripts/check-guideline-decision-boundaries.js src/admin/admin-control-snapshot-class-part-2.js test/admin/admin-control-snapshot.test.js` passed with 0 violations.
+- `npm run audit:runtime-grammar:file -- src/admin/admin-control-snapshot-class-part-2.js` passed with 0 violations.
+- `npm run work:evidence-summary -- test-output/reports/rolling-restart-active-gate-projected-fallback-20260517T063708Z.report.json` still reports first frontier `active_gate_snapshot_coverage`, owner `startup_active_gate_owner`, boundary `snapshot_coverage`.
+- `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-active-gate-projected-fallback-20260517T063708Z.report.json --handoff-probe` still reports handoff `owner_reconcile_pending` with 3 pending nodes in the existing representative artifact.
+- `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-active-gate-projected-fallback-20260517T063708Z.report.json` still classifies `active_gate_snapshot_coverage_incomplete` as a local runtime owner blocker in the existing representative artifact.
+- `npm run work:validate -- --pre-impl` passed after regenerating `work/sprints/current-blocker.md` and `work/sprints/current-blocker.json`.
+- `git diff --check` passed.
