@@ -1,9 +1,10 @@
+# Startup Active Gate Snapshot Coverage Owner Reconcile After ACK Drain
+
+<!-- work-package
 {
-  "schema": "current-blocker-v1",
-  "generatedBy": "scripts/work-tracker.js",
-  "sprint": "work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md",
-  "package": "work/packages/active-20260517-startup-active-gate-snapshot-coverage-owner-reconcile-after-ack-drain.md",
+  "schema": "work-package-v1",
   "status": "active",
+  "opened": "2026-05-17",
   "lane": "causal-escalation",
   "scenario": "rolling-restart",
   "artifact": "test-output/reports/rolling-restart-publication-open-ack-classified-20260517T104704Z.report.json",
@@ -78,7 +79,6 @@
     "test/control-plane/publication-active-gate-handoff-contract.test.js",
     "test/distributed/harness/__tests__/active-gate-closure-classification.test.js"
   ],
-  "touchedFiles": [],
   "modelFit": {
     "packageClass": "representative-frontier-closure",
     "intendedMinimumModel": "gpt-5.3-codex",
@@ -146,3 +146,92 @@
   },
   "predecessor": "work/packages/done-20260517-topology-publication-ack-pending-after-active-gate-drain-migration.md"
 }
+-->
+
+## Why
+
+The latest representative run satisfies `publication_ack_convergence`, but the
+release gate remains red on `active_gate_snapshot_coverage`. The active-gate
+handoff reports `owner_reconcile_pending`, `snapshotCoverageNodeCount=6/7`, and
+five pending reconcile nodes, so this package owns the next startup active-gate
+owner boundary.
+
+## Scope Basis
+
+Continuation of the rolling-restart green-gate closure sprint after the
+publication ACK count-only projection package closed as migrated.
+
+## Workflow Lane
+
+- Selected lane: `causal-escalation`
+- Why this lane is required: the representative release gate remains red and
+  canonical evidence selects a runtime owner boundary.
+- Escalation trigger to a heavier lane: runtime ownership, shared contract, or representative scenario evidence changes.
+
+## Subagent Sequencing Requirement
+
+Required before implementation because this is a scenario-driven runtime
+owner-boundary package. Run review, fix if needed, and implementation
+subagents before editing runtime files.
+
+## LLM Tool-First Contract
+
+Before raw JSON, raw logs, broad file search, oversized segment files, or ad hoc `jq`, use the canonical workflow command that owns the question:
+
+1. Package metadata or ledger edits: `npm run work:package:doctor -- --suggest <package>`, `npm run work:package:doctor -- --fix-dry-run <package>`, `npm run work:package:schema`, or `npm run work:package:new -- ...`.
+2. Representative evidence: `npm run work:evidence-summary -- <artifact>` plus any focused extractor for this failure class.
+3. Owner discovery: `npm run analyze:owner-files -- <owner> [boundary]`.
+4. Subagent sequencing: `npm run work:subagent-prompt -- --role <role> --package <package>`.
+5. Large-file cleanup: `npm run work:oversized-next -- --markdown`.
+
+If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which canonical extractor was tried and why it was insufficient.
+
+## In Scope
+
+1. work/packages/active-20260517-startup-active-gate-snapshot-coverage-owner-reconcile-after-ack-drain.md
+2. work/packages/done-20260517-topology-publication-ack-pending-after-active-gate-drain-migration.md
+3. work/packages/done-20260517-startup-active-gate-snapshot-coverage-joined-reconcile-residual.md
+4. work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md
+5. work/sprints/current-blocker.md
+6. work/sprints/current-blocker.json
+7. work/model-ledger.jsonl
+8. src/admin/admin-control-snapshot-class-part-2.js
+9. src/admin/admin-control-snapshot-class-part-3.js
+10. src/control-plane/publication-active-gate-handoff-contract.js
+11. src/control-plane/membership-publication-planning.js
+12. src/control-plane/control-plane-snapshot-owner.js
+13. src/control-plane/authoritative-node-evidence-reconciler.js
+14. test/admin/admin-control-snapshot.test.js
+15. test/control-plane/publication-active-gate-handoff-contract.test.js
+16. test/distributed/harness/__tests__/active-gate-closure-classification.test.js
+
+## Out Of Scope
+
+1. topology_publication_owner
+2. operation_workflow_owner
+3. timeout_budgets
+4. readiness_support
+
+## Model Fit
+
+- Package class: `representative-frontier-closure`
+- Intended minimum model: `gpt-5.3-codex`
+- Scope shape: `owner-boundary-contraction/current-frontier`
+- Output profile: `medium`
+- Owned files: `work/packages/active-20260517-startup-active-gate-snapshot-coverage-owner-reconcile-after-ack-drain.md`, `work/packages/done-20260517-topology-publication-ack-pending-after-active-gate-drain-migration.md`, `work/packages/done-20260517-startup-active-gate-snapshot-coverage-joined-reconcile-residual.md`, `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md`, `work/sprints/current-blocker.md`, `work/sprints/current-blocker.json`, `work/model-ledger.jsonl`, `src/admin/admin-control-snapshot-class-part-2.js`, `src/admin/admin-control-snapshot-class-part-3.js`, `src/control-plane/publication-active-gate-handoff-contract.js`, `src/control-plane/membership-publication-planning.js`, `src/control-plane/control-plane-snapshot-owner.js`, `src/control-plane/authoritative-node-evidence-reconciler.js`, `test/admin/admin-control-snapshot.test.js`, `test/control-plane/publication-active-gate-handoff-contract.test.js`, `test/distributed/harness/__tests__/active-gate-closure-classification.test.js`
+- Forbidden files: `topology_publication_owner`, `operation_workflow_owner`, `timeout_budgets`, `readiness_support`
+- Frozen decisions: package scope and lane stay bounded unless explicitly escalated.
+- Escalation triggers: owned files expand beyond this package, runtime ownership changes, or representative scenario evidence changes.
+- Focused proof: `npm run work:evidence-summary -- test-output/reports/rolling-restart-publication-open-ack-classified-20260517T104704Z.report.json`, `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-publication-open-ack-classified-20260517T104704Z.report.json --handoff-probe`, `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-publication-open-ack-classified-20260517T104704Z.report.json --replay-fixture`, `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-publication-open-ack-classified-20260517T104704Z.report.json`, `npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-publication-open-ack-classified-20260517T104704Z.report.json`, `npm run analyze:distributed-failure -- --report test-output/reports/rolling-restart-publication-open-ack-classified-20260517T104704Z.report.json`, `npm run analyze:owner-files -- startup_active_gate_owner snapshot_coverage`, `git diff --check`
+- Model ledger advisory: `escalate`
+
+## Validation
+
+1. npm run work:evidence-summary -- test-output/reports/rolling-restart-publication-open-ack-classified-20260517T104704Z.report.json
+2. npm run analyze:topology-convergence -- test-output/reports/rolling-restart-publication-open-ack-classified-20260517T104704Z.report.json --handoff-probe
+3. npm run analyze:topology-convergence -- test-output/reports/rolling-restart-publication-open-ack-classified-20260517T104704Z.report.json --replay-fixture
+4. npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-publication-open-ack-classified-20260517T104704Z.report.json
+5. npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-publication-open-ack-classified-20260517T104704Z.report.json
+6. npm run analyze:distributed-failure -- --report test-output/reports/rolling-restart-publication-open-ack-classified-20260517T104704Z.report.json
+7. npm run analyze:owner-files -- startup_active_gate_owner snapshot_coverage
+8. git diff --check

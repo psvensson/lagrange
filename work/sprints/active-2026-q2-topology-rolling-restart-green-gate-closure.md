@@ -33,7 +33,7 @@ migrated:
 2. The focused selector proof is green, but the representative rerun stayed
    red and selected a new first frontier.
 3. The current active package is
-   `work/packages/active-20260517-topology-publication-ack-pending-after-active-gate-drain-migration.md`.
+   `work/packages/done-20260517-topology-publication-ack-pending-after-active-gate-drain-migration.md`.
 4. Fresh `work:evidence-summary` selects `publication_ack_convergence` as the
    first frontier.
 5. Representative owner boundary:
@@ -418,8 +418,8 @@ required action.
 
 1. `npm run work:context`
 2. `npm run work:llm-start`
-3. `npm run work:package:doctor -- --suggest work/packages/active-20260517-topology-publication-ack-pending-after-active-gate-drain-migration.md`
-4. `npm run work:validate -- --entry work/packages/active-20260517-topology-publication-ack-pending-after-active-gate-drain-migration.md`
+3. `npm run work:package:doctor -- --suggest work/packages/done-20260517-topology-publication-ack-pending-after-active-gate-drain-migration.md`
+4. `npm run work:validate -- --entry work/packages/done-20260517-topology-publication-ack-pending-after-active-gate-drain-migration.md`
 5. `npm run work:evidence-summary -- test-output/reports/rolling-restart-active-gate-drained-handoff-20260517T095943Z.report.json`
 6. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-active-gate-drained-handoff-20260517T095943Z.report.json --handoff-probe`
 7. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-active-gate-drained-handoff-20260517T095943Z.report.json --replay-fixture`
@@ -501,7 +501,7 @@ Continue with the publication ACK successor selected by the latest
 representative artifact:
 
 ```text
-work/packages/active-20260517-topology-publication-ack-pending-after-active-gate-drain-migration.md
+work/packages/done-20260517-topology-publication-ack-pending-after-active-gate-drain-migration.md
 test-output/reports/rolling-restart-active-gate-drained-handoff-20260517T095943Z.report.json
 ```
 

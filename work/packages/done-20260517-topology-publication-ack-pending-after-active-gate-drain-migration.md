@@ -3,7 +3,7 @@
 <!-- work-package
 {
   "schema": "work-package-v1",
-  "status": "active",
+  "status": "done",
   "opened": "2026-05-17",
   "lane": "causal-escalation",
   "scenario": "rolling-restart",
@@ -36,7 +36,7 @@
     "npm run analyze:distributed-failure -- --report test-output/reports/rolling-restart-publication-open-ack-classified-20260517T104704Z.report.json"
   ],
   "writeScope": [
-    "work/packages/active-20260517-topology-publication-ack-pending-after-active-gate-drain-migration.md",
+    "work/packages/done-20260517-topology-publication-ack-pending-after-active-gate-drain-migration.md",
     "work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md",
     "work/sprints/current-blocker.md",
     "work/sprints/current-blocker.json",
@@ -67,7 +67,7 @@
     "src/rebalancer/operation-workflow-owner-segment-7-stage-5.js"
   ],
   "commitScope": [
-    "work/packages/active-20260517-topology-publication-ack-pending-after-active-gate-drain-migration.md",
+    "work/packages/done-20260517-topology-publication-ack-pending-after-active-gate-drain-migration.md",
     "work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md",
     "work/sprints/current-blocker.md",
     "work/sprints/current-blocker.json",
@@ -160,7 +160,10 @@
       "npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-publication-open-ack-classified-20260517T104704Z.report.json"
     ]
   },
-  "predecessor": "work/packages/done-20260517-startup-active-gate-snapshot-coverage-joined-reconcile-residual.md"
+  "predecessor": "work/packages/done-20260517-startup-active-gate-snapshot-coverage-joined-reconcile-residual.md",
+  "closed": "2026-05-17",
+  "commitAndPushLedgerRequired": true,
+  "successor": "work/packages/active-20260517-startup-active-gate-snapshot-coverage-owner-reconcile-after-ack-drain.md"
 }
 -->
 
@@ -194,9 +197,9 @@ owner-boundary package.
 
 ## Subagent Sequencing Ledger
 
-- [x] Review subagent recorded: Agent Codex (019e3571-f9bb-7932-a111-9df604a60821) reviewed work/packages/active-20260517-topology-publication-ack-pending-after-active-gate-drain-migration.md; result clean.
+- [x] Review subagent recorded: Agent Codex (019e3571-f9bb-7932-a111-9df604a60821) reviewed work/packages/done-20260517-topology-publication-ack-pending-after-active-gate-drain-migration.md; result clean.
 - [x] Fix subagent recorded or explicitly not needed: not-needed.
-- [x] Implementation subagent recorded: Agent Codex (019e357a-4503-7dc1-86c8-066e880f0144) implemented work/packages/active-20260517-topology-publication-ack-pending-after-active-gate-drain-migration.md.
+- [x] Implementation subagent recorded: Agent Codex (019e357a-4503-7dc1-86c8-066e880f0144) implemented work/packages/done-20260517-topology-publication-ack-pending-after-active-gate-drain-migration.md.
 
 ## LLM Tool-First Contract
 
@@ -212,7 +215,7 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 
 ## In Scope
 
-1. work/packages/active-20260517-topology-publication-ack-pending-after-active-gate-drain-migration.md
+1. work/packages/done-20260517-topology-publication-ack-pending-after-active-gate-drain-migration.md
 2. work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md
 3. work/sprints/current-blocker.md
 4. work/sprints/current-blocker.json
@@ -242,7 +245,7 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 - Intended minimum model: `gpt-5.3-codex`
 - Scope shape: `owner-boundary-contraction/current-frontier`
 - Output profile: `medium`
-- Owned files: `work/packages/active-20260517-topology-publication-ack-pending-after-active-gate-drain-migration.md`, `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md`, `work/sprints/current-blocker.md`, `work/sprints/current-blocker.json`, `work/model-ledger.jsonl`, `src/control-plane/publication-owner-evidence.js`, `src/control-plane/publication-owner-decision.js`, `src/control-plane/publication-recovery-gate.js`, `src/control-plane/publication-recovery-evidence.js`, `test/distributed/harness/failure-bundle-segment-4.js`, `test/distributed/harness/__tests__/failure-bundle-core-16-test-cases.js`, `test/control-plane/publication-owner-stream.test.js`, `test/control-plane/publication-recovery-gate.test.js`, `test/control-plane/publication-recovery-evidence.test.js`
+- Owned files: `work/packages/done-20260517-topology-publication-ack-pending-after-active-gate-drain-migration.md`, `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md`, `work/sprints/current-blocker.md`, `work/sprints/current-blocker.json`, `work/model-ledger.jsonl`, `src/control-plane/publication-owner-evidence.js`, `src/control-plane/publication-owner-decision.js`, `src/control-plane/publication-recovery-gate.js`, `src/control-plane/publication-recovery-evidence.js`, `test/distributed/harness/failure-bundle-segment-4.js`, `test/distributed/harness/__tests__/failure-bundle-core-16-test-cases.js`, `test/control-plane/publication-owner-stream.test.js`, `test/control-plane/publication-recovery-gate.test.js`, `test/control-plane/publication-recovery-evidence.test.js`
 - Forbidden files: `timeout_budgets`, `active_gate_admission`, `selected_snapshot_source_selection`, `forced_repair_timeout_handling`, `authoritative_query_pressure_fallback`, `readiness_support`
 - Frozen decisions: package scope and lane stay bounded unless explicitly escalated.
 - Escalation triggers: owned files expand beyond this package, runtime ownership changes, or representative scenario evidence changes.
@@ -257,7 +260,7 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 4. npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-active-gate-drained-handoff-20260517T095943Z.report.json
 5. npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-active-gate-drained-handoff-20260517T095943Z.report.json
 6. npm run analyze:distributed-failure -- --report test-output/reports/rolling-restart-active-gate-drained-handoff-20260517T095943Z.report.json
-7. PASS - `npm run work:validate -- --pre-impl work/packages/active-20260517-topology-publication-ack-pending-after-active-gate-drain-migration.md`
+7. PASS - `npm run work:validate -- --pre-impl work/packages/done-20260517-topology-publication-ack-pending-after-active-gate-drain-migration.md`
 8. PASS - `node --test --test-name-pattern "trusts open publishing gate normalization" test/distributed/harness/__tests__/failure-bundle.test.js`
 9. PASS - `node --check test/distributed/harness/failure-bundle-segment-4.js`
 10. PASS - `node --check test/distributed/harness/__tests__/failure-bundle-core-16-test-cases.js`
@@ -388,3 +391,9 @@ Do not continue by widening the package after a stop condition. Record the
 result, update the sprint/current-blocker handoff, run closure validation, then
 make a focused commit and push containing only package-owned files, generated
 sprint handoff files, and ledger updates.
+
+## Commit And Push Ledger
+
+1. Focused package commit: `589e6e6f88e956f899c6754d0f98a5fa99be829d`
+2. Pushed to: `origin/codex/pending-ack-eligibility-filter`
+3. Commit contains only package-owned files/package-status/allowed sprint handoff: yes

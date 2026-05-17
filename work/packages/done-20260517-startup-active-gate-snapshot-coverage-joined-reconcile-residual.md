@@ -149,7 +149,7 @@
   "predecessor": "work/packages/done-20260517-startup-active-gate-snapshot-coverage-after-publication-ack-closure.md",
   "closed": "2026-05-17",
   "commitAndPushLedgerRequired": true,
-  "successor": "work/packages/active-20260517-topology-publication-ack-pending-after-active-gate-drain-migration.md"
+  "successor": "work/packages/done-20260517-topology-publication-ack-pending-after-active-gate-drain-migration.md"
 }
 -->
 
