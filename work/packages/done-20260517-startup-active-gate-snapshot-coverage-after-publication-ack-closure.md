@@ -251,3 +251,9 @@ frontier remains `active_gate_snapshot_coverage` under
 `startup_active_gate_owner / snapshot_coverage` with snapshot coverage improved
 to `4/5`, `pendingReconcileCount=3`, and next action
 `reconcile_owner_membership_publication`.
+
+## Commit And Push Ledger
+
+1. Focused package commit: `0f4d9febf77b2d11f16d992f73dbd0d1c4cd1261`
+2. Pushed to: `origin/codex/pending-ack-eligibility-filter`
+3. Commit contains only package-owned files/package-status/allowed sprint handoff: yes
