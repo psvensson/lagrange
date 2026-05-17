@@ -308,6 +308,6 @@ Representative rerun:
 
 ## Commit And Push Ledger
 
-1. Focused package commit: pending-before-focused-commit
-2. Pushed to: pending-before-focused-push
-3. Commit contains only package-owned files/package-status/allowed sprint handoff: pending-before-focused-commit
+1. Focused package commit: `3aa7ef0143828cb2a3a7ce8e0284c963e220aac6`
+2. Pushed to: `origin/codex/pending-ack-eligibility-filter`
+3. Commit contains only package-owned files/package-status/allowed sprint handoff: yes
