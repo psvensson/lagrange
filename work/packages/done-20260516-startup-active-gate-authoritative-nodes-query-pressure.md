@@ -236,3 +236,9 @@ do not expose per-owner SQL delivery attempts. A focused log search was used
 only after those extractors to confirm the selected repair had already moved
 from CDC owner-RPC fallback into `sql_query_engine` and message-router
 reconnect delivery.
+
+## Commit And Push Ledger
+
+1. Focused package commit: `c0208f4d8e323e2b4e7e46e1feb866c8147de3a0`
+2. Pushed to: `origin/codex/pending-ack-eligibility-filter`
+3. Commit contains only package-owned files/package-status/allowed sprint handoff: yes
