@@ -264,6 +264,6 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 
 ## Commit And Push Ledger
 
-1. Focused package commit: cbea674e907d424a9133059b65e02a84a906f418
+1. Focused package commit: 0d99b1141096def39a76ae0310d553964bcffc5d
 2. Pushed to: origin/codex/pending-ack-eligibility-filter
 3. Commit contains only package-owned files/package-status/allowed sprint handoff: yes

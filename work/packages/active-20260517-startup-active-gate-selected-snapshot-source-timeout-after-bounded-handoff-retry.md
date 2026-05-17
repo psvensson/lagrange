@@ -170,8 +170,8 @@ subagents before editing runtime files.
 Required before implementation because this is a scenario-driven runtime
 owner-boundary package.
 
-- [ ] Review subagent recorded: pending-before-implementation-resumes.
-- [ ] Fix subagent recorded or explicitly not needed: pending-before-review-result.
+- [x] Review subagent recorded: Agent Archimedes (019e35bd-b7dd-7ea1-81af-e3d58bae2e43) reviewed work/packages/active-20260517-startup-active-gate-selected-snapshot-source-timeout-after-bounded-handoff-retry.md; result fixes-required.
+- [x] Fix subagent recorded or explicitly not needed: Agent Halley (019e35c0-3eed-7ea0-b92b-3e1e34883c1a) fixed work/packages/active-20260517-startup-active-gate-selected-snapshot-source-timeout-after-bounded-handoff-retry.md.
 - [ ] Implementation subagent recorded: pending-before-implementation-resumes.
 
 ## LLM Tool-First Contract
@@ -235,4 +235,3 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 | Producer publication durable truth | pending ACK and missing published counts are zero in canonical probes | Frozen unless fresh evidence selects publication |
 | Active-gate observation | selected source timeout on node `11601fe0-72d6-5853-8590-ec2881853e72`; coverage `0/5` | In scope |
 | Workflow progress | priority residual extraction reports zero witnesses | Frozen unless fresh evidence selects workflow progress |
-
