@@ -159,7 +159,7 @@
   "predecessor": "work/packages/done-20260517-startup-active-gate-startup-publication-lag-snapshot-projection.md",
   "closed": "2026-05-17",
   "commitAndPushLedgerRequired": true,
-  "successor": "work/packages/active-20260517-topology-publication-convergence-after-startup-reconcile-migration.md"
+  "successor": "work/packages/done-20260517-topology-publication-convergence-after-startup-reconcile-migration.md"
 }
 -->
 

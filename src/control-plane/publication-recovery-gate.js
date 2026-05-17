@@ -54,6 +54,9 @@ const PRIORITY_CLOSURE_WITNESS_SUMMARY_STATE = Object.freeze({
   DURABLE_SUMMARY_REFRESHED: 'durable_summary_refreshed',
   RETAINED: 'retained',
 });
+const PUBLICATION_RECOVERY_OWNER_REASON_CODE_SET = Object.freeze(new Set(
+  Object.values(CONTROL_PLANE_PRIORITY_RECOVERY_REASON),
+));
 
 const PUBLICATION_RECOVERY_GATE_STREAM_RULES = Object.freeze([
   Object.freeze({
@@ -707,14 +710,17 @@ function filterProvidedPriorityRecoveryReasonCodes(
   publicationEpochReasonActive,
 ) {
   return Object.freeze(
-    providedReasonCodes.filter((reasonCode) =>
-      shouldRetainPriorityRecoveryReasonCode(
-        reasonCode,
-        prioritySpreadDecision,
-        prioritySpreadEvidenceUnavailableReasonActive,
-        publicationEpochReasonActive,
+    providedReasonCodes
+      .filter((reasonCode) =>
+        PUBLICATION_RECOVERY_OWNER_REASON_CODE_SET.has(reasonCode))
+      .filter((reasonCode) =>
+        shouldRetainPriorityRecoveryReasonCode(
+          reasonCode,
+          prioritySpreadDecision,
+          prioritySpreadEvidenceUnavailableReasonActive,
+          publicationEpochReasonActive,
+        ),
       ),
-    ),
   );
 }
 

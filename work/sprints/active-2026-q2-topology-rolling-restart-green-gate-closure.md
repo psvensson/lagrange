@@ -22,59 +22,70 @@ success is in scope.
 ## Current Blocker Snapshot
 
 Latest representative artifact:
-`test-output/reports/rolling-restart-owner-reconcile-stale-ack-20260517T143948Z.report.json`.
+`test-output/reports/rolling-restart-publication-reason-filter-20260517T151928Z.report.json`.
 
-Canonical state after the startup active-gate remaining reconcile package
-migrated:
+Canonical state after the publication-convergence package migrated:
 
 1. `work/packages/done-20260517-startup-active-gate-remaining-handoff-reconcile-node.md`
    closed as `migrated`; focused part-5 harness proof passed, paired
    owner-reconcile projection and selected stale ACK resolution are covered,
    and the representative moved past startup active-gate setup.
-2. The current active package is
-   `work/packages/active-20260517-topology-publication-convergence-after-startup-reconcile-migration.md`.
-3. Fresh `work:evidence-summary` selects `publication_ack_convergence` as the
+2. `work/packages/done-20260517-topology-publication-convergence-after-startup-reconcile-migration.md`
+   closed publication convergence as `migrated`; stale presentation-only
+   publication gate reasons are filtered from the owner reason-code snapshot.
+3. The current active package is
+   `work/packages/active-20260517-startup-active-gate-selected-snapshot-source-timeout-after-publication-migration.md`.
+4. Fresh `work:evidence-summary` selects `active_gate_snapshot_coverage` as the
    first frontier.
-4. Representative owner boundary:
-   `topology_publication_owner / publication_convergence`.
-5. Canonical blocker: `publication_ack_convergence`.
-6. Dominant reason: `publication_pending`.
-7. Publication evidence: `publicationStatus=OPEN`,
+5. Representative owner boundary:
+   `startup_active_gate_owner / snapshot_coverage`.
+6. Canonical blocker: selected snapshot source timeout before active-gate
+   coverage can form.
+7. Dominant reason: `active_gate_timed_out`.
+8. Active-gate evidence: `activeGate.state=timed_out`,
+   `snapshotCoverageNodeCount=0/5`,
+   `selectedSnapshotSourceCause=selected_snapshot_source_timeout`,
+   `selectedSnapshotNodeId=35a891b8-c1a0-5064-9c6e-2acfba61c2a7`, and
+   `selectedSnapshotTimeoutMs=100`.
+9. Publication convergence is satisfied and
+   `priority-recovery-residuals` reports zero witnesses.
+10. The next focused proof must decide whether
+    `startup_active_gate_owner / snapshot_coverage` can reduce the selected
+    snapshot source timeout, must migrate to a narrower owner boundary, or can
+    make representative `rolling-restart` green.
+
+Historical publication-convergence package:
+
+1. The previous active package was
+   `work/packages/done-20260517-topology-publication-convergence-after-startup-reconcile-migration.md`.
+2. Its stale input evidence selected `publication_ack_convergence`.
+3. Publication evidence was `publicationStatus=OPEN`,
    `publicationPending=true`, `recoveryProtocolState=publication_pending`,
    `publicationOwnerStreamOutcome=publishing`, and
    `publicationOwnerRecoveryOutcome=waiting_for_publication`.
-8. The publication contains only the seed in `publishedActiveNodeIds` and
+4. The publication contained only the seed in `publishedActiveNodeIds` and
    reports `missingPublishedCount=4`.
-9. `priority-recovery-residuals` reports one
+5. `priority-recovery-residuals` reported one
    `operation_workflow_owner / rebalancer_handoff` witness for
-   `control_plane_publications-p1`; do not split to that owner until a focused
-   publication probe proves publication is waiting on it.
-10. `active_gate_snapshot_coverage` is deferred behind publication convergence
-    and priority recovery. It still carries `snapshotCoverageNodeCount=3/5`,
-    repair-deferred snapshot observation, and pending owner-reconcile handoff
-    state with `runtimePromotionAllowed=false`.
-11. The next focused proof must decide whether
-    `topology_publication_owner / publication_convergence` can close
-    `OPEN/publishing` directly, must migrate to
-    `operation_workflow_owner / rebalancer_handoff`, or can make
-    representative `rolling-restart` green.
+   `control_plane_publications-p1`; the fresh artifact reduced that witness
+   count to `0`.
 
 ## Current Edge Card
 
 ```text
-Representative artifact: test-output/reports/rolling-restart-owner-reconcile-stale-ack-20260517T143948Z.report.json
-First frontier: publication_ack_convergence
-Owner: topology_publication_owner
-Boundary: publication_convergence
-Selected cause: publication_pending with publicationStatus=OPEN and publicationOwnerStreamOutcome=publishing
-Required action: prove publication convergence or split to operation_workflow_owner / rebalancer_handoff with focused proof
-Runtime promotion allowed: not an active-gate package concern
-Priority residual: one operation_workflow_owner / rebalancer_handoff witness for control_plane_publications-p1
-Current coverage: active-gate snapshotCoverageNodeCount=3/5, deferred
-Goal: publication ACK convergence satisfied, owner-boundary migration with proof, or representative green
-Allowed edits: exact files promoted by the active package after review/fix/implementation proof or recorded environment-policy waiver
-Forbidden edits: closed active-gate harness proof, timeout_budgets, active_gate_admission, selected-source timeout, terminal-progress selection, readiness_support
-Required latest proof: npm run analyze:topology-convergence -- test-output/reports/rolling-restart-owner-reconcile-stale-ack-20260517T143948Z.report.json --replay-fixture
+Representative artifact: test-output/reports/rolling-restart-publication-reason-filter-20260517T151928Z.report.json
+First frontier: active_gate_snapshot_coverage
+Owner: startup_active_gate_owner
+Boundary: snapshot_coverage
+Selected cause: selected_snapshot_source_timeout
+Required action: prove selected-source timeout reduction or migrate a narrower active-gate edge
+Runtime promotion allowed: pending focused proof
+Priority residual: none
+Current coverage: active-gate snapshotCoverageNodeCount=0/5
+Goal: active-gate snapshot coverage improves, owner-boundary migration with proof, or representative green
+Allowed edits: package metadata until review/fix/implementation proof is clean, then exact files promoted by focused active-gate proof
+Forbidden edits: publication recovery, priority recovery, timeout_budgets, active_gate_admission, terminal-progress selection, readiness_support
+Required latest proof: npm run analyze:topology-convergence -- test-output/reports/rolling-restart-publication-reason-filter-20260517T151928Z.report.json --replay-fixture
 Allowed stop modes: representative-green, migrated, reduced, same-frontier, classification-only, architecture-gap, human-escalation
 ```
 
@@ -133,7 +144,8 @@ Forbidden during this gate:
 | `done-20260517-startup-active-gate-pending-handoff-reconcile-after-selected-timeout-reduction.md` | `rolling-restart-pending-handoff-reconcile-after-timeout-reduction-20260517T000000Z.report.json` | `startup_active_gate_owner / snapshot_coverage` | replay fixture records the three pending reconcile nodes; representative remains at `pendingReconcileCount=3`, coverage `4/5` | `same-frontier` |
 | `done-20260517-startup-active-gate-startup-publication-lag-snapshot-projection.md` | `rolling-restart-startup-publication-lag-projection-20260517T000000Z.report.json` | `startup_active_gate_owner / snapshot_coverage` | focused harness projection keeps ACK/priority frozen and reduces `pendingReconcileCount=3` -> `1`; remaining node `35a891b8-c1a0-5064-9c6e-2acfba61c2a7` | `reduced` |
 | `done-20260517-startup-active-gate-remaining-handoff-reconcile-node.md` | `rolling-restart-owner-reconcile-stale-ack-20260517T143948Z.report.json` | `startup_active_gate_owner / snapshot_coverage` -> `topology_publication_owner / publication_convergence` | focused paired reconcile projection and selected stale ACK handoff proof passed; representative moved past startup active gate and selected `publication_ack_convergence` with `publication_pending` | `migrated` |
-| `active-20260517-topology-publication-convergence-after-startup-reconcile-migration.md` | `rolling-restart-owner-reconcile-stale-ack-20260517T143948Z.report.json` | `topology_publication_owner / publication_convergence` | publication `OPEN/publishing`, published active only seed, `missingPublishedCount=4`, priority residual witness on `operation_workflow_owner / rebalancer_handoff` | `active` |
+| `done-20260517-topology-publication-convergence-after-startup-reconcile-migration.md` | `rolling-restart-publication-reason-filter-20260517T151928Z.report.json` | `topology_publication_owner / publication_convergence` -> `startup_active_gate_owner / snapshot_coverage` | stale presentation-only publication reasons filtered; `publication_ack_convergence` satisfied; priority residual witnesses -> `0`; selected active-gate source timeout at `0/5` coverage | `migrated` |
+| `active-20260517-startup-active-gate-selected-snapshot-source-timeout-after-publication-migration.md` | `rolling-restart-publication-reason-filter-20260517T151928Z.report.json` | `startup_active_gate_owner / snapshot_coverage` | selected snapshot source timeout on node `35a891b8-c1a0-5064-9c6e-2acfba61c2a7`; coverage `0/5`; publication and priority frozen upstream | `active` |
 
 ## Sprint LLM Trap List
 
@@ -670,26 +682,23 @@ The sprint cannot close until:
 
 ## Current Next Action
 
-Continue with the startup active-gate pending handoff reconcile successor
-selected by the latest representative artifact:
+Continue with the startup active-gate selected snapshot source timeout
+successor selected by the latest representative artifact:
 
 ```text
-work/packages/active-20260517-startup-active-gate-remaining-handoff-reconcile-node.md
-test-output/reports/rolling-restart-startup-publication-lag-projection-20260517T000000Z.report.json
+work/packages/active-20260517-startup-active-gate-selected-snapshot-source-timeout-after-publication-migration.md
+test-output/reports/rolling-restart-publication-reason-filter-20260517T151928Z.report.json
 ```
 
 The current first frontier is
 `startup_active_gate_owner / snapshot_coverage`: fresh evidence reports
 `active_gate_snapshot_coverage`, `active_gate_timed_out`,
-`snapshotCoverageNodeCount=2/5`,
-`selectedSnapshotObservationMode=repair_deferred`,
-`publicationActiveGateHandoffState=pending`,
-`publicationActiveGateHandoffReasonCode=owner_reconcile_pending`,
-`publicationActiveGateHandoffNextAction=reconcile_owner_membership_publication`,
-`publicationActiveGateHandoffRuntimePromotionAllowed=false`, and
-`publicationActiveGateHandoffPendingReconcileCount=1` for node
-`35a891b8-c1a0-5064-9c6e-2acfba61c2a7`. Publication ACK is not the selected
-blocker and priority residual extraction reports zero witnesses.
+`snapshotCoverageNodeCount=0/5`,
+`selectedSnapshotSourceCause=selected_snapshot_source_timeout`,
+`selectedSnapshotNodeId=35a891b8-c1a0-5064-9c6e-2acfba61c2a7`,
+`selectedSnapshotTimeoutMs=100`, and no publication active-gate handoff.
+Publication ACK is satisfied and priority residual extraction reports zero
+witnesses.
 
 Run the required review/fix/implementation subagent sequence before runtime
 edits for the successor package. Keep publication ACK, priority recovery,

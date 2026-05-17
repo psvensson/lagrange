@@ -1621,6 +1621,9 @@ function buildCanonicalPublicationConvergence(options = {}) {
   ) ?
     priorityRecoveryObservation.priorityRecoveryCurrentSummary :
     null;
+  const canonicalPriorityRecoveryReasonCodes = normalizeDistinctStringArray(
+    publicationConvergenceGate?.reasonCodes ?? priorityRecoveryReasonCodes,
+  );
   const publicationOwnerStream =
     publicationConvergenceGate?.publicationOwnerStream ||
     buildPublicationOwnerStreamState({
@@ -1643,7 +1646,7 @@ function buildCanonicalPublicationConvergence(options = {}) {
       pendingAckEvidenceState: pendingAckEvidence.evidenceState,
       missingPublishedNodeIds,
       missingPublishedCount,
-      priorityRecoveryReasonCodes,
+      priorityRecoveryReasonCodes: canonicalPriorityRecoveryReasonCodes,
       prioritySpreadPending:
         priorityRecoveryObservation?.prioritySpreadPending === true ||
         publicationConvergenceGate?.prioritySpreadPending === true,
@@ -1657,7 +1660,7 @@ function buildCanonicalPublicationConvergence(options = {}) {
     ...(publicationEpoch !== null ? {publicationEpoch} : {}),
     ...(publicationStatus ? {status: publicationStatus, publicationStatus} : {}),
     ...(recoveryProtocolState ? {recoveryProtocolState} : {}),
-    priorityRecoveryReasonCodes,
+    priorityRecoveryReasonCodes: canonicalPriorityRecoveryReasonCodes,
     priorityPartitionSummary,
     priorityRecoveryClosureWitness,
     publishedActiveNodeIds,

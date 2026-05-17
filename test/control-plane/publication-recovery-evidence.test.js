@@ -34,6 +34,13 @@ const TEST_CLOSURE_WITNESS_CLASS =
 const TEST_CLOSURE_WITNESS_STATE = 'closure_satisfied_stale_publication';
 const TEST_PUBLICATION_PENDING_REASON_CODE = 'publication_epoch_pending';
 const TEST_STALE_REASON_CODE = 'priority_partitions_not_spread';
+const TEST_STALE_PRESENTATION_REASON_CODE = Object.freeze({
+  PRIORITY_CONTROL_PLANE_SPREAD_PENDING:
+    'priority_control_plane_spread_pending',
+  PUBLICATION_MISSING_ACTIVE_NODE: 'publication_missing_active_node=node-b',
+  PUBLICATION_NOT_PUBLISHED_OPEN: 'publication_not_published=OPEN',
+  PUBLICATION_PENDING_ACK: 'publication_pending_ack=1',
+});
 const TEST_NON_PRIORITY_PARTITION_ID =
   'tbl-b932fa03-3835-4a50-87b4-bd158daed0ea-p1';
 const TEST_DECISION_SNAPSHOT_ACK_TARGET_ASSERTION =
@@ -754,6 +761,74 @@ test('buildCanonicalPublicationRecoveryEvidence reduces open count-only ACK evid
       evidence.publicationConvergence.recoveryOutcome,
       PUBLICATION_OWNER_RECOVERY_OUTCOME.WAITING_FOR_PUBLICATION,
     );
+    t.end();
+  });
+
+test('buildCanonicalPublicationRecoveryEvidence filters stale presentation-only publication gate reasons',
+  (t) => {
+    const stalePresentationReasonCodes = Object.freeze([
+      TEST_STALE_PRESENTATION_REASON_CODE
+        .PRIORITY_CONTROL_PLANE_SPREAD_PENDING,
+      TEST_STALE_REASON_CODE,
+      TEST_PUBLICATION_PENDING_REASON_CODE,
+      TEST_STALE_PRESENTATION_REASON_CODE.PUBLICATION_MISSING_ACTIVE_NODE,
+      TEST_STALE_PRESENTATION_REASON_CODE.PUBLICATION_NOT_PUBLISHED_OPEN,
+      TEST_STALE_PRESENTATION_REASON_CODE.PUBLICATION_PENDING_ACK,
+    ]);
+    const evidence = buildCanonicalPublicationRecoveryEvidence({
+      publicationConvergence: {
+        publicationEpoch: TEST_PUBLICATION_EPOCH,
+        publicationStatus: CONTROL_PLANE_PUBLICATION_STATUS.OPEN,
+        recoveryProtocolState: RECOVERY_PROTOCOL_STATE.PUBLICATION_PENDING,
+        pendingAckNodeIds: TEST_EMPTY_NODE_IDS,
+        pendingAckCount: TEST_EMPTY_PUBLICATION_DEBT_COUNT,
+        missingPublishedNodeIds: [TEST_NODE_ID.SECOND],
+        missingPublishedCount: TEST_PUBLICATION_DEBT_COUNT,
+        priorityRecoveryReasonCodes: stalePresentationReasonCodes,
+        prioritySpreadPending: true,
+      },
+      publicationConvergenceGate: {
+        publicationEpoch: TEST_PUBLICATION_EPOCH,
+        publicationStatus: CONTROL_PLANE_PUBLICATION_STATUS.OPEN,
+        recoveryProtocolState: RECOVERY_PROTOCOL_STATE.PUBLICATION_PENDING,
+        pendingAckNodeIds: TEST_EMPTY_NODE_IDS,
+        pendingAckCount: TEST_EMPTY_PUBLICATION_DEBT_COUNT,
+        missingPublishedNodeIds: [TEST_NODE_ID.SECOND],
+        missingPublishedCount: TEST_PUBLICATION_DEBT_COUNT,
+        reasonCodes: stalePresentationReasonCodes,
+        publicationPending: true,
+        prioritySpreadPending: true,
+      },
+      priorityRecoveryObservation: {
+        publicationEpoch: TEST_PUBLICATION_EPOCH,
+        publicationStatus: CONTROL_PLANE_PUBLICATION_STATUS.OPEN,
+        recoveryProtocolState: RECOVERY_PROTOCOL_STATE.PUBLICATION_PENDING,
+        pendingAckNodeIds: TEST_EMPTY_NODE_IDS,
+        pendingAckCount: TEST_EMPTY_PUBLICATION_DEBT_COUNT,
+        missingPublishedNodeIds: [TEST_NODE_ID.SECOND],
+        missingPublishedCount: TEST_PUBLICATION_DEBT_COUNT,
+        priorityRecoveryReasonCodes: stalePresentationReasonCodes,
+        publicationPending: true,
+        prioritySpreadPending: true,
+      },
+    });
+
+    t.same(evidence.publicationConvergenceGate.reasonCodes, [
+      TEST_PUBLICATION_PENDING_REASON_CODE,
+      TEST_STALE_REASON_CODE,
+    ]);
+    t.same(evidence.publicationConvergence.priorityRecoveryReasonCodes, [
+      TEST_PUBLICATION_PENDING_REASON_CODE,
+      TEST_STALE_REASON_CODE,
+    ]);
+    t.equal(
+      evidence.publicationConvergenceGate.reasonCodes.includes(
+        TEST_STALE_PRESENTATION_REASON_CODE.PUBLICATION_PENDING_ACK,
+      ),
+      false,
+    );
+    t.equal(evidence.publicationConvergenceGate.pendingAckCount, 0);
+    t.equal(evidence.publicationConvergence.pendingAckCount, 0);
     t.end();
   });
 
