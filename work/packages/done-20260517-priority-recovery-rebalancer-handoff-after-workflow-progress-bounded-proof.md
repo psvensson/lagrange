@@ -130,7 +130,7 @@
     ]
   },
   "predecessor": "work/packages/done-20260517-priority-recovery-workflow-progress-after-publication-backpressure.md",
-  "successor": "work/packages/active-20260517-startup-active-gate-snapshot-coverage-after-priority-backpressure-classification.md",
+  "successor": "work/packages/done-20260517-startup-active-gate-snapshot-coverage-after-priority-backpressure-classification.md",
   "closed": "2026-05-17",
   "commitAndPushLedgerRequired": true
 }

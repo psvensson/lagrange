@@ -4,7 +4,7 @@
 
 Sprint: `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md`
 
-Package: `work/packages/active-20260517-startup-active-gate-snapshot-coverage-after-priority-backpressure-classification.md`
+Package: `work/packages/done-20260517-startup-active-gate-snapshot-coverage-after-priority-backpressure-classification.md`
 
 Workflow lane: `causal-escalation`
 
@@ -178,7 +178,7 @@ Gate next action: Watch for repeated frontier oscillation and escalate if anothe
 
 Write scope:
 
-1. `work/packages/active-20260517-startup-active-gate-snapshot-coverage-after-priority-backpressure-classification.md`
+1. `work/packages/done-20260517-startup-active-gate-snapshot-coverage-after-priority-backpressure-classification.md`
 2. `test/admin/admin-control-snapshot.test.js`
 3. `work/sprints/current-blocker.md`
 4. `work/sprints/current-blocker.json`
@@ -207,7 +207,7 @@ Candidate runtime files:
 
 Commit scope:
 
-1. `work/packages/active-20260517-startup-active-gate-snapshot-coverage-after-priority-backpressure-classification.md`
+1. `work/packages/done-20260517-startup-active-gate-snapshot-coverage-after-priority-backpressure-classification.md`
 2. `test/admin/admin-control-snapshot.test.js`
 3. `work/sprints/current-blocker.md`
 4. `work/sprints/current-blocker.json`

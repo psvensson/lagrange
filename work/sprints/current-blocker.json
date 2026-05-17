@@ -2,8 +2,8 @@
   "schema": "current-blocker-v1",
   "generatedBy": "scripts/work-tracker.js",
   "sprint": "work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md",
-  "package": "work/packages/active-20260517-startup-active-gate-snapshot-coverage-after-priority-backpressure-classification.md",
-  "status": "active",
+  "package": "work/packages/done-20260517-startup-active-gate-snapshot-coverage-after-priority-backpressure-classification.md",
+  "status": "done",
   "lane": "causal-escalation",
   "scenario": "rolling-restart",
   "artifact": "test-output/reports/rolling-restart-publication-handoff-edge-20260517T171610Z.report.json",
@@ -27,7 +27,7 @@
     "node scripts/check-guideline-constant-names.js test/admin/admin-control-snapshot.test.js"
   ],
   "writeScope": [
-    "work/packages/active-20260517-startup-active-gate-snapshot-coverage-after-priority-backpressure-classification.md",
+    "work/packages/done-20260517-startup-active-gate-snapshot-coverage-after-priority-backpressure-classification.md",
     "test/admin/admin-control-snapshot.test.js",
     "work/sprints/current-blocker.md",
     "work/sprints/current-blocker.json",
@@ -52,7 +52,7 @@
     "test/distributed/harness/__tests__/cluster.test-part-5.js"
   ],
   "commitScope": [
-    "work/packages/active-20260517-startup-active-gate-snapshot-coverage-after-priority-backpressure-classification.md",
+    "work/packages/done-20260517-startup-active-gate-snapshot-coverage-after-priority-backpressure-classification.md",
     "test/admin/admin-control-snapshot.test.js",
     "work/sprints/current-blocker.md",
     "work/sprints/current-blocker.json",

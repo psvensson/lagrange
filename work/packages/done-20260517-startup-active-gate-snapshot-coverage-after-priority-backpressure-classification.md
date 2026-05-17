@@ -3,7 +3,7 @@
 <!-- work-package
 {
   "schema": "work-package-v1",
-  "status": "active",
+  "status": "done",
   "opened": "2026-05-17",
   "lane": "causal-escalation",
   "scenario": "rolling-restart",
@@ -28,7 +28,7 @@
     "node scripts/check-guideline-constant-names.js test/admin/admin-control-snapshot.test.js"
   ],
   "writeScope": [
-    "work/packages/active-20260517-startup-active-gate-snapshot-coverage-after-priority-backpressure-classification.md",
+    "work/packages/done-20260517-startup-active-gate-snapshot-coverage-after-priority-backpressure-classification.md",
     "test/admin/admin-control-snapshot.test.js",
     "work/sprints/current-blocker.md",
     "work/sprints/current-blocker.json",
@@ -53,7 +53,7 @@
     "test/distributed/harness/__tests__/cluster.test-part-5.js"
   ],
   "commitScope": [
-    "work/packages/active-20260517-startup-active-gate-snapshot-coverage-after-priority-backpressure-classification.md",
+    "work/packages/done-20260517-startup-active-gate-snapshot-coverage-after-priority-backpressure-classification.md",
     "test/admin/admin-control-snapshot.test.js",
     "work/sprints/current-blocker.md",
     "work/sprints/current-blocker.json",
@@ -144,7 +144,9 @@
       "npm run analyze:owner-files -- startup_active_gate_owner snapshot_coverage"
     ]
   },
-  "predecessor": "work/packages/done-20260517-priority-recovery-rebalancer-handoff-after-workflow-progress-bounded-proof.md"
+  "predecessor": "work/packages/done-20260517-priority-recovery-rebalancer-handoff-after-workflow-progress-bounded-proof.md",
+  "closed": "2026-05-17",
+  "commitAndPushLedgerRequired": true
 }
 -->
 
@@ -177,7 +179,7 @@ sequentially before editing runtime files.
 
 - [x] Review subagent recorded: Agent Boyle (019e3726-de80-7e00-bb3b-a56cfea41358) reviewed work/packages/done-20260517-priority-recovery-rebalancer-handoff-after-workflow-progress-bounded-proof.md; result clean.
 - [x] Fix subagent recorded or explicitly not needed: not-needed.
-- [ ] Implementation subagent recorded: pending-before-implementation-starts.
+- [x] Implementation subagent recorded: Agent Hegel (019e3747-18a0-7cc2-bc25-9ff58422f02a) implemented work/packages/done-20260517-startup-active-gate-snapshot-coverage-after-priority-backpressure-classification.md.
 
 ## LLM Tool-First Contract
 
@@ -193,7 +195,7 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 
 ## In Scope
 
-1. work/packages/active-20260517-startup-active-gate-snapshot-coverage-after-priority-backpressure-classification.md
+1. work/packages/done-20260517-startup-active-gate-snapshot-coverage-after-priority-backpressure-classification.md
 2. test/admin/admin-control-snapshot.test.js
 3. work/sprints/current-blocker.md
 4. work/sprints/current-blocker.json
@@ -214,7 +216,7 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 - Intended minimum model: `gpt-5.3-codex`
 - Scope shape: `owner-boundary-contraction/current-frontier`
 - Output profile: `medium`
-- Owned files: `work/packages/active-20260517-startup-active-gate-snapshot-coverage-after-priority-backpressure-classification.md`, `test/admin/admin-control-snapshot.test.js`, `work/sprints/current-blocker.md`, `work/sprints/current-blocker.json`, `work/model-ledger.jsonl`
+- Owned files: `work/packages/done-20260517-startup-active-gate-snapshot-coverage-after-priority-backpressure-classification.md`, `test/admin/admin-control-snapshot.test.js`, `work/sprints/current-blocker.md`, `work/sprints/current-blocker.json`, `work/model-ledger.jsonl`
 - Forbidden files: `topology_publication_owner`, `operation_workflow_owner`, `timeout_budgets`, `active_gate_admission`, `readiness_support`, `selected_source_timeout`
 - Frozen decisions: package scope and lane stay bounded unless explicitly escalated.
 - Escalation triggers: owned files expand beyond this package, runtime ownership changes, or representative scenario evidence changes.
