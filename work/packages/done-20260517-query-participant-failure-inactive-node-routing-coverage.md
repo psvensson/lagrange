@@ -263,3 +263,9 @@ registration and fails with `fetch failed` while activating message-group servic
 rows, which explains why live participants never become candidates without
 reopening query reconnect delivery, publication ACK, priority recovery, timeout
 budgets, or active-gate admission.
+
+## Commit And Push Ledger
+
+1. Focused package commit: `87575fc0ef66bb2590d80bfad4dd501059b72e02`
+2. Pushed to: `origin/codex/pending-ack-eligibility-filter`
+3. Commit contains only package-owned files/package-status/allowed sprint handoff: yes
