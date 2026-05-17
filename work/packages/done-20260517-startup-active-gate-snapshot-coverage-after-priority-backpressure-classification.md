@@ -256,3 +256,9 @@ Known validation residual: `npm test -- test/admin/admin-control-snapshot.test.j
 still fails an existing unrelated priority-recovery observation assertion in
 `AdminControlSnapshot exports publication convergence gate from live priority
 recovery readiness`; the focused new regression passes under `npx tap --grep`.
+
+## Commit And Push Ledger
+
+1. Focused package commit: `4f661a7686b50856092e1a85f6b8dc8a2930cfb5`
+2. Pushed to: `origin/codex/pending-ack-eligibility-filter`
+3. Commit contains only package-owned files/package-status/allowed sprint handoff: yes
