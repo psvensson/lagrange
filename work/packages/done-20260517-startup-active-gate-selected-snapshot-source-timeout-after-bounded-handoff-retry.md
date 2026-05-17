@@ -106,7 +106,7 @@
     ],
     "currentFirstFrontier": "active_gate_snapshot_coverage in test-output/reports/rolling-restart-after-bounded-handoff-retry-20260517T112600Z.report.json, owned by startup_active_gate_owner / snapshot_coverage with selected_snapshot_source_timeout for node 11601fe0-72d6-5853-8590-ec2881853e72 and snapshotCoverageNodeCount=0/5.",
     "knownDownstreamBlockers": [
-      "publication_ack_convergence producer is not the selected blocker; pendingAckCount=0 and missingPublishedCount=0",
+      "publication_ack_convergence producer is not the selected blocker; pendingAckCount=0 while missingPublishedCount=4 is represented through the pending handoff reconcile edge",
       "priority_recovery_partition_progress extraction reports zero residual witnesses",
       "publicationActiveGateHandoff is not detected in the representative artifact",
       "publicationActiveGateHandoffPendingReconcileCount is 0",
@@ -338,7 +338,7 @@ Implementation gate before runtime edits:
 
 | Edge | Current evidence | Package stance |
 | --- | --- | --- |
-| Producer publication durable truth | pending ACK and missing published counts are zero in canonical probes | Frozen unless fresh evidence selects publication |
+| Producer publication durable truth | ACK is closed in canonical probes with `pendingAckCount=0`; `missingPublishedCount=4` is represented through the pending handoff reconcile edge | Frozen unless fresh evidence selects publication |
 | Active-gate observation | selected source timeout on node `11601fe0-72d6-5853-8590-ec2881853e72`; coverage `0/5` | In scope |
 | Workflow progress | priority residual extraction reports zero witnesses | Frozen unless fresh evidence selects workflow progress |
 

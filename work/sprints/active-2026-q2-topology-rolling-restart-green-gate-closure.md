@@ -84,8 +84,9 @@ Allowed stop modes: representative-green, migrated, reduced, same-frontier, clas
 
 ## Sprint LLM Trap List
 
-1. Do not reopen publication ACK: canonical evidence has `pendingAckCount=0`,
-   `missingPublishedCount=0`, and publication is not the selected blocker.
+1. Do not reopen publication ACK: canonical evidence has `pendingAckCount=0`;
+   producer `missingPublishedCount=4` is carried through the pending active-gate
+   handoff reconcile edge, and publication ACK is not the selected blocker.
 2. Do not promote priority workflow progress: priority residual extraction
    reports zero witnesses.
 3. Do not widen timeout budgets or active-gate admission to hide the selected

@@ -190,8 +190,8 @@ subagents before editing runtime files.
 Required before implementation because this is a scenario-driven runtime
 owner-boundary package.
 
-- [ ] Review subagent recorded: pending-before-review.
-- [ ] Fix subagent recorded or explicitly not needed: pending-before-review.
+- [x] Review subagent recorded: Agent Bohr (019e35db-02f7-7f10-91a7-5b3c317a8a34) reviewed work/packages/active-20260517-startup-active-gate-pending-handoff-reconcile-after-selected-timeout-reduction.md; result fixes-required.
+- [x] Fix subagent recorded or explicitly not needed: Agent Linnaeus (019e35dd-553b-75e1-be1f-b2146c0f9d5b) fixed work/packages/active-20260517-startup-active-gate-pending-handoff-reconcile-after-selected-timeout-reduction.md.
 - [ ] Implementation subagent recorded: pending-before-implementation.
 
 ## LLM Tool-First Contract
