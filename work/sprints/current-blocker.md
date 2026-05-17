@@ -81,7 +81,7 @@ Stop-condition check: `Use work:evidence-summary, topology convergence explain/h
 
 Expected causal-model change: `Reduce selected_snapshot_source_timeout, improve snapshot coverage above 0/5, migrate to a new owner boundary, or turn representative rolling-restart green.`
 
-Representative outcome: `pending-before-rerun`
+Representative outcome: `reduced`
 
 Causal debt: `Publication ACK is satisfied or not required, priority residual extraction reports zero witnesses, and active-gate handoff is absent in the latest artifact. Timeout budgets, active-gate admission, publication truth, and readiness support remain frozen unless canonical evidence selects them again.`
 
@@ -117,9 +117,9 @@ Missing causal edge: `The selected snapshot source timeout prevents coverage bef
 
 Missing causal edge probe: `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-bounded-handoff-retry-20260517T112600Z.report.json --explain active_gate_snapshot_coverage`
 
-Bounded progress proof: `Pending before focused selected-source timeout implementation; first build replayable evidence for node 11601fe0-72d6-5853-8590-ec2881853e72.`
+Bounded progress proof: `Focused active-gate terminal progress now preserves the best clean snapshot-coverage witness when the current selected witness regresses to a zero-coverage timeout. Representative rolling-restart moved from selected_snapshot_source_timeout at 0/5 coverage to repair-deferred owner_reconcile_pending at 4/5 coverage.`
 
-Bounded progress proof artifact: `test-output/reports/rolling-restart-after-bounded-handoff-retry-20260517T112600Z.report.json`
+Bounded progress proof artifact: `test-output/reports/rolling-restart-selected-snapshot-source-timeout-fix-20260517T000000Z.report.json`
 
 Expected observable transition: `Focused proof should reduce selected_snapshot_source_timeout, improve snapshot coverage above 0/5, migrate to a new owner boundary, or turn rolling-restart green.`
 
@@ -129,7 +129,7 @@ Same-frontier fallback: `If focused tests pass but representative evidence remai
 
 Expected next frontier: `startup_active_gate_owner / snapshot_coverage unless selected source timeout reduces and canonical evidence selects a new owner boundary`
 
-Result classification: `pending-before-probe`
+Result classification: `reduced`
 
 Stop condition: `continue-local-fix`
 
@@ -152,6 +152,8 @@ Write scope:
 4. `work/sprints/current-blocker.md`
 5. `work/sprints/current-blocker.json`
 6. `work/model-ledger.jsonl`
+7. `test/distributed/harness/cluster-segment-7.js`
+8. `test/distributed/harness/__tests__/cluster.test-part-5.js`
 
 Handoff files:
 
@@ -183,6 +185,8 @@ Commit scope:
 4. `work/sprints/current-blocker.md`
 5. `work/sprints/current-blocker.json`
 6. `work/model-ledger.jsonl`
+7. `test/distributed/harness/cluster-segment-7.js`
+8. `test/distributed/harness/__tests__/cluster.test-part-5.js`
 
 Legacy touched files:
 

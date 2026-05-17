@@ -100,6 +100,8 @@ const LOAD_READINESS_STABLE_WINDOW_DECISION_TABLE = Object.freeze([
 const ACTIVE_WAIT_TERMINAL_PROGRESS_DECISION_CURRENT = 'current';
 const ACTIVE_WAIT_TERMINAL_PROGRESS_DECISION_LAST_MEANINGFUL =
   'last_meaningful';
+const ACTIVE_WAIT_TERMINAL_PROGRESS_DECISION_BEST_SNAPSHOT_COVERAGE =
+  'best_snapshot_coverage';
 const ACTIVE_WAIT_TYPE_OBJECT = 'object';
 const ACTIVE_WAIT_READINESS_DELAY_STATE = Object.freeze({
   ABSENT: 'absent',
@@ -121,6 +123,16 @@ const ACTIVE_WAIT_READINESS_DELAY_OUTCOME_PROGRESS = Object.freeze({
   source: ACTIVE_WAIT_READINESS_DELAY_SOURCE.PROGRESS,
 });
 const ACTIVE_WAIT_TERMINAL_PROGRESS_DECISION_TABLE = Object.freeze([
+  Object.freeze({
+    decision: ACTIVE_WAIT_TERMINAL_PROGRESS_DECISION_BEST_SNAPSHOT_COVERAGE,
+    matches: (evidence) =>
+      evidence.currentSnapshotZeroCoverageRegression === true &&
+      evidence.bestSnapshotCoverageProgressPresent === true &&
+      evidence.bestSnapshotCoverageNodeCount >
+        evidence.currentSnapshotCoverageNodeCount &&
+      evidence.bestSnapshotCoverageRegressionWithoutPublicationImprovement ===
+        true,
+  }),
   Object.freeze({
     decision: ACTIVE_WAIT_TERMINAL_PROGRESS_DECISION_LAST_MEANINGFUL,
     matches: (evidence) =>
@@ -480,6 +492,30 @@ function normalizeActiveWaitProgressCoverageNodeCount(progressSnapshot) {
     ZERO;
 }
 
+function hasActiveWaitProgressSelectedSnapshotError(progressSnapshot) {
+  return (
+    typeof progressSnapshot?.selectedSnapshotError === 'string' &&
+    progressSnapshot.selectedSnapshotError.length > ZERO
+  );
+}
+
+function isBetterActiveWaitSnapshotCoverageProgressSnapshot(
+  candidateSnapshot,
+  selectedSnapshot,
+) {
+  const candidateCoverageNodeCount =
+    normalizeActiveWaitProgressCoverageNodeCount(candidateSnapshot);
+  if (candidateCoverageNodeCount === ZERO) {
+    return false;
+  }
+  if (hasActiveWaitProgressSelectedSnapshotError(candidateSnapshot)) {
+    return false;
+  }
+  const selectedCoverageNodeCount =
+    normalizeActiveWaitProgressCoverageNodeCount(selectedSnapshot);
+  return candidateCoverageNodeCount > selectedCoverageNodeCount;
+}
+
 function normalizeActiveWaitProgressPublicationStatusRank(progressSnapshot) {
   return Number.isInteger(progressSnapshot?.publicationStatusRank) &&
     progressSnapshot.publicationStatusRank >= ZERO ?
@@ -638,6 +674,7 @@ function buildTerminalPublicationImprovementEvidence(options = {}) {
 function buildTerminalActiveWaitProgressEvidence({
   currentProgressSnapshot = null,
   lastMeaningfulProgressSnapshot = null,
+  bestSnapshotCoverageProgressSnapshot = null,
 } = {}) {
   const currentActiveNodeCount =
     normalizeActiveWaitProgressActiveNodeCount(currentProgressSnapshot);
@@ -650,6 +687,10 @@ function buildTerminalActiveWaitProgressEvidence({
   const lastMeaningfulCoverageNodeCount =
     normalizeActiveWaitProgressCoverageNodeCount(
       lastMeaningfulProgressSnapshot,
+    );
+  const bestSnapshotCoverageNodeCount =
+    normalizeActiveWaitProgressCoverageNodeCount(
+      bestSnapshotCoverageProgressSnapshot,
     );
   const currentSnapshotErrorPresent =
     typeof currentProgressSnapshot?.selectedSnapshotError === 'string' &&
@@ -664,15 +705,23 @@ function buildTerminalActiveWaitProgressEvidence({
       currentProgressSnapshot,
       lastMeaningfulProgressSnapshot,
     });
+  const bestSnapshotCoveragePublicationImprovementEvidence =
+    buildTerminalPublicationImprovementEvidence({
+      currentProgressSnapshot,
+      lastMeaningfulProgressSnapshot: bestSnapshotCoverageProgressSnapshot,
+    });
   return {
     currentProgressPresent:
       isActiveWaitProgressSnapshot(currentProgressSnapshot),
     lastMeaningfulProgressPresent:
       isActiveWaitProgressSnapshot(lastMeaningfulProgressSnapshot),
+    bestSnapshotCoverageProgressPresent:
+      isActiveWaitProgressSnapshot(bestSnapshotCoverageProgressSnapshot),
     currentActiveNodeCount,
     lastMeaningfulActiveNodeCount,
     currentSnapshotCoverageNodeCount,
     lastMeaningfulCoverageNodeCount,
+    bestSnapshotCoverageNodeCount,
     currentSnapshotZeroCoverageRegression:
       isActiveWaitProgressSnapshot(currentProgressSnapshot) &&
       isActiveWaitProgressSnapshot(lastMeaningfulProgressSnapshot) &&
@@ -684,6 +733,12 @@ function buildTerminalActiveWaitProgressEvidence({
       isActiveWaitProgressSnapshot(lastMeaningfulProgressSnapshot) &&
       currentSnapshotCoverageNodeCount < lastMeaningfulCoverageNodeCount &&
       publicationImprovementEvidence.semanticPublicationImproved !== true,
+    bestSnapshotCoverageRegressionWithoutPublicationImprovement:
+      isActiveWaitProgressSnapshot(currentProgressSnapshot) &&
+      isActiveWaitProgressSnapshot(bestSnapshotCoverageProgressSnapshot) &&
+      currentSnapshotCoverageNodeCount < bestSnapshotCoverageNodeCount &&
+      bestSnapshotCoveragePublicationImprovementEvidence
+        .semanticPublicationImproved !== true,
     activeRegressionWithoutPublicationImprovement:
       isActiveWaitProgressSnapshot(currentProgressSnapshot) &&
       isActiveWaitProgressSnapshot(lastMeaningfulProgressSnapshot) &&
@@ -697,10 +752,12 @@ function buildTerminalActiveWaitProgressEvidence({
 function selectTerminalActiveWaitProgressSnapshot({
   currentProgressSnapshot = null,
   lastMeaningfulProgressSnapshot = null,
+  bestSnapshotCoverageProgressSnapshot = null,
 } = {}) {
   const evidence = buildTerminalActiveWaitProgressEvidence({
     currentProgressSnapshot,
     lastMeaningfulProgressSnapshot,
+    bestSnapshotCoverageProgressSnapshot,
   });
   if (evidence.currentProgressPresent !== true) {
     return evidence.lastMeaningfulProgressPresent === true ?
@@ -710,6 +767,12 @@ function selectTerminalActiveWaitProgressSnapshot({
   const decision = ACTIVE_WAIT_TERMINAL_PROGRESS_DECISION_TABLE.find((entry) =>
     entry.matches(evidence),
   );
+  if (
+    decision?.decision ===
+    ACTIVE_WAIT_TERMINAL_PROGRESS_DECISION_BEST_SNAPSHOT_COVERAGE
+  ) {
+    return bestSnapshotCoverageProgressSnapshot;
+  }
   return decision?.decision ===
     ACTIVE_WAIT_TERMINAL_PROGRESS_DECISION_LAST_MEANINGFUL ?
     lastMeaningfulProgressSnapshot :
@@ -742,6 +805,7 @@ class Cluster extends Cluster5 {
     const blockerHistoryBySignature = new Map();
     let bestProgressSnapshot = null;
     let bestProgressScore = Number.NEGATIVE_INFINITY;
+    let bestSnapshotCoverageProgressSnapshot = null;
     let lastMeaningfulProgressAttempt = ZERO;
     let lastMeaningfulProgressElapsedMs = ZERO;
     let lastMeaningfulProgressSnapshot = null;
@@ -905,6 +969,14 @@ class Cluster extends Cluster5 {
         lastMeaningfulProgressAttempt = attempts;
         lastMeaningfulProgressElapsedMs = elapsedMs;
         lastMeaningfulProgressSnapshot = progressSnapshot;
+      }
+      if (
+        isBetterActiveWaitSnapshotCoverageProgressSnapshot(
+          progressSnapshot,
+          bestSnapshotCoverageProgressSnapshot,
+        )
+      ) {
+        bestSnapshotCoverageProgressSnapshot = progressSnapshot;
       }
 
       upsertActiveWaitBlockerHistory(
@@ -1109,6 +1181,7 @@ class Cluster extends Cluster5 {
               selectTerminalActiveWaitProgressSnapshot({
                 currentProgressSnapshot: waitingProgress.progressSnapshot,
                 lastMeaningfulProgressSnapshot,
+                bestSnapshotCoverageProgressSnapshot,
               });
             const stalledProgress = buildNoProgressDetails(
               attempts,
@@ -1296,6 +1369,7 @@ class Cluster extends Cluster5 {
     const terminalProgressSnapshot = selectTerminalActiveWaitProgressSnapshot({
       currentProgressSnapshot: observedFinalProgressSnapshot,
       lastMeaningfulProgressSnapshot,
+      bestSnapshotCoverageProgressSnapshot,
     });
     const terminalPublicationConvergenceEvidence = {
       progressSnapshot: terminalProgressSnapshot,
@@ -1498,6 +1572,7 @@ class Cluster extends Cluster5 {
     const blockerHistoryBySignature = new Map();
     let bestProgressSnapshot = null;
     let bestProgressScore = Number.NEGATIVE_INFINITY;
+    let bestSnapshotCoverageProgressSnapshot = null;
     let lastMeaningfulProgressAttempt = ZERO;
     let lastMeaningfulProgressElapsedMs = ZERO;
     let lastMeaningfulProgressSnapshot = null;
@@ -1633,6 +1708,14 @@ class Cluster extends Cluster5 {
         bestProgressScore = progressScore;
         bestProgressSnapshot = progressSnapshot;
       }
+      if (
+        isBetterActiveWaitSnapshotCoverageProgressSnapshot(
+          progressSnapshot,
+          bestSnapshotCoverageProgressSnapshot,
+        )
+      ) {
+        bestSnapshotCoverageProgressSnapshot = progressSnapshot;
+      }
       if (stableWindowProgressObserved) {
         highestStableElapsedMs = stableElapsedMs;
       }
@@ -1765,6 +1848,7 @@ class Cluster extends Cluster5 {
             selectTerminalActiveWaitProgressSnapshot({
               currentProgressSnapshot: readinessProgress.progressSnapshot,
               lastMeaningfulProgressSnapshot,
+              bestSnapshotCoverageProgressSnapshot,
             });
           const stalledProgress = buildLoadReadinessNoProgressDetails(
             attempts,
@@ -1921,6 +2005,7 @@ class Cluster extends Cluster5 {
     const terminalProgressSnapshot = selectTerminalActiveWaitProgressSnapshot({
       currentProgressSnapshot: finalProgressSnapshot,
       lastMeaningfulProgressSnapshot,
+      bestSnapshotCoverageProgressSnapshot,
     });
     const finalAttemptsSinceProgress = Math.max(
       ZERO,

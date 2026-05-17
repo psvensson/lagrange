@@ -30,7 +30,9 @@
     "work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md",
     "work/sprints/current-blocker.md",
     "work/sprints/current-blocker.json",
-    "work/model-ledger.jsonl"
+    "work/model-ledger.jsonl",
+    "test/distributed/harness/cluster-segment-7.js",
+    "test/distributed/harness/__tests__/cluster.test-part-5.js"
   ],
   "handoffFiles": [
     "test-output/reports/rolling-restart-after-bounded-handoff-retry-20260517T112600Z.report.json",
@@ -57,7 +59,9 @@
     "work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md",
     "work/sprints/current-blocker.md",
     "work/sprints/current-blocker.json",
-    "work/model-ledger.jsonl"
+    "work/model-ledger.jsonl",
+    "test/distributed/harness/cluster-segment-7.js",
+    "test/distributed/harness/__tests__/cluster.test-part-5.js"
   ],
   "touchedFiles": [],
   "modelFit": {
@@ -84,7 +88,7 @@
     "hypothesis": "The prior handoff retry package drained owner_reconcile_pending. The current first frontier is now selected_snapshot_source_timeout before any active-gate handoff evidence forms, so this package must first make that selected source timeout replayable and then reduce or migrate it.",
     "stopConditionCheck": "Use work:evidence-summary, topology convergence explain/handoff/replay probes, npm run analyze:causal-model, priority residual extraction, distributed-failure summary, and owner-files before runtime edits; then run required review/fix/implementation subagents before changing promoted runtime files.",
     "expectedCausalModelChange": "Reduce selected_snapshot_source_timeout, improve snapshot coverage above 0/5, migrate to a new owner boundary, or turn representative rolling-restart green.",
-    "representativeOutcome": "pending-before-rerun",
+    "representativeOutcome": "reduced",
     "causalDebt": "Publication ACK is satisfied or not required, priority residual extraction reports zero witnesses, and active-gate handoff is absent in the latest artifact. Timeout budgets, active-gate admission, publication truth, and readiness support remain frozen unless canonical evidence selects them again.",
     "crossBoundaryReview": "Do not reopen topology_publication_owner / publication_convergence, operation_workflow_owner / workflow_progress, timeout budgets, active-gate admission, or readiness support inside this package unless canonical evidence selects them again."
   },
@@ -111,13 +115,13 @@
     ],
     "missingCausalEdge": "The selected snapshot source timeout prevents coverage before handoff evidence can form.",
     "missingCausalEdgeProbe": "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-bounded-handoff-retry-20260517T112600Z.report.json --explain active_gate_snapshot_coverage",
-    "boundedProgressProof": "Pending before focused selected-source timeout implementation; first build replayable evidence for node 11601fe0-72d6-5853-8590-ec2881853e72.",
-    "boundedProgressProofArtifact": "test-output/reports/rolling-restart-after-bounded-handoff-retry-20260517T112600Z.report.json",
+    "boundedProgressProof": "Focused active-gate terminal progress now preserves the best clean snapshot-coverage witness when the current selected witness regresses to a zero-coverage timeout. Representative rolling-restart moved from selected_snapshot_source_timeout at 0/5 coverage to repair-deferred owner_reconcile_pending at 4/5 coverage.",
+    "boundedProgressProofArtifact": "test-output/reports/rolling-restart-selected-snapshot-source-timeout-fix-20260517T000000Z.report.json",
     "expectedObservableTransition": "Focused proof should reduce selected_snapshot_source_timeout, improve snapshot coverage above 0/5, migrate to a new owner boundary, or turn rolling-restart green.",
     "maxProgressBound": "one focused startup_active_gate_owner / snapshot_coverage selected-source timeout slice",
     "sameFrontierFallback": "If focused tests pass but representative evidence remains at active_gate_snapshot_coverage with the same selected snapshot timeout and no coverage movement, stop as same-frontier instead of widening into frozen publication, priority, timeout-budget, admission, or readiness edges.",
     "expectedNextFrontier": "startup_active_gate_owner / snapshot_coverage unless selected source timeout reduces and canonical evidence selects a new owner boundary",
-    "resultClassification": "pending-before-probe",
+    "resultClassification": "reduced",
     "stopCondition": "continue-local-fix",
     "recentFrontierHistory": [
       "work/packages/done-20260517-startup-active-gate-snapshot-coverage-owner-reconcile-after-ack-drain.md / startup_active_gate_owner / snapshot_coverage / reduced",

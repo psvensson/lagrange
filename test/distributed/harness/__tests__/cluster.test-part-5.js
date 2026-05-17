@@ -244,12 +244,19 @@ const ACTIVE_GATE_PARTIAL_RESIDUAL_STALE_CAPTURED_AT_MS =
 const ACTIVE_GATE_NO_PROGRESS_BEST_SNAPSHOT_TEST_NAME =
   'Unit: _waitForAllActive keeps metric-moving snapshot when terminal probe ' +
   'regresses to selected timeout';
+const ACTIVE_GATE_NO_PROGRESS_BEST_COVERAGE_TEST_NAME =
+  'Unit: _waitForAllActive keeps best snapshot coverage when active count ' +
+  'later regresses to selected timeout';
 const ACTIVE_GATE_NO_PROGRESS_TIMEOUT_MS = 200;
 const ACTIVE_GATE_NO_PROGRESS_MAX_ATTEMPTS = 2;
 const ACTIVE_GATE_NO_PROGRESS_EXPECTED_NODE_COUNT = 5;
 const ACTIVE_GATE_NO_PROGRESS_COVERAGE_NODE_COUNT = 2;
+const ACTIVE_GATE_NO_PROGRESS_BEST_COVERAGE_NODE_COUNT = 4;
 const ACTIVE_GATE_NO_PROGRESS_ZERO_COVERAGE = 0;
 const ACTIVE_GATE_NO_PROGRESS_PUBLICATION_EPOCH = 1;
+const ACTIVE_GATE_NO_PROGRESS_WAITING_STAGE = 'setup.cluster.waiting-active';
+const ACTIVE_GATE_NO_PROGRESS_PENDING_REASON =
+  'PRIORITY_CONTROL_PLANE_RECOVERY_PENDING';
 const ACTIVE_GATE_NO_PROGRESS_SELECTED_NODE_ID =
   SNAPSHOT_REPLAY_TEST_NODE_ID.BASELINE;
 const ACTIVE_GATE_NO_PROGRESS_RETRY_AFTER_MS = 25300;
@@ -2579,6 +2586,150 @@ test(ACTIVE_GATE_NO_PROGRESS_BEST_SNAPSHOT_TEST_NAME, async () => {
   assert.strictEqual(
     stalledStage.details?.activeGateProgress?.snapshotCoverageNodeCount,
     ACTIVE_GATE_NO_PROGRESS_COVERAGE_NODE_COUNT,
+  );
+});
+
+test(ACTIVE_GATE_NO_PROGRESS_BEST_COVERAGE_TEST_NAME, async () => {
+  const cluster = createCluster({
+    size: ACTIVE_GATE_NO_PROGRESS_EXPECTED_NODE_COUNT,
+    docker: {socketPath: SNAPSHOT_REPLAY_TEST_DOCKER_SOCKET_PATH},
+    image: SNAPSHOT_REPLAY_TEST_IMAGE,
+    timeouts: {
+      convergence: ACTIVE_GATE_NO_PROGRESS_TIMEOUT_MS,
+      activeWaitNoProgressMaxAttempts: ACTIVE_GATE_NO_PROGRESS_MAX_ATTEMPTS,
+    },
+  });
+
+  cluster._sleep = async () => {};
+  cluster._collectFailureLogs = async () => {};
+  const recordedStages = [];
+  cluster._recordClusterStage = (stage, details = {}) => {
+    recordedStages.push({stage, details});
+  };
+  const buildNodeDiagnostics = (activeNodeIds) => {
+    return SNAPSHOT_REPLAY_TEST_EXPECTED_NODE_IDS.map((nodeId) => {
+      const active = activeNodeIds.includes(nodeId);
+      return {
+        nodeId,
+        active,
+        state: active ?
+          ACTIVE_GATE_REACHABILITY_DELAY_STATE_ACTIVE :
+          ACTIVE_GATE_REACHABILITY_DELAY_STATE_INACTIVE,
+        reasons: active ? [] : [ACTIVE_GATE_NO_PROGRESS_PENDING_REASON],
+      };
+    });
+  };
+  const partialCoverageNodeIds =
+    SNAPSHOT_REPLAY_TEST_EXPECTED_NODE_IDS.slice(
+      ACTIVE_GATE_REACHABILITY_DELAY_ZERO,
+      ACTIVE_GATE_NO_PROGRESS_BEST_COVERAGE_NODE_COUNT,
+    );
+  const mostlyActiveNodeIds =
+    SNAPSHOT_REPLAY_TEST_EXPECTED_NODE_IDS.slice(
+      ACTIVE_GATE_REACHABILITY_DELAY_ZERO,
+      ACTIVE_GATE_NO_PROGRESS_EXPECTED_NODE_COUNT -
+        ACTIVE_GATE_REACHABILITY_DELAY_ONE,
+    );
+  const bestCoverageResult = {
+    allActive: false,
+    nodeDiagnostics: buildNodeDiagnostics([
+      SNAPSHOT_REPLAY_TEST_NODE_ID.SEED,
+    ]),
+    snapshotCoverage: {
+      completeCoverage: false,
+      expectedNodeCount: ACTIVE_GATE_NO_PROGRESS_EXPECTED_NODE_COUNT,
+      bestCoverageNodeCount: ACTIVE_GATE_NO_PROGRESS_BEST_COVERAGE_NODE_COUNT,
+      selectedNodeId: SNAPSHOT_REPLAY_TEST_NODE_ID.SEED,
+      selectedAdminReady: true,
+      selectedReachableBy: SNAPSHOT_REPLAY_TEST_ADMIN_HEALTH_SOURCE,
+      selectedPublicationConvergence: {
+        publicationEpoch: ACTIVE_GATE_NO_PROGRESS_PUBLICATION_EPOCH,
+        publicationStatus: CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED,
+        publishedActiveNodeIds: [...partialCoverageNodeIds],
+        pendingAckNodeIds: [],
+      },
+      selectedPublishedActiveNodeIds: [...partialCoverageNodeIds],
+      selectedMissingPublishedNodeIds: [
+        SNAPSHOT_REPLAY_TEST_NODE_ID.STALE_EXTRA,
+      ],
+      selectedError: null,
+    },
+    publicationConvergenceGate: {
+      ready: true,
+      reasons: [],
+      publicationStatus: CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED,
+      pendingAckNodeIds: [],
+      missingPublishedNodeIds: [],
+      priorityPartitionSummary: null,
+    },
+    priorityRecoveryInvariants: {
+      invariants: [],
+      failingInvariantIds: [],
+      failingInvariantReasonCodes: [],
+      passed: true,
+    },
+  };
+  const regressedTimeoutResult = {
+    allActive: false,
+    nodeDiagnostics: buildNodeDiagnostics(mostlyActiveNodeIds),
+    snapshotCoverage: {
+      completeCoverage: false,
+      expectedNodeCount: ACTIVE_GATE_NO_PROGRESS_EXPECTED_NODE_COUNT,
+      bestCoverageNodeCount: ACTIVE_GATE_NO_PROGRESS_ZERO_COVERAGE,
+      selectedNodeId: ACTIVE_GATE_NO_PROGRESS_SELECTED_NODE_ID,
+      selectedAdminReady: true,
+      selectedReachableBy: SNAPSHOT_REPLAY_TEST_ADMIN_HEALTH_SOURCE,
+      selectedSnapshotTimeoutMs:
+        ACTIVE_GATE_NO_PROGRESS_TIMEOUT_MS_PER_QUERY,
+      selectedError: ACTIVE_GATE_NO_PROGRESS_TIMEOUT_ERROR,
+    },
+    publicationConvergenceGate: {
+      ready: true,
+      reasons: [],
+      publicationStatus: null,
+      pendingAckNodeIds: [],
+      missingPublishedNodeIds: [],
+      priorityPartitionSummary: null,
+    },
+    priorityRecoveryInvariants: {
+      invariants: [],
+      failingInvariantIds: [],
+      failingInvariantReasonCodes: [],
+      passed: true,
+    },
+  };
+  let probeCount = ACTIVE_GATE_REACHABILITY_DELAY_ZERO;
+  cluster._probeClusterActiveState = async () => {
+    probeCount += ACTIVE_GATE_REACHABILITY_DELAY_ONE;
+    return probeCount === ACTIVE_GATE_REACHABILITY_DELAY_ONE ?
+      bestCoverageResult :
+      regressedTimeoutResult;
+  };
+
+  await assert.rejects(
+    async () => cluster._waitForAllActive({mode: 'load'}),
+    (error) => {
+      assert.match(error.message, /coverage=4\/5/);
+      assert.strictEqual(
+        error?.diagnostics?.activeGate?.progress?.snapshotCoverageNodeCount,
+        ACTIVE_GATE_NO_PROGRESS_BEST_COVERAGE_NODE_COUNT,
+      );
+      assert.match(
+        error?.diagnostics?.activeGate?.lastProgressEvent?.message || '',
+        /active=4\/5,coverage=0\/5.*snapshotError/u,
+      );
+      return true;
+    },
+  );
+
+  const stalledStage = recordedStages.find((entry) => {
+    return entry.stage === ACTIVE_GATE_NO_PROGRESS_WAITING_STAGE &&
+      entry.details?.activeGate?.state === 'stalled';
+  });
+  assert.ok(stalledStage, 'should record stalled active-gate details');
+  assert.strictEqual(
+    stalledStage.details?.activeGateProgress?.snapshotCoverageNodeCount,
+    ACTIVE_GATE_NO_PROGRESS_BEST_COVERAGE_NODE_COUNT,
   );
 });
 
