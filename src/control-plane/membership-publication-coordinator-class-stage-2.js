@@ -258,6 +258,31 @@ function isActiveGateMembershipPublicationRowVisibleForTarget(
   );
 }
 
+function buildActiveGateMembershipPublicationVisibleReadRows(
+  reconcileOutcome,
+  nowMs,
+) {
+  const candidate = reconcileOutcome?.candidate;
+  const candidateRow =
+    candidate && typeof candidate === TYPEOF.OBJECT ?
+      buildMembershipPublicationRow({candidate, nowMs}) :
+      null;
+  const publicationRows = [
+    reconcileOutcome?.publicationRow,
+    candidateRow,
+  ];
+  const seenPublicationIds = new Set();
+  return publicationRows.filter((publicationRow) => {
+    const publicationId =
+      normalizeControlPlanePublicationRow(publicationRow).publicationId;
+    if (!publicationId || seenPublicationIds.has(publicationId)) {
+      return false;
+    }
+    seenPublicationIds.add(publicationId);
+    return true;
+  });
+}
+
 function buildActiveGateMembershipPublicationReconcileContext({
   publicationActiveGateHandoff,
   target,
@@ -1005,6 +1030,30 @@ class MembershipPublicationCoordinatorClassStage2 extends
       null;
   }
 
+  async readActiveGateMembershipPublicationVisibleReconcileRow(
+    reconcileOutcome,
+    target,
+    context,
+  ) {
+    const publicationRows =
+      buildActiveGateMembershipPublicationVisibleReadRows(
+        reconcileOutcome,
+        this.now(),
+      );
+    for (const publicationRow of publicationRows) {
+      const visibleRow =
+        await this.readActiveGateMembershipPublicationVisibleRow(
+          publicationRow,
+          target,
+          context,
+        );
+      if (visibleRow) {
+        return visibleRow;
+      }
+    }
+    return null;
+  }
+
   async reconcileActiveGateMembershipPublication(
     publicationActiveGateHandoff,
     options = {},
@@ -1032,8 +1081,8 @@ class MembershipPublicationCoordinatorClassStage2 extends
     try {
       const reconcileOutcome = await this.reconcileClusterMembership(context);
       const visibleRow =
-        await this.readActiveGateMembershipPublicationVisibleRow(
-          reconcileOutcome?.publicationRow,
+        await this.readActiveGateMembershipPublicationVisibleReconcileRow(
+          reconcileOutcome,
           target,
           context,
         );
