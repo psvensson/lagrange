@@ -3,7 +3,7 @@
 <!-- work-package
 {
   "schema": "work-package-v1",
-  "status": "active",
+  "status": "done",
   "opened": "2026-05-17",
   "lane": "causal-escalation",
   "scenario": "rolling-restart",
@@ -12,21 +12,26 @@
   "owner": "operation_workflow_owner",
   "boundary": "workflow_progress",
   "dominantReason": "priority_recovery_event_driven_wait",
-  "currentState": "Active successor from the publication-convergence classification-only package. Fresh representative evidence keeps publication_ack_convergence visible, but causal analysis stops as classified priority-recovery backpressure. The topology next expected frontier is priority_recovery_partition_progress under operation_workflow_owner / workflow_progress with operation 96c522ac-95c7-4713-96da-a98010d295d9, current step dispatch_pending/planned, event-driven wait, and nextAction advance_existing_operation. Priority residual extraction reports split evidence: workflow_progress has one persisted_not_dispatched/event_driven witness and rebalancer_handoff has two dispatched_waiting_progress/retry_scheduled witnesses.",
-  "nextAction": "Prove or split the event-driven workflow progress residual for control_plane_publications-p1 operation 96c522ac-95c7-4713-96da-a98010d295d9; keep publication ACK, active-gate snapshot coverage, timeout budgets, admission, readiness, and rebalancer_handoff fixes frozen unless canonical evidence selects them.",
+  "currentState": "Focused workflow-progress proof is green for the current residual shape. The added regression models control_plane_publications-p1 operation 96c522ac-95c7-4713-96da-a98010d295d9 as PENDING, persisted_not_dispatched, event_driven, timeoutReconcileDue=false, and completion blocked by active_operation_still_blocks_spread. Existing operation_workflow_owner code emits wake_remote_owner, does not drain while spread remains blocked, arms one bounded owner re-entry timer, and that timer wakes the canonical target owner. No runtime change was required; the reference representative artifact remains same-frontier because it was not rerun after test-only proof.",
+  "nextAction": "Stop workflow_progress runtime edits in this package unless a fresh representative artifact changes owner, boundary, or required action. The current workflow_progress witness is bounded by retry/timer/wake proof; keep publication ACK, active-gate snapshot coverage, timeout budgets, admission, readiness, selected-source timeout, and rebalancer_handoff implementation frozen unless canonical evidence promotes them in a separate package.",
   "proof": [
     "npm run work:evidence-summary -- test-output/reports/rolling-restart-publication-handoff-edge-20260517T171610Z.report.json",
     "npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-publication-handoff-edge-20260517T171610Z.report.json",
     "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-publication-handoff-edge-20260517T171610Z.report.json --replay-fixture",
     "npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-publication-handoff-edge-20260517T171610Z.report.json",
     "npm run analyze:owner-files -- operation_workflow_owner workflow_progress",
-    "npm run analyze:owner-files -- operation_workflow_owner rebalancer_handoff"
+    "npm run analyze:owner-files -- operation_workflow_owner rebalancer_handoff",
+    "npm test -- test/rebalancer/operation-workflow-progress-event-driven-reentry.test.js",
+    "npm test -- test/rebalancer/operation-workflow-progress-event-driven-reentry.test.js test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js",
+    "node scripts/check-guideline-literals.js test/rebalancer/operation-workflow-progress-event-driven-reentry.test.js",
+    "node scripts/check-guideline-decision-boundaries.js test/rebalancer/operation-workflow-progress-event-driven-reentry.test.js"
   ],
   "writeScope": [
-    "work/packages/active-20260517-priority-recovery-workflow-progress-after-publication-backpressure.md",
+    "work/packages/done-20260517-priority-recovery-workflow-progress-after-publication-backpressure.md",
     "work/sprints/current-blocker.md",
     "work/sprints/current-blocker.json",
-    "work/model-ledger.jsonl"
+    "work/model-ledger.jsonl",
+    "test/rebalancer/operation-workflow-progress-event-driven-reentry.test.js"
   ],
   "handoffFiles": [
     "work/packages/done-20260517-topology-publication-convergence-after-selected-snapshot-lane-reset-migration.md",
@@ -42,10 +47,11 @@
     "test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js"
   ],
   "commitScope": [
-    "work/packages/active-20260517-priority-recovery-workflow-progress-after-publication-backpressure.md",
+    "work/packages/done-20260517-priority-recovery-workflow-progress-after-publication-backpressure.md",
     "work/sprints/current-blocker.md",
     "work/sprints/current-blocker.json",
-    "work/model-ledger.jsonl"
+    "work/model-ledger.jsonl",
+    "test/rebalancer/operation-workflow-progress-event-driven-reentry.test.js"
   ],
   "modelFit": {
     "packageClass": "representative-frontier-closure",
@@ -59,21 +65,21 @@
   }
   ,
   "representativeResidual": {
-    "status": "live-red-scenario-release-gate",
+    "status": "same-frontier-focused-proof",
     "scenario": "rolling-restart",
     "artifact": "test-output/reports/rolling-restart-publication-handoff-edge-20260517T171610Z.report.json",
     "frontier": "priority_recovery_partition_progress",
     "owner": "operation_workflow_owner",
     "boundary": "workflow_progress",
     "dominantReason": "priority_recovery_event_driven_wait",
-    "nextAction": "Prove or split the event-driven workflow-progress residual for control_plane_publications-p1 operation 96c522ac-95c7-4713-96da-a98010d295d9; do not promote the rebalancer_handoff split unless fresh canonical evidence selects it."
+    "nextAction": "Focused proof shows the workflow-progress witness has a bounded retry/timer/wake path for operation 96c522ac-95c7-4713-96da-a98010d295d9. Do not continue workflow_progress runtime edits or promote the rebalancer_handoff split without fresh canonical evidence or an explicit successor package."
   },
   "causalGovernance": {
     "hypothesis": "If operation_workflow_owner / workflow_progress owns the current priority-recovery backpressure, dispatch_pending/planned operation 96c522ac-95c7-4713-96da-a98010d295d9 should have a bounded advance, retry, wake, or classification path without reopening publication ACK or active-gate snapshot coverage.",
-    "stopConditionCheck": "Use work:evidence-summary, topology replay, npm run analyze:causal-model, priority residual extraction, owner-files for workflow_progress and rebalancer_handoff, then required review/fix/implementation subagents before runtime edits.",
-    "expectedCausalModelChange": "The workflow_progress witness drains, reduces, migrates to rebalancer_handoff or another named owner boundary, classifies as bounded backpressure, or representative rolling-restart turns green.",
-    "representativeOutcome": "pending-before-rerun",
-    "causalDebt": "Publication convergence classified the remaining wait as priority-recovery backpressure. The rebalancer_handoff residual is acknowledged as a parked split and must not be edited inside this workflow_progress package unless canonical evidence promotes it.",
+    "stopConditionCheck": "Canonical extractors were run first, including npm run analyze:causal-model on the reference artifact; focused owner proof was added for the current workflow_progress witness. Agent Pascal (019e3703-c285-78f3-9099-ddd84b7422a5) implemented the proof. No runtime edits were made.",
+    "expectedCausalModelChange": "Focused proof classifies the workflow_progress witness as bounded retry/timer/wake progress. Representative rolling-restart was not rerun because this package changed only focused test proof.",
+    "representativeOutcome": "same-frontier",
+    "causalDebt": "Publication convergence classified the remaining wait as priority-recovery backpressure. The workflow_progress witness is now proved bounded locally; the rebalancer_handoff residual remains a parked split and must not be edited inside this workflow_progress package unless canonical evidence promotes it.",
     "crossBoundaryReview": "Review work/packages/done-20260517-topology-publication-convergence-after-selected-snapshot-lane-reset-migration.md before implementation starts."
   },
   "scenarioCausalClosure": {
@@ -83,7 +89,8 @@
       "use priority residual extraction to isolate workflow_progress versus rebalancer_handoff split",
       "run review and fix subagents before implementation starts",
       "run a fresh implementation subagent for workflow_progress only",
-      "rerun focused owner tests and one representative rolling-restart run with a real timestamp"
+      "add focused owner proof for the workflow_progress witness",
+      "rerun focused owner tests; skip representative rerun because no runtime code changed"
     ],
     "currentFirstFrontier": "publication_ack_convergence remains visible in test-output/reports/rolling-restart-publication-handoff-edge-20260517T171610Z.report.json, but causal stop is classified_backpressure and the topology next expected frontier is operation_workflow_owner / workflow_progress.",
     "knownDownstreamBlockers": [
@@ -95,14 +102,14 @@
     ],
     "missingCausalEdge": "The operation workflow owner has a dispatch_pending/planned priority recovery operation whose next action is advance_existing_operation, but representative evidence still times out with prioritySpread pending.",
     "missingCausalEdgeProbe": "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-publication-handoff-edge-20260517T171610Z.report.json --replay-fixture",
-    "boundedProgressProof": "pending-before-probe: identify whether workflow_progress should advance operation 96c522ac-95c7-4713-96da-a98010d295d9, classify it as bounded backpressure, or migrate to the parked rebalancer_handoff split.",
-    "boundedProgressProofArtifact": "test-output/reports/rolling-restart-publication-handoff-edge-20260517T171610Z.report.json plus pending focused operation_workflow_owner / workflow_progress probe",
-    "expectedObservableTransition": "priority_recovery_partition_progress should drain, reduce witness count, migrate to a named owner boundary, classify as bounded backpressure, or turn rolling-restart green without changing publication-owner or active-gate code.",
+    "boundedProgressProof": "Focused proof added in test/rebalancer/operation-workflow-progress-event-driven-reentry.test.js: operation 96c522ac-95c7-4713-96da-a98010d295d9 on control_plane_publications-p1 remains PENDING and blocked while existing owner logic emits wake_remote_owner, does not drain, arms one bounded owner re-entry timer, and the timer wakes the target owner.",
+    "boundedProgressProofArtifact": "test-output/reports/rolling-restart-publication-handoff-edge-20260517T171610Z.report.json plus npm test -- test/rebalancer/operation-workflow-progress-event-driven-reentry.test.js",
+    "expectedObservableTransition": "Focused observable transition: persisted_not_dispatched/event_driven workflow_progress evidence advances to bounded owner re-entry timer and remote wake without changing publication-owner or active-gate code. Representative transition is same-frontier because no runtime change was made and no representative rerun was required.",
     "maxProgressBound": "one focused operation_workflow_owner / workflow_progress slice",
-    "sameFrontierFallback": "If workflow_progress remains selected with the same operation and action after focused proof, stop as same-frontier or classification-only instead of widening into publication ACK, active gate, timeout budgets, admission, readiness, or rebalancer_handoff work.",
-    "expectedNextFrontier": "rebalancer_handoff only if fresh evidence promotes it; active_gate_snapshot_coverage only after publication and priority recovery stop blocking",
-    "resultClassification": "pending-before-probe",
-    "stopCondition": "continue-local-fix",
+    "sameFrontierFallback": "Applied: workflow_progress remains the same representative artifact owner/action, but focused proof shows bounded progress. Stop as same-frontier instead of widening into publication ACK, active gate, timeout budgets, admission, readiness, selected-source timeout, or rebalancer_handoff implementation.",
+    "expectedNextFrontier": "rebalancer_handoff only if a fresh representative artifact or explicit successor package promotes it; active_gate_snapshot_coverage only after publication and priority recovery stop blocking",
+    "resultClassification": "same-frontier",
+    "stopCondition": "bounded-non-frontier",
     "recentFrontierHistory": [
       "work/packages/done-20260517-topology-publication-convergence-after-selected-snapshot-lane-reset-migration.md / topology_publication_owner / publication_convergence / classification-only",
       "work/packages/done-20260517-startup-active-gate-selected-snapshot-source-timeout-after-publication-migration.md / startup_active_gate_owner / snapshot_coverage / migrated"
@@ -124,7 +131,10 @@
       "npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-publication-handoff-edge-20260517T171610Z.report.json"
     ]
   },
-  "predecessor": "work/packages/done-20260517-topology-publication-convergence-after-selected-snapshot-lane-reset-migration.md"
+  "predecessor": "work/packages/done-20260517-topology-publication-convergence-after-selected-snapshot-lane-reset-migration.md",
+  "closed": "2026-05-17",
+  "commitAndPushLedgerRequired": true,
+  "successor": "work/packages/active-20260517-priority-recovery-rebalancer-handoff-after-workflow-progress-bounded-proof.md"
 }
 -->
 
@@ -156,9 +166,9 @@ sequentially before editing runtime files.
 
 ## Subagent Sequencing Ledger
 
-- [ ] Review subagent recorded: pending-before-implementation.
-- [ ] Fix subagent recorded or explicitly not needed: pending-review-result.
-- [ ] Implementation subagent recorded: pending-before-implementation.
+- [x] Review subagent recorded: Agent Banach (019e3700-53af-7922-9fc0-eca0346fd9e1) reviewed work/packages/done-20260517-topology-publication-convergence-after-selected-snapshot-lane-reset-migration.md; result clean.
+- [x] Fix subagent recorded or explicitly not needed: not-needed.
+- [x] Implementation subagent recorded: Agent Pascal (019e3703-c285-78f3-9099-ddd84b7422a5) implemented work/packages/active-20260517-priority-recovery-workflow-progress-after-publication-backpressure.md.
 
 ## LLM Tool-First Contract
 
@@ -174,10 +184,11 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 
 ## In Scope
 
-1. work/packages/active-20260517-priority-recovery-workflow-progress-after-publication-backpressure.md
+1. work/packages/done-20260517-priority-recovery-workflow-progress-after-publication-backpressure.md
 2. work/sprints/current-blocker.md
 3. work/sprints/current-blocker.json
 4. work/model-ledger.jsonl
+5. test/rebalancer/operation-workflow-progress-event-driven-reentry.test.js
 
 ## Out Of Scope
 
@@ -210,3 +221,22 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 4. npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-publication-handoff-edge-20260517T171610Z.report.json
 5. npm run analyze:owner-files -- operation_workflow_owner workflow_progress
 6. npm run analyze:owner-files -- operation_workflow_owner rebalancer_handoff
+7. npm test -- test/rebalancer/operation-workflow-progress-event-driven-reentry.test.js
+8. npm test -- test/rebalancer/operation-workflow-progress-event-driven-reentry.test.js test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js
+9. node scripts/check-guideline-literals.js test/rebalancer/operation-workflow-progress-event-driven-reentry.test.js
+10. node scripts/check-guideline-decision-boundaries.js test/rebalancer/operation-workflow-progress-event-driven-reentry.test.js
+
+## Focused Proof Result
+
+Same-frontier focused proof. The workflow-progress residual for
+`control_plane_publications-p1` operation
+`96c522ac-95c7-4713-96da-a98010d295d9` is bounded by the existing
+operation-owner re-entry path: the focused test keeps the row PENDING,
+`persisted_not_dispatched`, event-driven, and blocked by active spread; the
+owner outcome is `wake_remote_owner`, the operation does not drain, one bounded
+owner re-entry timer is armed, and that timer wakes the canonical target owner.
+
+No runtime file was changed. Representative rolling-restart was not rerun
+because this package only added focused proof; the reference artifact remains
+the same-frontier evidence until a runtime change or successor package produces
+a fresh representative artifact.

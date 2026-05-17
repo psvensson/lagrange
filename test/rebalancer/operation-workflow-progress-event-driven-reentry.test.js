@@ -43,6 +43,8 @@ const TEST_CONTROL_PLANE_PUBLICATION_OPERATION_ID =
   'event-driven-control-plane-publication-operation';
 const TEST_REPRESENTATIVE_CONTROL_PLANE_PUBLICATION_OPERATION_ID =
   'd5ffb401-f539-44d6-a23a-6365606ac232';
+const TEST_PUBLICATION_BACKPRESSURE_OPERATION_ID =
+  '96c522ac-95c7-4713-96da-a98010d295d9';
 const TEST_REPLICA_OPERATIONS_OPERATION_ID =
   'event-driven-replica-operations-operation';
 const TEST_SQL_TRANSACTION_PARTICIPANTS_OPERATION_ID =
@@ -70,10 +72,13 @@ const TEST_SQL_TRANSACTION_PARTICIPANTS_SOURCE_NODE_ID =
 const TEST_SQL_TRANSACTION_PARTICIPANTS_TARGET_NODE_ID =
   'sql-transaction-participants-target-node';
 const TEST_PUBLICATION_EPOCH = 2;
+const TEST_PUBLICATION_STATUS_OPEN = 'OPEN';
+const TEST_PUBLICATION_STATUS_PUBLISHED = 'PUBLISHED';
 const TEST_CAPTURED_AT_MS = 1000000;
 const TEST_CREATED_AT_MS = 900000;
 const TEST_UPDATED_AT_MS = 960000;
 const TEST_STEP_AGE_MS = 40000;
+const TEST_RECENT_OPERATION_UPDATED_AT_MS = 999000;
 const TEST_STEP_TIMEOUT_MS = 30000;
 const TEST_TIMEOUT_RECONCILE_DUE = true;
 const TEST_EVENT_DRIVEN_ONLY_TIMEOUT_RECONCILE_DUE = false;
@@ -85,6 +90,8 @@ const TEST_EMPTY_ROWS = Object.freeze([]);
 const TEST_UNDEFINED_VALUE = undefined;
 const TEST_REPLICA_DISPATCH_TARGET =
   'node-target/service/replica-dispatch';
+const TEST_CONTROL_PLANE_PUBLICATION_REPLICA_DISPATCH_TARGET =
+  'control-plane-publication-target-node/service/replica-dispatch';
 const TEST_DELIVERY_STATUS_INITIATED = 'initiated';
 const TEST_REPLICA_OPERATIONS_TABLE = 'replica_operations';
 const TEST_SERVICES_TABLE = 'services';
@@ -96,6 +103,9 @@ const TEST_REENTRY_TEST_NAME =
 const TEST_PENDING_REENTRY_TEST_NAME =
   'persisted-not-dispatched PENDING workflow progress re-enters through ' +
   'the operation owner outcome';
+const TEST_PUBLICATION_BACKPRESSURE_REENTRY_TEST_NAME =
+  'control-plane publication backpressure PENDING workflow progress ' +
+  're-enters through the operation owner outcome';
 const TEST_SPREAD_SATISFIED_REENTRY_TEST_NAME =
   'spread-satisfied priority PENDING dispatch waits drain through ' +
   'the operation owner outcome';
@@ -151,6 +161,15 @@ const TEST_ASSERT_SPREAD_SATISFIED_NEXT_ACTION =
 const TEST_ASSERT_SPREAD_SATISFIED_NO_REMOTE_WAKE =
   'spread-satisfied persisted-not-dispatched priority rows should not ' +
   'wake the remote target owner';
+const TEST_ASSERT_PUBLICATION_BACKPRESSURE_WAKE =
+  'publication backpressure dispatch-pending rows should wake the remote ' +
+  'operation owner';
+const TEST_ASSERT_PUBLICATION_BACKPRESSURE_RETRY =
+  'publication backpressure dispatch-pending rows should arm bounded ' +
+  'owner re-entry';
+const TEST_ASSERT_PUBLICATION_BACKPRESSURE_NO_DRAIN =
+  'publication backpressure dispatch-pending rows should not drain while ' +
+  'spread remains blocked';
 const TEST_SPREAD_SATISFIED_DRAIN_WITNESSES = Object.freeze([
   Object.freeze({
     operationId: TEST_CONTROL_PLANE_PUBLICATION_OPERATION_ID,
@@ -237,7 +256,8 @@ function buildEventDrivenPlanningSnapshot(options = {}) {
   };
   return Object.freeze({
     publicationEpoch: TEST_PUBLICATION_EPOCH,
-    publicationStatus: 'PUBLISHED',
+    publicationStatus:
+      options.publicationStatus || TEST_PUBLICATION_STATUS_PUBLISHED,
     publishedActiveNodeIds: Object.freeze([
       TEST_SOURCE_NODE_ID,
       TEST_TARGET_NODE_ID,
@@ -277,7 +297,10 @@ function buildEventDrivenPlanningSnapshot(options = {}) {
             stepAgeMs: TEST_STEP_AGE_MS,
             stepTimeoutMs: TEST_STEP_TIMEOUT_MS,
             lastProgressAtMs: TEST_UPDATED_AT_MS,
-            timeoutReconcileDue: TEST_TIMEOUT_RECONCILE_DUE,
+            timeoutReconcileDue:
+              typeof options.timeoutReconcileDue === 'boolean' ?
+                options.timeoutReconcileDue :
+                TEST_TIMEOUT_RECONCILE_DUE,
           }),
           progress: Object.freeze({
             contractState: OWNER_CONTRACT_STATE.PENDING,
@@ -653,6 +676,126 @@ test(TEST_PENDING_REENTRY_TEST_NAME, async (t) => {
       deferredTimers.length,
       NUM.ONE,
       'the focused PENDING witness should arm the bounded handoff verification lane',
+    );
+  } finally {
+    Date.now = originalDateNow;
+    await coordinator.shutdown();
+  }
+});
+
+test(TEST_PUBLICATION_BACKPRESSURE_REENTRY_TEST_NAME, async (t) => {
+  const deliveries = [];
+  const deferredTimers = [];
+  const completedOperationIds = [];
+  const originalDateNow = Date.now;
+  Date.now = () => TEST_CAPTURED_AT_MS;
+  const operation = buildEventDrivenOperation({
+    operationId: TEST_PUBLICATION_BACKPRESSURE_OPERATION_ID,
+    partitionId: TEST_CONTROL_PLANE_PUBLICATION_PARTITION_ID,
+    entityId: TEST_CONTROL_PLANE_PUBLICATION_PARTITION_ID,
+    replicaId: TEST_CONTROL_PLANE_PUBLICATION_REPLICA_ID,
+    sourceNodeId: TEST_CONTROL_PLANE_PUBLICATION_SOURCE_NODE_ID,
+    targetNodeId: TEST_CONTROL_PLANE_PUBLICATION_TARGET_NODE_ID,
+    workflowStep: WORKFLOW_STEP.PENDING,
+    createdAt: TEST_RECENT_OPERATION_UPDATED_AT_MS,
+    updatedAt: TEST_RECENT_OPERATION_UPDATED_AT_MS,
+  });
+  const operationRow = buildEventDrivenOperationRow({
+    operation_id: TEST_PUBLICATION_BACKPRESSURE_OPERATION_ID,
+    partition_id: TEST_CONTROL_PLANE_PUBLICATION_PARTITION_ID,
+    entity_id: TEST_CONTROL_PLANE_PUBLICATION_PARTITION_ID,
+    replica_id: TEST_CONTROL_PLANE_PUBLICATION_REPLICA_ID,
+    source_node_id: TEST_CONTROL_PLANE_PUBLICATION_SOURCE_NODE_ID,
+    target_node_id: TEST_CONTROL_PLANE_PUBLICATION_TARGET_NODE_ID,
+    workflow_step: WORKFLOW_STEP.PENDING,
+    created_at: TEST_RECENT_OPERATION_UPDATED_AT_MS,
+    updated_at: TEST_RECENT_OPERATION_UPDATED_AT_MS,
+  });
+  const coordinator = createEventDrivenCoordinator(
+    deliveries,
+    deferredTimers,
+    operationRow,
+    {
+      operationId: TEST_PUBLICATION_BACKPRESSURE_OPERATION_ID,
+      partitionId: TEST_CONTROL_PLANE_PUBLICATION_PARTITION_ID,
+      workflowStep: WORKFLOW_STEP.PENDING,
+      actuationState:
+        PRIORITY_RECOVERY_ACTUATION_STATE.PERSISTED_NOT_DISPATCHED,
+      completionState: PRIORITY_RECOVERY_COMPLETION_STATE.BLOCKED,
+      publicationStatus: TEST_PUBLICATION_STATUS_OPEN,
+      timeoutReconcileDue: TEST_EVENT_DRIVEN_ONLY_TIMEOUT_RECONCILE_DUE,
+    },
+  );
+
+  try {
+    coordinator.initialize();
+    coordinator.workflowOwner.completeOperation = async (completedOperation) => {
+      completedOperationIds.push(completedOperation.operationId);
+      return true;
+    };
+    coordinator.workflowOwner.repository
+      .getOperationsByEntityAuthoritativeObservation = async () => {
+        return Object.freeze({
+          state: 'present',
+          operationCount: NUM.ONE,
+          operations: Object.freeze([operation]),
+          deferredOutcome: null,
+          retryAfterMs: null,
+        });
+      };
+
+    const snapshot =
+      await coordinator.workflowOwner
+        .getPriorityRecoveryDecisionSnapshotForPartitionOperations(
+          TEST_CONTROL_PLANE_PUBLICATION_PARTITION_ID,
+          [operation],
+        );
+    await new Promise((resolve) => {
+      setTimeout(resolve, NUM.ZERO);
+    });
+
+    t.equal(
+      snapshot?.operationOwnerObservation?.outcome,
+      OPERATION_WORKFLOW_OUTCOME_VALUES.WAKE_REMOTE_OWNER,
+      TEST_ASSERT_PUBLICATION_BACKPRESSURE_WAKE,
+    );
+    t.equal(
+      snapshot?.progress?.nextRequiredAction,
+      PRIORITY_RECOVERY_NEXT_REQUIRED_ACTION.ADVANCE_EXISTING_OPERATION,
+      TEST_ASSERT_PUBLICATION_BACKPRESSURE_WAKE,
+    );
+    t.equal(
+      snapshot?.completion?.state,
+      PRIORITY_RECOVERY_COMPLETION_STATE.BLOCKED,
+      TEST_ASSERT_PUBLICATION_BACKPRESSURE_NO_DRAIN,
+    );
+    t.same(
+      completedOperationIds,
+      TEST_EMPTY_LIST,
+      TEST_ASSERT_PUBLICATION_BACKPRESSURE_NO_DRAIN,
+    );
+    t.equal(
+      deliveries.length,
+      NUM.ZERO,
+      TEST_ASSERT_PUBLICATION_BACKPRESSURE_RETRY,
+    );
+    t.equal(
+      deferredTimers.length,
+      NUM.ONE,
+      TEST_ASSERT_PUBLICATION_BACKPRESSURE_RETRY,
+    );
+
+    await deferredTimers[NUM.ZERO].fn();
+
+    t.equal(
+      deliveries.length,
+      NUM.ONE,
+      TEST_ASSERT_PUBLICATION_BACKPRESSURE_WAKE,
+    );
+    t.equal(
+      deliveries[NUM.ZERO]?.target,
+      TEST_CONTROL_PLANE_PUBLICATION_REPLICA_DISPATCH_TARGET,
+      TEST_ASSERT_PUBLICATION_BACKPRESSURE_WAKE,
     );
   } finally {
     Date.now = originalDateNow;
