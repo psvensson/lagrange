@@ -22,17 +22,17 @@ success is in scope.
 ## Current Blocker Snapshot
 
 Latest representative artifact:
-`test-output/reports/rolling-restart-active-gate-projected-fallback-20260517T063708Z.report.json`.
+`test-output/reports/rolling-restart-owner-reconcile-refresh-retention-20260517T073616Z.report.json`.
 
-Canonical state after the startup active-gate snapshot coverage
-after-priority closure package:
+Canonical state after the startup active-gate owner-reconcile refresh-retention
+package:
 
 1. `publication_ack_convergence` is satisfied and priority recovery residual
-   extraction reports zero witnesses.
+   remains frozen unless canonical evidence selects it again.
 2. The current active package is
-   `work/packages/active-20260517-startup-active-gate-owner-reconcile-after-query-pressure-fallback.md`
-   after the predecessor moved representative snapshot coverage from `0/5` to
-   `4/5`.
+   `work/packages/active-20260517-startup-active-gate-owner-reconcile-write-deferred-residual.md`
+   after the predecessor reduced pending owner reconciliation from three nodes
+   to two.
 3. Fresh `work:evidence-summary` selects `active_gate_snapshot_coverage` as the
    first frontier.
 4. Representative owner boundary:
@@ -40,23 +40,23 @@ after-priority closure package:
 5. Dominant reason: `active_gate_timed_out` with
    `owner_reconcile_pending`, `snapshot_coverage_incomplete`, and
    `snapshot_repair_deferred`.
-6. Fresh snapshot coverage is `4/5`; selected snapshot observation remains
+6. Fresh snapshot coverage is `3/5`; selected snapshot observation remains
    `repair_deferred` / `deferred_refresh` with next action `retry` and reason
    codes `cache_stale_watermark`, `discovery_node_coverage_gap`, and
    `stale_replica_operations_in_flight`.
 7. The handoff probe detects the publication active-gate handoff contract with
    state `pending`, reason `owner_reconcile_pending`, required action
-   `reconcile_owner_membership_publication`, and `pendingReconcileCount=3` for
-   nodes `35a891b8-c1a0-5064-9c6e-2acfba61c2a7`,
-   `8be8d30f-4499-5eed-865c-71b4d529a67a`, and
-   `ebc4aa0b-06c6-506d-93ea-1dd2deca3f58`.
+   `reconcile_owner_membership_publication`, and `pendingReconcileCount=2` for
+   nodes `11601fe0-72d6-5853-8590-ec2881853e72` and
+   `35a891b8-c1a0-5064-9c6e-2acfba61c2a7`.
 8. The next proof must be metric-moving: reduce pending reconcile, remove
    `discovery_node_coverage_gap`, move snapshot coverage to `5/5`, migrate to a
    genuinely new owner boundary, or turn representative `rolling-restart`
    green.
-9. Publication ACK, timeout budgets, active-gate admission, CDC fallback,
-   reconnect delivery, query participant routing, and readiness support remain
-   frozen unless canonical evidence selects them again.
+9. Publication ACK, priority recovery, timeout budgets, active-gate admission,
+   selected-source selection, forced repair timeout handling, authoritative
+   query-pressure fallback, and readiness support remain frozen unless
+   canonical evidence selects them again.
 
 ## Scope Basis
 
@@ -509,24 +509,23 @@ Continue with the owner reconciliation successor selected by the latest
 representative artifact:
 
 ```text
-work/packages/active-20260517-startup-active-gate-owner-reconcile-after-query-pressure-fallback.md
-test-output/reports/rolling-restart-active-gate-projected-fallback-20260517T063708Z.report.json
+work/packages/active-20260517-startup-active-gate-owner-reconcile-write-deferred-residual.md
+test-output/reports/rolling-restart-owner-reconcile-refresh-retention-20260517T073616Z.report.json
 ```
 
 The current first frontier is `startup_active_gate_owner / snapshot_coverage`:
-fresh evidence reports `active_gate_snapshot_coverage`, `snapshotCoverage=4/5`,
-`snapshot_repair_deferred`, and handoff contract state `pending` with
-`owner_reconcile_pending`. The required next action is
-`reconcile_owner_membership_publication` for pending nodes
-`35a891b8-c1a0-5064-9c6e-2acfba61c2a7`,
-`8be8d30f-4499-5eed-865c-71b4d529a67a`, and
-`ebc4aa0b-06c6-506d-93ea-1dd2deca3f58`.
+fresh evidence reports `active_gate_snapshot_coverage`, `snapshotCoverage=3/5`,
+`snapshot_repair_deferred`, handoff outcome `write_deferred`, and handoff
+contract state `pending` with `owner_reconcile_pending`. The required next
+action is `reconcile_owner_membership_publication` for pending nodes
+`11601fe0-72d6-5853-8590-ec2881853e72` and
+`35a891b8-c1a0-5064-9c6e-2acfba61c2a7`.
 
 Run the required review/fix/implementation subagent sequence before runtime
 edits for the successor package. Keep publication ACK, priority recovery,
-timeout budget increases, active-gate admission, CDC fallback, message-router
-reconnect delivery, query participant routing, and readiness support frozen
-unless canonical evidence selects them again. The next proof target remains
-metric-moving: reduce pending reconcile, remove `discovery_node_coverage_gap`,
-move snapshot coverage to `5/5`, migrate to a genuinely new owner boundary, or
-turn representative `rolling-restart` green.
+timeout budget increases, active-gate admission, selected-source selection,
+forced repair timeout handling, authoritative query-pressure fallback, and
+readiness support frozen unless canonical evidence selects them again. The next
+proof target remains metric-moving: reduce pending reconcile, remove
+`discovery_node_coverage_gap`, move snapshot coverage to `5/5`, migrate to a
+genuinely new owner boundary, or turn representative `rolling-restart` green.

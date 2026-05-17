@@ -4,13 +4,13 @@
 
 Sprint: `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md`
 
-Package: `work/packages/active-20260517-startup-active-gate-owner-reconcile-after-query-pressure-fallback.md`
+Package: `work/packages/active-20260517-startup-active-gate-owner-reconcile-write-deferred-residual.md`
 
 Workflow lane: `causal-escalation`
 
 Scenario: `rolling-restart`
 
-Artifact: `test-output/reports/rolling-restart-active-gate-projected-fallback-20260517T063708Z.report.json`
+Artifact: `test-output/reports/rolling-restart-owner-reconcile-refresh-retention-20260517T073616Z.report.json`
 
 Playback: `none`
 
@@ -22,26 +22,26 @@ Boundary: `snapshot_coverage`
 
 Dominant reason: `active_gate_timed_out`
 
-Current state: The predecessor selected authoritative_control_snapshot_query_pressure and moved representative snapshotCoverage from 0/5 to 4/5. The latest first frontier remains startup_active_gate_owner / snapshot_coverage with owner_reconcile_pending, snapshot_repair_deferred, discovery_node_coverage_gap, and three pending owner cohort nodes requiring reconcile_owner_membership_publication.
+Current state: The predecessor retained flat-coverage owner handoff refresh progress and the representative rerun reduced publicationActiveGateHandoffPendingReconcileCount from 3 to 2, but rolling-restart remains red at active_gate_snapshot_coverage with snapshotCoverage=3/5, handoff state pending, reason owner_reconcile_pending, nextAction reconcile_owner_membership_publication, and handoffOutcome write_deferred for the remaining owner cohort.
 
 ## Next Action
 
-Run the required review/fix/implementation subagent sequence, then target the narrow startup active-gate owner reconciliation path for pending nodes 35a891b8-c1a0-5064-9c6e-2acfba61c2a7, 8be8d30f-4499-5eed-865c-71b4d529a67a, and ebc4aa0b-06c6-506d-93ea-1dd2deca3f58. Success must reduce pending reconcile, remove discovery_node_coverage_gap, improve snapshotCoverage to 5/5, migrate to a genuinely new owner boundary, or turn rolling-restart green.
+Decide the remaining owner reconcile write-deferred edge for pending nodes 11601fe0-72d6-5853-8590-ec2881853e72 and 35a891b8-c1a0-5064-9c6e-2acfba61c2a7. Success must reduce pending reconcile, remove discovery_node_coverage_gap, improve snapshotCoverage to 5/5, migrate to a genuinely new owner boundary, or turn rolling-restart green.
 
 ## Proof Ladder
 
-1. `npm run work:evidence-summary -- test-output/reports/rolling-restart-active-gate-projected-fallback-20260517T063708Z.report.json`
-2. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-active-gate-projected-fallback-20260517T063708Z.report.json --handoff-probe`
-3. `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-active-gate-projected-fallback-20260517T063708Z.report.json`
-4. `npm run analyze:owner-files -- startup_active_gate_owner snapshot_coverage --markdown`
+1. `npm run work:evidence-summary -- test-output/reports/rolling-restart-owner-reconcile-refresh-retention-20260517T073616Z.report.json`
+2. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-owner-reconcile-refresh-retention-20260517T073616Z.report.json --handoff-probe`
+3. `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-owner-reconcile-refresh-retention-20260517T073616Z.report.json`
+4. `npm run analyze:distributed-failure -- --report test-output/reports/rolling-restart-owner-reconcile-refresh-retention-20260517T073616Z.report.json`
 
 ## Model Fit
 
-Package class: `cross-boundary-causal-escalation`
+Package class: `representative-frontier-closure`
 
 Intended minimum model: `gpt-5.3-codex`
 
-Scope shape: `active-gate-snapshot-coverage/owner-reconcile`
+Scope shape: `owner-boundary-contraction/current-frontier`
 
 Output profile: `medium`
 
@@ -56,7 +56,7 @@ Status: `live-red-scenario-release-gate`
 
 Scenario: `rolling-restart`
 
-Artifact: `test-output/reports/rolling-restart-active-gate-projected-fallback-20260517T063708Z.report.json`
+Artifact: `test-output/reports/rolling-restart-owner-reconcile-refresh-retention-20260517T073616Z.report.json`
 
 Frontier: `active_gate_snapshot_coverage`
 
@@ -66,74 +66,74 @@ Boundary: `snapshot_coverage`
 
 Dominant reason: `active_gate_timed_out`
 
-Next action: `Target reconcile_owner_membership_publication for three pending owner cohort nodes after predecessor moved snapshotCoverage to 4/5.`
+Next action: `Decide the remaining owner reconcile write-deferred edge for pending nodes 11601fe0-72d6-5853-8590-ec2881853e72 and 35a891b8-c1a0-5064-9c6e-2acfba61c2a7. Success must reduce pending reconcile, remove discovery_node_coverage_gap, improve snapshotCoverage to 5/5, migrate to a genuinely new owner boundary, or turn rolling-restart green.`
 
 ## Causal Governance
 
-Causal hypothesis: `The remaining active-gate snapshot coverage gap is owned by startup active-gate owner reconciliation: the projected fallback covers four nodes, but three owner cohort nodes remain pending owner membership publication reconciliation and discovery_node_coverage_gap remains in the deferred snapshot observation.`
+Causal hypothesis: `The remaining active-gate snapshot coverage gap is now concentrated in owner membership publication reconciliation: the representative artifact reports handoff state pending, reason owner_reconcile_pending, nextAction reconcile_owner_membership_publication, pendingReconcileCount=2, and handoffOutcome write_deferred.`
 
-Stop-condition check: `Use npm run work:evidence-summary, npm run analyze:topology-convergence -- --handoff-probe, npm run analyze:owner-files, and npm run analyze:causal-model before runtime edits; then run required subagents before promoting exact owner files.`
+Stop-condition check: `Use work:evidence-summary, topology convergence handoff probe, npm run analyze:causal-model, distributed-failure, and owner-files before runtime edits; then run the required review/fix/implementation subagents before changing promoted runtime files.`
 
-Expected causal-model change: `Pending owner reconciliation is reduced, discovery_node_coverage_gap disappears, snapshotCoverage reaches 5/5, the frontier migrates to a genuinely new owner boundary, or representative rolling-restart turns green.`
+Expected causal-model change: `The next proof must reduce pending reconcile again, remove discovery_node_coverage_gap, move snapshotCoverage to 5/5, migrate to a genuinely new owner boundary, or turn rolling-restart green.`
 
 Representative outcome: `pending-before-rerun`
 
 Causal debt: `Publication ACK, priority recovery, timeout budgets, active-gate admission, selected-source selection, forced repair timeout handling, authoritative query-pressure fallback, and readiness support are frozen unless canonical evidence selects them again.`
 
-Cross-boundary review: `This package continues the same startup_active_gate_owner / snapshot_coverage frontier only because the predecessor moved coverage to 4/5 and canonical handoff evidence selected owner_reconcile_pending with required action reconcile_owner_membership_publication.`
+Cross-boundary review: `The successor remains at startup_active_gate_owner / snapshot_coverage only because the predecessor was metric-moving and canonical evidence still selects owner_reconcile_pending.`
 
 ## Scenario Causal Closure
 
-Reference scenario/probe: `rolling-restart active-gate projected fallback rerun`
+Reference scenario/probe: `rolling-restart owner reconcile refresh retention rerun`
 
 Phase chain:
 
-1. `consume the closed authoritative query-pressure fallback proof`
-2. `use work:evidence-summary and handoff probe on the 4/5 representative artifact`
-3. `use owner-files to select the narrow startup active-gate owner reconciliation path`
+1. `consume the reduced owner handoff refresh-retention proof`
+2. `use work:evidence-summary and handoff probe on the reduced representative artifact`
+3. `use owner-files to select the narrow remaining owner reconcile write-deferred path`
 4. `run review, fix if required, and implementation subagents before runtime edits`
-5. `edit only the selected owner reconciliation path after exact owner files are promoted`
-6. `rerun representative rolling-restart and classify green, reduced, same-frontier, migrated, or contradictory`
+5. `edit only the selected owner path after exact owner files are promoted`
+6. `rerun focused owner tests and one representative rolling-restart run`
 
-Current first frontier: `active_gate_snapshot_coverage in test-output/reports/rolling-restart-active-gate-projected-fallback-20260517T063708Z.report.json, owned by startup_active_gate_owner / snapshot_coverage with snapshotCoverage=4/5, owner_reconcile_pending, snapshot_repair_deferred, and discovery_node_coverage_gap.`
+Current first frontier: `active_gate_snapshot_coverage in test-output/reports/rolling-restart-owner-reconcile-refresh-retention-20260517T073616Z.report.json, owned by startup_active_gate_owner / snapshot_coverage with snapshotCoverage=3/5, owner_reconcile_pending, snapshot_repair_deferred, discovery_node_coverage_gap, and pendingReconcileCount=2.`
 
 Known downstream blockers:
 
-1. `publication_ack_convergence is satisfied as producer state with publicationStatus=PUBLISHED and publicationOwnerAckState=not_required`
-2. `priority_recovery_partition_progress is satisfied and residual extraction reports zero witnesses`
-3. `snapshotCoverageNodeCount is 4 of expectedNodeCount 5`
+1. `publication_ack_convergence is frozen unless canonical evidence selects it again`
+2. `priority_recovery_workflow_progress is frozen unless canonical evidence selects it again`
+3. `snapshotCoverageNodeCount is 3 of expectedNodeCount 5`
 4. `selectedSnapshotObservationMode is repair_deferred with state deferred_refresh and nextAction retry`
 5. `selectedSnapshotObservationReasonCodes include cache_stale_watermark, discovery_node_coverage_gap, and stale_replica_operations_in_flight`
 6. `publicationActiveGateHandoffState is pending with reason owner_reconcile_pending and nextAction reconcile_owner_membership_publication`
-7. `publicationActiveGateHandoffPendingReconcileCount is 3 for nodes 35a891b8-c1a0-5064-9c6e-2acfba61c2a7, 8be8d30f-4499-5eed-865c-71b4d529a67a, and ebc4aa0b-06c6-506d-93ea-1dd2deca3f58`
+7. `publicationActiveGateHandoffPendingReconcileCount is 2 for nodes 11601fe0-72d6-5853-8590-ec2881853e72 and 35a891b8-c1a0-5064-9c6e-2acfba61c2a7`
 8. `readiness_startup_support remains deferred as inherited active-gate no progress`
 
-Missing causal edge: `Decide the narrow owner reconciliation edge that keeps three owner cohort nodes pending after projected fallback coverage reached 4/5.`
+Missing causal edge: `Determine why the remaining owner membership publication reconcile attempt reports write_deferred for the last two pending cohort nodes.`
 
-Missing causal edge probe: `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-active-gate-projected-fallback-20260517T063708Z.report.json --handoff-probe`
+Missing causal edge probe: `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-owner-reconcile-refresh-retention-20260517T073616Z.report.json --handoff-probe`
 
-Bounded progress proof: `Entry bounded reconcile proof: predecessor improved coverage to 4/5 and the handoff probe selected reconcile_owner_membership_publication as the next required progress mechanism.`
+Bounded progress proof: `Required for closure: pending reconcile decreases below 2, discovery_node_coverage_gap disappears, snapshotCoverage reaches 5/5, a new owner boundary is selected, or representative rolling-restart turns green.`
 
-Bounded progress proof artifact: `test-output/reports/rolling-restart-active-gate-projected-fallback-20260517T063708Z.report.json`
+Bounded progress proof artifact: `test-output/reports/rolling-restart-owner-reconcile-refresh-retention-20260517T073616Z.report.json`
 
-Expected observable transition: `Pending owner reconciliation is reduced, discovery_node_coverage_gap disappears, snapshotCoverage reaches 5/5, a genuinely new owner boundary is selected, or representative rolling-restart turns green.`
+Expected observable transition: `Owner reconcile write_deferred either drains additional nodes or produces a canonical migration to a new owner boundary without reopening frozen edges.`
 
-Max progress bound: `one focused startup_active_gate_owner / snapshot_coverage owner-reconcile slice`
+Max progress bound: `one focused startup_active_gate_owner / snapshot_coverage owner-reconcile write-deferred slice`
 
 Same-frontier fallback: `If focused tests pass but representative evidence remains at active_gate_snapshot_coverage with the same pending reconcile count and no metric movement, stop as same-frontier instead of reopening frozen edges.`
 
 Expected next frontier: `startup_active_gate_owner / snapshot_coverage unless owner reconciliation drains and readiness or a new boundary is selected`
 
-Result classification: `reduced`
+Result classification: `pending-before-probe`
 
 Stop condition: `continue-local-fix`
 
 Recent frontier history:
 
-1. `work/packages/done-20260517-priority-recovery-workflow-progress-after-publication-handoff.md / operation_workflow_owner / workflow_progress / migrated`
-2. `work/packages/done-20260517-startup-active-gate-snapshot-coverage-after-priority-closure.md / startup_active_gate_owner / snapshot_coverage / reduced`
+1. `work/packages/done-20260517-startup-active-gate-snapshot-coverage-after-priority-closure.md / startup_active_gate_owner / snapshot_coverage / reduced`
+2. `work/packages/done-20260517-startup-active-gate-owner-reconcile-after-query-pressure-fallback.md / startup_active_gate_owner / snapshot_coverage / reduced`
 
-Oscillation check: `This package is allowed because the immediate predecessor made metric-moving progress at the same owner boundary, from snapshotCoverage=0/5 to 4/5, and canonical evidence selected a narrower owner reconciliation action.`
+Oscillation check: `Allowed because the immediate predecessor reduced pending owner reconciliation from 3 nodes to 2 at the same owner boundary.`
 
 Handoff invariant: `Publication ACK, priority recovery, timeout budgets, active-gate admission, selected-source selection, forced repair timeout handling, authoritative query-pressure fallback, and readiness support remain frozen unless canonical evidence selects them again.`
 
@@ -141,18 +141,16 @@ Handoff invariant: `Publication ACK, priority recovery, timeout budgets, active-
 
 Write scope:
 
-1. `src/admin/admin-control-snapshot-class-part-2.js`
-2. `test/admin/admin-control-snapshot.test.js`
-3. `work/packages/active-20260517-startup-active-gate-owner-reconcile-after-query-pressure-fallback.md`
-4. `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md`
-5. `work/sprints/current-blocker.md`
-6. `work/sprints/current-blocker.json`
-7. `work/model-ledger.jsonl`
+1. `work/packages/active-20260517-startup-active-gate-owner-reconcile-write-deferred-residual.md`
+2. `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md`
+3. `work/sprints/current-blocker.md`
+4. `work/sprints/current-blocker.json`
+5. `work/model-ledger.jsonl`
 
 Handoff files:
 
-1. `work/packages/done-20260517-startup-active-gate-snapshot-coverage-after-priority-closure.md`
-2. `test-output/reports/rolling-restart-active-gate-projected-fallback-20260517T063708Z.report.json`
+1. `work/packages/done-20260517-startup-active-gate-owner-reconcile-after-query-pressure-fallback.md`
+2. `test-output/reports/rolling-restart-owner-reconcile-refresh-retention-20260517T073616Z.report.json`
 
 Generated files:
 
@@ -161,23 +159,18 @@ Generated files:
 
 Candidate runtime files:
 
-1. `src/admin/admin-control-snapshot-class-part-2.js`
-2. `src/admin/admin-control-snapshot-class-part-3.js`
-3. `src/admin/admin-control-snapshot-class-part-5.js`
-4. `src/admin/admin-control-snapshot-class-part-6.js`
-5. `src/control-plane/control-plane-snapshot-owner.js`
-6. `src/control-plane/authoritative-node-evidence-reconciler.js`
-7. `test/admin/admin-control-snapshot.test.js`
+1. `src/control-plane/membership-publication-coordinator-class-stage-2.js`
+2. `src/admin/admin-control-snapshot-class-part-2.js`
+3. `test/admin/admin-control-snapshot.test.js`
+4. `test/control-plane/membership-publication-coordinator.test.js`
 
 Commit scope:
 
-1. `src/admin/admin-control-snapshot-class-part-2.js`
-2. `test/admin/admin-control-snapshot.test.js`
-3. `work/packages/active-20260517-startup-active-gate-owner-reconcile-after-query-pressure-fallback.md`
-4. `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md`
-5. `work/sprints/current-blocker.md`
-6. `work/sprints/current-blocker.json`
-7. `work/model-ledger.jsonl`
+1. `work/packages/active-20260517-startup-active-gate-owner-reconcile-write-deferred-residual.md`
+2. `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md`
+3. `work/sprints/current-blocker.md`
+4. `work/sprints/current-blocker.json`
+5. `work/model-ledger.jsonl`
 
 Legacy touched files:
 

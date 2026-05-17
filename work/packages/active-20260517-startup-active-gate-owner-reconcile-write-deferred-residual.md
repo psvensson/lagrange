@@ -1,9 +1,10 @@
+# Startup Active Gate Owner Reconcile Write Deferred Residual
+
+<!-- work-package
 {
-  "schema": "current-blocker-v1",
-  "generatedBy": "scripts/work-tracker.js",
-  "sprint": "work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md",
-  "package": "work/packages/active-20260517-startup-active-gate-owner-reconcile-write-deferred-residual.md",
+  "schema": "work-package-v1",
   "status": "active",
+  "opened": "2026-05-17",
   "lane": "causal-escalation",
   "scenario": "rolling-restart",
   "artifact": "test-output/reports/rolling-restart-owner-reconcile-refresh-retention-20260517T073616Z.report.json",
@@ -47,7 +48,6 @@
     "work/sprints/current-blocker.json",
     "work/model-ledger.jsonl"
   ],
-  "touchedFiles": [],
   "modelFit": {
     "packageClass": "representative-frontier-closure",
     "intendedMinimumModel": "gpt-5.3-codex",
@@ -113,6 +113,97 @@
     ],
     "oscillationCheck": "Allowed because the immediate predecessor reduced pending owner reconciliation from 3 nodes to 2 at the same owner boundary.",
     "handoffInvariant": "Publication ACK, priority recovery, timeout budgets, active-gate admission, selected-source selection, forced repair timeout handling, authoritative query-pressure fallback, and readiness support remain frozen unless canonical evidence selects them again."
-  },
-  "predecessor": null
+  }
 }
+-->
+
+## Why
+
+The previous package made metric-moving progress at the same first frontier:
+pending owner reconciliation moved from three nodes to two. The representative
+run still fails at `active_gate_snapshot_coverage`, and canonical handoff
+evidence selects `startup_active_gate_owner / snapshot_coverage` with
+`owner_reconcile_pending` for nodes
+`11601fe0-72d6-5853-8590-ec2881853e72` and
+`35a891b8-c1a0-5064-9c6e-2acfba61c2a7`.
+
+This package owns the next narrow proof for the remaining `write_deferred`
+owner-reconcile edge. It must improve the metric, remove
+`discovery_node_coverage_gap`, migrate to a genuinely new owner boundary, or
+turn the representative rolling-restart run green. Publication ACK, priority
+recovery, timeout budgets, active-gate admission, selected-source selection,
+forced repair timeout handling, authoritative query-pressure fallback, and
+readiness support remain frozen unless canonical evidence selects them again.
+
+## Scope Basis
+
+Continuation of the active rolling-restart green-gate closure sprint after the
+bounded owner handoff refresh-retention slice classified as `reduced`.
+
+## Workflow Lane
+
+- Selected lane: `causal-escalation`
+- Why this lane is sufficient: bounded workflow/tooling scope unless changed.
+- Escalation trigger to a heavier lane: runtime ownership, shared contract, or representative scenario evidence changes.
+
+## Subagent Sequencing Requirement
+
+Required before implementation because this is a scenario-driven runtime
+owner-boundary package.
+
+## Subagent Sequencing Ledger
+
+- [ ] Review subagent recorded: pending.
+- [ ] Fix subagent recorded or explicitly not needed: pending.
+- [ ] Implementation subagent recorded: pending.
+
+## LLM Tool-First Contract
+
+Before raw JSON, raw logs, broad file search, oversized segment files, or ad hoc `jq`, use the canonical workflow command that owns the question:
+
+1. Package metadata or ledger edits: `npm run work:package:doctor -- --suggest <package>`, `npm run work:package:doctor -- --fix-dry-run <package>`, `npm run work:package:schema`, or `npm run work:package:new -- ...`.
+2. Representative evidence: `npm run work:evidence-summary -- <artifact>` plus any focused extractor for this failure class.
+3. Owner discovery: `npm run analyze:owner-files -- <owner> [boundary]`.
+4. Subagent sequencing: `npm run work:subagent-prompt -- --role <role> --package <package>`.
+5. Large-file cleanup: `npm run work:oversized-next -- --markdown`.
+
+If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which canonical extractor was tried and why it was insufficient.
+
+## In Scope
+
+1. work/packages/active-20260517-startup-active-gate-owner-reconcile-write-deferred-residual.md
+2. work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md
+3. work/sprints/current-blocker.md
+4. work/sprints/current-blocker.json
+5. work/model-ledger.jsonl
+
+## Out Of Scope
+
+1. publication_ack_convergence
+2. priority_recovery_workflow_progress
+3. timeout_budgets
+4. active_gate_admission
+5. selected_snapshot_source_selection
+6. forced_repair_timeout_handling
+7. authoritative_query_pressure_fallback
+8. readiness_support
+
+## Model Fit
+
+- Package class: `representative-frontier-closure`
+- Intended minimum model: `gpt-5.3-codex`
+- Scope shape: `owner-boundary-contraction/current-frontier`
+- Output profile: `medium`
+- Owned files: `work/packages/active-20260517-startup-active-gate-owner-reconcile-write-deferred-residual.md`, `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md`, `work/sprints/current-blocker.md`, `work/sprints/current-blocker.json`, `work/model-ledger.jsonl`
+- Forbidden files: `publication_ack_convergence`, `priority_recovery_workflow_progress`, `timeout_budgets`, `active_gate_admission`, `selected_snapshot_source_selection`, `forced_repair_timeout_handling`, `authoritative_query_pressure_fallback`, `readiness_support`
+- Frozen decisions: package scope and lane stay bounded unless explicitly escalated.
+- Escalation triggers: owned files expand beyond this package, runtime ownership changes, or representative scenario evidence changes.
+- Focused proof: `npm run work:evidence-summary -- test-output/reports/rolling-restart-owner-reconcile-refresh-retention-20260517T073616Z.report.json`, `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-owner-reconcile-refresh-retention-20260517T073616Z.report.json --handoff-probe`, `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-owner-reconcile-refresh-retention-20260517T073616Z.report.json`, `npm run analyze:distributed-failure -- --report test-output/reports/rolling-restart-owner-reconcile-refresh-retention-20260517T073616Z.report.json`
+- Model ledger advisory: `escalate`
+
+## Validation
+
+1. npm run work:evidence-summary -- test-output/reports/rolling-restart-owner-reconcile-refresh-retention-20260517T073616Z.report.json
+2. npm run analyze:topology-convergence -- test-output/reports/rolling-restart-owner-reconcile-refresh-retention-20260517T073616Z.report.json --handoff-probe
+3. npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-owner-reconcile-refresh-retention-20260517T073616Z.report.json
+4. npm run analyze:distributed-failure -- --report test-output/reports/rolling-restart-owner-reconcile-refresh-retention-20260517T073616Z.report.json
