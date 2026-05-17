@@ -125,14 +125,12 @@
     ],
     "currentFirstFrontier": "publication_ack_convergence in test-output/reports/rolling-restart-forced-repair-owner-command-20260517T043738Z.report.json, owned by topology_publication_owner / publication_convergence with reason pending_acks_present. Active gate remains downstream at repair_deferred, snapshotCoverage=2/5, discovery_node_coverage_gap present, and owner_reconcile_pending for 11601fe0-72d6-5853-8590-ec2881853e72.",
     "knownDownstreamBlockers": [
-      "snapshotCoverage=0/5",
-      "selectedSnapshotNodeId=11601fe0-72d6-5853-8590-ec2881853e72",
-      "selectedSnapshotTimeoutMs=3000",
-      "selectedSnapshotSourceCause=selected_snapshot_source_timeout",
-      "activeGateSnapshotOwnerEdge=selected_snapshot_source_selection",
-      "readinessDelayCause=snapshot_timeout",
-      "publicationActiveGateHandoff absent",
-      "discovery_node_coverage_gap absent"
+      "firstFrontier=publication_ack_convergence",
+      "activeGate=repair_deferred",
+      "snapshotCoverage=2/5",
+      "discovery_node_coverage_gap present",
+      "owner_reconcile_pending for 11601fe0-72d6-5853-8590-ec2881853e72",
+      "operation_workflow_owner / rebalancer_handoff residual witness"
     ],
     "missingCausalEdge": "Separate bad snapshot-source selection from forced repair stall, authoritative control snapshot query pressure, and inherited readiness support for the selected 11601fe0 snapshot timeout.",
     "missingCausalEdgeProbe": "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-publication-handoff-full-target-20260517T032823Z.report.json --replay-fixture",
@@ -154,7 +152,7 @@
   "predecessor": "work/packages/done-20260517-topology-publication-convergence-reopened-missing-publication.md",
   "closed": "2026-05-17",
   "commitAndPushLedgerRequired": true,
-  "successor": "work/packages/active-20260517-topology-publication-ack-pending-after-forced-repair-owner-command.md"
+  "successor": "work/packages/done-20260517-topology-publication-ack-pending-after-forced-repair-owner-command.md"
 }
 -->
 

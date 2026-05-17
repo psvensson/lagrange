@@ -1,9 +1,10 @@
+# Priority Recovery Workflow Progress After Publication Handoff
+
+<!-- work-package
 {
-  "schema": "current-blocker-v1",
-  "generatedBy": "scripts/work-tracker.js",
-  "sprint": "work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md",
-  "package": "work/packages/active-20260517-priority-recovery-workflow-progress-after-publication-handoff.md",
+  "schema": "work-package-v1",
   "status": "active",
+  "opened": "2026-05-17",
   "lane": "causal-escalation",
   "scenario": "rolling-restart",
   "artifact": "test-output/reports/rolling-restart-after-publication-handoff-flat-progress-20260517.report.json",
@@ -47,7 +48,6 @@
     "work/sprints/current-blocker.json",
     "work/model-ledger.jsonl"
   ],
-  "touchedFiles": [],
   "modelFit": {
     "packageClass": "cross-boundary-causal-escalation",
     "intendedMinimumModel": "gpt-5.3-codex",
@@ -68,6 +68,19 @@
     "boundary": "workflow_progress",
     "dominantReason": "priority_recovery_event_driven_wait",
     "nextAction": "Prove or split the single control_plane_publications-p1 spread_satisfied_in_flight workflow-progress residual without reopening publication ACK or active-gate admission."
+  },
+  "ownerBoundaryMigrationProof": {
+    "fromOwner": "topology_publication_owner",
+    "fromBoundary": "publication_convergence",
+    "toOwner": "operation_workflow_owner",
+    "toBoundary": "workflow_progress",
+    "reason": "The predecessor closed publication_ack_convergence and improved snapshotCoverage to 4/5. Canonical evidence now selects priority_recovery_partition_progress under operation_workflow_owner / workflow_progress.",
+    "evidence": [
+      "work/packages/done-20260517-topology-publication-ack-pending-after-forced-repair-owner-command.md",
+      "npm run work:evidence-summary -- test-output/reports/rolling-restart-after-publication-handoff-flat-progress-20260517.report.json",
+      "npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-after-publication-handoff-flat-progress-20260517.report.json --markdown",
+      "npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-publication-handoff-flat-progress-20260517.report.json"
+    ]
   },
   "causalGovernance": {
     "hypothesis": "The remaining red gate is a single retryable workflow-progress priority recovery wait for control_plane_publications-p1 after publication ACK has closed and active-gate coverage has improved to 4/5.",
@@ -115,3 +128,96 @@
   },
   "predecessor": "work/packages/done-20260517-topology-publication-ack-pending-after-forced-repair-owner-command.md"
 }
+-->
+
+## Why
+
+The publication handoff slice removed the ACK frontier and improved coverage to
+`4/5`. The representative is still red, but the first frontier is now a single
+`operation_workflow_owner / workflow_progress` priority recovery witness for
+`control_plane_publications-p1`.
+
+This package owns the narrow decision for that workflow-progress residual. It
+must move a metric or migrate to a new owner boundary; a same-frontier rerun
+without movement stops this slice.
+
+## Scope Basis
+
+Approved maintenance scope or roadmap row.
+
+## Workflow Lane
+
+- Selected lane: `causal-escalation`
+- Why this lane is required: adjacent active-gate and publication packages
+  migrated without turning the representative green, so this successor must
+  preserve a cross-boundary oscillation guard.
+- Escalation trigger to a heavier lane: canonical evidence selects a frozen
+  edge, runtime write scope expands beyond the selected owner path, or
+  representative evidence contradicts the operation workflow boundary.
+
+## Subagent Sequencing Requirement
+
+Required before implementation because this is a scenario-driven runtime
+owner-boundary package.
+
+## Subagent Sequencing Ledger
+
+- [ ] Review subagent recorded: pending-before-implementation-resumes.
+- [ ] Fix subagent recorded or explicitly not needed: pending-review-result.
+- [ ] Implementation subagent recorded: pending-before-implementation-resumes.
+
+## LLM Tool-First Contract
+
+Before raw JSON, raw logs, broad file search, oversized segment files, or ad hoc `jq`, use the canonical workflow command that owns the question:
+
+1. Package metadata or ledger edits: `npm run work:package:doctor -- --suggest <package>`, `npm run work:package:doctor -- --fix-dry-run <package>`, `npm run work:package:schema`, or `npm run work:package:new -- ...`.
+2. Representative evidence: `npm run work:evidence-summary -- <artifact>` plus any focused extractor for this failure class.
+3. Owner discovery: `npm run analyze:owner-files -- <owner> [boundary]`.
+4. Subagent sequencing: `npm run work:subagent-prompt -- --role <role> --package <package>`.
+5. Large-file cleanup: `npm run work:oversized-next -- --markdown`.
+
+If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which canonical extractor was tried and why it was insufficient.
+
+## In Scope
+
+1. work/packages/active-20260517-priority-recovery-workflow-progress-after-publication-handoff.md
+2. work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md
+3. work/sprints/current-blocker.md
+4. work/sprints/current-blocker.json
+5. work/model-ledger.jsonl
+
+## Out Of Scope
+
+1. publication_ack_convergence
+2. timeout_budgets
+3. active_gate_admission
+4. CDC_fallback
+5. reconnect_delivery
+6. query_participant_routing
+7. readiness_support
+
+## Model Fit
+
+- Package class: `cross-boundary-causal-escalation`
+- Intended minimum model: `gpt-5.3-codex`
+- Scope shape: `publication-handoff/workflow-progress-successor`
+- Output profile: `medium`
+- Owned files: `work/packages/active-20260517-priority-recovery-workflow-progress-after-publication-handoff.md`, `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md`, `work/sprints/current-blocker.md`, `work/sprints/current-blocker.json`, `work/model-ledger.jsonl`
+- Forbidden files: `publication_ack_convergence`, `timeout_budgets`, `active_gate_admission`, `CDC_fallback`, `reconnect_delivery`, `query_participant_routing`, `readiness_support`
+- Frozen decisions: publication ACK, timeout budgets, active-gate admission,
+  selected-source selection, CDC fallback, reconnect delivery, query routing,
+  and readiness support stay closed unless canonical evidence selects them
+  again.
+- Escalation triggers: owned files expand beyond this package, a frozen
+  decision must be reopened, or representative evidence selects a different
+  owner boundary.
+- Focused proof: `npm run work:evidence-summary -- test-output/reports/rolling-restart-after-publication-handoff-flat-progress-20260517.report.json`, `npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-after-publication-handoff-flat-progress-20260517.report.json --markdown`, `npm run analyze:owner-files -- operation_workflow_owner workflow_progress`, `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-publication-handoff-flat-progress-20260517.report.json`, `npm run work:validate -- --entry`
+- Model ledger advisory: `escalate`
+
+## Validation
+
+1. npm run work:evidence-summary -- test-output/reports/rolling-restart-after-publication-handoff-flat-progress-20260517.report.json
+2. npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-after-publication-handoff-flat-progress-20260517.report.json --markdown
+3. npm run analyze:owner-files -- operation_workflow_owner workflow_progress
+4. npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-publication-handoff-flat-progress-20260517.report.json
+5. npm run work:validate -- --entry
