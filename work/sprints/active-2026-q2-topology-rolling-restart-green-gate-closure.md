@@ -22,31 +22,31 @@ success is in scope.
 ## Current Blocker Snapshot
 
 Latest representative artifact:
-`test-output/reports/rolling-restart-publication-open-ack-classified-20260517T104704Z.report.json`.
+`test-output/reports/rolling-restart-after-bounded-handoff-retry-20260517T112600Z.report.json`.
 
-Canonical state after the publication ACK count-only projection package closed
-as migrated:
+Canonical state after the bounded handoff retry package closed as reduced:
 
-1. The previous publication ACK package closed as migrated; fresh
-   representative evidence now reports `publication_ack_convergence` satisfied.
+1. `work/packages/done-20260517-startup-active-gate-snapshot-coverage-owner-reconcile-after-ack-drain.md`
+   closed as `reduced`; focused admin and static proof passed, and the
+   implementation commit was pushed.
 2. The current active package is
-   `work/packages/active-20260517-startup-active-gate-snapshot-coverage-owner-reconcile-after-ack-drain.md`.
-3. Fresh `work:evidence-summary` selects `active_gate_snapshot_coverage` as
-   the first frontier.
+   `work/packages/active-20260517-startup-active-gate-selected-snapshot-source-timeout-after-bounded-handoff-retry.md`.
+3. Fresh `work:evidence-summary` still selects
+   `active_gate_snapshot_coverage` as the first frontier.
 4. Representative owner boundary:
    `startup_active_gate_owner / snapshot_coverage`.
 5. Canonical blocker: `active_gate_snapshot_coverage`.
 6. Dominant reason: `active_gate_timed_out`.
-7. The handoff probe producer is satisfied with `publicationStatus=PUBLISHED`
-   and `pendingAckCount=0`.
+7. The prior `owner_reconcile_pending` handoff evidence is drained:
+   `publicationActiveGateHandoff` is not detected and pending reconcile is `0`.
 8. The active-gate consumer remains blocked with
-   `snapshotCoverageNodeCount=6/7`, `publicationActiveGateHandoffState=pending`,
-   `publicationActiveGateHandoffPendingReconcileCount=5`, and
-   `publicationActiveGateHandoffReasonCode=owner_reconcile_pending`.
-9. The next focused proof must target
-    `reconcile_owner_membership_publication`, reduce pending reconcile, improve
-    snapshot coverage beyond `6/7`, drain the handoff, migrate to a genuinely
-    new owner boundary, or turn representative `rolling-restart` green.
+   `snapshotCoverageNodeCount=0/5`, `selectedSnapshotSourceCause=selected_snapshot_source_timeout`,
+   `selectedSnapshotNodeId=11601fe0-72d6-5853-8590-ec2881853e72`, and
+   `selectedSnapshotTimeoutMs=806`.
+9. The next focused proof must build the replayable selected-source timeout
+   fixture/probe, reduce the timeout edge, improve snapshot coverage above
+   `0/5`, migrate to a genuinely new owner boundary, or turn representative
+   `rolling-restart` green.
 
 ## Scope Basis
 
@@ -384,6 +384,39 @@ required action.
   genuinely new owner boundary, or representative `rolling-restart` turns
   green.
 
+[Startup Active Gate Snapshot Coverage Owner Reconcile After ACK Drain](../packages/done-20260517-startup-active-gate-snapshot-coverage-owner-reconcile-after-ack-drain.md)
+
+- Lane: `causal-escalation`
+- Owner boundary:
+  `startup_active_gate_owner / snapshot_coverage`
+- Purpose: preserve bounded retry evidence for a rejected owner publication
+  handoff after publication ACK drained.
+- Entry condition: fresh representative evidence selected
+  `active_gate_snapshot_coverage` with
+  `publicationActiveGateHandoffReasonCode=owner_reconcile_pending`,
+  `publicationActiveGateHandoffPendingReconcileCount=5`, and
+  `snapshotCoverageNodeCount=6/7`.
+- Result: `reduced`. Focused admin snapshot tests and static guardrails pass;
+  the representative rerun no longer detects the active-gate handoff or
+  pending reconcile nodes. The first frontier remains
+  `startup_active_gate_owner / snapshot_coverage`, now with
+  `selected_snapshot_source_timeout` and `snapshotCoverageNodeCount=0/5`.
+
+[Startup Active Gate Selected Snapshot Source Timeout After Bounded Handoff Retry](../packages/active-20260517-startup-active-gate-selected-snapshot-source-timeout-after-bounded-handoff-retry.md)
+
+- Lane: `causal-escalation`
+- Owner boundary:
+  `startup_active_gate_owner / snapshot_coverage`
+- Purpose: build the replayable selected-source timeout fixture/probe for node
+  `11601fe0-72d6-5853-8590-ec2881853e72` and reduce or migrate the current
+  active-gate snapshot coverage blocker.
+- Entry condition: predecessor pushed as reduced; latest representative
+  evidence has no detected handoff, pending reconcile `0`, snapshot coverage
+  `0/5`, and selected source timeout after `806ms`.
+- Acceptance: selected source timeout reduces, snapshot coverage improves above
+  `0/5`, the frontier migrates to a genuinely new owner boundary, or
+  representative `rolling-restart` turns green.
+
 ## Working Rules
 
 1. Work one active package at a time.
@@ -490,29 +523,29 @@ The sprint cannot close until:
 
 ## Current Next Action
 
-Continue with the publication ACK successor selected by the latest
-representative artifact:
+Continue with the selected snapshot source timeout successor selected by the
+latest representative artifact:
 
 ```text
-work/packages/done-20260517-topology-publication-ack-pending-after-active-gate-drain-migration.md
-test-output/reports/rolling-restart-active-gate-drained-handoff-20260517T095943Z.report.json
+work/packages/active-20260517-startup-active-gate-selected-snapshot-source-timeout-after-bounded-handoff-retry.md
+test-output/reports/rolling-restart-after-bounded-handoff-retry-20260517T112600Z.report.json
 ```
 
 The current first frontier is
-`topology_publication_owner / publication_convergence`: fresh evidence reports
-`publication_ack_convergence`, `pending_acks_present`, `publicationStatus=OPEN`,
-`pendingAckCount=1`, `pendingAckNodeIds=[]`,
-`publicationOwnerAckState=unavailable`, `freshnessFence=publishing`,
-`recoveryOutcome=waiting_for_publication`, and
-`streamOutcome=publishing`.
+`startup_active_gate_owner / snapshot_coverage`: fresh evidence reports
+`active_gate_snapshot_coverage`, `active_gate_timed_out`,
+`snapshotCoverageNodeCount=0/5`,
+`selectedSnapshotSourceCause=selected_snapshot_source_timeout`,
+`selectedSnapshotNodeId=11601fe0-72d6-5853-8590-ec2881853e72`, and
+`selectedSnapshotTimeoutMs=806`. Publication ACK is not the selected blocker,
+priority residual extraction reports zero witnesses, and the active-gate
+handoff contract is not detected.
 
 Run the required review/fix/implementation subagent sequence before runtime
-edits for the successor package. Keep active-gate snapshot coverage, timeout
-budget increases, active-gate admission, selected-source selection, forced
-repair timeout handling, authoritative query-pressure fallback, and readiness
-support frozen unless canonical evidence selects them again. The subordinate
-workflow-progress witness remains parked unless canonical evidence promotes it.
-The next proof target remains metric-moving: satisfy publication ACK, classify
-accepted backpressure, promote a canonical workflow-progress owner boundary,
+edits for the successor package. Keep publication ACK, priority recovery,
+timeout budget increases, active-gate admission, forced repair timeout
+handling, authoritative query-pressure fallback, and readiness support frozen
+unless canonical evidence selects them again. The next proof target remains
+metric-moving: reduce selected source timeout, improve snapshot coverage,
 migrate to a genuinely new owner boundary, or turn representative
 `rolling-restart` green.

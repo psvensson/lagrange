@@ -4,13 +4,13 @@
 
 Sprint: `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md`
 
-Package: `work/packages/active-20260517-startup-active-gate-snapshot-coverage-owner-reconcile-after-ack-drain.md`
+Package: `work/packages/active-20260517-startup-active-gate-selected-snapshot-source-timeout-after-bounded-handoff-retry.md`
 
 Workflow lane: `causal-escalation`
 
 Scenario: `rolling-restart`
 
-Artifact: `test-output/reports/rolling-restart-publication-open-ack-classified-20260517T104704Z.report.json`
+Artifact: `test-output/reports/rolling-restart-after-bounded-handoff-retry-20260517T112600Z.report.json`
 
 Playback: `none`
 
@@ -22,22 +22,23 @@ Boundary: `snapshot_coverage`
 
 Dominant reason: `active_gate_timed_out`
 
-Current state: Publication ACK is satisfied after the focused count-only projection fix. The latest representative rolling-restart artifact is red on active_gate_snapshot_coverage with snapshotCoverageNodeCount=6/7, activeGateState=timed_out, owner_reconcile_pending, snapshot_repair_deferred, and publicationActiveGateHandoffPendingReconcileCount=5.
+Current state: The bounded handoff retry package drained the owner_reconcile_pending evidence, but the representative rolling-restart rerun is still red on active_gate_snapshot_coverage with snapshotCoverageNodeCount=0/5, selectedSnapshotSourceCause=selected_snapshot_source_timeout, selectedSnapshotNodeId=11601fe0-72d6-5853-8590-ec2881853e72, selectedSnapshotTimeoutMs=806, no active-gate handoff contract, publication ACK satisfied, and priority residual witnesses at zero.
 
 ## Next Action
 
-Target the active-gate owner reconcile pending handoff from the latest artifact. Success must reduce pending reconcile, improve snapshot coverage beyond 6/7, drain the handoff, migrate to a new owner boundary, or turn rolling-restart green.
+Build the replayable selected-snapshot-source timeout fixture/probe for source 11601fe0-72d6-5853-8590-ec2881853e72, then reduce the timeout edge, improve snapshot coverage, migrate to a genuinely new owner boundary, or turn representative rolling-restart green.
 
 ## Proof Ladder
 
-1. `npm run work:evidence-summary -- test-output/reports/rolling-restart-publication-open-ack-classified-20260517T104704Z.report.json`
-2. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-publication-open-ack-classified-20260517T104704Z.report.json --handoff-probe`
-3. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-publication-open-ack-classified-20260517T104704Z.report.json --replay-fixture`
-4. `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-publication-open-ack-classified-20260517T104704Z.report.json`
-5. `npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-publication-open-ack-classified-20260517T104704Z.report.json`
-6. `npm run analyze:distributed-failure -- --report test-output/reports/rolling-restart-publication-open-ack-classified-20260517T104704Z.report.json`
-7. `npm run analyze:owner-files -- startup_active_gate_owner snapshot_coverage`
-8. `git diff --check`
+1. `npm run work:evidence-summary -- test-output/reports/rolling-restart-after-bounded-handoff-retry-20260517T112600Z.report.json`
+2. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-bounded-handoff-retry-20260517T112600Z.report.json --explain active_gate_snapshot_coverage`
+3. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-bounded-handoff-retry-20260517T112600Z.report.json --handoff-probe`
+4. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-bounded-handoff-retry-20260517T112600Z.report.json --replay-fixture`
+5. `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-bounded-handoff-retry-20260517T112600Z.report.json`
+6. `npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-after-bounded-handoff-retry-20260517T112600Z.report.json`
+7. `npm run analyze:distributed-failure -- --report test-output/reports/rolling-restart-after-bounded-handoff-retry-20260517T112600Z.report.json`
+8. `npm run analyze:owner-files -- startup_active_gate_owner snapshot_coverage --markdown`
+9. `git diff --check`
 
 ## Model Fit
 
@@ -60,7 +61,7 @@ Status: `live-red-scenario-release-gate`
 
 Scenario: `rolling-restart`
 
-Artifact: `test-output/reports/rolling-restart-publication-open-ack-classified-20260517T104704Z.report.json`
+Artifact: `test-output/reports/rolling-restart-after-bounded-handoff-retry-20260517T112600Z.report.json`
 
 Frontier: `active_gate_snapshot_coverage`
 
@@ -70,62 +71,63 @@ Boundary: `snapshot_coverage`
 
 Dominant reason: `active_gate_timed_out`
 
-Next action: `Target owner_reconcile_pending with publicationActiveGateHandoffPendingReconcileCount=5 and snapshotCoverageNodeCount=6/7.`
+Next action: `Build a replayable selected_snapshot_source_timeout fixture/probe for node 11601fe0-72d6-5853-8590-ec2881853e72.`
 
 ## Causal Governance
 
-Causal hypothesis: `Publication ACK and priority recovery are satisfied. The current first frontier is active-gate snapshot coverage, where the selected owner handoff is pending owner membership publication reconciliation for five nodes and snapshot coverage remains 6/7.`
+Causal hypothesis: `The prior handoff retry package drained owner_reconcile_pending. The current first frontier is now selected_snapshot_source_timeout before any active-gate handoff evidence forms, so this package must first make that selected source timeout replayable and then reduce or migrate it.`
 
-Stop-condition check: `Use work:evidence-summary, topology convergence handoff probe, replay fixture, npm run analyze:causal-model, priority residual extraction, distributed-failure summary, and owner-files before runtime edits; then run required review/fix/implementation subagents before changing promoted runtime files.`
+Stop-condition check: `Use work:evidence-summary, topology convergence explain/handoff/replay probes, npm run analyze:causal-model, priority residual extraction, distributed-failure summary, and owner-files before runtime edits; then run required review/fix/implementation subagents before changing promoted runtime files.`
 
-Expected causal-model change: `Reduce pending owner reconciliation, improve snapshot coverage beyond 6/7, drain the active-gate handoff, migrate to another canonical owner boundary, or turn representative rolling-restart green.`
+Expected causal-model change: `Reduce selected_snapshot_source_timeout, improve snapshot coverage above 0/5, migrate to a new owner boundary, or turn representative rolling-restart green.`
 
 Representative outcome: `pending-before-rerun`
 
-Causal debt: `Publication ACK and priority recovery are satisfied and frozen unless canonical evidence selects them again. Timeout budgets, active-gate admission, selected-source selection, forced repair timeout handling, authoritative query-pressure fallback, and readiness support remain frozen unless selected.`
+Causal debt: `Publication ACK is satisfied or not required, priority residual extraction reports zero witnesses, and active-gate handoff is absent in the latest artifact. Timeout budgets, active-gate admission, publication truth, and readiness support remain frozen unless canonical evidence selects them again.`
 
-Cross-boundary review: `Do not reopen topology_publication_owner / publication_convergence or operation_workflow_owner / workflow_progress inside this package; canonical evidence currently selects startup_active_gate_owner / snapshot_coverage.`
+Cross-boundary review: `Do not reopen topology_publication_owner / publication_convergence, operation_workflow_owner / workflow_progress, timeout budgets, active-gate admission, or readiness support inside this package unless canonical evidence selects them again.`
 
 ## Scenario Causal Closure
 
-Reference scenario/probe: `rolling-restart publication ACK classified rerun`
+Reference scenario/probe: `rolling-restart after bounded handoff retry`
 
 Phase chain:
 
-1. `consume the migrated publication ACK package proof`
-2. `use evidence-summary, handoff probe, replay fixture, causal model, priority residual extraction, distributed failure summary, and owner-files on the latest representative artifact`
+1. `consume the reduced bounded handoff retry proof`
+2. `use canonical extractors on the latest representative artifact`
 3. `run review, fix if required, and implementation subagents before runtime edits`
-4. `edit only the selected startup active-gate owner path after exact runtime files are promoted`
-5. `rerun focused active-gate owner tests and one representative rolling-restart run`
+4. `promote exact runtime files only after the selected snapshot source timeout fixture/probe identifies them`
+5. `rerun focused startup active-gate tests and one representative rolling-restart run`
 
-Current first frontier: `active_gate_snapshot_coverage in test-output/reports/rolling-restart-publication-open-ack-classified-20260517T104704Z.report.json, owned by startup_active_gate_owner / snapshot_coverage with active_gate_timed_out, snapshotCoverageNodeCount=6/7, owner_reconcile_pending, snapshot_repair_deferred, and publicationActiveGateHandoffPendingReconcileCount=5.`
+Current first frontier: `active_gate_snapshot_coverage in test-output/reports/rolling-restart-after-bounded-handoff-retry-20260517T112600Z.report.json, owned by startup_active_gate_owner / snapshot_coverage with selected_snapshot_source_timeout for node 11601fe0-72d6-5853-8590-ec2881853e72 and snapshotCoverageNodeCount=0/5.`
 
 Known downstream blockers:
 
-1. `publication_ack_convergence is satisfied with publicationStatus=PUBLISHED and pendingAckCount=0`
-2. `priority_recovery_partition_progress is satisfied and priority residual extraction reports zero witnesses`
-3. `publicationActiveGateHandoffState is pending with reason owner_reconcile_pending and nextAction reconcile_owner_membership_publication`
-4. `publicationActiveGateHandoffPendingReconcileCount is 5`
-5. `snapshotCoverageNodeCount is 6 of expectedNodeCount 7`
-6. `selectedSnapshotObservationMode is repair_deferred with state deferred_refresh and nextAction retry`
-7. `selectedSnapshotObservationReasonCodes include cache_stale_watermark, discovery_node_coverage_gap, and stale_replica_operations_in_flight`
-8. `readiness_startup_support remains deferred as inherited active-gate no progress`
+1. `publication_ack_convergence producer is not the selected blocker; pendingAckCount=0 and missingPublishedCount=0`
+2. `priority_recovery_partition_progress extraction reports zero residual witnesses`
+3. `publicationActiveGateHandoff is not detected in the representative artifact`
+4. `publicationActiveGateHandoffPendingReconcileCount is 0`
+5. `snapshotCoverageNodeCount is 0 of expectedNodeCount 5`
+6. `selectedSnapshotError is Admin API query timed out for node 11601fe0-72d6-5853-8590-ec2881853e72 on lane snapshot after 806ms`
+7. `selectedSnapshotSourceCause is selected_snapshot_source_timeout`
+8. `activeGateSnapshotOwnerEdge is selected_snapshot_source_selection`
+9. `readinessDelayCause is snapshot_timeout`
 
-Missing causal edge: `The active-gate owner reconcile handoff remains pending after publication ACK drains, preventing complete snapshot coverage.`
+Missing causal edge: `The selected snapshot source timeout prevents coverage before handoff evidence can form.`
 
-Missing causal edge probe: `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-publication-open-ack-classified-20260517T104704Z.report.json --handoff-probe`
+Missing causal edge probe: `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-bounded-handoff-retry-20260517T112600Z.report.json --explain active_gate_snapshot_coverage`
 
-Bounded progress proof: `Pending before focused owner reconcile implementation; the required bounded mechanism is reconcile_owner_membership_publication and active-gate handoff drain for five pending reconcile nodes.`
+Bounded progress proof: `Pending before focused selected-source timeout implementation; first build replayable evidence for node 11601fe0-72d6-5853-8590-ec2881853e72.`
 
-Bounded progress proof artifact: `test-output/reports/rolling-restart-publication-open-ack-classified-20260517T104704Z.report.json`
+Bounded progress proof artifact: `test-output/reports/rolling-restart-after-bounded-handoff-retry-20260517T112600Z.report.json`
 
-Expected observable transition: `Focused proof should reduce pending reconcile, improve snapshot coverage beyond 6/7, drain the handoff, migrate to a new owner boundary, or turn rolling-restart green.`
+Expected observable transition: `Focused proof should reduce selected_snapshot_source_timeout, improve snapshot coverage above 0/5, migrate to a new owner boundary, or turn rolling-restart green.`
 
-Max progress bound: `one focused startup_active_gate_owner / snapshot_coverage owner-reconcile slice`
+Max progress bound: `one focused startup_active_gate_owner / snapshot_coverage selected-source timeout slice`
 
-Same-frontier fallback: `If focused tests pass but representative evidence remains at active_gate_snapshot_coverage with pendingReconcileCount=5 and no snapshot coverage movement, stop as same-frontier instead of widening into frozen publication, priority, timeout, or readiness edges.`
+Same-frontier fallback: `If focused tests pass but representative evidence remains at active_gate_snapshot_coverage with the same selected snapshot timeout and no coverage movement, stop as same-frontier instead of widening into frozen publication, priority, timeout-budget, admission, or readiness edges.`
 
-Expected next frontier: `startup_active_gate_owner / snapshot_coverage unless owner reconciliation drains and canonical evidence selects a new owner boundary`
+Expected next frontier: `startup_active_gate_owner / snapshot_coverage unless selected source timeout reduces and canonical evidence selects a new owner boundary`
 
 Result classification: `pending-before-probe`
 
@@ -133,38 +135,28 @@ Stop condition: `continue-local-fix`
 
 Recent frontier history:
 
-1. `work/packages/done-20260517-startup-active-gate-snapshot-coverage-joined-reconcile-residual.md / startup_active_gate_owner / snapshot_coverage / migrated`
+1. `work/packages/done-20260517-startup-active-gate-snapshot-coverage-owner-reconcile-after-ack-drain.md / startup_active_gate_owner / snapshot_coverage / reduced`
 2. `work/packages/done-20260517-topology-publication-ack-pending-after-active-gate-drain-migration.md / topology_publication_owner / publication_convergence / migrated`
 
-Oscillation check: `Allowed because the predecessor closed the selected publication ACK count-only projection and fresh representative evidence satisfied publication ACK before selecting active_gate_snapshot_coverage again.`
+Oscillation check: `Allowed because the predecessor changed the selected subcause from owner_reconcile_pending with pendingReconcileCount=5 to selected_snapshot_source_timeout with no detected handoff.`
 
-Handoff invariant: `Publication ACK, priority recovery, timeout budgets, active-gate admission, selected-source selection, forced repair timeout handling, authoritative query-pressure fallback, and readiness support remain frozen unless canonical evidence selects them again.`
+Handoff invariant: `Publication ACK, priority recovery, timeout budgets, active-gate admission, publication truth, forced repair timeout handling, authoritative query-pressure fallback, and readiness support remain frozen unless canonical evidence selects them again.`
 
 ## Scope
 
 Write scope:
 
-1. `work/packages/active-20260517-startup-active-gate-snapshot-coverage-owner-reconcile-after-ack-drain.md`
-2. `work/packages/done-20260517-topology-publication-ack-pending-after-active-gate-drain-migration.md`
-3. `work/packages/done-20260517-startup-active-gate-snapshot-coverage-joined-reconcile-residual.md`
-4. `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md`
-5. `work/sprints/current-blocker.md`
-6. `work/sprints/current-blocker.json`
-7. `work/model-ledger.jsonl`
-8. `src/admin/admin-control-snapshot-class-part-2.js`
-9. `src/admin/admin-control-snapshot-class-part-3.js`
-10. `src/control-plane/publication-active-gate-handoff-contract.js`
-11. `src/control-plane/membership-publication-planning.js`
-12. `src/control-plane/control-plane-snapshot-owner.js`
-13. `src/control-plane/authoritative-node-evidence-reconciler.js`
-14. `test/admin/admin-control-snapshot.test.js`
-15. `test/control-plane/publication-active-gate-handoff-contract.test.js`
-16. `test/distributed/harness/__tests__/active-gate-closure-classification.test.js`
+1. `work/packages/active-20260517-startup-active-gate-selected-snapshot-source-timeout-after-bounded-handoff-retry.md`
+2. `work/packages/done-20260517-startup-active-gate-snapshot-coverage-owner-reconcile-after-ack-drain.md`
+3. `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md`
+4. `work/sprints/current-blocker.md`
+5. `work/sprints/current-blocker.json`
+6. `work/model-ledger.jsonl`
 
 Handoff files:
 
-1. `test-output/reports/rolling-restart-publication-open-ack-classified-20260517T104704Z.report.json`
-2. `work/packages/done-20260517-topology-publication-ack-pending-after-active-gate-drain-migration.md`
+1. `test-output/reports/rolling-restart-after-bounded-handoff-retry-20260517T112600Z.report.json`
+2. `work/packages/done-20260517-startup-active-gate-snapshot-coverage-owner-reconcile-after-ack-drain.md`
 
 Generated files:
 
@@ -173,34 +165,24 @@ Generated files:
 
 Candidate runtime files:
 
-1. `src/admin/admin-control-snapshot-class-part-2.js`
-2. `src/admin/admin-control-snapshot-class-part-3.js`
-3. `src/admin/admin-control-snapshot-class-part-5.js`
-4. `src/admin/admin-control-snapshot-class-part-6.js`
-5. `src/control-plane/control-plane-snapshot-owner.js`
-6. `src/control-plane/authoritative-node-evidence-reconciler.js`
-7. `src/control-plane/publication-active-gate-handoff-contract.js`
-8. `src/control-plane/membership-publication-planning.js`
-9. `src/diagnostics/topology-convergence-graph.js`
+1. `src/admin/admin-control-snapshot-class-part-1.js`
+2. `src/admin/admin-control-snapshot-class-part-2.js`
+3. `src/admin/admin-control-snapshot-class-part-6.js`
+4. `src/control-plane/control-plane-snapshot-owner.js`
+5. `src/control-plane/publication-active-gate-handoff-contract.js`
+6. `test/admin/admin-control-snapshot.test.js`
+7. `test/distributed/harness/cluster-segment-7.js`
+8. `test/distributed/harness/cluster-segment-7-class-5.js`
+9. `test/distributed/harness/__tests__/cluster.test-part-5.js`
 
 Commit scope:
 
-1. `work/packages/active-20260517-startup-active-gate-snapshot-coverage-owner-reconcile-after-ack-drain.md`
-2. `work/packages/done-20260517-topology-publication-ack-pending-after-active-gate-drain-migration.md`
-3. `work/packages/done-20260517-startup-active-gate-snapshot-coverage-joined-reconcile-residual.md`
-4. `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md`
-5. `work/sprints/current-blocker.md`
-6. `work/sprints/current-blocker.json`
-7. `work/model-ledger.jsonl`
-8. `src/admin/admin-control-snapshot-class-part-2.js`
-9. `src/admin/admin-control-snapshot-class-part-3.js`
-10. `src/control-plane/publication-active-gate-handoff-contract.js`
-11. `src/control-plane/membership-publication-planning.js`
-12. `src/control-plane/control-plane-snapshot-owner.js`
-13. `src/control-plane/authoritative-node-evidence-reconciler.js`
-14. `test/admin/admin-control-snapshot.test.js`
-15. `test/control-plane/publication-active-gate-handoff-contract.test.js`
-16. `test/distributed/harness/__tests__/active-gate-closure-classification.test.js`
+1. `work/packages/active-20260517-startup-active-gate-selected-snapshot-source-timeout-after-bounded-handoff-retry.md`
+2. `work/packages/done-20260517-startup-active-gate-snapshot-coverage-owner-reconcile-after-ack-drain.md`
+3. `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md`
+4. `work/sprints/current-blocker.md`
+5. `work/sprints/current-blocker.json`
+6. `work/model-ledger.jsonl`
 
 Legacy touched files:
 
