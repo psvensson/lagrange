@@ -302,6 +302,12 @@ Canonical extractors kept the first frontier at
 `publicationActiveGateHandoffPendingReconcileCount=3`. Priority residual
 extraction still reports zero witnesses. Result classification: `same-frontier`.
 
+## Commit And Push Ledger
+
+1. Focused package commit: 5888ab0c
+2. Pushed to: origin/codex/pending-ack-eligibility-filter
+3. Commit contains only package-owned files/package-status/allowed sprint handoff: yes
+
 ## LLM Trap List
 
 1. Do not reopen publication ACK; canonical handoff-probe evidence reports the
