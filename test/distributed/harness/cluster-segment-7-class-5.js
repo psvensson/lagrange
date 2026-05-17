@@ -51,6 +51,7 @@ import {Cluster4} from './cluster-segment-7-class-4.js';
 
 const TYPEOF_OBJECT = 'object';
 const TYPEOF_STRING = 'string';
+const TYPEOF_FUNCTION = 'function';
 const CONTROL_SNAPSHOT_OBSERVATION_MODE_FIELD = 'observationMode';
 const CONTROL_SNAPSHOT_ADMIN_OBSERVATION_FIELD = 'adminObservation';
 const CONTROL_SNAPSHOT_ADMIN_OBSERVATION_REPAIR_FIELD = 'repair';
@@ -128,6 +129,17 @@ function hasControlSnapshotReachabilityFallback(result = null) {
     result?.controlPlaneDiagnosticsAvailable === true &&
     isTimeoutShapedProbeError(result?.reachabilityError)
   );
+}
+
+function resetSnapshotLaneAfterTimeout(node, error) {
+  if (
+    isTimeoutShapedProbeError(error) !== true ||
+    typeof node?._resetAdminSocket !== TYPEOF_FUNCTION
+  ) {
+    return false;
+  }
+  node._resetAdminSocket(ADMIN_SOCKET_LANE_SNAPSHOT);
+  return true;
 }
 
 class Cluster5 extends Cluster4 {
@@ -287,10 +299,12 @@ class Cluster5 extends Cluster4 {
           missingPublishedNodeIds,
         };
       } catch (error) {
+        const snapshotError = normalizeProbeError(error);
+        resetSnapshotLaneAfterTimeout(node, snapshotError);
         await probeReachabilityDiagnostics();
         return {
           nodeId: node.id,
-          error: normalizeProbeError(error),
+          error: snapshotError,
           snapshotTimeoutMs,
           reachabilityTimeoutMs,
           adminReady: reachabilityDiagnostics?.adminReady === true,
