@@ -246,3 +246,9 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 4. npm run analyze:topology-convergence -- test-output/reports/rolling-restart-publication-handoff-full-target-20260517T032823Z.report.json --replay-fixture
 5. npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-publication-handoff-full-target-20260517T032823Z.report.json
 6. npm run analyze:owner-files -- startup_active_gate_owner snapshot_coverage --markdown
+
+## Commit And Push Ledger
+
+1. Focused package commit: `2f550a73865249d1a8591bb87794ec2604284416`
+2. Pushed to: `origin/codex/pending-ack-eligibility-filter`
+3. Commit contains only package-owned files/package-status/allowed sprint handoff: yes
