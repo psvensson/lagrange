@@ -1,9 +1,10 @@
+# Startup Active Gate Selected Snapshot Source Timeout
+
+<!-- work-package
 {
-  "schema": "current-blocker-v1",
-  "generatedBy": "scripts/work-tracker.js",
-  "sprint": "work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md",
-  "package": "work/packages/active-20260517-startup-active-gate-selected-snapshot-source-timeout.md",
+  "schema": "work-package-v1",
   "status": "active",
+  "opened": "2026-05-17",
   "lane": "causal-escalation",
   "scenario": "rolling-restart",
   "artifact": "test-output/reports/rolling-restart-publication-handoff-full-target-20260517T032823Z.report.json",
@@ -50,7 +51,6 @@
     "work/sprints/current-blocker.json",
     "work/model-ledger.jsonl"
   ],
-  "touchedFiles": [],
   "modelFit": {
     "packageClass": "cross-boundary-causal-escalation",
     "intendedMinimumModel": "gpt-5.3-codex",
@@ -70,6 +70,20 @@
     "boundary": "snapshot_coverage",
     "dominantReason": "selected_snapshot_source_timeout",
     "nextAction": "Build the replayable selected snapshot-source timeout fixture for source 11601fe0-72d6-5853-8590-ec2881853e72 before any local runtime edit."
+  },
+  "ownerBoundaryMigrationProof": {
+    "fromOwner": "topology_publication_owner",
+    "fromBoundary": "publication_convergence",
+    "toOwner": "startup_active_gate_owner",
+    "toBoundary": "snapshot_coverage",
+    "reason": "The publication handoff package removed the owner_reconcile_pending/discovery gap decision and the representative rerun selected selected_snapshot_source_timeout on source 11601fe0-72d6-5853-8590-ec2881853e72.",
+    "evidence": [
+      "work/packages/done-20260517-topology-publication-convergence-reopened-missing-publication.md",
+      "test-output/reports/rolling-restart-publication-handoff-full-target-20260517T032823Z.report.json",
+      "npm run work:evidence-summary -- test-output/reports/rolling-restart-publication-handoff-full-target-20260517T032823Z.report.json",
+      "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-publication-handoff-full-target-20260517T032823Z.report.json --replay-fixture",
+      "npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-publication-handoff-full-target-20260517T032823Z.report.json"
+    ]
   },
   "causalGovernance": {
     "hypothesis": "The representative edge now belongs to selected snapshot-source selection: the chosen source 11601fe0-72d6-5853-8590-ec2881853e72 is admin-health reachable but its snapshot-lane admin query times out, leaving snapshotCoverage=0/5 before publication handoff evidence can form.",
@@ -119,3 +133,88 @@
   },
   "predecessor": "work/packages/done-20260517-topology-publication-convergence-reopened-missing-publication.md"
 }
+-->
+
+## Why
+
+The representative rerun after the publication handoff package selected
+`selected_snapshot_source_timeout` on source
+`11601fe0-72d6-5853-8590-ec2881853e72`. This is a return to the recently
+closed startup active-gate snapshot boundary, so the package is causal
+escalation: it must decide the selected-source timeout edge before any local
+runtime patch.
+
+## Scope Basis
+
+Approved maintenance scope or roadmap row.
+
+## Workflow Lane
+
+- Selected lane: `causal-escalation`
+- Why this lane is required: canonical evidence returned to the recently closed
+  startup active-gate snapshot boundary after a publication migration.
+- Escalation trigger to a heavier lane: the selected-source fixture chooses a
+  frozen edge such as timeout budgets, active-gate admission, reconnect
+  delivery, query routing, or publication ACK.
+
+## Subagent Sequencing Requirement
+
+Required before implementation because this is a scenario-driven causal
+escalation package that may edit a runtime owner boundary.
+
+## Subagent Sequencing Ledger
+
+- [x] Review subagent recorded: Agent Banach (019e3404-bacd-7f63-ac1e-3e9a78ea10c3) reviewed work/packages/active-20260517-startup-active-gate-selected-snapshot-source-timeout.md; result fixes-required.
+- [x] Fix subagent recorded or explicitly not needed: Agent Dirac (019e3407-6a79-76e2-886b-ab9f3b042874) fixed work/packages/active-20260517-startup-active-gate-selected-snapshot-source-timeout.md.
+- [ ] Implementation subagent recorded: pending-before-implementation.
+
+## LLM Tool-First Contract
+
+Before raw JSON, raw logs, broad file search, oversized segment files, or ad hoc `jq`, use the canonical workflow command that owns the question:
+
+1. Package metadata or ledger edits: `npm run work:package:doctor -- --suggest <package>`, `npm run work:package:doctor -- --fix-dry-run <package>`, `npm run work:package:schema`, or `npm run work:package:new -- ...`.
+2. Representative evidence: `npm run work:evidence-summary -- <artifact>` plus any focused extractor for this failure class.
+3. Owner discovery: `npm run analyze:owner-files -- <owner> [boundary]`.
+4. Subagent sequencing: `npm run work:subagent-prompt -- --role <role> --package <package>`.
+5. Large-file cleanup: `npm run work:oversized-next -- --markdown`.
+
+If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which canonical extractor was tried and why it was insufficient.
+
+## In Scope
+
+1. work/packages/active-20260517-startup-active-gate-selected-snapshot-source-timeout.md
+2. work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md
+3. work/sprints/current-blocker.md
+4. work/sprints/current-blocker.json
+5. work/model-ledger.jsonl
+
+## Out Of Scope
+
+1. timeout_budgets
+2. active_gate_admission
+3. CDC_fallback
+4. query_message_router_owner/reconnect_delivery
+5. query_participant_failure/inactive_participant_routing
+6. topology_publication_owner/publication_convergence
+
+## Model Fit
+
+- Package class: `cross-boundary-causal-escalation`
+- Intended minimum model: `gpt-5.3-codex`
+- Scope shape: `oscillation-handoff/selected-snapshot-source`
+- Output profile: `medium`
+- Owned files: `work/packages/active-20260517-startup-active-gate-selected-snapshot-source-timeout.md`, `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md`, `work/sprints/current-blocker.md`, `work/sprints/current-blocker.json`, `work/model-ledger.jsonl`
+- Forbidden files: `timeout_budgets`, `active_gate_admission`, `CDC_fallback`, `query_message_router_owner/reconnect_delivery`, `query_participant_failure/inactive_participant_routing`, `topology_publication_owner/publication_convergence`
+- Frozen decisions: package scope and lane stay bounded unless explicitly escalated.
+- Escalation triggers: owned files expand beyond this package, runtime ownership changes, or representative scenario evidence changes.
+- Focused proof: `npm run work:validate -- --entry work/packages/active-20260517-startup-active-gate-selected-snapshot-source-timeout.md`, `npm run work:evidence-summary -- test-output/reports/rolling-restart-publication-handoff-full-target-20260517T032823Z.report.json`, `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-publication-handoff-full-target-20260517T032823Z.report.json --handoff-probe`, `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-publication-handoff-full-target-20260517T032823Z.report.json --replay-fixture`, `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-publication-handoff-full-target-20260517T032823Z.report.json`, `npm run analyze:owner-files -- startup_active_gate_owner snapshot_coverage --markdown`
+- Model ledger advisory: `escalate`
+
+## Validation
+
+1. npm run work:validate -- --entry work/packages/active-20260517-startup-active-gate-selected-snapshot-source-timeout.md
+2. npm run work:evidence-summary -- test-output/reports/rolling-restart-publication-handoff-full-target-20260517T032823Z.report.json
+3. npm run analyze:topology-convergence -- test-output/reports/rolling-restart-publication-handoff-full-target-20260517T032823Z.report.json --handoff-probe
+4. npm run analyze:topology-convergence -- test-output/reports/rolling-restart-publication-handoff-full-target-20260517T032823Z.report.json --replay-fixture
+5. npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-publication-handoff-full-target-20260517T032823Z.report.json
+6. npm run analyze:owner-files -- startup_active_gate_owner snapshot_coverage --markdown

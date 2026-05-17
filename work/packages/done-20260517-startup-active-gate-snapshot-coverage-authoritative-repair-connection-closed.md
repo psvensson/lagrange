@@ -7,8 +7,8 @@
   "opened": "2026-05-17",
   "lane": "scenario-release-gate",
   "scenario": "rolling-restart",
-  "artifact": "test-output/reports/rolling-restart-priority-workflow-progress-wait-drain-20260517T014714Z.report.json",
-  "playback": "test-output/reports/.playback/rolling-restart-priority-workflow-progress-wait-drain-20260517T014714Z/rolling-restart/",
+  "artifact": "test-output/reports/rolling-restart-active-gate-reference-projection-20260517T023552Z.report.json",
+  "playback": "test-output/reports/.playback/rolling-restart-active-gate-reference-projection-20260517T023552Z/rolling-restart/",
   "owner": "startup_active_gate_owner",
   "boundary": "snapshot_coverage",
   "dominantReason": "active_gate_timed_out",
@@ -89,12 +89,12 @@
   "representativeResidual": {
     "status": "live-red-scenario-release-gate",
     "scenario": "rolling-restart",
-    "artifact": "test-output/reports/rolling-restart-priority-workflow-progress-wait-drain-20260517T014714Z.report.json",
-    "frontier": "active_gate_snapshot_coverage",
-    "owner": "startup_active_gate_owner",
-    "boundary": "snapshot_coverage",
-    "dominantReason": "active_gate_timed_out",
-    "nextAction": "Decide whether selected source repair failure is owned by snapshot-source selection, forced repair stall, authoritative nodes query pressure/participant closed, or inherited readiness support."
+    "artifact": "test-output/reports/rolling-restart-active-gate-reference-projection-20260517T023552Z.report.json",
+    "frontier": "publication_ack_convergence",
+    "owner": "topology_publication_owner",
+    "boundary": "publication_convergence",
+    "dominantReason": "publication_pending",
+    "nextAction": "Migrate to the freshly selected topology_publication_owner / publication_convergence frontier; active_gate_snapshot_coverage is deferred with selected_snapshot_source_timeout."
   },
   "ownerBoundaryMigrationProof": {
     "fromOwner": "operation_workflow_owner",
@@ -276,6 +276,6 @@ Representative rerun:
 
 ## Commit And Push Ledger
 
-1. Focused package commit: `a108e4a0b960ea3a0ed3d3bbe88f906633bcbdf4`
+1. Focused package commit: `a108e4a08a2495c0e8d015e6a87a2d4245936f9c`
 2. Pushed to: `origin/codex/pending-ack-eligibility-filter`
 3. Commit contains only package-owned files/package-status/allowed sprint handoff: yes

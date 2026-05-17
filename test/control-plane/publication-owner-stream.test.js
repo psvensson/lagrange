@@ -22,6 +22,7 @@ const TEST_PUBLICATION_REVISION = Object.freeze({
 });
 const TEST_PUBLICATION_COUNT = Object.freeze({
   FRONTIER_PENDING_ACK: 1,
+  OPEN_FRONTIER_MISSING_PUBLISHED: 5,
   PUBLISHED_FRONTIER_PENDING_ACK: 0,
   FRONTIER_MISSING_PUBLISHED: 3,
 });
@@ -249,6 +250,42 @@ test('publication owner stream settles published count-only ACK frontier',
     t.same(
       stream.missingPublishedNodeIds,
       TEST_PUBLICATION_PUBLISHED_FRONTIER.MISSING_NODE_IDS,
+    );
+    t.end();
+  });
+
+test('publication owner stream classifies open missing active publication as publishing',
+  (t) => {
+    const stream = buildPublicationOwnerStreamState({
+      publicationStatus: CONTROL_PLANE_PUBLICATION_STATUS.OPEN,
+      pendingAckNodeIds: [],
+      pendingAckCount: TEST_PUBLICATION_COUNT.PUBLISHED_FRONTIER_PENDING_ACK,
+      missingPublishedNodeIds: [
+        TEST_NODE_ID.FRONTIER_ACK_PENDING,
+        TEST_NODE_ID.FRONTIER_PUBLISHED,
+        TEST_NODE_ID.FRONTIER_MISSING_FIRST,
+        TEST_NODE_ID.FRONTIER_MISSING_SECOND,
+        TEST_NODE_ID.FRONTIER_MISSING_THIRD,
+      ],
+      missingPublishedCount:
+        TEST_PUBLICATION_COUNT.OPEN_FRONTIER_MISSING_PUBLISHED,
+      recoveryProtocolState:
+        TEST_PUBLICATION_RECOVERY_PROTOCOL.PUBLICATION_PENDING,
+      publicationPending: true,
+      prioritySpreadPending: false,
+    });
+
+    t.equal(stream.ackState, PUBLICATION_OWNER_ACK_STATE.UNAVAILABLE);
+    t.equal(stream.freshnessFence, PUBLICATION_OWNER_FRESHNESS_FENCE.PUBLISHING);
+    t.equal(stream.streamOutcome, PUBLICATION_OWNER_STREAM_OUTCOME.PUBLISHING);
+    t.equal(
+      stream.recoveryOutcome,
+      PUBLICATION_OWNER_RECOVERY_OUTCOME.WAITING_FOR_PUBLICATION,
+    );
+    t.equal(isPublicationOwnerStreamPublicationPending(stream), true);
+    t.equal(
+      stream.missingPublishedCount,
+      TEST_PUBLICATION_COUNT.OPEN_FRONTIER_MISSING_PUBLISHED,
     );
     t.end();
   });

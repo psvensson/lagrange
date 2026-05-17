@@ -22,38 +22,35 @@ success is in scope.
 ## Current Blocker Snapshot
 
 Latest representative artifact:
-`test-output/reports/rolling-restart-active-gate-reference-projection-20260517T023552Z.report.json`.
+`test-output/reports/rolling-restart-publication-handoff-full-target-20260517T032823Z.report.json`.
 
-Canonical state after the active-gate forced-repair package:
+Canonical state after the publication handoff package:
 
-1. `work:evidence-summary` selects `publication_ack_convergence` as the first
-   frontier.
+1. `work:evidence-summary` still reports `publication_ack_convergence` as the
+   topology first frontier, but the bounded publication slice migrated the
+   actionable owner edge.
 2. Representative owner boundary:
-   `topology_publication_owner / publication_convergence`.
-3. Dominant reason: `publication_pending`.
-4. Priority recovery is satisfied with zero residual witnesses.
-5. Publication ACK convergence is reopened by canonical evidence:
-   `publicationStatus=OPEN`, `publishedActiveNodeIds=[]`,
-   `missingPublishedCount=5`, and `pendingAckCount=0`.
-6. Active-gate snapshot coverage is deferred rather than first frontier with
-   `snapshotCoverageNodeCount=0`, `expectedNodeCount=5`, and
-   `selected_snapshot_source_timeout`.
-7. Selected snapshot source `11601fe0-72d6-5853-8590-ec2881853e72` is
+   `startup_active_gate_owner / snapshot_coverage`.
+3. Dominant reason: `selected_snapshot_source_timeout`.
+4. The selected downstream owner edge is
+   `active_gate_snapshot_coverage / selected_snapshot_source_selection`.
+5. Selected snapshot source `11601fe0-72d6-5853-8590-ec2881853e72` is
    `adminReady=true` via `admin_health`, but the selected snapshot query timed
    out after 3000ms.
-8. The active-gate forced-repair package closed as migrated after focused admin
-   tests proved the repair-deferred fallback path.
+6. Snapshot coverage remains `0/5`; `discovery_node_coverage_gap` is absent
+   and `publicationActiveGateHandoff` is absent.
+7. `npm --silent run analyze:causal-model` on the latest artifact returned
+   `migrate_owner_boundary`.
+8. The publication package closed as migrated and is now the predecessor:
+   `work/packages/done-20260517-topology-publication-convergence-reopened-missing-publication.md`.
 9. The current active package is
-    `work/packages/active-20260517-topology-publication-convergence-reopened-missing-publication.md`.
-    It owns the replayable decision for the reopened publication frontier.
-10. The closed predecessor is
-    `work/packages/done-20260517-startup-active-gate-snapshot-coverage-authoritative-repair-connection-closed.md`.
-    Publication ACK is reopened only because canonical evidence selected it
-    again. Priority recovery workflow progress, timeout budget increases,
-    active-gate admission, CDC fallback, message-router reconnect delivery,
-    query participant routing, inactive participant routing, and startup
-    active-gate snapshot coverage remain frozen unless canonical evidence
-    selects them again.
+   `work/packages/active-20260517-startup-active-gate-selected-snapshot-source-timeout.md`.
+   It must build the narrow selected snapshot-source fixture before any
+   runtime edit.
+10. Timeout budgets, active-gate admission, publication ACK, priority recovery,
+    CDC fallback, reconnect delivery, query participant routing, and inactive
+    participant routing remain frozen unless canonical evidence selects them
+    again.
 
 ## Scope Basis
 
@@ -418,17 +415,16 @@ required action.
 
 1. `npm run work:context`
 2. `npm run work:llm-start`
-3. `npm run work:package:doctor -- --suggest work/packages/active-20260517-topology-publication-convergence-reopened-missing-publication.md`
-4. `npm run work:validate -- --entry work/packages/active-20260517-topology-publication-convergence-reopened-missing-publication.md`
-5. `npm run work:evidence-summary -- test-output/reports/rolling-restart-active-gate-reference-projection-20260517T023552Z.report.json`
-6. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-active-gate-reference-projection-20260517T023552Z.report.json --explain publication_ack_convergence`
-7. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-active-gate-reference-projection-20260517T023552Z.report.json --handoff-probe`
-8. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-active-gate-reference-projection-20260517T023552Z.report.json --replay-fixture`
-9. `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-active-gate-reference-projection-20260517T023552Z.report.json`
-10. `npm run analyze:owner-files -- topology_publication_owner publication_convergence --markdown`
-11. `npm run work:subagent-prompt -- --role review --package work/packages/active-20260517-topology-publication-convergence-reopened-missing-publication.md`
-12. Real review/fix/implementation subagent proof before runtime implementation starts.
-13. Focused snapshot-coverage replay fixture/probe, selected owner tests,
+3. `npm run work:package:doctor -- --suggest work/packages/active-20260517-startup-active-gate-selected-snapshot-source-timeout.md`
+4. `npm run work:validate -- --entry work/packages/active-20260517-startup-active-gate-selected-snapshot-source-timeout.md`
+5. `npm run work:evidence-summary -- test-output/reports/rolling-restart-publication-handoff-full-target-20260517T032823Z.report.json`
+6. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-publication-handoff-full-target-20260517T032823Z.report.json --handoff-probe`
+7. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-publication-handoff-full-target-20260517T032823Z.report.json --replay-fixture`
+8. `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-publication-handoff-full-target-20260517T032823Z.report.json`
+9. `npm run analyze:owner-files -- startup_active_gate_owner snapshot_coverage --markdown`
+10. `npm run work:subagent-prompt -- --role review --package work/packages/active-20260517-startup-active-gate-selected-snapshot-source-timeout.md`
+11. Real review/fix/implementation subagent proof before runtime implementation starts.
+12. Focused snapshot-coverage replay fixture/probe, selected owner tests,
     static guardrails, and representative `rolling-restart` after the package
     has implementation proof.
 

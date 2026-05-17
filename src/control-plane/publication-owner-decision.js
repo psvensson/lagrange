@@ -186,16 +186,16 @@ const PUBLICATION_OWNER_FRESHNESS_RULES = Object.freeze([
       ),
   }),
   Object.freeze({
-    fence: PUBLICATION_OWNER_FRESHNESS_FENCE.CONSUMER_LAG,
-    matches: (snapshot) =>
-      snapshot.evidence.missingPublishedCount > NUM.ZERO,
-  }),
-  Object.freeze({
     fence: PUBLICATION_OWNER_FRESHNESS_FENCE.PUBLISHING,
     matches: (snapshot) =>
       hasPublicationOwnerPublicationPending(snapshot.evidence) &&
       snapshot.ackState !== PUBLICATION_OWNER_ACK_STATE.ACKNOWLEDGED &&
       snapshot.ackState !== PUBLICATION_OWNER_ACK_STATE.NOT_REQUIRED,
+  }),
+  Object.freeze({
+    fence: PUBLICATION_OWNER_FRESHNESS_FENCE.CONSUMER_LAG,
+    matches: (snapshot) =>
+      snapshot.evidence.missingPublishedCount > NUM.ZERO,
   }),
   Object.freeze({
     fence: PUBLICATION_OWNER_FRESHNESS_FENCE.RECOVERY_LAG,

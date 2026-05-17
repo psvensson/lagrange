@@ -13,6 +13,7 @@ import {
   hasPublicationActiveGateOwnerReconcileSignal,
   projectPublicationActiveGateHandoffToOwnerCohort,
   resolvePublicationActiveGateMembershipPublicationTarget,
+  selectPublicationActiveGateHandoffContract,
 } from '../../src/control-plane/publication-active-gate-handoff-contract.js';
 
 const TEST_PUBLICATION_EPOCH = 7;
@@ -226,6 +227,48 @@ test('publication active-gate handoff reconcile target includes expected non-rec
       target.pendingReconcileNodeIds,
       [TEST_NODE_2],
       'pending reconcile diagnostics should keep the selected handoff projection',
+    );
+  });
+
+test('publication active-gate selector preserves full convergence target when owner cohort narrows progress',
+  async (t) => {
+    const selectedHandoff = selectPublicationActiveGateHandoffContract({
+      publicationConvergence: {
+        publicationEpoch: TEST_PUBLICATION_EPOCH,
+        publishedActiveNodeIds: [TEST_NODE_1],
+        missingPublishedNodeIds: [
+          TEST_NODE_2,
+          TEST_NODE_3,
+          TEST_NODE_4,
+          TEST_NODE_5,
+        ],
+      },
+      activeGateOwnerCohort: {
+        state: PUBLICATION_ACTIVE_GATE_HANDOFF_STATE.PENDING,
+        reasonCode:
+          PUBLICATION_ACTIVE_GATE_HANDOFF_REASON.OWNER_RECONCILE_PENDING,
+        publishedActiveNodeIds: [TEST_NODE_1],
+        missingPublishedNodeIds: [TEST_NODE_2],
+        pendingReconcileNodeIds: [TEST_NODE_2],
+        nextAction:
+          PUBLICATION_ACTIVE_GATE_HANDOFF_NEXT_ACTION
+            .RECONCILE_OWNER_MEMBERSHIP_PUBLICATION,
+      },
+    });
+    const target =
+      resolvePublicationActiveGateMembershipPublicationTarget(
+        selectedHandoff,
+      );
+
+    t.same(
+      target.publishedActiveNodeIds,
+      [...TEST_SELECTED_HANDOFF_EXPECTED_NODE_IDS],
+      'selected owner handoff should publish the full convergence cohort, not only the current narrowed cohort',
+    );
+    t.same(
+      target.pendingReconcileNodeIds,
+      [TEST_NODE_2],
+      'selected owner handoff should preserve the current progress subset for diagnostics',
     );
   });
 
