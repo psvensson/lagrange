@@ -155,7 +155,7 @@
   },
   "closed": "2026-05-17",
   "commitAndPushLedgerRequired": true,
-  "successor": "work/packages/active-20260517-priority-recovery-workflow-progress-after-publication-handoff.md"
+  "successor": "work/packages/done-20260517-priority-recovery-workflow-progress-after-publication-handoff.md"
 }
 -->
 

@@ -1,9 +1,10 @@
+# Startup Active Gate Snapshot Coverage After Priority Closure
+
+<!-- work-package
 {
-  "schema": "current-blocker-v1",
-  "generatedBy": "scripts/work-tracker.js",
-  "sprint": "work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md",
-  "package": "work/packages/active-20260517-startup-active-gate-snapshot-coverage-after-priority-closure.md",
+  "schema": "work-package-v1",
   "status": "active",
+  "opened": "2026-05-17",
   "lane": "causal-escalation",
   "scenario": "rolling-restart",
   "artifact": "test-output/reports/rolling-restart-priority-nonblocking-closure-20260517T055254Z.report.json",
@@ -52,7 +53,6 @@
     "work/sprints/current-blocker.json",
     "work/model-ledger.jsonl"
   ],
-  "touchedFiles": [],
   "modelFit": {
     "packageClass": "cross-boundary-causal-escalation",
     "intendedMinimumModel": "gpt-5.3-codex",
@@ -72,6 +72,19 @@
     "boundary": "snapshot_coverage",
     "dominantReason": "active_gate_timed_out",
     "nextAction": "Decide the authoritative repair/query pressure edge for selected snapshot source 11601fe0-72d6-5853-8590-ec2881853e72 without reopening publication ACK, priority recovery, timeout budgets, active-gate admission, or readiness support."
+  },
+  "ownerBoundaryMigrationProof": {
+    "fromOwner": "operation_workflow_owner",
+    "fromBoundary": "workflow_progress",
+    "toOwner": "startup_active_gate_owner",
+    "toBoundary": "snapshot_coverage",
+    "reason": "The predecessor classified the spread_satisfied_in_flight priority recovery witness as non-blocking, residual extraction reports zero witnesses, and fresh representative evidence selects active_gate_snapshot_coverage.",
+    "evidence": [
+      "work/packages/done-20260517-priority-recovery-workflow-progress-after-publication-handoff.md",
+      "npm run work:evidence-summary -- test-output/reports/rolling-restart-priority-nonblocking-closure-20260517T055254Z.report.json",
+      "npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-priority-nonblocking-closure-20260517T055254Z.report.json --markdown",
+      "npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-priority-nonblocking-closure-20260517T055254Z.report.json"
+    ]
   },
   "causalGovernance": {
     "hypothesis": "The remaining red gate belongs to startup_active_gate_owner / snapshot_coverage: the selected snapshot source is admin-ready, but authoritative control snapshot repair fails against a participant connection and coverage stays 0/5.",
@@ -118,3 +131,93 @@
   },
   "predecessor": "work/packages/done-20260517-priority-recovery-workflow-progress-after-publication-handoff.md"
 }
+-->
+
+## Why
+
+Priority recovery is now satisfied with zero residual witnesses. The fresh
+representative is still red, but canonical evidence selects
+`startup_active_gate_owner / snapshot_coverage`: selected source
+`11601fe0-72d6-5853-8590-ec2881853e72` is admin-ready, coverage is `0/5`, and
+authoritative repair fails while querying control snapshot data through node
+`7493b0ab-a054-5fad-a91b-5e331db29304`.
+
+This package owns the next metric-moving decision. It must separate selected
+source choice, forced repair stall, authoritative query pressure, and inherited
+readiness support before any runtime edit.
+
+## Scope Basis
+
+Approved maintenance scope or roadmap row.
+
+## Workflow Lane
+
+- Selected lane: `causal-escalation`
+- Why this lane is required: the representative gate remains red after adjacent
+  publication and workflow-progress migrations, and the next proof may change
+  startup active-gate snapshot coverage behavior.
+- Escalation trigger to a heavier lane: owner evidence expands outside
+  startup active-gate snapshot coverage, or representative evidence selects a
+  frozen decision again.
+
+## LLM Tool-First Contract
+
+Before raw JSON, raw logs, broad file search, oversized segment files, or ad hoc `jq`, use the canonical workflow command that owns the question:
+
+1. Package metadata or ledger edits: `npm run work:package:doctor -- --suggest <package>`, `npm run work:package:doctor -- --fix-dry-run <package>`, `npm run work:package:schema`, or `npm run work:package:new -- ...`.
+2. Representative evidence: `npm run work:evidence-summary -- <artifact>` plus any focused extractor for this failure class.
+3. Owner discovery: `npm run analyze:owner-files -- <owner> [boundary]`.
+4. Subagent sequencing: `npm run work:subagent-prompt -- --role <role> --package <package>`.
+5. Large-file cleanup: `npm run work:oversized-next -- --markdown`.
+
+If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which canonical extractor was tried and why it was insufficient.
+
+## In Scope
+
+1. work/packages/active-20260517-startup-active-gate-snapshot-coverage-after-priority-closure.md
+2. work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md
+3. work/sprints/current-blocker.md
+4. work/sprints/current-blocker.json
+5. work/model-ledger.jsonl
+
+## Subagent Sequencing Requirement
+
+Required before implementation because this is a scenario-driven runtime
+owner-boundary package.
+
+## Subagent Sequencing Ledger
+
+- [ ] Review subagent recorded: pending-before-implementation-starts.
+- [ ] Fix subagent recorded or explicitly not needed: pending-review-result.
+- [ ] Implementation subagent recorded: pending-review-and-fix-ledger-clean.
+
+## Out Of Scope
+
+1. publication_ack_convergence
+2. timeout_budgets
+3. active_gate_admission
+4. priority_recovery_workflow_progress
+5. readiness_support
+
+## Model Fit
+
+- Package class: `cross-boundary-causal-escalation`
+- Intended minimum model: `gpt-5.3-codex`
+- Scope shape: `active-gate-snapshot-coverage/authoritative-repair-pressure`
+- Output profile: `medium`
+- Owned files: `work/packages/active-20260517-startup-active-gate-snapshot-coverage-after-priority-closure.md`, `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md`, `work/sprints/current-blocker.md`, `work/sprints/current-blocker.json`, `work/model-ledger.jsonl`
+- Forbidden files: `publication_ack_convergence`, `timeout_budgets`, `active_gate_admission`, `priority_recovery_workflow_progress`, `readiness_support`
+- Frozen decisions: publication ACK, priority recovery, timeout budgets,
+  active-gate admission, and readiness support stay closed unless canonical
+  evidence selects them again.
+- Escalation triggers: owned files expand beyond this package, runtime
+  ownership changes, or representative scenario evidence changes.
+- Focused proof: `npm run work:evidence-summary -- test-output/reports/rolling-restart-priority-nonblocking-closure-20260517T055254Z.report.json`, `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-priority-nonblocking-closure-20260517T055254Z.report.json --handoff-probe`, `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-priority-nonblocking-closure-20260517T055254Z.report.json`, `npm run analyze:owner-files -- startup_active_gate_owner snapshot_coverage --markdown`
+- Model ledger advisory: `escalate`
+
+## Validation
+
+1. npm run work:evidence-summary -- test-output/reports/rolling-restart-priority-nonblocking-closure-20260517T055254Z.report.json
+2. npm run analyze:topology-convergence -- test-output/reports/rolling-restart-priority-nonblocking-closure-20260517T055254Z.report.json --handoff-probe
+3. npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-priority-nonblocking-closure-20260517T055254Z.report.json
+4. npm run analyze:owner-files -- startup_active_gate_owner snapshot_coverage --markdown

@@ -3,7 +3,7 @@
 <!-- work-package
 {
   "schema": "work-package-v1",
-  "status": "active",
+  "status": "done",
   "opened": "2026-05-17",
   "lane": "causal-escalation",
   "scenario": "rolling-restart",
@@ -19,8 +19,8 @@
     "npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-after-publication-handoff-flat-progress-20260517.report.json --markdown",
     "npm run analyze:owner-files -- operation_workflow_owner workflow_progress",
     "npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-publication-handoff-flat-progress-20260517.report.json",
-    "npm run work:validate -- --entry work/packages/active-20260517-priority-recovery-workflow-progress-after-publication-handoff.md",
-    "npm run work:validate -- --pre-impl work/packages/active-20260517-priority-recovery-workflow-progress-after-publication-handoff.md",
+    "npm run work:validate -- --entry work/packages/done-20260517-priority-recovery-workflow-progress-after-publication-handoff.md",
+    "npm run work:validate -- --pre-impl work/packages/done-20260517-priority-recovery-workflow-progress-after-publication-handoff.md",
     "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-publication-handoff-flat-progress-20260517.report.json --handoff-probe",
     "node --test test/diagnostics/topology-convergence-graph.test.js",
     "node --test test/distributed/harness/__tests__/priority-recovery-summary-normalization.test.js",
@@ -35,7 +35,7 @@
     "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-priority-nonblocking-closure-20260517T055254Z.report.json --handoff-probe"
   ],
   "writeScope": [
-    "work/packages/active-20260517-priority-recovery-workflow-progress-after-publication-handoff.md",
+    "work/packages/done-20260517-priority-recovery-workflow-progress-after-publication-handoff.md",
     "work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md",
     "work/sprints/current-blocker.md",
     "work/sprints/current-blocker.json",
@@ -67,7 +67,7 @@
     "test/scripts/priority-recovery-current-artifact-fixture.test.js"
   ],
   "commitScope": [
-    "work/packages/active-20260517-priority-recovery-workflow-progress-after-publication-handoff.md",
+    "work/packages/done-20260517-priority-recovery-workflow-progress-after-publication-handoff.md",
     "work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md",
     "work/sprints/current-blocker.md",
     "work/sprints/current-blocker.json",
@@ -159,7 +159,10 @@
     "oscillationCheck": "Causal-escalation lane is required because adjacent publication and active-gate edges migrated without going green. This package is allowed only because fresh canonical evidence selects operation_workflow_owner / workflow_progress and the predecessor produced metric movement to 4/5.",
     "handoffInvariant": "Publication ACK, timeout budgets, active-gate admission, CDC fallback, reconnect delivery, query routing, and readiness support remain frozen. Selected-source and active-gate snapshot coverage are eligible only in the successor because fresh canonical evidence selects startup_active_gate_owner / snapshot_coverage."
   },
-  "predecessor": "work/packages/done-20260517-topology-publication-ack-pending-after-forced-repair-owner-command.md"
+  "predecessor": "work/packages/done-20260517-topology-publication-ack-pending-after-forced-repair-owner-command.md",
+  "closed": "2026-05-17",
+  "commitAndPushLedgerRequired": true,
+  "successor": "work/packages/todo-20260515-topology-active-gate-snapshot-coverage-after-publication-handoff.md"
 }
 -->
 
@@ -196,9 +199,9 @@ owner-boundary package.
 
 ## Subagent Sequencing Ledger
 
-- [x] Review subagent recorded: Agent Bohr (019e3464-5bcd-7d83-a85b-08431f45bfb4) reviewed work/packages/active-20260517-priority-recovery-workflow-progress-after-publication-handoff.md; result clean.
+- [x] Review subagent recorded: Agent Bohr (019e3464-5bcd-7d83-a85b-08431f45bfb4) reviewed work/packages/done-20260517-priority-recovery-workflow-progress-after-publication-handoff.md; result clean.
 - [x] Fix subagent recorded or explicitly not needed: not-needed.
-- [x] Implementation subagent recorded: Agent Codex (019e3466-a87a-7191-ab06-f6118aa2324a) implemented work/packages/active-20260517-priority-recovery-workflow-progress-after-publication-handoff.md; result focused-owner-proof-clean, runtime-edit-not-needed, representative-rerun-inconclusive-no-artifact.
+- [x] Implementation subagent recorded: Agent Codex (019e3466-a87a-7191-ab06-f6118aa2324a) implemented work/packages/done-20260517-priority-recovery-workflow-progress-after-publication-handoff.md; result focused-owner-proof-clean, runtime-edit-not-needed, representative-rerun-inconclusive-no-artifact.
 
 ## LLM Tool-First Contract
 
@@ -214,7 +217,7 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 
 ## In Scope
 
-1. work/packages/active-20260517-priority-recovery-workflow-progress-after-publication-handoff.md
+1. work/packages/done-20260517-priority-recovery-workflow-progress-after-publication-handoff.md
 2. work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md
 3. work/sprints/current-blocker.md
 4. work/sprints/current-blocker.json
@@ -242,7 +245,7 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 - Intended minimum model: `gpt-5.3-codex`
 - Scope shape: `publication-handoff/workflow-progress-successor`
 - Output profile: `medium`
-- Owned files: `work/packages/active-20260517-priority-recovery-workflow-progress-after-publication-handoff.md`, `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md`, `work/sprints/current-blocker.md`, `work/sprints/current-blocker.json`, `work/model-ledger.jsonl`, `test/distributed/harness/priority-recovery-summary-normalization.js`, `test/distributed/harness/__tests__/priority-recovery-summary-normalization.test.js`, `src/diagnostics/topology-convergence-graph.js`, `test/diagnostics/topology-convergence-graph.test.js`, `scripts/analyze-priority-recovery-residuals.js`, `test/scripts/priority-recovery-current-artifact-fixture.test.js`
+- Owned files: `work/packages/done-20260517-priority-recovery-workflow-progress-after-publication-handoff.md`, `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md`, `work/sprints/current-blocker.md`, `work/sprints/current-blocker.json`, `work/model-ledger.jsonl`, `test/distributed/harness/priority-recovery-summary-normalization.js`, `test/distributed/harness/__tests__/priority-recovery-summary-normalization.test.js`, `src/diagnostics/topology-convergence-graph.js`, `test/diagnostics/topology-convergence-graph.test.js`, `scripts/analyze-priority-recovery-residuals.js`, `test/scripts/priority-recovery-current-artifact-fixture.test.js`
 - Forbidden files: `publication_ack_convergence`, `timeout_budgets`, `active_gate_admission`, `CDC_fallback`, `reconnect_delivery`, `query_participant_routing`, `readiness_support`
 - Frozen decisions: publication ACK, timeout budgets, active-gate admission,
   selected-source selection, CDC fallback, reconnect delivery, query routing,
@@ -260,8 +263,8 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 2. npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-after-publication-handoff-flat-progress-20260517.report.json --markdown
 3. npm run analyze:owner-files -- operation_workflow_owner workflow_progress
 4. npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-publication-handoff-flat-progress-20260517.report.json
-5. npm run work:validate -- --entry work/packages/active-20260517-priority-recovery-workflow-progress-after-publication-handoff.md
-6. npm run work:validate -- --pre-impl work/packages/active-20260517-priority-recovery-workflow-progress-after-publication-handoff.md
+5. npm run work:validate -- --entry work/packages/done-20260517-priority-recovery-workflow-progress-after-publication-handoff.md
+6. npm run work:validate -- --pre-impl work/packages/done-20260517-priority-recovery-workflow-progress-after-publication-handoff.md
 7. npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-publication-handoff-flat-progress-20260517.report.json --handoff-probe
 8. node --test test/diagnostics/topology-convergence-graph.test.js
 9. node --test test/distributed/harness/__tests__/priority-recovery-summary-normalization.test.js
@@ -274,3 +277,9 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 16. npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-priority-nonblocking-closure-20260517T055254Z.report.json --markdown
 17. npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-priority-nonblocking-closure-20260517T055254Z.report.json
 18. npm run analyze:topology-convergence -- test-output/reports/rolling-restart-priority-nonblocking-closure-20260517T055254Z.report.json --handoff-probe
+
+## Commit And Push Ledger
+
+1. Focused package commit: fefcc7198d748b538f90fe954e92f7e5859d1a4c
+2. Pushed to: origin/codex/pending-ack-eligibility-filter
+3. Commit contains only package-owned files/package-status/allowed sprint handoff: yes

@@ -29,7 +29,7 @@ Canonical state after the priority-recovery workflow-progress package:
 1. `publication_ack_convergence` is satisfied and priority recovery residual
    extraction reports zero witnesses.
 2. The active package
-   `work/packages/active-20260517-priority-recovery-workflow-progress-after-publication-handoff.md`
+   `work/packages/done-20260517-priority-recovery-workflow-progress-after-publication-handoff.md`
    is closing as migrated after classifying the
    `control_plane_publications-p1` `spread_satisfied_in_flight` witness as
    non-blocking closure evidence.
@@ -415,9 +415,9 @@ required action.
 
 1. `npm run work:context`
 2. `npm run work:llm-start`
-3. `npm run work:package:doctor -- --suggest work/packages/active-20260517-priority-recovery-workflow-progress-after-publication-handoff.md`
-4. `npm run work:validate -- --entry work/packages/active-20260517-priority-recovery-workflow-progress-after-publication-handoff.md`
-5. `npm run work:validate -- --pre-impl work/packages/active-20260517-priority-recovery-workflow-progress-after-publication-handoff.md`
+3. `npm run work:package:doctor -- --suggest work/packages/done-20260517-priority-recovery-workflow-progress-after-publication-handoff.md`
+4. `npm run work:validate -- --entry work/packages/done-20260517-priority-recovery-workflow-progress-after-publication-handoff.md`
+5. `npm run work:validate -- --pre-impl work/packages/done-20260517-priority-recovery-workflow-progress-after-publication-handoff.md`
 6. `npm run work:evidence-summary -- test-output/reports/rolling-restart-after-publication-handoff-flat-progress-20260517.report.json`
 7. `npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-after-publication-handoff-flat-progress-20260517.report.json --markdown`
 8. `npm run analyze:owner-files -- operation_workflow_owner workflow_progress`
@@ -503,7 +503,7 @@ Continue with the operation workflow successor selected by the metric-moving
 publication ACK handoff artifact:
 
 ```text
-work/packages/active-20260517-priority-recovery-workflow-progress-after-publication-handoff.md
+work/packages/done-20260517-priority-recovery-workflow-progress-after-publication-handoff.md
 test-output/reports/rolling-restart-after-publication-handoff-flat-progress-20260517.report.json
 ```
 
