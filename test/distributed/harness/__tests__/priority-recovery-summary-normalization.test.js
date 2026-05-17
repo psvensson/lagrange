@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 
 import {
   buildPriorityRecoveryProgressSummary,
+  isPriorityRecoveryNonBlockingProgressWitness,
 } from '../priority-recovery-summary-normalization.js';
 import {
   PRIORITY_RECOVERY_ACTUATION_STATE,
@@ -42,6 +43,8 @@ const SERIAL_WAIT_SOURCE_PROGRESS_TEST_NAME =
   'actionable source workflow progress outranks supporting serial-wait carriers';
 const TERMINAL_FOLLOW_UP_CARRIER_TEST_NAME =
   'direct workflow blockers outrank terminal rebalancer follow-up carriers';
+const SPREAD_SATISFIED_NON_BLOCKING_TEST_NAME =
+  'spread-satisfied closure witnesses are tagged as non-blocking progress';
 const OPERATION_SCHEDULING_PARTITION_ID = 'replica_operations-p1';
 const SERIAL_WAIT_PARTITION_ID = 'sql_transactions-p1';
 const SERIAL_WAIT_BLOCKING_PARTITION_ID = 'sql_transaction_participants-p1';
@@ -52,6 +55,7 @@ const SAME_BOUNDARY_DEFERRED_PARTITION_ID = 'replica_operations-p2';
 const STALE_WORKFLOW_TIMEOUT_PARTITION_ID = 'sql_transactions-p1';
 const TERMINAL_FOLLOW_UP_SOURCE_PARTITION_ID = 'sql_transactions-p1';
 const TERMINAL_FOLLOW_UP_CARRIER_PARTITION_ID = 'sql_write_operations-p1';
+const SPREAD_SATISFIED_PARTITION_ID = 'control_plane_publications-p1';
 const SERIAL_WAIT_BLOCKING_OPERATION_ID = 'op-serial-wait-owner';
 const SERIAL_WAIT_SOURCE_BLOCKER_OPERATION_ID =
   'op-serial-wait-source-direct-blocker';
@@ -64,6 +68,7 @@ const TERMINAL_FOLLOW_UP_SOURCE_OPERATION_ID =
   'op-terminal-follow-up-source-blocker';
 const TERMINAL_FOLLOW_UP_CARRIER_OPERATION_ID =
   'op-terminal-follow-up-carrier';
+const SPREAD_SATISFIED_OPERATION_ID = 'op-spread-satisfied';
 const STALE_WORKFLOW_TIMEOUT_CORRELATION_KEY =
   'sql_transactions-p1|4|op-retry-handoff';
 const SAMPLE_CAPTURED_AT_MS = 1777919035255;
@@ -88,6 +93,9 @@ const OPERATION_STATUS_RETRY_DEFERRED = 'retry_deferred';
 const OPERATION_STATUS_ACTIVE = 'active';
 const OPERATION_STATUS_CREATING = 'creating';
 const OPERATION_STATUS_REMOVED = 'removed';
+const COMPLETION_STATE_CONVERGED = 'converged';
+const WORKFLOW_STATE_IN_FLIGHT = 'in_flight';
+const VISIBILITY_STATE_CACHE_VISIBLE = 'cache_visible';
 const PROGRESS_EVIDENCE_SOURCE_OPERATION_DISPATCH =
   'operation_dispatch_retry_log';
 const EXPECTED_OWNER_COUNTS = Object.freeze({
@@ -419,6 +427,30 @@ const TERMINAL_FOLLOW_UP_CARRIER_WITNESS = Object.freeze({
   latestOperationWorkflowStep: 'REMOVED',
   latestOperationStatus: OPERATION_STATUS_REMOVED,
 });
+const SPREAD_SATISFIED_NON_BLOCKING_WITNESS = Object.freeze({
+  partitionId: SPREAD_SATISFIED_PARTITION_ID,
+  semanticStateId: PRIORITY_RECOVERY_SEMANTIC_STATE.SPREAD_SATISFIED_IN_FLIGHT,
+  progressContractState: OWNER_CONTRACT_STATE.PENDING,
+  actuationState: PRIORITY_RECOVERY_ACTUATION_STATE.PERSISTED_NOT_DISPATCHED,
+  currentOwner: PRIORITY_RECOVERY_PROGRESS_OWNER.OPERATION_WORKFLOW_OWNER,
+  actuationOwner: PRIORITY_RECOVERY_PROGRESS_OWNER.OPERATION_WORKFLOW_OWNER,
+  blockingBoundary: PRIORITY_RECOVERY_BLOCKING_BOUNDARY.WORKFLOW_PROGRESS,
+  waitMode: PRIORITY_RECOVERY_WAIT_MODE.EVENT_DRIVEN,
+  nextRequiredAction:
+    PRIORITY_RECOVERY_NEXT_REQUIRED_ACTION.WAIT_FOR_OPERATION_PROGRESS,
+  workflowProgressPhaseId:
+    PRIORITY_RECOVERY_WORKFLOW_PROGRESS_PHASE.DISPATCH_PENDING,
+  operationIds: Object.freeze([SPREAD_SATISFIED_OPERATION_ID]),
+  witnessIds: Object.freeze([SPREAD_SATISFIED_OPERATION_ID]),
+  correlationKey:
+    SPREAD_SATISFIED_PARTITION_ID + '|1|' + SPREAD_SATISFIED_OPERATION_ID,
+  completionState: COMPLETION_STATE_CONVERGED,
+  workflowState: WORKFLOW_STATE_IN_FLIGHT,
+  visibilityState: VISIBILITY_STATE_CACHE_VISIBLE,
+  convergenceState: COMPLETION_STATE_CONVERGED,
+  latestOperationWorkflowStep: WORKFLOW_STEP_PENDING,
+  latestOperationStatus: OPERATION_STATUS_PENDING,
+});
 
 test(TEST_NAME, () => {
   const progressSummary = buildPriorityRecoveryProgressSummary({
@@ -589,6 +621,26 @@ test(TERMINAL_FOLLOW_UP_CARRIER_TEST_NAME, () => {
   assert.equal(
     dominantWitness.latestOperationStatus,
     OPERATION_STATUS_ACTIVE,
+  );
+});
+
+test(SPREAD_SATISFIED_NON_BLOCKING_TEST_NAME, () => {
+  const progressSummary = buildPriorityRecoveryProgressSummary({
+    priorityRecoveryPartitionWitnesses: Object.freeze([
+      SPREAD_SATISFIED_NON_BLOCKING_WITNESS,
+    ]),
+  });
+
+  assert.equal(progressSummary.partitionCount, 1);
+  assert.equal(
+    progressSummary.dominantWitness.partitionId,
+    SPREAD_SATISFIED_PARTITION_ID,
+  );
+  assert.equal(
+    isPriorityRecoveryNonBlockingProgressWitness(
+      progressSummary.dominantWitness,
+    ),
+    true,
   );
 });
 

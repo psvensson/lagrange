@@ -22,36 +22,35 @@ success is in scope.
 ## Current Blocker Snapshot
 
 Latest representative artifact:
-`test-output/reports/rolling-restart-after-publication-handoff-flat-progress-20260517.report.json`.
+`test-output/reports/rolling-restart-priority-nonblocking-closure-20260517T055254Z.report.json`.
 
-Canonical state after the publication ACK handoff package:
+Canonical state after the priority-recovery workflow-progress package:
 
-1. `publication_ack_convergence` is satisfied:
-   `publicationStatus=PUBLISHED`, `pendingAckCount=0`, and no pending ACK node
-   IDs.
-2. The predecessor package
-   `work/packages/done-20260517-topology-publication-ack-pending-after-forced-repair-owner-command.md`
-   closed as migrated after improving `snapshotCoverage` from `2/5` to `4/5`.
-3. The current active package is
-   `work/packages/active-20260517-priority-recovery-workflow-progress-after-publication-handoff.md`.
-4. `work:evidence-summary` selects `priority_recovery_partition_progress` as
-   the first frontier.
-5. Representative owner boundary:
-   `operation_workflow_owner / workflow_progress`.
-6. Dominant reason: `priority_recovery_event_driven_wait`.
-7. `npm run analyze:priority-recovery-residuals` on the latest artifact reports
-   one unsplit witness: `control_plane_publications-p1` in
-   `spread_satisfied_in_flight`.
-8. Downstream active-gate snapshot coverage remains `4/5` with
-   `discovery_node_coverage_gap`.
-9. The next proof must be metric-moving: remove
-   `priority_recovery_partition_progress`, improve coverage above `4/5`,
-   remove `discovery_node_coverage_gap`, migrate to a genuinely new owner
-   boundary, or turn representative `rolling-restart` green.
-10. Publication ACK, timeout budgets, active-gate admission, selected-source
-    selection, CDC fallback, reconnect delivery, query participant routing, and
-    readiness support remain frozen unless canonical evidence selects them
-    again.
+1. `publication_ack_convergence` is satisfied and priority recovery residual
+   extraction reports zero witnesses.
+2. The active package
+   `work/packages/active-20260517-priority-recovery-workflow-progress-after-publication-handoff.md`
+   is closing as migrated after classifying the
+   `control_plane_publications-p1` `spread_satisfied_in_flight` witness as
+   non-blocking closure evidence.
+3. Fresh `work:evidence-summary` selects `active_gate_snapshot_coverage` as the
+   first frontier.
+4. Representative owner boundary:
+   `startup_active_gate_owner / snapshot_coverage`.
+5. Dominant reason: `active_gate_timed_out` with
+   `snapshot_coverage_incomplete`.
+6. Fresh snapshot coverage is `0/5`; selected snapshot source is
+   `11601fe0-72d6-5853-8590-ec2881853e72`.
+7. The handoff probe reports
+   `publication_active_gate_handoff_not_detected` and selected snapshot error
+   from authoritative control snapshot repair failing against node
+   `7493b0ab-a054-5fad-a91b-5e331db29304`.
+8. The next proof must be metric-moving: improve snapshot coverage, remove the
+   selected authoritative repair/query pressure edge, migrate to a genuinely
+   new owner boundary, or turn representative `rolling-restart` green.
+9. Publication ACK, timeout budgets, active-gate admission, CDC fallback,
+   reconnect delivery, query participant routing, and readiness support remain
+   frozen unless canonical evidence selects them again.
 
 ## Scope Basis
 
@@ -418,15 +417,20 @@ required action.
 2. `npm run work:llm-start`
 3. `npm run work:package:doctor -- --suggest work/packages/active-20260517-priority-recovery-workflow-progress-after-publication-handoff.md`
 4. `npm run work:validate -- --entry work/packages/active-20260517-priority-recovery-workflow-progress-after-publication-handoff.md`
-5. `npm run work:evidence-summary -- test-output/reports/rolling-restart-after-publication-handoff-flat-progress-20260517.report.json`
-6. `npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-after-publication-handoff-flat-progress-20260517.report.json --markdown`
-7. `npm run analyze:owner-files -- operation_workflow_owner workflow_progress`
-8. `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-publication-handoff-flat-progress-20260517.report.json`
-9. `npm run work:subagent-prompt -- --role review --package work/packages/active-20260517-priority-recovery-workflow-progress-after-publication-handoff.md`
-10. Real review/fix/implementation subagent proof before runtime implementation starts.
-11. Focused workflow-progress fixture/probe, selected owner tests, static
+5. `npm run work:validate -- --pre-impl work/packages/active-20260517-priority-recovery-workflow-progress-after-publication-handoff.md`
+6. `npm run work:evidence-summary -- test-output/reports/rolling-restart-after-publication-handoff-flat-progress-20260517.report.json`
+7. `npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-after-publication-handoff-flat-progress-20260517.report.json --markdown`
+8. `npm run analyze:owner-files -- operation_workflow_owner workflow_progress`
+9. `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-publication-handoff-flat-progress-20260517.report.json`
+10. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-publication-handoff-flat-progress-20260517.report.json --handoff-probe`
+11. Real review/fix/implementation subagent proof before runtime implementation starts.
+12. Focused workflow-progress fixture/probe, selected owner tests, static
     guardrails, and representative `rolling-restart` after the package has
     implementation proof.
+13. `npm run work:evidence-summary -- test-output/reports/rolling-restart-priority-nonblocking-closure-20260517T055254Z.report.json`
+14. `npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-priority-nonblocking-closure-20260517T055254Z.report.json --markdown`
+15. `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-priority-nonblocking-closure-20260517T055254Z.report.json`
+16. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-priority-nonblocking-closure-20260517T055254Z.report.json --handoff-probe`
 
 ## Closure Rules
 

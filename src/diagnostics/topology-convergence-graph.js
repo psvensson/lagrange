@@ -245,6 +245,8 @@ const SOURCE_FIELD = Object.freeze({
   WAIT_MODE: 'waitMode',
   NEXT_REQUIRED_ACTION: 'nextRequiredAction',
   ACTUATION_STATE: 'actuationState',
+  PROGRESS_CLASS_IDS: 'progressClassIds',
+  BLOCKER_REASON_CODES: 'blockerReasonCodes',
   CURRENT_STEP_ID: 'currentStepId',
   CURRENT_STEP_STATE: 'currentStepState',
   DEADLINE_MS: 'deadlineMs',
@@ -352,6 +354,10 @@ const SEMANTIC_STATE = Object.freeze({
 const PRIORITY_RECOVERY_RETRYABLE_WITNESS_SEMANTIC_STATE_SET =
   Object.freeze(new Set([
     PRIORITY_RECOVERY_SEMANTIC_RECOVERING_IN_FLIGHT,
+    PRIORITY_RECOVERY_SEMANTIC_SPREAD_SATISFIED_IN_FLIGHT,
+  ]));
+const PRIORITY_RECOVERY_NON_BLOCKING_WITNESS_SEMANTIC_STATE_SET =
+  Object.freeze(new Set([
     PRIORITY_RECOVERY_SEMANTIC_SPREAD_SATISFIED_IN_FLIGHT,
   ]));
 
@@ -1922,10 +1928,17 @@ function resolvePriorityRecoveryOwnerBoundary(
   topologyOperatorWitness = {},
   fallbackDominantWitness = {},
 ) {
+  const progressSummaryDominantWitness = asRecord(
+    asRecord(progressSummary)[SOURCE_FIELD.DOMINANT_WITNESS],
+  );
   const dominantWitness = asRecord(
     firstRecord(
       topologyOperatorWitness,
-      asRecord(progressSummary)[SOURCE_FIELD.DOMINANT_WITNESS],
+      isPriorityRecoveryNonBlockingPartitionWitness(
+        progressSummaryDominantWitness,
+      ) ?
+        {} :
+        progressSummaryDominantWitness,
       fallbackDominantWitness,
     ),
   );
@@ -2054,30 +2067,34 @@ function buildPriorityRecoveryWitnessSelection(witnesses) {
   const normalizedWitnesses = normalizePriorityRecoveryPartitionWitnesses(
     witnesses,
   );
+  const blockingWitnesses = normalizedWitnesses.filter(
+    (witness) =>
+      isPriorityRecoveryNonBlockingPartitionWitness(witness) !== true,
+  );
   const semanticStateIds = collectDistinctRecordText(
-    normalizedWitnesses,
+    blockingWitnesses,
     SOURCE_FIELD.SEMANTIC_STATE_ID,
   );
   const blockedPartitionIds = collectDistinctRecordText(
-    normalizedWitnesses,
+    blockingWitnesses,
     SOURCE_FIELD.PARTITION_ID,
   );
   const waitModes = collectDistinctRecordText(
-    normalizedWitnesses,
+    blockingWitnesses,
     SOURCE_FIELD.WAIT_MODE,
   );
   const nextRequiredActions = collectDistinctRecordText(
-    normalizedWitnesses,
+    blockingWitnesses,
     SOURCE_FIELD.NEXT_REQUIRED_ACTION,
   );
   const actuationStates = collectDistinctRecordText(
-    normalizedWitnesses,
+    blockingWitnesses,
     SOURCE_FIELD.ACTUATION_STATE,
   );
 
   return {
-    witnesses: normalizedWitnesses,
-    dominantWitness: normalizedWitnesses[FIRST_FRONTIER_INDEX] || {},
+    witnesses: blockingWitnesses,
+    dominantWitness: blockingWitnesses[FIRST_FRONTIER_INDEX] || {},
     classes: {
       unresolvedSemanticStateIds: semanticStateIds,
       blockedPartitionIds,
@@ -2094,12 +2111,23 @@ function buildPriorityRecoveryWitnessSelection(witnesses) {
 
 function selectTopologyOperatorWitness(normalized) {
   const directWitness = asRecord(normalized.topologyOperatorWitness);
-  if (isTopologyOperatorWitnessPresent(directWitness)) {
+  const progressSummaryDominantWitness = asRecord(
+    asRecord(normalized.progressSummary)[SOURCE_FIELD.DOMINANT_WITNESS],
+  );
+  if (
+    isTopologyOperatorWitnessPresent(directWitness) &&
+    isPriorityRecoveryNonBlockingPartitionWitness(
+      progressSummaryDominantWitness,
+    ) !== true
+  ) {
     return directWitness;
   }
   const partitionWitness = normalizePriorityRecoveryPartitionWitnesses(
     normalized.priorityRecoveryPartitionWitnesses,
   )
+    .filter((witness) =>
+      isPriorityRecoveryNonBlockingPartitionWitness(witness) !== true,
+    )
     .map((witness) =>
       asRecord(witness[SOURCE_FIELD.TOPOLOGY_OPERATOR_WITNESS]),
     )
@@ -2158,6 +2186,18 @@ function normalizePriorityRecoveryPartitionWitnesses(witnesses) {
     .filter((witness) =>
       Object.keys(witness).length > SOURCE_ORDER_BASE,
     );
+}
+
+function isPriorityRecoveryNonBlockingPartitionWitness(witness) {
+  return (
+    PRIORITY_RECOVERY_NON_BLOCKING_WITNESS_SEMANTIC_STATE_SET.has(
+      textOrUnknown(witness[SOURCE_FIELD.SEMANTIC_STATE_ID]),
+    ) &&
+    arrayOrEmpty(witness[SOURCE_FIELD.PROGRESS_CLASS_IDS]).length ===
+      SOURCE_ORDER_BASE &&
+    arrayOrEmpty(witness[SOURCE_FIELD.BLOCKER_REASON_CODES]).length ===
+      SOURCE_ORDER_BASE
+  );
 }
 
 function collectDistinctRecordText(records, fieldName) {

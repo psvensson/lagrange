@@ -980,7 +980,7 @@ describe('TopologyConvergenceGraph', () => {
       const fixture = buildFixtureFailureBundle();
       const partitionWitness = {
         partitionId: FIXTURE_PARTITION_ID,
-        semanticStateId: FIXTURE_PRIORITY_SPREAD_SATISFIED_STATE,
+        semanticStateId: FIXTURE_PRIORITY_RECOVERING_STATE,
         currentOwner: OWNER_OPERATION_WORKFLOW,
         blockingBoundary: BOUNDARY_WORKFLOW_PROGRESS,
         waitMode: PRIORITY_RECOVERY_WAIT_MODE_EVENT_DRIVEN,
@@ -1026,7 +1026,7 @@ describe('TopologyConvergenceGraph', () => {
       ]);
       assert.equal(
         priorityEdge.source.unresolvedSemanticStateIds,
-        FIXTURE_PRIORITY_SPREAD_SATISFIED_STATE,
+        FIXTURE_PRIORITY_RECOVERING_STATE,
       );
       assert.equal(priorityEdge.source.blockedPartitionIds, FIXTURE_PARTITION_ID);
       assert.equal(
@@ -1035,6 +1035,60 @@ describe('TopologyConvergenceGraph', () => {
       );
       assert.deepEqual(
         graph.nextExpectedFrontier.map((edge) => edge.id),
+        [EDGE_SNAPSHOT_COVERAGE],
+      );
+      assertNoNullOrUndefined(graph);
+    });
+
+  it('ignores spread-satisfied partition witnesses when class contracts are absent',
+    () => {
+      const fixture = buildFixtureFailureBundle();
+      const partitionWitness = {
+        partitionId: FIXTURE_PARTITION_ID,
+        semanticStateId: FIXTURE_PRIORITY_SPREAD_SATISFIED_STATE,
+        currentOwner: OWNER_OPERATION_WORKFLOW,
+        blockingBoundary: BOUNDARY_WORKFLOW_PROGRESS,
+        waitMode: PRIORITY_RECOVERY_WAIT_MODE_EVENT_DRIVEN,
+        nextRequiredAction:
+          PRIORITY_RECOVERY_ACTION_WAIT_FOR_OPERATION_PROGRESS,
+        actuationState:
+          PRIORITY_RECOVERY_ACTUATION_DISPATCHED_WAITING_PROGRESS,
+      };
+      const graph = buildTopologyConvergenceGraphFromArtifacts({
+        failureBundle: {
+          ...fixture,
+          publicationConvergence: {
+            ...fixture.publicationConvergence,
+            activeGate: {
+              ...fixture.publicationConvergence.activeGate,
+              progress: {
+                expectedNodeCount: FIXTURE_EXPECTED_NODE_COUNT,
+                snapshotCoverageNodeCount: FIXTURE_SNAPSHOT_COVERAGE_COUNT,
+                snapshotCoverageComplete: false,
+                priorityBlockedPartitionCount: ZERO_COUNT,
+                blockers: [SNAPSHOT_COVERAGE_TWO_OF_FIVE_BLOCKER],
+              },
+            },
+            priorityRecoveryPartitionWitnesses: [partitionWitness],
+            priorityRecoveryProgressSummary: {
+              dominantWitness: partitionWitness,
+              priorityBlockedPartitionCount: ZERO_COUNT,
+            },
+          },
+        },
+      });
+      const priorityEdge = findEdge(graph.edges, EDGE_PRIORITY_RECOVERY);
+
+      assert.equal(graph.summary.firstFrontierEdgeId, EDGE_SNAPSHOT_COVERAGE);
+      assert.equal(graph.summary.firstFrontierOwner, OWNER_STARTUP_ACTIVE_GATE);
+      assert.equal(priorityEdge.state, EDGE_STATE.SATISFIED);
+      assert.deepEqual(priorityEdge.reasons, [
+        PRIORITY_RECOVERY_SATISFIED_REASON,
+      ]);
+      assert.equal(priorityEdge.source.unresolvedSemanticStateIds, SOURCE_PATH_ABSENT);
+      assert.equal(priorityEdge.source.blockedPartitionIds, SOURCE_PATH_ABSENT);
+      assert.deepEqual(
+        graph.frontier.map((edge) => edge.id),
         [EDGE_SNAPSHOT_COVERAGE],
       );
       assertNoNullOrUndefined(graph);

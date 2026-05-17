@@ -17,10 +17,32 @@ const FLAG_HELP = '--help';
 const EMPTY_TEXT = '';
 const NEWLINE = '\n';
 const LIST_SEPARATOR = ',';
+const KEY_SEPARATOR = '/';
+const SLUG_SOURCE_SEPARATOR = '_';
+const SLUG_SEPARATOR = '-';
+const COMMAND_SEPARATOR = ' ';
 const SCHEMA_VERSION = 'priority-recovery-residuals-v1';
 const UNKNOWN_VALUE = 'unknown';
 const PRIORITY_REASON = 'priority_recovery_progress_blocked';
 const SCENARIO_RELEASE_GATE_LANE = 'scenario-release-gate';
+const SEMANTIC_STATE_SPREAD_SATISFIED_IN_FLIGHT =
+  'spread_satisfied_in_flight';
+const PACKAGE_NEW_COMMAND_PREFIX = 'npm run work:package:new --';
+const PACKAGE_NEW_FLAG_LANE = '--lane';
+const PACKAGE_NEW_FLAG_TITLE = '--title';
+const PACKAGE_NEW_FLAG_SLUG = '--slug';
+const PACKAGE_NEW_FLAG_OWNER = '--owner';
+const PACKAGE_NEW_FLAG_BOUNDARY = '--boundary';
+const PACKAGE_NEW_FLAG_DOMINANT_REASON = '--dominant-reason';
+const PACKAGE_NEW_FLAG_SCENARIO = '--scenario';
+const PACKAGE_NEW_FLAG_ARTIFACT = '--artifact';
+const PACKAGE_NEW_FLAG_NEXT_ACTION = '--next-action';
+const SUCCESSOR_NEXT_ACTION =
+  'Prove or split this residual owner boundary.';
+const MARKDOWN_NO_WITNESSES_LINE =
+  '- No priority recovery partition witnesses found.';
+const MARKDOWN_LIST_SEPARATOR = ', ';
+const MARKDOWN_SUCCESSOR_COMMANDS_HEADING = '## Successor Commands';
 const HELP_TEXT = [
   'Usage:',
   '  node scripts/analyze-priority-recovery-residuals.js <artifact.json> [--markdown]',
@@ -68,11 +90,20 @@ function normalizeArray(value) {
   return normalized ? normalized.split(LIST_SEPARATOR).map(normalizeText) : [];
 }
 
+function isNonBlockingPriorityRecoveryWitness(witness = {}) {
+  return (
+    normalizeText(witness.semanticStateId) ===
+      SEMANTIC_STATE_SPREAD_SATISFIED_IN_FLIGHT &&
+    normalizeArray(witness.progressClassIds).length === NUM_ZERO &&
+    normalizeArray(witness.blockerReasonCodes).length === NUM_ZERO
+  );
+}
+
 function witnessKey(witness = {}) {
   return [
     normalizeText(witness.currentOwner) || UNKNOWN_VALUE,
     normalizeText(witness.blockingBoundary) || UNKNOWN_VALUE,
-  ].join('/');
+  ].join(KEY_SEPARATOR);
 }
 
 function addAll(targetSet, values = []) {
@@ -102,10 +133,10 @@ function buildGroupSnapshot(group) {
 function slugPart(value) {
   return normalizeText(value)
     .toLowerCase()
-    .replaceAll('_', '-')
-    .replace(/[^a-z0-9-]+/gu, '-')
-    .replace(/^-+|-+$/gu, '') ||
-    'unknown';
+    .replaceAll(SLUG_SOURCE_SEPARATOR, SLUG_SEPARATOR)
+    .replace(/[^a-z0-9-]+/gu, SLUG_SEPARATOR)
+    .replace(/^-+|-+$/gu, EMPTY_TEXT) ||
+    UNKNOWN_VALUE;
 }
 
 function buildSuccessorSuggestion(group, artifactPath, scenario) {
@@ -126,23 +157,27 @@ function buildSuccessorSuggestion(group, artifactPath, scenario) {
     slug,
     title,
     command: [
-      'npm run work:package:new --',
-      '--lane', SCENARIO_RELEASE_GATE_LANE,
-      '--title', JSON.stringify(title),
-      '--slug', slug,
-      '--owner', group.owner,
-      '--boundary', group.boundary,
-      '--dominant-reason', PRIORITY_REASON,
-      '--scenario', scenario,
-      '--artifact', artifactPath,
-      '--next-action', JSON.stringify('Prove or split this residual owner boundary.'),
-    ].join(' '),
+      PACKAGE_NEW_COMMAND_PREFIX,
+      PACKAGE_NEW_FLAG_LANE, SCENARIO_RELEASE_GATE_LANE,
+      PACKAGE_NEW_FLAG_TITLE, JSON.stringify(title),
+      PACKAGE_NEW_FLAG_SLUG, slug,
+      PACKAGE_NEW_FLAG_OWNER, group.owner,
+      PACKAGE_NEW_FLAG_BOUNDARY, group.boundary,
+      PACKAGE_NEW_FLAG_DOMINANT_REASON, PRIORITY_REASON,
+      PACKAGE_NEW_FLAG_SCENARIO, scenario,
+      PACKAGE_NEW_FLAG_ARTIFACT, artifactPath,
+      PACKAGE_NEW_FLAG_NEXT_ACTION, JSON.stringify(SUCCESSOR_NEXT_ACTION),
+    ].join(COMMAND_SEPARATOR),
   };
 }
 
 function buildPriorityRecoveryResiduals(artifactPath, artifact) {
   const publicationConvergence = selectPublicationConvergence(artifact);
-  const witnesses = publicationConvergence.priorityRecoveryPartitionWitnesses || [];
+  const witnesses = (
+    publicationConvergence.priorityRecoveryPartitionWitnesses || []
+  ).filter((witness) =>
+    isNonBlockingPriorityRecoveryWitness(witness) !== true,
+  );
   const groups = new Map();
   for (const witness of witnesses) {
     const key = witnessKey(witness);
@@ -224,17 +259,17 @@ function renderMarkdown(summary) {
     EMPTY_TEXT,
   ];
   if (summary.ownerBoundaryGroups.length === NUM_ZERO) {
-    lines.push('- No priority recovery partition witnesses found.');
+    lines.push(MARKDOWN_NO_WITNESSES_LINE);
   }
   for (const group of summary.ownerBoundaryGroups) {
     lines.push(
       `- \`${group.owner} / ${group.boundary}\`: ` +
       `${group.witnessCount} witness(es); partitions ` +
-      `${group.partitionIds.join(', ') || UNKNOWN_VALUE}; semantic states ` +
-      `${group.semanticStateIds.join(', ') || UNKNOWN_VALUE}`,
+      `${group.partitionIds.join(MARKDOWN_LIST_SEPARATOR) || UNKNOWN_VALUE}; semantic states ` +
+      `${group.semanticStateIds.join(MARKDOWN_LIST_SEPARATOR) || UNKNOWN_VALUE}`,
     );
   }
-  lines.push(EMPTY_TEXT, '## Successor Commands', EMPTY_TEXT);
+  lines.push(EMPTY_TEXT, MARKDOWN_SUCCESSOR_COMMANDS_HEADING, EMPTY_TEXT);
   for (const successor of summary.suggestedSuccessors) {
     lines.push(`- \`${successor.command}\``);
   }

@@ -829,6 +829,22 @@ function hasMeaningfulPriorityRecoveryProgressWitness(witness) {
   });
 }
 
+function isPriorityRecoveryNonBlockingProgressWitness(witness) {
+  const progressClassIds = normalizeDistinctStringArray(
+    witness?.progressClassIds,
+  );
+  const blockerReasonCodes = normalizeDistinctStringArray(
+    witness?.blockerReasonCodes,
+  );
+  return (
+    progressClassIds.length === ZERO &&
+    blockerReasonCodes.length === ZERO &&
+    PRIORITY_RECOVERY_NON_BLOCKING_PROGRESS_SEMANTIC_STATES.has(
+      witness?.semanticStateId,
+    )
+  );
+}
+
 function buildPriorityRecoveryWitnessFreshnessKey(prefix, values) {
   const normalizedValues = normalizeDistinctStringArray(values).sort();
   if (normalizedValues.length === ZERO) {
@@ -1186,6 +1202,7 @@ function normalizePriorityPartitionSummaryForDiagnostics(summary) {
 export {
   buildPriorityRecoveryProgressSummary,
   hasMeaningfulPriorityRecoveryProgressWitness,
+  isPriorityRecoveryNonBlockingProgressWitness,
   normalizePriorityPartitionSummaryForDiagnostics,
   normalizePriorityRecoveryPartitionWitnessesForDiagnostics,
   selectDominantPriorityRecoveryPartitionWitness,
