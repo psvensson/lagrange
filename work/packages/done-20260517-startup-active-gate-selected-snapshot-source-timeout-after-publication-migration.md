@@ -3,7 +3,7 @@
 <!-- work-package
 {
   "schema": "work-package-v1",
-  "status": "active",
+  "status": "done",
   "opened": "2026-05-17",
   "lane": "causal-escalation",
   "scenario": "rolling-restart",
@@ -37,12 +37,12 @@
     "npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-selected-snapshot-lane-reset-20260517T155212Z.report.json",
     "npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-selected-snapshot-lane-reset-20260517T155212Z.report.json",
     "npm run analyze:distributed-failure -- --report test-output/reports/rolling-restart-selected-snapshot-lane-reset-20260517T155212Z.report.json",
-    "git diff --check -- test/distributed/harness/cluster-segment-7-class-5.js test/distributed/harness/__tests__/cluster.test-part-5.js work/packages/active-20260517-startup-active-gate-selected-snapshot-source-timeout-after-publication-migration.md work/model-ledger.jsonl"
+    "git diff --check -- test/distributed/harness/cluster-segment-7-class-5.js test/distributed/harness/__tests__/cluster.test-part-5.js work/packages/done-20260517-startup-active-gate-selected-snapshot-source-timeout-after-publication-migration.md work/model-ledger.jsonl"
   ],
   "writeScope": [
     "test/distributed/harness/cluster-segment-7-class-5.js",
     "test/distributed/harness/__tests__/cluster.test-part-5.js",
-    "work/packages/active-20260517-startup-active-gate-selected-snapshot-source-timeout-after-publication-migration.md",
+    "work/packages/done-20260517-startup-active-gate-selected-snapshot-source-timeout-after-publication-migration.md",
     "work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md",
     "work/sprints/current-blocker.md",
     "work/sprints/current-blocker.json",
@@ -71,7 +71,7 @@
   "commitScope": [
     "test/distributed/harness/cluster-segment-7-class-5.js",
     "test/distributed/harness/__tests__/cluster.test-part-5.js",
-    "work/packages/active-20260517-startup-active-gate-selected-snapshot-source-timeout-after-publication-migration.md",
+    "work/packages/done-20260517-startup-active-gate-selected-snapshot-source-timeout-after-publication-migration.md",
     "work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md",
     "work/sprints/current-blocker.md",
     "work/sprints/current-blocker.json",
@@ -155,7 +155,10 @@
       "npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-selected-snapshot-lane-reset-20260517T155212Z.report.json"
     ]
   },
-  "predecessor": "work/packages/done-20260517-topology-publication-convergence-after-startup-reconcile-migration.md"
+  "predecessor": "work/packages/done-20260517-topology-publication-convergence-after-startup-reconcile-migration.md",
+  "successor": "work/packages/active-20260517-topology-publication-convergence-after-selected-snapshot-lane-reset-migration.md",
+  "closed": "2026-05-17",
+  "commitAndPushLedgerRequired": true
 }
 -->
 
@@ -207,7 +210,7 @@ subagents before editing runtime files.
 
 - [x] Review subagent recorded: Agent Bernoulli (019e3694-7a7a-7193-84c0-a50903ec3c1a) reviewed work/packages/done-20260517-topology-publication-convergence-after-startup-reconcile-migration.md; result fixes-required.
 - [x] Fix subagent recorded or explicitly not needed: Agent Codex (019e3696-4c56-7001-bbf8-ac7d33f3341b) fixed work/packages/done-20260517-topology-publication-convergence-after-startup-reconcile-migration.md.
-- [x] Implementation subagent recorded: Agent Halley (019e369c-95cf-7de3-86f9-5c61ae089750) implemented work/packages/active-20260517-startup-active-gate-selected-snapshot-source-timeout-after-publication-migration.md.
+- [x] Implementation subagent recorded: Agent Halley (019e369c-95cf-7de3-86f9-5c61ae089750) implemented work/packages/done-20260517-startup-active-gate-selected-snapshot-source-timeout-after-publication-migration.md.
 
 ## LLM Tool-First Contract
 
@@ -227,7 +230,7 @@ canonical extractor was tried and why it was insufficient.
 
 1. test/distributed/harness/cluster-segment-7-class-5.js
 2. test/distributed/harness/__tests__/cluster.test-part-5.js
-3. work/packages/active-20260517-startup-active-gate-selected-snapshot-source-timeout-after-publication-migration.md
+3. work/packages/done-20260517-startup-active-gate-selected-snapshot-source-timeout-after-publication-migration.md
 4. work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md
 5. work/sprints/current-blocker.md
 6. work/sprints/current-blocker.json
@@ -248,7 +251,7 @@ canonical extractor was tried and why it was insufficient.
 - Intended minimum model: `gpt-5.3-codex`
 - Scope shape: `owner-boundary-contraction/current-frontier`
 - Output profile: `medium`
-- Owned files: `test/distributed/harness/cluster-segment-7-class-5.js`, `test/distributed/harness/__tests__/cluster.test-part-5.js`, `work/packages/active-20260517-startup-active-gate-selected-snapshot-source-timeout-after-publication-migration.md`, `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md`, `work/sprints/current-blocker.md`, `work/sprints/current-blocker.json`, `work/model-ledger.jsonl`
+- Owned files: `test/distributed/harness/cluster-segment-7-class-5.js`, `test/distributed/harness/__tests__/cluster.test-part-5.js`, `work/packages/done-20260517-startup-active-gate-selected-snapshot-source-timeout-after-publication-migration.md`, `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md`, `work/sprints/current-blocker.md`, `work/sprints/current-blocker.json`, `work/model-ledger.jsonl`
 - Forbidden files: `topology_publication_owner implementation`, `operation_workflow_owner implementation`, `timeout_budgets`, `active_gate_admission`, `readiness_support`, `closed publication-convergence proof`
 - Frozen decisions: publication recovery, priority recovery, timeout budgets, active-gate admission, terminal-progress selection, readiness support, and closed handoff proof stay frozen unless canonical evidence selects them again.
 - Escalation triggers: owned files expand beyond this package, runtime ownership changes, or representative scenario evidence changes.
@@ -279,4 +282,10 @@ canonical extractor was tried and why it was insufficient.
 20. npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-selected-snapshot-lane-reset-20260517T155212Z.report.json
 21. npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-selected-snapshot-lane-reset-20260517T155212Z.report.json
 22. npm run analyze:distributed-failure -- --report test-output/reports/rolling-restart-selected-snapshot-lane-reset-20260517T155212Z.report.json
-23. git diff --check -- test/distributed/harness/cluster-segment-7-class-5.js test/distributed/harness/__tests__/cluster.test-part-5.js work/packages/active-20260517-startup-active-gate-selected-snapshot-source-timeout-after-publication-migration.md work/model-ledger.jsonl
+23. git diff --check -- test/distributed/harness/cluster-segment-7-class-5.js test/distributed/harness/__tests__/cluster.test-part-5.js work/packages/done-20260517-startup-active-gate-selected-snapshot-source-timeout-after-publication-migration.md work/model-ledger.jsonl
+
+## Commit And Push Ledger
+
+1. Focused package commit: `d635d399`
+2. Pushed to: `origin/codex/pending-ack-eligibility-filter`
+3. Commit contains only package-owned files/package-status/allowed sprint handoff: yes

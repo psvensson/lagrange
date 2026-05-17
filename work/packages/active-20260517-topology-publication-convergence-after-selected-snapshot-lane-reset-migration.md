@@ -1,9 +1,10 @@
+# Topology Publication Convergence After Selected Snapshot Lane Reset Migration
+
+<!-- work-package
 {
-  "schema": "current-blocker-v1",
-  "generatedBy": "scripts/work-tracker.js",
-  "sprint": "work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md",
-  "package": "work/packages/active-20260517-topology-publication-convergence-after-selected-snapshot-lane-reset-migration.md",
+  "schema": "work-package-v1",
   "status": "active",
+  "opened": "2026-05-17",
   "lane": "causal-escalation",
   "scenario": "rolling-restart",
   "artifact": "test-output/reports/rolling-restart-selected-snapshot-lane-reset-20260517T155212Z.report.json",
@@ -56,7 +57,6 @@
     "work/sprints/current-blocker.json",
     "work/model-ledger.jsonl"
   ],
-  "touchedFiles": [],
   "modelFit": {
     "packageClass": "representative-frontier-closure",
     "intendedMinimumModel": "gpt-5.3-codex",
@@ -126,5 +126,129 @@
     "oscillationCheck": "This is an allowed successor because the immediately prior active-gate package changed the first frontier back to publication_ack_convergence after moving selected_snapshot_source_timeout out of first frontier; continued runtime work must first identify the missing publication owner causal edge.",
     "handoffInvariant": "Selected-source timeout handling, active-gate admission, timeout budgets, readiness support, priority recovery, terminal-progress selection, and closed handoff proof remain frozen unless canonical evidence selects them again."
   },
+  "ownerBoundaryMigrationProof": {
+    "fromOwner": "startup_active_gate_owner",
+    "fromBoundary": "snapshot_coverage",
+    "toOwner": "topology_publication_owner",
+    "toBoundary": "publication_convergence",
+    "reason": "Focused selected snapshot lane reset moved active_gate_snapshot_coverage out of first frontier; fresh canonical evidence selects publication_ack_convergence with publication_pending and priority residual witness count 0.",
+    "evidence": [
+      "npm run work:evidence-summary -- test-output/reports/rolling-restart-selected-snapshot-lane-reset-20260517T155212Z.report.json",
+      "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-selected-snapshot-lane-reset-20260517T155212Z.report.json --replay-fixture",
+      "npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-selected-snapshot-lane-reset-20260517T155212Z.report.json"
+    ]
+  },
   "predecessor": "work/packages/done-20260517-startup-active-gate-selected-snapshot-source-timeout-after-publication-migration.md"
 }
+-->
+
+## Why
+
+The selected snapshot lane reset package moved the active-gate selected-source
+timeout out of the first frontier. The latest representative artifact is still
+red, but the canonical blocker has migrated back to publication convergence:
+`publication_ack_convergence` is blocked by `publication_pending` while the
+publication owner stream remains publishing/waiting_for_publication.
+
+## Current Edge Card
+
+```text
+Input artifact: test-output/reports/rolling-restart-selected-snapshot-lane-reset-20260517T155212Z.report.json
+Current first frontier: publication_ack_convergence
+Owner: topology_publication_owner
+Boundary: publication_convergence
+Dominant reason: publication_pending
+Publication status: OPEN
+Publication owner stream: publishing / waiting_for_publication
+Published active nodes: 1/5, seed only
+Missing published nodes: 4
+Priority residual witnesses: 0
+Active-gate state: deferred, snapshotCoverageNodeCount=2/5, owner_reconcile_pending count=3
+Allowed stop modes: representative-green, reduced, same-frontier, migrated, classification-only, architecture-gap, human-escalation
+Next role: real review subagent before implementation
+```
+
+## Scope Basis
+
+Roadmap Phase `0.1 - Internal Coherence`, specifically rolling-restart topology
+workflow stabilization and production guarantees for the AGPL runtime.
+
+## Workflow Lane
+
+- Selected lane: `causal-escalation`
+- Why this lane is required: the representative release gate remains red after
+  adjacent active-gate and publication-convergence migrations, and canonical
+  evidence selects a runtime owner boundary that has recently re-entered.
+- Escalation trigger to a heavier lane: runtime ownership expands beyond the
+  publication owner boundary, shared contracts change, or representative
+  evidence changes owner/boundary again without monotonic progress.
+
+## Subagent Sequencing Requirement
+
+Required before implementation because this is a scenario-driven runtime
+owner-boundary package. Run review, fix if needed, and implementation subagents
+sequentially before editing runtime files.
+
+## Subagent Sequencing Ledger
+
+- [ ] Review subagent recorded: pending-before-implementation.
+- [ ] Fix subagent recorded or explicitly not needed: pending-before-implementation.
+- [ ] Implementation subagent recorded: pending-before-implementation.
+
+## LLM Tool-First Contract
+
+Before raw JSON, raw logs, broad file search, oversized segment files, or ad hoc
+`jq`, use the canonical workflow command that owns the question:
+
+1. Package metadata or ledger edits: `npm run work:package:doctor -- --suggest <package>`, `npm run work:package:doctor -- --fix-dry-run <package>`, `npm run work:package:schema`, or `npm run work:package:new -- ...`.
+2. Representative evidence: `npm run work:evidence-summary -- <artifact>` plus any focused extractor for this failure class.
+3. Owner discovery: `npm run analyze:owner-files -- <owner> [boundary]`.
+4. Subagent sequencing: `npm run work:subagent-prompt -- --role <role> --package <package>`.
+5. Large-file cleanup: `npm run work:oversized-next -- --markdown`.
+
+If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which
+canonical extractor was tried and why it was insufficient.
+
+## In Scope
+
+1. work/packages/active-20260517-topology-publication-convergence-after-selected-snapshot-lane-reset-migration.md
+2. work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md
+3. work/sprints/current-blocker.md
+4. work/sprints/current-blocker.json
+5. work/model-ledger.jsonl
+
+## Out Of Scope
+
+1. startup_active_gate_owner implementation
+2. operation_workflow_owner implementation
+3. selected_source_timeout
+4. timeout_budgets
+5. active_gate_admission
+6. priority_recovery
+7. readiness_support
+8. terminal_progress
+9. closed active-gate lane reset proof
+
+## Model Fit
+
+- Package class: `representative-frontier-closure`
+- Intended minimum model: `gpt-5.3-codex`
+- Scope shape: `owner-boundary-contraction/current-frontier`
+- Output profile: `medium`
+- Owned files: `work/packages/active-20260517-topology-publication-convergence-after-selected-snapshot-lane-reset-migration.md`, `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md`, `work/sprints/current-blocker.md`, `work/sprints/current-blocker.json`, `work/model-ledger.jsonl`
+- Forbidden files: `startup_active_gate_owner implementation`, `operation_workflow_owner implementation`, `selected_source_timeout`, `timeout_budgets`, `active_gate_admission`, `priority_recovery`, `readiness_support`, `terminal_progress`, `closed active-gate lane reset proof`
+- Frozen decisions: selected snapshot lane reset is closed; active-gate coverage is deferred; priority residual witnesses are `0`; publication recovery must be proven in the publication owner boundary before reopening downstream gates.
+- Escalation triggers: owned files expand beyond this package, a frozen decision must be reopened, or canonical evidence changes first frontier owner or boundary.
+- Focused proof: `npm run work:evidence-summary -- test-output/reports/rolling-restart-selected-snapshot-lane-reset-20260517T155212Z.report.json`, `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-selected-snapshot-lane-reset-20260517T155212Z.report.json --handoff-probe`, `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-selected-snapshot-lane-reset-20260517T155212Z.report.json --replay-fixture`, `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-selected-snapshot-lane-reset-20260517T155212Z.report.json`, `npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-selected-snapshot-lane-reset-20260517T155212Z.report.json`, `npm run analyze:distributed-failure -- --report test-output/reports/rolling-restart-selected-snapshot-lane-reset-20260517T155212Z.report.json`, `npm run analyze:owner-files -- topology_publication_owner publication_convergence`, `git diff --check`
+- Model ledger advisory: `escalate`
+
+## Validation
+
+1. npm run work:evidence-summary -- test-output/reports/rolling-restart-selected-snapshot-lane-reset-20260517T155212Z.report.json
+2. npm run analyze:topology-convergence -- test-output/reports/rolling-restart-selected-snapshot-lane-reset-20260517T155212Z.report.json --handoff-probe
+3. npm run analyze:topology-convergence -- test-output/reports/rolling-restart-selected-snapshot-lane-reset-20260517T155212Z.report.json --replay-fixture
+4. npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-selected-snapshot-lane-reset-20260517T155212Z.report.json
+5. npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-selected-snapshot-lane-reset-20260517T155212Z.report.json
+6. npm run analyze:distributed-failure -- --report test-output/reports/rolling-restart-selected-snapshot-lane-reset-20260517T155212Z.report.json
+7. npm run analyze:owner-files -- topology_publication_owner publication_convergence
+8. git diff --check
