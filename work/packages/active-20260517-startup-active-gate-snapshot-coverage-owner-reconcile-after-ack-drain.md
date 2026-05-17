@@ -174,6 +174,15 @@ Required before implementation because this is a scenario-driven runtime
 owner-boundary package. Run review, fix if needed, and implementation
 subagents before editing runtime files.
 
+## Subagent Sequencing Ledger
+
+Required before implementation because this is a scenario-driven runtime
+owner-boundary package.
+
+- [x] Review subagent recorded: Agent Faraday (019e3597-f55f-7333-a602-473a79157cf3) reviewed work/packages/active-20260517-startup-active-gate-snapshot-coverage-owner-reconcile-after-ack-drain.md; result fixes-required.
+- [x] Fix subagent recorded or explicitly not needed: Agent Codex (af9e824b-e1ca-4322-b9f7-d331266a7709) fixed work/packages/active-20260517-startup-active-gate-snapshot-coverage-owner-reconcile-after-ack-drain.md.
+- [x] Implementation subagent recorded: Agent Hume (019e35a0-4b97-71b2-a46a-f59b98a1dd1b) implemented work/packages/active-20260517-startup-active-gate-snapshot-coverage-owner-reconcile-after-ack-drain.md.
+
 ## LLM Tool-First Contract
 
 Before raw JSON, raw logs, broad file search, oversized segment files, or ad hoc `jq`, use the canonical workflow command that owns the question:

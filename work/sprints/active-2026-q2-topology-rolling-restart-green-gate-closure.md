@@ -22,38 +22,31 @@ success is in scope.
 ## Current Blocker Snapshot
 
 Latest representative artifact:
-`test-output/reports/rolling-restart-active-gate-drained-handoff-20260517T095943Z.report.json`.
+`test-output/reports/rolling-restart-publication-open-ack-classified-20260517T104704Z.report.json`.
 
-Canonical state after the active-gate handoff selector package closed as
-migrated:
+Canonical state after the publication ACK count-only projection package closed
+as migrated:
 
-1. The previous active-gate package closed as migrated by making explicit
-   drained `publicationActiveGateHandoff` state outrank stale flattened pending
-   progress in the handoff selector.
-2. The focused selector proof is green, but the representative rerun stayed
-   red and selected a new first frontier.
-3. The current active package is
-   `work/packages/done-20260517-topology-publication-ack-pending-after-active-gate-drain-migration.md`.
-4. Fresh `work:evidence-summary` selects `publication_ack_convergence` as the
-   first frontier.
-5. Representative owner boundary:
-   `topology_publication_owner / publication_convergence`.
-6. Dominant reason: `pending_acks_present`.
-7. Publication is `OPEN` with `pendingAckCount=1`, `pendingAckNodeIds=[]`,
-   `prioritySpreadPending=true`, `publicationOwnerAckState=unavailable`,
-   `freshnessFence=publishing`, `recoveryOutcome=waiting_for_publication`, and
-   `streamOutcome=publishing`.
-8. Active-gate snapshot coverage is deferred behind publication ACK with
-   snapshot coverage `2/7` and `pendingReconcileCount=5`.
-9. Priority recovery is subordinate evidence with one
-   `operation_workflow_owner / workflow_progress` witness on
-   `control_plane_publications-p1`, semantic state `recovering_in_flight`,
-   actuation `persisted_not_dispatched`, wait mode `event_driven`, and next
-   required action `advance_existing_operation`.
-10. The next proof must classify or satisfy `publication_ack_convergence`,
-    promote the workflow-progress witness only if canonical evidence selects
-    it, migrate to a genuinely new owner boundary, or turn representative
-    `rolling-restart` green.
+1. The previous publication ACK package closed as migrated; fresh
+   representative evidence now reports `publication_ack_convergence` satisfied.
+2. The current active package is
+   `work/packages/active-20260517-startup-active-gate-snapshot-coverage-owner-reconcile-after-ack-drain.md`.
+3. Fresh `work:evidence-summary` selects `active_gate_snapshot_coverage` as
+   the first frontier.
+4. Representative owner boundary:
+   `startup_active_gate_owner / snapshot_coverage`.
+5. Canonical blocker: `active_gate_snapshot_coverage`.
+6. Dominant reason: `active_gate_timed_out`.
+7. The handoff probe producer is satisfied with `publicationStatus=PUBLISHED`
+   and `pendingAckCount=0`.
+8. The active-gate consumer remains blocked with
+   `snapshotCoverageNodeCount=6/7`, `publicationActiveGateHandoffState=pending`,
+   `publicationActiveGateHandoffPendingReconcileCount=5`, and
+   `publicationActiveGateHandoffReasonCode=owner_reconcile_pending`.
+9. The next focused proof must target
+    `reconcile_owner_membership_publication`, reduce pending reconcile, improve
+    snapshot coverage beyond `6/7`, drain the handoff, migrate to a genuinely
+    new owner boundary, or turn representative `rolling-restart` green.
 
 ## Scope Basis
 

@@ -201,6 +201,17 @@ const ACTIVE_GATE_HANDOFF_RECONCILE_CONTROL_PLANE_CONVERGENCE =
 const ACTIVE_GATE_HANDOFF_RECONCILE_CRITICAL_OWNER_WAKE =
   'owner_recovery_wake';
 const ACTIVE_GATE_HANDOFF_RECONCILE_COMMAND_RETRY_AFTER_MS = 32000;
+const ACTIVE_GATE_HANDOFF_RECONCILE_OWNER_RETRY_AFTER_MS = 1000;
+const ACTIVE_GATE_HANDOFF_RECONCILE_CRITICAL_OPERATION =
+  'active_gate_handoff';
+const ACTIVE_GATE_HANDOFF_RECONCILE_CACHE_STALE_TRIGGER =
+  'cache_stale_watermark';
+const ACTIVE_GATE_HANDOFF_RECONCILE_CONTROL_PLANE_BACKPRESSURE_CAUSE =
+  'control_plane_backpressure';
+const ACTIVE_GATE_HANDOFF_RECONCILE_LOCAL_QUERY_TRANSPORT_READY_STATE =
+  'ready';
+const ACTIVE_GATE_HANDOFF_RECONCILE_PRESSURE_DEGRADED_ERROR =
+  'control_plane_pressure_degraded';
 const ACTIVE_GATE_AUTHORITATIVE_REPAIR_QUERY_TIMEOUT_MS = 3349;
 const ACTIVE_GATE_SNAPSHOT_TIMEOUT_SELECTED_SOURCE_NODE_ID =
   '11601fe0-72d6-5853-8590-ec2881853e72';
@@ -3994,7 +4005,9 @@ test('AdminControlSnapshot repair-deferred shared owner emits retry action after
     snapshot.canRunAuthoritativeControlSnapshotRepair = () => true;
     snapshot.evaluateAuthoritativeControlSnapshotRepair = () => ({
       shouldRepair: true,
-      triggerCodes: ['cache_stale_watermark'],
+      triggerCodes: [
+        ACTIVE_GATE_HANDOFF_RECONCILE_CACHE_STALE_TRIGGER,
+      ],
       nodeCoverage: {
         activeProjection: {
           hasCoverageGap: false,
@@ -5433,7 +5446,9 @@ test('AdminControlSnapshot repair-deferred shared owner attempts publication cat
     snapshot.canRunAuthoritativeControlSnapshotRepair = () => true;
     snapshot.evaluateAuthoritativeControlSnapshotRepair = () => ({
       shouldRepair: true,
-      triggerCodes: ['cache_stale_watermark'],
+      triggerCodes: [
+        ACTIVE_GATE_HANDOFF_RECONCILE_CACHE_STALE_TRIGGER,
+      ],
       nodeCoverage: {
         activeProjection: {
           hasCoverageGap: false,
@@ -6278,6 +6293,160 @@ test('AdminControlSnapshot repair-deferred trigger queues owner reconcile withou
         enqueued: true,
       },
       'the returned deferred snapshot should surface the queued owner outcome',
+    );
+  });
+
+test('AdminControlSnapshot repair-deferred trigger keeps bounded handoff retry after rejected owner enqueue',
+  async (t) => {
+    const buildOptions = [];
+    let reconcileOptions = null;
+    const staleSnapshot = {
+      nodes: [ACTIVE_GATE_HANDOFF_RECONCILE_NODE_IDS[0]],
+      controlPlaneDiagnostics: {
+        activeGateOwnerCohort: {
+          state: ACTIVE_GATE_OWNER_COHORT_STATE_PENDING,
+          reasonCode: ACTIVE_GATE_OWNER_COHORT_REASON_OWNER_RECONCILE_PENDING,
+          nextAction: ACTIVE_GATE_HANDOFF_NEXT_ACTION_RECONCILE,
+          expectedNodeIds: [
+            ...ACTIVE_GATE_HANDOFF_RECONCILE_NODE_IDS,
+          ],
+          publishedActiveNodeIds: [
+            ...ACTIVE_GATE_HANDOFF_RECONCILE_PUBLISHED_NODE_IDS,
+          ],
+          pendingReconcileCount:
+            ACTIVE_GATE_HANDOFF_RECONCILE_PENDING_COUNT,
+          pendingReconcileNodeIds: [
+            ...ACTIVE_GATE_HANDOFF_RECONCILE_PENDING_NODE_IDS,
+          ],
+        },
+        publicationConvergence: {
+          publicationEpoch: ACTIVE_GATE_HANDOFF_RECONCILE_PUBLICATION_EPOCH,
+          status: ACTIVE_GATE_OWNER_TRUTH_PUBLICATION_STATUS,
+          publishedActiveNodeIds: [
+            ...ACTIVE_GATE_HANDOFF_RECONCILE_PUBLISHED_NODE_IDS,
+          ],
+          missingPublishedNodeIds: [
+            ...ACTIVE_GATE_HANDOFF_RECONCILE_PENDING_NODE_IDS,
+          ],
+        },
+      },
+    };
+    const snapshot = new AdminControlSnapshot({
+      nodeId: ACTIVE_GATE_HANDOFF_RECONCILE_LOCAL_NODE_ID,
+      controlPlaneReadinessService: {
+        membershipPublicationService: {
+          async reconcileActiveGateMembershipPublication(
+            _publicationActiveGateHandoff,
+            options = {},
+          ) {
+            reconcileOptions = options;
+            return {
+              schemaVersion: ACTIVE_GATE_OWNER_COHORT_SCHEMA_VERSION,
+              state: ACTIVE_GATE_HANDOFF_RECONCILE_OUTCOME_WRITE_DEFERRED,
+              target: {
+                reconcileRequired: true,
+              },
+              publicationRow: null,
+              enqueued: false,
+              retryAfterMs:
+                ACTIVE_GATE_HANDOFF_RECONCILE_OWNER_RETRY_AFTER_MS,
+              controlPlaneConvergence: {
+                schemaVersion: ACTIVE_GATE_OWNER_COHORT_SCHEMA_VERSION,
+                convergenceClass:
+                  CONTROL_PLANE_CONVERGENCE_CLASS.CRITICAL,
+                pressureOutcome:
+                  CONTROL_PLANE_CONVERGENCE_PRESSURE_OUTCOME
+                    .CRITICAL_REJECTED,
+                operation:
+                  ACTIVE_GATE_HANDOFF_RECONCILE_CRITICAL_OPERATION,
+                retryAfterMs:
+                  ACTIVE_GATE_HANDOFF_RECONCILE_OWNER_RETRY_AFTER_MS,
+              },
+            };
+          },
+        },
+      },
+    });
+    snapshot.controlPlaneSnapshotOwner = new ControlPlaneSnapshotOwner({
+      controlSnapshot: snapshot,
+    });
+    snapshot.buildLocalControlSnapshot = async (options = {}) => {
+      buildOptions.push(options);
+      return staleSnapshot;
+    };
+    snapshot.canRunAuthoritativeControlSnapshotRepair = () => true;
+    snapshot.evaluateAuthoritativeControlSnapshotRepair = () => ({
+      shouldRepair: true,
+      triggerCodes: ['cache_stale_watermark'],
+      nodeCoverage: {
+        activeProjection: {
+          hasCoverageGap: false,
+        },
+      },
+    });
+    snapshot.ensureAuthoritativeDiscoveryCacheRepair = async () => ({
+      applied: false,
+      failedTables: [TABLES.SERVICES],
+      causeChain: [
+        ACTIVE_GATE_HANDOFF_RECONCILE_CONTROL_PLANE_BACKPRESSURE_CAUSE,
+      ],
+      retryAfterMs: ACTIVE_GATE_HANDOFF_RECONCILE_COMMAND_RETRY_AFTER_MS,
+      localQueryTransport: {
+        state: ACTIVE_GATE_HANDOFF_RECONCILE_LOCAL_QUERY_TRANSPORT_READY_STATE,
+        ready: true,
+      },
+      errors: [
+        ACTIVE_GATE_HANDOFF_RECONCILE_PRESSURE_DEGRADED_ERROR,
+      ],
+    });
+
+    const result = await snapshot.resolveLocalControlSnapshot({
+      allowAuthoritativeRepair: true,
+    });
+
+    t.equal(
+      reconcileOptions.reconcileAuthoritativeMembershipPublication,
+      true,
+      'deferred owner retry should still come from the handoff owner command',
+    );
+    t.equal(
+      buildOptions.length,
+      1,
+      'a rejected owner enqueue should not perform a visibility rebuild',
+    );
+    t.same(
+      result.nodes,
+      [ACTIVE_GATE_HANDOFF_RECONCILE_NODE_IDS[0]],
+      'the returned snapshot should keep the original coverage while retry remains pending',
+    );
+    t.same(
+      result.controlPlaneDiagnostics.publicationConvergence
+        .publishedActiveNodeIds,
+      [...ACTIVE_GATE_HANDOFF_RECONCILE_PUBLISHED_NODE_IDS],
+      'a deferred owner outcome should not widen publication truth',
+    );
+    t.match(
+      result.snapshotObservation,
+      {
+        state: ACTIVE_GATE_SNAPSHOT_REPAIR_DEFERRED_STATE,
+        contractState:
+          ACTIVE_GATE_SNAPSHOT_REPAIR_DEFERRED_CONTRACT_STATE,
+        nextAction: ACTIVE_GATE_SNAPSHOT_REPAIR_DEFERRED_NEXT_ACTION,
+        retryAfterMs:
+          ACTIVE_GATE_HANDOFF_RECONCILE_OWNER_RETRY_AFTER_MS,
+      },
+      'the returned repair-deferred observation should retain the bounded owner retry',
+    );
+    t.match(
+      result.controlPlaneDiagnostics.publicationConvergence
+        .membershipPublicationHandoffOutcome,
+      {
+        state: ACTIVE_GATE_HANDOFF_RECONCILE_OUTCOME_WRITE_DEFERRED,
+        enqueued: false,
+        retryAfterMs:
+          ACTIVE_GATE_HANDOFF_RECONCILE_OWNER_RETRY_AFTER_MS,
+      },
+      'the publication convergence diagnostics should retain the non-enqueued owner outcome',
     );
   });
 

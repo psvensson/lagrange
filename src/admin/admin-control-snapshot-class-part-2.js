@@ -82,10 +82,13 @@ const CONTROL_SNAPSHOT_MEMBERSHIP_PUBLICATION_HANDOFF_OUTCOME_FIELD =
 const CONTROL_SNAPSHOT_MEMBERSHIP_PUBLICATION_HANDOFF_OUTCOME_STATE =
   Object.freeze({
     PUBLISHED_VISIBLE: 'published_visible',
+    WRITE_DEFERRED: 'write_deferred',
   });
 const CONTROL_SNAPSHOT_MEMBERSHIP_PUBLICATION_HANDOFF_OUTCOME_DATA_FIELD =
   Object.freeze({
+    ENQUEUED: 'enqueued',
     PUBLICATION_ROW: 'publicationRow',
+    RETRY_AFTER_MS: 'retryAfterMs',
     STATE: 'state',
   });
 const CONTROL_SNAPSHOT_PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD = Object.freeze({
@@ -107,6 +110,7 @@ const CONTROL_SNAPSHOT_CRITICAL_CONVERGENCE_DEFERRED_FIELD =
 const CONTROL_SNAPSHOT_ORDINARY_REPAIR_DEFERRED_FIELD =
   'ordinaryRepairDeferred';
 const CONTROL_SNAPSHOT_PRESSURE_OUTCOME_FIELD = 'pressureOutcome';
+const CONTROL_SNAPSHOT_RETRY_AFTER_MS_FIELD = 'retryAfterMs';
 const CONTROL_SNAPSHOT_NODES_FIELD = 'nodes';
 const CONTROL_SNAPSHOT_PROJECTED_NODES_FIELD = 'projectedNodes';
 const CONTROL_SNAPSHOT_REFRESH_OPTION_FIELD = Object.freeze({
@@ -609,6 +613,78 @@ function isVisibleMembershipPublicationHandoffOutcome(outcome = null) {
   );
 }
 
+function normalizeControlSnapshotRetryAfterMs(value) {
+  const numericValue = Number(value);
+  return Number.isFinite(numericValue) && numericValue > NUM.ZERO ?
+    Math.floor(numericValue) :
+    null;
+}
+
+function selectMembershipPublicationHandoffRetryAfterMs(snapshot = null) {
+  const outcome = selectMembershipPublicationHandoffOutcome(snapshot);
+  if (
+    !outcome ||
+    typeof outcome !== TYPEOF.OBJECT ||
+    Array.isArray(outcome) ||
+    outcome[
+      CONTROL_SNAPSHOT_MEMBERSHIP_PUBLICATION_HANDOFF_OUTCOME_DATA_FIELD.STATE
+    ] !==
+      CONTROL_SNAPSHOT_MEMBERSHIP_PUBLICATION_HANDOFF_OUTCOME_STATE
+        .WRITE_DEFERRED ||
+    outcome[
+      CONTROL_SNAPSHOT_MEMBERSHIP_PUBLICATION_HANDOFF_OUTCOME_DATA_FIELD
+        .ENQUEUED
+    ] !== false
+  ) {
+    return null;
+  }
+  return normalizeControlSnapshotRetryAfterMs(
+    outcome[
+      CONTROL_SNAPSHOT_MEMBERSHIP_PUBLICATION_HANDOFF_OUTCOME_DATA_FIELD
+        .RETRY_AFTER_MS
+    ],
+  ) ||
+    normalizeControlSnapshotRetryAfterMs(
+      outcome[CONTROL_SNAPSHOT_CONTROL_PLANE_CONVERGENCE_FIELD]?.[
+        CONTROL_SNAPSHOT_RETRY_AFTER_MS_FIELD
+      ],
+    );
+}
+
+function buildControlSnapshotHandoffRetryOptions(
+  snapshot = null,
+  options = {},
+) {
+  const retryAfterMs =
+    selectMembershipPublicationHandoffRetryAfterMs(snapshot);
+  if (retryAfterMs === null) {
+    return options;
+  }
+  const repair =
+    options.repair &&
+      typeof options.repair === TYPEOF.OBJECT &&
+      !Array.isArray(options.repair) ?
+      {
+        ...options.repair,
+        [CONTROL_SNAPSHOT_RETRY_AFTER_MS_FIELD]: retryAfterMs,
+      } :
+      null;
+  return {
+    ...options,
+    [CONTROL_SNAPSHOT_RETRY_AFTER_MS_FIELD]: retryAfterMs,
+    ...(repair ? {repair} : {}),
+  };
+}
+
+function buildControlSnapshotHandoffProgressOptions(options = {}) {
+  return options.forceAuthoritativeRepair === true ?
+    {
+      ...options,
+      forceAuthoritativeRepair: false,
+    } :
+    options;
+}
+
 function resolveControlSnapshotCoverageNodeCount(snapshot = null) {
   const nodeIds = snapshot?.[CONTROL_SNAPSHOT_NODES_FIELD];
   return Array.isArray(nodeIds) ? nodeIds.length : NUM.ZERO;
@@ -843,15 +919,20 @@ class AdminControlSnapshotPart2 extends AdminControlSnapshotPart1 {
           handoffRefresh.snapshot,
           true,
         ),
-      handoffRefresh.refreshed === true ? options : {
-        ...options,
-        observationMode:
-          ADMIN_CONTROL_SNAPSHOT_OBSERVATION_MODE.REPAIR_DEFERRED,
-        repairEvaluation: deferredEvaluation,
-        repairAttempted: true,
-        repairDeferred: true,
-        retryAfterMs: options.repair?.retryAfterMs,
-      },
+      handoffRefresh.refreshed === true ?
+        buildControlSnapshotHandoffProgressOptions(options) :
+        buildControlSnapshotHandoffRetryOptions(
+          handoffRefresh.snapshot,
+          {
+            ...options,
+            observationMode:
+              ADMIN_CONTROL_SNAPSHOT_OBSERVATION_MODE.REPAIR_DEFERRED,
+            repairEvaluation: deferredEvaluation,
+            repairAttempted: true,
+            repairDeferred: true,
+            retryAfterMs: options.repair?.retryAfterMs,
+          },
+        ),
     );
   }
 
@@ -1138,15 +1219,20 @@ class AdminControlSnapshotPart2 extends AdminControlSnapshotPart1 {
               handoffRefresh.snapshot,
               true,
             ),
-          handoffRefresh.refreshed === true ? options : {
-            ...options,
-            observationMode:
-              ADMIN_CONTROL_SNAPSHOT_OBSERVATION_MODE.REPAIR_DEFERRED,
-            repairEvaluation,
-            repairAttempted: true,
-            repairDeferred: true,
-            retryAfterMs: error?.retryAfterMs,
-          },
+          handoffRefresh.refreshed === true ?
+            buildControlSnapshotHandoffProgressOptions(options) :
+            buildControlSnapshotHandoffRetryOptions(
+              handoffRefresh.snapshot,
+              {
+                ...options,
+                observationMode:
+                  ADMIN_CONTROL_SNAPSHOT_OBSERVATION_MODE.REPAIR_DEFERRED,
+                repairEvaluation,
+                repairAttempted: true,
+                repairDeferred: true,
+                retryAfterMs: error?.retryAfterMs,
+              },
+            ),
         );
       }
       throw buildAuthoritativeControlSnapshotRepairFailure(
@@ -1191,15 +1277,20 @@ class AdminControlSnapshotPart2 extends AdminControlSnapshotPart1 {
               handoffRefresh.snapshot,
               true,
             ),
-          handoffRefresh.refreshed === true ? options : {
-            ...options,
-            observationMode:
-              ADMIN_CONTROL_SNAPSHOT_OBSERVATION_MODE.REPAIR_DEFERRED,
-            repair,
-            repairEvaluation,
-            repairAttempted: true,
-            repairDeferred: true,
-          },
+          handoffRefresh.refreshed === true ?
+            buildControlSnapshotHandoffProgressOptions(options) :
+            buildControlSnapshotHandoffRetryOptions(
+              handoffRefresh.snapshot,
+              {
+                ...options,
+                observationMode:
+                  ADMIN_CONTROL_SNAPSHOT_OBSERVATION_MODE.REPAIR_DEFERRED,
+                repair,
+                repairEvaluation,
+                repairAttempted: true,
+                repairDeferred: true,
+              },
+            ),
         );
       }
       throw buildAuthoritativeControlSnapshotRepairFailure(
