@@ -3,7 +3,7 @@
 <!-- work-package
 {
   "schema": "work-package-v1",
-  "status": "active",
+  "status": "done",
   "opened": "2026-05-17",
   "lane": "causal-escalation",
   "scenario": "rolling-restart",
@@ -12,8 +12,8 @@
   "owner": "startup_active_gate_owner",
   "boundary": "snapshot_coverage",
   "dominantReason": "active_gate_timed_out",
-  "currentState": "The bounded handoff retry package drained the owner_reconcile_pending evidence, but the representative rolling-restart rerun is still red on active_gate_snapshot_coverage with snapshotCoverageNodeCount=0/5, selectedSnapshotSourceCause=selected_snapshot_source_timeout, selectedSnapshotNodeId=11601fe0-72d6-5853-8590-ec2881853e72, selectedSnapshotTimeoutMs=806, no active-gate handoff contract, publication ACK satisfied, and priority residual witnesses at zero.",
-  "nextAction": "Build the replayable selected-snapshot-source timeout fixture/probe for source 11601fe0-72d6-5853-8590-ec2881853e72, then reduce the timeout edge, improve snapshot coverage, migrate to a genuinely new owner boundary, or turn representative rolling-restart green.",
+  "currentState": "Focused active-gate terminal progress now preserves the best clean snapshot-coverage witness when the current selected witness regresses to a zero-coverage timeout. Focused harness tests and static checks pass. The representative rerun reduced the selected-source timeout edge from snapshotCoverageNodeCount=0/5 to snapshotCoverageNodeCount=4/5 with repair-deferred owner_reconcile_pending and publicationActiveGateHandoffPendingReconcileCount=3.",
+  "nextAction": "Open the successor pending handoff reconcile slice for the three pending reconcile nodes. Keep publication ACK, priority recovery, timeout budgets, active-gate admission, publication truth, selected-source timeout handling, terminal-progress selection, and readiness support frozen unless canonical evidence selects them again.",
   "proof": [
     "npm run work:evidence-summary -- test-output/reports/rolling-restart-after-bounded-handoff-retry-20260517T112600Z.report.json",
     "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-bounded-handoff-retry-20260517T112600Z.report.json --explain active_gate_snapshot_coverage",
@@ -26,7 +26,8 @@
     "git diff --check"
   ],
   "writeScope": [
-    "work/packages/active-20260517-startup-active-gate-selected-snapshot-source-timeout-after-bounded-handoff-retry.md",
+    "work/packages/done-20260517-startup-active-gate-selected-snapshot-source-timeout-after-bounded-handoff-retry.md",
+    "work/packages/active-20260517-startup-active-gate-pending-handoff-reconcile-after-selected-timeout-reduction.md",
     "work/packages/done-20260517-startup-active-gate-snapshot-coverage-owner-reconcile-after-ack-drain.md",
     "work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md",
     "work/sprints/current-blocker.md",
@@ -37,6 +38,7 @@
   ],
   "handoffFiles": [
     "test-output/reports/rolling-restart-after-bounded-handoff-retry-20260517T112600Z.report.json",
+    "test-output/reports/rolling-restart-selected-snapshot-source-timeout-fix-20260517T000000Z.report.json",
     "work/packages/done-20260517-startup-active-gate-snapshot-coverage-owner-reconcile-after-ack-drain.md"
   ],
   "generatedFiles": [
@@ -55,7 +57,8 @@
     "test/distributed/harness/__tests__/cluster.test-part-5.js"
   ],
   "commitScope": [
-    "work/packages/active-20260517-startup-active-gate-selected-snapshot-source-timeout-after-bounded-handoff-retry.md",
+    "work/packages/done-20260517-startup-active-gate-selected-snapshot-source-timeout-after-bounded-handoff-retry.md",
+    "work/packages/active-20260517-startup-active-gate-pending-handoff-reconcile-after-selected-timeout-reduction.md",
     "work/packages/done-20260517-startup-active-gate-snapshot-coverage-owner-reconcile-after-ack-drain.md",
     "work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md",
     "work/sprints/current-blocker.md",
@@ -75,14 +78,14 @@
     ]
   },
   "representativeResidual": {
-    "status": "live-red-scenario-release-gate",
+    "status": "reduced",
     "scenario": "rolling-restart",
-    "artifact": "test-output/reports/rolling-restart-after-bounded-handoff-retry-20260517T112600Z.report.json",
+    "artifact": "test-output/reports/rolling-restart-selected-snapshot-source-timeout-fix-20260517T000000Z.report.json",
     "frontier": "active_gate_snapshot_coverage",
     "owner": "startup_active_gate_owner",
     "boundary": "snapshot_coverage",
     "dominantReason": "active_gate_timed_out",
-    "nextAction": "Build a replayable selected_snapshot_source_timeout fixture/probe for node 11601fe0-72d6-5853-8590-ec2881853e72."
+    "nextAction": "Reduce the pending publication active-gate handoff reconcile count from 3 after selected_snapshot_source_timeout drained."
   },
   "causalGovernance": {
     "hypothesis": "The prior handoff retry package drained owner_reconcile_pending. The current first frontier is now selected_snapshot_source_timeout before any active-gate handoff evidence forms, so this package must first make that selected source timeout replayable and then reduce or migrate it.",
@@ -130,7 +133,10 @@
     "oscillationCheck": "Allowed because the predecessor changed the selected subcause from owner_reconcile_pending with pendingReconcileCount=5 to selected_snapshot_source_timeout with no detected handoff.",
     "handoffInvariant": "Publication ACK, priority recovery, timeout budgets, active-gate admission, publication truth, forced repair timeout handling, authoritative query-pressure fallback, and readiness support remain frozen unless canonical evidence selects them again."
   },
-  "predecessor": "work/packages/done-20260517-startup-active-gate-snapshot-coverage-owner-reconcile-after-ack-drain.md"
+  "predecessor": "work/packages/done-20260517-startup-active-gate-snapshot-coverage-owner-reconcile-after-ack-drain.md",
+  "closed": "2026-05-17",
+  "commitAndPushLedgerRequired": true,
+  "successor": "work/packages/active-20260517-startup-active-gate-pending-handoff-reconcile-after-selected-timeout-reduction.md"
 }
 -->
 
@@ -213,30 +219,31 @@ Classification gate before runtime edits:
 - [x] Subordinate evidence is frozen: publication ACK is satisfied or not
       selected, priority residual extraction reports zero witnesses, and
       readiness support is inherited from active-gate no progress.
-- [ ] Replayable selected-source timeout fixture/probe records node
+- [x] Replayable selected-source timeout fixture/probe records node
       `11601fe0-72d6-5853-8590-ec2881853e72`, timeout `806ms`, and coverage
       `0/5`.
 
 Implementation gate before runtime edits:
 
-- [ ] Exact runtime files are promoted by the fixture/probe, not by broad
+- [x] Exact runtime files are promoted by the fixture/probe, not by broad
       representative failure text alone.
-- [ ] Focused startup active-gate tests or probe assertions are named before
+- [x] Focused startup active-gate tests or probe assertions are named before
       implementation.
-- [ ] Runtime edits keep publication ACK, priority workflow progress, timeout
+- [x] Runtime edits keep publication ACK, priority workflow progress, timeout
       budgets, active-gate admission, publication truth, and readiness support
       frozen unless canonical evidence selects them again.
 
 ## In Scope
 
-1. work/packages/active-20260517-startup-active-gate-selected-snapshot-source-timeout-after-bounded-handoff-retry.md
-2. work/packages/done-20260517-startup-active-gate-snapshot-coverage-owner-reconcile-after-ack-drain.md
-3. work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md
-4. work/sprints/current-blocker.md
-5. work/sprints/current-blocker.json
-6. work/model-ledger.jsonl
-7. test/distributed/harness/cluster-segment-7.js
-8. test/distributed/harness/__tests__/cluster.test-part-5.js
+1. work/packages/done-20260517-startup-active-gate-selected-snapshot-source-timeout-after-bounded-handoff-retry.md
+2. work/packages/active-20260517-startup-active-gate-pending-handoff-reconcile-after-selected-timeout-reduction.md
+3. work/packages/done-20260517-startup-active-gate-snapshot-coverage-owner-reconcile-after-ack-drain.md
+4. work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md
+5. work/sprints/current-blocker.md
+6. work/sprints/current-blocker.json
+7. work/model-ledger.jsonl
+8. test/distributed/harness/cluster-segment-7.js
+9. test/distributed/harness/__tests__/cluster.test-part-5.js
 
 ## Out Of Scope
 
@@ -265,9 +272,12 @@ Implementation gate before runtime edits:
 - Intended minimum model: `gpt-5.3-codex`
 - Scope shape: `owner-boundary-contraction/current-frontier`
 - Output profile: `medium`
-- Owned files: `work/packages/active-20260517-startup-active-gate-selected-snapshot-source-timeout-after-bounded-handoff-retry.md`, `work/packages/done-20260517-startup-active-gate-snapshot-coverage-owner-reconcile-after-ack-drain.md`, `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md`, `work/sprints/current-blocker.md`, `work/sprints/current-blocker.json`, `work/model-ledger.jsonl`
+- Owned files: `work/packages/done-20260517-startup-active-gate-selected-snapshot-source-timeout-after-bounded-handoff-retry.md`, `work/packages/active-20260517-startup-active-gate-pending-handoff-reconcile-after-selected-timeout-reduction.md`, `work/packages/done-20260517-startup-active-gate-snapshot-coverage-owner-reconcile-after-ack-drain.md`, `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md`, `work/sprints/current-blocker.md`, `work/sprints/current-blocker.json`, `work/model-ledger.jsonl`
 - Forbidden files: `topology_publication_owner`, `operation_workflow_owner`, `timeout_budgets`, `active_gate_admission`, `readiness_support`
-- Frozen decisions: package scope and lane stay bounded unless explicitly escalated.
+- Frozen decisions: publication ACK, priority recovery, timeout budgets,
+  active-gate admission, publication truth, selected-source timeout handling,
+  terminal-progress selection, and readiness support stay frozen unless
+  canonical evidence selects them again.
 - Escalation triggers: owned files expand beyond this package, runtime ownership changes, or representative scenario evidence changes.
 - Focused proof: `npm run work:evidence-summary -- test-output/reports/rolling-restart-after-bounded-handoff-retry-20260517T112600Z.report.json`, `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-bounded-handoff-retry-20260517T112600Z.report.json --explain active_gate_snapshot_coverage`, `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-bounded-handoff-retry-20260517T112600Z.report.json --handoff-probe`, `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-bounded-handoff-retry-20260517T112600Z.report.json --replay-fixture`, `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-bounded-handoff-retry-20260517T112600Z.report.json`, `npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-after-bounded-handoff-retry-20260517T112600Z.report.json`, `npm run analyze:distributed-failure -- --report test-output/reports/rolling-restart-after-bounded-handoff-retry-20260517T112600Z.report.json`, `npm run analyze:owner-files -- startup_active_gate_owner snapshot_coverage --markdown`, `git diff --check`
 - Model ledger advisory: `escalate`
@@ -338,4 +348,10 @@ Implementation gate before runtime edits:
 | --- | --- | --- | --- | --- |
 | `done-20260517-topology-publication-ack-pending-after-active-gate-drain-migration.md` | `rolling-restart-publication-open-ack-classified-20260517T104704Z.report.json` | `topology_publication_owner / publication_convergence` -> `startup_active_gate_owner / snapshot_coverage` | `pendingAckCount=1` -> `0`; priority residual witnesses -> `0`; snapshot coverage `6/7` | `migrated` |
 | `done-20260517-startup-active-gate-snapshot-coverage-owner-reconcile-after-ack-drain.md` | `rolling-restart-after-bounded-handoff-retry-20260517T112600Z.report.json` | `startup_active_gate_owner / snapshot_coverage` | `owner_reconcile_pending` drained; `publicationActiveGateHandoffPendingReconcileCount=0`; selected cause moved to `selected_snapshot_source_timeout`; snapshot coverage `0/5` | `reduced` |
-| This package | `rolling-restart-after-bounded-handoff-retry-20260517T112600Z.report.json` | `startup_active_gate_owner / snapshot_coverage` | pending selected-source timeout fixture/probe for node `11601fe0-72d6-5853-8590-ec2881853e72` | `pending-before-probe` |
+| This package | `rolling-restart-selected-snapshot-source-timeout-fix-20260517T000000Z.report.json` | `startup_active_gate_owner / snapshot_coverage` | selected-source timeout reduced; snapshot coverage `0/5` -> `4/5`; pending handoff reconcile count `3` | `reduced` |
+
+## Commit And Push Ledger
+
+1. Focused package commit: 28b543d675bcce620e6fa101c52555dd228df877
+2. Pushed to: origin/codex/pending-ack-eligibility-filter
+3. Commit contains only package-owned files/package-status/allowed sprint handoff: yes

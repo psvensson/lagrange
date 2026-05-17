@@ -22,43 +22,54 @@ success is in scope.
 ## Current Blocker Snapshot
 
 Latest representative artifact:
-`test-output/reports/rolling-restart-after-bounded-handoff-retry-20260517T112600Z.report.json`.
+`test-output/reports/rolling-restart-selected-snapshot-source-timeout-fix-20260517T000000Z.report.json`.
 
-Canonical state after the bounded handoff retry package closed as reduced:
+Canonical state after the selected-source timeout package closed as reduced:
 
 1. `work/packages/done-20260517-startup-active-gate-snapshot-coverage-owner-reconcile-after-ack-drain.md`
    closed as `reduced`; focused admin and static proof passed, and the
    implementation commit was pushed.
-2. The current active package is
-   `work/packages/active-20260517-startup-active-gate-selected-snapshot-source-timeout-after-bounded-handoff-retry.md`.
-3. Fresh `work:evidence-summary` still selects
+2. `work/packages/done-20260517-startup-active-gate-selected-snapshot-source-timeout-after-bounded-handoff-retry.md`
+   closed as `reduced`; focused harness proof passed, terminal active-gate
+   progress preserves the best clean snapshot coverage witness across a
+   selected-source timeout regression, and the implementation commit was
+   pushed.
+3. The current active package is
+   `work/packages/active-20260517-startup-active-gate-pending-handoff-reconcile-after-selected-timeout-reduction.md`.
+4. Fresh `work:evidence-summary` still selects
    `active_gate_snapshot_coverage` as the first frontier.
-4. Representative owner boundary:
+5. Representative owner boundary:
    `startup_active_gate_owner / snapshot_coverage`.
-5. Canonical blocker: `active_gate_snapshot_coverage`.
-6. Dominant reason: `active_gate_timed_out`.
-7. The prior `owner_reconcile_pending` handoff evidence is drained:
-   `publicationActiveGateHandoff` is not detected and pending reconcile is `0`.
-8. The active-gate consumer remains blocked with
-   `snapshotCoverageNodeCount=0/5`, `selectedSnapshotSourceCause=selected_snapshot_source_timeout`,
-   `selectedSnapshotNodeId=11601fe0-72d6-5853-8590-ec2881853e72`, and
-   `selectedSnapshotTimeoutMs=806`.
-9. The next focused proof must build the replayable selected-source timeout
-   fixture/probe, reduce the timeout edge, improve snapshot coverage above
-   `0/5`, migrate to a genuinely new owner boundary, or turn representative
-   `rolling-restart` green.
+6. Canonical blocker: `active_gate_snapshot_coverage`.
+7. Dominant reason: `active_gate_timed_out`.
+8. The selected-source timeout edge is reduced: terminal progress now carries
+   `snapshotCoverageNodeCount=4/5` and no longer selects
+   `selected_snapshot_source_timeout` as the first subcause.
+9. The active-gate consumer remains blocked with
+   `publicationActiveGateHandoffState=pending`,
+   `publicationActiveGateHandoffReasonCode=owner_reconcile_pending`,
+   `publicationActiveGateHandoffPendingReconcileCount=3`, pending reconcile
+   nodes `11601fe0-72d6-5853-8590-ec2881853e72`,
+   `35a891b8-c1a0-5064-9c6e-2acfba61c2a7`, and
+   `ebc4aa0b-06c6-506d-93ea-1dd2deca3f58`, plus repair-deferred snapshot
+   observation.
+10. The next focused proof must build the replayable pending handoff reconcile
+   fixture/probe, reduce the pending reconcile count, improve snapshot coverage
+   from `4/5` to `5/5`, migrate to a genuinely new owner boundary, or turn
+   representative `rolling-restart` green.
 
 ## Current Edge Card
 
 ```text
-Representative artifact: test-output/reports/rolling-restart-after-bounded-handoff-retry-20260517T112600Z.report.json
+Representative artifact: test-output/reports/rolling-restart-selected-snapshot-source-timeout-fix-20260517T000000Z.report.json
 First frontier: active_gate_snapshot_coverage
 Owner: startup_active_gate_owner
 Boundary: snapshot_coverage
-Selected cause: selected_snapshot_source_timeout
-Allowed edits: selected-source timeout fixture/probe, then exact files promoted by that proof
+Selected cause: owner_reconcile_pending through pending publication active-gate handoff
+Pending reconcile nodes: 11601fe0-72d6-5853-8590-ec2881853e72, 35a891b8-c1a0-5064-9c6e-2acfba61c2a7, ebc4aa0b-06c6-506d-93ea-1dd2deca3f58
+Allowed edits: pending handoff reconcile fixture/probe, then exact files promoted by that proof
 Forbidden edits: topology_publication_owner, operation_workflow_owner, timeout_budgets, active_gate_admission, publication truth, readiness_support
-Required first proof: npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-bounded-handoff-retry-20260517T112600Z.report.json --explain active_gate_snapshot_coverage
+Required first proof: npm run analyze:topology-convergence -- test-output/reports/rolling-restart-selected-snapshot-source-timeout-fix-20260517T000000Z.report.json --handoff-probe
 Allowed stop modes: representative-green, migrated, reduced, same-frontier, classification-only, architecture-gap, human-escalation
 ```
 
@@ -68,7 +79,8 @@ Allowed stop modes: representative-green, migrated, reduced, same-frontier, clas
 | --- | --- | --- | --- | --- |
 | `done-20260517-topology-publication-ack-pending-after-active-gate-drain-migration.md` | `rolling-restart-publication-open-ack-classified-20260517T104704Z.report.json` | `topology_publication_owner / publication_convergence` -> `startup_active_gate_owner / snapshot_coverage` | `pendingAckCount=1` -> `0`; priority residual witnesses -> `0`; snapshot coverage `6/7` | `migrated` |
 | `done-20260517-startup-active-gate-snapshot-coverage-owner-reconcile-after-ack-drain.md` | `rolling-restart-after-bounded-handoff-retry-20260517T112600Z.report.json` | `startup_active_gate_owner / snapshot_coverage` | `owner_reconcile_pending` drained; `publicationActiveGateHandoffPendingReconcileCount=0`; selected cause moved to `selected_snapshot_source_timeout`; snapshot coverage `0/5` | `reduced` |
-| `active-20260517-startup-active-gate-selected-snapshot-source-timeout-after-bounded-handoff-retry.md` | `rolling-restart-after-bounded-handoff-retry-20260517T112600Z.report.json` | `startup_active_gate_owner / snapshot_coverage` | pending selected-source timeout proof for node `11601fe0-72d6-5853-8590-ec2881853e72` | `pending-before-probe` |
+| `done-20260517-startup-active-gate-selected-snapshot-source-timeout-after-bounded-handoff-retry.md` | `rolling-restart-selected-snapshot-source-timeout-fix-20260517T000000Z.report.json` | `startup_active_gate_owner / snapshot_coverage` | selected-source timeout reduced; snapshot coverage `0/5` -> `4/5`; pending handoff reconcile count `3` | `reduced` |
+| `active-20260517-startup-active-gate-pending-handoff-reconcile-after-selected-timeout-reduction.md` | `rolling-restart-selected-snapshot-source-timeout-fix-20260517T000000Z.report.json` | `startup_active_gate_owner / snapshot_coverage` | pending handoff reconcile fixture/probe for three nodes | `pending-before-probe` |
 
 ## Sprint LLM Trap List
 
@@ -80,8 +92,8 @@ Allowed stop modes: representative-green, migrated, reduced, same-frontier, clas
    source timeout.
 4. Do not chase readiness support until active-gate snapshot coverage improves;
    readiness is inherited from the active-gate failure.
-5. Do not start runtime edits before the selected-source timeout fixture/probe
-   makes the failing source-selection edge replayable.
+5. Do not start runtime edits before the pending handoff reconcile fixture/probe
+   makes the owner membership publication edge replayable.
 
 ## Scope Basis
 
