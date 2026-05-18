@@ -27,6 +27,7 @@ const TEST_PUBLICATION_COUNT = Object.freeze({
   PUBLISHED_FRONTIER_PENDING_ACK: 0,
   FRONTIER_MISSING_PUBLISHED: 3,
 });
+const TEST_EMPTY_NODE_IDS = Object.freeze([]);
 const TEST_NODE_ID = Object.freeze({
   FIRST: 'node-a',
   SECOND: 'node-b',
@@ -450,6 +451,42 @@ test('publication owner stream defers unknown count-only missing publication deb
         PUBLICATION_OWNER_REASON.MISSING_PUBLISHED_MEMBERS,
       ),
       true,
+    );
+    t.end();
+  });
+
+test('publication owner stream keeps UNKNOWN no-debt empty ACK list not started',
+  (t) => {
+    const stream = buildPublicationOwnerStreamState({
+      publicationStatus: PUBLICATION_OWNER_TEXT.UNKNOWN,
+      recoveryProtocolState:
+        TEST_PUBLICATION_RECOVERY_PROTOCOL.UNPUBLISHED_OBSERVATION,
+      requiredAckNodeIds: TEST_EMPTY_NODE_IDS,
+      acknowledgedNodeIds: TEST_EMPTY_NODE_IDS,
+      pendingAckNodeIds: TEST_EMPTY_NODE_IDS,
+      pendingAckCount: TEST_PUBLICATION_COUNT.PUBLISHED_FRONTIER_PENDING_ACK,
+      missingPublishedNodeIds: TEST_EMPTY_NODE_IDS,
+      missingPublishedCount:
+        TEST_PUBLICATION_COUNT.PUBLISHED_FRONTIER_PENDING_ACK,
+      publicationPending: true,
+      prioritySpreadPending: false,
+    });
+
+    t.equal(stream.ackState, PUBLICATION_OWNER_ACK_STATE.NOT_REQUIRED);
+    t.equal(
+      stream.freshnessFence,
+      PUBLICATION_OWNER_FRESHNESS_FENCE.NO_REVISION,
+    );
+    t.equal(stream.streamOutcome, PUBLICATION_OWNER_STREAM_OUTCOME.NOT_STARTED);
+    t.equal(
+      stream.recoveryOutcome,
+      PUBLICATION_OWNER_RECOVERY_OUTCOME.NOT_STARTED,
+    );
+    t.equal(
+      stream.reasonCodes.includes(
+        PUBLICATION_OWNER_REASON.PUBLICATION_PENDING_HINT,
+      ),
+      false,
     );
     t.end();
   });

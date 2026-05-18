@@ -394,6 +394,18 @@ test(TEST_UNKNOWN_COUNT_ONLY_PUBLICATION_PENDING_TEST_NAME, (t) => {
       priorityRecoveryReasonCodes: [TEST_PUBLICATION_PENDING_REASON_CODE],
       priorityPartitionSummary: TEST_SATISFIED_PRIORITY_PARTITION_SUMMARY,
     },
+    priorityRecoveryObservation: {
+      publicationEpoch: TEST_EMPTY_PUBLICATION_DEBT_COUNT,
+      publicationStatus: PUBLICATION_OWNER_TEXT.UNKNOWN,
+      recoveryProtocolState: RECOVERY_PROTOCOL_STATE.PUBLICATION_PENDING,
+      pendingAckNodeIds: TEST_EMPTY_NODE_IDS,
+      pendingAckCount: TEST_EMPTY_PUBLICATION_DEBT_COUNT,
+      missingPublishedNodeIds: TEST_EMPTY_NODE_IDS,
+      missingPublishedCount: TEST_EMPTY_PUBLICATION_DEBT_COUNT,
+      publicationPending: true,
+      priorityRecoveryReasonCodes: [TEST_PUBLICATION_PENDING_REASON_CODE],
+      priorityPartitionSummary: TEST_SATISFIED_PRIORITY_PARTITION_SUMMARY,
+    },
     activeGate: {
       progress: {
         expectedNodeCount: TEST_UNKNOWN_PUBLICATION_MISSING_COUNT,
@@ -424,6 +436,7 @@ test(TEST_UNKNOWN_COUNT_ONLY_PUBLICATION_PENDING_TEST_NAME, (t) => {
     PUBLICATION_RECOVERY_GATE_STATE.UNPUBLISHED_OBSERVATION,
   );
   t.equal(evidence.publicationConvergenceGate.publicationPending, false);
+  t.same(evidence.publicationConvergenceGate.reasonCodes, TEST_EMPTY_NODE_IDS);
   t.equal(
     evidence.publicationConvergenceGate.missingPublishedCount,
     TEST_EMPTY_PUBLICATION_DEBT_COUNT,
@@ -437,9 +450,22 @@ test(TEST_UNKNOWN_COUNT_ONLY_PUBLICATION_PENDING_TEST_NAME, (t) => {
     RECOVERY_PROTOCOL_STATE.UNPUBLISHED_OBSERVATION,
   );
   t.equal(evidence.publicationConvergence.publicationPending, false);
+  t.same(
+    evidence.publicationConvergence.priorityRecoveryReasonCodes,
+    TEST_EMPTY_NODE_IDS,
+  );
   t.equal(
     evidence.publicationConvergence.streamOutcome,
     PUBLICATION_OWNER_STREAM_OUTCOME.NOT_STARTED,
+  );
+  t.equal(evidence.priorityRecoveryObservation.publicationPending, false);
+  t.same(
+    evidence.priorityRecoveryObservation.priorityRecoveryReasonCodes,
+    TEST_EMPTY_NODE_IDS,
+  );
+  t.equal(
+    evidence.priorityRecoveryObservation.recoveryProtocolState,
+    RECOVERY_PROTOCOL_STATE.UNPUBLISHED_OBSERVATION,
   );
   t.end();
 });

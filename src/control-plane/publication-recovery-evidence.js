@@ -2,6 +2,9 @@ import {NUM} from '../constants/index.js';
 import {buildPriorityRecoveryObservationSnapshot} from
   './priority-recovery-observation-snapshot.js';
 import {
+  CONTROL_PLANE_PRIORITY_RECOVERY_REASON,
+} from './control-plane-readiness-constants.js';
+import {
   PUBLICATION_RECOVERY_PENDING_ACK_EVIDENCE_STATE,
   buildPublicationRecoveryGateSnapshot,
 } from
@@ -11,6 +14,9 @@ import {
   isPublicationOwnerStreamPublicationPending,
 } from './publication-owner-state.js';
 import {
+  PUBLICATION_OWNER_ACK_STATE,
+  PUBLICATION_OWNER_RECOVERY_OUTCOME,
+  PUBLICATION_OWNER_STREAM_OUTCOME,
   PUBLICATION_OWNER_TEXT,
 } from './publication-owner-constants.js';
 
@@ -677,6 +683,78 @@ function normalizeOptionalString(value) {
 
 function normalizeBoolean(value) {
   return value === true;
+}
+
+function hasClosedUnknownNoDebtPublicationGate(
+  publicationConvergenceGate = null,
+) {
+  if (!isRecord(publicationConvergenceGate)) {
+    return false;
+  }
+  const publicationStatus =
+    normalizeOptionalString(
+      publicationConvergenceGate.publicationStatusNormalized,
+    ) ||
+    normalizeOptionalString(publicationConvergenceGate.publicationStatus);
+  return publicationConvergenceGate.publicationPending !== true &&
+    publicationStatus === PUBLICATION_OWNER_TEXT.UNKNOWN &&
+    normalizeOptionalString(publicationConvergenceGate.recoveryProtocolState) ===
+      PUBLICATION_RECOVERY_PROTOCOL_STATE.UNPUBLISHED_OBSERVATION &&
+    normalizeOptionalString(publicationConvergenceGate.ackState) ===
+      PUBLICATION_OWNER_ACK_STATE.NOT_REQUIRED &&
+    normalizeOptionalString(publicationConvergenceGate.streamOutcome) ===
+      PUBLICATION_OWNER_STREAM_OUTCOME.NOT_STARTED &&
+    normalizeOptionalString(publicationConvergenceGate.recoveryOutcome) ===
+      PUBLICATION_OWNER_RECOVERY_OUTCOME.NOT_STARTED &&
+    normalizeNonNegativeInteger(publicationConvergenceGate.pendingAckCount) ===
+      NUM.ZERO &&
+    normalizeDistinctStringArray(publicationConvergenceGate.pendingAckNodeIds)
+      .length === NUM.ZERO &&
+    normalizeNonNegativeInteger(
+      publicationConvergenceGate.missingPublishedCount,
+    ) === NUM.ZERO &&
+    normalizeDistinctStringArray(
+      publicationConvergenceGate.missingPublishedNodeIds,
+    ).length === NUM.ZERO &&
+    publicationConvergenceGate.prioritySpreadPending !== true &&
+    publicationConvergenceGate.prioritySpreadEvidenceUnavailable !== true;
+}
+
+function filterClosedUnknownNoDebtReasonCodes(reasonCodes = []) {
+  return Object.freeze(
+    normalizeDistinctStringArray(reasonCodes).filter((reasonCode) =>
+      reasonCode !==
+        CONTROL_PLANE_PRIORITY_RECOVERY_REASON.PUBLICATION_EPOCH_PENDING,
+    ),
+  );
+}
+
+function normalizeClosedUnknownNoDebtPriorityRecoveryObservation(
+  priorityRecoveryObservation = null,
+  publicationConvergenceGate = null,
+) {
+  if (
+    !isRecord(priorityRecoveryObservation) ||
+    hasClosedUnknownNoDebtPublicationGate(publicationConvergenceGate) !== true
+  ) {
+    return priorityRecoveryObservation;
+  }
+  return Object.freeze({
+    ...priorityRecoveryObservation,
+    publicationPending: false,
+    recoveryProtocolState:
+      PUBLICATION_RECOVERY_PROTOCOL_STATE.UNPUBLISHED_OBSERVATION,
+    priorityRecoveryReasonCodes: filterClosedUnknownNoDebtReasonCodes(
+      priorityRecoveryObservation.priorityRecoveryReasonCodes,
+    ),
+    publicationConvergenceGateReasons: filterClosedUnknownNoDebtReasonCodes(
+      priorityRecoveryObservation.publicationConvergenceGateReasons,
+    ),
+    pendingAckNodeIds: PUBLICATION_RECOVERY_EVIDENCE_EMPTY_LIST,
+    pendingAckCount: NUM.ZERO,
+    missingPublishedNodeIds: PUBLICATION_RECOVERY_EVIDENCE_EMPTY_LIST,
+    missingPublishedCount: NUM.ZERO,
+  });
 }
 
 function hasUnavailablePublicationRecoveryEpoch(value) {
@@ -1471,21 +1549,26 @@ function buildCanonicalPriorityRecoveryObservation(options = {}) {
           {}),
       } :
       baseDerivedPriorityRecoveryObservation;
+  const normalizedDerivedPriorityRecoveryObservation =
+    normalizeClosedUnknownNoDebtPriorityRecoveryObservation(
+      derivedPriorityRecoveryObservation,
+      publicationConvergenceGate,
+    );
 
   if (
     !existingPriorityRecoveryObservation ||
-    !derivedPriorityRecoveryObservation
+    !normalizedDerivedPriorityRecoveryObservation
   ) {
-    return derivedPriorityRecoveryObservation ||
+    return normalizedDerivedPriorityRecoveryObservation ||
       existingPriorityRecoveryObservation;
   }
 
   return samePriorityRecoveryObservationContract(
     existingPriorityRecoveryObservation,
-    derivedPriorityRecoveryObservation,
+    normalizedDerivedPriorityRecoveryObservation,
   ) ?
     existingPriorityRecoveryObservation :
-    derivedPriorityRecoveryObservation;
+    normalizedDerivedPriorityRecoveryObservation;
 }
 
 function buildObservationPublicationGate(priorityRecoveryObservation = null) {
