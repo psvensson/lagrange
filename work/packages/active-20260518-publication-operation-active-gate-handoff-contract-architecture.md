@@ -1,9 +1,10 @@
+# Publication Operation Active Gate Handoff Contract Architecture
+
+<!-- work-package
 {
-  "schema": "current-blocker-v1",
-  "generatedBy": "scripts/work-tracker.js",
-  "sprint": "work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md",
-  "package": "work/packages/active-20260518-publication-operation-active-gate-handoff-contract-architecture.md",
+  "schema": "work-package-v1",
   "status": "active",
+  "opened": "2026-05-18",
   "lane": "causal-escalation",
   "scenario": "rolling-restart",
   "artifact": "test-output/reports/rolling-restart-after-active-gate-classification-20260518T043001Z.report.json",
@@ -55,7 +56,6 @@
     "test/scripts/analyze-topology-convergence.test.js",
     "test/scripts/__fixtures__/topology-convergence/publication-operation-active-gate-handoff.fixture.json"
   ],
-  "touchedFiles": [],
   "modelFit": {
     "packageClass": "architecture-gap-analysis",
     "intendedMinimumModel": "gpt-5.3-codex",
@@ -171,6 +171,91 @@
     ],
     "selectedChoice": "open-architecture-package",
     "nextAction": "Implement the selected bounded architecture package by first extending the focused handoff probe."
-  },
-  "predecessor": null
+  }
 }
+-->
+
+## Why
+
+The representative rolling-restart gate is red after multiple local focused
+proofs. The current first frontier is publication convergence, but the artifact
+also carries operation workflow dispatch-pending evidence and active-gate owner
+reconcile evidence. This package owns the selected architecture route: make
+that handoff replayable as one contract before more runtime owner patches.
+
+## Scope Basis
+
+Roadmap Phase `0.1 - Internal Coherence`: rolling-restart topology workflow
+stabilization and production guarantees for the AGPL runtime.
+
+## Workflow Lane
+
+- Selected lane: `causal-escalation`
+- Why this lane is sufficient: the sprint has selected a bounded architecture
+  package after repeated representative frontier oscillation.
+- Escalation trigger to a heavier lane: the focused probe cannot represent the
+  producer/operator/consumer handoff or selects files outside the candidate
+  runtime scope.
+
+## Subagent Sequencing Requirement
+
+This package may not start implementation until a fresh review subagent checks
+the previous package and the review/fix ledger is clean. Runtime source edits
+remain blocked until the focused probe identifies the exact owner contract.
+
+## Subagent Sequencing Ledger
+
+- [ ] Review subagent recorded: pending-before-implementation.
+- [ ] Fix subagent recorded or explicitly not needed: pending-before-review.
+- [ ] Implementation subagent recorded: pending-before-review.
+
+## LLM Tool-First Contract
+
+Before raw JSON, raw logs, broad file search, oversized segment files, or ad hoc `jq`, use the canonical workflow command that owns the question:
+
+1. Package metadata or ledger edits: `npm run work:package:doctor -- --suggest <package>`, `npm run work:package:doctor -- --fix-dry-run <package>`, `npm run work:package:schema`, or `npm run work:package:new -- ...`.
+2. Representative evidence: `npm run work:evidence-summary -- <artifact>` plus any focused extractor for this failure class.
+3. Owner discovery: `npm run analyze:owner-files -- <owner> [boundary]`.
+4. Subagent sequencing: `npm run work:subagent-prompt -- --role <role> --package <package>`.
+5. Large-file cleanup: `npm run work:oversized-next -- --markdown`.
+
+If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which canonical extractor was tried and why it was insufficient.
+
+## In Scope
+
+1. `work/packages/active-20260518-publication-operation-active-gate-handoff-contract-architecture.md`
+2. `work/sprints/current-blocker.md`
+3. `work/sprints/current-blocker.json`
+4. `scripts/analyze-topology-convergence.js`
+5. `test/scripts/analyze-topology-convergence.test.js`
+6. `test/scripts/__fixtures__/topology-convergence/publication-operation-active-gate-handoff.fixture.json`
+
+## Out Of Scope
+
+1. Runtime `src/` changes before focused probe selects the exact owner contract.
+2. Timeout budget increases.
+3. Active-gate admission relaxation.
+4. Consumer-local reinterpretation of publication, workflow, or active-gate evidence.
+
+## Model Fit
+
+- Package class: `architecture-gap-analysis`
+- Intended minimum model: `gpt-5.3-codex`
+- Scope shape: `cross-boundary-causal-gate`
+- Output profile: `medium`
+- Owned files: package metadata, generated current-blocker files, focused analyzer script, focused analyzer test, and handoff fixture named in metadata.
+- Forbidden files: runtime `src/` files before the focused probe selects the exact owner contract.
+- Frozen decisions: human-selected alternative 3 is active; prior local workflow-progress, rebalancer-handoff, and active-gate owner-reconcile classifications stay closed as isolated local proofs.
+- Escalation triggers: the probe selects a runtime owner outside candidate scope, canonical evidence changes the first frontier, or the producer/operator/consumer handoff cannot be represented by the current analyzer.
+- Focused proof: `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-active-gate-classification-20260518T043001Z.report.json --handoff-probe` plus `node --test test/scripts/analyze-topology-convergence.test.js`.
+- Model ledger advisory: `escalate`
+
+## Validation
+
+1. npm run work:evidence-summary -- test-output/reports/rolling-restart-after-active-gate-classification-20260518T043001Z.report.json
+2. npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-active-gate-classification-20260518T043001Z.report.json --explain publication_ack_convergence
+3. npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-active-gate-classification-20260518T043001Z.report.json --handoff-probe
+4. npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-after-active-gate-classification-20260518T043001Z.report.json --markdown
+5. npm run analyze:causal-model -- test-output/reports/rolling-restart-after-active-gate-classification-20260518T043001Z.report.json
+6. node --test test/scripts/analyze-topology-convergence.test.js
+7. npm run work:validate -- --closure

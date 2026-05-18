@@ -3,7 +3,7 @@
 <!-- work-package
 {
   "schema": "work-package-v1",
-  "status": "active",
+  "status": "done",
   "opened": "2026-05-18",
   "lane": "causal-escalation",
   "scenario": "rolling-restart",
@@ -24,10 +24,10 @@
     "npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-after-active-gate-classification-20260518T043001Z.report.json --markdown",
     "npm run analyze:distributed-failure -- --report test-output/reports/rolling-restart-after-active-gate-classification-20260518T043001Z.report.json",
     "npm run analyze:owner-files -- operation_workflow_owner workflow_progress",
-    "npm run work:package:doctor -- --suggest work/packages/active-20260518-priority-recovery-workflow-progress-after-active-gate-classification-rerun.md"
+    "npm run work:package:doctor -- --suggest work/packages/done-20260518-priority-recovery-workflow-progress-after-active-gate-classification-rerun.md"
   ],
   "writeScope": [
-    "work/packages/active-20260518-priority-recovery-workflow-progress-after-active-gate-classification-rerun.md",
+    "work/packages/done-20260518-priority-recovery-workflow-progress-after-active-gate-classification-rerun.md",
     "work/sprints/current-blocker.md",
     "work/sprints/current-blocker.json",
     "work/model-ledger.jsonl"
@@ -57,7 +57,7 @@
     "test/rebalancer/coordinator-created-operation-progress-remote-handoff.test.js"
   ],
   "commitScope": [
-    "work/packages/active-20260518-priority-recovery-workflow-progress-after-active-gate-classification-rerun.md",
+    "work/packages/done-20260518-priority-recovery-workflow-progress-after-active-gate-classification-rerun.md",
     "work/sprints/current-blocker.md",
     "work/sprints/current-blocker.json",
     "work/model-ledger.jsonl"
@@ -85,7 +85,7 @@
   },
   "causalGovernance": {
     "hypothesis": "The fresh red state is no longer a single-operation workflow-progress bug. It is the repeated cross-boundary handoff gap where publication convergence remains OPEN/publishing while active-gate snapshot coverage waits on owner reconcile, and operation workflow evidence reappears as persisted_not_dispatched dispatch_pending backpressure after prior focused proofs classified that exact local shape as bounded.",
-    "stopConditionCheck": "npm run analyze:causal-model -- test-output/reports/rolling-restart-after-active-gate-classification-20260518T043001Z.report.json plus npm run work:package:doctor -- --suggest work/packages/active-20260518-priority-recovery-workflow-progress-after-active-gate-classification-rerun.md",
+    "stopConditionCheck": "npm run analyze:causal-model -- test-output/reports/rolling-restart-after-active-gate-classification-20260518T043001Z.report.json plus npm run work:package:doctor -- --suggest work/packages/done-20260518-priority-recovery-workflow-progress-after-active-gate-classification-rerun.md",
     "expectedCausalModelChange": "No runtime implementation should start until the architecture gate selects continue-local-proof, owner-boundary migration, or an architecture package for the missing producer-consumer contract.",
     "representativeOutcome": "architecture-gap",
     "causalDebt": "Publication ACK, active-gate snapshot coverage, and operation workflow progress have each received recent focused local proofs or classifications, but the representative scenario still alternates between those boundaries instead of making monotonic progress toward green.",
@@ -164,7 +164,7 @@
         "route": "architecture-package",
         "proof": [
           "npm run analyze:causal-model -- test-output/reports/rolling-restart-after-active-gate-classification-20260518T043001Z.report.json",
-          "npm run work:package:doctor -- --suggest work/packages/active-20260518-priority-recovery-workflow-progress-after-active-gate-classification-rerun.md"
+          "npm run work:package:doctor -- --suggest work/packages/done-20260518-priority-recovery-workflow-progress-after-active-gate-classification-rerun.md"
         ]
       },
       {
@@ -173,14 +173,16 @@
         "route": "human-escalation",
         "proof": [
           "npm run work:context",
-          "npm run work:package:doctor -- --suggest work/packages/active-20260518-priority-recovery-workflow-progress-after-active-gate-classification-rerun.md"
+          "npm run work:package:doctor -- --suggest work/packages/done-20260518-priority-recovery-workflow-progress-after-active-gate-classification-rerun.md"
         ]
       }
     ],
     "selectedChoice": "open-architecture-package",
     "nextAction": "The successor bounded architecture package must be opened for the publication -> operation-workflow -> active-gate handoff contract before any runtime implementation resumes."
   },
-  "predecessor": "work/packages/done-20260517-startup-active-gate-snapshot-coverage-after-priority-backpressure-classification.md"
+  "predecessor": "work/packages/done-20260517-startup-active-gate-snapshot-coverage-after-priority-backpressure-classification.md",
+  "closed": "2026-05-18",
+  "commitAndPushLedgerRequired": true
 }
 -->
 
@@ -220,7 +222,7 @@ operation-workflow -> active-gate handoff contract before touching runtime files
 
 - [x] Review subagent recorded: Agent Codex (9c10920a-506c-4cf0-8823-4654d8903a03) reviewed work/packages/done-20260517-startup-active-gate-snapshot-coverage-after-priority-backpressure-classification.md; result clean.
 - [x] Fix subagent recorded or explicitly not needed: not-needed.
-- [x] Implementation subagent recorded: Agent Codex (c814d1a6-1b64-4b9e-8924-816718549279) implemented work/packages/active-20260518-priority-recovery-workflow-progress-after-active-gate-classification-rerun.md; result selected architectureDecisionGate route `open-architecture-package`, runtime-edit-not-needed, successor-package-not-created.
+- [x] Implementation subagent recorded: Agent Codex (c814d1a6-1b64-4b9e-8924-816718549279) implemented work/packages/done-20260518-priority-recovery-workflow-progress-after-active-gate-classification-rerun.md; result selected architectureDecisionGate route `open-architecture-package`, runtime-edit-not-needed, successor-package-not-created.
 
 ## LLM Tool-First Contract
 
@@ -254,7 +256,7 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 - Intended minimum model: `gpt-5.3-codex`
 - Scope shape: `cross-boundary-causal-gate`
 - Output profile: `medium`
-- Owned files: `work/packages/active-20260518-priority-recovery-workflow-progress-after-active-gate-classification-rerun.md`, `work/sprints/current-blocker.md`, `work/sprints/current-blocker.json`, `work/model-ledger.jsonl`
+- Owned files: `work/packages/done-20260518-priority-recovery-workflow-progress-after-active-gate-classification-rerun.md`, `work/sprints/current-blocker.md`, `work/sprints/current-blocker.json`, `work/model-ledger.jsonl`
 - Forbidden files: runtime `src/` files until route selection
 - Frozen decisions: prior local workflow-progress, rebalancer-handoff, and active-gate owner-reconcile classifications stay closed as isolated local proofs.
 - Escalation triggers: runtime files are edited before an architecture route is selected, or canonical evidence selects a single owner boundary with monotonic reduction.
@@ -269,10 +271,16 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 4. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-active-gate-classification-20260518T043001Z.report.json --explain publication_ack_convergence`
 5. `npm run analyze:causal-model -- test-output/reports/rolling-restart-after-active-gate-classification-20260518T043001Z.report.json`
 6. `npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-after-active-gate-classification-20260518T043001Z.report.json --markdown`
-7. `npm run work:package:doctor -- --suggest work/packages/active-20260518-priority-recovery-workflow-progress-after-active-gate-classification-rerun.md`
+7. `npm run work:package:doctor -- --suggest work/packages/done-20260518-priority-recovery-workflow-progress-after-active-gate-classification-rerun.md`
 
 ## Architecture Decision Gate
 
-- Status: `required`
+- Status: `selected`
 - Trigger: `frontier-oscillation`
 - Runtime implementation is blocked until a route is selected.
+
+## Commit And Push Ledger
+
+1. Focused package commit: `aa981869`
+2. Pushed to: `origin/codex/pending-ack-eligibility-filter`
+3. Commit contains only package-owned files/package-status/allowed sprint handoff: yes
