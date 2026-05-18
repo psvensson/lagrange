@@ -1,9 +1,10 @@
+# Topology Publication Residual After Priority Split Classification
+
+<!-- work-package
 {
-  "schema": "current-blocker-v1",
-  "generatedBy": "scripts/work-tracker.js",
-  "sprint": "work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md",
-  "package": "work/packages/active-20260518-topology-publication-residual-after-priority-split-classification.md",
+  "schema": "work-package-v1",
   "status": "active",
+  "opened": "2026-05-18",
   "lane": "causal-escalation",
   "scenario": "rolling-restart",
   "artifact": "test-output/reports/rolling-restart-after-publication-zero-gap-priority-spread-20260518T104305Z.report.json",
@@ -47,7 +48,6 @@
     "work/sprints/current-blocker.md",
     "work/sprints/current-blocker.json"
   ],
-  "touchedFiles": [],
   "modelFit": {
     "packageClass": "representative-frontier-closure",
     "intendedMinimumModel": "gpt-5.3-codex",
@@ -124,3 +124,120 @@
   },
   "predecessor": "work/packages/done-20260518-topology-publication-convergence-after-active-gate-handoff-oscillation.md"
 }
+-->
+
+## Why
+
+The predecessor reduced stale zero-gap priority-spread debt in the publication
+owner path, but representative evidence still selects publication first. This
+package owns the diagnostic handoff that decides the next concrete publication
+action, stop condition, or migration before any more runtime code changes.
+
+## Scope Basis
+
+Roadmap Phase `0.1 - Internal Coherence`: rolling-restart topology workflow
+stabilization and production guarantees for the AGPL runtime.
+
+## Workflow Lane
+
+- Selected lane: `causal-escalation`
+- Why this lane is sufficient: owner, boundary, core logic brief, and proof ladder are bounded to this package.
+- Escalation trigger to a heavier lane: runtime ownership, shared contract, or representative scenario evidence changes.
+
+## Core Logic Brief
+
+- Canonical outcome: one classification for the remaining
+  `publication_pending` frontier: bounded publication owner runtime successor,
+  classification-only stop, owner migration, same-frontier, architecture-gap,
+  human escalation, or representative-green.
+- Inputs/signals: representative artifact
+  `test-output/reports/rolling-restart-after-publication-zero-gap-priority-spread-20260518T104305Z.report.json`;
+  scenario-route; evidence-summary; handoff-probe; causal-model; priority
+  residual extraction; owner-files; predecessor package proof.
+- State model or invariant: normalize the publication frontier, active-gate
+  deferred handoff state, and priority residual split into one snapshot before
+  selecting a single next action.
+- Non-goals and forbidden interpretations: do not treat subordinate
+  `rebalancer_handoff` witnesses, deferred active-gate evidence, readiness
+  stalls, admission, handoff architecture, or timeout budgets as editable until
+  canonical evidence reselects them.
+- Proof mapping: canonical extractors must agree on the selected owner,
+  boundary, and next action; if runtime work is promoted, required subagent
+  sequencing and focused tests must be refreshed first.
+- Wrong-slice trigger: stop or escalate if the evidence cannot distinguish a
+  publication owner action from deferred consumer evidence or requires files
+  outside the promoted scope.
+
+## LLM Tool-First Contract
+
+Before raw JSON, raw logs, broad file search, oversized segment files, or ad hoc `jq`, use the canonical workflow command that owns the question:
+
+1. Package metadata or ledger edits: `npm run work:package:doctor -- --suggest <package>`, `npm run work:package:doctor -- --fix-dry-run <package>`, `npm run work:package:schema`, or `npm run work:package:new -- ...`.
+2. Representative evidence: `npm run work:evidence-summary -- <artifact>` plus any focused extractor for this failure class.
+3. Owner discovery: `npm run analyze:owner-files -- <owner> [boundary]`.
+4. Subagent sequencing: `npm run work:subagent-prompt -- --role <role> --package <package>`.
+5. Large-file cleanup: `npm run work:oversized-next -- --markdown`.
+
+If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which canonical extractor was tried and why it was insufficient.
+
+## Workflow Acceleration Contract
+
+1. Use `npm run work:advance -- --check` before adding more package prose; it combines doctor, subagent-next, and entry/pre-implementation validation.
+2. Keep the durable proof ladder to 3-5 commands by default: prefer `npm run work:scenario-route -- <artifact>` for representative routing, one focused test or extractor, and validation. Add static guardrails only when implementation files changed.
+3. If this package only changes package, sprint, tracker, or ledger files, the next pass must run representative evidence, close as classification-only, open a concrete bug package, or present a human gate.
+4. Once an architecture gate has a selected route, do not open another gate unless fresh canonical evidence contradicts the selected route.
+
+## In Scope
+
+1. work/packages/active-20260518-topology-publication-residual-after-priority-split-classification.md
+2. work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md
+3. work/sprints/current-blocker.md
+4. work/sprints/current-blocker.json
+
+## Out Of Scope
+
+1. startup active-gate runtime
+2. operation workflow / rebalancer_handoff runtime
+3. startup readiness runtime
+4. active-gate admission
+5. timeout budgets
+6. handoff architecture
+
+## Model Fit
+
+- Package class: `representative-frontier-closure`
+- Intended minimum model: `gpt-5.3-codex`
+- Scope shape: `owner-boundary-contraction/current-frontier`
+- Output profile: `medium`
+- Owned files: `work/packages/active-20260518-topology-publication-residual-after-priority-split-classification.md`, `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md`, `work/sprints/current-blocker.md`, `work/sprints/current-blocker.json`
+- Forbidden files: `startup active-gate runtime`, `operation workflow / rebalancer_handoff runtime`, `startup readiness runtime`, `active-gate admission`, `timeout budgets`, `handoff architecture`
+- Frozen decisions: package scope and lane stay bounded unless explicitly escalated.
+- Escalation triggers: owned files expand beyond this package, runtime ownership changes, or representative scenario evidence changes.
+- Focused proof: `npm run work:evidence-summary -- test-output/reports/rolling-restart-after-publication-zero-gap-priority-spread-20260518T104305Z.report.json`, `npm run work:scenario-triage -- test-output/reports/rolling-restart-after-publication-zero-gap-priority-spread-20260518T104305Z.report.json --markdown`, `npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-after-publication-zero-gap-priority-spread-20260518T104305Z.report.json --markdown`
+- Model ledger advisory: `escalate`
+
+## Subagent Sequencing Ledger
+
+Required before implementation because this is a causal-escalation package.
+Review returned `fixes-required`; this fix role repaired metadata, tracker, and
+sprint handoff files only. Implementation remains pending.
+
+- [x] Review subagent recorded: Agent Mencius (019e3ac0-56cf-7661-a241-e7f166adda9e) reviewed work/packages/active-20260518-topology-publication-residual-after-priority-split-classification.md; result fixes-required.
+- [x] Fix subagent recorded or explicitly not needed: Agent Raman (019e3ac3-0a8f-7483-932e-d94d0fdab835) fixed work/packages/active-20260518-topology-publication-residual-after-priority-split-classification.md.
+- [ ] Implementation subagent recorded:
+      pending-before-implementation-starts
+
+## Subagent Progress Ledger
+
+Required when subagent sequencing is required. Each real subagent appends one checked update after every completed subtask; the Sequencing Ledger remains the role-completion proof.
+
+- [x] Agent Mencius (019e3ac0-56cf-7661-a241-e7f166adda9e) review complete: successor package and predecessor classification reviewed; evidence: scenario-route, evidence-summary, scenario-triage, handoff-probe, causal-model, priority residual extraction, package doctor, and entry validation; next: fix subagent for metadata, tracker, and sprint repairs.
+- [x] Agent Raman (019e3ac3-0a8f-7483-932e-d94d0fdab835) fix context loaded: scope and blocker confirmed; evidence: `npm run work:context`, package file, sprint file, and current-blocker files read; next: run package doctor and entry validation.
+- [x] Agent Raman (019e3ac3-0a8f-7483-932e-d94d0fdab835) fix probe complete: stale current-blocker and missing Subagent Sequencing Ledger confirmed; evidence: `npm run work:llm-start`, `npm run work:package:doctor -- --suggest work/packages/active-20260518-topology-publication-residual-after-priority-split-classification.md`, and `npm run work:validate -- --entry`; next: edit metadata, tracker, and sprint references.
+- [x] Agent Raman (019e3ac3-0a8f-7483-932e-d94d0fdab835) fix validation complete: package proof refreshed; evidence: `npm run work:package:doctor -- --suggest work/packages/active-20260518-topology-publication-residual-after-priority-split-classification.md` validation ok and `npm run work:validate -- --entry` OK; next: final handoff.
+
+## Validation
+
+1. npm run work:evidence-summary -- test-output/reports/rolling-restart-after-publication-zero-gap-priority-spread-20260518T104305Z.report.json
+2. npm run work:scenario-triage -- test-output/reports/rolling-restart-after-publication-zero-gap-priority-spread-20260518T104305Z.report.json --markdown
+3. npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-after-publication-zero-gap-priority-spread-20260518T104305Z.report.json --markdown

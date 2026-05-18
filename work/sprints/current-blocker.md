@@ -4,7 +4,7 @@
 
 Sprint: `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md`
 
-Package: `work/packages/active-20260518-topology-publication-convergence-after-active-gate-handoff-oscillation.md`
+Package: `work/packages/active-20260518-topology-publication-residual-after-priority-split-classification.md`
 
 Workflow lane: `causal-escalation`
 
@@ -22,20 +22,17 @@ Boundary: `publication_convergence`
 
 Dominant reason: `publication_pending`
 
-Current state: Focused implementation selected a bounded publication owner reduction and the representative rerun remained red but reduced the residual. The latest artifact failed 0/1 at active=0/5 and snapshotCoverage=3/5. Canonical route still selects publication_ack_convergence / topology_publication_owner / publication_convergence / publication_pending, while active-gate pending reconcile reduced from three nodes to two and priority residual extraction now exposes four operation_workflow_owner / rebalancer_handoff witnesses.
+Current state: The predecessor reduced stale zero-gap priority-spread publication debt, but the representative rerun remains red with publication_ack_convergence first, snapshotCoverage=3/5, active-gate pending reconcile=2, and four subordinate operation_workflow_owner / rebalancer_handoff witnesses with splitRequired=false.
 
 ## Next Action
 
-Classify the post-rerun split between the topology publication first frontier and the four rebalancer_handoff priority residual witnesses before further runtime edits. Keep active-gate consumer runtime, operation workflow, readiness, active-gate admission, handoff architecture, and timeout budgets frozen unless fresh canonical evidence selects them through a bounded successor.
+Classify the remaining publication_pending frontier before runtime edits: choose a bounded publication owner successor, classification-only stop, or fresh owner migration from canonical evidence.
 
 ## Proof Ladder
 
-1. `npm run work:scenario-route -- test-output/reports/rolling-restart-after-publication-zero-gap-priority-spread-20260518T104305Z.report.json --owner topology_publication_owner --boundary publication_convergence --dominant-reason publication_pending --explain publication_ack_convergence --markdown`
-2. `npm run work:evidence-summary -- test-output/reports/rolling-restart-after-publication-zero-gap-priority-spread-20260518T104305Z.report.json`
-3. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-publication-zero-gap-priority-spread-20260518T104305Z.report.json --handoff-probe`
-4. `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-publication-zero-gap-priority-spread-20260518T104305Z.report.json`
-5. `npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-after-publication-zero-gap-priority-spread-20260518T104305Z.report.json --markdown`
-6. `npm run analyze:owner-files -- topology_publication_owner publication_convergence`
+1. `npm run work:evidence-summary -- test-output/reports/rolling-restart-after-publication-zero-gap-priority-spread-20260518T104305Z.report.json`
+2. `npm run work:scenario-triage -- test-output/reports/rolling-restart-after-publication-zero-gap-priority-spread-20260518T104305Z.report.json --markdown`
+3. `npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-after-publication-zero-gap-priority-spread-20260518T104305Z.report.json --markdown`
 
 ## Model Fit
 
@@ -50,12 +47,11 @@ Output profile: `medium`
 Escalation triggers:
 
 1. `owned files expand beyond this package`
-2. `runtime ownership changes`
-3. `representative scenario evidence changes`
+2. `a frozen decision must be reopened`
 
 ## Representative Residual
 
-Status: `reduced`
+Status: `pending-before-probe`
 
 Scenario: `rolling-restart`
 
@@ -69,82 +65,84 @@ Boundary: `publication_convergence`
 
 Dominant reason: `publication_pending`
 
-Next action: `Classify the reduced same-owner publication frontier with newly exposed operation_workflow_owner / rebalancer_handoff priority residual witnesses.`
+Next action: `Classify whether the remaining publication_pending frontier is a bounded topology publication owner runtime slice, classification-only stop, or fresh owner migration.`
 
 ## Causal Governance
 
-Causal hypothesis: `After the same-frontier handoff proof, the selected local blocker is producer-side topology publication convergence. Focused publication owner proof should reduce publication_pending, classify the remaining OPEN epoch-1 evidence, migrate to a concrete successor, or stop as same-frontier without reopening active-gate, operation workflow, readiness, admission, or timeout-budget work.`
+Causal hypothesis: `The predecessor reduced stale zero-gap priority-spread debt, but canonical route, triage, evidence summary, and causal model still select publication_ack_convergence / topology_publication_owner / publication_convergence first. The four operation_workflow_owner / rebalancer_handoff witnesses are subordinate unless fresh evidence changes splitRequired or reselects that owner boundary.`
 
-Stop-condition check: `Use scenario-route, evidence-summary, handoff-probe, npm run analyze:causal-model, priority residual extraction, owner-files, package doctor, and subagent sequencing before runtime edits. Runtime edits must stay inside the declared publication owner files.`
+Stop-condition check: `Use scenario-route, evidence-summary, handoff-probe, npm run analyze:causal-model, priority residual extraction, owner-files, package doctor, and subagent sequencing before runtime edits. Runtime files stay candidate-only until the diagnostic classification selects a bounded publication owner action.`
 
-Expected causal-model change: `Observed reduced but same-owner result: focused owner proof removed stale zero-gap priority-spread debt, snapshotCoverage moved 2/5 to 3/5, active-gate pending reconcile moved 3 to 2, and priority residual extraction now exposes four rebalancer_handoff witnesses while topology route remains publication_ack_convergence first.`
+Expected causal-model change: `This package should classify the reduced same-owner frontier into a bounded publication owner runtime successor, classification-only stop, migrated owner boundary, architecture-gap, human escalation, or representative green.`
 
-Representative outcome: `reduced`
+Representative outcome: `pending-before-rerun`
 
-Causal debt: `The representative remains red at active=0/5 and snapshotCoverage=3/5. Publication is still OPEN at epoch 1 with one published active node and four missing published nodes in canonical topology evidence. Active-gate remains deferred with two pending reconcile nodes and runtimePromotionAllowed=false. Priority residual extraction now reports four operation_workflow_owner / rebalancer_handoff witnesses.`
+Causal debt: `The representative remains red at active=0/5 and snapshotCoverage=3/5. Publication is OPEN at epoch 1 with one published active node and four missing published nodes; active-gate consumer evidence is deferred with two pending owner_reconcile_pending nodes and runtimePromotionAllowed=false; priority residual extraction reports four rebalancer_handoff retry-scheduled witnesses with splitRequired=false.`
 
-Cross-boundary review: `Required before implementation because this causal-escalation package may edit runtime publication owner files after a cross-boundary handoff proof.`
+Cross-boundary review: `Required before implementation because this causal-escalation successor follows a publication runtime reduction and may otherwise reopen adjacent active-gate or operation workflow boundaries.`
 
 ## Scenario Causal Closure
 
-Reference scenario/probe: `rolling-restart publication convergence after same-frontier publication-active-gate handoff classification`
+Reference scenario/probe: `rolling-restart publication residual after zero-gap priority-spread reduction`
 
 Phase chain:
 
-1. `publication count-only UNKNOWN evidence reduced to concrete OPEN epoch-1 evidence`
-2. `rebalancer_handoff retry witnesses classified as bounded`
-3. `publication-active-gate handoff probe recorded missingEdge=null and an existing contract edge`
-4. `fresh active-gate handoff classification rerun reselected publication_ack_convergence`
-5. `same-frontier handoff package closed without runtime or test edits`
+1. `same-frontier publication-active-gate handoff proof closed with missingEdge=null`
+2. `predecessor implemented bounded publication owner zero-gap priority-spread reduction`
+3. `representative rerun reduced snapshotCoverage 2/5 to 3/5 and active-gate pending reconcile 3 to 2`
+4. `fresh route still selects publication_ack_convergence first`
+5. `priority residual extraction reports four rebalancer_handoff witnesses with splitRequired=false`
 
 Current first frontier: `publication_ack_convergence / topology_publication_owner / publication_convergence / publication_pending in test-output/reports/rolling-restart-after-publication-zero-gap-priority-spread-20260518T104305Z.report.json.`
 
 Known downstream blockers:
 
-1. `post-implementation rerun failed 0/1 at active=0/5 and snapshotCoverage=3/5`
-2. `publicationStatus is OPEN at publicationEpoch=1`
-3. `publishedActiveNodeIds contains one node while four expected nodes remain missing from publication`
-4. `priority residual extraction reports four operation_workflow_owner / rebalancer_handoff witnesses`
-5. `active-gate snapshot coverage is deferred with two pending owner_reconcile_pending nodes and runtimePromotionAllowed=false`
+1. `representative failed 0/1 at active=0/5 and snapshotCoverage=3/5`
+2. `publicationStatus is OPEN at publicationEpoch=1 with publishedActive=1/5 and four missing published nodes`
+3. `active-gate snapshot coverage is deferred with two pending owner_reconcile_pending nodes and runtimePromotionAllowed=false`
+4. `priority residual extraction reports four operation_workflow_owner / rebalancer_handoff retry-scheduled witnesses with splitRequired=false`
 
-Missing causal edge: `Determine whether the newly exposed rebalancer_handoff witnesses are a publication-convergence successor, a priority-recovery migration, or bounded backpressure while topology route still reports publication_ack_convergence first.`
+Missing causal edge: `Determine the next concrete publication owner action after stale priority-spread debt was reduced and rebalancer_handoff witnesses remained subordinate.`
 
-Missing causal edge probe: `npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-after-publication-zero-gap-priority-spread-20260518T104305Z.report.json --markdown`
+Missing causal edge probe: `npm run work:scenario-route -- test-output/reports/rolling-restart-after-publication-zero-gap-priority-spread-20260518T104305Z.report.json --owner topology_publication_owner --boundary publication_convergence --dominant-reason publication_pending --explain publication_ack_convergence --markdown`
 
-Bounded progress proof: `Bounded focused tests prove zero-gap priority partition summaries close stale priority_spread pending in publication recovery gate and canonical publication convergence, even when an older owner stream retained prioritySpreadPending=true.`
+Bounded progress proof: `Predecessor focused tests and representative rerun prove a bounded zero-gap priority-spread publication slice reduced downstream evidence without moving the first frontier.`
 
-Bounded progress proof artifact: `focused publication recovery tests plus test-output/reports/rolling-restart-after-publication-zero-gap-priority-spread-20260518T104305Z.report.json`
+Bounded progress proof artifact: `work/packages/done-20260518-topology-publication-convergence-after-active-gate-handoff-oscillation.md plus test-output/reports/rolling-restart-after-publication-zero-gap-priority-spread-20260518T104305Z.report.json`
 
-Expected observable transition: `Observed reduced but still red: snapshotCoverage 2/5 -> 3/5, active-gate pending reconcile 3 -> 2, priority residual witnesses 0 -> 4, and topology first frontier stayed publication_ack_convergence.`
+Expected observable transition: `A diagnostic classification should select a concrete publication owner runtime successor, classification-only stop, migrated owner boundary, architecture gap, human escalation, or representative green before more runtime edits.`
 
-Max progress bound: `one focused topology_publication_owner / publication_convergence slice`
+Max progress bound: `one diagnostic classification pass before promoting exact runtime files`
 
-Same-frontier fallback: `If focused publication proof cannot reduce missingPublishedCount, change the required action, or select a narrower owner, stop as same-frontier or escalate instead of patching active-gate, readiness, operation workflow, admission, or timeout budgets.`
+Same-frontier fallback: `If the classification cannot name a narrower publication owner action or changed owner boundary, stop as same-frontier or human escalation instead of patching active-gate, operation workflow, readiness, admission, handoff architecture, or timeout budgets.`
 
-Expected next frontier: `diagnostic split between same-owner publication_pending and operation_workflow_owner / rebalancer_handoff priority residual witnesses`
+Expected next frontier: `bounded topology publication owner action or explicit non-publication migration selected by fresh canonical evidence`
 
-Result classification: `reduced`
+Result classification: `pending-before-probe`
 
 Stop condition: `continue-local-fix`
 
 Recent frontier history:
 
-1. `work/packages/done-20260518-rolling-restart-publication-active-gate-handoff-oscillation-after-fresh-evidence.md / topology_publication_owner / publication_convergence / same-frontier`
-2. `work/packages/done-20260518-startup-active-gate-snapshot-coverage-after-publication-handoff-classification.md / startup_active_gate_owner / snapshot_coverage / classification-only`
+1. `work/packages/done-20260518-topology-publication-convergence-after-active-gate-handoff-oscillation.md / topology_publication_owner / publication_convergence / reduced`
+2. `work/packages/done-20260518-rolling-restart-publication-active-gate-handoff-oscillation-after-fresh-evidence.md / topology_publication_owner / publication_convergence / same-frontier`
+3. `work/packages/done-20260518-startup-readiness-snapshot-timeout-after-fresh-evidence.md / startup_readiness_owner / startup_support_evidence / migrated`
 
-Oscillation check: `Allowed because the prior package resolved the handoff oscillation as same-frontier and selected a concrete publication-convergence successor.`
+Oscillation check: `Causal-escalation is active because the publication frontier returned after related publication and startup-readiness closures; no runtime patch may start until this package rechecks the handoff and residual split.`
 
-Handoff invariant: `Active-gate consumer runtime, operation workflow, startup readiness, active-gate admission, and timeout budgets remain frozen unless fresh canonical evidence selects them.`
+Handoff invariant: `Active-gate consumer runtime, operation workflow, startup readiness, active-gate admission, handoff architecture, and timeout budgets stay frozen unless canonical evidence reselects them.`
 
 ## Architecture Decision Gate
 
-Status: `not-required`
+Status: `watching`
 
-Trigger: `none`
+Trigger: `frontier-oscillation`
 
 Trigger evidence:
 
-1. `The prior package selected same-frontier and the handoff probe reported missingEdge=null.`
+1. `frontier returned to a recently closed related boundary`
+2. `same publication owner boundary remains first after a reduced predecessor`
+3. `priority residual witnesses are visible but splitRequired=false`
 
 Choices:
 
@@ -152,31 +150,21 @@ Choices:
 
 Selected choice: `unknown`
 
-Gate next action: No new architecture gate is required before the bounded publication-convergence proof.
+Gate next action: Watch for repeated frontier oscillation; present a gate only if the diagnostic classification cannot reduce, migrate, or classify the edge.
 
 ## Scope
 
 Write scope:
 
-1. `work/packages/active-20260518-topology-publication-convergence-after-active-gate-handoff-oscillation.md`
+1. `work/packages/active-20260518-topology-publication-residual-after-priority-split-classification.md`
 2. `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md`
 3. `work/sprints/current-blocker.md`
 4. `work/sprints/current-blocker.json`
-5. `work/model-ledger.jsonl`
-6. `src/control-plane/publication-owner-evidence.js`
-7. `src/control-plane/publication-owner-decision.js`
-8. `src/control-plane/publication-recovery-gate.js`
-9. `src/control-plane/publication-recovery-evidence.js`
-10. `test/control-plane/publication-owner-stream.test.js`
-11. `test/control-plane/publication-recovery-gate.test.js`
-12. `test/control-plane/publication-recovery-evidence.test.js`
 
 Handoff files:
 
-1. `work/packages/done-20260518-rolling-restart-publication-active-gate-handoff-oscillation-after-fresh-evidence.md`
-2. `work/packages/done-20260518-startup-active-gate-snapshot-coverage-after-publication-handoff-classification.md`
-3. `test-output/reports/rolling-restart-after-active-gate-handoff-classification-20260518T094315Z.report.json`
-4. `test-output/reports/rolling-restart-after-publication-zero-gap-priority-spread-20260518T104305Z.report.json`
+1. `work/packages/done-20260518-topology-publication-convergence-after-active-gate-handoff-oscillation.md`
+2. `test-output/reports/rolling-restart-after-publication-zero-gap-priority-spread-20260518T104305Z.report.json`
 
 Generated files:
 
@@ -195,18 +183,10 @@ Candidate runtime files:
 
 Commit scope:
 
-1. `work/packages/active-20260518-topology-publication-convergence-after-active-gate-handoff-oscillation.md`
+1. `work/packages/active-20260518-topology-publication-residual-after-priority-split-classification.md`
 2. `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md`
 3. `work/sprints/current-blocker.md`
 4. `work/sprints/current-blocker.json`
-5. `work/model-ledger.jsonl`
-6. `src/control-plane/publication-owner-evidence.js`
-7. `src/control-plane/publication-owner-decision.js`
-8. `src/control-plane/publication-recovery-gate.js`
-9. `src/control-plane/publication-recovery-evidence.js`
-10. `test/control-plane/publication-owner-stream.test.js`
-11. `test/control-plane/publication-recovery-gate.test.js`
-12. `test/control-plane/publication-recovery-evidence.test.js`
 
 Legacy touched files:
 

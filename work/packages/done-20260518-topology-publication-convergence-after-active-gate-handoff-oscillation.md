@@ -3,7 +3,7 @@
 <!-- work-package
 {
   "schema": "work-package-v1",
-  "status": "active",
+  "status": "done",
   "opened": "2026-05-18",
   "lane": "causal-escalation",
   "scenario": "rolling-restart",
@@ -12,8 +12,8 @@
   "owner": "topology_publication_owner",
   "boundary": "publication_convergence",
   "dominantReason": "publication_pending",
-  "currentState": "Focused implementation selected a bounded publication owner reduction and the representative rerun remained red but reduced the residual. The latest artifact failed 0/1 at active=0/5 and snapshotCoverage=3/5. Canonical route still selects publication_ack_convergence / topology_publication_owner / publication_convergence / publication_pending, while active-gate pending reconcile reduced from three nodes to two and priority residual extraction now exposes four operation_workflow_owner / rebalancer_handoff witnesses.",
-  "nextAction": "Classify the post-rerun split between the topology publication first frontier and the four rebalancer_handoff priority residual witnesses before further runtime edits. Keep active-gate consumer runtime, operation workflow, readiness, active-gate admission, handoff architecture, and timeout budgets frozen unless fresh canonical evidence selects them through a bounded successor.",
+  "currentState": "Closed as reduced. Focused implementation removed stale zero-gap priority-spread debt from the publication owner path, and the representative rerun stayed red but improved snapshotCoverage from 2/5 to 3/5 and active-gate pending reconcile from three nodes to two. Post-rerun classification keeps publication_ack_convergence / topology_publication_owner / publication_convergence first; the four operation_workflow_owner / rebalancer_handoff witnesses are visible but not a required split.",
+  "nextAction": "Hand off to a diagnostic classification successor on the same topology_publication_owner / publication_convergence frontier before further runtime edits. The successor must decide whether the remaining publication_pending evidence is a bounded publication owner runtime slice, classification-only stop, or fresh owner migration; active-gate consumer runtime, operation workflow, readiness, active-gate admission, handoff architecture, and timeout budgets remain frozen until selected by fresh canonical evidence.",
   "proof": [
     "npm run work:scenario-route -- test-output/reports/rolling-restart-after-publication-zero-gap-priority-spread-20260518T104305Z.report.json --owner topology_publication_owner --boundary publication_convergence --dominant-reason publication_pending --explain publication_ack_convergence --markdown",
     "npm run work:evidence-summary -- test-output/reports/rolling-restart-after-publication-zero-gap-priority-spread-20260518T104305Z.report.json",
@@ -23,7 +23,7 @@
     "npm run analyze:owner-files -- topology_publication_owner publication_convergence"
   ],
   "writeScope": [
-    "work/packages/active-20260518-topology-publication-convergence-after-active-gate-handoff-oscillation.md",
+    "work/packages/done-20260518-topology-publication-convergence-after-active-gate-handoff-oscillation.md",
     "work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md",
     "work/sprints/current-blocker.md",
     "work/sprints/current-blocker.json",
@@ -56,7 +56,7 @@
     "test/control-plane/publication-recovery-evidence.test.js"
   ],
   "commitScope": [
-    "work/packages/active-20260518-topology-publication-convergence-after-active-gate-handoff-oscillation.md",
+    "work/packages/done-20260518-topology-publication-convergence-after-active-gate-handoff-oscillation.md",
     "work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md",
     "work/sprints/current-blocker.md",
     "work/sprints/current-blocker.json",
@@ -88,7 +88,7 @@
     "owner": "topology_publication_owner",
     "boundary": "publication_convergence",
     "dominantReason": "publication_pending",
-    "nextAction": "Classify the reduced same-owner publication frontier with newly exposed operation_workflow_owner / rebalancer_handoff priority residual witnesses."
+    "nextAction": "Hand off to a diagnostic classification successor on topology_publication_owner / publication_convergence; priority residual witnesses are visible but route/causal extraction keep publication first and do not require an operation_workflow_owner split."
   },
   "causalGovernance": {
     "hypothesis": "After the same-frontier handoff proof, the selected local blocker is producer-side topology publication convergence. Focused publication owner proof should reduce publication_pending, classify the remaining OPEN epoch-1 evidence, migrate to a concrete successor, or stop as same-frontier without reopening active-gate, operation workflow, readiness, admission, or timeout-budget work.",
@@ -122,7 +122,7 @@
     "expectedObservableTransition": "Observed reduced but still red: snapshotCoverage 2/5 -> 3/5, active-gate pending reconcile 3 -> 2, priority residual witnesses 0 -> 4, and topology first frontier stayed publication_ack_convergence.",
     "maxProgressBound": "one focused topology_publication_owner / publication_convergence slice",
     "sameFrontierFallback": "If focused publication proof cannot reduce missingPublishedCount, change the required action, or select a narrower owner, stop as same-frontier or escalate instead of patching active-gate, readiness, operation workflow, admission, or timeout budgets.",
-    "expectedNextFrontier": "diagnostic split between same-owner publication_pending and operation_workflow_owner / rebalancer_handoff priority residual witnesses",
+    "expectedNextFrontier": "same-owner diagnostic classification for topology_publication_owner / publication_convergence; rebalancer_handoff witnesses remain subordinate unless fresh evidence selects them",
     "resultClassification": "reduced",
     "stopCondition": "continue-local-fix",
     "recentFrontierHistory": [
@@ -142,7 +142,10 @@
     "selectedChoice": null,
     "nextAction": "No new architecture gate is required before the bounded publication-convergence proof."
   },
-  "predecessor": "work/packages/done-20260518-rolling-restart-publication-active-gate-handoff-oscillation-after-fresh-evidence.md"
+  "predecessor": "work/packages/done-20260518-rolling-restart-publication-active-gate-handoff-oscillation-after-fresh-evidence.md",
+  "closed": "2026-05-18",
+  "commitAndPushLedgerRequired": true,
+  "successor": "work/packages/active-20260518-topology-publication-residual-after-priority-split-classification.md"
 }
 -->
 
@@ -273,6 +276,23 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
   doctor, work-advance check, entry/pre-impl validation, and diff check are
   green.
 
+## Classification Result
+
+- Result: `reduced`.
+- Classification: same owner and same visible first frontier. `work:scenario-route`,
+  `work:scenario-triage`, `work:evidence-summary`, and
+  `analyze:causal-model` keep `publication_ack_convergence /
+  topology_publication_owner / publication_convergence / publication_pending`
+  as the selected blocker with outcome `continue_local_fix`.
+- Priority residual split: `analyze:priority-recovery-residuals` reports four
+  `operation_workflow_owner / rebalancer_handoff` retry-scheduled witnesses,
+  but `splitRequired=false`; the handoff probe reports operation workflow
+  satisfied and active-gate consumer evidence deferred with
+  `runtimePromotionAllowed=false`.
+- Successor: close this package at the reduced runtime slice and continue with
+  a same-owner diagnostic classification successor before any further runtime
+  edit.
+
 ## Validation
 
 1. npm run work:scenario-route -- test-output/reports/rolling-restart-after-publication-zero-gap-priority-spread-20260518T104305Z.report.json --owner topology_publication_owner --boundary publication_convergence --dominant-reason publication_pending --explain publication_ack_convergence --markdown
@@ -288,7 +308,7 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 11. npm run audit:runtime-grammar:file -- src/control-plane/publication-recovery-gate.js src/control-plane/publication-recovery-evidence.js
 12. npm run work:validate -- --entry
 13. npm run work:validate -- --pre-impl
-14. git diff --check -- work/packages/active-20260518-topology-publication-convergence-after-active-gate-handoff-oscillation.md work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md work/sprints/current-blocker.md work/sprints/current-blocker.json work/model-ledger.jsonl src/control-plane/publication-recovery-gate.js src/control-plane/publication-recovery-evidence.js test/control-plane/publication-recovery-gate.test.js test/control-plane/publication-recovery-evidence.test.js
+14. git diff --check -- work/packages/done-20260518-topology-publication-convergence-after-active-gate-handoff-oscillation.md work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md work/sprints/current-blocker.md work/sprints/current-blocker.json work/model-ledger.jsonl src/control-plane/publication-recovery-gate.js src/control-plane/publication-recovery-evidence.js test/control-plane/publication-recovery-gate.test.js test/control-plane/publication-recovery-evidence.test.js
 
 ## Subagent Sequencing Requirement
 
@@ -297,9 +317,9 @@ publication owner runtime and test files.
 
 ## Subagent Sequencing Ledger
 
-- [x] Review subagent recorded: Agent Codex (019e3a96-1094-7243-9536-173be02722ff) reviewed work/packages/active-20260518-topology-publication-convergence-after-active-gate-handoff-oscillation.md; result fixes-required.
-- [x] Fix subagent recorded or explicitly not needed: Agent Codex (019e3a99-1173-7901-9c62-7d03560f8c1a) fixed work/packages/active-20260518-topology-publication-convergence-after-active-gate-handoff-oscillation.md.
-- [x] Implementation subagent recorded: Agent Codex (019e3a9d-2c09-7cd3-9e0e-a28399c5bbc7) implemented work/packages/active-20260518-topology-publication-convergence-after-active-gate-handoff-oscillation.md; result reduced stale zero-gap priority spread in publication recovery gate and canonical publication convergence, representative rerun pending.
+- [x] Review subagent recorded: Agent Codex (019e3a96-1094-7243-9536-173be02722ff) reviewed work/packages/done-20260518-topology-publication-convergence-after-active-gate-handoff-oscillation.md; result fixes-required.
+- [x] Fix subagent recorded or explicitly not needed: Agent Codex (019e3a99-1173-7901-9c62-7d03560f8c1a) fixed work/packages/done-20260518-topology-publication-convergence-after-active-gate-handoff-oscillation.md.
+- [x] Implementation subagent recorded: Agent Codex (019e3a9d-2c09-7cd3-9e0e-a28399c5bbc7) implemented work/packages/done-20260518-topology-publication-convergence-after-active-gate-handoff-oscillation.md; result reduced stale zero-gap priority spread in publication recovery gate and canonical publication convergence, representative rerun pending.
 
 ## Subagent Progress Ledger
 
@@ -307,3 +327,9 @@ publication owner runtime and test files.
 - [x] Agent Codex (019e3a99-1173-7901-9c62-7d03560f8c1a) fix validation complete: package setup and current-blocker handoff repaired; evidence: transition commit c65fcd7c and clean subagent-next handoff; next: implementation subagent.
 - [x] Agent Codex (019e3a9d-2c09-7cd3-9e0e-a28399c5bbc7) implementation validation complete: stale zero-gap priority-spread runtime slice implemented and focused validation passed; evidence: publication recovery gate/evidence tests, static guardrails, package doctor, work-advance check, and diff check; next: representative rerun.
 - Representative rerun complete: `test-output/reports/rolling-restart-after-publication-zero-gap-priority-spread-20260518T104305Z.report.json`; result red reduced; evidence: `active=0/5`, `snapshotCoverage=3/5`, priority residual witnesses `4`, active-gate pending reconcile `2`; next: classify same-owner publication frontier versus rebalancer_handoff residual split.
+
+## Commit And Push Ledger
+
+1. Focused package commit: `767f1d87`
+2. Pushed to: `origin/codex/pending-ack-eligibility-filter`
+3. Commit contains only package-owned files/package-status/allowed sprint handoff: yes

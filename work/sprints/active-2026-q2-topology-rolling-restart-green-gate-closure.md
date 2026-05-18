@@ -27,7 +27,7 @@ success is in scope.
 - Confidence and evidence: high for reduced same-owner publication frontier from scenario-route, evidence-summary, handoff-probe, causal-model, priority residual extraction, owner-files, focused tests, and representative rerun; medium on whether the next package should stay topology-publication diagnostic or migrate to rebalancer_handoff.
 - Expected green path: classify the post-rerun split, then either open a bounded topology-publication diagnostic successor or migrate to the concrete `operation_workflow_owner / rebalancer_handoff` residual without widening into deferred active-gate evidence.
 - Wrong direction signals: a package patches active-gate, readiness, admission, handoff architecture, or timeout budgets from this artifact; the priority residual split is ignored; or another publication runtime edit starts before the topology route versus residual extractor disagreement is resolved.
-- Next best package: `work/packages/active-20260518-topology-publication-convergence-after-active-gate-handoff-oscillation.md`.
+- Next best package: `work/packages/active-20260518-topology-publication-residual-after-priority-split-classification.md`.
 - Stop or escalate rule: if the next publication-convergence slice cannot reduce the visible frontier or fresh evidence alternates back to active-gate without a new required action, escalate to architecture/human direction instead of another local patch.
 
 ## Current Blocker Snapshot
@@ -38,38 +38,41 @@ Latest representative artifact:
 Canonical state after the fresh rerun:
 
 1. The current active package is
-   `work/packages/active-20260518-topology-publication-convergence-after-active-gate-handoff-oscillation.md`.
-2. Its predecessor is the closed same-frontier handoff package
+   `work/packages/active-20260518-topology-publication-residual-after-priority-split-classification.md`.
+2. Its predecessor is the reduced publication-convergence package
+   `work/packages/done-20260518-topology-publication-convergence-after-active-gate-handoff-oscillation.md`.
+3. The prior same-frontier handoff predecessor is
    `work/packages/done-20260518-rolling-restart-publication-active-gate-handoff-oscillation-after-fresh-evidence.md`.
-3. The prior active-gate handoff predecessor is
+4. The prior active-gate handoff predecessor is
    `work/packages/done-20260518-startup-active-gate-snapshot-coverage-after-publication-handoff-classification.md`,
    which closed as classification-only with no startup active-gate runtime edit.
-4. The post-implementation representative run failed 0/1 at `active=0/5` and
+5. The post-implementation representative run failed 0/1 at `active=0/5` and
    `snapshotCoverage=3/5`.
-5. Canonical `work:scenario-route`, `work:evidence-summary`, and
+6. Canonical `work:scenario-route`, `work:evidence-summary`, and
    `analyze:causal-model` select
    `publication_ack_convergence / topology_publication_owner /
    publication_convergence / publication_pending` as the visible first
    frontier.
-6. Priority residual extraction now reports four witnesses in one
+7. Priority residual extraction now reports four witnesses in one
    `operation_workflow_owner / rebalancer_handoff` owner-boundary group.
-7. The focused handoff probe records `missingEdge=null`,
+8. The focused handoff probe records `missingEdge=null`,
    `contractEdge=publication_active_gate_handoff_contract`,
    `resultClassification=publication_active_gate_handoff_not_detected`, and
    `nextOwnerPath startup_active_gate_owner / snapshot_coverage`.
-8. Active-gate evidence is deferred with `snapshotCoverageNodeCount=3/5`,
+9. Active-gate evidence is deferred with `snapshotCoverageNodeCount=3/5`,
    `selectedSnapshotRepairDeferred=true`, `retryAfterMs=1000`,
    `runtimePromotionAllowed=false`, and two pending reconcile nodes:
    `11601fe0-72d6-5853-8590-ec2881853e72`,
    `35a891b8-c1a0-5064-9c6e-2acfba61c2a7`.
-9. Focused predecessor implementation proof selected `same-frontier`: the handoff contract
-   is adequate, the active-gate consumer remains deferred, and no runtime or
-   test edit was justified inside the handoff package.
-10. The active package implemented only bounded publication owner files:
+10. The same-frontier handoff predecessor proved the handoff contract is
+    adequate, the active-gate consumer remains deferred, and no runtime or test
+    edit was justified inside that handoff package.
+11. The reduced publication-convergence predecessor implemented only bounded
+    publication owner files:
     zero-gap priority summaries now remove stale priority-spread pending from
     publication recovery gate and canonical publication convergence while
     publication remains OPEN/publishing; representative rerun is red but
-    reduced and exposes a residual split for the next package decision.
+    reduced and exposes a residual split for this active package decision.
 
 ## Current Edge Card
 
@@ -78,16 +81,16 @@ Representative artifact: test-output/reports/rolling-restart-after-publication-z
 Visible first frontier: publication_ack_convergence / topology_publication_owner / publication_convergence / publication_pending
 Active package owner: topology_publication_owner
 Active package boundary: publication_convergence
-Selected cause: concrete publication_convergence proof after same-frontier publication-active-gate handoff classification
+Selected cause: diagnostic classification after reduced publication_convergence proof exposed a topology route versus rebalancer_handoff residual split
 Required action: classify topology publication first frontier versus rebalancer_handoff priority residual split
-Runtime promotion allowed: bounded publication owner files implemented; active-gate runtimePromotionAllowed=false
+Runtime promotion allowed: false for this classification package until canonical evidence selects a bounded successor; active-gate runtimePromotionAllowed=false
 Priority residual: four operation_workflow_owner / rebalancer_handoff witnesses in fresh artifact
 Extractor split: scenario-route/evidence-summary/causal-model select publication first; handoff probe points nextOwnerPath to deferred startup_active_gate_owner / snapshot_coverage with runtimePromotionAllowed=false
 Publication state: raw artifact OPEN epoch=1, publishedActive=1/5, missingPublishedCount=4, prioritySpreadPending=true; focused owner output reduces stale zero-gap priority spread, but fresh residuals show real rebalancer_handoff work
-Focused predecessor implementation: active-gate handoff classification-only for one pending reconcile node, no runtime edit
+Focused predecessor implementation: bounded publication owner zero-gap priority-spread reduction; earlier active-gate handoff classification remained no-runtime-edit with missingEdge=null
 Current active-gate state: deferred, snapshotCoverageNodeCount=3/5, owner_reconcile_pending, snapshot_repair_deferred, two pending reconcile nodes 11601fe0-72d6-5853-8590-ec2881853e72 / 35a891b8-c1a0-5064-9c6e-2acfba61c2a7
 Goal: reduce or classify the selected publication frontier without reopening deferred active-gate evidence
-Allowed edits: active package, sprint/current-blocker/model ledger, bounded publication owner files and focused publication owner tests already used; next runtime edits require a bounded successor
+Allowed edits: active package, sprint, and current-blocker handoff files; next runtime edits require a bounded successor
 Forbidden edits: startup active-gate runtime; operation workflow/rebalancer handoff runtime; startup readiness runtime; active-gate admission; handoff architecture; harness timeout increases
 Required latest proof: scenario-route, evidence-summary, handoff-probe, causal-model, priority residuals, owner-files, focused publication tests, static guardrails, package validation, and diff checks
 Allowed stop modes: representative-green, migrated, reduced, same-frontier, classification-only, architecture-gap, human-escalation
@@ -95,22 +98,28 @@ Allowed stop modes: representative-green, migrated, reduced, same-frontier, clas
 
 ## Sprint Architecture Decision Gate
 
-Status: not-required for the current active package.
+Status: watching for the current active package.
 
-Current decision: the `same-frontier` result belongs to the predecessor
-handoff package
+Current decision: causal-escalation remains active because the publication
+frontier returned after related publication and startup-readiness closures. The
+active residual package must classify the topology-publication first frontier
+against the visible `operation_workflow_owner / rebalancer_handoff` witnesses
+before any more runtime patching.
+
+The `same-frontier` result belongs to the predecessor handoff package
 `work/packages/done-20260518-rolling-restart-publication-active-gate-handoff-oscillation-after-fresh-evidence.md`.
 That package proved the publication-active-gate contract exists,
 `missingEdge=null`, active-gate evidence remains deferred, and
 `runtimePromotionAllowed=false`, so no handoff, active-gate, runtime, or test
 edit was justified there.
 
-The current active package is the bounded
+The immediate predecessor was the bounded
 `topology_publication_owner / publication_convergence` successor slice. Its
 implementation stayed inside the declared publication owner runtime/test files
-and selected the zero-gap stale priority-spread reduction; startup active-gate,
-operation workflow, startup readiness, admission, handoff architecture, and
-timeout budgets remain frozen unless fresh canonical evidence reselects them.
+and selected the zero-gap stale priority-spread reduction. The active package is
+now the diagnostic split/migration classifier; startup active-gate, operation
+workflow, startup readiness, admission, handoff architecture, and timeout
+budgets remain frozen unless fresh canonical evidence reselects them.
 
 Decision basis:
 
@@ -127,9 +136,9 @@ Decision basis:
    required action `reconcile_owner_membership_publication`.
 4. Active gate is deferred at `snapshotCoverageNodeCount=3/5` with two
    pending reconcile nodes and `runtimePromotionAllowed=false`.
-5. The active package completed review/fix/implementation sequencing and
-   focused publication owner proof; the representative rerun is red but
-   reduced, so the next decision is a bounded split/migration classification.
+5. The predecessor completed review/fix/implementation sequencing and focused
+   publication owner proof; the representative rerun is red but reduced, so the
+   active package owns the bounded split/migration classification.
 
 Candidate ranking:
 
