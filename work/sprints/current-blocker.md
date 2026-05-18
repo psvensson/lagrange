@@ -26,7 +26,7 @@ Current state: Fresh representative rolling-restart after the active-gate classi
 
 ## Next Action
 
-Stop runtime implementation. Present the architecture decision gate for the repeated publication/active-gate/operation-workflow oscillation and open a bounded architecture or cross-boundary handoff package before any further runtime patch.
+The successor bounded architecture package must be opened for the publication -> operation-workflow -> active-gate handoff contract before any runtime implementation resumes.
 
 ## Proof Ladder
 
@@ -145,7 +145,7 @@ Handoff invariant: `Publication owner must publish one fresh cohort outcome; ope
 
 ## Architecture Decision Gate
 
-Status: `required`
+Status: `selected`
 
 Trigger: `frontier-oscillation`
 
@@ -163,9 +163,9 @@ Choices:
 3. `open-architecture-package` route=`architecture-package` - Open a bounded architecture package for the publication to operation-workflow to active-gate handoff contract.
 4. `human-escalation` route=`human-escalation` - Escalate before any new package if the team wants to choose between local proof and architecture work explicitly.
 
-Selected choice: `unknown`
+Selected choice: `open-architecture-package`
 
-Gate next action: Runtime implementation is blocked until a concrete architecture route is selected.
+Gate next action: The successor bounded architecture package must be opened for the publication -> operation-workflow -> active-gate handoff contract before any runtime implementation resumes.
 
 ## Scope
 

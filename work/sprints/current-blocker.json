@@ -12,7 +12,7 @@
   "boundary": "workflow_progress",
   "dominantReason": "priority_recovery_progress_blocked",
   "currentState": "Fresh representative rolling-restart after the active-gate classification-only stop is red again. Canonical evidence reports publication_ack_convergence blocked with publication_pending, and the next expected frontier is one operation_workflow_owner / workflow_progress witness: control_plane_publications-p1, recovering_in_flight, persisted_not_dispatched, event_driven, dispatch_pending/planned, nextRequiredAction=advance_existing_operation. Package doctor detects frontier oscillation and blocks another local runtime patch until a cross-boundary handoff or architecture route is selected.",
-  "nextAction": "Stop runtime implementation. Present the architecture decision gate for the repeated publication/active-gate/operation-workflow oscillation and open a bounded architecture or cross-boundary handoff package before any further runtime patch.",
+  "nextAction": "The successor bounded architecture package must be opened for the publication -> operation-workflow -> active-gate handoff contract before any runtime implementation resumes.",
   "proof": [
     "node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-after-active-gate-classification-20260518T043001Z.report.json --verbose",
     "npm run work:evidence-summary -- test-output/reports/rolling-restart-after-active-gate-classification-20260518T043001Z.report.json",
@@ -129,7 +129,7 @@
     "handoffInvariant": "Publication owner must publish one fresh cohort outcome; operation_workflow_owner must expose one durable dispatch/re-entry outcome for the selected priority operation; active-gate owner reconcile must consume that owner outcome through the canonical handoff without local promotion, timeout-budget expansion, or diagnostic reinterpretation."
   },
   "architectureDecisionGate": {
-    "status": "required",
+    "status": "selected",
     "trigger": "frontier-oscillation",
     "triggerEvidence": [
       "Fresh rolling-restart report test-output/reports/rolling-restart-after-active-gate-classification-20260518T043001Z.report.json failed after the prior active-gate classification-only stop.",
@@ -177,8 +177,8 @@
         ]
       }
     ],
-    "selectedChoice": null,
-    "nextAction": "Runtime implementation is blocked until a concrete architecture route is selected."
+    "selectedChoice": "open-architecture-package",
+    "nextAction": "The successor bounded architecture package must be opened for the publication -> operation-workflow -> active-gate handoff contract before any runtime implementation resumes."
   },
   "predecessor": "work/packages/done-20260517-startup-active-gate-snapshot-coverage-after-priority-backpressure-classification.md"
 }
