@@ -186,6 +186,12 @@ Required before implementation because this is a scenario-driven runtime
 owner-boundary package. Run the review/fix/implementation sequence before
 runtime or test implementation edits.
 
+## Subagent Sequencing Ledger
+
+- [x] Review subagent recorded: Agent Codex (019e39f8-8f6c-78a0-9f52-ab8a604cb8e0) reviewed work/packages/done-20260518-startup-readiness-snapshot-timeout-after-fresh-evidence.md; result clean.
+- [x] Fix subagent recorded or explicitly not needed: not-needed.
+- [ ] Implementation subagent recorded: pending-before-implementation-resumes.
+
 ## LLM Tool-First Contract
 
 Before raw JSON, raw logs, broad file search, oversized segment files, or ad hoc `jq`, use the canonical workflow command that owns the question:
