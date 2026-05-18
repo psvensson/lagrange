@@ -22,23 +22,23 @@ success is in scope.
 ## Sprint Strategy Brief
 
 - Goal state: representative `rolling-restart` is green with `active=5/5`, `snapshotCoverage=5/5`, `missingPublished=0`, and no timeout or admission relaxation.
-- Current causal thesis: focused UNKNOWN/no-debt publication owner proof is green locally, but the representative rerun reselected the same publication owner/boundary and returned to `missing_published_nodes_present` with `missingPublishedCount=5`; the causal gate is closed, and human direction selected the canonical `continue_local_fix` route for one bounded runtime successor.
+- Current causal thesis: focused missing-published normalization proof is green locally and the representative rerun reduced the stale count-only `missing_published_nodes_present` shape to same-owner `publication_pending`; because that returns to a recently closed owner/boundary frontier, the active causal gate records the selected route-before-runtime decision.
 - Competing hypotheses: H1 the representative harness is oscillating between publication evidence shapes and needs a causal/handoff decision before more runtime work; H2 topology_publication_owner still owns a missing-published invariant not covered by the prior focused slices; H3 startup_active_gate_owner remains visible through selected-source timeout but is downstream while `runtimePromotionAllowed=false`; H4 operation workflow is not selected because priority residual witnesses are `0`.
-- Confidence and evidence: high that local UNKNOWN/no-debt behavior is fixed because focused TAP/static proof passed and Hubble accounted for the partial worker; high that representative evidence did not reduce because `test-output/reports/rolling-restart-after-unknown-no-debt-pending-runtime-20260518T141836Z.report.json`, evidence-summary, scenario-route, causal-model, handoff-probe, and priority residual extraction all keep `publication_ack_convergence / topology_publication_owner / publication_convergence` first with `missing_published_nodes_present`.
-- Expected green path: execute `work/packages/active-20260518-topology-publication-missing-published-runtime-after-oscillation.md` as one bounded publication-owner runtime slice with required subagent sequencing, then classify representative proof as reduced, migrated, green, or renewed architecture/human gate.
+- Confidence and evidence: high that the local stale nested not-started evidence path is fixed because focused TAP/static proof passed; high that representative evidence reduced shape because `test-output/reports/rolling-restart-after-missing-published-normalization-20260518T155705Z.report.json` moved to `publication_pending`, `publicationStatus=OPEN`, `publicationEpoch=1`, `snapshotCoverage=3/5`, and priority residual witnesses remain `0`.
+- Expected green path: close the active causal gate `work/packages/active-20260518-topology-publication-pending-runtime-after-missing-published-reduction.md`, then open one bounded publication-owner runtime successor for `publication_pending` with required subagent sequencing.
 - Wrong direction signals: runtime edits start before review/fix/implementation sequencing is recorded; active-gate, operation workflow, readiness, admission, handoff architecture, or timeout budgets are patched while canonical evidence still marks them downstream or frozen; subagent work proceeds without progress-ledger checkpoints.
-- Next best package: execute the runtime-owner-boundary package `work/packages/active-20260518-topology-publication-missing-published-runtime-after-oscillation.md`.
-- Stop or escalate rule: if this one bounded runtime slice leaves the same missing-published frontier without concrete metric or state reduction, stop for architecture or human escalation instead of opening another local runtime package.
+- Next best package: close the causal-escalation package `work/packages/active-20260518-topology-publication-pending-runtime-after-missing-published-reduction.md` into the selected bounded runtime successor.
+- Stop or escalate rule: if the selected runtime successor leaves the same `publication_pending` frontier without concrete metric or state reduction, stop for architecture or human escalation instead of opening another local runtime package.
 
 ## Current Blocker Snapshot
 
 Latest representative artifact:
-`test-output/reports/rolling-restart-after-unknown-no-debt-pending-runtime-20260518T141836Z.report.json`.
+`test-output/reports/rolling-restart-after-missing-published-normalization-20260518T155705Z.report.json`.
 
 Canonical state after the fresh rerun:
 
 1. The current active package is
-   `work/packages/active-20260518-topology-publication-missing-published-runtime-after-oscillation.md`.
+   `work/packages/active-20260518-topology-publication-pending-runtime-after-missing-published-reduction.md`.
 2. Its predecessor is the same-frontier runtime package
    `work/packages/done-20260518-topology-publication-unknown-no-debt-pending-runtime.md`.
 3. Its predecessor is the reduced runtime package
@@ -57,23 +57,22 @@ Canonical state after the fresh rerun:
    `work/packages/done-20260518-startup-active-gate-snapshot-coverage-after-publication-handoff-classification.md`,
    which closed as classification-only with no startup active-gate runtime edit.
 10. The latest representative run failed 0/1 at `active=0/5` and
-   `snapshotCoverage=0/5`.
+   `snapshotCoverage=3/5`.
 11. Canonical `work:scenario-route`, `work:evidence-summary`, and
    `analyze:causal-model` select
    `publication_ack_convergence / topology_publication_owner /
-   publication_convergence / missing_published_nodes_present` as the visible first
+   publication_convergence / publication_pending` as the visible first
    frontier.
 12. Priority residual extraction now reports zero witnesses and
    `splitRequired=false`.
 13. The fresh handoff probe records `detected=false`, producer
-   `missing_published_nodes_present`, and active-gate consumer deferred with
+   `publication_pending`, and active-gate consumer deferred with
    `runtimePromotionAllowed=false`; its next owner path remains deferred
    `startup_active_gate_owner / snapshot_coverage` only after publication
    progress.
-14. Active-gate evidence is deferred with `snapshotCoverageNodeCount=0/5`,
-   selected snapshot source timeout on
-   `11601fe0-72d6-5853-8590-ec2881853e72`, and
-   `runtimePromotionAllowed=false`.
+14. Active-gate evidence is deferred with `snapshotCoverageNodeCount=3/5`,
+   snapshot repair deferred, owner reconcile pending for two publication nodes,
+   and `runtimePromotionAllowed=false`.
 15. The same-frontier handoff predecessor proved the handoff contract is
     adequate, the active-gate consumer remains deferred, and no runtime or test
     edit was justified inside that handoff package.

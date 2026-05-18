@@ -3,7 +3,7 @@
 <!-- work-package
 {
   "schema": "work-package-v1",
-  "status": "active",
+  "status": "done",
   "opened": "2026-05-18",
   "lane": "runtime-owner-boundary",
   "scenario": "rolling-restart",
@@ -21,7 +21,7 @@
     "npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-after-unknown-no-debt-pending-runtime-20260518T141836Z.report.json --markdown"
   ],
   "writeScope": [
-    "work/packages/active-20260518-topology-publication-missing-published-runtime-after-oscillation.md",
+    "work/packages/done-20260518-topology-publication-missing-published-runtime-after-oscillation.md",
     "work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md",
     "work/sprints/current-blocker.md",
     "work/sprints/current-blocker.json",
@@ -53,7 +53,7 @@
     "test/control-plane/publication-recovery-evidence.test.js"
   ],
   "commitScope": [
-    "work/packages/active-20260518-topology-publication-missing-published-runtime-after-oscillation.md",
+    "work/packages/done-20260518-topology-publication-missing-published-runtime-after-oscillation.md",
     "work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md",
     "work/sprints/current-blocker.md",
     "work/sprints/current-blocker.json",
@@ -183,7 +183,10 @@
       "npm run work:validate -- --pre-impl"
     ]
   },
-  "predecessor": "work/packages/done-20260518-topology-publication-missing-published-oscillation-gate.md"
+  "predecessor": "work/packages/done-20260518-topology-publication-missing-published-oscillation-gate.md",
+  "closed": "2026-05-18",
+  "commitAndPushLedgerRequired": true,
+  "successor": "work/packages/active-20260518-topology-publication-pending-runtime-after-missing-published-reduction.md"
 }
 -->
 
@@ -259,7 +262,7 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 
 ## In Scope
 
-1. work/packages/active-20260518-topology-publication-missing-published-runtime-after-oscillation.md
+1. work/packages/done-20260518-topology-publication-missing-published-runtime-after-oscillation.md
 2. work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md
 3. work/sprints/current-blocker.md
 4. work/sprints/current-blocker.json
@@ -287,7 +290,7 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 - Intended minimum model: `gpt-5.3-codex`
 - Scope shape: `bounded-owner-runtime/current-frontier`
 - Output profile: `medium`
-- Owned files: `work/packages/active-20260518-topology-publication-missing-published-runtime-after-oscillation.md`, `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md`, `work/sprints/current-blocker.md`, `work/sprints/current-blocker.json`, `work/model-ledger.jsonl`, `src/control-plane/publication-owner-evidence.js`, `src/control-plane/publication-owner-decision.js`, `src/control-plane/publication-recovery-gate.js`, `src/control-plane/publication-recovery-evidence.js`, `test/control-plane/publication-owner-stream.test.js`, `test/control-plane/publication-recovery-gate.test.js`, `test/control-plane/publication-recovery-evidence.test.js`
+- Owned files: `work/packages/done-20260518-topology-publication-missing-published-runtime-after-oscillation.md`, `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md`, `work/sprints/current-blocker.md`, `work/sprints/current-blocker.json`, `work/model-ledger.jsonl`, `src/control-plane/publication-owner-evidence.js`, `src/control-plane/publication-owner-decision.js`, `src/control-plane/publication-recovery-gate.js`, `src/control-plane/publication-recovery-evidence.js`, `test/control-plane/publication-owner-stream.test.js`, `test/control-plane/publication-recovery-gate.test.js`, `test/control-plane/publication-recovery-evidence.test.js`
 - Forbidden files: `startup active-gate runtime`, `operation workflow / rebalancer_handoff runtime`, `startup readiness runtime`, `active-gate admission`, `handoff architecture`, `timeout budgets`
 - Frozen decisions: package scope and lane stay bounded unless explicitly escalated.
 - Escalation triggers: owned files expand beyond this package, runtime ownership changes, or representative scenario evidence changes.
@@ -299,9 +302,9 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 Required before implementation because this runtime-owner-boundary package may
 edit topology publication owner runtime and focused test files.
 
-- [x] Review subagent recorded: Agent Lovelace (e1ef65ca-7031-4065-ba1f-41ccce87ce3b) reviewed work/packages/active-20260518-topology-publication-missing-published-runtime-after-oscillation.md and predecessors work/packages/done-20260518-topology-publication-missing-published-oscillation-gate.md plus work/packages/done-20260518-topology-publication-unknown-no-debt-pending-runtime.md; result clean.
+- [x] Review subagent recorded: Agent Lovelace (e1ef65ca-7031-4065-ba1f-41ccce87ce3b) reviewed work/packages/done-20260518-topology-publication-missing-published-runtime-after-oscillation.md and predecessors work/packages/done-20260518-topology-publication-missing-published-oscillation-gate.md plus work/packages/done-20260518-topology-publication-unknown-no-debt-pending-runtime.md; result clean.
 - [x] Fix subagent recorded or explicitly not needed: not-needed.
-- [x] Implementation subagent recorded: Agent Hopper (6f0a4dae-57fc-4fb3-baad-6848e50e6a5d) implemented work/packages/active-20260518-topology-publication-missing-published-runtime-after-oscillation.md; result focused-proof-green; parent revalidated focused proof: yes.
+- [x] Implementation subagent recorded: Agent Hopper (6f0a4dae-57fc-4fb3-baad-6848e50e6a5d) implemented work/packages/done-20260518-topology-publication-missing-published-runtime-after-oscillation.md; result focused-proof-green; parent revalidated focused proof: yes.
 
 ## Subagent Progress Ledger
 
@@ -310,8 +313,8 @@ Required when subagent sequencing is required. Each real subagent appends one ch
 - [x] Agent Lovelace (e1ef65ca-7031-4065-ba1f-41ccce87ce3b) review falsification check: wrong-slice evidence would be canonical extractor output reselecting startup active-gate, operation workflow, readiness, admission, handoff architecture, timeout ownership, priority residual debt, a non-publication owner/boundary, or a stop mode other than the selected human-directed `continue_local_fix` successor; evidence: `npm run work:context`, compact steering pack, active package, oscillation gate predecessor, UNKNOWN/no-debt runtime predecessor, sprint file, and current-blocker files loaded; next: run canonical artifact proof.
 - [x] Agent Lovelace (e1ef65ca-7031-4065-ba1f-41ccce87ce3b) review extractor subtask: canonical evidence still selects the declared publication owner boundary and does not select a forbidden downstream owner for runtime work; evidence: `npm run work:evidence-summary -- test-output/reports/rolling-restart-after-unknown-no-debt-pending-runtime-20260518T141836Z.report.json` reports `publication_ack_convergence / topology_publication_owner / publication_convergence / missing_published_nodes_present` with causal outcome `continue_local_fix`, `npm run work:scenario-route -- test-output/reports/rolling-restart-after-unknown-no-debt-pending-runtime-20260518T141836Z.report.json --owner topology_publication_owner --boundary publication_convergence --dominant-reason missing_published_nodes_present --explain publication_ack_convergence --markdown` reports priority witnesses `0`, `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-unknown-no-debt-pending-runtime-20260518T141836Z.report.json` reports `publication_ack_blocked / local_runtime_owner_fix`, and `npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-after-unknown-no-debt-pending-runtime-20260518T141836Z.report.json --markdown` reports witnesses `0` and split required `false`; next: review predecessor proof and sprint/current-blocker consistency.
 - [x] Agent Lovelace (e1ef65ca-7031-4065-ba1f-41ccce87ce3b) review consistency subtask: predecessor proof, residual inventory, guardrail ledger, blocker migration notes, sprint snapshot, and generated current-blocker handoff consistently support the active package next action; evidence: predecessor `work/packages/done-20260518-topology-publication-unknown-no-debt-pending-runtime.md` records focused TAP/static proof, representative same-frontier rerun, route-after-rerun result, and commit `c953dc15ddf42b45fa10ed5d56353152bf38e304`; oscillation gate `work/packages/done-20260518-topology-publication-missing-published-oscillation-gate.md` records selected human-directed runtime successor and commit `c8db7e05`; sprint/current-blocker files name the active package, same artifact, `topology_publication_owner / publication_convergence / missing_published_nodes_present`, zero priority residual witnesses, active-gate `runtimePromotionAllowed=false`, and frozen non-publication boundaries; next: record clean review result and validate package shape.
-- [x] Agent Lovelace (e1ef65ca-7031-4065-ba1f-41ccce87ce3b) review validation subtask: review proof and ledger update are complete, with only expected post-review fix/implementation roles remaining; evidence: `npm run work:package:doctor -- --suggest work/packages/active-20260518-topology-publication-missing-published-runtime-after-oscillation.md` initially failed only on missing subagent ledgers, `npm run work:llm-start`, `npm run work:model-ledger -- summary`, `npm run work:package:route-after-rerun -- --artifact test-output/reports/rolling-restart-after-unknown-no-debt-pending-runtime-20260518T141836Z.report.json --owner topology_publication_owner --boundary publication_convergence --dominant-reason missing_published_nodes_present`, `npm run analyze:owner-files -- topology_publication_owner publication_convergence`, and current package ledger edits; next: implementation may proceed after fix role is recorded as not-needed or completed and `npm run work:validate -- --pre-impl` passes.
-- [x] Agent Hopper (6f0a4dae-57fc-4fb3-baad-6848e50e6a5d) implementation context and route subtask: package handoff, compact steering, model-ledger advisory, owner-file index, and pre-implementation validation support proceeding inside the declared publication owner slice; evidence: `npm run work:context`, `.kiro/steering/llm/{README.md,core.md,architecture.md,testing.md,governance.md}`, `npm run work:package:doctor -- --suggest work/packages/active-20260518-topology-publication-missing-published-runtime-after-oscillation.md`, `npm run work:evidence-summary -- test-output/reports/rolling-restart-after-unknown-no-debt-pending-runtime-20260518T141836Z.report.json`, `npm run work:scenario-route -- test-output/reports/rolling-restart-after-unknown-no-debt-pending-runtime-20260518T141836Z.report.json --owner topology_publication_owner --boundary publication_convergence --dominant-reason missing_published_nodes_present --explain publication_ack_convergence --markdown`, `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-unknown-no-debt-pending-runtime-20260518T141836Z.report.json`, `npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-after-unknown-no-debt-pending-runtime-20260518T141836Z.report.json --markdown`, `npm run analyze:owner-files -- topology_publication_owner publication_convergence`, and `npm run work:validate -- --pre-impl`; next: inspect scoped publication runtime and focused tests.
+- [x] Agent Lovelace (e1ef65ca-7031-4065-ba1f-41ccce87ce3b) review validation subtask: review proof and ledger update are complete, with only expected post-review fix/implementation roles remaining; evidence: `npm run work:package:doctor -- --suggest work/packages/done-20260518-topology-publication-missing-published-runtime-after-oscillation.md` initially failed only on missing subagent ledgers, `npm run work:llm-start`, `npm run work:model-ledger -- summary`, `npm run work:package:route-after-rerun -- --artifact test-output/reports/rolling-restart-after-unknown-no-debt-pending-runtime-20260518T141836Z.report.json --owner topology_publication_owner --boundary publication_convergence --dominant-reason missing_published_nodes_present`, `npm run analyze:owner-files -- topology_publication_owner publication_convergence`, and current package ledger edits; next: implementation may proceed after fix role is recorded as not-needed or completed and `npm run work:validate -- --pre-impl` passes.
+- [x] Agent Hopper (6f0a4dae-57fc-4fb3-baad-6848e50e6a5d) implementation context and route subtask: package handoff, compact steering, model-ledger advisory, owner-file index, and pre-implementation validation support proceeding inside the declared publication owner slice; evidence: `npm run work:context`, `.kiro/steering/llm/{README.md,core.md,architecture.md,testing.md,governance.md}`, `npm run work:package:doctor -- --suggest work/packages/done-20260518-topology-publication-missing-published-runtime-after-oscillation.md`, `npm run work:evidence-summary -- test-output/reports/rolling-restart-after-unknown-no-debt-pending-runtime-20260518T141836Z.report.json`, `npm run work:scenario-route -- test-output/reports/rolling-restart-after-unknown-no-debt-pending-runtime-20260518T141836Z.report.json --owner topology_publication_owner --boundary publication_convergence --dominant-reason missing_published_nodes_present --explain publication_ack_convergence --markdown`, `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-unknown-no-debt-pending-runtime-20260518T141836Z.report.json`, `npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-after-unknown-no-debt-pending-runtime-20260518T141836Z.report.json --markdown`, `npm run analyze:owner-files -- topology_publication_owner publication_convergence`, and `npm run work:validate -- --pre-impl`; next: inspect scoped publication runtime and focused tests.
 - [x] Agent Hopper (6f0a4dae-57fc-4fb3-baad-6848e50e6a5d) implementation inspection subtask: identified a publication-owner evidence normalization gap, not a wrong slice; canonical convergence can rebuild the stale count-only `NOT_STARTED` gate, but priority-recovery observation normalization still requires literal `UNKNOWN` status and can retain stale publication presentation reason codes from the artifact shape; evidence: scoped reads of `src/control-plane/publication-owner-evidence.js`, `src/control-plane/publication-owner-decision.js`, `src/control-plane/publication-recovery-gate.js`, `src/control-plane/publication-recovery-evidence.js`, focused tests, and a narrow artifact field read after canonical extractors proved insufficient for nested gate/top-level mismatch details; next: add focused regression and patch `publication-recovery-evidence.js`.
 - [x] Agent Hopper (6f0a4dae-57fc-4fb3-baad-6848e50e6a5d) implementation patch and validation subtask: patched publication recovery evidence normalization so closed null-status `NOT_STARTED` publication gates clear stale priority-observation missing-published debt and stale publication presentation reason codes; evidence: regression first failed in `npm test -- test/control-plane/publication-recovery-evidence.test.js` on priority observation `missingPublishedCount=5` and stale reason codes, then passed after the patch; `npm test -- test/control-plane/publication-owner-stream.test.js` passed; `npm test -- test/control-plane/publication-recovery-gate.test.js` passed; `node scripts/check-guideline-literals.js src/control-plane/publication-owner-evidence.js src/control-plane/publication-owner-decision.js src/control-plane/publication-recovery-gate.js src/control-plane/publication-recovery-evidence.js` passed; `node scripts/check-guideline-decision-boundaries.js src/control-plane/publication-owner-evidence.js src/control-plane/publication-owner-decision.js src/control-plane/publication-recovery-gate.js src/control-plane/publication-recovery-evidence.js` passed; `npm run audit:runtime-grammar:file -- src/control-plane/publication-owner-evidence.js src/control-plane/publication-owner-decision.js src/control-plane/publication-recovery-gate.js src/control-plane/publication-recovery-evidence.js` passed; `npm run work:model-ledger -- record ...` recorded the package experience; next: parent reruns focused proof and representative route.
 
@@ -319,11 +322,11 @@ Required when subagent sequencing is required. Each real subagent appends one ch
 
 Required when subagent sequencing is required. Each real subagent records attempt status, last checkpoint, parent action, evidence, and next step. Interrupted or partial-unvalidated attempts must be followed by a superseded/discarded/revalidated checked line before closure.
 
-- [x] Agent Lovelace (e1ef65ca-7031-4065-ba1f-41ccce87ce3b) review attempt: status: `running`; last checkpoint: context and steering loaded; parent action: `pending`; evidence: `npm run work:context`, `.kiro/steering/llm/README.md`, `.kiro/steering/llm/core.md`, `.kiro/steering/llm/governance.md`, active package, predecessor packages, sprint file, and current-blocker files read; next: canonical extractor proof.
-- [x] Agent Lovelace (e1ef65ca-7031-4065-ba1f-41ccce87ce3b) review attempt: status: `running`; last checkpoint: canonical route proof reviewed; parent action: `pending`; evidence: package doctor, evidence-summary, scenario-route, causal-model, priority residual extractor, route-after-rerun, model-ledger summary, and owner-files commands completed; next: consistency review and final ledger result.
+- [x] Agent Lovelace (e1ef65ca-7031-4065-ba1f-41ccce87ce3b) review attempt: status: `validated`; last checkpoint: context and steering loaded; parent action: `accepted`; evidence: `npm run work:context`, `.kiro/steering/llm/README.md`, `.kiro/steering/llm/core.md`, `.kiro/steering/llm/governance.md`, active package, predecessor packages, sprint file, and current-blocker files read; next: review proof completed.
+- [x] Agent Lovelace (e1ef65ca-7031-4065-ba1f-41ccce87ce3b) review attempt: status: `validated`; last checkpoint: canonical route proof reviewed; parent action: `accepted`; evidence: package doctor, evidence-summary, scenario-route, causal-model, priority residual extractor, route-after-rerun, model-ledger summary, and owner-files commands completed; next: review proof completed.
 - [x] Agent Lovelace (e1ef65ca-7031-4065-ba1f-41ccce87ce3b) review attempt: status: `validated`; last checkpoint: package proof refreshed and review result recorded; parent action: `accepted`; evidence: checked Subagent Sequencing, Progress, and Attempt ledger lines in this package; next: fix role not-needed/clean handoff, then implementation subagent.
-- [x] Agent Hopper (6f0a4dae-57fc-4fb3-baad-6848e50e6a5d) implementation attempt: status: `running`; last checkpoint: canonical context, owner route, owner-file index, and pre-implementation validation refreshed; parent action: `pending`; evidence: checked implementation progress line above plus `npm run work:validate -- --pre-impl` passed; next: inspect scoped runtime and focused tests.
-- [x] Agent Hopper (6f0a4dae-57fc-4fb3-baad-6848e50e6a5d) implementation attempt: status: `running`; last checkpoint: scoped runtime/test inspection found priority observation stale-publication normalization gap; parent action: `pending`; evidence: focused file reads and narrow artifact field read showed `publicationRecoveryGate.publicationPending=false`, `streamOutcome=not_started`, `publicationStatus=null`, stale top-level publication reason codes, and stale priority observation missing count; next: add regression and runtime normalization patch.
+- [x] Agent Hopper (6f0a4dae-57fc-4fb3-baad-6848e50e6a5d) implementation attempt: status: `validated`; last checkpoint: canonical context, owner route, owner-file index, and pre-implementation validation refreshed; parent action: `accepted`; evidence: checked implementation progress line above plus `npm run work:validate -- --pre-impl` passed; next: implementation proof completed.
+- [x] Agent Hopper (6f0a4dae-57fc-4fb3-baad-6848e50e6a5d) implementation attempt: status: `validated`; last checkpoint: scoped runtime/test inspection found priority observation stale-publication normalization gap; parent action: `accepted`; evidence: focused file reads and narrow artifact field read showed `publicationRecoveryGate.publicationPending=false`, `streamOutcome=not_started`, `publicationStatus=null`, stale top-level publication reason codes, and stale priority observation missing count; next: implementation proof completed.
 - [x] Agent Hopper (6f0a4dae-57fc-4fb3-baad-6848e50e6a5d) implementation attempt: status: `validated`; last checkpoint: focused tests and static guardrails passed after runtime patch; parent action: `accepted`; evidence: checked implementation progress line above, focused TAP proof, static guardrails, and model-ledger record; next: parent reruns focused proof and decides representative rerun or route-after-rerun.
 
 ## Review Result
@@ -346,7 +349,7 @@ Changed files:
 
 1. `src/control-plane/publication-recovery-evidence.js`
 2. `test/control-plane/publication-recovery-evidence.test.js`
-3. `work/packages/active-20260518-topology-publication-missing-published-runtime-after-oscillation.md`
+3. `work/packages/done-20260518-topology-publication-missing-published-runtime-after-oscillation.md`
 4. `work/model-ledger.jsonl`
 
 Implementation summary: closed null-status unpublished `NOT_STARTED`
@@ -398,3 +401,9 @@ Successor: open a same-owner `runtime-owner-boundary` package for
 14. npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-missing-published-normalization-20260518T155705Z.report.json --handoff-probe
 15. npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-missing-published-normalization-20260518T155705Z.report.json
 16. npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-after-missing-published-normalization-20260518T155705Z.report.json --markdown
+
+## Commit And Push Ledger
+
+1. Focused package commit: 1143c81d
+2. Pushed to: origin/codex/pending-ack-eligibility-filter
+3. Commit contains only package-owned files/package-status/allowed sprint handoff: yes
