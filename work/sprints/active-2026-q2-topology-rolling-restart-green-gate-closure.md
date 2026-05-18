@@ -24,36 +24,30 @@ success is in scope.
 Latest representative artifact:
 `test-output/reports/rolling-restart-after-workflow-advance-classification-20260518T054537Z.report.json`.
 
-Canonical state after the operation-workflow package closed as migrated:
+Canonical state after the active-gate classification-only package closed:
 
 1. The current active package is
-   `work/packages/active-20260518-startup-active-gate-snapshot-coverage-after-workflow-advance-classification.md`.
+   `work/packages/active-20260518-rolling-restart-fresh-evidence-after-active-gate-classification.md`.
 2. Its predecessor is
-   `work/packages/done-20260518-priority-recovery-operation-workflow-advance-after-handoff-probe.md`,
-   which is done after proving the selected operation workflow edge.
-3. Fresh `work:evidence-summary` still reports
-   `publication_ack_convergence` as the visible producer frontier with
-   `publication_pending`.
-4. The fresh handoff probe reports operationWorkflow
-   `priority_recovery_partition_progress` as satisfied and `missingEdge=null`.
-5. Active package owner boundary:
-   `startup_active_gate_owner / snapshot_coverage`.
-6. Selected next owner path:
-   `active_gate_snapshot_coverage / startup_active_gate_owner /
-   snapshot_coverage / owner_reconcile_pending`.
-7. Required action:
+   `work/packages/done-20260518-startup-active-gate-snapshot-coverage-after-workflow-advance-classification.md`,
+   which closed as classification-only after the implementation subagent found
+   no runtime edit was needed.
+3. The reference artifact remains
+   `test-output/reports/rolling-restart-after-workflow-advance-classification-20260518T054537Z.report.json`.
+4. That artifact still showed visible `publication_ack_convergence` producer
+   context, while the handoff probe selected
+   `startup_active_gate_owner / snapshot_coverage` with required action
    `reconcile_owner_membership_publication`.
-8. Active gate is deferred at `snapshotCoverageNodeCount=3/5`, and
-   publication active-gate handoff remains pending with
-   `pendingReconcileCount=2`, pending nodes
-   `11601fe0-72d6-5853-8590-ec2881853e72` and
-   `35a891b8-c1a0-5064-9c6e-2acfba61c2a7`, and
-   `runtimePromotionAllowed=false`.
-9. Priority residual extraction reports subordinate
-   `operation_workflow_owner / rebalancer_handoff` witnesses, but causal model
-   and handoff probe do not select them as the next owner path.
-10. Required next step: run the review subagent for the active-gate successor
-    before any runtime edits.
+5. The selected active-gate reconcile edge is covered by existing focused
+   handoff regressions: flattened OPEN active-gate handoff progress with
+   `runtimePromotionAllowed=false` and two pending reconcile nodes queues only
+   the selected owner membership publication reconcile cohort.
+6. No runtime file changed in that classification-only package, so fresh
+   representative evidence is required before selecting the next runtime owner
+   boundary or architecture/human route.
+7. Required next step: run the fresh rolling-restart representative and then
+   use `work:evidence-summary`, topology handoff probe, causal model, and
+   priority residual extractors on that fresh artifact.
 
 ## Current Edge Card
 
@@ -138,7 +132,8 @@ Forbidden during this gate:
 | `done-20260518-priority-recovery-workflow-progress-after-active-gate-classification-rerun.md` | `rolling-restart-after-active-gate-classification-20260518T043001Z.report.json` | `topology_publication_owner / publication_convergence` plus downstream `operation_workflow_owner / workflow_progress` | selected architecture gate after publication pending, one dispatch-pending workflow witness, and active-gate owner reconcile pending remained cross-boundary | `architecture-package-selected` |
 | `done-20260518-publication-operation-active-gate-handoff-contract-architecture.md` | `rolling-restart-after-active-gate-classification-20260518T043001Z.report.json` | `topology_publication_owner / publication_convergence` -> `operation_workflow_owner / workflow_progress` | handoff probe exposes publication producer, operation-workflow leg, active-gate consumer, requiredProgressMechanism=advance, and selected successor requiredAction=advance_existing_operation | `migrated` |
 | `done-20260518-priority-recovery-operation-workflow-advance-after-handoff-probe.md` | `rolling-restart-after-workflow-advance-classification-20260518T054537Z.report.json` | selected owner path `operation_workflow_owner / workflow_progress` -> `startup_active_gate_owner / snapshot_coverage` | operation workflow proof stayed green; fresh handoff probe reports operationWorkflow satisfied, active-gate coverage `2/5` -> `3/5`, and pending reconcile count `3` -> `2` | `migrated` |
-| `active-20260518-startup-active-gate-snapshot-coverage-after-workflow-advance-classification.md` | `rolling-restart-after-workflow-advance-classification-20260518T054537Z.report.json` | visible `topology_publication_owner / publication_convergence`; selected owner path `startup_active_gate_owner / snapshot_coverage` | active package owns reconcile_owner_membership_publication for two pending active-gate owner reconcile nodes | `active` |
+| `done-20260518-startup-active-gate-snapshot-coverage-after-workflow-advance-classification.md` | `rolling-restart-after-workflow-advance-classification-20260518T054537Z.report.json` | visible `topology_publication_owner / publication_convergence`; selected owner path `startup_active_gate_owner / snapshot_coverage` | existing focused tests already cover the selected two-node reconcile edge without runtime edits | `classification-only` |
+| `active-20260518-rolling-restart-fresh-evidence-after-active-gate-classification.md` | planned `rolling-restart-after-active-gate-classification-fresh-20260518T062159Z.report.json` | pending fresh evidence | evidence-only package to rerun representative and select next owner boundary or route | `active` |
 
 ## Sprint LLM Trap List
 
@@ -152,8 +147,8 @@ Forbidden during this gate:
 4. Do not chase readiness support while publication convergence is first
    frontier.
 5. Do not start runtime edits before clean pre-impl validation and a fresh
-   implementation subagent; then keep edits inside the listed operation
-   workflow candidate runtime files.
+   implementation subagent; then keep edits inside the listed active-gate
+   candidate runtime files.
 6. Do not write new representative artifacts with placeholder timestamps such
    as `T000000Z`; use a real timestamp or unique run id.
 
@@ -675,12 +670,12 @@ The sprint cannot close until:
 
 ## Current Next Action
 
-Continue with the selected active-gate successor from the latest representative
-artifact:
+Continue with the evidence-only successor from the latest classification-only
+handoff:
 
 ```text
-work/packages/active-20260518-startup-active-gate-snapshot-coverage-after-workflow-advance-classification.md
-test-output/reports/rolling-restart-after-workflow-advance-classification-20260518T054537Z.report.json
+work/packages/active-20260518-rolling-restart-fresh-evidence-after-active-gate-classification.md
+test-output/reports/rolling-restart-after-active-gate-classification-fresh-20260518T062159Z.report.json
 ```
 
 The current first frontier is

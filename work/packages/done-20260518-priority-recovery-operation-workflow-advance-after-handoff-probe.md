@@ -213,7 +213,7 @@
   },
   "closed": "2026-05-18",
   "commitAndPushLedgerRequired": true,
-  "successor": "work/packages/active-20260518-startup-active-gate-snapshot-coverage-after-workflow-advance-classification.md"
+  "successor": "work/packages/done-20260518-startup-active-gate-snapshot-coverage-after-workflow-advance-classification.md"
 }
 -->
 

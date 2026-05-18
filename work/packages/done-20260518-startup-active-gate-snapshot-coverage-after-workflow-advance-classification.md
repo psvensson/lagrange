@@ -3,7 +3,7 @@
 <!-- work-package
 {
   "schema": "work-package-v1",
-  "status": "active",
+  "status": "done",
   "opened": "2026-05-18",
   "lane": "causal-escalation",
   "scenario": "rolling-restart",
@@ -12,8 +12,8 @@
   "owner": "startup_active_gate_owner",
   "boundary": "snapshot_coverage",
   "dominantReason": "owner_reconcile_pending",
-  "currentState": "Fresh representative rerun after the operation-workflow proof remains red. The visible producer frontier is publication_ack_convergence / topology_publication_owner / publication_convergence / publication_pending, but the handoff probe reports operationWorkflow priority_recovery_partition_progress satisfied, missingEdge=null, and nextOwnerPath startup_active_gate_owner / snapshot_coverage with requiredAction=reconcile_owner_membership_publication. Active-gate snapshot coverage is 3/5 with pendingReconcileCount=2 and runtimePromotionAllowed=false.",
-  "nextAction": "Run the required review subagent for this startup_active_gate_owner / snapshot_coverage successor before runtime edits. The review must decide whether the first implementation slice stays on owner membership publication reconcile or stops as an architecture gap; do not edit topology publication, operation workflow, timeout budgets, active-gate admission, readiness, or diagnostics grammar.",
+  "currentState": "Implementation subagent classified the selected startup_active_gate_owner / snapshot_coverage reconcile edge without runtime edits. Existing focused handoff tests already prove that flattened OPEN active-gate handoff progress with runtimePromotionAllowed=false and two pending reconcile nodes queues only the selected owner membership publication reconcile cohort, preserves producer publication truth, avoids local promotion/rebuild before visible owner outcome, and surfaces bounded queued/deferred owner outcomes.",
+  "nextAction": "Close this package as classification-only or rerun representative evidence from a follow-up package if a human wants fresh scenario movement. Do not edit topology publication, operation workflow, timeout budgets, active-gate admission, readiness, or diagnostics grammar from this package.",
   "proof": [
     "npm run work:evidence-summary -- test-output/reports/rolling-restart-after-workflow-advance-classification-20260518T054537Z.report.json",
     "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-workflow-advance-classification-20260518T054537Z.report.json --handoff-probe",
@@ -22,7 +22,7 @@
     "npm run analyze:owner-files -- startup_active_gate_owner snapshot_coverage"
   ],
   "writeScope": [
-    "work/packages/active-20260518-startup-active-gate-snapshot-coverage-after-workflow-advance-classification.md",
+    "work/packages/done-20260518-startup-active-gate-snapshot-coverage-after-workflow-advance-classification.md",
     "work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md",
     "work/sprints/current-blocker.md",
     "work/sprints/current-blocker.json",
@@ -47,7 +47,7 @@
     "test/control-plane/publication-active-gate-handoff-contract.test.js"
   ],
   "commitScope": [
-    "work/packages/active-20260518-startup-active-gate-snapshot-coverage-after-workflow-advance-classification.md",
+    "work/packages/done-20260518-startup-active-gate-snapshot-coverage-after-workflow-advance-classification.md",
     "work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md",
     "work/sprints/current-blocker.md",
     "work/sprints/current-blocker.json",
@@ -91,7 +91,7 @@
     "hypothesis": "After operation workflow satisfies the selected advance leg, rolling-restart remains red because startup active-gate snapshot coverage waits on owner membership publication reconcile for two pending active nodes while runtimePromotionAllowed=false.",
     "stopConditionCheck": "Use npm run analyze:causal-model -- test-output/reports/rolling-restart-after-workflow-advance-classification-20260518T054537Z.report.json plus npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-workflow-advance-classification-20260518T054537Z.report.json --handoff-probe before implementation and again after focused proof.",
     "expectedCausalModelChange": "Focused active-gate proof should reduce pendingReconcileCount, improve snapshot coverage, surface one bounded owner reconcile outcome, migrate to a narrower active-gate publication reconcile boundary, or stop as architecture-gap without reopening publication or operation workflow.",
-    "representativeOutcome": "pending-before-rerun",
+    "representativeOutcome": "classification-only",
     "causalDebt": "The sprint has recently bounced among publication convergence, operation workflow progress, rebalancer handoff, and active-gate reconcile. This package must keep the proof on the handoff probe's selected active-gate reconcile edge.",
     "crossBoundaryReview": "Required review subagent must inspect the predecessor migration, fresh handoff probe, active-gate owner files, and subordinate priority residual report before any runtime edit."
   },
@@ -123,7 +123,7 @@
     "maxProgressBound": "one focused startup_active_gate_owner / snapshot_coverage implementation slice before another architecture decision",
     "sameFrontierFallback": "If the same active-gate frontier remains, record the owner reconcile outcome and do not broaden into publication runtime, operation workflow runtime, timeout budgets, active-gate admission, readiness, or diagnostics grammar.",
     "expectedNextFrontier": "startup_active_gate_owner / snapshot_coverage for active_gate_snapshot_coverage requiredAction=reconcile_owner_membership_publication",
-    "resultClassification": "pending-before-probe",
+    "resultClassification": "classification-only",
     "stopCondition": "continue-local-fix",
     "recentFrontierHistory": [
       "work/packages/done-20260518-priority-recovery-operation-workflow-advance-after-handoff-probe.md / operation_workflow_owner / workflow_progress / migrated",
@@ -166,7 +166,7 @@
         "summary": "Stop for architecture if reconcile_owner_membership_publication cannot be represented by a bounded active-gate owner proof.",
         "route": "architecture-package",
         "proof": [
-          "npm run work:package:doctor -- --suggest work/packages/active-20260518-startup-active-gate-snapshot-coverage-after-workflow-advance-classification.md"
+          "npm run work:package:doctor -- --suggest work/packages/done-20260518-startup-active-gate-snapshot-coverage-after-workflow-advance-classification.md"
         ]
       },
       {
@@ -181,7 +181,9 @@
     "selectedChoice": "continue-local-proof",
     "nextAction": "Run review, fix if needed, and implementation subagents sequentially before any active-gate runtime edit."
   },
-  "predecessor": "work/packages/done-20260518-priority-recovery-operation-workflow-advance-after-handoff-probe.md"
+  "predecessor": "work/packages/done-20260518-priority-recovery-operation-workflow-advance-after-handoff-probe.md",
+  "closed": "2026-05-18",
+  "commitAndPushLedgerRequired": true
 }
 -->
 
@@ -222,9 +224,9 @@ sequentially before editing runtime files.
 
 ## Subagent Sequencing Ledger
 
-- [ ] Review subagent recorded: pending before implementation.
-- [ ] Fix subagent recorded or explicitly not needed: pending review result.
-- [ ] Implementation subagent recorded: pending review/fix completion.
+- [x] Review subagent recorded: Agent Codex (8f8dcb3d-3e10-4c96-8f9b-07a6f72ec4c8) reviewed work/packages/done-20260518-startup-active-gate-snapshot-coverage-after-workflow-advance-classification.md; result fixes-required.
+- [x] Fix subagent recorded or explicitly not needed: Agent Codex (019e39b4-9f4f-7601-be83-c97e1edd77f1) fixed work/packages/done-20260518-startup-active-gate-snapshot-coverage-after-workflow-advance-classification.md.
+- [x] Implementation subagent recorded: Agent Codex (37932028-386e-40d0-9114-7f740d385d62) implemented work/packages/done-20260518-startup-active-gate-snapshot-coverage-after-workflow-advance-classification.md.
 
 ## LLM Tool-First Contract
 
@@ -240,7 +242,7 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 
 ## In Scope
 
-1. work/packages/active-20260518-startup-active-gate-snapshot-coverage-after-workflow-advance-classification.md
+1. work/packages/done-20260518-startup-active-gate-snapshot-coverage-after-workflow-advance-classification.md
 2. work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md
 3. work/sprints/current-blocker.md
 4. work/sprints/current-blocker.json
@@ -261,7 +263,7 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 - Intended minimum model: `gpt-5.3-codex`
 - Scope shape: `owner-boundary-contraction/current-frontier`
 - Output profile: `medium`
-- Owned files: `work/packages/active-20260518-startup-active-gate-snapshot-coverage-after-workflow-advance-classification.md`, `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md`, `work/sprints/current-blocker.md`, `work/sprints/current-blocker.json`, `work/model-ledger.jsonl`
+- Owned files: `work/packages/done-20260518-startup-active-gate-snapshot-coverage-after-workflow-advance-classification.md`, `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md`, `work/sprints/current-blocker.md`, `work/sprints/current-blocker.json`, `work/model-ledger.jsonl`
 - Forbidden files: `topology_publication_owner runtime`, `operation_workflow_owner runtime`, `timeout budgets`, `active-gate admission`, `readiness shortcut`, `diagnostics-only reinterpretation`
 - Frozen decisions: operation workflow proof is satisfied in the fresh handoff
   probe; publication remains producer context; subordinate priority residuals
@@ -279,3 +281,43 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 3. npm run analyze:causal-model -- test-output/reports/rolling-restart-after-workflow-advance-classification-20260518T054537Z.report.json
 4. npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-after-workflow-advance-classification-20260518T054537Z.report.json --markdown
 5. npm run analyze:owner-files -- startup_active_gate_owner snapshot_coverage
+6. npx tap --grep "handoff" test/admin/admin-control-snapshot.test.js
+7. node --test test/control-plane/publication-active-gate-handoff-contract.test.js test/control-plane/membership-publication-coordinator-main-stage-2.js
+8. git diff --check
+
+## Implementation Result
+
+Classification: `classification-only`.
+
+No runtime or test edit was required. The existing focused owner proof already
+represents the fresh handoff probe edge:
+
+1. `publication active-gate selector accepts flattened active-gate progress handoff`
+   preserves the selected pending reconcile nodes from flattened progress and
+   retains the owner reconcile signal.
+2. `AdminControlSnapshot no-attempt path queues flattened OPEN active-gate
+   handoff reconcile` proves the OPEN producer context queues only the selected
+   owner reconcile cohort, does not rebuild before the owner outcome is visible,
+   preserves original snapshot coverage, and does not convert publication truth
+   locally.
+3. The adjacent handoff regressions prove owner-command forwarding, durable
+   visible readback, stale/readback-unavailable defers, and bounded queued or
+   non-enqueued owner outcomes.
+
+The selected two-node reconcile edge is therefore already represented by the
+bounded startup active-gate owner command path. Priority residuals remain
+subordinate `operation_workflow_owner / rebalancer_handoff` witnesses; topology
+publication remains producer context. Representative rolling-restart was not
+rerun because no runtime code changed.
+
+## Validation Results
+
+1. PASS - `npm run work:package:doctor -- --suggest work/packages/done-20260518-startup-active-gate-snapshot-coverage-after-workflow-advance-classification.md`
+2. PASS - `npm run work:evidence-summary -- test-output/reports/rolling-restart-after-workflow-advance-classification-20260518T054537Z.report.json`
+3. PASS - `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-workflow-advance-classification-20260518T054537Z.report.json --handoff-probe`
+4. PASS - `npm run analyze:causal-model -- test-output/reports/rolling-restart-after-workflow-advance-classification-20260518T054537Z.report.json`
+5. PASS - `npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-after-workflow-advance-classification-20260518T054537Z.report.json --markdown`
+6. PASS - `npm run analyze:owner-files -- startup_active_gate_owner snapshot_coverage`
+7. PASS - `npx tap --grep "handoff" test/admin/admin-control-snapshot.test.js`
+8. PASS - `node --test test/control-plane/publication-active-gate-handoff-contract.test.js test/control-plane/membership-publication-coordinator-main-stage-2.js`
+9. PASS - `git diff --check`

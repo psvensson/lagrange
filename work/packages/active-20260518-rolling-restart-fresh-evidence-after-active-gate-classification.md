@@ -1,9 +1,10 @@
+# Rolling Restart Fresh Evidence After Active Gate Classification
+
+<!-- work-package
 {
-  "schema": "current-blocker-v1",
-  "generatedBy": "scripts/work-tracker.js",
-  "sprint": "work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md",
-  "package": "work/packages/active-20260518-rolling-restart-fresh-evidence-after-active-gate-classification.md",
+  "schema": "work-package-v1",
   "status": "active",
+  "opened": "2026-05-18",
   "lane": "read-review-doc-only",
   "scenario": "rolling-restart",
   "artifact": "test-output/reports/rolling-restart-after-active-gate-classification-fresh-20260518T062159Z.report.json",
@@ -46,7 +47,6 @@
     "work/sprints/current-blocker.json",
     "work/model-ledger.jsonl"
   ],
-  "touchedFiles": [],
   "modelFit": {
     "packageClass": "bounded-implementation",
     "intendedMinimumModel": "gpt-5.3-codex-spark",
@@ -107,14 +107,75 @@
     ],
     "oscillationCheck": "This package is intentionally read/review only to avoid another stale-evidence runtime patch after repeated publication, operation workflow, and active-gate transitions.",
     "handoffInvariant": "Do not edit runtime or broaden owner scope until fresh canonical evidence selects the next owner boundary."
-  },
-  "architectureDecisionGate": {
-    "status": "not-required",
-    "trigger": "none",
-    "triggerEvidence": [],
-    "choices": [],
-    "selectedChoice": null,
-    "nextAction": "No architecture decision gate is required for this package."
-  },
-  "predecessor": null
+  }
 }
+-->
+
+## Why
+
+The active-gate owner reconcile slice classified the selected two-node
+reconcile edge as already represented by existing focused handoff tests, with
+no runtime change. The sprint now needs fresh representative evidence before it
+can safely select another implementation boundary.
+
+This package owns only that evidence refresh and canonical extractor pass. It
+must not edit runtime, broaden into publication or operation workflow code, or
+interpret a stale artifact as a new owner-boundary selection.
+
+## Scope Basis
+
+Roadmap Phase `0.1 - Internal Coherence`: rolling-restart topology workflow
+stabilization and production guarantees for the AGPL runtime.
+
+## Workflow Lane
+
+- Selected lane: `read-review-doc-only`
+- Why this lane is sufficient: this package is evidence collection and handoff
+  classification only; it has no runtime write scope.
+- Escalation trigger to a heavier lane: fresh representative evidence selects
+  a runtime owner boundary or a scenario/release-gate package.
+
+## LLM Tool-First Contract
+
+Before raw JSON, raw logs, broad file search, oversized segment files, or ad hoc `jq`, use the canonical workflow command that owns the question:
+
+1. Package metadata or ledger edits: `npm run work:package:doctor -- --suggest <package>`, `npm run work:package:doctor -- --fix-dry-run <package>`, `npm run work:package:schema`, or `npm run work:package:new -- ...`.
+2. Representative evidence: `npm run work:evidence-summary -- <artifact>` plus any focused extractor for this failure class.
+3. Owner discovery: `npm run analyze:owner-files -- <owner> [boundary]`.
+4. Subagent sequencing: `npm run work:subagent-prompt -- --role <role> --package <package>`.
+5. Large-file cleanup: `npm run work:oversized-next -- --markdown`.
+
+If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which canonical extractor was tried and why it was insufficient.
+
+## In Scope
+
+1. work/packages/active-20260518-rolling-restart-fresh-evidence-after-active-gate-classification.md
+2. work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md
+3. work/sprints/current-blocker.md
+4. work/sprints/current-blocker.json
+5. work/model-ledger.jsonl
+
+## Out Of Scope
+
+1. src
+
+## Model Fit
+
+- Package class: `bounded-implementation`
+- Intended minimum model: `gpt-5.3-codex-spark`
+- Scope shape: `leaf-slice`
+- Output profile: `medium`
+- Owned files: `work/packages/active-20260518-rolling-restart-fresh-evidence-after-active-gate-classification.md`, `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md`, `work/sprints/current-blocker.md`, `work/sprints/current-blocker.json`, `work/model-ledger.jsonl`
+- Forbidden files: `src`
+- Frozen decisions: package scope and lane stay bounded unless explicitly escalated.
+- Escalation triggers: owned files expand beyond this package, runtime ownership changes, or representative scenario evidence changes.
+- Focused proof: `node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-after-active-gate-classification-fresh-20260518T062159Z.report.json --verbose`, `npm run work:evidence-summary -- test-output/reports/rolling-restart-after-active-gate-classification-fresh-20260518T062159Z.report.json`, `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-active-gate-classification-fresh-20260518T062159Z.report.json --handoff-probe`, `npm run analyze:causal-model -- test-output/reports/rolling-restart-after-active-gate-classification-fresh-20260518T062159Z.report.json`, `npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-after-active-gate-classification-fresh-20260518T062159Z.report.json --markdown`
+- Model ledger advisory: `escalate`
+
+## Validation
+
+1. node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-after-active-gate-classification-fresh-20260518T062159Z.report.json --verbose
+2. npm run work:evidence-summary -- test-output/reports/rolling-restart-after-active-gate-classification-fresh-20260518T062159Z.report.json
+3. npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-active-gate-classification-fresh-20260518T062159Z.report.json --handoff-probe
+4. npm run analyze:causal-model -- test-output/reports/rolling-restart-after-active-gate-classification-fresh-20260518T062159Z.report.json
+5. npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-after-active-gate-classification-fresh-20260518T062159Z.report.json --markdown
