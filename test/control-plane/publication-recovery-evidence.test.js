@@ -1057,6 +1057,94 @@ test('buildCanonicalPublicationRecoveryEvidence narrows open publication debt fr
     t.end();
   });
 
+test('buildCanonicalPublicationRecoveryEvidence projects owner reconcile narrowing into the priority observation',
+  (t) => {
+    const stalePublicationReasonCodes = Object.freeze([
+      TEST_PUBLICATION_PENDING_REASON_CODE,
+      TEST_STALE_REASON_CODE,
+      TEST_STALE_PRESENTATION_REASON_CODE.PUBLICATION_PENDING_ACK,
+    ]);
+    const evidence = buildCanonicalPublicationRecoveryEvidence({
+      publicationConvergence: {
+        publicationEpoch: TEST_PUBLICATION_EPOCH,
+        publicationStatus: CONTROL_PLANE_PUBLICATION_STATUS.OPEN,
+        recoveryProtocolState: RECOVERY_PROTOCOL_STATE.PUBLICATION_PENDING,
+        publishedActiveNodeIds: [TEST_NODE_ID.FIRST],
+        pendingAckNodeIds: TEST_EMPTY_NODE_IDS,
+        pendingAckCount: TEST_EMPTY_PUBLICATION_DEBT_COUNT,
+        missingPublishedNodeIds: [
+          TEST_NODE_ID.SECOND,
+          TEST_NODE_ID.THIRD,
+          TEST_NODE_ID.FOURTH,
+          TEST_NODE_ID.FIFTH,
+        ],
+        missingPublishedCount: TEST_SELECTED_ONLY_MISSING_NODE_IDS.length +
+          TEST_PUBLICATION_SELECTED_SNAPSHOT_FRONTIER_COUNT,
+        priorityRecoveryReasonCodes: stalePublicationReasonCodes,
+        priorityPartitionSummary: TEST_ZERO_GAP_PRIORITY_PARTITION_SUMMARY,
+      },
+      priorityRecoveryObservation: {
+        publicationEpoch: TEST_PUBLICATION_EPOCH,
+        publicationStatus: CONTROL_PLANE_PUBLICATION_STATUS.OPEN,
+        recoveryProtocolState: RECOVERY_PROTOCOL_STATE.PUBLICATION_PENDING,
+        pendingAckNodeIds: TEST_EMPTY_NODE_IDS,
+        pendingAckCount: TEST_EMPTY_PUBLICATION_DEBT_COUNT,
+        missingPublishedNodeIds: [
+          TEST_NODE_ID.SECOND,
+          TEST_NODE_ID.THIRD,
+          TEST_NODE_ID.FOURTH,
+          TEST_NODE_ID.FIFTH,
+        ],
+        missingPublishedCount: TEST_SELECTED_ONLY_MISSING_NODE_IDS.length +
+          TEST_PUBLICATION_SELECTED_SNAPSHOT_FRONTIER_COUNT,
+        priorityRecoveryReasonCodes: stalePublicationReasonCodes,
+        publicationPending: true,
+        prioritySpreadPending: true,
+        priorityPartitionSummary: TEST_ZERO_GAP_PRIORITY_PARTITION_SUMMARY,
+      },
+      activeGate: {
+        progress: {
+          publicationActiveGateHandoffState:
+            TEST_PUBLICATION_ACTIVE_GATE_HANDOFF_STATE.PENDING,
+          publicationActiveGateHandoffReasonCode:
+            TEST_PUBLICATION_ACTIVE_GATE_HANDOFF_REASON
+              .OWNER_RECONCILE_PENDING,
+          publicationActiveGateHandoffNextAction:
+            TEST_PUBLICATION_ACTIVE_GATE_HANDOFF_NEXT_ACTION
+              .RECONCILE_OWNER_MEMBERSHIP_PUBLICATION,
+          publicationActiveGateHandoffRuntimePromotionAllowed: false,
+          publicationActiveGateHandoffPendingReconcileNodeIds:
+            TEST_SELECTED_HANDOFF_MISSING_NODE_IDS,
+          publicationActiveGateHandoffPendingReconcileCount:
+            TEST_PUBLICATION_SELECTED_HANDOFF_PENDING_COUNT,
+        },
+      },
+    });
+
+    t.same(
+      evidence.publicationConvergenceGate.missingPublishedNodeIds,
+      TEST_SELECTED_HANDOFF_MISSING_NODE_IDS,
+    );
+    t.same(
+      evidence.priorityRecoveryObservation.missingPublishedNodeIds,
+      TEST_SELECTED_HANDOFF_MISSING_NODE_IDS,
+    );
+    t.equal(
+      evidence.priorityRecoveryObservation.missingPublishedCount,
+      TEST_SELECTED_HANDOFF_MISSING_NODE_IDS.length,
+    );
+    t.equal(evidence.priorityRecoveryObservation.pendingAckCount, 0);
+    t.equal(
+      evidence.priorityRecoveryObservation.priorityRecoveryReasonCodes
+        .includes(TEST_STALE_PRESENTATION_REASON_CODE.PUBLICATION_PENDING_ACK),
+      false,
+    );
+    t.same(evidence.priorityRecoveryObservation.priorityRecoveryReasonCodes, [
+      TEST_PUBLICATION_PENDING_REASON_CODE,
+    ]);
+    t.end();
+  });
+
 test('buildCanonicalPublicationRecoveryEvidence closes stale open publication when selected membership proves the cohort',
   (t) => {
     const selectedPublicationCohortNodeIds = Object.freeze([

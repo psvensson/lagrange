@@ -804,6 +804,55 @@ function normalizeClosedUnknownNoDebtPriorityRecoveryObservation(
   });
 }
 
+function normalizePriorityRecoveryObservationFromPublicationGate(
+  priorityRecoveryObservation = null,
+  publicationConvergenceGate = null,
+) {
+  if (
+    !isRecord(priorityRecoveryObservation) ||
+    !isRecord(publicationConvergenceGate)
+  ) {
+    return priorityRecoveryObservation;
+  }
+  const publicationGateReasonCodes = normalizeDistinctStringArray(
+    publicationConvergenceGate.reasonCodes ??
+      publicationConvergenceGate.reasons ??
+      priorityRecoveryObservation.priorityRecoveryReasonCodes,
+  );
+  return Object.freeze({
+    ...priorityRecoveryObservation,
+    publicationEpoch:
+      publicationConvergenceGate.publicationEpoch ??
+      priorityRecoveryObservation.publicationEpoch,
+    publicationStatus:
+      publicationConvergenceGate.publicationStatus ??
+      priorityRecoveryObservation.publicationStatus,
+    recoveryProtocolState:
+      publicationConvergenceGate.recoveryProtocolState ??
+      priorityRecoveryObservation.recoveryProtocolState,
+    priorityRecoveryReasonCodes: publicationGateReasonCodes,
+    publicationConvergenceGateReasons: publicationGateReasonCodes,
+    pendingAckNodeIds: normalizeDistinctStringArray(
+      publicationConvergenceGate.pendingAckNodeIds,
+    ),
+    pendingAckCount: normalizeNonNegativeInteger(
+      publicationConvergenceGate.pendingAckCount,
+    ),
+    missingPublishedNodeIds: normalizeDistinctStringArray(
+      publicationConvergenceGate.missingPublishedNodeIds,
+    ),
+    missingPublishedCount: normalizeNonNegativeInteger(
+      publicationConvergenceGate.missingPublishedCount,
+    ),
+    publicationPending: publicationConvergenceGate.publicationPending === true,
+    prioritySpreadPending:
+      publicationConvergenceGate.prioritySpreadPending === true,
+    priorityPartitionSummary:
+      publicationConvergenceGate.priorityPartitionSummary ??
+      priorityRecoveryObservation.priorityPartitionSummary,
+  });
+}
+
 function hasUnavailablePublicationRecoveryEpoch(value) {
   const publicationEpoch = normalizePublicationEpoch(value);
   return publicationEpoch === null || publicationEpoch === NUM.ZERO;
@@ -1724,8 +1773,11 @@ function buildCanonicalPriorityRecoveryObservation(options = {}) {
       } :
       baseDerivedPriorityRecoveryObservation;
   const normalizedDerivedPriorityRecoveryObservation =
-    normalizeClosedUnknownNoDebtPriorityRecoveryObservation(
-      derivedPriorityRecoveryObservation,
+    normalizePriorityRecoveryObservationFromPublicationGate(
+      normalizeClosedUnknownNoDebtPriorityRecoveryObservation(
+        derivedPriorityRecoveryObservation,
+        publicationConvergenceGate,
+      ),
       publicationConvergenceGate,
     );
 
