@@ -187,7 +187,7 @@
   "predecessor": "work/packages/done-20260518-topology-publication-missing-published-nodes-classification.md",
   "closed": "2026-05-18",
   "commitAndPushLedgerRequired": true,
-  "successor": "work/packages/active-20260518-topology-publication-unknown-no-debt-pending-runtime.md"
+  "successor": "work/packages/done-20260518-topology-publication-unknown-no-debt-pending-runtime.md"
 }
 -->
 

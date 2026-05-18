@@ -3,7 +3,7 @@
 <!-- work-package
 {
   "schema": "work-package-v1",
-  "status": "active",
+  "status": "done",
   "opened": "2026-05-18",
   "lane": "runtime-owner-boundary",
   "scenario": "rolling-restart",
@@ -22,7 +22,7 @@
     "npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-after-unknown-missing-published-runtime-20260518T133616Z.report.json --markdown"
   ],
   "writeScope": [
-    "work/packages/active-20260518-topology-publication-unknown-no-debt-pending-runtime.md",
+    "work/packages/done-20260518-topology-publication-unknown-no-debt-pending-runtime.md",
     "work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md",
     "work/sprints/current-blocker.md",
     "work/sprints/current-blocker.json",
@@ -53,7 +53,7 @@
     "test/control-plane/publication-recovery-evidence.test.js"
   ],
   "commitScope": [
-    "work/packages/active-20260518-topology-publication-unknown-no-debt-pending-runtime.md",
+    "work/packages/done-20260518-topology-publication-unknown-no-debt-pending-runtime.md",
     "work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md",
     "work/sprints/current-blocker.md",
     "work/sprints/current-blocker.json",
@@ -186,7 +186,10 @@
       "npm run work:validate -- --pre-impl after review/fix proof is clean"
     ]
   },
-  "predecessor": "work/packages/done-20260518-topology-publication-unknown-missing-published-nodes-runtime.md"
+  "predecessor": "work/packages/done-20260518-topology-publication-unknown-missing-published-nodes-runtime.md",
+  "closed": "2026-05-18",
+  "commitAndPushLedgerRequired": true,
+  "successor": "work/packages/active-20260518-topology-publication-missing-published-oscillation-gate.md"
 }
 -->
 
@@ -322,7 +325,7 @@ canonical extractor was tried and why it was insufficient.
 
 ## In Scope
 
-1. work/packages/active-20260518-topology-publication-unknown-no-debt-pending-runtime.md
+1. work/packages/done-20260518-topology-publication-unknown-no-debt-pending-runtime.md
 2. work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md
 3. work/sprints/current-blocker.md
 4. work/sprints/current-blocker.json
@@ -350,7 +353,7 @@ canonical extractor was tried and why it was insufficient.
 - Intended minimum model: `gpt-5.3-codex`
 - Scope shape: `bounded-owner-runtime/current-frontier`
 - Output profile: `medium`
-- Owned files: `work/packages/active-20260518-topology-publication-unknown-no-debt-pending-runtime.md`, `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md`, `work/sprints/current-blocker.md`, `work/sprints/current-blocker.json`, `work/model-ledger.jsonl`, `src/control-plane/publication-owner-evidence.js`, `src/control-plane/publication-owner-decision.js`, `src/control-plane/publication-recovery-gate.js`, `src/control-plane/publication-recovery-evidence.js`, `test/control-plane/publication-owner-stream.test.js`, `test/control-plane/publication-recovery-gate.test.js`, `test/control-plane/publication-recovery-evidence.test.js`
+- Owned files: `work/packages/done-20260518-topology-publication-unknown-no-debt-pending-runtime.md`, `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md`, `work/sprints/current-blocker.md`, `work/sprints/current-blocker.json`, `work/model-ledger.jsonl`, `src/control-plane/publication-owner-evidence.js`, `src/control-plane/publication-owner-decision.js`, `src/control-plane/publication-recovery-gate.js`, `src/control-plane/publication-recovery-evidence.js`, `test/control-plane/publication-owner-stream.test.js`, `test/control-plane/publication-recovery-gate.test.js`, `test/control-plane/publication-recovery-evidence.test.js`
 - Forbidden files: `startup active-gate runtime`, `operation workflow / rebalancer_handoff runtime`, `startup readiness runtime`, `active-gate admission`, `timeout budgets`, `handoff architecture`
 - Frozen decisions: active-gate, operation-workflow, readiness, admission,
   handoff architecture, and timeout ownership remain out of scope unless fresh
@@ -368,7 +371,7 @@ edit topology publication owner runtime and focused test files.
 
 - [x] Review subagent recorded: Agent Arendt (019e3b5d-d5ce-7730-aed9-ae381c4e834a) reviewed work/packages/done-20260518-topology-publication-unknown-missing-published-nodes-runtime.md; result clean.
 - [x] Fix subagent recorded or explicitly not needed: not-needed.
-- [x] Implementation subagent recorded: Agent Hubble (019e3b69-bcc1-7b32-86b0-209b69d2822e) implemented work/packages/active-20260518-topology-publication-unknown-no-debt-pending-runtime.md; result implemented.
+- [x] Implementation subagent recorded: Agent Hubble (019e3b69-bcc1-7b32-86b0-209b69d2822e) implemented work/packages/done-20260518-topology-publication-unknown-no-debt-pending-runtime.md; result implemented.
 
 ## Subagent Progress Ledger
 
@@ -376,13 +379,13 @@ Required when subagent sequencing is required. Each real subagent appends one
 checked update after every completed subtask; the Sequencing Ledger remains the
 role-completion proof.
 
-- [x] Agent Arendt (019e3b5d-d5ce-7730-aed9-ae381c4e834a) review falsification check: wrong-slice evidence would be canonical extractor output reselecting startup active-gate, operation workflow, readiness, admission, handoff architecture, timeout ownership, priority residual debt, or a non-publication owner/boundary as the required next action; evidence: `npm run work:package:doctor -- --suggest work/packages/active-20260518-topology-publication-unknown-no-debt-pending-runtime.md` failed only on missing subagent proof, and `npm run work:evidence-summary -- test-output/reports/rolling-restart-after-unknown-missing-published-runtime-20260518T133616Z.report.json` still selected `publication_ack_convergence / topology_publication_owner / publication_convergence / publication_pending` with causal outcome `continue_local_fix`; next: review predecessor proof and sprint consistency.
+- [x] Agent Arendt (019e3b5d-d5ce-7730-aed9-ae381c4e834a) review falsification check: wrong-slice evidence would be canonical extractor output reselecting startup active-gate, operation workflow, readiness, admission, handoff architecture, timeout ownership, priority residual debt, or a non-publication owner/boundary as the required next action; evidence: `npm run work:package:doctor -- --suggest work/packages/done-20260518-topology-publication-unknown-no-debt-pending-runtime.md` failed only on missing subagent proof, and `npm run work:evidence-summary -- test-output/reports/rolling-restart-after-unknown-missing-published-runtime-20260518T133616Z.report.json` still selected `publication_ack_convergence / topology_publication_owner / publication_convergence / publication_pending` with causal outcome `continue_local_fix`; next: review predecessor proof and sprint consistency.
 - [x] Agent Arendt (019e3b5d-d5ce-7730-aed9-ae381c4e834a) review extractor subtask: canonical evidence keeps the package on the declared publication owner boundary and does not select a forbidden downstream owner for runtime work; evidence: `npm run work:scenario-route -- test-output/reports/rolling-restart-after-unknown-missing-published-runtime-20260518T133616Z.report.json --owner topology_publication_owner --boundary publication_convergence --dominant-reason publication_pending --explain publication_ack_convergence --markdown` reports `continue_local_fix` and priority witnesses `0`, `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-unknown-missing-published-runtime-20260518T133616Z.report.json --handoff-probe` reports producer `publication_pending`, consumer deferred with `runtimePromotionAllowed=false`, `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-unknown-missing-published-runtime-20260518T133616Z.report.json` reports `publication_ack_blocked / local_runtime_owner_fix`, and `npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-after-unknown-missing-published-runtime-20260518T133616Z.report.json --markdown` reports witnesses `0`; next: verify predecessor closure and sprint/current-blocker consistency.
 - [x] Agent Arendt (019e3b5d-d5ce-7730-aed9-ae381c4e834a) review consistency subtask: predecessor proof, residual inventory, blocker migration notes, and sprint snapshots consistently support the active package next action; evidence: predecessor `work/packages/done-20260518-topology-publication-unknown-missing-published-nodes-runtime.md` records result `reduced`, missingPublishedCount `5` to `0`, guardrail/test/representative proof, route-after-rerun proof, and commit `3cccd514`; sprint and current-blocker files name the active package, same artifact, `topology_publication_owner / publication_convergence / publication_pending`, zero priority residual witnesses, active-gate `runtimePromotionAllowed=false`, and frozen non-publication boundaries; next: record clean review sequencing line and validate.
-- [x] Agent Plato (019e3b61-ef83-7ac2-ad45-f2cf56f135dc) implementation falsification check: wrong-slice evidence would be canonical extractors reselecting startup active-gate, operation workflow, readiness, admission, handoff architecture, timeout ownership, priority residual debt, or a non-publication owner/boundary as the required current runtime change; evidence: `npm run work:package:doctor -- --suggest work/packages/active-20260518-topology-publication-unknown-no-debt-pending-runtime.md` reported validation ok, `npm run work:evidence-summary -- test-output/reports/rolling-restart-after-unknown-missing-published-runtime-20260518T133616Z.report.json` selected `publication_ack_convergence / topology_publication_owner / publication_convergence / publication_pending` with causal outcome `continue_local_fix`, `npm run work:scenario-route -- test-output/reports/rolling-restart-after-unknown-missing-published-runtime-20260518T133616Z.report.json --owner topology_publication_owner --boundary publication_convergence --dominant-reason publication_pending --explain publication_ack_convergence --markdown` reported priority witnesses `0`, `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-unknown-missing-published-runtime-20260518T133616Z.report.json --handoff-probe` reported producer `publication_pending` and consumer promotion `runtimePromotionAllowed=false`, `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-unknown-missing-published-runtime-20260518T133616Z.report.json` reported `publication_ack_blocked / local_runtime_owner_fix`, `npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-after-unknown-missing-published-runtime-20260518T133616Z.report.json --markdown` reported witnesses `0`, and `npm run work:validate -- --pre-impl` passed; next: edit publication owner runtime/tests within write scope.
+- [x] Agent Plato (019e3b61-ef83-7ac2-ad45-f2cf56f135dc) implementation falsification check: wrong-slice evidence would be canonical extractors reselecting startup active-gate, operation workflow, readiness, admission, handoff architecture, timeout ownership, priority residual debt, or a non-publication owner/boundary as the required current runtime change; evidence: `npm run work:package:doctor -- --suggest work/packages/done-20260518-topology-publication-unknown-no-debt-pending-runtime.md` reported validation ok, `npm run work:evidence-summary -- test-output/reports/rolling-restart-after-unknown-missing-published-runtime-20260518T133616Z.report.json` selected `publication_ack_convergence / topology_publication_owner / publication_convergence / publication_pending` with causal outcome `continue_local_fix`, `npm run work:scenario-route -- test-output/reports/rolling-restart-after-unknown-missing-published-runtime-20260518T133616Z.report.json --owner topology_publication_owner --boundary publication_convergence --dominant-reason publication_pending --explain publication_ack_convergence --markdown` reported priority witnesses `0`, `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-unknown-missing-published-runtime-20260518T133616Z.report.json --handoff-probe` reported producer `publication_pending` and consumer promotion `runtimePromotionAllowed=false`, `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-unknown-missing-published-runtime-20260518T133616Z.report.json` reported `publication_ack_blocked / local_runtime_owner_fix`, `npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-after-unknown-missing-published-runtime-20260518T133616Z.report.json --markdown` reported witnesses `0`, and `npm run work:validate -- --pre-impl` passed; next: edit publication owner runtime/tests within write scope.
 - [x] Agent Hubble (019e3b69-bcc1-7b32-86b0-209b69d2822e) partial-worker handoff check: previous Agent Plato (019e3b61-ef83-7ac2-ad45-f2cf56f135dc) added a falsification line and partial runtime/test edits, but did not complete validation or implementation role proof; evidence: initial dirty diff touched `src/control-plane/publication-owner-decision.js`, `src/control-plane/publication-recovery-evidence.js`, `test/control-plane/publication-owner-stream.test.js`, and this package, and `npm test -- test/control-plane/publication-recovery-evidence.test.js` failed on undefined `RECOVERY_PROTOCOL_STATE`; next: correct or replace the partial patch within the same package scope.
 - [x] Agent Hubble (019e3b69-bcc1-7b32-86b0-209b69d2822e) implementation correction subtask: finished the UNKNOWN/no-debt normalization by using the file-owned recovery protocol constant, importing the canonical priority recovery reason owner, and extending recovery-evidence coverage so a stale priority observation with `publicationPending=true` and `publication_epoch_pending` is normalized to the closed unpublished-observation outcome when the canonical publication gate is closed; evidence: `src/control-plane/publication-recovery-evidence.js`, `test/control-plane/publication-recovery-evidence.test.js`, and existing partial edits in `src/control-plane/publication-owner-decision.js` and `test/control-plane/publication-owner-stream.test.js`; next: run required focused TAP tests and static guardrails.
-- [x] Agent Hubble (019e3b69-bcc1-7b32-86b0-209b69d2822e) focused validation subtask: owner stream, recovery gate, and canonical recovery evidence tests all passed with TAP command shape, and touched-runtime static guardrails passed; evidence: `npm test -- test/control-plane/publication-owner-stream.test.js` pass 94/94, `npm test -- test/control-plane/publication-recovery-gate.test.js` pass 152/152, `npm test -- test/control-plane/publication-recovery-evidence.test.js` pass 167/167, `node scripts/check-guideline-literals.js src/control-plane/publication-owner-decision.js src/control-plane/publication-recovery-evidence.js` found 0 new literal-guideline violations, `node scripts/check-guideline-decision-boundaries.js src/control-plane/publication-owner-decision.js src/control-plane/publication-recovery-evidence.js` found 0 decision-boundary violations, `npm run audit:runtime-grammar:file -- src/control-plane/publication-owner-decision.js src/control-plane/publication-recovery-evidence.js` found 0 runtime-grammar-contract violations, and `git diff --check -- work/packages/active-20260518-topology-publication-unknown-no-debt-pending-runtime.md src/control-plane/publication-owner-decision.js src/control-plane/publication-recovery-evidence.js test/control-plane/publication-owner-stream.test.js test/control-plane/publication-recovery-evidence.test.js` passed; next: run workflow validation.
+- [x] Agent Hubble (019e3b69-bcc1-7b32-86b0-209b69d2822e) focused validation subtask: owner stream, recovery gate, and canonical recovery evidence tests all passed with TAP command shape, and touched-runtime static guardrails passed; evidence: `npm test -- test/control-plane/publication-owner-stream.test.js` pass 94/94, `npm test -- test/control-plane/publication-recovery-gate.test.js` pass 152/152, `npm test -- test/control-plane/publication-recovery-evidence.test.js` pass 167/167, `node scripts/check-guideline-literals.js src/control-plane/publication-owner-decision.js src/control-plane/publication-recovery-evidence.js` found 0 new literal-guideline violations, `node scripts/check-guideline-decision-boundaries.js src/control-plane/publication-owner-decision.js src/control-plane/publication-recovery-evidence.js` found 0 decision-boundary violations, `npm run audit:runtime-grammar:file -- src/control-plane/publication-owner-decision.js src/control-plane/publication-recovery-evidence.js` found 0 runtime-grammar-contract violations, and `git diff --check -- work/packages/done-20260518-topology-publication-unknown-no-debt-pending-runtime.md src/control-plane/publication-owner-decision.js src/control-plane/publication-recovery-evidence.js test/control-plane/publication-owner-stream.test.js test/control-plane/publication-recovery-evidence.test.js` passed; next: run workflow validation.
 - [x] Agent Hubble (019e3b69-bcc1-7b32-86b0-209b69d2822e) workflow validation subtask: package workflow validation accepts the implemented role proof and current package shape; evidence: `npm run work:validate -- --pre-impl` passed for 2 file(s); next: hand off for parent representative rerun.
 
 ## Review Result
@@ -449,7 +452,7 @@ package.
     - Result: pass, 0 decision-boundary guideline violations.
 11. npm run audit:runtime-grammar:file -- src/control-plane/publication-owner-decision.js src/control-plane/publication-recovery-evidence.js
     - Result: pass, 0 runtime-grammar-contract violations.
-12. git diff --check -- work/packages/active-20260518-topology-publication-unknown-no-debt-pending-runtime.md src/control-plane/publication-owner-decision.js src/control-plane/publication-recovery-evidence.js test/control-plane/publication-owner-stream.test.js test/control-plane/publication-recovery-evidence.test.js
+12. git diff --check -- work/packages/done-20260518-topology-publication-unknown-no-debt-pending-runtime.md src/control-plane/publication-owner-decision.js src/control-plane/publication-recovery-evidence.js test/control-plane/publication-owner-stream.test.js test/control-plane/publication-recovery-evidence.test.js
     - Result: pass.
 13. npm run work:validate -- --pre-impl
     - Result: pass, 2 file(s).
@@ -467,3 +470,9 @@ package.
     - Result: witnesses `0`, split required `false`.
 20. npm run work:package:route-after-rerun -- --artifact test-output/reports/rolling-restart-after-unknown-no-debt-pending-runtime-20260518T141836Z.report.json --owner topology_publication_owner --boundary publication_convergence --dominant-reason missing_published_nodes_present
     - Result: same owner/boundary route; required refresh says update sprint/current edge and use a successor only after the post-rerun gate.
+
+## Commit And Push Ledger
+
+1. Focused package commit: c953dc15ddf42b45fa10ed5d56353152bf38e304
+2. Pushed to: origin/codex/pending-ack-eligibility-filter
+3. Commit contains only package-owned files/package-status/allowed sprint handoff: yes
