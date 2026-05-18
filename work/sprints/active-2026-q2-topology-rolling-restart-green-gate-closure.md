@@ -44,11 +44,16 @@ Canonical state after the publication count-only classification rerun:
 6. The intervening `operation_workflow_owner / rebalancer_handoff` successor
    proved the five retry-scheduled witnesses normalize to four bounded remote
    handoff retries without duplicate wake state.
-7. With that residual classified, the active package owns the returned concrete
-   publication frontier only. Rebalancer, active-gate, readiness, and timeout
-   work stay frozen unless canonical evidence reselects those owners.
-8. The active package must run the required review/fix/implementation subagent
-   sequence before any runtime or test implementation edits.
+7. With that residual classified, the active package ran the producer-consumer
+   proof and recorded a no-missing-edge handoff probe with active-gate reconcile
+   as the next owner path.
+8. The handoff probe reports `publication_active_gate_handoff_contract`,
+   `resultClassification=publication_active_gate_handoff_not_detected`,
+   `owner_reconcile_pending`, `reconcile_owner_membership_publication`, one
+   pending reconcile node (`35a891b8-c1a0-5064-9c6e-2acfba61c2a7`), and
+   `runtimePromotionAllowed=false`; rebalancer, publication runtime,
+   active-gate runtime, readiness, and timeout work stay frozen unless fresh
+   canonical evidence reselects those owners.
 
 ## Current Edge Card
 
@@ -58,15 +63,15 @@ Visible first frontier: publication_ack_convergence / topology_publication_owner
 Active package owner: topology_publication_owner
 Active package boundary: publication_convergence
 Selected cause: concrete OPEN epoch-1 publication_pending after rebalancer_handoff residual classification
-Required action: review/fix proof is recorded; run a fresh implementation subagent before publication runtime/test edits, then prove producer-side publication debt, bounded active-gate reconcile, or narrower owner migration
+Required action: parent review may close as classification-only after validation; no publication runtime edit was made
 Runtime promotion allowed: false
 Priority residual: classified bounded in done-20260518-priority-recovery-rebalancer-handoff-after-publication-count-only-classification.md
 Extractor split: work:scenario-route, work:evidence-summary, analyze:topology-convergence, and analyze:causal-model select publication after rebalancer_handoff classification
 Publication state: OPEN epoch=1, publishedActive=1/5, missingPublishedCount=4, prioritySpreadPending=true
 Focused predecessor implementation: UNKNOWN count-only/no-node-list debt -> unpublished_observation/not_started
 Current active-gate state: deferred, snapshotCoverageNodeCount=2/5, owner_reconcile_pending and snapshot_repair_deferred
-Goal: reduce, migrate, or classify concrete OPEN epoch-1 publication_pending without reopening rebalancer_handoff, active-gate, readiness, or timeout-budget work
-Allowed edits: publication package and sprint handoff/tracker files for review-fix; publication runtime/test files only after clean review/fix proof and a fresh implementation subagent
+Goal: classify concrete OPEN epoch-1 publication_pending without reopening rebalancer_handoff, active-gate, readiness, or timeout-budget work
+Allowed edits: package, sprint handoff/tracker, and model-ledger proof only unless fresh canonical evidence reselects runtime
 Forbidden edits: operation workflow/rebalancer handoff runtime; startup active-gate runtime; startup readiness runtime; harness timeout increases
 Required latest proof: npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-publication-count-only-unknown-20260518T074802Z.report.json, plus scenario-route, evidence-summary, causal-model, and owner-files before runtime edits
 Allowed stop modes: representative-green, migrated, reduced, same-frontier, classification-only, architecture-gap, human-escalation
@@ -99,8 +104,9 @@ Decision basis:
    selected snapshot timeout as inherited active-gate support evidence.
 5. Rebalancer handoff remains frozen unless fresh canonical evidence reselects
    `operation_workflow_owner / rebalancer_handoff`.
-6. Publication runtime or test implementation may start only after the required
-   review/fix/implementation sequence is recorded.
+6. The active package recorded implementation proof and stopped
+   classification-only because the focused handoff probe already represents
+   the bounded active-gate owner reconcile contract.
 
 Candidate ranking:
 
@@ -151,7 +157,7 @@ Forbidden during this gate:
 | `done-20260518-startup-readiness-snapshot-timeout-after-fresh-evidence.md` | `rolling-restart-after-active-gate-classification-fresh-20260518T062159Z.report.json` | `startup_readiness_owner / startup_support_evidence` -> `topology_publication_owner / publication_convergence` | selectedSnapshotError snapshot_timeout classified as inherited active-gate support evidence; startup readiness blocker removed from taxonomy | `migrated` |
 | `done-20260518-topology-publication-convergence-after-startup-readiness-classification.md` | `rolling-restart-after-publication-count-only-unknown-20260518T074802Z.report.json` | `topology_publication_owner / publication_convergence` -> `operation_workflow_owner / rebalancer_handoff` | focused classifier closes UNKNOWN/no-epoch/no-node-list count-only publication debt; fresh rerun reports OPEN epoch-1 publication plus five retry-scheduled rebalancer_handoff witnesses | `reduced` |
 | `done-20260518-priority-recovery-rebalancer-handoff-after-publication-count-only-classification.md` | `rolling-restart-after-publication-count-only-unknown-20260518T074802Z.report.json` | `operation_workflow_owner / rebalancer_handoff` | focused proof classifies five retry-scheduled witnesses as four bounded remote handoff retries with no duplicate wake or runtime change | `classification-only` |
-| `active-20260518-rolling-restart-topology-publication-owner-publication-conve.md` | `rolling-restart-after-publication-count-only-unknown-20260518T074802Z.report.json` | `topology_publication_owner / publication_convergence` | active successor after rebalancer classification; owns concrete OPEN epoch-1 publication_pending proof and must run review/fix/implementation sequencing before runtime edits | `pending` |
+| `active-20260518-rolling-restart-topology-publication-owner-publication-conve.md` | `rolling-restart-after-publication-count-only-unknown-20260518T074802Z.report.json` | `topology_publication_owner / publication_convergence` | focused handoff probe records no missing edge, active-gate reconcile as next owner path, one pending reconcile node, and no runtime edit | `classification-only` |
 
 ## Sprint LLM Trap List
 
