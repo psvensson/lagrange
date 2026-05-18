@@ -145,7 +145,7 @@
   "predecessor": "work/packages/done-20260518-rolling-restart-publication-active-gate-handoff-oscillation-after-fresh-evidence.md",
   "closed": "2026-05-18",
   "commitAndPushLedgerRequired": true,
-  "successor": "work/packages/active-20260518-topology-publication-residual-after-priority-split-classification.md"
+  "successor": "work/packages/done-20260518-topology-publication-residual-after-priority-split-classification.md"
 }
 -->
 

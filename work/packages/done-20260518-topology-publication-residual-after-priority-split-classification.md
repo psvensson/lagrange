@@ -3,7 +3,7 @@
 <!-- work-package
 {
   "schema": "work-package-v1",
-  "status": "active",
+  "status": "done",
   "opened": "2026-05-18",
   "lane": "causal-escalation",
   "scenario": "rolling-restart",
@@ -22,7 +22,7 @@
     "npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-after-publication-zero-gap-priority-spread-20260518T104305Z.report.json --markdown"
   ],
   "writeScope": [
-    "work/packages/active-20260518-topology-publication-residual-after-priority-split-classification.md",
+    "work/packages/done-20260518-topology-publication-residual-after-priority-split-classification.md",
     "work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md",
     "work/sprints/current-blocker.md",
     "work/sprints/current-blocker.json",
@@ -46,7 +46,7 @@
     "test/control-plane/publication-recovery-evidence.test.js"
   ],
   "commitScope": [
-    "work/packages/active-20260518-topology-publication-residual-after-priority-split-classification.md",
+    "work/packages/done-20260518-topology-publication-residual-after-priority-split-classification.md",
     "work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md",
     "work/sprints/current-blocker.md",
     "work/sprints/current-blocker.json",
@@ -127,7 +127,10 @@
     "selectedChoice": null,
     "nextAction": "No gate is presented by this classifier. Continue with a bounded same-owner publication runtime successor unless fresh canonical evidence contradicts the owner boundary."
   },
-  "predecessor": "work/packages/done-20260518-topology-publication-convergence-after-active-gate-handoff-oscillation.md"
+  "predecessor": "work/packages/done-20260518-topology-publication-convergence-after-active-gate-handoff-oscillation.md",
+  "closed": "2026-05-18",
+  "commitAndPushLedgerRequired": true,
+  "successor": "work/packages/active-20260518-topology-publication-owner-publishing-visibility.md"
 }
 -->
 
@@ -202,7 +205,7 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 
 ## In Scope
 
-1. work/packages/active-20260518-topology-publication-residual-after-priority-split-classification.md
+1. work/packages/done-20260518-topology-publication-residual-after-priority-split-classification.md
 2. work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md
 3. work/sprints/current-blocker.md
 4. work/sprints/current-blocker.json
@@ -223,7 +226,7 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 - Intended minimum model: `gpt-5.3-codex`
 - Scope shape: `owner-boundary-contraction/current-frontier`
 - Output profile: `medium`
-- Owned files: `work/packages/active-20260518-topology-publication-residual-after-priority-split-classification.md`, `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md`, `work/sprints/current-blocker.md`, `work/sprints/current-blocker.json`, `work/model-ledger.jsonl`
+- Owned files: `work/packages/done-20260518-topology-publication-residual-after-priority-split-classification.md`, `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md`, `work/sprints/current-blocker.md`, `work/sprints/current-blocker.json`, `work/model-ledger.jsonl`
 - Forbidden files: `startup active-gate runtime`, `operation workflow / rebalancer_handoff runtime`, `startup readiness runtime`, `active-gate admission`, `timeout budgets`, `handoff architecture`
 - Frozen decisions: package scope and lane stay bounded unless explicitly escalated.
 - Escalation triggers: owned files expand beyond this package, runtime ownership changes, or representative scenario evidence changes.
@@ -236,9 +239,9 @@ Required before implementation because this is a causal-escalation package.
 Review returned `fixes-required`; this fix role repaired metadata, tracker, and
 sprint handoff files only. Implementation classification is complete.
 
-- [x] Review subagent recorded: Agent Mencius (019e3ac0-56cf-7661-a241-e7f166adda9e) reviewed work/packages/active-20260518-topology-publication-residual-after-priority-split-classification.md; result fixes-required.
-- [x] Fix subagent recorded or explicitly not needed: Agent Raman (019e3ac3-0a8f-7483-932e-d94d0fdab835) fixed work/packages/active-20260518-topology-publication-residual-after-priority-split-classification.md.
-- [x] Implementation subagent recorded: Agent Vega (92ef527f-044f-42d5-b3dc-bc50ecbc8ea5) implemented work/packages/active-20260518-topology-publication-residual-after-priority-split-classification.md.
+- [x] Review subagent recorded: Agent Mencius (019e3ac0-56cf-7661-a241-e7f166adda9e) reviewed work/packages/done-20260518-topology-publication-residual-after-priority-split-classification.md; result fixes-required.
+- [x] Fix subagent recorded or explicitly not needed: Agent Raman (019e3ac3-0a8f-7483-932e-d94d0fdab835) fixed work/packages/done-20260518-topology-publication-residual-after-priority-split-classification.md.
+- [x] Implementation subagent recorded: Agent Vega (92ef527f-044f-42d5-b3dc-bc50ecbc8ea5) implemented work/packages/done-20260518-topology-publication-residual-after-priority-split-classification.md.
 
 ## Subagent Progress Ledger
 
@@ -246,11 +249,11 @@ Required when subagent sequencing is required. Each real subagent appends one ch
 
 - [x] Agent Mencius (019e3ac0-56cf-7661-a241-e7f166adda9e) review complete: successor package and predecessor classification reviewed; evidence: scenario-route, evidence-summary, scenario-triage, handoff-probe, causal-model, priority residual extraction, package doctor, and entry validation; next: fix subagent for metadata, tracker, and sprint repairs.
 - [x] Agent Raman (019e3ac3-0a8f-7483-932e-d94d0fdab835) fix context loaded: scope and blocker confirmed; evidence: `npm run work:context`, package file, sprint file, and current-blocker files read; next: run package doctor and entry validation.
-- [x] Agent Raman (019e3ac3-0a8f-7483-932e-d94d0fdab835) fix probe complete: stale current-blocker and missing Subagent Sequencing Ledger confirmed; evidence: `npm run work:llm-start`, `npm run work:package:doctor -- --suggest work/packages/active-20260518-topology-publication-residual-after-priority-split-classification.md`, and `npm run work:validate -- --entry`; next: edit metadata, tracker, and sprint references.
-- [x] Agent Raman (019e3ac3-0a8f-7483-932e-d94d0fdab835) fix validation complete: package proof refreshed; evidence: `npm run work:package:doctor -- --suggest work/packages/active-20260518-topology-publication-residual-after-priority-split-classification.md` validation ok and `npm run work:validate -- --entry` OK; next: final handoff.
-- [x] Agent Vega (92ef527f-044f-42d5-b3dc-bc50ecbc8ea5) implementation context loaded: current blocker, package scope, sprint handoff, package doctor, model ledger, schema, and subagent prompt reviewed; evidence: `npm run work:context`, `npm run work:llm-start`, `npm run work:model-ledger -- summary`, `npm run work:package:doctor -- --suggest work/packages/active-20260518-topology-publication-residual-after-priority-split-classification.md`, `npm run work:advance -- --check`, and `npm run work:subagent-prompt -- --role implementation --package work/packages/active-20260518-topology-publication-residual-after-priority-split-classification.md`; next: run canonical evidence classification commands.
+- [x] Agent Raman (019e3ac3-0a8f-7483-932e-d94d0fdab835) fix probe complete: stale current-blocker and missing Subagent Sequencing Ledger confirmed; evidence: `npm run work:llm-start`, `npm run work:package:doctor -- --suggest work/packages/done-20260518-topology-publication-residual-after-priority-split-classification.md`, and `npm run work:validate -- --entry`; next: edit metadata, tracker, and sprint references.
+- [x] Agent Raman (019e3ac3-0a8f-7483-932e-d94d0fdab835) fix validation complete: package proof refreshed; evidence: `npm run work:package:doctor -- --suggest work/packages/done-20260518-topology-publication-residual-after-priority-split-classification.md` validation ok and `npm run work:validate -- --entry` OK; next: final handoff.
+- [x] Agent Vega (92ef527f-044f-42d5-b3dc-bc50ecbc8ea5) implementation context loaded: current blocker, package scope, sprint handoff, package doctor, model ledger, schema, and subagent prompt reviewed; evidence: `npm run work:context`, `npm run work:llm-start`, `npm run work:model-ledger -- summary`, `npm run work:package:doctor -- --suggest work/packages/done-20260518-topology-publication-residual-after-priority-split-classification.md`, `npm run work:advance -- --check`, and `npm run work:subagent-prompt -- --role implementation --package work/packages/done-20260518-topology-publication-residual-after-priority-split-classification.md`; next: run canonical evidence classification commands.
 - [x] Agent Vega (92ef527f-044f-42d5-b3dc-bc50ecbc8ea5) implementation classification complete: bounded same-owner publication runtime successor selected; evidence: `npm run work:evidence-summary -- test-output/reports/rolling-restart-after-publication-zero-gap-priority-spread-20260518T104305Z.report.json`, `npm run work:scenario-triage -- test-output/reports/rolling-restart-after-publication-zero-gap-priority-spread-20260518T104305Z.report.json --markdown`, `npm run work:scenario-route -- test-output/reports/rolling-restart-after-publication-zero-gap-priority-spread-20260518T104305Z.report.json --owner topology_publication_owner --boundary publication_convergence --dominant-reason publication_pending --explain publication_ack_convergence --markdown`, `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-publication-zero-gap-priority-spread-20260518T104305Z.report.json --handoff-probe`, `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-publication-zero-gap-priority-spread-20260518T104305Z.report.json`, `npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-after-publication-zero-gap-priority-spread-20260518T104305Z.report.json --markdown`, and `npm run analyze:owner-files -- topology_publication_owner publication_convergence`; next: update package, sprint, and generated current-blocker handoff files.
-- [x] Agent Vega (92ef527f-044f-42d5-b3dc-bc50ecbc8ea5) implementation validation complete: package, sprint, and generated current-blocker handoff files updated; evidence: `npm run work:current-blocker`, `npm run work:package:doctor -- --suggest work/packages/active-20260518-topology-publication-residual-after-priority-split-classification.md` validation ok, `npm run work:validate -- --entry` OK, `npm run work:validate -- --pre-impl` OK, and `npm run work:validate -- --closure` OK; next: parent workflow commit and push focused package slice or open the bounded successor after closure.
+- [x] Agent Vega (92ef527f-044f-42d5-b3dc-bc50ecbc8ea5) implementation validation complete: package, sprint, and generated current-blocker handoff files updated; evidence: `npm run work:current-blocker`, `npm run work:package:doctor -- --suggest work/packages/done-20260518-topology-publication-residual-after-priority-split-classification.md` validation ok, `npm run work:validate -- --entry` OK, `npm run work:validate -- --pre-impl` OK, and `npm run work:validate -- --closure` OK; next: parent workflow commit and push focused package slice or open the bounded successor after closure.
 
 ## Validation
 
@@ -268,7 +271,7 @@ Required when subagent sequencing is required. Each real subagent appends one ch
    - Result: four `operation_workflow_owner / rebalancer_handoff` witnesses, `splitRequired=false`.
 7. npm run analyze:owner-files -- topology_publication_owner publication_convergence
    - Result: owner-file index available; no runtime file was promoted by this classifier.
-8. npm run work:package:doctor -- --suggest work/packages/active-20260518-topology-publication-residual-after-priority-split-classification.md
+8. npm run work:package:doctor -- --suggest work/packages/done-20260518-topology-publication-residual-after-priority-split-classification.md
    - Result: validation ok, proof ladder compact `5/5`.
 9. npm run work:validate -- --entry
    - Result: OK for 2 files.
@@ -276,3 +279,9 @@ Required when subagent sequencing is required. Each real subagent appends one ch
    - Result: OK for 2 files.
 11. npm run work:validate -- --closure
    - Result: OK for 2 files.
+
+## Commit And Push Ledger
+
+1. Focused package commit: `d473f858`
+2. Pushed to: `origin/codex/pending-ack-eligibility-filter`
+3. Commit contains only package-owned files/package-status/allowed sprint handoff: yes
