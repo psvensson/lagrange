@@ -13,7 +13,7 @@
   "boundary": "publication_convergence",
   "dominantReason": "publication_pending",
   "currentState": "The rebalancer_handoff successor classified the five retry-scheduled priority residual witnesses as four bounded remote handoff retries with no runtime change. With that selected residual classified, canonical scenario-route still selects publication_ack_convergence / topology_publication_owner / publication_convergence / publication_pending from the same fresh rolling-restart artifact: publicationStatus OPEN, publicationEpoch=1, publishedActive=1/5, missingPublishedCount=4, pendingAckCount=0 in topology convergence, and prioritySpreadPending=true.",
-  "nextAction": "Run the required review subagent for the just-closed rebalancer_handoff package, then prove whether concrete OPEN epoch-1 publication_pending is producer-side publication-owner debt, bounded by active-gate owner reconcile, or must migrate to a narrower owner boundary. Do not edit runtime until review/fix/implementation proof is clean.",
+  "nextAction": "Review and fix proof are recorded for the current package. Run a fresh implementation subagent before publication runtime or test edits, then prove whether concrete OPEN epoch-1 publication_pending is producer-side publication-owner debt, bounded by active-gate owner reconcile, or must migrate to a narrower owner boundary. Do not reopen rebalancer_handoff unless fresh canonical evidence reselects it.",
   "proof": [
     "npm run work:scenario-route -- test-output/reports/rolling-restart-after-publication-count-only-unknown-20260518T074802Z.report.json",
     "npm run work:evidence-summary -- test-output/reports/rolling-restart-after-publication-count-only-unknown-20260518T074802Z.report.json",
@@ -216,8 +216,8 @@ subagents sequentially before editing runtime or test files.
 
 ## Subagent Sequencing Ledger
 
-- [ ] Review subagent recorded: pending-before-implementation.
-- [ ] Fix subagent recorded or explicitly not needed: pending-after-review.
+- [x] Review subagent recorded: Agent Codex (019e3a3b-622e-7700-bfb5-4c5deacd2137) reviewed work/packages/active-20260518-rolling-restart-topology-publication-owner-publication-conve.md; result fixes-required.
+- [x] Fix subagent recorded or explicitly not needed: Agent Codex (019e3a3f-90e2-7372-b300-2f3aff1072f9) fixed work/packages/active-20260518-rolling-restart-topology-publication-owner-publication-conve.md.
 - [ ] Implementation subagent recorded: pending-after-review-fix.
 
 ## LLM Tool-First Contract

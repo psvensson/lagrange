@@ -26,7 +26,7 @@ Current state: The rebalancer_handoff successor classified the five retry-schedu
 
 ## Next Action
 
-Run the required review subagent for the just-closed rebalancer_handoff package, then prove whether concrete OPEN epoch-1 publication_pending is producer-side publication-owner debt, bounded by active-gate owner reconcile, or must migrate to a narrower owner boundary. Do not edit runtime until review/fix/implementation proof is clean.
+Review and fix proof are recorded for the current package. Run a fresh implementation subagent before publication runtime or test edits, then prove whether concrete OPEN epoch-1 publication_pending is producer-side publication-owner debt, bounded by active-gate owner reconcile, or must migrate to a narrower owner boundary. Do not reopen rebalancer_handoff unless fresh canonical evidence reselects it.
 
 ## Proof Ladder
 

@@ -58,49 +58,56 @@ Visible first frontier: publication_ack_convergence / topology_publication_owner
 Active package owner: topology_publication_owner
 Active package boundary: publication_convergence
 Selected cause: concrete OPEN epoch-1 publication_pending after rebalancer_handoff residual classification
-Required action: required review subagent, then prove producer-side publication debt, bounded active-gate reconcile, or narrower owner migration
+Required action: review/fix proof is recorded; run a fresh implementation subagent before publication runtime/test edits, then prove producer-side publication debt, bounded active-gate reconcile, or narrower owner migration
 Runtime promotion allowed: false
 Priority residual: classified bounded in done-20260518-priority-recovery-rebalancer-handoff-after-publication-count-only-classification.md
-Extractor split: work:evidence-summary, analyze:topology-convergence, and analyze:causal-model keep publication visible; only analyze:priority-recovery-residuals selects rebalancer_handoff as actionable residual proof
+Extractor split: work:scenario-route, work:evidence-summary, analyze:topology-convergence, and analyze:causal-model select publication after rebalancer_handoff classification
 Publication state: OPEN epoch=1, publishedActive=1/5, missingPublishedCount=4, prioritySpreadPending=true
 Focused predecessor implementation: UNKNOWN count-only/no-node-list debt -> unpublished_observation/not_started
 Current active-gate state: deferred, snapshotCoverageNodeCount=2/5, owner_reconcile_pending and snapshot_repair_deferred
-Goal: reduce, migrate, or classify rebalancer_handoff without widening into publication, active-gate, readiness, or timeout-budget work
-Allowed edits: operation workflow/rebalancer handoff files listed in the active package after clean subagent proof
-Forbidden edits: publication runtime; startup active-gate runtime; startup readiness runtime; harness timeout increases
-Required latest proof: npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-after-publication-count-only-unknown-20260518T074802Z.report.json
+Goal: reduce, migrate, or classify concrete OPEN epoch-1 publication_pending without reopening rebalancer_handoff, active-gate, readiness, or timeout-budget work
+Allowed edits: publication package and sprint handoff/tracker files for review-fix; publication runtime/test files only after clean review/fix proof and a fresh implementation subagent
+Forbidden edits: operation workflow/rebalancer handoff runtime; startup active-gate runtime; startup readiness runtime; harness timeout increases
+Required latest proof: npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-publication-count-only-unknown-20260518T074802Z.report.json, plus scenario-route, evidence-summary, causal-model, and owner-files before runtime edits
 Allowed stop modes: representative-green, migrated, reduced, same-frontier, classification-only, architecture-gap, human-escalation
 ```
 
 ## Sprint Architecture Decision Gate
 
-Status: selected.
+Status: not-required.
 
-Current decision: the publication classifier package is done and reduced the
-stale UNKNOWN/no-epoch publication shape. The active package owns the fresh
-operation workflow rebalancer_handoff residual group.
+Current decision: no architecture gate is required before the focused
+producer-consumer publication proof. The publication classifier package reduced
+the stale UNKNOWN/no-epoch publication shape, and the rebalancer_handoff
+successor classified the retry-scheduled priority residual group. With that
+residual classified, the active package owns the returned
+`topology_publication_owner / publication_convergence / publication_pending`
+route.
 
 Decision basis:
 
-1. Fresh `work:evidence-summary`, `analyze:topology-convergence`, and
-   `analyze:causal-model` expose publication as visible producer context with
-   concrete OPEN epoch-1 state.
-2. Fresh `analyze:priority-recovery-residuals` reports five
-   rebalancer_handoff witnesses and splitRequired=false; this is the selected
-   residual proof surface for the successor.
+1. Fresh `work:scenario-route`, `work:evidence-summary`,
+   `analyze:topology-convergence`, and `analyze:causal-model` keep
+   publication selected with concrete OPEN epoch-1 state:
+   `publicationStatus=OPEN`, `publicationEpoch=1`, `publishedActive=1/5`,
+   `missingPublishedCount=4`, and `prioritySpreadPending=true`.
+2. The intervening `operation_workflow_owner / rebalancer_handoff` successor
+   classified the five retry-scheduled witnesses as four bounded remote handoff
+   retries without runtime changes.
 3. Active gate is deferred at `snapshotCoverageNodeCount=2/5`.
 4. Focused diagnostics removed `startup_readiness_blocked` by classifying the
    selected snapshot timeout as inherited active-gate support evidence.
-5. The predecessor removed stale count-only publication debt without touching
-   operation workflow runtime, and the successor must not reopen publication,
-   active-gate, readiness, or timeout-budget work from visible context alone.
-6. No implementation may start before the implementation subagent returns.
+5. Rebalancer handoff remains frozen unless fresh canonical evidence reselects
+   `operation_workflow_owner / rebalancer_handoff`.
+6. Publication runtime or test implementation may start only after the required
+   review/fix/implementation sequence is recorded.
 
 Candidate ranking:
 
-1. Rebalancer handoff proof: selected from fresh priority residual extraction.
-2. Publication convergence local proof: closed as reduced after fresh rerun
-   removed UNKNOWN/no-epoch/no-node-list count-only debt.
+1. Publication convergence producer-consumer proof: selected after
+   rebalancer_handoff classification.
+2. Rebalancer handoff proof: closed as classification-only and frozen unless
+   fresh canonical evidence reselects it.
 3. Startup readiness snapshot-timeout support proof: closed as migrated after
    focused diagnostics classified selectedSnapshotError snapshot_timeout as
    inherited active-gate support evidence.
@@ -115,15 +122,14 @@ Candidate ranking:
 
 Forbidden during this gate:
 
-1. Do not reopen the closed startup-readiness diagnostic proof; the active
-   package owns operation workflow rebalancer_handoff and must use a new subagent
-   sequence.
+1. Do not reopen the closed rebalancer_handoff proof unless fresh canonical
+   evidence reselects `operation_workflow_owner / rebalancer_handoff`.
 2. Do not widen timeout budgets, active-gate admission, selected-source
    timeout, terminal-progress selection, or readiness support unless canonical
    evidence reselects them.
-3. Do not patch publication, startup active-gate, startup readiness, or
-   timeout-budget files. Operation workflow runtime files require clean pre-impl
-   validation and implementation subagent proof.
+3. Do not patch operation workflow, startup active-gate, startup readiness, or
+   timeout-budget files. Publication runtime/test files require clean
+   review/fix proof and a fresh implementation subagent.
 
 ## Frontier Transition Ledger
 
