@@ -321,3 +321,9 @@ rerun because no runtime code changed.
 7. PASS - `npx tap --grep "handoff" test/admin/admin-control-snapshot.test.js`
 8. PASS - `node --test test/control-plane/publication-active-gate-handoff-contract.test.js test/control-plane/membership-publication-coordinator-main-stage-2.js`
 9. PASS - `git diff --check`
+
+## Commit And Push Ledger
+
+1. Focused package commit: `cbdd56b4`
+2. Pushed to: `origin/codex/pending-ack-eligibility-filter`
+3. Commit contains only package-owned files/package-status/allowed sprint handoff: yes
