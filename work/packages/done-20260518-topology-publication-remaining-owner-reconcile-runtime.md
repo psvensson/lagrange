@@ -343,6 +343,12 @@ Review agents may directly fix metadata-only package, sprint, tracker, current-b
 - Handoff probe: `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-priority-observation-narrowing-20260518T184535Z.report.json --handoff-probe` detects `publication_ack_to_active_gate_reconcile_missing`; next owner path is active-gate snapshot coverage, but runtime promotion remains false.
 - Classification: `reduced`; successor is `work/packages/active-20260518-topology-publication-no-debt-handoff-runtime.md`.
 
+## Commit And Push Ledger
+
+- [x] Focused package commit: `ff1de35a`
+- [x] Pushed to: `origin/codex/pending-ack-eligibility-filter`
+- [x] Commit contains only package-owned files/package-status/allowed sprint handoff: yes
+
 ## Validation
 
 1. npm run work:scenario-route -- test-output/reports/rolling-restart-after-owner-reconcile-narrowing-20260518T171916Z.report.json --owner topology_publication_owner --boundary publication_convergence --dominant-reason publication_pending --explain publication_ack_convergence --markdown
