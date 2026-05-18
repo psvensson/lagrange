@@ -189,7 +189,7 @@
   "predecessor": "work/packages/done-20260518-topology-publication-unknown-missing-published-nodes-runtime.md",
   "closed": "2026-05-18",
   "commitAndPushLedgerRequired": true,
-  "successor": "work/packages/active-20260518-topology-publication-missing-published-oscillation-gate.md"
+  "successor": "work/packages/done-20260518-topology-publication-missing-published-oscillation-gate.md"
 }
 -->
 

@@ -22,13 +22,13 @@ success is in scope.
 ## Sprint Strategy Brief
 
 - Goal state: representative `rolling-restart` is green with `active=5/5`, `snapshotCoverage=5/5`, `missingPublished=0`, and no timeout or admission relaxation.
-- Current causal thesis: focused UNKNOWN/no-debt publication owner proof is now green locally, but the representative rerun reselected the same publication owner/boundary and returned to `missing_published_nodes_present` with `missingPublishedCount=5`; the sprint is now in a same-frontier oscillation, not a safe next-runtime-patch state.
+- Current causal thesis: focused UNKNOWN/no-debt publication owner proof is green locally, but the representative rerun reselected the same publication owner/boundary and returned to `missing_published_nodes_present` with `missingPublishedCount=5`; the causal gate is closed, and human direction selected the canonical `continue_local_fix` route for one bounded runtime successor.
 - Competing hypotheses: H1 the representative harness is oscillating between publication evidence shapes and needs a causal/handoff decision before more runtime work; H2 topology_publication_owner still owns a missing-published invariant not covered by the prior focused slices; H3 startup_active_gate_owner remains visible through selected-source timeout but is downstream while `runtimePromotionAllowed=false`; H4 operation workflow is not selected because priority residual witnesses are `0`.
 - Confidence and evidence: high that local UNKNOWN/no-debt behavior is fixed because focused TAP/static proof passed and Hubble accounted for the partial worker; high that representative evidence did not reduce because `test-output/reports/rolling-restart-after-unknown-no-debt-pending-runtime-20260518T141836Z.report.json`, evidence-summary, scenario-route, causal-model, handoff-probe, and priority residual extraction all keep `publication_ack_convergence / topology_publication_owner / publication_convergence` first with `missing_published_nodes_present`.
-- Expected green path: keep `work/packages/active-20260518-topology-publication-missing-published-oscillation-gate.md` active; do not start another runtime package until the selected human/architecture route chooses rerun, replayable handoff fixture, architecture gap, or an explicitly approved bounded successor.
-- Wrong direction signals: any runtime edit starts from the same artifact without resolving the active causal-escalation gate; active-gate, operation workflow, readiness, admission, handoff architecture, or timeout budgets are patched while canonical evidence still marks them downstream or frozen; subagent work proceeds without progress-ledger checkpoints.
-- Next best package: execute the causal-escalation package `work/packages/active-20260518-topology-publication-missing-published-oscillation-gate.md` and hold runtime implementation until human/architecture direction is selected.
-- Stop or escalate rule: same-frontier without concrete representative reduction has already triggered human/architecture escalation; another local runtime patch requires an explicit selected route.
+- Expected green path: execute `work/packages/active-20260518-topology-publication-missing-published-runtime-after-oscillation.md` as one bounded publication-owner runtime slice with required subagent sequencing, then classify representative proof as reduced, migrated, green, or renewed architecture/human gate.
+- Wrong direction signals: runtime edits start before review/fix/implementation sequencing is recorded; active-gate, operation workflow, readiness, admission, handoff architecture, or timeout budgets are patched while canonical evidence still marks them downstream or frozen; subagent work proceeds without progress-ledger checkpoints.
+- Next best package: execute the runtime-owner-boundary package `work/packages/active-20260518-topology-publication-missing-published-runtime-after-oscillation.md`.
+- Stop or escalate rule: if this one bounded runtime slice leaves the same missing-published frontier without concrete metric or state reduction, stop for architecture or human escalation instead of opening another local runtime package.
 
 ## Current Blocker Snapshot
 
@@ -38,7 +38,7 @@ Latest representative artifact:
 Canonical state after the fresh rerun:
 
 1. The current active package is
-   `work/packages/active-20260518-topology-publication-missing-published-oscillation-gate.md`.
+   `work/packages/active-20260518-topology-publication-missing-published-runtime-after-oscillation.md`.
 2. Its predecessor is the same-frontier runtime package
    `work/packages/done-20260518-topology-publication-unknown-no-debt-pending-runtime.md`.
 3. Its predecessor is the reduced runtime package
@@ -110,17 +110,17 @@ Visible first frontier: publication_ack_convergence / topology_publication_owner
 Active package owner: topology_publication_owner
 Active package boundary: publication_convergence
 Selected cause: focused UNKNOWN/no-debt owner proof passed locally, but representative evidence returned to missingPublishedCount=5 on the same owner/boundary
-Required action: hold runtime implementation and execute the active causal-escalation gate before another topology publication owner runtime package
-Runtime promotion allowed: no new runtime promotion from this gate; active-gate runtimePromotionAllowed=false
+Required action: run required review/fix/implementation subagent sequencing for one bounded topology publication owner runtime package
+Runtime promotion allowed: one human-directed publication-owner runtime successor; active-gate runtimePromotionAllowed=false
 Priority residual: zero witnesses in fresh artifact
 Extractor split: scenario-route/evidence-summary/causal-model select publication first; handoff probe classifies active-gate as deferred with runtimePromotionAllowed=false
 Publication state: fresh artifact publicationStatus=unknown, publicationEpoch=0, pendingAckCount=0, missingPublishedCount=5, publicationPending=true, ackState=unavailable, streamOutcome=not_started
 Focused predecessor implementation: bounded publication owner unknown/no-debt normalization; previous reduced missing-published package drained one artifact shape but the fresh representative reopened it
 Current active-gate state: deferred, snapshotCoverageNodeCount=0/5, selected_snapshot_source_timeout on 11601fe0-72d6-5853-8590-ec2881853e72, runtimePromotionAllowed=false
-Goal: classify the same-frontier publication oscillation and choose human/architecture direction before any more runtime work
-Allowed edits: active causal-escalation package, sprint, current-blocker handoff files, and model ledger
+Goal: reduce or classify the owner-local missing-published publication frontier without widening into downstream owners
+Allowed edits: active runtime package, publication owner runtime/test files, sprint, current-blocker handoff files, and model ledger
 Forbidden edits: startup active-gate runtime; operation workflow/rebalancer handoff runtime; startup readiness runtime; active-gate admission; handoff architecture; harness timeout increases
-Required latest proof: evidence-summary, scenario-route, causal-model, package validation, and explicit selected route before runtime promotion
+Required latest proof: evidence-summary, scenario-route, causal-model, priority residual extraction, subagent ledgers, focused owner tests, package validation, and representative route proof
 Allowed stop modes: representative-green, migrated, reduced, same-frontier, classification-only, architecture-gap, human-escalation
 ```
 
@@ -174,17 +174,16 @@ Decision basis:
    snapshot source timeout on
    `11601fe0-72d6-5853-8590-ec2881853e72`; it remains downstream while
    publication is the first frontier.
-5. The active package is a causal-escalation handoff. Runtime promotion is held
-   until the selected human/architecture route chooses rerun, replayable
-   handoff fixture, architecture gap, or an explicitly approved bounded
-   successor.
+5. The active package is the human-directed runtime-owner-boundary successor.
+   Runtime promotion is limited to the declared topology publication owner
+   files and focused tests; non-publication owners remain frozen.
 
 Candidate ranking:
 
-1. Human/architecture route: selected by the active causal-escalation handoff
-   because the same owner/boundary returned without representative reduction.
-2. Bounded same-owner runtime successor: not allowed until the active gate
-   explicitly approves another bounded runtime package.
+1. Bounded same-owner runtime successor: selected after the causal gate and
+   human direction, with required review/fix/implementation sequencing.
+2. Human/architecture route: reopens only if the bounded successor returns the
+   same missing-published frontier without concrete reduction.
 3. Same-frontier handoff proof: closed by the predecessor handoff package.
 4. Owner-boundary migration to `startup_active_gate_owner`: not selected from
    this artifact because the consumer is deferred and runtime promotion is
