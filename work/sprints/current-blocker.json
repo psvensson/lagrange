@@ -2,31 +2,40 @@
   "schema": "current-blocker-v1",
   "generatedBy": "scripts/work-tracker.js",
   "sprint": "work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md",
-  "package": "work/packages/active-20260518-topology-publication-missing-published-nodes-classification.md",
+  "package": "work/packages/active-20260518-topology-publication-unknown-missing-published-nodes-runtime.md",
   "status": "active",
-  "lane": "causal-escalation",
+  "lane": "runtime-owner-boundary",
   "scenario": "rolling-restart",
   "artifact": "test-output/reports/rolling-restart-after-publication-owner-publishing-visibility-20260518T114956Z.report.json",
   "playback": "none",
   "owner": "topology_publication_owner",
   "boundary": "publication_convergence",
   "dominantReason": "missing_published_nodes_present",
-  "currentState": "Implementation classification complete: canonical extractors still select publication_ack_convergence / topology_publication_owner / publication_convergence with dominantReason=missing_published_nodes_present, publicationStatus=unknown, missingPublishedCount=5, priority residual witnesses=0, and selected_snapshot_source_timeout deferred downstream.",
-  "nextAction": "Parent should close this diagnostic classifier as bounded-same-owner-successor, then open a focused topology_publication_owner / publication_convergence runtime successor for the unknown publication status and missing published nodes shape. Keep active-gate, operation workflow, readiness, admission, handoff architecture, and timeout budgets frozen unless fresh evidence reselects them.",
+  "currentState": "Predecessor classifier selected a bounded same-owner topology publication runtime successor. Fresh representative evidence reports publicationStatus=unknown, publicationEpoch=0, missingPublishedCount=5, priority residual witnesses=0, and active-gate selected_snapshot_source_timeout downstream with runtimePromotionAllowed=false.",
+  "nextAction": "Run required review/fix/implementation sequencing, then implement one focused topology_publication_owner / publication_convergence runtime slice for unknown publication status plus missing published nodes. Keep active-gate, operation workflow, readiness, admission, handoff architecture, and timeout budgets frozen unless fresh evidence reselects them.",
   "proof": [
     "npm run work:evidence-summary -- test-output/reports/rolling-restart-after-publication-owner-publishing-visibility-20260518T114956Z.report.json",
-    "npm run work:scenario-triage -- test-output/reports/rolling-restart-after-publication-owner-publishing-visibility-20260518T114956Z.report.json --markdown",
+    "npm run work:scenario-route -- test-output/reports/rolling-restart-after-publication-owner-publishing-visibility-20260518T114956Z.report.json --owner topology_publication_owner --boundary publication_convergence --dominant-reason missing_published_nodes_present --explain publication_ack_convergence --markdown",
+    "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-publication-owner-publishing-visibility-20260518T114956Z.report.json --handoff-probe",
+    "npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-publication-owner-publishing-visibility-20260518T114956Z.report.json",
     "npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-after-publication-owner-publishing-visibility-20260518T114956Z.report.json --markdown"
   ],
   "writeScope": [
-    "work/packages/active-20260518-topology-publication-missing-published-nodes-classification.md",
+    "work/packages/active-20260518-topology-publication-unknown-missing-published-nodes-runtime.md",
     "work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md",
     "work/sprints/current-blocker.md",
     "work/sprints/current-blocker.json",
-    "work/model-ledger.jsonl"
+    "work/model-ledger.jsonl",
+    "src/control-plane/publication-owner-evidence.js",
+    "src/control-plane/publication-owner-decision.js",
+    "src/control-plane/publication-recovery-gate.js",
+    "src/control-plane/publication-recovery-evidence.js",
+    "test/control-plane/publication-owner-stream.test.js",
+    "test/control-plane/publication-recovery-gate.test.js",
+    "test/control-plane/publication-recovery-evidence.test.js"
   ],
   "handoffFiles": [
-    "work/packages/done-20260518-topology-publication-owner-publishing-visibility.md",
+    "work/packages/done-20260518-topology-publication-missing-published-nodes-classification.md",
     "test-output/reports/rolling-restart-after-publication-owner-publishing-visibility-20260518T114956Z.report.json"
   ],
   "generatedFiles": [
@@ -43,47 +52,55 @@
     "test/control-plane/publication-recovery-evidence.test.js"
   ],
   "commitScope": [
-    "work/packages/active-20260518-topology-publication-missing-published-nodes-classification.md",
+    "work/packages/active-20260518-topology-publication-unknown-missing-published-nodes-runtime.md",
     "work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md",
     "work/sprints/current-blocker.md",
     "work/sprints/current-blocker.json",
-    "work/model-ledger.jsonl"
+    "work/model-ledger.jsonl",
+    "src/control-plane/publication-owner-evidence.js",
+    "src/control-plane/publication-owner-decision.js",
+    "src/control-plane/publication-recovery-gate.js",
+    "src/control-plane/publication-recovery-evidence.js",
+    "test/control-plane/publication-owner-stream.test.js",
+    "test/control-plane/publication-recovery-gate.test.js",
+    "test/control-plane/publication-recovery-evidence.test.js"
   ],
   "touchedFiles": [],
   "modelFit": {
-    "packageClass": "representative-frontier-classification",
+    "packageClass": "runtime-owner-boundary",
     "intendedMinimumModel": "gpt-5.3-codex",
-    "scopeShape": "owner-boundary-diagnostic/current-frontier",
+    "scopeShape": "bounded-owner-runtime/current-frontier",
     "outputProfile": "medium",
     "escalationTriggers": [
-      "owned files expand beyond this package",
-      "a frozen decision must be reopened"
+      "owned files expand beyond topology publication owner runtime and focused tests",
+      "canonical evidence reselects startup active-gate, operation workflow, readiness, admission, handoff architecture, or timeout ownership",
+      "representative scenario evidence contradicts the missing_published_nodes_present route"
     ]
   },
   "representativeResidual": {
-    "status": "bounded-same-owner-successor",
+    "status": "pending-before-probe",
     "scenario": "rolling-restart",
     "artifact": "test-output/reports/rolling-restart-after-publication-owner-publishing-visibility-20260518T114956Z.report.json",
     "frontier": "publication_ack_convergence",
     "owner": "topology_publication_owner",
     "boundary": "publication_convergence",
     "dominantReason": "missing_published_nodes_present",
-    "nextAction": "Open a focused same-owner publication convergence successor; this diagnostic package does not edit runtime files."
+    "nextAction": "Run review/fix/implementation sequencing, then implement one bounded publication-owner runtime slice for unknown status plus missing published nodes."
   },
   "causalGovernance": {
-    "hypothesis": "Fresh representative evidence after the publication owner publishing-visibility reduction still selects the topology publication owner boundary, but the observable blocker is now missing published nodes with publicationStatus=unknown and no priority residual witnesses.",
-    "stopConditionCheck": "Run evidence-summary, scenario-route or triage, handoff-probe, npm run analyze:causal-model, priority residual extraction, owner-files, package doctor, and validation before promoting runtime files.",
-    "expectedCausalModelChange": "This package classified the missing published nodes with unknown publication status as a bounded same-owner runtime successor, not a migration, architecture gap, human escalation, or representative green.",
-    "representativeOutcome": "same-frontier",
-    "causalDebt": "The fresh representative failed at active=0/5 and snapshotCoverage=0/5. Publication evidence reports publicationStatus=unknown, publicationEpoch=0, missingPublishedCount=5, prioritySpreadPending=false, publicationOwnerAckState=unavailable, publicationOwnerRevisionState=unavailable, publicationOwnerStreamOutcome=publishing, active-gate selected_snapshot_source_timeout downstream, and zero priority residual witnesses.",
-    "crossBoundaryReview": "Required only if this diagnostic classifier promotes runtime ownership or migrates to a runtime owner-boundary successor."
+    "hypothesis": "The fresh representative is still blocked inside topology publication ownership: publication evidence is unknown at epoch 0 while all five active nodes remain missing from published visibility, priority residuals are absent, and active-gate selected-source timeout is downstream rather than authoritative.",
+    "stopConditionCheck": "Before runtime edits, use package doctor, required subagent review/fix sequencing, scenario-route, handoff-probe, npm run analyze:causal-model, priority residual extraction, owner-files or focused owner tests, and validation to confirm the same owner and boundary.",
+    "expectedCausalModelChange": "The runtime slice should reduce or close the missing published nodes publication edge by making the owner either publish active nodes or emit a structured owner-local deferred outcome that explains why publication remains unavailable.",
+    "representativeOutcome": "pending-before-rerun",
+    "causalDebt": "Fresh representative proof records active=0/5, snapshotCoverage=0/5, publicationStatus=unknown, publicationEpoch=0, missingPublishedCount=5, prioritySpreadPending=false, publicationOwnerAckState=unavailable, publicationOwnerRevisionState=unavailable, publicationOwnerStreamOutcome=publishing, no priority residual witnesses, and active-gate runtimePromotionAllowed=false.",
+    "crossBoundaryReview": "Required if implementation needs files outside topology publication owner runtime or if fresh proof reselects active-gate, operation workflow, readiness, admission, handoff architecture, or timeout ownership."
   },
   "scenarioCausalClosure": {
     "referenceScenarioOrProbe": "rolling-restart publication missing published nodes after owner publishing visibility reduction",
     "phaseChain": [
-      "focused publication owner publishing visibility slice reduced OPEN epoch revision evidence",
-      "fresh representative stays on publication_ack_convergence / topology_publication_owner / publication_convergence",
-      "fresh dominant reason is missing_published_nodes_present",
+      "predecessor runtime slice reduced OPEN epoch publishing revision visibility",
+      "fresh representative remains on publication_ack_convergence / topology_publication_owner / publication_convergence",
+      "classifier selected bounded-same-owner-successor for missing_published_nodes_present",
       "priority residual witnesses are zero",
       "active-gate selected_snapshot_source_timeout remains downstream and runtimePromotionAllowed=false"
     ],
@@ -94,22 +111,22 @@
       "active-gate snapshot coverage is deferred on selected_snapshot_source_timeout with runtimePromotionAllowed=false",
       "priority residual extraction reports zero operation workflow witnesses"
     ],
-    "missingCausalEdge": "Classify whether the missing-published-nodes shape is publication owner debt, stale/unknown evidence, downstream selected-source timeout evidence, or a boundary migration signal.",
-    "missingCausalEdgeProbe": "npm run analyze:owner-files -- topology_publication_owner publication_convergence",
-    "boundedProgressProof": "Predecessor focused implementation provided a bounded advance in OPEN epoch publishing revision visibility and fresh rerun narrowed the residual to missing_published_nodes_present with priority residual witnesses=0.",
-    "boundedProgressProofArtifact": "work/packages/done-20260518-topology-publication-owner-publishing-visibility.md plus test-output/reports/rolling-restart-after-publication-owner-publishing-visibility-20260518T114956Z.report.json",
-    "expectedObservableTransition": "Diagnostic proof selected a bounded same-owner runtime successor.",
-    "maxProgressBound": "one diagnostic classification pass before runtime promotion",
-    "sameFrontierFallback": "If canonical proof cannot narrow or migrate the missing-published-nodes residual, present an architecture/human gate instead of opening another local runtime patch.",
-    "expectedNextFrontier": "bounded same-owner topology_publication_owner / publication_convergence runtime successor",
-    "resultClassification": "same-frontier",
+    "missingCausalEdge": "The publication owner path does not yet provide a decisive publication convergence outcome for unknown publication status plus missing published nodes.",
+    "missingCausalEdgeProbe": "npm run analyze:owner-files -- topology_publication_owner publication_convergence plus focused owner runtime tests over publication owner evidence, decision, recovery gate, and recovery evidence",
+    "boundedProgressProof": "Predecessor diagnostic classifier selected a bounded same-owner runtime successor after canonical route, causal-model, handoff-probe, and priority residual extraction stayed on topology_publication_owner / publication_convergence.",
+    "boundedProgressProofArtifact": "work/packages/done-20260518-topology-publication-missing-published-nodes-classification.md plus test-output/reports/rolling-restart-after-publication-owner-publishing-visibility-20260518T114956Z.report.json",
+    "expectedObservableTransition": "Focused owner tests should prove the chosen publication-owner outcome, and the next representative run should reduce missingPublishedCount, move to a later publication-owner cause, migrate, or close the scenario.",
+    "maxProgressBound": "one bounded runtime owner slice before another representative rerun or architecture/human gate",
+    "sameFrontierFallback": "If implementation cannot change the publication owner outcome without widening beyond declared owner files, stop for architecture or human escalation instead of adding another local symptom patch.",
+    "expectedNextFrontier": "reduced missing-published-node evidence, migrated owner boundary, representative green, or explicit architecture/human gate",
+    "resultClassification": "pending-before-probe",
     "stopCondition": "continue-local-fix",
     "recentFrontierHistory": [
+      "work/packages/done-20260518-topology-publication-missing-published-nodes-classification.md / topology_publication_owner / publication_convergence / bounded-same-owner-successor",
       "work/packages/done-20260518-topology-publication-owner-publishing-visibility.md / topology_publication_owner / publication_convergence / reduced",
-      "work/packages/done-20260518-topology-publication-residual-after-priority-split-classification.md / topology_publication_owner / publication_convergence / same-frontier",
-      "work/packages/done-20260518-topology-publication-convergence-after-active-gate-handoff-oscillation.md / topology_publication_owner / publication_convergence / reduced"
+      "work/packages/done-20260518-topology-publication-residual-after-priority-split-classification.md / topology_publication_owner / publication_convergence / same-frontier"
     ],
-    "oscillationCheck": "Causal-escalation watch remains active at the sprint level; this diagnostic package must not promote runtime without a concrete owner-boundary selection.",
+    "oscillationCheck": "Causal-escalation watch remains active; if this runtime slice cannot reduce or migrate the representative frontier, stop for an architecture or human decision gate.",
     "handoffInvariant": "Active-gate consumer runtime, operation workflow, startup readiness, active-gate admission, handoff architecture, and timeout budgets stay frozen unless fresh canonical evidence reselects them."
   },
   "rerunDecision": {
@@ -119,29 +136,43 @@
     "routeDominantReason": "missing_published_nodes_present",
     "routeCausalOutcome": "continue_local_fix",
     "stopMode": "classified_local_blocker",
-    "nextLane": "causal-escalation",
-    "expectedDelta": "Classify the fresh missing-published-nodes route before runtime promotion; if the same frontier has no concrete metric or shape reduction, stop for architecture or human escalation.",
+    "nextLane": "runtime-owner-boundary",
+    "expectedDelta": "Implement one focused topology publication owner runtime slice for unknown publication status plus missing published nodes; representative proof should then reduce, migrate, close, or trigger an architecture/human gate.",
     "requiredRefreshCommands": [
-      "npm run work:package:route-after-rerun -- --artifact test-output/reports/rolling-restart-after-publication-owner-publishing-visibility-20260518T114956Z.report.json --package work/packages/active-20260518-topology-publication-missing-published-nodes-classification.md --owner topology_publication_owner --boundary publication_convergence --dominant-reason missing_published_nodes_present --explain publication_ack_convergence",
-      "Update Sprint Strategy Brief from the route result.",
-      "Update Current Edge Card from the route result.",
+      "npm run work:package:route-after-rerun -- --artifact test-output/reports/rolling-restart-after-publication-owner-publishing-visibility-20260518T114956Z.report.json --owner topology_publication_owner --boundary publication_convergence --dominant-reason missing_published_nodes_present",
+      "Update Sprint Strategy Brief and Current Edge Card from the route result.",
       "npm run work:current-blocker -- --write",
-      "npm run work:validate -- --pre-impl"
+      "npm run work:validate -- --entry",
+      "npm run work:validate -- --pre-impl after review/fix proof is clean"
     ]
+  },
+  "classificationEfficiency": {
+    "defaultMode": "inline-gate-default",
+    "separatePackageReason": "successor-selection",
+    "artifactBudget": "one-artifact",
+    "proofCommandBudget": "two-or-three-canonical-commands",
+    "commands": [
+      "npm run work:evidence-summary -- test-output/reports/rolling-restart-after-publication-owner-publishing-visibility-20260518T114956Z.report.json",
+      "npm run work:scenario-route -- test-output/reports/rolling-restart-after-publication-owner-publishing-visibility-20260518T114956Z.report.json --owner topology_publication_owner --boundary publication_convergence --dominant-reason missing_published_nodes_present --explain publication_ack_convergence --markdown",
+      "npm run work:validate -- --entry"
+    ],
+    "decisionRecord": "The predecessor classifier recorded the separate classification; this runtime package keeps the classification gate inline and must update the current package rather than open another classifier for the same unchanged artifact.",
+    "successorAction": "update-current-package",
+    "runtimePromotionRule": "This package is the runtime-owner-boundary successor for stable topology_publication_owner / publication_convergence evidence."
   },
   "architectureDecisionGate": {
     "status": "selected",
     "trigger": "frontier-oscillation",
     "triggerEvidence": [
-      "publication frontier remains after reduced predecessor",
-      "fresh representative changes shape to missing_published_nodes_present",
+      "fresh representative remains publication_ack_convergence after a reduced predecessor",
+      "predecessor classifier selected bounded same-owner successor",
       "priority residual witnesses are zero",
       "active-gate selected-source timeout remains downstream"
     ],
     "choices": [
       {
-        "id": "bounded-same-owner-successor",
-        "summary": "Close the diagnostic classifier and open a focused same-owner publication convergence successor.",
+        "id": "bounded-same-owner-runtime-successor",
+        "summary": "Run normal review/fix/implementation sequencing for a focused topology publication owner runtime slice.",
         "route": "continue-local-proof",
         "proof": [
           "npm run work:scenario-route -- test-output/reports/rolling-restart-after-publication-owner-publishing-visibility-20260518T114956Z.report.json --owner topology_publication_owner --boundary publication_convergence --dominant-reason missing_published_nodes_present --explain publication_ack_convergence --markdown",
@@ -150,8 +181,8 @@
         ]
       }
     ],
-    "selectedChoice": "bounded-same-owner-successor",
-    "nextAction": "Close this diagnostic classifier and open a focused same-owner runtime successor; do not promote runtime files inside this package."
+    "selectedChoice": "bounded-same-owner-runtime-successor",
+    "nextAction": "Run review subagent first, fix if required, then implementation subagent for this runtime successor."
   },
-  "predecessor": "work/packages/done-20260518-topology-publication-owner-publishing-visibility.md"
+  "predecessor": "work/packages/done-20260518-topology-publication-missing-published-nodes-classification.md"
 }

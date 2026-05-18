@@ -3,7 +3,7 @@
 <!-- work-package
 {
   "schema": "work-package-v1",
-  "status": "active",
+  "status": "done",
   "opened": "2026-05-18",
   "lane": "causal-escalation",
   "scenario": "rolling-restart",
@@ -20,7 +20,7 @@
     "npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-after-publication-owner-publishing-visibility-20260518T114956Z.report.json --markdown"
   ],
   "writeScope": [
-    "work/packages/active-20260518-topology-publication-missing-published-nodes-classification.md",
+    "work/packages/done-20260518-topology-publication-missing-published-nodes-classification.md",
     "work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md",
     "work/sprints/current-blocker.md",
     "work/sprints/current-blocker.json",
@@ -44,7 +44,7 @@
     "test/control-plane/publication-recovery-evidence.test.js"
   ],
   "commitScope": [
-    "work/packages/active-20260518-topology-publication-missing-published-nodes-classification.md",
+    "work/packages/done-20260518-topology-publication-missing-published-nodes-classification.md",
     "work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md",
     "work/sprints/current-blocker.md",
     "work/sprints/current-blocker.json",
@@ -143,17 +143,34 @@
     "routeDominantReason": "missing_published_nodes_present",
     "routeCausalOutcome": "continue_local_fix",
     "stopMode": "classified_local_blocker",
-    "nextLane": "causal-escalation",
+    "nextLane": "runtime-owner-boundary",
     "expectedDelta": "Classify the fresh missing-published-nodes route before runtime promotion; if the same frontier has no concrete metric or shape reduction, stop for architecture or human escalation.",
     "requiredRefreshCommands": [
-      "npm run work:package:route-after-rerun -- --artifact test-output/reports/rolling-restart-after-publication-owner-publishing-visibility-20260518T114956Z.report.json --package work/packages/active-20260518-topology-publication-missing-published-nodes-classification.md --owner topology_publication_owner --boundary publication_convergence --dominant-reason missing_published_nodes_present --explain publication_ack_convergence",
+      "npm run work:package:route-after-rerun -- --artifact test-output/reports/rolling-restart-after-publication-owner-publishing-visibility-20260518T114956Z.report.json --package work/packages/done-20260518-topology-publication-missing-published-nodes-classification.md --owner topology_publication_owner --boundary publication_convergence --dominant-reason missing_published_nodes_present --explain publication_ack_convergence",
       "Update Sprint Strategy Brief from the route result.",
       "Update Current Edge Card from the route result.",
       "npm run work:current-blocker -- --write",
       "npm run work:validate -- --pre-impl"
     ]
   },
-  "predecessor": "work/packages/done-20260518-topology-publication-owner-publishing-visibility.md"
+  "classificationEfficiency": {
+    "defaultMode": "separate-package-approved",
+    "separatePackageReason": "successor-selection",
+    "artifactBudget": "one-artifact",
+    "proofCommandBudget": "two-or-three-canonical-commands",
+    "commands": [
+      "npm run work:evidence-summary -- test-output/reports/rolling-restart-after-publication-owner-publishing-visibility-20260518T114956Z.report.json",
+      "npm run work:scenario-triage -- test-output/reports/rolling-restart-after-publication-owner-publishing-visibility-20260518T114956Z.report.json --markdown",
+      "npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-after-publication-owner-publishing-visibility-20260518T114956Z.report.json --markdown"
+    ],
+    "decisionRecord": "This separate classifier is the one diagnostic decision record for the fresh missing-published-nodes artifact; future same-owner refinements update the runtime successor instead of opening another classifier.",
+    "successorAction": "open-runtime-owner-boundary",
+    "runtimePromotionRule": "Stable topology_publication_owner / publication_convergence evidence promotes to a runtime-owner-boundary successor; runtime files stay candidateRuntimeFiles in this classifier."
+  },
+  "predecessor": "work/packages/done-20260518-topology-publication-owner-publishing-visibility.md",
+  "closed": "2026-05-18",
+  "commitAndPushLedgerRequired": true,
+  "successor": "work/packages/active-20260518-topology-publication-unknown-missing-published-nodes-runtime.md"
 }
 -->
 
@@ -228,8 +245,17 @@ stabilization and production guarantees for the AGPL runtime.
 - Route dominant reason: `missing_published_nodes_present`
 - Route causal outcome: `continue_local_fix`
 - Stop mode: `classified_local_blocker`
-- Next lane: `causal-escalation`
+- Next lane: `runtime-owner-boundary`
 - Required after rerun: route-after-rerun, Sprint Strategy Brief and Current Edge Card update, current-blocker refresh, and pre-implementation validation.
+
+## Classification Efficiency
+
+- Default mode: `separate-package-approved`
+- Separate package reason: `successor-selection`
+- Evidence budget: `one-artifact`; `two-or-three-canonical-commands`
+- Decision record: this separate classifier is the one diagnostic decision record for the fresh missing-published-nodes artifact; future same-owner refinements update the runtime successor instead of opening another classifier.
+- Successor action: `open-runtime-owner-boundary`
+- Runtime promotion rule: stable `topology_publication_owner / publication_convergence` evidence promotes to a `runtime-owner-boundary` successor; runtime files stay `candidateRuntimeFiles` in this classifier.
 
 ## Classification Result
 
@@ -268,7 +294,7 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 
 ## In Scope
 
-1. work/packages/active-20260518-topology-publication-missing-published-nodes-classification.md
+1. work/packages/done-20260518-topology-publication-missing-published-nodes-classification.md
 2. work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md
 3. work/sprints/current-blocker.md
 4. work/sprints/current-blocker.json
@@ -289,7 +315,7 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 - Intended minimum model: `gpt-5.3-codex`
 - Scope shape: `owner-boundary-diagnostic/current-frontier`
 - Output profile: `medium`
-- Owned files: `work/packages/active-20260518-topology-publication-missing-published-nodes-classification.md`, `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md`, `work/sprints/current-blocker.md`, `work/sprints/current-blocker.json`, `work/model-ledger.jsonl`
+- Owned files: `work/packages/done-20260518-topology-publication-missing-published-nodes-classification.md`, `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md`, `work/sprints/current-blocker.md`, `work/sprints/current-blocker.json`, `work/model-ledger.jsonl`
 - Forbidden files: `startup active-gate runtime`, `operation workflow / rebalancer_handoff runtime`, `startup readiness runtime`, `active-gate admission`, `timeout budgets`, `handoff architecture`
 - Frozen decisions: package scope and lane stay bounded unless explicitly escalated.
 - Escalation triggers: owned files expand beyond this package, runtime ownership changes, or representative scenario evidence changes.
@@ -302,9 +328,9 @@ Review is required before this causal-escalation package continues. If the
 package promotes runtime ownership, refresh the remaining role proof before
 implementation.
 
-- [x] Review subagent recorded: Agent Noether (019e3b21-7e99-7ac2-bf5f-bfaed81e7f9b) reviewed work/packages/active-20260518-topology-publication-missing-published-nodes-classification.md; result fixes-required.
-- [x] Fix subagent recorded or explicitly not needed: Agent Darwin (019e3b26-41dd-78f1-95f4-3ffdae49dc5b) fixed work/packages/active-20260518-topology-publication-missing-published-nodes-classification.md.
-- [x] Implementation subagent recorded: Agent Epicurus (019e3b2a-69c3-7192-aff6-5cd65d123070) implemented work/packages/active-20260518-topology-publication-missing-published-nodes-classification.md; result bounded-same-owner-successor.
+- [x] Review subagent recorded: Agent Noether (019e3b21-7e99-7ac2-bf5f-bfaed81e7f9b) reviewed work/packages/done-20260518-topology-publication-missing-published-nodes-classification.md; result fixes-required.
+- [x] Fix subagent recorded or explicitly not needed: Agent Darwin (019e3b26-41dd-78f1-95f4-3ffdae49dc5b) fixed work/packages/done-20260518-topology-publication-missing-published-nodes-classification.md.
+- [x] Implementation subagent recorded: Agent Epicurus (019e3b2a-69c3-7192-aff6-5cd65d123070) implemented work/packages/done-20260518-topology-publication-missing-published-nodes-classification.md; result bounded-same-owner-successor.
 
 ## Subagent Progress Ledger
 
@@ -316,7 +342,7 @@ implementation.
 - [x] Agent Epicurus (019e3b2a-69c3-7192-aff6-5cd65d123070) implementation falsification check: wrong-slice evidence would be representative-green, canonical owner/boundary migration, operation workflow witnesses requiring `operation_workflow_owner`, active-gate handoff proof with `runtimePromotionAllowed=true`, or an architecture/human stop replacing `continue_local_fix`; evidence: package doctor reports admin stop/no implementation write scope, evidence-summary and scenario-route keep `publication_ack_convergence / topology_publication_owner / publication_convergence / missing_published_nodes_present`, priority residual witnesses are `0`, causal-model reports `publication_ack_blocked` with `continue_local_fix`, and handoff-probe reports `contractEdge=null`, `handoffContract.state=absent`, `runtimePromotionAllowed=false`; next: record the classification as a bounded same-owner successor without runtime edits.
 - [x] Agent Epicurus (019e3b2a-69c3-7192-aff6-5cd65d123070) implementation extractor classification subtask: selected `bounded-same-owner-successor` because evidence-summary, scenario-triage, scenario-route, and causal-model agree on `topology_publication_owner / publication_convergence` with `missing_published_nodes_present`, while priority residuals report witnesses `0` and handoff-probe keeps startup active-gate downstream with `runtimePromotionAllowed=false`; evidence: required canonical commands completed successfully on `test-output/reports/rolling-restart-after-publication-owner-publishing-visibility-20260518T114956Z.report.json`; next: update sprint/current-blocker/model ledger and run validation.
 - [x] Agent Epicurus (019e3b2a-69c3-7192-aff6-5cd65d123070) implementation package classification subtask: recorded the diagnostic result, successor instruction, sequencing ledger line, and non-selected boundaries without changing runtime, test, script, or report files; evidence: package metadata records schema-compatible `representativeOutcome=same-frontier`, `resultClassification=same-frontier`, and a continue-owner-fix stop, while the package decision records `bounded-same-owner-successor`; next: refresh generated blocker files and validate closure readiness.
-- [x] Agent Epicurus (019e3b2a-69c3-7192-aff6-5cd65d123070) implementation validation subtask: refreshed current blocker, recorded model-ledger evidence, selected the architecture gate route, and validated package shape through closure; evidence: `npm run work:current-blocker`, `npm run work:package:doctor -- work/packages/active-20260518-topology-publication-missing-published-nodes-classification.md`, `npm run work:validate -- --entry`, `npm run work:validate -- --pre-impl`, and `npm run work:validate -- --closure` all passed after schema-compatible same-frontier mapping; next: run final diff whitespace check over write scope.
+- [x] Agent Epicurus (019e3b2a-69c3-7192-aff6-5cd65d123070) implementation validation subtask: refreshed current blocker, recorded model-ledger evidence, selected the architecture gate route, and validated package shape through closure; evidence: `npm run work:current-blocker`, `npm run work:package:doctor -- work/packages/done-20260518-topology-publication-missing-published-nodes-classification.md`, `npm run work:validate -- --entry`, `npm run work:validate -- --pre-impl`, and `npm run work:validate -- --closure` all passed after schema-compatible same-frontier mapping; next: run final diff whitespace check over write scope.
 
 ## Review Result
 
@@ -336,15 +362,21 @@ Findings:
 5. npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-publication-owner-publishing-visibility-20260518T114956Z.report.json
 6. npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-publication-owner-publishing-visibility-20260518T114956Z.report.json --handoff-probe
 7. npm run analyze:owner-files -- topology_publication_owner publication_convergence
-8. npm run work:package:route-after-rerun -- --artifact test-output/reports/rolling-restart-after-publication-owner-publishing-visibility-20260518T114956Z.report.json --package work/packages/active-20260518-topology-publication-missing-published-nodes-classification.md --owner topology_publication_owner --boundary publication_convergence --dominant-reason missing_published_nodes_present --explain publication_ack_convergence
+8. npm run work:package:route-after-rerun -- --artifact test-output/reports/rolling-restart-after-publication-owner-publishing-visibility-20260518T114956Z.report.json --package work/packages/done-20260518-topology-publication-missing-published-nodes-classification.md --owner topology_publication_owner --boundary publication_convergence --dominant-reason missing_published_nodes_present --explain publication_ack_convergence
 
 Implementation validation results:
 
-9. `npm run work:package:doctor -- --suggest work/packages/active-20260518-topology-publication-missing-published-nodes-classification.md` - passed; admin stop noted no implementation write scope.
+9. `npm run work:package:doctor -- --suggest work/packages/done-20260518-topology-publication-missing-published-nodes-classification.md` - passed; admin stop noted no implementation write scope.
 10. `npm run work:current-blocker -- --write` - passed; regenerated `work/sprints/current-blocker.md` and `work/sprints/current-blocker.json`.
 11. `npm run work:model-ledger -- record ...` - passed; recorded same-frontier schema outcome with bounded same-owner successor notes.
 12. `npm run work:current-blocker` - passed.
-13. `npm run work:package:doctor -- work/packages/active-20260518-topology-publication-missing-published-nodes-classification.md` - passed.
+13. `npm run work:package:doctor -- work/packages/done-20260518-topology-publication-missing-published-nodes-classification.md` - passed.
 14. `npm run work:validate -- --entry` - passed.
 15. `npm run work:validate -- --pre-impl` - passed.
 16. `npm run work:validate -- --closure` - passed.
+
+## Commit And Push Ledger
+
+1. Focused package commit: `ed8a681d`
+2. Pushed to: `origin/codex/pending-ack-eligibility-filter`
+3. Commit contains only package-owned files/package-status/allowed sprint handoff: yes
