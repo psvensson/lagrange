@@ -17,17 +17,28 @@ const JSON_ENCODING_UTF8 = 'utf8';
 const SCENARIO_ROLLING_RESTART = 'rolling-restart';
 const REPORT_COUNT_FAILED = 1;
 const REPORT_COUNT_PASSED = 0;
-const ACTIVE_GATE_STATE_TIMED_OUT = 'timed_out';
+const ACTIVE_GATE_STATE_STALLED = 'stalled';
 const PUBLICATION_STATUS_PUBLISHED = 'PUBLISHED';
 const PUBLICATION_PROTOCOL_STEADY_PUBLISHED = 'steady_published';
 const READINESS_CLASS_SNAPSHOT_TIMEOUT = 'snapshot_timeout';
-const READINESS_RECOVERABILITY_TERMINAL = 'terminal';
-const READINESS_TERMINAL_REASON_STALLED = 'stalled_no_progress';
+const READINESS_RECOVERABILITY_RECOVERABLE = 'recoverable';
 const READINESS_SOURCE_SELECTED_SNAPSHOT_ERROR = 'selectedSnapshotError';
 const READINESS_CAUSE_SNAPSHOT_TIMEOUT = 'snapshot_timeout';
-const SNAPSHOT_COVERAGE_COUNT = 1;
+const SNAPSHOT_COVERAGE_COUNT = 0;
 const EXPECTED_NODE_COUNT = 5;
-const BLOCKER_SNAPSHOT_COVERAGE_ONE_OF_FIVE = 'snapshot_coverage=1/5';
+const SELECTED_SNAPSHOT_SOURCE_NODE_ID =
+  '11601fe0-72d6-5853-8590-ec2881853e72';
+const SELECTED_SNAPSHOT_TIMEOUT_MS = 3000;
+const SELECTED_SNAPSHOT_TIMEOUT_ERROR =
+  'Admin API query timed out for node ' +
+  SELECTED_SNAPSHOT_SOURCE_NODE_ID +
+  ' on lane snapshot after ' +
+  String(SELECTED_SNAPSHOT_TIMEOUT_MS) +
+  'ms';
+const READINESS_PROGRESS_ATTEMPTS_SINCE_PROGRESS = 8;
+const READINESS_PROGRESS_MAX_ATTEMPTS = 8;
+const READINESS_PROGRESS_STALLED = true;
+const BLOCKER_SNAPSHOT_COVERAGE_ZERO_OF_FIVE = 'snapshot_coverage=0/5';
 const NULL_VALUE = null;
 const UNDEFINED_VALUE = undefined;
 
@@ -71,10 +82,15 @@ function buildSelectedSnapshotTimeoutReport() {
         passed: false,
         readinessFailure: {
           classCode: READINESS_CLASS_SNAPSHOT_TIMEOUT,
-          recoverability: READINESS_RECOVERABILITY_TERMINAL,
-          terminalReason: READINESS_TERMINAL_REASON_STALLED,
+          recoverability: READINESS_RECOVERABILITY_RECOVERABLE,
+          progressSignal: {
+            attemptsSinceProgress: READINESS_PROGRESS_ATTEMPTS_SINCE_PROGRESS,
+            maxAttempts: READINESS_PROGRESS_MAX_ATTEMPTS,
+            stalled: READINESS_PROGRESS_STALLED,
+          },
           source: READINESS_SOURCE_SELECTED_SNAPSHOT_ERROR,
           cause: READINESS_CAUSE_SNAPSHOT_TIMEOUT,
+          error: SELECTED_SNAPSHOT_TIMEOUT_ERROR,
         },
         publicationConvergence: {
           publicationStatus: PUBLICATION_STATUS_PUBLISHED,
@@ -83,17 +99,20 @@ function buildSelectedSnapshotTimeoutReport() {
           missingPublishedCount: REPORT_COUNT_PASSED,
           recoveryProtocolState: PUBLICATION_PROTOCOL_STEADY_PUBLISHED,
           activeGate: {
-            state: ACTIVE_GATE_STATE_TIMED_OUT,
+            state: ACTIVE_GATE_STATE_STALLED,
             ready: false,
             progress: {
               expectedNodeCount: EXPECTED_NODE_COUNT,
               snapshotCoverageNodeCount: SNAPSHOT_COVERAGE_COUNT,
               snapshotCoverageComplete: false,
+              selectedSnapshotNodeId: SELECTED_SNAPSHOT_SOURCE_NODE_ID,
+              selectedSnapshotTimeoutMs: SELECTED_SNAPSHOT_TIMEOUT_MS,
+              selectedSnapshotError: SELECTED_SNAPSHOT_TIMEOUT_ERROR,
               priorityRecoveryProgressClasses: {
                 unresolvedSemanticStateIds: [],
                 blockedPartitionIds: [],
               },
-              blockers: [BLOCKER_SNAPSHOT_COVERAGE_ONE_OF_FIVE],
+              blockers: [BLOCKER_SNAPSHOT_COVERAGE_ZERO_OF_FIVE],
             },
           },
         },

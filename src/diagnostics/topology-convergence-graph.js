@@ -677,9 +677,10 @@ const READINESS_INHERITED_ACTIVE_GATE_SUPPORT_RULES = Object.freeze([
   }),
   Object.freeze({
     matches: (snapshot) =>
-      snapshot.activeGateState === ACTIVE_GATE_STATE_TIMED_OUT &&
+      READINESS_INHERITED_ACTIVE_GATE_NO_PROGRESS_STATE_SET.has(
+        snapshot.activeGateState,
+      ) &&
       snapshot.classCode === READINESS_FAILURE_CLASS_SNAPSHOT_TIMEOUT &&
-      snapshot.terminalReason === READINESS_TERMINAL_REASON_STALLED_NO_PROGRESS &&
       snapshot.source === READINESS_SOURCE_SELECTED_SNAPSHOT_ERROR &&
       snapshot.cause === READINESS_CAUSE_SNAPSHOT_TIMEOUT,
   }),

@@ -28,6 +28,7 @@ const FIXTURE_READINESS_MODE = 'startup';
 const FIXTURE_READINESS_CLASS = 'snapshot_reachability_timeout';
 const FIXTURE_READINESS_SNAPSHOT_TIMEOUT_CLASS = 'snapshot_timeout';
 const FIXTURE_READINESS_RECOVERABILITY = 'terminal';
+const FIXTURE_READINESS_RECOVERABILITY_RECOVERABLE = 'recoverable';
 const FIXTURE_READINESS_TERMINAL_REASON = 'stalled_no_progress';
 const FIXTURE_READINESS_CAUSE = 'snapshot_reachability_timeout';
 const FIXTURE_READINESS_SNAPSHOT_TIMEOUT_CAUSE = 'snapshot_timeout';
@@ -48,6 +49,7 @@ const OWNER_OPERATION_WORKFLOW = 'operation_workflow_owner';
 const SOURCE_PATH_ABSENT = 'absent';
 const SOURCE_PATH_FAILURE_BUNDLE = 'failureBundle';
 const ACTIVE_GATE_STATE_TIMED_OUT = 'timed_out';
+const ACTIVE_GATE_STATE_STALLED = 'stalled';
 const ACTIVE_GATE_STATE_READY = 'ready';
 const PUBLICATION_STATUS_PUBLISHED = 'PUBLISHED';
 const RECOVERY_PROTOCOL_PRIORITY_SPREAD_PENDING = 'priority_spread_pending';
@@ -151,12 +153,15 @@ const ACTIVE_GATE_TIMEOUT_SELECTED_SNAPSHOT_SOURCE =
   '11601fe0-72d6-5853-8590-ec2881853e72';
 const ACTIVE_GATE_TIMEOUT_SELECTED_SNAPSHOT_TIMEOUT_MS = 3349;
 const ACTIVE_GATE_TIMEOUT_AUTHORITATIVE_QUERY_TIMEOUT_MS = 1500;
-const ACTIVE_GATE_TIMEOUT_SELECTED_SNAPSHOT_ERROR =
+const ACTIVE_GATE_SELECTED_SNAPSHOT_SOURCE_TIMEOUT_ERROR =
   'Admin API query timed out for node ' +
   ACTIVE_GATE_TIMEOUT_SELECTED_SNAPSHOT_SOURCE +
   ' on lane snapshot after ' +
   String(ACTIVE_GATE_TIMEOUT_SELECTED_SNAPSHOT_TIMEOUT_MS) +
-  'ms; forced repair snapshot failed: Admin API query failed for node ' +
+  'ms';
+const ACTIVE_GATE_TIMEOUT_SELECTED_SNAPSHOT_ERROR =
+  ACTIVE_GATE_SELECTED_SNAPSHOT_SOURCE_TIMEOUT_ERROR +
+  '; forced repair snapshot failed: Admin API query failed for node ' +
   ACTIVE_GATE_TIMEOUT_SELECTED_SNAPSHOT_SOURCE +
   ' on lane snapshot: Authoritative control snapshot repair failed: ' +
   'nodes:Query timeout after ' +
@@ -663,6 +668,85 @@ describe('TopologyConvergenceGraph', () => {
         activeGateWitness.source.activeGateSnapshotOwnerEdge,
         ACTIVE_GATE_SNAPSHOT_OWNER_EDGE_AUTHORITATIVE_QUERY,
       );
+      assert.equal(readinessWitness.state, EDGE_STATE.DEFERRED);
+      assert.deepEqual(readinessWitness.reasons, [
+        READINESS_INHERITED_ACTIVE_GATE_NO_PROGRESS_REASON,
+      ]);
+      assert.equal(
+        readinessWitness.source.supportPath,
+        READINESS_SUPPORT_PATH_INHERITED_ACTIVE_GATE_NO_PROGRESS,
+      );
+      assertNoNullOrUndefined(graph);
+    });
+
+  it('contracts recoverable selected snapshot timeout to inherited active-gate support',
+    () => {
+      const graph = buildTopologyConvergenceGraph({
+        report: {
+          scenarios: [
+            {
+              scenario: SCENARIO_ROLLING_RESTART,
+              publicationConvergence: {
+                publicationStatus: PUBLICATION_STATUS_PUBLISHED,
+                pendingAckCount: ZERO_COUNT,
+                blockedNodeCount: ZERO_COUNT,
+                missingPublishedCount: ZERO_COUNT,
+                recoveryProtocolState: RECOVERY_PROTOCOL_STEADY_PUBLISHED,
+                activeGate: {
+                  mode: FIXTURE_READINESS_MODE,
+                  state: ACTIVE_GATE_STATE_STALLED,
+                  ready: false,
+                  progress: {
+                    expectedNodeCount: FIXTURE_EXPECTED_NODE_COUNT,
+                    snapshotCoverageNodeCount: ZERO_COUNT,
+                    snapshotCoverageComplete: false,
+                    selectedSnapshotNodeId:
+                      ACTIVE_GATE_TIMEOUT_SELECTED_SNAPSHOT_SOURCE,
+                    selectedSnapshotTimeoutMs:
+                      ACTIVE_GATE_TIMEOUT_SELECTED_SNAPSHOT_TIMEOUT_MS,
+                    selectedSnapshotError:
+                      ACTIVE_GATE_SELECTED_SNAPSHOT_SOURCE_TIMEOUT_ERROR,
+                    readinessDelay: {
+                      timedOut: true,
+                      cause: FIXTURE_READINESS_SNAPSHOT_TIMEOUT_CAUSE,
+                      source: FIXTURE_READINESS_SELECTED_SNAPSHOT_SOURCE,
+                      recoverability:
+                        FIXTURE_READINESS_RECOVERABILITY_RECOVERABLE,
+                      error: ACTIVE_GATE_SELECTED_SNAPSHOT_SOURCE_TIMEOUT_ERROR,
+                    },
+                    priorityRecoveryProgressClasses: {
+                      unresolvedSemanticStateIds: [],
+                      blockedPartitionIds: [],
+                    },
+                    blockers: [...ACTIVE_GATE_TIMEOUT_BLOCKERS],
+                  },
+                },
+              },
+              readinessFailure: {
+                mode: FIXTURE_READINESS_MODE,
+                classCode: FIXTURE_READINESS_SNAPSHOT_TIMEOUT_CLASS,
+                recoverability: FIXTURE_READINESS_RECOVERABILITY_RECOVERABLE,
+                cause: FIXTURE_READINESS_SNAPSHOT_TIMEOUT_CAUSE,
+                source: FIXTURE_READINESS_SELECTED_SNAPSHOT_SOURCE,
+              },
+            },
+          ],
+        },
+      });
+      const activeGateWitness = graph.ownerWitnesses.find((witness) =>
+        witness.edgeId === EDGE_SNAPSHOT_COVERAGE,
+      );
+      const readinessWitness = graph.ownerWitnesses.find((witness) =>
+        witness.edgeId === EDGE_READINESS,
+      );
+
+      assert.equal(graph.summary.firstFrontierEdgeId, EDGE_SNAPSHOT_COVERAGE);
+      assert.equal(graph.summary.firstFrontierOwner, OWNER_STARTUP_ACTIVE_GATE);
+      assert.equal(activeGateWitness.state, EDGE_STATE.DEFERRED);
+      assert.deepEqual(activeGateWitness.reasons, [
+        SNAPSHOT_COVERAGE_INCOMPLETE_REASON,
+        SELECTED_SNAPSHOT_SOURCE_TIMEOUT_REASON,
+      ]);
       assert.equal(readinessWitness.state, EDGE_STATE.DEFERRED);
       assert.deepEqual(readinessWitness.reasons, [
         READINESS_INHERITED_ACTIVE_GATE_NO_PROGRESS_REASON,
