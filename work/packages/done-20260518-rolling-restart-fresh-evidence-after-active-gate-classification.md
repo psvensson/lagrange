@@ -182,3 +182,9 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 3. npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-active-gate-classification-fresh-20260518T062159Z.report.json --handoff-probe
 4. npm run analyze:causal-model -- test-output/reports/rolling-restart-after-active-gate-classification-fresh-20260518T062159Z.report.json
 5. npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-after-active-gate-classification-fresh-20260518T062159Z.report.json --markdown
+
+## Commit And Push Ledger
+
+1. Focused package commit: `d886e2e9`
+2. Pushed to: `origin/codex/pending-ack-eligibility-filter`
+3. Commit contains only package-owned files/package-status/allowed sprint handoff: yes
