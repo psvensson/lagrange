@@ -12,8 +12,8 @@
   "owner": "operation_workflow_owner",
   "boundary": "rebalancer_handoff",
   "dominantReason": "priority_recovery_progress_blocked",
-  "currentState": "The predecessor reduced stale UNKNOWN/no-epoch/no-node-list publication debt. The fresh rolling-restart artifact still has publication_ack_convergence visible first, but priority residual extraction now reports one operation_workflow_owner / rebalancer_handoff group with five retry-scheduled dispatched_waiting_progress witnesses across control_plane_publications-p1, replica_operations-p1, sql_transaction_participants-p1, and sql_transactions-p1.",
-  "nextAction": "Run required review/fix/implementation subagent sequencing, then prove or split the retry-scheduled rebalancer_handoff witnesses without reopening publication, active-gate, readiness, or timeout-budget work.",
+  "currentState": "The predecessor reduced stale UNKNOWN/no-epoch/no-node-list publication debt. In the fresh rolling-restart artifact, work:evidence-summary, analyze:topology-convergence, and analyze:causal-model still show the visible publication_ack_convergence / topology_publication_owner / publication_convergence / publication_pending context, but only analyze:priority-recovery-residuals selects the actionable operation_workflow_owner / rebalancer_handoff group with five retry-scheduled dispatched_waiting_progress witnesses across control_plane_publications-p1, replica_operations-p1, sql_transaction_participants-p1, and sql_transactions-p1.",
+  "nextAction": "Review returned fixes-required and the fix subagent repaired metadata/proof. Run the required implementation subagent next, then prove or split the retry-scheduled rebalancer_handoff witnesses without reopening publication, active-gate, readiness, or timeout-budget work.",
   "proof": [
     "npm run work:evidence-summary -- test-output/reports/rolling-restart-after-publication-count-only-unknown-20260518T074802Z.report.json",
     "npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-after-publication-count-only-unknown-20260518T074802Z.report.json",
@@ -88,14 +88,14 @@
     "owner": "operation_workflow_owner",
     "boundary": "rebalancer_handoff",
     "dominantReason": "priority_recovery_progress_blocked",
-    "nextAction": "Run the required subagent sequence, then prove or split the retry-scheduled rebalancer_handoff witnesses selected by priority residual extraction."
+    "nextAction": "Run the required implementation subagent, then prove or split the retry-scheduled rebalancer_handoff witnesses selected by priority residual extraction."
   },
   "ownerBoundaryMigrationProof": {
     "fromOwner": "topology_publication_owner",
     "fromBoundary": "publication_convergence",
     "toOwner": "operation_workflow_owner",
     "toBoundary": "rebalancer_handoff",
-    "reason": "The predecessor reduced the stale count-only UNKNOWN publication debt. Fresh priority residual extraction now reports a concrete operation_workflow_owner / rebalancer_handoff residual group with retry-scheduled dispatched_waiting_progress witnesses and nextRequiredAction wait_for_operation_progress.",
+    "reason": "The predecessor reduced the stale count-only UNKNOWN publication debt. Fresh work:evidence-summary, analyze:topology-convergence, and analyze:causal-model keep publication_ack_convergence / topology_publication_owner / publication_convergence / publication_pending visible as producer context, while analyze:priority-recovery-residuals is the only extractor that selects an actionable successor: one operation_workflow_owner / rebalancer_handoff residual group with five retry-scheduled dispatched_waiting_progress witnesses and nextRequiredAction wait_for_operation_progress.",
     "evidence": [
       "work/packages/done-20260518-topology-publication-convergence-after-startup-readiness-classification.md",
       "npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-after-publication-count-only-unknown-20260518T074802Z.report.json",
@@ -107,7 +107,7 @@
     "stopConditionCheck": "Use work:evidence-summary, analyze:priority-recovery-residuals, analyze:topology-convergence, npm run analyze:causal-model, owner-files, and work:advance before implementation. Runtime or test implementation requires clean review/fix proof and a fresh implementation subagent.",
     "expectedCausalModelChange": "The package should classify the rebalancer_handoff residual as bounded, reduce the witness set, migrate to a narrower operation workflow owner boundary, or keep same-frontier with concrete focused proof.",
     "representativeOutcome": "pending-before-rerun",
-    "causalDebt": "Publication_ack_convergence remains visible first with OPEN epoch-1 evidence, active_gate_snapshot_coverage remains deferred at 2/5 with owner_reconcile_pending, and readiness_startup_support remains inherited active-gate no progress. Those owners and timeout budgets stay frozen in this package.",
+    "causalDebt": "Publication_ack_convergence remains visible first with OPEN epoch-1 evidence in work:evidence-summary, analyze:topology-convergence, and analyze:causal-model; active_gate_snapshot_coverage remains deferred at 2/5 with owner_reconcile_pending; readiness_startup_support remains inherited active-gate no progress. The successor owns residual proof only because analyze:priority-recovery-residuals selects operation_workflow_owner / rebalancer_handoff, so publication, active-gate, readiness, and timeout work stay frozen in this package.",
     "crossBoundaryReview": "Required before implementation because this is a scenario-driven runtime owner-boundary package following a publication-convergence predecessor."
   },
   "scenarioCausalClosure": {
@@ -119,7 +119,7 @@
       "priority residual extraction reports one operation_workflow_owner / rebalancer_handoff group with five retry-scheduled witnesses",
       "this package owns the rebalancer_handoff proof only"
     ],
-    "currentFirstFrontier": "publication_ack_convergence remains visible first in topology routing, but priority residual extraction selects operation_workflow_owner / rebalancer_handoff with retry_scheduled waitMode and wait_for_operation_progress nextRequiredAction.",
+    "currentFirstFrontier": "publication_ack_convergence / topology_publication_owner / publication_convergence / publication_pending remains visible in work:evidence-summary, analyze:topology-convergence, and analyze:causal-model. Only analyze:priority-recovery-residuals selects operation_workflow_owner / rebalancer_handoff with retry_scheduled waitMode and wait_for_operation_progress nextRequiredAction, so this package owns the five residual witnesses rather than publication, active-gate, readiness, or timeout repair.",
     "knownDownstreamBlockers": [
       "control_plane_publications-p1 has duplicate recovering_in_flight retry-scheduled witnesses for operation 4c6da3d9-3dc9-4288-81d8-d0730df1657d",
       "replica_operations-p1 has operation 84f3d14d-b26a-4702-b7c4-4821eaf7acac waiting for operation progress",
@@ -130,7 +130,7 @@
     ],
     "missingCausalEdge": "Determine whether the retry-scheduled rebalancer_handoff witness group is already bounded by existing remote handoff retry behavior, needs a focused drain/re-entry repair, or splits to a narrower operation workflow owner boundary.",
     "missingCausalEdgeProbe": "npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-after-publication-count-only-unknown-20260518T074802Z.report.json",
-    "boundedProgressProof": "Pending required subagent sequencing; first proof is to compare the fresh retry-scheduled witness group with the prior bounded rebalancer_handoff proof before any runtime edits.",
+    "boundedProgressProof": "Review/fix sequencing is recorded; implementation subagent remains pending. First proof is to compare the fresh retry-scheduled witness group with the prior bounded rebalancer_handoff proof before any runtime edits.",
     "boundedProgressProofArtifact": "test-output/reports/rolling-restart-after-publication-count-only-unknown-20260518T074802Z.report.json",
     "expectedObservableTransition": "Reduce or classify the five retry-scheduled witnesses, migrate to a narrower operation workflow owner boundary, or record same-frontier bounded proof without changing publication, active-gate, readiness, or timeout budgets.",
     "maxProgressBound": "one focused operation_workflow_owner / rebalancer_handoff slice",
@@ -144,7 +144,7 @@
       "work/packages/done-20260518-priority-recovery-operation-workflow-advance-after-handoff-probe.md / operation_workflow_owner / workflow_progress / migrated"
     ],
     "oscillationCheck": "Allowed because the predecessor changed the publication evidence shape and fresh priority residual extraction now reports a concrete rebalancer_handoff group.",
-    "handoffInvariant": "Publication runtime, startup active-gate runtime, startup readiness runtime, timeout budgets, and harness timeout policy remain frozen unless canonical evidence reselects them."
+    "handoffInvariant": "Publication runtime, startup active-gate runtime, startup readiness runtime, timeout budgets, and harness timeout policy remain frozen unless canonical evidence reselects them; visible publication context from summary/topology/causal extractors is not enough to reopen those owners while priority residual extraction selects rebalancer_handoff."
   },
   "architectureDecisionGate": {
     "status": "not-required",
@@ -212,8 +212,8 @@ subagents sequentially before editing runtime or test files.
 
 ## Subagent Sequencing Ledger
 
-- [ ] Review subagent recorded: pending-before-implementation-resumes.
-- [ ] Fix subagent recorded or explicitly not needed: pending-before-review.
+- [x] Review subagent recorded: Agent Codex (019e3a1f-5c2f-7cb2-b9b1-bd7be023dcd2) reviewed work/packages/done-20260518-topology-publication-convergence-after-startup-readiness-classification.md; result fixes-required.
+- [x] Fix subagent recorded or explicitly not needed: Agent Codex (019e3a21-ff60-7b83-89e5-2024e10569c4) fixed work/packages/done-20260518-topology-publication-convergence-after-startup-readiness-classification.md.
 - [ ] Implementation subagent recorded: pending-before-review.
 
 ## LLM Tool-First Contract

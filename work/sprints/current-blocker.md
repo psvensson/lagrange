@@ -22,11 +22,11 @@ Boundary: `rebalancer_handoff`
 
 Dominant reason: `priority_recovery_progress_blocked`
 
-Current state: The predecessor reduced stale UNKNOWN/no-epoch/no-node-list publication debt. The fresh rolling-restart artifact still has publication_ack_convergence visible first, but priority residual extraction now reports one operation_workflow_owner / rebalancer_handoff group with five retry-scheduled dispatched_waiting_progress witnesses across control_plane_publications-p1, replica_operations-p1, sql_transaction_participants-p1, and sql_transactions-p1.
+Current state: The predecessor reduced stale UNKNOWN/no-epoch/no-node-list publication debt. In the fresh rolling-restart artifact, work:evidence-summary, analyze:topology-convergence, and analyze:causal-model still show the visible publication_ack_convergence / topology_publication_owner / publication_convergence / publication_pending context, but only analyze:priority-recovery-residuals selects the actionable operation_workflow_owner / rebalancer_handoff group with five retry-scheduled dispatched_waiting_progress witnesses across control_plane_publications-p1, replica_operations-p1, sql_transaction_participants-p1, and sql_transactions-p1.
 
 ## Next Action
 
-Run required review/fix/implementation subagent sequencing, then prove or split the retry-scheduled rebalancer_handoff witnesses without reopening publication, active-gate, readiness, or timeout-budget work.
+Review returned fixes-required and the fix subagent repaired metadata/proof. Run the required implementation subagent next, then prove or split the retry-scheduled rebalancer_handoff witnesses without reopening publication, active-gate, readiness, or timeout-budget work.
 
 ## Proof Ladder
 
@@ -67,7 +67,7 @@ Boundary: `rebalancer_handoff`
 
 Dominant reason: `priority_recovery_progress_blocked`
 
-Next action: `Run the required subagent sequence, then prove or split the retry-scheduled rebalancer_handoff witnesses selected by priority residual extraction.`
+Next action: `Run the required implementation subagent, then prove or split the retry-scheduled rebalancer_handoff witnesses selected by priority residual extraction.`
 
 ## Causal Governance
 
@@ -79,7 +79,7 @@ Expected causal-model change: `The package should classify the rebalancer_handof
 
 Representative outcome: `pending-before-rerun`
 
-Causal debt: `Publication_ack_convergence remains visible first with OPEN epoch-1 evidence, active_gate_snapshot_coverage remains deferred at 2/5 with owner_reconcile_pending, and readiness_startup_support remains inherited active-gate no progress. Those owners and timeout budgets stay frozen in this package.`
+Causal debt: `Publication_ack_convergence remains visible first with OPEN epoch-1 evidence in work:evidence-summary, analyze:topology-convergence, and analyze:causal-model; active_gate_snapshot_coverage remains deferred at 2/5 with owner_reconcile_pending; readiness_startup_support remains inherited active-gate no progress. The successor owns residual proof only because analyze:priority-recovery-residuals selects operation_workflow_owner / rebalancer_handoff, so publication, active-gate, readiness, and timeout work stay frozen in this package.`
 
 Cross-boundary review: `Required before implementation because this is a scenario-driven runtime owner-boundary package following a publication-convergence predecessor.`
 
@@ -95,7 +95,7 @@ Phase chain:
 4. `priority residual extraction reports one operation_workflow_owner / rebalancer_handoff group with five retry-scheduled witnesses`
 5. `this package owns the rebalancer_handoff proof only`
 
-Current first frontier: `publication_ack_convergence remains visible first in topology routing, but priority residual extraction selects operation_workflow_owner / rebalancer_handoff with retry_scheduled waitMode and wait_for_operation_progress nextRequiredAction.`
+Current first frontier: `publication_ack_convergence / topology_publication_owner / publication_convergence / publication_pending remains visible in work:evidence-summary, analyze:topology-convergence, and analyze:causal-model. Only analyze:priority-recovery-residuals selects operation_workflow_owner / rebalancer_handoff with retry_scheduled waitMode and wait_for_operation_progress nextRequiredAction, so this package owns the five residual witnesses rather than publication, active-gate, readiness, or timeout repair.`
 
 Known downstream blockers:
 
@@ -110,7 +110,7 @@ Missing causal edge: `Determine whether the retry-scheduled rebalancer_handoff w
 
 Missing causal edge probe: `npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-after-publication-count-only-unknown-20260518T074802Z.report.json`
 
-Bounded progress proof: `Pending required subagent sequencing; first proof is to compare the fresh retry-scheduled witness group with the prior bounded rebalancer_handoff proof before any runtime edits.`
+Bounded progress proof: `Review/fix sequencing is recorded; implementation subagent remains pending. First proof is to compare the fresh retry-scheduled witness group with the prior bounded rebalancer_handoff proof before any runtime edits.`
 
 Bounded progress proof artifact: `test-output/reports/rolling-restart-after-publication-count-only-unknown-20260518T074802Z.report.json`
 
@@ -134,7 +134,7 @@ Recent frontier history:
 
 Oscillation check: `Allowed because the predecessor changed the publication evidence shape and fresh priority residual extraction now reports a concrete rebalancer_handoff group.`
 
-Handoff invariant: `Publication runtime, startup active-gate runtime, startup readiness runtime, timeout budgets, and harness timeout policy remain frozen unless canonical evidence reselects them.`
+Handoff invariant: `Publication runtime, startup active-gate runtime, startup readiness runtime, timeout budgets, and harness timeout policy remain frozen unless canonical evidence reselects them; visible publication context from summary/topology/causal extractors is not enough to reopen those owners while priority residual extraction selects rebalancer_handoff.`
 
 ## Architecture Decision Gate
 
