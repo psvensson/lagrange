@@ -57,13 +57,21 @@ const MISSING_EDGE_PUBLICATION_ACK_TO_ACTIVE_GATE_RECONCILE =
   'publication_ack_to_active_gate_reconcile_missing';
 const MISSING_EDGE_NAME_PUBLICATION_ACK_TO_ACTIVE_GATE_RECONCILE =
   'publication_ack_to_active_gate_reconcile';
+const MISSING_EDGE_PUBLICATION_OPERATION_WORKFLOW_HANDOFF =
+  'publication_operation_workflow_handoff_leg_missing';
+const MISSING_EDGE_NAME_PUBLICATION_OPERATION_WORKFLOW_HANDOFF =
+  'publication_operation_workflow_handoff';
 const CONTRACT_EDGE_PUBLICATION_ACTIVE_GATE_HANDOFF =
   'publication_active_gate_handoff_contract';
 const CONTRACT_EDGE_NAME_PUBLICATION_ACTIVE_GATE_HANDOFF =
   'publication_active_gate_handoff_contract';
 const REQUIRED_PROGRESS_MECHANISM_RECONCILE = 'reconcile';
+const REQUIRED_PROGRESS_MECHANISM_ADVANCE = 'advance';
+const REQUIRED_PROGRESS_MECHANISM_DISPATCH = 'dispatch';
 const RESULT_CLASSIFICATION_PUBLICATION_ACTIVE_GATE_RECONCILE_MISSING =
   'publication_ack_to_active_gate_reconcile_missing';
+const RESULT_CLASSIFICATION_PUBLICATION_OPERATION_WORKFLOW_HANDOFF_MISSING =
+  'publication_operation_workflow_handoff_leg_missing';
 const RESULT_CLASSIFICATION_PUBLICATION_ACTIVE_GATE_HANDOFF_CONTRACT_PENDING =
   'publication_active_gate_handoff_contract_pending';
 const RESULT_CLASSIFICATION_PUBLICATION_ACTIVE_GATE_HANDOFF_CONTRACT_COMPLETE =
@@ -71,6 +79,12 @@ const RESULT_CLASSIFICATION_PUBLICATION_ACTIVE_GATE_HANDOFF_CONTRACT_COMPLETE =
 const RESULT_CLASSIFICATION_PUBLICATION_ACTIVE_GATE_HANDOFF_NOT_DETECTED =
   'publication_active_gate_handoff_not_detected';
 const EDGE_STATE_BLOCKED = 'blocked';
+const OPERATION_WORKFLOW_OWNER = 'operation_workflow_owner';
+const WORKFLOW_PROGRESS_BOUNDARY = 'workflow_progress';
+const TOPOLOGY_OPERATOR_CURRENT_STEP_ID_DISPATCH_PENDING =
+  'dispatch_pending';
+const TOPOLOGY_OPERATOR_NEXT_ACTION_ADVANCE_EXISTING_OPERATION =
+  'advance_existing_operation';
 const HANDOFF_PROBE_TARGET_ACTION_BUILD_REPLAYABLE_FIXTURE =
   'build_replayable_handoff_fixture';
 const HANDOFF_CONTRACT_NEXT_ACTION_RECONCILE_OWNER_MEMBERSHIP_PUBLICATION =
@@ -102,10 +116,15 @@ const EDGE_ALIAS_PUBLICATION = 'publication';
 const EDGE_ALIAS_ACTIVE_GATE = 'active-gate';
 const EDGE_ALIAS_SNAPSHOT = 'snapshot';
 const EDGE_ALIAS_READINESS = 'readiness';
+const CSV_SEPARATOR = ',';
 const LIST_SEPARATOR = ', ';
 const HANDOFF_PROBE_CONSUMER_WAITING_STATES = Object.freeze(new Set([
   EDGE_STATE.BLOCKED,
   EDGE_STATE.DEFERRED,
+  EDGE_STATE.RETRYABLE,
+]));
+const HANDOFF_PROBE_OPERATION_WORKFLOW_STATES = Object.freeze(new Set([
+  EDGE_STATE.BLOCKED,
   EDGE_STATE.RETRYABLE,
 ]));
 const HANDOFF_CONTRACT_ABSENT = Object.freeze({
@@ -129,6 +148,24 @@ const HANDOFF_PROBE_DETECTION_RULES = Object.freeze([
       snapshot.producerState === EDGE_STATE.SATISFIED &&
       HANDOFF_PROBE_CONSUMER_WAITING_STATES.has(snapshot.consumerState) &&
       snapshot.missingPublishedCount > NUM_ZERO,
+  }),
+]);
+const PROBE_REQUIRED_PROGRESS_MECHANISM_RULES = Object.freeze([
+  Object.freeze({
+    matches: (operationWorkflowWitness) =>
+      operationWorkflowWitness?.source?.topologyOperatorNextAction ===
+        TOPOLOGY_OPERATOR_NEXT_ACTION_ADVANCE_EXISTING_OPERATION,
+    mechanism: REQUIRED_PROGRESS_MECHANISM_ADVANCE,
+  }),
+  Object.freeze({
+    matches: (operationWorkflowWitness) =>
+      operationWorkflowWitness?.source?.topologyOperatorCurrentStepId ===
+        TOPOLOGY_OPERATOR_CURRENT_STEP_ID_DISPATCH_PENDING,
+    mechanism: REQUIRED_PROGRESS_MECHANISM_DISPATCH,
+  }),
+  Object.freeze({
+    matches: () => true,
+    mechanism: REQUIRED_PROGRESS_MECHANISM_RECONCILE,
   }),
 ]);
 const HELP_TEXT = [
@@ -383,27 +420,49 @@ function selectHandoffProbeOutput(graph) {
     EDGE_ID.PUBLICATION_ACK_CONVERGENCE,
   );
   const consumer = selectHandoffConsumerEdge(graph);
+  const operationWorkflow = selectHandoffOperationWorkflowEdge(graph);
   const probeSnapshot = buildHandoffProbeSnapshot(graph, producer, consumer);
   const handoffDetected = isPublicationActiveGateHandoffDetected(probeSnapshot);
+  const operationWorkflowWitness = buildProbeWitness(operationWorkflow);
   const consumerWitness = buildProbeWitness(consumer);
   const handoffContract = buildProbeHandoffContract(consumerWitness);
   const handoffContractDetected = isProbeHandoffContractDetected(handoffContract);
+  const operationWorkflowHandoffLegMissing =
+    isProbeOperationWorkflowHandoffLegMissing({
+      handoffDetected,
+      handoffContractDetected,
+      operationWorkflowWitness,
+    });
 
   return {
     schemaVersion: SCHEMA_VERSION_PUBLICATION_ACTIVE_GATE_HANDOFF_PROBE_V1,
     scenario: graph.scenario,
-    missingEdge: buildProbeMissingEdge(handoffDetected, handoffContractDetected),
+    missingEdge: buildProbeMissingEdge({
+      handoffDetected,
+      handoffContractDetected,
+      operationWorkflowHandoffLegMissing,
+    }),
     contractEdge: buildProbeContractEdge(handoffContractDetected),
     detected: handoffDetected ? HANDOFF_DETECTED : HANDOFF_NOT_DETECTED,
     producer: buildProbeWitness(producer),
+    operationWorkflow: operationWorkflowWitness,
     consumer: consumerWitness,
     handoffContract,
-    nextOwnerPath: buildProbeNextOwnerPath(consumerWitness, handoffContract),
-    requiredProgressMechanism: REQUIRED_PROGRESS_MECHANISM_RECONCILE,
+    nextOwnerPath: buildProbeNextOwnerPath({
+      operationWorkflowWitness,
+      consumerWitness,
+      handoffContract,
+      operationWorkflowHandoffLegMissing,
+    }),
+    requiredProgressMechanism: selectProbeRequiredProgressMechanism({
+      operationWorkflowWitness,
+      operationWorkflowHandoffLegMissing,
+    }),
     resultClassification: classifyProbeResult(
       handoffDetected,
       handoffContract,
       handoffContractDetected,
+      operationWorkflowHandoffLegMissing,
     ),
     runtimePromotionAllowed: handoffContract.runtimePromotionAllowed,
   };
@@ -416,6 +475,21 @@ function selectHandoffConsumerEdge(graph) {
   ) ||
     selectGraphEdge(graph.frontier, EDGE_ID.ACTIVE_GATE_SNAPSHOT_COVERAGE) ||
     selectGraphEdge(graph.edges, EDGE_ID.ACTIVE_GATE_SNAPSHOT_COVERAGE);
+}
+
+function selectHandoffOperationWorkflowEdge(graph) {
+  return selectGraphEdge(
+    graph.nextExpectedFrontier,
+    EDGE_ID.PRIORITY_RECOVERY_PARTITION_PROGRESS,
+  ) ||
+    selectGraphEdge(
+      graph.frontier,
+      EDGE_ID.PRIORITY_RECOVERY_PARTITION_PROGRESS,
+    ) ||
+    selectGraphEdge(
+      graph.edges,
+      EDGE_ID.PRIORITY_RECOVERY_PARTITION_PROGRESS,
+    );
 }
 
 function selectGraphEdge(edges, edgeId) {
@@ -491,7 +565,38 @@ function buildProbeHandoffContract(consumerWitness) {
   };
 }
 
-function buildProbeMissingEdge(handoffDetected, handoffContractDetected) {
+function isProbeOperationWorkflowHandoffLegMissing({
+  handoffDetected,
+  handoffContractDetected,
+  operationWorkflowWitness,
+}) {
+  return handoffDetected !== true &&
+    handoffContractDetected === true &&
+    isProbeOperationWorkflowDispatchPending(operationWorkflowWitness);
+}
+
+function isProbeOperationWorkflowDispatchPending(witness) {
+  return witness?.edge === EDGE_ID.PRIORITY_RECOVERY_PARTITION_PROGRESS &&
+    witness?.owner === OPERATION_WORKFLOW_OWNER &&
+    witness?.boundary === WORKFLOW_PROGRESS_BOUNDARY &&
+    HANDOFF_PROBE_OPERATION_WORKFLOW_STATES.has(witness?.state) &&
+    witness?.source?.topologyOperatorCurrentStepId ===
+      TOPOLOGY_OPERATOR_CURRENT_STEP_ID_DISPATCH_PENDING &&
+    witness?.source?.topologyOperatorNextAction ===
+      TOPOLOGY_OPERATOR_NEXT_ACTION_ADVANCE_EXISTING_OPERATION;
+}
+
+function buildProbeMissingEdge({
+  handoffDetected,
+  handoffContractDetected,
+  operationWorkflowHandoffLegMissing,
+}) {
+  if (operationWorkflowHandoffLegMissing) {
+    return {
+      id: MISSING_EDGE_PUBLICATION_OPERATION_WORKFLOW_HANDOFF,
+      name: MISSING_EDGE_NAME_PUBLICATION_OPERATION_WORKFLOW_HANDOFF,
+    };
+  }
   if (!handoffDetected || handoffContractDetected) {
     return null;
   }
@@ -511,7 +616,22 @@ function buildProbeContractEdge(handoffContractDetected) {
   };
 }
 
-function buildProbeNextOwnerPath(consumerWitness, handoffContract) {
+function buildProbeNextOwnerPath({
+  operationWorkflowWitness,
+  consumerWitness,
+  handoffContract,
+  operationWorkflowHandoffLegMissing,
+}) {
+  if (operationWorkflowHandoffLegMissing) {
+    return {
+      edge: operationWorkflowWitness.edge,
+      owner: operationWorkflowWitness.owner,
+      boundary: operationWorkflowWitness.boundary,
+      evidencePath: operationWorkflowWitness.evidencePath,
+      requiredAction: operationWorkflowWitness.source.topologyOperatorNextAction,
+      runtimePromotionAllowed: handoffContract.runtimePromotionAllowed,
+    };
+  }
   const requiredAction = isProbeHandoffContractDetected(handoffContract) ?
     handoffContract.nextAction :
     HANDOFF_PROBE_TARGET_ACTION_BUILD_REPLAYABLE_FIXTURE;
@@ -525,11 +645,27 @@ function buildProbeNextOwnerPath(consumerWitness, handoffContract) {
   };
 }
 
+function selectProbeRequiredProgressMechanism({
+  operationWorkflowWitness,
+  operationWorkflowHandoffLegMissing,
+}) {
+  if (operationWorkflowHandoffLegMissing !== true) {
+    return REQUIRED_PROGRESS_MECHANISM_RECONCILE;
+  }
+  return PROBE_REQUIRED_PROGRESS_MECHANISM_RULES.find((rule) =>
+    rule.matches(operationWorkflowWitness),
+  ).mechanism;
+}
+
 function classifyProbeResult(
   handoffDetected,
   handoffContract,
   handoffContractDetected,
+  operationWorkflowHandoffLegMissing,
 ) {
+  if (operationWorkflowHandoffLegMissing) {
+    return RESULT_CLASSIFICATION_PUBLICATION_OPERATION_WORKFLOW_HANDOFF_MISSING;
+  }
   if (!handoffDetected) {
     return RESULT_CLASSIFICATION_PUBLICATION_ACTIVE_GATE_HANDOFF_NOT_DETECTED;
   }
@@ -558,7 +694,7 @@ function arrayOrEmpty(value) {
 
 function splitProbeNodeIds(value) {
   return String(value || EMPTY_TEXT)
-    .split(',')
+    .split(CSV_SEPARATOR)
     .map((nodeId) => nodeId.trim())
     .filter((nodeId) => nodeId.length > NUM_ZERO);
 }

@@ -41,6 +41,8 @@ const PUBLICATION_ACTIVE_GATE_HANDOFF_FIXTURE_PATH =
   `${FIXTURE_DIRECTORY}/publication-active-gate-handoff-oscillation.fixture.json`;
 const PUBLICATION_ACTIVE_GATE_REDUCED_HANDOFF_FIXTURE_PATH =
   `${FIXTURE_DIRECTORY}/publication-active-gate-reduced-handoff.fixture.json`;
+const PUBLICATION_OPERATION_ACTIVE_GATE_HANDOFF_FIXTURE_PATH =
+  `${FIXTURE_DIRECTORY}/publication-operation-active-gate-handoff.fixture.json`;
 const PRIORITY_DOMINANT_WITNESS_FIXTURE_PATH =
   `${FIXTURE_DIRECTORY}/priority-dominant-witness-owner-boundary.fixture.json`;
 const PRIORITY_REBALANCER_HANDOFF_FIXTURE_PATH =
@@ -75,6 +77,8 @@ const GLOSSARY_SEMANTIC_STATE = 'recovering_in_flight';
 const PACKAGE_EVIDENCE_HEADING = '## Generated Owner Evidence Block';
 const OWNER_DOMINANT_REASON = 'priority_recovery_progress_blocked';
 const EDGE_STATE_BLOCKED = 'blocked';
+const EDGE_STATE_DEFERRED = 'deferred';
+const EDGE_STATE_RETRYABLE = 'retryable';
 const BLOCKED_REASONS = ['priority_recovery_progress_blocked'];
 const PRIORITY_RECOVERY_PROGRESS_CLASSES_PATH =
   'report.scenarios[0].publicationConvergence.activeGate.progress.priorityRecoveryProgressClasses';
@@ -84,15 +88,22 @@ const HANDOFF_MISSING_EDGE_ID =
   'publication_ack_to_active_gate_reconcile_missing';
 const HANDOFF_MISSING_EDGE_NAME =
   'publication_ack_to_active_gate_reconcile';
+const OPERATION_WORKFLOW_HANDOFF_MISSING_EDGE_ID =
+  'publication_operation_workflow_handoff_leg_missing';
+const OPERATION_WORKFLOW_HANDOFF_MISSING_EDGE_NAME =
+  'publication_operation_workflow_handoff';
 const HANDOFF_CONTRACT_EDGE_ID =
   'publication_active_gate_handoff_contract';
 const HANDOFF_CONTRACT_EDGE_NAME =
   'publication_active_gate_handoff_contract';
 const HANDOFF_LEGACY_RESULT_CLASSIFICATION =
   'publication_ack_to_active_gate_reconcile_missing';
+const OPERATION_WORKFLOW_HANDOFF_RESULT_CLASSIFICATION =
+  'publication_operation_workflow_handoff_leg_missing';
 const HANDOFF_CONTRACT_RESULT_CLASSIFICATION =
   'publication_active_gate_handoff_contract_pending';
 const HANDOFF_REQUIRED_PROGRESS_MECHANISM = 'reconcile';
+const HANDOFF_REQUIRED_PROGRESS_MECHANISM_ADVANCE = 'advance';
 const PUBLICATION_EDGE_ID = 'publication_ack_convergence';
 const ACTIVE_GATE_EDGE_ID = 'active_gate_snapshot_coverage';
 const TOPOLOGY_PUBLICATION_OWNER = 'topology_publication_owner';
@@ -104,6 +115,8 @@ const ACTIVE_GATE_TIMED_OUT_REASON = 'active_gate_timed_out';
 const OWNER_RECONCILE_PENDING_REASON = 'owner_reconcile_pending';
 const SNAPSHOT_COVERAGE_INCOMPLETE_REASON = 'snapshot_coverage_incomplete';
 const SNAPSHOT_REPAIR_DEFERRED_REASON = 'snapshot_repair_deferred';
+const PRIORITY_RECOVERY_EVENT_DRIVEN_WAIT_REASON =
+  'priority_recovery_event_driven_wait';
 const SELECTED_SNAPSHOT_SOURCE_TIMEOUT_REASON =
   'selected_snapshot_source_timeout';
 const FORCED_REPAIR_SNAPSHOT_TIMEOUT_REASON =
@@ -130,12 +143,29 @@ const EXPECTED_NODE_COUNT = 5;
 const MISSING_PUBLISHED_COUNT = 4;
 const RUNTIME_PROMOTION_ALLOWED_FALSE = false;
 const HANDOFF_DETECTED_TRUE = true;
+const HANDOFF_DETECTED_FALSE = false;
 const ACTIVE_GATE_OWNER_COHORT_STATE_PENDING = 'pending';
+const HANDOFF_CONTRACT_STATE_PENDING = 'pending';
 const ACTIVE_GATE_OWNER_COHORT_PENDING_RECONCILE_COUNT = 2;
+const PUBLICATION_OPERATION_HANDOFF_PENDING_RECONCILE_COUNT = 3;
 const ACTIVE_GATE_OWNER_COHORT_PENDING_RECONCILE_NODE_IDS =
   'node-2,node-3';
+const PUBLICATION_OPERATION_HANDOFF_PENDING_RECONCILE_NODE_IDS = [
+  'node-2',
+  'node-3',
+  'node-5',
+];
 const HANDOFF_CONTRACT_NEXT_ACTION_RECONCILE =
   'reconcile_owner_membership_publication';
+const TOPOLOGY_OPERATOR_CURRENT_STEP_ID_DISPATCH_PENDING =
+  'dispatch_pending';
+const TOPOLOGY_OPERATOR_CURRENT_STEP_STATE_PLANNED = 'planned';
+const TOPOLOGY_OPERATOR_WITNESS_SOURCE_EVENT_DRIVEN = 'event_driven';
+const TOPOLOGY_OPERATOR_NEXT_ACTION_ADVANCE_EXISTING_OPERATION =
+  'advance_existing_operation';
+const PRIORITY_RECOVERY_UNRESOLVED_RECOVERING_IN_FLIGHT =
+  'recovering_in_flight';
+const PRIORITY_RECOVERY_BLOCKED_PARTITION_IDS_ABSENT = 'absent';
 const HANDOFF_PROBE_TARGET_ACTION_BUILD_REPLAYABLE_FIXTURE =
   'build_replayable_handoff_fixture';
 const SNAPSHOT_OBSERVATION_STATE_DEFERRED_REFRESH = 'deferred_refresh';
@@ -143,6 +173,8 @@ const SNAPSHOT_OBSERVATION_CONTRACT_STATE_DEFERRED = 'deferred';
 const SNAPSHOT_OBSERVATION_REFRESH_STATE_DEFERRED = 'deferred';
 const SNAPSHOT_OBSERVATION_NEXT_ACTION_RETRY = 'retry';
 const SNAPSHOT_OBSERVATION_RETRY_AFTER_MS = 14976;
+const OPERATION_WORKFLOW_WITNESS_EVIDENCE_PATH =
+  'report.scenarios[0].publicationConvergence.priorityRecoveryProgressSummary.topologyOperatorWitness';
 const TEMP_FIXTURE_PREFIX = 'topology-convergence-';
 const TEMP_FIXTURE_SUFFIX = '.json';
 
@@ -386,6 +418,99 @@ describe('analyze-topology-convergence CLI', () => {
       SNAPSHOT_COVERAGE_ZERO_OF_FIVE,
     );
     assert.equal(output.consumer.source.expectedNodeCount, EXPECTED_NODE_COUNT);
+  });
+
+  it('prints publication operation workflow active-gate handoff probe', () => {
+    const output = runAnalyzerJson(
+      PUBLICATION_OPERATION_ACTIVE_GATE_HANDOFF_FIXTURE_PATH,
+      ARG_HANDOFF_PROBE,
+    );
+
+    assert.equal(output.schemaVersion, HANDOFF_PROBE_SCHEMA);
+    assert.equal(output.detected, HANDOFF_DETECTED_FALSE);
+    assert.deepEqual(output.missingEdge, {
+      id: OPERATION_WORKFLOW_HANDOFF_MISSING_EDGE_ID,
+      name: OPERATION_WORKFLOW_HANDOFF_MISSING_EDGE_NAME,
+    });
+    assert.deepEqual(output.contractEdge, {
+      id: HANDOFF_CONTRACT_EDGE_ID,
+      name: HANDOFF_CONTRACT_EDGE_NAME,
+    });
+    assert.equal(
+      output.resultClassification,
+      OPERATION_WORKFLOW_HANDOFF_RESULT_CLASSIFICATION,
+    );
+    assert.equal(
+      output.requiredProgressMechanism,
+      HANDOFF_REQUIRED_PROGRESS_MECHANISM_ADVANCE,
+    );
+    assert.equal(
+      output.runtimePromotionAllowed,
+      RUNTIME_PROMOTION_ALLOWED_FALSE,
+    );
+    assert.equal(output.producer.edge, PUBLICATION_EDGE_ID);
+    assert.equal(output.producer.owner, TOPOLOGY_PUBLICATION_OWNER);
+    assert.equal(output.producer.boundary, PUBLICATION_CONVERGENCE_BOUNDARY);
+    assert.equal(output.producer.state, EDGE_STATE_BLOCKED);
+    assert.deepEqual(output.producer.reasons, [PUBLICATION_PENDING_REASON]);
+    assert.equal(output.operationWorkflow.edge, PRIORITY_EDGE_ID);
+    assert.equal(output.operationWorkflow.owner, OPERATION_WORKFLOW_OWNER);
+    assert.equal(output.operationWorkflow.boundary, WORKFLOW_PROGRESS_BOUNDARY);
+    assert.equal(output.operationWorkflow.state, EDGE_STATE_RETRYABLE);
+    assert.deepEqual(output.operationWorkflow.reasons, [
+      PRIORITY_RECOVERY_EVENT_DRIVEN_WAIT_REASON,
+    ]);
+    assert.equal(
+      output.operationWorkflow.source.unresolvedSemanticStateIds,
+      PRIORITY_RECOVERY_UNRESOLVED_RECOVERING_IN_FLIGHT,
+    );
+    assert.equal(
+      output.operationWorkflow.source.blockedPartitionIds,
+      PRIORITY_RECOVERY_BLOCKED_PARTITION_IDS_ABSENT,
+    );
+    assert.equal(
+      output.operationWorkflow.source.topologyOperatorCurrentStepId,
+      TOPOLOGY_OPERATOR_CURRENT_STEP_ID_DISPATCH_PENDING,
+    );
+    assert.equal(
+      output.operationWorkflow.source.topologyOperatorCurrentStepState,
+      TOPOLOGY_OPERATOR_CURRENT_STEP_STATE_PLANNED,
+    );
+    assert.equal(
+      output.operationWorkflow.source.topologyOperatorWitnessSource,
+      TOPOLOGY_OPERATOR_WITNESS_SOURCE_EVENT_DRIVEN,
+    );
+    assert.equal(
+      output.operationWorkflow.source.topologyOperatorNextAction,
+      TOPOLOGY_OPERATOR_NEXT_ACTION_ADVANCE_EXISTING_OPERATION,
+    );
+    assert.equal(output.consumer.edge, ACTIVE_GATE_EDGE_ID);
+    assert.equal(output.consumer.owner, STARTUP_ACTIVE_GATE_OWNER);
+    assert.equal(output.consumer.boundary, SNAPSHOT_COVERAGE_BOUNDARY);
+    assert.equal(output.consumer.state, EDGE_STATE_DEFERRED);
+    assert.deepEqual(output.consumer.reasons, [
+      OWNER_RECONCILE_PENDING_REASON,
+      SNAPSHOT_COVERAGE_INCOMPLETE_REASON,
+      SNAPSHOT_REPAIR_DEFERRED_REASON,
+    ]);
+    assert.deepEqual(output.handoffContract, {
+      state: HANDOFF_CONTRACT_STATE_PENDING,
+      reasonCode: OWNER_RECONCILE_PENDING_REASON,
+      nextAction: HANDOFF_CONTRACT_NEXT_ACTION_RECONCILE,
+      runtimePromotionAllowed: RUNTIME_PROMOTION_ALLOWED_FALSE,
+      pendingReconcileCount:
+        PUBLICATION_OPERATION_HANDOFF_PENDING_RECONCILE_COUNT,
+      pendingReconcileNodeIds:
+        PUBLICATION_OPERATION_HANDOFF_PENDING_RECONCILE_NODE_IDS,
+    });
+    assert.deepEqual(output.nextOwnerPath, {
+      edge: PRIORITY_EDGE_ID,
+      owner: OPERATION_WORKFLOW_OWNER,
+      boundary: WORKFLOW_PROGRESS_BOUNDARY,
+      evidencePath: OPERATION_WORKFLOW_WITNESS_EVIDENCE_PATH,
+      requiredAction: TOPOLOGY_OPERATOR_NEXT_ACTION_ADVANCE_EXISTING_OPERATION,
+      runtimePromotionAllowed: RUNTIME_PROMOTION_ALLOWED_FALSE,
+    });
   });
 
   it('prints active-gate snapshot timeout owner-edge split in handoff probe',

@@ -1,0 +1,146 @@
+{
+  "scenarios": [
+    {
+      "scenario": "rolling-restart",
+      "passed": false,
+      "duration": 178411,
+      "summary": {
+        "dominantReason": "publication_missing_active_node=node-2",
+        "failureClass": "publication_convergence_blocked"
+      },
+      "readinessFailure": {
+        "mode": "load",
+        "classCode": "no_progress_terminal",
+        "recoverability": "unknown",
+        "terminalReason": "unknown",
+        "source": "unknown",
+        "cause": "none",
+        "attemptsSinceProgress": 8
+      },
+      "publicationConvergence": {
+        "publicationEpoch": 1,
+        "publicationStatus": "OPEN",
+        "pendingAckNodeIds": [],
+        "pendingAckCount": 0,
+        "blockedNodeCount": 0,
+        "publishedActiveNodeIds": [
+          "node-1"
+        ],
+        "missingPublishedNodeIds": [
+          "node-2",
+          "node-3",
+          "node-4",
+          "node-5"
+        ],
+        "missingPublishedCount": 4,
+        "publicationPending": true,
+        "recoveryProtocolState": "publication_pending",
+        "prioritySpreadPending": true,
+        "publicationOwnerStream": {
+          "ackState": "unavailable",
+          "freshnessFence": "publishing",
+          "recoveryOutcome": "waiting_for_publication",
+          "revision": {
+            "state": "unavailable"
+          },
+          "streamOutcome": "publishing"
+        },
+        "publicationActiveGateHandoff": {
+          "schemaVersion": 1,
+          "publicationEpoch": 1,
+          "expectedNodeIds": [
+            "node-1",
+            "node-2",
+            "node-3",
+            "node-4",
+            "node-5"
+          ],
+          "expectedNodeCount": 5,
+          "publishedActiveNodeIds": [
+            "node-1"
+          ],
+          "publishedActiveNodeCount": 1,
+          "missingPublishedNodeIds": [
+            "node-2",
+            "node-3",
+            "node-5"
+          ],
+          "missingPublishedCount": 3,
+          "pendingRecoveryNodeIds": [],
+          "pendingRecoveryCount": 0,
+          "pendingReconcileNodeIds": [
+            "node-2",
+            "node-3",
+            "node-5"
+          ],
+          "pendingReconcileCount": 3,
+          "runtimePromotionAllowed": false,
+          "state": "pending",
+          "reasonCode": "owner_reconcile_pending",
+          "nextAction": "reconcile_owner_membership_publication"
+        },
+        "priorityRecoveryProgressSummary": {
+          "topologyOperatorWitness": {
+            "operatorId": "operation-1",
+            "kind": "REPLACE",
+            "currentStepId": "dispatch_pending",
+            "currentStepState": "planned",
+            "witnessSource": "event_driven",
+            "nextAction": "advance_existing_operation",
+            "deadlineMs": 1779078728188,
+            "lastObservedAtMs": 1779078698188
+          }
+        },
+        "activeGate": {
+          "state": "stalled",
+          "ready": false,
+          "attempts": 9,
+          "elapsedMs": 84457,
+          "progress": {
+            "expectedNodeCount": 5,
+            "snapshotCoverageNodeCount": 2,
+            "snapshotCoverageComplete": false,
+            "selectedSnapshotObservationMode": "repair_deferred",
+            "selectedSnapshotObservationState": "deferred_refresh",
+            "selectedSnapshotObservationContractState": "deferred",
+            "selectedSnapshotObservationRefreshState": "deferred",
+            "selectedSnapshotObservationNextAction": "retry",
+            "selectedSnapshotObservationRetryAfterMs": 1000,
+            "selectedSnapshotObservationReasonCodes": [
+              "cache_stale_watermark",
+              "discovery_node_coverage_gap",
+              "stale_replica_operations_in_flight"
+            ],
+            "selectedSnapshotRepairDeferred": true,
+            "activeGateOwnerCohortState": "pending",
+            "activeGateOwnerCohortReasonCode": "owner_reconcile_pending",
+            "activeGateOwnerCohortMissingPublishedNodeIds": [
+              "node-2",
+              "node-3",
+              "node-5"
+            ],
+            "activeGateOwnerCohortMissingPublishedCount": 3,
+            "activeGateOwnerCohortPendingRecoveryNodeIds": [],
+            "activeGateOwnerCohortPendingRecoveryCount": 0,
+            "activeGateOwnerCohortPendingReconcileNodeIds": [
+              "node-2",
+              "node-3",
+              "node-5"
+            ],
+            "activeGateOwnerCohortPendingReconcileCount": 3,
+            "priorityRecoveryProgressClasses": {
+              "unresolvedSemanticStateIds": [],
+              "blockedPartitionIds": []
+            },
+            "blockers": [
+              "inactive_nodes=5",
+              "snapshot_coverage=2/5",
+              "publication_gate=priority_control_plane_spread_pending",
+              "publication_gate=publication_not_published=OPEN"
+            ]
+          }
+        }
+      }
+    }
+  ]
+}
