@@ -358,3 +358,9 @@ satisfied and selects `startup_active_gate_owner / snapshot_coverage` with
 15. PASS - `npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-after-workflow-advance-classification-20260518T054537Z.report.json --markdown`
 16. PASS - `npm run analyze:causal-model -- test-output/reports/rolling-restart-after-workflow-advance-classification-20260518T054537Z.report.json`
 17. PASS - `npm run analyze:owner-files -- startup_active_gate_owner snapshot_coverage`
+
+## Commit And Push Ledger
+
+1. Focused package commit: `f2948816`
+2. Pushed to: `origin/codex/pending-ack-eligibility-filter`
+3. Commit contains only package-owned files/package-status/allowed sprint handoff: yes
