@@ -45,6 +45,12 @@ const TEST_PRIORITY_PARTITION_SUMMARY = Object.freeze({
     satisfied: false,
     missingPartitionIds: Object.freeze([TEST_PRIORITY_PARTITION_ID]),
   }),
+  STALE_ZERO_GAP: Object.freeze({
+    satisfied: false,
+    blockedPartitionCount: TEST_EMPTY_PUBLICATION_DEBT_COUNT,
+    largestSpreadGap: TEST_EMPTY_PUBLICATION_DEBT_COUNT,
+    totalSpreadGap: TEST_EMPTY_PUBLICATION_DEBT_COUNT,
+  }),
   SATISFIED: Object.freeze({
     satisfied: true,
     missingPartitionIds: Object.freeze([]),
@@ -385,6 +391,74 @@ test('buildPublicationRecoveryGateSnapshot lets satisfied summary close stale sp
     t.equal(gate.pendingAckCount, 0);
     t.equal(gate.prioritySpreadPending, false);
     t.same(gate.reasonCodes, []);
+    t.end();
+  });
+
+test('buildPublicationRecoveryGateSnapshot closes zero-gap stale spread summary',
+  (t) => {
+    const gate = buildPublicationRecoveryGateSnapshot({
+      publicationEpoch: TEST_PUBLICATION_EPOCH,
+      publicationStatus: CONTROL_PLANE_PUBLICATION_STATUS.OPEN,
+      recoveryProtocolState: RECOVERY_PROTOCOL_STATE.PUBLICATION_PENDING,
+      pendingAckNodeIds: TEST_EMPTY_NODE_IDS,
+      pendingAckCount: TEST_EMPTY_PUBLICATION_DEBT_COUNT,
+      missingPublishedNodeIds: [TEST_NODE_ID.SECOND],
+      missingPublishedCount: TEST_PUBLICATION_DEBT_COUNT,
+      priorityRecoveryReasonCodes: [
+        CONTROL_PLANE_PRIORITY_RECOVERY_REASON.PUBLICATION_EPOCH_PENDING,
+        CONTROL_PLANE_PRIORITY_RECOVERY_REASON.PRIORITY_PARTITIONS_NOT_SPREAD,
+      ],
+      priorityPartitionSummary:
+        TEST_PRIORITY_PARTITION_SUMMARY.STALE_ZERO_GAP,
+    });
+
+    t.equal(gate.state, PUBLICATION_RECOVERY_GATE_STATE.PUBLICATION_PENDING);
+    t.equal(gate.ready, false);
+    t.equal(gate.publicationPending, true);
+    t.equal(gate.prioritySpreadPending, false);
+    t.same(gate.reasonCodes, [
+      CONTROL_PLANE_PRIORITY_RECOVERY_REASON.PUBLICATION_EPOCH_PENDING,
+    ]);
+    t.end();
+  });
+
+test('buildPublicationRecoveryGateSnapshot closes zero-gap stale owner stream spread',
+  (t) => {
+    const publicationOwnerStream = buildPublicationOwnerStreamState({
+      publicationRevision: TEST_PUBLICATION_EPOCH,
+      publicationStatus: CONTROL_PLANE_PUBLICATION_STATUS.OPEN,
+      pendingAckNodeIds: TEST_EMPTY_NODE_IDS,
+      pendingAckCount: TEST_EMPTY_PUBLICATION_DEBT_COUNT,
+      missingPublishedNodeIds: [TEST_NODE_ID.SECOND],
+      missingPublishedCount: TEST_PUBLICATION_DEBT_COUNT,
+      recoveryProtocolState: RECOVERY_PROTOCOL_STATE.PUBLICATION_PENDING,
+      publicationPending: true,
+      prioritySpreadPending: true,
+    });
+    const gate = buildPublicationRecoveryGateSnapshot({
+      publicationOwnerStream,
+      publicationEpoch: TEST_PUBLICATION_EPOCH,
+      publicationStatus: CONTROL_PLANE_PUBLICATION_STATUS.OPEN,
+      recoveryProtocolState: RECOVERY_PROTOCOL_STATE.PUBLICATION_PENDING,
+      pendingAckNodeIds: TEST_EMPTY_NODE_IDS,
+      pendingAckCount: TEST_EMPTY_PUBLICATION_DEBT_COUNT,
+      missingPublishedNodeIds: [TEST_NODE_ID.SECOND],
+      missingPublishedCount: TEST_PUBLICATION_DEBT_COUNT,
+      priorityRecoveryReasonCodes: [
+        CONTROL_PLANE_PRIORITY_RECOVERY_REASON.PUBLICATION_EPOCH_PENDING,
+        CONTROL_PLANE_PRIORITY_RECOVERY_REASON.PRIORITY_PARTITIONS_NOT_SPREAD,
+      ],
+      priorityPartitionSummary:
+        TEST_PRIORITY_PARTITION_SUMMARY.STALE_ZERO_GAP,
+    });
+
+    t.equal(gate.publicationOwnerStream, publicationOwnerStream);
+    t.equal(gate.state, PUBLICATION_RECOVERY_GATE_STATE.PUBLICATION_PENDING);
+    t.equal(gate.publicationPending, true);
+    t.equal(gate.prioritySpreadPending, false);
+    t.same(gate.reasonCodes, [
+      CONTROL_PLANE_PRIORITY_RECOVERY_REASON.PUBLICATION_EPOCH_PENDING,
+    ]);
     t.end();
   });
 

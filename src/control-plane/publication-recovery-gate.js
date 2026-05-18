@@ -33,6 +33,11 @@ const PUBLICATION_PRIORITY_SPREAD_DECISION_SOURCE = Object.freeze({
   OWNER_EVIDENCE_UNAVAILABLE: 'owner_evidence_unavailable',
   PRIORITY_PARTITION_SUMMARY: 'priority_partition_summary',
 });
+const PUBLICATION_PRIORITY_SPREAD_AUTHORITATIVE_DECISION_SOURCE_SET =
+  Object.freeze(new Set([
+    PUBLICATION_PRIORITY_SPREAD_DECISION_SOURCE.CLOSURE_WITNESS,
+    PUBLICATION_PRIORITY_SPREAD_DECISION_SOURCE.PRIORITY_PARTITION_SUMMARY,
+  ]));
 
 const PUBLICATION_RECOVERY_GATE_STATE = Object.freeze({
   UNPUBLISHED_OBSERVATION: 'unpublished_observation',
@@ -268,6 +273,27 @@ function resolvePublicationOwnerStreamNodeIds(value, fallbackValue) {
     fallbackValue;
 }
 
+function hasAuthoritativePrioritySpreadDecision(options = {}) {
+  return PUBLICATION_PRIORITY_SPREAD_AUTHORITATIVE_DECISION_SOURCE_SET.has(
+    options.prioritySpreadDecisionSource,
+  );
+}
+
+function resolvePublicationStreamPrioritySpreadPending(
+  publicationOwnerStream,
+  options = {},
+) {
+  return hasAuthoritativePrioritySpreadDecision(options) &&
+    typeof options.prioritySpreadPending === TYPEOF.BOOLEAN ?
+    options.prioritySpreadPending :
+    typeof publicationOwnerStream?.prioritySpreadPending === TYPEOF.BOOLEAN ?
+      publicationOwnerStream.prioritySpreadPending :
+      publicationOwnerStream?.recoveryOutcome ===
+        PUBLICATION_OWNER_RECOVERY_OUTCOME.RECOVERING ?
+        true :
+        options.prioritySpreadPending;
+}
+
 function resolvePendingAckNodeIds(requiredAckNodeIds = [], acknowledgedNodeIds = []) {
   const acknowledgedNodeIdSet = new Set(acknowledgedNodeIds);
   return Object.freeze(
@@ -456,12 +482,10 @@ function buildPublicationStreamCompatibilityEvidence(options = {}) {
         missingPublishedNodeIds.length :
         options.missingPublishedCount;
   const prioritySpreadPending =
-    typeof publicationOwnerStream?.prioritySpreadPending === TYPEOF.BOOLEAN ?
-      publicationOwnerStream.prioritySpreadPending :
-      publicationOwnerStream?.recoveryOutcome ===
-        PUBLICATION_OWNER_RECOVERY_OUTCOME.RECOVERING ?
-        true :
-        options.prioritySpreadPending;
+    resolvePublicationStreamPrioritySpreadPending(
+      publicationOwnerStream,
+      options,
+    );
   const prioritySpreadEvidenceUnavailable =
     typeof publicationOwnerStream?.prioritySpreadEvidenceUnavailable ===
       TYPEOF.BOOLEAN ?
@@ -543,7 +567,7 @@ function resolvePriorityClosureWitnessSummaryState(
 ) {
   const summarySpreadPending =
     durablePriorityPartitionSummary ?
-      hasPriorityRecoverySpreadGap(durablePriorityPartitionSummary) :
+      resolvePrioritySpreadPendingFromSummary(durablePriorityPartitionSummary) :
       null;
   const closureWitnessSatisfied =
     priorityRecoveryClosureWitness?.prioritySpreadPending === false;
@@ -593,6 +617,38 @@ function normalizePriorityClosureWitnessForDurableSummary(
       ) || durablePriorityPartitionSummary,
     summarySpreadPending: false,
   });
+}
+
+function hasPrioritySpreadMetricEvidence(priorityPartitionSummary = null) {
+  return Number.isFinite(Number(priorityPartitionSummary?.blockedPartitionCount)) ||
+    Number.isFinite(Number(priorityPartitionSummary?.largestSpreadGap)) ||
+    Number.isFinite(Number(priorityPartitionSummary?.totalSpreadGap));
+}
+
+function hasZeroPrioritySpreadGapSummary(priorityPartitionSummary = null) {
+  const missingPartitionIds = normalizeDistinctStringArray(
+    priorityPartitionSummary?.missingPartitionIds,
+  );
+  const blockedPartitions = Array.isArray(
+    priorityPartitionSummary?.blockedPartitions,
+  ) ?
+    priorityPartitionSummary.blockedPartitions :
+    [];
+  return hasPrioritySpreadMetricEvidence(priorityPartitionSummary) &&
+    missingPartitionIds.length === NUM.ZERO &&
+    blockedPartitions.length === NUM.ZERO &&
+    normalizeNonNegativeInteger(priorityPartitionSummary?.blockedPartitionCount) ===
+      NUM.ZERO &&
+    normalizeNonNegativeInteger(priorityPartitionSummary?.largestSpreadGap) ===
+      NUM.ZERO &&
+    normalizeNonNegativeInteger(priorityPartitionSummary?.totalSpreadGap) ===
+      NUM.ZERO;
+}
+
+function resolvePrioritySpreadPendingFromSummary(priorityPartitionSummary = null) {
+  return hasZeroPrioritySpreadGapSummary(priorityPartitionSummary) ?
+    false :
+    hasPriorityRecoverySpreadGap(priorityPartitionSummary);
 }
 
 function requiresPrioritySpreadOwnerEvidence(options = {}) {
@@ -652,7 +708,9 @@ function buildPrioritySpreadDecision(options = {}) {
       null;
   const summaryPrioritySpreadPending =
     priorityPartitionSummary ?
-      hasPriorityRecoverySpreadGap(priorityPartitionSummary) :
+      hasZeroPrioritySpreadGapSummary(priorityPartitionSummary) ?
+        false :
+        hasPriorityRecoverySpreadGap(priorityPartitionSummary) :
       null;
   const prioritySpreadEvidenceUnavailable =
     !priorityRecoveryClosureWitness &&
@@ -883,6 +941,7 @@ function buildPublicationRecoveryGateSnapshot(options = {}) {
         }),
         prioritySpreadPending,
         prioritySpreadEvidenceUnavailable,
+        prioritySpreadDecisionSource: prioritySpreadDecision.decisionSource,
       }) :
       Object.freeze({
         publicationEpoch:

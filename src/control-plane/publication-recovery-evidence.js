@@ -1667,6 +1667,15 @@ function samePriorityRecoveryObservationContract(
     );
 }
 
+function resolveCanonicalPublicationPrioritySpreadPending({
+  publicationConvergenceGate = null,
+  priorityRecoveryObservation = null,
+} = {}) {
+  return isRecord(publicationConvergenceGate) ?
+    publicationConvergenceGate.prioritySpreadPending === true :
+    priorityRecoveryObservation?.prioritySpreadPending === true;
+}
+
 function buildCanonicalPublicationConvergence(options = {}) {
   const rawPublicationConvergence = isRecord(options.publicationConvergence) ?
     options.publicationConvergence :
@@ -1982,6 +1991,11 @@ function buildCanonicalPublicationConvergence(options = {}) {
   ) ?
     priorityRecoveryObservation.priorityRecoveryCurrentSummary :
     null;
+  const canonicalPrioritySpreadPending =
+    resolveCanonicalPublicationPrioritySpreadPending({
+      publicationConvergenceGate,
+      priorityRecoveryObservation,
+    });
   const canonicalPriorityRecoveryReasonCodes = normalizeDistinctStringArray(
     publicationConvergenceGate?.reasonCodes ?? priorityRecoveryReasonCodes,
   );
@@ -2014,9 +2028,7 @@ function buildCanonicalPublicationConvergence(options = {}) {
       missingPublishedNodeIds,
       missingPublishedCount,
       priorityRecoveryReasonCodes: canonicalPriorityRecoveryReasonCodes,
-      prioritySpreadPending:
-        priorityRecoveryObservation?.prioritySpreadPending === true ||
-        publicationConvergenceGate?.prioritySpreadPending === true,
+      prioritySpreadPending: canonicalPrioritySpreadPending,
       publicationPendingHint:
         publicationConvergenceGate?.publicationPending === true ||
         priorityRecoveryObservation?.publicationPending === true,
@@ -2061,9 +2073,7 @@ function buildCanonicalPublicationConvergence(options = {}) {
     freshnessFence: publicationOwnerStream.freshnessFence,
     recoveryOutcome: publicationOwnerStream.recoveryOutcome,
     publicationPending,
-    prioritySpreadPending:
-      priorityRecoveryObservation?.prioritySpreadPending === true ||
-      publicationConvergenceGate?.prioritySpreadPending === true,
+    prioritySpreadPending: canonicalPrioritySpreadPending,
     ...(priorityRecoveryCurrentSummary ?
       {priorityRecoveryCurrentSummary} :
       {}),

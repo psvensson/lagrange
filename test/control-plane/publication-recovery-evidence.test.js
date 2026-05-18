@@ -100,6 +100,12 @@ const TEST_STALE_PRIORITY_PARTITION_SUMMARY = Object.freeze({
   largestSpreadGap: 1,
   totalSpreadGap: 1,
 });
+const TEST_ZERO_GAP_PRIORITY_PARTITION_SUMMARY = Object.freeze({
+  satisfied: false,
+  blockedPartitionCount: TEST_EMPTY_PUBLICATION_DEBT_COUNT,
+  largestSpreadGap: TEST_EMPTY_PUBLICATION_DEBT_COUNT,
+  totalSpreadGap: TEST_EMPTY_PUBLICATION_DEBT_COUNT,
+});
 const TEST_SATISFIED_PRIORITY_PARTITION_SUMMARY = Object.freeze({
   satisfied: true,
   requiredDistinctNodeCount: 3,
@@ -1071,6 +1077,45 @@ test('buildCanonicalPublicationRecoveryEvidence filters stale presentation-only 
     );
     t.equal(evidence.publicationConvergenceGate.pendingAckCount, 0);
     t.equal(evidence.publicationConvergence.pendingAckCount, 0);
+    t.end();
+  });
+
+test('buildCanonicalPublicationRecoveryEvidence closes zero-gap stale priority spread on open publication',
+  (t) => {
+    const evidence = buildCanonicalPublicationRecoveryEvidence({
+      publicationConvergence: {
+        publicationEpoch: TEST_PUBLICATION_EPOCH,
+        publicationStatus: CONTROL_PLANE_PUBLICATION_STATUS.OPEN,
+        recoveryProtocolState: RECOVERY_PROTOCOL_STATE.PUBLICATION_PENDING,
+        pendingAckNodeIds: TEST_EMPTY_NODE_IDS,
+        pendingAckCount: TEST_EMPTY_PUBLICATION_DEBT_COUNT,
+        missingPublishedNodeIds: [TEST_NODE_ID.SECOND],
+        missingPublishedCount: TEST_PUBLICATION_DEBT_COUNT,
+        priorityRecoveryReasonCodes: [
+          TEST_PUBLICATION_PENDING_REASON_CODE,
+          TEST_STALE_REASON_CODE,
+        ],
+        prioritySpreadPending: true,
+        priorityPartitionSummary: TEST_ZERO_GAP_PRIORITY_PARTITION_SUMMARY,
+      },
+    });
+
+    t.equal(evidence.publicationConvergenceGate.prioritySpreadPending, false);
+    t.same(evidence.publicationConvergenceGate.reasonCodes, [
+      TEST_PUBLICATION_PENDING_REASON_CODE,
+    ]);
+    t.equal(evidence.publicationConvergence.prioritySpreadPending, false);
+    t.same(evidence.publicationConvergence.priorityRecoveryReasonCodes, [
+      TEST_PUBLICATION_PENDING_REASON_CODE,
+    ]);
+    t.equal(
+      evidence.publicationConvergence.streamOutcome,
+      PUBLICATION_OWNER_STREAM_OUTCOME.PUBLISHING,
+    );
+    t.equal(
+      evidence.publicationConvergence.recoveryOutcome,
+      PUBLICATION_OWNER_RECOVERY_OUTCOME.WAITING_FOR_PUBLICATION,
+    );
     t.end();
   });
 
