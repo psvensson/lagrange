@@ -1,9 +1,10 @@
+# Startup Readiness Snapshot Timeout After Fresh Evidence
+
+<!-- work-package
 {
-  "schema": "current-blocker-v1",
-  "generatedBy": "scripts/work-tracker.js",
-  "sprint": "work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md",
-  "package": "work/packages/active-20260518-startup-readiness-snapshot-timeout-after-fresh-evidence.md",
+  "schema": "work-package-v1",
   "status": "active",
+  "opened": "2026-05-18",
   "lane": "scenario-release-gate",
   "scenario": "rolling-restart",
   "artifact": "test-output/reports/rolling-restart-after-active-gate-classification-fresh-20260518T062159Z.report.json",
@@ -63,7 +64,6 @@
     "test/diagnostics/stop-condition-decision.test.js",
     "test/diagnostics/causal-graph-builder.test.js"
   ],
-  "touchedFiles": [],
   "modelFit": {
     "packageClass": "representative-frontier-closure",
     "intendedMinimumModel": "gpt-5.3-codex",
@@ -83,6 +83,19 @@
     "boundary": "startup_support_evidence",
     "dominantReason": "snapshot_timeout",
     "nextAction": "Run review/fix/implementation subagents, then prove whether selectedSnapshotError snapshot_timeout is inherited active-gate support evidence, a startup readiness support bug, or a migration back to startup_active_gate_owner / snapshot_coverage."
+  },
+  "ownerBoundaryMigrationProof": {
+    "fromOwner": "release_gate_owner",
+    "fromBoundary": "representative_evidence",
+    "toOwner": "startup_readiness_owner",
+    "toBoundary": "startup_support_evidence",
+    "reason": "The evidence-only package ran the fresh representative. Canonical causal analysis reports outcome migrate_owner_boundary with stop reason startup_readiness_boundary; readiness_startup_support is retryable with selectedSnapshotError snapshot_timeout while priority residuals are zero.",
+    "evidence": [
+      "work/packages/done-20260518-rolling-restart-fresh-evidence-after-active-gate-classification.md",
+      "npm run work:evidence-summary -- test-output/reports/rolling-restart-after-active-gate-classification-fresh-20260518T062159Z.report.json",
+      "npm run analyze:causal-model -- test-output/reports/rolling-restart-after-active-gate-classification-fresh-20260518T062159Z.report.json",
+      "npm run analyze:owner-files -- startup_readiness_owner startup_support_evidence"
+    ]
   },
   "causalGovernance": {
     "hypothesis": "If startup_readiness_owner / startup_support_evidence owns the migrated residual, selectedSnapshotError snapshot_timeout should reduce to bounded support evidence or explicitly migrate back to startup_active_gate_owner / snapshot_coverage instead of leaving publication_pending as an unqualified runtime target.",
@@ -128,14 +141,108 @@
     ],
     "oscillationCheck": "This package is allowed because fresh evidence changed the active-gate reconcile shape to selectedSnapshotError snapshot_timeout and canonical causal analysis selected startup readiness support.",
     "handoffInvariant": "Publication, operation workflow, startup active-gate runtime, and harness timeout budgets remain frozen unless canonical evidence selects them again."
-  },
-  "architectureDecisionGate": {
-    "status": "not-required",
-    "trigger": "none",
-    "triggerEvidence": [],
-    "choices": [],
-    "selectedChoice": null,
-    "nextAction": "No architecture decision gate is required for this package."
-  },
-  "predecessor": null
+  }
 }
+-->
+
+## Why
+
+Fresh representative evidence after the active-gate classification-only closure
+is red at an earlier startup support point: the runner stalled at
+`active=0/5` and `snapshotCoverage=0/5`, while the selected snapshot source
+timed out on the admin snapshot lane.
+
+This package owns only the migrated
+`startup_readiness_owner / startup_support_evidence` boundary. It must classify
+whether that snapshot timeout is inherited active-gate support evidence, a
+startup readiness support bug, or a migration back to active-gate snapshot
+coverage.
+
+## Scope Basis
+
+Roadmap Phase `0.1 - Internal Coherence`: rolling-restart topology workflow
+stabilization and production guarantees for the AGPL runtime.
+
+## Workflow Lane
+
+- Selected lane: `scenario-release-gate`
+- Why this lane is sufficient: the fresh representative selected a named
+  scenario owner boundary with focused diagnostics candidate files.
+- Escalation trigger to a heavier lane: focused proof cannot classify the
+  snapshot-timeout support edge, or fresh evidence promotes publication,
+  operation workflow, active-gate runtime, or timeout-budget ownership.
+
+## Subagent Sequencing Requirement
+
+Required before implementation because this is a scenario-driven owner-boundary
+package. Run review, fix if needed, and implementation subagents sequentially
+before editing diagnostics or runtime files.
+
+## Subagent Sequencing Ledger
+
+- [ ] Review subagent recorded: pending-before-implementation-starts.
+- [ ] Fix subagent recorded or explicitly not needed: pending-review-result.
+- [ ] Implementation subagent recorded: pending-review-and-fix-clean.
+
+## LLM Tool-First Contract
+
+Before raw JSON, raw logs, broad file search, oversized segment files, or ad hoc `jq`, use the canonical workflow command that owns the question:
+
+1. Package metadata or ledger edits: `npm run work:package:doctor -- --suggest <package>`, `npm run work:package:doctor -- --fix-dry-run <package>`, `npm run work:package:schema`, or `npm run work:package:new -- ...`.
+2. Representative evidence: `npm run work:evidence-summary -- <artifact>` plus any focused extractor for this failure class.
+3. Owner discovery: `npm run analyze:owner-files -- <owner> [boundary]`.
+4. Subagent sequencing: `npm run work:subagent-prompt -- --role <role> --package <package>`.
+5. Large-file cleanup: `npm run work:oversized-next -- --markdown`.
+
+If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which canonical extractor was tried and why it was insufficient.
+
+## Workflow Acceleration Contract
+
+1. Use `npm run work:advance -- --check` before adding more package prose; it combines doctor, subagent-next, and entry/pre-implementation validation.
+2. Keep the durable proof ladder to 3-5 commands by default: one representative/evidence command, one focused extractor or test, and validation. Add static guardrails only when implementation files changed.
+3. If this package only changes package, sprint, tracker, or ledger files, the next pass must run representative evidence, close as classification-only, open a concrete bug package, or present a human gate.
+4. Once an architecture gate has a selected route, do not open another gate unless fresh canonical evidence contradicts the selected route.
+
+## In Scope
+
+1. work/packages/active-20260518-startup-readiness-snapshot-timeout-after-fresh-evidence.md
+2. work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md
+3. work/sprints/current-blocker.md
+4. work/sprints/current-blocker.json
+5. work/model-ledger.jsonl
+6. src/diagnostics/topology-convergence-graph.js
+7. src/diagnostics/failure-class-taxonomy.js
+8. src/diagnostics/causal-graph-builder.js
+9. test/diagnostics/topology-convergence-graph.test.js
+10. test/diagnostics/failure-class-taxonomy.test.js
+11. test/diagnostics/stop-condition-decision.test.js
+12. test/diagnostics/causal-graph-builder.test.js
+
+## Out Of Scope
+
+1. topology_publication_owner/runtime
+2. operation_workflow_owner/runtime
+3. startup_active_gate_owner/runtime
+4. harness-timeout-increase
+
+## Model Fit
+
+- Package class: `representative-frontier-closure`
+- Intended minimum model: `gpt-5.3-codex`
+- Scope shape: `owner-boundary-contraction/current-frontier`
+- Output profile: `medium`
+- Owned files: `work/packages/active-20260518-startup-readiness-snapshot-timeout-after-fresh-evidence.md`, `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md`, `work/sprints/current-blocker.md`, `work/sprints/current-blocker.json`, `work/model-ledger.jsonl`, `src/diagnostics/topology-convergence-graph.js`, `src/diagnostics/failure-class-taxonomy.js`, `src/diagnostics/causal-graph-builder.js`, `test/diagnostics/topology-convergence-graph.test.js`, `test/diagnostics/failure-class-taxonomy.test.js`, `test/diagnostics/stop-condition-decision.test.js`, `test/diagnostics/causal-graph-builder.test.js`
+- Forbidden files: `topology_publication_owner/runtime`, `operation_workflow_owner/runtime`, `startup_active_gate_owner/runtime`, `harness-timeout-increase`
+- Frozen decisions: package scope and lane stay bounded unless explicitly escalated.
+- Escalation triggers: owned files expand beyond this package, runtime ownership changes, or representative scenario evidence changes.
+- Focused proof: `npm run work:evidence-summary -- test-output/reports/rolling-restart-after-active-gate-classification-fresh-20260518T062159Z.report.json`, `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-active-gate-classification-fresh-20260518T062159Z.report.json --explain active_gate_snapshot_coverage`, `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-active-gate-classification-fresh-20260518T062159Z.report.json --handoff-probe`, `npm run analyze:causal-model -- test-output/reports/rolling-restart-after-active-gate-classification-fresh-20260518T062159Z.report.json`, `npm run analyze:owner-files -- startup_readiness_owner startup_support_evidence`, `node --test test/diagnostics/topology-convergence-graph.test.js test/diagnostics/failure-class-taxonomy.test.js test/diagnostics/stop-condition-decision.test.js test/diagnostics/causal-graph-builder.test.js`
+- Model ledger advisory: `escalate`
+
+## Validation
+
+1. npm run work:evidence-summary -- test-output/reports/rolling-restart-after-active-gate-classification-fresh-20260518T062159Z.report.json
+2. npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-active-gate-classification-fresh-20260518T062159Z.report.json --explain active_gate_snapshot_coverage
+3. npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-active-gate-classification-fresh-20260518T062159Z.report.json --handoff-probe
+4. npm run analyze:causal-model -- test-output/reports/rolling-restart-after-active-gate-classification-fresh-20260518T062159Z.report.json
+5. npm run analyze:owner-files -- startup_readiness_owner startup_support_evidence
+6. node --test test/diagnostics/topology-convergence-graph.test.js test/diagnostics/failure-class-taxonomy.test.js test/diagnostics/stop-condition-decision.test.js test/diagnostics/causal-graph-builder.test.js

@@ -3,7 +3,7 @@
 <!-- work-package
 {
   "schema": "work-package-v1",
-  "status": "active",
+  "status": "done",
   "opened": "2026-05-18",
   "lane": "read-review-doc-only",
   "scenario": "rolling-restart",
@@ -12,8 +12,8 @@
   "owner": "release_gate_owner",
   "boundary": "representative_evidence",
   "dominantReason": "fresh_evidence_required",
-  "currentState": "The active-gate owner reconcile slice closed as classification-only without runtime changes. This package owns the next evidence step only: run a fresh rolling-restart representative, then use canonical extractors to select the next owner boundary, green state, or architecture/human route.",
-  "nextAction": "Run a fresh rolling-restart representative after the active-gate classification-only closure, then use canonical extractors to select the next owner boundary or route.",
+  "currentState": "Fresh rolling-restart evidence ran and failed 0/1 at active=0/5 and snapshotCoverage=0/5. Canonical extractors report zero priority residual witnesses, publication_ack_convergence as visible producer context, active_gate_snapshot_coverage deferred with selected_snapshot_source_timeout, and causal outcome migrate_owner_boundary with stop reason startup_readiness_boundary.",
+  "nextAction": "Closed as migrated to work/packages/active-20260518-startup-readiness-snapshot-timeout-after-fresh-evidence.md. Continue there with required review/fix/implementation subagent sequencing before any diagnostics or runtime edit.",
   "proof": [
     "node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-after-active-gate-classification-fresh-20260518T062159Z.report.json --verbose",
     "npm run work:evidence-summary -- test-output/reports/rolling-restart-after-active-gate-classification-fresh-20260518T062159Z.report.json",
@@ -22,7 +22,7 @@
     "npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-after-active-gate-classification-fresh-20260518T062159Z.report.json --markdown"
   ],
   "writeScope": [
-    "work/packages/active-20260518-rolling-restart-fresh-evidence-after-active-gate-classification.md",
+    "work/packages/done-20260518-rolling-restart-fresh-evidence-after-active-gate-classification.md",
     "work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md",
     "work/sprints/current-blocker.md",
     "work/sprints/current-blocker.json",
@@ -41,7 +41,7 @@
     "test/distributed/config/local.json"
   ],
   "commitScope": [
-    "work/packages/active-20260518-rolling-restart-fresh-evidence-after-active-gate-classification.md",
+    "work/packages/done-20260518-rolling-restart-fresh-evidence-after-active-gate-classification.md",
     "work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md",
     "work/sprints/current-blocker.md",
     "work/sprints/current-blocker.json",
@@ -58,21 +58,21 @@
     ]
   },
   "representativeResidual": {
-    "status": "pending-before-rerun",
+    "status": "migrated",
     "scenario": "rolling-restart",
     "artifact": "test-output/reports/rolling-restart-after-active-gate-classification-fresh-20260518T062159Z.report.json",
-    "frontier": "pending-fresh-evidence",
-    "owner": "release_gate_owner",
-    "boundary": "representative_evidence",
-    "dominantReason": "fresh_evidence_required",
-    "nextAction": "Run the fresh representative and classify the resulting owner boundary with canonical extractors."
+    "frontier": "readiness_startup_support",
+    "owner": "startup_readiness_owner",
+    "boundary": "startup_support_evidence",
+    "dominantReason": "snapshot_timeout",
+    "nextAction": "Continue in the startup readiness snapshot-timeout successor selected by fresh causal evidence."
   },
   "causalGovernance": {
     "hypothesis": "After the active-gate owner reconcile edge closed as classification-only without runtime changes, stale evidence must not drive another runtime package. A fresh rolling-restart representative is required before selecting the next owner boundary or route.",
     "stopConditionCheck": "Run the fresh representative artifact through work:evidence-summary, topology handoff probe, `npm run analyze:causal-model -- test-output/reports/rolling-restart-after-active-gate-classification-fresh-20260518T062159Z.report.json`, and priority residual extractors before opening or migrating to any runtime owner package.",
-    "expectedCausalModelChange": "Fresh evidence should either go green, select a concrete owner boundary, preserve the same frontier with new proof, or justify architecture/human escalation.",
-    "representativeOutcome": "pending-before-rerun",
-    "causalDebt": "Publication, operation workflow, rebalancer handoff, and active-gate classifications remain historical context only until the fresh artifact selects a live edge.",
+    "expectedCausalModelChange": "Observed: fresh evidence selected a concrete owner-boundary migration to startup_readiness_owner / startup_support_evidence.",
+    "representativeOutcome": "migrated",
+    "causalDebt": "Publication, operation workflow, rebalancer handoff, and active-gate classifications remain historical context. The successor owns selectedSnapshotError snapshot_timeout support evidence.",
     "crossBoundaryReview": "No runtime review subagent is required for this read/review package; if fresh evidence selects a runtime owner-boundary or scenario gate, open the next package with required subagent sequencing."
   },
   "scenarioCausalClosure": {
@@ -83,23 +83,23 @@
       "active-gate reconcile edge closed as classification-only without runtime edits",
       "fresh representative rerun is required before selecting another runtime owner"
     ],
-    "currentFirstFrontier": "release_gate_owner / representative_evidence owns the pending fresh rolling-restart evidence step; previous artifact showed publication_ack_convergence as visible producer context while handoff selected startup_active_gate_owner / snapshot_coverage.",
+    "currentFirstFrontier": "Fresh evidence still shows publication_ack_convergence as visible producer context, but causal stop migrates to startup_readiness_owner / startup_support_evidence because readiness_startup_support carries selectedSnapshotError snapshot_timeout.",
     "knownDownstreamBlockers": [
       "previous artifact active-gate snapshotCoverageNodeCount was 3 of expectedNodeCount 5",
       "previous artifact publicationActiveGateHandoffPendingReconcileCount was 2",
       "previous artifact runtimePromotionAllowed was false",
       "previous priority residual extraction reported subordinate operation_workflow_owner / rebalancer_handoff witnesses"
     ],
-    "missingCausalEdge": "The next live causal edge is unknown until fresh representative evidence is collected and classified.",
+    "missingCausalEdge": "Resolved for this evidence package: the next package boundary is startup_readiness_owner / startup_support_evidence for selectedSnapshotError snapshot_timeout support evidence.",
     "missingCausalEdgeProbe": "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-active-gate-classification-fresh-20260518T062159Z.report.json --handoff-probe",
-    "boundedProgressProof": "No runtime bounded-progress proof is owned by this package; it only refreshes evidence.",
+    "boundedProgressProof": "No runtime bounded-progress proof is owned by this package; it refreshed evidence and migrated to the startup readiness successor.",
     "boundedProgressProofArtifact": "test-output/reports/rolling-restart-after-active-gate-classification-fresh-20260518T062159Z.report.json",
-    "expectedObservableTransition": "Fresh representative evidence should identify the current first frontier and selected owner path, or show representative green.",
+    "expectedObservableTransition": "Observed: fresh representative evidence identified a startup readiness support-evidence migration target.",
     "maxProgressBound": "one fresh representative run plus canonical extractor classification",
-    "sameFrontierFallback": "If the same active-gate frontier remains, open a new runtime/scenario package from the fresh evidence rather than editing runtime in this package.",
-    "expectedNextFrontier": "unknown until fresh representative evidence is available",
-    "resultClassification": "pending-before-probe",
-    "stopCondition": "continue-local-fix",
+    "sameFrontierFallback": "Not used; this package migrated to a startup readiness successor from fresh evidence.",
+    "expectedNextFrontier": "startup_readiness_owner / startup_support_evidence successor for selectedSnapshotError snapshot_timeout",
+    "resultClassification": "migrated",
+    "stopCondition": "migrate-owner-boundary",
     "recentFrontierHistory": [
       "work/packages/done-20260518-startup-active-gate-snapshot-coverage-after-workflow-advance-classification.md / startup_active_gate_owner / snapshot_coverage / classification-only",
       "work/packages/done-20260518-priority-recovery-operation-workflow-advance-after-handoff-probe.md / operation_workflow_owner / workflow_progress / migrated",
@@ -107,7 +107,10 @@
     ],
     "oscillationCheck": "This package is intentionally read/review only to avoid another stale-evidence runtime patch after repeated publication, operation workflow, and active-gate transitions.",
     "handoffInvariant": "Do not edit runtime or broaden owner scope until fresh canonical evidence selects the next owner boundary."
-  }
+  },
+  "closed": "2026-05-18",
+  "commitAndPushLedgerRequired": true,
+  "successor": "work/packages/active-20260518-startup-readiness-snapshot-timeout-after-fresh-evidence.md"
 }
 -->
 
@@ -149,7 +152,7 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 
 ## In Scope
 
-1. work/packages/active-20260518-rolling-restart-fresh-evidence-after-active-gate-classification.md
+1. work/packages/done-20260518-rolling-restart-fresh-evidence-after-active-gate-classification.md
 2. work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md
 3. work/sprints/current-blocker.md
 4. work/sprints/current-blocker.json
@@ -165,7 +168,7 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 - Intended minimum model: `gpt-5.3-codex-spark`
 - Scope shape: `leaf-slice`
 - Output profile: `medium`
-- Owned files: `work/packages/active-20260518-rolling-restart-fresh-evidence-after-active-gate-classification.md`, `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md`, `work/sprints/current-blocker.md`, `work/sprints/current-blocker.json`, `work/model-ledger.jsonl`
+- Owned files: `work/packages/done-20260518-rolling-restart-fresh-evidence-after-active-gate-classification.md`, `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md`, `work/sprints/current-blocker.md`, `work/sprints/current-blocker.json`, `work/model-ledger.jsonl`
 - Forbidden files: `src`
 - Frozen decisions: package scope and lane stay bounded unless explicitly escalated.
 - Escalation triggers: owned files expand beyond this package, runtime ownership changes, or representative scenario evidence changes.
