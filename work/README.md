@@ -94,12 +94,14 @@ Use the tracker utility for current sprint/package mechanics:
 11. `npm run work:package:new -- --lane <lane> --title <title> --slug <slug>
    --owner <owner> --boundary <boundary> --dominant-reason <reason>
    --next-action <action>` scaffolds a schema-valid work package. The
-   scaffolder pre-fills Model Fit from the lane and model-ledger summary unless
-   explicit Model Fit flags are provided.
+   scaffolder pre-fills Model Fit and Core Logic Brief defaults from the lane
+   and model-ledger summary unless explicit Model Fit flags are provided.
 12. `npm run work:package:route-after-rerun -- --artifact <artifact>
    --successor <active-successor>` combines the post-rerun route handoff with
    the package migration transaction when the successor already exists and is
-   ready to become the active blocker.
+   ready to become the active blocker. It also prints the required refresh
+   sequence: update Sprint Strategy Brief, update Current Edge Card,
+   regenerate `current-blocker.*`, and run pre-implementation validation.
 13. `npm run work:evidence-summary -- <artifact>` prints a compact deterministic
    topology plus causal-model summary for LLM handoff before reading raw logs or
    large harness segment files.
@@ -116,7 +118,10 @@ Use the tracker utility for current sprint/package mechanics:
     package scaffolding commands for deliberate residual splits.
 17. `npm run work:subagent-prompt -- --role review|fix|implementation
     --package work/packages/active-...md` generates bounded role prompts and
-    the ledger-line shape to record after a real subagent returns.
+    the ledger-line shape to record after a real subagent returns. The prompt
+    also tells subagents to append one `## Subagent Progress Ledger` update
+    and one `## Subagent Attempt Ledger` checkpoint after every completed
+    subtask.
 18. `npm run work:oversized-next -- --markdown` turns oversized
     owner-boundary segment files into package-ready extraction candidates so
     file-size debt stays actionable rather than a broad background concern.
@@ -155,9 +160,9 @@ the package explicitly records a heavier audit or architecture reason:
    editing. It prints doctor findings, the next subagent role, and entry plus
    pre-implementation validation in one pass.
 2. Representative reruns are the progress currency for release-gate sprints.
-   After a classification-only package, run fresh representative evidence or
-   close/open the next concrete blocker; do not add another metadata-only
-   refinement package.
+   Classification is an inline gate by default. Create a separate
+   classification package only when the rerun changes owner, boundary, required
+   action, stop condition, tracker truth, or successor selection.
 3. Durable proof ladders default to 3-5 commands. Use
    `npm run work:scenario-route -- <artifact>` to replace separate evidence,
    causal, residual, owner-file, and explain commands when the package is
@@ -173,11 +178,42 @@ the package explicitly records a heavier audit or architecture reason:
 6. Subagents are review gates for runtime owner-boundary and scenario/release
    work. For read/review/doc-only and lightweight maintenance packages, omit
    them unless the package or human explicitly requires them.
+   When subagents are used, the package's `## Subagent Progress Ledger` is the
+   in-flight communication channel: every completed subtask gets one checked
+   update with real agent identity, `evidence: ...`, and either `next: ...` or
+   `blocker: ...`. The `## Subagent Sequencing Ledger` remains the role
+   completion proof. The `## Subagent Attempt Ledger` records every attempt,
+   including interrupted and partial-unvalidated attempts, with `status: ...`,
+   `last checkpoint: ...`, `parent action: ...`, `evidence: ...`, and either
+   `next: ...` or `blocker: ...`. Interrupted or partial-unvalidated attempts
+   must be followed by a checked superseded/discarded/revalidated line before
+   closure.
 7. Use the `diagnostic-classification` lane when the package is driven by a
    representative artifact but edits only diagnostics, diagnostic tests, and
    work-tracker files. This lane keeps causal ledgers and representative
    evidence, but does not require review/fix/implementation subagents unless
    runtime ownership, shared contracts, or scenario behavior can change.
+8. Once canonical owner and boundary are stable and the route is local runtime
+   work, prefer a `runtime-owner-boundary` successor over another
+   classification package.
+
+## Core Logic Brief
+
+Runtime owner-boundary, scenario/release-gate, and causal-escalation packages
+must include a `## Core Logic Brief` before implementation starts. The brief
+records the domain decision, not just the file list:
+
+1. `Canonical outcome`
+2. `Inputs/signals`
+3. `State model or invariant`
+4. `Non-goals and forbidden interpretations`
+5. `Proof mapping`
+6. `Wrong-slice trigger`
+
+Small read/review/doc-only and lightweight maintenance packages may omit the
+brief or record `not-needed: no runtime, scenario, or shared contract decision
+changes`. Subagent prompts include the brief so review and implementation check
+logic and proof against the same package contract.
 
 ## Tool-First LLM Workflow
 
@@ -266,26 +302,43 @@ The package must record:
 2. Fix: `Agent <name> (<agent-id>) fixed <package>` when review found fixes,
    or `not-needed` only when the review result was `clean`.
 3. Implementation: `Agent <name> (<agent-id>) implemented <package>` after the
-   review/fix proof is recorded.
+   review/fix proof is recorded and the parent session has rerun the focused
+   package proof locally with `parent revalidated focused proof: yes`.
 
 Do not use parallel subagents for these roles unless a human explicitly changes
 the package sequencing contract. Parent-session notes, local/manual session
 labels, and arbitrary text without a real agent id do not satisfy required
 roles unless the user explicitly disables subagents for the task.
 
+The package must also record every real subagent attempt in
+`## Subagent Attempt Ledger`. Each checked attempt update names the real agent,
+role, `status: ...`, `last checkpoint: ...`, `parent action: ...`,
+`evidence: ...`, and either `next: ...` or `blocker: ...`. Valid statuses are
+`started`, `running`, `interrupted`, `partial-unvalidated`, `validated`, and
+`superseded`. `interrupted` and `partial-unvalidated` attempts must be followed
+by a checked superseded/discarded/revalidated line before closure.
+
+Worker-reported validation is handoff evidence only. The parent session must
+rerun focused proof locally before committing subagent runtime edits or marking
+implementation complete. If a worker goes silent after a checkpoint or stops
+with edited files and no validation, record the attempt as
+`partial-unvalidated` or `interrupted`, discard or supersede that patch, and do
+not promote the implementation ledger line.
+
 `npm run work:validate -- --entry` validates package shape and contracts while
 subagent proof is still being assigned. `--pre-impl` also requires clean
 review/fix proof for lanes that require subagents but permits the
 implementation entry to remain open. `--closure` is strict: all required
-subagent entries must be checked, real, ordered, and complete before package
-closure.
+subagent entries must be checked, real, ordered, parent-revalidated, and
+complete before package closure.
 
 Legacy active metadata packages without `lane` remain strict. Historical
 `done-...` packages without the ledger remain valid unless they add a ledger
 with open or incomplete required entries. Checked closure entries must contain
 real agent identities; template placeholders such as `<...>`, pending markers
 such as `pending-before-implementation-resumes`, and non-real identities such
-as `current-session`, `parent Codex`, `manual`, `local`, or `session` are
+as `current-session`, `parent Codex`, `manual`, `local`, `session`,
+`Agent Codex Implementation`, `Agent Codex Review`, or `Agent Codex Fix` are
 closure validation failures for packages under the current policy. Before
 closure, a required role may explicitly record `human-waived`,
 `tool-unavailable`, or `blocked-by-environment-policy` with a `reason: ...`
@@ -726,6 +779,100 @@ Required workflow:
 
 Use a sprint file only when several active work packages must be coordinated.
 The sprint file should link packages; it should not replace them.
+
+Active scenario-driven, release-gate, and causal-escalation sprint files must
+keep a `## Sprint Strategy Brief` near the top. The brief records the strategic
+logic for the sprint, separate from package-level implementation detail:
+
+1. `Goal state`
+2. `Current causal thesis`
+3. `Competing hypotheses`
+4. `Confidence and evidence`
+5. `Expected green path`
+6. `Wrong direction signals`
+7. `Next best package`
+8. `Stop or escalate rule`
+
+Update it whenever the selected owner or boundary changes, fresh evidence
+contradicts the thesis, two or three material packages close, or frontier
+oscillation appears. The Current Edge Card records the next tactical edge; the
+Sprint Strategy Brief records why that edge is strategically correct.
+
+## Classification-Only Fast Path
+
+Use the classification-only fast path for packages that prove no implementation
+edit is justified from the current evidence. The metadata must record
+`classification-only` as the representative outcome, scenario result
+classification, or representative residual status.
+
+Fast-path packages keep `writeScope` and `commitScope` to work-tracking,
+handoff, ledger, or documentation files. Runtime, test, script, and report paths
+belong in `candidateRuntimeFiles` until fresh evidence promotes implementation.
+
+Fast-path proof should be two or three canonical commands: representative
+evidence, one focused extractor or probe, and validation or causal-model proof.
+Subagent sequencing and static runtime guardrails are optional until
+implementation write scope is promoted.
+
+Do not create a new classification-only package from the same unchanged
+artifact unless owner/boundary, package class, or stop condition changes. Close
+the package, rerun fresh evidence, or escalate instead.
+
+## Classification Efficiency Contract
+
+Classification is normally a gate inside the predecessor, successor, or sprint
+Current Edge Card. A separate pure classification package is justified only
+when it changes durable routing truth: owner, boundary, required action, stop
+condition, architecture/human gate, tracker truth, or successor package choice.
+
+Pure classification packages must carry `classificationEfficiency` metadata:
+
+1. `defaultMode`: `inline-gate-default` or `separate-package-approved`.
+2. `separatePackageReason`: one of owner/boundary/action changed, runtime
+   promotion blocked, architecture/human stop, tracker-truth change, or
+   successor selection.
+3. `artifactBudget`: `one-artifact`.
+4. `proofCommandBudget`: `two-or-three-canonical-commands`.
+5. `commands`: the capped canonical commands used for the classification.
+6. `decisionRecord`: where the decision is recorded so it is not repeated.
+7. `successorAction`: update current package, record in predecessor/sprint,
+   open runtime owner-boundary work, open tooling work, open causal escalation,
+   present a human gate, or rerun representative evidence.
+8. `runtimePromotionRule`: when stable owner/boundary evidence should move to
+   `runtime-owner-boundary` work.
+
+Subagent sequencing is optional for pure classification packages that have no
+runtime, test, script, or report write scope. Sequencing resumes as soon as
+implementation scope is promoted.
+
+## Post-Rerun Decision Gate
+
+After every representative rerun, route the artifact before creating or
+promoting successor work:
+
+```bash
+npm run work:package:route-after-rerun -- --artifact <artifact> ...
+```
+
+Successor packages must carry `rerunDecision` metadata naming the source
+artifact, route owner, route boundary, route dominant reason, route causal
+outcome, stop mode, next lane, expected representative delta, and required
+refresh commands. The refresh commands must include route-after-rerun, Sprint
+Strategy Brief update, Current Edge Card update, `npm run work:current-blocker
+-- --write`, and `npm run work:validate -- --pre-impl`.
+
+When the route owner and boundary are stable and the causal route is a local
+runtime fix, `rerunDecision.nextLane` should be `runtime-owner-boundary`.
+
+Treat local proof and representative proof as separate proof classes. Focused
+owner tests or diagnostic extractors can justify a bounded local change, but
+only a fresh representative rerun or route-after-rerun result can close the
+representative outcome as green, reduced, migrated, same-frontier,
+architecture-gap, or contradictory.
+
+Same-frontier without concrete metric or shape reduction stops local patching.
+Record an architecture decision gate or human escalation before opening another
+local implementation package.
 
 ## Systemic Sprint Isolation
 

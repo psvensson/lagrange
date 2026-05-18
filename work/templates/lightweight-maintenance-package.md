@@ -51,6 +51,10 @@ Describe the focused maintenance concern.
 - Why this lane is sufficient:
 - Escalate to runtime/scenario lane if:
 
+## Core Logic Brief
+
+- Status: `not-needed` - no runtime, scenario, or shared contract decision changes.
+
 ## Scope
 
 In scope:
@@ -67,6 +71,14 @@ Out of scope:
 
 1. Focused script or test:
 2. `git diff --check -- <files>`
+
+## Subagent Progress Ledger
+
+Optional for this lane unless the package or user explicitly asks for
+subagents. If used, each real subagent appends one checked update after every
+completed subtask.
+
+- [ ] Agent <name> (<agent-id>) <role> subtask complete: state; evidence: command/result/files; next: next step or final handoff.
 
 ## Closure
 

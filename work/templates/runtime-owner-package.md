@@ -55,6 +55,37 @@ Describe the runtime owner-boundary problem.
 - Primary boundary:
 - Escalate to scenario lane if:
 
+## Core Logic Brief
+
+- Canonical outcome:
+- Inputs/signals:
+- State model or invariant:
+- Non-goals and forbidden interpretations:
+- Proof mapping:
+- Wrong-slice trigger:
+
+## Expected Representative Delta
+
+Required when a representative artifact selected this runtime package.
+
+- Baseline artifact:
+- Expected metric, owner, boundary, dominant reason, or route delta:
+- Local proof class:
+- Representative proof class:
+- Stop if unchanged:
+
+## Classification Efficiency
+
+- Default mode: `inline-gate-default`
+- Separate package reason: `not-needed-inline-gate`
+- Artifact budget: `one-artifact`
+- Proof command budget: `two-or-three-canonical-commands`
+- Decision record: classification gate stays inside this runtime package unless
+  owner, boundary, required action, stop condition, or successor choice changes.
+- Successor action: `update-current-package`
+- Runtime promotion rule: this package is already the
+  `runtime-owner-boundary` successor for stable owner/boundary evidence.
+
 ## LLM Tool-First Contract
 
 Before raw JSON, raw logs, broad file search, oversized segment files, or ad hoc
@@ -130,7 +161,29 @@ changes the package.
       Agent <name> (<agent-id>) fixed <package>, or `not-needed` only when
       review result is `clean`.
 - [ ] Implementation subagent recorded:
-      Agent <name> (<agent-id>) implemented <this package>.
+      Agent <name> (<agent-id>) implemented <this package>;
+      parent revalidated focused proof: yes.
+
+## Subagent Progress Ledger
+
+Required with the sequencing ledger. Each real subagent appends one checked
+update after every completed subtask; the Sequencing Ledger remains the
+role-completion proof.
+
+- [ ] Agent <name> (<agent-id>) <role> context loaded: scope and blocker confirmed; evidence: package, sprint, and handoff files read; next: first focused probe.
+- [ ] Agent <name> (<agent-id>) <role> probe complete: state/cause confirmed or contradicted; evidence: command and result; next: edit, validate, or blocker handoff.
+- [ ] Agent <name> (<agent-id>) <role> validation complete: package proof refreshed; evidence: commands and results; next: final handoff or successor action.
+
+## Subagent Attempt Ledger
+
+Required with the sequencing ledger. Every real subagent attempt records the
+latest checkpoint, validation state, parent action, and recovery decision.
+Interrupted or partial-unvalidated attempts must be followed by a checked
+superseded/discarded/revalidated line before closure.
+
+- [ ] Agent <name> (<agent-id>) <role> attempt: status: <started|running|interrupted|partial-unvalidated|validated|superseded>; last checkpoint: context loaded; parent action: pending; evidence: package, sprint, and handoff files read; next: first focused probe.
+- [ ] Agent <name> (<agent-id>) <role> attempt: status: validated; last checkpoint: package proof refreshed; parent action: revalidated; evidence: commands and results; next: final handoff or successor action.
+- [ ] Agent <name> (<agent-id>) <role> recovery: status: superseded; last checkpoint: replaced interrupted or partial-unvalidated attempt; parent action: superseded; evidence: superseding proof; next: continue from clean checkpoint.
 
 ## Validation
 

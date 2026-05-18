@@ -54,6 +54,136 @@ Raw `jq`, raw JSON slicing, or raw-log sampling is a fallback only when the
 canonical extractor is missing or insufficient. Record the tried extractor and
 fallback reason in the package.
 
+## Core Logic Brief Contract
+
+Before package implementation starts, runtime owner-boundary,
+scenario/release-gate, and causal-escalation packages must carry a
+`## Core Logic Brief` section. The brief proves the package author understands
+the domain decision before assigning files or writing code.
+
+Required fields:
+
+1. `Canonical outcome`: the exact owner outcome this package changes or proves.
+2. `Inputs/signals`: the evidence inputs that determine the outcome.
+3. `State model or invariant`: the decision table, state model, or invariant
+   that maps inputs to one outcome.
+4. `Non-goals and forbidden interpretations`: meanings this package must not
+   infer or implement.
+5. `Proof mapping`: how tests, extractors, or scenario proof verify the stated
+   logic.
+6. `Wrong-slice trigger`: the condition that means this package should stop,
+   split, or migrate owner boundary instead of continuing.
+
+Read/review/doc-only and lightweight maintenance packages may omit the section
+or record `not-needed: no runtime, scenario, or shared contract decision
+changes`. Review and implementation subagents must check the brief against the
+actual code path and proof, not just package formatting.
+
+## Sprint Strategy Brief Contract
+
+Active scenario-driven, release-gate, and causal-escalation sprints must keep a
+`## Sprint Strategy Brief` near the top of the sprint file. The brief is the
+holistic sprint-level decision record: it explains why the current work package
+is the next best move, what would prove that direction wrong, and when the
+sprint should stop local patching and escalate.
+
+Required fields:
+
+1. `Goal state`: the concrete scenario or release-gate success condition.
+2. `Current causal thesis`: the best current explanation for why the gate is
+   not green.
+3. `Competing hypotheses`: credible alternate explanations that could redirect
+   the sprint.
+4. `Confidence and evidence`: confidence by hypothesis and the artifacts or
+   probes supporting it.
+5. `Expected green path`: the expected package sequence from current residual
+   to success.
+6. `Wrong direction signals`: evidence that the sprint is following the wrong
+   owner, boundary, or package sequence.
+7. `Next best package`: the next package to open or continue after the current
+   package closes.
+8. `Stop or escalate rule`: the concrete condition that triggers causal,
+   architecture, or human escalation instead of another local runtime patch.
+
+Update the brief when a representative rerun changes the selected owner or
+boundary, after two or three material package closures, when frontier
+oscillation appears, or when focused proof contradicts the current thesis. The
+Current Edge Card stays tactical; the Sprint Strategy Brief stays strategic.
+
+## Classification-Only Fast Path
+
+When a package proves that no runtime, test, script, report, timeout, or
+admission edit is justified, keep it on the classification-only fast path
+instead of running the full implementation ceremony.
+
+The fast path applies only when all are true:
+
+1. Package metadata records `classification-only` as representative outcome,
+   scenario result classification, or representative residual status.
+2. `writeScope` and `commitScope` contain only package, sprint, tracker,
+   ledger, or documentation handoff files.
+3. Possible runtime, test, script, or report files are listed only under
+   `candidateRuntimeFiles`.
+4. Proof is limited to two or three canonical commands: representative evidence,
+   one focused extractor/probe, and validation or causal-model proof.
+
+Under this fast path, subagent sequencing and static runtime guardrails are not
+required. Promotion to any runtime, test, script, or report edit immediately
+returns the package to the normal implementation lane: refresh scope, run
+review/fix/implementation sequencing when the lane requires it, and use the
+full proof ladder.
+
+Do not open another classification-only package from the same unchanged artifact
+unless it changes package class, owner/boundary selection, or stop condition.
+Close, rerun fresh evidence, or escalate instead.
+
+## Classification Efficiency Contract
+
+Classification is an inline gate by default. A separate pure classification
+package is allowed only when it changes owner, boundary, required action, stop
+condition, tracker truth, architecture/human route, or successor selection.
+
+Pure classification packages must carry `classificationEfficiency` metadata:
+default mode, separate-package reason, one-artifact budget,
+two-or-three-command proof budget, capped commands, decision record, successor
+action, and runtime promotion rule.
+
+Subagent sequencing is optional for pure classification packages with no
+runtime, test, script, or report write scope. If implementation paths move into
+`writeScope` or `commitScope`, normal lane proof and subagent sequencing resume.
+
+When canonical owner and boundary are stable and the route is a local runtime
+fix, prefer a `runtime-owner-boundary` successor. In that case
+`rerunDecision.nextLane` must be `runtime-owner-boundary`, not another
+classification package.
+
+## Post-Rerun Decision Contract
+
+After every representative rerun, run
+`npm run work:package:route-after-rerun -- --artifact <artifact> ...` before
+creating or promoting another package. The successor package must record
+`rerunDecision` metadata with the source artifact, route owner, route boundary,
+route dominant reason, route causal outcome, stop mode, next lane, expected
+representative delta, and required refresh commands.
+
+The required refresh commands are:
+
+1. Route-after-rerun command for the fresh artifact.
+2. Update Sprint Strategy Brief.
+3. Update Current Edge Card.
+4. `npm run work:current-blocker -- --write`.
+5. `npm run work:validate -- --pre-impl`.
+
+Before implementation starts, the package must separate focused local proof from
+representative proof. Local proof can justify a bounded patch; only a fresh
+representative rerun or route-after-rerun result can classify
+`representative-green`, `reduced`, `migrated`, `same-frontier`,
+`architecture-gap`, or `contradictory`.
+
+If a rerun is `same-frontier` without a concrete metric or shape reduction,
+stop local patching. Record an architecture decision gate or human escalation
+before opening another local implementation package.
+
 ## Subagent Sequencing By Lane
 
 Use the lightest valid workflow lane from `.kiro/steering/workflow-guidelines.md`.
@@ -94,10 +224,40 @@ checked entries in this format:
    `not-needed` only when the review result is `clean`
 3. `Agent <name> (<agent-id>) implemented <package>`
 
+The implementation entry becomes valid closure proof only after the parent
+session reruns the focused package proof locally and records
+`parent revalidated focused proof: yes`. Worker-reported validation is handoff
+evidence, not promotion authority.
+
 Checked required ledger entries must not contain template placeholders such as
 `<...>`, pending markers such as `pending-before-implementation-resumes`, or
 non-real identities such as `current-session`, `parent Codex`, `manual`,
-`local`, or `session` at closure.
+`local`, `session`, `Agent Codex Implementation`, `Agent Codex Review`, or
+`Agent Codex Fix` at closure.
+
+The package's Subagent Progress Ledger is the in-flight communication channel.
+When subagent sequencing is required, each real subagent must append one
+checked progress update after every completed subtask, not only at final
+handoff. Each checked update must name the real agent, the completed subtask,
+`evidence: ...`, and either `next: ...` or `blocker: ...`. The progress ledger
+explains what happened inside a role; it does not replace the Sequencing
+Ledger's review/fix/implementation proof.
+
+The package's Subagent Attempt Ledger records every real subagent attempt,
+including stopped or failed attempts. Each checked attempt update must name the
+real agent, role, `status: ...`, `last checkpoint: ...`, `parent action: ...`,
+`evidence: ...`, and either `next: ...` or `blocker: ...`. Valid statuses are
+`started`, `running`, `interrupted`, `partial-unvalidated`, `validated`, and
+`superseded`. `interrupted` and `partial-unvalidated` attempts must be followed
+by a checked superseded/discarded/revalidated line before closure. A parent
+session must not commit subagent runtime edits until it reruns the focused
+proof locally.
+
+Watchdog rule: after every completed subtask, a subagent updates Progress and
+Attempt ledgers before continuing. If a worker goes silent after a checkpoint
+or stops with edited files and no validation, the parent records the attempt as
+`partial-unvalidated` or `interrupted`, discards or supersedes that patch, and
+does not promote the implementation ledger line until local proof passes.
 
 Use validation phases deliberately:
 

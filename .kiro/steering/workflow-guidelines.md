@@ -85,6 +85,37 @@ May omit:
 - sub-agent sequencing, unless the work package declares the runtime/scenario
   lane or the user explicitly requires it
 
+## Core Logic Brief Gate
+
+Runtime owner-boundary, scenario/release-gate, and causal-escalation packages
+must carry a `## Core Logic Brief` before implementation starts. This is a
+logic gate, not a prose quota: it prevents procedurally valid packages from
+slicing the wrong behavior or proving the wrong decision.
+
+Required fields:
+
+1. `Canonical outcome`: the exact owner outcome this package changes,
+   preserves, or proves.
+2. `Inputs/signals`: the evidence inputs that decide the outcome.
+3. `State model or invariant`: the state model, decision table, or invariant
+   that maps those inputs to one outcome.
+4. `Non-goals and forbidden interpretations`: meanings, consumers, owner
+   boundaries, or downstream symptoms this package must not treat as authority.
+5. `Proof mapping`: the focused tests, extractors, fixtures, or representative
+   proof that verify the stated logic.
+6. `Wrong-slice trigger`: the concrete signal that should stop, split, or
+   migrate the package instead of continuing locally.
+
+Read/review/doc-only and lightweight maintenance packages may omit the brief or
+record `not-needed: no runtime, scenario, or shared contract decision changes`.
+Diagnostic-classification packages use the brief when they reshape diagnostic
+meaning or scenario routing, and may otherwise record `not-needed`.
+
+Sub-agent review and implementation prompts carry the Core Logic Brief forward.
+Review checks whether the brief matches the selected owner path and proof
+surface. Implementation follows the named state model or invariant rather than
+inventing a parallel decision path.
+
 ### Runtime Owner-Boundary Lane
 
 This lane is required when runtime behavior, shared metadata, control-plane
@@ -94,13 +125,15 @@ runtime consumers can change.
 Required:
 
 1. Active package with one primary owner and boundary.
-2. Shared boundary contract when a shared runtime surface changes.
-3. Static drift ledger before and after implementation.
-4. Focused owner-path tests.
-5. Affected consumer proof for diagnostics, admin, harness, reporting, or
+2. Core Logic Brief naming the canonical outcome, evidence inputs, state model
+   or invariant, proof mapping, and wrong-slice trigger.
+3. Shared boundary contract when a shared runtime surface changes.
+4. Static drift ledger before and after implementation.
+5. Focused owner-path tests.
+6. Affected consumer proof for diagnostics, admin, harness, reporting, or
    status surfaces that consume the changed contract.
-6. Affected-area deep dive before closure.
-7. Sequential sub-agent review/fix/implementation proof unless the user
+7. Affected-area deep dive before closure.
+8. Sequential sub-agent review/fix/implementation proof unless the user
    explicitly disables sub-agents.
 
 Representative scenario proof is required when a scenario artifact drove the
@@ -114,20 +147,23 @@ or release-gate artifact.
 Required:
 
 1. Active package naming current dominant blocker, semantic owner, and boundary.
-2. Sub-agent sequencing ledger before implementation.
-3. Causal governance fields and scenario causal closure ledger.
-4. A compact Current Edge Card near the top of the package that names the
+2. Core Logic Brief tying the selected edge to one canonical owner outcome,
+   evidence inputs, state model or invariant, proof mapping, and wrong-slice
+   trigger.
+3. Sub-agent sequencing ledger before implementation.
+4. Causal governance fields and scenario causal closure ledger.
+5. A compact Current Edge Card near the top of the package that names the
    selected edge, allowed edits, forbidden edits, first proof, and stop modes.
-5. Classification and implementation gates before runtime edits: canonical
+6. Classification and implementation gates before runtime edits: canonical
    extractors must agree on owner/boundary/cause, then the package must name
    exact candidate runtime files and focused proof.
-6. Focused missing-edge probe or replayable fixture before broad reruns or
+7. Focused missing-edge probe or replayable fixture before broad reruns or
    runtime edits. If the selected edge cannot be represented by a focused
    probe, stop as evidence-incomplete or create tooling before patching.
-7. Affected presentation tests when reports, active gates, summaries, or
+8. Affected presentation tests when reports, active gates, summaries, or
    failure bundles consume the changed contract.
-8. Representative scenario or blocker probe after focused proof.
-9. Final classification: representative-green, reduced, same-frontier,
+9. Representative scenario or blocker probe after focused proof.
+10. Final classification: representative-green, reduced, same-frontier,
    migrated, classification-only, architecture-gap, contradictory, or human
    escalation. `Reduced` requires a concrete metric delta; `classification-only`
    must name the accepted bounded/backpressure state and stop reason.
@@ -140,14 +176,15 @@ related local fixes or classification-only reductions.
 Required:
 
 1. Causal-analysis package rather than another symptom patch.
-2. End-to-end phase model.
-3. Cross-entity causal graph.
-4. Budget and timeout accounting.
-5. Invariant review.
-6. Normalized failure-class taxonomy.
-7. Stop conditions for local fix, owner migration, architecture work, or human
+2. Core Logic Brief for the cross-boundary outcome or invariant under review.
+3. End-to-end phase model.
+4. Cross-entity causal graph.
+5. Budget and timeout accounting.
+6. Invariant review.
+7. Normalized failure-class taxonomy.
+8. Stop conditions for local fix, owner migration, architecture work, or human
    escalation.
-8. Sprint Architecture Decision Gate when the sprint may continue local proof,
+9. Sprint Architecture Decision Gate when the sprint may continue local proof,
    migrate owner boundary, classify `architecture-gap`, or route broad
    architecture work.
 
@@ -434,6 +471,122 @@ Required workflow:
 9. Frontier oscillation across related packages starts from a causal-escalation
    package, not another local owner-boundary runtime patch.
 
+## Sprint Strategy Brief
+
+Active scenario-driven, release-gate, and causal-escalation sprints carry a
+compact `## Sprint Strategy Brief` near the top of the sprint file. The brief
+keeps the sprint pointed at a causal explanation instead of a sequence of local
+packages.
+
+Required fields:
+
+1. `Goal state`: concrete green condition or release-gate success state.
+2. `Current causal thesis`: the best current explanation for why the gate is
+   red.
+3. `Competing hypotheses`: plausible alternates that could redirect owner,
+   boundary, or proof sequence.
+4. `Confidence and evidence`: confidence by hypothesis and the artifacts,
+   focused probes, or extractor outputs behind it.
+5. `Expected green path`: expected package sequence from current residual to
+   representative success.
+6. `Wrong direction signals`: evidence that the sprint is patching the wrong
+   owner, chasing a downstream consumer, or widening scope to hide the blocker.
+7. `Next best package`: the next package to continue or activate after the
+   current package closes.
+8. `Stop or escalate rule`: the concrete condition that opens causal,
+   architecture, or human escalation instead of another local runtime patch.
+
+Update the brief when selected owner or boundary changes, fresh evidence
+contradicts the thesis, two or three material packages close, or frontier
+oscillation appears. The Current Edge Card is the tactical next edge; the Sprint
+Strategy Brief is the strategic map for the whole sprint.
+
+## Classification-Only Fast Path
+
+Classification-only packages are evidence closure, not implementation. Use the
+fast path when the package records `classification-only` as representative
+outcome, scenario result classification, or representative residual status and
+does not own runtime, test, script, or report write scope.
+
+Fast-path rules:
+
+1. Keep `writeScope` and `commitScope` to package, sprint, tracker, ledger, or
+   documentation handoff files.
+2. Put possible runtime, test, script, and report files in
+   `candidateRuntimeFiles` only.
+3. Use two or three canonical proof commands: representative evidence, one
+   focused extractor/probe, and validation or causal-model proof.
+4. Subagent sequencing and static runtime guardrails are optional while no
+   implementation write scope exists.
+5. Promotion to runtime, test, script, or report edits exits the fast path and
+   requires normal lane proof, including subagent sequencing when the lane
+   requires it.
+6. Do not create another classification-only package from the same unchanged
+   artifact unless owner/boundary, package class, or stop condition changes.
+   Close, rerun fresh evidence, or escalate.
+
+## Classification Efficiency Contract
+
+Classification is an inline gate by default. Record the decision in the
+predecessor, successor, or sprint Current Edge Card unless the classification
+changes durable route truth.
+
+Create a separate pure classification package only when at least one is true:
+
+1. owner, boundary, or required action changed
+2. runtime promotion is blocked until a route is selected
+3. the result is architecture-gap or human escalation
+4. sprint/current-blocker truth would otherwise become misleading
+5. the classification creates a concrete successor package
+
+Pure classification packages carry `classificationEfficiency` metadata with
+the default mode, separate-package reason, one-artifact budget,
+two-or-three-command proof budget, capped commands, decision record, successor
+action, and runtime promotion rule.
+
+Subagent sequencing and static runtime guardrails are optional while the pure
+classifier has no runtime, test, script, or report write scope. Promotion to
+implementation scope exits the fast path and restores normal lane proof.
+
+When canonical owner and boundary are stable and the route is a local runtime
+fix, the successor action is `open-runtime-owner-boundary` and
+`rerunDecision.nextLane` is `runtime-owner-boundary`. Do not open another
+classification package from the same unchanged artifact.
+
+## Post-Rerun Decision Gate
+
+Every representative rerun produces a routing decision before more package work
+starts. Run `npm run work:package:route-after-rerun -- --artifact <artifact>
+...` and record the result in successor package metadata as `rerunDecision`.
+
+Required `rerunDecision` fields:
+
+1. `sourceArtifact`
+2. `routeOwner`
+3. `routeBoundary`
+4. `routeDominantReason`
+5. `routeCausalOutcome`
+6. `stopMode`
+7. `nextLane`
+8. `expectedDelta`
+9. `requiredRefreshCommands`
+
+`requiredRefreshCommands` must cite route-after-rerun, Sprint Strategy Brief
+update, Current Edge Card update, current-blocker regeneration, and
+pre-implementation validation. Closure or migration is not complete while the
+active package, sprint brief, Current Edge Card, and generated
+`current-blocker.json` disagree.
+
+Packages must state the expected representative delta before implementation:
+what metric, owner, boundary, dominant reason, or route is expected to change.
+Focused local proof and representative proof are different proof classes. Local
+proof can justify a bounded patch; representative proof requires a fresh rerun
+or route-after-rerun result.
+
+If the rerun is same-frontier with no concrete metric or shape reduction, stop
+local patching and present an architecture decision gate or human escalation
+before another implementation package.
+
 ## LLM Current Edge Card And Trap List
 
 Scenario-driven packages and active sprint snapshots must include a compact
@@ -598,10 +751,35 @@ Review checks:
 Parallel sub-agents are allowed only for independent sidecar questions with
 disjoint owner or file scope. Parent-session notes, local/manual labels, and
 arbitrary text without a real agent id do not satisfy review, fix, or
-implementation roles at closure. Before closure, an implementation environment
+implementation roles at closure. Generic labels such as
+`Agent Codex Implementation`, `Agent Codex Review`, and `Agent Codex Fix` are
+also invalid closure identities. Before closure, an implementation environment
 may record `human-waived`, `tool-unavailable`, or
 `blocked-by-environment-policy` with a `reason: ...` note so unavailable
 delegation is explicit instead of disguised as agent proof.
+
+When sub-agent sequencing is required, the package's Subagent Progress Ledger
+is the in-flight communication channel. Each real sub-agent appends one checked
+update after every completed subtask with real agent identity, the completed
+subtask, `evidence: ...`, and either `next: ...` or `blocker: ...`. The
+progress ledger explains what happened inside each role; the Subagent
+Sequencing Ledger remains the role-completion proof.
+
+The Subagent Attempt Ledger records every real attempt, including stopped or
+failed attempts. Each checked attempt update names the real agent, role,
+`status: ...`, `last checkpoint: ...`, `parent action: ...`, `evidence: ...`,
+and either `next: ...` or `blocker: ...`. Valid statuses are `started`,
+`running`, `interrupted`, `partial-unvalidated`, `validated`, and
+`superseded`. `interrupted` and `partial-unvalidated` attempts must be
+followed by a checked superseded/discarded/revalidated line before closure.
+
+Implementation completion is valid only after the parent session reruns the
+focused package proof locally and records `parent revalidated focused proof:
+yes` in the Sequencing Ledger. Worker-reported validation is handoff evidence,
+not promotion authority. If a worker goes silent after a checkpoint or stops
+with edited files and no validation, record the attempt as
+`partial-unvalidated` or `interrupted`, discard or supersede that patch, and do
+not commit subagent runtime edits until local proof passes.
 
 The main agent remains responsible for integrating findings, deciding whether
 the owner boundary changed, and keeping package status filename-first.

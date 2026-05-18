@@ -118,6 +118,20 @@ Select the lightest valid lane from
 - Why this lane is sufficient:
 - Escalation trigger to a heavier lane:
 
+## Core Logic Brief
+
+Required for runtime owner-boundary, scenario/release-gate, and
+causal-escalation packages before implementation starts. Read/review/doc-only
+and lightweight maintenance packages may record `not-needed: no runtime,
+scenario, or shared contract decision changes`.
+
+- Canonical outcome:
+- Inputs/signals:
+- State model or invariant:
+- Non-goals and forbidden interpretations:
+- Proof mapping:
+- Wrong-slice trigger:
+
 ## Active Sprint Isolation
 
 Required when the package is systemic, governance, architecture-planning,
@@ -183,6 +197,67 @@ Implementation gate:
 - [ ] Forbidden boundaries are listed before broad in-scope implementation
       detail.
 - [ ] Runtime edits wait until the classification gate is satisfied.
+
+## Classification-Only Fast Path
+
+Use only when the package proves no implementation edit is justified.
+
+- Metadata records `classification-only` as representative outcome, scenario
+  result classification, or representative residual status.
+- `writeScope` and `commitScope` contain no runtime, test, script, or report
+  paths.
+- Possible implementation files stay in `candidateRuntimeFiles`.
+- Proof is two or three canonical commands: representative evidence, one
+  focused extractor/probe, and validation or causal-model proof.
+- Subagent sequencing and static runtime guardrails are optional until
+  implementation write scope is promoted.
+- Do not open another classification-only package from the same unchanged
+  artifact unless owner/boundary, package class, or stop condition changes.
+
+## Classification Efficiency
+
+Use when this package is a pure classifier or when classification gates runtime
+promotion.
+
+- Default mode: `inline-gate-default`
+- Separate package reason:
+- Artifact budget: `one-artifact`
+- Proof command budget: `two-or-three-canonical-commands`
+- Commands:
+  1. Representative evidence or route command
+  2. Focused extractor/probe
+  3. Validation or causal-model proof
+- Decision record:
+- Successor action:
+- Runtime promotion rule: stable owner/boundary local-fix routes open a
+  `runtime-owner-boundary` successor; do not open another classifier from the
+  same unchanged artifact.
+
+## Expected Representative Delta
+
+Required before runtime/scenario implementation after representative evidence
+drives the package.
+
+- Baseline artifact:
+- Expected metric, owner, boundary, dominant reason, or route delta:
+- Local proof class:
+- Representative proof class:
+- Stop if unchanged:
+
+## Rerun Decision Gate
+
+Required for successor packages created from a representative rerun.
+
+- Source artifact:
+- Route owner:
+- Route boundary:
+- Route dominant reason:
+- Route causal outcome:
+- Stop mode:
+- Next lane:
+- Required after rerun: route-after-rerun, Sprint Strategy Brief update,
+  Current Edge Card update, `npm run work:current-blocker -- --write`, and
+  `npm run work:validate -- --pre-impl`.
 
 ## Same-Owner Reduction Continuation
 
@@ -403,7 +478,30 @@ must not stand in for review, fix, or implementation subagents.
       when review result is `clean`.
 - [ ] Implementation subagent recorded:
       Agent <name> (<agent-id>) implemented <this package> after
-      review/fix proof was recorded.
+      review/fix proof was recorded; parent revalidated focused proof: yes.
+
+## Subagent Progress Ledger
+
+Required when subagent sequencing is required. Optional otherwise unless the
+package or user asks for subagents. Each real subagent appends one checked
+update after every completed subtask; the Sequencing Ledger remains the
+role-completion proof.
+
+- [ ] Agent <name> (<agent-id>) <role> context loaded: scope and blocker confirmed; evidence: package, sprint, and handoff files read; next: first focused probe.
+- [ ] Agent <name> (<agent-id>) <role> probe complete: state/cause confirmed or contradicted; evidence: command and result; next: edit, validate, or blocker handoff.
+- [ ] Agent <name> (<agent-id>) <role> validation complete: package proof refreshed; evidence: commands and results; next: final handoff or successor action.
+
+## Subagent Attempt Ledger
+
+Required when subagent sequencing is required. Optional otherwise unless the
+package or user asks for subagents. Each real subagent attempt records status,
+last checkpoint, parent action, evidence, and either `next:` or `blocker:`.
+Interrupted or partial-unvalidated attempts must be followed by a checked
+superseded/discarded/revalidated line before closure.
+
+- [ ] Agent <name> (<agent-id>) <role> attempt: status: <started|running|interrupted|partial-unvalidated|validated|superseded>; last checkpoint: context loaded; parent action: pending; evidence: package, sprint, and handoff files read; next: first focused probe.
+- [ ] Agent <name> (<agent-id>) <role> attempt: status: validated; last checkpoint: package proof refreshed; parent action: revalidated; evidence: commands and results; next: final handoff or successor action.
+- [ ] Agent <name> (<agent-id>) <role> recovery: status: superseded; last checkpoint: replaced interrupted or partial-unvalidated attempt; parent action: superseded; evidence: superseding proof; next: continue from clean checkpoint.
 
 ## Commit And Push Ledger
 

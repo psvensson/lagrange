@@ -123,6 +123,7 @@ const SECTION_TOUCHED_FILES = 'Touched Files';
 const SECTION_SCOPE = 'Scope';
 const SECTION_PROOF_LADDER = 'Proof Ladder';
 const SECTION_SUBAGENT_SEQUENCING = 'Subagent Sequencing';
+const SECTION_SUBAGENT_PROGRESS = 'Subagent Progress';
 const SECTION_MODEL_FIT = 'Model Fit';
 const SECTION_REPRESENTATIVE_RESIDUAL = 'Representative Residual';
 const SECTION_CAUSAL_GOVERNANCE = 'Causal Governance';
@@ -134,6 +135,7 @@ const SECTION_USEFUL_COMMANDS = 'Useful Commands';
 const SECTION_WORKTREE = 'Worktree Summary';
 const PACKAGE_SECTION_OUT_OF_SCOPE = 'Out Of Scope';
 const PACKAGE_SECTION_SUBAGENT_LEDGER = 'Subagent Sequencing Ledger';
+const PACKAGE_SECTION_SUBAGENT_PROGRESS_LEDGER = 'Subagent Progress Ledger';
 const PACKAGE_SECTION_MODEL_FIT = 'Model Fit';
 const MESSAGE_CURRENT_BLOCKER_MISSING =
   'No current blocker handoff was found.';
@@ -141,6 +143,8 @@ const MESSAGE_CURRENT_BLOCKER_HINT =
   `Run \`${NPM_RUN_WORK_CURRENT_BLOCKER_COMMAND}\` first.`;
 const MESSAGE_NO_OPEN_CHECKLIST = 'No open checklist items found in package.';
 const MESSAGE_NO_OUT_OF_SCOPE = 'No Out Of Scope section found in package.';
+const MESSAGE_NO_SUBAGENT_PROGRESS =
+  'No Subagent Progress Ledger updates found in package.';
 const MESSAGE_NO_GIT_STATUS = 'No dirty git status entries.';
 const MESSAGE_GIT_STATUS_UNAVAILABLE = 'Git status unavailable.';
 const SUBAGENT_LEDGER_REVIEW_LABEL = 'Review subagent recorded';
@@ -168,7 +172,9 @@ const SUBAGENT_STATUS_IMPLEMENTATION_RECORDED =
 const SUBAGENT_STATUS_STRICT_VALIDATION_FAILED =
   'Subagent Sequencing Ledger strict validation failed; repair the recorded proof before implementation.';
 const SUBAGENT_STATUS_NOT_REQUIRED =
-  'Subagent sequencing not required for this workflow lane.';
+  'Subagent sequencing not required for this workflow lane or classification-only fast path.';
+const SUBAGENT_PROGRESS_CHECKED_ITEM_PATTERN = /^\[[xX]\]\s*/u;
+const SUBAGENT_PROGRESS_ITEM_LIMIT = 3;
 const SUBAGENT_REVIEW_RESULT_CLEAN = 'clean';
 const SUBAGENT_REVIEW_RESULT_FIXES_REQUIRED = 'fixes-required';
 const SUBAGENT_FIX_NOT_NEEDED = 'not-needed';
@@ -1044,6 +1050,20 @@ function buildSubagentSequencingStatus(
   );
 }
 
+function buildSubagentProgressSummary(packageContent = EMPTY_STRING) {
+  const progressItems = extractMarkdownSection(
+    packageContent,
+    PACKAGE_SECTION_SUBAGENT_PROGRESS_LEDGER,
+  )
+    .filter((item) => SUBAGENT_PROGRESS_CHECKED_ITEM_PATTERN.test(item))
+    .map((item) =>
+      item.replace(SUBAGENT_PROGRESS_CHECKED_ITEM_PATTERN, EMPTY_STRING));
+  if (progressItems.length === NUM_ZERO) {
+    return [MESSAGE_NO_SUBAGENT_PROGRESS];
+  }
+  return progressItems.slice(-SUBAGENT_PROGRESS_ITEM_LIMIT);
+}
+
 async function resolvePathPresenceLabel(filePath) {
   if (isGlobPattern(filePath)) {
     return `${filePath} (${PATH_PATTERN})`;
@@ -1499,6 +1519,13 @@ async function buildContextLines(currentBlocker, packageContent) {
   appendSection(lines, SECTION_SUBAGENT_SEQUENCING);
   appendKeyValue(lines, FIELD_LABELS.SUBAGENT_ROLE, subagentStatus.role);
   appendKeyValue(lines, FIELD_LABELS.SUBAGENT_STATUS, subagentStatus.status);
+
+  appendSection(lines, SECTION_SUBAGENT_PROGRESS);
+  appendList(
+    lines,
+    buildSubagentProgressSummary(packageContent || EMPTY_STRING),
+    MESSAGE_NO_SUBAGENT_PROGRESS,
+  );
 
   appendSection(lines, SECTION_MODEL_FIT);
   appendKeyValue(

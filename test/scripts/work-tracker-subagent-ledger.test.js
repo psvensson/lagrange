@@ -4,25 +4,37 @@ import {
   buildCurrentBlockerPayload,
   buildPackageDoctorLines,
   isGeneratedCurrentBlockerPath,
+  metadataHasClassificationOnlyOutcome,
   metadataRequiresSubagentSequencing,
+  metadataUsesClassificationOnlyFastPath,
+  metadataUsesPureClassificationFastPath,
   renderCurrentBlockerMarkdown,
   validateActiveWorkReferences,
   validateCausalGovernanceContract,
+  validateClassificationEfficiencyContract,
   validateCommitAndPushLedger,
+  validateCoreLogicBrief,
   validateCurrentBlockerPayloadFreshness,
   validateCurrentBlockerSnapshot,
   validateFrontierOscillationContract,
   validateModelFitContract,
   validateRepresentativeResidualContract,
+  validateRerunDecisionContract,
   validateScenarioCausalClosureContract,
   validateScenarioFrontierOwnerBoundaryContract,
+  validateSameFrontierStopContract,
+  validateSubagentAttemptLedger,
+  validateSubagentProgressLedger,
   validateSubagentSequencingLedger,
+  validateSprintStrategyBrief,
 } from '../../scripts/work-tracker.js';
 
 const WORK_TRACKER_LEDGER_TEST_FILE = 'work/packages/active-test-package.md';
 const WORK_TRACKER_LEDGER_LOCAL_PATH_TEST_FILE =
   'work/packages/active-20260511-active-gate-local-blocker-frontier.md';
 const WORK_TRACKER_DONE_TEST_FILE = 'work/packages/done-test-package.md';
+const WORK_TRACKER_FUTURE_DONE_TEST_FILE =
+  'work/packages/done-20260519-strict-runtime.md';
 const WORK_TRACKER_CURRENT_BLOCKER_MARKDOWN =
   'work/sprints/current-blocker.md';
 const WORK_TRACKER_ACTIVE_DOCTOR_FILE =
@@ -87,6 +99,114 @@ const SCENARIO_CAUSAL_CLOSURE_VALID_METADATA = Object.freeze({
     resultClassification: 'classification-only',
     stopCondition: 'classification-only-stop',
   }),
+});
+const RERUN_DECISION_VALID_METADATA = Object.freeze({
+  status: WORK_TRACKER_ACTIVE_STATUS,
+  lane: LANE_DIAGNOSTIC_CLASSIFICATION,
+  scenario: 'rolling-restart',
+  artifact: 'test-output/reports/rerun.report.json',
+  owner: 'operation_workflow_owner',
+  boundary: 'workflow_progress',
+  dominantReason: 'owner_reconcile_pending',
+  writeScope: Object.freeze(['work/packages/active-test-package.md']),
+  commitScope: Object.freeze(['work/packages/active-test-package.md']),
+  rerunDecision: Object.freeze({
+    sourceArtifact: 'test-output/reports/rerun.report.json',
+    routeOwner: 'operation_workflow_owner',
+    routeBoundary: 'workflow_progress',
+    routeDominantReason: 'owner_reconcile_pending',
+    routeCausalOutcome: 'continue_local_fix',
+    stopMode: 'classified_local_blocker',
+    nextLane: LANE_DIAGNOSTIC_CLASSIFICATION,
+    expectedDelta:
+      'Classify the selected frontier before runtime promotion.',
+    requiredRefreshCommands: Object.freeze([
+      'npm run work:package:route-after-rerun -- --artifact test-output/reports/rerun.report.json --owner operation_workflow_owner --boundary workflow_progress --dominant-reason owner_reconcile_pending',
+      'Update Sprint Strategy Brief from the route result.',
+      'Update Current Edge Card from the route result.',
+      'npm run work:current-blocker -- --write',
+      'npm run work:validate -- --pre-impl',
+    ]),
+  }),
+});
+const CLASSIFICATION_EFFICIENCY_VALID_METADATA = Object.freeze({
+  classificationEfficiency: Object.freeze({
+    defaultMode: 'separate-package-approved',
+    separatePackageReason: 'successor-selection',
+    artifactBudget: 'one-artifact',
+    proofCommandBudget: 'two-or-three-canonical-commands',
+    commands: Object.freeze([
+      'npm run work:evidence-summary -- test-output/reports/rerun.report.json',
+      'npm run work:scenario-route -- test-output/reports/rerun.report.json',
+      'npm run work:validate -- --pre-impl',
+    ]),
+    decisionRecord:
+      'Record this one classifier result and use the successor for future work.',
+    successorAction: 'open-runtime-owner-boundary',
+    runtimePromotionRule:
+      'Stable owner/boundary local-fix routes open a runtime-owner-boundary successor.',
+  }),
+});
+const CLASSIFICATION_ONLY_FAST_PATH_METADATA = Object.freeze({
+  schema: 'work-package-v1',
+  status: WORK_TRACKER_ACTIVE_STATUS,
+  opened: '2026-05-18',
+  lane: LANE_CAUSAL_ESCALATION,
+  scenario: 'rolling-restart',
+  artifact: 'test-output/reports/classification-only.report.json',
+  playback: 'none',
+  owner: 'operation_workflow_owner',
+  boundary: 'workflow_progress',
+  dominantReason: 'owner_reconcile_pending',
+  currentState: 'Focused proof classifies the edge without runtime edits.',
+  nextAction: 'Close classification-only and rerun representative evidence.',
+  proof: Object.freeze([
+    'npm run work:evidence-summary -- test-output/reports/classification-only.report.json',
+    'npm run analyze:topology-convergence -- test-output/reports/classification-only.report.json --handoff-probe',
+    'npm --silent run analyze:causal-model -- test-output/reports/classification-only.report.json',
+  ]),
+  writeScope: Object.freeze(['work/packages/active-test-package.md']),
+  handoffFiles: Object.freeze([
+    'test-output/reports/classification-only.report.json',
+  ]),
+  generatedFiles: Object.freeze([]),
+  candidateRuntimeFiles: Object.freeze([
+    'src/rebalancer/operation-workflow-owner.js',
+  ]),
+  commitScope: Object.freeze(['work/packages/active-test-package.md']),
+  modelFit: Object.freeze({
+    packageClass: 'representative-frontier-closure',
+    intendedMinimumModel: 'gpt-5.3-codex',
+    scopeShape: 'owner-boundary-contraction/current-frontier',
+    outputProfile: 'medium',
+    escalationTriggers: Object.freeze(['runtime ownership changes']),
+  }),
+  representativeResidual: Object.freeze({
+    status: 'classification-only',
+    scenario: 'rolling-restart',
+    artifact: 'test-output/reports/classification-only.report.json',
+    frontier: 'active_gate_snapshot_coverage',
+    owner: 'operation_workflow_owner',
+    boundary: 'workflow_progress',
+    dominantReason: 'owner_reconcile_pending',
+    nextAction: 'Close classification-only and rerun representative evidence.',
+  }),
+  causalGovernance: CAUSAL_GOVERNANCE_VALID_METADATA.causalGovernance,
+  scenarioCausalClosure:
+    SCENARIO_CAUSAL_CLOSURE_VALID_METADATA.scenarioCausalClosure,
+  classificationEfficiency:
+    CLASSIFICATION_EFFICIENCY_VALID_METADATA.classificationEfficiency,
+});
+const CLASSIFICATION_ONLY_WITH_IMPLEMENTATION_SCOPE_METADATA = Object.freeze({
+  ...CLASSIFICATION_ONLY_FAST_PATH_METADATA,
+  writeScope: Object.freeze([
+    'work/packages/active-test-package.md',
+    'src/rebalancer/operation-workflow-owner.js',
+  ]),
+  commitScope: Object.freeze([
+    'work/packages/active-test-package.md',
+    'src/rebalancer/operation-workflow-owner.js',
+  ]),
 });
 const SCENARIO_CAUSAL_CLOSURE_MISSING_METADATA = Object.freeze({
   status: WORK_TRACKER_ACTIVE_STATUS,
@@ -188,6 +308,63 @@ const MODEL_FIT_VALID_SPARK_SAFE_CONTENT = [
   '',
 ].join('\n');
 const MODEL_FIT_MISSING_CONTENT = '# Test Package\n';
+const CORE_LOGIC_BRIEF_VALID_CONTENT = [
+  '# Test Package',
+  '',
+  '## Core Logic Brief',
+  '',
+  '- Canonical outcome: operation_workflow_owner / workflow_progress emits retry-scheduled.',
+  '- Inputs/signals: operation ledger, rebalancer handoff witness, and focused owner fixture.',
+  '- State model or invariant: one normalized workflow snapshot maps to one state-table outcome.',
+  '- Non-goals and forbidden interpretations: no startup active-gate or publication reinterpretation.',
+  '- Proof mapping: `node --test test/rebalancer/operation-workflow-progress-event-driven-reentry.test.js` proves the invariant.',
+  '- Wrong-slice trigger: stop if owner, boundary, or required action changes.',
+  '',
+].join('\n');
+const CORE_LOGIC_BRIEF_NOT_NEEDED_CONTENT = [
+  '# Test Package',
+  '',
+  '## Core Logic Brief',
+  '',
+  '- Status: `not-needed` - no runtime, scenario, or shared contract decision changes.',
+  '',
+].join('\n');
+const CORE_LOGIC_BRIEF_INCOMPLETE_CONTENT = [
+  '# Test Package',
+  '',
+  '## Core Logic Brief',
+  '',
+  '- Canonical outcome: <outcome>',
+  '- Inputs/signals: todo',
+  '- State model or invariant: unknown',
+  '',
+].join('\n');
+const SPRINT_STRATEGY_BRIEF_VALID_CONTENT = [
+  '# Test Sprint',
+  '',
+  '## Sprint Strategy Brief',
+  '',
+  '- Goal state: representative gate is green without timeout or admission relaxation.',
+  '- Current causal thesis: owner reconcile backpressure is the selected frontier.',
+  '- Competing hypotheses: H1 owner reconcile remains first; H2 diagnostics lag the proof.',
+  '- Confidence and evidence: medium-high from focused handoff probe and current blocker.',
+  '- Expected green path: close classification package, rerun representative, then activate the selected owner.',
+  '- Wrong direction signals: the frontier reselects a frozen owner or metrics do not reduce.',
+  '- Next best package: open active-gate owner reconcile only after canonical extractors select it.',
+  '- Stop or escalate rule: open causal escalation if two related owners alternate again.',
+  '',
+].join('\n');
+const SPRINT_STRATEGY_BRIEF_INCOMPLETE_CONTENT = [
+  '# Test Sprint',
+  '',
+  '## Sprint Strategy Brief',
+  '',
+  '- Goal state: <goal>',
+  '- Current causal thesis: todo',
+  '- Competing hypotheses: H1 something remains possible.',
+  '- Confidence and evidence: unknown',
+  '',
+].join('\n');
 const MODEL_FIT_INCOMPLETE_SPARK_SAFE_CONTENT = [
   '# Test Package',
   '',
@@ -230,7 +407,113 @@ const WORK_TRACKER_LEDGER_CLEAN_CONTENT = [
   '- [x] Fix subagent recorded or explicitly not needed: `not-needed`.',
   '- [x] Implementation subagent recorded:',
   `      Agent Implement (${IMPLEMENTATION_AGENT_ID}) implemented`,
+  '      `work/packages/active-test-package.md`; parent revalidated focused proof: yes.',
+  '',
+].join('\n');
+const WORK_TRACKER_LEDGER_UNVALIDATED_IMPLEMENTATION_CONTENT = [
+  '# Test Package',
+  '',
+  '## Subagent Sequencing Ledger',
+  '',
+  '- [x] Review subagent recorded:',
+  `      Agent Review (${REVIEW_AGENT_ID}) reviewed`,
+  '      `work/packages/done-test-package.md`; result `clean`.',
+  '- [x] Fix subagent recorded or explicitly not needed: `not-needed`.',
+  '- [x] Implementation subagent recorded:',
+  `      Agent Implement (${IMPLEMENTATION_AGENT_ID}) implemented`,
   '      `work/packages/active-test-package.md`.',
+  '',
+].join('\n');
+const WORK_TRACKER_PROGRESS_LEDGER_CLEAN_CONTENT = [
+  '# Test Package',
+  '',
+  '## Subagent Progress Ledger',
+  '',
+  '- [x] Agent Review (' + REVIEW_AGENT_ID + ') review context loaded: scope confirmed; evidence: package and sprint files read; next: predecessor consistency check.',
+  '- [x] Agent Implement (' + IMPLEMENTATION_AGENT_ID + ') implementation validation complete: focused proof passed; evidence: node --test test/example.test.js; next: final handoff.',
+  '',
+].join('\n');
+const WORK_TRACKER_PROGRESS_LEDGER_OPEN_CONTENT = [
+  '# Test Package',
+  '',
+  '## Subagent Progress Ledger',
+  '',
+  '- [ ] Agent Review (<agent-id>) review context loaded: scope confirmed; evidence: package and sprint files read; next: predecessor consistency check.',
+  '',
+].join('\n');
+const WORK_TRACKER_PROGRESS_LEDGER_BAD_CONTENT = [
+  '# Test Package',
+  '',
+  '## Subagent Progress Ledger',
+  '',
+  '- [x] Agent local session (' + REVIEW_AGENT_ID + ') review context loaded: scope confirmed.',
+  '',
+].join('\n');
+const WORK_TRACKER_PROGRESS_LEDGER_NOT_NEEDED_CONTENT = [
+  '# Test Package',
+  '',
+  '## Subagent Progress Ledger',
+  '',
+  '- [x] not-needed implementation update: skipped; evidence: none; next: closure.',
+  '',
+].join('\n');
+const WORK_TRACKER_ATTEMPT_LEDGER_CLEAN_CONTENT = [
+  '# Test Package',
+  '',
+  '## Subagent Attempt Ledger',
+  '',
+  '- [x] Agent Review (' + REVIEW_AGENT_ID + ') review attempt: status: validated; last checkpoint: review complete; parent action: accepted; evidence: package proof read; next: fix role.',
+  '- [x] Agent Implement (' + IMPLEMENTATION_AGENT_ID + ') implementation attempt: status: validated; last checkpoint: focused proof passed; parent action: revalidated; evidence: npm test -- test/example.test.js; next: closure.',
+  '',
+].join('\n');
+const WORK_TRACKER_ATTEMPT_LEDGER_PARTIAL_CONTENT = [
+  '# Test Package',
+  '',
+  '## Subagent Attempt Ledger',
+  '',
+  '- [x] Agent Implement (' + IMPLEMENTATION_AGENT_ID + ') implementation attempt: status: partial-unvalidated; last checkpoint: patch edited without proof; parent action: pending; evidence: files changed; blocker: validation did not run.',
+  '',
+].join('\n');
+const WORK_TRACKER_ATTEMPT_LEDGER_SUPERSEDED_CONTENT = [
+  '# Test Package',
+  '',
+  '## Subagent Attempt Ledger',
+  '',
+  '- [x] Agent Implement (' + IMPLEMENTATION_AGENT_ID + ') implementation attempt: status: partial-unvalidated; last checkpoint: patch edited without proof; parent action: pending; evidence: files changed; blocker: validation did not run.',
+  '- [x] Agent Recovery (' + FIX_AGENT_ID + ') implementation recovery: status: superseded; last checkpoint: discarded unvalidated patch; parent action: superseded; evidence: parent reran focused proof; next: continue from clean checkpoint.',
+  '',
+].join('\n');
+const WORK_TRACKER_ATTEMPT_LEDGER_GENERIC_IDENTITY_CONTENT = [
+  '# Test Package',
+  '',
+  '## Subagent Attempt Ledger',
+  '',
+  '- [x] Agent Codex Implementation (' + IMPLEMENTATION_AGENT_ID + ') implementation attempt: status: validated; last checkpoint: proof complete; parent action: revalidated; evidence: npm test -- test/example.test.js; next: closure.',
+  '',
+].join('\n');
+const WORK_TRACKER_ATTEMPT_LEDGER_BAD_CONTENT = [
+  '# Test Package',
+  '',
+  '## Subagent Attempt Ledger',
+  '',
+  '- [x] Agent Implement (' + IMPLEMENTATION_AGENT_ID + ') implementation attempt: done.',
+  '',
+].join('\n');
+const WORK_TRACKER_ATTEMPT_LEDGER_OPEN_PARTIAL_CONTENT = [
+  '# Test Package',
+  '',
+  '## Subagent Attempt Ledger',
+  '',
+  '- [ ] Agent Implement (' + IMPLEMENTATION_AGENT_ID + ') implementation attempt: status: partial-unvalidated; last checkpoint: patch edited without proof; parent action: pending; evidence: files changed; blocker: validation did not run.',
+  '- [x] Agent Recovery (' + FIX_AGENT_ID + ') implementation recovery: status: superseded; last checkpoint: discarded unvalidated patch; parent action: superseded; evidence: parent reran focused proof; next: continue from clean checkpoint.',
+  '',
+].join('\n');
+const WORK_TRACKER_ATTEMPT_LEDGER_NOT_NEEDED_CONTENT = [
+  '# Test Package',
+  '',
+  '## Subagent Attempt Ledger',
+  '',
+  '- [x] not-needed implementation attempt: status: validated; last checkpoint: skipped; parent action: accepted; evidence: none; next: closure.',
   '',
 ].join('\n');
 const WORK_TRACKER_LEDGER_FIXES_REQUIRED_CONTENT = [
@@ -246,7 +529,7 @@ const WORK_TRACKER_LEDGER_FIXES_REQUIRED_CONTENT = [
   '      `work/packages/done-test-package.md`.',
   '- [x] Implementation subagent recorded:',
   `      Agent Implement (${IMPLEMENTATION_AGENT_ID}) implemented`,
-  '      `work/packages/active-test-package.md`.',
+  '      `work/packages/active-test-package.md`; parent revalidated focused proof: yes.',
   '',
 ].join('\n');
 const WORK_TRACKER_LEDGER_PRE_IMPL_CONTENT = [
@@ -300,7 +583,7 @@ const WORK_TRACKER_LEDGER_FIRST_PACKAGE_CONTENT = [
   '- [x] Fix subagent recorded or explicitly not needed: `not-needed`.',
   '- [x] Implementation subagent recorded:',
   `      Agent Implement (${IMPLEMENTATION_AGENT_ID}) implemented`,
-  '      `work/packages/active-test-package.md`.',
+  '      `work/packages/active-test-package.md`; parent revalidated focused proof: yes.',
   '',
 ].join('\n');
 const WORK_TRACKER_LEDGER_AMBIGUOUS_REVIEW_NOT_NEEDED_CONTENT = [
@@ -312,7 +595,7 @@ const WORK_TRACKER_LEDGER_AMBIGUOUS_REVIEW_NOT_NEEDED_CONTENT = [
   '- [x] Fix subagent recorded or explicitly not needed: `not-needed`.',
   '- [x] Implementation subagent recorded:',
   `      Agent Implement (${IMPLEMENTATION_AGENT_ID}) implemented`,
-  '      `work/packages/active-test-package.md`.',
+  '      `work/packages/active-test-package.md`; parent revalidated focused proof: yes.',
   '',
 ].join('\n');
 const WORK_TRACKER_LEDGER_NO_AGENT_ID_CONTENT = [
@@ -354,7 +637,7 @@ const WORK_TRACKER_LEDGER_MANUAL_FIX_NOTE_CONTENT = [
   '- [x] Fix subagent recorded or explicitly not needed: `not-needed`.',
   '- [x] Implementation subagent recorded:',
   `      Agent Implement (${IMPLEMENTATION_AGENT_ID}) implemented`,
-  '      `work/packages/active-test-package.md`.',
+  '      `work/packages/active-test-package.md`; parent revalidated focused proof: yes.',
   '',
 ].join('\n');
 const WORK_TRACKER_LEDGER_LOCAL_PATH_CONTENT = [
@@ -368,7 +651,7 @@ const WORK_TRACKER_LEDGER_LOCAL_PATH_CONTENT = [
   '- [x] Fix subagent recorded or explicitly not needed: `not-needed`.',
   '- [x] Implementation subagent recorded:',
   `      Agent Implement (${IMPLEMENTATION_AGENT_ID}) implemented`,
-  '      `work/packages/active-20260511-active-gate-local-blocker-frontier.md`.',
+  '      `work/packages/active-20260511-active-gate-local-blocker-frontier.md`; parent revalidated focused proof: yes.',
   '',
 ].join('\n');
 const WORK_TRACKER_LEDGER_BAD_NOT_NEEDED_CONTENT = [
@@ -382,7 +665,7 @@ const WORK_TRACKER_LEDGER_BAD_NOT_NEEDED_CONTENT = [
   '- [x] Fix subagent recorded or explicitly not needed: `not-needed`.',
   '- [x] Implementation subagent recorded:',
   `      Agent Implement (${IMPLEMENTATION_AGENT_ID}) implemented`,
-  '      `work/packages/active-test-package.md`.',
+  '      `work/packages/active-test-package.md`; parent revalidated focused proof: yes.',
   '',
 ].join('\n');
 const WORK_TRACKER_LEDGER_LEGACY_DONE_CONTENT = [
@@ -496,7 +779,51 @@ const WORK_TRACKER_DOCTOR_CONTENT = [
   '- [x] Fix subagent recorded or explicitly not needed: `not-needed`.',
   '- [x] Implementation subagent recorded:',
   `      Agent Implement (${IMPLEMENTATION_AGENT_ID}) implemented`,
-  `      \`${WORK_TRACKER_ACTIVE_DOCTOR_FILE}\`.`,
+  `      \`${WORK_TRACKER_ACTIVE_DOCTOR_FILE}\`; parent revalidated focused proof: yes.`,
+  '',
+].join('\n');
+const WORK_TRACKER_FUTURE_DONE_STRICT_CONTENT = [
+  '# Strict Runtime Package',
+  '',
+  '<!-- work-package',
+  JSON.stringify({
+    schema: 'work-package-v1',
+    status: WORK_TRACKER_DONE_STATUS,
+    opened: '2026-05-19',
+    lane: LANE_RUNTIME_OWNER_BOUNDARY,
+    scenario: 'rolling-restart',
+    artifact: 'test-output/reports/future-runtime.report.json',
+    playback: 'none',
+    owner: 'operation_workflow_owner',
+    boundary: 'workflow_progress',
+    dominantReason: 'dispatch_pending',
+    currentState: 'Runtime owner package closed after the current subagent policy.',
+    nextAction: 'Validate strict closure proof.',
+    proof: ['npm test -- test/rebalancer/workflow-progress.test.js'],
+    writeScope: ['src/rebalancer/operation-workflow-owner.js'],
+    handoffFiles: [],
+    generatedFiles: [],
+    candidateRuntimeFiles: [],
+    commitScope: ['src/rebalancer/operation-workflow-owner.js'],
+    modelFit: {
+      packageClass: 'runtime-owner-boundary',
+      intendedMinimumModel: 'gpt-5.3-codex',
+      scopeShape: 'owner-boundary-contraction',
+      outputProfile: 'medium',
+      escalationTriggers: ['runtime ownership changes'],
+    },
+  }, null, 2),
+  '-->',
+  '',
+  '## Subagent Sequencing Ledger',
+  '',
+  '- [x] Review subagent recorded:',
+  `      Agent Review (${REVIEW_AGENT_ID}) reviewed`,
+  '      `work/packages/done-test-package.md`; result `clean`.',
+  '- [x] Fix subagent recorded or explicitly not needed: `not-needed`.',
+  '- [x] Implementation subagent recorded:',
+  `      Agent Implement (${IMPLEMENTATION_AGENT_ID}) implemented`,
+  `      \`${WORK_TRACKER_FUTURE_DONE_TEST_FILE}\`.`,
   '',
 ].join('\n');
 const WORK_TRACKER_COMMIT_LEDGER_TEMPLATE_CONTENT = [
@@ -541,6 +868,49 @@ describe('work tracker subagent sequencing ledger validation', () => {
     assert.equal(metadataRequiresSubagentSequencing({}), true);
   });
 
+  it('uses classification-only fast path only without implementation writes', () => {
+    assert.equal(
+      metadataHasClassificationOnlyOutcome(CLASSIFICATION_ONLY_FAST_PATH_METADATA),
+      true,
+    );
+    assert.equal(
+      metadataUsesClassificationOnlyFastPath(
+        CLASSIFICATION_ONLY_FAST_PATH_METADATA,
+      ),
+      true,
+    );
+    assert.equal(
+      metadataUsesPureClassificationFastPath(
+        CLASSIFICATION_ONLY_FAST_PATH_METADATA,
+      ),
+      true,
+    );
+    assert.equal(
+      metadataRequiresSubagentSequencing(
+        CLASSIFICATION_ONLY_FAST_PATH_METADATA,
+      ),
+      false,
+    );
+    assert.equal(
+      metadataUsesClassificationOnlyFastPath(
+        CLASSIFICATION_ONLY_WITH_IMPLEMENTATION_SCOPE_METADATA,
+      ),
+      false,
+    );
+    assert.equal(
+      metadataUsesPureClassificationFastPath(
+        CLASSIFICATION_ONLY_WITH_IMPLEMENTATION_SCOPE_METADATA,
+      ),
+      false,
+    );
+    assert.equal(
+      metadataRequiresSubagentSequencing(
+        CLASSIFICATION_ONLY_WITH_IMPLEMENTATION_SCOPE_METADATA,
+      ),
+      true,
+    );
+  });
+
   it('reports active metadata-bearing packages without the new ledger', () => {
     const errors = validateSubagentSequencingLedger(
       WORK_TRACKER_LEDGER_NO_LEDGER_CONTENT,
@@ -560,6 +930,144 @@ describe('work tracker subagent sequencing ledger validation', () => {
     );
 
     assert.deepEqual(errors, []);
+  });
+
+  it('requires a progress ledger when subagent sequencing is required', () => {
+    const errors = validateSubagentProgressLedger(
+      WORK_TRACKER_LEDGER_NO_LEDGER_CONTENT,
+      WORK_TRACKER_LEDGER_TEST_FILE,
+      {requiresLedger: true},
+    );
+
+    assert.equal(errors.length, 1);
+    assert.match(errors[0], /Subagent Progress Ledger is required/u);
+  });
+
+  it('accepts checked subagent progress updates with evidence and next step', () => {
+    const errors = validateSubagentProgressLedger(
+      WORK_TRACKER_PROGRESS_LEDGER_CLEAN_CONTENT,
+      WORK_TRACKER_LEDGER_TEST_FILE,
+      {requiresLedger: true, requiresStrictEntries: true},
+    );
+
+    assert.deepEqual(errors, []);
+  });
+
+  it('requires completed progress updates before pre-implementation proof', () => {
+    const errors = validateSubagentProgressLedger(
+      WORK_TRACKER_PROGRESS_LEDGER_OPEN_CONTENT,
+      WORK_TRACKER_LEDGER_TEST_FILE,
+      {requiresLedger: true, requiresStrictEntries: true},
+    );
+
+    assert.match(errors.join('\n'), /at least one completed subtask/u);
+  });
+
+  it('reports checked progress updates without durable evidence or next step', () => {
+    const errors = validateSubagentProgressLedger(
+      WORK_TRACKER_PROGRESS_LEDGER_BAD_CONTENT,
+      WORK_TRACKER_LEDGER_TEST_FILE,
+      {requiresLedger: true, requiresStrictEntries: true},
+    );
+
+    assert.match(errors.join('\n'), /non-real agent identity/u);
+    assert.match(errors.join('\n'), /`evidence:`/u);
+    assert.match(errors.join('\n'), /`next:` or `blocker:`/u);
+  });
+
+  it('rejects not-needed progress entries as strict subagent identity proof', () => {
+    const errors = validateSubagentProgressLedger(
+      WORK_TRACKER_PROGRESS_LEDGER_NOT_NEEDED_CONTENT,
+      WORK_TRACKER_LEDGER_TEST_FILE,
+      {requiresLedger: true, requiresStrictEntries: true},
+    );
+
+    assert.match(errors.join('\n'), /Agent <name> \(<agent-id>\)/u);
+  });
+
+  it('requires an attempt ledger when subagent sequencing is required', () => {
+    const errors = validateSubagentAttemptLedger(
+      WORK_TRACKER_LEDGER_NO_LEDGER_CONTENT,
+      WORK_TRACKER_LEDGER_TEST_FILE,
+      {requiresLedger: true},
+    );
+
+    assert.equal(errors.length, 1);
+    assert.match(errors[0], /Subagent Attempt Ledger is required/u);
+  });
+
+  it('accepts checked subagent attempt checkpoints with parent action', () => {
+    const errors = validateSubagentAttemptLedger(
+      WORK_TRACKER_ATTEMPT_LEDGER_CLEAN_CONTENT,
+      WORK_TRACKER_LEDGER_TEST_FILE,
+      {requiresLedger: true, requiresStrictEntries: true},
+    );
+
+    assert.deepEqual(errors, []);
+  });
+
+  it('requires partial-unvalidated attempts to be superseded', () => {
+    const errors = validateSubagentAttemptLedger(
+      WORK_TRACKER_ATTEMPT_LEDGER_PARTIAL_CONTENT,
+      WORK_TRACKER_LEDGER_TEST_FILE,
+      {requiresLedger: true, requiresStrictEntries: true},
+    );
+
+    assert.match(errors.join('\n'), /partial-unvalidated attempt must be followed/u);
+  });
+
+  it('accepts superseded recovery after a partial-unvalidated attempt', () => {
+    const errors = validateSubagentAttemptLedger(
+      WORK_TRACKER_ATTEMPT_LEDGER_SUPERSEDED_CONTENT,
+      WORK_TRACKER_LEDGER_TEST_FILE,
+      {requiresLedger: true, requiresStrictEntries: true},
+    );
+
+    assert.deepEqual(errors, []);
+  });
+
+  it('reports generic Codex role labels in attempt ledger identities', () => {
+    const errors = validateSubagentAttemptLedger(
+      WORK_TRACKER_ATTEMPT_LEDGER_GENERIC_IDENTITY_CONTENT,
+      WORK_TRACKER_LEDGER_TEST_FILE,
+      {requiresLedger: true, requiresStrictEntries: true},
+    );
+
+    assert.match(errors.join('\n'), /non-real agent identity/u);
+  });
+
+  it('reports checked attempt entries without checkpoint proof fields', () => {
+    const errors = validateSubagentAttemptLedger(
+      WORK_TRACKER_ATTEMPT_LEDGER_BAD_CONTENT,
+      WORK_TRACKER_LEDGER_TEST_FILE,
+      {requiresLedger: true, requiresStrictEntries: true},
+    );
+
+    assert.match(errors.join('\n'), /status/u);
+    assert.match(errors.join('\n'), /last checkpoint/u);
+    assert.match(errors.join('\n'), /parent action/u);
+    assert.match(errors.join('\n'), /`evidence:`/u);
+    assert.match(errors.join('\n'), /`next:` or `blocker:`/u);
+  });
+
+  it('rejects open attempt items at closure validation', () => {
+    const errors = validateSubagentAttemptLedger(
+      WORK_TRACKER_ATTEMPT_LEDGER_OPEN_PARTIAL_CONTENT,
+      WORK_TRACKER_LEDGER_TEST_FILE,
+      {requiresLedger: true, requiresStrictEntries: true},
+    );
+
+    assert.match(errors.join('\n'), /Subagent Attempt Ledger has open items/u);
+  });
+
+  it('rejects not-needed attempt entries as strict subagent identity proof', () => {
+    const errors = validateSubagentAttemptLedger(
+      WORK_TRACKER_ATTEMPT_LEDGER_NOT_NEEDED_CONTENT,
+      WORK_TRACKER_LEDGER_TEST_FILE,
+      {requiresLedger: true, requiresStrictEntries: true},
+    );
+
+    assert.match(errors.join('\n'), /Agent <name> \(<agent-id>\)/u);
   });
 
   it('reports open and unchecked required ledger items', () => {
@@ -595,6 +1103,19 @@ describe('work tracker subagent sequencing ledger validation', () => {
     );
 
     assert.deepEqual(errors, []);
+  });
+
+  it('rejects implementation completion before parent revalidation proof', () => {
+    const errors = validateSubagentSequencingLedger(
+      WORK_TRACKER_LEDGER_UNVALIDATED_IMPLEMENTATION_CONTENT,
+      WORK_TRACKER_LEDGER_TEST_FILE,
+      {requiresLedger: true, requiresStrictEntries: true},
+    );
+
+    assert.match(
+      errors.join('\n'),
+      /parent revalidated focused proof: yes/u,
+    );
   });
 
   it('accepts a fixes-required review with a separate real fix agent', () => {
@@ -787,6 +1308,20 @@ describe('work tracker package doctor', () => {
     assert.match(rendered, /Validation: ok/u);
   });
 
+  it('requires strict subagent closure proof for future closed runtime packages',
+    () => {
+      const report = buildPackageDoctorLines(
+        WORK_TRACKER_FUTURE_DONE_TEST_FILE,
+        WORK_TRACKER_FUTURE_DONE_STRICT_CONTENT,
+        {phase: 'closure'},
+      );
+      const rendered = report.lines.join('\n');
+
+      assert.match(rendered, /parent revalidated focused proof: yes/u);
+      assert.match(rendered, /Subagent Progress Ledger is required/u);
+      assert.match(rendered, /Subagent Attempt Ledger is required/u);
+    });
+
   it('prints acceleration guidance for admin-heavy packages', () => {
     const content = [
       '# Admin Package',
@@ -851,6 +1386,55 @@ describe('work tracker package doctor', () => {
     assert.match(rendered, /## Process Guidance/u);
     assert.match(rendered, /Proof ladder is heavy/u);
     assert.match(rendered, /Admin stop applies/u);
+  });
+
+  it('allows classification-only fast path without subagent ledger', () => {
+    const content = [
+      '# Classification Only Package',
+      '',
+      '<!-- work-package',
+      JSON.stringify(CLASSIFICATION_ONLY_FAST_PATH_METADATA, null, 2),
+      '-->',
+      '',
+      CORE_LOGIC_BRIEF_VALID_CONTENT.split('\n').slice(2).join('\n'),
+      MODEL_FIT_VALID_SPARK_SAFE_CONTENT.split('\n').slice(2).join('\n'),
+    ].join('\n');
+    const report = buildPackageDoctorLines(
+      WORK_TRACKER_LEDGER_TEST_FILE,
+      content,
+    );
+    const rendered = report.lines.join('\n');
+
+    assert.deepEqual(report.errors, []);
+    assert.match(rendered, /Classification-only fast path: yes/u);
+    assert.match(rendered, /Classification-only proof ladder is compact/u);
+    assert.match(rendered, /subagent sequencing and static guardrails are not required/u);
+  });
+
+  it('keeps classification-only implementation scope on the normal lane', () => {
+    const content = [
+      '# Classification Only Package',
+      '',
+      '<!-- work-package',
+      JSON.stringify(
+        CLASSIFICATION_ONLY_WITH_IMPLEMENTATION_SCOPE_METADATA,
+        null,
+        2,
+      ),
+      '-->',
+      '',
+      CORE_LOGIC_BRIEF_VALID_CONTENT.split('\n').slice(2).join('\n'),
+      MODEL_FIT_VALID_SPARK_SAFE_CONTENT.split('\n').slice(2).join('\n'),
+    ].join('\n');
+    const report = buildPackageDoctorLines(
+      WORK_TRACKER_LEDGER_TEST_FILE,
+      content,
+    );
+    const rendered = report.lines.join('\n');
+
+    assert.match(report.errors.join('\n'), /Subagent Sequencing Ledger is required/u);
+    assert.match(rendered, /Classification-only fast path: no/u);
+    assert.match(rendered, /Classification-only result has implementation write scope/u);
   });
 
   it('does not require subagent ledger proof at entry phase', () => {
@@ -1019,6 +1603,220 @@ describe('work tracker commit and push ledger validation', () => {
     assert.match(errors.join('\n'), /must be a git commit SHA/u);
     assert.match(errors.join('\n'), /must be <remote>\/<branch>/u);
     assert.match(errors.join('\n'), /must be yes/u);
+  });
+});
+
+describe('work tracker core logic brief validation', () => {
+  it('requires Core Logic Brief when strict lanes ask for it', () => {
+    const errors = validateCoreLogicBrief(
+      WORK_TRACKER_LEDGER_NO_LEDGER_CONTENT,
+      WORK_TRACKER_LEDGER_TEST_FILE,
+      {requiresLedger: true},
+    );
+
+    assert.equal(errors.length, 1);
+    assert.match(errors[0], /Core Logic Brief section is required/u);
+  });
+
+  it('accepts not-needed only when the lane does not require core logic', () => {
+    const optionalErrors = validateCoreLogicBrief(
+      CORE_LOGIC_BRIEF_NOT_NEEDED_CONTENT,
+      WORK_TRACKER_LEDGER_TEST_FILE,
+      {requiresLedger: false},
+    );
+    const requiredErrors = validateCoreLogicBrief(
+      CORE_LOGIC_BRIEF_NOT_NEEDED_CONTENT,
+      WORK_TRACKER_LEDGER_TEST_FILE,
+      {requiresLedger: true},
+    );
+
+    assert.deepEqual(optionalErrors, []);
+    assert.match(requiredErrors.join('\n'), /cannot be not-needed/u);
+  });
+
+  it('accepts a complete Core Logic Brief', () => {
+    const errors = validateCoreLogicBrief(
+      CORE_LOGIC_BRIEF_VALID_CONTENT,
+      WORK_TRACKER_LEDGER_TEST_FILE,
+      {requiresLedger: true},
+    );
+
+    assert.deepEqual(errors, []);
+  });
+
+  it('reports missing placeholders and vague Core Logic Brief fields', () => {
+    const errors = validateCoreLogicBrief(
+      CORE_LOGIC_BRIEF_INCOMPLETE_CONTENT,
+      WORK_TRACKER_LEDGER_TEST_FILE,
+      {requiresLedger: true},
+    );
+
+    assert.match(errors.join('\n'), /Canonical outcome/u);
+    assert.match(errors.join('\n'), /Inputs\/signals/u);
+    assert.match(errors.join('\n'), /State model or invariant/u);
+    assert.match(errors.join('\n'), /Proof mapping/u);
+  });
+});
+
+describe('work tracker sprint strategy brief validation', () => {
+  it('requires Sprint Strategy Brief when active sprints ask for it', () => {
+    const errors = validateSprintStrategyBrief(
+      WORK_TRACKER_LEDGER_NO_LEDGER_CONTENT,
+      'work/sprints/active-test-sprint.md',
+      {requiresLedger: true},
+    );
+
+    assert.equal(errors.length, 1);
+    assert.match(errors[0], /Sprint Strategy Brief section is required/u);
+  });
+
+  it('accepts a complete Sprint Strategy Brief', () => {
+    const errors = validateSprintStrategyBrief(
+      SPRINT_STRATEGY_BRIEF_VALID_CONTENT,
+      'work/sprints/active-test-sprint.md',
+      {requiresLedger: true},
+    );
+
+    assert.deepEqual(errors, []);
+  });
+
+  it('reports missing placeholders and vague Sprint Strategy Brief fields', () => {
+    const errors = validateSprintStrategyBrief(
+      SPRINT_STRATEGY_BRIEF_INCOMPLETE_CONTENT,
+      'work/sprints/active-test-sprint.md',
+      {requiresLedger: true},
+    );
+    const message = errors.join('\n');
+
+    assert.match(message, /Goal state/u);
+    assert.match(message, /Current causal thesis/u);
+    assert.match(message, /Confidence and evidence/u);
+    assert.match(message, /Expected green path/u);
+  });
+});
+
+describe('work tracker rerun decision validation', () => {
+  it('requires rerun decision on active diagnostic successor packages', () => {
+    const errors = validateRerunDecisionContract(
+      {
+        ...RERUN_DECISION_VALID_METADATA,
+        rerunDecision: undefined,
+      },
+      WORK_TRACKER_LEDGER_TEST_FILE,
+      {status: WORK_TRACKER_ACTIVE_STATUS},
+    );
+
+    assert.match(errors.join('\n'), /metadata rerunDecision is required/u);
+  });
+
+  it('accepts a concrete rerun decision with refresh commands', () => {
+    const errors = validateRerunDecisionContract(
+      RERUN_DECISION_VALID_METADATA,
+      WORK_TRACKER_LEDGER_TEST_FILE,
+      {status: WORK_TRACKER_ACTIVE_STATUS},
+    );
+
+    assert.deepEqual(errors, []);
+  });
+
+  it('requires classification efficiency on pure classification packages', () => {
+    const errors = validateClassificationEfficiencyContract(
+      {
+        ...RERUN_DECISION_VALID_METADATA,
+        classificationEfficiency: undefined,
+      },
+      WORK_TRACKER_LEDGER_TEST_FILE,
+      {status: WORK_TRACKER_ACTIVE_STATUS},
+    );
+
+    assert.match(errors.join('\n'), /metadata classificationEfficiency is required/u);
+  });
+
+  it('accepts pure classification packages with capped successor routing', () => {
+    const errors = validateClassificationEfficiencyContract(
+      {
+        ...RERUN_DECISION_VALID_METADATA,
+        rerunDecision: {
+          ...RERUN_DECISION_VALID_METADATA.rerunDecision,
+          nextLane: LANE_RUNTIME_OWNER_BOUNDARY,
+        },
+        ...CLASSIFICATION_EFFICIENCY_VALID_METADATA,
+      },
+      WORK_TRACKER_LEDGER_TEST_FILE,
+      {status: WORK_TRACKER_ACTIVE_STATUS},
+    );
+
+    assert.deepEqual(errors, []);
+  });
+
+  it('routes stable owner-boundary classification to runtime successors', () => {
+    const errors = validateClassificationEfficiencyContract(
+      {
+        ...RERUN_DECISION_VALID_METADATA,
+        ...CLASSIFICATION_EFFICIENCY_VALID_METADATA,
+      },
+      WORK_TRACKER_LEDGER_TEST_FILE,
+      {status: WORK_TRACKER_ACTIVE_STATUS},
+    );
+
+    assert.match(errors.join('\n'), /rerunDecision\.nextLane must be runtime-owner-boundary/u);
+  });
+
+  it('rejects rerun decisions that omit required refresh steps', () => {
+    const errors = validateRerunDecisionContract(
+      {
+        ...RERUN_DECISION_VALID_METADATA,
+        rerunDecision: {
+          ...RERUN_DECISION_VALID_METADATA.rerunDecision,
+          requiredRefreshCommands: [
+            'npm run work:package:route-after-rerun -- --artifact test-output/reports/rerun.report.json',
+          ],
+        },
+      },
+      WORK_TRACKER_LEDGER_TEST_FILE,
+      {status: WORK_TRACKER_ACTIVE_STATUS},
+    );
+
+    assert.match(errors.join('\n'), /requiredRefreshCommands/u);
+    assert.match(errors.join('\n'), /Current Edge Card/u);
+  });
+
+  it('stops same-frontier no-reduction packages without a selected gate', () => {
+    const sameFrontierMetadata = {
+      ...SCENARIO_CAUSAL_CLOSURE_VALID_METADATA,
+      scenarioCausalClosure: {
+        ...SCENARIO_CAUSAL_CLOSURE_VALID_METADATA.scenarioCausalClosure,
+        resultClassification: 'same-frontier',
+        stopCondition: 'continue-local-fix',
+      },
+    };
+
+    const errors = validateSameFrontierStopContract(
+      sameFrontierMetadata,
+      WORK_TRACKER_LEDGER_TEST_FILE,
+      {status: WORK_TRACKER_ACTIVE_STATUS},
+    );
+
+    assert.match(errors.join('\n'), /same-frontier rerun without concrete reduction/u);
+  });
+
+  it('allows same-frontier no-reduction packages with human escalation', () => {
+    const sameFrontierMetadata = {
+      ...SCENARIO_CAUSAL_CLOSURE_VALID_METADATA,
+      scenarioCausalClosure: {
+        ...SCENARIO_CAUSAL_CLOSURE_VALID_METADATA.scenarioCausalClosure,
+        resultClassification: 'same-frontier',
+        stopCondition: 'human-escalation',
+      },
+    };
+
+    const errors = validateSameFrontierStopContract(
+      sameFrontierMetadata,
+      WORK_TRACKER_LEDGER_TEST_FILE,
+      {status: WORK_TRACKER_ACTIVE_STATUS},
+    );
+
+    assert.deepEqual(errors, []);
   });
 });
 
@@ -1317,6 +2115,56 @@ describe('work tracker scenario causal closure validation', () => {
       assert.match(errors.join('\n'), /causal-escalation/u);
     });
 
+  it('allows selected runtime successors after an oscillation gate', () => {
+    const metadata = {
+      ...SCENARIO_CAUSAL_CLOSURE_VALID_METADATA,
+      lane: LANE_RUNTIME_OWNER_BOUNDARY,
+      owner: 'startup_active_gate_owner',
+      boundary: 'snapshot_coverage',
+      writeScope: ['src/startup/active-gate-owner.js'],
+      commitScope: ['src/startup/active-gate-owner.js'],
+      architectureDecisionGate: {
+        status: 'selected',
+        trigger: 'frontier-oscillation',
+        triggerEvidence: ['frontier returned after causal classifier'],
+        choices: [
+          {
+            id: 'bounded-runtime-successor',
+            summary: 'Run the selected bounded runtime successor.',
+            route: 'continue-local-proof',
+            proof: ['npm run work:scenario-route -- report.json'],
+          },
+        ],
+        selectedChoice: 'bounded-runtime-successor',
+        nextAction: 'Run the runtime successor.',
+      },
+    };
+    const history = [
+      {
+        filePath: 'work/packages/done-20260514-active-gate.md',
+        metadata: {
+          scenario: 'rolling-restart',
+          owner: 'startup_active_gate_owner',
+          boundary: 'snapshot_coverage',
+          scenarioCausalClosure: {
+            resultClassification: 'migrated',
+          },
+        },
+      },
+    ];
+
+    const errors = validateFrontierOscillationContract(
+      metadata,
+      WORK_TRACKER_LEDGER_TEST_FILE,
+      {
+        packageHistoryEntries: history,
+        status: WORK_TRACKER_ACTIVE_STATUS,
+      },
+    );
+
+    assert.deepEqual(errors, []);
+  });
+
   it('accepts causal escalation when oscillation handoff fields are recorded',
     () => {
       const metadata = {
@@ -1455,6 +2303,16 @@ describe('work tracker scenario causal closure validation', () => {
           dominantReason: 'snapshot_coverage_incomplete',
           nextAction: 'keep representative residual visible',
         },
+        classificationEfficiency: {
+          defaultMode: 'inline-gate-default',
+          separatePackageReason: 'tracker-truth-change',
+          artifactBudget: 'one-artifact',
+          proofCommandBudget: 'two-or-three-canonical-commands',
+          commands: ['npm run work:scenario-route -- test-output/reports/current-red.report.json'],
+          decisionRecord: 'current package edge card',
+          successorAction: 'update-current-package',
+          runtimePromotionRule: 'runtime-owner-boundary only after stable route',
+        },
       };
       const payload = buildCurrentBlockerPayload(
         'work/sprints/active-test.md',
@@ -1479,6 +2337,10 @@ describe('work tracker scenario causal closure validation', () => {
       ]);
       assert.equal(payload.representativeResidual.status, 'red');
       assert.equal(
+        payload.classificationEfficiency.defaultMode,
+        'inline-gate-default',
+      );
+      assert.equal(
         payload.representativeResidual.frontier,
         'active_gate_snapshot_coverage',
       );
@@ -1498,6 +2360,8 @@ describe('work tracker scenario causal closure validation', () => {
       assert.match(rendered, /Max progress bound/u);
       assert.match(rendered, /Same-frontier fallback/u);
       assert.match(rendered, /classification-only-stop/u);
+      assert.match(rendered, /## Classification Efficiency/u);
+      assert.match(rendered, /update-current-package/u);
     });
 });
 

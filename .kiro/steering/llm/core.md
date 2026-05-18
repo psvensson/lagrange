@@ -27,6 +27,26 @@ Use the lightest valid lane:
 When uncertain, choose the heavier lane only if runtime ownership, shared
 contracts, or representative scenario evidence can change.
 
+Runtime owner-boundary, scenario/release-gate, and causal-escalation packages
+must include a Core Logic Brief before implementation: canonical outcome,
+inputs/signals, state model or invariant, non-goals, proof mapping, and
+wrong-slice trigger. Small docs and lightweight maintenance may record
+`not-needed` when no runtime, scenario, or shared contract decision changes.
+
+Active scenario-driven, release-gate, and causal-escalation sprints must keep a
+Sprint Strategy Brief near the top of the sprint file: goal state, current
+causal thesis, competing hypotheses, confidence and evidence, expected green
+path, wrong-direction signals, next best package, and stop or escalate rule.
+Update it when owner/boundary selection changes, evidence contradicts the
+thesis, several material packages close, or frontier oscillation appears.
+
+Classification-only packages use the fast path only when metadata records
+`classification-only` and `writeScope`/`commitScope` contain no runtime, test,
+script, or report paths. Keep possible implementation files in
+`candidateRuntimeFiles`, cap proof to two or three canonical commands, and skip
+subagent sequencing/static runtime guardrails until implementation scope is
+promoted.
+
 ## Rules
 
 1. Start from `npm run work:context` for non-trivial implementation work; use
@@ -38,7 +58,7 @@ contracts, or representative scenario evidence can change.
 3. For scenario-driven packages, keep the Current Edge Card in view before
    editing: artifact, first frontier, owner, boundary, selected cause, allowed
    edits, forbidden edits, first proof, and stop modes. Runtime edits require a
-   classification gate and an implementation gate.
+   Core Logic Brief, classification gate, and implementation gate.
 4. Do not locally patch symptoms. Identify the semantic owner boundary, reduce
    duplicate paths, prove the owner contract, and record what the representative
    scenario does next.
@@ -111,6 +131,15 @@ contracts, or representative scenario evidence can change.
     expose delegation before implementation, record `human-waived`,
     `tool-unavailable`, or `blocked-by-environment-policy` with a reason; do
     not use that as closure proof.
+    When sub-agents run, each completed subtask gets one checked Subagent
+    Progress Ledger update with real agent identity, `evidence: ...`, and
+    `next: ...` or `blocker: ...`; this progress ledger does not replace the
+    Subagent Sequencing Ledger role proof. Each attempt also records a checked
+    Subagent Attempt Ledger checkpoint with status, last checkpoint, parent
+    action, evidence, and next/blocker. Interrupted or partial-unvalidated
+    attempts must be superseded/discarded/revalidated before closure, and
+    implementation completion requires parent local proof rerun with
+    `parent revalidated focused proof: yes`.
 28. Commit and push focused package slices before starting the next package.
     Use `npm run work:sprint:push -- <git-push-args>` for sprint pushes so the
     remaining sprint package list prints after a successful push. Do not sweep

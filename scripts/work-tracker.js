@@ -7,10 +7,35 @@ import {fileURLToPath} from 'node:url';
 import {
   CAUSAL_GOVERNANCE_PENDING_OUTCOME,
   CAUSAL_GOVERNANCE_VALID_OUTCOMES,
+  CLASSIFICATION_EFFICIENCY_ARTIFACT_BUDGET_FIELD,
+  CLASSIFICATION_EFFICIENCY_COMMANDS_FIELD,
+  CLASSIFICATION_EFFICIENCY_DECISION_RECORD_FIELD,
+  CLASSIFICATION_EFFICIENCY_DEFAULT_MODE_FIELD,
+  CLASSIFICATION_EFFICIENCY_DEFAULT_MODES,
+  CLASSIFICATION_EFFICIENCY_FIELD,
+  CLASSIFICATION_EFFICIENCY_PROOF_COMMAND_BUDGET_FIELD,
+  CLASSIFICATION_EFFICIENCY_RUNTIME_PROMOTION_RULE_FIELD,
+  CLASSIFICATION_EFFICIENCY_SEPARATE_PACKAGE_REASON_FIELD,
+  CLASSIFICATION_EFFICIENCY_SEPARATE_PACKAGE_REASONS,
+  CLASSIFICATION_EFFICIENCY_SUCCESSOR_ACTION_FIELD,
+  CLASSIFICATION_EFFICIENCY_SUCCESSOR_ACTIONS,
+  CORE_LOGIC_BRIEF_FIELDS,
   LANE_CAUSAL_ESCALATION,
+  LANE_DIAGNOSTIC_CLASSIFICATION,
+  LANE_RUNTIME_OWNER_BOUNDARY,
   OWNER_BOUNDARY_MIGRATION_PROOF_EVIDENCE_FIELD,
   OWNER_BOUNDARY_MIGRATION_PROOF_FIELD,
   OWNER_BOUNDARY_MIGRATION_PROOF_FIELDS,
+  RERUN_DECISION_CAUSAL_OUTCOME_FIELD,
+  RERUN_DECISION_EXPECTED_DELTA_FIELD,
+  RERUN_DECISION_FIELD,
+  RERUN_DECISION_NEXT_LANE_FIELD,
+  RERUN_DECISION_REQUIRED_REFRESH_COMMANDS_FIELD,
+  RERUN_DECISION_ROUTE_BOUNDARY_FIELD,
+  RERUN_DECISION_ROUTE_DOMINANT_REASON_FIELD,
+  RERUN_DECISION_ROUTE_OWNER_FIELD,
+  RERUN_DECISION_SOURCE_ARTIFACT_FIELD,
+  RERUN_DECISION_STOP_MODE_FIELD,
   SCENARIO_CAUSAL_CLOSURE_HANDOFF_INVARIANT_FIELD,
   SCENARIO_CAUSAL_CLOSURE_OSCILLATION_CHECK_FIELD,
   SCENARIO_CAUSAL_CLOSURE_RECENT_FRONTIER_HISTORY_FIELD,
@@ -21,6 +46,7 @@ import {
   SCOPE_FIELD_GENERATED_FILES,
   SCOPE_FIELD_HANDOFF_FILES,
   SCOPE_FIELD_WRITE_SCOPE,
+  SUBAGENT_ATTEMPT_STATUSES,
   SUBAGENT_OPTIONAL_LANES,
   SUBAGENT_UNAVAILABLE_STATES,
   VALID_PACKAGE_STATUSES,
@@ -30,6 +56,7 @@ import {
   VALIDATION_PHASE_PRE_IMPL,
   VALIDATION_PHASES,
   WORK_PACKAGE_METADATA_SCHEMA,
+  coreLogicBriefRequiredForLane,
 } from './work-package-schema.js';
 
 const ENCODING_UTF8 = 'utf8';
@@ -82,6 +109,8 @@ const CURRENT_ACTIVE_PACKAGE_LINK_PATTERN =
 const ACTIVE_WORK_REFERENCE_PATTERN =
   /\b((?:work\/(?:packages|sprints)|(?:\.\.\/|\.\/)(?:packages|sprints))\/active-[A-Za-z0-9._-]+\.md)\b/gu;
 const SUBAGENT_LEDGER_HEADING = '## Subagent Sequencing Ledger';
+const SUBAGENT_PROGRESS_LEDGER_HEADING = '## Subagent Progress Ledger';
+const SUBAGENT_ATTEMPT_LEDGER_HEADING = '## Subagent Attempt Ledger';
 const MARKDOWN_LEVEL_TWO_HEADING_PREFIX = '## ';
 const SUBAGENT_LEDGER_REVIEW_LABEL = 'Review subagent recorded';
 const SUBAGENT_LEDGER_FIX_LABEL =
@@ -99,7 +128,10 @@ const COMMIT_AND_PUSH_LEDGER_HEADINGS = Object.freeze([
   COMMIT_AND_PUSH_LEDGER_LEGACY_HEADING,
 ]);
 const COMMIT_LEDGER_POLICY_OPENED_ON_OR_AFTER = '2026-05-14';
+const SUBAGENT_ATTEMPT_LEDGER_POLICY_OPENED_AFTER = '2026-05-18';
 const MODEL_FIT_HEADING = '## Model Fit';
+const CORE_LOGIC_BRIEF_HEADING = '## Core Logic Brief';
+const SPRINT_STRATEGY_BRIEF_HEADING = '## Sprint Strategy Brief';
 const COMMIT_LEDGER_COMMIT_LABEL = 'Focused package commit';
 const COMMIT_LEDGER_PUSHED_LABEL = 'Pushed to';
 const COMMIT_LEDGER_FOCUSED_SLICE_LABEL =
@@ -113,6 +145,29 @@ const MODEL_FIT_FORBIDDEN_FILES_LABEL = 'Forbidden files';
 const MODEL_FIT_FROZEN_DECISIONS_LABEL = 'Frozen decisions';
 const MODEL_FIT_ESCALATION_TRIGGERS_LABEL = 'Escalation triggers';
 const MODEL_FIT_FOCUSED_PROOF_LABEL = 'Focused proof';
+const SPRINT_STRATEGY_BRIEF_GOAL_STATE_LABEL = 'Goal state';
+const SPRINT_STRATEGY_BRIEF_CURRENT_CAUSAL_THESIS_LABEL =
+  'Current causal thesis';
+const SPRINT_STRATEGY_BRIEF_COMPETING_HYPOTHESES_LABEL =
+  'Competing hypotheses';
+const SPRINT_STRATEGY_BRIEF_CONFIDENCE_AND_EVIDENCE_LABEL =
+  'Confidence and evidence';
+const SPRINT_STRATEGY_BRIEF_EXPECTED_GREEN_PATH_LABEL = 'Expected green path';
+const SPRINT_STRATEGY_BRIEF_WRONG_DIRECTION_SIGNALS_LABEL =
+  'Wrong direction signals';
+const SPRINT_STRATEGY_BRIEF_NEXT_BEST_PACKAGE_LABEL = 'Next best package';
+const SPRINT_STRATEGY_BRIEF_STOP_OR_ESCALATE_RULE_LABEL =
+  'Stop or escalate rule';
+const SPRINT_STRATEGY_BRIEF_FIELDS = Object.freeze([
+  SPRINT_STRATEGY_BRIEF_GOAL_STATE_LABEL,
+  SPRINT_STRATEGY_BRIEF_CURRENT_CAUSAL_THESIS_LABEL,
+  SPRINT_STRATEGY_BRIEF_COMPETING_HYPOTHESES_LABEL,
+  SPRINT_STRATEGY_BRIEF_CONFIDENCE_AND_EVIDENCE_LABEL,
+  SPRINT_STRATEGY_BRIEF_EXPECTED_GREEN_PATH_LABEL,
+  SPRINT_STRATEGY_BRIEF_WRONG_DIRECTION_SIGNALS_LABEL,
+  SPRINT_STRATEGY_BRIEF_NEXT_BEST_PACKAGE_LABEL,
+  SPRINT_STRATEGY_BRIEF_STOP_OR_ESCALATE_RULE_LABEL,
+]);
 const MODEL_FIT_SPARK_SAFE_CLASS = 'spark-safe';
 const MODEL_FIT_SPARK_MODEL = 'gpt-5.3-codex-spark';
 const MODEL_FIT_LEAF_SLICE_SCOPE = 'leaf-slice';
@@ -194,6 +249,7 @@ const CAUSAL_GOVERNANCE_REQUIRED_FIELDS = Object.freeze([
   CAUSAL_GOVERNANCE_CAUSAL_DEBT_FIELD,
   CAUSAL_GOVERNANCE_CROSS_BOUNDARY_REVIEW_FIELD,
 ]);
+const CLASSIFICATION_ONLY_RESULT = 'classification-only';
 const CAUSAL_GOVERNANCE_CAUSAL_MODEL_COMMAND_PATTERN =
   /\bnpm\s+(?:--silent\s+)?run\s+analyze:causal-model\b/iu;
 const SCENARIO_CAUSAL_CLOSURE_METADATA_FIELD = 'scenarioCausalClosure';
@@ -256,6 +312,18 @@ const FRONTIER_OSCILLATION_MATERIAL_RESULTS = Object.freeze([
   'same-frontier',
   'reduced',
   'classification-only',
+]);
+const RERUN_DECISION_REQUIRED_COMMAND_PATTERNS = Object.freeze([
+  /\bwork:package:route-after-rerun\b/iu,
+  /\bSprint Strategy Brief\b/iu,
+  /\bCurrent Edge Card\b/iu,
+  /\bwork:current-blocker\b/iu,
+  /\bwork:validate\b[\s\S]*\bpre-impl\b/iu,
+]);
+const SAME_FRONTIER_RESULT = 'same-frontier';
+const SAME_FRONTIER_ESCALATION_STOP_CONDITIONS = Object.freeze([
+  'architecture-gap-stop',
+  'human-escalation',
 ]);
 const SCENARIO_CAUSAL_CLOSURE_PROGRESS_MECHANISM_PATTERN =
   /\b(?:wake|retry|timeout|reconcile|drain|dispatch|delivery|timer|advance|bounded)\b/iu;
@@ -336,6 +404,7 @@ const MODEL_FIT_OPEN_ENDED_FRONTIER_PATTERNS = Object.freeze([
   /\bfrontier\s+(?:appears|emerges|wherever|whatever)\b/iu,
   /\brepresentative\b[\s\S]{0,120}\b(?:expand|broaden|continue|chase|fix)\b[\s\S]{0,80}\bscope\b/iu,
 ]);
+const CORE_LOGIC_BRIEF_NOT_NEEDED_PATTERN = /\bnot-needed\b/iu;
 const IMPLEMENTATION_WRITE_PATH_PATTERN =
   /^(?:src|test|scripts|test-output\/reports|test-output\/.*\.report\.json)\b/u;
 const STATIC_GUARDRAIL_COMMAND_PATTERN =
@@ -344,8 +413,23 @@ const REPRESENTATIVE_EVIDENCE_COMMAND_PATTERN =
   /\b(?:test\/distributed\/run\.js|distributed:|work:evidence-summary|work:scenario-triage|summarize:harness)\b/iu;
 const ARCHITECTURE_GATE_SELECTED_STATUS = 'selected';
 const PROOF_COMMAND_CAP = NUM_FIVE;
+const CLASSIFICATION_ONLY_FAST_PATH_PROOF_CAP = NUM_THREE;
+const CLASSIFICATION_EFFICIENCY_STABLE_ROUTE_OUTCOME =
+  'continue_local_fix';
+const CLASSIFICATION_EFFICIENCY_STABLE_ROUTE_STOP =
+  'classified_local_blocker';
+const CLASSIFICATION_EFFICIENCY_RUNTIME_SUCCESSOR_ACTION =
+  'open-runtime-owner-boundary';
+const CLASSIFICATION_EFFICIENCY_ONE_ARTIFACT_PATTERN = /\bone-artifact\b/iu;
+const CLASSIFICATION_EFFICIENCY_COMMAND_BUDGET_PATTERN =
+  /\btwo-or-three-canonical-commands\b/iu;
+const CLASSIFICATION_EFFICIENCY_RUNTIME_PROMOTION_PATTERN =
+  /\bruntime-owner-boundary\b/iu;
 const CHECKBOX_DONE_PREFIX_PATTERN = '(?:-|\\d+\\.) \\[[xX]\\] ';
 const CHECKBOX_ANY_ITEM_PATTERN = /\n(?:-|\d+\.) \[[ xX]\] /gu;
+const CHECKBOX_ITEM_PRESENT_PATTERN = /(?:^|\n)(?:-|\d+\.) \[[ xX]\] /u;
+const CHECKBOX_CHECKED_ITEM_PATTERN =
+  /(?:^|\n)((?:-|\d+\.) \[[xX]\] [\s\S]*?)(?=\n(?:-|\d+\.) \[[ xX]\] |\s*$)/gu;
 const LEDGER_VALIDATION_REQUIRES_LEDGER = 'requiresLedger';
 const LEDGER_VALIDATION_REQUIRES_STRICT_ENTRIES = 'requiresStrictEntries';
 const LEDGER_VALIDATION_ALLOW_PENDING_SUBAGENT_LEDGER =
@@ -365,6 +449,7 @@ const AGENT_ID_PATTERN_TEXT =
   '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}';
 const AGENT_PROOF_PATTERN_TEXT =
   'Agent\\s+([^()]+?)\\s+\\(`?(' + AGENT_ID_PATTERN_TEXT + ')`?\\)';
+const AGENT_PROOF_PATTERN_TEXT_RE = new RegExp(AGENT_PROOF_PATTERN_TEXT, 'iu');
 const SUBAGENT_REVIEW_RESULT_CLEAN = 'clean';
 const SUBAGENT_REVIEW_RESULT_FIXES_REQUIRED = 'fixes-required';
 const SUBAGENT_FIX_NOT_NEEDED = 'not-needed';
@@ -384,8 +469,10 @@ const SUBAGENT_IMPLEMENTATION_PATTERN = new RegExp(
   AGENT_PROOF_PATTERN_TEXT + '\\s+implemented\\s+`?([^;`]+)`?(?:[.;]|$)',
   'iu',
 );
+const SUBAGENT_PARENT_REVALIDATION_PATTERN =
+  /\b(?:parent\s+revalidated\s+(?:focused\s+)?proof|parent\s+validation)\s*:\s*`?yes`?/iu;
 const NON_REAL_IDENTITY_PATTERN =
-  /\b(?:current-session|current session|parent\s+codex|manual|local|session)\b/iu;
+  /\b(?:current-session|current session|parent\s+codex|manual|local|session|agent\s+codex(?:\s+(?:review|fix|implementation))?|codex\s+(?:review|fix|implementation)(?:\s+(?:agent|subagent|session))?)\b/iu;
 const FILE_PATH_TOKEN_PATTERN = /\S*\/\S+/gu;
 const COMMIT_SHA_PATTERN = /^[0-9a-f]{7,40}$/iu;
 const REMOTE_BRANCH_PATTERN = /^[A-Za-z0-9._-]+\/[A-Za-z0-9._/-]+$/u;
@@ -418,6 +505,37 @@ const LEDGER_VALIDATION_ALLOW_OPEN_IMPLEMENTATION = 'allowOpenImplementation';
 const LEDGER_VALIDATION_ALLOW_UNAVAILABLE_SUBAGENTS =
   'allowUnavailableSubagents';
 const SUBAGENT_UNAVAILABLE_REASON_PATTERN = /\breason\s*:\s*\S+/iu;
+const SUBAGENT_PROGRESS_EVIDENCE_FIELD_PATTERN = /\bevidence\s*:/iu;
+const SUBAGENT_PROGRESS_NEXT_OR_BLOCKER_FIELD_PATTERN =
+  /\b(?:next|blocker)\s*:/iu;
+const SUBAGENT_ATTEMPT_STATUS_PATTERN =
+  /\bstatus\s*:\s*`?([a-z-]+)`?/iu;
+const SUBAGENT_ATTEMPT_LAST_CHECKPOINT_FIELD_PATTERN =
+  /\blast checkpoint\s*:/iu;
+const SUBAGENT_ATTEMPT_PARENT_ACTION_PATTERN =
+  /\bparent action\s*:\s*`?([a-z-]+)`?/iu;
+const SUBAGENT_ATTEMPT_PARENT_ACTIONS = Object.freeze([
+  'accepted',
+  'discarded',
+  'pending',
+  'revalidated',
+  'superseded',
+]);
+const SUBAGENT_ATTEMPT_OPEN_STATUSES = Object.freeze([
+  'started',
+  'running',
+]);
+const SUBAGENT_ATTEMPT_UNVALIDATED_STATUSES = Object.freeze([
+  'interrupted',
+  'partial-unvalidated',
+]);
+const SUBAGENT_ATTEMPT_VALIDATED_STATUS = 'validated';
+const SUBAGENT_ATTEMPT_SUPERSEDED_STATUS = 'superseded';
+const SUBAGENT_ATTEMPT_PARENT_TERMINAL_ACTIONS = Object.freeze([
+  'discarded',
+  'revalidated',
+  'superseded',
+]);
 
 function printUsage() {
   console.log([
@@ -483,6 +601,20 @@ function extractSubagentSequencingLedger(content) {
   return extractMarkdownLevelTwoSection(content, SUBAGENT_LEDGER_HEADING);
 }
 
+function extractSubagentProgressLedger(content) {
+  return extractMarkdownLevelTwoSection(
+    content,
+    SUBAGENT_PROGRESS_LEDGER_HEADING,
+  );
+}
+
+function extractSubagentAttemptLedger(content) {
+  return extractMarkdownLevelTwoSection(
+    content,
+    SUBAGENT_ATTEMPT_LEDGER_HEADING,
+  );
+}
+
 function extractCommitAndPushLedger(content) {
   for (const heading of COMMIT_AND_PUSH_LEDGER_HEADINGS) {
     const ledger = extractMarkdownLevelTwoSection(content, heading);
@@ -495,6 +627,17 @@ function extractCommitAndPushLedger(content) {
 
 function extractModelFitSection(content) {
   return extractMarkdownLevelTwoSection(content, MODEL_FIT_HEADING);
+}
+
+function extractCoreLogicBriefSection(content) {
+  return extractMarkdownLevelTwoSection(content, CORE_LOGIC_BRIEF_HEADING);
+}
+
+function extractSprintStrategyBriefSection(content) {
+  return extractMarkdownLevelTwoSection(
+    content,
+    SPRINT_STRATEGY_BRIEF_HEADING,
+  );
 }
 
 function findCheckedSubagentLedgerEntry(ledger, label) {
@@ -542,6 +685,282 @@ function findSubagentUnavailableState(content) {
     return null;
   }
   return state;
+}
+
+function extractCheckedChecklistItems(ledger) {
+  const items = [];
+  CHECKBOX_CHECKED_ITEM_PATTERN.lastIndex = NUM_ZERO;
+  let match = CHECKBOX_CHECKED_ITEM_PATTERN.exec(ledger);
+  while (match) {
+    items.push(normalizeLedgerText(match[NUM_ONE]));
+    match = CHECKBOX_CHECKED_ITEM_PATTERN.exec(ledger);
+  }
+  return items;
+}
+
+function isProgressLedgerNonAgentItem(content) {
+  return findSubagentUnavailableState(content) !== null;
+}
+
+function validateCheckedSubagentProgressItem(content, filePath, options = {}) {
+  const errors = [];
+  const checkedItemErrors = validateCheckedSubagentLedgerItem(content, options);
+  for (const checkedItemError of checkedItemErrors) {
+    errors.push(
+      `${filePath}: Subagent Progress Ledger checked item ` +
+      `${checkedItemError}.`,
+    );
+  }
+  if (
+    options[LEDGER_VALIDATION_REQUIRES_STRICT_ENTRIES] === true &&
+    !isProgressLedgerNonAgentItem(content) &&
+    !AGENT_PROOF_PATTERN_TEXT_RE.test(content)
+  ) {
+    errors.push(
+      `${filePath}: Subagent Progress Ledger checked item must include ` +
+      'Agent <name> (<agent-id>) or an explicit unavailable state.',
+    );
+  }
+  if (!SUBAGENT_PROGRESS_EVIDENCE_FIELD_PATTERN.test(content)) {
+    errors.push(
+      `${filePath}: Subagent Progress Ledger checked item must include ` +
+      '`evidence:`.',
+    );
+  }
+  if (!SUBAGENT_PROGRESS_NEXT_OR_BLOCKER_FIELD_PATTERN.test(content)) {
+    errors.push(
+      `${filePath}: Subagent Progress Ledger checked item must include ` +
+      '`next:` or `blocker:`.',
+    );
+  }
+  return errors;
+}
+
+export function validateSubagentProgressLedger(content, filePath, options = {}) {
+  const ledger = extractSubagentProgressLedger(content);
+  if (!ledger) {
+    return options[LEDGER_VALIDATION_REQUIRES_LEDGER] ?
+      [`${filePath}: Subagent Progress Ledger is required.`] :
+      [];
+  }
+  if (
+    options[LEDGER_VALIDATION_ALLOW_PENDING_SUBAGENT_LEDGER] &&
+    !options[LEDGER_VALIDATION_REQUIRES_LEDGER]
+  ) {
+    return [];
+  }
+  const errors = [];
+  if (!CHECKBOX_ITEM_PRESENT_PATTERN.test(ledger)) {
+    errors.push(
+      `${filePath}: Subagent Progress Ledger must contain checklist items.`,
+    );
+  }
+  if (
+    options[LEDGER_VALIDATION_REQUIRES_LEDGER] &&
+    hasOpenChecklist(ledger) &&
+    options[LEDGER_VALIDATION_ALLOW_OPEN_IMPLEMENTATION] !== true
+  ) {
+    errors.push(`${filePath}: Subagent Progress Ledger has open items.`);
+  }
+  const checkedItems = extractCheckedChecklistItems(ledger);
+  if (
+    options[LEDGER_VALIDATION_REQUIRES_LEDGER] &&
+    checkedItems.length === NUM_ZERO
+  ) {
+    errors.push(
+      `${filePath}: Subagent Progress Ledger must record at least one ` +
+      'completed subtask update before pre-implementation or closure.',
+    );
+  }
+  for (const checkedItem of checkedItems) {
+    errors.push(...validateCheckedSubagentProgressItem(
+      checkedItem,
+      filePath,
+      {
+        [LEDGER_VALIDATION_REQUIRES_STRICT_ENTRIES]:
+          options[LEDGER_VALIDATION_REQUIRES_STRICT_ENTRIES],
+        [LEDGER_VALIDATION_ALLOW_UNAVAILABLE_SUBAGENTS]:
+          options[LEDGER_VALIDATION_ALLOW_UNAVAILABLE_SUBAGENTS],
+      },
+    ));
+  }
+  return errors;
+}
+
+function isAttemptLedgerNonAgentItem(content) {
+  return findSubagentUnavailableState(content) !== null;
+}
+
+function parseAttemptStatus(content) {
+  const match = SUBAGENT_ATTEMPT_STATUS_PATTERN.exec(normalizeLedgerText(content));
+  return match ? normalizeLedgerFieldValue(match[NUM_ONE]).toLowerCase() : null;
+}
+
+function parseAttemptParentAction(content) {
+  const match = SUBAGENT_ATTEMPT_PARENT_ACTION_PATTERN.exec(
+    normalizeLedgerText(content),
+  );
+  return match ? normalizeLedgerFieldValue(match[NUM_ONE]).toLowerCase() : null;
+}
+
+function itemSupersedesUnvalidatedAttempt(content) {
+  const status = parseAttemptStatus(content);
+  const parentAction = parseAttemptParentAction(content);
+  return status === SUBAGENT_ATTEMPT_SUPERSEDED_STATUS ||
+    SUBAGENT_ATTEMPT_PARENT_TERMINAL_ACTIONS.includes(parentAction) ||
+    /\bsuperseded by\s+Agent\s+/iu.test(content);
+}
+
+function validateCheckedSubagentAttemptItem(content, filePath, options = {}) {
+  const errors = [];
+  const checkedItemErrors = validateCheckedSubagentLedgerItem(content, options);
+  for (const checkedItemError of checkedItemErrors) {
+    errors.push(
+      `${filePath}: Subagent Attempt Ledger checked item ` +
+      `${checkedItemError}.`,
+    );
+  }
+  if (
+    options[LEDGER_VALIDATION_REQUIRES_STRICT_ENTRIES] === true &&
+    !isAttemptLedgerNonAgentItem(content) &&
+    !AGENT_PROOF_PATTERN_TEXT_RE.test(content)
+  ) {
+    errors.push(
+      `${filePath}: Subagent Attempt Ledger checked item must include ` +
+      'Agent <name> (<agent-id>) or an explicit unavailable state.',
+    );
+  }
+
+  const status = parseAttemptStatus(content);
+  if (!status) {
+    errors.push(
+      `${filePath}: Subagent Attempt Ledger checked item must include ` +
+      '`status: <started|running|interrupted|partial-unvalidated|' +
+      'validated|superseded>`.',
+    );
+  } else if (!SUBAGENT_ATTEMPT_STATUSES.includes(status)) {
+    errors.push(
+      `${filePath}: Subagent Attempt Ledger checked item status ` +
+      `\`${status}\` is not valid.`,
+    );
+  }
+
+  if (!SUBAGENT_ATTEMPT_LAST_CHECKPOINT_FIELD_PATTERN.test(content)) {
+    errors.push(
+      `${filePath}: Subagent Attempt Ledger checked item must include ` +
+      '`last checkpoint:`.',
+    );
+  }
+  if (!SUBAGENT_PROGRESS_EVIDENCE_FIELD_PATTERN.test(content)) {
+    errors.push(
+      `${filePath}: Subagent Attempt Ledger checked item must include ` +
+      '`evidence:`.',
+    );
+  }
+  if (!SUBAGENT_PROGRESS_NEXT_OR_BLOCKER_FIELD_PATTERN.test(content)) {
+    errors.push(
+      `${filePath}: Subagent Attempt Ledger checked item must include ` +
+      '`next:` or `blocker:`.',
+    );
+  }
+
+  const parentAction = parseAttemptParentAction(content);
+  if (!parentAction) {
+    errors.push(
+      `${filePath}: Subagent Attempt Ledger checked item must include ` +
+      '`parent action:`.',
+    );
+  } else if (!SUBAGENT_ATTEMPT_PARENT_ACTIONS.includes(parentAction)) {
+    errors.push(
+      `${filePath}: Subagent Attempt Ledger checked item parent action ` +
+      `\`${parentAction}\` is not valid.`,
+    );
+  }
+
+  if (
+    options[LEDGER_VALIDATION_ALLOW_OPEN_IMPLEMENTATION] !== true &&
+    SUBAGENT_ATTEMPT_OPEN_STATUSES.includes(status)
+  ) {
+    errors.push(
+      `${filePath}: Subagent Attempt Ledger checked item status ` +
+      `\`${status}\` is not terminal for closure.`,
+    );
+  }
+  if (
+    status === SUBAGENT_ATTEMPT_VALIDATED_STATUS &&
+    !['accepted', 'revalidated'].includes(parentAction)
+  ) {
+    errors.push(
+      `${filePath}: Subagent Attempt Ledger validated attempts require ` +
+      '`parent action: accepted` or `parent action: revalidated`.',
+    );
+  }
+  return errors;
+}
+
+export function validateSubagentAttemptLedger(content, filePath, options = {}) {
+  const ledger = extractSubagentAttemptLedger(content);
+  if (!ledger) {
+    return options[LEDGER_VALIDATION_REQUIRES_LEDGER] ?
+      [`${filePath}: Subagent Attempt Ledger is required.`] :
+      [];
+  }
+  if (
+    options[LEDGER_VALIDATION_ALLOW_PENDING_SUBAGENT_LEDGER] &&
+    !options[LEDGER_VALIDATION_REQUIRES_LEDGER]
+  ) {
+    return [];
+  }
+  const errors = [];
+  if (!CHECKBOX_ITEM_PRESENT_PATTERN.test(ledger)) {
+    errors.push(
+      `${filePath}: Subagent Attempt Ledger must contain checklist items.`,
+    );
+  }
+  if (
+    options[LEDGER_VALIDATION_REQUIRES_LEDGER] &&
+    hasOpenChecklist(ledger) &&
+    options[LEDGER_VALIDATION_ALLOW_OPEN_IMPLEMENTATION] !== true
+  ) {
+    errors.push(`${filePath}: Subagent Attempt Ledger has open items.`);
+  }
+  const checkedItems = extractCheckedChecklistItems(ledger);
+  if (
+    options[LEDGER_VALIDATION_REQUIRES_LEDGER] &&
+    checkedItems.length === NUM_ZERO
+  ) {
+    errors.push(
+      `${filePath}: Subagent Attempt Ledger must record at least one ` +
+      'completed attempt checkpoint before pre-implementation or closure.',
+    );
+  }
+  for (const [index, checkedItem] of checkedItems.entries()) {
+    errors.push(...validateCheckedSubagentAttemptItem(
+      checkedItem,
+      filePath,
+      {
+        [LEDGER_VALIDATION_REQUIRES_STRICT_ENTRIES]:
+          options[LEDGER_VALIDATION_REQUIRES_STRICT_ENTRIES],
+        [LEDGER_VALIDATION_ALLOW_OPEN_IMPLEMENTATION]:
+          options[LEDGER_VALIDATION_ALLOW_OPEN_IMPLEMENTATION],
+        [LEDGER_VALIDATION_ALLOW_UNAVAILABLE_SUBAGENTS]:
+          options[LEDGER_VALIDATION_ALLOW_UNAVAILABLE_SUBAGENTS],
+      },
+    ));
+    const status = parseAttemptStatus(checkedItem);
+    if (SUBAGENT_ATTEMPT_UNVALIDATED_STATUSES.includes(status)) {
+      const hasSupersedingAttempt = checkedItems
+        .slice(index + NUM_ONE)
+        .some(itemSupersedesUnvalidatedAttempt);
+      if (!hasSupersedingAttempt) {
+        errors.push(
+          `${filePath}: Subagent Attempt Ledger ${status} attempt must be ` +
+          'followed by a checked superseded/discarded/revalidated attempt line.',
+        );
+      }
+    }
+  }
+  return errors;
 }
 
 function validateCheckedSubagentLedgerItem(content, options = {}) {
@@ -700,6 +1119,9 @@ function parseImplementationEntry(content, options = {}) {
       id: match[NUM_TWO].toLowerCase(),
     },
     packagePath: normalizeLedgerPackage(match[NUM_TWO + NUM_ONE]),
+    parentRevalidated: SUBAGENT_PARENT_REVALIDATION_PATTERN.test(
+      normalizeLedgerText(content),
+    ),
   };
 }
 
@@ -820,6 +1242,15 @@ function validateSubagentLedgerRoles(entries, filePath, options = {}) {
     errors.push(
       ...validateAgentProof(implementation.agent, 'implementation', filePath),
     );
+    if (
+      options[LEDGER_VALIDATION_REQUIRES_STRICT_ENTRIES] !== false &&
+      implementation.parentRevalidated !== true
+    ) {
+      errors.push(
+        `${filePath}: Subagent Sequencing Ledger implementation entry must ` +
+        'record `parent revalidated focused proof: yes` before closure.',
+      );
+    }
   }
 
   if (!review || !fix || !implementation) {
@@ -965,6 +1396,19 @@ function isHistoricalClosedCommitLedgerMetadata(fileStatus, metadata) {
   );
 }
 
+function isCurrentPolicyClosedSubagentMetadata(fileStatus, metadata) {
+  const opened = normalizeLedgerText(metadata?.opened).slice(
+    NUM_ZERO,
+    DATE_SLICE_END,
+  );
+  return (
+    (fileStatus === STATUS_DONE || fileStatus === STATUS_SUPERSEDED) &&
+    metadataRequiresSubagentSequencing(metadata) &&
+    opened.length === DATE_SLICE_END &&
+    opened > SUBAGENT_ATTEMPT_LEDGER_POLICY_OPENED_AFTER
+  );
+}
+
 function validateCommitLedgerFieldValue(filePath, label, value, validateValue) {
   const errors = [];
   if (value === null) {
@@ -1042,6 +1486,115 @@ function findModelFitField(section, label) {
   );
   const match = fieldPattern.exec(section);
   return match ? normalizeLedgerFieldValue(match[NUM_ONE]) : null;
+}
+
+function findCoreLogicBriefField(section, label) {
+  const fieldPattern = new RegExp(
+    `${escapeRegExp(label)}:\\s*([^\\n]+)`,
+    'iu',
+  );
+  const match = fieldPattern.exec(section);
+  return match ? normalizeLedgerFieldValue(match[NUM_ONE]) : null;
+}
+
+function findSprintStrategyBriefField(section, label) {
+  const fieldPattern = new RegExp(
+    `${escapeRegExp(label)}:\\s*([^\\n]+)`,
+    'iu',
+  );
+  const match = fieldPattern.exec(section);
+  return match ? normalizeLedgerFieldValue(match[NUM_ONE]) : null;
+}
+
+function metadataRequiresCoreLogicBrief(metadata) {
+  return metadata !== null &&
+    coreLogicBriefRequiredForLane(metadataLane(metadata));
+}
+
+function validateCoreLogicBriefField(filePath, label, value) {
+  if (value === null) {
+    return [`${filePath}: Core Logic Brief is missing ${label}.`];
+  }
+  if (
+    value.length === NUM_ZERO ||
+    MODEL_FIT_EMPTY_VALUE_PATTERN.test(value) ||
+    LEDGER_TEMPLATE_PLACEHOLDER_PATTERN.test(value) ||
+    value.includes(LEDGER_PENDING_BEFORE_IMPLEMENTATION_MARKER)
+  ) {
+    return [
+      `${filePath}: Core Logic Brief ${label} must be a concrete value.`,
+    ];
+  }
+  return [];
+}
+
+export function validateCoreLogicBrief(content, filePath, options = {}) {
+  const requiresBrief =
+    options[LEDGER_VALIDATION_REQUIRES_LEDGER] === true;
+  const section = extractCoreLogicBriefSection(content);
+  if (!section) {
+    return requiresBrief ?
+      [`${filePath}: Core Logic Brief section is required.`] :
+      [];
+  }
+  if (CORE_LOGIC_BRIEF_NOT_NEEDED_PATTERN.test(section)) {
+    return requiresBrief ?
+      [
+        `${filePath}: Core Logic Brief cannot be not-needed for this ` +
+        'workflow lane.',
+      ] :
+      [];
+  }
+  const errors = [];
+  for (const label of CORE_LOGIC_BRIEF_FIELDS) {
+    errors.push(
+      ...validateCoreLogicBriefField(
+        filePath,
+        label,
+        findCoreLogicBriefField(section, label),
+      ),
+    );
+  }
+  return errors;
+}
+
+function validateSprintStrategyBriefField(filePath, label, value) {
+  if (value === null) {
+    return [`${filePath}: Sprint Strategy Brief is missing ${label}.`];
+  }
+  if (
+    value.length === NUM_ZERO ||
+    MODEL_FIT_EMPTY_VALUE_PATTERN.test(value) ||
+    LEDGER_TEMPLATE_PLACEHOLDER_PATTERN.test(value) ||
+    value.includes(LEDGER_PENDING_BEFORE_IMPLEMENTATION_MARKER)
+  ) {
+    return [
+      `${filePath}: Sprint Strategy Brief ${label} must be a concrete value.`,
+    ];
+  }
+  return [];
+}
+
+export function validateSprintStrategyBrief(content, filePath, options = {}) {
+  const requiresBrief =
+    options[LEDGER_VALIDATION_REQUIRES_LEDGER] === true;
+  const section = extractSprintStrategyBriefSection(content);
+  if (!section) {
+    return requiresBrief ?
+      [`${filePath}: Sprint Strategy Brief section is required.`] :
+      [];
+  }
+  const errors = [];
+  for (const label of SPRINT_STRATEGY_BRIEF_FIELDS) {
+    errors.push(
+      ...validateSprintStrategyBriefField(
+        filePath,
+        label,
+        findSprintStrategyBriefField(section, label),
+      ),
+    );
+  }
+  return errors;
 }
 
 function validateModelFitField(filePath, label, value) {
@@ -1296,6 +1849,47 @@ function scenarioClosureResult(metadata) {
   ).toLowerCase();
 }
 
+export function metadataHasClassificationOnlyOutcome(metadata = {}) {
+  const outcomeValues = [
+    metadata?.[SCENARIO_CAUSAL_CLOSURE_METADATA_FIELD]?.[
+      SCENARIO_CAUSAL_CLOSURE_RESULT_CLASSIFICATION_FIELD
+    ],
+    metadata?.[CAUSAL_GOVERNANCE_METADATA_FIELD]?.[
+      CAUSAL_GOVERNANCE_REPRESENTATIVE_OUTCOME_FIELD
+    ],
+    metadata?.[REPRESENTATIVE_RESIDUAL_METADATA_FIELD]?.[
+      REPRESENTATIVE_RESIDUAL_STATUS_FIELD
+    ],
+    scenarioClosureResult(metadata),
+  ].map((value) => normalizeLedgerText(value).toLowerCase());
+  return outcomeValues.includes(CLASSIFICATION_ONLY_RESULT);
+}
+
+export function metadataUsesClassificationOnlyFastPath(metadata = {}) {
+  return metadataHasClassificationOnlyOutcome(metadata) &&
+    !hasImplementationWriteScope(metadata);
+}
+
+function metadataHasClassificationEfficiency(metadata = {}) {
+  return isObjectRecord(metadata?.[CLASSIFICATION_EFFICIENCY_FIELD]);
+}
+
+function metadataIsPureClassificationPackage(metadata = {}) {
+  return metadata &&
+    isScenarioDrivenMetadata(metadata) &&
+    !hasImplementationWriteScope(metadata) &&
+    (
+      metadataLane(metadata) === LANE_DIAGNOSTIC_CLASSIFICATION ||
+      metadataHasClassificationOnlyOutcome(metadata) ||
+      metadataHasClassificationEfficiency(metadata)
+    );
+}
+
+export function metadataUsesPureClassificationFastPath(metadata = {}) {
+  return metadataIsPureClassificationPackage(metadata) &&
+    metadataHasClassificationEfficiency(metadata);
+}
+
 function isMaterialOscillationResult(metadata) {
   const result = scenarioClosureResult(metadata);
   return result.length === NUM_ZERO ||
@@ -1345,6 +1939,12 @@ function sortedFrontierHistoryEntries(entries = []) {
 
 export function metadataRequiresSubagentSequencing(metadata) {
   if (!metadata) {
+    return false;
+  }
+  if (
+    metadataUsesClassificationOnlyFastPath(metadata) ||
+    metadataUsesPureClassificationFastPath(metadata)
+  ) {
     return false;
   }
   return !SUBAGENT_OPTIONAL_LANES.includes(metadataLane(metadata));
@@ -1671,6 +2271,414 @@ export function validateScenarioCausalClosureContract(
   return errors;
 }
 
+function metadataRequiresRerunDecision(metadata, fileStatus) {
+  if (
+    fileStatus !== STATUS_ACTIVE ||
+    !metadata ||
+    !isScenarioDrivenMetadata(metadata) ||
+    metadataHasClassificationOnlyOutcome(metadata)
+  ) {
+    return false;
+  }
+  const lane = metadataLane(metadata);
+  if (
+    lane === LANE_DIAGNOSTIC_CLASSIFICATION &&
+    !hasImplementationWriteScope(metadata)
+  ) {
+    return true;
+  }
+  if (
+    lane === LANE_CAUSAL_ESCALATION &&
+    !hasImplementationWriteScope(metadata) &&
+    metadataKeepsRepresentativeResidualLive(metadata)
+  ) {
+    return true;
+  }
+  return [
+    scenarioClosureResult(metadata),
+    representativeOutcome(metadata),
+    normalizeLedgerText(
+      metadata?.[REPRESENTATIVE_RESIDUAL_METADATA_FIELD]?.[
+        REPRESENTATIVE_RESIDUAL_STATUS_FIELD
+      ],
+    ).toLowerCase(),
+  ].some((result) =>
+    result.length > NUM_ZERO &&
+    result !== CAUSAL_GOVERNANCE_PENDING_OUTCOME &&
+    result !== 'pending-before-probe');
+}
+
+function validateRerunDecisionConcreteValue(filePath, fieldName, value) {
+  const normalizedValue = normalizeLedgerText(value);
+  if (
+    normalizedValue.length === NUM_ZERO ||
+    MODEL_FIT_EMPTY_VALUE_PATTERN.test(normalizedValue) ||
+    LEDGER_TEMPLATE_PLACEHOLDER_PATTERN.test(normalizedValue) ||
+    normalizedValue.includes(LEDGER_PENDING_BEFORE_IMPLEMENTATION_MARKER)
+  ) {
+    return [
+      `${filePath}: rerunDecision.${fieldName} must be a concrete value.`,
+    ];
+  }
+  return [];
+}
+
+function validateRerunDecisionRefreshCommands(filePath, commands) {
+  if (!Array.isArray(commands) || commands.length === NUM_ZERO) {
+    return [
+      `${filePath}: rerunDecision.requiredRefreshCommands must be a ` +
+      'non-empty array.',
+    ];
+  }
+  const rendered = commands.map(normalizeLedgerText).join(NEWLINE);
+  const errors = [];
+  for (const pattern of RERUN_DECISION_REQUIRED_COMMAND_PATTERNS) {
+    if (!pattern.test(rendered)) {
+      errors.push(
+        `${filePath}: rerunDecision.requiredRefreshCommands must cite ` +
+        'route-after-rerun, Sprint Strategy Brief, Current Edge Card, ' +
+        'current-blocker refresh, and pre-implementation validation.',
+      );
+      break;
+    }
+  }
+  for (let index = NUM_ZERO; index < commands.length; index += NUM_ONE) {
+    errors.push(
+      ...validateRerunDecisionConcreteValue(
+        filePath,
+        `requiredRefreshCommands[${index}]`,
+        commands[index],
+      ),
+    );
+  }
+  return errors;
+}
+
+export function validateRerunDecisionContract(
+  metadata,
+  filePath,
+  options = {},
+) {
+  const fileStatus = options.status || normalizeLedgerText(metadata?.status);
+  const requiresRerunDecision =
+    options[LEDGER_VALIDATION_REQUIRES_LEDGER] === true ||
+    metadataRequiresRerunDecision(metadata, fileStatus);
+  const rerunDecision = metadata?.[RERUN_DECISION_FIELD];
+  if (!rerunDecision) {
+    return requiresRerunDecision ?
+      [
+        `${filePath}: metadata rerunDecision is required after a ` +
+        'representative rerun routes successor work; cite owner, boundary, ' +
+        'dominant reason, stop mode, expected delta, and required refresh commands.',
+      ] :
+      [];
+  }
+  if (!isObjectRecord(rerunDecision)) {
+    return [`${filePath}: metadata rerunDecision must be an object.`];
+  }
+  const errors = [];
+  for (const fieldName of [
+    RERUN_DECISION_SOURCE_ARTIFACT_FIELD,
+    RERUN_DECISION_ROUTE_OWNER_FIELD,
+    RERUN_DECISION_ROUTE_BOUNDARY_FIELD,
+    RERUN_DECISION_ROUTE_DOMINANT_REASON_FIELD,
+    RERUN_DECISION_CAUSAL_OUTCOME_FIELD,
+    RERUN_DECISION_STOP_MODE_FIELD,
+    RERUN_DECISION_NEXT_LANE_FIELD,
+    RERUN_DECISION_EXPECTED_DELTA_FIELD,
+  ]) {
+    errors.push(
+      ...validateRerunDecisionConcreteValue(
+        filePath,
+        fieldName,
+        rerunDecision[fieldName],
+      ),
+    );
+  }
+  errors.push(...validateRerunDecisionRefreshCommands(
+    filePath,
+    rerunDecision[RERUN_DECISION_REQUIRED_REFRESH_COMMANDS_FIELD],
+  ));
+  return errors;
+}
+
+function metadataRequiresClassificationEfficiency(metadata, fileStatus) {
+  return fileStatus === STATUS_ACTIVE &&
+    metadataIsPureClassificationPackage(metadata);
+}
+
+function validateClassificationEfficiencyConcreteValue(
+  filePath,
+  fieldName,
+  value,
+) {
+  const normalizedValue = normalizeLedgerText(value);
+  if (
+    normalizedValue.length === NUM_ZERO ||
+    MODEL_FIT_EMPTY_VALUE_PATTERN.test(normalizedValue) ||
+    LEDGER_TEMPLATE_PLACEHOLDER_PATTERN.test(normalizedValue) ||
+    normalizedValue.includes(LEDGER_PENDING_BEFORE_IMPLEMENTATION_MARKER)
+  ) {
+    return [
+      `${filePath}: classificationEfficiency.${fieldName} must be a concrete value.`,
+    ];
+  }
+  return [];
+}
+
+function validateClassificationEfficiencyCommands(filePath, commands) {
+  if (!Array.isArray(commands) || commands.length === NUM_ZERO) {
+    return [
+      `${filePath}: classificationEfficiency.commands must be a non-empty array.`,
+    ];
+  }
+  const errors = [];
+  if (commands.length > CLASSIFICATION_ONLY_FAST_PATH_PROOF_CAP) {
+    errors.push(
+      `${filePath}: classificationEfficiency.commands must stay within the ` +
+      `classification budget of ${CLASSIFICATION_ONLY_FAST_PATH_PROOF_CAP} ` +
+      'canonical commands.',
+    );
+  }
+  for (let index = NUM_ZERO; index < commands.length; index += NUM_ONE) {
+    errors.push(
+      ...validateClassificationEfficiencyConcreteValue(
+        filePath,
+        `commands[${index}]`,
+        commands[index],
+      ),
+    );
+  }
+  return errors;
+}
+
+function metadataHasStableRuntimeRerunRoute(metadata = {}) {
+  const rerunDecision = metadata?.[RERUN_DECISION_FIELD];
+  if (!isObjectRecord(rerunDecision)) {
+    return false;
+  }
+  return normalizeLedgerText(
+    rerunDecision[RERUN_DECISION_ROUTE_OWNER_FIELD],
+  ) === normalizeLedgerText(metadata.owner) &&
+    normalizeLedgerText(
+      rerunDecision[RERUN_DECISION_ROUTE_BOUNDARY_FIELD],
+    ) === normalizeLedgerText(metadata.boundary) &&
+    normalizeLedgerText(
+      rerunDecision[RERUN_DECISION_CAUSAL_OUTCOME_FIELD],
+    ) === CLASSIFICATION_EFFICIENCY_STABLE_ROUTE_OUTCOME &&
+    normalizeLedgerText(
+      rerunDecision[RERUN_DECISION_STOP_MODE_FIELD],
+    ) === CLASSIFICATION_EFFICIENCY_STABLE_ROUTE_STOP;
+}
+
+export function validateClassificationEfficiencyContract(
+  metadata,
+  filePath,
+  options = {},
+) {
+  const fileStatus = options.status || normalizeLedgerText(metadata?.status);
+  const requiresEfficiency =
+    options[LEDGER_VALIDATION_REQUIRES_LEDGER] === true ||
+    metadataRequiresClassificationEfficiency(metadata, fileStatus);
+  const efficiency = metadata?.[CLASSIFICATION_EFFICIENCY_FIELD];
+  if (!efficiency) {
+    return requiresEfficiency ?
+      [
+        `${filePath}: metadata classificationEfficiency is required for pure ` +
+        'classification packages; record inline-default mode, separate-package ' +
+        'reason, evidence budget, decision record, successor action, and ' +
+        'runtime promotion rule.',
+      ] :
+      [];
+  }
+  if (!isObjectRecord(efficiency)) {
+    return [
+      `${filePath}: metadata classificationEfficiency must be an object.`,
+    ];
+  }
+
+  const errors = [];
+  for (const fieldName of [
+    CLASSIFICATION_EFFICIENCY_DEFAULT_MODE_FIELD,
+    CLASSIFICATION_EFFICIENCY_SEPARATE_PACKAGE_REASON_FIELD,
+    CLASSIFICATION_EFFICIENCY_ARTIFACT_BUDGET_FIELD,
+    CLASSIFICATION_EFFICIENCY_PROOF_COMMAND_BUDGET_FIELD,
+    CLASSIFICATION_EFFICIENCY_DECISION_RECORD_FIELD,
+    CLASSIFICATION_EFFICIENCY_SUCCESSOR_ACTION_FIELD,
+    CLASSIFICATION_EFFICIENCY_RUNTIME_PROMOTION_RULE_FIELD,
+  ]) {
+    errors.push(
+      ...validateClassificationEfficiencyConcreteValue(
+        filePath,
+        fieldName,
+        efficiency[fieldName],
+      ),
+    );
+  }
+
+  const defaultMode = normalizeLedgerText(
+    efficiency[CLASSIFICATION_EFFICIENCY_DEFAULT_MODE_FIELD],
+  );
+  if (
+    defaultMode.length > NUM_ZERO &&
+    !CLASSIFICATION_EFFICIENCY_DEFAULT_MODES.includes(defaultMode)
+  ) {
+    errors.push(
+      `${filePath}: classificationEfficiency.defaultMode must be one of ` +
+      CLASSIFICATION_EFFICIENCY_DEFAULT_MODES.join(', ') + '.',
+    );
+  }
+  const separatePackageReason = normalizeLedgerText(
+    efficiency[CLASSIFICATION_EFFICIENCY_SEPARATE_PACKAGE_REASON_FIELD],
+  );
+  if (
+    separatePackageReason.length > NUM_ZERO &&
+    !CLASSIFICATION_EFFICIENCY_SEPARATE_PACKAGE_REASONS.includes(
+      separatePackageReason,
+    )
+  ) {
+    errors.push(
+      `${filePath}: classificationEfficiency.separatePackageReason must be one of ` +
+      CLASSIFICATION_EFFICIENCY_SEPARATE_PACKAGE_REASONS.join(', ') + '.',
+    );
+  }
+  const successorAction = normalizeLedgerText(
+    efficiency[CLASSIFICATION_EFFICIENCY_SUCCESSOR_ACTION_FIELD],
+  );
+  if (
+    successorAction.length > NUM_ZERO &&
+    !CLASSIFICATION_EFFICIENCY_SUCCESSOR_ACTIONS.includes(successorAction)
+  ) {
+    errors.push(
+      `${filePath}: classificationEfficiency.successorAction must be one of ` +
+      CLASSIFICATION_EFFICIENCY_SUCCESSOR_ACTIONS.join(', ') + '.',
+    );
+  }
+
+  if (
+    !CLASSIFICATION_EFFICIENCY_ONE_ARTIFACT_PATTERN.test(
+      normalizeLedgerText(
+        efficiency[CLASSIFICATION_EFFICIENCY_ARTIFACT_BUDGET_FIELD],
+      ),
+    )
+  ) {
+    errors.push(
+      `${filePath}: classificationEfficiency.artifactBudget must keep pure ` +
+      'classification packages to one representative artifact.',
+    );
+  }
+  if (
+    !CLASSIFICATION_EFFICIENCY_COMMAND_BUDGET_PATTERN.test(
+      normalizeLedgerText(
+        efficiency[CLASSIFICATION_EFFICIENCY_PROOF_COMMAND_BUDGET_FIELD],
+      ),
+    )
+  ) {
+    errors.push(
+      `${filePath}: classificationEfficiency.proofCommandBudget must record ` +
+      'two-or-three-canonical-commands.',
+    );
+  }
+  errors.push(...validateClassificationEfficiencyCommands(
+    filePath,
+    efficiency[CLASSIFICATION_EFFICIENCY_COMMANDS_FIELD],
+  ));
+
+  if (
+    metadataIsPureClassificationPackage(metadata) &&
+    metadataProofCommands(metadata).length > CLASSIFICATION_ONLY_FAST_PATH_PROOF_CAP
+  ) {
+    errors.push(
+      `${filePath}: pure classification package metadata proof must stay ` +
+      `within ${CLASSIFICATION_ONLY_FAST_PATH_PROOF_CAP} canonical commands; ` +
+      'record supporting detail in notes or promote a runtime package.',
+    );
+  }
+
+  if (
+    metadataIsPureClassificationPackage(metadata) &&
+    metadataHasStableRuntimeRerunRoute(metadata) &&
+    successorAction !== CLASSIFICATION_EFFICIENCY_RUNTIME_SUCCESSOR_ACTION
+  ) {
+    errors.push(
+      `${filePath}: stable owner/boundary classification must prefer a ` +
+      'runtime-owner-boundary successor instead of another classification package.',
+    );
+  }
+  const rerunDecision = metadata?.[RERUN_DECISION_FIELD];
+  if (
+    metadataHasStableRuntimeRerunRoute(metadata) &&
+    isObjectRecord(rerunDecision) &&
+    normalizeLedgerText(rerunDecision[RERUN_DECISION_NEXT_LANE_FIELD]) !==
+      LANE_RUNTIME_OWNER_BOUNDARY
+  ) {
+    errors.push(
+      `${filePath}: rerunDecision.nextLane must be ` +
+      `${LANE_RUNTIME_OWNER_BOUNDARY} when stable owner/boundary evidence ` +
+      'selects a local runtime fix.',
+    );
+  }
+  if (
+    successorAction === CLASSIFICATION_EFFICIENCY_RUNTIME_SUCCESSOR_ACTION &&
+    !CLASSIFICATION_EFFICIENCY_RUNTIME_PROMOTION_PATTERN.test(
+      normalizeLedgerText(
+        efficiency[CLASSIFICATION_EFFICIENCY_RUNTIME_PROMOTION_RULE_FIELD],
+      ),
+    )
+  ) {
+    errors.push(
+      `${filePath}: classificationEfficiency.runtimePromotionRule must name ` +
+      'runtime-owner-boundary when successorAction opens runtime work.',
+    );
+  }
+  return errors;
+}
+
+function metadataHasSameFrontierNoReduction(metadata = {}) {
+  return [
+    scenarioClosureResult(metadata),
+    representativeOutcome(metadata),
+    normalizeLedgerText(
+      metadata?.[REPRESENTATIVE_RESIDUAL_METADATA_FIELD]?.[
+        REPRESENTATIVE_RESIDUAL_STATUS_FIELD
+      ],
+    ).toLowerCase(),
+  ].includes(SAME_FRONTIER_RESULT);
+}
+
+export function validateSameFrontierStopContract(
+  metadata,
+  filePath,
+  options = {},
+) {
+  const fileStatus = options.status || normalizeLedgerText(metadata?.status);
+  if (
+    fileStatus !== STATUS_ACTIVE ||
+    !metadata ||
+    !isScenarioDrivenMetadata(metadata) ||
+    !metadataHasSameFrontierNoReduction(metadata)
+  ) {
+    return [];
+  }
+  const gate = metadata[ARCHITECTURE_DECISION_GATE_FIELD];
+  const gateStatus = normalizeLedgerText(gate?.status);
+  const stopCondition = scenarioClosureStopCondition(metadata);
+  if (
+    [
+      ARCHITECTURE_DECISION_GATE_STATUS_REQUIRED,
+      ARCHITECTURE_DECISION_GATE_STATUS_PRESENTED,
+      ARCHITECTURE_DECISION_GATE_STATUS_SELECTED,
+    ].includes(gateStatus) ||
+    SAME_FRONTIER_ESCALATION_STOP_CONDITIONS.includes(stopCondition)
+  ) {
+    return [];
+  }
+  return [
+    `${filePath}: same-frontier rerun without concrete reduction must stop ` +
+    'local patching and record an architectureDecisionGate or human escalation before another local implementation package.',
+  ];
+}
+
 function validateOwnerBoundaryMigrationProof(filePath, proof) {
   if (!isObjectRecord(proof)) {
     return [
@@ -1797,6 +2805,29 @@ function validateFrontierOscillationClosureFields(
   return errors;
 }
 
+function metadataHasSelectedLocalProofGate(metadata = {}) {
+  const gate = metadata?.[ARCHITECTURE_DECISION_GATE_FIELD];
+  if (!isObjectRecord(gate)) {
+    return false;
+  }
+  if (normalizeLedgerText(gate.status) !== ARCHITECTURE_GATE_SELECTED_STATUS) {
+    return false;
+  }
+  const selectedChoice = normalizeLedgerText(gate.selectedChoice);
+  const choices = Array.isArray(gate.choices) ? gate.choices : [];
+  return choices.some((choice) =>
+    isObjectRecord(choice) &&
+    normalizeLedgerText(choice.id) === selectedChoice &&
+    normalizeLedgerText(choice.route) ===
+      ARCHITECTURE_DECISION_GATE_ROUTE_CONTINUE_LOCAL_PROOF);
+}
+
+function metadataIsSelectedRuntimeSuccessor(metadata = {}) {
+  return metadataLane(metadata) === LANE_RUNTIME_OWNER_BOUNDARY &&
+    hasImplementationWriteScope(metadata) &&
+    metadataHasSelectedLocalProofGate(metadata);
+}
+
 function frontierHistoryEntrySummary(entry) {
   const metadata = entry.metadata || {};
   return [
@@ -1893,7 +2924,16 @@ export function validateFrontierOscillationContract(
   }
 
   const errors = [];
-  if (metadataLane(metadata) !== LANE_CAUSAL_ESCALATION) {
+  const isDiagnosticOnlyRoute =
+    metadataLane(metadata) === LANE_DIAGNOSTIC_CLASSIFICATION &&
+    !hasImplementationWriteScope(metadata);
+  const isSelectedRuntimeSuccessor =
+    metadataIsSelectedRuntimeSuccessor(metadata);
+  if (
+    metadataLane(metadata) !== LANE_CAUSAL_ESCALATION &&
+    !isDiagnosticOnlyRoute &&
+    !isSelectedRuntimeSuccessor
+  ) {
     errors.push(
       `${filePath}: frontier oscillation detected (${detection.reason}); ` +
       'use the causal-escalation lane and a cross-boundary handoff package ' +
@@ -1907,7 +2947,7 @@ export function validateFrontierOscillationContract(
   errors.push(...validateFrontierOscillationClosureFields(
     metadata,
     filePath,
-    true,
+    metadataLane(metadata) === LANE_CAUSAL_ESCALATION || isDiagnosticOnlyRoute,
   ));
   return errors;
 }
@@ -2564,11 +3604,19 @@ function resolveValidationPhase(args = []) {
   return requestedPhases[NUM_ZERO] || VALIDATION_PHASE_PRE_IMPL;
 }
 
-function buildSubagentValidationOptions(fileStatus, metadata, phase) {
+function buildSubagentValidationOptions(fileStatus, metadata, phase, options = {}) {
+  const forceClosedPackageLedger =
+    options.enforceClosureSubagentLedger === true &&
+    (fileStatus === STATUS_DONE || fileStatus === STATUS_SUPERSEDED) &&
+    metadataRequiresSubagentSequencing(metadata);
   const requiresSubagentLedger =
-    fileStatus === STATUS_ACTIVE &&
     metadata !== null &&
     metadataRequiresSubagentSequencing(metadata) &&
+    (
+      fileStatus === STATUS_ACTIVE ||
+      isCurrentPolicyClosedSubagentMetadata(fileStatus, metadata) ||
+      forceClosedPackageLedger
+    ) &&
     phase !== VALIDATION_PHASE_ENTRY;
   return {
     skipSubagentLedger: phase === VALIDATION_PHASE_ENTRY,
@@ -2606,6 +3654,9 @@ async function validatePackageFile(filePath, options = {}) {
     fileStatus,
     metadata,
     phase,
+    {
+      enforceClosureSubagentLedger: options.enforceClosureSubagentLedger,
+    },
   );
   if (!subagentValidation.skipSubagentLedger) {
     errors.push(...validateSubagentSequencingLedger(content, relativePath, {
@@ -2620,7 +3671,37 @@ async function validatePackageFile(filePath, options = {}) {
       [LEDGER_VALIDATION_ALLOW_PENDING_SUBAGENT_LEDGER]:
         fileStatus === STATUS_TODO,
     }));
+    errors.push(...validateSubagentProgressLedger(content, relativePath, {
+      [LEDGER_VALIDATION_REQUIRES_LEDGER]:
+        subagentValidation.requiresSubagentLedger,
+      [LEDGER_VALIDATION_REQUIRES_STRICT_ENTRIES]:
+        subagentValidation.requiresSubagentLedger,
+      [LEDGER_VALIDATION_ALLOW_OPEN_IMPLEMENTATION]:
+        subagentValidation.allowOpenImplementation,
+      [LEDGER_VALIDATION_ALLOW_UNAVAILABLE_SUBAGENTS]:
+        subagentValidation.allowUnavailableSubagents,
+      [LEDGER_VALIDATION_ALLOW_PENDING_SUBAGENT_LEDGER]:
+        fileStatus === STATUS_TODO,
+    }));
+    errors.push(...validateSubagentAttemptLedger(content, relativePath, {
+      [LEDGER_VALIDATION_REQUIRES_LEDGER]:
+        subagentValidation.requiresSubagentLedger,
+      [LEDGER_VALIDATION_REQUIRES_STRICT_ENTRIES]:
+        subagentValidation.requiresSubagentLedger,
+      [LEDGER_VALIDATION_ALLOW_OPEN_IMPLEMENTATION]:
+        subagentValidation.allowOpenImplementation,
+      [LEDGER_VALIDATION_ALLOW_UNAVAILABLE_SUBAGENTS]:
+        subagentValidation.allowUnavailableSubagents,
+      [LEDGER_VALIDATION_ALLOW_PENDING_SUBAGENT_LEDGER]:
+        fileStatus === STATUS_TODO,
+    }));
   }
+  errors.push(...validateCoreLogicBrief(content, relativePath, {
+    [LEDGER_VALIDATION_REQUIRES_LEDGER]:
+      phase !== VALIDATION_PHASE_ENTRY &&
+      fileStatus === STATUS_ACTIVE &&
+      metadataRequiresCoreLogicBrief(metadata),
+  }));
   errors.push(...validateModelFitContract(content, relativePath, {
     [LEDGER_VALIDATION_REQUIRES_LEDGER]:
       fileStatus === STATUS_ACTIVE && metadata !== null,
@@ -2642,6 +3723,23 @@ async function validatePackageFile(filePath, options = {}) {
       fileStatus === STATUS_ACTIVE &&
       metadata !== null &&
       isScenarioDrivenMetadata(metadata),
+    status: fileStatus,
+  }));
+  errors.push(...validateRerunDecisionContract(metadata, relativePath, {
+    [LEDGER_VALIDATION_REQUIRES_LEDGER]:
+      metadataRequiresRerunDecision(metadata, fileStatus),
+    status: fileStatus,
+  }));
+  errors.push(...validateClassificationEfficiencyContract(
+    metadata,
+    relativePath,
+    {
+      [LEDGER_VALIDATION_REQUIRES_LEDGER]:
+        metadataRequiresClassificationEfficiency(metadata, fileStatus),
+      status: fileStatus,
+    },
+  ));
+  errors.push(...validateSameFrontierStopContract(metadata, relativePath, {
     status: fileStatus,
   }));
   errors.push(...validateScenarioFrontierOwnerBoundaryContract(
@@ -2699,6 +3797,9 @@ async function validateSprintFile(filePath) {
   if (fileStatus === STATUS_DONE && hasOpenChecklist(content)) {
     errors.push(`${relativePath}: closed sprint still has open checklist items.`);
   }
+  errors.push(...validateSprintStrategyBrief(content, relativePath, {
+    [LEDGER_VALIDATION_REQUIRES_LEDGER]: fileStatus === STATUS_ACTIVE,
+  }));
   return errors;
 }
 
@@ -2708,16 +3809,23 @@ async function resolveValidationTargets(args) {
     return explicitTargets.map(normalizeCliPath);
   }
   const packageFiles = await listPackageFiles();
+  const sprintFiles = await listSprintFiles();
   if (args.includes(CLI_FLAG_ALL)) {
     return [
       ...packageFiles,
-      ...(await listSprintFiles()),
+      ...sprintFiles,
     ];
   }
   const activePackages = packageFiles.filter((filePath) =>
     getPackageStatusFromPath(filePath) === STATUS_ACTIVE,
   );
-  return activePackages;
+  const activeSprints = sprintFiles.filter((filePath) =>
+    getSprintStatusFromPath(filePath) === STATUS_ACTIVE,
+  );
+  return [
+    ...activePackages,
+    ...activeSprints,
+  ];
 }
 
 function hasExplicitValidationTargets(args) {
@@ -3156,6 +4264,10 @@ function summarizeDoctorMetadata(metadata = {}) {
       metadata.touchedFiles.length :
       NUM_ZERO,
     proofCount: Array.isArray(metadata.proof) ? metadata.proof.length : NUM_ZERO,
+    classificationOnlyFastPath:
+      metadataUsesClassificationOnlyFastPath(metadata) ? 'yes' : 'no',
+    pureClassificationFastPath:
+      metadataUsesPureClassificationFastPath(metadata) ? 'yes' : 'no',
     outputProfile:
       modelFit[MODEL_FIT_METADATA_OUTPUT_PROFILE_FIELD] || DEFAULT_UNKNOWN,
   };
@@ -3195,6 +4307,16 @@ function hasRepresentativeEvidenceProof(metadata = {}) {
 
 function buildProofLadderGuidance(metadata = {}) {
   const proofCount = metadataProofCommands(metadata).length;
+  if (metadataUsesClassificationOnlyFastPath(metadata)) {
+    if (proofCount > CLASSIFICATION_ONLY_FAST_PATH_PROOF_CAP) {
+      return 'Classification-only proof ladder is heavy: keep fast-path ' +
+        `packages to 2-${CLASSIFICATION_ONLY_FAST_PATH_PROOF_CAP} canonical ` +
+        'commands, then close and rerun evidence instead of adding more ' +
+        'implementation ceremony.';
+    }
+    return `Classification-only proof ladder is compact: ${proofCount}/` +
+      `${CLASSIFICATION_ONLY_FAST_PATH_PROOF_CAP} durable commands.`;
+  }
   if (proofCount > PROOF_COMMAND_CAP) {
     return 'Proof ladder is heavy: keep default packages to 3-5 durable ' +
       'commands and move supporting extractors into notes unless this is an ' +
@@ -3208,7 +4330,39 @@ function buildProcessGuidanceLines(metadata = {}, fileStatus = DEFAULT_UNKNOWN) 
   const lines = [buildProofLadderGuidance(metadata)];
   const isActivePackage = fileStatus === STATUS_ACTIVE;
   const hasImplementationWrites = hasImplementationWriteScope(metadata);
-  if (isActivePackage && !hasImplementationWrites) {
+  const hasClassificationOnlyOutcome =
+    metadataHasClassificationOnlyOutcome(metadata);
+  const usesClassificationOnlyFastPath =
+    metadataUsesClassificationOnlyFastPath(metadata);
+  const usesPureClassificationFastPath =
+    metadataUsesPureClassificationFastPath(metadata);
+  if (usesClassificationOnlyFastPath) {
+    lines.push(
+      'Classification-only fast path applies: subagent sequencing and static ' +
+      'guardrails are not required until runtime, test, script, or report ' +
+      'writes are promoted into write scope.',
+    );
+  }
+  if (usesPureClassificationFastPath && !usesClassificationOnlyFastPath) {
+    lines.push(
+      'Pure classification fast path applies: classification is a short-lived ' +
+      'decision record with a capped proof budget; subagent sequencing resumes ' +
+      'only when runtime/test/script/report writes move into write scope.',
+    );
+  }
+  if (hasClassificationOnlyOutcome && hasImplementationWrites) {
+    lines.push(
+      'Classification-only result has implementation write scope. Move ' +
+      'implementation paths to candidateRuntimeFiles, or change the package ' +
+      'outcome before runtime/test/script edits begin.',
+    );
+  }
+  if (
+    isActivePackage &&
+    !hasImplementationWrites &&
+    !usesClassificationOnlyFastPath &&
+    !usesPureClassificationFastPath
+  ) {
     lines.push(
       'Admin stop applies: this active package owns no implementation write ' +
       'scope, so the next pass must run representative evidence, close as ' +
@@ -3271,9 +4425,32 @@ function buildDoctorSuggestion(error) {
       'implementation --package <package>` to generate bounded role prompts, ' +
       'then record the returned real agent id in the ledger.';
   }
+  if (/Subagent Progress Ledger/iu.test(error)) {
+    return 'Add a `## Subagent Progress Ledger` and have each real subagent ' +
+      'append one checked update after every completed subtask, including ' +
+      '`evidence:` plus `next:` or `blocker:`.';
+  }
+  if (/Subagent Attempt Ledger/iu.test(error)) {
+    return 'Add a `## Subagent Attempt Ledger` with checked attempt ' +
+      'checkpoints. Interrupted or partial-unvalidated attempts must be ' +
+      'followed by a checked superseded/discarded/revalidated line before ' +
+      'closure.';
+  }
   if (/Model Fit section is required/iu.test(error)) {
     return 'Use `npm run work:package:new -- --lane <lane> ...` to scaffold a ' +
       'package with schema-valid Model Fit fields prefilled from the model ledger.';
+  }
+  if (/Core Logic Brief/iu.test(error)) {
+    return 'Add a Core Logic Brief before runtime/scenario implementation: ' +
+      'canonical outcome, inputs/signals, state model or invariant, non-goals, ' +
+      'proof mapping, and wrong-slice trigger. Use `not-needed` only for ' +
+      'read/review/doc-only or lightweight maintenance packages.';
+  }
+  if (/Sprint Strategy Brief/iu.test(error)) {
+    return 'Add a Sprint Strategy Brief near the top of the active sprint: ' +
+      'goal state, current causal thesis, competing hypotheses, confidence ' +
+      'and evidence, expected green path, wrong-direction signals, next best ' +
+      'package, and stop or escalate rule.';
   }
   if (/Commit And Push Ledger is required/iu.test(error)) {
     return 'After validation and package closure, commit only package-owned ' +
@@ -3296,6 +4473,22 @@ function buildDoctorSuggestion(error) {
       'record `recentFrontierHistory`, `oscillationCheck`, and ' +
       '`handoffInvariant`, and prove the producer-consumer missing edge before ' +
       'another local runtime patch.';
+  }
+  if (/rerunDecision/iu.test(error)) {
+    return 'Record `rerunDecision` from `npm run work:package:route-after-rerun`: ' +
+      'source artifact, route owner/boundary/dominant reason, causal outcome, ' +
+      'stop mode, next lane, expected delta, and required refresh commands for ' +
+      'Sprint Strategy Brief, Current Edge Card, current-blocker, and pre-impl validation.';
+  }
+  if (/classificationEfficiency/iu.test(error)) {
+    return 'Add `classificationEfficiency` to pure classifier packages: ' +
+      'default mode, separate-package reason, one-artifact/two-or-three-command ' +
+      'budget, decision record, successor action, and runtime promotion rule. ' +
+      'Stable owner/boundary local-fix routes should open a runtime-owner-boundary successor.';
+  }
+  if (/same-frontier rerun without concrete reduction/iu.test(error)) {
+    return 'Stop local patching: record an architecture decision gate or human ' +
+      'escalation before opening another local implementation package.';
   }
   if (/architectureDecisionGate/iu.test(error)) {
     return 'Record `architectureDecisionGate` with concrete choices, proof, ' +
@@ -3367,7 +4560,37 @@ export function buildPackageDoctorLines(filePath, content, options = {}) {
       [LEDGER_VALIDATION_ALLOW_PENDING_SUBAGENT_LEDGER]:
         fileStatus === STATUS_TODO,
     }));
+    errors.push(...validateSubagentProgressLedger(content, relativePath, {
+      [LEDGER_VALIDATION_REQUIRES_LEDGER]:
+        subagentValidation.requiresSubagentLedger,
+      [LEDGER_VALIDATION_REQUIRES_STRICT_ENTRIES]:
+        subagentValidation.requiresSubagentLedger,
+      [LEDGER_VALIDATION_ALLOW_OPEN_IMPLEMENTATION]:
+        subagentValidation.allowOpenImplementation,
+      [LEDGER_VALIDATION_ALLOW_UNAVAILABLE_SUBAGENTS]:
+        subagentValidation.allowUnavailableSubagents,
+      [LEDGER_VALIDATION_ALLOW_PENDING_SUBAGENT_LEDGER]:
+        fileStatus === STATUS_TODO,
+    }));
+    errors.push(...validateSubagentAttemptLedger(content, relativePath, {
+      [LEDGER_VALIDATION_REQUIRES_LEDGER]:
+        subagentValidation.requiresSubagentLedger,
+      [LEDGER_VALIDATION_REQUIRES_STRICT_ENTRIES]:
+        subagentValidation.requiresSubagentLedger,
+      [LEDGER_VALIDATION_ALLOW_OPEN_IMPLEMENTATION]:
+        subagentValidation.allowOpenImplementation,
+      [LEDGER_VALIDATION_ALLOW_UNAVAILABLE_SUBAGENTS]:
+        subagentValidation.allowUnavailableSubagents,
+      [LEDGER_VALIDATION_ALLOW_PENDING_SUBAGENT_LEDGER]:
+        fileStatus === STATUS_TODO,
+    }));
   }
+  errors.push(...validateCoreLogicBrief(content, relativePath, {
+    [LEDGER_VALIDATION_REQUIRES_LEDGER]:
+      phase !== VALIDATION_PHASE_ENTRY &&
+      fileStatus === STATUS_ACTIVE &&
+      metadataRequiresCoreLogicBrief(metadata),
+  }));
   errors.push(...validateModelFitContract(content, relativePath, {
     [LEDGER_VALIDATION_REQUIRES_LEDGER]:
       fileStatus === STATUS_ACTIVE && metadata !== null,
@@ -3389,6 +4612,23 @@ export function buildPackageDoctorLines(filePath, content, options = {}) {
       fileStatus === STATUS_ACTIVE &&
       metadata !== null &&
       isScenarioDrivenMetadata(metadata),
+    status: fileStatus,
+  }));
+  errors.push(...validateRerunDecisionContract(metadata, relativePath, {
+    [LEDGER_VALIDATION_REQUIRES_LEDGER]:
+      metadataRequiresRerunDecision(metadata, fileStatus),
+    status: fileStatus,
+  }));
+  errors.push(...validateClassificationEfficiencyContract(
+    metadata,
+    relativePath,
+    {
+      [LEDGER_VALIDATION_REQUIRES_LEDGER]:
+        metadataRequiresClassificationEfficiency(metadata, fileStatus),
+      status: fileStatus,
+    },
+  ));
+  errors.push(...validateSameFrontierStopContract(metadata, relativePath, {
     status: fileStatus,
   }));
   errors.push(...validateScenarioFrontierOwnerBoundaryContract(
@@ -3461,6 +4701,16 @@ export function buildPackageDoctorLines(filePath, content, options = {}) {
     String(metadataSummary.legacyTouchedFileCount),
   );
   appendDoctorField(lines, 'Proof commands', String(metadataSummary.proofCount));
+  appendDoctorField(
+    lines,
+    'Classification-only fast path',
+    metadataSummary.classificationOnlyFastPath,
+  );
+  appendDoctorField(
+    lines,
+    'Pure classification fast path',
+    metadataSummary.pureClassificationFastPath,
+  );
   appendDoctorField(lines, 'Validation', errors.length === NUM_ZERO ? 'ok' : 'failed');
   const processGuidance = buildProcessGuidanceLines(
     metadata || {},
@@ -3618,6 +4868,8 @@ export function buildCurrentBlockerPayload(
     ) ? metadata[REPRESENTATIVE_RESIDUAL_METADATA_FIELD] : {},
     causalGovernance: metadata.causalGovernance || {},
     scenarioCausalClosure: metadata.scenarioCausalClosure || {},
+    rerunDecision: metadata[RERUN_DECISION_FIELD] || {},
+    classificationEfficiency: metadata[CLASSIFICATION_EFFICIENCY_FIELD] || {},
     architectureDecisionGate: buildArchitectureDecisionGatePayload(
       metadata,
       activePackageFile,
@@ -3800,6 +5052,66 @@ export function renderCurrentBlockerMarkdown(payload) {
     'Handoff invariant: ' +
       `\`${payload.scenarioCausalClosure?.handoffInvariant || DEFAULT_UNKNOWN}\``,
     '',
+    '## Rerun Decision',
+    '',
+    `Source artifact: \`${payload.rerunDecision?.sourceArtifact || DEFAULT_UNKNOWN}\``,
+    '',
+    `Route owner: \`${payload.rerunDecision?.routeOwner || DEFAULT_UNKNOWN}\``,
+    '',
+    `Route boundary: \`${payload.rerunDecision?.routeBoundary || DEFAULT_UNKNOWN}\``,
+    '',
+    'Route dominant reason: ' +
+      `\`${payload.rerunDecision?.routeDominantReason || DEFAULT_UNKNOWN}\``,
+    '',
+    'Route causal outcome: ' +
+      `\`${payload.rerunDecision?.routeCausalOutcome || DEFAULT_UNKNOWN}\``,
+    '',
+    `Stop mode: \`${payload.rerunDecision?.stopMode || DEFAULT_UNKNOWN}\``,
+    '',
+    `Next lane: \`${payload.rerunDecision?.nextLane || DEFAULT_UNKNOWN}\``,
+    '',
+    'Expected delta: ' +
+      `\`${payload.rerunDecision?.expectedDelta || DEFAULT_UNKNOWN}\``,
+    '',
+    'Required refresh commands:',
+    '',
+    formatMarkdownList(
+      payload.rerunDecision?.requiredRefreshCommands || [],
+    ),
+    '',
+    '## Classification Efficiency',
+    '',
+    'Default mode: ' +
+      `\`${payload.classificationEfficiency?.defaultMode || DEFAULT_UNKNOWN}\``,
+    '',
+    'Separate package reason: ' +
+      `\`${payload.classificationEfficiency?.separatePackageReason ||
+        DEFAULT_UNKNOWN}\``,
+    '',
+    'Artifact budget: ' +
+      `\`${payload.classificationEfficiency?.artifactBudget ||
+        DEFAULT_UNKNOWN}\``,
+    '',
+    'Proof command budget: ' +
+      `\`${payload.classificationEfficiency?.proofCommandBudget ||
+        DEFAULT_UNKNOWN}\``,
+    '',
+    'Commands:',
+    '',
+    formatMarkdownList(payload.classificationEfficiency?.commands || []),
+    '',
+    'Decision record: ' +
+      `\`${payload.classificationEfficiency?.decisionRecord ||
+        DEFAULT_UNKNOWN}\``,
+    '',
+    'Successor action: ' +
+      `\`${payload.classificationEfficiency?.successorAction ||
+        DEFAULT_UNKNOWN}\``,
+    '',
+    'Runtime promotion rule: ' +
+      `\`${payload.classificationEfficiency?.runtimePromotionRule ||
+        DEFAULT_UNKNOWN}\``,
+    '',
     '## Architecture Decision Gate',
     '',
     `Status: \`${payload.architectureDecisionGate?.status || DEFAULT_UNKNOWN}\``,
@@ -3975,6 +5287,8 @@ async function writeValidatedMovedPackage(
   await writeTextFile(targetPath, nextContent);
   const validation = await validatePackageFile(targetPath, {
     phase: validationPhaseForTargetStatus(targetStatus),
+    enforceClosureSubagentLedger:
+      targetStatus === STATUS_DONE || targetStatus === STATUS_SUPERSEDED,
     packageHistoryEntries: await collectPackageHistoryEntries(),
   });
   if (validation.errors.length > NUM_ZERO) {

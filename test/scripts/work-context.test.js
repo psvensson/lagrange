@@ -305,6 +305,7 @@ const RUNTIME_GRAMMAR_BROAD_FILE_COMMAND =
 const SECTION_USEFUL_COMMANDS = '## Useful Commands';
 const SECTION_FIRST_FILES = '## First Files To Read';
 const SECTION_SUBAGENT_SEQUENCING = '## Subagent Sequencing';
+const SECTION_SUBAGENT_PROGRESS = '## Subagent Progress';
 const SECTION_MODEL_FIT = '## Model Fit';
 const SECTION_REPRESENTATIVE_RESIDUAL = '## Representative Residual';
 const SECTION_CAUSAL_GOVERNANCE = '## Causal Governance';
@@ -383,6 +384,7 @@ test('work context advertises triage commands before raw artifact reads',
     t.notOk(commands.includes(RUNTIME_GRAMMAR_BROAD_FILE_COMMAND));
     t.ok(rendered.includes('Playback: ' + TEST_PLAYBACK_PATH + ' (missing)'));
     t.ok(rendered.includes(SECTION_SUBAGENT_SEQUENCING));
+    t.ok(rendered.includes(SECTION_SUBAGENT_PROGRESS));
     t.ok(rendered.includes(SECTION_MODEL_FIT));
     t.ok(rendered.includes(SECTION_REPRESENTATIVE_RESIDUAL));
     t.ok(rendered.includes(SECTION_CAUSAL_GOVERNANCE));

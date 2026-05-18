@@ -61,14 +61,29 @@ test('shared package schema lists validator enums for LLM scaffolding', (t) => {
   t.match(rendered, /Output Profiles/u);
   t.match(rendered, /extra-high/u);
   t.match(rendered, /writeScope/u);
+  t.match(rendered, /Core Logic Brief/u);
+  t.match(rendered, /Canonical outcome/u);
+  t.match(rendered, /State model or invariant/u);
   t.match(rendered, /pre-impl/u);
   t.match(rendered, /tool-unavailable/u);
+  t.match(rendered, /Subagent Progress Ledger/u);
+  t.match(rendered, /evidence: \.\.\./u);
+  t.match(rendered, /Subagent Attempt Ledger/u);
+  t.match(rendered, /partial-unvalidated/u);
   t.match(rendered, /pending-before-rerun/u);
   t.match(rendered, /classification-only-stop/u);
   t.match(rendered, /ownerBoundaryMigrationProof/u);
   t.match(rendered, /fromOwner/u);
   t.match(rendered, /Architecture Decision Gate/u);
   t.match(rendered, /architectureDecisionGate/u);
+  t.match(rendered, /Rerun Decision/u);
+  t.match(rendered, /rerunDecision/u);
+  t.match(rendered, /Classification Efficiency/u);
+  t.match(rendered, /classificationEfficiency/u);
+  t.match(rendered, /inline-gate-default/u);
+  t.match(rendered, /open-runtime-owner-boundary/u);
+  t.match(rendered, /Classification-Only Fast Path/u);
+  t.match(rendered, /candidateRuntimeFiles/u);
   t.end();
 });
 
@@ -94,12 +109,48 @@ test('package scaffolder pre-fills Model Fit from schema defaults', async (t) =>
   t.match(content, /Intended minimum model: `gpt-5\.3-codex-spark`/u);
   t.match(content, /Output profile: `medium`/u);
   t.match(content, /Model ledger advisory: `hold`/u);
+  t.match(content, /## Core Logic Brief/u);
+  t.match(content, /Status: `not-needed`/u);
   t.match(content, /## LLM Tool-First Contract/u);
   t.match(content, /## Workflow Acceleration Contract/u);
+  t.match(content, /## Expected Representative Delta/u);
+  t.match(content, /## Rerun Decision Gate/u);
+  t.match(content, /## Classification Efficiency/u);
+  t.match(content, /## Subagent Progress Ledger/u);
+  t.match(content, /## Subagent Attempt Ledger/u);
+  t.match(content, /every completed subtask/u);
   t.match(content, /work:advance -- --check/u);
   t.match(content, /work:scenario-route/u);
   t.match(content, /work:evidence-summary/u);
   t.match(content, /ad hoc `jq`/u);
+});
+
+test('package scaffolder adds Core Logic Brief for runtime lanes', async (t) => {
+  const content = await buildPackageContent({
+    'title': TEST_TITLE,
+    'slug': TEST_SLUG,
+    'lane': 'runtime-owner-boundary',
+    'owner': 'operation_workflow_owner',
+    'boundary': 'workflow_progress',
+    'dominant-reason': 'dispatch_pending',
+    'next-action': 'Prove the workflow progress decision table.',
+    'artifact': 'test-output/reports/runtime-owner.report.json',
+    'proof': ['node --test test/rebalancer/workflow-progress.test.js'],
+    'write-scope': ['src/rebalancer/operation-workflow-owner.js'],
+    'forbidden-file': ['startup_active_gate_owner/runtime'],
+    'ledger': TEMP_LEDGER_PATH,
+  });
+
+  t.match(content, /## Core Logic Brief/u);
+  t.match(
+    content,
+    /Canonical outcome: operation_workflow_owner \/ workflow_progress/u,
+  );
+  t.match(content, /Inputs\/signals: test-output\/reports\/runtime-owner\.report\.json/u);
+  t.match(content, /State model or invariant: Collect evidence/u);
+  t.match(content, /Proof mapping: Implementation and tests must prove/u);
+  t.match(content, /Wrong-slice trigger: Stop or split/u);
+  t.notMatch(content, /Status: `not-needed`/u);
 });
 
 test('package scaffolder keeps Model Fit focused proof concrete', async (t) => {
@@ -118,6 +169,35 @@ test('package scaffolder keeps Model Fit focused proof concrete', async (t) => {
 
   t.match(content, /Focused proof: `npm run work:advance -- --check`/u);
   t.match(content, /npm run work:evidence-summary -- <fresh-artifact>/u);
+});
+
+test('package scaffolder can mark classification-only fast path', async (t) => {
+  const content = await buildPackageContent({
+    'title': TEST_TITLE,
+    'slug': TEST_SLUG,
+    'lane': 'causal-escalation',
+    'scenario': 'rolling-restart',
+    'artifact': FIXTURE_PATH,
+    'owner': OWNER_NAME,
+    'boundary': BOUNDARY_NAME,
+    'dominant-reason': 'classification_only',
+    'next-action': 'Close classification-only and rerun evidence.',
+    'proof': [
+      `npm run work:evidence-summary -- ${FIXTURE_PATH}`,
+      `npm run analyze:topology-convergence -- ${FIXTURE_PATH} --handoff-probe`,
+    ],
+    'write-scope': ['work/packages/active-test.md'],
+    'candidate-runtime-file': ['src/rebalancer/operation-workflow-owner.js'],
+    'classification-only': true,
+    'ledger': TEMP_LEDGER_PATH,
+  });
+
+  t.match(content, /"status": "classification-only"/u);
+  t.match(content, /## Classification-Only Fast Path/u);
+  t.match(content, /candidateRuntimeFiles/u);
+  t.match(content, /Subagent sequencing is optional/u);
+  t.match(content, /"classificationEfficiency": \{/u);
+  t.match(content, /"artifactBudget": "one-artifact"/u);
 });
 
 test('package scaffolder uses package filename date convention', async (t) => {
@@ -158,6 +238,9 @@ test('package scaffolder can infer package defaults from an artifact',
     t.match(rendered, /"lane": "causal-escalation"/u);
     t.match(rendered, /"artifact": "test\/scripts\/__fixtures__/u);
     t.match(rendered, /"owner": "operation_workflow_owner"/u);
+    t.match(rendered, /"rerunDecision": \{/u);
+    t.match(rendered, /"routeCausalOutcome":/u);
+    t.match(rendered, /"classificationEfficiency": \{/u);
     t.match(rendered, /work:scenario-triage/u);
     t.match(rendered, /analyze:priority-recovery-residuals/u);
   });
@@ -261,7 +344,11 @@ test('route-after-rerun prints the migration transaction without writing',
 
     t.match(rendered, /# Route After Rerun/u);
     t.match(rendered, /# Scenario Route/u);
+    t.match(rendered, /## Required Refresh/u);
+    t.match(rendered, /work:current-blocker -- --write/u);
+    t.match(rendered, /work:validate -- --pre-impl/u);
     t.match(rendered, /work:package:migrate -- --write --transaction/u);
+    t.match(rendered, /Successor package command/u);
     t.match(rendered, /work\/packages\/active-successor\.md/u);
   });
 
@@ -278,6 +365,8 @@ test('subagent prompt generator emits bounded task and ledger guidance',
     t.match(prompt, /workflow_tooling_owner/u);
     t.match(prompt, /Predecessor: `none`/u);
     t.match(prompt, /Do not widen beyond the write scope/u);
+    t.match(prompt, /## Core Logic Brief/u);
+    t.match(prompt, /Status: `not-needed`/u);
     t.match(prompt, /## Output Budget/u);
     t.match(prompt, /Profile: `medium`/u);
     t.match(prompt, /More output is not evidence/u);
@@ -286,6 +375,16 @@ test('subagent prompt generator emits bounded task and ledger guidance',
     t.match(prompt, /## Commit Scope/u);
     t.match(prompt, /work:evidence-summary/u);
     t.match(prompt, /ad hoc `jq`/u);
+    t.match(prompt, /## Progress Ledger Updates/u);
+    t.match(prompt, /after every completed subtask/u);
+    t.match(prompt, /falsification check/u);
+    t.match(prompt, /blocker:/u);
+    t.match(prompt, /## Exact Validation Commands/u);
+    t.match(prompt, /Do not add ad hoc Jest or TAP flags/u);
+    t.match(prompt, /## Attempt Ledger Updates/u);
+    t.match(prompt, /partial-unvalidated/u);
+    t.match(prompt, /parent revalidated focused proof: yes/u);
+    t.match(prompt, /edited after the last progress-ledger line/u);
     t.match(prompt, /Add the real returned agent name and id/u);
   });
 

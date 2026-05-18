@@ -35,6 +35,7 @@ const MESSAGE_WRITE_REQUIRES_SUCCESSOR =
   '--write requires --successor <active-successor>.';
 const MARKDOWN_HEADER_ROUTE_AFTER_RERUN = '# Route After Rerun';
 const MARKDOWN_HEADER_TRANSACTION = '## Transaction';
+const MARKDOWN_HEADER_REQUIRED_REFRESH = '## Required Refresh';
 const MARKDOWN_SUCCESSOR_REQUIRED =
   '- `provide --successor <active-successor> before --write`';
 const HELP_TEXT = [
@@ -120,6 +121,8 @@ async function buildRouteAfterRerunLines(options = {}) {
   }
   const packagePath = options.packagePath || await currentPackagePath();
   const route = await buildScenarioRouteSummary(options);
+  const routeCommand = route.suggestedProof?.[NUM_ZERO] ||
+    `npm run work:scenario-route -- ${options.artifactPath}`;
   const lines = [
     MARKDOWN_HEADER_ROUTE_AFTER_RERUN,
     EMPTY_TEXT,
@@ -128,6 +131,16 @@ async function buildRouteAfterRerunLines(options = {}) {
     `- Write: \`${options.write}\``,
     EMPTY_TEXT,
     renderMarkdown(route),
+    EMPTY_TEXT,
+    MARKDOWN_HEADER_REQUIRED_REFRESH,
+    EMPTY_TEXT,
+    `- Route result command: \`${routeCommand}\``,
+    `- Successor package command: \`${route.suggestedPackageCommand}\``,
+    '- If owner and boundary are stable, open a runtime-owner-boundary successor instead of another classification package.',
+    '- Update Sprint Strategy Brief from the route result.',
+    '- Update Current Edge Card from the route result.',
+    `- Refresh blocker handoff: \`npm run work:current-blocker -- --write\``,
+    `- Enforce consistency: \`npm run work:validate -- --pre-impl\``,
   ];
   if (!options.write) {
     lines.push(

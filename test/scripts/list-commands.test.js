@@ -91,7 +91,7 @@ const OWNER_GLOSSARY_DESCRIPTION =
 const PACKAGE_EVIDENCE_BLOCK_DESCRIPTION =
   'Generate a package migration/evidence block from topology analyzer output.';
 const PACKAGE_ROUTE_AFTER_RERUN_DESCRIPTION =
-  'Combine post-rerun routing with the package migration transaction.';
+  'Combine post-rerun routing, required sprint/current-blocker refresh steps, and the package migration transaction.';
 const HARNESS_SUMMARY_DESCRIPTION =
   'List latest harness reports by scenario and status.';
 const MODEL_LEDGER_SUMMARY_DESCRIPTION =

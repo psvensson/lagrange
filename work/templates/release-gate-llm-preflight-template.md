@@ -40,6 +40,15 @@ canonical extractor that was insufficient and why.
   `priority-recovery-stale-or-subordinate` | `active-gate-first-frontier` |
   `contradictory-evidence`
 
+## Core Logic Brief
+
+- Canonical outcome:
+- Inputs/signals:
+- State model or invariant:
+- Non-goals and forbidden interpretations:
+- Proof mapping:
+- Wrong-slice trigger:
+
 ## State And Progress Review
 
 For each current state or wait, record entry condition, progress signal,
@@ -71,6 +80,9 @@ Classify each dirty entry as `package-owned`, `sprint-owned`,
 ## Agent Result
 
 - Agent identity:
+- Progress ledger updates recorded after each completed subtask:
+- Attempt ledger status and last checkpoint:
+- Parent revalidated focused proof before implementation completion:
 - Review result:
 - Fix result, if any:
 - Implementation result, if any:

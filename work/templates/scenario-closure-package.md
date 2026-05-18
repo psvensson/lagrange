@@ -97,6 +97,15 @@ frontier.
 - Current boundary:
 - Current dominant reason:
 
+## Core Logic Brief
+
+- Canonical outcome:
+- Inputs/signals:
+- State model or invariant:
+- Non-goals and forbidden interpretations:
+- Proof mapping:
+- Wrong-slice trigger:
+
 ## LLM Tool-First Contract
 
 Before raw JSON, raw logs, broad file search, oversized segment files, or ad hoc
@@ -118,6 +127,58 @@ Before raw JSON, raw logs, broad file search, oversized segment files, or ad hoc
 
 If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which
 canonical extractor was tried and why it was insufficient.
+
+## Classification-Only Fast Path
+
+Use when focused proof classifies the current edge and no runtime, test, script,
+or report edit is justified.
+
+- Metadata result: `classification-only`
+- `writeScope` / `commitScope`: package, sprint, tracker, ledger, or handoff
+  docs only
+- Possible implementation files: `candidateRuntimeFiles`
+- Proof cap: two or three canonical commands
+- Subagents/static runtime guardrails: optional until implementation write
+  scope is promoted
+- Reuse of the same unchanged artifact: close and rerun evidence, or escalate
+  if owner/boundary, package class, or stop condition did not change
+
+## Classification Efficiency
+
+- Default mode: `inline-gate-default`
+- Separate package reason:
+- Artifact budget: `one-artifact`
+- Proof command budget: `two-or-three-canonical-commands`
+- Commands:
+  1. Representative evidence or route command
+  2. Focused extractor/probe
+  3. Validation or causal-model proof
+- Decision record:
+- Successor action:
+- Runtime promotion rule: stable owner/boundary local-fix routes open a
+  `runtime-owner-boundary` successor; do not open another classifier from the
+  same unchanged artifact.
+
+## Expected Representative Delta
+
+- Baseline artifact:
+- Expected metric, owner, boundary, dominant reason, or route delta:
+- Local proof class:
+- Representative proof class:
+- Stop if unchanged:
+
+## Rerun Decision Gate
+
+- Source artifact:
+- Route owner:
+- Route boundary:
+- Route dominant reason:
+- Route causal outcome:
+- Stop mode:
+- Next lane:
+- Required after rerun: route-after-rerun, Sprint Strategy Brief update,
+  Current Edge Card update, `npm run work:current-blocker -- --write`, and
+  `npm run work:validate -- --pre-impl`.
 
 ## Scope
 
@@ -151,7 +212,29 @@ changes the package.
       Agent <name> (<agent-id>) fixed <predecessor package>, or `not-needed`
       only when review result is `clean`.
 - [ ] Implementation subagent recorded:
-      Agent <name> (<agent-id>) implemented <this package>.
+      Agent <name> (<agent-id>) implemented <this package>;
+      parent revalidated focused proof: yes.
+
+## Subagent Progress Ledger
+
+Required with the sequencing ledger. Each real subagent appends one checked
+update after every completed subtask; the Sequencing Ledger remains the
+role-completion proof.
+
+- [ ] Agent <name> (<agent-id>) <role> context loaded: scope and blocker confirmed; evidence: package, sprint, and handoff files read; next: first focused probe.
+- [ ] Agent <name> (<agent-id>) <role> probe complete: state/cause confirmed or contradicted; evidence: command and result; next: edit, validate, or blocker handoff.
+- [ ] Agent <name> (<agent-id>) <role> validation complete: package proof refreshed; evidence: commands and results; next: final handoff or successor action.
+
+## Subagent Attempt Ledger
+
+Required with the sequencing ledger. Every real subagent attempt records the
+latest checkpoint, validation state, parent action, and recovery decision.
+Interrupted or partial-unvalidated attempts must be followed by a checked
+superseded/discarded/revalidated line before closure.
+
+- [ ] Agent <name> (<agent-id>) <role> attempt: status: <started|running|interrupted|partial-unvalidated|validated|superseded>; last checkpoint: context loaded; parent action: pending; evidence: package, sprint, and handoff files read; next: first focused probe.
+- [ ] Agent <name> (<agent-id>) <role> attempt: status: validated; last checkpoint: package proof refreshed; parent action: revalidated; evidence: commands and results; next: final handoff or successor action.
+- [ ] Agent <name> (<agent-id>) <role> recovery: status: superseded; last checkpoint: replaced interrupted or partial-unvalidated attempt; parent action: superseded; evidence: superseding proof; next: continue from clean checkpoint.
 
 ## Static Drift Ledger
 

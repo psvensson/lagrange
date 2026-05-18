@@ -46,7 +46,7 @@ const COMMAND_GROUPS = Object.freeze([
       }),
       Object.freeze({
         command: 'npm run work:package:route-after-rerun -- --artifact <artifact> --successor <active-successor>',
-        description: 'Combine post-rerun routing with the package migration transaction.',
+        description: 'Combine post-rerun routing, required sprint/current-blocker refresh steps, and the package migration transaction.',
       }),
       Object.freeze({
         command: 'npm run work:package:schema',
@@ -54,7 +54,7 @@ const COMMAND_GROUPS = Object.freeze([
       }),
       Object.freeze({
         command: 'npm run work:subagent-prompt -- --role <role> --package <package>',
-        description: 'Generate bounded review, fix, or implementation subagent prompts and ledger line guidance.',
+        description: 'Generate bounded subagent prompts plus sequencing and progress ledger guidance.',
       }),
       Object.freeze({
         command: 'npm run work:subagent-next',

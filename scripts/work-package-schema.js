@@ -16,6 +16,13 @@ const LANE_DIAGNOSTIC_CLASSIFICATION = 'diagnostic-classification';
 const LANE_RUNTIME_OWNER_BOUNDARY = 'runtime-owner-boundary';
 const LANE_SCENARIO_RELEASE_GATE = 'scenario-release-gate';
 const LANE_CAUSAL_ESCALATION = 'causal-escalation';
+const CORE_LOGIC_BRIEF_CANONICAL_OUTCOME_FIELD = 'Canonical outcome';
+const CORE_LOGIC_BRIEF_INPUTS_FIELD = 'Inputs/signals';
+const CORE_LOGIC_BRIEF_MODEL_FIELD = 'State model or invariant';
+const CORE_LOGIC_BRIEF_NON_GOALS_FIELD =
+  'Non-goals and forbidden interpretations';
+const CORE_LOGIC_BRIEF_PROOF_FIELD = 'Proof mapping';
+const CORE_LOGIC_BRIEF_WRONG_SLICE_FIELD = 'Wrong-slice trigger';
 const MODEL_FIT_SPARK_MODEL = 'gpt-5.3-codex-spark';
 const MODEL_FIT_DEFAULT_FRONTIER_MODEL = 'gpt-5.3-codex';
 const MODEL_FIT_LEAF_SLICE_SCOPE = 'leaf-slice';
@@ -53,6 +60,70 @@ const SCENARIO_CAUSAL_CLOSURE_OSCILLATION_CHECK_FIELD =
 const SCENARIO_CAUSAL_CLOSURE_HANDOFF_INVARIANT_FIELD =
   'handoffInvariant';
 const ARCHITECTURE_DECISION_GATE_FIELD = 'architectureDecisionGate';
+const RERUN_DECISION_FIELD = 'rerunDecision';
+const RERUN_DECISION_SOURCE_ARTIFACT_FIELD = 'sourceArtifact';
+const RERUN_DECISION_ROUTE_OWNER_FIELD = 'routeOwner';
+const RERUN_DECISION_ROUTE_BOUNDARY_FIELD = 'routeBoundary';
+const RERUN_DECISION_ROUTE_DOMINANT_REASON_FIELD = 'routeDominantReason';
+const RERUN_DECISION_CAUSAL_OUTCOME_FIELD = 'routeCausalOutcome';
+const RERUN_DECISION_STOP_MODE_FIELD = 'stopMode';
+const RERUN_DECISION_NEXT_LANE_FIELD = 'nextLane';
+const RERUN_DECISION_EXPECTED_DELTA_FIELD = 'expectedDelta';
+const RERUN_DECISION_REQUIRED_REFRESH_COMMANDS_FIELD =
+  'requiredRefreshCommands';
+const RERUN_DECISION_FIELDS = Object.freeze([
+  RERUN_DECISION_SOURCE_ARTIFACT_FIELD,
+  RERUN_DECISION_ROUTE_OWNER_FIELD,
+  RERUN_DECISION_ROUTE_BOUNDARY_FIELD,
+  RERUN_DECISION_ROUTE_DOMINANT_REASON_FIELD,
+  RERUN_DECISION_CAUSAL_OUTCOME_FIELD,
+  RERUN_DECISION_STOP_MODE_FIELD,
+  RERUN_DECISION_NEXT_LANE_FIELD,
+  RERUN_DECISION_EXPECTED_DELTA_FIELD,
+  RERUN_DECISION_REQUIRED_REFRESH_COMMANDS_FIELD,
+]);
+const CLASSIFICATION_EFFICIENCY_FIELD = 'classificationEfficiency';
+const CLASSIFICATION_EFFICIENCY_DEFAULT_MODE_FIELD = 'defaultMode';
+const CLASSIFICATION_EFFICIENCY_SEPARATE_PACKAGE_REASON_FIELD =
+  'separatePackageReason';
+const CLASSIFICATION_EFFICIENCY_ARTIFACT_BUDGET_FIELD = 'artifactBudget';
+const CLASSIFICATION_EFFICIENCY_PROOF_COMMAND_BUDGET_FIELD =
+  'proofCommandBudget';
+const CLASSIFICATION_EFFICIENCY_COMMANDS_FIELD = 'commands';
+const CLASSIFICATION_EFFICIENCY_DECISION_RECORD_FIELD = 'decisionRecord';
+const CLASSIFICATION_EFFICIENCY_SUCCESSOR_ACTION_FIELD = 'successorAction';
+const CLASSIFICATION_EFFICIENCY_RUNTIME_PROMOTION_RULE_FIELD =
+  'runtimePromotionRule';
+const CLASSIFICATION_EFFICIENCY_FIELDS = Object.freeze([
+  CLASSIFICATION_EFFICIENCY_DEFAULT_MODE_FIELD,
+  CLASSIFICATION_EFFICIENCY_SEPARATE_PACKAGE_REASON_FIELD,
+  CLASSIFICATION_EFFICIENCY_ARTIFACT_BUDGET_FIELD,
+  CLASSIFICATION_EFFICIENCY_PROOF_COMMAND_BUDGET_FIELD,
+  CLASSIFICATION_EFFICIENCY_COMMANDS_FIELD,
+  CLASSIFICATION_EFFICIENCY_DECISION_RECORD_FIELD,
+  CLASSIFICATION_EFFICIENCY_SUCCESSOR_ACTION_FIELD,
+  CLASSIFICATION_EFFICIENCY_RUNTIME_PROMOTION_RULE_FIELD,
+]);
+const CLASSIFICATION_EFFICIENCY_DEFAULT_MODES = Object.freeze([
+  'inline-gate-default',
+  'separate-package-approved',
+]);
+const CLASSIFICATION_EFFICIENCY_SEPARATE_PACKAGE_REASONS = Object.freeze([
+  'owner-boundary-or-action-changed',
+  'runtime-promotion-blocked',
+  'architecture-or-human-stop',
+  'tracker-truth-change',
+  'successor-selection',
+]);
+const CLASSIFICATION_EFFICIENCY_SUCCESSOR_ACTIONS = Object.freeze([
+  'update-current-package',
+  'record-in-predecessor-or-sprint',
+  'open-runtime-owner-boundary',
+  'open-tooling-bug',
+  'open-causal-escalation',
+  'present-human-gate',
+  'rerun-representative-evidence',
+]);
 const ARCHITECTURE_DECISION_GATE_STATUSES = Object.freeze([
   'not-required',
   'required',
@@ -78,6 +149,12 @@ const SUBAGENT_UNAVAILABLE_HUMAN_WAIVED = 'human-waived';
 const SUBAGENT_UNAVAILABLE_TOOL_UNAVAILABLE = 'tool-unavailable';
 const SUBAGENT_UNAVAILABLE_BLOCKED_BY_ENVIRONMENT_POLICY =
   'blocked-by-environment-policy';
+const SUBAGENT_ATTEMPT_STARTED = 'started';
+const SUBAGENT_ATTEMPT_RUNNING = 'running';
+const SUBAGENT_ATTEMPT_INTERRUPTED = 'interrupted';
+const SUBAGENT_ATTEMPT_PARTIAL_UNVALIDATED = 'partial-unvalidated';
+const SUBAGENT_ATTEMPT_VALIDATED = 'validated';
+const SUBAGENT_ATTEMPT_SUPERSEDED = 'superseded';
 
 const VALID_PACKAGE_STATUSES = Object.freeze([
   STATUS_ACTIVE,
@@ -99,6 +176,21 @@ const SUBAGENT_OPTIONAL_LANES = Object.freeze([
   LANE_READ_REVIEW_DOC_ONLY,
   LANE_LIGHTWEIGHT_MAINTENANCE,
   LANE_DIAGNOSTIC_CLASSIFICATION,
+]);
+
+const CORE_LOGIC_BRIEF_REQUIRED_LANES = Object.freeze([
+  LANE_RUNTIME_OWNER_BOUNDARY,
+  LANE_SCENARIO_RELEASE_GATE,
+  LANE_CAUSAL_ESCALATION,
+]);
+
+const CORE_LOGIC_BRIEF_FIELDS = Object.freeze([
+  CORE_LOGIC_BRIEF_CANONICAL_OUTCOME_FIELD,
+  CORE_LOGIC_BRIEF_INPUTS_FIELD,
+  CORE_LOGIC_BRIEF_MODEL_FIELD,
+  CORE_LOGIC_BRIEF_NON_GOALS_FIELD,
+  CORE_LOGIC_BRIEF_PROOF_FIELD,
+  CORE_LOGIC_BRIEF_WRONG_SLICE_FIELD,
 ]);
 
 const CAUSAL_GOVERNANCE_VALID_OUTCOMES = Object.freeze([
@@ -199,6 +291,15 @@ const SUBAGENT_UNAVAILABLE_STATES = Object.freeze([
   SUBAGENT_UNAVAILABLE_BLOCKED_BY_ENVIRONMENT_POLICY,
 ]);
 
+const SUBAGENT_ATTEMPT_STATUSES = Object.freeze([
+  SUBAGENT_ATTEMPT_STARTED,
+  SUBAGENT_ATTEMPT_RUNNING,
+  SUBAGENT_ATTEMPT_INTERRUPTED,
+  SUBAGENT_ATTEMPT_PARTIAL_UNVALIDATED,
+  SUBAGENT_ATTEMPT_VALIDATED,
+  SUBAGENT_ATTEMPT_SUPERSEDED,
+]);
+
 const DEFAULT_MODEL_FIT_BY_LANE = Object.freeze({
   [LANE_READ_REVIEW_DOC_ONLY]: Object.freeze({
     packageClass: MODEL_FIT_LIGHTWEIGHT_CLASS,
@@ -287,6 +388,10 @@ function renderEnumList(values = []) {
   return values.map((value) => `${LIST_PREFIX}\`${value}\``).join(NEWLINE);
 }
 
+function coreLogicBriefRequiredForLane(lane) {
+  return CORE_LOGIC_BRIEF_REQUIRED_LANES.includes(normalizeText(lane));
+}
+
 function renderSchemaReference() {
   return [
     '# Work Package Schema Reference',
@@ -309,6 +414,16 @@ function renderSchemaReference() {
     EMPTY_TEXT,
     renderEnumList(WORK_PACKAGE_SCOPE_FIELDS),
     EMPTY_TEXT,
+    '## Core Logic Brief',
+    EMPTY_TEXT,
+    'Required lanes:',
+    EMPTY_TEXT,
+    renderEnumList(CORE_LOGIC_BRIEF_REQUIRED_LANES),
+    EMPTY_TEXT,
+    'Fields:',
+    EMPTY_TEXT,
+    renderEnumList(CORE_LOGIC_BRIEF_FIELDS),
+    EMPTY_TEXT,
     '## Representative Residual',
     EMPTY_TEXT,
     `- Metadata field: \`${REPRESENTATIVE_RESIDUAL_FIELD}\``,
@@ -319,6 +434,28 @@ function renderSchemaReference() {
     `- Metadata field: \`${OWNER_BOUNDARY_MIGRATION_PROOF_FIELD}\``,
     renderEnumList(OWNER_BOUNDARY_MIGRATION_PROOF_FIELDS),
     EMPTY_TEXT,
+    '## Rerun Decision',
+    EMPTY_TEXT,
+    `- Metadata field: \`${RERUN_DECISION_FIELD}\``,
+    renderEnumList(RERUN_DECISION_FIELDS),
+    EMPTY_TEXT,
+    '## Classification Efficiency',
+    EMPTY_TEXT,
+    `- Metadata field: \`${CLASSIFICATION_EFFICIENCY_FIELD}\``,
+    renderEnumList(CLASSIFICATION_EFFICIENCY_FIELDS),
+    EMPTY_TEXT,
+    'Default modes:',
+    EMPTY_TEXT,
+    renderEnumList(CLASSIFICATION_EFFICIENCY_DEFAULT_MODES),
+    EMPTY_TEXT,
+    'Separate package reasons:',
+    EMPTY_TEXT,
+    renderEnumList(CLASSIFICATION_EFFICIENCY_SEPARATE_PACKAGE_REASONS),
+    EMPTY_TEXT,
+    'Successor actions:',
+    EMPTY_TEXT,
+    renderEnumList(CLASSIFICATION_EFFICIENCY_SUCCESSOR_ACTIONS),
+    EMPTY_TEXT,
     '## Validation Phases',
     EMPTY_TEXT,
     renderEnumList(VALIDATION_PHASES),
@@ -326,6 +463,23 @@ function renderSchemaReference() {
     '## Subagent Unavailable States',
     EMPTY_TEXT,
     renderEnumList(SUBAGENT_UNAVAILABLE_STATES),
+    EMPTY_TEXT,
+    '## Subagent Progress Ledger',
+    EMPTY_TEXT,
+    '- Required with subagent sequencing for active runtime owner-boundary, scenario/release-gate, and causal-escalation packages.',
+    '- Each real subagent appends one checked update after every completed subtask.',
+    '- Checked updates include `Agent <name> (<agent-id>)`, `evidence: ...`, and `next: ...` or `blocker: ...`.',
+    '- The progress ledger explains in-flight work; the Subagent Sequencing Ledger remains the closure proof for required roles.',
+    EMPTY_TEXT,
+    '## Subagent Attempt Ledger',
+    EMPTY_TEXT,
+    '- Required with subagent sequencing for active runtime owner-boundary, scenario/release-gate, and causal-escalation packages.',
+    '- Checked attempts include `Agent <name> (<agent-id>)`, `status: ...`, `last checkpoint: ...`, `parent action: ...`, `evidence: ...`, and `next: ...` or `blocker: ...`.',
+    '- Valid statuses:',
+    EMPTY_TEXT,
+    renderEnumList(SUBAGENT_ATTEMPT_STATUSES),
+    EMPTY_TEXT,
+    '- Interrupted or partial-unvalidated attempts must be followed by a checked superseded/discarded/revalidated attempt line before closure.',
     EMPTY_TEXT,
     '## Causal Governance Outcomes',
     EMPTY_TEXT,
@@ -338,6 +492,13 @@ function renderSchemaReference() {
     '## Scenario Stop Conditions',
     EMPTY_TEXT,
     renderEnumList(SCENARIO_CAUSAL_CLOSURE_VALID_STOP_CONDITIONS),
+    EMPTY_TEXT,
+    '## Classification-Only Fast Path',
+    EMPTY_TEXT,
+    '- Applies when package metadata records `classification-only` as the representative outcome, scenario result classification, or representative residual status.',
+    '- Requires implementation paths to stay out of `writeScope` and `commitScope`; keep possible runtime/test/script/report paths in `candidateRuntimeFiles` until promotion.',
+    '- Subagent sequencing is optional for the fast path. Runtime/test/script/report promotion returns the package to the normal implementation lane.',
+    '- Keep fast-path proof to 2-3 canonical commands: representative evidence, one focused extractor/probe, and validation or causal-model proof.',
     EMPTY_TEXT,
     '## Scenario Frontier Oscillation Fields',
     EMPTY_TEXT,
@@ -381,6 +542,21 @@ export {
   ARCHITECTURE_DECISION_GATE_TRIGGERS,
   CAUSAL_GOVERNANCE_PENDING_OUTCOME,
   CAUSAL_GOVERNANCE_VALID_OUTCOMES,
+  CLASSIFICATION_EFFICIENCY_ARTIFACT_BUDGET_FIELD,
+  CLASSIFICATION_EFFICIENCY_COMMANDS_FIELD,
+  CLASSIFICATION_EFFICIENCY_DECISION_RECORD_FIELD,
+  CLASSIFICATION_EFFICIENCY_DEFAULT_MODE_FIELD,
+  CLASSIFICATION_EFFICIENCY_DEFAULT_MODES,
+  CLASSIFICATION_EFFICIENCY_FIELD,
+  CLASSIFICATION_EFFICIENCY_FIELDS,
+  CLASSIFICATION_EFFICIENCY_PROOF_COMMAND_BUDGET_FIELD,
+  CLASSIFICATION_EFFICIENCY_RUNTIME_PROMOTION_RULE_FIELD,
+  CLASSIFICATION_EFFICIENCY_SEPARATE_PACKAGE_REASON_FIELD,
+  CLASSIFICATION_EFFICIENCY_SEPARATE_PACKAGE_REASONS,
+  CLASSIFICATION_EFFICIENCY_SUCCESSOR_ACTION_FIELD,
+  CLASSIFICATION_EFFICIENCY_SUCCESSOR_ACTIONS,
+  CORE_LOGIC_BRIEF_FIELDS,
+  CORE_LOGIC_BRIEF_REQUIRED_LANES,
   DEFAULT_MODEL_FIT_BY_LANE,
   LANE_CAUSAL_ESCALATION,
   LANE_DIAGNOSTIC_CLASSIFICATION,
@@ -392,6 +568,17 @@ export {
   MODEL_FIT_LEAF_SLICE_SCOPE,
   MODEL_FIT_SPARK_MODEL,
   OUTPUT_PROFILE_MEDIUM,
+  RERUN_DECISION_CAUSAL_OUTCOME_FIELD,
+  RERUN_DECISION_EXPECTED_DELTA_FIELD,
+  RERUN_DECISION_FIELD,
+  RERUN_DECISION_FIELDS,
+  RERUN_DECISION_NEXT_LANE_FIELD,
+  RERUN_DECISION_REQUIRED_REFRESH_COMMANDS_FIELD,
+  RERUN_DECISION_ROUTE_BOUNDARY_FIELD,
+  RERUN_DECISION_ROUTE_DOMINANT_REASON_FIELD,
+  RERUN_DECISION_ROUTE_OWNER_FIELD,
+  RERUN_DECISION_SOURCE_ARTIFACT_FIELD,
+  RERUN_DECISION_STOP_MODE_FIELD,
   OWNER_BOUNDARY_MIGRATION_PROOF_EVIDENCE_FIELD,
   OWNER_BOUNDARY_MIGRATION_PROOF_FIELD,
   OWNER_BOUNDARY_MIGRATION_PROOF_FIELDS,
@@ -415,6 +602,7 @@ export {
   SCOPE_FIELD_HANDOFF_FILES,
   SCOPE_FIELD_WRITE_SCOPE,
   SUBAGENT_OPTIONAL_LANES,
+  SUBAGENT_ATTEMPT_STATUSES,
   SUBAGENT_UNAVAILABLE_STATES,
   VALID_PACKAGE_STATUSES,
   VALID_OUTPUT_PROFILES,
@@ -425,6 +613,7 @@ export {
   WORK_PACKAGE_SCOPE_FIELDS,
   WORKFLOW_LANES,
   WORK_PACKAGE_METADATA_SCHEMA,
+  coreLogicBriefRequiredForLane,
   defaultOutputProfileForLane,
   defaultModelFitForLane,
   renderSchemaReference,

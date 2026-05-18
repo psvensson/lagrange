@@ -44,10 +44,10 @@
     }
   ],
   "stats": {
-    "candidateCount": 295,
-    "dedupedRuleCount": 295,
-    "exportedRuleCount": 295,
-    "estimatedAllRulesTokens": 11039
+    "candidateCount": 305,
+    "dedupedRuleCount": 305,
+    "exportedRuleCount": 305,
+    "estimatedAllRulesTokens": 11417
   },
   "rules": [
     {
@@ -1524,14 +1524,16 @@
       "id": "GOV-0005",
       "domain": "governance",
       "strength": "must_not",
-      "tags": [],
-      "rule": "Do not create heading, directory, checkbox, or sidecar status systems that contradict the filename.",
+      "tags": [
+        "ownership"
+      ],
+      "rule": "Non-goals and forbidden interpretations: meanings, consumers, owner boundaries, or downstream symptoms this package must not treat as authority.",
       "score": 221,
       "sources": [
         {
           "file": "workflow-guidelines.md",
-          "line": 164,
-          "section": "Workflow Guidelines Detail > Package Status And Closure"
+          "line": 102,
+          "section": "Workflow Guidelines Detail > Core Logic Brief Gate"
         }
       ]
     },
@@ -1540,12 +1542,12 @@
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
-      "rule": "Do not archive package files into a second package-status directory.",
+      "rule": "Do not create heading, directory, checkbox, or sidecar status systems that contradict the filename.",
       "score": 221,
       "sources": [
         {
           "file": "workflow-guidelines.md",
-          "line": 167,
+          "line": 201,
           "section": "Workflow Guidelines Detail > Package Status And Closure"
         }
       ]
@@ -1555,7 +1557,7 @@
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
-      "rule": "Run validation before committing so current-blocker never points at a missing active-... package.",
+      "rule": "Do not archive package files into a second package-status directory.",
       "score": 221,
       "sources": [
         {
@@ -1570,18 +1572,33 @@
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
-      "rule": "Do not open a new package merely because artifact path, epoch, node ids, counts, attempts, timings, timestamps, or presentation shape changed.",
-      "score": 220,
+      "rule": "Run validation before committing so current-blocker never points at a missing active-... package.",
+      "score": 221,
       "sources": [
         {
           "file": "workflow-guidelines.md",
-          "line": 301,
-          "section": "Workflow Guidelines Detail > Scenario Failure Migration"
+          "line": 241,
+          "section": "Workflow Guidelines Detail > Package Status And Closure"
         }
       ]
     },
     {
       "id": "GOV-0009",
+      "domain": "governance",
+      "strength": "must_not",
+      "tags": [],
+      "rule": "Do not open a new package merely because artifact path, epoch, node ids, counts, attempts, timings, timestamps, or presentation shape changed.",
+      "score": 220,
+      "sources": [
+        {
+          "file": "workflow-guidelines.md",
+          "line": 338,
+          "section": "Workflow Guidelines Detail > Scenario Failure Migration"
+        }
+      ]
+    },
+    {
+      "id": "GOV-0010",
       "domain": "governance",
       "strength": "must_not",
       "tags": [
@@ -1592,23 +1609,8 @@
       "sources": [
         {
           "file": "workflow-guidelines.md",
-          "line": 343,
+          "line": 380,
           "section": "Workflow Guidelines Detail > Frontier Oscillation Escalation"
-        }
-      ]
-    },
-    {
-      "id": "GOV-0010",
-      "domain": "governance",
-      "strength": "must_not",
-      "tags": [],
-      "rule": "If the fixture/probe is missing, create the fixture/probe or stop as evidence-incomplete. Do not patch runtime from a representative red run alone.",
-      "score": 220,
-      "sources": [
-        {
-          "file": "workflow-guidelines.md",
-          "line": 468,
-          "section": "Workflow Guidelines Detail > LLM Current Edge Card And Trap List"
         }
       ]
     },
@@ -1619,12 +1621,44 @@
       "tags": [
         "ownership"
       ],
-      "rule": "Refresh the sprint gate card whenever the representative artifact, canonical owner boundary, or required action changes.",
+      "rule": "Do not create another classification-only package from the same unchanged artifact unless owner/boundary, package class, or stop condition changes. Close, rerun fresh evidence, or escalate.",
       "score": 219,
       "sources": [
         {
           "file": "workflow-guidelines.md",
-          "line": 712,
+          "line": 524,
+          "section": "Workflow Guidelines Detail > Classification-Only Fast Path"
+        }
+      ]
+    },
+    {
+      "id": "GOV-0012",
+      "domain": "governance",
+      "strength": "must_not",
+      "tags": [],
+      "rule": "If the fixture/probe is missing, create the fixture/probe or stop as evidence-incomplete. Do not patch runtime from a representative red run alone.",
+      "score": 219,
+      "sources": [
+        {
+          "file": "workflow-guidelines.md",
+          "line": 621,
+          "section": "Workflow Guidelines Detail > LLM Current Edge Card And Trap List"
+        }
+      ]
+    },
+    {
+      "id": "GOV-0013",
+      "domain": "governance",
+      "strength": "must_not",
+      "tags": [
+        "ownership"
+      ],
+      "rule": "Refresh the sprint gate card whenever the representative artifact, canonical owner boundary, or required action changes.",
+      "score": 218,
+      "sources": [
+        {
+          "file": "workflow-guidelines.md",
+          "line": 872,
           "section": "Workflow Guidelines Detail > Sprint Architecture Decision Gate"
         }
       ]
@@ -1970,7 +2004,7 @@
       ]
     },
     {
-      "id": "GOV-0012",
+      "id": "GOV-0014",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -1985,7 +2019,7 @@
       ]
     },
     {
-      "id": "GOV-0013",
+      "id": "GOV-0015",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -2294,7 +2328,7 @@
       ]
     },
     {
-      "id": "GOV-0014",
+      "id": "GOV-0016",
       "domain": "governance",
       "strength": "must_not",
       "tags": [
@@ -2311,7 +2345,7 @@
       ]
     },
     {
-      "id": "GOV-0015",
+      "id": "GOV-0017",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -2320,13 +2354,13 @@
       "sources": [
         {
           "file": "workflow-guidelines.md",
-          "line": 185,
+          "line": 222,
           "section": "Workflow Guidelines Detail > Package Status And Closure"
         }
       ]
     },
     {
-      "id": "GOV-0016",
+      "id": "GOV-0018",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -2335,13 +2369,13 @@
       "sources": [
         {
           "file": "workflow-guidelines.md",
-          "line": 192,
+          "line": 229,
           "section": "Workflow Guidelines Detail > Package Status And Closure"
         }
       ]
     },
     {
-      "id": "GOV-0017",
+      "id": "GOV-0019",
       "domain": "governance",
       "strength": "must_not",
       "tags": [
@@ -2352,13 +2386,13 @@
       "sources": [
         {
           "file": "workflow-guidelines.md",
-          "line": 254,
+          "line": 291,
           "section": "Workflow Guidelines Detail > Residual Closure Inventory"
         }
       ]
     },
     {
-      "id": "GOV-0018",
+      "id": "GOV-0020",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -2367,13 +2401,13 @@
       "sources": [
         {
           "file": "workflow-guidelines.md",
-          "line": 406,
+          "line": 443,
           "section": "Workflow Guidelines Detail > Static Drift Ledger"
         }
       ]
     },
     {
-      "id": "GOV-0019",
+      "id": "GOV-0021",
       "domain": "governance",
       "strength": "must_not",
       "tags": [
@@ -2386,40 +2420,8 @@
       "sources": [
         {
           "file": "workflow-guidelines.md",
-          "line": 406,
+          "line": 443,
           "section": "Workflow Guidelines Detail > Static Drift Ledger"
-        }
-      ]
-    },
-    {
-      "id": "GOV-0020",
-      "domain": "governance",
-      "strength": "must_not",
-      "tags": [
-        "governance"
-      ],
-      "rule": "For LLMs, \"do not edit\" boundaries are higher-signal than a long positive scope list.",
-      "score": 210,
-      "sources": [
-        {
-          "file": "workflow-guidelines.md",
-          "line": 454,
-          "section": "Workflow Guidelines Detail > LLM Current Edge Card And Trap List"
-        }
-      ]
-    },
-    {
-      "id": "GOV-0021",
-      "domain": "governance",
-      "strength": "must_not",
-      "tags": [],
-      "rule": "Do not name new representative rerun outputs with placeholder timestamps such as T000000Z; placeholder names make lineage ambiguous and can hide accidental overwrite.",
-      "score": 209,
-      "sources": [
-        {
-          "file": "workflow-guidelines.md",
-          "line": 501,
-          "section": "Workflow Guidelines Detail > LLM Current Edge Card And Trap List"
         }
       ]
     },
@@ -2428,13 +2430,13 @@
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
-      "rule": "work/sprints/current-blocker.json is generated handoff state, but it must not be stale.",
+      "rule": "Do not open another classification package from the same unchanged artifact.",
       "score": 209,
       "sources": [
         {
           "file": "workflow-guidelines.md",
-          "line": 567,
-          "section": "Workflow Guidelines Detail > LLM Tool-First Triage"
+          "line": 551,
+          "section": "Workflow Guidelines Detail > Classification Efficiency Contract"
         }
       ]
     },
@@ -2442,19 +2444,66 @@
       "id": "GOV-0023",
       "domain": "governance",
       "strength": "must_not",
-      "tags": [],
-      "rule": "Parent-session notes, local/manual labels, and arbitrary text without a real agent id do not satisfy review, fix, or implementation roles at closure.",
+      "tags": [
+        "governance"
+      ],
+      "rule": "For LLMs, \"do not edit\" boundaries are higher-signal than a long positive scope list.",
       "score": 209,
       "sources": [
         {
           "file": "workflow-guidelines.md",
-          "line": 598,
-          "section": "Workflow Guidelines Detail > Sub-Agent Sequencing"
+          "line": 607,
+          "section": "Workflow Guidelines Detail > LLM Current Edge Card And Trap List"
         }
       ]
     },
     {
       "id": "GOV-0024",
+      "domain": "governance",
+      "strength": "must_not",
+      "tags": [],
+      "rule": "Do not name new representative rerun outputs with placeholder timestamps such as T000000Z; placeholder names make lineage ambiguous and can hide accidental overwrite.",
+      "score": 209,
+      "sources": [
+        {
+          "file": "workflow-guidelines.md",
+          "line": 654,
+          "section": "Workflow Guidelines Detail > LLM Current Edge Card And Trap List"
+        }
+      ]
+    },
+    {
+      "id": "GOV-0025",
+      "domain": "governance",
+      "strength": "must_not",
+      "tags": [],
+      "rule": "work/sprints/current-blocker.json is generated handoff state, but it must not be stale.",
+      "score": 209,
+      "sources": [
+        {
+          "file": "workflow-guidelines.md",
+          "line": 720,
+          "section": "Workflow Guidelines Detail > LLM Tool-First Triage"
+        }
+      ]
+    },
+    {
+      "id": "GOV-0026",
+      "domain": "governance",
+      "strength": "must_not",
+      "tags": [],
+      "rule": "Parent-session notes, local/manual labels, and arbitrary text without a real agent id do not satisfy review, fix, or implementation roles at closure.",
+      "score": 208,
+      "sources": [
+        {
+          "file": "workflow-guidelines.md",
+          "line": 751,
+          "section": "Workflow Guidelines Detail > Sub-Agent Sequencing"
+        }
+      ]
+    },
+    {
+      "id": "GOV-0027",
       "domain": "governance",
       "strength": "must_not",
       "tags": [
@@ -2465,7 +2514,7 @@
       "sources": [
         {
           "file": "workflow-guidelines.md",
-          "line": 774,
+          "line": 934,
           "section": "Workflow Guidelines Detail > Roadmap And Work-Tracker Truth"
         }
       ]
@@ -2536,7 +2585,7 @@
       ]
     },
     {
-      "id": "GOV-0025",
+      "id": "GOV-0028",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -2553,7 +2602,7 @@
       ]
     },
     {
-      "id": "GOV-0026",
+      "id": "GOV-0029",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -2568,7 +2617,7 @@
       ]
     },
     {
-      "id": "GOV-0027",
+      "id": "GOV-0030",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -2585,7 +2634,7 @@
       ]
     },
     {
-      "id": "GOV-0028",
+      "id": "GOV-0031",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -2603,7 +2652,7 @@
       ]
     },
     {
-      "id": "GOV-0029",
+      "id": "GOV-0032",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -2620,7 +2669,7 @@
       ]
     },
     {
-      "id": "GOV-0030",
+      "id": "GOV-0033",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -2637,7 +2686,7 @@
       ]
     },
     {
-      "id": "GOV-0031",
+      "id": "GOV-0034",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -3015,7 +3064,7 @@
       ]
     },
     {
-      "id": "GOV-0032",
+      "id": "GOV-0035",
       "domain": "governance",
       "strength": "must_not",
       "tags": [
@@ -3032,7 +3081,7 @@
       ]
     },
     {
-      "id": "GOV-0033",
+      "id": "GOV-0036",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -3047,7 +3096,7 @@
       ]
     },
     {
-      "id": "GOV-0034",
+      "id": "GOV-0037",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -3058,13 +3107,13 @@
       "sources": [
         {
           "file": "workflow-guidelines.md",
-          "line": 121,
-          "section": "Workflow Guidelines Detail > Lane Requirements > Scenario/Release-Gate Lane"
+          "line": 157,
+          "section": "Workflow Guidelines Detail > Core Logic Brief Gate > Scenario/Release-Gate Lane"
         }
       ]
     },
     {
-      "id": "GOV-0035",
+      "id": "GOV-0038",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -3075,13 +3124,13 @@
       "sources": [
         {
           "file": "workflow-guidelines.md",
-          "line": 196,
+          "line": 233,
           "section": "Workflow Guidelines Detail > Package Status And Closure"
         }
       ]
     },
     {
-      "id": "GOV-0036",
+      "id": "GOV-0039",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -3092,13 +3141,13 @@
       "sources": [
         {
           "file": "workflow-guidelines.md",
-          "line": 200,
+          "line": 237,
           "section": "Workflow Guidelines Detail > Package Status And Closure"
         }
       ]
     },
     {
-      "id": "GOV-0037",
+      "id": "GOV-0040",
       "domain": "governance",
       "strength": "must_not",
       "tags": [
@@ -3115,7 +3164,7 @@
       ]
     },
     {
-      "id": "GOV-0038",
+      "id": "GOV-0041",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -3126,7 +3175,7 @@
       "sources": [
         {
           "file": "workflow-guidelines.md",
-          "line": 298,
+          "line": 335,
           "section": "Workflow Guidelines Detail > Scenario Failure Migration"
         }
       ]
@@ -3164,50 +3213,50 @@
       ]
     },
     {
-      "id": "GOV-0039",
+      "id": "GOV-0042",
       "domain": "governance",
       "strength": "must",
       "tags": [
         "ownership"
       ],
       "rule": "Canonical extractors agree on the first frontier, owner boundary, cause, and next required action, or the sprint records the exact extractor conflict.",
-      "score": 201,
+      "score": 200,
       "sources": [
         {
           "file": "workflow-guidelines.md",
-          "line": 653,
+          "line": 813,
           "section": "Workflow Guidelines Detail > Sprint Architecture Decision Gate"
         }
       ]
     },
     {
-      "id": "GOV-0040",
+      "id": "GOV-0043",
       "domain": "governance",
       "strength": "must",
       "tags": [
         "governance"
       ],
       "rule": "roadmap-sharpening-required: the proposed reset is real but too broad for a bounded runtime package and must be converted into roadmap/spec/architecture scope first.",
-      "score": 201,
+      "score": 200,
       "sources": [
         {
           "file": "workflow-guidelines.md",
-          "line": 676,
+          "line": 836,
           "section": "Workflow Guidelines Detail > Sprint Architecture Decision Gate"
         }
       ]
     },
     {
-      "id": "GOV-0041",
+      "id": "GOV-0044",
       "domain": "governance",
       "strength": "must",
       "tags": [],
       "rule": "The gate cannot replace canonical extractor evidence, package closure, required sub-agent sequencing, validation, or focused commit and push proof.",
-      "score": 201,
+      "score": 200,
       "sources": [
         {
           "file": "workflow-guidelines.md",
-          "line": 704,
+          "line": 864,
           "section": "Workflow Guidelines Detail > Sprint Architecture Decision Gate"
         }
       ]
@@ -3345,7 +3394,7 @@
       ]
     },
     {
-      "id": "GOV-0042",
+      "id": "GOV-0045",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -3360,7 +3409,7 @@
       ]
     },
     {
-      "id": "GOV-0043",
+      "id": "GOV-0046",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -3378,7 +3427,7 @@
       ]
     },
     {
-      "id": "GOV-0044",
+      "id": "GOV-0047",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -3396,7 +3445,7 @@
       ]
     },
     {
-      "id": "GOV-0045",
+      "id": "GOV-0048",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -3633,7 +3682,24 @@
       ]
     },
     {
-      "id": "GOV-0046",
+      "id": "GOV-0049",
+      "domain": "governance",
+      "strength": "must",
+      "tags": [
+        "ownership"
+      ],
+      "rule": "Runtime owner-boundary, scenario/release-gate, and causal-escalation packages must carry a ## Core Logic Brief before implementation starts.",
+      "score": 193,
+      "sources": [
+        {
+          "file": "workflow-guidelines.md",
+          "line": 90,
+          "section": "Workflow Guidelines Detail > Core Logic Brief Gate"
+        }
+      ]
+    },
+    {
+      "id": "GOV-0050",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -3644,13 +3710,13 @@
       "sources": [
         {
           "file": "workflow-guidelines.md",
-          "line": 90,
-          "section": "Workflow Guidelines Detail > Lane Requirements > Runtime Owner-Boundary Lane"
+          "line": 121,
+          "section": "Workflow Guidelines Detail > Core Logic Brief Gate > Runtime Owner-Boundary Lane"
         }
       ]
     },
     {
-      "id": "GOV-0047",
+      "id": "GOV-0051",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -3659,13 +3725,13 @@
       "sources": [
         {
           "file": "workflow-guidelines.md",
-          "line": 106,
-          "section": "Workflow Guidelines Detail > Lane Requirements > Runtime Owner-Boundary Lane"
+          "line": 139,
+          "section": "Workflow Guidelines Detail > Core Logic Brief Gate > Runtime Owner-Boundary Lane"
         }
       ]
     },
     {
-      "id": "GOV-0048",
+      "id": "GOV-0052",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -3676,70 +3742,8 @@
       "sources": [
         {
           "file": "workflow-guidelines.md",
-          "line": 111,
-          "section": "Workflow Guidelines Detail > Lane Requirements > Scenario/Release-Gate Lane"
-        }
-      ]
-    },
-    {
-      "id": "GOV-0049",
-      "domain": "governance",
-      "strength": "must",
-      "tags": [],
-      "rule": "This lane is required when the representative gate remains red after repeated related local fixes or classification-only reductions.",
-      "score": 193,
-      "sources": [
-        {
-          "file": "workflow-guidelines.md",
-          "line": 137,
-          "section": "Workflow Guidelines Detail > Lane Requirements > Causal Escalation Lane"
-        }
-      ]
-    },
-    {
-      "id": "GOV-0050",
-      "domain": "governance",
-      "strength": "must",
-      "tags": [],
-      "rule": "Every completed work-package slice MUST end in a focused commit and push before the next slice starts.",
-      "score": 193,
-      "sources": [
-        {
-          "file": "workflow-guidelines.md",
-          "line": 171,
-          "section": "Workflow Guidelines Detail > Package Status And Closure"
-        }
-      ]
-    },
-    {
-      "id": "GOV-0051",
-      "domain": "governance",
-      "strength": "must",
-      "tags": [],
-      "rule": "Stop for human direction when package-owned and unrelated changes cannot be separated safely, when no push target exists, or when credentials/policy prevent the required push.",
-      "score": 193,
-      "sources": [
-        {
-          "file": "workflow-guidelines.md",
-          "line": 188,
-          "section": "Workflow Guidelines Detail > Package Status And Closure"
-        }
-      ]
-    },
-    {
-      "id": "GOV-0052",
-      "domain": "governance",
-      "strength": "must",
-      "tags": [
-        "ownership"
-      ],
-      "rule": "Same-owner reductions stay in the current package unless the required action changes.",
-      "score": 192,
-      "sources": [
-        {
-          "file": "workflow-guidelines.md",
-          "line": 304,
-          "section": "Workflow Guidelines Detail > Scenario Failure Migration"
+          "line": 144,
+          "section": "Workflow Guidelines Detail > Core Logic Brief Gate > Scenario/Release-Gate Lane"
         }
       ]
     },
@@ -3748,13 +3752,13 @@
       "domain": "governance",
       "strength": "must",
       "tags": [],
-      "rule": "Scenario-driven packages and active sprint snapshots must include a compact Current Edge Card that an LLM can keep in working memory without rereading the full package history.",
-      "score": 192,
+      "rule": "This lane is required when the representative gate remains red after repeated related local fixes or classification-only reductions.",
+      "score": 193,
       "sources": [
         {
           "file": "workflow-guidelines.md",
-          "line": 439,
-          "section": "Workflow Guidelines Detail > LLM Current Edge Card And Trap List"
+          "line": 173,
+          "section": "Workflow Guidelines Detail > Core Logic Brief Gate > Causal Escalation Lane"
         }
       ]
     },
@@ -3762,16 +3766,14 @@
       "id": "GOV-0054",
       "domain": "governance",
       "strength": "must",
-      "tags": [
-        "ownership"
-      ],
-      "rule": "That fast path should avoid a broad package unless canonical evidence changes owner, boundary, or required action.",
-      "score": 192,
+      "tags": [],
+      "rule": "Every completed work-package slice MUST end in a focused commit and push before the next slice starts.",
+      "score": 193,
       "sources": [
         {
           "file": "workflow-guidelines.md",
-          "line": 498,
-          "section": "Workflow Guidelines Detail > LLM Current Edge Card And Trap List"
+          "line": 208,
+          "section": "Workflow Guidelines Detail > Package Status And Closure"
         }
       ]
     },
@@ -3780,13 +3782,13 @@
       "domain": "governance",
       "strength": "must",
       "tags": [],
-      "rule": "Representative artifacts must use real unique timestamps or otherwise unique run identifiers.",
-      "score": 191,
+      "rule": "Stop for human direction when package-owned and unrelated changes cannot be separated safely, when no push target exists, or when credentials/policy prevent the required push.",
+      "score": 193,
       "sources": [
         {
           "file": "workflow-guidelines.md",
-          "line": 501,
-          "section": "Workflow Guidelines Detail > LLM Current Edge Card And Trap List"
+          "line": 225,
+          "section": "Workflow Guidelines Detail > Package Status And Closure"
         }
       ]
     },
@@ -3797,13 +3799,92 @@
       "tags": [
         "ownership"
       ],
-      "rule": "The active scenario package owner and boundary must appear in scenarioCausalClosure.currentFirstFrontier.",
+      "rule": "Same-owner reductions stay in the current package unless the required action changes.",
+      "score": 192,
+      "sources": [
+        {
+          "file": "workflow-guidelines.md",
+          "line": 341,
+          "section": "Workflow Guidelines Detail > Scenario Failure Migration"
+        }
+      ]
+    },
+    {
+      "id": "GOV-0057",
+      "domain": "governance",
+      "strength": "must",
+      "tags": [],
+      "rule": "requiredRefreshCommands must cite route-after-rerun, Sprint Strategy Brief update, Current Edge Card update, current-blocker regeneration, and pre-implementation validation.",
       "score": 191,
       "sources": [
         {
           "file": "workflow-guidelines.md",
-          "line": 740,
-          "section": "Workflow Guidelines Detail > Scenario Causal Closure Ledger"
+          "line": 574,
+          "section": "Workflow Guidelines Detail > Post-Rerun Decision Gate"
+        }
+      ]
+    },
+    {
+      "id": "GOV-0058",
+      "domain": "governance",
+      "strength": "must",
+      "tags": [
+        "ownership"
+      ],
+      "rule": "Packages must state the expected representative delta before implementation: what metric, owner, boundary, dominant reason, or route is expected to change.",
+      "score": 191,
+      "sources": [
+        {
+          "file": "workflow-guidelines.md",
+          "line": 580,
+          "section": "Workflow Guidelines Detail > Post-Rerun Decision Gate"
+        }
+      ]
+    },
+    {
+      "id": "GOV-0059",
+      "domain": "governance",
+      "strength": "must",
+      "tags": [],
+      "rule": "Scenario-driven packages and active sprint snapshots must include a compact Current Edge Card that an LLM can keep in working memory without rereading the full package history.",
+      "score": 191,
+      "sources": [
+        {
+          "file": "workflow-guidelines.md",
+          "line": 592,
+          "section": "Workflow Guidelines Detail > LLM Current Edge Card And Trap List"
+        }
+      ]
+    },
+    {
+      "id": "GOV-0060",
+      "domain": "governance",
+      "strength": "must",
+      "tags": [
+        "ownership"
+      ],
+      "rule": "That fast path should avoid a broad package unless canonical evidence changes owner, boundary, or required action.",
+      "score": 191,
+      "sources": [
+        {
+          "file": "workflow-guidelines.md",
+          "line": 651,
+          "section": "Workflow Guidelines Detail > LLM Current Edge Card And Trap List"
+        }
+      ]
+    },
+    {
+      "id": "GOV-0061",
+      "domain": "governance",
+      "strength": "must",
+      "tags": [],
+      "rule": "Representative artifacts must use real unique timestamps or otherwise unique run identifiers.",
+      "score": 191,
+      "sources": [
+        {
+          "file": "workflow-guidelines.md",
+          "line": 654,
+          "section": "Workflow Guidelines Detail > LLM Current Edge Card And Trap List"
         }
       ]
     },
@@ -3851,6 +3932,38 @@
           "file": "testing-guidelines.md",
           "line": 899,
           "section": "Testing Guidelines > Availability Under Pressure Test Policy > Required coverage patterns"
+        }
+      ]
+    },
+    {
+      "id": "GOV-0062",
+      "domain": "governance",
+      "strength": "must",
+      "tags": [],
+      "rule": "When sub-agent sequencing is required, the package's Subagent Progress Ledger is the in-flight communication channel, and the Subagent Attempt Ledger records every attempt status, checkpoint, parent action, evidence, and next/blocker. Interrupted or partial-unvalidated attempts must be superseded/discarded/revalidated before closure, and implementation completion requires parent local proof rerun with parent revalidated focused proof: yes.",
+      "score": 190,
+      "sources": [
+        {
+          "file": "workflow-guidelines.md",
+          "line": 759,
+          "section": "Workflow Guidelines Detail > Sub-Agent Sequencing"
+        }
+      ]
+    },
+    {
+      "id": "GOV-0063",
+      "domain": "governance",
+      "strength": "must",
+      "tags": [
+        "ownership"
+      ],
+      "rule": "The active scenario package owner and boundary must appear in scenarioCausalClosure.currentFirstFrontier.",
+      "score": 190,
+      "sources": [
+        {
+          "file": "workflow-guidelines.md",
+          "line": 900,
+          "section": "Workflow Guidelines Detail > Scenario Causal Closure Ledger"
         }
       ]
     },
@@ -4038,7 +4151,7 @@
       ]
     },
     {
-      "id": "GOV-0057",
+      "id": "GOV-0064",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -4160,7 +4273,7 @@
       ]
     },
     {
-      "id": "GOV-0058",
+      "id": "GOV-0065",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -4169,13 +4282,13 @@
       "sources": [
         {
           "file": "workflow-guidelines.md",
-          "line": 130,
-          "section": "Workflow Guidelines Detail > Lane Requirements > Scenario/Release-Gate Lane"
+          "line": 166,
+          "section": "Workflow Guidelines Detail > Core Logic Brief Gate > Scenario/Release-Gate Lane"
         }
       ]
     },
     {
-      "id": "GOV-0059",
+      "id": "GOV-0066",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -4186,13 +4299,13 @@
       "sources": [
         {
           "file": "workflow-guidelines.md",
-          "line": 294,
+          "line": 331,
           "section": "Workflow Guidelines Detail > Scenario Failure Migration"
         }
       ]
     },
     {
-      "id": "GOV-0060",
+      "id": "GOV-0067",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -4201,56 +4314,8 @@
       "sources": [
         {
           "file": "workflow-guidelines.md",
-          "line": 535,
-          "section": "Workflow Guidelines Detail > LLM Tool-First Triage"
-        }
-      ]
-    },
-    {
-      "id": "GOV-0061",
-      "domain": "governance",
-      "strength": "must",
-      "tags": [],
-      "rule": "status: required means the tracker has enough evidence to stop and request concrete choices. status: presented means choices are visible but no route has been selected. Both states fail pre-implementation validation for active runtime/scenario work.",
-      "score": 177,
-      "sources": [
-        {
-          "file": "workflow-guidelines.md",
           "line": 688,
-          "section": "Workflow Guidelines Detail > Sprint Architecture Decision Gate"
-        }
-      ]
-    },
-    {
-      "id": "GOV-0062",
-      "domain": "governance",
-      "strength": "must",
-      "tags": [
-        "ownership",
-        "governance"
-      ],
-      "rule": "status: selected names the human-selected choice and opens the bounded route for the next package or new sprint. The selected route still must carry normal owner, boundary, scope, proof, sub-agent, validation, commit, and push evidence.",
-      "score": 177,
-      "sources": [
-        {
-          "file": "workflow-guidelines.md",
-          "line": 692,
-          "section": "Workflow Guidelines Detail > Sprint Architecture Decision Gate"
-        }
-      ]
-    },
-    {
-      "id": "GOV-0063",
-      "domain": "governance",
-      "strength": "must",
-      "tags": [],
-      "rule": "The tracker infers a required gate from architecture-gap or human-escalation scenario closure. Frontier oscillation is rendered as watching; it becomes a required gate when the next local proof cannot reduce, migrate, or classify the edge without changing architecture.",
-      "score": 177,
-      "sources": [
-        {
-          "file": "workflow-guidelines.md",
-          "line": 696,
-          "section": "Workflow Guidelines Detail > Sprint Architecture Decision Gate"
+          "section": "Workflow Guidelines Detail > LLM Tool-First Triage"
         }
       ]
     },
@@ -4268,6 +4333,54 @@
           "file": "testing-guidelines.md",
           "line": 264,
           "section": "Testing Guidelines > Test-First Bug Fix Policy"
+        }
+      ]
+    },
+    {
+      "id": "GOV-0068",
+      "domain": "governance",
+      "strength": "must",
+      "tags": [],
+      "rule": "status: required means the tracker has enough evidence to stop and request concrete choices. status: presented means choices are visible but no route has been selected. Both states fail pre-implementation validation for active runtime/scenario work.",
+      "score": 176,
+      "sources": [
+        {
+          "file": "workflow-guidelines.md",
+          "line": 848,
+          "section": "Workflow Guidelines Detail > Sprint Architecture Decision Gate"
+        }
+      ]
+    },
+    {
+      "id": "GOV-0069",
+      "domain": "governance",
+      "strength": "must",
+      "tags": [
+        "ownership",
+        "governance"
+      ],
+      "rule": "status: selected names the human-selected choice and opens the bounded route for the next package or new sprint. The selected route still must carry normal owner, boundary, scope, proof, sub-agent, validation, commit, and push evidence.",
+      "score": 176,
+      "sources": [
+        {
+          "file": "workflow-guidelines.md",
+          "line": 852,
+          "section": "Workflow Guidelines Detail > Sprint Architecture Decision Gate"
+        }
+      ]
+    },
+    {
+      "id": "GOV-0070",
+      "domain": "governance",
+      "strength": "must",
+      "tags": [],
+      "rule": "The tracker infers a required gate from architecture-gap or human-escalation scenario closure. Frontier oscillation is rendered as watching; it becomes a required gate when the next local proof cannot reduce, migrate, or classify the edge without changing architecture.",
+      "score": 176,
+      "sources": [
+        {
+          "file": "workflow-guidelines.md",
+          "line": 856,
+          "section": "Workflow Guidelines Detail > Sprint Architecture Decision Gate"
         }
       ]
     },
@@ -4404,6 +4517,21 @@
       ]
     },
     {
+      "id": "GOV-0071",
+      "domain": "governance",
+      "strength": "should",
+      "tags": [],
+      "rule": "Wrong-slice trigger: the concrete signal that should stop, split, or migrate the package instead of continuing locally.",
+      "score": 171,
+      "sources": [
+        {
+          "file": "workflow-guidelines.md",
+          "line": 106,
+          "section": "Workflow Guidelines Detail > Core Logic Brief Gate"
+        }
+      ]
+    },
+    {
       "id": "TEST-0091",
       "domain": "testing",
       "strength": "may",
@@ -4449,7 +4577,7 @@
       ]
     },
     {
-      "id": "GOV-0064",
+      "id": "GOV-0072",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -4460,13 +4588,13 @@
       "sources": [
         {
           "file": "workflow-guidelines.md",
-          "line": 361,
+          "line": 398,
           "section": "Workflow Guidelines Detail > Frontier Oscillation Escalation"
         }
       ]
     },
     {
-      "id": "GOV-0065",
+      "id": "GOV-0073",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -4477,7 +4605,7 @@
       "sources": [
         {
           "file": "workflow-guidelines.md",
-          "line": 508,
+          "line": 661,
           "section": "Workflow Guidelines Detail > LLM Tool-First Triage"
         }
       ]
@@ -4577,7 +4705,7 @@
       ]
     },
     {
-      "id": "GOV-0066",
+      "id": "GOV-0074",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -4594,7 +4722,7 @@
       ]
     },
     {
-      "id": "GOV-0067",
+      "id": "GOV-0075",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -4611,7 +4739,7 @@
       ]
     },
     {
-      "id": "GOV-0068",
+      "id": "GOV-0076",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -4660,7 +4788,7 @@
       ]
     },
     {
-      "id": "GOV-0069",
+      "id": "GOV-0077",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -4671,28 +4799,28 @@
       "sources": [
         {
           "file": "workflow-guidelines.md",
-          "line": 150,
-          "section": "Workflow Guidelines Detail > Lane Requirements > Causal Escalation Lane"
+          "line": 187,
+          "section": "Workflow Guidelines Detail > Core Logic Brief Gate > Causal Escalation Lane"
         }
       ]
     },
     {
-      "id": "GOV-0070",
+      "id": "GOV-0078",
       "domain": "governance",
       "strength": "may",
       "tags": [],
       "rule": "Runtime edits may start only after the classification gate and implementation gate are both satisfied.",
-      "score": 154,
+      "score": 153,
       "sources": [
         {
           "file": "workflow-guidelines.md",
-          "line": 471,
+          "line": 624,
           "section": "Workflow Guidelines Detail > LLM Current Edge Card And Trap List"
         }
       ]
     },
     {
-      "id": "GOV-0071",
+      "id": "GOV-0079",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -4703,7 +4831,7 @@
       "sources": [
         {
           "file": "workflow-guidelines.md",
-          "line": 547,
+          "line": 700,
           "section": "Workflow Guidelines Detail > LLM Tool-First Triage"
         }
       ]
@@ -4724,7 +4852,7 @@
       ]
     },
     {
-      "id": "GOV-0072",
+      "id": "GOV-0080",
       "domain": "governance",
       "strength": "may",
       "tags": [],
@@ -4739,7 +4867,39 @@
       ]
     },
     {
-      "id": "GOV-0073",
+      "id": "GOV-0081",
+      "domain": "governance",
+      "strength": "may",
+      "tags": [
+        "routing"
+      ],
+      "rule": "Diagnostic-classification packages use the brief when they reshape diagnostic meaning or scenario routing, and may otherwise record not-needed.",
+      "score": 145,
+      "sources": [
+        {
+          "file": "workflow-guidelines.md",
+          "line": 109,
+          "section": "Workflow Guidelines Detail > Core Logic Brief Gate"
+        }
+      ]
+    },
+    {
+      "id": "GOV-0082",
+      "domain": "governance",
+      "strength": "may",
+      "tags": [],
+      "rule": "Read/review/doc-only and lightweight maintenance packages may omit the brief or record not-needed: no runtime, scenario, or shared contract decision changes.",
+      "score": 145,
+      "sources": [
+        {
+          "file": "workflow-guidelines.md",
+          "line": 109,
+          "section": "Workflow Guidelines Detail > Core Logic Brief Gate"
+        }
+      ]
+    },
+    {
+      "id": "GOV-0083",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -4750,13 +4910,13 @@
       "sources": [
         {
           "file": "workflow-guidelines.md",
-          "line": 250,
+          "line": 287,
           "section": "Workflow Guidelines Detail > Residual Closure Inventory"
         }
       ]
     },
     {
-      "id": "GOV-0074",
+      "id": "GOV-0084",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -4768,13 +4928,13 @@
       "sources": [
         {
           "file": "workflow-guidelines.md",
-          "line": 346,
+          "line": 383,
           "section": "Workflow Guidelines Detail > Frontier Oscillation Escalation"
         }
       ]
     },
     {
-      "id": "GOV-0075",
+      "id": "GOV-0085",
       "domain": "governance",
       "strength": "may",
       "tags": [],
@@ -4783,40 +4943,8 @@
       "sources": [
         {
           "file": "workflow-guidelines.md",
-          "line": 361,
+          "line": 398,
           "section": "Workflow Guidelines Detail > Frontier Oscillation Escalation"
-        }
-      ]
-    },
-    {
-      "id": "GOV-0076",
-      "domain": "governance",
-      "strength": "may",
-      "tags": [],
-      "rule": "Before closure, an implementation environment may record human-waived, tool-unavailable, or blocked-by-environment-policy with a reason: ... note so unavailable delegation is explicit instead of disguised as agent proof.",
-      "score": 143,
-      "sources": [
-        {
-          "file": "workflow-guidelines.md",
-          "line": 598,
-          "section": "Workflow Guidelines Detail > Sub-Agent Sequencing"
-        }
-      ]
-    },
-    {
-      "id": "GOV-0077",
-      "domain": "governance",
-      "strength": "may",
-      "tags": [
-        "ownership"
-      ],
-      "rule": "Use this gate when a scenario-driven or causal-escalation sprint may decide between continued local proof, owner-boundary migration, architecture work, or human escalation.",
-      "score": 143,
-      "sources": [
-        {
-          "file": "workflow-guidelines.md",
-          "line": 644,
-          "section": "Workflow Guidelines Detail > Sprint Architecture Decision Gate"
         }
       ]
     },
@@ -4836,7 +4964,39 @@
       ]
     },
     {
-      "id": "GOV-0078",
+      "id": "GOV-0086",
+      "domain": "governance",
+      "strength": "may",
+      "tags": [],
+      "rule": "Before closure, an implementation environment may record human-waived, tool-unavailable, or blocked-by-environment-policy with a reason: ... note so unavailable delegation is explicit instead of disguised as agent proof.",
+      "score": 142,
+      "sources": [
+        {
+          "file": "workflow-guidelines.md",
+          "line": 751,
+          "section": "Workflow Guidelines Detail > Sub-Agent Sequencing"
+        }
+      ]
+    },
+    {
+      "id": "GOV-0087",
+      "domain": "governance",
+      "strength": "may",
+      "tags": [
+        "ownership"
+      ],
+      "rule": "Use this gate when a scenario-driven or causal-escalation sprint may decide between continued local proof, owner-boundary migration, architecture work, or human escalation.",
+      "score": 142,
+      "sources": [
+        {
+          "file": "workflow-guidelines.md",
+          "line": 804,
+          "section": "Workflow Guidelines Detail > Sprint Architecture Decision Gate"
+        }
+      ]
+    },
+    {
+      "id": "GOV-0088",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -4853,7 +5013,7 @@
       ]
     },
     {
-      "id": "GOV-0079",
+      "id": "GOV-0089",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -4864,28 +5024,28 @@
       "sources": [
         {
           "file": "workflow-guidelines.md",
-          "line": 542,
+          "line": 695,
           "section": "Workflow Guidelines Detail > LLM Tool-First Triage"
         }
       ]
     },
     {
-      "id": "GOV-0080",
+      "id": "GOV-0090",
       "domain": "governance",
       "strength": "may",
       "tags": [
         "ownership"
       ],
       "rule": "A package may diverge only when it records metadata ownerBoundaryMigrationProof with concrete from/to owner and boundary, reason, and focused evidence proving a bounded diagnostic/support role or owner-boundary migration.",
-      "score": 119,
+      "score": 118,
       "sources": [
         {
           "file": "workflow-guidelines.md",
-          "line": 740,
+          "line": 900,
           "section": "Workflow Guidelines Detail > Scenario Causal Closure Ledger"
         }
       ]
     }
   ],
-  "generatedAt": "2026-05-17T16:24:35.042Z"
+  "generatedAt": "2026-05-18T13:17:40.998Z"
 }

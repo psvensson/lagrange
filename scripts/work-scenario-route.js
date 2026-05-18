@@ -44,6 +44,14 @@ const VALUE_NONE = 'none';
 const SPACE = ' ';
 const COMMAND_WORK_ADVANCE_CHECK = 'npm run work:advance -- --check';
 const COMMAND_WORK_PACKAGE_NEW_PREFIX = 'npm run work:package:new --';
+const LANE_DIAGNOSTIC_CLASSIFICATION = 'diagnostic-classification';
+const LANE_RUNTIME_OWNER_BOUNDARY = 'runtime-owner-boundary';
+const CAUSAL_OUTCOME_CONTINUE_LOCAL_FIX = 'continue_local_fix';
+const STOP_CONDITION_CLASSIFIED_LOCAL_BLOCKER = 'classified_local_blocker';
+const SUCCESSOR_ACTION_OPEN_RUNTIME_OWNER_BOUNDARY =
+  'open-runtime-owner-boundary';
+const SUCCESSOR_ACTION_RERUN_REPRESENTATIVE_EVIDENCE =
+  'rerun-representative-evidence';
 const MARKDOWN_NONE_LIST_ITEM = '- `none`';
 const MARKDOWN_HEADER_SCENARIO_ROUTE = '# Scenario Route';
 const MARKDOWN_HEADER_REPRESENTATIVE_EVIDENCE =
@@ -170,6 +178,29 @@ function buildSuggestedProof(artifactPath, route, tests = []) {
   ];
 }
 
+function hasStableRuntimeOwnerBoundary(route = {}) {
+  return route.owner !== VALUE_UNKNOWN && route.boundary !== VALUE_UNKNOWN;
+}
+
+function suggestedSuccessorLane(route = {}, representativeEvidence = {}) {
+  if (
+    hasStableRuntimeOwnerBoundary(route) &&
+    representativeEvidence.causal?.outcome === CAUSAL_OUTCOME_CONTINUE_LOCAL_FIX &&
+    representativeEvidence.causal?.stopCondition ===
+      STOP_CONDITION_CLASSIFIED_LOCAL_BLOCKER
+  ) {
+    return LANE_RUNTIME_OWNER_BOUNDARY;
+  }
+  return LANE_DIAGNOSTIC_CLASSIFICATION;
+}
+
+function suggestedSuccessorAction(route = {}, representativeEvidence = {}) {
+  return suggestedSuccessorLane(route, representativeEvidence) ===
+    LANE_RUNTIME_OWNER_BOUNDARY ?
+    SUCCESSOR_ACTION_OPEN_RUNTIME_OWNER_BOUNDARY :
+    SUCCESSOR_ACTION_RERUN_REPRESENTATIVE_EVIDENCE;
+}
+
 async function buildScenarioRouteSummary(options = {}) {
   const artifact = await readJsonFile(options.artifactPath);
   const representativeEvidence = buildRepresentativeEvidenceSummary(
@@ -226,10 +257,13 @@ async function buildScenarioRouteSummary(options = {}) {
     suggestedPackageCommand: [
       COMMAND_WORK_PACKAGE_NEW_PREFIX,
       `--from-artifact ${options.artifactPath}`,
-      `--lane diagnostic-classification`,
+      `--lane ${suggestedSuccessorLane(route, representativeEvidence)}`,
       `--owner ${route.owner}`,
       `--boundary ${route.boundary}`,
       `--dominant-reason ${route.dominantReason}`,
+      `--route-causal-outcome ${representativeEvidence.causal?.outcome || VALUE_UNKNOWN}`,
+      `--route-stop-mode ${representativeEvidence.causal?.stopCondition || VALUE_UNKNOWN}`,
+      `--successor-action ${suggestedSuccessorAction(route, representativeEvidence)}`,
     ].join(SPACE),
   };
 }
