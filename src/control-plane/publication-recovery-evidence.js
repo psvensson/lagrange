@@ -10,6 +10,9 @@ import {
   buildPublicationOwnerStreamState,
   isPublicationOwnerStreamPublicationPending,
 } from './publication-owner-state.js';
+import {
+  PUBLICATION_OWNER_TEXT,
+} from './publication-owner-constants.js';
 
 const PUBLICATION_RECOVERY_EVIDENCE_EMPTY_LIST = Object.freeze([]);
 const PUBLICATION_RECOVERY_ACK_NODE_LIST_INPUT_STATE = Object.freeze({
@@ -98,6 +101,7 @@ const PUBLICATION_RECOVERY_PUBLICATION_STATUS = Object.freeze({
 });
 const PUBLICATION_RECOVERY_PROTOCOL_STATE = Object.freeze({
   STEADY_PUBLISHED: 'steady_published',
+  UNPUBLISHED_OBSERVATION: 'unpublished_observation',
 });
 const PUBLICATION_RECOVERY_EVIDENCE_TYPEOF = Object.freeze({
   OBJECT: 'object',
@@ -675,6 +679,54 @@ function normalizeBoolean(value) {
   return value === true;
 }
 
+function hasUnavailablePublicationRecoveryEpoch(value) {
+  const publicationEpoch = normalizePublicationEpoch(value);
+  return publicationEpoch === null || publicationEpoch === NUM.ZERO;
+}
+
+function hasUnknownPublicationRecoveryStatus(value) {
+  const publicationStatus = normalizeOptionalString(value);
+  return publicationStatus === null ||
+    publicationStatus === PUBLICATION_OWNER_TEXT.UNKNOWN;
+}
+
+function hasPublicationRecoveryNodeListEvidence(...nodeIdLists) {
+  return nodeIdLists.some((nodeIds) =>
+    normalizeDistinctStringArray(nodeIds).length > NUM.ZERO,
+  );
+}
+
+function hasCountOnlyUnknownPublicationDeficit({
+  publicationEpoch = null,
+  publicationStatus = null,
+  pendingAckEvidence = null,
+  authoritativePublicationMembershipNodeIds =
+    PUBLICATION_RECOVERY_EVIDENCE_EMPTY_LIST,
+  authoritativeMissingPublishedNodeIds =
+    PUBLICATION_RECOVERY_EVIDENCE_EMPTY_LIST,
+  observedMissingPublishedNodeIds = PUBLICATION_RECOVERY_EVIDENCE_EMPTY_LIST,
+  selectedPublicationMembershipNodeIds =
+    PUBLICATION_RECOVERY_EVIDENCE_EMPTY_LIST,
+  publishedActiveNodeIds = PUBLICATION_RECOVERY_EVIDENCE_EMPTY_LIST,
+  prioritySpreadPending = false,
+} = {}) {
+  return hasUnknownPublicationRecoveryStatus(publicationStatus) &&
+    hasUnavailablePublicationRecoveryEpoch(publicationEpoch) &&
+    prioritySpreadPending !== true &&
+    normalizeNonNegativeInteger(pendingAckEvidence?.pendingAckCount) ===
+      NUM.ZERO &&
+    hasPublicationRecoveryNodeListEvidence(
+      pendingAckEvidence?.requiredAckNodeIds,
+      pendingAckEvidence?.acknowledgedNodeIds,
+      pendingAckEvidence?.pendingAckNodeIds,
+      authoritativePublicationMembershipNodeIds,
+      authoritativeMissingPublishedNodeIds,
+      observedMissingPublishedNodeIds,
+      selectedPublicationMembershipNodeIds,
+      publishedActiveNodeIds,
+    ) !== true;
+}
+
 function normalizePublicationRecoveryNodeIdListInput(
   values = PUBLICATION_RECOVERY_EVIDENCE_EMPTY_LIST,
 ) {
@@ -1120,17 +1172,22 @@ function buildCanonicalPublicationConvergenceGate(options = {}) {
     priorityRecoveryObservation?.recoveryProtocolState ??
     activeGateRecoveryProtocolState ??
     null;
+  const publicationEpoch =
+    rawPublicationConvergenceGate?.publicationEpoch ??
+    publicationConvergence?.publicationEpoch ??
+    priorityRecoveryObservation?.publicationEpoch ??
+    null;
   const selectedMembershipClosesStaleOpenPublication =
     hasSelectedPublicationMembershipClosureEvidence({
       publicationStatus: normalizeOptionalString(publicationStatus),
       pendingAckEvidence,
       activeGateProgressRecords,
     });
-  const effectivePublicationStatus =
+  const selectedMembershipPublicationStatus =
     selectedMembershipClosesStaleOpenPublication ?
       PUBLICATION_RECOVERY_PUBLICATION_STATUS.PUBLISHED :
       publicationStatus;
-  const effectiveRecoveryProtocolState =
+  const selectedMembershipRecoveryProtocolState =
     selectedMembershipClosesStaleOpenPublication ?
       PUBLICATION_RECOVERY_PROTOCOL_STATE.STEADY_PUBLISHED :
       recoveryProtocolState;
@@ -1178,6 +1235,24 @@ function buildCanonicalPublicationConvergenceGate(options = {}) {
       selectedMissingPublishedEvidence.nodeIds :
       PUBLICATION_RECOVERY_EVIDENCE_EMPTY_LIST),
   ]);
+  const countOnlyUnknownPublicationDeficit =
+    hasCountOnlyUnknownPublicationDeficit({
+      publicationEpoch,
+      publicationStatus,
+      pendingAckEvidence,
+      authoritativePublicationMembershipNodeIds,
+      authoritativeMissingPublishedNodeIds,
+      observedMissingPublishedNodeIds,
+      selectedPublicationMembershipNodeIds,
+      prioritySpreadPending:
+        priorityRecoveryObservation?.prioritySpreadPending === true ||
+        rawPublicationConvergenceGate?.prioritySpreadPending === true ||
+        publicationConvergence?.prioritySpreadPending === true,
+    });
+  const effectivePublicationStatus = selectedMembershipPublicationStatus;
+  const effectiveRecoveryProtocolState = countOnlyUnknownPublicationDeficit ?
+    PUBLICATION_RECOVERY_PROTOCOL_STATE.UNPUBLISHED_OBSERVATION :
+    selectedMembershipRecoveryProtocolState;
   const relevantObservedMissingPublishedNodeIds =
     resolveRelevantPublicationMembershipNodeIds(
       observedMissingPublishedNodeIds,
@@ -1191,7 +1266,10 @@ function buildCanonicalPublicationConvergenceGate(options = {}) {
   const selectedMembershipClosesPublication =
     hasSelectedFullCoverageClosure ||
     selectedMembershipClosesStaleOpenPublication;
-  const missingPublishedNodeIds = selectedMembershipClosesPublication ?
+  const missingPublishedClosed =
+    selectedMembershipClosesPublication ||
+    countOnlyUnknownPublicationDeficit;
+  const missingPublishedNodeIds = missingPublishedClosed ?
     PUBLICATION_RECOVERY_EVIDENCE_EMPTY_LIST :
     authoritativePublicationMembershipAvailable ?
       normalizeDistinctStringArray([
@@ -1202,7 +1280,7 @@ function buildCanonicalPublicationConvergenceGate(options = {}) {
         ...authoritativeMissingPublishedNodeIds,
         ...observedMissingPublishedNodeIds,
       ]);
-  const missingPublishedCount = selectedMembershipClosesPublication ?
+  const missingPublishedCount = missingPublishedClosed ?
     NUM.ZERO :
     steadyPublishedSelectedPublicationMembershipOpen === true ?
       missingPublishedNodeIds.length :
@@ -1237,15 +1315,15 @@ function buildCanonicalPublicationConvergenceGate(options = {}) {
 
   const canonicalPublicationConvergenceGate = buildPublicationRecoveryGateSnapshot({
     ...(rawPublicationConvergenceGate || {}),
+    ...(countOnlyUnknownPublicationDeficit ? {
+      pendingAckEvidenceState: null,
+      publicationOwnerStream: null,
+    } : {}),
     openCountOnlyAckIsStale:
       !hasActiveGateSelectedPublicationMembershipOpenEvidence(
         activeGateProgressRecords,
       ),
-    publicationEpoch:
-      rawPublicationConvergenceGate?.publicationEpoch ??
-      publicationConvergence?.publicationEpoch ??
-      priorityRecoveryObservation?.publicationEpoch ??
-      null,
+    publicationEpoch,
     publicationStatus: effectivePublicationStatus,
     publicationObservationState:
       rawPublicationConvergenceGate?.publicationObservationState ??
@@ -1267,7 +1345,8 @@ function buildCanonicalPublicationConvergenceGate(options = {}) {
       null,
     priorityRecoveryDecisionSnapshots,
     priorityRecoveryClosureWitness,
-    ...(isPublicationRecoveryAckNodeListProvided(requiredAckNodeListInput) ?
+    ...(isPublicationRecoveryAckNodeListProvided(requiredAckNodeListInput) ||
+      countOnlyUnknownPublicationDeficit ?
       {requiredAckNodeIds: pendingAckEvidence.requiredAckNodeIds} :
       {}),
     acknowledgedNodeIds: pendingAckEvidence.acknowledgedNodeIds,
@@ -1942,6 +2021,12 @@ function buildCanonicalPublicationConvergence(options = {}) {
         publicationConvergenceGate?.publicationPending === true ||
         priorityRecoveryObservation?.publicationPending === true,
     });
+  const publicationPending =
+    publicationConvergenceGate?.publicationPending === true ?
+      true :
+    publicationConvergenceGate?.publicationPending === false ?
+      false :
+      isPublicationOwnerStreamPublicationPending(publicationOwnerStream);
 
   return {
     ...(rawPublicationConvergence || {}),
@@ -1975,8 +2060,7 @@ function buildCanonicalPublicationConvergence(options = {}) {
     ackState: publicationOwnerStream.ackState,
     freshnessFence: publicationOwnerStream.freshnessFence,
     recoveryOutcome: publicationOwnerStream.recoveryOutcome,
-    publicationPending:
-      isPublicationOwnerStreamPublicationPending(publicationOwnerStream),
+    publicationPending,
     prioritySpreadPending:
       priorityRecoveryObservation?.prioritySpreadPending === true ||
       publicationConvergenceGate?.prioritySpreadPending === true,

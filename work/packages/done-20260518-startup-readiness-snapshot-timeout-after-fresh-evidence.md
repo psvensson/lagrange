@@ -13,7 +13,7 @@
   "boundary": "startup_support_evidence",
   "dominantReason": "snapshot_timeout",
   "currentState": "Focused diagnostics now classify recoverable selectedSnapshotError snapshot_timeout as inherited active-gate support evidence whenever the active gate is stalled or timed_out. On the fresh artifact, readiness_startup_support is deferred with readiness_inherited_active_gate_no_progress, startup_readiness_blocked drops out of the failure taxonomy, and scenario-route now reports publication_ack_convergence under topology_publication_owner / publication_convergence as the local blocker.",
-  "nextAction": "Closed as migrated to work/packages/active-20260518-topology-publication-convergence-after-startup-readiness-classification.md. Continue there after required subagent sequencing; do not patch publication runtime inside this diagnostic package.",
+  "nextAction": "Closed as migrated to work/packages/done-20260518-topology-publication-convergence-after-startup-readiness-classification.md. Continue there after required subagent sequencing; do not patch publication runtime inside this diagnostic package.",
   "proof": [
     "npm run work:scenario-route -- test-output/reports/rolling-restart-after-active-gate-classification-fresh-20260518T062159Z.report.json --owner startup_readiness_owner --boundary startup_support_evidence --dominant-reason snapshot_timeout --explain active_gate_snapshot_coverage --test test/diagnostics/topology-convergence-graph.test.js --test test/diagnostics/failure-class-taxonomy.test.js --test test/diagnostics/stop-condition-decision.test.js --test test/diagnostics/causal-graph-builder.test.js --markdown",
     "node --test test/diagnostics/topology-convergence-graph.test.js test/diagnostics/failure-class-taxonomy.test.js test/diagnostics/stop-condition-decision.test.js test/diagnostics/causal-graph-builder.test.js",
@@ -141,7 +141,7 @@
   },
   "closed": "2026-05-18",
   "commitAndPushLedgerRequired": true,
-  "successor": "work/packages/active-20260518-topology-publication-convergence-after-startup-readiness-classification.md"
+  "successor": "work/packages/done-20260518-topology-publication-convergence-after-startup-readiness-classification.md"
 }
 -->
 

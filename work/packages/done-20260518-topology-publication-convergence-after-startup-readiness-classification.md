@@ -3,26 +3,26 @@
 <!-- work-package
 {
   "schema": "work-package-v1",
-  "status": "active",
+  "status": "done",
   "opened": "2026-05-18",
   "lane": "causal-escalation",
   "scenario": "rolling-restart",
-  "artifact": "test-output/reports/rolling-restart-after-active-gate-classification-fresh-20260518T062159Z.report.json",
+  "artifact": "test-output/reports/rolling-restart-after-publication-count-only-unknown-20260518T074802Z.report.json",
   "playback": "none",
   "owner": "topology_publication_owner",
   "boundary": "publication_convergence",
   "dominantReason": "publication_pending",
-  "currentState": "Startup readiness support is now classified as inherited active-gate support evidence for selectedSnapshotError snapshot_timeout. The fresh artifact remains red at active=0/5 and snapshotCoverage=0/5; scenario-route reports publication_ack_convergence under topology_publication_owner / publication_convergence as the visible local blocker, with priority residual witnesses at zero.",
-  "nextAction": "Run the required review/fix/implementation subagent sequence, then classify or repair publication_pending without touching operation workflow runtime, startup active-gate runtime, startup readiness support, or timeout budgets.",
+  "currentState": "Focused implementation classifies UNKNOWN/no-epoch/no-node-list count-only publication debt as unpublished startup evidence. A fresh rolling-restart rerun no longer reports UNKNOWN/no-epoch publication debt; it reports concrete publicationStatus OPEN, publicationEpoch=1, publishedActive=1/5, missingPublishedCount=4, prioritySpreadPending=true, and five retry-scheduled operation_workflow_owner / rebalancer_handoff residual witnesses.",
+  "nextAction": "Closed as reduced and handed off to work/packages/active-20260518-priority-recovery-rebalancer-handoff-after-publication-count-only-classification.md. Continue there after the required review/fix/implementation subagent sequence; keep publication runtime, startup active-gate runtime, startup readiness runtime, and timeout budgets frozen unless fresh canonical evidence reselects them.",
   "proof": [
-    "npm run work:scenario-route -- test-output/reports/rolling-restart-after-active-gate-classification-fresh-20260518T062159Z.report.json --owner topology_publication_owner --boundary publication_convergence --dominant-reason publication_pending --explain publication_ack_convergence --markdown",
-    "npm run work:evidence-summary -- test-output/reports/rolling-restart-after-active-gate-classification-fresh-20260518T062159Z.report.json",
-    "npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-active-gate-classification-fresh-20260518T062159Z.report.json",
-    "npm run analyze:owner-files -- topology_publication_owner publication_convergence --markdown",
+    "npm run work:scenario-route -- test-output/reports/rolling-restart-after-publication-count-only-unknown-20260518T074802Z.report.json --owner topology_publication_owner --boundary publication_convergence --dominant-reason publication_pending --explain publication_ack_convergence --markdown",
+    "npm run work:evidence-summary -- test-output/reports/rolling-restart-after-publication-count-only-unknown-20260518T074802Z.report.json",
+    "npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-after-publication-count-only-unknown-20260518T074802Z.report.json",
+    "node --test test/control-plane/publication-owner-stream.test.js test/control-plane/publication-recovery-gate.test.js test/control-plane/publication-recovery-evidence.test.js test/control-plane/publication-recovery-evidence-open-membership.test.js",
     "npm run work:advance -- --check"
   ],
   "writeScope": [
-    "work/packages/active-20260518-topology-publication-convergence-after-startup-readiness-classification.md",
+    "work/packages/done-20260518-topology-publication-convergence-after-startup-readiness-classification.md",
     "work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md",
     "work/sprints/current-blocker.md",
     "work/sprints/current-blocker.json",
@@ -37,7 +37,9 @@
   ],
   "handoffFiles": [
     "work/packages/done-20260518-startup-readiness-snapshot-timeout-after-fresh-evidence.md",
-    "test-output/reports/rolling-restart-after-active-gate-classification-fresh-20260518T062159Z.report.json"
+    "test-output/reports/rolling-restart-after-active-gate-classification-fresh-20260518T062159Z.report.json",
+    "test-output/reports/rolling-restart-after-publication-count-only-unknown-20260518T074802Z.report.json",
+    "work/packages/active-20260518-priority-recovery-rebalancer-handoff-after-publication-count-only-classification.md"
   ],
   "generatedFiles": [
     "work/sprints/current-blocker.md",
@@ -53,7 +55,7 @@
     "test/control-plane/publication-recovery-evidence.test.js"
   ],
   "commitScope": [
-    "work/packages/active-20260518-topology-publication-convergence-after-startup-readiness-classification.md",
+    "work/packages/done-20260518-topology-publication-convergence-after-startup-readiness-classification.md",
     "work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md",
     "work/sprints/current-blocker.md",
     "work/sprints/current-blocker.json",
@@ -77,71 +79,72 @@
     ]
   },
   "representativeResidual": {
-    "status": "live-red-scenario-release-gate",
+    "status": "reduced-same-frontier-concrete-evidence",
     "scenario": "rolling-restart",
-    "artifact": "test-output/reports/rolling-restart-after-active-gate-classification-fresh-20260518T062159Z.report.json",
+    "artifact": "test-output/reports/rolling-restart-after-publication-count-only-unknown-20260518T074802Z.report.json",
     "frontier": "publication_ack_convergence",
     "owner": "topology_publication_owner",
     "boundary": "publication_convergence",
     "dominantReason": "publication_pending",
-    "nextAction": "Run required subagent sequencing, then classify or repair the publication_pending local blocker selected after startup readiness support reduced to inherited active-gate evidence."
+    "nextAction": "Continue in the operation_workflow_owner / rebalancer_handoff successor for the retry-scheduled priority recovery residuals exposed after the UNKNOWN count-only publication debt was reduced."
   },
   "ownerBoundaryMigrationProof": {
-    "fromOwner": "startup_readiness_owner",
-    "fromBoundary": "startup_support_evidence",
-    "toOwner": "topology_publication_owner",
-    "toBoundary": "publication_convergence",
-    "reason": "The predecessor diagnostic package removed startup_readiness_blocked by classifying selectedSnapshotError snapshot_timeout as inherited active-gate support evidence. The fresh artifact still fails with publication_ack_convergence as the first visible frontier and scenario-route now reports classified_local_blocker for topology_publication_owner / publication_convergence.",
+    "fromOwner": "topology_publication_owner",
+    "fromBoundary": "publication_convergence",
+    "toOwner": "operation_workflow_owner",
+    "toBoundary": "rebalancer_handoff",
+    "reason": "The focused publication classifier removes the stale UNKNOWN/no-epoch/no-node-list count-only debt. The fresh rerun still has publication_ack_convergence visible first, but priority residual extraction now reports one concrete operation_workflow_owner / rebalancer_handoff group with five retry-scheduled dispatched_waiting_progress witnesses and nextRequiredAction wait_for_operation_progress.",
     "evidence": [
-      "work/packages/done-20260518-startup-readiness-snapshot-timeout-after-fresh-evidence.md",
-      "npm run work:scenario-route -- test-output/reports/rolling-restart-after-active-gate-classification-fresh-20260518T062159Z.report.json --owner startup_readiness_owner --boundary startup_support_evidence --dominant-reason snapshot_timeout --explain active_gate_snapshot_coverage --test test/diagnostics/topology-convergence-graph.test.js --test test/diagnostics/failure-class-taxonomy.test.js --test test/diagnostics/stop-condition-decision.test.js --test test/diagnostics/causal-graph-builder.test.js --markdown",
-      "npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-active-gate-classification-fresh-20260518T062159Z.report.json"
+      "npm run work:scenario-route -- test-output/reports/rolling-restart-after-publication-count-only-unknown-20260518T074802Z.report.json --owner topology_publication_owner --boundary publication_convergence --dominant-reason publication_pending --explain publication_ack_convergence --markdown",
+      "npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-after-publication-count-only-unknown-20260518T074802Z.report.json",
+      "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-publication-count-only-unknown-20260518T074802Z.report.json"
     ]
   },
   "causalGovernance": {
     "hypothesis": "If topology_publication_owner / publication_convergence owns the current local blocker, focused owner proof should reduce publication_pending, migrate to a concrete successor owner boundary, or classify the remaining publication evidence without reopening startup readiness, active-gate runtime, operation workflow runtime, or timeout budgets.",
     "stopConditionCheck": "Use scenario-route, evidence-summary, npm run analyze:causal-model, owner-files, and work:advance before runtime edits. Runtime edits require the package's required review/fix/implementation subagent sequence.",
-    "expectedCausalModelChange": "Publication_ack_convergence becomes satisfied, reduces to a narrower publication owner edge, migrates to a successor owner boundary, or remains same-frontier with concrete publication owner evidence.",
-    "representativeOutcome": "pending-before-rerun",
-    "causalDebt": "The fresh artifact still has active=0/5, snapshotCoverage=0/5, active-gate snapshot source timeout, and zero priority residual witnesses. This package must not absorb startup active-gate runtime, startup readiness runtime, operation workflow runtime, or timeout-budget work.",
+    "expectedCausalModelChange": "Observed: publication_ack_convergence remains visible first, but the stale UNKNOWN/no-epoch/no-node-list evidence reduced to concrete OPEN epoch-1 publication evidence and priority residual extraction selected operation_workflow_owner / rebalancer_handoff.",
+    "representativeOutcome": "reduced",
+    "causalDebt": "The fresh rerun remains red at active=0/5 and snapshotCoverage=2/5 with publicationStatus OPEN, publishedActive=1/5, missingPublishedCount=4, prioritySpreadPending=true, and five operation_workflow_owner / rebalancer_handoff witnesses. This package did not patch operation workflow, active-gate runtime, readiness runtime, or timeout budgets.",
     "crossBoundaryReview": "Required before implementation because this causal-escalation package is a scenario-driven runtime owner-boundary package."
   },
   "scenarioCausalClosure": {
     "referenceScenarioOrProbe": "fresh rolling-restart representative after startup readiness support classification",
     "phaseChain": [
       "active-gate owner reconcile closed as classification-only",
-      "fresh representative stalled at active=0/5 and snapshotCoverage=0/5",
+      "pre-fix representative stalled at active=0/5 and snapshotCoverage=0/5",
       "startup readiness support reduced selectedSnapshotError snapshot_timeout to inherited active-gate evidence",
-      "priority residual extraction reports zero witnesses",
-      "scenario-route selects publication_ack_convergence as the local blocker"
+      "priority residual extraction initially reported zero witnesses",
+      "focused publication classifier reduces UNKNOWN/no-epoch/no-node-list count-only publication debt",
+      "fresh representative rerun reports concrete OPEN epoch-1 publication evidence and operation_workflow_owner / rebalancer_handoff residual witnesses"
     ],
-    "currentFirstFrontier": "publication_ack_convergence in test-output/reports/rolling-restart-after-active-gate-classification-fresh-20260518T062159Z.report.json, owned by topology_publication_owner / publication_convergence with publication_pending, publicationStatus UNKNOWN, missingPublishedCount=5, and zero priority recovery residual witnesses.",
+    "currentFirstFrontier": "publication_ack_convergence remains visible in test-output/reports/rolling-restart-after-publication-count-only-unknown-20260518T074802Z.report.json, but the publication evidence is now concrete: publicationStatus OPEN, publicationEpoch=1, publishedActive=1/5, missingPublishedCount=4, and prioritySpreadPending=true.",
     "knownDownstreamBlockers": [
-      "runner stalled with active=0/5 and snapshotCoverage=0/5",
-      "publicationStatus is UNKNOWN and missingPublishedCount is 5",
-      "active_gate_snapshot_coverage is deferred with selected_snapshot_source_timeout",
-      "selectedSnapshotNodeId is 11601fe0-72d6-5853-8590-ec2881853e72",
-      "selectedSnapshotTimeoutMs is 3000",
-      "readiness_startup_support is deferred as inherited active-gate no progress",
-      "priority recovery residual witnesses are zero"
+      "runner stalled with active=0/5 and snapshotCoverage=2/5",
+      "publicationStatus is OPEN with publicationEpoch=1",
+      "publishedActiveNodeIds contains one seed node while four nodes remain missing from publication",
+      "prioritySpreadPending is true",
+      "priority residual extraction reports five operation_workflow_owner / rebalancer_handoff retry-scheduled witnesses",
+      "active_gate_snapshot_coverage is deferred with owner_reconcile_pending and snapshot_repair_deferred",
+      "readiness_startup_support remains deferred as inherited active-gate no progress"
     ],
-    "missingCausalEdge": "Determine whether publication_pending is a topology publication owner bug, a bounded publication support classification, or a migration to a concrete successor owner boundary.",
-    "missingCausalEdgeProbe": "npm run work:scenario-route -- test-output/reports/rolling-restart-after-active-gate-classification-fresh-20260518T062159Z.report.json --owner topology_publication_owner --boundary publication_convergence --dominant-reason publication_pending --explain publication_ack_convergence --markdown",
-    "boundedProgressProof": "Pending: required subagent sequence must run before implementation; first proof is the publication-convergence scenario route and owner-files review, then any runtime proof must name a bounded publication reconcile or retry mechanism.",
-    "boundedProgressProofArtifact": "test-output/reports/rolling-restart-after-active-gate-classification-fresh-20260518T062159Z.report.json",
-    "expectedObservableTransition": "Publication convergence reduces, migrates, classifies as same-frontier with concrete owner evidence, or representative rolling-restart turns green.",
+    "missingCausalEdge": "Determine whether the retry-scheduled rebalancer_handoff witnesses should drain, classify as bounded backpressure, or split to a narrower operation workflow owner boundary.",
+    "missingCausalEdgeProbe": "npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-after-publication-count-only-unknown-20260518T074802Z.report.json",
+    "boundedProgressProof": "Implemented a bounded classification mechanism in src/control-plane/publication-recovery-evidence.js with regression coverage in test/control-plane/publication-recovery-evidence.test.js: UNKNOWN publication status, publicationEpoch=0, no concrete ACK/member node-list evidence, pendingAckCount=0, and count-only missingPublishedCount now classify as unpublished_observation / not_started rather than publication_pending.",
+    "boundedProgressProofArtifact": "test-output/reports/rolling-restart-after-publication-count-only-unknown-20260518T074802Z.report.json plus focused publication recovery tests",
+    "expectedObservableTransition": "Observed reduction from UNKNOWN/no-epoch/no-node-list debt to concrete OPEN epoch-1 publication evidence; successor owns the retry-scheduled rebalancer_handoff residuals.",
     "maxProgressBound": "one focused topology_publication_owner / publication_convergence slice",
     "sameFrontierFallback": "If focused proof cannot move or classify publication_pending, record same-frontier and do not widen into active-gate, readiness, operation workflow, or timeout-budget work.",
-    "expectedNextFrontier": "publication_ack_convergence until focused proof reduces, migrates, or classifies it",
-    "resultClassification": "pending-before-probe",
-    "stopCondition": "continue-local-fix",
+    "expectedNextFrontier": "operation_workflow_owner / rebalancer_handoff for retry-scheduled priority recovery residual witnesses",
+    "resultClassification": "reduced",
+    "stopCondition": "migrate-owner-boundary",
     "recentFrontierHistory": [
       "work/packages/done-20260518-startup-readiness-snapshot-timeout-after-fresh-evidence.md / startup_readiness_owner / startup_support_evidence / migrated",
       "work/packages/done-20260518-rolling-restart-fresh-evidence-after-active-gate-classification.md / release_gate_owner / representative_evidence / migrated",
       "work/packages/done-20260518-startup-active-gate-snapshot-coverage-after-workflow-advance-classification.md / startup_active_gate_owner / snapshot_coverage / classification-only"
     ],
     "oscillationCheck": "Allowed because focused diagnostic proof changed the selected owner boundary by removing startup_readiness_blocked from the fresh causal model.",
-    "handoffInvariant": "Startup readiness runtime, startup active-gate runtime, operation workflow runtime, and timeout budgets remain frozen unless canonical evidence selects them again."
+    "handoffInvariant": "Topology publication runtime, startup readiness runtime, startup active-gate runtime, and timeout budgets remain frozen unless canonical evidence selects them again."
   },
   "architectureDecisionGate": {
     "status": "not-required",
@@ -151,7 +154,10 @@
     "selectedChoice": null,
     "nextAction": "No architecture decision gate is required before the publication-convergence proof."
   },
-  "predecessor": "work/packages/done-20260518-startup-readiness-snapshot-timeout-after-fresh-evidence.md"
+  "predecessor": "work/packages/done-20260518-startup-readiness-snapshot-timeout-after-fresh-evidence.md",
+  "closed": "2026-05-18",
+  "commitAndPushLedgerRequired": true,
+  "successor": "work/packages/active-20260518-priority-recovery-rebalancer-handoff-after-publication-count-only-classification.md"
 }
 -->
 
@@ -190,7 +196,7 @@ runtime or test implementation edits.
 
 - [x] Review subagent recorded: Agent Codex (019e39f8-8f6c-78a0-9f52-ab8a604cb8e0) reviewed work/packages/done-20260518-startup-readiness-snapshot-timeout-after-fresh-evidence.md; result clean.
 - [x] Fix subagent recorded or explicitly not needed: not-needed.
-- [ ] Implementation subagent recorded: pending-before-implementation-resumes.
+- [x] Implementation subagent recorded: Agent Codex (019e3a5a-9b58-7f8e-9d38-0e3f4bf71a21) implemented work/packages/done-20260518-topology-publication-convergence-after-startup-readiness-classification.md.
 
 ## LLM Tool-First Contract
 
@@ -213,7 +219,7 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 
 ## In Scope
 
-1. work/packages/active-20260518-topology-publication-convergence-after-startup-readiness-classification.md
+1. work/packages/done-20260518-topology-publication-convergence-after-startup-readiness-classification.md
 2. work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md
 3. work/sprints/current-blocker.md
 4. work/sprints/current-blocker.json
@@ -239,7 +245,7 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 - Intended minimum model: `gpt-5.3-codex`
 - Scope shape: `owner-boundary-contraction/current-frontier`
 - Output profile: `medium`
-- Owned files: `work/packages/active-20260518-topology-publication-convergence-after-startup-readiness-classification.md`, `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md`, `work/sprints/current-blocker.md`, `work/sprints/current-blocker.json`, `work/model-ledger.jsonl`, `src/control-plane/publication-owner-evidence.js`, `src/control-plane/publication-owner-decision.js`, `src/control-plane/publication-recovery-gate.js`, `src/control-plane/publication-recovery-evidence.js`, `test/control-plane/publication-owner-stream.test.js`, `test/control-plane/publication-recovery-gate.test.js`, `test/control-plane/publication-recovery-evidence.test.js`
+- Owned files: `work/packages/done-20260518-topology-publication-convergence-after-startup-readiness-classification.md`, `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md`, `work/sprints/current-blocker.md`, `work/sprints/current-blocker.json`, `work/model-ledger.jsonl`, `src/control-plane/publication-owner-evidence.js`, `src/control-plane/publication-owner-decision.js`, `src/control-plane/publication-recovery-gate.js`, `src/control-plane/publication-recovery-evidence.js`, `test/control-plane/publication-owner-stream.test.js`, `test/control-plane/publication-recovery-gate.test.js`, `test/control-plane/publication-recovery-evidence.test.js`
 - Forbidden files: `operation_workflow_owner/runtime`, `startup_active_gate_owner/runtime`, `startup_readiness_owner/runtime`, `harness-timeout-increase`
 - Frozen decisions: package scope and lane stay bounded unless explicitly escalated.
 - Escalation triggers: owned files expand beyond this package, runtime ownership changes, or representative scenario evidence changes.
@@ -252,4 +258,18 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 2. npm run work:evidence-summary -- test-output/reports/rolling-restart-after-active-gate-classification-fresh-20260518T062159Z.report.json
 3. npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-active-gate-classification-fresh-20260518T062159Z.report.json
 4. npm run analyze:owner-files -- topology_publication_owner publication_convergence --markdown
-5. npm run work:advance -- --check
+5. node --test test/control-plane/publication-owner-stream.test.js test/control-plane/publication-recovery-gate.test.js test/control-plane/publication-recovery-evidence.test.js test/control-plane/publication-recovery-evidence-open-membership.test.js
+6. node scripts/check-guideline-literals.js src/control-plane/publication-owner-evidence.js src/control-plane/publication-owner-decision.js src/control-plane/publication-recovery-gate.js src/control-plane/publication-recovery-evidence.js
+7. node scripts/check-guideline-decision-boundaries.js src/control-plane/publication-owner-evidence.js src/control-plane/publication-owner-decision.js src/control-plane/publication-recovery-gate.js src/control-plane/publication-recovery-evidence.js
+8. npm run audit:runtime-grammar:file -- src/control-plane/publication-owner-evidence.js src/control-plane/publication-owner-decision.js src/control-plane/publication-recovery-gate.js src/control-plane/publication-recovery-evidence.js
+9. npm run work:advance -- --check
+
+## Extractor Fallback Note
+
+Canonical extractors used: `work:scenario-route`, `work:evidence-summary`,
+`analyze:causal-model`, `analyze:owner-files`,
+`analyze:priority-recovery-residuals`, `analyze:topology-convergence`, and
+`analyze:distributed-failure`. A focused raw report read was used only after
+those extractors did not expose the full `publicationOwnerStream` and
+`publicationRecoveryGate` field-level shape needed to isolate the count-only
+UNKNOWN/no-node-list publication debt case.

@@ -5,6 +5,7 @@ import {
   PUBLICATION_OWNER_FRESHNESS_FENCE,
   PUBLICATION_OWNER_RECOVERY_OUTCOME,
   PUBLICATION_OWNER_STREAM_OUTCOME,
+  PUBLICATION_OWNER_TEXT,
 } from '../../src/control-plane/publication-owner-constants.js';
 import {RECOVERY_PROTOCOL_STATE} from
   '../../src/control-plane/membership-lifecycle-constants.js';
@@ -21,6 +22,7 @@ const TEST_PUBLICATION_DEBT_COUNT = 1;
 const TEST_PUBLICATION_SELECTED_SNAPSHOT_FRONTIER_COUNT = 2;
 const TEST_PUBLICATION_SELECTED_HANDOFF_PENDING_COUNT = 3;
 const TEST_PUBLISHED_ACTIVE_NODE_COUNT = 3;
+const TEST_UNKNOWN_PUBLICATION_MISSING_COUNT = 5;
 const TEST_EMPTY_NODE_IDS = Object.freeze([]);
 const TEST_PRIORITY_PARTITION_ID = 'replica_operations-p1';
 const TEST_NODE_ID = Object.freeze({
@@ -65,6 +67,9 @@ const TEST_COUNT_ONLY_REENTRY_ACK_TARGET_TEST_NAME =
 const TEST_STALE_PUBLISHED_PUBLICATION_PENDING_TEST_NAME =
   'buildCanonicalPublicationRecoveryEvidence settles stale published ' +
   'publication pending evidence';
+const TEST_UNKNOWN_COUNT_ONLY_PUBLICATION_PENDING_TEST_NAME =
+  'buildCanonicalPublicationRecoveryEvidence classifies unknown count-only ' +
+  'publication debt as unpublished startup evidence';
 const TEST_AUTHORITATIVE_PUBLISHED_NODE_IDS = Object.freeze([
   TEST_NODE_ID.FIRST,
   TEST_NODE_ID.SECOND,
@@ -367,6 +372,71 @@ test('buildCanonicalPublicationRecoveryEvidence does not reopen publication pend
     t.same(evidence.publicationConvergence.missingPublishedNodeIds, []);
     t.end();
   });
+
+test(TEST_UNKNOWN_COUNT_ONLY_PUBLICATION_PENDING_TEST_NAME, (t) => {
+  const evidence = buildCanonicalPublicationRecoveryEvidence({
+    publicationConvergence: {
+      publicationEpoch: TEST_EMPTY_PUBLICATION_DEBT_COUNT,
+      publicationStatus: PUBLICATION_OWNER_TEXT.UNKNOWN,
+      recoveryProtocolState: RECOVERY_PROTOCOL_STATE.PUBLICATION_PENDING,
+      pendingAckNodeIds: TEST_EMPTY_NODE_IDS,
+      pendingAckCount: TEST_EMPTY_PUBLICATION_DEBT_COUNT,
+      missingPublishedNodeIds: TEST_EMPTY_NODE_IDS,
+      missingPublishedCount: TEST_UNKNOWN_PUBLICATION_MISSING_COUNT,
+      publicationPending: true,
+      prioritySpreadPending: false,
+      priorityRecoveryReasonCodes: [TEST_PUBLICATION_PENDING_REASON_CODE],
+      priorityPartitionSummary: TEST_SATISFIED_PRIORITY_PARTITION_SUMMARY,
+    },
+    activeGate: {
+      progress: {
+        expectedNodeCount: TEST_UNKNOWN_PUBLICATION_MISSING_COUNT,
+        activeNodeCount: TEST_EMPTY_PUBLICATION_DEBT_COUNT,
+        inactiveNodeCount: TEST_UNKNOWN_PUBLICATION_MISSING_COUNT,
+        snapshotCoverageNodeCount: TEST_EMPTY_PUBLICATION_DEBT_COUNT,
+        snapshotCoverageComplete: false,
+        publicationStatus: PUBLICATION_OWNER_TEXT.UNKNOWN,
+        publicationEpoch: TEST_EMPTY_PUBLICATION_DEBT_COUNT,
+        recoveryProtocolState: RECOVERY_PROTOCOL_STATE.PUBLICATION_PENDING,
+        selectedPublishedActiveNodeIds: TEST_EMPTY_NODE_IDS,
+        selectedPublishedActiveCount: TEST_EMPTY_PUBLICATION_DEBT_COUNT,
+        selectedMissingPublishedNodeIds: TEST_EMPTY_NODE_IDS,
+        pendingAckCount: TEST_EMPTY_PUBLICATION_DEBT_COUNT,
+        missingPublishedCount: TEST_UNKNOWN_PUBLICATION_MISSING_COUNT,
+        prioritySpreadSatisfied: true,
+        priorityRecoveryProgressClasses: {
+          unresolvedClassCount: TEST_EMPTY_PUBLICATION_DEBT_COUNT,
+          unresolvedSemanticStateCount: TEST_EMPTY_PUBLICATION_DEBT_COUNT,
+          blockedPartitionCount: TEST_EMPTY_PUBLICATION_DEBT_COUNT,
+        },
+      },
+    },
+  });
+
+  t.equal(
+    evidence.publicationConvergenceGate.state,
+    PUBLICATION_RECOVERY_GATE_STATE.UNPUBLISHED_OBSERVATION,
+  );
+  t.equal(evidence.publicationConvergenceGate.publicationPending, false);
+  t.equal(
+    evidence.publicationConvergenceGate.missingPublishedCount,
+    TEST_EMPTY_PUBLICATION_DEBT_COUNT,
+  );
+  t.same(
+    evidence.publicationConvergenceGate.missingPublishedNodeIds,
+    TEST_EMPTY_NODE_IDS,
+  );
+  t.equal(
+    evidence.publicationConvergence.recoveryProtocolState,
+    RECOVERY_PROTOCOL_STATE.UNPUBLISHED_OBSERVATION,
+  );
+  t.equal(evidence.publicationConvergence.publicationPending, false);
+  t.equal(
+    evidence.publicationConvergence.streamOutcome,
+    PUBLICATION_OWNER_STREAM_OUTCOME.NOT_STARTED,
+  );
+  t.end();
+});
 
 test('buildCanonicalPublicationRecoveryEvidence carries owner stream consumer lag',
   (t) => {
