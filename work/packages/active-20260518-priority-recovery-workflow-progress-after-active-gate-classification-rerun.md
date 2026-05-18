@@ -1,9 +1,10 @@
+# Priority Recovery Workflow Progress After Active Gate Classification Rerun
+
+<!-- work-package
 {
-  "schema": "current-blocker-v1",
-  "generatedBy": "scripts/work-tracker.js",
-  "sprint": "work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md",
-  "package": "work/packages/active-20260518-priority-recovery-workflow-progress-after-active-gate-classification-rerun.md",
+  "schema": "work-package-v1",
   "status": "active",
+  "opened": "2026-05-18",
   "lane": "causal-escalation",
   "scenario": "rolling-restart",
   "artifact": "test-output/reports/rolling-restart-after-active-gate-classification-20260518T043001Z.report.json",
@@ -61,7 +62,6 @@
     "work/sprints/current-blocker.json",
     "work/model-ledger.jsonl"
   ],
-  "touchedFiles": [],
   "modelFit": {
     "packageClass": "architecture-gap-analysis",
     "intendedMinimumModel": "gpt-5.3-codex",
@@ -182,3 +182,97 @@
   },
   "predecessor": "work/packages/done-20260517-startup-active-gate-snapshot-coverage-after-priority-backpressure-classification.md"
 }
+-->
+
+## Why
+
+The fresh representative run after the previous classification-only package
+did not go green. It returned to publication convergence with subordinate
+operation workflow progress evidence even though the recent sprint history has
+already bounded the local workflow-progress, rebalancer-handoff, and active-gate
+  owner-reconcile shapes in isolation.
+
+This package records the stop point: the next move is not another tactical
+runtime patch. The missing edge is now the cross-boundary contract between
+publication convergence, operation workflow dispatch/re-entry, and active-gate
+owner reconcile visibility.
+
+## Scope Basis
+
+Roadmap Phase `0.1 - Internal Coherence`, specifically rolling-restart topology
+workflow stabilization and production guarantees for the AGPL runtime.
+
+## Workflow Lane
+
+- Selected lane: `causal-escalation`
+- Why this lane is sufficient: canonical evidence and package doctor detect
+  frontier oscillation after fresh representative proof.
+- Escalation trigger to a heavier lane: any runtime implementation before an
+  architecture route is selected.
+
+## Subagent Sequencing Requirement
+
+Runtime implementation is blocked by the architecture decision gate. If the
+selected route resumes implementation, run the normal review/fix/implementation
+subagent sequence in that successor package before touching runtime files.
+
+## Subagent Sequencing Ledger
+
+- [x] Review subagent recorded: Agent Codex (9c10920a-506c-4cf0-8823-4654d8903a03) reviewed work/packages/done-20260517-startup-active-gate-snapshot-coverage-after-priority-backpressure-classification.md; result clean.
+- [x] Fix subagent recorded or explicitly not needed: not-needed.
+- [ ] Implementation subagent recorded: blocked by architectureDecisionGate status `required`.
+
+## LLM Tool-First Contract
+
+Before raw JSON, raw logs, broad file search, oversized segment files, or ad hoc `jq`, use the canonical workflow command that owns the question:
+
+1. Package metadata or ledger edits: `npm run work:package:doctor -- --suggest <package>`, `npm run work:package:doctor -- --fix-dry-run <package>`, `npm run work:package:schema`, or `npm run work:package:new -- ...`.
+2. Representative evidence: `npm run work:evidence-summary -- <artifact>` plus any focused extractor for this failure class.
+3. Owner discovery: `npm run analyze:owner-files -- <owner> [boundary]`.
+4. Subagent sequencing: `npm run work:subagent-prompt -- --role <role> --package <package>`.
+5. Large-file cleanup: `npm run work:oversized-next -- --markdown`.
+
+If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which canonical extractor was tried and why it was insufficient.
+
+## In Scope
+
+1. Architecture decision gate metadata for the fresh rolling-restart report.
+2. Cross-boundary handoff proof requirements.
+3. Current-blocker handoff generation.
+
+## Out Of Scope
+
+1. Runtime code changes before route selection.
+2. Timeout budget increases.
+3. Active-gate admission relaxation.
+4. Local publication truth conversion.
+5. Consumer-local diagnostic reinterpretation.
+
+## Model Fit
+
+- Package class: `architecture-gap-analysis`
+- Intended minimum model: `gpt-5.3-codex`
+- Scope shape: `cross-boundary-causal-gate`
+- Output profile: `medium`
+- Owned files: `work/packages/active-20260518-priority-recovery-workflow-progress-after-active-gate-classification-rerun.md`, `work/sprints/current-blocker.md`, `work/sprints/current-blocker.json`, `work/model-ledger.jsonl`
+- Forbidden files: runtime `src/` files until route selection
+- Frozen decisions: prior local workflow-progress, rebalancer-handoff, and active-gate owner-reconcile classifications stay closed as isolated local proofs.
+- Escalation triggers: runtime files are edited before an architecture route is selected, or canonical evidence selects a single owner boundary with monotonic reduction.
+- Focused proof: fresh representative report, playback failure bundles, and canonical extractors named in metadata.
+- Model ledger advisory: `escalate`
+
+## Validation
+
+1. `npm run work:evidence-summary -- test-output/reports/rolling-restart-after-active-gate-classification-20260518T043001Z.report.json`
+2. `npm run work:scenario-triage -- test-output/reports/rolling-restart-after-active-gate-classification-20260518T043001Z.report.json`
+3. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-active-gate-classification-20260518T043001Z.report.json`
+4. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-active-gate-classification-20260518T043001Z.report.json --explain publication_ack_convergence`
+5. `npm run analyze:causal-model -- test-output/reports/rolling-restart-after-active-gate-classification-20260518T043001Z.report.json`
+6. `npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-after-active-gate-classification-20260518T043001Z.report.json --markdown`
+7. `npm run work:package:doctor -- --suggest work/packages/active-20260518-priority-recovery-workflow-progress-after-active-gate-classification-rerun.md`
+
+## Architecture Decision Gate
+
+- Status: `required`
+- Trigger: `frontier-oscillation`
+- Runtime implementation is blocked until a route is selected.
