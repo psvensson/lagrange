@@ -22,11 +22,11 @@ Boundary: `rebalancer_handoff`
 
 Dominant reason: `priority_recovery_progress_blocked`
 
-Current state: The predecessor reduced stale UNKNOWN/no-epoch/no-node-list publication debt. In the fresh rolling-restart artifact, work:evidence-summary, analyze:topology-convergence, and analyze:causal-model still show the visible publication_ack_convergence / topology_publication_owner / publication_convergence / publication_pending context, but only analyze:priority-recovery-residuals selects the actionable operation_workflow_owner / rebalancer_handoff group with five retry-scheduled dispatched_waiting_progress witnesses across control_plane_publications-p1, replica_operations-p1, sql_transaction_participants-p1, and sql_transactions-p1.
+Current state: Focused implementation proof is green for the fresh publication-count-only retry-scheduled rebalancer_handoff group. The five residual witnesses normalize to four unique operation retries: duplicate control_plane_publications-p1 witnesses preserve one timer, the other partition witnesses each preserve one bounded remote handoff retry, and no duplicate remote wake is emitted.
 
 ## Next Action
 
-Review returned fixes-required and the fix subagent repaired metadata/proof. Run the required implementation subagent next, then prove or split the retry-scheduled rebalancer_handoff witnesses without reopening publication, active-gate, readiness, or timeout-budget work.
+Stop local rebalancer_handoff runtime edits for this residual unless fresh canonical evidence changes owner, boundary, or next required action. Publication convergence, startup active-gate snapshot coverage, startup readiness support, harness timeout policy, and timeout budgets remain frozen.
 
 ## Proof Ladder
 
@@ -53,7 +53,7 @@ Escalation triggers:
 
 ## Representative Residual
 
-Status: `live-red-scenario-release-gate`
+Status: `classification-only-focused-proof`
 
 Scenario: `rolling-restart`
 
@@ -67,7 +67,7 @@ Boundary: `rebalancer_handoff`
 
 Dominant reason: `priority_recovery_progress_blocked`
 
-Next action: `Run the required implementation subagent, then prove or split the retry-scheduled rebalancer_handoff witnesses selected by priority residual extraction.`
+Next action: `Focused proof shows the retry-scheduled handoff group is bounded by existing remote handoff retry behavior without duplicate wake or duplicate timer state.`
 
 ## Causal Governance
 
@@ -75,9 +75,9 @@ Causal hypothesis: `If operation_workflow_owner / rebalancer_handoff owns the fr
 
 Stop-condition check: `Use work:evidence-summary, analyze:priority-recovery-residuals, analyze:topology-convergence, npm run analyze:causal-model, owner-files, and work:advance before implementation. Runtime or test implementation requires clean review/fix proof and a fresh implementation subagent.`
 
-Expected causal-model change: `The package should classify the rebalancer_handoff residual as bounded, reduce the witness set, migrate to a narrower operation workflow owner boundary, or keep same-frontier with concrete focused proof.`
+Expected causal-model change: `Focused proof classifies the rebalancer_handoff residual as bounded retry-scheduled backpressure. Representative rolling-restart was not rerun because this package only added focused test proof and did not change runtime code.`
 
-Representative outcome: `pending-before-rerun`
+Representative outcome: `classification-only`
 
 Causal debt: `Publication_ack_convergence remains visible first with OPEN epoch-1 evidence in work:evidence-summary, analyze:topology-convergence, and analyze:causal-model; active_gate_snapshot_coverage remains deferred at 2/5 with owner_reconcile_pending; readiness_startup_support remains inherited active-gate no progress. The successor owns residual proof only because analyze:priority-recovery-residuals selects operation_workflow_owner / rebalancer_handoff, so publication, active-gate, readiness, and timeout work stay frozen in this package.`
 
@@ -110,21 +110,21 @@ Missing causal edge: `Determine whether the retry-scheduled rebalancer_handoff w
 
 Missing causal edge probe: `npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-after-publication-count-only-unknown-20260518T074802Z.report.json`
 
-Bounded progress proof: `Review/fix sequencing is recorded; implementation subagent remains pending. First proof is to compare the fresh retry-scheduled witness group with the prior bounded rebalancer_handoff proof before any runtime edits.`
+Bounded progress proof: `Focused proof added in test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js: the five publication-count-only retry-scheduled witnesses normalize to four unique operation handoff retries, duplicate control_plane_publications-p1 evidence does not duplicate remote wake state, and each unique operation preserves exactly one bounded remote handoff retry timer.`
 
-Bounded progress proof artifact: `test-output/reports/rolling-restart-after-publication-count-only-unknown-20260518T074802Z.report.json`
+Bounded progress proof artifact: `test-output/reports/rolling-restart-after-publication-count-only-unknown-20260518T074802Z.report.json plus npm test -- test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js`
 
-Expected observable transition: `Reduce or classify the five retry-scheduled witnesses, migrate to a narrower operation workflow owner boundary, or record same-frontier bounded proof without changing publication, active-gate, readiness, or timeout budgets.`
+Expected observable transition: `Focused observable transition: retry-scheduled rebalancer_handoff evidence classifies to bounded existing remote handoff retry state without changing publication-owner, active-gate, readiness, or timeout-budget code. Representative transition is classification-only because no runtime change was made and no representative rerun was required.`
 
 Max progress bound: `one focused operation_workflow_owner / rebalancer_handoff slice`
 
-Same-frontier fallback: `If the residual stays same-frontier, record the bounded retry/drain proof and stop rather than widening into publication ACK, active-gate snapshot coverage, readiness, or timeout budgets.`
+Same-frontier fallback: `Applied: rebalancer_handoff remains selected in the reference artifact, but focused proof shows bounded retry-scheduled backpressure. Stop as classification-only instead of widening into publication ACK, active-gate snapshot coverage, readiness, or timeout budgets.`
 
 Expected next frontier: `operation_workflow_owner / rebalancer_handoff until focused proof reduces, classifies, or migrates it`
 
-Result classification: `pending-before-probe`
+Result classification: `classification-only`
 
-Stop condition: `continue-local-fix`
+Stop condition: `classification-only-stop`
 
 Recent frontier history:
 

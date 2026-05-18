@@ -12,8 +12,8 @@
   "owner": "operation_workflow_owner",
   "boundary": "rebalancer_handoff",
   "dominantReason": "priority_recovery_progress_blocked",
-  "currentState": "The predecessor reduced stale UNKNOWN/no-epoch/no-node-list publication debt. In the fresh rolling-restart artifact, work:evidence-summary, analyze:topology-convergence, and analyze:causal-model still show the visible publication_ack_convergence / topology_publication_owner / publication_convergence / publication_pending context, but only analyze:priority-recovery-residuals selects the actionable operation_workflow_owner / rebalancer_handoff group with five retry-scheduled dispatched_waiting_progress witnesses across control_plane_publications-p1, replica_operations-p1, sql_transaction_participants-p1, and sql_transactions-p1.",
-  "nextAction": "Review returned fixes-required and the fix subagent repaired metadata/proof. Run the required implementation subagent next, then prove or split the retry-scheduled rebalancer_handoff witnesses without reopening publication, active-gate, readiness, or timeout-budget work.",
+  "currentState": "Focused implementation proof is green for the fresh publication-count-only retry-scheduled rebalancer_handoff group. The five residual witnesses normalize to four unique operation retries: duplicate control_plane_publications-p1 witnesses preserve one timer, the other partition witnesses each preserve one bounded remote handoff retry, and no duplicate remote wake is emitted.",
+  "nextAction": "Stop local rebalancer_handoff runtime edits for this residual unless fresh canonical evidence changes owner, boundary, or next required action. Publication convergence, startup active-gate snapshot coverage, startup readiness support, harness timeout policy, and timeout budgets remain frozen.",
   "proof": [
     "npm run work:evidence-summary -- test-output/reports/rolling-restart-after-publication-count-only-unknown-20260518T074802Z.report.json",
     "npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-after-publication-count-only-unknown-20260518T074802Z.report.json",
@@ -81,14 +81,14 @@
     ]
   },
   "representativeResidual": {
-    "status": "live-red-scenario-release-gate",
+    "status": "classification-only-focused-proof",
     "scenario": "rolling-restart",
     "artifact": "test-output/reports/rolling-restart-after-publication-count-only-unknown-20260518T074802Z.report.json",
     "frontier": "priority_recovery_partition_progress",
     "owner": "operation_workflow_owner",
     "boundary": "rebalancer_handoff",
     "dominantReason": "priority_recovery_progress_blocked",
-    "nextAction": "Run the required implementation subagent, then prove or split the retry-scheduled rebalancer_handoff witnesses selected by priority residual extraction."
+    "nextAction": "Focused proof shows the retry-scheduled handoff group is bounded by existing remote handoff retry behavior without duplicate wake or duplicate timer state."
   },
   "ownerBoundaryMigrationProof": {
     "fromOwner": "topology_publication_owner",
@@ -105,8 +105,8 @@
   "causalGovernance": {
     "hypothesis": "If operation_workflow_owner / rebalancer_handoff owns the fresh retry-scheduled residual group, focused proof should show the witnesses drain, remain bounded by an existing retry, split to a narrower operation workflow owner edge, or migrate without reopening publication, startup active-gate, readiness, or timeout budgets.",
     "stopConditionCheck": "Use work:evidence-summary, analyze:priority-recovery-residuals, analyze:topology-convergence, npm run analyze:causal-model, owner-files, and work:advance before implementation. Runtime or test implementation requires clean review/fix proof and a fresh implementation subagent.",
-    "expectedCausalModelChange": "The package should classify the rebalancer_handoff residual as bounded, reduce the witness set, migrate to a narrower operation workflow owner boundary, or keep same-frontier with concrete focused proof.",
-    "representativeOutcome": "pending-before-rerun",
+    "expectedCausalModelChange": "Focused proof classifies the rebalancer_handoff residual as bounded retry-scheduled backpressure. Representative rolling-restart was not rerun because this package only added focused test proof and did not change runtime code.",
+    "representativeOutcome": "classification-only",
     "causalDebt": "Publication_ack_convergence remains visible first with OPEN epoch-1 evidence in work:evidence-summary, analyze:topology-convergence, and analyze:causal-model; active_gate_snapshot_coverage remains deferred at 2/5 with owner_reconcile_pending; readiness_startup_support remains inherited active-gate no progress. The successor owns residual proof only because analyze:priority-recovery-residuals selects operation_workflow_owner / rebalancer_handoff, so publication, active-gate, readiness, and timeout work stay frozen in this package.",
     "crossBoundaryReview": "Required before implementation because this is a scenario-driven runtime owner-boundary package following a publication-convergence predecessor."
   },
@@ -130,14 +130,14 @@
     ],
     "missingCausalEdge": "Determine whether the retry-scheduled rebalancer_handoff witness group is already bounded by existing remote handoff retry behavior, needs a focused drain/re-entry repair, or splits to a narrower operation workflow owner boundary.",
     "missingCausalEdgeProbe": "npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-after-publication-count-only-unknown-20260518T074802Z.report.json",
-    "boundedProgressProof": "Review/fix sequencing is recorded; implementation subagent remains pending. First proof is to compare the fresh retry-scheduled witness group with the prior bounded rebalancer_handoff proof before any runtime edits.",
-    "boundedProgressProofArtifact": "test-output/reports/rolling-restart-after-publication-count-only-unknown-20260518T074802Z.report.json",
-    "expectedObservableTransition": "Reduce or classify the five retry-scheduled witnesses, migrate to a narrower operation workflow owner boundary, or record same-frontier bounded proof without changing publication, active-gate, readiness, or timeout budgets.",
+    "boundedProgressProof": "Focused proof added in test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js: the five publication-count-only retry-scheduled witnesses normalize to four unique operation handoff retries, duplicate control_plane_publications-p1 evidence does not duplicate remote wake state, and each unique operation preserves exactly one bounded remote handoff retry timer.",
+    "boundedProgressProofArtifact": "test-output/reports/rolling-restart-after-publication-count-only-unknown-20260518T074802Z.report.json plus npm test -- test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js",
+    "expectedObservableTransition": "Focused observable transition: retry-scheduled rebalancer_handoff evidence classifies to bounded existing remote handoff retry state without changing publication-owner, active-gate, readiness, or timeout-budget code. Representative transition is classification-only because no runtime change was made and no representative rerun was required.",
     "maxProgressBound": "one focused operation_workflow_owner / rebalancer_handoff slice",
-    "sameFrontierFallback": "If the residual stays same-frontier, record the bounded retry/drain proof and stop rather than widening into publication ACK, active-gate snapshot coverage, readiness, or timeout budgets.",
+    "sameFrontierFallback": "Applied: rebalancer_handoff remains selected in the reference artifact, but focused proof shows bounded retry-scheduled backpressure. Stop as classification-only instead of widening into publication ACK, active-gate snapshot coverage, readiness, or timeout budgets.",
     "expectedNextFrontier": "operation_workflow_owner / rebalancer_handoff until focused proof reduces, classifies, or migrates it",
-    "resultClassification": "pending-before-probe",
-    "stopCondition": "continue-local-fix",
+    "resultClassification": "classification-only",
+    "stopCondition": "classification-only-stop",
     "recentFrontierHistory": [
       "work/packages/done-20260518-topology-publication-convergence-after-startup-readiness-classification.md / topology_publication_owner / publication_convergence / reduced",
       "work/packages/done-20260517-priority-recovery-rebalancer-handoff-after-workflow-progress-bounded-proof.md / operation_workflow_owner / rebalancer_handoff / classification-only",
@@ -214,7 +214,7 @@ subagents sequentially before editing runtime or test files.
 
 - [x] Review subagent recorded: Agent Codex (019e3a1f-5c2f-7cb2-b9b1-bd7be023dcd2) reviewed work/packages/done-20260518-topology-publication-convergence-after-startup-readiness-classification.md; result fixes-required.
 - [x] Fix subagent recorded or explicitly not needed: Agent Codex (019e3a21-ff60-7b83-89e5-2024e10569c4) fixed work/packages/done-20260518-topology-publication-convergence-after-startup-readiness-classification.md.
-- [ ] Implementation subagent recorded: pending-before-review.
+- [x] Implementation subagent recorded: Agent Codex (019e3a28-ae3d-75b1-9dc2-1058708bc32d) implemented work/packages/active-20260518-priority-recovery-rebalancer-handoff-after-publication-count-only-classification.md.
 
 ## LLM Tool-First Contract
 
@@ -278,3 +278,21 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 3. npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-publication-count-only-unknown-20260518T074802Z.report.json
 4. npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-publication-count-only-unknown-20260518T074802Z.report.json
 5. npm run analyze:owner-files -- operation_workflow_owner rebalancer_handoff --markdown
+6. npm run work:advance -- --check
+7. npm test -- test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js
+8. node scripts/check-guideline-literals.js test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js
+9. node scripts/check-guideline-decision-boundaries.js test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js
+
+## Focused Proof Result
+
+Classification-only focused proof. The publication-count-only residual has five
+retry-scheduled `rebalancer_handoff` witnesses, but they normalize to four
+unique operation handoff retries. The duplicate `control_plane_publications-p1`
+operation preserves one bounded retry timer and emits no duplicate remote wake;
+the other three unique operations each preserve one bounded remote handoff
+retry timer.
+
+No runtime file was changed. Representative rolling-restart was not rerun
+because this package added focused proof only; the reference artifact remains
+same-artifact evidence while this boundary stops as bounded retry-scheduled
+backpressure.

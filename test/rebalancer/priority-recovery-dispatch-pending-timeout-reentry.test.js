@@ -39,13 +39,27 @@ const TEST_SERIAL_WAIT_OPERATION_ID =
   'priority-dispatch-pending-serial-wait-operation';
 const TEST_REPRESENTATIVE_PUBLICATION_OPERATION_ID =
   '96c522ac-95c7-4713-96da-a98010d295d9';
+const TEST_PUBLICATION_COUNT_ONLY_PUBLICATION_OPERATION_ID =
+  '4c6da3d9-3dc9-4288-81d8-d0730df1657d';
+const TEST_PUBLICATION_COUNT_ONLY_REPLICA_OPERATION_ID =
+  '84f3d14d-b26a-4702-b7c4-4821eaf7acac';
+const TEST_PUBLICATION_COUNT_ONLY_SQL_PARTICIPANT_OPERATION_ID =
+  'c56129f4-fbc9-4ccc-8e72-c625ae9259a4';
+const TEST_PUBLICATION_COUNT_ONLY_SQL_TRANSACTION_OPERATION_ID =
+  '36b42a1f-bba3-487d-a7f4-c7cbc06c0c3e';
 const TEST_OPERATION_TYPE_REPLACE = OperationType.REPLACE;
 const TEST_PARTITION_ID = 'sql_write_operations-p1';
 const TEST_LOCAL_OWNER_PARTITION_ID = 'control_plane_publications-p1';
 const TEST_AUTHORITATIVE_ONLY_PARTITION_ID = 'replica_operations-p1';
+const TEST_SQL_TRANSACTION_PARTICIPANTS_PARTITION_ID =
+  'sql_transaction_participants-p1';
+const TEST_SQL_TRANSACTIONS_PARTITION_ID = 'sql_transactions-p1';
 const TEST_REPLICA_ID = 'sql_write_operations-p1-r4';
 const TEST_LOCAL_OWNER_REPLICA_ID = 'control_plane_publications-p1-r4';
 const TEST_AUTHORITATIVE_ONLY_REPLICA_ID = 'replica_operations-p1-r4';
+const TEST_SQL_TRANSACTION_PARTICIPANTS_REPLICA_ID =
+  'sql_transaction_participants-p1-r4';
+const TEST_SQL_TRANSACTIONS_REPLICA_ID = 'sql_transactions-p1-r4';
 const TEST_OBSERVER_NODE_ID = 'node-observer';
 const TEST_SOURCE_NODE_ID = 'node-source';
 const TEST_TARGET_NODE_ID = 'node-target';
@@ -285,6 +299,14 @@ const TEST_ASSERT_REPRESENTATIVE_HANDOFF_NO_DUPLICATE_WAKE =
   'duplicate representative handoff witnesses should not duplicate remote wake';
 const TEST_ASSERT_REPRESENTATIVE_HANDOFF_TIMER_PRESERVED =
   'duplicate representative handoff witnesses should preserve one retry timer';
+const TEST_ASSERT_COUNT_ONLY_HANDOFF_UNIQUE_RETRIES =
+  'count-only publication residual should normalize duplicate witnesses to ' +
+  'unique retries';
+const TEST_ASSERT_COUNT_ONLY_HANDOFF_NO_DUPLICATE_WAKE =
+  'count-only publication residual should not duplicate remote wake state';
+const TEST_ASSERT_COUNT_ONLY_HANDOFF_TIMERS_PRESERVED =
+  'count-only publication residual should preserve one retry timer per ' +
+  'unique operation';
 const TEST_ASSERT_LOCAL_OWNER_HANDOFF_RETRY_CONSUMED =
   'local-owner retryable pressure should stay consumed by transition retry';
 const TEST_ASSERT_LOCAL_OWNER_NO_HANDOFF_TIMER =
@@ -3806,6 +3828,161 @@ async (t) => {
         .size,
       NUM.ONE,
       TEST_ASSERT_REPRESENTATIVE_HANDOFF_TIMER_PRESERVED,
+    );
+  } finally {
+    Date.now = originalDateNow;
+    await coordinator.shutdown();
+  }
+});
+
+test('publication count-only retry-scheduled handoff residual preserves one ' +
+  'bounded remote retry per unique operation',
+async (t) => {
+  const deliveries = [];
+  const deferredTimers = [];
+  const witnessOperations = Object.freeze([
+    Object.freeze({
+      operationId: TEST_PUBLICATION_COUNT_ONLY_PUBLICATION_OPERATION_ID,
+      partitionId: TEST_LOCAL_OWNER_PARTITION_ID,
+      replicaId: TEST_LOCAL_OWNER_REPLICA_ID,
+    }),
+    Object.freeze({
+      operationId: TEST_PUBLICATION_COUNT_ONLY_PUBLICATION_OPERATION_ID,
+      partitionId: TEST_LOCAL_OWNER_PARTITION_ID,
+      replicaId: TEST_LOCAL_OWNER_REPLICA_ID,
+    }),
+    Object.freeze({
+      operationId: TEST_PUBLICATION_COUNT_ONLY_REPLICA_OPERATION_ID,
+      partitionId: TEST_AUTHORITATIVE_ONLY_PARTITION_ID,
+      replicaId: TEST_AUTHORITATIVE_ONLY_REPLICA_ID,
+    }),
+    Object.freeze({
+      operationId: TEST_PUBLICATION_COUNT_ONLY_SQL_PARTICIPANT_OPERATION_ID,
+      partitionId: TEST_SQL_TRANSACTION_PARTICIPANTS_PARTITION_ID,
+      replicaId: TEST_SQL_TRANSACTION_PARTICIPANTS_REPLICA_ID,
+    }),
+    Object.freeze({
+      operationId: TEST_PUBLICATION_COUNT_ONLY_SQL_TRANSACTION_OPERATION_ID,
+      partitionId: TEST_SQL_TRANSACTIONS_PARTITION_ID,
+      replicaId: TEST_SQL_TRANSACTIONS_REPLICA_ID,
+    }),
+  ].map((operation) => Object.freeze({
+    ...operation,
+    type: TEST_OPERATION_TYPE_REPLACE,
+    status: TEST_STATUS_PENDING,
+    workflowStep: WORKFLOW_STEP.SENDING,
+    sourceNodeId: TEST_SOURCE_NODE_ID,
+    targetNodeId: TEST_TARGET_NODE_ID,
+    createdAt: TEST_CAPTURED_AT_MS,
+    updatedAt: TEST_CAPTURED_AT_MS,
+  })));
+  const uniqueOperations = Object.freeze(Array.from(
+    new Map(witnessOperations.map((operation) => [
+      operation.operationId,
+      operation,
+    ])).values(),
+  ));
+  const coordinator = createCoordinator({
+    nodeId: TEST_OBSERVER_NODE_ID,
+    transactionCoordinator: buildTransactionCoordinator(),
+    systemTableCache: {
+      get() {
+        return TEST_EMPTY_VALUE;
+      },
+      getAll() {
+        return [];
+      },
+      filter() {
+        return [];
+      },
+    },
+    cdcIntegrationService: {
+      async waitForCacheUpdate() {},
+    },
+    messageRouter: {
+      async deliver(target, payload, options) {
+        deliveries.push({target, payload, options});
+        return {acknowledged: true, status: TEST_DELIVERY_STATUS_INITIATED};
+      },
+    },
+    tablePolicyService: {
+      async getPolicyForPartition() {
+        return {minReplicaCount: TEST_MIN_REPLICA_COUNT};
+      },
+    },
+    setTimeoutFn(fn, delayMs) {
+      const handle = {fn, delayMs};
+      deferredTimers.push(handle);
+      return handle;
+    },
+    clearTimeoutFn() {},
+    enableTimeouts: false,
+  });
+  const originalDateNow = Date.now;
+  Date.now = () => TEST_CAPTURED_AT_MS;
+
+  try {
+    coordinator.initialize();
+    for (const operation of uniqueOperations) {
+      t.equal(
+        coordinator.workflowOwner.deferCoordinatorCreatedRemoteHandoffRetry(
+          operation,
+          {
+            deferRetry: true,
+            retryAfterMs: TEST_RETRY_AFTER_MS,
+            error: TEST_RETRYABLE_HANDOFF_ERROR,
+          },
+        ),
+        true,
+        TEST_ASSERT_COUNT_ONLY_HANDOFF_UNIQUE_RETRIES,
+      );
+    }
+    for (const operation of uniqueOperations) {
+      const snapshot = Object.freeze({
+        operationId: operation.operationId,
+        actuation: Object.freeze({
+          owner: OPERATION_WORKFLOW_OWNER,
+          state:
+            PRIORITY_RECOVERY_ACTUATION_STATE.DISPATCHED_WAITING_PROGRESS,
+          workflowProgressPhaseId:
+            PRIORITY_RECOVERY_WORKFLOW_PROGRESS_PHASE.DISPATCH_PENDING,
+        }),
+        progress: Object.freeze({
+          currentOwner: OPERATION_WORKFLOW_OWNER,
+          nextRequiredAction:
+            PRIORITY_RECOVERY_NEXT_REQUIRED_ACTION
+              .WAIT_FOR_OPERATION_PROGRESS,
+          blockingBoundary:
+            PRIORITY_RECOVERY_BLOCKING_BOUNDARY.REBALANCER_HANDOFF,
+          waitMode: PRIORITY_RECOVERY_WAIT_MODE.RETRY_SCHEDULED,
+          workflowProgressPhaseId:
+            PRIORITY_RECOVERY_WORKFLOW_PROGRESS_PHASE.DISPATCH_PENDING,
+        }),
+      });
+      t.equal(
+        coordinator.workflowOwner.schedulePriorityRecoveryDispatchPendingReentry(
+          snapshot,
+          witnessOperations,
+        ),
+        false,
+        TEST_ASSERT_COUNT_ONLY_HANDOFF_NO_DUPLICATE_WAKE,
+      );
+    }
+    t.equal(
+      deliveries.length,
+      NUM.ZERO,
+      TEST_ASSERT_COUNT_ONLY_HANDOFF_NO_DUPLICATE_WAKE,
+    );
+    t.equal(
+      deferredTimers.length,
+      uniqueOperations.length,
+      TEST_ASSERT_COUNT_ONLY_HANDOFF_TIMERS_PRESERVED,
+    );
+    t.equal(
+      coordinator.workflowOwner.createdOperationHandoffRetryTimerByOperationId
+        .size,
+      uniqueOperations.length,
+      TEST_ASSERT_COUNT_ONLY_HANDOFF_TIMERS_PRESERVED,
     );
   } finally {
     Date.now = originalDateNow;
