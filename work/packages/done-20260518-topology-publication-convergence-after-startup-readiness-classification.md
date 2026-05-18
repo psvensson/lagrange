@@ -273,3 +273,9 @@ Canonical extractors used: `work:scenario-route`, `work:evidence-summary`,
 those extractors did not expose the full `publicationOwnerStream` and
 `publicationRecoveryGate` field-level shape needed to isolate the count-only
 UNKNOWN/no-node-list publication debt case.
+
+## Commit And Push Ledger
+
+1. Focused package commit: `d62b3d4a`
+2. Pushed to: `origin/codex/pending-ack-eligibility-filter`
+3. Commit contains only package-owned files/package-status/allowed sprint handoff: yes
