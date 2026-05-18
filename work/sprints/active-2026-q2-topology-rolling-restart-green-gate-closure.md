@@ -22,12 +22,12 @@ success is in scope.
 ## Sprint Strategy Brief
 
 - Goal state: representative `rolling-restart` is green with `active=5/5`, `snapshotCoverage=5/5`, `missingPublished=0`, and no timeout or admission relaxation.
-- Current causal thesis: the same-frontier handoff gate is closed, the existing publication-active-gate contract is adequate, and the active bounded same-owner publication runtime successor reduced the local OPEN epoch publishing revision-visibility path. Fresh representative evidence still selects `publication_ack_convergence / topology_publication_owner / publication_convergence`, but the shape narrowed to `missing_published_nodes_present` with `publicationStatus=unknown`, `missingPublishedCount=5`, priority residual witnesses `0`, and active-gate evidence deferred on `selected_snapshot_source_timeout`.
-- Competing hypotheses: H2 topology_publication_owner remains the first frontier and now needs diagnostic classification for the missing-published-nodes shape; H3 startup_active_gate_owner is visible through selected-source timeout but remains downstream because topology/causal evidence still selects publication first; H4 operation workflow is no longer visible in the fresh residual because priority residual witnesses are `0`; H1 architecture handoff gap is not selected because the handoff probe reports `missingEdge=null`.
-- Confidence and evidence: high for bounded same-owner publication successor reduction from focused tests, scenario-route, evidence-summary, handoff-probe, causal-model, priority residual extraction, owner-files, and the fresh representative rerun `test-output/reports/rolling-restart-after-publication-owner-publishing-visibility-20260518T114956Z.report.json`.
-- Expected green path: commit and close the active reduced `topology_publication_owner / publication_convergence` runtime successor, then open a diagnostic classifier on the fresh `missing_published_nodes_present` artifact before any further runtime edit. The focused owner fixture now changes OPEN epoch publishing revision visibility to `advancing` while preserving the publishing wait; the next proof must classify why the fresh representative stops earlier at unknown publication status.
+- Current causal thesis: the predecessor reduced the focused OPEN epoch publishing revision-visibility path, but the fresh representative rerun now stops earlier at `publication_ack_convergence / topology_publication_owner / publication_convergence`, `missing_published_nodes_present`, `publicationStatus=unknown`, `publicationEpoch=0`, `missingPublishedCount=5`, priority residual witnesses `0`, and active-gate coverage `0/5`. The active diagnostic classifier now selects a bounded same-owner runtime successor, with no runtime promotion inside the classifier package.
+- Competing hypotheses: H2 topology_publication_owner remains the first frontier and now needs diagnostic classification for the missing-published-nodes shape; H3 startup_active_gate_owner is visible through selected-source timeout but remains downstream because topology/causal evidence still selects publication first and `runtimePromotionAllowed=false`; H4 operation workflow is no longer visible in the fresh residual because priority residual witnesses are `0`; H1 architecture/handoff gap is unresolved for this shape because the handoff probe reports `contractEdge=null`, `handoffContract.state=absent`, and `detected=false`.
+- Confidence and evidence: high for the fresh diagnostic classification input from scenario-route, evidence-summary, handoff-probe, causal-model, priority residual extraction, owner-files, and the fresh representative rerun `test-output/reports/rolling-restart-after-publication-owner-publishing-visibility-20260518T114956Z.report.json`; bounded runtime successor evidence belongs to the predecessor and is not promoted by the active package.
+- Expected green path: close the active diagnostic classifier as bounded same-owner successor, then open a focused `topology_publication_owner / publication_convergence` runtime successor for unknown publication status and missing published nodes. The focused owner fixture now changes OPEN epoch publishing revision visibility to `advancing` while preserving the publishing wait; the successor proof must target why the fresh representative stops earlier at unknown publication status.
 - Wrong direction signals: a package patches active-gate, operation workflow, readiness, admission, handoff architecture, or timeout budgets from this artifact; the rebalancer witnesses are treated as selected despite `splitRequired=false`; or publication runtime work starts outside this active bounded successor package or before refreshed clean role sequencing.
-- Next best package: close `work/packages/active-20260518-topology-publication-owner-publishing-visibility.md` as reduced after commit/push, then open a diagnostic-classification successor for the fresh missing-published-nodes evidence.
+- Next best package: close `work/packages/active-20260518-topology-publication-missing-published-nodes-classification.md` as the diagnostic classifier, then open a focused same-owner publication convergence runtime successor for the fresh missing-published-nodes evidence.
 - Stop or escalate rule: if the next diagnostic classifier cannot narrow, migrate, or justify a bounded owner slice from fresh evidence, escalate to architecture/human direction instead of another local runtime patch.
 
 ## Current Blocker Snapshot
@@ -38,49 +38,52 @@ Latest representative artifact:
 Canonical state after the fresh rerun:
 
 1. The current active package is
-   `work/packages/active-20260518-topology-publication-owner-publishing-visibility.md`.
-2. Its predecessor is the closed same-owner classifier
+   `work/packages/active-20260518-topology-publication-missing-published-nodes-classification.md`.
+2. Its predecessor is the reduced publication owner runtime slice
+   `work/packages/done-20260518-topology-publication-owner-publishing-visibility.md`.
+3. The predecessor's predecessor is the closed same-owner classifier
    `work/packages/done-20260518-topology-publication-residual-after-priority-split-classification.md`.
-3. The prior reduced publication-convergence package is
+4. The prior reduced publication-convergence package is
    `work/packages/done-20260518-topology-publication-convergence-after-active-gate-handoff-oscillation.md`.
-4. The prior same-frontier handoff predecessor is
+5. The prior same-frontier handoff predecessor is
    `work/packages/done-20260518-rolling-restart-publication-active-gate-handoff-oscillation-after-fresh-evidence.md`.
-5. The prior active-gate handoff predecessor is
+6. The prior active-gate handoff predecessor is
    `work/packages/done-20260518-startup-active-gate-snapshot-coverage-after-publication-handoff-classification.md`,
    which closed as classification-only with no startup active-gate runtime edit.
-6. The latest representative run failed 0/1 at `active=0/5` and
+7. The latest representative run failed 0/1 at `active=0/5` and
    `snapshotCoverage=0/5`.
-7. Canonical `work:scenario-route`, `work:evidence-summary`, and
+8. Canonical `work:scenario-route`, `work:evidence-summary`, and
    `analyze:causal-model` select
    `publication_ack_convergence / topology_publication_owner /
    publication_convergence / missing_published_nodes_present` as the visible first
    frontier.
-8. Priority residual extraction now reports zero witnesses and
+9. Priority residual extraction now reports zero witnesses and
    `splitRequired=false`.
-9. The focused handoff probe records `missingEdge=null`,
-   `contractEdge=publication_active_gate_handoff_contract`,
+10. The fresh handoff probe records `missingEdge=null`, `contractEdge=null`,
+   `handoffContract.state=absent`, `detected=false`,
    `resultClassification=publication_active_gate_handoff_not_detected`, and
-   `nextOwnerPath startup_active_gate_owner / snapshot_coverage`.
-10. Active-gate evidence is deferred with `snapshotCoverageNodeCount=0/5`,
+   `nextOwnerPath startup_active_gate_owner / snapshot_coverage` with required
+   action `build_replayable_handoff_fixture`.
+11. Active-gate evidence is deferred with `snapshotCoverageNodeCount=0/5`,
    selected snapshot source timeout on
    `11601fe0-72d6-5853-8590-ec2881853e72`, and
    `runtimePromotionAllowed=false`.
-11. The same-frontier handoff predecessor proved the handoff contract is
+12. The same-frontier handoff predecessor proved the handoff contract is
     adequate, the active-gate consumer remains deferred, and no runtime or test
     edit was justified inside that handoff package.
-12. The reduced publication-convergence predecessor implemented only bounded
+13. The reduced publication-convergence predecessor implemented only bounded
     publication owner files:
     zero-gap priority summaries now remove stale priority-spread pending from
     publication recovery gate and canonical publication convergence while
     publication remains OPEN/publishing; representative rerun is red but
     reduced and exposes a residual split for this active package decision.
-13. The closed classification package selected a bounded same-owner
-    publication runtime successor. It did not promote runtime files: the next
-    active package stays on `topology_publication_owner /
-    publication_convergence` and focus on OPEN epoch-1 publishing state,
-    `missingPublishedCount=4`, `prioritySpreadPending=true`, and unavailable
-    publication owner ack/revision/stream evidence.
-14. Focused implementation in the active package reduced the revision
+14. The closed classification package selected the predecessor bounded
+    same-owner publication runtime successor for the earlier OPEN epoch-1
+    shape. That predecessor has now been consumed; the current active package is
+    diagnostic-only and must not promote runtime files from the fresh
+    `publicationStatus=unknown`, `publicationEpoch=0`,
+    `missingPublishedCount=5`, zero-priority-witness artifact.
+15. Focused implementation in the predecessor runtime package reduced the revision
     visibility side of that blocker: OPEN epoch publishing now reports
     `revisionState=advancing` from observed/desired epoch evidence while
     retaining `ackState=unavailable`, `freshnessFence=publishing`,
@@ -88,6 +91,11 @@ Canonical state after the fresh rerun:
     Fresh representative rerun stayed red but narrowed to
     `missing_published_nodes_present` with `publicationStatus=unknown` and
     priority residual witnesses `0`.
+16. The active diagnostic classifier selected
+    `bounded-same-owner-successor`: canonical extractors keep
+    `topology_publication_owner / publication_convergence` first, priority
+    residual witnesses remain `0`, active-gate runtime promotion is false, and
+    no runtime/test/script/report file is edited in the classifier package.
 
 ## Current Edge Card
 
@@ -96,30 +104,31 @@ Representative artifact: test-output/reports/rolling-restart-after-publication-o
 Visible first frontier: publication_ack_convergence / topology_publication_owner / publication_convergence / missing_published_nodes_present
 Active package owner: topology_publication_owner
 Active package boundary: publication_convergence
-Selected cause: bounded same-owner publication runtime successor reduced the OPEN publishing revision-visibility fixture; fresh evidence now needs classification of missing published nodes with unknown publication status
-Required action: commit/close the reduced slice, then open a diagnostic classifier for the fresh missing-published-nodes artifact
-Runtime promotion allowed: bounded publication owner files only after fresh role proof; active-gate runtimePromotionAllowed=false
+Selected cause: active diagnostic classifier selected a bounded same-owner publication runtime successor for missing published nodes with unknown publication status
+Required action: close the diagnostic classifier, then open a focused same-owner publication convergence runtime successor
+Runtime promotion allowed: no runtime promotion in the active diagnostic package; successor runtime promotion requires a new package and clean role sequencing; active-gate runtimePromotionAllowed=false
 Priority residual: zero witnesses in fresh artifact
 Extractor split: scenario-route/evidence-summary/causal-model select publication first; handoff probe points nextOwnerPath to deferred startup_active_gate_owner / snapshot_coverage with runtimePromotionAllowed=false
 Publication state: fresh artifact publicationStatus=unknown, publicationEpoch=0, publishedActive=0/5, missingPublishedCount=5, prioritySpreadPending=false; focused owner output still reduces revision visibility from unavailable to advancing for OPEN epoch publishing when observed/desired revision evidence exists
 Focused predecessor implementation: bounded publication owner zero-gap priority-spread reduction; earlier active-gate handoff classification remained no-runtime-edit with missingEdge=null
 Current active-gate state: deferred, snapshotCoverageNodeCount=0/5, selected_snapshot_source_timeout on 11601fe0-72d6-5853-8590-ec2881853e72, runtimePromotionAllowed=false
-Goal: classify the fresh publication-owner missing-published-nodes residual without reopening deferred active-gate evidence
-Allowed edits: active package, sprint, and current-blocker handoff files; after clean role proof, runtime/test edits are limited to this active package's bounded publication owner files
+Goal: hand off the classified fresh publication-owner missing-published-nodes residual to a bounded same-owner successor without reopening deferred active-gate evidence
+Allowed edits: active package, sprint, current-blocker handoff files, and model ledger; runtime/test files remain candidates only until classification promotes a bounded successor
 Forbidden edits: startup active-gate runtime; operation workflow/rebalancer handoff runtime; startup readiness runtime; active-gate admission; handoff architecture; harness timeout increases
-Required latest proof: scenario-route, evidence-summary, handoff-probe, causal-model, priority residuals, owner-files, focused publication tests, static guardrails, package validation, and diff checks
+Required latest proof: evidence-summary, scenario-triage/route, handoff-probe, causal-model, priority residuals, owner-files, package validation, and diff checks
 Allowed stop modes: representative-green, migrated, reduced, same-frontier, classification-only, architecture-gap, human-escalation
 ```
 
 ## Sprint Architecture Decision Gate
 
-Status: watching for the current active package.
+Status: selected after the current active package classification.
 
 Current decision: causal-escalation remains active because the publication
 frontier returned after related publication and startup-readiness closures. The
-active residual package classified the topology-publication first frontier
-against the visible `operation_workflow_owner / rebalancer_handoff` witnesses:
-continue with a bounded same-owner publication runtime successor.
+active package is not a runtime successor; it is the diagnostic classifier for
+the fresh missing-published-nodes shape after the predecessor runtime slice
+reduced OPEN epoch publishing revision visibility, and it now selects a bounded
+same-owner publication runtime successor.
 
 The `same-frontier` result belongs to the predecessor handoff package
 `work/packages/done-20260518-rolling-restart-publication-active-gate-handoff-oscillation-after-fresh-evidence.md`.
@@ -128,41 +137,46 @@ That package proved the publication-active-gate contract exists,
 `runtimePromotionAllowed=false`, so no handoff, active-gate, runtime, or test
 edit was justified there.
 
-The immediate predecessor was the diagnostic split/migration classifier
-`work/packages/done-20260518-topology-publication-residual-after-priority-split-classification.md`.
-It promoted no runtime/test files and selected this active package as the
-bounded same-owner publication runtime successor. The active package now owns the
-bounded `topology_publication_owner / publication_convergence` publication owner
-runtime slice; startup active-gate, operation workflow, startup readiness,
-admission, handoff architecture, and timeout budgets remain frozen unless fresh
-canonical evidence reselects them.
+The diagnostic split/migration classifier
+`work/packages/done-20260518-topology-publication-residual-after-priority-split-classification.md`
+selected the predecessor bounded same-owner publication runtime successor for a
+different OPEN epoch-1 shape. The immediate predecessor
+`work/packages/done-20260518-topology-publication-owner-publishing-visibility.md`
+consumed that runtime slice and produced the fresh representative artifact. This
+active package owns only the diagnostic classification for
+`topology_publication_owner / publication_convergence`; startup active-gate,
+operation workflow, startup readiness, admission, handoff architecture, timeout
+budgets, and runtime files remain frozen unless fresh canonical evidence
+reselects them.
 
 Decision basis:
 
 1. Fresh `work:scenario-route`, `work:evidence-summary`, and
-   `analyze:causal-model` keep publication visible first with concrete OPEN
-   epoch-1 state:
-   `publicationStatus=OPEN`, `publicationEpoch=1`, `publishedActive=1/5`,
-   `missingPublishedCount=4`, and `prioritySpreadPending=true`.
-2. Priority residual extraction now reports four
-   `operation_workflow_owner / rebalancer_handoff` witnesses, while topology
-   route still names publication as the first frontier.
-3. The publication-active-gate handoff probe reports no missing edge and points
-   `nextOwnerPath` to `startup_active_gate_owner / snapshot_coverage` with
-   required action `reconcile_owner_membership_publication`.
-4. Active gate is deferred at `snapshotCoverageNodeCount=3/5` with two
-   pending reconcile nodes and `runtimePromotionAllowed=false`.
-5. The predecessor completed the diagnostic split/migration classification; the
-   representative rerun is red but bounded to the same owner, so the active
-   package owns the publication runtime successor slice.
+   `analyze:causal-model` keep publication visible first with
+   `publicationStatus=unknown`, `publicationEpoch=0`, `publishedActive=0/5`,
+   `missingPublishedCount=5`, and `prioritySpreadPending=false`.
+2. Priority residual extraction reports zero witnesses and
+   `splitRequired=false`, so operation workflow is not selected from this
+   artifact.
+3. The fresh handoff probe reports `missingEdge=null`, `contractEdge=null`,
+   `handoffContract.state=absent`, `detected=false`, and
+   `runtimePromotionAllowed=false`.
+4. Active gate is deferred at `snapshotCoverageNodeCount=0/5` with selected
+   snapshot source timeout on
+   `11601fe0-72d6-5853-8590-ec2881853e72`; it remains downstream while
+   publication is the first frontier.
+5. The active package must classify whether this diagnostic shape is
+   classification-only, bounded same-owner successor, migrated owner boundary,
+   architecture-gap, human-escalation, or representative-green before any
+   runtime promotion.
 
 Candidate ranking:
 
-1. Bounded same-owner publication successor: continue the active focused
-   `topology_publication_owner / publication_convergence` runtime package for
-   OPEN epoch-1 publishing state, missing published active nodes,
-   `prioritySpreadPending=true`, and unavailable publication owner
-   ack/revision/stream evidence.
+1. Bounded same-owner successor: selected from the active
+   `topology_publication_owner / publication_convergence` classifier for
+   unknown publication status, epoch `0`, five missing published nodes, zero
+   priority witnesses, absent handoff contract evidence, and no runtime
+   promotion inside the classifier package.
 2. Same-frontier handoff proof: closed by the predecessor handoff package.
 3. Owner-boundary migration to `startup_active_gate_owner`: not selected from
    this artifact because the consumer is deferred and runtime promotion is
@@ -214,7 +228,7 @@ Forbidden during this gate:
 | `done-20260518-priority-recovery-rebalancer-handoff-after-publication-count-only-classification.md` | `rolling-restart-after-publication-count-only-unknown-20260518T074802Z.report.json` | `operation_workflow_owner / rebalancer_handoff` | focused proof classifies five retry-scheduled witnesses as four bounded remote handoff retries with no duplicate wake or runtime change | `classification-only` |
 | `done-20260518-rolling-restart-topology-publication-owner-publication-conve.md` | `rolling-restart-after-publication-count-only-unknown-20260518T074802Z.report.json` | `topology_publication_owner / publication_convergence` | focused handoff probe records no missing edge, active-gate reconcile as next owner path, one pending reconcile node, and no runtime edit | `classification-only` |
 | `done-20260518-rolling-restart-publication-active-gate-handoff-oscillation-after-fresh-evidence.md` | `rolling-restart-after-active-gate-handoff-classification-20260518T094315Z.report.json` | `topology_publication_owner / publication_convergence` -> `topology_publication_owner / publication_convergence` | focused proof records `missingEdge=null`, existing handoff contract, priority residual witnesses `0`, active-gate deferred with three pending reconcile nodes and `runtimePromotionAllowed=false`; no runtime or test edit in this package | `same-frontier` |
-| `active-20260518-topology-publication-owner-publishing-visibility.md` | `rolling-restart-after-publication-owner-publishing-visibility-20260518T114956Z.report.json` | `topology_publication_owner / publication_convergence` -> `topology_publication_owner / publication_convergence` | focused owner fixture reduces OPEN publishing revision visibility to `advancing`; fresh representative narrows to `missing_published_nodes_present`, `publicationStatus=unknown`, priority residual witnesses `0`, selected snapshot source timeout deferred downstream | `reduced` |
+| `done-20260518-topology-publication-owner-publishing-visibility.md` | `rolling-restart-after-publication-owner-publishing-visibility-20260518T114956Z.report.json` | `topology_publication_owner / publication_convergence` -> `topology_publication_owner / publication_convergence` | focused owner fixture reduces OPEN publishing revision visibility to `advancing`; fresh representative narrows to `missing_published_nodes_present`, `publicationStatus=unknown`, priority residual witnesses `0`, selected snapshot source timeout deferred downstream | `reduced` |
 
 ## Sprint LLM Trap List
 

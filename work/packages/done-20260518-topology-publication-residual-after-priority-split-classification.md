@@ -130,7 +130,7 @@
   "predecessor": "work/packages/done-20260518-topology-publication-convergence-after-active-gate-handoff-oscillation.md",
   "closed": "2026-05-18",
   "commitAndPushLedgerRequired": true,
-  "successor": "work/packages/active-20260518-topology-publication-owner-publishing-visibility.md"
+  "successor": "work/packages/done-20260518-topology-publication-owner-publishing-visibility.md"
 }
 -->
 

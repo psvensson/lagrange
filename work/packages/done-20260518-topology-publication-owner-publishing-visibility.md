@@ -3,7 +3,7 @@
 <!-- work-package
 {
   "schema": "work-package-v1",
-  "status": "active",
+  "status": "done",
   "opened": "2026-05-18",
   "lane": "causal-escalation",
   "scenario": "rolling-restart",
@@ -22,7 +22,7 @@
     "npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-after-publication-owner-publishing-visibility-20260518T114956Z.report.json --markdown"
   ],
   "writeScope": [
-    "work/packages/active-20260518-topology-publication-owner-publishing-visibility.md",
+    "work/packages/done-20260518-topology-publication-owner-publishing-visibility.md",
     "work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md",
     "work/sprints/current-blocker.md",
     "work/sprints/current-blocker.json",
@@ -54,7 +54,7 @@
     "test/control-plane/publication-recovery-evidence.test.js"
   ],
   "commitScope": [
-    "work/packages/active-20260518-topology-publication-owner-publishing-visibility.md",
+    "work/packages/done-20260518-topology-publication-owner-publishing-visibility.md",
     "work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md",
     "work/sprints/current-blocker.md",
     "work/sprints/current-blocker.json",
@@ -142,7 +142,10 @@
     "selectedChoice": null,
     "nextAction": "Close this reduced slice and continue with a diagnostic classifier on the fresh missing-published-nodes evidence; present a gate only if that successor cannot narrow or migrate the publication owner blocker."
   },
-  "predecessor": "work/packages/done-20260518-topology-publication-residual-after-priority-split-classification.md"
+  "predecessor": "work/packages/done-20260518-topology-publication-residual-after-priority-split-classification.md",
+  "closed": "2026-05-18",
+  "commitAndPushLedgerRequired": true,
+  "successor": "work/packages/active-20260518-topology-publication-missing-published-nodes-classification.md"
 }
 -->
 
@@ -219,7 +222,7 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 
 ## In Scope
 
-1. work/packages/active-20260518-topology-publication-owner-publishing-visibility.md
+1. work/packages/done-20260518-topology-publication-owner-publishing-visibility.md
 2. work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md
 3. work/sprints/current-blocker.md
 4. work/sprints/current-blocker.json
@@ -247,7 +250,7 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 - Intended minimum model: `gpt-5.3-codex`
 - Scope shape: `owner-boundary-contraction/current-frontier`
 - Output profile: `medium`
-- Owned files: `work/packages/active-20260518-topology-publication-owner-publishing-visibility.md`, `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md`, `work/sprints/current-blocker.md`, `work/sprints/current-blocker.json`, `work/model-ledger.jsonl`, `src/control-plane/publication-owner-evidence.js`, `src/control-plane/publication-owner-decision.js`, `src/control-plane/publication-recovery-gate.js`, `src/control-plane/publication-recovery-evidence.js`, `test/control-plane/publication-owner-stream.test.js`, `test/control-plane/publication-recovery-gate.test.js`, `test/control-plane/publication-recovery-evidence.test.js`
+- Owned files: `work/packages/done-20260518-topology-publication-owner-publishing-visibility.md`, `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md`, `work/sprints/current-blocker.md`, `work/sprints/current-blocker.json`, `work/model-ledger.jsonl`, `src/control-plane/publication-owner-evidence.js`, `src/control-plane/publication-owner-decision.js`, `src/control-plane/publication-recovery-gate.js`, `src/control-plane/publication-recovery-evidence.js`, `test/control-plane/publication-owner-stream.test.js`, `test/control-plane/publication-recovery-gate.test.js`, `test/control-plane/publication-recovery-evidence.test.js`
 - Forbidden files: `startup active-gate runtime`, `operation workflow / rebalancer_handoff runtime`, `startup readiness runtime`, `active-gate admission`, `timeout budgets`, `handoff architecture`
 - Frozen decisions: package scope and lane stay bounded unless explicitly escalated.
 - Escalation triggers: owned files expand beyond this package, runtime ownership changes, or representative scenario evidence changes.
@@ -259,15 +262,15 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 Required before implementation because this causal-escalation package may edit
 topology publication owner runtime and test files.
 
-- [x] Review subagent recorded: Agent Russell (019e3ad9-2244-7e92-b19a-3742fdab11c9) reviewed `work/packages/active-20260518-topology-publication-owner-publishing-visibility.md`; result fixes-required.
-- [x] Fix subagent recorded or explicitly not needed: Agent Mill (019e3adc-98fc-7773-9e29-f423b5d2a3a9) fixed `work/packages/active-20260518-topology-publication-owner-publishing-visibility.md`.
-- [x] Implementation subagent recorded: Agent Nietzsche (019e3ae1-0e1f-7220-9b83-93297adfe951) implemented `work/packages/active-20260518-topology-publication-owner-publishing-visibility.md`; result reduced.
+- [x] Review subagent recorded: Agent Russell (019e3ad9-2244-7e92-b19a-3742fdab11c9) reviewed `work/packages/done-20260518-topology-publication-owner-publishing-visibility.md`; result fixes-required.
+- [x] Fix subagent recorded or explicitly not needed: Agent Mill (019e3adc-98fc-7773-9e29-f423b5d2a3a9) fixed `work/packages/done-20260518-topology-publication-owner-publishing-visibility.md`.
+- [x] Implementation subagent recorded: Agent Nietzsche (019e3ae1-0e1f-7220-9b83-93297adfe951) implemented `work/packages/done-20260518-topology-publication-owner-publishing-visibility.md`; result reduced.
 
 ## Subagent Progress Ledger
 
 Required when subagent sequencing is required. Each real subagent appends one checked update after every completed subtask; the Sequencing Ledger remains the role-completion proof.
 
-- [x] Agent Russell (019e3ad9-2244-7e92-b19a-3742fdab11c9) completed review subtask: identified stale sprint successor/classifier wording and missing review/fix ledger proof; evidence: review result fixes-required for `work/packages/active-20260518-topology-publication-owner-publishing-visibility.md`; next: fix subagent repairs package and sprint handoff text.
+- [x] Agent Russell (019e3ad9-2244-7e92-b19a-3742fdab11c9) completed review subtask: identified stale sprint successor/classifier wording and missing review/fix ledger proof; evidence: review result fixes-required for `work/packages/done-20260518-topology-publication-owner-publishing-visibility.md`; next: fix subagent repairs package and sprint handoff text.
 - [x] Agent Mill (019e3adc-98fc-7773-9e29-f423b5d2a3a9) completed fix subtask: recorded review/fix proof and corrected successor/classifier wording without runtime or test edits; evidence: package and sprint files patched; next: run package doctor, entry validation, pre-implementation validation, and diff check.
 - [x] Agent Nietzsche (019e3ae1-0e1f-7220-9b83-93297adfe951) implementation evidence triage: canonical evidence and package gates agree on `publication_ack_convergence / topology_publication_owner / publication_convergence / publication_pending`; evidence: `npm run work:context`, `npm run work:llm-start`, package doctor, evidence-summary, scenario-route, handoff-probe, causal-model, priority residuals, owner-files, subagent prompt, work:advance -- --check, entry validation, and pre-impl validation all completed; next: implement the smallest publication owner runtime/test slice for OPEN epoch-1 publishing visibility.
 - [x] Agent Nietzsche (019e3ae1-0e1f-7220-9b83-93297adfe951) implementation runtime slice: OPEN epoch publishing revision visibility now reports `revisionState=advancing` from observed/desired epoch evidence while retaining `ackState=unavailable` and `streamOutcome=publishing`; evidence: `src/control-plane/publication-owner-decision.js` and `test/control-plane/publication-owner-stream.test.js`, with the focused test failing before the runtime change and passing after it; next: run recovery consumer tests and static guardrails.
@@ -289,14 +292,14 @@ and the producer evidence reports `publicationStatus=unknown`.
 
 1. `npm run work:context` - pass.
 2. `npm run work:llm-start` - pass.
-3. `npm run work:package:doctor -- --suggest work/packages/active-20260518-topology-publication-owner-publishing-visibility.md` - pass.
+3. `npm run work:package:doctor -- --suggest work/packages/done-20260518-topology-publication-owner-publishing-visibility.md` - pass.
 4. `npm run work:evidence-summary -- test-output/reports/rolling-restart-after-publication-zero-gap-priority-spread-20260518T104305Z.report.json` - pass; first frontier remains `publication_ack_convergence`.
 5. `npm run work:scenario-route -- test-output/reports/rolling-restart-after-publication-zero-gap-priority-spread-20260518T104305Z.report.json --owner topology_publication_owner --boundary publication_convergence --dominant-reason publication_pending --explain publication_ack_convergence --markdown` - pass.
 6. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-publication-zero-gap-priority-spread-20260518T104305Z.report.json --handoff-probe` - pass; producer remains OPEN/publishing and active-gate promotion remains false.
 7. `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-publication-zero-gap-priority-spread-20260518T104305Z.report.json` - pass; outcome `continue_local_fix`.
 8. `npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-after-publication-zero-gap-priority-spread-20260518T104305Z.report.json --markdown` - pass; `splitRequired=false`.
 9. `npm run analyze:owner-files -- topology_publication_owner publication_convergence` - pass.
-10. `npm run work:subagent-prompt -- --role implementation --package work/packages/active-20260518-topology-publication-owner-publishing-visibility.md` - pass.
+10. `npm run work:subagent-prompt -- --role implementation --package work/packages/done-20260518-topology-publication-owner-publishing-visibility.md` - pass.
 11. `npm run work:advance -- --check` - pass.
 12. `npm run work:validate -- --entry` - pass.
 13. `npm run work:validate -- --pre-impl` - pass.
@@ -308,13 +311,19 @@ and the producer evidence reports `publicationStatus=unknown`.
 19. `npm run audit:runtime-grammar:file -- src/control-plane/publication-owner-evidence.js src/control-plane/publication-owner-decision.js src/control-plane/publication-recovery-gate.js src/control-plane/publication-recovery-evidence.js` - pass.
 20. `npm run work:model-ledger -- record ...` - pass; recorded focused implementation evidence with representative rerun pending.
 21. `npm run work:current-blocker` - pass after correcting package result fields to tracker-approved enums; regenerated `work/sprints/current-blocker.md` and `work/sprints/current-blocker.json`.
-22. `npm run work:package:doctor -- --suggest work/packages/active-20260518-topology-publication-owner-publishing-visibility.md` - pass.
+22. `npm run work:package:doctor -- --suggest work/packages/done-20260518-topology-publication-owner-publishing-visibility.md` - pass.
 23. `npm run work:validate -- --closure` - pass.
-24. `git diff --check -- work/packages/active-20260518-topology-publication-owner-publishing-visibility.md work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md work/sprints/current-blocker.md work/sprints/current-blocker.json work/model-ledger.jsonl src/control-plane/publication-owner-evidence.js src/control-plane/publication-owner-decision.js src/control-plane/publication-recovery-gate.js src/control-plane/publication-recovery-evidence.js test/control-plane/publication-owner-stream.test.js test/control-plane/publication-recovery-gate.test.js test/control-plane/publication-recovery-evidence.test.js` - pass.
+24. `git diff --check -- work/packages/done-20260518-topology-publication-owner-publishing-visibility.md work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md work/sprints/current-blocker.md work/sprints/current-blocker.json work/model-ledger.jsonl src/control-plane/publication-owner-evidence.js src/control-plane/publication-owner-decision.js src/control-plane/publication-recovery-gate.js src/control-plane/publication-recovery-evidence.js test/control-plane/publication-owner-stream.test.js test/control-plane/publication-recovery-gate.test.js test/control-plane/publication-recovery-evidence.test.js` - pass.
 25. `node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-after-publication-owner-publishing-visibility-20260518T114956Z.report.json --verbose` - fail as expected for the release gate; writes fresh representative evidence.
 26. `npm run work:evidence-summary -- test-output/reports/rolling-restart-after-publication-owner-publishing-visibility-20260518T114956Z.report.json` - pass; first frontier remains `publication_ack_convergence`, dominant reason is `missing_published_nodes_present`.
 27. `npm run work:scenario-route -- test-output/reports/rolling-restart-after-publication-owner-publishing-visibility-20260518T114956Z.report.json --owner topology_publication_owner --boundary publication_convergence --dominant-reason missing_published_nodes_present --explain publication_ack_convergence --markdown` - pass.
 28. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-publication-owner-publishing-visibility-20260518T114956Z.report.json --handoff-probe` - pass; `missingEdge=null`, producer `publicationStatus=unknown`, runtime promotion remains false.
 29. `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-publication-owner-publishing-visibility-20260518T114956Z.report.json` - pass; outcome `continue_local_fix`.
 30. `npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-after-publication-owner-publishing-visibility-20260518T114956Z.report.json --markdown` - pass; witnesses `0`, `splitRequired=false`.
-31. `npm run work:package:route-after-rerun -- --artifact test-output/reports/rolling-restart-after-publication-owner-publishing-visibility-20260518T114956Z.report.json --package work/packages/active-20260518-topology-publication-owner-publishing-visibility.md --owner topology_publication_owner --boundary publication_convergence --dominant-reason missing_published_nodes_present --explain publication_ack_convergence` - pass; suggests diagnostic-classification successor.
+31. `npm run work:package:route-after-rerun -- --artifact test-output/reports/rolling-restart-after-publication-owner-publishing-visibility-20260518T114956Z.report.json --package work/packages/done-20260518-topology-publication-owner-publishing-visibility.md --owner topology_publication_owner --boundary publication_convergence --dominant-reason missing_published_nodes_present --explain publication_ack_convergence` - pass; suggests diagnostic-classification successor.
+
+## Commit And Push Ledger
+
+1. Focused package commit: `e9b119bd`
+2. Pushed to: `origin/codex/pending-ack-eligibility-filter`
+3. Commit contains only package-owned files/package-status/allowed sprint handoff: yes
