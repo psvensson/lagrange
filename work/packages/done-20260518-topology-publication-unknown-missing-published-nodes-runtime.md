@@ -3,7 +3,7 @@
 <!-- work-package
 {
   "schema": "work-package-v1",
-  "status": "active",
+  "status": "done",
   "opened": "2026-05-18",
   "lane": "runtime-owner-boundary",
   "scenario": "rolling-restart",
@@ -22,7 +22,7 @@
     "npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-after-unknown-missing-published-runtime-20260518T133616Z.report.json --markdown"
   ],
   "writeScope": [
-    "work/packages/active-20260518-topology-publication-unknown-missing-published-nodes-runtime.md",
+    "work/packages/done-20260518-topology-publication-unknown-missing-published-nodes-runtime.md",
     "work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md",
     "work/sprints/current-blocker.md",
     "work/sprints/current-blocker.json",
@@ -53,7 +53,7 @@
     "test/control-plane/publication-recovery-evidence.test.js"
   ],
   "commitScope": [
-    "work/packages/active-20260518-topology-publication-unknown-missing-published-nodes-runtime.md",
+    "work/packages/done-20260518-topology-publication-unknown-missing-published-nodes-runtime.md",
     "work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md",
     "work/sprints/current-blocker.md",
     "work/sprints/current-blocker.json",
@@ -184,7 +184,10 @@
     "successorAction": "update-current-package",
     "runtimePromotionRule": "This package is the runtime-owner-boundary successor for stable topology_publication_owner / publication_convergence evidence."
   },
-  "predecessor": "work/packages/done-20260518-topology-publication-missing-published-nodes-classification.md"
+  "predecessor": "work/packages/done-20260518-topology-publication-missing-published-nodes-classification.md",
+  "closed": "2026-05-18",
+  "commitAndPushLedgerRequired": true,
+  "successor": "work/packages/active-20260518-topology-publication-unknown-no-debt-pending-runtime.md"
 }
 -->
 
@@ -295,7 +298,7 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 
 ## In Scope
 
-1. work/packages/active-20260518-topology-publication-unknown-missing-published-nodes-runtime.md
+1. work/packages/done-20260518-topology-publication-unknown-missing-published-nodes-runtime.md
 2. work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md
 3. work/sprints/current-blocker.md
 4. work/sprints/current-blocker.json
@@ -323,7 +326,7 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 - Intended minimum model: `gpt-5.3-codex`
 - Scope shape: `bounded-owner-runtime/current-frontier`
 - Output profile: `medium`
-- Owned files: `work/packages/active-20260518-topology-publication-unknown-missing-published-nodes-runtime.md`, `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md`, `work/sprints/current-blocker.md`, `work/sprints/current-blocker.json`, `work/model-ledger.jsonl`, `src/control-plane/publication-owner-evidence.js`, `src/control-plane/publication-owner-decision.js`, `src/control-plane/publication-recovery-gate.js`, `src/control-plane/publication-recovery-evidence.js`, `test/control-plane/publication-owner-stream.test.js`, `test/control-plane/publication-recovery-gate.test.js`, `test/control-plane/publication-recovery-evidence.test.js`
+- Owned files: `work/packages/done-20260518-topology-publication-unknown-missing-published-nodes-runtime.md`, `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md`, `work/sprints/current-blocker.md`, `work/sprints/current-blocker.json`, `work/model-ledger.jsonl`, `src/control-plane/publication-owner-evidence.js`, `src/control-plane/publication-owner-decision.js`, `src/control-plane/publication-recovery-gate.js`, `src/control-plane/publication-recovery-evidence.js`, `test/control-plane/publication-owner-stream.test.js`, `test/control-plane/publication-recovery-gate.test.js`, `test/control-plane/publication-recovery-evidence.test.js`
 - Forbidden files: `startup active-gate runtime`, `operation workflow / rebalancer_handoff runtime`, `startup readiness runtime`, `active-gate admission`, `timeout budgets`, `handoff architecture`
 - Frozen decisions: active-gate, operation-workflow, readiness, admission, handoff architecture, and timeout ownership remain out of scope unless fresh canonical evidence reselects them.
 - Escalation triggers: owned files expand beyond this package, runtime ownership changes, or representative scenario evidence contradicts the selected route.
@@ -335,9 +338,9 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 Required before implementation because this runtime-owner-boundary package may edit
 topology publication owner runtime and focused test files.
 
-- [x] Review subagent recorded: Agent Heisenberg (019e3b3d-ff79-71a0-ad00-0f10d46c3f12) reviewed work/packages/active-20260518-topology-publication-unknown-missing-published-nodes-runtime.md; result clean.
+- [x] Review subagent recorded: Agent Heisenberg (019e3b3d-ff79-71a0-ad00-0f10d46c3f12) reviewed work/packages/done-20260518-topology-publication-unknown-missing-published-nodes-runtime.md; result clean.
 - [x] Fix subagent recorded or explicitly not needed: not-needed.
-- [x] Implementation subagent recorded: Agent Parfit (019e3b41-5fdf-7ca2-97a1-a6c2777cb4d5) implemented work/packages/active-20260518-topology-publication-unknown-missing-published-nodes-runtime.md.
+- [x] Implementation subagent recorded: Agent Parfit (019e3b41-5fdf-7ca2-97a1-a6c2777cb4d5) implemented work/packages/done-20260518-topology-publication-unknown-missing-published-nodes-runtime.md.
 
 ## Subagent Progress Ledger
 
@@ -348,9 +351,9 @@ role-completion proof.
 - [x] Agent Heisenberg (019e3b3d-ff79-71a0-ad00-0f10d46c3f12) review falsification check: wrong-slice evidence would be canonical evidence reselecting startup active-gate, operation workflow, readiness, admission, handoff architecture, timeout-budget, representative-green, or a broad publication architecture edit instead of a bounded publication owner runtime slice; evidence: `npm run work:context` and package doctor keep the active package on `topology_publication_owner / publication_convergence / missing_published_nodes_present` with only expected pre-implementation subagent-open findings; next: run canonical extractor proof and inspect sprint/current-blocker consistency.
 - [x] Agent Heisenberg (019e3b3d-ff79-71a0-ad00-0f10d46c3f12) review extractor subtask: canonical evidence keeps the package on the declared publication owner boundary and does not select a forbidden downstream owner; evidence: `work:evidence-summary` and `work:scenario-route` report `publication_ack_convergence / topology_publication_owner / publication_convergence / missing_published_nodes_present`, causal-model reports `publication_ack_blocked` with `continue_local_fix`, handoff-probe reports `contractEdge=null`, `handoffContract.state=absent`, and `runtimePromotionAllowed=false`, and priority residual extraction reports witnesses `0`; next: check predecessor closure, sprint snapshot, and generated blocker state.
 - [x] Agent Heisenberg (019e3b3d-ff79-71a0-ad00-0f10d46c3f12) review consistency subtask: predecessor and handoff state consistently route to the active runtime successor while keeping active-gate, operation workflow, readiness, admission, handoff architecture, and timeout budgets out of scope; evidence: predecessor records `bounded-same-owner-successor`, current-blocker markdown/json name the active package, and the sprint strategy/current edge card name the active `topology_publication_owner / publication_convergence` runtime successor with priority residual witnesses `0` and active-gate `runtimePromotionAllowed=false`; next: record clean review result and run validation.
-- [x] Agent Parfit (019e3b41-5fdf-7ca2-97a1-a6c2777cb4d5) implementation falsification check: wrong-slice evidence would be a required edit outside publication owner evidence, decision, recovery gate, recovery evidence, or focused owner tests; evidence: `npm run work:context`, `npm run work:llm-start`, `npm run work:package:doctor -- --suggest work/packages/active-20260518-topology-publication-unknown-missing-published-nodes-runtime.md`, `npm run analyze:owner-files -- topology_publication_owner publication_convergence`, and `npm run work:evidence-summary -- test-output/reports/rolling-restart-after-publication-owner-publishing-visibility-20260518T114956Z.report.json` keep the route on `topology_publication_owner / publication_convergence / missing_published_nodes_present`; next: implement a bounded owner-scoped deferred/not-started outcome for unknown count-only missing-published evidence.
+- [x] Agent Parfit (019e3b41-5fdf-7ca2-97a1-a6c2777cb4d5) implementation falsification check: wrong-slice evidence would be a required edit outside publication owner evidence, decision, recovery gate, recovery evidence, or focused owner tests; evidence: `npm run work:context`, `npm run work:llm-start`, `npm run work:package:doctor -- --suggest work/packages/done-20260518-topology-publication-unknown-missing-published-nodes-runtime.md`, `npm run analyze:owner-files -- topology_publication_owner publication_convergence`, and `npm run work:evidence-summary -- test-output/reports/rolling-restart-after-publication-owner-publishing-visibility-20260518T114956Z.report.json` keep the route on `topology_publication_owner / publication_convergence / missing_published_nodes_present`; next: implement a bounded owner-scoped deferred/not-started outcome for unknown count-only missing-published evidence.
 - [x] Agent Parfit (019e3b41-5fdf-7ca2-97a1-a6c2777cb4d5) implementation runtime subtask: unknown publication status with unavailable revision, zero pending ACKs, count-only missing-published debt, and no priority spread debt now resolves to owner-scoped `not_started` instead of `publishing`, and recovery-gate compatibility does not reopen a supplied not-started owner stream solely from count-only missing-published debt; evidence: `npm test -- test/control-plane/publication-owner-stream.test.js`, `npm test -- test/control-plane/publication-recovery-gate.test.js`, and `npm test -- test/control-plane/publication-recovery-evidence.test.js` pass; next: run static guardrails and package validation.
-- [x] Agent Parfit (019e3b41-5fdf-7ca2-97a1-a6c2777cb4d5) implementation validation subtask: focused runtime guardrails and tracker validation are green for the touched owner files; evidence: `node scripts/check-guideline-literals.js src/control-plane/publication-owner-decision.js src/control-plane/publication-recovery-gate.js`, `node scripts/check-guideline-decision-boundaries.js src/control-plane/publication-owner-decision.js src/control-plane/publication-recovery-gate.js`, `npm run audit:runtime-grammar:file -- src/control-plane/publication-owner-decision.js src/control-plane/publication-recovery-gate.js`, `git diff --check -- work/packages/active-20260518-topology-publication-unknown-missing-published-nodes-runtime.md src/control-plane/publication-owner-decision.js src/control-plane/publication-recovery-gate.js test/control-plane/publication-owner-stream.test.js test/control-plane/publication-recovery-gate.test.js`, and `npm run work:validate -- --pre-impl` pass; next: parent representative rerun or closure sequencing.
+- [x] Agent Parfit (019e3b41-5fdf-7ca2-97a1-a6c2777cb4d5) implementation validation subtask: focused runtime guardrails and tracker validation are green for the touched owner files; evidence: `node scripts/check-guideline-literals.js src/control-plane/publication-owner-decision.js src/control-plane/publication-recovery-gate.js`, `node scripts/check-guideline-decision-boundaries.js src/control-plane/publication-owner-decision.js src/control-plane/publication-recovery-gate.js`, `npm run audit:runtime-grammar:file -- src/control-plane/publication-owner-decision.js src/control-plane/publication-recovery-gate.js`, `git diff --check -- work/packages/done-20260518-topology-publication-unknown-missing-published-nodes-runtime.md src/control-plane/publication-owner-decision.js src/control-plane/publication-recovery-gate.js test/control-plane/publication-owner-stream.test.js test/control-plane/publication-recovery-gate.test.js`, and `npm run work:validate -- --pre-impl` pass; next: parent representative rerun or closure sequencing.
 
 ## Review Result
 
@@ -367,7 +370,7 @@ Findings: no package proof, residual inventory, blocker migration, sprint snapsh
 5. node scripts/check-guideline-literals.js src/control-plane/publication-owner-decision.js src/control-plane/publication-recovery-gate.js
 6. node scripts/check-guideline-decision-boundaries.js src/control-plane/publication-owner-decision.js src/control-plane/publication-recovery-gate.js
 7. npm run audit:runtime-grammar:file -- src/control-plane/publication-owner-decision.js src/control-plane/publication-recovery-gate.js
-8. git diff --check -- work/packages/active-20260518-topology-publication-unknown-missing-published-nodes-runtime.md src/control-plane/publication-owner-decision.js src/control-plane/publication-recovery-gate.js test/control-plane/publication-owner-stream.test.js test/control-plane/publication-recovery-gate.test.js
+8. git diff --check -- work/packages/done-20260518-topology-publication-unknown-missing-published-nodes-runtime.md src/control-plane/publication-owner-decision.js src/control-plane/publication-recovery-gate.js test/control-plane/publication-owner-stream.test.js test/control-plane/publication-recovery-gate.test.js
 9. npm run work:validate -- --pre-impl
 10. node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-after-unknown-missing-published-runtime-20260518T133616Z.report.json --verbose
 11. npm run work:evidence-summary -- test-output/reports/rolling-restart-after-unknown-missing-published-runtime-20260518T133616Z.report.json
@@ -376,3 +379,9 @@ Findings: no package proof, residual inventory, blocker migration, sprint snapsh
 14. npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-unknown-missing-published-runtime-20260518T133616Z.report.json
 15. npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-after-unknown-missing-published-runtime-20260518T133616Z.report.json --markdown
 16. npm run work:package:route-after-rerun -- --artifact test-output/reports/rolling-restart-after-unknown-missing-published-runtime-20260518T133616Z.report.json --owner topology_publication_owner --boundary publication_convergence --dominant-reason publication_pending
+
+## Commit And Push Ledger
+
+1. Focused package commit: `3cccd514`
+2. Pushed to: `origin/codex/pending-ack-eligibility-filter`
+3. Commit contains only package-owned files/package-status/allowed sprint handoff: yes
