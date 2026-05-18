@@ -13,7 +13,7 @@
   "boundary": "publication_convergence",
   "dominantReason": "publication_pending",
   "currentState": "Focused implementation classifies UNKNOWN/no-epoch/no-node-list count-only publication debt as unpublished startup evidence. A fresh rolling-restart rerun no longer reports UNKNOWN/no-epoch publication debt; it reports concrete publicationStatus OPEN, publicationEpoch=1, publishedActive=1/5, missingPublishedCount=4, prioritySpreadPending=true, and five retry-scheduled operation_workflow_owner / rebalancer_handoff residual witnesses.",
-  "nextAction": "Closed as reduced and handed off to work/packages/active-20260518-priority-recovery-rebalancer-handoff-after-publication-count-only-classification.md. Continue there after the required review/fix/implementation subagent sequence; keep publication runtime, startup active-gate runtime, startup readiness runtime, and timeout budgets frozen unless fresh canonical evidence reselects them.",
+  "nextAction": "Closed as reduced and handed off to work/packages/done-20260518-priority-recovery-rebalancer-handoff-after-publication-count-only-classification.md. Continue there after the required review/fix/implementation subagent sequence; keep publication runtime, startup active-gate runtime, startup readiness runtime, and timeout budgets frozen unless fresh canonical evidence reselects them.",
   "proof": [
     "npm run work:scenario-route -- test-output/reports/rolling-restart-after-publication-count-only-unknown-20260518T074802Z.report.json --owner topology_publication_owner --boundary publication_convergence --dominant-reason publication_pending --explain publication_ack_convergence --markdown",
     "npm run work:evidence-summary -- test-output/reports/rolling-restart-after-publication-count-only-unknown-20260518T074802Z.report.json",
@@ -39,7 +39,7 @@
     "work/packages/done-20260518-startup-readiness-snapshot-timeout-after-fresh-evidence.md",
     "test-output/reports/rolling-restart-after-active-gate-classification-fresh-20260518T062159Z.report.json",
     "test-output/reports/rolling-restart-after-publication-count-only-unknown-20260518T074802Z.report.json",
-    "work/packages/active-20260518-priority-recovery-rebalancer-handoff-after-publication-count-only-classification.md"
+    "work/packages/done-20260518-priority-recovery-rebalancer-handoff-after-publication-count-only-classification.md"
   ],
   "generatedFiles": [
     "work/sprints/current-blocker.md",
@@ -157,7 +157,7 @@
   "predecessor": "work/packages/done-20260518-startup-readiness-snapshot-timeout-after-fresh-evidence.md",
   "closed": "2026-05-18",
   "commitAndPushLedgerRequired": true,
-  "successor": "work/packages/active-20260518-priority-recovery-rebalancer-handoff-after-publication-count-only-classification.md"
+  "successor": "work/packages/done-20260518-priority-recovery-rebalancer-handoff-after-publication-count-only-classification.md"
 }
 -->
 

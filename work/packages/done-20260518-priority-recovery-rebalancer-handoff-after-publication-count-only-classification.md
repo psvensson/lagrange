@@ -3,7 +3,7 @@
 <!-- work-package
 {
   "schema": "work-package-v1",
-  "status": "active",
+  "status": "done",
   "opened": "2026-05-18",
   "lane": "causal-escalation",
   "scenario": "rolling-restart",
@@ -22,7 +22,7 @@
     "npm run analyze:owner-files -- operation_workflow_owner rebalancer_handoff --markdown"
   ],
   "writeScope": [
-    "work/packages/active-20260518-priority-recovery-rebalancer-handoff-after-publication-count-only-classification.md",
+    "work/packages/done-20260518-priority-recovery-rebalancer-handoff-after-publication-count-only-classification.md",
     "work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md",
     "work/sprints/current-blocker.md",
     "work/sprints/current-blocker.json",
@@ -56,7 +56,7 @@
     "test/rebalancer/coordinator-created-operation-progress-remote-handoff.test.js"
   ],
   "commitScope": [
-    "work/packages/active-20260518-priority-recovery-rebalancer-handoff-after-publication-count-only-classification.md",
+    "work/packages/done-20260518-priority-recovery-rebalancer-handoff-after-publication-count-only-classification.md",
     "work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md",
     "work/sprints/current-blocker.md",
     "work/sprints/current-blocker.json",
@@ -154,7 +154,9 @@
     "selectedChoice": null,
     "nextAction": "No architecture decision gate is required before this bounded rebalancer_handoff proof."
   },
-  "predecessor": "work/packages/done-20260518-topology-publication-convergence-after-startup-readiness-classification.md"
+  "predecessor": "work/packages/done-20260518-topology-publication-convergence-after-startup-readiness-classification.md",
+  "closed": "2026-05-18",
+  "commitAndPushLedgerRequired": true
 }
 -->
 
@@ -214,7 +216,7 @@ subagents sequentially before editing runtime or test files.
 
 - [x] Review subagent recorded: Agent Codex (019e3a1f-5c2f-7cb2-b9b1-bd7be023dcd2) reviewed work/packages/done-20260518-topology-publication-convergence-after-startup-readiness-classification.md; result fixes-required.
 - [x] Fix subagent recorded or explicitly not needed: Agent Codex (019e3a21-ff60-7b83-89e5-2024e10569c4) fixed work/packages/done-20260518-topology-publication-convergence-after-startup-readiness-classification.md.
-- [x] Implementation subagent recorded: Agent Codex (019e3a28-ae3d-75b1-9dc2-1058708bc32d) implemented work/packages/active-20260518-priority-recovery-rebalancer-handoff-after-publication-count-only-classification.md.
+- [x] Implementation subagent recorded: Agent Codex (019e3a28-ae3d-75b1-9dc2-1058708bc32d) implemented work/packages/done-20260518-priority-recovery-rebalancer-handoff-after-publication-count-only-classification.md.
 
 ## LLM Tool-First Contract
 
@@ -237,7 +239,7 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 
 ## In Scope
 
-1. work/packages/active-20260518-priority-recovery-rebalancer-handoff-after-publication-count-only-classification.md
+1. work/packages/done-20260518-priority-recovery-rebalancer-handoff-after-publication-count-only-classification.md
 2. work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md
 3. work/sprints/current-blocker.md
 4. work/sprints/current-blocker.json
@@ -264,7 +266,7 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 - Intended minimum model: `gpt-5.3-codex`
 - Scope shape: `owner-boundary-contraction/current-frontier`
 - Output profile: `medium`
-- Owned files: `work/packages/active-20260518-priority-recovery-rebalancer-handoff-after-publication-count-only-classification.md`, `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md`, `work/sprints/current-blocker.md`, `work/sprints/current-blocker.json`, `work/model-ledger.jsonl`, `src/rebalancer/operation-workflow-owner.js`, `src/rebalancer/operation-workflow-owner-segment-7-stage-5.js`, `src/rebalancer/operation-workflow-owner-segment-7-stage-shared.js`, `src/control-plane/priority-recovery-snapshot-stage-10.js`, `src/control-plane/topology-operator-witness.js`, `test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js`, `test/rebalancer/operation-workflow-progress-event-driven-reentry.test.js`, `test/rebalancer/coordinator-created-operation-progress-remote-handoff.test.js`
+- Owned files: `work/packages/done-20260518-priority-recovery-rebalancer-handoff-after-publication-count-only-classification.md`, `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md`, `work/sprints/current-blocker.md`, `work/sprints/current-blocker.json`, `work/model-ledger.jsonl`, `src/rebalancer/operation-workflow-owner.js`, `src/rebalancer/operation-workflow-owner-segment-7-stage-5.js`, `src/rebalancer/operation-workflow-owner-segment-7-stage-shared.js`, `src/control-plane/priority-recovery-snapshot-stage-10.js`, `src/control-plane/topology-operator-witness.js`, `test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js`, `test/rebalancer/operation-workflow-progress-event-driven-reentry.test.js`, `test/rebalancer/coordinator-created-operation-progress-remote-handoff.test.js`
 - Forbidden files: `topology_publication_owner/runtime`, `startup_active_gate_owner/runtime`, `startup_readiness_owner/runtime`, `harness-timeout-increase`
 - Frozen decisions: package scope and lane stay bounded unless explicitly escalated.
 - Escalation triggers: owned files expand beyond this package, runtime ownership changes, or representative scenario evidence changes.
@@ -296,3 +298,9 @@ No runtime file was changed. Representative rolling-restart was not rerun
 because this package added focused proof only; the reference artifact remains
 same-artifact evidence while this boundary stops as bounded retry-scheduled
 backpressure.
+
+## Commit And Push Ledger
+
+1. Focused package commit: `b50ad83b`
+2. Pushed to: `origin/codex/pending-ack-eligibility-filter`
+3. Commit contains only package-owned files/package-status/allowed sprint handoff: yes

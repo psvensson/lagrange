@@ -1,9 +1,10 @@
+# Rolling Restart Publication Convergence After Rebalancer Handoff Classification
+
+<!-- work-package
 {
-  "schema": "current-blocker-v1",
-  "generatedBy": "scripts/work-tracker.js",
-  "sprint": "work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md",
-  "package": "work/packages/active-20260518-rolling-restart-topology-publication-owner-publication-conve.md",
+  "schema": "work-package-v1",
   "status": "active",
+  "opened": "2026-05-18",
   "lane": "causal-escalation",
   "scenario": "rolling-restart",
   "artifact": "test-output/reports/rolling-restart-after-publication-count-only-unknown-20260518T074802Z.report.json",
@@ -66,7 +67,6 @@
     "test/control-plane/publication-recovery-gate.test.js",
     "test/control-plane/publication-recovery-evidence.test.js"
   ],
-  "touchedFiles": [],
   "modelFit": {
     "packageClass": "representative-frontier-closure",
     "intendedMinimumModel": "gpt-5.3-codex",
@@ -88,6 +88,18 @@
     "boundary": "publication_convergence",
     "dominantReason": "publication_pending",
     "nextAction": "Prove the concrete OPEN epoch-1 publication_pending edge after the rebalancer_handoff residual has been classified as bounded retry-scheduled backpressure."
+  },
+  "ownerBoundaryMigrationProof": {
+    "fromOwner": "operation_workflow_owner",
+    "fromBoundary": "rebalancer_handoff",
+    "toOwner": "topology_publication_owner",
+    "toBoundary": "publication_convergence",
+    "reason": "The immediate successor classified the priority residual selected by analyze:priority-recovery-residuals. After that bounded proof, the same representative artifact still routes through publication_ack_convergence in work:scenario-route, work:evidence-summary, analyze:topology-convergence, and analyze:causal-model.",
+    "evidence": [
+      "work/packages/done-20260518-priority-recovery-rebalancer-handoff-after-publication-count-only-classification.md",
+      "npm run work:scenario-route -- test-output/reports/rolling-restart-after-publication-count-only-unknown-20260518T074802Z.report.json",
+      "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-publication-count-only-unknown-20260518T074802Z.report.json"
+    ]
   },
   "causalGovernance": {
     "hypothesis": "If topology_publication_owner / publication_convergence owns the post-rebalancer frontier, focused proof should distinguish producer-side publication debt from bounded active-gate owner reconcile or migrate to a narrower owner boundary without reopening rebalancer_handoff, startup readiness, active-gate runtime, or timeout budgets.",
@@ -144,3 +156,129 @@
   },
   "predecessor": "work/packages/done-20260518-priority-recovery-rebalancer-handoff-after-publication-count-only-classification.md"
 }
+-->
+
+## Why
+
+The rebalancer handoff successor closed as classification-only: its five
+retry-scheduled witnesses reduce to four bounded remote handoff retries. After
+that proof, the same representative artifact still routes to
+`publication_ack_convergence` with concrete `OPEN` epoch-1 publication evidence.
+
+This package owns that publication-convergence proof. It must not absorb
+startup active-gate runtime, startup readiness runtime, rebalancer handoff
+runtime, harness timeout policy, or timeout-budget work.
+
+## Scope Basis
+
+Roadmap Phase `0.1 - Internal Coherence`: rolling-restart topology workflow
+stabilization and production guarantees for the AGPL runtime.
+
+## Core Logic Brief
+
+Canonical outcome: one producer-consumer decision for concrete OPEN epoch-1
+publication evidence: reduce publication_pending, classify bounded publication
+backpressure, migrate to a narrower owner boundary, or stop as same-frontier
+with proof.
+
+Inputs/signals: publication status, epoch, published active node ids, missing
+published node ids, pending ACK counts, priority spread state, active-gate owner
+reconcile state, publication owner stream state, and causal route output.
+
+State model or invariant: normalize one publication evidence snapshot before
+deciding whether the producer is still publishing, the consumer is waiting on
+owner reconcile, or the frontier belongs to a different owner.
+
+Non-goals and forbidden interpretations: do not reinterpret the classified
+rebalancer_handoff retry witnesses, startup readiness support, active-gate
+runtime, harness timeout policy, or timeout budgets inside this package.
+
+Proof mapping: scenario-route and causal-model identify the selected route;
+topology-convergence provides the concrete OPEN epoch-1 evidence; focused owner
+tests or extractor proof must show reduction, classification, or migration.
+
+Wrong-slice trigger: if proof requires operation workflow runtime, startup
+readiness runtime, active-gate runtime, timeout-budget changes, or a non-
+publication owner boundary, stop and migrate instead of editing locally.
+
+## Workflow Lane
+
+- Selected lane: `causal-escalation`
+- Why this lane is required: the frontier oscillated back to a recently reduced
+  publication boundary after a cross-owner residual classification.
+- Escalation trigger to a heavier lane: runtime ownership, shared contract, or representative scenario evidence changes.
+
+## Subagent Sequencing Requirement
+
+Required before implementation because this is a scenario-driven runtime
+owner-boundary package. Run review, fix if needed, and implementation
+subagents sequentially before editing runtime or test files.
+
+## Subagent Sequencing Ledger
+
+- [ ] Review subagent recorded: pending-before-implementation.
+- [ ] Fix subagent recorded or explicitly not needed: pending-after-review.
+- [ ] Implementation subagent recorded: pending-after-review-fix.
+
+## LLM Tool-First Contract
+
+Before raw JSON, raw logs, broad file search, oversized segment files, or ad hoc `jq`, use the canonical workflow command that owns the question:
+
+1. Package metadata or ledger edits: `npm run work:package:doctor -- --suggest <package>`, `npm run work:package:doctor -- --fix-dry-run <package>`, `npm run work:package:schema`, or `npm run work:package:new -- ...`.
+2. Representative evidence: `npm run work:evidence-summary -- <artifact>` plus any focused extractor for this failure class.
+3. Owner discovery: `npm run analyze:owner-files -- <owner> [boundary]`.
+4. Subagent sequencing: `npm run work:subagent-prompt -- --role <role> --package <package>`.
+5. Large-file cleanup: `npm run work:oversized-next -- --markdown`.
+
+If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which canonical extractor was tried and why it was insufficient.
+
+## Workflow Acceleration Contract
+
+1. Use `npm run work:advance -- --check` before adding more package prose; it combines doctor, subagent-next, and entry/pre-implementation validation.
+2. Keep the durable proof ladder to 3-5 commands by default: prefer `npm run work:scenario-route -- <artifact>` for representative routing, one focused test or extractor, and validation. Add static guardrails only when implementation files changed.
+3. If this package only changes package, sprint, tracker, or ledger files, the next pass must run representative evidence, close as classification-only, open a concrete bug package, or present a human gate.
+4. Once an architecture gate has a selected route, do not open another gate unless fresh canonical evidence contradicts the selected route.
+
+## In Scope
+
+1. work/packages/active-20260518-rolling-restart-topology-publication-owner-publication-conve.md
+2. work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md
+3. work/sprints/current-blocker.md
+4. work/sprints/current-blocker.json
+5. work/model-ledger.jsonl
+6. src/control-plane/publication-owner-evidence.js
+7. src/control-plane/publication-owner-decision.js
+8. src/control-plane/publication-recovery-gate.js
+9. src/control-plane/publication-recovery-evidence.js
+10. test/control-plane/publication-owner-stream.test.js
+11. test/control-plane/publication-recovery-gate.test.js
+12. test/control-plane/publication-recovery-evidence.test.js
+
+## Out Of Scope
+
+1. operation_workflow_owner/runtime
+2. startup_active_gate_owner/runtime
+3. startup_readiness_owner/runtime
+4. harness-timeout-increase
+5. timeout-budget-policy
+
+## Model Fit
+
+- Package class: `representative-frontier-closure`
+- Intended minimum model: `gpt-5.3-codex`
+- Scope shape: `owner-boundary-contraction/frontier-oscillation`
+- Output profile: `medium`
+- Owned files: `work/packages/active-20260518-rolling-restart-topology-publication-owner-publication-conve.md`, `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md`, `work/sprints/current-blocker.md`, `work/sprints/current-blocker.json`, `work/model-ledger.jsonl`, `src/control-plane/publication-owner-evidence.js`, `src/control-plane/publication-owner-decision.js`, `src/control-plane/publication-recovery-gate.js`, `src/control-plane/publication-recovery-evidence.js`, `test/control-plane/publication-owner-stream.test.js`, `test/control-plane/publication-recovery-gate.test.js`, `test/control-plane/publication-recovery-evidence.test.js`
+- Forbidden files: `operation_workflow_owner/runtime`, `startup_active_gate_owner/runtime`, `startup_readiness_owner/runtime`, `harness-timeout-increase`, `timeout-budget-policy`
+- Frozen decisions: rebalancer_handoff retry witnesses remain classified; package scope and lane stay bounded unless canonical evidence reselects a different owner.
+- Escalation triggers: owned files expand beyond this package, runtime ownership changes, representative scenario evidence changes, or frontier oscillates without producer-consumer proof.
+- Focused proof: `npm run work:scenario-route -- test-output/reports/rolling-restart-after-publication-count-only-unknown-20260518T074802Z.report.json`, `npm run work:evidence-summary -- test-output/reports/rolling-restart-after-publication-count-only-unknown-20260518T074802Z.report.json`, `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-publication-count-only-unknown-20260518T074802Z.report.json`, `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-publication-count-only-unknown-20260518T074802Z.report.json`, `npm run analyze:owner-files -- topology_publication_owner publication_convergence --markdown`
+- Model ledger advisory: `escalate`
+
+## Validation
+
+1. npm run work:scenario-route -- test-output/reports/rolling-restart-after-publication-count-only-unknown-20260518T074802Z.report.json
+2. npm run work:evidence-summary -- test-output/reports/rolling-restart-after-publication-count-only-unknown-20260518T074802Z.report.json
+3. npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-publication-count-only-unknown-20260518T074802Z.report.json
+4. npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-publication-count-only-unknown-20260518T074802Z.report.json
+5. npm run analyze:owner-files -- topology_publication_owner publication_convergence --markdown

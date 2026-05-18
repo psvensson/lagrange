@@ -27,11 +27,11 @@ Latest representative artifact:
 Canonical state after the publication count-only classification rerun:
 
 1. The current active package is
-   `work/packages/active-20260518-priority-recovery-rebalancer-handoff-after-publication-count-only-classification.md`.
+   `work/packages/active-20260518-rolling-restart-topology-publication-owner-publication-conve.md`.
 2. Its predecessor is
-   `work/packages/done-20260518-topology-publication-convergence-after-startup-readiness-classification.md`,
-   which classified UNKNOWN/no-epoch/no-node-list count-only publication debt
-   as unpublished startup evidence and closed as reduced.
+   `work/packages/done-20260518-priority-recovery-rebalancer-handoff-after-publication-count-only-classification.md`,
+   which classified the retry-scheduled `rebalancer_handoff` residual as
+   bounded remote handoff backpressure and closed as classification-only.
 3. The fresh run failed 0/1 at `active=0/5` and `snapshotCoverage=2/5`.
 4. `work:scenario-route`, `work:evidence-summary`,
    `analyze:topology-convergence`, and `analyze:causal-model` still show
@@ -41,28 +41,26 @@ Canonical state after the publication count-only classification rerun:
 5. The publication evidence is now concrete: `publicationStatus=OPEN`,
    `publicationEpoch=1`, `publishedActive=1/5`, `missingPublishedCount=4`,
    and `prioritySpreadPending=true`.
-6. Only `analyze:priority-recovery-residuals` selects an actionable successor:
-   one
-   `operation_workflow_owner / rebalancer_handoff` group with five
-   retry-scheduled `dispatched_waiting_progress` witnesses.
-7. The active successor owns residual proof only. Publication, active-gate,
-   readiness, and timeout work stay frozen unless canonical evidence reselects
-   those owners.
-8. Review returned fixes-required and fix metadata/proof repair is recorded;
-   the active successor must run the implementation subagent before any runtime
-   or test implementation edits.
+6. The intervening `operation_workflow_owner / rebalancer_handoff` successor
+   proved the five retry-scheduled witnesses normalize to four bounded remote
+   handoff retries without duplicate wake state.
+7. With that residual classified, the active package owns the returned concrete
+   publication frontier only. Rebalancer, active-gate, readiness, and timeout
+   work stay frozen unless canonical evidence reselects those owners.
+8. The active package must run the required review/fix/implementation subagent
+   sequence before any runtime or test implementation edits.
 
 ## Current Edge Card
 
 ```text
 Representative artifact: test-output/reports/rolling-restart-after-publication-count-only-unknown-20260518T074802Z.report.json
 Visible first frontier: publication_ack_convergence / topology_publication_owner / publication_convergence / publication_pending
-Active package owner: operation_workflow_owner
-Active package boundary: rebalancer_handoff
-Selected cause: retry-scheduled priority recovery residuals after publication UNKNOWN/no-epoch debt reduced
-Required action: required implementation subagent, then prove or split rebalancer_handoff witnesses
+Active package owner: topology_publication_owner
+Active package boundary: publication_convergence
+Selected cause: concrete OPEN epoch-1 publication_pending after rebalancer_handoff residual classification
+Required action: required review subagent, then prove producer-side publication debt, bounded active-gate reconcile, or narrower owner migration
 Runtime promotion allowed: false
-Priority residual: 5 witnesses in one operation_workflow_owner / rebalancer_handoff group
+Priority residual: classified bounded in done-20260518-priority-recovery-rebalancer-handoff-after-publication-count-only-classification.md
 Extractor split: work:evidence-summary, analyze:topology-convergence, and analyze:causal-model keep publication visible; only analyze:priority-recovery-residuals selects rebalancer_handoff as actionable residual proof
 Publication state: OPEN epoch=1, publishedActive=1/5, missingPublishedCount=4, prioritySpreadPending=true
 Focused predecessor implementation: UNKNOWN count-only/no-node-list debt -> unpublished_observation/not_started
@@ -146,7 +144,8 @@ Forbidden during this gate:
 | `done-20260518-rolling-restart-fresh-evidence-after-active-gate-classification.md` | `rolling-restart-after-active-gate-classification-fresh-20260518T062159Z.report.json` | visible `topology_publication_owner / publication_convergence`; causal stop `startup_readiness_owner / startup_support_evidence` | fresh run failed at active=0/5 and snapshotCoverage=0/5; priority residuals zero; causal stop migrated to startup readiness boundary | `migrated` |
 | `done-20260518-startup-readiness-snapshot-timeout-after-fresh-evidence.md` | `rolling-restart-after-active-gate-classification-fresh-20260518T062159Z.report.json` | `startup_readiness_owner / startup_support_evidence` -> `topology_publication_owner / publication_convergence` | selectedSnapshotError snapshot_timeout classified as inherited active-gate support evidence; startup readiness blocker removed from taxonomy | `migrated` |
 | `done-20260518-topology-publication-convergence-after-startup-readiness-classification.md` | `rolling-restart-after-publication-count-only-unknown-20260518T074802Z.report.json` | `topology_publication_owner / publication_convergence` -> `operation_workflow_owner / rebalancer_handoff` | focused classifier closes UNKNOWN/no-epoch/no-node-list count-only publication debt; fresh rerun reports OPEN epoch-1 publication plus five retry-scheduled rebalancer_handoff witnesses | `reduced` |
-| `active-20260518-priority-recovery-rebalancer-handoff-after-publication-count-only-classification.md` | `rolling-restart-after-publication-count-only-unknown-20260518T074802Z.report.json` | `operation_workflow_owner / rebalancer_handoff` | active successor; review returned fixes-required, fix metadata/proof repair is recorded, implementation subagent pending before runtime or test edits | `pending` |
+| `done-20260518-priority-recovery-rebalancer-handoff-after-publication-count-only-classification.md` | `rolling-restart-after-publication-count-only-unknown-20260518T074802Z.report.json` | `operation_workflow_owner / rebalancer_handoff` | focused proof classifies five retry-scheduled witnesses as four bounded remote handoff retries with no duplicate wake or runtime change | `classification-only` |
+| `active-20260518-rolling-restart-topology-publication-owner-publication-conve.md` | `rolling-restart-after-publication-count-only-unknown-20260518T074802Z.report.json` | `topology_publication_owner / publication_convergence` | active successor after rebalancer classification; owns concrete OPEN epoch-1 publication_pending proof and must run review/fix/implementation sequencing before runtime edits | `pending` |
 
 ## Sprint LLM Trap List
 
@@ -683,11 +682,11 @@ The sprint cannot close until:
 
 ## Current Next Action
 
-Continue with the priority recovery rebalancer handoff successor after
-publication count-only classification:
+Continue with the publication convergence successor after rebalancer handoff
+classification:
 
 ```text
-work/packages/active-20260518-priority-recovery-rebalancer-handoff-after-publication-count-only-classification.md
+work/packages/active-20260518-rolling-restart-topology-publication-owner-publication-conve.md
 test-output/reports/rolling-restart-after-publication-count-only-unknown-20260518T074802Z.report.json
 ```
 
@@ -695,10 +694,11 @@ The visible first frontier in `work:evidence-summary`,
 `analyze:topology-convergence`, and `analyze:causal-model` remains
 `publication_ack_convergence / topology_publication_owner /
 publication_convergence / publication_pending`, but the publication evidence is
-now concrete OPEN epoch-1 state. Only `analyze:priority-recovery-residuals`
-selects the five retry-scheduled
-`operation_workflow_owner / rebalancer_handoff` witnesses, so the next
-checkpoint is the required implementation subagent and focused residual proof.
+now concrete OPEN epoch-1 state. The intervening
+`operation_workflow_owner / rebalancer_handoff` package classified the five
+retry-scheduled witnesses as bounded remote handoff retries, so the next
+checkpoint is the required review subagent and focused producer-consumer
+publication proof.
 
 Keep publication runtime, startup active-gate runtime, startup readiness
 runtime, active-gate admission, timeout budget increases,
