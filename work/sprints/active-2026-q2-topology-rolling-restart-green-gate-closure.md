@@ -19,61 +19,69 @@ missingPublished=0
 No timeout increase, active-gate admission relaxation, or diagnostics-only
 success is in scope.
 
+## Sprint Strategy Brief
+
+- Goal state: representative `rolling-restart` is green with `active=5/5`, `snapshotCoverage=5/5`, `missingPublished=0`, and no timeout or admission relaxation.
+- Current causal thesis: the latest concrete publication frontier is bounded by active-gate owner reconcile backpressure; the active-gate handoff package now owns the one pending reconcile node proof.
+- Competing hypotheses: H1 active-gate owner reconcile is the next real blocker; H2 publication still has producer-side debt hidden by the current handoff probe; H3 diagnostic frontier selection is lagging the bounded handoff proof; H4 a broader architecture handoff gap reappears if fresh evidence oscillates.
+- Confidence and evidence: medium-high for H1 from focused handoff proof and current-blocker evidence; medium for H2/H3 until the next fresh rerun; low-medium for H4 unless oscillation repeats.
+- Expected green path: prove whether the one-node active-gate owner reconcile edge drains, needs a focused startup_active_gate_owner repair, or migrates; then expect representative green, readiness support, or a narrower successor frontier.
+- Wrong direction signals: fresh evidence reselects `publication_pending` without active-gate reconcile detail, priority residuals return, active-gate metrics stay flat after reconcile proof, or a package needs timeout, admission, readiness, or runtime edits outside the selected owner.
+- Next best package: active-gate owner reconcile proof for `startup_active_gate_owner / snapshot_coverage` using the publication handoff probe and active-gate explain output.
+- Stop or escalate rule: if publication and active-gate alternate again without metric reduction, open a causal or architecture handoff package instead of another local runtime package.
+
 ## Current Blocker Snapshot
 
 Latest representative artifact:
 `test-output/reports/rolling-restart-after-publication-count-only-unknown-20260518T074802Z.report.json`.
 
-Canonical state after the publication count-only classification rerun:
+Canonical state after the publication handoff classification:
 
 1. The current active package is
-   `work/packages/active-20260518-rolling-restart-topology-publication-owner-publication-conve.md`.
+   `work/packages/active-20260518-startup-active-gate-snapshot-coverage-after-publication-handoff-classification.md`.
 2. Its predecessor is
-   `work/packages/done-20260518-priority-recovery-rebalancer-handoff-after-publication-count-only-classification.md`,
-   which classified the retry-scheduled `rebalancer_handoff` residual as
-   bounded remote handoff backpressure and closed as classification-only.
-3. The fresh run failed 0/1 at `active=0/5` and `snapshotCoverage=2/5`.
-4. `work:scenario-route`, `work:evidence-summary`,
-   `analyze:topology-convergence`, and `analyze:causal-model` still show
-   visible
+   `work/packages/done-20260518-rolling-restart-topology-publication-owner-publication-conve.md`,
+   which closed as classification-only with no publication runtime edit.
+3. The unchanged representative run failed 0/1 at `active=0/5` and
+   `snapshotCoverage=2/5`.
+4. Canonical `work:scenario-route` and `analyze:causal-model` still show the
+   visible first frontier as
    `publication_ack_convergence / topology_publication_owner /
    publication_convergence / publication_pending`.
-5. The publication evidence is now concrete: `publicationStatus=OPEN`,
-   `publicationEpoch=1`, `publishedActive=1/5`, `missingPublishedCount=4`,
-   and `prioritySpreadPending=true`.
-6. The intervening `operation_workflow_owner / rebalancer_handoff` successor
-   proved the five retry-scheduled witnesses normalize to four bounded remote
-   handoff retries without duplicate wake state.
-7. With that residual classified, the active package ran the producer-consumer
-   proof and recorded a no-missing-edge handoff probe with active-gate reconcile
-   as the next owner path.
-8. The handoff probe reports `publication_active_gate_handoff_contract`,
-   `resultClassification=publication_active_gate_handoff_not_detected`,
-   `owner_reconcile_pending`, `reconcile_owner_membership_publication`, one
-   pending reconcile node (`35a891b8-c1a0-5064-9c6e-2acfba61c2a7`), and
-   `runtimePromotionAllowed=false`; rebalancer, publication runtime,
-   active-gate runtime, readiness, and timeout work stay frozen unless fresh
-   canonical evidence reselects those owners.
+5. The predecessor's focused handoff probe records `missingEdge=null`,
+   `contractEdge=publication_active_gate_handoff_contract`, and
+   `resultClassification=publication_active_gate_handoff_not_detected`.
+6. `work:evidence-summary` and `analyze:topology-convergence --handoff-probe`
+   expose the bounded next owner path as
+   `active_gate_snapshot_coverage / startup_active_gate_owner /
+   snapshot_coverage / owner_reconcile_pending`.
+7. Active-gate evidence is deferred with `snapshotCoverageNodeCount=2/5`,
+   `selectedSnapshotRepairDeferred=true`, `retryAfterMs=1000`,
+   `runtimePromotionAllowed=false`, and one pending reconcile node
+   (`35a891b8-c1a0-5064-9c6e-2acfba61c2a7`).
+8. Publication runtime, rebalancer handoff, startup readiness, active-gate
+   admission, and timeout budgets stay frozen unless fresh canonical evidence
+   changes owner, boundary, or required action.
 
 ## Current Edge Card
 
 ```text
 Representative artifact: test-output/reports/rolling-restart-after-publication-count-only-unknown-20260518T074802Z.report.json
 Visible first frontier: publication_ack_convergence / topology_publication_owner / publication_convergence / publication_pending
-Active package owner: topology_publication_owner
-Active package boundary: publication_convergence
-Selected cause: concrete OPEN epoch-1 publication_pending after rebalancer_handoff residual classification
-Required action: parent review may close as classification-only after validation; no publication runtime edit was made
+Active package owner: startup_active_gate_owner
+Active package boundary: snapshot_coverage
+Selected cause: bounded next owner path from publication handoff probe with owner_reconcile_pending
+Required action: run review/fix/implementation subagents before runtime edits; prove whether the one pending reconcile node drains, needs focused startup_active_gate_owner repair, or migrates
 Runtime promotion allowed: false
 Priority residual: classified bounded in done-20260518-priority-recovery-rebalancer-handoff-after-publication-count-only-classification.md
-Extractor split: work:scenario-route, work:evidence-summary, analyze:topology-convergence, and analyze:causal-model select publication after rebalancer_handoff classification
+Extractor split: scenario-route and causal-model still select publication as visible first frontier; evidence-summary and handoff probe identify active-gate snapshot coverage as bounded next owner path
 Publication state: OPEN epoch=1, publishedActive=1/5, missingPublishedCount=4, prioritySpreadPending=true
 Focused predecessor implementation: UNKNOWN count-only/no-node-list debt -> unpublished_observation/not_started
-Current active-gate state: deferred, snapshotCoverageNodeCount=2/5, owner_reconcile_pending and snapshot_repair_deferred
-Goal: classify concrete OPEN epoch-1 publication_pending without reopening rebalancer_handoff, active-gate, readiness, or timeout-budget work
-Allowed edits: package, sprint handoff/tracker, and model-ledger proof only unless fresh canonical evidence reselects runtime
-Forbidden edits: operation workflow/rebalancer handoff runtime; startup active-gate runtime; startup readiness runtime; harness timeout increases
-Required latest proof: npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-publication-count-only-unknown-20260518T074802Z.report.json, plus scenario-route, evidence-summary, causal-model, and owner-files before runtime edits
+Current active-gate state: deferred, snapshotCoverageNodeCount=2/5, owner_reconcile_pending, snapshot_repair_deferred, one pending reconcile node 35a891b8-c1a0-5064-9c6e-2acfba61c2a7
+Goal: classify, reduce, or migrate the one-node active-gate owner reconcile handoff without reopening publication, rebalancer_handoff, readiness, or timeout-budget work
+Allowed edits: package, sprint handoff/tracker, model-ledger proof, and declared startup_active_gate_owner candidate files after subagent sequencing is clean
+Forbidden edits: publication convergence runtime; operation workflow/rebalancer handoff runtime; startup readiness runtime; harness timeout increases
+Required latest proof: npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-publication-count-only-unknown-20260518T074802Z.report.json --handoff-probe, plus active-gate explain, evidence-summary, causal-model, owner-files, and work:advance before runtime edits
 Allowed stop modes: representative-green, migrated, reduced, same-frontier, classification-only, architecture-gap, human-escalation
 ```
 
@@ -82,43 +90,45 @@ Allowed stop modes: representative-green, migrated, reduced, same-frontier, clas
 Status: not-required.
 
 Current decision: no architecture gate is required before the focused
-producer-consumer publication proof. The publication classifier package reduced
-the stale UNKNOWN/no-epoch publication shape, and the rebalancer_handoff
-successor classified the retry-scheduled priority residual group. With that
-residual classified, the active package owns the returned
-`topology_publication_owner / publication_convergence / publication_pending`
-route.
+active-gate owner reconcile proof. The publication classifier reduced the
+stale UNKNOWN/no-epoch publication shape, the rebalancer_handoff successor
+classified the retry-scheduled priority residual group, and the publication
+handoff package recorded no missing publication-active-gate edge. The active
+package now owns the bounded next owner path:
+`startup_active_gate_owner / snapshot_coverage / owner_reconcile_pending`.
 
 Decision basis:
 
-1. Fresh `work:scenario-route`, `work:evidence-summary`,
-   `analyze:topology-convergence`, and `analyze:causal-model` keep
-   publication selected with concrete OPEN epoch-1 state:
+1. Fresh `work:scenario-route` and `analyze:causal-model` still keep
+   publication visible first with concrete OPEN epoch-1 state:
    `publicationStatus=OPEN`, `publicationEpoch=1`, `publishedActive=1/5`,
    `missingPublishedCount=4`, and `prioritySpreadPending=true`.
 2. The intervening `operation_workflow_owner / rebalancer_handoff` successor
    classified the five retry-scheduled witnesses as four bounded remote handoff
    retries without runtime changes.
-3. Active gate is deferred at `snapshotCoverageNodeCount=2/5`.
-4. Focused diagnostics removed `startup_readiness_blocked` by classifying the
+3. The publication handoff probe reports no missing edge and points
+   `nextOwnerPath` to `startup_active_gate_owner / snapshot_coverage` with
+   required action `reconcile_owner_membership_publication`.
+4. Active gate is deferred at `snapshotCoverageNodeCount=2/5` with one pending
+   reconcile node and `runtimePromotionAllowed=false`.
+5. Focused diagnostics removed `startup_readiness_blocked` by classifying the
    selected snapshot timeout as inherited active-gate support evidence.
-5. Rebalancer handoff remains frozen unless fresh canonical evidence reselects
-   `operation_workflow_owner / rebalancer_handoff`.
-6. The active package recorded implementation proof and stopped
-   classification-only because the focused handoff probe already represents
-   the bounded active-gate owner reconcile contract.
+6. Rebalancer handoff and publication runtime remain frozen unless fresh
+   canonical evidence reselects them.
+7. The active package must complete review/fix/implementation subagent
+   sequencing before runtime or test edits.
 
 Candidate ranking:
 
-1. Publication convergence producer-consumer proof: selected after
-   rebalancer_handoff classification.
-2. Rebalancer handoff proof: closed as classification-only and frozen unless
+1. Active-gate owner reconcile proof: selected as the bounded next owner path
+   after publication handoff classification.
+2. Publication convergence producer-consumer proof: closed as
+   classification-only and frozen unless fresh canonical evidence reselects it.
+3. Rebalancer handoff proof: closed as classification-only and frozen unless
    fresh canonical evidence reselects it.
-3. Startup readiness snapshot-timeout support proof: closed as migrated after
+4. Startup readiness snapshot-timeout support proof: closed as migrated after
    focused diagnostics classified selectedSnapshotError snapshot_timeout as
    inherited active-gate support evidence.
-4. Active-gate owner reconcile proof: closed as classification-only after
-   existing focused tests covered the selected handoff edge.
 5. Operation workflow dispatch/re-entry proof: done and migrated after fresh
    handoff probe reported operationWorkflow satisfied.
 6. Publication-operation-active-gate handoff contract: done; do not extend
@@ -133,8 +143,8 @@ Forbidden during this gate:
 2. Do not widen timeout budgets, active-gate admission, selected-source
    timeout, terminal-progress selection, or readiness support unless canonical
    evidence reselects them.
-3. Do not patch operation workflow, startup active-gate, startup readiness, or
-   timeout-budget files. Publication runtime/test files require clean
+3. Do not patch operation workflow, publication runtime, startup readiness, or
+   timeout-budget files. Startup active-gate runtime/test files require clean
    review/fix proof and a fresh implementation subagent.
 
 ## Frontier Transition Ledger
@@ -157,7 +167,7 @@ Forbidden during this gate:
 | `done-20260518-startup-readiness-snapshot-timeout-after-fresh-evidence.md` | `rolling-restart-after-active-gate-classification-fresh-20260518T062159Z.report.json` | `startup_readiness_owner / startup_support_evidence` -> `topology_publication_owner / publication_convergence` | selectedSnapshotError snapshot_timeout classified as inherited active-gate support evidence; startup readiness blocker removed from taxonomy | `migrated` |
 | `done-20260518-topology-publication-convergence-after-startup-readiness-classification.md` | `rolling-restart-after-publication-count-only-unknown-20260518T074802Z.report.json` | `topology_publication_owner / publication_convergence` -> `operation_workflow_owner / rebalancer_handoff` | focused classifier closes UNKNOWN/no-epoch/no-node-list count-only publication debt; fresh rerun reports OPEN epoch-1 publication plus five retry-scheduled rebalancer_handoff witnesses | `reduced` |
 | `done-20260518-priority-recovery-rebalancer-handoff-after-publication-count-only-classification.md` | `rolling-restart-after-publication-count-only-unknown-20260518T074802Z.report.json` | `operation_workflow_owner / rebalancer_handoff` | focused proof classifies five retry-scheduled witnesses as four bounded remote handoff retries with no duplicate wake or runtime change | `classification-only` |
-| `active-20260518-rolling-restart-topology-publication-owner-publication-conve.md` | `rolling-restart-after-publication-count-only-unknown-20260518T074802Z.report.json` | `topology_publication_owner / publication_convergence` | focused handoff probe records no missing edge, active-gate reconcile as next owner path, one pending reconcile node, and no runtime edit | `classification-only` |
+| `done-20260518-rolling-restart-topology-publication-owner-publication-conve.md` | `rolling-restart-after-publication-count-only-unknown-20260518T074802Z.report.json` | `topology_publication_owner / publication_convergence` | focused handoff probe records no missing edge, active-gate reconcile as next owner path, one pending reconcile node, and no runtime edit | `classification-only` |
 
 ## Sprint LLM Trap List
 
@@ -698,7 +708,7 @@ Continue with the publication convergence successor after rebalancer handoff
 classification:
 
 ```text
-work/packages/active-20260518-rolling-restart-topology-publication-owner-publication-conve.md
+work/packages/done-20260518-rolling-restart-topology-publication-owner-publication-conve.md
 test-output/reports/rolling-restart-after-publication-count-only-unknown-20260518T074802Z.report.json
 ```
 

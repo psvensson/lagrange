@@ -3,7 +3,7 @@
 <!-- work-package
 {
   "schema": "work-package-v1",
-  "status": "active",
+  "status": "done",
   "opened": "2026-05-18",
   "lane": "causal-escalation",
   "scenario": "rolling-restart",
@@ -22,7 +22,7 @@
     "npm run analyze:owner-files -- topology_publication_owner publication_convergence --markdown"
   ],
   "writeScope": [
-    "work/packages/active-20260518-rolling-restart-topology-publication-owner-publication-conve.md",
+    "work/packages/done-20260518-rolling-restart-topology-publication-owner-publication-conve.md",
     "work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md",
     "work/sprints/current-blocker.md",
     "work/sprints/current-blocker.json",
@@ -54,7 +54,7 @@
     "test/control-plane/publication-recovery-evidence.test.js"
   ],
   "commitScope": [
-    "work/packages/active-20260518-rolling-restart-topology-publication-owner-publication-conve.md",
+    "work/packages/done-20260518-rolling-restart-topology-publication-owner-publication-conve.md",
     "work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md",
     "work/sprints/current-blocker.md",
     "work/sprints/current-blocker.json",
@@ -154,7 +154,9 @@
     "selectedChoice": null,
     "nextAction": "No architecture gate is required before the focused producer-consumer publication proof."
   },
-  "predecessor": "work/packages/done-20260518-priority-recovery-rebalancer-handoff-after-publication-count-only-classification.md"
+  "predecessor": "work/packages/done-20260518-priority-recovery-rebalancer-handoff-after-publication-count-only-classification.md",
+  "closed": "2026-05-18",
+  "commitAndPushLedgerRequired": true
 }
 -->
 
@@ -216,9 +218,9 @@ subagents sequentially before editing runtime or test files.
 
 ## Subagent Sequencing Ledger
 
-- [x] Review subagent recorded: Agent Codex (019e3a3b-622e-7700-bfb5-4c5deacd2137) reviewed work/packages/active-20260518-rolling-restart-topology-publication-owner-publication-conve.md; result fixes-required.
-- [x] Fix subagent recorded or explicitly not needed: Agent Codex (019e3a3f-90e2-7372-b300-2f3aff1072f9) fixed work/packages/active-20260518-rolling-restart-topology-publication-owner-publication-conve.md.
-- [x] Implementation subagent recorded: Agent Codex (019e3a45-9ece-7681-be2c-6ae8201f3e6f) implemented work/packages/active-20260518-rolling-restart-topology-publication-owner-publication-conve.md; result classification-only bounded active-gate owner reconcile proof, runtime-edit-not-needed.
+- [x] Review subagent recorded: Agent Codex (019e3a3b-622e-7700-bfb5-4c5deacd2137) reviewed work/packages/done-20260518-rolling-restart-topology-publication-owner-publication-conve.md; result fixes-required.
+- [x] Fix subagent recorded or explicitly not needed: Agent Codex (019e3a3f-90e2-7372-b300-2f3aff1072f9) fixed work/packages/done-20260518-rolling-restart-topology-publication-owner-publication-conve.md.
+- [x] Implementation subagent recorded: Agent Codex (019e3a45-9ece-7681-be2c-6ae8201f3e6f) implemented work/packages/done-20260518-rolling-restart-topology-publication-owner-publication-conve.md; result classification-only bounded active-gate owner reconcile proof, runtime-edit-not-needed.
 
 ## LLM Tool-First Contract
 
@@ -241,7 +243,7 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 
 ## In Scope
 
-1. work/packages/active-20260518-rolling-restart-topology-publication-owner-publication-conve.md
+1. work/packages/done-20260518-rolling-restart-topology-publication-owner-publication-conve.md
 2. work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md
 3. work/sprints/current-blocker.md
 4. work/sprints/current-blocker.json
@@ -268,7 +270,7 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 - Intended minimum model: `gpt-5.3-codex`
 - Scope shape: `owner-boundary-contraction/frontier-oscillation`
 - Output profile: `medium`
-- Owned files: `work/packages/active-20260518-rolling-restart-topology-publication-owner-publication-conve.md`, `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md`, `work/sprints/current-blocker.md`, `work/sprints/current-blocker.json`, `work/model-ledger.jsonl`, `src/control-plane/publication-owner-evidence.js`, `src/control-plane/publication-owner-decision.js`, `src/control-plane/publication-recovery-gate.js`, `src/control-plane/publication-recovery-evidence.js`, `test/control-plane/publication-owner-stream.test.js`, `test/control-plane/publication-recovery-gate.test.js`, `test/control-plane/publication-recovery-evidence.test.js`
+- Owned files: `work/packages/done-20260518-rolling-restart-topology-publication-owner-publication-conve.md`, `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md`, `work/sprints/current-blocker.md`, `work/sprints/current-blocker.json`, `work/model-ledger.jsonl`, `src/control-plane/publication-owner-evidence.js`, `src/control-plane/publication-owner-decision.js`, `src/control-plane/publication-recovery-gate.js`, `src/control-plane/publication-recovery-evidence.js`, `test/control-plane/publication-owner-stream.test.js`, `test/control-plane/publication-recovery-gate.test.js`, `test/control-plane/publication-recovery-evidence.test.js`
 - Forbidden files: `operation_workflow_owner/runtime`, `startup_active_gate_owner/runtime`, `startup_readiness_owner/runtime`, `harness-timeout-increase`, `timeout-budget-policy`
 - Frozen decisions: rebalancer_handoff retry witnesses remain classified; package scope and lane stay bounded unless canonical evidence reselects a different owner.
 - Escalation triggers: owned files expand beyond this package, runtime ownership changes, representative scenario evidence changes, or frontier oscillates without producer-consumer proof.
@@ -282,3 +284,9 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 3. npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-publication-count-only-unknown-20260518T074802Z.report.json
 4. npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-publication-count-only-unknown-20260518T074802Z.report.json
 5. npm run analyze:owner-files -- topology_publication_owner publication_convergence --markdown
+
+## Commit And Push Ledger
+
+1. Focused package commit: `bc5efab3`
+2. Pushed to: `origin/codex/pending-ack-eligibility-filter`
+3. Commit contains only package-owned files/package-status/allowed sprint handoff: yes
