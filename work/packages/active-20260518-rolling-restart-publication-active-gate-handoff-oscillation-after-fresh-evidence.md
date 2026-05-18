@@ -1,9 +1,10 @@
+# Rolling Restart Publication Active Gate Handoff Oscillation After Fresh Evidence
+
+<!-- work-package
 {
-  "schema": "current-blocker-v1",
-  "generatedBy": "scripts/work-tracker.js",
-  "sprint": "work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md",
-  "package": "work/packages/active-20260518-rolling-restart-publication-active-gate-handoff-oscillation-after-fresh-evidence.md",
+  "schema": "work-package-v1",
   "status": "active",
+  "opened": "2026-05-18",
   "lane": "causal-escalation",
   "scenario": "rolling-restart",
   "artifact": "test-output/reports/rolling-restart-after-active-gate-handoff-classification-20260518T094315Z.report.json",
@@ -52,7 +53,6 @@
     "work/sprints/current-blocker.json",
     "work/model-ledger.jsonl"
   ],
-  "touchedFiles": [],
   "modelFit": {
     "packageClass": "architecture-gap-analysis",
     "intendedMinimumModel": "gpt-5.3-codex",
@@ -75,6 +75,18 @@
     "boundary": "publication_convergence",
     "dominantReason": "publication_pending",
     "nextAction": "Same-frontier: the existing handoff contract represents the deferred active-gate leg, while publication_convergence remains the visible blocked owner. No runtime edit is justified inside this handoff package."
+  },
+  "ownerBoundaryMigrationProof": {
+    "fromOwner": "startup_active_gate_owner",
+    "fromBoundary": "snapshot_coverage",
+    "toOwner": "topology_publication_owner",
+    "toBoundary": "publication_convergence",
+    "reason": "The predecessor classified the one-node active-gate owner reconcile handoff without runtime edits. A fresh representative rerun reselected publication_ack_convergence as the visible first frontier, kept priority recovery satisfied, and widened active-gate handoff pendingReconcileCount to 3 with runtimePromotionAllowed=false.",
+    "evidence": [
+      "work/packages/done-20260518-startup-active-gate-snapshot-coverage-after-publication-handoff-classification.md",
+      "npm run work:scenario-route -- test-output/reports/rolling-restart-after-active-gate-handoff-classification-20260518T094315Z.report.json --owner topology_publication_owner --boundary publication_convergence --dominant-reason publication_pending --explain publication_ack_convergence --markdown",
+      "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-active-gate-handoff-classification-20260518T094315Z.report.json --handoff-probe"
+    ]
   },
   "causalGovernance": {
     "hypothesis": "Focused implementation proof selected same-frontier: the existing publication-active-gate handoff contract represents the widened reconcile set, active-gate remains deferred with runtimePromotionAllowed=false, and the visible first frontier remains topology_publication_owner / publication_convergence.",
@@ -163,3 +175,138 @@
   },
   "predecessor": "work/packages/done-20260518-startup-active-gate-snapshot-coverage-after-publication-handoff-classification.md"
 }
+-->
+
+## Why
+
+Fresh rolling-restart evidence reselected `topology_publication_owner /
+publication_convergence` immediately after the active-gate handoff package
+classified the one-node owner reconcile edge. Priority recovery is satisfied,
+but active-gate owner reconcile widened to three pending nodes with
+`runtimePromotionAllowed=false`.
+
+This package owns that publication-to-active-gate oscillation classification.
+Focused proof selected `same-frontier`: the handoff contract is adequate, the
+active-gate leg is deferred, and no runtime patch is justified in this package.
+
+## Scope Basis
+
+Roadmap Phase `0.1 - Internal Coherence`: rolling-restart topology workflow
+stabilization and production guarantees for the AGPL runtime.
+
+## Workflow Lane
+
+- Selected lane: `causal-escalation`
+- Why this lane is required: fresh representative evidence returned to
+  publication after a classified active-gate handoff and widened the
+  active-gate reconcile set instead of reducing it.
+- Escalation trigger to a heavier lane: focused proof cannot select a bounded
+  owner route, runtime ownership changes, shared contract changes, or
+  representative scenario evidence changes.
+
+## Core Logic Brief
+
+- Canonical outcome: one cross-boundary outcome for the renewed
+  publication-active-gate oscillation: architecture-gap, bounded
+  owner-boundary migration, classification-only stop, same-frontier, or
+  representative-green.
+- Inputs/signals: fresh representative artifact
+  `test-output/reports/rolling-restart-after-active-gate-handoff-classification-20260518T094315Z.report.json`;
+  scenario-route; evidence-summary; topology handoff probe; causal-model;
+  priority residual extraction; owner-files for publication and active-gate.
+- State model or invariant: normalize the publication producer, satisfied
+  operation workflow leg, active-gate consumer, and handoff contract into one
+  snapshot before choosing one outcome. Counts alone do not select a runtime
+  owner unless the required action also changes.
+- Non-goals and forbidden interpretations: do not treat visible publication
+  context alone as permission to patch publication runtime; do not patch
+  active-gate runtime from deferred consumer evidence alone; do not reopen
+  rebalancer_handoff, startup readiness, active-gate admission, harness timeout
+  policy, or timeout budgets.
+- Proof mapping: canonical extractors must agree on the visible frontier and
+  handoff state; focused proof must name the selected owner/architecture route
+  before runtime implementation or closure.
+- Wrong-slice trigger: stop as architecture-gap or human-escalation if the
+  proof cannot distinguish producer debt, consumer handoff debt, or shared
+  handoff contract debt without widening scope.
+
+## LLM Tool-First Contract
+
+Before raw JSON, raw logs, broad file search, oversized segment files, or ad hoc `jq`, use the canonical workflow command that owns the question:
+
+1. Package metadata or ledger edits: `npm run work:package:doctor -- --suggest <package>`, `npm run work:package:doctor -- --fix-dry-run <package>`, `npm run work:package:schema`, or `npm run work:package:new -- ...`.
+2. Representative evidence: `npm run work:evidence-summary -- <artifact>` plus any focused extractor for this failure class.
+3. Owner discovery: `npm run analyze:owner-files -- <owner> [boundary]`.
+4. Subagent sequencing: `npm run work:subagent-prompt -- --role <role> --package <package>`.
+5. Large-file cleanup: `npm run work:oversized-next -- --markdown`.
+
+If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which canonical extractor was tried and why it was insufficient.
+
+## Workflow Acceleration Contract
+
+1. Use `npm run work:advance -- --check` before adding more package prose; it combines doctor, subagent-next, and entry/pre-implementation validation.
+2. Keep the durable proof ladder to 3-5 commands by default: prefer `npm run work:scenario-route -- <artifact>` for representative routing, one focused test or extractor, and validation. Add static guardrails only when implementation files changed.
+3. If this package only changes package, sprint, tracker, or ledger files, the next pass must run representative evidence, close as classification-only, open a concrete bug package, or present a human gate.
+4. Once an architecture gate has a selected route, do not open another gate unless fresh canonical evidence contradicts the selected route.
+
+## In Scope
+
+1. work/packages/active-20260518-rolling-restart-publication-active-gate-handoff-oscillation-after-fresh-evidence.md
+2. work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md
+3. work/sprints/current-blocker.md
+4. work/sprints/current-blocker.json
+5. work/model-ledger.jsonl
+
+## Out Of Scope
+
+1. publication convergence runtime
+2. startup active-gate runtime
+3. operation workflow / rebalancer_handoff runtime
+4. startup readiness runtime
+5. active-gate admission relaxation
+6. harness timeout increases or timeout budget policy
+
+## Model Fit
+
+- Package class: `architecture-gap-analysis`
+- Intended minimum model: `gpt-5.3-codex`
+- Scope shape: `cross-boundary-causal-gate`
+- Output profile: `medium`
+- Owned files: `work/packages/active-20260518-rolling-restart-publication-active-gate-handoff-oscillation-after-fresh-evidence.md`, `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md`, `work/sprints/current-blocker.md`, `work/sprints/current-blocker.json`, `work/model-ledger.jsonl`
+- Forbidden files: `publication convergence runtime`, `startup active-gate runtime`, `operation workflow / rebalancer_handoff runtime`, `startup readiness runtime`, `active-gate admission`, `timeout budgets`
+- Frozen decisions: package scope and lane stay bounded unless explicitly escalated.
+- Escalation triggers: owned files expand beyond this package, fresh evidence selects a different owner boundary, focused proof cannot represent the handoff, runtime ownership changes, or a frozen decision must be reopened.
+- Focused proof: `npm run work:scenario-route -- test-output/reports/rolling-restart-after-active-gate-handoff-classification-20260518T094315Z.report.json --owner topology_publication_owner --boundary publication_convergence --dominant-reason publication_pending --explain publication_ack_convergence --markdown`, `npm run work:evidence-summary -- test-output/reports/rolling-restart-after-active-gate-handoff-classification-20260518T094315Z.report.json`, `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-active-gate-handoff-classification-20260518T094315Z.report.json --handoff-probe`, `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-active-gate-handoff-classification-20260518T094315Z.report.json`, `npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-after-active-gate-handoff-classification-20260518T094315Z.report.json --markdown`
+- Model ledger advisory: `escalate`
+
+## Subagent Sequencing Ledger
+
+- [x] Review subagent recorded: Agent Kierkegaard (019e3a83-9a79-7061-ba6a-4d74e19078bb) reviewed work/packages/active-20260518-rolling-restart-publication-active-gate-handoff-oscillation-after-fresh-evidence.md; result fixes-required.
+- [x] Fix subagent recorded or explicitly not needed: Agent Codex (019e3a85-a147-7303-b85b-d05b0a7fbf07) fixed work/packages/active-20260518-rolling-restart-publication-active-gate-handoff-oscillation-after-fresh-evidence.md.
+- [x] Implementation subagent recorded: Agent Codex (019e3a88-703b-7cc3-9c30-7b7061b4feed) implemented work/packages/active-20260518-rolling-restart-publication-active-gate-handoff-oscillation-after-fresh-evidence.md; result same-frontier metadata-only handoff classification, no runtime/test edits justified.
+
+## Implementation Result
+
+- Result classification: `same-frontier`.
+- Selected gate route: `continue-local-proof`.
+- Decision: the oscillation is not an architecture handoff gap because the
+  probe reports `missingEdge=null` and
+  `contractEdge=publication_active_gate_handoff_contract`.
+- Decision: this is not a startup active-gate migration because the consumer is
+  deferred with `runtimePromotionAllowed=false`.
+- Decision: this is not representative-green because the fresh run remains red
+  at `active=0/5` and `snapshotCoverage=2/5`.
+- Runtime/test result: no runtime, test, template, script, steering, timeout,
+  admission, publication, active-gate, readiness, or operation workflow edits
+  are justified in this package.
+- Handoff: close this gate as same-frontier, then open a concrete bounded
+  `topology_publication_owner / publication_convergence` package or rerun fresh
+  representative evidence before any local runtime implementation.
+
+## Validation
+
+1. npm run work:scenario-route -- test-output/reports/rolling-restart-after-active-gate-handoff-classification-20260518T094315Z.report.json --owner topology_publication_owner --boundary publication_convergence --dominant-reason publication_pending --explain publication_ack_convergence --markdown
+2. npm run work:evidence-summary -- test-output/reports/rolling-restart-after-active-gate-handoff-classification-20260518T094315Z.report.json
+3. npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-active-gate-handoff-classification-20260518T094315Z.report.json --handoff-probe
+4. npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-active-gate-handoff-classification-20260518T094315Z.report.json
+5. npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-after-active-gate-handoff-classification-20260518T094315Z.report.json --markdown
