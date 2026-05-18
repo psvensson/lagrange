@@ -109,6 +109,11 @@ const PUBLICATION_RECOVERY_PROTOCOL_STATE = Object.freeze({
   STEADY_PUBLISHED: 'steady_published',
   UNPUBLISHED_OBSERVATION: 'unpublished_observation',
 });
+const PUBLICATION_RECOVERY_CLOSED_UNPUBLISHED_REASON = Object.freeze({
+  PUBLICATION_CONVERGENCE_MISSING: 'publication_convergence_missing',
+  PUBLICATION_MISSING_ACTIVE_NODE_PREFIX: 'publication_missing_active_node=',
+  PUBLICATION_NOT_PUBLISHED_PREFIX: 'publication_not_published=',
+});
 const PUBLICATION_RECOVERY_EVIDENCE_TYPEOF = Object.freeze({
   OBJECT: 'object',
   STRING: 'string',
@@ -697,7 +702,7 @@ function hasClosedUnknownNoDebtPublicationGate(
     ) ||
     normalizeOptionalString(publicationConvergenceGate.publicationStatus);
   return publicationConvergenceGate.publicationPending !== true &&
-    publicationStatus === PUBLICATION_OWNER_TEXT.UNKNOWN &&
+    hasUnknownPublicationRecoveryStatus(publicationStatus) &&
     normalizeOptionalString(publicationConvergenceGate.recoveryProtocolState) ===
       PUBLICATION_RECOVERY_PROTOCOL_STATE.UNPUBLISHED_OBSERVATION &&
     normalizeOptionalString(publicationConvergenceGate.ackState) ===
@@ -720,11 +725,27 @@ function hasClosedUnknownNoDebtPublicationGate(
     publicationConvergenceGate.prioritySpreadEvidenceUnavailable !== true;
 }
 
+function isClosedUnknownNoDebtReasonCode(reasonCode) {
+  const normalizedReasonCode = normalizeOptionalString(reasonCode);
+  return normalizedReasonCode ===
+      CONTROL_PLANE_PRIORITY_RECOVERY_REASON.PUBLICATION_EPOCH_PENDING ||
+    normalizedReasonCode ===
+      PUBLICATION_RECOVERY_CLOSED_UNPUBLISHED_REASON
+        .PUBLICATION_CONVERGENCE_MISSING ||
+    normalizedReasonCode?.startsWith(
+      PUBLICATION_RECOVERY_CLOSED_UNPUBLISHED_REASON
+        .PUBLICATION_MISSING_ACTIVE_NODE_PREFIX,
+    ) === true ||
+    normalizedReasonCode?.startsWith(
+      PUBLICATION_RECOVERY_CLOSED_UNPUBLISHED_REASON
+        .PUBLICATION_NOT_PUBLISHED_PREFIX,
+    ) === true;
+}
+
 function filterClosedUnknownNoDebtReasonCodes(reasonCodes = []) {
   return Object.freeze(
     normalizeDistinctStringArray(reasonCodes).filter((reasonCode) =>
-      reasonCode !==
-        CONTROL_PLANE_PRIORITY_RECOVERY_REASON.PUBLICATION_EPOCH_PENDING,
+      isClosedUnknownNoDebtReasonCode(reasonCode) !== true,
     ),
   );
 }
