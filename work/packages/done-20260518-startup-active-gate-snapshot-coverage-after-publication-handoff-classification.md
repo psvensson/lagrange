@@ -143,7 +143,7 @@
   "predecessor": "work/packages/done-20260518-rolling-restart-topology-publication-owner-publication-conve.md",
   "closed": "2026-05-18",
   "commitAndPushLedgerRequired": true,
-  "successor": "work/packages/active-20260518-rolling-restart-publication-active-gate-handoff-oscillation-after-fresh-evidence.md"
+  "successor": "work/packages/done-20260518-rolling-restart-publication-active-gate-handoff-oscillation-after-fresh-evidence.md"
 }
 -->
 
@@ -274,7 +274,7 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 - Priority residuals: zero witnesses.
 - Handoff probe: `missingEdge=null`, `resultClassification=publication_active_gate_handoff_not_detected`, `runtimePromotionAllowed=false`.
 - Active-gate handoff changed from one pending reconcile node to three pending reconcile nodes: `11601fe0-72d6-5853-8590-ec2881853e72`, `35a891b8-c1a0-5064-9c6e-2acfba61c2a7`, and `ebc4aa0b-06c6-506d-93ea-1dd2deca3f58`.
-- Successor: `work/packages/active-20260518-rolling-restart-publication-active-gate-handoff-oscillation-after-fresh-evidence.md`.
+- Successor: `work/packages/done-20260518-rolling-restart-publication-active-gate-handoff-oscillation-after-fresh-evidence.md`.
 
 ## Commit And Push Ledger
 

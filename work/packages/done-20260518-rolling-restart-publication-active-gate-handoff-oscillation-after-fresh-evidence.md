@@ -3,7 +3,7 @@
 <!-- work-package
 {
   "schema": "work-package-v1",
-  "status": "active",
+  "status": "done",
   "opened": "2026-05-18",
   "lane": "causal-escalation",
   "scenario": "rolling-restart",
@@ -22,7 +22,7 @@
     "npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-after-active-gate-handoff-classification-20260518T094315Z.report.json --markdown"
   ],
   "writeScope": [
-    "work/packages/active-20260518-rolling-restart-publication-active-gate-handoff-oscillation-after-fresh-evidence.md",
+    "work/packages/done-20260518-rolling-restart-publication-active-gate-handoff-oscillation-after-fresh-evidence.md",
     "work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md",
     "work/sprints/current-blocker.md",
     "work/sprints/current-blocker.json",
@@ -47,7 +47,7 @@
     "test/scripts/analyze-topology-convergence.test.js"
   ],
   "commitScope": [
-    "work/packages/active-20260518-rolling-restart-publication-active-gate-handoff-oscillation-after-fresh-evidence.md",
+    "work/packages/done-20260518-rolling-restart-publication-active-gate-handoff-oscillation-after-fresh-evidence.md",
     "work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md",
     "work/sprints/current-blocker.md",
     "work/sprints/current-blocker.json",
@@ -173,7 +173,9 @@
     "selectedChoice": "continue-local-proof",
     "nextAction": "Selected continue-local-proof. Record same-frontier, keep runtime and tests untouched in this package, then hand off to a bounded topology_publication_owner / publication_convergence package or fresh representative evidence."
   },
-  "predecessor": "work/packages/done-20260518-startup-active-gate-snapshot-coverage-after-publication-handoff-classification.md"
+  "predecessor": "work/packages/done-20260518-startup-active-gate-snapshot-coverage-after-publication-handoff-classification.md",
+  "closed": "2026-05-18",
+  "commitAndPushLedgerRequired": true
 }
 -->
 
@@ -251,7 +253,7 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 
 ## In Scope
 
-1. work/packages/active-20260518-rolling-restart-publication-active-gate-handoff-oscillation-after-fresh-evidence.md
+1. work/packages/done-20260518-rolling-restart-publication-active-gate-handoff-oscillation-after-fresh-evidence.md
 2. work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md
 3. work/sprints/current-blocker.md
 4. work/sprints/current-blocker.json
@@ -272,7 +274,7 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 - Intended minimum model: `gpt-5.3-codex`
 - Scope shape: `cross-boundary-causal-gate`
 - Output profile: `medium`
-- Owned files: `work/packages/active-20260518-rolling-restart-publication-active-gate-handoff-oscillation-after-fresh-evidence.md`, `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md`, `work/sprints/current-blocker.md`, `work/sprints/current-blocker.json`, `work/model-ledger.jsonl`
+- Owned files: `work/packages/done-20260518-rolling-restart-publication-active-gate-handoff-oscillation-after-fresh-evidence.md`, `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md`, `work/sprints/current-blocker.md`, `work/sprints/current-blocker.json`, `work/model-ledger.jsonl`
 - Forbidden files: `publication convergence runtime`, `startup active-gate runtime`, `operation workflow / rebalancer_handoff runtime`, `startup readiness runtime`, `active-gate admission`, `timeout budgets`
 - Frozen decisions: package scope and lane stay bounded unless explicitly escalated.
 - Escalation triggers: owned files expand beyond this package, fresh evidence selects a different owner boundary, focused proof cannot represent the handoff, runtime ownership changes, or a frozen decision must be reopened.
@@ -281,9 +283,9 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 
 ## Subagent Sequencing Ledger
 
-- [x] Review subagent recorded: Agent Kierkegaard (019e3a83-9a79-7061-ba6a-4d74e19078bb) reviewed work/packages/active-20260518-rolling-restart-publication-active-gate-handoff-oscillation-after-fresh-evidence.md; result fixes-required.
-- [x] Fix subagent recorded or explicitly not needed: Agent Codex (019e3a85-a147-7303-b85b-d05b0a7fbf07) fixed work/packages/active-20260518-rolling-restart-publication-active-gate-handoff-oscillation-after-fresh-evidence.md.
-- [x] Implementation subagent recorded: Agent Codex (019e3a88-703b-7cc3-9c30-7b7061b4feed) implemented work/packages/active-20260518-rolling-restart-publication-active-gate-handoff-oscillation-after-fresh-evidence.md; result same-frontier metadata-only handoff classification, no runtime/test edits justified.
+- [x] Review subagent recorded: Agent Kierkegaard (019e3a83-9a79-7061-ba6a-4d74e19078bb) reviewed work/packages/done-20260518-rolling-restart-publication-active-gate-handoff-oscillation-after-fresh-evidence.md; result fixes-required.
+- [x] Fix subagent recorded or explicitly not needed: Agent Codex (019e3a85-a147-7303-b85b-d05b0a7fbf07) fixed work/packages/done-20260518-rolling-restart-publication-active-gate-handoff-oscillation-after-fresh-evidence.md.
+- [x] Implementation subagent recorded: Agent Codex (019e3a88-703b-7cc3-9c30-7b7061b4feed) implemented work/packages/done-20260518-rolling-restart-publication-active-gate-handoff-oscillation-after-fresh-evidence.md; result same-frontier metadata-only handoff classification, no runtime/test edits justified.
 
 ## Implementation Result
 
@@ -310,3 +312,9 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 3. npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-active-gate-handoff-classification-20260518T094315Z.report.json --handoff-probe
 4. npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-active-gate-handoff-classification-20260518T094315Z.report.json
 5. npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-after-active-gate-handoff-classification-20260518T094315Z.report.json --markdown
+
+## Commit And Push Ledger
+
+1. Focused package commit: `d33b4146`
+2. Pushed to: `origin/codex/pending-ack-eligibility-filter`
+3. Commit contains only package-owned files/package-status/allowed sprint handoff: yes
