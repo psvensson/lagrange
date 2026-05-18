@@ -49,6 +49,16 @@ const TEST_PUBLICATION_PUBLISHED_FRONTIER = Object.freeze({
     TEST_NODE_ID.FRONTIER_MISSING_THIRD,
   ]),
 });
+const TEST_PUBLICATION_OPEN_FRONTIER = Object.freeze({
+  EPOCH: 1,
+  MISSING_COUNT: TEST_PUBLICATION_COUNT.OPEN_COUNT_ONLY_ACK_MISSING_PUBLISHED,
+  MISSING_NODE_IDS: Object.freeze([
+    TEST_NODE_ID.FRONTIER_ACK_PENDING,
+    TEST_NODE_ID.FRONTIER_MISSING_FIRST,
+    TEST_NODE_ID.FRONTIER_MISSING_SECOND,
+    TEST_NODE_ID.FRONTIER_MISSING_THIRD,
+  ]),
+});
 
 test('publication owner stream exposes pending ACK state by revision',
   (t) => {
@@ -320,6 +330,46 @@ test('publication owner stream does not treat open count-only ACK evidence as AC
       TEST_PUBLICATION_COUNT.PUBLISHED_FRONTIER_PENDING_ACK,
     );
     t.same(stream.pendingAckNodeIds, []);
+    t.equal(stream.ackState, PUBLICATION_OWNER_ACK_STATE.UNAVAILABLE);
+    t.equal(stream.freshnessFence, PUBLICATION_OWNER_FRESHNESS_FENCE.PUBLISHING);
+    t.equal(stream.streamOutcome, PUBLICATION_OWNER_STREAM_OUTCOME.PUBLISHING);
+    t.equal(
+      stream.recoveryOutcome,
+      PUBLICATION_OWNER_RECOVERY_OUTCOME.WAITING_FOR_PUBLICATION,
+    );
+    t.equal(isPublicationOwnerStreamPublicationPending(stream), true);
+    t.end();
+  });
+
+test('publication owner stream exposes open epoch publishing revision',
+  (t) => {
+    const stream = buildPublicationOwnerStreamState({
+      publicationEpoch: TEST_PUBLICATION_OPEN_FRONTIER.EPOCH,
+      publicationStatus: CONTROL_PLANE_PUBLICATION_STATUS.OPEN,
+      pendingAckNodeIds: [],
+      pendingAckCount: TEST_PUBLICATION_COUNT.PUBLISHED_FRONTIER_PENDING_ACK,
+      missingPublishedNodeIds:
+        TEST_PUBLICATION_OPEN_FRONTIER.MISSING_NODE_IDS,
+      missingPublishedCount: TEST_PUBLICATION_OPEN_FRONTIER.MISSING_COUNT,
+      recoveryProtocolState:
+        TEST_PUBLICATION_RECOVERY_PROTOCOL.PUBLICATION_PENDING,
+      publicationPending: true,
+      prioritySpreadPending: true,
+    });
+
+    t.equal(stream.revision.state, PUBLICATION_OWNER_REVISION_STATE.ADVANCING);
+    t.equal(
+      stream.revision.observed.value,
+      TEST_PUBLICATION_OPEN_FRONTIER.EPOCH,
+    );
+    t.equal(
+      stream.revision.desired.value,
+      TEST_PUBLICATION_OPEN_FRONTIER.EPOCH,
+    );
+    t.equal(
+      stream.revision.committed.state,
+      PUBLICATION_OWNER_REVISION_STATE.UNAVAILABLE,
+    );
     t.equal(stream.ackState, PUBLICATION_OWNER_ACK_STATE.UNAVAILABLE);
     t.equal(stream.freshnessFence, PUBLICATION_OWNER_FRESHNESS_FENCE.PUBLISHING);
     t.equal(stream.streamOutcome, PUBLICATION_OWNER_STREAM_OUTCOME.PUBLISHING);

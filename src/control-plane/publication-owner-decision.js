@@ -80,7 +80,22 @@ const PUBLICATION_OWNER_ACK_STATE_RULES = Object.freeze([
   }),
 ]);
 
+function hasPublicationOwnerPendingUncommittedRevision(evidence) {
+  return hasPublicationOwnerPublicationPending(evidence) &&
+    evidence.observedRevision.state !==
+      PUBLICATION_OWNER_REVISION_STATE.UNAVAILABLE &&
+    evidence.desiredRevision.state !==
+      PUBLICATION_OWNER_REVISION_STATE.UNAVAILABLE &&
+    evidence.committedRevision.state ===
+      PUBLICATION_OWNER_REVISION_STATE.UNAVAILABLE;
+}
+
 const PUBLICATION_OWNER_REVISION_STATE_RULES = Object.freeze([
+  Object.freeze({
+    state: PUBLICATION_OWNER_REVISION_STATE.ADVANCING,
+    matches: (evidence) =>
+      hasPublicationOwnerPendingUncommittedRevision(evidence),
+  }),
   Object.freeze({
     state: PUBLICATION_OWNER_REVISION_STATE.UNAVAILABLE,
     matches: (evidence) =>
@@ -146,7 +161,8 @@ function resolvePublicationOwnerRevisionState(evidence) {
 }
 
 function hasPublicationOwnerRevisionLag(evidence, revisionState) {
-  return revisionState === PUBLICATION_OWNER_REVISION_STATE.ADVANCING;
+  return revisionState === PUBLICATION_OWNER_REVISION_STATE.ADVANCING &&
+    hasPublicationOwnerPublicationPending(evidence) !== true;
 }
 
 function hasPublicationOwnerPublicationPending(evidence) {
