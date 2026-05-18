@@ -45,6 +45,10 @@ const COMMAND_GROUPS = Object.freeze([
         description: 'Scaffold a schema-valid package with Model Fit defaults from the model ledger.',
       }),
       Object.freeze({
+        command: 'npm run work:package:route-after-rerun -- --artifact <artifact> --successor <active-successor>',
+        description: 'Combine post-rerun routing with the package migration transaction.',
+      }),
+      Object.freeze({
         command: 'npm run work:package:schema',
         description: 'Print the shared work-package schema enums used by templates and validation.',
       }),
@@ -125,6 +129,10 @@ const COMMAND_GROUPS = Object.freeze([
       Object.freeze({
         command: 'npm run work:scenario-triage -- <artifact>',
         description: 'Combine representative evidence and priority residual grouping into one scenario handoff.',
+      }),
+      Object.freeze({
+        command: 'npm run work:scenario-route -- <artifact>',
+        description: 'Combine evidence, causal routing, residuals, owner files, and capped proof into one handoff.',
       }),
       Object.freeze({
         command: 'npm run summarize:harness -- --report-dir test-output/reports',

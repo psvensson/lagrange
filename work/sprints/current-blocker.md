@@ -6,7 +6,7 @@ Sprint: `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure
 
 Package: `work/packages/active-20260518-startup-readiness-snapshot-timeout-after-fresh-evidence.md`
 
-Workflow lane: `scenario-release-gate`
+Workflow lane: `diagnostic-classification`
 
 Scenario: `rolling-restart`
 
@@ -26,24 +26,21 @@ Current state: Fresh rolling-restart evidence after the active-gate classificati
 
 ## Next Action
 
-Run the required review subagent before implementation. Prove whether selectedSnapshotError snapshot_timeout is inherited active-gate support evidence, a startup readiness support bug, or a migration back to startup_active_gate_owner / snapshot_coverage.
+Use the combined scenario-route diagnostics handoff, then prove whether selectedSnapshotError snapshot_timeout is inherited active-gate support evidence, a startup readiness support bug, or a migration back to startup_active_gate_owner / snapshot_coverage.
 
 ## Proof Ladder
 
-1. `npm run work:evidence-summary -- test-output/reports/rolling-restart-after-active-gate-classification-fresh-20260518T062159Z.report.json`
-2. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-active-gate-classification-fresh-20260518T062159Z.report.json --explain active_gate_snapshot_coverage`
-3. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-active-gate-classification-fresh-20260518T062159Z.report.json --handoff-probe`
-4. `npm run analyze:causal-model -- test-output/reports/rolling-restart-after-active-gate-classification-fresh-20260518T062159Z.report.json`
-5. `npm run analyze:owner-files -- startup_readiness_owner startup_support_evidence`
-6. `node --test test/diagnostics/topology-convergence-graph.test.js test/diagnostics/failure-class-taxonomy.test.js test/diagnostics/stop-condition-decision.test.js test/diagnostics/causal-graph-builder.test.js`
+1. `npm run work:scenario-route -- test-output/reports/rolling-restart-after-active-gate-classification-fresh-20260518T062159Z.report.json --owner startup_readiness_owner --boundary startup_support_evidence --dominant-reason snapshot_timeout --explain active_gate_snapshot_coverage --test test/diagnostics/topology-convergence-graph.test.js --test test/diagnostics/failure-class-taxonomy.test.js --test test/diagnostics/stop-condition-decision.test.js --test test/diagnostics/causal-graph-builder.test.js --markdown`
+2. `node --test test/diagnostics/topology-convergence-graph.test.js test/diagnostics/failure-class-taxonomy.test.js test/diagnostics/stop-condition-decision.test.js test/diagnostics/causal-graph-builder.test.js`
+3. `npm run work:advance -- --check`
 
 ## Model Fit
 
-Package class: `representative-frontier-closure`
+Package class: `diagnostic-classification`
 
 Intended minimum model: `gpt-5.3-codex`
 
-Scope shape: `owner-boundary-contraction/current-frontier`
+Scope shape: `diagnostic-owner-evidence/current-artifact`
 
 Output profile: `medium`
 
@@ -68,13 +65,13 @@ Boundary: `startup_support_evidence`
 
 Dominant reason: `snapshot_timeout`
 
-Next action: `Run review/fix/implementation subagents, then prove whether selectedSnapshotError snapshot_timeout is inherited active-gate support evidence, a startup readiness support bug, or a migration back to startup_active_gate_owner / snapshot_coverage.`
+Next action: `Use scenario-route and focused diagnostics tests to classify selectedSnapshotError snapshot_timeout without subagent handoff unless runtime ownership changes.`
 
 ## Causal Governance
 
 Causal hypothesis: `If startup_readiness_owner / startup_support_evidence owns the migrated residual, selectedSnapshotError snapshot_timeout should reduce to bounded support evidence or explicitly migrate back to startup_active_gate_owner / snapshot_coverage instead of leaving publication_pending as an unqualified runtime target.`
 
-Stop-condition check: `Use npm run analyze:causal-model -- test-output/reports/rolling-restart-after-active-gate-classification-fresh-20260518T062159Z.report.json plus the active-gate topology explain before implementation and again after focused proof.`
+Stop-condition check: `Use npm run work:scenario-route -- test-output/reports/rolling-restart-after-active-gate-classification-fresh-20260518T062159Z.report.json --owner startup_readiness_owner --boundary startup_support_evidence --dominant-reason snapshot_timeout --explain active_gate_snapshot_coverage --markdown plus npm run analyze:causal-model -- test-output/reports/rolling-restart-after-active-gate-classification-fresh-20260518T062159Z.report.json before implementation and again after focused proof if diagnostics changed.`
 
 Expected causal-model change: `The readiness_startup_support edge reduces to inherited active-gate no progress, converges, or names a fresh owner-boundary migration with concrete evidence.`
 
@@ -82,7 +79,7 @@ Representative outcome: `pending-before-rerun`
 
 Causal debt: `Publication remains visible producer context, active-gate snapshot coverage is deferred at 0/5 with selected_snapshot_source_timeout, and priority residuals are zero. This package must not patch publication, operation workflow, active-gate runtime, or harness timeout budgets.`
 
-Cross-boundary review: `Required review subagent must inspect the fresh evidence package, startup readiness owner files, prior startup readiness packages, and active-gate explain output before any implementation edit.`
+Cross-boundary review: `Diagnostic-classification lane keeps review/fix/implementation subagents optional because this package may edit only diagnostics, diagnostic tests, and work-tracker files. Escalate to scenario-release-gate if runtime owner behavior, shared runtime contracts, or scenario behavior changes.`
 
 ## Scenario Causal Closure
 

@@ -36,6 +36,7 @@ const WORK_TRACKER_ACTIVE_STATUS = 'active';
 const WORK_TRACKER_DONE_STATUS = 'done';
 const LANE_READ_REVIEW_DOC_ONLY = 'read-review-doc-only';
 const LANE_LIGHTWEIGHT_MAINTENANCE = 'lightweight-maintenance';
+const LANE_DIAGNOSTIC_CLASSIFICATION = 'diagnostic-classification';
 const LANE_RUNTIME_OWNER_BOUNDARY = 'runtime-owner-boundary';
 const LANE_CAUSAL_ESCALATION = 'causal-escalation';
 const CAUSAL_GOVERNANCE_VALID_METADATA = Object.freeze({
@@ -527,6 +528,10 @@ describe('work tracker subagent sequencing ledger validation', () => {
     );
     assert.equal(
       metadataRequiresSubagentSequencing({lane: LANE_LIGHTWEIGHT_MAINTENANCE}),
+      false,
+    );
+    assert.equal(
+      metadataRequiresSubagentSequencing({lane: LANE_DIAGNOSTIC_CLASSIFICATION}),
       false,
     );
     assert.equal(

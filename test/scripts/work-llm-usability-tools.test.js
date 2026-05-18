@@ -7,7 +7,11 @@ import {buildPriorityRecoveryResiduals} from '../../scripts/analyze-priority-rec
 import {buildSubagentPrompt} from '../../scripts/work-subagent-prompt.js';
 import {buildSubagentNextLines} from '../../scripts/work-subagent-next.js';
 import {buildPackageContent, runCli} from '../../scripts/work-package-new.js';
+import {
+  buildRouteAfterRerunLines,
+} from '../../scripts/work-package-route-after-rerun.js';
 import {buildLlmStartLines} from '../../scripts/work-llm-start.js';
+import {buildScenarioRouteSummary} from '../../scripts/work-scenario-route.js';
 import {buildScenarioTriageSummary} from '../../scripts/work-scenario-triage.js';
 import {renderSchemaReference} from '../../scripts/work-package-schema.js';
 
@@ -53,6 +57,7 @@ test('shared package schema lists validator enums for LLM scaffolding', (t) => {
   const rendered = renderSchemaReference();
 
   t.match(rendered, /scenario-release-gate/u);
+  t.match(rendered, /diagnostic-classification/u);
   t.match(rendered, /Output Profiles/u);
   t.match(rendered, /extra-high/u);
   t.match(rendered, /writeScope/u);
@@ -92,6 +97,7 @@ test('package scaffolder pre-fills Model Fit from schema defaults', async (t) =>
   t.match(content, /## LLM Tool-First Contract/u);
   t.match(content, /## Workflow Acceleration Contract/u);
   t.match(content, /work:advance -- --check/u);
+  t.match(content, /work:scenario-route/u);
   t.match(content, /work:evidence-summary/u);
   t.match(content, /ad hoc `jq`/u);
 });
@@ -207,6 +213,56 @@ test('scenario triage combines representative and priority residual evidence',
     t.match(summary.suggestedPackageCommand, /--from-artifact/u);
     t.ok(summary.extractorCommands.some((command) =>
       command.includes('work:scenario-triage')));
+  });
+
+test('scenario route combines routing, owner files, and capped proof',
+  async (t) => {
+    const summary = await buildScenarioRouteSummary({
+      artifactPath: FIXTURE_PATH,
+      owner: OWNER_NAME,
+      boundary: BOUNDARY_NAME,
+      dominantReason: 'priority_recovery_event_driven_wait',
+      explain: 'active_gate_snapshot_coverage',
+      tests: ['test/diagnostics/topology-convergence-graph.test.js'],
+    });
+
+    t.equal(summary.schemaVersion, 'scenario-route-v1');
+    t.equal(summary.route.owner, OWNER_NAME);
+    t.equal(summary.route.boundary, BOUNDARY_NAME);
+    t.equal(summary.route.dominantReason, 'priority_recovery_event_driven_wait');
+    t.equal(summary.route.explainEdge, 'active_gate_snapshot_coverage');
+    t.ok(summary.ownerFiles.matchCount >= 0);
+    t.same(summary.suggestedProof, [
+      'npm run work:scenario-route -- ' +
+        `${FIXTURE_PATH} --owner ${OWNER_NAME} --boundary ` +
+        `${BOUNDARY_NAME} --dominant-reason ` +
+        'priority_recovery_event_driven_wait --explain ' +
+        'active_gate_snapshot_coverage',
+      'node --test test/diagnostics/topology-convergence-graph.test.js',
+      'npm run work:advance -- --check',
+    ]);
+    t.match(summary.suggestedPackageCommand, /diagnostic-classification/u);
+  });
+
+test('route-after-rerun prints the migration transaction without writing',
+  async (t) => {
+    const lines = await buildRouteAfterRerunLines({
+      artifactPath: FIXTURE_PATH,
+      packagePath: 'work/packages/active-evidence.md',
+      successorPath: 'work/packages/active-successor.md',
+      owner: OWNER_NAME,
+      boundary: BOUNDARY_NAME,
+      dominantReason: 'priority_recovery_event_driven_wait',
+      explain: 'active_gate_snapshot_coverage',
+      tests: [],
+      write: false,
+    });
+    const rendered = lines.join('\n');
+
+    t.match(rendered, /# Route After Rerun/u);
+    t.match(rendered, /# Scenario Route/u);
+    t.match(rendered, /work:package:migrate -- --write --transaction/u);
+    t.match(rendered, /work\/packages\/active-successor\.md/u);
   });
 
 test('subagent prompt generator emits bounded task and ledger guidance',

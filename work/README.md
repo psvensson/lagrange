@@ -96,41 +96,50 @@ Use the tracker utility for current sprint/package mechanics:
    --next-action <action>` scaffolds a schema-valid work package. The
    scaffolder pre-fills Model Fit from the lane and model-ledger summary unless
    explicit Model Fit flags are provided.
-12. `npm run work:evidence-summary -- <artifact>` prints a compact deterministic
+12. `npm run work:package:route-after-rerun -- --artifact <artifact>
+   --successor <active-successor>` combines the post-rerun route handoff with
+   the package migration transaction when the successor already exists and is
+   ready to become the active blocker.
+13. `npm run work:evidence-summary -- <artifact>` prints a compact deterministic
    topology plus causal-model summary for LLM handoff before reading raw logs or
    large harness segment files.
-13. `npm run analyze:owner-files -- <owner> [boundary]` prints a ranked
+14. `npm run work:scenario-route -- <artifact> [--owner <owner>]
+   [--boundary <boundary>] [--explain <edge>]` combines representative
+   evidence, causal routing, priority residuals, owner-file discovery, and a
+   capped proof ladder into one handoff. Prefer this over listing multiple
+   extractor commands in diagnostic classification packages.
+15. `npm run analyze:owner-files -- <owner> [boundary]` prints a ranked
     owner-to-files index so agents can inspect likely owner files before broad
     text search.
-14. `npm run analyze:priority-recovery-residuals -- <artifact>` extracts
+16. `npm run analyze:priority-recovery-residuals -- <artifact>` extracts
     priority-recovery partition witnesses by owner and boundary and prints
     package scaffolding commands for deliberate residual splits.
-15. `npm run work:subagent-prompt -- --role review|fix|implementation
+17. `npm run work:subagent-prompt -- --role review|fix|implementation
     --package work/packages/active-...md` generates bounded role prompts and
     the ledger-line shape to record after a real subagent returns.
-16. `npm run work:oversized-next -- --markdown` turns oversized
+18. `npm run work:oversized-next -- --markdown` turns oversized
     owner-boundary segment files into package-ready extraction candidates so
     file-size debt stays actionable rather than a broad background concern.
-17. `npm run work:validate -- --entry|--pre-impl|--closure` checks active and
+19. `npm run work:validate -- --entry|--pre-impl|--closure` checks active and
    metadata-bearing packages for filename/header drift, stale open checklist
    items, and lane-required Subagent Sequencing Ledgers at the requested phase.
    The default phase is `--pre-impl`.
-18. `npm run work:package:close -- --write work/packages/active-...md` renames a
+20. `npm run work:package:close -- --write work/packages/active-...md` renames a
     package to `done-...` only after open checklist items are closed.
-19. `npm run work:package:migrate -- --write work/packages/active-...md`
+21. `npm run work:package:migrate -- --write work/packages/active-...md`
     `work/packages/active-successor.md` performs the same closure gate while
     recording a successor handoff.
-20. `npm run work:package:move -- --write work/packages/todo-...md --to active`
+22. `npm run work:package:move -- --write work/packages/todo-...md --to active`
     performs non-terminal state moves.
-21. `npm run work:package:evidence-block -- <artifact>` generates a Markdown
+23. `npm run work:package:evidence-block -- <artifact>` generates a Markdown
     owner/evidence block from topology-convergence analyzer output for package
     migration or contraction notes.
-22. After each completed package slice, create one focused git commit containing
+24. After each completed package slice, create one focused git commit containing
     only that slice's package-owned changes and push the current branch before
     starting the next slice. Use `npm run work:sprint:push -- <git-push-args>`
     for sprint pushes so the remaining package list is printed after a
     successful push.
-23. If the slice cannot be pushed because the remote or credentials are
+25. If the slice cannot be pushed because the remote or credentials are
     unavailable, record the unpushed commit SHA and reason in the package or
    sprint handoff. If package-owned and unrelated dirty changes cannot be
    separated safely, stop for human direction instead of committing a mixed
@@ -149,10 +158,10 @@ the package explicitly records a heavier audit or architecture reason:
    After a classification-only package, run fresh representative evidence or
    close/open the next concrete blocker; do not add another metadata-only
    refinement package.
-3. Durable proof ladders default to 3-5 commands: representative evidence,
-   one focused extractor or test, and validation. Static guardrails belong in
-   the ladder only when implementation files changed or an audit package says
-   they are the work.
+3. Durable proof ladders default to 3-5 commands. Use
+   `npm run work:scenario-route -- <artifact>` to replace separate evidence,
+   causal, residual, owner-file, and explain commands when the package is
+   classifying or routing diagnostic evidence.
 4. Admin-only packages, meaning packages whose write/commit scope is limited to
    `work/` tracking files and ledgers, must end the next pass by doing one of
    four things: run representative evidence, close as classification-only, open
@@ -164,6 +173,11 @@ the package explicitly records a heavier audit or architecture reason:
 6. Subagents are review gates for runtime owner-boundary and scenario/release
    work. For read/review/doc-only and lightweight maintenance packages, omit
    them unless the package or human explicitly requires them.
+7. Use the `diagnostic-classification` lane when the package is driven by a
+   representative artifact but edits only diagnostics, diagnostic tests, and
+   work-tracker files. This lane keeps causal ledgers and representative
+   evidence, but does not require review/fix/implementation subagents unless
+   runtime ownership, shared contracts, or scenario behavior can change.
 
 ## Tool-First LLM Workflow
 
@@ -221,11 +235,14 @@ selection, focused validation, package closure, or commit discipline.
 Choose the lightest workflow lane that still proves the owner boundary was not
 weakened. Record the lane in package metadata as `lane`.
 
-Subagents are not required for `read-review-doc-only` or
-`lightweight-maintenance` packages unless the package explicitly declares that
-they are needed or a human asks for them. These lanes are for review, steering,
-documentation, tracker, or narrow maintenance work that cannot change runtime
-ownership, shared contracts, or representative scenario evidence.
+Subagents are not required for `read-review-doc-only`,
+`lightweight-maintenance`, or `diagnostic-classification` packages unless the
+package explicitly declares that they are needed or a human asks for them. The
+first two lanes are for review, steering, documentation, tracker, or narrow
+maintenance work that cannot change runtime ownership, shared contracts, or
+representative scenario evidence. `diagnostic-classification` keeps
+representative evidence and causal ledgers, but is limited to diagnostics,
+diagnostic tests, and work-tracker routing.
 
 Subagents are required by default for `runtime-owner-boundary`,
 `scenario-release-gate`, and `causal-escalation` packages. Use the sequential

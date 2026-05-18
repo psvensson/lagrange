@@ -21,6 +21,8 @@ const WORK_SPRINT_PUSH_COMMAND = 'npm run work:sprint:push -- <git-push-args>';
 const MODEL_LEDGER_SUMMARY_COMMAND = 'npm run work:model-ledger -- summary';
 const PACKAGE_NEW_COMMAND =
   'npm run work:package:new -- --lane <lane> --title <title> --slug <slug> --owner <owner> --boundary <boundary> --dominant-reason <reason> --next-action <action>';
+const PACKAGE_ROUTE_AFTER_RERUN_COMMAND =
+  'npm run work:package:route-after-rerun -- --artifact <artifact> --successor <active-successor>';
 const PACKAGE_SCHEMA_COMMAND = 'npm run work:package:schema';
 const SUBAGENT_PROMPT_COMMAND =
   'npm run work:subagent-prompt -- --role <role> --package <package>';
@@ -52,6 +54,8 @@ const PACKAGE_EVIDENCE_BLOCK_COMMAND =
   'npm run work:package:evidence-block -- <artifact>';
 const SCENARIO_TRIAGE_COMMAND =
   'npm run work:scenario-triage -- <artifact>';
+const SCENARIO_ROUTE_COMMAND =
+  'npm run work:scenario-route -- <artifact>';
 const HARNESS_SUMMARY_COMMAND =
   'npm run summarize:harness -- --report-dir test-output/reports';
 const RUNTIME_GRAMMAR_FILE_COMMAND =
@@ -86,6 +90,8 @@ const OWNER_GLOSSARY_DESCRIPTION =
   'Print canonical topology owner, boundary, reason, and semantic-state glossary.';
 const PACKAGE_EVIDENCE_BLOCK_DESCRIPTION =
   'Generate a package migration/evidence block from topology analyzer output.';
+const PACKAGE_ROUTE_AFTER_RERUN_DESCRIPTION =
+  'Combine post-rerun routing with the package migration transaction.';
 const HARNESS_SUMMARY_DESCRIPTION =
   'List latest harness reports by scenario and status.';
 const MODEL_LEDGER_SUMMARY_DESCRIPTION =
@@ -98,6 +104,8 @@ const WORK_SUBAGENT_NEXT_DESCRIPTION =
   'Detect the next required subagent role for the active package and print its bounded prompt.';
 const SCENARIO_TRIAGE_DESCRIPTION =
   'Combine representative evidence and priority residual grouping into one scenario handoff.';
+const SCENARIO_ROUTE_DESCRIPTION =
+  'Combine evidence, causal routing, residuals, owner files, and capped proof into one handoff.';
 const COMMAND_ENTRY_SEPARATOR = ' - ';
 const COMMAND_CHAIN_SEPARATOR = ' && ';
 const NONEMPTY_COMMAND_GROUP_COUNT = 0;
@@ -154,6 +162,8 @@ const PACKAGE_EVIDENCE_BLOCK_GROUP_MESSAGE =
   'package evidence block should be discoverable from report triage';
 const SCENARIO_TRIAGE_GROUP_MESSAGE =
   'combined scenario triage should be discoverable from report triage';
+const SCENARIO_ROUTE_GROUP_MESSAGE =
+  'scenario route should be discoverable from report triage';
 const HARNESS_SUMMARY_GROUP_MESSAGE =
   'harness summary should be discoverable from report triage';
 const ANALYZE_OWNER_EXPLAIN_SCRIPT = 'analyze:owner-explain';
@@ -180,6 +190,9 @@ const WORK_ADVANCE_SCRIPT = 'work:advance';
 const WORK_ADVANCE_SCRIPT_COMMAND = 'node scripts/work-advance.js';
 const WORK_PACKAGE_NEW_SCRIPT = 'work:package:new';
 const WORK_PACKAGE_NEW_SCRIPT_COMMAND = 'node scripts/work-package-new.js';
+const WORK_PACKAGE_ROUTE_AFTER_RERUN_SCRIPT = 'work:package:route-after-rerun';
+const WORK_PACKAGE_ROUTE_AFTER_RERUN_SCRIPT_COMMAND =
+  'node scripts/work-package-route-after-rerun.js';
 const WORK_PACKAGE_SCHEMA_SCRIPT = 'work:package:schema';
 const WORK_PACKAGE_SCHEMA_SCRIPT_COMMAND = 'node scripts/work-package-schema.js';
 const WORK_SUBAGENT_PROMPT_SCRIPT = 'work:subagent-prompt';
@@ -191,6 +204,8 @@ const PACKAGE_EVIDENCE_BLOCK_SCRIPT_COMMAND =
   'node scripts/analyze-topology-convergence.js --package-evidence-block';
 const SCENARIO_TRIAGE_SCRIPT = 'work:scenario-triage';
 const SCENARIO_TRIAGE_SCRIPT_COMMAND = 'node scripts/work-scenario-triage.js';
+const SCENARIO_ROUTE_SCRIPT = 'work:scenario-route';
+const SCENARIO_ROUTE_SCRIPT_COMMAND = 'node scripts/work-scenario-route.js';
 const OWNER_BOUNDARY_SEGMENTS_SCRIPT = 'audit:owner-boundary-segments';
 const OWNER_BOUNDARY_SEGMENTS_SCRIPT_COMMAND =
   'node scripts/check-file-size-thresholds.js --owner-boundary-guidance';
@@ -232,6 +247,7 @@ test(ORIENTATION_GUARDRAILS_TEST_NAME, (t) => {
   t.match(rendered, WORK_SPRINT_PUSH_COMMAND);
   t.match(rendered, MODEL_LEDGER_SUMMARY_COMMAND);
   t.match(rendered, PACKAGE_NEW_COMMAND);
+  t.match(rendered, PACKAGE_ROUTE_AFTER_RERUN_COMMAND);
   t.match(rendered, PACKAGE_SCHEMA_COMMAND);
   t.match(rendered, SUBAGENT_PROMPT_COMMAND);
   t.match(rendered, SUBAGENT_NEXT_COMMAND);
@@ -393,6 +409,7 @@ test(REPORT_TRIAGE_TEST_NAME, (t) => {
   t.match(rendered, OWNER_FILES_COMMAND);
   t.match(rendered, PRIORITY_RESIDUALS_COMMAND);
   t.match(rendered, SCENARIO_TRIAGE_COMMAND);
+  t.match(rendered, SCENARIO_ROUTE_COMMAND);
   t.match(
     rendered,
     `${PACKAGE_EVIDENCE_BLOCK_COMMAND}\`${COMMAND_ENTRY_SEPARATOR}` +
@@ -402,6 +419,11 @@ test(REPORT_TRIAGE_TEST_NAME, (t) => {
     rendered,
     `${SCENARIO_TRIAGE_COMMAND}\`${COMMAND_ENTRY_SEPARATOR}` +
       SCENARIO_TRIAGE_DESCRIPTION,
+  );
+  t.match(
+    rendered,
+    `${SCENARIO_ROUTE_COMMAND}\`${COMMAND_ENTRY_SEPARATOR}` +
+      SCENARIO_ROUTE_DESCRIPTION,
   );
   t.match(
     rendered,
@@ -452,6 +474,11 @@ test(REPORT_TRIAGE_TEST_NAME, (t) => {
     findCommandEntry(SCENARIO_TRIAGE_COMMAND).group.title,
     REPORT_TRIAGE_GROUP_TITLE,
     SCENARIO_TRIAGE_GROUP_MESSAGE,
+  );
+  t.equal(
+    findCommandEntry(SCENARIO_ROUTE_COMMAND).group.title,
+    REPORT_TRIAGE_GROUP_TITLE,
+    SCENARIO_ROUTE_GROUP_MESSAGE,
   );
   t.equal(
     findCommandEntry(HARNESS_SUMMARY_COMMAND).group.title,
@@ -515,6 +542,10 @@ test(RUNTIME_GRAMMAR_TEST_NAME,
       WORK_PACKAGE_NEW_SCRIPT_COMMAND,
     );
     t.equal(
+      scripts[WORK_PACKAGE_ROUTE_AFTER_RERUN_SCRIPT],
+      WORK_PACKAGE_ROUTE_AFTER_RERUN_SCRIPT_COMMAND,
+    );
+    t.equal(
       scripts[WORK_PACKAGE_SCHEMA_SCRIPT],
       WORK_PACKAGE_SCHEMA_SCRIPT_COMMAND,
     );
@@ -533,6 +564,10 @@ test(RUNTIME_GRAMMAR_TEST_NAME,
     t.equal(
       scripts[SCENARIO_TRIAGE_SCRIPT],
       SCENARIO_TRIAGE_SCRIPT_COMMAND,
+    );
+    t.equal(
+      scripts[SCENARIO_ROUTE_SCRIPT],
+      SCENARIO_ROUTE_SCRIPT_COMMAND,
     );
     t.equal(
       scripts[OVERSIZED_NEXT_SCRIPT],

@@ -64,6 +64,7 @@ const NPM_RUN_WORK_PACKAGE_DOCTOR_SUGGEST_COMMAND =
   'npm run work:package:doctor -- --suggest';
 const NPM_RUN_WORK_SUBAGENT_NEXT_COMMAND = 'npm run work:subagent-next';
 const NPM_RUN_WORK_EVIDENCE_SUMMARY_COMMAND = 'npm run work:evidence-summary --';
+const NPM_RUN_WORK_SCENARIO_ROUTE_COMMAND = 'npm run work:scenario-route --';
 const NPM_RUN_WORK_SCENARIO_TRIAGE_COMMAND = 'npm run work:scenario-triage --';
 const ANALYZE_PRIORITY_RECOVERY_RESIDUALS_COMMAND =
   'npm run analyze:priority-recovery-residuals --';
@@ -1226,6 +1227,11 @@ function buildUsefulCommands(currentBlocker) {
     );
     commands.push(
       commandWithPaths(NPM_RUN_WORK_SCENARIO_TRIAGE_COMMAND, [
+        currentBlocker.artifact,
+      ]),
+    );
+    commands.push(
+      commandWithPaths(NPM_RUN_WORK_SCENARIO_ROUTE_COMMAND, [
         currentBlocker.artifact,
       ]),
     );

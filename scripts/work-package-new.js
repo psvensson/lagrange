@@ -429,7 +429,7 @@ async function buildPackageContent(flags = {}) {
     '## Workflow Acceleration Contract',
     EMPTY_TEXT,
     '1. Use `npm run work:advance -- --check` before adding more package prose; it combines doctor, subagent-next, and entry/pre-implementation validation.',
-    '2. Keep the durable proof ladder to 3-5 commands by default: one representative/evidence command, one focused extractor or test, and validation. Add static guardrails only when implementation files changed.',
+    '2. Keep the durable proof ladder to 3-5 commands by default: prefer `npm run work:scenario-route -- <artifact>` for representative routing, one focused test or extractor, and validation. Add static guardrails only when implementation files changed.',
     '3. If this package only changes package, sprint, tracker, or ledger files, the next pass must run representative evidence, close as classification-only, open a concrete bug package, or present a human gate.',
     '4. Once an architecture gate has a selected route, do not open another gate unless fresh canonical evidence contradicts the selected route.',
     EMPTY_TEXT,

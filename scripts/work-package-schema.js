@@ -12,6 +12,7 @@ const STATUS_SUPERSEDED = 'superseded';
 const STATUS_TODO = 'todo';
 const LANE_READ_REVIEW_DOC_ONLY = 'read-review-doc-only';
 const LANE_LIGHTWEIGHT_MAINTENANCE = 'lightweight-maintenance';
+const LANE_DIAGNOSTIC_CLASSIFICATION = 'diagnostic-classification';
 const LANE_RUNTIME_OWNER_BOUNDARY = 'runtime-owner-boundary';
 const LANE_SCENARIO_RELEASE_GATE = 'scenario-release-gate';
 const LANE_CAUSAL_ESCALATION = 'causal-escalation';
@@ -19,10 +20,12 @@ const MODEL_FIT_SPARK_MODEL = 'gpt-5.3-codex-spark';
 const MODEL_FIT_DEFAULT_FRONTIER_MODEL = 'gpt-5.3-codex';
 const MODEL_FIT_LEAF_SLICE_SCOPE = 'leaf-slice';
 const MODEL_FIT_LIGHTWEIGHT_CLASS = 'bounded-implementation';
+const MODEL_FIT_DIAGNOSTIC_CLASS = 'diagnostic-classification';
 const MODEL_FIT_RUNTIME_CLASS = 'runtime-owner-boundary';
 const MODEL_FIT_SCENARIO_CLASS = 'representative-frontier-closure';
 const MODEL_FIT_CAUSAL_CLASS = 'architecture-gap-analysis';
 const MODEL_FIT_RUNTIME_SCOPE = 'owner-boundary-contraction';
+const MODEL_FIT_DIAGNOSTIC_SCOPE = 'diagnostic-owner-evidence/current-artifact';
 const MODEL_FIT_SCENARIO_SCOPE = 'owner-boundary-contraction/current-frontier';
 const MODEL_FIT_CAUSAL_SCOPE = 'scenario-causal-escalation';
 const OUTPUT_PROFILE_SMALL = 'small';
@@ -86,6 +89,7 @@ const VALID_PACKAGE_STATUSES = Object.freeze([
 const WORKFLOW_LANES = Object.freeze([
   LANE_READ_REVIEW_DOC_ONLY,
   LANE_LIGHTWEIGHT_MAINTENANCE,
+  LANE_DIAGNOSTIC_CLASSIFICATION,
   LANE_RUNTIME_OWNER_BOUNDARY,
   LANE_SCENARIO_RELEASE_GATE,
   LANE_CAUSAL_ESCALATION,
@@ -94,6 +98,7 @@ const WORKFLOW_LANES = Object.freeze([
 const SUBAGENT_OPTIONAL_LANES = Object.freeze([
   LANE_READ_REVIEW_DOC_ONLY,
   LANE_LIGHTWEIGHT_MAINTENANCE,
+  LANE_DIAGNOSTIC_CLASSIFICATION,
 ]);
 
 const CAUSAL_GOVERNANCE_VALID_OUTCOMES = Object.freeze([
@@ -205,6 +210,12 @@ const DEFAULT_MODEL_FIT_BY_LANE = Object.freeze({
     packageClass: MODEL_FIT_LIGHTWEIGHT_CLASS,
     intendedMinimumModel: MODEL_FIT_SPARK_MODEL,
     scopeShape: MODEL_FIT_LEAF_SLICE_SCOPE,
+    outputProfile: OUTPUT_PROFILE_MEDIUM,
+  }),
+  [LANE_DIAGNOSTIC_CLASSIFICATION]: Object.freeze({
+    packageClass: MODEL_FIT_DIAGNOSTIC_CLASS,
+    intendedMinimumModel: MODEL_FIT_DEFAULT_FRONTIER_MODEL,
+    scopeShape: MODEL_FIT_DIAGNOSTIC_SCOPE,
     outputProfile: OUTPUT_PROFILE_MEDIUM,
   }),
   [LANE_RUNTIME_OWNER_BOUNDARY]: Object.freeze({
@@ -372,6 +383,7 @@ export {
   CAUSAL_GOVERNANCE_VALID_OUTCOMES,
   DEFAULT_MODEL_FIT_BY_LANE,
   LANE_CAUSAL_ESCALATION,
+  LANE_DIAGNOSTIC_CLASSIFICATION,
   LANE_LIGHTWEIGHT_MAINTENANCE,
   LANE_READ_REVIEW_DOC_ONLY,
   LANE_RUNTIME_OWNER_BOUNDARY,
