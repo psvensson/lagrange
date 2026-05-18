@@ -587,6 +587,35 @@ If the rerun is same-frontier with no concrete metric or shape reduction, stop
 local patching and present an architecture decision gate or human escalation
 before another implementation package.
 
+## Decision Experiment Gate
+
+Active runtime owner-boundary, scenario/release-gate, and causal-escalation
+packages must carry a compact `## Decision Experiment Gate` before
+implementation starts. Treat the next implementation as a falsifiable
+experiment, not as proof that the current route is correct.
+
+The gate names:
+
+1. decision question
+2. architecture review
+3. competing hypotheses
+4. pre-edit focused probe
+5. success metrics
+6. representative rerun
+7. kill rule
+
+The architecture review distinguishes local owner-boundary work from
+owner-boundary migration, architecture/contract gap, or human route. Competing
+hypotheses include stale evidence and wrong-owner explanations. The pre-edit
+probe and representative rerun are executable commands. Success metrics name
+concrete count, metric, frontier movement, migration, or representative green.
+The kill rule stops or escalates on unchanged same-frontier/no-reduction
+evidence instead of opening another local patch.
+
+Classification-only fast-path, pure classification, read/review/doc-only, and
+lightweight maintenance packages are exempt unless they promote runtime,
+scenario, script, report, or shared-contract implementation scope.
+
 ## LLM Current Edge Card And Trap List
 
 Scenario-driven packages and active sprint snapshots must include a compact

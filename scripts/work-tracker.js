@@ -143,6 +143,7 @@ const SUBAGENT_ATTEMPT_LEDGER_POLICY_OPENED_AFTER = '2026-05-18';
 const MODEL_FIT_HEADING = '## Model Fit';
 const CORE_LOGIC_BRIEF_HEADING = '## Core Logic Brief';
 const CAUSAL_DECISION_CONTRACT_HEADING = '## Causal Decision Contract';
+const DECISION_EXPERIMENT_GATE_HEADING = '## Decision Experiment Gate';
 const SPRINT_STRATEGY_BRIEF_HEADING = '## Sprint Strategy Brief';
 const CURRENT_EDGE_CARD_HEADING = '## Current Edge Card';
 const LEGACY_CURRENT_NEXT_ACTION_HEADING = '## Current Next Action';
@@ -456,6 +457,31 @@ const MODEL_FIT_REQUIRED_SPARK_LABELS = Object.freeze([
   MODEL_FIT_ESCALATION_TRIGGERS_LABEL,
   MODEL_FIT_FOCUSED_PROOF_LABEL,
 ]);
+const DECISION_EXPERIMENT_DECISION_QUESTION_LABEL = 'Decision question';
+const DECISION_EXPERIMENT_ARCHITECTURE_REVIEW_LABEL =
+  'Architecture review';
+const DECISION_EXPERIMENT_COMPETING_HYPOTHESES_LABEL =
+  'Competing hypotheses';
+const DECISION_EXPERIMENT_PRE_EDIT_PROBE_LABEL = 'Pre-edit focused probe';
+const DECISION_EXPERIMENT_SUCCESS_METRICS_LABEL = 'Success metrics';
+const DECISION_EXPERIMENT_REPRESENTATIVE_RERUN_LABEL =
+  'Representative rerun';
+const DECISION_EXPERIMENT_KILL_RULE_LABEL = 'Kill rule';
+const DECISION_EXPERIMENT_FIELDS = Object.freeze([
+  DECISION_EXPERIMENT_DECISION_QUESTION_LABEL,
+  DECISION_EXPERIMENT_ARCHITECTURE_REVIEW_LABEL,
+  DECISION_EXPERIMENT_COMPETING_HYPOTHESES_LABEL,
+  DECISION_EXPERIMENT_PRE_EDIT_PROBE_LABEL,
+  DECISION_EXPERIMENT_SUCCESS_METRICS_LABEL,
+  DECISION_EXPERIMENT_REPRESENTATIVE_RERUN_LABEL,
+  DECISION_EXPERIMENT_KILL_RULE_LABEL,
+]);
+const DECISION_EXPERIMENT_ARCHITECTURE_REVIEW_PATTERN =
+  /\b(?:architecture|owner|boundary|contract|human|route)\b/iu;
+const DECISION_EXPERIMENT_SUCCESS_METRIC_PATTERN =
+  /\b(?:reduce|reduced|reduction|migrate|migration|green|count|metric|frontier|representative)\b/iu;
+const DECISION_EXPERIMENT_KILL_RULE_PATTERN =
+  /\b(?:stop|escalat|architecture|human|same-frontier|no-reduction|unchanged)\b/iu;
 const MODEL_FIT_OPEN_ENDED_FRONTIER_PATTERNS = Object.freeze([
   /\bopen-ended\s+frontier\b/iu,
   /\b(?:any|unknown|whatever|unbounded)\s+frontier\b/iu,
@@ -710,6 +736,13 @@ function extractCausalDecisionContractSection(content) {
   return extractMarkdownLevelTwoSection(
     content,
     CAUSAL_DECISION_CONTRACT_HEADING,
+  );
+}
+
+function extractDecisionExperimentGateSection(content) {
+  return extractMarkdownLevelTwoSection(
+    content,
+    DECISION_EXPERIMENT_GATE_HEADING,
   );
 }
 
@@ -1914,6 +1947,122 @@ export function validateCausalDecisionContract(
         'why this is not another same-frontier symptom patch.',
       );
     }
+  }
+  return errors;
+}
+
+function metadataRequiresDecisionExperimentGate(metadata, fileStatus) {
+  return fileStatus === STATUS_ACTIVE &&
+    metadata !== null &&
+    coreLogicBriefRequiredForLane(metadataLane(metadata)) &&
+    !metadataUsesClassificationOnlyFastPath(metadata) &&
+    !metadataUsesPureClassificationFastPath(metadata);
+}
+
+function findDecisionExperimentGateField(section, label) {
+  const fieldPattern = new RegExp(
+    `${escapeRegExp(label)}:\\s*([^\\n]+)`,
+    'iu',
+  );
+  const match = fieldPattern.exec(section);
+  return match ? normalizeLedgerFieldValue(match[NUM_ONE]) : null;
+}
+
+function validateDecisionExperimentGateField(filePath, label, value) {
+  if (value === null) {
+    return [`${filePath}: Decision Experiment Gate is missing ${label}.`];
+  }
+  if (
+    value.length === NUM_ZERO ||
+    MODEL_FIT_EMPTY_VALUE_PATTERN.test(value) ||
+    LEDGER_TEMPLATE_PLACEHOLDER_PATTERN.test(value) ||
+    value.includes(LEDGER_PENDING_BEFORE_IMPLEMENTATION_MARKER)
+  ) {
+    return [
+      `${filePath}: Decision Experiment Gate ${label} must be concrete.`,
+    ];
+  }
+  return [];
+}
+
+export function validateDecisionExperimentGate(
+  content,
+  metadata,
+  filePath,
+  options = {},
+) {
+  const requiresGate =
+    options[LEDGER_VALIDATION_REQUIRES_LEDGER] === true;
+  const section = extractDecisionExperimentGateSection(content);
+  if (!section) {
+    return requiresGate ?
+      [
+        `${filePath}: Decision Experiment Gate section is required before ` +
+        'runtime/scenario implementation.',
+      ] :
+      [];
+  }
+  const errors = [];
+  for (const label of DECISION_EXPERIMENT_FIELDS) {
+    errors.push(...validateDecisionExperimentGateField(
+      filePath,
+      label,
+      findDecisionExperimentGateField(section, label),
+    ));
+  }
+  const architectureReview = findDecisionExperimentGateField(
+    section,
+    DECISION_EXPERIMENT_ARCHITECTURE_REVIEW_LABEL,
+  );
+  if (
+    architectureReview !== null &&
+    !DECISION_EXPERIMENT_ARCHITECTURE_REVIEW_PATTERN.test(architectureReview)
+  ) {
+    errors.push(
+      `${filePath}: Decision Experiment Gate ` +
+      `${DECISION_EXPERIMENT_ARCHITECTURE_REVIEW_LABEL} must name the ` +
+      'owner, boundary, contract, architecture, route, or human review.',
+    );
+  }
+  for (const label of [
+    DECISION_EXPERIMENT_PRE_EDIT_PROBE_LABEL,
+    DECISION_EXPERIMENT_REPRESENTATIVE_RERUN_LABEL,
+  ]) {
+    const value = findDecisionExperimentGateField(section, label);
+    if (value !== null && !MODEL_FIT_FOCUSED_PROOF_COMMAND_PATTERN.test(value)) {
+      errors.push(
+        `${filePath}: Decision Experiment Gate ${label} must name a ` +
+        'focused command.',
+      );
+    }
+  }
+  const successMetrics = findDecisionExperimentGateField(
+    section,
+    DECISION_EXPERIMENT_SUCCESS_METRICS_LABEL,
+  );
+  if (
+    successMetrics !== null &&
+    !DECISION_EXPERIMENT_SUCCESS_METRIC_PATTERN.test(successMetrics)
+  ) {
+    errors.push(
+      `${filePath}: Decision Experiment Gate ` +
+      `${DECISION_EXPERIMENT_SUCCESS_METRICS_LABEL} must name a concrete ` +
+      'metric reduction, migration, representative green, count, or frontier move.',
+    );
+  }
+  const killRule = findDecisionExperimentGateField(
+    section,
+    DECISION_EXPERIMENT_KILL_RULE_LABEL,
+  );
+  if (
+    killRule !== null &&
+    !DECISION_EXPERIMENT_KILL_RULE_PATTERN.test(killRule)
+  ) {
+    errors.push(
+      `${filePath}: Decision Experiment Gate ` +
+      `${DECISION_EXPERIMENT_KILL_RULE_LABEL} must stop or escalate on ` +
+      'unchanged same-frontier/no-reduction evidence.',
+    );
   }
   return errors;
 }
@@ -4071,6 +4220,12 @@ async function validatePackageFile(filePath, options = {}) {
       metadataRequiresCausalDecisionContract(metadata, fileStatus),
     status: fileStatus,
   }));
+  errors.push(...validateDecisionExperimentGate(content, metadata, relativePath, {
+    [LEDGER_VALIDATION_REQUIRES_LEDGER]:
+      phase !== VALIDATION_PHASE_ENTRY &&
+      metadataRequiresDecisionExperimentGate(metadata, fileStatus),
+    status: fileStatus,
+  }));
   errors.push(...validateModelFitContract(content, relativePath, {
     [LEDGER_VALIDATION_REQUIRES_LEDGER]:
       fileStatus === STATUS_ACTIVE && metadata !== null,
@@ -4871,6 +5026,12 @@ function buildDoctorSuggestion(error) {
       'interaction scan, a ping-pong stop rule, and an oscillation guard for ' +
       'returned same-frontier work.';
   }
+  if (/Decision Experiment Gate/iu.test(error)) {
+    return 'Add a Decision Experiment Gate with a decision question, tiny ' +
+      'architecture review, competing hypotheses, pre-edit focused probe, ' +
+      'success metrics, representative rerun command, and kill rule before ' +
+      'another runtime/scenario implementation slice.';
+  }
   if (/Sprint Strategy Brief/iu.test(error)) {
     return 'Add a Sprint Strategy Brief near the top of the active sprint: ' +
       'goal state, current causal thesis, competing hypotheses, confidence ' +
@@ -5023,6 +5184,12 @@ export function buildPackageDoctorLines(filePath, content, options = {}) {
     [LEDGER_VALIDATION_REQUIRES_LEDGER]:
       phase !== VALIDATION_PHASE_ENTRY &&
       metadataRequiresCausalDecisionContract(metadata, fileStatus),
+    status: fileStatus,
+  }));
+  errors.push(...validateDecisionExperimentGate(content, metadata, relativePath, {
+    [LEDGER_VALIDATION_REQUIRES_LEDGER]:
+      phase !== VALIDATION_PHASE_ENTRY &&
+      metadataRequiresDecisionExperimentGate(metadata, fileStatus),
     status: fileStatus,
   }));
   errors.push(...validateModelFitContract(content, relativePath, {

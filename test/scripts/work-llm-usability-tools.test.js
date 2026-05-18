@@ -63,6 +63,7 @@ test('shared package schema lists validator enums for LLM scaffolding', (t) => {
   t.match(rendered, /writeScope/u);
   t.match(rendered, /Core Logic Brief/u);
   t.match(rendered, /Causal Decision Contract/u);
+  t.match(rendered, /Decision Experiment Gate/u);
   t.match(rendered, /Canonical outcome/u);
   t.match(rendered, /State model or invariant/u);
   t.match(rendered, /Falsifying focused probe/u);
@@ -179,6 +180,11 @@ test('review subagent prompt allows metadata-only fixes inline',
   t.match(content, /Systemic interaction scan/u);
   t.match(content, /Ping-pong stop rule/u);
   t.match(content, /Oscillation guard/u);
+  t.match(content, /## Decision Experiment Gate/u);
+  t.match(content, /Decision question: Does operation_workflow_owner \/ workflow_progress/u);
+  t.match(content, /Pre-edit focused probe: `node --test test\/rebalancer\/workflow-progress\.test\.js`/u);
+  t.match(content, /Representative rerun: `npm run work:package:route-after-rerun/u);
+  t.match(content, /Kill rule/u);
   t.match(content, /Proof mapping: Implementation and tests must prove/u);
   t.match(content, /Wrong-slice trigger: Stop or split/u);
   t.notMatch(content, /Status: `not-needed`/u);
@@ -399,7 +405,10 @@ test('subagent prompt generator emits bounded task and ledger guidance',
     t.match(prompt, /## Core Logic Brief/u);
     t.match(prompt, /Status: `not-needed`/u);
     t.match(prompt, /## Causal Decision Contract/u);
+    t.match(prompt, /## Decision Experiment Gate/u);
     t.match(prompt, /## Systemic Thinking Check/u);
+    t.match(prompt, /Decision Experiment Gate/u);
+    t.match(prompt, /pre-edit focused probe must run/u);
     t.match(prompt, /competing explanations/u);
     t.match(prompt, /ping-pong stop rule/u);
     t.match(prompt, /## Output Budget/u);

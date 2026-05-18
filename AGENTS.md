@@ -79,6 +79,36 @@ or record `not-needed: no runtime, scenario, or shared contract decision
 changes`. Review and implementation subagents must check the brief against the
 actual code path and proof, not just package formatting.
 
+## Decision Experiment Gate Contract
+
+Before implementation starts, active runtime owner-boundary,
+scenario/release-gate, and causal-escalation packages must carry a
+`## Decision Experiment Gate` section. The gate turns the package into a
+falsifiable experiment: what theory is being tried, what implementation should
+move, what would prove it wrong, and when to stop local patching.
+
+Required fields:
+
+1. `Decision question`: the owner-boundary decision this package is testing.
+2. `Architecture review`: whether the route is local owner-boundary work,
+   owner-boundary migration, architecture/contract gap, or human route.
+3. `Competing hypotheses`: credible alternate explanations, including stale
+   evidence or wrong-owner interpretations.
+4. `Pre-edit focused probe`: the focused command that must run before runtime
+   edits unless blocked by the environment.
+5. `Success metrics`: the concrete metric, count, frontier movement, migration,
+   or representative-green condition expected to move.
+6. `Representative rerun`: the route-after-rerun or representative command that
+   can classify the result after focused proof.
+7. `Kill rule`: the unchanged same-frontier or no-reduction condition that
+   stops local patching for architecture or human escalation.
+
+Classification-only fast-path, pure classification, read/review/doc-only, and
+lightweight maintenance packages do not require this gate unless they promote
+runtime, scenario, script, report, or shared-contract implementation scope.
+Subagent prompts must include the gate and review/fix/implementation agents
+must test the decision question, not just the file list.
+
 ## Sprint Strategy Brief Contract
 
 Active scenario-driven, release-gate, and causal-escalation sprints must keep a

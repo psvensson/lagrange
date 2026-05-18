@@ -215,6 +215,35 @@ brief or record `not-needed: no runtime, scenario, or shared contract decision
 changes`. Subagent prompts include the brief so review and implementation check
 logic and proof against the same package contract.
 
+## Decision Experiment Gate
+
+Active runtime owner-boundary, scenario/release-gate, and causal-escalation
+packages must carry a `## Decision Experiment Gate` before implementation
+starts. The gate keeps the package focused on the theory and implementation
+being tested rather than on process administration.
+
+Required fields:
+
+1. `Decision question`
+2. `Architecture review`
+3. `Competing hypotheses`
+4. `Pre-edit focused probe`
+5. `Success metrics`
+6. `Representative rerun`
+7. `Kill rule`
+
+The pre-edit focused probe and representative rerun must name executable
+commands. Success metrics must name concrete metric/count/frontier movement,
+owner-boundary migration, or representative green. The kill rule must stop or
+escalate on unchanged same-frontier or no-reduction evidence.
+
+Classification-only fast-path, pure classification, read/review/doc-only, and
+lightweight maintenance packages do not require the gate unless implementation
+scope is promoted. The package scaffolder emits the gate for strict runtime and
+scenario lanes, validators enforce it before implementation, and subagent
+prompts include it so review, fix, and implementation agents test the same
+decision experiment.
+
 ## Tool-First LLM Workflow
 
 The workflow tools are the default entry path for all future packages, not a

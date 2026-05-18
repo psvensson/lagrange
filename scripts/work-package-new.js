@@ -527,6 +527,52 @@ function buildCausalDecisionContractLines(
   ];
 }
 
+function buildDecisionExperimentGateLines(lane, flags, proof, metadata) {
+  if (!coreLogicBriefRequiredForLane(lane)) {
+    return [];
+  }
+  const owner = normalizeText(flags[FLAG_OWNER]);
+  const boundary = normalizeText(flags[FLAG_BOUNDARY]);
+  const dominantReason = normalizeText(flags[FLAG_DOMINANT_REASON]);
+  const firstProof = firstFocusedProofCommand(proof);
+  const artifact = normalizeText(flags[FLAG_ARTIFACT]) || DEFAULT_ARTIFACT;
+  const expectedDelta =
+    normalizeText(metadata?.[RERUN_DECISION_FIELD]?.[
+      RERUN_DECISION_EXPECTED_DELTA_FIELD
+    ]) ||
+    DEFAULT_RERUN_EXPECTED_DELTA;
+  const representativeRerun = [
+    'npm run work:package:route-after-rerun -- --artifact',
+    artifact,
+    '--owner',
+    owner,
+    '--boundary',
+    boundary,
+    '--dominant-reason',
+    dominantReason,
+  ].join(' ');
+  return [
+    '## Decision Experiment Gate',
+    EMPTY_TEXT,
+    `- Decision question: Does ${owner} / ${boundary} still own ` +
+      `${dominantReason}, and what exact producer, consumer, or contract ` +
+      'fact must move before implementation is justified?',
+    '- Architecture review: Before runtime edits, confirm whether this is ' +
+      'still a local owner-boundary route, an owner-boundary migration, an ' +
+      'architecture/contract gap, or a human route.',
+    `- Competing hypotheses: ${dominantReason} is real owner debt; the ` +
+      'visible symptom is downstream lag; instrumentation or stale evidence ' +
+      'is misleading; a different owner boundary owns the next move.',
+    `- Pre-edit focused probe: \`${firstProof}\``,
+    `- Success metrics: ${expectedDelta}; at least one concrete metric, ` +
+      'count, frontier, migration, or representative-green condition must move.',
+    `- Representative rerun: \`${representativeRerun}\``,
+    '- Kill rule: If fresh representative evidence returns the same frontier ' +
+      'and dominant reason with no concrete metric reduction, stop for ' +
+      'architecture or human escalation instead of opening another local patch.',
+  ];
+}
+
 function buildLaneSufficiencyLine(lane) {
   if (!coreLogicBriefRequiredForLane(lane)) {
     return '- Why this lane is sufficient: bounded workflow/tooling scope unless changed.';
@@ -829,6 +875,8 @@ async function buildPackageContent(flags = {}) {
       forbiddenFiles,
       metadata,
     ),
+    EMPTY_TEXT,
+    ...buildDecisionExperimentGateLines(lane, flags, proof, metadata),
     EMPTY_TEXT,
     ...buildClassificationOnlyFastPathLines(isClassificationOnly),
     '## Expected Representative Delta',

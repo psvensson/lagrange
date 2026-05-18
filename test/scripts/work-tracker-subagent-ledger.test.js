@@ -19,6 +19,7 @@ import {
   validateCoreLogicBrief,
   validateCurrentBlockerPayloadFreshness,
   validateCurrentBlockerSnapshot,
+  validateDecisionExperimentGate,
   validateFrontierOscillationContract,
   validateModelFitContract,
   validateRepresentativeResidualContract,
@@ -383,6 +384,34 @@ const CAUSAL_DECISION_CONTRACT_INVALID_CONTENT = [
   '',
   '- Anti-symptom rationale: <reason>',
   '- Falsifying focused probe: read the file manually',
+  '',
+].join('\n');
+const DECISION_EXPERIMENT_GATE_VALID_CONTENT = [
+  '# Test Package',
+  '',
+  '## Decision Experiment Gate',
+  '',
+  '- Decision question: Does operation_workflow_owner / workflow_progress still own dispatch_pending, and what exact retry fact must move before implementation is justified?',
+  '- Architecture review: Confirm this is still a local owner-boundary route, owner-boundary migration, architecture contract gap, or human route.',
+  '- Competing hypotheses: dispatch_pending is real owner debt; startup active-gate lag is downstream; instrumentation is stale; another boundary owns the next move.',
+  '- Pre-edit focused probe: `node --test test/rebalancer/workflow-progress.test.js`',
+  '- Success metrics: retry count reduces, frontier migrates, or representative rolling-restart turns green.',
+  '- Representative rerun: `npm run work:package:route-after-rerun -- --artifact test-output/reports/rerun.report.json --owner operation_workflow_owner --boundary workflow_progress --dominant-reason dispatch_pending`',
+  '- Kill rule: If fresh representative evidence returns same-frontier unchanged with no concrete reduction, stop for architecture or human escalation.',
+  '',
+].join('\n');
+const DECISION_EXPERIMENT_GATE_INVALID_CONTENT = [
+  '# Test Package',
+  '',
+  '## Decision Experiment Gate',
+  '',
+  '- Decision question: <question>',
+  '- Architecture review: decide later',
+  '- Competing hypotheses: todo',
+  '- Pre-edit focused probe: read report manually',
+  '- Success metrics: better',
+  '- Representative rerun: inspect artifact',
+  '- Kill rule: continue locally',
   '',
 ].join('\n');
 const CAUSAL_DECISION_CONTRACT_OSCILLATION_METADATA = Object.freeze({
@@ -1867,6 +1896,47 @@ describe('work tracker causal decision contract validation', () => {
   assert.match(errors.join('\n'), /Systemic interaction scan/u);
   assert.match(errors.join('\n'), /Ping-pong stop rule/u);
   assert.match(errors.join('\n'), /Oscillation guard/u);
+  });
+});
+
+describe('work tracker decision experiment gate validation', () => {
+  it('requires Decision Experiment Gate when strict active packages ask for it', () => {
+    const errors = validateDecisionExperimentGate(
+      WORK_TRACKER_LEDGER_NO_LEDGER_CONTENT,
+      CAUSAL_DECISION_CONTRACT_OSCILLATION_METADATA,
+      WORK_TRACKER_LEDGER_TEST_FILE,
+      {requiresLedger: true, status: WORK_TRACKER_ACTIVE_STATUS},
+    );
+
+    assert.equal(errors.length, 1);
+    assert.match(errors[0], /Decision Experiment Gate section is required/u);
+  });
+
+  it('accepts a concrete Decision Experiment Gate', () => {
+    const errors = validateDecisionExperimentGate(
+      DECISION_EXPERIMENT_GATE_VALID_CONTENT,
+      CAUSAL_DECISION_CONTRACT_OSCILLATION_METADATA,
+      WORK_TRACKER_LEDGER_TEST_FILE,
+      {requiresLedger: true, status: WORK_TRACKER_ACTIVE_STATUS},
+    );
+
+    assert.deepEqual(errors, []);
+  });
+
+  it('reports placeholders, non-command probes, vague metrics, and missing stop rules', () => {
+    const errors = validateDecisionExperimentGate(
+      DECISION_EXPERIMENT_GATE_INVALID_CONTENT,
+      CAUSAL_DECISION_CONTRACT_OSCILLATION_METADATA,
+      WORK_TRACKER_LEDGER_TEST_FILE,
+      {requiresLedger: true, status: WORK_TRACKER_ACTIVE_STATUS},
+    );
+
+    assert.match(errors.join('\n'), /Decision question/u);
+    assert.match(errors.join('\n'), /Architecture review/u);
+    assert.match(errors.join('\n'), /Pre-edit focused probe must name a focused command/u);
+    assert.match(errors.join('\n'), /Success metrics/u);
+    assert.match(errors.join('\n'), /Representative rerun must name a focused command/u);
+    assert.match(errors.join('\n'), /Kill rule/u);
   });
 });
 

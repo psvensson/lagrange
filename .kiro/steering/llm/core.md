@@ -33,6 +33,12 @@ inputs/signals, state model or invariant, non-goals, proof mapping, and
 wrong-slice trigger. Small docs and lightweight maintenance may record
 `not-needed` when no runtime, scenario, or shared contract decision changes.
 
+Before implementation, strict runtime/scenario/causal packages must also carry
+a Decision Experiment Gate: decision question, architecture review, competing
+hypotheses, pre-edit focused probe, success metrics, representative rerun, and
+kill rule. The gate is not required for classification-only fast paths or
+lightweight maintenance unless implementation scope is promoted.
+
 Active scenario-driven, release-gate, and causal-escalation sprints must keep a
 Sprint Strategy Brief near the top of the sprint file: goal state, current
 causal thesis, competing hypotheses, confidence and evidence, expected green

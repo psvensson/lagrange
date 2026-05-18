@@ -218,6 +218,16 @@ Approved maintenance scope or roadmap row.
 - Ping-pong stop rule: Do not bounce between adjacent owners on the same unchanged artifact; require fresh representative evidence, a concrete metric reduction, owner/boundary migration proof, or architecture/human stop before another local patch.
 - Oscillation guard: If fresh representative evidence returns the same frontier or another symptom-shaped result, the next package must show concrete reduction, migration, green, or an architecture/human stop before another local patch.
 
+## Decision Experiment Gate
+
+- Decision question: Does topology_publication_owner / publication_convergence still own publication_pending, and which producer, active-gate consumer, or handoff-contract fact explains the remaining two pending reconcile nodes before successor implementation is justified?
+- Architecture review: Before runtime edits in the successor, confirm whether this remains a local topology_publication_owner boundary route, owner-boundary migration, architecture/contract gap, or human route.
+- Competing hypotheses: publication_pending is real publication-owner debt; active-gate is showing downstream lag; producer or consumer evidence is stale; the next owner boundary is different after the remaining node mismatch is isolated.
+- Pre-edit focused probe: `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-owner-reconcile-narrowing-20260518T171916Z.report.json --handoff-probe`
+- Success metrics: successor proof must reduce pending reconcile nodes, reduce missingPublishedCount, reduce active-gate disagreementNodes, migrate owner boundary, or turn representative rolling-restart green.
+- Representative rerun: `npm run work:package:route-after-rerun -- --artifact test-output/reports/rolling-restart-after-owner-reconcile-narrowing-20260518T171916Z.report.json --owner topology_publication_owner --boundary publication_convergence --dominant-reason publication_pending`
+- Kill rule: If fresh representative evidence returns publication_pending on the same frontier with no concrete metric reduction, stop for architecture or human escalation instead of opening another local runtime patch.
+
 ## Expected Representative Delta
 
 - Baseline artifact: `test-output/reports/rolling-restart-after-missing-published-normalization-20260518T155705Z.report.json`

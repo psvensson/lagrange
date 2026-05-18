@@ -35,6 +35,7 @@ const METADATA_FIELD_COMMIT_SCOPE = 'commitScope';
 const MODEL_FIT_FIELD_OUTPUT_PROFILE = 'outputProfile';
 const CORE_LOGIC_BRIEF_HEADING = '## Core Logic Brief';
 const CAUSAL_DECISION_CONTRACT_HEADING = '## Causal Decision Contract';
+const DECISION_EXPERIMENT_GATE_HEADING = '## Decision Experiment Gate';
 const MARKDOWN_LEVEL_TWO_HEADING_PREFIX = '## ';
 const OUTPUT_PROFILE_SMALL = 'small';
 const OUTPUT_PROFILE_MEDIUM = 'medium';
@@ -160,6 +161,13 @@ function causalDecisionContract(content) {
   ) || 'Not recorded.';
 }
 
+function decisionExperimentGate(content) {
+  return extractMarkdownLevelTwoSection(
+    content,
+    DECISION_EXPERIMENT_GATE_HEADING,
+  ) || 'Not recorded.';
+}
+
 function roleTask(role, metadata, packagePath) {
   if (role === ROLE_REVIEW) {
     return [
@@ -268,9 +276,15 @@ function buildSubagentPrompt(role, packagePath, content, args = []) {
     EMPTY_TEXT,
     causalDecisionContract(content),
     EMPTY_TEXT,
+    '## Decision Experiment Gate',
+    EMPTY_TEXT,
+    decisionExperimentGate(content),
+    EMPTY_TEXT,
     '## Systemic Thinking Check',
     EMPTY_TEXT,
+    '- Treat this role as part of the Decision Experiment Gate: test the decision question before treating implementation as justified.',
     '- Before edits, name at least two credible competing explanations for the same symptom, including one wrong-owner or instrumentation/staleness explanation.',
+    '- The pre-edit focused probe must run before runtime edits unless it is impossible in this environment; record the blocker instead of substituting narrative.',
     '- Scan producer, consumer, admission/gating, retry/lifecycle, and evidence-generation interactions before assigning the next slice.',
     '- If evidence has not changed since the last package, do not bounce to an adjacent owner; record the ping-pong stop rule and return a split, rerun, architecture gate, or human-escalation handoff.',
     '- Treat local proof as a falsifier for this owner boundary, not as representative success.',
