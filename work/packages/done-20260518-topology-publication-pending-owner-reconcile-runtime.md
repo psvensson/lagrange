@@ -3,7 +3,7 @@
 <!-- work-package
 {
   "schema": "work-package-v1",
-  "status": "active",
+  "status": "done",
   "opened": "2026-05-18",
   "lane": "runtime-owner-boundary",
   "scenario": "rolling-restart",
@@ -21,7 +21,7 @@
     "npm run test:static"
   ],
   "writeScope": [
-    "work/packages/active-20260518-topology-publication-pending-owner-reconcile-runtime.md",
+    "work/packages/done-20260518-topology-publication-pending-owner-reconcile-runtime.md",
     "work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md",
     "work/sprints/current-blocker.md",
     "work/sprints/current-blocker.json",
@@ -47,7 +47,7 @@
   ],
   "candidateRuntimeFiles": [],
   "commitScope": [
-    "work/packages/active-20260518-topology-publication-pending-owner-reconcile-runtime.md",
+    "work/packages/done-20260518-topology-publication-pending-owner-reconcile-runtime.md",
     "work/packages/done-20260518-topology-publication-pending-runtime-after-missing-published-reduction.md",
     "work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md",
     "work/sprints/current-blocker.md",
@@ -137,7 +137,7 @@
     "missingCausalEdge": "Determine whether publication owner reconcile should advance or close the OPEN epoch-1 publication_pending state for the two pending publication nodes.",
     "missingCausalEdgeProbe": "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-owner-reconcile-narrowing-20260518T171916Z.report.json --handoff-probe",
     "boundedProgressProof": "Bounded reconcile progress is one publication-owner runtime slice with focused owner tests before any representative rerun.",
-    "boundedProgressProofArtifact": "work/packages/active-20260518-topology-publication-pending-owner-reconcile-runtime.md and test-output/reports/rolling-restart-after-owner-reconcile-narrowing-20260518T171916Z.report.json",
+    "boundedProgressProofArtifact": "work/packages/done-20260518-topology-publication-pending-owner-reconcile-runtime.md and test-output/reports/rolling-restart-after-owner-reconcile-narrowing-20260518T171916Z.report.json",
     "expectedObservableTransition": "Fresh representative evidence reduced live active-gate disagreementNodes from 3 to 1 while retaining the same canonical publication_pending frontier; successor proof must reduce the remaining producer/active-gate publication mismatch, migrate owner boundary, or turn representative green.",
     "maxProgressBound": "one runtime-owner-boundary package before architecture or human escalation if publication_pending is unchanged",
     "sameFrontierFallback": "If fresh representative evidence returns publication_pending without concrete metric or state reduction, stop for architecture or human escalation instead of opening another local runtime package.",
@@ -177,7 +177,9 @@
     "selectedChoice": "human-directed-runtime-successor",
     "nextAction": "Run required review/fix/implementation sequencing before runtime edits."
   },
-  "predecessor": "work/packages/done-20260518-topology-publication-pending-runtime-after-missing-published-reduction.md"
+  "predecessor": "work/packages/done-20260518-topology-publication-pending-runtime-after-missing-published-reduction.md",
+  "closed": "2026-05-18",
+  "commitAndPushLedgerRequired": true
 }
 -->
 
@@ -279,7 +281,7 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 
 ## In Scope
 
-1. work/packages/active-20260518-topology-publication-pending-owner-reconcile-runtime.md
+1. work/packages/done-20260518-topology-publication-pending-owner-reconcile-runtime.md
 2. work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md
 3. work/sprints/current-blocker.md
 4. work/sprints/current-blocker.json
@@ -307,7 +309,7 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 - Intended minimum model: `gpt-5.3-codex`
 - Scope shape: `bounded-owner-runtime/current-frontier`
 - Output profile: `medium`
-- Owned files: `work/packages/active-20260518-topology-publication-pending-owner-reconcile-runtime.md`, `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md`, `work/sprints/current-blocker.md`, `work/sprints/current-blocker.json`, `work/model-ledger.jsonl`, `src/control-plane/publication-owner-evidence.js`, `src/control-plane/publication-owner-decision.js`, `src/control-plane/publication-recovery-gate.js`, `src/control-plane/publication-recovery-evidence.js`, `test/control-plane/publication-owner-stream.test.js`, `test/control-plane/publication-recovery-gate.test.js`, `test/control-plane/publication-recovery-evidence.test.js`
+- Owned files: `work/packages/done-20260518-topology-publication-pending-owner-reconcile-runtime.md`, `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md`, `work/sprints/current-blocker.md`, `work/sprints/current-blocker.json`, `work/model-ledger.jsonl`, `src/control-plane/publication-owner-evidence.js`, `src/control-plane/publication-owner-decision.js`, `src/control-plane/publication-recovery-gate.js`, `src/control-plane/publication-recovery-evidence.js`, `test/control-plane/publication-owner-stream.test.js`, `test/control-plane/publication-recovery-gate.test.js`, `test/control-plane/publication-recovery-evidence.test.js`
 - Forbidden files: `startup active-gate runtime`, `operation workflow / rebalancer_handoff runtime`, `startup readiness runtime`, `active-gate admission`, `handoff architecture`, `timeout budgets`
 - Frozen decisions: package scope and lane stay bounded unless explicitly escalated.
 - Escalation triggers: owned files expand beyond this package, runtime ownership changes, or representative scenario evidence changes.
@@ -318,22 +320,22 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 
 Required for this lane unless the user explicitly disables subagents.
 
-- [x] Review subagent recorded: Agent Planck (019e3c00-7d5f-7c12-b30f-91024bc89c44) reviewed `work/packages/active-20260518-topology-publication-pending-owner-reconcile-runtime.md`; result `fixes-required`.
-- [x] Fix subagent recorded or explicitly not needed: Agent Turing (019e3c04-5716-7c20-8c4e-abf2843dbacd) fixed `work/packages/active-20260518-topology-publication-pending-owner-reconcile-runtime.md`.
-- [x] Implementation subagent recorded: Agent Gibbs (019e3c0a-9dad-7ad0-843d-1af2ef6b22c2) implemented `work/packages/active-20260518-topology-publication-pending-owner-reconcile-runtime.md`; parent revalidated focused proof: yes.
+- [x] Review subagent recorded: Agent Planck (019e3c00-7d5f-7c12-b30f-91024bc89c44) reviewed `work/packages/done-20260518-topology-publication-pending-owner-reconcile-runtime.md`; result `fixes-required`.
+- [x] Fix subagent recorded or explicitly not needed: Agent Turing (019e3c04-5716-7c20-8c4e-abf2843dbacd) fixed `work/packages/done-20260518-topology-publication-pending-owner-reconcile-runtime.md`.
+- [x] Implementation subagent recorded: Agent Gibbs (019e3c0a-9dad-7ad0-843d-1af2ef6b22c2) implemented `work/packages/done-20260518-topology-publication-pending-owner-reconcile-runtime.md`; parent revalidated focused proof: yes.
 
 ## Subagent Progress Ledger
 
 Required when subagent sequencing is required. Each real subagent appends one checked update after every completed subtask; the Sequencing Ledger remains the role-completion proof.
 
 - [x] Agent Planck (019e3c00-7d5f-7c12-b30f-91024bc89c44) review context loaded: scope and blocker confirmed; evidence: `npm run work:context`, compact steering pack, active package, and predecessor package read; next: required canonical probes.
-- [x] Agent Planck (019e3c00-7d5f-7c12-b30f-91024bc89c44) review probe complete: state/cause confirmed and sprint inconsistency found; evidence: `npm run work:package:doctor -- --suggest work/packages/active-20260518-topology-publication-pending-owner-reconcile-runtime.md` failed on missing/invalid subagent ledger shape, `npm run work:scenario-route -- test-output/reports/rolling-restart-after-missing-published-normalization-20260518T155705Z.report.json --owner topology_publication_owner --boundary publication_convergence --dominant-reason publication_pending --explain publication_ack_convergence --markdown` passed with continue_local_fix, `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-missing-published-normalization-20260518T155705Z.report.json --handoff-probe` passed with pending owner reconcile count 2, and sprint architecture gate still named the prior UNKNOWN/no-debt successor and old artifact values; next: validate review handoff.
-- [x] Agent Planck (019e3c00-7d5f-7c12-b30f-91024bc89c44) review validation complete: package proof refreshed and review handoff recorded as fixes-required; evidence: rerun `npm run work:package:doctor -- --suggest work/packages/active-20260518-topology-publication-pending-owner-reconcile-runtime.md` and `npm run work:validate -- --pre-impl work/packages/active-20260518-topology-publication-pending-owner-reconcile-runtime.md` failed only because fix subagent proof was missing after this review result; next: fix subagent repairs sprint architecture gate stale text and records separate fix proof.
-- [x] Agent Turing (019e3c04-5716-7c20-8c4e-abf2843dbacd) fix context loaded: scope and blocker confirmed; evidence: `npm run work:context`, compact steering pack, `npm run work:package:doctor -- --suggest work/packages/active-20260518-topology-publication-pending-owner-reconcile-runtime.md`, active package ledger, and sprint architecture decision gate read; next: repair stale sprint gate narrative.
+- [x] Agent Planck (019e3c00-7d5f-7c12-b30f-91024bc89c44) review probe complete: state/cause confirmed and sprint inconsistency found; evidence: `npm run work:package:doctor -- --suggest work/packages/done-20260518-topology-publication-pending-owner-reconcile-runtime.md` failed on missing/invalid subagent ledger shape, `npm run work:scenario-route -- test-output/reports/rolling-restart-after-missing-published-normalization-20260518T155705Z.report.json --owner topology_publication_owner --boundary publication_convergence --dominant-reason publication_pending --explain publication_ack_convergence --markdown` passed with continue_local_fix, `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-missing-published-normalization-20260518T155705Z.report.json --handoff-probe` passed with pending owner reconcile count 2, and sprint architecture gate still named the prior UNKNOWN/no-debt successor and old artifact values; next: validate review handoff.
+- [x] Agent Planck (019e3c00-7d5f-7c12-b30f-91024bc89c44) review validation complete: package proof refreshed and review handoff recorded as fixes-required; evidence: rerun `npm run work:package:doctor -- --suggest work/packages/done-20260518-topology-publication-pending-owner-reconcile-runtime.md` and `npm run work:validate -- --pre-impl work/packages/done-20260518-topology-publication-pending-owner-reconcile-runtime.md` failed only because fix subagent proof was missing after this review result; next: fix subagent repairs sprint architecture gate stale text and records separate fix proof.
+- [x] Agent Turing (019e3c04-5716-7c20-8c4e-abf2843dbacd) fix context loaded: scope and blocker confirmed; evidence: `npm run work:context`, compact steering pack, `npm run work:package:doctor -- --suggest work/packages/done-20260518-topology-publication-pending-owner-reconcile-runtime.md`, active package ledger, and sprint architecture decision gate read; next: repair stale sprint gate narrative.
 - [x] Agent Turing (019e3c04-5716-7c20-8c4e-abf2843dbacd) fix probe complete: state/cause confirmed; evidence: sprint architecture decision gate still named UNKNOWN/no-debt successor, old UNKNOWN/epoch-0/missingPublishedCount=5 values, old `missing_published_nodes_present` producer, and old `snapshotCoverageNodeCount=0/5` state while active package and artifact require OPEN epoch 1, `publishedActive=1/5`, `missingPublishedCount=4`, producer `publication_pending`, `runtimePromotionAllowed=false`, and active-gate deferral at `snapshotCoverageNodeCount=3/5`; next: validate fixed sprint/package documentation.
-- [x] Agent Turing (019e3c04-5716-7c20-8c4e-abf2843dbacd) fix validation complete: package proof refreshed; evidence: `npm run work:scenario-route -- test-output/reports/rolling-restart-after-missing-published-normalization-20260518T155705Z.report.json --owner topology_publication_owner --boundary publication_convergence --dominant-reason publication_pending --explain publication_ack_convergence --markdown` passed with `continue_local_fix`, `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-missing-published-normalization-20260518T155705Z.report.json --handoff-probe` passed with producer `publication_pending`, pending reconcile count 2, and `runtimePromotionAllowed=false`, and `npm run work:validate -- --pre-impl work/packages/active-20260518-topology-publication-pending-owner-reconcile-runtime.md` passed after sequencing ledger repair; next: final fix handoff.
+- [x] Agent Turing (019e3c04-5716-7c20-8c4e-abf2843dbacd) fix validation complete: package proof refreshed; evidence: `npm run work:scenario-route -- test-output/reports/rolling-restart-after-missing-published-normalization-20260518T155705Z.report.json --owner topology_publication_owner --boundary publication_convergence --dominant-reason publication_pending --explain publication_ack_convergence --markdown` passed with `continue_local_fix`, `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-missing-published-normalization-20260518T155705Z.report.json --handoff-probe` passed with producer `publication_pending`, pending reconcile count 2, and `runtimePromotionAllowed=false`, and `npm run work:validate -- --pre-impl work/packages/done-20260518-topology-publication-pending-owner-reconcile-runtime.md` passed after sequencing ledger repair; next: final fix handoff.
 - [x] Agent Gibbs (019e3c0a-9dad-7ad0-843d-1af2ef6b22c2) implementation context and patch complete: added publication owner handoff narrowing for OPEN publication with zero ACK debt and active-gate owner-reconcile handoff evidence; evidence: required package doctor, scenario-route, handoff probe, focused file reads, and `npm test -- test/control-plane/publication-owner-stream.test.js test/control-plane/publication-recovery-gate.test.js test/control-plane/publication-recovery-evidence.test.js` passed with 426 assertions; next: run static and package validation.
-- [x] Agent Gibbs (019e3c0a-9dad-7ad0-843d-1af2ef6b22c2) implementation validation complete: package proof separated from inherited static blocker; evidence: focused publication tests passed, scoped literal/decision/runtime-grammar guardrails passed for `src/control-plane/publication-recovery-evidence.js`, `git diff --check -- work/packages/active-20260518-topology-publication-pending-owner-reconcile-runtime.md src/control-plane/publication-recovery-evidence.js test/control-plane/publication-recovery-evidence.test.js` passed, and `npm run work:validate -- --pre-impl work/packages/active-20260518-topology-publication-pending-owner-reconcile-runtime.md` passed; blocker: `npm run test:static` fails in existing `knip` unused-files/devDependency gate outside this package.
+- [x] Agent Gibbs (019e3c0a-9dad-7ad0-843d-1af2ef6b22c2) implementation validation complete: package proof separated from inherited static blocker; evidence: focused publication tests passed, scoped literal/decision/runtime-grammar guardrails passed for `src/control-plane/publication-recovery-evidence.js`, `git diff --check -- work/packages/done-20260518-topology-publication-pending-owner-reconcile-runtime.md src/control-plane/publication-recovery-evidence.js test/control-plane/publication-recovery-evidence.test.js` passed, and `npm run work:validate -- --pre-impl work/packages/done-20260518-topology-publication-pending-owner-reconcile-runtime.md` passed; blocker: `npm run test:static` fails in existing `knip` unused-files/devDependency gate outside this package.
 - [x] Agent Gibbs (019e3c0a-9dad-7ad0-843d-1af2ef6b22c2) implementation handoff complete: no subagent edits after this progress line; evidence: package pre-impl validation passed after implementation ledger updates; next: parent revalidation and closure decision.
 
 ## Subagent Attempt Ledger
@@ -381,6 +383,6 @@ Findings: sprint/current-blocker state mostly matches the active runtime success
 - Passed: `npm run audit:guideline:literals -- src/control-plane/publication-recovery-evidence.js test/control-plane/publication-recovery-evidence.test.js`
 - Passed: `npm run audit:guideline:decision-boundaries -- src/control-plane/publication-recovery-evidence.js test/control-plane/publication-recovery-evidence.test.js`
 - Passed with inherited ratchet output only: `npm run test:complexity:scoped -- src/control-plane/publication-recovery-evidence.js test/control-plane/publication-recovery-evidence.test.js`; no new helper is listed after parent refactor.
-- Passed: `git diff --check -- src/control-plane/publication-recovery-evidence.js test/control-plane/publication-recovery-evidence.test.js work/packages/active-20260518-topology-publication-pending-owner-reconcile-runtime.md work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md work/sprints/current-blocker.md work/sprints/current-blocker.json`
-- Passed: `npm run work:validate -- --pre-impl work/packages/active-20260518-topology-publication-pending-owner-reconcile-runtime.md`
+- Passed: `git diff --check -- src/control-plane/publication-recovery-evidence.js test/control-plane/publication-recovery-evidence.test.js work/packages/done-20260518-topology-publication-pending-owner-reconcile-runtime.md work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md work/sprints/current-blocker.md work/sprints/current-blocker.json`
+- Passed: `npm run work:validate -- --pre-impl work/packages/done-20260518-topology-publication-pending-owner-reconcile-runtime.md`
 - Blocked by inherited repo-wide static debt: `npm run test:static` fails at `knip --exclude exports` before touched-file checks with 86 unused files and unused devDependency `jscpd` in `package.json`.
