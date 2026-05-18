@@ -22,11 +22,11 @@ Boundary: `snapshot_coverage`
 
 Dominant reason: `owner_reconcile_pending`
 
-Current state: The publication handoff proof closed as classification-only with missingEdge=null and contractEdge=publication_active_gate_handoff_contract. The same representative artifact still routes first to publication_ack_convergence, but evidence-summary and the handoff probe expose the bounded next owner path as active_gate_snapshot_coverage under startup_active_gate_owner / snapshot_coverage: snapshot coverage is 2/5, the selected snapshot is repair_deferred/deferred_refresh/retry, runtimePromotionAllowed=false, and one pending reconcile node 35a891b8-c1a0-5064-9c6e-2acfba61c2a7 blocks owner membership publication.
+Current state: Implementation proof classifies the active-gate handoff without runtime edits. The unchanged representative artifact still routes first to publication_ack_convergence, while the focused handoff probe records missingEdge=null, contractEdge=publication_active_gate_handoff_contract, resultClassification=publication_active_gate_handoff_not_detected, and nextOwnerPath startup_active_gate_owner / snapshot_coverage with runtimePromotionAllowed=false. Active-gate explain keeps active_gate_snapshot_coverage deferred, non-frontier, snapshotCoverageNodeCount=2/5, selected snapshot repair_deferred/deferred_refresh/retry, and one pending reconcile node 35a891b8-c1a0-5064-9c6e-2acfba61c2a7.
 
 ## Next Action
 
-Run review/fix/implementation subagents before runtime edits. First prove whether the one-node owner_reconcile_pending active-gate snapshot coverage edge drains, needs a focused startup_active_gate_owner repair, or must migrate without reopening publication, rebalancer_handoff, startup readiness, harness timeout policy, or timeout budgets.
+No focused runtime edit is justified from this unchanged artifact. Treat this package as classification-only proof for bounded owner_reconcile_pending active-gate handoff evidence; keep publication, rebalancer_handoff, startup readiness, harness timeout policy, and timeout budgets frozen unless fresh canonical evidence changes owner, boundary, or required action.
 
 ## Proof Ladder
 
@@ -55,7 +55,7 @@ Escalation triggers:
 
 ## Representative Residual
 
-Status: `next-owner-handoff-open`
+Status: `classification-only`
 
 Scenario: `rolling-restart`
 
@@ -69,7 +69,7 @@ Boundary: `snapshot_coverage`
 
 Dominant reason: `owner_reconcile_pending`
 
-Next action: `Use the publication handoff probe and active-gate owner evidence to prove whether one pending reconcile node drains, needs a focused startup_active_gate_owner repair, or migrates without reopening publication or timeout scope.`
+Next action: `Focused proof keeps the one pending reconcile node as bounded deferred active-gate handoff evidence with runtimePromotionAllowed=false; no runtime repair in this package.`
 
 ## Causal Governance
 
@@ -79,9 +79,9 @@ Stop-condition check: `Use evidence-summary, topology-convergence --handoff-prob
 
 Expected causal-model change: `Focused proof should either reduce active-gate snapshot coverage by draining the one pending owner reconcile node, classify it as bounded deferred progress, migrate to a narrower owner boundary, or stop before touching publication, operation workflow, readiness, or timeout policy.`
 
-Representative outcome: `pending-before-rerun`
+Representative outcome: `classification-only`
 
-Causal debt: `Canonical scenario-route and causal-model still select publication_ack_convergence on the unchanged artifact, but the predecessor's focused handoff probe records no missing publication edge and identifies startup_active_gate_owner / snapshot_coverage as the next owner path. Active-gate evidence remains deferred with snapshotCoverageNodeCount=2/5, owner_reconcile_pending, selectedSnapshotRepairDeferred=true, retryAfterMs=1000, and runtimePromotionAllowed=false.`
+Causal debt: `Canonical scenario-route and causal-model still select publication_ack_convergence on the unchanged artifact, but the focused handoff probe records no missing publication edge and identifies startup_active_gate_owner / snapshot_coverage as the next owner path. Active-gate evidence remains deferred and non-frontier with snapshotCoverageNodeCount=2/5, owner_reconcile_pending, selectedSnapshotRepairDeferred=true, retryAfterMs=1000, runtimePromotionAllowed=false, and one pending reconcile node. This classifies the edge without proving a startup_active_gate_owner runtime repair.`
 
 Cross-boundary review: `Required before implementation because this package follows a cross-owner publication-to-active-gate handoff after recent publication, rebalancer_handoff, and startup readiness classifications.`
 
@@ -112,7 +112,7 @@ Missing causal edge: `Determine whether the one pending owner reconcile node can
 
 Missing causal edge probe: `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-publication-count-only-unknown-20260518T074802Z.report.json --handoff-probe`
 
-Bounded progress proof: `Pending: current proof only classifies the predecessor handoff. This package must use the handoff probe, active-gate explain output, owner files, and any focused runtime/test evidence to prove drain, classification, or migration for startup_active_gate_owner / snapshot_coverage.`
+Bounded progress proof: `Classification-only: evidence-summary keeps active_gate_snapshot_coverage as the bounded nextExpectedFrontier, handoff-probe records missingEdge=null and runtimePromotionAllowed=false, active-gate explain keeps the edge deferred and non-frontier, causal-model still selects publication_ack_convergence as the first critical path, and owner-files shows the selected owner boundary without requiring runtime file edits.`
 
 Bounded progress proof artifact: `test-output/reports/rolling-restart-after-publication-count-only-unknown-20260518T074802Z.report.json`
 
@@ -124,9 +124,9 @@ Same-frontier fallback: `If focused proof cannot move or classify the one-node a
 
 Expected next frontier: `startup_active_gate_owner / snapshot_coverage drains to readiness_startup_support, representative green, or a narrower owner-boundary successor`
 
-Result classification: `pending-before-probe`
+Result classification: `classification-only`
 
-Stop condition: `continue-local-fix`
+Stop condition: `classification-only-stop`
 
 Recent frontier history:
 

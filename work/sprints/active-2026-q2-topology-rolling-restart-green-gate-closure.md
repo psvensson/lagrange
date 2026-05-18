@@ -22,12 +22,12 @@ success is in scope.
 ## Sprint Strategy Brief
 
 - Goal state: representative `rolling-restart` is green with `active=5/5`, `snapshotCoverage=5/5`, `missingPublished=0`, and no timeout or admission relaxation.
-- Current causal thesis: the latest concrete publication frontier is bounded by active-gate owner reconcile backpressure; the active-gate handoff package now owns the one pending reconcile node proof.
+- Current causal thesis: the latest concrete publication frontier is bounded by active-gate owner reconcile backpressure; the active-gate handoff package classified the one pending reconcile node as bounded deferred handoff evidence with no runtime edit.
 - Competing hypotheses: H1 active-gate owner reconcile is the next real blocker; H2 publication still has producer-side debt hidden by the current handoff probe; H3 diagnostic frontier selection is lagging the bounded handoff proof; H4 a broader architecture handoff gap reappears if fresh evidence oscillates.
 - Confidence and evidence: medium-high for H1 from focused handoff proof and current-blocker evidence; medium for H2/H3 until the next fresh rerun; low-medium for H4 unless oscillation repeats.
-- Expected green path: prove whether the one-node active-gate owner reconcile edge drains, needs a focused startup_active_gate_owner repair, or migrates; then expect representative green, readiness support, or a narrower successor frontier.
+- Expected green path: close or hand off the classification-only active-gate owner reconcile proof, then use fresh canonical evidence to determine whether the representative gate drains, migrates, or selects a narrower successor frontier.
 - Wrong direction signals: fresh evidence reselects `publication_pending` without active-gate reconcile detail, priority residuals return, active-gate metrics stay flat after reconcile proof, or a package needs timeout, admission, readiness, or runtime edits outside the selected owner.
-- Next best package: active-gate owner reconcile proof for `startup_active_gate_owner / snapshot_coverage` using the publication handoff probe and active-gate explain output.
+- Next best package: no runtime package is selected from the unchanged artifact; close this classification-only proof or rerun representative evidence before opening any successor.
 - Stop or escalate rule: if publication and active-gate alternate again without metric reduction, open a causal or architecture handoff package instead of another local runtime package.
 
 ## Current Blocker Snapshot
@@ -35,7 +35,7 @@ success is in scope.
 Latest representative artifact:
 `test-output/reports/rolling-restart-after-publication-count-only-unknown-20260518T074802Z.report.json`.
 
-Canonical state after the publication handoff classification:
+Canonical state after the active-gate handoff classification:
 
 1. The current active package is
    `work/packages/active-20260518-startup-active-gate-snapshot-coverage-after-publication-handoff-classification.md`.
@@ -55,11 +55,13 @@ Canonical state after the publication handoff classification:
    expose the bounded next owner path as
    `active_gate_snapshot_coverage / startup_active_gate_owner /
    snapshot_coverage / owner_reconcile_pending`.
-7. Active-gate evidence is deferred with `snapshotCoverageNodeCount=2/5`,
+7. Active-gate evidence is deferred and non-frontier with `snapshotCoverageNodeCount=2/5`,
    `selectedSnapshotRepairDeferred=true`, `retryAfterMs=1000`,
    `runtimePromotionAllowed=false`, and one pending reconcile node
    (`35a891b8-c1a0-5064-9c6e-2acfba61c2a7`).
-8. Publication runtime, rebalancer handoff, startup readiness, active-gate
+8. The implementation proof records this package as `classification-only`;
+   no startup_active_gate_owner runtime or test files were edited.
+9. Publication runtime, rebalancer handoff, startup readiness, active-gate
    admission, and timeout budgets stay frozen unless fresh canonical evidence
    changes owner, boundary, or required action.
 
@@ -71,17 +73,17 @@ Visible first frontier: publication_ack_convergence / topology_publication_owner
 Active package owner: startup_active_gate_owner
 Active package boundary: snapshot_coverage
 Selected cause: bounded next owner path from publication handoff probe with owner_reconcile_pending
-Required action: run review/fix/implementation subagents before runtime edits; prove whether the one pending reconcile node drains, needs focused startup_active_gate_owner repair, or migrates
+Required action: classification-only proof recorded; close or hand off without runtime edits, or rerun fresh representative evidence before selecting any successor
 Runtime promotion allowed: false
 Priority residual: classified bounded in done-20260518-priority-recovery-rebalancer-handoff-after-publication-count-only-classification.md
 Extractor split: scenario-route and causal-model still select publication as visible first frontier; evidence-summary and handoff probe identify active-gate snapshot coverage as bounded next owner path
 Publication state: OPEN epoch=1, publishedActive=1/5, missingPublishedCount=4, prioritySpreadPending=true
 Focused predecessor implementation: UNKNOWN count-only/no-node-list debt -> unpublished_observation/not_started
 Current active-gate state: deferred, snapshotCoverageNodeCount=2/5, owner_reconcile_pending, snapshot_repair_deferred, one pending reconcile node 35a891b8-c1a0-5064-9c6e-2acfba61c2a7
-Goal: classify, reduce, or migrate the one-node active-gate owner reconcile handoff without reopening publication, rebalancer_handoff, readiness, or timeout-budget work
+Goal: preserve classification-only proof for the one-node active-gate owner reconcile handoff without reopening publication, rebalancer_handoff, readiness, or timeout-budget work
 Allowed edits: package, sprint handoff/tracker, model-ledger proof, and declared startup_active_gate_owner candidate files after subagent sequencing is clean
 Forbidden edits: publication convergence runtime; operation workflow/rebalancer handoff runtime; startup readiness runtime; harness timeout increases
-Required latest proof: npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-publication-count-only-unknown-20260518T074802Z.report.json --handoff-probe, plus active-gate explain, evidence-summary, causal-model, owner-files, and work:advance before runtime edits
+Required latest proof: evidence-summary, handoff-probe, active-gate explain, causal-model, owner-files, package doctor, validation, and diff checks; runtime edits remain unwarranted for this artifact
 Allowed stop modes: representative-green, migrated, reduced, same-frontier, classification-only, architecture-gap, human-escalation
 ```
 
