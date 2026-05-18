@@ -12,7 +12,7 @@ Scenario: `rolling-restart`
 
 Artifact: `test-output/reports/rolling-restart-after-active-gate-classification-20260518T043001Z.report.json`
 
-Playback: `test-output/reports/.playback/rolling-restart-after-active-gate-classification-20260518T043001Z`
+Playback: `test-output/reports/.playback/rolling-restart-after-active-gate-classification-20260518T043001Z/rolling-restart`
 
 ## Boundary
 

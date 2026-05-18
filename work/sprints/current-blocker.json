@@ -7,7 +7,7 @@
   "lane": "causal-escalation",
   "scenario": "rolling-restart",
   "artifact": "test-output/reports/rolling-restart-after-active-gate-classification-20260518T043001Z.report.json",
-  "playback": "test-output/reports/.playback/rolling-restart-after-active-gate-classification-20260518T043001Z",
+  "playback": "test-output/reports/.playback/rolling-restart-after-active-gate-classification-20260518T043001Z/rolling-restart",
   "owner": "operation_workflow_owner",
   "boundary": "workflow_progress",
   "dominantReason": "priority_recovery_progress_blocked",
