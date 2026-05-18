@@ -104,22 +104,22 @@ Canonical state after the fresh rerun:
 ## Current Edge Card
 
 ```text
-Representative artifact: test-output/reports/rolling-restart-after-unknown-no-debt-pending-runtime-20260518T141836Z.report.json
-Visible first frontier: publication_ack_convergence / topology_publication_owner / publication_convergence / missing_published_nodes_present
+Representative artifact: test-output/reports/rolling-restart-after-missing-published-normalization-20260518T155705Z.report.json
+Visible first frontier: publication_ack_convergence / topology_publication_owner / publication_convergence / publication_pending in test-output/reports/rolling-restart-after-missing-published-normalization-20260518T155705Z.report.json.
+Active package: work/packages/active-20260518-topology-publication-pending-runtime-after-missing-published-reduction.md
 Active package owner: topology_publication_owner
 Active package boundary: publication_convergence
-Selected cause: focused UNKNOWN/no-debt owner proof passed locally, but representative evidence returned to missingPublishedCount=5 on the same owner/boundary
-Required action: run required review/fix/implementation subagent sequencing for one bounded topology publication owner runtime package
-Runtime promotion allowed: one human-directed publication-owner runtime successor; active-gate runtimePromotionAllowed=false
-Priority residual: zero witnesses in fresh artifact
-Extractor split: scenario-route/evidence-summary/causal-model select publication first; handoff probe classifies active-gate as deferred with runtimePromotionAllowed=false
-Publication state: fresh artifact publicationStatus=unknown, publicationEpoch=0, pendingAckCount=0, missingPublishedCount=5, publicationPending=true, ackState=unavailable, streamOutcome=not_started
-Focused predecessor implementation: bounded publication owner unknown/no-debt normalization; previous reduced missing-published package drained one artifact shape but the fresh representative reopened it
-Current active-gate state: deferred, snapshotCoverageNodeCount=0/5, selected_snapshot_source_timeout on 11601fe0-72d6-5853-8590-ec2881853e72, runtimePromotionAllowed=false
-Goal: reduce or classify the owner-local missing-published publication frontier without widening into downstream owners
-Allowed edits: active runtime package, publication owner runtime/test files, sprint, current-blocker handoff files, and model ledger
-Forbidden edits: startup active-gate runtime; operation workflow/rebalancer handoff runtime; startup readiness runtime; active-gate admission; handoff architecture; harness timeout increases
-Required latest proof: evidence-summary, scenario-route, causal-model, priority residual extraction, subagent ledgers, focused owner tests, package validation, and representative route proof
+Selected cause: publication_pending
+Required action: Causal gate selects the route-after-rerun local runtime path; close this gate and open a bounded runtime-owner-boundary successor for topology_publication_owner / publication_convergence / publication_pending.
+Representative status: same-frontier
+Causal outcome: continue_local_fix
+Architecture gate: selected / human-directed-runtime-successor
+Expected delta: Classify returned publication_pending as bounded progress, rerun-needed, architecture/human escalation, or explicitly approved runtime successor.
+Current state: Fresh representative evidence reduced the missing_published_nodes_present package but returned to a recently closed same-owner publication_pending frontier; package doctor flags this as frontier oscillation before another local runtime patch.
+Allowed edits: work/packages/active-20260518-topology-publication-pending-runtime-after-missing-published-reduction.md, work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md, work/sprints/current-blocker.md, work/sprints/current-blocker.json, work/model-ledger.jsonl
+Candidate runtime files: src/control-plane/publication-owner-evidence.js, src/control-plane/publication-owner-decision.js, src/control-plane/publication-recovery-gate.js, src/control-plane/publication-recovery-evidence.js, test/control-plane/publication-owner-stream.test.js, test/control-plane/publication-recovery-gate.test.js, test/control-plane/publication-recovery-evidence.test.js
+Forbidden edits: No startup active-gate, operation workflow, readiness, admission, handoff architecture, timeout, or publication runtime edit may start from this package without an explicit selected route.
+Required latest proof: npm run work:evidence-summary -- test-output/reports/rolling-restart-after-missing-published-normalization-20260518T155705Z.report.json, npm run work:scenario-route -- test-output/reports/rolling-restart-after-missing-published-normalization-20260518T155705Z.report.json --owner topology_publication_owner --boundary publication_convergence --dominant-reason publication_pending --explain publication_ack_convergence --markdown, npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-missing-published-normalization-20260518T155705Z.report.json
 Allowed stop modes: representative-green, migrated, reduced, same-frontier, classification-only, architecture-gap, human-escalation
 ```
 
@@ -768,28 +768,3 @@ The sprint cannot close until:
   `pendingReconcileCount=0` and `nextAction=wait_owner_recovery`, and
   priority recovery remains subordinate with two unsplit workflow-progress
   witnesses.
-
-## Current Next Action
-
-Continue with the publication convergence successor after rebalancer handoff
-classification:
-
-```text
-work/packages/done-20260518-rolling-restart-topology-publication-owner-publication-conve.md
-test-output/reports/rolling-restart-after-publication-count-only-unknown-20260518T074802Z.report.json
-```
-
-The visible first frontier in `work:evidence-summary`,
-`analyze:topology-convergence`, and `analyze:causal-model` remains
-`publication_ack_convergence / topology_publication_owner /
-publication_convergence / publication_pending`, but the publication evidence is
-now concrete OPEN epoch-1 state. The intervening
-`operation_workflow_owner / rebalancer_handoff` package classified the five
-retry-scheduled witnesses as bounded remote handoff retries, so the next
-checkpoint is the required review subagent and focused producer-consumer
-publication proof.
-
-Keep publication runtime, startup active-gate runtime, startup readiness
-runtime, active-gate admission, timeout budget increases,
-terminal-progress selection, and closed handoff-probe architecture proof frozen
-unless fresh canonical evidence reselects them.

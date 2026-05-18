@@ -59,6 +59,15 @@ import {
   coreLogicBriefRequiredForLane,
 } from './work-package-schema.js';
 
+const [
+  CORE_LOGIC_BRIEF_CANONICAL_OUTCOME_FIELD,
+  CORE_LOGIC_BRIEF_INPUTS_FIELD,
+  CORE_LOGIC_BRIEF_MODEL_FIELD,
+  CORE_LOGIC_BRIEF_NON_GOALS_FIELD,
+  CORE_LOGIC_BRIEF_PROOF_FIELD,
+  CORE_LOGIC_BRIEF_WRONG_SLICE_FIELD,
+] = CORE_LOGIC_BRIEF_FIELDS;
+
 const ENCODING_UTF8 = 'utf8';
 const EMPTY_TEXT = '';
 const NUM_ZERO = 0;
@@ -131,7 +140,32 @@ const COMMIT_LEDGER_POLICY_OPENED_ON_OR_AFTER = '2026-05-14';
 const SUBAGENT_ATTEMPT_LEDGER_POLICY_OPENED_AFTER = '2026-05-18';
 const MODEL_FIT_HEADING = '## Model Fit';
 const CORE_LOGIC_BRIEF_HEADING = '## Core Logic Brief';
+const CAUSAL_DECISION_CONTRACT_HEADING = '## Causal Decision Contract';
 const SPRINT_STRATEGY_BRIEF_HEADING = '## Sprint Strategy Brief';
+const CURRENT_EDGE_CARD_HEADING = '## Current Edge Card';
+const LEGACY_CURRENT_NEXT_ACTION_HEADING = '## Current Next Action';
+const CURRENT_EDGE_CARD_CODE_FENCE_OPEN = '```text';
+const CURRENT_EDGE_CARD_CODE_FENCE_CLOSE = '```';
+const CURRENT_EDGE_CARD_ALLOWED_STOP_MODES =
+  'representative-green, migrated, reduced, same-frontier, ' +
+  'classification-only, architecture-gap, human-escalation';
+const CURRENT_EDGE_CARD_FIELD_PACKAGE = 'active package';
+const CURRENT_EDGE_CARD_FIELD_ARTIFACT = 'artifact';
+const CURRENT_EDGE_CARD_FIELD_OWNER = 'owner';
+const CURRENT_EDGE_CARD_FIELD_BOUNDARY = 'boundary';
+const CURRENT_EDGE_CARD_FIELD_DOMINANT_REASON = 'dominant reason';
+const CURRENT_EDGE_CARD_FIELD_FRONTIER = 'current first frontier';
+const CURRENT_EDGE_CARD_FIELD_NEXT_ACTION = 'next action';
+const CURRENT_EDGE_CARD_LABEL_REPRESENTATIVE_ARTIFACT =
+  'Representative artifact';
+const CURRENT_EDGE_CARD_LABEL_VISIBLE_FIRST_FRONTIER =
+  'Visible first frontier';
+const CURRENT_EDGE_CARD_LABEL_ACTIVE_PACKAGE = 'Active package';
+const CURRENT_EDGE_CARD_LABEL_ACTIVE_PACKAGE_OWNER = 'Active package owner';
+const CURRENT_EDGE_CARD_LABEL_ACTIVE_PACKAGE_BOUNDARY =
+  'Active package boundary';
+const CURRENT_EDGE_CARD_LABEL_SELECTED_CAUSE = 'Selected cause';
+const CURRENT_EDGE_CARD_LABEL_REQUIRED_ACTION = 'Required action';
 const COMMIT_LEDGER_COMMIT_LABEL = 'Focused package commit';
 const COMMIT_LEDGER_PUSHED_LABEL = 'Pushed to';
 const COMMIT_LEDGER_FOCUSED_SLICE_LABEL =
@@ -145,6 +179,25 @@ const MODEL_FIT_FORBIDDEN_FILES_LABEL = 'Forbidden files';
 const MODEL_FIT_FROZEN_DECISIONS_LABEL = 'Frozen decisions';
 const MODEL_FIT_ESCALATION_TRIGGERS_LABEL = 'Escalation triggers';
 const MODEL_FIT_FOCUSED_PROOF_LABEL = 'Focused proof';
+const CAUSAL_DECISION_CONTRACT_TABLE_LABEL = 'Decision table';
+const CAUSAL_DECISION_CONTRACT_ANTI_SYMPTOM_LABEL =
+  'Anti-symptom rationale';
+const CAUSAL_DECISION_CONTRACT_FALSIFYING_PROBE_LABEL =
+  'Falsifying focused probe';
+const CAUSAL_DECISION_CONTRACT_COMPETING_EXPLANATIONS_LABEL =
+  'Competing explanations';
+const CAUSAL_DECISION_CONTRACT_SYSTEMIC_INTERACTION_SCAN_LABEL =
+  'Systemic interaction scan';
+const CAUSAL_DECISION_CONTRACT_PING_PONG_STOP_RULE_LABEL =
+  'Ping-pong stop rule';
+const CAUSAL_DECISION_CONTRACT_OSCILLATION_GUARD_LABEL =
+  'Oscillation guard';
+const CAUSAL_DECISION_CONTRACT_TABLE_HEADER_PATTERN =
+  /\|\s*Signal\s*\|\s*Normalized value\s*\|\s*Owner interpretation\s*\|\s*Emitted outcome\s*\|\s*Expected delta\s*\|\s*Disproof probe\s*\|/iu;
+const CAUSAL_DECISION_CONTRACT_TABLE_ROW_PATTERN =
+  /^\|\s*(?!\s*Signal\s*\|)(?!\s*-+\s*\|)[^|\n]+\|[^|\n]+\|[^|\n]+\|[^|\n]+\|[^|\n]+\|[^|\n]+\|\s*$/imu;
+const GENERIC_CORE_LOGIC_MODEL_PATTERN =
+  /\bCollect evidence,\s*normalize one\b[\s\S]{0,120}\bthen use one explicit state model,\s*decision table,\s*or invariant\b/iu;
 const SPRINT_STRATEGY_BRIEF_GOAL_STATE_LABEL = 'Goal state';
 const SPRINT_STRATEGY_BRIEF_CURRENT_CAUSAL_THESIS_LABEL =
   'Current causal thesis';
@@ -633,10 +686,28 @@ function extractCoreLogicBriefSection(content) {
   return extractMarkdownLevelTwoSection(content, CORE_LOGIC_BRIEF_HEADING);
 }
 
+function extractCausalDecisionContractSection(content) {
+  return extractMarkdownLevelTwoSection(
+    content,
+    CAUSAL_DECISION_CONTRACT_HEADING,
+  );
+}
+
 function extractSprintStrategyBriefSection(content) {
   return extractMarkdownLevelTwoSection(
     content,
     SPRINT_STRATEGY_BRIEF_HEADING,
+  );
+}
+
+function extractCurrentEdgeCardSection(content) {
+  return extractMarkdownLevelTwoSection(content, CURRENT_EDGE_CARD_HEADING);
+}
+
+function extractLegacyCurrentNextActionSection(content) {
+  return extractMarkdownLevelTwoSection(
+    content,
+    LEGACY_CURRENT_NEXT_ACTION_HEADING,
   );
 }
 
@@ -1554,6 +1625,195 @@ export function validateCoreLogicBrief(content, filePath, options = {}) {
         findCoreLogicBriefField(section, label),
       ),
     );
+  }
+  if (
+    options.rejectGeneric === true &&
+    GENERIC_CORE_LOGIC_MODEL_PATTERN.test(
+      findCoreLogicBriefField(section, CORE_LOGIC_BRIEF_MODEL_FIELD) ||
+        EMPTY_TEXT,
+    )
+  ) {
+    errors.push(
+      `${filePath}: Core Logic Brief ${CORE_LOGIC_BRIEF_MODEL_FIELD} ` +
+      'must name the concrete decision model; move generic scaffolding into ' +
+      `${CAUSAL_DECISION_CONTRACT_HEADING} before implementation.`,
+    );
+  }
+  return errors;
+}
+
+function findCausalDecisionContractField(section, label) {
+  const fieldPattern = new RegExp(
+    `${escapeRegExp(label)}:\\s*([^\\n]+)`,
+    'iu',
+  );
+  const match = fieldPattern.exec(section);
+  return match ? normalizeLedgerFieldValue(match[NUM_ONE]) : null;
+}
+
+function validateCausalDecisionContractField(filePath, label, value) {
+  if (value === null) {
+    return [`${filePath}: Causal Decision Contract is missing ${label}.`];
+  }
+  if (
+    value.length === NUM_ZERO ||
+    MODEL_FIT_EMPTY_VALUE_PATTERN.test(value) ||
+    LEDGER_TEMPLATE_PLACEHOLDER_PATTERN.test(value) ||
+    value.includes(LEDGER_PENDING_BEFORE_IMPLEMENTATION_MARKER)
+  ) {
+    return [
+      `${filePath}: Causal Decision Contract ${label} must be concrete.`,
+    ];
+  }
+  return [];
+}
+
+function validateCausalDecisionContractTable(section, filePath) {
+  const errors = [];
+  if (!CAUSAL_DECISION_CONTRACT_TABLE_HEADER_PATTERN.test(section)) {
+    errors.push(
+      `${filePath}: Causal Decision Contract ${CAUSAL_DECISION_CONTRACT_TABLE_LABEL} ` +
+      'must include columns Signal, Normalized value, Owner interpretation, ' +
+      'Emitted outcome, Expected delta, and Disproof probe.',
+    );
+  }
+  if (!CAUSAL_DECISION_CONTRACT_TABLE_ROW_PATTERN.test(section)) {
+    errors.push(
+      `${filePath}: Causal Decision Contract ${CAUSAL_DECISION_CONTRACT_TABLE_LABEL} ` +
+      'must include at least one concrete decision row.',
+    );
+  }
+  if (
+    LEDGER_TEMPLATE_PLACEHOLDER_PATTERN.test(section) ||
+    section.includes(LEDGER_PENDING_BEFORE_IMPLEMENTATION_MARKER)
+  ) {
+    errors.push(
+      `${filePath}: Causal Decision Contract ${CAUSAL_DECISION_CONTRACT_TABLE_LABEL} ` +
+      'must not contain placeholders or pending markers.',
+    );
+  }
+  return errors;
+}
+
+function metadataRequiresCausalDecisionContract(metadata, fileStatus) {
+  return fileStatus === STATUS_ACTIVE &&
+    metadata !== null &&
+    coreLogicBriefRequiredForLane(metadataLane(metadata));
+}
+
+function metadataRequiresOscillationGuard(metadata, fileStatus) {
+  if (!metadataRequiresCausalDecisionContract(metadata, fileStatus)) {
+    return false;
+  }
+  const architectureGate = metadata?.[ARCHITECTURE_DECISION_GATE_FIELD];
+  const scenarioClosure =
+    metadata?.[SCENARIO_CAUSAL_CLOSURE_METADATA_FIELD] || {};
+  return (
+    isObjectRecord(architectureGate) &&
+    normalizeLedgerText(architectureGate.trigger) ===
+      ARCHITECTURE_DECISION_GATE_TRIGGER_FRONTIER_OSCILLATION
+  ) ||
+    normalizeLedgerText(
+      scenarioClosure[SCENARIO_CAUSAL_CLOSURE_OSCILLATION_CHECK_FIELD],
+    ).length > NUM_ZERO ||
+    normalizeMetadataStringList(
+      scenarioClosure[SCENARIO_CAUSAL_CLOSURE_RECENT_FRONTIER_HISTORY_FIELD],
+    ).length > NUM_ZERO;
+}
+
+export function validateCausalDecisionContract(
+  content,
+  metadata,
+  filePath,
+  options = {},
+) {
+  const requiresContract =
+    options[LEDGER_VALIDATION_REQUIRES_LEDGER] === true;
+  const section = extractCausalDecisionContractSection(content);
+  if (!section) {
+    return requiresContract ?
+      [
+        `${filePath}: Causal Decision Contract section is required for ` +
+        'active scenario/runtime packages.',
+      ] :
+      [];
+  }
+  const errors = [];
+  errors.push(...validateCausalDecisionContractTable(section, filePath));
+  const antiSymptom = findCausalDecisionContractField(
+    section,
+    CAUSAL_DECISION_CONTRACT_ANTI_SYMPTOM_LABEL,
+  );
+  errors.push(...validateCausalDecisionContractField(
+    filePath,
+    CAUSAL_DECISION_CONTRACT_ANTI_SYMPTOM_LABEL,
+    antiSymptom,
+  ));
+  const falsifyingProbe = findCausalDecisionContractField(
+    section,
+    CAUSAL_DECISION_CONTRACT_FALSIFYING_PROBE_LABEL,
+  );
+  errors.push(...validateCausalDecisionContractField(
+    filePath,
+    CAUSAL_DECISION_CONTRACT_FALSIFYING_PROBE_LABEL,
+    falsifyingProbe,
+  ));
+  if (
+    falsifyingProbe !== null &&
+    !MODEL_FIT_FOCUSED_PROOF_COMMAND_PATTERN.test(falsifyingProbe)
+  ) {
+    errors.push(
+      `${filePath}: Causal Decision Contract ` +
+      `${CAUSAL_DECISION_CONTRACT_FALSIFYING_PROBE_LABEL} must name a ` +
+      'focused command.',
+    );
+  }
+  errors.push(...validateCausalDecisionContractField(
+    filePath,
+    CAUSAL_DECISION_CONTRACT_COMPETING_EXPLANATIONS_LABEL,
+    findCausalDecisionContractField(
+      section,
+      CAUSAL_DECISION_CONTRACT_COMPETING_EXPLANATIONS_LABEL,
+    ),
+  ));
+  errors.push(...validateCausalDecisionContractField(
+    filePath,
+    CAUSAL_DECISION_CONTRACT_SYSTEMIC_INTERACTION_SCAN_LABEL,
+    findCausalDecisionContractField(
+      section,
+      CAUSAL_DECISION_CONTRACT_SYSTEMIC_INTERACTION_SCAN_LABEL,
+    ),
+  ));
+  errors.push(...validateCausalDecisionContractField(
+    filePath,
+    CAUSAL_DECISION_CONTRACT_PING_PONG_STOP_RULE_LABEL,
+    findCausalDecisionContractField(
+      section,
+      CAUSAL_DECISION_CONTRACT_PING_PONG_STOP_RULE_LABEL,
+    ),
+  ));
+  if (metadataRequiresOscillationGuard(metadata, options.status)) {
+    const oscillationGuard = findCausalDecisionContractField(
+      section,
+      CAUSAL_DECISION_CONTRACT_OSCILLATION_GUARD_LABEL,
+    );
+    errors.push(...validateCausalDecisionContractField(
+      filePath,
+      CAUSAL_DECISION_CONTRACT_OSCILLATION_GUARD_LABEL,
+      oscillationGuard,
+    ));
+    if (
+      oscillationGuard !== null &&
+      !/\b(?:oscillation|same-frontier|symptom|frontier)\b/iu.test(
+        oscillationGuard,
+      )
+    ) {
+      errors.push(
+        `${filePath}: Causal Decision Contract ` +
+        `${CAUSAL_DECISION_CONTRACT_OSCILLATION_GUARD_LABEL} must explain ` +
+        'why this is not another same-frontier symptom patch.',
+      );
+    }
   }
   return errors;
 }
@@ -3701,6 +3961,15 @@ async function validatePackageFile(filePath, options = {}) {
       phase !== VALIDATION_PHASE_ENTRY &&
       fileStatus === STATUS_ACTIVE &&
       metadataRequiresCoreLogicBrief(metadata),
+    rejectGeneric:
+      phase !== VALIDATION_PHASE_ENTRY &&
+      metadataRequiresCausalDecisionContract(metadata, fileStatus),
+  }));
+  errors.push(...validateCausalDecisionContract(content, metadata, relativePath, {
+    [LEDGER_VALIDATION_REQUIRES_LEDGER]:
+      phase !== VALIDATION_PHASE_ENTRY &&
+      metadataRequiresCausalDecisionContract(metadata, fileStatus),
+    status: fileStatus,
   }));
   errors.push(...validateModelFitContract(content, relativePath, {
     [LEDGER_VALIDATION_REQUIRES_LEDGER]:
@@ -3800,7 +4069,54 @@ async function validateSprintFile(filePath) {
   errors.push(...validateSprintStrategyBrief(content, relativePath, {
     [LEDGER_VALIDATION_REQUIRES_LEDGER]: fileStatus === STATUS_ACTIVE,
   }));
+  if (fileStatus === STATUS_ACTIVE) {
+    const activePayload = await buildActiveSprintCurrentBlockerPayload(filePath);
+    if (activePayload && isScenarioPayload(activePayload)) {
+      errors.push(...validateSprintCurrentEdgeCard(
+        content,
+        relativePath,
+        activePayload,
+      ));
+      errors.push(...validateLegacyCurrentNextActionSection(
+        content,
+        relativePath,
+      ));
+    }
+  }
   return errors;
+}
+
+function isScenarioPayload(payload) {
+  const scenario = normalizeLedgerText(payload?.scenario).toLowerCase();
+  return scenario.length > NUM_ZERO &&
+    scenario !== SCENARIO_NONE &&
+    scenario !== SCENARIO_UNKNOWN &&
+    scenario !== SCENARIO_TEMPLATE_VALUE;
+}
+
+async function buildActiveSprintCurrentBlockerPayload(filePath) {
+  const activeSprintFile = await findActiveSprintFile();
+  if (
+    !activeSprintFile ||
+    normalizeRelativePath(activeSprintFile) !== normalizeRelativePath(filePath)
+  ) {
+    return null;
+  }
+  const activePackageFile = await findActivePackageFile(activeSprintFile);
+  if (!activePackageFile) {
+    return null;
+  }
+  const activePackageRelativePath = normalizeRelativePath(activePackageFile);
+  const packageContent = await readTextFile(activePackageFile);
+  const metadata = parsePackageMetadata(
+    packageContent,
+    activePackageRelativePath,
+  );
+  return metadata ?
+    buildCurrentBlockerPayload(activeSprintFile, activePackageFile, metadata, {
+      packageHistoryEntries: await collectPackageHistoryEntries(),
+    }) :
+    null;
 }
 
 async function resolveValidationTargets(args) {
@@ -4446,6 +4762,14 @@ function buildDoctorSuggestion(error) {
       'proof mapping, and wrong-slice trigger. Use `not-needed` only for ' +
       'read/review/doc-only or lightweight maintenance packages.';
   }
+  if (/Causal Decision Contract/iu.test(error)) {
+    return 'Add a Causal Decision Contract with table columns Signal, ' +
+      'Normalized value, Owner interpretation, Emitted outcome, Expected ' +
+      'delta, and Disproof probe. Include anti-symptom rationale, a focused ' +
+      'falsifying probe command, competing explanations, a systemic ' +
+      'interaction scan, a ping-pong stop rule, and an oscillation guard for ' +
+      'returned same-frontier work.';
+  }
   if (/Sprint Strategy Brief/iu.test(error)) {
     return 'Add a Sprint Strategy Brief near the top of the active sprint: ' +
       'goal state, current causal thesis, competing hypotheses, confidence ' +
@@ -4590,6 +4914,15 @@ export function buildPackageDoctorLines(filePath, content, options = {}) {
       phase !== VALIDATION_PHASE_ENTRY &&
       fileStatus === STATUS_ACTIVE &&
       metadataRequiresCoreLogicBrief(metadata),
+    rejectGeneric:
+      phase !== VALIDATION_PHASE_ENTRY &&
+      metadataRequiresCausalDecisionContract(metadata, fileStatus),
+  }));
+  errors.push(...validateCausalDecisionContract(content, metadata, relativePath, {
+    [LEDGER_VALIDATION_REQUIRES_LEDGER]:
+      phase !== VALIDATION_PHASE_ENTRY &&
+      metadataRequiresCausalDecisionContract(metadata, fileStatus),
+    status: fileStatus,
   }));
   errors.push(...validateModelFitContract(content, relativePath, {
     [LEDGER_VALIDATION_REQUIRES_LEDGER]:
@@ -4895,6 +5228,198 @@ function formatArchitectureGateChoices(choices) {
     `route=\`${choice.route || DEFAULT_UNKNOWN}\` - ` +
     `${choice.summary || DEFAULT_UNKNOWN}`,
   ).join(NEWLINE);
+}
+
+function formatCurrentEdgeCardValue(value) {
+  return normalizeLedgerText(value) || DEFAULT_UNKNOWN;
+}
+
+function formatCurrentEdgeCardList(values) {
+  if (!Array.isArray(values) || values.length === NUM_ZERO) {
+    return DEFAULT_UNKNOWN;
+  }
+  return values
+    .map((value) => normalizeLedgerText(value))
+    .filter((value) => value.length > NUM_ZERO)
+    .join(', ') || DEFAULT_UNKNOWN;
+}
+
+function currentEdgeCardFirstFrontier(payload) {
+  return formatCurrentEdgeCardValue(
+    payload.scenarioCausalClosure?.currentFirstFrontier ||
+      payload.representativeResidual?.frontier,
+  );
+}
+
+function currentEdgeCardCausalOutcome(payload) {
+  return formatCurrentEdgeCardValue(
+    payload.rerunDecision?.routeCausalOutcome ||
+      payload.causalGovernance?.representativeOutcome,
+  );
+}
+
+function currentEdgeCardExpectedDelta(payload) {
+  return formatCurrentEdgeCardValue(
+    payload.rerunDecision?.expectedDelta ||
+      payload.scenarioCausalClosure?.expectedObservableTransition,
+  );
+}
+
+function currentEdgeCardForbiddenEdits(payload) {
+  return formatCurrentEdgeCardValue(
+    payload.scenarioCausalClosure?.handoffInvariant ||
+      formatCurrentEdgeCardList(payload.modelFit?.escalationTriggers || []),
+  );
+}
+
+export function renderCurrentEdgeCardSection(payload) {
+  return [
+    CURRENT_EDGE_CARD_HEADING,
+    '',
+    CURRENT_EDGE_CARD_CODE_FENCE_OPEN,
+    `${CURRENT_EDGE_CARD_LABEL_REPRESENTATIVE_ARTIFACT}: ` +
+      `${formatCurrentEdgeCardValue(payload.artifact)}`,
+    `${CURRENT_EDGE_CARD_LABEL_VISIBLE_FIRST_FRONTIER}: ` +
+      `${currentEdgeCardFirstFrontier(payload)}`,
+    `${CURRENT_EDGE_CARD_LABEL_ACTIVE_PACKAGE}: ` +
+      `${formatCurrentEdgeCardValue(payload.package)}`,
+    `${CURRENT_EDGE_CARD_LABEL_ACTIVE_PACKAGE_OWNER}: ` +
+      `${formatCurrentEdgeCardValue(payload.owner)}`,
+    `${CURRENT_EDGE_CARD_LABEL_ACTIVE_PACKAGE_BOUNDARY}: ` +
+      `${formatCurrentEdgeCardValue(payload.boundary)}`,
+    `${CURRENT_EDGE_CARD_LABEL_SELECTED_CAUSE}: ` +
+      `${formatCurrentEdgeCardValue(payload.dominantReason)}`,
+    `${CURRENT_EDGE_CARD_LABEL_REQUIRED_ACTION}: ` +
+      `${formatCurrentEdgeCardValue(payload.nextAction)}`,
+    'Representative status: ' +
+      `${formatCurrentEdgeCardValue(payload.representativeResidual?.status)}`,
+    `Causal outcome: ${currentEdgeCardCausalOutcome(payload)}`,
+    'Architecture gate: ' +
+      `${formatCurrentEdgeCardValue(payload.architectureDecisionGate?.status)} / ` +
+      `${formatCurrentEdgeCardValue(payload.architectureDecisionGate?.selectedChoice)}`,
+    `Expected delta: ${currentEdgeCardExpectedDelta(payload)}`,
+    `Current state: ${formatCurrentEdgeCardValue(payload.currentState)}`,
+    `Allowed edits: ${formatCurrentEdgeCardList(payload.writeScope)}`,
+    'Candidate runtime files: ' +
+      `${formatCurrentEdgeCardList(payload.candidateRuntimeFiles)}`,
+    `Forbidden edits: ${currentEdgeCardForbiddenEdits(payload)}`,
+    `Required latest proof: ${formatCurrentEdgeCardList(payload.proof)}`,
+    `Allowed stop modes: ${CURRENT_EDGE_CARD_ALLOWED_STOP_MODES}`,
+    CURRENT_EDGE_CARD_CODE_FENCE_CLOSE,
+  ].join(NEWLINE);
+}
+
+function insertSectionAfterAnchor(content, anchorSection, nextSection) {
+  const anchorIndex = content.indexOf(anchorSection);
+  if (anchorIndex < NUM_ZERO) {
+    return `${content.trimEnd()}${NEWLINE}${NEWLINE}${nextSection}${NEWLINE}`;
+  }
+  const insertIndex = anchorIndex + anchorSection.length;
+  return [
+    content.slice(NUM_ZERO, insertIndex).trimEnd(),
+    '',
+    nextSection,
+    '',
+    content.slice(insertIndex).trimStart(),
+  ].join(NEWLINE);
+}
+
+export function upsertSprintCurrentEdgeCard(content, payload) {
+  const nextSection = renderCurrentEdgeCardSection(payload);
+  const existingSection = extractCurrentEdgeCardSection(content);
+  if (existingSection) {
+    return content.replace(existingSection, `${nextSection}${NEWLINE}`);
+  }
+  const strategySection = extractSprintStrategyBriefSection(content);
+  if (strategySection) {
+    return insertSectionAfterAnchor(content, strategySection, nextSection);
+  }
+  return `${content.trimEnd()}${NEWLINE}${NEWLINE}${nextSection}${NEWLINE}`;
+}
+
+function currentEdgeCardExpectedFields(payload) {
+  return [
+    {
+      label: CURRENT_EDGE_CARD_LABEL_ACTIVE_PACKAGE,
+      reportField: CURRENT_EDGE_CARD_FIELD_PACKAGE,
+      value: payload.package,
+    },
+    {
+      label: CURRENT_EDGE_CARD_LABEL_REPRESENTATIVE_ARTIFACT,
+      reportField: CURRENT_EDGE_CARD_FIELD_ARTIFACT,
+      value: payload.artifact,
+    },
+    {
+      label: CURRENT_EDGE_CARD_LABEL_ACTIVE_PACKAGE_OWNER,
+      reportField: CURRENT_EDGE_CARD_FIELD_OWNER,
+      value: payload.owner,
+    },
+    {
+      label: CURRENT_EDGE_CARD_LABEL_ACTIVE_PACKAGE_BOUNDARY,
+      reportField: CURRENT_EDGE_CARD_FIELD_BOUNDARY,
+      value: payload.boundary,
+    },
+    {
+      label: CURRENT_EDGE_CARD_LABEL_SELECTED_CAUSE,
+      reportField: CURRENT_EDGE_CARD_FIELD_DOMINANT_REASON,
+      value: payload.dominantReason,
+    },
+    {
+      label: CURRENT_EDGE_CARD_LABEL_VISIBLE_FIRST_FRONTIER,
+      reportField: CURRENT_EDGE_CARD_FIELD_FRONTIER,
+      value: payload.scenarioCausalClosure?.currentFirstFrontier ||
+        payload.representativeResidual?.frontier,
+    },
+    {
+      label: CURRENT_EDGE_CARD_LABEL_REQUIRED_ACTION,
+      reportField: CURRENT_EDGE_CARD_FIELD_NEXT_ACTION,
+      value: payload.nextAction,
+    },
+  ].filter(({value}) =>
+    formatCurrentEdgeCardValue(value) !== DEFAULT_UNKNOWN);
+}
+
+function findCurrentEdgeCardField(section, label) {
+  const fieldPattern = new RegExp(
+    `^${escapeRegExp(label)}:\\s*([^\\n]+)$`,
+    'imu',
+  );
+  const match = fieldPattern.exec(section);
+  return match ? normalizeLedgerText(match[NUM_ONE]) : null;
+}
+
+export function validateSprintCurrentEdgeCard(content, filePath, payload) {
+  const section = extractCurrentEdgeCardSection(content);
+  if (!section) {
+    return [
+      `${filePath}: Current Edge Card section is required for the active ` +
+      `scenario sprint; run ${CURRENT_BLOCKER_REPAIR_COMMAND}.`,
+    ];
+  }
+  const staleFields = currentEdgeCardExpectedFields(payload)
+    .filter(({label, value}) => {
+      const currentValue = findCurrentEdgeCardField(section, label);
+      return currentValue === null ||
+        !currentValue.includes(formatCurrentEdgeCardValue(value));
+    })
+    .map(({reportField}) => reportField);
+  if (staleFields.length === NUM_ZERO) {
+    return [];
+  }
+  return [
+    `${filePath}: Current Edge Card is stale for fields: ` +
+    `${staleFields.join(', ')}; run ${CURRENT_BLOCKER_REPAIR_COMMAND}.`,
+  ];
+}
+
+function validateLegacyCurrentNextActionSection(content, filePath) {
+  if (!extractLegacyCurrentNextActionSection(content)) {
+    return [];
+  }
+  return [
+    `${filePath}: active sprints must not keep a separate Current Next ` +
+    `Action section; use Current Edge Card and ${CURRENT_BLOCKER_REPAIR_COMMAND}.`,
+  ];
 }
 
 export function renderCurrentBlockerMarkdown(payload) {
@@ -5207,8 +5732,21 @@ async function currentBlockerCommand(args) {
   if (args.includes(CLI_FLAG_WRITE)) {
     await writeTextFile(CURRENT_BLOCKER_JSON_PATH, jsonContent);
     await writeTextFile(CURRENT_BLOCKER_MARKDOWN_PATH, markdownContent);
+    const sprintContent = await readTextFile(activeSprintFile);
+    const nextSprintContent = upsertSprintCurrentEdgeCard(
+      sprintContent,
+      payload,
+    );
+    const updatedPaths = [
+      CURRENT_BLOCKER_JSON_PATH,
+      CURRENT_BLOCKER_MARKDOWN_PATH,
+    ];
+    if (nextSprintContent !== sprintContent) {
+      await writeTextFile(activeSprintFile, nextSprintContent);
+      updatedPaths.push(normalizeRelativePath(activeSprintFile));
+    }
     console.log(
-      `Updated ${CURRENT_BLOCKER_JSON_PATH} and ${CURRENT_BLOCKER_MARKDOWN_PATH}.`,
+      `Updated ${updatedPaths.join(', ')}.`,
     );
     return;
   }

@@ -9,7 +9,10 @@ import {
   metadataUsesClassificationOnlyFastPath,
   metadataUsesPureClassificationFastPath,
   renderCurrentBlockerMarkdown,
+  renderCurrentEdgeCardSection,
+  upsertSprintCurrentEdgeCard,
   validateActiveWorkReferences,
+  validateCausalDecisionContract,
   validateCausalGovernanceContract,
   validateClassificationEfficiencyContract,
   validateCommitAndPushLedger,
@@ -23,6 +26,7 @@ import {
   validateScenarioCausalClosureContract,
   validateScenarioFrontierOwnerBoundaryContract,
   validateSameFrontierStopContract,
+  validateSprintCurrentEdgeCard,
   validateSubagentAttemptLedger,
   validateSubagentProgressLedger,
   validateSubagentSequencingLedger,
@@ -339,6 +343,56 @@ const CORE_LOGIC_BRIEF_INCOMPLETE_CONTENT = [
   '- State model or invariant: unknown',
   '',
 ].join('\n');
+const CORE_LOGIC_BRIEF_GENERIC_CONTENT = [
+  '# Test Package',
+  '',
+  '## Core Logic Brief',
+  '',
+  '- Canonical outcome: operation_workflow_owner / workflow_progress emits retry-scheduled.',
+  '- Inputs/signals: operation ledger and focused owner fixture.',
+  '- State model or invariant: Collect evidence, normalize one operation_workflow_owner / workflow_progress snapshot, then use one explicit state model, decision table, or invariant to emit one canonical outcome and reasons.',
+  '- Non-goals and forbidden interpretations: no startup active-gate reinterpretation.',
+  '- Proof mapping: `node --test test/rebalancer/workflow-progress.test.js` proves the invariant.',
+  '- Wrong-slice trigger: stop if owner, boundary, or required action changes.',
+  '',
+].join('\n');
+const CAUSAL_DECISION_CONTRACT_VALID_CONTENT = [
+  '# Test Package',
+  '',
+  '## Causal Decision Contract',
+  '',
+  '| Signal | Normalized value | Owner interpretation | Emitted outcome | Expected delta | Disproof probe |',
+  '| --- | --- | --- | --- | --- | --- |',
+  '| route owner | operation_workflow_owner / workflow_progress / dispatch_pending | operation workflow owner decides before startup consumers reinterpret it | retry-scheduled | dispatch debt reduces | node --test test/rebalancer/workflow-progress.test.js |',
+  '',
+  '- Anti-symptom rationale: This proves the operation workflow owner decision directly instead of patching downstream startup symptoms.',
+  '- Falsifying focused probe: `node --test test/rebalancer/workflow-progress.test.js`',
+  '- Competing explanations: compare dispatch_pending with startup lag, stale instrumentation, and wrong-owner routing.',
+  '- Systemic interaction scan: check producer, consumer, admission gate, retry lifecycle, and report generation before assigning the next slice.',
+  '- Ping-pong stop rule: require fresh representative evidence or concrete reduction before bouncing between adjacent owners.',
+  '- Oscillation guard: same-frontier runtime work must show concrete frontier reduction before another local patch.',
+  '',
+].join('\n');
+const CAUSAL_DECISION_CONTRACT_INVALID_CONTENT = [
+  '# Test Package',
+  '',
+  '## Causal Decision Contract',
+  '',
+  '| Signal | Normalized value | Owner interpretation | Emitted outcome | Expected delta | Disproof probe |',
+  '| --- | --- | --- | --- | --- | --- |',
+  '',
+  '- Anti-symptom rationale: <reason>',
+  '- Falsifying focused probe: read the file manually',
+  '',
+].join('\n');
+const CAUSAL_DECISION_CONTRACT_OSCILLATION_METADATA = Object.freeze({
+  status: WORK_TRACKER_ACTIVE_STATUS,
+  lane: LANE_CAUSAL_ESCALATION,
+  scenario: 'rolling-restart',
+  architectureDecisionGate: Object.freeze({
+    trigger: 'frontier-oscillation',
+  }),
+});
 const SPRINT_STRATEGY_BRIEF_VALID_CONTENT = [
   '# Test Sprint',
   '',
@@ -1397,6 +1451,7 @@ describe('work tracker package doctor', () => {
       '-->',
       '',
       CORE_LOGIC_BRIEF_VALID_CONTENT.split('\n').slice(2).join('\n'),
+      CAUSAL_DECISION_CONTRACT_VALID_CONTENT.split('\n').slice(2).join('\n'),
       MODEL_FIT_VALID_SPARK_SAFE_CONTENT.split('\n').slice(2).join('\n'),
     ].join('\n');
     const report = buildPackageDoctorLines(
@@ -1644,6 +1699,16 @@ describe('work tracker core logic brief validation', () => {
     assert.deepEqual(errors, []);
   });
 
+  it('rejects generic Core Logic Brief scaffolding before implementation', () => {
+    const errors = validateCoreLogicBrief(
+      CORE_LOGIC_BRIEF_GENERIC_CONTENT,
+      WORK_TRACKER_LEDGER_TEST_FILE,
+      {requiresLedger: true, rejectGeneric: true},
+    );
+
+    assert.match(errors.join('\n'), /must name the concrete decision model/u);
+  });
+
   it('reports missing placeholders and vague Core Logic Brief fields', () => {
     const errors = validateCoreLogicBrief(
       CORE_LOGIC_BRIEF_INCOMPLETE_CONTENT,
@@ -1655,6 +1720,48 @@ describe('work tracker core logic brief validation', () => {
     assert.match(errors.join('\n'), /Inputs\/signals/u);
     assert.match(errors.join('\n'), /State model or invariant/u);
     assert.match(errors.join('\n'), /Proof mapping/u);
+  });
+});
+
+describe('work tracker causal decision contract validation', () => {
+  it('requires Causal Decision Contract when strict active packages ask for it', () => {
+    const errors = validateCausalDecisionContract(
+      WORK_TRACKER_LEDGER_NO_LEDGER_CONTENT,
+      CAUSAL_DECISION_CONTRACT_OSCILLATION_METADATA,
+      WORK_TRACKER_LEDGER_TEST_FILE,
+      {requiresLedger: true, status: WORK_TRACKER_ACTIVE_STATUS},
+    );
+
+    assert.equal(errors.length, 1);
+    assert.match(errors[0], /Causal Decision Contract section is required/u);
+  });
+
+  it('accepts a concrete Causal Decision Contract with oscillation guard', () => {
+    const errors = validateCausalDecisionContract(
+      CAUSAL_DECISION_CONTRACT_VALID_CONTENT,
+      CAUSAL_DECISION_CONTRACT_OSCILLATION_METADATA,
+      WORK_TRACKER_LEDGER_TEST_FILE,
+      {requiresLedger: true, status: WORK_TRACKER_ACTIVE_STATUS},
+    );
+
+    assert.deepEqual(errors, []);
+  });
+
+  it('reports placeholders, missing decision rows, and non-command probes', () => {
+    const errors = validateCausalDecisionContract(
+      CAUSAL_DECISION_CONTRACT_INVALID_CONTENT,
+      CAUSAL_DECISION_CONTRACT_OSCILLATION_METADATA,
+      WORK_TRACKER_LEDGER_TEST_FILE,
+      {requiresLedger: true, status: WORK_TRACKER_ACTIVE_STATUS},
+    );
+
+    assert.match(errors.join('\n'), /at least one concrete decision row/u);
+  assert.match(errors.join('\n'), /Anti-symptom rationale/u);
+  assert.match(errors.join('\n'), /must name a focused command/u);
+  assert.match(errors.join('\n'), /Competing explanations/u);
+  assert.match(errors.join('\n'), /Systemic interaction scan/u);
+  assert.match(errors.join('\n'), /Ping-pong stop rule/u);
+  assert.match(errors.join('\n'), /Oscillation guard/u);
   });
 });
 
@@ -2363,6 +2470,137 @@ describe('work tracker scenario causal closure validation', () => {
       assert.match(rendered, /## Classification Efficiency/u);
       assert.match(rendered, /update-current-package/u);
     });
+
+  it('renders and refreshes the active sprint current edge card', () => {
+    const payload = buildCurrentBlockerPayload(
+      'work/sprints/active-test.md',
+      WORK_TRACKER_LEDGER_TEST_FILE,
+      {
+        ...SCENARIO_CAUSAL_CLOSURE_VALID_METADATA,
+        schema: 'work-package-v1',
+        status: WORK_TRACKER_ACTIVE_STATUS,
+        lane: LANE_CAUSAL_ESCALATION,
+        artifact: 'test-output/reports/current.report.json',
+        playback: 'none',
+        owner: 'topology_publication_owner',
+        boundary: 'publication_convergence',
+        dominantReason: 'publication_pending',
+        currentState: 'Current package state.',
+        nextAction: 'Build focused proof.',
+        proof: [
+          'npm run work:evidence-summary -- test-output/reports/current.report.json',
+        ],
+        writeScope: ['work/packages/active-test-package.md'],
+        handoffFiles: [],
+        generatedFiles: ['work/sprints/current-blocker.json'],
+        candidateRuntimeFiles: ['src/example.js'],
+        commitScope: ['work/packages/active-test-package.md'],
+        modelFit: {
+          packageClass: 'representative-frontier-closure',
+          intendedMinimumModel: 'gpt-5.3-codex',
+          scopeShape: 'scenario-causal-escalation',
+          outputProfile: 'medium',
+          escalationTriggers: ['scope expands'],
+        },
+        representativeResidual: {
+          status: 'same-frontier',
+          scenario: 'rolling-restart',
+          artifact: 'test-output/reports/current.report.json',
+          frontier: 'publication_ack_convergence',
+          owner: 'topology_publication_owner',
+          boundary: 'publication_convergence',
+          dominantReason: 'publication_pending',
+          nextAction: 'keep edge visible',
+        },
+      },
+    );
+    const staleSprint = [
+      '# Sprint',
+      '',
+      '## Current Edge Card',
+      '',
+      '```text',
+      'Representative artifact: test-output/reports/old.report.json',
+      'Selected cause: missing_published_nodes_present',
+      '```',
+      '',
+      '## Package Queue',
+      '',
+      '1. Keep this section.',
+      '',
+    ].join('\n');
+    const refreshedSprint = upsertSprintCurrentEdgeCard(staleSprint, payload);
+
+    assert.match(
+      refreshedSprint,
+      /Representative artifact: test-output\/reports\/current\.report\.json/u,
+    );
+    assert.match(refreshedSprint, /Selected cause: publication_pending/u);
+    assert.match(
+      refreshedSprint,
+      /Active package: work\/packages\/active-test-package\.md/u,
+    );
+    assert.match(refreshedSprint, /## Package Queue/u);
+    assert.doesNotMatch(refreshedSprint, /old\.report\.json/u);
+    assert.doesNotMatch(refreshedSprint, /missing_published_nodes_present/u);
+  });
+
+  it('reports a stale active sprint current edge card', () => {
+    const payload = buildCurrentBlockerPayload(
+      'work/sprints/active-test.md',
+      WORK_TRACKER_LEDGER_TEST_FILE,
+      {
+        ...SCENARIO_CAUSAL_CLOSURE_VALID_METADATA,
+        schema: 'work-package-v1',
+        status: WORK_TRACKER_ACTIVE_STATUS,
+        lane: LANE_CAUSAL_ESCALATION,
+        artifact: 'test-output/reports/current.report.json',
+        playback: 'none',
+        owner: 'topology_publication_owner',
+        boundary: 'publication_convergence',
+        dominantReason: 'publication_pending',
+        currentState: 'Current package state.',
+        nextAction: 'Build focused proof.',
+        proof: [
+          'npm run work:evidence-summary -- test-output/reports/current.report.json',
+        ],
+        writeScope: ['work/packages/active-test-package.md'],
+        handoffFiles: [],
+        generatedFiles: ['work/sprints/current-blocker.json'],
+        candidateRuntimeFiles: [],
+        commitScope: ['work/packages/active-test-package.md'],
+        modelFit: {
+          packageClass: 'representative-frontier-closure',
+          intendedMinimumModel: 'gpt-5.3-codex',
+          scopeShape: 'scenario-causal-escalation',
+          outputProfile: 'medium',
+          escalationTriggers: ['scope expands'],
+        },
+      },
+    );
+    const validCard = renderCurrentEdgeCardSection(payload);
+    const staleCard = validCard
+      .replace('test-output/reports/current.report.json', 'old.report.json')
+      .replace('publication_pending', 'missing_published_nodes_present');
+    const staleErrors = validateSprintCurrentEdgeCard(
+      staleCard,
+      'work/sprints/active-test.md',
+      payload,
+    ).join('\n');
+
+    assert.deepEqual(
+      validateSprintCurrentEdgeCard(
+        validCard,
+        'work/sprints/active-test.md',
+        payload,
+      ),
+      [],
+    );
+    assert.match(staleErrors, /Current Edge Card is stale/u);
+    assert.match(staleErrors, /artifact/u);
+    assert.match(staleErrors, /dominant reason/u);
+    assert.match(staleErrors, /npm run work:current-blocker -- --write/u);
+  });
 });
 
 describe('work tracker current blocker snapshot validation', () => {

@@ -105,6 +105,10 @@ const FLAG_PREFIX = '--';
 const SLUG_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/u;
 const TEMPLATE_PLACEHOLDER_PATTERN = /<[^>]+>/u;
 const DEFAULT_ACCELERATION_PROOF = 'npm run work:advance -- --check';
+const CAUSAL_DECISION_CONTRACT_TABLE_HEADER =
+  '| Signal | Normalized value | Owner interpretation | Emitted outcome | Expected delta | Disproof probe |';
+const CAUSAL_DECISION_CONTRACT_TABLE_SEPARATOR =
+  '| --- | --- | --- | --- | --- | --- |';
 const DEFAULT_RERUN_EXPECTED_DELTA =
   'Classify whether fresh representative evidence is green, reduced, ' +
   'migrated, same-frontier, architecture-gap, contradictory, or needs a ' +
@@ -390,7 +394,21 @@ function markdownSentenceList(values = [], fallback) {
   return normalized.length > NUM_ZERO ? normalized.join('; ') : fallback;
 }
 
-function buildCoreLogicBriefLines(lane, flags, proof, forbiddenFiles) {
+function firstFocusedProofCommand(proof = []) {
+  return proof.map(normalizeText).find(Boolean) || DEFAULT_ACCELERATION_PROOF;
+}
+
+function markdownTableCell(value, fallback) {
+  return normalizeText(value || fallback).replace(/\|/gu, '/');
+}
+
+function buildCoreLogicBriefLines(
+  lane,
+  flags,
+  proof,
+  forbiddenFiles,
+  metadata,
+) {
   if (!coreLogicBriefRequiredForLane(lane)) {
     return [
       '## Core Logic Brief',
@@ -403,6 +421,11 @@ function buildCoreLogicBriefLines(lane, flags, proof, forbiddenFiles) {
   const dominantReason = normalizeText(flags[FLAG_DOMINANT_REASON]);
   const artifact = normalizeText(flags[FLAG_ARTIFACT]) || DEFAULT_ARTIFACT;
   const nextAction = normalizeText(flags[FLAG_NEXT_ACTION]);
+  const emittedOutcome =
+    normalizeText(metadata?.[RERUN_DECISION_FIELD]?.[
+      RERUN_DECISION_CAUSAL_OUTCOME_FIELD
+    ]) ||
+    nextAction;
   const inputSignals = [
     artifact !== DEFAULT_ARTIFACT ? artifact : EMPTY_TEXT,
     markdownSentenceList(proof, nextAction),
@@ -414,9 +437,9 @@ function buildCoreLogicBriefLines(lane, flags, proof, forbiddenFiles) {
       `${owner} / ${boundary} emits the package outcome for ` +
       `${dominantReason}.`,
     `- ${CORE_LOGIC_BRIEF_INPUTS_FIELD}: ${inputSignals}.`,
-    `- ${CORE_LOGIC_BRIEF_MODEL_FIELD}: Collect evidence, normalize one ` +
-      `${owner} / ${boundary} snapshot, then use one explicit state model, ` +
-      'decision table, or invariant to emit one canonical outcome and reasons.',
+    `- ${CORE_LOGIC_BRIEF_MODEL_FIELD}: The ${owner} / ${boundary} ` +
+      `decision table in the Causal Decision Contract maps ${dominantReason} ` +
+      `and route evidence to one emitted outcome: ${emittedOutcome}.`,
     `- ${CORE_LOGIC_BRIEF_NON_GOALS_FIELD}: Do not reinterpret downstream ` +
       'evidence, widen forbidden boundaries, or patch symptoms outside this ' +
       `package. Forbidden scope: ${markdownSentenceList(
@@ -429,6 +452,78 @@ function buildCoreLogicBriefLines(lane, flags, proof, forbiddenFiles) {
     `- ${CORE_LOGIC_BRIEF_WRONG_SLICE_FIELD}: Stop or split if the canonical ` +
       'outcome changes owner, boundary, required action, or needs files ' +
       'outside the declared scope.',
+  ];
+}
+
+function buildCausalDecisionContractLines(
+  lane,
+  flags,
+  proof,
+  forbiddenFiles,
+  metadata,
+) {
+  if (!coreLogicBriefRequiredForLane(lane)) {
+    return [];
+  }
+  const owner = normalizeText(flags[FLAG_OWNER]);
+  const boundary = normalizeText(flags[FLAG_BOUNDARY]);
+  const dominantReason = normalizeText(flags[FLAG_DOMINANT_REASON]);
+  const nextAction = normalizeText(flags[FLAG_NEXT_ACTION]);
+  const artifact = normalizeText(flags[FLAG_ARTIFACT]) || DEFAULT_ARTIFACT;
+  const firstProof = firstFocusedProofCommand(proof);
+  const expectedDelta =
+    normalizeText(metadata?.[RERUN_DECISION_FIELD]?.[
+      RERUN_DECISION_EXPECTED_DELTA_FIELD
+    ]) ||
+    DEFAULT_RERUN_EXPECTED_DELTA;
+  const forbiddenScope = markdownSentenceList(
+    forbiddenFiles,
+    'lane and package scope only',
+  );
+  return [
+    '## Causal Decision Contract',
+    EMPTY_TEXT,
+    CAUSAL_DECISION_CONTRACT_TABLE_HEADER,
+    CAUSAL_DECISION_CONTRACT_TABLE_SEPARATOR,
+    '| ' +
+      [
+        'route owner/boundary',
+        `${owner} / ${boundary} / ${dominantReason}`,
+        `${owner} owns this decision before downstream consumers reinterpret it`,
+        nextAction,
+        expectedDelta,
+        firstProof,
+      ].map((value) => markdownTableCell(value, 'not-recorded')).join(' | ') +
+      ' |',
+    '| ' +
+      [
+        'scope boundary',
+        forbiddenScope,
+        'proof that needs forbidden scope means this package is the wrong slice',
+        'stop, split, or migrate owner boundary',
+        'no widened runtime scope inside this package',
+        DEFAULT_ACCELERATION_PROOF,
+      ].map((value) => markdownTableCell(value, 'not-recorded')).join(' | ') +
+      ' |',
+    EMPTY_TEXT,
+    `- Anti-symptom rationale: This package changes or classifies ${owner} / ` +
+      `${boundary} directly; it does not patch downstream symptoms or widen ` +
+      'forbidden scope.',
+    `- Falsifying focused probe: \`${firstProof}\``,
+    `- Competing explanations: At minimum compare ${dominantReason} against ` +
+      'downstream symptom lag, stale instrumentation, and wrong-owner routing ' +
+      'before implementation.',
+    '- Systemic interaction scan: Check producer, consumer, admission/gating, ' +
+      'retry/lifecycle, and evidence-generation effects before assigning the ' +
+      'next owner slice.',
+    '- Ping-pong stop rule: Do not bounce between adjacent owners on the same ' +
+      'unchanged artifact; require fresh representative evidence, a concrete ' +
+      'metric reduction, owner/boundary migration proof, or architecture/human ' +
+      'stop before another local patch.',
+    '- Oscillation guard: If fresh representative evidence returns the same ' +
+      'frontier or another symptom-shaped result, the next package must show ' +
+      'concrete reduction, migration, green, or an architecture/human stop ' +
+      'before another local patch.',
   ];
 }
 
@@ -725,7 +820,15 @@ async function buildPackageContent(flags = {}) {
     buildLaneSufficiencyLine(lane),
     '- Escalation trigger to a heavier lane: runtime ownership, shared contract, or representative scenario evidence changes.',
     EMPTY_TEXT,
-    ...buildCoreLogicBriefLines(lane, flags, proof, forbiddenFiles),
+    ...buildCoreLogicBriefLines(lane, flags, proof, forbiddenFiles, metadata),
+    EMPTY_TEXT,
+    ...buildCausalDecisionContractLines(
+      lane,
+      flags,
+      proof,
+      forbiddenFiles,
+      metadata,
+    ),
     EMPTY_TEXT,
     ...buildClassificationOnlyFastPathLines(isClassificationOnly),
     '## Expected Representative Delta',

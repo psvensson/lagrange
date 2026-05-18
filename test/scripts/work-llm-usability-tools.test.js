@@ -62,8 +62,13 @@ test('shared package schema lists validator enums for LLM scaffolding', (t) => {
   t.match(rendered, /extra-high/u);
   t.match(rendered, /writeScope/u);
   t.match(rendered, /Core Logic Brief/u);
+  t.match(rendered, /Causal Decision Contract/u);
   t.match(rendered, /Canonical outcome/u);
   t.match(rendered, /State model or invariant/u);
+  t.match(rendered, /Falsifying focused probe/u);
+  t.match(rendered, /Competing explanations/u);
+  t.match(rendered, /Systemic interaction scan/u);
+  t.match(rendered, /Ping-pong stop rule/u);
   t.match(rendered, /pre-impl/u);
   t.match(rendered, /tool-unavailable/u);
   t.match(rendered, /Subagent Progress Ledger/u);
@@ -147,7 +152,15 @@ test('package scaffolder adds Core Logic Brief for runtime lanes', async (t) => 
     /Canonical outcome: operation_workflow_owner \/ workflow_progress/u,
   );
   t.match(content, /Inputs\/signals: test-output\/reports\/runtime-owner\.report\.json/u);
-  t.match(content, /State model or invariant: Collect evidence/u);
+  t.match(content, /State model or invariant: The operation_workflow_owner \/ workflow_progress decision table/u);
+  t.match(content, /## Causal Decision Contract/u);
+  t.match(content, /Signal \| Normalized value \| Owner interpretation/u);
+  t.match(content, /Anti-symptom rationale/u);
+  t.match(content, /Falsifying focused probe: `node --test test\/rebalancer\/workflow-progress\.test\.js`/u);
+  t.match(content, /Competing explanations/u);
+  t.match(content, /Systemic interaction scan/u);
+  t.match(content, /Ping-pong stop rule/u);
+  t.match(content, /Oscillation guard/u);
   t.match(content, /Proof mapping: Implementation and tests must prove/u);
   t.match(content, /Wrong-slice trigger: Stop or split/u);
   t.notMatch(content, /Status: `not-needed`/u);
@@ -367,6 +380,10 @@ test('subagent prompt generator emits bounded task and ledger guidance',
     t.match(prompt, /Do not widen beyond the write scope/u);
     t.match(prompt, /## Core Logic Brief/u);
     t.match(prompt, /Status: `not-needed`/u);
+    t.match(prompt, /## Causal Decision Contract/u);
+    t.match(prompt, /## Systemic Thinking Check/u);
+    t.match(prompt, /competing explanations/u);
+    t.match(prompt, /ping-pong stop rule/u);
     t.match(prompt, /## Output Budget/u);
     t.match(prompt, /Profile: `medium`/u);
     t.match(prompt, /More output is not evidence/u);

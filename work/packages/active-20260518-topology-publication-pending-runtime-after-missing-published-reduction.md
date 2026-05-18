@@ -188,10 +188,24 @@ Approved maintenance scope or roadmap row.
 
 - Canonical outcome: topology_publication_owner / publication_convergence emits the package outcome for publication_pending.
 - Inputs/signals: test-output/reports/rolling-restart-after-missing-published-normalization-20260518T155705Z.report.json; npm run work:evidence-summary -- test-output/reports/rolling-restart-after-missing-published-normalization-20260518T155705Z.report.json; npm run work:scenario-route -- test-output/reports/rolling-restart-after-missing-published-normalization-20260518T155705Z.report.json --owner topology_publication_owner --boundary publication_convergence --dominant-reason publication_pending --explain publication_ack_convergence --markdown; npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-missing-published-normalization-20260518T155705Z.report.json.
-- State model or invariant: Collect evidence, normalize one topology_publication_owner / publication_convergence snapshot, then use one explicit state model, decision table, or invariant to emit one canonical outcome and reasons.
+- State model or invariant: The topology_publication_owner / publication_convergence decision table maps publicationStatus=OPEN, publicationEpoch=1, publishedActive=1/5, priority residual witnesses=0, runtimePromotionAllowed=false, and pending owner reconcile for two nodes to one emitted outcome: human-directed-runtime-successor.
 - Non-goals and forbidden interpretations: Do not reinterpret downstream evidence, widen forbidden boundaries, or patch symptoms outside this package. Forbidden scope: startup active-gate runtime; operation workflow / rebalancer_handoff runtime; startup readiness runtime; active-gate admission; handoff architecture; timeout budgets.
 - Proof mapping: Implementation and tests must prove the topology_publication_owner / publication_convergence invariant before representative or closure proof is accepted.
 - Wrong-slice trigger: Stop or split if the canonical outcome changes owner, boundary, required action, or needs files outside the declared scope.
+
+## Causal Decision Contract
+
+| Signal | Normalized value | Owner interpretation | Emitted outcome | Expected delta | Disproof probe |
+| --- | --- | --- | --- | --- | --- |
+| route-after-rerun owner boundary | topology_publication_owner / publication_convergence / publication_pending | publication owner remains first frontier; active-gate and operation workflow are downstream | human-directed-runtime-successor | successor reduces publication_pending, migrates, greens, or triggers architecture/human gate | npm run work:scenario-route -- test-output/reports/rolling-restart-after-missing-published-normalization-20260518T155705Z.report.json --owner topology_publication_owner --boundary publication_convergence --dominant-reason publication_pending --explain publication_ack_convergence --markdown |
+| handoff probe | missingEdge=null; runtimePromotionAllowed=false; pending reconcile count=2 | existing handoff contract is present and downstream runtime edits remain forbidden | keep startup active-gate and operation workflow frozen until publication owner changes | no active-gate or workflow runtime promotion from this package | npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-missing-published-normalization-20260518T155705Z.report.json --handoff-probe |
+
+- Anti-symptom rationale: This package does not patch downstream symptoms; it classifies the returned publication_pending same-owner frontier and opens one bounded successor because route-after-rerun selected continue_local_fix.
+- Falsifying focused probe: `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-missing-published-normalization-20260518T155705Z.report.json --handoff-probe`
+- Competing explanations: H1 publication reconcile is still the real producer frontier; H2 startup active-gate is only reflecting downstream snapshot coverage; H3 the artifact is stale or instrumentation is under-reporting publication acknowledgements; H4 the owner boundary should migrate only if fresh route-after-rerun leaves topology_publication_owner.
+- Systemic interaction scan: Check publication producer state, acknowledgement consumer convergence, startup active-gate promotion, operation workflow priority residuals, and report-generation freshness before assigning another owner slice.
+- Ping-pong stop rule: Do not bounce from publication to active-gate or workflow on the unchanged artifact; require a fresh representative rerun, concrete publication metric reduction, owner/boundary migration proof, or architecture/human stop before another local patch.
+- Oscillation guard: Because this is a returned same-frontier publication oscillation, the successor must stop if the next representative run leaves publication_pending without concrete metric or state reduction.
 
 ## Expected Representative Delta
 

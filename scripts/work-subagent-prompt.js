@@ -34,6 +34,7 @@ const METADATA_FIELD_CANDIDATE_RUNTIME_FILES = 'candidateRuntimeFiles';
 const METADATA_FIELD_COMMIT_SCOPE = 'commitScope';
 const MODEL_FIT_FIELD_OUTPUT_PROFILE = 'outputProfile';
 const CORE_LOGIC_BRIEF_HEADING = '## Core Logic Brief';
+const CAUSAL_DECISION_CONTRACT_HEADING = '## Causal Decision Contract';
 const MARKDOWN_LEVEL_TWO_HEADING_PREFIX = '## ';
 const OUTPUT_PROFILE_SMALL = 'small';
 const OUTPUT_PROFILE_MEDIUM = 'medium';
@@ -152,6 +153,13 @@ function coreLogicBrief(content) {
     'Not recorded.';
 }
 
+function causalDecisionContract(content) {
+  return extractMarkdownLevelTwoSection(
+    content,
+    CAUSAL_DECISION_CONTRACT_HEADING,
+  ) || 'Not recorded.';
+}
+
 function roleTask(role, metadata, packagePath) {
   if (role === ROLE_REVIEW) {
     return [
@@ -256,6 +264,17 @@ function buildSubagentPrompt(role, packagePath, content, args = []) {
     '## Core Logic Brief',
     EMPTY_TEXT,
     coreLogicBrief(content),
+    EMPTY_TEXT,
+    '## Causal Decision Contract',
+    EMPTY_TEXT,
+    causalDecisionContract(content),
+    EMPTY_TEXT,
+    '## Systemic Thinking Check',
+    EMPTY_TEXT,
+    '- Before edits, name at least two credible competing explanations for the same symptom, including one wrong-owner or instrumentation/staleness explanation.',
+    '- Scan producer, consumer, admission/gating, retry/lifecycle, and evidence-generation interactions before assigning the next slice.',
+    '- If evidence has not changed since the last package, do not bounce to an adjacent owner; record the ping-pong stop rule and return a split, rerun, architecture gate, or human-escalation handoff.',
+    '- Treat local proof as a falsifier for this owner boundary, not as representative success.',
     EMPTY_TEXT,
     '## Output Budget',
     EMPTY_TEXT,
