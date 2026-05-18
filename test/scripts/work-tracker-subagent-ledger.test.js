@@ -520,6 +520,15 @@ const WORK_TRACKER_ATTEMPT_LEDGER_CLEAN_CONTENT = [
   '- [x] Agent Implement (' + IMPLEMENTATION_AGENT_ID + ') implementation attempt: status: validated; last checkpoint: focused proof passed; parent action: revalidated; evidence: npm test -- test/example.test.js; next: closure.',
   '',
 ].join('\n');
+const WORK_TRACKER_COMBINED_PROGRESS_ATTEMPT_LEDGER_CONTENT = [
+  '# Test Package',
+  '',
+  '## Subagent Progress And Attempt Ledger',
+  '',
+  '- [x] Agent Review (' + REVIEW_AGENT_ID + ') review checkpoint: status: validated; last checkpoint: review complete; parent action: accepted; evidence: package proof read; next: fix role.',
+  '- [x] Agent Implement (' + IMPLEMENTATION_AGENT_ID + ') implementation checkpoint: status: validated; last checkpoint: focused proof passed; parent action: revalidated; evidence: npm test -- test/example.test.js; next: closure.',
+  '',
+].join('\n');
 const WORK_TRACKER_ATTEMPT_LEDGER_PARTIAL_CONTENT = [
   '# Test Package',
   '',
@@ -581,6 +590,54 @@ const WORK_TRACKER_LEDGER_FIXES_REQUIRED_CONTENT = [
   '- [x] Fix subagent recorded or explicitly not needed:',
   `      Agent Fix (${FIX_AGENT_ID}) fixed`,
   '      `work/packages/done-test-package.md`.',
+  '- [x] Implementation subagent recorded:',
+  `      Agent Implement (${IMPLEMENTATION_AGENT_ID}) implemented`,
+  '      `work/packages/active-test-package.md`; parent revalidated focused proof: yes.',
+  '',
+].join('\n');
+const WORK_TRACKER_LEDGER_REVIEW_FIXED_METADATA_CONTENT = [
+  '# Test Package',
+  '',
+  '## Subagent Sequencing Ledger',
+  '',
+  '- [x] Review subagent recorded:',
+  `      Agent Review (${REVIEW_AGENT_ID}) reviewed`,
+  '      `work/packages/done-test-package.md`; result `fixes-required`.',
+  '- [x] Fix subagent recorded or explicitly not needed:',
+  `      review-fixed-metadata-only by Agent Review (${REVIEW_AGENT_ID})`,
+  '      for `work/packages/done-test-package.md`; scope: metadata-only package/sprint/tracker/handoff edits.',
+  '- [x] Implementation subagent recorded:',
+  `      Agent Implement (${IMPLEMENTATION_AGENT_ID}) implemented`,
+  '      `work/packages/active-test-package.md`; parent revalidated focused proof: yes.',
+  '',
+].join('\n');
+const WORK_TRACKER_LEDGER_REVIEW_FIXED_RUNTIME_CONTENT = [
+  '# Test Package',
+  '',
+  '## Subagent Sequencing Ledger',
+  '',
+  '- [x] Review subagent recorded:',
+  `      Agent Review (${REVIEW_AGENT_ID}) reviewed`,
+  '      `work/packages/done-test-package.md`; result `fixes-required`.',
+  '- [x] Fix subagent recorded or explicitly not needed:',
+  `      review-fixed-metadata-only by Agent Review (${REVIEW_AGENT_ID})`,
+  '      for `work/packages/done-test-package.md`; scope: runtime implementation edits.',
+  '- [x] Implementation subagent recorded:',
+  `      Agent Implement (${IMPLEMENTATION_AGENT_ID}) implemented`,
+  '      `work/packages/active-test-package.md`; parent revalidated focused proof: yes.',
+  '',
+].join('\n');
+const WORK_TRACKER_LEDGER_REVIEW_FIXED_WRONG_AGENT_CONTENT = [
+  '# Test Package',
+  '',
+  '## Subagent Sequencing Ledger',
+  '',
+  '- [x] Review subagent recorded:',
+  `      Agent Review (${REVIEW_AGENT_ID}) reviewed`,
+  '      `work/packages/done-test-package.md`; result `fixes-required`.',
+  '- [x] Fix subagent recorded or explicitly not needed:',
+  `      review-fixed-metadata-only by Agent Fix (${FIX_AGENT_ID})`,
+  '      for `work/packages/done-test-package.md`; scope: metadata-only package/sprint/tracker/handoff edits.',
   '- [x] Implementation subagent recorded:',
   `      Agent Implement (${IMPLEMENTATION_AGENT_ID}) implemented`,
   '      `work/packages/active-test-package.md`; parent revalidated focused proof: yes.',
@@ -994,7 +1051,10 @@ describe('work tracker subagent sequencing ledger validation', () => {
     );
 
     assert.equal(errors.length, 1);
-    assert.match(errors[0], /Subagent Progress Ledger is required/u);
+    assert.match(
+      errors[0],
+      /Subagent Progress Ledger or Subagent Progress And Attempt Ledger is required/u,
+    );
   });
 
   it('accepts checked subagent progress updates with evidence and next step', () => {
@@ -1005,6 +1065,22 @@ describe('work tracker subagent sequencing ledger validation', () => {
     );
 
     assert.deepEqual(errors, []);
+  });
+
+  it('accepts one combined progress and attempt checkpoint ledger', () => {
+    const progressErrors = validateSubagentProgressLedger(
+      WORK_TRACKER_COMBINED_PROGRESS_ATTEMPT_LEDGER_CONTENT,
+      WORK_TRACKER_LEDGER_TEST_FILE,
+      {requiresLedger: true, requiresStrictEntries: true},
+    );
+    const attemptErrors = validateSubagentAttemptLedger(
+      WORK_TRACKER_COMBINED_PROGRESS_ATTEMPT_LEDGER_CONTENT,
+      WORK_TRACKER_LEDGER_TEST_FILE,
+      {requiresLedger: true, requiresStrictEntries: true},
+    );
+
+    assert.deepEqual(progressErrors, []);
+    assert.deepEqual(attemptErrors, []);
   });
 
   it('requires completed progress updates before pre-implementation proof', () => {
@@ -1047,7 +1123,10 @@ describe('work tracker subagent sequencing ledger validation', () => {
     );
 
     assert.equal(errors.length, 1);
-    assert.match(errors[0], /Subagent Attempt Ledger is required/u);
+    assert.match(
+      errors[0],
+      /Subagent Attempt Ledger or Subagent Progress And Attempt Ledger is required/u,
+    );
   });
 
   it('accepts checked subagent attempt checkpoints with parent action', () => {
@@ -1179,6 +1258,33 @@ describe('work tracker subagent sequencing ledger validation', () => {
     );
 
     assert.deepEqual(errors, []);
+  });
+
+  it('accepts metadata-only fixes performed by the review agent', () => {
+    const errors = validateSubagentSequencingLedger(
+      WORK_TRACKER_LEDGER_REVIEW_FIXED_METADATA_CONTENT,
+      WORK_TRACKER_LEDGER_TEST_FILE,
+    );
+
+    assert.deepEqual(errors, []);
+  });
+
+  it('rejects review-fixed entries for non-metadata changes', () => {
+    const errors = validateSubagentSequencingLedger(
+      WORK_TRACKER_LEDGER_REVIEW_FIXED_RUNTIME_CONTENT,
+      WORK_TRACKER_LEDGER_TEST_FILE,
+    );
+
+    assert.match(errors.join('\n'), /metadata-only/u);
+  });
+
+  it('requires review-fixed metadata fixes to use the review agent', () => {
+    const errors = validateSubagentSequencingLedger(
+      WORK_TRACKER_LEDGER_REVIEW_FIXED_WRONG_AGENT_CONTENT,
+      WORK_TRACKER_LEDGER_TEST_FILE,
+    );
+
+    assert.match(errors.join('\n'), /must be recorded by the review agent/u);
   });
 
   it('allows pending implementation at pre-implementation validation', () => {
@@ -1372,8 +1478,7 @@ describe('work tracker package doctor', () => {
       const rendered = report.lines.join('\n');
 
       assert.match(rendered, /parent revalidated focused proof: yes/u);
-      assert.match(rendered, /Subagent Progress Ledger is required/u);
-      assert.match(rendered, /Subagent Attempt Ledger is required/u);
+      assert.match(rendered, /Subagent Progress And Attempt Ledger is required/u);
     });
 
   it('prints acceleration guidance for admin-heavy packages', () => {
@@ -2451,6 +2556,12 @@ describe('work tracker scenario causal closure validation', () => {
         payload.representativeResidual.frontier,
         'active_gate_snapshot_coverage',
       );
+      assert.match(rendered, /## Theory And Implementation Focus/u);
+      assert.match(rendered, /Theory under test/u);
+      assert.match(rendered, /Implementation slice/u);
+      assert.match(rendered, /Implementation files/u);
+      assert.match(rendered, /src\/example\.js/u);
+      assert.match(rendered, /Falsifying probe/u);
       assert.match(rendered, /Workflow lane/u);
       assert.match(rendered, /Output profile/u);
       assert.match(rendered, /## Scope/u);

@@ -120,6 +120,8 @@ const ACTIVE_WORK_REFERENCE_PATTERN =
 const SUBAGENT_LEDGER_HEADING = '## Subagent Sequencing Ledger';
 const SUBAGENT_PROGRESS_LEDGER_HEADING = '## Subagent Progress Ledger';
 const SUBAGENT_ATTEMPT_LEDGER_HEADING = '## Subagent Attempt Ledger';
+const SUBAGENT_COMBINED_PROGRESS_ATTEMPT_LEDGER_HEADING =
+  '## Subagent Progress And Attempt Ledger';
 const MARKDOWN_LEVEL_TWO_HEADING_PREFIX = '## ';
 const SUBAGENT_LEDGER_REVIEW_LABEL = 'Review subagent recorded';
 const SUBAGENT_LEDGER_FIX_LABEL =
@@ -166,6 +168,10 @@ const CURRENT_EDGE_CARD_LABEL_ACTIVE_PACKAGE_BOUNDARY =
   'Active package boundary';
 const CURRENT_EDGE_CARD_LABEL_SELECTED_CAUSE = 'Selected cause';
 const CURRENT_EDGE_CARD_LABEL_REQUIRED_ACTION = 'Required action';
+const CURRENT_BLOCKER_THEORY_SECTION_HEADING =
+  '## Theory And Implementation Focus';
+const CURRENT_BLOCKER_IMPLEMENTATION_SCOPE_PATTERN =
+  /^(?:src|test|scripts|reports|test-output)\//u;
 const COMMIT_LEDGER_COMMIT_LABEL = 'Focused package commit';
 const COMMIT_LEDGER_PUSHED_LABEL = 'Pushed to';
 const COMMIT_LEDGER_FOCUSED_SLICE_LABEL =
@@ -506,6 +512,8 @@ const AGENT_PROOF_PATTERN_TEXT_RE = new RegExp(AGENT_PROOF_PATTERN_TEXT, 'iu');
 const SUBAGENT_REVIEW_RESULT_CLEAN = 'clean';
 const SUBAGENT_REVIEW_RESULT_FIXES_REQUIRED = 'fixes-required';
 const SUBAGENT_FIX_NOT_NEEDED = 'not-needed';
+const SUBAGENT_FIX_REVIEW_FIXED_METADATA_ONLY =
+  'review-fixed-metadata-only';
 const SUBAGENT_REVIEW_NOT_NEEDED_REASON_FIRST_PACKAGE =
   'first-package-in-sprint';
 const SUBAGENT_REVIEW_PATTERN = new RegExp(
@@ -522,6 +530,12 @@ const SUBAGENT_IMPLEMENTATION_PATTERN = new RegExp(
   AGENT_PROOF_PATTERN_TEXT + '\\s+implemented\\s+`?([^;`]+)`?(?:[.;]|$)',
   'iu',
 );
+const SUBAGENT_FIX_REVIEW_FIXED_PACKAGE_PATTERN =
+  /\b(?:for|on)\s+`?([^;`]+)`?/iu;
+const SUBAGENT_FIX_REVIEW_FIXED_METADATA_SCOPE_FIELD_PATTERN =
+  /\bscope:\s*([^.;]+)/iu;
+const SUBAGENT_FIX_REVIEW_FIXED_METADATA_SCOPE_PATTERN =
+  /\b(?:metadata-only|package\s+metadata|sprint\s+metadata|tracker|handoff|current-blocker|ledger)\b/iu;
 const SUBAGENT_PARENT_REVALIDATION_PATTERN =
   /\b(?:parent\s+revalidated\s+(?:focused\s+)?proof|parent\s+validation)\s*:\s*`?yes`?/iu;
 const NON_REAL_IDENTITY_PATTERN =
@@ -658,6 +672,9 @@ function extractSubagentProgressLedger(content) {
   return extractMarkdownLevelTwoSection(
     content,
     SUBAGENT_PROGRESS_LEDGER_HEADING,
+  ) || extractMarkdownLevelTwoSection(
+    content,
+    SUBAGENT_COMBINED_PROGRESS_ATTEMPT_LEDGER_HEADING,
   );
 }
 
@@ -665,6 +682,9 @@ function extractSubagentAttemptLedger(content) {
   return extractMarkdownLevelTwoSection(
     content,
     SUBAGENT_ATTEMPT_LEDGER_HEADING,
+  ) || extractMarkdownLevelTwoSection(
+    content,
+    SUBAGENT_COMBINED_PROGRESS_ATTEMPT_LEDGER_HEADING,
   );
 }
 
@@ -811,7 +831,10 @@ export function validateSubagentProgressLedger(content, filePath, options = {}) 
   const ledger = extractSubagentProgressLedger(content);
   if (!ledger) {
     return options[LEDGER_VALIDATION_REQUIRES_LEDGER] ?
-      [`${filePath}: Subagent Progress Ledger is required.`] :
+      [
+        `${filePath}: Subagent Progress Ledger or Subagent Progress And ` +
+          'Attempt Ledger is required.',
+      ] :
       [];
   }
   if (
@@ -973,7 +996,10 @@ export function validateSubagentAttemptLedger(content, filePath, options = {}) {
   const ledger = extractSubagentAttemptLedger(content);
   if (!ledger) {
     return options[LEDGER_VALIDATION_REQUIRES_LEDGER] ?
-      [`${filePath}: Subagent Attempt Ledger is required.`] :
+      [
+        `${filePath}: Subagent Attempt Ledger or Subagent Progress And ` +
+          'Attempt Ledger is required.',
+      ] :
       [];
   }
   if (
@@ -1143,6 +1169,24 @@ function isFixNotNeededEntry(content) {
   return notNeededPattern.test(normalizedContent);
 }
 
+function isReviewFixedMetadataOnlyEntry(content) {
+  return normalizeLedgerText(content)
+    .includes(SUBAGENT_FIX_REVIEW_FIXED_METADATA_ONLY);
+}
+
+function reviewFixedMetadataScopeValue(content) {
+  const match = SUBAGENT_FIX_REVIEW_FIXED_METADATA_SCOPE_FIELD_PATTERN.exec(
+    normalizeLedgerText(content),
+  );
+  return match ? normalizeLedgerText(match[NUM_ONE]) : EMPTY_TEXT;
+}
+
+function reviewFixedMetadataScopeIsAllowed(content) {
+  return SUBAGENT_FIX_REVIEW_FIXED_METADATA_SCOPE_PATTERN.test(
+    reviewFixedMetadataScopeValue(content),
+  );
+}
+
 function parseFixEntry(content, options = {}) {
   if (
     options[LEDGER_VALIDATION_ALLOW_UNAVAILABLE_SUBAGENTS] === true &&
@@ -1155,6 +1199,23 @@ function parseFixEntry(content, options = {}) {
   if (isFixNotNeededEntry(content)) {
     return {
       type: SUBAGENT_FIX_NOT_NEEDED,
+    };
+  }
+  if (isReviewFixedMetadataOnlyEntry(content)) {
+    const normalizedContent = normalizeLedgerText(content);
+    const agentMatch = AGENT_PROOF_PATTERN_TEXT_RE.exec(normalizedContent);
+    const packageMatch =
+      SUBAGENT_FIX_REVIEW_FIXED_PACKAGE_PATTERN.exec(normalizedContent);
+    return {
+      type: SUBAGENT_FIX_REVIEW_FIXED_METADATA_ONLY,
+      agent: agentMatch ? {
+        name: normalizeLedgerText(agentMatch[NUM_ONE]),
+        id: agentMatch[NUM_TWO].toLowerCase(),
+      } : null,
+      packagePath: packageMatch ?
+        normalizeLedgerPackage(packageMatch[NUM_ONE]) :
+        null,
+      metadataOnlyScope: reviewFixedMetadataScopeIsAllowed(normalizedContent),
     };
   }
   const match = SUBAGENT_FIX_PATTERN.exec(normalizeLedgerText(content));
@@ -1243,6 +1304,26 @@ function validateSubagentLedgerReviewFixRoles(entries, filePath, options = {}) {
   if (fix?.type === 'agent') {
     errors.push(...validateAgentProof(fix.agent, 'fix', filePath));
   }
+  if (fix?.type === SUBAGENT_FIX_REVIEW_FIXED_METADATA_ONLY) {
+    errors.push(...validateAgentProof(
+      fix.agent,
+      'review-fixed metadata-only fix',
+      filePath,
+    ));
+    if (!fix.packagePath) {
+      errors.push(
+        `${filePath}: Subagent Sequencing Ledger review-fixed metadata-only ` +
+        'fix entry must name the reviewed package after `for` or `on`.',
+      );
+    }
+    if (!fix.metadataOnlyScope) {
+      errors.push(
+        `${filePath}: Subagent Sequencing Ledger review-fixed metadata-only ` +
+        'fix entry must state metadata-only, package metadata, sprint ' +
+        'metadata, tracker, handoff, current-blocker, or ledger scope.',
+      );
+    }
+  }
 
   if (!review || !fix) {
     return errors;
@@ -1258,8 +1339,7 @@ function validateSubagentLedgerReviewFixRoles(entries, filePath, options = {}) {
   }
   if (
     review.result === SUBAGENT_REVIEW_RESULT_CLEAN &&
-    fix.type !== SUBAGENT_FIX_NOT_NEEDED &&
-    fix.type === 'agent'
+    fix.type !== SUBAGENT_FIX_NOT_NEEDED
   ) {
     errors.push(
       `${filePath}: Subagent Sequencing Ledger fix entry must be not-needed ` +
@@ -1278,12 +1358,32 @@ function validateSubagentLedgerReviewFixRoles(entries, filePath, options = {}) {
   }
   if (
     review.type === 'agent' &&
+    fix.type === SUBAGENT_FIX_REVIEW_FIXED_METADATA_ONLY &&
+    fix.packagePath !== review.packagePath
+  ) {
+    errors.push(
+      `${filePath}: Subagent Sequencing Ledger review-fixed metadata-only ` +
+      'fix package must match the reviewed package.',
+    );
+  }
+  if (
+    review.type === 'agent' &&
     fix.type === 'agent' &&
     fix.agent.id === review.agent.id
   ) {
     errors.push(
       `${filePath}: Subagent Sequencing Ledger fix agent must be separate ` +
       'from the review agent.',
+    );
+  }
+  if (
+    review.type === 'agent' &&
+    fix.type === SUBAGENT_FIX_REVIEW_FIXED_METADATA_ONLY &&
+    fix.agent?.id !== review.agent.id
+  ) {
+    errors.push(
+      `${filePath}: Subagent Sequencing Ledger review-fixed metadata-only ` +
+      'fix must be recorded by the review agent.',
     );
   }
   return errors;
@@ -4742,14 +4842,15 @@ function buildDoctorSuggestion(error) {
       'then record the returned real agent id in the ledger.';
   }
   if (/Subagent Progress Ledger/iu.test(error)) {
-    return 'Add a `## Subagent Progress Ledger` and have each real subagent ' +
-      'append one checked update after every completed subtask, including ' +
-      '`evidence:` plus `next:` or `blocker:`.';
+    return 'Add a `## Subagent Progress And Attempt Ledger` and have each ' +
+      'real subagent append one checked checkpoint after every completed ' +
+      'subtask, including status, last checkpoint, parent action, `evidence:` ' +
+      'and `next:` or `blocker:`.';
   }
   if (/Subagent Attempt Ledger/iu.test(error)) {
-    return 'Add a `## Subagent Attempt Ledger` with checked attempt ' +
-      'checkpoints. Interrupted or partial-unvalidated attempts must be ' +
-      'followed by a checked superseded/discarded/revalidated line before ' +
+    return 'Add a `## Subagent Progress And Attempt Ledger` with checked ' +
+      'attempt checkpoints. Interrupted or partial-unvalidated attempts must ' +
+      'be followed by a checked superseded/discarded/revalidated line before ' +
       'closure.';
   }
   if (/Model Fit section is required/iu.test(error)) {
@@ -5219,6 +5320,53 @@ function formatMarkdownList(values) {
   return values.map((value, index) => `${index + NUM_ONE}. \`${value}\``).join(NEWLINE);
 }
 
+function firstCurrentBlockerValue(values = []) {
+  return values
+    .map((value) => normalizeLedgerText(value))
+    .find((value) => value.length > NUM_ZERO) || DEFAULT_UNKNOWN;
+}
+
+function currentBlockerImplementationFiles(payload) {
+  const implementationFiles = [
+    ...normalizeMetadataStringList(payload.writeScope),
+    ...normalizeMetadataStringList(payload.candidateRuntimeFiles),
+  ].filter((filePath) =>
+    CURRENT_BLOCKER_IMPLEMENTATION_SCOPE_PATTERN.test(filePath));
+  return implementationFiles.length > NUM_ZERO ?
+    implementationFiles :
+    normalizeMetadataStringList(payload.writeScope);
+}
+
+function currentBlockerTheoryFocus(payload) {
+  return {
+    theoryUnderTest: firstCurrentBlockerValue([
+      payload.causalGovernance?.hypothesis,
+      payload.currentState,
+    ]),
+    causalQuestion: firstCurrentBlockerValue([
+      payload.scenarioCausalClosure?.missingCausalEdge,
+      payload.dominantReason,
+    ]),
+    implementationSlice: firstCurrentBlockerValue([payload.nextAction]),
+    implementationFiles: currentBlockerImplementationFiles(payload),
+    expectedImplementationDelta: firstCurrentBlockerValue([
+      payload.causalGovernance?.expectedCausalModelChange,
+      payload.scenarioCausalClosure?.expectedObservableTransition,
+      payload.rerunDecision?.expectedDelta,
+    ]),
+    falsifyingProbe: firstCurrentBlockerValue([
+      payload.scenarioCausalClosure?.missingCausalEdgeProbe,
+      payload.causalGovernance?.stopConditionCheck,
+      normalizeMetadataStringList(payload.proof)[NUM_ZERO],
+    ]),
+    stopRule: firstCurrentBlockerValue([
+      payload.scenarioCausalClosure?.sameFrontierFallback,
+      payload.scenarioCausalClosure?.stopCondition,
+      payload.architectureDecisionGate?.nextAction,
+    ]),
+  };
+}
+
 function formatArchitectureGateChoices(choices) {
   if (!Array.isArray(choices) || choices.length === NUM_ZERO) {
     return '1. None recorded';
@@ -5423,10 +5571,29 @@ function validateLegacyCurrentNextActionSection(content, filePath) {
 }
 
 export function renderCurrentBlockerMarkdown(payload) {
+  const theoryFocus = currentBlockerTheoryFocus(payload);
   return [
     GENERATED_NOTE,
     '',
     '# Current Blocker',
+    '',
+    CURRENT_BLOCKER_THEORY_SECTION_HEADING,
+    '',
+    `Theory under test: ${theoryFocus.theoryUnderTest}`,
+    '',
+    `Causal question: ${theoryFocus.causalQuestion}`,
+    '',
+    `Implementation slice: ${theoryFocus.implementationSlice}`,
+    '',
+    'Implementation files:',
+    '',
+    formatMarkdownList(theoryFocus.implementationFiles),
+    '',
+    `Expected implementation delta: ${theoryFocus.expectedImplementationDelta}`,
+    '',
+    `Falsifying probe: ${theoryFocus.falsifyingProbe}`,
+    '',
+    `Stop rule: ${theoryFocus.stopRule}`,
     '',
     `Sprint: \`${payload.sprint}\``,
     '',

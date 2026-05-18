@@ -166,7 +166,11 @@ function roleTask(role, metadata, packagePath) {
       'Review the predecessor or most recently executed package named by this',
       'package. Focus on package proof, residual inventory, guardrail ledger,',
       'blocker migration notes, sprint snapshot consistency, and whether the',
-      'stated next action still matches artifact evidence.',
+      'stated next action still matches artifact evidence. If every finding is',
+      'limited to package, sprint, tracker, current-blocker, ledger, or handoff',
+      'metadata in the declared scope, fix it directly as the review agent and',
+      'record the fix as review-fixed-metadata-only instead of requesting a',
+      'separate fix subagent.',
     ].join(' ');
   }
   if (role === ROLE_FIX) {
@@ -199,18 +203,13 @@ function ledgerLine(role, packagePath, flags = {}) {
   return `Agent ${agentName} (${agentId}) implemented ${packagePath}; parent revalidated focused proof: yes`;
 }
 
-function attemptLedgerShape(role) {
-  return [
-    `- [x] Agent <name> (<agent-id>) ${role} attempt: status: ` +
-      '`<started|running|interrupted|partial-unvalidated|validated|superseded>`; ' +
-      'last checkpoint: <completed checkpoint>; parent action: ' +
-      '`<pending|accepted|revalidated|discarded|superseded>`; evidence: ' +
-      '<command/result/files>; next: <next step>.',
-    `- [x] Agent <name> (<agent-id>) ${role} recovery: status: ` +
-      '`superseded`; last checkpoint: replaced partial attempt; parent ' +
-      'action: `superseded`; evidence: <new agent/proof>; next: continue ' +
-      'from clean checkpoint.',
-  ].join(NEWLINE);
+function reviewMetadataFixLedgerLine(packagePath, flags = {}) {
+  const agentName = parseOptionValue(flags, FLAG_AGENT_NAME);
+  const agentId = parseOptionValue(flags, FLAG_AGENT_ID);
+  if (!agentName || !agentId) {
+    return 'If the review agent directly fixes metadata-only findings, record: `review-fixed-metadata-only by Agent <name> (<agent-id>) for <reviewed-package>; scope: metadata-only package/sprint/tracker/handoff edits`.';
+  }
+  return `review-fixed-metadata-only by Agent ${agentName} (${agentId}) for ${packagePath}; scope: metadata-only package/sprint/tracker/handoff edits`;
 }
 
 function validationCommandLines(role, packagePath, metadata) {
@@ -325,30 +324,26 @@ function buildSubagentPrompt(role, packagePath, content, args = []) {
     EMPTY_TEXT,
     list(metadata.modelFit?.escalationTriggers),
     EMPTY_TEXT,
-    '## Progress Ledger Updates',
+    '## Checkpoint Ledger Updates',
     EMPTY_TEXT,
-    'Append one checked `## Subagent Progress Ledger` update in the package after every completed subtask. Do this while working, not only in the final response.',
-    'Before edits, include a falsification update naming what evidence would prove this package is the wrong slice.',
+    'Append one checked `## Subagent Progress And Attempt Ledger` checkpoint in the package after every completed subtask. If the package already uses separate Progress and Attempt ledgers, mirror the same checkpoint facts into those existing sections instead of inventing extra prose.',
+    'Each checked checkpoint must include Agent name/id, status, last checkpoint, parent action, evidence, and next or blocker. Before edits, include a falsification checkpoint naming what evidence would prove this package is the wrong slice.',
+    role === ROLE_REVIEW ?
+      'If review findings are metadata-only, apply those edits directly and add a checked checkpoint naming the metadata-only files fixed before final review validation.' :
+      EMPTY_TEXT,
     EMPTY_TEXT,
     'Use this shape:',
     EMPTY_TEXT,
-    `- [x] Agent <name> (<agent-id>) ${role} <subtask>: <state>; evidence: <command/result/files>; next: <next step>.`,
-    `- [x] Agent <name> (<agent-id>) ${role} falsification check: wrong-slice evidence would be <owner/boundary/result change>; evidence: <command/result/files>; next: edit, validate, split, or blocker handoff.`,
+    `- [x] Agent <name> (<agent-id>) ${role} checkpoint: status: \`<started|running|interrupted|partial-unvalidated|validated|superseded>\`; last checkpoint: <completed checkpoint>; parent action: \`<pending|accepted|revalidated|discarded|superseded>\`; evidence: <command/result/files>; next: <next step>.`,
+    `- [x] Agent <name> (<agent-id>) ${role} falsification checkpoint: status: running; last checkpoint: wrong-slice check complete; parent action: pending; wrong-slice evidence would be <owner/boundary/result change>; evidence: <command/result/files>; next: edit, validate, split, or blocker handoff.`,
     EMPTY_TEXT,
     'If blocked, append `blocker:` instead of `next:` and stop for the parent session rather than continuing silently.',
     EMPTY_TEXT,
-    '## Attempt Ledger Updates',
-    EMPTY_TEXT,
-    'Append or update one checked `## Subagent Attempt Ledger` line for this role. Use `partial-unvalidated` if you edited files but cannot complete validation; use `interrupted` if the role stops before a clean checkpoint. A later worker or parent must add a checked superseded/discarded/revalidated line before closure.',
+    'Use `partial-unvalidated` if you edited files but cannot complete validation; use `interrupted` if the role stops before a clean checkpoint. A later worker or parent must add a checked superseded/discarded/revalidated checkpoint before closure.',
     `Valid statuses: ${SUBAGENT_ATTEMPT_STATUSES.map((status) => `\`${status}\``).join(', ')}.`,
+    'Progress watchdog: after each completed subtask, update the combined checkpoint ledger before continuing. Silence after a checkpoint means the parent may interrupt or discard the attempt instead of promoting it.',
     EMPTY_TEXT,
-    'Use this shape:',
-    EMPTY_TEXT,
-    attemptLedgerShape(role),
-    EMPTY_TEXT,
-    'Progress watchdog: after each completed subtask, update both the Progress Ledger and Attempt Ledger before continuing. Silence after a checkpoint means the parent may interrupt or discard the attempt instead of promoting it.',
-    EMPTY_TEXT,
-    'Final handoff must include files changed, commands run with pass/fail result, whether you edited after the last progress-ledger line, and any remaining blocker.',
+    'Final handoff must include files changed, commands run with pass/fail result, whether you edited after the last checkpoint line, and any remaining blocker.',
     EMPTY_TEXT,
     '## Ledger Line',
     EMPTY_TEXT,
@@ -357,6 +352,12 @@ function buildSubagentPrompt(role, packagePath, content, args = []) {
       'Record this Sequencing Ledger line after the role completes:',
     EMPTY_TEXT,
     ledgerLine(role, packagePath, args),
+    ...(role === ROLE_REVIEW ? [
+      EMPTY_TEXT,
+      'If metadata-only findings were fixed by the review agent, record this under `Fix subagent recorded or explicitly not needed` instead of spawning a fix subagent:',
+      EMPTY_TEXT,
+      reviewMetadataFixLedgerLine(packagePath, args),
+    ] : []),
     EMPTY_TEXT,
   ].join(NEWLINE);
 }

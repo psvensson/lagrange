@@ -115,6 +115,7 @@ const GIT_GROUP_UNRELATED = 'unrelated';
 const DEFAULT_UNKNOWN = 'unknown';
 const OUTPUT_TITLE = '# Work Context';
 const DIRTY_SCOPE_OUTPUT_TITLE = '# Worktree Package Scope';
+const SECTION_THEORY_IMPLEMENTATION = 'Theory And Implementation Focus';
 const SECTION_CURRENT_BLOCKER = 'Current Blocker';
 const SECTION_CURRENT_STATE = 'Current State';
 const SECTION_NEXT_ACTION = 'Next Action';
@@ -136,6 +137,8 @@ const SECTION_WORKTREE = 'Worktree Summary';
 const PACKAGE_SECTION_OUT_OF_SCOPE = 'Out Of Scope';
 const PACKAGE_SECTION_SUBAGENT_LEDGER = 'Subagent Sequencing Ledger';
 const PACKAGE_SECTION_SUBAGENT_PROGRESS_LEDGER = 'Subagent Progress Ledger';
+const PACKAGE_SECTION_SUBAGENT_PROGRESS_ATTEMPT_LEDGER =
+  'Subagent Progress And Attempt Ledger';
 const PACKAGE_SECTION_MODEL_FIT = 'Model Fit';
 const MESSAGE_CURRENT_BLOCKER_MISSING =
   'No current blocker handoff was found.';
@@ -160,7 +163,7 @@ const SUBAGENT_STATUS_LEDGER_MISSING =
 const SUBAGENT_STATUS_REVIEW_MISSING =
   'Review proof missing; assign a real review subagent before implementation.';
 const SUBAGENT_STATUS_FIX_REQUIRED =
-  'Review found fixes-required; assign a separate real fix subagent before implementation.';
+  'Review found fixes-required; assign a separate real fix subagent for runtime/code fixes, or have the review agent record review-fixed-metadata-only for metadata-only fixes before implementation.';
 const SUBAGENT_STATUS_FIX_NOT_NEEDED_MISSING =
   'Review is clean; record fix as not-needed before implementation.';
 const SUBAGENT_STATUS_FIX_MISSING =
@@ -178,12 +181,18 @@ const SUBAGENT_PROGRESS_ITEM_LIMIT = 3;
 const SUBAGENT_REVIEW_RESULT_CLEAN = 'clean';
 const SUBAGENT_REVIEW_RESULT_FIXES_REQUIRED = 'fixes-required';
 const SUBAGENT_FIX_NOT_NEEDED = 'not-needed';
+const SUBAGENT_FIX_REVIEW_FIXED_METADATA_ONLY =
+  'review-fixed-metadata-only';
 const SUBAGENT_REVIEW_NOT_NEEDED_REASON_FIRST_PACKAGE =
   'first-package-in-sprint';
 const SUBAGENT_REVIEW_RESULT_PATTERN =
   /result\s+`?(clean|fixes-required)`?/iu;
 const SUBAGENT_AGENT_ID_PATTERN =
   /\(`?[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}`?\)/iu;
+const SUBAGENT_REVIEW_FIXED_METADATA_SCOPE_FIELD_PATTERN =
+  /\bscope:\s*([^.;]+)/iu;
+const SUBAGENT_REVIEW_FIXED_METADATA_SCOPE_PATTERN =
+  /\b(?:metadata-only|package\s+metadata|sprint\s+metadata|tracker|handoff|current-blocker|ledger)\b/iu;
 const SUBAGENT_NON_REAL_IDENTITY_PATTERN =
   /\b(?:current-session|current session|parent\s+codex|manual|local|session)\b/iu;
 const SUBAGENT_SEQUENCE_ORDER_ERROR_PATTERN = /entries must appear/iu;
@@ -195,10 +204,15 @@ const LEDGER_VALIDATION_REQUIRES_STRICT_ENTRIES = 'requiresStrictEntries';
 const FIELD_LABELS = Object.freeze({
   ARTIFACT: 'Artifact',
   BOUNDARY: 'Boundary',
+  CAUSAL_QUESTION: 'Causal question',
   DIRTY_ENTRIES: 'Dirty entries',
   DOMINANT_REASON: 'Dominant reason',
   ESCALATION_TRIGGERS: 'Escalation triggers',
   EXPECTED_CAUSAL_MODEL_CHANGE: 'Expected causal-model change',
+  EXPECTED_IMPLEMENTATION_DELTA: 'Expected implementation delta',
+  FALSIFYING_PROBE: 'Falsifying probe',
+  IMPLEMENTATION_FILES: 'Implementation files',
+  IMPLEMENTATION_SLICE: 'Implementation slice',
   INTENDED_MINIMUM_MODEL: 'Intended minimum model',
   CAUSAL_DEBT: 'Causal debt',
   CAUSAL_HYPOTHESIS: 'Causal hypothesis',
@@ -221,8 +235,10 @@ const FIELD_LABELS = Object.freeze({
   SELECTED_CHOICE: 'Selected choice',
   WORKFLOW_LANE: 'Workflow lane',
   STOP_CONDITION_CHECK: 'Stop-condition check',
+  STOP_RULE: 'Stop rule',
   SUBAGENT_ROLE: 'Next required subagent role',
   SUBAGENT_STATUS: 'Subagent sequencing status',
+  THEORY_UNDER_TEST: 'Theory under test',
   REPRESENTATIVE_OUTCOME: 'Representative outcome',
   REFERENCE_SCENARIO_OR_PROBE: 'Reference scenario/probe',
   PHASE_CHAIN: 'Phase chain',
@@ -261,6 +277,8 @@ const GIT_RENAME_SEPARATOR = ' -> ';
 const DOUBLE_QUOTE = '"';
 const FORWARD_SLASH = '/';
 const REGEXP_ESCAPE_REPLACEMENT = '\\$&';
+const IMPLEMENTATION_SCOPE_PATH_PATTERN =
+  /^(?:src|test|scripts|reports|test-output)\//u;
 const GLOB_ANY_PATH_SEGMENT = '*';
 const GLOB_SINGLE_CHARACTER = '?';
 const GLOB_PATTERN_MARKERS = Object.freeze([
@@ -900,6 +918,16 @@ function isNotNeededFix(fixItem) {
   return normalizeString(fixItem).includes(SUBAGENT_FIX_NOT_NEEDED);
 }
 
+function isReviewFixedMetadataOnlyFix(fixItem) {
+  const normalizedItem = normalizeString(fixItem);
+  const scopeMatch =
+    SUBAGENT_REVIEW_FIXED_METADATA_SCOPE_FIELD_PATTERN.exec(normalizedItem);
+  const scope = scopeMatch ? normalizeString(scopeMatch[NUM_ONE]) : EMPTY_STRING;
+  return normalizedItem.includes(SUBAGENT_FIX_REVIEW_FIXED_METADATA_ONLY) &&
+    hasRealAgentProof(fixItem) &&
+    SUBAGENT_REVIEW_FIXED_METADATA_SCOPE_PATTERN.test(scope);
+}
+
 function hasRealAgentProof(ledgerItem) {
   const normalizedItem = normalizeString(ledgerItem);
   return SUBAGENT_AGENT_ID_PATTERN.test(normalizedItem) &&
@@ -996,7 +1024,11 @@ function buildSubagentSequencingStatus(
       SUBAGENT_STATUS_FIX_REQUIRED,
     );
   }
-  if (!isNotNeededFix(fixItem) && !hasRealAgentProof(fixItem)) {
+  if (
+    !isNotNeededFix(fixItem) &&
+    !isReviewFixedMetadataOnlyFix(fixItem) &&
+    !hasRealAgentProof(fixItem)
+  ) {
     return buildSubagentRoleStatus(
       SUBAGENT_ROLE_FIX,
       SUBAGENT_STATUS_FIX_MISSING,
@@ -1051,10 +1083,16 @@ function buildSubagentSequencingStatus(
 }
 
 function buildSubagentProgressSummary(packageContent = EMPTY_STRING) {
-  const progressItems = extractMarkdownSection(
-    packageContent,
-    PACKAGE_SECTION_SUBAGENT_PROGRESS_LEDGER,
-  )
+  const progressItems = [
+    ...extractMarkdownSection(
+      packageContent,
+      PACKAGE_SECTION_SUBAGENT_PROGRESS_LEDGER,
+    ),
+    ...extractMarkdownSection(
+      packageContent,
+      PACKAGE_SECTION_SUBAGENT_PROGRESS_ATTEMPT_LEDGER,
+    ),
+  ]
     .filter((item) => SUBAGENT_PROGRESS_CHECKED_ITEM_PATTERN.test(item))
     .map((item) =>
       item.replace(SUBAGENT_PROGRESS_CHECKED_ITEM_PATTERN, EMPTY_STRING));
@@ -1115,6 +1153,63 @@ function buildCandidateRuntimeFiles(currentBlocker = {}) {
 function buildCommitScope(currentBlocker = {}) {
   const commitScope = scopeList(currentBlocker, METADATA_FIELD_COMMIT_SCOPE);
   return commitScope.length > NUM_ZERO ? commitScope : buildWriteScope(currentBlocker);
+}
+
+function firstNonEmptyValue(values = []) {
+  return values
+    .map((value) => normalizeString(value))
+    .find((value) => value.length > NUM_ZERO) || DEFAULT_UNKNOWN;
+}
+
+function firstProofCommand(currentBlocker = {}) {
+  return normalizeStringList(currentBlocker.proof)[NUM_ZERO] || DEFAULT_UNKNOWN;
+}
+
+function buildImplementationFiles(currentBlocker = {}) {
+  const implementationFiles = normalizeStringList([
+    ...buildWriteScope(currentBlocker),
+    ...buildCandidateRuntimeFiles(currentBlocker),
+  ]).filter((filePath) => IMPLEMENTATION_SCOPE_PATH_PATTERN.test(filePath));
+  return implementationFiles.length > NUM_ZERO ?
+    implementationFiles :
+    buildWriteScope(currentBlocker);
+}
+
+function buildTheoryImplementationFocus(currentBlocker = {}) {
+  const causalGovernance = currentBlocker.causalGovernance || {};
+  const scenarioCausalClosure = currentBlocker.scenarioCausalClosure || {};
+  const rerunDecision = currentBlocker.rerunDecision || {};
+  return {
+    theoryUnderTest: firstNonEmptyValue([
+      causalGovernance[CAUSAL_GOVERNANCE_FIELD_HYPOTHESIS],
+      currentBlocker.currentState,
+    ]),
+    causalQuestion: firstNonEmptyValue([
+      scenarioCausalClosure[SCENARIO_CAUSAL_CLOSURE_FIELD_MISSING_EDGE],
+      currentBlocker.dominantReason,
+    ]),
+    implementationSlice: firstNonEmptyValue([
+      currentBlocker.nextAction,
+    ]),
+    implementationFiles: buildImplementationFiles(currentBlocker),
+    expectedImplementationDelta: firstNonEmptyValue([
+      causalGovernance[CAUSAL_GOVERNANCE_FIELD_EXPECTED_CAUSAL_MODEL_CHANGE],
+      scenarioCausalClosure[
+        SCENARIO_CAUSAL_CLOSURE_FIELD_EXPECTED_OBSERVABLE_TRANSITION
+      ],
+      rerunDecision.expectedDelta,
+    ]),
+    falsifyingProbe: firstNonEmptyValue([
+      scenarioCausalClosure[SCENARIO_CAUSAL_CLOSURE_FIELD_MISSING_EDGE_PROBE],
+      causalGovernance[CAUSAL_GOVERNANCE_FIELD_STOP_CONDITION_CHECK],
+      firstProofCommand(currentBlocker),
+    ]),
+    stopRule: firstNonEmptyValue([
+      scenarioCausalClosure[SCENARIO_CAUSAL_CLOSURE_FIELD_SAME_FRONTIER_FALLBACK],
+      scenarioCausalClosure[SCENARIO_CAUSAL_CLOSURE_FIELD_STOP_CONDITION],
+      currentBlocker.architectureDecisionGate?.nextAction,
+    ]),
+  };
 }
 
 function buildReadScope(currentBlocker = {}) {
@@ -1497,6 +1592,40 @@ async function buildContextLines(currentBlocker, packageContent) {
     currentBlocker,
     packageContent || EMPTY_STRING,
   );
+  const theoryFocus = buildTheoryImplementationFocus(currentBlocker);
+
+  appendSection(lines, SECTION_THEORY_IMPLEMENTATION);
+  appendKeyValue(
+    lines,
+    FIELD_LABELS.THEORY_UNDER_TEST,
+    theoryFocus.theoryUnderTest,
+  );
+  appendKeyValue(
+    lines,
+    FIELD_LABELS.CAUSAL_QUESTION,
+    theoryFocus.causalQuestion,
+  );
+  appendKeyValue(
+    lines,
+    FIELD_LABELS.IMPLEMENTATION_SLICE,
+    theoryFocus.implementationSlice,
+  );
+  appendKeyValue(
+    lines,
+    FIELD_LABELS.IMPLEMENTATION_FILES,
+    theoryFocus.implementationFiles.join(', '),
+  );
+  appendKeyValue(
+    lines,
+    FIELD_LABELS.EXPECTED_IMPLEMENTATION_DELTA,
+    theoryFocus.expectedImplementationDelta,
+  );
+  appendKeyValue(
+    lines,
+    FIELD_LABELS.FALSIFYING_PROBE,
+    theoryFocus.falsifyingProbe,
+  );
+  appendKeyValue(lines, FIELD_LABELS.STOP_RULE, theoryFocus.stopRule);
 
   appendSection(lines, SECTION_CURRENT_BLOCKER);
   appendKeyValue(lines, FIELD_LABELS.SPRINT, currentBlocker.sprint);
@@ -1867,6 +1996,7 @@ export {
   buildFirstReadPaths,
   buildModelFitContext,
   buildOwnerCardPaths,
+  buildTheoryImplementationFocus,
   buildWriteScope,
   buildSubagentSequencingStatus,
   buildUsefulCommands,

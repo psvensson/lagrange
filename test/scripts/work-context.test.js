@@ -10,6 +10,7 @@ import {
   buildFirstReadPaths,
   buildModelFitContext,
   buildOwnerCardPaths,
+  buildTheoryImplementationFocus,
   buildSubagentSequencingStatus,
   buildUsefulCommands,
   buildWriteScope,
@@ -80,7 +81,7 @@ const TEST_PACKAGE_READY_CONTENT = [
   '- [x] Fix subagent recorded or explicitly not needed: `not-needed`.',
   '- [x] Implementation subagent recorded:',
   `      Agent Implement (${IMPLEMENTATION_AGENT_ID}) implemented`,
-  '      `work/packages/active-20260507-test-package.md`.',
+  '      `work/packages/active-20260507-test-package.md`; parent revalidated focused proof: yes.',
   '',
 ].join('\n');
 const TEST_PACKAGE_FIRST_IN_SPRINT_CONTENT = [
@@ -92,7 +93,7 @@ const TEST_PACKAGE_FIRST_IN_SPRINT_CONTENT = [
   '- [x] Fix subagent recorded or explicitly not needed: `not-needed`.',
   '- [x] Implementation subagent recorded:',
   `      Agent Implement (${IMPLEMENTATION_AGENT_ID}) implemented`,
-  '      `work/packages/active-20260507-test-package.md`.',
+  '      `work/packages/active-20260507-test-package.md`; parent revalidated focused proof: yes.',
   '',
 ].join('\n');
 const TEST_PACKAGE_ROLE_ORDER_INVALID_CONTENT = [
@@ -105,7 +106,7 @@ const TEST_PACKAGE_ROLE_ORDER_INVALID_CONTENT = [
   '      `work/packages/done-test-package.md`; result `fixes-required`.',
   '- [x] Implementation subagent recorded:',
   `      Agent Implement (${IMPLEMENTATION_AGENT_ID}) implemented`,
-  '      `work/packages/active-20260507-test-package.md`.',
+  '      `work/packages/active-20260507-test-package.md`; parent revalidated focused proof: yes.',
   '- [x] Fix subagent recorded or explicitly not needed:',
   `      Agent Fix (${FIX_AGENT_ID}) fixed`,
   '      `work/packages/done-test-package.md`.',
@@ -122,7 +123,7 @@ const TEST_PACKAGE_IMPLEMENTATION_MISMATCH_CONTENT = [
   '- [x] Fix subagent recorded or explicitly not needed: `not-needed`.',
   '- [x] Implementation subagent recorded:',
   `      Agent Implement (${IMPLEMENTATION_AGENT_ID}) implemented`,
-  '      `work/packages/active-20260507-other-package.md`.',
+  '      `work/packages/active-20260507-other-package.md`; parent revalidated focused proof: yes.',
   '',
 ].join('\n');
 const TEST_PACKAGE_BAD_FIX_CONSISTENCY_CONTENT = [
@@ -136,7 +137,23 @@ const TEST_PACKAGE_BAD_FIX_CONSISTENCY_CONTENT = [
   '- [x] Fix subagent recorded or explicitly not needed: `not-needed`.',
   '- [x] Implementation subagent recorded:',
   `      Agent Implement (${IMPLEMENTATION_AGENT_ID}) implemented`,
-  '      `work/packages/active-20260507-test-package.md`.',
+  '      `work/packages/active-20260507-test-package.md`; parent revalidated focused proof: yes.',
+  '',
+].join('\n');
+const TEST_PACKAGE_REVIEW_FIXED_METADATA_CONTENT = [
+  '# Test Package',
+  '',
+  '## Subagent Sequencing Ledger',
+  '',
+  '- [x] Review subagent recorded:',
+  `      Agent Review (${REVIEW_AGENT_ID}) reviewed`,
+  '      `work/packages/done-test-package.md`; result `fixes-required`.',
+  '- [x] Fix subagent recorded or explicitly not needed:',
+  `      review-fixed-metadata-only by Agent Review (${REVIEW_AGENT_ID})`,
+  '      for `work/packages/done-test-package.md`; scope: metadata-only package/sprint/tracker/handoff edits.',
+  '- [x] Implementation subagent recorded:',
+  `      Agent Implement (${IMPLEMENTATION_AGENT_ID}) implemented`,
+  '      `work/packages/active-20260507-test-package.md`; parent revalidated focused proof: yes.',
   '',
 ].join('\n');
 const TEST_PACKAGE_SAME_AGENT_REUSE_CONTENT = [
@@ -150,7 +167,7 @@ const TEST_PACKAGE_SAME_AGENT_REUSE_CONTENT = [
   '- [x] Fix subagent recorded or explicitly not needed: `not-needed`.',
   '- [x] Implementation subagent recorded:',
   `      Agent Review Again (${REVIEW_AGENT_ID}) implemented`,
-  '      `work/packages/active-20260507-test-package.md`.',
+  '      `work/packages/active-20260507-test-package.md`; parent revalidated focused proof: yes.',
   '',
 ].join('\n');
 const TEST_PACKAGE_MANUAL_FIX_NOTE_CONTENT = [
@@ -165,7 +182,7 @@ const TEST_PACKAGE_MANUAL_FIX_NOTE_CONTENT = [
   '      `not-needed`. Manual current session note carried forward.',
   '- [x] Implementation subagent recorded:',
   `      Agent Implement (${IMPLEMENTATION_AGENT_ID}) implemented`,
-  '      `work/packages/active-20260507-test-package.md`.',
+  '      `work/packages/active-20260507-test-package.md`; parent revalidated focused proof: yes.',
   '',
 ].join('\n');
 const TEST_PACKAGE_LOCAL_SESSION_CONTENT = [
@@ -304,6 +321,7 @@ const RUNTIME_GRAMMAR_BROAD_FILE_COMMAND =
   'npm run audit:runtime-grammar -- ' + TEST_BOOTSTRAP_SOURCE_PATH;
 const SECTION_USEFUL_COMMANDS = '## Useful Commands';
 const SECTION_FIRST_FILES = '## First Files To Read';
+const SECTION_THEORY_IMPLEMENTATION = '## Theory And Implementation Focus';
 const SECTION_SUBAGENT_SEQUENCING = '## Subagent Sequencing';
 const SECTION_SUBAGENT_PROGRESS = '## Subagent Progress';
 const SECTION_MODEL_FIT = '## Model Fit';
@@ -383,6 +401,20 @@ test('work context advertises triage commands before raw artifact reads',
     t.ok(commands.includes(RUNTIME_GRAMMAR_FILE_COMMAND));
     t.notOk(commands.includes(RUNTIME_GRAMMAR_BROAD_FILE_COMMAND));
     t.ok(rendered.includes('Playback: ' + TEST_PLAYBACK_PATH + ' (missing)'));
+    t.ok(rendered.includes(SECTION_THEORY_IMPLEMENTATION));
+    t.ok(rendered.includes('Theory under test: Causal edge should reduce.'));
+    t.ok(rendered.includes('Causal question: dispatch wake proof'));
+    t.ok(rendered.includes('Implementation slice: Next action.'));
+    t.ok(rendered.includes(
+      'Implementation files: ' + TEST_BOOTSTRAP_SOURCE_PATH,
+    ));
+    t.ok(rendered.includes(
+      'Expected implementation delta: edge disappears or migrates',
+    ));
+    t.ok(rendered.includes(
+      'Falsifying probe: npm test -- test/rebalancer/' +
+        'operation-workflow-progress-event-driven-reentry.test.js',
+    ));
     t.ok(rendered.includes(SECTION_SUBAGENT_SEQUENCING));
     t.ok(rendered.includes(SECTION_SUBAGENT_PROGRESS));
     t.ok(rendered.includes(SECTION_MODEL_FIT));
@@ -430,11 +462,29 @@ test('work context advertises triage commands before raw artifact reads',
     t.ok(rendered.includes('Stop condition: continue-local-fix'));
     t.ok(rendered.includes('Next required subagent role: review'));
     t.ok(
+      rendered.indexOf(SECTION_THEORY_IMPLEMENTATION) <
+        rendered.indexOf('## Current Blocker'),
+      'theory and implementation focus should precede process metadata',
+    );
+    t.ok(
       rendered.indexOf(SECTION_USEFUL_COMMANDS) <
         rendered.indexOf(SECTION_FIRST_FILES),
       'triage commands section should precede first raw artifact reads',
     );
   });
+
+test('work context builds a theory and implementation focus card', (t) => {
+  const focus = buildTheoryImplementationFocus(TEST_BLOCKER);
+
+  t.equal(focus.theoryUnderTest, 'Causal edge should reduce.');
+  t.equal(focus.causalQuestion, 'dispatch wake proof');
+  t.equal(focus.expectedImplementationDelta, 'edge disappears or migrates');
+  t.same(focus.implementationFiles, [
+    TEST_BOOTSTRAP_SOURCE_PATH,
+    TEST_BOOTSTRAP_TEST_PATH,
+  ]);
+  t.end();
+});
 
 test('work context extracts model fit from package metadata and section text',
   (t) => {
@@ -462,6 +512,10 @@ test('work context reports the next required subagent role', (t) => {
   const localSession = buildSubagentSequencingStatus(
     TEST_PACKAGE_LOCAL_SESSION_CONTENT,
   );
+  const reviewFixedMetadata = buildSubagentSequencingStatus(
+    TEST_PACKAGE_REVIEW_FIXED_METADATA_CONTENT,
+    TEST_PACKAGE_PATH,
+  );
 
   t.equal(missingLedger.role, 'review');
   t.match(missingLedger.status, /Ledger missing/u);
@@ -473,6 +527,8 @@ test('work context reports the next required subagent role', (t) => {
   t.match(firstInSprint.status, /implementation proof recorded/u);
   t.equal(localSession.role, 'review');
   t.match(localSession.status, /Review proof missing/u);
+  t.equal(reviewFixedMetadata.role, 'none');
+  t.match(reviewFixedMetadata.status, /implementation proof recorded/u);
   t.end();
 });
 

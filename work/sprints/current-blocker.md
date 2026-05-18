@@ -2,15 +2,39 @@
 
 # Current Blocker
 
+## Theory And Implementation Focus
+
+Theory under test: The selected runtime successor owns one bounded topology_publication_owner / publication_convergence slice because route-after-rerun keeps the first frontier on publication_pending while downstream active-gate, workflow, readiness, admission, handoff architecture, and timeout evidence remains frozen.
+
+Causal question: Determine whether publication owner reconcile should advance or close the OPEN epoch-1 publication_pending state for the two pending publication nodes.
+
+Implementation slice: Close this package as reduced after focused commit/push containment, then open one bounded runtime-owner-boundary successor from the fresh artifact for the remaining publication_pending producer/active-gate mismatch unless architecture review overrides the local runtime route.
+
+Implementation files:
+
+1. `src/control-plane/publication-owner-evidence.js`
+2. `src/control-plane/publication-owner-decision.js`
+3. `src/control-plane/publication-recovery-gate.js`
+4. `src/control-plane/publication-recovery-evidence.js`
+5. `test/control-plane/publication-owner-stream.test.js`
+6. `test/control-plane/publication-recovery-gate.test.js`
+7. `test/control-plane/publication-recovery-evidence.test.js`
+
+Expected implementation delta: Focused implementation should reduce or close publication_pending owner reconcile debt before active-gate or workflow consumers can be selected.
+
+Falsifying probe: npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-owner-reconcile-narrowing-20260518T171916Z.report.json --handoff-probe
+
+Stop rule: If fresh representative evidence returns publication_pending without concrete metric or state reduction, stop for architecture or human escalation instead of opening another local runtime package.
+
 Sprint: `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md`
 
-Package: `work/packages/active-20260518-topology-publication-pending-runtime-after-missing-published-reduction.md`
+Package: `work/packages/active-20260518-topology-publication-pending-owner-reconcile-runtime.md`
 
-Workflow lane: `causal-escalation`
+Workflow lane: `runtime-owner-boundary`
 
 Scenario: `rolling-restart`
 
-Artifact: `test-output/reports/rolling-restart-after-missing-published-normalization-20260518T155705Z.report.json`
+Artifact: `test-output/reports/rolling-restart-after-owner-reconcile-narrowing-20260518T171916Z.report.json`
 
 Playback: `none`
 
@@ -22,25 +46,26 @@ Boundary: `publication_convergence`
 
 Dominant reason: `publication_pending`
 
-Current state: Fresh representative evidence reduced the missing_published_nodes_present package but returned to a recently closed same-owner publication_pending frontier; package doctor flags this as frontier oscillation before another local runtime patch.
+Current state: Fresh representative rerun remains on topology_publication_owner / publication_convergence / publication_pending with OPEN epoch 1 publication and priority residual witnesses=0; the focused slice reduced the live active-gate disagreement metric from 3 to 1, while canonical producer evidence still reports missingPublishedCount=4 and owner reconcile remains pending for two publication nodes.
 
 ## Next Action
 
-Causal gate selects the route-after-rerun local runtime path; close this gate and open a bounded runtime-owner-boundary successor for topology_publication_owner / publication_convergence / publication_pending.
+Close this package as reduced after focused commit/push containment, then open one bounded runtime-owner-boundary successor from the fresh artifact for the remaining publication_pending producer/active-gate mismatch unless architecture review overrides the local runtime route.
 
 ## Proof Ladder
 
-1. `npm run work:evidence-summary -- test-output/reports/rolling-restart-after-missing-published-normalization-20260518T155705Z.report.json`
-2. `npm run work:scenario-route -- test-output/reports/rolling-restart-after-missing-published-normalization-20260518T155705Z.report.json --owner topology_publication_owner --boundary publication_convergence --dominant-reason publication_pending --explain publication_ack_convergence --markdown`
-3. `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-missing-published-normalization-20260518T155705Z.report.json`
+1. `npm run work:scenario-route -- test-output/reports/rolling-restart-after-owner-reconcile-narrowing-20260518T171916Z.report.json --owner topology_publication_owner --boundary publication_convergence --dominant-reason publication_pending --explain publication_ack_convergence --markdown`
+2. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-owner-reconcile-narrowing-20260518T171916Z.report.json --handoff-probe`
+3. `npm test -- test/control-plane/publication-owner-stream.test.js test/control-plane/publication-recovery-gate.test.js test/control-plane/publication-recovery-evidence.test.js`
+4. `npm run test:static`
 
 ## Model Fit
 
-Package class: `causal-escalation-owner-handoff`
+Package class: `runtime-owner-boundary`
 
 Intended minimum model: `gpt-5.3-codex`
 
-Scope shape: `owner-boundary-contraction/current-frontier`
+Scope shape: `bounded-owner-runtime/current-frontier`
 
 Output profile: `medium`
 
@@ -51,11 +76,11 @@ Escalation triggers:
 
 ## Representative Residual
 
-Status: `same-frontier`
+Status: `reduced`
 
 Scenario: `rolling-restart`
 
-Artifact: `test-output/reports/rolling-restart-after-missing-published-normalization-20260518T155705Z.report.json`
+Artifact: `test-output/reports/rolling-restart-after-owner-reconcile-narrowing-20260518T171916Z.report.json`
 
 Frontier: `publication_ack_convergence`
 
@@ -65,61 +90,61 @@ Boundary: `publication_convergence`
 
 Dominant reason: `publication_pending`
 
-Next action: `Classify the publication_pending oscillation before another local runtime patch.`
+Next action: `Close this package as reduced after focused commit/push containment, then open one bounded runtime-owner-boundary successor for the remaining producer/active-gate publication mismatch.`
 
 ## Causal Governance
 
-Causal hypothesis: `The sprint reduced the stale count-only missing-published artifact shape, but the fresh representative frontier returned to topology_publication_owner / publication_convergence / publication_pending, a recently closed same-owner frontier. The next decision is whether this is expected bounded progress toward publication reconcile or another oscillation that needs architecture or human escalation.`
+Causal hypothesis: `The selected runtime successor owns one bounded topology_publication_owner / publication_convergence slice because route-after-rerun keeps the first frontier on publication_pending while downstream active-gate, workflow, readiness, admission, handoff architecture, and timeout evidence remains frozen.`
 
-Stop-condition check: `Use route-after-rerun, evidence-summary, scenario-route, npm run analyze:causal-model, priority residual extraction, and recent package history before selecting another runtime implementation package.`
+Stop-condition check: `Use npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-owner-reconcile-narrowing-20260518T171916Z.report.json plus the handoff probe, distributed failure extractor, and focused owner tests before successor runtime edits.`
 
-Expected causal-model change: `This package should not change runtime; it should classify whether the returned publication_pending frontier has a concrete reduced shape that permits one more bounded runtime successor or requires architecture/human escalation.`
+Expected causal-model change: `Focused implementation should reduce or close publication_pending owner reconcile debt before active-gate or workflow consumers can be selected.`
 
-Representative outcome: `same-frontier`
+Representative outcome: `reduced`
 
-Causal debt: `Fresh artifact test-output/reports/rolling-restart-after-missing-published-normalization-20260518T155705Z.report.json reports publicationStatus=OPEN, publicationEpoch=1, publishedActive=1/5, snapshotCoverage=3/5, priority residual witnesses=0, active-gate runtimePromotionAllowed=false, and handoff pending owner reconcile for two nodes.`
+Causal debt: `Fresh artifact reports the same topology_publication_owner / publication_convergence / publication_pending first frontier, publicationStatus=OPEN, publicationEpoch=1, publishedActive=1/5, canonical missingPublishedCount=4, priority residual witnesses=0, active-gate runtimePromotionAllowed=false, and owner reconcile pending for nodes 11601fe0-72d6-5853-8590-ec2881853e72 and 35a891b8-c1a0-5064-9c6e-2acfba61c2a7; distributed failure progress reduced disagreementNodes from 3 to 1 and changed the active-gate missing-active blocker to node 35a891b8-c1a0-5064-9c6e-2acfba61c2a7.`
 
-Cross-boundary review: `Required before any new runtime-owner-boundary implementation package.`
+Cross-boundary review: `Required before implementation: review must confirm the closed causal gate selected human-directed-runtime-successor and that non-publication owner files remain forbidden.`
 
 ## Scenario Causal Closure
 
-Reference scenario/probe: `rolling-restart publication_pending after missing-published reduction`
+Reference scenario/probe: `rolling-restart publication_pending owner reconcile runtime successor`
 
 Phase chain:
 
-1. `focused missing-published normalization passed local owner tests`
-2. `representative rerun reduced the stale count-only missing-published shape`
-3. `fresh artifact returned to publication_pending inside the same owner and boundary`
+1. `the causal gate selected continue_local_fix after the missing-published reduction`
+2. `fresh route evidence keeps publication_ack_convergence first`
+3. `handoff probe reports no missing edge and active-gate runtimePromotionAllowed=false`
 4. `priority residual witnesses remain zero`
-5. `active-gate runtime promotion remains false and owner reconcile is pending`
+5. `this runtime package is limited to publication owner reconcile debt`
 
-Current first frontier: `publication_ack_convergence / topology_publication_owner / publication_convergence / publication_pending in test-output/reports/rolling-restart-after-missing-published-normalization-20260518T155705Z.report.json.`
+Current first frontier: `publication_ack_convergence / topology_publication_owner / publication_convergence / publication_pending in test-output/reports/rolling-restart-after-owner-reconcile-narrowing-20260518T171916Z.report.json.`
 
 Known downstream blockers:
 
-1. `startup active-gate snapshot coverage remains deferred on snapshot_coverage_incomplete and snapshot_repair_deferred`
+1. `startup active-gate snapshot coverage remains deferred on owner_reconcile_pending and snapshot repair`
 2. `operation workflow priority residual witnesses are zero`
 3. `startup readiness inherits active-gate no-progress evidence`
 
-Missing causal edge: `The sprint needs to decide whether returned publication_pending with owner reconcile pending is bounded publication progress or an oscillating same-owner frontier that should not receive another local runtime patch.`
+Missing causal edge: `Determine whether publication owner reconcile should advance or close the OPEN epoch-1 publication_pending state for the two pending publication nodes.`
 
-Missing causal edge probe: `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-missing-published-normalization-20260518T155705Z.report.json --handoff-probe`
+Missing causal edge probe: `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-owner-reconcile-narrowing-20260518T171916Z.report.json --handoff-probe`
 
-Bounded progress proof: `Bounded progress mechanism is stopped runtime patching after the reduced representative rerun and running this causal gate before another implementation package.`
+Bounded progress proof: `Bounded reconcile progress is one publication-owner runtime slice with focused owner tests before any representative rerun.`
 
-Bounded progress proof artifact: `work/packages/done-20260518-topology-publication-missing-published-runtime-after-oscillation.md and test-output/reports/rolling-restart-after-missing-published-normalization-20260518T155705Z.report.json`
+Bounded progress proof artifact: `work/packages/active-20260518-topology-publication-pending-owner-reconcile-runtime.md and test-output/reports/rolling-restart-after-owner-reconcile-narrowing-20260518T171916Z.report.json`
 
-Expected observable transition: `This package should select human/architecture escalation, rerun-needed, or explicitly approve a bounded same-owner runtime successor with a concrete expected delta.`
+Expected observable transition: `Fresh representative evidence reduced live active-gate disagreementNodes from 3 to 1 while retaining the same canonical publication_pending frontier; successor proof must reduce the remaining producer/active-gate publication mismatch, migrate owner boundary, or turn representative green.`
 
-Max progress bound: `one causal-escalation package before any runtime successor`
+Max progress bound: `one runtime-owner-boundary package before architecture or human escalation if publication_pending is unchanged`
 
-Same-frontier fallback: `If no concrete reduction or selected route is recorded, do not open another local runtime package.`
+Same-frontier fallback: `If fresh representative evidence returns publication_pending without concrete metric or state reduction, stop for architecture or human escalation instead of opening another local runtime package.`
 
-Expected next frontier: `selected human/architecture route, rerun-needed decision, or explicitly approved bounded runtime successor`
+Expected next frontier: `reduced publication_pending, migrated owner boundary, representative green, or architecture/human escalation`
 
-Result classification: `same-frontier`
+Result classification: `reduced`
 
-Stop condition: `human-escalation`
+Stop condition: `continue-local-fix`
 
 Recent frontier history:
 
@@ -127,13 +152,13 @@ Recent frontier history:
 2. `work/packages/done-20260518-topology-publication-missing-published-oscillation-gate.md / topology_publication_owner / publication_convergence / human-directed-runtime-successor`
 3. `work/packages/done-20260518-topology-publication-missing-published-runtime-after-oscillation.md / topology_publication_owner / publication_convergence / reduced`
 
-Oscillation check: `Fresh representative proof reduced the current package shape but returned to a recently closed publication_pending frontier.`
+Oscillation check: `This runtime successor is allowed only because the just-closed causal gate selected the continue-local-proof route from the frontier oscillation.`
 
-Handoff invariant: `No startup active-gate, operation workflow, readiness, admission, handoff architecture, timeout, or publication runtime edit may start from this package without an explicit selected route.`
+Handoff invariant: `Do not edit startup active-gate, operation workflow, readiness, admission, handoff architecture, or timeout files unless fresh canonical evidence migrates the owner boundary.`
 
 ## Rerun Decision
 
-Source artifact: `test-output/reports/rolling-restart-after-missing-published-normalization-20260518T155705Z.report.json`
+Source artifact: `test-output/reports/rolling-restart-after-owner-reconcile-narrowing-20260518T171916Z.report.json`
 
 Route owner: `topology_publication_owner`
 
@@ -147,11 +172,11 @@ Stop mode: `classified_local_blocker`
 
 Next lane: `runtime-owner-boundary`
 
-Expected delta: `Classify returned publication_pending as bounded progress, rerun-needed, architecture/human escalation, or explicitly approved runtime successor.`
+Expected delta: `Fresh representative proof reduced live active-gate disagreementNodes from 3 to 1 but kept the canonical first frontier on publication_pending; the next package must reduce the remaining producer/active-gate publication mismatch, migrate owner boundary, or stop for architecture/human escalation.`
 
 Required refresh commands:
 
-1. `npm run work:package:route-after-rerun -- --artifact test-output/reports/rolling-restart-after-missing-published-normalization-20260518T155705Z.report.json --owner topology_publication_owner --boundary publication_convergence --dominant-reason publication_pending`
+1. `npm run work:package:route-after-rerun -- --artifact test-output/reports/rolling-restart-after-owner-reconcile-narrowing-20260518T171916Z.report.json --owner topology_publication_owner --boundary publication_convergence --dominant-reason publication_pending`
 2. `update Sprint Strategy Brief and Current Edge Card from the route result`
 3. `npm run work:current-blocker -- --write`
 4. `npm run work:validate -- --pre-impl`
@@ -168,15 +193,15 @@ Proof command budget: `two-or-three-canonical-commands`
 
 Commands:
 
-1. `npm run work:evidence-summary -- test-output/reports/rolling-restart-after-missing-published-normalization-20260518T155705Z.report.json`
-2. `npm run work:scenario-route -- test-output/reports/rolling-restart-after-missing-published-normalization-20260518T155705Z.report.json --owner topology_publication_owner --boundary publication_convergence --dominant-reason publication_pending --explain publication_ack_convergence --markdown`
-3. `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-missing-published-normalization-20260518T155705Z.report.json`
+1. `npm run work:scenario-route -- test-output/reports/rolling-restart-after-owner-reconcile-narrowing-20260518T171916Z.report.json --owner topology_publication_owner --boundary publication_convergence --dominant-reason publication_pending --explain publication_ack_convergence --markdown`
+2. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-owner-reconcile-narrowing-20260518T171916Z.report.json --handoff-probe`
+3. `npm test -- test/control-plane/publication-owner-stream.test.js test/control-plane/publication-recovery-gate.test.js test/control-plane/publication-recovery-evidence.test.js`
 
-Decision record: `A separate causal package is allowed because the fresh representative result returned to a recently closed owner/boundary frontier.`
+Decision record: `Record classification in the current package or sprint edge card; open a separate classifier only for material route, owner, boundary, stop-condition, tracker-truth, or successor-selection changes.`
 
 Successor action: `open-runtime-owner-boundary`
 
-Runtime promotion rule: `Runtime files stay in candidateRuntimeFiles until the bounded runtime-owner-boundary successor activates them.`
+Runtime promotion rule: `When canonical owner and boundary are stable, prefer a runtime-owner-boundary successor and keep runtime files in candidateRuntimeFiles until that package activates them.`
 
 ## Architecture Decision Gate
 
@@ -186,35 +211,44 @@ Trigger: `frontier-oscillation`
 
 Trigger evidence:
 
-1. `package doctor flags the publication_pending successor as frontier oscillation`
-2. `fresh route remains topology_publication_owner / publication_convergence`
+1. `closed causal gate selected human-directed-runtime-successor`
+2. `route-after-rerun keeps topology_publication_owner / publication_convergence / publication_pending`
 3. `priority residual witnesses are zero`
 4. `active-gate runtimePromotionAllowed=false`
-5. `owner reconcile remains pending for two nodes`
+5. `owner reconcile remains pending for two publication nodes`
 
 Choices:
 
-1. `human-directed-runtime-successor` route=`continue-local-proof` - Use the route-after-rerun local fix result and user direction to open one bounded runtime-owner-boundary successor while keeping non-publication owners frozen.
+1. `human-directed-runtime-successor` route=`continue-local-proof` - Execute one bounded publication-owner runtime slice while keeping non-publication owners frozen.
 
 Selected choice: `human-directed-runtime-successor`
 
-Gate next action: Close this causal gate and open the bounded runtime-owner-boundary successor before runtime implementation starts.
+Gate next action: Run required review/fix/implementation sequencing before runtime edits.
 
 ## Scope
 
 Write scope:
 
-1. `work/packages/active-20260518-topology-publication-pending-runtime-after-missing-published-reduction.md`
+1. `work/packages/active-20260518-topology-publication-pending-owner-reconcile-runtime.md`
 2. `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md`
 3. `work/sprints/current-blocker.md`
 4. `work/sprints/current-blocker.json`
 5. `work/model-ledger.jsonl`
+6. `src/control-plane/publication-owner-evidence.js`
+7. `src/control-plane/publication-owner-decision.js`
+8. `src/control-plane/publication-recovery-gate.js`
+9. `src/control-plane/publication-recovery-evidence.js`
+10. `test/control-plane/publication-owner-stream.test.js`
+11. `test/control-plane/publication-recovery-gate.test.js`
+12. `test/control-plane/publication-recovery-evidence.test.js`
 
 Handoff files:
 
 1. `work/packages/done-20260518-topology-publication-missing-published-runtime-after-oscillation.md`
 2. `work/packages/done-20260518-topology-publication-missing-published-oscillation-gate.md`
-3. `test-output/reports/rolling-restart-after-missing-published-normalization-20260518T155705Z.report.json`
+3. `work/packages/done-20260518-topology-publication-unknown-no-debt-pending-runtime.md`
+4. `test-output/reports/rolling-restart-after-missing-published-normalization-20260518T155705Z.report.json`
+5. `test-output/reports/rolling-restart-after-owner-reconcile-narrowing-20260518T171916Z.report.json`
 
 Generated files:
 
@@ -223,21 +257,23 @@ Generated files:
 
 Candidate runtime files:
 
-1. `src/control-plane/publication-owner-evidence.js`
-2. `src/control-plane/publication-owner-decision.js`
-3. `src/control-plane/publication-recovery-gate.js`
-4. `src/control-plane/publication-recovery-evidence.js`
-5. `test/control-plane/publication-owner-stream.test.js`
-6. `test/control-plane/publication-recovery-gate.test.js`
-7. `test/control-plane/publication-recovery-evidence.test.js`
+1. None recorded
 
 Commit scope:
 
-1. `work/packages/active-20260518-topology-publication-pending-runtime-after-missing-published-reduction.md`
-2. `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md`
-3. `work/sprints/current-blocker.md`
-4. `work/sprints/current-blocker.json`
-5. `work/model-ledger.jsonl`
+1. `work/packages/active-20260518-topology-publication-pending-owner-reconcile-runtime.md`
+2. `work/packages/done-20260518-topology-publication-pending-runtime-after-missing-published-reduction.md`
+3. `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md`
+4. `work/sprints/current-blocker.md`
+5. `work/sprints/current-blocker.json`
+6. `work/model-ledger.jsonl`
+7. `src/control-plane/publication-owner-evidence.js`
+8. `src/control-plane/publication-owner-decision.js`
+9. `src/control-plane/publication-recovery-gate.js`
+10. `src/control-plane/publication-recovery-evidence.js`
+11. `test/control-plane/publication-owner-stream.test.js`
+12. `test/control-plane/publication-recovery-gate.test.js`
+13. `test/control-plane/publication-recovery-evidence.test.js`
 
 Legacy touched files:
 

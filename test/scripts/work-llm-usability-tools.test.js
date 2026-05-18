@@ -71,7 +71,9 @@ test('shared package schema lists validator enums for LLM scaffolding', (t) => {
   t.match(rendered, /Ping-pong stop rule/u);
   t.match(rendered, /pre-impl/u);
   t.match(rendered, /tool-unavailable/u);
+  t.match(rendered, /Subagent Progress And Attempt Ledger/u);
   t.match(rendered, /Subagent Progress Ledger/u);
+  t.match(rendered, /review-fixed-metadata-only/u);
   t.match(rendered, /evidence: \.\.\./u);
   t.match(rendered, /Subagent Attempt Ledger/u);
   t.match(rendered, /partial-unvalidated/u);
@@ -121,8 +123,10 @@ test('package scaffolder pre-fills Model Fit from schema defaults', async (t) =>
   t.match(content, /## Expected Representative Delta/u);
   t.match(content, /## Rerun Decision Gate/u);
   t.match(content, /## Classification Efficiency/u);
-  t.match(content, /## Subagent Progress Ledger/u);
-  t.match(content, /## Subagent Attempt Ledger/u);
+  t.match(content, /## Subagent Progress And Attempt Ledger/u);
+  t.match(content, /review-fixed-metadata-only/u);
+  t.match(content, /status: validated/u);
+  t.match(content, /parent action: revalidated/u);
   t.match(content, /every completed subtask/u);
   t.match(content, /work:advance -- --check/u);
   t.match(content, /work:scenario-route/u);
@@ -144,6 +148,20 @@ test('package scaffolder adds Core Logic Brief for runtime lanes', async (t) => 
     'write-scope': ['src/rebalancer/operation-workflow-owner.js'],
     'forbidden-file': ['startup_active_gate_owner/runtime'],
     'ledger': TEMP_LEDGER_PATH,
+  });
+
+test('review subagent prompt allows metadata-only fixes inline',
+  async (t) => {
+    const content = await writeTempPackage();
+    const prompt = buildSubagentPrompt(
+      'review',
+      TEMP_PACKAGE_PATH,
+      content,
+    );
+
+    t.match(prompt, /review-fixed-metadata-only/u);
+    t.match(prompt, /metadata-only findings/u);
+    t.match(prompt, /instead of spawning a fix subagent/u);
   });
 
   t.match(content, /## Core Logic Brief/u);
@@ -392,16 +410,15 @@ test('subagent prompt generator emits bounded task and ledger guidance',
     t.match(prompt, /## Commit Scope/u);
     t.match(prompt, /work:evidence-summary/u);
     t.match(prompt, /ad hoc `jq`/u);
-    t.match(prompt, /## Progress Ledger Updates/u);
+    t.match(prompt, /## Checkpoint Ledger Updates/u);
     t.match(prompt, /after every completed subtask/u);
-    t.match(prompt, /falsification check/u);
+    t.match(prompt, /falsification checkpoint/u);
     t.match(prompt, /blocker:/u);
     t.match(prompt, /## Exact Validation Commands/u);
     t.match(prompt, /Do not add ad hoc Jest or TAP flags/u);
-    t.match(prompt, /## Attempt Ledger Updates/u);
     t.match(prompt, /partial-unvalidated/u);
     t.match(prompt, /parent revalidated focused proof: yes/u);
-    t.match(prompt, /edited after the last progress-ledger line/u);
+    t.match(prompt, /edited after the last checkpoint line/u);
     t.match(prompt, /Add the real returned agent name and id/u);
   });
 

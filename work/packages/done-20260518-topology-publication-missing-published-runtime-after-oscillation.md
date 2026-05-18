@@ -186,7 +186,7 @@
   "predecessor": "work/packages/done-20260518-topology-publication-missing-published-oscillation-gate.md",
   "closed": "2026-05-18",
   "commitAndPushLedgerRequired": true,
-  "successor": "work/packages/active-20260518-topology-publication-pending-runtime-after-missing-published-reduction.md"
+  "successor": "work/packages/done-20260518-topology-publication-pending-runtime-after-missing-published-reduction.md"
 }
 -->
 
