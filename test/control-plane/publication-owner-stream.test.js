@@ -415,6 +415,45 @@ test('publication owner stream classifies pending unpublished revision as publis
     t.end();
   });
 
+test('publication owner stream defers unknown count-only missing publication debt',
+  (t) => {
+    const stream = buildPublicationOwnerStreamState({
+      publicationStatus: PUBLICATION_OWNER_TEXT.UNKNOWN,
+      publicationRevision: TEST_PUBLICATION_COUNT.PUBLISHED_FRONTIER_PENDING_ACK,
+      recoveryProtocolState:
+        TEST_PUBLICATION_RECOVERY_PROTOCOL.UNPUBLISHED_OBSERVATION,
+      pendingAckNodeIds: [],
+      pendingAckCount: TEST_PUBLICATION_COUNT.PUBLISHED_FRONTIER_PENDING_ACK,
+      missingPublishedNodeIds: [],
+      missingPublishedCount:
+        TEST_PUBLICATION_COUNT.OPEN_FRONTIER_MISSING_PUBLISHED,
+      publicationPendingHint: true,
+      prioritySpreadPending: false,
+    });
+
+    t.equal(
+      stream.freshnessFence,
+      PUBLICATION_OWNER_FRESHNESS_FENCE.NO_REVISION,
+    );
+    t.equal(stream.streamOutcome, PUBLICATION_OWNER_STREAM_OUTCOME.NOT_STARTED);
+    t.equal(
+      stream.recoveryOutcome,
+      PUBLICATION_OWNER_RECOVERY_OUTCOME.NOT_STARTED,
+    );
+    t.equal(
+      stream.missingPublishedCount,
+      TEST_PUBLICATION_COUNT.OPEN_FRONTIER_MISSING_PUBLISHED,
+    );
+    t.same(stream.missingPublishedNodeIds, []);
+    t.equal(
+      stream.reasonCodes.includes(
+        PUBLICATION_OWNER_REASON.MISSING_PUBLISHED_MEMBERS,
+      ),
+      true,
+    );
+    t.end();
+  });
+
 test('publication owner stream does not publish ACK_PENDING status without ACK evidence',
   (t) => {
     const stream = buildPublicationOwnerStreamState({

@@ -351,6 +351,69 @@ test('buildPublicationRecoveryGateSnapshot does not let supplied NOT_STARTED str
     t.end();
   });
 
+test('buildPublicationRecoveryGateSnapshot keeps count-only UNKNOWN owner stream deferred',
+  (t) => {
+    const publicationOwnerStream = buildPublicationOwnerStreamState({
+      publicationStatus: PUBLICATION_OWNER_TEXT.UNKNOWN,
+      recoveryProtocolState: RECOVERY_PROTOCOL_STATE.UNPUBLISHED_OBSERVATION,
+      pendingAckNodeIds: TEST_EMPTY_NODE_IDS,
+      pendingAckCount: TEST_EMPTY_PUBLICATION_DEBT_COUNT,
+      missingPublishedNodeIds: TEST_EMPTY_NODE_IDS,
+      missingPublishedCount: TEST_PUBLICATION_DEBT_COUNT,
+      publicationPendingHint: true,
+      prioritySpreadPending: false,
+    });
+
+    const gate = buildPublicationRecoveryGateSnapshot({
+      publicationOwnerStream,
+      publicationEpoch: TEST_UNAVAILABLE_PUBLICATION_EPOCH,
+      publicationStatus: PUBLICATION_OWNER_TEXT.UNKNOWN,
+      recoveryProtocolState: RECOVERY_PROTOCOL_STATE.PUBLICATION_PENDING,
+      pendingAckCount: TEST_EMPTY_PUBLICATION_DEBT_COUNT,
+      missingPublishedCount: TEST_PUBLICATION_DEBT_COUNT,
+      priorityPartitionSummary: TEST_PRIORITY_PARTITION_SUMMARY.SATISFIED,
+    });
+
+    t.equal(
+      publicationOwnerStream.streamOutcome,
+      PUBLICATION_OWNER_STREAM_OUTCOME.NOT_STARTED,
+    );
+    t.equal(gate.state, PUBLICATION_RECOVERY_GATE_STATE.UNPUBLISHED_OBSERVATION);
+    t.equal(gate.publicationPending, false);
+    t.equal(gate.ackPending, false);
+    t.equal(gate.pendingAckCount, TEST_EMPTY_PUBLICATION_DEBT_COUNT);
+    t.equal(gate.missingPublishedCount, TEST_PUBLICATION_DEBT_COUNT);
+    t.equal(
+      gate.recoveryProtocolState,
+      RECOVERY_PROTOCOL_STATE.UNPUBLISHED_OBSERVATION,
+    );
+    t.equal(gate.streamOutcome, PUBLICATION_OWNER_STREAM_OUTCOME.NOT_STARTED);
+    t.same(gate.reasonCodes, TEST_EMPTY_NODE_IDS);
+
+    const directGate = buildPublicationRecoveryGateSnapshot({
+      publicationEpoch: TEST_UNAVAILABLE_PUBLICATION_EPOCH,
+      publicationStatus: PUBLICATION_OWNER_TEXT.UNKNOWN,
+      recoveryProtocolState: RECOVERY_PROTOCOL_STATE.UNPUBLISHED_OBSERVATION,
+      pendingAckNodeIds: TEST_EMPTY_NODE_IDS,
+      pendingAckCount: TEST_EMPTY_PUBLICATION_DEBT_COUNT,
+      missingPublishedNodeIds: TEST_EMPTY_NODE_IDS,
+      missingPublishedCount: TEST_PUBLICATION_DEBT_COUNT,
+      priorityPartitionSummary: TEST_PRIORITY_PARTITION_SUMMARY.SATISFIED,
+    });
+
+    t.equal(
+      directGate.state,
+      PUBLICATION_RECOVERY_GATE_STATE.UNPUBLISHED_OBSERVATION,
+    );
+    t.equal(directGate.publicationPending, false);
+    t.equal(
+      directGate.streamOutcome,
+      PUBLICATION_OWNER_STREAM_OUTCOME.NOT_STARTED,
+    );
+    t.same(directGate.reasonCodes, TEST_EMPTY_NODE_IDS);
+    t.end();
+  });
+
 test('buildPublicationRecoveryGateSnapshot classifies priority spread once acknowledgements close',
   (t) => {
     const gate = buildPublicationRecoveryGateSnapshot({

@@ -48,6 +48,18 @@ function hasPublicationOwnerOpenCountOnlyPublishDebt(evidence) {
     evidence.missingPublishedCount > NUM.ZERO;
 }
 
+function hasPublicationOwnerUnknownCountOnlyPublishDebt(evidence) {
+  return evidence.publicationStatus === PUBLICATION_OWNER_TEXT.UNKNOWN &&
+    evidence.pendingAckEvidenceState ===
+      PUBLICATION_OWNER_ACK_EVIDENCE_STATE.COUNT_ONLY &&
+    evidence.pendingAckCount === NUM.ZERO &&
+    evidence.pendingAckNodeIds.length === NUM.ZERO &&
+    evidence.missingPublishedCount > NUM.ZERO &&
+    evidence.missingPublishedNodeIds.length === NUM.ZERO &&
+    evidence.prioritySpreadPending !== true &&
+    evidence.prioritySpreadEvidenceUnavailable !== true;
+}
+
 const PUBLICATION_OWNER_ACK_STATE_RULES = Object.freeze([
   Object.freeze({
     state: PUBLICATION_OWNER_ACK_STATE.WAITING_FOR_ACK,
@@ -186,6 +198,7 @@ const PUBLICATION_OWNER_FRESHNESS_RULES = Object.freeze([
   Object.freeze({
     fence: PUBLICATION_OWNER_FRESHNESS_FENCE.NO_REVISION,
     matches: (snapshot) =>
+      hasPublicationOwnerUnknownCountOnlyPublishDebt(snapshot.evidence) ||
       (
         isPublicationOwnerUnpublishedObservation(snapshot.evidence) &&
         hasPublicationOwnerPublicationPending(snapshot.evidence) !== true

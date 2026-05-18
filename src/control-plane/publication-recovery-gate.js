@@ -175,6 +175,16 @@ function hasPublicationStatusPendingMeaning(publicationStatusNormalized) {
     publicationStatusNormalized !== PUBLICATION_OWNER_TEXT.UNKNOWN;
 }
 
+function hasCountOnlyMissingPublishedDebt(
+  publicationOwnerStream,
+  missingPublishedCount,
+) {
+  return normalizeNonNegativeInteger(missingPublishedCount) > NUM.ZERO &&
+    normalizeDistinctStringArray(
+      publicationOwnerStream?.missingPublishedNodeIds,
+    ).length === NUM.ZERO;
+}
+
 function isClosedNotStartedPublicationOwnerStream(
   publicationOwnerStream,
   pendingAckCount,
@@ -187,10 +197,20 @@ function isClosedNotStartedPublicationOwnerStream(
     PUBLICATION_OWNER_STREAM_OUTCOME.NOT_STARTED &&
     publicationOwnerStream?.recoveryOutcome ===
       PUBLICATION_OWNER_RECOVERY_OUTCOME.NOT_STARTED &&
-    publicationOwnerStream?.ackState ===
-      PUBLICATION_OWNER_ACK_STATE.NOT_REQUIRED &&
+    (
+      publicationOwnerStream?.ackState ===
+        PUBLICATION_OWNER_ACK_STATE.NOT_REQUIRED ||
+      publicationOwnerStream?.ackState ===
+        PUBLICATION_OWNER_ACK_STATE.UNAVAILABLE
+    ) &&
     normalizeNonNegativeInteger(pendingAckCount) === NUM.ZERO &&
-    normalizeNonNegativeInteger(missingPublishedCount) === NUM.ZERO &&
+    (
+      normalizeNonNegativeInteger(missingPublishedCount) === NUM.ZERO ||
+      hasCountOnlyMissingPublishedDebt(
+        publicationOwnerStream,
+        missingPublishedCount,
+      )
+    ) &&
     hasPublicationStatusPendingMeaning(publicationStatusNormalized) !== true;
 }
 
@@ -963,7 +983,13 @@ function buildPublicationRecoveryGateSnapshot(options = {}) {
         pendingAckEvidenceState: pendingAckEvidence.evidenceState,
         missingPublishedNodeIds,
         missingPublishedCount,
-        publicationPending: publicationPending || pendingAckCount > NUM.ZERO,
+        publicationPending:
+          isPublicationOwnerStreamPendingForRecoveryGate(
+            publicationOwnerStream,
+            pendingAckCount,
+            missingPublishedCount,
+          ) ||
+          pendingAckCount > NUM.ZERO,
         ackPending: pendingAckCount > NUM.ZERO,
         prioritySpreadPending,
         prioritySpreadEvidenceUnavailable,
