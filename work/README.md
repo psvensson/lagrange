@@ -136,6 +136,35 @@ Use the tracker utility for current sprint/package mechanics:
    separated safely, stop for human direction instead of committing a mixed
    slice.
 
+## Workflow Acceleration Rules
+
+The tracker should spend most of its time moving representative evidence or
+focused implementation, not refining administration. Use these defaults unless
+the package explicitly records a heavier audit or architecture reason:
+
+1. `npm run work:advance -- --check` is the fast path before more package
+   editing. It prints doctor findings, the next subagent role, and entry plus
+   pre-implementation validation in one pass.
+2. Representative reruns are the progress currency for release-gate sprints.
+   After a classification-only package, run fresh representative evidence or
+   close/open the next concrete blocker; do not add another metadata-only
+   refinement package.
+3. Durable proof ladders default to 3-5 commands: representative evidence,
+   one focused extractor or test, and validation. Static guardrails belong in
+   the ladder only when implementation files changed or an audit package says
+   they are the work.
+4. Admin-only packages, meaning packages whose write/commit scope is limited to
+   `work/` tracking files and ledgers, must end the next pass by doing one of
+   four things: run representative evidence, close as classification-only, open
+   a concrete runtime/tooling bug package, or present a human gate.
+5. Architecture gates are for repeated oscillation or missing owner contracts.
+   Once a gate has a selected route, future packages execute that route or
+   rerun evidence; they do not open another architecture gate unless fresh
+   canonical evidence contradicts the selection.
+6. Subagents are review gates for runtime owner-boundary and scenario/release
+   work. For read/review/doc-only and lightweight maintenance packages, omit
+   them unless the package or human explicitly requires them.
+
 ## Tool-First LLM Workflow
 
 The workflow tools are the default entry path for all future packages, not a

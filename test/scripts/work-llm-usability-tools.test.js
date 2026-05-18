@@ -90,8 +90,28 @@ test('package scaffolder pre-fills Model Fit from schema defaults', async (t) =>
   t.match(content, /Output profile: `medium`/u);
   t.match(content, /Model ledger advisory: `hold`/u);
   t.match(content, /## LLM Tool-First Contract/u);
+  t.match(content, /## Workflow Acceleration Contract/u);
+  t.match(content, /work:advance -- --check/u);
   t.match(content, /work:evidence-summary/u);
   t.match(content, /ad hoc `jq`/u);
+});
+
+test('package scaffolder keeps Model Fit focused proof concrete', async (t) => {
+  const content = await buildPackageContent({
+    'title': TEST_TITLE,
+    'slug': TEST_SLUG,
+    'lane': 'lightweight-maintenance',
+    'owner': 'workflow_tooling_owner',
+    'boundary': 'llm_usability_handoff',
+    'dominant-reason': 'test_package',
+    'next-action': 'Create a package.',
+    'proof': ['npm run work:evidence-summary -- <fresh-artifact>'],
+    'write-scope': ['work/packages/active-test.md'],
+    'ledger': TEMP_LEDGER_PATH,
+  });
+
+  t.match(content, /Focused proof: `npm run work:advance -- --check`/u);
+  t.match(content, /npm run work:evidence-summary -- <fresh-artifact>/u);
 });
 
 test('package scaffolder uses package filename date convention', async (t) => {

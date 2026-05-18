@@ -39,6 +39,7 @@ const NUM_ONE = 1;
 const NUM_TWO = 2;
 const NUM_THREE = 3;
 const NUM_FOUR = 4;
+const NUM_FIVE = 5;
 const DATE_SLICE_END = 10;
 const EXIT_SUCCESS = 0;
 const EXIT_FAILURE = 1;
@@ -335,6 +336,14 @@ const MODEL_FIT_OPEN_ENDED_FRONTIER_PATTERNS = Object.freeze([
   /\bfrontier\s+(?:appears|emerges|wherever|whatever)\b/iu,
   /\brepresentative\b[\s\S]{0,120}\b(?:expand|broaden|continue|chase|fix)\b[\s\S]{0,80}\bscope\b/iu,
 ]);
+const IMPLEMENTATION_WRITE_PATH_PATTERN =
+  /^(?:src|test|scripts|test-output\/reports|test-output\/.*\.report\.json)\b/u;
+const STATIC_GUARDRAIL_COMMAND_PATTERN =
+  /\b(?:check-guideline|audit:runtime-grammar|check-runtime-grammar|guard:guideline)\b/iu;
+const REPRESENTATIVE_EVIDENCE_COMMAND_PATTERN =
+  /\b(?:test\/distributed\/run\.js|distributed:|work:evidence-summary|work:scenario-triage|summarize:harness)\b/iu;
+const ARCHITECTURE_GATE_SELECTED_STATUS = 'selected';
+const PROOF_COMMAND_CAP = NUM_FIVE;
 const CHECKBOX_DONE_PREFIX_PATTERN = '(?:-|\\d+\\.) \\[[xX]\\] ';
 const CHECKBOX_ANY_ITEM_PATTERN = /\n(?:-|\d+\.) \[[ xX]\] /gu;
 const LEDGER_VALIDATION_REQUIRES_LEDGER = 'requiresLedger';
@@ -3152,6 +3161,86 @@ function summarizeDoctorMetadata(metadata = {}) {
   };
 }
 
+function normalizeMetadataStringList(values = []) {
+  return (Array.isArray(values) ? values : [])
+    .map(normalizeLedgerText)
+    .filter((value) => value.length > NUM_ZERO);
+}
+
+function metadataWritePaths(metadata = {}) {
+  return [
+    ...normalizeMetadataStringList(metadata[SCOPE_FIELD_WRITE_SCOPE]),
+    ...normalizeMetadataStringList(metadata[SCOPE_FIELD_COMMIT_SCOPE]),
+  ];
+}
+
+function metadataProofCommands(metadata = {}) {
+  return normalizeMetadataStringList(metadata[METADATA_FIELD_PROOF]);
+}
+
+function hasImplementationWriteScope(metadata = {}) {
+  return metadataWritePaths(metadata)
+    .some((filePath) => IMPLEMENTATION_WRITE_PATH_PATTERN.test(filePath));
+}
+
+function hasStaticGuardrailProof(metadata = {}) {
+  return metadataProofCommands(metadata)
+    .some((command) => STATIC_GUARDRAIL_COMMAND_PATTERN.test(command));
+}
+
+function hasRepresentativeEvidenceProof(metadata = {}) {
+  return metadataProofCommands(metadata)
+    .some((command) => REPRESENTATIVE_EVIDENCE_COMMAND_PATTERN.test(command));
+}
+
+function buildProofLadderGuidance(metadata = {}) {
+  const proofCount = metadataProofCommands(metadata).length;
+  if (proofCount > PROOF_COMMAND_CAP) {
+    return 'Proof ladder is heavy: keep default packages to 3-5 durable ' +
+      'commands and move supporting extractors into notes unless this is an ' +
+      'explicit audit or architecture package.';
+  }
+  return `Proof ladder is compact: ${proofCount}/${PROOF_COMMAND_CAP} ` +
+    'durable commands.';
+}
+
+function buildProcessGuidanceLines(metadata = {}, fileStatus = DEFAULT_UNKNOWN) {
+  const lines = [buildProofLadderGuidance(metadata)];
+  const isActivePackage = fileStatus === STATUS_ACTIVE;
+  const hasImplementationWrites = hasImplementationWriteScope(metadata);
+  if (isActivePackage && !hasImplementationWrites) {
+    lines.push(
+      'Admin stop applies: this active package owns no implementation write ' +
+      'scope, so the next pass must run representative evidence, close as ' +
+      'classification-only, open a concrete runtime/tooling bug package, or ' +
+      'present a human gate.',
+    );
+    if (!hasRepresentativeEvidenceProof(metadata)) {
+      lines.push(
+        'Add or run one representative evidence command before creating ' +
+        'another metadata-only package.',
+      );
+    }
+  }
+  if (!hasImplementationWrites && hasStaticGuardrailProof(metadata)) {
+    lines.push(
+      'Static guardrails are not default proof for metadata-only packages; ' +
+      'keep them only when implementation files changed.',
+    );
+  }
+  const architectureGate = metadata?.[ARCHITECTURE_DECISION_GATE_FIELD];
+  if (
+    isObjectRecord(architectureGate) &&
+    architectureGate.status === ARCHITECTURE_GATE_SELECTED_STATUS
+  ) {
+    lines.push(
+      'Architecture gate already selected: execute the selected route or ' +
+      'rerun representative evidence before opening another architecture gate.',
+    );
+  }
+  return lines;
+}
+
 function buildDoctorSuggestion(error) {
   if (/representativeOutcome must be one of/iu.test(error)) {
     return 'Use one of the schema outcomes from `npm run work:package:schema`; ' +
@@ -3373,6 +3462,16 @@ export function buildPackageDoctorLines(filePath, content, options = {}) {
   );
   appendDoctorField(lines, 'Proof commands', String(metadataSummary.proofCount));
   appendDoctorField(lines, 'Validation', errors.length === NUM_ZERO ? 'ok' : 'failed');
+  const processGuidance = buildProcessGuidanceLines(
+    metadata || {},
+    fileStatus,
+  );
+  if (processGuidance.length > NUM_ZERO) {
+    lines.push('', '## Process Guidance');
+    for (const guidance of processGuidance) {
+      lines.push(`- ${guidance}`);
+    }
+  }
   if (errors.length > NUM_ZERO) {
     lines.push('', '## Findings');
     for (const error of errors) {

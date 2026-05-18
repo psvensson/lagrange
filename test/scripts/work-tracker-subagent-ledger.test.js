@@ -782,6 +782,72 @@ describe('work tracker package doctor', () => {
     assert.match(rendered, /Validation: ok/u);
   });
 
+  it('prints acceleration guidance for admin-heavy packages', () => {
+    const content = [
+      '# Admin Package',
+      '',
+      '<!-- work-package',
+      JSON.stringify({
+        schema: 'work-package-v1',
+        status: WORK_TRACKER_ACTIVE_STATUS,
+        opened: '2026-05-18',
+        lane: LANE_READ_REVIEW_DOC_ONLY,
+        scenario: 'none',
+        artifact: 'none',
+        playback: 'none',
+        owner: 'release_gate_owner',
+        boundary: 'representative_evidence',
+        dominantReason: 'fresh_evidence_required',
+        currentState: 'Metadata-only package needs a hard next action.',
+        nextAction: 'Run representative evidence before more package edits.',
+        proof: [
+          'npm run work:evidence-summary -- test-output/reports/a.report.json',
+          'npm run work:scenario-triage -- test-output/reports/a.report.json --markdown',
+          'npm run analyze:topology-convergence -- test-output/reports/a.report.json',
+          'npm run analyze:causal-model -- test-output/reports/a.report.json',
+          'npm run analyze:priority-recovery-residuals -- test-output/reports/a.report.json --markdown',
+          'npm run summarize:harness -- --report-dir test-output/reports',
+        ],
+        writeScope: ['work/packages/active-admin-package.md'],
+        handoffFiles: [],
+        generatedFiles: [],
+        candidateRuntimeFiles: [],
+        commitScope: ['work/packages/active-admin-package.md'],
+        modelFit: {
+          packageClass: 'bounded-implementation',
+          intendedMinimumModel: 'gpt-5.3-codex-spark',
+          scopeShape: 'leaf-slice',
+          outputProfile: 'small',
+          escalationTriggers: ['runtime ownership changes'],
+        },
+      }, null, 2),
+      '-->',
+      '',
+      '## Model Fit',
+      '',
+      '- Package class: `bounded-implementation`',
+      '- Intended minimum model: `gpt-5.3-codex-spark`',
+      '- Scope shape: `leaf-slice`',
+      '- Output profile: `small`',
+      '- Owned files: `work/packages/active-admin-package.md`',
+      '- Forbidden files: `src/`',
+      '- Frozen decisions: metadata-only package stops after one pass.',
+      '- Escalation triggers: runtime ownership changes.',
+      '- Focused proof: `npm run work:advance -- --check`',
+      '',
+    ].join('\n');
+    const report = buildPackageDoctorLines(
+      'work/packages/active-admin-package.md',
+      content,
+    );
+    const rendered = report.lines.join('\n');
+
+    assert.deepEqual(report.errors, []);
+    assert.match(rendered, /## Process Guidance/u);
+    assert.match(rendered, /Proof ladder is heavy/u);
+    assert.match(rendered, /Admin stop applies/u);
+  });
+
   it('does not require subagent ledger proof at entry phase', () => {
     const openLedgerContent = WORK_TRACKER_DOCTOR_CONTENT.replace(
       /## Subagent Sequencing Ledger[\s\S]*$/u,

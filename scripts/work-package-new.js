@@ -73,6 +73,8 @@ const EMPTY_TEXT = '';
 const NEWLINE = '\n';
 const FLAG_PREFIX = '--';
 const SLUG_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/u;
+const TEMPLATE_PLACEHOLDER_PATTERN = /<[^>]+>/u;
+const DEFAULT_ACCELERATION_PROOF = 'npm run work:advance -- --check';
 const REQUIRED_FLAGS = Object.freeze([
   FLAG_TITLE,
   FLAG_SLUG,
@@ -300,6 +302,17 @@ function markdownInlineCodeList(values = [], fallback) {
   return normalized.map((value) => `\`${value}\``).join(', ');
 }
 
+function concreteModelFitProofCommands(values = []) {
+  const concreteValues = values
+    .map(normalizeText)
+    .filter((value) =>
+      value.length > NUM_ZERO &&
+      !TEMPLATE_PLACEHOLDER_PATTERN.test(value));
+  return concreteValues.length > NUM_ZERO ?
+    concreteValues :
+    [DEFAULT_ACCELERATION_PROOF];
+}
+
 function buildPackagePath(status, opened, slug) {
   const packageDate = opened.replaceAll('-', EMPTY_TEXT);
   return path.join(WORK_PACKAGES_DIRECTORY, `${status}-${packageDate}-${slug}.md`);
@@ -319,6 +332,7 @@ async function buildPackageContent(flags = {}) {
   const opened = normalizeText(flags[FLAG_OPENED]) || todayIsoDate();
   const status = normalizeText(flags[FLAG_STATUS]) || DEFAULT_STATUS;
   const proof = flags[FLAG_PROOF] || [];
+  const modelFitProof = concreteModelFitProofCommands(proof);
   const legacyTouchedFiles = flags[FLAG_TOUCHED_FILE] || [];
   const writeScope = [
     ...(flags[FLAG_WRITE_SCOPE] || []),
@@ -412,6 +426,13 @@ async function buildPackageContent(flags = {}) {
     EMPTY_TEXT,
     'If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which canonical extractor was tried and why it was insufficient.',
     EMPTY_TEXT,
+    '## Workflow Acceleration Contract',
+    EMPTY_TEXT,
+    '1. Use `npm run work:advance -- --check` before adding more package prose; it combines doctor, subagent-next, and entry/pre-implementation validation.',
+    '2. Keep the durable proof ladder to 3-5 commands by default: one representative/evidence command, one focused extractor or test, and validation. Add static guardrails only when implementation files changed.',
+    '3. If this package only changes package, sprint, tracker, or ledger files, the next pass must run representative evidence, close as classification-only, open a concrete bug package, or present a human gate.',
+    '4. Once an architecture gate has a selected route, do not open another gate unless fresh canonical evidence contradicts the selected route.',
+    EMPTY_TEXT,
     '## In Scope',
     EMPTY_TEXT,
     markdownList(ownedFiles, 'Focused package-owned edit.'),
@@ -430,7 +451,7 @@ async function buildPackageContent(flags = {}) {
     `- Forbidden files: ${markdownInlineCodeList(forbiddenFiles, '`src/`')}`,
     '- Frozen decisions: package scope and lane stay bounded unless explicitly escalated.',
     '- Escalation triggers: owned files expand beyond this package, runtime ownership changes, or representative scenario evidence changes.',
-    `- Focused proof: ${markdownInlineCodeList(proof, '`git diff --check`')}`,
+    `- Focused proof: ${markdownInlineCodeList(modelFitProof, `\`${DEFAULT_ACCELERATION_PROOF}\``)}`,
     `- Model ledger advisory: \`${modelFitDefaults.ledgerRecommendation}\``,
     EMPTY_TEXT,
     '## Validation',
