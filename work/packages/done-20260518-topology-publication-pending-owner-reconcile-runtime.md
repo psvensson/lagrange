@@ -386,3 +386,9 @@ Findings: sprint/current-blocker state mostly matches the active runtime success
 - Passed: `git diff --check -- src/control-plane/publication-recovery-evidence.js test/control-plane/publication-recovery-evidence.test.js work/packages/done-20260518-topology-publication-pending-owner-reconcile-runtime.md work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md work/sprints/current-blocker.md work/sprints/current-blocker.json`
 - Passed: `npm run work:validate -- --pre-impl work/packages/done-20260518-topology-publication-pending-owner-reconcile-runtime.md`
 - Blocked by inherited repo-wide static debt: `npm run test:static` fails at `knip --exclude exports` before touched-file checks with 86 unused files and unused devDependency `jscpd` in `package.json`.
+
+## Commit And Push Ledger
+
+1. Focused package commit: 408358e3
+2. Pushed to: origin/codex/pending-ack-eligibility-filter
+3. Commit contains only package-owned files/package-status/allowed sprint handoff: yes
