@@ -49,7 +49,9 @@ Output profile: `medium`
 Escalation triggers:
 
 1. `owned files expand beyond this package`
-2. `a frozen decision must be reopened`
+2. `runtime ownership changes`
+3. `shared contract changes`
+4. `representative scenario evidence changes`
 
 ## Representative Residual
 
@@ -213,8 +215,6 @@ Commit scope:
 12. `test/admin/admin-control-snapshot.test.js`
 13. `scripts/analyze-topology-convergence.js`
 14. `test/scripts/analyze-topology-convergence.test.js`
-15. `work/sprints/current-blocker.md`
-16. `work/sprints/current-blocker.json`
 
 Legacy touched files:
 

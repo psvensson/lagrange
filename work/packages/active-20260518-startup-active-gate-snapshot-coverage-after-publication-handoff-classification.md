@@ -72,9 +72,7 @@
     "src/diagnostics/topology-convergence-graph.js",
     "test/admin/admin-control-snapshot.test.js",
     "scripts/analyze-topology-convergence.js",
-    "test/scripts/analyze-topology-convergence.test.js",
-    "work/sprints/current-blocker.md",
-    "work/sprints/current-blocker.json"
+    "test/scripts/analyze-topology-convergence.test.js"
   ],
   "modelFit": {
     "packageClass": "representative-frontier-closure",
@@ -83,7 +81,9 @@
     "outputProfile": "medium",
     "escalationTriggers": [
       "owned files expand beyond this package",
-      "a frozen decision must be reopened"
+      "runtime ownership changes",
+      "shared contract changes",
+      "representative scenario evidence changes"
     ]
   },
   "representativeResidual": {
@@ -205,8 +205,8 @@ subagents sequentially before editing runtime or test files.
 
 ## Subagent Sequencing Ledger
 
-- [ ] Review subagent recorded: pending before implementation starts.
-- [ ] Fix subagent recorded or explicitly not needed: pending review result.
+- [x] Review subagent recorded: Agent Codex (019e3a5f-6b2d-7951-bbb0-d8ffd1126a75) reviewed work/packages/active-20260518-startup-active-gate-snapshot-coverage-after-publication-handoff-classification.md; result fixes-required.
+- [x] Fix subagent recorded or explicitly not needed: Agent Codex (019e3a62-09e3-7a53-a1a0-630f95a75b28) fixed work/packages/active-20260518-startup-active-gate-snapshot-coverage-after-publication-handoff-classification.md.
 - [ ] Implementation subagent recorded: pending review/fix proof.
 
 ## LLM Tool-First Contract

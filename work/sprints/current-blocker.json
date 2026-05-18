@@ -71,9 +71,7 @@
     "src/diagnostics/topology-convergence-graph.js",
     "test/admin/admin-control-snapshot.test.js",
     "scripts/analyze-topology-convergence.js",
-    "test/scripts/analyze-topology-convergence.test.js",
-    "work/sprints/current-blocker.md",
-    "work/sprints/current-blocker.json"
+    "test/scripts/analyze-topology-convergence.test.js"
   ],
   "touchedFiles": [],
   "modelFit": {
@@ -83,7 +81,9 @@
     "outputProfile": "medium",
     "escalationTriggers": [
       "owned files expand beyond this package",
-      "a frozen decision must be reopened"
+      "runtime ownership changes",
+      "shared contract changes",
+      "representative scenario evidence changes"
     ]
   },
   "representativeResidual": {
