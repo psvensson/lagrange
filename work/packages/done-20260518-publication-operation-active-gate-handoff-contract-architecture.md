@@ -3,7 +3,7 @@
 <!-- work-package
 {
   "schema": "work-package-v1",
-  "status": "active",
+  "status": "done",
   "opened": "2026-05-18",
   "lane": "causal-escalation",
   "scenario": "rolling-restart",
@@ -27,7 +27,7 @@
     "npm run work:validate -- --closure"
   ],
   "writeScope": [
-    "work/packages/active-20260518-publication-operation-active-gate-handoff-contract-architecture.md",
+    "work/packages/done-20260518-publication-operation-active-gate-handoff-contract-architecture.md",
     "work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md",
     "work/sprints/current-blocker.md",
     "work/sprints/current-blocker.json",
@@ -55,7 +55,7 @@
     "src/rebalancer/operation-workflow-owner.js"
   ],
   "commitScope": [
-    "work/packages/active-20260518-publication-operation-active-gate-handoff-contract-architecture.md",
+    "work/packages/done-20260518-publication-operation-active-gate-handoff-contract-architecture.md",
     "work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md",
     "work/sprints/current-blocker.md",
     "work/sprints/current-blocker.json",
@@ -136,7 +136,7 @@
       "work/packages/done-20260517-priority-recovery-rebalancer-handoff-after-workflow-progress-bounded-proof.md / operation_workflow_owner / rebalancer_handoff / classification-only-focused-proof",
       "work/packages/done-20260517-startup-active-gate-snapshot-coverage-after-priority-backpressure-classification.md / startup_active_gate_owner / snapshot_coverage / classification-only-focused-proof",
       "work/packages/done-20260518-priority-recovery-workflow-progress-after-active-gate-classification-rerun.md / topology_publication_owner plus operation_workflow_owner / publication_convergence plus workflow_progress / selected architecture package route",
-      "work/packages/active-20260518-publication-operation-active-gate-handoff-contract-architecture.md / operation_workflow_owner / workflow_progress / handoff-probe-selected-successor"
+      "work/packages/done-20260518-publication-operation-active-gate-handoff-contract-architecture.md / operation_workflow_owner / workflow_progress / handoff-probe-selected-successor"
     ],
     "oscillationCheck": "Human-selected alternative 3 opens this architecture package because repeated local proofs did not make rolling-restart green or produce monotonic representative reduction.",
     "handoffInvariant": "Publication owner must publish one fresh cohort outcome; operation_workflow_owner must expose one durable dispatch/re-entry outcome for the selected priority operation; active-gate owner reconcile must consume that owner outcome through the canonical handoff without local promotion, timeout-budget expansion, or diagnostic reinterpretation."
@@ -187,13 +187,15 @@
         "route": "human-escalation",
         "proof": [
           "npm run work:context",
-          "npm run work:package:doctor -- --suggest work/packages/active-20260518-publication-operation-active-gate-handoff-contract-architecture.md"
+          "npm run work:package:doctor -- --suggest work/packages/done-20260518-publication-operation-active-gate-handoff-contract-architecture.md"
         ]
       }
     ],
     "selectedChoice": "open-architecture-package",
     "nextAction": "Architecture package implemented. Continue in the selected operation_workflow_owner / workflow_progress successor."
-  }
+  },
+  "commitAndPushLedgerRequired": true,
+  "closed": "2026-05-18"
 }
 -->
 
@@ -227,9 +229,9 @@ focused probe identifies the exact successor owner contract.
 
 ## Subagent Sequencing Ledger
 
-- [x] Review subagent recorded: Agent Locke (019e3976-dfad-73e2-bd19-dcd83b3451c8) reviewed work/packages/active-20260518-publication-operation-active-gate-handoff-contract-architecture.md; result fixes-required.
-- [x] Fix subagent recorded or explicitly not needed: Agent Codex (019e397a-11d0-78c1-81ad-f4617c6b6c0b) fixed work/packages/active-20260518-publication-operation-active-gate-handoff-contract-architecture.md; result fixed sprint snapshot and predecessor handoff metadata.
-- [x] Implementation subagent recorded: Agent Anscombe (019e397f-778a-7353-817d-7b7be2dbeaa1) implemented work/packages/active-20260518-publication-operation-active-gate-handoff-contract-architecture.md; result implemented focused handoff probe and selected operation_workflow_owner / workflow_progress.
+- [x] Review subagent recorded: Agent Locke (019e3976-dfad-73e2-bd19-dcd83b3451c8) reviewed work/packages/done-20260518-publication-operation-active-gate-handoff-contract-architecture.md; result fixes-required.
+- [x] Fix subagent recorded or explicitly not needed: Agent Codex (019e397a-11d0-78c1-81ad-f4617c6b6c0b) fixed work/packages/done-20260518-publication-operation-active-gate-handoff-contract-architecture.md; result fixed sprint snapshot and predecessor handoff metadata.
+- [x] Implementation subagent recorded: Agent Anscombe (019e397f-778a-7353-817d-7b7be2dbeaa1) implemented work/packages/done-20260518-publication-operation-active-gate-handoff-contract-architecture.md; result implemented focused handoff probe and selected operation_workflow_owner / workflow_progress.
 
 ## LLM Tool-First Contract
 
@@ -245,7 +247,7 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 
 ## In Scope
 
-1. `work/packages/active-20260518-publication-operation-active-gate-handoff-contract-architecture.md`
+1. `work/packages/done-20260518-publication-operation-active-gate-handoff-contract-architecture.md`
 2. `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md`
 3. `work/sprints/current-blocker.md`
 4. `work/sprints/current-blocker.json`
@@ -285,3 +287,9 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 8. node scripts/check-guideline-literals.js scripts/analyze-topology-convergence.js test/scripts/analyze-topology-convergence.test.js
 9. node scripts/check-guideline-constant-names.js scripts/analyze-topology-convergence.js test/scripts/analyze-topology-convergence.test.js
 10. npm run work:validate -- --closure
+
+## Commit And Push Ledger
+
+1. Focused package commit: `e35ad684`
+2. Pushed to: `origin/codex/pending-ack-eligibility-filter`
+3. Commit contains only package-owned files/package-status/allowed sprint handoff: yes

@@ -22,54 +22,56 @@ success is in scope.
 ## Current Blocker Snapshot
 
 Latest representative artifact:
-`test-output/reports/rolling-restart-after-active-gate-classification-20260518T043001Z.report.json`.
+`test-output/reports/rolling-restart-after-workflow-advance-classification-20260518T054537Z.report.json`.
 
-Canonical state after the active-gate classification rerun selected the
-architecture route:
+Canonical state after the operation-workflow package closed as migrated:
 
 1. The current active package is
-   `work/packages/active-20260518-publication-operation-active-gate-handoff-contract-architecture.md`.
+   `work/packages/active-20260518-startup-active-gate-snapshot-coverage-after-workflow-advance-classification.md`.
 2. Its predecessor is
-   `work/packages/done-20260518-priority-recovery-workflow-progress-after-active-gate-classification-rerun.md`.
-3. Fresh `work:evidence-summary` selects `publication_ack_convergence` as the
-   first frontier with dominant reason `publication_pending`.
-4. Representative owner boundary:
-   `topology_publication_owner / publication_convergence`.
-5. Canonical blocker:
-   `publication_ack_convergence / topology_publication_owner /
-   publication_convergence / publication_pending`.
-6. Priority residual extraction reports one
-   `operation_workflow_owner / workflow_progress` witness with
-   `persisted_not_dispatched`, `dispatch_pending`, and
-   `nextRequiredAction=advance_existing_operation`.
-7. Active gate is deferred at `snapshotCoverageNodeCount=2/5`, and
+   `work/packages/done-20260518-priority-recovery-operation-workflow-advance-after-handoff-probe.md`,
+   which is done after proving the selected operation workflow edge.
+3. Fresh `work:evidence-summary` still reports
+   `publication_ack_convergence` as the visible producer frontier with
+   `publication_pending`.
+4. The fresh handoff probe reports operationWorkflow
+   `priority_recovery_partition_progress` as satisfied and `missingEdge=null`.
+5. Active package owner boundary:
+   `startup_active_gate_owner / snapshot_coverage`.
+6. Selected next owner path:
+   `active_gate_snapshot_coverage / startup_active_gate_owner /
+   snapshot_coverage / owner_reconcile_pending`.
+7. Required action:
+   `reconcile_owner_membership_publication`.
+8. Active gate is deferred at `snapshotCoverageNodeCount=3/5`, and
    publication active-gate handoff remains pending with
-   `pendingReconcileCount=3` and `owner_reconcile_pending`.
-8. The current `--handoff-probe` reports the publication-to-active-gate edge
-   but does not expose the operation-workflow dispatch/re-entry leg.
-9. Human-selected alternative 3 is active: open a bounded architecture package
-   for the publication producer, operation-workflow dispatch/re-entry leg, and
-   active-gate owner-reconcile consumer.
-10. The next focused proof is to extend the handoff probe before any runtime
-    patch.
+   `pendingReconcileCount=2`, pending nodes
+   `11601fe0-72d6-5853-8590-ec2881853e72` and
+   `35a891b8-c1a0-5064-9c6e-2acfba61c2a7`, and
+   `runtimePromotionAllowed=false`.
+9. Priority residual extraction reports subordinate
+   `operation_workflow_owner / rebalancer_handoff` witnesses, but causal model
+   and handoff probe do not select them as the next owner path.
+10. Required next step: run the review subagent for the active-gate successor
+    before any runtime edits.
 
 ## Current Edge Card
 
 ```text
-Representative artifact: test-output/reports/rolling-restart-after-active-gate-classification-20260518T043001Z.report.json
-First frontier: publication_ack_convergence
-Owner: topology_publication_owner
-Boundary: publication_convergence
-Selected cause: publication_pending
-Required action: extend the focused handoff probe to report publication producer, operation-workflow dispatch/re-entry, and active-gate owner reconcile
-Runtime promotion allowed: pending focused proof and clean subagent sequence
-Priority residual: one operation_workflow_owner / workflow_progress witness with persisted_not_dispatched and dispatch_pending
+Representative artifact: test-output/reports/rolling-restart-after-workflow-advance-classification-20260518T054537Z.report.json
+Visible first frontier: publication_ack_convergence / topology_publication_owner / publication_convergence / publication_pending
+Active package owner: startup_active_gate_owner
+Active package boundary: snapshot_coverage
+Selected cause: owner_reconcile_pending behind publication active-gate handoff pending reconcile
+Required action: reconcile_owner_membership_publication
+Runtime promotion allowed: false
+Priority residual: subordinate operation_workflow_owner / rebalancer_handoff witnesses, parked unless canonical evidence promotes them
 Current publication state: publication_ack_convergence blocked with publication_pending
-Current active-gate state: deferred, snapshotCoverageNodeCount=2/5, owner_reconcile_pending count=3
-Goal: handoff probe names one bounded owner contract, classifies architecture-gap, or representative green after later implementation
-Allowed edits: package metadata and focused analyzer probe files after review/fix/implementation proof is clean
-Forbidden edits: runtime src files before the focused probe selects the exact owner contract; timeout budgets; active-gate admission relaxation; local diagnostic reinterpretation
-Required latest proof: npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-active-gate-classification-20260518T043001Z.report.json --handoff-probe
+Current active-gate state: deferred, snapshotCoverageNodeCount=3/5, owner_reconcile_pending count=2
+Goal: prove or classify bounded active-gate owner membership publication reconcile
+Allowed edits: active package metadata/tracker now; listed active-gate candidate runtime files only after required subagent sequence
+Forbidden edits: topology publication runtime; operation workflow runtime; handoff probe extension; timeout budgets; active-gate admission relaxation; readiness shortcut; local diagnostic reinterpretation
+Required latest proof: npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-workflow-advance-classification-20260518T054537Z.report.json --handoff-probe
 Allowed stop modes: representative-green, migrated, reduced, same-frontier, classification-only, architecture-gap, human-escalation
 ```
 
@@ -77,49 +79,49 @@ Allowed stop modes: representative-green, migrated, reduced, same-frontier, clas
 
 Status: selected.
 
-Current decision: human-selected alternative 3 is active. Continue through the
-bounded architecture package for the publication producer, operation-workflow
-dispatch/re-entry leg, and active-gate owner-reconcile consumer before any
-runtime patch.
+Current decision: the operation-workflow owner-boundary migration package is
+done, and the fresh handoff probe selects the active-gate owner reconcile
+successor. The next runtime work is blocked until the required review/fix/
+implementation subagent sequence is recorded on that active package.
 
 Decision basis:
 
-1. `work:evidence-summary` and causal-model select
+1. Fresh `work:evidence-summary` and causal model still expose
    `publication_ack_convergence / topology_publication_owner /
-   publication_convergence` with dominant reason `publication_pending`.
-2. Priority residual extraction reports one
-   `operation_workflow_owner / workflow_progress` witness with
-   `persisted_not_dispatched`, `dispatch_pending`, and
-   `nextRequiredAction=advance_existing_operation`.
-3. Active gate remains deferred at `snapshotCoverageNodeCount=2/5` with
-   `owner_reconcile_pending` and `pendingReconcileCount=3`.
-4. The current handoff probe reports publication -> active-gate only and does
-   not expose the operation-workflow leg.
-5. The user selected alternative 3, so the active package owns a bounded
-   architecture probe before any runtime owner patch.
+   publication_convergence` as visible producer context.
+2. The fresh handoff probe reports operationWorkflow satisfied and
+   `missingEdge=null`.
+3. Active gate remains deferred at `snapshotCoverageNodeCount=3/5` with
+   `owner_reconcile_pending` and `pendingReconcileCount=2`.
+4. The current handoff probe selects next owner path
+   `startup_active_gate_owner / snapshot_coverage` with required action
+   `reconcile_owner_membership_publication`.
+5. The active package is the bounded active-gate successor; no runtime edit may
+   start before the review subagent returns.
 
 Candidate ranking:
 
-1. Publication-operation-active-gate handoff contract: selected. Route to the
-   active architecture package.
-2. Publication convergence local patch: deferred until the handoff probe proves
-   publication owner owns the next bounded runtime contract.
-3. Operation workflow dispatch/re-entry patch: deferred until the handoff probe
-   proves operation workflow owns the next bounded runtime contract.
-4. Active-gate owner reconcile patch: deferred until the handoff probe proves
-   active gate owns the next bounded runtime contract.
+1. Active-gate owner reconcile proof: selected but blocked on required review
+   subagent before runtime edits.
+2. Operation workflow dispatch/re-entry proof: done and migrated after fresh
+   handoff probe reported operationWorkflow satisfied.
+3. Publication convergence local patch: deferred unless canonical evidence
+   reselects publication owner as the implementable runtime contract.
+4. Publication-operation-active-gate handoff contract: done; do not extend
+   unless active-gate proof cannot represent the selected reconcile edge.
 5. Timeout/budget reset: removed unless a future architecture gate selects it
    from fresh canonical evidence.
 
 Forbidden during this gate:
 
-1. Do not reopen the closed active-gate harness proof unless canonical evidence
-   reselects it.
+1. Do not reopen the closed active-gate harness proof; the active package owns
+   the fresh owner reconcile edge and must use a new subagent sequence.
 2. Do not widen timeout budgets, active-gate admission, selected-source
    timeout, terminal-progress selection, or readiness support unless canonical
    evidence reselects them.
-3. Do not patch publication, operation workflow, or active-gate runtime files
-   until the focused handoff probe names the exact owner contract.
+3. Do not patch publication or operation-workflow runtime files. Active-gate
+   candidate runtime files require clean pre-impl validation and implementation
+   subagent proof.
 
 ## Frontier Transition Ledger
 
@@ -134,23 +136,24 @@ Forbidden during this gate:
 | `done-20260517-topology-publication-convergence-after-startup-reconcile-migration.md` | `rolling-restart-publication-reason-filter-20260517T151928Z.report.json` | `topology_publication_owner / publication_convergence` -> `startup_active_gate_owner / snapshot_coverage` | stale presentation-only publication reasons filtered; `publication_ack_convergence` satisfied; priority residual witnesses -> `0`; selected active-gate source timeout at `0/5` coverage | `migrated` |
 | `done-20260517-startup-active-gate-selected-snapshot-source-timeout-after-publication-migration.md` | `rolling-restart-selected-snapshot-lane-reset-20260517T155212Z.report.json` | `startup_active_gate_owner / snapshot_coverage` -> `topology_publication_owner / publication_convergence` | selected-source timeout moved out of first frontier; active-gate coverage `0/5` -> `2/5`; priority residual witnesses stayed `0`; fresh publication evidence is OPEN/publishing | `migrated` |
 | `done-20260518-priority-recovery-workflow-progress-after-active-gate-classification-rerun.md` | `rolling-restart-after-active-gate-classification-20260518T043001Z.report.json` | `topology_publication_owner / publication_convergence` plus downstream `operation_workflow_owner / workflow_progress` | selected architecture gate after publication pending, one dispatch-pending workflow witness, and active-gate owner reconcile pending remained cross-boundary | `architecture-package-selected` |
-| `active-20260518-publication-operation-active-gate-handoff-contract-architecture.md` | `rolling-restart-after-active-gate-classification-20260518T043001Z.report.json` | `topology_publication_owner / publication_convergence` | active package extends the focused handoff probe to expose publication producer, operation-workflow dispatch/re-entry leg, and active-gate owner-reconcile consumer | `active` |
+| `done-20260518-publication-operation-active-gate-handoff-contract-architecture.md` | `rolling-restart-after-active-gate-classification-20260518T043001Z.report.json` | `topology_publication_owner / publication_convergence` -> `operation_workflow_owner / workflow_progress` | handoff probe exposes publication producer, operation-workflow leg, active-gate consumer, requiredProgressMechanism=advance, and selected successor requiredAction=advance_existing_operation | `migrated` |
+| `done-20260518-priority-recovery-operation-workflow-advance-after-handoff-probe.md` | `rolling-restart-after-workflow-advance-classification-20260518T054537Z.report.json` | selected owner path `operation_workflow_owner / workflow_progress` -> `startup_active_gate_owner / snapshot_coverage` | operation workflow proof stayed green; fresh handoff probe reports operationWorkflow satisfied, active-gate coverage `2/5` -> `3/5`, and pending reconcile count `3` -> `2` | `migrated` |
+| `active-20260518-startup-active-gate-snapshot-coverage-after-workflow-advance-classification.md` | `rolling-restart-after-workflow-advance-classification-20260518T054537Z.report.json` | visible `topology_publication_owner / publication_convergence`; selected owner path `startup_active_gate_owner / snapshot_coverage` | active package owns reconcile_owner_membership_publication for two pending active-gate owner reconcile nodes | `active` |
 
 ## Sprint LLM Trap List
 
 1. Do not reopen the closed active-gate harness proof unless canonical evidence
    reselects `startup_active_gate_owner / snapshot_coverage` as the first
    frontier.
-2. Do not split to operation workflow solely because a residual witness exists;
-   first extend the handoff probe so the publication producer,
-   operation-workflow dispatch/re-entry leg, and active-gate owner-reconcile
-   consumer are reported as one causal contract.
+2. Do not extend the handoff probe further unless the focused operation
+   workflow owner proof cannot represent `advance_existing_operation`.
 3. Do not widen timeout budgets or active-gate admission to hide publication
    convergence.
 4. Do not chase readiness support while publication convergence is first
    frontier.
-5. Do not start runtime edits before the focused handoff probe names the exact
-   owner file path and required progress mechanism.
+5. Do not start runtime edits before clean pre-impl validation and a fresh
+   implementation subagent; then keep edits inside the listed operation
+   workflow candidate runtime files.
 6. Do not write new representative artifacts with placeholder timestamps such
    as `T000000Z`; use a real timestamp or unique run id.
 
@@ -672,28 +675,25 @@ The sprint cannot close until:
 
 ## Current Next Action
 
-Continue with the selected architecture package from the latest representative
+Continue with the selected active-gate successor from the latest representative
 artifact:
 
 ```text
-work/packages/active-20260518-publication-operation-active-gate-handoff-contract-architecture.md
-test-output/reports/rolling-restart-after-active-gate-classification-20260518T043001Z.report.json
+work/packages/active-20260518-startup-active-gate-snapshot-coverage-after-workflow-advance-classification.md
+test-output/reports/rolling-restart-after-workflow-advance-classification-20260518T054537Z.report.json
 ```
 
 The current first frontier is
 `topology_publication_owner / publication_convergence`: fresh evidence reports
-`publication_ack_convergence` with `publication_pending`. Priority residual
-extraction reports one `operation_workflow_owner / workflow_progress` witness
-with `persisted_not_dispatched`, `dispatch_pending`, and
-`nextRequiredAction=advance_existing_operation`. Active gate is deferred at
-`snapshotCoverageNodeCount=2/5` with `owner_reconcile_pending` count `3`.
+`publication_ack_convergence` with `publication_pending`. The selected handoff
+next owner path, however, is `startup_active_gate_owner / snapshot_coverage`.
+The handoff probe reports operationWorkflow satisfied, active gate deferred at
+`snapshotCoverageNodeCount=3/5`, `pendingReconcileCount=2`,
+`runtimePromotionAllowed=false`, and required action
+`reconcile_owner_membership_publication`.
 
-Run the required review/fix/implementation subagent sequence before runtime
-edits for the active architecture package. Keep selected-source timeout
-handling, active-gate admission, timeout budget increases, local runtime owner
-patches, terminal-progress selection, readiness support, and closed active-gate
-handoff proof frozen unless the focused handoff probe selects them from
-canonical evidence. The next proof target is to extend the focused handoff
-probe so it reports the publication producer, operation-workflow
-dispatch/re-entry leg, and active-gate owner-reconcile consumer before any
-runtime patch.
+Run the required review subagent before runtime edits. Keep selected-source
+timeout handling, active-gate admission, timeout budget increases, topology
+publication runtime, operation-workflow runtime, terminal-progress selection,
+readiness support, diagnostics grammar, and closed handoff-probe architecture
+proof frozen unless fresh canonical evidence reselects them.

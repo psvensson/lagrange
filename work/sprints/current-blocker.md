@@ -4,143 +4,142 @@
 
 Sprint: `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md`
 
-Package: `work/packages/active-20260518-publication-operation-active-gate-handoff-contract-architecture.md`
+Package: `work/packages/active-20260518-startup-active-gate-snapshot-coverage-after-workflow-advance-classification.md`
 
 Workflow lane: `causal-escalation`
 
 Scenario: `rolling-restart`
 
-Artifact: `test-output/reports/rolling-restart-after-active-gate-classification-20260518T043001Z.report.json`
+Artifact: `test-output/reports/rolling-restart-after-workflow-advance-classification-20260518T054537Z.report.json`
 
-Playback: `test-output/reports/.playback/rolling-restart-after-active-gate-classification-20260518T043001Z/rolling-restart`
+Playback: `none`
 
 ## Boundary
 
-Owner: `topology_publication_owner`
+Owner: `startup_active_gate_owner`
 
-Boundary: `publication_convergence`
+Boundary: `snapshot_coverage`
 
-Dominant reason: `publication_pending`
+Dominant reason: `owner_reconcile_pending`
 
-Current state: Focused handoff probe implemented. It now reports the publication producer, operationWorkflow leg, active-gate consumer, pending publication_active_gate_handoff_contract, requiredProgressMechanism=advance, and resultClassification=publication_operation_workflow_handoff_leg_missing. The selected next owner contract is operation_workflow_owner / workflow_progress for priority_recovery_partition_progress with requiredAction=advance_existing_operation.
+Current state: Fresh representative rerun after the operation-workflow proof remains red. The visible producer frontier is publication_ack_convergence / topology_publication_owner / publication_convergence / publication_pending, but the handoff probe reports operationWorkflow priority_recovery_partition_progress satisfied, missingEdge=null, and nextOwnerPath startup_active_gate_owner / snapshot_coverage with requiredAction=reconcile_owner_membership_publication. Active-gate snapshot coverage is 3/5 with pendingReconcileCount=2 and runtimePromotionAllowed=false.
 
 ## Next Action
 
-Close this architecture package as migrated, then activate a focused operation_workflow_owner / workflow_progress successor for the selected advance_existing_operation dispatch/re-entry contract.
+Run the required review subagent for this startup_active_gate_owner / snapshot_coverage successor before runtime edits. The review must decide whether the first implementation slice stays on owner membership publication reconcile or stops as an architecture gap; do not edit topology publication, operation workflow, timeout budgets, active-gate admission, readiness, or diagnostics grammar.
 
 ## Proof Ladder
 
-1. `npm run work:evidence-summary -- test-output/reports/rolling-restart-after-active-gate-classification-20260518T043001Z.report.json`
-2. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-active-gate-classification-20260518T043001Z.report.json --explain publication_ack_convergence`
-3. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-active-gate-classification-20260518T043001Z.report.json --handoff-probe`
-4. `npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-after-active-gate-classification-20260518T043001Z.report.json --markdown`
-5. `npm run analyze:causal-model -- test-output/reports/rolling-restart-after-active-gate-classification-20260518T043001Z.report.json`
-6. `node --test test/scripts/analyze-topology-convergence.test.js`
-7. `node scripts/check-guideline-decision-boundaries.js scripts/analyze-topology-convergence.js`
-8. `node scripts/check-guideline-literals.js scripts/analyze-topology-convergence.js test/scripts/analyze-topology-convergence.test.js`
-9. `node scripts/check-guideline-constant-names.js scripts/analyze-topology-convergence.js test/scripts/analyze-topology-convergence.test.js`
-10. `npm run work:validate -- --closure`
+1. `npm run work:evidence-summary -- test-output/reports/rolling-restart-after-workflow-advance-classification-20260518T054537Z.report.json`
+2. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-workflow-advance-classification-20260518T054537Z.report.json --handoff-probe`
+3. `npm run analyze:causal-model -- test-output/reports/rolling-restart-after-workflow-advance-classification-20260518T054537Z.report.json`
+4. `npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-after-workflow-advance-classification-20260518T054537Z.report.json --markdown`
+5. `npm run analyze:owner-files -- startup_active_gate_owner snapshot_coverage`
 
 ## Model Fit
 
-Package class: `architecture-gap-analysis`
+Package class: `representative-frontier-closure`
 
 Intended minimum model: `gpt-5.3-codex`
 
-Scope shape: `cross-boundary-causal-gate`
+Scope shape: `owner-boundary-contraction/current-frontier`
 
 Output profile: `medium`
 
 Escalation triggers:
 
-1. `the focused probe selects a runtime owner contract outside the candidate runtime files`
-2. `canonical evidence changes the first frontier owner or boundary`
-3. `the probe cannot represent the operation-workflow leg without broader architecture changes`
+1. `owned files expand beyond this package`
+2. `canonical evidence reselects topology_publication_owner / publication_convergence`
+3. `canonical evidence reselects operation_workflow_owner / workflow_progress or rebalancer_handoff`
+4. `the owner reconcile path requires timeout, admission, readiness, or diagnostics grammar changes`
 
 ## Representative Residual
 
-Status: `migrated`
+Status: `live-red-scenario-release-gate`
 
 Scenario: `rolling-restart`
 
-Artifact: `test-output/reports/rolling-restart-after-active-gate-classification-20260518T043001Z.report.json`
+Artifact: `test-output/reports/rolling-restart-after-workflow-advance-classification-20260518T054537Z.report.json`
 
-Frontier: `publication_ack_convergence`
+Frontier: `active_gate_snapshot_coverage`
 
-Owner: `topology_publication_owner`
+Owner: `startup_active_gate_owner`
 
-Boundary: `publication_convergence`
+Boundary: `snapshot_coverage`
 
-Dominant reason: `publication_pending`
+Dominant reason: `owner_reconcile_pending`
 
-Next action: `Activate operation_workflow_owner / workflow_progress successor for priority_recovery_partition_progress requiredAction=advance_existing_operation.`
+Next action: `Prove or classify reconcile_owner_membership_publication for the two pending active-gate owner reconcile nodes selected by the fresh handoff probe.`
 
 ## Causal Governance
 
-Causal hypothesis: `The repeated rolling-restart failure is a missing cross-boundary contract: publication convergence blocks on publication_pending, operation workflow has a retryable persisted_not_dispatched dispatch_pending witness, and active-gate owner reconcile consumes stale or incomplete publication visibility without one shared handoff state that names the producer, operator leg, consumer, and required progress mechanism.`
+Causal hypothesis: `After operation workflow satisfies the selected advance leg, rolling-restart remains red because startup active-gate snapshot coverage waits on owner membership publication reconcile for two pending active nodes while runtimePromotionAllowed=false.`
 
-Stop-condition check: `npm run analyze:causal-model -- test-output/reports/rolling-restart-after-active-gate-classification-20260518T043001Z.report.json plus npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-active-gate-classification-20260518T043001Z.report.json --handoff-probe plus npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-after-active-gate-classification-20260518T043001Z.report.json --markdown`
+Stop-condition check: `Use npm run analyze:causal-model -- test-output/reports/rolling-restart-after-workflow-advance-classification-20260518T054537Z.report.json plus npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-workflow-advance-classification-20260518T054537Z.report.json --handoff-probe before implementation and again after focused proof.`
 
-Expected causal-model change: `The probe now exposes the next implementable contract as operation_workflow_owner / workflow_progress with requiredAction=advance_existing_operation; runtime work must continue in that successor package.`
+Expected causal-model change: `Focused active-gate proof should reduce pendingReconcileCount, improve snapshot coverage, surface one bounded owner reconcile outcome, migrate to a narrower active-gate publication reconcile boundary, or stop as architecture-gap without reopening publication or operation workflow.`
 
-Representative outcome: `migrated`
+Representative outcome: `pending-before-rerun`
 
-Causal debt: `Prior focused packages reduced or classified publication, workflow progress, rebalancer handoff, and active-gate owner reconcile in isolation, but the representative scenario still alternates among those boundaries.`
+Causal debt: `The sprint has recently bounced among publication convergence, operation workflow progress, rebalancer handoff, and active-gate reconcile. This package must keep the proof on the handoff probe's selected active-gate reconcile edge.`
 
-Cross-boundary review: `Review/fix/implementation subagents completed for this package. Runtime work remains out of scope here and moves to the selected operation_workflow_owner / workflow_progress successor.`
+Cross-boundary review: `Required review subagent must inspect the predecessor migration, fresh handoff probe, active-gate owner files, and subordinate priority residual report before any runtime edit.`
 
 ## Scenario Causal Closure
 
-Reference scenario/probe: `rolling-restart representative rerun after active-gate classification-only proof plus publication-operation-active-gate handoff probe`
+Reference scenario/probe: `fresh rolling-restart representative rerun after operation-workflow proof plus publication-operation-active-gate handoff probe`
 
 Phase chain:
 
-1. `publication_ack_convergence blocks with publication_pending`
-2. `priority recovery emits one operation_workflow_owner / workflow_progress retryable witness`
-3. `active_gate_snapshot_coverage remains deferred with owner_reconcile_pending`
-4. `handoff probe reports all three owners as one causal contract`
-5. `probe selects operation_workflow_owner / workflow_progress with requiredProgressMechanism=advance`
+1. `predecessor architecture package selected operation_workflow_owner / workflow_progress for advance_existing_operation`
+2. `operation-workflow package proved the selected advance leg with focused tests and no runtime change`
+3. `fresh representative rerun remained red but changed the selected handoff owner`
+4. `fresh handoff probe reports operationWorkflow satisfied and active_gate_snapshot_coverage deferred`
+5. `this successor owns startup_active_gate_owner / snapshot_coverage reconcile_owner_membership_publication`
 
-Current first frontier: `publication_ack_convergence / topology_publication_owner / publication_convergence / publication_pending; next expected frontier operation_workflow_owner / workflow_progress with persisted_not_dispatched dispatch_pending planned operation ec1145bb-d89d-4cef-8b07-fabd87ff8e84 and nextRequiredAction=advance_existing_operation.`
+Current first frontier: `publication_ack_convergence remains visible as producer context, while the selected next owner path is active_gate_snapshot_coverage / startup_active_gate_owner / snapshot_coverage / owner_reconcile_pending.`
 
 Known downstream blockers:
 
-1. `operation_workflow_owner / workflow_progress has one retryable persisted_not_dispatched dispatch_pending witness`
-2. `active_gate_snapshot_coverage is deferred at snapshotCoverage=2/5 with owner_reconcile_pending`
-3. `publication_active_gate_handoff_contract is pending with pendingReconcileCount=3 and runtimePromotionAllowed=false`
-4. `readiness_startup_support inherits active-gate no-progress evidence`
+1. `active-gate snapshotCoverageNodeCount is 3 of expectedNodeCount 5`
+2. `publicationActiveGateHandoffState is pending with reason owner_reconcile_pending`
+3. `publicationActiveGateHandoffPendingReconcileCount is 2`
+4. `pending reconcile nodes are 11601fe0-72d6-5853-8590-ec2881853e72 and 35a891b8-c1a0-5064-9c6e-2acfba61c2a7`
+5. `publicationActiveGateHandoffNextAction is reconcile_owner_membership_publication`
+6. `runtimePromotionAllowed is false`
+7. `operationWorkflow priority_recovery_partition_progress is satisfied in the fresh handoff probe`
+8. `priority residual extraction reports subordinate operation_workflow_owner / rebalancer_handoff witnesses that remain parked unless canonical evidence promotes them`
 
-Missing causal edge: `The missing edge is now narrowed to publication_operation_workflow_handoff_leg_missing: operation_workflow_owner / workflow_progress must advance the selected dispatch_pending operation and expose the dispatch/re-entry outcome to the publication-active-gate handoff.`
+Missing causal edge: `The active-gate owner path must submit or consume the owner membership publication reconcile for the two pending nodes and surface a bounded owner outcome instead of leaving the handoff at generic owner_reconcile_pending.`
 
-Missing causal edge probe: `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-active-gate-classification-20260518T043001Z.report.json --handoff-probe`
+Missing causal edge probe: `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-workflow-advance-classification-20260518T054537Z.report.json --handoff-probe`
 
-Bounded progress proof: `Focused probe proof reports producer=publication_ack_convergence, operationWorkflow=priority_recovery_partition_progress, consumer=active_gate_snapshot_coverage, requiredProgressMechanism=advance, resultClassification=publication_operation_workflow_handoff_leg_missing, and nextOwnerPath operation_workflow_owner / workflow_progress.`
+Bounded progress proof: `The bounded progress mechanism is reconcile: prove reconcile_owner_membership_publication for pendingReconcileCount=2 with runtimePromotionAllowed=false, or classify the exact owner outcome blocking active_gate_snapshot_coverage.`
 
-Bounded progress proof artifact: `test/scripts/__fixtures__/topology-convergence/publication-operation-active-gate-handoff.fixture.json`
+Bounded progress proof artifact: `test-output/reports/rolling-restart-after-workflow-advance-classification-20260518T054537Z.report.json`
 
-Expected observable transition: `The successor package advances or classifies the selected priority_recovery_partition_progress witness so publication convergence can observe a durable dispatch/re-entry outcome.`
+Expected observable transition: `Representative evidence should reduce pendingReconcileCount, improve snapshot coverage, surface one bounded owner reconcile outcome, migrate to a narrower active-gate publication boundary, or stop as architecture-gap.`
 
-Max progress bound: `one focused operation_workflow_owner / workflow_progress successor package before another architecture decision`
+Max progress bound: `one focused startup_active_gate_owner / snapshot_coverage implementation slice before another architecture decision`
 
-Same-frontier fallback: `If the successor cannot move or classify advance_existing_operation with focused proof, stop instead of reopening topology publication or active-gate owner reconcile locally.`
+Same-frontier fallback: `If the same active-gate frontier remains, record the owner reconcile outcome and do not broaden into publication runtime, operation workflow runtime, timeout budgets, active-gate admission, readiness, or diagnostics grammar.`
 
-Expected next frontier: `operation_workflow_owner / workflow_progress for priority_recovery_partition_progress requiredAction=advance_existing_operation`
+Expected next frontier: `startup_active_gate_owner / snapshot_coverage for active_gate_snapshot_coverage requiredAction=reconcile_owner_membership_publication`
 
-Result classification: `migrated`
+Result classification: `pending-before-probe`
 
-Stop condition: `migrate-owner-boundary`
+Stop condition: `continue-local-fix`
 
 Recent frontier history:
 
-1. `work/packages/done-20260517-priority-recovery-workflow-progress-after-publication-backpressure.md / operation_workflow_owner / workflow_progress / same-frontier-focused-proof`
-2. `work/packages/done-20260517-priority-recovery-rebalancer-handoff-after-workflow-progress-bounded-proof.md / operation_workflow_owner / rebalancer_handoff / classification-only-focused-proof`
-3. `work/packages/done-20260517-startup-active-gate-snapshot-coverage-after-priority-backpressure-classification.md / startup_active_gate_owner / snapshot_coverage / classification-only-focused-proof`
-4. `work/packages/done-20260518-priority-recovery-workflow-progress-after-active-gate-classification-rerun.md / topology_publication_owner plus operation_workflow_owner / publication_convergence plus workflow_progress / selected architecture package route`
-5. `work/packages/active-20260518-publication-operation-active-gate-handoff-contract-architecture.md / operation_workflow_owner / workflow_progress / handoff-probe-selected-successor`
+1. `work/packages/done-20260518-priority-recovery-operation-workflow-advance-after-handoff-probe.md / operation_workflow_owner / workflow_progress / migrated`
+2. `work/packages/done-20260518-publication-operation-active-gate-handoff-contract-architecture.md / topology_publication_owner / publication_convergence / migrated`
+3. `work/packages/done-20260517-startup-active-gate-snapshot-coverage-after-priority-backpressure-classification.md / startup_active_gate_owner / snapshot_coverage / classification-only`
+4. `work/packages/done-20260517-priority-recovery-workflow-progress-after-publication-backpressure.md / operation_workflow_owner / workflow_progress / same-frontier`
 
-Oscillation check: `Human-selected alternative 3 opens this architecture package because repeated local proofs did not make rolling-restart green or produce monotonic representative reduction.`
+Oscillation check: `The package stays causal-escalation because the representative gate remains red after adjacent publication, workflow, and active-gate classifications; implementation may only target the selected active-gate reconcile edge.`
 
-Handoff invariant: `Publication owner must publish one fresh cohort outcome; operation_workflow_owner must expose one durable dispatch/re-entry outcome for the selected priority operation; active-gate owner reconcile must consume that owner outcome through the canonical handoff without local promotion, timeout-budget expansion, or diagnostic reinterpretation.`
+Handoff invariant: `Publication remains producer context, operationWorkflow remains satisfied, and active-gate owner reconcile may not locally promote runtime truth, relax admission, expand timeout budgets, bypass readiness, or reinterpret diagnostics.`
 
 ## Architecture Decision Gate
 
@@ -150,40 +149,36 @@ Trigger: `frontier-oscillation`
 
 Trigger evidence:
 
-1. `Fresh rolling-restart report test-output/reports/rolling-restart-after-active-gate-classification-20260518T043001Z.report.json failed after the prior active-gate classification-only stop.`
-2. `Canonical evidence reports publication_ack_convergence blocked with publication_pending and a next expected operation_workflow_owner / workflow_progress dispatch_pending witness.`
-3. `The current --handoff-probe reports publication_active_gate_handoff_not_detected and does not expose the operation-workflow leg.`
-4. `The user selected alternative 3: open a bounded architecture package for the publication -> operation-workflow -> active-gate handoff contract.`
+1. `Fresh handoff probe selects startup_active_gate_owner / snapshot_coverage after operation workflow satisfied.`
+2. `Visible publication_ack_convergence remains red, but the handoff nextOwnerPath is active-gate reconcile.`
+3. `Recent sprint history includes adjacent publication, workflow_progress, rebalancer_handoff, and active-gate classifications without green representative closure.`
 
 Choices:
 
-1. `continue-local-proof` route=`continue-local-proof` - Continue only if a focused cross-boundary probe proves the selected workflow_progress witness can reduce without changing architecture.
-2. `migrate-owner-boundary` route=`owner-boundary-migration` - Migrate to a newly selected owner boundary only if canonical evidence names one owner as the missing contract owner.
-3. `open-architecture-package` route=`architecture-package` - Open a bounded architecture package for the publication to operation-workflow to active-gate handoff contract.
-4. `human-escalation` route=`human-escalation` - Escalate before any runtime implementation if the focused handoff probe cannot select a bounded owner contract.
+1. `continue-local-proof` route=`continue-local-proof` - Proceed only with bounded startup active-gate owner reconcile proof.
+2. `migrate-owner-boundary` route=`owner-boundary-migration` - Migrate only if focused active-gate proof selects a narrower owner boundary.
+3. `architecture-package` route=`architecture-package` - Stop for architecture if reconcile_owner_membership_publication cannot be represented by a bounded active-gate owner proof.
+4. `human-escalation` route=`human-escalation` - Escalate if canonical extractors disagree on owner, boundary, or required action.
 
-Selected choice: `open-architecture-package`
+Selected choice: `continue-local-proof`
 
-Gate next action: Architecture package implemented. Continue in the selected operation_workflow_owner / workflow_progress successor.
+Gate next action: Run review, fix if needed, and implementation subagents sequentially before any active-gate runtime edit.
 
 ## Scope
 
 Write scope:
 
-1. `work/packages/active-20260518-publication-operation-active-gate-handoff-contract-architecture.md`
+1. `work/packages/active-20260518-startup-active-gate-snapshot-coverage-after-workflow-advance-classification.md`
 2. `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md`
 3. `work/sprints/current-blocker.md`
 4. `work/sprints/current-blocker.json`
 5. `work/model-ledger.jsonl`
-6. `scripts/analyze-topology-convergence.js`
-7. `test/scripts/analyze-topology-convergence.test.js`
-8. `test/scripts/__fixtures__/topology-convergence/publication-operation-active-gate-handoff.fixture.json`
 
 Handoff files:
 
-1. `work/packages/done-20260518-priority-recovery-workflow-progress-after-active-gate-classification-rerun.md`
-2. `test-output/reports/rolling-restart-after-active-gate-classification-20260518T043001Z.report.json`
-3. `test-output/reports/.playback/rolling-restart-after-active-gate-classification-20260518T043001Z/rolling-restart/failure-bundle.json`
+1. `work/packages/done-20260518-priority-recovery-operation-workflow-advance-after-handoff-probe.md`
+2. `work/packages/done-20260518-publication-operation-active-gate-handoff-contract-architecture.md`
+3. `test-output/reports/rolling-restart-after-workflow-advance-classification-20260518T054537Z.report.json`
 
 Generated files:
 
@@ -193,22 +188,20 @@ Generated files:
 Candidate runtime files:
 
 1. `src/control-plane/publication-active-gate-handoff-contract.js`
-2. `src/diagnostics/topology-convergence-graph.js`
-3. `test/distributed/harness/publication-evidence-contract.js`
-4. `src/control-plane/topology-operator-witness.js`
-5. `src/control-plane/priority-recovery-snapshot-stage-10.js`
-6. `src/rebalancer/operation-workflow-owner.js`
+2. `src/admin/admin-control-snapshot-class-part-2.js`
+3. `src/admin/admin-control-snapshot-class-part-6.js`
+4. `src/control-plane/membership-publication-coordinator-class-stage-2.js`
+5. `src/control-plane/membership-publication-coordinator-class-stage-3.js`
+6. `test/admin/admin-control-snapshot.test.js`
+7. `test/control-plane/publication-active-gate-handoff-contract.test.js`
 
 Commit scope:
 
-1. `work/packages/active-20260518-publication-operation-active-gate-handoff-contract-architecture.md`
+1. `work/packages/active-20260518-startup-active-gate-snapshot-coverage-after-workflow-advance-classification.md`
 2. `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md`
 3. `work/sprints/current-blocker.md`
 4. `work/sprints/current-blocker.json`
 5. `work/model-ledger.jsonl`
-6. `scripts/analyze-topology-convergence.js`
-7. `test/scripts/analyze-topology-convergence.test.js`
-8. `test/scripts/__fixtures__/topology-convergence/publication-operation-active-gate-handoff.fixture.json`
 
 Legacy touched files:
 
