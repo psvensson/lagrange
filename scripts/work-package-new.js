@@ -29,7 +29,17 @@ import {
   LANE_BOUNDED_EXPERIMENT,
   LANE_DIAGNOSTIC_CLASSIFICATION,
   LANE_LIGHTWEIGHT_MAINTENANCE,
+  LANE_MECHANICAL_MAINTENANCE,
   LANE_RUNTIME_OWNER_BOUNDARY,
+  LANE_SCENARIO_RELEASE_GATE,
+  LANE_SINGLE_FILE_RUNTIME,
+  LANE_TEST_ONLY_PROOF,
+  MODEL_FIT_SPLIT_ALLOWED_DECISION_DEPTH_FIELD,
+  MODEL_FIT_SPLIT_CHILD_CANDIDATES_FIELD,
+  MODEL_FIT_SPLIT_FIELD,
+  MODEL_FIT_SPLIT_SAFE_TO_EXECUTE_WHEN_FIELD,
+  MODEL_FIT_SPLIT_SPLIT_TRIGGERS_FIELD,
+  MODEL_FIT_SPLIT_TARGET_MODEL_FIELD,
   RERUN_DECISION_CAUSAL_OUTCOME_FIELD,
   RERUN_DECISION_EXPECTED_DELTA_FIELD,
   RERUN_DECISION_FIELD,
@@ -115,6 +125,7 @@ const FLAG_TIMEBOX = 'timebox';
 const FLAG_MERGE_REQUIREMENT = 'merge-requirement';
 const FLAG_KILL_RULE = 'kill-rule';
 const FLAG_VALIDATION_TIER = 'validation-tier';
+const FLAG_SPLIT_CANDIDATE = 'split-candidate';
 const FLAG_SCHEMA = 'schema';
 const FLAG_HELP = 'help';
 const EMPTY_TEXT = '';
@@ -176,6 +187,7 @@ const REPEATED_FLAGS = Object.freeze([
   FLAG_CANDIDATE_RUNTIME_FILE,
   FLAG_COMMIT_SCOPE,
   FLAG_FORBIDDEN_FILE,
+  FLAG_SPLIT_CANDIDATE,
 ]);
 const HELP_TEXT = [
   'Usage:',
@@ -206,6 +218,7 @@ const HELP_TEXT = [
   '  --merge-requirement <text>  Proof required before merging an experiment.',
   '  --kill-rule <text>  Condition that discards or escalates an experiment.',
   '  --validation-tier <file-local|single-owner|cross-owner|release-gate>',
+  '  --split-candidate <text>  Candidate child package for lower-model execution.',
   '',
   'Use --schema to print the shared work-package schema reference.',
 ].join(NEWLINE);
@@ -261,6 +274,24 @@ function slugPart(value) {
     .toLowerCase()
     .replace(/[^a-z0-9]+/gu, '-')
     .replace(/^-+|-+$/gu, EMPTY_TEXT);
+}
+
+function declaredWriteScopeFromFlags(flags = {}) {
+  return [
+    ...(flags[FLAG_WRITE_SCOPE] || []),
+    ...(flags[FLAG_OWNED_FILE] || []),
+    ...(flags[FLAG_TOUCHED_FILE] || []),
+  ].map(normalizeText).filter(Boolean);
+}
+
+function isSourcePath(filePath) {
+  return normalizeText(filePath).startsWith('src/');
+}
+
+function isTestOnlyProofPath(filePath) {
+  const normalizedPath = normalizeText(filePath);
+  return normalizedPath.startsWith('test/') ||
+    normalizedPath.startsWith('work/packages/');
 }
 
 function buildArtifactSlug(summary) {
@@ -420,6 +451,34 @@ function validateFlags(flags = {}) {
           .map((flagName) => `${FLAG_PREFIX}${flagName}`)
           .join(', ') +
         '.',
+      );
+    }
+  }
+  const declaredWriteScope = declaredWriteScopeFromFlags(flags);
+  if (
+    lane === LANE_MECHANICAL_MAINTENANCE &&
+    declaredWriteScope.some(isSourcePath)
+  ) {
+    throw new Error(
+      `--lane ${LANE_MECHANICAL_MAINTENANCE} must not include src/ paths; ` +
+      'split runtime behavior into a separate package.',
+    );
+  }
+  if (
+    lane === LANE_TEST_ONLY_PROOF &&
+    declaredWriteScope.some((filePath) => !isTestOnlyProofPath(filePath))
+  ) {
+    throw new Error(
+      `--lane ${LANE_TEST_ONLY_PROOF} write scope must stay in test/ or ` +
+      'work/packages/ paths.',
+    );
+  }
+  if (lane === LANE_SINGLE_FILE_RUNTIME) {
+    const runtimeFiles = declaredWriteScope.filter(isSourcePath);
+    if (runtimeFiles.length !== NUM_ONE) {
+      throw new Error(
+        `--lane ${LANE_SINGLE_FILE_RUNTIME} requires exactly one src/ ` +
+        'runtime file in write scope.',
       );
     }
   }
@@ -708,6 +767,112 @@ function buildBoundedExperimentLines(metadata = {}) {
   ];
 }
 
+function defaultAllowedDecisionDepth(lane) {
+  switch (lane) {
+    case LANE_MECHANICAL_MAINTENANCE:
+      return 'mechanical edits only; no behavior or ownership decisions';
+    case LANE_TEST_ONLY_PROOF:
+      return 'test assertion or fixture proof only; runtime behavior stays frozen';
+    case LANE_BOUNDED_EXPERIMENT:
+      return 'one inherited-owner hypothesis with explicit expected metric and kill rule';
+    case LANE_SINGLE_FILE_RUNTIME:
+      return 'one preselected runtime file after owner, boundary, and proof are fixed';
+    case LANE_RUNTIME_OWNER_BOUNDARY:
+      return 'single owner-boundary execution after higher-model route selection';
+    case LANE_SCENARIO_RELEASE_GATE:
+    case LANE_CAUSAL_ESCALATION:
+      return 'planning and route selection; split executable children before implementation';
+    default:
+      return 'bounded local edit after owner, scope, proof, and forbidden files are named';
+  }
+}
+
+function defaultSplitCandidatesForLane(lane) {
+  if (lane === LANE_MECHANICAL_MAINTENANCE) {
+    return [
+      'Keep docs/templates/schema metadata edits in this Spark-safe package.',
+      'Split any runtime or test behavior into a separate package before execution.',
+    ];
+  }
+  if (lane === LANE_TEST_ONLY_PROOF) {
+    return [
+      'Add or tighten the focused test in this Spark-safe package.',
+      'Open a separate bounded-experiment or single-file-runtime package for implementation.',
+    ];
+  }
+  if (lane === LANE_SINGLE_FILE_RUNTIME) {
+    return [
+      'Execute only the declared runtime file and focused proof in this gpt-5.4 package.',
+      'Split immediately if a second runtime file, shared contract, or owner migration is needed.',
+    ];
+  }
+  if (lane === LANE_RUNTIME_OWNER_BOUNDARY) {
+    return [
+      'Split mechanical cleanup into mechanical-maintenance / gpt-5.3-codex-spark.',
+      'Split focused tests or fixtures into test-only-proof / gpt-5.3-codex-spark.',
+      'Split one same-owner hypothesis into bounded-experiment / gpt-5.3-codex-spark.',
+      'Keep cross-file owner runtime integration in this package unless it contracts to one runtime file.',
+    ];
+  }
+  if (lane === LANE_SCENARIO_RELEASE_GATE || lane === LANE_CAUSAL_ESCALATION) {
+    return [
+      'Use this package for route selection, owner/boundary decisions, and stop rules.',
+      'Create Spark-safe mechanical or test-only children once execution is unambiguous.',
+      'Create a gpt-5.4 single-file-runtime child only after the runtime owner file is selected.',
+    ];
+  }
+  return [
+    'Prefer mechanical-maintenance for docs/templates/schema-only edits.',
+    'Prefer test-only-proof for tests that do not change runtime behavior.',
+    'Prefer bounded-experiment for one same-owner hypothesis with inherited context.',
+  ];
+}
+
+function buildModelFitSplitMetadata(lane, metadata, flags = {}) {
+  const candidateFlags = Array.isArray(flags[FLAG_SPLIT_CANDIDATE]) ?
+    flags[FLAG_SPLIT_CANDIDATE] :
+    [];
+  const childCandidates = candidateFlags.length ?
+    candidateFlags.map(normalizeText).filter(Boolean) :
+    defaultSplitCandidatesForLane(lane);
+  return {
+    [MODEL_FIT_SPLIT_TARGET_MODEL_FIELD]:
+      metadata.modelFit.intendedMinimumModel,
+    [MODEL_FIT_SPLIT_ALLOWED_DECISION_DEPTH_FIELD]:
+      defaultAllowedDecisionDepth(lane),
+    [MODEL_FIT_SPLIT_SAFE_TO_EXECUTE_WHEN_FIELD]: [
+      'owner, boundary, write scope, forbidden scope, proof, and kill rule stay as declared',
+      'the executor does not need to choose architecture, migrate ownership, or reinterpret representative evidence',
+      'the first focused proof gives a clear pass, fail, or escalate signal',
+    ],
+    [MODEL_FIT_SPLIT_SPLIT_TRIGGERS_FIELD]: [
+      'write scope expands beyond the declared lower-model lane',
+      'proof requires forbidden scope, cross-owner reasoning, or architecture route selection',
+      'the implementation needs to decide system behavior instead of executing a named local mechanism',
+    ],
+    [MODEL_FIT_SPLIT_CHILD_CANDIDATES_FIELD]: childCandidates,
+  };
+}
+
+function buildModelFitSplitLines(metadata = {}) {
+  const split = metadata[MODEL_FIT_SPLIT_FIELD];
+  if (!split) {
+    return [];
+  }
+  return [
+    '## Model-Fit Split',
+    EMPTY_TEXT,
+    `- Target executor: \`${split[MODEL_FIT_SPLIT_TARGET_MODEL_FIELD]}\``,
+    `- Allowed decision depth: ${split[MODEL_FIT_SPLIT_ALLOWED_DECISION_DEPTH_FIELD]}`,
+    '- Safe to execute when:',
+    markdownList(split[MODEL_FIT_SPLIT_SAFE_TO_EXECUTE_WHEN_FIELD], 'Scope remains concrete.'),
+    '- Split or escalate when:',
+    markdownList(split[MODEL_FIT_SPLIT_SPLIT_TRIGGERS_FIELD], 'Scope expands.'),
+    '- Candidate lower-model child packages:',
+    markdownList(split[MODEL_FIT_SPLIT_CHILD_CANDIDATES_FIELD], 'No child package candidate recorded.'),
+  ];
+}
+
 function buildClassificationOnlyFastPathLines(isClassificationOnly) {
   if (!isClassificationOnly) {
     return [];
@@ -954,6 +1119,11 @@ async function buildPackageContent(flags = {}) {
   if (inheritsContext) {
     metadata[INHERITS_CONTEXT_FIELD] = inheritsContext;
   }
+  metadata[MODEL_FIT_SPLIT_FIELD] = buildModelFitSplitMetadata(
+    lane,
+    metadata,
+    flags,
+  );
   if (isClassificationOnly) {
     metadata.representativeResidual = {
       status: 'classification-only',
@@ -1119,6 +1289,8 @@ async function buildPackageContent(flags = {}) {
     '- Escalation triggers: owned files expand beyond this package, runtime ownership changes, or representative scenario evidence changes.',
     `- Focused proof: ${markdownInlineCodeList(modelFitProof, `\`${DEFAULT_ACCELERATION_PROOF}\``)}`,
     `- Model ledger advisory: \`${modelFitDefaults.ledgerRecommendation}\``,
+    EMPTY_TEXT,
+    ...buildModelFitSplitLines(metadata),
     EMPTY_TEXT,
     '## Subagent Progress And Attempt Ledger',
     EMPTY_TEXT,

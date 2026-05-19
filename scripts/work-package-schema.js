@@ -11,9 +11,12 @@ const STATUS_DONE = 'done';
 const STATUS_SUPERSEDED = 'superseded';
 const STATUS_TODO = 'todo';
 const LANE_READ_REVIEW_DOC_ONLY = 'read-review-doc-only';
+const LANE_MECHANICAL_MAINTENANCE = 'mechanical-maintenance';
 const LANE_LIGHTWEIGHT_MAINTENANCE = 'lightweight-maintenance';
+const LANE_TEST_ONLY_PROOF = 'test-only-proof';
 const LANE_DIAGNOSTIC_CLASSIFICATION = 'diagnostic-classification';
 const LANE_BOUNDED_EXPERIMENT = 'bounded-experiment';
+const LANE_SINGLE_FILE_RUNTIME = 'single-file-runtime';
 const LANE_RUNTIME_OWNER_BOUNDARY = 'runtime-owner-boundary';
 const LANE_SCENARIO_RELEASE_GATE = 'scenario-release-gate';
 const LANE_CAUSAL_ESCALATION = 'causal-escalation';
@@ -25,16 +28,21 @@ const CORE_LOGIC_BRIEF_NON_GOALS_FIELD =
 const CORE_LOGIC_BRIEF_PROOF_FIELD = 'Proof mapping';
 const CORE_LOGIC_BRIEF_WRONG_SLICE_FIELD = 'Wrong-slice trigger';
 const MODEL_FIT_SPARK_MODEL = 'gpt-5.3-codex-spark';
+const MODEL_FIT_54_MODEL = 'gpt-5.4';
 const MODEL_FIT_DEFAULT_FRONTIER_MODEL = 'gpt-5.3-codex';
 const MODEL_FIT_LEAF_SLICE_SCOPE = 'leaf-slice';
 const MODEL_FIT_LIGHTWEIGHT_CLASS = 'bounded-implementation';
+const MODEL_FIT_MECHANICAL_CLASS = 'mechanical-maintenance';
+const MODEL_FIT_TEST_ONLY_CLASS = 'test-only-proof';
 const MODEL_FIT_DIAGNOSTIC_CLASS = 'diagnostic-classification';
 const MODEL_FIT_BOUNDED_EXPERIMENT_CLASS = 'bounded-experiment';
+const MODEL_FIT_SINGLE_FILE_RUNTIME_CLASS = 'single-file-runtime';
 const MODEL_FIT_RUNTIME_CLASS = 'runtime-owner-boundary';
 const MODEL_FIT_SCENARIO_CLASS = 'representative-frontier-closure';
 const MODEL_FIT_CAUSAL_CLASS = 'architecture-gap-analysis';
 const MODEL_FIT_RUNTIME_SCOPE = 'owner-boundary-contraction';
-const MODEL_FIT_BOUNDED_EXPERIMENT_SCOPE = 'hypothesis-led-leaf-slice';
+const MODEL_FIT_SINGLE_FILE_RUNTIME_SCOPE = 'single-runtime-file';
+const MODEL_FIT_BOUNDED_EXPERIMENT_SCOPE = MODEL_FIT_LEAF_SLICE_SCOPE;
 const MODEL_FIT_DIAGNOSTIC_SCOPE = 'diagnostic-owner-evidence/current-artifact';
 const MODEL_FIT_SCENARIO_SCOPE = 'owner-boundary-contraction/current-frontier';
 const MODEL_FIT_CAUSAL_SCOPE = 'scenario-causal-escalation';
@@ -161,6 +169,34 @@ const VALIDATION_TIERS = Object.freeze([
   VALIDATION_TIER_CROSS_OWNER,
   VALIDATION_TIER_RELEASE_GATE,
 ]);
+const MODEL_FIT_SPLIT_FIELD = 'modelFitSplit';
+const MODEL_FIT_SPLIT_TARGET_MODEL_FIELD = 'targetExecutionModel';
+const MODEL_FIT_SPLIT_ALLOWED_DECISION_DEPTH_FIELD = 'allowedDecisionDepth';
+const MODEL_FIT_SPLIT_SAFE_TO_EXECUTE_WHEN_FIELD = 'safeToExecuteWhen';
+const MODEL_FIT_SPLIT_SPLIT_TRIGGERS_FIELD = 'splitTriggers';
+const MODEL_FIT_SPLIT_CHILD_CANDIDATES_FIELD = 'childPackageCandidates';
+const MODEL_FIT_SPLIT_FIELDS = Object.freeze([
+  MODEL_FIT_SPLIT_TARGET_MODEL_FIELD,
+  MODEL_FIT_SPLIT_ALLOWED_DECISION_DEPTH_FIELD,
+  MODEL_FIT_SPLIT_SAFE_TO_EXECUTE_WHEN_FIELD,
+  MODEL_FIT_SPLIT_SPLIT_TRIGGERS_FIELD,
+  MODEL_FIT_SPLIT_CHILD_CANDIDATES_FIELD,
+]);
+const LOWER_MODEL_WORKFLOW_LANES = Object.freeze([
+  LANE_READ_REVIEW_DOC_ONLY,
+  LANE_MECHANICAL_MAINTENANCE,
+  LANE_LIGHTWEIGHT_MAINTENANCE,
+  LANE_TEST_ONLY_PROOF,
+  LANE_BOUNDED_EXPERIMENT,
+  LANE_SINGLE_FILE_RUNTIME,
+]);
+const SPARK_SAFE_WORKFLOW_LANES = Object.freeze([
+  LANE_READ_REVIEW_DOC_ONLY,
+  LANE_MECHANICAL_MAINTENANCE,
+  LANE_LIGHTWEIGHT_MAINTENANCE,
+  LANE_TEST_ONLY_PROOF,
+  LANE_BOUNDED_EXPERIMENT,
+]);
 const ARCHITECTURE_DECISION_GATE_STATUSES = Object.freeze([
   'not-required',
   'required',
@@ -202,9 +238,12 @@ const VALID_PACKAGE_STATUSES = Object.freeze([
 
 const WORKFLOW_LANES = Object.freeze([
   LANE_READ_REVIEW_DOC_ONLY,
+  LANE_MECHANICAL_MAINTENANCE,
   LANE_LIGHTWEIGHT_MAINTENANCE,
+  LANE_TEST_ONLY_PROOF,
   LANE_DIAGNOSTIC_CLASSIFICATION,
   LANE_BOUNDED_EXPERIMENT,
+  LANE_SINGLE_FILE_RUNTIME,
   LANE_RUNTIME_OWNER_BOUNDARY,
   LANE_SCENARIO_RELEASE_GATE,
   LANE_CAUSAL_ESCALATION,
@@ -212,12 +251,16 @@ const WORKFLOW_LANES = Object.freeze([
 
 const SUBAGENT_OPTIONAL_LANES = Object.freeze([
   LANE_READ_REVIEW_DOC_ONLY,
+  LANE_MECHANICAL_MAINTENANCE,
   LANE_LIGHTWEIGHT_MAINTENANCE,
+  LANE_TEST_ONLY_PROOF,
   LANE_DIAGNOSTIC_CLASSIFICATION,
   LANE_BOUNDED_EXPERIMENT,
+  LANE_SINGLE_FILE_RUNTIME,
 ]);
 
 const CORE_LOGIC_BRIEF_REQUIRED_LANES = Object.freeze([
+  LANE_SINGLE_FILE_RUNTIME,
   LANE_RUNTIME_OWNER_BOUNDARY,
   LANE_SCENARIO_RELEASE_GATE,
   LANE_CAUSAL_ESCALATION,
@@ -346,8 +389,20 @@ const DEFAULT_MODEL_FIT_BY_LANE = Object.freeze({
     scopeShape: MODEL_FIT_LEAF_SLICE_SCOPE,
     outputProfile: OUTPUT_PROFILE_SMALL,
   }),
+  [LANE_MECHANICAL_MAINTENANCE]: Object.freeze({
+    packageClass: MODEL_FIT_MECHANICAL_CLASS,
+    intendedMinimumModel: MODEL_FIT_SPARK_MODEL,
+    scopeShape: MODEL_FIT_LEAF_SLICE_SCOPE,
+    outputProfile: OUTPUT_PROFILE_SMALL,
+  }),
   [LANE_LIGHTWEIGHT_MAINTENANCE]: Object.freeze({
     packageClass: MODEL_FIT_LIGHTWEIGHT_CLASS,
+    intendedMinimumModel: MODEL_FIT_SPARK_MODEL,
+    scopeShape: MODEL_FIT_LEAF_SLICE_SCOPE,
+    outputProfile: OUTPUT_PROFILE_MEDIUM,
+  }),
+  [LANE_TEST_ONLY_PROOF]: Object.freeze({
+    packageClass: MODEL_FIT_TEST_ONLY_CLASS,
     intendedMinimumModel: MODEL_FIT_SPARK_MODEL,
     scopeShape: MODEL_FIT_LEAF_SLICE_SCOPE,
     outputProfile: OUTPUT_PROFILE_MEDIUM,
@@ -362,6 +417,12 @@ const DEFAULT_MODEL_FIT_BY_LANE = Object.freeze({
     packageClass: MODEL_FIT_BOUNDED_EXPERIMENT_CLASS,
     intendedMinimumModel: MODEL_FIT_SPARK_MODEL,
     scopeShape: MODEL_FIT_BOUNDED_EXPERIMENT_SCOPE,
+    outputProfile: OUTPUT_PROFILE_MEDIUM,
+  }),
+  [LANE_SINGLE_FILE_RUNTIME]: Object.freeze({
+    packageClass: MODEL_FIT_SINGLE_FILE_RUNTIME_CLASS,
+    intendedMinimumModel: MODEL_FIT_54_MODEL,
+    scopeShape: MODEL_FIT_SINGLE_FILE_RUNTIME_SCOPE,
     outputProfile: OUTPUT_PROFILE_MEDIUM,
   }),
   [LANE_RUNTIME_OWNER_BOUNDARY]: Object.freeze({
@@ -450,6 +511,30 @@ function renderSchemaReference() {
     '## Workflow Lanes',
     EMPTY_TEXT,
     renderEnumList(WORKFLOW_LANES),
+    EMPTY_TEXT,
+    '## Model-Fit Package Splitter',
+    EMPTY_TEXT,
+    '- Purpose: split broad work into lower-model execution packages before implementation whenever ownership, scope, and proof can be made mechanical.',
+    '- Package authoring should decide owner, boundary, hypothesis, proof, forbidden scope, and kill rule before assigning execution to a lower model.',
+    EMPTY_TEXT,
+    'Lower-model execution lanes:',
+    EMPTY_TEXT,
+    renderEnumList(LOWER_MODEL_WORKFLOW_LANES),
+    EMPTY_TEXT,
+    'Spark-safe lanes:',
+    EMPTY_TEXT,
+    renderEnumList(SPARK_SAFE_WORKFLOW_LANES),
+    EMPTY_TEXT,
+    'Package class defaults:',
+    EMPTY_TEXT,
+    `- \`${LANE_MECHANICAL_MAINTENANCE}\` -> \`${MODEL_FIT_SPARK_MODEL}\` for docs/templates/schema/mechanical metadata edits.`,
+    `- \`${LANE_TEST_ONLY_PROOF}\` -> \`${MODEL_FIT_SPARK_MODEL}\` for test-only evidence without runtime behavior changes.`,
+    `- \`${LANE_BOUNDED_EXPERIMENT}\` -> \`${MODEL_FIT_SPARK_MODEL}\` for one inherited-owner hypothesis with proof-gated merge.`,
+    `- \`${LANE_SINGLE_FILE_RUNTIME}\` -> \`${MODEL_FIT_54_MODEL}\` for one preselected runtime file with core logic and focused proof.`,
+    `- Cross-owner runtime, scenario release gates, and architecture route decisions stay on \`${MODEL_FIT_DEFAULT_FRONTIER_MODEL}\` or stronger.`,
+    EMPTY_TEXT,
+    `- Metadata field: \`${MODEL_FIT_SPLIT_FIELD}\``,
+    renderEnumList(MODEL_FIT_SPLIT_FIELDS),
     EMPTY_TEXT,
     '## Output Profiles',
     EMPTY_TEXT,
@@ -650,6 +735,7 @@ export {
   CORE_LOGIC_BRIEF_FIELDS,
   CORE_LOGIC_BRIEF_REQUIRED_LANES,
   DEFAULT_MODEL_FIT_BY_LANE,
+  LANE_MECHANICAL_MAINTENANCE,
   LANE_CAUSAL_ESCALATION,
   LANE_BOUNDED_EXPERIMENT,
   LANE_DIAGNOSTIC_CLASSIFICATION,
@@ -657,10 +743,22 @@ export {
   LANE_READ_REVIEW_DOC_ONLY,
   LANE_RUNTIME_OWNER_BOUNDARY,
   LANE_SCENARIO_RELEASE_GATE,
+  LANE_SINGLE_FILE_RUNTIME,
+  LANE_TEST_ONLY_PROOF,
+  LOWER_MODEL_WORKFLOW_LANES,
+  SPARK_SAFE_WORKFLOW_LANES,
+  MODEL_FIT_54_MODEL,
   MODEL_FIT_DEFAULT_FRONTIER_MODEL,
   MODEL_FIT_BOUNDED_EXPERIMENT_SCOPE,
   MODEL_FIT_LEAF_SLICE_SCOPE,
   MODEL_FIT_SPARK_MODEL,
+  MODEL_FIT_SPLIT_ALLOWED_DECISION_DEPTH_FIELD,
+  MODEL_FIT_SPLIT_CHILD_CANDIDATES_FIELD,
+  MODEL_FIT_SPLIT_FIELD,
+  MODEL_FIT_SPLIT_FIELDS,
+  MODEL_FIT_SPLIT_SAFE_TO_EXECUTE_WHEN_FIELD,
+  MODEL_FIT_SPLIT_SPLIT_TRIGGERS_FIELD,
+  MODEL_FIT_SPLIT_TARGET_MODEL_FIELD,
   OUTPUT_PROFILE_MEDIUM,
   RERUN_DECISION_CAUSAL_OUTCOME_FIELD,
   RERUN_DECISION_EXPECTED_DELTA_FIELD,

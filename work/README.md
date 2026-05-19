@@ -188,17 +188,29 @@ the package explicitly records a heavier audit or architecture reason:
    `next: ...` or `blocker: ...`. Interrupted or partial-unvalidated attempts
    must be followed by a checked superseded/discarded/revalidated line before
    closure.
-7. Use the `diagnostic-classification` lane when the package is driven by a
+7. Use the `mechanical-maintenance` lane for docs, templates, schema text,
+   package metadata, generated handoff text, and similarly mechanical edits
+   that do not change runtime or test behavior. These packages should be
+   Spark-safe by default.
+8. Use the `test-only-proof` lane when the package only adds or tightens tests,
+   fixtures, or package proof around already-selected behavior. Runtime files
+   stay out of `writeScope` and `commitScope`; open a separate implementation
+   package for the fix.
+9. Use the `diagnostic-classification` lane when the package is driven by a
    representative artifact but edits only diagnostics, diagnostic tests, and
    work-tracker files. This lane keeps causal ledgers and representative
    evidence, but does not require review/fix/implementation subagents unless
    runtime ownership, shared contracts, or scenario behavior can change.
-8. Use the `bounded-experiment` lane for same-owner or tightly scoped
+10. Use the `bounded-experiment` lane for same-owner or tightly scoped
    hypothesis-driven slices that inherit current owner/boundary context and
    merge only after focused proof plus canonical evidence movement. Pre-review
    subagents are optional; post-hoc review is expected before merging runtime
    behavior when the package declares it.
-9. Once canonical owner and boundary are stable and the route is local runtime
+11. Use the `single-file-runtime` lane for a preselected one-file runtime slice
+   intended for `gpt-5.4`. It still needs a Core Logic Brief, focused proof,
+   and explicit forbidden scope, and it must split as soon as a second runtime
+   file, shared contract, or owner migration is needed.
+12. Once canonical owner and boundary are stable and the route is local runtime
    work, prefer a `runtime-owner-boundary` successor over another
    classification package.
 
@@ -744,6 +756,22 @@ Packages intended for `gpt-5.3-codex-spark` must use
 `Scope shape: leaf-slice` and must not contain open-ended frontier language. If
 a package must chase a new owner boundary, broaden write scope, or reopen
 frozen decisions, mark it as escalated in the model ledger instead.
+
+Before creating or assigning executable packages, do a model-fit split:
+
+1. Keep route selection, owner/boundary choice, representative evidence
+   interpretation, and architecture decisions in a stronger planning package.
+2. Split mechanical edits into `mechanical-maintenance` packages intended for
+   `gpt-5.3-codex-spark`.
+3. Split tests and fixtures into `test-only-proof` packages intended for
+   `gpt-5.3-codex-spark`.
+4. Split one inherited-owner hypothesis into a `bounded-experiment` package
+   intended for `gpt-5.3-codex-spark`.
+5. Split one preselected runtime file into `single-file-runtime` intended for
+   `gpt-5.4`.
+6. Keep cross-owner runtime integration, shared contract changes, and
+   architecture route decisions on `runtime-owner-boundary`,
+   `scenario-release-gate`, or `causal-escalation` packages.
 
 Package closure also requires one final deep dive across the affected area:
 

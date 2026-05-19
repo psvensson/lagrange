@@ -288,7 +288,7 @@ test('publication active-gate handoff preserves nested selected missing publicat
     });
   });
 
-test('publication active-gate handoff reconcile target includes expected non-recovery handoff nodes',
+test('publication active-gate handoff reconcile target follows selected pending reconcile nodes',
   async (t) => {
     const target = resolvePublicationActiveGateMembershipPublicationTarget({
       publicationActiveGateHandoff: {
@@ -352,8 +352,8 @@ test('publication active-gate handoff reconcile target includes expected non-rec
 
     t.same(
       target.publishedActiveNodeIds,
-      [TEST_NODE_1, TEST_NODE_2, TEST_NODE_3, TEST_NODE_4],
-      'owner reconcile target should widen to the canonical expected non-recovery handoff cohort',
+      [TEST_NODE_1, TEST_NODE_2],
+      'owner reconcile target should publish only the selected pending handoff node with the durable seed',
     );
     t.same(
       target.pendingReconcileNodeIds,
@@ -362,7 +362,7 @@ test('publication active-gate handoff reconcile target includes expected non-rec
     );
   });
 
-test('publication active-gate selector preserves full convergence target when owner cohort narrows progress',
+test('publication active-gate selector preserves narrowed owner reconcile target',
   async (t) => {
     const selectedHandoff = selectPublicationActiveGateHandoffContract({
       publicationConvergence: {
@@ -394,8 +394,8 @@ test('publication active-gate selector preserves full convergence target when ow
 
     t.same(
       target.publishedActiveNodeIds,
-      [...TEST_SELECTED_HANDOFF_EXPECTED_NODE_IDS],
-      'selected owner handoff should publish the full convergence cohort, not only the current narrowed cohort',
+      [TEST_NODE_1, TEST_NODE_2],
+      'selected owner handoff should publish the current pending reconcile target',
     );
     t.same(
       target.pendingReconcileNodeIds,
@@ -459,8 +459,8 @@ test('publication active-gate selector accepts flattened active-gate progress ha
     );
     t.same(
       target.publishedActiveNodeIds,
-      [...TEST_SELECTED_HANDOFF_EXPECTED_NODE_IDS],
-      'flattened active-gate progress should publish the full selected publication cohort',
+      [TEST_NODE_1, TEST_NODE_2],
+      'flattened active-gate progress should publish the selected pending reconcile node',
     );
     t.same(
       target.pendingReconcileNodeIds,
@@ -511,8 +511,8 @@ test('publication active-gate selector preserves joined pending reconcile ids af
 
     t.same(
       target.publishedActiveNodeIds,
-      [...TEST_SELECTED_HANDOFF_EXPECTED_NODE_IDS],
-      'joined active-gate progress should publish the full selected publication cohort',
+      [TEST_NODE_1, TEST_NODE_2, TEST_NODE_3],
+      'joined active-gate progress should publish the selected pending reconcile nodes',
     );
     t.same(
       target.pendingReconcileNodeIds,

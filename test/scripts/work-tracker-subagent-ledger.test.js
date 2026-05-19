@@ -52,9 +52,12 @@ const TEST_PUSH_TARGET = 'origin/main';
 const WORK_TRACKER_ACTIVE_STATUS = 'active';
 const WORK_TRACKER_DONE_STATUS = 'done';
 const LANE_READ_REVIEW_DOC_ONLY = 'read-review-doc-only';
+const LANE_MECHANICAL_MAINTENANCE = 'mechanical-maintenance';
 const LANE_LIGHTWEIGHT_MAINTENANCE = 'lightweight-maintenance';
+const LANE_TEST_ONLY_PROOF = 'test-only-proof';
 const LANE_DIAGNOSTIC_CLASSIFICATION = 'diagnostic-classification';
 const LANE_BOUNDED_EXPERIMENT = 'bounded-experiment';
+const LANE_SINGLE_FILE_RUNTIME = 'single-file-runtime';
 const LANE_RUNTIME_OWNER_BOUNDARY = 'runtime-owner-boundary';
 const LANE_CAUSAL_ESCALATION = 'causal-escalation';
 const CAUSAL_GOVERNANCE_VALID_METADATA = Object.freeze({
@@ -1003,7 +1006,15 @@ describe('work tracker subagent sequencing ledger validation', () => {
       false,
     );
     assert.equal(
+      metadataRequiresSubagentSequencing({lane: LANE_MECHANICAL_MAINTENANCE}),
+      false,
+    );
+    assert.equal(
       metadataRequiresSubagentSequencing({lane: LANE_LIGHTWEIGHT_MAINTENANCE}),
+      false,
+    );
+    assert.equal(
+      metadataRequiresSubagentSequencing({lane: LANE_TEST_ONLY_PROOF}),
       false,
     );
     assert.equal(
@@ -1012,6 +1023,10 @@ describe('work tracker subagent sequencing ledger validation', () => {
     );
     assert.equal(
       metadataRequiresSubagentSequencing({lane: LANE_BOUNDED_EXPERIMENT}),
+      false,
+    );
+    assert.equal(
+      metadataRequiresSubagentSequencing({lane: LANE_SINGLE_FILE_RUNTIME}),
       false,
     );
     assert.equal(

@@ -57,8 +57,14 @@ test('shared package schema lists validator enums for LLM scaffolding', (t) => {
   const rendered = renderSchemaReference();
 
   t.match(rendered, /scenario-release-gate/u);
+  t.match(rendered, /mechanical-maintenance/u);
+  t.match(rendered, /test-only-proof/u);
   t.match(rendered, /diagnostic-classification/u);
   t.match(rendered, /bounded-experiment/u);
+  t.match(rendered, /single-file-runtime/u);
+  t.match(rendered, /Model-Fit Package Splitter/u);
+  t.match(rendered, /modelFitSplit/u);
+  t.match(rendered, /gpt-5\.4/u);
   t.match(rendered, /Output Profiles/u);
   t.match(rendered, /extra-high/u);
   t.match(rendered, /writeScope/u);
@@ -120,9 +126,13 @@ test('package scaffolder pre-fills Model Fit from schema defaults', async (t) =>
   t.match(content, /"lane": "lightweight-maintenance"/u);
   t.match(content, /"writeScope": \[/u);
   t.match(content, /"commitScope": \[/u);
+  t.match(content, /"modelFitSplit": \{/u);
   t.match(content, /"outputProfile": "medium"/u);
   t.match(content, /Intended minimum model: `gpt-5\.3-codex-spark`/u);
   t.match(content, /Output profile: `medium`/u);
+  t.match(content, /## Model-Fit Split/u);
+  t.match(content, /Target executor: `gpt-5\.3-codex-spark`/u);
+  t.match(content, /Candidate lower-model child packages/u);
   t.match(content, /Model ledger advisory: `hold`/u);
   t.match(content, /## Core Logic Brief/u);
   t.match(content, /Status: `not-needed`/u);
@@ -234,6 +244,73 @@ test('package scaffolder creates bounded experiment packages with inherited cont
     t.notMatch(content, /## Causal Decision Contract/u);
     t.notMatch(content, /## Decision Experiment Gate/u);
     t.match(content, /Subagent sequencing is optional/u);
+  });
+
+test('package scaffolder creates lower-model execution package shapes',
+  async (t) => {
+    const mechanical = await buildPackageContent({
+      'title': 'Schema Text Maintenance',
+      'slug': 'schema-text-maintenance',
+      'lane': 'mechanical-maintenance',
+      'owner': 'workflow_tooling_owner',
+      'boundary': 'package_schema',
+      'dominant-reason': 'lower_model_split',
+      'next-action': 'Update package schema prose.',
+      'proof': ['npm run work:package:schema'],
+      'write-scope': ['work/README.md'],
+      'ledger': TEMP_LEDGER_PATH,
+    });
+    const testOnly = await buildPackageContent({
+      'title': 'Publication Owner Fixture Proof',
+      'slug': 'publication-owner-fixture-proof',
+      'lane': 'test-only-proof',
+      'owner': 'topology_publication_owner',
+      'boundary': 'publication_convergence',
+      'dominant-reason': 'missing_test_probe',
+      'next-action': 'Add the focused publication owner fixture.',
+      'proof': ['npm test -- test/control-plane/publication-owner-stream.test.js'],
+      'write-scope': ['test/control-plane/publication-owner-stream.test.js'],
+      'ledger': TEMP_LEDGER_PATH,
+    });
+    const singleRuntime = await runCli([
+      '--title',
+      'Single Runtime File Slice',
+      '--slug',
+      'single-runtime-file-slice',
+      '--opened',
+      '2026-05-12',
+      '--lane',
+      'single-file-runtime',
+      '--owner',
+      'topology_publication_owner',
+      '--boundary',
+      'publication_convergence',
+      '--dominant-reason',
+      'publication_pending',
+      '--next-action',
+      'Implement one preselected runtime file.',
+      '--proof',
+      'npm test -- test/control-plane/publication-owner-stream.test.js',
+      '--write-scope',
+      'src/control-plane/publication-owner-decision.js',
+      '--write-scope',
+      'test/control-plane/publication-owner-stream.test.js',
+      '--ledger',
+      TEMP_LEDGER_PATH,
+    ]);
+
+    t.match(mechanical, /"lane": "mechanical-maintenance"/u);
+    t.match(mechanical, /Package class: `mechanical-maintenance`/u);
+    t.match(mechanical, /Target executor: `gpt-5\.3-codex-spark`/u);
+    t.match(mechanical, /mechanical edits only/u);
+    t.match(testOnly, /"lane": "test-only-proof"/u);
+    t.match(testOnly, /Package class: `test-only-proof`/u);
+    t.match(testOnly, /test assertion or fixture proof only/u);
+    t.match(singleRuntime, /"lane": "single-file-runtime"/u);
+    t.match(singleRuntime, /Package class: `single-file-runtime`/u);
+    t.match(singleRuntime, /Intended minimum model: `gpt-5\.4`/u);
+    t.match(singleRuntime, /## Core Logic Brief/u);
+    t.match(singleRuntime, /one preselected runtime file/u);
   });
 
 test('review subagent prompt caps review commands before runtime proof',

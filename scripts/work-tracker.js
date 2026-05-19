@@ -33,7 +33,11 @@ import {
   LANE_CAUSAL_ESCALATION,
   LANE_BOUNDED_EXPERIMENT,
   LANE_DIAGNOSTIC_CLASSIFICATION,
+  LANE_MECHANICAL_MAINTENANCE,
   LANE_RUNTIME_OWNER_BOUNDARY,
+  LANE_SINGLE_FILE_RUNTIME,
+  LANE_TEST_ONLY_PROOF,
+  MODEL_FIT_54_MODEL,
   OWNER_BOUNDARY_MIGRATION_PROOF_EVIDENCE_FIELD,
   OWNER_BOUNDARY_MIGRATION_PROOF_FIELD,
   OWNER_BOUNDARY_MIGRATION_PROOF_FIELDS,
@@ -4089,6 +4093,69 @@ function validateBoundedExperimentMetadataShape(filePath, metadata) {
   return errors;
 }
 
+function metadataScopeList(metadata, fieldName) {
+  return Array.isArray(metadata?.[fieldName]) ?
+    metadata[fieldName].map(normalizeLedgerText).filter(Boolean) :
+    [];
+}
+
+function isSourceWritePath(filePath) {
+  return normalizeLedgerText(filePath).startsWith('src/');
+}
+
+function isTestOnlyProofWritePath(filePath) {
+  const normalizedPath = normalizeLedgerText(filePath);
+  return normalizedPath.startsWith('test/') ||
+    normalizedPath.startsWith('work/packages/');
+}
+
+function validateLowerModelLaneMetadataShape(filePath, metadata) {
+  const lane = metadataLane(metadata);
+  const writeScope = metadataScopeList(metadata, SCOPE_FIELD_WRITE_SCOPE);
+  const commitScope = metadataScopeList(metadata, SCOPE_FIELD_COMMIT_SCOPE);
+  const scopedPaths = [...writeScope, ...commitScope];
+  const errors = [];
+  if (
+    lane === LANE_MECHANICAL_MAINTENANCE &&
+    scopedPaths.some(isSourceWritePath)
+  ) {
+    errors.push(
+      `${filePath}: ${LANE_MECHANICAL_MAINTENANCE} packages must not ` +
+      'include src/ paths; split runtime behavior into a separate package.',
+    );
+  }
+  if (
+    lane === LANE_TEST_ONLY_PROOF &&
+    scopedPaths.some((filePathValue) => !isTestOnlyProofWritePath(filePathValue))
+  ) {
+    errors.push(
+      `${filePath}: ${LANE_TEST_ONLY_PROOF} packages must keep writeScope ` +
+      'and commitScope in test/ or work/packages/ paths.',
+    );
+  }
+  if (lane === LANE_SINGLE_FILE_RUNTIME) {
+    const runtimeFiles = writeScope.filter(isSourceWritePath);
+    if (runtimeFiles.length !== NUM_ONE) {
+      errors.push(
+        `${filePath}: ${LANE_SINGLE_FILE_RUNTIME} packages require exactly ` +
+        'one src/ runtime file in writeScope.',
+      );
+    }
+    const intendedModel = normalizeLedgerText(
+      metadata?.[METADATA_FIELD_MODEL_FIT]?.[
+        MODEL_FIT_METADATA_INTENDED_MINIMUM_MODEL_FIELD
+      ],
+    );
+    if (intendedModel !== MODEL_FIT_54_MODEL) {
+      errors.push(
+        `${filePath}: ${LANE_SINGLE_FILE_RUNTIME} packages must use ` +
+        `${MODEL_FIT_54_MODEL} as modelFit.intendedMinimumModel.`,
+      );
+    }
+  }
+  return errors;
+}
+
 function validateActivePackageMetadataShape(filePath, metadata) {
   const errors = [];
   for (const fieldName of ACTIVE_PACKAGE_REQUIRED_TEXT_METADATA_FIELDS) {
@@ -4193,6 +4260,7 @@ function validatePackageMetadataShape(filePath, fileStatus, metadata) {
     errors.push(...validateActiveScenarioMetadataShape(filePath, metadata));
   }
   errors.push(...validateBoundedExperimentMetadataShape(filePath, metadata));
+  errors.push(...validateLowerModelLaneMetadataShape(filePath, metadata));
   return errors;
 }
 

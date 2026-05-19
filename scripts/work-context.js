@@ -124,7 +124,18 @@ const GIT_STATUS_UNAVAILABLE_STATE = 'git-status-unavailable';
 const GIT_GROUP_PACKAGE_OWNED = 'packageOwned';
 const GIT_GROUP_TRACKER_GENERATED = 'trackerGenerated';
 const GIT_GROUP_UNRELATED = 'unrelated';
+const LANE_MECHANICAL_MAINTENANCE = 'mechanical-maintenance';
 const LANE_LIGHTWEIGHT_MAINTENANCE = 'lightweight-maintenance';
+const LANE_TEST_ONLY_PROOF = 'test-only-proof';
+const LANE_BOUNDED_EXPERIMENT = 'bounded-experiment';
+const LANE_SINGLE_FILE_RUNTIME = 'single-file-runtime';
+const LOWER_MODEL_EXECUTION_LANES = Object.freeze([
+  LANE_MECHANICAL_MAINTENANCE,
+  LANE_LIGHTWEIGHT_MAINTENANCE,
+  LANE_TEST_ONLY_PROOF,
+  LANE_BOUNDED_EXPERIMENT,
+  LANE_SINGLE_FILE_RUNTIME,
+]);
 const DEFAULT_UNKNOWN = 'unknown';
 const OUTPUT_TITLE = '# Work Context';
 const DIRTY_SCOPE_OUTPUT_TITLE = '# Worktree Package Scope';
@@ -1440,6 +1451,12 @@ function buildRelevantSteeringRules(currentBlocker = {}, packageContent = EMPTY_
     appendActiveRule(
       rules,
       'ARCH-0001 Lightweight maintenance uses one focused package and proof; omit causal ledgers and subagents unless ownership can change.',
+    );
+  }
+  if (LOWER_MODEL_EXECUTION_LANES.includes(currentBlocker.lane)) {
+    appendActiveRule(
+      rules,
+      'GOV-LOWER-MODEL Lower-model execution packages keep owner, boundary, write scope, proof, forbidden scope, and kill rule concrete; split or escalate on ambiguity.',
     );
   }
   if (hasRuntimeSourceScope(currentBlocker)) {

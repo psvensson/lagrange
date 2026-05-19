@@ -5,7 +5,7 @@
   "schema": "work-package-v1",
   "status": "active",
   "opened": "YYYY-MM-DD",
-  "lane": "read-review-doc-only|lightweight-maintenance|diagnostic-classification|bounded-experiment|runtime-owner-boundary|scenario-release-gate|causal-escalation",
+  "lane": "read-review-doc-only|mechanical-maintenance|lightweight-maintenance|test-only-proof|diagnostic-classification|bounded-experiment|single-file-runtime|runtime-owner-boundary|scenario-release-gate|causal-escalation",
   "scenario": "scenario-or-none",
   "artifact": "path/to/latest.report.json",
   "playback": "path/to/playback-or-none",
@@ -344,6 +344,28 @@ representative outcomes, scenario result classifications, and stop conditions.
 - Frozen decisions: decision that must not be reopened by this package
 - Escalation triggers: condition that requires a stronger model or human split
 - Focused proof: exact command or proof surface for this leaf slice
+
+## Model-Fit Split
+
+Required when a package is intended to be executable by a lower model. Put
+route selection and ambiguity in the parent package; put only the mechanical
+or preselected implementation slice here.
+
+- Target executor: `gpt-5.3-codex-spark|gpt-5.4|gpt-5.3-codex`
+- Allowed decision depth: mechanical/test-only/bounded-hypothesis/single-file-runtime
+- Safe to execute when:
+1. Owner, boundary, write scope, forbidden scope, proof, and kill rule stay as declared.
+2. The executor does not need to choose architecture, migrate ownership, or reinterpret representative evidence.
+3. The first focused proof gives a clear pass, fail, or escalate signal.
+- Split or escalate when:
+1. Write scope expands beyond the declared lower-model lane.
+2. Proof requires forbidden scope, cross-owner reasoning, or architecture route selection.
+3. Implementation needs to decide system behavior instead of executing a named local mechanism.
+- Candidate lower-model child packages:
+1. `mechanical-maintenance` for docs/templates/schema/metadata.
+2. `test-only-proof` for tests and fixtures.
+3. `bounded-experiment` for one same-owner hypothesis.
+4. `single-file-runtime` for one preselected runtime file.
 
 ## Shared Boundary Contract
 

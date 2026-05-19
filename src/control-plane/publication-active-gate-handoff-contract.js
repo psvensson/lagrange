@@ -2534,12 +2534,19 @@ function resolvePublicationActiveGateHandoffReconcileTargetNodeIds(
         targetEvidence,
       ),
     ]);
+  const selectedPendingReconcileNodeIds =
+    normalizePublicationActiveGateHandoffNodeIdList(
+      handoffContract.pendingReconcileNodeIds,
+    ).filter((nodeId) => !pendingRecoveryNodeIdSet.has(nodeId));
+  const selectedReconcileTargetNodeIds =
+    selectedPendingReconcileNodeIds.length > NUM.ZERO ?
+      selectedPendingReconcileNodeIds :
+      expectedTargetNodeIds.filter(
+        (nodeId) => !pendingRecoveryNodeIdSet.has(nodeId),
+      );
   return normalizePublicationActiveGateHandoffNodeIdList([
     ...handoffContract.publishedActiveNodeIds,
-    ...handoffContract.pendingReconcileNodeIds,
-    ...expectedTargetNodeIds.filter(
-      (nodeId) => !pendingRecoveryNodeIdSet.has(nodeId),
-    ),
+    ...selectedReconcileTargetNodeIds,
   ]);
 }
 
