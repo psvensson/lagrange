@@ -3,7 +3,7 @@
 <!-- work-package
 {
   "schema": "work-package-v1",
-  "status": "active",
+  "status": "done",
   "opened": "2026-05-19",
   "lane": "runtime-owner-boundary",
   "scenario": "rolling-restart",
@@ -12,17 +12,17 @@
   "owner": "startup_active_gate_owner",
   "boundary": "snapshot_coverage",
   "dominantReason": "active_gate_timed_out",
-  "currentState": "Fresh causal gate migrates the reduced no-debt publication_pending shape to startup_active_gate_owner / snapshot_coverage. The latest rolling-restart artifact has active=4/5, snapshotCoverage=0/5, selected snapshot source timeout on node 11601fe0-72d6-5853-8590-ec2881853e72, publication convergence reported ready in the scenario error, pendingAck=0, missingPublished=0, pendingReconcile=0, and priority residual witnesses=0.",
-  "nextAction": "Run required runtime-owner-boundary sequencing, then implement one bounded selected-snapshot-source timeout fix that improves snapshot coverage, migrates the frontier, or turns rolling-restart green.",
+  "currentState": "Closed as migrated/reduced. Focused commit 396f763e retries the selected snapshot source once after a snapshot-lane timeout reset when reachability proves the source is admin-ready. Fresh rolling-restart remains red but removed selected_snapshot_source_timeout, improved snapshotCoverage from 0/5 to 3/5, changed active_gate_snapshot_coverage from blocked timeout to deferred owner_reconcile_pending / snapshot_repair_deferred, and selected operation_workflow_owner / workflow_progress for the remaining control_plane_publications-p1 persisted_not_dispatched residual.",
+  "nextAction": "Open and continue the operation_workflow_owner / workflow_progress successor for control_plane_publications-p1 persisted_not_dispatched, next action advance_existing_operation.",
   "proof": [
-    "npm run work:evidence-summary -- test-output/reports/rolling-restart-after-open-owner-reconcile-20260519T060754Z.report.json",
-    "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-open-owner-reconcile-20260519T060754Z.report.json --explain active_gate_snapshot_coverage",
-    "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-open-owner-reconcile-20260519T060754Z.report.json --handoff-probe",
-    "npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-open-owner-reconcile-20260519T060754Z.report.json",
-    "npm run analyze:owner-files -- startup_active_gate_owner snapshot_coverage"
+    "npm test -- test/distributed/harness/__tests__/cluster.test-part-5.js",
+    "node scripts/check-guideline-literals.js /media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test/distributed/harness/cluster-segment-7-class-5.js /media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test/distributed/harness/__tests__/cluster.test-part-5.js",
+    "node scripts/check-guideline-decision-boundaries.js test/distributed/harness/cluster-segment-7-class-5.js test/distributed/harness/__tests__/cluster.test-part-5.js",
+    "npm run audit:runtime-grammar:file -- test/distributed/harness/cluster-segment-7-class-5.js test/distributed/harness/__tests__/cluster.test-part-5.js",
+    "npm run work:package:route-after-rerun -- --artifact test-output/reports/rolling-restart-after-selected-source-retry-20260519T064809Z.report.json --owner startup_active_gate_owner --boundary snapshot_coverage --dominant-reason active_gate_timed_out"
   ],
   "writeScope": [
-    "work/packages/active-20260519-startup-active-gate-selected-snapshot-source-timeout-runtime.md",
+    "work/packages/done-20260519-startup-active-gate-selected-snapshot-source-timeout-runtime.md",
     "work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md",
     "work/sprints/current-blocker.md",
     "work/sprints/current-blocker.json",
@@ -33,6 +33,7 @@
   ],
   "handoffFiles": [
     "test-output/reports/rolling-restart-after-open-owner-reconcile-20260519T060754Z.report.json",
+    "test-output/reports/rolling-restart-after-selected-source-retry-20260519T064809Z.report.json",
     "work/packages/done-20260519-topology-publication-no-debt-snapshot-timeout-causal-gate.md",
     "work/packages/done-20260517-startup-active-gate-selected-snapshot-source-timeout-after-bounded-handoff-retry.md"
   ],
@@ -52,7 +53,7 @@
     "test/distributed/harness/__tests__/cluster.test-part-5.js"
   ],
   "commitScope": [
-    "work/packages/active-20260519-startup-active-gate-selected-snapshot-source-timeout-runtime.md",
+    "work/packages/done-20260519-startup-active-gate-selected-snapshot-source-timeout-runtime.md",
     "work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md",
     "work/sprints/current-blocker.md",
     "work/sprints/current-blocker.json",
@@ -86,16 +87,17 @@
     "runtimePromotionRule": "When canonical owner and boundary are stable, prefer a runtime-owner-boundary successor and keep runtime files in candidateRuntimeFiles until that package activates them."
   },
   "rerunDecision": {
-    "sourceArtifact": "test-output/reports/rolling-restart-after-open-owner-reconcile-20260519T060754Z.report.json",
-    "routeOwner": "startup_active_gate_owner",
-    "routeBoundary": "snapshot_coverage",
-    "routeDominantReason": "active_gate_timed_out",
-    "routeCausalOutcome": "migrate_owner_boundary",
-    "stopMode": "owner_boundary_migration",
-    "nextLane": "runtime-owner-boundary",
-    "expectedDelta": "Classify whether fresh representative evidence is green, reduced, migrated, same-frontier, architecture-gap, contradictory, or needs a bounded successor before runtime promotion.",
+    "sourceArtifact": "test-output/reports/rolling-restart-after-selected-source-retry-20260519T064809Z.report.json",
+    "routeOwner": "operation_workflow_owner",
+    "routeBoundary": "workflow_progress",
+    "routeDominantReason": "priority_recovery_event_driven_wait",
+    "routeCausalOutcome": "accept_classified_backpressure",
+    "stopMode": "classified_backpressure",
+    "nextLane": "scenario-release-gate",
+    "expectedDelta": "Advance or classify the single control_plane_publications-p1 persisted_not_dispatched operation workflow residual, reducing the priority recovery witness, migrating owner boundary, or turning rolling-restart green.",
     "requiredRefreshCommands": [
-      "npm run work:package:route-after-rerun -- --artifact test-output/reports/rolling-restart-after-open-owner-reconcile-20260519T060754Z.report.json --owner startup_active_gate_owner --boundary snapshot_coverage --dominant-reason active_gate_timed_out",
+      "npm run work:package:route-after-rerun -- --artifact test-output/reports/rolling-restart-after-selected-source-retry-20260519T064809Z.report.json --owner startup_active_gate_owner --boundary snapshot_coverage --dominant-reason active_gate_timed_out",
+      "npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-after-selected-source-retry-20260519T064809Z.report.json",
       "update Sprint Strategy Brief and Current Edge Card from the route result",
       "npm run work:current-blocker -- --write",
       "npm run work:validate -- --pre-impl"
@@ -104,52 +106,65 @@
   "representativeResidual": {
     "status": "migrated",
     "scenario": "rolling-restart",
-    "artifact": "test-output/reports/rolling-restart-after-open-owner-reconcile-20260519T060754Z.report.json",
-    "frontier": "active_gate_snapshot_coverage",
-    "owner": "startup_active_gate_owner",
-    "boundary": "snapshot_coverage",
-    "dominantReason": "active_gate_timed_out",
-    "nextAction": "Reduce selected snapshot source timeout and improve snapshot coverage above 0/5."
+    "artifact": "test-output/reports/rolling-restart-after-selected-source-retry-20260519T064809Z.report.json",
+    "frontier": "priority_recovery_partition_progress",
+    "owner": "operation_workflow_owner",
+    "boundary": "workflow_progress",
+    "dominantReason": "priority_recovery_event_driven_wait",
+    "nextAction": "Open operation_workflow_owner / workflow_progress successor for control_plane_publications-p1 persisted_not_dispatched advance_existing_operation."
+  },
+  "ownerBoundaryMigrationProof": {
+    "fromOwner": "startup_active_gate_owner",
+    "fromBoundary": "snapshot_coverage",
+    "toOwner": "operation_workflow_owner",
+    "toBoundary": "workflow_progress",
+    "reason": "Fresh representative rerun removed selected_snapshot_source_timeout and improved snapshotCoverage from 0/5 to 3/5; handoff probe selected priority_recovery_partition_progress with requiredAction advance_existing_operation.",
+    "evidence": [
+      "npm run work:evidence-summary -- test-output/reports/rolling-restart-after-selected-source-retry-20260519T064809Z.report.json",
+      "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-selected-source-retry-20260519T064809Z.report.json --explain active_gate_snapshot_coverage",
+      "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-selected-source-retry-20260519T064809Z.report.json --handoff-probe",
+      "npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-after-selected-source-retry-20260519T064809Z.report.json"
+    ]
   },
   "causalGovernance": {
-    "hypothesis": "The publication owner debt is drained and active-gate snapshot coverage is now the concrete blocking owner path; selected snapshot source timeout prevents coverage from forming before handoff evidence can be replayed.",
-    "stopConditionCheck": "Use work:evidence-summary, topology convergence explain/handoff probes, npm run analyze:causal-model, distributed-failure summary, owner-files, focused harness proof, and representative rerun before closure.",
-    "expectedCausalModelChange": "Reduce selected_snapshot_source_timeout, improve snapshot coverage above 0/5, migrate to a new owner boundary, or turn representative rolling-restart green.",
-    "representativeOutcome": "pending-before-rerun",
-    "causalDebt": "Fresh artifact reports active=4/5, snapshotCoverage=0/5, selectedSnapshotSourceCause=selected_snapshot_source_timeout, selectedSnapshotError on node 11601fe0-72d6-5853-8590-ec2881853e72, pendingAck=0, missingPublished=0, pendingReconcile=0, and priority residual witnesses=0.",
-    "crossBoundaryReview": "Do not reopen topology publication, operation workflow, active-gate admission, timeout budgets, or readiness support unless canonical evidence selects them again."
+    "hypothesis": "Selected snapshot source timeout was the concrete startup active-gate blocker. After the bounded retry, the remaining red state is an operation_workflow_owner / workflow_progress residual for control_plane_publications-p1.",
+    "stopConditionCheck": "Focused tests and static guardrails passed, `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-selected-source-retry-20260519T064809Z.report.json` classified the fresh artifact as backpressure, and route-after-rerun plus priority residual extraction selected the successor owner boundary.",
+    "expectedCausalModelChange": "Selected_snapshot_source_timeout removed, snapshot coverage improved above 0/5, and owner boundary migrated to operation_workflow_owner / workflow_progress.",
+    "representativeOutcome": "migrated",
+    "causalDebt": "Fresh artifact reports snapshotCoverage=3/5, selectedSnapshotError=unknown, selectedSnapshotObservationMode=repair_deferred, publicationActiveGateHandoffPendingReconcileCount=2, one priority recovery residual witness for control_plane_publications-p1, actuationState=persisted_not_dispatched, waitMode=event_driven, and nextRequiredAction=advance_existing_operation.",
+    "crossBoundaryReview": "Do not reopen selected-source timeout or startup active-gate local retry in the next package unless fresh evidence reselects it; continue with operation_workflow_owner / workflow_progress."
   },
   "scenarioCausalClosure": {
     "referenceScenarioOrProbe": "rolling-restart after no-debt publication owner reconcile",
     "phaseChain": [
       "predecessor drained publication owner reconcile debt",
       "causal gate migrated the no-debt shape to startup active-gate snapshot coverage",
-      "selected snapshot source timeout blocks coverage at 0/5",
-      "priority residuals are zero and publication debt metrics are zero"
+      "selected snapshot source retry removed the 0/5 selected-source timeout",
+      "fresh rerun exposes operation workflow progress backpressure for control_plane_publications-p1"
     ],
-    "currentFirstFrontier": "active_gate_snapshot_coverage under startup_active_gate_owner / snapshot_coverage after the no-debt publication causal gate.",
+    "currentFirstFrontier": "publication_ack_convergence remains the visible topology frontier, but handoff and priority residual probes select operation_workflow_owner / workflow_progress as the next actionable owner boundary.",
     "knownDownstreamBlockers": [
       "one seed node readiness probe timed out while four nodes reached active",
       "selected snapshot source node 11601fe0-72d6-5853-8590-ec2881853e72 is adminReady=true but snapshot lane timed out",
       "publication active-gate handoff contract is absent because owner reconcile debt drained"
     ],
-    "missingCausalEdge": "The selected snapshot source timeout prevents coverage before handoff evidence can form.",
+    "missingCausalEdge": "The operation workflow residual must advance the persisted_not_dispatched control_plane_publications-p1 operation before publication and active-gate evidence can close.",
     "missingCausalEdgeProbe": "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-open-owner-reconcile-20260519T060754Z.report.json --explain active_gate_snapshot_coverage",
-    "boundedProgressProof": "Focused active-gate snapshot progress should preserve or choose a usable coverage witness instead of allowing a zero-coverage selected-source timeout to remain terminal.",
-    "boundedProgressProofArtifact": "work/packages/active-20260519-startup-active-gate-selected-snapshot-source-timeout-runtime.md and test-output/reports/rolling-restart-after-open-owner-reconcile-20260519T060754Z.report.json",
-    "expectedObservableTransition": "Reduce selected_snapshot_source_timeout, improve snapshot coverage above 0/5, migrate owner boundary, or turn rolling-restart green.",
+    "boundedProgressProof": "Focused active-gate snapshot progress preserved a usable coverage witness and no longer leaves selected snapshot source timeout as terminal.",
+    "boundedProgressProofArtifact": "work/packages/done-20260519-startup-active-gate-selected-snapshot-source-timeout-runtime.md and test-output/reports/rolling-restart-after-selected-source-retry-20260519T064809Z.report.json",
+    "expectedObservableTransition": "Selected_snapshot_source_timeout removed, snapshot coverage above 0/5, and owner boundary migrated to operation workflow progress.",
     "maxProgressBound": "one focused startup_active_gate_owner / snapshot_coverage selected-source timeout slice",
     "sameFrontierFallback": "If focused tests pass but representative evidence remains at selected snapshot source timeout with coverage 0/5 and no metric movement, stop as same-frontier instead of widening into frozen owners.",
-    "expectedNextFrontier": "startup_active_gate_owner / snapshot_coverage unless selected source timeout reduces and canonical evidence selects a new owner boundary",
-    "resultClassification": "pending-before-probe",
-    "stopCondition": "continue-local-fix",
+    "expectedNextFrontier": "operation_workflow_owner / workflow_progress for control_plane_publications-p1 persisted_not_dispatched advance_existing_operation",
+    "resultClassification": "migrated",
+    "stopCondition": "migrate-owner-boundary",
     "recentFrontierHistory": [
       "work/packages/done-20260517-startup-active-gate-selected-snapshot-source-timeout-after-bounded-handoff-retry.md / startup_active_gate_owner / snapshot_coverage / reduced",
       "work/packages/done-20260519-topology-publication-open-owner-reconcile-runtime.md / topology_publication_owner / publication_convergence / reduced",
       "work/packages/done-20260519-topology-publication-no-debt-snapshot-timeout-causal-gate.md / topology_publication_owner / publication_convergence / migrated"
     ],
     "oscillationCheck": "Allowed because the causal gate changed owner boundary after concrete publication debt reduction.",
-    "handoffInvariant": "Publication ACK, priority recovery, timeout budgets, active-gate admission, publication truth, and readiness support remain frozen unless canonical evidence selects them again."
+    "handoffInvariant": "Selected-source timeout and startup active-gate local retry remain frozen unless fresh evidence selects them again; the successor owns operation_workflow_owner / workflow_progress."
   },
   "architectureDecisionGate": {
     "status": "selected",
@@ -297,7 +312,7 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 - Intended minimum model: `gpt-5.3-codex`
 - Scope shape: `bounded-owner-runtime/current-frontier`
 - Output profile: `medium`
-- Owned files: `work/packages/active-20260519-startup-active-gate-selected-snapshot-source-timeout-runtime.md`, `test/distributed/harness/cluster-segment-7-class-5.js`, `test/distributed/harness/__tests__/cluster.test-part-5.js`
+- Owned files: `work/packages/done-20260519-startup-active-gate-selected-snapshot-source-timeout-runtime.md`, `test/distributed/harness/cluster-segment-7-class-5.js`, `test/distributed/harness/__tests__/cluster.test-part-5.js`
 - Forbidden files: `src/`, except if fresh canonical evidence migrates the owner boundary before this package closes.
 - Frozen decisions: package scope and lane stay bounded unless explicitly escalated.
 - Escalation triggers: owned files expand beyond this package, runtime ownership changes, or representative scenario evidence changes.
@@ -306,24 +321,24 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 
 ## Subagent Sequencing Ledger
 
-- [x] Review subagent recorded: Agent OpenAI Codex (019e47e0-a739-7b61-946f-1db4fd9710b1) reviewed work/packages/active-20260519-startup-active-gate-selected-snapshot-source-timeout-runtime.md; result fixes-required.
-- [x] Fix subagent recorded or explicitly not needed: review-fixed-metadata-only by Agent OpenAI Codex (019e47e0-a739-7b61-946f-1db4fd9710b1) for work/packages/active-20260519-startup-active-gate-selected-snapshot-source-timeout-runtime.md; scope: metadata-only package/sprint/tracker/handoff ledger edits.
-- [x] Implementation subagent recorded: Agent OpenAI Codex (e2cd09cf-05ed-4ed0-b0b9-ccf9fa5b5196) implemented work/packages/active-20260519-startup-active-gate-selected-snapshot-source-timeout-runtime.md; parent revalidated focused proof: yes.
+- [x] Review subagent recorded: Agent OpenAI Codex (019e47e0-a739-7b61-946f-1db4fd9710b1) reviewed work/packages/done-20260519-startup-active-gate-selected-snapshot-source-timeout-runtime.md; result fixes-required.
+- [x] Fix subagent recorded or explicitly not needed: review-fixed-metadata-only by Agent OpenAI Codex (019e47e0-a739-7b61-946f-1db4fd9710b1) for work/packages/done-20260519-startup-active-gate-selected-snapshot-source-timeout-runtime.md; scope: metadata-only package/sprint/tracker/handoff ledger edits.
+- [x] Implementation subagent recorded: Agent OpenAI Codex (e2cd09cf-05ed-4ed0-b0b9-ccf9fa5b5196) implemented work/packages/done-20260519-startup-active-gate-selected-snapshot-source-timeout-runtime.md; parent revalidated focused proof: yes.
 
 ## Subagent Progress And Attempt Ledger
 
 Required when subagent sequencing is required. Each real subagent appends one checked checkpoint after every completed subtask; this combined ledger satisfies both Progress and Attempt proof when the item includes status, last checkpoint, parent action, evidence, and next or blocker.
 Review agents may directly fix metadata-only package, sprint, tracker, current-blocker, ledger, or handoff findings and record `review-fixed-metadata-only`; runtime, test, script, report, or non-metadata fixes still require a separate fix subagent.
 
-- [x] Agent OpenAI Codex (019e47e0-a739-7b61-946f-1db4fd9710b1) review checkpoint: status: started; last checkpoint: context loaded; parent action: pending; evidence: `npm run work:context` passed and active package, predecessor package, sprint snapshot, compact core/governance steering read; next: run capped package doctor and route checks.
-- [x] Agent OpenAI Codex (019e47e0-a739-7b61-946f-1db4fd9710b1) review checkpoint: status: running; last checkpoint: capped review probes complete; parent action: pending; evidence: active package doctor failed only subagent ledger metadata shape, predecessor package doctor passed, route-after-rerun kept `startup_active_gate_owner / snapshot_coverage / active_gate_timed_out`; next: repair metadata-only ledger shape and validate.
-- [x] Agent OpenAI Codex (019e47e0-a739-7b61-946f-1db4fd9710b1) review falsification checkpoint: status: running; last checkpoint: wrong-slice check complete; parent action: pending; wrong-slice evidence would be owner/boundary/result change away from `startup_active_gate_owner / snapshot_coverage / active_gate_timed_out`; evidence: route-after-rerun kept the requested owner, boundary, and dominant reason while reporting no priority residual witnesses; next: validate.
-- [x] Agent OpenAI Codex (019e47e0-a739-7b61-946f-1db4fd9710b1) review checkpoint: status: running; last checkpoint: review-fixed-metadata-only complete; parent action: accepted; evidence: added Subagent Sequencing Ledger and UUID-backed checked review Progress And Attempt checkpoints in this package only; next: run pre-implementation validation.
-- [x] Agent OpenAI Codex (019e47e0-a739-7b61-946f-1db4fd9710b1) review checkpoint: status: validated; last checkpoint: package proof refreshed; parent action: revalidated; evidence: active package doctor passed and `npm run work:validate -- --pre-impl work/packages/active-20260519-startup-active-gate-selected-snapshot-source-timeout-runtime.md` passed after review-fixed-metadata-only repair; next: final handoff to parent for implementation subagent.
-- [x] Agent OpenAI Codex (e2cd09cf-05ed-4ed0-b0b9-ccf9fa5b5196) implementation checkpoint: status: started; last checkpoint: context and pre-impl validation complete; parent action: pending; evidence: `npm run work:context`, package doctor, and `npm run work:validate -- --pre-impl work/packages/active-20260519-startup-active-gate-selected-snapshot-source-timeout-runtime.md` passed; next: run focused owner probes.
-- [x] Agent OpenAI Codex (e2cd09cf-05ed-4ed0-b0b9-ccf9fa5b5196) implementation falsification checkpoint: status: running; last checkpoint: wrong-slice check complete; parent action: pending; wrong-slice evidence would be owner/boundary/result change away from `startup_active_gate_owner / snapshot_coverage / selected_snapshot_source_timeout`; evidence: `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-open-owner-reconcile-20260519T060754Z.report.json --explain active_gate_snapshot_coverage` kept selected snapshot source timeout at coverage 0/5 and `npm run analyze:owner-files -- startup_active_gate_owner snapshot_coverage` selected `test/distributed/harness/cluster-segment-7-class-5.js` for probing; next: promote candidate file and edit focused harness slice.
-- [x] Agent OpenAI Codex (e2cd09cf-05ed-4ed0-b0b9-ccf9fa5b5196) implementation checkpoint: status: running; last checkpoint: focused selected-source retry edit complete; parent action: pending; evidence: promoted `test/distributed/harness/cluster-segment-7-class-5.js`, added same-attempt retry after snapshot-lane reset for admin-ready selected sources, and updated `test/distributed/harness/__tests__/cluster.test-part-5.js`; next: run focused test and validation.
-- [x] Agent OpenAI Codex (e2cd09cf-05ed-4ed0-b0b9-ccf9fa5b5196) implementation checkpoint: status: validated; last checkpoint: implementation proof complete with bounded blocker; parent action: revalidated; evidence: `npm test -- test/distributed/harness/__tests__/cluster.test-part-5.js --grep "resets snapshot lane"` passed, full `npm test -- test/distributed/harness/__tests__/cluster.test-part-5.js` still fails on pre-existing publication reason-code ordering assertion observed before runtime edits, package doctor passed, `git diff --check -- work/packages/active-20260519-startup-active-gate-selected-snapshot-source-timeout-runtime.md test/distributed/harness/cluster-segment-7-class-5.js test/distributed/harness/__tests__/cluster.test-part-5.js` passed, closure validation fails until parent resolves open sequencing ledger items; next: parent revalidate focused proof or record blocker.
+- [x] Agent OpenAI Codex (019e47e0-a739-7b61-946f-1db4fd9710b1) review checkpoint: status: validated; last checkpoint: context loaded; parent action: accepted; evidence: `npm run work:context` passed and active package, predecessor package, sprint snapshot, compact core/governance steering read; next: run capped package doctor and route checks.
+- [x] Agent OpenAI Codex (019e47e0-a739-7b61-946f-1db4fd9710b1) review checkpoint: status: validated; last checkpoint: capped review probes complete; parent action: accepted; evidence: active package doctor failed only subagent ledger metadata shape, predecessor package doctor passed, route-after-rerun kept `startup_active_gate_owner / snapshot_coverage / active_gate_timed_out`; next: repair metadata-only ledger shape and validate.
+- [x] Agent OpenAI Codex (019e47e0-a739-7b61-946f-1db4fd9710b1) review falsification checkpoint: status: validated; last checkpoint: wrong-slice check complete; parent action: accepted; wrong-slice evidence would be owner/boundary/result change away from `startup_active_gate_owner / snapshot_coverage / active_gate_timed_out`; evidence: route-after-rerun kept the requested owner, boundary, and dominant reason while reporting no priority residual witnesses; next: validate.
+- [x] Agent OpenAI Codex (019e47e0-a739-7b61-946f-1db4fd9710b1) review checkpoint: status: validated; last checkpoint: review-fixed-metadata-only complete; parent action: accepted; evidence: added Subagent Sequencing Ledger and UUID-backed checked review Progress And Attempt checkpoints in this package only; next: run pre-implementation validation.
+- [x] Agent OpenAI Codex (019e47e0-a739-7b61-946f-1db4fd9710b1) review checkpoint: status: validated; last checkpoint: package proof refreshed; parent action: revalidated; evidence: active package doctor passed and `npm run work:validate -- --pre-impl work/packages/done-20260519-startup-active-gate-selected-snapshot-source-timeout-runtime.md` passed after review-fixed-metadata-only repair; next: final handoff to parent for implementation subagent.
+- [x] Agent OpenAI Codex (e2cd09cf-05ed-4ed0-b0b9-ccf9fa5b5196) implementation checkpoint: status: validated; last checkpoint: context and pre-impl validation complete; parent action: accepted; evidence: `npm run work:context`, package doctor, and `npm run work:validate -- --pre-impl work/packages/done-20260519-startup-active-gate-selected-snapshot-source-timeout-runtime.md` passed; next: run focused owner probes.
+- [x] Agent OpenAI Codex (e2cd09cf-05ed-4ed0-b0b9-ccf9fa5b5196) implementation falsification checkpoint: status: validated; last checkpoint: wrong-slice check complete; parent action: accepted; wrong-slice evidence would be owner/boundary/result change away from `startup_active_gate_owner / snapshot_coverage / selected_snapshot_source_timeout`; evidence: `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-open-owner-reconcile-20260519T060754Z.report.json --explain active_gate_snapshot_coverage` kept selected snapshot source timeout at coverage 0/5 and `npm run analyze:owner-files -- startup_active_gate_owner snapshot_coverage` selected `test/distributed/harness/cluster-segment-7-class-5.js` for probing; next: promote candidate file and edit focused harness slice.
+- [x] Agent OpenAI Codex (e2cd09cf-05ed-4ed0-b0b9-ccf9fa5b5196) implementation checkpoint: status: validated; last checkpoint: focused selected-source retry edit complete; parent action: accepted; evidence: promoted `test/distributed/harness/cluster-segment-7-class-5.js`, added same-attempt retry after snapshot-lane reset for admin-ready selected sources, and updated `test/distributed/harness/__tests__/cluster.test-part-5.js`; next: run focused test and validation.
+- [x] Agent OpenAI Codex (e2cd09cf-05ed-4ed0-b0b9-ccf9fa5b5196) implementation checkpoint: status: validated; last checkpoint: implementation proof complete with bounded blocker; parent action: revalidated; evidence: `npm test -- test/distributed/harness/__tests__/cluster.test-part-5.js --grep "resets snapshot lane"` passed, full `npm test -- test/distributed/harness/__tests__/cluster.test-part-5.js` still fails on pre-existing publication reason-code ordering assertion observed before runtime edits, package doctor passed, `git diff --check -- work/packages/done-20260519-startup-active-gate-selected-snapshot-source-timeout-runtime.md test/distributed/harness/cluster-segment-7-class-5.js test/distributed/harness/__tests__/cluster.test-part-5.js` passed, closure validation fails until parent resolves open sequencing ledger items; next: parent revalidate focused proof or record blocker.
 
 ## Parent Focused Revalidation
 
@@ -343,5 +358,11 @@ Review agents may directly fix metadata-only package, sprint, tracker, current-b
 7. PASS - `node scripts/check-guideline-literals.js /media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test/distributed/harness/cluster-segment-7-class-5.js /media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test/distributed/harness/__tests__/cluster.test-part-5.js`
 8. PASS - `node scripts/check-guideline-decision-boundaries.js test/distributed/harness/cluster-segment-7-class-5.js test/distributed/harness/__tests__/cluster.test-part-5.js`
 9. PASS - `npm run audit:runtime-grammar:file -- test/distributed/harness/cluster-segment-7-class-5.js test/distributed/harness/__tests__/cluster.test-part-5.js`
-10. PASS - `git diff --check -- work/packages/active-20260519-startup-active-gate-selected-snapshot-source-timeout-runtime.md test/distributed/harness/cluster-segment-7-class-5.js test/distributed/harness/__tests__/cluster.test-part-5.js`
+10. PASS - `git diff --check -- work/packages/done-20260519-startup-active-gate-selected-snapshot-source-timeout-runtime.md test/distributed/harness/cluster-segment-7-class-5.js test/distributed/harness/__tests__/cluster.test-part-5.js`
 11. NOTE - `node scripts/check-guideline-literals.js test/distributed/harness/cluster-segment-7-class-5.js test/distributed/harness/__tests__/cluster.test-part-5.js` reported 512 literal-guideline violations because the relative test path is misclassified as runtime; see Parent Focused Revalidation.
+
+## Commit And Push Ledger
+
+- [x] Focused package commit: `396f763e`
+- [x] Pushed to: `origin/codex/pending-ack-eligibility-filter`
+- [x] Commit contains only package-owned files/package-status/allowed sprint handoff: yes.
