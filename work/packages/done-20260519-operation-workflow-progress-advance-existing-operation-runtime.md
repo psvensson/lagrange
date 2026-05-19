@@ -329,3 +329,9 @@ Review agents may directly fix metadata-only package, sprint, tracker, current-b
 1. npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-after-selected-source-retry-20260519T064809Z.report.json
 2. npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-selected-source-retry-20260519T064809Z.report.json --handoff-probe
 3. npm run analyze:owner-files -- operation_workflow_owner workflow_progress
+
+## Commit And Push Ledger
+
+- [x] Focused package commit: `11399f08`
+- [x] Pushed to: `origin/codex/pending-ack-eligibility-filter`
+- [x] Commit contains only package-owned files/package-status/allowed sprint handoff: yes
