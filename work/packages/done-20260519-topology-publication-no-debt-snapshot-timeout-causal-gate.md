@@ -324,3 +324,9 @@ Not required: pure classification causal gate with no runtime, test, script, or 
 1. npm run work:evidence-summary -- test-output/reports/rolling-restart-after-open-owner-reconcile-20260519T060754Z.report.json
 2. npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-open-owner-reconcile-20260519T060754Z.report.json --handoff-probe
 3. npm run analyze:owner-files -- startup_active_gate_owner snapshot_coverage
+
+## Commit And Push Ledger
+
+- Focused package commit: 7f4f6796b6feaf94ab904d6e2409abbb23aeb03f
+- Pushed to: origin/codex/pending-ack-eligibility-filter
+- Commit contains only package-owned files/package-status/allowed sprint handoff: yes
