@@ -23,6 +23,7 @@ const TEST_PUBLICATION_DEBT_COUNT = 1;
 const TEST_PUBLICATION_SELECTED_SNAPSHOT_FRONTIER_COUNT = 2;
 const TEST_PUBLICATION_SELECTED_HANDOFF_PENDING_COUNT = 3;
 const TEST_PUBLISHED_ACTIVE_NODE_COUNT = 3;
+const TEST_ACTIVE_GATE_EXPECTED_NODE_COUNT = 5;
 const TEST_UNKNOWN_PUBLICATION_MISSING_COUNT = 5;
 const TEST_PRESSURE_RETRY_AFTER_MS = 250;
 const TEST_PRESSURE_REASON_CODE = 'control_plane_pressure_degraded';
@@ -1227,6 +1228,46 @@ test('buildCanonicalPublicationRecoveryEvidence carries classified workflow back
         operationIds: [TEST_OPERATION_WORKFLOW_OPERATION_ID],
       },
     );
+    t.end();
+  });
+
+test('buildCanonicalPublicationRecoveryEvidence emits active-gate handoff for unpublished publication pending',
+  (t) => {
+    const evidence = buildCanonicalPublicationRecoveryEvidence({
+      publicationConvergence: {
+        publicationEpoch: TEST_EMPTY_PUBLICATION_DEBT_COUNT,
+        publicationStatus: PUBLICATION_OWNER_TEXT.UNKNOWN,
+        recoveryProtocolState:
+          RECOVERY_PROTOCOL_STATE.UNPUBLISHED_OBSERVATION,
+        publicationPending: true,
+        pendingAckNodeIds: TEST_EMPTY_NODE_IDS,
+        pendingAckCount: TEST_EMPTY_PUBLICATION_DEBT_COUNT,
+        missingPublishedNodeIds: TEST_EMPTY_NODE_IDS,
+        missingPublishedCount: TEST_EMPTY_PUBLICATION_DEBT_COUNT,
+        prioritySpreadPending: false,
+      },
+      activeGate: {
+        progress: {
+          expectedNodeCount: TEST_ACTIVE_GATE_EXPECTED_NODE_COUNT,
+        },
+      },
+    });
+
+    t.same(
+      evidence.publicationConvergence.missingPublishedNodeIds,
+      TEST_EMPTY_NODE_IDS,
+    );
+    t.match(evidence.publicationConvergence.publicationActiveGateHandoff, {
+      state: TEST_PUBLICATION_ACTIVE_GATE_HANDOFF_STATE.PENDING,
+      reasonCode:
+        TEST_PUBLICATION_ACTIVE_GATE_HANDOFF_REASON.OWNER_RECONCILE_PENDING,
+      nextAction:
+        TEST_PUBLICATION_ACTIVE_GATE_HANDOFF_NEXT_ACTION
+          .RECONCILE_OWNER_MEMBERSHIP_PUBLICATION,
+      runtimePromotionAllowed: false,
+      pendingReconcileCount: TEST_EMPTY_PUBLICATION_DEBT_COUNT,
+      pendingReconcileNodeIds: TEST_EMPTY_NODE_IDS,
+    });
     t.end();
   });
 

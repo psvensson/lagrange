@@ -49,6 +49,9 @@ const TEST_SELECTED_HANDOFF_EXPECTED_NODE_IDS = Object.freeze([
   TEST_NODE_5,
 ]);
 const TEST_PUBLICATION_STATUS_OPEN = 'OPEN';
+const TEST_PUBLICATION_PENDING = true;
+const TEST_RECOVERY_PROTOCOL_UNPUBLISHED_OBSERVATION =
+  'unpublished_observation';
 const TEST_PUBLICATION_ACK_CLOSED_COUNT = 0;
 const TEST_PENDING_ACK_COUNT = 1;
 const TEST_JOINED_PENDING_RECONCILE_COUNT = 2;
@@ -174,6 +177,59 @@ test('publication active-gate handoff emits classified workflow backpressure def
       partitionIds: [TEST_OPERATION_WORKFLOW_PARTITION_ID],
       operationIds: [TEST_OPERATION_WORKFLOW_OPERATION_ID],
     });
+  });
+
+test('publication active-gate handoff emits reconcile contract for unpublished publication pending',
+  async (t) => {
+    const contract = buildPublicationActiveGateHandoffContract({
+      publicationConvergence: {
+        publicationEpoch: TEST_PUBLICATION_ACK_CLOSED_COUNT,
+        publicationPending: TEST_PUBLICATION_PENDING,
+        recoveryProtocolState:
+          TEST_RECOVERY_PROTOCOL_UNPUBLISHED_OBSERVATION,
+        pendingAckCount: TEST_PUBLICATION_ACK_CLOSED_COUNT,
+        pendingAckNodeIds: [...TEST_EMPTY_NODE_IDS],
+        missingPublishedCount: TEST_PUBLICATION_ACK_CLOSED_COUNT,
+        missingPublishedNodeIds: [...TEST_EMPTY_NODE_IDS],
+        publishedActiveNodeIds: [...TEST_EMPTY_NODE_IDS],
+      },
+      activeGate: {
+        progress: {
+          expectedNodeCount:
+            TEST_SELECTED_HANDOFF_EXPECTED_NODE_IDS.length,
+        },
+      },
+    });
+
+    t.match(contract, {
+      expectedNodeIds: [...TEST_EMPTY_NODE_IDS],
+      publishedActiveNodeIds: [...TEST_EMPTY_NODE_IDS],
+      missingPublishedNodeIds: [...TEST_EMPTY_NODE_IDS],
+      pendingRecoveryNodeIds: [...TEST_EMPTY_NODE_IDS],
+      pendingReconcileNodeIds: [...TEST_EMPTY_NODE_IDS],
+      pendingReconcileCount: TEST_PUBLICATION_ACK_CLOSED_COUNT,
+      runtimePromotionAllowed: false,
+      state: PUBLICATION_ACTIVE_GATE_HANDOFF_STATE.PENDING,
+      reasonCode:
+        PUBLICATION_ACTIVE_GATE_HANDOFF_REASON.OWNER_RECONCILE_PENDING,
+      nextAction:
+        PUBLICATION_ACTIVE_GATE_HANDOFF_NEXT_ACTION
+          .RECONCILE_OWNER_MEMBERSHIP_PUBLICATION,
+      activeGateCatchupFence: {
+        state:
+          PUBLICATION_ACTIVE_GATE_CATCHUP_FENCE_STATE.CATCHUP_BLOCKED,
+        nextLegalAction:
+          PUBLICATION_ACTIVE_GATE_CATCHUP_FENCE_NEXT_ACTION
+            .OBSERVE_ACTIVE_GATE_TARGETS,
+      },
+    });
+    t.equal(
+      hasPublicationActiveGateOwnerReconcileSignal({
+        publicationActiveGateHandoff: contract,
+      }),
+      true,
+      'unpublished pending publication should expose owner reconcile signal',
+    );
   });
 
 test('publication active-gate handoff preserves nested selected missing publication evidence',

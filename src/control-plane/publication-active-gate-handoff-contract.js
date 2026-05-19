@@ -103,6 +103,27 @@ const PUBLICATION_ACTIVE_GATE_HANDOFF_PUBLICATION_STATUS = Object.freeze({
   PUBLISHED: 'PUBLISHED',
 });
 
+const PUBLICATION_ACTIVE_GATE_HANDOFF_PUBLICATION_OBSERVATION_STATE =
+  Object.freeze({
+    UNPUBLISHED: 'unpublished',
+  });
+
+const PUBLICATION_ACTIVE_GATE_HANDOFF_RECOVERY_PROTOCOL_STATE =
+  Object.freeze({
+    UNPUBLISHED_OBSERVATION: 'unpublished_observation',
+  });
+
+const PUBLICATION_ACTIVE_GATE_HANDOFF_RECONCILE_REQUIREMENT =
+  Object.freeze({
+    NOT_REQUIRED: 'not_required',
+    REQUIRED: 'required',
+  });
+
+const PUBLICATION_ACTIVE_GATE_HANDOFF_NODE_DEBT_STATE = Object.freeze({
+  ABSENT: 'absent',
+  PRESENT: 'present',
+});
+
 const PUBLICATION_ACTIVE_GATE_HANDOFF_STALE_MARKER = Object.freeze({
   BEHIND: 'behind',
   STALE: 'stale',
@@ -151,6 +172,7 @@ const PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD = Object.freeze({
   ID: 'id',
   LOCALLY_ELIGIBLE_NODE_IDS: 'locallyEligibleNodeIds',
   MEMBERSHIP_LIFECYCLE_SUMMARY: 'membershipLifecycleSummary',
+  MISSING_PUBLISHED_COUNT: 'missingPublishedCount',
   MISSING_PUBLISHED_NODE_IDS: 'missingPublishedNodeIds',
   MISSING_PUBLISHED_RECOVERY_ACTIVE_NODE_IDS:
     'missingPublishedRecoveryActiveNodeIds',
@@ -161,6 +183,7 @@ const PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD = Object.freeze({
   OPERATION_IDS: 'operationIds',
   OPERATION_WORKFLOW_HANDOFF: 'operationWorkflowHandoff',
   OWNER: 'owner',
+  PENDING_ACK_COUNT: 'pendingAckCount',
   PENDING_ACK_NODE_IDS: 'pendingAckNodeIds',
   PENDING_RECONCILE_COUNT: 'pendingReconcileCount',
   PENDING_RECONCILE_NODE_IDS: 'pendingReconcileNodeIds',
@@ -176,6 +199,7 @@ const PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD = Object.freeze({
   PRIORITY_RECOVERY_PARTITION_WITNESSES:
     'priorityRecoveryPartitionWitnesses',
   PRIORITY_RECOVERY_PROGRESS_SUMMARY: 'priorityRecoveryProgressSummary',
+  PRIORITY_SPREAD_PENDING: 'prioritySpreadPending',
   PRIORITY_RECOVERY_UNRESOLVED_CLASS_COUNT:
     'priorityRecoveryUnresolvedClassCount',
   PRIORITY_RECOVERY_UNRESOLVED_PARTITION_COUNT:
@@ -202,7 +226,9 @@ const PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD = Object.freeze({
   PUBLICATION_EPOCH: 'publicationEpoch',
   PUBLICATION_NEXT_ACTION: 'publicationNextAction',
   PUBLICATION_OBSERVATION: 'publicationObservation',
+  PUBLICATION_OBSERVATION_STATE: 'publicationObservationState',
   PUBLICATION_OWNER: 'publicationOwner',
+  PUBLICATION_PENDING: 'publicationPending',
   PUBLICATION_REVISION: 'publicationRevision',
   PUBLICATION_STATUS: 'publicationStatus',
   PUBLISHED_ACTIVE_NODE_IDS: 'publishedActiveNodeIds',
@@ -210,6 +236,7 @@ const PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD = Object.freeze({
   REASON_CODES: 'reasonCodes',
   REASONS: 'reasons',
   RECOVERY_ACTIVE_NODE_IDS: 'recoveryActiveNodeIds',
+  RECOVERY_PROTOCOL_STATE: 'recoveryProtocolState',
   REQUIRED_ACK_NODE_IDS: 'requiredAckNodeIds',
   REVISION: 'revision',
   REVISION_STATE: 'revisionState',
@@ -367,6 +394,18 @@ const PUBLICATION_ACTIVE_GATE_HANDOFF_PRIORITY_RECOVERY_BLOCKER_LIST_FIELDS =
 
 const PUBLICATION_ACTIVE_GATE_HANDOFF_DECISION_RULES = Object.freeze([
   Object.freeze({
+    state: PUBLICATION_ACTIVE_GATE_HANDOFF_STATE.PENDING,
+    reasonCode:
+      PUBLICATION_ACTIVE_GATE_HANDOFF_REASON.OWNER_RECONCILE_PENDING,
+    nextAction:
+      PUBLICATION_ACTIVE_GATE_HANDOFF_NEXT_ACTION
+        .RECONCILE_OWNER_MEMBERSHIP_PUBLICATION,
+    runtimePromotionAllowed: false,
+    matches: (evidence) =>
+      evidence.reconcileRequirement ===
+      PUBLICATION_ACTIVE_GATE_HANDOFF_RECONCILE_REQUIREMENT.REQUIRED,
+  }),
+  Object.freeze({
     state: PUBLICATION_ACTIVE_GATE_HANDOFF_STATE.UNAVAILABLE,
     reasonCode:
       PUBLICATION_ACTIVE_GATE_HANDOFF_REASON.EXPECTED_COHORT_UNAVAILABLE,
@@ -417,6 +456,25 @@ const PUBLICATION_ACTIVE_GATE_HANDOFF_DECISION_RULES = Object.freeze([
     matches: () => true,
   }),
 ]);
+
+const PUBLICATION_ACTIVE_GATE_HANDOFF_RECONCILE_REQUIREMENT_RULES =
+  Object.freeze([
+    Object.freeze({
+      requirement:
+        PUBLICATION_ACTIVE_GATE_HANDOFF_RECONCILE_REQUIREMENT.REQUIRED,
+      matches: (snapshot) =>
+        snapshot.publicationPending === true &&
+        snapshot.unpublishedObservation === true &&
+        snapshot.nodeDebtState ===
+          PUBLICATION_ACTIVE_GATE_HANDOFF_NODE_DEBT_STATE.ABSENT &&
+        snapshot.prioritySpreadPending !== true,
+    }),
+    Object.freeze({
+      requirement:
+        PUBLICATION_ACTIVE_GATE_HANDOFF_RECONCILE_REQUIREMENT.NOT_REQUIRED,
+      matches: () => true,
+    }),
+  ]);
 
 const PUBLICATION_ACTIVE_GATE_CATCHUP_FENCE_DECISION_RULES = Object.freeze([
   Object.freeze({
@@ -511,6 +569,121 @@ function normalizePublicationActiveGateHandoffText(value) {
   return normalizedValue.length > NUM.ZERO ?
     normalizedValue :
     PUBLICATION_ACTIVE_GATE_HANDOFF_EMPTY_TEXT;
+}
+
+function normalizePublicationActiveGateHandoffDebtCount(
+  value,
+  nodeIds = PUBLICATION_ACTIVE_GATE_HANDOFF_EMPTY_LIST,
+) {
+  const normalizedValue = normalizePublicationActiveGateHandoffInteger(value);
+  return Math.max(
+    NUM.ZERO,
+    normalizedValue === null ? NUM.ZERO : normalizedValue,
+    normalizePublicationActiveGateHandoffNodeIdList(nodeIds).length,
+  );
+}
+
+function normalizePublicationActiveGateHandoffPublicationSnapshot(
+  publicationConvergence = null,
+) {
+  const convergence = isPublicationActiveGateHandoffRecord(
+    publicationConvergence,
+  ) ?
+    publicationConvergence :
+    {};
+  const membershipLifecycleSummary = isPublicationActiveGateHandoffRecord(
+    convergence[
+      PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.MEMBERSHIP_LIFECYCLE_SUMMARY
+    ],
+  ) ?
+    convergence[
+      PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.MEMBERSHIP_LIFECYCLE_SUMMARY
+    ] :
+    {};
+  const publicationObservation = isPublicationActiveGateHandoffRecord(
+    convergence[
+      PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.PUBLICATION_OBSERVATION
+    ],
+  ) ?
+    convergence[
+      PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.PUBLICATION_OBSERVATION
+    ] :
+    {};
+  const publicationObservationState =
+    normalizePublicationActiveGateHandoffText(
+      convergence[
+        PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.PUBLICATION_OBSERVATION_STATE
+      ] ??
+      publicationObservation[
+        PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.STATE
+      ] ??
+      membershipLifecycleSummary[
+        PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.PUBLICATION_OBSERVATION_STATE
+      ],
+    );
+  const recoveryProtocolState =
+    normalizePublicationActiveGateHandoffText(
+      convergence[
+        PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.RECOVERY_PROTOCOL_STATE
+      ] ??
+      membershipLifecycleSummary[
+        PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.RECOVERY_PROTOCOL_STATE
+      ],
+    );
+  const pendingAckNodeIds = normalizePublicationActiveGateHandoffNodeIdList(
+    convergence[PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.PENDING_ACK_NODE_IDS],
+  );
+  const missingPublishedNodeIds =
+    normalizePublicationActiveGateHandoffNodeIdList(
+      convergence[
+        PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.MISSING_PUBLISHED_NODE_IDS
+      ],
+    );
+  const pendingAckCount = normalizePublicationActiveGateHandoffDebtCount(
+    convergence[PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.PENDING_ACK_COUNT],
+    pendingAckNodeIds,
+  );
+  const missingPublishedCount = normalizePublicationActiveGateHandoffDebtCount(
+    convergence[PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.MISSING_PUBLISHED_COUNT],
+    missingPublishedNodeIds,
+  );
+  const nodeDebtState =
+    pendingAckCount > NUM.ZERO || missingPublishedCount > NUM.ZERO ?
+      PUBLICATION_ACTIVE_GATE_HANDOFF_NODE_DEBT_STATE.PRESENT :
+      PUBLICATION_ACTIVE_GATE_HANDOFF_NODE_DEBT_STATE.ABSENT;
+  return Object.freeze({
+    publicationPending:
+      convergence[
+        PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.PUBLICATION_PENDING
+      ] === true,
+    unpublishedObservation:
+      publicationObservationState ===
+        PUBLICATION_ACTIVE_GATE_HANDOFF_PUBLICATION_OBSERVATION_STATE
+          .UNPUBLISHED ||
+      recoveryProtocolState ===
+        PUBLICATION_ACTIVE_GATE_HANDOFF_RECOVERY_PROTOCOL_STATE
+          .UNPUBLISHED_OBSERVATION,
+    nodeDebtState,
+    prioritySpreadPending:
+      convergence[
+        PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.PRIORITY_SPREAD_PENDING
+      ] === true ||
+      membershipLifecycleSummary[
+        PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.PRIORITY_SPREAD_PENDING
+      ] === true,
+  });
+}
+
+function resolvePublicationActiveGateHandoffReconcileRequirement(
+  publicationConvergence = null,
+) {
+  const snapshot =
+    normalizePublicationActiveGateHandoffPublicationSnapshot(
+      publicationConvergence,
+    );
+  return PUBLICATION_ACTIVE_GATE_HANDOFF_RECONCILE_REQUIREMENT_RULES.find(
+    (rule) => rule.matches(snapshot),
+  ).requirement;
 }
 
 function normalizePublicationOperationWorkflowRecord(value = null) {
@@ -1853,12 +2026,17 @@ function buildPublicationActiveGateHandoffContract(options = {}) {
         missingPublishedNodeIds,
         pendingRecoveryNodeIds,
       });
+  const reconcileRequirement =
+    resolvePublicationActiveGateHandoffReconcileRequirement(
+      options.publicationConvergence,
+    );
   const evidence = Object.freeze({
     expectedNodeIds,
     publishedActiveNodeIds,
     missingPublishedNodeIds,
     pendingRecoveryNodeIds,
     pendingReconcileNodeIds,
+    reconcileRequirement,
   });
   const activeGateCatchupFence = buildPublicationActiveGateCatchupFence({
     ...options,

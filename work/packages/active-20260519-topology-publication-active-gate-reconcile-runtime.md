@@ -12,12 +12,13 @@
   "owner": "topology_publication_owner",
   "boundary": "publication_convergence",
   "dominantReason": "publication_pending",
-  "currentState": "Fresh representative evidence reduced operation-workflow backpressure to zero residual witnesses and missingPublishedCount=0, but publication_ack_convergence remains blocked because publication_ack_to_active_gate_reconcile_missing leaves active-gate snapshot coverage downstream with no publication-owned reconcile contract.",
-  "nextAction": "Run required review/fix/implementation subagent sequencing, then implement one bounded publication-owned reconcile contract for publication_ack_to_active_gate_reconcile_missing.",
+  "currentState": "Fresh representative evidence after this package reduced the absent-contract shape: the publication-active-gate handoff contract is present, active-gate observes owner_reconcile_pending for node 35a891b8-c1a0-5064-9c6e-2acfba61c2a7, snapshot coverage improved to 2/5, and publication_ack_convergence now remains blocked by an OPEN epoch-2 write_deferred owner-reconcile shape.",
+  "nextAction": "Close this package as reduced, then open a bounded topology_publication_owner / publication_convergence successor for the OPEN epoch-2 handoff write_deferred publication_pending shape.",
   "proof": [
-    "npm run work:scenario-route -- test-output/reports/rolling-restart-after-publication-workflow-handoff-20260519T083006Z.report.json --owner topology_publication_owner --boundary publication_convergence --dominant-reason publication_pending --explain publication_ack_convergence",
-    "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-publication-workflow-handoff-20260519T083006Z.report.json --handoff-probe",
-    "npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-publication-workflow-handoff-20260519T083006Z.report.json",
+    "npm test -- test/control-plane/publication-recovery-evidence.test.js test/control-plane/membership-publication-coordinator-main-stage-2.js test/control-plane/publication-active-gate-handoff-contract.test.js test/control-plane/publication-owner-stream.test.js",
+    "npm run work:package:route-after-rerun -- --artifact test-output/reports/rolling-restart-after-active-gate-reconcile-20260519T091127Z.report.json --owner topology_publication_owner --boundary publication_convergence --dominant-reason publication_pending",
+    "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-active-gate-reconcile-20260519T091127Z.report.json --handoff-probe",
+    "npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-active-gate-reconcile-20260519T091127Z.report.json",
     "npm run analyze:owner-files -- topology_publication_owner publication_convergence"
   ],
   "writeScope": [
@@ -38,7 +39,8 @@
   ],
   "handoffFiles": [
     "work/packages/done-20260519-topology-publication-classified-backpressure-runtime.md",
-    "test-output/reports/rolling-restart-after-publication-workflow-handoff-20260519T083006Z.report.json"
+    "test-output/reports/rolling-restart-after-publication-workflow-handoff-20260519T083006Z.report.json",
+    "test-output/reports/rolling-restart-after-active-gate-reconcile-20260519T091127Z.report.json"
   ],
   "generatedFiles": [
     "work/sprints/current-blocker.md",
@@ -77,72 +79,73 @@
     "artifactBudget": "one-artifact",
     "proofCommandBudget": "two-or-three-canonical-commands",
     "commands": [
-      "npm run work:scenario-route -- test-output/reports/rolling-restart-after-publication-workflow-handoff-20260519T083006Z.report.json --owner topology_publication_owner --boundary publication_convergence --dominant-reason publication_pending --explain publication_ack_convergence",
-      "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-publication-workflow-handoff-20260519T083006Z.report.json --handoff-probe",
-      "npm run analyze:owner-files -- topology_publication_owner publication_convergence"
+      "npm run work:package:route-after-rerun -- --artifact test-output/reports/rolling-restart-after-active-gate-reconcile-20260519T091127Z.report.json --owner topology_publication_owner --boundary publication_convergence --dominant-reason publication_pending",
+      "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-active-gate-reconcile-20260519T091127Z.report.json --handoff-probe",
+      "npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-active-gate-reconcile-20260519T091127Z.report.json"
     ],
     "decisionRecord": "Record classification in the current package or sprint edge card; open a separate classifier only for material route, owner, boundary, stop-condition, tracker-truth, or successor-selection changes.",
     "successorAction": "open-runtime-owner-boundary",
     "runtimePromotionRule": "When canonical owner and boundary are stable, prefer a runtime-owner-boundary successor and keep runtime files in candidateRuntimeFiles until that package activates them."
   },
   "rerunDecision": {
-    "sourceArtifact": "test-output/reports/rolling-restart-after-publication-workflow-handoff-20260519T083006Z.report.json",
+    "sourceArtifact": "test-output/reports/rolling-restart-after-active-gate-reconcile-20260519T091127Z.report.json",
     "routeOwner": "topology_publication_owner",
     "routeBoundary": "publication_convergence",
     "routeDominantReason": "publication_pending",
     "routeCausalOutcome": "continue_local_fix",
     "stopMode": "classified_local_blocker",
     "nextLane": "runtime-owner-boundary",
-    "expectedDelta": "Emit a publication-owned active-gate reconcile contract, reduce publication_pending or active-gate snapshot timeout, migrate owner boundary, or turn rolling-restart green.",
+    "expectedDelta": "This package reduced the absent publication-active-gate contract edge and selected a bounded successor for the OPEN epoch-2 handoff write_deferred publication_pending shape.",
     "requiredRefreshCommands": [
-      "npm run work:package:route-after-rerun -- --artifact test-output/reports/rolling-restart-after-publication-workflow-handoff-20260519T083006Z.report.json --owner topology_publication_owner --boundary publication_convergence --dominant-reason publication_pending",
+      "npm run work:package:route-after-rerun -- --artifact test-output/reports/rolling-restart-after-active-gate-reconcile-20260519T091127Z.report.json --owner topology_publication_owner --boundary publication_convergence --dominant-reason publication_pending",
       "update Sprint Strategy Brief and Current Edge Card from the route result",
       "npm run work:current-blocker -- --write",
       "npm run work:validate -- --pre-impl"
     ]
   },
   "representativeResidual": {
-    "status": "same-frontier",
+    "status": "reduced",
     "scenario": "rolling-restart",
-    "artifact": "test-output/reports/rolling-restart-after-publication-workflow-handoff-20260519T083006Z.report.json",
+    "artifact": "test-output/reports/rolling-restart-after-active-gate-reconcile-20260519T091127Z.report.json",
     "frontier": "publication_ack_convergence",
     "owner": "topology_publication_owner",
     "boundary": "publication_convergence",
     "dominantReason": "publication_pending",
-    "nextAction": "Emit a publication-owned active-gate reconcile contract for publication_ack_to_active_gate_reconcile_missing."
+    "nextAction": "Open a bounded publication-convergence successor for the OPEN epoch-2 handoff write_deferred publication_pending shape."
   },
   "causalGovernance": {
-    "hypothesis": "Publication convergence remains the local runtime owner because the fresh artifact has zero operation-workflow residual witnesses and blocks on an absent publication-to-active-gate reconcile contract.",
-    "stopConditionCheck": "Use `npm run work:scenario-route -- test-output/reports/rolling-restart-after-publication-workflow-handoff-20260519T083006Z.report.json --owner topology_publication_owner --boundary publication_convergence --dominant-reason publication_pending --explain publication_ack_convergence`, `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-publication-workflow-handoff-20260519T083006Z.report.json --handoff-probe`, and `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-publication-workflow-handoff-20260519T083006Z.report.json` before implementation.",
-    "expectedCausalModelChange": "Emit the publication-owned reconcile contract so publication_pending reduces, active-gate snapshot timeout migrates with a concrete contract, or rolling-restart turns green.",
-    "representativeOutcome": "pending-before-rerun",
-    "causalDebt": "Fresh artifact has publicationStatus=unknown, publicationPending=true, pendingAckCount=0, missingPublishedCount=0, priority recovery satisfied, activeGateState=timed_out, snapshotCoverageNodeCount=0/5, and handoffContract.state=absent.",
-    "crossBoundaryReview": "Do not edit operation workflow, startup active-gate, readiness, admission, or timeout runtime unless fresh proof reselects that owner boundary."
+    "hypothesis": "Publication convergence was the local runtime owner for the missing active-gate reconcile contract, and the fresh run proves that edge now exists while the next publication_pending shape remains in the same owner boundary.",
+    "stopConditionCheck": "Focused proof passed, and the fresh representative rerun at test-output/reports/rolling-restart-after-active-gate-reconcile-20260519T091127Z.report.json reduced the absent-contract edge. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-active-gate-reconcile-20260519T091127Z.report.json --handoff-probe` now reports a handoff contract with state pending, owner_reconcile_pending, nextAction reconcile_owner_membership_publication, pendingReconcileCount=1, and pendingReconcileNodeIds=35a891b8-c1a0-5064-9c6e-2acfba61c2a7. `npm run analyze:causal-model -- test-output/reports/rolling-restart-after-active-gate-reconcile-20260519T091127Z.report.json` keeps the route on continue_local_fix for topology_publication_owner / publication_convergence.",
+    "expectedCausalModelChange": "Achieved reduction: publication_ack_to_active_gate_reconcile_missing cleared, active-gate snapshot timeout moved from timed_out to stalled/deferred repair, snapshot coverage improved from 0/5 to 2/5, and a concrete owner reconcile handoff outcome is visible.",
+    "representativeOutcome": "reduced",
+    "causalDebt": "Fresh artifact has publicationStatus=OPEN, publicationEpoch=2, publicationPending=true, missingPublishedCount=4, publishedActiveNodeIds=1/5, snapshotCoverageNodeCount=2/5, handoffOutcome=write_deferred, handoffContract.state=pending, pendingReconcileCount=1, and priority recovery residual witnesses remain 0.",
+    "crossBoundaryReview": "Open the same-owner publication-convergence successor for the OPEN/write_deferred handoff shape before editing operation workflow, startup active-gate, readiness, admission, or timeout runtime."
   },
   "scenarioCausalClosure": {
     "referenceScenarioOrProbe": "rolling-restart after publication workflow handoff reduction",
     "phaseChain": [
       "operation workflow residual drained to zero witnesses",
       "publication_ack_convergence remains the visible first frontier",
-      "handoff probe selects publication_ack_to_active_gate_reconcile_missing",
-      "active-gate snapshot coverage remains downstream until publication emits a reconcile contract"
+      "this package emits the missing publication-active-gate reconcile contract",
+      "fresh evidence moves downstream active-gate evidence from timed_out/absent-contract to stalled/deferred owner_reconcile_pending with concrete pendingReconcileNodeIds"
     ],
-    "currentFirstFrontier": "publication_ack_convergence / topology_publication_owner / publication_convergence / publication_pending in test-output/reports/rolling-restart-after-publication-workflow-handoff-20260519T083006Z.report.json.",
+    "currentFirstFrontier": "publication_ack_convergence / topology_publication_owner / publication_convergence / publication_pending in test-output/reports/rolling-restart-after-active-gate-reconcile-20260519T091127Z.report.json.",
     "knownDownstreamBlockers": [
-      "activeGateState=timed_out",
-      "snapshotCoverageNodeCount=0/5",
-      "selected_snapshot_source_timeout",
-      "handoffContract.state=absent"
+      "activeGateState=stalled",
+      "snapshotCoverageNodeCount=2/5",
+      "snapshot_repair_deferred",
+      "handoffContract.state=pending",
+      "handoffOutcome=write_deferred"
     ],
-    "missingCausalEdge": "Publication convergence must emit a structured active-gate reconcile contract for the publication_pending/unpublished-observation shape.",
-    "missingCausalEdgeProbe": "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-publication-workflow-handoff-20260519T083006Z.report.json --handoff-probe",
-    "boundedProgressProof": "Bounded publication reconcile proof should move the reconcile/wake contract that lets active-gate consume publication progress without reopening operation workflow.",
-    "boundedProgressProofArtifact": "work/packages/active-20260519-topology-publication-active-gate-reconcile-runtime.md and test-output/reports/rolling-restart-after-publication-workflow-handoff-20260519T083006Z.report.json",
-    "expectedObservableTransition": "publication_ack_to_active_gate_reconcile_missing clears, publication_pending reduces, active-gate snapshot timeout migrates with a concrete contract, or rolling-restart turns green.",
+    "missingCausalEdge": "The absent publication-active-gate reconcile contract is closed; the remaining causal edge is owner reconciliation for the OPEN epoch-2 write_deferred handoff.",
+    "missingCausalEdgeProbe": "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-active-gate-reconcile-20260519T091127Z.report.json --handoff-probe",
+    "boundedProgressProof": "Bounded publication reconcile proof emitted the contract and moved the consumer to a concrete owner_reconcile_pending handoff with one pending reconcile node.",
+    "boundedProgressProofArtifact": "work/packages/active-20260519-topology-publication-active-gate-reconcile-runtime.md and test-output/reports/rolling-restart-after-active-gate-reconcile-20260519T091127Z.report.json",
+    "expectedObservableTransition": "absent handoff contract cleared, snapshot coverage improved to 2/5, and successor selected for OPEN epoch-2 write_deferred owner reconcile.",
     "maxProgressBound": "one topology_publication_owner / publication_convergence runtime slice",
-    "sameFrontierFallback": "If focused proof passes but representative rerun returns unchanged publication_pending and absent handoff contract with no metric reduction, stop for architecture escalation.",
+    "sameFrontierFallback": "If the successor focused proof passes but the next representative rerun returns unchanged OPEN/write_deferred publication_pending with no metric reduction, stop for architecture escalation.",
     "expectedNextFrontier": "topology_publication_owner / publication_convergence until fresh evidence proves migration to startup_active_gate_owner / snapshot_coverage.",
-    "resultClassification": "pending-before-probe",
+    "resultClassification": "reduced",
     "stopCondition": "continue-local-fix",
     "recentFrontierHistory": [
       "work/packages/done-20260519-topology-publication-classified-backpressure-runtime.md / topology_publication_owner / publication_convergence / reduced",
@@ -329,11 +332,14 @@ Review agents may directly fix metadata-only package, sprint, tracker, current-b
 - [x] Agent ReviewSubagent (019e3f68-f6c9-7f42-b399-a2545a82c4ab) review falsification checkpoint: status: validated; last checkpoint: wrong-slice check complete; parent action: accepted; wrong-slice evidence would be route owner/boundary/dominant reason changing away from `topology_publication_owner / publication_convergence / publication_pending`, the handoff probe not reporting `publication_ack_to_active_gate_reconcile_missing`, operation workflow residual witnesses reopening, or current-blocker selecting the predecessor package; evidence: `npm run work:scenario-route -- test-output/reports/rolling-restart-after-publication-workflow-handoff-20260519T083006Z.report.json --owner topology_publication_owner --boundary publication_convergence --dominant-reason publication_pending --explain publication_ack_convergence` passed with route unchanged and priority residual witness count `0`; `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-publication-workflow-handoff-20260519T083006Z.report.json --handoff-probe` passed with `publication_ack_to_active_gate_reconcile_missing`, operation workflow `satisfied`, and `runtimePromotionAllowed=false`; next: metadata-only blocker and sprint refresh.
 - [x] Agent ReviewSubagent (019e3f68-f6c9-7f42-b399-a2545a82c4ab) review checkpoint: status: validated; last checkpoint: metadata-only blocker refresh complete; parent action: accepted; evidence: `npm run work:current-blocker -- --write` updated `work/sprints/current-blocker.md`, `work/sprints/current-blocker.json`, and the sprint Current Edge Card to the active reconcile package and fresh artifact; next: pre-implementation validation.
 - [x] Agent ReviewSubagent (019e3f68-f6c9-7f42-b399-a2545a82c4ab) review checkpoint: status: validated; last checkpoint: pre-implementation validation complete; parent action: accepted; evidence: `npm run work:package:doctor -- --suggest work/packages/active-20260519-topology-publication-active-gate-reconcile-runtime.md` passed after metadata-only repairs, and `npm run work:validate -- --pre-impl work/packages/active-20260519-topology-publication-active-gate-reconcile-runtime.md` passed; next: final handoff for implementation subagent.
+- [x] Agent Chandrasekhar (019e3f6e-3053-7120-8972-80807674a181) implementation checkpoint: status: partial-unvalidated; last checkpoint: context, package, compact steering, source map, required pre-edit probes, and runtime patch present after worker shutdown; parent action: pending; evidence: worker edited `src/control-plane/publication-active-gate-handoff-contract.js`, `src/control-plane/publication-recovery-evidence.js`, `test/control-plane/publication-active-gate-handoff-contract.test.js`, `test/control-plane/publication-recovery-evidence.test.js`, and this package without final handoff; next: parent focused proof before commit.
+- [x] Agent Chandrasekhar (019e3f6e-3053-7120-8972-80807674a181) implementation checkpoint: status: validated; last checkpoint: parent focused proof revalidated partial patch; parent action: revalidated; evidence: `npm test -- test/control-plane/publication-active-gate-handoff-contract.test.js test/control-plane/publication-recovery-evidence.test.js`, `npm test -- test/control-plane/publication-recovery-evidence.test.js test/control-plane/membership-publication-coordinator-main-stage-2.js test/control-plane/publication-active-gate-handoff-contract.test.js test/control-plane/publication-owner-stream.test.js`, `node scripts/check-guideline-literals.js src/control-plane/publication-active-gate-handoff-contract.js src/control-plane/publication-recovery-evidence.js`, `node scripts/check-guideline-decision-boundaries.js src/control-plane/publication-active-gate-handoff-contract.js src/control-plane/publication-recovery-evidence.js`, and `npm run audit:runtime-grammar:file -- src/control-plane/publication-active-gate-handoff-contract.js src/control-plane/publication-recovery-evidence.js` passed; next: package validation and representative rerun.
 
 ## Subagent Sequencing Ledger
 
 - [x] Review subagent recorded: Agent ReviewSubagent (019e3f68-f6c9-7f42-b399-a2545a82c4ab) reviewed work/packages/active-20260519-topology-publication-active-gate-reconcile-runtime.md; result fixes-required.
 - [x] Fix subagent recorded or explicitly not needed: review-fixed-metadata-only by Agent ReviewSubagent (019e3f68-f6c9-7f42-b399-a2545a82c4ab) for work/packages/active-20260519-topology-publication-active-gate-reconcile-runtime.md; scope: metadata-only package/sprint/tracker/handoff edits.
+- [x] Implementation subagent recorded: Agent Chandrasekhar (019e3f6e-3053-7120-8972-80807674a181) implemented work/packages/active-20260519-topology-publication-active-gate-reconcile-runtime.md; parent revalidated focused proof: yes.
 
 ## Validation
 

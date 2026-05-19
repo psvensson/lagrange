@@ -21,6 +21,7 @@ import {
   PUBLICATION_OWNER_TEXT,
 } from './publication-owner-constants.js';
 import {
+  buildPublicationActiveGateHandoffContract,
   buildPublicationOperationWorkflowHandoff,
 } from './publication-active-gate-handoff-contract.js';
 
@@ -116,6 +117,15 @@ const PUBLICATION_RECOVERY_HANDOFF_NEXT_ACTION = Object.freeze({
   RECONCILE_OWNER_MEMBERSHIP_PUBLICATION:
     'reconcile_owner_membership_publication',
 });
+const PUBLICATION_RECOVERY_ACTIVE_GATE_HANDOFF_EMISSION = Object.freeze({
+  EMIT_UNPUBLISHED_RECONCILE: 'emit_unpublished_reconcile',
+  OMIT: 'omit',
+  PRESERVE_EXISTING: 'preserve_existing',
+});
+const PUBLICATION_RECOVERY_NODE_DEBT_STATE = Object.freeze({
+  ABSENT: 'absent',
+  PRESENT: 'present',
+});
 const PUBLICATION_RECOVERY_OWNER_RECONCILE_HANDOFF_MATCHERS = Object.freeze([
   Object.freeze({
     fieldName: PUBLICATION_RECOVERY_HANDOFF_FIELD.STATE,
@@ -130,6 +140,29 @@ const PUBLICATION_RECOVERY_OWNER_RECONCILE_HANDOFF_MATCHERS = Object.freeze([
     fieldName: PUBLICATION_RECOVERY_HANDOFF_FIELD.NEXT_ACTION,
     expectedValue: PUBLICATION_RECOVERY_HANDOFF_NEXT_ACTION
       .RECONCILE_OWNER_MEMBERSHIP_PUBLICATION,
+  }),
+]);
+const PUBLICATION_RECOVERY_ACTIVE_GATE_HANDOFF_EMISSION_RULES = Object.freeze([
+  Object.freeze({
+    outcome:
+      PUBLICATION_RECOVERY_ACTIVE_GATE_HANDOFF_EMISSION.PRESERVE_EXISTING,
+    matches: (snapshot) => snapshot.existingHandoffAvailable === true,
+  }),
+  Object.freeze({
+    outcome:
+      PUBLICATION_RECOVERY_ACTIVE_GATE_HANDOFF_EMISSION
+        .EMIT_UNPUBLISHED_RECONCILE,
+    matches: (snapshot) =>
+      snapshot.activeGateProgressAvailable === true &&
+      snapshot.publicationPending === true &&
+      snapshot.recoveryProtocolState ===
+        PUBLICATION_RECOVERY_PROTOCOL_STATE.UNPUBLISHED_OBSERVATION &&
+      snapshot.nodeDebtState === PUBLICATION_RECOVERY_NODE_DEBT_STATE.ABSENT &&
+      snapshot.prioritySpreadPending !== true,
+  }),
+  Object.freeze({
+    outcome: PUBLICATION_RECOVERY_ACTIVE_GATE_HANDOFF_EMISSION.OMIT,
+    matches: () => true,
   }),
 ]);
 const PUBLICATION_RECOVERY_PUBLICATION_STATUS = Object.freeze({
@@ -1235,6 +1268,113 @@ function enrichPublicationRecoveryActiveGateHandoff({
         operationWorkflowHandoff,
     }) :
     publicationActiveGateHandoff;
+}
+
+function buildPublicationRecoveryActiveGateHandoffEmissionSnapshot({
+  publicationActiveGateHandoff = null,
+  activeGateProgressRecords = PUBLICATION_RECOVERY_EVIDENCE_EMPTY_LIST,
+  publicationPending = false,
+  recoveryProtocolState = null,
+  pendingAckEvidence = null,
+  missingPublishedNodeIds = PUBLICATION_RECOVERY_EVIDENCE_EMPTY_LIST,
+  missingPublishedCount = NUM.ZERO,
+  prioritySpreadPending = false,
+} = {}) {
+  const normalizedMissingPublishedNodeIds = normalizeDistinctStringArray(
+    missingPublishedNodeIds,
+  );
+  const normalizedPendingAckNodeIds = normalizeDistinctStringArray(
+    pendingAckEvidence?.pendingAckNodeIds,
+  );
+  const pendingAckCount = normalizeMaximumNonNegativeInteger([
+    pendingAckEvidence?.pendingAckCount,
+    normalizedPendingAckNodeIds.length,
+  ]);
+  const normalizedMissingPublishedCount = normalizeMaximumNonNegativeInteger([
+    missingPublishedCount,
+    normalizedMissingPublishedNodeIds.length,
+  ]);
+  const nodeDebtState =
+    pendingAckCount > NUM.ZERO ||
+    normalizedMissingPublishedCount > NUM.ZERO ?
+      PUBLICATION_RECOVERY_NODE_DEBT_STATE.PRESENT :
+      PUBLICATION_RECOVERY_NODE_DEBT_STATE.ABSENT;
+  return Object.freeze({
+    existingHandoffAvailable: isRecord(publicationActiveGateHandoff),
+    activeGateProgressAvailable:
+      activeGateProgressRecords.length > NUM.ZERO,
+    publicationPending,
+    recoveryProtocolState: normalizeOptionalString(recoveryProtocolState),
+    nodeDebtState,
+    prioritySpreadPending,
+  });
+}
+
+function resolvePublicationRecoveryActiveGateHandoffEmission(snapshot) {
+  return PUBLICATION_RECOVERY_ACTIVE_GATE_HANDOFF_EMISSION_RULES.find((rule) =>
+    rule.matches(snapshot),
+  ).outcome;
+}
+
+function resolvePublicationRecoveryEmittedActiveGateHandoff({
+  publicationActiveGateHandoff = null,
+  publicationConvergence = null,
+  priorityRecoveryObservation = null,
+  activeGateProgressRecords = PUBLICATION_RECOVERY_EVIDENCE_EMPTY_LIST,
+  publicationEpoch = null,
+  publicationStatus = null,
+  recoveryProtocolState = null,
+  publicationPending = false,
+  pendingAckEvidence = null,
+  missingPublishedNodeIds = PUBLICATION_RECOVERY_EVIDENCE_EMPTY_LIST,
+  missingPublishedCount = NUM.ZERO,
+  publishedActiveNodeIds = PUBLICATION_RECOVERY_EVIDENCE_EMPTY_LIST,
+  prioritySpreadPending = false,
+} = {}) {
+  const snapshot = buildPublicationRecoveryActiveGateHandoffEmissionSnapshot({
+    publicationActiveGateHandoff,
+    activeGateProgressRecords,
+    publicationPending,
+    recoveryProtocolState,
+    pendingAckEvidence,
+    missingPublishedNodeIds,
+    missingPublishedCount,
+    prioritySpreadPending,
+  });
+  const outcome = resolvePublicationRecoveryActiveGateHandoffEmission(snapshot);
+  if (
+    outcome ===
+    PUBLICATION_RECOVERY_ACTIVE_GATE_HANDOFF_EMISSION.PRESERVE_EXISTING
+  ) {
+    return publicationActiveGateHandoff;
+  }
+  if (
+    outcome !==
+    PUBLICATION_RECOVERY_ACTIVE_GATE_HANDOFF_EMISSION
+      .EMIT_UNPUBLISHED_RECONCILE
+  ) {
+    return null;
+  }
+  return enrichPublicationRecoveryActiveGateHandoff({
+    publicationActiveGateHandoff: buildPublicationActiveGateHandoffContract({
+      publicationConvergence: {
+        ...(isRecord(publicationConvergence) ? publicationConvergence : {}),
+        publicationEpoch,
+        publicationStatus,
+        recoveryProtocolState,
+        publicationPending,
+        pendingAckNodeIds: pendingAckEvidence?.pendingAckNodeIds,
+        pendingAckCount: pendingAckEvidence?.pendingAckCount,
+        missingPublishedNodeIds,
+        missingPublishedCount,
+        publishedActiveNodeIds,
+        prioritySpreadPending,
+      },
+      activeGateProgress: activeGateProgressRecords[NUM.ZERO],
+    }),
+    publicationConvergence,
+    priorityRecoveryObservation,
+  });
 }
 
 function normalizeProgressNodeIds(
@@ -2573,6 +2713,26 @@ function buildCanonicalPublicationConvergence(options = {}) {
       publicationConvergenceGate?.publicationPending === false ?
         false :
         isPublicationOwnerStreamPublicationPending(publicationOwnerStream);
+  const emittedPublicationActiveGateHandoff =
+    resolvePublicationRecoveryEmittedActiveGateHandoff({
+      publicationActiveGateHandoff,
+      publicationConvergence: rawPublicationConvergence,
+      priorityRecoveryObservation:
+        rawPriorityRecoveryObservation || priorityRecoveryObservation,
+      activeGateProgressRecords,
+      publicationEpoch,
+      publicationStatus: effectivePublicationStatus,
+      recoveryProtocolState: effectiveRecoveryProtocolState,
+      publicationPending:
+        publicationPending ||
+        publicationConvergenceGate?.publicationPending === true ||
+        rawPublicationConvergence?.publicationPending === true,
+      pendingAckEvidence,
+      missingPublishedNodeIds,
+      missingPublishedCount,
+      publishedActiveNodeIds,
+      prioritySpreadPending: canonicalPrioritySpreadPending,
+    });
 
   return {
     ...(rawPublicationConvergence || {}),
@@ -2618,8 +2778,8 @@ function buildCanonicalPublicationConvergence(options = {}) {
       {}),
     closureRecordId,
     closureWitnessClass,
-    ...(publicationActiveGateHandoff ?
-      {publicationActiveGateHandoff} :
+    ...(emittedPublicationActiveGateHandoff ?
+      {publicationActiveGateHandoff: emittedPublicationActiveGateHandoff} :
       {}),
     ...(publicationConvergenceGate ?
       {publicationRecoveryGate: publicationConvergenceGate} :
