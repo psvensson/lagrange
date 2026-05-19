@@ -348,3 +348,18 @@ Required for this runtime package. Each real subagent must append one checked ch
 2. npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-active-gate-reconcile-20260519T091127Z.report.json --handoff-probe
 3. npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-active-gate-reconcile-20260519T091127Z.report.json
 4. npm run analyze:owner-files -- topology_publication_owner publication_convergence
+
+## Representative Rerun Result
+
+- Artifact: `test-output/reports/rolling-restart-after-owner-reconcile-write-deferred-20260519T100837Z.report.json`
+- Result: `same-frontier`
+- Route-after-rerun: `topology_publication_owner / publication_convergence / publication_pending`, causal outcome `continue_local_fix`, stop mode `classified_local_blocker`
+- Handoff probe: `state=pending`, `reasonCode=owner_reconcile_pending`, `nextAction=reconcile_owner_membership_publication`, `runtimePromotionAllowed=false`, `pendingReconcileCount=4`
+- Priority residuals: `3` witnesses under `operation_workflow_owner / rebalancer_handoff`
+- Closure decision: focused proof passed, but representative proof stayed red without clean reduction; open a causal/architecture decision package before another local runtime patch.
+
+## Commit And Push Ledger
+
+1. Focused package commit: b51e4b81
+2. Pushed to: origin/codex/pending-ack-eligibility-filter
+3. Commit contains only package-owned files/package-status/allowed sprint handoff: yes
