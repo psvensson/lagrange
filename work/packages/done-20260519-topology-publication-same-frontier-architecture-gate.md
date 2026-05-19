@@ -290,3 +290,9 @@ Review agents may directly fix metadata-only package, sprint, tracker, current-b
 1. `npm run work:package:route-after-rerun -- --artifact test-output/reports/rolling-restart-after-pressure-stability-20260519T050912Z.report.json --owner topology_publication_owner --boundary publication_convergence --dominant-reason publication_pending`
 2. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-pressure-stability-20260519T050912Z.report.json --handoff-probe`
 3. `npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-after-pressure-stability-20260519T050912Z.report.json`
+
+## Commit And Push Ledger
+
+1. Focused package commit: 8af61306
+2. Pushed to: origin/codex/pending-ack-eligibility-filter
+3. Commit contains only package-owned files/package-status/allowed sprint handoff: yes
