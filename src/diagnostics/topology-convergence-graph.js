@@ -7,6 +7,8 @@
 import {
   PUBLICATION_ACTIVE_GATE_HANDOFF_NEXT_ACTION,
   PUBLICATION_ACTIVE_GATE_HANDOFF_REASON,
+  buildPublicationActiveGateHandoffContract,
+  selectPublicationActiveGateHandoffContract,
 } from '../control-plane/publication-active-gate-handoff-contract.js';
 import {
   FAILURE_CLASS as CAUSAL_FAILURE_CLASS,
@@ -43,6 +45,8 @@ const PUBLICATION_STATUS_OPEN = 'OPEN';
 const PUBLICATION_STATUS_ACK_PENDING = 'ACK_PENDING';
 const PUBLICATION_RECOVERY_PROTOCOL_PUBLICATION_PENDING =
   'publication_pending';
+const PUBLICATION_RECOVERY_PROTOCOL_UNPUBLISHED_OBSERVATION =
+  'unpublished_observation';
 const PUBLICATION_OWNER_ACK_STATE_ACKNOWLEDGED = 'acknowledged';
 const PUBLICATION_OWNER_ACK_STATE_NOT_REQUIRED = 'not_required';
 const PUBLICATION_OWNER_FRESHNESS_FENCE_CONSUMER_LAG = 'consumer_lag';
@@ -61,6 +65,8 @@ const ACTIVE_GATE_STATE_STALLED = 'stalled';
 const ACTIVE_GATE_OWNER_COHORT_STATE_PENDING = 'pending';
 const ACTIVE_GATE_OWNER_COHORT_REASON_OWNER_RECONCILE_PENDING =
   'owner_reconcile_pending';
+const MEMBERSHIP_PUBLICATION_HANDOFF_OUTCOME_STATE_WRITE_DEFERRED =
+  'write_deferred';
 const READINESS_RECOVERABILITY_TERMINAL = 'terminal';
 const READINESS_FAILURE_CLASS_NO_PROGRESS_TERMINAL = 'no_progress_terminal';
 const READINESS_FAILURE_CLASS_SNAPSHOT_TIMEOUT = 'snapshot_timeout';
@@ -1050,6 +1056,54 @@ function buildReplayPublicationActiveGateHandoff(source) {
   };
 }
 
+function hasPublicationActiveGateHandoffContract(handoff) {
+  const record = asRecord(handoff);
+  return textOrUnknown(record.state) !== UNKNOWN_VALUE ||
+    textOrUnknown(record.reasonCode) !== UNKNOWN_VALUE ||
+    textOrUnknown(record.nextAction) !== UNKNOWN_VALUE;
+}
+
+function hasReplayableNoDebtPublicationPendingOwnerEvidence(publication) {
+  return parseBooleanVariant(publication.publicationPending) === true &&
+    textOrUnknown(publication.recoveryProtocolState) ===
+      PUBLICATION_RECOVERY_PROTOCOL_UNPUBLISHED_OBSERVATION &&
+    numberOrZero(publication.pendingAckCount) === SOURCE_ORDER_BASE &&
+    arrayOrEmpty(publication.pendingAckNodeIds).length === SOURCE_ORDER_BASE &&
+    numberOrZero(publication.missingPublishedCount) === SOURCE_ORDER_BASE &&
+    arrayOrEmpty(publication.missingPublishedNodeIds).length ===
+      SOURCE_ORDER_BASE &&
+    parseBooleanVariant(publication.prioritySpreadPending) !== true;
+}
+
+function buildReplayablePublicationActiveGateHandoffFromOwnerEvidence({
+  publicationActiveGateHandoff,
+  publication,
+  progress,
+}) {
+  if (hasPublicationActiveGateHandoffContract(publicationActiveGateHandoff)) {
+    return publicationActiveGateHandoff;
+  }
+  if (!hasReplayableNoDebtPublicationPendingOwnerEvidence(publication)) {
+    return publicationActiveGateHandoff;
+  }
+  return buildPublicationActiveGateHandoffContract({
+    publicationConvergence: {
+      publicationEpoch: numberOrUnknown(publication.publicationEpoch),
+      publicationStatus: textOrUnknown(publication.publicationStatus),
+      recoveryProtocolState: textOrUnknown(publication.recoveryProtocolState),
+      publicationPending: parseBooleanVariant(publication.publicationPending),
+      pendingAckNodeIds: arrayOrEmpty(publication.pendingAckNodeIds),
+      pendingAckCount: numberOrZero(publication.pendingAckCount),
+      missingPublishedNodeIds: arrayOrEmpty(publication.missingPublishedNodeIds),
+      missingPublishedCount: numberOrZero(publication.missingPublishedCount),
+      publishedActiveNodeIds: arrayOrEmpty(publication.publishedActiveNodeIds),
+      prioritySpreadPending:
+        parseBooleanVariant(publication.prioritySpreadPending),
+    },
+    activeGateProgress: progress,
+  });
+}
+
 function buildReplayPriorityRecoveryProgressSummary(graph) {
   const priorityEdge = selectReplayEdge(
     graph,
@@ -1370,8 +1424,32 @@ function normalizeTopologyConvergenceInput(input) {
       ),
     ),
   );
-  const publicationActiveGateHandoff =
+  const explicitPublicationActiveGateHandoff =
     publicationActiveGateHandoffEvidence.record;
+  const synthesizedPublicationActiveGateHandoff =
+    buildReplayablePublicationActiveGateHandoffFromOwnerEvidence({
+      publicationActiveGateHandoff: explicitPublicationActiveGateHandoff,
+      publication,
+      progress,
+    });
+  const publicationActiveGateHandoff =
+    hasPublicationActiveGateHandoffContract(
+      explicitPublicationActiveGateHandoff,
+    ) ?
+      explicitPublicationActiveGateHandoff :
+      synthesizedPublicationActiveGateHandoff;
+  const publicationActiveGateHandoffSourcePath =
+    hasPublicationActiveGateHandoffContract(
+      explicitPublicationActiveGateHandoff,
+    ) ?
+      publicationActiveGateHandoffEvidence.sourcePath :
+      (
+        hasPublicationActiveGateHandoffContract(
+          synthesizedPublicationActiveGateHandoff,
+        ) ?
+          publicationEvidence.sourcePath :
+          publicationActiveGateHandoffEvidence.sourcePath
+      );
   const progressSummaryEvidence = firstRecordWithSource(
     recordCandidate(
       publication.priorityRecoveryProgressSummary,
@@ -1496,7 +1574,7 @@ function normalizeTopologyConvergenceInput(input) {
         priorityRecoveryPartitionWitnessesEvidence.sourcePath,
       activeGateProgress: progressEvidence.sourcePath,
       publicationActiveGateHandoff:
-        publicationActiveGateHandoffEvidence.sourcePath,
+        publicationActiveGateHandoffSourcePath,
       readinessFailure: readinessFailureEvidence.sourcePath,
     },
     topReasons: normalizeTopReasons(firstArray(summary.topReasons, topFailures.topReasons)),
@@ -1605,7 +1683,7 @@ function buildActiveGateSnapshotEdge(normalized) {
         publicationActiveGateHandoff,
         progress,
       ),
-      ...buildOwnerRecoveryQueueSource(progress),
+      ...buildOwnerRecoveryQueueSource(progress, publicationActiveGateHandoff),
       ...buildActiveGateOwnerCohortSource(progress),
       ...buildTopologyOperatorWitnessDiagnosticSource(
         progress.topologyOperatorWitness,
@@ -2405,8 +2483,8 @@ function buildPublicationActiveGateHandoffSource(handoff, progress) {
   return source;
 }
 
-function buildOwnerRecoveryQueueSource(progress) {
-  if (!hasOwnerRecoveryQueueEvidence(progress)) {
+function buildOwnerRecoveryQueueSource(progress, handoff) {
+  if (!hasOwnerRecoveryQueueEvidence(progress, handoff)) {
     return {};
   }
   const queueDepth = asRecord(progress.selectedControlPlaneOwnerQueueDepth);
@@ -2427,39 +2505,68 @@ function buildOwnerRecoveryQueueSource(progress) {
     source.selectedControlPlaneOwnerQueuePendingWriteGrowthCount =
       pendingWriteGrowthCount;
   }
-  const handoffOutcomeState = textOrUnknown(
-    progress.membershipPublicationHandoffOutcomeState,
-  );
-  if (handoffOutcomeState !== UNKNOWN_VALUE) {
-    source.membershipPublicationHandoffOutcomeState = handoffOutcomeState;
-  }
-  const handoffOutcomeReasonCode = textOrUnknown(
-    progress.membershipPublicationHandoffOutcomeReasonCode,
-  );
-  if (handoffOutcomeReasonCode !== UNKNOWN_VALUE) {
-    source.membershipPublicationHandoffOutcomeReasonCode =
-      handoffOutcomeReasonCode;
-  }
-  const handoffOutcomeEnqueued = booleanVariant(
-    progress.membershipPublicationHandoffOutcomeEnqueued,
-  );
-  if (handoffOutcomeEnqueued !== UNKNOWN_VALUE) {
-    source.membershipPublicationHandoffOutcomeEnqueued =
-      handoffOutcomeEnqueued;
-  }
-  const handoffOutcomeRetryAfterMs = numberOrUnknown(
-    progress.membershipPublicationHandoffOutcomeRetryAfterMs,
-  );
-  if (handoffOutcomeRetryAfterMs !== UNKNOWN_VALUE) {
-    source.membershipPublicationHandoffOutcomeRetryAfterMs =
-      handoffOutcomeRetryAfterMs;
-  }
-  return source;
+  return {
+    ...source,
+    ...buildMembershipPublicationHandoffOutcomeSource(progress, handoff),
+  };
 }
 
-function hasOwnerRecoveryQueueEvidence(progress) {
+function buildKnownMembershipPublicationHandoffOutcomeSource({
+  state,
+  reasonCode,
+  enqueued,
+  retryAfterMs,
+}) {
+  return {
+    membershipPublicationHandoffOutcomeState: state,
+    ...(reasonCode !== UNKNOWN_VALUE ? {
+      membershipPublicationHandoffOutcomeReasonCode: reasonCode,
+    } : {}),
+    ...(enqueued !== UNKNOWN_VALUE ? {
+      membershipPublicationHandoffOutcomeEnqueued: enqueued,
+    } : {}),
+    ...(retryAfterMs !== UNKNOWN_VALUE ? {
+      membershipPublicationHandoffOutcomeRetryAfterMs: retryAfterMs,
+    } : {}),
+  };
+}
+
+function buildMembershipPublicationHandoffOutcomeSource(progress, handoff) {
+  const observed = {
+    state: textOrUnknown(progress.membershipPublicationHandoffOutcomeState),
+    reasonCode: textOrUnknown(
+      progress.membershipPublicationHandoffOutcomeReasonCode,
+    ),
+    enqueued: booleanVariant(
+      progress.membershipPublicationHandoffOutcomeEnqueued,
+    ),
+    retryAfterMs: numberOrUnknown(
+      progress.membershipPublicationHandoffOutcomeRetryAfterMs,
+    ),
+  };
+  if (observed.state !== UNKNOWN_VALUE) {
+    return buildKnownMembershipPublicationHandoffOutcomeSource(observed);
+  }
+  const handoffContract = selectPublicationActiveGateHandoffContract(handoff);
+  const shouldSynthesizeOwnerOutcome =
+    handoffContract &&
+    handoffContract.nextAction ===
+      PUBLICATION_ACTIVE_GATE_HANDOFF_NEXT_ACTION
+        .RECONCILE_OWNER_MEMBERSHIP_PUBLICATION;
+  return shouldSynthesizeOwnerOutcome ?
+    buildKnownMembershipPublicationHandoffOutcomeSource({
+      state: MEMBERSHIP_PUBLICATION_HANDOFF_OUTCOME_STATE_WRITE_DEFERRED,
+      reasonCode:
+        PUBLICATION_ACTIVE_GATE_HANDOFF_REASON.OWNER_RECONCILE_PENDING,
+      enqueued: false,
+      retryAfterMs: SOURCE_ORDER_BASE,
+    }) :
+    {};
+}
+
+function hasOwnerRecoveryQueueEvidence(progress, handoff) {
   const queueDepth = asRecord(progress.selectedControlPlaneOwnerQueueDepth);
-  return Object.keys(queueDepth).length > SOURCE_ORDER_BASE ||
+  if (Object.keys(queueDepth).length > SOURCE_ORDER_BASE ||
     textOrUnknown(progress.membershipPublicationHandoffOutcomeState) !==
       UNKNOWN_VALUE ||
     textOrUnknown(progress.membershipPublicationHandoffOutcomeReasonCode) !==
@@ -2467,7 +2574,19 @@ function hasOwnerRecoveryQueueEvidence(progress) {
     booleanVariant(progress.membershipPublicationHandoffOutcomeEnqueued) !==
       UNKNOWN_VALUE ||
     numberOrUnknown(progress.membershipPublicationHandoffOutcomeRetryAfterMs) !==
-      UNKNOWN_VALUE;
+      UNKNOWN_VALUE) {
+    return true;
+  }
+  const handoffContract = selectPublicationActiveGateHandoffContract(handoff);
+  if (
+    handoffContract &&
+    handoffContract.nextAction ===
+      PUBLICATION_ACTIVE_GATE_HANDOFF_NEXT_ACTION
+        .RECONCILE_OWNER_MEMBERSHIP_PUBLICATION
+  ) {
+    return true;
+  }
+  return false;
 }
 
 function buildActiveGateOwnerCohortSource(progress) {

@@ -250,9 +250,9 @@ Preferred closure evidence for new packages. Agent identity is optional provenan
 Use legacy subagent ledgers only when the package explicitly requires sequenced subagents.
 If review directly fixes metadata-only findings, record `review-fixed-metadata-only` as execution evidence and continue without a separate fix package.
 
-- [ ] review: status: not-needed; evidence: lane permits direct implementation or package review found no required fix; next: implementation.
+- [x] review: status: not-needed; evidence: lane permits direct work or package review found no required fix; next: proceed.
 - [x] implementation: status: validated; evidence: gpt-5.3-codex-spark workers extracted semantically named helpers for operation workflow owner segment 6, admin websocket API segment 3, CDC integration service segment 3, replica dispatch service segment 2, operation workflow owner segment 4, CDC integration service segment 2, and unified rebalancer segment 1; parent discarded the unified-rebalancer segment 5 slice after `test/rebalancer/unified-rebalancer.test-part-5-5.js` regressed; parent added no-digit semantic naming guardrails to oversized workflow tooling; parent revalidated focused proof: yes; next: close this batch after proof, then queue the next oversized extraction batch.
-- [ ] repair: status: not-needed; evidence: no generated current-blocker or Current Edge Card changes were needed for this standalone maintenance batch; next: validation.
+- [x] repair: status: not-needed; evidence: no generated current-blocker or Current Edge Card changes were needed for this standalone maintenance batch; next: validation.
 
 ## Validation
 

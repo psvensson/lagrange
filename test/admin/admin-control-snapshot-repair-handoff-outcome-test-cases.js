@@ -588,7 +588,7 @@ test('AdminControlSnapshot handoff reconcile defers when publication readback is
           convergenceClass:
             CONTROL_PLANE_CONVERGENCE_CLASS.CRITICAL,
           pressureOutcome:
-            CONTROL_PLANE_CONVERGENCE_PRESSURE_OUTCOME.CRITICAL_REJECTED,
+            CONTROL_PLANE_CONVERGENCE_PRESSURE_OUTCOME.CRITICAL_ADMITTED,
         },
       },
       'the awaited handoff reconcile should return a structured critical defer without carrying an unverified publication row',

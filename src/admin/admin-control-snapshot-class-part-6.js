@@ -17,6 +17,7 @@ import {
   CONTROL_PLANE_CONVERGENCE_PRESSURE_OUTCOME,
 } from '../control-plane/control-plane-error-classification.js';
 import {
+  PUBLICATION_ACTIVE_GATE_HANDOFF_STATE,
   resolvePublicationActiveGateMembershipPublicationTarget,
 } from '../control-plane/publication-active-gate-handoff-contract.js';
 import {AdminControlSnapshotPart5} from './admin-control-snapshot-class-part-5.js';
@@ -68,6 +69,8 @@ const MEMBERSHIP_PUBLICATION_HANDOFF_CONVERGENCE_OPERATION =
   'active_gate_handoff';
 const MEMBERSHIP_PUBLICATION_HANDOFF_OUTCOME_STATE = Object.freeze({
   WRITE_DEFERRED: 'write_deferred',
+  TARGET_BLOCKED: 'target_blocked',
+  NO_CHANGE: 'no_change',
 });
 const MEMBERSHIP_PUBLICATION_HANDOFF_OUTCOME_REASON_COMMAND_ERROR =
   'owner_reconcile_error';
@@ -294,6 +297,20 @@ async function maybeReconcileAuthoritativeMembershipPublication(
     resolvePublicationActiveGateMembershipPublicationTarget(
       publicationActiveGateHandoff,
     );
+  if (membershipPublicationTarget.reconcileRequired !== true) {
+    const handoffState = membershipPublicationTarget.handoffContract?.state;
+    const outcomeState =
+      handoffState === PUBLICATION_ACTIVE_GATE_HANDOFF_STATE.COMPLETE ?
+        MEMBERSHIP_PUBLICATION_HANDOFF_OUTCOME_STATE.NO_CHANGE :
+        MEMBERSHIP_PUBLICATION_HANDOFF_OUTCOME_STATE.TARGET_BLOCKED;
+    return buildMembershipPublicationHandoffOutcome(
+      outcomeState,
+      {
+        target: membershipPublicationTarget,
+        enqueued: false,
+      },
+    );
+  }
   if (!membershipPublicationService) {
     return membershipPublicationTarget.reconcileRequired === true ?
       buildMembershipPublicationHandoffOutcome(

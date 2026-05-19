@@ -3,7 +3,7 @@
 <!-- work-package
 {
   "schema": "work-package-v1",
-  "status": "active",
+  "status": "done",
   "opened": "2026-05-19",
   "lane": "runtime-owner-boundary",
   "scenario": "rolling-restart",
@@ -20,7 +20,7 @@
     "npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-after-queue-drain-runtime-20260519T151451Z.report.json --markdown"
   ],
   "writeScope": [
-    "work/packages/active-20260519-topology-publication-active-gate-handoff-fixture-runtime.md",
+    "work/packages/done-20260519-topology-publication-active-gate-handoff-fixture-runtime.md",
     "work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md",
     "work/sprints/current-blocker.md",
     "work/sprints/current-blocker.json",
@@ -35,7 +35,7 @@
     "src/control-plane/membership-publication-coordinator-class-stage-3.js"
   ],
   "commitScope": [
-    "work/packages/active-20260519-topology-publication-active-gate-handoff-fixture-runtime.md",
+    "work/packages/done-20260519-topology-publication-active-gate-handoff-fixture-runtime.md",
     "work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md",
     "work/sprints/current-blocker.md",
     "work/sprints/current-blocker.json",
@@ -188,7 +188,10 @@
     ],
     "selectedChoice": "publication-active-gate-handoff-fixture-runtime",
     "nextAction": "Use the recorded focused implementation evidence to close this proof slice or open the bounded publication-owner successor; do not add review/fix sequencing unless fresh evidence changes the package scope."
-  }
+  },
+  "closed": "2026-05-19",
+  "commitAndPushLedgerRequired": true,
+  "successor": "work/packages/done-20260519-topology-publication-active-gate-handoff-outcome-diagnostics-runtime.md"
 }
 -->
 
@@ -290,7 +293,7 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 
 ## In Scope
 
-1. work/packages/active-20260519-topology-publication-active-gate-handoff-fixture-runtime.md
+1. work/packages/done-20260519-topology-publication-active-gate-handoff-fixture-runtime.md
 2. work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md
 3. work/sprints/current-blocker.md
 4. work/sprints/current-blocker.json
@@ -307,7 +310,7 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 - Intended minimum model: `gpt-5.3-codex`
 - Scope shape: `bounded-owner-runtime/current-frontier`
 - Output profile: `medium`
-- Owned files: `work/packages/active-20260519-topology-publication-active-gate-handoff-fixture-runtime.md`, `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md`, `work/sprints/current-blocker.md`, `work/sprints/current-blocker.json`, `work/model-ledger.jsonl`, `test/control-plane/membership-publication-coordinator-main-stage-2.js`
+- Owned files: `work/packages/done-20260519-topology-publication-active-gate-handoff-fixture-runtime.md`, `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md`, `work/sprints/current-blocker.md`, `work/sprints/current-blocker.json`, `work/model-ledger.jsonl`, `test/control-plane/membership-publication-coordinator-main-stage-2.js`
 - Forbidden files: `src/`
 - Frozen decisions: package scope and lane stay bounded unless explicitly escalated.
 - Escalation triggers: owned files expand beyond this package, runtime ownership changes, or representative scenario evidence changes.
@@ -370,3 +373,9 @@ Review agents may directly fix metadata-only package, sprint, tracker, current-b
 8. PASS - `node scripts/check-guideline-decision-boundaries.js test/control-plane/membership-publication-coordinator-main-stage-2.js` found `0` decision-boundary violations.
 9. PASS - `npm run audit:runtime-grammar:file -- test/control-plane/membership-publication-coordinator-main-stage-2.js` found `0` runtime-grammar-contract violations.
 10. PASS - Scoped `git diff --check` over package-owned files passed.
+
+## Commit And Push Ledger
+
+1. Focused package commit: 9d1f063bb5aa6b090303623258d5e7b7b1c9a51f
+2. Pushed to: origin/codex/pending-ack-eligibility-filter
+3. Commit contains only package-owned files/package-status/allowed sprint handoff: yes
