@@ -732,24 +732,20 @@ test(SELECTED_SNAPSHOT_SOURCE_TIMEOUT_RESET_TEST_NAME, async () => {
     });
   }
 
-  const firstCoverage = await cluster._probeControlSnapshotCoverage(
-    Date.now() + SNAPSHOT_REPLAY_TEST_DEADLINE_EXTENSION_MS,
-    SNAPSHOT_REPLAY_TEST_EXPECTED_NODE_IDS,
-  );
-  const recoveredCoverage = await cluster._probeControlSnapshotCoverage(
+  const coverage = await cluster._probeControlSnapshotCoverage(
     Date.now() + SNAPSHOT_REPLAY_TEST_DEADLINE_EXTENSION_MS,
     SNAPSHOT_REPLAY_TEST_EXPECTED_NODE_IDS,
   );
 
   assert.strictEqual(
-    firstCoverage.selectedSnapshotNodeId,
+    coverage.selectedSnapshotNodeId,
     SELECTED_SNAPSHOT_SOURCE_TIMEOUT_RESET_NODE_ID,
-    'first timeout should preserve the selected admin-ready source',
+    'selected timeout retry should preserve the selected admin-ready source',
   );
-  assert.match(
-    firstCoverage.selectedError,
-    /Admin API query timed out/u,
-    'first timeout should remain explicit in the current attempt',
+  assert.strictEqual(
+    coverage.selectedError,
+    null,
+    'selected-source retry should recover after the lane reset in the same attempt',
   );
   assert.deepStrictEqual(
     resetCalls,
@@ -760,16 +756,7 @@ test(SELECTED_SNAPSHOT_SOURCE_TIMEOUT_RESET_TEST_NAME, async () => {
     'selected snapshot timeout should reset only the snapshot lane',
   );
   assert.strictEqual(
-    recoveredCoverage.selectedSnapshotNodeId,
-    SELECTED_SNAPSHOT_SOURCE_TIMEOUT_RESET_NODE_ID,
-  );
-  assert.strictEqual(
-    recoveredCoverage.selectedError,
-    null,
-    'next selected-source attempt should recover after the lane reset',
-  );
-  assert.strictEqual(
-    recoveredCoverage.bestCoverageNodeCount,
+    coverage.bestCoverageNodeCount,
     SELECTED_SNAPSHOT_SOURCE_TIMEOUT_RESET_NODE_IDS.length,
   );
   assert.ok(
@@ -1785,8 +1772,8 @@ test('Unit: _probeControlSnapshotCoverage surfaces stringified publication diagn
         missingPublishedRecoveryActiveNodeIds: ['node-c'],
         recoveryProtocolState: 'publication_pending',
         priorityRecoveryReasonCodes: [
-          'priority_partitions_not_spread',
           'publication_epoch_pending',
+          'priority_partitions_not_spread',
         ],
         participationByNodeId: {
           'node-a': {
@@ -1949,8 +1936,8 @@ test('Unit: _probeControlSnapshotCoverage surfaces stringified publication diagn
         publicationStatus: 'OPEN',
         recoveryProtocolState: 'publication_pending',
         priorityRecoveryReasonCodes: [
-          'priority_partitions_not_spread',
           'publication_epoch_pending',
+          'priority_partitions_not_spread',
         ],
         pendingAckCount: 1,
         priorityRecoveryBlockedPartitionCount: 0,

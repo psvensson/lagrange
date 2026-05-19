@@ -27,6 +27,7 @@
     "work/sprints/current-blocker.json",
     "work/model-ledger.jsonl",
     "test/distributed/harness/cluster-segment-7.js",
+    "test/distributed/harness/cluster-segment-7-class-5.js",
     "test/distributed/harness/__tests__/cluster.test-part-5.js"
   ],
   "handoffFiles": [
@@ -56,6 +57,7 @@
     "work/sprints/current-blocker.json",
     "work/model-ledger.jsonl",
     "test/distributed/harness/cluster-segment-7.js",
+    "test/distributed/harness/cluster-segment-7-class-5.js",
     "test/distributed/harness/__tests__/cluster.test-part-5.js"
   ],
   "touchedFiles": [],

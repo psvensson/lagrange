@@ -13,16 +13,17 @@ Implementation slice: Run required runtime-owner-boundary sequencing, then imple
 Implementation files:
 
 1. `test/distributed/harness/cluster-segment-7.js`
-2. `test/distributed/harness/__tests__/cluster.test-part-5.js`
-3. `src/admin/admin-control-snapshot-class-part-1.js`
-4. `src/admin/admin-control-snapshot-class-part-2.js`
-5. `src/admin/admin-control-snapshot-class-part-6.js`
-6. `src/control-plane/control-plane-snapshot-owner.js`
-7. `src/control-plane/publication-active-gate-handoff-contract.js`
-8. `test/admin/admin-control-snapshot.test.js`
-9. `test/distributed/harness/cluster-segment-7.js`
-10. `test/distributed/harness/cluster-segment-7-class-5.js`
-11. `test/distributed/harness/__tests__/cluster.test-part-5.js`
+2. `test/distributed/harness/cluster-segment-7-class-5.js`
+3. `test/distributed/harness/__tests__/cluster.test-part-5.js`
+4. `src/admin/admin-control-snapshot-class-part-1.js`
+5. `src/admin/admin-control-snapshot-class-part-2.js`
+6. `src/admin/admin-control-snapshot-class-part-6.js`
+7. `src/control-plane/control-plane-snapshot-owner.js`
+8. `src/control-plane/publication-active-gate-handoff-contract.js`
+9. `test/admin/admin-control-snapshot.test.js`
+10. `test/distributed/harness/cluster-segment-7.js`
+11. `test/distributed/harness/cluster-segment-7-class-5.js`
+12. `test/distributed/harness/__tests__/cluster.test-part-5.js`
 
 Expected implementation delta: Reduce selected_snapshot_source_timeout, improve snapshot coverage above 0/5, migrate to a new owner boundary, or turn representative rolling-restart green.
 
@@ -239,7 +240,8 @@ Write scope:
 4. `work/sprints/current-blocker.json`
 5. `work/model-ledger.jsonl`
 6. `test/distributed/harness/cluster-segment-7.js`
-7. `test/distributed/harness/__tests__/cluster.test-part-5.js`
+7. `test/distributed/harness/cluster-segment-7-class-5.js`
+8. `test/distributed/harness/__tests__/cluster.test-part-5.js`
 
 Handoff files:
 
@@ -272,7 +274,8 @@ Commit scope:
 4. `work/sprints/current-blocker.json`
 5. `work/model-ledger.jsonl`
 6. `test/distributed/harness/cluster-segment-7.js`
-7. `test/distributed/harness/__tests__/cluster.test-part-5.js`
+7. `test/distributed/harness/cluster-segment-7-class-5.js`
+8. `test/distributed/harness/__tests__/cluster.test-part-5.js`
 
 Legacy touched files:
 

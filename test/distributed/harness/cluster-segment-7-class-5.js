@@ -190,30 +190,7 @@ class Cluster5 extends Cluster4 {
     ) => {
       let reachabilityDiagnostics = null;
       let reachabilityError = null;
-      const probeReachabilityDiagnostics = async () => {
-        if (typeof node.getReachabilityDiagnostics !== 'function') {
-          return;
-        }
-        try {
-          reachabilityDiagnostics = await withTimeout(
-            node.getReachabilityDiagnostics({
-              timeoutMs: reachabilityTimeoutMs,
-              skipBootstrapReadiness: true,
-            }),
-            reachabilityTimeoutMs,
-            'Control snapshot reachability probe timed out for ' + node.id,
-          );
-        } catch (error) {
-          reachabilityError = normalizeProbeError(error);
-        }
-      };
-      try {
-        const snapshotResult = await node.getControlSnapshot({
-          timeoutMs: snapshotTimeoutMs,
-          lane: ADMIN_SOCKET_LANE_SNAPSHOT,
-          forceRepair: options.forceRepair === true,
-          forceAuthoritativeRepair: options.forceRepair === true,
-        });
+      const buildSuccessfulSnapshotCoverageResult = (snapshotResult) => {
         const snapshotPayload =
           this._extractControlSnapshotPayload(snapshotResult);
         const snapshotSummary =
@@ -222,7 +199,6 @@ class Cluster5 extends Cluster4 {
           buildControlSnapshotObservationSummary(snapshotPayload);
         const snapshotDiagnostics =
           this._extractControlSnapshotCoverageDiagnostics(snapshotResult);
-        await probeReachabilityDiagnostics();
         const publicationConvergence =
           snapshotDiagnostics.publicationConvergence || null;
         const publicationConvergenceGate =
@@ -298,10 +274,58 @@ class Cluster5 extends Cluster4 {
           pendingAckNodeIds,
           missingPublishedNodeIds,
         };
-      } catch (error) {
-        const snapshotError = normalizeProbeError(error);
-        resetSnapshotLaneAfterTimeout(node, snapshotError);
+      };
+      const probeReachabilityDiagnostics = async () => {
+        if (typeof node.getReachabilityDiagnostics !== 'function') {
+          return;
+        }
+        try {
+          reachabilityDiagnostics = await withTimeout(
+            node.getReachabilityDiagnostics({
+              timeoutMs: reachabilityTimeoutMs,
+              skipBootstrapReadiness: true,
+            }),
+            reachabilityTimeoutMs,
+            'Control snapshot reachability probe timed out for ' + node.id,
+          );
+        } catch (error) {
+          reachabilityError = normalizeProbeError(error);
+        }
+      };
+      try {
+        const snapshotResult = await node.getControlSnapshot({
+          timeoutMs: snapshotTimeoutMs,
+          lane: ADMIN_SOCKET_LANE_SNAPSHOT,
+          forceRepair: options.forceRepair === true,
+          forceAuthoritativeRepair: options.forceRepair === true,
+        });
         await probeReachabilityDiagnostics();
+        return buildSuccessfulSnapshotCoverageResult(snapshotResult);
+      } catch (error) {
+        let snapshotError = normalizeProbeError(error);
+        const snapshotLaneReset = resetSnapshotLaneAfterTimeout(
+          node,
+          snapshotError,
+        );
+        await probeReachabilityDiagnostics();
+        if (
+          snapshotLaneReset === true &&
+          reachabilityDiagnostics?.adminReady === true &&
+          options.forceRepair !== true
+        ) {
+          try {
+            const retrySnapshotResult = await node.getControlSnapshot({
+              timeoutMs: snapshotTimeoutMs,
+              lane: ADMIN_SOCKET_LANE_SNAPSHOT,
+              forceRepair: false,
+              forceAuthoritativeRepair: false,
+            });
+            return buildSuccessfulSnapshotCoverageResult(retrySnapshotResult);
+          } catch (retryError) {
+            snapshotError = normalizeProbeError(retryError);
+            resetSnapshotLaneAfterTimeout(node, snapshotError);
+          }
+        }
         return {
           nodeId: node.id,
           error: snapshotError,
