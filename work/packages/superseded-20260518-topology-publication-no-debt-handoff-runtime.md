@@ -300,3 +300,9 @@ publication `OPEN`, missingPublished `4`, owner_reconcile_pending `4`, and four
 `operation_workflow_owner / rebalancer_handoff` retry-scheduled witnesses. Use a
 fresh causal architecture package from that artifact before another local
 runtime patch.
+
+## Commit And Push Ledger
+
+- [x] Focused package commit: `950d3818`
+- [x] Pushed to: `origin/codex/pending-ack-eligibility-filter`
+- [x] Commit contains only package-owned files/package-status/allowed sprint handoff: yes
