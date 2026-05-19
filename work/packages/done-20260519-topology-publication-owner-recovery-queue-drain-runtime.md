@@ -3,7 +3,7 @@
 <!-- work-package
 {
   "schema": "work-package-v1",
-  "status": "active",
+  "status": "done",
   "opened": "2026-05-19",
   "lane": "runtime-owner-boundary",
   "scenario": "rolling-restart",
@@ -20,7 +20,7 @@
     "npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-wake-queue-admission-20260519T135719Z.report.json"
   ],
   "writeScope": [
-    "work/packages/active-20260519-topology-publication-owner-recovery-queue-drain-runtime.md",
+    "work/packages/done-20260519-topology-publication-owner-recovery-queue-drain-runtime.md",
     "work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md",
     "work/sprints/current-blocker.md",
     "work/sprints/current-blocker.json",
@@ -40,7 +40,7 @@
     "src/control-plane/membership-publication-coordinator-class-stage-2.js"
   ],
   "commitScope": [
-    "work/packages/active-20260519-topology-publication-owner-recovery-queue-drain-runtime.md",
+    "work/packages/done-20260519-topology-publication-owner-recovery-queue-drain-runtime.md",
     "work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md",
     "work/sprints/current-blocker.md",
     "work/sprints/current-blocker.json",
@@ -63,12 +63,12 @@
   "representativeResidual": {
     "status": "red",
     "scenario": "rolling-restart",
-    "artifact": "test-output/reports/rolling-restart-after-wake-queue-admission-20260519T135719Z.report.json",
+    "artifact": "test-output/reports/rolling-restart-after-queue-drain-runtime-20260519T151451Z.report.json",
     "frontier": "publication_ack_convergence",
     "owner": "topology_publication_owner",
     "boundary": "publication_convergence",
     "dominantReason": "publication_pending",
-    "nextAction": "reconcile_owner_membership_publication"
+    "nextAction": "build_replayable_handoff_fixture"
   },
   "modelFitSplit": {
     "targetExecutionModel": "gpt-5.3-codex",
@@ -94,8 +94,8 @@
     "hypothesis": "Accepted owner recovery queue admission is observable, but the accepted owner-key item may not drain or preserve retry state after retryable distributed participant failures; the stalled wait evidence still reports ownerQueue=unknown while publication handoff remains pending.",
     "stopConditionCheck": "Before runtime edits, run npm run analyze:causal-model -- test-output/reports/rolling-restart-after-wake-queue-admission-20260519T135719Z.report.json and confirm canonical route remains topology_publication_owner / publication_convergence / publication_pending, priority residual splitRequired=false, and the handoff probe still requires reconcile_owner_membership_publication. Focused proof must show the accepted queue item drains or retains structured retry state after a retryable drain failure.",
     "expectedCausalModelChange": "Accepted owner recovery queue drain either reduces pendingReconcileCount and activeGateOwnerCohortMissingPublishedCount, or replaces ownerQueue=unknown with a structured retryable drain outcome that keeps publication owner retry state explicit.",
-    "representativeOutcome": "pending-before-rerun",
-    "causalDebt": "Fresh artifact test-output/reports/rolling-restart-after-wake-queue-admission-20260519T135719Z.report.json remains red at publication_ack_convergence / topology_publication_owner / publication_convergence / publication_pending with write_deferred#enqueued=true, snapshotCoverageNodeCount=3/5, pendingReconcileCount=2, activeGateOwnerCohortMissingPublishedCount=2, ownerQueue=unknown in the stalled wait evidence, and priority residual witnesses=3 with splitRequired=false.",
+    "representativeOutcome": "reduced",
+    "causalDebt": "Fresh artifact test-output/reports/rolling-restart-after-queue-drain-runtime-20260519T151451Z.report.json remains red at publication_ack_convergence / topology_publication_owner / publication_convergence / publication_pending, but the queue-drain residual reduced: priority residual witnesses are 0, pending owner reconcile is 0, activeGateOwnerCohortMissingPublishedCount is 0, membershipPublicationHandoffOutcome is absent, and the handoff probe now reports publication_ack_to_active_gate_reconcile_missing with required action build_replayable_handoff_fixture.",
     "crossBoundaryReview": "The causal gate selected this package as the bounded local runtime successor after the predecessor reduced wake queue admission. Startup active-gate, startup readiness, operation workflow, admission, and timeout paths remain frozen."
   },
   "scenarioCausalClosure": {
@@ -197,7 +197,10 @@
       "npm run work:current-blocker -- --write",
       "npm run work:validate -- --pre-impl"
     ]
-  }
+  },
+  "closed": "2026-05-19",
+  "commitAndPushLedgerRequired": true,
+  "successor": "work/packages/active-20260519-topology-publication-active-gate-handoff-fixture-runtime.md"
 }
 -->
 
@@ -304,7 +307,7 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 
 ## In Scope
 
-1. work/packages/active-20260519-topology-publication-owner-recovery-queue-drain-runtime.md
+1. work/packages/done-20260519-topology-publication-owner-recovery-queue-drain-runtime.md
 2. work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md
 3. work/sprints/current-blocker.md
 4. work/sprints/current-blocker.json
@@ -328,7 +331,7 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 - Intended minimum model: `gpt-5.3-codex`
 - Scope shape: `bounded-owner-runtime/current-frontier`
 - Output profile: `medium`
-- Owned files: `work/packages/active-20260519-topology-publication-owner-recovery-queue-drain-runtime.md`, `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md`, `work/sprints/current-blocker.md`, `work/sprints/current-blocker.json`, `work/model-ledger.jsonl`, `src/control-plane/membership-publication-coordinator-class-stage-3.js`, `src/workflow/owner-key-reconcile-queue.js`, `test/control-plane/membership-publication-coordinator-main-stage-2.js`, `test/workflow/owner-key-reconcile-queue.test.js`
+- Owned files: `work/packages/done-20260519-topology-publication-owner-recovery-queue-drain-runtime.md`, `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md`, `work/sprints/current-blocker.md`, `work/sprints/current-blocker.json`, `work/model-ledger.jsonl`, `src/control-plane/membership-publication-coordinator-class-stage-3.js`, `src/workflow/owner-key-reconcile-queue.js`, `test/control-plane/membership-publication-coordinator-main-stage-2.js`, `test/workflow/owner-key-reconcile-queue.test.js`
 - Forbidden files: `src/rebalancer/operation-workflow-owner.js`, `startup-active-gate-runtime`, `startup-readiness-runtime`, `admission-runtime`, `timeout-runtime`
 - Frozen decisions: package scope and lane stay bounded unless explicitly escalated.
 - Escalation triggers: owned files expand beyond this package, runtime ownership changes, or representative scenario evidence changes.
@@ -358,19 +361,19 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 Required when subagent sequencing is required. Each real subagent appends one checked checkpoint after every completed subtask; this combined ledger satisfies both Progress and Attempt proof when the item includes status, last checkpoint, parent action, evidence, and next or blocker.
 Review agents may directly fix metadata-only package, sprint, tracker, current-blocker, ledger, or handoff findings and record `review-fixed-metadata-only`; runtime, test, script, report, or non-metadata fixes still require a separate fix subagent.
 
-- [x] Agent Socrates (019e40a1-b072-73c1-9f3d-5e7b8cc123ec) review checkpoint: status: validated; last checkpoint: context and generated review prompt loaded; parent action: accepted; evidence: `npm run work:context` passed, `npm run work:subagent-prompt -- --role review --package work/packages/active-20260519-topology-publication-owner-recovery-queue-drain-runtime.md` passed, and package/sprint/current-blocker metadata was read; next: capped review probes.
-- [x] Agent Socrates (019e40a1-b072-73c1-9f3d-5e7b8cc123ec) review checkpoint: status: validated; last checkpoint: package doctor and scenario route complete; parent action: accepted; evidence: `npm run work:package:doctor -- --suggest work/packages/active-20260519-topology-publication-owner-recovery-queue-drain-runtime.md` failed only on missing Subagent Sequencing, Progress, and Attempt ledger proof; `npm run work:scenario-route -- test-output/reports/rolling-restart-after-wake-queue-admission-20260519T135719Z.report.json --owner topology_publication_owner --boundary publication_convergence --dominant-reason publication_pending --explain publication_ack_convergence` passed with route `topology_publication_owner / publication_convergence / publication_pending`, causal outcome `continue_local_fix`, stop `classified_local_blocker`, priority witnesses `3`, and splitRequired `false`; next: inspect metadata-only consistency.
+- [x] Agent Socrates (019e40a1-b072-73c1-9f3d-5e7b8cc123ec) review checkpoint: status: validated; last checkpoint: context and generated review prompt loaded; parent action: accepted; evidence: `npm run work:context` passed, `npm run work:subagent-prompt -- --role review --package work/packages/done-20260519-topology-publication-owner-recovery-queue-drain-runtime.md` passed, and package/sprint/current-blocker metadata was read; next: capped review probes.
+- [x] Agent Socrates (019e40a1-b072-73c1-9f3d-5e7b8cc123ec) review checkpoint: status: validated; last checkpoint: package doctor and scenario route complete; parent action: accepted; evidence: `npm run work:package:doctor -- --suggest work/packages/done-20260519-topology-publication-owner-recovery-queue-drain-runtime.md` failed only on missing Subagent Sequencing, Progress, and Attempt ledger proof; `npm run work:scenario-route -- test-output/reports/rolling-restart-after-wake-queue-admission-20260519T135719Z.report.json --owner topology_publication_owner --boundary publication_convergence --dominant-reason publication_pending --explain publication_ack_convergence` passed with route `topology_publication_owner / publication_convergence / publication_pending`, causal outcome `continue_local_fix`, stop `classified_local_blocker`, priority witnesses `3`, and splitRequired `false`; next: inspect metadata-only consistency.
 - [x] Agent Socrates (019e40a1-b072-73c1-9f3d-5e7b8cc123ec) review falsification checkpoint: status: validated; last checkpoint: wrong-slice check complete; parent action: accepted; wrong-slice evidence would be route owner, boundary, dominant reason, or causal outcome changing away from `topology_publication_owner / publication_convergence / publication_pending / continue_local_fix`, priority residual `splitRequired=true`, active-gate runtime promotion becoming allowed before publication owner progress, or proof requiring forbidden operation-workflow, readiness, active-gate runtime, admission, or timeout scope; evidence: scenario route stayed on the selected owner boundary with `classified_local_blocker`, priority witnesses `3`, and splitRequired `false`, while package and sprint metadata kept operation workflow, startup active-gate, readiness, admission, and timeout scope frozen; next: metadata-only repair.
-- [x] Agent Socrates (019e40a1-b072-73c1-9f3d-5e7b8cc123ec) review checkpoint: status: validated; last checkpoint: review-fixed-metadata-only repair recorded; parent action: accepted; evidence: added checked Subagent Progress And Attempt Ledger checkpoints, added Subagent Sequencing Ledger review/fix entries in `work/packages/active-20260519-topology-publication-owner-recovery-queue-drain-runtime.md`, and refreshed the stale superseded sprint architecture note in `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md`; next: package doctor and pre-implementation validation.
-- [x] Agent Socrates (019e40a1-b072-73c1-9f3d-5e7b8cc123ec) review checkpoint: status: validated; last checkpoint: package doctor and pre-implementation validation complete after metadata-only repair; parent action: accepted; evidence: `npm run work:package:doctor -- --suggest work/packages/active-20260519-topology-publication-owner-recovery-queue-drain-runtime.md` passed, and `npm run work:validate -- --pre-impl work/packages/active-20260519-topology-publication-owner-recovery-queue-drain-runtime.md` passed; next: final review handoff for implementation sequencing.
-- [x] Agent Lovelace (019e40a7-fdf2-7e42-b939-41bef3f02bff) implementation checkpoint: status: validated; last checkpoint: retryable owner queue drain state implemented; parent action: accepted; evidence: `node test/workflow/owner-key-reconcile-queue.test.js` passed with 95/95 assertions after first failing on missing retry state, `node test/control-plane/membership-publication-coordinator-main-stage-2.js` passed with 125/125 assertions after first failing on missing publication-owner retry state, `node scripts/check-guideline-literals.js src/control-plane/membership-publication-coordinator-class-stage-3.js src/workflow/owner-key-reconcile-queue.js` passed, `node scripts/check-guideline-decision-boundaries.js src/control-plane/membership-publication-coordinator-class-stage-3.js src/workflow/owner-key-reconcile-queue.js` passed, `npm run audit:runtime-grammar:file -- src/control-plane/membership-publication-coordinator-class-stage-3.js src/workflow/owner-key-reconcile-queue.js` passed, and `git diff --check -- work/packages/active-20260519-topology-publication-owner-recovery-queue-drain-runtime.md work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md work/sprints/current-blocker.md work/sprints/current-blocker.json work/model-ledger.jsonl src/control-plane/membership-publication-coordinator-class-stage-3.js src/workflow/owner-key-reconcile-queue.js test/control-plane/membership-publication-coordinator-main-stage-2.js test/workflow/owner-key-reconcile-queue.test.js` passed; next: representative rerun after focused commit.
+- [x] Agent Socrates (019e40a1-b072-73c1-9f3d-5e7b8cc123ec) review checkpoint: status: validated; last checkpoint: review-fixed-metadata-only repair recorded; parent action: accepted; evidence: added checked Subagent Progress And Attempt Ledger checkpoints, added Subagent Sequencing Ledger review/fix entries in `work/packages/done-20260519-topology-publication-owner-recovery-queue-drain-runtime.md`, and refreshed the stale superseded sprint architecture note in `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md`; next: package doctor and pre-implementation validation.
+- [x] Agent Socrates (019e40a1-b072-73c1-9f3d-5e7b8cc123ec) review checkpoint: status: validated; last checkpoint: package doctor and pre-implementation validation complete after metadata-only repair; parent action: accepted; evidence: `npm run work:package:doctor -- --suggest work/packages/done-20260519-topology-publication-owner-recovery-queue-drain-runtime.md` passed, and `npm run work:validate -- --pre-impl work/packages/done-20260519-topology-publication-owner-recovery-queue-drain-runtime.md` passed; next: final review handoff for implementation sequencing.
+- [x] Agent Lovelace (019e40a7-fdf2-7e42-b939-41bef3f02bff) implementation checkpoint: status: validated; last checkpoint: retryable owner queue drain state implemented; parent action: accepted; evidence: `node test/workflow/owner-key-reconcile-queue.test.js` passed with 95/95 assertions after first failing on missing retry state, `node test/control-plane/membership-publication-coordinator-main-stage-2.js` passed with 125/125 assertions after first failing on missing publication-owner retry state, `node scripts/check-guideline-literals.js src/control-plane/membership-publication-coordinator-class-stage-3.js src/workflow/owner-key-reconcile-queue.js` passed, `node scripts/check-guideline-decision-boundaries.js src/control-plane/membership-publication-coordinator-class-stage-3.js src/workflow/owner-key-reconcile-queue.js` passed, `npm run audit:runtime-grammar:file -- src/control-plane/membership-publication-coordinator-class-stage-3.js src/workflow/owner-key-reconcile-queue.js` passed, and `git diff --check -- work/packages/done-20260519-topology-publication-owner-recovery-queue-drain-runtime.md work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md work/sprints/current-blocker.md work/sprints/current-blocker.json work/model-ledger.jsonl src/control-plane/membership-publication-coordinator-class-stage-3.js src/workflow/owner-key-reconcile-queue.js test/control-plane/membership-publication-coordinator-main-stage-2.js test/workflow/owner-key-reconcile-queue.test.js` passed; next: representative rerun after focused commit.
 - [x] Agent Lovelace (019e40a7-fdf2-7e42-b939-41bef3f02bff) implementation falsification checkpoint: status: validated; last checkpoint: wrong-slice and representative-route guard complete; parent action: accepted; wrong-slice evidence would be route owner, boundary, dominant reason, or causal outcome changing away from `topology_publication_owner / publication_convergence / publication_pending / continue_local_fix`, priority residual `splitRequired=true`, proof requiring forbidden operation-workflow, readiness, active-gate runtime, admission, or timeout scope, or focused tests failing to preserve either owner reconcile progress or structured retry state after retryable drain failure; evidence: post-implementation `npm run work:scenario-route -- test-output/reports/rolling-restart-after-wake-queue-admission-20260519T135719Z.report.json --owner topology_publication_owner --boundary publication_convergence --dominant-reason publication_pending --explain publication_ack_convergence` kept route `topology_publication_owner / publication_convergence / publication_pending`, causal outcome `continue_local_fix`, stop `classified_local_blocker`, priority witnesses `3`, and splitRequired `false`; `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-wake-queue-admission-20260519T135719Z.report.json --handoff-probe` kept `requiredAction=reconcile_owner_membership_publication`, `runtimePromotionAllowed=false`, `ownerRecoveryQueue.handoffOutcome.state=write_deferred`, and `ownerRecoveryQueue.depth.state=unknown`; `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-wake-queue-admission-20260519T135719Z.report.json` kept outcome `continue_local_fix` with dominant failure class `publication_ack_blocked`; next: representative rerun after focused commit.
 
 ## Subagent Sequencing Ledger
 
-- [x] Review subagent recorded: Agent Socrates (019e40a1-b072-73c1-9f3d-5e7b8cc123ec) reviewed work/packages/active-20260519-topology-publication-owner-recovery-queue-drain-runtime.md; result fixes-required.
-- [x] Fix subagent recorded or explicitly not needed: review-fixed-metadata-only by Agent Socrates (019e40a1-b072-73c1-9f3d-5e7b8cc123ec) for work/packages/active-20260519-topology-publication-owner-recovery-queue-drain-runtime.md; scope: metadata-only package/sprint/ledger edits.
-- [x] Implementation subagent recorded: Agent Lovelace (019e40a7-fdf2-7e42-b939-41bef3f02bff) implemented work/packages/active-20260519-topology-publication-owner-recovery-queue-drain-runtime.md; parent revalidated focused proof: yes.
+- [x] Review subagent recorded: Agent Socrates (019e40a1-b072-73c1-9f3d-5e7b8cc123ec) reviewed work/packages/done-20260519-topology-publication-owner-recovery-queue-drain-runtime.md; result fixes-required.
+- [x] Fix subagent recorded or explicitly not needed: review-fixed-metadata-only by Agent Socrates (019e40a1-b072-73c1-9f3d-5e7b8cc123ec) for work/packages/done-20260519-topology-publication-owner-recovery-queue-drain-runtime.md; scope: metadata-only package/sprint/ledger edits.
+- [x] Implementation subagent recorded: Agent Lovelace (019e40a7-fdf2-7e42-b939-41bef3f02bff) implemented work/packages/done-20260519-topology-publication-owner-recovery-queue-drain-runtime.md; parent revalidated focused proof: yes.
 
 ## Validation
 
@@ -385,4 +388,16 @@ Review agents may directly fix metadata-only package, sprint, tracker, current-b
 9. PASS - Parent revalidated `node scripts/check-guideline-literals.js src/control-plane/membership-publication-coordinator-class-stage-3.js src/workflow/owner-key-reconcile-queue.js` with 0 new literal-guideline violations.
 10. PASS - Parent revalidated `node scripts/check-guideline-decision-boundaries.js src/control-plane/membership-publication-coordinator-class-stage-3.js src/workflow/owner-key-reconcile-queue.js` with 0 decision-boundary violations.
 11. PASS - Parent revalidated `npm run audit:runtime-grammar:file -- src/control-plane/membership-publication-coordinator-class-stage-3.js src/workflow/owner-key-reconcile-queue.js` with 0 runtime-grammar-contract violations.
-12. PASS - Parent revalidated `npm run work:package:doctor -- --suggest work/packages/active-20260519-topology-publication-owner-recovery-queue-drain-runtime.md`, `npm run work:validate -- --pre-impl work/packages/active-20260519-topology-publication-owner-recovery-queue-drain-runtime.md`, `npm run work:advance -- --check`, and commit-scope `git diff --check`.
+12. PASS - Parent revalidated `npm run work:package:doctor -- --suggest work/packages/done-20260519-topology-publication-owner-recovery-queue-drain-runtime.md`, `npm run work:validate -- --pre-impl work/packages/done-20260519-topology-publication-owner-recovery-queue-drain-runtime.md`, `npm run work:advance -- --check`, and commit-scope `git diff --check`.
+13. FAIL/REDUCED - Fresh representative rerun `node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-after-queue-drain-runtime-20260519T151451Z.report.json --verbose` failed, but moved queue-drain evidence to priority residual witnesses `0`, pending owner reconcile `0`, activeGateOwnerCohortMissingPublishedCount `0`, and membershipPublicationHandoffOutcome `absent`.
+14. PASS - `npm run work:evidence-summary -- test-output/reports/rolling-restart-after-queue-drain-runtime-20260519T151451Z.report.json` kept first frontier `publication_ack_convergence / topology_publication_owner / publication_convergence / publication_pending` and exposed active-gate snapshot timeout as downstream expected frontier.
+15. PASS - `npm run work:scenario-triage -- test-output/reports/rolling-restart-after-queue-drain-runtime-20260519T151451Z.report.json --markdown` kept route `topology_publication_owner / publication_convergence / publication_pending`, stop `classified_local_blocker`, and priority residual witnesses `0`.
+16. PASS - `npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-after-queue-drain-runtime-20260519T151451Z.report.json --markdown` found no priority recovery partition witnesses.
+17. PASS - `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-queue-drain-runtime-20260519T151451Z.report.json --handoff-probe` reported `publication_ack_to_active_gate_reconcile_missing` with required action `build_replayable_handoff_fixture`.
+18. PASS - `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-queue-drain-runtime-20260519T151451Z.report.json` kept outcome `continue_local_fix`, dominant failure class `publication_ack_blocked`, and stop `classified_local_blocker`.
+
+## Commit And Push Ledger
+
+1. Focused package commit: 15e36d6840b348d77d470f6ae3cd517201a7b723
+2. Pushed to: origin/codex/pending-ack-eligibility-filter
+3. Commit contains only package-owned files/package-status/allowed sprint handoff: yes

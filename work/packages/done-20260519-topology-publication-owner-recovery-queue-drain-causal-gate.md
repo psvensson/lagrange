@@ -13,7 +13,7 @@
   "boundary": "publication_convergence",
   "dominantReason": "publication_pending",
   "currentState": "Causal proof selected the accepted owner recovery queue drain/retry edge as the bounded local runtime successor while keeping topology_publication_owner / publication_convergence first.",
-  "nextAction": "Close this causal gate as classification-only and hand off to work/packages/active-20260519-topology-publication-owner-recovery-queue-drain-runtime.md for required runtime-owner-boundary review/fix/implementation sequencing.",
+  "nextAction": "Close this causal gate as classification-only and hand off to work/packages/done-20260519-topology-publication-owner-recovery-queue-drain-runtime.md for required runtime-owner-boundary review/fix/implementation sequencing.",
   "proof": [
     "npm run work:scenario-route -- test-output/reports/rolling-restart-after-wake-queue-admission-20260519T135719Z.report.json --owner topology_publication_owner --boundary publication_convergence --dominant-reason publication_pending --explain publication_ack_convergence",
     "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-wake-queue-admission-20260519T135719Z.report.json --handoff-probe",
@@ -165,7 +165,7 @@
   },
   "closed": "2026-05-19",
   "commitAndPushLedgerRequired": true,
-  "successor": "work/packages/active-20260519-topology-publication-owner-recovery-queue-drain-runtime.md"
+  "successor": "work/packages/done-20260519-topology-publication-owner-recovery-queue-drain-runtime.md"
 }
 -->
 
