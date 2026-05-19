@@ -19,6 +19,7 @@ import {
 import {normalizeControlPlanePublicationRow} from './system-row-normalizers.js';
 import {publicationRowSatisfiesDesiredState} from './control-plane-publication-merge.js';
 import {
+  hasPublicationActiveGateOwnerReconcileSignal,
   resolvePublicationActiveGateMembershipPublicationTarget,
 } from './publication-active-gate-handoff-contract.js';
 import {
@@ -482,6 +483,16 @@ function buildCriticalControlPlaneConvergenceOptions(
   };
 }
 
+function shouldRouteActiveGateMembershipPublicationReconcile(options = {}) {
+  return hasExplicitMembershipPublicationTarget(options) !== true &&
+    hasPublicationActiveGateOwnerReconcileSignal(
+      options[
+        ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_CONTEXT_FIELD
+          .PUBLICATION_ACTIVE_GATE_HANDOFF
+      ],
+    ) === true;
+}
+
 function resolveActiveGateMembershipPublicationErrorOutcome(error) {
   if (error?.activeGateMembershipPublicationReadbackFailed === true) {
     return ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_OUTCOME.WRITE_DEFERRED;
@@ -879,6 +890,17 @@ class MembershipPublicationCoordinatorClassStage2 extends
           CONTROL_PLANE_CRITICAL_CONVERGENCE_OPERATION.MEMBERSHIP_PUBLICATION,
       },
     );
+    if (shouldRouteActiveGateMembershipPublicationReconcile(
+      convergenceOptions,
+    )) {
+      return this.reconcileActiveGateMembershipPublication(
+        convergenceOptions[
+          ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_CONTEXT_FIELD
+            .PUBLICATION_ACTIVE_GATE_HANDOFF
+        ],
+        convergenceOptions,
+      );
+    }
     return this.publicationReconcileLane.run(
       {
         ownerKey,

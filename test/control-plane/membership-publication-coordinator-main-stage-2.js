@@ -27,6 +27,8 @@ import {
 } from '../../src/control-plane/control-plane-error-classification.js';
 import {
   PUBLICATION_ACTIVE_GATE_HANDOFF_NEXT_ACTION,
+  PUBLICATION_ACTIVE_GATE_HANDOFF_REASON,
+  PUBLICATION_ACTIVE_GATE_HANDOFF_STATE,
 } from '../../src/control-plane/publication-active-gate-handoff-contract.js';
 import {MEMBERSHIP_PUBLICATION_ACK_DEFERRAL_CONNECTION_STATE_CONNECTED, MEMBERSHIP_PUBLICATION_ACK_DEFERRAL_NOW_MS, MEMBERSHIP_PUBLICATION_ACK_DEFERRAL_PROCESS_DEAD_NODE_ID, MEMBERSHIP_PUBLICATION_ACK_DEFERRAL_PUBLICATION_EPOCH, MEMBERSHIP_PUBLICATION_ACK_DEFERRAL_PUBLISHED_NODE_ID, MEMBERSHIP_PUBLICATION_ACK_DEFERRAL_PUBLISHER_NODE_ID, MEMBERSHIP_PUBLICATION_ACK_DEFERRAL_STATUS_ACK_PENDING, MEMBERSHIP_PUBLICATION_TRIM_CONNECTION_STATE_READY, MEMBERSHIP_PUBLICATION_TRIM_STATUS_PUBLISHED, buildMembershipPublicationAckDeferralNodeRow, buildMembershipPublicationTrimEndpointRow, buildMembershipPublicationTrimServiceRow} from './membership-publication-coordinator-main-stage-1.js';
 
@@ -665,6 +667,90 @@ test('reconcileActiveGateMembershipPublication widens seed-only active-gate hand
       persistedRows.length > 0,
       true,
       'owner command should persist the widened publication row',
+    );
+  });
+
+test('reconcileClusterMembership consumes active-gate owner reconcile handoff',
+  async (t) => {
+    const latestPublicationRow = {
+      publication_id: PUBLICATION_CONVERGENCE_HANDOFF_TARGET_PUBLICATION_ID,
+      publication_kind: 'cluster_membership',
+      publication_epoch: PUBLICATION_CONVERGENCE_HANDOFF_TARGET_EPOCH,
+      status: CONTROL_PLANE_PUBLICATION_STATUS.OPEN,
+      published_active_node_ids: [
+        ...PUBLICATION_CONVERGENCE_HANDOFF_TARGET_PUBLISHED_NODE_IDS,
+      ],
+      required_ack_node_ids: [
+        ...PUBLICATION_CONVERGENCE_HANDOFF_TARGET_PUBLISHED_NODE_IDS,
+      ],
+      acknowledged_node_ids: [
+        ...PUBLICATION_CONVERGENCE_HANDOFF_TARGET_PUBLISHED_NODE_IDS,
+      ],
+      priority_partition_summary:
+        PUBLICATION_CONVERGENCE_AUTH_REFRESH_PRIORITY_SUMMARY,
+    };
+    const persistedRows = [];
+    const coordinator = new MembershipPublicationCoordinator({
+      nodeId: PUBLICATION_CONVERGENCE_HANDOFF_TARGET_NODE_IDS[0],
+      controlPlanePublicationsOwner: {
+        async listPublications() {
+          return {rows: [latestPublicationRow]};
+        },
+        async getPublication() {
+          return persistedRows[persistedRows.length - 1] ||
+            latestPublicationRow;
+        },
+        async upsertPublication(row) {
+          persistedRows.push(row);
+        },
+      },
+      systemTableCache: {
+        getAll(tableName) {
+          if (tableName === TABLES.CONTROL_PLANE_PUBLICATIONS) {
+            return [latestPublicationRow];
+          }
+          return [...PUBLICATION_CONVERGENCE_HANDOFF_TARGET_EMPTY_ROWS];
+        },
+      },
+      now: () => PUBLICATION_CONVERGENCE_HANDOFF_TARGET_NOW_MS,
+    });
+
+    const outcome = await coordinator.reconcileClusterMembership({
+      publicationActiveGateHandoff: {
+        publicationEpoch: PUBLICATION_CONVERGENCE_HANDOFF_TARGET_EPOCH,
+        state: PUBLICATION_ACTIVE_GATE_HANDOFF_STATE.PENDING,
+        reasonCode:
+          PUBLICATION_ACTIVE_GATE_HANDOFF_REASON.OWNER_RECONCILE_PENDING,
+        nextAction:
+          PUBLICATION_ACTIVE_GATE_HANDOFF_NEXT_ACTION
+            .RECONCILE_OWNER_MEMBERSHIP_PUBLICATION,
+        runtimePromotionAllowed: false,
+        expectedNodeIds: [
+          ...PUBLICATION_CONVERGENCE_HANDOFF_TARGET_NODE_IDS,
+        ],
+        publishedActiveNodeIds: [
+          ...PUBLICATION_CONVERGENCE_HANDOFF_TARGET_PUBLISHED_NODE_IDS,
+        ],
+        pendingReconcileNodeIds: [
+          ...PUBLICATION_CONVERGENCE_HANDOFF_TARGET_PENDING_NODE_IDS,
+        ],
+      },
+    });
+
+    t.equal(
+      outcome.publicationRow.status,
+      CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED,
+      'owner reconcile handoff should close the durable publication when the target is fully acknowledged',
+    );
+    t.same(
+      outcome.publicationRow.publishedActiveNodeIds,
+      [...PUBLICATION_CONVERGENCE_HANDOFF_TARGET_SORTED_NODE_IDS],
+      'normal owner reconcile should publish the full active-gate handoff cohort',
+    );
+    t.same(
+      persistedRows[0]?.published_active_node_ids,
+      [...PUBLICATION_CONVERGENCE_HANDOFF_TARGET_SORTED_NODE_IDS],
+      'owner ingress should persist the widened handoff publication',
     );
   });
 
