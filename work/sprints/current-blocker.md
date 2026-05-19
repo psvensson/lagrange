@@ -25,7 +25,7 @@ Stop rule: If proof keeps publication_pending unchanged with no concrete route d
 
 Sprint: `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md`
 
-Package: `work/packages/active-20260518-topology-publication-no-debt-handoff-runtime.md`
+Package: `work/packages/superseded-20260518-topology-publication-no-debt-handoff-runtime.md`
 
 Workflow lane: `causal-escalation`
 
@@ -129,7 +129,7 @@ Missing causal edge probe: `npm run analyze:topology-convergence -- test-output/
 
 Bounded progress proof: `Causal-escalation reconcile proof only; runtime files remain candidateRuntimeFiles until this package selects the next bounded progress mechanism.`
 
-Bounded progress proof artifact: `work/packages/active-20260518-topology-publication-no-debt-handoff-runtime.md and test-output/reports/rolling-restart-after-priority-observation-narrowing-20260518T184535Z.report.json`
+Bounded progress proof artifact: `work/packages/superseded-20260518-topology-publication-no-debt-handoff-runtime.md and test-output/reports/rolling-restart-after-priority-observation-narrowing-20260518T184535Z.report.json`
 
 Expected observable transition: `Classify as runtime successor, migrated owner boundary, architecture-gap, same-frontier stop, or representative-green after fresh proof.`
 
@@ -226,7 +226,7 @@ Gate next action: Run the causal proof ladder before adding runtime write scope.
 
 Write scope:
 
-1. `work/packages/active-20260518-topology-publication-no-debt-handoff-runtime.md`
+1. `work/packages/superseded-20260518-topology-publication-no-debt-handoff-runtime.md`
 2. `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md`
 3. `work/sprints/current-blocker.md`
 4. `work/sprints/current-blocker.json`
@@ -253,7 +253,7 @@ Candidate runtime files:
 
 Commit scope:
 
-1. `work/packages/active-20260518-topology-publication-no-debt-handoff-runtime.md`
+1. `work/packages/superseded-20260518-topology-publication-no-debt-handoff-runtime.md`
 2. `work/packages/done-20260518-topology-publication-remaining-owner-reconcile-runtime.md`
 3. `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md`
 4. `work/sprints/current-blocker.md`

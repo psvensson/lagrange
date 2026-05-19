@@ -133,7 +133,7 @@ Canonical state after the fresh rerun:
 ```text
 Representative artifact: test-output/reports/rolling-restart-after-priority-observation-narrowing-20260518T184535Z.report.json
 Visible first frontier: publication_ack_convergence / topology_publication_owner / publication_convergence / publication_pending in test-output/reports/rolling-restart-after-priority-observation-narrowing-20260518T184535Z.report.json.
-Active package: work/packages/active-20260518-topology-publication-no-debt-handoff-runtime.md
+Active package: work/packages/superseded-20260518-topology-publication-no-debt-handoff-runtime.md
 Active package owner: topology_publication_owner
 Active package boundary: publication_convergence
 Selected cause: publication_pending
@@ -143,7 +143,7 @@ Causal outcome: continue_local_fix
 Architecture gate: selected / causal-handoff-gate
 Expected delta: Close or migrate the no-debt publication_pending artifact: publicationConvergence is ready locally with missingPublished=0, pendingAck=0, active-gate disagreementNodes=0, but route evidence still marks publication_pending and the handoff probe reports publication_ack_to_active_gate_reconcile_missing.
 Current state: Fresh representative evidence is reduced but still red: active=4/5, snapshotCoverage=0/5, pendingAck=0, missingPublished=0, active-gate disagreementNodes=0, pendingReconcileCount=0, and publicationConvergence is ready in the scenario error while canonical route still marks publication_pending with handoff probe result publication_ack_to_active_gate_reconcile_missing.
-Allowed edits: work/packages/active-20260518-topology-publication-no-debt-handoff-runtime.md, work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md, work/sprints/current-blocker.md, work/sprints/current-blocker.json, work/model-ledger.jsonl
+Allowed edits: work/packages/superseded-20260518-topology-publication-no-debt-handoff-runtime.md, work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md, work/sprints/current-blocker.md, work/sprints/current-blocker.json, work/model-ledger.jsonl
 Candidate runtime files: src/control-plane/publication-recovery-evidence.js, src/control-plane/publication-recovery-gate.js, test/control-plane/publication-recovery-evidence.test.js, test/control-plane/publication-recovery-gate.test.js
 Forbidden edits: Do not edit publication runtime, startup active-gate runtime, operation workflow runtime, readiness, admission, handoff architecture, or timeout budgets unless this causal gate selects that route.
 Required latest proof: npm run work:package:route-after-rerun -- --artifact test-output/reports/rolling-restart-after-priority-observation-narrowing-20260518T184535Z.report.json --owner topology_publication_owner --boundary publication_convergence --dominant-reason publication_pending, npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-priority-observation-narrowing-20260518T184535Z.report.json --handoff-probe, npm run analyze:distributed-failure -- --report test-output/reports/rolling-restart-after-priority-observation-narrowing-20260518T184535Z.report.json

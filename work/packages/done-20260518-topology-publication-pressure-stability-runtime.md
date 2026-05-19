@@ -37,7 +37,7 @@
     "test-output/reports/rolling-restart-after-priority-observation-narrowing-20260518T184535Z.report.json",
     "test-output/reports/rolling-restart-after-pressure-stability-20260519T050912Z.report.json",
     "test-output/reports/.playback/rolling-restart-after-pressure-stability-20260519T050912Z/rolling-restart/triage-summary.md",
-    "work/packages/active-20260518-topology-publication-no-debt-handoff-runtime.md"
+    "work/packages/superseded-20260518-topology-publication-no-debt-handoff-runtime.md"
   ],
   "generatedFiles": [],
   "candidateRuntimeFiles": [],

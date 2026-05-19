@@ -3,52 +3,37 @@
 <!-- work-package
 {
   "schema": "work-package-v1",
-  "status": "active",
+  "status": "superseded",
   "opened": "2026-05-18",
   "lane": "causal-escalation",
   "scenario": "rolling-restart",
   "artifact": "test-output/reports/rolling-restart-after-priority-observation-narrowing-20260518T184535Z.report.json",
+  "supersededByArtifact": "test-output/reports/rolling-restart-after-pressure-stability-20260519T050912Z.report.json",
   "playback": "none",
   "owner": "topology_publication_owner",
   "boundary": "publication_convergence",
   "dominantReason": "publication_pending",
-  "currentState": "Fresh representative evidence is reduced but still red: active=4/5, snapshotCoverage=0/5, pendingAck=0, missingPublished=0, active-gate disagreementNodes=0, pendingReconcileCount=0, and publicationConvergence is ready in the scenario error while canonical route still marks publication_pending with handoff probe result publication_ack_to_active_gate_reconcile_missing.",
-  "nextAction": "Run a causal-escalation handoff gate: prove whether the no-debt publication_pending label is stale owner state, a missing publication-to-active-gate handoff fixture/contract edge, or a downstream active-gate snapshot coverage blocker before any runtime patch.",
+  "currentState": "Metadata-only supersession: the old no-debt handoff artifact was superseded by fresh representative test-output/reports/rolling-restart-after-pressure-stability-20260519T050912Z.report.json.",
+  "nextAction": "Do not perform runtime work in this superseded package; use the fresh pressure-stability representative artifact for successor routing.",
   "proof": [
     "npm run work:package:route-after-rerun -- --artifact test-output/reports/rolling-restart-after-priority-observation-narrowing-20260518T184535Z.report.json --owner topology_publication_owner --boundary publication_convergence --dominant-reason publication_pending",
     "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-priority-observation-narrowing-20260518T184535Z.report.json --handoff-probe",
     "npm run analyze:distributed-failure -- --report test-output/reports/rolling-restart-after-priority-observation-narrowing-20260518T184535Z.report.json"
   ],
   "writeScope": [
-    "work/packages/active-20260518-topology-publication-no-debt-handoff-runtime.md",
-    "work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md",
-    "work/sprints/current-blocker.md",
-    "work/sprints/current-blocker.json",
-    "work/model-ledger.jsonl"
+    "work/packages/superseded-20260518-topology-publication-no-debt-handoff-runtime.md"
   ],
   "handoffFiles": [
     "test-output/reports/rolling-restart-after-priority-observation-narrowing-20260518T184535Z.report.json",
+    "test-output/reports/rolling-restart-after-pressure-stability-20260519T050912Z.report.json",
     "work/packages/done-20260518-topology-publication-remaining-owner-reconcile-runtime.md",
     "work/packages/done-20260518-topology-publication-pending-owner-reconcile-runtime.md",
     "work/packages/done-20260518-topology-publication-unknown-no-debt-pending-runtime.md"
   ],
-  "generatedFiles": [
-    "work/sprints/current-blocker.md",
-    "work/sprints/current-blocker.json"
-  ],
-  "candidateRuntimeFiles": [
-    "src/control-plane/publication-recovery-evidence.js",
-    "src/control-plane/publication-recovery-gate.js",
-    "test/control-plane/publication-recovery-evidence.test.js",
-    "test/control-plane/publication-recovery-gate.test.js"
-  ],
+  "generatedFiles": [],
+  "candidateRuntimeFiles": [],
   "commitScope": [
-    "work/packages/active-20260518-topology-publication-no-debt-handoff-runtime.md",
-    "work/packages/done-20260518-topology-publication-remaining-owner-reconcile-runtime.md",
-    "work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md",
-    "work/sprints/current-blocker.md",
-    "work/sprints/current-blocker.json",
-    "work/model-ledger.jsonl"
+    "work/packages/superseded-20260518-topology-publication-no-debt-handoff-runtime.md"
   ],
   "modelFit": {
     "packageClass": "causal-escalation",
@@ -96,9 +81,9 @@
     "hypothesis": "The fresh no-debt publication_pending route is an oscillation/handoff decision, not an immediate runtime patch: producer debt is zero, active-gate disagreement is zero, and the handoff probe now detects publication_ack_to_active_gate_reconcile_missing.",
     "stopConditionCheck": "Use npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-priority-observation-narrowing-20260518T184535Z.report.json with route-after-rerun, handoff probe, distributed failure summary, and evidence summary before any runtime edits.",
     "expectedCausalModelChange": "Classify whether publication_pending is stale no-debt owner state, a missing handoff fixture/contract gap, or migrated downstream active-gate snapshot coverage pressure.",
-    "representativeOutcome": "pending-before-rerun",
-    "causalDebt": "Fresh artifact reports active=4/5, snapshotCoverage=0/5, publicationConvergence ready in the scenario error, pendingAckCount=0, missingPublishedCount=0, active-gate disagreementNodes=0, pendingReconcileCount=0, and handoff probe result publication_ack_to_active_gate_reconcile_missing while route-after-rerun still selects topology_publication_owner / publication_convergence / publication_pending.",
-    "crossBoundaryReview": "Required before implementation: compare producer publication state, active-gate snapshot coverage, and missing handoff edge before moving runtime files into writeScope."
+    "representativeOutcome": "same-frontier",
+    "causalDebt": "Old no-debt artifact reports active=4/5, snapshotCoverage=0/5, publicationConvergence ready in the scenario error, pendingAckCount=0, missingPublishedCount=0, active-gate disagreementNodes=0, pendingReconcileCount=0, and handoff probe result publication_ack_to_active_gate_reconcile_missing while route-after-rerun still selects topology_publication_owner / publication_convergence / publication_pending. It was superseded by fresh representative test-output/reports/rolling-restart-after-pressure-stability-20260519T050912Z.report.json.",
+    "crossBoundaryReview": "Not required in this superseded package because closure is metadata-only and runtime work is out of scope."
   },
   "representativeResidual": {
     "status": "reduced",
@@ -127,12 +112,12 @@
     "missingCausalEdge": "Determine whether no-debt publicationPending=true is stale owner evidence, a missing publication-to-active-gate reconcile fixture/contract edge, or a downstream active-gate owner migration.",
     "missingCausalEdgeProbe": "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-priority-observation-narrowing-20260518T184535Z.report.json --handoff-probe",
     "boundedProgressProof": "Causal-escalation reconcile proof only; runtime files remain candidateRuntimeFiles until this package selects the next bounded progress mechanism.",
-    "boundedProgressProofArtifact": "work/packages/active-20260518-topology-publication-no-debt-handoff-runtime.md and test-output/reports/rolling-restart-after-priority-observation-narrowing-20260518T184535Z.report.json",
+    "boundedProgressProofArtifact": "work/packages/superseded-20260518-topology-publication-no-debt-handoff-runtime.md and test-output/reports/rolling-restart-after-priority-observation-narrowing-20260518T184535Z.report.json",
     "expectedObservableTransition": "Classify as runtime successor, migrated owner boundary, architecture-gap, same-frontier stop, or representative-green after fresh proof.",
     "maxProgressBound": "one causal-escalation handoff gate before runtime owner-boundary implementation resumes",
     "sameFrontierFallback": "If proof keeps publication_pending unchanged with no concrete route decision, stop for architecture or human escalation instead of another local runtime patch.",
     "expectedNextFrontier": "runtime successor, migrated owner boundary, architecture-gap, human escalation, or representative green",
-    "resultClassification": "pending-before-probe",
+    "resultClassification": "same-frontier",
     "stopCondition": "continue-local-fix",
     "recentFrontierHistory": [
       "work/packages/done-20260518-topology-publication-unknown-no-debt-pending-runtime.md / topology_publication_owner / publication_convergence / same-frontier",
@@ -166,7 +151,9 @@
     ],
     "selectedChoice": "causal-handoff-gate",
     "nextAction": "Run the causal proof ladder before adding runtime write scope."
-  }
+  },
+  "closed": "2026-05-19",
+  "commitAndPushLedgerRequired": true
 }
 -->
 
@@ -290,13 +277,26 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 Required when subagent sequencing is required. Each real subagent appends one checked checkpoint after every completed subtask; this combined ledger satisfies both Progress and Attempt proof when the item includes status, last checkpoint, parent action, evidence, and next or blocker.
 Review agents may directly fix metadata-only package, sprint, tracker, current-blocker, ledger, or handoff findings and record `review-fixed-metadata-only`; runtime, test, script, report, or non-metadata fixes still require a separate fix subagent.
 
-- [ ] Agent <name> (<agent-id>) <role> checkpoint: status: started; last checkpoint: context loaded; parent action: pending; evidence: package, sprint, and handoff files read; next: first focused probe.
-- [ ] Agent <name> (<agent-id>) <role> checkpoint: status: running; last checkpoint: probe complete; parent action: pending; evidence: command and result; next: edit, validate, or blocker handoff.
-- [ ] Agent <name> (<agent-id>) <role> checkpoint: status: validated; last checkpoint: package proof refreshed; parent action: revalidated; evidence: commands and results; next: final handoff or successor action.
-- [ ] Agent <name> (<agent-id>) <role> recovery: status: superseded; last checkpoint: replaced interrupted or partial-unvalidated attempt; parent action: superseded; evidence: superseding proof; next: continue from clean checkpoint.
+Subagent sequencing is not required for this causal-escalation pure
+classification fast path. No checked subagent proof is used for closure.
+
+- [x] Agent Codex GPT-5 (`codex-gpt-5-20260519`) reviewed metadata-only supersession; status: validated; last checkpoint: package-only metadata repair; parent action: accepted; evidence: old no-debt artifact `test-output/reports/rolling-restart-after-priority-observation-narrowing-20260518T184535Z.report.json` is superseded by fresh representative `test-output/reports/rolling-restart-after-pressure-stability-20260519T050912Z.report.json`, representative outcome is `same-frontier`, and no runtime/test/sprint/current-blocker/model-ledger files are in scope; next: parent adds Commit And Push Ledger after focused commit.
 
 ## Validation
 
 1. npm run work:evidence-summary -- test-output/reports/rolling-restart-after-priority-observation-narrowing-20260518T184535Z.report.json
 2. npm run work:scenario-triage -- test-output/reports/rolling-restart-after-priority-observation-narrowing-20260518T184535Z.report.json --markdown
 3. npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-after-priority-observation-narrowing-20260518T184535Z.report.json --markdown
+4. `npm run work:package:route-after-rerun -- --artifact test-output/reports/rolling-restart-after-priority-observation-narrowing-20260518T184535Z.report.json --owner topology_publication_owner --boundary publication_convergence --dominant-reason publication_pending` - pass; old no-debt route selected local publication_convergence with zero priority residual witnesses.
+5. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-priority-observation-narrowing-20260518T184535Z.report.json --handoff-probe` - pass; old artifact detected `publication_ack_to_active_gate_reconcile_missing`.
+6. `npm run analyze:distributed-failure -- --report test-output/reports/rolling-restart-after-priority-observation-narrowing-20260518T184535Z.report.json` - pass; old artifact failed at active=4/5 and snapshotCoverage=0/5.
+7. `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-priority-observation-narrowing-20260518T184535Z.report.json` - pass; old artifact classified a local publication ACK blocker.
+
+Supersession note: this package's no-debt handoff artifact is no longer the
+latest representative evidence. The pressure-stability rerun
+`test-output/reports/rolling-restart-after-pressure-stability-20260519T050912Z.report.json`
+returned a different same-frontier publication_convergence shape with
+publication `OPEN`, missingPublished `4`, owner_reconcile_pending `4`, and four
+`operation_workflow_owner / rebalancer_handoff` retry-scheduled witnesses. Use a
+fresh causal architecture package from that artifact before another local
+runtime patch.

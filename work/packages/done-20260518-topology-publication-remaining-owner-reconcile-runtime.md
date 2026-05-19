@@ -341,7 +341,7 @@ Review agents may directly fix metadata-only package, sprint, tracker, current-b
 - Reduction: `pendingAckCount=0`, `missingPublishedCount=0`, `publicationActiveGateHandoffPendingReconcileCount=0`, active-gate disagreementNodes `1 -> 0`, active nodes `0/5 -> 4/5`.
 - Remaining route: `npm run work:package:route-after-rerun -- --artifact test-output/reports/rolling-restart-after-priority-observation-narrowing-20260518T184535Z.report.json --owner topology_publication_owner --boundary publication_convergence --dominant-reason publication_pending` still selects `topology_publication_owner / publication_convergence / publication_pending`.
 - Handoff probe: `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-priority-observation-narrowing-20260518T184535Z.report.json --handoff-probe` detects `publication_ack_to_active_gate_reconcile_missing`; next owner path is active-gate snapshot coverage, but runtime promotion remains false.
-- Classification: `reduced`; successor is `work/packages/active-20260518-topology-publication-no-debt-handoff-runtime.md`.
+- Classification: `reduced`; successor is `work/packages/superseded-20260518-topology-publication-no-debt-handoff-runtime.md`.
 
 ## Commit And Push Ledger
 
