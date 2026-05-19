@@ -139,7 +139,7 @@ Active package owner: topology_publication_owner
 Active package boundary: publication_convergence
 Selected cause: publication_pending
 Required action: Implement one bounded owner recovery queue drain/retry runtime slice: prove an accepted write_deferred owner recovery queue item either drains to owner reconcile progress or preserves structured retry state after a retryable distributed participant failure, without patching downstream active-gate, readiness, operation-workflow, admission, or timeout paths.
-Representative status: unknown
+Representative status: red
 Causal outcome: continue_local_fix
 Architecture gate: selected / owner-recovery-queue-drain-runtime-successor
 Expected delta: Accepted owner recovery queue admission remains observable and the drain path either reduces pendingReconcileCount and activeGateOwnerCohortMissingPublishedCount, emits a structured retryable owner queue drain outcome instead of ownerQueue=unknown, migrates the owner boundary, turns rolling-restart green, or records architecture/human stop.
@@ -156,19 +156,19 @@ Allowed stop modes: representative-green, migrated, reduced, same-frontier, clas
 2026-05-19 review note: this older decision ledger is superseded for the active
 slice by the selected package-level architecture gate and Current Edge Card
 above. The current selected route is
-`owner-recovery-wake-queue-runtime-successor` for `topology_publication_owner /
+`owner-recovery-queue-drain-runtime-successor` for `topology_publication_owner /
 publication_convergence / publication_pending` from
-`test-output/reports/rolling-restart-after-multi-node-reconcile-20260519T105449Z.report.json`.
+`test-output/reports/rolling-restart-after-wake-queue-admission-20260519T135719Z.report.json`.
 
-Status: selected after the operation-residual decision gate closed and opened
-the active runtime successor.
+Status: selected after the queue-drain causal gate closed and opened the
+active runtime successor.
 
 Current decision: the architecture gate remains selected because the
 publication frontier stayed first, active-gate runtime promotion is false, and
 operation workflow residual witnesses are non-splitting. The active
 runtime-owner-boundary package must now run required sequencing before one
-bounded publication-owned owner recovery wake queue admission/merge runtime
-slice for the active-gate publication handoff `write_deferred` shape.
+bounded publication-owned owner recovery queue drain/retry runtime slice for
+the accepted active-gate publication handoff `write_deferred` shape.
 
 The `same-frontier` result belongs to the predecessor handoff package
 `work/packages/done-20260518-rolling-restart-publication-active-gate-handoff-oscillation-after-fresh-evidence.md`.
