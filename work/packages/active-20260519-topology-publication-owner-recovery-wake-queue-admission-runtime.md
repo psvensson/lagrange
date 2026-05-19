@@ -1,49 +1,52 @@
-# Topology Publication Owner Recovery Wake Queue Causal Gate
+# Topology Publication Owner Recovery Wake Queue Admission Runtime
 
 <!-- work-package
 {
   "schema": "work-package-v1",
   "status": "active",
   "opened": "2026-05-19",
-  "lane": "causal-escalation",
+  "lane": "runtime-owner-boundary",
   "scenario": "rolling-restart",
   "artifact": "test-output/reports/rolling-restart-after-multi-node-reconcile-20260519T105449Z.report.json",
   "playback": "none",
   "owner": "topology_publication_owner",
   "boundary": "publication_convergence",
   "dominantReason": "publication_pending",
-  "currentState": "Causal proof kept topology_publication_owner / publication_convergence as the selected local-fix route and selected the owner recovery wake queue admission path as the bounded runtime successor.",
-  "nextAction": "Open a bounded runtime-owner-boundary successor for src/control-plane/membership-publication-coordinator-class-stage-3.js and the stage-2 handoff outcome path, then run required review/fix/implementation sequencing before runtime edits.",
+  "currentState": "The causal-escalation gate selected owner recovery wake queue admission/merge as the bounded runtime successor for membershipPublicationHandoffOutcomeEnqueued=false while keeping topology_publication_owner / publication_convergence as the first frontier.",
+  "nextAction": "Implement one bounded owner recovery wake queue admission runtime slice for the active-gate publication handoff write_deferred path, proving accepted retry merge/admission is observable without patching downstream active-gate, readiness, operation-workflow, admission, or timeout paths.",
   "proof": [
     "npm run work:evidence-summary -- test-output/reports/rolling-restart-after-multi-node-reconcile-20260519T105449Z.report.json",
     "npm run work:scenario-triage -- test-output/reports/rolling-restart-after-multi-node-reconcile-20260519T105449Z.report.json --markdown",
     "npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-after-multi-node-reconcile-20260519T105449Z.report.json --markdown"
   ],
   "writeScope": [
-    "work/packages/active-20260519-topology-publication-owner-recovery-wake-queue-causal-gate.md",
+    "work/packages/active-20260519-topology-publication-owner-recovery-wake-queue-admission-runtime.md",
     "work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md",
     "work/sprints/current-blocker.md",
     "work/sprints/current-blocker.json",
-    "work/model-ledger.jsonl"
+    "work/model-ledger.jsonl",
+    "src/control-plane/membership-publication-coordinator-class-stage-3.js",
+    "src/control-plane/membership-publication-coordinator-class-stage-2.js",
+    "test/control-plane/membership-publication-coordinator-main-stage-2.js"
   ],
   "handoffFiles": [
+    "work/packages/active-20260519-topology-publication-owner-recovery-wake-queue-causal-gate.md",
     "work/packages/done-20260519-topology-publication-remaining-node-reconcile-runtime.md",
     "work/packages/done-20260519-topology-publication-remaining-node-causal-gate.md",
     "work/packages/done-20260519-topology-publication-multi-node-reconcile-runtime.md",
     "test-output/reports/rolling-restart-after-multi-node-reconcile-20260519T105449Z.report.json"
   ],
   "generatedFiles": [],
-  "candidateRuntimeFiles": [
-    "src/control-plane/membership-publication-coordinator-class-stage-3.js",
-    "src/control-plane/membership-publication-coordinator-class-stage-2.js",
-    "test/control-plane/membership-publication-coordinator-main-stage-2.js"
-  ],
+  "candidateRuntimeFiles": [],
   "commitScope": [
-    "work/packages/active-20260519-topology-publication-owner-recovery-wake-queue-causal-gate.md",
+    "work/packages/active-20260519-topology-publication-owner-recovery-wake-queue-admission-runtime.md",
     "work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md",
     "work/sprints/current-blocker.md",
     "work/sprints/current-blocker.json",
-    "work/model-ledger.jsonl"
+    "work/model-ledger.jsonl",
+    "src/control-plane/membership-publication-coordinator-class-stage-3.js",
+    "src/control-plane/membership-publication-coordinator-class-stage-2.js",
+    "test/control-plane/membership-publication-coordinator-main-stage-2.js"
   ],
   "modelFit": {
     "packageClass": "runtime-owner-boundary",
@@ -57,7 +60,7 @@
   },
   "modelFitSplit": {
     "targetExecutionModel": "gpt-5.3-codex",
-    "allowedDecisionDepth": "planning and route selection; split executable children before implementation",
+    "allowedDecisionDepth": "single owner-boundary execution after higher-model route selection",
     "safeToExecuteWhen": [
       "owner, boundary, write scope, forbidden scope, proof, and kill rule stay as declared",
       "the executor does not need to choose architecture, migrate ownership, or reinterpret representative evidence",
@@ -69,36 +72,26 @@
       "the implementation needs to decide system behavior instead of executing a named local mechanism"
     ],
     "childPackageCandidates": [
-      "Use this package for route selection, owner/boundary decisions, and stop rules.",
-      "Create Spark-safe mechanical or test-only children once execution is unambiguous.",
-      "Create a gpt-5.4 single-file-runtime child only after the runtime owner file is selected."
+      "Split mechanical cleanup into mechanical-maintenance / gpt-5.3-codex-spark.",
+      "Split focused tests or fixtures into test-only-proof / gpt-5.3-codex-spark.",
+      "Split one same-owner hypothesis into bounded-experiment / gpt-5.3-codex-spark.",
+      "Keep cross-file owner runtime integration in this package unless it contracts to one runtime file."
     ]
   },
-  "representativeResidual": {
-    "status": "classification-only",
-    "scenario": "rolling-restart",
-    "artifact": "test-output/reports/rolling-restart-after-multi-node-reconcile-20260519T105449Z.report.json",
-    "frontier": "topology_publication_owner / publication_convergence",
-    "owner": "topology_publication_owner",
-    "boundary": "publication_convergence",
-    "dominantReason": "publication_pending",
-    "nextAction": "Open a bounded runtime-owner-boundary successor for src/control-plane/membership-publication-coordinator-class-stage-3.js and the stage-2 handoff outcome path, then run required review/fix/implementation sequencing before runtime edits."
-  },
   "causalGovernance": {
-    "hypothesis": "The remaining enqueue=false write_deferred handoff is no longer proven to be package-owned stage-2 publication writer debt; it may be the owner recovery wake queue admission or merge contract that decides whether the retry is accepted.",
-    "stopConditionCheck": "Before any runtime patch, run npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-multi-node-reconcile-20260519T105449Z.report.json and prove whether the stage-3 owner recovery wake queue path is the next bounded successor, an owner-boundary migration, an architecture gap, or a human stop. Runtime files stay in candidateRuntimeFiles until this gate selects them.",
-    "expectedCausalModelChange": "Selected owner recovery wake queue admission as the concrete successor route for membershipPublicationHandoffOutcomeEnqueued=false; runtime files remain candidate-only in this gate and move to the successor package.",
-    "representativeOutcome": "classification-only",
+    "hypothesis": "The remaining write_deferred handoff is publication-convergence debt in the owner recovery wake queue admission/merge path: an accepted merge may currently be reported as membershipPublicationHandoffOutcomeEnqueued=false, hiding the bounded retry mechanism from active-gate handoff evidence.",
+    "stopConditionCheck": "Before runtime edits, run npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-multi-node-reconcile-20260519T105449Z.report.json and confirm the route remains topology_publication_owner / publication_convergence / publication_pending. After implementation, focused proof must show accepted owner recovery wake queue admission or merge before representative rerun.",
+    "expectedCausalModelChange": "Accepted owner retry admission/merge becomes observable for the write_deferred publication handoff, moving membershipPublicationHandoffOutcomeEnqueued=false or producing a clear pressure rejection outcome.",
+    "representativeOutcome": "pending-before-rerun",
     "causalDebt": "Fresh artifact test-output/reports/rolling-restart-after-multi-node-reconcile-20260519T105449Z.report.json remains red at publication_ack_convergence / topology_publication_owner / publication_convergence / publication_pending with pendingReconcileCount=1, activeGateOwnerCohortMissingPublishedCount=1, runtimePromotionAllowed=false, and priority residual witnesses=0.",
-    "crossBoundaryReview": "The predecessor runtime package exhausted its declared write scope: stage-2 already attempts bounded visible writes and returns write_deferred, while the remaining failed edge points at the stage-3 owner recovery wake queue admission/merge path. Frontier oscillation validation requires this causal-escalation gate before another local runtime patch."
+    "crossBoundaryReview": "The causal gate selected this bounded runtime successor after the predecessor proved stage-2 already reaches write_deferred and the remaining failed edge points at stage-3 owner recovery wake queue admission/merge. Downstream active-gate, readiness, operation-workflow, admission, and timeout paths stay frozen."
   },
   "scenarioCausalClosure": {
-    "referenceScenarioOrProbe": "rolling-restart remaining one-node publication target after owner reconcile runtime handoff",
+    "referenceScenarioOrProbe": "rolling-restart remaining one-node publication target after owner recovery wake queue causal gate",
     "phaseChain": [
       "multi-node owner reconcile runtime reduced pendingReconcileCount from 4 to 1",
-      "remaining-node causal gate selected one bounded topology publication owner runtime successor",
       "remaining-node runtime package found package-owned stage-2 code already reaches write_deferred",
-      "the next unproven edge is owner recovery wake queue admission/merge visibility for membershipPublicationHandoffOutcomeEnqueued=false"
+      "causal-escalation gate selected owner recovery wake queue admission/merge as the bounded runtime successor"
     ],
     "currentFirstFrontier": "publication_ack_convergence / topology_publication_owner / publication_convergence / publication_pending in test-output/reports/rolling-restart-after-multi-node-reconcile-20260519T105449Z.report.json.",
     "knownDownstreamBlockers": [
@@ -111,69 +104,51 @@
       "runtimePromotionAllowed=false",
       "priority recovery residual witnesses=0 with splitRequired=false"
     ],
-    "missingCausalEdge": "The causal proof keeps publication convergence as a local-fix route and selects the owner recovery wake queue admission/merge path as the next bounded runtime successor.",
+    "missingCausalEdge": "Prove whether owner recovery wake queue admission/merge accepts the write_deferred publication handoff retry and exposes that accepted retry in the handoff outcome.",
     "missingCausalEdgeProbe": "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-multi-node-reconcile-20260519T105449Z.report.json --handoff-probe",
-    "boundedProgressProof": "Focused proof selected stage-3 owner recovery wake queue admission as the runtime successor while keeping downstream active-gate, readiness, operation-workflow, admission, and timeout paths frozen.",
+    "boundedProgressProof": "Focused runtime proof must show accepted owner recovery wake queue admission or merge for the handoff retry, or a pressure rejection that keeps retry state explicit.",
     "boundedProgressProofArtifact": "test-output/reports/rolling-restart-after-multi-node-reconcile-20260519T105449Z.report.json",
-    "expectedObservableTransition": "Open a bounded runtime-owner-boundary successor that can prove accepted owner recovery wake queue admission/merge for membershipPublicationHandoffOutcomeEnqueued=false.",
-    "maxProgressBound": "one causal-escalation gate before another local runtime patch",
-    "sameFrontierFallback": "Do not open another local runtime package on the same unchanged artifact until this gate records the selected route.",
-    "expectedNextFrontier": "runtime successor package for owner recovery wake queue admission",
-    "resultClassification": "classification-only",
+    "expectedObservableTransition": "membershipPublicationHandoffOutcomeEnqueued=false moves to an accepted retry/merge signal, pendingReconcileCount=1 clears, ownership migrates, representative evidence turns green, or architecture/human stop is recorded.",
+    "maxProgressBound": "one bounded runtime-owner-boundary package before rerun or renewed causal escalation",
+    "sameFrontierFallback": "If focused proof cannot move the owner recovery wake queue admission signal, stop instead of patching downstream active-gate symptoms.",
+    "expectedNextFrontier": "representative green, reduced publication handoff frontier, migrated owner boundary, or architecture/human stop",
+    "resultClassification": "pending-before-probe",
     "stopCondition": "continue-local-fix",
     "recentFrontierHistory": [
       "work/packages/done-20260519-topology-publication-same-frontier-architecture-gate.md / topology_publication_owner / publication_convergence / same-frontier",
       "work/packages/done-20260519-topology-publication-operation-residual-decision-gate.md / topology_publication_owner / publication_convergence / successor-selected",
-      "work/packages/done-20260519-topology-publication-open-owner-reconcile-runtime.md / topology_publication_owner / publication_convergence / reduced",
       "work/packages/done-20260519-topology-publication-multi-node-reconcile-runtime.md / topology_publication_owner / publication_convergence / reduced",
-      "work/packages/done-20260519-topology-publication-remaining-node-causal-gate.md / topology_publication_owner / publication_convergence / selected-runtime-successor",
-      "work/packages/done-20260519-topology-publication-remaining-node-reconcile-runtime.md / topology_publication_owner / publication_convergence / scope-exhausted"
+      "work/packages/done-20260519-topology-publication-remaining-node-reconcile-runtime.md / topology_publication_owner / publication_convergence / architecture-gap",
+      "work/packages/active-20260519-topology-publication-owner-recovery-wake-queue-causal-gate.md / topology_publication_owner / publication_convergence / selected-runtime-successor"
     ],
-    "oscillationCheck": "The previous runtime package did not change representative metrics and identified a required file outside its write scope; this package is a causal gate, not another local runtime patch.",
-    "handoffInvariant": "Operation workflow, startup active-gate runtime, startup readiness, admission, and timeout budgets remain frozen unless this gate records a supported owner-boundary migration."
+    "oscillationCheck": "This runtime package is allowed only because the causal-escalation gate selected the owner recovery wake queue admission successor after the prior runtime scope was exhausted.",
+    "handoffInvariant": "Operation workflow, startup active-gate runtime, startup readiness, admission, and timeout budgets remain frozen unless fresh representative evidence migrates ownership."
   },
   "architectureDecisionGate": {
     "status": "selected",
-    "trigger": "architecture-gap",
+    "trigger": "frontier-oscillation",
     "triggerEvidence": [
-      "remaining-node runtime package exhausted its write scope without runtime edits",
+      "causal-escalation gate selected owner-recovery-wake-queue-runtime-successor",
       "handoff probe keeps membershipPublicationHandoffOutcomeState=write_deferred and membershipPublicationHandoffOutcomeEnqueued=false",
-      "candidate owner recovery wake queue file is outside the predecessor package write scope",
-      "frontier oscillation validation requires a causal-escalation gate before another local runtime patch"
+      "causal model keeps outcome continue_local_fix and first critical path publication_ack_convergence",
+      "priority residual witnesses remain 0 with splitRequired=false"
     ],
     "choices": [
       {
-        "id": "owner-recovery-wake-queue-causal-proof",
-        "summary": "Use this causal-escalation package to prove whether the stage-3 owner recovery wake queue admission/merge path is the next runtime successor.",
-        "route": "architecture-package",
-        "proof": [
-          "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-multi-node-reconcile-20260519T105449Z.report.json --handoff-probe",
-          "npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-multi-node-reconcile-20260519T105449Z.report.json"
-        ]
-      },
-      {
         "id": "owner-recovery-wake-queue-runtime-successor",
-        "summary": "Open a bounded runtime successor only if the causal proof selects membership-publication stage-3 owner recovery wake queue admission as the next owned mechanism.",
+        "summary": "Implement the bounded owner recovery wake queue admission/merge path for the active-gate publication handoff write_deferred outcome.",
         "route": "continue-local-proof",
         "proof": [
-          "npm run work:package:route-after-rerun -- --artifact test-output/reports/rolling-restart-after-multi-node-reconcile-20260519T105449Z.report.json --owner topology_publication_owner --boundary publication_convergence --dominant-reason publication_pending",
-          "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-multi-node-reconcile-20260519T105449Z.report.json --handoff-probe"
-        ]
-      },
-      {
-        "id": "human-escalation",
-        "summary": "Stop for human direction if causal proof cannot distinguish queue admission, owner-boundary migration, or architecture contract debt.",
-        "route": "human-escalation",
-        "proof": [
+          "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-multi-node-reconcile-20260519T105449Z.report.json --handoff-probe",
           "npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-multi-node-reconcile-20260519T105449Z.report.json"
         ]
       }
     ],
     "selectedChoice": "owner-recovery-wake-queue-runtime-successor",
-    "nextAction": "Close this causal gate after opening a bounded runtime-owner-boundary successor for owner recovery wake queue admission."
+    "nextAction": "Run required review/fix/implementation sequencing, then implement the bounded owner recovery wake queue admission runtime slice."
   },
   "classificationEfficiency": {
-    "defaultMode": "separate-package-approved",
+    "defaultMode": "inline-gate-default",
     "separatePackageReason": "successor-selection",
     "artifactBudget": "one-artifact",
     "proofCommandBudget": "two-or-three-canonical-commands",
@@ -194,7 +169,7 @@
     "routeCausalOutcome": "continue_local_fix",
     "stopMode": "classified_local_blocker",
     "nextLane": "runtime-owner-boundary",
-    "expectedDelta": "Select whether the remaining owner recovery wake queue admission path is a valid bounded successor, an owner-boundary migration, an architecture gap, or human stop before any new local runtime patch.",
+    "expectedDelta": "Prove accepted owner recovery wake queue admission or merge for the active-gate publication handoff write_deferred path so membershipPublicationHandoffOutcomeEnqueued=false moves, then clear pendingReconcileCount=1 and activeGateOwnerCohortMissingPublishedCount=1, migrate the owner boundary, turn rolling-restart green, or trigger architecture/human stop.",
     "requiredRefreshCommands": [
       "npm run work:package:route-after-rerun -- --artifact test-output/reports/rolling-restart-after-multi-node-reconcile-20260519T105449Z.report.json --owner topology_publication_owner --boundary publication_convergence --dominant-reason publication_pending",
       "update Sprint Strategy Brief and Current Edge Card from the route result",
@@ -207,19 +182,19 @@
 
 ## Why
 
-The remaining package-owned runtime slice stopped at a write_deferred handoff
-with `membershipPublicationHandoffOutcomeEnqueued=false`. This package owns the
-causal decision before `membership-publication-coordinator-class-stage-3.js`
-can become runtime write scope.
+The previous runtime package reached `write_deferred` but still reported
+`membershipPublicationHandoffOutcomeEnqueued=false`. The causal gate selected
+the owner recovery wake queue admission/merge path as the next bounded
+publication owner runtime successor.
 
 ## Scope Basis
 
-AGPL rolling-restart release-gate closure work. Runtime files are candidate
-scope only until this causal gate selects a successor route.
+AGPL rolling-restart release-gate closure work. Runtime changes stay limited
+to the membership publication owner queue admission and handoff outcome path.
 
 ## Workflow Lane
 
-- Selected lane: `causal-escalation`
+- Selected lane: `runtime-owner-boundary`
 - Why this lane is sufficient: owner, boundary, core logic brief, and proof ladder are bounded to this package.
 - Escalation trigger to a heavier lane: runtime ownership, shared contract, or representative scenario evidence changes.
 
@@ -236,7 +211,7 @@ scope only until this causal gate selects a successor route.
 
 | Signal | Normalized value | Owner interpretation | Emitted outcome | Expected delta | Disproof probe |
 | --- | --- | --- | --- | --- | --- |
-| route owner/boundary | topology_publication_owner / publication_convergence / publication_pending | topology_publication_owner owns this decision before downstream consumers reinterpret it | Run a causal escalation gate for the remaining active-gate publication handoff write_deferred enqueue=false edge, proving whether src/control-plane/membership-publication-coordinator-class-stage-3.js should enter a successor runtime package. | Select whether the remaining owner recovery wake queue admission path is a valid bounded successor, an owner-boundary migration, an architecture gap, or human stop before any new local runtime patch. | npm run work:evidence-summary -- test-output/reports/rolling-restart-after-multi-node-reconcile-20260519T105449Z.report.json |
+| route owner/boundary | topology_publication_owner / publication_convergence / publication_pending | topology_publication_owner owns this decision before downstream consumers reinterpret it | Implement one bounded owner recovery wake queue admission runtime slice for the active-gate publication handoff write_deferred path, proving accepted retry merge/admission is observable without patching downstream active-gate, readiness, operation-workflow, admission, or timeout paths. | Prove accepted owner recovery wake queue admission or merge for the active-gate publication handoff write_deferred path so membershipPublicationHandoffOutcomeEnqueued=false moves, then clear pendingReconcileCount=1 and activeGateOwnerCohortMissingPublishedCount=1, migrate the owner boundary, turn rolling-restart green, or trigger architecture/human stop. | npm run work:evidence-summary -- test-output/reports/rolling-restart-after-multi-node-reconcile-20260519T105449Z.report.json |
 | scope boundary | src/rebalancer/operation-workflow-owner.js; startup-active-gate-runtime; startup-readiness-runtime; admission-runtime; timeout-runtime | proof that needs forbidden scope means this package is the wrong slice | stop, split, or migrate owner boundary | no widened runtime scope inside this package | npm run work:advance -- --check |
 
 - Anti-symptom rationale: This package changes or classifies topology_publication_owner / publication_convergence directly; it does not patch downstream symptoms or widen forbidden scope.
@@ -252,22 +227,15 @@ scope only until this causal gate selects a successor route.
 - Architecture review: Before runtime edits, confirm whether this is still a local owner-boundary route, an owner-boundary migration, an architecture/contract gap, or a human route.
 - Competing hypotheses: publication_pending is real owner debt; the visible symptom is downstream lag; instrumentation or stale evidence is misleading; a different owner boundary owns the next move.
 - Pre-edit focused probe: `npm run work:evidence-summary -- test-output/reports/rolling-restart-after-multi-node-reconcile-20260519T105449Z.report.json`
-- Success metrics: Select whether the remaining owner recovery wake queue admission path is a valid bounded successor, an owner-boundary migration, an architecture gap, or human stop before any new local runtime patch.; at least one concrete metric, count, frontier, migration, or representative-green condition must move.
+- Success metrics: Prove accepted owner recovery wake queue admission or merge for the active-gate publication handoff write_deferred path so membershipPublicationHandoffOutcomeEnqueued=false moves, then clear pendingReconcileCount=1 and activeGateOwnerCohortMissingPublishedCount=1, migrate the owner boundary, turn rolling-restart green, or trigger architecture/human stop.; at least one concrete metric, count, frontier, migration, or representative-green condition must move.
 - Representative rerun: `npm run work:package:route-after-rerun -- --artifact test-output/reports/rolling-restart-after-multi-node-reconcile-20260519T105449Z.report.json --owner topology_publication_owner --boundary publication_convergence --dominant-reason publication_pending`
 - Kill rule: If fresh representative evidence returns the same frontier and dominant reason with no concrete metric reduction, stop for architecture or human escalation instead of opening another local patch.
 
 
-## Classification-Only Fast Path
-
-- Runtime, test, script, and report paths stay out of `writeScope` and `commitScope` until fresh evidence promotes implementation.
-- Keep possible implementation files in `candidateRuntimeFiles` only.
-- Subagent sequencing is optional while the package remains classification-only and no implementation write scope is present.
-- Use 2-3 canonical proof commands, then close and rerun evidence instead of adding more package ceremony.
-
 ## Expected Representative Delta
 
 - Baseline artifact: `test-output/reports/rolling-restart-after-multi-node-reconcile-20260519T105449Z.report.json`
-- Expected delta: Select whether the remaining owner recovery wake queue admission path is a valid bounded successor, an owner-boundary migration, an architecture gap, or human stop before any new local runtime patch.
+- Expected delta: Prove accepted owner recovery wake queue admission or merge for the active-gate publication handoff write_deferred path so membershipPublicationHandoffOutcomeEnqueued=false moves, then clear pendingReconcileCount=1 and activeGateOwnerCohortMissingPublishedCount=1, migrate the owner boundary, turn rolling-restart green, or trigger architecture/human stop.
 - Local proof class: focused owner or diagnostic proof only; it is not representative-green proof.
 - Representative proof class: fresh representative rerun or canonical route-after-rerun result.
 - Stop if unchanged: same-frontier with no concrete metric or shape reduction triggers architecture or human escalation instead of another local patch.
@@ -285,7 +253,7 @@ scope only until this causal gate selects a successor route.
 
 ## Classification Efficiency
 
-- Default mode: `separate-package-approved`
+- Default mode: `inline-gate-default`
 - Separate package reason: `successor-selection`
 - Evidence budget: `one-artifact`; `two-or-three-canonical-commands`
 - Decision record: Record classification in the current package or sprint edge card; open a separate classifier only for material route, owner, boundary, stop-condition, tracker-truth, or successor-selection changes.
@@ -314,11 +282,14 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 
 ## In Scope
 
-1. work/packages/active-20260519-topology-publication-owner-recovery-wake-queue-causal-gate.md
+1. work/packages/active-20260519-topology-publication-owner-recovery-wake-queue-admission-runtime.md
 2. work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md
 3. work/sprints/current-blocker.md
 4. work/sprints/current-blocker.json
 5. work/model-ledger.jsonl
+6. src/control-plane/membership-publication-coordinator-class-stage-3.js
+7. src/control-plane/membership-publication-coordinator-class-stage-2.js
+8. test/control-plane/membership-publication-coordinator-main-stage-2.js
 
 ## Out Of Scope
 
@@ -334,7 +305,7 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 - Intended minimum model: `gpt-5.3-codex`
 - Scope shape: `bounded-owner-runtime/current-frontier`
 - Output profile: `medium`
-- Owned files: `work/packages/active-20260519-topology-publication-owner-recovery-wake-queue-causal-gate.md`, `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md`, `work/sprints/current-blocker.md`, `work/sprints/current-blocker.json`, `work/model-ledger.jsonl`
+- Owned files: `work/packages/active-20260519-topology-publication-owner-recovery-wake-queue-admission-runtime.md`, `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md`, `work/sprints/current-blocker.md`, `work/sprints/current-blocker.json`, `work/model-ledger.jsonl`, `src/control-plane/membership-publication-coordinator-class-stage-3.js`, `src/control-plane/membership-publication-coordinator-class-stage-2.js`, `test/control-plane/membership-publication-coordinator-main-stage-2.js`
 - Forbidden files: `src/rebalancer/operation-workflow-owner.js`, `startup-active-gate-runtime`, `startup-readiness-runtime`, `admission-runtime`, `timeout-runtime`
 - Frozen decisions: package scope and lane stay bounded unless explicitly escalated.
 - Escalation triggers: owned files expand beyond this package, runtime ownership changes, or representative scenario evidence changes.
@@ -344,7 +315,7 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 ## Model-Fit Split
 
 - Target executor: `gpt-5.3-codex`
-- Allowed decision depth: planning and route selection; split executable children before implementation
+- Allowed decision depth: single owner-boundary execution after higher-model route selection
 - Safe to execute when:
 1. owner, boundary, write scope, forbidden scope, proof, and kill rule stay as declared
 2. the executor does not need to choose architecture, migrate ownership, or reinterpret representative evidence
@@ -354,9 +325,10 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 2. proof requires forbidden scope, cross-owner reasoning, or architecture route selection
 3. the implementation needs to decide system behavior instead of executing a named local mechanism
 - Candidate lower-model child packages:
-1. Use this package for route selection, owner/boundary decisions, and stop rules.
-2. Create Spark-safe mechanical or test-only children once execution is unambiguous.
-3. Create a gpt-5.4 single-file-runtime child only after the runtime owner file is selected.
+1. Split mechanical cleanup into mechanical-maintenance / gpt-5.3-codex-spark.
+2. Split focused tests or fixtures into test-only-proof / gpt-5.3-codex-spark.
+3. Split one same-owner hypothesis into bounded-experiment / gpt-5.3-codex-spark.
+4. Keep cross-file owner runtime integration in this package unless it contracts to one runtime file.
 
 ## Subagent Progress And Attempt Ledger
 
