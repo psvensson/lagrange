@@ -84,6 +84,14 @@ const TEST_PACKAGE_READY_CONTENT = [
   '      `work/packages/active-20260507-test-package.md`; parent revalidated focused proof: yes.',
   '',
 ].join('\n');
+const TEST_PACKAGE_EXECUTION_EVIDENCE_READY_CONTENT = [
+  '# Test Package',
+  '',
+  '## Execution Evidence',
+  '',
+  '- [x] implementation: status: validated; evidence: npm test -- test/example.test.js; parent revalidated focused proof: yes; next: closure.',
+  '',
+].join('\n');
 const TEST_PACKAGE_FIRST_IN_SPRINT_CONTENT = [
   '# Test Package',
   '',
@@ -541,7 +549,7 @@ test('work context advertises triage commands before raw artifact reads',
         'workflow_progress as first frontier',
     ));
     t.ok(rendered.includes('Stop condition: continue-local-fix'));
-    t.ok(rendered.includes('Next required subagent role: review'));
+    t.ok(rendered.includes('Next required subagent role: none'));
     t.ok(
       rendered.indexOf(SECTION_THEORY_IMPLEMENTATION) <
         rendered.indexOf('## Current Blocker'),
@@ -607,18 +615,61 @@ test('work context reports the next required subagent role', (t) => {
     TEST_PACKAGE_PATH,
   );
 
-  t.equal(missingLedger.role, 'review');
-  t.match(missingLedger.status, /Ledger missing/u);
+  t.equal(missingLedger.role, 'none');
+  t.match(missingLedger.status, /direct implementation may proceed/u);
   t.equal(reviewOnly.role, 'fix');
   t.match(reviewOnly.status, /not-needed/u);
   t.equal(ready.role, 'none');
-  t.match(ready.status, /implementation proof recorded/u);
+  t.match(ready.status, /Implementation proof recorded/u);
   t.equal(firstInSprint.role, 'none');
-  t.match(firstInSprint.status, /implementation proof recorded/u);
+  t.match(firstInSprint.status, /Implementation proof recorded/u);
   t.equal(localSession.role, 'review');
   t.match(localSession.status, /Review proof missing/u);
   t.equal(reviewFixedMetadata.role, 'none');
-  t.match(reviewFixedMetadata.status, /implementation proof recorded/u);
+  t.match(reviewFixedMetadata.status, /Implementation proof recorded/u);
+  t.end();
+});
+
+test('work context treats execution evidence as implementation proof', (t) => {
+  const status = buildSubagentSequencingStatus(
+    TEST_PACKAGE_EXECUTION_EVIDENCE_READY_CONTENT,
+    TEST_PACKAGE_PATH,
+  );
+
+  t.equal(status.role, 'none');
+  t.match(status.status, /Implementation proof recorded/u);
+  t.end();
+});
+
+test('work context treats placeholder-only legacy ledgers as no process blocker',
+  (t) => {
+    const status = buildSubagentSequencingStatus([
+      '# Test Package',
+      '',
+      '## Subagent Sequencing Ledger',
+      '',
+      '- [ ] Review subagent recorded: Agent <name> (<agent-id>) reviewed <package>.',
+      '',
+    ].join('\n'));
+
+    t.equal(status.role, 'none');
+    t.match(status.status, /direct implementation may proceed/u);
+    t.end();
+  });
+
+test('work context hides template placeholder checklist residue', async (t) => {
+  const lines = await buildContextLines(TEST_BLOCKER, [
+    '# Test Package',
+    '',
+    '## Execution Evidence',
+    '',
+    '- [ ] implementation: status: <validated>; evidence: <commands>; next: <closure>.',
+    '',
+  ].join('\n'));
+  const rendered = lines.join('\n');
+
+  t.ok(rendered.includes('No open checklist items found in package.'));
+  t.notOk(rendered.includes('evidence: <commands>'));
   t.end();
 });
 

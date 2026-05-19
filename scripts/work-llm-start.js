@@ -34,8 +34,7 @@ const PATH_UNKNOWN = 'unknown';
 const TITLE = '# LLM Start';
 const STATUS_ACTIVE = 'active';
 const ACTIVE_PACKAGE_FILE_PATTERN = /^active-.+\.md$/u;
-const CURRENT_BLOCKER_REPAIR_COMMAND =
-  'npm run work:current-blocker -- --write';
+const CURRENT_BLOCKER_REPAIR_COMMAND = 'npm run work:repair';
 
 function normalizeText(value) {
   return String(value || EMPTY_TEXT).trim();

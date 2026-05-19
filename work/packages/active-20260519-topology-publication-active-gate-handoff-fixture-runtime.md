@@ -12,8 +12,8 @@
   "owner": "topology_publication_owner",
   "boundary": "publication_convergence",
   "dominantReason": "publication_pending",
-  "currentState": "Scaffolded from representative evidence for publication_ack_convergence.",
-  "nextAction": "Build a replayable handoff fixture for publication_ack_to_active_gate_reconcile_missing and prove whether the publication owner emits the active-gate reconcile handoff or preserves an explicit owner outcome.",
+  "currentState": "Focused replay fixture proves the no-debt publication_pending shape emits a publication active-gate owner reconcile handoff, and the coordinator preserves an explicit target_blocked owner outcome for the empty target without enqueueing downstream recovery work.",
+  "nextAction": "Close this package as a focused same-frontier proof slice, then open a bounded topology_publication_owner / publication_convergence successor to surface the replay-proved handoff contract or target_blocked owner outcome in representative diagnostics before downstream active-gate/readiness edits.",
   "proof": [
     "npm run work:evidence-summary -- test-output/reports/rolling-restart-after-queue-drain-runtime-20260519T151451Z.report.json",
     "npm run work:scenario-triage -- test-output/reports/rolling-restart-after-queue-drain-runtime-20260519T151451Z.report.json --markdown",
@@ -116,8 +116,8 @@
     "hypothesis": "Queue-drain runtime reduced the accepted owner-recovery queue residual, but the publication owner still lacks a replayable proof for the publication_ack_to_active_gate_reconcile_missing edge before downstream active-gate evidence can progress.",
     "stopConditionCheck": "Before runtime edits, run npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-queue-drain-runtime-20260519T151451Z.report.json and npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-queue-drain-runtime-20260519T151451Z.report.json --handoff-probe, then confirm requiredAction=build_replayable_handoff_fixture. Focused proof must build or identify the handoff fixture and prove whether publication owner emits the active-gate reconcile handoff or preserves an explicit owner outcome.",
     "expectedCausalModelChange": "The missing publication_ack_to_active_gate_reconcile edge becomes replayable and classifies into a bounded publication-owner runtime successor, owner-boundary migration, architecture stop, human stop, or representative-green outcome.",
-    "representativeOutcome": "pending-before-rerun",
-    "causalDebt": "Fresh artifact test-output/reports/rolling-restart-after-queue-drain-runtime-20260519T151451Z.report.json remains red at publication_ack_convergence / topology_publication_owner / publication_convergence / publication_pending. Queue-drain residuals are reduced: priority residual witnesses are 0, pending owner reconcile is 0, activeGateOwnerCohortMissingPublishedCount is 0, membershipPublicationHandoffOutcome is absent, and handoff probe resultClassification=publication_ack_to_active_gate_reconcile_missing with requiredAction=build_replayable_handoff_fixture.",
+    "representativeOutcome": "same-frontier",
+    "causalDebt": "Fresh artifact test-output/reports/rolling-restart-after-queue-drain-runtime-20260519T151451Z.report.json remains red at publication_ack_convergence / topology_publication_owner / publication_convergence / publication_pending. Queue-drain residuals are reduced: priority residual witnesses are 0, pending owner reconcile is 0, activeGateOwnerCohortMissingPublishedCount is 0, membershipPublicationHandoffOutcome is absent, and handoff probe resultClassification=publication_ack_to_active_gate_reconcile_missing with requiredAction=build_replayable_handoff_fixture. Focused fixture now proves the no-debt publication_pending replay emits a publication active-gate handoff contract and the coordinator preserves target_blocked / expected_cohort_unavailable instead of enqueuing downstream owner recovery work; the unchanged artifact still lacks that surfaced handoff contract.",
     "crossBoundaryReview": "Startup active-gate, startup readiness, operation workflow, admission, and timeout paths remain frozen until the publication-owner handoff edge is replayable or ownership migrates."
   },
   "scenarioCausalClosure": {
@@ -143,11 +143,11 @@
     "missingCausalEdgeProbe": "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-queue-drain-runtime-20260519T151451Z.report.json --handoff-probe",
     "boundedProgressProof": "Build or identify a replayable handoff fixture and prove whether the publication owner emits the active-gate reconcile handoff or preserves an explicit owner outcome.",
     "boundedProgressProofArtifact": "test-output/reports/rolling-restart-after-queue-drain-runtime-20260519T151451Z.report.json",
-    "expectedObservableTransition": "The handoff fixture proves a publication-owner runtime successor, owner-boundary migration, architecture/human stop, or representative-green route before downstream active-gate symptoms are edited.",
+    "expectedObservableTransition": "Focused fixture proved a publication-owner same-frontier successor: the no-debt publication_pending replay emits an owner reconcile handoff, then normalizes to a target_blocked owner outcome because the representative replay has no expected cohort. Representative evidence remains unchanged until a successor surfaces that contract/outcome.",
     "maxProgressBound": "one fixture/runtime-owner-boundary package before rerun or renewed causal escalation",
     "sameFrontierFallback": "If the handoff fixture cannot prove the missing edge or an explicit owner outcome, stop for architecture or human escalation instead of editing downstream active-gate/readiness paths.",
-    "expectedNextFrontier": "runtime successor selected, owner boundary migrated, architecture/human stop, or representative green",
-    "resultClassification": "pending-before-probe",
+    "expectedNextFrontier": "bounded publication-owner projection/runtime successor or architecture/human stop before downstream active-gate edits",
+    "resultClassification": "same-frontier",
     "stopCondition": "continue-local-fix",
     "recentFrontierHistory": [
       "work/packages/done-20260519-topology-publication-same-frontier-architecture-gate.md / topology_publication_owner / publication_convergence / same-frontier",
@@ -187,7 +187,7 @@
       }
     ],
     "selectedChoice": "publication-active-gate-handoff-fixture-runtime",
-    "nextAction": "Run required review/fix/implementation sequencing, then build the replayable publication-owner handoff fixture."
+    "nextAction": "Use the recorded focused implementation evidence to close this proof slice or open the bounded publication-owner successor; do not add review/fix sequencing unless fresh evidence changes the package scope."
   }
 }
 -->
@@ -332,18 +332,41 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 3. Split one same-owner hypothesis into bounded-experiment / gpt-5.3-codex-spark.
 4. Keep cross-file owner runtime integration in this package unless it contracts to one runtime file.
 
+## Focused Fixture Result
+
+- Replay fixture: `reconcileClusterMembership preserves target-blocked active-gate handoff replay` in `test/control-plane/membership-publication-coordinator-main-stage-2.js`.
+- Producer proof: no-debt `publicationPending=true`, `recoveryProtocolState=unpublished_observation`, pending ACK count `0`, missing published count `0`, and priority spread `false` emit a publication active-gate handoff contract with `state=pending`, `reasonCode=owner_reconcile_pending`, `nextAction=reconcile_owner_membership_publication`, `runtimePromotionAllowed=false`, and no pending reconcile nodes.
+- Owner outcome proof: routing that replay through `reconcileClusterMembership({publicationActiveGateHandoff})` preserves an explicit owner outcome: `state=target_blocked`, target `reconcileRequired=false`, nested handoff `state=unavailable`, `reasonCode=expected_cohort_unavailable`, `nextAction=observe_owner_handoff`, and owner recovery enqueue count `0`.
+- Classification: this package proved the missing edge is replayable and classifies to an explicit publication-owner outcome for the empty-target replay. It did not promote runtime scope because `src/` is forbidden in this package.
+- Successor boundary: surface the replay-proved handoff contract or `target_blocked` owner outcome in representative diagnostics/evidence before editing downstream startup active-gate, startup readiness, operation workflow, admission, or timeout paths.
+
+## Execution Evidence
+
+- [x] implementation: status: validated; evidence: focused replay fixture, route-after-rerun, handoff probe, evidence summary, scenario triage, priority residual extractor, decision-boundary guard, runtime grammar audit, and scoped diff check passed; parent revalidated focused proof: yes; next: close this package or open the bounded publication-owner successor.
+
 ## Subagent Progress And Attempt Ledger
 
 Required when subagent sequencing is required. Each real subagent appends one checked checkpoint after every completed subtask; this combined ledger satisfies both Progress and Attempt proof when the item includes status, last checkpoint, parent action, evidence, and next or blocker.
 Review agents may directly fix metadata-only package, sprint, tracker, current-blocker, ledger, or handoff findings and record `review-fixed-metadata-only`; runtime, test, script, report, or non-metadata fixes still require a separate fix subagent.
 
-- [ ] Agent <name> (<agent-id>) <role> checkpoint: status: started; last checkpoint: context loaded; parent action: pending; evidence: package, sprint, and handoff files read; next: first focused probe.
-- [ ] Agent <name> (<agent-id>) <role> checkpoint: status: running; last checkpoint: probe complete; parent action: pending; evidence: command and result; next: edit, validate, or blocker handoff.
-- [ ] Agent <name> (<agent-id>) <role> checkpoint: status: validated; last checkpoint: package proof refreshed; parent action: revalidated; evidence: commands and results; next: final handoff or successor action.
-- [ ] Agent <name> (<agent-id>) <role> recovery: status: superseded; last checkpoint: replaced interrupted or partial-unvalidated attempt; parent action: superseded; evidence: superseding proof; next: continue from clean checkpoint.
+- [x] Agent Hypatia (019e40db-d1f4-7a70-960f-275407e6a609) explorer checkpoint: status: validated; last checkpoint: fixture pattern inspection complete; parent action: accepted; evidence: identified the replay fixture in `test/control-plane/membership-publication-coordinator-main-stage-2.js`, confirmed the no-debt publication pending contract rules in `src/control-plane/publication-active-gate-handoff-contract.js`, and recommended assertions for emitted handoff plus `target_blocked` owner outcome; next: parent local proof and package classification.
+- [x] Parent implementation checkpoint: status: validated; last checkpoint: focused replay fixture and proof ladder complete; parent action: revalidated; evidence: `node test/control-plane/membership-publication-coordinator-main-stage-2.js` passed with `128/128` assertions, `npm run work:package:route-after-rerun -- --artifact test-output/reports/rolling-restart-after-queue-drain-runtime-20260519T151451Z.report.json --owner topology_publication_owner --boundary publication_convergence --dominant-reason publication_pending` kept the route on `topology_publication_owner / publication_convergence / publication_pending`, `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-queue-drain-runtime-20260519T151451Z.report.json --handoff-probe` kept `publication_ack_to_active_gate_reconcile_missing`, `npm run work:evidence-summary -- test-output/reports/rolling-restart-after-queue-drain-runtime-20260519T151451Z.report.json`, `npm run work:scenario-triage -- test-output/reports/rolling-restart-after-queue-drain-runtime-20260519T151451Z.report.json --markdown`, `npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-after-queue-drain-runtime-20260519T151451Z.report.json --markdown`, `node scripts/check-guideline-decision-boundaries.js test/control-plane/membership-publication-coordinator-main-stage-2.js`, `npm run audit:runtime-grammar:file -- test/control-plane/membership-publication-coordinator-main-stage-2.js`, and scoped `git diff --check` passed; next: close package or open bounded successor for surfaced handoff outcome.
+
+## Subagent Sequencing Ledger
+
+- [x] Review subagent recorded: not required by `npm run work:advance -- --check`; focused explorer Agent Hypatia (019e40db-d1f4-7a70-960f-275407e6a609) inspected fixture pattern and assertions.
+- [x] Fix subagent recorded or explicitly not needed: not needed; no review findings required a separate fix role.
+- [x] Implementation subagent recorded: parent implemented the test-only replay fixture with subagent-assisted fixture review; parent revalidated focused proof: yes.
 
 ## Validation
 
-1. npm run work:evidence-summary -- test-output/reports/rolling-restart-after-queue-drain-runtime-20260519T151451Z.report.json
-2. npm run work:scenario-triage -- test-output/reports/rolling-restart-after-queue-drain-runtime-20260519T151451Z.report.json --markdown
-3. npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-after-queue-drain-runtime-20260519T151451Z.report.json --markdown
+1. PASS - `node test/control-plane/membership-publication-coordinator-main-stage-2.js` passed with `128/128` assertions.
+2. PASS - `npm run work:package:route-after-rerun -- --artifact test-output/reports/rolling-restart-after-queue-drain-runtime-20260519T151451Z.report.json --owner topology_publication_owner --boundary publication_convergence --dominant-reason publication_pending` kept route `topology_publication_owner / publication_convergence / publication_pending`, causal outcome `continue_local_fix`, stop `classified_local_blocker`, and priority witnesses `0`.
+3. PASS - `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-queue-drain-runtime-20260519T151451Z.report.json --handoff-probe` kept `publication_ack_to_active_gate_reconcile_missing`, no handoff contract in the representative artifact, no owner recovery queue handoff outcome, and `runtimePromotionAllowed=false`.
+4. PASS - `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-queue-drain-runtime-20260519T151451Z.report.json --replay-fixture` emitted the no-debt publication pending replay fixture that the focused TAP test now covers.
+5. PASS - `npm run work:evidence-summary -- test-output/reports/rolling-restart-after-queue-drain-runtime-20260519T151451Z.report.json` kept first frontier `publication_ack_convergence / topology_publication_owner / publication_convergence / publication_pending`.
+6. PASS - `npm run work:scenario-triage -- test-output/reports/rolling-restart-after-queue-drain-runtime-20260519T151451Z.report.json --markdown` kept causal outcome `continue_local_fix`, stop `classified_local_blocker`, priority witnesses `0`, and split required `false`.
+7. PASS - `npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-after-queue-drain-runtime-20260519T151451Z.report.json --markdown` reported priority recovery witnesses `0` and split required `false`.
+8. PASS - `node scripts/check-guideline-decision-boundaries.js test/control-plane/membership-publication-coordinator-main-stage-2.js` found `0` decision-boundary violations.
+9. PASS - `npm run audit:runtime-grammar:file -- test/control-plane/membership-publication-coordinator-main-stage-2.js` found `0` runtime-grammar-contract violations.
+10. PASS - Scoped `git diff --check` over package-owned files passed.

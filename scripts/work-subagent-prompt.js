@@ -4,6 +4,11 @@ import fs from 'node:fs/promises';
 import process from 'node:process';
 import {fileURLToPath} from 'node:url';
 import {
+  MODEL_FIT_SPLIT_ALLOWED_DECISION_DEPTH_FIELD,
+  MODEL_FIT_SPLIT_FIELD,
+  MODEL_FIT_SPLIT_SAFE_TO_EXECUTE_WHEN_FIELD,
+  MODEL_FIT_SPLIT_SPLIT_TRIGGERS_FIELD,
+  MODEL_FIT_SPLIT_TARGET_MODEL_FIELD,
   SUBAGENT_ATTEMPT_STATUSES,
   VALID_OUTPUT_PROFILES,
   defaultOutputProfileForLane,
@@ -33,7 +38,11 @@ const METADATA_FIELD_WRITE_SCOPE = 'writeScope';
 const METADATA_FIELD_HANDOFF_FILES = 'handoffFiles';
 const METADATA_FIELD_CANDIDATE_RUNTIME_FILES = 'candidateRuntimeFiles';
 const METADATA_FIELD_COMMIT_SCOPE = 'commitScope';
+const MODEL_FIT_FIELD_PACKAGE_CLASS = 'packageClass';
+const MODEL_FIT_FIELD_INTENDED_MINIMUM_MODEL = 'intendedMinimumModel';
+const MODEL_FIT_FIELD_SCOPE_SHAPE = 'scopeShape';
 const MODEL_FIT_FIELD_OUTPUT_PROFILE = 'outputProfile';
+const MODEL_FIT_FIELD_ESCALATION_TRIGGERS = 'escalationTriggers';
 const CORE_LOGIC_BRIEF_HEADING = '## Core Logic Brief';
 const CAUSAL_DECISION_CONTRACT_HEADING = '## Causal Decision Contract';
 const DECISION_EXPERIMENT_GATE_HEADING = '## Decision Experiment Gate';
@@ -105,6 +114,16 @@ function list(values = [], fallback = 'None recorded.') {
   return normalized.map((value) => `- \`${value}\``).join(NEWLINE);
 }
 
+function plainList(values = [], fallback = 'None recorded.') {
+  const normalized = Array.isArray(values) ?
+    values.map(normalizeText).filter(Boolean) :
+    [];
+  if (normalized.length === NUM_ZERO) {
+    return `- ${fallback}`;
+  }
+  return normalized.map((value) => `- ${value}`).join(NEWLINE);
+}
+
 function scopeList(metadata, fieldName, fallbackFieldName = null) {
   if (Array.isArray(metadata[fieldName])) {
     return metadata[fieldName];
@@ -127,6 +146,55 @@ function outputProfileForMetadata(metadata = {}) {
 function outputGuidance(profile) {
   return OUTPUT_GUIDANCE_BY_PROFILE[profile] ||
     OUTPUT_GUIDANCE_BY_PROFILE[OUTPUT_PROFILE_MEDIUM];
+}
+
+function modelSizingLines(metadata = {}) {
+  const modelFit = metadata.modelFit || {};
+  const split = metadata[MODEL_FIT_SPLIT_FIELD] || {};
+  const intendedMinimumModel = normalizeText(
+    modelFit[MODEL_FIT_FIELD_INTENDED_MINIMUM_MODEL],
+  ) || 'package minimum';
+  const targetExecutionModel = normalizeText(
+    split[MODEL_FIT_SPLIT_TARGET_MODEL_FIELD],
+  ) || intendedMinimumModel;
+  const packageClass = normalizeText(
+    modelFit[MODEL_FIT_FIELD_PACKAGE_CLASS],
+  ) || 'unknown';
+  const scopeShape = normalizeText(
+    modelFit[MODEL_FIT_FIELD_SCOPE_SHAPE],
+  ) || 'unknown';
+  const allowedDecisionDepth = normalizeText(
+    split[MODEL_FIT_SPLIT_ALLOWED_DECISION_DEPTH_FIELD],
+  ) || 'Use only the package-defined decision depth.';
+
+  const lines = [
+    '## Model Sizing',
+    EMPTY_TEXT,
+    `Spawn/execution model: \`${targetExecutionModel}\``,
+    `Intended minimum model: \`${intendedMinimumModel}\``,
+    `Package class: \`${packageClass}\``,
+    `Scope shape: \`${scopeShape}\``,
+    `Allowed decision depth: ${allowedDecisionDepth}`,
+    'When spawning this role, set the model explicitly to the spawn/execution model instead of inheriting a stronger parent model.',
+    'Do not move above this model unless an escalation trigger below fires; split mechanical, test-only, bounded experiment, or single-file runtime work into child packages first.',
+  ];
+
+  if (Array.isArray(split[MODEL_FIT_SPLIT_SAFE_TO_EXECUTE_WHEN_FIELD])) {
+    lines.push(
+      EMPTY_TEXT,
+      'Lower-model safe when:',
+      plainList(split[MODEL_FIT_SPLIT_SAFE_TO_EXECUTE_WHEN_FIELD]),
+    );
+  }
+  if (Array.isArray(split[MODEL_FIT_SPLIT_SPLIT_TRIGGERS_FIELD])) {
+    lines.push(
+      EMPTY_TEXT,
+      'Split or escalate when:',
+      plainList(split[MODEL_FIT_SPLIT_SPLIT_TRIGGERS_FIELD]),
+    );
+  }
+
+  return lines;
 }
 
 function packageTitle(content) {
@@ -179,8 +247,8 @@ function roleTask(role, metadata, packagePath) {
       'stated next action still matches artifact evidence. If every finding is',
       'limited to package, sprint, tracker, current-blocker, ledger, or handoff',
       'metadata in the declared scope, fix it directly as the review agent and',
-      'record the fix as review-fixed-metadata-only instead of requesting a',
-      'separate fix subagent.',
+      'record the fix as review-fixed-metadata-only instead of spawning a',
+      'fix subagent.',
     ].join(' ');
   }
   if (role === ROLE_FIX) {
@@ -191,7 +259,7 @@ function roleTask(role, metadata, packagePath) {
     ].join(' ');
   }
   return [
-    'Implement only this current package after review/fix proof is clean:',
+    'Implement only this current package when scope, proof, and stop rule are explicit:',
     packagePath + '.',
     'Do not widen beyond the write scope, forbidden files, frozen decisions,',
     'and proof ladder recorded below.',
@@ -201,25 +269,36 @@ function roleTask(role, metadata, packagePath) {
 function ledgerLine(role, packagePath, flags = {}) {
   const agentName = parseOptionValue(flags, FLAG_AGENT_NAME);
   const agentId = parseOptionValue(flags, FLAG_AGENT_ID);
-  if (!agentName || !agentId) {
-    return 'Add the real returned agent name and id after the subagent completes.';
-  }
+  const agentPrefix = agentName && agentId ?
+    `agent: Agent ${agentName} (${agentId}); ` :
+    EMPTY_TEXT;
   if (role === ROLE_REVIEW) {
-    return `Agent ${agentName} (${agentId}) reviewed ${packagePath}; result <clean|fixes-required>`;
+    return `- [x] review: status: validated; ${agentPrefix}` +
+      `evidence: reviewed ${packagePath}; next: implementation or fixes.`;
   }
   if (role === ROLE_FIX) {
-    return `Agent ${agentName} (${agentId}) fixed ${packagePath}`;
+    return `- [x] fix: status: validated; ${agentPrefix}` +
+      `evidence: fixed ${packagePath}; next: implementation.`;
   }
-  return `Agent ${agentName} (${agentId}) implemented ${packagePath}; parent revalidated focused proof: yes`;
+  return `- [x] implementation: status: validated; ${agentPrefix}` +
+    `evidence: implemented ${packagePath}; ` +
+    'parent revalidated focused proof: yes; next: closure or successor action.';
 }
 
 function reviewMetadataFixLedgerLine(packagePath, flags = {}) {
   const agentName = parseOptionValue(flags, FLAG_AGENT_NAME);
   const agentId = parseOptionValue(flags, FLAG_AGENT_ID);
+  const agentPrefix = agentName && agentId ?
+    `agent: Agent ${agentName} (${agentId}); ` :
+    EMPTY_TEXT;
   if (!agentName || !agentId) {
-    return 'If the review agent directly fixes metadata-only findings, record: `review-fixed-metadata-only by Agent <name> (<agent-id>) for <reviewed-package>; scope: metadata-only package/sprint/tracker/handoff edits`.';
+    return 'If the review directly fixes metadata-only findings, record: ' +
+      '`- [x] review-fixed-metadata-only: status: validated; evidence: ' +
+      'metadata-only package/sprint/tracker/handoff edits; next: validation.`';
   }
-  return `review-fixed-metadata-only by Agent ${agentName} (${agentId}) for ${packagePath}; scope: metadata-only package/sprint/tracker/handoff edits`;
+  return `- [x] review-fixed-metadata-only: status: validated; ` +
+    `${agentPrefix}evidence: metadata-only fixes for ${packagePath}; ` +
+    'next: validation.';
 }
 
 function validationCommandLines(role, packagePath, metadata) {
@@ -376,6 +455,8 @@ function buildSubagentPrompt(role, packagePath, content, args = []) {
     `Dominant reason: \`${metadata.dominantReason || 'unknown'}\``,
     `Predecessor: \`${metadata.predecessor || 'none'}\``,
     EMPTY_TEXT,
+    ...modelSizingLines(metadata),
+    EMPTY_TEXT,
     '## Task',
     EMPTY_TEXT,
     roleTask(role, metadata, packagePath),
@@ -456,34 +537,34 @@ function buildSubagentPrompt(role, packagePath, content, args = []) {
     EMPTY_TEXT,
     '## Escalation Triggers',
     EMPTY_TEXT,
-    list(metadata.modelFit?.escalationTriggers),
+    list(metadata.modelFit?.[MODEL_FIT_FIELD_ESCALATION_TRIGGERS]),
     EMPTY_TEXT,
-    '## Checkpoint Ledger Updates',
+    '## Execution Evidence',
     EMPTY_TEXT,
-    'Append one checked `## Subagent Progress And Attempt Ledger` checkpoint in the package after every completed subtask. If the package already uses separate Progress and Attempt ledgers, mirror the same checkpoint facts into those existing sections instead of inventing extra prose.',
-    'Each checked checkpoint must include Agent name/id, status, last checkpoint, parent action, evidence, and next or blocker. Before edits, include a falsification checkpoint naming what evidence would prove this package is the wrong slice.',
+    'Append one checked `## Execution Evidence` item in the package after completed implementation or validation work. Agent identity is optional provenance; do not invent names or ids.',
+    'Each checked item must include status, evidence, and next or blocker. Before edits, include a falsification item naming what evidence would prove this package is the wrong slice.',
     role === ROLE_REVIEW ?
-      'If review findings are metadata-only, apply those edits directly and add a checked checkpoint naming the metadata-only files fixed before final review validation.' :
+      'If review findings are metadata-only, apply those edits directly and add a checked item naming the metadata-only files fixed before final review validation.' :
       EMPTY_TEXT,
     EMPTY_TEXT,
     'Use this shape:',
     EMPTY_TEXT,
-    `- [x] Agent <name> (<agent-id>) ${role} checkpoint: status: \`<started|running|interrupted|partial-unvalidated|validated|superseded>\`; last checkpoint: <completed checkpoint>; parent action: \`<pending|accepted|revalidated|discarded|superseded>\`; evidence: <command/result/files>; next: <next step>.`,
-    `- [x] Agent <name> (<agent-id>) ${role} falsification checkpoint: status: running; last checkpoint: wrong-slice check complete; parent action: pending; wrong-slice evidence would be <owner/boundary/result change>; evidence: <command/result/files>; next: edit, validate, split, or blocker handoff.`,
+    `- [ ] ${role}: status: \`<running|partial-unvalidated|validated|superseded>\`; evidence: <command/result/files>; next: <next step>.`,
+    `- [ ] ${role} falsification: status: validated; wrong-slice evidence would be <owner/boundary/result change>; evidence: <command/result/files>; next: edit, validate, split, or blocker handoff.`,
     EMPTY_TEXT,
     'If blocked, append `blocker:` instead of `next:` and stop for the parent session rather than continuing silently.',
     EMPTY_TEXT,
-    'Use `partial-unvalidated` if you edited files but cannot complete validation; use `interrupted` if the role stops before a clean checkpoint. A later worker or parent must add a checked superseded/discarded/revalidated checkpoint before closure.',
+    'Use `partial-unvalidated` if you edited files but cannot complete validation; use `interrupted` only in a legacy subagent attempt ledger. A later worker or parent must add checked superseded/discarded/revalidated evidence before closure.',
     `Valid statuses: ${SUBAGENT_ATTEMPT_STATUSES.map((status) => `\`${status}\``).join(', ')}.`,
-    'Progress watchdog: after each completed subtask, update the combined checkpoint ledger before continuing. Silence after a checkpoint means the parent may interrupt or discard the attempt instead of promoting it.',
+    'Progress watchdog: after each completed subtask, update execution evidence before continuing. Silence after evidence means the parent may interrupt or discard the attempt instead of promoting it.',
     EMPTY_TEXT,
-    'Final handoff must include files changed, commands run with pass/fail result, whether you edited after the last checkpoint line, and any remaining blocker.',
+    'Final handoff must include files changed, commands run with pass/fail result, whether you edited after the last evidence line, and any remaining blocker.',
     EMPTY_TEXT,
     '## Ledger Line',
     EMPTY_TEXT,
     role === ROLE_IMPLEMENTATION ?
-      'The parent session records this implementation Sequencing Ledger line only after rerunning the focused proof locally and truthfully adding `parent revalidated focused proof: yes`:' :
-      'Record this Sequencing Ledger line after the role completes:',
+      'The parent session records this implementation evidence only after rerunning the focused proof locally and truthfully adding `parent revalidated focused proof: yes`:' :
+      'Record this execution evidence line after the role completes:',
     EMPTY_TEXT,
     ledgerLine(role, packagePath, args),
     ...(role === ROLE_REVIEW ? [

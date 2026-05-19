@@ -139,7 +139,7 @@ async function buildRouteAfterRerunLines(options = {}) {
     '- If owner and boundary are stable, open a runtime-owner-boundary successor instead of another classification package.',
     '- Update Sprint Strategy Brief from the route result.',
     '- Update Current Edge Card from the route result.',
-    `- Refresh blocker handoff: \`npm run work:current-blocker -- --write\``,
+    `- Refresh generated tracker handoff: \`npm run work:repair\``,
     `- Enforce consistency: \`npm run work:validate -- --pre-impl\``,
   ];
   if (!options.write) {

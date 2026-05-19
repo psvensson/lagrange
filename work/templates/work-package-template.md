@@ -269,7 +269,7 @@ Required for successor packages created from a representative rerun.
 - Stop mode:
 - Next lane:
 - Required after rerun: route-after-rerun, Sprint Strategy Brief update,
-  Current Edge Card update, `npm run work:current-blocker -- --write`, and
+  Current Edge Card update, `npm run work:repair`, and
   `npm run work:validate -- --pre-impl`.
 
 ## Same-Owner Reduction Continuation
@@ -353,6 +353,8 @@ or preselected implementation slice here.
 
 - Target executor: `gpt-5.3-codex-spark|gpt-5.4|gpt-5.3-codex`
 - Allowed decision depth: mechanical/test-only/bounded-hypothesis/single-file-runtime
+- Spawn rule: set the subagent model explicitly to the target executor; do not
+  rely on inheriting a stronger parent model.
 - Safe to execute when:
 1. Owner, boundary, write scope, forbidden scope, proof, and kill rule stay as declared.
 2. The executor does not need to choose architecture, migrate ownership, or reinterpret representative evidence.
@@ -487,56 +489,26 @@ Closure:
 - [ ] Package-owned changes committed as one focused slice.
 - [ ] Slice commit pushed to the recorded remote/branch.
 
-## Subagent Sequencing Ledger
+## Execution Evidence
 
-Required before implementation starts for `runtime-owner-boundary`,
-`scenario-release-gate`, and `causal-escalation` packages. Optional for
-`read-review-doc-only` and `lightweight-maintenance` packages unless the
-package declares otherwise. Active metadata-bearing packages in required lanes
-fail `npm run work:validate -- --pre-impl` without review/fix proof and fail
-`npm run work:validate -- --closure` without complete implementation proof. Do
-not check these items until real subagent names and agent ids replace the
-template placeholders; checked placeholders, pending markers, parent-session
-labels, local/manual labels, or arbitrary text without agent id proof are
-invalid at closure. Before closure only, unavailable delegation may be recorded
-as `human-waived`, `tool-unavailable`, or `blocked-by-environment-policy` with
-`reason: ...`.
-Subagents are orchestrated by Codex sessions and recorded here; npm scripts
-must not stand in for review, fix, or implementation subagents.
+Preferred closure evidence for new packages. Agent identity is optional
+provenance; implementation proof, scope, status, and parent revalidation are
+blocking. Use legacy subagent ledgers only when this package explicitly requires
+sequenced subagents.
+If review directly fixes metadata-only findings, record
+`review-fixed-metadata-only` as execution evidence and continue without a
+separate fix package.
 
-- [ ] Review subagent recorded:
-      Agent <name> (<agent-id>) reviewed <package>;
-      result `<clean|fixes-required>`, or `not-needed`
-      (`first-package-in-sprint`) only for the first package in a new sprint.
-- [ ] Fix subagent recorded or explicitly not needed:
-      Agent <name> (<agent-id>) fixed <package>, or `not-needed` only
-      when review result is `clean`.
-- [ ] Implementation subagent recorded:
-      Agent <name> (<agent-id>) implemented <this package> after
-      review/fix proof was recorded; parent revalidated focused proof: yes.
+- [ ] review: status: not-needed; evidence: lane permits direct implementation or review found no required fix; next: implementation.
+- [ ] implementation: status: validated; evidence: <focused proof commands and results>; parent revalidated focused proof: yes; next: closure or successor action.
+- [ ] repair: status: validated; evidence: `npm run work:repair` refreshed generated current-blocker and Current Edge Card when needed; next: validation.
 
-## Subagent Progress Ledger
+## Legacy Subagent Ledgers
 
-Required when subagent sequencing is required. Optional otherwise unless the
-package or user asks for subagents. Each real subagent appends one checked
-update after every completed subtask; the Sequencing Ledger remains the
-role-completion proof.
-
-- [ ] Agent <name> (<agent-id>) <role> context loaded: scope and blocker confirmed; evidence: package, sprint, and handoff files read; next: first focused probe.
-- [ ] Agent <name> (<agent-id>) <role> probe complete: state/cause confirmed or contradicted; evidence: command and result; next: edit, validate, or blocker handoff.
-- [ ] Agent <name> (<agent-id>) <role> validation complete: package proof refreshed; evidence: commands and results; next: final handoff or successor action.
-
-## Subagent Attempt Ledger
-
-Required when subagent sequencing is required. Optional otherwise unless the
-package or user asks for subagents. Each real subagent attempt records status,
-last checkpoint, parent action, evidence, and either `next:` or `blocker:`.
-Interrupted or partial-unvalidated attempts must be followed by a checked
-superseded/discarded/revalidated line before closure.
-
-- [ ] Agent <name> (<agent-id>) <role> attempt: status: <started|running|interrupted|partial-unvalidated|validated|superseded>; last checkpoint: context loaded; parent action: pending; evidence: package, sprint, and handoff files read; next: first focused probe.
-- [ ] Agent <name> (<agent-id>) <role> attempt: status: validated; last checkpoint: package proof refreshed; parent action: revalidated; evidence: commands and results; next: final handoff or successor action.
-- [ ] Agent <name> (<agent-id>) <role> recovery: status: superseded; last checkpoint: replaced interrupted or partial-unvalidated attempt; parent action: superseded; evidence: superseding proof; next: continue from clean checkpoint.
+Legacy `## Subagent Sequencing Ledger`, `## Subagent Progress Ledger`,
+`## Subagent Attempt Ledger`, and `## Subagent Progress And Attempt Ledger`
+sections remain valid for packages already using them. Do not invent agent names
+or ids; record agent identity only when a real subagent was used.
 
 ## Commit And Push Ledger
 

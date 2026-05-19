@@ -81,8 +81,9 @@ Use the tracker utility for current sprint/package mechanics:
 8. `npm run work:model-ledger -- summary` prints recent model, reasoning
    effort, output profile, task class, package class, intended minimum model,
    scope shape, escalation, bailout, outcome, validation, correction-loop, and
-   review-finding signals with a simple advisory recommendation to escalate,
-   de-escalate, or hold effort.
+   review-finding signals with an advisory recommendation to escalate,
+   de-escalate, or hold effort plus a bounded recommended executor so
+   escalation does not silently mean inheriting a larger parent model.
 9. `npm run work:package:doctor -- work/packages/active-...md` prints a compact
    package summary plus the same validation findings used by the tracker. It is
    a local diagnostic aid only; it does not replace real subagent sequencing.
@@ -100,51 +101,54 @@ Use the tracker utility for current sprint/package mechanics:
    --successor <active-successor>` combines the post-rerun route handoff with
    the package migration transaction when the successor already exists and is
    ready to become the active blocker. It also prints the required refresh
-   sequence: update Sprint Strategy Brief, update Current Edge Card,
-   regenerate `current-blocker.*`, and run pre-implementation validation.
-13. `npm run work:evidence-summary -- <artifact>` prints a compact deterministic
+   sequence: update Sprint Strategy Brief, update Current Edge Card, run
+   `npm run work:repair`, and run pre-implementation validation.
+13. `npm run work:repair` regenerates generated current-blocker files and the
+   active sprint Current Edge Card, then checks freshness. Use this instead of
+   hand-editing generated tracker state.
+14. `npm run work:evidence-summary -- <artifact>` prints a compact deterministic
    topology plus causal-model summary for LLM handoff before reading raw logs or
    large harness segment files.
-14. `npm run work:scenario-route -- <artifact> [--owner <owner>]
+15. `npm run work:scenario-route -- <artifact> [--owner <owner>]
    [--boundary <boundary>] [--explain <edge>]` combines representative
    evidence, causal routing, priority residuals, owner-file discovery, and a
    capped proof ladder into one handoff. Prefer this over listing multiple
    extractor commands in diagnostic classification packages.
-15. `npm run analyze:owner-files -- <owner> [boundary]` prints a ranked
+16. `npm run analyze:owner-files -- <owner> [boundary]` prints a ranked
     owner-to-files index so agents can inspect likely owner files before broad
     text search.
-16. `npm run analyze:priority-recovery-residuals -- <artifact>` extracts
+17. `npm run analyze:priority-recovery-residuals -- <artifact>` extracts
     priority-recovery partition witnesses by owner and boundary and prints
     package scaffolding commands for deliberate residual splits.
-17. `npm run work:subagent-prompt -- --role review|fix|implementation
+18. `npm run work:subagent-prompt -- --role review|fix|implementation
     --package work/packages/active-...md` generates bounded role prompts and
     the ledger-line shape to record after a real subagent returns. The prompt
-    also tells subagents to append one `## Subagent Progress Ledger` update
-    and one `## Subagent Attempt Ledger` checkpoint after every completed
-    subtask.
-18. `npm run work:oversized-next -- --markdown` turns oversized
+    includes the package spawn/execution model and tells the parent to set it
+    explicitly instead of relying on inherited high-model defaults. It records
+    `## Execution Evidence`; agent identity is optional provenance.
+19. `npm run work:oversized-next -- --markdown` turns oversized
     owner-boundary segment files into package-ready extraction candidates so
     file-size debt stays actionable rather than a broad background concern.
-19. `npm run work:validate -- --entry|--pre-impl|--closure` checks active and
+20. `npm run work:validate -- --entry|--pre-impl|--closure` checks active and
    metadata-bearing packages for filename/header drift, stale open checklist
-   items, and lane-required Subagent Sequencing Ledgers at the requested phase.
-   The default phase is `--pre-impl`.
-20. `npm run work:package:close -- --write work/packages/active-...md` renames a
+   items, and lane-required execution proof at the requested phase. The default
+   phase is `--pre-impl`; `--closure` is strict for implementation evidence.
+21. `npm run work:package:close -- --write work/packages/active-...md` renames a
     package to `done-...` only after open checklist items are closed.
-21. `npm run work:package:migrate -- --write work/packages/active-...md`
+22. `npm run work:package:migrate -- --write work/packages/active-...md`
     `work/packages/active-successor.md` performs the same closure gate while
     recording a successor handoff.
-22. `npm run work:package:move -- --write work/packages/todo-...md --to active`
+23. `npm run work:package:move -- --write work/packages/todo-...md --to active`
     performs non-terminal state moves.
-23. `npm run work:package:evidence-block -- <artifact>` generates a Markdown
+24. `npm run work:package:evidence-block -- <artifact>` generates a Markdown
     owner/evidence block from topology-convergence analyzer output for package
     migration or contraction notes.
-24. After each completed package slice, create one focused git commit containing
+25. After each completed package slice, create one focused git commit containing
     only that slice's package-owned changes and push the current branch before
     starting the next slice. Use `npm run work:sprint:push -- <git-push-args>`
     for sprint pushes so the remaining package list is printed after a
     successful push.
-25. If the slice cannot be pushed because the remote or credentials are
+26. If the slice cannot be pushed because the remote or credentials are
     unavailable, record the unpushed commit SHA and reason in the package or
    sprint handoff. If package-owned and unrelated dirty changes cannot be
    separated safely, stop for human direction instead of committing a mixed
@@ -175,19 +179,13 @@ the package explicitly records a heavier audit or architecture reason:
    Once a gate has a selected route, future packages execute that route or
    rerun evidence; they do not open another architecture gate unless fresh
    canonical evidence contradicts the selection.
-6. Subagents are review gates for runtime owner-boundary and scenario/release
-   work. For read/review/doc-only and lightweight maintenance packages, omit
-   them unless the package or human explicitly requires them.
-   When subagents are used, the package's `## Subagent Progress Ledger` is the
-   in-flight communication channel: every completed subtask gets one checked
-   update with real agent identity, `evidence: ...`, and either `next: ...` or
-   `blocker: ...`. The `## Subagent Sequencing Ledger` remains the role
-   completion proof. The `## Subagent Attempt Ledger` records every attempt,
-   including interrupted and partial-unvalidated attempts, with `status: ...`,
-   `last checkpoint: ...`, `parent action: ...`, `evidence: ...`, and either
-   `next: ...` or `blocker: ...`. Interrupted or partial-unvalidated attempts
-   must be followed by a checked superseded/discarded/revalidated line before
-   closure.
+6. Subagents are optional review capacity before implementation unless the
+   package or human explicitly requires them. Closure proof is the package's
+   `## Execution Evidence`: checked role items with `status: ...`,
+   `evidence: ...`, and either `next: ...` or `blocker: ...`. Implementation
+   closure also records `parent revalidated focused proof: yes`. Agent identity
+   is optional provenance and must never be invented. Legacy subagent ledgers
+   remain valid for packages already using them.
 7. Use the `mechanical-maintenance` lane for docs, templates, schema text,
    package metadata, generated handoff text, and similarly mechanical edits
    that do not change runtime or test behavior. These packages should be
@@ -312,92 +310,57 @@ The ledger is advisory. It helps future agents choose a model, reasoning
 effort, and output profile, but it never replaces `npm run work:validate`, lane
 selection, focused validation, package closure, or commit discipline.
 
-## Subagent Sequencing By Lane
+## Execution Evidence By Lane
 
 Choose the lightest workflow lane that still proves the owner boundary was not
 weakened. Record the lane in package metadata as `lane`.
 
 Subagents are not required for `read-review-doc-only`,
-`lightweight-maintenance`, or `diagnostic-classification` packages unless the
-package explicitly declares that they are needed or a human asks for them. The
-first two lanes are for review, steering, documentation, tracker, or narrow
-maintenance work that cannot change runtime ownership, shared contracts, or
-representative scenario evidence. `diagnostic-classification` keeps
-representative evidence and causal ledgers, but is limited to diagnostics,
-diagnostic tests, and work-tracker routing.
+`lightweight-maintenance`, `mechanical-maintenance`, `test-only-proof`,
+`diagnostic-classification`, `bounded-experiment`, or `single-file-runtime`
+packages unless the package explicitly declares that they are needed or a human
+asks for them. These lanes should prefer direct implementation and focused
+proof.
 
-Subagents are required by default for `runtime-owner-boundary`,
-`scenario-release-gate`, and `causal-escalation` packages. Use the sequential
-handoff before implementation starts:
+For `runtime-owner-boundary`, `scenario-release-gate`, and
+`causal-escalation` packages, use the lightest valid path that preserves the
+owner boundary. Direct implementation is allowed before `--pre-impl` when the
+route, scope, proof, and stop rule are explicit. Closure remains strict.
 
-1. Fresh review subagent: review the most recently executed package on the same
-   sprint or owner boundary. For the first work package in a new sprint, record
-   review as `not-needed` with reason `first-package-in-sprint` instead.
-   Review is capped to route and predecessor proof: package doctor for the
-   active package, package doctor for the direct predecessor when present, one
-   canonical route or artifact command, and pre-implementation validation after
-   metadata-only repairs. Review agents do not run focused runtime tests,
-   `npm run test:static`, broad extractor stacks, raw report JSON, or older
-   handoff-file archaeology unless the capped commands contradict package
-   routing, scope, stale blocker state, or metadata shape.
-2. Fresh fix subagent, when needed: if the review finds fixes, a separate
-   subagent performs those fixes before implementation starts.
-3. Fresh implementation subagent: after review/fixes are clean, a separate
-   subagent implements the new/current package.
-4. Focused commit and push: after the package closes, commit only the
-   package-owned slice and push it before the next slice starts.
+The preferred package proof section is `## Execution Evidence`:
 
-The package must record:
+1. Review, when used: `- [x] review: status: validated; evidence: <review command/result>; next: implementation or fixes.`
+2. Fix, when used: `- [x] fix: status: validated; evidence: <files/commands>; next: implementation.`
+3. Implementation: `- [x] implementation: status: validated; evidence: <focused proof commands and results>; parent revalidated focused proof: yes; next: closure or successor action.`
 
-1. Review: `Agent <name> (<agent-id>) reviewed <package>; result <clean|fixes-required>`,
-   or `not-needed (first-package-in-sprint)` only for the first package in a
-   new sprint.
-2. Fix: `Agent <name> (<agent-id>) fixed <package>` when review found fixes,
-   or `not-needed` only when the review result was `clean`.
-3. Implementation: `Agent <name> (<agent-id>) implemented <package>` after the
-   review/fix proof is recorded and the parent session has rerun the focused
-   package proof locally with `parent revalidated focused proof: yes`.
-
-Do not use parallel subagents for these roles unless a human explicitly changes
-the package sequencing contract. Parent-session notes, local/manual session
-labels, and arbitrary text without a real agent id do not satisfy required
-roles unless the user explicitly disables subagents for the task.
-
-The package must also record every real subagent attempt in
-`## Subagent Attempt Ledger`. Each checked attempt update names the real agent,
-role, `status: ...`, `last checkpoint: ...`, `parent action: ...`,
-`evidence: ...`, and either `next: ...` or `blocker: ...`. Valid statuses are
-`started`, `running`, `interrupted`, `partial-unvalidated`, `validated`, and
-`superseded`. `interrupted` and `partial-unvalidated` attempts must be followed
-by a checked superseded/discarded/revalidated line before closure.
+Agent identity may be appended as `agent: Agent <name> (<agent-id>);` when a
+real subagent was used and recovery would benefit from that provenance. It is
+not required for implementation truth and must not be invented.
 
 Worker-reported validation is handoff evidence only. The parent session must
-rerun focused proof locally before committing subagent runtime edits or marking
-implementation complete. If a worker goes silent after a checkpoint or stops
-with edited files and no validation, record the attempt as
-`partial-unvalidated` or `interrupted`, discard or supersede that patch, and do
-not promote the implementation ledger line.
+rerun focused proof locally before committing runtime edits or marking
+implementation complete. If a worker or local attempt stops with edited files
+and no validation, record `status: partial-unvalidated` with a `blocker:` or add
+a later checked superseded/revalidated evidence item before closure.
 
-`npm run work:validate -- --entry` validates package shape and contracts while
-subagent proof is still being assigned. `--pre-impl` also requires clean
-review/fix proof for lanes that require subagents but permits the
-implementation entry to remain open. `--closure` is strict: all required
-subagent entries must be checked, real, ordered, parent-revalidated, and
-complete before package closure.
+Legacy `## Subagent Sequencing Ledger`, `## Subagent Progress Ledger`,
+`## Subagent Attempt Ledger`, and `## Subagent Progress And Attempt Ledger`
+sections remain valid for packages already using them.
+
+`npm run work:validate -- --entry` validates package shape and contracts.
+`--pre-impl` no longer blocks on process ledgers when implementation scope is
+bounded. `--closure` is strict: implementation evidence must be checked,
+terminal, focused-proof-backed, and parent-revalidated before package closure.
 
 Legacy active metadata packages without `lane` remain strict. Historical
 `done-...` packages without the ledger remain valid unless they add a ledger
-with open or incomplete required entries. Checked closure entries must contain
-real agent identities; template placeholders such as `<...>`, pending markers
-such as `pending-before-implementation-resumes`, and non-real identities such
-as `current-session`, `parent Codex`, `manual`, `local`, `session`,
-`Agent Codex Implementation`, `Agent Codex Review`, or `Agent Codex Fix` are
-closure validation failures for packages under the current policy. Before
-closure, a required role may explicitly record `human-waived`,
-`tool-unavailable`, or `blocked-by-environment-policy` with a `reason: ...`
-note so the environment state is visible without pretending a real subagent
-ran. Historical closed-package proof is not backfilled by invention; if a
-package is reopened, migrated, or closed again, the current proof rules apply.
+with open or incomplete required entries. In legacy subagent ledgers, checked
+closure entries must contain real agent identities. In `## Execution Evidence`,
+agent identity is optional, but template placeholders such as `<...>` and
+pending markers such as `pending-before-implementation-resumes` remain closure
+validation failures. Historical closed-package proof is not backfilled by
+invention; if a package is reopened, migrated, or closed again, the current
+proof rules apply.
 
 ## Commit And Push Ledger
 
@@ -773,6 +736,11 @@ Before creating or assigning executable packages, do a model-fit split:
    architecture route decisions on `runtime-owner-boundary`,
    `scenario-release-gate`, or `causal-escalation` packages.
 
+When spawning subagents, use the package's `Target executor` or intended
+minimum model explicitly. Do not let the parent session's stronger model become
+the default for mechanical, test-only, bounded experiment, or single-file
+runtime packages.
+
 Package closure also requires one final deep dive across the affected area:
 
 1. read the write-scope files and their direct owner collaborators as one boundary
@@ -1082,5 +1050,5 @@ guideline audits (`audit:guideline:literals`,
 `audit:guideline:decision-boundaries`,
 `audit:guideline:boundary-mode-contracts`,
 `guard:guideline:constant-names:file`, and
-`audit:runtime-grammar:file`) plus the lane-required Subagent Sequencing Ledger
-for review proof; do not depend on network-backed LLM API checks.
+`audit:runtime-grammar:file`) plus lane-required execution evidence for review
+proof; do not depend on network-backed LLM API checks.

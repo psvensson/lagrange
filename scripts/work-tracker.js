@@ -111,8 +111,7 @@ const CURRENT_BLOCKER_JSON_PATH = path.join(
   'current-blocker.json',
 );
 const CURRENT_BLOCKER_SCHEMA = 'current-blocker-v1';
-const CURRENT_BLOCKER_REPAIR_COMMAND =
-  'npm run work:current-blocker -- --write';
+const CURRENT_BLOCKER_REPAIR_COMMAND = 'npm run work:repair';
 const CURRENT_BLOCKER_STALE_FIELD_LIMIT = 8;
 const CURRENT_BLOCKER_CLOSED_STATUSES = Object.freeze([
   STATUS_DONE,
@@ -132,8 +131,13 @@ const ACTIVE_PACKAGE_LINK_PATTERN =
   /\]\((\.\.\/packages\/active-[^)]+\.md)\)/u;
 const CURRENT_ACTIVE_PACKAGE_LINK_PATTERN =
   /(?:current\s+active\s+package|active\s+package|continue)\s*:?\s*(?:\n\s*)?\[[^\]]+\]\((\.\.\/packages\/active-[^)]+\.md)\)/iu;
+const ACTIVE_PACKAGE_REFERENCE_PATTERN =
+  /((?:work\/packages|(?:\.\.\/|\.\/)packages)\/active-[A-Za-z0-9._-]+\.md)/u;
+const CURRENT_EDGE_CARD_ACTIVE_PACKAGE_REFERENCE_PATTERN =
+  /^Active package:\s*`?((?:work\/packages|(?:\.\.\/|\.\/)packages)\/active-[A-Za-z0-9._-]+\.md)`?\s*$/imu;
 const ACTIVE_WORK_REFERENCE_PATTERN =
   /\b((?:work\/(?:packages|sprints)|(?:\.\.\/|\.\/)(?:packages|sprints))\/active-[A-Za-z0-9._-]+\.md)\b/gu;
+const EXECUTION_EVIDENCE_HEADING = '## Execution Evidence';
 const SUBAGENT_LEDGER_HEADING = '## Subagent Sequencing Ledger';
 const SUBAGENT_PROGRESS_LEDGER_HEADING = '## Subagent Progress Ledger';
 const SUBAGENT_ATTEMPT_LEDGER_HEADING = '## Subagent Attempt Ledger';
@@ -394,7 +398,7 @@ const RERUN_DECISION_REQUIRED_COMMAND_PATTERNS = Object.freeze([
   /\bwork:package:route-after-rerun\b/iu,
   /\bSprint Strategy Brief\b/iu,
   /\bCurrent Edge Card\b/iu,
-  /\bwork:current-blocker\b/iu,
+  /\b(?:work:repair|work:current-blocker)\b/iu,
   /\bwork:validate\b[\s\S]*\bpre-impl\b/iu,
 ]);
 const SAME_FRONTIER_RESULT = 'same-frontier';
@@ -582,7 +586,7 @@ const SUBAGENT_FIX_REVIEW_FIXED_METADATA_SCOPE_PATTERN =
 const SUBAGENT_PARENT_REVALIDATION_PATTERN =
   /\b(?:parent\s+revalidated\s+(?:focused\s+)?proof|parent\s+validation)\s*:\s*`?yes`?/iu;
 const NON_REAL_IDENTITY_PATTERN =
-  /\b(?:current-session|current session|parent\s+codex|manual|local|session|agent\s+codex(?:\s+(?:review|fix|implementation))?|codex\s+(?:review|fix|implementation)(?:\s+(?:agent|subagent|session))?)\b/iu;
+  /\b(?:current-session|current session|parent\s+codex|manual\s+(?:parent\s+)?codex|local\s+session|session\s+identity|agent\s+codex(?:\s+(?:review|fix|implementation))?|codex\s+(?:review|fix|implementation)(?:\s+(?:agent|subagent|session))?)\b/iu;
 const FILE_PATH_TOKEN_PATTERN = /\S*\/\S+/gu;
 const COMMIT_SHA_PATTERN = /^[0-9a-f]{7,40}$/iu;
 const REMOTE_BRANCH_PATTERN = /^[A-Za-z0-9._-]+\/[A-Za-z0-9._/-]+$/u;
@@ -601,6 +605,7 @@ const CLI_FLAG_PRE_IMPL = '--pre-impl';
 const CLI_FLAG_CLOSURE = '--closure';
 const CLI_FLAG_TRANSACTION = '--transaction';
 const CLI_COMMAND_CURRENT_BLOCKER = 'current-blocker';
+const CLI_COMMAND_REPAIR = 'repair';
 const CLI_COMMAND_VALIDATE = 'validate';
 const CLI_COMMAND_DOCTOR = 'doctor';
 const CLI_COMMAND_CLOSE = 'close';
@@ -641,6 +646,9 @@ const SUBAGENT_ATTEMPT_UNVALIDATED_STATUSES = Object.freeze([
 ]);
 const SUBAGENT_ATTEMPT_VALIDATED_STATUS = 'validated';
 const SUBAGENT_ATTEMPT_SUPERSEDED_STATUS = 'superseded';
+const EXECUTION_EVIDENCE_IMPLEMENTATION_PATTERN = /\bimplementation\b/iu;
+const EXECUTION_EVIDENCE_TERMINAL_STATUS_PATTERN =
+  /\bstatus\s*:\s*`?(?:validated|passed|green|success|done)`?/iu;
 const SUBAGENT_ATTEMPT_PARENT_TERMINAL_ACTIONS = Object.freeze([
   'discarded',
   'revalidated',
@@ -716,6 +724,10 @@ function extractMarkdownLevelTwoSection(content, heading) {
 
 function extractSubagentSequencingLedger(content) {
   return extractMarkdownLevelTwoSection(content, SUBAGENT_LEDGER_HEADING);
+}
+
+function extractExecutionEvidenceLedger(content) {
+  return extractMarkdownLevelTwoSection(content, EXECUTION_EVIDENCE_HEADING);
 }
 
 function extractSubagentProgressLedger(content) {
@@ -1135,6 +1147,117 @@ function validateCheckedSubagentLedgerItem(content, options = {}) {
     const contentWithoutPaths = content.replace(FILE_PATH_TOKEN_PATTERN, '');
     if (NON_REAL_IDENTITY_PATTERN.test(contentWithoutPaths)) {
       errors.push('contains a non-real agent identity');
+    }
+  }
+  return errors;
+}
+
+function validateCheckedExecutionEvidenceItem(content, filePath, options = {}) {
+  const errors = [];
+  for (const checkedItemError of validateCheckedSubagentLedgerItem(content, {
+    [LEDGER_VALIDATION_REQUIRES_STRICT_ENTRIES]: false,
+  })) {
+    errors.push(
+      `${filePath}: Execution Evidence checked item ${checkedItemError}.`,
+    );
+  }
+  const status = parseAttemptStatus(content);
+  if (!status) {
+    errors.push(
+      `${filePath}: Execution Evidence checked item must include ` +
+      '`status:`.',
+    );
+  }
+  if (!SUBAGENT_PROGRESS_EVIDENCE_FIELD_PATTERN.test(content)) {
+    errors.push(
+      `${filePath}: Execution Evidence checked item must include ` +
+      '`evidence:`.',
+    );
+  }
+  if (!SUBAGENT_PROGRESS_NEXT_OR_BLOCKER_FIELD_PATTERN.test(content)) {
+    errors.push(
+      `${filePath}: Execution Evidence checked item must include ` +
+      '`next:` or `blocker:`.',
+    );
+  }
+  if (
+    options[LEDGER_VALIDATION_ALLOW_OPEN_IMPLEMENTATION] !== true &&
+    SUBAGENT_ATTEMPT_OPEN_STATUSES.includes(status)
+  ) {
+    errors.push(
+      `${filePath}: Execution Evidence checked item status \`${status}\` ` +
+      'is not terminal for closure.',
+    );
+  }
+  return errors;
+}
+
+function findImplementationExecutionEvidenceItem(checkedItems = []) {
+  return checkedItems.find((item) =>
+    EXECUTION_EVIDENCE_IMPLEMENTATION_PATTERN.test(item));
+}
+
+export function validateExecutionEvidenceLedger(content, filePath, options = {}) {
+  const ledger = extractExecutionEvidenceLedger(content);
+  if (!ledger) {
+    return options[LEDGER_VALIDATION_REQUIRES_LEDGER] ?
+      [`${filePath}: Execution Evidence is required.`] :
+      [];
+  }
+  if (
+    options[LEDGER_VALIDATION_ALLOW_PENDING_SUBAGENT_LEDGER] &&
+    !options[LEDGER_VALIDATION_REQUIRES_LEDGER]
+  ) {
+    return [];
+  }
+  const errors = [];
+  if (
+    hasOpenChecklist(ledger) &&
+    options[LEDGER_VALIDATION_ALLOW_OPEN_IMPLEMENTATION] !== true
+  ) {
+    errors.push(`${filePath}: Execution Evidence has open items.`);
+  }
+  const checkedItems = extractCheckedChecklistItems(ledger);
+  if (
+    options[LEDGER_VALIDATION_REQUIRES_LEDGER] &&
+    checkedItems.length === NUM_ZERO
+  ) {
+    errors.push(
+      `${filePath}: Execution Evidence must record at least one checked ` +
+      'implementation evidence item before closure.',
+    );
+  }
+  for (const checkedItem of checkedItems) {
+    errors.push(...validateCheckedExecutionEvidenceItem(
+      checkedItem,
+      filePath,
+      options,
+    ));
+  }
+  const implementationItem =
+    findImplementationExecutionEvidenceItem(checkedItems);
+  if (
+    options[LEDGER_VALIDATION_REQUIRES_LEDGER] &&
+    options[LEDGER_VALIDATION_ALLOW_OPEN_IMPLEMENTATION] !== true
+  ) {
+    if (!implementationItem) {
+      errors.push(
+        `${filePath}: Execution Evidence must include a checked ` +
+        'implementation item before closure.',
+      );
+    } else {
+      if (!EXECUTION_EVIDENCE_TERMINAL_STATUS_PATTERN.test(implementationItem)) {
+        errors.push(
+          `${filePath}: Execution Evidence implementation item must record ` +
+          'status validated, passed, green, success, or done.',
+        );
+      }
+      if (!SUBAGENT_PARENT_REVALIDATION_PATTERN.test(implementationItem)) {
+        errors.push(
+          `${filePath}: Execution Evidence implementation item must record ` +
+          '`parent revalidated focused proof: yes` before closure.',
+        );
+      }
     }
   }
   return errors;
@@ -4287,7 +4410,7 @@ function buildSubagentValidationOptions(fileStatus, metadata, phase, options = {
     metadata !== null &&
     metadataRequiresSubagentSequencing(metadata) &&
     (
-      fileStatus === STATUS_ACTIVE ||
+      (fileStatus === STATUS_ACTIVE && phase === VALIDATION_PHASE_CLOSURE) ||
       isCurrentPolicyClosedSubagentMetadata(fileStatus, metadata) ||
       forceClosedPackageLedger
     ) &&
@@ -4333,42 +4456,55 @@ async function validatePackageFile(filePath, options = {}) {
     },
   );
   if (!subagentValidation.skipSubagentLedger) {
-    errors.push(...validateSubagentSequencingLedger(content, relativePath, {
-      [LEDGER_VALIDATION_REQUIRES_LEDGER]:
-        subagentValidation.requiresSubagentLedger,
-      [LEDGER_VALIDATION_REQUIRES_STRICT_ENTRIES]:
-        subagentValidation.requiresSubagentLedger,
-      [LEDGER_VALIDATION_ALLOW_OPEN_IMPLEMENTATION]:
-        subagentValidation.allowOpenImplementation,
-      [LEDGER_VALIDATION_ALLOW_UNAVAILABLE_SUBAGENTS]:
-        subagentValidation.allowUnavailableSubagents,
-      [LEDGER_VALIDATION_ALLOW_PENDING_SUBAGENT_LEDGER]:
-        fileStatus === STATUS_TODO,
-    }));
-    errors.push(...validateSubagentProgressLedger(content, relativePath, {
-      [LEDGER_VALIDATION_REQUIRES_LEDGER]:
-        subagentValidation.requiresSubagentLedger,
-      [LEDGER_VALIDATION_REQUIRES_STRICT_ENTRIES]:
-        subagentValidation.requiresSubagentLedger,
-      [LEDGER_VALIDATION_ALLOW_OPEN_IMPLEMENTATION]:
-        subagentValidation.allowOpenImplementation,
-      [LEDGER_VALIDATION_ALLOW_UNAVAILABLE_SUBAGENTS]:
-        subagentValidation.allowUnavailableSubagents,
-      [LEDGER_VALIDATION_ALLOW_PENDING_SUBAGENT_LEDGER]:
-        fileStatus === STATUS_TODO,
-    }));
-    errors.push(...validateSubagentAttemptLedger(content, relativePath, {
-      [LEDGER_VALIDATION_REQUIRES_LEDGER]:
-        subagentValidation.requiresSubagentLedger,
-      [LEDGER_VALIDATION_REQUIRES_STRICT_ENTRIES]:
-        subagentValidation.requiresSubagentLedger,
-      [LEDGER_VALIDATION_ALLOW_OPEN_IMPLEMENTATION]:
-        subagentValidation.allowOpenImplementation,
-      [LEDGER_VALIDATION_ALLOW_UNAVAILABLE_SUBAGENTS]:
-        subagentValidation.allowUnavailableSubagents,
-      [LEDGER_VALIDATION_ALLOW_PENDING_SUBAGENT_LEDGER]:
-        fileStatus === STATUS_TODO,
-    }));
+    const hasExecutionEvidence =
+      extractExecutionEvidenceLedger(content) !== null;
+    if (hasExecutionEvidence) {
+      errors.push(...validateExecutionEvidenceLedger(content, relativePath, {
+        [LEDGER_VALIDATION_REQUIRES_LEDGER]:
+          subagentValidation.requiresSubagentLedger,
+        [LEDGER_VALIDATION_ALLOW_OPEN_IMPLEMENTATION]:
+          subagentValidation.allowOpenImplementation,
+        [LEDGER_VALIDATION_ALLOW_PENDING_SUBAGENT_LEDGER]:
+          fileStatus === STATUS_TODO,
+      }));
+    } else if (subagentValidation.requiresSubagentLedger) {
+      errors.push(...validateSubagentSequencingLedger(content, relativePath, {
+        [LEDGER_VALIDATION_REQUIRES_LEDGER]:
+          subagentValidation.requiresSubagentLedger,
+        [LEDGER_VALIDATION_REQUIRES_STRICT_ENTRIES]:
+          subagentValidation.requiresSubagentLedger,
+        [LEDGER_VALIDATION_ALLOW_OPEN_IMPLEMENTATION]:
+          subagentValidation.allowOpenImplementation,
+        [LEDGER_VALIDATION_ALLOW_UNAVAILABLE_SUBAGENTS]:
+          subagentValidation.allowUnavailableSubagents,
+        [LEDGER_VALIDATION_ALLOW_PENDING_SUBAGENT_LEDGER]:
+          fileStatus === STATUS_TODO,
+      }));
+      errors.push(...validateSubagentProgressLedger(content, relativePath, {
+        [LEDGER_VALIDATION_REQUIRES_LEDGER]:
+          subagentValidation.requiresSubagentLedger,
+        [LEDGER_VALIDATION_REQUIRES_STRICT_ENTRIES]:
+          subagentValidation.requiresSubagentLedger,
+        [LEDGER_VALIDATION_ALLOW_OPEN_IMPLEMENTATION]:
+          subagentValidation.allowOpenImplementation,
+        [LEDGER_VALIDATION_ALLOW_UNAVAILABLE_SUBAGENTS]:
+          subagentValidation.allowUnavailableSubagents,
+        [LEDGER_VALIDATION_ALLOW_PENDING_SUBAGENT_LEDGER]:
+          fileStatus === STATUS_TODO,
+      }));
+      errors.push(...validateSubagentAttemptLedger(content, relativePath, {
+        [LEDGER_VALIDATION_REQUIRES_LEDGER]:
+          subagentValidation.requiresSubagentLedger,
+        [LEDGER_VALIDATION_REQUIRES_STRICT_ENTRIES]:
+          subagentValidation.requiresSubagentLedger,
+        [LEDGER_VALIDATION_ALLOW_OPEN_IMPLEMENTATION]:
+          subagentValidation.allowOpenImplementation,
+        [LEDGER_VALIDATION_ALLOW_UNAVAILABLE_SUBAGENTS]:
+          subagentValidation.allowUnavailableSubagents,
+        [LEDGER_VALIDATION_ALLOW_PENDING_SUBAGENT_LEDGER]:
+          fileStatus === STATUS_TODO,
+      }));
+    }
   }
   errors.push(...validateCoreLogicBrief(content, relativePath, {
     [LEDGER_VALIDATION_REQUIRES_LEDGER]:
@@ -4845,8 +4981,9 @@ async function validateCurrentBlockerFreshness() {
     null;
   if (!activePackageFile && !allowClosedSnapshot) {
     errors.push(
-      `${CURRENT_BLOCKER_JSON_PATH}: ${ERROR_NO_ACTIVE_PACKAGE} Run ` +
-      `${CURRENT_BLOCKER_REPAIR_COMMAND} after activating a package.`,
+      `${CURRENT_BLOCKER_JSON_PATH}: ` +
+      `${await formatActivePackageResolutionFailure(activeSprintFile)} Run ` +
+      `${CURRENT_BLOCKER_REPAIR_COMMAND} after updating the active sprint.`,
     );
   }
   const packagePath = normalizeSnapshotPathValue(currentBlocker.package);
@@ -5156,10 +5293,11 @@ function buildDoctorSuggestion(error) {
       'example `npm run analyze:topology-convergence -- <artifact> --explain ' +
       '<edge>` or `npm test -- <focused-test.js>`.';
   }
-  if (/Subagent Sequencing Ledger/iu.test(error)) {
-    return 'Use `npm run work:subagent-prompt -- --role review|fix|' +
-      'implementation --package <package>` to generate bounded role prompts, ' +
-      'then record the returned real agent id in the ledger.';
+  if (/Execution Evidence|Subagent Sequencing Ledger/iu.test(error)) {
+    return 'Prefer one `## Execution Evidence` section with checked role ' +
+      'entries that record `status:`, `evidence:`, `next:` or `blocker:`, ' +
+      'and `parent revalidated focused proof: yes` for closure. Agent ' +
+      'identity is optional provenance.';
   }
   if (/Subagent Progress Ledger/iu.test(error)) {
     return 'Add a `## Subagent Progress And Attempt Ledger` and have each ' +
@@ -5299,42 +5437,55 @@ export function buildPackageDoctorLines(filePath, content, options = {}) {
     phase,
   );
   if (!subagentValidation.skipSubagentLedger) {
-    errors.push(...validateSubagentSequencingLedger(content, relativePath, {
-      [LEDGER_VALIDATION_REQUIRES_LEDGER]:
-        subagentValidation.requiresSubagentLedger,
-      [LEDGER_VALIDATION_REQUIRES_STRICT_ENTRIES]:
-        subagentValidation.requiresSubagentLedger,
-      [LEDGER_VALIDATION_ALLOW_OPEN_IMPLEMENTATION]:
-        subagentValidation.allowOpenImplementation,
-      [LEDGER_VALIDATION_ALLOW_UNAVAILABLE_SUBAGENTS]:
-        subagentValidation.allowUnavailableSubagents,
-      [LEDGER_VALIDATION_ALLOW_PENDING_SUBAGENT_LEDGER]:
-        fileStatus === STATUS_TODO,
-    }));
-    errors.push(...validateSubagentProgressLedger(content, relativePath, {
-      [LEDGER_VALIDATION_REQUIRES_LEDGER]:
-        subagentValidation.requiresSubagentLedger,
-      [LEDGER_VALIDATION_REQUIRES_STRICT_ENTRIES]:
-        subagentValidation.requiresSubagentLedger,
-      [LEDGER_VALIDATION_ALLOW_OPEN_IMPLEMENTATION]:
-        subagentValidation.allowOpenImplementation,
-      [LEDGER_VALIDATION_ALLOW_UNAVAILABLE_SUBAGENTS]:
-        subagentValidation.allowUnavailableSubagents,
-      [LEDGER_VALIDATION_ALLOW_PENDING_SUBAGENT_LEDGER]:
-        fileStatus === STATUS_TODO,
-    }));
-    errors.push(...validateSubagentAttemptLedger(content, relativePath, {
-      [LEDGER_VALIDATION_REQUIRES_LEDGER]:
-        subagentValidation.requiresSubagentLedger,
-      [LEDGER_VALIDATION_REQUIRES_STRICT_ENTRIES]:
-        subagentValidation.requiresSubagentLedger,
-      [LEDGER_VALIDATION_ALLOW_OPEN_IMPLEMENTATION]:
-        subagentValidation.allowOpenImplementation,
-      [LEDGER_VALIDATION_ALLOW_UNAVAILABLE_SUBAGENTS]:
-        subagentValidation.allowUnavailableSubagents,
-      [LEDGER_VALIDATION_ALLOW_PENDING_SUBAGENT_LEDGER]:
-        fileStatus === STATUS_TODO,
-    }));
+    const hasExecutionEvidence =
+      extractExecutionEvidenceLedger(content) !== null;
+    if (hasExecutionEvidence) {
+      errors.push(...validateExecutionEvidenceLedger(content, relativePath, {
+        [LEDGER_VALIDATION_REQUIRES_LEDGER]:
+          subagentValidation.requiresSubagentLedger,
+        [LEDGER_VALIDATION_ALLOW_OPEN_IMPLEMENTATION]:
+          subagentValidation.allowOpenImplementation,
+        [LEDGER_VALIDATION_ALLOW_PENDING_SUBAGENT_LEDGER]:
+          fileStatus === STATUS_TODO,
+      }));
+    } else if (subagentValidation.requiresSubagentLedger) {
+      errors.push(...validateSubagentSequencingLedger(content, relativePath, {
+        [LEDGER_VALIDATION_REQUIRES_LEDGER]:
+          subagentValidation.requiresSubagentLedger,
+        [LEDGER_VALIDATION_REQUIRES_STRICT_ENTRIES]:
+          subagentValidation.requiresSubagentLedger,
+        [LEDGER_VALIDATION_ALLOW_OPEN_IMPLEMENTATION]:
+          subagentValidation.allowOpenImplementation,
+        [LEDGER_VALIDATION_ALLOW_UNAVAILABLE_SUBAGENTS]:
+          subagentValidation.allowUnavailableSubagents,
+        [LEDGER_VALIDATION_ALLOW_PENDING_SUBAGENT_LEDGER]:
+          fileStatus === STATUS_TODO,
+      }));
+      errors.push(...validateSubagentProgressLedger(content, relativePath, {
+        [LEDGER_VALIDATION_REQUIRES_LEDGER]:
+          subagentValidation.requiresSubagentLedger,
+        [LEDGER_VALIDATION_REQUIRES_STRICT_ENTRIES]:
+          subagentValidation.requiresSubagentLedger,
+        [LEDGER_VALIDATION_ALLOW_OPEN_IMPLEMENTATION]:
+          subagentValidation.allowOpenImplementation,
+        [LEDGER_VALIDATION_ALLOW_UNAVAILABLE_SUBAGENTS]:
+          subagentValidation.allowUnavailableSubagents,
+        [LEDGER_VALIDATION_ALLOW_PENDING_SUBAGENT_LEDGER]:
+          fileStatus === STATUS_TODO,
+      }));
+      errors.push(...validateSubagentAttemptLedger(content, relativePath, {
+        [LEDGER_VALIDATION_REQUIRES_LEDGER]:
+          subagentValidation.requiresSubagentLedger,
+        [LEDGER_VALIDATION_REQUIRES_STRICT_ENTRIES]:
+          subagentValidation.requiresSubagentLedger,
+        [LEDGER_VALIDATION_ALLOW_OPEN_IMPLEMENTATION]:
+          subagentValidation.allowOpenImplementation,
+        [LEDGER_VALIDATION_ALLOW_UNAVAILABLE_SUBAGENTS]:
+          subagentValidation.allowUnavailableSubagents,
+        [LEDGER_VALIDATION_ALLOW_PENDING_SUBAGENT_LEDGER]:
+          fileStatus === STATUS_TODO,
+      }));
+    }
   }
   errors.push(...validateCoreLogicBrief(content, relativePath, {
     [LEDGER_VALIDATION_REQUIRES_LEDGER]:
@@ -5514,9 +5665,7 @@ async function resolveDoctorPackagePath(args) {
   }
   const activeSprintFile = await findActiveSprintFile();
   const activePackageFile = await findActivePackageFile(activeSprintFile);
-  if (!activePackageFile) {
-    throw new Error(ERROR_NO_ACTIVE_PACKAGE);
-  }
+  await assertResolvableActivePackage(activeSprintFile, activePackageFile);
   return activePackageFile;
 }
 
@@ -5544,13 +5693,37 @@ export async function findActiveSprintFile() {
   ) || null;
 }
 
-function findActivePackageLinkInSprint(content) {
+export function findActivePackageLinkInSprint(content) {
+  const currentEdgeCardSection = extractCurrentEdgeCardSection(content);
+  const currentEdgeCardMatch = currentEdgeCardSection?.match(
+    CURRENT_EDGE_CARD_ACTIVE_PACKAGE_REFERENCE_PATTERN,
+  );
+  if (currentEdgeCardMatch) {
+    return currentEdgeCardMatch[NUM_ONE];
+  }
   const currentMatch = content.match(CURRENT_ACTIVE_PACKAGE_LINK_PATTERN);
   if (currentMatch) {
     return currentMatch[NUM_ONE];
   }
   const match = content.match(ACTIVE_PACKAGE_LINK_PATTERN);
-  return match ? match[NUM_ONE] : null;
+  if (match) {
+    return match[NUM_ONE];
+  }
+  const referenceMatch = content.match(ACTIVE_PACKAGE_REFERENCE_PATTERN);
+  return referenceMatch ? referenceMatch[NUM_ONE] : null;
+}
+
+export function resolveSprintPackageReference(activeSprintFile, packageReference) {
+  const normalizedReference = normalizeLedgerText(packageReference);
+  if (
+    path.isAbsolute(normalizedReference) ||
+    normalizedReference.startsWith(`${WORK_ROOT}/`)
+  ) {
+    return normalizeCliPath(normalizedReference);
+  }
+  return normalizeCliPath(
+    path.join(path.dirname(activeSprintFile), normalizedReference),
+  );
 }
 
 export async function findActivePackageFile(activeSprintFile) {
@@ -5558,18 +5731,53 @@ export async function findActivePackageFile(activeSprintFile) {
   const activePackages = packageFiles.filter((filePath) =>
     getPackageStatusFromPath(filePath) === STATUS_ACTIVE,
   );
-  if (activePackages.length === NUM_ONE) {
-    return activePackages[NUM_ZERO];
+  if (activeSprintFile) {
+    const sprintContent = await readTextFile(activeSprintFile);
+    const packageLink = findActivePackageLinkInSprint(sprintContent);
+    if (packageLink) {
+      const sprintPackageFile = resolveSprintPackageReference(
+        activeSprintFile,
+        packageLink,
+      );
+      const matchingActivePackage = activePackages.find((filePath) =>
+        normalizeRelativePath(filePath) === normalizeRelativePath(sprintPackageFile),
+      );
+      return matchingActivePackage || sprintPackageFile;
+    }
   }
-  if (!activeSprintFile) {
-    return null;
+  return activePackages.length === NUM_ONE ? activePackages[NUM_ZERO] : null;
+}
+
+async function formatActivePackageResolutionFailure(activeSprintFile) {
+  const packageFiles = await listPackageFiles();
+  const activePackages = packageFiles
+    .filter((filePath) => getPackageStatusFromPath(filePath) === STATUS_ACTIVE)
+    .map(normalizeRelativePath);
+  const sprintMessage = activeSprintFile ?
+    `active sprint ${normalizeRelativePath(activeSprintFile)}` :
+    'no active sprint';
+  if (activePackages.length === NUM_ZERO) {
+    return `${ERROR_NO_ACTIVE_PACKAGE} Found ${sprintMessage} and no ` +
+      'active-* package files.';
   }
-  const sprintContent = await readTextFile(activeSprintFile);
-  const packageLink = findActivePackageLinkInSprint(sprintContent);
-  if (!packageLink) {
-    return null;
+  return `${ERROR_NO_ACTIVE_PACKAGE} Found ${sprintMessage} and active ` +
+    `package files: ${activePackages.join(', ')}. The active sprint must ` +
+    'name exactly one package in the Current Edge Card `Active package:` ' +
+    'line or a current-active-package markdown link.';
+}
+
+async function assertResolvableActivePackage(activeSprintFile, activePackageFile) {
+  if (!activePackageFile) {
+    throw new Error(await formatActivePackageResolutionFailure(activeSprintFile));
   }
-  return path.normalize(path.join(path.dirname(activeSprintFile), packageLink));
+  if (!(await pathExists(activePackageFile))) {
+    throw new Error(
+      `${normalizeRelativePath(activePackageFile)}: active package named by ` +
+      `${normalizeRelativePath(activeSprintFile)} does not exist. Update the ` +
+      'active sprint Current Edge Card or activate the successor package, then ' +
+      `run ${CURRENT_BLOCKER_REPAIR_COMMAND}.`,
+    );
+  }
 }
 
 function metadataArray(metadata, fieldName) {
@@ -6191,9 +6399,7 @@ async function currentBlockerCommand(args) {
     throw new Error(ERROR_NO_ACTIVE_SPRINT);
   }
   const activePackageFile = await findActivePackageFile(activeSprintFile);
-  if (!activePackageFile) {
-    throw new Error(ERROR_NO_ACTIVE_PACKAGE);
-  }
+  await assertResolvableActivePackage(activeSprintFile, activePackageFile);
   const packageContent = await readTextFile(activePackageFile);
   const metadata = parsePackageMetadata(
     packageContent,
@@ -6252,6 +6458,14 @@ async function currentBlockerCommand(args) {
   console.log(jsonContent);
 }
 
+async function repairCommand() {
+  await currentBlockerCommand([CLI_FLAG_WRITE]);
+  const freshnessErrors = await validateCurrentBlockerFreshness();
+  if (freshnessErrors.length > NUM_ZERO) {
+    throw new Error(freshnessErrors.join(NEWLINE));
+  }
+}
+
 function buildPackageTargetPath(packagePath, targetStatus) {
   const directoryPath = path.dirname(packagePath);
   const fileName = path.basename(packagePath);
@@ -6291,6 +6505,61 @@ async function rewriteWorkReferences(oldPackagePath, newPackagePath) {
     }
     await writeTextFile(filePath, content.split(oldFileName).join(newFileName));
   }
+}
+
+async function validateMigrationSuccessorPackage(successorPath) {
+  if (!successorPath) {
+    return null;
+  }
+  const successorFile = normalizeCliPath(successorPath);
+  const relativeSuccessorPath = normalizeRelativePath(successorFile);
+  if (getPackageStatusFromPath(successorFile) !== STATUS_ACTIVE) {
+    throw new Error(
+      `${relativeSuccessorPath}: migration successor must be an active-* package.`,
+    );
+  }
+  if (!(await pathExists(successorFile))) {
+    throw new Error(
+      `${relativeSuccessorPath}: migration successor package does not exist.`,
+    );
+  }
+  const successorContent = await readTextFile(successorFile);
+  const successorMetadata = parsePackageMetadata(
+    successorContent,
+    relativeSuccessorPath,
+  );
+  if (!successorMetadata) {
+    throw new Error(
+      `${relativeSuccessorPath}: migration successor has no work-package metadata.`,
+    );
+  }
+  return {
+    filePath: successorFile,
+    metadata: successorMetadata,
+  };
+}
+
+async function upsertSuccessorCurrentEdgeCard(successorPackage) {
+  if (!successorPackage) {
+    return false;
+  }
+  const activeSprintFile = await findActiveSprintFile();
+  if (!activeSprintFile) {
+    return false;
+  }
+  const payload = buildCurrentBlockerPayload(
+    activeSprintFile,
+    successorPackage.filePath,
+    successorPackage.metadata,
+    {packageHistoryEntries: await collectPackageHistoryEntries()},
+  );
+  const sprintContent = await readTextFile(activeSprintFile);
+  const nextSprintContent = upsertSprintCurrentEdgeCard(sprintContent, payload);
+  if (nextSprintContent === sprintContent) {
+    return false;
+  }
+  await writeTextFile(activeSprintFile, nextSprintContent);
+  return true;
 }
 
 async function regenerateCurrentBlockerWhenActivePackageExists() {
@@ -6363,6 +6632,9 @@ async function movePackageCommand(args, fallbackTargetStatus, requiresSuccessor)
   const targetPath = buildPackageTargetPath(packagePath, targetStatus);
   const metadata = parsePackageMetadata(content, normalizeRelativePath(packagePath));
   const successorPath = successor ? normalizeRelativePath(normalizeCliPath(successor)) : null;
+  const migrationSuccessor = requiresSuccessor ?
+    await validateMigrationSuccessorPackage(successorPath) :
+    null;
   if (!args.includes(CLI_FLAG_WRITE)) {
     console.log(
       `Dry run: ${normalizeRelativePath(packagePath)} -> ${normalizeRelativePath(targetPath)}`,
@@ -6401,6 +6673,7 @@ async function movePackageCommand(args, fallbackTargetStatus, requiresSuccessor)
   }
   await rewriteWorkReferences(packagePath, targetPath);
   if (args.includes(CLI_FLAG_TRANSACTION)) {
+    await upsertSuccessorCurrentEdgeCard(migrationSuccessor);
     const regenerated = await regenerateCurrentBlockerWhenActivePackageExists();
     if (regenerated) {
       const freshnessErrors = await validateCurrentBlockerFreshness();
@@ -6427,6 +6700,10 @@ async function main() {
     }
     if (command === CLI_COMMAND_CURRENT_BLOCKER) {
       await currentBlockerCommand(args);
+      return;
+    }
+    if (command === CLI_COMMAND_REPAIR) {
+      await repairCommand();
       return;
     }
     if (command === CLI_COMMAND_CLOSE) {

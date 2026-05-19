@@ -5,6 +5,9 @@ import path from 'node:path';
 import process from 'node:process';
 import {fileURLToPath} from 'node:url';
 import {
+  MODEL_FIT_54_MODEL,
+  MODEL_FIT_DEFAULT_FRONTIER_MODEL,
+  MODEL_FIT_SPARK_MODEL,
   OUTPUT_PROFILE_MEDIUM,
   VALID_OUTPUT_PROFILES,
 } from './work-package-schema.js';
@@ -68,6 +71,9 @@ const VALIDATION_SKIPPED = 'skipped';
 const RECOMMEND_ESCALATE = 'escalate';
 const RECOMMEND_DEESCALATE = 'de-escalate';
 const RECOMMEND_HOLD = 'hold';
+const MODEL_EXECUTOR_PACKAGE_MINIMUM = 'package-minimum';
+const MODEL_FIT_GPT_5_CODEX = 'gpt-5-codex';
+const MODEL_FIT_GPT_5_5 = 'gpt-5.5';
 const EMPTY_TEXT = '';
 const NEWLINE = '\n';
 const FLAG_PREFIX = '--';
@@ -143,6 +149,45 @@ const SUMMARY_DEESCALATE_REASON =
   'Recent high-effort entries are mostly clean with low correction load.';
 const SUMMARY_HOLD_REASON =
   'Recent entries do not justify changing model or effort.';
+const SUMMARY_SIZING_EMPTY_REASON =
+  'No ledger evidence; use the package Model Fit target.';
+const SUMMARY_SIZING_ESCALATE_REASON =
+  'Escalate only to the bounded package target; split lower-model children before using a stronger inherited model.';
+const SUMMARY_SIZING_DEESCALATE_REASON =
+  'Clean high-effort work supports lowering to the cheapest matching package lane.';
+const SUMMARY_SIZING_HOLD_REASON =
+  'Use the package Model Fit target and avoid inherited high-model defaults.';
+const PACKAGE_CLASS_BOUNDED_IMPLEMENTATION = 'bounded-implementation';
+const PACKAGE_CLASS_MECHANICAL_MAINTENANCE = 'mechanical-maintenance';
+const PACKAGE_CLASS_TEST_ONLY_PROOF = 'test-only-proof';
+const PACKAGE_CLASS_BOUNDED_EXPERIMENT = 'bounded-experiment';
+const PACKAGE_CLASS_SINGLE_FILE_RUNTIME = 'single-file-runtime';
+const PACKAGE_CLASS_RUNTIME_OWNER_BOUNDARY = 'runtime-owner-boundary';
+const PACKAGE_CLASS_REPRESENTATIVE_FRONTIER_CLOSURE =
+  'representative-frontier-closure';
+const PACKAGE_CLASS_ARCHITECTURE_GAP_ANALYSIS = 'architecture-gap-analysis';
+const PACKAGE_CLASS_DIAGNOSTIC_CLASSIFICATION = 'diagnostic-classification';
+const MODEL_RANKS = new Map([
+  [MODEL_FIT_SPARK_MODEL, 1],
+  [MODEL_FIT_54_MODEL, 2],
+  [MODEL_FIT_DEFAULT_FRONTIER_MODEL, 3],
+  [MODEL_FIT_GPT_5_CODEX, 4],
+  [MODEL_FIT_GPT_5_5, 5],
+]);
+const TARGET_MODEL_BY_PACKAGE_CLASS = Object.freeze({
+  [PACKAGE_CLASS_BOUNDED_IMPLEMENTATION]: MODEL_FIT_SPARK_MODEL,
+  [PACKAGE_CLASS_MECHANICAL_MAINTENANCE]: MODEL_FIT_SPARK_MODEL,
+  [PACKAGE_CLASS_TEST_ONLY_PROOF]: MODEL_FIT_SPARK_MODEL,
+  [PACKAGE_CLASS_BOUNDED_EXPERIMENT]: MODEL_FIT_SPARK_MODEL,
+  [PACKAGE_CLASS_SINGLE_FILE_RUNTIME]: MODEL_FIT_54_MODEL,
+  [PACKAGE_CLASS_RUNTIME_OWNER_BOUNDARY]: MODEL_FIT_DEFAULT_FRONTIER_MODEL,
+  [PACKAGE_CLASS_REPRESENTATIVE_FRONTIER_CLOSURE]:
+    MODEL_FIT_DEFAULT_FRONTIER_MODEL,
+  [PACKAGE_CLASS_ARCHITECTURE_GAP_ANALYSIS]:
+    MODEL_FIT_DEFAULT_FRONTIER_MODEL,
+  [PACKAGE_CLASS_DIAGNOSTIC_CLASSIFICATION]:
+    MODEL_FIT_DEFAULT_FRONTIER_MODEL,
+});
 
 function normalizeText(value) {
   if (value === null || value === undefined) {
@@ -325,6 +370,70 @@ function countBy(entries = [], fieldName) {
   });
 }
 
+function firstCountKey(counts = []) {
+  const [first] = counts.filter(([key]) => key !== SUMMARY_EMPTY_COUNTS);
+  return Array.isArray(first) ? normalizeText(first[NUM_ZERO]) : EMPTY_TEXT;
+}
+
+function modelRank(model) {
+  return MODEL_RANKS.get(normalizeLookupValue(model)) || NUM_ZERO;
+}
+
+function highestKnownModel(models = [], fallback = EMPTY_TEXT) {
+  const knownModels = models
+    .map(normalizeText)
+    .filter((model) => modelRank(model) > NUM_ZERO);
+  if (knownModels.length === NUM_ZERO) {
+    return fallback;
+  }
+  return knownModels.reduce((highest, model) =>
+    modelRank(model) > modelRank(highest) ? model : highest);
+}
+
+function lowestKnownModel(models = [], fallback = EMPTY_TEXT) {
+  const knownModels = models
+    .map(normalizeText)
+    .filter((model) => modelRank(model) > NUM_ZERO);
+  if (knownModels.length === NUM_ZERO) {
+    return fallback;
+  }
+  return knownModels.reduce((lowest, model) =>
+    modelRank(model) < modelRank(lowest) ? model : lowest);
+}
+
+function targetModelForPackageClass(packageClass) {
+  return TARGET_MODEL_BY_PACKAGE_CLASS[normalizeLookupValue(packageClass)] ||
+    EMPTY_TEXT;
+}
+
+function dominantPackageClassTargetModel(recentEntries = []) {
+  return targetModelForPackageClass(
+    firstCountKey(countBy(recentEntries, RECORD_FIELD_PACKAGE_CLASS)),
+  );
+}
+
+function dominantIntendedMinimumModel(recentEntries = []) {
+  return firstCountKey(
+    countBy(recentEntries, RECORD_FIELD_INTENDED_MINIMUM_MODEL),
+  );
+}
+
+function actualAboveIntendedMinimumCount(recentEntries = []) {
+  return countMatching(recentEntries, (entry) => {
+    const actualRank = modelRank(entry[RECORD_FIELD_MODEL]);
+    const intendedRank = modelRank(entry[RECORD_FIELD_INTENDED_MINIMUM_MODEL]);
+    return actualRank > NUM_ZERO &&
+      intendedRank > NUM_ZERO &&
+      actualRank > intendedRank;
+  });
+}
+
+function recordedModelCount(recentEntries = [], model) {
+  const normalizedModel = normalizeLookupValue(model);
+  return countMatching(recentEntries, (entry) =>
+    normalizeLookupValue(entry[RECORD_FIELD_MODEL]) === normalizedModel);
+}
+
 function renderCounts(counts = []) {
   if (counts.length === NUM_ZERO) {
     return SUMMARY_EMPTY_COUNTS;
@@ -431,10 +540,76 @@ function buildRecommendation(recentEntries = []) {
   };
 }
 
+function buildModelSizingAdvice(recentEntries = [], recommendation = RECOMMEND_HOLD) {
+  if (recentEntries.length === NUM_ZERO) {
+    return {
+      recommendedExecutionModel: MODEL_EXECUTOR_PACKAGE_MINIMUM,
+      modelSizingReason: SUMMARY_SIZING_EMPTY_REASON,
+      actualAboveIntendedMinimumCount: NUM_ZERO,
+      gpt55RecordedCount: NUM_ZERO,
+    };
+  }
+
+  const intendedMinimumModel = dominantIntendedMinimumModel(recentEntries);
+  const packageClassTargetModel =
+    dominantPackageClassTargetModel(recentEntries);
+  const fallbackTarget =
+    intendedMinimumModel ||
+    packageClassTargetModel ||
+    MODEL_EXECUTOR_PACKAGE_MINIMUM;
+  const escalationTarget = highestKnownModel(
+    [
+      intendedMinimumModel,
+      packageClassTargetModel,
+      MODEL_FIT_DEFAULT_FRONTIER_MODEL,
+    ],
+    MODEL_FIT_DEFAULT_FRONTIER_MODEL,
+  );
+  const deEscalationTarget = lowestKnownModel(
+    [intendedMinimumModel, packageClassTargetModel],
+    MODEL_FIT_SPARK_MODEL,
+  );
+
+  if (recommendation === RECOMMEND_ESCALATE) {
+    return {
+      recommendedExecutionModel: escalationTarget,
+      modelSizingReason: SUMMARY_SIZING_ESCALATE_REASON,
+      actualAboveIntendedMinimumCount:
+        actualAboveIntendedMinimumCount(recentEntries),
+      gpt55RecordedCount:
+        recordedModelCount(recentEntries, MODEL_FIT_GPT_5_5),
+    };
+  }
+
+  if (recommendation === RECOMMEND_DEESCALATE) {
+    return {
+      recommendedExecutionModel: deEscalationTarget,
+      modelSizingReason: SUMMARY_SIZING_DEESCALATE_REASON,
+      actualAboveIntendedMinimumCount:
+        actualAboveIntendedMinimumCount(recentEntries),
+      gpt55RecordedCount:
+        recordedModelCount(recentEntries, MODEL_FIT_GPT_5_5),
+    };
+  }
+
+  return {
+    recommendedExecutionModel: fallbackTarget,
+    modelSizingReason: SUMMARY_SIZING_HOLD_REASON,
+    actualAboveIntendedMinimumCount:
+      actualAboveIntendedMinimumCount(recentEntries),
+    gpt55RecordedCount:
+      recordedModelCount(recentEntries, MODEL_FIT_GPT_5_5),
+  };
+}
+
 function buildSummary(entries = [], options = {}) {
   const limit = options.recent || NUM_TWENTY;
   const recentEntries = entries.slice(-limit);
   const recommendation = buildRecommendation(recentEntries);
+  const sizingAdvice = buildModelSizingAdvice(
+    recentEntries,
+    recommendation.recommendation,
+  );
 
   return {
     totalEntries: entries.length,
@@ -460,6 +635,7 @@ function buildSummary(entries = [], options = {}) {
     ),
     averageReviewFindings: average(recentEntries, RECORD_FIELD_REVIEW_FINDINGS),
     ...recommendation,
+    ...sizingAdvice,
   };
 }
 
@@ -503,6 +679,14 @@ function renderSummary(summary = {}, ledgerPath = DEFAULT_LEDGER_PATH) {
     `${LIST_PREFIX}Recommendation${LABEL_SEPARATOR}` +
       summary.recommendation,
     `${LIST_PREFIX}Reason${LABEL_SEPARATOR}${summary.reason}`,
+    `${LIST_PREFIX}Recommended executor${LABEL_SEPARATOR}` +
+      summary.recommendedExecutionModel,
+    `${LIST_PREFIX}Model sizing reason${LABEL_SEPARATOR}` +
+      summary.modelSizingReason,
+    `${LIST_PREFIX}Actual above intended minimum${LABEL_SEPARATOR}` +
+      summary.actualAboveIntendedMinimumCount,
+    `${LIST_PREFIX}gpt-5.5 recorded${LABEL_SEPARATOR}` +
+      summary.gpt55RecordedCount,
   );
 
   return `${lines.join(NEWLINE)}${NEWLINE}`;

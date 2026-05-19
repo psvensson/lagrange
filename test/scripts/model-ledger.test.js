@@ -54,6 +54,10 @@ const FLAG_RECENT = '--recent';
 const SUMMARY_RECOMMEND_ESCALATE = 'Recommendation: escalate';
 const SUMMARY_RECOMMEND_DEESCALATE = 'Recommendation: de-escalate';
 const SUMMARY_RECOMMEND_HOLD = 'Recommendation: hold';
+const SUMMARY_RECOMMENDED_FRONTIER_EXECUTOR =
+  'Recommended executor: gpt-5.3-codex';
+const SUMMARY_RECOMMENDED_SPARK_EXECUTOR =
+  'Recommended executor: gpt-5.3-codex-spark';
 const SUMMARY_ENTRIES_EMPTY = 'No entries found.';
 const SUMMARY_MODEL_COUNT = 'Models: gpt-5-codex=1';
 const SUMMARY_OUTPUT_PROFILE_COUNT = 'Output profiles: medium=1';
@@ -215,6 +219,9 @@ test('summary recommends escalation for recent failed proof', (t) => {
   t.match(rendered, SUMMARY_MINIMUM_MODEL_COUNT);
   t.match(rendered, SUMMARY_ESCALATED_FALSE_COUNT);
   t.match(rendered, SUMMARY_RECOMMEND_ESCALATE);
+  t.match(rendered, SUMMARY_RECOMMENDED_FRONTIER_EXECUTOR);
+  t.match(rendered, /Actual above intended minimum: 1/u);
+  t.match(rendered, /gpt-5\.5 recorded: 0/u);
   t.end();
 });
 
@@ -260,6 +267,10 @@ test('summary recommends de-escalation after repeated clean high-effort work',
     t.match(
       renderSummary(buildSummary(cleanHighEffortEntries), 'work/model-ledger.jsonl'),
       SUMMARY_RECOMMEND_DEESCALATE,
+    );
+    t.match(
+      renderSummary(buildSummary(cleanHighEffortEntries), 'work/model-ledger.jsonl'),
+      SUMMARY_RECOMMENDED_SPARK_EXECUTOR,
     );
     t.end();
   });

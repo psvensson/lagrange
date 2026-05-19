@@ -11,8 +11,8 @@
   "owner": "topology_publication_owner",
   "boundary": "publication_convergence",
   "dominantReason": "publication_pending",
-  "currentState": "Scaffolded from representative evidence for publication_ack_convergence.",
-  "nextAction": "Build a replayable handoff fixture for publication_ack_to_active_gate_reconcile_missing and prove whether the publication owner emits the active-gate reconcile handoff or preserves an explicit owner outcome.",
+  "currentState": "Focused replay fixture proves the no-debt publication_pending shape emits a publication active-gate owner reconcile handoff, and the coordinator preserves an explicit target_blocked owner outcome for the empty target without enqueueing downstream recovery work.",
+  "nextAction": "Close this package as a focused same-frontier proof slice, then open a bounded topology_publication_owner / publication_convergence successor to surface the replay-proved handoff contract or target_blocked owner outcome in representative diagnostics before downstream active-gate/readiness edits.",
   "proof": [
     "npm run work:evidence-summary -- test-output/reports/rolling-restart-after-queue-drain-runtime-20260519T151451Z.report.json",
     "npm run work:scenario-triage -- test-output/reports/rolling-restart-after-queue-drain-runtime-20260519T151451Z.report.json --markdown",
@@ -66,8 +66,8 @@
     "hypothesis": "Queue-drain runtime reduced the accepted owner-recovery queue residual, but the publication owner still lacks a replayable proof for the publication_ack_to_active_gate_reconcile_missing edge before downstream active-gate evidence can progress.",
     "stopConditionCheck": "Before runtime edits, run npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-queue-drain-runtime-20260519T151451Z.report.json and npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-queue-drain-runtime-20260519T151451Z.report.json --handoff-probe, then confirm requiredAction=build_replayable_handoff_fixture. Focused proof must build or identify the handoff fixture and prove whether publication owner emits the active-gate reconcile handoff or preserves an explicit owner outcome.",
     "expectedCausalModelChange": "The missing publication_ack_to_active_gate_reconcile edge becomes replayable and classifies into a bounded publication-owner runtime successor, owner-boundary migration, architecture stop, human stop, or representative-green outcome.",
-    "representativeOutcome": "pending-before-rerun",
-    "causalDebt": "Fresh artifact test-output/reports/rolling-restart-after-queue-drain-runtime-20260519T151451Z.report.json remains red at publication_ack_convergence / topology_publication_owner / publication_convergence / publication_pending. Queue-drain residuals are reduced: priority residual witnesses are 0, pending owner reconcile is 0, activeGateOwnerCohortMissingPublishedCount is 0, membershipPublicationHandoffOutcome is absent, and handoff probe resultClassification=publication_ack_to_active_gate_reconcile_missing with requiredAction=build_replayable_handoff_fixture.",
+    "representativeOutcome": "same-frontier",
+    "causalDebt": "Fresh artifact test-output/reports/rolling-restart-after-queue-drain-runtime-20260519T151451Z.report.json remains red at publication_ack_convergence / topology_publication_owner / publication_convergence / publication_pending. Queue-drain residuals are reduced: priority residual witnesses are 0, pending owner reconcile is 0, activeGateOwnerCohortMissingPublishedCount is 0, membershipPublicationHandoffOutcome is absent, and handoff probe resultClassification=publication_ack_to_active_gate_reconcile_missing with requiredAction=build_replayable_handoff_fixture. Focused fixture now proves the no-debt publication_pending replay emits a publication active-gate handoff contract and the coordinator preserves target_blocked / expected_cohort_unavailable instead of enqueuing downstream owner recovery work; the unchanged artifact still lacks that surfaced handoff contract.",
     "crossBoundaryReview": "Startup active-gate, startup readiness, operation workflow, admission, and timeout paths remain frozen until the publication-owner handoff edge is replayable or ownership migrates."
   },
   "scenarioCausalClosure": {
@@ -93,11 +93,11 @@
     "missingCausalEdgeProbe": "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-queue-drain-runtime-20260519T151451Z.report.json --handoff-probe",
     "boundedProgressProof": "Build or identify a replayable handoff fixture and prove whether the publication owner emits the active-gate reconcile handoff or preserves an explicit owner outcome.",
     "boundedProgressProofArtifact": "test-output/reports/rolling-restart-after-queue-drain-runtime-20260519T151451Z.report.json",
-    "expectedObservableTransition": "The handoff fixture proves a publication-owner runtime successor, owner-boundary migration, architecture/human stop, or representative-green route before downstream active-gate symptoms are edited.",
+    "expectedObservableTransition": "Focused fixture proved a publication-owner same-frontier successor: the no-debt publication_pending replay emits an owner reconcile handoff, then normalizes to a target_blocked owner outcome because the representative replay has no expected cohort. Representative evidence remains unchanged until a successor surfaces that contract/outcome.",
     "maxProgressBound": "one fixture/runtime-owner-boundary package before rerun or renewed causal escalation",
     "sameFrontierFallback": "If the handoff fixture cannot prove the missing edge or an explicit owner outcome, stop for architecture or human escalation instead of editing downstream active-gate/readiness paths.",
-    "expectedNextFrontier": "runtime successor selected, owner boundary migrated, architecture/human stop, or representative green",
-    "resultClassification": "pending-before-probe",
+    "expectedNextFrontier": "bounded publication-owner projection/runtime successor or architecture/human stop before downstream active-gate edits",
+    "resultClassification": "same-frontier",
     "stopCondition": "continue-local-fix",
     "recentFrontierHistory": [
       "work/packages/done-20260519-topology-publication-same-frontier-architecture-gate.md / topology_publication_owner / publication_convergence / same-frontier",
@@ -167,7 +167,7 @@
       }
     ],
     "selectedChoice": "publication-active-gate-handoff-fixture-runtime",
-    "nextAction": "Run required review/fix/implementation sequencing, then build the replayable publication-owner handoff fixture."
+    "nextAction": "Use the recorded focused implementation evidence to close this proof slice or open the bounded publication-owner successor; do not add review/fix sequencing unless fresh evidence changes the package scope."
   },
   "predecessor": null
 }

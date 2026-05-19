@@ -26,6 +26,7 @@ import {
   CONTROL_PLANE_CONVERGENCE_PRESSURE_OUTCOME,
 } from '../../src/control-plane/control-plane-error-classification.js';
 import {
+  buildPublicationActiveGateHandoffContract,
   PUBLICATION_ACTIVE_GATE_HANDOFF_NEXT_ACTION,
   PUBLICATION_ACTIVE_GATE_HANDOFF_REASON,
   PUBLICATION_ACTIVE_GATE_HANDOFF_STATE,
@@ -149,6 +150,18 @@ const PUBLICATION_CONVERGENCE_OWNER_QUEUE_DISTRIBUTED_FAILURE_MESSAGE =
 const PUBLICATION_CONVERGENCE_OWNER_QUEUE_RETRY_AFTER_MS = 37;
 const PUBLICATION_CONVERGENCE_OWNER_QUEUE_RETRYING_COUNT = 1;
 const PUBLICATION_CONVERGENCE_OWNER_QUEUE_FIRST_CALL_COUNT = 1;
+const PUBLICATION_CONVERGENCE_HANDOFF_REPLAY_UNKNOWN_EPOCH = 0;
+const PUBLICATION_CONVERGENCE_HANDOFF_REPLAY_UNPUBLISHED_OBSERVATION =
+  'unpublished_observation';
+const PUBLICATION_CONVERGENCE_HANDOFF_REPLAY_NO_ENQUEUE_COUNT = 0;
+const PUBLICATION_CONVERGENCE_HANDOFF_REPLAY_TEST_NAME =
+  'reconcileClusterMembership preserves target-blocked active-gate handoff replay';
+const PUBLICATION_CONVERGENCE_HANDOFF_REPLAY_CONTRACT_MESSAGE =
+  'no-debt publication pending replay should emit an owner reconcile handoff';
+const PUBLICATION_CONVERGENCE_HANDOFF_REPLAY_STATE_MESSAGE =
+  'empty replay target should remain a typed owner outcome';
+const PUBLICATION_CONVERGENCE_HANDOFF_REPLAY_QUEUE_MESSAGE =
+  'target-blocked replay should not enqueue downstream owner recovery work';
 
 test('shouldPreferAuthoritativeMembershipState refreshes published count-only rows without lifecycle projection evidence',
   async (t) => {
@@ -790,6 +803,79 @@ test('reconcileClusterMembership consumes active-gate owner reconcile handoff',
       'owner ingress should persist the widened handoff publication',
     );
   });
+
+test(PUBLICATION_CONVERGENCE_HANDOFF_REPLAY_TEST_NAME, async (t) => {
+  const replayHandoffContract = buildPublicationActiveGateHandoffContract({
+    publicationConvergence: {
+      publicationEpoch: PUBLICATION_CONVERGENCE_HANDOFF_REPLAY_UNKNOWN_EPOCH,
+      recoveryProtocolState:
+        PUBLICATION_CONVERGENCE_HANDOFF_REPLAY_UNPUBLISHED_OBSERVATION,
+      publicationPending: true,
+      pendingAckNodeIds: [],
+      pendingAckCount: 0,
+      missingPublishedNodeIds: [],
+      missingPublishedCount: 0,
+      publishedActiveNodeIds: [],
+      prioritySpreadPending: false,
+    },
+  });
+  const enqueued = [];
+  const coordinator = new MembershipPublicationCoordinator({
+    nodeId: PUBLICATION_CONVERGENCE_HANDOFF_TARGET_NODE_IDS[0],
+    reconcileQueue: {
+      enqueue(ownerKey, reason, context, options) {
+        enqueued.push({ownerKey, reason, context, options});
+        return true;
+      },
+    },
+    now: () => PUBLICATION_CONVERGENCE_HANDOFF_TARGET_NOW_MS,
+  });
+
+  const outcome = await coordinator.reconcileClusterMembership({
+    publicationActiveGateHandoff: replayHandoffContract,
+  });
+
+  t.match(
+    replayHandoffContract,
+    {
+      state: PUBLICATION_ACTIVE_GATE_HANDOFF_STATE.PENDING,
+      reasonCode:
+        PUBLICATION_ACTIVE_GATE_HANDOFF_REASON.OWNER_RECONCILE_PENDING,
+      nextAction:
+        PUBLICATION_ACTIVE_GATE_HANDOFF_NEXT_ACTION
+          .RECONCILE_OWNER_MEMBERSHIP_PUBLICATION,
+      runtimePromotionAllowed: false,
+      pendingReconcileCount:
+        PUBLICATION_CONVERGENCE_HANDOFF_REPLAY_NO_ENQUEUE_COUNT,
+    },
+    PUBLICATION_CONVERGENCE_HANDOFF_REPLAY_CONTRACT_MESSAGE,
+  );
+  t.match(
+    outcome,
+    {
+      state: ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_OUTCOME
+        .TARGET_BLOCKED,
+      target: {
+        reconcileRequired: false,
+        handoffContract: {
+          state: PUBLICATION_ACTIVE_GATE_HANDOFF_STATE.UNAVAILABLE,
+          reasonCode:
+            PUBLICATION_ACTIVE_GATE_HANDOFF_REASON
+              .EXPECTED_COHORT_UNAVAILABLE,
+          nextAction:
+            PUBLICATION_ACTIVE_GATE_HANDOFF_NEXT_ACTION
+              .OBSERVE_OWNER_HANDOFF,
+        },
+      },
+    },
+    PUBLICATION_CONVERGENCE_HANDOFF_REPLAY_STATE_MESSAGE,
+  );
+  t.equal(
+    enqueued.length,
+    PUBLICATION_CONVERGENCE_HANDOFF_REPLAY_NO_ENQUEUE_COUNT,
+    PUBLICATION_CONVERGENCE_HANDOFF_REPLAY_QUEUE_MESSAGE,
+  );
+});
 
 test('reconcileActiveGateMembershipPublication defers stale durable readback',
   async (t) => {

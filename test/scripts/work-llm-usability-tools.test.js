@@ -64,6 +64,7 @@ test('shared package schema lists validator enums for LLM scaffolding', (t) => {
   t.match(rendered, /single-file-runtime/u);
   t.match(rendered, /Model-Fit Package Splitter/u);
   t.match(rendered, /modelFitSplit/u);
+  t.match(rendered, /targetExecutionModel` explicitly/u);
   t.match(rendered, /gpt-5\.4/u);
   t.match(rendered, /Output Profiles/u);
   t.match(rendered, /extra-high/u);
@@ -79,7 +80,8 @@ test('shared package schema lists validator enums for LLM scaffolding', (t) => {
   t.match(rendered, /Ping-pong stop rule/u);
   t.match(rendered, /pre-impl/u);
   t.match(rendered, /tool-unavailable/u);
-  t.match(rendered, /Subagent Progress And Attempt Ledger/u);
+  t.match(rendered, /Execution Evidence/u);
+  t.match(rendered, /Agent identity is optional provenance/u);
   t.match(rendered, /Subagent Progress Ledger/u);
   t.match(rendered, /review-fixed-metadata-only/u);
   t.match(rendered, /evidence: \.\.\./u);
@@ -141,11 +143,11 @@ test('package scaffolder pre-fills Model Fit from schema defaults', async (t) =>
   t.match(content, /## Expected Representative Delta/u);
   t.match(content, /## Rerun Decision Gate/u);
   t.match(content, /## Classification Efficiency/u);
-  t.match(content, /## Subagent Progress And Attempt Ledger/u);
+  t.match(content, /## Execution Evidence/u);
   t.match(content, /review-fixed-metadata-only/u);
   t.match(content, /status: validated/u);
-  t.match(content, /parent action: revalidated/u);
-  t.match(content, /every completed subtask/u);
+  t.match(content, /parent revalidated focused proof: yes/u);
+  t.match(content, /Agent identity is optional provenance/u);
   t.match(content, /work:advance -- --check/u);
   t.match(content, /work:scenario-route/u);
   t.match(content, /work:evidence-summary/u);
@@ -544,7 +546,7 @@ test('route-after-rerun prints the migration transaction without writing',
     t.match(rendered, /# Route After Rerun/u);
     t.match(rendered, /# Scenario Route/u);
     t.match(rendered, /## Required Refresh/u);
-    t.match(rendered, /work:current-blocker -- --write/u);
+    t.match(rendered, /work:repair/u);
     t.match(rendered, /work:validate -- --pre-impl/u);
     t.match(rendered, /work:package:migrate -- --write --transaction/u);
     t.match(rendered, /Successor package command/u);
@@ -563,6 +565,11 @@ test('subagent prompt generator emits bounded task and ledger guidance',
     t.match(prompt, /implementation Subagent Prompt/u);
     t.match(prompt, /workflow_tooling_owner/u);
     t.match(prompt, /Predecessor: `none`/u);
+    t.match(prompt, /## Model Sizing/u);
+    t.match(prompt, /Spawn\/execution model: `gpt-5\.3-codex-spark`/u);
+    t.match(prompt, /set the model explicitly/u);
+    t.match(prompt, /instead of inheriting a stronger parent model/u);
+    t.match(prompt, /Lower-model safe when/u);
     t.match(prompt, /Do not widen beyond the write scope/u);
     t.match(prompt, /## Core Logic Brief/u);
     t.match(prompt, /Status: `not-needed`/u);
@@ -581,16 +588,16 @@ test('subagent prompt generator emits bounded task and ledger guidance',
     t.match(prompt, /## Commit Scope/u);
     t.match(prompt, /work:evidence-summary/u);
     t.match(prompt, /ad hoc `jq`/u);
-    t.match(prompt, /## Checkpoint Ledger Updates/u);
-    t.match(prompt, /after every completed subtask/u);
-    t.match(prompt, /falsification checkpoint/u);
+    t.match(prompt, /## Execution Evidence/u);
+    t.match(prompt, /after completed implementation or validation work/u);
+    t.match(prompt, /falsification/u);
     t.match(prompt, /blocker:/u);
     t.match(prompt, /## Exact Validation Commands/u);
     t.match(prompt, /Do not add ad hoc Jest or TAP flags/u);
     t.match(prompt, /partial-unvalidated/u);
     t.match(prompt, /parent revalidated focused proof: yes/u);
-    t.match(prompt, /edited after the last checkpoint line/u);
-    t.match(prompt, /Add the real returned agent name and id/u);
+    t.match(prompt, /edited after the last evidence line/u);
+    t.match(prompt, /Agent identity is optional provenance/u);
   });
 
 test('subagent-next emits the next required role and prompt', async (t) => {
@@ -648,6 +655,6 @@ test('llm-start gives a repair command for stale current-blocker packages',
       t.fail('expected stale current-blocker package to fail');
     } catch (error) {
       t.match(error.message, /Current blocker package .* is missing/u);
-      t.match(error.message, /npm run work:current-blocker -- --write/u);
+      t.match(error.message, /npm run work:repair/u);
     }
   });

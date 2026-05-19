@@ -157,6 +157,10 @@ const PUBLICATION_OPERATION_HANDOFF_PENDING_RECONCILE_NODE_IDS = [
 ];
 const HANDOFF_CONTRACT_NEXT_ACTION_RECONCILE =
   'reconcile_owner_membership_publication';
+const OWNER_QUEUE_DEPTH_STATE_UNKNOWN = 'unknown';
+const MEMBERSHIP_PUBLICATION_HANDOFF_OUTCOME_STATE_WRITE_DEFERRED =
+  'write_deferred';
+const MEMBERSHIP_PUBLICATION_HANDOFF_OUTCOME_RETRY_AFTER_MS = 1000;
 const TOPOLOGY_OPERATOR_CURRENT_STEP_ID_DISPATCH_PENDING =
   'dispatch_pending';
 const TOPOLOGY_OPERATOR_CURRENT_STEP_STATE_PLANNED = 'planned';
@@ -693,6 +697,37 @@ describe('analyze-topology-convergence CLI', () => {
         runtimePromotionAllowed: RUNTIME_PROMOTION_ALLOWED_FALSE,
       });
     });
+
+  it('surfaces owner recovery queue drain evidence in the handoff probe', () => {
+    const fixture = readJson(PUBLICATION_ACTIVE_GATE_REDUCED_HANDOFF_FIXTURE_PATH);
+    const progress = fixture.scenarios[0]
+      .publicationConvergence.activeGate.progress;
+    progress.selectedControlPlaneOwnerQueueDepth = null;
+    progress.membershipPublicationHandoffOutcomeState =
+      MEMBERSHIP_PUBLICATION_HANDOFF_OUTCOME_STATE_WRITE_DEFERRED;
+    progress.membershipPublicationHandoffOutcomeEnqueued = true;
+    progress.membershipPublicationHandoffOutcomeRetryAfterMs =
+      MEMBERSHIP_PUBLICATION_HANDOFF_OUTCOME_RETRY_AFTER_MS;
+
+    const output = runAnalyzerJsonForFixture(fixture, ARG_HANDOFF_PROBE);
+
+    assert.deepEqual(output.ownerRecoveryQueue, {
+      depth: {
+        state: OWNER_QUEUE_DEPTH_STATE_UNKNOWN,
+        pendingWrites: OWNER_QUEUE_DEPTH_STATE_UNKNOWN,
+        pendingWriteGrowthCount: OWNER_QUEUE_DEPTH_STATE_UNKNOWN,
+      },
+      handoffOutcome: {
+        state: MEMBERSHIP_PUBLICATION_HANDOFF_OUTCOME_STATE_WRITE_DEFERRED,
+        reasonCode: ABSENT_VALUE,
+        enqueued: true,
+        retryAfterMs: MEMBERSHIP_PUBLICATION_HANDOFF_OUTCOME_RETRY_AFTER_MS,
+      },
+      pendingReconcileCount: ACTIVE_GATE_OWNER_COHORT_PENDING_RECONCILE_COUNT,
+      activeGateOwnerCohortMissingPublishedCount:
+        ACTIVE_GATE_OWNER_COHORT_PENDING_RECONCILE_COUNT,
+    });
+  });
 
   it('generates a package migration evidence block from analyzer output', () => {
     const output = runAnalyzerText(ARG_PACKAGE_EVIDENCE_BLOCK, PRIORITY_FIXTURE_PATH);

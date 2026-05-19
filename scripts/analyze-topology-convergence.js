@@ -41,6 +41,7 @@ const PROPERTY_SUMMARY = 'summary';
 const STDOUT_NEWLINE = '\n';
 const EMPTY_TEXT = '';
 const ABSENT_VALUE = 'absent';
+const UNKNOWN_VALUE = 'unknown';
 const CLI_FLAG_PREFIX = '-';
 const FILE_JSON_EXTENSION = '.json';
 const MODE_SUMMARY = 'summary';
@@ -92,10 +93,12 @@ const HANDOFF_CONTRACT_NEXT_ACTION_RECONCILE_OWNER_MEMBERSHIP_PUBLICATION =
 const HANDOFF_CONTRACT_REASON_OWNER_RECONCILE_PENDING =
   'owner_reconcile_pending';
 const HANDOFF_CONTRACT_STATE_COMPLETE = 'complete';
+const OWNER_QUEUE_DEPTH_STATE_UNKNOWN = UNKNOWN_VALUE;
 const HANDOFF_DETECTED = true;
 const HANDOFF_NOT_DETECTED = false;
 const RUNTIME_PROMOTION_DISALLOWED = false;
 const BOOLEAN_TRUE_TEXT = 'true';
+const BOOLEAN_FALSE_TEXT = 'false';
 const MARKDOWN_SECTION_OWNER_EVIDENCE_BLOCK =
   '## Generated Owner Evidence Block';
 const MARKDOWN_LIST_PREFIX = '- ';
@@ -448,6 +451,7 @@ function selectHandoffProbeOutput(graph) {
     operationWorkflow: operationWorkflowWitness,
     consumer: consumerWitness,
     handoffContract,
+    ownerRecoveryQueue: buildProbeOwnerRecoveryQueue(consumerWitness),
     nextOwnerPath: buildProbeNextOwnerPath({
       operationWorkflowWitness,
       consumerWitness,
@@ -562,6 +566,42 @@ function buildProbeHandoffContract(consumerWitness) {
     ),
     pendingReconcileCount,
     pendingReconcileNodeIds,
+  };
+}
+
+function buildProbeOwnerRecoveryQueue(consumerWitness) {
+  const source = consumerWitness?.source || {};
+  return {
+    depth: {
+      state:
+        source.selectedControlPlaneOwnerQueueDepthState ||
+        OWNER_QUEUE_DEPTH_STATE_UNKNOWN,
+      pendingWrites: probeNumberOrUnknown(
+        source.selectedControlPlaneOwnerQueuePendingWrites,
+      ),
+      pendingWriteGrowthCount: probeNumberOrUnknown(
+        source.selectedControlPlaneOwnerQueuePendingWriteGrowthCount,
+      ),
+    },
+    handoffOutcome: {
+      state:
+        source.membershipPublicationHandoffOutcomeState || ABSENT_VALUE,
+      reasonCode:
+        source.membershipPublicationHandoffOutcomeReasonCode || ABSENT_VALUE,
+      enqueued: probeBooleanVariant(
+        source.membershipPublicationHandoffOutcomeEnqueued,
+      ),
+      retryAfterMs: probeNumberOrUnknown(
+        source.membershipPublicationHandoffOutcomeRetryAfterMs,
+      ),
+    },
+    pendingReconcileCount: positiveNumberOrZero(
+      source.publicationActiveGateHandoffPendingReconcileCount ??
+        source.activeGateOwnerCohortPendingReconcileCount,
+    ),
+    activeGateOwnerCohortMissingPublishedCount: positiveNumberOrZero(
+      source.activeGateOwnerCohortMissingPublishedCount,
+    ),
   };
 }
 
@@ -704,6 +744,24 @@ function probeBoolean(value) {
     return true;
   }
   return RUNTIME_PROMOTION_DISALLOWED;
+}
+
+function probeBooleanVariant(value) {
+  if (value === true || value === BOOLEAN_TRUE_TEXT) {
+    return true;
+  }
+  if (value === false || value === BOOLEAN_FALSE_TEXT) {
+    return false;
+  }
+  return UNKNOWN_VALUE;
+}
+
+function probeNumberOrUnknown(value) {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) {
+    return UNKNOWN_VALUE;
+  }
+  return parsed;
 }
 
 function positiveNumberOrZero(value) {

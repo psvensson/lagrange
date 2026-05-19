@@ -28,8 +28,8 @@ const SUBAGENT_ROLE_NONE = 'none';
 const HELP_TEXT = [
   'Usage: node scripts/work-subagent-next.js [--package <package.md>]',
   '',
-  'Reads the package Subagent Sequencing Ledger, prints the next required',
-  'role, and emits the bounded prompt for that role.',
+  'Reads the package Execution Evidence or legacy Subagent Sequencing Ledger,',
+  'prints the next useful role, and emits the bounded prompt when needed.',
 ].join(NEWLINE);
 
 function normalizeText(value) {

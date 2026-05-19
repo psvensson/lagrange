@@ -17,6 +17,9 @@ Use `npm run work:llm-start` when the compact handoff is not enough. Use
 `npm run work:model-ledger -- summary` as advisory input for model, reasoning
 effort, and output-profile choice. When a package adds useful evidence, record
 the result before closure with `npm run work:model-ledger -- record ...`.
+When spawning subagents, set the model explicitly from the package Target
+executor or intended minimum model; do not inherit a stronger parent model
+unless an escalation trigger fires.
 
 ## Steering Load
 
@@ -42,6 +45,7 @@ ad hoc `jq`:
 - Owner discovery: `npm run analyze:owner-files -- <owner> [boundary]`
 - Subagent prompts: `npm run work:subagent-prompt -- --role <role> --package <package>`
 - Oversized cleanup: `npm run work:oversized-next -- --markdown`
+- Generated handoff repair: `npm run work:repair`
 - Validation: `npm run work:validate -- --entry|--pre-impl|--closure`
 
 If a canonical tool is missing or insufficient, record the tool tried and the
@@ -67,8 +71,10 @@ Use the lightest valid lane:
 - Lightweight maintenance: use one focused package and focused proof; subagents
   are optional unless runtime ownership or shared contracts can change.
 - Runtime owner-boundary and scenario/release-gate work: use the full package
-  lane required by the validator, including required subagent sequencing,
-  focused proof, and representative evidence when the scenario drove the work.
+  lane required by the validator, including focused proof, representative
+  evidence when the scenario drove the work, and closure execution evidence.
+  Agent identity is optional provenance; never invent agent IDs to satisfy
+  process fields.
 
 ## Coding Constraints
 

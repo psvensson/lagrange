@@ -138,12 +138,12 @@ Active package: work/packages/active-20260519-topology-publication-active-gate-h
 Active package owner: topology_publication_owner
 Active package boundary: publication_convergence
 Selected cause: publication_pending
-Required action: Build a replayable handoff fixture for publication_ack_to_active_gate_reconcile_missing and prove whether the publication owner emits the active-gate reconcile handoff or preserves an explicit owner outcome.
+Required action: Close this package as a focused same-frontier proof slice, then open a bounded topology_publication_owner / publication_convergence successor to surface the replay-proved handoff contract or target_blocked owner outcome in representative diagnostics before downstream active-gate/readiness edits.
 Representative status: red
 Causal outcome: continue_local_fix
 Architecture gate: selected / publication-active-gate-handoff-fixture-runtime
 Expected delta: Queue drain residual is reduced: priority residuals are 0, pending owner reconcile is 0, activeGateOwnerCohortMissingPublishedCount is 0, and the next missing edge is publication_ack_to_active_gate_reconcile_missing with required action build_replayable_handoff_fixture.
-Current state: Scaffolded from representative evidence for publication_ack_convergence.
+Current state: Focused replay fixture proves the no-debt publication_pending shape emits a publication active-gate owner reconcile handoff, and the coordinator preserves an explicit target_blocked owner outcome for the empty target without enqueueing downstream recovery work.
 Allowed edits: work/packages/active-20260519-topology-publication-active-gate-handoff-fixture-runtime.md, work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md, work/sprints/current-blocker.md, work/sprints/current-blocker.json, work/model-ledger.jsonl, test/control-plane/membership-publication-coordinator-main-stage-2.js
 Candidate runtime files: src/control-plane/membership-publication-coordinator-class-stage-3.js
 Forbidden edits: Do not edit startup active-gate, startup readiness, operation workflow, admission, or timeout paths until the publication owner handoff edge is replayable or ownership migrates.

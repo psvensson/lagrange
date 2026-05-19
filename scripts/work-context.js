@@ -13,6 +13,7 @@ import {
   findActivePackageFile,
   findActiveSprintFile,
   metadataRequiresSubagentSequencing,
+  validateExecutionEvidenceLedger,
   validateSubagentSequencingLedger,
 } from './work-tracker.js';
 
@@ -105,6 +106,7 @@ const MARKDOWN_HEADING_PREFIX = '# ';
 const SECTION_HEADING_PREFIX = '## ';
 const CHECKBOX_OPEN_PREFIX = '- [ ]';
 const CHECKBOX_ANY_PREFIX = '- [';
+const OPEN_CHECKLIST_TEMPLATE_PLACEHOLDER_PATTERN = /<[^>]+>/u;
 const PACKAGE_METADATA_OPEN = '<!-- work-package';
 const PACKAGE_METADATA_CLOSE = '-->';
 const MARKDOWN_LIST_PREFIX = '- ';
@@ -161,6 +163,7 @@ const SECTION_OUT_OF_SCOPE = 'Out Of Scope';
 const SECTION_USEFUL_COMMANDS = 'Useful Commands';
 const SECTION_WORKTREE = 'Worktree Summary';
 const PACKAGE_SECTION_OUT_OF_SCOPE = 'Out Of Scope';
+const PACKAGE_SECTION_EXECUTION_EVIDENCE = 'Execution Evidence';
 const PACKAGE_SECTION_SUBAGENT_LEDGER = 'Subagent Sequencing Ledger';
 const PACKAGE_SECTION_SUBAGENT_PROGRESS_LEDGER = 'Subagent Progress Ledger';
 const PACKAGE_SECTION_SUBAGENT_PROGRESS_ATTEMPT_LEDGER =
@@ -186,24 +189,28 @@ const SUBAGENT_ROLE_FIX = 'fix';
 const SUBAGENT_ROLE_IMPLEMENTATION = 'implementation';
 const SUBAGENT_ROLE_NONE = 'none';
 const SUBAGENT_STATUS_LEDGER_MISSING =
-  'Subagent Sequencing Ledger missing; assign a real review subagent before implementation.';
+  'Execution evidence not recorded; direct implementation may proceed, and closure requires validated implementation evidence.';
 const SUBAGENT_STATUS_REVIEW_MISSING =
-  'Review proof missing; assign a real review subagent before implementation.';
+  'Review proof missing in legacy ledger; direct implementation may proceed when package scope and proof are explicit.';
 const SUBAGENT_STATUS_FIX_REQUIRED =
-  'Review found fixes-required; assign a separate real fix subagent for runtime/code fixes, or have the review agent record review-fixed-metadata-only for metadata-only fixes before implementation.';
+  'Review found fixes-required; fix runtime/code findings before implementation, or record review-fixed-metadata-only for metadata-only fixes.';
 const SUBAGENT_STATUS_FIX_NOT_NEEDED_MISSING =
-  'Review is clean; record fix as not-needed before implementation.';
+  'Review is clean; record fix as not-needed or continue with execution evidence.';
 const SUBAGENT_STATUS_FIX_MISSING =
-  'Fix proof missing; assign or record the required fix subagent before implementation.';
+  'Fix proof missing in legacy ledger; record the required fix only when review found code/runtime fixes.';
 const SUBAGENT_STATUS_IMPLEMENTATION_MISSING =
-  'Review/fix proof recorded; assign a separate real implementation subagent before implementation.';
+  'Review/fix proof recorded; implement directly and record execution evidence after focused proof.';
 const SUBAGENT_STATUS_IMPLEMENTATION_RECORDED =
-  'Review, fix, and implementation proof recorded.';
+  'Implementation proof recorded.';
 const SUBAGENT_STATUS_STRICT_VALIDATION_FAILED =
-  'Subagent Sequencing Ledger strict validation failed; repair the recorded proof before implementation.';
+  'Legacy Subagent Sequencing Ledger strict validation failed; repair the recorded proof or replace it with Execution Evidence.';
 const SUBAGENT_STATUS_NOT_REQUIRED =
-  'Subagent sequencing not required for this workflow lane or classification-only fast path.';
+  'Execution evidence only; subagent sequencing is not required for this workflow lane or classification-only fast path.';
 const SUBAGENT_PROGRESS_CHECKED_ITEM_PATTERN = /^\[[xX]\]\s*/u;
+const SUBAGENT_LEDGER_CHECKED_LINE_PATTERN = /^-\s*\[[xX]\]\s*/mu;
+const EXECUTION_EVIDENCE_IMPLEMENTATION_PATTERN = /\bimplementation\b/iu;
+const EXECUTION_EVIDENCE_PARENT_REVALIDATED_PATTERN =
+  /\b(?:parent\s+revalidated\s+(?:focused\s+)?proof|parent\s+validation)\s*:\s*`?yes`?/iu;
 const SUBAGENT_PROGRESS_ITEM_LIMIT = 3;
 const SUBAGENT_REVIEW_RESULT_CLEAN = 'clean';
 const SUBAGENT_REVIEW_RESULT_FIXES_REQUIRED = 'fixes-required';
@@ -743,7 +750,10 @@ function extractMarkdownTitle(content = EMPTY_STRING) {
 function appendOpenChecklistItem(items, itemParts) {
   const item = normalizeString(itemParts.join(SPACE));
   itemParts.length = NUM_ZERO;
-  if (item.length > NUM_ZERO) {
+  if (
+    item.length > NUM_ZERO &&
+    !OPEN_CHECKLIST_TEMPLATE_PLACEHOLDER_PATTERN.test(item)
+  ) {
     items.push(item);
   }
 }
@@ -992,6 +1002,13 @@ function buildSubagentRoleStatus(role, status) {
   return {role, status};
 }
 
+function findCheckedImplementationExecutionEvidence(packageContent) {
+  return extractMarkdownSection(packageContent, PACKAGE_SECTION_EXECUTION_EVIDENCE)
+    .find((item) =>
+      SUBAGENT_PROGRESS_CHECKED_ITEM_PATTERN.test(item) &&
+      EXECUTION_EVIDENCE_IMPLEMENTATION_PATTERN.test(item));
+}
+
 function buildSubagentSequencingStatus(
   packageContent = EMPTY_STRING,
   packagePath = EMPTY_STRING,
@@ -1003,13 +1020,50 @@ function buildSubagentSequencingStatus(
       SUBAGENT_STATUS_NOT_REQUIRED,
     );
   }
+  const executionEvidenceItem =
+    findCheckedImplementationExecutionEvidence(packageContent);
+  if (executionEvidenceItem) {
+    const normalizedPackagePath = normalizeString(packagePath);
+    if (normalizedPackagePath.length > NUM_ZERO) {
+      const evidenceErrors = validateExecutionEvidenceLedger(
+        packageContent,
+        normalizedPackagePath,
+        {
+          [LEDGER_VALIDATION_REQUIRES_LEDGER]: true,
+        },
+      );
+      if (evidenceErrors.length > NUM_ZERO) {
+        return buildSubagentRoleStatus(
+          SUBAGENT_ROLE_IMPLEMENTATION,
+          buildStrictValidationStatus(evidenceErrors),
+        );
+      }
+    } else if (!EXECUTION_EVIDENCE_PARENT_REVALIDATED_PATTERN.test(
+      executionEvidenceItem,
+    )) {
+      return buildSubagentRoleStatus(
+        SUBAGENT_ROLE_IMPLEMENTATION,
+        'Execution Evidence implementation item needs parent revalidation before closure.',
+      );
+    }
+    return buildSubagentRoleStatus(
+      SUBAGENT_ROLE_NONE,
+      SUBAGENT_STATUS_IMPLEMENTATION_RECORDED,
+    );
+  }
   const ledger = extractMarkdownSectionText(
     packageContent,
     PACKAGE_SECTION_SUBAGENT_LEDGER,
   );
   if (ledger.length === NUM_ZERO) {
     return buildSubagentRoleStatus(
-      SUBAGENT_ROLE_REVIEW,
+      SUBAGENT_ROLE_NONE,
+      SUBAGENT_STATUS_LEDGER_MISSING,
+    );
+  }
+  if (!SUBAGENT_LEDGER_CHECKED_LINE_PATTERN.test(ledger)) {
+    return buildSubagentRoleStatus(
+      SUBAGENT_ROLE_NONE,
       SUBAGENT_STATUS_LEDGER_MISSING,
     );
   }
@@ -1111,6 +1165,10 @@ function buildSubagentSequencingStatus(
 
 function buildSubagentProgressSummary(packageContent = EMPTY_STRING) {
   const progressItems = [
+    ...extractMarkdownSection(
+      packageContent,
+      PACKAGE_SECTION_EXECUTION_EVIDENCE,
+    ),
     ...extractMarkdownSection(
       packageContent,
       PACKAGE_SECTION_SUBAGENT_PROGRESS_LEDGER,
