@@ -273,3 +273,9 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 1. npm run work:evidence-summary -- test-output/reports/rolling-restart-after-workflow-progress-proof-20260519T073539Z.report.json
 2. npm run work:scenario-route -- test-output/reports/rolling-restart-after-workflow-progress-proof-20260519T073539Z.report.json --owner topology_publication_owner --boundary publication_convergence --dominant-reason publication_pending --explain publication_ack_convergence
 3. npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-workflow-progress-proof-20260519T073539Z.report.json
+
+## Commit And Push Ledger
+
+- [x] Focused package commit: `031f3e98`
+- [x] Pushed to: `origin/codex/pending-ack-eligibility-filter`
+- [x] Commit contains only package-owned files/package-status/allowed sprint handoff: yes
