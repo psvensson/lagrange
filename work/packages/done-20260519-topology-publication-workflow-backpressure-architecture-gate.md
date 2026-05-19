@@ -13,7 +13,7 @@
   "boundary": "publication_convergence",
   "dominantReason": "publication_pending",
   "currentState": "Closed as classification-only successor selection. The capped proof keeps publication_ack_convergence / topology_publication_owner / publication_convergence first, classifies the operation_workflow_owner residual as backpressure, and selects a bounded publication-convergence runtime successor before further local patching.",
-  "nextAction": "Continue work/packages/active-20260519-topology-publication-classified-backpressure-runtime.md with required runtime-owner-boundary subagent sequencing before runtime edits.",
+  "nextAction": "Continue work/packages/done-20260519-topology-publication-classified-backpressure-runtime.md with required runtime-owner-boundary subagent sequencing before runtime edits.",
   "proof": [
     "npm run work:evidence-summary -- test-output/reports/rolling-restart-after-workflow-progress-proof-20260519T073539Z.report.json",
     "npm run work:scenario-route -- test-output/reports/rolling-restart-after-workflow-progress-proof-20260519T073539Z.report.json --owner topology_publication_owner --boundary publication_convergence --dominant-reason publication_pending --explain publication_ack_convergence",
