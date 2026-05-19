@@ -3,7 +3,7 @@
 <!-- work-package
 {
   "schema": "work-package-v1",
-  "status": "active",
+  "status": "done",
   "opened": "2026-05-19",
   "lane": "runtime-owner-boundary",
   "scenario": "rolling-restart",
@@ -12,8 +12,8 @@
   "owner": "topology_publication_owner",
   "boundary": "publication_convergence",
   "dominantReason": "publication_pending",
-  "currentState": "The causal gate selected a bounded runtime-owner-boundary successor: route-after-rerun and causal-model keep topology_publication_owner / publication_convergence selected, the publication-active-gate contract is present, and the remaining shape is publicationStatus=OPEN, epoch=2, handoffOutcome=write_deferred, missingPublishedCount=4, snapshotCoverageNodeCount=2/5, and one pending reconcile node.",
-  "nextAction": "Run required review/fix/implementation subagent sequencing, then implement one bounded publication-owned runtime slice for the OPEN epoch-2 owner-reconcile write_deferred shape.",
+  "currentState": "Closed after focused proof and representative rerun. The bounded owner visibility retry is green locally, but fresh rolling-restart evidence at test-output/reports/rolling-restart-after-owner-reconcile-write-deferred-20260519T100837Z.report.json stayed red on publication_ack_convergence / topology_publication_owner / publication_convergence / publication_pending, with the handoff still write_deferred, pendingReconcileCount widened to 4, and priority-recovery residual witnesses reappearing at 3 under operation_workflow_owner / rebalancer_handoff.",
+  "nextAction": "Do not open another automatic local publication runtime patch from this unchanged frontier. Open a causal/architecture decision package from the fresh artifact to decide whether the next implementation belongs to publication convergence, operation workflow rebalancer handoff, or a cross-owner contract.",
   "proof": [
     "npm run work:package:route-after-rerun -- --artifact test-output/reports/rolling-restart-after-active-gate-reconcile-20260519T091127Z.report.json --owner topology_publication_owner --boundary publication_convergence --dominant-reason publication_pending",
     "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-active-gate-reconcile-20260519T091127Z.report.json --handoff-probe",
@@ -21,7 +21,7 @@
     "npm run analyze:owner-files -- topology_publication_owner publication_convergence"
   ],
   "writeScope": [
-    "work/packages/active-20260519-topology-publication-owner-reconcile-write-deferred-runtime.md",
+    "work/packages/done-20260519-topology-publication-owner-reconcile-write-deferred-runtime.md",
     "work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md",
     "work/sprints/current-blocker.md",
     "work/sprints/current-blocker.json",
@@ -57,7 +57,7 @@
     "test/control-plane/membership-publication-coordinator-main-stage-2.js"
   ],
   "commitScope": [
-    "work/packages/active-20260519-topology-publication-owner-reconcile-write-deferred-runtime.md",
+    "work/packages/done-20260519-topology-publication-owner-reconcile-write-deferred-runtime.md",
     "work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md",
     "work/sprints/current-blocker.md",
     "work/sprints/current-blocker.json",
@@ -86,19 +86,19 @@
   "representativeResidual": {
     "status": "same-frontier",
     "scenario": "rolling-restart",
-    "artifact": "test-output/reports/rolling-restart-after-active-gate-reconcile-20260519T091127Z.report.json",
+    "artifact": "test-output/reports/rolling-restart-after-owner-reconcile-write-deferred-20260519T100837Z.report.json",
     "frontier": "publication_ack_convergence",
     "owner": "topology_publication_owner",
     "boundary": "publication_convergence",
     "dominantReason": "publication_pending",
-    "nextAction": "Implement one bounded publication-convergence owner-reconcile runtime slice selected by the causal gate."
+    "nextAction": "Open a causal/architecture decision package before another local runtime patch; fresh priority residual witnesses contradict the previous zero-witness publication-only thesis."
   },
   "causalGovernance": {
     "hypothesis": "The OPEN epoch-2 write_deferred shape is still publication-convergence producer debt: publication remains OPEN with missingPublishedCount=4, the active-gate handoff contract is pending with nextAction=reconcile_owner_membership_publication, priority residual witnesses are zero, and the causal gate selected a bounded runtime successor.",
     "stopConditionCheck": "Before runtime edits, use route-after-rerun, the handoff probe, `npm run analyze:causal-model -- test-output/reports/rolling-restart-after-active-gate-reconcile-20260519T091127Z.report.json`, owner-files, review/fix sequencing, and focused owner tests to confirm the same owner and boundary.",
     "expectedCausalModelChange": "The runtime slice should reduce the OPEN/write_deferred publication_pending shape by publishing the pending reconcile cohort, clearing missing published nodes, migrating to a concrete active-gate consumer boundary, or turning rolling-restart green.",
-    "representativeOutcome": "pending-before-rerun",
-    "causalDebt": "Fresh artifact reports publicationStatus=OPEN, publicationEpoch=2, handoffOutcome=write_deferred, missingPublishedCount=4, publishedActiveNodeIds=1/5, snapshotCoverageNodeCount=2/5, publicationActiveGateHandoff.state=pending, pendingReconcileCount=1, pendingReconcileNodeIds=35a891b8-c1a0-5064-9c6e-2acfba61c2a7, activeGateState=stalled, and priority recovery residual witnesses=0.",
+    "representativeOutcome": "same-frontier",
+    "causalDebt": "Fresh artifact test-output/reports/rolling-restart-after-owner-reconcile-write-deferred-20260519T100837Z.report.json reports publicationStatus=OPEN, publicationEpoch=2, handoffOutcome=write_deferred, publishedActiveNodeIds=1/5, snapshotCoverageNodeCount=2/5, publicationActiveGateHandoff.state=pending, pendingReconcileCount=4, activeGateState=stalled, and priority recovery residual witnesses=3 under operation_workflow_owner / rebalancer_handoff. Focused local proof passed but representative evidence did not reduce the selected frontier.",
     "crossBoundaryReview": "Required before implementation; review subagent must check the causal gate, predecessor runtime proof, current route evidence, and frozen non-publication boundaries."
   },
   "scenarioCausalClosure": {
@@ -191,7 +191,9 @@
       "npm run work:validate -- --pre-impl"
     ]
   },
-  "predecessor": "work/packages/done-20260519-topology-publication-open-handoff-write-deferred-runtime.md"
+  "predecessor": "work/packages/done-20260519-topology-publication-open-handoff-write-deferred-runtime.md",
+  "closed": "2026-05-19",
+  "commitAndPushLedgerRequired": true
 }
 -->
 
@@ -283,7 +285,7 @@ Before raw JSON, raw logs, broad file search, oversized segment files, or ad hoc
 
 ## In Scope
 
-1. work/packages/active-20260519-topology-publication-owner-reconcile-write-deferred-runtime.md
+1. work/packages/done-20260519-topology-publication-owner-reconcile-write-deferred-runtime.md
 2. work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md
 3. work/sprints/current-blocker.md
 4. work/sprints/current-blocker.json
@@ -312,7 +314,7 @@ Before raw JSON, raw logs, broad file search, oversized segment files, or ad hoc
 - Intended minimum model: `gpt-5.3-codex`
 - Scope shape: `bounded-owner-runtime/current-frontier`
 - Output profile: `medium`
-- Owned files: `work/packages/active-20260519-topology-publication-owner-reconcile-write-deferred-runtime.md`, `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md`, `work/sprints/current-blocker.md`, `work/sprints/current-blocker.json`, `work/model-ledger.jsonl`, `src/control-plane/publication-active-gate-handoff-contract.js`, `src/control-plane/publication-recovery-evidence.js`, `src/control-plane/publication-owner-decision.js`, `src/control-plane/membership-publication-coordinator-class-stage-2.js`, `src/control-plane/active-node-projection.js`, `test/control-plane/publication-active-gate-handoff-contract.test.js`, `test/control-plane/publication-recovery-evidence.test.js`, `test/control-plane/publication-owner-stream.test.js`, `test/control-plane/membership-publication-coordinator-main-stage-2.js`
+- Owned files: `work/packages/done-20260519-topology-publication-owner-reconcile-write-deferred-runtime.md`, `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md`, `work/sprints/current-blocker.md`, `work/sprints/current-blocker.json`, `work/model-ledger.jsonl`, `src/control-plane/publication-active-gate-handoff-contract.js`, `src/control-plane/publication-recovery-evidence.js`, `src/control-plane/publication-owner-decision.js`, `src/control-plane/membership-publication-coordinator-class-stage-2.js`, `src/control-plane/active-node-projection.js`, `test/control-plane/publication-active-gate-handoff-contract.test.js`, `test/control-plane/publication-recovery-evidence.test.js`, `test/control-plane/publication-owner-stream.test.js`, `test/control-plane/membership-publication-coordinator-main-stage-2.js`
 - Forbidden files: `src/rebalancer/operation-workflow-owner.js`, `startup-active-gate-runtime`, `startup-readiness-runtime`, `admission-runtime`, `timeout-runtime`
 - Frozen decisions: causal gate selected one bounded runtime-owner-boundary successor; no forbidden owner edits.
 - Escalation triggers: owned files expand, ownership changes, or representative evidence stays unchanged.
@@ -323,14 +325,22 @@ Before raw JSON, raw logs, broad file search, oversized segment files, or ad hoc
 
 Required for this runtime package. Each real subagent must append one checked checkpoint after each completed subtask.
 
-- [ ] Agent <name> (<agent-id>) review checkpoint: status: started; last checkpoint: context loaded; parent action: pending; evidence: package, causal gate, predecessor, sprint, and handoff files read; next: focused review probes.
-- [ ] Agent <name> (<agent-id>) implementation checkpoint: status: started; last checkpoint: review/fix clean; parent action: pending; evidence: pre-implementation validation; next: bounded runtime patch.
+- [x] Agent James (019e3f98-d3e7-7542-b34e-3fa836fa9e8b) review checkpoint: status: validated; last checkpoint: context and generated review prompt loaded; parent action: accepted; evidence: `npm run work:context` and `npm run work:subagent-prompt -- --role review --package work/packages/done-20260519-topology-publication-owner-reconcile-write-deferred-runtime.md`; next: budget review probes.
+- [x] Agent James (019e3f98-d3e7-7542-b34e-3fa836fa9e8b) review falsification checkpoint: status: validated; last checkpoint: wrong-slice check complete; parent action: accepted; wrong-slice evidence would be route owner, route boundary, dominant reason, causal outcome, or predecessor package proof changing away from topology_publication_owner / publication_convergence / publication_pending / continue_local_fix; evidence: active package doctor found metadata-only ledger gaps, predecessor package doctor passed, route-after-rerun kept `continue_local_fix`; next: metadata-only ledger repair and pre-implementation validation.
+- [x] Agent James (019e3f98-d3e7-7542-b34e-3fa836fa9e8b) review checkpoint: status: validated; last checkpoint: metadata-only ledger repair and pre-implementation validation complete; parent action: accepted; evidence: `npm run work:validate -- --pre-impl work/packages/done-20260519-topology-publication-owner-reconcile-write-deferred-runtime.md` passed after review/fix ledger repair; next: implementation subagent may run the bounded runtime patch.
+- [x] Agent Maxwell (019e3f9e-c3b2-75d2-b2af-0de7832819c5) implementation checkpoint: status: validated; last checkpoint: context, steering, and pre-implementation validation complete; parent action: accepted; evidence: `npm run work:context`, `npm run work:llm-start`, compact LLM steering packs, `npm run work:model-ledger -- summary`, `npm run work:advance -- --check`, `npm run work:package:doctor -- --suggest work/packages/done-20260519-topology-publication-owner-reconcile-write-deferred-runtime.md`, and `npm run work:validate -- --pre-impl work/packages/done-20260519-topology-publication-owner-reconcile-write-deferred-runtime.md` passed; next: scan the bounded owner runtime path.
+- [x] Agent Maxwell (019e3f9e-c3b2-75d2-b2af-0de7832819c5) implementation falsification checkpoint: status: validated; last checkpoint: wrong-slice check complete; parent action: accepted; wrong-slice evidence would be route owner, boundary, dominant reason, causal outcome, handoff required action, or runtime promotion state changing away from topology_publication_owner / publication_convergence / publication_pending / continue_local_fix / reconcile_owner_membership_publication / runtimePromotionAllowed=false; competing explanations considered: downstream startup_active_gate_owner consumer debt after a valid contract, stale or incomplete artifact instrumentation, and missing handoff contract architecture; evidence: `npm run work:package:route-after-rerun -- --artifact test-output/reports/rolling-restart-after-active-gate-reconcile-20260519T091127Z.report.json --owner topology_publication_owner --boundary publication_convergence --dominant-reason publication_pending`, `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-active-gate-reconcile-20260519T091127Z.report.json --handoff-probe`, `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-active-gate-reconcile-20260519T091127Z.report.json`, and `npm run analyze:owner-files -- topology_publication_owner publication_convergence` kept the publication owner reconcile route selected; next: scan producer, consumer handoff, retry/lifecycle, and evidence-generation interactions before runtime edits.
+- [x] Agent Maxwell (019e3f9e-c3b2-75d2-b2af-0de7832819c5) implementation checkpoint: status: validated; last checkpoint: producer, consumer handoff, retry/lifecycle, evidence-generation scan and baseline owner tests complete; parent action: accepted; evidence: read `src/control-plane/publication-active-gate-handoff-contract.js`, `src/control-plane/publication-recovery-evidence.js`, `src/control-plane/publication-owner-decision.js`, `src/control-plane/membership-publication-coordinator-class-stage-2.js`, `src/control-plane/active-node-projection.js`, focused tests, and baseline `npm test -- test/control-plane/publication-active-gate-handoff-contract.test.js`, `npm test -- test/control-plane/publication-recovery-evidence.test.js`, `npm test -- test/control-plane/publication-owner-stream.test.js`, `npm test -- test/control-plane/membership-publication-coordinator-main-stage-2.js` passed; next: add a focused failing owner fixture for the OPEN epoch-2 write-deferred retry shape.
+- [x] Agent Maxwell (019e3f9e-c3b2-75d2-b2af-0de7832819c5) implementation checkpoint: status: validated; last checkpoint: focused failing owner fixture added; parent action: accepted; evidence: `npm test -- test/control-plane/membership-publication-coordinator-main-stage-2.js` failed as expected on the new OPEN epoch-2 owner-reconcile fixture with `actual write_deferred`, one enqueue, and one owner write instead of `published_visible`, zero enqueue, and the bounded second owner write; next: implement bounded publication owner visibility retry.
+- [x] Agent Maxwell (019e3f9e-c3b2-75d2-b2af-0de7832819c5) implementation checkpoint: status: validated; last checkpoint: bounded owner visibility retry implemented; parent action: accepted; evidence: updated `src/control-plane/membership-publication-coordinator-class-stage-2.js` to attempt bounded owner publication visibility twice before queue deferral, added the OPEN epoch-2 fixture in `test/control-plane/membership-publication-coordinator-main-stage-2.js`, and `npm test -- test/control-plane/membership-publication-coordinator-main-stage-2.js` passed with 108 assertions; next: run focused owner proof, guardrails, and exact package validation.
+- [x] Agent Maxwell (019e3f9e-c3b2-75d2-b2af-0de7832819c5) implementation checkpoint: status: validated; last checkpoint: focused owner proof passed; parent action: accepted; evidence: `npm test -- test/control-plane/publication-active-gate-handoff-contract.test.js` passed with 25 assertions, `npm test -- test/control-plane/publication-recovery-evidence.test.js` passed with 211 assertions, and `npm test -- test/control-plane/publication-owner-stream.test.js` passed with 94 assertions; next: run static guardrails and exact package validation.
+- [x] Agent Maxwell (019e3f9e-c3b2-75d2-b2af-0de7832819c5) implementation checkpoint: status: validated; last checkpoint: static guardrails, exact package proof, and model-ledger record complete; parent action: accepted; evidence: `node scripts/check-guideline-literals.js src/control-plane/membership-publication-coordinator-class-stage-2.js`, `node scripts/check-guideline-decision-boundaries.js src/control-plane/membership-publication-coordinator-class-stage-2.js test/control-plane/membership-publication-coordinator-main-stage-2.js`, `npm run audit:runtime-grammar:file -- src/control-plane/membership-publication-coordinator-class-stage-2.js`, `node scripts/check-guideline-deferred-outcomes.js src/control-plane/membership-publication-coordinator-class-stage-2.js`, `node scripts/check-guideline-constant-names.js src/control-plane/membership-publication-coordinator-class-stage-2.js test/control-plane/membership-publication-coordinator-main-stage-2.js`, and `git diff --check -- work/packages/done-20260519-topology-publication-owner-reconcile-write-deferred-runtime.md src/control-plane/membership-publication-coordinator-class-stage-2.js test/control-plane/membership-publication-coordinator-main-stage-2.js` passed; a two-file literal-check trial including the test file reported test baseline churn, so the canonical literal guardrail was kept scoped to runtime source; `npm run work:package:doctor -- --suggest work/packages/done-20260519-topology-publication-owner-reconcile-write-deferred-runtime.md`, `npm run work:validate -- --pre-impl work/packages/done-20260519-topology-publication-owner-reconcile-write-deferred-runtime.md`, `npm run work:package:route-after-rerun -- --artifact test-output/reports/rolling-restart-after-active-gate-reconcile-20260519T091127Z.report.json --owner topology_publication_owner --boundary publication_convergence --dominant-reason publication_pending`, `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-active-gate-reconcile-20260519T091127Z.report.json --handoff-probe`, `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-active-gate-reconcile-20260519T091127Z.report.json`, `npm run analyze:owner-files -- topology_publication_owner publication_convergence`, and `npm run work:model-ledger -- record ...` passed; raw report fallback reason: after `npm run work:evidence-summary -- test-output/reports/rolling-restart-after-active-gate-reconcile-20260519T091127Z.report.json` and `npm run work:scenario-route -- test-output/reports/rolling-restart-after-active-gate-reconcile-20260519T091127Z.report.json --owner topology_publication_owner --boundary publication_convergence --dominant-reason publication_pending --explain publication_ack_convergence`, `rg`/`sed` were used only to inspect `membershipPublicationHandoffOutcomeEnqueued` because canonical extractors omitted that field; next: parent reruns focused proof, checks `Implementation subagent recorded` with `parent revalidated focused proof: yes`, and runs closure validation.
 
 ## Subagent Sequencing Ledger
 
-- [ ] Review subagent recorded: pending-before-implementation-resumes.
-- [ ] Fix subagent recorded or explicitly not needed: pending-before-review.
-- [ ] Implementation subagent recorded: pending-before-review.
+- [x] Review subagent recorded: Agent James (019e3f98-d3e7-7542-b34e-3fa836fa9e8b) reviewed work/packages/done-20260519-topology-publication-owner-reconcile-write-deferred-runtime.md; result fixes-required.
+- [x] Fix subagent recorded or explicitly not needed: review-fixed-metadata-only by Agent James (019e3f98-d3e7-7542-b34e-3fa836fa9e8b) for work/packages/done-20260519-topology-publication-owner-reconcile-write-deferred-runtime.md; scope: metadata-only package/sprint/tracker/handoff ledger edits.
+- [x] Implementation subagent recorded: Agent Maxwell (019e3f9e-c3b2-75d2-b2af-0de7832819c5) implemented work/packages/done-20260519-topology-publication-owner-reconcile-write-deferred-runtime.md; parent revalidated focused proof: yes.
 
 ## Validation
 

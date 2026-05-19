@@ -39,7 +39,7 @@ Stop rule: If the same OPEN/write_deferred publication_pending frontier persists
 
 Sprint: `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md`
 
-Package: `work/packages/active-20260519-topology-publication-owner-reconcile-write-deferred-runtime.md`
+Package: `work/packages/done-20260519-topology-publication-owner-reconcile-write-deferred-runtime.md`
 
 Workflow lane: `runtime-owner-boundary`
 
@@ -243,7 +243,7 @@ Gate next action: Run review subagent first, fix if required, then implementatio
 
 Write scope:
 
-1. `work/packages/active-20260519-topology-publication-owner-reconcile-write-deferred-runtime.md`
+1. `work/packages/done-20260519-topology-publication-owner-reconcile-write-deferred-runtime.md`
 2. `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md`
 3. `work/sprints/current-blocker.md`
 4. `work/sprints/current-blocker.json`
@@ -283,7 +283,7 @@ Candidate runtime files:
 
 Commit scope:
 
-1. `work/packages/active-20260519-topology-publication-owner-reconcile-write-deferred-runtime.md`
+1. `work/packages/done-20260519-topology-publication-owner-reconcile-write-deferred-runtime.md`
 2. `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md`
 3. `work/sprints/current-blocker.md`
 4. `work/sprints/current-blocker.json`

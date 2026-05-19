@@ -103,7 +103,7 @@
     "expectedObservableTransition": "Classification selects one concrete next owner route before runtime promotion.",
     "maxProgressBound": "one causal-escalation handoff package before any runtime successor",
     "sameFrontierFallback": "If focused proof cannot name a concrete producer or consumer edge, do not open another local runtime package.",
-    "expectedNextFrontier": "work/packages/active-20260519-topology-publication-owner-reconcile-write-deferred-runtime.md as the selected runtime-owner-boundary successor",
+    "expectedNextFrontier": "work/packages/done-20260519-topology-publication-owner-reconcile-write-deferred-runtime.md as the selected runtime-owner-boundary successor",
     "resultClassification": "same-frontier",
     "stopCondition": "continue-local-fix",
     "recentFrontierHistory": [
@@ -169,7 +169,7 @@
   },
   "closed": "2026-05-19",
   "commitAndPushLedgerRequired": true,
-  "successor": "work/packages/active-20260519-topology-publication-owner-reconcile-write-deferred-runtime.md"
+  "successor": "work/packages/done-20260519-topology-publication-owner-reconcile-write-deferred-runtime.md"
 }
 -->
 

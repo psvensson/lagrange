@@ -2268,6 +2268,44 @@ const PUBLICATION_CONVERGENCE_HANDOFF_TARGET_SINGLE_WRITE_ATTEMPT = 1;
 const PUBLICATION_CONVERGENCE_HANDOFF_TARGET_STALE_READBACK_COUNT = 1;
 const PUBLICATION_CONVERGENCE_HANDOFF_TARGET_FIRST_PERSISTED_INDEX = 0;
 const PUBLICATION_CONVERGENCE_HANDOFF_TARGET_NO_ENQUEUE_COUNT = 0;
+const PUBLICATION_CONVERGENCE_HANDOFF_RETRY_OPEN_EPOCH = 2;
+const PUBLICATION_CONVERGENCE_HANDOFF_RETRY_PUBLICATION_ID =
+  'publication-handoff-retry-open';
+const PUBLICATION_CONVERGENCE_HANDOFF_RETRY_NODE_IDS = Object.freeze([
+  'node-handoff-retry-seed',
+  'node-handoff-retry-a',
+  'node-handoff-retry-b',
+  'node-handoff-retry-c',
+  'node-handoff-retry-d',
+]);
+const PUBLICATION_CONVERGENCE_HANDOFF_RETRY_SORTED_NODE_IDS = Object.freeze(
+  [...PUBLICATION_CONVERGENCE_HANDOFF_RETRY_NODE_IDS].sort((left, right) =>
+    left.localeCompare(right),
+  ),
+);
+const PUBLICATION_CONVERGENCE_HANDOFF_RETRY_PUBLISHED_NODE_IDS =
+  Object.freeze([
+    PUBLICATION_CONVERGENCE_HANDOFF_RETRY_NODE_IDS[
+      PUBLICATION_CONVERGENCE_HANDOFF_TARGET_FIRST_NODE_INDEX
+    ],
+  ]);
+const PUBLICATION_CONVERGENCE_HANDOFF_RETRY_PENDING_NODE_IDS =
+  Object.freeze([
+    PUBLICATION_CONVERGENCE_HANDOFF_RETRY_NODE_IDS[
+      PUBLICATION_CONVERGENCE_HANDOFF_TARGET_PENDING_START_INDEX
+    ],
+  ]);
+const PUBLICATION_CONVERGENCE_HANDOFF_RETRY_VISIBLE_PERSISTED_COUNT = 2;
+const PUBLICATION_CONVERGENCE_HANDOFF_RETRY_VISIBLE_TEST_NAME =
+  'reconcileActiveGateMembershipPublication retries owner visibility before deferred handoff';
+const PUBLICATION_CONVERGENCE_HANDOFF_RETRY_VISIBLE_STATE_MESSAGE =
+  'owner-visible publication after a bounded owner retry should satisfy the handoff';
+const PUBLICATION_CONVERGENCE_HANDOFF_RETRY_VISIBLE_ENQUEUE_MESSAGE =
+  'visible owner retry should not enqueue another reconcile retry';
+const PUBLICATION_CONVERGENCE_HANDOFF_RETRY_VISIBLE_ATTEMPT_MESSAGE =
+  'owner retry should perform the bounded second publication write before deferring';
+const PUBLICATION_CONVERGENCE_HANDOFF_RETRY_VISIBLE_ROW_MESSAGE =
+  'bounded owner retry row should cover the complete OPEN epoch-2 handoff target';
 const PUBLICATION_CONVERGENCE_HANDOFF_TARGET_STALE_VISIBLE_TEST_NAME =
   'reconcileActiveGateMembershipPublication accepts owner-visible publication after stale write readback';
 const PUBLICATION_CONVERGENCE_HANDOFF_TARGET_STALE_VISIBLE_STATE_MESSAGE =
@@ -2276,6 +2314,128 @@ const PUBLICATION_CONVERGENCE_HANDOFF_TARGET_STALE_VISIBLE_ENQUEUE_MESSAGE =
   'visible owner publication should not enqueue another reconcile retry';
 const PUBLICATION_CONVERGENCE_HANDOFF_TARGET_STALE_VISIBLE_ROW_MESSAGE =
   'owner-visible row should cover the complete handoff target';
+
+test(PUBLICATION_CONVERGENCE_HANDOFF_RETRY_VISIBLE_TEST_NAME,
+  async (t) => {
+    const latestPublicationRow = {
+      publication_id: PUBLICATION_CONVERGENCE_HANDOFF_RETRY_PUBLICATION_ID,
+      publication_kind: PUBLICATION_CONVERGENCE_HANDOFF_TARGET_KIND,
+      publication_epoch: PUBLICATION_CONVERGENCE_HANDOFF_RETRY_OPEN_EPOCH,
+      status: CONTROL_PLANE_PUBLICATION_STATUS.OPEN,
+      published_active_node_ids: [
+        ...PUBLICATION_CONVERGENCE_HANDOFF_RETRY_PUBLISHED_NODE_IDS,
+      ],
+      required_ack_node_ids: [
+        ...PUBLICATION_CONVERGENCE_HANDOFF_RETRY_PUBLISHED_NODE_IDS,
+      ],
+      acknowledged_node_ids: [
+        ...PUBLICATION_CONVERGENCE_HANDOFF_RETRY_PUBLISHED_NODE_IDS,
+      ],
+      priority_partition_summary:
+        PUBLICATION_CONVERGENCE_AUTH_REFRESH_PRIORITY_SUMMARY,
+    };
+    const pending = new Map();
+    const enqueued = [];
+    const persistedRows = [];
+    const coordinator = new MembershipPublicationCoordinator({
+      nodeId:
+        PUBLICATION_CONVERGENCE_HANDOFF_RETRY_NODE_IDS[
+          PUBLICATION_CONVERGENCE_HANDOFF_TARGET_FIRST_NODE_INDEX
+        ],
+      reconcileQueue: {
+        pending,
+        enqueue(ownerKey, reason, context, options) {
+          enqueued.push({ownerKey, reason, context, options});
+          pending.set(ownerKey, {context});
+          return true;
+        },
+      },
+      controlPlanePublicationsOwner: {
+        async listPublications() {
+          return {rows: [latestPublicationRow]};
+        },
+        async getPublication(publicationId) {
+          const persistedRow = persistedRows[persistedRows.length - 1];
+          if (!persistedRow) {
+            return latestPublicationRow;
+          }
+          if (publicationId !== persistedRow.publication_id) {
+            return latestPublicationRow;
+          }
+          if (
+            persistedRows.length <
+            PUBLICATION_CONVERGENCE_HANDOFF_RETRY_VISIBLE_PERSISTED_COUNT
+          ) {
+            return latestPublicationRow;
+          }
+          return {
+            ...persistedRow,
+            reason_code:
+              PUBLICATION_CONVERGENCE_HANDOFF_TARGET_DURABLE_REASON_CODE,
+            updated_at:
+              PUBLICATION_CONVERGENCE_HANDOFF_TARGET_DURABLE_UPDATED_AT,
+          };
+        },
+        async upsertPublication(row) {
+          persistedRows.push(row);
+          return row;
+        },
+      },
+      systemTableCache: {
+        getAll(tableName) {
+          if (tableName === TABLES.CONTROL_PLANE_PUBLICATIONS) {
+            return [latestPublicationRow];
+          }
+          return [...PUBLICATION_CONVERGENCE_HANDOFF_TARGET_EMPTY_ROWS];
+        },
+      },
+      now: () => PUBLICATION_CONVERGENCE_HANDOFF_TARGET_NOW_MS,
+    });
+
+    const outcome =
+      await coordinator.reconcileActiveGateMembershipPublication(
+        {
+          publicationEpoch: PUBLICATION_CONVERGENCE_HANDOFF_RETRY_OPEN_EPOCH,
+          expectedNodeIds: [
+            ...PUBLICATION_CONVERGENCE_HANDOFF_RETRY_NODE_IDS,
+          ],
+          publishedActiveNodeIds: [
+            ...PUBLICATION_CONVERGENCE_HANDOFF_RETRY_PUBLISHED_NODE_IDS,
+          ],
+          pendingReconcileNodeIds: [
+            ...PUBLICATION_CONVERGENCE_HANDOFF_RETRY_PENDING_NODE_IDS,
+          ],
+          nextAction:
+            PUBLICATION_ACTIVE_GATE_HANDOFF_NEXT_ACTION
+              .RECONCILE_OWNER_MEMBERSHIP_PUBLICATION,
+        },
+        {
+          publicationWriteMaxAttempts:
+            PUBLICATION_CONVERGENCE_HANDOFF_TARGET_SINGLE_WRITE_ATTEMPT,
+        },
+      );
+
+    t.equal(
+      outcome.state,
+      ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_OUTCOME.PUBLISHED_VISIBLE,
+      PUBLICATION_CONVERGENCE_HANDOFF_RETRY_VISIBLE_STATE_MESSAGE,
+    );
+    t.equal(
+      enqueued.length,
+      PUBLICATION_CONVERGENCE_HANDOFF_TARGET_NO_ENQUEUE_COUNT,
+      PUBLICATION_CONVERGENCE_HANDOFF_RETRY_VISIBLE_ENQUEUE_MESSAGE,
+    );
+    t.equal(
+      persistedRows.length,
+      PUBLICATION_CONVERGENCE_HANDOFF_RETRY_VISIBLE_PERSISTED_COUNT,
+      PUBLICATION_CONVERGENCE_HANDOFF_RETRY_VISIBLE_ATTEMPT_MESSAGE,
+    );
+    t.same(
+      outcome.publicationRow.publishedActiveNodeIds,
+      [...PUBLICATION_CONVERGENCE_HANDOFF_RETRY_SORTED_NODE_IDS],
+      PUBLICATION_CONVERGENCE_HANDOFF_RETRY_VISIBLE_ROW_MESSAGE,
+    );
+  });
 
 test(PUBLICATION_CONVERGENCE_HANDOFF_TARGET_STALE_VISIBLE_TEST_NAME,
   async (t) => {

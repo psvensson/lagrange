@@ -96,12 +96,16 @@ const ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_REASON =
   'active_gate_handoff_owner_reconcile';
 const ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_READ_PROFILE =
   'diagnostics';
+const ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_VISIBLE_WRITE_ATTEMPTS =
+  NUM.TWO;
 const ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_EMPTY_TEXT = '';
 const ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_ALLOW_EMPTY_PRELOADED_ROWS =
   true;
 const ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_EMPTY_ROWS = Object.freeze(
   [],
 );
+const ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_EMPTY_OUTCOME =
+  Object.freeze({});
 const ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_OUTCOME = Object.freeze({
   NO_CHANGE: 'no_change',
   PRESSURE_DEFERRED: 'pressure_deferred',
@@ -1101,30 +1105,39 @@ class MembershipPublicationCoordinatorClassStage2 extends
       }),
     });
     try {
-      const reconcileOutcome = await this.reconcileClusterMembership(context);
-      const visibleRow =
-        await this.readActiveGateMembershipPublicationVisibleReconcileRow(
-          reconcileOutcome,
-          target,
-          context,
-        );
-      if (visibleRow) {
-        return buildActiveGateMembershipPublicationReconcileOutcome(
-          ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_OUTCOME
-            .PUBLISHED_VISIBLE,
-          {
-            publicationRow: visibleRow,
+      let reconcileOutcome =
+        ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_EMPTY_OUTCOME;
+      for (
+        let visibilityAttempt = NUM.ZERO;
+        visibilityAttempt <
+          ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_VISIBLE_WRITE_ATTEMPTS;
+        visibilityAttempt += NUM.ONE
+      ) {
+        reconcileOutcome = await this.reconcileClusterMembership(context);
+        const visibleRow =
+          await this.readActiveGateMembershipPublicationVisibleReconcileRow(
+            reconcileOutcome,
             target,
-            controlPlaneConvergence: buildControlPlaneConvergenceOutcome({
-              pressureOutcome:
-                CONTROL_PLANE_CONVERGENCE_PRESSURE_OUTCOME.CRITICAL_ADMITTED,
-              ownerKey: this.buildOwnerKey(),
-              operation:
-                CONTROL_PLANE_CRITICAL_CONVERGENCE_OPERATION
-                  .ACTIVE_GATE_HANDOFF,
-            }),
-          },
-        );
+            context,
+          );
+        if (visibleRow) {
+          return buildActiveGateMembershipPublicationReconcileOutcome(
+            ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_OUTCOME
+              .PUBLISHED_VISIBLE,
+            {
+              publicationRow: visibleRow,
+              target,
+              controlPlaneConvergence: buildControlPlaneConvergenceOutcome({
+                pressureOutcome:
+                  CONTROL_PLANE_CONVERGENCE_PRESSURE_OUTCOME.CRITICAL_ADMITTED,
+                ownerKey: this.buildOwnerKey(),
+                operation:
+                  CONTROL_PLANE_CRITICAL_CONVERGENCE_OPERATION
+                    .ACTIVE_GATE_HANDOFF,
+              }),
+            },
+          );
+        }
       }
       const enqueued = this.enqueueClusterMembershipReconcile(
         ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_REASON,
@@ -1142,7 +1155,7 @@ class MembershipPublicationCoordinatorClassStage2 extends
       return buildActiveGateMembershipPublicationReconcileOutcome(
         ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_OUTCOME.WRITE_DEFERRED,
         {
-          publicationRow: reconcileOutcome?.publicationRow || null,
+          publicationRow: reconcileOutcome.publicationRow,
           target,
           enqueued,
           controlPlaneConvergence,
