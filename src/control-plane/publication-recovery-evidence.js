@@ -20,6 +20,9 @@ import {
   PUBLICATION_OWNER_STREAM_OUTCOME,
   PUBLICATION_OWNER_TEXT,
 } from './publication-owner-constants.js';
+import {
+  buildPublicationOperationWorkflowHandoff,
+} from './publication-active-gate-handoff-contract.js';
 
 const PUBLICATION_RECOVERY_EVIDENCE_EMPTY_LIST = Object.freeze([]);
 const PUBLICATION_RECOVERY_ACK_NODE_LIST_INPUT_STATE = Object.freeze({
@@ -96,6 +99,7 @@ const PUBLICATION_RECOVERY_EVIDENCE_TEXT = Object.freeze({
 });
 const PUBLICATION_RECOVERY_HANDOFF_FIELD = Object.freeze({
   NEXT_ACTION: 'nextAction',
+  OPERATION_WORKFLOW_HANDOFF: 'operationWorkflowHandoff',
   PENDING_RECONCILE_COUNT: 'pendingReconcileCount',
   PENDING_RECONCILE_NODE_IDS: 'pendingReconcileNodeIds',
   REASON_CODE: 'reasonCode',
@@ -1205,6 +1209,34 @@ function resolvePublicationRecoveryActiveGateHandoff(
   return null;
 }
 
+function enrichPublicationRecoveryActiveGateHandoff({
+  publicationActiveGateHandoff = null,
+  publicationConvergence = null,
+  priorityRecoveryObservation = null,
+} = {}) {
+  if (!isRecord(publicationActiveGateHandoff)) {
+    return publicationActiveGateHandoff;
+  }
+  const operationWorkflowHandoff = buildPublicationOperationWorkflowHandoff({
+    publicationConvergence: {
+      ...(isRecord(publicationConvergence) ? publicationConvergence : {}),
+      priorityRecoveryObservation,
+      [PUBLICATION_RECOVERY_HANDOFF_FIELD.OPERATION_WORKFLOW_HANDOFF]:
+        publicationActiveGateHandoff[
+          PUBLICATION_RECOVERY_HANDOFF_FIELD.OPERATION_WORKFLOW_HANDOFF
+        ],
+    },
+    handoffContract: publicationActiveGateHandoff,
+  });
+  return operationWorkflowHandoff ?
+    Object.freeze({
+      ...publicationActiveGateHandoff,
+      [PUBLICATION_RECOVERY_HANDOFF_FIELD.OPERATION_WORKFLOW_HANDOFF]:
+        operationWorkflowHandoff,
+    }) :
+    publicationActiveGateHandoff;
+}
+
 function normalizeProgressNodeIds(
   progress = null,
   fieldName = PUBLICATION_RECOVERY_EVIDENCE_TEXT.EMPTY,
@@ -1536,12 +1568,18 @@ function buildCanonicalPublicationConvergenceGate(options = {}) {
     publicationConvergence?.publicationEpoch ??
     priorityRecoveryObservation?.publicationEpoch ??
     null;
-  const publicationActiveGateHandoff =
+  const rawPublicationActiveGateHandoff =
     resolvePublicationRecoveryActiveGateHandoff(
       activeGateProgressRecords,
       rawPublicationConvergenceGate,
       publicationConvergence,
     );
+  const publicationActiveGateHandoff =
+    enrichPublicationRecoveryActiveGateHandoff({
+      publicationActiveGateHandoff: rawPublicationActiveGateHandoff,
+      publicationConvergence,
+      priorityRecoveryObservation,
+    });
   const selectedMembershipClosesStaleOpenPublication =
     hasSelectedPublicationMembershipClosureEvidence({
       publicationStatus: normalizeOptionalString(publicationStatus),
@@ -2099,6 +2137,11 @@ function buildCanonicalPublicationConvergence(options = {}) {
   const publicationConvergenceGate = isRecord(options.publicationConvergenceGate) ?
     options.publicationConvergenceGate :
     null;
+  const rawPriorityRecoveryObservation = isRecord(
+    options.rawPriorityRecoveryObservation,
+  ) ?
+    options.rawPriorityRecoveryObservation :
+    null;
   const priorityRecoveryObservation = isRecord(options.priorityRecoveryObservation) ?
     options.priorityRecoveryObservation :
     null;
@@ -2293,12 +2336,19 @@ function buildCanonicalPublicationConvergence(options = {}) {
     resolveActiveGateSelectedPublicationMembershipNodeIds(
       activeGateProgressRecords,
     );
-  const publicationActiveGateHandoff =
+  const rawPublicationActiveGateHandoff =
     resolvePublicationRecoveryActiveGateHandoff(
       activeGateProgressRecords,
       publicationConvergenceGate,
       rawPublicationConvergence,
     );
+  const publicationActiveGateHandoff =
+    enrichPublicationRecoveryActiveGateHandoff({
+      publicationActiveGateHandoff: rawPublicationActiveGateHandoff,
+      publicationConvergence: rawPublicationConvergence,
+      priorityRecoveryObservation:
+        rawPriorityRecoveryObservation || priorityRecoveryObservation,
+    });
   const rawPublicationStatus =
     normalizeOptionalString(rawPublicationConvergence?.publicationStatus) ||
     normalizeOptionalString(rawPublicationConvergence?.status);
@@ -2610,6 +2660,7 @@ function buildCanonicalPublicationRecoveryEvidence(options = {}) {
   const publicationConvergence = buildCanonicalPublicationConvergence({
     publicationConvergence: options.publicationConvergence,
     publicationConvergenceGate,
+    rawPriorityRecoveryObservation: options.priorityRecoveryObservation,
     priorityRecoveryObservation,
     activeGate: options.activeGate,
     activeGateProgress: options.activeGateProgress,

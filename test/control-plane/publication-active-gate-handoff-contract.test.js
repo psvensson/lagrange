@@ -9,6 +9,8 @@ import {
   PUBLICATION_ACTIVE_GATE_HANDOFF_NEXT_ACTION,
   PUBLICATION_ACTIVE_GATE_HANDOFF_REASON,
   PUBLICATION_ACTIVE_GATE_HANDOFF_STATE,
+  PUBLICATION_OPERATION_WORKFLOW_HANDOFF_REASON,
+  PUBLICATION_OPERATION_WORKFLOW_HANDOFF_STATE,
   buildPublicationActiveGateHandoffContract,
   hasPublicationActiveGateOwnerReconcileSignal,
   projectPublicationActiveGateHandoffToOwnerCohort,
@@ -53,6 +55,16 @@ const TEST_JOINED_PENDING_RECONCILE_COUNT = 2;
 const TEST_RUNTIME_PROMOTION_DENIED = false;
 const TEST_JOINED_NODE_ID_SEPARATOR = ',';
 const TEST_EMPTY_NODE_IDS = Object.freeze([]);
+const TEST_OPERATION_WORKFLOW_OWNER = 'operation_workflow_owner';
+const TEST_OPERATION_WORKFLOW_BOUNDARY = 'workflow_progress';
+const TEST_PUBLICATION_OWNER = 'topology_publication_owner';
+const TEST_PUBLICATION_BOUNDARY = 'publication_convergence';
+const TEST_OPERATION_WORKFLOW_ADVANCE_ACTION = 'advance_existing_operation';
+const TEST_OPERATION_WORKFLOW_ACTUATION_STATE = 'persisted_not_dispatched';
+const TEST_OPERATION_WORKFLOW_WAIT_MODE = 'event_driven';
+const TEST_OPERATION_WORKFLOW_PROGRESS_PHASE = 'dispatch_pending';
+const TEST_OPERATION_WORKFLOW_PARTITION_ID = 'control_plane_publications-p1';
+const TEST_OPERATION_WORKFLOW_OPERATION_ID = 'operator-1';
 const TEST_JOINED_PENDING_RECONCILE_NODE_IDS = [
   TEST_NODE_2,
   TEST_NODE_3,
@@ -108,6 +120,59 @@ test('publication active-gate handoff contract schedules owner reconcile from on
           PUBLICATION_ACTIVE_GATE_CATCHUP_FENCE_NEXT_ACTION
             .RECONCILE_OWNER_MEMBERSHIP_PUBLICATION,
       },
+    });
+  });
+
+test('publication active-gate handoff emits classified workflow backpressure defer',
+  async (t) => {
+    const contract = buildPublicationActiveGateHandoffContract({
+      nodeRows: [
+        {node_id: TEST_NODE_1},
+        {node_id: TEST_NODE_2},
+        {node_id: TEST_NODE_3},
+      ],
+      activeNodeViews: {
+        effectiveActiveNodeIds: [TEST_NODE_1, TEST_NODE_2, TEST_NODE_3],
+        publishedActiveNodeIds: [TEST_NODE_1],
+      },
+      publicationConvergence: {
+        publicationEpoch: TEST_PUBLICATION_EPOCH,
+        publishedActiveNodeIds: [TEST_NODE_1],
+        missingPublishedNodeIds: [TEST_NODE_2, TEST_NODE_3],
+        priorityRecoveryObservation: {
+          priorityRecoveryPartitionWitnesses: [{
+            partitionId: TEST_OPERATION_WORKFLOW_PARTITION_ID,
+            currentOwner: TEST_OPERATION_WORKFLOW_OWNER,
+            blockingBoundary: TEST_OPERATION_WORKFLOW_BOUNDARY,
+            nextRequiredAction: TEST_OPERATION_WORKFLOW_ADVANCE_ACTION,
+            actuationState: TEST_OPERATION_WORKFLOW_ACTUATION_STATE,
+            waitMode: TEST_OPERATION_WORKFLOW_WAIT_MODE,
+            workflowProgressPhaseId: TEST_OPERATION_WORKFLOW_PROGRESS_PHASE,
+            operationIds: [TEST_OPERATION_WORKFLOW_OPERATION_ID],
+          }],
+        },
+      },
+    });
+
+    t.match(contract.operationWorkflowHandoff, {
+      state: PUBLICATION_OPERATION_WORKFLOW_HANDOFF_STATE.DEFERRED,
+      reasonCode:
+        PUBLICATION_OPERATION_WORKFLOW_HANDOFF_REASON
+          .CLASSIFIED_BACKPRESSURE,
+      publicationOwner: TEST_PUBLICATION_OWNER,
+      publicationBoundary: TEST_PUBLICATION_BOUNDARY,
+      downstreamOwner: TEST_OPERATION_WORKFLOW_OWNER,
+      downstreamBoundary: TEST_OPERATION_WORKFLOW_BOUNDARY,
+      downstreamRequiredAction: TEST_OPERATION_WORKFLOW_ADVANCE_ACTION,
+      publicationNextAction:
+        PUBLICATION_ACTIVE_GATE_HANDOFF_NEXT_ACTION
+          .RECONCILE_OWNER_MEMBERSHIP_PUBLICATION,
+      runtimePromotionAllowed: TEST_RUNTIME_PROMOTION_DENIED,
+      actuationState: TEST_OPERATION_WORKFLOW_ACTUATION_STATE,
+      waitMode: TEST_OPERATION_WORKFLOW_WAIT_MODE,
+      workflowProgressPhaseId: TEST_OPERATION_WORKFLOW_PROGRESS_PHASE,
+      partitionIds: [TEST_OPERATION_WORKFLOW_PARTITION_ID],
+      operationIds: [TEST_OPERATION_WORKFLOW_OPERATION_ID],
     });
   });
 

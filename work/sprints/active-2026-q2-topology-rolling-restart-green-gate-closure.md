@@ -22,13 +22,13 @@ success is in scope.
 ## Sprint Strategy Brief
 
 - Goal state: representative `rolling-restart` is green with `active=5/5`, `snapshotCoverage=5/5`, `missingPublished=0`, and no timeout or admission relaxation.
-- Current causal thesis: the publication/workflow diagnostic gate selected the bounded publication-convergence runtime route. `rolling-restart-after-workflow-progress-proof-20260519T073539Z.report.json` keeps `publication_ack_convergence / topology_publication_owner / publication_convergence / publication_pending` as the failed invariant, while the operation-workflow witness is classified backpressure and active-gate runtime promotion is still false.
-- Competing hypotheses: H1 publication convergence must resolve or explicitly defer the OPEN/missingPublished shape when priority recovery is classified backpressure; H2 active-gate owner reconcile remains only a downstream consumer until publication progress moves; H3 the operation-workflow residual should remain classified unless fresh evidence changes required action; H4 unchanged same-frontier after this publication slice means architecture/human escalation rather than another local patch.
-- Confidence and evidence: high that the selected route is publication convergence from `work:scenario-route`; high that operation workflow is classified backpressure from `analyze:causal-model`; high that active-gate promotion is false from the handoff probe; medium that one bounded publication owner slice can reduce `publication_pending` or `missingPublished` because prior publication slices reduced adjacent metrics but this classified-backpressure shape is new.
-- Expected green path: run required review/fix/implementation subagents for `work/packages/active-20260519-topology-publication-classified-backpressure-runtime.md`, implement one bounded publication-convergence change, prove focused owner tests and static guardrails, then rerun representative `rolling-restart`.
-- Wrong direction signals: editing operation-workflow, active-gate, readiness, admission, handoff, or timeout runtime from this package; reopening the diagnostic gate without new evidence; or accepting another publication runtime package if this selected slice returns unchanged same-frontier/no-reduction evidence.
-- Next best package: `work/packages/active-20260519-topology-publication-classified-backpressure-runtime.md`, focused on publication convergence under classified operation-workflow backpressure.
-- Stop or escalate rule: if focused proof passes but representative rerun returns unchanged `publication_pending` with no metric reduction or owner-boundary migration, stop for architecture or human escalation instead of opening another local publication patch.
+- Current causal thesis: `rolling-restart-after-publication-workflow-handoff-20260519T083006Z.report.json` reduced the classified operation-workflow backpressure shape. Priority recovery is now satisfied with zero residual witnesses and `missingPublishedCount=0`, but `publication_ack_convergence / topology_publication_owner / publication_convergence / publication_pending` remains first because the publication-to-active-gate reconcile contract is absent.
+- Competing hypotheses: H1 publication convergence must emit a structured active-gate reconcile contract for the unpublished-observation/publication_pending shape; H2 active-gate snapshot timeout is a downstream consumer until publication exposes that reconcile contract; H3 operation workflow should stay frozen because fresh evidence marks it satisfied; H4 if the next publication-owned reconcile slice returns unchanged with no metric or frontier movement, this is an architecture contract gap rather than another local runtime patch.
+- Confidence and evidence: high that the selected route remains publication convergence from `work:package:route-after-rerun`; high that operation workflow is no longer the blocker from the handoff probe and causal model; high that the next missing edge is `publication_ack_to_active_gate_reconcile_missing`; medium that one bounded publication owner slice can clear or migrate the active-gate snapshot timeout because the fresh artifact still times out at snapshot coverage 0/5.
+- Expected green path: close the classified-backpressure package as reduced, open `work/packages/active-20260519-topology-publication-active-gate-reconcile-runtime.md`, run required review/fix/implementation subagents, implement one bounded publication-owned reconcile contract slice, prove focused owner tests and guardrails, then rerun representative `rolling-restart`.
+- Wrong direction signals: editing operation-workflow, startup active-gate, readiness, admission, or timeout runtime before the publication-owned reconcile contract is proved; treating the selected snapshot timeout as first-owner work while the publication handoff contract is absent; or accepting another local publication patch if the reconcile successor returns same-frontier with no concrete reduction.
+- Next best package: `work/packages/active-20260519-topology-publication-active-gate-reconcile-runtime.md`, focused on `publication_ack_to_active_gate_reconcile_missing`.
+- Stop or escalate rule: if focused proof passes but representative rerun returns unchanged `publication_pending` and absent handoff contract with no metric reduction or owner-boundary migration, stop for architecture escalation instead of opening another local publication patch.
 
 ## Sprint Systemic Insight Gate
 
@@ -56,10 +56,11 @@ shape of failure:
 
 ## Current Blocker Snapshot
 
-Latest representative artifact for the active pressure-stability package:
-`test-output/reports/rolling-restart-after-pressure-stability-20260519T050912Z.report.json`.
+Historical snapshot retained for frontier history. The current blocker snapshot
+for the active package is the Current Edge Card below, based on
+`test-output/reports/rolling-restart-after-workflow-progress-proof-20260519T073539Z.report.json`.
 
-Canonical state after the fresh rerun:
+Historical state from that earlier rerun:
 
 1. The current active package is
    [Topology Publication Pressure Stability Runtime](../packages/done-20260518-topology-publication-pressure-stability-runtime.md).
@@ -131,26 +132,33 @@ Canonical state after the fresh rerun:
 ## Current Edge Card
 
 ```text
-Representative artifact: test-output/reports/rolling-restart-after-workflow-progress-proof-20260519T073539Z.report.json
-Visible first frontier: publication_ack_convergence / topology_publication_owner / publication_convergence / publication_pending in test-output/reports/rolling-restart-after-workflow-progress-proof-20260519T073539Z.report.json.
+Representative artifact: test-output/reports/rolling-restart-after-publication-workflow-handoff-20260519T083006Z.report.json
+Visible first frontier: publication_ack_convergence / topology_publication_owner / publication_convergence / publication_pending in test-output/reports/rolling-restart-after-publication-workflow-handoff-20260519T083006Z.report.json.
 Active package: work/packages/active-20260519-topology-publication-classified-backpressure-runtime.md
 Active package owner: topology_publication_owner
 Active package boundary: publication_convergence
 Selected cause: publication_pending
-Required action: Run required review/fix/implementation subagent sequencing, then implement one bounded publication-convergence runtime slice for the classified-backpressure publication_pending shape.
-Representative status: same-frontier
-Causal outcome: accept_classified_backpressure
+Required action: Close this reduced package and open a bounded publication-active-gate reconcile successor.
+Representative status: reduced
+Causal outcome: continue_local_fix
 Architecture gate: selected / publication-convergence-successor
-Expected delta: Resolve or correctly defer publication_ack_convergence while priority recovery is classified backpressure; reduce publication_pending/missingPublished, migrate owner boundary, or turn rolling-restart green.
-Current state: The predecessor diagnostic gate selected topology_publication_owner / publication_convergence as the bounded runtime successor. Fresh representative evidence keeps publication_ack_convergence first with publication_pending, while the operation_workflow_owner / workflow_progress residual is classified backpressure rather than the next local patch target.
+Expected delta: Priority recovery satisfied, residual witnesses reduced to 0, missingPublishedCount reduced to 0, and publication_ack_to_active_gate_reconcile_missing selected for the successor.
+Current state: Fresh representative evidence reduced the prior classified-backpressure shape but still blocks at publication_ack_convergence because the publication-active-gate handoff contract is absent.
 Allowed edits: work/packages/active-20260519-topology-publication-classified-backpressure-runtime.md, work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md, work/sprints/current-blocker.md, work/sprints/current-blocker.json, work/model-ledger.jsonl, src/control-plane/publication-owner-decision.js, src/control-plane/publication-recovery-evidence.js, src/control-plane/publication-active-gate-handoff-contract.js, src/control-plane/membership-publication-coordinator-class-stage-2.js, src/control-plane/active-node-projection.js, test/control-plane/publication-recovery-evidence.test.js, test/control-plane/membership-publication-coordinator-main-stage-2.js, test/control-plane/publication-active-gate-handoff-contract.test.js, test/control-plane/publication-owner-stream.test.js
-Candidate runtime files: unknown
-Forbidden edits: Operation workflow remains classified backpressure and active-gate runtime promotion remains false unless fresh evidence changes owner or required action.
-Required latest proof: npm run work:scenario-route -- test-output/reports/rolling-restart-after-workflow-progress-proof-20260519T073539Z.report.json --owner topology_publication_owner --boundary publication_convergence --dominant-reason publication_pending --explain publication_ack_convergence, npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-workflow-progress-proof-20260519T073539Z.report.json --handoff-probe, npm run analyze:owner-files -- topology_publication_owner publication_convergence
+Candidate runtime files: none recorded
+Forbidden edits: Operation workflow remains satisfied/frozen, and startup active-gate runtime remains downstream until the publication-owned reconcile contract is proved or fresh evidence migrates ownership.
+Required latest proof: npm run work:package:route-after-rerun -- --artifact test-output/reports/rolling-restart-after-publication-workflow-handoff-20260519T083006Z.report.json --owner topology_publication_owner --boundary publication_convergence --dominant-reason publication_pending, npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-publication-workflow-handoff-20260519T083006Z.report.json --handoff-probe, npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-publication-workflow-handoff-20260519T083006Z.report.json
 Allowed stop modes: representative-green, migrated, reduced, same-frontier, classification-only, architecture-gap, human-escalation
 ```
 
 ## Sprint Architecture Decision Gate
+
+2026-05-19 review note: this older decision ledger is superseded for the active
+slice by the selected package-level architecture gate and Current Edge Card
+above. The current selected route is
+`topology_publication_owner / publication_convergence / publication_pending`
+from
+`test-output/reports/rolling-restart-after-workflow-progress-proof-20260519T073539Z.report.json`.
 
 Status: selected after the reduced predecessor closed and opened the active runtime successor.
 

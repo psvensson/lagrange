@@ -2,6 +2,14 @@ import {NUM, TYPEOF} from '../constants/index.js';
 import {
   CONTROL_PLANE_READINESS_REASON,
 } from './control-plane-readiness-constants.js';
+import {
+  PRIORITY_RECOVERY_ACTUATION_STATE,
+  PRIORITY_RECOVERY_BLOCKING_BOUNDARY,
+  PRIORITY_RECOVERY_NEXT_REQUIRED_ACTION,
+  PRIORITY_RECOVERY_PROGRESS_OWNER,
+  PRIORITY_RECOVERY_WAIT_MODE,
+  PRIORITY_RECOVERY_WORKFLOW_PROGRESS_PHASE,
+} from './priority-recovery-diagnostics-constants.js';
 
 const PUBLICATION_ACTIVE_GATE_HANDOFF_EMPTY_LIST = Object.freeze([]);
 const PUBLICATION_ACTIVE_GATE_HANDOFF_EMPTY_TEXT = '';
@@ -9,6 +17,8 @@ const PUBLICATION_ACTIVE_GATE_HANDOFF_JOINED_LIST_SEPARATORS =
   Object.freeze([',', '|']);
 const PUBLICATION_ACTIVE_GATE_HANDOFF_SCHEMA_VERSION = 1;
 const PUBLICATION_ACTIVE_GATE_HANDOFF_UNKNOWN_EPOCH = 0;
+const PUBLICATION_OPERATION_WORKFLOW_HANDOFF_SCHEMA_VERSION = 1;
+const PUBLICATION_OPERATION_WORKFLOW_RUNTIME_PROMOTION_ALLOWED = false;
 
 const PUBLICATION_ACTIVE_GATE_HANDOFF_STATE = Object.freeze({
   COMPLETE: 'complete',
@@ -31,6 +41,25 @@ const PUBLICATION_ACTIVE_GATE_HANDOFF_NEXT_ACTION = Object.freeze({
   RECONCILE_OWNER_MEMBERSHIP_PUBLICATION:
     'reconcile_owner_membership_publication',
   WAIT_OWNER_RECOVERY: 'wait_owner_recovery',
+});
+
+const PUBLICATION_OPERATION_WORKFLOW_HANDOFF_STATE = Object.freeze({
+  DEFERRED: 'deferred',
+});
+
+const PUBLICATION_OPERATION_WORKFLOW_HANDOFF_REASON = Object.freeze({
+  CLASSIFIED_BACKPRESSURE: 'classified_backpressure',
+});
+
+const PUBLICATION_OPERATION_WORKFLOW_HANDOFF_OWNER = Object.freeze({
+  TOPOLOGY_PUBLICATION_OWNER: 'topology_publication_owner',
+  OPERATION_WORKFLOW_OWNER:
+    PRIORITY_RECOVERY_PROGRESS_OWNER.OPERATION_WORKFLOW_OWNER,
+});
+
+const PUBLICATION_OPERATION_WORKFLOW_HANDOFF_BOUNDARY = Object.freeze({
+  PUBLICATION_CONVERGENCE: 'publication_convergence',
+  WORKFLOW_PROGRESS: PRIORITY_RECOVERY_BLOCKING_BOUNDARY.WORKFLOW_PROGRESS,
 });
 
 const PUBLICATION_ACTIVE_GATE_CATCHUP_FENCE_STATE = Object.freeze({
@@ -103,9 +132,19 @@ const PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD = Object.freeze({
   ACTIVE_GATE_PROGRESS: 'activeGateProgress',
   ACTIVE_GATE_CATCHUP_FENCE: 'activeGateCatchupFence',
   ACTIVE_GATE_OWNER_COHORT: 'activeGateOwnerCohort',
+  ACTUATION_STATE: 'actuationState',
+  BOUNDARY: 'boundary',
   BLOCKED_PARTITION_COUNT: 'blockedPartitionCount',
   BLOCKED_PARTITION_IDS: 'blockedPartitionIds',
+  BLOCKING_BOUNDARY: 'blockingBoundary',
   COVERED_NODE_IDS: 'coveredNodeIds',
+  CURRENT_OWNER: 'currentOwner',
+  CURRENT_STEP_ID: 'currentStepId',
+  CURRENT_STEP_STATE: 'currentStepState',
+  DOMINANT_WITNESS: 'dominantWitness',
+  DOWNSTREAM_BOUNDARY: 'downstreamBoundary',
+  DOWNSTREAM_OWNER: 'downstreamOwner',
+  DOWNSTREAM_REQUIRED_ACTION: 'downstreamRequiredAction',
   EFFECTIVE_ACTIVE_NODE_IDS: 'effectiveActiveNodeIds',
   EXPECTED_NODE_IDS: 'expectedNodeIds',
   FRESH: 'fresh',
@@ -118,10 +157,17 @@ const PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD = Object.freeze({
   NODE_ID: 'node_id',
   NODE_IDS: 'nodeIds',
   NODEID: 'nodeId',
+  NEXT_REQUIRED_ACTION: 'nextRequiredAction',
+  OPERATION_IDS: 'operationIds',
+  OPERATION_WORKFLOW_HANDOFF: 'operationWorkflowHandoff',
+  OWNER: 'owner',
   PENDING_ACK_NODE_IDS: 'pendingAckNodeIds',
   PENDING_RECONCILE_COUNT: 'pendingReconcileCount',
   PENDING_RECONCILE_NODE_IDS: 'pendingReconcileNodeIds',
+  PARTITION_ID: 'partitionId',
+  PARTITION_IDS: 'partitionIds',
   PARTITION_WITNESSES: 'partitionWitnesses',
+  PUBLICATION_BOUNDARY: 'publicationBoundary',
   PRIORITY_RECOVERY_BLOCKED_PARTITION_COUNT:
     'priorityRecoveryBlockedPartitionCount',
   PRIORITY_RECOVERY_CURRENT_SUMMARY: 'priorityRecoveryCurrentSummary',
@@ -129,6 +175,7 @@ const PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD = Object.freeze({
   PRIORITY_RECOVERY_OBSERVATION: 'priorityRecoveryObservation',
   PRIORITY_RECOVERY_PARTITION_WITNESSES:
     'priorityRecoveryPartitionWitnesses',
+  PRIORITY_RECOVERY_PROGRESS_SUMMARY: 'priorityRecoveryProgressSummary',
   PRIORITY_RECOVERY_UNRESOLVED_CLASS_COUNT:
     'priorityRecoveryUnresolvedClassCount',
   PRIORITY_RECOVERY_UNRESOLVED_PARTITION_COUNT:
@@ -153,7 +200,9 @@ const PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD = Object.freeze({
   PUBLICATION_ACTIVE_GATE_HANDOFF_STATE: 'publicationActiveGateHandoffState',
   PUBLICATION_CONVERGENCE: 'publicationConvergence',
   PUBLICATION_EPOCH: 'publicationEpoch',
+  PUBLICATION_NEXT_ACTION: 'publicationNextAction',
   PUBLICATION_OBSERVATION: 'publicationObservation',
+  PUBLICATION_OWNER: 'publicationOwner',
   PUBLICATION_REVISION: 'publicationRevision',
   PUBLICATION_STATUS: 'publicationStatus',
   PUBLISHED_ACTIVE_NODE_IDS: 'publishedActiveNodeIds',
@@ -178,6 +227,10 @@ const PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD = Object.freeze({
   STATE: 'state',
   STATUS: 'status',
   SUSPECTED_OR_TRANSITIONING_NODE_IDS: 'suspectedOrTransitioningNodeIds',
+  TOPOLOGY_OPERATOR_CURRENT_STEP_ID: 'topologyOperatorCurrentStepId',
+  TOPOLOGY_OPERATOR_CURRENT_STEP_STATE: 'topologyOperatorCurrentStepState',
+  TOPOLOGY_OPERATOR_NEXT_ACTION: 'topologyOperatorNextAction',
+  TOPOLOGY_OPERATOR_WITNESS: 'topologyOperatorWitness',
   UNRESOLVED_CLASS_COUNT: 'unresolvedClassCount',
   UNRESOLVED_CLASS_IDS: 'unresolvedClassIds',
   UNRESOLVED_SEMANTIC_STATE_COUNT: 'unresolvedSemanticStateCount',
@@ -186,6 +239,8 @@ const PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD = Object.freeze({
   UPDATEDAT: 'updatedAt',
   WITNESS_PARTITION_COUNT: 'witnessPartitionCount',
   WITNESS_PARTITION_IDS: 'witnessPartitionIds',
+  WAIT_MODE: 'waitMode',
+  WORKFLOW_PROGRESS_PHASE_ID: 'workflowProgressPhaseId',
 });
 
 const PUBLICATION_ACTIVE_GATE_HANDOFF_PRIORITY_RECOVERY_STATE = Object.freeze({
@@ -447,6 +502,411 @@ function normalizePublicationActiveGateHandoffNodeIdList(
       ),
     ].sort((left, right) => left.localeCompare(right)),
   );
+}
+
+function normalizePublicationActiveGateHandoffText(value) {
+  const normalizedValue = String(
+    value || PUBLICATION_ACTIVE_GATE_HANDOFF_EMPTY_TEXT,
+  ).trim();
+  return normalizedValue.length > NUM.ZERO ?
+    normalizedValue :
+    PUBLICATION_ACTIVE_GATE_HANDOFF_EMPTY_TEXT;
+}
+
+function normalizePublicationOperationWorkflowRecord(value = null) {
+  return isPublicationActiveGateHandoffRecord(value) ? value : null;
+}
+
+function normalizePublicationOperationWorkflowHandoff(value = null) {
+  const record = normalizePublicationOperationWorkflowRecord(value);
+  if (!record) {
+    return null;
+  }
+  const downstreamRequiredAction =
+    normalizePublicationActiveGateHandoffText(
+      record[
+        PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.DOWNSTREAM_REQUIRED_ACTION
+      ] ??
+      record[
+        PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.NEXT_REQUIRED_ACTION
+      ] ??
+      record[
+        PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD
+          .TOPOLOGY_OPERATOR_NEXT_ACTION
+      ],
+    );
+  if (
+    downstreamRequiredAction !==
+      PRIORITY_RECOVERY_NEXT_REQUIRED_ACTION.ADVANCE_EXISTING_OPERATION
+  ) {
+    return null;
+  }
+  const partitionIds = normalizePublicationActiveGateHandoffNodeIdList(
+    record[PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.PARTITION_IDS] ??
+      record[PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.PARTITION_ID],
+  );
+  return Object.freeze({
+    schemaVersion: PUBLICATION_OPERATION_WORKFLOW_HANDOFF_SCHEMA_VERSION,
+    state: PUBLICATION_OPERATION_WORKFLOW_HANDOFF_STATE.DEFERRED,
+    reasonCode:
+      PUBLICATION_OPERATION_WORKFLOW_HANDOFF_REASON
+        .CLASSIFIED_BACKPRESSURE,
+    [PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.PUBLICATION_OWNER]:
+      PUBLICATION_OPERATION_WORKFLOW_HANDOFF_OWNER
+        .TOPOLOGY_PUBLICATION_OWNER,
+    [PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.PUBLICATION_BOUNDARY]:
+      PUBLICATION_OPERATION_WORKFLOW_HANDOFF_BOUNDARY
+        .PUBLICATION_CONVERGENCE,
+    [PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.DOWNSTREAM_OWNER]:
+      PUBLICATION_OPERATION_WORKFLOW_HANDOFF_OWNER.OPERATION_WORKFLOW_OWNER,
+    [PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.DOWNSTREAM_BOUNDARY]:
+      PUBLICATION_OPERATION_WORKFLOW_HANDOFF_BOUNDARY.WORKFLOW_PROGRESS,
+    [PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.DOWNSTREAM_REQUIRED_ACTION]:
+      downstreamRequiredAction,
+    runtimePromotionAllowed:
+      PUBLICATION_OPERATION_WORKFLOW_RUNTIME_PROMOTION_ALLOWED,
+    ...(normalizePublicationActiveGateHandoffText(
+      record[
+        PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.PUBLICATION_NEXT_ACTION
+      ],
+    ) ? {
+        [PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.PUBLICATION_NEXT_ACTION]:
+          normalizePublicationActiveGateHandoffText(
+            record[
+              PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.PUBLICATION_NEXT_ACTION
+            ],
+          ),
+      } :
+      {}),
+    ...(normalizePublicationActiveGateHandoffText(
+      record[PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.ACTUATION_STATE],
+    ) ? {
+        [PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.ACTUATION_STATE]:
+          normalizePublicationActiveGateHandoffText(
+            record[PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.ACTUATION_STATE],
+          ),
+      } :
+      {}),
+    ...(normalizePublicationActiveGateHandoffText(
+      record[PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.WAIT_MODE],
+    ) ? {
+        [PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.WAIT_MODE]:
+          normalizePublicationActiveGateHandoffText(
+            record[PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.WAIT_MODE],
+          ),
+      } :
+      {}),
+    ...(normalizePublicationActiveGateHandoffText(
+      record[
+        PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.WORKFLOW_PROGRESS_PHASE_ID
+      ] ??
+      record[
+        PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD
+          .TOPOLOGY_OPERATOR_CURRENT_STEP_ID
+      ] ??
+      record[PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.CURRENT_STEP_ID],
+    ) ? {
+        [PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.WORKFLOW_PROGRESS_PHASE_ID]:
+          normalizePublicationActiveGateHandoffText(
+            record[
+              PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD
+                .WORKFLOW_PROGRESS_PHASE_ID
+            ] ??
+            record[
+              PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD
+                .TOPOLOGY_OPERATOR_CURRENT_STEP_ID
+            ] ??
+            record[PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.CURRENT_STEP_ID],
+          ),
+      } :
+      {}),
+    ...(normalizePublicationActiveGateHandoffText(
+      record[
+        PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD
+          .TOPOLOGY_OPERATOR_CURRENT_STEP_STATE
+      ] ??
+      record[PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.CURRENT_STEP_STATE],
+    ) ? {
+        [PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD
+          .TOPOLOGY_OPERATOR_CURRENT_STEP_STATE]:
+          normalizePublicationActiveGateHandoffText(
+            record[
+              PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD
+                .TOPOLOGY_OPERATOR_CURRENT_STEP_STATE
+            ] ??
+            record[PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.CURRENT_STEP_STATE],
+          ),
+      } :
+      {}),
+    ...(partitionIds.length > NUM.ZERO ?
+      {[PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.PARTITION_IDS]: partitionIds} :
+      {}),
+    ...(normalizePublicationActiveGateHandoffNodeIdList(
+      record[PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.OPERATION_IDS],
+    ).length > NUM.ZERO ?
+      {
+        [PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.OPERATION_IDS]:
+          normalizePublicationActiveGateHandoffNodeIdList(
+            record[PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.OPERATION_IDS],
+          ),
+      } :
+      {}),
+  });
+}
+
+function collectPublicationOperationWorkflowSourceRecords(source = null) {
+  const record = normalizePublicationOperationWorkflowRecord(source);
+  if (!record) {
+    return PUBLICATION_ACTIVE_GATE_HANDOFF_EMPTY_LIST;
+  }
+  const activeGate =
+    normalizePublicationOperationWorkflowRecord(
+      record[PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.ACTIVE_GATE],
+    );
+  return Object.freeze([
+    record,
+    record[
+      PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.OPERATION_WORKFLOW_HANDOFF
+    ],
+    record[
+      PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD
+        .PRIORITY_RECOVERY_PROGRESS_SUMMARY
+    ],
+    record[
+      PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD
+        .PRIORITY_RECOVERY_CURRENT_SUMMARY
+    ],
+    record[
+      PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.PRIORITY_RECOVERY_OBSERVATION
+    ],
+    record[PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.ACTIVE_GATE_PROGRESS],
+    record[PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.ACTIVE_GATE_BEST_PROGRESS],
+    activeGate?.[PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.PROGRESS],
+    activeGate?.[PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.ACTIVE_GATE_PROGRESS],
+    activeGate?.[
+      PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.ACTIVE_GATE_BEST_PROGRESS
+    ],
+  ].filter(isPublicationActiveGateHandoffRecord));
+}
+
+function collectPublicationOperationWorkflowWitnessRecords(source = null) {
+  return Object.freeze(
+    collectPublicationOperationWorkflowSourceRecords(source)
+      .flatMap((record) => {
+        const partitionWitnesses = [
+          ...(
+            Array.isArray(
+              record[
+                PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD
+                  .PRIORITY_RECOVERY_PARTITION_WITNESSES
+              ],
+            ) ?
+              record[
+                PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD
+                  .PRIORITY_RECOVERY_PARTITION_WITNESSES
+              ] :
+              PUBLICATION_ACTIVE_GATE_HANDOFF_EMPTY_LIST
+          ),
+          ...(
+            Array.isArray(
+              record[PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.PARTITION_WITNESSES],
+            ) ?
+              record[
+                PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.PARTITION_WITNESSES
+              ] :
+              PUBLICATION_ACTIVE_GATE_HANDOFF_EMPTY_LIST
+          ),
+        ].filter(isPublicationActiveGateHandoffRecord);
+        return [
+          record,
+          record[PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.DOMINANT_WITNESS],
+          record[
+            PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.TOPOLOGY_OPERATOR_WITNESS
+          ],
+          ...partitionWitnesses,
+          ...partitionWitnesses
+            .map((witness) => ({
+              ...witness,
+              ...(
+                isPublicationActiveGateHandoffRecord(
+                  witness[
+                    PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD
+                      .TOPOLOGY_OPERATOR_WITNESS
+                  ],
+                ) ?
+                  witness[
+                    PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD
+                      .TOPOLOGY_OPERATOR_WITNESS
+                  ] :
+                  {}
+              ),
+            })),
+        ].filter(isPublicationActiveGateHandoffRecord);
+      }),
+  );
+}
+
+function normalizePublicationOperationWorkflowWitness(record = null) {
+  const witness = normalizePublicationOperationWorkflowRecord(record);
+  if (!witness) {
+    return null;
+  }
+  const downstreamOwner = normalizePublicationActiveGateHandoffText(
+    witness[PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.CURRENT_OWNER] ??
+    witness[PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.OWNER],
+  );
+  const downstreamBoundary = normalizePublicationActiveGateHandoffText(
+    witness[PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.BLOCKING_BOUNDARY] ??
+    witness[PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.BOUNDARY],
+  );
+  const actuationState = normalizePublicationActiveGateHandoffText(
+    witness[PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.ACTUATION_STATE],
+  );
+  const waitMode = normalizePublicationActiveGateHandoffText(
+    witness[PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.WAIT_MODE],
+  );
+  const workflowProgressPhaseId = normalizePublicationActiveGateHandoffText(
+    witness[
+      PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.WORKFLOW_PROGRESS_PHASE_ID
+    ] ??
+    witness[
+      PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.TOPOLOGY_OPERATOR_CURRENT_STEP_ID
+    ] ??
+    witness[PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.CURRENT_STEP_ID],
+  );
+  if (
+    downstreamOwner !==
+      PUBLICATION_OPERATION_WORKFLOW_HANDOFF_OWNER.OPERATION_WORKFLOW_OWNER ||
+    downstreamBoundary !==
+      PUBLICATION_OPERATION_WORKFLOW_HANDOFF_BOUNDARY.WORKFLOW_PROGRESS ||
+    (
+      actuationState !==
+        PRIORITY_RECOVERY_ACTUATION_STATE.PERSISTED_NOT_DISPATCHED &&
+      waitMode !== PRIORITY_RECOVERY_WAIT_MODE.EVENT_DRIVEN &&
+      workflowProgressPhaseId !==
+        PRIORITY_RECOVERY_WORKFLOW_PROGRESS_PHASE.DISPATCH_PENDING
+    )
+  ) {
+    return null;
+  }
+  return normalizePublicationOperationWorkflowHandoff({
+    ...witness,
+    [PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.DOWNSTREAM_REQUIRED_ACTION]:
+      witness[
+        PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.NEXT_REQUIRED_ACTION
+      ] ??
+      witness[
+        PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.TOPOLOGY_OPERATOR_NEXT_ACTION
+      ],
+    [PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.DOWNSTREAM_OWNER]:
+      witness[PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.CURRENT_OWNER] ??
+      witness[PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.OWNER],
+    [PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.DOWNSTREAM_BOUNDARY]:
+      witness[PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.BLOCKING_BOUNDARY] ??
+      witness[PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.BOUNDARY],
+    [PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.PARTITION_IDS]:
+      witness[PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.PARTITION_IDS] ??
+      witness[PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.PARTITION_ID],
+  });
+}
+
+function hasPublicationOperationWorkflowBackpressureWitness(record = null) {
+  const witness = normalizePublicationOperationWorkflowRecord(record);
+  if (!witness) {
+    return false;
+  }
+  const downstreamOwner = normalizePublicationActiveGateHandoffText(
+    witness[PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.CURRENT_OWNER] ??
+    witness[PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.OWNER],
+  );
+  const downstreamBoundary = normalizePublicationActiveGateHandoffText(
+    witness[PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.BLOCKING_BOUNDARY] ??
+    witness[PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.BOUNDARY],
+  );
+  const downstreamRequiredAction = normalizePublicationActiveGateHandoffText(
+    witness[PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.NEXT_REQUIRED_ACTION] ??
+    witness[
+      PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.TOPOLOGY_OPERATOR_NEXT_ACTION
+    ],
+  );
+  const actuationState = normalizePublicationActiveGateHandoffText(
+    witness[PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.ACTUATION_STATE],
+  );
+  const waitMode = normalizePublicationActiveGateHandoffText(
+    witness[PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.WAIT_MODE],
+  );
+  const workflowProgressPhaseId = normalizePublicationActiveGateHandoffText(
+    witness[
+      PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.WORKFLOW_PROGRESS_PHASE_ID
+    ] ??
+    witness[
+      PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.TOPOLOGY_OPERATOR_CURRENT_STEP_ID
+    ] ??
+    witness[PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.CURRENT_STEP_ID],
+  );
+  return downstreamOwner ===
+      PUBLICATION_OPERATION_WORKFLOW_HANDOFF_OWNER.OPERATION_WORKFLOW_OWNER &&
+    downstreamBoundary ===
+      PUBLICATION_OPERATION_WORKFLOW_HANDOFF_BOUNDARY.WORKFLOW_PROGRESS &&
+    downstreamRequiredAction ===
+      PRIORITY_RECOVERY_NEXT_REQUIRED_ACTION.ADVANCE_EXISTING_OPERATION &&
+    (
+      actuationState ===
+        PRIORITY_RECOVERY_ACTUATION_STATE.PERSISTED_NOT_DISPATCHED ||
+      waitMode === PRIORITY_RECOVERY_WAIT_MODE.EVENT_DRIVEN ||
+      workflowProgressPhaseId ===
+        PRIORITY_RECOVERY_WORKFLOW_PROGRESS_PHASE.DISPATCH_PENDING
+    );
+}
+
+function buildPublicationOperationWorkflowHandoff(options = {}) {
+  const explicitHandoff = normalizePublicationOperationWorkflowHandoff(
+    options[
+      PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.OPERATION_WORKFLOW_HANDOFF
+    ] ??
+    options.publicationConvergence?.[
+      PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.OPERATION_WORKFLOW_HANDOFF
+    ],
+  );
+  if (explicitHandoff) {
+    return explicitHandoff;
+  }
+  const publicationNextAction = normalizePublicationActiveGateHandoffText(
+    options.publicationNextAction ??
+      options.handoffContract?.nextAction ??
+      options.decision?.nextAction,
+  );
+  if (
+    publicationNextAction !==
+      PUBLICATION_ACTIVE_GATE_HANDOFF_NEXT_ACTION
+        .RECONCILE_OWNER_MEMBERSHIP_PUBLICATION
+  ) {
+    return null;
+  }
+  const witness = [
+    options.publicationConvergence,
+    options.publicationConvergence?.[
+      PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.PRIORITY_RECOVERY_OBSERVATION
+    ],
+    options.priorityRecoveryObservation,
+  ]
+    .flatMap((source) =>
+      collectPublicationOperationWorkflowWitnessRecords(source))
+    .map(normalizePublicationOperationWorkflowWitness)
+    .find(Boolean);
+  const operationWorkflowHandoff = witness;
+  if (!operationWorkflowHandoff) {
+    return null;
+  }
+  return Object.freeze({
+    ...operationWorkflowHandoff,
+    ...(publicationNextAction ?
+      {
+        [PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.PUBLICATION_NEXT_ACTION]:
+          publicationNextAction,
+      } :
+      {}),
+  });
 }
 
 function collectPublicationActiveGateHandoffRecordNodeIds(record, fields) {
@@ -1405,6 +1865,11 @@ function buildPublicationActiveGateHandoffContract(options = {}) {
     expectedNodeIds,
   });
   const decision = decidePublicationActiveGateHandoff(evidence);
+  const operationWorkflowHandoff = buildPublicationOperationWorkflowHandoff({
+    ...options,
+    handoffContract: options,
+    decision,
+  });
   const runtimePromotionAllowed =
     decision.runtimePromotionAllowed === true &&
     activeGateCatchupFence.promotionAllowed === true;
@@ -1438,6 +1903,12 @@ function buildPublicationActiveGateHandoffContract(options = {}) {
     nextAction: promotionDeniedByFence ?
       PUBLICATION_ACTIVE_GATE_HANDOFF_NEXT_ACTION.OBSERVE_OWNER_HANDOFF :
       decision.nextAction,
+    ...(operationWorkflowHandoff ?
+      {
+        [PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.OPERATION_WORKFLOW_HANDOFF]:
+          operationWorkflowHandoff,
+      } :
+      {}),
   });
 }
 
@@ -1465,6 +1936,10 @@ function normalizePublicationActiveGateHandoffContract(value) {
         value[PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.PUBLISHED_ACTIVE_NODE_IDS],
       [PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.MISSING_PUBLISHED_NODE_IDS]:
         value[PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.MISSING_PUBLISHED_NODE_IDS],
+      [PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.OPERATION_WORKFLOW_HANDOFF]:
+        value[
+          PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.OPERATION_WORKFLOW_HANDOFF
+        ],
     },
     expectedNodeIds: value[PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.EXPECTED_NODE_IDS],
     pendingRecoveryNodeIds: value.pendingRecoveryNodeIds,
@@ -1650,6 +2125,9 @@ function projectPublicationActiveGateHandoffToOwnerCohort(
     runtimePromotionAllowed: contract.runtimePromotionAllowed,
     nextAction: contract.nextAction,
     activeGateBudget,
+    ...(contract.operationWorkflowHandoff ?
+      {operationWorkflowHandoff: contract.operationWorkflowHandoff} :
+      {}),
   });
 }
 
@@ -1981,7 +2459,10 @@ export {
   PUBLICATION_ACTIVE_GATE_HANDOFF_REASON,
   PUBLICATION_ACTIVE_GATE_HANDOFF_SCHEMA_VERSION,
   PUBLICATION_ACTIVE_GATE_HANDOFF_STATE,
+  PUBLICATION_OPERATION_WORKFLOW_HANDOFF_REASON,
+  PUBLICATION_OPERATION_WORKFLOW_HANDOFF_STATE,
   buildPublicationActiveGateHandoffContract,
+  buildPublicationOperationWorkflowHandoff,
   hasPublicationActiveGateOwnerReconcileSignal,
   normalizePublicationActiveGateHandoffContract,
   projectPublicationActiveGateHandoffToOwnerCohort,
