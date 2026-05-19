@@ -4,21 +4,21 @@
 
 ## Theory And Implementation Focus
 
-Theory under test: Accepted owner recovery queue admission is now observable, but the accepted owner-key item may not drain or preserve retry state after retryable distributed participant failures; the stalled wait evidence still reports ownerQueue=unknown while publication handoff remains pending.
+Theory under test: Accepted owner recovery queue admission is observable, but the accepted owner-key item may not drain or preserve retry state after retryable distributed participant failures; the stalled wait evidence still reports ownerQueue=unknown while publication handoff remains pending.
 
-Causal question: Selected edge: an accepted owner recovery queue item must drain to owner reconcile progress or remain retryable after retryable distributed participant failures instead of disappearing behind ownerQueue=unknown.
+Causal question: Prove whether an accepted owner recovery queue item drains to owner reconcile progress or remains retryable after retryable distributed participant failures instead of disappearing behind ownerQueue=unknown.
 
-Implementation slice: Run a causal escalation gate for the accepted owner recovery queue drain edge, then select a bounded child only if evidence proves this is still a local publication-owner runtime fix rather than an owner-boundary migration, architecture gap, or human stop.
+Implementation slice: Implement one bounded owner recovery queue drain/retry runtime slice: prove an accepted write_deferred owner recovery queue item either drains to owner reconcile progress or preserves structured retry state after a retryable distributed participant failure, without patching downstream active-gate, readiness, operation-workflow, admission, or timeout paths.
 
 Implementation files:
 
 1. `src/control-plane/membership-publication-coordinator-class-stage-3.js`
-2. `src/control-plane/membership-publication-coordinator-class-stage-2.js`
-3. `src/workflow/owner-key-reconcile-queue.js`
-4. `test/control-plane/membership-publication-coordinator-main-stage-2.js`
-5. `test/workflow/owner-key-reconcile-queue.test.js`
+2. `src/workflow/owner-key-reconcile-queue.js`
+3. `test/control-plane/membership-publication-coordinator-main-stage-2.js`
+4. `test/workflow/owner-key-reconcile-queue.test.js`
+5. `src/control-plane/membership-publication-coordinator-class-stage-2.js`
 
-Expected implementation delta: Selected the accepted owner recovery queue drain/retry edge as the bounded runtime successor candidate while keeping runtime files candidate-only in this gate.
+Expected implementation delta: Accepted owner recovery queue drain either reduces pendingReconcileCount and activeGateOwnerCohortMissingPublishedCount, or replaces ownerQueue=unknown with a structured retryable drain outcome that keeps publication owner retry state explicit.
 
 Falsifying probe: npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-wake-queue-admission-20260519T135719Z.report.json --handoff-probe
 
@@ -26,9 +26,9 @@ Stop rule: If focused proof cannot show queue drain or structured retry preserva
 
 Sprint: `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md`
 
-Package: `work/packages/active-20260519-topology-publication-owner-recovery-queue-drain-causal-gate.md`
+Package: `work/packages/active-20260519-topology-publication-owner-recovery-queue-drain-runtime.md`
 
-Workflow lane: `causal-escalation`
+Workflow lane: `runtime-owner-boundary`
 
 Scenario: `rolling-restart`
 
@@ -44,11 +44,11 @@ Boundary: `publication_convergence`
 
 Dominant reason: `publication_pending`
 
-Current state: Fresh representative rerun after accepted wake queue admission still fails at publication_ack_convergence. The prior slice moved the handoff outcome to write_deferred#enqueued=true, while active-gate handoff pendingReconcileCount is 2, activeGateOwnerCohortMissingPublishedCount is 2, ownerQueue remains unknown in the stalled wait evidence, and priority recovery residual witnesses reopened at 3 with splitRequired=false.
+Current state: The causal gate selected the accepted owner recovery queue drain/retry edge as the bounded local runtime successor. Fresh rolling-restart evidence keeps publication_ack_convergence first with write_deferred#enqueued=true, pendingReconcileCount=2, activeGateOwnerCohortMissingPublishedCount=2, ownerQueue=unknown, and priority residual witnesses=3 with splitRequired=false.
 
 ## Next Action
 
-Run a causal escalation gate for the accepted owner recovery queue drain edge, then select a bounded child only if evidence proves this is still a local publication-owner runtime fix rather than an owner-boundary migration, architecture gap, or human stop.
+Implement one bounded owner recovery queue drain/retry runtime slice: prove an accepted write_deferred owner recovery queue item either drains to owner reconcile progress or preserves structured retry state after a retryable distributed participant failure, without patching downstream active-gate, readiness, operation-workflow, admission, or timeout paths.
 
 ## Proof Ladder
 
@@ -58,11 +58,11 @@ Run a causal escalation gate for the accepted owner recovery queue drain edge, t
 
 ## Model Fit
 
-Package class: `architecture-gap-analysis`
+Package class: `runtime-owner-boundary`
 
 Intended minimum model: `gpt-5.3-codex`
 
-Scope shape: `scenario-causal-escalation`
+Scope shape: `bounded-owner-runtime/current-frontier`
 
 Output profile: `medium`
 
@@ -73,35 +73,35 @@ Escalation triggers:
 
 ## Representative Residual
 
-Status: `classification-only`
+Status: `unknown`
 
-Scenario: `rolling-restart`
+Scenario: `unknown`
 
-Artifact: `test-output/reports/rolling-restart-after-wake-queue-admission-20260519T135719Z.report.json`
+Artifact: `unknown`
 
-Frontier: `publication_ack_convergence`
+Frontier: `unknown`
 
-Owner: `topology_publication_owner`
+Owner: `unknown`
 
-Boundary: `publication_convergence`
+Boundary: `unknown`
 
-Dominant reason: `publication_pending`
+Dominant reason: `unknown`
 
-Next action: `Open a bounded runtime-owner-boundary successor for the accepted owner recovery queue drain/retry edge, then run required review/fix/implementation sequencing before runtime edits.`
+Next action: `unknown`
 
 ## Causal Governance
 
-Causal hypothesis: `Accepted owner recovery queue admission is now observable, but the accepted owner-key item may not drain or preserve retry state after retryable distributed participant failures; the stalled wait evidence still reports ownerQueue=unknown while publication handoff remains pending.`
+Causal hypothesis: `Accepted owner recovery queue admission is observable, but the accepted owner-key item may not drain or preserve retry state after retryable distributed participant failures; the stalled wait evidence still reports ownerQueue=unknown while publication handoff remains pending.`
 
-Stop-condition check: `Before runtime edits, run npm run analyze:causal-model -- test-output/reports/rolling-restart-after-wake-queue-admission-20260519T135719Z.report.json and confirm canonical route remains topology_publication_owner / publication_convergence / publication_pending, priority residual splitRequired=false, and the handoff probe still requires reconcile_owner_membership_publication. After the gate, only open a runtime child if focused proof can show the accepted queue item drains or retains structured retry state after a retryable drain failure.`
+Stop-condition check: `Before runtime edits, run npm run analyze:causal-model -- test-output/reports/rolling-restart-after-wake-queue-admission-20260519T135719Z.report.json and confirm canonical route remains topology_publication_owner / publication_convergence / publication_pending, priority residual splitRequired=false, and the handoff probe still requires reconcile_owner_membership_publication. Focused proof must show the accepted queue item drains or retains structured retry state after a retryable drain failure.`
 
-Expected causal-model change: `Selected the accepted owner recovery queue drain/retry edge as the bounded runtime successor candidate while keeping runtime files candidate-only in this gate.`
+Expected causal-model change: `Accepted owner recovery queue drain either reduces pendingReconcileCount and activeGateOwnerCohortMissingPublishedCount, or replaces ownerQueue=unknown with a structured retryable drain outcome that keeps publication owner retry state explicit.`
 
-Representative outcome: `classification-only`
+Representative outcome: `pending-before-rerun`
 
 Causal debt: `Fresh artifact test-output/reports/rolling-restart-after-wake-queue-admission-20260519T135719Z.report.json remains red at publication_ack_convergence / topology_publication_owner / publication_convergence / publication_pending with write_deferred#enqueued=true, snapshotCoverageNodeCount=3/5, pendingReconcileCount=2, activeGateOwnerCohortMissingPublishedCount=2, ownerQueue=unknown in the stalled wait evidence, and priority residual witnesses=3 with splitRequired=false.`
 
-Cross-boundary review: `The predecessor reduced the wake queue admission edge and proved accepted merge/admission is visible. This package must stay on the publication owner recovery queue drain/retry path; startup active-gate, startup readiness, operation workflow, admission, and timeout paths remain frozen.`
+Cross-boundary review: `The causal gate selected this package as the bounded local runtime successor after the predecessor reduced wake queue admission. Startup active-gate, startup readiness, operation workflow, admission, and timeout paths remain frozen.`
 
 ## Scenario Causal Closure
 
@@ -110,8 +110,8 @@ Reference scenario/probe: `rolling-restart after accepted owner recovery wake qu
 Phase chain:
 
 1. `multi-node owner reconcile runtime reduced pendingReconcileCount from 4 to 1`
-2. `remaining-node runtime package found stage-2 already reaches write_deferred`
-3. `owner recovery wake queue admission runtime moved membershipPublicationHandoffOutcomeEnqueued=false to write_deferred#enqueued=true`
+2. `owner recovery wake queue admission runtime moved membershipPublicationHandoffOutcomeEnqueued=false to write_deferred#enqueued=true`
+3. `queue drain causal gate selected a local runtime-owner-boundary successor`
 4. `fresh representative evidence stays red with pendingReconcileCount=2 and ownerQueue=unknown`
 
 Current first frontier: `publication_ack_convergence / topology_publication_owner / publication_convergence / publication_pending in test-output/reports/rolling-restart-after-wake-queue-admission-20260519T135719Z.report.json.`
@@ -128,34 +128,34 @@ Known downstream blockers:
 8. `runtimePromotionAllowed=false`
 9. `priority recovery residual witnesses=3 with splitRequired=false`
 
-Missing causal edge: `Selected edge: an accepted owner recovery queue item must drain to owner reconcile progress or remain retryable after retryable distributed participant failures instead of disappearing behind ownerQueue=unknown.`
+Missing causal edge: `Prove whether an accepted owner recovery queue item drains to owner reconcile progress or remains retryable after retryable distributed participant failures instead of disappearing behind ownerQueue=unknown.`
 
 Missing causal edge probe: `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-wake-queue-admission-20260519T135719Z.report.json --handoff-probe`
 
-Bounded progress proof: `Focused causal proof selects a runtime-owner-boundary successor for accepted owner recovery queue drain success or structured retry preservation.`
+Bounded progress proof: `Focused runtime proof must show accepted owner recovery queue drain success or structured retry preservation for retryable drain failure.`
 
 Bounded progress proof artifact: `test-output/reports/rolling-restart-after-wake-queue-admission-20260519T135719Z.report.json`
 
-Expected observable transition: `Open a bounded runtime-owner-boundary successor that can prove pendingReconcileCount or activeGateOwnerCohortMissingPublishedCount reduces, ownerQueue=unknown becomes a structured retryable owner queue drain outcome, the owner boundary migrates, representative evidence turns green, or architecture/human stop is recorded.`
+Expected observable transition: `pendingReconcileCount or activeGateOwnerCohortMissingPublishedCount reduces, ownerQueue=unknown becomes a structured retryable owner queue drain outcome, the owner boundary migrates, representative evidence turns green, or architecture/human stop is recorded.`
 
-Max progress bound: `one bounded causal-escalation gate before selecting a child package, migration, architecture stop, or human stop`
+Max progress bound: `one bounded runtime-owner-boundary package before rerun or renewed causal escalation`
 
 Same-frontier fallback: `If focused proof cannot show queue drain or structured retry preservation for the accepted owner recovery item, stop instead of patching downstream active-gate symptoms.`
 
-Expected next frontier: `runtime successor package for owner recovery queue drain/retry`
+Expected next frontier: `representative green, reduced publication drain frontier, migrated owner boundary, or architecture/human stop`
 
-Result classification: `classification-only`
+Result classification: `pending-before-probe`
 
 Stop condition: `continue-local-fix`
 
 Recent frontier history:
 
 1. `work/packages/done-20260519-topology-publication-multi-node-reconcile-runtime.md / topology_publication_owner / publication_convergence / reduced`
-2. `work/packages/done-20260519-topology-publication-remaining-node-reconcile-runtime.md / topology_publication_owner / publication_convergence / architecture-gap`
-3. `work/packages/done-20260519-topology-publication-owner-recovery-wake-queue-causal-gate.md / topology_publication_owner / publication_convergence / selected-runtime-successor`
-4. `work/packages/done-20260519-topology-publication-owner-recovery-wake-queue-admission-runtime.md / topology_publication_owner / publication_convergence / reduced`
+2. `work/packages/done-20260519-topology-publication-owner-recovery-wake-queue-causal-gate.md / topology_publication_owner / publication_convergence / selected-runtime-successor`
+3. `work/packages/done-20260519-topology-publication-owner-recovery-wake-queue-admission-runtime.md / topology_publication_owner / publication_convergence / reduced`
+4. `work/packages/done-20260519-topology-publication-owner-recovery-queue-drain-causal-gate.md / topology_publication_owner / publication_convergence / classification-only`
 
-Oscillation check: `This package is allowed because fresh representative evidence moved the predecessor admission signal, but stayed on the same owner boundary with a new accepted-queue drain/retry edge.`
+Oscillation check: `This runtime package is allowed because the causal-escalation gate selected the accepted owner recovery queue drain edge after the predecessor moved the admission signal.`
 
 Handoff invariant: `Operation workflow, startup active-gate runtime, startup readiness, admission, and timeout budgets remain frozen unless fresh representative evidence migrates ownership.`
 
@@ -196,55 +196,57 @@ Proof command budget: `two-or-three-canonical-commands`
 
 Commands:
 
-1. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-wake-queue-admission-20260519T135719Z.report.json --handoff-probe`
-2. `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-wake-queue-admission-20260519T135719Z.report.json`
-3. `npm run work:evidence-summary -- test-output/reports/rolling-restart-after-wake-queue-admission-20260519T135719Z.report.json`
+1. `npm run work:scenario-route -- test-output/reports/rolling-restart-after-wake-queue-admission-20260519T135719Z.report.json --owner topology_publication_owner --boundary publication_convergence --dominant-reason publication_pending --explain publication_ack_convergence`
+2. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-wake-queue-admission-20260519T135719Z.report.json --handoff-probe`
+3. `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-wake-queue-admission-20260519T135719Z.report.json`
 
 Decision record: `Record classification in the current package or sprint edge card; open a separate classifier only for material route, owner, boundary, stop-condition, tracker-truth, or successor-selection changes.`
 
 Successor action: `open-runtime-owner-boundary`
 
-Runtime promotion rule: `When this causal gate selects local proof, open a runtime-owner-boundary successor and keep runtime files in candidateRuntimeFiles until that package activates them.`
+Runtime promotion rule: `When canonical owner and boundary are stable, prefer a runtime-owner-boundary successor and keep runtime files in candidateRuntimeFiles until that package activates them.`
 
 ## Architecture Decision Gate
 
-Status: `watching`
+Status: `selected`
 
 Trigger: `frontier-oscillation`
 
 Trigger evidence:
 
-1. `frontier returned to a recently closed related boundary`
-2. `work/packages/done-20260519-topology-publication-same-frontier-architecture-gate.md / topology_publication_owner / publication_convergence / same-frontier`
-3. `work/packages/done-20260519-topology-publication-remaining-node-causal-gate.md / topology_publication_owner / publication_convergence / reduced`
-4. `work/packages/done-20260519-topology-publication-owner-recovery-wake-queue-causal-gate.md / topology_publication_owner / publication_convergence / classification-only`
+1. `queue drain causal gate selected this local runtime successor`
+2. `scenario route remains topology_publication_owner / publication_convergence / publication_pending with continue_local_fix`
+3. `handoff probe keeps requiredAction=reconcile_owner_membership_publication and runtimePromotionAllowed=false`
+4. `priority residual witnesses=3 with splitRequired=false`
 
 Choices:
 
-1. `continue-local-proof` route=`continue-local-proof` - Continue with a bounded local proof if the missing edge stays inside this owner boundary.
-2. `migrate-owner-boundary` route=`owner-boundary-migration` - Migrate the active package to the owner boundary named by the first frontier evidence.
-3. `open-architecture-package` route=`architecture-package` - Open a bounded architecture package for the missing owner contract.
-4. `human-escalation` route=`human-escalation` - Escalate to a human choice before creating or changing runtime packages.
+1. `owner-recovery-queue-drain-runtime-successor` route=`continue-local-proof` - Implement the bounded accepted owner recovery queue drain/retry path inside the publication owner boundary.
+2. `human-escalation` route=`human-escalation` - Stop for human direction if focused proof cannot distinguish queue drain, owner-boundary migration, or architecture contract debt.
 
-Selected choice: `unknown`
+Selected choice: `owner-recovery-queue-drain-runtime-successor`
 
-Gate next action: Watch for repeated frontier oscillation and escalate if another local proof returns here.
+Gate next action: Run required review/fix/implementation sequencing, then implement the bounded owner recovery queue drain/retry runtime slice.
 
 ## Scope
 
 Write scope:
 
-1. `work/packages/active-20260519-topology-publication-owner-recovery-queue-drain-causal-gate.md`
+1. `work/packages/active-20260519-topology-publication-owner-recovery-queue-drain-runtime.md`
 2. `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md`
 3. `work/sprints/current-blocker.md`
 4. `work/sprints/current-blocker.json`
 5. `work/model-ledger.jsonl`
+6. `src/control-plane/membership-publication-coordinator-class-stage-3.js`
+7. `src/workflow/owner-key-reconcile-queue.js`
+8. `test/control-plane/membership-publication-coordinator-main-stage-2.js`
+9. `test/workflow/owner-key-reconcile-queue.test.js`
 
 Handoff files:
 
-1. `work/packages/done-20260519-topology-publication-owner-recovery-wake-queue-admission-runtime.md`
-2. `test-output/reports/rolling-restart-after-wake-queue-admission-20260519T135719Z.report.json`
-3. `test-output/reports/rolling-restart-after-multi-node-reconcile-20260519T105449Z.report.json`
+1. `work/packages/done-20260519-topology-publication-owner-recovery-queue-drain-causal-gate.md`
+2. `work/packages/done-20260519-topology-publication-owner-recovery-wake-queue-admission-runtime.md`
+3. `test-output/reports/rolling-restart-after-wake-queue-admission-20260519T135719Z.report.json`
 
 Generated files:
 
@@ -252,19 +254,19 @@ Generated files:
 
 Candidate runtime files:
 
-1. `src/control-plane/membership-publication-coordinator-class-stage-3.js`
-2. `src/control-plane/membership-publication-coordinator-class-stage-2.js`
-3. `src/workflow/owner-key-reconcile-queue.js`
-4. `test/control-plane/membership-publication-coordinator-main-stage-2.js`
-5. `test/workflow/owner-key-reconcile-queue.test.js`
+1. `src/control-plane/membership-publication-coordinator-class-stage-2.js`
 
 Commit scope:
 
-1. `work/packages/active-20260519-topology-publication-owner-recovery-queue-drain-causal-gate.md`
+1. `work/packages/active-20260519-topology-publication-owner-recovery-queue-drain-runtime.md`
 2. `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md`
 3. `work/sprints/current-blocker.md`
 4. `work/sprints/current-blocker.json`
 5. `work/model-ledger.jsonl`
+6. `src/control-plane/membership-publication-coordinator-class-stage-3.js`
+7. `src/workflow/owner-key-reconcile-queue.js`
+8. `test/control-plane/membership-publication-coordinator-main-stage-2.js`
+9. `test/workflow/owner-key-reconcile-queue.test.js`
 
 Legacy touched files:
 

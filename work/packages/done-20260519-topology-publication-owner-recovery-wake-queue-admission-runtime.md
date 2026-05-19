@@ -13,7 +13,7 @@
   "boundary": "publication_convergence",
   "dominantReason": "publication_pending",
   "currentState": "Focused implementation made accepted owner recovery wake queue admission/merge observable: fresh rolling-restart evidence moved the handoff outcome from enqueued=false to write_deferred#enqueued=true, while the representative scenario stayed red at publication_ack_convergence with pendingReconcileCount=2 and activeGateOwnerCohortMissingPublishedCount=2.",
-  "nextAction": "Close this package as reduced and hand off to work/packages/active-20260519-topology-publication-owner-recovery-queue-drain-causal-gate.md for the accepted owner recovery queue drain/retry path.",
+  "nextAction": "Close this package as reduced and hand off to work/packages/done-20260519-topology-publication-owner-recovery-queue-drain-causal-gate.md for the accepted owner recovery queue drain/retry path.",
   "proof": [
     "npm run work:evidence-summary -- test-output/reports/rolling-restart-after-multi-node-reconcile-20260519T105449Z.report.json",
     "npm run work:scenario-triage -- test-output/reports/rolling-restart-after-multi-node-reconcile-20260519T105449Z.report.json --markdown",
@@ -111,7 +111,7 @@
     "expectedObservableTransition": "membershipPublicationHandoffOutcomeEnqueued=false moved to an accepted retry/merge signal; the successor must now prove drain/retry progress, pendingReconcileCount clears or reduces, ownership migrates, representative evidence turns green, or architecture/human stop is recorded.",
     "maxProgressBound": "one bounded runtime-owner-boundary package before rerun or renewed causal escalation",
     "sameFrontierFallback": "If focused proof cannot move the owner recovery wake queue admission signal, stop instead of patching downstream active-gate symptoms.",
-    "expectedNextFrontier": "work/packages/active-20260519-topology-publication-owner-recovery-queue-drain-causal-gate.md",
+    "expectedNextFrontier": "work/packages/done-20260519-topology-publication-owner-recovery-queue-drain-causal-gate.md",
     "resultClassification": "reduced",
     "stopCondition": "continue-local-fix",
     "recentFrontierHistory": [
@@ -179,7 +179,7 @@
   },
   "closed": "2026-05-19",
   "commitAndPushLedgerRequired": true,
-  "successor": "work/packages/active-20260519-topology-publication-owner-recovery-queue-drain-causal-gate.md"
+  "successor": "work/packages/done-20260519-topology-publication-owner-recovery-queue-drain-causal-gate.md"
 }
 -->
 
