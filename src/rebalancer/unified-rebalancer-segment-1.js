@@ -1,4 +1,7 @@
 import {UNIFIED_REBALANCER_SHARED} from './unified-rebalancer-shared.js';
+import {
+  buildPriorityRecoveryVisibilityRebalanceDecision,
+} from './priority-recovery-visibility-decision.js';
 
 const {
   CLUSTER_READINESS_TIMEOUT_MS,
@@ -50,38 +53,6 @@ const PRIORITY_RECOVERY_COORDINATOR_TERMINAL_EVENT_SET = new Set([
   REBALANCE_COORDINATOR_EVENT.OPERATION_FAILED,
 ]);
 const CONTROL_PLANE_PUBLICATION_TRIM_RAFT_LEARNER = 'learner';
-const PRIORITY_RECOVERY_VISIBILITY_SERVICE_FIELD = Object.freeze({
-  ENTITY_ID: 'entityId',
-  ENTITY_ID_SNAKE: 'entity_id',
-  PARTITION_ID: 'partitionId',
-  PARTITION_ID_SNAKE: 'partition_id',
-  SERVICE_TYPE: 'serviceType',
-  SERVICE_TYPE_SNAKE: 'service_type',
-  STATUS: 'status',
-});
-const PRIORITY_RECOVERY_VISIBILITY_OPERATION_FIELD = Object.freeze({
-  ENTITY_ID: 'entityId',
-  ENTITY_ID_SNAKE: 'entity_id',
-  PARTITION_ID: 'partitionId',
-  PARTITION_ID_SNAKE: 'partition_id',
-  STATUS: 'status',
-  TYPE: 'type',
-  WORKFLOW_STEP: 'workflowStep',
-  WORKFLOW_STEP_SNAKE: 'workflow_step',
-});
-const PRIORITY_RECOVERY_VISIBILITY_SERVICE_TYPE = Object.freeze({
-  PARTITION: 'partition',
-});
-const PRIORITY_RECOVERY_VISIBILITY_SERVICE_STATUS = Object.freeze({
-  ACTIVE: SERVICE_STATUS.ACTIVE,
-  FAILED: 'failed',
-  REMOVED: 'removed',
-});
-const PRIORITY_RECOVERY_VISIBILITY_PROGRESS_SERVICE_STATUS_SET = new Set([
-  PRIORITY_RECOVERY_VISIBILITY_SERVICE_STATUS.ACTIVE,
-  PRIORITY_RECOVERY_VISIBILITY_SERVICE_STATUS.FAILED,
-  PRIORITY_RECOVERY_VISIBILITY_SERVICE_STATUS.REMOVED,
-]);
 
 class UnifiedRebalancerSegment1 extends EventEmitter {
   constructor(options = {}) {
@@ -560,93 +531,17 @@ class UnifiedRebalancerSegment1 extends EventEmitter {
   }
 
   buildPriorityRecoveryVisibilityRebalanceDecision(event = {}, options = {}) {
-    const visibilityRow =
-      event?.data && typeof event.data === TYPEOF.OBJECT ? event.data : {};
-    const servicePartitionId = String(
-      visibilityRow[PRIORITY_RECOVERY_VISIBILITY_SERVICE_FIELD.PARTITION_ID] ||
-        visibilityRow[PRIORITY_RECOVERY_VISIBILITY_SERVICE_FIELD.PARTITION_ID_SNAKE] ||
-        visibilityRow[PRIORITY_RECOVERY_VISIBILITY_SERVICE_FIELD.ENTITY_ID] ||
-        visibilityRow[PRIORITY_RECOVERY_VISIBILITY_SERVICE_FIELD.ENTITY_ID_SNAKE] ||
-        UNIFIED_REBALANCER_LITERAL.EMPTY_STRING,
-    ).trim();
-    const serviceType = String(
-      visibilityRow[PRIORITY_RECOVERY_VISIBILITY_SERVICE_FIELD.SERVICE_TYPE] ||
-        visibilityRow[PRIORITY_RECOVERY_VISIBILITY_SERVICE_FIELD.SERVICE_TYPE_SNAKE] ||
-        UNIFIED_REBALANCER_LITERAL.EMPTY_STRING,
-    ).toLowerCase();
-    const serviceStatus = String(
-      visibilityRow[PRIORITY_RECOVERY_VISIBILITY_SERVICE_FIELD.STATUS] ||
-        UNIFIED_REBALANCER_LITERAL.EMPTY_STRING,
-    ).toLowerCase();
-    const operationPartitionId = String(
-      visibilityRow[PRIORITY_RECOVERY_VISIBILITY_OPERATION_FIELD.PARTITION_ID] ||
-        visibilityRow[PRIORITY_RECOVERY_VISIBILITY_OPERATION_FIELD.PARTITION_ID_SNAKE] ||
-        visibilityRow[PRIORITY_RECOVERY_VISIBILITY_OPERATION_FIELD.ENTITY_ID] ||
-        visibilityRow[PRIORITY_RECOVERY_VISIBILITY_OPERATION_FIELD.ENTITY_ID_SNAKE] ||
-        UNIFIED_REBALANCER_LITERAL.EMPTY_STRING,
-    ).trim();
-    const operationStatus = String(
-      visibilityRow[PRIORITY_RECOVERY_VISIBILITY_OPERATION_FIELD.STATUS] ||
-        UNIFIED_REBALANCER_LITERAL.EMPTY_STRING,
-    ).toLowerCase();
-    const operationType = String(
-      visibilityRow[PRIORITY_RECOVERY_VISIBILITY_OPERATION_FIELD.TYPE] ||
-        UNIFIED_REBALANCER_LITERAL.EMPTY_STRING,
-    ).toUpperCase();
-    const operationWorkflowStep = String(
-      visibilityRow[PRIORITY_RECOVERY_VISIBILITY_OPERATION_FIELD.WORKFLOW_STEP] ||
-        visibilityRow[PRIORITY_RECOVERY_VISIBILITY_OPERATION_FIELD.WORKFLOW_STEP_SNAKE] ||
-        UNIFIED_REBALANCER_LITERAL.EMPTY_STRING,
-    ).toUpperCase();
-    const serviceTableMatches = event?.tableName === SYSTEM_TABLE_NAME.SERVICES;
-    const servicePartitionMatches = servicePartitionId === this.entityId;
-    const progressPartitionService =
-      serviceType === PRIORITY_RECOVERY_VISIBILITY_SERVICE_TYPE.PARTITION &&
-      PRIORITY_RECOVERY_VISIBILITY_PROGRESS_SERVICE_STATUS_SET.has(
-        serviceStatus,
-      );
-    const operationTableMatches =
-      event?.tableName === SYSTEM_TABLE_NAME.REPLICA_OPERATIONS;
-    const operationPartitionMatches = operationPartitionId === this.entityId;
-    const coordinatorOwnedOperation =
-      isCoordinatorOwnedOperationType(operationType);
-    const terminalReplicaOperation =
-      coordinatorOwnedOperation &&
-      operationPartitionMatches &&
-      isTerminalReplicaOperationRecord({
-        type: operationType,
-        workflowStep: operationWorkflowStep,
-        status: operationStatus,
-      });
-    const serviceVisibilityProgress =
-      serviceTableMatches &&
-      servicePartitionMatches &&
-      progressPartitionService;
-    const operationVisibilityProgress =
-      operationTableMatches &&
-      terminalReplicaOperation;
-    const evidence = {
-      isLeader: this.isLeader === true,
-      priorityPartition: this.isControlPlanePriorityPartition() === true,
-      tableMatches: serviceTableMatches,
-      partitionMatches: servicePartitionMatches,
-      progressPartitionService,
-      operationTableMatches,
-      operationPartitionMatches,
-      coordinatorOwnedOperation,
-      terminalReplicaOperation,
-    };
-    const visibilityProgress =
-      evidence.priorityPartition &&
-      (serviceVisibilityProgress || operationVisibilityProgress);
-    return {
-      shouldEnqueue:
-        visibilityProgress &&
-        (options.requireLeader === false || evidence.isLeader),
-      visibilityProgress,
-      reconcileReason: RECONCILE_REASON.PRIORITY_RECOVERY_PROGRESS,
-      evidence,
-    };
+    return buildPriorityRecoveryVisibilityRebalanceDecision(
+      event,
+      {
+        entityId: this.entityId,
+        isLeader: this.isLeader,
+        isPriorityPartition: this.isControlPlanePriorityPartition() === true,
+        isCoordinatorOwnedOperationType,
+        isTerminalReplicaOperationRecord,
+      },
+      options,
+    );
   }
 
   handlePriorityRecoveryVisibilityEvent(event = {}) {

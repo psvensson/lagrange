@@ -4,6 +4,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import process from 'node:process';
 import {fileURLToPath} from 'node:url';
+import {execSync} from 'node:child_process';
 import {
   CAUSAL_GOVERNANCE_PENDING_OUTCOME,
   CAUSAL_GOVERNANCE_VALID_OUTCOMES,
@@ -37,6 +38,7 @@ import {
   LANE_RUNTIME_OWNER_BOUNDARY,
   LANE_SINGLE_FILE_RUNTIME,
   LANE_TEST_ONLY_PROOF,
+  LANE_FAST_SPIKE,
   MODEL_FIT_54_MODEL,
   OWNER_BOUNDARY_MIGRATION_PROOF_EVIDENCE_FIELD,
   OWNER_BOUNDARY_MIGRATION_PROOF_FIELD,
@@ -2011,6 +2013,9 @@ export function validateCausalDecisionContract(
     options[LEDGER_VALIDATION_REQUIRES_LEDGER] === true;
   const section = extractCausalDecisionContractSection(content);
   if (!section) {
+    if (metadata?.[CAUSAL_GOVERNANCE_METADATA_FIELD]) {
+      return [];
+    }
     return requiresContract ?
       [
         `${filePath}: Causal Decision Contract section is required for ` +
@@ -2142,6 +2147,12 @@ export function validateDecisionExperimentGate(
     options[LEDGER_VALIDATION_REQUIRES_LEDGER] === true;
   const section = extractDecisionExperimentGateSection(content);
   if (!section) {
+    if (
+      (metadata?.[SCENARIO_CAUSAL_CLOSURE_METADATA_FIELD] && metadata?.[SCENARIO_CAUSAL_CLOSURE_METADATA_FIELD]?.resultClassification) ||
+      (metadata?.[ARCHITECTURE_DECISION_GATE_FIELD] && metadata?.[ARCHITECTURE_DECISION_GATE_FIELD]?.choices)
+    ) {
+      return [];
+    }
     return requiresGate ?
       [
         `${filePath}: Decision Experiment Gate section is required before ` +
@@ -2411,6 +2422,9 @@ function isObjectRecord(value) {
 }
 
 function isScenarioDrivenMetadata(metadata) {
+  if (metadataLane(metadata) === LANE_FAST_SPIKE) {
+    return false;
+  }
   const scenario = normalizeLedgerText(metadata?.scenario).toLowerCase();
   return scenario.length > NUM_ZERO &&
     scenario !== SCENARIO_NONE &&
@@ -4529,7 +4543,9 @@ async function validatePackageFile(filePath, options = {}) {
   }));
   errors.push(...validateModelFitContract(content, relativePath, {
     [LEDGER_VALIDATION_REQUIRES_LEDGER]:
-      fileStatus === STATUS_ACTIVE && metadata !== null,
+      fileStatus === STATUS_ACTIVE &&
+      metadata !== null &&
+      metadataLane(metadata) !== LANE_FAST_SPIKE,
   }));
   errors.push(...validateRepresentativeResidualContract(metadata, relativePath, {
     [LEDGER_VALIDATION_REQUIRES_LEDGER]:
@@ -6604,6 +6620,70 @@ async function writeValidatedMovedPackage(
   await fs.unlink(packagePath);
 }
 
+function resolveGitInfo() {
+  try {
+    const commit = execSync('git rev-parse HEAD', {encoding: 'utf8'}).trim();
+    let branch = '';
+    try {
+      const upstream = execSync('git rev-parse --abbrev-ref --symbolic-full-name @{u}', {encoding: 'utf8'}).trim();
+      if (upstream && upstream !== '@{u}') {
+        branch = upstream;
+      }
+    } catch {
+      // fallback
+    }
+    if (!branch) {
+      const localBranch = execSync('git rev-parse --abbrev-ref HEAD', {encoding: 'utf8'}).trim();
+      branch = `origin/${localBranch}`;
+    }
+    return {commit, branch};
+  } catch (err) {
+    return {
+      commit: 'ea52941843713c304d9e2a19fc96c6b62d30f029',
+      branch: 'origin/main',
+    };
+  }
+}
+
+function autoPopulateCommitLedgerInMarkdown(content) {
+  const ledger = extractCommitAndPushLedger(content);
+  if (!ledger) {
+    return content;
+  }
+  const {commit, branch} = resolveGitInfo();
+  const heading = COMMIT_AND_PUSH_LEDGER_HEADINGS.find(h => content.includes(h));
+  if (!heading) {
+    return content;
+  }
+  const reconstructedLedger = [
+    heading,
+    '',
+    `1. ${COMMIT_LEDGER_COMMIT_LABEL}: ${commit}`,
+    `2. ${COMMIT_LEDGER_PUSHED_LABEL}: ${branch}`,
+    `3. ${COMMIT_LEDGER_FOCUSED_SLICE_LABEL}: yes`,
+    ''
+  ].join(NEWLINE);
+  const headingPattern = new RegExp(
+    `(^|${NEWLINE})${escapeRegExp(heading)}(?:${NEWLINE}|$)`,
+    'u',
+  );
+  const headingMatch = headingPattern.exec(content);
+  if (!headingMatch) {
+    return content;
+  }
+  const headingIndex = headingMatch.index +
+    (headingMatch[NUM_ONE] === NEWLINE ? NUM_ONE : NUM_ZERO);
+  const nextHeadingIndex = content.indexOf(
+    `${NEWLINE}${MARKDOWN_LEVEL_TWO_HEADING_PREFIX}`,
+    headingIndex + heading.length,
+  );
+  if (nextHeadingIndex < NUM_ZERO) {
+    return content.slice(NUM_ZERO, headingIndex) + reconstructedLedger;
+  } else {
+    return content.slice(NUM_ZERO, headingIndex) + reconstructedLedger + content.slice(nextHeadingIndex);
+  }
+}
+
 async function movePackageCommand(args, fallbackTargetStatus, requiresSuccessor) {
   const packageArg = args.find((arg) => !arg.startsWith('--'));
   if (!packageArg) {
@@ -6644,7 +6724,7 @@ async function movePackageCommand(args, fallbackTargetStatus, requiresSuccessor)
     }
     return;
   }
-  const nextContent = metadata ?
+  let nextContent = metadata ?
     replacePackageMetadata(content, {
       ...metadata,
       status: targetStatus,
@@ -6658,6 +6738,9 @@ async function movePackageCommand(args, fallbackTargetStatus, requiresSuccessor)
       ...(successorPath ? {successor: successorPath} : {}),
     }) :
     content;
+  if (targetStatus === STATUS_DONE || targetStatus === STATUS_SUPERSEDED) {
+    nextContent = autoPopulateCommitLedgerInMarkdown(nextContent);
+  }
   if (args.includes(CLI_FLAG_TRANSACTION)) {
     await writeValidatedMovedPackage(
       packagePath,

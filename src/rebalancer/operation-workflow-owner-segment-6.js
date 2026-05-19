@@ -1,10 +1,8 @@
 import {OPERATION_WORKFLOW_OWNER_SHARED} from './operation-workflow-owner-shared.js';
 import {OperationWorkflowOwnerSegment5} from './operation-workflow-owner-segment-5.js';
+import {resolvePriorityRecoverySupersededTargetDecision} from './operation-workflow-priority-recovery-superseded-target-decision.js';
 
 const {
-  CONTROL_PLANE_PRIORITY_RECOVERY_REASON,
-  CONTROL_PLANE_READINESS_DIMENSION,
-  CONTROL_PLANE_READINESS_REASON,
   EXACT_TARGET_REPLICA_OBSERVATION_OPTIONS,
   NUM,
   INITIAL_PARTITION_IDS,
@@ -13,7 +11,6 @@ const {
   OperationType,
   PRIORITY_PUBLICATION_SOURCE_ROLE_STATE,
   PRIORITY_RECOVERY_COMPLETION_STATE,
-  PRIORITY_RECOVERY_PRE_SYNC_REPLACE_TARGET_STATE,
   PRIORITY_REMOVE_SAFETY_MEMBERSHIP_SOURCE,
   REBALANCE_COORDINATOR_DEFER_REASON,
   REMOVE_SAFETY_EVALUATION_CLASSIFICATION,
@@ -35,7 +32,6 @@ const {
   normalizeNodeIdList,
   normalizeReplicaRowNodeIds,
   resolvePriorityRecoveryActiveNodeCohort,
-  resolvePriorityRecoveryPreSyncReplaceTargetStateFromEvidence,
 } = OPERATION_WORKFLOW_OWNER_SHARED;
 
 const PRIORITY_OPERATION_VISIBILITY_DEFERRED_SAFE_REMOVAL_SUFFIX =
@@ -83,131 +79,6 @@ const PRIORITY_PUBLICATION_REPLACEMENT_LEADER_CANDIDATE_ACTION_BY_STATE =
       ],
     ]),
   );
-
-const PRIORITY_RECOVERY_SUPERSEDED_TARGET_DECISION_STATE = Object.freeze({
-  NOT_APPLICABLE: 'not_applicable',
-  DEFER: 'defer',
-  FAIL: 'fail',
-});
-
-const PRIORITY_RECOVERY_SUPERSEDED_TARGET_DEFER_REASON_CODES = Object.freeze(
-  new Set([
-    CONTROL_PLANE_READINESS_REASON.PROCESS_NOT_ALIVE,
-    CONTROL_PLANE_READINESS_REASON.CLUSTER_MEMBER_UNHEALTHY,
-    CONTROL_PLANE_READINESS_REASON.CONTROL_PLANE_WRITE_UNHEALTHY,
-    CONTROL_PLANE_READINESS_REASON.CONTROL_PLANE_PUBLICATION_PENDING,
-    CONTROL_PLANE_READINESS_REASON.PRIORITY_CONTROL_PLANE_RECOVERY_PENDING,
-    CONTROL_PLANE_PRIORITY_RECOVERY_REASON.PUBLICATION_EPOCH_PENDING,
-  ]),
-);
-
-const PRIORITY_RECOVERY_SUPERSEDED_TARGET_DECISION_TABLE = Object.freeze([
-  Object.freeze({
-    state: PRIORITY_RECOVERY_SUPERSEDED_TARGET_DECISION_STATE.NOT_APPLICABLE,
-    matches: (evidence) => evidence.targetOutsideEligibleCohort !== true,
-  }),
-  Object.freeze({
-    state: PRIORITY_RECOVERY_SUPERSEDED_TARGET_DECISION_STATE.DEFER,
-    matches: (evidence) => evidence.materializedPreSyncTarget === true,
-  }),
-  Object.freeze({
-    state: PRIORITY_RECOVERY_SUPERSEDED_TARGET_DECISION_STATE.DEFER,
-    matches: (evidence) => evidence.transientReadinessBlockerPresent === true,
-  }),
-  Object.freeze({
-    state: PRIORITY_RECOVERY_SUPERSEDED_TARGET_DECISION_STATE.FAIL,
-    matches: (evidence) => evidence.targetOutsideEligibleCohort === true,
-  }),
-]);
-
-function normalizePriorityRecoverySupersededReasonCodes(readiness) {
-  const runtimeAuthority =
-    readiness?.runtimeAuthority &&
-    typeof readiness.runtimeAuthority === TYPEOF.OBJECT ?
-      readiness.runtimeAuthority :
-      null;
-  const reasonCodes = [
-    ...(Array.isArray(readiness?.reasonCodes) ? readiness.reasonCodes : []),
-    ...(Array.isArray(runtimeAuthority?.reasonCodes) ?
-      runtimeAuthority.reasonCodes :
-      []),
-  ];
-  const normalizedReasonCodes = [];
-  const seenReasonCodes = new Set();
-  for (const reasonCode of reasonCodes) {
-    const normalizedReasonCode = String(reasonCode || '').trim();
-    if (
-      normalizedReasonCode.length === NUM.ZERO ||
-      seenReasonCodes.has(normalizedReasonCode)
-    ) {
-      continue;
-    }
-    seenReasonCodes.add(normalizedReasonCode);
-    normalizedReasonCodes.push(normalizedReasonCode);
-  }
-  return Object.freeze(normalizedReasonCodes);
-}
-
-function buildPriorityRecoverySupersededTargetEvidence({
-  operation,
-  priorityPartitionSummary,
-  eligibleNodeIds,
-  targetReadiness,
-  targetLifecycleStatus,
-}) {
-  const targetNodeId = String(operation?.targetNodeId || '').trim();
-  const blockedPartitionIds = priorityPartitionSummary ?
-    buildPriorityRecoveryBlockedPartitionIds(priorityPartitionSummary) :
-    [];
-  const blockedPartitionScopeApplies =
-    blockedPartitionIds.length === NUM.ZERO ||
-    blockedPartitionIds.includes(operation?.partitionId);
-  const targetOutsideEligibleCohort =
-    hasPriorityRecoverySpreadGap(priorityPartitionSummary) &&
-    eligibleNodeIds.length > NUM.ZERO &&
-    targetNodeId.length > NUM.ZERO &&
-    !eligibleNodeIds.includes(targetNodeId) &&
-    blockedPartitionScopeApplies === true;
-  const dimensions =
-    targetReadiness?.dimensions &&
-    typeof targetReadiness.dimensions === TYPEOF.OBJECT ?
-      targetReadiness.dimensions :
-      null;
-  const reasonCodes =
-    normalizePriorityRecoverySupersededReasonCodes(targetReadiness);
-  const transientReasonCodePresent = reasonCodes.some((reasonCode) =>
-    PRIORITY_RECOVERY_SUPERSEDED_TARGET_DEFER_REASON_CODES.has(reasonCode),
-  );
-  const transientDimensionBlockerPresent =
-    dimensions?.[CONTROL_PLANE_READINESS_DIMENSION.PROCESS_ALIVE] === false ||
-    dimensions?.[CONTROL_PLANE_READINESS_DIMENSION.CLUSTER_MEMBER_HEALTHY] ===
-      false ||
-    dimensions?.[CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_WRITABLE] ===
-      false ||
-    dimensions?.[CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_PUBLISHED] ===
-      false;
-  const materializedPreSyncTarget =
-    resolvePriorityRecoveryPreSyncReplaceTargetStateFromEvidence({
-      operation,
-      targetLifecycleStatus,
-    }) === PRIORITY_RECOVERY_PRE_SYNC_REPLACE_TARGET_STATE.MATERIALIZED;
-  return Object.freeze({
-    materializedPreSyncTarget,
-    targetOutsideEligibleCohort,
-    transientReadinessBlockerPresent:
-      transientReasonCodePresent || transientDimensionBlockerPresent,
-  });
-}
-
-function decidePriorityRecoverySupersededTarget(evidence) {
-  const decision = PRIORITY_RECOVERY_SUPERSEDED_TARGET_DECISION_TABLE.find(
-    (candidate) => candidate.matches(evidence),
-  );
-  return Object.freeze({
-    state: decision?.state ||
-      PRIORITY_RECOVERY_SUPERSEDED_TARGET_DECISION_STATE.NOT_APPLICABLE,
-  });
-}
 
 function shouldPreservePriorityPublicationMinimumReplicaCount(
   operation,
@@ -509,16 +380,11 @@ class OperationWorkflowOwnerSegment6 extends OperationWorkflowOwnerSegment5 {
       return null;
     }
 
-    const targetNodeId = String(operation.targetNodeId || '').trim();
+    const targetNodeId = String(operation?.targetNodeId || '').trim();
     if (targetNodeId.length === NUM.ZERO) {
       return null;
     }
 
-    const priorityPartitionSummary =
-      priorityRecoveryContext.priorityPartitionSummary;
-    const eligibleNodeIds = normalizeNodeIdList(
-      priorityRecoveryContext.effectiveEligibleNodeIds,
-    );
     const targetReadiness =
       typeof this.controlPlaneReadinessService?.getNodeReadinessSync ===
         TYPEOF.FUNCTION ?
@@ -538,27 +404,22 @@ class OperationWorkflowOwnerSegment6 extends OperationWorkflowOwnerSegment5 {
           EXACT_TARGET_REPLICA_OBSERVATION_OPTIONS,
         ) :
         null;
-    const supersededTargetEvidence =
-      buildPriorityRecoverySupersededTargetEvidence({
+
+    const supersededTargetDecision =
+      resolvePriorityRecoverySupersededTargetDecision({
         operation,
-        priorityPartitionSummary,
-        eligibleNodeIds,
+        priorityRecoveryContext,
         targetReadiness,
         targetLifecycleStatus,
       });
-    const supersededTargetDecision =
-      decidePriorityRecoverySupersededTarget(supersededTargetEvidence);
-    if (
-      supersededTargetDecision.state !==
-      PRIORITY_RECOVERY_SUPERSEDED_TARGET_DECISION_STATE.FAIL
-    ) {
+    if (!supersededTargetDecision.isFailure) {
       return null;
     }
 
     return this.buildPriorityRecoverySupersededTargetError(
       operation,
       targetNodeId,
-      eligibleNodeIds,
+      supersededTargetDecision.eligibleNodeIds,
     );
   }
 

@@ -296,7 +296,7 @@ function reviewMetadataFixLedgerLine(packagePath, flags = {}) {
       '`- [x] review-fixed-metadata-only: status: validated; evidence: ' +
       'metadata-only package/sprint/tracker/handoff edits; next: validation.`';
   }
-  return `- [x] review-fixed-metadata-only: status: validated; ` +
+  return '- [x] review-fixed-metadata-only: status: validated; ' +
     `${agentPrefix}evidence: metadata-only fixes for ${packagePath}; ` +
     'next: validation.';
 }
@@ -505,6 +505,7 @@ function buildSubagentPrompt(role, packagePath, content, args = []) {
     '- `npm run work:evidence-summary -- <artifact>` plus focused scenario extractors before raw distributed report JSON or logs.',
     '- `npm run analyze:owner-files -- <owner> [boundary]` before broad owner file search.',
     '- `npm run work:oversized-next -- --markdown` before creating broad file-size cleanup packages.',
+    '- For oversized-file extraction, new helper and package filenames must describe the semantic concern; do not use digit characters, append `-helper` to a numbered segment/part filename, or carry segment, stage, part, or batch ordinals into new filenames.',
     EMPTY_TEXT,
     'If fallback to raw JSON, raw logs, or ad hoc `jq` is necessary, record which canonical extractor was tried and why it was insufficient.',
     EMPTY_TEXT,

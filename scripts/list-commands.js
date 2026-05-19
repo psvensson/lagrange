@@ -89,6 +89,10 @@ const COMMAND_GROUPS = Object.freeze([
         command: 'npm run work:oversized-next -- --markdown',
         description: 'Turn oversized owner-boundary files into package-ready extraction candidates.',
       }),
+      Object.freeze({
+        command: 'npm run work:oversized-refactor -- --run',
+        description: 'List oversized files, then run gpt-5.3-codex direct refactors without creating work packages.',
+      }),
     ]),
   }),
   Object.freeze({

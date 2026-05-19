@@ -21,6 +21,11 @@ const EMPTY_TEXT = '';
 const NEWLINE = '\n';
 const JSON_INDENT_SPACES = 2;
 const SCHEMA_VERSION = 'oversized-file-extraction-candidates-v1';
+const SEMANTIC_HELPER_PLACEHOLDER = 'semantic-helper-concern';
+const SEMANTIC_PACKAGE_TITLE_PLACEHOLDER =
+  'Extract semantic owner-boundary helper';
+const SEMANTIC_NAMING_RULE =
+  'Replace semantic-helper-concern with the real owner concern; name new helper and package files for the semantic concern they own; do not use digit characters; do not derive new filenames from segment, stage, part, or batch ordinals.';
 const HELP_TEXT = [
   'Usage:',
   '  node scripts/work-oversized-next.js [--top <count>] [--markdown]',
@@ -45,34 +50,29 @@ function parseTop(args = []) {
   return Number.isInteger(parsed) && parsed > NUM_ZERO ? parsed : DEFAULT_TOP;
 }
 
-function slugForPath(filePath) {
-  return filePath
-    .replace(/\.[cm]?js$/u, '')
-    .replace(/[^a-zA-Z0-9]+/gu, '-')
-    .replace(/^-+|-+$/gu, '')
-    .toLowerCase();
-}
-
 function buildCandidate(entry) {
-  const slug = `extract-${slugForPath(entry.path)}`;
+  const slug = `extract-${SEMANTIC_HELPER_PLACEHOLDER}`;
   return {
     path: entry.path,
     lines: entry.lines,
     threshold: entry.threshold,
     scope: entry.scope,
     slug,
+    semanticNamingRule: SEMANTIC_NAMING_RULE,
     packageCommand: [
       'npm run work:package:new --',
       '--lane lightweight-maintenance',
       '--title',
-      JSON.stringify(`Extract ${entry.path}`),
+      JSON.stringify(`${SEMANTIC_PACKAGE_TITLE_PLACEHOLDER} from ${entry.path}`),
       '--slug',
       slug,
       '--owner workflow_tooling_owner',
       '--boundary file_size_extraction',
       '--dominant-reason oversized_file_ratchet',
       '--next-action',
-      JSON.stringify('Extract one named owner/boundary helper without changing runtime behavior.'),
+      JSON.stringify(
+        'Extract one semantically named owner/boundary helper without changing runtime behavior.',
+      ),
       '--write-scope',
       entry.path,
       '--proof',
@@ -117,6 +117,7 @@ function renderMarkdown(summary) {
   for (const candidate of summary.candidates) {
     lines.push(
       `- \`${candidate.path}\` ${candidate.lines}/${candidate.threshold}: ` +
+      `${candidate.semanticNamingRule} Command template: ` +
       `\`${candidate.packageCommand}\``,
     );
   }
@@ -150,6 +151,7 @@ if (isDirectRun()) {
 }
 
 export {
+  buildCandidate,
   buildOversizedNext,
   renderMarkdown,
   runCli,

@@ -103,6 +103,7 @@
     "work:llm-start": "node scripts/work-llm-start.js",
     "work:model-ledger": "node scripts/model-ledger.js",
     "work:oversized-next": "node scripts/work-oversized-next.js",
+    "work:oversized-refactor": "node scripts/work-oversized-refactor.js",
     "work:tracks": "node scripts/work-track-summary.js",
     "work:sprint:remaining": "node scripts/work-sprint-remaining.js",
     "work:sprint:push": "node scripts/work-sprint-push.js",

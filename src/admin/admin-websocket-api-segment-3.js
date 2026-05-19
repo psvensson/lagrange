@@ -1,19 +1,8 @@
 import {ADMIN_WEBSOCKET_API_SHARED} from './admin-websocket-api-shared.js';
 import {AdminWebSocketAPISegment2} from './admin-websocket-api-segment-2.js';
-import {
-  CONTROL_PLANE_CONVERGENCE_PRESSURE_OUTCOME,
-} from '../control-plane/control-plane-error-classification.js';
+import {resolveControlSnapshotQueryResult} from './admin-control-snapshot-query-result-helper.js';
 
 const LOCAL_STR_I = 'i';
-const CONTROL_SNAPSHOT_QUERY_RESULT_ROW_INDEX = 0;
-const CONTROL_SNAPSHOT_QUERY_RESULT_CONTROL_PLANE_DIAGNOSTICS_FIELD =
-  'controlPlaneDiagnostics';
-const CONTROL_SNAPSHOT_QUERY_RESULT_CONTROL_PLANE_CONVERGENCE_FIELD =
-  'controlPlaneConvergence';
-const CONTROL_SNAPSHOT_QUERY_RESULT_CRITICAL_CONVERGENCE_DEFERRED_FIELD =
-  'criticalConvergenceDeferred';
-const CONTROL_SNAPSHOT_QUERY_RESULT_PRESSURE_OUTCOME_FIELD =
-  'pressureOutcome';
 
 const {
   ADMIN_CACHE_DUMP,
@@ -1064,30 +1053,10 @@ class AdminWebSocketAPISegment3 extends AdminWebSocketAPISegment2 {
    * @return {Promise<Object>}
    */
   async buildControlSnapshotQueryResult(options = {}) {
-    const result =
-      await this.controlSnapshot.buildControlSnapshotQueryResult(options);
-    const snapshot = Array.isArray(result?.rows) ?
-      result.rows[CONTROL_SNAPSHOT_QUERY_RESULT_ROW_INDEX] :
-      null;
-    const convergence =
-      snapshot?.[
-        CONTROL_SNAPSHOT_QUERY_RESULT_CONTROL_PLANE_DIAGNOSTICS_FIELD
-      ]?.[CONTROL_SNAPSHOT_QUERY_RESULT_CONTROL_PLANE_CONVERGENCE_FIELD];
-    if (!convergence || typeof convergence !== TYPEOF.OBJECT) {
-      return result;
-    }
-    const pressureOutcome =
-      convergence[CONTROL_SNAPSHOT_QUERY_RESULT_PRESSURE_OUTCOME_FIELD];
-    return {
-      ...result,
-      [CONTROL_SNAPSHOT_QUERY_RESULT_CONTROL_PLANE_CONVERGENCE_FIELD]:
-        convergence,
-      [CONTROL_SNAPSHOT_QUERY_RESULT_CRITICAL_CONVERGENCE_DEFERRED_FIELD]:
-        pressureOutcome ===
-          CONTROL_PLANE_CONVERGENCE_PRESSURE_OUTCOME.CRITICAL_DEFERRED ||
-        pressureOutcome ===
-          CONTROL_PLANE_CONVERGENCE_PRESSURE_OUTCOME.CRITICAL_REJECTED,
-    };
+    const result = await this.controlSnapshot.buildControlSnapshotQueryResult(
+      options,
+    );
+    return resolveControlSnapshotQueryResult(result);
   }
 
   /**

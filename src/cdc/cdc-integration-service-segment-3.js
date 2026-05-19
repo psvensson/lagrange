@@ -1,5 +1,6 @@
 import {CDC_INTEGRATION_SERVICE_SHARED} from './cdc-integration-service-shared.js';
 import {CDCIntegrationServiceSegment2} from './cdc-integration-service-segment-2.js';
+import {buildSystemTableMutationSqlParts} from './cdc-system-table-mutation-sql-helpers.js';
 
 const {
   ADDRESS,
@@ -17,7 +18,6 @@ const {
   CDC_PRIMARY_KEY,
   CDC_SKIP_REASON,
   CDC_SOURCE,
-  CDC_SQL,
   CDC_STATS_DEFAULT,
   COLUMN,
   ENTRYPOINT_DEFAULT,
@@ -421,32 +421,6 @@ class CDCIntegrationServiceSegment3 extends CDCIntegrationServiceSegment2 {
   }
 
   /**
-   * Build column list and value placeholders for INSERT.
-   * @param {Object} data - Row data.
-   * @return {Object} {columns, placeholders, values}
-   * @private
-   */
-  buildInsertParts(data) {
-    const columns = Object.keys(data);
-    const placeholders = columns
-      .map(() => CDC_SQL.PARAM_PLACEHOLDER)
-      .join(CDC_SQL.COMMA_SPACE);
-    const values = columns.map((col) => {
-      const val = data[col];
-      // Serialize objects/arrays to JSON
-      if (val !== null && typeof val === TYPEOF.OBJECT) {
-        return JSON.stringify(val);
-      }
-      return val;
-    });
-    return {
-      columns: columns.join(CDC_SQL.COMMA_SPACE),
-      placeholders,
-      values,
-    };
-  }
-
-  /**
    * Filter row data to known columns for the target system table.
    * @param {string} tableName - System table name.
    * @param {Object} data - Row data.
@@ -658,48 +632,6 @@ class CDCIntegrationServiceSegment3 extends CDCIntegrationServiceSegment2 {
   }
 
   /**
-   * Build SET clause for UPDATE.
-   * @param {Object} data - Data to update.
-   * @return {Object} {setClause, values}
-   * @private
-   */
-  buildUpdateParts(data) {
-    const columns = Object.keys(data);
-    const setClause = columns
-      .map((col) => `${col}${CDC_SQL.ASSIGNMENT_PLACEHOLDER}`)
-      .join(CDC_SQL.COMMA_SPACE);
-    const values = columns.map((col) => {
-      const val = data[col];
-      if (val !== null && typeof val === TYPEOF.OBJECT) {
-        return JSON.stringify(val);
-      }
-      return val;
-    });
-    return {
-      setClause,
-      values,
-    };
-  }
-
-  /**
-   * Build WHERE clause from conditions.
-   * @param {Object} whereClause - WHERE conditions.
-   * @return {Object} {whereStr, values}
-   * @private
-   */
-  buildWhereParts(whereClause) {
-    const conditions = Object.keys(whereClause);
-    const whereStr = conditions
-      .map((col) => `${col}${CDC_SQL.ASSIGNMENT_PLACEHOLDER}`)
-      .join(CDC_SQL.WHERE_AND);
-    const values = conditions.map((col) => whereClause[col]);
-    return {
-      whereStr,
-      values,
-    };
-  }
-
-  /**
    * Build one canonical single-flight key for an in-flight system-table
    * mutation so identical callers collapse into one routed write.
    * @param {string} operation
@@ -795,7 +727,8 @@ class CDCIntegrationServiceSegment3 extends CDCIntegrationServiceSegment2 {
     });
     return this.runCoalescedMutation(singleFlightKey, async () => {
       try {
-        const {columns, placeholders, values} = this.buildInsertParts(rowData);
+        const {columns, placeholders, values} =
+          buildSystemTableMutationSqlParts(CDC_OPERATION.INSERT, rowData);
         const sql =
           `${options?.ignoreExisting === true ? SQL.INSERT_OR_IGNORE_INTO : SQL.INSERT_INTO} ${tableName} (${columns}) ` +
           `${SQL.VALUES} (${placeholders})`;
@@ -958,9 +891,9 @@ class CDCIntegrationServiceSegment3 extends CDCIntegrationServiceSegment2 {
     return this.runCoalescedMutation(singleFlightKey, async () => {
       try {
         const {setClause, values: setValues} =
-          this.buildUpdateParts(updateData);
+          buildSystemTableMutationSqlParts(CDC_OPERATION.UPDATE, updateData);
         const {whereStr, values: whereValues} =
-          this.buildWhereParts(whereClause);
+          buildSystemTableMutationSqlParts(CDC_OPERATION.DELETE, whereClause);
         const sql =
           `${SQL.UPDATE} ${tableName} ${SQL.SET} ${setClause} ` +
           `${SQL.WHERE} ${whereStr}`;
@@ -1131,7 +1064,8 @@ class CDCIntegrationServiceSegment3 extends CDCIntegrationServiceSegment2 {
     });
     return this.runCoalescedMutation(singleFlightKey, async () => {
       try {
-        const {whereStr, values} = this.buildWhereParts(whereClause);
+        const {whereStr, values} =
+          buildSystemTableMutationSqlParts(CDC_OPERATION.DELETE, whereClause);
         const sql = `${SQL.DELETE_FROM} ${tableName} ${SQL.WHERE} ${whereStr}`;
         const result = await this.executeSQL(sql, values, {
           queryTimeoutMs: options?.queryTimeoutMs,
@@ -1265,7 +1199,7 @@ class CDCIntegrationServiceSegment3 extends CDCIntegrationServiceSegment2 {
     return this.runCoalescedMutation(singleFlightKey, async () => {
       try {
         const {columns, placeholders, values} =
-          this.buildInsertParts(upsertData);
+          buildSystemTableMutationSqlParts(CDC_OPERATION.INSERT, upsertData);
         // SQLite INSERT OR REPLACE
         const sql =
           `${SQL.INSERT_OR_REPLACE_INTO} ${tableName} (${columns}) ` +

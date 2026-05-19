@@ -28,7 +28,8 @@ test('owner-boundary guidance targets oversized segment files only', (t) => {
 
   t.equal(guidanceEntries.length, 1);
   t.equal(guidanceEntries[0].path, SEGMENT_FILE_PATH);
-  t.match(guidanceEntries[0].guidance, /owner\/boundary helper/u);
+  t.match(guidanceEntries[0].guidance, /semantically named owner\/boundary helper/u);
   t.match(guidanceEntries[0].guidance, /existing entrypoint/u);
+  t.match(guidanceEntries[0].guidance, /do not carry segment\/stage\/part ordinals or any digit characters/u);
   t.end();
 });

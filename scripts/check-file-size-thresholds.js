@@ -31,7 +31,7 @@ const OWNER_BOUNDARY_GUIDANCE_TITLE = 'Owner-boundary extraction guidance:';
 const OWNER_BOUNDARY_GUIDANCE_EMPTY =
   'No oversized segment files matched the owner-boundary guidance pattern.';
 const OWNER_BOUNDARY_GUIDANCE_ACTION =
-  'extract one named owner/boundary helper behind the existing entrypoint; keep the public segment seam stable and move only one decision table, state model, or evidence-normalization concern.';
+  'extract one semantically named owner/boundary helper behind the existing entrypoint; keep the public segment seam stable, do not carry segment/stage/part ordinals or any digit characters into new filenames, and move only one decision table, state model, or evidence-normalization concern.';
 const FILE_SIZE_SCOPE = Object.freeze({
   SOURCE: 'source',
   TEST: 'test',

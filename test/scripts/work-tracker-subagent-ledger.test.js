@@ -2043,12 +2043,28 @@ describe('work tracker causal decision contract validation', () => {
     );
 
     assert.match(errors.join('\n'), /at least one concrete decision row/u);
-  assert.match(errors.join('\n'), /Anti-symptom rationale/u);
-  assert.match(errors.join('\n'), /must name a focused command/u);
-  assert.match(errors.join('\n'), /Competing explanations/u);
-  assert.match(errors.join('\n'), /Systemic interaction scan/u);
-  assert.match(errors.join('\n'), /Ping-pong stop rule/u);
-  assert.match(errors.join('\n'), /Oscillation guard/u);
+    assert.match(errors.join('\n'), /Anti-symptom rationale/u);
+    assert.match(errors.join('\n'), /must name a focused command/u);
+    assert.match(errors.join('\n'), /Competing explanations/u);
+    assert.match(errors.join('\n'), /Systemic interaction scan/u);
+    assert.match(errors.join('\n'), /Ping-pong stop rule/u);
+    assert.match(errors.join('\n'), /Oscillation guard/u);
+  });
+
+  it('accepts missing Causal Decision Contract section when causalGovernance is present in metadata', () => {
+    const errors = validateCausalDecisionContract(
+      WORK_TRACKER_LEDGER_NO_LEDGER_CONTENT,
+      {
+        ...CAUSAL_DECISION_CONTRACT_OSCILLATION_METADATA,
+        causalGovernance: {
+          hypothesis: 'H1',
+        },
+      },
+      WORK_TRACKER_LEDGER_TEST_FILE,
+      {requiresLedger: true, status: WORK_TRACKER_ACTIVE_STATUS},
+    );
+
+    assert.deepEqual(errors, []);
   });
 });
 
@@ -2090,6 +2106,22 @@ describe('work tracker decision experiment gate validation', () => {
     assert.match(errors.join('\n'), /Success metrics/u);
     assert.match(errors.join('\n'), /Representative rerun must name a focused command/u);
     assert.match(errors.join('\n'), /Kill rule/u);
+  });
+
+  it('accepts missing Decision Experiment Gate section when architectureDecisionGate is present in metadata with choices', () => {
+    const errors = validateDecisionExperimentGate(
+      WORK_TRACKER_LEDGER_NO_LEDGER_CONTENT,
+      {
+        ...CAUSAL_DECISION_CONTRACT_OSCILLATION_METADATA,
+        architectureDecisionGate: {
+          choices: [{ id: 'choice-1' }],
+        },
+      },
+      WORK_TRACKER_LEDGER_TEST_FILE,
+      {requiresLedger: true, status: WORK_TRACKER_ACTIVE_STATUS},
+    );
+
+    assert.deepEqual(errors, []);
   });
 });
 

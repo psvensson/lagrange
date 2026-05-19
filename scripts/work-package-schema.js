@@ -20,6 +20,7 @@ const LANE_SINGLE_FILE_RUNTIME = 'single-file-runtime';
 const LANE_RUNTIME_OWNER_BOUNDARY = 'runtime-owner-boundary';
 const LANE_SCENARIO_RELEASE_GATE = 'scenario-release-gate';
 const LANE_CAUSAL_ESCALATION = 'causal-escalation';
+const LANE_FAST_SPIKE = 'fast-spike';
 const CORE_LOGIC_BRIEF_CANONICAL_OUTCOME_FIELD = 'Canonical outcome';
 const CORE_LOGIC_BRIEF_INPUTS_FIELD = 'Inputs/signals';
 const CORE_LOGIC_BRIEF_MODEL_FIELD = 'State model or invariant';
@@ -189,6 +190,7 @@ const LOWER_MODEL_WORKFLOW_LANES = Object.freeze([
   LANE_TEST_ONLY_PROOF,
   LANE_BOUNDED_EXPERIMENT,
   LANE_SINGLE_FILE_RUNTIME,
+  LANE_FAST_SPIKE,
 ]);
 const SPARK_SAFE_WORKFLOW_LANES = Object.freeze([
   LANE_READ_REVIEW_DOC_ONLY,
@@ -196,6 +198,7 @@ const SPARK_SAFE_WORKFLOW_LANES = Object.freeze([
   LANE_LIGHTWEIGHT_MAINTENANCE,
   LANE_TEST_ONLY_PROOF,
   LANE_BOUNDED_EXPERIMENT,
+  LANE_FAST_SPIKE,
 ]);
 const ARCHITECTURE_DECISION_GATE_STATUSES = Object.freeze([
   'not-required',
@@ -247,6 +250,7 @@ const WORKFLOW_LANES = Object.freeze([
   LANE_RUNTIME_OWNER_BOUNDARY,
   LANE_SCENARIO_RELEASE_GATE,
   LANE_CAUSAL_ESCALATION,
+  LANE_FAST_SPIKE,
 ]);
 
 const SUBAGENT_OPTIONAL_LANES = Object.freeze([
@@ -257,6 +261,7 @@ const SUBAGENT_OPTIONAL_LANES = Object.freeze([
   LANE_DIAGNOSTIC_CLASSIFICATION,
   LANE_BOUNDED_EXPERIMENT,
   LANE_SINGLE_FILE_RUNTIME,
+  LANE_FAST_SPIKE,
 ]);
 
 const CORE_LOGIC_BRIEF_REQUIRED_LANES = Object.freeze([
@@ -442,6 +447,12 @@ const DEFAULT_MODEL_FIT_BY_LANE = Object.freeze({
     intendedMinimumModel: MODEL_FIT_DEFAULT_FRONTIER_MODEL,
     scopeShape: MODEL_FIT_CAUSAL_SCOPE,
     outputProfile: OUTPUT_PROFILE_MEDIUM,
+  }),
+  [LANE_FAST_SPIKE]: Object.freeze({
+    packageClass: 'fast-spike',
+    intendedMinimumModel: MODEL_FIT_SPARK_MODEL,
+    scopeShape: MODEL_FIT_LEAF_SLICE_SCOPE,
+    outputProfile: OUTPUT_PROFILE_SMALL,
   }),
 });
 
@@ -753,6 +764,7 @@ export {
   LANE_SCENARIO_RELEASE_GATE,
   LANE_SINGLE_FILE_RUNTIME,
   LANE_TEST_ONLY_PROOF,
+  LANE_FAST_SPIKE,
   LOWER_MODEL_WORKFLOW_LANES,
   SPARK_SAFE_WORKFLOW_LANES,
   MODEL_FIT_54_MODEL,
