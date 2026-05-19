@@ -561,6 +561,15 @@ function buildCriticalConvergenceErrorOutcome(error, ownerKey, operation) {
   });
 }
 
+function isActiveGateMembershipPublicationHandoffRetryAccepted(
+  rawEnqueueOutcome,
+  controlPlaneConvergence,
+) {
+  return rawEnqueueOutcome === true ||
+    controlPlaneConvergence?.pressureOutcome ===
+      CONTROL_PLANE_CONVERGENCE_PRESSURE_OUTCOME.CRITICAL_ADMITTED;
+}
+
 class MembershipPublicationCoordinatorClassStage2 extends
   MembershipPublicationCoordinatorClassStage1 {
   deriveClusterMembershipCandidateSync(options = {}) {
@@ -1169,7 +1178,7 @@ class MembershipPublicationCoordinatorClassStage2 extends
           context,
           reconcileOutcome,
         );
-      const enqueued = this.enqueueClusterMembershipReconcile(
+      const rawEnqueueOutcome = this.enqueueClusterMembershipReconcile(
         ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_REASON,
         deferredContext,
       );
@@ -1182,6 +1191,11 @@ class MembershipPublicationCoordinatorClassStage2 extends
           operation:
             CONTROL_PLANE_CRITICAL_CONVERGENCE_OPERATION.OWNER_RECOVERY_WAKE,
         });
+      const enqueued =
+        isActiveGateMembershipPublicationHandoffRetryAccepted(
+          rawEnqueueOutcome,
+          controlPlaneConvergence,
+        );
       return buildActiveGateMembershipPublicationReconcileOutcome(
         ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_OUTCOME.WRITE_DEFERRED,
         {
@@ -1202,13 +1216,15 @@ class MembershipPublicationCoordinatorClassStage2 extends
           context,
           error.activeGateMembershipPublicationReconcileOutcome,
         );
-      const enqueued = this.enqueueClusterMembershipReconcile(
+      const rawEnqueueOutcome = this.enqueueClusterMembershipReconcile(
         ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_REASON,
         deferredContext,
       );
       const queueOutcome =
         this.lastControlPlaneConvergenceQueueOutcome || null;
       const controlPlaneConvergence =
+        queueOutcome?.pressureOutcome ===
+          CONTROL_PLANE_CONVERGENCE_PRESSURE_OUTCOME.CRITICAL_ADMITTED ||
         queueOutcome?.pressureOutcome ===
           CONTROL_PLANE_CONVERGENCE_PRESSURE_OUTCOME.CRITICAL_REJECTED ?
           queueOutcome :
@@ -1217,6 +1233,11 @@ class MembershipPublicationCoordinatorClassStage2 extends
             this.buildOwnerKey(),
             CONTROL_PLANE_CRITICAL_CONVERGENCE_OPERATION.ACTIVE_GATE_HANDOFF,
           );
+      const enqueued =
+        isActiveGateMembershipPublicationHandoffRetryAccepted(
+          rawEnqueueOutcome,
+          controlPlaneConvergence,
+        );
       return buildActiveGateMembershipPublicationReconcileOutcome(
         deferredOutcome,
         {
