@@ -55,9 +55,9 @@
     "artifactBudget": "one-artifact",
     "proofCommandBudget": "two-or-three-canonical-commands",
     "commands": [
-      "npm run work:evidence-summary -- test-output/reports/rolling-restart-after-owner-reconcile-write-deferred-20260519T100837Z.report.json",
-      "npm run work:scenario-triage -- test-output/reports/rolling-restart-after-owner-reconcile-write-deferred-20260519T100837Z.report.json --markdown",
-      "npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-after-owner-reconcile-write-deferred-20260519T100837Z.report.json --markdown"
+      "npm run work:package:route-after-rerun -- --artifact test-output/reports/rolling-restart-after-owner-reconcile-write-deferred-20260519T100837Z.report.json --owner topology_publication_owner --boundary publication_convergence --dominant-reason publication_pending",
+      "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-owner-reconcile-write-deferred-20260519T100837Z.report.json --handoff-probe",
+      "npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-after-owner-reconcile-write-deferred-20260519T100837Z.report.json"
     ],
     "decisionRecord": "Fresh same-frontier evidence after a focused publication owner retry produced a contradiction: canonical route remains topology_publication_owner / publication_convergence, while priority residual extraction reports three operation_workflow_owner / rebalancer_handoff witnesses. Record the architecture decision before selecting another runtime package.",
     "successorAction": "open-runtime-owner-boundary",
@@ -307,3 +307,9 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 1. npm run work:package:route-after-rerun -- --artifact test-output/reports/rolling-restart-after-owner-reconcile-write-deferred-20260519T100837Z.report.json --owner topology_publication_owner --boundary publication_convergence --dominant-reason publication_pending
 2. npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-owner-reconcile-write-deferred-20260519T100837Z.report.json --handoff-probe
 3. npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-after-owner-reconcile-write-deferred-20260519T100837Z.report.json
+
+## Commit And Push Ledger
+
+1. Focused package commit: e63211b9
+2. Pushed to: origin/codex/pending-ack-eligibility-filter
+3. Commit contains only package-owned files/package-status/allowed sprint handoff: yes
