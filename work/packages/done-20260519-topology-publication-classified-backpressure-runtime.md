@@ -189,7 +189,7 @@
   "predecessor": "work/packages/done-20260519-topology-publication-workflow-backpressure-architecture-gate.md",
   "closed": "2026-05-19",
   "commitAndPushLedgerRequired": true,
-  "successor": "work/packages/active-20260519-topology-publication-active-gate-reconcile-runtime.md"
+  "successor": "work/packages/done-20260519-topology-publication-active-gate-reconcile-runtime.md"
 }
 -->
 
