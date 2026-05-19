@@ -132,22 +132,22 @@ Historical state from that earlier rerun:
 ## Current Edge Card
 
 ```text
-Representative artifact: test-output/reports/rolling-restart-after-active-gate-reconcile-20260519T091127Z.report.json
-Visible first frontier: publication_ack_convergence / topology_publication_owner / publication_convergence / publication_pending in test-output/reports/rolling-restart-after-active-gate-reconcile-20260519T091127Z.report.json.
-Active package: work/packages/done-20260519-topology-publication-owner-reconcile-write-deferred-runtime.md
+Representative artifact: test-output/reports/rolling-restart-after-owner-reconcile-write-deferred-20260519T100837Z.report.json
+Visible first frontier: publication_ack_convergence / topology_publication_owner / publication_convergence / publication_pending in test-output/reports/rolling-restart-after-owner-reconcile-write-deferred-20260519T100837Z.report.json.
+Active package: work/packages/done-20260519-topology-publication-operation-residual-decision-gate.md
 Active package owner: topology_publication_owner
 Active package boundary: publication_convergence
 Selected cause: publication_pending
-Required action: Run required review/fix/implementation subagent sequencing, then implement one bounded publication-owned runtime slice for the OPEN epoch-2 owner-reconcile write_deferred shape.
+Required action: Close this gate and open one runtime-owner-boundary successor for continued topology_publication_owner / publication_convergence work; keep operation workflow residuals frozen as non-splitting residual evidence unless fresh canonical routing reselects them.
 Representative status: same-frontier
 Causal outcome: continue_local_fix
-Architecture gate: selected / causal-gate-selected-runtime-successor
-Expected delta: Reduce the OPEN epoch-2 handoff write_deferred publication_pending shape by closing owner reconcile publication coverage, clearing missing published nodes, migrating ownership to the active-gate consumer, or turning rolling-restart green.
-Current state: The causal gate selected a bounded runtime-owner-boundary successor: route-after-rerun and causal-model keep topology_publication_owner / publication_convergence selected, the publication-active-gate contract is present, and the remaining shape is publicationStatus=OPEN, epoch=2, handoffOutcome=write_deferred, missingPublishedCount=4, snapshotCoverageNodeCount=2/5, and one pending reconcile node.
-Allowed edits: work/packages/done-20260519-topology-publication-owner-reconcile-write-deferred-runtime.md, work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md, work/sprints/current-blocker.md, work/sprints/current-blocker.json, work/model-ledger.jsonl, src/control-plane/publication-active-gate-handoff-contract.js, src/control-plane/publication-recovery-evidence.js, src/control-plane/publication-owner-decision.js, src/control-plane/membership-publication-coordinator-class-stage-2.js, src/control-plane/active-node-projection.js, test/control-plane/publication-active-gate-handoff-contract.test.js, test/control-plane/publication-recovery-evidence.test.js, test/control-plane/publication-owner-stream.test.js, test/control-plane/membership-publication-coordinator-main-stage-2.js
-Candidate runtime files: src/control-plane/publication-active-gate-handoff-contract.js, src/control-plane/publication-recovery-evidence.js, src/control-plane/publication-owner-decision.js, src/control-plane/membership-publication-coordinator-class-stage-2.js, src/control-plane/active-node-projection.js, test/control-plane/publication-active-gate-handoff-contract.test.js, test/control-plane/publication-recovery-evidence.test.js, test/control-plane/publication-owner-stream.test.js, test/control-plane/membership-publication-coordinator-main-stage-2.js
-Forbidden edits: Operation workflow, startup active-gate runtime, readiness, admission, and timeout budgets stay frozen unless fresh canonical evidence reselects them.
-Required latest proof: npm run work:package:route-after-rerun -- --artifact test-output/reports/rolling-restart-after-active-gate-reconcile-20260519T091127Z.report.json --owner topology_publication_owner --boundary publication_convergence --dominant-reason publication_pending, npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-active-gate-reconcile-20260519T091127Z.report.json --handoff-probe, npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-active-gate-reconcile-20260519T091127Z.report.json, npm run analyze:owner-files -- topology_publication_owner publication_convergence
+Architecture gate: selected / continue-publication-owner-runtime
+Expected delta: Open one bounded topology_publication_owner / publication_convergence runtime successor; representative proof should reduce missingPublished/pendingReconcileCount, migrate, green, or trigger architecture/human stop.
+Current state: Fresh representative proof after the owner visibility retry stayed at publication_ack_convergence / topology_publication_owner / publication_convergence / publication_pending. Route-after-rerun and causal-model still select a local publication owner blocker, but priority recovery residual extraction now reports three operation_workflow_owner / rebalancer_handoff witnesses. This package is the metadata-only architecture decision gate required before another runtime patch.
+Allowed edits: work/packages/done-20260519-topology-publication-operation-residual-decision-gate.md, work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md, work/sprints/current-blocker.md, work/sprints/current-blocker.json, work/model-ledger.jsonl
+Candidate runtime files: unknown
+Forbidden edits: Do not edit publication, active-gate, operation-workflow, readiness, admission, or timeout runtime until this architecture gate chooses one bounded route.
+Required latest proof: npm run work:package:route-after-rerun -- --artifact test-output/reports/rolling-restart-after-owner-reconcile-write-deferred-20260519T100837Z.report.json --owner topology_publication_owner --boundary publication_convergence --dominant-reason publication_pending, npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-owner-reconcile-write-deferred-20260519T100837Z.report.json --handoff-probe, npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-after-owner-reconcile-write-deferred-20260519T100837Z.report.json
 Allowed stop modes: representative-green, migrated, reduced, same-frontier, classification-only, architecture-gap, human-escalation
 ```
 
