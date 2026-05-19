@@ -30,7 +30,7 @@
     "test/control-plane/membership-publication-coordinator-main-stage-2.js"
   ],
   "handoffFiles": [
-    "work/packages/active-20260519-topology-publication-owner-recovery-wake-queue-causal-gate.md",
+    "work/packages/done-20260519-topology-publication-owner-recovery-wake-queue-causal-gate.md",
     "work/packages/done-20260519-topology-publication-remaining-node-reconcile-runtime.md",
     "work/packages/done-20260519-topology-publication-remaining-node-causal-gate.md",
     "work/packages/done-20260519-topology-publication-multi-node-reconcile-runtime.md",
@@ -119,7 +119,7 @@
       "work/packages/done-20260519-topology-publication-operation-residual-decision-gate.md / topology_publication_owner / publication_convergence / successor-selected",
       "work/packages/done-20260519-topology-publication-multi-node-reconcile-runtime.md / topology_publication_owner / publication_convergence / reduced",
       "work/packages/done-20260519-topology-publication-remaining-node-reconcile-runtime.md / topology_publication_owner / publication_convergence / architecture-gap",
-      "work/packages/active-20260519-topology-publication-owner-recovery-wake-queue-causal-gate.md / topology_publication_owner / publication_convergence / selected-runtime-successor"
+      "work/packages/done-20260519-topology-publication-owner-recovery-wake-queue-causal-gate.md / topology_publication_owner / publication_convergence / selected-runtime-successor"
     ],
     "oscillationCheck": "This runtime package is allowed only because the causal-escalation gate selected the owner recovery wake queue admission successor after the prior runtime scope was exhausted.",
     "handoffInvariant": "Operation workflow, startup active-gate runtime, startup readiness, admission, and timeout budgets remain frozen unless fresh representative evidence migrates ownership."
@@ -335,10 +335,17 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 Required when subagent sequencing is required. Each real subagent appends one checked checkpoint after every completed subtask; this combined ledger satisfies both Progress and Attempt proof when the item includes status, last checkpoint, parent action, evidence, and next or blocker.
 Review agents may directly fix metadata-only package, sprint, tracker, current-blocker, ledger, or handoff findings and record `review-fixed-metadata-only`; runtime, test, script, report, or non-metadata fixes still require a separate fix subagent.
 
-- [ ] Agent <name> (<agent-id>) <role> checkpoint: status: started; last checkpoint: context loaded; parent action: pending; evidence: package, sprint, and handoff files read; next: first focused probe.
-- [ ] Agent <name> (<agent-id>) <role> checkpoint: status: running; last checkpoint: probe complete; parent action: pending; evidence: command and result; next: edit, validate, or blocker handoff.
-- [ ] Agent <name> (<agent-id>) <role> checkpoint: status: validated; last checkpoint: package proof refreshed; parent action: revalidated; evidence: commands and results; next: final handoff or successor action.
-- [ ] Agent <name> (<agent-id>) <role> recovery: status: superseded; last checkpoint: replaced interrupted or partial-unvalidated attempt; parent action: superseded; evidence: superseding proof; next: continue from clean checkpoint.
+- [x] Agent Turing (019e406f-0c28-7782-ab9d-3e1723d89d12) review checkpoint: status: validated; last checkpoint: context, compact steering, and review prompt loaded; parent action: accepted; evidence: `npm run work:context`, `.kiro/steering/llm/README.md`, `.kiro/steering/llm/core.md`, `.kiro/steering/llm/architecture.md`, and `npm run work:subagent-prompt -- --role review --package work/packages/active-20260519-topology-publication-owner-recovery-wake-queue-admission-runtime.md`; next: capped review probes.
+- [x] Agent Turing (019e406f-0c28-7782-ab9d-3e1723d89d12) review checkpoint: status: validated; last checkpoint: package doctor and route-after-rerun complete; parent action: accepted; evidence: `npm run work:package:doctor -- --suggest work/packages/active-20260519-topology-publication-owner-recovery-wake-queue-admission-runtime.md` failed only because required Subagent Sequencing, Progress, and Attempt ledger proof was missing; `npm run work:package:route-after-rerun -- --artifact test-output/reports/rolling-restart-after-multi-node-reconcile-20260519T105449Z.report.json --owner topology_publication_owner --boundary publication_convergence --dominant-reason publication_pending` passed with owner `topology_publication_owner`, boundary `publication_convergence`, dominant reason `publication_pending`, causal outcome `continue_local_fix`, stop `classified_local_blocker`, priority witnesses `0`, and splitRequired `false`; next: inspect package/sprint/current-blocker metadata and repair metadata-only findings.
+- [x] Agent Turing (019e406f-0c28-7782-ab9d-3e1723d89d12) review falsification checkpoint: status: validated; last checkpoint: wrong-slice check complete; parent action: accepted; wrong-slice evidence would be route owner, boundary, dominant reason, or causal outcome changing away from `topology_publication_owner / publication_convergence / publication_pending / continue_local_fix`, priority residual witnesses reopening, active-gate runtime promotion becoming allowed before publication owner progress, or proof requiring forbidden operation-workflow, readiness, active-gate runtime, admission, or timeout scope; evidence: route-after-rerun stayed on the selected owner boundary with `classified_local_blocker`, priority witnesses `0`, and splitRequired `false`; next: metadata-only repair.
+- [x] Agent Turing (019e406f-0c28-7782-ab9d-3e1723d89d12) review checkpoint: status: validated; last checkpoint: review-fixed-metadata-only repair recorded; parent action: accepted; evidence: added checked Subagent Progress And Attempt Ledger checkpoints and Subagent Sequencing Ledger review/fix entries in `work/packages/active-20260519-topology-publication-owner-recovery-wake-queue-admission-runtime.md`, and refreshed stale sprint strategy references in `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md`; next: package doctor and pre-implementation validation.
+- [x] Agent Turing (019e406f-0c28-7782-ab9d-3e1723d89d12) review checkpoint: status: validated; last checkpoint: package doctor and pre-implementation validation complete after metadata-only repair; parent action: accepted; evidence: `npm run work:package:doctor -- --suggest work/packages/active-20260519-topology-publication-owner-recovery-wake-queue-admission-runtime.md` passed, and `npm run work:validate -- --pre-impl work/packages/active-20260519-topology-publication-owner-recovery-wake-queue-admission-runtime.md` passed; next: final review handoff for implementation sequencing.
+
+## Subagent Sequencing Ledger
+
+- [x] Review subagent recorded: Agent Turing (019e406f-0c28-7782-ab9d-3e1723d89d12) reviewed work/packages/active-20260519-topology-publication-owner-recovery-wake-queue-admission-runtime.md; result fixes-required.
+- [x] Fix subagent recorded or explicitly not needed: review-fixed-metadata-only by Agent Turing (019e406f-0c28-7782-ab9d-3e1723d89d12) for work/packages/active-20260519-topology-publication-owner-recovery-wake-queue-admission-runtime.md; scope: metadata-only package/sprint/ledger edits.
+- [ ] Implementation subagent recorded: pending-before-implementation-resumes.
 
 ## Validation
 

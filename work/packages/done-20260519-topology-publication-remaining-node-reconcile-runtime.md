@@ -156,7 +156,7 @@
       }
     ],
     "selectedChoice": "owner-recovery-wake-queue-causal-gate",
-    "nextAction": "Close this exhausted runtime package and continue with work/packages/active-20260519-topology-publication-owner-recovery-wake-queue-causal-gate.md before runtime implementation resumes."
+    "nextAction": "Close this exhausted runtime package and continue with work/packages/done-20260519-topology-publication-owner-recovery-wake-queue-causal-gate.md before runtime implementation resumes."
   },
   "classificationEfficiency": {
     "defaultMode": "inline-gate-default",
@@ -190,7 +190,7 @@
   },
   "closed": "2026-05-19",
   "commitAndPushLedgerRequired": true,
-  "successor": "work/packages/active-20260519-topology-publication-owner-recovery-wake-queue-causal-gate.md"
+  "successor": "work/packages/done-20260519-topology-publication-owner-recovery-wake-queue-causal-gate.md"
 }
 -->
 

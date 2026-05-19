@@ -22,12 +22,12 @@ success is in scope.
 ## Sprint Strategy Brief
 
 - Goal state: representative `rolling-restart` is green with `active=5/5`, `snapshotCoverage=5/5`, `missingPublished=0`, and no timeout or admission relaxation.
-- Current causal thesis: `rolling-restart-after-multi-node-reconcile-20260519T105449Z.report.json` still keeps `publication_ack_convergence / topology_publication_owner / publication_convergence / publication_pending` first, but the predecessor reduced the cohort: active-gate handoff `pendingReconcileCount=4` to `1`, active-gate owner cohort missing published count `4` to `1`, and priority residual witnesses `3` to `0`. The remaining-node runtime package exhausted its stage-2 write scope and handed off to the owner recovery wake queue causal gate.
+- Current causal thesis: `rolling-restart-after-multi-node-reconcile-20260519T105449Z.report.json` still keeps `publication_ack_convergence / topology_publication_owner / publication_convergence / publication_pending` first, but the predecessor reduced the cohort: active-gate handoff `pendingReconcileCount=4` to `1`, active-gate owner cohort missing published count `4` to `1`, and priority residual witnesses `3` to `0`. The owner recovery wake queue causal gate selected the active bounded runtime successor for the stage-3 owner recovery wake queue admission/merge path.
 - Competing hypotheses: H1 publication convergence still owns the remaining one-node owner-reconcile target; H2 the remaining target exposes a narrower owner retry/wake path in the stage-3 owner queue admission/merge path; H3 active-gate snapshot coverage remains downstream because runtime promotion is still false; H4 another same-frontier no-reduction result would be an architecture or cross-owner contract gap.
-- Confidence and evidence: high that canonical route-after-rerun keeps publication convergence as the first topology frontier; high that priority residual extraction now reports zero witnesses and `splitRequired=false`; medium that the next valid move is the owner recovery wake queue causal gate because stage-2 already reaches `write_deferred` while `membershipPublicationHandoffOutcomeEnqueued=false` remains unresolved.
-- Expected green path: continue `work/packages/active-20260519-topology-publication-owner-recovery-wake-queue-causal-gate.md`, select the bounded owner recovery wake queue route or stop, then open runtime only if the gate proves that successor.
+- Confidence and evidence: high that canonical route-after-rerun keeps publication convergence as the first topology frontier; high that priority residual extraction now reports zero witnesses and `splitRequired=false`; medium that the next valid move is the active owner recovery wake queue admission runtime successor because stage-2 already reaches `write_deferred` while `membershipPublicationHandoffOutcomeEnqueued=false` remains unresolved.
+- Expected green path: continue `work/packages/active-20260519-topology-publication-owner-recovery-wake-queue-admission-runtime.md`, implement the bounded owner recovery wake queue admission/merge path, and prove the accepted retry merge/admission becomes observable without patching downstream active-gate, readiness, operation-workflow, admission, or timeout paths.
 - Wrong direction signals: treating the remaining one-node target as an active-gate, readiness, admission, timeout, or operation-workflow runtime issue while publication remains first and runtime promotion is false; or opening another local publication runtime package if the next representative run returns unchanged with no metric movement.
-- Next best package: continue `work/packages/active-20260519-topology-publication-owner-recovery-wake-queue-causal-gate.md` from the selected causal gate.
+- Next best package: continue `work/packages/active-20260519-topology-publication-owner-recovery-wake-queue-admission-runtime.md` from the selected owner recovery wake queue runtime successor.
 - Stop or escalate rule: if the successor returns the same publication_pending frontier with no concrete missingPublishedCount, pendingReconcileCount, migration, or green movement, stop for architecture or human escalation instead of opening another local runtime patch.
 
 ## Sprint Systemic Insight Gate
@@ -63,7 +63,7 @@ for the active package is the Current Edge Card below, based on
 Historical state from that earlier rerun:
 
 1. The current active package is
-   [Topology Publication Owner Recovery Wake Queue Causal Gate](../packages/active-20260519-topology-publication-owner-recovery-wake-queue-causal-gate.md).
+   [Topology Publication Owner Recovery Wake Queue Causal Gate](../packages/done-20260519-topology-publication-owner-recovery-wake-queue-causal-gate.md).
 2. Its predecessor is the reduced owner-reconcile runtime package
    `work/packages/done-20260518-topology-publication-pending-owner-reconcile-runtime.md`.
 3. Its predecessor is the same-frontier runtime package
@@ -134,19 +134,19 @@ Historical state from that earlier rerun:
 ```text
 Representative artifact: test-output/reports/rolling-restart-after-multi-node-reconcile-20260519T105449Z.report.json
 Visible first frontier: publication_ack_convergence / topology_publication_owner / publication_convergence / publication_pending in test-output/reports/rolling-restart-after-multi-node-reconcile-20260519T105449Z.report.json.
-Active package: work/packages/active-20260519-topology-publication-owner-recovery-wake-queue-causal-gate.md
+Active package: work/packages/active-20260519-topology-publication-owner-recovery-wake-queue-admission-runtime.md
 Active package owner: topology_publication_owner
 Active package boundary: publication_convergence
 Selected cause: publication_pending
-Required action: Open a bounded runtime-owner-boundary successor for src/control-plane/membership-publication-coordinator-class-stage-3.js and the stage-2 handoff outcome path, then run required review/fix/implementation sequencing before runtime edits.
-Representative status: classification-only
+Required action: Implement one bounded owner recovery wake queue admission runtime slice for the active-gate publication handoff write_deferred path, proving accepted retry merge/admission is observable without patching downstream active-gate, readiness, operation-workflow, admission, or timeout paths.
+Representative status: unknown
 Causal outcome: continue_local_fix
 Architecture gate: selected / owner-recovery-wake-queue-runtime-successor
-Expected delta: Select whether the remaining owner recovery wake queue admission path is a valid bounded successor, an owner-boundary migration, an architecture gap, or human stop before any new local runtime patch.
-Current state: Causal proof kept topology_publication_owner / publication_convergence as the selected local-fix route and selected the owner recovery wake queue admission path as the bounded runtime successor.
-Allowed edits: work/packages/active-20260519-topology-publication-owner-recovery-wake-queue-causal-gate.md, work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md, work/sprints/current-blocker.md, work/sprints/current-blocker.json, work/model-ledger.jsonl
-Candidate runtime files: src/control-plane/membership-publication-coordinator-class-stage-3.js, src/control-plane/membership-publication-coordinator-class-stage-2.js, test/control-plane/membership-publication-coordinator-main-stage-2.js
-Forbidden edits: Operation workflow, startup active-gate runtime, startup readiness, admission, and timeout budgets remain frozen unless this gate records a supported owner-boundary migration.
+Expected delta: Prove accepted owner recovery wake queue admission or merge for the active-gate publication handoff write_deferred path so membershipPublicationHandoffOutcomeEnqueued=false moves, then clear pendingReconcileCount=1 and activeGateOwnerCohortMissingPublishedCount=1, migrate the owner boundary, turn rolling-restart green, or trigger architecture/human stop.
+Current state: The causal-escalation gate selected owner recovery wake queue admission/merge as the bounded runtime successor for membershipPublicationHandoffOutcomeEnqueued=false while keeping topology_publication_owner / publication_convergence as the first frontier.
+Allowed edits: work/packages/active-20260519-topology-publication-owner-recovery-wake-queue-admission-runtime.md, work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md, work/sprints/current-blocker.md, work/sprints/current-blocker.json, work/model-ledger.jsonl, src/control-plane/membership-publication-coordinator-class-stage-3.js, src/control-plane/membership-publication-coordinator-class-stage-2.js, test/control-plane/membership-publication-coordinator-main-stage-2.js
+Candidate runtime files: unknown
+Forbidden edits: Operation workflow, startup active-gate runtime, startup readiness, admission, and timeout budgets remain frozen unless fresh representative evidence migrates ownership.
 Required latest proof: npm run work:evidence-summary -- test-output/reports/rolling-restart-after-multi-node-reconcile-20260519T105449Z.report.json, npm run work:scenario-triage -- test-output/reports/rolling-restart-after-multi-node-reconcile-20260519T105449Z.report.json --markdown, npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-after-multi-node-reconcile-20260519T105449Z.report.json --markdown
 Allowed stop modes: representative-green, migrated, reduced, same-frontier, classification-only, architecture-gap, human-escalation
 ```
@@ -155,9 +155,9 @@ Allowed stop modes: representative-green, migrated, reduced, same-frontier, clas
 
 2026-05-19 review note: this older decision ledger is superseded for the active
 slice by the selected package-level architecture gate and Current Edge Card
-above. The current selected route is `remaining-node-local-runtime` for
-`topology_publication_owner / publication_convergence / publication_pending`
-from
+above. The current selected route is
+`owner-recovery-wake-queue-runtime-successor` for `topology_publication_owner /
+publication_convergence / publication_pending` from
 `test-output/reports/rolling-restart-after-multi-node-reconcile-20260519T105449Z.report.json`.
 
 Status: selected after the operation-residual decision gate closed and opened
@@ -167,8 +167,8 @@ Current decision: the architecture gate remains selected because the
 publication frontier stayed first, active-gate runtime promotion is false, and
 operation workflow residual witnesses are non-splitting. The active
 runtime-owner-boundary package must now run required sequencing before one
-bounded publication-owned runtime slice for the multi-node OPEN epoch-2
-`write_deferred` reconcile shape.
+bounded publication-owned owner recovery wake queue admission/merge runtime
+slice for the active-gate publication handoff `write_deferred` shape.
 
 The `same-frontier` result belongs to the predecessor handoff package
 `work/packages/done-20260518-rolling-restart-publication-active-gate-handoff-oscillation-after-fresh-evidence.md`.
