@@ -132,21 +132,21 @@ Canonical state after the fresh rerun:
 
 ```text
 Representative artifact: test-output/reports/rolling-restart-after-open-owner-reconcile-20260519T060754Z.report.json
-Visible first frontier: publication_ack_convergence / topology_publication_owner / publication_convergence / publication_pending in test-output/reports/rolling-restart-after-open-owner-reconcile-20260519T060754Z.report.json.
-Active package: work/packages/active-20260519-topology-publication-no-debt-snapshot-timeout-causal-gate.md
-Active package owner: topology_publication_owner
-Active package boundary: publication_convergence
-Selected cause: publication_pending
-Required action: Run the causal-escalation gate, then classify and fix the no-debt publication_pending versus active-gate snapshot-timeout contract shape without another local patch unless focused proof identifies the exact owner move.
-Representative status: reduced
-Causal outcome: continue_local_fix
-Architecture gate: watching / bounded-publication-owner-runtime-successor
+Visible first frontier: active_gate_snapshot_coverage under startup_active_gate_owner / snapshot_coverage after the no-debt publication causal gate.
+Active package: work/packages/active-20260519-startup-active-gate-selected-snapshot-source-timeout-runtime.md
+Active package owner: startup_active_gate_owner
+Active package boundary: snapshot_coverage
+Selected cause: active_gate_timed_out
+Required action: Run required runtime-owner-boundary sequencing, then implement one bounded selected-snapshot-source timeout fix that improves snapshot coverage, migrates the frontier, or turns rolling-restart green.
+Representative status: migrated
+Causal outcome: migrate_owner_boundary
+Architecture gate: selected / bounded-startup-active-gate-snapshot-coverage-runtime-successor
 Expected delta: Classify whether fresh representative evidence is green, reduced, migrated, same-frontier, architecture-gap, contradictory, or needs a bounded successor before runtime promotion.
-Current state: Fresh rerun after the open-owner-reconcile fix is red but reduced: publicationConvergence is reported ready in the scenario error, pendingAck=0, missingPublished=0, pendingReconcile=0, priority residual witnesses=0, active=4/5, and snapshotCoverage=0/5. Generic route still reports topology_publication_owner / publication_convergence / publication_pending on unknown/no-revision evidence; handoff probe detects publication_ack_to_active_gate_reconcile_missing with selected snapshot source timeout.
-Allowed edits: work/packages/active-20260519-topology-publication-no-debt-snapshot-timeout-causal-gate.md, work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md, work/sprints/current-blocker.md, work/sprints/current-blocker.json, work/model-ledger.jsonl
-Candidate runtime files: src/control-plane/publication-owner-decision.js, src/control-plane/publication-recovery-evidence.js, src/control-plane/publication-active-gate-handoff-contract.js, src/control-plane/membership-publication-coordinator-class-stage-2.js, src/control-plane/active-node-projection.js, src/admin/admin-control-snapshot-class-part-1.js, src/admin/admin-control-snapshot-class-part-2.js, src/admin/admin-control-snapshot-class-part-6.js
-Forbidden edits: Do not edit startup active-gate, operation workflow, readiness, admission, handoff architecture, or timeout files unless focused proof selects owner-boundary migration or architecture work.
-Required latest proof: npm run work:evidence-summary -- test-output/reports/rolling-restart-after-open-owner-reconcile-20260519T060754Z.report.json, npm run work:scenario-triage -- test-output/reports/rolling-restart-after-open-owner-reconcile-20260519T060754Z.report.json --markdown, npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-after-open-owner-reconcile-20260519T060754Z.report.json --markdown
+Current state: Fresh causal gate migrates the reduced no-debt publication_pending shape to startup_active_gate_owner / snapshot_coverage. The latest rolling-restart artifact has active=4/5, snapshotCoverage=0/5, selected snapshot source timeout on node 11601fe0-72d6-5853-8590-ec2881853e72, publication convergence reported ready in the scenario error, pendingAck=0, missingPublished=0, pendingReconcile=0, and priority residual witnesses=0.
+Allowed edits: work/packages/active-20260519-startup-active-gate-selected-snapshot-source-timeout-runtime.md, work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md, work/sprints/current-blocker.md, work/sprints/current-blocker.json, work/model-ledger.jsonl, test/distributed/harness/cluster-segment-7.js, test/distributed/harness/__tests__/cluster.test-part-5.js
+Candidate runtime files: src/admin/admin-control-snapshot-class-part-1.js, src/admin/admin-control-snapshot-class-part-2.js, src/admin/admin-control-snapshot-class-part-6.js, src/control-plane/control-plane-snapshot-owner.js, src/control-plane/publication-active-gate-handoff-contract.js, test/admin/admin-control-snapshot.test.js, test/distributed/harness/cluster-segment-7.js, test/distributed/harness/cluster-segment-7-class-5.js, test/distributed/harness/__tests__/cluster.test-part-5.js
+Forbidden edits: Publication ACK, priority recovery, timeout budgets, active-gate admission, publication truth, and readiness support remain frozen unless canonical evidence selects them again.
+Required latest proof: npm run work:evidence-summary -- test-output/reports/rolling-restart-after-open-owner-reconcile-20260519T060754Z.report.json, npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-open-owner-reconcile-20260519T060754Z.report.json --explain active_gate_snapshot_coverage, npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-open-owner-reconcile-20260519T060754Z.report.json --handoff-probe, npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-open-owner-reconcile-20260519T060754Z.report.json, npm run analyze:owner-files -- startup_active_gate_owner snapshot_coverage
 Allowed stop modes: representative-green, migrated, reduced, same-frontier, classification-only, architecture-gap, human-escalation
 ```
 
