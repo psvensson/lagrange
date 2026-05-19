@@ -6,6 +6,7 @@ import {
   CONTROL_PLANE_PUBLICATION_STATUS,
   PUBLICATION_OWNER_ACK_STATE,
   PUBLICATION_OWNER_FRESHNESS_FENCE,
+  PUBLICATION_OWNER_PRESSURE_STATE,
   PUBLICATION_OWNER_RECOVERY_OUTCOME,
   PUBLICATION_OWNER_SEMANTIC_OWNER,
   PUBLICATION_OWNER_STREAM_OUTCOME,
@@ -27,6 +28,7 @@ import {
 const LOCAL_STR_EMPTY = '';
 
 const EMPTY_STRING = '';
+const PUBLICATION_RECOVERY_GATE_EMPTY_LIST = Object.freeze([]);
 
 const PUBLICATION_PRIORITY_SPREAD_DECISION_SOURCE = Object.freeze({
   CLOSURE_WITNESS: 'closure_witness',
@@ -47,6 +49,7 @@ const PUBLICATION_RECOVERY_GATE_STATE = Object.freeze({
   PRIORITY_SPREAD_EVIDENCE_UNAVAILABLE:
     'priority_spread_evidence_unavailable',
   PRIORITY_SPREAD_PENDING: 'priority_spread_pending',
+  PRESSURE_DEFERRED: 'pressure_deferred',
   READY: 'ready',
 });
 
@@ -64,6 +67,14 @@ const PUBLICATION_RECOVERY_OWNER_REASON_CODE_SET = Object.freeze(new Set(
 ));
 
 const PUBLICATION_RECOVERY_GATE_STREAM_RULES = Object.freeze([
+  Object.freeze({
+    state: PUBLICATION_RECOVERY_GATE_STATE.PRESSURE_DEFERRED,
+    matches: (context) =>
+      context.publicationOwnerStream?.streamOutcome ===
+        PUBLICATION_OWNER_STREAM_OUTCOME.PRESSURE_DEFERRED ||
+      context.publicationOwnerStream?.recoveryOutcome ===
+        PUBLICATION_OWNER_RECOVERY_OUTCOME.PRESSURE_DEFERRED,
+  }),
   Object.freeze({
     state: PUBLICATION_RECOVERY_GATE_STATE.UNPUBLISHED_OBSERVATION,
     matches: (context) =>
@@ -241,6 +252,12 @@ function normalizeOptionalNonNegativeInteger(value, fallbackValue) {
     fallbackValue;
 }
 
+function normalizePublicationPressureState(value) {
+  return Object.values(PUBLICATION_OWNER_PRESSURE_STATE).includes(value) ?
+    value :
+    PUBLICATION_OWNER_PRESSURE_STATE.NONE;
+}
+
 function isPublicationOwnerStreamRecord(value) {
   return Boolean(value) &&
     typeof value === TYPEOF.OBJECT &&
@@ -291,6 +308,58 @@ function resolvePublicationOwnerStreamNodeIds(value, fallbackValue) {
   return Array.isArray(value) ?
     normalizeDistinctStringArray(value) :
     fallbackValue;
+}
+
+function resolvePublicationPressureEvidence(
+  publicationOwnerStream = null,
+  options = {},
+) {
+  const streamPressureState = normalizePublicationPressureState(
+    publicationOwnerStream?.pressureState,
+  );
+  const optionPressureState = normalizePublicationPressureState(
+    options.pressureState,
+  );
+  const pressureCoalesced =
+    publicationOwnerStream?.pressureCoalesced === true ||
+    options.pressureCoalesced === true ||
+    streamPressureState === PUBLICATION_OWNER_PRESSURE_STATE.COALESCED ||
+    optionPressureState === PUBLICATION_OWNER_PRESSURE_STATE.COALESCED;
+  const pressureDeferred =
+    pressureCoalesced ||
+    publicationOwnerStream?.pressureDeferred === true ||
+    options.pressureDeferred === true ||
+    streamPressureState === PUBLICATION_OWNER_PRESSURE_STATE.DEFERRED ||
+    optionPressureState === PUBLICATION_OWNER_PRESSURE_STATE.DEFERRED;
+  const pressureState = pressureCoalesced ?
+    PUBLICATION_OWNER_PRESSURE_STATE.COALESCED :
+    pressureDeferred ?
+      PUBLICATION_OWNER_PRESSURE_STATE.DEFERRED :
+      PUBLICATION_OWNER_PRESSURE_STATE.NONE;
+  const streamRetryAfterMs = normalizeOptionalNonNegativeInteger(
+    publicationOwnerStream?.pressureRetryAfterMs,
+    null,
+  );
+  const optionRetryAfterMs = normalizeOptionalNonNegativeInteger(
+    options.pressureRetryAfterMs ?? options.retryAfterMs,
+    NUM.ZERO,
+  );
+
+  return Object.freeze({
+    pressureState,
+    pressureDeferred,
+    pressureCoalesced,
+    pressureRetryAfterMs:
+      pressureDeferred ?
+        streamRetryAfterMs ?? optionRetryAfterMs :
+        NUM.ZERO,
+    pressureReasonCodes: normalizeDistinctStringArray([
+      ...normalizeDistinctStringArray(
+        publicationOwnerStream?.pressureReasonCodes,
+      ),
+      ...normalizeDistinctStringArray(options.pressureReasonCodes),
+    ]),
+  });
 }
 
 function hasAuthoritativePrioritySpreadDecision(options = {}) {
@@ -456,20 +525,31 @@ function buildPublicationStreamCompatibilityEvidence(options = {}) {
   const publicationOwnerStream = options.publicationOwnerStream;
   const pendingAckEvidence = options.pendingAckEvidence;
   const fallbackMissingPublishedNodeIds = options.missingPublishedNodeIds;
-  const requiredAckNodeIds = resolvePublicationOwnerStreamNodeIds(
-    publicationOwnerStream?.requiredAckNodeIds,
-    pendingAckEvidence.requiredAckNodeIds,
+  const pressureEvidence = resolvePublicationPressureEvidence(
+    publicationOwnerStream,
+    options,
   );
-  const acknowledgedNodeIds = resolvePublicationOwnerStreamNodeIds(
-    publicationOwnerStream?.acknowledgedNodeIds,
-    pendingAckEvidence.acknowledgedNodeIds,
-  );
-  const pendingAckNodeIds = resolvePublicationOwnerStreamNodeIds(
-    publicationOwnerStream?.pendingAckNodeIds,
-    pendingAckEvidence.pendingAckNodeIds,
-  );
+  const pressureDeferred = pressureEvidence.pressureDeferred === true;
+  const requiredAckNodeIds = pressureDeferred ?
+    PUBLICATION_RECOVERY_GATE_EMPTY_LIST :
+    resolvePublicationOwnerStreamNodeIds(
+      publicationOwnerStream?.requiredAckNodeIds,
+      pendingAckEvidence.requiredAckNodeIds,
+    );
+  const acknowledgedNodeIds = pressureDeferred ?
+    PUBLICATION_RECOVERY_GATE_EMPTY_LIST :
+    resolvePublicationOwnerStreamNodeIds(
+      publicationOwnerStream?.acknowledgedNodeIds,
+      pendingAckEvidence.acknowledgedNodeIds,
+    );
+  const pendingAckNodeIds = pressureDeferred ?
+    PUBLICATION_RECOVERY_GATE_EMPTY_LIST :
+    resolvePublicationOwnerStreamNodeIds(
+      publicationOwnerStream?.pendingAckNodeIds,
+      pendingAckEvidence.pendingAckNodeIds,
+    );
   const streamPendingAckCount = normalizeOptionalNonNegativeInteger(
-    publicationOwnerStream?.pendingAckCount,
+    pressureDeferred ? NUM.ZERO : publicationOwnerStream?.pendingAckCount,
     null,
   );
   const streamPendingAckEvidence = buildPendingAckEvidence({
@@ -487,12 +567,14 @@ function buildPublicationStreamCompatibilityEvidence(options = {}) {
       pendingAckEvidence.evidenceState,
   });
   const pendingAckCount = streamPendingAckEvidence.pendingAckCount;
-  const missingPublishedNodeIds = resolvePublicationOwnerStreamNodeIds(
-    publicationOwnerStream?.missingPublishedNodeIds,
-    fallbackMissingPublishedNodeIds,
-  );
+  const missingPublishedNodeIds = pressureDeferred ?
+    PUBLICATION_RECOVERY_GATE_EMPTY_LIST :
+    resolvePublicationOwnerStreamNodeIds(
+      publicationOwnerStream?.missingPublishedNodeIds,
+      fallbackMissingPublishedNodeIds,
+    );
   const streamMissingPublishedCount = normalizeOptionalNonNegativeInteger(
-    publicationOwnerStream?.missingPublishedCount,
+    pressureDeferred ? NUM.ZERO : publicationOwnerStream?.missingPublishedCount,
     null,
   );
   const missingPublishedCount =
@@ -514,19 +596,19 @@ function buildPublicationStreamCompatibilityEvidence(options = {}) {
         PUBLICATION_OWNER_RECOVERY_OUTCOME.WAITING_FOR_RECOVERY_EVIDENCE ?
         true :
         options.prioritySpreadEvidenceUnavailable;
-  const publicationPending =
+  const publicationPending = pressureDeferred ?
+    false :
     isPublicationOwnerStreamPendingForRecoveryGate(
       publicationOwnerStream,
       pendingAckCount,
       missingPublishedCount,
     ) ||
-    pendingAckCount > NUM.ZERO;
+      pendingAckCount > NUM.ZERO;
   const recoveryProtocolState = resolvePublicationRecoveryProtocolState({
     publicationOwnerStream,
     prioritySpreadPending,
     prioritySpreadEvidenceUnavailable,
   });
-
   return Object.freeze({
     publicationEpoch:
       normalizeOptionalNonNegativeInteger(
@@ -552,12 +634,15 @@ function buildPublicationStreamCompatibilityEvidence(options = {}) {
     missingPublishedNodeIds,
     missingPublishedCount,
     publicationPending,
-    ackPending:
-      publicationOwnerStream?.ackState ===
+    ackPending: pressureDeferred !== true &&
+      (
+        publicationOwnerStream?.ackState ===
         PUBLICATION_OWNER_ACK_STATE.WAITING_FOR_ACK ||
-      pendingAckCount > NUM.ZERO,
+        pendingAckCount > NUM.ZERO
+      ),
     prioritySpreadPending,
     prioritySpreadEvidenceUnavailable,
+    ...pressureEvidence,
   });
 }
 
@@ -849,27 +934,46 @@ function resolvePublicationRecoveryProtocolState(context = {}) {
 }
 
 function buildPublicationRecoveryGateSnapshot(options = {}) {
-  const pendingAckEvidence = buildPendingAckEvidence(options);
+  const providedPublicationOwnerStream = normalizeProvidedPublicationOwnerStream(
+    options.publicationOwnerStream,
+  );
+  const pressureEvidence = resolvePublicationPressureEvidence(
+    providedPublicationOwnerStream,
+    options,
+  );
+  const pressureDeferred = pressureEvidence.pressureDeferred === true;
+  const pendingAckEvidence = buildPendingAckEvidence(
+    pressureDeferred ?
+      {
+        ...options,
+        requiredAckNodeIds: PUBLICATION_RECOVERY_GATE_EMPTY_LIST,
+        acknowledgedNodeIds: PUBLICATION_RECOVERY_GATE_EMPTY_LIST,
+        pendingAckNodeIds: PUBLICATION_RECOVERY_GATE_EMPTY_LIST,
+        pendingAckCount: NUM.ZERO,
+      } :
+      options,
+  );
   const requiredAckNodeIds = pendingAckEvidence.requiredAckNodeIds;
   const acknowledgedNodeIds = pendingAckEvidence.acknowledgedNodeIds;
   const effectivePendingAckNodeIds = pendingAckEvidence.pendingAckNodeIds;
   const pendingAckCount = pendingAckEvidence.pendingAckCount;
-  const providedPublicationOwnerStream = normalizeProvidedPublicationOwnerStream(
-    options.publicationOwnerStream,
-  );
   const ackClosureSatisfied =
     pendingAckEvidence.evidenceState ===
       PUBLICATION_RECOVERY_PENDING_ACK_EVIDENCE_STATE
         .REQUIRED_ACK_NODE_LIST &&
     pendingAckCount === NUM.ZERO;
-  const missingPublishedNodeIds = normalizeDistinctStringArray(
-    options.missingPublishedNodeIds ??
-      options.missingPublishedRecoveryActiveNodeIds,
-  );
-  const missingPublishedCount = Math.max(
-    missingPublishedNodeIds.length,
-    normalizeNonNegativeInteger(options.missingPublishedCount),
-  );
+  const missingPublishedNodeIds = pressureDeferred ?
+    PUBLICATION_RECOVERY_GATE_EMPTY_LIST :
+    normalizeDistinctStringArray(
+      options.missingPublishedNodeIds ??
+        options.missingPublishedRecoveryActiveNodeIds,
+    );
+  const missingPublishedCount = pressureDeferred ?
+    NUM.ZERO :
+    Math.max(
+      missingPublishedNodeIds.length,
+      normalizeNonNegativeInteger(options.missingPublishedCount),
+    );
   const providedReasonCodes = normalizeDistinctStringArray(
     options.priorityRecoveryReasonCodes ??
       options.reasonCodes,
@@ -884,13 +988,15 @@ function buildPublicationRecoveryGateSnapshot(options = {}) {
   const prioritySpreadPending = prioritySpreadDecision.prioritySpreadPending;
   const prioritySpreadEvidenceUnavailable =
     prioritySpreadDecision.prioritySpreadEvidenceUnavailable === true;
-  const publicationPendingEvidenceActive = resolvePublicationPending({
-    publicationStatus: options.publicationStatus,
-    recoveryProtocolState: options.recoveryProtocolState,
-    reasonCodes: providedReasonCodes,
-    missingPublishedCount,
-    ackClosureSatisfied,
-  });
+  const publicationPendingEvidenceActive = pressureDeferred ?
+    false :
+    resolvePublicationPending({
+      publicationStatus: options.publicationStatus,
+      recoveryProtocolState: options.recoveryProtocolState,
+      reasonCodes: providedReasonCodes,
+      missingPublishedCount,
+      ackClosureSatisfied,
+    });
   const prioritySpreadEvidenceUnavailableReasonActive =
     prioritySpreadEvidenceUnavailable === true &&
     publicationPendingEvidenceActive !== true &&
@@ -904,13 +1010,15 @@ function buildPublicationRecoveryGateSnapshot(options = {}) {
     prioritySpreadEvidenceUnavailableReasonActive,
     publicationEpochReasonActive,
   );
-  const publicationPending = resolvePublicationPending({
-    publicationStatus: options.publicationStatus,
-    recoveryProtocolState: options.recoveryProtocolState,
-    reasonCodes: retainedProvidedReasonCodes,
-    missingPublishedCount,
-    ackClosureSatisfied,
-  });
+  const publicationPending = pressureDeferred ?
+    false :
+    resolvePublicationPending({
+      publicationStatus: options.publicationStatus,
+      recoveryProtocolState: options.recoveryProtocolState,
+      reasonCodes: retainedProvidedReasonCodes,
+      missingPublishedCount,
+      ackClosureSatisfied,
+    });
   const publicationStatusNormalized = normalizePublicationStatus(
     options.publicationStatus,
   );
@@ -936,6 +1044,11 @@ function buildPublicationRecoveryGateSnapshot(options = {}) {
     priorityRecoveryReasonCodes: retainedProvidedReasonCodes,
     prioritySpreadPending,
     prioritySpreadEvidenceUnavailable,
+    pressureState: options.pressureState,
+    pressureDeferred: options.pressureDeferred,
+    pressureCoalesced: options.pressureCoalesced,
+    pressureRetryAfterMs: options.pressureRetryAfterMs,
+    pressureReasonCodes: options.pressureReasonCodes,
     publicationPendingHint: publicationPending,
   });
   const publicationOwnerStream =
@@ -962,6 +1075,11 @@ function buildPublicationRecoveryGateSnapshot(options = {}) {
         prioritySpreadPending,
         prioritySpreadEvidenceUnavailable,
         prioritySpreadDecisionSource: prioritySpreadDecision.decisionSource,
+        pressureState: options.pressureState,
+        pressureDeferred: options.pressureDeferred,
+        pressureCoalesced: options.pressureCoalesced,
+        pressureRetryAfterMs: options.pressureRetryAfterMs,
+        pressureReasonCodes: options.pressureReasonCodes,
       }) :
       Object.freeze({
         publicationEpoch:
@@ -993,6 +1111,7 @@ function buildPublicationRecoveryGateSnapshot(options = {}) {
         ackPending: pendingAckCount > NUM.ZERO,
         prioritySpreadPending,
         prioritySpreadEvidenceUnavailable,
+        ...pressureEvidence,
       });
   const effectivePrioritySpreadDecision = Object.freeze({
     ...prioritySpreadDecision,
@@ -1058,6 +1177,11 @@ function buildPublicationRecoveryGateSnapshot(options = {}) {
     ackState: publicationOwnerStream.ackState,
     freshnessFence: publicationOwnerStream.freshnessFence,
     recoveryOutcome: publicationOwnerStream.recoveryOutcome,
+    pressureState: streamCompatibilityEvidence.pressureState,
+    pressureDeferred: streamCompatibilityEvidence.pressureDeferred,
+    pressureCoalesced: streamCompatibilityEvidence.pressureCoalesced,
+    pressureRetryAfterMs: streamCompatibilityEvidence.pressureRetryAfterMs,
+    pressureReasonCodes: streamCompatibilityEvidence.pressureReasonCodes,
     priorityRecoveryClosureWitness:
       prioritySpreadDecision.priorityRecoveryClosureWitness ?
         Object.freeze({...prioritySpreadDecision.priorityRecoveryClosureWitness}) :

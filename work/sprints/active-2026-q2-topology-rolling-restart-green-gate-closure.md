@@ -22,23 +22,47 @@ success is in scope.
 ## Sprint Strategy Brief
 
 - Goal state: representative `rolling-restart` is green with `active=5/5`, `snapshotCoverage=5/5`, `missingPublished=0`, and no timeout or admission relaxation.
-- Current causal thesis: the closed publication-owner runtime slice reduced live active-gate disagreement from `3` to `1`, but the fresh representative rerun still selects `topology_publication_owner / publication_convergence / publication_pending`; the active successor owns one bounded remaining producer/active-gate publication mismatch unless architecture review overrides the local runtime route.
-- Competing hypotheses: H1 topology_publication_owner still owns a producer/active-gate publication evidence mismatch; H2 startup_active_gate_owner remains downstream while `runtimePromotionAllowed=false`; H3 operation workflow is not selected because priority residual witnesses are `0`; H4 the remaining first frontier is an architecture/handoff contract gap if another bounded runtime slice cannot produce a concrete reduction.
-- Confidence and evidence: high that focused owner tests and guideline checks are green; medium that the representative result is a real reduction because `test-output/reports/rolling-restart-after-owner-reconcile-narrowing-20260518T171916Z.report.json` keeps the same first frontier but reduces distributed-failure `disagreementNodes=3 -> 1`, keeps priority residual witnesses at `0`, and leaves active-gate runtime promotion blocked.
-- Expected green path: run review/fix/implementation sequencing for `work/packages/done-20260518-topology-publication-remaining-owner-reconcile-runtime.md`, reduce the remaining pending reconcile or missing-published mismatch, then rerun representative `rolling-restart`.
-- Wrong direction signals: runtime edits start before review/fix/implementation sequencing is recorded; active-gate, operation workflow, readiness, admission, handoff architecture, or timeout budgets are patched while canonical evidence still marks them downstream or frozen; subagent work proceeds without progress-ledger checkpoints.
-- Next best package: `work/packages/done-20260518-topology-publication-remaining-owner-reconcile-runtime.md` for the remaining publication_pending producer/active-gate mismatch from the fresh artifact.
-- Stop or escalate rule: if the selected runtime successor leaves the same `publication_pending` frontier without concrete metric or state reduction, stop for architecture or human escalation instead of opening another local runtime package.
+- Current causal thesis: focused pressure grammar is now in place, but the fresh representative rerun falsified pressure as the immediate green path. `rolling-restart-after-pressure-stability-20260519T050912Z.report.json` still routes to `topology_publication_owner / publication_convergence / publication_pending` with publication `OPEN`, publishedActive `1/5`, missingPublished `4`, active `0/5`, and snapshotCoverage `2/5`.
+- Competing hypotheses: H1 the publication owner is still missing a local OPEN/publishing convergence transition; H2 active-gate owner reconcile and publication convergence form a cross-boundary architecture loop; H3 the retry-scheduled `operation_workflow_owner / rebalancer_handoff` residual is the producer pressure behind the publication stall; H4 another local publication patch would continue same-frontier ping-pong without an architecture decision.
+- Confidence and evidence: high that pressure_deferred focused proof is correct but not representative-moving; high that the current route remains publication convergence from `work:evidence-summary` and `route-after-rerun`; medium that an architecture gate must decide whether the next move is publication owner, operation workflow, or active-gate contract work.
+- Expected green path: close `work/packages/done-20260518-topology-publication-pressure-stability-runtime.md` as same-frontier/architecture-stop, commit the focused pressure slice, then open a causal architecture decision package before any further local runtime patch.
+- Wrong direction signals: opening another `publication_convergence` runtime package directly from the unchanged publication_pending route without an architecture decision, ignoring the rebalancer_handoff residuals, or reclassifying pressure as green evidence.
+- Next best package: a causal-escalation architecture package from `test-output/reports/rolling-restart-after-pressure-stability-20260519T050912Z.report.json` to choose publication, operation workflow, active-gate, or human route before further runtime edits.
+- Stop or escalate rule: active; same-frontier/no-reduction evidence requires architecture or human escalation before another local implementation package.
+
+## Sprint Systemic Insight Gate
+
+Use this pattern when a sprint starts producing adjacent-owner bounces,
+same-frontier loops, or fixes that explain one symptom but not the repeated
+shape of failure:
+
+1. Start from the contradiction, not the symptom: name the facts that seem
+   simultaneously true and ask what system rule would make them compatible.
+2. List competing causal theories across producer, consumer, lifecycle,
+   retry/wake, admission/gating, observability, and stale-evidence paths before
+   assigning files.
+3. Identify whether the missing thing is runtime code, vocabulary, invariant,
+   owner contract, evidence projection, fixture coverage, or architecture
+   policy.
+4. Choose the next package as an experiment against one theory, with a concrete
+   falsifier that would redirect owner, boundary, or escalation path.
+5. Prove the negative case that created ping-pong: the fix must not reintroduce
+   old debt, reinterpret downstream symptoms, or depend on stale diagnostics.
+6. After focused proof, require fresh representative routing or rerun evidence
+   before opening another local patch on the same unchanged artifact.
+7. Stop for architecture or human escalation when the same class of frontier
+   returns without a hypothesis change, metric movement, migration, or green
+   result.
 
 ## Current Blocker Snapshot
 
-Latest representative artifact:
-`test-output/reports/rolling-restart-after-owner-reconcile-narrowing-20260518T171916Z.report.json`.
+Latest representative artifact for the active pressure-stability package:
+`test-output/reports/rolling-restart-after-pressure-stability-20260519T050912Z.report.json`.
 
 Canonical state after the fresh rerun:
 
 1. The current active package is
-   `work/packages/done-20260518-topology-publication-remaining-owner-reconcile-runtime.md`.
+   [Topology Publication Pressure Stability Runtime](../packages/done-20260518-topology-publication-pressure-stability-runtime.md).
 2. Its predecessor is the reduced owner-reconcile runtime package
    `work/packages/done-20260518-topology-publication-pending-owner-reconcile-runtime.md`.
 3. Its predecessor is the same-frontier runtime package
@@ -59,21 +83,22 @@ Canonical state after the fresh rerun:
    `work/packages/done-20260518-startup-active-gate-snapshot-coverage-after-publication-handoff-classification.md`,
    which closed as classification-only with no startup active-gate runtime edit.
 11. The latest representative run failed 0/1 at `active=0/5` and
-   `snapshotCoverage=3/5`.
+   `snapshotCoverage=2/5`.
 12. Canonical `work:scenario-route`, `work:evidence-summary`, and
    `analyze:causal-model` select
    `publication_ack_convergence / topology_publication_owner /
    publication_convergence / publication_pending` as the visible first
    frontier.
-13. Priority residual extraction now reports zero witnesses and
-   `splitRequired=false`.
+13. Priority residual extraction reports four
+   `operation_workflow_owner / rebalancer_handoff` retry-scheduled witnesses
+   and `splitRequired=false`.
 14. The fresh handoff probe records `detected=false`, producer
    `publication_pending`, and active-gate consumer deferred with
    `runtimePromotionAllowed=false`; its next owner path remains deferred
    `startup_active_gate_owner / snapshot_coverage` only after publication
    progress.
-15. Active-gate evidence is deferred with `snapshotCoverageNodeCount=3/5`,
-   snapshot repair deferred, owner reconcile pending for two publication nodes,
+15. Active-gate evidence is deferred with `snapshotCoverageNodeCount=2/5`,
+   snapshot repair deferred, owner reconcile pending for four publication nodes,
    and `runtimePromotionAllowed=false`.
 16. The same-frontier handoff predecessor proved the handoff contract is
     adequate, the active-gate consumer remains deferred, and no runtime or test

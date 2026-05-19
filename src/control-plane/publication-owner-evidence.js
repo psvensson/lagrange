@@ -2,6 +2,7 @@ import {NUM, TYPEOF} from '../constants/index.js';
 import {
   CONTROL_PLANE_PUBLICATION_STATUS,
   PUBLICATION_OWNER_ACK_EVIDENCE_STATE,
+  PUBLICATION_OWNER_PRESSURE_STATE,
   PUBLICATION_OWNER_REVISION_NUMBER,
   PUBLICATION_OWNER_REVISION_STATE,
   PUBLICATION_OWNER_TEXT,
@@ -19,6 +20,17 @@ const PUBLICATION_OWNER_REVISION_INPUT_FIELD = Object.freeze({
   PUBLICATION_EPOCH: 'publicationEpoch',
   PUBLICATION_REVISION: 'publicationRevision',
   PUBLISHED_PUBLICATION_REVISION: 'publishedPublicationRevision',
+});
+
+const PUBLICATION_OWNER_PRESSURE_INPUT_FIELD = Object.freeze({
+  PRESSURE_COALESCED: 'pressureCoalesced',
+  PRESSURE_DEFERRED: 'pressureDeferred',
+  PRESSURE_REASON_CODES: 'pressureReasonCodes',
+  PRESSURE_RETRY_AFTER_MS: 'pressureRetryAfterMs',
+  PRESSURE_STATE: 'pressureState',
+  PUBLICATION_PRESSURE_DEFERRED: 'publicationPressureDeferred',
+  REPAIR_DEFERRED: 'repairDeferred',
+  RETRY_AFTER_MS: 'retryAfterMs',
 });
 
 function isPublicationOwnerRecord(value) {
@@ -55,6 +67,56 @@ function normalizePublicationOwnerNonNegativeInteger(value) {
   return Number.isFinite(numericValue) && numericValue >= NUM.ZERO ?
     Math.floor(numericValue) :
     NUM.ZERO;
+}
+
+function isKnownPublicationOwnerPressureState(value) {
+  return Object.values(PUBLICATION_OWNER_PRESSURE_STATE).includes(value);
+}
+
+function normalizePublicationOwnerPressureState(value) {
+  return isKnownPublicationOwnerPressureState(value) ?
+    value :
+    PUBLICATION_OWNER_PRESSURE_STATE.NONE;
+}
+
+function resolvePublicationOwnerPressureEvidence(options = {}) {
+  const requestedState = normalizePublicationOwnerPressureState(
+    options[PUBLICATION_OWNER_PRESSURE_INPUT_FIELD.PRESSURE_STATE],
+  );
+  const coalesced =
+    options[PUBLICATION_OWNER_PRESSURE_INPUT_FIELD.PRESSURE_COALESCED] ===
+      true ||
+    requestedState === PUBLICATION_OWNER_PRESSURE_STATE.COALESCED;
+  const deferred =
+    coalesced ||
+    options[PUBLICATION_OWNER_PRESSURE_INPUT_FIELD.PRESSURE_DEFERRED] ===
+      true ||
+    options[
+      PUBLICATION_OWNER_PRESSURE_INPUT_FIELD.PUBLICATION_PRESSURE_DEFERRED
+    ] === true ||
+    options[PUBLICATION_OWNER_PRESSURE_INPUT_FIELD.REPAIR_DEFERRED] === true ||
+    requestedState === PUBLICATION_OWNER_PRESSURE_STATE.DEFERRED;
+  const state = coalesced ?
+    PUBLICATION_OWNER_PRESSURE_STATE.COALESCED :
+    deferred ?
+      PUBLICATION_OWNER_PRESSURE_STATE.DEFERRED :
+      PUBLICATION_OWNER_PRESSURE_STATE.NONE;
+  return Object.freeze({
+    state,
+    deferred,
+    coalesced,
+    retryAfterMs: deferred ?
+      normalizePublicationOwnerNonNegativeInteger(
+        options[
+          PUBLICATION_OWNER_PRESSURE_INPUT_FIELD.PRESSURE_RETRY_AFTER_MS
+        ] ??
+          options[PUBLICATION_OWNER_PRESSURE_INPUT_FIELD.RETRY_AFTER_MS],
+      ) :
+      NUM.ZERO,
+    reasonCodes: normalizePublicationOwnerNodeIds(
+      options[PUBLICATION_OWNER_PRESSURE_INPUT_FIELD.PRESSURE_REASON_CODES],
+    ),
+  });
 }
 
 function normalizePublicationOwnerRevision(value) {
@@ -237,6 +299,7 @@ function buildPublicationOwnerEvidence(options = {}) {
     options.missingPublishedNodeIds ??
       options.missingPublishedRecoveryActiveNodeIds,
   );
+  const pressureEvidence = resolvePublicationOwnerPressureEvidence(options);
 
   return Object.freeze({
     ...revisionEvidence,
@@ -252,6 +315,11 @@ function buildPublicationOwnerEvidence(options = {}) {
     prioritySpreadPending: options.prioritySpreadPending === true,
     prioritySpreadEvidenceUnavailable:
       options.prioritySpreadEvidenceUnavailable === true,
+    pressureState: pressureEvidence.state,
+    pressureDeferred: pressureEvidence.deferred,
+    pressureCoalesced: pressureEvidence.coalesced,
+    pressureRetryAfterMs: pressureEvidence.retryAfterMs,
+    pressureReasonCodes: pressureEvidence.reasonCodes,
     requiredAckNodeIds: ackEvidence.requiredAckNodeIds,
     acknowledgedNodeIds: ackEvidence.acknowledgedNodeIds,
     pendingAckNodeIds: ackEvidence.pendingAckNodeIds,

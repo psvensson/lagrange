@@ -6,6 +6,7 @@ import {
   CONTROL_PLANE_PUBLICATION_STATUS,
   PUBLICATION_OWNER_ACK_STATE,
   PUBLICATION_OWNER_FRESHNESS_FENCE,
+  PUBLICATION_OWNER_PRESSURE_STATE,
   PUBLICATION_OWNER_RECOVERY_OUTCOME,
   PUBLICATION_OWNER_STREAM_OUTCOME,
   PUBLICATION_OWNER_TEXT,
@@ -32,6 +33,8 @@ const TEST_UNAVAILABLE_PUBLICATION_EPOCH = 0;
 const TEST_CONFLICTING_PUBLICATION_EPOCH = 3;
 const TEST_PUBLICATION_DEBT_COUNT = 1;
 const TEST_EMPTY_PUBLICATION_DEBT_COUNT = 0;
+const TEST_PRESSURE_RETRY_AFTER_MS = 250;
+const TEST_PRESSURE_REASON_CODE = 'control_plane_pressure_degraded';
 const TEST_EMPTY_NODE_IDS = Object.freeze([]);
 const TEST_NODE_ID = Object.freeze({
   FIRST: 'node-a',
@@ -74,6 +77,81 @@ const TEST_PRIORITY_RECOVERY_DECISION_SNAPSHOTS = Object.freeze({
 const TEST_SETTLED_PUBLISHED_MISSING_MEMBERSHIP_TEST_NAME =
   'buildPublicationRecoveryGateSnapshot settles publication pending when ' +
   'published membership still excludes required nodes';
+
+test('buildPublicationRecoveryGateSnapshot emits pressure-deferred owner state without publication debt',
+  (t) => {
+    const gate = buildPublicationRecoveryGateSnapshot({
+      publicationEpoch: TEST_PUBLICATION_EPOCH,
+      publicationStatus: CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED,
+      recoveryProtocolState: RECOVERY_PROTOCOL_STATE.STEADY_PUBLISHED,
+      pendingAckNodeIds: TEST_EMPTY_NODE_IDS,
+      pendingAckCount: TEST_EMPTY_PUBLICATION_DEBT_COUNT,
+      missingPublishedNodeIds: TEST_EMPTY_NODE_IDS,
+      missingPublishedCount: TEST_EMPTY_PUBLICATION_DEBT_COUNT,
+      pressureDeferred: true,
+      pressureCoalesced: true,
+      pressureRetryAfterMs: TEST_PRESSURE_RETRY_AFTER_MS,
+      pressureReasonCodes: [TEST_PRESSURE_REASON_CODE],
+      priorityPartitionSummary: TEST_PRIORITY_PARTITION_SUMMARY.SATISFIED,
+    });
+
+    t.equal(gate.state, PUBLICATION_RECOVERY_GATE_STATE.PRESSURE_DEFERRED);
+    t.equal(gate.ready, false);
+    t.equal(gate.publicationPending, false);
+    t.equal(gate.ackPending, false);
+    t.equal(gate.pendingAckCount, TEST_EMPTY_PUBLICATION_DEBT_COUNT);
+    t.equal(gate.missingPublishedCount, TEST_EMPTY_PUBLICATION_DEBT_COUNT);
+    t.equal(
+      gate.freshnessFence,
+      PUBLICATION_OWNER_FRESHNESS_FENCE.PRESSURE_DEFERRED,
+    );
+    t.equal(
+      gate.recoveryOutcome,
+      PUBLICATION_OWNER_RECOVERY_OUTCOME.PRESSURE_DEFERRED,
+    );
+    t.equal(
+      gate.streamOutcome,
+      PUBLICATION_OWNER_STREAM_OUTCOME.PRESSURE_DEFERRED,
+    );
+    t.equal(gate.pressureState, PUBLICATION_OWNER_PRESSURE_STATE.COALESCED);
+    t.equal(gate.pressureDeferred, true);
+    t.equal(gate.pressureCoalesced, true);
+    t.equal(gate.pressureRetryAfterMs, TEST_PRESSURE_RETRY_AFTER_MS);
+    t.same(gate.pressureReasonCodes, [TEST_PRESSURE_REASON_CODE]);
+    t.same(gate.reasonCodes, []);
+    t.end();
+  });
+
+test('buildPublicationRecoveryGateSnapshot lets pressure state override stale open publication debt',
+  (t) => {
+    const gate = buildPublicationRecoveryGateSnapshot({
+      publicationEpoch: TEST_PUBLICATION_EPOCH,
+      publicationStatus: CONTROL_PLANE_PUBLICATION_STATUS.OPEN,
+      recoveryProtocolState: RECOVERY_PROTOCOL_STATE.PUBLICATION_PENDING,
+      pendingAckNodeIds: [TEST_NODE_ID.FOURTH],
+      pendingAckCount: TEST_PUBLICATION_DEBT_COUNT,
+      missingPublishedNodeIds: [TEST_NODE_ID.FIFTH],
+      missingPublishedCount: TEST_PUBLICATION_DEBT_COUNT,
+      pressureState: PUBLICATION_OWNER_PRESSURE_STATE.COALESCED,
+      pressureRetryAfterMs: TEST_PRESSURE_RETRY_AFTER_MS,
+      pressureReasonCodes: [TEST_PRESSURE_REASON_CODE],
+      priorityPartitionSummary: TEST_PRIORITY_PARTITION_SUMMARY.SATISFIED,
+    });
+
+    t.equal(gate.state, PUBLICATION_RECOVERY_GATE_STATE.PRESSURE_DEFERRED);
+    t.equal(gate.ready, false);
+    t.equal(gate.publicationPending, false);
+    t.equal(gate.ackPending, false);
+    t.equal(gate.pendingAckCount, TEST_EMPTY_PUBLICATION_DEBT_COUNT);
+    t.equal(gate.missingPublishedCount, TEST_EMPTY_PUBLICATION_DEBT_COUNT);
+    t.equal(gate.pressureState, PUBLICATION_OWNER_PRESSURE_STATE.COALESCED);
+    t.equal(gate.pressureDeferred, true);
+    t.equal(gate.pressureCoalesced, true);
+    t.equal(gate.pressureRetryAfterMs, TEST_PRESSURE_RETRY_AFTER_MS);
+    t.same(gate.pressureReasonCodes, [TEST_PRESSURE_REASON_CODE]);
+    t.same(gate.reasonCodes, []);
+    t.end();
+  });
 
 test('buildPublicationRecoveryGateSnapshot classifies acknowledgement lag explicitly',
   (t) => {

@@ -3,6 +3,7 @@ import {CONTROL_PLANE_PUBLICATION_STATUS} from
   '../../src/control-plane/control-plane-publication-merge.js';
 import {
   PUBLICATION_OWNER_FRESHNESS_FENCE,
+  PUBLICATION_OWNER_PRESSURE_STATE,
   PUBLICATION_OWNER_RECOVERY_OUTCOME,
   PUBLICATION_OWNER_STREAM_OUTCOME,
   PUBLICATION_OWNER_TEXT,
@@ -23,6 +24,8 @@ const TEST_PUBLICATION_SELECTED_SNAPSHOT_FRONTIER_COUNT = 2;
 const TEST_PUBLICATION_SELECTED_HANDOFF_PENDING_COUNT = 3;
 const TEST_PUBLISHED_ACTIVE_NODE_COUNT = 3;
 const TEST_UNKNOWN_PUBLICATION_MISSING_COUNT = 5;
+const TEST_PRESSURE_RETRY_AFTER_MS = 250;
+const TEST_PRESSURE_REASON_CODE = 'control_plane_pressure_degraded';
 const TEST_EMPTY_NODE_IDS = Object.freeze([]);
 const TEST_PRIORITY_PARTITION_ID = 'replica_operations-p1';
 const TEST_NODE_ID = Object.freeze({
@@ -130,6 +133,84 @@ const TEST_STALE_PRIORITY_RECOVERY_CLOSURE_WITNESS = Object.freeze({
   summarySpreadPending: true,
   publicationEpoch: TEST_PUBLICATION_EPOCH,
 });
+
+test('buildCanonicalPublicationRecoveryEvidence projects pressure-deferred gate without reopening publication debt',
+  (t) => {
+    const evidence = buildCanonicalPublicationRecoveryEvidence({
+      publicationConvergenceGate: {
+        publicationEpoch: TEST_PUBLICATION_EPOCH,
+        publicationStatus: CONTROL_PLANE_PUBLICATION_STATUS.OPEN,
+        recoveryProtocolState: RECOVERY_PROTOCOL_STATE.PUBLICATION_PENDING,
+        pendingAckNodeIds: TEST_EMPTY_NODE_IDS,
+        pendingAckCount: TEST_EMPTY_PUBLICATION_DEBT_COUNT,
+        missingPublishedNodeIds: TEST_EMPTY_NODE_IDS,
+        missingPublishedCount: TEST_EMPTY_PUBLICATION_DEBT_COUNT,
+        pressureState: PUBLICATION_OWNER_PRESSURE_STATE.COALESCED,
+        pressureRetryAfterMs: TEST_PRESSURE_RETRY_AFTER_MS,
+        pressureReasonCodes: [TEST_PRESSURE_REASON_CODE],
+        priorityPartitionSummary: TEST_SATISFIED_PRIORITY_PARTITION_SUMMARY,
+      },
+      priorityRecoveryObservation: {
+        publicationEpoch: TEST_PUBLICATION_EPOCH,
+        publicationStatus: CONTROL_PLANE_PUBLICATION_STATUS.OPEN,
+        recoveryProtocolState: RECOVERY_PROTOCOL_STATE.PUBLICATION_PENDING,
+        publicationPending: true,
+        pendingAckNodeIds: [TEST_NODE_ID.FOURTH],
+        pendingAckCount: TEST_PUBLICATION_DEBT_COUNT,
+        missingPublishedNodeIds: [TEST_NODE_ID.FIFTH],
+        missingPublishedCount: TEST_PUBLICATION_DEBT_COUNT,
+        priorityRecoveryReasonCodes: [TEST_PUBLICATION_PENDING_REASON_CODE],
+      },
+    });
+
+    t.equal(
+      evidence.publicationConvergenceGate.state,
+      PUBLICATION_RECOVERY_GATE_STATE.PRESSURE_DEFERRED,
+    );
+    t.equal(evidence.publicationConvergenceGate.ready, false);
+    t.equal(evidence.publicationConvergenceGate.publicationPending, false);
+    t.equal(evidence.publicationConvergence.publicationPending, false);
+    t.equal(
+      evidence.publicationConvergence.streamOutcome,
+      PUBLICATION_OWNER_STREAM_OUTCOME.PRESSURE_DEFERRED,
+    );
+    t.equal(
+      evidence.publicationConvergence.recoveryOutcome,
+      PUBLICATION_OWNER_RECOVERY_OUTCOME.PRESSURE_DEFERRED,
+    );
+    t.equal(
+      evidence.publicationConvergence.freshnessFence,
+      PUBLICATION_OWNER_FRESHNESS_FENCE.PRESSURE_DEFERRED,
+    );
+    t.equal(
+      evidence.priorityRecoveryObservation.publicationPending,
+      false,
+    );
+    t.equal(
+      evidence.priorityRecoveryObservation.pendingAckCount,
+      TEST_EMPTY_PUBLICATION_DEBT_COUNT,
+    );
+    t.equal(
+      evidence.priorityRecoveryObservation.missingPublishedCount,
+      TEST_EMPTY_PUBLICATION_DEBT_COUNT,
+    );
+    t.equal(
+      evidence.priorityRecoveryObservation.pressureState,
+      PUBLICATION_OWNER_PRESSURE_STATE.COALESCED,
+    );
+    t.equal(evidence.priorityRecoveryObservation.pressureDeferred, true);
+    t.equal(evidence.priorityRecoveryObservation.pressureCoalesced, true);
+    t.equal(
+      evidence.priorityRecoveryObservation.pressureRetryAfterMs,
+      TEST_PRESSURE_RETRY_AFTER_MS,
+    );
+    t.same(
+      evidence.priorityRecoveryObservation.pressureReasonCodes,
+      [TEST_PRESSURE_REASON_CODE],
+    );
+    t.same(evidence.priorityRecoveryObservation.priorityRecoveryReasonCodes, []);
+    t.end();
+  });
 
 function buildDecisionSnapshots() {
   return {

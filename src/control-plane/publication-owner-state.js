@@ -83,6 +83,11 @@ function buildPublicationOwnerStreamState(options = {}) {
     prioritySpreadPending: evidence.prioritySpreadPending,
     prioritySpreadEvidenceUnavailable:
       evidence.prioritySpreadEvidenceUnavailable,
+    pressureState: evidence.pressureState,
+    pressureDeferred: evidence.pressureDeferred,
+    pressureCoalesced: evidence.pressureCoalesced,
+    pressureRetryAfterMs: evidence.pressureRetryAfterMs,
+    pressureReasonCodes: evidence.pressureReasonCodes,
   });
 }
 

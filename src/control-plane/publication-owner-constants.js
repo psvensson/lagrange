@@ -39,6 +39,12 @@ const PUBLICATION_OWNER_ACK_EVIDENCE_STATE = Object.freeze({
   REQUIRED_ACK_NODE_LIST: 'required_ack_node_list',
 });
 
+const PUBLICATION_OWNER_PRESSURE_STATE = Object.freeze({
+  NONE: 'none',
+  DEFERRED: 'deferred',
+  COALESCED: 'coalesced',
+});
+
 const PUBLICATION_OWNER_FRESHNESS_FENCE = Object.freeze({
   NO_REVISION: 'no_revision',
   PUBLISHING: 'publishing',
@@ -46,6 +52,7 @@ const PUBLICATION_OWNER_FRESHNESS_FENCE = Object.freeze({
   REVISION_LAG: 'revision_lag',
   CONSUMER_LAG: 'consumer_lag',
   RECOVERY_LAG: 'recovery_lag',
+  PRESSURE_DEFERRED: 'pressure_deferred',
   FAILED: 'failed',
   FRESH: 'fresh',
 });
@@ -57,6 +64,7 @@ const PUBLICATION_OWNER_RECOVERY_OUTCOME = Object.freeze({
   WAITING_FOR_CONSUMER: 'waiting_for_consumer',
   WAITING_FOR_RECOVERY_EVIDENCE: 'waiting_for_recovery_evidence',
   RECOVERING: 'recovering',
+  PRESSURE_DEFERRED: 'pressure_deferred',
   READY: 'ready',
   FAILED: 'failed',
 });
@@ -67,6 +75,7 @@ const PUBLICATION_OWNER_STREAM_OUTCOME = Object.freeze({
   WAITING_FOR_ACK: 'waiting_for_ack',
   STALE: 'stale',
   RECOVERING: 'recovering',
+  PRESSURE_DEFERRED: 'pressure_deferred',
   PUBLISHED: 'published',
   FAILED: 'failed',
 });
@@ -91,6 +100,8 @@ const PUBLICATION_OWNER_REASON = Object.freeze({
   PRIORITY_SPREAD_PENDING: 'priority_spread_pending',
   PRIORITY_SPREAD_EVIDENCE_UNAVAILABLE:
     'priority_spread_evidence_unavailable',
+  PRESSURE_DEFERRED: 'pressure_deferred',
+  PRESSURE_COALESCED: 'pressure_coalesced',
   STREAM_FRESH: 'stream_fresh',
 });
 
@@ -99,6 +110,7 @@ export {
   PUBLICATION_OWNER_ACK_EVIDENCE_STATE,
   PUBLICATION_OWNER_ACK_STATE,
   PUBLICATION_OWNER_FRESHNESS_FENCE,
+  PUBLICATION_OWNER_PRESSURE_STATE,
   PUBLICATION_OWNER_REASON,
   PUBLICATION_OWNER_RECOVERY_OUTCOME,
   PUBLICATION_OWNER_REVISION_NUMBER,

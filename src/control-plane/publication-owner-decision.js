@@ -204,11 +204,20 @@ function hasPublicationOwnerPublishingFence(snapshot) {
   return snapshot.freshnessFence === PUBLICATION_OWNER_FRESHNESS_FENCE.PUBLISHING;
 }
 
+function hasPublicationOwnerPressureDeferred(evidence) {
+  return evidence.pressureDeferred === true;
+}
+
 const PUBLICATION_OWNER_FRESHNESS_RULES = Object.freeze([
   Object.freeze({
     fence: PUBLICATION_OWNER_FRESHNESS_FENCE.FAILED,
     matches: (snapshot) =>
       isPublicationOwnerFailureStatus(snapshot.evidence.publicationStatus),
+  }),
+  Object.freeze({
+    fence: PUBLICATION_OWNER_FRESHNESS_FENCE.PRESSURE_DEFERRED,
+    matches: (snapshot) =>
+      hasPublicationOwnerPressureDeferred(snapshot.evidence),
   }),
   Object.freeze({
     fence: PUBLICATION_OWNER_FRESHNESS_FENCE.NO_REVISION,
@@ -273,6 +282,12 @@ const PUBLICATION_OWNER_RECOVERY_OUTCOME_RULES = Object.freeze([
       snapshot.freshnessFence === PUBLICATION_OWNER_FRESHNESS_FENCE.FAILED,
   }),
   Object.freeze({
+    outcome: PUBLICATION_OWNER_RECOVERY_OUTCOME.PRESSURE_DEFERRED,
+    matches: (snapshot) =>
+      snapshot.freshnessFence ===
+        PUBLICATION_OWNER_FRESHNESS_FENCE.PRESSURE_DEFERRED,
+  }),
+  Object.freeze({
     outcome: PUBLICATION_OWNER_RECOVERY_OUTCOME.NOT_STARTED,
     matches: (snapshot) =>
       snapshot.freshnessFence ===
@@ -319,6 +334,12 @@ const PUBLICATION_OWNER_STREAM_OUTCOME_RULES = Object.freeze([
     outcome: PUBLICATION_OWNER_STREAM_OUTCOME.FAILED,
     matches: (snapshot) =>
       snapshot.recoveryOutcome === PUBLICATION_OWNER_RECOVERY_OUTCOME.FAILED,
+  }),
+  Object.freeze({
+    outcome: PUBLICATION_OWNER_STREAM_OUTCOME.PRESSURE_DEFERRED,
+    matches: (snapshot) =>
+      snapshot.recoveryOutcome ===
+        PUBLICATION_OWNER_RECOVERY_OUTCOME.PRESSURE_DEFERRED,
   }),
   Object.freeze({
     outcome: PUBLICATION_OWNER_STREAM_OUTCOME.NOT_STARTED,
@@ -422,6 +443,16 @@ const PUBLICATION_OWNER_REASON_RULES = Object.freeze([
     reason: PUBLICATION_OWNER_REASON.PRIORITY_SPREAD_EVIDENCE_UNAVAILABLE,
     matches: (snapshot) =>
       snapshot.evidence.prioritySpreadEvidenceUnavailable === true,
+  }),
+  Object.freeze({
+    reason: PUBLICATION_OWNER_REASON.PRESSURE_DEFERRED,
+    matches: (snapshot) =>
+      snapshot.evidence.pressureDeferred === true,
+  }),
+  Object.freeze({
+    reason: PUBLICATION_OWNER_REASON.PRESSURE_COALESCED,
+    matches: (snapshot) =>
+      snapshot.evidence.pressureCoalesced === true,
   }),
   Object.freeze({
     reason: PUBLICATION_OWNER_REASON.STREAM_FRESH,
