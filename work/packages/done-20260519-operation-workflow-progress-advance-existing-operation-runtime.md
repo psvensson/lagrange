@@ -3,7 +3,7 @@
 <!-- work-package
 {
   "schema": "work-package-v1",
-  "status": "active",
+  "status": "done",
   "opened": "2026-05-19",
   "lane": "runtime-owner-boundary",
   "scenario": "rolling-restart",
@@ -12,50 +12,47 @@
   "owner": "operation_workflow_owner",
   "boundary": "workflow_progress",
   "dominantReason": "priority_recovery_progress_blocked",
-  "currentState": "Causal gate selected operation_workflow_owner / workflow_progress as the bounded runtime successor. Fresh representative evidence has one priority recovery residual: control_plane_publications-p1 is recovering_in_flight with actuationState=persisted_not_dispatched, waitMode=event_driven, and nextRequiredAction=advance_existing_operation.",
-  "nextAction": "Run required runtime-owner-boundary sequencing, then implement one bounded operation_workflow_owner / workflow_progress fix for control_plane_publications-p1 advance_existing_operation.",
+  "currentState": "Closed as same-frontier/classified-backpressure. Focused owner proof shows the current workflow-progress path attaches diagnostic owner observation and schedules dispatch-pending re-entry for no-observation advance_existing_operation snapshots, but the fresh rolling-restart rerun remained red with one operation_workflow_owner / workflow_progress persisted_not_dispatched witness and causal outcome accept_classified_backpressure.",
+  "nextAction": "Continue the active diagnostic architecture gate work/packages/active-20260519-topology-publication-workflow-backpressure-architecture-gate.md before any further local runtime patching.",
   "proof": [
-    "npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-after-selected-source-retry-20260519T064809Z.report.json",
-    "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-selected-source-retry-20260519T064809Z.report.json --handoff-probe",
-    "npm run analyze:owner-files -- operation_workflow_owner workflow_progress"
+    "npm test -- test/rebalancer/operation-workflow-progress-event-driven-reentry.test.js",
+    "npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-after-workflow-progress-proof-20260519T073539Z.report.json",
+    "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-workflow-progress-proof-20260519T073539Z.report.json --handoff-probe",
+    "npm run work:package:route-after-rerun -- --artifact test-output/reports/rolling-restart-after-workflow-progress-proof-20260519T073539Z.report.json --owner operation_workflow_owner --boundary workflow_progress --dominant-reason priority_recovery_progress_blocked",
+    "npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-workflow-progress-proof-20260519T073539Z.report.json"
   ],
   "writeScope": [
-    "work/packages/active-20260519-operation-workflow-progress-advance-existing-operation-runtime.md",
+    "work/packages/done-20260519-operation-workflow-progress-advance-existing-operation-runtime.md",
     "work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md",
     "work/sprints/current-blocker.md",
     "work/sprints/current-blocker.json",
     "work/model-ledger.jsonl",
-    "src/rebalancer/operation-workflow-owner.js",
-    "src/rebalancer/operation-workflow-owner-segment-7-stage-5.js",
-    "src/rebalancer/operation-workflow-owner-segment-7-stage-shared.js",
-    "src/rebalancer/operation-workflow-owner-constants.js",
-    "src/control-plane/priority-recovery-snapshot-stage-10.js",
-    "test/rebalancer/coordinator-created-operation-progress-remote-handoff.test.js",
-    "test/rebalancer/operation-workflow-progress-event-driven-reentry.test.js",
-    "test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js"
+    "test/rebalancer/operation-workflow-progress-event-driven-reentry.test.js"
   ],
   "handoffFiles": [
-    "test-output/reports/rolling-restart-after-selected-source-retry-20260519T064809Z.report.json"
+    "test-output/reports/rolling-restart-after-selected-source-retry-20260519T064809Z.report.json",
+    "test-output/reports/rolling-restart-after-workflow-progress-proof-20260519T073539Z.report.json"
   ],
   "generatedFiles": [
     "work/sprints/current-blocker.md",
     "work/sprints/current-blocker.json"
   ],
-  "candidateRuntimeFiles": [],
-  "commitScope": [
-    "work/packages/active-20260519-operation-workflow-progress-advance-existing-operation-runtime.md",
-    "work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md",
-    "work/sprints/current-blocker.md",
-    "work/sprints/current-blocker.json",
-    "work/model-ledger.jsonl",
+  "candidateRuntimeFiles": [
     "src/rebalancer/operation-workflow-owner.js",
     "src/rebalancer/operation-workflow-owner-segment-7-stage-5.js",
     "src/rebalancer/operation-workflow-owner-segment-7-stage-shared.js",
     "src/rebalancer/operation-workflow-owner-constants.js",
     "src/control-plane/priority-recovery-snapshot-stage-10.js",
     "test/rebalancer/coordinator-created-operation-progress-remote-handoff.test.js",
-    "test/rebalancer/operation-workflow-progress-event-driven-reentry.test.js",
     "test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js"
+  ],
+  "commitScope": [
+    "work/packages/done-20260519-operation-workflow-progress-advance-existing-operation-runtime.md",
+    "work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md",
+    "work/sprints/current-blocker.md",
+    "work/sprints/current-blocker.json",
+    "work/model-ledger.jsonl",
+    "test/rebalancer/operation-workflow-progress-event-driven-reentry.test.js"
   ],
   "modelFit": {
     "packageClass": "runtime-owner-boundary",
@@ -73,47 +70,47 @@
     "artifactBudget": "one-artifact",
     "proofCommandBudget": "two-or-three-canonical-commands",
     "commands": [
-      "npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-after-selected-source-retry-20260519T064809Z.report.json",
-      "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-selected-source-retry-20260519T064809Z.report.json --handoff-probe",
-      "npm run analyze:owner-files -- operation_workflow_owner workflow_progress"
+      "npm test -- test/rebalancer/operation-workflow-progress-event-driven-reentry.test.js",
+      "npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-after-workflow-progress-proof-20260519T073539Z.report.json",
+      "npm run work:package:route-after-rerun -- --artifact test-output/reports/rolling-restart-after-workflow-progress-proof-20260519T073539Z.report.json --owner operation_workflow_owner --boundary workflow_progress --dominant-reason priority_recovery_progress_blocked"
     ],
     "decisionRecord": "Record classification in the current package or sprint edge card; open a separate classifier only for material route, owner, boundary, stop-condition, tracker-truth, or successor-selection changes.",
-    "successorAction": "open-runtime-owner-boundary",
+    "successorAction": "open-causal-escalation",
     "runtimePromotionRule": "When canonical owner and boundary are stable, prefer a runtime-owner-boundary successor and keep runtime files in candidateRuntimeFiles until that package activates them."
   },
   "rerunDecision": {
-    "sourceArtifact": "test-output/reports/rolling-restart-after-selected-source-retry-20260519T064809Z.report.json",
+    "sourceArtifact": "test-output/reports/rolling-restart-after-workflow-progress-proof-20260519T073539Z.report.json",
     "routeOwner": "operation_workflow_owner",
     "routeBoundary": "workflow_progress",
     "routeDominantReason": "priority_recovery_progress_blocked",
     "routeCausalOutcome": "accept_classified_backpressure",
     "stopMode": "classified_backpressure",
-    "nextLane": "runtime-owner-boundary",
-    "expectedDelta": "Advance or classify the single control_plane_publications-p1 persisted_not_dispatched workflow residual, reducing the priority recovery witness, migrating owner boundary, or turning rolling-restart green.",
+    "nextLane": "diagnostic-classification",
+    "expectedDelta": "Fresh representative evidence kept the single operation workflow residual with no count reduction and classified the residual as backpressure; continue with the publication/workflow architecture gate before another runtime patch.",
     "requiredRefreshCommands": [
-      "npm run work:package:route-after-rerun -- --artifact test-output/reports/rolling-restart-after-selected-source-retry-20260519T064809Z.report.json --owner operation_workflow_owner --boundary workflow_progress --dominant-reason priority_recovery_progress_blocked",
+      "npm run work:package:route-after-rerun -- --artifact test-output/reports/rolling-restart-after-workflow-progress-proof-20260519T073539Z.report.json --owner operation_workflow_owner --boundary workflow_progress --dominant-reason priority_recovery_progress_blocked",
       "update Sprint Strategy Brief and Current Edge Card from the route result",
       "npm run work:current-blocker -- --write",
       "npm run work:validate -- --pre-impl"
     ]
   },
   "representativeResidual": {
-    "status": "migrated",
+    "status": "same-frontier",
     "scenario": "rolling-restart",
-    "artifact": "test-output/reports/rolling-restart-after-selected-source-retry-20260519T064809Z.report.json",
+    "artifact": "test-output/reports/rolling-restart-after-workflow-progress-proof-20260519T073539Z.report.json",
     "frontier": "priority_recovery_partition_progress",
     "owner": "operation_workflow_owner",
     "boundary": "workflow_progress",
     "dominantReason": "priority_recovery_progress_blocked",
-    "nextAction": "Advance or classify control_plane_publications-p1 persisted_not_dispatched advance_existing_operation."
+    "nextAction": "Stop local operation workflow patching and continue the publication/workflow backpressure architecture gate."
   },
   "causalGovernance": {
-    "hypothesis": "The remaining rolling-restart red state is caused by operation workflow progress backpressure for control_plane_publications-p1, not selected-source timeout or publication owner truth.",
-    "stopConditionCheck": "Use `npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-after-selected-source-retry-20260519T064809Z.report.json`, handoff probe, focused owner tests, static guardrails, representative rerun, and `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-selected-source-retry-20260519T064809Z.report.json` before closure.",
-    "expectedCausalModelChange": "Reduce the single priority recovery residual witness, migrate owner boundary, or turn rolling-restart green.",
-    "representativeOutcome": "pending-before-rerun",
-    "causalDebt": "Fresh artifact reports control_plane_publications-p1 recovering_in_flight, actuationState=persisted_not_dispatched, waitMode=event_driven, nextRequiredAction=advance_existing_operation.",
-    "crossBoundaryReview": "Do not reopen startup active-gate selected-source timeout or topology publication owner unless fresh evidence reselects those owners."
+    "hypothesis": "The remaining rolling-restart red state was tested as operation workflow progress backpressure for control_plane_publications-p1.",
+    "stopConditionCheck": "Focused owner proof passed, but fresh representative rerun returned the same one persisted_not_dispatched workflow witness and `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-workflow-progress-proof-20260519T073539Z.report.json` classified the residual as backpressure.",
+    "expectedCausalModelChange": "No representative reduction occurred; the concrete result is same-frontier with classified backpressure, so local operation-workflow runtime patching stops.",
+    "representativeOutcome": "same-frontier",
+    "causalDebt": "Fresh artifact reports control_plane_publications-p1 recovering_in_flight, actuationState=persisted_not_dispatched, waitMode=event_driven, nextRequiredAction=advance_existing_operation, while causal analysis keeps publication_ack_convergence as the failed invariant and stopCondition=classified_backpressure.",
+    "crossBoundaryReview": "Continue through the active publication/workflow backpressure architecture gate before reopening operation workflow, topology publication, startup active-gate, readiness, admission, handoff, or timeout runtime code."
   },
   "scenarioCausalClosure": {
     "referenceScenarioOrProbe": "rolling-restart after selected-source retry causal gate",
@@ -133,20 +130,20 @@
     "missingCausalEdge": "The workflow owner must either advance the existing operation or prove the residual is bounded classified backpressure.",
     "missingCausalEdgeProbe": "npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-after-selected-source-retry-20260519T064809Z.report.json",
     "boundedProgressProof": "Focused proof should advance the existing operation by moving the advance_existing_operation progress mechanism for the persisted_not_dispatched operation.",
-    "boundedProgressProofArtifact": "work/packages/active-20260519-operation-workflow-progress-advance-existing-operation-runtime.md and test-output/reports/rolling-restart-after-selected-source-retry-20260519T064809Z.report.json",
+    "boundedProgressProofArtifact": "work/packages/done-20260519-operation-workflow-progress-advance-existing-operation-runtime.md and test-output/reports/rolling-restart-after-workflow-progress-proof-20260519T073539Z.report.json",
     "expectedObservableTransition": "Priority recovery witness count reduces to zero, owner boundary migrates, or rolling-restart turns green.",
     "maxProgressBound": "one operation_workflow_owner / workflow_progress runtime slice",
     "sameFrontierFallback": "If the same residual returns with no metric reduction, stop for architecture or human escalation.",
     "expectedNextFrontier": "operation_workflow_owner / workflow_progress until fresh evidence proves otherwise",
-    "resultClassification": "pending-before-probe",
-    "stopCondition": "continue-local-fix",
+    "resultClassification": "same-frontier",
+    "stopCondition": "architecture-gap-stop",
     "recentFrontierHistory": [
       "work/packages/done-20260519-topology-publication-open-owner-reconcile-runtime.md / topology_publication_owner / publication_convergence / reduced",
       "work/packages/done-20260519-startup-active-gate-selected-snapshot-source-timeout-runtime.md / startup_active_gate_owner / snapshot_coverage / migrated",
       "work/packages/done-20260519-priority-recovery-operation-workflow-owner-workflow-progress-after-selected-source-retry-causal-gate.md / operation_workflow_owner / workflow_progress / migrated"
     ],
-    "oscillationCheck": "Allowed because the causal gate selected this owner boundary after concrete active-gate reduction.",
-    "handoffInvariant": "Publication owner and startup active-gate local retry remain frozen unless fresh evidence reselects them."
+    "oscillationCheck": "Fresh same-frontier evidence after the bounded operation-workflow proof forces the active publication/workflow backpressure architecture gate before another local runtime patch.",
+    "handoffInvariant": "Publication owner, operation workflow, and startup active-gate local runtime patches remain frozen until the active architecture gate selects one concrete successor."
   },
   "ownerBoundaryMigrationProof": {
     "fromOwner": "startup_active_gate_owner",
@@ -187,8 +184,8 @@
         ]
       }
     ],
-    "selectedChoice": "bounded-operation-workflow-progress-runtime",
-    "nextAction": "Run required review/fix/implementation sequencing before runtime edits."
+    "selectedChoice": "architecture-stop",
+    "nextAction": "Continue work/packages/active-20260519-topology-publication-workflow-backpressure-architecture-gate.md before further local runtime edits."
   }
 }
 -->
@@ -302,7 +299,7 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 - Intended minimum model: `gpt-5.3-codex`
 - Scope shape: `bounded-owner-runtime/current-frontier`
 - Output profile: `medium`
-- Owned files: `work/packages/active-20260519-operation-workflow-progress-advance-existing-operation-runtime.md`, `src/rebalancer/operation-workflow-owner.js`, `src/rebalancer/operation-workflow-owner-segment-7-stage-5.js`, `src/rebalancer/operation-workflow-owner-segment-7-stage-shared.js`, `src/rebalancer/operation-workflow-owner-constants.js`, `src/control-plane/priority-recovery-snapshot-stage-10.js`, `test/rebalancer/coordinator-created-operation-progress-remote-handoff.test.js`, `test/rebalancer/operation-workflow-progress-event-driven-reentry.test.js`, `test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js`
+- Owned files: `work/packages/done-20260519-operation-workflow-progress-advance-existing-operation-runtime.md`, `test/rebalancer/operation-workflow-progress-event-driven-reentry.test.js`
 - Forbidden files: selected-source timeout, topology publication owner, startup active-gate runtime, and files outside promoted write scope unless fresh evidence reselects that owner boundary.
 - Frozen decisions: package scope and lane stay bounded unless explicitly escalated.
 - Escalation triggers: owned files expand beyond this package, runtime ownership changes, or representative scenario evidence changes.
@@ -314,16 +311,18 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 Required when subagent sequencing is required. Each real subagent appends one checked checkpoint after every completed subtask; this combined ledger satisfies both Progress and Attempt proof when the item includes status, last checkpoint, parent action, evidence, and next or blocker.
 Review agents may directly fix metadata-only package, sprint, tracker, current-blocker, ledger, or handoff findings and record `review-fixed-metadata-only`; runtime, test, script, report, or non-metadata fixes still require a separate fix subagent.
 
-- [ ] Agent <name> (<agent-id>) <role> checkpoint: status: started; last checkpoint: context loaded; parent action: pending; evidence: package, sprint, and handoff files read; next: first focused probe.
-- [ ] Agent <name> (<agent-id>) <role> checkpoint: status: running; last checkpoint: probe complete; parent action: pending; evidence: command and result; next: edit, validate, or blocker handoff.
-- [ ] Agent <name> (<agent-id>) <role> checkpoint: status: validated; last checkpoint: package proof refreshed; parent action: revalidated; evidence: commands and results; next: final handoff or successor action.
-- [ ] Agent <name> (<agent-id>) <role> recovery: status: superseded; last checkpoint: replaced interrupted or partial-unvalidated attempt; parent action: superseded; evidence: superseding proof; next: continue from clean checkpoint.
+- [x] Agent Aquinas (019e3eca-a3ad-75e0-9acc-150ac00b41ec) review checkpoint: status: validated; last checkpoint: package doctor completed; parent action: accepted; evidence: `npm run work:package:doctor -- --suggest work/packages/done-20260519-operation-workflow-progress-advance-existing-operation-runtime.md` failed only on review/fix sequencing and subagent checkpoint placeholders; next: route verified and review closed clean.
+- [x] Agent Aquinas (019e3eca-a3ad-75e0-9acc-150ac00b41ec) review checkpoint: status: validated; last checkpoint: route check completed; parent action: revalidated; evidence: `npm run work:package:route-after-rerun -- --artifact test-output/reports/rolling-restart-after-selected-source-retry-20260519T064809Z.report.json --owner operation_workflow_owner --boundary workflow_progress --dominant-reason priority_recovery_progress_blocked` passed and confirmed operation_workflow_owner/workflow_progress with one priority recovery residual; next: parent starts implementation role after pre-implementation validation.
+- [x] Agent OpenAI Codex (019e3f1f-8177-7f61-b2ed-573c65bd7a8d) implementation checkpoint: status: validated; last checkpoint: pre-edit package and artifact probes completed; parent action: accepted; evidence: `npm run work:package:doctor -- --suggest work/packages/done-20260519-operation-workflow-progress-advance-existing-operation-runtime.md`, `npm run work:validate -- --pre-impl work/packages/done-20260519-operation-workflow-progress-advance-existing-operation-runtime.md`, `npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-after-selected-source-retry-20260519T064809Z.report.json`, and `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-selected-source-retry-20260519T064809Z.report.json --handoff-probe` passed and confirmed one operation_workflow_owner/workflow_progress `advance_existing_operation` residual; next: inspected operation workflow owner progress code and focused tests.
+- [x] Agent OpenAI Codex (019e3f1f-8177-7f61-b2ed-573c65bd7a8d) implementation checkpoint: status: validated; last checkpoint: focused diagnostic-owner regression added; parent action: accepted; evidence: `npm test -- test/rebalancer/operation-workflow-progress-event-driven-reentry.test.js` passed with the new no-observation control-plane publication fixture proving diagnostic owner observation plus workflow-owner re-entry scheduling; next: canonical package proof and static guardrails completed.
+- [x] Agent OpenAI Codex (019e3f1f-8177-7f61-b2ed-573c65bd7a8d) implementation checkpoint: status: validated; last checkpoint: package proof and static guardrails refreshed; parent action: accepted; evidence: `npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-after-selected-source-retry-20260519T064809Z.report.json`, `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-selected-source-retry-20260519T064809Z.report.json --handoff-probe`, `npm run analyze:owner-files -- operation_workflow_owner workflow_progress`, `node scripts/check-guideline-literals.js /media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test/rebalancer/operation-workflow-progress-event-driven-reentry.test.js`, `node scripts/check-guideline-decision-boundaries.js /media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test/rebalancer/operation-workflow-progress-event-driven-reentry.test.js`, `npm run audit:runtime-grammar:file -- test/rebalancer/operation-workflow-progress-event-driven-reentry.test.js`, `git diff --check -- work/packages/done-20260519-operation-workflow-progress-advance-existing-operation-runtime.md test/rebalancer/operation-workflow-progress-event-driven-reentry.test.js`, `npm run work:package:doctor -- --suggest work/packages/done-20260519-operation-workflow-progress-advance-existing-operation-runtime.md`, and `npm run work:validate -- --pre-impl work/packages/done-20260519-operation-workflow-progress-advance-existing-operation-runtime.md` passed; raw artifact inspection fallback was used only after the canonical residual and handoff extractors did not expose `operationOwnerObservation`; next: parent revalidated focused proof and reran representative evidence.
 
 ## Subagent Sequencing Ledger
 
-- [ ] Review subagent recorded: pending before implementation.
-- [ ] Fix subagent recorded or explicitly not needed: pending review result.
-- [ ] Implementation subagent recorded: pending review/fix completion.
+- [x] Review subagent recorded: Agent Aquinas (019e3eca-a3ad-75e0-9acc-150ac00b41ec) reviewed work/packages/done-20260519-operation-workflow-progress-advance-existing-operation-runtime.md; result clean
+- [x] review-fixed-metadata-only by Agent Aquinas (019e3eca-a3ad-75e0-9acc-150ac00b41ec) for work/packages/done-20260519-operation-workflow-progress-advance-existing-operation-runtime.md; scope: metadata-only package/sprint/tracker/handoff edits
+- [x] Fix subagent recorded or explicitly not needed: not-needed.
+- [x] Implementation subagent recorded: Agent OpenAI Codex (019e3f1f-8177-7f61-b2ed-573c65bd7a8d) implemented work/packages/done-20260519-operation-workflow-progress-advance-existing-operation-runtime.md; parent revalidated focused proof: yes.
 
 ## Validation
 

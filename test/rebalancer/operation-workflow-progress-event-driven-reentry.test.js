@@ -20,6 +20,8 @@ import {
   PRIORITY_RECOVERY_TARGET_SERVICE_TERMINAL_STATE,
   PRIORITY_RECOVERY_TARGET_VISIBILITY_STATE,
 } from '../../src/control-plane/priority-recovery-snapshot-stage-shared.js';
+import {buildPriorityRecoveryDecisionSnapshot} from
+  '../../src/control-plane/priority-recovery-snapshot-stage-10.js';
 import {
   OPERATION_WORKFLOW_EFFECT_COMMAND_VALUES,
   OPERATION_WORKFLOW_OUTCOME_VALUES,
@@ -97,6 +99,7 @@ const TEST_REPLICA_OPERATIONS_TABLE = 'replica_operations';
 const TEST_SERVICES_TABLE = 'services';
 const TEST_ENTITY_TYPE_PARTITION = 'partition';
 const TEST_OPERATION_OWNER_OBSERVATION_FIELD = 'operationOwnerObservation';
+const TEST_OPERATION_OWNER_EFFECT_NOT_EXECUTED = 'not_executed';
 const TEST_REENTRY_TEST_NAME =
   'event-driven dispatch-pending workflow progress re-enters through the ' +
   'operation owner outcome';
@@ -106,6 +109,9 @@ const TEST_PENDING_REENTRY_TEST_NAME =
 const TEST_PUBLICATION_BACKPRESSURE_REENTRY_TEST_NAME =
   'control-plane publication backpressure PENDING workflow progress ' +
   're-enters through the operation owner outcome';
+const TEST_DIAGNOSTIC_OWNER_REENTRY_TEST_NAME =
+  'diagnostic dispatch-pending publication snapshots re-enter owner ' +
+  'workflow progress';
 const TEST_SPREAD_SATISFIED_REENTRY_TEST_NAME =
   'spread-satisfied priority PENDING dispatch waits drain through ' +
   'the operation owner outcome';
@@ -799,6 +805,134 @@ test(TEST_PUBLICATION_BACKPRESSURE_REENTRY_TEST_NAME, async (t) => {
     );
   } finally {
     Date.now = originalDateNow;
+    await coordinator.shutdown();
+  }
+});
+
+test(TEST_DIAGNOSTIC_OWNER_REENTRY_TEST_NAME, async (t) => {
+  const deliveries = [];
+  const deferredTimers = [];
+  const operation = buildEventDrivenOperation({
+    operationId: TEST_PUBLICATION_BACKPRESSURE_OPERATION_ID,
+    partitionId: TEST_CONTROL_PLANE_PUBLICATION_PARTITION_ID,
+    entityId: TEST_CONTROL_PLANE_PUBLICATION_PARTITION_ID,
+    replicaId: TEST_CONTROL_PLANE_PUBLICATION_REPLICA_ID,
+    sourceNodeId: TEST_CONTROL_PLANE_PUBLICATION_SOURCE_NODE_ID,
+    targetNodeId: TEST_CONTROL_PLANE_PUBLICATION_TARGET_NODE_ID,
+    workflowStep: WORKFLOW_STEP.PENDING,
+    createdAt: TEST_RECENT_OPERATION_UPDATED_AT_MS,
+    updatedAt: TEST_RECENT_OPERATION_UPDATED_AT_MS,
+  });
+  const operationRow = buildEventDrivenOperationRow({
+    operation_id: TEST_PUBLICATION_BACKPRESSURE_OPERATION_ID,
+    partition_id: TEST_CONTROL_PLANE_PUBLICATION_PARTITION_ID,
+    entity_id: TEST_CONTROL_PLANE_PUBLICATION_PARTITION_ID,
+    replica_id: TEST_CONTROL_PLANE_PUBLICATION_REPLICA_ID,
+    source_node_id: TEST_CONTROL_PLANE_PUBLICATION_SOURCE_NODE_ID,
+    target_node_id: TEST_CONTROL_PLANE_PUBLICATION_TARGET_NODE_ID,
+    workflow_step: WORKFLOW_STEP.PENDING,
+    created_at: TEST_RECENT_OPERATION_UPDATED_AT_MS,
+    updated_at: TEST_RECENT_OPERATION_UPDATED_AT_MS,
+  });
+  const coordinator = createEventDrivenCoordinator(
+    deliveries,
+    deferredTimers,
+    operationRow,
+  );
+  const publicationConvergence = buildEventDrivenPlanningSnapshot({
+    operationId: TEST_PUBLICATION_BACKPRESSURE_OPERATION_ID,
+    partitionId: TEST_CONTROL_PLANE_PUBLICATION_PARTITION_ID,
+    workflowStep: WORKFLOW_STEP.PENDING,
+    publicationStatus: TEST_PUBLICATION_STATUS_OPEN,
+  });
+  const snapshot = buildPriorityRecoveryDecisionSnapshot({
+    partitionId: TEST_CONTROL_PLANE_PUBLICATION_PARTITION_ID,
+    capturedAt: TEST_CAPTURED_AT_MS,
+    publicationEpoch: TEST_PUBLICATION_EPOCH,
+    publicationConvergence,
+    priorityPartitionSummary:
+      publicationConvergence.priorityPartitionSummary,
+    operationContexts: [Object.freeze({
+      operationId: TEST_PUBLICATION_BACKPRESSURE_OPERATION_ID,
+      partitionId: TEST_CONTROL_PLANE_PUBLICATION_PARTITION_ID,
+      tableName: TEST_CONTROL_PLANE_PUBLICATION_PARTITION_ID,
+      type: OperationType.REPLACE,
+      status: ReplicaStatus.PENDING,
+      workflowStep: WORKFLOW_STEP.PENDING,
+      sourceNodeId: TEST_CONTROL_PLANE_PUBLICATION_SOURCE_NODE_ID,
+      targetNodeId: TEST_CONTROL_PLANE_PUBLICATION_TARGET_NODE_ID,
+      replicaId: TEST_CONTROL_PLANE_PUBLICATION_REPLICA_ID,
+      createdAtMs: TEST_RECENT_OPERATION_UPDATED_AT_MS,
+      updatedAtMs: TEST_RECENT_OPERATION_UPDATED_AT_MS,
+      completedAtMs: TEST_UNDEFINED_VALUE,
+      stepTimeoutMs: TEST_STEP_TIMEOUT_MS,
+      targetVisibilityState:
+        PRIORITY_RECOVERY_TARGET_VISIBILITY_STATE.ABSENT,
+      targetServiceTerminalState:
+        PRIORITY_RECOVERY_TARGET_SERVICE_TERMINAL_STATE.UNKNOWN,
+    })],
+    operationId: TEST_PUBLICATION_BACKPRESSURE_OPERATION_ID,
+    stepTimeoutMsByWorkflowStep: {
+      [WORKFLOW_STEP.PENDING]: TEST_STEP_TIMEOUT_MS,
+    },
+  });
+
+  try {
+    coordinator.initialize();
+    coordinator.workflowOwner.repository
+      .getOperationsByEntityAuthoritativeObservation = async () => {
+        return Object.freeze({
+          state: 'present',
+          operationCount: NUM.ONE,
+          operations: Object.freeze([operation]),
+          deferredOutcome: null,
+          retryAfterMs: null,
+        });
+      };
+
+    t.equal(
+      snapshot?.operationOwnerObservation?.outcome,
+      OPERATION_WORKFLOW_OUTCOME_VALUES.ADVANCE_EXISTING_OPERATION,
+      'diagnostic snapshots should attach the owner advancement observation',
+    );
+    t.equal(
+      snapshot?.operationOwnerObservation?.effectCommand,
+      OPERATION_WORKFLOW_EFFECT_COMMAND_VALUES
+        .ADVANCE_EXISTING_OPERATION_COMMAND,
+      'diagnostic snapshots should retain the owner advancement effect',
+    );
+    t.equal(
+      snapshot?.operationOwnerObservation?.effectExecution,
+      TEST_OPERATION_OWNER_EFFECT_NOT_EXECUTED,
+      'diagnostic snapshots should not claim the effect already executed',
+    );
+    t.equal(
+      coordinator.workflowOwner.schedulePriorityRecoveryDispatchPendingReentry(
+        snapshot,
+        [snapshot.coordinator.operation],
+      ),
+      true,
+      'diagnostic snapshots should enqueue the workflow owner re-entry',
+    );
+    await new Promise((resolve) => {
+      setTimeout(resolve, NUM.ZERO);
+    });
+    t.equal(
+      deliveries.length,
+      NUM.ONE,
+      'diagnostic owner re-entry should wake the remote operation owner',
+    );
+    t.equal(
+      deliveries[NUM.ZERO]?.target,
+      TEST_CONTROL_PLANE_PUBLICATION_REPLICA_DISPATCH_TARGET,
+      'diagnostic owner re-entry should use the canonical dispatch ingress',
+    );
+    t.equal(
+      deferredTimers.length,
+      NUM.ONE,
+      'diagnostic owner re-entry should arm bounded handoff verification',
+    );
+  } finally {
     await coordinator.shutdown();
   }
 });
