@@ -407,6 +407,25 @@ function buildActiveGateMembershipPublicationReconcileOutcome(
   });
 }
 
+function buildActiveGateMembershipPublicationDeferredContext(
+  context,
+  reconcileOutcome = ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_EMPTY_OUTCOME,
+) {
+  const publicationRow =
+    reconcileOutcome?.publicationRow &&
+    typeof reconcileOutcome.publicationRow === TYPEOF.OBJECT ?
+      reconcileOutcome.publicationRow :
+      ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_EMPTY_OUTCOME;
+  return publicationRow ===
+    ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_EMPTY_OUTCOME ?
+    context :
+    {
+      ...context,
+      [ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_CONTEXT_FIELD
+        .LATEST_PUBLICATION_ROW]: publicationRow,
+    };
+}
+
 function normalizeControlPlaneConvergenceRetryAfterMs(value) {
   return Number.isFinite(value) && value > NUM.ZERO ?
     Math.floor(value) :
@@ -1067,14 +1086,20 @@ class MembershipPublicationCoordinatorClassStage2 extends
         this.now(),
       );
     for (const publicationRow of publicationRows) {
-      const visibleRow =
-        await this.readActiveGateMembershipPublicationVisibleRow(
-          publicationRow,
-          target,
-          context,
-        );
-      if (visibleRow) {
-        return visibleRow;
+      try {
+        const visibleRow =
+          await this.readActiveGateMembershipPublicationVisibleRow(
+            publicationRow,
+            target,
+            context,
+          );
+        if (visibleRow) {
+          return visibleRow;
+        }
+      } catch (error) {
+        error.activeGateMembershipPublicationReconcileOutcome =
+          reconcileOutcome;
+        throw error;
       }
     }
     return null;
@@ -1139,9 +1164,14 @@ class MembershipPublicationCoordinatorClassStage2 extends
           );
         }
       }
+      const deferredContext =
+        buildActiveGateMembershipPublicationDeferredContext(
+          context,
+          reconcileOutcome,
+        );
       const enqueued = this.enqueueClusterMembershipReconcile(
         ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_REASON,
-        context,
+        deferredContext,
       );
       const controlPlaneConvergence =
         this.lastControlPlaneConvergenceQueueOutcome ||
@@ -1167,9 +1197,14 @@ class MembershipPublicationCoordinatorClassStage2 extends
       if (!deferredOutcome) {
         throw error;
       }
+      const deferredContext =
+        buildActiveGateMembershipPublicationDeferredContext(
+          context,
+          error.activeGateMembershipPublicationReconcileOutcome,
+        );
       const enqueued = this.enqueueClusterMembershipReconcile(
         ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_REASON,
-        context,
+        deferredContext,
       );
       const queueOutcome =
         this.lastControlPlaneConvergenceQueueOutcome || null;
@@ -1185,6 +1220,9 @@ class MembershipPublicationCoordinatorClassStage2 extends
       return buildActiveGateMembershipPublicationReconcileOutcome(
         deferredOutcome,
         {
+          publicationRow:
+            error.activeGateMembershipPublicationReconcileOutcome
+              ?.publicationRow,
           target,
           enqueued,
           retryAfterMs: getControlPlaneRetryAfterMs(error),
