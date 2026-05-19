@@ -15,6 +15,7 @@ const EXIT_FAILURE = 1;
 const NUM_ZERO = 0;
 const NUM_ONE = 1;
 const NUM_TWO = 2;
+const NUM_MINUS_ONE = -1;
 const ROLE_REVIEW = 'review';
 const ROLE_FIX = 'fix';
 const ROLE_IMPLEMENTATION = 'implementation';
@@ -37,6 +38,7 @@ const CORE_LOGIC_BRIEF_HEADING = '## Core Logic Brief';
 const CAUSAL_DECISION_CONTRACT_HEADING = '## Causal Decision Contract';
 const DECISION_EXPERIMENT_GATE_HEADING = '## Decision Experiment Gate';
 const MARKDOWN_LEVEL_TWO_HEADING_PREFIX = '## ';
+const NONE_VALUE = 'none';
 const OUTPUT_PROFILE_SMALL = 'small';
 const OUTPUT_PROFILE_MEDIUM = 'medium';
 const OUTPUT_PROFILE_HIGH = 'high';
@@ -70,7 +72,7 @@ function normalizeText(value) {
 
 function parseOptionValue(args, optionName) {
   const optionIndex = args.indexOf(optionName);
-  if (optionIndex < NUM_ZERO) {
+  if (optionIndex === NUM_MINUS_ONE) {
     return EMPTY_TEXT;
   }
   return normalizeText(args[optionIndex + NUM_ONE]);
@@ -78,14 +80,14 @@ function parseOptionValue(args, optionName) {
 
 function parseMetadata(content, filePath) {
   const openIndex = content.indexOf(PACKAGE_METADATA_OPEN);
-  if (openIndex < NUM_ZERO) {
+  if (openIndex === NUM_MINUS_ONE) {
     throw new Error(`${filePath}: work-package metadata is required.`);
   }
   const closeIndex = content.indexOf(
     PACKAGE_METADATA_CLOSE,
     openIndex + PACKAGE_METADATA_OPEN.length,
   );
-  if (closeIndex < NUM_ZERO) {
+  if (closeIndex === NUM_MINUS_ONE) {
     throw new Error(`${filePath}: work-package metadata closing marker is missing.`);
   }
   return JSON.parse(
@@ -136,14 +138,14 @@ function packageTitle(content) {
 
 function extractMarkdownLevelTwoSection(content, heading) {
   const headingIndex = content.indexOf(heading);
-  if (headingIndex < NUM_ZERO) {
+  if (headingIndex === NUM_MINUS_ONE) {
     return EMPTY_TEXT;
   }
   const nextHeadingIndex = content.indexOf(
     `${NEWLINE}${MARKDOWN_LEVEL_TWO_HEADING_PREFIX}`,
     headingIndex + heading.length,
   );
-  const section = nextHeadingIndex < NUM_ZERO ?
+  const section = nextHeadingIndex === NUM_MINUS_ONE ?
     content.slice(headingIndex) :
     content.slice(headingIndex, nextHeadingIndex);
   return section.replace(heading, EMPTY_TEXT).trim();
@@ -224,12 +226,13 @@ function validationCommandLines(role, packagePath, metadata) {
   const proofCommands = Array.isArray(metadata.proof) ?
     metadata.proof.map(normalizeText).filter(Boolean) :
     [];
+  if (role === ROLE_REVIEW) {
+    return reviewCommandBudgetLines(packagePath, metadata, proofCommands);
+  }
   const lines = [
     `- \`npm run work:package:doctor -- --suggest ${packagePath}\``,
   ];
-  if (role !== ROLE_REVIEW) {
-    lines.push(`- \`npm run work:validate -- --pre-impl ${packagePath}\``);
-  }
+  lines.push(`- \`npm run work:validate -- --pre-impl ${packagePath}\``);
   for (const command of proofCommands) {
     lines.push(`- \`${command}\``);
   }
@@ -237,6 +240,123 @@ function validationCommandLines(role, packagePath, metadata) {
     lines.push(`- \`npm run work:validate -- --closure ${packagePath}\``);
   }
   return lines.join(NEWLINE);
+}
+
+function commandIfConcrete(command) {
+  const normalizedCommand = normalizeText(command);
+  return normalizedCommand &&
+    normalizedCommand.toLowerCase() !== NONE_VALUE ?
+    normalizedCommand :
+    EMPTY_TEXT;
+}
+
+function firstCommandMatching(commands, pattern) {
+  return commands.map(commandIfConcrete).find((command) =>
+    command.length > NUM_ZERO && pattern.test(command)) || EMPTY_TEXT;
+}
+
+function reviewRouteCommand(metadata, proofCommands) {
+  const scenarioRouteCommand = firstCommandMatching(
+    proofCommands,
+    /\bnpm run work:scenario-route\b/u,
+  );
+  if (scenarioRouteCommand) {
+    return scenarioRouteCommand;
+  }
+  const refreshCommand = firstCommandMatching(
+    metadata.rerunDecision?.requiredRefreshCommands || [],
+    /\bnpm run work:package:route-after-rerun\b/u,
+  );
+  if (refreshCommand) {
+    return refreshCommand;
+  }
+  const artifact = commandIfConcrete(
+    metadata.rerunDecision?.sourceArtifact || metadata.artifact,
+  );
+  const owner = commandIfConcrete(
+    metadata.rerunDecision?.routeOwner || metadata.owner,
+  );
+  const boundary = commandIfConcrete(
+    metadata.rerunDecision?.routeBoundary || metadata.boundary,
+  );
+  const dominantReason = commandIfConcrete(
+    metadata.rerunDecision?.routeDominantReason || metadata.dominantReason,
+  );
+  if (!artifact || !owner || !boundary || !dominantReason) {
+    return EMPTY_TEXT;
+  }
+  return [
+    'npm run work:package:route-after-rerun -- --artifact',
+    artifact,
+    '--owner',
+    owner,
+    '--boundary',
+    boundary,
+    '--dominant-reason',
+    dominantReason,
+  ].join(' ');
+}
+
+function reviewCommandBudgetLines(packagePath, metadata, proofCommands) {
+  const lines = [
+    '- Default budget: four commands. Stop after these unless they contradict package routing, scope, stale blocker state, or metadata shape.',
+    `- \`npm run work:package:doctor -- --suggest ${packagePath}\``,
+  ];
+  const predecessor = commandIfConcrete(metadata.predecessor);
+  if (predecessor) {
+    lines.push(`- \`npm run work:package:doctor -- --suggest ${predecessor}\``);
+  }
+  const routeCommand = reviewRouteCommand(metadata, proofCommands);
+  if (routeCommand) {
+    lines.push(`- \`${routeCommand}\``);
+  }
+  lines.push(
+    `- \`npm run work:validate -- --pre-impl ${packagePath}\` ` +
+    'only after metadata-only repairs or before final clean handoff.',
+  );
+  lines.push(
+    '- Do not run focused runtime tests, `npm run test:static`, broad extractor stacks, raw report JSON, or raw logs during review unless one of the capped commands contradicts the package or proves a wrong-slice/stale-evidence risk.',
+  );
+  lines.push(
+    '- Read older handoff files only if the direct predecessor, active package, sprint snapshot, or route command disagree.',
+  );
+  return lines.join(NEWLINE);
+}
+
+function proofLadderHeading(role) {
+  return role === ROLE_REVIEW ?
+    '## Package Proof Ladder (Implementation/Parent-Owned)' :
+    '## Proof Ladder';
+}
+
+function proofLadderLead(role) {
+  return role === ROLE_REVIEW ?
+    'Review verifies this ladder is coherent; implementation and parent revalidation run it unless the review budget exposes a contradiction.' :
+    EMPTY_TEXT;
+}
+
+function proofLadderLeadLines(role) {
+  const lead = proofLadderLead(role);
+  return lead ? [lead, EMPTY_TEXT] : [];
+}
+
+function validationHeading(role) {
+  return role === ROLE_REVIEW ?
+    '## Review Command Budget' :
+    '## Exact Validation Commands';
+}
+
+function validationInstructionLines(role) {
+  if (role === ROLE_REVIEW) {
+    return [
+      'Run only the review budget commands above by default. Do not add runtime tests, static checks, broad extractor stacks, raw report JSON, or raw-log sampling unless the capped commands show contradiction, stale evidence, widened scope, or wrong-slice risk.',
+      'Runtime proof and `npm run test:static` belong to implementation and parent revalidation; review may cite them as required later without running them.',
+    ].join(NEWLINE);
+  }
+  return [
+    'Run the exact command shapes above unless the command is impossible in this environment. Do not add ad hoc Jest or TAP flags such as `--runInBand`, do not invent runner flags, and do not substitute broad raw-log sampling for the listed canonical commands. This repo uses `npm test -- test/path.test.js` for focused TAP test files.',
+    'Worker-reported validation is handoff evidence only; the parent session must rerun focused proof locally before recording final implementation completion.',
+  ].join(NEWLINE);
 }
 
 function buildSubagentPrompt(role, packagePath, content, args = []) {
@@ -323,16 +443,16 @@ function buildSubagentPrompt(role, packagePath, content, args = []) {
     EMPTY_TEXT,
     list(scopeList(metadata, METADATA_FIELD_COMMIT_SCOPE, METADATA_FIELD_TOUCHED_FILES)),
     EMPTY_TEXT,
-    '## Proof Ladder',
+    proofLadderHeading(role),
     EMPTY_TEXT,
+    ...proofLadderLeadLines(role),
     list(metadata.proof),
     EMPTY_TEXT,
-    '## Exact Validation Commands',
+    validationHeading(role),
     EMPTY_TEXT,
     validationCommandLines(role, packagePath, metadata),
     EMPTY_TEXT,
-    'Run the exact command shapes above unless the command is impossible in this environment. Do not add ad hoc Jest or TAP flags such as `--runInBand`, do not invent runner flags, and do not substitute broad raw-log sampling for the listed canonical commands. This repo uses `npm test -- test/path.test.js` for focused TAP test files.',
-    'Worker-reported validation is handoff evidence only; the parent session must rerun focused proof locally before recording final implementation completion.',
+    validationInstructionLines(role),
     EMPTY_TEXT,
     '## Escalation Triggers',
     EMPTY_TEXT,

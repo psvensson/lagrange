@@ -58,6 +58,7 @@ test('shared package schema lists validator enums for LLM scaffolding', (t) => {
 
   t.match(rendered, /scenario-release-gate/u);
   t.match(rendered, /diagnostic-classification/u);
+  t.match(rendered, /bounded-experiment/u);
   t.match(rendered, /Output Profiles/u);
   t.match(rendered, /extra-high/u);
   t.match(rendered, /writeScope/u);
@@ -90,6 +91,12 @@ test('shared package schema lists validator enums for LLM scaffolding', (t) => {
   t.match(rendered, /classificationEfficiency/u);
   t.match(rendered, /inline-gate-default/u);
   t.match(rendered, /open-runtime-owner-boundary/u);
+  t.match(rendered, /Bounded Experiment Lane/u);
+  t.match(rendered, /boundedExperiment/u);
+  t.match(rendered, /hypothesis/u);
+  t.match(rendered, /expectedMetric/u);
+  t.match(rendered, /validationTier/u);
+  t.match(rendered, /single-owner/u);
   t.match(rendered, /Classification-Only Fast Path/u);
   t.match(rendered, /candidateRuntimeFiles/u);
   t.end();
@@ -189,6 +196,84 @@ test('review subagent prompt allows metadata-only fixes inline',
   t.match(content, /Wrong-slice trigger: Stop or split/u);
   t.notMatch(content, /Status: `not-needed`/u);
 });
+
+test('package scaffolder creates bounded experiment packages with inherited context',
+  async (t) => {
+    const content = await buildPackageContent({
+      'title': 'Remaining Node Wake Experiment',
+      'slug': 'remaining-node-wake-experiment',
+      'lane': 'bounded-experiment',
+      'owner': 'topology_publication_owner',
+      'boundary': 'publication_convergence',
+      'dominant-reason': 'publication_pending',
+      'next-action': 'Test one owner wake mechanism.',
+      'hypothesis':
+        'Explicit owner wake clears the last pending publication reconcile.',
+      'expected-metric': 'pendingReconcileCount=1 -> 0',
+      'inherits': 'work/packages/active-predecessor.md',
+      'validation-tier': 'single-owner',
+      'proof': [
+        'npm run work:evidence-summary -- test-output/reports/example.report.json',
+        'npm test -- test/control-plane/publication-owner-stream.test.js',
+      ],
+      'write-scope': ['src/control-plane/publication-owner-decision.js'],
+      'forbidden-file': ['src/rebalancer/operation-workflow-owner.js'],
+      'ledger': TEMP_LEDGER_PATH,
+    });
+
+    t.match(content, /"lane": "bounded-experiment"/u);
+    t.match(content, /"boundedExperiment": \{/u);
+    t.match(content, /"hypothesis": "Explicit owner wake/u);
+    t.match(content, /"expectedMetric": "pendingReconcileCount=1 -> 0"/u);
+    t.match(content, /"inheritsFrom": "work\/packages\/active-predecessor\.md"/u);
+    t.match(content, /"validationTier": "single-owner"/u);
+    t.match(content, /"inheritsContext": \{/u);
+    t.match(content, /"forbiddenScope": true/u);
+    t.match(content, /## Bounded Experiment/u);
+    t.match(content, /Merge requirement: focused test plus canonical route or evidence command/u);
+    t.notMatch(content, /## Causal Decision Contract/u);
+    t.notMatch(content, /## Decision Experiment Gate/u);
+    t.match(content, /Subagent sequencing is optional/u);
+  });
+
+test('review subagent prompt caps review commands before runtime proof',
+  async (t) => {
+    const content = await buildPackageContent({
+      'title': TEST_TITLE,
+      'slug': TEST_SLUG,
+      'lane': 'runtime-owner-boundary',
+      'owner': 'operation_workflow_owner',
+      'boundary': 'workflow_progress',
+      'dominant-reason': 'dispatch_pending',
+      'next-action': 'Review route before implementation.',
+      'artifact': 'test-output/reports/runtime-owner.report.json',
+      'proof': [
+        'npm run work:scenario-route -- test-output/reports/runtime-owner.report.json --owner operation_workflow_owner --boundary workflow_progress --dominant-reason dispatch_pending',
+        'node --test test/rebalancer/workflow-progress.test.js',
+        'npm run test:static',
+      ],
+      'write-scope': ['src/rebalancer/operation-workflow-owner.js'],
+      'predecessor': 'work/packages/done-20260518-predecessor.md',
+      'ledger': TEMP_LEDGER_PATH,
+    });
+    const prompt = buildSubagentPrompt('review', TEMP_PACKAGE_PATH, content);
+    const reviewBudget = prompt.slice(
+      prompt.indexOf('## Review Command Budget'),
+      prompt.indexOf('## Escalation Triggers'),
+    );
+
+    t.match(prompt, /## Package Proof Ladder \(Implementation\/Parent-Owned\)/u);
+    t.match(prompt, /Review verifies this ladder is coherent/u);
+    t.match(reviewBudget, /Default budget: four commands/u);
+    t.match(reviewBudget, /work:package:doctor -- --suggest/u);
+    t.match(reviewBudget, /done-20260518-predecessor\.md/u);
+    t.match(reviewBudget, /work:scenario-route/u);
+    t.match(reviewBudget, /work:validate -- --pre-impl/u);
+    t.match(reviewBudget, /Do not run focused runtime tests/u);
+    t.match(reviewBudget, /Runtime proof and `npm run test:static` belong/u);
+    t.notMatch(reviewBudget, /- `node --test/u);
+    t.notMatch(reviewBudget, /- `npm run test:static`/u);
+  });
 
 test('package scaffolder keeps Model Fit focused proof concrete', async (t) => {
   const content = await buildPackageContent({

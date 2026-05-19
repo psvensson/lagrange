@@ -777,6 +777,20 @@ Review checks:
 - guardrail drift
 - sprint snapshot mismatch with current evidence
 
+Review command budget:
+
+1. package doctor for the active package
+2. package doctor for the direct predecessor when present
+3. one canonical route or artifact command
+4. pre-implementation validation after metadata-only repairs or before final
+   clean handoff
+
+Review agents do not run focused runtime tests, `npm run test:static`, broad
+extractor stacks, raw report JSON, raw logs, or older handoff-file archaeology
+unless the capped commands contradict package routing, scope, stale blocker
+state, or metadata shape. The review may cite runtime/static proof as required
+later; implementation and parent revalidation run it.
+
 Parallel sub-agents are allowed only for independent sidecar questions with
 disjoint owner or file scope. Parent-session notes, local/manual labels, and
 arbitrary text without a real agent id do not satisfy review, fix, or

@@ -3,7 +3,7 @@
 Load for roadmap and edition-scope checks.
 
 Generated rules: 80
-Estimated tokens: 3422
+Estimated tokens: 3433
 Domains: governance
 
 ## Rules
@@ -70,21 +70,21 @@ Domains: governance
 60. [GOV-0060] Scenario-driven packages and active sprint snapshots must include a compact Current Edge Card that an LLM can keep in working memory without rereading the full package history.
 61. [GOV-0061] That fast path should avoid a broad package unless canonical evidence changes owner, boundary, or required action.
 62. [GOV-0062] Representative artifacts must use real unique timestamps or otherwise unique run identifiers.
-63. [GOV-0063] When sub-agent sequencing is required, the package's Subagent Progress Ledger is the in-flight communication channel.
-64. [GOV-0064] interrupted and partial-unvalidated attempts must be followed by a checked superseded/discarded/revalidated line before closure.
-65. [GOV-0065] The active scenario package owner and boundary must appear in scenarioCausalClosure.currentFirstFrontier.
-66. [GOV-0066] If a worker goes silent after a checkpoint or stops with edited files and no validation, record the attempt as partial-unvalidated or interrupted, discard or supersede that patch, and do not commit subagent runtime edits until local proof passes.
-67. [GOV-0067] If a package discovers that a completed roadmap row still has an active representative blocker, the package must classify the mismatch as one of: - capability-complete but gate-open; - status-overstated and requiring roadmap correction; - new maintenance concern outside the original row
-68. [GOV-0068] Final classification: representative-green, reduced, same-frontier, migrated, classification-only, architecture-gap, contradictory, or human escalation. Reduced requires a concrete metric delta; classification-only must name the accepted bounded/backpressure state and stop reason.
-69. [GOV-0069] Split one follow-on package only when canonical extraction shows semantic movement: first-frontier edge, semantic owner, owner boundary, or next required action changes. A dominant reason change qualifies only when it changes the next required action.
-70. [GOV-0070] Use npm run work:subagent-prompt -- --role <role> --package <package> to prepare bounded sub-agent tasks; the generated text assists the real sub-agent sequence but does not replace real returned agent ids. The prompt must carry the package Model Fit output profile so sub-agents know expected response verbosity separately from model or reasoning effort.
-71. [GOV-0071] status: required means the tracker has enough evidence to stop and request concrete choices. status: presented means choices are visible but no route has been selected. Both states fail pre-implementation validation for active runtime/scenario work.
-72. [GOV-0072] status: selected names the human-selected choice and opens the bounded route for the next package or new sprint. The selected route still must carry normal owner, boundary, scope, proof, sub-agent, validation, commit, and push evidence.
-73. [GOV-0073] The tracker infers a required gate from architecture-gap or human-escalation scenario closure. Frontier oscillation is rendered as watching; it becomes a required gate when the next local proof cannot reduce, migrate, or classify the edge without changing architecture.
-74. [GOV-0074] Wrong-slice trigger: the concrete signal that should stop, split, or migrate the package instead of continuing locally.
-75. [GOV-0075] If the same two boundaries alternate again without representative green or monotonic reduction, the next validation surface must be a replayable handoff fixture or missing-edge probe that includes both owners before more runtime edits start.
-76. [GOV-0076] LLM-driven work across all packages and sub-agent tasks must use canonical workflow and artifact tools before raw JSON or log slicing: work:llm-start, work:evidence-summary, work:package:doctor -- --suggest, work:package:schema, work:package:new, analyze:owner-files, focused scenario extractors such as analyze:priority-recovery-residuals, work:subagent-prompt, and work:oversized-next.
-77. [GOV-0077] A row may move to active implementation only when the intended behavior is sharp enough to produce tasks without inventing scope locally.
-78. [GOV-0078] A roadmap row may be treated as complete only when no active package or active sprint is still fixing the same declared exit criterion.
-79. [GOV-0079] A sprint may not close while ../../roadmap.md says a relevant exit criterion is complete and the sprint's current package says that same criterion still fails.
-80. [GOV-0080] Sprint Architecture Decision Gate when the sprint may continue local proof, migrate owner boundary, classify architecture-gap, or route broad architecture work.
+63. [GOV-0063] The review may cite runtime/static proof as required later; implementation and parent revalidation run it.
+64. [GOV-0064] When sub-agent sequencing is required, the package's Subagent Progress Ledger is the in-flight communication channel.
+65. [GOV-0065] interrupted and partial-unvalidated attempts must be followed by a checked superseded/discarded/revalidated line before closure.
+66. [GOV-0066] The active scenario package owner and boundary must appear in scenarioCausalClosure.currentFirstFrontier.
+67. [GOV-0067] Review agents do not run focused runtime tests, npm run test:static, broad extractor stacks, raw report JSON, raw logs, or older handoff-file archaeology unless the capped commands contradict package routing, scope, stale blocker state, or metadata shape.
+68. [GOV-0068] If a worker goes silent after a checkpoint or stops with edited files and no validation, record the attempt as partial-unvalidated or interrupted, discard or supersede that patch, and do not commit subagent runtime edits until local proof passes.
+69. [GOV-0069] If a package discovers that a completed roadmap row still has an active representative blocker, the package must classify the mismatch as one of: - capability-complete but gate-open; - status-overstated and requiring roadmap correction; - new maintenance concern outside the original row
+70. [GOV-0070] Final classification: representative-green, reduced, same-frontier, migrated, classification-only, architecture-gap, contradictory, or human escalation. Reduced requires a concrete metric delta; classification-only must name the accepted bounded/backpressure state and stop reason.
+71. [GOV-0071] Split one follow-on package only when canonical extraction shows semantic movement: first-frontier edge, semantic owner, owner boundary, or next required action changes. A dominant reason change qualifies only when it changes the next required action.
+72. [GOV-0072] Use npm run work:subagent-prompt -- --role <role> --package <package> to prepare bounded sub-agent tasks; the generated text assists the real sub-agent sequence but does not replace real returned agent ids. The prompt must carry the package Model Fit output profile so sub-agents know expected response verbosity separately from model or reasoning effort.
+73. [GOV-0073] status: required means the tracker has enough evidence to stop and request concrete choices. status: presented means choices are visible but no route has been selected. Both states fail pre-implementation validation for active runtime/scenario work.
+74. [GOV-0074] status: selected names the human-selected choice and opens the bounded route for the next package or new sprint. The selected route still must carry normal owner, boundary, scope, proof, sub-agent, validation, commit, and push evidence.
+75. [GOV-0075] The tracker infers a required gate from architecture-gap or human-escalation scenario closure. Frontier oscillation is rendered as watching; it becomes a required gate when the next local proof cannot reduce, migrate, or classify the edge without changing architecture.
+76. [GOV-0076] Wrong-slice trigger: the concrete signal that should stop, split, or migrate the package instead of continuing locally.
+77. [GOV-0077] If the same two boundaries alternate again without representative green or monotonic reduction, the next validation surface must be a replayable handoff fixture or missing-edge probe that includes both owners before more runtime edits start.
+78. [GOV-0078] LLM-driven work across all packages and sub-agent tasks must use canonical workflow and artifact tools before raw JSON or log slicing: work:llm-start, work:evidence-summary, work:package:doctor -- --suggest, work:package:schema, work:package:new, analyze:owner-files, focused scenario extractors such as analyze:priority-recovery-residuals, work:subagent-prompt, and work:oversized-next.
+79. [GOV-0079] A row may move to active implementation only when the intended behavior is sharp enough to produce tasks without inventing scope locally.
+80. [GOV-0080] A roadmap row may be treated as complete only when no active package or active sprint is still fixing the same declared exit criterion.

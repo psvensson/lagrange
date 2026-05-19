@@ -16,8 +16,17 @@ import {
   CLASSIFICATION_EFFICIENCY_RUNTIME_PROMOTION_RULE_FIELD,
   CLASSIFICATION_EFFICIENCY_SEPARATE_PACKAGE_REASON_FIELD,
   CLASSIFICATION_EFFICIENCY_SUCCESSOR_ACTION_FIELD,
+  BOUNDED_EXPERIMENT_EXPECTED_METRIC_FIELD,
+  BOUNDED_EXPERIMENT_FIELD,
+  BOUNDED_EXPERIMENT_HYPOTHESIS_FIELD,
+  BOUNDED_EXPERIMENT_INHERITS_FROM_FIELD,
+  BOUNDED_EXPERIMENT_KILL_RULE_FIELD,
+  BOUNDED_EXPERIMENT_MERGE_REQUIREMENT_FIELD,
+  BOUNDED_EXPERIMENT_TIMEBOX_FIELD,
   CORE_LOGIC_BRIEF_FIELDS,
+  INHERITS_CONTEXT_FIELD,
   LANE_CAUSAL_ESCALATION,
+  LANE_BOUNDED_EXPERIMENT,
   LANE_DIAGNOSTIC_CLASSIFICATION,
   LANE_LIGHTWEIGHT_MAINTENANCE,
   LANE_RUNTIME_OWNER_BOUNDARY,
@@ -38,6 +47,8 @@ import {
   SCOPE_FIELD_WRITE_SCOPE,
   VALID_PACKAGE_STATUSES,
   VALID_OUTPUT_PROFILES,
+  VALIDATION_TIER_FIELD,
+  VALIDATION_TIERS,
   WORKFLOW_LANES,
   WORK_PACKAGE_METADATA_SCHEMA,
   coreLogicBriefRequiredForLane,
@@ -97,6 +108,13 @@ const FLAG_ROUTE_STOP_MODE = 'route-stop-mode';
 const FLAG_EXPECTED_DELTA = 'expected-delta';
 const FLAG_SEPARATE_CLASSIFICATION_REASON = 'separate-classification-reason';
 const FLAG_SUCCESSOR_ACTION = 'successor-action';
+const FLAG_HYPOTHESIS = 'hypothesis';
+const FLAG_EXPECTED_METRIC = 'expected-metric';
+const FLAG_INHERITS = 'inherits';
+const FLAG_TIMEBOX = 'timebox';
+const FLAG_MERGE_REQUIREMENT = 'merge-requirement';
+const FLAG_KILL_RULE = 'kill-rule';
+const FLAG_VALIDATION_TIER = 'validation-tier';
 const FLAG_SCHEMA = 'schema';
 const FLAG_HELP = 'help';
 const EMPTY_TEXT = '';
@@ -124,6 +142,12 @@ const SUCCESSOR_ACTION_OPEN_RUNTIME_OWNER_BOUNDARY =
   'open-runtime-owner-boundary';
 const SUCCESSOR_ACTION_RERUN_REPRESENTATIVE_EVIDENCE =
   'rerun-representative-evidence';
+const DEFAULT_EXPERIMENT_TIMEBOX = '24h';
+const DEFAULT_EXPERIMENT_MERGE_REQUIREMENT =
+  'focused test plus canonical route or evidence command';
+const DEFAULT_EXPERIMENT_KILL_RULE =
+  'same frontier with no metric movement discards the experiment or escalates';
+const DEFAULT_EXPERIMENT_VALIDATION_TIER = 'single-owner';
 const CAUSAL_OUTCOME_CONTINUE_LOCAL_FIX = 'continue_local_fix';
 const STOP_MODE_CLASSIFIED_LOCAL_BLOCKER = 'classified_local_blocker';
 const [
@@ -175,6 +199,13 @@ const HELP_TEXT = [
   '  --expected-delta <text>  Record the expected representative delta before implementation.',
   '  --separate-classification-reason <reason>  Explain why classification is a package instead of an inline gate.',
   '  --successor-action <action>  Record whether classification updates the current package, opens runtime work, reruns evidence, or escalates.',
+  '  --hypothesis <text>  Bounded experiment hypothesis.',
+  '  --expected-metric <text>  Metric or frontier movement expected from the experiment.',
+  '  --inherits <package>  Package or sprint context inherited by a bounded experiment.',
+  '  --timebox <duration>  Bounded experiment timebox, default 24h.',
+  '  --merge-requirement <text>  Proof required before merging an experiment.',
+  '  --kill-rule <text>  Condition that discards or escalates an experiment.',
+  '  --validation-tier <file-local|single-owner|cross-owner|release-gate>',
   '',
   'Use --schema to print the shared work-package schema reference.',
 ].join(NEWLINE);
@@ -366,6 +397,31 @@ function validateFlags(flags = {}) {
       `--${FLAG_OUTPUT_PROFILE} must be one of ` +
       `${VALID_OUTPUT_PROFILES.join(', ')}.`,
     );
+  }
+  const validationTier = normalizeText(flags[FLAG_VALIDATION_TIER]);
+  if (
+    validationTier.length > NUM_ZERO &&
+    !VALIDATION_TIERS.includes(validationTier)
+  ) {
+    throw new Error(
+      `--${FLAG_VALIDATION_TIER} must be one of ` +
+      `${VALIDATION_TIERS.join(', ')}.`,
+    );
+  }
+  if (lane === LANE_BOUNDED_EXPERIMENT) {
+    const missingExperimentFlags = [
+      FLAG_HYPOTHESIS,
+      FLAG_EXPECTED_METRIC,
+    ].filter((flagName) => normalizeText(flags[flagName]).length === NUM_ZERO);
+    if (missingExperimentFlags.length > NUM_ZERO) {
+      throw new Error(
+        `--lane ${LANE_BOUNDED_EXPERIMENT} requires ` +
+        missingExperimentFlags
+          .map((flagName) => `${FLAG_PREFIX}${flagName}`)
+          .join(', ') +
+        '.',
+      );
+    }
   }
   const slug = normalizeText(flags[FLAG_SLUG]);
   if (!SLUG_PATTERN.test(slug)) {
@@ -574,10 +630,82 @@ function buildDecisionExperimentGateLines(lane, flags, proof, metadata) {
 }
 
 function buildLaneSufficiencyLine(lane) {
+  if (lane === LANE_BOUNDED_EXPERIMENT) {
+    return '- Why this lane is sufficient: same-owner or tightly scoped hypothesis-driven change with inherited context, proof-gated merge, and explicit kill rule.';
+  }
   if (!coreLogicBriefRequiredForLane(lane)) {
     return '- Why this lane is sufficient: bounded workflow/tooling scope unless changed.';
   }
   return '- Why this lane is sufficient: owner, boundary, core logic brief, and proof ladder are bounded to this package.';
+}
+
+function shouldBuildBoundedExperimentMetadata(lane, flags = {}) {
+  return lane === LANE_BOUNDED_EXPERIMENT ||
+    [
+      FLAG_HYPOTHESIS,
+      FLAG_EXPECTED_METRIC,
+      FLAG_INHERITS,
+      FLAG_TIMEBOX,
+      FLAG_MERGE_REQUIREMENT,
+      FLAG_KILL_RULE,
+      FLAG_VALIDATION_TIER,
+    ].some((flagName) => normalizeText(flags[flagName]).length > NUM_ZERO);
+}
+
+function buildBoundedExperimentMetadata(lane, flags = {}) {
+  if (!shouldBuildBoundedExperimentMetadata(lane, flags)) {
+    return null;
+  }
+  return {
+    [BOUNDED_EXPERIMENT_HYPOTHESIS_FIELD]:
+      normalizeText(flags[FLAG_HYPOTHESIS]) ||
+      'State the experiment hypothesis before implementation.',
+    [BOUNDED_EXPERIMENT_EXPECTED_METRIC_FIELD]:
+      normalizeText(flags[FLAG_EXPECTED_METRIC]) ||
+      'Name the count, frontier, route, or representative result expected to move.',
+    [BOUNDED_EXPERIMENT_INHERITS_FROM_FIELD]:
+      normalizeText(flags[FLAG_INHERITS]) || 'none',
+    [BOUNDED_EXPERIMENT_TIMEBOX_FIELD]:
+      normalizeText(flags[FLAG_TIMEBOX]) || DEFAULT_EXPERIMENT_TIMEBOX,
+    [BOUNDED_EXPERIMENT_MERGE_REQUIREMENT_FIELD]:
+      normalizeText(flags[FLAG_MERGE_REQUIREMENT]) ||
+      DEFAULT_EXPERIMENT_MERGE_REQUIREMENT,
+    [BOUNDED_EXPERIMENT_KILL_RULE_FIELD]:
+      normalizeText(flags[FLAG_KILL_RULE]) || DEFAULT_EXPERIMENT_KILL_RULE,
+  };
+}
+
+function buildInheritsContextMetadata(lane, flags = {}) {
+  const inherits = normalizeText(flags[FLAG_INHERITS]);
+  if (lane !== LANE_BOUNDED_EXPERIMENT || inherits.length === NUM_ZERO) {
+    return null;
+  }
+  return {
+    owner: true,
+    boundary: true,
+    forbiddenScope: true,
+    proofCommands: true,
+    stopRule: true,
+  };
+}
+
+function buildBoundedExperimentLines(metadata = {}) {
+  const experiment = metadata[BOUNDED_EXPERIMENT_FIELD];
+  if (!experiment) {
+    return [];
+  }
+  return [
+    '## Bounded Experiment',
+    EMPTY_TEXT,
+    `- Hypothesis: ${experiment[BOUNDED_EXPERIMENT_HYPOTHESIS_FIELD]}`,
+    `- Expected metric: ${experiment[BOUNDED_EXPERIMENT_EXPECTED_METRIC_FIELD]}`,
+    `- Inherits from: \`${experiment[BOUNDED_EXPERIMENT_INHERITS_FROM_FIELD]}\``,
+    `- Timebox: \`${experiment[BOUNDED_EXPERIMENT_TIMEBOX_FIELD]}\``,
+    `- Validation tier: \`${metadata[VALIDATION_TIER_FIELD] || DEFAULT_EXPERIMENT_VALIDATION_TIER}\``,
+    `- Merge requirement: ${experiment[BOUNDED_EXPERIMENT_MERGE_REQUIREMENT_FIELD]}`,
+    `- Kill rule: ${experiment[BOUNDED_EXPERIMENT_KILL_RULE_FIELD]}`,
+    '- Subagent sequencing is optional before implementation; use post-hoc review before merge when runtime behavior changed.',
+  ];
 }
 
 function buildClassificationOnlyFastPathLines(isClassificationOnly) {
@@ -815,6 +943,17 @@ async function buildPackageContent(flags = {}) {
       ],
     },
   };
+  const boundedExperiment = buildBoundedExperimentMetadata(lane, flags);
+  if (boundedExperiment) {
+    metadata[BOUNDED_EXPERIMENT_FIELD] = boundedExperiment;
+    metadata[VALIDATION_TIER_FIELD] =
+      normalizeText(flags[FLAG_VALIDATION_TIER]) ||
+      DEFAULT_EXPERIMENT_VALIDATION_TIER;
+  }
+  const inheritsContext = buildInheritsContextMetadata(lane, flags);
+  if (inheritsContext) {
+    metadata[INHERITS_CONTEXT_FIELD] = inheritsContext;
+  }
   if (isClassificationOnly) {
     metadata.representativeResidual = {
       status: 'classification-only',
@@ -877,6 +1016,8 @@ async function buildPackageContent(flags = {}) {
     ),
     EMPTY_TEXT,
     ...buildDecisionExperimentGateLines(lane, flags, proof, metadata),
+    EMPTY_TEXT,
+    ...buildBoundedExperimentLines(metadata),
     EMPTY_TEXT,
     ...buildClassificationOnlyFastPathLines(isClassificationOnly),
     '## Expected Representative Delta',
@@ -956,6 +1097,7 @@ async function buildPackageContent(flags = {}) {
     '2. Keep the durable proof ladder to 3-5 commands by default: prefer `npm run work:scenario-route -- <artifact>` for representative routing, one focused test or extractor, and validation. Add static guardrails only when implementation files changed.',
     '3. If this package only changes package, sprint, tracker, or ledger files, the next pass must run representative evidence, close as classification-only, open a concrete bug package, or present a human gate.',
     '4. Once an architecture gate has a selected route, do not open another gate unless fresh canonical evidence contradicts the selected route.',
+    '5. For bounded experiments, move quickly inside the inherited owner boundary, but do not merge without the stated focused proof and canonical evidence movement.',
     EMPTY_TEXT,
     '## In Scope',
     EMPTY_TEXT,

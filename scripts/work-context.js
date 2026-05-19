@@ -26,6 +26,8 @@ const NUM_ONE = 1;
 const NUM_TWO = 2;
 const NUM_THREE = 3;
 const MAX_GIT_STATUS_LINES = 30;
+const MAX_ACTIVE_STEERING_RULES = 10;
+const MIN_ACTIVE_STEERING_RULES = 5;
 const PROCESS_ARG_SCRIPT_INDEX = 1;
 const CLI_FLAG_DIRTY_SCOPE = '--dirty-scope';
 const CLI_FLAG_PACKAGE = '--package';
@@ -52,6 +54,16 @@ const COMPACT_STEERING_BASE_PATHS = Object.freeze([
   LLM_STEERING_README_PATH,
   LLM_STEERING_CORE_PATH,
 ]);
+const LLM_DOMAIN_ARCHITECTURE = 'architecture';
+const LLM_DOMAIN_TESTING = 'testing';
+const LLM_DOMAIN_STYLE = 'style';
+const LLM_DOMAIN_GOVERNANCE = 'governance';
+const LLM_DOMAIN_PACKS = Object.freeze({
+  [LLM_DOMAIN_ARCHITECTURE]: LLM_STEERING_ARCHITECTURE_PATH,
+  [LLM_DOMAIN_TESTING]: LLM_STEERING_TESTING_PATH,
+  [LLM_DOMAIN_STYLE]: LLM_STEERING_STYLE_PATH,
+  [LLM_DOMAIN_GOVERNANCE]: LLM_STEERING_GOVERNANCE_PATH,
+});
 const WORK_README_PATH = path.join('work', 'README.md');
 const GIT_COMMAND = 'git';
 const GIT_STATUS_ARGS = Object.freeze(['status', '--short']);
@@ -112,14 +124,17 @@ const GIT_STATUS_UNAVAILABLE_STATE = 'git-status-unavailable';
 const GIT_GROUP_PACKAGE_OWNED = 'packageOwned';
 const GIT_GROUP_TRACKER_GENERATED = 'trackerGenerated';
 const GIT_GROUP_UNRELATED = 'unrelated';
+const LANE_LIGHTWEIGHT_MAINTENANCE = 'lightweight-maintenance';
 const DEFAULT_UNKNOWN = 'unknown';
 const OUTPUT_TITLE = '# Work Context';
 const DIRTY_SCOPE_OUTPUT_TITLE = '# Worktree Package Scope';
 const SECTION_THEORY_IMPLEMENTATION = 'Theory And Implementation Focus';
+const SECTION_ACTIVE_CONSTRAINTS = 'Active Constraints';
 const SECTION_CURRENT_BLOCKER = 'Current Blocker';
 const SECTION_CURRENT_STATE = 'Current State';
 const SECTION_NEXT_ACTION = 'Next Action';
 const SECTION_FIRST_FILES = 'First Files To Read';
+const SECTION_SECONDARY_STEERING = 'Secondary Steering Packs';
 const SECTION_TOUCHED_FILES = 'Touched Files';
 const SECTION_SCOPE = 'Scope';
 const SECTION_PROOF_LADDER = 'Proof Ladder';
@@ -140,6 +155,7 @@ const PACKAGE_SECTION_SUBAGENT_PROGRESS_LEDGER = 'Subagent Progress Ledger';
 const PACKAGE_SECTION_SUBAGENT_PROGRESS_ATTEMPT_LEDGER =
   'Subagent Progress And Attempt Ledger';
 const PACKAGE_SECTION_MODEL_FIT = 'Model Fit';
+const MODEL_FIT_LABEL_FORBIDDEN_FILES = 'Forbidden files';
 const MESSAGE_CURRENT_BLOCKER_MISSING =
   'No current blocker handoff was found.';
 const MESSAGE_CURRENT_BLOCKER_HINT =
@@ -1158,7 +1174,9 @@ function buildCommitScope(currentBlocker = {}) {
 function firstNonEmptyValue(values = []) {
   return values
     .map((value) => normalizeString(value))
-    .find((value) => value.length > NUM_ZERO) || DEFAULT_UNKNOWN;
+    .find((value) =>
+      value.length > NUM_ZERO &&
+      value !== DEFAULT_UNKNOWN) || DEFAULT_UNKNOWN;
 }
 
 function firstProofCommand(currentBlocker = {}) {
@@ -1207,7 +1225,11 @@ function buildTheoryImplementationFocus(currentBlocker = {}) {
     stopRule: firstNonEmptyValue([
       scenarioCausalClosure[SCENARIO_CAUSAL_CLOSURE_FIELD_SAME_FRONTIER_FALLBACK],
       scenarioCausalClosure[SCENARIO_CAUSAL_CLOSURE_FIELD_STOP_CONDITION],
+      normalizeStringList(
+        currentBlocker.modelFit?.[MODEL_FIT_FIELD_ESCALATION_TRIGGERS],
+      ).join(', '),
       currentBlocker.architectureDecisionGate?.nextAction,
+      currentBlocker.nextAction,
     ]),
   };
 }
@@ -1242,36 +1264,261 @@ function buildOwnerCardPaths(currentBlocker) {
   return normalizeStringList(ownerCards);
 }
 
-function buildRelevantLlmDomainPackPaths(currentBlocker) {
+function domainPackDescriptor(domain, reason) {
+  return {
+    domain,
+    path: LLM_DOMAIN_PACKS[domain],
+    reason,
+  };
+}
+
+function uniqueDomainPackDescriptors(descriptors = []) {
+  const seenPaths = new Set();
+  const uniqueDescriptors = [];
+  for (const descriptor of descriptors) {
+    if (!descriptor?.path || seenPaths.has(descriptor.path)) {
+      continue;
+    }
+    seenPaths.add(descriptor.path);
+    uniqueDescriptors.push(descriptor);
+  }
+  return uniqueDescriptors;
+}
+
+function hasScenarioSignal(currentBlocker = {}) {
+  const scenario = normalizeString(currentBlocker.scenario);
+  return pathHasRealValue(currentBlocker.artifact) ||
+    pathHasRealValue(currentBlocker.playback) ||
+    (
+      scenario.length > NUM_ZERO &&
+      scenario !== DEFAULT_UNKNOWN &&
+      scenario !== PATH_NONE
+    );
+}
+
+function buildRelevantLlmDomainPackDescriptors(currentBlocker) {
   const readScope = buildReadScope(currentBlocker);
   const writeScope = buildWriteScope(currentBlocker);
-  const scenario = normalizeString(currentBlocker.scenario);
   const domainPacks = [];
   if (readScope.some((filePath) => filePath.startsWith(SOURCE_DIRECTORY_PREFIX))) {
-    domainPacks.push(LLM_STEERING_ARCHITECTURE_PATH);
+    domainPacks.push(domainPackDescriptor(
+      LLM_DOMAIN_ARCHITECTURE,
+      'runtime or source ownership files are in scope',
+    ));
+  }
+  if (writeScope.some((filePath) => filePath.startsWith(SCRIPT_DIRECTORY_PREFIX))) {
+    domainPacks.push(domainPackDescriptor(
+      LLM_DOMAIN_STYLE,
+      'workflow scripts or lint-sensitive tooling are in scope',
+    ));
   }
   if (
     readScope.some((filePath) => filePath.startsWith(TEST_DIRECTORY_PREFIX)) ||
-    pathHasRealValue(currentBlocker.artifact) ||
-    pathHasRealValue(currentBlocker.playback) ||
-    (scenario.length > NUM_ZERO &&
-      scenario !== DEFAULT_UNKNOWN &&
-      scenario !== PATH_NONE)
+    hasScenarioSignal(currentBlocker)
   ) {
-    domainPacks.push(LLM_STEERING_TESTING_PATH);
-  }
-  if (writeScope.some((filePath) => filePath.startsWith(SCRIPT_DIRECTORY_PREFIX))) {
-    domainPacks.push(LLM_STEERING_STYLE_PATH);
+    domainPacks.push(domainPackDescriptor(
+      LLM_DOMAIN_TESTING,
+      'tests, scenario, artifact, or playback evidence are in scope',
+    ));
   }
   if (
     readScope.some((filePath) => filePath.startsWith(WORK_README_PATH)) ||
     readScope.some((filePath) => filePath.startsWith(WORK_DIRECTORY_PREFIX))
   ) {
-    domainPacks.push(LLM_STEERING_GOVERNANCE_PATH);
+    domainPacks.push(domainPackDescriptor(
+      LLM_DOMAIN_GOVERNANCE,
+      'work package, sprint, or tracker files are in scope',
+    ));
+  }
+  return uniqueDomainPackDescriptors(
+    domainPacks.length > NUM_ZERO ?
+      domainPacks :
+      [domainPackDescriptor(LLM_DOMAIN_GOVERNANCE, 'default workflow scope')],
+  );
+}
+
+function buildPrimaryLlmDomainPackDescriptor(currentBlocker) {
+  return buildRelevantLlmDomainPackDescriptors(currentBlocker)[NUM_ZERO];
+}
+
+function buildSecondaryLlmDomainPackDescriptors(currentBlocker) {
+  return buildRelevantLlmDomainPackDescriptors(currentBlocker).slice(NUM_ONE);
+}
+
+function buildRelevantLlmDomainPackPaths(currentBlocker) {
+  const primaryDescriptor = buildPrimaryLlmDomainPackDescriptor(currentBlocker);
+  return primaryDescriptor ? [primaryDescriptor.path] : [LLM_STEERING_GOVERNANCE_PATH];
+}
+
+async function buildSecondarySteeringPackLabels(currentBlocker) {
+  const descriptors = buildSecondaryLlmDomainPackDescriptors(currentBlocker);
+  const labels = [];
+  for (const descriptor of descriptors) {
+    labels.push(
+      `${await resolvePathPresenceLabel(descriptor.path)} - ` +
+      `read only if needed: ${descriptor.reason}`,
+    );
+  }
+  return labels;
+}
+
+function primarySteeringPackLabel(currentBlocker) {
+  const descriptor = buildPrimaryLlmDomainPackDescriptor(currentBlocker);
+  if (!descriptor) {
+    return LLM_STEERING_GOVERNANCE_PATH;
+  }
+  return `${descriptor.path} (${descriptor.domain})`;
+}
+
+function splitMarkdownInlineList(value) {
+  return normalizeString(value)
+    .replace(/`/gu, EMPTY_STRING)
+    .split(/[,;]/u)
+    .map(normalizeString)
+    .filter((item) => item.length > NUM_ZERO);
+}
+
+function buildForbiddenScope(packageContent = EMPTY_STRING) {
+  const modelFitSection = extractMarkdownSectionText(
+    packageContent,
+    PACKAGE_SECTION_MODEL_FIT,
+  );
+  const modelFitForbidden = splitMarkdownInlineList(
+    findMarkdownFieldValue(modelFitSection, MODEL_FIT_LABEL_FORBIDDEN_FILES),
+  );
+  if (modelFitForbidden.length > NUM_ZERO) {
+    return modelFitForbidden;
   }
   return normalizeStringList(
-    domainPacks.length > NUM_ZERO ? domainPacks : [LLM_STEERING_GOVERNANCE_PATH],
+    extractMarkdownSection(packageContent, PACKAGE_SECTION_OUT_OF_SCOPE),
   );
+}
+
+function hasRuntimeSourceScope(currentBlocker = {}) {
+  return buildReadScope(currentBlocker)
+    .some((filePath) => filePath.startsWith(SOURCE_DIRECTORY_PREFIX));
+}
+
+function hasTestScope(currentBlocker = {}) {
+  return buildReadScope(currentBlocker)
+    .some((filePath) => filePath.startsWith(TEST_DIRECTORY_PREFIX));
+}
+
+function hasScriptScope(currentBlocker = {}) {
+  return buildWriteScope(currentBlocker)
+    .some((filePath) => filePath.startsWith(SCRIPT_DIRECTORY_PREFIX));
+}
+
+function hasWorkScope(currentBlocker = {}) {
+  return buildReadScope(currentBlocker)
+    .some((filePath) => filePath.startsWith(WORK_DIRECTORY_PREFIX));
+}
+
+function appendActiveRule(rules, rule) {
+  if (!rules.includes(rule)) {
+    rules.push(rule);
+  }
+}
+
+function buildRelevantSteeringRules(currentBlocker = {}, packageContent = EMPTY_STRING) {
+  const rules = [];
+  const forbiddenScope = buildForbiddenScope(packageContent);
+  appendActiveRule(
+    rules,
+    'CORE-02 Work one bounded concern; do not mix unrelated guardrail, runtime, presentation, or roadmap changes.',
+  );
+  appendActiveRule(
+    rules,
+    'CORE-15 Use canonical workflow and artifact extractors before raw JSON, logs, broad search, or ad hoc jq.',
+  );
+  appendActiveRule(
+    rules,
+    'CORE-17 Validate at the right phase: entry, pre-implementation, then closure.',
+  );
+
+  if (currentBlocker.lane === LANE_LIGHTWEIGHT_MAINTENANCE) {
+    appendActiveRule(
+      rules,
+      'ARCH-0001 Lightweight maintenance uses one focused package and proof; omit causal ledgers and subagents unless ownership can change.',
+    );
+  }
+  if (hasRuntimeSourceScope(currentBlocker)) {
+    appendActiveRule(
+      rules,
+      'ARCH-0042 Every runtime state transition, lifecycle decision, diagnostic grammar, and resource has one semantic owner.',
+    );
+    appendActiveRule(
+      rules,
+      'ARCH-0062 Do not keep patching symptoms while leaving the owner boundary porous.',
+    );
+    appendActiveRule(
+      rules,
+      'STYLE-0001 Do not inline domain/runtime scalars when an owner constant or explicit state variant should exist.',
+    );
+  }
+  if (hasScenarioSignal(currentBlocker) || hasTestScope(currentBlocker)) {
+    appendActiveRule(
+      rules,
+      'TEST-0028 The active work package must define the required validation surface.',
+    );
+    appendActiveRule(
+      rules,
+      'TEST-0083 Implementation starts only after the owner boundary and smallest proof surface are named.',
+    );
+  }
+  if (hasScenarioSignal(currentBlocker)) {
+    appendActiveRule(
+      rules,
+      'TEST-0085 Distributed artifact triage starts with canonical summaries and focused extractors before broad search or raw logs.',
+    );
+  }
+  if (forbiddenScope.length > NUM_ZERO) {
+    appendActiveRule(
+      rules,
+      'GOV-0023 Do-not-edit boundaries are higher signal than long positive scope lists.',
+    );
+  }
+  if (hasWorkScope(currentBlocker)) {
+    appendActiveRule(
+      rules,
+      'GOV-0078 LLM-driven package work uses canonical workflow tools before raw JSON or log slicing.',
+    );
+  }
+  if (hasScriptScope(currentBlocker)) {
+    appendActiveRule(
+      rules,
+      'STYLE-0007 Write code with ESLint rules in mind from the start.',
+    );
+  }
+
+  for (const fallbackRule of [
+    'ARCH-0041 All non-trivial implementation work must follow the repository work-tracking workflow.',
+    'TEST-0028 The active work package must define the required validation surface.',
+    'GOV-0078 LLM-driven package work uses canonical workflow tools before raw JSON or log slicing.',
+  ]) {
+    if (rules.length >= MIN_ACTIVE_STEERING_RULES) {
+      break;
+    }
+    appendActiveRule(rules, fallbackRule);
+  }
+
+  return rules.slice(NUM_ZERO, MAX_ACTIVE_STEERING_RULES);
+}
+
+function buildActiveConstraintLines(currentBlocker = {}, packageContent = EMPTY_STRING) {
+  const theoryFocus = buildTheoryImplementationFocus(currentBlocker);
+  const forbiddenScope = buildForbiddenScope(packageContent);
+  return [
+    `Owner boundary: ${normalizeString(currentBlocker.owner) || DEFAULT_UNKNOWN} / ` +
+      `${normalizeString(currentBlocker.boundary) || DEFAULT_UNKNOWN}`,
+    `Dominant reason: ${normalizeString(currentBlocker.dominantReason) || DEFAULT_UNKNOWN}`,
+    `Primary steering pack: ${primarySteeringPackLabel(currentBlocker)}`,
+    `Forbidden files/scope: ${forbiddenScope.join(', ') || DEFAULT_UNKNOWN}`,
+    `Proof ladder: ${normalizeStringList(currentBlocker.proof).join('; ') || DEFAULT_UNKNOWN}`,
+    `Kill rule: ${theoryFocus.stopRule}`,
+    ...buildRelevantSteeringRules(currentBlocker, packageContent)
+      .map((rule) => `Steering rule: ${rule}`),
+  ];
 }
 
 function buildPlaybackEvidencePaths(currentBlocker) {
@@ -1581,6 +1828,8 @@ async function buildContextLines(currentBlocker, packageContent) {
   const lines = [OUTPUT_TITLE];
   const packageTitle = extractMarkdownTitle(packageContent || EMPTY_STRING);
   const firstReadPaths = await buildFirstReadPathLabels(currentBlocker);
+  const secondarySteeringPacks =
+    await buildSecondarySteeringPackLabels(currentBlocker);
   const gitStatus = await readGitStatus();
   const artifactLabel = await resolveOptionalPathPresenceValue(currentBlocker.artifact);
   const playbackLabel = await resolveOptionalPathPresenceValue(currentBlocker.playback);
@@ -1626,6 +1875,13 @@ async function buildContextLines(currentBlocker, packageContent) {
     theoryFocus.falsifyingProbe,
   );
   appendKeyValue(lines, FIELD_LABELS.STOP_RULE, theoryFocus.stopRule);
+
+  appendSection(lines, SECTION_ACTIVE_CONSTRAINTS);
+  appendList(
+    lines,
+    buildActiveConstraintLines(currentBlocker, packageContent || EMPTY_STRING),
+    DEFAULT_UNKNOWN,
+  );
 
   appendSection(lines, SECTION_CURRENT_BLOCKER);
   appendKeyValue(lines, FIELD_LABELS.SPRINT, currentBlocker.sprint);
@@ -1874,6 +2130,13 @@ async function buildContextLines(currentBlocker, packageContent) {
 
   appendSection(lines, SECTION_FIRST_FILES);
   appendList(lines, firstReadPaths, DEFAULT_UNKNOWN);
+
+  appendSection(lines, SECTION_SECONDARY_STEERING);
+  appendList(
+    lines,
+    secondarySteeringPacks,
+    'No secondary steering packs selected.',
+  );
 
   appendSection(lines, SECTION_SCOPE);
   appendKeyValue(lines, 'Write scope', buildWriteScope(currentBlocker).join(', '));

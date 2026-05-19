@@ -285,6 +285,8 @@ const COMPACT_PACK_README_PATH = '.kiro/steering/llm/README.md';
 const COMPACT_PACK_CORE_PATH = '.kiro/steering/llm/core.md';
 const COMPACT_ARCHITECTURE_PACK_PATH = '.kiro/steering/llm/architecture.md';
 const COMPACT_TESTING_PACK_PATH = '.kiro/steering/llm/testing.md';
+const COMPACT_STYLE_PACK_PATH = '.kiro/steering/llm/style.md';
+const COMPACT_GOVERNANCE_PACK_PATH = '.kiro/steering/llm/governance.md';
 const FULL_STEERING_SYSTEM_PATH = '.kiro/steering/system guidelines.md';
 const BOOTSTRAP_OWNER_CARD_PATH = 'src/bootstrap/README.md';
 const PLAYBACK_FAILURE_BUNDLE_PATH = TEST_PLAYBACK_PATH + 'failure-bundle.json';
@@ -321,7 +323,9 @@ const RUNTIME_GRAMMAR_BROAD_FILE_COMMAND =
   'npm run audit:runtime-grammar -- ' + TEST_BOOTSTRAP_SOURCE_PATH;
 const SECTION_USEFUL_COMMANDS = '## Useful Commands';
 const SECTION_FIRST_FILES = '## First Files To Read';
+const SECTION_SECONDARY_STEERING = '## Secondary Steering Packs';
 const SECTION_THEORY_IMPLEMENTATION = '## Theory And Implementation Focus';
+const SECTION_ACTIVE_CONSTRAINTS = '## Active Constraints';
 const SECTION_SUBAGENT_SEQUENCING = '## Subagent Sequencing';
 const SECTION_SUBAGENT_PROGRESS = '## Subagent Progress';
 const SECTION_MODEL_FIT = '## Model Fit';
@@ -366,13 +370,68 @@ test('work context first-read paths prefer compact pack and owner cards', (t) =>
   t.equal(firstReadPaths[1], COMPACT_PACK_README_PATH);
   t.equal(firstReadPaths[2], COMPACT_PACK_CORE_PATH);
   t.equal(firstReadPaths[3], COMPACT_ARCHITECTURE_PACK_PATH);
-  t.equal(firstReadPaths[4], COMPACT_TESTING_PACK_PATH);
+  t.notOk(firstReadPaths.includes(COMPACT_TESTING_PACK_PATH));
+  t.notOk(firstReadPaths.includes(COMPACT_GOVERNANCE_PACK_PATH));
   t.ok(firstReadPaths.includes(BOOTSTRAP_OWNER_CARD_PATH));
   t.ok(firstReadPaths.includes(TEST_ARTIFACT_PATH));
   t.ok(firstReadPaths.includes(TEST_PLAYBACK_PATH));
   t.ok(firstReadPaths.includes(PLAYBACK_FAILURE_BUNDLE_PATH));
   t.ok(firstReadPaths.includes(TEST_PREDECESSOR_PATH));
   t.notOk(firstReadPaths.includes(FULL_STEERING_SYSTEM_PATH));
+  t.end();
+});
+
+test('work context chooses testing as primary pack for test-only scope', (t) => {
+  const firstReadPaths = buildFirstReadPaths({
+    ...TEST_BLOCKER,
+    scenario: 'none',
+    artifact: 'none',
+    playback: 'none',
+    writeScope: [
+      TEST_BOOTSTRAP_TEST_PATH,
+      TEST_PACKAGE_PATH,
+    ],
+    handoffFiles: [],
+    generatedFiles: [],
+    candidateRuntimeFiles: [],
+    commitScope: [
+      TEST_BOOTSTRAP_TEST_PATH,
+      TEST_PACKAGE_PATH,
+    ],
+  });
+
+  t.equal(firstReadPaths[1], COMPACT_PACK_README_PATH);
+  t.equal(firstReadPaths[2], COMPACT_PACK_CORE_PATH);
+  t.equal(firstReadPaths[3], COMPACT_TESTING_PACK_PATH);
+  t.notOk(firstReadPaths.includes(COMPACT_ARCHITECTURE_PACK_PATH));
+  t.end();
+});
+
+test('work context chooses style as primary pack for script tooling scope', (t) => {
+  const firstReadPaths = buildFirstReadPaths({
+    ...TEST_BLOCKER,
+    scenario: 'none',
+    artifact: 'none',
+    playback: 'none',
+    writeScope: [
+      'scripts/work-context.js',
+      'test/scripts/work-context.test.js',
+      TEST_PACKAGE_PATH,
+    ],
+    handoffFiles: [],
+    generatedFiles: [],
+    candidateRuntimeFiles: [],
+    commitScope: [
+      'scripts/work-context.js',
+      'test/scripts/work-context.test.js',
+      TEST_PACKAGE_PATH,
+    ],
+  });
+
+  t.equal(firstReadPaths[1], COMPACT_PACK_README_PATH);
+  t.equal(firstReadPaths[2], COMPACT_PACK_CORE_PATH);
+  t.equal(firstReadPaths[3], COMPACT_STYLE_PACK_PATH);
+  t.notOk(firstReadPaths.includes(COMPACT_ARCHITECTURE_PACK_PATH));
   t.end();
 });
 
@@ -414,6 +473,28 @@ test('work context advertises triage commands before raw artifact reads',
     t.ok(rendered.includes(
       'Falsifying probe: npm test -- test/rebalancer/' +
         'operation-workflow-progress-event-driven-reentry.test.js',
+    ));
+    t.ok(rendered.includes(SECTION_ACTIVE_CONSTRAINTS));
+    t.ok(rendered.includes(
+      'Owner boundary: Bootstrap owner / Startup join',
+    ));
+    t.ok(rendered.includes(
+      'Primary steering pack: .kiro/steering/llm/architecture.md (architecture)',
+    ));
+    t.ok(rendered.includes(
+      'Proof ladder: Focused proof',
+    ));
+    t.ok(rendered.includes(
+      'Kill rule: keep operation_workflow_owner / workflow_progress as first frontier',
+    ));
+    t.ok(rendered.includes(
+      'Steering rule: CORE-02 Work one bounded concern',
+    ));
+    t.ok(rendered.includes(
+      'Steering rule: ARCH-0042 Every runtime state transition',
+    ));
+    t.ok(rendered.includes(
+      'Steering rule: TEST-0085 Distributed artifact triage starts',
     ));
     t.ok(rendered.includes(SECTION_SUBAGENT_SEQUENCING));
     t.ok(rendered.includes(SECTION_SUBAGENT_PROGRESS));
@@ -471,6 +552,15 @@ test('work context advertises triage commands before raw artifact reads',
         rendered.indexOf(SECTION_FIRST_FILES),
       'triage commands section should precede first raw artifact reads',
     );
+    t.ok(rendered.includes(SECTION_SECONDARY_STEERING));
+    t.ok(rendered.includes(
+      COMPACT_TESTING_PACK_PATH +
+        ' (present) - read only if needed: tests, scenario, artifact, or playback evidence are in scope',
+    ));
+    t.ok(rendered.includes(
+      COMPACT_GOVERNANCE_PACK_PATH +
+        ' (present) - read only if needed: work package, sprint, or tracker files are in scope',
+    ));
   });
 
 test('work context builds a theory and implementation focus card', (t) => {

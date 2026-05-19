@@ -19,8 +19,19 @@ import {
   CLASSIFICATION_EFFICIENCY_SEPARATE_PACKAGE_REASONS,
   CLASSIFICATION_EFFICIENCY_SUCCESSOR_ACTION_FIELD,
   CLASSIFICATION_EFFICIENCY_SUCCESSOR_ACTIONS,
+  BOUNDED_EXPERIMENT_EXPECTED_METRIC_FIELD,
+  BOUNDED_EXPERIMENT_FIELD,
+  BOUNDED_EXPERIMENT_FIELDS,
+  BOUNDED_EXPERIMENT_HYPOTHESIS_FIELD,
+  BOUNDED_EXPERIMENT_INHERITS_FROM_FIELD,
+  BOUNDED_EXPERIMENT_KILL_RULE_FIELD,
+  BOUNDED_EXPERIMENT_MERGE_REQUIREMENT_FIELD,
+  BOUNDED_EXPERIMENT_TIMEBOX_FIELD,
   CORE_LOGIC_BRIEF_FIELDS,
+  INHERITS_CONTEXT_FIELD,
+  INHERITS_CONTEXT_FIELDS,
   LANE_CAUSAL_ESCALATION,
+  LANE_BOUNDED_EXPERIMENT,
   LANE_DIAGNOSTIC_CLASSIFICATION,
   LANE_RUNTIME_OWNER_BOUNDARY,
   OWNER_BOUNDARY_MIGRATION_PROOF_EVIDENCE_FIELD,
@@ -51,6 +62,8 @@ import {
   SUBAGENT_UNAVAILABLE_STATES,
   VALID_PACKAGE_STATUSES,
   VALID_OUTPUT_PROFILES,
+  VALIDATION_TIER_FIELD,
+  VALIDATION_TIERS,
   VALIDATION_PHASE_CLOSURE,
   VALIDATION_PHASE_ENTRY,
   VALIDATION_PHASE_PRE_IMPL,
@@ -628,6 +641,13 @@ const SUBAGENT_ATTEMPT_PARENT_TERMINAL_ACTIONS = Object.freeze([
   'discarded',
   'revalidated',
   'superseded',
+]);
+const BOUNDED_EXPERIMENT_CONCRETE_FIELDS = Object.freeze([
+  BOUNDED_EXPERIMENT_HYPOTHESIS_FIELD,
+  BOUNDED_EXPERIMENT_EXPECTED_METRIC_FIELD,
+  BOUNDED_EXPERIMENT_TIMEBOX_FIELD,
+  BOUNDED_EXPERIMENT_MERGE_REQUIREMENT_FIELD,
+  BOUNDED_EXPERIMENT_KILL_RULE_FIELD,
 ]);
 
 function printUsage() {
@@ -3993,6 +4013,82 @@ function validateRequiredMetadataArray(filePath, metadata, fieldName, options = 
   return [];
 }
 
+function validateBoundedExperimentField(filePath, experiment, fieldName) {
+  const value = experiment?.[fieldName];
+  if (isConcreteMetadataText(value, {
+    allowEmptyKeyword: fieldName === BOUNDED_EXPERIMENT_INHERITS_FROM_FIELD,
+  })) {
+    return [];
+  }
+  return [
+    `${filePath}: metadata ${BOUNDED_EXPERIMENT_FIELD}.${fieldName} ` +
+    `must be concrete for ${LANE_BOUNDED_EXPERIMENT} packages.`,
+  ];
+}
+
+function validateInheritsContext(filePath, metadata) {
+  const inheritsContext = metadata?.[INHERITS_CONTEXT_FIELD];
+  if (inheritsContext === undefined) {
+    return [];
+  }
+  if (!isObjectRecord(inheritsContext)) {
+    return [
+      `${filePath}: metadata ${INHERITS_CONTEXT_FIELD} must be an object.`,
+    ];
+  }
+  const errors = [];
+  for (const fieldName of INHERITS_CONTEXT_FIELDS) {
+    if (inheritsContext[fieldName] !== true) {
+      errors.push(
+        `${filePath}: metadata ${INHERITS_CONTEXT_FIELD}.${fieldName} ` +
+        'must be true when context inheritance is recorded.',
+      );
+    }
+  }
+  return errors;
+}
+
+function validateBoundedExperimentMetadataShape(filePath, metadata) {
+  if (metadataLane(metadata) !== LANE_BOUNDED_EXPERIMENT) {
+    return [];
+  }
+  const experiment = metadata?.[BOUNDED_EXPERIMENT_FIELD];
+  if (!isObjectRecord(experiment)) {
+    return [
+      `${filePath}: metadata ${BOUNDED_EXPERIMENT_FIELD} is required for ` +
+      `${LANE_BOUNDED_EXPERIMENT} packages.`,
+    ];
+  }
+  const errors = [];
+  for (const fieldName of BOUNDED_EXPERIMENT_CONCRETE_FIELDS) {
+    errors.push(...validateBoundedExperimentField(
+      filePath,
+      experiment,
+      fieldName,
+    ));
+  }
+  if (experiment[BOUNDED_EXPERIMENT_INHERITS_FROM_FIELD] !== undefined) {
+    errors.push(...validateBoundedExperimentField(
+      filePath,
+      experiment,
+      BOUNDED_EXPERIMENT_INHERITS_FROM_FIELD,
+    ));
+  }
+  const validationTier = normalizeLedgerText(metadata[VALIDATION_TIER_FIELD]);
+  if (
+    validationTier.length === NUM_ZERO ||
+    !VALIDATION_TIERS.includes(validationTier)
+  ) {
+    errors.push(
+      `${filePath}: metadata ${VALIDATION_TIER_FIELD} must be one of ` +
+      `${VALIDATION_TIERS.join(', ')} for ${LANE_BOUNDED_EXPERIMENT} ` +
+      'packages.',
+    );
+  }
+  errors.push(...validateInheritsContext(filePath, metadata));
+  return errors;
+}
+
 function validateActivePackageMetadataShape(filePath, metadata) {
   const errors = [];
   for (const fieldName of ACTIVE_PACKAGE_REQUIRED_TEXT_METADATA_FIELDS) {
@@ -4096,6 +4192,7 @@ function validatePackageMetadataShape(filePath, fileStatus, metadata) {
     errors.push(...validateActivePackageMetadataShape(filePath, metadata));
     errors.push(...validateActiveScenarioMetadataShape(filePath, metadata));
   }
+  errors.push(...validateBoundedExperimentMetadataShape(filePath, metadata));
   return errors;
 }
 

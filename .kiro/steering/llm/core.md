@@ -53,6 +53,12 @@ script, or report paths. Keep possible implementation files in
 subagent sequencing/static runtime guardrails until implementation scope is
 promoted.
 
+Review subagents are capped route and predecessor gates by default. They should
+not run focused runtime tests, `npm run test:static`, broad extractor stacks,
+raw report JSON, raw logs, or older handoff-file archaeology unless the capped
+review commands contradict package routing, scope, stale blocker state, or
+metadata shape.
+
 ## Rules
 
 1. Start from `npm run work:context` for non-trivial implementation work; use

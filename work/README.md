@@ -193,7 +193,12 @@ the package explicitly records a heavier audit or architecture reason:
    work-tracker files. This lane keeps causal ledgers and representative
    evidence, but does not require review/fix/implementation subagents unless
    runtime ownership, shared contracts, or scenario behavior can change.
-8. Once canonical owner and boundary are stable and the route is local runtime
+8. Use the `bounded-experiment` lane for same-owner or tightly scoped
+   hypothesis-driven slices that inherit current owner/boundary context and
+   merge only after focused proof plus canonical evidence movement. Pre-review
+   subagents are optional; post-hoc review is expected before merging runtime
+   behavior when the package declares it.
+9. Once canonical owner and boundary are stable and the route is local runtime
    work, prefer a `runtime-owner-boundary` successor over another
    classification package.
 
@@ -316,6 +321,13 @@ handoff before implementation starts:
 1. Fresh review subagent: review the most recently executed package on the same
    sprint or owner boundary. For the first work package in a new sprint, record
    review as `not-needed` with reason `first-package-in-sprint` instead.
+   Review is capped to route and predecessor proof: package doctor for the
+   active package, package doctor for the direct predecessor when present, one
+   canonical route or artifact command, and pre-implementation validation after
+   metadata-only repairs. Review agents do not run focused runtime tests,
+   `npm run test:static`, broad extractor stacks, raw report JSON, or older
+   handoff-file archaeology unless the capped commands contradict package
+   routing, scope, stale blocker state, or metadata shape.
 2. Fresh fix subagent, when needed: if the review finds fixes, a separate
    subagent performs those fixes before implementation starts.
 3. Fresh implementation subagent: after review/fixes are clean, a separate

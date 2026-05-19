@@ -5,7 +5,7 @@
   "schema": "work-package-v1",
   "status": "active",
   "opened": "YYYY-MM-DD",
-  "lane": "read-review-doc-only|lightweight-maintenance|runtime-owner-boundary|scenario-release-gate|causal-escalation",
+  "lane": "read-review-doc-only|lightweight-maintenance|diagnostic-classification|bounded-experiment|runtime-owner-boundary|scenario-release-gate|causal-escalation",
   "scenario": "scenario-or-none",
   "artifact": "path/to/latest.report.json",
   "playback": "path/to/playback-or-none",
@@ -232,6 +232,19 @@ promotion.
 - Runtime promotion rule: stable owner/boundary local-fix routes open a
   `runtime-owner-boundary` successor; do not open another classifier from the
   same unchanged artifact.
+
+## Bounded Experiment
+
+Use only for same-owner or tightly scoped hypothesis-driven slices that inherit
+context from the active sprint/package and should move quickly.
+
+- Hypothesis:
+- Expected metric:
+- Inherits from:
+- Timebox:
+- Validation tier: `file-local|single-owner|cross-owner|release-gate`
+- Merge requirement:
+- Kill rule:
 
 ## Expected Representative Delta
 

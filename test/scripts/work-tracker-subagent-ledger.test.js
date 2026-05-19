@@ -54,6 +54,7 @@ const WORK_TRACKER_DONE_STATUS = 'done';
 const LANE_READ_REVIEW_DOC_ONLY = 'read-review-doc-only';
 const LANE_LIGHTWEIGHT_MAINTENANCE = 'lightweight-maintenance';
 const LANE_DIAGNOSTIC_CLASSIFICATION = 'diagnostic-classification';
+const LANE_BOUNDED_EXPERIMENT = 'bounded-experiment';
 const LANE_RUNTIME_OWNER_BOUNDARY = 'runtime-owner-boundary';
 const LANE_CAUSAL_ESCALATION = 'causal-escalation';
 const CAUSAL_GOVERNANCE_VALID_METADATA = Object.freeze({
@@ -583,6 +584,14 @@ const WORK_TRACKER_ATTEMPT_LEDGER_GENERIC_IDENTITY_CONTENT = [
   '- [x] Agent Codex Implementation (' + IMPLEMENTATION_AGENT_ID + ') implementation attempt: status: validated; last checkpoint: proof complete; parent action: revalidated; evidence: npm test -- test/example.test.js; next: closure.',
   '',
 ].join('\n');
+const WORK_TRACKER_ATTEMPT_LEDGER_CODEX_NAMED_AGENT_CONTENT = [
+  '# Test Package',
+  '',
+  '## Subagent Attempt Ledger',
+  '',
+  '- [x] Agent CodexImplementationSubagent (' + IMPLEMENTATION_AGENT_ID + ') implementation attempt: status: validated; last checkpoint: proof complete; parent action: revalidated; evidence: npm test -- test/example.test.js; next: closure.',
+  '',
+].join('\n');
 const WORK_TRACKER_ATTEMPT_LEDGER_BAD_CONTENT = [
   '# Test Package',
   '',
@@ -1002,6 +1011,10 @@ describe('work tracker subagent sequencing ledger validation', () => {
       false,
     );
     assert.equal(
+      metadataRequiresSubagentSequencing({lane: LANE_BOUNDED_EXPERIMENT}),
+      false,
+    );
+    assert.equal(
       metadataRequiresSubagentSequencing({lane: LANE_RUNTIME_OWNER_BOUNDARY}),
       true,
     );
@@ -1197,6 +1210,17 @@ describe('work tracker subagent sequencing ledger validation', () => {
 
     assert.match(errors.join('\n'), /non-real agent identity/u);
   });
+
+  it('accepts real Codex-named agents when the identity has a concrete UUID',
+    () => {
+      const errors = validateSubagentAttemptLedger(
+        WORK_TRACKER_ATTEMPT_LEDGER_CODEX_NAMED_AGENT_CONTENT,
+        WORK_TRACKER_LEDGER_TEST_FILE,
+        {requiresLedger: true, requiresStrictEntries: true},
+      );
+
+      assert.deepEqual(errors, []);
+    });
 
   it('reports checked attempt entries without checkpoint proof fields', () => {
     const errors = validateSubagentAttemptLedger(
