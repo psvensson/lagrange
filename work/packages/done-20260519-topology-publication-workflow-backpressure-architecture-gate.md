@@ -3,7 +3,7 @@
 <!-- work-package
 {
   "schema": "work-package-v1",
-  "status": "active",
+  "status": "done",
   "opened": "2026-05-19",
   "lane": "diagnostic-classification",
   "scenario": "rolling-restart",
@@ -12,15 +12,15 @@
   "owner": "topology_publication_owner",
   "boundary": "publication_convergence",
   "dominantReason": "publication_pending",
-  "currentState": "Fresh representative evidence after the operation-workflow proof remains red. The visible first frontier is publication_ack_convergence / topology_publication_owner / publication_convergence / publication_pending, priority residual extraction still reports one operation_workflow_owner / workflow_progress persisted_not_dispatched witness, and causal analysis classifies that witness as backpressure.",
-  "nextAction": "Run the capped classification proof and select the next architecture/runtime successor before any further local runtime patching.",
+  "currentState": "Closed as classification-only successor selection. The capped proof keeps publication_ack_convergence / topology_publication_owner / publication_convergence first, classifies the operation_workflow_owner residual as backpressure, and selects a bounded publication-convergence runtime successor before further local patching.",
+  "nextAction": "Continue work/packages/active-20260519-topology-publication-classified-backpressure-runtime.md with required runtime-owner-boundary subagent sequencing before runtime edits.",
   "proof": [
     "npm run work:evidence-summary -- test-output/reports/rolling-restart-after-workflow-progress-proof-20260519T073539Z.report.json",
     "npm run work:scenario-route -- test-output/reports/rolling-restart-after-workflow-progress-proof-20260519T073539Z.report.json --owner topology_publication_owner --boundary publication_convergence --dominant-reason publication_pending --explain publication_ack_convergence",
     "npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-workflow-progress-proof-20260519T073539Z.report.json"
   ],
   "writeScope": [
-    "work/packages/active-20260519-topology-publication-workflow-backpressure-architecture-gate.md",
+    "work/packages/done-20260519-topology-publication-workflow-backpressure-architecture-gate.md",
     "work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md",
     "work/sprints/current-blocker.md",
     "work/sprints/current-blocker.json",
@@ -45,7 +45,7 @@
     "test/control-plane/publication-owner-stream.test.js"
   ],
   "commitScope": [
-    "work/packages/active-20260519-topology-publication-workflow-backpressure-architecture-gate.md",
+    "work/packages/done-20260519-topology-publication-workflow-backpressure-architecture-gate.md",
     "work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md",
     "work/sprints/current-blocker.md",
     "work/sprints/current-blocker.json",
@@ -72,7 +72,7 @@
       "npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-workflow-progress-proof-20260519T073539Z.report.json"
     ],
     "decisionRecord": "Record classification in the current package or sprint edge card; open a separate classifier only for material route, owner, boundary, stop-condition, tracker-truth, or successor-selection changes.",
-    "successorAction": "open-causal-escalation",
+    "successorAction": "open-runtime-owner-boundary",
     "runtimePromotionRule": "When canonical owner and boundary are stable, prefer a runtime-owner-boundary successor and keep runtime files in candidateRuntimeFiles until that package activates them."
   },
   "rerunDecision": {
@@ -82,8 +82,8 @@
     "routeDominantReason": "publication_pending",
     "routeCausalOutcome": "accept_classified_backpressure",
     "stopMode": "classified_backpressure",
-    "nextLane": "diagnostic-classification",
-    "expectedDelta": "Classify the publication/workflow backpressure handoff from the fresh same-frontier result; select a concrete architecture/runtime successor or stop with an architecture-gap record before further local runtime patching.",
+    "nextLane": "runtime-owner-boundary",
+    "expectedDelta": "Open a bounded topology_publication_owner / publication_convergence successor that resolves or correctly defers publication_ack_convergence while priority recovery is classified backpressure.",
     "requiredRefreshCommands": [
       "npm run work:package:route-after-rerun -- --artifact test-output/reports/rolling-restart-after-workflow-progress-proof-20260519T073539Z.report.json --owner topology_publication_owner --boundary publication_convergence --dominant-reason publication_pending",
       "update Sprint Strategy Brief and Current Edge Card from the route result",
@@ -92,22 +92,22 @@
     ]
   },
   "representativeResidual": {
-    "status": "same-frontier",
+    "status": "classification-only",
     "scenario": "rolling-restart",
     "artifact": "test-output/reports/rolling-restart-after-workflow-progress-proof-20260519T073539Z.report.json",
     "frontier": "publication_ack_convergence",
     "owner": "topology_publication_owner",
     "boundary": "publication_convergence",
     "dominantReason": "publication_pending",
-    "nextAction": "Classify the publication/workflow backpressure handoff and select architecture-gap or one bounded successor before runtime edits."
+    "nextAction": "Open topology_publication_owner / publication_convergence runtime successor before runtime edits."
   },
   "causalGovernance": {
     "hypothesis": "Fresh representative evidence after a bounded operation-workflow proof returned the same workflow residual, but causal analysis classifies that residual as backpressure while publication_ack_convergence remains the failed invariant.",
     "stopConditionCheck": "Use evidence summary, scenario route, priority residual extraction, topology handoff probe, and `npm run analyze:causal-model -- test-output/reports/rolling-restart-after-workflow-progress-proof-20260519T073539Z.report.json` before selecting another runtime owner.",
-    "expectedCausalModelChange": "This diagnostic gate should either select one concrete architecture/runtime successor with a falsifiable proof surface or record architecture-gap before further local runtime patching.",
-    "representativeOutcome": "pending-before-rerun",
+    "expectedCausalModelChange": "Capped proof selected one concrete runtime successor: topology_publication_owner / publication_convergence.",
+    "representativeOutcome": "classification-only",
     "causalDebt": "Fresh artifact has publicationStatus=OPEN, missingPublishedCount=4, pendingAckCount=0, one operation_workflow_owner / workflow_progress persisted_not_dispatched witness, active-gate owner_reconcile_pending, and causal stop classified_backpressure.",
-    "crossBoundaryReview": "Runtime edits are frozen until this package decides whether the next owner is topology_publication_owner, operation_workflow_owner, startup_active_gate_owner, or an architecture contract gap."
+    "crossBoundaryReview": "Runtime edits remain frozen in this package; the successor owns publication convergence and must run required review/fix/implementation sequencing before code changes."
   },
   "scenarioCausalClosure": {
     "referenceScenarioOrProbe": "rolling-restart after operation workflow progress proof",
@@ -128,13 +128,13 @@
     "missingCausalEdge": "The sprint must decide whether publication convergence owns the next move, operation workflow is a bounded non-frontier backpressure witness, or the publication/workflow handoff contract needs architecture work.",
     "missingCausalEdgeProbe": "npm run work:scenario-route -- test-output/reports/rolling-restart-after-workflow-progress-proof-20260519T073539Z.report.json --owner topology_publication_owner --boundary publication_convergence --dominant-reason publication_pending --explain publication_ack_convergence",
     "boundedProgressProof": "Diagnostic classification only; the bounded progress mechanism under test is whether classified backpressure should defer, advance, or hand off before a runtime patch is allowed.",
-    "boundedProgressProofArtifact": "work/packages/active-20260519-topology-publication-workflow-backpressure-architecture-gate.md and test-output/reports/rolling-restart-after-workflow-progress-proof-20260519T073539Z.report.json",
-    "expectedObservableTransition": "successor selected, architecture-gap recorded, or representative-green if a fresh rerun is selected before implementation",
+    "boundedProgressProofArtifact": "work/packages/done-20260519-topology-publication-workflow-backpressure-architecture-gate.md and test-output/reports/rolling-restart-after-workflow-progress-proof-20260519T073539Z.report.json",
+    "expectedObservableTransition": "topology_publication_owner / publication_convergence runtime successor selected",
     "maxProgressBound": "one diagnostic classification gate",
     "sameFrontierFallback": "If classification cannot name one concrete owner-boundary successor with a falsifiable proof surface, stop as architecture-gap instead of opening a local runtime patch.",
-    "expectedNextFrontier": "to be selected by this diagnostic gate",
-    "resultClassification": "pending-before-probe",
-    "stopCondition": "classification-only-stop",
+    "expectedNextFrontier": "topology_publication_owner / publication_convergence runtime successor",
+    "resultClassification": "classification-only",
+    "stopCondition": "continue-local-fix",
     "recentFrontierHistory": [
       "work/packages/done-20260519-topology-publication-open-owner-reconcile-runtime.md / topology_publication_owner / publication_convergence / reduced",
       "work/packages/done-20260519-startup-active-gate-selected-snapshot-source-timeout-runtime.md / startup_active_gate_owner / snapshot_coverage / migrated",
@@ -170,8 +170,8 @@
         ]
       }
     ],
-    "selectedChoice": "architecture-gap-stop",
-    "nextAction": "Open a causal-escalation successor unless the capped proof selects a narrower runtime owner before closure."
+    "selectedChoice": "publication-convergence-successor",
+    "nextAction": "Open and continue the bounded topology_publication_owner / publication_convergence runtime successor."
   }
 }
 -->
@@ -199,7 +199,7 @@ Approved maintenance scope or roadmap row.
 ## Expected Representative Delta
 
 - Baseline artifact: `test-output/reports/rolling-restart-after-workflow-progress-proof-20260519T073539Z.report.json`
-- Expected delta: Classify the publication/workflow backpressure handoff from the fresh same-frontier result; select a concrete architecture/runtime successor or stop with an architecture-gap record before further local runtime patching.
+- Expected delta: Select a bounded topology_publication_owner / publication_convergence runtime successor while keeping the operation-workflow residual classified as backpressure.
 - Local proof class: focused owner or diagnostic proof only; it is not representative-green proof.
 - Representative proof class: fresh representative rerun or canonical route-after-rerun result.
 - Stop if unchanged: same-frontier with no concrete metric or shape reduction triggers architecture or human escalation instead of another local patch.
@@ -221,7 +221,7 @@ Approved maintenance scope or roadmap row.
 - Separate package reason: `successor-selection`
 - Evidence budget: `one-artifact`; `two-or-three-canonical-commands`
 - Decision record: Record classification in the current package or sprint edge card; open a separate classifier only for material route, owner, boundary, stop-condition, tracker-truth, or successor-selection changes.
-- Successor action: `open-causal-escalation`
+- Successor action: `open-runtime-owner-boundary`
 - Runtime promotion rule: When canonical owner and boundary are stable, prefer a runtime-owner-boundary successor and keep runtime files in candidateRuntimeFiles until that package activates them.
 
 ## LLM Tool-First Contract
@@ -257,7 +257,7 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 - Intended minimum model: `gpt-5.3-codex`
 - Scope shape: `diagnostic-owner-evidence/current-artifact`
 - Output profile: `medium`
-- Owned files: `work/packages/active-20260519-topology-publication-workflow-backpressure-architecture-gate.md`, `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md`, `work/sprints/current-blocker.md`, `work/sprints/current-blocker.json`, `work/model-ledger.jsonl`
+- Owned files: `work/packages/done-20260519-topology-publication-workflow-backpressure-architecture-gate.md`, `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md`, `work/sprints/current-blocker.md`, `work/sprints/current-blocker.json`, `work/model-ledger.jsonl`
 - Forbidden files: `src/`
 - Frozen decisions: package scope and lane stay bounded unless explicitly escalated.
 - Escalation triggers: owned files expand beyond this package, runtime ownership changes, or representative scenario evidence changes.
@@ -266,13 +266,7 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 
 ## Subagent Progress And Attempt Ledger
 
-Required when subagent sequencing is required. Each real subagent appends one checked checkpoint after every completed subtask; this combined ledger satisfies both Progress and Attempt proof when the item includes status, last checkpoint, parent action, evidence, and next or blocker.
-Review agents may directly fix metadata-only package, sprint, tracker, current-blocker, ledger, or handoff findings and record `review-fixed-metadata-only`; runtime, test, script, report, or non-metadata fixes still require a separate fix subagent.
-
-- [ ] Agent <name> (<agent-id>) <role> checkpoint: status: started; last checkpoint: context loaded; parent action: pending; evidence: package, sprint, and handoff files read; next: first focused probe.
-- [ ] Agent <name> (<agent-id>) <role> checkpoint: status: running; last checkpoint: probe complete; parent action: pending; evidence: command and result; next: edit, validate, or blocker handoff.
-- [ ] Agent <name> (<agent-id>) <role> checkpoint: status: validated; last checkpoint: package proof refreshed; parent action: revalidated; evidence: commands and results; next: final handoff or successor action.
-- [ ] Agent <name> (<agent-id>) <role> recovery: status: superseded; last checkpoint: replaced interrupted or partial-unvalidated attempt; parent action: superseded; evidence: superseding proof; next: continue from clean checkpoint.
+- [x] not-needed for classification-only package: status: validated; last checkpoint: capped proof complete; parent action: accepted; evidence: `npm run work:evidence-summary -- test-output/reports/rolling-restart-after-workflow-progress-proof-20260519T073539Z.report.json`, `npm run work:scenario-route -- test-output/reports/rolling-restart-after-workflow-progress-proof-20260519T073539Z.report.json --owner topology_publication_owner --boundary publication_convergence --dominant-reason publication_pending --explain publication_ack_convergence`, and `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-workflow-progress-proof-20260519T073539Z.report.json`; next: active runtime successor handles required subagent sequencing.
 
 ## Validation
 
