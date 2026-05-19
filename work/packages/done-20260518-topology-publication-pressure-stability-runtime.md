@@ -346,3 +346,9 @@ fresh representative route stayed at publication convergence without a pressure
 classification or concrete reduction. The package stops local patching and
 requires an architecture decision gate before another local publication runtime
 package.
+
+## Commit And Push Ledger
+
+- [x] Focused package commit: `0a5eef80`
+- [x] Pushed to: `origin/codex/pending-ack-eligibility-filter`
+- [x] Commit contains only package-owned files/package-status/allowed sprint handoff: yes
