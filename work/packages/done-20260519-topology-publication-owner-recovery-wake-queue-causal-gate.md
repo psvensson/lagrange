@@ -204,7 +204,7 @@
   },
   "closed": "2026-05-19",
   "commitAndPushLedgerRequired": true,
-  "successor": "work/packages/active-20260519-topology-publication-owner-recovery-wake-queue-admission-runtime.md"
+  "successor": "work/packages/done-20260519-topology-publication-owner-recovery-wake-queue-admission-runtime.md"
 }
 -->
 
