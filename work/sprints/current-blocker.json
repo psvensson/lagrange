@@ -60,7 +60,16 @@
       "a frozen decision must be reopened"
     ]
   },
-  "representativeResidual": {},
+  "representativeResidual": {
+    "status": "red",
+    "scenario": "rolling-restart",
+    "artifact": "test-output/reports/rolling-restart-after-wake-queue-admission-20260519T135719Z.report.json",
+    "frontier": "publication_ack_convergence",
+    "owner": "topology_publication_owner",
+    "boundary": "publication_convergence",
+    "dominantReason": "publication_pending",
+    "nextAction": "reconcile_owner_membership_publication"
+  },
   "causalGovernance": {
     "hypothesis": "Accepted owner recovery queue admission is observable, but the accepted owner-key item may not drain or preserve retry state after retryable distributed participant failures; the stalled wait evidence still reports ownerQueue=unknown while publication handoff remains pending.",
     "stopConditionCheck": "Before runtime edits, run npm run analyze:causal-model -- test-output/reports/rolling-restart-after-wake-queue-admission-20260519T135719Z.report.json and confirm canonical route remains topology_publication_owner / publication_convergence / publication_pending, priority residual splitRequired=false, and the handoff probe still requires reconcile_owner_membership_publication. Focused proof must show the accepted queue item drains or retains structured retry state after a retryable drain failure.",

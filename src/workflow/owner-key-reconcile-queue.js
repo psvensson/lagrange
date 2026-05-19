@@ -25,8 +25,83 @@ import {
 } from './reconcile-queue-constants.js';
 
 const LOCAL_STR_FUNCTION = 'function';
+const LOCAL_STR_OBJECT = 'object';
+const LOCAL_STR_STRING = 'string';
+const LOCAL_STR_EMPTY = '';
 const LOCAL_NUM_ZERO = 0;
 const LOCAL_NUM_ONE = 1;
+const LOCAL_NUM_THOUSAND = 1000;
+const RECONCILE_QUEUE_RETRYABLE_DRAIN_FAILURE =
+  'retryable_drain_failure';
+const RECONCILE_QUEUE_RETRYABLE_DRAIN_DEFERRED =
+  'retryable_drain_deferred';
+const RECONCILE_QUEUE_RETRYABLE_DRAIN_FAILURE_LOG_MSG =
+  'Reconcile queue item deferred after retryable drain failure';
+
+function defaultRetryableDrainFailureClassifier() {
+  return false;
+}
+
+function defaultRetryableDrainFailureRetryAfterMs(error) {
+  return Number.isFinite(error?.retryAfterMs) &&
+    error.retryAfterMs > LOCAL_NUM_ZERO ?
+    Math.floor(error.retryAfterMs) :
+    LOCAL_NUM_THOUSAND;
+}
+
+function defaultRetryableDrainFailureReason() {
+  return RECONCILE_QUEUE_RETRYABLE_DRAIN_FAILURE;
+}
+
+function normalizeReconcileQueueRetryPolicy(policy = {}) {
+  const source = policy && typeof policy === LOCAL_STR_OBJECT ? policy : {};
+  return Object.freeze({
+    isRetryableError:
+      typeof source.isRetryableError === LOCAL_STR_FUNCTION ?
+        source.isRetryableError :
+        defaultRetryableDrainFailureClassifier,
+    getRetryAfterMs:
+      typeof source.getRetryAfterMs === LOCAL_STR_FUNCTION ?
+        source.getRetryAfterMs :
+        defaultRetryableDrainFailureRetryAfterMs,
+    getFailureReason:
+      typeof source.getFailureReason === LOCAL_STR_FUNCTION ?
+        source.getFailureReason :
+        defaultRetryableDrainFailureReason,
+  });
+}
+
+function normalizeRetryAfterMs(value) {
+  return Number.isFinite(value) && value > LOCAL_NUM_ZERO ?
+    Math.floor(value) :
+    LOCAL_NUM_THOUSAND;
+}
+
+function getRetryableDrainFailureMessage(error) {
+  if (typeof error === LOCAL_STR_STRING) {
+    return error;
+  }
+  if (typeof error?.message === LOCAL_STR_STRING) {
+    return error.message;
+  }
+  return RECONCILE_QUEUE_RETRYABLE_DRAIN_FAILURE;
+}
+
+function getRetryableDrainFailureCode(error) {
+  if (typeof error?.code === LOCAL_STR_STRING) {
+    return error.code;
+  }
+  if (typeof error?.errorCode === LOCAL_STR_STRING) {
+    return error.errorCode;
+  }
+  return LOCAL_STR_EMPTY;
+}
+
+function maybeUnrefTimer(timer) {
+  if (typeof timer?.unref === LOCAL_STR_FUNCTION) {
+    timer.unref();
+  }
+}
 
 /**
  * @typedef {Object} ReconcileWorkItem
@@ -75,6 +150,18 @@ class OwnerKeyReconcileQueue extends EventEmitter {
     // Bounded ring buffer for recent stale-fence event samples.
     this._staleFenceSamples = [];
     this._staleFenceSampleIndex = LOCAL_NUM_ZERO;
+    this.retryPolicy = normalizeReconcileQueueRetryPolicy(
+      options.retryPolicy || options,
+    );
+    /** @type {Map<string, ReconcileWorkItem>} */
+    this.retryWorkItems = new Map();
+    /** @type {Map<string, Object>} */
+    this.retryStates = new Map();
+    /** @type {Map<string, NodeJS.Timeout>} */
+    this.retryTimers = new Map();
+    this._retryableDrainFailureCount = LOCAL_NUM_ZERO;
+    this._retryableDrainFailureSamples = [];
+    this._retryableDrainFailureSampleIndex = LOCAL_NUM_ZERO;
 
     const loggingService = LoggingService.getInstance();
     this.logger = loggingService.isInitialized() ?
@@ -153,6 +240,25 @@ class OwnerKeyReconcileQueue extends EventEmitter {
         pendingReasons: Array.from(existing.reasons),
       });
       this.scheduleDrain();
+      return false;
+    }
+
+    const retrying = this.retryWorkItems.get(ownerKey);
+    if (retrying) {
+      retrying.reasons.add(reason);
+      if (context !== undefined) {
+        retrying.context = context;
+      }
+      if (fenceToken !== undefined && fenceToken !== null) {
+        retrying.fenceToken = fenceToken;
+      }
+      this.logger.debug(RECONCILE_QUEUE_LOG_MSG.DEDUP_MERGED, {
+        queue: this.name,
+        ownerKey,
+        reason,
+        pendingReasons: Array.from(retrying.reasons),
+      });
+      this._wakeRetryWorkItem(ownerKey);
       return false;
     }
 
@@ -243,13 +349,18 @@ class OwnerKeyReconcileQueue extends EventEmitter {
             await this.reconcileFn(
               ownerKey, reasons, item.context,
             );
+            this._clearRetryState(ownerKey);
           } catch (error) {
-            this.logger.warn(RECONCILE_QUEUE_LOG_MSG.DRAIN_ERROR, {
-              queue: this.name,
-              ownerKey,
-              reasons,
-              error: error.message,
-            });
+            const retryDeferred =
+              this._deferRetryableDrainFailure(ownerKey, item, reasons, error);
+            if (!retryDeferred) {
+              this.logger.warn(RECONCILE_QUEUE_LOG_MSG.DRAIN_ERROR, {
+                queue: this.name,
+                ownerKey,
+                reasons,
+                error: error.message,
+              });
+            }
           } finally {
             this.inFlight.delete(ownerKey);
             this.logger.debug(
@@ -323,6 +434,154 @@ class OwnerKeyReconcileQueue extends EventEmitter {
       });
   }
 
+  _shouldRetryDrainFailure(ownerKey, item, error) {
+    try {
+      return this.retryPolicy.isRetryableError(
+        error,
+        item.context,
+        {ownerKey, queue: this.name},
+      ) === true;
+    } catch (_classifierError) {
+      return false;
+    }
+  }
+
+  _resolveRetryAfterMs(ownerKey, item, error) {
+    try {
+      return normalizeRetryAfterMs(
+        this.retryPolicy.getRetryAfterMs(
+          error,
+          item.context,
+          {ownerKey, queue: this.name},
+        ),
+      );
+    } catch (_retryAfterError) {
+      return LOCAL_NUM_THOUSAND;
+    }
+  }
+
+  _resolveFailureReason(ownerKey, item, error) {
+    try {
+      const reason = this.retryPolicy.getFailureReason(
+        error,
+        item.context,
+        {ownerKey, queue: this.name},
+      );
+      return typeof reason === LOCAL_STR_STRING &&
+        reason.length > LOCAL_NUM_ZERO ?
+        reason :
+        RECONCILE_QUEUE_RETRYABLE_DRAIN_FAILURE;
+    } catch (_reasonError) {
+      return RECONCILE_QUEUE_RETRYABLE_DRAIN_FAILURE;
+    }
+  }
+
+  _deferRetryableDrainFailure(ownerKey, item, reasons, error) {
+    if (!this._shouldRetryDrainFailure(ownerKey, item, error)) {
+      return false;
+    }
+    const retryAfterMs = this._resolveRetryAfterMs(ownerKey, item, error);
+    const timestamp = Date.now();
+    const previousState = this.retryStates.get(ownerKey);
+    const failureCount =
+      Number.isFinite(previousState?.failureCount) ?
+        previousState.failureCount + LOCAL_NUM_ONE :
+        LOCAL_NUM_ONE;
+    const errorCode = getRetryableDrainFailureCode(error);
+    const retryState = {
+      type: RECONCILE_QUEUE_RETRYABLE_DRAIN_FAILURE,
+      queue: this.name,
+      ownerKey,
+      reasons,
+      failureReason: this._resolveFailureReason(ownerKey, item, error),
+      retryAfterMs,
+      nextAttemptAt: timestamp + retryAfterMs,
+      failureCount,
+      errorMessage: getRetryableDrainFailureMessage(error),
+      ...(errorCode.length > LOCAL_NUM_ZERO ? {errorCode} : {}),
+      timestamp,
+    };
+    item.retryState = retryState;
+    this.retryStates.set(ownerKey, retryState);
+    this.retryWorkItems.set(ownerKey, item);
+    this._retryableDrainFailureCount++;
+    this._pushRetryableDrainFailureSample(retryState);
+    this.emit(RECONCILE_QUEUE_RETRYABLE_DRAIN_DEFERRED, retryState);
+    this._scheduleRetryDrain(ownerKey, retryAfterMs);
+    this.logger.warn(RECONCILE_QUEUE_RETRYABLE_DRAIN_FAILURE_LOG_MSG, {
+      ...retryState,
+    });
+    return true;
+  }
+
+  _scheduleRetryDrain(ownerKey, retryAfterMs) {
+    this._clearRetryTimer(ownerKey);
+    const timer = setTimeout(() => {
+      this.retryTimers.delete(ownerKey);
+      this._wakeRetryWorkItem(ownerKey);
+    }, retryAfterMs);
+    maybeUnrefTimer(timer);
+    this.retryTimers.set(ownerKey, timer);
+  }
+
+  _wakeRetryWorkItem(ownerKey) {
+    if (this.stopped) {
+      return false;
+    }
+    const item = this.retryWorkItems.get(ownerKey);
+    if (!item) {
+      return false;
+    }
+    this._clearRetryTimer(ownerKey);
+    this.retryWorkItems.delete(ownerKey);
+    const existing = this.pending.get(ownerKey);
+    if (existing) {
+      for (const reason of item.reasons) {
+        existing.reasons.add(reason);
+      }
+      if (item.context !== null && item.context !== undefined) {
+        existing.context = item.context;
+      }
+      if (item.fenceToken !== undefined && item.fenceToken !== null) {
+        existing.fenceToken = item.fenceToken;
+      }
+    } else {
+      this.pending.set(ownerKey, item);
+    }
+    this.scheduleDrain();
+    return true;
+  }
+
+  _clearRetryTimer(ownerKey) {
+    const retryTimer = this.retryTimers.get(ownerKey);
+    if (retryTimer) {
+      clearTimeout(retryTimer);
+      this.retryTimers.delete(ownerKey);
+    }
+  }
+
+  _clearRetryState(ownerKey) {
+    this._clearRetryTimer(ownerKey);
+    this.retryStates.delete(ownerKey);
+    this.retryWorkItems.delete(ownerKey);
+  }
+
+  _pushRetryableDrainFailureSample(sample) {
+    if (
+      this._retryableDrainFailureSamples.length <
+      STALE_FENCE_SAMPLE_CAPACITY
+    ) {
+      this._retryableDrainFailureSamples.push(sample);
+    } else {
+      this._retryableDrainFailureSamples[
+        this._retryableDrainFailureSampleIndex
+      ] = sample;
+    }
+    this._retryableDrainFailureSampleIndex =
+      (this._retryableDrainFailureSampleIndex + LOCAL_NUM_ONE) %
+      STALE_FENCE_SAMPLE_CAPACITY;
+  }
+
   /**
    * Record a stale-fence diagnostic when a work item's fence token
    * is older than the current token for its owner key.
@@ -387,12 +646,23 @@ class OwnerKeyReconcileQueue extends EventEmitter {
     return this.inFlight.has(ownerKey);
   }
 
+  configureRetryPolicy(policy = {}) {
+    this.retryPolicy = normalizeReconcileQueueRetryPolicy({
+      ...this.retryPolicy,
+      ...policy,
+    });
+  }
+
   /**
    * Return the number of pending (not yet drained) items.
    * @return {number}
    */
   get size() {
-    return this.pending.size;
+    const pendingKeys = new Set(this.pending.keys());
+    for (const ownerKey of this.retryWorkItems.keys()) {
+      pendingKeys.add(ownerKey);
+    }
+    return pendingKeys.size;
   }
 
   /**
@@ -401,7 +671,7 @@ class OwnerKeyReconcileQueue extends EventEmitter {
    * @return {boolean}
    */
   has(ownerKey) {
-    return this.pending.has(ownerKey);
+    return this.pending.has(ownerKey) || this.retryWorkItems.has(ownerKey);
   }
 
   /**
@@ -414,15 +684,24 @@ class OwnerKeyReconcileQueue extends EventEmitter {
     for (const [key, token] of this.fenceTokens) {
       fenceEntries[key] = token;
     }
+    const retryStates = {};
+    for (const [key, retryState] of this.retryStates) {
+      retryStates[key] = {...retryState};
+    }
     return {
       queue: this.name,
       pendingKeys: Array.from(this.pending.keys()),
+      retryingKeys: Array.from(this.retryWorkItems.keys()),
       inFlightKeys: Array.from(this.inFlight),
       fenceTokens: fenceEntries,
       staleClaims: this.staleClaims.slice(),
       staleFenceRejectionCount: this._staleFenceRejectionCount,
       staleInFlightDeferralCount: this._staleInFlightDeferralCount,
       recentStaleFenceSamples: this._staleFenceSamples.slice(),
+      retryStates,
+      retryableDrainFailureCount: this._retryableDrainFailureCount,
+      recentRetryableDrainFailureSamples:
+        this._retryableDrainFailureSamples.slice(),
       draining: this.draining,
       stopped: this.stopped,
     };
@@ -434,6 +713,12 @@ class OwnerKeyReconcileQueue extends EventEmitter {
   shutdown() {
     this.stopped = true;
     this.pending.clear();
+    this.retryWorkItems.clear();
+    this.retryStates.clear();
+    for (const retryTimer of this.retryTimers.values()) {
+      clearTimeout(retryTimer);
+    }
+    this.retryTimers.clear();
     this.inFlight.clear();
     this.fenceTokens.clear();
     this.logger.debug(RECONCILE_QUEUE_LOG_MSG.SHUTDOWN, {

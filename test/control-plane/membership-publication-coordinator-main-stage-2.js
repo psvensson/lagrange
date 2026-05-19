@@ -138,6 +138,17 @@ const PUBLICATION_CONVERGENCE_HANDOFF_TARGET_QUEUE_NODE_B_IDS = Object.freeze([
   PUBLICATION_CONVERGENCE_HANDOFF_TARGET_NODE_IDS[0],
   PUBLICATION_CONVERGENCE_HANDOFF_TARGET_NODE_IDS[2],
 ]);
+const PUBLICATION_CONVERGENCE_OWNER_QUEUE_RETRYABLE_DRAIN_FAILURE =
+  'retryable_drain_failure';
+const PUBLICATION_CONVERGENCE_OWNER_QUEUE_DISTRIBUTED_FAILURE =
+  'distributed_participant_failure';
+const PUBLICATION_CONVERGENCE_OWNER_QUEUE_DISTRIBUTED_FAILURE_CODE =
+  'DISTRIBUTED_PARTICIPANT_FAILURE';
+const PUBLICATION_CONVERGENCE_OWNER_QUEUE_DISTRIBUTED_FAILURE_MESSAGE =
+  'Distributed operation failed due to participant failures';
+const PUBLICATION_CONVERGENCE_OWNER_QUEUE_RETRY_AFTER_MS = 37;
+const PUBLICATION_CONVERGENCE_OWNER_QUEUE_RETRYING_COUNT = 1;
+const PUBLICATION_CONVERGENCE_OWNER_QUEUE_FIRST_CALL_COUNT = 1;
 
 test('shouldPreferAuthoritativeMembershipState refreshes published count-only rows without lifecycle projection evidence',
   async (t) => {
@@ -1238,6 +1249,114 @@ test('enqueueClusterMembershipReconcile merges pending explicit handoff targets'
       'pending context should retain the explicit non-deferred write option',
     );
   });
+
+test('enqueueClusterMembershipReconcile preserves retryable owner drain ' +
+  'state after distributed participant failure', async (t) => {
+  const coordinator = new MembershipPublicationCoordinator({
+    nodeId: PUBLICATION_CONVERGENCE_HANDOFF_TARGET_NODE_IDS[0],
+  });
+  const ownerKey = coordinator.buildOwnerKey();
+  const observedContexts = [];
+  coordinator.reconcileClusterMembership = async (context) => {
+    observedContexts.push(context);
+    const error = new Error(
+      PUBLICATION_CONVERGENCE_OWNER_QUEUE_DISTRIBUTED_FAILURE_MESSAGE,
+    );
+    error.code =
+      PUBLICATION_CONVERGENCE_OWNER_QUEUE_DISTRIBUTED_FAILURE_CODE;
+    error.retryAfterMs =
+      PUBLICATION_CONVERGENCE_OWNER_QUEUE_RETRY_AFTER_MS;
+    throw error;
+  };
+
+  const accepted = coordinator.enqueueClusterMembershipReconcile(
+    PUBLICATION_CONVERGENCE_HANDOFF_TARGET_QUEUE_REASON_A,
+    {
+      latestPublicationRow: {
+        publication_epoch: PUBLICATION_CONVERGENCE_HANDOFF_TARGET_EPOCH,
+      },
+      publicationActiveGateHandoff: {
+        publicationEpoch: PUBLICATION_CONVERGENCE_HANDOFF_TARGET_EPOCH,
+        expectedNodeIds: [
+          ...PUBLICATION_CONVERGENCE_HANDOFF_TARGET_NODE_IDS,
+        ],
+        publishedActiveNodeIds: [
+          ...PUBLICATION_CONVERGENCE_HANDOFF_TARGET_PUBLISHED_NODE_IDS,
+        ],
+        pendingReconcileNodeIds: [
+          ...PUBLICATION_CONVERGENCE_HANDOFF_TARGET_PENDING_NODE_IDS,
+        ],
+        nextAction:
+          PUBLICATION_ACTIVE_GATE_HANDOFF_NEXT_ACTION
+            .RECONCILE_OWNER_MEMBERSHIP_PUBLICATION,
+      },
+      publishedActiveNodeIds: [
+        ...PUBLICATION_CONVERGENCE_HANDOFF_TARGET_SORTED_NODE_IDS,
+      ],
+      requiredAckNodeIds: [
+        ...PUBLICATION_CONVERGENCE_HANDOFF_TARGET_SORTED_NODE_IDS,
+      ],
+      acknowledgedNodeIds: [
+        ...PUBLICATION_CONVERGENCE_HANDOFF_TARGET_SORTED_NODE_IDS,
+      ],
+    },
+  );
+
+  await new Promise((resolve) => {
+    setTimeout(resolve, 0);
+  });
+
+  const diagnostics = coordinator.reconcileQueue.getDiagnostics();
+  t.equal(
+    accepted,
+    true,
+    'owner recovery queue item should be accepted before drain failure',
+  );
+  t.match(
+    coordinator.lastControlPlaneConvergenceQueueOutcome,
+    {
+      ownerKey,
+      operation: PUBLICATION_CONVERGENCE_CRITICAL_OWNER_RECOVERY_WAKE,
+      queueOutcome: PUBLICATION_CONVERGENCE_CRITICAL_QUEUE_OUTCOME_ENQUEUED,
+      pressureOutcome:
+        CONTROL_PLANE_CONVERGENCE_PRESSURE_OUTCOME.CRITICAL_ADMITTED,
+    },
+    'accepted owner recovery wake should remain observable',
+  );
+  t.equal(
+    observedContexts.length,
+    PUBLICATION_CONVERGENCE_OWNER_QUEUE_FIRST_CALL_COUNT,
+    'accepted owner queue item should attempt owner reconcile once',
+  );
+  t.same(
+    diagnostics.retryingKeys,
+    [ownerKey],
+    'retryable distributed failure should preserve owner queue retry state',
+  );
+  t.equal(
+    diagnostics.retryableDrainFailureCount,
+    PUBLICATION_CONVERGENCE_OWNER_QUEUE_RETRYING_COUNT,
+    'retryable owner drain failure should be counted',
+  );
+  t.match(
+    diagnostics.retryStates[ownerKey],
+    {
+      type: PUBLICATION_CONVERGENCE_OWNER_QUEUE_RETRYABLE_DRAIN_FAILURE,
+      ownerKey,
+      failureReason: PUBLICATION_CONVERGENCE_OWNER_QUEUE_DISTRIBUTED_FAILURE,
+      retryAfterMs: PUBLICATION_CONVERGENCE_OWNER_QUEUE_RETRY_AFTER_MS,
+      failureCount: PUBLICATION_CONVERGENCE_OWNER_QUEUE_RETRYING_COUNT,
+    },
+    'owner queue retry state should classify the distributed participant failure',
+  );
+  t.same(
+    observedContexts[0]?.publishedActiveNodeIds,
+    [...PUBLICATION_CONVERGENCE_HANDOFF_TARGET_SORTED_NODE_IDS],
+    'owner drain retry must preserve the complete handoff target context',
+  );
+
+  coordinator.reconcileQueue.shutdown();
+});
 
 test('deriveMembershipPublicationCandidate promotes healthy projected members while publication acknowledgements are still pending',
   async (t) => {

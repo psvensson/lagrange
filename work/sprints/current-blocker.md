@@ -73,21 +73,21 @@ Escalation triggers:
 
 ## Representative Residual
 
-Status: `unknown`
+Status: `red`
 
-Scenario: `unknown`
+Scenario: `rolling-restart`
 
-Artifact: `unknown`
+Artifact: `test-output/reports/rolling-restart-after-wake-queue-admission-20260519T135719Z.report.json`
 
-Frontier: `unknown`
+Frontier: `publication_ack_convergence`
 
-Owner: `unknown`
+Owner: `topology_publication_owner`
 
-Boundary: `unknown`
+Boundary: `publication_convergence`
 
-Dominant reason: `unknown`
+Dominant reason: `publication_pending`
 
-Next action: `unknown`
+Next action: `reconcile_owner_membership_publication`
 
 ## Causal Governance
 

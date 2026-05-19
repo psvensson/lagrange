@@ -9,6 +9,9 @@ import {
 import {
   CONTROL_PLANE_CONVERGENCE_CLASS,
   CONTROL_PLANE_CONVERGENCE_PRESSURE_OUTCOME,
+  getControlPlaneFailureSummary,
+  getControlPlaneRetryAfterMs,
+  isRetryableControlPlaneError,
 } from './control-plane-error-classification.js';
 import {
   ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_OUTCOME,
@@ -152,6 +155,10 @@ function resolveCriticalConvergenceQueueOutcome(reconcileQueue, ownerKey) {
     queueOutcome: decision.queueOutcome,
     reasonCode: decision.reasonCode,
   });
+}
+
+function resolveCriticalConvergenceQueueFailureReason(error) {
+  return getControlPlaneFailureSummary(error).primaryReason;
 }
 
 function isMembershipPublicationReconcileContext(value) {
@@ -301,6 +308,19 @@ function mergeMembershipPublicationReconcileContext(previousContext, nextContext
 
 class MembershipPublicationCoordinatorClassStage3 extends
   MembershipPublicationCoordinatorClassStage2 {
+  constructor(options = {}) {
+    super(options);
+    if (
+      typeof this.reconcileQueue?.configureRetryPolicy === TYPEOF.FUNCTION
+    ) {
+      this.reconcileQueue.configureRetryPolicy({
+        isRetryableError: isRetryableControlPlaneError,
+        getRetryAfterMs: getControlPlaneRetryAfterMs,
+        getFailureReason: resolveCriticalConvergenceQueueFailureReason,
+      });
+    }
+  }
+
   enqueueClusterMembershipReconcile(
     reason = MEMBERSHIP_PUBLICATION_COORDINATOR_LITERAL.MANUAL,
     context = {},

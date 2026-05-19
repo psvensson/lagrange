@@ -9,6 +9,17 @@ import {
   STALE_FENCE_SAMPLE_CAPACITY,
 } from '../../src/workflow/reconcile-queue-constants.js';
 
+const RECONCILE_QUEUE_RETRYABLE_DRAIN_FAILURE =
+  'retryable_drain_failure';
+const RECONCILE_QUEUE_RETRYABLE_DISTRIBUTED_FAILURE =
+  'distributed_participant_failure';
+const RECONCILE_QUEUE_RETRYABLE_FAILURE_CODE =
+  'DISTRIBUTED_PARTICIPANT_FAILURE';
+const RECONCILE_QUEUE_RETRYABLE_FAILURE_MESSAGE =
+  'Distributed operation failed due to participant failures';
+const RECONCILE_QUEUE_RETRYABLE_RETRY_AFTER_MS = 25;
+const RECONCILE_QUEUE_RETRYABLE_WAIT_MS = 50;
+
 test('OwnerKeyReconcileQueue - requires reconcileFn', async (t) => {
   t.throws(
     () => new OwnerKeyReconcileQueue(),
@@ -908,6 +919,103 @@ test('REGRESSION: concurrent fence advancement during in-flight ' +
     'aggregate stale fence rejection count must be >= 1');
   t.ok(diag.recentStaleFenceSamples.length >= 1,
     'ring buffer must contain the rejection sample');
+
+  queue.shutdown();
+});
+
+test('OwnerKeyReconcileQueue - retryable drain failure preserves ' +
+  'structured retry state and retries', async (t) => {
+  let callCount = 0;
+  const reconciled = [];
+  const retryContext = {handoff: true};
+  const queue = new OwnerKeyReconcileQueue({
+    name: 'retryable-drain-queue',
+    retryPolicy: {
+      isRetryableError(error) {
+        return error?.code === RECONCILE_QUEUE_RETRYABLE_FAILURE_CODE;
+      },
+      getRetryAfterMs() {
+        return RECONCILE_QUEUE_RETRYABLE_RETRY_AFTER_MS;
+      },
+      getFailureReason() {
+        return RECONCILE_QUEUE_RETRYABLE_DISTRIBUTED_FAILURE;
+      },
+    },
+    reconcileFn: async (ownerKey, reasons, context) => {
+      callCount++;
+      if (callCount === 1) {
+        const error = new Error(RECONCILE_QUEUE_RETRYABLE_FAILURE_MESSAGE);
+        error.code = RECONCILE_QUEUE_RETRYABLE_FAILURE_CODE;
+        throw error;
+      }
+      reconciled.push({ownerKey, reasons, context});
+    },
+  });
+
+  queue.enqueue(
+    'key-retry',
+    RECONCILE_REASON.PERIODIC_CHECK,
+    retryContext,
+  );
+
+  await new Promise((resolve) => {
+    setTimeout(resolve, 0);
+  });
+
+  const retryingDiagnostics = queue.getDiagnostics();
+  t.same(
+    retryingDiagnostics.retryingKeys,
+    ['key-retry'],
+    'retryable failure keeps the owner key in retry state',
+  );
+  t.equal(
+    queue.has('key-retry'),
+    true,
+    'retrying owner key remains observable to queue admission',
+  );
+  t.equal(
+    queue.size,
+    1,
+    'retrying owner key counts against queue capacity',
+  );
+  t.match(
+    retryingDiagnostics.retryStates['key-retry'],
+    {
+      type: RECONCILE_QUEUE_RETRYABLE_DRAIN_FAILURE,
+      ownerKey: 'key-retry',
+      failureReason: RECONCILE_QUEUE_RETRYABLE_DISTRIBUTED_FAILURE,
+      retryAfterMs: RECONCILE_QUEUE_RETRYABLE_RETRY_AFTER_MS,
+      failureCount: 1,
+    },
+    'retry state records the retryable distributed participant failure',
+  );
+
+  await new Promise((resolve) => {
+    setTimeout(resolve, RECONCILE_QUEUE_RETRYABLE_WAIT_MS);
+  });
+
+  t.equal(callCount, 2, 'retry timer drains the preserved item');
+  t.same(
+    reconciled,
+    [{
+      ownerKey: 'key-retry',
+      reasons: [RECONCILE_REASON.PERIODIC_CHECK],
+      context: retryContext,
+    }],
+    'retry drain preserves original owner work context',
+  );
+
+  const drainedDiagnostics = queue.getDiagnostics();
+  t.same(
+    drainedDiagnostics.retryingKeys,
+    [],
+    'successful retry clears retrying owner key state',
+  );
+  t.equal(
+    drainedDiagnostics.retryableDrainFailureCount,
+    1,
+    'retryable drain failure count remains available for diagnostics',
+  );
 
   queue.shutdown();
 });
