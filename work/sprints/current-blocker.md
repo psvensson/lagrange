@@ -4,11 +4,11 @@
 
 ## Theory And Implementation Focus
 
-Theory under test: The selected-source retry removed the startup active-gate timeout symptom, exposing a real operation_workflow_owner / workflow_progress priority-recovery residual for control_plane_publications-p1.
+Theory under test: The remaining rolling-restart red state is caused by operation workflow progress backpressure for control_plane_publications-p1, not selected-source timeout or publication owner truth.
 
-Causal question: The sprint needs a cross-boundary decision proving whether the remaining publication surface is caused by operation workflow progress backpressure.
+Causal question: The workflow owner must either advance the existing operation or prove the residual is bounded classified backpressure.
 
-Implementation slice: Prove the cross-boundary handoff decision, then open the bounded runtime successor only if operation_workflow_owner / workflow_progress remains the selected owner boundary.
+Implementation slice: Run required runtime-owner-boundary sequencing, then implement one bounded operation_workflow_owner / workflow_progress fix for control_plane_publications-p1 advance_existing_operation.
 
 Implementation files:
 
@@ -21,17 +21,17 @@ Implementation files:
 7. `test/rebalancer/operation-workflow-progress-event-driven-reentry.test.js`
 8. `test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js`
 
-Expected implementation delta: Causal escalation should either select operation_workflow_owner / workflow_progress as the bounded runtime successor or classify the route as architecture-gap/human-stop.
+Expected implementation delta: Reduce the single priority recovery residual witness, migrate owner boundary, or turn rolling-restart green.
 
 Falsifying probe: npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-after-selected-source-retry-20260519T064809Z.report.json
 
-Stop rule: If the route cannot prove a concrete owner/boundary successor, stop for architecture instead of local patching.
+Stop rule: If the same residual returns with no metric reduction, stop for architecture or human escalation.
 
 Sprint: `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md`
 
-Package: `work/packages/active-20260519-priority-recovery-operation-workflow-owner-workflow-progress-after-selected-source-retry.md`
+Package: `work/packages/active-20260519-operation-workflow-progress-advance-existing-operation-runtime.md`
 
-Workflow lane: `causal-escalation`
+Workflow lane: `runtime-owner-boundary`
 
 Scenario: `rolling-restart`
 
@@ -47,21 +47,21 @@ Boundary: `workflow_progress`
 
 Dominant reason: `priority_recovery_progress_blocked`
 
-Current state: Causal escalation package opened because fresh representative evidence after the selected-source retry improved active-gate snapshot coverage from 0/5 to 3/5, then reselected publication/priority-recovery backpressure: control_plane_publications-p1 is recovering_in_flight, actuationState=persisted_not_dispatched, waitMode=event_driven, nextRequiredAction=advance_existing_operation under operation_workflow_owner / workflow_progress.
+Current state: Causal gate selected operation_workflow_owner / workflow_progress as the bounded runtime successor. Fresh representative evidence has one priority recovery residual: control_plane_publications-p1 is recovering_in_flight with actuationState=persisted_not_dispatched, waitMode=event_driven, and nextRequiredAction=advance_existing_operation.
 
 ## Next Action
 
-Prove the cross-boundary handoff decision, then open the bounded runtime successor only if operation_workflow_owner / workflow_progress remains the selected owner boundary.
+Run required runtime-owner-boundary sequencing, then implement one bounded operation_workflow_owner / workflow_progress fix for control_plane_publications-p1 advance_existing_operation.
 
 ## Proof Ladder
 
 1. `npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-after-selected-source-retry-20260519T064809Z.report.json`
 2. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-selected-source-retry-20260519T064809Z.report.json --handoff-probe`
-3. `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-selected-source-retry-20260519T064809Z.report.json`
+3. `npm run analyze:owner-files -- operation_workflow_owner workflow_progress`
 
 ## Model Fit
 
-Package class: `causal-escalation`
+Package class: `runtime-owner-boundary`
 
 Intended minimum model: `gpt-5.3-codex`
 
@@ -76,71 +76,71 @@ Escalation triggers:
 
 ## Representative Residual
 
-Status: `unknown`
+Status: `migrated`
 
-Scenario: `unknown`
+Scenario: `rolling-restart`
 
-Artifact: `unknown`
+Artifact: `test-output/reports/rolling-restart-after-selected-source-retry-20260519T064809Z.report.json`
 
-Frontier: `unknown`
+Frontier: `priority_recovery_partition_progress`
 
-Owner: `unknown`
+Owner: `operation_workflow_owner`
 
-Boundary: `unknown`
+Boundary: `workflow_progress`
 
-Dominant reason: `unknown`
+Dominant reason: `priority_recovery_progress_blocked`
 
-Next action: `unknown`
+Next action: `Advance or classify control_plane_publications-p1 persisted_not_dispatched advance_existing_operation.`
 
 ## Causal Governance
 
-Causal hypothesis: `The selected-source retry removed the startup active-gate timeout symptom, exposing a real operation_workflow_owner / workflow_progress priority-recovery residual for control_plane_publications-p1.`
+Causal hypothesis: `The remaining rolling-restart red state is caused by operation workflow progress backpressure for control_plane_publications-p1, not selected-source timeout or publication owner truth.`
 
-Stop-condition check: `Use priority residual extraction, topology handoff probe, and `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-selected-source-retry-20260519T064809Z.report.json` before opening another runtime package.`
+Stop-condition check: `Use `npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-after-selected-source-retry-20260519T064809Z.report.json`, handoff probe, focused owner tests, static guardrails, representative rerun, and `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-selected-source-retry-20260519T064809Z.report.json` before closure.`
 
-Expected causal-model change: `Causal escalation should either select operation_workflow_owner / workflow_progress as the bounded runtime successor or classify the route as architecture-gap/human-stop.`
+Expected causal-model change: `Reduce the single priority recovery residual witness, migrate owner boundary, or turn rolling-restart green.`
 
 Representative outcome: `pending-before-rerun`
 
-Causal debt: `Fresh artifact has snapshotCoverage=3/5, active_gate_snapshot_coverage deferred on owner_reconcile_pending / snapshot_repair_deferred, publication_ack_convergence visible, and one priority recovery witness for control_plane_publications-p1 persisted_not_dispatched advance_existing_operation.`
+Causal debt: `Fresh artifact reports control_plane_publications-p1 recovering_in_flight, actuationState=persisted_not_dispatched, waitMode=event_driven, nextRequiredAction=advance_existing_operation.`
 
-Cross-boundary review: `Do not open local runtime work until the handoff from startup active-gate reduction to operation workflow progress is recorded in this causal package.`
+Cross-boundary review: `Do not reopen startup active-gate selected-source timeout or topology publication owner unless fresh evidence reselects those owners.`
 
 ## Scenario Causal Closure
 
-Reference scenario/probe: `rolling-restart after selected-source retry`
+Reference scenario/probe: `rolling-restart after selected-source retry causal gate`
 
 Phase chain:
 
-1. `startup active-gate selected-source timeout reduced`
-2. `snapshot coverage improved from 0/5 to 3/5`
-3. `publication/priority recovery backpressure remains visible`
-4. `priority residual extraction selects operation_workflow_owner / workflow_progress`
+1. `selected-source timeout reduced and migrated`
+2. `causal gate selected operation_workflow_owner / workflow_progress`
+3. `single priority recovery residual remains`
+4. `runtime successor must advance or classify the persisted_not_dispatched operation`
 
-Current first frontier: `publication_ack_convergence remains the visible topology frontier while handoff and priority residual probes identify operation_workflow_owner / workflow_progress as the next actionable owner.`
+Current first frontier: `priority_recovery_partition_progress is the actionable frontier selected by priority residual extraction and handoff probe for operation_workflow_owner / workflow_progress, while publication_ack_convergence remains the visible topology surface.`
 
 Known downstream blockers:
 
-1. `control_plane_publications-p1 is recovering_in_flight`
+1. `control_plane_publications-p1 recovering_in_flight`
 2. `actuationState=persisted_not_dispatched`
 3. `waitMode=event_driven`
 4. `nextRequiredAction=advance_existing_operation`
 
-Missing causal edge: `The sprint needs a cross-boundary decision proving whether the remaining publication surface is caused by operation workflow progress backpressure.`
+Missing causal edge: `The workflow owner must either advance the existing operation or prove the residual is bounded classified backpressure.`
 
 Missing causal edge probe: `npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-after-selected-source-retry-20260519T064809Z.report.json`
 
-Bounded progress proof: `The causal package must prove whether the next bounded progress mechanism is advance_existing_operation on operation_workflow_owner / workflow_progress, not runtime edits.`
+Bounded progress proof: `Focused proof should advance the existing operation by moving the advance_existing_operation progress mechanism for the persisted_not_dispatched operation.`
 
-Bounded progress proof artifact: `test-output/reports/rolling-restart-after-selected-source-retry-20260519T064809Z.report.json`
+Bounded progress proof artifact: `work/packages/active-20260519-operation-workflow-progress-advance-existing-operation-runtime.md and test-output/reports/rolling-restart-after-selected-source-retry-20260519T064809Z.report.json`
 
-Expected observable transition: `owner-boundary migration to operation_workflow_owner / workflow_progress, architecture-gap, or human stop.`
+Expected observable transition: `Priority recovery witness count reduces to zero, owner boundary migrates, or rolling-restart turns green.`
 
-Max progress bound: `one causal-escalation handoff decision`
+Max progress bound: `one operation_workflow_owner / workflow_progress runtime slice`
 
-Same-frontier fallback: `If the route cannot prove a concrete owner/boundary successor, stop for architecture instead of local patching.`
+Same-frontier fallback: `If the same residual returns with no metric reduction, stop for architecture or human escalation.`
 
-Expected next frontier: `operation_workflow_owner / workflow_progress if causal proof is clean`
+Expected next frontier: `operation_workflow_owner / workflow_progress until fresh evidence proves otherwise`
 
 Result classification: `pending-before-probe`
 
@@ -148,13 +148,13 @@ Stop condition: `continue-local-fix`
 
 Recent frontier history:
 
-1. `work/packages/done-20260519-topology-publication-same-frontier-architecture-gate.md / topology_publication_owner / publication_convergence / same-frontier`
-2. `work/packages/done-20260519-topology-publication-open-owner-reconcile-runtime.md / topology_publication_owner / publication_convergence / reduced`
-3. `work/packages/done-20260519-startup-active-gate-selected-snapshot-source-timeout-runtime.md / startup_active_gate_owner / snapshot_coverage / migrated`
+1. `work/packages/done-20260519-topology-publication-open-owner-reconcile-runtime.md / topology_publication_owner / publication_convergence / reduced`
+2. `work/packages/done-20260519-startup-active-gate-selected-snapshot-source-timeout-runtime.md / startup_active_gate_owner / snapshot_coverage / migrated`
+3. `work/packages/done-20260519-priority-recovery-operation-workflow-owner-workflow-progress-after-selected-source-retry-causal-gate.md / operation_workflow_owner / workflow_progress / migrated`
 
-Oscillation check: `Required by validation: adjacent owner-boundary fixes did not close rolling-restart; this package records the cross-boundary handoff before any operation workflow runtime patch.`
+Oscillation check: `Allowed because the causal gate selected this owner boundary after concrete active-gate reduction.`
 
-Handoff invariant: `Selected-source timeout, topology publication owner, and startup active-gate runtime stay frozen unless fresh causal evidence reselects them.`
+Handoff invariant: `Publication owner and startup active-gate local retry remain frozen unless fresh evidence reselects them.`
 
 ## Rerun Decision
 
@@ -170,9 +170,9 @@ Route causal outcome: `accept_classified_backpressure`
 
 Stop mode: `classified_backpressure`
 
-Next lane: `causal-escalation`
+Next lane: `runtime-owner-boundary`
 
-Expected delta: `Classify the cross-boundary handoff from selected-source active-gate reduction to operation workflow progress; either open a bounded operation_workflow_owner / workflow_progress runtime successor or stop for architecture if the handoff is not defensible.`
+Expected delta: `Advance or classify the single control_plane_publications-p1 persisted_not_dispatched workflow residual, reducing the priority recovery witness, migrating owner boundary, or turning rolling-restart green.`
 
 Required refresh commands:
 
@@ -195,11 +195,11 @@ Commands:
 
 1. `npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-after-selected-source-retry-20260519T064809Z.report.json`
 2. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-selected-source-retry-20260519T064809Z.report.json --handoff-probe`
-3. `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-selected-source-retry-20260519T064809Z.report.json`
+3. `npm run analyze:owner-files -- operation_workflow_owner workflow_progress`
 
 Decision record: `Record classification in the current package or sprint edge card; open a separate classifier only for material route, owner, boundary, stop-condition, tracker-truth, or successor-selection changes.`
 
-Successor action: `rerun-representative-evidence`
+Successor action: `open-runtime-owner-boundary`
 
 Runtime promotion rule: `When canonical owner and boundary are stable, prefer a runtime-owner-boundary successor and keep runtime files in candidateRuntimeFiles until that package activates them.`
 
@@ -211,29 +211,36 @@ Trigger: `frontier-oscillation`
 
 Trigger evidence:
 
-1. `publication owner and startup active-gate owner packages reduced concrete debt but did not close rolling-restart`
-2. `fresh artifact improved snapshotCoverage from 0/5 to 3/5 but returned publication_ack_convergence as the visible frontier`
-3. `priority residual extraction reports one operation_workflow_owner / workflow_progress witness with nextRequiredAction=advance_existing_operation`
-4. `handoff probe reports nextOwnerPath operation_workflow_owner / workflow_progress`
+1. `preceding causal gate selected operation_workflow_owner / workflow_progress after publication and startup active-gate reductions`
+2. `fresh priority residual extraction reports one control_plane_publications-p1 persisted_not_dispatched witness`
+3. `handoff probe reports requiredProgressMechanism=advance and nextOwnerPath operation_workflow_owner / workflow_progress`
 
 Choices:
 
-1. `operation-workflow-progress-runtime-successor` route=`owner-boundary-migration` - Select a bounded operation_workflow_owner / workflow_progress runtime successor for control_plane_publications-p1 persisted_not_dispatched advance_existing_operation.
-2. `architecture-gap-stop` route=`architecture-package` - Stop runtime patching if causal proof cannot distinguish operation workflow progress from publication or active-gate symptoms.
+1. `bounded-operation-workflow-progress-runtime` route=`continue-local-proof` - Execute one bounded operation_workflow_owner / workflow_progress runtime slice for advance_existing_operation.
+2. `architecture-stop` route=`architecture-package` - Stop local runtime patching if focused proof cannot target the advance_existing_operation progress mechanism.
 
-Selected choice: `operation-workflow-progress-runtime-successor`
+Selected choice: `bounded-operation-workflow-progress-runtime`
 
-Gate next action: Run causal proof, then open operation_workflow_owner / workflow_progress runtime successor if the selected choice remains supported.
+Gate next action: Run required review/fix/implementation sequencing before runtime edits.
 
 ## Scope
 
 Write scope:
 
-1. `work/packages/active-20260519-priority-recovery-operation-workflow-owner-workflow-progress-after-selected-source-retry.md`
+1. `work/packages/active-20260519-operation-workflow-progress-advance-existing-operation-runtime.md`
 2. `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md`
 3. `work/sprints/current-blocker.md`
 4. `work/sprints/current-blocker.json`
 5. `work/model-ledger.jsonl`
+6. `src/rebalancer/operation-workflow-owner.js`
+7. `src/rebalancer/operation-workflow-owner-segment-7-stage-5.js`
+8. `src/rebalancer/operation-workflow-owner-segment-7-stage-shared.js`
+9. `src/rebalancer/operation-workflow-owner-constants.js`
+10. `src/control-plane/priority-recovery-snapshot-stage-10.js`
+11. `test/rebalancer/coordinator-created-operation-progress-remote-handoff.test.js`
+12. `test/rebalancer/operation-workflow-progress-event-driven-reentry.test.js`
+13. `test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js`
 
 Handoff files:
 
@@ -246,22 +253,23 @@ Generated files:
 
 Candidate runtime files:
 
-1. `src/rebalancer/operation-workflow-owner.js`
-2. `src/rebalancer/operation-workflow-owner-segment-7-stage-5.js`
-3. `src/rebalancer/operation-workflow-owner-segment-7-stage-shared.js`
-4. `src/rebalancer/operation-workflow-owner-constants.js`
-5. `src/control-plane/priority-recovery-snapshot-stage-10.js`
-6. `test/rebalancer/coordinator-created-operation-progress-remote-handoff.test.js`
-7. `test/rebalancer/operation-workflow-progress-event-driven-reentry.test.js`
-8. `test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js`
+1. None recorded
 
 Commit scope:
 
-1. `work/packages/active-20260519-priority-recovery-operation-workflow-owner-workflow-progress-after-selected-source-retry.md`
+1. `work/packages/active-20260519-operation-workflow-progress-advance-existing-operation-runtime.md`
 2. `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md`
 3. `work/sprints/current-blocker.md`
 4. `work/sprints/current-blocker.json`
 5. `work/model-ledger.jsonl`
+6. `src/rebalancer/operation-workflow-owner.js`
+7. `src/rebalancer/operation-workflow-owner-segment-7-stage-5.js`
+8. `src/rebalancer/operation-workflow-owner-segment-7-stage-shared.js`
+9. `src/rebalancer/operation-workflow-owner-constants.js`
+10. `src/control-plane/priority-recovery-snapshot-stage-10.js`
+11. `test/rebalancer/coordinator-created-operation-progress-remote-handoff.test.js`
+12. `test/rebalancer/operation-workflow-progress-event-driven-reentry.test.js`
+13. `test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js`
 
 Legacy touched files:
 
