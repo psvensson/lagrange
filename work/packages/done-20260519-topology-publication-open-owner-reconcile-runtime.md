@@ -385,3 +385,9 @@ Parent proof on 2026-05-19:
 - Remaining route: `npm run work:package:route-after-rerun -- --artifact test-output/reports/rolling-restart-after-open-owner-reconcile-20260519T060754Z.report.json --owner topology_publication_owner --boundary publication_convergence --dominant-reason publication_pending` still selects `topology_publication_owner / publication_convergence / publication_pending`.
 - Handoff probe: `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-open-owner-reconcile-20260519T060754Z.report.json --handoff-probe` detects `publication_ack_to_active_gate_reconcile_missing`; next owner path is active-gate snapshot coverage with selected snapshot source timeout, runtime promotion remains false, and the handoff contract is absent.
 - Classification: `reduced`; successor should classify the no-debt publication_pending / active-gate snapshot-timeout edge before another runtime patch.
+
+## Commit And Push Ledger
+
+- [x] Focused package commit: `0ea7ec2d`
+- [x] Pushed to: `origin/codex/pending-ack-eligibility-filter`
+- [x] Commit contains only package-owned files/package-status/allowed sprint handoff: yes
