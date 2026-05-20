@@ -2,6 +2,7 @@
 
 import {readdir, readFile} from 'node:fs/promises';
 import {join} from 'node:path';
+import {fileURLToPath} from 'node:url';
 
 const CHECK_EMPTY_TEXT = '';
 const CHECK_ENCODING_UTF8 = 'utf8';
@@ -12,6 +13,8 @@ const CHECK_OWNER_MAP_PATH = 'architecture/current-owner-maps.md';
 const CHECK_SCAN_ROOT_SRC = 'src';
 const CHECK_SCAN_ROOT_TEST = 'test';
 const CHECK_REBALANCER_DIR = 'src/rebalancer';
+const CHECK_CONTROL_PLANE_PRIORITY_SNAPSHOT_PATTERN =
+  /^src\/control-plane\/priority-recovery-snapshot-stage(?:-\d+|-shared)\.js$/u;
 const CHECK_SUMMARY_OK =
   'operation progress authority guard passed';
 const CHECK_ERROR_PREFIX = 'operation progress authority guard failed:';
@@ -73,6 +76,24 @@ const LEGACY_REBALANCER_ORDINAL_FILES = Object.freeze([
   'src/rebalancer/unified-rebalancer-segment-4.js',
   'src/rebalancer/unified-rebalancer-segment-5.js',
 ]);
+const LEGACY_CONTROL_PLANE_ORDINAL_FILES = Object.freeze([
+  'src/control-plane/priority-recovery-snapshot-stage-1.js',
+  'src/control-plane/priority-recovery-snapshot-stage-2.js',
+  'src/control-plane/priority-recovery-snapshot-stage-3.js',
+  'src/control-plane/priority-recovery-snapshot-stage-4.js',
+  'src/control-plane/priority-recovery-snapshot-stage-5.js',
+  'src/control-plane/priority-recovery-snapshot-stage-6.js',
+  'src/control-plane/priority-recovery-snapshot-stage-7.js',
+  'src/control-plane/priority-recovery-snapshot-stage-8.js',
+  'src/control-plane/priority-recovery-snapshot-stage-9.js',
+  'src/control-plane/priority-recovery-snapshot-stage-10.js',
+  'src/control-plane/priority-recovery-snapshot-stage-11.js',
+  'src/control-plane/priority-recovery-snapshot-stage-shared.js',
+]);
+const LEGACY_ORDINAL_FILES = Object.freeze([
+  ...LEGACY_REBALANCER_ORDINAL_FILES,
+  ...LEGACY_CONTROL_PLANE_ORDINAL_FILES,
+]);
 
 function buildTokens(tokenParts) {
   return Object.freeze(tokenParts.map((parts) =>
@@ -118,14 +139,21 @@ function collectTokenViolations({
   return violations;
 }
 
-function collectOrdinalFileViolations(rebalancerFiles) {
-  const allowed = new Set(LEGACY_REBALANCER_ORDINAL_FILES);
-  const actual = rebalancerFiles
-    .filter((file) => REBALANCER_ORDINAL_FILE_PATTERN.test(file))
+function isTrackedOrdinalFile(file) {
+  return (
+    file.startsWith(`${CHECK_REBALANCER_DIR}/`) &&
+    REBALANCER_ORDINAL_FILE_PATTERN.test(file)
+  ) || CHECK_CONTROL_PLANE_PRIORITY_SNAPSHOT_PATTERN.test(file);
+}
+
+function collectOrdinalFileViolations(sourceFiles) {
+  const allowed = new Set(LEGACY_ORDINAL_FILES);
+  const actual = sourceFiles
+    .filter(isTrackedOrdinalFile)
     .sort();
   const actualSet = new Set(actual);
   const unexpected = actual.filter((file) => !allowed.has(file));
-  const missing = LEGACY_REBALANCER_ORDINAL_FILES.filter((file) =>
+  const missing = LEGACY_ORDINAL_FILES.filter((file) =>
     !actualSet.has(file),
   );
   return Object.freeze([
@@ -134,10 +162,21 @@ function collectOrdinalFileViolations(rebalancerFiles) {
   ]);
 }
 
+function ownerMapHasSemanticSuccessor(ownerMapContent, file) {
+  const escapedFile = file.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&');
+  const rowPattern = new RegExp(
+    '\\|\\s*`' + escapedFile +
+      '`\\s*\\|[^|]*\\|[^|]*\\b(?:src\\/|future\\s+`?src\\/)',
+    'u',
+  );
+  return rowPattern.test(ownerMapContent);
+}
+
 function collectOwnerMapViolations(ownerMapContent) {
-  return LEGACY_REBALANCER_ORDINAL_FILES
-    .filter((file) => !ownerMapContent.includes(file))
-    .map((file) => `${CHECK_OWNER_MAP_PATH}: missing removal ledger row for ${file}`);
+  return LEGACY_ORDINAL_FILES
+    .filter((file) => !ownerMapHasSemanticSuccessor(ownerMapContent, file))
+    .map((file) =>
+      `${CHECK_OWNER_MAP_PATH}: missing removal ledger row with semantic successor target for ${file}`);
 }
 
 async function main() {
@@ -149,12 +188,9 @@ async function main() {
     await readUtf8(file),
   ]));
   const contentByFile = new Map(contentEntries);
-  const rebalancerFiles = sourceFiles.filter((file) =>
-    file.startsWith(CHECK_REBALANCER_DIR),
-  );
   const legacyContentByFile = new Map(
     [...contentByFile.entries()].filter(([file]) =>
-      LEGACY_REBALANCER_ORDINAL_FILES.includes(file),
+      LEGACY_ORDINAL_FILES.includes(file),
     ),
   );
   const ownerMapContent = await readUtf8(CHECK_OWNER_MAP_PATH);
@@ -165,7 +201,7 @@ async function main() {
       tokens: buildTokens(RETIRED_SOURCE_TOKEN_PARTS),
       reason: 'retired lifecycle source vocabulary',
     }),
-    ...collectOrdinalFileViolations(rebalancerFiles),
+    ...collectOrdinalFileViolations(sourceFiles),
     ...collectTokenViolations({
       files: LEGACY_REBALANCER_ORDINAL_FILES,
       contentByFile: legacyContentByFile,
@@ -184,7 +220,21 @@ async function main() {
   process.stdout.write(`${CHECK_SUMMARY_OK}${CHECK_NEWLINE}`);
 }
 
-main().catch((error) => {
-  process.stderr.write(`${error.message}${CHECK_NEWLINE}`);
-  process.exitCode = CHECK_EXIT_FAILURE;
-});
+function isDirectRun() {
+  return process.argv[1] === fileURLToPath(import.meta.url);
+}
+
+if (isDirectRun()) {
+  main().catch((error) => {
+    process.stderr.write(`${error.message}${CHECK_NEWLINE}`);
+    process.exitCode = CHECK_EXIT_FAILURE;
+  });
+}
+
+export {
+  LEGACY_CONTROL_PLANE_ORDINAL_FILES,
+  LEGACY_REBALANCER_ORDINAL_FILES,
+  collectOrdinalFileViolations,
+  collectOwnerMapViolations,
+  ownerMapHasSemanticSuccessor,
+};

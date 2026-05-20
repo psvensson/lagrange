@@ -149,6 +149,27 @@ listed above.
 | `src/rebalancer/unified-rebalancer-segment-4.js` | temporary compatibility wrapper | future `src/rebalancer/rebalance-health-evaluation.js` | Delete after segment-four public imports point at the named evaluation module. |
 | `src/rebalancer/unified-rebalancer-segment-5.js` | temporary compatibility wrapper | `src/rebalancer/unified-rebalancer.js` | Delete after the top-level unified rebalancer class composes named modules directly. |
 
+## Control-Plane Snapshot Stage Removal Ledger
+
+The following priority-recovery snapshot stage files are allowlisted temporary
+compatibility modules. New control-plane snapshot work must land in semantic
+owner files rather than ordinal stage files.
+
+| Legacy file | Classification | Replacement owner file | Deletion condition |
+| --- | --- | --- | --- |
+| `src/control-plane/priority-recovery-snapshot-stage-1.js` | extract into responsibility-named module | future `src/control-plane/priority-recovery-snapshot-ingress.js` | Delete after snapshot ingress normalization is routed through the named module. |
+| `src/control-plane/priority-recovery-snapshot-stage-2.js` | extract into responsibility-named module | future `src/control-plane/priority-recovery-snapshot-eligibility.js` | Delete after eligibility projection moves to the named module. |
+| `src/control-plane/priority-recovery-snapshot-stage-3.js` | extract into responsibility-named module | future `src/control-plane/priority-recovery-snapshot-publication.js` | Delete after publication evidence shaping moves to the named module. |
+| `src/control-plane/priority-recovery-snapshot-stage-4.js` | extract into responsibility-named module | future `src/control-plane/priority-recovery-snapshot-active-gate.js` | Delete after active-gate evidence shaping moves to the named module. |
+| `src/control-plane/priority-recovery-snapshot-stage-5.js` | extract into responsibility-named module | future `src/control-plane/priority-recovery-snapshot-workflow.js` | Delete after workflow-progress evidence shaping moves to the named module. |
+| `src/control-plane/priority-recovery-snapshot-stage-6.js` | extract into responsibility-named module | future `src/control-plane/priority-recovery-snapshot-rebalancer.js` | Delete after rebalancer-handoff evidence shaping moves to the named module. |
+| `src/control-plane/priority-recovery-snapshot-stage-7.js` | extract into responsibility-named module | future `src/control-plane/priority-recovery-snapshot-observation.js` | Delete after observation selection moves to the named module. |
+| `src/control-plane/priority-recovery-snapshot-stage-8.js` | extract into responsibility-named module | `src/control-plane/priority-recovery-snapshot.js` | Delete after current invariant proof no longer imports the ordinal stage. |
+| `src/control-plane/priority-recovery-snapshot-stage-9.js` | extract into responsibility-named module | future `src/control-plane/priority-recovery-snapshot-burndown.js` | Delete after residual burn-down projection moves to the named module. |
+| `src/control-plane/priority-recovery-snapshot-stage-10.js` | extract into responsibility-named module | future `src/control-plane/priority-recovery-dispatch-snapshot.js` | Delete after dispatch_pending/planned workflow evidence moves to the named dispatch snapshot module. |
+| `src/control-plane/priority-recovery-snapshot-stage-11.js` | extract into responsibility-named module | future `src/control-plane/priority-recovery-snapshot-closure.js` | Delete after closure classification moves to the named module. |
+| `src/control-plane/priority-recovery-snapshot-stage-shared.js` | temporary compatibility wrapper | future `src/control-plane/priority-recovery-snapshot-contract.js` | Delete after shared snapshot constants move to the named contract module. |
+
 ## Shared Control-Plane Building Blocks
 
 The current shared building blocks for control-plane work are:

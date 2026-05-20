@@ -36,8 +36,8 @@ export {buildPriorityRecoveryPartitionAssessment} from './priority-recovery-snap
 export {buildPriorityRecoveryBlockedPartitionIds} from './priority-recovery-snapshot-stage-1.js';
 export {buildPriorityRecoveryBlockedPartitions} from './priority-recovery-snapshot-stage-1.js';
 export {buildPriorityRecoveryCorrelationKey};
-export {buildPriorityRecoveryDecisionSnapshot} from './priority-recovery-snapshot-stage-10.js';
-export {normalizePriorityRecoveryDispatchPendingDecisionSnapshot} from './priority-recovery-snapshot-stage-10.js';
+export {buildPriorityRecoveryDecisionSnapshot} from './priority-recovery-dispatch-snapshot.js';
+export {normalizePriorityRecoveryDispatchPendingDecisionSnapshot} from './priority-recovery-dispatch-snapshot.js';
 export {buildPriorityRecoveryDecisionSnapshots} from './priority-recovery-snapshot-stage-11.js';
 export {buildPriorityRecoveryPlannerEntry} from './priority-recovery-snapshot-stage-1.js';
 export {buildPriorityRecoveryPlannerByPartitionId} from './priority-recovery-snapshot-stage-1.js';

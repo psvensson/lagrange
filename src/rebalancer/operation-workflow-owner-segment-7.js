@@ -6,7 +6,7 @@
  * Prohibited fallbacks: no independent status mutation outside lifecycle resolution.
  * Primary tests: test/rebalancer/rebalance-coordinator-stopping-reconcile.test.js.
  */
-import {OperationWorkflowOwnerSegment7Stage5 as OperationWorkflowOwnerSegment7} from './operation-workflow-owner-segment-7-stage-5.js';
+import {OperationWorkflowOwnerSegment7Stage5 as OperationWorkflowOwnerSegment7} from './operation-workflow-recovery-reconcile.js';
 
 export {
   OperationWorkflowOwnerSegment7,

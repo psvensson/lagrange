@@ -23,7 +23,7 @@ import {buildPriorityRecoveryClosureWitness} from './priority-recovery-snapshot-
 import {buildPriorityRecoveryOperationContextFromRecord, buildPriorityRecoveryReplicaOperationContexts, isPriorityRecoveryCompletedPlacementOperationContext, isPriorityRecoveryOperationContextTerminal} from './priority-recovery-snapshot-stage-6.js';
 import {arePriorityRecoveryBlockingOperationsWithoutOwnedTransitions} from './priority-recovery-snapshot-stage-7.js';
 import {buildEffectivePriorityRecoveryAdmission, buildPriorityRecoveryAdmissionByPartitionId, buildPriorityRecoveryLearnerPromotionByPartitionId, buildPriorityRecoveryPublicationNodeDecisions} from './priority-recovery-snapshot-stage-9.js';
-import {appendPriorityRecoveryPartitionSnapshots, buildPriorityRecoveryBlockerPartitionSetMap, buildPriorityRecoveryCompletionPartitionSetMap, buildPriorityRecoveryDecisionSnapshot, normalizePriorityRecoveryBlockerPartitionIdsByReason, normalizePriorityRecoveryPartitionIdSetMap, recordPriorityRecoveryDecisionSnapshotSummary} from './priority-recovery-snapshot-stage-10.js';
+import {appendPriorityRecoveryPartitionSnapshots, buildPriorityRecoveryBlockerPartitionSetMap, buildPriorityRecoveryCompletionPartitionSetMap, buildPriorityRecoveryDecisionSnapshot, normalizePriorityRecoveryBlockerPartitionIdsByReason, normalizePriorityRecoveryPartitionIdSetMap, recordPriorityRecoveryDecisionSnapshotSummary} from './priority-recovery-dispatch-snapshot.js';
 
 function buildPriorityRecoveryDecisionSnapshots(options = {}) {
   const publicationConvergence =

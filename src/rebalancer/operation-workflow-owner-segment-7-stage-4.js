@@ -1,5 +1,5 @@
 import {OperationWorkflowOwnerSegment7Stage3} from './operation-workflow-owner-segment-7-stage-3.js';
-import {OPERATION_WORKFLOW_OWNER_SEGMENT_7_STAGE_SHARED as SHARED} from './operation-workflow-owner-segment-7-stage-shared.js';
+import {OPERATION_WORKFLOW_OWNER_SEGMENT_7_STAGE_SHARED as SHARED} from './operation-workflow-recovery-reconcile-shared.js';
 
 const {
   EXACT_TARGET_REPLICA_OBSERVATION_OPTIONS,
