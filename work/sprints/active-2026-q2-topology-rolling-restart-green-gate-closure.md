@@ -132,22 +132,22 @@ Historical state from that earlier rerun:
 ## Current Edge Card
 
 ```text
-Representative artifact: none
-Visible first frontier: unknown
-Active package: work/packages/active-20260520-topology-epoch-fencing-recovery-preemption.md
-Active package owner: control-plane
-Active package boundary: publication-recovery
-Selected cause: System-wide topology epoch preemption implementation
-Required action: Implement topology epoch fencer and recovery lease preemption rules in control-plane
+Representative artifact: test-output/reports/rolling-restart-snapshot-lane-reset-close-20260520T055140Z.report.json
+Visible first frontier: publication_ack_convergence / topology_publication_owner / publication_convergence / publication_pending in test-output/reports/rolling-restart-snapshot-lane-reset-close-20260520T055140Z.report.json.
+Active package: work/packages/active-20260520-rolling-restart-startup-active-gate-owner-snapshot-coverage.md
+Active package owner: startup_active_gate_owner
+Active package boundary: snapshot_coverage
+Selected cause: active_gate_timed_out
+Required action: Close this startup_active_gate_owner / snapshot_coverage package as migrated/reduced, then activate the operation_workflow_owner / workflow_progress successor package created from the priority recovery residuals.
 Representative status: unknown
-Causal outcome: unknown
-Architecture gate: not-required / unknown
-Expected delta: unknown
-Current state: New package scaffolded from the shared work-package schema.
-Allowed edits: src/control-plane/publication-recovery-evidence.js, test/control-plane/publication-recovery-evidence.test.js
-Candidate runtime files: src/control-plane/publication-recovery-evidence.js
-Forbidden edits: owned files expand beyond this package, a frozen decision must be reopened
-Required latest proof: node --test test/control-plane/publication-recovery-evidence.test.js
+Causal outcome: accept_classified_backpressure
+Architecture gate: selected / bounded-harness-snapshot-retry
+Expected delta: Snapshot coverage moved and the first frontier migrated; close this startup active-gate package and pursue the operation_workflow_owner / workflow_progress residual successor.
+Current state: Focused proof is green and fresh rolling-restart evidence shows the snapshot-lane reset fix reduced the active-gate symptom: selected snapshot error cleared, snapshot coverage moved from 0/5 to 2/5, and active_gate_snapshot_coverage is now deferred behind owner_reconcile_pending instead of the first frontier. The representative first frontier migrated to publication_ack_convergence / topology_publication_owner / publication_convergence, with priority recovery residuals split by operation_workflow_owner boundaries.
+Allowed edits: test/distributed/harness/cluster-segment-5.js, test/distributed/harness/cluster-segment-7-class-5.js, test/distributed/harness/__tests__/cluster.test-part-3.js, test/distributed/harness/__tests__/cluster-control-snapshot-repair-pressure.test.js
+Candidate runtime files: test/distributed/harness/cluster-segment-5.js, test/distributed/harness/__tests__/cluster.test-part-3.js, test/distributed/harness/cluster-segment-7-class-4.js, src/admin/admin-control-snapshot-class-part-2.js
+Forbidden edits: Startup active-gate snapshot coverage no longer owns the first frontier; successor work must preserve the selected snapshot coverage improvement while advancing the operation_workflow_owner priority recovery residuals.
+Required latest proof: npm test -- test/distributed/harness/__tests__/cluster.test-part-3.js test/distributed/harness/__tests__/cluster-control-snapshot-repair-pressure.test.js, node scripts/check-guideline-literals.js test/distributed/harness/cluster-segment-7-class-5.js test/distributed/harness/__tests__/cluster-control-snapshot-repair-pressure.test.js, npm run audit:runtime-grammar:file -- test/distributed/harness/cluster-segment-5.js test/distributed/harness/__tests__/cluster.test-part-3.js, node scripts/check-guideline-decision-boundaries.js test/distributed/harness/cluster-segment-5.js test/distributed/harness/cluster-segment-7-class-5.js test/distributed/harness/__tests__/cluster.test-part-3.js test/distributed/harness/__tests__/cluster-control-snapshot-repair-pressure.test.js, npm run work:evidence-summary -- test-output/reports/rolling-restart-snapshot-lane-reset-close-20260520T055140Z.report.json, npm run analyze:topology-convergence -- test-output/reports/rolling-restart-snapshot-lane-reset-close-20260520T055140Z.report.json --handoff-probe
 Allowed stop modes: representative-green, migrated, reduced, same-frontier, classification-only, architecture-gap, human-escalation
 ```
 
