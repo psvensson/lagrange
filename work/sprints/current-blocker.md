@@ -4,64 +4,123 @@
 
 ## Theory And Implementation Focus
 
-Theory under test: The publication producer is now satisfied, but active-gate snapshot coverage remains deferred because owner-reconcile publication handoff writes are deferred/enqueued for one node and the active-gate owner is not observing a completed reconcile before its snapshot repair budget expires.
+Theory under test: Implementation and closure proof are validated; operation_progress owns lifecycle state, retired source vocabulary is removed from source/test/script/owner docs, and rebalancer ordinal wrappers are guarded by the owner-map ledger.
 
-Causal question: Startup active-gate owner must either drive or observe the owner-reconcile publication handoff completion for the pending reconcile node before snapshot coverage can promote.
+Causal question: operation_progress_multi_owner
 
-Implementation slice: Classify the active-gate owner-reconcile handoff path, identify the one owner-owned runtime mechanism that can progress pending reconcile publication, then either implement a bounded startup-active-gate fix, migrate owner boundary, or stop as an architecture gap.
+Implementation slice: Close this package or route any successor from fresh representative evidence rather than rolling-restart symptom metrics.
 
 Implementation files:
 
-1. `test/distributed/harness/cluster-segment-5.js`
-2. `test/distributed/harness/cluster-segment-7-class-5.js`
-3. `test/distributed/harness/__tests__/cluster.test-part-3.js`
-4. `test/distributed/harness/__tests__/cluster-control-snapshot-repair-pressure.test.js`
+1. `scripts/check-operation-progress-authority.js`
+2. `scripts/list-commands.js`
+3. `scripts/run-topology-failure-gates.js`
+4. `scripts/work-package-schema.js`
+5. `scripts/work-tracker.js`
+6. `src/rebalancer/README.md`
+7. `src/rebalancer/operation-lifecycle.js`
+8. `src/rebalancer/operation-progress-events.js`
+9. `src/rebalancer/operation-progress-observer.js`
+10. `src/rebalancer/operation-progress-store.js`
+11. `src/rebalancer/operation-workflow-owner.js`
+12. `src/rebalancer/operation-workflow-owner-adapter.js`
+13. `src/rebalancer/operation-workflow-owner-decision.js`
+14. `src/rebalancer/operation-workflow-owner-constants.js`
+15. `src/rebalancer/operation-workflow-owner-ports.js`
+16. `src/rebalancer/operation-workflow-owner-shared.js`
+17. `src/control-plane/invariant-engine.js`
+18. `src/control-plane/invariant-constants.js`
+19. `src/control-plane/priority-recovery-snapshot-stage-8.js`
+20. `src/control-plane/topology-operator-witness.js`
+21. `src/diagnostics/topology-convergence-graph.js`
+22. `src/invariants/invariant-catalog.js`
+23. `test/rebalancer/operation-lifecycle.test.js`
+24. `test/rebalancer/operation-progress-store.test.js`
+25. `test/rebalancer/operation-workflow-owner-adapter.test.js`
+26. `test/rebalancer/operation-workflow-owner-decision.test.js`
+27. `test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry-suite.js`
+28. `test/rebalancer/priority-recovery-topology-timeout-owner-reentry-test-cases.js`
+29. `test/control-plane/invariant-engine.test.js`
+30. `test/diagnostics/topology-convergence-graph.test.js`
+31. `test/distributed/harness/deterministic-simulator.js`
+32. `test/distributed/harness/__tests__/deterministic-simulator.test.js`
+33. `test/distributed/harness/cluster-segment-7-class-4.js`
+34. `test/distributed/harness/scenario-registry.js`
+35. `test/distributed/harness/__tests__/scenario-registry.test.js`
+36. `test/distributed/harness/topology-failure-gate-runner.js`
+37. `test/distributed/harness/topology-failure-gate-matrix.js`
+38. `test/distributed/harness/__tests__/topology-failure-gate-matrix.test.js`
+39. `test/scripts/analyze-topology-convergence.test.js`
+40. `test/scripts/__fixtures__/topology-convergence/publication-operation-active-gate-handoff.fixture.json`
+41. `src/rebalancer/operation-lifecycle.js`
+42. `src/rebalancer/operation-progress-events.js`
+43. `src/rebalancer/operation-progress-observer.js`
+44. `src/rebalancer/operation-progress-store.js`
+45. `src/rebalancer/operation-workflow-owner.js`
+46. `src/rebalancer/operation-workflow-owner-adapter.js`
+47. `src/rebalancer/operation-workflow-owner-decision.js`
+48. `src/rebalancer/operation-workflow-owner-effects.js`
+49. `src/rebalancer/operation-workflow-owner-ports.js`
+50. `src/rebalancer/operation-workflow-owner-shared.js`
+51. `src/control-plane/topology-operator-witness.js`
+52. `src/control-plane/invariant-engine.js`
+53. `src/control-plane/priority-recovery-snapshot-stage-8.js`
+54. `src/diagnostics/topology-convergence-graph.js`
+55. `src/invariants/invariant-catalog.js`
 
-Expected implementation delta: The next proof should either identify a bounded startup_active_gate_owner / snapshot_coverage runtime fix for owner_reconcile_pending, migrate the blocker to the publication owner or readiness owner, or stop as architecture-gap if the handoff contract lacks an owner-owned progress mechanism.
+Expected implementation delta: Operation progress is represented by one owner-owned state machine; publication, active-gate, and observation code consume owned outcomes instead of re-deriving lifecycle state; rolling-restart joins a multi-scenario invariant gate.
 
-Falsifying probe: npm run analyze:topology-convergence -- test-output/reports/rolling-restart-publication-pending-narrowed-20260520T070009Z.report.json --handoff-probe
+Falsifying probe: npm test -- test/rebalancer/operation-lifecycle.test.js test/rebalancer/operation-progress-store.test.js test/rebalancer/operation-workflow-owner-decision.test.js test/rebalancer/operation-workflow-owner-adapter.test.js
 
-Stop rule: If fresh representative evidence returns owner_reconcile_pending with no concrete metric reduction, stop as architecture-gap or human escalation instead of another local patch.
+Stop rule: No architecture decision gate is required for this package.
 
-Sprint: `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md`
+Sprint: `work/sprints/done-2026-q2-operation-progress-resource-and-deterministic-gates.md`
 
-Package: `work/packages/active-20260520-startup-active-gate-owner-reconcile-pending-runtime.md`
+Package: `work/packages/done-20260520-operation-progress-resource-and-deterministic-gates.md`
 
 Workflow lane: `causal-escalation`
 
-Scenario: `rolling-restart`
+Scenario: `none`
 
-Artifact: `test-output/reports/rolling-restart-publication-pending-narrowed-20260520T070009Z.report.json`
+Artifact: `none`
 
 Playback: `none`
 
 ## Boundary
 
-Owner: `startup_active_gate_owner`
+Owner: `operation_workflow_owner`
 
-Boundary: `snapshot_coverage`
+Boundary: `operation_progress`
 
-Dominant reason: `owner_reconcile_pending`
+Dominant reason: `operation_progress_multi_owner`
 
-Current state: Fresh rolling-restart evidence after the publication pending normalization slice closed publication ACK and moved the first frontier to active_gate_snapshot_coverage. The active-gate handoff is pending owner_reconcile_pending for one node while membership publication handoff writes are deferred/enqueued, so this is the pre-approved causal-escalation package before another startup-active-gate local patch.
+Current state: Implementation and closure proof are validated; operation_progress owns lifecycle state, retired source vocabulary is removed from source/test/script/owner docs, and rebalancer ordinal wrappers are guarded by the owner-map ledger.
 
 ## Next Action
 
-Classify the active-gate owner-reconcile handoff path, identify the one owner-owned runtime mechanism that can progress pending reconcile publication, then either implement a bounded startup-active-gate fix, migrate owner boundary, or stop as an architecture gap.
+Close this package or route any successor from fresh representative evidence rather than rolling-restart symptom metrics.
 
 ## Proof Ladder
 
-1. `npm run work:scenario-route -- test-output/reports/rolling-restart-publication-pending-narrowed-20260520T070009Z.report.json --owner startup_active_gate_owner --boundary snapshot_coverage --dominant-reason owner_reconcile_pending --explain active_gate_snapshot_coverage`
-2. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-publication-pending-narrowed-20260520T070009Z.report.json --handoff-probe`
-3. `npm run analyze:causal-model -- test-output/reports/rolling-restart-publication-pending-narrowed-20260520T070009Z.report.json`
+1. `npm test -- test/rebalancer/operation-lifecycle.test.js test/rebalancer/operation-progress-store.test.js test/rebalancer/operation-workflow-owner-decision.test.js test/rebalancer/operation-workflow-owner-adapter.test.js`
+2. `npm test -- test/diagnostics/topology-convergence-graph.test.js test/scripts/analyze-topology-convergence.test.js test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js`
+3. `npm test -- test/control-plane/invariant-engine.test.js test/distributed/harness/__tests__/deterministic-simulator.test.js test/distributed/harness/__tests__/topology-failure-gate-matrix.test.js test/distributed/harness/__tests__/scenario-registry.test.js`
+4. `npm run test:topology-failure-gates`
+5. `npm run audit:operation-progress-authority`
+6. `npm run audit:runtime-grammar:file -- src/rebalancer/operation-lifecycle.js src/rebalancer/operation-progress-events.js src/rebalancer/operation-progress-store.js src/rebalancer/operation-progress-observer.js src/rebalancer/operation-workflow-owner-adapter.js src/rebalancer/operation-workflow-owner-effects.js src/rebalancer/operation-workflow-owner-ports.js src/rebalancer/operation-workflow-owner.js src/rebalancer/operation-workflow-owner-decision.js src/control-plane/topology-operator-witness.js src/control-plane/invariant-engine.js src/invariants/invariant-catalog.js src/diagnostics/topology-convergence-graph.js src/control-plane/priority-recovery-snapshot-stage-8.js`
+7. `npm run audit:guideline:literals -- scripts/check-operation-progress-authority.js scripts/list-commands.js src/rebalancer/operation-lifecycle.js src/rebalancer/operation-progress-events.js src/rebalancer/operation-progress-store.js src/rebalancer/operation-progress-observer.js src/rebalancer/operation-workflow-owner-adapter.js src/rebalancer/operation-workflow-owner-effects.js src/rebalancer/operation-workflow-owner-ports.js src/rebalancer/operation-workflow-owner.js src/rebalancer/operation-workflow-owner-decision.js src/control-plane/topology-operator-witness.js src/control-plane/invariant-engine.js src/invariants/invariant-catalog.js src/diagnostics/topology-convergence-graph.js src/control-plane/priority-recovery-snapshot-stage-8.js test/distributed/harness/deterministic-simulator.js test/distributed/harness/topology-failure-gate-runner.js scripts/run-topology-failure-gates.js`
+8. `npm run audit:guideline:decision-boundaries -- scripts/check-operation-progress-authority.js src/rebalancer/operation-lifecycle.js src/rebalancer/operation-progress-events.js src/rebalancer/operation-progress-store.js src/rebalancer/operation-progress-observer.js src/rebalancer/operation-workflow-owner-adapter.js src/rebalancer/operation-workflow-owner-effects.js src/rebalancer/operation-workflow-owner-ports.js src/rebalancer/operation-workflow-owner.js src/rebalancer/operation-workflow-owner-decision.js src/control-plane/topology-operator-witness.js test/distributed/harness/deterministic-simulator.js test/distributed/harness/topology-failure-gate-runner.js scripts/run-topology-failure-gates.js`
+9. `npm run work:validate -- --entry`
+10. `npm run work:validate -- --pre-impl`
+11. `npm run work:validate -- --closure`
 
 ## Model Fit
 
-Package class: `causal-escalation`
+Package class: `runtime-owner-boundary`
 
 Intended minimum model: `gpt-5.3-codex`
 
-Scope shape: `cross-boundary-handoff/current-frontier`
+Scope shape: `bounded-owner-runtime/current-frontier`
 
 Output profile: `medium`
 
@@ -72,106 +131,99 @@ Escalation triggers:
 
 ## Representative Residual
 
-Status: `migrated`
+Status: `architecture-gap`
 
-Scenario: `rolling-restart`
+Scenario: `architecture-reset`
 
-Artifact: `test-output/reports/rolling-restart-publication-pending-narrowed-20260520T070009Z.report.json`
+Artifact: `work/sprints/current-blocker.md`
 
-Frontier: `active_gate_snapshot_coverage`
+Frontier: `operation_progress`
 
-Owner: `startup_active_gate_owner`
+Owner: `operation_workflow_owner`
 
-Boundary: `snapshot_coverage`
+Boundary: `operation_progress`
 
-Dominant reason: `owner_reconcile_pending`
+Dominant reason: `operation_progress_multi_owner`
 
-Next action: `Use the causal-escalation handoff route to identify a bounded owner-reconcile publication progress mechanism before another startup active-gate runtime patch.`
+Next action: `Promote operation_progress to a first-class owner resource with invariant and deterministic gate proof.`
 
 ## Causal Governance
 
-Causal hypothesis: `The publication producer is now satisfied, but active-gate snapshot coverage remains deferred because owner-reconcile publication handoff writes are deferred/enqueued for one node and the active-gate owner is not observing a completed reconcile before its snapshot repair budget expires.`
+Causal hypothesis: `unknown`
 
-Stop-condition check: `Use `npm run work:scenario-route -- test-output/reports/rolling-restart-publication-pending-narrowed-20260520T070009Z.report.json --owner startup_active_gate_owner --boundary snapshot_coverage --dominant-reason owner_reconcile_pending --explain active_gate_snapshot_coverage`, `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-publication-pending-narrowed-20260520T070009Z.report.json --handoff-probe`, and `npm run analyze:causal-model -- test-output/reports/rolling-restart-publication-pending-narrowed-20260520T070009Z.report.json` before runtime edits.`
+Stop-condition check: `unknown`
 
-Expected causal-model change: `The next proof should either identify a bounded startup_active_gate_owner / snapshot_coverage runtime fix for owner_reconcile_pending, migrate the blocker to the publication owner or readiness owner, or stop as architecture-gap if the handoff contract lacks an owner-owned progress mechanism.`
+Expected causal-model change: `unknown`
 
-Representative outcome: `migrated`
+Representative outcome: `unknown`
 
-Causal debt: `Fresh artifact reports active_gate_snapshot_coverage as first frontier with owner_reconcile_pending, snapshotCoverageNodeCount 2/5, publicationActiveGateHandoff pending for node 35a891b8-c1a0-5064-9c6e-2acfba61c2a7, membershipPublicationHandoffOutcome write_deferred/enqueued/retryAfterMs=1000, publication ACK closed, and priority recovery residuals 0.`
+Causal debt: `unknown`
 
-Cross-boundary review: `User pre-approved architectural escalation on 2026-05-20. This package may inspect startup active-gate snapshot coverage, publication active-gate handoff, and membership-publication handoff evidence, but must not patch operation workflow runtime or weaken timeout/guardrail contracts.`
+Cross-boundary review: `unknown`
 
 ## Scenario Causal Closure
 
-Reference scenario/probe: `rolling-restart test-output/reports/rolling-restart-publication-pending-narrowed-20260520T070009Z.report.json`
+Reference scenario/probe: `unknown`
 
 Phase chain:
 
-1. `publication workflow handoff runtime cleared publication_operation_workflow_handoff_leg_missing`
-2. `publication pending normalization narrowed stale missing-published evidence and closed publication ACK`
-3. `fresh handoff probe now selects startup_active_gate_owner / snapshot_coverage with owner_reconcile_pending for one node`
-4. `active-gate snapshot coverage remains 2/5 and repair is deferred behind the owner-reconcile handoff`
+1. None recorded
 
-Current first frontier: `active_gate_snapshot_coverage / startup_active_gate_owner / snapshot_coverage / owner_reconcile_pending is first frontier after publication ACK closed.`
+Current first frontier: `unknown`
 
 Known downstream blockers:
 
-1. `readiness_startup_support inherits active_gate no-progress`
-2. `snapshot repair is deferred with cache_stale_watermark, discovery_node_coverage_gap, and stale_replica_operations_in_flight`
-3. `membershipPublicationHandoffOutcome remains write_deferred and enqueued`
+1. None recorded
 
-Missing causal edge: `Startup active-gate owner must either drive or observe the owner-reconcile publication handoff completion for the pending reconcile node before snapshot coverage can promote.`
+Missing causal edge: `unknown`
 
-Missing causal edge probe: `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-publication-pending-narrowed-20260520T070009Z.report.json --handoff-probe`
+Missing causal edge probe: `unknown`
 
-Bounded progress proof: `Focused proof must show a concrete owner-owned reconcile retry, handoff drain, wake, or bounded timer mechanism that reduces pendingReconcileCount, improves snapshot coverage, migrates owner boundary, or records architecture stop.`
+Bounded progress proof: `unknown`
 
-Bounded progress proof artifact: `test-output/reports/rolling-restart-publication-pending-narrowed-20260520T070009Z.report.json`
+Bounded progress proof artifact: `unknown`
 
-Expected observable transition: `Fresh representative evidence reduces owner_reconcile_pending, migrates to a new owner boundary, or turns rolling-restart green.`
+Expected observable transition: `unknown`
 
-Max progress bound: `one causal-escalation handoff package before another same-frontier startup active-gate runtime successor`
+Max progress bound: `unknown`
 
-Same-frontier fallback: `If fresh representative evidence returns owner_reconcile_pending with no concrete metric reduction, stop as architecture-gap or human escalation instead of another local patch.`
+Same-frontier fallback: `unknown`
 
-Expected next frontier: `reduced owner_reconcile_pending, owner-boundary migration, representative-green, architecture-gap, or human stop`
+Expected next frontier: `unknown`
 
-Result classification: `migrated`
+Result classification: `unknown`
 
-Stop condition: `continue-local-fix`
+Stop condition: `unknown`
 
 Recent frontier history:
 
-1. `work/packages/done-20260520-rolling-restart-startup-active-gate-owner-snapshot-coverage.md / startup_active_gate_owner / snapshot_coverage / migrated`
-2. `work/packages/done-20260520-topology-publication-workflow-handoff-runtime.md / topology_publication_owner / publication_convergence / reduced`
-3. `work/packages/done-20260520-topology-publication-remaining-pending-runtime.md / topology_publication_owner / publication_convergence / reduced`
+1. None recorded
 
-Oscillation check: `The frontier returned to startup_active_gate_owner / snapshot_coverage after adjacent startup and publication fixes; this package is the required causal-escalation handoff and the user pre-approved architectural escalation while pursuing green rolling-restart.`
+Oscillation check: `unknown`
 
-Handoff invariant: `Startup active-gate owner consumes one canonical publication active-gate handoff outcome and must not reconstruct publication debt locally.`
+Handoff invariant: `unknown`
 
 ## Rerun Decision
 
-Source artifact: `test-output/reports/rolling-restart-publication-pending-narrowed-20260520T070009Z.report.json`
+Source artifact: `work/sprints/current-blocker.md`
 
-Route owner: `startup_active_gate_owner`
+Route owner: `operation_workflow_owner`
 
-Route boundary: `snapshot_coverage`
+Route boundary: `operation_progress`
 
-Route dominant reason: `owner_reconcile_pending`
+Route dominant reason: `operation_progress_multi_owner`
 
-Route causal outcome: `continue_local_fix`
+Route causal outcome: `architecture-gap`
 
-Stop mode: `classified_local_blocker`
+Stop mode: `architecture-gap-stop`
 
-Next lane: `runtime-owner-boundary`
+Next lane: `causal-escalation`
 
-Expected delta: `Select one executable startup active-gate owner-reconcile mechanism, migrate the owner boundary, or record architecture-gap stop before another local runtime patch.`
+Expected delta: `Operation progress is represented by one owner-owned state machine; publication, active-gate, and observation code consume owned outcomes instead of re-deriving lifecycle state; rolling-restart joins a multi-scenario invariant gate.`
 
 Required refresh commands:
 
-1. `npm run work:package:route-after-rerun -- --artifact test-output/reports/rolling-restart-publication-pending-narrowed-20260520T070009Z.report.json --owner startup_active_gate_owner --boundary snapshot_coverage --dominant-reason owner_reconcile_pending`
+1. `npm run work:package:route-after-rerun -- --artifact work/sprints/current-blocker.md --owner operation_workflow_owner --boundary operation_progress --dominant-reason operation_progress_multi_owner`
 2. `update Sprint Strategy Brief and Current Edge Card from the route result`
 3. `npm run work:repair`
 4. `npm run work:validate -- --pre-impl`
@@ -188,63 +240,167 @@ Proof command budget: `two-or-three-canonical-commands`
 
 Commands:
 
-1. `npm run work:evidence-summary -- test-output/reports/rolling-restart-publication-pending-narrowed-20260520T070009Z.report.json`
-2. `npm run work:scenario-triage -- test-output/reports/rolling-restart-publication-pending-narrowed-20260520T070009Z.report.json --markdown`
-3. `npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-publication-pending-narrowed-20260520T070009Z.report.json --markdown`
+1. `npm test -- test/rebalancer/operation-lifecycle.test.js test/rebalancer/operation-progress-store.test.js test/rebalancer/operation-workflow-owner-decision.test.js test/rebalancer/operation-workflow-owner-adapter.test.js`
+2. `npm run test:topology-failure-gates`
+3. `npm run work:validate -- --pre-impl`
 
 Decision record: `Record classification in the current package or sprint edge card; open a separate classifier only for material route, owner, boundary, stop-condition, tracker-truth, or successor-selection changes.`
 
-Successor action: `open-runtime-owner-boundary`
+Successor action: `rerun-representative-evidence`
 
 Runtime promotion rule: `When canonical owner and boundary are stable, prefer a runtime-owner-boundary successor and keep runtime files in candidateRuntimeFiles until that package activates them.`
 
 ## Architecture Decision Gate
 
-Status: `selected`
+Status: `not-required`
 
-Trigger: `frontier-oscillation`
+Trigger: `none`
 
 Trigger evidence:
 
-1. `publication ACK is now satisfied while active-gate snapshot coverage is first frontier`
-2. `publicationActiveGateHandoff is pending owner_reconcile_pending for exactly one node`
-3. `membershipPublicationHandoffOutcome is write_deferred and enqueued`
-4. `user pre-approved architectural escalation while pursuing green rolling-restart`
+1. None recorded
 
 Choices:
 
-1. `active-gate-owner-reconcile-causal-handoff` route=`continue-local-proof` - Classify and execute the owner-owned active-gate reconcile path if the handoff exposes a concrete progress mechanism.
-2. `publication-owner-migration` route=`owner-boundary-migration` - Migrate back only if the deferred handoff write belongs to publication owner rather than active-gate snapshot coverage.
-3. `architecture-gap-stop` route=`architecture-package` - Stop local patching if no single owner owns progress from write_deferred handoff to snapshot coverage.
+1. None recorded
 
-Selected choice: `active-gate-owner-reconcile-causal-handoff`
+Selected choice: `unknown`
 
-Gate next action: Proceed with causal handoff proof before expanding runtime write scope.
+Gate next action: No architecture decision gate is required for this package.
 
 ## Scope
 
 Write scope:
 
-1. None recorded
+1. `work/packages/done-20260520-operation-progress-resource-and-deterministic-gates.md`
+2. `work/sprints/done-2026-q2-operation-progress-resource-and-deterministic-gates.md`
+3. `work/sprints/current-blocker.md`
+4. `work/sprints/current-blocker.json`
+5. `work/tracks/topology-convergence.md`
+6. `architecture/current-owner-maps.md`
+7. `package.json`
+8. `scripts/check-operation-progress-authority.js`
+9. `scripts/list-commands.js`
+10. `scripts/run-topology-failure-gates.js`
+11. `scripts/work-package-schema.js`
+12. `scripts/work-tracker.js`
+13. `work/README.md`
+14. `work/model-ledger.jsonl`
+15. `work/templates/probe-package.md`
+16. `src/rebalancer/README.md`
+17. `src/rebalancer/operation-lifecycle.js`
+18. `src/rebalancer/operation-progress-events.js`
+19. `src/rebalancer/operation-progress-observer.js`
+20. `src/rebalancer/operation-progress-store.js`
+21. `src/rebalancer/operation-workflow-owner.js`
+22. `src/rebalancer/operation-workflow-owner-adapter.js`
+23. `src/rebalancer/operation-workflow-owner-decision.js`
+24. `src/rebalancer/operation-workflow-owner-constants.js`
+25. `src/rebalancer/operation-workflow-owner-ports.js`
+26. `src/rebalancer/operation-workflow-owner-shared.js`
+27. `src/control-plane/invariant-engine.js`
+28. `src/control-plane/invariant-constants.js`
+29. `src/control-plane/priority-recovery-snapshot-stage-8.js`
+30. `src/control-plane/topology-operator-witness.js`
+31. `src/diagnostics/topology-convergence-graph.js`
+32. `src/invariants/invariant-catalog.js`
+33. `test/rebalancer/operation-lifecycle.test.js`
+34. `test/rebalancer/operation-progress-store.test.js`
+35. `test/rebalancer/operation-workflow-owner-adapter.test.js`
+36. `test/rebalancer/operation-workflow-owner-decision.test.js`
+37. `test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry-suite.js`
+38. `test/rebalancer/priority-recovery-topology-timeout-owner-reentry-test-cases.js`
+39. `test/control-plane/invariant-engine.test.js`
+40. `test/diagnostics/topology-convergence-graph.test.js`
+41. `test/distributed/harness/deterministic-simulator.js`
+42. `test/distributed/harness/__tests__/deterministic-simulator.test.js`
+43. `test/distributed/harness/cluster-segment-7-class-4.js`
+44. `test/distributed/harness/scenario-registry.js`
+45. `test/distributed/harness/__tests__/scenario-registry.test.js`
+46. `test/distributed/harness/topology-failure-gate-runner.js`
+47. `test/distributed/harness/topology-failure-gate-matrix.js`
+48. `test/distributed/harness/__tests__/topology-failure-gate-matrix.test.js`
+49. `test/scripts/analyze-topology-convergence.test.js`
+50. `test/scripts/__fixtures__/topology-convergence/publication-operation-active-gate-handoff.fixture.json`
 
 Handoff files:
 
-1. `test-output/reports/rolling-restart-publication-pending-narrowed-20260520T070009Z.report.json`
+1. None recorded
 
 Generated files:
 
-1. None recorded
+1. `test-output/reports/topology-failure-gates/latest/invariant-gate.report.json`
 
 Candidate runtime files:
 
-1. `test/distributed/harness/cluster-segment-5.js`
-2. `test/distributed/harness/cluster-segment-7-class-5.js`
-3. `test/distributed/harness/__tests__/cluster.test-part-3.js`
-4. `test/distributed/harness/__tests__/cluster-control-snapshot-repair-pressure.test.js`
+1. `src/rebalancer/operation-lifecycle.js`
+2. `src/rebalancer/operation-progress-events.js`
+3. `src/rebalancer/operation-progress-observer.js`
+4. `src/rebalancer/operation-progress-store.js`
+5. `src/rebalancer/operation-workflow-owner.js`
+6. `src/rebalancer/operation-workflow-owner-adapter.js`
+7. `src/rebalancer/operation-workflow-owner-decision.js`
+8. `src/rebalancer/operation-workflow-owner-effects.js`
+9. `src/rebalancer/operation-workflow-owner-ports.js`
+10. `src/rebalancer/operation-workflow-owner-shared.js`
+11. `src/control-plane/topology-operator-witness.js`
+12. `src/control-plane/invariant-engine.js`
+13. `src/control-plane/priority-recovery-snapshot-stage-8.js`
+14. `src/diagnostics/topology-convergence-graph.js`
+15. `src/invariants/invariant-catalog.js`
 
 Commit scope:
 
-1. None recorded
+1. `work/packages/done-20260520-operation-progress-resource-and-deterministic-gates.md`
+2. `work/sprints/done-2026-q2-operation-progress-resource-and-deterministic-gates.md`
+3. `work/sprints/current-blocker.md`
+4. `work/sprints/current-blocker.json`
+5. `work/tracks/topology-convergence.md`
+6. `architecture/current-owner-maps.md`
+7. `package.json`
+8. `scripts/check-operation-progress-authority.js`
+9. `scripts/list-commands.js`
+10. `scripts/run-topology-failure-gates.js`
+11. `scripts/work-package-schema.js`
+12. `scripts/work-tracker.js`
+13. `work/README.md`
+14. `work/model-ledger.jsonl`
+15. `work/templates/probe-package.md`
+16. `src/rebalancer/README.md`
+17. `src/rebalancer/operation-lifecycle.js`
+18. `src/rebalancer/operation-progress-events.js`
+19. `src/rebalancer/operation-progress-observer.js`
+20. `src/rebalancer/operation-progress-store.js`
+21. `src/rebalancer/operation-workflow-owner.js`
+22. `src/rebalancer/operation-workflow-owner-adapter.js`
+23. `src/rebalancer/operation-workflow-owner-decision.js`
+24. `src/rebalancer/operation-workflow-owner-constants.js`
+25. `src/rebalancer/operation-workflow-owner-ports.js`
+26. `src/rebalancer/operation-workflow-owner-shared.js`
+27. `src/control-plane/invariant-engine.js`
+28. `src/control-plane/invariant-constants.js`
+29. `src/control-plane/priority-recovery-snapshot-stage-8.js`
+30. `src/control-plane/topology-operator-witness.js`
+31. `src/diagnostics/topology-convergence-graph.js`
+32. `src/invariants/invariant-catalog.js`
+33. `test/rebalancer/operation-lifecycle.test.js`
+34. `test/rebalancer/operation-progress-store.test.js`
+35. `test/rebalancer/operation-workflow-owner-adapter.test.js`
+36. `test/rebalancer/operation-workflow-owner-decision.test.js`
+37. `test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry-suite.js`
+38. `test/rebalancer/priority-recovery-topology-timeout-owner-reentry-test-cases.js`
+39. `test/control-plane/invariant-engine.test.js`
+40. `test/diagnostics/topology-convergence-graph.test.js`
+41. `test/distributed/harness/deterministic-simulator.js`
+42. `test/distributed/harness/__tests__/deterministic-simulator.test.js`
+43. `test/distributed/harness/cluster-segment-7-class-4.js`
+44. `test/distributed/harness/scenario-registry.js`
+45. `test/distributed/harness/__tests__/scenario-registry.test.js`
+46. `test/distributed/harness/topology-failure-gate-runner.js`
+47. `test/distributed/harness/topology-failure-gate-matrix.js`
+48. `test/distributed/harness/__tests__/topology-failure-gate-matrix.test.js`
+49. `test/scripts/analyze-topology-convergence.test.js`
+50. `test/scripts/__fixtures__/topology-convergence/publication-operation-active-gate-handoff.fixture.json`
 
 Legacy touched files:
 

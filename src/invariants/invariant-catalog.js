@@ -62,6 +62,9 @@ const INVARIANT_ID = Object.freeze({
     'control_plane.readiness_dimension_correctness',
   CONTROL_PLANE_TRANSACTION_COORDINATOR_REQUIRED:
     'control_plane.transaction_coordinator_required',
+  OPERATION_PROGRESS_BOUNDED_STEPS: 'IV-OP-1',
+  PUBLICATION_VISIBLE_OR_RETAINED: 'IV-PUB-1',
+  SNAPSHOT_COVERAGE_MONOTONIC: 'IV-COV-1',
 });
 
 function freezeDefinition(definition) {
@@ -294,6 +297,42 @@ const INVARIANT_CATALOG = Object.freeze({
           'transaction coordinator is absent',
       },
     }),
+  [INVARIANT_ID.OPERATION_PROGRESS_BOUNDED_STEPS]: freezeDefinition({
+    id: INVARIANT_ID.OPERATION_PROGRESS_BOUNDED_STEPS,
+    severity: INVARIANT_SEVERITY.CRITICAL,
+    scope: INVARIANT_SCOPE.CLUSTER,
+    owningSubsystem: 'operation-workflow-owner',
+    defaultReasonCode: 'operation_progress_bound_exceeded',
+    expected: {
+      condition:
+        'every dispatched operation reaches a terminal state within its ' +
+        'declared step bound',
+    },
+  }),
+  [INVARIANT_ID.PUBLICATION_VISIBLE_OR_RETAINED]: freezeDefinition({
+    id: INVARIANT_ID.PUBLICATION_VISIBLE_OR_RETAINED,
+    severity: INVARIANT_SEVERITY.CRITICAL,
+    scope: INVARIANT_SCOPE.CLUSTER,
+    owningSubsystem: 'topology-publication-owner',
+    defaultReasonCode: 'accepted_publication_without_visibility_or_retry',
+    expected: {
+      condition:
+        'every accepted publication is visible at active-gate or retained ' +
+        'with an explicit retry outcome',
+    },
+  }),
+  [INVARIANT_ID.SNAPSHOT_COVERAGE_MONOTONIC]: freezeDefinition({
+    id: INVARIANT_ID.SNAPSHOT_COVERAGE_MONOTONIC,
+    severity: INVARIANT_SEVERITY.CRITICAL,
+    scope: INVARIANT_SCOPE.CLUSTER,
+    owningSubsystem: 'startup-active-gate-owner',
+    defaultReasonCode: 'snapshot_coverage_regressed',
+    expected: {
+      condition:
+        'snapshot coverage monotonically advances while no failure is ' +
+        'declared',
+    },
+  }),
 });
 
 function clonePayload(payload) {

@@ -8,8 +8,11 @@ import {
   checkMonotonicSteps,
   checkClaimExclusivity,
   checkOrphanInFlight,
+  checkOperationProgressBoundedSteps,
+  checkPublicationVisibleOrRetained,
   checkReadinessDimensionCorrectness,
   checkReplicaOperationSingleWriter,
+  checkSnapshotCoverageMonotonic,
   checkSplitResumeCompleteness,
   checkTransactionAvailability,
   evaluateInvariants,
@@ -46,6 +49,9 @@ const FIXTURE_CONSUMER_ROUTING = 'RoutingService';
 const READINESS_DIMENSION_REPAIR = 'repairEligible';
 const READINESS_DIMENSION_SERVE = 'serveEligible';
 const FIXTURE_TRANSITION_ID = 'transition-1';
+const FIXTURE_PUBLICATION_ID = 'publication-1';
+const FIXTURE_SAMPLE_A = 'coverage-sample-a';
+const FIXTURE_SAMPLE_B = 'coverage-sample-b';
 const STEP_1 = 1;
 const STEP_2 = 2;
 const STEP_3 = 3;
@@ -117,6 +123,31 @@ function buildValidInvariantState(overrides = {}) {
       requiresTransactionCoordinator: true,
       hasTransactionCoordinator: true,
     }],
+    operationProgressRecords: [{
+      operationId: FIXTURE_OP_1,
+      dispatched: true,
+      terminal: true,
+      stepCount: 3,
+      maxStepBound: 5,
+    }],
+    publicationProgressRecords: [{
+      publicationId: FIXTURE_PUBLICATION_ID,
+      accepted: true,
+      visibleAtActiveGate: true,
+      retainedRetry: false,
+    }],
+    snapshotCoverageSamples: [
+      {
+        sampleId: FIXTURE_SAMPLE_A,
+        sequence: 1,
+        coverageNodeCount: 3,
+      },
+      {
+        sampleId: FIXTURE_SAMPLE_B,
+        sequence: 2,
+        coverageNodeCount: 5,
+      },
+    ],
     ...overrides,
   };
 }
@@ -651,14 +682,135 @@ test('checkTransactionAvailability fails when an atomic transition ' +
 });
 
 // ═══════════════════════════════════════════════════════════════════
-// 11. evaluateInvariants — full set evaluation
+// 11. Operation Progress Bounded Steps
+// ═══════════════════════════════════════════════════════════════════
+
+test('checkOperationProgressBoundedSteps passes when dispatched ' +
+  'operation is terminal within bound', async (t) => {
+  const result = checkOperationProgressBoundedSteps({
+    operationProgressRecords: buildValidInvariantState()
+      .operationProgressRecords,
+  });
+
+  t.equal(
+    result.invariantId,
+    INVARIANT_ID.OPERATION_PROGRESS_BOUNDED_STEPS,
+  );
+  t.equal(result.passed, true);
+  t.equal(result.reason, INVARIANT_REASON.OPERATION_PROGRESS_BOUNDED);
+});
+
+test('checkOperationProgressBoundedSteps fails when dispatched ' +
+  'operation exceeds bound without terminal state', async (t) => {
+  const result = checkOperationProgressBoundedSteps({
+    operationProgressRecords: [{
+      operationId: FIXTURE_OP_1,
+      dispatched: true,
+      state: 'existing_operation_advancement_ready',
+      stepCount: 9,
+      maxStepBound: 5,
+    }],
+  });
+
+  t.equal(result.passed, false);
+  t.equal(
+    result.reason,
+    INVARIANT_REASON.OPERATION_PROGRESS_BOUND_EXCEEDED,
+  );
+  t.equal(result.context.violations[0].operationId, FIXTURE_OP_1);
+});
+
+// ═══════════════════════════════════════════════════════════════════
+// 12. Publication Visible Or Retained
+// ═══════════════════════════════════════════════════════════════════
+
+test('checkPublicationVisibleOrRetained passes when accepted publication ' +
+  'is visible', async (t) => {
+  const result = checkPublicationVisibleOrRetained({
+    publicationProgressRecords: buildValidInvariantState()
+      .publicationProgressRecords,
+  });
+
+  t.equal(
+    result.invariantId,
+    INVARIANT_ID.PUBLICATION_VISIBLE_OR_RETAINED,
+  );
+  t.equal(result.passed, true);
+  t.equal(result.reason, INVARIANT_REASON.PUBLICATION_VISIBLE_OR_RETAINED);
+});
+
+test('checkPublicationVisibleOrRetained fails when accepted publication ' +
+  'has no active-gate visibility or retry retention', async (t) => {
+  const result = checkPublicationVisibleOrRetained({
+    publicationProgressRecords: [{
+      publicationId: FIXTURE_PUBLICATION_ID,
+      accepted: true,
+      visibleAtActiveGate: false,
+      retainedRetry: false,
+    }],
+  });
+
+  t.equal(result.passed, false);
+  t.equal(
+    result.reason,
+    INVARIANT_REASON.ACCEPTED_PUBLICATION_WITHOUT_VISIBILITY_OR_RETRY,
+  );
+  t.equal(
+    result.context.violations[0].publicationId,
+    FIXTURE_PUBLICATION_ID,
+  );
+});
+
+// ═══════════════════════════════════════════════════════════════════
+// 13. Snapshot Coverage Monotonic
+// ═══════════════════════════════════════════════════════════════════
+
+test('checkSnapshotCoverageMonotonic passes when coverage advances',
+  async (t) => {
+    const result = checkSnapshotCoverageMonotonic({
+      snapshotCoverageSamples: buildValidInvariantState()
+        .snapshotCoverageSamples,
+    });
+
+    t.equal(
+      result.invariantId,
+      INVARIANT_ID.SNAPSHOT_COVERAGE_MONOTONIC,
+    );
+    t.equal(result.passed, true);
+    t.equal(result.reason, INVARIANT_REASON.SNAPSHOT_COVERAGE_MONOTONIC);
+  });
+
+test('checkSnapshotCoverageMonotonic fails when coverage regresses ' +
+  'under no-failure', async (t) => {
+  const result = checkSnapshotCoverageMonotonic({
+    snapshotCoverageSamples: [
+      {
+        sampleId: FIXTURE_SAMPLE_A,
+        sequence: 1,
+        coverageNodeCount: 5,
+      },
+      {
+        sampleId: FIXTURE_SAMPLE_B,
+        sequence: 2,
+        coverageNodeCount: 3,
+      },
+    ],
+  });
+
+  t.equal(result.passed, false);
+  t.equal(result.reason, INVARIANT_REASON.SNAPSHOT_COVERAGE_REGRESSED);
+  t.equal(result.context.violations[0].sampleId, FIXTURE_SAMPLE_B);
+});
+
+// ═══════════════════════════════════════════════════════════════════
+// 14. evaluateInvariants — full set evaluation
 // ═══════════════════════════════════════════════════════════════════
 
 test('evaluateInvariants returns the full invariant set on ' +
   'valid state', async (t) => {
   const results = evaluateInvariants(buildValidInvariantState());
 
-  t.equal(results.length, 9);
+  t.equal(results.length, 12);
   t.ok(Object.isFrozen(results));
 
   const ids = results.map((r) => r.invariantId);
@@ -675,6 +827,9 @@ test('evaluateInvariants returns the full invariant set on ' +
   t.ok(
     ids.includes(INVARIANT_ID.CONTROL_PLANE_TRANSACTION_COORDINATOR_REQUIRED),
   );
+  t.ok(ids.includes(INVARIANT_ID.OPERATION_PROGRESS_BOUNDED_STEPS));
+  t.ok(ids.includes(INVARIANT_ID.PUBLICATION_VISIBLE_OR_RETAINED));
+  t.ok(ids.includes(INVARIANT_ID.SNAPSHOT_COVERAGE_MONOTONIC));
 
   for (const result of results) {
     t.equal(result.passed, true, `${result.invariantId} should pass`);
@@ -736,17 +891,42 @@ test('evaluateInvariants detects multiple violations in one call',
         requiresTransactionCoordinator: true,
         hasTransactionCoordinator: false,
       }],
+      operationProgressRecords: [{
+        operationId: FIXTURE_OP_1,
+        dispatched: true,
+        terminal: false,
+        stepCount: 9,
+        maxStepBound: 5,
+      }],
+      publicationProgressRecords: [{
+        publicationId: FIXTURE_PUBLICATION_ID,
+        accepted: true,
+        visibleAtActiveGate: false,
+        retainedRetry: false,
+      }],
+      snapshotCoverageSamples: [
+        {
+          sampleId: FIXTURE_SAMPLE_A,
+          sequence: 1,
+          coverageNodeCount: 5,
+        },
+        {
+          sampleId: FIXTURE_SAMPLE_B,
+          sequence: 2,
+          coverageNodeCount: 3,
+        },
+      ],
     }));
 
-    t.equal(results.length, 9);
+    t.equal(results.length, 12);
     const failed = results.filter((r) => !r.passed);
-    t.equal(failed.length, 9, 'all invariants should fail');
+    t.equal(failed.length, 12, 'all invariants should fail');
   });
 
 test('evaluateInvariants handles null/undefined state gracefully',
   async (t) => {
     const results = evaluateInvariants(null);
-    t.equal(results.length, 9);
+    t.equal(results.length, 12);
     for (const result of results) {
       t.equal(result.passed, true);
     }
@@ -766,13 +946,13 @@ test('buildInvariantDiagnosticsBundle summarizes all-passing results',
     const bundle = buildInvariantDiagnosticsBundle(results);
 
     t.ok(Object.isFrozen(bundle));
-    t.equal(bundle.summary.total, 9);
-    t.equal(bundle.summary.passed, 9);
+    t.equal(bundle.summary.total, 12);
+    t.equal(bundle.summary.passed, 12);
     t.equal(bundle.summary.failed, 0);
     t.equal(bundle.summary.hardFailures, 0);
     t.equal(bundle.summary.softFailures, 0);
     t.equal(bundle.breaches.length, 0);
-    t.equal(bundle.artifactRecords.length, 9);
+    t.equal(bundle.artifactRecords.length, 12);
     t.ok(Object.isFrozen(bundle.breaches));
     t.ok(Object.isFrozen(bundle.artifactRecords));
     t.ok(typeof bundle.timestamp === 'number');
@@ -793,8 +973,8 @@ test('buildInvariantDiagnosticsBundle separates hard and soft failures',
 
     const bundle = buildInvariantDiagnosticsBundle(results);
 
-    t.equal(bundle.summary.total, 9);
-    t.equal(bundle.summary.passed, 7);
+    t.equal(bundle.summary.total, 12);
+    t.equal(bundle.summary.passed, 10);
     t.equal(bundle.summary.failed, 2);
     t.equal(bundle.summary.hardFailures, 1);
     t.equal(bundle.summary.softFailures, 1);
@@ -872,7 +1052,7 @@ test('buildInvariantArtifactRecords produce catalog-shaped entries ' +
   const artifactRecords = buildInvariantArtifactRecords(results);
   const summary = summarizeInvariantBreaches(artifactRecords);
 
-  t.equal(artifactRecords.length, 9);
+  t.equal(artifactRecords.length, 12);
   t.equal(summary.totalCount, 1);
   t.equal(summary.hardCount, 1);
   t.equal(

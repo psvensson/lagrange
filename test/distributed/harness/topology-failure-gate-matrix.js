@@ -26,29 +26,37 @@ const TOPOLOGY_FAILURE_GATE_CONFIG = Object.freeze({
 
 const TOPOLOGY_FAILURE_GATE_SCENARIO = Object.freeze({
   NODE_JOIN_UNDER_LOAD: 'node-join-under-load',
+  PARTITION_KILL_HEAL_UNDER_LOAD: 'partition-kill-heal-under-load',
   ROLLING_RESTART: 'rolling-restart',
   SEED_RESTART_UNDER_LOAD: 'seed-restart-under-load',
   SEVEN_NODE_LOAD_DURING_PARTITIONING:
     'seven-node-load-during-partitioning',
   SEVEN_NODE_READ_WRITE_LOAD_TRANSACTION_RECOVERY:
     'seven-node-read-write-load-transaction-recovery',
+  SLOW_FOLLOWER_UNDER_LOAD: 'slow-follower-under-load',
   WRITE_ACK_VISIBILITY: 'write-ack-visibility',
 });
 
 const TOPOLOGY_FAILURE_GATE_DIMENSION = Object.freeze({
   FAILURE_DETECTION: 'failure_detection',
+  FAILURE_INJECTION: 'failure_injection',
   JOIN: 'join',
   REBALANCE_DISRUPTION: 'rebalance_disruption',
   REJOIN: 'rejoin',
   REMOTE_HANDOFF: 'remote_handoff',
+  SLOW_NETWORK: 'slow_network',
+  STALE_EVIDENCE: 'stale_evidence',
   STALE_PUBLICATION: 'stale_publication',
 });
 
 const REQUIRED_TOPOLOGY_FAILURE_GATE_DIMENSIONS = Object.freeze([
   TOPOLOGY_FAILURE_GATE_DIMENSION.FAILURE_DETECTION,
+  TOPOLOGY_FAILURE_GATE_DIMENSION.FAILURE_INJECTION,
   TOPOLOGY_FAILURE_GATE_DIMENSION.JOIN,
   TOPOLOGY_FAILURE_GATE_DIMENSION.REJOIN,
   TOPOLOGY_FAILURE_GATE_DIMENSION.REMOTE_HANDOFF,
+  TOPOLOGY_FAILURE_GATE_DIMENSION.SLOW_NETWORK,
+  TOPOLOGY_FAILURE_GATE_DIMENSION.STALE_EVIDENCE,
   TOPOLOGY_FAILURE_GATE_DIMENSION.STALE_PUBLICATION,
   TOPOLOGY_FAILURE_GATE_DIMENSION.REBALANCE_DISRUPTION,
 ]);
@@ -84,6 +92,7 @@ const TOPOLOGY_FAILURE_GATE_BOUNDED_PROGRESS_MECHANISM_SET =
 
 const TOPOLOGY_FAILURE_GATE_OWNER = Object.freeze({
   OPERATION_WORKFLOW_OWNER: 'operation_workflow_owner',
+  STARTUP_ACTIVE_GATE_OWNER: 'startup_active_gate_owner',
   TOPOLOGY_CONTROL_PLANE: 'topology_control_plane',
   TOPOLOGY_JOIN_OWNER: 'topology_join_owner',
   TOPOLOGY_PUBLICATION_OWNER: 'topology_publication_owner',
@@ -94,12 +103,15 @@ const TOPOLOGY_FAILURE_GATE_OWNER = Object.freeze({
 const TOPOLOGY_FAILURE_GATE_BOUNDARY = Object.freeze({
   FAILURE_DETECTION_REPAIR_INTENT: 'failure_detection_repair_intent',
   JOIN_ADMISSION_REBALANCE: 'join_admission_rebalance',
+  OPERATION_PROGRESS: 'operation_progress',
   POST_RESTORE_RECONCILIATION: 'post_restore_reconciliation',
+  PUBLICATION_VISIBILITY_RETRY: 'publication_visibility_retry',
   PUBLICATION_TRUTH_AHEAD_OF_PROJECTION:
     'publication_truth_ahead_of_projection',
   REMOTE_HANDOFF_ACK_CLOSURE: 'remote_handoff_ack_closure',
   REPLICA_OPERATION_COORDINATOR_HANDOFF:
     'replica_operation_coordinator_handoff',
+  SNAPSHOT_COVERAGE: 'snapshot_coverage',
   SPLIT_REBALANCE_DURING_RECOVERY: 'split_rebalance_during_recovery',
 });
 
@@ -113,8 +125,12 @@ const TOPOLOGY_FAILURE_GATE_EPOCH_FENCE = Object.freeze({
 const TOPOLOGY_FAILURE_GATE_OUTCOME = Object.freeze({
   DURABLE_ACKED_WRITE_TRUTH_OUTRANKS_STALE_PUBLICATION_PROJECTION:
     'durable_acked_write_truth_outranks_stale_publication_projection',
+  EVERY_DISPATCHED_OPERATION_REACHES_TERMINAL_BOUND:
+    'every_dispatched_operation_reaches_terminal_bound',
   IN_FLIGHT_COORDINATOR_HANDOFF_REACHES_TERMINAL_WORKFLOW_STATUS:
     'in_flight_coordinator_handoff_reaches_terminal_workflow_status',
+  EVERY_ACCEPTED_PUBLICATION_VISIBLE_OR_RETAINED:
+    'every_accepted_publication_visible_or_retained',
   JOINING_MEMBER_ADMITTED_OR_FENCED_DURABLY:
     'joining_member_admitted_or_fenced_durably',
   MISSED_HANDOFF_ACK_RETRIED_BEFORE_PUBLICATION_CLOSES:
@@ -125,6 +141,8 @@ const TOPOLOGY_FAILURE_GATE_OUTCOME = Object.freeze({
     'rejoined_member_validated_against_durable_topology',
   SPLIT_REBALANCE_DRAINS_AND_CONVERGES_DURABLE_PLACEMENT:
     'split_rebalance_drains_and_converges_durable_placement',
+  SNAPSHOT_COVERAGE_MONOTONIC_UNDER_NO_FAILURE:
+    'snapshot_coverage_monotonic_under_no_failure',
 });
 
 const TOPOLOGY_FAILURE_GATE_REASON = Object.freeze({
@@ -137,6 +155,7 @@ const TOPOLOGY_FAILURE_GATE_REASON = Object.freeze({
   DURABLE_WRITE_ACKED: 'durable_write_acked',
   HANDOFF_REPLAY_DURABLE: 'handoff_replay_durable',
   JOIN_INTENT_DURABLE: 'join_intent_durable',
+  LEADER_KILLED_DURING_DISPATCH: 'leader_killed_during_dispatch',
   LOCAL_SERVICES_RECONCILED: 'local_services_reconciled',
   NODE_FAILURE_DETECTED: 'node_failure_detected',
   PLACEMENT_EPOCH_FENCED: 'placement_epoch_fenced',
@@ -146,6 +165,8 @@ const TOPOLOGY_FAILURE_GATE_REASON = Object.freeze({
   REBALANCE_RECONCILED: 'rebalance_reconciled',
   REMOTE_COORDINATOR_LOST: 'remote_coordinator_lost',
   RESTORED_MEMBER_REDISCOVERED: 'restored_member_rediscovered',
+  SLOW_NETWORK_DELAYED: 'slow_network_delayed',
+  SNAPSHOT_COVERAGE_MONOTONIC: 'snapshot_coverage_monotonic',
   SPLIT_INTENT_DURABLE: 'split_intent_durable',
   STALE_PROJECTION_DETECTED: 'stale_projection_detected',
   WORKFLOW_TERMINAL_STATE: 'workflow_terminal_state',
@@ -164,6 +185,9 @@ const TOPOLOGY_FAILURE_GATE_ASSERTION = Object.freeze({
   DURABLE_OWNER_TRUTH_SELECTED: 'durable_owner_truth_selected',
   FAILURE_REPAIR_INTENT_CONSUMED: 'failure_repair_intent_consumed',
   FINAL_PLACEMENT_CONVERGENCE: 'final_placement_convergence',
+  IV_COV_1: 'IV-COV-1',
+  IV_OP_1: 'IV-OP-1',
+  IV_PUB_1: 'IV-PUB-1',
   LOCAL_SERVICES_REARMED: 'local_services_rearmed',
   MEMBERSHIP_EPOCH_FENCED: 'membership_epoch_fenced',
   MISSING_PUBLISHED_ZERO: 'missing_published_zero',
@@ -189,12 +213,18 @@ const TOPOLOGY_FAILURE_GATE_SPLIT_PACKAGE = Object.freeze({
     'work/packages/todo-20260514-topology-killed-join-gate.md',
   KILLED_REJOIN_GATE:
     'work/packages/todo-20260514-topology-killed-rejoin-gate.md',
+  LEADER_KILL_DURING_DISPATCH_GATE:
+    'work/packages/todo-20260520-topology-leader-kill-during-dispatch-gate.md',
   MISSED_HANDOFF_ACK_GATE:
     'work/packages/todo-20260514-topology-missed-handoff-ack-gate.md',
   REBALANCE_DISRUPTION_RECOVERY_GATE:
     'work/packages/todo-20260514-topology-rebalance-disruption-recovery-gate.md',
   REMOTE_COORDINATOR_HANDOFF_GATE:
     'work/packages/todo-20260514-topology-remote-coordinator-handoff-gate.md',
+  SLOW_NETWORK_PUBLICATION_GATE:
+    'work/packages/todo-20260520-topology-slow-network-publication-gate.md',
+  STALE_EVIDENCE_SNAPSHOT_COVERAGE_GATE:
+    'work/packages/todo-20260520-topology-stale-evidence-snapshot-coverage-gate.md',
   STALE_PUBLICATION_DURABLE_TRUTH_GATE:
     'work/packages/todo-20260514-topology-stale-publication-durable-truth-gate.md',
 });
@@ -230,6 +260,38 @@ const TOPOLOGY_FAILURE_GATE_MATRIX = Object.freeze([
       TOPOLOGY_FAILURE_GATE_EPOCH_FENCE.MEMBERSHIP_EPOCH_REQUIRED,
     splitTargetPackage:
       TOPOLOGY_FAILURE_GATE_SPLIT_PACKAGE.FAILURE_DETECTION_REPAIR_GATE,
+  }),
+  Object.freeze({
+    gateId: 'failure-injection-leader-kill-during-dispatch',
+    dimension: TOPOLOGY_FAILURE_GATE_DIMENSION.FAILURE_INJECTION,
+    config: TOPOLOGY_FAILURE_GATE_CONFIG.LOCAL,
+    scenario:
+      TOPOLOGY_FAILURE_GATE_SCENARIO.PARTITION_KILL_HEAL_UNDER_LOAD,
+    owner: TOPOLOGY_FAILURE_GATE_OWNER.OPERATION_WORKFLOW_OWNER,
+    boundary: TOPOLOGY_FAILURE_GATE_BOUNDARY.OPERATION_PROGRESS,
+    expectedDurableOutcome:
+      TOPOLOGY_FAILURE_GATE_OUTCOME
+        .EVERY_DISPATCHED_OPERATION_REACHES_TERMINAL_BOUND,
+    expectedOwnerReasons: Object.freeze([
+      TOPOLOGY_FAILURE_GATE_REASON.LEADER_KILLED_DURING_DISPATCH,
+      TOPOLOGY_FAILURE_GATE_REASON.HANDOFF_REPLAY_DURABLE,
+      TOPOLOGY_FAILURE_GATE_REASON.WORKFLOW_TERMINAL_STATE,
+    ]),
+    boundedProgressMechanisms: Object.freeze([
+      TOPOLOGY_FAILURE_GATE_PROGRESS_MECHANISM.DISPATCH,
+      TOPOLOGY_FAILURE_GATE_PROGRESS_MECHANISM.RETRY,
+      TOPOLOGY_FAILURE_GATE_PROGRESS_MECHANISM.ADVANCE,
+    ]),
+    durableAssertions: Object.freeze([
+      TOPOLOGY_FAILURE_GATE_ASSERTION.IV_OP_1,
+      TOPOLOGY_FAILURE_GATE_ASSERTION.DURABLE_OPERATION_REPLAY,
+      TOPOLOGY_FAILURE_GATE_ASSERTION.WORKFLOW_TERMINAL_STATUS,
+    ]),
+    fencingRequirement:
+      TOPOLOGY_FAILURE_GATE_EPOCH_FENCE.OPERATION_EPOCH_REQUIRED,
+    splitTargetPackage:
+      TOPOLOGY_FAILURE_GATE_SPLIT_PACKAGE
+        .LEADER_KILL_DURING_DISPATCH_GATE,
   }),
   Object.freeze({
     gateId: 'join-killed-node-under-load',
@@ -358,6 +420,67 @@ const TOPOLOGY_FAILURE_GATE_MATRIX = Object.freeze([
       TOPOLOGY_FAILURE_GATE_EPOCH_FENCE.PUBLICATION_EPOCH_REQUIRED,
     splitTargetPackage:
       TOPOLOGY_FAILURE_GATE_SPLIT_PACKAGE.MISSED_HANDOFF_ACK_GATE,
+  }),
+  Object.freeze({
+    gateId: 'slow-network-publication-visible-or-retained',
+    dimension: TOPOLOGY_FAILURE_GATE_DIMENSION.SLOW_NETWORK,
+    config: TOPOLOGY_FAILURE_GATE_CONFIG.LOCAL,
+    scenario: TOPOLOGY_FAILURE_GATE_SCENARIO.SLOW_FOLLOWER_UNDER_LOAD,
+    owner: TOPOLOGY_FAILURE_GATE_OWNER.TOPOLOGY_PUBLICATION_OWNER,
+    boundary: TOPOLOGY_FAILURE_GATE_BOUNDARY.PUBLICATION_VISIBILITY_RETRY,
+    expectedDurableOutcome:
+      TOPOLOGY_FAILURE_GATE_OUTCOME
+        .EVERY_ACCEPTED_PUBLICATION_VISIBLE_OR_RETAINED,
+    expectedOwnerReasons: Object.freeze([
+      TOPOLOGY_FAILURE_GATE_REASON.SLOW_NETWORK_DELAYED,
+      TOPOLOGY_FAILURE_GATE_REASON.DELIVERY_RETRIED,
+      TOPOLOGY_FAILURE_GATE_REASON.PUBLICATION_CLOSURE_FENCED,
+    ]),
+    boundedProgressMechanisms: Object.freeze([
+      TOPOLOGY_FAILURE_GATE_PROGRESS_MECHANISM.DELIVERY,
+      TOPOLOGY_FAILURE_GATE_PROGRESS_MECHANISM.RETRY,
+      TOPOLOGY_FAILURE_GATE_PROGRESS_MECHANISM.TIMER,
+    ]),
+    durableAssertions: Object.freeze([
+      TOPOLOGY_FAILURE_GATE_ASSERTION.IV_PUB_1,
+      TOPOLOGY_FAILURE_GATE_ASSERTION.RETRY_OR_TERMINAL_DEGRADED,
+      TOPOLOGY_FAILURE_GATE_ASSERTION.PUBLICATION_CLOSURE_FENCED,
+    ]),
+    fencingRequirement:
+      TOPOLOGY_FAILURE_GATE_EPOCH_FENCE.PUBLICATION_EPOCH_REQUIRED,
+    splitTargetPackage:
+      TOPOLOGY_FAILURE_GATE_SPLIT_PACKAGE.SLOW_NETWORK_PUBLICATION_GATE,
+  }),
+  Object.freeze({
+    gateId: 'stale-evidence-snapshot-coverage-monotonic',
+    dimension: TOPOLOGY_FAILURE_GATE_DIMENSION.STALE_EVIDENCE,
+    config: TOPOLOGY_FAILURE_GATE_CONFIG.LOCAL_THREE_NODE,
+    scenario: TOPOLOGY_FAILURE_GATE_SCENARIO.WRITE_ACK_VISIBILITY,
+    owner: TOPOLOGY_FAILURE_GATE_OWNER.STARTUP_ACTIVE_GATE_OWNER,
+    boundary: TOPOLOGY_FAILURE_GATE_BOUNDARY.SNAPSHOT_COVERAGE,
+    expectedDurableOutcome:
+      TOPOLOGY_FAILURE_GATE_OUTCOME
+        .SNAPSHOT_COVERAGE_MONOTONIC_UNDER_NO_FAILURE,
+    expectedOwnerReasons: Object.freeze([
+      TOPOLOGY_FAILURE_GATE_REASON.STALE_PROJECTION_DETECTED,
+      TOPOLOGY_FAILURE_GATE_REASON.SNAPSHOT_COVERAGE_MONOTONIC,
+      TOPOLOGY_FAILURE_GATE_REASON.PROJECTION_RECONCILED,
+    ]),
+    boundedProgressMechanisms: Object.freeze([
+      TOPOLOGY_FAILURE_GATE_PROGRESS_MECHANISM.ADVANCE,
+      TOPOLOGY_FAILURE_GATE_PROGRESS_MECHANISM.RECONCILE,
+      TOPOLOGY_FAILURE_GATE_PROGRESS_MECHANISM.TIMEOUT,
+    ]),
+    durableAssertions: Object.freeze([
+      TOPOLOGY_FAILURE_GATE_ASSERTION.IV_COV_1,
+      TOPOLOGY_FAILURE_GATE_ASSERTION.SNAPSHOT_COVERAGE_FULL,
+      TOPOLOGY_FAILURE_GATE_ASSERTION.STALE_PROJECTION_DETECTED,
+    ]),
+    fencingRequirement:
+      TOPOLOGY_FAILURE_GATE_EPOCH_FENCE.PUBLICATION_EPOCH_REQUIRED,
+    splitTargetPackage:
+      TOPOLOGY_FAILURE_GATE_SPLIT_PACKAGE
+        .STALE_EVIDENCE_SNAPSHOT_COVERAGE_GATE,
   }),
   Object.freeze({
     gateId: 'stale-publication-durable-truth-ahead',
@@ -604,6 +727,7 @@ export {
   TOPOLOGY_FAILURE_GATE_BOUNDED_PROGRESS_MECHANISMS,
   TOPOLOGY_FAILURE_GATE_DIMENSION,
   TOPOLOGY_FAILURE_GATE_MATRIX,
+  TOPOLOGY_FAILURE_GATE_ASSERTION,
   buildTopologyFailureGateExecutionPlan,
   buildTopologyFailureGateCoverageSnapshot,
   formatTopologyFailureGateExecutionLines,

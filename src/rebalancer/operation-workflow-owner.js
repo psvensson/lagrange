@@ -10,6 +10,7 @@ import {OperationWorkflowOwnerSegment7} from
   './operation-workflow-owner-segment-7.js';
 import {createOperationWorkflowOwnerAdapter} from
   './operation-workflow-owner-adapter.js';
+import {createOperationProgressStore} from './operation-progress-store.js';
 import {
   PRIORITY_RECOVERY_ACTUATION_STATE,
   PRIORITY_RECOVERY_BLOCKING_BOUNDARY,
@@ -595,6 +596,8 @@ class OperationWorkflowOwner extends OperationWorkflowOwnerSegment7 {
       new Map();
     this.operationWorkflowOwnerPorts =
       createOperationWorkflowOwnerPorts(this);
+    this.operationProgressStore =
+      options?.operationProgressStore || createOperationProgressStore();
     this.operationWorkflowOwnerAdapter =
       createOperationWorkflowOwnerAdapter({
         ports: this.operationWorkflowOwnerPorts,
@@ -705,7 +708,7 @@ class OperationWorkflowOwner extends OperationWorkflowOwnerSegment7 {
         operationInput,
         context,
       );
-      return result.applied === true;
+      return result;
     } finally {
       this.clearOperationWorkflowOwnerAdapterOperationSnapshot(
         retainedOperationId,

@@ -14,10 +14,11 @@ import {
   selectCanonicalTopologyFailureGateScenariosForConfig,
 } from '../scenario-registry.js';
 
-const EXPECTED_TOPOLOGY_FAILURE_GATE_COUNT = 7;
+const EXPECTED_TOPOLOGY_FAILURE_GATE_COUNT = 10;
 const EXPECTED_LOCAL_THREE_NODE_FAILURE_GATE_IDS = [
   'failure-detection-rolling-restart',
   'remote-handoff-missed-ack',
+  'stale-evidence-snapshot-coverage-monotonic',
   'stale-publication-durable-truth-ahead',
 ];
 const EXPECTED_LOCAL_THREE_NODE_FAILURE_GATE_SCENARIOS = [
@@ -47,11 +48,12 @@ const EXPECTED_FIRST_EXECUTION_LINE =
 const EXPECTED_LOCAL_THREE_NODE_EXECUTION_GATE_IDS = [
   'failure-detection-rolling-restart',
   'remote-handoff-missed-ack',
+  'stale-evidence-snapshot-coverage-monotonic',
   'stale-publication-durable-truth-ahead',
 ];
 
-test('scenario-registry tracks the canonical 20-scenario matrix', (t) => {
-  assert.equal(CANONICAL_SCENARIO_MATRIX.length, 20);
+test('scenario-registry tracks the canonical 21-scenario matrix', (t) => {
+  assert.equal(CANONICAL_SCENARIO_MATRIX.length, 21);
   t.end();
 });
 
@@ -133,7 +135,7 @@ test('scenario-registry selects canonical scenarios in matrix order', (t) => {
 test('scenario-registry formats canonical scenario matrix lines', (t) => {
   const lines = formatCanonicalScenarioMatrixLines();
 
-  assert.equal(lines.length, 20);
+  assert.equal(lines.length, 21);
   assert.equal(lines[0], 'local-three-node.json|admin-query-smoke');
   assert.equal(
     lines[lines.length - 1],

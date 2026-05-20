@@ -95,7 +95,7 @@ or produces a narrower owner-boundary blocker selected by canonical evidence.
 ## Current Evidence
 
 - Continuation sprint context:
-  `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md`
+  `work/sprints/done-2026-q2-operation-progress-resource-and-deterministic-gates.md`
 - Active successor package:
   `work/packages/done-20260516-startup-active-gate-admin-snapshot-timeout-after-priority-recovery.md`
 - Artifact:
@@ -130,7 +130,8 @@ publication-evidence replay code rather than by the runtime owner alone.
 | --- | --- | --- | --- |
 | `work/sprints/done-2026-q2-topology-convergence-residual-closure.md` | `bugfix` / `stabilization` | stopped | Stopped on 2026-05-15 by human direction. Retained as residual context only. |
 | `work/sprints/done-2026-q2-topology-convergence-complexity-reduction.md` | `stabilization` / `complexity-reduction` | done reduced | Canonical publication-to-active-gate handoff contract implemented end to end; representative run remains red at startup active-gate snapshot coverage. |
-| `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md` | `stabilization` / `green-gate` | active resumed | Resumed after systems-pattern closure to run the post-detour rolling-restart checkpoint. |
+| `work/sprints/done-2026-q2-topology-rolling-restart-green-gate-closure.md` | `stabilization` / `green-gate` | done/superseded | Closed on 2026-05-20 when the repeated rolling-restart symptom selected operation_progress architecture reset instead of another local symptom patch. |
+| `work/sprints/done-2026-q2-operation-progress-resource-and-deterministic-gates.md` | `architecture` / `green-gate` | active | Owns operation_progress as the single lifecycle resource with invariant, deterministic simulator, and multi-scenario gate proof. |
 | `work/sprints/done-2026-q2-topology-convergence-systems-pattern-hardening.md` | `stabilization` / `systems-pattern-hardening` | done | Added handoff hygiene, publication-convergence causal selection, deterministic replay, active-gate catch-up fencing, topology operator witnesses, critical control-plane convergence, and owner-boundary file-size reduction contracts. |
 | `work/sprints/done-2026-q2-topology-systems-pattern-completion-closure.md` | `stabilization` / `systems-pattern-completion` | done | Closed the live TiKV operator witness summary path, broad Cockroach admin tail proof, and stale active-reference tracker guard before the paused topology sprint resumes. |
 

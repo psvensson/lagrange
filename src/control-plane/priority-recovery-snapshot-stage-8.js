@@ -27,6 +27,10 @@ import {
   PRIORITY_RECOVERY_VISIBILITY_STATE,
   PRIORITY_RECOVERY_WORKFLOW_STATE,
 } from './priority-recovery-snapshot-stage-shared.js';
+import {
+  OPERATION_PROGRESS_COMPATIBILITY_VARIANT,
+  buildOperationProgressCompatibilityProjection,
+} from '../rebalancer/operation-progress-observer.js';
 import {buildPriorityRecoveryActuationDecisionEvidence, buildPriorityRecoveryActuationShape, buildPriorityRecoveryActuationSnapshot, buildPriorityRecoveryConditionsContract, buildPriorityRecoveryProgressEvidenceSourceIds, buildPriorityRecoveryWorkflowProgressMetrics, hasPriorityRecoveryScheduledRetry, isPriorityRecoveryObservationDeferred, resolvePriorityRecoveryOperationProgressTimestampMs, resolvePriorityRecoveryTerminalActuationState, selectLatestPriorityRecoveryOperationContext} from './priority-recovery-snapshot-stage-7.js';
 
 const PRIORITY_RECOVERY_ACTUATION_DECISION_TABLE = Object.freeze([
@@ -431,6 +435,25 @@ function buildPriorityRecoveryProgressContext(options = {}) {
 }
 
 function resolvePriorityRecoveryInFlightProgressDescriptor(options = {}) {
+  const operationProgressProjection =
+    buildOperationProgressCompatibilityProjection(
+      options.operationProgressRecord,
+    );
+  if (
+    operationProgressProjection.topologyOperatorCurrentStepId !==
+      OPERATION_PROGRESS_COMPATIBILITY_VARIANT.UNAVAILABLE
+  ) {
+    return {
+      ...buildPriorityRecoveryPendingDescriptor(
+        options.scheduledRetry,
+        PRIORITY_RECOVERY_WAIT_MODE.EVENT_DRIVEN,
+      ),
+      currentOwner: PRIORITY_RECOVERY_PROGRESS_OWNER.OPERATION_WORKFLOW_OWNER,
+      nextRequiredAction:
+        operationProgressProjection.topologyOperatorNextAction,
+      blockingBoundary: PRIORITY_RECOVERY_BLOCKING_BOUNDARY.WORKFLOW_PROGRESS,
+    };
+  }
   const workflowOwned =
     options.workflowState === PRIORITY_RECOVERY_WORKFLOW_STATE.IN_FLIGHT ||
     options.workflowState === PRIORITY_RECOVERY_WORKFLOW_STATE.REMOVE_PHASE;
@@ -501,6 +524,7 @@ function buildPriorityRecoveryProgressDecisionEvidence(
     workflowState: progressContext.workflowState,
     progressMetrics: progressContext.progressMetrics,
     scheduledRetry: progressContext.scheduledRetry,
+    operationProgressRecord: options.operationProgressRecord,
   });
   return Object.freeze({
     ...progressContext,

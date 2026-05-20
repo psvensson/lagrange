@@ -85,7 +85,6 @@
             "kind": "REPLACE",
             "currentStepId": "dispatch_pending",
             "currentStepState": "planned",
-            "witnessSource": "event_driven",
             "nextAction": "advance_existing_operation",
             "deadlineMs": 1779078728188,
             "lastObservedAtMs": 1779078698188

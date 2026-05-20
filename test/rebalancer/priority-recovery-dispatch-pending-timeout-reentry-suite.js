@@ -336,10 +336,6 @@ const TEST_TOPOLOGY_OPERATOR_ACTIVE_GATE_OWNER =
 const TEST_TOPOLOGY_OPERATOR_PUBLICATION_BOUNDARY =
   'publication_convergence';
 const TEST_TOPOLOGY_OPERATOR_ACTIVE_GATE_BOUNDARY = 'snapshot_coverage';
-const TEST_TOPOLOGY_OPERATOR_PUBLICATION_SOURCE =
-  'publication_owner_ack';
-const TEST_TOPOLOGY_OPERATOR_ACTIVE_GATE_SOURCE =
-  'active_gate_owner_reconcile';
 const TEST_TOPOLOGY_OPERATOR_WAIT_FOR_PUBLICATION_ACK =
   'wait_for_publication_ack';
 const TEST_TOPOLOGY_OPERATOR_RECONCILE_ACTIVE_GATE =
@@ -386,7 +382,6 @@ function assertTopologyOperatorWitness(t, witness, expected) {
     'steps',
     'currentStepId',
     'currentStepState',
-    'witnessSource',
     'nextAction',
     'deadlineMs',
     'lastObservedAtMs',
@@ -410,7 +405,6 @@ function assertTopologyOperatorWitness(t, witness, expected) {
     expected.currentStepState,
     expected.message,
   );
-  t.equal(witness.witnessSource, expected.witnessSource, expected.message);
   t.equal(witness.nextAction, expected.nextAction, expected.message);
   t.equal(
     witness.steps.filter((step) => step.current === true).length,
@@ -605,6 +599,8 @@ function registerCase(name, fn) {
 
 const registrationDependencies = Object.freeze({
   NUM,
+  OPERATION_WORKFLOW_EFFECT_COMMAND_VALUES,
+  OPERATION_WORKFLOW_OUTCOME_VALUES,
   OPERATION_WORKFLOW_OWNER,
   PRIORITY_RECOVERY_ACTUATION_STATE,
   PRIORITY_RECOVERY_BLOCKING_BOUNDARY,
@@ -761,13 +757,11 @@ const registrationDependencies = Object.freeze({
   TEST_TOPOLOGY_OPERATOR_ACTIVE_GATE_BOUNDARY,
   TEST_TOPOLOGY_OPERATOR_ACTIVE_GATE_OWNER,
   TEST_TOPOLOGY_OPERATOR_ACTIVE_GATE_RECONCILE_STEP,
-  TEST_TOPOLOGY_OPERATOR_ACTIVE_GATE_SOURCE,
   TEST_TOPOLOGY_OPERATOR_KIND_ACTIVE_GATE_RECONCILE,
   TEST_TOPOLOGY_OPERATOR_KIND_PUBLICATION_ACK,
   TEST_TOPOLOGY_OPERATOR_PUBLICATION_ACK_STEP,
   TEST_TOPOLOGY_OPERATOR_PUBLICATION_BOUNDARY,
   TEST_TOPOLOGY_OPERATOR_PUBLICATION_OWNER,
-  TEST_TOPOLOGY_OPERATOR_PUBLICATION_SOURCE,
   TEST_TOPOLOGY_OPERATOR_RECONCILE_ACTIVE_GATE,
   TEST_TOPOLOGY_OPERATOR_WAIT_FOR_PUBLICATION_ACK,
   TEST_TOPOLOGY_OPERATOR_WITNESS_STATE,

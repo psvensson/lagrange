@@ -17,15 +17,18 @@ import {
   normalizeTopologyFailureGateConfigName,
 } from '../topology-failure-gate-matrix.js';
 
-const EXPECTED_FAILURE_GATE_COUNT = 7;
+const EXPECTED_FAILURE_GATE_COUNT = 10;
 const EXECUTION_PLAN_RUN_ID = '20260514T000000Z';
 const EXPECTED_LOCAL_GATE_IDS = [
+  'failure-injection-leader-kill-during-dispatch',
   'join-killed-node-under-load',
   'rejoin-killed-seed-under-load',
+  'slow-network-publication-visible-or-retained',
 ];
 const EXPECTED_LOCAL_THREE_NODE_GATE_IDS = [
   'failure-detection-rolling-restart',
   'remote-handoff-missed-ack',
+  'stale-evidence-snapshot-coverage-monotonic',
   'stale-publication-durable-truth-ahead',
 ];
 const REQUIRED_TEXT_FIELDS = [
@@ -41,12 +44,15 @@ const REQUIRED_TEXT_FIELDS = [
 ];
 const EXPECTED_COVERAGE_BY_DIMENSION = {
   failure_detection: ['failure-detection-rolling-restart'],
+  failure_injection: ['failure-injection-leader-kill-during-dispatch'],
   join: ['join-killed-node-under-load'],
   rejoin: ['rejoin-killed-seed-under-load'],
   remote_handoff: [
     'remote-handoff-replica-operation-coordinator',
     'remote-handoff-missed-ack',
   ],
+  slow_network: ['slow-network-publication-visible-or-retained'],
+  stale_evidence: ['stale-evidence-snapshot-coverage-monotonic'],
   stale_publication: ['stale-publication-durable-truth-ahead'],
   rebalance_disruption: ['rebalance-disruption-split-during-recovery'],
 };
@@ -55,6 +61,10 @@ const EXPECTED_MATRIX_LINES = [
     'failure-detection-rolling-restart|failure_detection|' +
     'topology_control_plane|failure_detection_repair_intent|' +
     'node_lifecycle_repair_intent_reconciled',
+  'local.json|partition-kill-heal-under-load|' +
+    'failure-injection-leader-kill-during-dispatch|' +
+    'failure_injection|operation_workflow_owner|operation_progress|' +
+    'every_dispatched_operation_reaches_terminal_bound',
   'local.json|node-join-under-load|' +
     'join-killed-node-under-load|join|topology_join_owner|' +
     'join_admission_rebalance|joining_member_admitted_or_fenced_durably',
@@ -71,6 +81,14 @@ const EXPECTED_MATRIX_LINES = [
     'remote-handoff-missed-ack|remote_handoff|' +
     'topology_publication_owner|remote_handoff_ack_closure|' +
     'missed_handoff_ack_retried_before_publication_closes',
+  'local.json|slow-follower-under-load|' +
+    'slow-network-publication-visible-or-retained|slow_network|' +
+    'topology_publication_owner|publication_visibility_retry|' +
+    'every_accepted_publication_visible_or_retained',
+  'local-three-node.json|write-ack-visibility|' +
+    'stale-evidence-snapshot-coverage-monotonic|stale_evidence|' +
+    'startup_active_gate_owner|snapshot_coverage|' +
+    'snapshot_coverage_monotonic_under_no_failure',
   'local-three-node.json|write-ack-visibility|' +
     'stale-publication-durable-truth-ahead|stale_publication|' +
     'topology_publication_owner|publication_truth_ahead_of_projection|' +
@@ -100,6 +118,13 @@ const EXPECTED_EXECUTION_LINES = [
     'active_gate_active_nodes_5_of_5,snapshot_coverage_5_of_5,' +
     'missing_published_zero,no_priority_recovery_event_driven_wait,' +
     'failure_repair_intent_consumed',
+  'failure-injection-leader-kill-during-dispatch|local.json|' +
+    'partition-kill-heal-under-load|test-output/reports/' +
+    'topology-failure-gates/20260514T000000Z/' +
+    'failure-injection-leader-kill-during-dispatch.report.json|' +
+    'operation_workflow_owner|operation_progress|' +
+    'work/packages/todo-20260520-topology-leader-kill-during-dispatch-gate.md|' +
+    'IV-OP-1,durable_operation_replay,workflow_terminal_status',
   'join-killed-node-under-load|local.json|node-join-under-load|' +
     'test-output/reports/topology-failure-gates/20260514T000000Z/' +
     'join-killed-node-under-load.report.json|topology_join_owner|' +
@@ -130,6 +155,20 @@ const EXPECTED_EXECUTION_LINES = [
     'work/packages/todo-20260514-topology-missed-handoff-ack-gate.md|' +
     'ack_absence_detected,retry_or_terminal_degraded,' +
     'publication_closure_fenced',
+  'slow-network-publication-visible-or-retained|local.json|' +
+    'slow-follower-under-load|test-output/reports/topology-failure-gates/' +
+    '20260514T000000Z/' +
+    'slow-network-publication-visible-or-retained.report.json|' +
+    'topology_publication_owner|publication_visibility_retry|' +
+    'work/packages/todo-20260520-topology-slow-network-publication-gate.md|' +
+    'IV-PUB-1,retry_or_terminal_degraded,publication_closure_fenced',
+  'stale-evidence-snapshot-coverage-monotonic|local-three-node.json|' +
+    'write-ack-visibility|test-output/reports/topology-failure-gates/' +
+    '20260514T000000Z/' +
+    'stale-evidence-snapshot-coverage-monotonic.report.json|' +
+    'startup_active_gate_owner|snapshot_coverage|' +
+    'work/packages/todo-20260520-topology-stale-evidence-snapshot-coverage-gate.md|' +
+    'IV-COV-1,snapshot_coverage_5_of_5,stale_projection_detected',
   'stale-publication-durable-truth-ahead|local-three-node.json|' +
     'write-ack-visibility|test-output/reports/topology-failure-gates/' +
     '20260514T000000Z/stale-publication-durable-truth-ahead.report.json|' +
@@ -170,9 +209,12 @@ test('topology-failure-gate-matrix covers required dimensions', (t) => {
     coverage.requiredDimensions,
     [
       TOPOLOGY_FAILURE_GATE_DIMENSION.FAILURE_DETECTION,
+      TOPOLOGY_FAILURE_GATE_DIMENSION.FAILURE_INJECTION,
       TOPOLOGY_FAILURE_GATE_DIMENSION.JOIN,
       TOPOLOGY_FAILURE_GATE_DIMENSION.REJOIN,
       TOPOLOGY_FAILURE_GATE_DIMENSION.REMOTE_HANDOFF,
+      TOPOLOGY_FAILURE_GATE_DIMENSION.SLOW_NETWORK,
+      TOPOLOGY_FAILURE_GATE_DIMENSION.STALE_EVIDENCE,
       TOPOLOGY_FAILURE_GATE_DIMENSION.STALE_PUBLICATION,
       TOPOLOGY_FAILURE_GATE_DIMENSION.REBALANCE_DISRUPTION,
     ],

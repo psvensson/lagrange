@@ -3,6 +3,10 @@ import {
   buildOperationWorkflowEffectCommand,
 } from './operation-workflow-owner-effects.js';
 import {
+  advanceOperationLifecycle,
+  resolveOperationLifecycleEvent,
+} from './operation-lifecycle.js';
+import {
   OPERATION_WORKFLOW_EVIDENCE_FIELDS,
   OPERATION_WORKFLOW_IDENTIFIER_VARIANTS,
   OPERATION_WORKFLOW_OWNER,
@@ -16,9 +20,15 @@ import {
 
 const OPERATION_WORKFLOW_ADAPTER_EMPTY_TEXT = '';
 const OPERATION_WORKFLOW_ADAPTER_DEFAULT_CONTEXT = Object.freeze({});
-const OPERATION_WORKFLOW_ADAPTER_NO_OPERATION = null;
+const OPERATION_WORKFLOW_ADAPTER_FIRST_COMMAND_INDEX = 0;
+const OPERATION_WORKFLOW_ADAPTER_LAST_ENTRY_OFFSET = 1;
+const OPERATION_WORKFLOW_ADAPTER_EMPTY_SIDE_EFFECT_COUNT = 0;
+const OPERATION_WORKFLOW_ADAPTER_NO_OPERATION = Object.freeze({
+  operationId: OPERATION_WORKFLOW_IDENTIFIER_VARIANTS.OPERATION_KEY_UNAVAILABLE,
+});
 const OPERATION_WORKFLOW_ADAPTER_COMMAND_RESULT_STATE = Object.freeze({
   APPLIED: 'applied',
+  PERSISTED: 'persisted',
   SKIPPED: 'skipped',
 });
 
@@ -88,17 +98,46 @@ function buildOperationWorkflowAdapterCommandResultEvidence({
   });
 }
 
+function buildOperationWorkflowAdapterPersistedEvidence({
+  persisted,
+  progress,
+}) {
+  return Object.freeze({
+    [OPERATION_WORKFLOW_RECORD_FIELDS.OPERATION_KEY]:
+      normalizeOperationWorkflowAdapterText(
+        progress?.operationId,
+        OPERATION_WORKFLOW_IDENTIFIER_VARIANTS.OPERATION_KEY_UNAVAILABLE,
+      ),
+    [OPERATION_WORKFLOW_RECORD_FIELDS.COMMAND_STATE]:
+      persisted?.applied === true ?
+        OPERATION_WORKFLOW_ADAPTER_COMMAND_RESULT_STATE.PERSISTED :
+        OPERATION_WORKFLOW_ADAPTER_COMMAND_RESULT_STATE.SKIPPED,
+    effectCommand: OPERATION_WORKFLOW_ADAPTER_COMMAND_RESULT_STATE.PERSISTED,
+  });
+}
+
 function buildOperationWorkflowAdapterResult({
   outcome,
-  command,
+  commands,
   applied,
+  persisted,
+  appendedEvents,
   commandResultEvidence,
 }) {
   return Object.freeze({
     outcome,
-    command,
+    command: commands[OPERATION_WORKFLOW_ADAPTER_FIRST_COMMAND_INDEX] ||
+      buildOperationWorkflowEffectCommand(OPERATION_WORKFLOW_ADAPTER_DEFAULT_CONTEXT),
+    commands: Object.freeze([...commands]),
     applied,
-    commandResultEvidence,
+    persisted,
+    appendedEvents: Object.freeze([...appendedEvents]),
+    commandResultEvidence:
+      commandResultEvidence[
+        commandResultEvidence.length -
+          OPERATION_WORKFLOW_ADAPTER_LAST_ENTRY_OFFSET
+      ],
+    commandResultEvidenceRecords: Object.freeze([...commandResultEvidence]),
   });
 }
 
@@ -129,6 +168,18 @@ function buildOperationWorkflowCommandExecutors(ports) {
       ),
     ],
     [
+      OPERATION_WORKFLOW_EFFECT_COMMANDS
+        .RETAIN_PUBLICATION_FOR_RETRY_COMMAND,
+      (operation, context) => ports.retainPublicationForRetry(
+        operation,
+        context,
+      ),
+    ],
+    [
+      OPERATION_WORKFLOW_EFFECT_COMMANDS.MARK_ACTIVE_GATE_VISIBLE_COMMAND,
+      (operation, context) => ports.markActiveGateVisible(operation, context),
+    ],
+    [
       OPERATION_WORKFLOW_EFFECT_COMMANDS.RECORD_TERMINAL_SUCCESS_COMMAND,
       (operation, context) => ports.recordTerminalSuccess(operation, context),
     ],
@@ -141,6 +192,49 @@ function buildOperationWorkflowCommandExecutors(ports) {
       (operation, context) => ports.waitForOwnerProgress(operation, context),
     ],
   ]));
+}
+
+async function executeOperationWorkflowCommands({
+  commandExecutors,
+  commands,
+  operation,
+  context,
+}) {
+  const commandResults = [];
+  for (const command of commands) {
+    const executor = commandExecutors.get(command.effectCommand);
+    const applied = await executor(operation, {
+      ...context,
+      effectCommand: command.effectCommand,
+      operationProgress: context.operationProgress,
+    });
+    commandResults.push(buildOperationWorkflowAdapterCommandResultEvidence({
+      applied,
+      command,
+      operation,
+    }));
+  }
+  return Object.freeze(commandResults);
+}
+
+function buildOperationWorkflowAdapterCommands(outcome) {
+  const sideEffects = Array.isArray(outcome.sideEffects) ?
+    outcome.sideEffects :
+    [];
+  if (sideEffects.length === OPERATION_WORKFLOW_ADAPTER_EMPTY_SIDE_EFFECT_COUNT) {
+    return Object.freeze([
+      buildOperationWorkflowEffectCommand({
+        ...outcome,
+        effectCommand: OPERATION_WORKFLOW_EFFECT_COMMANDS.NO_OPERATION_EFFECT,
+      }),
+    ]);
+  }
+  return Object.freeze(sideEffects.map((effectCommand) =>
+    buildOperationWorkflowEffectCommand({
+      ...outcome,
+      effectCommand,
+    }),
+  ));
 }
 
 function createOperationWorkflowOwnerAdapter({ports}) {
@@ -168,24 +262,65 @@ function createOperationWorkflowOwnerAdapter({ports}) {
         context,
         ports,
       });
-      const outcome = decideOperationWorkflowProgress(evidence);
-      const command = buildOperationWorkflowEffectCommand(outcome);
-      const executor = commandExecutors.get(command.effectCommand);
-      const applied = await executor(operation, {
-        ...context,
-        effectCommand: command.effectCommand,
+      const currentProgress = await ports.loadOperationProgress(
+        operation,
+        {
+          ...context,
+          evidence,
+        },
+      );
+      const ingressEvent = resolveOperationLifecycleEvent(
+        context.event || evidence,
+      );
+      const lifecycleResult = advanceOperationLifecycle(
+        currentProgress,
+        ingressEvent,
+      );
+      const outcome = decideOperationWorkflowProgress(
+        evidence,
+        currentProgress,
+      );
+      const persisted = await ports.persistOperationProgress({
+        expectedVersion: currentProgress.version,
+        progress: lifecycleResult.operationProgress,
       });
-      const commandResultEvidence =
-        buildOperationWorkflowAdapterCommandResultEvidence({
-          applied,
-          command,
-          operation,
-        });
+      const appendedEvents = [];
+      for (const event of lifecycleResult.emittedEvents) {
+        appendedEvents.push(await ports.appendOperationProgressEvent(event));
+      }
+      const commands = buildOperationWorkflowAdapterCommands({
+        ...outcome,
+        sideEffects: lifecycleResult.sideEffects,
+        operationProgress: lifecycleResult.operationProgress,
+      });
+      const commandResultEvidence = await executeOperationWorkflowCommands({
+        commandExecutors,
+        commands,
+        operation,
+        context: {
+          ...context,
+          operationProgress: persisted.progress,
+        },
+      });
       return buildOperationWorkflowAdapterResult({
-        outcome,
-        command,
-        applied,
-        commandResultEvidence,
+        outcome: Object.freeze({
+          ...outcome,
+          operationProgress: persisted.progress,
+          persistedProgress: persisted.progress,
+        }),
+        commands,
+        applied: commandResultEvidence.some((entry) =>
+          entry.commandState ===
+            OPERATION_WORKFLOW_ADAPTER_COMMAND_RESULT_STATE.APPLIED),
+        persisted,
+        appendedEvents,
+        commandResultEvidence: Object.freeze([
+          buildOperationWorkflowAdapterPersistedEvidence({
+            persisted,
+            progress: persisted.progress,
+          }),
+          ...commandResultEvidence,
+        ]),
       });
     },
   });

@@ -11,6 +11,9 @@ import {
   selectPublicationActiveGateHandoffContract,
 } from '../control-plane/publication-active-gate-handoff-contract.js';
 import {
+  buildOperationProgressCompatibilityProjection,
+} from '../rebalancer/operation-progress-observer.js';
+import {
   FAILURE_CLASS as CAUSAL_FAILURE_CLASS,
 } from './causal-analysis-schema.js';
 
@@ -40,6 +43,8 @@ const BOOLEAN_FALSE_TEXT = 'false';
 const ROOT_CAUSE_CLASS_TOPOLOGY = 'topology';
 const ROOT_CAUSE_CLASS_STARTUP = 'startup';
 const ROOT_CAUSE_CLASS_UNKNOWN = 'unknown';
+const OPERATION_PROGRESS_PROJECTION_UNAVAILABLE =
+  'operation_progress_projection_unavailable';
 const PUBLICATION_STATUS_PUBLISHED = 'PUBLISHED';
 const PUBLICATION_STATUS_OPEN = 'OPEN';
 const PUBLICATION_STATUS_ACK_PENDING = 'ACK_PENDING';
@@ -85,6 +90,11 @@ const PRIORITY_RECOVERY_EVIDENCE_SOURCE_PARTITION_WITNESSES =
   'partition_witnesses';
 const PRIORITY_RECOVERY_EVIDENCE_SOURCE_TOPOLOGY_OPERATOR_WITNESS =
   'topology_operator_witness';
+const PRIORITY_RECOVERY_OBSERVATION_FIELD_WAIT_MODES = 'waitModes';
+const PRIORITY_RECOVERY_OBSERVATION_FIELD_NEXT_REQUIRED_ACTIONS =
+  'nextRequiredActions';
+const PRIORITY_RECOVERY_OBSERVATION_FIELD_ACTUATION_STATES =
+  'actuationStates';
 const TOPOLOGY_OPERATOR_CURRENT_STEP_STATE_PLANNED = 'planned';
 const TOPOLOGY_OPERATOR_CURRENT_STEP_STATE_DISPATCHED = 'dispatched';
 const TOPOLOGY_OPERATOR_CURRENT_STEP_STATE_OBSERVED = 'observed';
@@ -134,6 +144,15 @@ const EDGE_STATE = Object.freeze({
   TERMINAL_FAILED: 'terminal_failed',
   UNKNOWN: 'unknown',
 });
+
+const TOPOLOGY_OPERATOR_WITNESS_EDGE_STATE_BY_STEP = new Map([
+  [TOPOLOGY_OPERATOR_CURRENT_STEP_STATE_TERMINAL, EDGE_STATE.SATISFIED],
+  [TOPOLOGY_OPERATOR_CURRENT_STEP_STATE_BLOCKED, EDGE_STATE.BLOCKED],
+  [TOPOLOGY_OPERATOR_CURRENT_STEP_STATE_RETRY_SCHEDULED, EDGE_STATE.RETRYABLE],
+  [TOPOLOGY_OPERATOR_CURRENT_STEP_STATE_DISPATCHED, EDGE_STATE.RETRYABLE],
+  [TOPOLOGY_OPERATOR_CURRENT_STEP_STATE_PLANNED, EDGE_STATE.RETRYABLE],
+  [TOPOLOGY_OPERATOR_CURRENT_STEP_STATE_OBSERVED, EDGE_STATE.RETRYABLE],
+]);
 
 const NODE_ID = Object.freeze({
   PUBLICATION_CONVERGENCE: 'publication_convergence',
@@ -270,7 +289,6 @@ const SOURCE_FIELD = Object.freeze({
   OPERATOR_ID: 'operatorId',
   OWNER: 'owner',
   TARGET_NODE_ID: 'targetNodeId',
-  WITNESS_SOURCE: 'witnessSource',
 });
 
 const OWNER_WITNESS_FIELD = Object.freeze({
@@ -1623,7 +1641,7 @@ function buildPriorityRecoveryEdge(normalized) {
         normalized.summary.failureClass ||
         normalized.summary.failureClassification?.failureClass,
       ),
-      ...buildPriorityRecoveryWitnessSource(evidence),
+      ...buildPriorityRecoveryEvidenceSource(evidence),
     },
     reasons,
     rank: RANK.PRIORITY_RECOVERY,
@@ -2303,21 +2321,8 @@ function buildPriorityRecoveryClassesFromTopologyOperatorWitness(witness) {
 
 function resolveTopologyOperatorWitnessEdgeState(evidence) {
   const state = evidence.topologyOperatorWitnessState;
-  if (state === TOPOLOGY_OPERATOR_CURRENT_STEP_STATE_TERMINAL) {
-    return EDGE_STATE.SATISFIED;
-  }
-  if (state === TOPOLOGY_OPERATOR_CURRENT_STEP_STATE_BLOCKED) {
-    return EDGE_STATE.BLOCKED;
-  }
-  if (
-    state === TOPOLOGY_OPERATOR_CURRENT_STEP_STATE_RETRY_SCHEDULED ||
-    state === TOPOLOGY_OPERATOR_CURRENT_STEP_STATE_DISPATCHED ||
-    state === TOPOLOGY_OPERATOR_CURRENT_STEP_STATE_PLANNED ||
-    state === TOPOLOGY_OPERATOR_CURRENT_STEP_STATE_OBSERVED
-  ) {
-    return EDGE_STATE.RETRYABLE;
-  }
-  return EDGE_STATE.UNKNOWN;
+  return TOPOLOGY_OPERATOR_WITNESS_EDGE_STATE_BY_STEP.get(state) ||
+    EDGE_STATE.UNKNOWN;
 }
 
 function normalizePriorityRecoveryPartitionWitnesses(witnesses) {
@@ -2381,45 +2386,105 @@ function isPriorityRecoveryEventDrivenWaitWitness(witness) {
   );
 }
 
-function buildPriorityRecoveryWitnessSource(evidence) {
-  const witnessSource = {};
+function buildPriorityRecoveryEvidenceSource(evidence) {
+  const operationProgressProjection =
+    buildOperationProgressCompatibilityProjection(
+      evidence.operationProgressRecord,
+    );
+  if (hasOperationProgressProjectionSource(operationProgressProjection)) {
+    return buildOperationProgressProjectionSource(operationProgressProjection);
+  }
   const topologyOperatorWitness = asRecord(evidence.topologyOperatorWitness);
+  return Object.freeze({
+    ...buildTopologyOperatorEvidenceSource(topologyOperatorWitness),
+    ...buildPriorityRecoveryObservationSource(evidence),
+  });
+}
+
+function hasOperationProgressProjectionSource(operationProgressProjection) {
+  return operationProgressProjection.topologyOperatorCurrentStepId !==
+    OPERATION_PROGRESS_PROJECTION_UNAVAILABLE;
+}
+
+function buildOperationProgressProjectionSource(operationProgressProjection) {
+  return Object.freeze({
+    topologyOperatorId: textOrUnknown(
+      operationProgressProjection.operationId,
+    ),
+    topologyOperatorKind: textOrUnknown(
+      operationProgressProjection.resource,
+    ),
+    topologyOperatorCurrentStepId: textOrUnknown(
+      operationProgressProjection.topologyOperatorCurrentStepId,
+    ),
+    topologyOperatorCurrentStepState: textOrUnknown(
+      operationProgressProjection.topologyOperatorCurrentStepState,
+    ),
+    operationProgressResource: textOrUnknown(
+      operationProgressProjection.operationProgressResource,
+    ),
+    operationProgressState: textOrUnknown(
+      operationProgressProjection.operationProgressState,
+    ),
+    operationProgressLastAcceptedEventId: textOrUnknown(
+      operationProgressProjection.operationProgressLastAcceptedEventId,
+    ),
+    topologyOperatorNextAction: textOrUnknown(
+      operationProgressProjection.topologyOperatorNextAction,
+    ),
+  });
+}
+
+function buildTopologyOperatorEvidenceSource(topologyOperatorWitness) {
   if (isTopologyOperatorWitnessPresent(topologyOperatorWitness)) {
-    witnessSource.topologyOperatorId = textOrUnknown(
-      topologyOperatorWitness[SOURCE_FIELD.OPERATOR_ID],
-    );
-    witnessSource.topologyOperatorKind = textOrUnknown(
-      topologyOperatorWitness[SOURCE_FIELD.KIND],
-    );
-    witnessSource.topologyOperatorCurrentStepId = textOrUnknown(
-      topologyOperatorWitness[SOURCE_FIELD.CURRENT_STEP_ID],
-    );
-    witnessSource.topologyOperatorCurrentStepState = textOrUnknown(
-      topologyOperatorWitness[SOURCE_FIELD.CURRENT_STEP_STATE],
-    );
-    witnessSource.topologyOperatorWitnessSource = textOrUnknown(
-      topologyOperatorWitness[SOURCE_FIELD.WITNESS_SOURCE],
-    );
-    witnessSource.topologyOperatorNextAction = textOrUnknown(
-      topologyOperatorWitness[SOURCE_FIELD.NEXT_ACTION],
-    );
-    witnessSource.topologyOperatorDeadlineMs = numberOrUnknown(
-      topologyOperatorWitness[SOURCE_FIELD.DEADLINE_MS],
-    );
-    witnessSource.topologyOperatorLastObservedAtMs = numberOrUnknown(
-      topologyOperatorWitness[SOURCE_FIELD.LAST_OBSERVED_AT_MS],
-    );
+    return Object.freeze({
+      topologyOperatorId: textOrUnknown(
+        topologyOperatorWitness[SOURCE_FIELD.OPERATOR_ID],
+      ),
+      topologyOperatorKind: textOrUnknown(
+        topologyOperatorWitness[SOURCE_FIELD.KIND],
+      ),
+      topologyOperatorCurrentStepId: textOrUnknown(
+        topologyOperatorWitness[SOURCE_FIELD.CURRENT_STEP_ID],
+      ),
+      topologyOperatorCurrentStepState: textOrUnknown(
+        topologyOperatorWitness[SOURCE_FIELD.CURRENT_STEP_STATE],
+      ),
+      topologyOperatorNextAction: textOrUnknown(
+        topologyOperatorWitness[SOURCE_FIELD.NEXT_ACTION],
+      ),
+      topologyOperatorDeadlineMs: numberOrUnknown(
+        topologyOperatorWitness[SOURCE_FIELD.DEADLINE_MS],
+      ),
+      topologyOperatorLastObservedAtMs: numberOrUnknown(
+        topologyOperatorWitness[SOURCE_FIELD.LAST_OBSERVED_AT_MS],
+      ),
+    });
   }
-  if (evidence.waitModes.length > SOURCE_ORDER_BASE) {
-    witnessSource.waitModes = joinValues(evidence.waitModes);
-  }
-  if (evidence.nextRequiredActions.length > SOURCE_ORDER_BASE) {
-    witnessSource.nextRequiredActions = joinValues(evidence.nextRequiredActions);
-  }
-  if (evidence.actuationStates.length > SOURCE_ORDER_BASE) {
-    witnessSource.actuationStates = joinValues(evidence.actuationStates);
-  }
-  return witnessSource;
+  return Object.freeze({});
+}
+
+function buildPriorityRecoveryObservationSource(evidence) {
+  return Object.freeze({
+    ...buildPriorityRecoveryObservationEntry(
+      evidence.waitModes,
+      PRIORITY_RECOVERY_OBSERVATION_FIELD_WAIT_MODES,
+    ),
+    ...buildPriorityRecoveryObservationEntry(
+      evidence.nextRequiredActions,
+      PRIORITY_RECOVERY_OBSERVATION_FIELD_NEXT_REQUIRED_ACTIONS,
+    ),
+    ...buildPriorityRecoveryObservationEntry(
+      evidence.actuationStates,
+      PRIORITY_RECOVERY_OBSERVATION_FIELD_ACTUATION_STATES,
+    ),
+  });
+}
+
+function buildPriorityRecoveryObservationEntry(values, fieldName) {
+  return values.length > SOURCE_ORDER_BASE ?
+    Object.freeze({[fieldName]: joinValues(values)}) :
+    Object.freeze({});
 }
 
 function buildSelectedSnapshotObservationRetrySource(progress) {

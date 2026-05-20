@@ -395,7 +395,7 @@ function buildLoadPublicationGateProjectionContext(
       snapshotCoverage?.selectedSnapshotAdminReady === true,
     loadPublicationGateWitnessUsable:
       loadPublicationGateWitness.usable === true,
-    loadPublicationGateWitnessSource: loadPublicationGateWitness.source,
+    loadPublicationGateDecisionSource: loadPublicationGateWitness.source,
     publishedActiveNodeIds: normalizeDistinctStringArray(
       snapshotCoverage?.selectedPublishedActiveNodeIds,
     ),
@@ -429,8 +429,8 @@ function normalizeLoadPublicationGateProjectionEvidence(
       projectionContext.selectedSnapshotAdminReady === true,
     loadPublicationGateWitnessUsable:
       projectionContext.loadPublicationGateWitnessUsable === true,
-    loadPublicationGateWitnessSource:
-      projectionContext.loadPublicationGateWitnessSource,
+    loadPublicationGateDecisionSource:
+      projectionContext.loadPublicationGateDecisionSource,
     diagnosticActive: diagnostic?.active === true,
     diagnosticErrorPresent,
     diagnosticActivitySource: diagnostic?.activitySource,
@@ -628,10 +628,8 @@ function isPendingOwnerReconcileActiveGateHandoff(handoff = null) {
   if (!handoff || typeof handoff !== TYPEOF_OBJECT) {
     return false;
   }
-  const pendingReconcileNodeIds = normalizeDistinctStringArray(
-    handoff[PUBLICATION_HANDOFF_PENDING_RECONCILE_NODE_IDS_FIELD] ??
-      handoff[PUBLICATION_HANDOFF_PENDING_RECONCILE_NODE_IDS_SNAKE_FIELD],
-  );
+  const pendingReconcileNodeIds =
+    normalizeOwnerReconcileHandoffPendingNodeIds(handoff);
   return (
     normalizeOptionalString(handoff[PUBLICATION_HANDOFF_STATE_FIELD]) ===
       PUBLICATION_HANDOFF_STATE_PENDING &&
@@ -648,6 +646,52 @@ function isPendingOwnerReconcileActiveGateHandoff(handoff = null) {
       handoff[PUBLICATION_HANDOFF_RUNTIME_PROMOTION_ALLOWED_SNAKE_FIELD]
     ) !== true &&
     pendingReconcileNodeIds.length > ZERO
+  );
+}
+
+function normalizeOwnerReconcileHandoffPendingNodeIds(handoff = null) {
+  return normalizeDistinctStringArray(
+    handoff?.[PUBLICATION_HANDOFF_PENDING_RECONCILE_NODE_IDS_FIELD] ??
+      handoff?.[PUBLICATION_HANDOFF_PENDING_RECONCILE_NODE_IDS_SNAKE_FIELD],
+  );
+}
+
+function normalizeOwnerReconcileHandoffMissingNodeIds(handoff = null) {
+  return normalizeDistinctStringArray(
+    handoff?.[
+      PARTIAL_COVERAGE_PUBLICATION_GATE_FIELD.MISSING_PUBLISHED_NODE_IDS
+    ],
+  );
+}
+
+function ownerReconcileHandoffMatchesSelectedMissingPublishedDebt({
+  pendingReconcileNodeIds,
+  selectedMissingPublishedNodeIds,
+  selectedPublicationActiveGateHandoff,
+}) {
+  if (
+    pendingReconcileNodeIds.length >
+      PUBLICATION_HANDOFF_RESIDUAL_RECONCILE_PROJECTION_LIMIT
+  ) {
+    return false;
+  }
+  if (
+    pendingReconcileNodeIds.every((nodeId) =>
+      selectedMissingPublishedNodeIds.includes(nodeId),
+    ) !== true
+  ) {
+    return false;
+  }
+  const handoffMissingPublishedNodeIds =
+    normalizeOwnerReconcileHandoffMissingNodeIds(
+      selectedPublicationActiveGateHandoff,
+    );
+  return (
+    handoffMissingPublishedNodeIds.length === ZERO ||
+    handoffMissingPublishedNodeIds.every((nodeId) =>
+      pendingReconcileNodeIds.includes(nodeId) &&
+      selectedMissingPublishedNodeIds.includes(nodeId),
+    )
   );
 }
 
@@ -672,17 +716,49 @@ function canResolveSelectedPendingAckThroughOwnerReconcile({
   ) {
     return false;
   }
-  const pendingReconcileNodeIds = normalizeDistinctStringArray(
-    selectedPublicationActiveGateHandoff[
-      PUBLICATION_HANDOFF_PENDING_RECONCILE_NODE_IDS_FIELD
-    ] ??
-      selectedPublicationActiveGateHandoff[
-        PUBLICATION_HANDOFF_PENDING_RECONCILE_NODE_IDS_SNAKE_FIELD
-      ],
+  const pendingReconcileNodeIds = normalizeOwnerReconcileHandoffPendingNodeIds(
+    selectedPublicationActiveGateHandoff,
   );
   return pendingAckNodeIds.every((nodeId) =>
     pendingReconcileNodeIds.includes(nodeId),
   );
+}
+
+function canResolveSelectedMissingPublishedThroughOwnerReconcile({
+  publicationConvergenceGate,
+  selectedPendingAckNodeIds,
+  selectedMissingPublishedNodeIds,
+  selectedPublicationActiveGateHandoff,
+}) {
+  const pendingAckNodeIds = normalizeDistinctStringArray(
+    selectedPendingAckNodeIds,
+  );
+  const missingPublishedNodeIds = normalizeDistinctStringArray(
+    selectedMissingPublishedNodeIds,
+  );
+  if (
+    pendingAckNodeIds.length !== ZERO ||
+    missingPublishedNodeIds.length === ZERO
+  ) {
+    return false;
+  }
+  if (publicationConvergenceGate?.ready !== true) {
+    return false;
+  }
+  if (
+    isPendingOwnerReconcileActiveGateHandoff(
+      selectedPublicationActiveGateHandoff,
+    ) !== true
+  ) {
+    return false;
+  }
+  return ownerReconcileHandoffMatchesSelectedMissingPublishedDebt({
+    pendingReconcileNodeIds: normalizeOwnerReconcileHandoffPendingNodeIds(
+      selectedPublicationActiveGateHandoff,
+    ),
+    selectedMissingPublishedNodeIds: missingPublishedNodeIds,
+    selectedPublicationActiveGateHandoff,
+  });
 }
 
 function normalizePartialCoverageConvergenceEvidence({
@@ -706,22 +782,33 @@ function normalizePartialCoverageConvergenceEvidence({
     Number.isInteger(snapshotCoverage?.bestCoverageNodeCount) ?
       Math.max(ZERO, snapshotCoverage.bestCoverageNodeCount) :
       ZERO;
-  const selectedPendingAckCount = normalizeDistinctStringArray(
+  const selectedPendingAckNodeIds = normalizeDistinctStringArray(
     snapshotCoverage?.selectedPendingAckNodeIds,
-  ).length;
-  const selectedMissingPublishedCount = normalizeDistinctStringArray(
+  );
+  const selectedMissingPublishedNodeIds = normalizeDistinctStringArray(
     snapshotCoverage?.selectedMissingPublishedNodeIds,
-  ).length;
+  );
   const selectedPublicationActiveGateHandoff =
     snapshotCoverage?.selectedPublicationActiveGateHandoff &&
       typeof snapshotCoverage.selectedPublicationActiveGateHandoff ===
         TYPEOF_OBJECT ?
       snapshotCoverage.selectedPublicationActiveGateHandoff :
-      null;
+      snapshotCoverage?.selectedActiveGateOwnerCohort &&
+        typeof snapshotCoverage.selectedActiveGateOwnerCohort ===
+          TYPEOF_OBJECT ?
+        snapshotCoverage.selectedActiveGateOwnerCohort :
+        null;
   const selectedPendingAckResolvedByOwnerReconcile =
     canResolveSelectedPendingAckThroughOwnerReconcile({
       publicationConvergenceGate,
-      selectedPendingAckNodeIds: snapshotCoverage?.selectedPendingAckNodeIds,
+      selectedPendingAckNodeIds,
+      selectedPublicationActiveGateHandoff,
+    });
+  const selectedMissingPublishedResolvedByOwnerReconcile =
+    canResolveSelectedMissingPublishedThroughOwnerReconcile({
+      publicationConvergenceGate,
+      selectedPendingAckNodeIds,
+      selectedMissingPublishedNodeIds,
       selectedPublicationActiveGateHandoff,
     });
   const selectedSnapshotErrorPresent =
@@ -742,12 +829,13 @@ function normalizePartialCoverageConvergenceEvidence({
       isPartialCoveragePublicationGateReady(
         selectedPublicationConvergenceGate,
       ) ||
-      selectedPendingAckResolvedByOwnerReconcile,
+      selectedPendingAckResolvedByOwnerReconcile ||
+      selectedMissingPublishedResolvedByOwnerReconcile,
     selectedPendingAckCount:
       selectedPendingAckResolvedByOwnerReconcile === true ?
         ZERO :
-        selectedPendingAckCount,
-    selectedMissingPublishedCount,
+        selectedPendingAckNodeIds.length,
+    selectedMissingPublishedCount: selectedMissingPublishedNodeIds.length,
   });
 }
 

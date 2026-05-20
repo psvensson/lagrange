@@ -1195,7 +1195,6 @@ describe('TopologyConvergenceGraph', () => {
         }],
         currentStepId: TOPOLOGY_OPERATOR_TEST_CURRENT_STEP_ID,
         currentStepState: TOPOLOGY_OPERATOR_TEST_CURRENT_STEP_STATE,
-        witnessSource: PRIORITY_RECOVERY_WAIT_MODE_EVENT_DRIVEN,
         nextAction: PRIORITY_RECOVERY_ACTION_WAIT_FOR_OPERATION_PROGRESS,
         deadlineMs: TOPOLOGY_OPERATOR_TEST_DEADLINE_MS,
         lastObservedAtMs: TOPOLOGY_OPERATOR_TEST_LAST_OBSERVED_AT_MS,

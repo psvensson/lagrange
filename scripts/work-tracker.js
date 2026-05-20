@@ -72,6 +72,7 @@ import {
   VALIDATION_TIERS,
   VALIDATION_PHASE_CLOSURE,
   VALIDATION_PHASE_ENTRY,
+  VALIDATION_PHASE_PROBE,
   VALIDATION_PHASE_PRE_IMPL,
   VALIDATION_PHASES,
   WORK_PACKAGE_METADATA_SCHEMA,
@@ -605,6 +606,7 @@ const CLI_FLAG_SUCCESSOR = '--successor';
 const CLI_FLAG_SUGGEST = '--suggest';
 const CLI_FLAG_FIX_DRY_RUN = '--fix-dry-run';
 const CLI_FLAG_ENTRY = '--entry';
+const CLI_FLAG_PROBE = '--probe';
 const CLI_FLAG_PRE_IMPL = '--pre-impl';
 const CLI_FLAG_CLOSURE = '--closure';
 const CLI_FLAG_TRANSACTION = '--transaction';
@@ -618,6 +620,9 @@ const CLI_COMMAND_MOVE = 'move';
 const ERROR_NO_ACTIVE_PACKAGE = 'No active work package was found.';
 const ERROR_NO_ACTIVE_SPRINT = 'No active sprint file was found.';
 const DEFAULT_UNKNOWN = 'unknown';
+const PROBE_PACKAGE_MAX_MARKDOWN_LINES = 30;
+const PROBE_PACKAGE_EXECUTION_EVIDENCE_HEADING_PATTERN =
+  /^## Execution Evidence\b/imu;
 const DOCTOR_SUGGESTION_NONE =
   'No deterministic suggestions are available for these findings.';
 const LEDGER_VALIDATION_ALLOW_OPEN_IMPLEMENTATION = 'allowOpenImplementation';
@@ -670,7 +675,7 @@ function printUsage() {
   console.log([
     'Usage:',
     '  node scripts/work-tracker.js current-blocker [--write]',
-    '  node scripts/work-tracker.js validate [--entry|--pre-impl|--closure] [--all] [paths...]',
+    '  node scripts/work-tracker.js validate [--entry|--probe|--pre-impl|--closure] [--all] [paths...]',
     '  node scripts/work-tracker.js doctor [package]',
     '  node scripts/work-tracker.js close <package> [--write] [--transaction]',
     '  node scripts/work-tracker.js migrate <package> <successor> [--write] [--transaction]',
@@ -4445,6 +4450,7 @@ function validatePackageMetadataShape(filePath, fileStatus, metadata) {
 function resolveValidationPhase(args = []) {
   const requestedPhases = [
     args.includes(CLI_FLAG_ENTRY) ? VALIDATION_PHASE_ENTRY : null,
+    args.includes(CLI_FLAG_PROBE) ? VALIDATION_PHASE_PROBE : null,
     args.includes(CLI_FLAG_PRE_IMPL) ? VALIDATION_PHASE_PRE_IMPL : null,
     args.includes(CLI_FLAG_CLOSURE) ? VALIDATION_PHASE_CLOSURE : null,
   ].filter(Boolean);
@@ -4516,6 +4522,34 @@ async function validateExecutableContracts(metadata, filePath, options = {}) {
   return errors;
 }
 
+function validateProbePackageContract(content, filePath, metadata) {
+  const errors = [];
+  const markdownLineCount = content.split(NEWLINE).length;
+  if (markdownLineCount > PROBE_PACKAGE_MAX_MARKDOWN_LINES) {
+    errors.push(
+      `${filePath}: probe package has ${markdownLineCount} markdown lines; ` +
+      `keep probe packages at or below ${PROBE_PACKAGE_MAX_MARKDOWN_LINES} lines.`,
+    );
+  }
+  if (PROBE_PACKAGE_EXECUTION_EVIDENCE_HEADING_PATTERN.test(content)) {
+    errors.push(
+      `${filePath}: probe packages must not include the closure ` +
+      'Execution Evidence ladder; validate them with --probe.',
+    );
+  }
+  if (!metadata) {
+    return errors;
+  }
+  const proof = Array.isArray(metadata.proof) ? metadata.proof : [];
+  if (proof.length === NUM_ZERO) {
+    errors.push(
+      `${filePath}: probe package metadata.proof must name at least one ` +
+      'probe command or artifact.',
+    );
+  }
+  return errors;
+}
+
 async function validatePackageFile(filePath, options = {}) {
   const phase = options.phase || VALIDATION_PHASE_PRE_IMPL;
   const content = await readTextFile(filePath);
@@ -4538,6 +4572,17 @@ async function validatePackageFile(filePath, options = {}) {
   errors.push(
     ...validatePackageMetadataShape(relativePath, fileStatus, metadata),
   );
+  if (phase === VALIDATION_PHASE_PROBE) {
+    errors.push(...validateProbePackageContract(
+      content,
+      relativePath,
+      metadata,
+    ));
+    return {
+      errors,
+      hasMetadata: metadata !== null,
+    };
+  }
   const subagentValidation = buildSubagentValidationOptions(
     fileStatus,
     metadata,

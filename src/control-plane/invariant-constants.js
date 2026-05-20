@@ -70,6 +70,27 @@ const INVARIANT_REASON = Object.freeze({
   TRANSACTION_COORDINATOR_MISSING: 'transaction_coordinator_missing',
   /** Transaction: required transaction coordinator was available. */
   TRANSACTION_COORDINATOR_AVAILABLE: 'transaction_coordinator_available',
+
+  /** Operation progress: dispatched operations exceeded bounded steps. */
+  OPERATION_PROGRESS_BOUND_EXCEEDED:
+    'operation_progress_bound_exceeded',
+  /** Operation progress: dispatched operations reached terminal state. */
+  OPERATION_PROGRESS_BOUNDED:
+    'operation_progress_bounded',
+
+  /** Publication: accepted publication is neither visible nor retained. */
+  ACCEPTED_PUBLICATION_WITHOUT_VISIBILITY_OR_RETRY:
+    'accepted_publication_without_visibility_or_retry',
+  /** Publication: accepted publications are visible or explicitly retained. */
+  PUBLICATION_VISIBLE_OR_RETAINED:
+    'publication_visible_or_retained',
+
+  /** Snapshot coverage: coverage regressed while no failure was declared. */
+  SNAPSHOT_COVERAGE_REGRESSED:
+    'snapshot_coverage_regressed',
+  /** Snapshot coverage: coverage monotonically advanced. */
+  SNAPSHOT_COVERAGE_MONOTONIC:
+    'snapshot_coverage_monotonic',
 });
 
 /**

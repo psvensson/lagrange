@@ -49,7 +49,9 @@ The current concrete ownership map is:
 - Replica state -> `ReplicaStateMachine`
 - Epoch -> `config.current_epoch` via CDC
 - Placement planning -> `MovePlanner`
-- Operation lifecycle -> `RebalanceCoordinator` + `replica_operations`
+- Operation lifecycle -> `OperationWorkflowOwner` owns
+  `operation_progress`; `RebalanceCoordinator` remains the writer of
+  owner-managed `replica_operations` workflow fields.
 - Dispatch -> `ReplicaDispatchService`
 - Failure detection -> `FailureDetector`
 - System cache -> `SystemTableCache`
@@ -65,6 +67,87 @@ Current workflow ownership boundaries are:
 - Executors such as `ReplicaHandler` and `PartitionService` are participants.
   They emit typed acknowledgements or outcomes and do not persist
   owner-managed phase transitions directly.
+- `OperationWorkflowOwner` is the single writer for `operation_progress`.
+  Publication owner, startup active-gate owner, diagnostics, and harness
+  observers consume its persisted outcome/event projection and must not
+  re-derive operation progress from topology step fields, publication
+  symptoms, or snapshot coverage.
+
+## Operation Progress Owner File Map
+
+- Resource: `operation_progress`
+- Semantic owner and writer: `OperationWorkflowOwner`
+- FSM/resource schema and single advance function:
+  `src/rebalancer/operation-lifecycle.js`
+- Persisted resource load, compare-and-swap, and event-log storage:
+  `src/rebalancer/operation-progress-store.js`
+- Lifecycle event definitions, append helpers, and event projection:
+  `src/rebalancer/operation-progress-events.js`
+- Read-only projections for diagnostics, gates, and tests:
+  `src/rebalancer/operation-progress-observer.js`
+- Runtime ingress orchestration:
+  `src/rebalancer/operation-workflow-owner-adapter.js`
+- Effect command adapter:
+  `src/rebalancer/operation-workflow-owner-effects.js`
+- Owner port executor boundary:
+  `src/rebalancer/operation-workflow-owner-ports.js`
+- Compatibility entry point for existing workflow decision callers:
+  `src/rebalancer/operation-workflow-owner-decision.js`
+- Runtime evidence normalizer:
+  `src/rebalancer/operation-workflow-owner-evidence.js`
+- Observation rule: publication, active-gate, readiness, diagnostics, and
+  harness code may project from `operation_progress` events/outcomes but must
+  not write lifecycle state or infer lifecycle progress from symptom metrics.
+- Retired source vocabulary is not operation lifecycle authority. Current
+  diagnostics and gates consume `operation_progress.resource`,
+  `operation_progress.state`, `operation_progress.lastAcceptedEventId`, and
+  event projections. Historical report adapters may render old fields only as
+  presentation-only compatibility, outside lifecycle decision code.
+
+## Rebalancer Segment Removal Ledger
+
+The following ordinal files are allowlisted temporary compatibility wrappers.
+They may not implement or import the `operation_progress` resource/FSM/store
+path. New operation-progress runtime work must land in the named owner files
+listed above.
+
+| Legacy file | Classification | Replacement owner file | Deletion condition |
+| --- | --- | --- | --- |
+| `src/rebalancer/operation-workflow-owner-segment-1.js` | temporary compatibility wrapper | `src/rebalancer/operation-workflow-owner.js`, `src/rebalancer/operation-workflow-owner-adapter.js`, `src/rebalancer/operation-workflow-owner-ports.js` | Delete after public construction and workflow owner ingress no longer extend ordinal classes. |
+| `src/rebalancer/operation-workflow-owner-segment-2.js` | temporary compatibility wrapper | `src/rebalancer/operation-workflow-owner.js`, `src/rebalancer/operation-workflow-owner-ports.js` | Delete after owner-lane and workflow-coordinator helpers are extracted behind named ports. |
+| `src/rebalancer/operation-workflow-owner-segment-3.js` | extract into responsibility-named module | `src/rebalancer/operation-workflow-owner-ports.js` | Delete after transition persistence/recovery helpers are routed through named owner ports. |
+| `src/rebalancer/operation-workflow-owner-segment-4.js` | extract into responsibility-named module | `src/rebalancer/operation-workflow-owner-ports.js` | Delete after dispatch wake and retry helpers move behind named effect ports. |
+| `src/rebalancer/operation-workflow-owner-segment-5-stage-1.js` | extract into responsibility-named module | future `src/rebalancer/priority-publication-safety.js` | Delete after priority publication safety evidence is extracted and callers import the named module. |
+| `src/rebalancer/operation-workflow-owner-segment-5-stage-2.js` | extract into responsibility-named module | future `src/rebalancer/priority-publication-safety.js` | Delete after replica-row safety merge reads are owned by the named safety module. |
+| `src/rebalancer/operation-workflow-owner-segment-5-stage-3.js` | extract into responsibility-named module | future `src/rebalancer/priority-publication-safety.js` | Delete after leader/follower source-removal safety snapshots move to the named safety module. |
+| `src/rebalancer/operation-workflow-owner-segment-5-stage-4.js` | extract into responsibility-named module | future `src/rebalancer/priority-publication-handoff.js` | Delete after remove-safety handoff continuation behavior moves to the named handoff module. |
+| `src/rebalancer/operation-workflow-owner-segment-5-stage-5.js` | extract into responsibility-named module | future `src/rebalancer/priority-recovery-observation.js` | Delete after priority recovery observation selection moves to the named observation module. |
+| `src/rebalancer/operation-workflow-owner-segment-5-stage-shared.js` | temporary compatibility wrapper | future `src/rebalancer/priority-publication-safety.js` | Delete after stage-shared constants are collapsed into named safety/observation modules. |
+| `src/rebalancer/operation-workflow-owner-segment-5.js` | temporary compatibility wrapper | future `src/rebalancer/priority-publication-safety.js` | Delete after segment-five public imports point at the named safety module. |
+| `src/rebalancer/operation-workflow-owner-segment-6.js` | extract into responsibility-named module | future `src/rebalancer/priority-recovery-superseded-target.js` | Delete after superseded-target and remove-safety participation decisions move to named modules. |
+| `src/rebalancer/operation-workflow-owner-segment-7-stage-1.js` | extract into responsibility-named module | future `src/rebalancer/operation-workflow-recovery-observation.js` | Delete after observed target-progress routing moves to the named recovery observation module. |
+| `src/rebalancer/operation-workflow-owner-segment-7-stage-2.js` | extract into responsibility-named module | future `src/rebalancer/operation-workflow-recovery-reconcile.js` | Delete after reconciled status resolution and target admission move to the named reconcile module. |
+| `src/rebalancer/operation-workflow-owner-segment-7-stage-3.js` | extract into responsibility-named module | future `src/rebalancer/operation-workflow-recovery-drain.js` | Delete after executor outcome and drain release decisions move to the named drain module. |
+| `src/rebalancer/operation-workflow-owner-segment-7-stage-4.js` | extract into responsibility-named module | future `src/rebalancer/operation-workflow-recovery-drain.js` | Delete after priority recovery drain owner decisions move to the named drain module. |
+| `src/rebalancer/operation-workflow-owner-segment-7-stage-5.js` | extract into responsibility-named module | `src/rebalancer/operation-workflow-owner-adapter.js`, future `src/rebalancer/operation-workflow-recovery-reconcile.js` | Delete after priority recovery re-entry uses `operation_progress` projections and named reconcile modules only. |
+| `src/rebalancer/operation-workflow-owner-segment-7-stage-shared.js` | temporary compatibility wrapper | future `src/rebalancer/operation-workflow-recovery-reconcile.js` | Delete after stage-shared recovery constants are collapsed into named recovery modules. |
+| `src/rebalancer/operation-workflow-owner-segment-7.js` | temporary compatibility wrapper | future `src/rebalancer/operation-workflow-recovery-reconcile.js` | Delete after segment-seven public imports point at named recovery modules. |
+| `src/rebalancer/rebalance-coordinator-segment-1.js` | temporary compatibility wrapper | `src/rebalancer/rebalance-coordinator.js` | Delete after coordinator construction imports no ordinal classes. |
+| `src/rebalancer/rebalance-coordinator-segment-2.js` | extract into responsibility-named module | future `src/rebalancer/rebalance-operation-admission.js` | Delete after operation admission and planning helpers move to named coordinator modules. |
+| `src/rebalancer/rebalance-coordinator-segment-3.js` | extract into responsibility-named module | future `src/rebalancer/rebalance-operation-dispatch.js` | Delete after dispatch orchestration enters named coordinator modules and owner ports. |
+| `src/rebalancer/rebalance-coordinator-segment-4.js` | extract into responsibility-named module | future `src/rebalancer/rebalance-operation-reconcile.js` | Delete after reconciliation and timeout helpers move to named coordinator modules. |
+| `src/rebalancer/rebalance-coordinator-segment-5.js` | temporary compatibility wrapper | `src/rebalancer/rebalance-coordinator.js` | Delete after the top-level coordinator class composes named modules directly. |
+| `src/rebalancer/unified-rebalancer-segment-1.js` | temporary compatibility wrapper | `src/rebalancer/unified-rebalancer.js` | Delete after unified rebalancer construction imports no ordinal classes. |
+| `src/rebalancer/unified-rebalancer-segment-2.js` | extract into responsibility-named module | `src/rebalancer/move-planner.js` | Delete after placement planning helpers consume `MovePlanner` directly. |
+| `src/rebalancer/unified-rebalancer-segment-3.js` | extract into responsibility-named module | future `src/rebalancer/replica-operation-status-projection.js` | Delete after replica-operation progress/status projection moves to the named projection module. |
+| `src/rebalancer/unified-rebalancer-segment-4-stage-1.js` | extract into responsibility-named module | future `src/rebalancer/rebalance-health-evaluation.js` | Delete after health/admission stage-one helpers move to the named evaluation module. |
+| `src/rebalancer/unified-rebalancer-segment-4-stage-2.js` | extract into responsibility-named module | future `src/rebalancer/rebalance-health-evaluation.js` | Delete after health/admission stage-two helpers move to the named evaluation module. |
+| `src/rebalancer/unified-rebalancer-segment-4-stage-3.js` | extract into responsibility-named module | future `src/rebalancer/rebalance-health-evaluation.js` | Delete after health/admission stage-three helpers move to the named evaluation module. |
+| `src/rebalancer/unified-rebalancer-segment-4-stage-4.js` | extract into responsibility-named module | future `src/rebalancer/rebalance-health-evaluation.js` | Delete after health/admission stage-four helpers move to the named evaluation module. |
+| `src/rebalancer/unified-rebalancer-segment-4-stage-5.js` | extract into responsibility-named module | future `src/rebalancer/rebalance-health-evaluation.js` | Delete after health/admission stage-five helpers move to the named evaluation module. |
+| `src/rebalancer/unified-rebalancer-segment-4-stage-shared.js` | temporary compatibility wrapper | future `src/rebalancer/rebalance-health-evaluation.js` | Delete after shared health/admission constants move to the named evaluation module. |
+| `src/rebalancer/unified-rebalancer-segment-4.js` | temporary compatibility wrapper | future `src/rebalancer/rebalance-health-evaluation.js` | Delete after segment-four public imports point at the named evaluation module. |
+| `src/rebalancer/unified-rebalancer-segment-5.js` | temporary compatibility wrapper | `src/rebalancer/unified-rebalancer.js` | Delete after the top-level unified rebalancer class composes named modules directly. |
 
 ## Shared Control-Plane Building Blocks
 

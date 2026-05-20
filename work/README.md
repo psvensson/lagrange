@@ -129,10 +129,12 @@ Use the tracker utility for current sprint/package mechanics:
 19. `npm run work:oversized-next -- --markdown` turns oversized
     owner-boundary segment files into package-ready extraction candidates so
     file-size debt stays actionable rather than a broad background concern.
-20. `npm run work:validate -- --entry|--pre-impl|--closure` checks active and
+20. `npm run work:validate -- --entry|--probe|--pre-impl|--closure` checks active and
    metadata-bearing packages for filename/header drift, stale open checklist
    items, and lane-required execution proof at the requested phase. The default
-   phase is `--pre-impl`; `--closure` is strict for implementation evidence.
+   phase is `--pre-impl`; `--probe` is for small probe packages that stay at or
+   below 30 markdown lines and omit the closure evidence ladder; `--closure` is
+   strict for implementation evidence.
 21. `npm run work:package:close -- --write work/packages/active-...md` renames a
     package to `done-...` only after open checklist items are closed.
 22. `npm run work:package:migrate -- --write work/packages/active-...md`
@@ -211,6 +213,10 @@ the package explicitly records a heavier audit or architecture reason:
 12. Once canonical owner and boundary are stable and the route is local runtime
    work, prefer a `runtime-owner-boundary` successor over another
    classification package.
+13. For read/probe work, start from `work/templates/probe-package.md` and
+   validate with `npm run work:validate -- --probe <package>`. A probe package
+   should name one falsifiable question, one expected signal, and one stop rule;
+   it should not carry `## Execution Evidence`.
 
 ## Core Logic Brief
 

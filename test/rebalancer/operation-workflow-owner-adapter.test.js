@@ -26,6 +26,9 @@ import {
   createOperationWorkflowOwnerAdapter,
 } from '../../src/rebalancer/operation-workflow-owner-adapter.js';
 import {
+  createOperationProgressStore,
+} from '../../src/rebalancer/operation-progress-store.js';
+import {
   OPERATION_WORKFLOW_OWNER_PORT_CONTEXT_MODE,
   createOperationWorkflowOwnerPorts,
 } from '../../src/rebalancer/operation-workflow-owner-ports.js';
@@ -38,6 +41,7 @@ const TEST_OWNER_NODE_KEY = 'adapter-owner-node';
 const TEST_LEASE_TERM = 9;
 const TEST_REQUIRED_REVISION = 'adapter-required-revision';
 const TEST_PRIOR_OPERATION_ID = 'adapter-prior-operation';
+const TEST_COMMAND_STATE_PERSISTED = 'persisted';
 
 function buildOperation(overrides = {}) {
   return Object.freeze({
@@ -140,6 +144,7 @@ function buildEvidence(overrides = {}) {
 
 function buildAdapterHarness() {
   const calls = [];
+  const progressStore = createOperationProgressStore();
   const ports = {
     async readDurableOperation() {
       return buildOperation();
@@ -162,6 +167,15 @@ function buildAdapterHarness() {
     readDispatchObservation() {
       return buildDispatchObservation();
     },
+    loadOperationProgress(operation, context) {
+      return progressStore.loadOperationProgress(operation, context);
+    },
+    persistOperationProgress(write) {
+      return progressStore.compareAndSwapOperationProgress(write);
+    },
+    appendOperationProgressEvent(event) {
+      return progressStore.appendEvent(event);
+    },
     dispatchLocalOwner() {
       calls.push(OPERATION_WORKFLOW_EFFECT_COMMANDS
         .DISPATCH_LOCAL_OWNER_COMMAND);
@@ -180,6 +194,16 @@ function buildAdapterHarness() {
     reconcileStaleProgress() {
       calls.push(OPERATION_WORKFLOW_EFFECT_COMMANDS
         .RECONCILE_STALE_PROGRESS_COMMAND);
+      return true;
+    },
+    retainPublicationForRetry() {
+      calls.push(OPERATION_WORKFLOW_EFFECT_COMMANDS
+        .RETAIN_PUBLICATION_FOR_RETRY_COMMAND);
+      return true;
+    },
+    markActiveGateVisible() {
+      calls.push(OPERATION_WORKFLOW_EFFECT_COMMANDS
+        .MARK_ACTIVE_GATE_VISIBLE_COMMAND);
       return true;
     },
     recordTerminalSuccess() {
@@ -288,7 +312,7 @@ test('operation workflow adapter executes canonical effect commands', async (t) 
       }),
       command:
         OPERATION_WORKFLOW_EFFECT_COMMANDS
-          .RECONCILE_STALE_PROGRESS_COMMAND,
+          .RETAIN_PUBLICATION_FOR_RETRY_COMMAND,
       applied: true,
     },
     {
@@ -355,6 +379,13 @@ test('operation workflow adapter executes canonical effect commands', async (t) 
     t.equal(result.command.effectCommand, scenario.command, scenario.name);
     t.equal(result.applied, scenario.applied, scenario.name);
     t.same(harness.calls, [scenario.command], scenario.name);
+    t.equal(result.persisted.applied, true, scenario.name);
+    t.equal(result.appendedEvents.length, 1, scenario.name);
+    t.equal(
+      result.commandResultEvidenceRecords[0].commandState,
+      TEST_COMMAND_STATE_PERSISTED,
+      scenario.name,
+    );
     t.equal(
       result.commandResultEvidence.effectCommand,
       scenario.command,

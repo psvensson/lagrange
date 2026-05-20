@@ -164,7 +164,6 @@ const MEMBERSHIP_PUBLICATION_HANDOFF_OUTCOME_RETRY_AFTER_MS = 1000;
 const TOPOLOGY_OPERATOR_CURRENT_STEP_ID_DISPATCH_PENDING =
   'dispatch_pending';
 const TOPOLOGY_OPERATOR_CURRENT_STEP_STATE_PLANNED = 'planned';
-const TOPOLOGY_OPERATOR_WITNESS_SOURCE_EVENT_DRIVEN = 'event_driven';
 const TOPOLOGY_OPERATOR_NEXT_ACTION_ADVANCE_EXISTING_OPERATION =
   'advance_existing_operation';
 const PRIORITY_RECOVERY_UNRESOLVED_RECOVERING_IN_FLIGHT =
@@ -489,10 +488,6 @@ describe('analyze-topology-convergence CLI', () => {
     assert.equal(
       output.operationWorkflow.source.topologyOperatorCurrentStepState,
       TOPOLOGY_OPERATOR_CURRENT_STEP_STATE_PLANNED,
-    );
-    assert.equal(
-      output.operationWorkflow.source.topologyOperatorWitnessSource,
-      TOPOLOGY_OPERATOR_WITNESS_SOURCE_EVENT_DRIVEN,
     );
     assert.equal(
       output.operationWorkflow.source.topologyOperatorNextAction,

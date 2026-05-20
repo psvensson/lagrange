@@ -37,8 +37,8 @@ const COMMAND_GROUPS = Object.freeze([
         description: 'Summarize recent model, reasoning-effort, and output-profile fit signals.',
       }),
       Object.freeze({
-        command: 'npm run work:validate -- --entry|--pre-impl|--closure',
-        description: 'Validate active work-package metadata, checklist state, and lane-required subagent proof at a workflow phase.',
+        command: 'npm run work:validate -- --entry|--probe|--pre-impl|--closure',
+        description: 'Validate active work-package metadata, probe packages, checklist state, and lane-required proof at a workflow phase.',
       }),
       Object.freeze({
         command: 'npm run work:package:new -- --lane <lane> --title <title> --slug <slug> --owner <owner> --boundary <boundary> --dominant-reason <reason> --next-action <action>',
@@ -82,8 +82,16 @@ const COMMAND_GROUPS = Object.freeze([
         description: 'Report oversized production and test files.',
       }),
       Object.freeze({
+        command: 'npm run test:topology-failure-gates',
+        description: 'Run topology failure gates against operation, publication, and coverage invariants.',
+      }),
+      Object.freeze({
         command: 'npm run audit:owner-boundary-segments -- <files...>',
         description: 'Print extraction guidance for oversized owner-boundary segment files.',
+      }),
+      Object.freeze({
+        command: 'npm run audit:operation-progress-authority',
+        description: 'Block retired operation-progress source vocabulary and new rebalancer ordinal files outside the owner-map ledger.',
       }),
       Object.freeze({
         command: 'npm run work:oversized-next -- --markdown',

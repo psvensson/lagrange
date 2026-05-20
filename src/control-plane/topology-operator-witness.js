@@ -21,7 +21,6 @@ const TOPOLOGY_OPERATOR_WITNESS_LITERAL = Object.freeze({
   OPERATOR_UNAVAILABLE: 'operator_unavailable',
   PARTITION_UNAVAILABLE: 'partition_unavailable',
   STEP_UNAVAILABLE: 'step_unavailable',
-  SOURCE_UNAVAILABLE: 'witness_source_unavailable',
   TARGET_UNAVAILABLE: 'target_unavailable',
 });
 
@@ -35,7 +34,6 @@ const TOPOLOGY_OPERATOR_WITNESS_FIELD = Object.freeze({
   STEPS: 'steps',
   CURRENT_STEP_ID: 'currentStepId',
   CURRENT_STEP_STATE: 'currentStepState',
-  WITNESS_SOURCE: 'witnessSource',
   NEXT_ACTION: 'nextAction',
   DEADLINE_MS: 'deadlineMs',
   LAST_OBSERVED_AT_MS: 'lastObservedAtMs',
@@ -294,11 +292,6 @@ function buildTopologyOperatorWitnessFromWorkflowProgress(
       buildTopologyOperatorWitnessSteps(currentStepId, currentStepState),
     [TOPOLOGY_OPERATOR_WITNESS_FIELD.CURRENT_STEP_ID]: currentStepId,
     [TOPOLOGY_OPERATOR_WITNESS_FIELD.CURRENT_STEP_STATE]: currentStepState,
-    [TOPOLOGY_OPERATOR_WITNESS_FIELD.WITNESS_SOURCE]:
-      normalizeTopologyOperatorWitnessText(
-        options.witnessSource || snapshot?.progress?.waitMode,
-        TOPOLOGY_OPERATOR_WITNESS_LITERAL.SOURCE_UNAVAILABLE,
-      ),
     [TOPOLOGY_OPERATOR_WITNESS_FIELD.NEXT_ACTION]: nextAction,
     [TOPOLOGY_OPERATOR_WITNESS_FIELD.DEADLINE_MS]: deadlineMs,
     [TOPOLOGY_OPERATOR_WITNESS_FIELD.LAST_OBSERVED_AT_MS]: lastObservedAtMs,

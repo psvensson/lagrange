@@ -112,6 +112,10 @@ const OPERATION_WORKFLOW_EFFECT_COMMAND_VALUES = Object.freeze({
     'advance_existing_operation_command',
   RECONCILE_STALE_PROGRESS_COMMAND:
     'reconcile_stale_progress_command',
+  RETAIN_PUBLICATION_FOR_RETRY_COMMAND:
+    'retain_publication_for_retry_command',
+  MARK_ACTIVE_GATE_VISIBLE_COMMAND:
+    'mark_active_gate_visible_command',
   RECORD_TERMINAL_SUCCESS_COMMAND:
     'record_terminal_success_command',
   RECORD_TERMINAL_FAILURE_COMMAND:
@@ -134,6 +138,9 @@ const OPERATION_WORKFLOW_REASON_CODE_VALUES = Object.freeze({
   REMOTE_HANDOFF_RETRY_SCHEDULED: 'remote_handoff_retry_scheduled',
   WORKFLOW_TRANSITION_AVAILABLE: 'workflow_transition_available',
   OWNER_PROGRESS_IN_FLIGHT: 'owner_progress_in_flight',
+  INVALID_LIFECYCLE_TRANSITION: 'invalid_lifecycle_transition',
+  PUBLICATION_ACCEPTED: 'publication_accepted',
+  RETRY_BUDGET_EXHAUSTED: 'retry_budget_exhausted',
 });
 
 const OPERATION_WORKFLOW_ABSENCE_VARIANT_VALUES = Object.freeze({

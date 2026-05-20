@@ -26,6 +26,9 @@ import {
   OPERATION_WORKFLOW_TYPE,
   OPERATION_WORKFLOW_WAKE_STATE,
 } from './operation-workflow-owner-constants.js';
+import {
+  createOperationProgressStore,
+} from './operation-progress-store.js';
 
 const OPERATION_WORKFLOW_OWNER_PORT_EMPTY_TEXT = '';
 const OPERATION_WORKFLOW_OWNER_PORT_NO_RECORD = null;
@@ -49,6 +52,20 @@ const OPERATION_WORKFLOW_OWNER_PORT_RECONCILE_DISPATCH_PENDING_STEPS =
   Object.freeze(new Set([
     WORKFLOW_STEP.PENDING,
     WORKFLOW_STEP.SENDING,
+  ]));
+const OPERATION_WORKFLOW_OWNER_PORT_REMOTE_HANDOFF_SNAPSHOT_STATE =
+  Object.freeze({
+    COORDINATOR_MODE_UNAVAILABLE: 'coordinator_mode_unavailable',
+    SNAPSHOT_UNAVAILABLE: 'snapshot_unavailable',
+    REMOTE_AUTHORITY_UNAVAILABLE: 'remote_authority_unavailable',
+    REMOTE_HANDOFF_INELIGIBLE: 'remote_handoff_ineligible',
+    DISPATCH_RETRY_UNAVAILABLE: 'dispatch_retry_unavailable',
+    SNAPSHOT_READY: 'snapshot_ready',
+  });
+const OPERATION_WORKFLOW_OWNER_PORT_REMOTE_HANDOFF_SNAPSHOT_ALLOWED_STATES =
+  Object.freeze(new Set([
+    OPERATION_WORKFLOW_OWNER_PORT_REMOTE_HANDOFF_SNAPSHOT_STATE
+      .SNAPSHOT_READY,
   ]));
 
 const OPERATION_WORKFLOW_OWNER_PORT_DISPATCH_STATE_TABLE = Object.freeze([
@@ -99,6 +116,48 @@ const OPERATION_WORKFLOW_OWNER_PORT_TRANSITION_STATE_TABLE = Object.freeze([
   }),
 ]);
 
+const OPERATION_WORKFLOW_OWNER_PORT_REMOTE_HANDOFF_SNAPSHOT_STATE_TABLE =
+  Object.freeze([
+    Object.freeze({
+      state:
+        OPERATION_WORKFLOW_OWNER_PORT_REMOTE_HANDOFF_SNAPSHOT_STATE
+          .COORDINATOR_MODE_UNAVAILABLE,
+      matches: (evidence) => evidence.coordinatorCreatedMode !== true,
+    }),
+    Object.freeze({
+      state:
+        OPERATION_WORKFLOW_OWNER_PORT_REMOTE_HANDOFF_SNAPSHOT_STATE
+          .SNAPSHOT_UNAVAILABLE,
+      matches: (evidence) => evidence.snapshotAvailable !== true,
+    }),
+    Object.freeze({
+      state:
+        OPERATION_WORKFLOW_OWNER_PORT_REMOTE_HANDOFF_SNAPSHOT_STATE
+          .REMOTE_AUTHORITY_UNAVAILABLE,
+      matches: (evidence) =>
+        evidence.authorityState !==
+        OPERATION_WORKFLOW_OWNER_AUTHORITY_STATE.REMOTE_AUTHORITATIVE,
+    }),
+    Object.freeze({
+      state:
+        OPERATION_WORKFLOW_OWNER_PORT_REMOTE_HANDOFF_SNAPSHOT_STATE
+          .REMOTE_HANDOFF_INELIGIBLE,
+      matches: (evidence) => evidence.remoteHandoffEligible !== true,
+    }),
+    Object.freeze({
+      state:
+        OPERATION_WORKFLOW_OWNER_PORT_REMOTE_HANDOFF_SNAPSHOT_STATE
+          .DISPATCH_RETRY_UNAVAILABLE,
+      matches: (evidence) => evidence.dispatchRetryable !== true,
+    }),
+    Object.freeze({
+      state:
+        OPERATION_WORKFLOW_OWNER_PORT_REMOTE_HANDOFF_SNAPSHOT_STATE
+          .SNAPSHOT_READY,
+      matches: () => true,
+    }),
+  ]);
+
 function isOperationWorkflowOwnerPortRecord(value) {
   return Boolean(value) &&
     typeof value === OPERATION_WORKFLOW_TYPE.OBJECT &&
@@ -134,6 +193,13 @@ function getOperationWorkflowOwnerPortOperationId(owner, operationInput) {
       operationInput[OPERATION_WORKFLOW_OWNER_PORT_OPERATION_ID_UNDERSCORE],
     OPERATION_WORKFLOW_IDENTIFIER_VARIANTS.OPERATION_KEY_UNAVAILABLE,
   );
+}
+
+function resolveOperationWorkflowOwnerProgressStore(owner) {
+  if (!owner.operationProgressStore) {
+    owner.operationProgressStore = createOperationProgressStore();
+  }
+  return owner.operationProgressStore;
 }
 
 function getOperationWorkflowOwnerPortWorkflowStep(operation) {
@@ -411,6 +477,68 @@ function shouldPrimeCoordinatorCreatedLocalOwnerOperation(
       WORKFLOW_STEP.PENDING;
 }
 
+function buildCoordinatorCreatedRemoteHandoffSnapshotEvidence(
+  owner,
+  operationInput,
+  context,
+) {
+  const operation = isOperationWorkflowOwnerPortRecord(operationInput) ?
+    operationInput :
+    context.fallbackOperation;
+  const snapshotAvailable = isOperationWorkflowOwnerPortRecord(operation);
+  const dispatchRetrySupportAvailable =
+    typeof owner.isDispatchRetryableWorkflowStep ===
+      OPERATION_WORKFLOW_OWNER_PORT_FUNCTION_TYPE;
+  return Object.freeze({
+    operation,
+    coordinatorCreatedMode:
+      context.mode ===
+      OPERATION_WORKFLOW_OWNER_PORT_CONTEXT_MODE.COORDINATOR_CREATED_OPERATION,
+    snapshotAvailable,
+    authorityState: snapshotAvailable === true ?
+      resolveOperationWorkflowOwnerAuthorityState(owner, operation) :
+      OPERATION_WORKFLOW_OWNER_AUTHORITY_STATE.UNAVAILABLE,
+    remoteHandoffEligible:
+      snapshotAvailable === true &&
+      typeof owner.shouldRetryCoordinatorCreatedRemoteHandoff ===
+        OPERATION_WORKFLOW_OWNER_PORT_FUNCTION_TYPE &&
+      owner.shouldRetryCoordinatorCreatedRemoteHandoff(operation) === true,
+    dispatchRetryable:
+      snapshotAvailable === true &&
+      (
+        dispatchRetrySupportAvailable !== true ||
+        owner.isDispatchRetryableWorkflowStep(operation) === true
+      ),
+  });
+}
+
+function resolveCoordinatorCreatedRemoteHandoffSnapshotState(evidence) {
+  return OPERATION_WORKFLOW_OWNER_PORT_REMOTE_HANDOFF_SNAPSHOT_STATE_TABLE
+    .find((entry) => entry.matches(evidence))
+    .state;
+}
+
+function selectCoordinatorCreatedRemoteHandoffSnapshot(
+  owner,
+  operationInput,
+  context,
+) {
+  const evidence = buildCoordinatorCreatedRemoteHandoffSnapshotEvidence(
+    owner,
+    operationInput,
+    context,
+  );
+  const state = resolveCoordinatorCreatedRemoteHandoffSnapshotState(evidence);
+  if (
+    !OPERATION_WORKFLOW_OWNER_PORT_REMOTE_HANDOFF_SNAPSHOT_ALLOWED_STATES
+      .has(state)
+  ) {
+    return OPERATION_WORKFLOW_OWNER_PORT_NO_RECORD;
+  }
+  return owner.cloneOperationSnapshot?.(evidence.operation) ||
+    evidence.operation;
+}
+
 async function readOperationWorkflowOwnerPortDurableOperation(
   owner,
   operationInput,
@@ -425,6 +553,15 @@ async function readOperationWorkflowOwnerPortDurableOperation(
     OPERATION_WORKFLOW_IDENTIFIER_VARIANTS.OPERATION_KEY_UNAVAILABLE
   ) {
     return OPERATION_WORKFLOW_OWNER_PORT_NO_RECORD;
+  }
+  const remoteHandoffSnapshot =
+    selectCoordinatorCreatedRemoteHandoffSnapshot(
+      owner,
+      operationInput,
+      context,
+    );
+  if (remoteHandoffSnapshot) {
+    return remoteHandoffSnapshot;
   }
   if (
     context.mode ===
@@ -574,6 +711,21 @@ function createOperationWorkflowOwnerPorts(owner) {
         context,
       );
     },
+    loadOperationProgress(operation, context) {
+      return resolveOperationWorkflowOwnerProgressStore(owner)
+        .loadOperationProgress(operation, context);
+    },
+    persistOperationProgress({expectedVersion, progress}) {
+      return resolveOperationWorkflowOwnerProgressStore(owner)
+        .compareAndSwapOperationProgress({
+          expectedVersion,
+          progress,
+        });
+    },
+    appendOperationProgressEvent(event) {
+      return resolveOperationWorkflowOwnerProgressStore(owner)
+        .appendEvent(event);
+    },
     dispatchLocalOwner(operation, context) {
       return dispatchOperationWorkflowLocalOwner(owner, operation, context);
     },
@@ -585,6 +737,12 @@ function createOperationWorkflowOwnerPorts(owner) {
     },
     reconcileStaleProgress(operation, context) {
       return owner.reconcileOperationLifecycle(operation, context);
+    },
+    retainPublicationForRetry(operation, context) {
+      return owner.reconcileOperationLifecycle(operation, context);
+    },
+    markActiveGateVisible() {
+      return true;
     },
     recordTerminalSuccess() {
       return true;

@@ -62,6 +62,10 @@ const CANONICAL_SCENARIO_MATRIX = Object.freeze([
   }),
   Object.freeze({
     config: 'local.json',
+    name: 'slow-follower-under-load',
+  }),
+  Object.freeze({
+    config: 'local.json',
     name: 'sustained-write-throughput',
   }),
   Object.freeze({
