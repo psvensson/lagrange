@@ -13,7 +13,7 @@
   "boundary": "publication_convergence",
   "dominantReason": "publication_operation_workflow_handoff_leg_missing",
   "currentState": "Focused publication evidence changes cleared publication_operation_workflow_handoff_leg_missing in rolling-restart-publication-workflow-handoff-runtime-20260520T062923Z. The representative rerun is reduced but still red on publication_ack_convergence / topology_publication_owner / publication_convergence with dominant reason publication_pending, pending reconcile count 2, and active-gate snapshot coverage 3/5.",
-  "nextAction": "Close this reduced handoff slice and continue in successor work/packages/active-20260520-topology-publication-remaining-pending-runtime.md.",
+  "nextAction": "Close this reduced handoff slice and continue in successor work/packages/done-20260520-topology-publication-remaining-pending-runtime.md.",
   "proof": [
     "npm test -- test/control-plane/publication-recovery-evidence.test.js test/distributed/harness/__tests__/publication-evidence-open-membership.test.js",
     "node scripts/check-guideline-literals.js src/control-plane/publication-recovery-evidence.js test/control-plane/publication-recovery-evidence.test.js test/distributed/harness/publication-evidence-contract.js test/distributed/harness/__tests__/publication-evidence-open-membership.test.js",
@@ -190,7 +190,7 @@
   },
   "closed": "2026-05-20",
   "commitAndPushLedgerRequired": true,
-  "successor": "work/packages/active-20260520-topology-publication-remaining-pending-runtime.md"
+  "successor": "work/packages/done-20260520-topology-publication-remaining-pending-runtime.md"
 }
 -->
 

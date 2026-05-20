@@ -3,7 +3,7 @@
 <!-- work-package
 {
   "schema": "work-package-v1",
-  "status": "active",
+  "status": "done",
   "opened": "2026-05-20",
   "lane": "causal-escalation",
   "scenario": "rolling-restart",
@@ -200,7 +200,10 @@
     ],
     "selectedChoice": "publication-pending-causal-handoff",
     "nextAction": "Proceed with the causal-escalation handoff proof and the narrow publication evidence implementation surface."
-  }
+  },
+  "closed": "2026-05-20",
+  "commitAndPushLedgerRequired": true,
+  "successor": "work/packages/active-20260520-startup-active-gate-owner-reconcile-pending-runtime.md"
 }
 -->
 
@@ -351,7 +354,13 @@ If review directly fixes metadata-only findings, record `review-fixed-metadata-o
 
 - [x] review: status: not-needed; evidence: lane permits direct work and the package already selected the publication-pending causal handoff route; next: focused proof.
 - [x] implementation: status: validated; evidence: `npm test -- test/control-plane/publication-recovery-evidence.test.js test/distributed/harness/__tests__/publication-evidence-open-membership.test.js` passed with 262 passing tests; `node scripts/check-guideline-literals.js src/control-plane/publication-recovery-evidence.js test/control-plane/publication-recovery-evidence.test.js test/distributed/harness/publication-evidence-contract.js test/distributed/harness/__tests__/publication-evidence-open-membership.test.js` passed with 0 new literal violations; `node scripts/check-guideline-decision-boundaries.js src/control-plane/publication-recovery-evidence.js test/control-plane/publication-recovery-evidence.test.js test/distributed/harness/publication-evidence-contract.js test/distributed/harness/__tests__/publication-evidence-open-membership.test.js` passed with 0 violations; `npm run audit:runtime-grammar:file -- src/control-plane/publication-recovery-evidence.js` passed with 0 runtime grammar violations; scoped `git diff --check` passed; representative rerun `node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-publication-pending-narrowed-20260520T070009Z.report.json --fast-local --verbose` remained red but moved the first frontier to `active_gate_snapshot_coverage / startup_active_gate_owner / snapshot_coverage / owner_reconcile_pending`, closed publication ACK, and left priority recovery residuals at 0; parent revalidated focused proof: yes; next: close package and open the startup active-gate successor.
-- [x] repair: status: validated; evidence: `npm run work:context` reflected the package-owned dirty runtime files and `npm run work:package:doctor -- --suggest work/packages/active-20260520-topology-publication-remaining-pending-runtime.md` validated the package before closure evidence was recorded; next: validation.
+- [x] repair: status: validated; evidence: `npm run work:context` reflected the package-owned dirty runtime files and `npm run work:package:doctor -- --suggest work/packages/done-20260520-topology-publication-remaining-pending-runtime.md` validated the package before closure evidence was recorded; next: validation.
+
+## Commit And Push Ledger
+
+1. Focused package commit: e7cc86200189100c98f756c0053e8fc6081963f4
+2. Pushed to: origin/codex/pending-ack-eligibility-filter
+3. Commit contains only package-owned files/package-status/allowed sprint handoff: yes
 
 ## Validation
 

@@ -132,22 +132,22 @@ Historical state from that earlier rerun:
 ## Current Edge Card
 
 ```text
-Representative artifact: test-output/reports/rolling-restart-publication-workflow-handoff-runtime-20260520T062923Z.report.json
-Visible first frontier: publication_ack_convergence / topology_publication_owner / publication_convergence / publication_pending remains first frontier after the prior handoff edge cleared.
-Active package: work/packages/active-20260520-topology-publication-remaining-pending-runtime.md
-Active package owner: topology_publication_owner
-Active package boundary: publication_convergence
-Selected cause: publication_pending
-Required action: Align publication convergence evidence with the remaining owner-reconcile publication pending state and rerun rolling-restart.
-Representative status: reduced
+Representative artifact: test-output/reports/rolling-restart-publication-pending-narrowed-20260520T070009Z.report.json
+Visible first frontier: active_gate_snapshot_coverage / startup_active_gate_owner / snapshot_coverage / owner_reconcile_pending is first frontier after publication ACK closed.
+Active package: work/packages/active-20260520-startup-active-gate-owner-reconcile-pending-runtime.md
+Active package owner: startup_active_gate_owner
+Active package boundary: snapshot_coverage
+Selected cause: owner_reconcile_pending
+Required action: Classify the active-gate owner-reconcile handoff path, identify the one owner-owned runtime mechanism that can progress pending reconcile publication, then either implement a bounded startup-active-gate fix, migrate owner boundary, or stop as an architecture gap.
+Representative status: migrated
 Causal outcome: continue_local_fix
-Architecture gate: selected / publication-pending-causal-handoff
-Expected delta: Reduce publication_pending debt, migrate the owner boundary, or turn rolling-restart green.
-Current state: Fresh rolling-restart evidence cleared publication_operation_workflow_handoff_leg_missing and satisfied operation workflow, but publication_ack_convergence remains first frontier with dominant reason publication_pending. The handoff probe narrows active-gate owner reconcile debt to two nodes while the publication producer still reports four missing published nodes, so the next slice is a user-approved causal-escalation handoff package before another local runtime patch.
-Allowed edits: src/control-plane/publication-recovery-evidence.js, test/control-plane/publication-recovery-evidence.test.js, test/distributed/harness/publication-evidence-contract.js, test/distributed/harness/__tests__/publication-evidence-open-membership.test.js
-Candidate runtime files: src/control-plane/publication-owner-decision.js, src/control-plane/publication-active-gate-handoff-contract.js, src/control-plane/membership-publication-coordinator-class-stage-2.js, src/control-plane/active-node-projection.js, test/control-plane/membership-publication-coordinator-main-stage-2.js, test/control-plane/publication-active-gate-handoff-contract.test.js, test/control-plane/publication-owner-stream.test.js
-Forbidden edits: Publication owner emits one normalized publication pending outcome and active-gate consumers consume it without reconstructing publication debt.
-Required latest proof: npm test -- test/control-plane/publication-recovery-evidence.test.js test/distributed/harness/__tests__/publication-evidence-open-membership.test.js, node scripts/check-guideline-literals.js src/control-plane/publication-recovery-evidence.js test/control-plane/publication-recovery-evidence.test.js test/distributed/harness/publication-evidence-contract.js test/distributed/harness/__tests__/publication-evidence-open-membership.test.js, node scripts/check-guideline-decision-boundaries.js src/control-plane/publication-recovery-evidence.js test/control-plane/publication-recovery-evidence.test.js test/distributed/harness/publication-evidence-contract.js test/distributed/harness/__tests__/publication-evidence-open-membership.test.js, npm run analyze:topology-convergence -- test-output/reports/rolling-restart-publication-workflow-handoff-runtime-20260520T062923Z.report.json --handoff-probe, npm run work:evidence-summary -- test-output/reports/rolling-restart-publication-workflow-handoff-runtime-20260520T062923Z.report.json, npm run work:scenario-triage -- test-output/reports/rolling-restart-publication-workflow-handoff-runtime-20260520T062923Z.report.json --markdown, npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-publication-workflow-handoff-runtime-20260520T062923Z.report.json --markdown
+Architecture gate: selected / active-gate-owner-reconcile-causal-handoff
+Expected delta: Select one executable startup active-gate owner-reconcile mechanism, migrate the owner boundary, or record architecture-gap stop before another local runtime patch.
+Current state: Fresh rolling-restart evidence after the publication pending normalization slice closed publication ACK and moved the first frontier to active_gate_snapshot_coverage. The active-gate handoff is pending owner_reconcile_pending for one node while membership publication handoff writes are deferred/enqueued, so this is the pre-approved causal-escalation package before another startup-active-gate local patch.
+Allowed edits: unknown
+Candidate runtime files: test/distributed/harness/cluster-segment-5.js, test/distributed/harness/cluster-segment-7-class-5.js, test/distributed/harness/__tests__/cluster.test-part-3.js, test/distributed/harness/__tests__/cluster-control-snapshot-repair-pressure.test.js
+Forbidden edits: Startup active-gate owner consumes one canonical publication active-gate handoff outcome and must not reconstruct publication debt locally.
+Required latest proof: npm run work:scenario-route -- test-output/reports/rolling-restart-publication-pending-narrowed-20260520T070009Z.report.json --owner startup_active_gate_owner --boundary snapshot_coverage --dominant-reason owner_reconcile_pending --explain active_gate_snapshot_coverage, npm run analyze:topology-convergence -- test-output/reports/rolling-restart-publication-pending-narrowed-20260520T070009Z.report.json --handoff-probe, npm run analyze:causal-model -- test-output/reports/rolling-restart-publication-pending-narrowed-20260520T070009Z.report.json
 Allowed stop modes: representative-green, migrated, reduced, same-frontier, classification-only, architecture-gap, human-escalation
 ```
 
