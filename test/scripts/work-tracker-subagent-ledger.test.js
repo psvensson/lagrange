@@ -24,8 +24,12 @@ import {
   validateCurrentBlockerSnapshot,
   validateDecisionExperimentGate,
   validateExecutionEvidenceLedger,
+  validateExperimentOutcomeContract,
   validateFrontierOscillationContract,
   validateModelFitContract,
+  validateObservablePredictionContract,
+  validateProbePackageContract,
+  validateRequiredPreImplProbeContract,
   validateRepresentativeResidualContract,
   validateRerunDecisionContract,
   validateScenarioCausalClosureContract,
@@ -60,6 +64,7 @@ const LANE_MECHANICAL_MAINTENANCE = 'mechanical-maintenance';
 const LANE_LIGHTWEIGHT_MAINTENANCE = 'lightweight-maintenance';
 const LANE_TEST_ONLY_PROOF = 'test-only-proof';
 const LANE_DIAGNOSTIC_CLASSIFICATION = 'diagnostic-classification';
+const LANE_EXPERIMENT = 'experiment';
 const LANE_BOUNDED_EXPERIMENT = 'bounded-experiment';
 const LANE_SINGLE_FILE_RUNTIME = 'single-file-runtime';
 const LANE_RUNTIME_OWNER_BOUNDARY = 'runtime-owner-boundary';
@@ -2123,6 +2128,39 @@ describe('work tracker decision experiment gate validation', () => {
 
     assert.deepEqual(errors, []);
   });
+
+  it('requires a hypothesis discriminator for watching frontier oscillation', () => {
+    const metadata = {
+      ...CAUSAL_DECISION_CONTRACT_OSCILLATION_METADATA,
+      architectureDecisionGate: {
+        status: 'watching',
+        trigger: 'frontier-oscillation',
+        triggerEvidence: ['frontier returned to the same owner'],
+      },
+    };
+
+    const vagueErrors = validateDecisionExperimentGate(
+      DECISION_EXPERIMENT_GATE_VALID_CONTENT,
+      metadata,
+      WORK_TRACKER_LEDGER_TEST_FILE,
+      {requiresLedger: true, status: WORK_TRACKER_ACTIVE_STATUS},
+    );
+    const discriminatingErrors = validateDecisionExperimentGate(
+      DECISION_EXPERIMENT_GATE_VALID_CONTENT.replace(
+        /Competing hypotheses: .+/u,
+        'Competing hypotheses: H1 owner wake missing predicts pending=1; ' +
+          'H2 active-gate lag predicts pending=0 but snapshot stale; ' +
+          'H3 fixture drift predicts pending=1 only in replay; ' +
+          'different observable chooses the route.',
+      ),
+      metadata,
+      WORK_TRACKER_LEDGER_TEST_FILE,
+      {requiresLedger: true, status: WORK_TRACKER_ACTIVE_STATUS},
+    );
+
+    assert.match(vagueErrors.join('\n'), /hypothesis discriminator/u);
+    assert.deepEqual(discriminatingErrors, []);
+  });
 });
 
 describe('work tracker sprint strategy brief validation', () => {
@@ -2285,6 +2323,388 @@ describe('work tracker rerun decision validation', () => {
 
     assert.deepEqual(errors, []);
   });
+
+  it('rejects a third same-frontier runtime package at entry', () => {
+    const metadata = {
+      ...SCENARIO_CAUSAL_CLOSURE_VALID_METADATA,
+      lane: LANE_RUNTIME_OWNER_BOUNDARY,
+      owner: 'operation_workflow_owner',
+      boundary: 'workflow_progress',
+      scenarioCausalClosure: {
+        ...SCENARIO_CAUSAL_CLOSURE_VALID_METADATA.scenarioCausalClosure,
+        resultClassification: 'pending-before-probe',
+      },
+    };
+    const history = [
+      {
+        filePath: 'work/packages/done-20260518-workflow-a.md',
+        metadata: {
+          scenario: 'rolling-restart',
+          owner: 'operation_workflow_owner',
+          boundary: 'workflow_progress',
+          scenarioCausalClosure: {resultClassification: 'same-frontier'},
+        },
+      },
+      {
+        filePath: 'work/packages/done-20260519-workflow-b.md',
+        metadata: {
+          scenario: 'rolling-restart',
+          owner: 'operation_workflow_owner',
+          boundary: 'workflow_progress',
+          scenarioCausalClosure: {resultClassification: 'same-frontier'},
+        },
+      },
+    ];
+
+    const errors = validateSameFrontierStopContract(
+      metadata,
+      WORK_TRACKER_LEDGER_TEST_FILE,
+      {
+        status: WORK_TRACKER_ACTIVE_STATUS,
+        phase: 'entry',
+        packageHistoryEntries: history,
+      },
+    );
+
+    assert.match(errors.join('\n'), /two-shot same-frontier rule/u);
+    assert.match(errors.join('\n'), /owner-boundary migration package/u);
+  });
+
+  it('does not count prior same-frontier entries with concrete movement', () => {
+    const metadata = {
+      ...SCENARIO_CAUSAL_CLOSURE_VALID_METADATA,
+      lane: LANE_RUNTIME_OWNER_BOUNDARY,
+      owner: 'operation_workflow_owner',
+      boundary: 'workflow_progress',
+    };
+    const history = [
+      {
+        filePath: 'work/packages/done-20260518-workflow-a.md',
+        metadata: {
+          scenario: 'rolling-restart',
+          owner: 'operation_workflow_owner',
+          boundary: 'workflow_progress',
+          scenarioCausalClosure: {
+            resultClassification: 'same-frontier',
+            expectedObservableTransition:
+              'pendingReconcileCount 2 -> 1 reduced shape',
+          },
+          observablePrediction: {
+            accuracy: 'partial',
+            observed: 'pendingReconcileCount 2 -> 1',
+          },
+        },
+      },
+      {
+        filePath: 'work/packages/done-20260519-workflow-b.md',
+        metadata: {
+          scenario: 'rolling-restart',
+          owner: 'sibling_owner',
+          boundary: 'sibling_boundary',
+          scenarioCausalClosure: {resultClassification: 'migrated'},
+        },
+      },
+    ];
+
+    const errors = validateSameFrontierStopContract(
+      metadata,
+      WORK_TRACKER_LEDGER_TEST_FILE,
+      {
+        status: WORK_TRACKER_ACTIVE_STATUS,
+        phase: 'entry',
+        packageHistoryEntries: history,
+      },
+    );
+
+    assert.deepEqual(errors, []);
+  });
+
+  it('does not block a sibling-owner migration package', () => {
+    const metadata = {
+      ...SCENARIO_CAUSAL_CLOSURE_VALID_METADATA,
+      lane: LANE_RUNTIME_OWNER_BOUNDARY,
+      owner: 'sibling_owner',
+      boundary: 'sibling_boundary',
+    };
+    const history = [
+      {
+        filePath: 'work/packages/done-20260518-workflow-a.md',
+        metadata: {
+          scenario: 'rolling-restart',
+          owner: 'operation_workflow_owner',
+          boundary: 'workflow_progress',
+          scenarioCausalClosure: {resultClassification: 'same-frontier'},
+        },
+      },
+      {
+        filePath: 'work/packages/done-20260519-workflow-b.md',
+        metadata: {
+          scenario: 'rolling-restart',
+          owner: 'operation_workflow_owner',
+          boundary: 'workflow_progress',
+          scenarioCausalClosure: {resultClassification: 'same-frontier'},
+        },
+      },
+    ];
+
+    const errors = validateSameFrontierStopContract(
+      metadata,
+      WORK_TRACKER_LEDGER_TEST_FILE,
+      {
+        status: WORK_TRACKER_ACTIVE_STATUS,
+        phase: 'entry',
+        packageHistoryEntries: history,
+      },
+    );
+
+    assert.deepEqual(errors, []);
+  });
+});
+
+describe('work tracker observable prediction validation', () => {
+  it('requires pre-registered prediction metadata on experiment packages', () => {
+    const errors = validateObservablePredictionContract(
+      {status: WORK_TRACKER_ACTIVE_STATUS, lane: LANE_EXPERIMENT},
+      WORK_TRACKER_LEDGER_TEST_FILE,
+      {status: WORK_TRACKER_ACTIVE_STATUS, phase: 'pre-impl'},
+    );
+
+    assert.match(errors.join('\n'), /observablePrediction is required/u);
+  });
+
+  it('requires prediction metadata when runtime packages predict movement', () => {
+    const errors = validateObservablePredictionContract(
+      {
+        status: WORK_TRACKER_ACTIVE_STATUS,
+        lane: LANE_RUNTIME_OWNER_BOUNDARY,
+        scenarioCausalClosure: {
+          expectedObservableTransition: 'frontier reduces from 3 to 1 blockers',
+        },
+      },
+      WORK_TRACKER_LEDGER_TEST_FILE,
+      {status: WORK_TRACKER_ACTIVE_STATUS, phase: 'pre-impl'},
+    );
+
+    assert.match(errors.join('\n'), /observablePrediction is required/u);
+  });
+
+  it('compares predicted and observed transitions at closure', () => {
+    const mismatchErrors = validateObservablePredictionContract(
+      {
+        status: WORK_TRACKER_ACTIVE_STATUS,
+        lane: LANE_EXPERIMENT,
+        observablePrediction: {
+          metric: 'frontier',
+          predicted: 'frontier=operation_workflow_owner/workflow_progress',
+          observed: 'frontier=startup_active_gate_owner/snapshot_coverage',
+          accuracy: 'matched',
+          evidence: 'npm test -- test/rebalancer/probe.test.js',
+        },
+      },
+      WORK_TRACKER_LEDGER_TEST_FILE,
+      {status: WORK_TRACKER_ACTIVE_STATUS, phase: 'closure'},
+    );
+    const matchedErrors = validateObservablePredictionContract(
+      {
+        status: WORK_TRACKER_ACTIVE_STATUS,
+        lane: LANE_EXPERIMENT,
+        observablePrediction: {
+          metric: 'frontier',
+          predicted: 'frontier=operation_workflow_owner/workflow_progress',
+          observed: 'frontier=operation_workflow_owner/workflow_progress',
+          accuracy: 'matched',
+          evidence: 'npm test -- test/rebalancer/probe.test.js',
+        },
+      },
+      WORK_TRACKER_LEDGER_TEST_FILE,
+      {status: WORK_TRACKER_ACTIVE_STATUS, phase: 'closure'},
+    );
+
+    assert.match(mismatchErrors.join('\n'), /predicted and observed transitions differ/u);
+    assert.deepEqual(matchedErrors, []);
+  });
+});
+
+describe('work tracker experiment outcome validation', () => {
+  it('requires information learned at experiment closure', () => {
+    const missingErrors = validateExperimentOutcomeContract(
+      {status: WORK_TRACKER_ACTIVE_STATUS, lane: LANE_EXPERIMENT},
+      WORK_TRACKER_LEDGER_TEST_FILE,
+      {status: WORK_TRACKER_ACTIVE_STATUS, phase: 'closure'},
+    );
+    const validErrors = validateExperimentOutcomeContract(
+      {
+        status: WORK_TRACKER_ACTIVE_STATUS,
+        lane: LANE_EXPERIMENT,
+        experimentOutcome: {
+          distinguishedHypothesis: 'H2',
+          decision: 'open-runtime-owner-boundary',
+          nextOwner: 'operation_workflow_owner',
+          nextBoundary: 'workflow_progress',
+          evidence: 'npm test -- test/rebalancer/probe.test.js',
+        },
+      },
+      WORK_TRACKER_LEDGER_TEST_FILE,
+      {status: WORK_TRACKER_ACTIVE_STATUS, phase: 'closure'},
+    );
+    const incompleteErrors = validateExperimentOutcomeContract(
+      {
+        status: WORK_TRACKER_ACTIVE_STATUS,
+        lane: LANE_EXPERIMENT,
+        experimentOutcome: {
+          distinguishedHypothesis: 'evidence-incomplete',
+          decision: 'evidence-incomplete',
+          evidence: 'test-output/reports/probe.report.json',
+        },
+      },
+      WORK_TRACKER_LEDGER_TEST_FILE,
+      {status: WORK_TRACKER_ACTIVE_STATUS, phase: 'closure'},
+    );
+
+    assert.match(missingErrors.join('\n'), /experimentOutcome is required/u);
+    assert.deepEqual(validErrors, []);
+    assert.deepEqual(incompleteErrors, []);
+  });
+});
+
+describe('work tracker probe package validation', () => {
+  it('requires experiment metadata and blocks runtime source writes', () => {
+    const errors = validateProbePackageContract(
+      '# Probe\n',
+      WORK_TRACKER_LEDGER_TEST_FILE,
+      {
+        status: WORK_TRACKER_ACTIVE_STATUS,
+        lane: LANE_RUNTIME_OWNER_BOUNDARY,
+        proof: [],
+        writeScope: ['src/rebalancer/runtime.js'],
+      },
+    ).join('\n');
+    const validErrors = validateProbePackageContract(
+      '# Probe\n',
+      WORK_TRACKER_LEDGER_TEST_FILE,
+      {
+        status: WORK_TRACKER_ACTIVE_STATUS,
+        lane: LANE_EXPERIMENT,
+        proof: ['npm test -- test/rebalancer/probe.test.js'],
+        writeScope: ['test/rebalancer/probe.test.js'],
+        boundedExperiment: {
+          hypothesis: 'H1 vs H2 vs H3',
+          hypothesisDiscriminator:
+            'H1 predicts A; H2 predicts B; H3 predicts C',
+          expectedMetric: 'A vs B vs C',
+          inheritsFrom: 'work/packages/active-predecessor.md',
+          timebox: '24h',
+          mergeRequirement: 'probe distinguishes H1/H2/H3',
+          killRule: 'stop on non-discriminating evidence',
+        },
+        validationTier: 'single-owner',
+        observablePrediction: {
+          metric: 'frontier',
+          predicted: 'H2 observable',
+          metricDelta: 1,
+        },
+      },
+    );
+    const longExperimentErrors = validateProbePackageContract(
+      Array.from({length: 40}, (_value, index) => `line ${index}`).join('\n'),
+      WORK_TRACKER_LEDGER_TEST_FILE,
+      {
+        status: WORK_TRACKER_ACTIVE_STATUS,
+        lane: LANE_EXPERIMENT,
+        proof: ['npm test -- test/rebalancer/probe.test.js'],
+        writeScope: ['test/rebalancer/probe.test.js'],
+        modelFit: {packageClass: 'experiment'},
+        boundedExperiment: {
+          hypothesis: 'H1 vs H2 vs H3',
+          hypothesisDiscriminator:
+            'H1 predicts A; H2 predicts B; H3 predicts C',
+          expectedMetric: 'A vs B vs C',
+          inheritsFrom: 'work/packages/active-predecessor.md',
+          timebox: '24h',
+          mergeRequirement: 'probe distinguishes H1/H2/H3',
+          killRule: 'stop on non-discriminating evidence',
+        },
+        validationTier: 'single-owner',
+        observablePrediction: {
+          metric: 'frontier',
+          predicted: 'H2 observable',
+        },
+      },
+    );
+    const compactLongErrors = validateProbePackageContract(
+      Array.from({length: 40}, (_value, index) => `line ${index}`).join('\n'),
+      WORK_TRACKER_LEDGER_TEST_FILE,
+      {
+        status: WORK_TRACKER_ACTIVE_STATUS,
+        lane: LANE_EXPERIMENT,
+        proof: ['npm test -- test/rebalancer/probe.test.js'],
+        writeScope: ['test/rebalancer/probe.test.js'],
+        modelFit: {packageClass: 'compact-probe'},
+        boundedExperiment: {
+          hypothesis: 'H1 vs H2 vs H3',
+          hypothesisDiscriminator:
+            'H1 predicts A; H2 predicts B; H3 predicts C',
+          expectedMetric: 'A vs B vs C',
+          inheritsFrom: 'work/packages/active-predecessor.md',
+          timebox: '24h',
+          mergeRequirement: 'probe distinguishes H1/H2/H3',
+          killRule: 'stop on non-discriminating evidence',
+        },
+        validationTier: 'single-owner',
+        observablePrediction: {
+          metric: 'frontier',
+          predicted: 'H2 observable',
+        },
+      },
+    ).join('\n');
+
+    assert.match(errors, /must use lane experiment/u);
+    assert.match(errors, /metadata.proof must name/u);
+    assert.match(errors, /must not include src\/ runtime files/u);
+    assert.deepEqual(validErrors, []);
+    assert.deepEqual(longExperimentErrors, []);
+    assert.match(compactLongErrors, /keep probe packages at or below/u);
+  });
+});
+
+describe('work tracker required pre-implementation probe validation', () => {
+  it('requires metadata-declared fixture proof before runtime source edits', () => {
+    const missingErrors = validateRequiredPreImplProbeContract(
+      {
+        status: WORK_TRACKER_ACTIVE_STATUS,
+        lane: LANE_RUNTIME_OWNER_BOUNDARY,
+        proof: ['npm test -- test/rebalancer/runtime.test.js'],
+        writeScope: ['src/rebalancer/runtime.js'],
+        requiredPreImplProbe: {
+          command:
+            'npm run analyze:topology-convergence -- test/scripts/fixtures/current.json --handoff-probe',
+          artifact: 'test/scripts/fixtures/current.json',
+        },
+      },
+      WORK_TRACKER_LEDGER_TEST_FILE,
+    ).join('\n');
+    const validErrors = validateRequiredPreImplProbeContract(
+      {
+        status: WORK_TRACKER_ACTIVE_STATUS,
+        lane: LANE_RUNTIME_OWNER_BOUNDARY,
+        proof: [
+          'npm run analyze:topology-convergence -- test/scripts/fixtures/current.json --handoff-probe',
+          'npm test -- test/rebalancer/runtime.test.js',
+        ],
+        writeScope: ['src/rebalancer/runtime.js'],
+        requiredPreImplProbe: {
+          command:
+            'npm run analyze:topology-convergence -- test/scripts/fixtures/current.json --handoff-probe',
+          artifact: 'test/scripts/fixtures/current.json',
+        },
+      },
+      WORK_TRACKER_LEDGER_TEST_FILE,
+    );
+
+    assert.match(missingErrors, /required fixture\/probe artifact/u);
+    assert.match(missingErrors, /required fixture\/probe command/u);
+    assert.deepEqual(validErrors, []);
+  });
 });
 
 describe('work tracker model fit validation', () => {
@@ -2356,7 +2776,7 @@ describe('work tracker causal governance validation', () => {
       assert.match(errors.join('\n'), /hypothesis/u);
       assert.match(errors.join('\n'), /expectedCausalModelChange/u);
       assert.match(errors.join('\n'), /causalDebt/u);
-      assert.match(errors.join('\n'), /closed packages must classify/u);
+      assert.match(errors.join('\n'), /cannot close scenario-driven package/u);
       assert.match(errors.join('\n'), /analyze:causal-model/u);
     });
 });
@@ -3020,6 +3440,24 @@ describe('work tracker current blocker snapshot validation', () => {
       },
       {
         activeSprintFile: 'work/sprints/active-test.md',
+        activePackageFile: WORK_TRACKER_LEDGER_TEST_FILE,
+        packageExists: true,
+      },
+    );
+
+    assert.deepEqual(errors, []);
+  });
+
+  it('accepts a current-blocker snapshot sourced from a track next package', () => {
+    const errors = validateCurrentBlockerSnapshot(
+      {
+        schema: 'current-blocker-v1',
+        sprint: 'none',
+        package: WORK_TRACKER_LEDGER_TEST_FILE,
+        status: WORK_TRACKER_ACTIVE_STATUS,
+      },
+      {
+        activeSprintFile: null,
         activePackageFile: WORK_TRACKER_LEDGER_TEST_FILE,
         packageExists: true,
       },

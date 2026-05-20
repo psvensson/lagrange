@@ -44,6 +44,8 @@ const PUBLICATION_ACTIVE_GATE_REDUCED_HANDOFF_FIXTURE_PATH =
   `${FIXTURE_DIRECTORY}/publication-active-gate-reduced-handoff.fixture.json`;
 const PUBLICATION_OPERATION_ACTIVE_GATE_HANDOFF_FIXTURE_PATH =
   `${FIXTURE_DIRECTORY}/publication-operation-active-gate-handoff.fixture.json`;
+const PRIORITY_WORKFLOW_DISPATCH_PENDING_PLANNED_FIXTURE_PATH =
+  `${FIXTURE_DIRECTORY}/priority-workflow-dispatch-pending-planned-control-plane-publications.fixture.json`;
 const PRIORITY_DOMINANT_WITNESS_FIXTURE_PATH =
   `${FIXTURE_DIRECTORY}/priority-dominant-witness-owner-boundary.fixture.json`;
 const PRIORITY_REBALANCER_HANDOFF_FIXTURE_PATH =
@@ -520,6 +522,28 @@ describe('analyze-topology-convergence CLI', () => {
       requiredAction: TOPOLOGY_OPERATOR_NEXT_ACTION_ADVANCE_EXISTING_OPERATION,
       runtimePromotionAllowed: RUNTIME_PROMOTION_ALLOWED_FALSE,
     });
+  });
+
+  it('advances compact dispatch-pending fixture through handoff probe', () => {
+    const output = runAnalyzerJson(
+      PRIORITY_WORKFLOW_DISPATCH_PENDING_PLANNED_FIXTURE_PATH,
+      ARG_HANDOFF_PROBE,
+    );
+
+    assert.equal(output.operationWorkflow.owner, OPERATION_WORKFLOW_OWNER);
+    assert.equal(output.operationWorkflow.boundary, WORKFLOW_PROGRESS_BOUNDARY);
+    assert.equal(
+      output.operationWorkflow.source.topologyOperatorCurrentStepId,
+      TOPOLOGY_OPERATOR_CURRENT_STEP_ID_DISPATCH_PENDING,
+    );
+    assert.equal(
+      output.operationWorkflow.source.topologyOperatorCurrentStepState,
+      TOPOLOGY_OPERATOR_CURRENT_STEP_STATE_PLANNED,
+    );
+    assert.equal(
+      output.operationWorkflow.source.topologyOperatorNextAction,
+      TOPOLOGY_OPERATOR_NEXT_ACTION_ADVANCE_EXISTING_OPERATION,
+    );
   });
 
   it('prints active-gate snapshot timeout owner-edge split in handoff probe',

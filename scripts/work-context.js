@@ -568,9 +568,6 @@ async function buildCurrentBlockerFromPackage(packagePath) {
 
 async function buildCurrentBlockerFromActivePackage() {
   const activeSprintFile = await findActiveSprintFile();
-  if (!activeSprintFile) {
-    throw new Error(MESSAGE_CURRENT_BLOCKER_MISSING);
-  }
   const activePackageFile = await findActivePackageFile(activeSprintFile);
   if (!activePackageFile) {
     throw new Error(MESSAGE_CURRENT_BLOCKER_MISSING);

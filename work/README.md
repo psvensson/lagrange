@@ -132,9 +132,11 @@ Use the tracker utility for current sprint/package mechanics:
 20. `npm run work:validate -- --entry|--probe|--pre-impl|--closure` checks active and
    metadata-bearing packages for filename/header drift, stale open checklist
    items, and lane-required execution proof at the requested phase. The default
-   phase is `--pre-impl`; `--probe` is for small probe packages that stay at or
-   below 30 markdown lines and omit the closure evidence ladder; `--closure` is
-   strict for implementation evidence.
+   phase is `--pre-impl`; `--probe` validates experiment-lane hypothesis,
+   discriminator, observable prediction, proof, and no-runtime-write metadata.
+   Packages with `modelFit.packageClass=compact-probe` also stay at or below
+   30 markdown lines and omit the closure evidence ladder. `--closure` is strict
+   for implementation evidence.
 21. `npm run work:package:close -- --write work/packages/active-...md` renames a
     package to `done-...` only after open checklist items are closed.
 22. `npm run work:package:migrate -- --write work/packages/active-...md`
@@ -201,22 +203,27 @@ the package explicitly records a heavier audit or architecture reason:
    work-tracker files. This lane keeps causal ledgers and representative
    evidence, but does not require review/fix/implementation subagents unless
    runtime ownership, shared contracts, or scenario behavior can change.
-10. Use the `bounded-experiment` lane for same-owner or tightly scoped
+10. Use the `experiment` lane for probe packages whose success criterion is
+   information. An experiment closes green when it distinguishes competing
+   hypotheses with a pre-registered observable prediction, even when no runtime
+   line changes.
+11. Use the `bounded-experiment` lane for same-owner or tightly scoped
    hypothesis-driven slices that inherit current owner/boundary context and
    merge only after focused proof plus canonical evidence movement. Pre-review
    subagents are optional; post-hoc review is expected before merging runtime
    behavior when the package declares it.
-11. Use the `single-file-runtime` lane for a preselected one-file runtime slice
+12. Use the `single-file-runtime` lane for a preselected one-file runtime slice
    intended for `gpt-5.4`. It still needs a Core Logic Brief, focused proof,
    and explicit forbidden scope, and it must split as soon as a second runtime
    file, shared contract, or owner migration is needed.
-12. Once canonical owner and boundary are stable and the route is local runtime
+13. Once canonical owner and boundary are stable and the route is local runtime
    work, prefer a `runtime-owner-boundary` successor over another
    classification package.
-13. For read/probe work, start from `work/templates/probe-package.md` and
+14. For read/probe work, start from `work/templates/probe-package.md` and
    validate with `npm run work:validate -- --probe <package>`. A probe package
-   should name one falsifiable question, one expected signal, and one stop rule;
-   it should not carry `## Execution Evidence`.
+   should name one falsifiable question, one hypothesis discriminator, one
+   pre-registered observable prediction, and one stop rule; it should not carry
+   `## Execution Evidence`.
 
 ## Core Logic Brief
 
@@ -257,6 +264,12 @@ The pre-edit focused probe and representative rerun must name executable
 commands. Success metrics must name concrete metric/count/frontier movement,
 owner-boundary migration, or representative green. The kill rule must stop or
 escalate on unchanged same-frontier or no-reduction evidence.
+
+When `architectureDecisionGate.status=watching` and
+`trigger=frontier-oscillation`, pre-implementation validation blocks another
+runtime package whose proof ladder ends in `npm test`. The next package must be
+an `experiment`/probe with H1 vs H2 vs H3 observable discrimination and an
+`observablePrediction` written before runtime edits resume.
 
 Classification-only fast-path, pure classification, read/review/doc-only, and
 lightweight maintenance packages do not require the gate unless implementation
@@ -685,6 +698,43 @@ Required fields:
    `migrate-owner-boundary`, `classification-only-stop`,
    `architecture-gap-stop`, `representative-green`, or `human-escalation`.
 
+## Observable Prediction
+
+`experiment` packages and watching frontier-oscillation routes must carry
+metadata `observablePrediction`. Runtime/scenario packages should use the same
+field when representative movement is predicted.
+
+Required fields:
+
+1. `metric`: the numeric/state signal being predicted.
+2. `predicted`: the expected observable transition written before the run.
+3. `observed`: the actual transition, filled at closure.
+4. `accuracy`: one of `pending-before-observation`, `matched`, `partial`,
+   `missed`, or `contradicted`.
+5. `evidence`: the focused command or artifact supporting the observation.
+6. `metricDelta`: optional numeric representative metric points moved when the
+   movement can be measured.
+
+Closure validation compares `predicted` and `observed` when accuracy is
+`matched`; mismatches must be recorded as `partial`, `missed`, or
+`contradicted`. `npm run work:package:cost` aggregates movement-classified
+package ratios, numeric representative points moved where present, and
+prediction accuracy across closed packages.
+
+## Experiment Outcome
+
+At closure, `experiment` packages must record `experimentOutcome`. The outcome
+records what the probe learned, not whether a runtime metric moved:
+
+1. `distinguishedHypothesis`: `H1`, `H2`, `H3`, etc., or
+   `evidence-incomplete`.
+2. `decision`: one of `open-runtime-owner-boundary`,
+   `open-architecture-contract`, `owner-boundary-migration`,
+   `human-escalation`, or `evidence-incomplete`.
+3. `nextOwner` and `nextBoundary`: required when the decision opens runtime or
+   owner-boundary migration work.
+4. `evidence`: focused command or artifact that supports the outcome.
+
 Representative reruns can confirm a causal edge, but they do not replace the
 focused probe for a missing wake, retry, timeout, reconcile, drain, dispatch,
 delivery, timer, advance, or bounded-progress mechanism.
@@ -961,13 +1011,22 @@ Systemic release-gate sprints must also carry a higher-order execution gate:
    reconciles against.
 3. **Fixture-first proof:** runtime packages name a focused fixture, extractor,
    or probe before another full distributed rerun is used for confirmation.
-4. **Bounded progress:** retryable, backpressure, accepted, or deferred
+4. **Semantic decomposition:** owner files and follow-on packages use names
+   that describe the semantic owner or contract, not ordinal stage/segment
+   accretion. Stage/segment cleanup is itself an experiment when the hypothesis
+   is structural rather than local.
+5. **Bounded progress:** retryable, backpressure, accepted, or deferred
    evidence stays active until a wake, retry, timeout, reconcile, drain,
    dispatch, delivery, timer, advance, or bounded migration mechanism and
    maximum bound are named.
-5. **Runtime backlog activation:** runtime implementation starts only from a
+6. **Runtime backlog activation:** runtime implementation starts only from a
    backlog item that cites the blocker-path ledger row, architecture contract,
    focused proof, forbidden files, and active-proof reconciliation.
+7. **Package cost:** periodic sprint review runs
+   `npm run work:package:cost` and reports packages closed per representative
+   movement point plus observable prediction accuracy. Owner/boundary rows with
+   repeated non-movement packages are high-cost frontiers and should warn during
+   review.
 
 When systemic governance work intentionally pauses an active release-gate sprint,
 it must also leave a resume activation brief before implementation resumes. The

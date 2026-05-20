@@ -20,6 +20,13 @@ import {
   CLASSIFICATION_EFFICIENCY_SEPARATE_PACKAGE_REASONS,
   CLASSIFICATION_EFFICIENCY_SUCCESSOR_ACTION_FIELD,
   CLASSIFICATION_EFFICIENCY_SUCCESSOR_ACTIONS,
+  EXPERIMENT_OUTCOME_DECISION_FIELD,
+  EXPERIMENT_OUTCOME_DISTINGUISHED_HYPOTHESIS_FIELD,
+  EXPERIMENT_OUTCOME_EVIDENCE_FIELD,
+  EXPERIMENT_OUTCOME_FIELD,
+  EXPERIMENT_OUTCOME_NEXT_BOUNDARY_FIELD,
+  EXPERIMENT_OUTCOME_NEXT_OWNER_FIELD,
+  BOUNDED_EXPERIMENT_DISCRIMINATOR_FIELD,
   BOUNDED_EXPERIMENT_EXPECTED_METRIC_FIELD,
   BOUNDED_EXPERIMENT_FIELD,
   BOUNDED_EXPERIMENT_FIELDS,
@@ -34,12 +41,21 @@ import {
   LANE_CAUSAL_ESCALATION,
   LANE_BOUNDED_EXPERIMENT,
   LANE_DIAGNOSTIC_CLASSIFICATION,
+  LANE_EXPERIMENT,
   LANE_MECHANICAL_MAINTENANCE,
   LANE_RUNTIME_OWNER_BOUNDARY,
+  LANE_SCENARIO_RELEASE_GATE,
   LANE_SINGLE_FILE_RUNTIME,
   LANE_TEST_ONLY_PROOF,
   LANE_FAST_SPIKE,
   MODEL_FIT_54_MODEL,
+  OBSERVABLE_PREDICTION_ACCURACY_FIELD,
+  OBSERVABLE_PREDICTION_EVIDENCE_FIELD,
+  OBSERVABLE_PREDICTION_FIELD,
+  OBSERVABLE_PREDICTION_METRIC_DELTA_FIELD,
+  OBSERVABLE_PREDICTION_METRIC_FIELD,
+  OBSERVABLE_PREDICTION_OBSERVED_FIELD,
+  OBSERVABLE_PREDICTION_PREDICTED_FIELD,
   OWNER_BOUNDARY_MIGRATION_PROOF_EVIDENCE_FIELD,
   OWNER_BOUNDARY_MIGRATION_PROOF_FIELD,
   OWNER_BOUNDARY_MIGRATION_PROOF_FIELDS,
@@ -116,6 +132,7 @@ const CURRENT_BLOCKER_JSON_PATH = path.join(
 const CURRENT_BLOCKER_SCHEMA = 'current-blocker-v1';
 const CURRENT_BLOCKER_REPAIR_COMMAND = 'npm run work:repair';
 const CURRENT_BLOCKER_STALE_FIELD_LIMIT = 8;
+const CURRENT_BLOCKER_NO_ACTIVE_SPRINT = 'none';
 const CURRENT_BLOCKER_CLOSED_STATUSES = Object.freeze([
   STATUS_DONE,
   STATUS_FAILED,
@@ -138,6 +155,7 @@ const ACTIVE_PACKAGE_REFERENCE_PATTERN =
   /((?:work\/packages|(?:\.\.\/|\.\/)packages)\/active-[A-Za-z0-9._-]+\.md)/u;
 const CURRENT_EDGE_CARD_ACTIVE_PACKAGE_REFERENCE_PATTERN =
   /^Active package:\s*`?((?:work\/packages|(?:\.\.\/|\.\/)packages)\/active-[A-Za-z0-9._-]+\.md)`?\s*$/imu;
+const NEXT_PACKAGE_HEADING = '## Next Package';
 const ACTIVE_WORK_REFERENCE_PATTERN =
   /\b((?:work\/(?:packages|sprints)|(?:\.\.\/|\.\/)(?:packages|sprints))\/active-[A-Za-z0-9._-]+\.md)\b/gu;
 const EXECUTION_EVIDENCE_HEADING = '## Execution Evidence';
@@ -399,6 +417,11 @@ const FRONTIER_OSCILLATION_MATERIAL_RESULTS = Object.freeze([
   'reduced',
   'classification-only',
 ]);
+const REPRESENTATIVE_MOVEMENT_RESULTS = Object.freeze([
+  'representative-green',
+  'reduced',
+  'migrated',
+]);
 const RERUN_DECISION_REQUIRED_COMMAND_PATTERNS = Object.freeze([
   /\bwork:package:route-after-rerun\b/iu,
   /\bSprint Strategy Brief\b/iu,
@@ -411,6 +434,14 @@ const SAME_FRONTIER_ESCALATION_STOP_CONDITIONS = Object.freeze([
   'architecture-gap-stop',
   'human-escalation',
 ]);
+const SAME_FRONTIER_RUNTIME_SUCCESSOR_LANES = Object.freeze([
+  LANE_RUNTIME_OWNER_BOUNDARY,
+  LANE_SINGLE_FILE_RUNTIME,
+]);
+const REPRESENTATIVE_MOVEMENT_PREDICTION_PATTERN =
+  /\b(?:representative[-\s]+green|green|reduced?|reduces|reducing|reduction|migrated?|migration|moves?|frontier moved|owner-boundary migration|count\s*[:=]?\s*\d+\s*->\s*\d+|->)\b/iu;
+const REPRESENTATIVE_CLASSIFICATION_ONLY_PATTERN =
+  /^\s*classify whether\b/iu;
 const SCENARIO_CAUSAL_CLOSURE_PROGRESS_MECHANISM_PATTERN =
   /\b(?:wake|retry|timeout|reconcile|drain|dispatch|delivery|timer|advance|bounded)\b/iu;
 const SCENARIO_CAUSAL_CLOSURE_ARTIFACT_PATH_PATTERN = new RegExp(
@@ -470,6 +501,35 @@ const ARCHITECTURE_DECISION_GATE_NEXT_ACTION_SELECT =
   'Wait for a human-selected architecture route before runtime implementation.';
 const ARCHITECTURE_DECISION_GATE_NEXT_ACTION_WATCH =
   'Watch for repeated frontier oscillation and escalate if another local proof returns here.';
+const OBSERVABLE_PREDICTION_ACCURACY_PENDING = 'pending-before-observation';
+const OBSERVABLE_PREDICTION_ACCURACY_MATCHED = 'matched';
+const OBSERVABLE_PREDICTION_ACCURACY_PARTIAL = 'partial';
+const OBSERVABLE_PREDICTION_ACCURACY_MISSED = 'missed';
+const OBSERVABLE_PREDICTION_ACCURACY_CONTRADICTED = 'contradicted';
+const OBSERVABLE_PREDICTION_ACCURACIES = Object.freeze([
+  OBSERVABLE_PREDICTION_ACCURACY_PENDING,
+  OBSERVABLE_PREDICTION_ACCURACY_MATCHED,
+  OBSERVABLE_PREDICTION_ACCURACY_PARTIAL,
+  OBSERVABLE_PREDICTION_ACCURACY_MISSED,
+  OBSERVABLE_PREDICTION_ACCURACY_CONTRADICTED,
+]);
+const EXPERIMENT_OUTCOME_DECISION_OPEN_RUNTIME = 'open-runtime-owner-boundary';
+const EXPERIMENT_OUTCOME_DECISION_OPEN_ARCHITECTURE =
+  'open-architecture-contract';
+const EXPERIMENT_OUTCOME_DECISION_OWNER_MIGRATION =
+  'owner-boundary-migration';
+const EXPERIMENT_OUTCOME_DECISION_HUMAN_ESCALATION = 'human-escalation';
+const EXPERIMENT_OUTCOME_DECISION_EVIDENCE_INCOMPLETE =
+  'evidence-incomplete';
+const EXPERIMENT_OUTCOME_DECISIONS = Object.freeze([
+  EXPERIMENT_OUTCOME_DECISION_OPEN_RUNTIME,
+  EXPERIMENT_OUTCOME_DECISION_OPEN_ARCHITECTURE,
+  EXPERIMENT_OUTCOME_DECISION_OWNER_MIGRATION,
+  EXPERIMENT_OUTCOME_DECISION_HUMAN_ESCALATION,
+  EXPERIMENT_OUTCOME_DECISION_EVIDENCE_INCOMPLETE,
+]);
+const EXPERIMENT_OUTCOME_INCOMPLETE_HYPOTHESIS =
+  'evidence-incomplete';
 const MODEL_FIT_EMPTY_VALUE_PATTERN = /^(?:none|n\/a|na|unknown|tbd|todo)$/iu;
 const MODEL_FIT_FOCUSED_PROOF_COMMAND_PATTERN = new RegExp(
   '\\b(?:npm\\s+(?:--silent\\s+)?run|npm\\s+test|' +
@@ -623,6 +683,11 @@ const DEFAULT_UNKNOWN = 'unknown';
 const PROBE_PACKAGE_MAX_MARKDOWN_LINES = 30;
 const PROBE_PACKAGE_EXECUTION_EVIDENCE_HEADING_PATTERN =
   /^## Execution Evidence\b/imu;
+const COMPACT_PROBE_PACKAGE_CLASS = 'compact-probe';
+const REQUIRED_PRE_IMPL_PROBE_FIELD = 'requiredPreImplProbe';
+const REQUIRED_PRE_IMPL_PROBE_COMMAND_FIELD = 'command';
+const REQUIRED_PRE_IMPL_PROBE_ARTIFACT_FIELD = 'artifact';
+const REQUIRED_PRE_IMPL_PROBE_REASON_FIELD = 'reason';
 const DOCTOR_SUGGESTION_NONE =
   'No deterministic suggestions are available for these findings.';
 const LEDGER_VALIDATION_ALLOW_OPEN_IMPLEMENTATION = 'allowOpenImplementation';
@@ -2155,8 +2220,16 @@ export function validateDecisionExperimentGate(
   const section = extractDecisionExperimentGateSection(content);
   if (!section) {
     if (
-      (metadata?.[SCENARIO_CAUSAL_CLOSURE_METADATA_FIELD] && metadata?.[SCENARIO_CAUSAL_CLOSURE_METADATA_FIELD]?.resultClassification) ||
-      (metadata?.[ARCHITECTURE_DECISION_GATE_FIELD] && metadata?.[ARCHITECTURE_DECISION_GATE_FIELD]?.choices)
+      (
+        metadata?.[SCENARIO_CAUSAL_CLOSURE_METADATA_FIELD] &&
+        metadata?.[SCENARIO_CAUSAL_CLOSURE_METADATA_FIELD]?.resultClassification &&
+        !metadataHasWatchingFrontierOscillationGate(metadata)
+      ) ||
+      (
+        metadata?.[ARCHITECTURE_DECISION_GATE_FIELD] &&
+        metadata?.[ARCHITECTURE_DECISION_GATE_FIELD]?.choices &&
+        !metadataHasWatchingFrontierOscillationGate(metadata)
+      )
     ) {
       return [];
     }
@@ -2187,6 +2260,23 @@ export function validateDecisionExperimentGate(
       `${filePath}: Decision Experiment Gate ` +
       `${DECISION_EXPERIMENT_ARCHITECTURE_REVIEW_LABEL} must name the ` +
       'owner, boundary, contract, architecture, route, or human review.',
+    );
+  }
+  const competingHypotheses = findDecisionExperimentGateField(
+    section,
+    DECISION_EXPERIMENT_COMPETING_HYPOTHESES_LABEL,
+  );
+  if (
+    metadataHasWatchingFrontierOscillationGate(metadata) &&
+    competingHypotheses !== null &&
+    !/\bH1\b[\s\S]*\bH2\b[\s\S]*\bH3\b[\s\S]*\b(?:different|discriminat|observable|predict)\b/iu.test(
+      competingHypotheses,
+    )
+  ) {
+    errors.push(
+      `${filePath}: Decision Experiment Gate ` +
+      `${DECISION_EXPERIMENT_COMPETING_HYPOTHESES_LABEL} must write a ` +
+      'hypothesis discriminator that predicts different observables under H1 vs H2 vs H3 before runtime edits.',
     );
   }
   for (const label of [
@@ -2516,6 +2606,13 @@ function textMentionsValue(text, value) {
 
 function metadataLane(metadata) {
   return normalizeLedgerText(metadata?.[METADATA_LANE_FIELD]).toLowerCase();
+}
+
+function metadataIsExperimentLane(metadata) {
+  return [
+    LANE_EXPERIMENT,
+    LANE_BOUNDED_EXPERIMENT,
+  ].includes(metadataLane(metadata));
 }
 
 function metadataScenarioKey(metadata) {
@@ -2987,6 +3084,336 @@ export function validateScenarioCausalClosureContract(
   return errors;
 }
 
+function metadataHasWatchingFrontierOscillationGate(metadata = {}) {
+  const gate = metadata?.[ARCHITECTURE_DECISION_GATE_FIELD];
+  return isObjectRecord(gate) &&
+    normalizeLedgerText(gate.status) ===
+      ARCHITECTURE_DECISION_GATE_STATUS_WATCHING &&
+    normalizeLedgerText(gate.trigger) ===
+      ARCHITECTURE_DECISION_GATE_TRIGGER_FRONTIER_OSCILLATION;
+}
+
+function metadataRequiresObservablePrediction(metadata, fileStatus, phase) {
+  if (
+    fileStatus !== STATUS_ACTIVE ||
+    phase === VALIDATION_PHASE_ENTRY ||
+    !metadata
+  ) {
+    return false;
+  }
+  return metadataLane(metadata) === LANE_EXPERIMENT ||
+    metadataHasWatchingFrontierOscillationGate(metadata) ||
+    metadataPredictsRepresentativeMovement(metadata);
+}
+
+function metadataRequiresExperimentOutcome(metadata, fileStatus, phase) {
+  return metadataLane(metadata) === LANE_EXPERIMENT &&
+    phase === VALIDATION_PHASE_CLOSURE &&
+    [STATUS_ACTIVE, STATUS_DONE].includes(fileStatus);
+}
+
+function predictionEvidenceIsCommandOrArtifact(evidence) {
+  return MODEL_FIT_FOCUSED_PROOF_COMMAND_PATTERN.test(evidence) ||
+    SCENARIO_CAUSAL_CLOSURE_ARTIFACT_PATH_PATTERN.test(evidence);
+}
+
+function metadataPredictsRepresentativeMovement(metadata = {}) {
+  if (
+    metadataHasClassificationOnlyOutcome(metadata) &&
+    !hasImplementationWriteScope(metadata)
+  ) {
+    return false;
+  }
+  if (
+    ![
+      LANE_RUNTIME_OWNER_BOUNDARY,
+      LANE_SINGLE_FILE_RUNTIME,
+      LANE_SCENARIO_RELEASE_GATE,
+      LANE_CAUSAL_ESCALATION,
+    ].includes(metadataLane(metadata))
+  ) {
+    return false;
+  }
+  return [
+    metadata?.[SCENARIO_CAUSAL_CLOSURE_METADATA_FIELD]?.[
+      SCENARIO_CAUSAL_CLOSURE_EXPECTED_OBSERVABLE_TRANSITION_FIELD
+    ],
+    metadata?.[RERUN_DECISION_FIELD]?.[RERUN_DECISION_EXPECTED_DELTA_FIELD],
+    metadata?.[CAUSAL_GOVERNANCE_METADATA_FIELD]?.[
+      CAUSAL_GOVERNANCE_EXPECTED_CHANGE_FIELD
+    ],
+  ].some((value) => {
+    const normalized = normalizeLedgerText(value);
+    return normalized.length > NUM_ZERO &&
+      !REPRESENTATIVE_CLASSIFICATION_ONLY_PATTERN.test(normalized) &&
+      REPRESENTATIVE_MOVEMENT_PREDICTION_PATTERN.test(normalized);
+  });
+}
+
+function validateObservablePredictionConcreteValue(filePath, fieldName, value) {
+  const normalizedValue = normalizeLedgerText(value);
+  if (
+    normalizedValue.length === NUM_ZERO ||
+    MODEL_FIT_EMPTY_VALUE_PATTERN.test(normalizedValue) ||
+    LEDGER_TEMPLATE_PLACEHOLDER_PATTERN.test(normalizedValue) ||
+    normalizedValue.includes(LEDGER_PENDING_BEFORE_IMPLEMENTATION_MARKER)
+  ) {
+    return [
+      `${filePath}: ${OBSERVABLE_PREDICTION_FIELD}.${fieldName} must be a concrete value.`,
+    ];
+  }
+  return [];
+}
+
+function predictionValuesMatch(predicted, observed) {
+  return normalizeLedgerText(predicted).toLowerCase() ===
+    normalizeLedgerText(observed).toLowerCase();
+}
+
+function observablePredictionMetricDeltaIsPresent(value) {
+  return value !== null && value !== undefined &&
+    normalizeLedgerText(value).length > NUM_ZERO;
+}
+
+function validateObservablePredictionMetricDelta(filePath, value) {
+  if (!observablePredictionMetricDeltaIsPresent(value)) {
+    return [];
+  }
+  const numericValue = Number(value);
+  if (!Number.isFinite(numericValue) || numericValue < NUM_ZERO) {
+    return [
+      `${filePath}: ${OBSERVABLE_PREDICTION_FIELD}.` +
+      `${OBSERVABLE_PREDICTION_METRIC_DELTA_FIELD} must be a non-negative number.`,
+    ];
+  }
+  return [];
+}
+
+export function validateObservablePredictionContract(
+  metadata,
+  filePath,
+  options = {},
+) {
+  const fileStatus = options.status || normalizeLedgerText(metadata?.status);
+  const phase = options.phase || VALIDATION_PHASE_PRE_IMPL;
+  const requiresPrediction =
+    options[LEDGER_VALIDATION_REQUIRES_LEDGER] === true ||
+    metadataRequiresObservablePrediction(metadata, fileStatus, phase);
+  const prediction = metadata?.[OBSERVABLE_PREDICTION_FIELD];
+  if (!prediction) {
+    return requiresPrediction ?
+      [
+        `${filePath}: metadata ${OBSERVABLE_PREDICTION_FIELD} is required ` +
+        'to pre-register a falsifiable numeric/state prediction before the probe.',
+      ] :
+      [];
+  }
+  if (!isObjectRecord(prediction)) {
+    return [
+      `${filePath}: metadata ${OBSERVABLE_PREDICTION_FIELD} must be an object.`,
+    ];
+  }
+
+  const errors = [];
+  for (const fieldName of [
+    OBSERVABLE_PREDICTION_METRIC_FIELD,
+    OBSERVABLE_PREDICTION_PREDICTED_FIELD,
+  ]) {
+    errors.push(...validateObservablePredictionConcreteValue(
+      filePath,
+      fieldName,
+      prediction[fieldName],
+    ));
+  }
+  errors.push(...validateObservablePredictionMetricDelta(
+    filePath,
+    prediction[OBSERVABLE_PREDICTION_METRIC_DELTA_FIELD],
+  ));
+
+  const observed = normalizeLedgerText(
+    prediction[OBSERVABLE_PREDICTION_OBSERVED_FIELD],
+  );
+  const accuracy = normalizeLedgerText(
+    prediction[OBSERVABLE_PREDICTION_ACCURACY_FIELD],
+  );
+  const evidence = normalizeLedgerText(
+    prediction[OBSERVABLE_PREDICTION_EVIDENCE_FIELD],
+  );
+
+  if (accuracy.length > NUM_ZERO &&
+    !OBSERVABLE_PREDICTION_ACCURACIES.includes(accuracy)) {
+    errors.push(
+      `${filePath}: ${OBSERVABLE_PREDICTION_FIELD}.accuracy must be one of ` +
+      `${OBSERVABLE_PREDICTION_ACCURACIES.join(', ')}.`,
+    );
+  }
+
+  if (phase !== VALIDATION_PHASE_CLOSURE) {
+    return errors;
+  }
+
+  errors.push(...validateObservablePredictionConcreteValue(
+    filePath,
+    OBSERVABLE_PREDICTION_OBSERVED_FIELD,
+    observed,
+  ));
+  errors.push(...validateObservablePredictionConcreteValue(
+    filePath,
+    OBSERVABLE_PREDICTION_ACCURACY_FIELD,
+    accuracy,
+  ));
+  errors.push(...validateObservablePredictionConcreteValue(
+    filePath,
+    OBSERVABLE_PREDICTION_EVIDENCE_FIELD,
+    evidence,
+  ));
+  if (accuracy === OBSERVABLE_PREDICTION_ACCURACY_PENDING) {
+    errors.push(
+      `${filePath}: ${OBSERVABLE_PREDICTION_FIELD}.accuracy cannot remain ` +
+      `${OBSERVABLE_PREDICTION_ACCURACY_PENDING} at closure.`,
+    );
+  }
+  if (
+    accuracy === OBSERVABLE_PREDICTION_ACCURACY_MATCHED &&
+    !predictionValuesMatch(
+      prediction[OBSERVABLE_PREDICTION_PREDICTED_FIELD],
+      observed,
+    )
+  ) {
+    errors.push(
+      `${filePath}: ${OBSERVABLE_PREDICTION_FIELD}.accuracy is matched, ` +
+      'but predicted and observed transitions differ.',
+    );
+  }
+  if (evidence.length > NUM_ZERO && !predictionEvidenceIsCommandOrArtifact(evidence)) {
+    errors.push(
+      `${filePath}: ${OBSERVABLE_PREDICTION_FIELD}.evidence must name a ` +
+      'focused command or artifact path.',
+    );
+  }
+  return errors;
+}
+
+function validateExperimentOutcomeConcreteValue(filePath, fieldName, value) {
+  const normalizedValue = normalizeLedgerText(value);
+  if (
+    normalizedValue.length === NUM_ZERO ||
+    MODEL_FIT_EMPTY_VALUE_PATTERN.test(normalizedValue) ||
+    LEDGER_TEMPLATE_PLACEHOLDER_PATTERN.test(normalizedValue) ||
+    normalizedValue.includes(LEDGER_PENDING_BEFORE_IMPLEMENTATION_MARKER)
+  ) {
+    return [
+      `${filePath}: ${EXPERIMENT_OUTCOME_FIELD}.${fieldName} must be a concrete value.`,
+    ];
+  }
+  return [];
+}
+
+export function validateExperimentOutcomeContract(
+  metadata,
+  filePath,
+  options = {},
+) {
+  const fileStatus = options.status || normalizeLedgerText(metadata?.status);
+  const phase = options.phase || VALIDATION_PHASE_PRE_IMPL;
+  const requiresOutcome =
+    options[LEDGER_VALIDATION_REQUIRES_LEDGER] === true ||
+    metadataRequiresExperimentOutcome(metadata, fileStatus, phase);
+  const outcome = metadata?.[EXPERIMENT_OUTCOME_FIELD];
+  if (!outcome) {
+    return requiresOutcome ?
+      [
+        `${filePath}: metadata ${EXPERIMENT_OUTCOME_FIELD} is required ` +
+        'at experiment closure to record the distinguished hypothesis or evidence-incomplete decision.',
+      ] :
+      [];
+  }
+  if (!isObjectRecord(outcome)) {
+    return [
+      `${filePath}: metadata ${EXPERIMENT_OUTCOME_FIELD} must be an object.`,
+    ];
+  }
+
+  const errors = [];
+  const distinguishedHypothesis = normalizeLedgerText(
+    outcome[EXPERIMENT_OUTCOME_DISTINGUISHED_HYPOTHESIS_FIELD],
+  );
+  const decision = normalizeLedgerText(
+    outcome[EXPERIMENT_OUTCOME_DECISION_FIELD],
+  );
+  const evidence = normalizeLedgerText(
+    outcome[EXPERIMENT_OUTCOME_EVIDENCE_FIELD],
+  );
+  errors.push(...validateExperimentOutcomeConcreteValue(
+    filePath,
+    EXPERIMENT_OUTCOME_DISTINGUISHED_HYPOTHESIS_FIELD,
+    distinguishedHypothesis,
+  ));
+  errors.push(...validateExperimentOutcomeConcreteValue(
+    filePath,
+    EXPERIMENT_OUTCOME_DECISION_FIELD,
+    decision,
+  ));
+  errors.push(...validateExperimentOutcomeConcreteValue(
+    filePath,
+    EXPERIMENT_OUTCOME_EVIDENCE_FIELD,
+    evidence,
+  ));
+  if (
+    decision.length > NUM_ZERO &&
+    !EXPERIMENT_OUTCOME_DECISIONS.includes(decision)
+  ) {
+    errors.push(
+      `${filePath}: ${EXPERIMENT_OUTCOME_FIELD}.decision must be one of ` +
+      `${EXPERIMENT_OUTCOME_DECISIONS.join(', ')}.`,
+    );
+  }
+  if (
+    decision === EXPERIMENT_OUTCOME_DECISION_EVIDENCE_INCOMPLETE &&
+    distinguishedHypothesis !== EXPERIMENT_OUTCOME_INCOMPLETE_HYPOTHESIS
+  ) {
+    errors.push(
+      `${filePath}: ${EXPERIMENT_OUTCOME_FIELD}.distinguishedHypothesis ` +
+      `must be ${EXPERIMENT_OUTCOME_INCOMPLETE_HYPOTHESIS} when decision is ` +
+      `${EXPERIMENT_OUTCOME_DECISION_EVIDENCE_INCOMPLETE}.`,
+    );
+  }
+  if (
+    decision !== EXPERIMENT_OUTCOME_DECISION_EVIDENCE_INCOMPLETE &&
+    distinguishedHypothesis.length > NUM_ZERO &&
+    !/^H[1-9]\d*$/u.test(distinguishedHypothesis)
+  ) {
+    errors.push(
+      `${filePath}: ${EXPERIMENT_OUTCOME_FIELD}.distinguishedHypothesis ` +
+      'must name the distinguished hypothesis such as H1, H2, or H3, or use evidence-incomplete.',
+    );
+  }
+  if (
+    [
+      EXPERIMENT_OUTCOME_DECISION_OPEN_RUNTIME,
+      EXPERIMENT_OUTCOME_DECISION_OWNER_MIGRATION,
+    ].includes(decision)
+  ) {
+    errors.push(...validateExperimentOutcomeConcreteValue(
+      filePath,
+      EXPERIMENT_OUTCOME_NEXT_OWNER_FIELD,
+      outcome[EXPERIMENT_OUTCOME_NEXT_OWNER_FIELD],
+    ));
+    errors.push(...validateExperimentOutcomeConcreteValue(
+      filePath,
+      EXPERIMENT_OUTCOME_NEXT_BOUNDARY_FIELD,
+      outcome[EXPERIMENT_OUTCOME_NEXT_BOUNDARY_FIELD],
+    ));
+  }
+  if (evidence.length > NUM_ZERO && !predictionEvidenceIsCommandOrArtifact(evidence)) {
+    errors.push(
+      `${filePath}: ${EXPERIMENT_OUTCOME_FIELD}.evidence must name a ` +
+      'focused command or artifact path.',
+    );
+  }
+  return errors;
+}
+
 function metadataRequiresRerunDecision(metadata, fileStatus) {
   if (
     fileStatus !== STATUS_ACTIVE ||
@@ -3362,12 +3789,114 @@ function metadataHasSameFrontierNoReduction(metadata = {}) {
   ].includes(SAME_FRONTIER_RESULT);
 }
 
+function observablePredictionHasConcreteMovement(metadata = {}) {
+  const prediction = metadata?.[OBSERVABLE_PREDICTION_FIELD];
+  if (!isObjectRecord(prediction)) {
+    return false;
+  }
+  const accuracy = normalizeLedgerText(
+    prediction[OBSERVABLE_PREDICTION_ACCURACY_FIELD],
+  );
+  const observed = normalizeLedgerText(
+    prediction[OBSERVABLE_PREDICTION_OBSERVED_FIELD],
+  );
+  if (
+    ![
+      OBSERVABLE_PREDICTION_ACCURACY_MATCHED,
+      OBSERVABLE_PREDICTION_ACCURACY_PARTIAL,
+    ].includes(accuracy) ||
+    observed.length === NUM_ZERO ||
+    MODEL_FIT_EMPTY_VALUE_PATTERN.test(observed) ||
+    observed.includes(LEDGER_PENDING_BEFORE_IMPLEMENTATION_MARKER)
+  ) {
+    return false;
+  }
+  return REPRESENTATIVE_MOVEMENT_PREDICTION_PATTERN.test(observed) &&
+    !/\b(?:same-frontier|unchanged|no reduction|no movement)\b/iu.test(observed);
+}
+
+function scenarioClosureHasConcreteMovement(metadata = {}) {
+  const closure = metadata?.[SCENARIO_CAUSAL_CLOSURE_METADATA_FIELD];
+  const expectedTransition = normalizeLedgerText(
+    closure?.[SCENARIO_CAUSAL_CLOSURE_EXPECTED_OBSERVABLE_TRANSITION_FIELD],
+  );
+  return expectedTransition.length > NUM_ZERO &&
+    !MODEL_FIT_EMPTY_VALUE_PATTERN.test(expectedTransition) &&
+    !expectedTransition.includes(LEDGER_PENDING_BEFORE_IMPLEMENTATION_MARKER) &&
+    REPRESENTATIVE_MOVEMENT_PREDICTION_PATTERN.test(expectedTransition) &&
+    !/\b(?:same-frontier|unchanged|no reduction|no movement)\b/iu.test(
+      expectedTransition,
+    );
+}
+
+function metadataHasConcreteMovement(metadata = {}) {
+  const representativeResidualStatus = normalizeLedgerText(
+    metadata?.[REPRESENTATIVE_RESIDUAL_METADATA_FIELD]?.[
+      REPRESENTATIVE_RESIDUAL_STATUS_FIELD
+    ],
+  ).toLowerCase();
+  return REPRESENTATIVE_MOVEMENT_RESULTS.includes(scenarioClosureResult(metadata)) ||
+    REPRESENTATIVE_MOVEMENT_RESULTS.includes(representativeOutcome(metadata)) ||
+    REPRESENTATIVE_MOVEMENT_RESULTS.includes(representativeResidualStatus) ||
+    observablePredictionHasConcreteMovement(metadata) ||
+    scenarioClosureHasConcreteMovement(metadata);
+}
+
+function metadataIsRuntimeSuccessorLane(metadata = {}) {
+  return SAME_FRONTIER_RUNTIME_SUCCESSOR_LANES.includes(metadataLane(metadata));
+}
+
+function metadataIsSameFrontierWithoutMovement(metadata = {}) {
+  return metadataHasSameFrontierNoReduction(metadata) &&
+    !metadataHasConcreteMovement(metadata);
+}
+
+function sameFrontierNoMovementHistoryCount(
+  metadata,
+  filePath,
+  packageHistoryEntries = [],
+) {
+  const currentKey = metadataOwnerBoundaryKey(metadata);
+  const scenarioKey = metadataScenarioKey(metadata);
+  if (currentKey.length === NUM_ZERO || scenarioKey.length === NUM_ZERO) {
+    return NUM_ZERO;
+  }
+  const normalizedFilePath = normalizeRelativePath(filePath);
+  return sortedFrontierHistoryEntries(packageHistoryEntries)
+    .filter((entry) =>
+      entry.filePath !== normalizedFilePath &&
+      entry.scenarioKey === scenarioKey &&
+      entry.ownerBoundaryKey === currentKey &&
+      metadataIsSameFrontierWithoutMovement(entry.metadata))
+    .length;
+}
+
 export function validateSameFrontierStopContract(
   metadata,
   filePath,
   options = {},
 ) {
   const fileStatus = options.status || normalizeLedgerText(metadata?.status);
+  const phase = options.phase || VALIDATION_PHASE_PRE_IMPL;
+  const sameFrontierCount = sameFrontierNoMovementHistoryCount(
+    metadata,
+    filePath,
+    options.packageHistoryEntries || [],
+  );
+  if (
+    fileStatus === STATUS_ACTIVE &&
+    phase === VALIDATION_PHASE_ENTRY &&
+    metadata &&
+    isScenarioDrivenMetadata(metadata) &&
+    metadataIsRuntimeSuccessorLane(metadata) &&
+    sameFrontierCount >= NUM_TWO
+  ) {
+    return [
+      `${filePath}: two-shot same-frontier rule rejected a third ` +
+      `${metadataLane(metadata)} package for ${metadataOwnerBoundaryKey(metadata)}; ` +
+      'open an owner-boundary migration package, architecture-contract package, or human escalation instead.',
+    ];
+  }
   if (
     fileStatus !== STATUS_ACTIVE ||
     !metadata ||
@@ -3643,11 +4172,13 @@ export function validateFrontierOscillationContract(
   const isDiagnosticOnlyRoute =
     metadataLane(metadata) === LANE_DIAGNOSTIC_CLASSIFICATION &&
     !hasImplementationWriteScope(metadata);
+  const isExperimentProbe = metadataLane(metadata) === LANE_EXPERIMENT;
   const isSelectedRuntimeSuccessor =
     metadataIsSelectedRuntimeSuccessor(metadata);
   if (
     metadataLane(metadata) !== LANE_CAUSAL_ESCALATION &&
     !isDiagnosticOnlyRoute &&
+    !isExperimentProbe &&
     !isSelectedRuntimeSuccessor
   ) {
     errors.push(
@@ -3924,6 +4455,76 @@ function validateArchitectureGateSelectedChoice(filePath, gate) {
   return validateArchitectureGateChoices(filePath, [selected]);
 }
 
+function proofLadderEndsInNpmTest(metadata = {}) {
+  const proof = metadataProofCommands(metadata);
+  if (proof.length === NUM_ZERO) {
+    return false;
+  }
+  const lastProof = proof[proof.length - NUM_ONE];
+  return /\bnpm\s+test\b/iu.test(lastProof);
+}
+
+function hasRuntimeSourceWriteScope(metadata = {}) {
+  return metadataWritePaths(metadata).some(isSourceWritePath);
+}
+
+function metadataHasSelectedNonLocalArchitectureRoute(metadata = {}) {
+  const gate = metadata?.[ARCHITECTURE_DECISION_GATE_FIELD];
+  if (!isObjectRecord(gate)) {
+    return false;
+  }
+  if (
+    normalizeLedgerText(gate.status) !==
+    ARCHITECTURE_DECISION_GATE_STATUS_SELECTED
+  ) {
+    return false;
+  }
+  const selectedChoice = normalizeLedgerText(gate.selectedChoice);
+  const choices = Array.isArray(gate.choices) ? gate.choices : [];
+  return choices.some((choice) =>
+    isObjectRecord(choice) &&
+    normalizeLedgerText(choice.id) === selectedChoice &&
+    normalizeLedgerText(choice.route) !==
+      ARCHITECTURE_DECISION_GATE_ROUTE_CONTINUE_LOCAL_PROOF);
+}
+
+function metadataIsOwnerBoundaryMigrationPackage(metadata = {}) {
+  return isObjectRecord(metadata?.[OWNER_BOUNDARY_MIGRATION_PROOF_FIELD]);
+}
+
+function metadataIsArchitectureContractPackage(metadata = {}) {
+  return /(?:architecture|owner)[-_ ](?:contract|package)|architecture[-_ ]gap/iu.test(
+    [
+      metadataLane(metadata),
+      metadata?.owner,
+      metadata?.boundary,
+      metadata?.dominantReason,
+      metadata?.modelFit?.packageClass,
+      metadata?.nextAction,
+    ].map(normalizeLedgerText).join(' '),
+  );
+}
+
+function metadataIsHumanEscalationPackage(metadata = {}) {
+  return scenarioClosureStopCondition(metadata) ===
+      ARCHITECTURE_DECISION_GATE_ROUTE_HUMAN_ESCALATION ||
+    /human[-_ ]escalation|human[-_ ]gate|present[-_ ]human/iu.test(
+      [
+        metadata?.dominantReason,
+        metadata?.nextAction,
+        metadata?.[EXPERIMENT_OUTCOME_FIELD]?.[EXPERIMENT_OUTCOME_DECISION_FIELD],
+      ].map(normalizeLedgerText).join(' '),
+    );
+}
+
+function metadataAllowsWatchingOscillationRuntimeEdit(metadata = {}) {
+  return metadataLane(metadata) === LANE_EXPERIMENT ||
+    metadataHasSelectedNonLocalArchitectureRoute(metadata) ||
+    metadataIsOwnerBoundaryMigrationPackage(metadata) ||
+    metadataIsArchitectureContractPackage(metadata) ||
+    metadataIsHumanEscalationPackage(metadata);
+}
+
 export function validateArchitectureDecisionGateContract(
   metadata,
   filePath,
@@ -4006,6 +4607,21 @@ export function validateArchitectureDecisionGateContract(
     errors.push(
       `${filePath}: architectureDecisionGate status is presented; runtime ` +
       'implementation is blocked until a human-selected architecture route is recorded.',
+    );
+  }
+  if (
+    status === ARCHITECTURE_DECISION_GATE_STATUS_WATCHING &&
+    trigger === ARCHITECTURE_DECISION_GATE_TRIGGER_FRONTIER_OSCILLATION &&
+    phase === VALIDATION_PHASE_PRE_IMPL &&
+    fileStatus === STATUS_ACTIVE &&
+    hasRuntimeSourceWriteScope(metadata) &&
+    !metadataAllowsWatchingOscillationRuntimeEdit(metadata)
+  ) {
+    errors.push(
+      `${filePath}: architectureDecisionGate is watching frontier-oscillation; ` +
+      'pre-implementation cannot start another active runtime edit until ' +
+      'the next package is an experiment, owner-boundary migration, ' +
+      'architecture contract, human escalation, or selected non-local route.',
     );
   }
   if (
@@ -4236,14 +4852,14 @@ function validateInheritsContext(filePath, metadata) {
 }
 
 function validateBoundedExperimentMetadataShape(filePath, metadata) {
-  if (metadataLane(metadata) !== LANE_BOUNDED_EXPERIMENT) {
+  if (!metadataIsExperimentLane(metadata)) {
     return [];
   }
   const experiment = metadata?.[BOUNDED_EXPERIMENT_FIELD];
   if (!isObjectRecord(experiment)) {
     return [
       `${filePath}: metadata ${BOUNDED_EXPERIMENT_FIELD} is required for ` +
-      `${LANE_BOUNDED_EXPERIMENT} packages.`,
+      `${metadataLane(metadata)} packages.`,
     ];
   }
   const errors = [];
@@ -4261,6 +4877,13 @@ function validateBoundedExperimentMetadataShape(filePath, metadata) {
       BOUNDED_EXPERIMENT_INHERITS_FROM_FIELD,
     ));
   }
+  if (metadataLane(metadata) === LANE_EXPERIMENT) {
+    errors.push(...validateBoundedExperimentField(
+      filePath,
+      experiment,
+      BOUNDED_EXPERIMENT_DISCRIMINATOR_FIELD,
+    ));
+  }
   const validationTier = normalizeLedgerText(metadata[VALIDATION_TIER_FIELD]);
   if (
     validationTier.length === NUM_ZERO ||
@@ -4268,7 +4891,7 @@ function validateBoundedExperimentMetadataShape(filePath, metadata) {
   ) {
     errors.push(
       `${filePath}: metadata ${VALIDATION_TIER_FIELD} must be one of ` +
-      `${VALIDATION_TIERS.join(', ')} for ${LANE_BOUNDED_EXPERIMENT} ` +
+      `${VALIDATION_TIERS.join(', ')} for ${metadataLane(metadata)} ` +
       'packages.',
     );
   }
@@ -4486,10 +5109,98 @@ function buildSubagentValidationOptions(fileStatus, metadata, phase, options = {
   };
 }
 
+function metadataRequiredPreImplProbe(metadata = {}) {
+  const explicitRequirement = metadata[REQUIRED_PRE_IMPL_PROBE_FIELD];
+  if (isObjectRecord(explicitRequirement)) {
+    return explicitRequirement;
+  }
+  if (typeof explicitRequirement === 'string') {
+    return {
+      [REQUIRED_PRE_IMPL_PROBE_COMMAND_FIELD]: explicitRequirement,
+    };
+  }
+  const closure = metadata[SCENARIO_CAUSAL_CLOSURE_METADATA_FIELD];
+  if (!isObjectRecord(closure)) {
+    return null;
+  }
+  const artifact = normalizeLedgerText(
+    closure[SCENARIO_CAUSAL_CLOSURE_BOUNDED_PROOF_ARTIFACT_FIELD],
+  );
+  const command = normalizeLedgerText(
+    closure[SCENARIO_CAUSAL_CLOSURE_MISSING_EDGE_PROBE_FIELD],
+  );
+  if (
+    artifact.length === NUM_ZERO ||
+    MODEL_FIT_EMPTY_VALUE_PATTERN.test(artifact)
+  ) {
+    return null;
+  }
+  return {
+    [REQUIRED_PRE_IMPL_PROBE_ARTIFACT_FIELD]: artifact,
+    [REQUIRED_PRE_IMPL_PROBE_COMMAND_FIELD]: command,
+    [REQUIRED_PRE_IMPL_PROBE_REASON_FIELD]:
+      'scenario bounded progress proof artifact',
+  };
+}
+
+function requiredPreImplProbeValueIsConcrete(value) {
+  const normalizedValue = normalizeLedgerText(value);
+  return normalizedValue.length > NUM_ZERO &&
+    !MODEL_FIT_EMPTY_VALUE_PATTERN.test(normalizedValue) &&
+    !LEDGER_TEMPLATE_PLACEHOLDER_PATTERN.test(normalizedValue);
+}
+
+export function validateRequiredPreImplProbeContract(metadata, filePath) {
+  const requirement = metadataRequiredPreImplProbe(metadata);
+  if (!requirement || !hasRuntimeSourceWriteScope(metadata)) {
+    return [];
+  }
+  const command = normalizeLedgerText(
+    requirement[REQUIRED_PRE_IMPL_PROBE_COMMAND_FIELD],
+  );
+  const artifact = normalizeLedgerText(
+    requirement[REQUIRED_PRE_IMPL_PROBE_ARTIFACT_FIELD],
+  );
+  const errors = [];
+  if (
+    !requiredPreImplProbeValueIsConcrete(command) &&
+    !requiredPreImplProbeValueIsConcrete(artifact)
+  ) {
+    errors.push(
+      `${filePath}: ${REQUIRED_PRE_IMPL_PROBE_FIELD} must name a focused ` +
+      'pre-implementation command or artifact for runtime source edits.',
+    );
+    return errors;
+  }
+  const proofText = metadataProofCommands(metadata).join(NEWLINE);
+  if (
+    requiredPreImplProbeValueIsConcrete(artifact) &&
+    !proofText.includes(artifact)
+  ) {
+    errors.push(
+      `${filePath}: runtime source pre-implementation proof must cite ` +
+      `required fixture/probe artifact ${artifact}.`,
+    );
+  }
+  if (
+    requiredPreImplProbeValueIsConcrete(command) &&
+    !proofText.includes(command)
+  ) {
+    errors.push(
+      `${filePath}: runtime source pre-implementation proof must cite ` +
+      `required fixture/probe command ${command}.`,
+    );
+  }
+  return errors;
+}
+
 async function validateExecutableContracts(metadata, filePath, options = {}) {
   const errors = [];
   if (!metadata || options.phase === VALIDATION_PHASE_ENTRY || options.status !== STATUS_ACTIVE) {
     return errors;
+  }
+  if (options.phase === VALIDATION_PHASE_PRE_IMPL) {
+    errors.push(...validateRequiredPreImplProbeContract(metadata, filePath));
   }
   const writeScope = metadata[SCOPE_FIELD_WRITE_SCOPE];
   if (!Array.isArray(writeScope)) {
@@ -4522,16 +5233,30 @@ async function validateExecutableContracts(metadata, filePath, options = {}) {
   return errors;
 }
 
-function validateProbePackageContract(content, filePath, metadata) {
+export function validateProbePackageContract(content, filePath, metadata) {
   const errors = [];
   const markdownLineCount = content.split(NEWLINE).length;
-  if (markdownLineCount > PROBE_PACKAGE_MAX_MARKDOWN_LINES) {
+  const modelFit = isObjectRecord(metadata?.[METADATA_FIELD_MODEL_FIT]) ?
+    metadata[METADATA_FIELD_MODEL_FIT] :
+    {};
+  const packageClass = normalizeLedgerText(
+    modelFit.packageClass,
+  ).toLowerCase();
+  const isCompactProbePackage =
+    packageClass === COMPACT_PROBE_PACKAGE_CLASS;
+  if (
+    isCompactProbePackage &&
+    markdownLineCount > PROBE_PACKAGE_MAX_MARKDOWN_LINES
+  ) {
     errors.push(
       `${filePath}: probe package has ${markdownLineCount} markdown lines; ` +
       `keep probe packages at or below ${PROBE_PACKAGE_MAX_MARKDOWN_LINES} lines.`,
     );
   }
-  if (PROBE_PACKAGE_EXECUTION_EVIDENCE_HEADING_PATTERN.test(content)) {
+  if (
+    isCompactProbePackage &&
+    PROBE_PACKAGE_EXECUTION_EVIDENCE_HEADING_PATTERN.test(content)
+  ) {
     errors.push(
       `${filePath}: probe packages must not include the closure ` +
       'Execution Evidence ladder; validate them with --probe.',
@@ -4540,6 +5265,11 @@ function validateProbePackageContract(content, filePath, metadata) {
   if (!metadata) {
     return errors;
   }
+  if (metadataLane(metadata) !== LANE_EXPERIMENT) {
+    errors.push(
+      `${filePath}: probe packages must use lane ${LANE_EXPERIMENT}.`,
+    );
+  }
   const proof = Array.isArray(metadata.proof) ? metadata.proof : [];
   if (proof.length === NUM_ZERO) {
     errors.push(
@@ -4547,6 +5277,18 @@ function validateProbePackageContract(content, filePath, metadata) {
       'probe command or artifact.',
     );
   }
+  if (metadataScopeList(metadata, SCOPE_FIELD_WRITE_SCOPE).some(isSourceWritePath)) {
+    errors.push(
+      `${filePath}: probe packages must not include src/ runtime files in ` +
+      'writeScope; promote out of the probe lane before runtime edits.',
+    );
+  }
+  errors.push(...validateBoundedExperimentMetadataShape(filePath, metadata));
+  errors.push(...validateObservablePredictionContract(metadata, filePath, {
+    [LEDGER_VALIDATION_REQUIRES_LEDGER]: true,
+    status: STATUS_ACTIVE,
+    phase: VALIDATION_PHASE_PROBE,
+  }));
   return errors;
 }
 
@@ -4692,6 +5434,18 @@ async function validatePackageFile(filePath, options = {}) {
     status: fileStatus,
     phase,
   }));
+  errors.push(...validateObservablePredictionContract(metadata, relativePath, {
+    [LEDGER_VALIDATION_REQUIRES_LEDGER]:
+      metadataRequiresObservablePrediction(metadata, fileStatus, phase),
+    status: fileStatus,
+    phase,
+  }));
+  errors.push(...validateExperimentOutcomeContract(metadata, relativePath, {
+    [LEDGER_VALIDATION_REQUIRES_LEDGER]:
+      metadataRequiresExperimentOutcome(metadata, fileStatus, phase),
+    status: fileStatus,
+    phase,
+  }));
   errors.push(...validateRerunDecisionContract(metadata, relativePath, {
     [LEDGER_VALIDATION_REQUIRES_LEDGER]:
       metadataRequiresRerunDecision(metadata, fileStatus),
@@ -4708,6 +5462,8 @@ async function validatePackageFile(filePath, options = {}) {
   ));
   errors.push(...validateSameFrontierStopContract(metadata, relativePath, {
     status: fileStatus,
+    phase,
+    packageHistoryEntries: options.packageHistoryEntries || [],
   }));
   errors.push(...validateScenarioFrontierOwnerBoundaryContract(
     metadata,
@@ -5110,23 +5866,24 @@ async function validateCurrentBlockerFreshness() {
 
   const errors = [];
   const activeSprintFile = await findActiveSprintFile();
+  const activePackageFile = await findActivePackageFile(activeSprintFile);
   const allowClosedSnapshot =
     !activeSprintFile &&
+    !activePackageFile &&
     CURRENT_BLOCKER_CLOSED_STATUSES.includes(currentBlocker.status);
-  if (!activeSprintFile && !allowClosedSnapshot) {
+  if (!activeSprintFile && !activePackageFile && !allowClosedSnapshot) {
     errors.push(
       `${CURRENT_BLOCKER_JSON_PATH}: ${ERROR_NO_ACTIVE_SPRINT} Run ` +
-      `${CURRENT_BLOCKER_REPAIR_COMMAND} after activating a sprint.`,
+      `${CURRENT_BLOCKER_REPAIR_COMMAND} after activating a sprint or ` +
+      'recording a track Next Package.',
     );
   }
-  const activePackageFile = activeSprintFile ?
-    await findActivePackageFile(activeSprintFile) :
-    null;
   if (!activePackageFile && !allowClosedSnapshot) {
     errors.push(
       `${CURRENT_BLOCKER_JSON_PATH}: ` +
       `${await formatActivePackageResolutionFailure(activeSprintFile)} Run ` +
-      `${CURRENT_BLOCKER_REPAIR_COMMAND} after updating the active sprint.`,
+      `${CURRENT_BLOCKER_REPAIR_COMMAND} after updating the active sprint or ` +
+      'track Next Package.',
     );
   }
   const packagePath = normalizeSnapshotPathValue(currentBlocker.package);
@@ -5140,7 +5897,7 @@ async function validateCurrentBlockerFreshness() {
     packageExists,
     snapshotPath: CURRENT_BLOCKER_JSON_PATH,
   }));
-  if (activeSprintFile && activePackageFile && !allowClosedSnapshot) {
+  if (activePackageFile && !allowClosedSnapshot) {
     const activePackageRelativePath = normalizeRelativePath(activePackageFile);
     try {
       const packageContent = await readTextFile(activePackageFile);
@@ -5674,6 +6431,18 @@ export function buildPackageDoctorLines(filePath, content, options = {}) {
       isScenarioDrivenMetadata(metadata),
     status: fileStatus,
   }));
+  errors.push(...validateObservablePredictionContract(metadata, relativePath, {
+    [LEDGER_VALIDATION_REQUIRES_LEDGER]:
+      metadataRequiresObservablePrediction(metadata, fileStatus, phase),
+    status: fileStatus,
+    phase,
+  }));
+  errors.push(...validateExperimentOutcomeContract(metadata, relativePath, {
+    [LEDGER_VALIDATION_REQUIRES_LEDGER]:
+      metadataRequiresExperimentOutcome(metadata, fileStatus, phase),
+    status: fileStatus,
+    phase,
+  }));
   errors.push(...validateRerunDecisionContract(metadata, relativePath, {
     [LEDGER_VALIDATION_REQUIRES_LEDGER]:
       metadataRequiresRerunDecision(metadata, fileStatus),
@@ -5690,6 +6459,8 @@ export function buildPackageDoctorLines(filePath, content, options = {}) {
   ));
   errors.push(...validateSameFrontierStopContract(metadata, relativePath, {
     status: fileStatus,
+    phase,
+    packageHistoryEntries: options.packageHistoryEntries || [],
   }));
   errors.push(...validateScenarioFrontierOwnerBoundaryContract(
     metadata,
@@ -5856,6 +6627,20 @@ export function findActivePackageLinkInSprint(content) {
   return referenceMatch ? referenceMatch[NUM_ONE] : null;
 }
 
+function findNextPackageLinkInTrack(content) {
+  const nextPackageSection = extractMarkdownLevelTwoSection(
+    content,
+    NEXT_PACKAGE_HEADING,
+  );
+  const references = collectActiveWorkReferences(
+    nextPackageSection || content,
+  ).filter((referencePath) =>
+    normalizeLedgerText(referencePath).includes(`${WORK_PACKAGES_DIR}/`) ||
+    normalizeLedgerText(referencePath).includes('/packages/'),
+  );
+  return references.length === NUM_ONE ? references[NUM_ZERO] : null;
+}
+
 export function resolveSprintPackageReference(activeSprintFile, packageReference) {
   const normalizedReference = normalizeLedgerText(packageReference);
   if (
@@ -5888,6 +6673,23 @@ export async function findActivePackageFile(activeSprintFile) {
       return matchingActivePackage || sprintPackageFile;
     }
   }
+  if (!activeSprintFile) {
+    const trackFiles = await listTrackFiles();
+    for (const trackFile of trackFiles) {
+      const trackContent = await readTextFile(trackFile);
+      const trackPackageLink = findNextPackageLinkInTrack(trackContent);
+      if (!trackPackageLink) {
+        continue;
+      }
+      const trackPackageFile = normalizeCliPath(trackPackageLink);
+      const matchingActivePackage = activePackages.find((filePath) =>
+        normalizeRelativePath(filePath) === normalizeRelativePath(trackPackageFile),
+      );
+      if (matchingActivePackage) {
+        return matchingActivePackage;
+      }
+    }
+  }
   return activePackages.length === NUM_ONE ? activePackages[NUM_ZERO] : null;
 }
 
@@ -5904,9 +6706,9 @@ async function formatActivePackageResolutionFailure(activeSprintFile) {
       'active-* package files.';
   }
   return `${ERROR_NO_ACTIVE_PACKAGE} Found ${sprintMessage} and active ` +
-    `package files: ${activePackages.join(', ')}. The active sprint must ` +
-    'name exactly one package in the Current Edge Card `Active package:` ' +
-    'line or a current-active-package markdown link.';
+    `package files: ${activePackages.join(', ')}. The active sprint Current ` +
+    'Edge Card or a track Next Package section must name exactly one active ' +
+    'package.';
 }
 
 async function assertResolvableActivePackage(activeSprintFile, activePackageFile) {
@@ -5914,10 +6716,13 @@ async function assertResolvableActivePackage(activeSprintFile, activePackageFile
     throw new Error(await formatActivePackageResolutionFailure(activeSprintFile));
   }
   if (!(await pathExists(activePackageFile))) {
+    const activeSource = activeSprintFile ?
+      normalizeRelativePath(activeSprintFile) :
+      'track Next Package handoff';
     throw new Error(
       `${normalizeRelativePath(activePackageFile)}: active package named by ` +
-      `${normalizeRelativePath(activeSprintFile)} does not exist. Update the ` +
-      'active sprint Current Edge Card or activate the successor package, then ' +
+      `${activeSource} does not exist. Update the active sprint Current Edge ` +
+      'Card, track Next Package, or activate the successor package, then ' +
       `run ${CURRENT_BLOCKER_REPAIR_COMMAND}.`,
     );
   }
@@ -5960,7 +6765,9 @@ export function buildCurrentBlockerPayload(
   return {
     schema: 'current-blocker-v1',
     generatedBy: 'scripts/work-tracker.js',
-    sprint: normalizeRelativePath(activeSprintFile),
+    sprint: activeSprintFile ?
+      normalizeRelativePath(activeSprintFile) :
+      CURRENT_BLOCKER_NO_ACTIVE_SPRINT,
     package: normalizeRelativePath(activePackageFile),
     status: metadata.status,
     lane: metadata[METADATA_LANE_FIELD] || DEFAULT_UNKNOWN,
@@ -5985,6 +6792,8 @@ export function buildCurrentBlockerPayload(
     ) ? metadata[REPRESENTATIVE_RESIDUAL_METADATA_FIELD] : {},
     causalGovernance: metadata.causalGovernance || {},
     scenarioCausalClosure: metadata.scenarioCausalClosure || {},
+    observablePrediction: metadata[OBSERVABLE_PREDICTION_FIELD] || {},
+    experimentOutcome: metadata[EXPERIMENT_OUTCOME_FIELD] || {},
     rerunDecision: metadata[RERUN_DECISION_FIELD] || {},
     classificationEfficiency: metadata[CLASSIFICATION_EFFICIENCY_FIELD] || {},
     architectureDecisionGate: buildArchitectureDecisionGatePayload(
@@ -6035,6 +6844,7 @@ function currentBlockerTheoryFocus(payload) {
     expectedImplementationDelta: firstCurrentBlockerValue([
       payload.causalGovernance?.expectedCausalModelChange,
       payload.scenarioCausalClosure?.expectedObservableTransition,
+      payload.observablePrediction?.predicted,
       payload.rerunDecision?.expectedDelta,
     ]),
     falsifyingProbe: firstCurrentBlockerValue([
@@ -6427,6 +7237,32 @@ export function renderCurrentBlockerMarkdown(payload) {
     'Handoff invariant: ' +
       `\`${payload.scenarioCausalClosure?.handoffInvariant || DEFAULT_UNKNOWN}\``,
     '',
+    '## Observable Prediction',
+    '',
+    `Metric: \`${payload.observablePrediction?.metric || DEFAULT_UNKNOWN}\``,
+    '',
+    `Predicted: \`${payload.observablePrediction?.predicted || DEFAULT_UNKNOWN}\``,
+    '',
+    `Observed: \`${payload.observablePrediction?.observed || DEFAULT_UNKNOWN}\``,
+    '',
+    `Accuracy: \`${payload.observablePrediction?.accuracy || DEFAULT_UNKNOWN}\``,
+    '',
+    `Evidence: \`${payload.observablePrediction?.evidence || DEFAULT_UNKNOWN}\``,
+    '',
+    `Metric delta: \`${payload.observablePrediction?.metricDelta ?? DEFAULT_UNKNOWN}\``,
+    '',
+    '## Experiment Outcome',
+    '',
+    `Distinguished hypothesis: \`${payload.experimentOutcome?.distinguishedHypothesis || DEFAULT_UNKNOWN}\``,
+    '',
+    `Decision: \`${payload.experimentOutcome?.decision || DEFAULT_UNKNOWN}\``,
+    '',
+    `Next owner: \`${payload.experimentOutcome?.nextOwner || DEFAULT_UNKNOWN}\``,
+    '',
+    `Next boundary: \`${payload.experimentOutcome?.nextBoundary || DEFAULT_UNKNOWN}\``,
+    '',
+    `Evidence: \`${payload.experimentOutcome?.evidence || DEFAULT_UNKNOWN}\``,
+    '',
     '## Rerun Decision',
     '',
     `Source artifact: \`${payload.rerunDecision?.sourceArtifact || DEFAULT_UNKNOWN}\``,
@@ -6538,9 +7374,6 @@ export function renderCurrentBlockerMarkdown(payload) {
 
 async function currentBlockerCommand(args) {
   const activeSprintFile = await findActiveSprintFile();
-  if (!activeSprintFile) {
-    throw new Error(ERROR_NO_ACTIVE_SPRINT);
-  }
   const activePackageFile = await findActivePackageFile(activeSprintFile);
   await assertResolvableActivePackage(activeSprintFile, activePackageFile);
   const packageContent = await readTextFile(activePackageFile);
@@ -6580,18 +7413,20 @@ async function currentBlockerCommand(args) {
   if (args.includes(CLI_FLAG_WRITE)) {
     await writeTextFile(CURRENT_BLOCKER_JSON_PATH, jsonContent);
     await writeTextFile(CURRENT_BLOCKER_MARKDOWN_PATH, markdownContent);
-    const sprintContent = await readTextFile(activeSprintFile);
-    const nextSprintContent = upsertSprintCurrentEdgeCard(
-      sprintContent,
-      payload,
-    );
     const updatedPaths = [
       CURRENT_BLOCKER_JSON_PATH,
       CURRENT_BLOCKER_MARKDOWN_PATH,
     ];
-    if (nextSprintContent !== sprintContent) {
-      await writeTextFile(activeSprintFile, nextSprintContent);
-      updatedPaths.push(normalizeRelativePath(activeSprintFile));
+    if (activeSprintFile) {
+      const sprintContent = await readTextFile(activeSprintFile);
+      const nextSprintContent = upsertSprintCurrentEdgeCard(
+        sprintContent,
+        payload,
+      );
+      if (nextSprintContent !== sprintContent) {
+        await writeTextFile(activeSprintFile, nextSprintContent);
+        updatedPaths.push(normalizeRelativePath(activeSprintFile));
+      }
     }
     console.log(
       `Updated ${updatedPaths.join(', ')}.`,

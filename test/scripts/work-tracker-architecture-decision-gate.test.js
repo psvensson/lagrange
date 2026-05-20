@@ -203,6 +203,40 @@ describe('work tracker architecture decision gate validation', () => {
       );
     });
 
+  it('blocks runtime edits while oscillation is watching', () => {
+    const metadata = {
+      ...BASE_SCENARIO_METADATA,
+      lane: 'runtime-owner-boundary',
+      owner: 'operation_workflow_owner',
+      boundary: 'workflow_progress',
+      proof: [
+        'npm test -- test/rebalancer/probe.test.js',
+        'npm run work:evidence-summary -- report.json',
+      ],
+      writeScope: ['src/rebalancer/operation-workflow-owner.js'],
+      architectureDecisionGate: {
+        status: 'watching',
+        trigger: 'frontier-oscillation',
+        triggerEvidence: ['frontier returned twice'],
+        choices: [],
+        selectedChoice: null,
+        nextAction: 'Open a probe first.',
+      },
+    };
+
+    const errors = validateArchitectureDecisionGateContract(
+      metadata,
+      WORK_TRACKER_TEST_FILE,
+      {
+        phase: 'pre-impl',
+        status: WORK_TRACKER_ACTIVE_STATUS,
+      },
+    ).join('\n');
+
+    assert.match(errors, /watching frontier-oscillation/u);
+    assert.match(errors, /owner-boundary migration/u);
+  });
+
   it('includes the gate in current-blocker payload and markdown', () => {
     const payload = buildCurrentBlockerPayload(
       'work/sprints/active-test.md',

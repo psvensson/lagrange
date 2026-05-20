@@ -53,6 +53,10 @@ const COMMAND_GROUPS = Object.freeze([
         description: 'Print the shared work-package schema enums used by templates and validation.',
       }),
       Object.freeze({
+        command: 'npm run work:package:cost',
+        description: 'Summarize closed packages per representative movement point and observable prediction accuracy.',
+      }),
+      Object.freeze({
         command: 'npm run work:subagent-prompt -- --role <role> --package <package>',
         description: 'Generate bounded subagent prompts plus sequencing and progress ledger guidance.',
       }),

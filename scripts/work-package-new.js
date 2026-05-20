@@ -16,6 +16,7 @@ import {
   CLASSIFICATION_EFFICIENCY_RUNTIME_PROMOTION_RULE_FIELD,
   CLASSIFICATION_EFFICIENCY_SEPARATE_PACKAGE_REASON_FIELD,
   CLASSIFICATION_EFFICIENCY_SUCCESSOR_ACTION_FIELD,
+  BOUNDED_EXPERIMENT_DISCRIMINATOR_FIELD,
   BOUNDED_EXPERIMENT_EXPECTED_METRIC_FIELD,
   BOUNDED_EXPERIMENT_FIELD,
   BOUNDED_EXPERIMENT_HYPOTHESIS_FIELD,
@@ -28,6 +29,7 @@ import {
   LANE_CAUSAL_ESCALATION,
   LANE_BOUNDED_EXPERIMENT,
   LANE_DIAGNOSTIC_CLASSIFICATION,
+  LANE_EXPERIMENT,
   LANE_LIGHTWEIGHT_MAINTENANCE,
   LANE_MECHANICAL_MAINTENANCE,
   LANE_RUNTIME_OWNER_BOUNDARY,
@@ -40,6 +42,12 @@ import {
   MODEL_FIT_SPLIT_SAFE_TO_EXECUTE_WHEN_FIELD,
   MODEL_FIT_SPLIT_SPLIT_TRIGGERS_FIELD,
   MODEL_FIT_SPLIT_TARGET_MODEL_FIELD,
+  OBSERVABLE_PREDICTION_ACCURACY_FIELD,
+  OBSERVABLE_PREDICTION_EVIDENCE_FIELD,
+  OBSERVABLE_PREDICTION_FIELD,
+  OBSERVABLE_PREDICTION_METRIC_FIELD,
+  OBSERVABLE_PREDICTION_OBSERVED_FIELD,
+  OBSERVABLE_PREDICTION_PREDICTED_FIELD,
   RERUN_DECISION_CAUSAL_OUTCOME_FIELD,
   RERUN_DECISION_EXPECTED_DELTA_FIELD,
   RERUN_DECISION_FIELD,
@@ -119,7 +127,9 @@ const FLAG_EXPECTED_DELTA = 'expected-delta';
 const FLAG_SEPARATE_CLASSIFICATION_REASON = 'separate-classification-reason';
 const FLAG_SUCCESSOR_ACTION = 'successor-action';
 const FLAG_HYPOTHESIS = 'hypothesis';
+const FLAG_HYPOTHESIS_DISCRIMINATOR = 'hypothesis-discriminator';
 const FLAG_EXPECTED_METRIC = 'expected-metric';
+const FLAG_OBSERVED_TRANSITION = 'observed-transition';
 const FLAG_INHERITS = 'inherits';
 const FLAG_TIMEBOX = 'timebox';
 const FLAG_MERGE_REQUIREMENT = 'merge-requirement';
@@ -159,6 +169,7 @@ const DEFAULT_EXPERIMENT_MERGE_REQUIREMENT =
 const DEFAULT_EXPERIMENT_KILL_RULE =
   'same frontier with no metric movement discards the experiment or escalates';
 const DEFAULT_EXPERIMENT_VALIDATION_TIER = 'single-owner';
+const OBSERVABLE_PREDICTION_ACCURACY_PENDING = 'pending-before-observation';
 const CAUSAL_OUTCOME_CONTINUE_LOCAL_FIX = 'continue_local_fix';
 const STOP_MODE_CLASSIFIED_LOCAL_BLOCKER = 'classified_local_blocker';
 const [
@@ -212,7 +223,9 @@ const HELP_TEXT = [
   '  --separate-classification-reason <reason>  Explain why classification is a package instead of an inline gate.',
   '  --successor-action <action>  Record whether classification updates the current package, opens runtime work, reruns evidence, or escalates.',
   '  --hypothesis <text>  Bounded experiment hypothesis.',
+  '  --hypothesis-discriminator <text>  Different observable predicted under competing hypotheses.',
   '  --expected-metric <text>  Metric or frontier movement expected from the experiment.',
+  '  --observed-transition <text>  Closure observation for the pre-registered prediction.',
   '  --inherits <package>  Package or sprint context inherited by a bounded experiment.',
   '  --timebox <duration>  Bounded experiment timebox, default 24h.',
   '  --merge-requirement <text>  Proof required before merging an experiment.',
@@ -439,14 +452,15 @@ function validateFlags(flags = {}) {
       `${VALIDATION_TIERS.join(', ')}.`,
     );
   }
-  if (lane === LANE_BOUNDED_EXPERIMENT) {
+  if (lane === LANE_BOUNDED_EXPERIMENT || lane === LANE_EXPERIMENT) {
     const missingExperimentFlags = [
       FLAG_HYPOTHESIS,
       FLAG_EXPECTED_METRIC,
+      lane === LANE_EXPERIMENT ? FLAG_HYPOTHESIS_DISCRIMINATOR : null,
     ].filter((flagName) => normalizeText(flags[flagName]).length === NUM_ZERO);
     if (missingExperimentFlags.length > NUM_ZERO) {
       throw new Error(
-        `--lane ${LANE_BOUNDED_EXPERIMENT} requires ` +
+        `--lane ${lane} requires ` +
         missingExperimentFlags
           .map((flagName) => `${FLAG_PREFIX}${flagName}`)
           .join(', ') +
@@ -689,6 +703,9 @@ function buildDecisionExperimentGateLines(lane, flags, proof, metadata) {
 }
 
 function buildLaneSufficiencyLine(lane) {
+  if (lane === LANE_EXPERIMENT) {
+    return '- Why this lane is sufficient: success criterion is information from a bounded hypothesis discriminator, not runtime metric movement.';
+  }
   if (lane === LANE_BOUNDED_EXPERIMENT) {
     return '- Why this lane is sufficient: same-owner or tightly scoped hypothesis-driven change with inherited context, proof-gated merge, and explicit kill rule.';
   }
@@ -700,8 +717,10 @@ function buildLaneSufficiencyLine(lane) {
 
 function shouldBuildBoundedExperimentMetadata(lane, flags = {}) {
   return lane === LANE_BOUNDED_EXPERIMENT ||
+    lane === LANE_EXPERIMENT ||
     [
       FLAG_HYPOTHESIS,
+      FLAG_HYPOTHESIS_DISCRIMINATOR,
       FLAG_EXPECTED_METRIC,
       FLAG_INHERITS,
       FLAG_TIMEBOX,
@@ -719,6 +738,9 @@ function buildBoundedExperimentMetadata(lane, flags = {}) {
     [BOUNDED_EXPERIMENT_HYPOTHESIS_FIELD]:
       normalizeText(flags[FLAG_HYPOTHESIS]) ||
       'State the experiment hypothesis before implementation.',
+    [BOUNDED_EXPERIMENT_DISCRIMINATOR_FIELD]:
+      normalizeText(flags[FLAG_HYPOTHESIS_DISCRIMINATOR]) ||
+      'Predict the different observable under H1 vs H2 vs H3 before implementation.',
     [BOUNDED_EXPERIMENT_EXPECTED_METRIC_FIELD]:
       normalizeText(flags[FLAG_EXPECTED_METRIC]) ||
       'Name the count, frontier, route, or representative result expected to move.',
@@ -734,9 +756,35 @@ function buildBoundedExperimentMetadata(lane, flags = {}) {
   };
 }
 
+function buildObservablePredictionMetadata(lane, flags = {}, metadata = {}) {
+  if (lane !== LANE_EXPERIMENT && lane !== LANE_BOUNDED_EXPERIMENT) {
+    return null;
+  }
+  const expectedMetric = normalizeText(flags[FLAG_EXPECTED_METRIC]) ||
+    normalizeText(metadata?.[BOUNDED_EXPERIMENT_FIELD]?.[
+      BOUNDED_EXPERIMENT_EXPECTED_METRIC_FIELD
+    ]);
+  return {
+    [OBSERVABLE_PREDICTION_METRIC_FIELD]:
+      expectedMetric || 'Name the numeric/state prediction metric.',
+    [OBSERVABLE_PREDICTION_PREDICTED_FIELD]:
+      expectedMetric || 'State the predicted transition before the probe.',
+    [OBSERVABLE_PREDICTION_OBSERVED_FIELD]:
+      normalizeText(flags[FLAG_OBSERVED_TRANSITION]) ||
+      OBSERVABLE_PREDICTION_ACCURACY_PENDING,
+    [OBSERVABLE_PREDICTION_ACCURACY_FIELD]:
+      OBSERVABLE_PREDICTION_ACCURACY_PENDING,
+    [OBSERVABLE_PREDICTION_EVIDENCE_FIELD]:
+      'pending-before-observation',
+  };
+}
+
 function buildInheritsContextMetadata(lane, flags = {}) {
   const inherits = normalizeText(flags[FLAG_INHERITS]);
-  if (lane !== LANE_BOUNDED_EXPERIMENT || inherits.length === NUM_ZERO) {
+  if (
+    (lane !== LANE_BOUNDED_EXPERIMENT && lane !== LANE_EXPERIMENT) ||
+    inherits.length === NUM_ZERO
+  ) {
     return null;
   }
   return {
@@ -757,6 +805,7 @@ function buildBoundedExperimentLines(metadata = {}) {
     '## Bounded Experiment',
     EMPTY_TEXT,
     `- Hypothesis: ${experiment[BOUNDED_EXPERIMENT_HYPOTHESIS_FIELD]}`,
+    `- Hypothesis discriminator: ${experiment[BOUNDED_EXPERIMENT_DISCRIMINATOR_FIELD]}`,
     `- Expected metric: ${experiment[BOUNDED_EXPERIMENT_EXPECTED_METRIC_FIELD]}`,
     `- Inherits from: \`${experiment[BOUNDED_EXPERIMENT_INHERITS_FROM_FIELD]}\``,
     `- Timebox: \`${experiment[BOUNDED_EXPERIMENT_TIMEBOX_FIELD]}\``,
@@ -767,12 +816,31 @@ function buildBoundedExperimentLines(metadata = {}) {
   ];
 }
 
+function buildObservablePredictionLines(metadata = {}) {
+  const prediction = metadata[OBSERVABLE_PREDICTION_FIELD];
+  if (!prediction) {
+    return [];
+  }
+  return [
+    '## Observable Prediction',
+    EMPTY_TEXT,
+    `- Metric: ${prediction[OBSERVABLE_PREDICTION_METRIC_FIELD]}`,
+    `- Predicted: ${prediction[OBSERVABLE_PREDICTION_PREDICTED_FIELD]}`,
+    `- Observed: ${prediction[OBSERVABLE_PREDICTION_OBSERVED_FIELD]}`,
+    `- Accuracy: ${prediction[OBSERVABLE_PREDICTION_ACCURACY_FIELD]}`,
+    `- Evidence: ${prediction[OBSERVABLE_PREDICTION_EVIDENCE_FIELD]}`,
+    '- Closure compares predicted vs observed before the package can close.',
+  ];
+}
+
 function defaultAllowedDecisionDepth(lane) {
   switch (lane) {
     case LANE_MECHANICAL_MAINTENANCE:
       return 'mechanical edits only; no behavior or ownership decisions';
     case LANE_TEST_ONLY_PROOF:
       return 'test assertion or fixture proof only; runtime behavior stays frozen';
+    case LANE_EXPERIMENT:
+      return 'one probe that distinguishes hypotheses; success is information, not runtime metric movement';
     case LANE_BOUNDED_EXPERIMENT:
       return 'one inherited-owner hypothesis with explicit expected metric and kill rule';
     case LANE_SINGLE_FILE_RUNTIME:
@@ -798,6 +866,12 @@ function defaultSplitCandidatesForLane(lane) {
     return [
       'Add or tighten the focused test in this Spark-safe package.',
       'Open a separate bounded-experiment or single-file-runtime package for implementation.',
+    ];
+  }
+  if (lane === LANE_EXPERIMENT) {
+    return [
+      'Keep runtime behavior frozen until the probe distinguishes competing hypotheses.',
+      'Promote only the discriminated owner/boundary into a follow-on runtime or architecture package.',
     ];
   }
   if (lane === LANE_SINGLE_FILE_RUNTIME) {
@@ -1114,6 +1188,14 @@ async function buildPackageContent(flags = {}) {
     metadata[VALIDATION_TIER_FIELD] =
       normalizeText(flags[FLAG_VALIDATION_TIER]) ||
       DEFAULT_EXPERIMENT_VALIDATION_TIER;
+    const observablePrediction = buildObservablePredictionMetadata(
+      lane,
+      flags,
+      metadata,
+    );
+    if (observablePrediction) {
+      metadata[OBSERVABLE_PREDICTION_FIELD] = observablePrediction;
+    }
   }
   const inheritsContext = buildInheritsContextMetadata(lane, flags);
   if (inheritsContext) {
@@ -1188,6 +1270,8 @@ async function buildPackageContent(flags = {}) {
     ...buildDecisionExperimentGateLines(lane, flags, proof, metadata),
     EMPTY_TEXT,
     ...buildBoundedExperimentLines(metadata),
+    EMPTY_TEXT,
+    ...buildObservablePredictionLines(metadata),
     EMPTY_TEXT,
     ...buildClassificationOnlyFastPathLines(isClassificationOnly),
     '## Expected Representative Delta',

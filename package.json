@@ -123,6 +123,7 @@
     "work:package:close": "node scripts/work-tracker.js close",
     "work:package:migrate": "node scripts/work-tracker.js migrate",
     "work:package:move": "node scripts/work-tracker.js move",
+    "work:package:cost": "node scripts/work-package-cost.js",
     "hooks:install": "node scripts/install-git-hooks.js",
     "test:unit": "tap $(find test -type f -name '*.test.js' ! -name '*.integration.test.js' ! -path 'test/integration/*' ! -path 'test/bootstrap/*' | sort)",
     "test:distributed:boundary:transition": "node test/distributed/harness/__tests__/boundary-transition-scenarios.test.js",

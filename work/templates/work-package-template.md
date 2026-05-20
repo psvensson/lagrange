@@ -5,7 +5,7 @@
   "schema": "work-package-v1",
   "status": "active",
   "opened": "YYYY-MM-DD",
-  "lane": "read-review-doc-only|mechanical-maintenance|lightweight-maintenance|test-only-proof|diagnostic-classification|bounded-experiment|single-file-runtime|runtime-owner-boundary|scenario-release-gate|causal-escalation",
+  "lane": "read-review-doc-only|mechanical-maintenance|lightweight-maintenance|test-only-proof|diagnostic-classification|bounded-experiment|experiment|single-file-runtime|runtime-owner-boundary|scenario-release-gate|causal-escalation",
   "scenario": "scenario-or-none",
   "artifact": "path/to/latest.report.json",
   "playback": "path/to/playback-or-none",
@@ -75,6 +75,14 @@
     ],
     "oscillationCheck": "state whether the frontier returned to or alternated with a recently closed related boundary",
     "handoffInvariant": "producer outcome + consumer precondition + freshness/revision/ack edge"
+  },
+  "observablePrediction": {
+    "metric": "pre-registered numeric/state metric",
+    "predicted": "state the expected observable before the probe or rerun",
+    "observed": "pending-before-observation",
+    "accuracy": "pending-before-observation",
+    "evidence": "pending-before-observation",
+    "metricDelta": 0
   },
   "predecessor": "work/packages/done-predecessor.md"
 }
@@ -157,6 +165,17 @@ or systemic sprint execution.
 - Runtime backlog item that may activate later:
 - Latest active scenario proof this package reconciles with:
 
+## Experiment Outcome
+
+Required at closure for `experiment` packages.
+
+- Distinguished hypothesis: `H1|H2|H3|evidence-incomplete`
+- Decision:
+  `open-runtime-owner-boundary|open-architecture-contract|owner-boundary-migration|human-escalation|evidence-incomplete`
+- Next owner:
+- Next boundary:
+- Evidence command or artifact:
+
 ## LLM Tool-First Contract
 
 Before raw JSON, raw logs, broad file search, oversized segment files, or ad hoc
@@ -197,6 +216,14 @@ Implementation gate:
 - [ ] Forbidden boundaries are listed before broad in-scope implementation
       detail.
 - [ ] Runtime edits wait until the classification gate is satisfied.
+
+Oscillating-frontier gate:
+
+- [ ] If `architectureDecisionGate.status=watching` and
+      `trigger=frontier-oscillation`, runtime edits wait for an `experiment`
+      package whose `boundedExperiment.hypothesisDiscriminator` predicts
+      different observables under H1 vs H2 vs H3 and whose
+      `observablePrediction.predicted` is written before the probe runs.
 
 ## Classification-Only Fast Path
 
@@ -239,12 +266,24 @@ Use only for same-owner or tightly scoped hypothesis-driven slices that inherit
 context from the active sprint/package and should move quickly.
 
 - Hypothesis:
+- Hypothesis discriminator:
 - Expected metric:
 - Inherits from:
 - Timebox:
 - Validation tier: `file-local|single-owner|cross-owner|release-gate`
 - Merge requirement:
 - Kill rule:
+
+## Observable Prediction
+
+Required for `experiment` packages and for watching frontier oscillation before
+runtime edits resume.
+
+- Metric:
+- Predicted:
+- Observed:
+- Accuracy: `pending-before-observation|matched|partial|missed|contradicted`
+- Evidence:
 
 ## Expected Representative Delta
 
@@ -430,6 +469,9 @@ non-frontier with prose alone.
   name the focused test, report, diagnostic output, or artifact path.
 - Expected observable transition:
   name the before/after state change or classification.
+- Observable prediction:
+  record metric, predicted, observed, accuracy, and evidence; closure compares
+  predicted vs observed so missed predictions become escalation data.
 - Max progress bound:
   name the maximum retry/timer/dispatch/owner-cycle bound before fallback.
 - Same-frontier fallback:

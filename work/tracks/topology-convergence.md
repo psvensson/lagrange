@@ -187,9 +187,10 @@ These are context candidates, not write authorization:
 
 ## Entry Condition
 
-When the rolling-restart gate is resumed, continue with the focused
-`startup_active_gate_owner / snapshot_coverage` successor using
-`test-output/reports/rolling-restart-after-workflow-progress-pending-coordination-gate-20260516.report.json`.
+When the rolling-restart gate is resumed, restart from fixture-first proof
+rather than another broad harness rerun. The next package must freeze or refresh
+the priority-recovery residual into a compact replayable fixture before any new
+runtime owner-boundary slice starts.
 
 ## Exit Condition
 
@@ -202,5 +203,5 @@ canonical owner-boundary evidence.
 Next continuation package:
 
 ```text
-work/packages/done-20260516-startup-active-gate-admin-snapshot-timeout-after-priority-recovery.md
+work/packages/active-20260513-priority-recovery-current-artifact-fixture-and-burndown.md
 ```

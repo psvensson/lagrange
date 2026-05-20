@@ -1,0 +1,57 @@
+{
+  "scenarios": [
+    {
+      "scenario": "rolling-restart",
+      "summary": {
+        "dominantReason": "priority_recovery_progress_blocked",
+        "failureClass": "priority_recovery_progress_blocked"
+      },
+      "publicationConvergence": {
+        "publicationStatus": "OPEN",
+        "pendingAckCount": 0,
+        "missingPublishedCount": 1,
+        "publicationPending": true,
+        "recoveryProtocolState": "publication_pending",
+        "priorityRecoveryProgressSummary": {
+          "topologyOperatorWitness": {
+            "operatorId": "operation-1",
+            "kind": "REPLACE",
+            "currentStepId": "dispatch_pending",
+            "currentStepState": "planned",
+            "nextAction": "advance_existing_operation"
+          }
+        },
+        "priorityRecoveryPartitionWitnesses": [
+          {
+            "partitionId": "control_plane_publications-p1",
+            "semanticStateId": "coordination_mismatch",
+            "currentOwner": "operation_workflow_owner",
+            "blockingBoundary": "workflow_progress",
+            "waitMode": "event_driven",
+            "nextRequiredAction": "advance_existing_operation",
+            "actuationState": "persisted_not_dispatched",
+            "operationIds": [
+              "operation-1"
+            ],
+            "progressClassIds": [
+              "operation_created_but_no_step_transitions"
+            ],
+            "blockerReasonCodes": [
+              "operation_created_but_no_step_transitions"
+            ]
+          }
+        ],
+        "activeGate": {
+          "state": "ready",
+          "ready": true,
+          "progress": {
+            "expectedNodeCount": 5,
+            "snapshotCoverageNodeCount": 5,
+            "snapshotCoverageComplete": true,
+            "selectedSnapshotRepairDeferred": false
+          }
+        }
+      }
+    }
+  ]
+}

@@ -15,6 +15,7 @@ const LANE_MECHANICAL_MAINTENANCE = 'mechanical-maintenance';
 const LANE_LIGHTWEIGHT_MAINTENANCE = 'lightweight-maintenance';
 const LANE_TEST_ONLY_PROOF = 'test-only-proof';
 const LANE_DIAGNOSTIC_CLASSIFICATION = 'diagnostic-classification';
+const LANE_EXPERIMENT = 'experiment';
 const LANE_BOUNDED_EXPERIMENT = 'bounded-experiment';
 const LANE_SINGLE_FILE_RUNTIME = 'single-file-runtime';
 const LANE_RUNTIME_OWNER_BOUNDARY = 'runtime-owner-boundary';
@@ -36,6 +37,7 @@ const MODEL_FIT_LIGHTWEIGHT_CLASS = 'bounded-implementation';
 const MODEL_FIT_MECHANICAL_CLASS = 'mechanical-maintenance';
 const MODEL_FIT_TEST_ONLY_CLASS = 'test-only-proof';
 const MODEL_FIT_DIAGNOSTIC_CLASS = 'diagnostic-classification';
+const MODEL_FIT_EXPERIMENT_CLASS = 'experiment';
 const MODEL_FIT_BOUNDED_EXPERIMENT_CLASS = 'bounded-experiment';
 const MODEL_FIT_SINGLE_FILE_RUNTIME_CLASS = 'single-file-runtime';
 const MODEL_FIT_RUNTIME_CLASS = 'runtime-owner-boundary';
@@ -136,8 +138,47 @@ const CLASSIFICATION_EFFICIENCY_SUCCESSOR_ACTIONS = Object.freeze([
   'present-human-gate',
   'rerun-representative-evidence',
 ]);
+const OBSERVABLE_PREDICTION_FIELD = 'observablePrediction';
+const OBSERVABLE_PREDICTION_METRIC_FIELD = 'metric';
+const OBSERVABLE_PREDICTION_PREDICTED_FIELD = 'predicted';
+const OBSERVABLE_PREDICTION_OBSERVED_FIELD = 'observed';
+const OBSERVABLE_PREDICTION_ACCURACY_FIELD = 'accuracy';
+const OBSERVABLE_PREDICTION_EVIDENCE_FIELD = 'evidence';
+const OBSERVABLE_PREDICTION_METRIC_DELTA_FIELD = 'metricDelta';
+const OBSERVABLE_PREDICTION_FIELDS = Object.freeze([
+  OBSERVABLE_PREDICTION_METRIC_FIELD,
+  OBSERVABLE_PREDICTION_PREDICTED_FIELD,
+  OBSERVABLE_PREDICTION_OBSERVED_FIELD,
+  OBSERVABLE_PREDICTION_ACCURACY_FIELD,
+  OBSERVABLE_PREDICTION_EVIDENCE_FIELD,
+  OBSERVABLE_PREDICTION_METRIC_DELTA_FIELD,
+]);
+const EXPERIMENT_OUTCOME_FIELD = 'experimentOutcome';
+const EXPERIMENT_OUTCOME_DISTINGUISHED_HYPOTHESIS_FIELD =
+  'distinguishedHypothesis';
+const EXPERIMENT_OUTCOME_DECISION_FIELD = 'decision';
+const EXPERIMENT_OUTCOME_NEXT_OWNER_FIELD = 'nextOwner';
+const EXPERIMENT_OUTCOME_NEXT_BOUNDARY_FIELD = 'nextBoundary';
+const EXPERIMENT_OUTCOME_EVIDENCE_FIELD = 'evidence';
+const EXPERIMENT_OUTCOME_FIELDS = Object.freeze([
+  EXPERIMENT_OUTCOME_DISTINGUISHED_HYPOTHESIS_FIELD,
+  EXPERIMENT_OUTCOME_DECISION_FIELD,
+  EXPERIMENT_OUTCOME_NEXT_OWNER_FIELD,
+  EXPERIMENT_OUTCOME_NEXT_BOUNDARY_FIELD,
+  EXPERIMENT_OUTCOME_EVIDENCE_FIELD,
+]);
+const REQUIRED_PRE_IMPL_PROBE_FIELD = 'requiredPreImplProbe';
+const REQUIRED_PRE_IMPL_PROBE_COMMAND_FIELD = 'command';
+const REQUIRED_PRE_IMPL_PROBE_ARTIFACT_FIELD = 'artifact';
+const REQUIRED_PRE_IMPL_PROBE_REASON_FIELD = 'reason';
+const REQUIRED_PRE_IMPL_PROBE_FIELDS = Object.freeze([
+  REQUIRED_PRE_IMPL_PROBE_COMMAND_FIELD,
+  REQUIRED_PRE_IMPL_PROBE_ARTIFACT_FIELD,
+  REQUIRED_PRE_IMPL_PROBE_REASON_FIELD,
+]);
 const BOUNDED_EXPERIMENT_FIELD = 'boundedExperiment';
 const BOUNDED_EXPERIMENT_HYPOTHESIS_FIELD = 'hypothesis';
+const BOUNDED_EXPERIMENT_DISCRIMINATOR_FIELD = 'hypothesisDiscriminator';
 const BOUNDED_EXPERIMENT_EXPECTED_METRIC_FIELD = 'expectedMetric';
 const BOUNDED_EXPERIMENT_INHERITS_FROM_FIELD = 'inheritsFrom';
 const BOUNDED_EXPERIMENT_TIMEBOX_FIELD = 'timebox';
@@ -145,6 +186,7 @@ const BOUNDED_EXPERIMENT_MERGE_REQUIREMENT_FIELD = 'mergeRequirement';
 const BOUNDED_EXPERIMENT_KILL_RULE_FIELD = 'killRule';
 const BOUNDED_EXPERIMENT_FIELDS = Object.freeze([
   BOUNDED_EXPERIMENT_HYPOTHESIS_FIELD,
+  BOUNDED_EXPERIMENT_DISCRIMINATOR_FIELD,
   BOUNDED_EXPERIMENT_EXPECTED_METRIC_FIELD,
   BOUNDED_EXPERIMENT_INHERITS_FROM_FIELD,
   BOUNDED_EXPERIMENT_TIMEBOX_FIELD,
@@ -188,6 +230,7 @@ const LOWER_MODEL_WORKFLOW_LANES = Object.freeze([
   LANE_MECHANICAL_MAINTENANCE,
   LANE_LIGHTWEIGHT_MAINTENANCE,
   LANE_TEST_ONLY_PROOF,
+  LANE_EXPERIMENT,
   LANE_BOUNDED_EXPERIMENT,
   LANE_SINGLE_FILE_RUNTIME,
   LANE_FAST_SPIKE,
@@ -197,6 +240,7 @@ const SPARK_SAFE_WORKFLOW_LANES = Object.freeze([
   LANE_MECHANICAL_MAINTENANCE,
   LANE_LIGHTWEIGHT_MAINTENANCE,
   LANE_TEST_ONLY_PROOF,
+  LANE_EXPERIMENT,
   LANE_BOUNDED_EXPERIMENT,
   LANE_FAST_SPIKE,
 ]);
@@ -246,6 +290,7 @@ const WORKFLOW_LANES = Object.freeze([
   LANE_LIGHTWEIGHT_MAINTENANCE,
   LANE_TEST_ONLY_PROOF,
   LANE_DIAGNOSTIC_CLASSIFICATION,
+  LANE_EXPERIMENT,
   LANE_BOUNDED_EXPERIMENT,
   LANE_SINGLE_FILE_RUNTIME,
   LANE_RUNTIME_OWNER_BOUNDARY,
@@ -260,6 +305,7 @@ const SUBAGENT_OPTIONAL_LANES = Object.freeze([
   LANE_LIGHTWEIGHT_MAINTENANCE,
   LANE_TEST_ONLY_PROOF,
   LANE_DIAGNOSTIC_CLASSIFICATION,
+  LANE_EXPERIMENT,
   LANE_BOUNDED_EXPERIMENT,
   LANE_SINGLE_FILE_RUNTIME,
   LANE_FAST_SPIKE,
@@ -420,6 +466,12 @@ const DEFAULT_MODEL_FIT_BY_LANE = Object.freeze({
     scopeShape: MODEL_FIT_DIAGNOSTIC_SCOPE,
     outputProfile: OUTPUT_PROFILE_MEDIUM,
   }),
+  [LANE_EXPERIMENT]: Object.freeze({
+    packageClass: MODEL_FIT_EXPERIMENT_CLASS,
+    intendedMinimumModel: MODEL_FIT_SPARK_MODEL,
+    scopeShape: MODEL_FIT_BOUNDED_EXPERIMENT_SCOPE,
+    outputProfile: OUTPUT_PROFILE_MEDIUM,
+  }),
   [LANE_BOUNDED_EXPERIMENT]: Object.freeze({
     packageClass: MODEL_FIT_BOUNDED_EXPERIMENT_CLASS,
     intendedMinimumModel: MODEL_FIT_SPARK_MODEL,
@@ -542,6 +594,7 @@ function renderSchemaReference() {
     EMPTY_TEXT,
     `- \`${LANE_MECHANICAL_MAINTENANCE}\` -> \`${MODEL_FIT_SPARK_MODEL}\` for docs/templates/schema/mechanical metadata edits.`,
     `- \`${LANE_TEST_ONLY_PROOF}\` -> \`${MODEL_FIT_SPARK_MODEL}\` for test-only evidence without runtime behavior changes.`,
+    `- \`${LANE_EXPERIMENT}\` -> \`${MODEL_FIT_SPARK_MODEL}\` for probe packages whose success criterion is information, not metric movement.`,
     `- \`${LANE_BOUNDED_EXPERIMENT}\` -> \`${MODEL_FIT_SPARK_MODEL}\` for one inherited-owner hypothesis with proof-gated merge.`,
     `- \`${LANE_SINGLE_FILE_RUNTIME}\` -> \`${MODEL_FIT_54_MODEL}\` for one preselected runtime file with core logic and focused proof.`,
     `- Cross-owner runtime, scenario release gates, and architecture route decisions stay on \`${MODEL_FIT_DEFAULT_FRONTIER_MODEL}\` or stronger.`,
@@ -615,9 +668,39 @@ function renderSchemaReference() {
     EMPTY_TEXT,
     renderEnumList(CLASSIFICATION_EFFICIENCY_SUCCESSOR_ACTIONS),
     EMPTY_TEXT,
+    '## Observable Prediction',
+    EMPTY_TEXT,
+    `- Metadata field: \`${OBSERVABLE_PREDICTION_FIELD}\``,
+    '- Purpose: pre-register a falsifiable numeric/state prediction before the probe or representative run, then record observed result and accuracy at closure.',
+    '- Optional numeric movement: `metricDelta` records representative metric points moved when the package can measure them; package-cost reporting falls back to movement classification when it is absent.',
+    EMPTY_TEXT,
+    'Fields:',
+    EMPTY_TEXT,
+    renderEnumList(OBSERVABLE_PREDICTION_FIELDS),
+    EMPTY_TEXT,
+    '## Experiment Outcome',
+    EMPTY_TEXT,
+    `- Metadata field: \`${EXPERIMENT_OUTCOME_FIELD}\``,
+    '- Purpose: close an experiment by recording the hypothesis that was distinguished, or an explicit evidence-incomplete decision.',
+    EMPTY_TEXT,
+    'Fields:',
+    EMPTY_TEXT,
+    renderEnumList(EXPERIMENT_OUTCOME_FIELDS),
+    EMPTY_TEXT,
+    '## Required Pre-Implementation Probe',
+    EMPTY_TEXT,
+    `- Metadata field: \`${REQUIRED_PRE_IMPL_PROBE_FIELD}\``,
+    '- Purpose: require runtime source packages to cite a fixture or focused probe before pre-implementation validation passes.',
+    '- Scenario packages may also use `scenarioCausalClosure.boundedProgressProofArtifact` with `missingCausalEdgeProbe` for the same requirement.',
+    EMPTY_TEXT,
+    'Fields:',
+    EMPTY_TEXT,
+    renderEnumList(REQUIRED_PRE_IMPL_PROBE_FIELDS),
+    EMPTY_TEXT,
     '## Bounded Experiment Lane',
     EMPTY_TEXT,
     `- Workflow lane: \`${LANE_BOUNDED_EXPERIMENT}\``,
+    `- First-class probe lane: \`${LANE_EXPERIMENT}\``,
     `- Metadata field: \`${BOUNDED_EXPERIMENT_FIELD}\``,
     '- Purpose: same-owner or tightly bounded hypothesis-driven implementation slices that inherit context and merge only after proof.',
     '- Subagent sequencing is optional before implementation; runtime changes still need focused proof and post-hoc review before merge when required by the package.',
@@ -745,6 +828,14 @@ export {
   CLASSIFICATION_EFFICIENCY_SEPARATE_PACKAGE_REASONS,
   CLASSIFICATION_EFFICIENCY_SUCCESSOR_ACTION_FIELD,
   CLASSIFICATION_EFFICIENCY_SUCCESSOR_ACTIONS,
+  EXPERIMENT_OUTCOME_DECISION_FIELD,
+  EXPERIMENT_OUTCOME_DISTINGUISHED_HYPOTHESIS_FIELD,
+  EXPERIMENT_OUTCOME_EVIDENCE_FIELD,
+  EXPERIMENT_OUTCOME_FIELD,
+  EXPERIMENT_OUTCOME_FIELDS,
+  EXPERIMENT_OUTCOME_NEXT_BOUNDARY_FIELD,
+  EXPERIMENT_OUTCOME_NEXT_OWNER_FIELD,
+  BOUNDED_EXPERIMENT_DISCRIMINATOR_FIELD,
   BOUNDED_EXPERIMENT_EXPECTED_METRIC_FIELD,
   BOUNDED_EXPERIMENT_FIELD,
   BOUNDED_EXPERIMENT_FIELDS,
@@ -760,6 +851,7 @@ export {
   LANE_CAUSAL_ESCALATION,
   LANE_BOUNDED_EXPERIMENT,
   LANE_DIAGNOSTIC_CLASSIFICATION,
+  LANE_EXPERIMENT,
   LANE_LIGHTWEIGHT_MAINTENANCE,
   LANE_READ_REVIEW_DOC_ONLY,
   LANE_RUNTIME_OWNER_BOUNDARY,
@@ -781,6 +873,14 @@ export {
   MODEL_FIT_SPLIT_SAFE_TO_EXECUTE_WHEN_FIELD,
   MODEL_FIT_SPLIT_SPLIT_TRIGGERS_FIELD,
   MODEL_FIT_SPLIT_TARGET_MODEL_FIELD,
+  OBSERVABLE_PREDICTION_ACCURACY_FIELD,
+  OBSERVABLE_PREDICTION_EVIDENCE_FIELD,
+  OBSERVABLE_PREDICTION_FIELD,
+  OBSERVABLE_PREDICTION_FIELDS,
+  OBSERVABLE_PREDICTION_METRIC_DELTA_FIELD,
+  OBSERVABLE_PREDICTION_METRIC_FIELD,
+  OBSERVABLE_PREDICTION_OBSERVED_FIELD,
+  OBSERVABLE_PREDICTION_PREDICTED_FIELD,
   OUTPUT_PROFILE_MEDIUM,
   RERUN_DECISION_CAUSAL_OUTCOME_FIELD,
   RERUN_DECISION_EXPECTED_DELTA_FIELD,
@@ -793,6 +893,11 @@ export {
   RERUN_DECISION_ROUTE_OWNER_FIELD,
   RERUN_DECISION_SOURCE_ARTIFACT_FIELD,
   RERUN_DECISION_STOP_MODE_FIELD,
+  REQUIRED_PRE_IMPL_PROBE_ARTIFACT_FIELD,
+  REQUIRED_PRE_IMPL_PROBE_COMMAND_FIELD,
+  REQUIRED_PRE_IMPL_PROBE_FIELD,
+  REQUIRED_PRE_IMPL_PROBE_FIELDS,
+  REQUIRED_PRE_IMPL_PROBE_REASON_FIELD,
   OWNER_BOUNDARY_MIGRATION_PROOF_EVIDENCE_FIELD,
   OWNER_BOUNDARY_MIGRATION_PROOF_FIELD,
   OWNER_BOUNDARY_MIGRATION_PROOF_FIELDS,

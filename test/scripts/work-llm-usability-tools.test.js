@@ -13,6 +13,10 @@ import {
 import {buildLlmStartLines} from '../../scripts/work-llm-start.js';
 import {buildScenarioRouteSummary} from '../../scripts/work-scenario-route.js';
 import {buildScenarioTriageSummary} from '../../scripts/work-scenario-triage.js';
+import {
+  renderPackageCostSummary,
+  summarizePackageCost,
+} from '../../scripts/work-package-cost.js';
 import {renderSchemaReference} from '../../scripts/work-package-schema.js';
 
 const TEMP_ROOT = 'test-output/work-llm-usability-tools';
@@ -60,6 +64,7 @@ test('shared package schema lists validator enums for LLM scaffolding', (t) => {
   t.match(rendered, /mechanical-maintenance/u);
   t.match(rendered, /test-only-proof/u);
   t.match(rendered, /diagnostic-classification/u);
+  t.match(rendered, /experiment/u);
   t.match(rendered, /bounded-experiment/u);
   t.match(rendered, /single-file-runtime/u);
   t.match(rendered, /Model-Fit Package Splitter/u);
@@ -97,6 +102,12 @@ test('shared package schema lists validator enums for LLM scaffolding', (t) => {
   t.match(rendered, /rerunDecision/u);
   t.match(rendered, /Classification Efficiency/u);
   t.match(rendered, /classificationEfficiency/u);
+  t.match(rendered, /Observable Prediction/u);
+  t.match(rendered, /observablePrediction/u);
+  t.match(rendered, /accuracy/u);
+  t.match(rendered, /Experiment Outcome/u);
+  t.match(rendered, /experimentOutcome/u);
+  t.match(rendered, /distinguishedHypothesis/u);
   t.match(rendered, /inline-gate-default/u);
   t.match(rendered, /open-runtime-owner-boundary/u);
   t.match(rendered, /Bounded Experiment Lane/u);
@@ -221,6 +232,8 @@ test('package scaffolder creates bounded experiment packages with inherited cont
       'next-action': 'Test one owner wake mechanism.',
       'hypothesis':
         'Explicit owner wake clears the last pending publication reconcile.',
+      'hypothesis-discriminator':
+        'H1 predicts pendingReconcileCount=0; H2 predicts pendingReconcileCount remains 1; H3 predicts fixture divergence.',
       'expected-metric': 'pendingReconcileCount=1 -> 0',
       'inherits': 'work/packages/active-predecessor.md',
       'validation-tier': 'single-owner',
@@ -236,16 +249,52 @@ test('package scaffolder creates bounded experiment packages with inherited cont
     t.match(content, /"lane": "bounded-experiment"/u);
     t.match(content, /"boundedExperiment": \{/u);
     t.match(content, /"hypothesis": "Explicit owner wake/u);
+    t.match(content, /"hypothesisDiscriminator": "H1 predicts/u);
     t.match(content, /"expectedMetric": "pendingReconcileCount=1 -> 0"/u);
+    t.match(content, /"observablePrediction": \{/u);
+    t.match(content, /"predicted": "pendingReconcileCount=1 -> 0"/u);
+    t.match(content, /"accuracy": "pending-before-observation"/u);
     t.match(content, /"inheritsFrom": "work\/packages\/active-predecessor\.md"/u);
     t.match(content, /"validationTier": "single-owner"/u);
     t.match(content, /"inheritsContext": \{/u);
     t.match(content, /"forbiddenScope": true/u);
     t.match(content, /## Bounded Experiment/u);
+    t.match(content, /## Observable Prediction/u);
     t.match(content, /Merge requirement: focused test plus canonical route or evidence command/u);
     t.notMatch(content, /## Causal Decision Contract/u);
     t.notMatch(content, /## Decision Experiment Gate/u);
     t.match(content, /Subagent sequencing is optional/u);
+  });
+
+test('package scaffolder creates information-first experiment packages',
+  async (t) => {
+    const content = await buildPackageContent({
+      'title': 'Publication Handoff Probe',
+      'slug': 'publication-handoff-probe',
+      'lane': 'experiment',
+      'owner': 'topology_publication_owner',
+      'boundary': 'publication_active_gate_handoff',
+      'dominant-reason': 'frontier_oscillation',
+      'next-action': 'Distinguish owner handoff hypotheses.',
+      'hypothesis': 'The missing edge is publication freshness, not active-gate selection.',
+      'hypothesis-discriminator':
+        'H1 predicts publicationRevision advances before active gate; H2 predicts active gate sees stale revision; H3 predicts fixture replay divergence.',
+      'expected-metric':
+        'publicationRevision=fresh vs activeGateRevision=stale',
+      'proof': [
+        'npm test -- test/control-plane/publication-active-gate-handoff.test.js',
+      ],
+      'write-scope': [
+        'test/control-plane/publication-active-gate-handoff.test.js',
+      ],
+      'ledger': TEMP_LEDGER_PATH,
+    });
+
+    t.match(content, /"lane": "experiment"/u);
+    t.match(content, /"packageClass": "experiment"/u);
+    t.match(content, /"hypothesisDiscriminator": "H1 predicts/u);
+    t.match(content, /## Observable Prediction/u);
+    t.match(content, /success criterion is information/u);
   });
 
 test('package scaffolder creates lower-model execution package shapes',
@@ -314,6 +363,43 @@ test('package scaffolder creates lower-model execution package shapes',
     t.match(singleRuntime, /## Core Logic Brief/u);
     t.match(singleRuntime, /one preselected runtime file/u);
   });
+
+test('package cost summary reports movement and prediction accuracy', (t) => {
+  const summary = summarizePackageCost([
+    {
+      metadata: {
+        lane: 'runtime-owner-boundary',
+        owner: 'operation_workflow_owner',
+        boundary: 'workflow_progress',
+        scenarioCausalClosure: {resultClassification: 'reduced'},
+        observablePrediction: {accuracy: 'matched', metricDelta: 0.5},
+      },
+    },
+    {
+      metadata: {
+        lane: 'runtime-owner-boundary',
+        owner: 'operation_workflow_owner',
+        boundary: 'workflow_progress',
+        scenarioCausalClosure: {resultClassification: 'same-frontier'},
+        observablePrediction: {accuracy: 'missed'},
+      },
+    },
+  ]);
+  const rendered = renderPackageCostSummary(summary);
+
+  t.equal(summary.totalDonePackages, 2);
+  t.equal(summary.movementPackages, 1);
+  t.equal(summary.totalNumericMovementPoints, 0.5);
+  t.match(rendered, /Packages per movement-classified package: 2\.00/u);
+  t.match(rendered, /Packages per numeric representative point moved: 4\.00/u);
+  t.match(rendered, /Observable predictions matched: 1/u);
+  t.match(rendered, /`same-frontier`: 1/u);
+  t.match(rendered, /## Owner Boundary Cost/u);
+  t.match(rendered, /`operation_workflow_owner \/ workflow_progress`: total=2/u);
+  t.match(rendered, /numericPoints=0\.5/u);
+  t.match(rendered, /## High-Cost Frontiers/u);
+  t.end();
+});
 
 test('review subagent prompt caps review commands before runtime proof',
   async (t) => {
