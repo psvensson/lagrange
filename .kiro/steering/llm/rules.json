@@ -469,7 +469,7 @@
       "sources": [
         {
           "file": "runtime-contracts.md",
-          "line": 223,
+          "line": 227,
           "section": "Runtime Contracts Detail > Deterministic Control-Plane Progression"
         }
       ]
@@ -487,7 +487,7 @@
       "sources": [
         {
           "file": "runtime-contracts.md",
-          "line": 228,
+          "line": 232,
           "section": "Runtime Contracts Detail > Deterministic Control-Plane Progression"
         }
       ]
@@ -504,7 +504,7 @@
       "sources": [
         {
           "file": "runtime-contracts.md",
-          "line": 266,
+          "line": 270,
           "section": "Runtime Contracts Detail > Admission, Readiness, And Multi-Signal Decisions"
         }
       ]
@@ -519,7 +519,7 @@
       "sources": [
         {
           "file": "runtime-contracts.md",
-          "line": 281,
+          "line": 285,
           "section": "Runtime Contracts Detail > Admission, Readiness, And Multi-Signal Decisions"
         }
       ]
@@ -1160,7 +1160,7 @@
       "sources": [
         {
           "file": "runtime-contracts.md",
-          "line": 350,
+          "line": 354,
           "section": "Runtime Contracts Detail > Query Routing And Transport"
         }
       ]
@@ -2307,7 +2307,7 @@
       "sources": [
         {
           "file": "runtime-contracts.md",
-          "line": 325,
+          "line": 329,
           "section": "Runtime Contracts Detail > Pressure, Backpressure, And Resource Lifetime"
         }
       ]
@@ -2322,7 +2322,7 @@
       "sources": [
         {
           "file": "runtime-contracts.md",
-          "line": 372,
+          "line": 376,
           "section": "Runtime Contracts Detail > Idempotency"
         }
       ]
@@ -5128,5 +5128,5 @@
       ]
     }
   ],
-  "generatedAt": "2026-05-18T18:36:33.350Z"
+  "generatedAt": "2026-05-20T03:54:47.771Z"
 }

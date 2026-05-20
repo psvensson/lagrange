@@ -132,22 +132,22 @@ Historical state from that earlier rerun:
 ## Current Edge Card
 
 ```text
-Representative artifact: test-output/reports/rolling-restart-after-handoff-owner-outcome-20260519T193101Z.report.json
-Visible first frontier: publication_ack_convergence / topology_publication_owner / publication_convergence / publication_pending in test-output/report.json.
-Active package: work/packages/active-20260519-topology-publication-active-gate-handoff-owner-outcome-runtime.md
-Active package owner: topology_publication_owner
-Active package boundary: publication_convergence
-Selected cause: publication_pending
-Required action: Close this owner-outcome source projection package as reduced, then continue with a bounded publication-owner successor for the remaining unpublished_observation / no_revision / not_started producer state before any downstream active-gate/readiness edits.
-Representative status: red
-Causal outcome: continue_local_fix
-Architecture gate: selected / publication-owner-outcome-runtime-successor
-Expected delta: Fresh representative diagnostics carry a typed membershipPublicationHandoffOutcome owner result from the publication owner instead of relying on synthesized analyzer fallback; remaining producer state is unpublished_observation / no_revision / not_started.
-Current state: Fresh rolling-restart evidence confirms the source report now carries membershipPublicationHandoffOutcomeState=write_deferred / owner_reconcile_pending for the active-gate handoff. The representative route remains publication_ack_convergence / topology_publication_owner / publication_convergence / publication_pending with producer state unpublished_observation, no_revision, and not_started owner outcomes.
-Allowed edits: work/packages/active-20260519-topology-publication-active-gate-handoff-owner-outcome-runtime.md, work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md, work/sprints/current-blocker.md, work/sprints/current-blocker.json, work/model-ledger.jsonl, src/admin/admin-control-snapshot-class-part-6.js, src/admin/admin-control-snapshot-class-part-1.js, test/scripts/analyze-topology-convergence.test.js, test/admin/admin-control-snapshot-active-gate-handoff-target-blocked.test.js
-Candidate runtime files: src/admin/admin-control-snapshot-class-part-6.js, src/admin/admin-control-snapshot-class-part-1.js
-Forbidden edits: The publication owner emits one typed handoff or owner outcome; downstream startup active-gate, readiness, operation workflow, admission, and timeout paths must not reinterpret absent source diagnostics.
-Required latest proof: npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-handoff-owner-outcome-20260519T193101Z.report.json --handoff-probe, node --test test/scripts/analyze-topology-convergence.test.js, node --test test/admin/admin-control-snapshot-active-gate-handoff-target-blocked.test.js, npm run work:evidence-summary -- test-output/reports/rolling-restart-after-handoff-owner-outcome-20260519T193101Z.report.json, npm run work:scenario-triage -- test-output/reports/rolling-restart-after-handoff-owner-outcome-20260519T193101Z.report.json --markdown
+Representative artifact: none
+Visible first frontier: unknown
+Active package: work/packages/active-20260520-topology-epoch-fencing-recovery-preemption.md
+Active package owner: control-plane
+Active package boundary: publication-recovery
+Selected cause: System-wide topology epoch preemption implementation
+Required action: Implement topology epoch fencer and recovery lease preemption rules in control-plane
+Representative status: unknown
+Causal outcome: unknown
+Architecture gate: not-required / unknown
+Expected delta: unknown
+Current state: New package scaffolded from the shared work-package schema.
+Allowed edits: src/control-plane/publication-recovery-evidence.js, test/control-plane/publication-recovery-evidence.test.js
+Candidate runtime files: src/control-plane/publication-recovery-evidence.js
+Forbidden edits: owned files expand beyond this package, a frozen decision must be reopened
+Required latest proof: node --test test/control-plane/publication-recovery-evidence.test.js
 Allowed stop modes: representative-green, migrated, reduced, same-frontier, classification-only, architecture-gap, human-escalation
 ```
 

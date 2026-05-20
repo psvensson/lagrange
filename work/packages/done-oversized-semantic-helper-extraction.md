@@ -3,7 +3,7 @@
 <!-- work-package
 {
   "schema": "work-package-v1",
-  "status": "active",
+  "status": "done",
   "opened": "2026-05-19",
   "lane": "lightweight-maintenance",
   "scenario": "none",
@@ -108,7 +108,9 @@
       "gpt-5.3-codex-spark extracts the priority recovery visibility decision helper from the unified rebalancer boundary",
       "parent updates oversized workflow tooling so future package/helper names require semantic concerns and no digit characters"
     ]
-  }
+  },
+  "closed": "2026-05-19",
+  "commitAndPushLedgerRequired": true
 }
 -->
 
@@ -233,7 +235,7 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 - Forbidden files: everything outside the exact batch-owned files.
 - Frozen decisions: package scope and lane stay bounded unless explicitly escalated.
 - Escalation triggers: owned files expand beyond this package, runtime ownership changes, or representative scenario evidence changes.
-- Focused proof: `npm run audit:owner-boundary-segments -- ...`, `node --check ...`, `npx eslint ...`, `npm test -- ...`, `npm run audit:runtime-grammar:file -- ...`, `node scripts/check-guideline-decision-boundaries.js ...`, `npm run work:validate -- --entry work/packages/active-oversized-semantic-helper-extraction.md`, `npm run work:validate -- --pre-impl work/packages/active-oversized-semantic-helper-extraction.md`, and scoped `git diff --check`.
+- Focused proof: `npm run audit:owner-boundary-segments -- ...`, `node --check ...`, `npx eslint ...`, `npm test -- ...`, `npm run audit:runtime-grammar:file -- ...`, `node scripts/check-guideline-decision-boundaries.js ...`, `npm run work:validate -- --entry work/packages/done-oversized-semantic-helper-extraction.md`, `npm run work:validate -- --pre-impl work/packages/done-oversized-semantic-helper-extraction.md`, and scoped `git diff --check`.
 - Model ledger advisory: `escalate`
 
 ## Model-Fit Split

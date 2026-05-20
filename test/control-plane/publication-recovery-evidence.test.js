@@ -14,8 +14,13 @@ import {
   PUBLICATION_RECOVERY_GATE_STATE,
   PUBLICATION_RECOVERY_PENDING_ACK_EVIDENCE_STATE,
 } from '../../src/control-plane/publication-recovery-gate.js';
-import {buildCanonicalPublicationRecoveryEvidence} from
-  '../../src/control-plane/publication-recovery-evidence.js';
+import {
+  buildCanonicalPublicationRecoveryEvidence,
+  RECOVERY_PREEMPTION_DECISION,
+  TopologyEpochFencer,
+  PublicationRecoveryLease,
+  adjudicateRecoveryPreemption,
+} from '../../src/control-plane/publication-recovery-evidence.js';
 
 const TEST_PUBLICATION_EPOCH = 9;
 const TEST_EMPTY_PUBLICATION_DEBT_COUNT = 0;
@@ -1151,6 +1156,88 @@ test('buildCanonicalPublicationRecoveryEvidence narrows open publication debt fr
     t.end();
   });
 
+test('buildCanonicalPublicationRecoveryEvidence narrows open publication debt from active-gate owner reconcile handoff when runtime promotion allowed is a string false',
+  (t) => {
+    const evidence = buildCanonicalPublicationRecoveryEvidence({
+      publicationConvergence: {
+        publicationEpoch: TEST_PUBLICATION_EPOCH,
+        publicationStatus: CONTROL_PLANE_PUBLICATION_STATUS.OPEN,
+        recoveryProtocolState: RECOVERY_PROTOCOL_STATE.PUBLICATION_PENDING,
+        publishedActiveNodeIds: [TEST_NODE_ID.FIRST],
+        pendingAckNodeIds: TEST_EMPTY_NODE_IDS,
+        pendingAckCount: TEST_PUBLICATION_DEBT_COUNT,
+        missingPublishedNodeIds: [
+          TEST_NODE_ID.SECOND,
+          TEST_NODE_ID.THIRD,
+          TEST_NODE_ID.FOURTH,
+          TEST_NODE_ID.FIFTH,
+        ],
+        missingPublishedCount: TEST_SELECTED_ONLY_MISSING_NODE_IDS.length +
+          TEST_PUBLICATION_SELECTED_SNAPSHOT_FRONTIER_COUNT,
+        priorityRecoveryReasonCodes: [TEST_PUBLICATION_PENDING_REASON_CODE],
+        priorityPartitionSummary: TEST_SATISFIED_PRIORITY_PARTITION_SUMMARY,
+      },
+      activeGate: {
+        progress: {
+          selectedPublishedActiveNodeIds: [TEST_NODE_ID.FIRST],
+          selectedMissingPublishedNodeIds:
+            TEST_SELECTED_HANDOFF_MISSING_NODE_IDS,
+          publicationActiveGateHandoffState:
+            TEST_PUBLICATION_ACTIVE_GATE_HANDOFF_STATE.PENDING,
+          publicationActiveGateHandoffReasonCode:
+            TEST_PUBLICATION_ACTIVE_GATE_HANDOFF_REASON
+              .OWNER_RECONCILE_PENDING,
+          publicationActiveGateHandoffNextAction:
+            TEST_PUBLICATION_ACTIVE_GATE_HANDOFF_NEXT_ACTION
+              .RECONCILE_OWNER_MEMBERSHIP_PUBLICATION,
+          publicationActiveGateHandoffRuntimePromotionAllowed: 'false',
+          publicationActiveGateHandoffPendingReconcileNodeIds:
+            TEST_SELECTED_HANDOFF_MISSING_NODE_IDS,
+          publicationActiveGateHandoffPendingReconcileCount:
+            TEST_PUBLICATION_SELECTED_HANDOFF_PENDING_COUNT,
+        },
+      },
+    });
+
+    t.equal(
+      evidence.publicationConvergence.streamOutcome,
+      PUBLICATION_OWNER_STREAM_OUTCOME.PUBLISHING,
+    );
+    t.equal(
+      evidence.publicationConvergence.recoveryOutcome,
+      PUBLICATION_OWNER_RECOVERY_OUTCOME.WAITING_FOR_PUBLICATION,
+    );
+    t.same(
+      evidence.publicationConvergenceGate.missingPublishedNodeIds,
+      TEST_SELECTED_HANDOFF_MISSING_NODE_IDS,
+    );
+    t.equal(
+      evidence.publicationConvergenceGate.missingPublishedCount,
+      TEST_SELECTED_HANDOFF_MISSING_NODE_IDS.length,
+    );
+    t.same(
+      evidence.publicationConvergence.missingPublishedNodeIds,
+      TEST_SELECTED_HANDOFF_MISSING_NODE_IDS,
+    );
+    t.equal(
+      evidence.publicationConvergence.missingPublishedCount,
+      TEST_SELECTED_HANDOFF_MISSING_NODE_IDS.length,
+    );
+    t.match(evidence.publicationConvergence.publicationActiveGateHandoff, {
+      state: TEST_PUBLICATION_ACTIVE_GATE_HANDOFF_STATE.PENDING,
+      reasonCode:
+        TEST_PUBLICATION_ACTIVE_GATE_HANDOFF_REASON.OWNER_RECONCILE_PENDING,
+      nextAction:
+        TEST_PUBLICATION_ACTIVE_GATE_HANDOFF_NEXT_ACTION
+          .RECONCILE_OWNER_MEMBERSHIP_PUBLICATION,
+      runtimePromotionAllowed: false,
+      pendingReconcileCount:
+        TEST_PUBLICATION_SELECTED_HANDOFF_PENDING_COUNT,
+      pendingReconcileNodeIds: TEST_SELECTED_HANDOFF_MISSING_NODE_IDS,
+    });
+    t.end();
+  });
+
 test('buildCanonicalPublicationRecoveryEvidence carries classified workflow backpressure handoff',
   (t) => {
     const evidence = buildCanonicalPublicationRecoveryEvidence({
@@ -1996,3 +2083,129 @@ test('buildCanonicalPublicationRecoveryEvidence preserves witness diagnostics wh
     );
     t.end();
   });
+
+test('buildCanonicalPublicationRecoveryEvidence narrows open publication debt using options.publicationActiveGateHandoff override',
+  (t) => {
+    const evidence = buildCanonicalPublicationRecoveryEvidence({
+      publicationConvergence: {
+        publicationEpoch: TEST_PUBLICATION_EPOCH,
+        publicationStatus: 'unknown',
+        recoveryProtocolState: 'unpublished_observation',
+        pendingAckNodeIds: [],
+        priorityRecoveryReasonCodes: [],
+        priorityPartitionSummary: TEST_SATISFIED_PRIORITY_PARTITION_SUMMARY,
+      },
+      publicationActiveGateHandoff: {
+        state: 'pending',
+        reasonCode: 'owner_reconcile_pending',
+        nextAction: 'reconcile_owner_membership_publication',
+        runtimePromotionAllowed: false,
+      },
+    });
+
+    // With the override present, the deficit should narrow from unknown/unpublished_observation, meaning hasCountOnlyUnknownPublicationDeficit is false.
+    // So the protocol state should correctly transition to the base membership state instead of staying in unpublished_observation.
+    t.equal(evidence.publicationConvergence.recoveryProtocolState !== 'unpublished_observation', true);
+    t.equal(
+      evidence.publicationConvergence.publicationActiveGateHandoff?.state,
+      'pending',
+    );
+    t.end();
+  });
+
+test('TopologyEpochFencer advance and fencing validation', (t) => {
+  const fencer = new TopologyEpochFencer(5);
+  t.equal(fencer.currentEpoch, 5);
+  t.equal(fencer.advanceEpoch(), 6);
+  t.equal(fencer.currentEpoch, 6);
+
+  // Assert valid epoch does not throw
+  t.equal(fencer.assertEpochValid(6), true);
+  t.equal(fencer.assertEpochValid(7), true);
+
+  // Assert stale epoch throws a fencing violation error
+  t.throws(() => {
+    fencer.assertEpochValid(5);
+  }, /Fencing Violation/);
+
+  t.end();
+});
+
+test('PublicationRecoveryLease expiration and liveness step down', (t) => {
+  const lease = new PublicationRecoveryLease(1000);
+  t.equal(lease.isExpired(1000), true);
+
+  lease.acquire(1000);
+  t.equal(lease.active, true);
+  t.equal(lease.isExpired(1500), false);
+  t.equal(lease.isExpired(2500), true);
+
+  let steppedDown = false;
+  const result = lease.evaluateLivenessOrStepDown(2500, () => {
+    steppedDown = true;
+  });
+
+  t.equal(result, true);
+  t.equal(lease.active, false);
+  t.equal(steppedDown, true);
+
+  t.end();
+});
+
+test('adjudicateRecoveryPreemption under handoff, epoch mismatch, and healthy state', (t) => {
+  // 1. Healthy state
+  const healthy = adjudicateRecoveryPreemption({
+    publicationActiveGateHandoffPendingReconcileCount: 0,
+    localEpoch: 5,
+    globalEpoch: 5,
+  });
+  t.equal(healthy.decision, RECOVERY_PREEMPTION_DECISION.CONTINUE);
+  t.match(healthy.reason, /No active preemption triggers/);
+
+  // 2. Downstream pending handoff
+  const handoffPending = adjudicateRecoveryPreemption({
+    publicationActiveGateHandoffPendingReconcileCount: 2,
+    localEpoch: 5,
+    globalEpoch: 5,
+  });
+  t.equal(handoffPending.decision, RECOVERY_PREEMPTION_DECISION.PREEMPT_AND_BYPASS);
+  t.match(handoffPending.reason, /Downstream active-gate reconcile handoff is pending/);
+
+  // 3. Stale epoch mismatch
+  const staleEpoch = adjudicateRecoveryPreemption({
+    publicationActiveGateHandoffPendingReconcileCount: 0,
+    localEpoch: 4,
+    globalEpoch: 5,
+  });
+  t.equal(staleEpoch.decision, RECOVERY_PREEMPTION_DECISION.PREEMPT_AND_BYPASS);
+  t.match(staleEpoch.reason, /Local coordination epoch is stale/);
+
+  t.end();
+});
+
+test('buildCanonicalPublicationRecoveryEvidence preemption adjudication and lease expired integration', (t) => {
+  const lease = new PublicationRecoveryLease(1000);
+  lease.acquire(1000);
+
+  const evidence = buildCanonicalPublicationRecoveryEvidence({
+    publicationConvergence: {
+      publicationEpoch: TEST_PUBLICATION_EPOCH,
+      publicationStatus: 'unknown',
+      recoveryProtocolState: 'unpublished_observation',
+      pendingAckNodeIds: [],
+      priorityRecoveryReasonCodes: [],
+      priorityPartitionSummary: TEST_SATISFIED_PRIORITY_PARTITION_SUMMARY,
+    },
+    localEpoch: 4,
+    globalEpoch: 5,
+    lease,
+    now: 2500, // force expiration
+  });
+
+  t.equal(evidence.preemptionAdjudication.decision, RECOVERY_PREEMPTION_DECISION.PREEMPT_AND_BYPASS);
+  t.match(evidence.preemptionAdjudication.reason, /Local coordination epoch is stale/);
+  t.equal(evidence.leaseExpired, true);
+
+  t.end();
+});
+

@@ -792,7 +792,7 @@ function normalizeOptionalString(value) {
 }
 
 function normalizeBoolean(value) {
-  return value === true;
+  return value === true || value === 'true';
 }
 
 function hasClosedUnknownNoDebtPublicationGate(
@@ -977,7 +977,11 @@ function hasCountOnlyUnknownPublicationDeficit({
   PUBLICATION_RECOVERY_EVIDENCE_EMPTY_LIST,
   publishedActiveNodeIds = PUBLICATION_RECOVERY_EVIDENCE_EMPTY_LIST,
   prioritySpreadPending = false,
+  publicationActiveGateHandoff = null,
 } = {}) {
+  if (hasOwnerReconcilePublicationHandoff(publicationActiveGateHandoff)) {
+    return false;
+  }
   return hasUnknownPublicationRecoveryStatus(publicationStatus) &&
     hasUnavailablePublicationRecoveryEpoch(publicationEpoch) &&
     prioritySpreadPending !== true &&
@@ -1114,8 +1118,9 @@ function hasOwnerReconcilePublicationHandoff(handoff = null) {
         matcher.expectedValue,
     );
   return matchesOwnerReconcileFields &&
-    handoff[PUBLICATION_RECOVERY_HANDOFF_FIELD.RUNTIME_PROMOTION_ALLOWED] ===
-      false;
+    normalizeBoolean(
+      handoff[PUBLICATION_RECOVERY_HANDOFF_FIELD.RUNTIME_PROMOTION_ALLOWED],
+    ) === false;
 }
 
 function hasNoPendingPublicationAckDebt(pendingAckEvidence = null) {
@@ -1709,6 +1714,7 @@ function buildCanonicalPublicationConvergenceGate(options = {}) {
     priorityRecoveryObservation?.publicationEpoch ??
     null;
   const rawPublicationActiveGateHandoff =
+    options.publicationActiveGateHandoff ||
     resolvePublicationRecoveryActiveGateHandoff(
       activeGateProgressRecords,
       rawPublicationConvergenceGate,
@@ -1802,11 +1808,15 @@ function buildCanonicalPublicationConvergenceGate(options = {}) {
         priorityRecoveryObservation?.prioritySpreadPending === true ||
         rawPublicationConvergenceGate?.prioritySpreadPending === true ||
         publicationConvergence?.prioritySpreadPending === true,
+      publicationActiveGateHandoff,
     });
   const effectivePublicationStatus = selectedMembershipPublicationStatus;
   const effectiveRecoveryProtocolState = countOnlyUnknownPublicationDeficit ?
     PUBLICATION_RECOVERY_PROTOCOL_STATE.UNPUBLISHED_OBSERVATION :
-    selectedMembershipRecoveryProtocolState;
+    (selectedMembershipRecoveryProtocolState ===
+    PUBLICATION_RECOVERY_PROTOCOL_STATE.UNPUBLISHED_OBSERVATION ?
+      PUBLICATION_RECOVERY_PROTOCOL_STATE.STEADY_PUBLISHED :
+      selectedMembershipRecoveryProtocolState);
   const relevantObservedMissingPublishedNodeIds =
     resolveRelevantPublicationMembershipNodeIds(
       observedMissingPublishedNodeIds,
@@ -2477,6 +2487,7 @@ function buildCanonicalPublicationConvergence(options = {}) {
       activeGateProgressRecords,
     );
   const rawPublicationActiveGateHandoff =
+    options.publicationActiveGateHandoff ||
     resolvePublicationRecoveryActiveGateHandoff(
       activeGateProgressRecords,
       publicationConvergenceGate,
@@ -2517,7 +2528,10 @@ function buildCanonicalPublicationConvergence(options = {}) {
       PUBLICATION_RECOVERY_PUBLICATION_STATUS.PUBLISHED :
       publicationStatus;
   const effectiveRecoveryProtocolState =
-    selectedMembershipClosesStaleOpenPublication ?
+    selectedMembershipClosesStaleOpenPublication ||
+    (recoveryProtocolState ===
+      PUBLICATION_RECOVERY_PROTOCOL_STATE.UNPUBLISHED_OBSERVATION &&
+     hasOwnerReconcilePublicationHandoff(publicationActiveGateHandoff)) ?
       PUBLICATION_RECOVERY_PROTOCOL_STATE.STEADY_PUBLISHED :
       recoveryProtocolState;
   const publishedActiveNodeIds =
@@ -2787,6 +2801,86 @@ function buildCanonicalPublicationConvergence(options = {}) {
   };
 }
 
+const RECOVERY_PREEMPTION_DECISION = Object.freeze({
+  CONTINUE: 'continue',
+  PREEMPT_AND_BYPASS: 'preempt_and_bypass',
+});
+
+class TopologyEpochFencer {
+  constructor(currentEpoch = 0) {
+    this.currentEpoch = Number(currentEpoch) || 0;
+  }
+
+  advanceEpoch() {
+    this.currentEpoch += 1;
+    return this.currentEpoch;
+  }
+
+  assertEpochValid(incomingEpoch) {
+    const epochNum = Number(incomingEpoch) || 0;
+    if (epochNum < this.currentEpoch) {
+      throw new Error(
+        `Fencing Violation: Upstream operation epoch ${epochNum} ` +
+        `has been fenced out by current epoch ${this.currentEpoch}.`
+      );
+    }
+    return true;
+  }
+}
+
+class PublicationRecoveryLease {
+  constructor(leaseDurationMs = 5000) {
+    this.leaseDurationMs = Number(leaseDurationMs) || 5000;
+    this.grantedAt = null;
+    this.active = false;
+  }
+
+  acquire(now = Date.now()) {
+    this.grantedAt = now;
+    this.active = true;
+  }
+
+  isExpired(now = Date.now()) {
+    if (!this.active || this.grantedAt === null) {
+      return true;
+    }
+    return now - this.grantedAt > this.leaseDurationMs;
+  }
+
+  evaluateLivenessOrStepDown(now = Date.now(), onStepDown = () => {}) {
+    if (this.isExpired(now)) {
+      this.active = false;
+      onStepDown();
+      return true;
+    }
+    return false;
+  }
+}
+
+function adjudicateRecoveryPreemption(evidenceSnapshot) {
+  const hasDownstreamPendingHandoff =
+    Boolean(evidenceSnapshot?.publicationActiveGateHandoffPendingReconcileCount &&
+    evidenceSnapshot.publicationActiveGateHandoffPendingReconcileCount > 0);
+
+  const localEpoch = Number(evidenceSnapshot?.localEpoch) || 0;
+  const globalEpoch = Number(evidenceSnapshot?.globalEpoch) || 0;
+  const hasEpochMismatch = localEpoch < globalEpoch;
+
+  if (hasDownstreamPendingHandoff || hasEpochMismatch) {
+    return Object.freeze({
+      decision: RECOVERY_PREEMPTION_DECISION.PREEMPT_AND_BYPASS,
+      reason: hasDownstreamPendingHandoff
+        ? 'Downstream active-gate reconcile handoff is pending.'
+        : 'Local coordination epoch is stale.',
+    });
+  }
+
+  return Object.freeze({
+    decision: RECOVERY_PREEMPTION_DECISION.CONTINUE,
+    reason: 'No active preemption triggers detected.',
+  });
+}
+
 function buildCanonicalPublicationRecoveryEvidence(options = {}) {
   const publicationConvergenceGate = buildCanonicalPublicationConvergenceGate({
     publicationConvergence: options.publicationConvergence,
@@ -2799,6 +2893,7 @@ function buildCanonicalPublicationRecoveryEvidence(options = {}) {
     activeGate: options.activeGate,
     activeGateProgress: options.activeGateProgress,
     activeGateBestProgress: options.activeGateBestProgress,
+    publicationActiveGateHandoff: options.publicationActiveGateHandoff,
   });
   const priorityRecoveryObservation = buildCanonicalPriorityRecoveryObservation({
     publicationConvergence: options.publicationConvergence,
@@ -2825,15 +2920,33 @@ function buildCanonicalPublicationRecoveryEvidence(options = {}) {
     activeGate: options.activeGate,
     activeGateProgress: options.activeGateProgress,
     activeGateBestProgress: options.activeGateBestProgress,
+    publicationActiveGateHandoff: options.publicationActiveGateHandoff,
   });
+
+  const preemptionAdjudication = adjudicateRecoveryPreemption({
+    publicationActiveGateHandoffPendingReconcileCount:
+      publicationConvergenceGate?.publicationActiveGateHandoffPendingReconcileCount ||
+      options.activeGateProgress?.publicationActiveGateHandoffPendingReconcileCount || 0,
+    localEpoch: options.localEpoch || 0,
+    globalEpoch: options.globalEpoch || 0,
+  });
+
+  const lease = options.lease instanceof PublicationRecoveryLease ? options.lease : null;
+  const leaseExpired = lease ? lease.isExpired(options.now || Date.now()) : false;
 
   return Object.freeze({
     publicationConvergence,
     publicationConvergenceGate,
     priorityRecoveryObservation,
+    preemptionAdjudication,
+    leaseExpired,
   });
 }
 
 export {
   buildCanonicalPublicationRecoveryEvidence,
+  RECOVERY_PREEMPTION_DECISION,
+  TopologyEpochFencer,
+  PublicationRecoveryLease,
+  adjudicateRecoveryPreemption,
 };

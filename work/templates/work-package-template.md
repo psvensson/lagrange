@@ -312,6 +312,10 @@ sprint-specific mistakes that the next LLM must not repeat.
    unsatisfied.
 3. Do not widen timeout budgets or admission policy to mask a selected owner
    failure.
+4. Do not evaluate publication deficits or producer states in isolation from
+   active-gate reconcile handoffs, as doing so can hide structural deadlocks
+   during pressure restarts.
+
 
 ## Invariants
 
@@ -339,6 +343,7 @@ representative outcomes, scenario result classifications, and stop conditions.
 - Package class: `bounded-implementation`
 - Intended minimum model: `gpt-5.3-codex-spark`
 - Scope shape: `leaf-slice`
+- Ambiguity score: 1
 - Owned files: `path/to/owned-file`
 - Forbidden files: `src/runtime-or-other-forbidden-area`
 - Frozen decisions: decision that must not be reopened by this package
@@ -416,6 +421,8 @@ non-frontier with prose alone.
 - Missing causal edge:
 - Missing causal edge probe:
   name the focused command that proves or disproves the missing edge.
+- Falsifying probe:
+  name the focused npm test command to serve as the falsifying blocker probe in runtime lanes.
 - Bounded progress proof:
   name the focused wake/retry/timeout/reconcile/drain/dispatch/delivery/timer/
   advance/bounded mechanism.

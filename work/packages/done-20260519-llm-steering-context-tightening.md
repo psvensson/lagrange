@@ -3,7 +3,7 @@
 <!-- work-package
 {
   "schema": "work-package-v1",
-  "status": "active",
+  "status": "done",
   "opened": "2026-05-19",
   "lane": "lightweight-maintenance",
   "scenario": "none",
@@ -17,8 +17,8 @@
   "proof": [
     "npm test -- test/scripts/model-ledger.test.js test/scripts/work-context.test.js test/scripts/work-llm-usability-tools.test.js test/scripts/work-tracker-subagent-ledger.test.js test/scripts/analyze-topology-convergence.test.js",
     "npm run work:package:schema",
-    "npm run work:validate -- --entry work/packages/active-20260519-llm-steering-context-tightening.md",
-    "git diff --check -- AGENTS.md package.json scripts/analyze-topology-convergence.js scripts/model-ledger.js scripts/work-context.js scripts/work-llm-start.js scripts/work-package-new.js scripts/work-package-route-after-rerun.js scripts/work-package-schema.js scripts/work-subagent-next.js scripts/work-subagent-prompt.js scripts/work-tracker.js src/diagnostics/topology-convergence-graph.js test/scripts/analyze-topology-convergence.test.js test/scripts/model-ledger.test.js test/scripts/work-context.test.js test/scripts/work-llm-usability-tools.test.js test/scripts/work-tracker-subagent-ledger.test.js work/README.md work/packages/active-20260519-llm-steering-context-tightening.md work/templates/work-package-template.md"
+    "npm run work:validate -- --entry work/packages/done-20260519-llm-steering-context-tightening.md",
+    "git diff --check -- AGENTS.md package.json scripts/analyze-topology-convergence.js scripts/model-ledger.js scripts/work-context.js scripts/work-llm-start.js scripts/work-package-new.js scripts/work-package-route-after-rerun.js scripts/work-package-schema.js scripts/work-subagent-next.js scripts/work-subagent-prompt.js scripts/work-tracker.js src/diagnostics/topology-convergence-graph.js test/scripts/analyze-topology-convergence.test.js test/scripts/model-ledger.test.js test/scripts/work-context.test.js test/scripts/work-llm-usability-tools.test.js test/scripts/work-tracker-subagent-ledger.test.js work/README.md work/packages/done-20260519-llm-steering-context-tightening.md work/templates/work-package-template.md"
   ],
   "writeScope": [
     "AGENTS.md",
@@ -41,7 +41,7 @@
     "test/scripts/work-tracker-subagent-ledger.test.js",
     "work/README.md",
     "work/templates/work-package-template.md",
-    "work/packages/active-20260519-llm-steering-context-tightening.md"
+    "work/packages/done-20260519-llm-steering-context-tightening.md"
   ],
   "handoffFiles": [],
   "generatedFiles": [],
@@ -67,7 +67,7 @@
     "test/scripts/work-tracker-subagent-ledger.test.js",
     "work/README.md",
     "work/templates/work-package-template.md",
-    "work/packages/active-20260519-llm-steering-context-tightening.md"
+    "work/packages/done-20260519-llm-steering-context-tightening.md"
   ],
   "modelFit": {
     "packageClass": "bounded-implementation",
@@ -78,7 +78,9 @@
       "owned files expand beyond this package",
       "a frozen decision must be reopened"
     ]
-  }
+  },
+  "closed": "2026-05-19",
+  "commitAndPushLedgerRequired": true
 }
 -->
 
@@ -187,7 +189,7 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 18. test/scripts/work-tracker-subagent-ledger.test.js
 19. work/README.md
 20. work/templates/work-package-template.md
-21. work/packages/active-20260519-llm-steering-context-tightening.md
+21. work/packages/done-20260519-llm-steering-context-tightening.md
 
 ## Out Of Scope
 
@@ -199,11 +201,11 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 - Intended minimum model: `gpt-5.3-codex-spark`
 - Scope shape: `leaf-slice`
 - Output profile: `medium`
-- Owned files: `AGENTS.md`, `package.json`, `scripts/analyze-topology-convergence.js`, `scripts/model-ledger.js`, `scripts/work-context.js`, `scripts/work-llm-start.js`, `scripts/work-package-new.js`, `scripts/work-package-route-after-rerun.js`, `scripts/work-package-schema.js`, `scripts/work-subagent-next.js`, `scripts/work-subagent-prompt.js`, `scripts/work-tracker.js`, `src/diagnostics/topology-convergence-graph.js`, `test/scripts/analyze-topology-convergence.test.js`, `test/scripts/model-ledger.test.js`, `test/scripts/work-context.test.js`, `test/scripts/work-llm-usability-tools.test.js`, `test/scripts/work-tracker-subagent-ledger.test.js`, `work/README.md`, `work/templates/work-package-template.md`, `work/packages/active-20260519-llm-steering-context-tightening.md`
+- Owned files: `AGENTS.md`, `package.json`, `scripts/analyze-topology-convergence.js`, `scripts/model-ledger.js`, `scripts/work-context.js`, `scripts/work-llm-start.js`, `scripts/work-package-new.js`, `scripts/work-package-route-after-rerun.js`, `scripts/work-package-schema.js`, `scripts/work-subagent-next.js`, `scripts/work-subagent-prompt.js`, `scripts/work-tracker.js`, `src/diagnostics/topology-convergence-graph.js`, `test/scripts/analyze-topology-convergence.test.js`, `test/scripts/model-ledger.test.js`, `test/scripts/work-context.test.js`, `test/scripts/work-llm-usability-tools.test.js`, `test/scripts/work-tracker-subagent-ledger.test.js`, `work/README.md`, `work/templates/work-package-template.md`, `work/packages/done-20260519-llm-steering-context-tightening.md`
 - Forbidden files: runtime owner files outside `src/diagnostics/`
 - Frozen decisions: package scope and lane stay bounded unless explicitly escalated.
 - Escalation triggers: owned files expand beyond this package, runtime ownership changes, or representative scenario evidence changes.
-- Focused proof: `npm test -- test/scripts/model-ledger.test.js test/scripts/work-context.test.js test/scripts/work-llm-usability-tools.test.js test/scripts/work-tracker-subagent-ledger.test.js test/scripts/analyze-topology-convergence.test.js`, `npm run work:package:schema`, `git diff --check -- AGENTS.md package.json scripts/analyze-topology-convergence.js scripts/model-ledger.js scripts/work-context.js scripts/work-llm-start.js scripts/work-package-new.js scripts/work-package-route-after-rerun.js scripts/work-package-schema.js scripts/work-subagent-next.js scripts/work-subagent-prompt.js scripts/work-tracker.js src/diagnostics/topology-convergence-graph.js test/scripts/analyze-topology-convergence.test.js test/scripts/model-ledger.test.js test/scripts/work-context.test.js test/scripts/work-llm-usability-tools.test.js test/scripts/work-tracker-subagent-ledger.test.js work/README.md work/packages/active-20260519-llm-steering-context-tightening.md work/templates/work-package-template.md`
+- Focused proof: `npm test -- test/scripts/model-ledger.test.js test/scripts/work-context.test.js test/scripts/work-llm-usability-tools.test.js test/scripts/work-tracker-subagent-ledger.test.js test/scripts/analyze-topology-convergence.test.js`, `npm run work:package:schema`, `git diff --check -- AGENTS.md package.json scripts/analyze-topology-convergence.js scripts/model-ledger.js scripts/work-context.js scripts/work-llm-start.js scripts/work-package-new.js scripts/work-package-route-after-rerun.js scripts/work-package-schema.js scripts/work-subagent-next.js scripts/work-subagent-prompt.js scripts/work-tracker.js src/diagnostics/topology-convergence-graph.js test/scripts/analyze-topology-convergence.test.js test/scripts/model-ledger.test.js test/scripts/work-context.test.js test/scripts/work-llm-usability-tools.test.js test/scripts/work-tracker-subagent-ledger.test.js work/README.md work/packages/done-20260519-llm-steering-context-tightening.md work/templates/work-package-template.md`
 - Model ledger advisory: `escalate`
 
 ## Model-Fit Split
@@ -233,10 +235,10 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 
 1. PASS - `npm test -- test/scripts/model-ledger.test.js test/scripts/work-context.test.js test/scripts/work-llm-usability-tools.test.js test/scripts/work-tracker-subagent-ledger.test.js test/scripts/analyze-topology-convergence.test.js` passed 554/554.
 2. PASS - `npm run work:package:schema` rendered the shared schema with lower-model lanes, the `bounded-experiment` lane, the `single-file-runtime` lane, `modelFitSplit`, and explicit target-executor spawn guidance.
-3. PASS - `npm run work:validate -- --entry work/packages/active-20260519-llm-steering-context-tightening.md`.
-4. PASS - `npm run work:validate -- --pre-impl work/packages/active-20260519-llm-steering-context-tightening.md`.
-5. PASS - `npm run work:package:doctor -- --suggest work/packages/active-20260519-llm-steering-context-tightening.md`.
-6. PASS - `git diff --check -- AGENTS.md package.json scripts/analyze-topology-convergence.js scripts/model-ledger.js scripts/work-context.js scripts/work-llm-start.js scripts/work-package-new.js scripts/work-package-route-after-rerun.js scripts/work-package-schema.js scripts/work-subagent-next.js scripts/work-subagent-prompt.js scripts/work-tracker.js src/diagnostics/topology-convergence-graph.js test/control-plane/membership-publication-coordinator-main-stage-2.js test/scripts/analyze-topology-convergence.test.js test/scripts/model-ledger.test.js test/scripts/work-context.test.js test/scripts/work-llm-usability-tools.test.js test/scripts/work-tracker-subagent-ledger.test.js work/README.md work/packages/active-20260519-llm-steering-context-tightening.md work/packages/active-20260519-topology-publication-active-gate-handoff-fixture-runtime.md work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md work/sprints/current-blocker.json work/sprints/current-blocker.md work/templates/work-package-template.md`.
+3. PASS - `npm run work:validate -- --entry work/packages/done-20260519-llm-steering-context-tightening.md`.
+4. PASS - `npm run work:validate -- --pre-impl work/packages/done-20260519-llm-steering-context-tightening.md`.
+5. PASS - `npm run work:package:doctor -- --suggest work/packages/done-20260519-llm-steering-context-tightening.md`.
+6. PASS - `git diff --check -- AGENTS.md package.json scripts/analyze-topology-convergence.js scripts/model-ledger.js scripts/work-context.js scripts/work-llm-start.js scripts/work-package-new.js scripts/work-package-route-after-rerun.js scripts/work-package-schema.js scripts/work-subagent-next.js scripts/work-subagent-prompt.js scripts/work-tracker.js src/diagnostics/topology-convergence-graph.js test/control-plane/membership-publication-coordinator-main-stage-2.js test/scripts/analyze-topology-convergence.test.js test/scripts/model-ledger.test.js test/scripts/work-context.test.js test/scripts/work-llm-usability-tools.test.js test/scripts/work-tracker-subagent-ledger.test.js work/README.md work/packages/done-20260519-llm-steering-context-tightening.md work/packages/active-20260519-topology-publication-active-gate-handoff-fixture-runtime.md work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md work/sprints/current-blocker.json work/sprints/current-blocker.md work/templates/work-package-template.md`.
 7. PASS - `npm run work:repair` refreshed generated current-blocker files and passed freshness checks.
 8. PASS - `npm run work:validate -- --pre-impl work/packages/active-20260519-topology-publication-active-gate-handoff-fixture-runtime.md` proves the current runtime package is not blocked by legacy process ledgers before implementation.
 9. PASS - `npm run work:advance -- --check` reports `Next required subagent role: none`, `Implementation proof recorded`, and clean entry/pre-implementation validation for the current runtime package.

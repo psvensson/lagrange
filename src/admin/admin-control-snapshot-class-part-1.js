@@ -27,6 +27,7 @@ import {
   CONTROL_PLANE_SNAPSHOT_REFRESH_STATE,
 } from '../control-plane/control-plane-snapshot-owner.js';
 import {StartupRecoveryCoordinator} from '../bootstrap/startup-recovery-coordinator.js';
+import {buildCanonicalPublicationRecoveryEvidence} from '../control-plane/publication-recovery-evidence.js';
 // ── file-local constants ────────────────────────────────────────────────────
 const ADMIN_CONTROL_SNAPSHOT_LITERAL = Object.freeze({
   VALUE: '',
@@ -429,6 +430,29 @@ class AdminControlSnapshotPart1 {
       controlPlaneDiagnostics[
         CONTROL_SNAPSHOT_PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD
       ] = publicationActiveGateHandoff;
+      const readinessEntries = Object.values(controlPlaneDiagnostics.readinessByNodeId || {});
+      const reevaluatedEvidence = this.resolveCanonicalPublicationRecoveryEvidenceDiagnostics(
+        readinessEntries,
+        controlPlaneDiagnostics.publicationConvergence,
+        controlPlaneDiagnostics.priorityRecoveryDecisionSnapshots,
+        {
+          logsTable: controlPlaneDiagnostics.logsTable,
+          publicationActiveGateHandoff,
+        }
+      );
+      const resolvedConvergence = reevaluatedEvidence.publicationConvergence || controlPlaneDiagnostics.publicationConvergence;
+      const resolvedConvergenceGate = reevaluatedEvidence.publicationConvergenceGate || controlPlaneDiagnostics.publicationConvergenceGate;
+      const reevaluatedPriorityObservation = reevaluatedEvidence.priorityRecoveryObservation || buildCanonicalPublicationRecoveryEvidence({
+        publicationConvergence: resolvedConvergence,
+        publicationConvergenceGate: resolvedConvergenceGate,
+        priorityRecoveryDecisionSnapshots: controlPlaneDiagnostics.priorityRecoveryDecisionSnapshots,
+        logsTable: controlPlaneDiagnostics.logsTable,
+        publicationActiveGateHandoff,
+      }).priorityRecoveryObservation;
+
+      controlPlaneDiagnostics.publicationConvergence = resolvedConvergence;
+      controlPlaneDiagnostics.publicationConvergenceGate = resolvedConvergenceGate;
+      controlPlaneDiagnostics.priorityRecoveryObservation = reevaluatedPriorityObservation;
       controlPlaneDiagnostics[CONTROL_SNAPSHOT_ACTIVE_GATE_CATCHUP_FENCE_FIELD] =
         publicationActiveGateHandoff.activeGateCatchupFence;
       if (

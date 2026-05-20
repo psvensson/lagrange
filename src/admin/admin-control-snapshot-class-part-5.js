@@ -362,7 +362,10 @@ class AdminControlSnapshotPart5 extends AdminControlSnapshotPart4 {
         readinessEntries,
         publicationConvergence,
         priorityRecoveryDecisionSnapshots,
-        {logsTable},
+        {
+          logsTable,
+          publicationActiveGateHandoff: options.publicationActiveGateHandoff,
+        },
       );
     const publicationConvergenceGate =
       publicationEvidence.publicationConvergenceGate;
@@ -375,6 +378,7 @@ class AdminControlSnapshotPart5 extends AdminControlSnapshotPart4 {
         publicationConvergenceGate,
         priorityRecoveryDecisionSnapshots,
         logsTable,
+        publicationActiveGateHandoff: options.publicationActiveGateHandoff,
       }).priorityRecoveryObservation;
     const splitEvaluation = this.resolveSplitEvaluationDiagnostics();
     const partitionServices =

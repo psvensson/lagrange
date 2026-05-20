@@ -344,6 +344,8 @@ const SCENARIO_CAUSAL_CLOSURE_DOWNSTREAM_BLOCKERS_FIELD =
 const SCENARIO_CAUSAL_CLOSURE_MISSING_EDGE_FIELD = 'missingCausalEdge';
 const SCENARIO_CAUSAL_CLOSURE_MISSING_EDGE_PROBE_FIELD =
   'missingCausalEdgeProbe';
+const SCENARIO_CAUSAL_CLOSURE_FALSIFYING_PROBE_FIELD =
+  'falsifyingProbe';
 const SCENARIO_CAUSAL_CLOSURE_BOUNDED_PROOF_FIELD = 'boundedProgressProof';
 const SCENARIO_CAUSAL_CLOSURE_BOUNDED_PROOF_ARTIFACT_FIELD =
   'boundedProgressProofArtifact';
@@ -2414,6 +2416,29 @@ export function validateModelFitContract(content, filePath, options = {}) {
   if (isSparkSafeModelFit(fields)) {
     errors.push(...validateSparkSafeModelFit(content, filePath, fields));
   }
+  const metadata = options.metadata;
+  const phase = options.phase;
+  if (metadata && metadata.modelFit && options[LEDGER_VALIDATION_REQUIRES_LEDGER]) {
+    const ambiguityScore = metadata.modelFit.ambiguityScore;
+    if (ambiguityScore === undefined) {
+      errors.push(
+        `${filePath}: metadata.modelFit.ambiguityScore is required for active packages ` +
+        `to guard against high-entropy subagent execution loops.`
+      );
+    } else {
+      const score = Number(ambiguityScore);
+      if (!Number.isInteger(score) || score < 1 || score > 5) {
+        errors.push(
+          `${filePath}: metadata.modelFit.ambiguityScore must be an integer between 1 and 5 inclusive.`
+        );
+      } else if (score > 3 && phase !== VALIDATION_PHASE_ENTRY) {
+        errors.push(
+          `${filePath}: metadata.modelFit.ambiguityScore is ${score} (> 3), which requires ` +
+          `escalation to a stronger model or human split before implementation.`
+        );
+      }
+    }
+  }
   return errors;
 }
 
@@ -2762,13 +2787,13 @@ export function validateCausalGovernanceContract(
     );
   }
   if (
-    (fileStatus === STATUS_DONE || fileStatus === STATUS_SUPERSEDED) &&
-    representativeOutcome === CAUSAL_GOVERNANCE_PENDING_OUTCOME
+    ((fileStatus === STATUS_DONE || fileStatus === STATUS_SUPERSEDED) || options.phase === VALIDATION_PHASE_CLOSURE) &&
+    (representativeOutcome === CAUSAL_GOVERNANCE_PENDING_OUTCOME || representativeOutcome === 'pending-before-rerun')
   ) {
     errors.push(
-      `${filePath}: closed packages must classify representativeOutcome as ` +
-      'representative-green, reduced, same-frontier, migrated, ' +
-      'classification-only, architecture-gap, or contradictory.',
+      `${filePath}: cannot close scenario-driven package while ` +
+      `causalGovernance.representativeOutcome remains "${representativeOutcome}". ` +
+      `Rerun the causal model analyzer and record the validated outcome.`,
     );
   }
   if (
@@ -2936,6 +2961,22 @@ export function validateScenarioCausalClosureContract(
       `${filePath}: scenarioCausalClosure.boundedProgressProofArtifact ` +
       'must name a path or proof artifact.',
     );
+  }
+  if (
+    metadata &&
+    options.status === STATUS_ACTIVE &&
+    (metadataLane(metadata) === 'runtime-owner-boundary' || metadataLane(metadata) === 'scenario-release-gate') &&
+    (options.phase === VALIDATION_PHASE_PRE_IMPL || options.phase === VALIDATION_PHASE_CLOSURE)
+  ) {
+    const falsifyingProbe = normalizeLedgerText(
+      scenarioCausalClosure[SCENARIO_CAUSAL_CLOSURE_FALSIFYING_PROBE_FIELD],
+    );
+    if (!MODEL_FIT_FOCUSED_PROOF_COMMAND_PATTERN.test(falsifyingProbe)) {
+      errors.push(
+        `${filePath}: scenarioCausalClosure.falsifyingProbe must name a focused npm test command ` +
+        `to serve as the falsifying blocker probe in runtime lanes.`
+      );
+    }
   }
 
   return errors;
@@ -4439,6 +4480,42 @@ function buildSubagentValidationOptions(fileStatus, metadata, phase, options = {
   };
 }
 
+async function validateExecutableContracts(metadata, filePath, options = {}) {
+  const errors = [];
+  if (!metadata || options.phase === VALIDATION_PHASE_ENTRY || options.status !== STATUS_ACTIVE) {
+    return errors;
+  }
+  const writeScope = metadata[SCOPE_FIELD_WRITE_SCOPE];
+  if (!Array.isArray(writeScope)) {
+    return errors;
+  }
+  for (const file of writeScope) {
+    if (typeof file !== 'string' || !file.endsWith('.js') || !file.startsWith('src/')) {
+      continue;
+    }
+    try {
+      const jsContent = await readTextFile(file);
+      const nullOrUndefinedMatch = jsContent.match(/\b(state|status)\s*=\s*(null|undefined)\b/iu);
+      if (nullOrUndefinedMatch) {
+        errors.push(
+          `${filePath}: runtime file "${file}" violates the AGENTS.md rule ` +
+          `by assigning "${nullOrUndefinedMatch[0]}". null and undefined must not encode domain/runtime state.`
+        );
+      }
+      const ifStatementMatches = jsContent.match(/if\s*\(\s*(state|status)\s*===[\s\S]*?\}\s*if\s*\(\s*(state|status)\s*===/g);
+      if (ifStatementMatches) {
+        errors.push(
+          `${filePath}: runtime file "${file}" contains consecutive independent if statements on state/status ` +
+          `("if (state === ... } if (state === ..."). This violates the AGENTS.md rule requiring a single structured state adjudicator/decision table.`
+        );
+      }
+    } catch (error) {
+      // Ignore if file doesn't exist yet
+    }
+  }
+  return errors;
+}
+
 async function validatePackageFile(filePath, options = {}) {
   const phase = options.phase || VALIDATION_PHASE_PRE_IMPL;
   const content = await readTextFile(filePath);
@@ -4546,6 +4623,8 @@ async function validatePackageFile(filePath, options = {}) {
       fileStatus === STATUS_ACTIVE &&
       metadata !== null &&
       metadataLane(metadata) !== LANE_FAST_SPIKE,
+    metadata,
+    phase,
   }));
   errors.push(...validateRepresentativeResidualContract(metadata, relativePath, {
     [LEDGER_VALIDATION_REQUIRES_LEDGER]:
@@ -4558,6 +4637,7 @@ async function validatePackageFile(filePath, options = {}) {
       metadata !== null &&
       isScenarioDrivenMetadata(metadata),
     status: fileStatus,
+    phase,
   }));
   errors.push(...validateScenarioCausalClosureContract(metadata, relativePath, {
     [LEDGER_VALIDATION_REQUIRES_LEDGER]:
@@ -4565,6 +4645,7 @@ async function validatePackageFile(filePath, options = {}) {
       metadata !== null &&
       isScenarioDrivenMetadata(metadata),
     status: fileStatus,
+    phase,
   }));
   errors.push(...validateRerunDecisionContract(metadata, relativePath, {
     [LEDGER_VALIDATION_REQUIRES_LEDGER]:
@@ -4621,6 +4702,7 @@ async function validatePackageFile(filePath, options = {}) {
     [LEDGER_VALIDATION_ALLOW_MISSING_HISTORICAL_COMMIT_LEDGER]:
       isHistoricalClosedCommitLedgerMetadata(fileStatus, metadata),
   }));
+  errors.push(...await validateExecutableContracts(metadata, relativePath, { phase, status: fileStatus }));
   return {
     errors,
     hasMetadata: metadata !== null,

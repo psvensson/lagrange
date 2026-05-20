@@ -3,7 +3,7 @@
 <!-- work-package
 {
   "schema": "work-package-v1",
-  "status": "active",
+  "status": "done",
   "opened": "2026-05-19",
   "lane": "runtime-owner-boundary",
   "scenario": "rolling-restart",
@@ -22,7 +22,7 @@
     "npm run work:scenario-triage -- test-output/reports/rolling-restart-after-handoff-owner-outcome-20260519T193101Z.report.json --markdown"
   ],
   "writeScope": [
-    "work/packages/active-20260519-topology-publication-active-gate-handoff-owner-outcome-runtime.md",
+    "work/packages/done-20260519-topology-publication-active-gate-handoff-owner-outcome-runtime.md",
     "work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md",
     "work/sprints/current-blocker.md",
     "work/sprints/current-blocker.json",
@@ -42,7 +42,7 @@
     "src/admin/admin-control-snapshot-class-part-1.js"
   ],
   "commitScope": [
-    "work/packages/active-20260519-topology-publication-active-gate-handoff-owner-outcome-runtime.md",
+    "work/packages/done-20260519-topology-publication-active-gate-handoff-owner-outcome-runtime.md",
     "work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md",
     "work/sprints/current-blocker.md",
     "work/sprints/current-blocker.json",
@@ -187,7 +187,10 @@
     ],
     "selectedChoice": "publication-owner-outcome-runtime-successor",
     "nextAction": "Execute the bounded source owner-outcome projection runtime package."
-  }
+  },
+  "closed": "2026-05-19",
+  "commitAndPushLedgerRequired": true,
+  "successor": "work/packages/done-20260519-topology-publication-unpublished-observation-producer-runtime.md"
 }
 -->
 
@@ -289,7 +292,7 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 
 ## In Scope
 
-1. work/packages/active-20260519-topology-publication-active-gate-handoff-owner-outcome-runtime.md
+1. work/packages/done-20260519-topology-publication-active-gate-handoff-owner-outcome-runtime.md
 2. work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md
 3. work/sprints/current-blocker.md
 4. work/sprints/current-blocker.json
@@ -313,7 +316,7 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 - Intended minimum model: `gpt-5.3-codex`
 - Scope shape: `bounded-owner-runtime/current-frontier`
 - Output profile: `medium`
-- Owned files: `work/packages/active-20260519-topology-publication-active-gate-handoff-owner-outcome-runtime.md`, `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md`, `work/sprints/current-blocker.md`, `work/sprints/current-blocker.json`, `work/model-ledger.jsonl`, `src/admin/admin-control-snapshot-class-part-6.js`, `src/admin/admin-control-snapshot-class-part-1.js`, `test/scripts/analyze-topology-convergence.test.js`, `test/admin/admin-control-snapshot-active-gate-handoff-target-blocked.test.js`
+- Owned files: `work/packages/done-20260519-topology-publication-active-gate-handoff-owner-outcome-runtime.md`, `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md`, `work/sprints/current-blocker.md`, `work/sprints/current-blocker.json`, `work/model-ledger.jsonl`, `src/admin/admin-control-snapshot-class-part-6.js`, `src/admin/admin-control-snapshot-class-part-1.js`, `test/scripts/analyze-topology-convergence.test.js`, `test/admin/admin-control-snapshot-active-gate-handoff-target-blocked.test.js`
 - Forbidden files: `startup active-gate`, `startup readiness`, `operation workflow`, `admission`, `timeout`
 - Frozen decisions: package scope and lane stay bounded unless explicitly escalated.
 - Escalation triggers: owned files expand beyond this package, runtime ownership changes, or representative scenario evidence changes.
@@ -362,3 +365,9 @@ If review directly fixes metadata-only findings, record `review-fixed-metadata-o
 8. PASS `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-handoff-owner-outcome-20260519T193101Z.report.json --handoff-probe` -> `missingEdge=null`, `contractEdge=publication_active_gate_handoff_contract`, `membershipPublicationHandoffOutcomeState=write_deferred`, `reasonCode=owner_reconcile_pending`, `pendingReconcileCount=0`.
 9. PASS `npm run work:evidence-summary -- test-output/reports/rolling-restart-after-handoff-owner-outcome-20260519T193101Z.report.json`; PASS `npm run work:scenario-triage -- test-output/reports/rolling-restart-after-handoff-owner-outcome-20260519T193101Z.report.json --markdown`; PASS `npm run work:scenario-route -- test-output/reports/rolling-restart-after-handoff-owner-outcome-20260519T193101Z.report.json --owner topology_publication_owner --boundary publication_convergence --dominant-reason publication_pending --explain publication_ack_convergence` -> first frontier remains `publication_ack_convergence / topology_publication_owner / publication_convergence / publication_pending`, priority residual witnesses `0`, and successor route remains local runtime owner work.
 10. PASS focused raw-field check after canonical extractors: `rg -n "membershipPublicationHandoffOutcome|publicationActiveGateHandoff" test-output/reports/rolling-restart-after-handoff-owner-outcome-20260519T193101Z.report.json` shows raw `membershipPublicationHandoffOutcomeState: "write_deferred"` and reason `owner_reconcile_pending`.
+
+## Commit And Push Ledger
+
+1. Focused package commit: 263aed08fa9a7f9fcb80d799cc123eaf3796dbda
+2. Pushed to: origin/codex/pending-ack-eligibility-filter
+3. Commit contains only package-owned files/package-status/allowed sprint handoff: yes

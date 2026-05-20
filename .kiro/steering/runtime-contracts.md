@@ -212,6 +212,10 @@ Forbidden patterns:
   published the required durable handoff edge
 - proving the producer and consumer with separate focused tests while no
   replayable handoff fixture or missing-edge probe covers their interaction
+- allowing a publication recovery producer to stall or wait on unknown publication
+  deficits when a downstream active-gate reconcile handoff is already pending,
+  as this introduces structural deadlocks during rolling restarts under pressure.
+
 
 ## Deterministic Control-Plane Progression
 

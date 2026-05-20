@@ -126,6 +126,7 @@ function assignAdminControlSnapshotReadinessDiagnosticsMethods(
             null :
             priorityRecoveryDecisionSnapshots,
         logsTable: options.logsTable || null,
+        publicationActiveGateHandoff: options.publicationActiveGateHandoff,
       });
       if (!priorityRecoveryDecisionSnapshots) {
         return gateScopedEvidence;
@@ -148,6 +149,7 @@ function assignAdminControlSnapshotReadinessDiagnosticsMethods(
               null,
             priorityRecoveryDecisionSnapshots,
             logsTable: options.logsTable || null,
+            publicationActiveGateHandoff: options.publicationActiveGateHandoff,
           }).priorityRecoveryObservation ||
           gateScopedEvidence.priorityRecoveryObservation,
       });

@@ -170,7 +170,7 @@
   },
   "closed": "2026-05-19",
   "commitAndPushLedgerRequired": true,
-  "successor": "work/packages/active-20260519-topology-publication-active-gate-handoff-owner-outcome-runtime.md"
+  "successor": "work/packages/done-20260519-topology-publication-active-gate-handoff-owner-outcome-runtime.md"
 }
 -->
 
