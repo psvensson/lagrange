@@ -193,7 +193,7 @@
     "nextAction": "Continue in the active bounded publication-convergence runtime successor."
   },
   "closed": "2026-05-20",
-  "successor": "work/packages/active-20260520-topology-publication-workflow-handoff-runtime.md",
+  "successor": "work/packages/done-20260520-topology-publication-workflow-handoff-runtime.md",
   "commitAndPushLedgerRequired": true
 }
 -->

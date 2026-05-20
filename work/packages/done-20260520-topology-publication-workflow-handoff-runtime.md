@@ -3,7 +3,7 @@
 <!-- work-package
 {
   "schema": "work-package-v1",
-  "status": "active",
+  "status": "done",
   "opened": "2026-05-20",
   "lane": "runtime-owner-boundary",
   "scenario": "rolling-restart",
@@ -12,8 +12,8 @@
   "owner": "topology_publication_owner",
   "boundary": "publication_convergence",
   "dominantReason": "publication_operation_workflow_handoff_leg_missing",
-  "currentState": "Causal handoff proof selected topology_publication_owner / publication_convergence as the bounded runtime successor. The fresh artifact keeps publication_ack_convergence first, reports publication_operation_workflow_handoff_leg_missing, keeps publication_active_gate_handoff_contract pending owner_reconcile_pending, and blocks direct workflow runtime promotion with runtimePromotionAllowed=false.",
-  "nextAction": "Implement the publication-owned handoff contract path so publication convergence exposes the owner outcome needed before workflow runtime promotion.",
+  "currentState": "Focused publication evidence changes cleared publication_operation_workflow_handoff_leg_missing in rolling-restart-publication-workflow-handoff-runtime-20260520T062923Z. The representative rerun is reduced but still red on publication_ack_convergence / topology_publication_owner / publication_convergence with dominant reason publication_pending, pending reconcile count 2, and active-gate snapshot coverage 3/5.",
+  "nextAction": "Close this reduced handoff slice and continue in successor work/packages/active-20260520-topology-publication-remaining-pending-runtime.md.",
   "proof": [
     "npm test -- test/control-plane/publication-recovery-evidence.test.js test/distributed/harness/__tests__/publication-evidence-open-membership.test.js",
     "node scripts/check-guideline-literals.js src/control-plane/publication-recovery-evidence.js test/control-plane/publication-recovery-evidence.test.js test/distributed/harness/publication-evidence-contract.js test/distributed/harness/__tests__/publication-evidence-open-membership.test.js",
@@ -107,21 +107,21 @@
     ]
   },
   "representativeResidual": {
-    "status": "pending-before-probe",
+    "status": "reduced",
     "scenario": "rolling-restart",
-    "artifact": "test-output/reports/rolling-restart-snapshot-lane-reset-close-20260520T055140Z.report.json",
+    "artifact": "test-output/reports/rolling-restart-publication-workflow-handoff-runtime-20260520T062923Z.report.json",
     "frontier": "publication_ack_convergence",
     "owner": "topology_publication_owner",
     "boundary": "publication_convergence",
-    "dominantReason": "publication_operation_workflow_handoff_leg_missing",
-    "nextAction": "Implement the publication-owned handoff outcome and rerun rolling-restart."
+    "dominantReason": "publication_pending",
+    "nextAction": "Open the topology publication remaining pending runtime successor and align publication convergence with the remaining owner-reconcile pending state."
   },
   "causalGovernance": {
     "hypothesis": "Publication convergence is not surfacing a durable handoff outcome that reconciles OPEN publication debt with active-gate pending owner reconcile and the retryable operation workflow leg. The publication owner must emit one canonical outcome instead of leaving consumers to reconstruct publication/workflow state.",
     "stopConditionCheck": "Use `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-snapshot-lane-reset-close-20260520T055140Z.report.json --handoff-probe`, `npm run analyze:causal-model -- test-output/reports/rolling-restart-snapshot-lane-reset-close-20260520T055140Z.report.json`, and focused publication evidence tests before runtime edits, then rerun rolling-restart.",
     "expectedCausalModelChange": "The handoff probe or representative rerun should move from publication_operation_workflow_handoff_leg_missing to a reduced publication-owned handoff state, owner-boundary migration, or green rolling-restart.",
-    "representativeOutcome": "pending-before-rerun",
-    "causalDebt": "Fresh artifact has publicationStatus OPEN, missingPublishedCount 4, publicationOwnerRecoveryOutcome waiting_for_publication, membershipPublicationHandoffOutcome write_deferred/enqueued, active-gate owner_reconcile_pending pendingReconcileCount 4, and operation workflow retryable advance_existing_operation evidence.",
+    "representativeOutcome": "reduced",
+    "causalDebt": "Fresh artifact cleared missingEdge for the handoff probe and satisfied operationWorkflow; remaining debt is publication_pending with publicationStatus OPEN, producer missingPublishedCount 4, active-gate owner_reconcile_pending pendingReconcileCount 2, membershipPublicationHandoffOutcome write_deferred/enqueued, and snapshotCoverage 3/5.",
     "crossBoundaryReview": "Do not patch operation workflow, startup active-gate, readiness, timeout budgets, or analyzer-only routing in this runtime package."
   },
   "scenarioCausalClosure": {
@@ -132,12 +132,12 @@
       "publication/workflow handoff causal gate selected topology_publication_owner / publication_convergence",
       "runtime package now owns the publication evidence handoff outcome"
     ],
-    "currentFirstFrontier": "publication_ack_convergence / topology_publication_owner / publication_convergence with handoff probe result publication_operation_workflow_handoff_leg_missing.",
+    "currentFirstFrontier": "publication_ack_convergence / topology_publication_owner / publication_convergence with dominant reason publication_pending after publication_operation_workflow_handoff_leg_missing cleared.",
     "knownDownstreamBlockers": [
-      "publication_active_gate_handoff_contract pending owner_reconcile_pending",
+      "publication_active_gate_handoff_contract pending owner_reconcile_pending with pendingReconcileCount 2",
       "membershipPublicationHandoffOutcome write_deferred and enqueued",
-      "activeGateOwnerCohort missingPublishedCount 4",
-      "operation_workflow_owner workflow_progress retryable advance_existing_operation"
+      "activeGateOwnerCohort missingPublishedCount 2",
+      "startup_active_gate_owner snapshot_coverage deferred at 3/5"
     ],
     "missingCausalEdge": "Publication convergence must emit one owner outcome for the publication/workflow/active-gate handoff instead of leaving direct workflow promotion blocked.",
     "missingCausalEdgeProbe": "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-snapshot-lane-reset-close-20260520T055140Z.report.json --handoff-probe",
@@ -148,7 +148,7 @@
     "maxProgressBound": "one topology_publication_owner / publication_convergence runtime slice before representative rerun",
     "sameFrontierFallback": "If focused proof passes but representative evidence returns unchanged publication_operation_workflow_handoff_leg_missing with no metric reduction, stop for architecture instead of another local publication patch.",
     "expectedNextFrontier": "representative-green, reduced publication handoff debt, or owner-boundary migration",
-    "resultClassification": "pending-before-probe",
+    "resultClassification": "reduced",
     "stopCondition": "continue-local-fix",
     "recentFrontierHistory": [
       "work/packages/done-20260520-priority-recovery-operation-workflow-owner-workflow-progress.md / operation_workflow_owner / workflow_progress / architecture-gap",
@@ -187,7 +187,10 @@
     ],
     "selectedChoice": "publication-owned-handoff-runtime",
     "nextAction": "Implement the bounded publication evidence handoff slice and rerun rolling-restart."
-  }
+  },
+  "closed": "2026-05-20",
+  "commitAndPushLedgerRequired": true,
+  "successor": "work/packages/active-20260520-topology-publication-remaining-pending-runtime.md"
 }
 -->
 
@@ -332,9 +335,15 @@ Preferred closure evidence for new packages. Agent identity is optional provenan
 Use legacy subagent ledgers only when the package explicitly requires sequenced subagents.
 If review directly fixes metadata-only findings, record `review-fixed-metadata-only` as execution evidence and continue without a separate fix package.
 
-- [ ] review: status: not-needed; evidence: lane permits direct implementation or package review found no required fix; next: implementation.
-- [ ] implementation: status: validated; evidence: <focused proof commands and results>; parent revalidated focused proof: yes; next: closure or successor action.
-- [ ] repair: status: validated; evidence: `npm run work:repair` refreshed generated current-blocker and Current Edge Card when needed; next: validation.
+- [x] review: status: done; evidence: Agent Banach (`019e4412-425d-7ae0-9694-35309ac3e8b3`) reviewed the reduced publication handoff path and identified no blocking change beyond the stale-producer risk captured for the successor; next: runtime proof.
+- [x] implementation: status: validated; parent validation: yes; evidence: `npm test -- test/control-plane/publication-recovery-evidence.test.js test/distributed/harness/__tests__/publication-evidence-open-membership.test.js` passed; `node scripts/check-guideline-literals.js src/control-plane/publication-recovery-evidence.js test/control-plane/publication-recovery-evidence.test.js test/distributed/harness/publication-evidence-contract.js test/distributed/harness/__tests__/publication-evidence-open-membership.test.js` passed; `node scripts/check-guideline-decision-boundaries.js src/control-plane/publication-recovery-evidence.js test/control-plane/publication-recovery-evidence.test.js test/distributed/harness/publication-evidence-contract.js test/distributed/harness/__tests__/publication-evidence-open-membership.test.js` passed; `npm run audit:runtime-grammar:file -- src/control-plane/publication-recovery-evidence.js` passed; representative rerun `node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-publication-workflow-handoff-runtime-20260520T062923Z.report.json --fast-local --verbose` reduced the blocker by clearing `publication_operation_workflow_handoff_leg_missing`, satisfying operation workflow, shrinking pending reconcile 4 to 2, and moving dominant reason to `publication_pending`; parent revalidated focused proof: yes; next: successor action.
+- [x] repair: status: validated; evidence: `npm run work:evidence-summary -- test-output/reports/rolling-restart-publication-workflow-handoff-runtime-20260520T062923Z.report.json`, `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-publication-workflow-handoff-runtime-20260520T062923Z.report.json --handoff-probe`, `npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-publication-workflow-handoff-runtime-20260520T062923Z.report.json --markdown`, `npm run analyze:causal-model -- test-output/reports/rolling-restart-publication-workflow-handoff-runtime-20260520T062923Z.report.json`, and route-after-rerun selected the publication_pending successor; next: validation.
+
+## Commit And Push Ledger
+
+1. Focused package commit: ec829782e77f073f862e3e4ff9d36e8a75fff354
+2. Pushed to: origin/codex/pending-ack-eligibility-filter
+3. Commit contains only package-owned files/package-status/allowed sprint handoff: yes
 
 ## Validation
 

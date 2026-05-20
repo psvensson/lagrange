@@ -132,22 +132,22 @@ Historical state from that earlier rerun:
 ## Current Edge Card
 
 ```text
-Representative artifact: test-output/reports/rolling-restart-snapshot-lane-reset-close-20260520T055140Z.report.json
-Visible first frontier: publication_ack_convergence / topology_publication_owner / publication_convergence with handoff probe result publication_operation_workflow_handoff_leg_missing.
-Active package: work/packages/active-20260520-topology-publication-workflow-handoff-runtime.md
+Representative artifact: test-output/reports/rolling-restart-publication-workflow-handoff-runtime-20260520T062923Z.report.json
+Visible first frontier: publication_ack_convergence / topology_publication_owner / publication_convergence / publication_pending remains first frontier after the prior handoff edge cleared.
+Active package: work/packages/active-20260520-topology-publication-remaining-pending-runtime.md
 Active package owner: topology_publication_owner
 Active package boundary: publication_convergence
-Selected cause: publication_operation_workflow_handoff_leg_missing
-Required action: Implement the publication-owned handoff contract path so publication convergence exposes the owner outcome needed before workflow runtime promotion.
-Representative status: pending-before-probe
+Selected cause: publication_pending
+Required action: Align publication convergence evidence with the remaining owner-reconcile publication pending state and rerun rolling-restart.
+Representative status: reduced
 Causal outcome: continue_local_fix
-Architecture gate: selected / publication-owned-handoff-runtime
-Expected delta: Move publication_operation_workflow_handoff_leg_missing by emitting or preserving the publication-owned handoff outcome, reducing pending reconcile debt, migrating owner boundary, or turning rolling-restart green.
-Current state: Causal handoff proof selected topology_publication_owner / publication_convergence as the bounded runtime successor. The fresh artifact keeps publication_ack_convergence first, reports publication_operation_workflow_handoff_leg_missing, keeps publication_active_gate_handoff_contract pending owner_reconcile_pending, and blocks direct workflow runtime promotion with runtimePromotionAllowed=false.
+Architecture gate: selected / publication-pending-causal-handoff
+Expected delta: Reduce publication_pending debt, migrate the owner boundary, or turn rolling-restart green.
+Current state: Fresh rolling-restart evidence cleared publication_operation_workflow_handoff_leg_missing and satisfied operation workflow, but publication_ack_convergence remains first frontier with dominant reason publication_pending. The handoff probe narrows active-gate owner reconcile debt to two nodes while the publication producer still reports four missing published nodes, so the next slice is a user-approved causal-escalation handoff package before another local runtime patch.
 Allowed edits: src/control-plane/publication-recovery-evidence.js, test/control-plane/publication-recovery-evidence.test.js, test/distributed/harness/publication-evidence-contract.js, test/distributed/harness/__tests__/publication-evidence-open-membership.test.js
 Candidate runtime files: src/control-plane/publication-owner-decision.js, src/control-plane/publication-active-gate-handoff-contract.js, src/control-plane/membership-publication-coordinator-class-stage-2.js, src/control-plane/active-node-projection.js, test/control-plane/membership-publication-coordinator-main-stage-2.js, test/control-plane/publication-active-gate-handoff-contract.test.js, test/control-plane/publication-owner-stream.test.js
-Forbidden edits: Publication owner emits the handoff outcome; operation workflow and active-gate consumers consume it without reproducing publication debt logic.
-Required latest proof: npm test -- test/control-plane/publication-recovery-evidence.test.js test/distributed/harness/__tests__/publication-evidence-open-membership.test.js, node scripts/check-guideline-literals.js src/control-plane/publication-recovery-evidence.js test/control-plane/publication-recovery-evidence.test.js test/distributed/harness/publication-evidence-contract.js test/distributed/harness/__tests__/publication-evidence-open-membership.test.js, node scripts/check-guideline-decision-boundaries.js src/control-plane/publication-recovery-evidence.js test/control-plane/publication-recovery-evidence.test.js test/distributed/harness/publication-evidence-contract.js test/distributed/harness/__tests__/publication-evidence-open-membership.test.js, npm run analyze:topology-convergence -- test-output/reports/rolling-restart-snapshot-lane-reset-close-20260520T055140Z.report.json --handoff-probe
+Forbidden edits: Publication owner emits one normalized publication pending outcome and active-gate consumers consume it without reconstructing publication debt.
+Required latest proof: npm test -- test/control-plane/publication-recovery-evidence.test.js test/distributed/harness/__tests__/publication-evidence-open-membership.test.js, node scripts/check-guideline-literals.js src/control-plane/publication-recovery-evidence.js test/control-plane/publication-recovery-evidence.test.js test/distributed/harness/publication-evidence-contract.js test/distributed/harness/__tests__/publication-evidence-open-membership.test.js, node scripts/check-guideline-decision-boundaries.js src/control-plane/publication-recovery-evidence.js test/control-plane/publication-recovery-evidence.test.js test/distributed/harness/publication-evidence-contract.js test/distributed/harness/__tests__/publication-evidence-open-membership.test.js, npm run analyze:topology-convergence -- test-output/reports/rolling-restart-publication-workflow-handoff-runtime-20260520T062923Z.report.json --handoff-probe, npm run work:evidence-summary -- test-output/reports/rolling-restart-publication-workflow-handoff-runtime-20260520T062923Z.report.json, npm run work:scenario-triage -- test-output/reports/rolling-restart-publication-workflow-handoff-runtime-20260520T062923Z.report.json --markdown, npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-publication-workflow-handoff-runtime-20260520T062923Z.report.json --markdown
 Allowed stop modes: representative-green, migrated, reduced, same-frontier, classification-only, architecture-gap, human-escalation
 ```
 
