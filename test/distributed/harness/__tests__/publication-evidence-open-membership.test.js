@@ -7,6 +7,9 @@ import {
   RECOVERY_PROTOCOL_STATE,
 } from '../../../../src/control-plane/membership-lifecycle-constants.js';
 import {
+  PUBLICATION_RECOVERY_PENDING_ACK_EVIDENCE_STATE,
+} from '../../../../src/control-plane/publication-recovery-gate.js';
+import {
   buildCanonicalPublicationEvidenceFromControlPlane,
 } from '../publication-evidence-contract.js';
 
@@ -95,6 +98,9 @@ const PUBLISHED_ACK_FRONTIER_TEST_NAME =
 const CLOSED_GATE_WRAPPER_TEST_NAME =
   'buildCanonicalPublicationEvidenceFromControlPlane keeps outer publication ' +
     'pending aligned with a closed no-debt gate';
+const OWNER_RECONCILE_HANDOFF_TEST_NAME =
+  'buildCanonicalPublicationEvidenceFromControlPlane narrows open ' +
+    'publication debt from owner-reconcile handoff evidence';
 const PUBLISHED_ACK_FRONTIER_EPOCH = 5;
 const PUBLISHED_ACK_FRONTIER_ZERO_COUNT = 0;
 const PUBLISHED_ACK_FRONTIER_AUTHORITATIVE_NODE_IDS = Object.freeze([
@@ -131,6 +137,32 @@ const PUBLISHED_ACK_FRONTIER_PER_NODE_PUBLICATION_DISAGREEMENT_SET =
     [PUBLISHED_ACK_FRONTIER_MISSING_NODE_IDS[1]]:
       PUBLISHED_ACK_FRONTIER_MISSING_NODE_IDS,
   });
+const OWNER_RECONCILE_HANDOFF_STATE = Object.freeze({
+  PENDING: 'pending',
+});
+const OWNER_RECONCILE_HANDOFF_REASON = Object.freeze({
+  OWNER_RECONCILE_PENDING: 'owner_reconcile_pending',
+});
+const OWNER_RECONCILE_HANDOFF_NEXT_ACTION = Object.freeze({
+  RECONCILE_OWNER_MEMBERSHIP_PUBLICATION:
+    'reconcile_owner_membership_publication',
+});
+const OWNER_RECONCILE_HANDOFF_OUTCOME_STATE = Object.freeze({
+  WRITE_DEFERRED: 'write_deferred',
+});
+const OWNER_RECONCILE_BROAD_MISSING_NODE_IDS = Object.freeze([
+  'owner-reconcile-node-b',
+  'owner-reconcile-node-c',
+  'owner-reconcile-node-d',
+  'owner-reconcile-node-e',
+]);
+const OWNER_RECONCILE_HANDOFF_NODE_IDS = Object.freeze([
+  'owner-reconcile-node-b',
+  'owner-reconcile-node-e',
+]);
+const OWNER_RECONCILE_PUBLISHED_NODE_IDS = Object.freeze([
+  'owner-reconcile-node-a',
+]);
 
 it(TEST_NAME, () => {
   const publicationEvidence = buildCanonicalPublicationEvidenceFromControlPlane({
@@ -490,5 +522,97 @@ it(CLOSED_GATE_WRAPPER_TEST_NAME, () => {
   assert.equal(
     publicationEvidence.publicationConvergence.missingPublishedCount,
     TEST_EMPTY_COUNT,
+  );
+});
+
+it(OWNER_RECONCILE_HANDOFF_TEST_NAME, () => {
+  const publicationEvidence = buildCanonicalPublicationEvidenceFromControlPlane({
+    publicationConvergence: {
+      publicationEpoch: TEST_PUBLICATION_EPOCH,
+      publicationStatus: CONTROL_PLANE_PUBLICATION_STATUS.OPEN,
+      recoveryProtocolState: RECOVERY_PROTOCOL_STATE.PUBLICATION_PENDING,
+      publishedActiveNodeIds: OWNER_RECONCILE_PUBLISHED_NODE_IDS,
+      pendingAckNodeIds: TEST_EMPTY_NODE_IDS,
+      pendingAckCount: TEST_EMPTY_COUNT,
+      missingPublishedNodeIds: OWNER_RECONCILE_BROAD_MISSING_NODE_IDS,
+      missingPublishedCount: OWNER_RECONCILE_BROAD_MISSING_NODE_IDS.length,
+      priorityRecoveryReasonCodes: TEST_PRIORITY_RECOVERY_REASON_CODES,
+      priorityPartitionSummary: {
+        satisfied: true,
+      },
+    },
+    publicationConvergenceGate: {
+      publicationEpoch: TEST_PUBLICATION_EPOCH,
+      publicationStatus: CONTROL_PLANE_PUBLICATION_STATUS.OPEN,
+      recoveryProtocolState: RECOVERY_PROTOCOL_STATE.PUBLICATION_PENDING,
+      pendingAckNodeIds: TEST_EMPTY_NODE_IDS,
+      pendingAckCount: TEST_EMPTY_COUNT,
+      pendingAckEvidenceState:
+        PUBLICATION_RECOVERY_PENDING_ACK_EVIDENCE_STATE.COUNT_ONLY,
+      missingPublishedNodeIds: OWNER_RECONCILE_BROAD_MISSING_NODE_IDS,
+      missingPublishedCount: OWNER_RECONCILE_BROAD_MISSING_NODE_IDS.length,
+      publicationPending: true,
+      priorityPartitionSummary: {
+        satisfied: true,
+      },
+      reasonCodes: TEST_PRIORITY_RECOVERY_REASON_CODES,
+      publicationOwnerStream: {
+        publicationStatus: CONTROL_PLANE_PUBLICATION_STATUS.OPEN,
+        recoveryProtocolState: RECOVERY_PROTOCOL_STATE.PUBLICATION_PENDING,
+        pendingAckNodeIds: TEST_EMPTY_NODE_IDS,
+        pendingAckCount: TEST_EMPTY_COUNT,
+        pendingAckEvidenceState:
+          PUBLICATION_RECOVERY_PENDING_ACK_EVIDENCE_STATE.COUNT_ONLY,
+        missingPublishedNodeIds: OWNER_RECONCILE_BROAD_MISSING_NODE_IDS,
+        missingPublishedCount: OWNER_RECONCILE_BROAD_MISSING_NODE_IDS.length,
+      },
+    },
+    activeGate: {
+      progress: {
+        expectedNodeCount:
+          OWNER_RECONCILE_PUBLISHED_NODE_IDS.length +
+          OWNER_RECONCILE_BROAD_MISSING_NODE_IDS.length,
+        selectedPublishedActiveNodeIds: OWNER_RECONCILE_PUBLISHED_NODE_IDS,
+        selectedMissingPublishedNodeIds:
+          OWNER_RECONCILE_BROAD_MISSING_NODE_IDS,
+        publicationStatus: CONTROL_PLANE_PUBLICATION_STATUS.OPEN,
+        recoveryProtocolState: RECOVERY_PROTOCOL_STATE.PUBLICATION_PENDING,
+        pendingAckCount: TEST_PENDING_ACK_COUNT,
+        missingPublishedCount: OWNER_RECONCILE_BROAD_MISSING_NODE_IDS.length,
+        membershipPublicationHandoffOutcomeState:
+          OWNER_RECONCILE_HANDOFF_OUTCOME_STATE.WRITE_DEFERRED,
+        membershipPublicationHandoffOutcomeEnqueued: true,
+        publicationActiveGateHandoffState:
+          OWNER_RECONCILE_HANDOFF_STATE.PENDING,
+        publicationActiveGateHandoffReasonCode:
+          OWNER_RECONCILE_HANDOFF_REASON.OWNER_RECONCILE_PENDING,
+        publicationActiveGateHandoffNextAction:
+          OWNER_RECONCILE_HANDOFF_NEXT_ACTION
+            .RECONCILE_OWNER_MEMBERSHIP_PUBLICATION,
+        publicationActiveGateHandoffRuntimePromotionAllowed: false,
+        publicationActiveGateHandoffPendingReconcileNodeIds:
+          OWNER_RECONCILE_HANDOFF_NODE_IDS,
+        publicationActiveGateHandoffPendingReconcileCount:
+          OWNER_RECONCILE_HANDOFF_NODE_IDS.length,
+      },
+    },
+  });
+
+  assert.equal(
+    publicationEvidence.publicationConvergence.pendingAckCount,
+    TEST_PENDING_ACK_COUNT,
+  );
+  assert.deepEqual(
+    publicationEvidence.publicationConvergence.missingPublishedNodeIds,
+    OWNER_RECONCILE_HANDOFF_NODE_IDS,
+  );
+  assert.equal(
+    publicationEvidence.publicationConvergence.missingPublishedCount,
+    OWNER_RECONCILE_HANDOFF_NODE_IDS.length,
+  );
+  assert.deepEqual(
+    publicationEvidence.publicationConvergence.publicationRecoveryGate
+      .missingPublishedNodeIds,
+    OWNER_RECONCILE_HANDOFF_NODE_IDS,
   );
 });

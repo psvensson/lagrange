@@ -1100,7 +1100,7 @@ function resolveOwnerReconcileNarrowedMissingPublishedNodeIds({
     normalizeOptionalString(publicationStatus) ===
       PUBLICATION_RECOVERY_PUBLICATION_STATUS.OPEN,
     hasOwnerReconcilePublicationHandoff(publicationActiveGateHandoff),
-    hasNoPendingPublicationAckDebt(pendingAckEvidence),
+    pendingAckEvidenceAllowsOwnerReconcileNarrowing(pendingAckEvidence),
   ].every(Boolean);
   if (!canNarrow) {
     return PUBLICATION_RECOVERY_EVIDENCE_EMPTY_LIST;
@@ -1130,6 +1130,26 @@ function hasNoPendingPublicationAckDebt(pendingAckEvidence = null) {
     NUM.ZERO &&
     normalizeDistinctStringArray(pendingAckEvidence?.pendingAckNodeIds)
       .length === NUM.ZERO;
+}
+
+function hasNoPendingPublicationAckNodeDebt(pendingAckEvidence = null) {
+  return normalizeDistinctStringArray(pendingAckEvidence?.pendingAckNodeIds)
+    .length === NUM.ZERO;
+}
+
+function hasCountOnlyPendingPublicationAckDebt(pendingAckEvidence = null) {
+  return normalizeOptionalString(pendingAckEvidence?.evidenceState) ===
+    PUBLICATION_RECOVERY_PENDING_ACK_EVIDENCE_STATE.COUNT_ONLY &&
+    hasNoPendingPublicationAckNodeDebt(pendingAckEvidence) &&
+    normalizeNonNegativeInteger(pendingAckEvidence?.pendingAckCount) >
+      NUM.ZERO;
+}
+
+function pendingAckEvidenceAllowsOwnerReconcileNarrowing(
+  pendingAckEvidence = null,
+) {
+  return hasNoPendingPublicationAckDebt(pendingAckEvidence) ||
+    hasCountOnlyPendingPublicationAckDebt(pendingAckEvidence);
 }
 
 function resolvePublicationMissingPublishedNodeIds({
@@ -1227,6 +1247,39 @@ function activeGateOpenDebtOutrunsPublicationOwnerStream({
     normalizeNonNegativeInteger(publicationOwnerStream.pendingAckCount) ||
     normalizeNonNegativeInteger(missingPublishedCount) >
       normalizeNonNegativeInteger(publicationOwnerStream.missingPublishedCount);
+}
+
+function haveSamePublicationRecoveryNodeIdSet(
+  leftNodeIds = PUBLICATION_RECOVERY_EVIDENCE_EMPTY_LIST,
+  rightNodeIds = PUBLICATION_RECOVERY_EVIDENCE_EMPTY_LIST,
+) {
+  const left = normalizeDistinctStringArray(leftNodeIds);
+  const right = normalizeDistinctStringArray(rightNodeIds);
+  return left.length === right.length &&
+    left.every((nodeId) => right.includes(nodeId));
+}
+
+function ownerReconcileNarrowingRefreshesPublicationOwnerStream({
+  ownerReconcileNarrowsOpenPublication = false,
+  ownerReconcileNarrowedMissingPublishedNodeIds =
+    PUBLICATION_RECOVERY_EVIDENCE_EMPTY_LIST,
+  publicationOwnerStream = null,
+} = {}) {
+  if (
+    ownerReconcileNarrowsOpenPublication !== true ||
+    !isRecord(publicationOwnerStream)
+  ) {
+    return false;
+  }
+  const narrowedMissingPublishedNodeIds = normalizeDistinctStringArray(
+    ownerReconcileNarrowedMissingPublishedNodeIds,
+  );
+  return haveSamePublicationRecoveryNodeIdSet(
+    publicationOwnerStream.missingPublishedNodeIds,
+    narrowedMissingPublishedNodeIds,
+  ) !== true ||
+    normalizeNonNegativeInteger(publicationOwnerStream.missingPublishedCount) !==
+      narrowedMissingPublishedNodeIds.length;
 }
 
 function alignPublicationRecoveryGateOwnerStreamWithOpenDebt(gate = null) {
@@ -1952,6 +2005,16 @@ function buildCanonicalPublicationConvergenceGate(options = {}) {
       publicationOwnerStream:
         rawPublicationConvergenceGate?.publicationOwnerStream,
     });
+  const ownerReconcileNarrowingRefreshesOwnerStream =
+    ownerReconcileNarrowingRefreshesPublicationOwnerStream({
+      ownerReconcileNarrowsOpenPublication,
+      ownerReconcileNarrowedMissingPublishedNodeIds,
+      publicationOwnerStream:
+        rawPublicationConvergenceGate?.publicationOwnerStream,
+    });
+  const publicationOwnerStreamNeedsOpenDebtRefresh =
+    activeGateOpenDebtRefreshesPublicationOwnerStream ||
+    ownerReconcileNarrowingRefreshesOwnerStream;
 
   if (
     !publicationConvergence &&
@@ -1969,7 +2032,7 @@ function buildCanonicalPublicationConvergenceGate(options = {}) {
       pendingAckEvidenceState: null,
       publicationOwnerStream: null,
     } : {}),
-    ...(activeGateOpenDebtRefreshesPublicationOwnerStream ? {
+    ...(publicationOwnerStreamNeedsOpenDebtRefresh ? {
       publicationOwnerStream: null,
     } : {}),
     openCountOnlyAckIsStale:
@@ -2029,7 +2092,7 @@ function buildCanonicalPublicationConvergenceGate(options = {}) {
       priorityRecoveryObservation?.pressureReasonCodes,
   });
   const alignedPublicationConvergenceGate =
-    activeGateOpenDebtRefreshesPublicationOwnerStream ?
+    publicationOwnerStreamNeedsOpenDebtRefresh ?
       alignPublicationRecoveryGateOwnerStreamWithOpenDebt(
         canonicalPublicationConvergenceGate,
       ) :

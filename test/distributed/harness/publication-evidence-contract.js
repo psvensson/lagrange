@@ -26,6 +26,7 @@ import {
 const PUBLICATION_EVIDENCE_EMPTY_LIST = Object.freeze([]);
 const PUBLICATION_EVIDENCE_ZERO = 0;
 const PUBLICATION_EVIDENCE_READY_BLOCKER = 'ready';
+const PUBLICATION_EVIDENCE_PUBLICATION_STATUS_OPEN = 'OPEN';
 const PUBLICATION_EVIDENCE_PUBLICATION_STATUS_PUBLISHED = 'PUBLISHED';
 const PUBLICATION_EVIDENCE_RECOVERY_PROTOCOL_STATE_STEADY_PUBLISHED =
   'steady_published';
@@ -63,12 +64,28 @@ const PUBLICATION_EVIDENCE_ACTIVE_GATE_PUBLICATION_MEMBERSHIP_RULES =
       matches: () => true,
     }),
   ]);
+const PUBLICATION_EVIDENCE_ACTIVE_GATE_HANDOFF_FIELD = Object.freeze({
+  STATE: 'publicationActiveGateHandoffState',
+  REASON_CODE: 'publicationActiveGateHandoffReasonCode',
+  NEXT_ACTION: 'publicationActiveGateHandoffNextAction',
+  RUNTIME_PROMOTION_ALLOWED:
+    'publicationActiveGateHandoffRuntimePromotionAllowed',
+  PENDING_RECONCILE_NODE_IDS:
+    'publicationActiveGateHandoffPendingReconcileNodeIds',
+});
+const PUBLICATION_EVIDENCE_ACTIVE_GATE_HANDOFF = Object.freeze({
+  STATE_PENDING: 'pending',
+  REASON_OWNER_RECONCILE_PENDING: 'owner_reconcile_pending',
+  ACTION_RECONCILE_OWNER_MEMBERSHIP_PUBLICATION:
+    'reconcile_owner_membership_publication',
+});
 const PUBLICATION_EVIDENCE_TYPEOF = Object.freeze({
   OBJECT: 'object',
   STRING: 'string',
 });
 const PUBLICATION_EVIDENCE_TEXT = Object.freeze({
   EMPTY: '',
+  FALSE: 'false',
   VALUE_SEPARATOR: '|',
 });
 const PUBLICATION_EVIDENCE_EMPTY_RECORD = Object.freeze({});
@@ -146,10 +163,82 @@ function normalizeBoolean(value) {
   return value === true;
 }
 
+function normalizeExplicitFalse(value) {
+  return value === false ||
+    value === PUBLICATION_EVIDENCE_TEXT.FALSE;
+}
+
 function normalizeNonNegativeInteger(value) {
   return Number.isInteger(value) && value >= PUBLICATION_EVIDENCE_ZERO ?
     value :
     null;
+}
+
+function pendingAckEvidenceAllowsOwnerReconcileNarrowing({
+  pendingAckCount = PUBLICATION_EVIDENCE_ZERO,
+  pendingAckNodeIds = PUBLICATION_EVIDENCE_EMPTY_LIST,
+  pendingAckEvidenceState = null,
+} = {}) {
+  const normalizedPendingAckNodeIds =
+    normalizeDistinctStringArray(pendingAckNodeIds);
+  if (
+    pendingAckCount === PUBLICATION_EVIDENCE_ZERO &&
+    normalizedPendingAckNodeIds.length === PUBLICATION_EVIDENCE_ZERO
+  ) {
+    return true;
+  }
+  return pendingAckEvidenceState ===
+    PUBLICATION_RECOVERY_PENDING_ACK_EVIDENCE_STATE.COUNT_ONLY &&
+    normalizedPendingAckNodeIds.length === PUBLICATION_EVIDENCE_ZERO;
+}
+
+function resolveOwnerReconcileHandoffMissingPublishedNodeIds({
+  activeGateProgress = null,
+  publicationStatus = null,
+  pendingAckCount = PUBLICATION_EVIDENCE_ZERO,
+  pendingAckNodeIds = PUBLICATION_EVIDENCE_EMPTY_LIST,
+  pendingAckEvidenceState = null,
+} = {}) {
+  if (
+    !isRecord(activeGateProgress) ||
+    publicationStatus !== PUBLICATION_EVIDENCE_PUBLICATION_STATUS_OPEN ||
+    pendingAckEvidenceAllowsOwnerReconcileNarrowing({
+      pendingAckCount,
+      pendingAckNodeIds,
+      pendingAckEvidenceState,
+    }) !== true
+  ) {
+    return PUBLICATION_EVIDENCE_EMPTY_LIST;
+  }
+  const matchesOwnerReconcileHandoff = [
+    activeGateProgress[
+      PUBLICATION_EVIDENCE_ACTIVE_GATE_HANDOFF_FIELD.STATE
+    ] === PUBLICATION_EVIDENCE_ACTIVE_GATE_HANDOFF.STATE_PENDING,
+    activeGateProgress[
+      PUBLICATION_EVIDENCE_ACTIVE_GATE_HANDOFF_FIELD.REASON_CODE
+    ] ===
+      PUBLICATION_EVIDENCE_ACTIVE_GATE_HANDOFF
+        .REASON_OWNER_RECONCILE_PENDING,
+    activeGateProgress[
+      PUBLICATION_EVIDENCE_ACTIVE_GATE_HANDOFF_FIELD.NEXT_ACTION
+    ] ===
+      PUBLICATION_EVIDENCE_ACTIVE_GATE_HANDOFF
+        .ACTION_RECONCILE_OWNER_MEMBERSHIP_PUBLICATION,
+    normalizeExplicitFalse(
+      activeGateProgress[
+        PUBLICATION_EVIDENCE_ACTIVE_GATE_HANDOFF_FIELD
+          .RUNTIME_PROMOTION_ALLOWED
+      ],
+    ),
+  ].every(Boolean);
+  return matchesOwnerReconcileHandoff ?
+    normalizeDistinctStringArray(
+      activeGateProgress[
+        PUBLICATION_EVIDENCE_ACTIVE_GATE_HANDOFF_FIELD
+          .PENDING_RECONCILE_NODE_IDS
+      ],
+    ) :
+    PUBLICATION_EVIDENCE_EMPTY_LIST;
 }
 
 function normalizePositiveInteger(value) {
@@ -2110,6 +2199,9 @@ function buildCanonicalPublicationConvergence(
         normalizeNonNegativeInteger(activeGateProgress?.pendingAckCount) ??
         PUBLICATION_EVIDENCE_ZERO,
       );
+  const pendingAckEvidenceState =
+    publicationConvergenceGate?.pendingAckEvidenceState ??
+    rawPublicationConvergence?.pendingAckEvidenceState;
   const rawPublicationGateReasons =
     publicationConvergenceGate?.reasonCodes ??
     publicationConvergenceGate?.reasons ??
@@ -2203,8 +2295,21 @@ function buildCanonicalPublicationConvergence(
       observedMissingPublishedNodeIds,
       effectivePublicationMembershipNodeIds,
     );
+  const ownerReconcileNarrowedMissingPublishedNodeIds =
+    resolveOwnerReconcileHandoffMissingPublishedNodeIds({
+      activeGateProgress,
+      publicationStatus,
+      pendingAckCount,
+      pendingAckNodeIds,
+      pendingAckEvidenceState,
+    });
+  const ownerReconcileNarrowsOpenPublication =
+    ownerReconcileNarrowedMissingPublishedNodeIds.length >
+      PUBLICATION_EVIDENCE_ZERO;
   const missingPublishedNodeIds =
-    staleGenericPublicationEpochClosure === true &&
+    ownerReconcileNarrowsOpenPublication ?
+      ownerReconcileNarrowedMissingPublishedNodeIds :
+      staleGenericPublicationEpochClosure === true &&
       steadyPublishedSelectedPublicationMembershipOpen !== true &&
       currentSelectedPublicationMembershipDeficitOpen !== true ?
       PUBLICATION_EVIDENCE_EMPTY_LIST :
@@ -2219,7 +2324,9 @@ function buildCanonicalPublicationConvergence(
           ...observedMissingPublishedNodeIds,
         ]);
   const missingPublishedCount =
-    staleGenericPublicationEpochClosure === true &&
+    ownerReconcileNarrowsOpenPublication ?
+      ownerReconcileNarrowedMissingPublishedNodeIds.length :
+      staleGenericPublicationEpochClosure === true &&
       currentSelectedPublicationMembershipDeficitOpen !== true ?
       PUBLICATION_EVIDENCE_ZERO :
       authoritativePublicationMembershipAvailable ?
@@ -2274,9 +2381,7 @@ function buildCanonicalPublicationConvergence(
       acknowledgedNodeIds,
       pendingAckNodeIds,
       pendingAckCount,
-      pendingAckEvidenceState:
-        publicationConvergenceGate?.pendingAckEvidenceState ??
-        rawPublicationConvergence?.pendingAckEvidenceState,
+      pendingAckEvidenceState,
       missingPublishedNodeIds,
       missingPublishedCount,
       priorityRecoveryReasonCodes: currentPriorityRecoveryReasonCodes,
