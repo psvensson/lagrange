@@ -353,7 +353,7 @@ If review directly fixes metadata-only findings, record `review-fixed-metadata-o
 
 ## Commit And Push Ledger
 
-1. Focused package commit: e5793ea776a8833f2a51a1b290df2043a4692973
+1. Focused package commit: 8b65d7f5
 2. Pushed to: origin/codex/pending-ack-eligibility-filter
 3. Commit contains only package-owned files/package-status/allowed sprint handoff: yes
 
