@@ -25,6 +25,8 @@
   ],
   "writeScope": [
     "work/packages/done-20260520-semantic-decomposition-operation-workflow-priority-dispatch.md",
+    "architecture/current-owner-maps.md",
+    "scripts/check-operation-progress-authority.js",
     "src/rebalancer/operation-workflow-recovery-reconcile.js",
     "src/rebalancer/operation-workflow-recovery-reconcile-shared.js",
     "src/rebalancer/operation-workflow-owner-segment-7.js",
@@ -44,8 +46,11 @@
   "handoffFiles": [],
   "generatedFiles": [],
   "candidateRuntimeFiles": [],
+  "commitAndPushLedgerRequired": true,
   "commitScope": [
     "work/packages/done-20260520-semantic-decomposition-operation-workflow-priority-dispatch.md",
+    "architecture/current-owner-maps.md",
+    "scripts/check-operation-progress-authority.js",
     "src/rebalancer/operation-workflow-recovery-reconcile.js",
     "src/rebalancer/operation-workflow-recovery-reconcile-shared.js",
     "src/rebalancer/operation-workflow-owner-segment-7.js",
@@ -111,3 +116,9 @@ moves to semantic module names.
 ## Execution Evidence
 
 - [x] implementation: status: validated; evidence: `node --check src/rebalancer/operation-workflow-recovery-reconcile.js`, `node --check src/rebalancer/operation-workflow-recovery-reconcile-shared.js`, `node --check src/control-plane/priority-recovery-dispatch-snapshot.js`, `npm test -- test/scripts/check-operation-progress-authority.test.js`, `npm test -- test/rebalancer/operation-workflow-owner-decision.test.js test/rebalancer/operation-workflow-owner-adapter.test.js`, `npm run audit:operation-progress-authority`, and `npm run work:validate -- --closure work/packages/done-20260520-semantic-decomposition-operation-workflow-priority-dispatch.md`; parent validation: yes; next: keep wrappers until import consumers are migrated.
+
+## Commit And Push Ledger
+
+1. Focused package commit: 9e1a266d885f24ecd098aa25b83de18317428d03
+2. Pushed to: origin/codex/pending-ack-eligibility-filter
+3. Commit contains only package-owned files/package-status/allowed sprint handoff: yes

@@ -32,11 +32,13 @@
   ],
   "writeScope": [
     "work/packages/done-20260520-workflow-experiment-lane-and-cost-tracking.md",
+    "work/packages/done-20260520-priority-recovery-fixture-experiment-lifecycle.md",
     "architecture/current-owner-maps.md",
     "package.json",
     "scripts/check-operation-progress-authority.js",
     "scripts/list-commands.js",
     "scripts/model-ledger.js",
+    "scripts/work-context.js",
     "scripts/work-package-cost.js",
     "scripts/work-package-new.js",
     "scripts/work-package-schema.js",
@@ -44,11 +46,14 @@
     "test/scripts/__fixtures__/topology-convergence/priority-workflow-dispatch-pending-planned-control-plane-publications.fixture.json",
     "test/scripts/analyze-topology-convergence.test.js",
     "test/scripts/check-operation-progress-authority.test.js",
+    "test/scripts/priority-recovery-current-artifact-fixture.test.js",
     "test/scripts/work-llm-usability-tools.test.js",
     "test/scripts/work-tracker-architecture-decision-gate.test.js",
     "test/scripts/work-tracker-subagent-ledger.test.js",
     "work/packages/active-20260513-priority-recovery-current-artifact-fixture-and-burndown.md",
     "work/packages/todo-20260513-priority-recovery-current-artifact-fixture-and-burndown.md",
+    "work/sprints/current-blocker.json",
+    "work/sprints/current-blocker.md",
     "work/tracks/topology-convergence.md",
     "work/README.md",
     "work/templates/probe-package.md",
@@ -57,13 +62,16 @@
   "handoffFiles": [],
   "generatedFiles": [],
   "candidateRuntimeFiles": [],
+  "commitAndPushLedgerRequired": true,
   "commitScope": [
     "work/packages/done-20260520-workflow-experiment-lane-and-cost-tracking.md",
+    "work/packages/done-20260520-priority-recovery-fixture-experiment-lifecycle.md",
     "architecture/current-owner-maps.md",
     "package.json",
     "scripts/check-operation-progress-authority.js",
     "scripts/list-commands.js",
     "scripts/model-ledger.js",
+    "scripts/work-context.js",
     "scripts/work-package-cost.js",
     "scripts/work-package-new.js",
     "scripts/work-package-schema.js",
@@ -71,11 +79,14 @@
     "test/scripts/__fixtures__/topology-convergence/priority-workflow-dispatch-pending-planned-control-plane-publications.fixture.json",
     "test/scripts/analyze-topology-convergence.test.js",
     "test/scripts/check-operation-progress-authority.test.js",
+    "test/scripts/priority-recovery-current-artifact-fixture.test.js",
     "test/scripts/work-llm-usability-tools.test.js",
     "test/scripts/work-tracker-architecture-decision-gate.test.js",
     "test/scripts/work-tracker-subagent-ledger.test.js",
     "work/packages/active-20260513-priority-recovery-current-artifact-fixture-and-burndown.md",
     "work/packages/todo-20260513-priority-recovery-current-artifact-fixture-and-burndown.md",
+    "work/sprints/current-blocker.json",
+    "work/sprints/current-blocker.md",
     "work/tracks/topology-convergence.md",
     "work/README.md",
     "work/templates/probe-package.md",
@@ -273,3 +284,9 @@ If review directly fixes metadata-only findings, record `review-fixed-metadata-o
 12. npm run work:validate -- --pre-impl work/packages/active-20260513-priority-recovery-current-artifact-fixture-and-burndown.md
 13. npm run work:validate -- --closure work/packages/done-20260520-workflow-experiment-lane-and-cost-tracking.md
 14. git diff --check
+
+## Commit And Push Ledger
+
+1. Focused package commit: 55b82b77818da3eceaf081986bfd54af0cee1917
+2. Pushed to: origin/codex/pending-ack-eligibility-filter
+3. Commit contains only package-owned files/package-status/allowed sprint handoff: yes
