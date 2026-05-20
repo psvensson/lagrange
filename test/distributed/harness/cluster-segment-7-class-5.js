@@ -66,6 +66,13 @@ const CONTROL_SNAPSHOT_OBSERVATION_RETRY_AFTER_MS_FIELD = 'retryAfterMs';
 const CONTROL_SNAPSHOT_REACHABILITY_SOURCE = 'control_snapshot';
 const CONTROL_SNAPSHOT_MISSING_ROWS_ERROR = 'control snapshot missing rows';
 const CONTROL_SNAPSHOT_NO_CANDIDATES_ERROR = 'no_control_snapshot_candidates';
+const CONTROL_SNAPSHOT_AUTHORITATIVE_REPAIR_FAILED_TEXT =
+  'authoritative control snapshot repair failed';
+const CONTROL_SNAPSHOT_CONNECTION_TO_NODE_TEXT = 'connection to node';
+const CONTROL_SNAPSHOT_CONNECTION_CLOSED_TEXT = 'closed';
+const CONTROL_SNAPSHOT_RETRY_REASON_SELECTED_TIMEOUT = 'selected_timeout';
+const CONTROL_SNAPSHOT_RETRY_REASON_AUTHORITATIVE_REPAIR_PRESSURE =
+  'authoritative_repair_pressure';
 const SERVICE_DISCOVERY_NO_CANDIDATES_ERROR = 'no_service_discovery_candidates';
 const ACTIVE_WAIT_TIMEOUT_EVENT_INTERVAL_DIVISOR = 2;
 const TYPEOF_BOOLEAN = 'boolean';
@@ -142,6 +149,57 @@ function resetSnapshotLaneAfterTimeout(node, error) {
   return true;
 }
 
+function isAuthoritativeRepairParticipantConnectionClosedProbeError(error) {
+  const normalizedError = String(normalizeProbeError(error)).toLowerCase();
+  return (
+    normalizedError.includes(
+      CONTROL_SNAPSHOT_AUTHORITATIVE_REPAIR_FAILED_TEXT,
+    ) &&
+    normalizedError.includes(CONTROL_SNAPSHOT_CONNECTION_TO_NODE_TEXT) &&
+    normalizedError.includes(CONTROL_SNAPSHOT_CONNECTION_CLOSED_TEXT)
+  );
+}
+
+function resolveSnapshotRetryReason({
+  forceRepair,
+  reachabilityDiagnostics,
+  snapshotError,
+}) {
+  const snapshotRetryEvidence = {
+    adminReady: reachabilityDiagnostics?.adminReady === true,
+    authoritativeRepairPressure:
+      isAuthoritativeRepairParticipantConnectionClosedProbeError(snapshotError),
+    forceRepair: forceRepair === true,
+    selectedTimeout: isTimeoutShapedProbeError(snapshotError) === true,
+  };
+  if (snapshotRetryEvidence.adminReady !== true) {
+    return null;
+  }
+  if (
+    snapshotRetryEvidence.forceRepair !== true &&
+    snapshotRetryEvidence.selectedTimeout
+  ) {
+    return CONTROL_SNAPSHOT_RETRY_REASON_SELECTED_TIMEOUT;
+  }
+  if (
+    snapshotRetryEvidence.forceRepair === true &&
+    snapshotRetryEvidence.authoritativeRepairPressure
+  ) {
+    return CONTROL_SNAPSHOT_RETRY_REASON_AUTHORITATIVE_REPAIR_PRESSURE;
+  }
+  return null;
+}
+
+function resolveSnapshotRetryTimeoutMs(snapshotTimeoutMs) {
+  const normalizedSnapshotTimeoutMs = Number.isFinite(snapshotTimeoutMs) ?
+    Math.max(MIN_TIMEOUT_MS, Math.floor(snapshotTimeoutMs)) :
+    MIN_TIMEOUT_MS;
+  return Math.max(
+    normalizedSnapshotTimeoutMs,
+    CONTROL_SNAPSHOT_PROBE_TIMEOUT_MS,
+  );
+}
+
 class Cluster5 extends Cluster4 {
   async _probeControlSnapshotCoverage(
     deadline,
@@ -190,7 +248,10 @@ class Cluster5 extends Cluster4 {
     ) => {
       let reachabilityDiagnostics = null;
       let reachabilityError = null;
-      const buildSuccessfulSnapshotCoverageResult = (snapshotResult) => {
+      const buildSuccessfulSnapshotCoverageResult = (
+        snapshotResult,
+        successfulSnapshotTimeoutMs = snapshotTimeoutMs,
+      ) => {
         const snapshotPayload =
           this._extractControlSnapshotPayload(snapshotResult);
         const snapshotSummary =
@@ -226,7 +287,7 @@ class Cluster5 extends Cluster4 {
         return {
           nodeId: node.id,
           error: null,
-          snapshotTimeoutMs,
+          snapshotTimeoutMs: successfulSnapshotTimeoutMs,
           reachabilityTimeoutMs,
           adminReady: reachabilityDiagnostics?.adminReady === true,
           reachable: reachabilityDiagnostics?.reachable === true,
@@ -303,24 +364,27 @@ class Cluster5 extends Cluster4 {
         return buildSuccessfulSnapshotCoverageResult(snapshotResult);
       } catch (error) {
         let snapshotError = normalizeProbeError(error);
-        const snapshotLaneReset = resetSnapshotLaneAfterTimeout(
-          node,
-          snapshotError,
-        );
+        resetSnapshotLaneAfterTimeout(node, snapshotError);
         await probeReachabilityDiagnostics();
-        if (
-          snapshotLaneReset === true &&
-          reachabilityDiagnostics?.adminReady === true &&
-          options.forceRepair !== true
-        ) {
+        const retryReason = resolveSnapshotRetryReason({
+          forceRepair: options.forceRepair === true,
+          reachabilityDiagnostics,
+          snapshotError,
+        });
+        if (retryReason !== null) {
           try {
+            const retrySnapshotTimeoutMs =
+              resolveSnapshotRetryTimeoutMs(snapshotTimeoutMs);
             const retrySnapshotResult = await node.getControlSnapshot({
-              timeoutMs: snapshotTimeoutMs,
+              timeoutMs: retrySnapshotTimeoutMs,
               lane: ADMIN_SOCKET_LANE_SNAPSHOT,
               forceRepair: false,
               forceAuthoritativeRepair: false,
             });
-            return buildSuccessfulSnapshotCoverageResult(retrySnapshotResult);
+            return buildSuccessfulSnapshotCoverageResult(
+              retrySnapshotResult,
+              retrySnapshotTimeoutMs,
+            );
           } catch (retryError) {
             snapshotError = normalizeProbeError(retryError);
             resetSnapshotLaneAfterTimeout(node, snapshotError);

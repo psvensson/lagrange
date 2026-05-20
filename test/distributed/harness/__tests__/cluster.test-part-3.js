@@ -48,6 +48,14 @@ const TEST_NODE_ID = 'node-1';
 const TEST_CONTAINER_ID = 'container-1';
 const TEST_CAPTURED_AT = 1;
 const TEST_ADMIN_QUERY_TIMEOUT_MS = 4321;
+const TEST_SNAPSHOT_LANE = 'snapshot';
+const TEST_RESET_LANE_SOCKET_TEST_NAME =
+  'Unit: NodeHandle._resetAdminSocket closes lane socket before retry';
+const TEST_RESET_LANE_QUERY_ONE = 'SELECT 1';
+const TEST_RESET_LANE_QUERY_TWO = 'SELECT 2';
+const TEST_RESET_LANE_ROW = Object.freeze({ok: 1});
+const TEST_FIRST_CONNECTION_COUNT = 1;
+const TEST_QUERY_RESULT_COUNT = 1;
 const TEST_FORCED_REPAIR_FAILURE =
   'Distributed operation failed due to participant failures';
 const TEST_FORCED_REPAIR_ERROR_CODE = 'DISTRIBUTED_PARTICIPANT_FAILURE';
@@ -603,6 +611,109 @@ test('Unit: NodeHandle.queryWithTimeout captures timeout query trace entries',
       });
     }
   });
+
+test(TEST_RESET_LANE_SOCKET_TEST_NAME, async () => {
+  const server = new WebSocketServer({
+    host: TEST_ADMIN_HOST,
+    port: TEST_ADMIN_PORT_ANY,
+  });
+  await new Promise((resolve, reject) => {
+    server.once('listening', resolve);
+    server.once('error', reject);
+  });
+
+  const address = server.address();
+  assert.ok(address && typeof address === 'object',
+    'server should expose listen address');
+  const adminApiPort = address.port;
+  const connectionsByLane = [];
+  let firstSnapshotConnectionClosed = null;
+  const firstSnapshotConnectionClosedPromise = new Promise((resolve) => {
+    firstSnapshotConnectionClosed = resolve;
+  });
+
+  server.on('connection', (socket, request) => {
+    const requestUrl = new URL(
+      request?.url || '',
+      'ws://' + TEST_ADMIN_HOST,
+    );
+    const lane = requestUrl.searchParams.get('lane');
+    connectionsByLane.push(lane);
+    const snapshotConnectionCount = connectionsByLane.filter(
+      (connectionLane) => connectionLane === TEST_SNAPSHOT_LANE,
+    ).length;
+    socket.send(JSON.stringify({
+      type: TEST_CACHE_DUMP_MESSAGE_TYPE,
+      data: TEST_EMPTY_CACHE_DUMP,
+    }));
+    if (
+      lane === TEST_SNAPSHOT_LANE &&
+      snapshotConnectionCount === TEST_FIRST_CONNECTION_COUNT
+    ) {
+      socket.once('close', firstSnapshotConnectionClosed);
+    }
+    socket.once('message', (data) => {
+      const parsed = JSON.parse(data.toString());
+      if (
+        lane === TEST_SNAPSHOT_LANE &&
+        snapshotConnectionCount === TEST_FIRST_CONNECTION_COUNT
+      ) {
+        return;
+      }
+      socket.send(JSON.stringify({
+        type: TEST_QUERY_RESULT_MESSAGE_TYPE,
+        queryId: parsed.queryId,
+        results: [TEST_RESET_LANE_ROW],
+        count: TEST_QUERY_RESULT_COUNT,
+      }));
+    });
+  });
+
+  const node = new NodeHandle(
+    TEST_NODE_ID,
+    TEST_CONTAINER_ID,
+    TEST_ADMIN_HOST,
+    NODE_ROLES.SEED,
+    {getContainerLogs: async () => ''},
+    adminApiPort,
+  );
+
+  try {
+    await assert.rejects(
+      node.queryWithTimeout(TEST_RESET_LANE_QUERY_ONE, [], {
+        lane: TEST_SNAPSHOT_LANE,
+        timeoutMs: ADMIN_QUERY_TRACE_TIMEOUT_TEST_MS,
+      }),
+      /timed out/i,
+    );
+    node._resetAdminSocket(TEST_SNAPSHOT_LANE);
+    await firstSnapshotConnectionClosedPromise;
+    const result = await node.queryWithTimeout(
+      TEST_RESET_LANE_QUERY_TWO,
+      [],
+      {lane: TEST_SNAPSHOT_LANE},
+    );
+    assert.deepStrictEqual(result.rows, [TEST_RESET_LANE_ROW]);
+    assert.deepStrictEqual(
+      connectionsByLane,
+      [
+        TEST_SNAPSHOT_LANE,
+        TEST_SNAPSHOT_LANE,
+      ],
+    );
+  } finally {
+    node.closeQueryConnection();
+    await new Promise((resolve, reject) => {
+      server.close((err) => {
+        if (err) {
+          reject(err);
+          return;
+        }
+        resolve();
+      });
+    });
+  }
+});
 
 test('Unit: NodeHandle.partitionCallback sends callback envelope and returns hostResult',
   async () => {

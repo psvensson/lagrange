@@ -69,6 +69,9 @@ const {
 
 const REACHABILITY_HTTP_PROBE_TIMEOUT_MS = FETCH_TIMEOUT_MS;
 const REACHABILITY_ADMIN_PROBE_TIMEOUT_MS = FETCH_TIMEOUT_MS;
+const ADMIN_QUERY_CONNECTION_RESET_PREFIX =
+  'Admin API query connection reset for node ';
+const ADMIN_QUERY_CONNECTION_RESET_LANE_TEXT = ' on lane ';
 
 function resolveReachabilityProbeTimeoutMs(remainingBudgetMs, maxTimeoutMs) {
   const remainingMs = resolvePositiveTimeoutMs(
@@ -846,10 +849,32 @@ class NodeHandle {
 
   _resetAdminSocket(lane = null) {
     if (lane !== null) {
+      const socket = this._adminSocketByLane.get(lane);
+      const pendingSocket = this._pendingAdminSocketByLane.get(lane);
+      this._rejectPendingQueries(
+        ADMIN_QUERY_CONNECTION_RESET_PREFIX +
+          this.id +
+          ADMIN_QUERY_CONNECTION_RESET_LANE_TEXT +
+          lane,
+        lane,
+      );
       this._adminSocketByLane.delete(lane);
       this._adminSocketReadyByLane.delete(lane);
       this._pendingAdminSocketByLane.delete(lane);
+      closeWebSocketSafely(socket);
+      if (pendingSocket !== socket) {
+        closeWebSocketSafely(pendingSocket);
+      }
       return;
+    }
+    this._rejectPendingQueries(
+      ADMIN_QUERY_CONNECTION_RESET_PREFIX + this.id,
+    );
+    for (const socket of this._adminSocketByLane.values()) {
+      closeWebSocketSafely(socket);
+    }
+    for (const pendingSocket of this._pendingAdminSocketByLane.values()) {
+      closeWebSocketSafely(pendingSocket);
     }
     this._adminSocketByLane.clear();
     this._adminSocketReadyByLane.clear();
