@@ -3,7 +3,7 @@
 <!-- work-package
 {
   "schema": "work-package-v1",
-  "status": "active",
+  "status": "done",
   "opened": "2026-05-20",
   "lane": "runtime-owner-boundary",
   "scenario": "rolling-restart",
@@ -201,7 +201,10 @@
       "npm run work:repair",
       "npm run work:validate -- --pre-impl"
     ]
-  }
+  },
+  "closed": "2026-05-20",
+  "commitAndPushLedgerRequired": true,
+  "successor": "work/packages/done-20260520-priority-recovery-operation-workflow-owner-workflow-progress.md"
 }
 -->
 
@@ -356,9 +359,9 @@ If review directly fixes metadata-only findings, record `review-fixed-metadata-o
 
 ## Commit And Push Ledger
 
-1. Focused package commit: pending-before-closure
-2. Pushed to: pending-before-closure
-3. Commit contains only package-owned files/package-status/allowed sprint handoff: pending-before-closure
+1. Focused package commit: e5793ea776a8833f2a51a1b290df2043a4692973
+2. Pushed to: origin/codex/pending-ack-eligibility-filter
+3. Commit contains only package-owned files/package-status/allowed sprint handoff: yes
 
 ## Validation
 

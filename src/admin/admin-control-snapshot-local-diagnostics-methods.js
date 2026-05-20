@@ -1,4 +1,23 @@
 const LOCAL_STR_CONSTRUCTOR = 'constructor';
+const CONTROL_SNAPSHOT_DEFER_INLINE_OWNER_COMMAND_FIELD =
+  'deferInlineOwnerCommand';
+
+function buildControlSnapshotResolveOptions(options = {}) {
+  return {
+    ...(options.forceAuthoritativeRepair === true ?
+      {forceAuthoritativeRepair: true} :
+      {}),
+    allowAuthoritativeRepair: options.allowAuthoritativeRepair,
+    ...(options[CONTROL_SNAPSHOT_DEFER_INLINE_OWNER_COMMAND_FIELD] === true ?
+      {[CONTROL_SNAPSHOT_DEFER_INLINE_OWNER_COMMAND_FIELD]: true} :
+      {}),
+    queryTimeoutMs: options.queryTimeoutMs,
+    allowAuthoritativeReadinessRefresh:
+        options.allowAuthoritativeReadinessRefresh,
+    allowStaleReadinessOnCacheChange:
+        options.allowStaleReadinessOnCacheChange,
+  };
+}
 
 function assignAdminControlSnapshotLocalDiagnosticsMethods(
   AdminControlSnapshot,
@@ -490,27 +509,8 @@ function assignAdminControlSnapshotLocalDiagnosticsMethods(
      * @return {Object}
      */
     async buildControlSnapshotQueryResult(options = {}) {
-      const forceAuthoritativeRepair =
-        options.forceAuthoritativeRepair === true;
       const snapshot = await this.resolveLocalControlSnapshot(
-        forceAuthoritativeRepair ?
-          {
-            forceAuthoritativeRepair: true,
-            allowAuthoritativeRepair: options.allowAuthoritativeRepair,
-            queryTimeoutMs: options.queryTimeoutMs,
-            allowAuthoritativeReadinessRefresh:
-                options.allowAuthoritativeReadinessRefresh,
-            allowStaleReadinessOnCacheChange:
-                options.allowStaleReadinessOnCacheChange,
-          } :
-          {
-            allowAuthoritativeRepair: options.allowAuthoritativeRepair,
-            queryTimeoutMs: options.queryTimeoutMs,
-            allowAuthoritativeReadinessRefresh:
-                options.allowAuthoritativeReadinessRefresh,
-            allowStaleReadinessOnCacheChange:
-                options.allowStaleReadinessOnCacheChange,
-          },
+        buildControlSnapshotResolveOptions(options),
       );
       return {
         success: true,

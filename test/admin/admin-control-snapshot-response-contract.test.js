@@ -23,6 +23,7 @@ const TEST_PUBLICATION_EPOCH = 12;
 const TEST_REPLICA_ID = 'p1-r1';
 const TEST_REPLICA_ROLE_LEADER_NODE_ID = 'node-current';
 const TEST_STALE_PARTITION_LEADER_NODE_ID = 'node-stale';
+const TEST_DEFER_INLINE_OWNER_COMMAND_FIELD = 'deferInlineOwnerCommand';
 
 function createSnapshot() {
   return new AdminControlSnapshot({
@@ -229,6 +230,50 @@ test('AdminControlSnapshot labels local-cache observation mode',
         },
       },
       'local control snapshot rows should name the local-cache mode',
+    );
+  });
+
+test('AdminControlSnapshot query result does not defer owner handoff commands by default',
+  async (t) => {
+    const snapshot = createSnapshot();
+    let receivedOptions = null;
+    snapshot.resolveLocalControlSnapshot = async (options = {}) => {
+      receivedOptions = options;
+      return {
+        nodeId: TEST_NODE_ID,
+        capturedAt: TEST_CAPTURED_AT_MS,
+      };
+    };
+
+    await snapshot.buildControlSnapshotQueryResult();
+
+    t.equal(
+      receivedOptions?.[TEST_DEFER_INLINE_OWNER_COMMAND_FIELD],
+      undefined,
+      'control snapshot query results should let the owner command run inline when possible',
+    );
+  });
+
+test('AdminControlSnapshot query result preserves explicit owner handoff deferral',
+  async (t) => {
+    const snapshot = createSnapshot();
+    let receivedOptions = null;
+    snapshot.resolveLocalControlSnapshot = async (options = {}) => {
+      receivedOptions = options;
+      return {
+        nodeId: TEST_NODE_ID,
+        capturedAt: TEST_CAPTURED_AT_MS,
+      };
+    };
+
+    await snapshot.buildControlSnapshotQueryResult({
+      [TEST_DEFER_INLINE_OWNER_COMMAND_FIELD]: true,
+    });
+
+    t.equal(
+      receivedOptions?.[TEST_DEFER_INLINE_OWNER_COMMAND_FIELD],
+      true,
+      'explicit snapshot-query owner handoff deferral should still reach the resolver',
     );
   });
 

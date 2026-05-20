@@ -41,6 +41,7 @@ const DISPATCH_REARM_RECONCILE_BLOCKING_STATUSES = Object.freeze(
 const DISPATCH_REARM_RECONCILE_STATE = Object.freeze({
   OPERATION_UNAVAILABLE: 'operation_unavailable',
   CREATING_WITHOUT_CREATE_REARM: 'creating_without_create_rearm',
+  CREATE_REARM_TARGET_STILL_CREATING: 'create_rearm_target_still_creating',
   OBSERVED_BLOCKING_STATUS: 'observed_blocking_status',
   NON_DISPATCH_RETRYABLE_STEP: 'non_dispatch_retryable_step',
   NON_PRIORITY_RECOVERY_PARTITION: 'non_priority_recovery_partition',
@@ -57,6 +58,12 @@ const DISPATCH_REARM_RECONCILE_STATE_TABLE = Object.freeze([
     state: DISPATCH_REARM_RECONCILE_STATE.CREATING_WITHOUT_CREATE_REARM,
     matches: (evidence) =>
       evidence.observedCreatingWithoutCreateRearm === true,
+  }),
+  Object.freeze({
+    state:
+      DISPATCH_REARM_RECONCILE_STATE.CREATE_REARM_TARGET_STILL_CREATING,
+    matches: (evidence) =>
+      evidence.createRearmTargetStillCreating === true,
   }),
   Object.freeze({
     state: DISPATCH_REARM_RECONCILE_STATE.OBSERVED_BLOCKING_STATUS,
@@ -83,7 +90,10 @@ const DISPATCH_REARM_RECONCILE_STATE_TABLE = Object.freeze([
 ]);
 
 const DISPATCH_REARM_RECONCILE_ALLOWED_STATES = Object.freeze(
-  new Set([DISPATCH_REARM_RECONCILE_STATE.REARM_DISPATCH]),
+  new Set([
+    DISPATCH_REARM_RECONCILE_STATE.CREATE_REARM_TARGET_STILL_CREATING,
+    DISPATCH_REARM_RECONCILE_STATE.REARM_DISPATCH,
+  ]),
 );
 
 class OperationWorkflowOwnerSegment1 {
@@ -679,6 +689,9 @@ class OperationWorkflowOwnerSegment1 {
       observedCreatingWithoutCreateRearm:
         normalizedActualStatus === ReplicaStatus.CREATING &&
         !createRearmPhase,
+      createRearmTargetStillCreating:
+        normalizedActualStatus === ReplicaStatus.CREATING &&
+        createRearmPhase === true,
       observedBlockingStatus:
         !(
           normalizedActualStatus === ReplicaStatus.PENDING &&

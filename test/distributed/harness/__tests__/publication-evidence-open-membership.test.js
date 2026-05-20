@@ -163,6 +163,16 @@ const OWNER_RECONCILE_HANDOFF_NODE_IDS = Object.freeze([
 const OWNER_RECONCILE_PUBLISHED_NODE_IDS = Object.freeze([
   'owner-reconcile-node-a',
 ]);
+const OWNER_RECONCILE_PENDING_ACK_GATE_REASON = 'publication_pending_ack=1';
+const OWNER_RECONCILE_MISSING_ACTIVE_GATE_REASON =
+  'publication_missing_active_node=' + OWNER_RECONCILE_HANDOFF_NODE_IDS[1];
+const OWNER_RECONCILE_STALE_GATE_REASONS = Object.freeze([
+  OWNER_RECONCILE_PENDING_ACK_GATE_REASON,
+  OWNER_RECONCILE_MISSING_ACTIVE_GATE_REASON,
+]);
+const OWNER_RECONCILE_CANONICAL_GATE_REASONS = Object.freeze([
+  OWNER_RECONCILE_MISSING_ACTIVE_GATE_REASON,
+]);
 
 it(TEST_NAME, () => {
   const publicationEvidence = buildCanonicalPublicationEvidenceFromControlPlane({
@@ -594,14 +604,18 @@ it(OWNER_RECONCILE_HANDOFF_TEST_NAME, () => {
           OWNER_RECONCILE_HANDOFF_NODE_IDS,
         publicationActiveGateHandoffPendingReconcileCount:
           OWNER_RECONCILE_HANDOFF_NODE_IDS.length,
+        gateReasons: OWNER_RECONCILE_STALE_GATE_REASONS,
       },
     },
   });
+  const activeGateProgress =
+    publicationEvidence.priorityRecoveryObservation.activeGate.progress;
 
   assert.equal(
     publicationEvidence.publicationConvergence.pendingAckCount,
-    TEST_PENDING_ACK_COUNT,
+    TEST_EMPTY_COUNT,
   );
+  assert.equal(activeGateProgress.pendingAckCount, TEST_EMPTY_COUNT);
   assert.deepEqual(
     publicationEvidence.publicationConvergence.missingPublishedNodeIds,
     OWNER_RECONCILE_HANDOFF_NODE_IDS,
@@ -614,5 +628,17 @@ it(OWNER_RECONCILE_HANDOFF_TEST_NAME, () => {
     publicationEvidence.publicationConvergence.publicationRecoveryGate
       .missingPublishedNodeIds,
     OWNER_RECONCILE_HANDOFF_NODE_IDS,
+  );
+  assert.deepEqual(
+    activeGateProgress.selectedMissingPublishedNodeIds,
+    OWNER_RECONCILE_HANDOFF_NODE_IDS,
+  );
+  assert.equal(
+    activeGateProgress.missingPublishedCount,
+    OWNER_RECONCILE_HANDOFF_NODE_IDS.length,
+  );
+  assert.deepEqual(
+    activeGateProgress.gateReasons,
+    OWNER_RECONCILE_CANONICAL_GATE_REASONS,
   );
 });

@@ -12,6 +12,11 @@ import {MessageGroupServiceRowOwner} from
   '../../message-group/message-group-service-row-owner.js';
 import {MessageGroupService} from '../../message-group/message-group-service.js';
 import {
+  getControlPlaneErrorCode,
+  getControlPlaneRetryAfterMs,
+  isRetryableControlPlaneError,
+} from '../../control-plane/control-plane-error-classification.js';
+import {
   MESSAGE_GROUP_ASSIGNMENT_STRATEGY as AssignmentStrategy,
 } from '../message-group-assignment.js';
 import {
@@ -148,6 +153,7 @@ function buildRetryableMessageGroupRegistrationError(error, classification) {
     error?.message || JOINING_ERROR_MSG.BOOTSTRAP_REQUEST_FAILED,
   );
   retryableError.deferRetry = true;
+  retryableError.retryable = true;
   if (Number.isFinite(classification?.retryAfterMs) &&
       classification.retryAfterMs > NUM.ZERO) {
     retryableError.retryAfterMs = Math.floor(classification.retryAfterMs);
@@ -166,6 +172,34 @@ function buildRetryableMessageGroupRegistrationError(error, classification) {
     retryableError.cause = error;
   }
   return retryableError;
+}
+
+function buildShortcutMessageGroupRegistrationError(shortcutResult) {
+  const error = new Error(MESSAGE_GROUP_REGISTER_SHORTCUT_FAILED);
+  if (shortcutResult?.error) {
+    error.cause = shortcutResult.error;
+  }
+  const retryable =
+    isRetryableControlPlaneError(shortcutResult) ||
+    isRetryableControlPlaneError(shortcutResult?.error);
+  if (retryable !== true) {
+    return error;
+  }
+
+  return buildRetryableMessageGroupRegistrationError(
+    error,
+    {
+      parsedError: shortcutResult || null,
+      retryAfterMs: Math.max(
+        getControlPlaneRetryAfterMs(shortcutResult),
+        getControlPlaneRetryAfterMs(shortcutResult?.error),
+      ),
+      code:
+        getControlPlaneErrorCode(shortcutResult) ||
+        getControlPlaneErrorCode(shortcutResult?.error) ||
+        null,
+    },
+  );
 }
 
 /**
@@ -658,9 +692,7 @@ class CreateMessageGroupPhase {
             error: shortcutResult.error,
           },
         );
-        throw new Error(
-          MESSAGE_GROUP_REGISTER_SHORTCUT_FAILED,
-        );
+        throw buildShortcutMessageGroupRegistrationError(shortcutResult);
       }
 
       if (typeof this.delegates.seedJoinTimeCacheRow === LOCAL_STR_FUNCTION) {

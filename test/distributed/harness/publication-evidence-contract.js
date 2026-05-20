@@ -33,6 +33,7 @@ const PUBLICATION_EVIDENCE_RECOVERY_PROTOCOL_STATE_STEADY_PUBLISHED =
 const PUBLICATION_EVIDENCE_PUBLICATION_GATE_REASON = Object.freeze({
   PUBLICATION_EPOCH_PENDING: 'publication_epoch_pending',
   MISSING_ACTIVE_NODE_PREFIX: 'publication_missing_active_node=',
+  PENDING_ACK_PREFIX: 'publication_pending_ack=',
 });
 const PUBLICATION_EVIDENCE_ACTIVE_GATE_BLOCKER_PREFIX = Object.freeze({
   PUBLICATION_GATE: 'publication_gate=',
@@ -1005,6 +1006,18 @@ function hasPublishedPendingAckNodeListClosure(pendingAckSource = null) {
     pendingAckCount > PUBLICATION_EVIDENCE_ZERO;
 }
 
+function hasPendingAckNodeListClosure(pendingAckSource = null) {
+  const pendingAckNodeIds = normalizeDistinctStringArray(
+    pendingAckSource?.pendingAckNodeIds,
+  );
+  const pendingAckCount =
+    normalizeNonNegativeInteger(pendingAckSource?.pendingAckCount) ??
+    PUBLICATION_EVIDENCE_ZERO;
+  return Array.isArray(pendingAckSource?.pendingAckNodeIds) &&
+    pendingAckNodeIds.length === PUBLICATION_EVIDENCE_ZERO &&
+    pendingAckCount === PUBLICATION_EVIDENCE_ZERO;
+}
+
 function hasCurrentActiveGatePendingAckClosure(progress = null) {
   if (!isRecord(progress)) {
     return false;
@@ -1061,6 +1074,9 @@ function resolveCurrentPendingAckNodeIds({
     if (hasPublishedPendingAckNodeListClosure(pendingAckSource)) {
       return pendingAckNodeIds;
     }
+    if (hasPendingAckNodeListClosure(pendingAckSource)) {
+      return pendingAckNodeIds;
+    }
     const pendingRequiredAckNodeIds =
       resolvePendingRequiredAckNodeIds(pendingAckSource);
     if (pendingRequiredAckNodeIds !== null) {
@@ -1087,6 +1103,9 @@ function isPublicationMembershipGateReason(reason) {
   return reason ===
     PUBLICATION_EVIDENCE_PUBLICATION_GATE_REASON.PUBLICATION_EPOCH_PENDING ||
     reason.startsWith(
+      PUBLICATION_EVIDENCE_PUBLICATION_GATE_REASON.PENDING_ACK_PREFIX,
+    ) ||
+    reason.startsWith(
       PUBLICATION_EVIDENCE_PUBLICATION_GATE_REASON
         .MISSING_ACTIVE_NODE_PREFIX,
     );
@@ -1095,6 +1114,12 @@ function isPublicationMembershipGateReason(reason) {
 function hasPublicationMembershipGateReason(reasons) {
   return normalizeDistinctStringArray(reasons).some((reason) =>
     isPublicationMembershipGateReason(reason),
+  );
+}
+
+function isPublicationPendingAckGateReason(reason) {
+  return String(reason || PUBLICATION_EVIDENCE_TEXT.EMPTY).startsWith(
+    PUBLICATION_EVIDENCE_PUBLICATION_GATE_REASON.PENDING_ACK_PREFIX,
   );
 }
 
@@ -1314,6 +1339,7 @@ function buildCanonicalPriorityRecoveryActiveGateProgress(
   const pendingAckNodeIds = resolveCurrentPendingAckNodeIds({
     progress,
     priorityRecoveryObservation,
+    publicationConvergence: rawPublicationConvergenceGate,
     publicationConvergenceGate,
   });
   const pendingAckCount = pendingAckNodeIds !== null ?
@@ -1325,6 +1351,24 @@ function buildCanonicalPriorityRecoveryActiveGateProgress(
         publicationPendingAckCount,
         observationPendingAckCount,
       );
+  const activeGatePublicationStatus =
+    normalizeOptionalString(priorityRecoveryObservation?.publicationStatus) ||
+    normalizeOptionalString(publicationConvergenceGate?.publicationStatus) ||
+    normalizeOptionalString(progress?.publicationStatus);
+  const activeGatePendingAckEvidenceState =
+    publicationConvergenceGate?.pendingAckEvidenceState ??
+    rawPublicationConvergenceGate?.pendingAckEvidenceState;
+  const ownerReconcileNarrowedMissingPublishedNodeIds =
+    resolveOwnerReconcileHandoffMissingPublishedNodeIds({
+      activeGateProgress: progress,
+      publicationStatus: activeGatePublicationStatus,
+      pendingAckCount,
+      pendingAckNodeIds: pendingAckNodeIds ?? PUBLICATION_EVIDENCE_EMPTY_LIST,
+      pendingAckEvidenceState: activeGatePendingAckEvidenceState,
+    });
+  const ownerReconcileNarrowsActiveGateProgress =
+    ownerReconcileNarrowedMissingPublishedNodeIds.length >
+      PUBLICATION_EVIDENCE_ZERO;
   const publicationMembershipEvidence =
     buildActiveGatePublicationMembershipEvidence({
       progress,
@@ -1349,7 +1393,12 @@ function buildCanonicalPriorityRecoveryActiveGateProgress(
         pendingAckNodeIds ?? PUBLICATION_EVIDENCE_EMPTY_LIST,
     });
   const selectedPublicationMembershipNodeIds =
-    resolveSelectedPublicationMembershipNodeIds(progress);
+    ownerReconcileNarrowsActiveGateProgress ?
+      normalizeDistinctStringArray([
+        ...normalizeDistinctStringArray(progress.selectedPublishedActiveNodeIds),
+        ...ownerReconcileNarrowedMissingPublishedNodeIds,
+      ]) :
+      resolveSelectedPublicationMembershipNodeIds(progress);
   const publicationMembershipState =
     resolveActiveGatePublicationMembershipState(publicationMembershipEvidence);
   const staleGenericPublicationMembershipClosed =
@@ -1385,7 +1434,9 @@ function buildCanonicalPriorityRecoveryActiveGateProgress(
         ),
     });
   const currentSelectedSnapshotDisagreementNodeIds =
-    resolveSelectedPublishedMembershipDeficitNodeIds(progress);
+    ownerReconcileNarrowsActiveGateProgress ?
+      ownerReconcileNarrowedMissingPublishedNodeIds :
+      resolveSelectedPublishedMembershipDeficitNodeIds(progress);
   const currentSelectedPublicationMembershipDeficitNodeIds =
     resolveRelevantPublicationMembershipNodeIds(
       currentSelectedSnapshotDisagreementNodeIds,
@@ -1403,19 +1454,27 @@ function buildCanonicalPriorityRecoveryActiveGateProgress(
       staleGenericPublicationMembershipClosed
     );
   const observedSelectedMissingPublishedNodeIds =
-    resolveSelectedMissingPublishedNodeIds(progress);
+    ownerReconcileNarrowsActiveGateProgress ?
+      ownerReconcileNarrowedMissingPublishedNodeIds :
+      resolveSelectedMissingPublishedNodeIds(progress);
   const selectedMissingPublishedNodeIds =
     currentSelectedSnapshotDisagreementNodeIds !== null ?
       currentSelectedSnapshotDisagreementNodeIds :
       publicationMembershipClosed ?
         PUBLICATION_EVIDENCE_EMPTY_LIST :
         observedSelectedMissingPublishedNodeIds;
-  const canonicalGateReasons =
-    publicationMembershipClosed ?
+  const pendingAckFilteredGateReasons =
+    pendingAckCount === PUBLICATION_EVIDENCE_ZERO ?
       gateReasons.filter((reason) =>
-        isPublicationMembershipGateReason(reason) !== true,
+        isPublicationPendingAckGateReason(reason) !== true,
       ) :
       gateReasons;
+  const canonicalGateReasons =
+    publicationMembershipClosed ?
+      pendingAckFilteredGateReasons.filter((reason) =>
+        isPublicationMembershipGateReason(reason) !== true,
+      ) :
+      pendingAckFilteredGateReasons;
   const progressMissingPublishedCount =
     currentSelectedPublicationMembershipDeficitNodeIds !== null ?
       currentSelectedPublicationMembershipDeficitNodeIds.length :

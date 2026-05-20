@@ -3,7 +3,7 @@
 <!-- work-package
 {
   "schema": "work-package-v1",
-  "status": "todo",
+  "status": "done",
   "opened": "2026-05-20",
   "lane": "causal-escalation",
   "scenario": "rolling-restart",
@@ -31,6 +31,7 @@
     "intendedMinimumModel": "gpt-5.3-codex",
     "scopeShape": "bounded-owner-runtime/current-frontier",
     "outputProfile": "medium",
+    "ambiguityScore": 1,
     "escalationTriggers": [
       "owned files expand beyond this package",
       "a frozen decision must be reopened"
@@ -54,6 +55,16 @@
       "Create Spark-safe mechanical or test-only children once execution is unambiguous.",
       "Create a gpt-5.4 single-file-runtime child only after the runtime owner file is selected."
     ]
+  },
+  "representativeResidual": {
+    "status": "classification-only",
+    "scenario": "rolling-restart",
+    "artifact": "test-output/reports/rolling-restart-rerun-20260520T040948Z.report.json",
+    "frontier": "topology_publication_owner / publication_convergence",
+    "owner": "topology_publication_owner",
+    "boundary": "publication_convergence",
+    "dominantReason": "publication_pending",
+    "nextAction": "Triage publication_ack_convergence with combined scenario evidence before runtime edits."
   },
   "classificationEfficiency": {
     "defaultMode": "inline-gate-default",
@@ -84,7 +95,46 @@
       "npm run work:repair",
       "npm run work:validate -- --pre-impl"
     ]
-  }
+  },
+  "causalGovernance": {
+    "hypothesis": "The active gate is deferred under publication_pending because publication convergence is enqueued but write_deferred is true. Triage publication_ack_convergence to select successor action.",
+    "stopConditionCheck": "Before runtime edits, run npm run analyze:causal-model -- test-output/reports/rolling-restart-rerun-20260520T040948Z.report.json and confirm the blocker remains in topology_publication_owner.",
+    "expectedCausalModelChange": "Triage should confirm why publication_ack_convergence is deferred and select either successor runtime implementation or human/architecture gate.",
+    "representativeOutcome": "classification-only",
+    "causalDebt": "topology_publication_owner / publication_convergence / publication_pending remains enqueued with write_deferred=true and depth unknown.",
+    "crossBoundaryReview": "Causal gate selects topology_publication_owner / publication_convergence for triage. Startup active-gate, startup readiness, and rebalancer stay frozen."
+  },
+  "scenarioCausalClosure": {
+    "referenceScenarioOrProbe": "rolling-restart",
+    "phaseChain": [
+      "epoch fencing implementation verified recovery-lease preemption",
+      "rolling-restart rerun reported topology_publication_owner publication_pending blocker"
+    ],
+    "currentFirstFrontier": "publication_ack_convergence / topology_publication_owner / publication_convergence / publication_pending in test-output/reports/rolling-restart-rerun-20260520T040948Z.report.json.",
+    "knownDownstreamBlockers": [
+      "activeGateState=deferred",
+      "publicationPending=true",
+      "runtimePromotionAllowed=false"
+    ],
+    "missingCausalEdge": "topology_publication_owner publication_pending persists with write_deferred=true after epoch fencer preemption.",
+    "missingCausalEdgeProbe": "npm run work:evidence-summary -- test-output/reports/rolling-restart-rerun-20260520T040948Z.report.json",
+    "boundedProgressProof": "Move or classify the publication-recovery producer reconcile/progress state without touching downstream owners.",
+    "boundedProgressProofArtifact": "test-output/reports/rolling-restart-rerun-20260520T040948Z.report.json",
+    "expectedObservableTransition": "publicationConvergence fields move away from unknown / unpublished_observation or are classified as a bounded owner outcome.",
+    "maxProgressBound": "one runtime-owner-boundary source package before downstream active-gate/readiness edits",
+    "sameFrontierFallback": "If focused proof cannot change or classify the state, stop for architecture or human escalation instead of adding another local patch.",
+    "expectedNextFrontier": "publication producer state reduced, owner-boundary migration, architecture stop, or human stop",
+    "resultClassification": "pending-before-probe",
+    "stopCondition": "continue-local-fix",
+    "recentFrontierHistory": [
+      "work/packages/done-20260520-topology-epoch-fencing-recovery-preemption.md / control-plane / publication-recovery / green"
+    ],
+    "oscillationCheck": "Runtime work is allowed only because the causal-escalation gate selected the successor from fresh route, explain, causal-model, and source-slice proof.",
+    "handoffInvariant": "The publication owner emits one typed publication convergence producer state before downstream active-gate/readiness consumers reinterpret the residual."
+  },
+  "closed": "2026-05-20",
+  "commitAndPushLedgerRequired": true,
+  "successor": "work/packages/done-20260520-rolling-restart-publication-recovery-evidence-consistency.md"
 }
 -->
 
@@ -228,9 +278,9 @@ Preferred closure evidence for new packages. Agent identity is optional provenan
 Use legacy subagent ledgers only when the package explicitly requires sequenced subagents.
 If review directly fixes metadata-only findings, record `review-fixed-metadata-only` as execution evidence and continue without a separate fix package.
 
-- [ ] review: status: not-needed; evidence: lane permits direct implementation or package review found no required fix; next: implementation.
-- [ ] implementation: status: validated; evidence: <focused proof commands and results>; parent revalidated focused proof: yes; next: closure or successor action.
-- [ ] repair: status: validated; evidence: `npm run work:repair` refreshed generated current-blocker and Current Edge Card when needed; next: validation.
+- [x] review: status: not-needed; evidence: classification-only causal-escalation fast path validated by `npm run work:advance -- --check`; next: proof ladder.
+- [x] implementation: status: validated; evidence: `npm run work:evidence-summary -- test-output/reports/rolling-restart-rerun-20260520T040948Z.report.json` selected `publication_ack_convergence` / `topology_publication_owner` / `publication_convergence` / `publication_pending` with causal outcome `continue_local_fix`; `npm run work:scenario-triage -- test-output/reports/rolling-restart-rerun-20260520T040948Z.report.json --markdown` confirmed `classified_local_blocker`; `npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-rerun-20260520T040948Z.report.json --markdown` reported 7 `operation_workflow_owner / rebalancer_handoff` witnesses with `splitRequired=false`; parent revalidated focused proof: yes; next: runtime-owner-boundary successor.
+- [x] repair: status: validated; evidence: `npm run work:repair` refreshed generated current-blocker and Current Edge Card before this package was activated; next: migrate to runtime successor.
 
 ## Validation
 
@@ -238,3 +288,8 @@ If review directly fixes metadata-only findings, record `review-fixed-metadata-o
 2. npm run work:scenario-triage -- test-output/reports/rolling-restart-rerun-20260520T040948Z.report.json --markdown
 3. npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-rerun-20260520T040948Z.report.json --markdown
 
+## Commit And Push Ledger
+
+1. Focused package commit: f1994037e9f6579b2eb60fe7edd6b20aa466c9d0
+2. Pushed to: origin/codex/pending-ack-eligibility-filter
+3. Commit contains only package-owned files/package-status/allowed sprint handoff: yes

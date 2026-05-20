@@ -226,13 +226,23 @@ const SELECTED_SNAPSHOT_SOURCE_TIMEOUT_TEST_NAME =
 const SELECTED_SNAPSHOT_SOURCE_TIMEOUT_RESET_TEST_NAME =
   'Unit: _probeControlSnapshotCoverage resets snapshot lane after selected ' +
   'source timeout';
+const SELECTED_SNAPSHOT_SOURCE_TIMEOUT_LOAD_RETRY_TEST_NAME =
+  'Unit: _probeControlSnapshotCoverage keeps load selected source retry on ' +
+  'base timeout';
+const SELECTED_SNAPSHOT_FORCE_REPAIR_TIMEOUT_FALLBACK_TEST_NAME =
+  'Unit: _probeControlSnapshotCoverage falls back to normal selected source ' +
+  'after forced repair timeout';
 const SELECTED_SNAPSHOT_SOURCE_TIMEOUT_SELECTED_NODE_ID =
   SNAPSHOT_REPLAY_TEST_NODE_ID.BASELINE;
 const SELECTED_SNAPSHOT_SOURCE_TIMEOUT_FALLBACK_NODE_ID =
   SNAPSHOT_REPLAY_TEST_NODE_ID.ADMIN_READY_STALE;
 const SELECTED_SNAPSHOT_SOURCE_TIMEOUT_RESET_NODE_ID =
   SNAPSHOT_REPLAY_TEST_NODE_ID.ADMIN_READY_STALE;
+const SELECTED_SNAPSHOT_FORCE_REPAIR_TIMEOUT_NODE_ID =
+  SNAPSHOT_REPLAY_TEST_NODE_ID.BASELINE;
 const SELECTED_SNAPSHOT_SOURCE_TIMEOUT_QUERY_TIMEOUT_MS = 3000;
+const SELECTED_SNAPSHOT_SOURCE_TIMEOUT_STARTUP_RETRY_TIMEOUT_MS = 6000;
+const SELECTED_SNAPSHOT_SOURCE_TIMEOUT_LOAD_RETRY_TIMEOUT_MS = 3000;
 const SELECTED_SNAPSHOT_SOURCE_TIMEOUT_ERROR =
   'Admin API query timed out for node ' +
   SELECTED_SNAPSHOT_SOURCE_TIMEOUT_SELECTED_NODE_ID +
@@ -245,16 +255,31 @@ const SELECTED_SNAPSHOT_SOURCE_TIMEOUT_RESET_ERROR =
   ' on lane snapshot after ' +
   SELECTED_SNAPSHOT_SOURCE_TIMEOUT_QUERY_TIMEOUT_MS +
   'ms';
+const SELECTED_SNAPSHOT_FORCE_REPAIR_TIMEOUT_ERROR =
+  'Admin API query timed out for node ' +
+  SELECTED_SNAPSHOT_FORCE_REPAIR_TIMEOUT_NODE_ID +
+  ' on lane snapshot after ' +
+  SELECTED_SNAPSHOT_SOURCE_TIMEOUT_QUERY_TIMEOUT_MS +
+  'ms';
 const SELECTED_SNAPSHOT_SOURCE_TIMEOUT_EMPTY_NODE_IDS = Object.freeze([]);
 const SELECTED_SNAPSHOT_SOURCE_TIMEOUT_RESET_NODE_IDS = Object.freeze([
   SNAPSHOT_REPLAY_TEST_NODE_ID.SEED,
   SNAPSHOT_REPLAY_TEST_NODE_ID.ADMIN_READY_STALE,
 ]);
+const SELECTED_SNAPSHOT_FORCE_REPAIR_TIMEOUT_NODE_IDS = Object.freeze([
+  SNAPSHOT_REPLAY_TEST_NODE_ID.SEED,
+  SNAPSHOT_REPLAY_TEST_NODE_ID.BASELINE,
+  SNAPSHOT_REPLAY_TEST_NODE_ID.ADMIN_READY_STALE,
+  SNAPSHOT_REPLAY_TEST_NODE_ID.STRONG_EXTRA,
+  SNAPSHOT_REPLAY_TEST_NODE_ID.STALE_EXTRA,
+]);
 const SELECTED_SNAPSHOT_SOURCE_TIMEOUT_CAPTURED_AT_MS = 1777976842823;
 const SELECTED_SNAPSHOT_SOURCE_TIMEOUT_RESET_CAPTURED_AT_MS = 1777976843125;
+const SELECTED_SNAPSHOT_FORCE_REPAIR_TIMEOUT_CAPTURED_AT_MS = 1777976843340;
 const SELECTED_SNAPSHOT_SOURCE_TIMEOUT_UNSELECTED_ERROR_PREFIX =
   'snapshot lane unavailable for ';
 const SELECTED_SNAPSHOT_SOURCE_TIMEOUT_SNAPSHOT_LANE = 'snapshot';
+const SELECTED_SNAPSHOT_SOURCE_TIMEOUT_LOAD_MODE = 'load';
 const ACTIVE_GATE_REACHABILITY_DELAY_TEST_NAME =
   'Unit: _waitForAllActive keeps terminal reachability delay from selected progress';
 const ACTIVE_GATE_REACHABILITY_DELAY_CLUSTER_SIZE = 5;
@@ -592,6 +617,7 @@ test(SELECTED_SNAPSHOT_SOURCE_TIMEOUT_TEST_NAME, async () => {
       async getControlSnapshot(options = {}) {
         snapshotProbeCalls.push({
           nodeId,
+          timeoutMs: options.timeoutMs,
           lane: options.lane,
           forceRepair: options.forceRepair === true,
           forceAuthoritativeRepair:
@@ -705,6 +731,7 @@ test(SELECTED_SNAPSHOT_SOURCE_TIMEOUT_RESET_TEST_NAME, async () => {
       async getControlSnapshot(options = {}) {
         snapshotProbeCalls.push({
           nodeId,
+          timeoutMs: options.timeoutMs,
           lane: options.lane,
           forceRepair: options.forceRepair === true,
           forceAuthoritativeRepair:
@@ -736,6 +763,9 @@ test(SELECTED_SNAPSHOT_SOURCE_TIMEOUT_RESET_TEST_NAME, async () => {
     Date.now() + SNAPSHOT_REPLAY_TEST_DEADLINE_EXTENSION_MS,
     SNAPSHOT_REPLAY_TEST_EXPECTED_NODE_IDS,
   );
+  const selectedCalls = snapshotProbeCalls.filter((call) => {
+    return call.nodeId === SELECTED_SNAPSHOT_SOURCE_TIMEOUT_RESET_NODE_ID;
+  });
 
   assert.strictEqual(
     coverage.selectedSnapshotNodeId,
@@ -759,6 +789,20 @@ test(SELECTED_SNAPSHOT_SOURCE_TIMEOUT_RESET_TEST_NAME, async () => {
     coverage.bestCoverageNodeCount,
     SELECTED_SNAPSHOT_SOURCE_TIMEOUT_RESET_NODE_IDS.length,
   );
+  assert.strictEqual(
+    selectedCalls.length,
+    2,
+    'selected-source startup retry should make one bounded retry after reset',
+  );
+  assert.ok(
+    selectedCalls[0].timeoutMs < selectedCalls[1].timeoutMs,
+    'startup selected-source retry should restore the startup timeout floor',
+  );
+  assert.strictEqual(
+    selectedCalls[1].timeoutMs,
+    SELECTED_SNAPSHOT_SOURCE_TIMEOUT_STARTUP_RETRY_TIMEOUT_MS,
+    'startup selected-source retry should use the startup-scaled snapshot timeout floor',
+  );
   assert.ok(
     snapshotProbeCalls.every((call) =>
       call.lane === SELECTED_SNAPSHOT_SOURCE_TIMEOUT_SNAPSHOT_LANE &&
@@ -766,6 +810,254 @@ test(SELECTED_SNAPSHOT_SOURCE_TIMEOUT_RESET_TEST_NAME, async () => {
       call.forceAuthoritativeRepair === false,
     ),
     'selected-source retry proof should stay on the normal snapshot lane',
+  );
+});
+
+test(SELECTED_SNAPSHOT_SOURCE_TIMEOUT_LOAD_RETRY_TEST_NAME, async () => {
+  const cluster = createCluster({
+    size: SNAPSHOT_REPLAY_TEST_CLUSTER_SIZE,
+    docker: {socketPath: SNAPSHOT_REPLAY_TEST_DOCKER_SOCKET_PATH},
+    image: SNAPSHOT_REPLAY_TEST_IMAGE,
+  });
+  const snapshotProbeCalls = [];
+  const resetCalls = [];
+  let selectedSnapshotLaneReset = false;
+
+  for (const nodeId of SNAPSHOT_REPLAY_TEST_EXPECTED_NODE_IDS) {
+    cluster._nodes.set(nodeId, {
+      id: nodeId,
+      role:
+        nodeId === SNAPSHOT_REPLAY_TEST_NODE_ID.SEED ?
+          NODE_ROLES.SEED :
+          NODE_ROLES.JOINER,
+      _resetAdminSocket(lane) {
+        resetCalls.push({nodeId, lane});
+        if (
+          nodeId === SELECTED_SNAPSHOT_SOURCE_TIMEOUT_RESET_NODE_ID &&
+          lane === SELECTED_SNAPSHOT_SOURCE_TIMEOUT_SNAPSHOT_LANE
+        ) {
+          selectedSnapshotLaneReset = true;
+        }
+      },
+      async getStatus() {
+        return {rows: [{status: SERVICE_STATUS.ACTIVE}]};
+      },
+      async getReachabilityDiagnostics(options = {}) {
+        return {
+          reachable:
+            nodeId === SELECTED_SNAPSHOT_SOURCE_TIMEOUT_RESET_NODE_ID,
+          adminReady:
+            nodeId === SELECTED_SNAPSHOT_SOURCE_TIMEOUT_RESET_NODE_ID,
+          reachableBy:
+            nodeId === SELECTED_SNAPSHOT_SOURCE_TIMEOUT_RESET_NODE_ID ?
+              SNAPSHOT_REPLAY_TEST_ADMIN_HEALTH_SOURCE :
+              null,
+          lastError: null,
+          skipBootstrapReadiness: options.skipBootstrapReadiness === true,
+        };
+      },
+      async getControlSnapshot(options = {}) {
+        snapshotProbeCalls.push({
+          nodeId,
+          timeoutMs: options.timeoutMs,
+          lane: options.lane,
+          forceRepair: options.forceRepair === true,
+          forceAuthoritativeRepair:
+            options.forceAuthoritativeRepair === true,
+        });
+        if (nodeId === SELECTED_SNAPSHOT_SOURCE_TIMEOUT_RESET_NODE_ID) {
+          if (selectedSnapshotLaneReset !== true) {
+            throw new Error(SELECTED_SNAPSHOT_SOURCE_TIMEOUT_RESET_ERROR);
+          }
+          return {
+            rows: [{
+              nodes: SELECTED_SNAPSHOT_SOURCE_TIMEOUT_RESET_NODE_IDS,
+              capturedAtMs:
+                SELECTED_SNAPSHOT_SOURCE_TIMEOUT_RESET_CAPTURED_AT_MS,
+            }],
+          };
+        }
+        throw new Error(
+          SELECTED_SNAPSHOT_SOURCE_TIMEOUT_UNSELECTED_ERROR_PREFIX + nodeId,
+        );
+      },
+      async getLogs(_options) {
+        return SNAPSHOT_REPLAY_TEST_EMPTY_LOG;
+      },
+    });
+  }
+
+  const coverage = await cluster._probeControlSnapshotCoverage(
+    Date.now() + SNAPSHOT_REPLAY_TEST_DEADLINE_EXTENSION_MS,
+    SNAPSHOT_REPLAY_TEST_EXPECTED_NODE_IDS,
+    {readinessMode: SELECTED_SNAPSHOT_SOURCE_TIMEOUT_LOAD_MODE},
+  );
+  const selectedCalls = snapshotProbeCalls.filter((call) => {
+    return call.nodeId === SELECTED_SNAPSHOT_SOURCE_TIMEOUT_RESET_NODE_ID;
+  });
+
+  assert.strictEqual(
+    coverage.selectedSnapshotNodeId,
+    SELECTED_SNAPSHOT_SOURCE_TIMEOUT_RESET_NODE_ID,
+    'load selected-source retry should preserve the selected admin-ready source',
+  );
+  assert.strictEqual(
+    coverage.selectedError,
+    null,
+    'load selected-source retry should recover after the lane reset',
+  );
+  assert.strictEqual(
+    selectedCalls.length,
+    2,
+    'load selected-source retry should make one bounded retry after reset',
+  );
+  assert.strictEqual(
+    selectedCalls[0].timeoutMs,
+    SELECTED_SNAPSHOT_SOURCE_TIMEOUT_LOAD_RETRY_TIMEOUT_MS,
+    'load selected-source first probe should use the base snapshot timeout',
+  );
+  assert.strictEqual(
+    selectedCalls[1].timeoutMs,
+    SELECTED_SNAPSHOT_SOURCE_TIMEOUT_LOAD_RETRY_TIMEOUT_MS,
+    'load selected-source retry should keep the base snapshot timeout',
+  );
+  assert.deepStrictEqual(
+    resetCalls,
+    [{
+      nodeId: SELECTED_SNAPSHOT_SOURCE_TIMEOUT_RESET_NODE_ID,
+      lane: SELECTED_SNAPSHOT_SOURCE_TIMEOUT_SNAPSHOT_LANE,
+    }],
+    'load selected snapshot timeout should reset only the snapshot lane',
+  );
+});
+
+test(SELECTED_SNAPSHOT_FORCE_REPAIR_TIMEOUT_FALLBACK_TEST_NAME, async () => {
+  const cluster = createCluster({
+    size: SNAPSHOT_REPLAY_TEST_CLUSTER_SIZE,
+    docker: {socketPath: SNAPSHOT_REPLAY_TEST_DOCKER_SOCKET_PATH},
+    image: SNAPSHOT_REPLAY_TEST_IMAGE,
+  });
+  const snapshotProbeCalls = [];
+  const resetCalls = [];
+  let selectedSnapshotLaneReset = false;
+
+  for (const nodeId of SNAPSHOT_REPLAY_TEST_EXPECTED_NODE_IDS) {
+    cluster._nodes.set(nodeId, {
+      id: nodeId,
+      role:
+        nodeId === SNAPSHOT_REPLAY_TEST_NODE_ID.SEED ?
+          NODE_ROLES.SEED :
+          NODE_ROLES.JOINER,
+      _resetAdminSocket(lane) {
+        resetCalls.push({nodeId, lane});
+        if (
+          nodeId === SELECTED_SNAPSHOT_FORCE_REPAIR_TIMEOUT_NODE_ID &&
+          lane === SELECTED_SNAPSHOT_SOURCE_TIMEOUT_SNAPSHOT_LANE
+        ) {
+          selectedSnapshotLaneReset = true;
+        }
+      },
+      async getStatus() {
+        return {rows: [{status: SERVICE_STATUS.ACTIVE}]};
+      },
+      async getReachabilityDiagnostics(options = {}) {
+        return {
+          reachable:
+            nodeId === SELECTED_SNAPSHOT_FORCE_REPAIR_TIMEOUT_NODE_ID,
+          adminReady:
+            nodeId === SELECTED_SNAPSHOT_FORCE_REPAIR_TIMEOUT_NODE_ID,
+          reachableBy:
+            nodeId === SELECTED_SNAPSHOT_FORCE_REPAIR_TIMEOUT_NODE_ID ?
+              SNAPSHOT_REPLAY_TEST_ADMIN_HEALTH_SOURCE :
+              null,
+          lastError: null,
+          skipBootstrapReadiness: options.skipBootstrapReadiness === true,
+        };
+      },
+      async getControlSnapshot(options = {}) {
+        snapshotProbeCalls.push({
+          nodeId,
+          lane: options.lane,
+          forceRepair: options.forceRepair === true,
+          forceAuthoritativeRepair:
+            options.forceAuthoritativeRepair === true,
+        });
+        if (nodeId === SELECTED_SNAPSHOT_FORCE_REPAIR_TIMEOUT_NODE_ID) {
+          if (options.forceAuthoritativeRepair === true) {
+            throw new Error(SELECTED_SNAPSHOT_FORCE_REPAIR_TIMEOUT_ERROR);
+          }
+          assert.strictEqual(
+            selectedSnapshotLaneReset,
+            true,
+            'normal selected-source fallback must follow the snapshot lane reset',
+          );
+          return {
+            rows: [{
+              nodes: SELECTED_SNAPSHOT_FORCE_REPAIR_TIMEOUT_NODE_IDS,
+              capturedAtMs:
+                SELECTED_SNAPSHOT_FORCE_REPAIR_TIMEOUT_CAPTURED_AT_MS,
+            }],
+          };
+        }
+        throw new Error(
+          SELECTED_SNAPSHOT_SOURCE_TIMEOUT_UNSELECTED_ERROR_PREFIX + nodeId,
+        );
+      },
+      async getLogs(_options) {
+        return SNAPSHOT_REPLAY_TEST_EMPTY_LOG;
+      },
+    });
+  }
+
+  const coverage = await cluster._probeControlSnapshotCoverage(
+    Date.now() + SNAPSHOT_REPLAY_TEST_DEADLINE_EXTENSION_MS,
+    SNAPSHOT_REPLAY_TEST_EXPECTED_NODE_IDS,
+    {forceRepair: true},
+  );
+  const selectedCalls = snapshotProbeCalls.filter((call) => {
+    return call.nodeId === SELECTED_SNAPSHOT_FORCE_REPAIR_TIMEOUT_NODE_ID;
+  });
+
+  assert.strictEqual(
+    coverage.selectedSnapshotNodeId,
+    SELECTED_SNAPSHOT_FORCE_REPAIR_TIMEOUT_NODE_ID,
+    'forced repair timeout fallback should preserve the selected admin-ready source',
+  );
+  assert.strictEqual(
+    coverage.selectedError,
+    null,
+    'normal selected-source fallback should clear the forced repair timeout',
+  );
+  assert.strictEqual(
+    coverage.completeCoverage,
+    true,
+    'normal selected-source fallback should recover authoritative coverage',
+  );
+  assert.deepStrictEqual(
+    selectedCalls,
+    [
+      {
+        nodeId: SELECTED_SNAPSHOT_FORCE_REPAIR_TIMEOUT_NODE_ID,
+        lane: SELECTED_SNAPSHOT_SOURCE_TIMEOUT_SNAPSHOT_LANE,
+        forceRepair: true,
+        forceAuthoritativeRepair: true,
+      },
+      {
+        nodeId: SELECTED_SNAPSHOT_FORCE_REPAIR_TIMEOUT_NODE_ID,
+        lane: SELECTED_SNAPSHOT_SOURCE_TIMEOUT_SNAPSHOT_LANE,
+        forceRepair: false,
+        forceAuthoritativeRepair: false,
+      },
+    ],
+    'selected source should fall back from forced repair to normal snapshot once',
+  );
+  assert.deepStrictEqual(
+    resetCalls,
+    [{
+      nodeId: SELECTED_SNAPSHOT_FORCE_REPAIR_TIMEOUT_NODE_ID,
+      lane: SELECTED_SNAPSHOT_SOURCE_TIMEOUT_SNAPSHOT_LANE,
+    }],
+    'forced repair timeout should reset only the selected snapshot lane',
   );
 });
 
@@ -996,4 +1288,3 @@ test(
     );
   },
 );
-

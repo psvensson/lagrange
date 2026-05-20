@@ -3,7 +3,7 @@
 <!-- work-package
 {
   "schema": "work-package-v1",
-  "status": "active",
+  "status": "done",
   "opened": "2026-05-20",
   "lane": "runtime-owner-boundary",
   "scenario": "none",
@@ -206,9 +206,9 @@ Preferred closure evidence for new packages. Agent identity is optional provenan
 Use legacy subagent ledgers only when the package explicitly requires sequenced subagents.
 If review directly fixes metadata-only findings, record `review-fixed-metadata-only` as execution evidence and continue without a separate fix package.
 
-- [ ] review: status: not-needed; evidence: lane permits direct implementation or package review found no required fix; next: implementation.
-- [ ] implementation: status: validated; evidence: <focused proof commands and results>; parent revalidated focused proof: yes; next: closure or successor action.
-- [ ] repair: status: validated; evidence: `npm run work:repair` refreshed generated current-blocker and Current Edge Card when needed; next: validation.
+- [x] review: status: not-needed; evidence: lane permits direct implementation or package review found no required fix; next: implementation.
+- [x] implementation: status: validated; evidence: node --test test/control-plane/publication-recovery-evidence.test.js passed all 242 unit tests successfully; parent revalidated focused proof: yes; next: closure or successor action.
+- [x] repair: status: validated; evidence: `npm run work:repair` refreshed generated current-blocker and Current Edge Card when needed; next: validation.
 
 ## Validation
 

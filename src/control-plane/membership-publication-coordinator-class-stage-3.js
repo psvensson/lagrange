@@ -7,6 +7,12 @@ import {
   normalizeNodeIdList,
 } from './membership-publication-coordinator-stage-1.js';
 import {
+  hasExplicitMembershipPublicationTarget,
+} from './membership-publication-coordinator-stage-2.js';
+import {
+  hasPublicationActiveGateOwnerReconcileSignal,
+} from './publication-active-gate-handoff-contract.js';
+import {
   CONTROL_PLANE_CONVERGENCE_CLASS,
   CONTROL_PLANE_CONVERGENCE_PRESSURE_OUTCOME,
   getControlPlaneFailureSummary,
@@ -77,22 +83,58 @@ const CONTROL_PLANE_CRITICAL_CONVERGENCE_QUEUE_DECISION = Object.freeze([
 
 const MEMBERSHIP_PUBLICATION_RECONCILE_CONTEXT_FIELD = Object.freeze({
   ACKNOWLEDGED_NODE_IDS: 'acknowledgedNodeIds',
+  ALLOW_EMPTY_PRELOADED_ROWS: 'allowEmptyPreloadedRows',
   ALLOW_PENDING_VISIBILITY: 'allowPendingVisibility',
   ALLOW_PRESSURE_DEFER: 'allowPressureDefer',
   DISABLE_NESTED_PRIORITY_RECOVERY_PLANNING:
     'disableNestedPriorityRecoveryPlanning',
   LATEST_PUBLICATION_ROW: 'latestPublicationRow',
+  NODE_ENDPOINT_ROWS: 'nodeEndpointRows',
+  NODE_ROWS: 'nodeRows',
+  PARTITION_ROWS: 'partitionRows',
   PUBLISHED_ACTIVE_NODE_IDS: 'publishedActiveNodeIds',
   PUBLICATION_ACTIVE_GATE_HANDOFF: 'publicationActiveGateHandoff',
   PUBLICATION_EPOCH: 'publicationEpoch',
   PUBLICATION_EPOCH_SNAKE: 'publication_epoch',
   READ_PROFILE: 'readProfile',
+  READINESS_ENTRIES: 'readinessEntries',
+  REPLICA_OPERATION_ROWS: 'replicaOperationRows',
   REQUIRED_ACK_NODE_IDS: 'requiredAckNodeIds',
+  SERVICE_ROWS: 'serviceRows',
   SKIP_PUBLICATION_WRITE_READBACK: 'skipPublicationWriteReadback',
 });
 const MEMBERSHIP_PUBLICATION_RECONCILE_CONTEXT_ABSENT = Symbol(
   'membership-publication-reconcile-context-absent',
 );
+const MEMBERSHIP_PUBLICATION_RECONCILE_MERGE_ROUTE = Object.freeze({
+  ACTIVE_GATE_HANDOFF: 'active_gate_handoff',
+  STANDARD: 'standard',
+});
+const MEMBERSHIP_PUBLICATION_RECONCILE_MERGE_ROUTE_DECISION = Object.freeze([
+  Object.freeze({
+    route: MEMBERSHIP_PUBLICATION_RECONCILE_MERGE_ROUTE.ACTIVE_GATE_HANDOFF,
+    matches: (evidence) =>
+      evidence.nextHasOwnerReconcileHandoff === true &&
+      evidence.nextHasExplicitTarget !== true,
+  }),
+  Object.freeze({
+    route: MEMBERSHIP_PUBLICATION_RECONCILE_MERGE_ROUTE.STANDARD,
+    matches: () => true,
+  }),
+]);
+const MEMBERSHIP_PUBLICATION_RECONCILE_HANDOFF_ROUTE_RESET_FIELDS =
+  Object.freeze([
+    MEMBERSHIP_PUBLICATION_RECONCILE_CONTEXT_FIELD.PUBLISHED_ACTIVE_NODE_IDS,
+    MEMBERSHIP_PUBLICATION_RECONCILE_CONTEXT_FIELD.REQUIRED_ACK_NODE_IDS,
+    MEMBERSHIP_PUBLICATION_RECONCILE_CONTEXT_FIELD.ACKNOWLEDGED_NODE_IDS,
+    MEMBERSHIP_PUBLICATION_RECONCILE_CONTEXT_FIELD.ALLOW_EMPTY_PRELOADED_ROWS,
+    MEMBERSHIP_PUBLICATION_RECONCILE_CONTEXT_FIELD.NODE_ROWS,
+    MEMBERSHIP_PUBLICATION_RECONCILE_CONTEXT_FIELD.NODE_ENDPOINT_ROWS,
+    MEMBERSHIP_PUBLICATION_RECONCILE_CONTEXT_FIELD.SERVICE_ROWS,
+    MEMBERSHIP_PUBLICATION_RECONCILE_CONTEXT_FIELD.PARTITION_ROWS,
+    MEMBERSHIP_PUBLICATION_RECONCILE_CONTEXT_FIELD.REPLICA_OPERATION_ROWS,
+    MEMBERSHIP_PUBLICATION_RECONCILE_CONTEXT_FIELD.READINESS_ENTRIES,
+  ]);
 
 function normalizeCriticalConvergenceRetryAfterMs(value) {
   return Number.isFinite(value) && value > NUM.ZERO ?
@@ -216,6 +258,51 @@ function selectLatestPublicationRow(previousContext, nextContext) {
     previousRow;
 }
 
+function resolveMembershipPublicationReconcileMergeRoute(nextContext) {
+  const evidence = Object.freeze({
+    nextHasOwnerReconcileHandoff:
+      hasPublicationActiveGateOwnerReconcileSignal(
+        nextContext[
+          MEMBERSHIP_PUBLICATION_RECONCILE_CONTEXT_FIELD
+            .PUBLICATION_ACTIVE_GATE_HANDOFF
+        ],
+      ) === true,
+    nextHasExplicitTarget:
+      hasExplicitMembershipPublicationTarget(nextContext) === true,
+  });
+  const decision = MEMBERSHIP_PUBLICATION_RECONCILE_MERGE_ROUTE_DECISION.find(
+    (candidate) => candidate.matches(evidence),
+  );
+  return decision.route;
+}
+
+function resetMembershipPublicationReconcileContextFields(
+  context,
+  fieldNames,
+) {
+  const nextContext = {...context};
+  for (const fieldName of fieldNames) {
+    delete nextContext[fieldName];
+  }
+  return nextContext;
+}
+
+function finalizeMembershipPublicationReconcileMergedContext(
+  mergedContext,
+  mergeRoute,
+) {
+  if (
+    mergeRoute ===
+      MEMBERSHIP_PUBLICATION_RECONCILE_MERGE_ROUTE.ACTIVE_GATE_HANDOFF
+  ) {
+    return resetMembershipPublicationReconcileContextFields(
+      mergedContext,
+      MEMBERSHIP_PUBLICATION_RECONCILE_HANDOFF_ROUTE_RESET_FIELDS,
+    );
+  }
+  return mergedContext;
+}
+
 function mergeMembershipPublicationReconcileContext(previousContext, nextContext) {
   if (
     !isMembershipPublicationReconcileContext(previousContext) ||
@@ -223,6 +310,8 @@ function mergeMembershipPublicationReconcileContext(previousContext, nextContext
   ) {
     return nextContext;
   }
+  const mergeRoute =
+    resolveMembershipPublicationReconcileMergeRoute(nextContext);
   const publishedActiveNodeIds = mergeMembershipPublicationReconcileNodeIds(
     previousContext[
       MEMBERSHIP_PUBLICATION_RECONCILE_CONTEXT_FIELD.PUBLISHED_ACTIVE_NODE_IDS
@@ -247,7 +336,7 @@ function mergeMembershipPublicationReconcileContext(previousContext, nextContext
       MEMBERSHIP_PUBLICATION_RECONCILE_CONTEXT_FIELD.ACKNOWLEDGED_NODE_IDS
     ],
   );
-  return {
+  const mergedContext = {
     ...previousContext,
     ...nextContext,
     [MEMBERSHIP_PUBLICATION_RECONCILE_CONTEXT_FIELD.LATEST_PUBLICATION_ROW]:
@@ -300,10 +389,35 @@ function mergeMembershipPublicationReconcileContext(previousContext, nextContext
         ],
         nextContext[
           MEMBERSHIP_PUBLICATION_RECONCILE_CONTEXT_FIELD
-            .SKIP_PUBLICATION_WRITE_READBACK
+          .SKIP_PUBLICATION_WRITE_READBACK
         ],
       ),
   };
+  return finalizeMembershipPublicationReconcileMergedContext(
+    mergedContext,
+    mergeRoute,
+  );
+}
+
+function resolveQueuedMembershipPublicationReconcileContext(
+  reconcileQueue,
+  ownerKey,
+) {
+  const pendingEntry =
+    reconcileQueue?.pending instanceof Map ?
+      reconcileQueue.pending.get(ownerKey) :
+      null;
+  if (pendingEntry) {
+    return pendingEntry.context;
+  }
+  const retryEntry =
+    reconcileQueue?.retryWorkItems instanceof Map ?
+      reconcileQueue.retryWorkItems.get(ownerKey) :
+      null;
+  if (retryEntry) {
+    return retryEntry.context;
+  }
+  return MEMBERSHIP_PUBLICATION_RECONCILE_CONTEXT_ABSENT;
 }
 
 class MembershipPublicationCoordinatorClassStage3 extends
@@ -336,10 +450,10 @@ class MembershipPublicationCoordinatorClassStage3 extends
     ) {
       return false;
     }
-    const pendingContext =
-      this.reconcileQueue?.pending instanceof Map ?
-        this.reconcileQueue.pending.get(ownerKey)?.context :
-        MEMBERSHIP_PUBLICATION_RECONCILE_CONTEXT_ABSENT;
+    const pendingContext = resolveQueuedMembershipPublicationReconcileContext(
+      this.reconcileQueue,
+      ownerKey,
+    );
     const mergedContext = mergeMembershipPublicationReconcileContext(
       pendingContext,
       {

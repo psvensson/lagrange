@@ -2538,12 +2538,13 @@ function resolvePublicationActiveGateHandoffReconcileTargetNodeIds(
     normalizePublicationActiveGateHandoffNodeIdList(
       handoffContract.pendingReconcileNodeIds,
     ).filter((nodeId) => !pendingRecoveryNodeIdSet.has(nodeId));
+  const expectedReconcileTargetNodeIds = expectedTargetNodeIds.filter(
+    (nodeId) => !pendingRecoveryNodeIdSet.has(nodeId),
+  );
   const selectedReconcileTargetNodeIds =
-    selectedPendingReconcileNodeIds.length > NUM.ZERO ?
-      selectedPendingReconcileNodeIds :
-      expectedTargetNodeIds.filter(
-        (nodeId) => !pendingRecoveryNodeIdSet.has(nodeId),
-      );
+    expectedReconcileTargetNodeIds.length > NUM.ZERO ?
+      expectedReconcileTargetNodeIds :
+      selectedPendingReconcileNodeIds;
   return normalizePublicationActiveGateHandoffNodeIdList([
     ...handoffContract.publishedActiveNodeIds,
     ...selectedReconcileTargetNodeIds,

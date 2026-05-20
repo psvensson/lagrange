@@ -93,6 +93,15 @@ class ReplicaDispatchServiceSegment3 extends ReplicaDispatchServiceSegment2 {
       return true;
     }
 
+    if (this.isDispatchReplayCreateTargetRearmOperation(row)) {
+      this.operationDispatchQueue.enqueue(
+        row.operation_id,
+        reasons.pendingReason,
+        {row},
+      );
+      return true;
+    }
+
     if (
       row.workflow_step !== WORKFLOW_STEP.PENDING &&
       row.workflow_step !== WORKFLOW_STEP.SENDING
@@ -123,6 +132,7 @@ class ReplicaDispatchServiceSegment3 extends ReplicaDispatchServiceSegment2 {
     const remoteReplayable =
       workflowStep === WORKFLOW_STEP.PENDING ||
       workflowStep === WORKFLOW_STEP.SENDING ||
+      this.isDispatchReplayCreateTargetRearmOperation(row) ||
       (row.type === OperationType.REPLACE &&
         workflowStep === WORKFLOW_STEP.ACTIVE);
     if (!remoteReplayable || this.isReplicaOperationLocallyOwned(row)) {

@@ -18,6 +18,15 @@ import {
 } from '../../src/diagnostics/topology-convergence-graph.js';
 import * as ACTIVE_GATE_SNAPSHOT_TEST_STATE from './admin-control-snapshot-active-gate-fixture-state.js';
 
+const TEST_DEFER_INLINE_OWNER_COMMAND_FIELD = 'deferInlineOwnerCommand';
+const TEST_DEFERRED_SKIP_PUBLICATION_WRITE_READBACK = true;
+const TEST_PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD =
+  'publicationActiveGateHandoff';
+const TEST_PUBLISHED_ACTIVE_NODE_IDS_FIELD = 'publishedActiveNodeIds';
+const TEST_ALLOW_EMPTY_PRELOADED_ROWS_FIELD = 'allowEmptyPreloadedRows';
+const TEST_NODE_ROWS_FIELD = 'nodeRows';
+const TEST_OWNER_QUEUE_STOPPED_REASON = 'owner_queue_stopped';
+
 test('AdminControlSnapshot surfaces handoff owner outcome when repair is not selected',
   async (t) => {
     let observedHandoff = null;
@@ -114,6 +123,225 @@ test('AdminControlSnapshot surfaces handoff owner outcome when repair is not sel
           ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_HANDOFF_RECONCILE_OUTCOME_PUBLISHED_VISIBLE,
       },
       'representative publication convergence should surface the owner command outcome',
+    );
+  });
+
+test('AdminControlSnapshot defers snapshot-query handoff owner commands to the owner queue',
+  async (t) => {
+    let inlineReconcileCalled = false;
+    let enqueueReason = null;
+    let enqueuedContext = null;
+    const publicationActiveGateHandoff = {
+      schemaVersion: ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_OWNER_COHORT_SCHEMA_VERSION,
+      state: ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_OWNER_COHORT_STATE_PENDING,
+      reasonCode: ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_OWNER_COHORT_REASON_OWNER_RECONCILE_PENDING,
+      nextAction: ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_HANDOFF_NEXT_ACTION_RECONCILE,
+      expectedNodeIds: [
+        ...ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_HANDOFF_RECONCILE_NODE_IDS,
+      ],
+      publishedActiveNodeIds: [
+        ...ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_HANDOFF_RECONCILE_PUBLISHED_NODE_IDS,
+      ],
+      pendingReconcileCount:
+        ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_HANDOFF_RECONCILE_PENDING_COUNT,
+      pendingReconcileNodeIds: [
+        ...ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_HANDOFF_RECONCILE_PENDING_NODE_IDS,
+      ],
+    };
+    const localSnapshot = {
+      nodes: [
+        ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_HANDOFF_RECONCILE_NODE_IDS[0],
+      ],
+      controlPlaneDiagnostics: {
+        publicationActiveGateHandoff,
+        activeGateOwnerCohort: publicationActiveGateHandoff,
+        publicationConvergence: {
+          publicationEpoch:
+            ACTIVE_GATE_SNAPSHOT_TEST_STATE
+              .ACTIVE_GATE_HANDOFF_RECONCILE_PUBLICATION_EPOCH,
+          status:
+            ACTIVE_GATE_SNAPSHOT_TEST_STATE
+              .ACTIVE_GATE_OWNER_TRUTH_PUBLICATION_STATUS,
+          publishedActiveNodeIds: [
+            ...ACTIVE_GATE_SNAPSHOT_TEST_STATE
+              .ACTIVE_GATE_HANDOFF_RECONCILE_PUBLISHED_NODE_IDS,
+          ],
+        },
+      },
+    };
+    const snapshot = new AdminControlSnapshot({
+      nodeId: ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_HANDOFF_RECONCILE_LOCAL_NODE_ID,
+      controlPlaneReadinessService: {
+        membershipPublicationService: {
+          async reconcileActiveGateMembershipPublication() {
+            inlineReconcileCalled = true;
+            throw new Error(
+              ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_HANDOFF_RECONCILE_PRESSURE_ERROR,
+            );
+          },
+          enqueueClusterMembershipReconcile(reason, context = {}) {
+            enqueueReason = reason;
+            enqueuedContext = context;
+            return true;
+          },
+        },
+      },
+    });
+
+    const result = await snapshot.triggerMembershipPublicationHandoffOwnerCommand(
+      localSnapshot,
+      {
+        [TEST_DEFER_INLINE_OWNER_COMMAND_FIELD]: true,
+      },
+    );
+
+    t.equal(
+      inlineReconcileCalled,
+      false,
+      'snapshot-query owner command should not await inline publication reconcile',
+    );
+    t.equal(
+      enqueueReason,
+      'admin_control_snapshot_publication_handoff',
+      'snapshot-query owner command should enqueue the canonical handoff reason',
+    );
+    t.same(
+      enqueuedContext[TEST_PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD]
+        ?.pendingReconcileNodeIds,
+      [
+        ...ACTIVE_GATE_SNAPSHOT_TEST_STATE
+          .ACTIVE_GATE_HANDOFF_RECONCILE_PENDING_NODE_IDS,
+      ],
+      'snapshot-query owner command should carry the active-gate handoff contract',
+    );
+    t.equal(
+      Object.hasOwn(enqueuedContext, TEST_PUBLISHED_ACTIVE_NODE_IDS_FIELD),
+      false,
+      'snapshot-query owner command should let the owner derive the handoff target',
+    );
+    t.equal(
+      Object.hasOwn(enqueuedContext, TEST_ALLOW_EMPTY_PRELOADED_ROWS_FIELD),
+      false,
+      'snapshot-query owner command should not force empty authoritative reads',
+    );
+    t.equal(
+      Object.hasOwn(enqueuedContext, TEST_NODE_ROWS_FIELD),
+      false,
+      'snapshot-query owner command should not preload empty membership rows',
+    );
+    t.equal(
+      enqueuedContext.skipPublicationWriteReadback,
+      TEST_DEFERRED_SKIP_PUBLICATION_WRITE_READBACK,
+      'snapshot-query owner command should avoid immediate durable readback',
+    );
+    t.match(
+      result.controlPlaneDiagnostics.publicationConvergence
+        .membershipPublicationHandoffOutcome,
+      {
+        state:
+          ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_HANDOFF_RECONCILE_OUTCOME_WRITE_DEFERRED,
+        enqueued: true,
+        reasonCode:
+          ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_HANDOFF_RECONCILE_OUTCOME_ENQUEUED_REASON,
+        controlPlaneConvergence: {
+          convergenceClass: CONTROL_PLANE_CONVERGENCE_CLASS.CRITICAL,
+          pressureOutcome:
+            CONTROL_PLANE_CONVERGENCE_PRESSURE_OUTCOME.CRITICAL_ADMITTED,
+        },
+        target: {
+          pendingReconcileNodeIds: [
+            ...ACTIVE_GATE_SNAPSHOT_TEST_STATE
+              .ACTIVE_GATE_HANDOFF_RECONCILE_PENDING_NODE_IDS,
+          ],
+        },
+      },
+      'snapshot-query owner command should return a structured deferred outcome',
+    );
+  });
+
+test('AdminControlSnapshot reports rejected deferred handoff owner queue admission',
+  async (t) => {
+    let inlineReconcileCalled = false;
+    const publicationActiveGateHandoff = {
+      schemaVersion: ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_OWNER_COHORT_SCHEMA_VERSION,
+      state: ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_OWNER_COHORT_STATE_PENDING,
+      reasonCode: ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_OWNER_COHORT_REASON_OWNER_RECONCILE_PENDING,
+      nextAction: ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_HANDOFF_NEXT_ACTION_RECONCILE,
+      expectedNodeIds: [
+        ...ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_HANDOFF_RECONCILE_NODE_IDS,
+      ],
+      publishedActiveNodeIds: [
+        ...ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_HANDOFF_RECONCILE_PUBLISHED_NODE_IDS,
+      ],
+      pendingReconcileCount:
+        ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_HANDOFF_RECONCILE_PENDING_COUNT,
+      pendingReconcileNodeIds: [
+        ...ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_HANDOFF_RECONCILE_PENDING_NODE_IDS,
+      ],
+    };
+    const snapshot = new AdminControlSnapshot({
+      nodeId: ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_HANDOFF_RECONCILE_LOCAL_NODE_ID,
+      controlPlaneReadinessService: {
+        membershipPublicationService: {
+          async reconcileActiveGateMembershipPublication() {
+            inlineReconcileCalled = true;
+          },
+          enqueueClusterMembershipReconcile() {
+            this.lastControlPlaneConvergenceQueueOutcome = {
+              convergenceClass: CONTROL_PLANE_CONVERGENCE_CLASS.CRITICAL,
+              pressureOutcome:
+                CONTROL_PLANE_CONVERGENCE_PRESSURE_OUTCOME.CRITICAL_REJECTED,
+              reasonCode: TEST_OWNER_QUEUE_STOPPED_REASON,
+            };
+            return false;
+          },
+        },
+      },
+    });
+
+    const result = await snapshot.triggerMembershipPublicationHandoffOwnerCommand(
+      {
+        controlPlaneDiagnostics: {
+          publicationActiveGateHandoff,
+          activeGateOwnerCohort: publicationActiveGateHandoff,
+          publicationConvergence: {
+            publicationEpoch:
+              ACTIVE_GATE_SNAPSHOT_TEST_STATE
+                .ACTIVE_GATE_HANDOFF_RECONCILE_PUBLICATION_EPOCH,
+            status:
+              ACTIVE_GATE_SNAPSHOT_TEST_STATE
+                .ACTIVE_GATE_OWNER_TRUTH_PUBLICATION_STATUS,
+          },
+        },
+      },
+      {
+        [TEST_DEFER_INLINE_OWNER_COMMAND_FIELD]: true,
+      },
+    );
+
+    t.equal(
+      inlineReconcileCalled,
+      false,
+      'rejected deferred owner admission should still avoid inline reconcile',
+    );
+    t.match(
+      result.controlPlaneDiagnostics.publicationConvergence
+        .membershipPublicationHandoffOutcome,
+      {
+        state:
+          ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_HANDOFF_RECONCILE_OUTCOME_WRITE_DEFERRED,
+        enqueued: false,
+        reasonCode:
+          ACTIVE_GATE_SNAPSHOT_TEST_STATE
+            .ACTIVE_GATE_HANDOFF_RECONCILE_OUTCOME_SERVICE_UNAVAILABLE,
+        controlPlaneConvergence: {
+          convergenceClass: CONTROL_PLANE_CONVERGENCE_CLASS.CRITICAL,
+          pressureOutcome:
+            CONTROL_PLANE_CONVERGENCE_PRESSURE_OUTCOME.CRITICAL_REJECTED,
+          reasonCode: TEST_OWNER_QUEUE_STOPPED_REASON,
+        },
+      },
+      'deferred owner command should not report enqueued when the owner queue rejects admission',
     );
   });
 
@@ -666,7 +894,7 @@ test('AdminControlSnapshot queues handoff reconcile when awaited owner reconcile
           convergenceClass:
             CONTROL_PLANE_CONVERGENCE_CLASS.CRITICAL,
           pressureOutcome:
-            CONTROL_PLANE_CONVERGENCE_PRESSURE_OUTCOME.CRITICAL_REJECTED,
+            CONTROL_PLANE_CONVERGENCE_PRESSURE_OUTCOME.CRITICAL_ADMITTED,
         },
       },
       'stale awaited reconcile rows should return a structured critical defer instead of a completed handoff',

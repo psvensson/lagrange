@@ -22,6 +22,9 @@ import {
 import {
 } from '../../src/control-plane/control-plane-kernel-ingress.js';
 import {
+  PRESSURE_GOVERNOR_ERROR_CODE,
+} from '../../src/control-plane/pressure-governor.js';
+import {
 } from '../../src/bootstrap/join-session-store.js';
 import {
   JOINING_ERROR_MSG,
@@ -76,6 +79,11 @@ const QUERY_STATE_SERVICE_REGISTRATION_ADMISSION_TARGET =
   'create-self-hosted join metadata service registration';
 const ASSIGNMENT_TOKEN_UNKNOWN_ERROR_CODE =
   'ASSIGNMENT_TOKEN_UNKNOWN';
+const TEST_SHORTCUT_RETRY_AFTER_MS = 125;
+const TEST_TERMINAL_SHORTCUT_ERROR_CODE =
+  'SHORTCUT_VALIDATION_FAILED';
+const TEST_SHORTCUT_NON_SUCCESS_ERROR_PATTERN =
+  /shortcut returned non-success/;
 const TEST_SEED_CONTACT_AUTHORITY = Object.freeze({
   state: 'seed_locally_ready_unpublished',
   ready: false,
@@ -1928,6 +1936,130 @@ test('NodeJoiningService - bypasses HTTP register-service for query-state self-h
       'query-state shortcut should seed the join-time cache row',
     );
   });
+
+test('NodeJoiningService - query-state shortcut preserves retryable ' +
+  'control-plane pressure', async (t) => {
+  initializeTestEnvironment();
+
+  let httpCalls = 0;
+  let upsertCalls = 0;
+  const service = new NodeJoiningService({
+    nodeId: 'join-node-shortcut-pressure',
+    nodeAddress: 'ws://localhost:9090',
+    seedNodeAddress: 'http://localhost:8080',
+    httpPost: async () => {
+      httpCalls += 1;
+      return {success: true};
+    },
+  });
+  service.seedNodeId = 'seed-node-1';
+  service.upsertJoinServiceRowWithRetry = async () => {
+    upsertCalls += 1;
+    return {
+      success: false,
+      error: 'control_plane_pressure_degraded',
+      errorCode:
+        PRESSURE_GOVERNOR_ERROR_CODE.CONTROL_PLANE_PRESSURE_DEGRADED,
+      retryAfterMs: TEST_SHORTCUT_RETRY_AFTER_MS,
+    };
+  };
+
+  const error = await t.rejects(
+    service.registerMessageGroupService(
+      'mg-1',
+      'mg-1-r0',
+      {getRole: () => 'leader'},
+      {
+        status: SERVICE_STATUS.STOPPED,
+        [QUERY_STATE_SERVICE_REGISTRATION_SHORTCUT_OPTION]: true,
+      },
+    ),
+    'retryable shortcut pressure should surface for outer resume',
+  );
+
+  t.equal(httpCalls, 0, 'retryable shortcut should not fall back to HTTP');
+  t.equal(upsertCalls, 1, 'shortcut should attempt one owner write');
+  t.equal(
+    error?.deferRetry,
+    true,
+    'retryable shortcut failure should preserve defer semantics',
+  );
+  t.equal(
+    error?.retryable,
+    true,
+    'retryable shortcut failure should preserve retryable metadata',
+  );
+  t.equal(
+    error?.retryAfterMs,
+    TEST_SHORTCUT_RETRY_AFTER_MS,
+    'retryable shortcut failure should preserve retry delay hints',
+  );
+  t.equal(
+    error?.code,
+    PRESSURE_GOVERNOR_ERROR_CODE.CONTROL_PLANE_PRESSURE_DEGRADED,
+    'retryable shortcut failure should preserve control-plane code',
+  );
+  t.equal(
+    error?.bootstrapResponse?.success,
+    false,
+    'retryable shortcut failure should retain the owner result',
+  );
+});
+
+test('NodeJoiningService - query-state shortcut keeps terminal ' +
+  'non-retryable failures terminal', async (t) => {
+  initializeTestEnvironment();
+
+  let httpCalls = 0;
+  let upsertCalls = 0;
+  const service = new NodeJoiningService({
+    nodeId: 'join-node-shortcut-terminal',
+    nodeAddress: 'ws://localhost:9090',
+    seedNodeAddress: 'http://localhost:8080',
+    httpPost: async () => {
+      httpCalls += 1;
+      return {success: true};
+    },
+  });
+  service.seedNodeId = 'seed-node-1';
+  service.upsertJoinServiceRowWithRetry = async () => {
+    upsertCalls += 1;
+    return {
+      success: false,
+      error: 'shortcut validation failed',
+      errorCode: TEST_TERMINAL_SHORTCUT_ERROR_CODE,
+    };
+  };
+
+  const error = await t.rejects(
+    service.registerMessageGroupService(
+      'mg-1',
+      'mg-1-r0',
+      {getRole: () => 'leader'},
+      {
+        status: SERVICE_STATUS.STOPPED,
+        [QUERY_STATE_SERVICE_REGISTRATION_SHORTCUT_OPTION]: true,
+      },
+    ),
+    'terminal shortcut failure should still reject',
+  );
+
+  t.equal(httpCalls, 0, 'terminal shortcut should not fall back to HTTP');
+  t.equal(upsertCalls, 1, 'terminal shortcut should attempt one owner write');
+  t.notOk(
+    error?.deferRetry,
+    'non-retryable shortcut failure should not defer retry',
+  );
+  t.notOk(
+    error?.retryable,
+    'non-retryable shortcut failure should not become retryable',
+  );
+  t.match(
+    error?.message,
+    TEST_SHORTCUT_NON_SUCCESS_ERROR_PATTERN,
+    'terminal shortcut failure should preserve the shortcut failure message',
+  );
+});
 
 test('NodeJoiningService - MOVE_REPLICA control-plane upsert preserves ' +
   'assignment publication when preferred', async (t) => {

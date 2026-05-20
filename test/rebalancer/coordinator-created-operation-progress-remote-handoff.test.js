@@ -18,6 +18,23 @@ import {
 
 const REMOTE_HANDOFF_TEST_INITIAL_NOW_MS = 1_000_000;
 const REMOTE_HANDOFF_TIMEOUT_OVERRUN_MS = 1;
+const REMOTE_HANDOFF_SNAPSHOT_OPERATION_ID =
+  'remote-handoff-snapshot-operation';
+const REMOTE_HANDOFF_SNAPSHOT_SOURCE_NODE_ID =
+  'remote-handoff-snapshot-source-node';
+const REMOTE_HANDOFF_SNAPSHOT_TARGET_NODE_ID =
+  'remote-handoff-snapshot-target-node';
+const REMOTE_HANDOFF_SNAPSHOT_PARTITION_ID =
+  'control_plane_publications-p1';
+const REMOTE_HANDOFF_SNAPSHOT_REPLICA_ID =
+  'control_plane_publications-p1-r4';
+const REMOTE_HANDOFF_SNAPSHOT_DISPATCH_TARGET =
+  `${REMOTE_HANDOFF_SNAPSHOT_TARGET_NODE_ID}/service/replica-dispatch`;
+const REMOTE_HANDOFF_SNAPSHOT_READ_ERROR =
+  'replica_operations owner unavailable';
+const REMOTE_HANDOFF_SNAPSHOT_PARTICIPANT_FAILURE =
+  'DISTRIBUTED_PARTICIPANT_FAILURE';
+const REMOTE_HANDOFF_SNAPSHOT_RETRY_AFTER_MS = 250;
 const RECENT_INTENT_POLICY_NODE_ID = 'recent-intent-policy-node';
 const RECENT_INTENT_POLICY_TARGET_NODE_ID =
   'recent-intent-policy-target-node';
@@ -780,6 +797,147 @@ async (t) => {
       deliveries.length,
       2,
       'deferred handoff retry should re-send the owner wake-up through the same ingress',
+    );
+  } finally {
+    await coordinator.shutdown();
+  }
+});
+
+test('workflowOwner remote coordinator-created handoff uses the operation ' +
+  'snapshot when the source owner read is unavailable', async (t) => {
+  let authoritativeOperationReadCount = NUM.ZERO;
+  const deferredTimers = [];
+  const deliveries = [];
+
+  const authoritativeRead = async (tableName, sql, params = []) => {
+    const isOperationIdRead =
+      tableName === 'replica_operations' &&
+      String(sql).includes('operation_id') &&
+      params.includes(REMOTE_HANDOFF_SNAPSHOT_OPERATION_ID);
+    if (isOperationIdRead) {
+      authoritativeOperationReadCount += NUM.ONE;
+      const error = new Error(REMOTE_HANDOFF_SNAPSHOT_READ_ERROR);
+      error.code = REMOTE_HANDOFF_SNAPSHOT_PARTICIPANT_FAILURE;
+      error.errorCode = REMOTE_HANDOFF_SNAPSHOT_PARTICIPANT_FAILURE;
+      error.deferRetry = true;
+      error.retryAfterMs = REMOTE_HANDOFF_SNAPSHOT_RETRY_AFTER_MS;
+      throw error;
+    }
+    return {success: true, rows: [], affectedRows: NUM.ZERO};
+  };
+
+  const coordinator = new RebalanceCoordinator({
+    nodeId: REMOTE_HANDOFF_SNAPSHOT_SOURCE_NODE_ID,
+    systemTableCache: {
+      get() {
+        return null;
+      },
+      getAll() {
+        return [];
+      },
+      filter() {
+        return [];
+      },
+    },
+    cdcIntegrationService: {
+      async waitForCacheUpdate() {},
+      async executeAuthoritativeSystemTableRead(
+        tableName,
+        sql,
+        params,
+      ) {
+        return authoritativeRead(tableName, sql, params);
+      },
+    },
+    controlPlaneSystemTableGateway: {
+      async readRows(tableName, sql, params = []) {
+        return authoritativeRead(tableName, sql, params);
+      },
+      async readAuthoritativeRows(tableName, sql, params = []) {
+        return authoritativeRead(tableName, sql, params);
+      },
+      async executeQuery() {
+        return {success: true, rows: [], affectedRows: NUM.ZERO};
+      },
+    },
+    sqlQueryEngine: {
+      async executeQuery() {
+        return {success: true, rows: [], affectedRows: NUM.ZERO};
+      },
+    },
+    tablePolicyService: {
+      async getPolicyForPartition() {
+        return {minReplicaCount: NUM.ONE};
+      },
+    },
+    storageAccountingService: {
+      estimateReplicaBytes() {
+        return 1024;
+      },
+    },
+    messageRouter: {
+      async deliver(target, payload, options) {
+        deliveries.push({target, payload, options});
+        return {acknowledged: true};
+      },
+    },
+    controlPlaneReadinessService: createMockControlPlaneReadinessService(),
+    transactionCoordinator: createMockTransactionCoordinator(),
+    setTimeoutFn(fn, delayMs) {
+      const handle = {fn, delayMs};
+      deferredTimers.push(handle);
+      return handle;
+    },
+    clearTimeoutFn() {},
+    enableTimeouts: false,
+  });
+  coordinator.initialize();
+
+  try {
+    const operationTimestampMs = Date.now();
+    const operation = Object.freeze({
+      operationId: REMOTE_HANDOFF_SNAPSHOT_OPERATION_ID,
+      type: OperationType.REPLACE,
+      partitionId: REMOTE_HANDOFF_SNAPSHOT_PARTITION_ID,
+      entityType: SERVICE_TYPE.PARTITION,
+      entityId: REMOTE_HANDOFF_SNAPSHOT_PARTITION_ID,
+      sourceNodeId: REMOTE_HANDOFF_SNAPSHOT_SOURCE_NODE_ID,
+      targetNodeId: REMOTE_HANDOFF_SNAPSHOT_TARGET_NODE_ID,
+      replicaId: REMOTE_HANDOFF_SNAPSHOT_REPLICA_ID,
+      status: ReplicaStatus.PENDING,
+      workflowStep: WORKFLOW_STEP.PENDING,
+      createdAt: operationTimestampMs,
+      updatedAt: operationTimestampMs,
+      stepsHistory: [],
+    });
+
+    const applied =
+      await coordinator.workflowOwner.armCoordinatorCreatedOperation(operation);
+
+    t.equal(
+      applied,
+      true,
+      'remote handoff should use the supplied operation snapshot and apply',
+    );
+    t.equal(
+      authoritativeOperationReadCount,
+      NUM.ZERO,
+      'remote handoff should not block on the source owner operation read',
+    );
+    t.equal(
+      deliveries.length,
+      NUM.ONE,
+      'remote target wake-up should be delivered on the first attempt',
+    );
+    t.equal(
+      deliveries[NUM.ZERO]?.target,
+      REMOTE_HANDOFF_SNAPSHOT_DISPATCH_TARGET,
+      'handoff should target the canonical remote replica-dispatch ingress',
+    );
+    t.equal(
+      deferredTimers.length,
+      NUM.ONE,
+      'successful remote wake-up should still arm verification follow-up',
     );
   } finally {
     await coordinator.shutdown();

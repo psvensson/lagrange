@@ -75,6 +75,8 @@ const CONTROL_SNAPSHOT_RETRY_REASON_AUTHORITATIVE_REPAIR_PRESSURE =
   'authoritative_repair_pressure';
 const SERVICE_DISCOVERY_NO_CANDIDATES_ERROR = 'no_service_discovery_candidates';
 const ACTIVE_WAIT_TIMEOUT_EVENT_INTERVAL_DIVISOR = 2;
+const CONTROL_SNAPSHOT_STARTUP_PROBE_TIMEOUT_SCALE = 2;
+const CONTROL_SNAPSHOT_DEFAULT_PROBE_TIMEOUT_SCALE = ONE;
 const TYPEOF_BOOLEAN = 'boolean';
 
 function normalizeControlSnapshotObservationString(value) {
@@ -176,27 +178,34 @@ function resolveSnapshotRetryReason({
     return null;
   }
   if (
-    snapshotRetryEvidence.forceRepair !== true &&
-    snapshotRetryEvidence.selectedTimeout
-  ) {
-    return CONTROL_SNAPSHOT_RETRY_REASON_SELECTED_TIMEOUT;
-  }
-  if (
     snapshotRetryEvidence.forceRepair === true &&
     snapshotRetryEvidence.authoritativeRepairPressure
   ) {
     return CONTROL_SNAPSHOT_RETRY_REASON_AUTHORITATIVE_REPAIR_PRESSURE;
   }
+  if (snapshotRetryEvidence.selectedTimeout) {
+    return CONTROL_SNAPSHOT_RETRY_REASON_SELECTED_TIMEOUT;
+  }
   return null;
 }
 
-function resolveSnapshotRetryTimeoutMs(snapshotTimeoutMs) {
+function resolveSnapshotRetryTimeoutMs(
+  snapshotTimeoutMs,
+  probeTimeoutScale = CONTROL_SNAPSHOT_DEFAULT_PROBE_TIMEOUT_SCALE,
+) {
   const normalizedSnapshotTimeoutMs = Number.isFinite(snapshotTimeoutMs) ?
     Math.max(MIN_TIMEOUT_MS, Math.floor(snapshotTimeoutMs)) :
     MIN_TIMEOUT_MS;
+  const normalizedProbeTimeoutScale = Number.isFinite(probeTimeoutScale) ?
+    Math.max(CONTROL_SNAPSHOT_DEFAULT_PROBE_TIMEOUT_SCALE, probeTimeoutScale) :
+    CONTROL_SNAPSHOT_DEFAULT_PROBE_TIMEOUT_SCALE;
+  const scaledProbeTimeoutMs = Math.max(
+    MIN_TIMEOUT_MS,
+    Math.floor(CONTROL_SNAPSHOT_PROBE_TIMEOUT_MS * normalizedProbeTimeoutScale),
+  );
   return Math.max(
     normalizedSnapshotTimeoutMs,
-    CONTROL_SNAPSHOT_PROBE_TIMEOUT_MS,
+    scaledProbeTimeoutMs,
   );
 }
 
@@ -211,7 +220,9 @@ class Cluster5 extends Cluster4 {
         CLUSTER_READINESS_MODE_LOAD :
         CLUSTER_READINESS_MODE_STARTUP;
     const startupProbeTimeoutScale =
-      readinessMode === CLUSTER_READINESS_MODE_STARTUP ? 2 : 1;
+      readinessMode === CLUSTER_READINESS_MODE_STARTUP ?
+        CONTROL_SNAPSHOT_STARTUP_PROBE_TIMEOUT_SCALE :
+        CONTROL_SNAPSHOT_DEFAULT_PROBE_TIMEOUT_SCALE;
     const expectedNodeSet = new Set(
       expectedNodeIds.map((nodeId) => String(nodeId)),
     );
@@ -374,7 +385,10 @@ class Cluster5 extends Cluster4 {
         if (retryReason !== null) {
           try {
             const retrySnapshotTimeoutMs =
-              resolveSnapshotRetryTimeoutMs(snapshotTimeoutMs);
+              resolveSnapshotRetryTimeoutMs(
+                snapshotTimeoutMs,
+                startupProbeTimeoutScale,
+              );
             const retrySnapshotResult = await node.getControlSnapshot({
               timeoutMs: retrySnapshotTimeoutMs,
               lane: ADMIN_SOCKET_LANE_SNAPSHOT,

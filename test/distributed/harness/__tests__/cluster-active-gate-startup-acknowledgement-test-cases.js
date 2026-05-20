@@ -338,6 +338,12 @@ const ACTIVE_GATE_STARTUP_OWNER_RECONCILE_STALE_ACK_TEST_NAME =
 const ACTIVE_GATE_STARTUP_OWNER_RECONCILE_STALE_ACK_GUARDRAIL_TEST_NAME =
   'Unit: _probeClusterActiveState keeps stale selected ACK blocked without ' +
   'startup owner-reconcile handoff';
+const ACTIVE_GATE_STARTUP_OWNER_RECONCILE_NO_ACK_TEST_NAME =
+  'Unit: _probeClusterActiveState resolves no-ACK missing-published ' +
+  'residual with startup owner-reconcile handoff';
+const ACTIVE_GATE_STARTUP_OWNER_RECONCILE_NO_ACK_GUARDRAIL_TEST_NAME =
+  'Unit: _probeClusterActiveState keeps no-ACK missing-published residual ' +
+  'blocked without startup owner-reconcile handoff';
 const ACTIVE_GATE_STARTUP_OWNER_RECONCILE_STATUS = 200;
 const ACTIVE_GATE_STARTUP_OWNER_RECONCILE_PHASE = 'JOIN_READY';
 const ACTIVE_GATE_STARTUP_OWNER_RECONCILE_STATE = 'active';
@@ -361,10 +367,16 @@ const ACTIVE_GATE_STARTUP_OWNER_RECONCILE_PENDING_ACK_NODE_IDS =
   Object.freeze([
     SNAPSHOT_REPLAY_TEST_NODE_ID.BASELINE,
   ]);
+const ACTIVE_GATE_STARTUP_OWNER_RECONCILE_EMPTY_PENDING_ACK_NODE_IDS =
+  Object.freeze([]);
 const ACTIVE_GATE_STARTUP_OWNER_RECONCILE_PENDING_RECONCILE_NODE_IDS =
   Object.freeze([
     SNAPSHOT_REPLAY_TEST_NODE_ID.BASELINE,
     SNAPSHOT_REPLAY_TEST_NODE_ID.ADMIN_READY_STALE,
+  ]);
+const ACTIVE_GATE_STARTUP_OWNER_RECONCILE_NO_ACK_HANDOFF_NODE_IDS =
+  Object.freeze([
+    SNAPSHOT_REPLAY_TEST_NODE_ID.BASELINE,
   ]);
 const ACTIVE_GATE_NO_PROGRESS_BEST_SNAPSHOT_TEST_NAME =
   'Unit: _waitForAllActive keeps metric-moving snapshot when terminal probe ' +
@@ -685,6 +697,11 @@ test(ACTIVE_GATE_PARTIAL_RESIDUAL_TEST_NAME, async () => {
 
 function buildStartupOwnerReconcilePartialCoverageCluster({
   includeOwnerReconcileHandoff,
+  pendingAckNodeIds = ACTIVE_GATE_STARTUP_OWNER_RECONCILE_PENDING_ACK_NODE_IDS,
+  pendingReconcileNodeIds =
+    ACTIVE_GATE_STARTUP_OWNER_RECONCILE_PENDING_RECONCILE_NODE_IDS,
+  handoffMissingPublishedNodeIds =
+    ACTIVE_GATE_STARTUP_OWNER_RECONCILE_MISSING_NODE_IDS,
 }) {
   const cluster = createCluster({
     size: SNAPSHOT_REPLAY_TEST_CLUSTER_SIZE,
@@ -731,13 +748,9 @@ function buildStartupOwnerReconcilePartialCoverageCluster({
             SNAPSHOT_REPLAY_TEST_HANDOFF_RUNTIME_PROMOTION_ALLOWED_FALSE,
           publishedActiveNodeIds:
             ACTIVE_GATE_STARTUP_OWNER_RECONCILE_PUBLISHED_NODE_IDS,
-          missingPublishedNodeIds:
-            ACTIVE_GATE_STARTUP_OWNER_RECONCILE_MISSING_NODE_IDS,
-          pendingReconcileNodeIds:
-            ACTIVE_GATE_STARTUP_OWNER_RECONCILE_PENDING_RECONCILE_NODE_IDS,
-          pendingReconcileCount:
-            ACTIVE_GATE_STARTUP_OWNER_RECONCILE_PENDING_RECONCILE_NODE_IDS
-              .length,
+          missingPublishedNodeIds: handoffMissingPublishedNodeIds,
+          pendingReconcileNodeIds,
+          pendingReconcileCount: pendingReconcileNodeIds.length,
         } :
         null;
     return {
@@ -758,12 +771,10 @@ function buildStartupOwnerReconcilePartialCoverageCluster({
         ACTIVE_GATE_STARTUP_OWNER_RECONCILE_PUBLISHED_NODE_IDS,
       selectedMissingPublishedNodeIds:
         ACTIVE_GATE_STARTUP_OWNER_RECONCILE_MISSING_NODE_IDS,
-      selectedPendingAckNodeIds:
-        ACTIVE_GATE_STARTUP_OWNER_RECONCILE_PENDING_ACK_NODE_IDS,
+      selectedPendingAckNodeIds: pendingAckNodeIds,
       selectedPublicationConvergenceGate: {
         ready: false,
-        pendingAckNodeIds:
-          ACTIVE_GATE_STARTUP_OWNER_RECONCILE_PENDING_ACK_NODE_IDS,
+        pendingAckNodeIds,
         missingPublishedNodeIds:
           ACTIVE_GATE_STARTUP_OWNER_RECONCILE_MISSING_NODE_IDS,
         priorityPartitionSummary: {
@@ -775,8 +786,7 @@ function buildStartupOwnerReconcilePartialCoverageCluster({
         publicationStatus: CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED,
         publishedActiveNodeIds:
           ACTIVE_GATE_STARTUP_OWNER_RECONCILE_PUBLISHED_NODE_IDS,
-        pendingAckNodeIds:
-          ACTIVE_GATE_STARTUP_OWNER_RECONCILE_PENDING_ACK_NODE_IDS,
+        pendingAckNodeIds,
       },
       ...(selectedPublicationActiveGateHandoff ?
         {selectedPublicationActiveGateHandoff} :
@@ -838,6 +848,69 @@ test(
       probeResult.snapshotCoverage.selectedPendingAckNodeIds,
       ACTIVE_GATE_STARTUP_OWNER_RECONCILE_PENDING_ACK_NODE_IDS,
       'selected stale pending ACK should stay visible to diagnostics',
+    );
+  },
+);
+
+test(ACTIVE_GATE_STARTUP_OWNER_RECONCILE_NO_ACK_TEST_NAME, async () => {
+  const cluster = buildStartupOwnerReconcilePartialCoverageCluster({
+    includeOwnerReconcileHandoff: true,
+    pendingAckNodeIds:
+      ACTIVE_GATE_STARTUP_OWNER_RECONCILE_EMPTY_PENDING_ACK_NODE_IDS,
+    pendingReconcileNodeIds:
+      ACTIVE_GATE_STARTUP_OWNER_RECONCILE_NO_ACK_HANDOFF_NODE_IDS,
+    handoffMissingPublishedNodeIds:
+      ACTIVE_GATE_STARTUP_OWNER_RECONCILE_NO_ACK_HANDOFF_NODE_IDS,
+  });
+
+  const probeResult = await cluster._probeClusterActiveState(
+    Date.now() + ACTIVE_GATE_PARTIAL_RESIDUAL_TIMEOUT_MS,
+  );
+
+  assert.strictEqual(
+    probeResult.allActive,
+    true,
+    'owner-reconcile handoff should resolve no-ACK missing-published residual',
+  );
+  assert.deepStrictEqual(
+    probeResult.snapshotCoverage.selectedPendingAckNodeIds,
+    ACTIVE_GATE_STARTUP_OWNER_RECONCILE_EMPTY_PENDING_ACK_NODE_IDS,
+    'selected snapshot should preserve the closed ACK witness',
+  );
+  assert.deepStrictEqual(
+    probeResult.snapshotCoverage.selectedMissingPublishedNodeIds,
+    ACTIVE_GATE_STARTUP_OWNER_RECONCILE_MISSING_NODE_IDS,
+    'selected snapshot should preserve stale missing-published diagnostics',
+  );
+});
+
+test(
+  ACTIVE_GATE_STARTUP_OWNER_RECONCILE_NO_ACK_GUARDRAIL_TEST_NAME,
+  async () => {
+    const cluster = buildStartupOwnerReconcilePartialCoverageCluster({
+      includeOwnerReconcileHandoff: false,
+      pendingAckNodeIds:
+        ACTIVE_GATE_STARTUP_OWNER_RECONCILE_EMPTY_PENDING_ACK_NODE_IDS,
+    });
+
+    const probeResult = await cluster._probeClusterActiveState(
+      Date.now() + ACTIVE_GATE_PARTIAL_RESIDUAL_TIMEOUT_MS,
+    );
+
+    assert.strictEqual(
+      probeResult.allActive,
+      false,
+      'no-ACK residual must remain blocked without handoff proof',
+    );
+    assert.deepStrictEqual(
+      probeResult.snapshotCoverage.selectedPendingAckNodeIds,
+      ACTIVE_GATE_STARTUP_OWNER_RECONCILE_EMPTY_PENDING_ACK_NODE_IDS,
+      'guardrail fixture should keep ACK closed',
+    );
+    assert.deepStrictEqual(
+      probeResult.snapshotCoverage.selectedMissingPublishedNodeIds,
+      ACTIVE_GATE_STARTUP_OWNER_RECONCILE_MISSING_NODE_IDS,
+      'guardrail fixture should keep stale missing-published diagnostics',
     );
   },
 );
@@ -1041,4 +1114,3 @@ test('Unit: _probeControlSnapshotCoverage counts projected and suspected nodes '
     'coverage should retain the expanded observed node set',
   );
 });
-

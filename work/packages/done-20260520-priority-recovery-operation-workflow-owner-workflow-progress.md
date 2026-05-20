@@ -3,7 +3,7 @@
 <!-- work-package
 {
   "schema": "work-package-v1",
-  "status": "active",
+  "status": "done",
   "opened": "2026-05-20",
   "lane": "causal-escalation",
   "scenario": "rolling-restart",
@@ -20,7 +20,7 @@
     "npm run analyze:causal-model -- test-output/reports/rolling-restart-snapshot-lane-reset-close-20260520T055140Z.report.json"
   ],
   "writeScope": [
-    "work/packages/active-20260520-priority-recovery-operation-workflow-owner-workflow-progress.md",
+    "work/packages/done-20260520-priority-recovery-operation-workflow-owner-workflow-progress.md",
     "work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md",
     "work/sprints/current-blocker.md",
     "work/sprints/current-blocker.json",
@@ -44,7 +44,7 @@
     "test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js"
   ],
   "commitScope": [
-    "work/packages/active-20260520-priority-recovery-operation-workflow-owner-workflow-progress.md",
+    "work/packages/done-20260520-priority-recovery-operation-workflow-owner-workflow-progress.md",
     "work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md",
     "work/sprints/current-blocker.md",
     "work/sprints/current-blocker.json",
@@ -159,7 +159,7 @@
     "recentFrontierHistory": [
       "work/packages/done-20260520-rolling-restart-publication-recovery-evidence-consistency.md / topology_publication_owner / publication_convergence / reduced",
       "work/packages/done-20260520-rolling-restart-harness-publication-pending-wrapper.md / topology_publication_owner / publication_convergence / migrated",
-      "work/packages/active-20260520-rolling-restart-startup-active-gate-owner-snapshot-coverage.md / startup_active_gate_owner / snapshot_coverage / migrated"
+      "work/packages/done-20260520-rolling-restart-startup-active-gate-owner-snapshot-coverage.md / startup_active_gate_owner / snapshot_coverage / migrated"
     ],
     "oscillationCheck": "Tracker activation detected adjacent publication and active-gate owner fixes without green rolling-restart; this package is the required cross-boundary handoff before another runtime patch.",
     "handoffInvariant": "Preserve the snapshot-lane reset improvement and do not reopen topology publication or startup active-gate runtime unless fresh causal evidence reselects them."
@@ -202,7 +202,10 @@
     ],
     "selectedChoice": "architecture-gap-stop",
     "nextAction": "Open the publication/workflow handoff contract package before direct workflow runtime promotion."
-  }
+  },
+  "closed": "2026-05-20",
+  "commitAndPushLedgerRequired": true,
+  "successor": "work/packages/done-20260520-publication-workflow-handoff-contract-architecture.md"
 }
 -->
 
@@ -316,7 +319,7 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 - Intended minimum model: `gpt-5.3-codex`
 - Scope shape: `cross-boundary-handoff/current-frontier`
 - Output profile: `medium`
-- Owned files: `work/packages/active-20260520-priority-recovery-operation-workflow-owner-workflow-progress.md`, `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md`, `work/sprints/current-blocker.md`, `work/sprints/current-blocker.json`, `work/model-ledger.jsonl`
+- Owned files: `work/packages/done-20260520-priority-recovery-operation-workflow-owner-workflow-progress.md`, `work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md`, `work/sprints/current-blocker.md`, `work/sprints/current-blocker.json`, `work/model-ledger.jsonl`
 - Forbidden files: `src/`
 - Frozen decisions: package scope and lane stay bounded unless explicitly escalated.
 - Escalation triggers: owned files expand beyond this package, runtime ownership changes, or representative scenario evidence changes.
@@ -346,9 +349,15 @@ Preferred closure evidence for new packages. Agent identity is optional provenan
 Use legacy subagent ledgers only when the package explicitly requires sequenced subagents.
 If review directly fixes metadata-only findings, record `review-fixed-metadata-only` as execution evidence and continue without a separate fix package.
 
-- [ ] review: status: not-needed; evidence: lane permits direct implementation or package review found no required fix; next: implementation.
-- [ ] implementation: status: validated; evidence: <focused proof commands and results>; parent revalidated focused proof: yes; next: closure or successor action.
-- [ ] repair: status: validated; evidence: `npm run work:repair` refreshed generated current-blocker and Current Edge Card when needed; next: validation.
+- [x] implementation: status: validated; evidence: `npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-snapshot-lane-reset-close-20260520T055140Z.report.json --markdown` passed and reported split required with workflow_progress plus rebalancer_handoff; `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-snapshot-lane-reset-close-20260520T055140Z.report.json --handoff-probe` passed and reported runtimePromotionAllowed=false; `npm run analyze:causal-model -- test-output/reports/rolling-restart-snapshot-lane-reset-close-20260520T055140Z.report.json` passed with classified_backpressure; parent revalidated focused proof: yes; next: publication/workflow handoff successor.
+- [x] review: status: not-needed; evidence: pure causal handoff package with user-approved architecture escalation and no runtime writes; next: successor activation.
+- [x] repair: status: validated; evidence: `npm run work:repair` and `npm run work:validate -- --pre-impl` passed after activating the publication/workflow handoff successor; next: closure.
+
+## Commit And Push Ledger
+
+1. Focused package commit: e5793ea776a8833f2a51a1b290df2043a4692973
+2. Pushed to: origin/codex/pending-ack-eligibility-filter
+3. Commit contains only package-owned files/package-status/allowed sprint handoff: yes
 
 ## Validation
 

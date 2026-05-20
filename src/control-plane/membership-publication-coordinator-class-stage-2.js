@@ -24,6 +24,7 @@ import {
 } from './publication-active-gate-handoff-contract.js';
 import {
   MEMBERSHIP_PUBLICATION_COORDINATOR_LITERAL,
+  MEMBERSHIP_PUBLICATION_KIND,
   MEMBERSHIP_PUBLICATION_READ_PROFILE,
   MEMBERSHIP_PUBLICATION_STATUS,
   MEMBERSHIP_PUBLICATION_WORKFLOW_STEP,
@@ -101,6 +102,8 @@ const ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_VISIBLE_WRITE_ATTEMPTS =
 const ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_EMPTY_TEXT = '';
 const ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_ALLOW_EMPTY_PRELOADED_ROWS =
   true;
+const ACTIVE_GATE_MEMBERSHIP_PUBLICATION_DEFERRED_SKIP_WRITE_READBACK = true;
+const ACTIVE_GATE_MEMBERSHIP_PUBLICATION_SKIP_CACHE_WAIT = true;
 const ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_EMPTY_ROWS = Object.freeze(
   [],
 );
@@ -132,6 +135,7 @@ const ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_CONTEXT_FIELD =
     ALLOW_PRESSURE_DEFER: 'allowPressureDefer',
     DISABLE_NESTED_PRIORITY_RECOVERY_PLANNING:
       'disableNestedPriorityRecoveryPlanning',
+    LATEST_PUBLISHED_PUBLICATION_ROW: 'latestPublishedPublicationRow',
     LATEST_PUBLICATION_ROW: 'latestPublicationRow',
     NODE_ENDPOINT_ROWS: 'nodeEndpointRows',
     NODE_ROWS: 'nodeRows',
@@ -142,11 +146,16 @@ const ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_CONTEXT_FIELD =
     READINESS_ENTRIES: 'readinessEntries',
     REPLICA_OPERATION_ROWS: 'replicaOperationRows',
     REQUIRED_ACK_NODE_IDS: 'requiredAckNodeIds',
+    SKIP_CACHE_WAIT: 'skipCacheWait',
     SERVICE_ROWS: 'serviceRows',
     SKIP_PUBLICATION_WRITE_READBACK: 'skipPublicationWriteReadback',
   });
 
-function selectLatestActiveGateMembershipPublicationRow(rows = []) {
+function selectLatestActiveGateMembershipPublicationRow(rows = [], options = {}) {
+  const expectedStatus =
+    typeof options.status === TYPEOF.STRING ?
+      options.status.toUpperCase() :
+      null;
   const normalizedRows = (Array.isArray(rows) ? rows : [])
     .map((row) => {
       if (!row || typeof row !== TYPEOF.OBJECT) {
@@ -160,6 +169,7 @@ function selectLatestActiveGateMembershipPublicationRow(rows = []) {
     })
     .filter((row) =>
       row &&
+      (expectedStatus === null || row.status === expectedStatus) &&
       (
         row.publicationId ||
         row.publicationEpoch ||
@@ -185,8 +195,35 @@ function selectLatestActiveGateMembershipPublicationRow(rows = []) {
   return normalizedRows[NUM.ZERO] || null;
 }
 
+function buildActiveGateMembershipPublicationPublishedBaselineRow(target) {
+  const handoffContract =
+    target?.handoffContract && typeof target.handoffContract === TYPEOF.OBJECT ?
+      target.handoffContract :
+      null;
+  const publishedActiveNodeIds = normalizeNodeIdList(
+    handoffContract?.publishedActiveNodeIds,
+  );
+  if (publishedActiveNodeIds.length === NUM.ZERO) {
+    return null;
+  }
+  const publicationEpoch = normalizePositiveInteger(
+    handoffContract?.publicationEpoch,
+    NUM.ONE,
+  );
+  return {
+    publication_kind: MEMBERSHIP_PUBLICATION_KIND,
+    publication_epoch: publicationEpoch,
+    status: MEMBERSHIP_PUBLICATION_STATUS.PUBLISHED,
+    published_active_node_ids: [...publishedActiveNodeIds],
+    required_ack_node_ids: [...publishedActiveNodeIds],
+    acknowledged_node_ids: [...publishedActiveNodeIds],
+  };
+}
+
 function resolveActiveGateMembershipPublicationLatestRow(
   publicationActiveGateHandoff,
+  target,
+  options = {},
 ) {
   if (
     !publicationActiveGateHandoff ||
@@ -201,6 +238,10 @@ function resolveActiveGateMembershipPublicationLatestRow(
         .PUBLICATION_CONVERGENCE
     ];
   return selectLatestActiveGateMembershipPublicationRow([
+    options[
+      ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_CONTEXT_FIELD
+        .LATEST_PUBLICATION_ROW
+    ],
     publicationActiveGateHandoff[
       ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_FIELD
         .PUBLISHED_MEMBERSHIP_OBSERVATION
@@ -210,7 +251,38 @@ function resolveActiveGateMembershipPublicationLatestRow(
       ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_FIELD
         .PUBLISHED_MEMBERSHIP_OBSERVATION
     ],
+    buildActiveGateMembershipPublicationPublishedBaselineRow(target),
   ]);
+}
+
+function resolveActiveGateMembershipPublicationLatestPublishedRow(
+  publicationActiveGateHandoff,
+  target,
+  options = {},
+) {
+  const publicationConvergence =
+    publicationActiveGateHandoff[
+      ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_FIELD
+        .PUBLICATION_CONVERGENCE
+    ];
+  return selectLatestActiveGateMembershipPublicationRow(
+    [
+      options[
+        ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_CONTEXT_FIELD
+          .LATEST_PUBLISHED_PUBLICATION_ROW
+      ],
+      publicationActiveGateHandoff[
+        ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_FIELD
+          .PUBLISHED_MEMBERSHIP_OBSERVATION
+      ],
+      publicationConvergence?.[
+        ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_FIELD
+          .PUBLISHED_MEMBERSHIP_OBSERVATION
+      ],
+      buildActiveGateMembershipPublicationPublishedBaselineRow(target),
+    ],
+    {status: MEMBERSHIP_PUBLICATION_STATUS.PUBLISHED},
+  );
 }
 
 function resolveActiveGateMembershipPublicationPreloadedRows(
@@ -296,6 +368,14 @@ function buildActiveGateMembershipPublicationReconcileContext({
   const latestPublicationRow =
     resolveActiveGateMembershipPublicationLatestRow(
       publicationActiveGateHandoff,
+      target,
+      options,
+    );
+  const latestPublishedPublicationRow =
+    resolveActiveGateMembershipPublicationLatestPublishedRow(
+      publicationActiveGateHandoff,
+      target,
+      options,
     );
   return {
     ...options,
@@ -310,6 +390,8 @@ function buildActiveGateMembershipPublicationReconcileContext({
       .ALLOW_PENDING_VISIBILITY]: true,
     [ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_CONTEXT_FIELD
       .ALLOW_PRESSURE_DEFER]: false,
+    [ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_CONTEXT_FIELD
+      .SKIP_CACHE_WAIT]: ACTIVE_GATE_MEMBERSHIP_PUBLICATION_SKIP_CACHE_WAIT,
     [ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_CONTEXT_FIELD
       .ALLOW_EMPTY_PRELOADED_ROWS]:
       ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_ALLOW_EMPTY_PRELOADED_ROWS,
@@ -365,6 +447,12 @@ function buildActiveGateMembershipPublicationReconcileContext({
           .LATEST_PUBLICATION_ROW]: latestPublicationRow,
       } :
       {}),
+    ...(latestPublishedPublicationRow ?
+      {
+        [ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_CONTEXT_FIELD
+          .LATEST_PUBLISHED_PUBLICATION_ROW]: latestPublishedPublicationRow,
+      } :
+      {}),
   };
 }
 
@@ -416,7 +504,7 @@ function buildActiveGateMembershipPublicationDeferredContext(
     typeof reconcileOutcome.publicationRow === TYPEOF.OBJECT ?
       reconcileOutcome.publicationRow :
       ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_EMPTY_OUTCOME;
-  return publicationRow ===
+  const deferredContext = publicationRow ===
     ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_EMPTY_OUTCOME ?
     context :
     {
@@ -424,6 +512,12 @@ function buildActiveGateMembershipPublicationDeferredContext(
       [ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_CONTEXT_FIELD
         .LATEST_PUBLICATION_ROW]: publicationRow,
     };
+  return {
+    ...deferredContext,
+    [ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_CONTEXT_FIELD
+      .SKIP_PUBLICATION_WRITE_READBACK]:
+      ACTIVE_GATE_MEMBERSHIP_PUBLICATION_DEFERRED_SKIP_WRITE_READBACK,
+  };
 }
 
 function normalizeControlPlaneConvergenceRetryAfterMs(value) {
@@ -568,6 +662,24 @@ function isActiveGateMembershipPublicationHandoffRetryAccepted(
   return rawEnqueueOutcome === true ||
     controlPlaneConvergence?.pressureOutcome ===
       CONTROL_PLANE_CONVERGENCE_PRESSURE_OUTCOME.CRITICAL_ADMITTED;
+}
+
+function resolveActiveGateMembershipPublicationDeferredReasonCode(
+  target,
+  controlPlaneConvergence,
+) {
+  const convergenceReasonCode = controlPlaneConvergence?.reasonCode;
+  if (
+    typeof convergenceReasonCode === TYPEOF.STRING &&
+    convergenceReasonCode.length > NUM.ZERO
+  ) {
+    return convergenceReasonCode;
+  }
+  const handoffReasonCode = target?.handoffContract?.reasonCode;
+  return typeof handoffReasonCode === TYPEOF.STRING &&
+    handoffReasonCode.length > NUM.ZERO ?
+    handoffReasonCode :
+    null;
 }
 
 class MembershipPublicationCoordinatorClassStage2 extends
@@ -1202,6 +1314,12 @@ class MembershipPublicationCoordinatorClassStage2 extends
           publicationRow: reconcileOutcome.publicationRow,
           target,
           enqueued,
+          reasonCode:
+            resolveActiveGateMembershipPublicationDeferredReasonCode(
+              target,
+              controlPlaneConvergence,
+            ),
+          retryAfterMs: controlPlaneConvergence.retryAfterMs,
           controlPlaneConvergence,
         },
       );
@@ -1246,7 +1364,14 @@ class MembershipPublicationCoordinatorClassStage2 extends
               ?.publicationRow,
           target,
           enqueued,
-          retryAfterMs: getControlPlaneRetryAfterMs(error),
+          reasonCode:
+            resolveActiveGateMembershipPublicationDeferredReasonCode(
+              target,
+              controlPlaneConvergence,
+            ),
+          retryAfterMs: normalizeControlPlaneConvergenceRetryAfterMs(
+            getControlPlaneRetryAfterMs(error),
+          ),
           controlPlaneConvergence,
         },
       );

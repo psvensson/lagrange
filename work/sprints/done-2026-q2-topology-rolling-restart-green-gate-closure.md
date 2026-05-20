@@ -1,10 +1,10 @@
 # Topology Rolling-Restart Green Gate Closure Sprint
 
-Status: active, resumed on 2026-05-16 after a migrated closure. This sprint
-started after `done-2026-q2-topology-convergence-complexity-reduction.md`
-reduced the publication-to-active-gate handoff complexity and first closed when
-fresh evidence selected `topology_publication_owner / publication_convergence`
-as the next blocker.
+Status: done/superseded on 2026-05-20. This sprint is closed by the
+operation_progress architecture reset: the rolling-restart symptom now points
+at a shared operation-publication-active-gate lifecycle without one owned
+progress resource, so the remaining work moves to a successor sprint/package
+instead of another local symptom patch.
 
 ## Goal
 
@@ -132,22 +132,22 @@ Historical state from that earlier rerun:
 ## Current Edge Card
 
 ```text
-Representative artifact: test-output/reports/rolling-restart-publication-pending-narrowed-20260520T070009Z.report.json
-Visible first frontier: active_gate_snapshot_coverage / startup_active_gate_owner / snapshot_coverage / owner_reconcile_pending is first frontier after publication ACK closed.
-Active package: work/packages/active-20260520-startup-active-gate-owner-reconcile-pending-runtime.md
-Active package owner: startup_active_gate_owner
-Active package boundary: snapshot_coverage
-Selected cause: owner_reconcile_pending
-Required action: Classify the active-gate owner-reconcile handoff path, identify the one owner-owned runtime mechanism that can progress pending reconcile publication, then either implement a bounded startup-active-gate fix, migrate owner boundary, or stop as an architecture gap.
-Representative status: migrated
-Causal outcome: continue_local_fix
-Architecture gate: selected / active-gate-owner-reconcile-causal-handoff
-Expected delta: Select one executable startup active-gate owner-reconcile mechanism, migrate the owner boundary, or record architecture-gap stop before another local runtime patch.
-Current state: Fresh rolling-restart evidence after the publication pending normalization slice closed publication ACK and moved the first frontier to active_gate_snapshot_coverage. The active-gate handoff is pending owner_reconcile_pending for one node while membership publication handoff writes are deferred/enqueued, so this is the pre-approved causal-escalation package before another startup-active-gate local patch.
-Allowed edits: unknown
-Candidate runtime files: test/distributed/harness/cluster-segment-5.js, test/distributed/harness/cluster-segment-7-class-5.js, test/distributed/harness/__tests__/cluster.test-part-3.js, test/distributed/harness/__tests__/cluster-control-snapshot-repair-pressure.test.js
-Forbidden edits: Startup active-gate owner consumes one canonical publication active-gate handoff outcome and must not reconstruct publication debt locally.
-Required latest proof: npm run work:scenario-route -- test-output/reports/rolling-restart-publication-pending-narrowed-20260520T070009Z.report.json --owner startup_active_gate_owner --boundary snapshot_coverage --dominant-reason owner_reconcile_pending --explain active_gate_snapshot_coverage, npm run analyze:topology-convergence -- test-output/reports/rolling-restart-publication-pending-narrowed-20260520T070009Z.report.json --handoff-probe, npm run analyze:causal-model -- test-output/reports/rolling-restart-publication-pending-narrowed-20260520T070009Z.report.json
+Representative artifact: test-output/reports/rolling-restart-publication-deferred-drain-20260520T104514Z.report.json
+Visible first frontier: publication_ack_convergence is the visible failed invariant, while the actionable successor is priority_recovery_partition_progress / operation_workflow_owner / workflow_progress for control_plane_publications-p1 dispatch_pending planned work.
+Active package: work/packages/superseded-20260520-priority-recovery-operation-workflow-owner-workflow-progress.md
+Active package owner: operation_workflow_owner
+Active package boundary: workflow_progress
+Selected cause: priority_recovery_progress_blocked
+Required action: Classify and, if locally owned, implement one bounded operation_workflow_owner / workflow_progress fix so the dispatch_pending control_plane_publications-p1 operation advances or records structured retry/progress before the next rolling-restart rerun.
+Representative status: active
+Causal outcome: pending-before-rerun
+Architecture gate: watching / unknown
+Expected delta: Advance or classify the dispatch_pending control_plane_publications-p1 operation so fresh evidence shows operation progress, a different owner boundary, a structured retry state, or rolling-restart green.
+Current state: Fresh rolling-restart evidence after the publication deferred-drain patch still fails publication_ack_convergence, but canonical topology analysis selects a concrete successor on operation_workflow_owner / workflow_progress: one control_plane_publications-p1 REPLACE operation is recovering_in_flight at dispatch_pending, currentStepState=planned, witnessSource=event_driven, and nextAction=advance_existing_operation.
+Allowed edits: work/packages/superseded-20260520-priority-recovery-operation-workflow-owner-workflow-progress.md, work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md, work/sprints/current-blocker.md, work/sprints/current-blocker.json, src/rebalancer/operation-workflow-owner.js, src/rebalancer/operation-workflow-owner-ports.js, src/rebalancer/operation-workflow-owner-segment-7-stage-5.js, src/rebalancer/operation-workflow-owner-segment-7-stage-shared.js, src/rebalancer/operation-workflow-owner-constants.js, src/control-plane/priority-recovery-snapshot-stage-10.js, test/rebalancer/operation-workflow-progress-event-driven-reentry.test.js, test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js, test/rebalancer/coordinator-created-operation-progress-remote-handoff.test.js, test/rebalancer/priority-recovery-topology-timeout-owner-reentry-test-cases.js
+Candidate runtime files: src/rebalancer/operation-workflow-owner.js, src/rebalancer/operation-workflow-owner-ports.js, src/rebalancer/operation-workflow-owner-segment-7-stage-5.js, src/rebalancer/operation-workflow-owner-segment-7-stage-shared.js, src/rebalancer/operation-workflow-owner-constants.js, src/control-plane/priority-recovery-snapshot-stage-10.js, test/rebalancer/operation-workflow-progress-event-driven-reentry.test.js, test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js, test/rebalancer/coordinator-created-operation-progress-remote-handoff.test.js, test/rebalancer/priority-recovery-topology-timeout-owner-reentry-test-cases.js
+Forbidden edits: Publication owner remains the visible producer and active gate remains the consumer; operation workflow owner may only advance or classify its own durable operation progress.
+Required latest proof: npm run work:evidence-summary -- test-output/reports/rolling-restart-publication-deferred-drain-20260520T104514Z.report.json, npm run analyze:topology-convergence -- test-output/reports/rolling-restart-publication-deferred-drain-20260520T104514Z.report.json --handoff-probe, npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-publication-deferred-drain-20260520T104514Z.report.json --markdown, npm test -- test/rebalancer/operation-workflow-progress-event-driven-reentry.test.js test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js test/rebalancer/coordinator-created-operation-progress-remote-handoff.test.js
 Allowed stop modes: representative-green, migrated, reduced, same-frontier, classification-only, architecture-gap, human-escalation
 ```
 

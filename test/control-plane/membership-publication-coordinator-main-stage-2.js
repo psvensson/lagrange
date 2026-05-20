@@ -79,6 +79,7 @@ const PUBLICATION_CONVERGENCE_HANDOFF_TARGET_BROAD_READ_ERROR =
   'active-gate owner reconcile should not read broad membership tables';
 const PUBLICATION_CONVERGENCE_HANDOFF_TARGET_ALLOW_PENDING_VISIBILITY = true;
 const PUBLICATION_CONVERGENCE_HANDOFF_TARGET_ALLOW_PRESSURE_DEFER = false;
+const PUBLICATION_CONVERGENCE_HANDOFF_TARGET_SKIP_CACHE_WAIT = true;
 const PUBLICATION_CONVERGENCE_HANDOFF_TARGET_READ_PROFILE =
   'diagnostics';
 const PUBLICATION_CONVERGENCE_HANDOFF_TARGET_DURABLE_REASON_CODE =
@@ -109,7 +110,9 @@ const PUBLICATION_CONVERGENCE_HANDOFF_TARGET_QUEUE_NEWER_EPOCH = 43;
 const PUBLICATION_CONVERGENCE_CRITICAL_QUEUE_OTHER_OWNER_KEY =
   'membership-publication:other-cluster';
 const PUBLICATION_CONVERGENCE_CRITICAL_QUEUE_BOUND = 1;
+const PUBLICATION_CONVERGENCE_CRITICAL_QUEUE_RETRY_AFTER_MS = 1000;
 const PUBLICATION_CONVERGENCE_CRITICAL_QUEUE_EMPTY_ENQUEUE_COUNT = 0;
+const PUBLICATION_CONVERGENCE_DEFERRED_SKIP_WRITE_READBACK = true;
 const PUBLICATION_CONVERGENCE_CRITICAL_QUEUE_OUTCOME_ENQUEUED =
   'enqueued';
 const PUBLICATION_CONVERGENCE_CRITICAL_QUEUE_OUTCOME_MERGED =
@@ -139,6 +142,10 @@ const PUBLICATION_CONVERGENCE_HANDOFF_TARGET_QUEUE_NODE_B_IDS = Object.freeze([
   PUBLICATION_CONVERGENCE_HANDOFF_TARGET_NODE_IDS[0],
   PUBLICATION_CONVERGENCE_HANDOFF_TARGET_NODE_IDS[2],
 ]);
+const PUBLICATION_CONVERGENCE_HANDOFF_ONLY_PRELOADED_FIELD =
+  'nodeRows';
+const PUBLICATION_CONVERGENCE_HANDOFF_ONLY_ALLOW_EMPTY_FIELD =
+  'allowEmptyPreloadedRows';
 const PUBLICATION_CONVERGENCE_OWNER_QUEUE_RETRYABLE_DRAIN_FAILURE =
   'retryable_drain_failure';
 const PUBLICATION_CONVERGENCE_OWNER_QUEUE_DISTRIBUTED_FAILURE =
@@ -609,6 +616,11 @@ test('reconcileActiveGateMembershipPublication owns handoff write visibility',
       false,
       'active-gate owner reconcile should keep write readback enabled',
     );
+    t.equal(
+      persistOptions[0]?.skipCacheWait,
+      PUBLICATION_CONVERGENCE_HANDOFF_TARGET_SKIP_CACHE_WAIT,
+      'active-gate owner reconcile should not wait on cache visibility before authoritative readback',
+    );
     t.match(
       publicationReadOptions[publicationReadOptions.length - 1],
       {
@@ -618,6 +630,78 @@ test('reconcileActiveGateMembershipPublication owns handoff write visibility',
           CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED,
       },
       'active-gate owner reconcile should verify durable visibility through the publication owner',
+    );
+  });
+
+test('reconcileActiveGateMembershipPublication uses handoff baseline under publication read pressure',
+  async (t) => {
+    const persistedRows = [];
+    const listPublicationCalls = [];
+    const coordinator = new MembershipPublicationCoordinator({
+      nodeId: PUBLICATION_CONVERGENCE_HANDOFF_TARGET_NODE_IDS[0],
+      controlPlanePublicationsOwner: {
+        async listPublications() {
+          listPublicationCalls.push(true);
+          throw new Error(
+            PUBLICATION_CONVERGENCE_HANDOFF_TARGET_AUTHORITATIVE_READ_ERROR,
+          );
+        },
+        async getPublication(publicationId) {
+          return persistedRows.find(
+            (row) => row.publication_id === publicationId,
+          ) || null;
+        },
+        async upsertPublication(row) {
+          persistedRows.push(row);
+        },
+      },
+      systemTableCache: {
+        getAll() {
+          throw new Error(
+            PUBLICATION_CONVERGENCE_HANDOFF_TARGET_BROAD_READ_ERROR,
+          );
+        },
+      },
+      now: () => PUBLICATION_CONVERGENCE_HANDOFF_TARGET_NOW_MS,
+    });
+
+    const outcome =
+      await coordinator.reconcileActiveGateMembershipPublication({
+        publicationEpoch: PUBLICATION_CONVERGENCE_HANDOFF_TARGET_EPOCH,
+        expectedNodeIds: [
+          ...PUBLICATION_CONVERGENCE_HANDOFF_TARGET_NODE_IDS,
+        ],
+        publishedActiveNodeIds: [
+          ...PUBLICATION_CONVERGENCE_HANDOFF_TARGET_PUBLISHED_NODE_IDS,
+        ],
+        pendingReconcileNodeIds: [
+          ...PUBLICATION_CONVERGENCE_HANDOFF_TARGET_PENDING_NODE_IDS,
+        ],
+        pendingRecoveryNodeIds: [],
+        nextAction:
+          PUBLICATION_ACTIVE_GATE_HANDOFF_NEXT_ACTION
+            .RECONCILE_OWNER_MEMBERSHIP_PUBLICATION,
+      });
+
+    t.equal(
+      outcome.state,
+      ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_OUTCOME.PUBLISHED_VISIBLE,
+      'handoff baseline should let the owner publish without a prior publication list read',
+    );
+    t.equal(
+      listPublicationCalls.length,
+      PUBLICATION_CONVERGENCE_HANDOFF_TARGET_NO_ENQUEUE_COUNT,
+      'active-gate owner reconcile should not list publications before writing the explicit handoff target',
+    );
+    t.same(
+      outcome.publicationRow.publishedActiveNodeIds,
+      [...PUBLICATION_CONVERGENCE_HANDOFF_TARGET_SORTED_NODE_IDS],
+      'published row should cover the full active-gate handoff target',
+    );
+    t.equal(
+      persistedRows.length > 0,
+      true,
+      'owner command should persist the handoff publication row under read pressure',
     );
   });
 
@@ -956,6 +1040,16 @@ test('reconcileActiveGateMembershipPublication defers stale durable readback',
       'stale durable readback should remain a deferred owner outcome',
     );
     t.equal(
+      outcome.reasonCode,
+      PUBLICATION_ACTIVE_GATE_HANDOFF_REASON.OWNER_RECONCILE_PENDING,
+      'stale durable readback should retain the owner handoff retry reason',
+    );
+    t.equal(
+      outcome.retryAfterMs,
+      PUBLICATION_CONVERGENCE_CRITICAL_QUEUE_RETRY_AFTER_MS,
+      'stale durable readback should expose the bounded owner retry delay',
+    );
+    t.equal(
       enqueued.length,
       1,
       'deferred durable visibility should requeue the owner reconcile path',
@@ -967,8 +1061,8 @@ test('reconcileActiveGateMembershipPublication defers stale durable readback',
     );
     t.equal(
       pending.get(ownerKey)?.context?.skipPublicationWriteReadback,
-      false,
-      'deferred owner retry should keep durable readback enabled',
+      PUBLICATION_CONVERGENCE_DEFERRED_SKIP_WRITE_READBACK,
+      'deferred owner retry should avoid immediate durable readback',
     );
     t.match(
       outcome.controlPlaneConvergence,
@@ -1100,6 +1194,9 @@ test(PUBLICATION_CONVERGENCE_HANDOFF_TARGET_MERGED_TEST_NAME,
           queueBound: PUBLICATION_CONVERGENCE_CRITICAL_QUEUE_BOUND,
           queueOutcome: PUBLICATION_CONVERGENCE_CRITICAL_QUEUE_OUTCOME_MERGED,
         },
+        reasonCode:
+          PUBLICATION_ACTIVE_GATE_HANDOFF_REASON.OWNER_RECONCILE_PENDING,
+        retryAfterMs: PUBLICATION_CONVERGENCE_CRITICAL_QUEUE_RETRY_AFTER_MS,
       },
       PUBLICATION_CONVERGENCE_HANDOFF_TARGET_MERGED_OUTCOME_MESSAGE,
     );
@@ -1230,6 +1327,8 @@ test('reconcileActiveGateMembershipPublication reports bounded critical queue pr
             PUBLICATION_CONVERGENCE_CRITICAL_QUEUE_OUTCOME_REJECTED,
           reasonCode: PUBLICATION_CONVERGENCE_CRITICAL_QUEUE_BOUNDED_REASON,
         },
+        reasonCode: PUBLICATION_CONVERGENCE_CRITICAL_QUEUE_BOUNDED_REASON,
+        retryAfterMs: PUBLICATION_CONVERGENCE_CRITICAL_QUEUE_RETRY_AFTER_MS,
       },
       'bounded critical convergence queue pressure should be typed instead of silently dropped',
     );
@@ -1333,6 +1432,270 @@ test('enqueueClusterMembershipReconcile merges pending explicit handoff targets'
       mergedContext?.allowPressureDefer,
       PUBLICATION_CONVERGENCE_HANDOFF_TARGET_ALLOW_PRESSURE_DEFER,
       'pending context should retain the explicit non-deferred write option',
+    );
+  });
+
+test('enqueueClusterMembershipReconcile lets handoff-only owner wake clear stale explicit targets',
+  async (t) => {
+    const pending = new Map();
+    const enqueued = [];
+    const reconcileQueue = {
+      pending,
+      has(ownerKey) {
+        return pending.has(ownerKey);
+      },
+      get size() {
+        return pending.size;
+      },
+      enqueue(ownerKey, reason, context, options) {
+        enqueued.push({ownerKey, reason, context, options});
+        const pendingEntry = pending.get(ownerKey);
+        if (pendingEntry) {
+          pendingEntry.context = context;
+          return false;
+        }
+        pending.set(ownerKey, {context});
+        return true;
+      },
+    };
+    const coordinator = new MembershipPublicationCoordinator({
+      nodeId: PUBLICATION_CONVERGENCE_HANDOFF_TARGET_NODE_IDS[0],
+      reconcileQueue,
+    });
+    const ownerKey = coordinator.buildOwnerKey();
+    pending.set(ownerKey, {
+      context: {
+        latestPublicationRow: {
+          publication_epoch: PUBLICATION_CONVERGENCE_HANDOFF_TARGET_EPOCH,
+        },
+        publishedActiveNodeIds: [
+          ...PUBLICATION_CONVERGENCE_HANDOFF_TARGET_QUEUE_NODE_A_IDS,
+        ],
+        requiredAckNodeIds: [
+          ...PUBLICATION_CONVERGENCE_HANDOFF_TARGET_QUEUE_NODE_A_IDS,
+        ],
+        acknowledgedNodeIds: [
+          ...PUBLICATION_CONVERGENCE_HANDOFF_TARGET_QUEUE_NODE_A_IDS,
+        ],
+        [PUBLICATION_CONVERGENCE_HANDOFF_ONLY_ALLOW_EMPTY_FIELD]: true,
+        [PUBLICATION_CONVERGENCE_HANDOFF_ONLY_PRELOADED_FIELD]:
+          PUBLICATION_CONVERGENCE_HANDOFF_TARGET_EMPTY_ROWS,
+      },
+    });
+
+    coordinator.enqueueClusterMembershipReconcile(
+      PUBLICATION_CONVERGENCE_HANDOFF_TARGET_QUEUE_REASON_B,
+      {
+        latestPublicationRow: {
+          publication_epoch:
+            PUBLICATION_CONVERGENCE_HANDOFF_TARGET_QUEUE_NEWER_EPOCH,
+        },
+        publicationActiveGateHandoff: {
+          publicationEpoch:
+            PUBLICATION_CONVERGENCE_HANDOFF_TARGET_QUEUE_NEWER_EPOCH,
+          expectedNodeIds: [
+            ...PUBLICATION_CONVERGENCE_HANDOFF_TARGET_NODE_IDS,
+          ],
+          publishedActiveNodeIds: [
+            ...PUBLICATION_CONVERGENCE_HANDOFF_TARGET_PUBLISHED_NODE_IDS,
+          ],
+          pendingReconcileNodeIds: [
+            ...PUBLICATION_CONVERGENCE_HANDOFF_TARGET_PENDING_NODE_IDS,
+          ],
+          nextAction:
+            PUBLICATION_ACTIVE_GATE_HANDOFF_NEXT_ACTION
+              .RECONCILE_OWNER_MEMBERSHIP_PUBLICATION,
+        },
+        skipPublicationWriteReadback:
+          PUBLICATION_CONVERGENCE_DEFERRED_SKIP_WRITE_READBACK,
+      },
+    );
+
+    const mergedContext = pending.get(ownerKey)?.context;
+    t.equal(
+      enqueued.length,
+      PUBLICATION_CONVERGENCE_HANDOFF_TARGET_MERGED_ENQUEUE_COUNT,
+      'handoff-only owner wake should still reach the owner queue once',
+    );
+    t.same(
+      mergedContext?.publicationActiveGateHandoff?.pendingReconcileNodeIds,
+      [...PUBLICATION_CONVERGENCE_HANDOFF_TARGET_PENDING_NODE_IDS],
+      'handoff-only owner wake should retain the active-gate handoff contract',
+    );
+    t.equal(
+      Object.hasOwn(mergedContext, 'publishedActiveNodeIds'),
+      false,
+      'handoff-only owner wake should clear stale explicit publication targets',
+    );
+    t.equal(
+      Object.hasOwn(mergedContext, 'requiredAckNodeIds'),
+      false,
+      'handoff-only owner wake should clear stale explicit ACK targets',
+    );
+    t.equal(
+      Object.hasOwn(mergedContext, 'acknowledgedNodeIds'),
+      false,
+      'handoff-only owner wake should clear stale explicit acknowledged nodes',
+    );
+    t.equal(
+      Object.hasOwn(
+        mergedContext,
+        PUBLICATION_CONVERGENCE_HANDOFF_ONLY_ALLOW_EMPTY_FIELD,
+      ),
+      false,
+      'handoff-only owner wake should clear stale empty-row read hints',
+    );
+    t.equal(
+      Object.hasOwn(
+        mergedContext,
+        PUBLICATION_CONVERGENCE_HANDOFF_ONLY_PRELOADED_FIELD,
+      ),
+      false,
+      'handoff-only owner wake should not inherit stale preloaded rows',
+    );
+    t.equal(
+      mergedContext?.skipPublicationWriteReadback,
+      PUBLICATION_CONVERGENCE_DEFERRED_SKIP_WRITE_READBACK,
+      'handoff-only owner wake should retain deferred write readback policy',
+    );
+  });
+
+test('enqueueClusterMembershipReconcile merges retrying explicit handoff targets',
+  async (t) => {
+    const pending = new Map();
+    const retryWorkItems = new Map();
+    const enqueued = [];
+    const reconcileQueue = {
+      pending,
+      retryWorkItems,
+      get size() {
+        return new Set([
+          ...pending.keys(),
+          ...retryWorkItems.keys(),
+        ]).size;
+      },
+      has(ownerKey) {
+        return pending.has(ownerKey) || retryWorkItems.has(ownerKey);
+      },
+      enqueue(ownerKey, reason, context, options) {
+        enqueued.push({ownerKey, reason, context, options});
+        const retryingEntry = retryWorkItems.get(ownerKey);
+        if (retryingEntry) {
+          retryingEntry.reasons.add(reason);
+          retryingEntry.context = context;
+          return false;
+        }
+        pending.set(ownerKey, {context});
+        return true;
+      },
+    };
+    const coordinator = new MembershipPublicationCoordinator({
+      nodeId: PUBLICATION_CONVERGENCE_HANDOFF_TARGET_NODE_IDS[0],
+      reconcileQueue,
+    });
+    const ownerKey = coordinator.buildOwnerKey();
+    retryWorkItems.set(ownerKey, {
+      ownerKey,
+      reasons: new Set([PUBLICATION_CONVERGENCE_HANDOFF_TARGET_QUEUE_REASON_A]),
+      context: {
+        latestPublicationRow: {
+          publication_epoch: PUBLICATION_CONVERGENCE_HANDOFF_TARGET_EPOCH,
+        },
+        publicationActiveGateHandoff: {
+          publicationEpoch: PUBLICATION_CONVERGENCE_HANDOFF_TARGET_EPOCH,
+          expectedNodeIds: [
+            ...PUBLICATION_CONVERGENCE_HANDOFF_TARGET_NODE_IDS,
+          ],
+          publishedActiveNodeIds: [
+            ...PUBLICATION_CONVERGENCE_HANDOFF_TARGET_PUBLISHED_NODE_IDS,
+          ],
+          pendingReconcileNodeIds: [
+            ...PUBLICATION_CONVERGENCE_HANDOFF_TARGET_PENDING_NODE_IDS,
+          ],
+          nextAction:
+            PUBLICATION_ACTIVE_GATE_HANDOFF_NEXT_ACTION
+              .RECONCILE_OWNER_MEMBERSHIP_PUBLICATION,
+        },
+        publishedActiveNodeIds: [
+          ...PUBLICATION_CONVERGENCE_HANDOFF_TARGET_QUEUE_NODE_A_IDS,
+        ],
+        requiredAckNodeIds: [
+          ...PUBLICATION_CONVERGENCE_HANDOFF_TARGET_QUEUE_NODE_A_IDS,
+        ],
+        acknowledgedNodeIds: [
+          ...PUBLICATION_CONVERGENCE_HANDOFF_TARGET_QUEUE_NODE_A_IDS,
+        ],
+        allowPendingVisibility:
+          PUBLICATION_CONVERGENCE_HANDOFF_TARGET_ALLOW_PENDING_VISIBILITY,
+        allowPressureDefer:
+          PUBLICATION_CONVERGENCE_HANDOFF_TARGET_ALLOW_PRESSURE_DEFER,
+      },
+    });
+
+    coordinator.enqueueClusterMembershipReconcile(
+      PUBLICATION_CONVERGENCE_HANDOFF_TARGET_QUEUE_REASON_B,
+      {
+        latestPublicationRow: {
+          publication_epoch:
+            PUBLICATION_CONVERGENCE_HANDOFF_TARGET_QUEUE_NEWER_EPOCH,
+        },
+        publishedActiveNodeIds: [
+          ...PUBLICATION_CONVERGENCE_HANDOFF_TARGET_QUEUE_NODE_B_IDS,
+        ],
+        requiredAckNodeIds: [
+          ...PUBLICATION_CONVERGENCE_HANDOFF_TARGET_QUEUE_NODE_B_IDS,
+        ],
+        acknowledgedNodeIds: [
+          ...PUBLICATION_CONVERGENCE_HANDOFF_TARGET_QUEUE_NODE_B_IDS,
+        ],
+      },
+    );
+
+    const mergedContext = retryWorkItems.get(ownerKey)?.context;
+    t.match(
+      coordinator.lastControlPlaneConvergenceQueueOutcome,
+      {
+        ownerKey,
+        queueOutcome: PUBLICATION_CONVERGENCE_CRITICAL_QUEUE_OUTCOME_MERGED,
+        pressureOutcome:
+          CONTROL_PLANE_CONVERGENCE_PRESSURE_OUTCOME.CRITICAL_ADMITTED,
+      },
+      'retrying owner-key merge should be admitted as a critical merge',
+    );
+    t.equal(
+      enqueued.length,
+      PUBLICATION_CONVERGENCE_HANDOFF_TARGET_MERGED_ENQUEUE_COUNT,
+      'retrying owner-key merge should still reach the owner queue once',
+    );
+    t.same(
+      mergedContext?.publishedActiveNodeIds,
+      [...PUBLICATION_CONVERGENCE_HANDOFF_TARGET_SORTED_NODE_IDS],
+      'retrying context should union explicit publication targets',
+    );
+    t.same(
+      mergedContext?.requiredAckNodeIds,
+      [...PUBLICATION_CONVERGENCE_HANDOFF_TARGET_SORTED_NODE_IDS],
+      'retrying context should union explicit ACK targets',
+    );
+    t.same(
+      mergedContext?.acknowledgedNodeIds,
+      [...PUBLICATION_CONVERGENCE_HANDOFF_TARGET_SORTED_NODE_IDS],
+      'retrying context should union explicit acknowledged nodes',
+    );
+    t.same(
+      mergedContext?.publicationActiveGateHandoff?.pendingReconcileNodeIds,
+      [...PUBLICATION_CONVERGENCE_HANDOFF_TARGET_PENDING_NODE_IDS],
+      'retrying context should retain the active-gate handoff target',
+    );
+    t.equal(
+      mergedContext?.latestPublicationRow?.publication_epoch,
+      PUBLICATION_CONVERGENCE_HANDOFF_TARGET_QUEUE_NEWER_EPOCH,
+      'retrying context should retain the newest known publication row',
+    );
+    t.equal(
+      mergedContext?.allowPressureDefer,
+      PUBLICATION_CONVERGENCE_HANDOFF_TARGET_ALLOW_PRESSURE_DEFER,
+      'retrying context should retain the explicit non-deferred write option',
     );
   });
 
@@ -3057,8 +3420,23 @@ test(PUBLICATION_CONVERGENCE_HANDOFF_TARGET_READBACK_FAILURE_TEST_NAME,
       PUBLICATION_CONVERGENCE_HANDOFF_TARGET_DEFERRED_CONTEXT_MESSAGE,
     );
     t.equal(
+      outcome.reasonCode,
+      PUBLICATION_ACTIVE_GATE_HANDOFF_REASON.OWNER_RECONCILE_PENDING,
+      PUBLICATION_CONVERGENCE_HANDOFF_TARGET_DEFERRED_CONTEXT_MESSAGE,
+    );
+    t.equal(
+      outcome.retryAfterMs,
+      PUBLICATION_CONVERGENCE_CRITICAL_QUEUE_RETRY_AFTER_MS,
+      PUBLICATION_CONVERGENCE_HANDOFF_TARGET_DEFERRED_CONTEXT_MESSAGE,
+    );
+    t.equal(
       enqueued.length,
       PUBLICATION_CONVERGENCE_HANDOFF_TARGET_STALE_READBACK_COUNT,
+      PUBLICATION_CONVERGENCE_HANDOFF_TARGET_DEFERRED_CONTEXT_MESSAGE,
+    );
+    t.equal(
+      pending.get(ownerKey)?.context?.skipPublicationWriteReadback,
+      PUBLICATION_CONVERGENCE_DEFERRED_SKIP_WRITE_READBACK,
       PUBLICATION_CONVERGENCE_HANDOFF_TARGET_DEFERRED_CONTEXT_MESSAGE,
     );
   });

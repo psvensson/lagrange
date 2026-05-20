@@ -414,6 +414,76 @@ test(CREATING_REARM_REPLAY_TEST_NAME, async (t) => {
   }
 });
 
+test('ReplicaDispatchService enqueues CREATING system-table cache replay',
+  async (t) => {
+    initEnv();
+
+    const dispatchCalls = [];
+    const operationRow = {
+      operation_id: CREATING_REARM_REPLAY_OPERATION_ID,
+      partition_id: CREATING_REARM_REPLAY_PARTITION_ID,
+      replica_id: CREATING_REARM_REPLAY_REPLICA_ID,
+      source_node_id: CREATING_REARM_REPLAY_SOURCE_NODE_ID,
+      target_node_id: CREATING_REARM_REPLAY_TARGET_NODE_ID,
+      status: CREATING_REARM_REPLAY_STATUS,
+      workflow_step: WORKFLOW_STEP.CREATING,
+      type: OperationType.REPLACE,
+      steps_history: CREATING_REARM_REPLAY_STEPS_HISTORY_JSON,
+      created_at: CREATING_REARM_REPLAY_CREATED_AT,
+      updated_at: CREATING_REARM_REPLAY_UPDATED_AT,
+    };
+
+    const service = createService({
+      cdcIntegrationService: {
+        updateSystemTableRow: async () => ({success: true}),
+        upsertSystemTableRow: async () => ({success: true}),
+      },
+      rebalanceCoordinator: {
+        async dispatchOperation(operation) {
+          dispatchCalls.push(operation);
+          return {success: true};
+        },
+        isOperationLocallyOwned(operation) {
+          return operation?.target_node_id ===
+            CREATING_REARM_REPLAY_TARGET_NODE_ID ||
+            operation?.targetNodeId === CREATING_REARM_REPLAY_TARGET_NODE_ID;
+        },
+      },
+    });
+
+    try {
+      t.equal(
+        service.replayReplicaOperationRow(operationRow, {
+          pendingReason: RECONCILE_REASON.REPLICA_OPERATIONS_CACHE_PENDING,
+          replaceActiveReason:
+            RECONCILE_REASON.REPLICA_OPERATIONS_CACHE_REPLACE_ACTIVE,
+        }),
+        true,
+        CREATING_REARM_REPLAY_ASSERT_DISPATCHED,
+      );
+
+      await new Promise((resolve) => setImmediate(resolve));
+
+      t.equal(
+        dispatchCalls.length,
+        CREATING_REARM_REPLAY_DISPATCH_COUNT,
+        CREATING_REARM_REPLAY_ASSERT_DISPATCHED,
+      );
+      t.equal(
+        dispatchCalls[NUM.ZERO]?.operationId,
+        CREATING_REARM_REPLAY_OPERATION_ID,
+        CREATING_REARM_REPLAY_ASSERT_OPERATION_ID,
+      );
+      t.equal(
+        dispatchCalls[NUM.ZERO]?.workflowStep,
+        WORKFLOW_STEP.CREATING,
+        CREATING_REARM_REPLAY_ASSERT_WORKFLOW_STEP,
+      );
+    } finally {
+      service.stop();
+    }
+  });
+
 test(AUTHORITATIVE_CREATING_RETRY_TEST_NAME, async (t) => {
   initEnv();
 

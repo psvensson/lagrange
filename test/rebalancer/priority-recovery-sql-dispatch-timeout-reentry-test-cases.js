@@ -153,6 +153,19 @@ registerCase(TEST_SQL_PRIORITY_TIMEOUT_REDISPATCH_TEST_NAME, async (t) => {
     true,
     TEST_ASSERT_SQL_PRIORITY_REARM,
   );
+  t.equal(
+    coordinator.workflowOwner.shouldRearmDispatchFromProgressReconcile(
+      {
+        ...cachedOperation,
+        workflowStep: WORKFLOW_STEP.CREATING,
+        status: TEST_STATUS_CREATING,
+      },
+      TEST_STATUS_CREATING,
+      {now: nowMs},
+    ),
+    true,
+    TEST_ASSERT_SQL_PRIORITY_REARM,
+  );
 
   await coordinator.checkTimeouts();
 
