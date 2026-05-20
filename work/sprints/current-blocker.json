@@ -2,48 +2,48 @@
   "schema": "current-blocker-v1",
   "generatedBy": "scripts/work-tracker.js",
   "sprint": "work/sprints/active-2026-q2-topology-rolling-restart-green-gate-closure.md",
-  "package": "work/packages/active-20260520-rolling-restart-startup-active-gate-owner-snapshot-coverage.md",
+  "package": "work/packages/active-20260520-topology-publication-workflow-handoff-runtime.md",
   "status": "active",
   "lane": "runtime-owner-boundary",
   "scenario": "rolling-restart",
   "artifact": "test-output/reports/rolling-restart-snapshot-lane-reset-close-20260520T055140Z.report.json",
   "playback": "none",
-  "owner": "startup_active_gate_owner",
-  "boundary": "snapshot_coverage",
-  "dominantReason": "active_gate_timed_out",
-  "currentState": "Focused proof is green and fresh rolling-restart evidence shows the snapshot-lane reset fix reduced the active-gate symptom: selected snapshot error cleared, snapshot coverage moved from 0/5 to 2/5, and active_gate_snapshot_coverage is now deferred behind owner_reconcile_pending instead of the first frontier. The representative first frontier migrated to publication_ack_convergence / topology_publication_owner / publication_convergence, with priority recovery residuals split by operation_workflow_owner boundaries.",
-  "nextAction": "Close this startup_active_gate_owner / snapshot_coverage package as migrated/reduced, then activate the operation_workflow_owner / workflow_progress successor package created from the priority recovery residuals.",
+  "owner": "topology_publication_owner",
+  "boundary": "publication_convergence",
+  "dominantReason": "publication_operation_workflow_handoff_leg_missing",
+  "currentState": "Causal handoff proof selected topology_publication_owner / publication_convergence as the bounded runtime successor. The fresh artifact keeps publication_ack_convergence first, reports publication_operation_workflow_handoff_leg_missing, keeps publication_active_gate_handoff_contract pending owner_reconcile_pending, and blocks direct workflow runtime promotion with runtimePromotionAllowed=false.",
+  "nextAction": "Implement the publication-owned handoff contract path so publication convergence exposes the owner outcome needed before workflow runtime promotion.",
   "proof": [
-    "npm test -- test/distributed/harness/__tests__/cluster.test-part-3.js test/distributed/harness/__tests__/cluster-control-snapshot-repair-pressure.test.js",
-    "node scripts/check-guideline-literals.js test/distributed/harness/cluster-segment-7-class-5.js test/distributed/harness/__tests__/cluster-control-snapshot-repair-pressure.test.js",
-    "npm run audit:runtime-grammar:file -- test/distributed/harness/cluster-segment-5.js test/distributed/harness/__tests__/cluster.test-part-3.js",
-    "node scripts/check-guideline-decision-boundaries.js test/distributed/harness/cluster-segment-5.js test/distributed/harness/cluster-segment-7-class-5.js test/distributed/harness/__tests__/cluster.test-part-3.js test/distributed/harness/__tests__/cluster-control-snapshot-repair-pressure.test.js",
-    "npm run work:evidence-summary -- test-output/reports/rolling-restart-snapshot-lane-reset-close-20260520T055140Z.report.json",
+    "npm test -- test/control-plane/publication-recovery-evidence.test.js test/distributed/harness/__tests__/publication-evidence-open-membership.test.js",
+    "node scripts/check-guideline-literals.js src/control-plane/publication-recovery-evidence.js test/control-plane/publication-recovery-evidence.test.js test/distributed/harness/publication-evidence-contract.js test/distributed/harness/__tests__/publication-evidence-open-membership.test.js",
+    "node scripts/check-guideline-decision-boundaries.js src/control-plane/publication-recovery-evidence.js test/control-plane/publication-recovery-evidence.test.js test/distributed/harness/publication-evidence-contract.js test/distributed/harness/__tests__/publication-evidence-open-membership.test.js",
     "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-snapshot-lane-reset-close-20260520T055140Z.report.json --handoff-probe"
   ],
   "writeScope": [
-    "test/distributed/harness/cluster-segment-5.js",
-    "test/distributed/harness/cluster-segment-7-class-5.js",
-    "test/distributed/harness/__tests__/cluster.test-part-3.js",
-    "test/distributed/harness/__tests__/cluster-control-snapshot-repair-pressure.test.js"
+    "src/control-plane/publication-recovery-evidence.js",
+    "test/control-plane/publication-recovery-evidence.test.js",
+    "test/distributed/harness/publication-evidence-contract.js",
+    "test/distributed/harness/__tests__/publication-evidence-open-membership.test.js"
   ],
   "handoffFiles": [
-    "test-output/reports/rolling-restart-harness-publication-pending-wrapper-20260520T050735Z.report.json",
-    "test-output/reports/rolling-restart-selected-snapshot-no-reset-retry-20260520T054148Z.report.json",
-    "test-output/reports/rolling-restart-snapshot-lane-reset-close-20260520T055140Z.report.json"
+    "test-output/reports/rolling-restart-snapshot-lane-reset-close-20260520T055140Z.report.json",
+    "work/packages/done-20260520-publication-workflow-handoff-contract-architecture.md"
   ],
   "generatedFiles": [],
   "candidateRuntimeFiles": [
-    "test/distributed/harness/cluster-segment-5.js",
-    "test/distributed/harness/__tests__/cluster.test-part-3.js",
-    "test/distributed/harness/cluster-segment-7-class-4.js",
-    "src/admin/admin-control-snapshot-class-part-2.js"
+    "src/control-plane/publication-owner-decision.js",
+    "src/control-plane/publication-active-gate-handoff-contract.js",
+    "src/control-plane/membership-publication-coordinator-class-stage-2.js",
+    "src/control-plane/active-node-projection.js",
+    "test/control-plane/membership-publication-coordinator-main-stage-2.js",
+    "test/control-plane/publication-active-gate-handoff-contract.test.js",
+    "test/control-plane/publication-owner-stream.test.js"
   ],
   "commitScope": [
-    "test/distributed/harness/cluster-segment-5.js",
-    "test/distributed/harness/cluster-segment-7-class-5.js",
-    "test/distributed/harness/__tests__/cluster.test-part-3.js",
-    "test/distributed/harness/__tests__/cluster-control-snapshot-repair-pressure.test.js"
+    "src/control-plane/publication-recovery-evidence.js",
+    "test/control-plane/publication-recovery-evidence.test.js",
+    "test/distributed/harness/publication-evidence-contract.js",
+    "test/distributed/harness/__tests__/publication-evidence-open-membership.test.js"
   ],
   "touchedFiles": [],
   "modelFit": {
@@ -57,57 +57,69 @@
       "a frozen decision must be reopened"
     ]
   },
-  "representativeResidual": {},
+  "representativeResidual": {
+    "status": "pending-before-probe",
+    "scenario": "rolling-restart",
+    "artifact": "test-output/reports/rolling-restart-snapshot-lane-reset-close-20260520T055140Z.report.json",
+    "frontier": "publication_ack_convergence",
+    "owner": "topology_publication_owner",
+    "boundary": "publication_convergence",
+    "dominantReason": "publication_operation_workflow_handoff_leg_missing",
+    "nextAction": "Implement the publication-owned handoff outcome and rerun rolling-restart."
+  },
   "causalGovernance": {
-    "hypothesis": "The active-gate snapshot coverage frontier is now caused by snapshot-lane timeout reset not closing the stale Admin API WebSocket before the normal-budget retry. The selected retry reaches 3000ms but old snapshot clients accumulate, leaving coverage 0/5 while publication and priority recovery are ready.",
-    "stopConditionCheck": "Use `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-snapshot-lane-reset-close-20260520T055140Z.report.json`, `npm run work:evidence-summary -- test-output/reports/rolling-restart-snapshot-lane-reset-close-20260520T055140Z.report.json`, and `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-snapshot-lane-reset-close-20260520T055140Z.report.json --handoff-probe` to verify active_gate_snapshot_coverage is no longer first frontier, selectedSnapshotError is cleared, snapshotCoverageNodeCount improved to 2, and the representative route migrated to publication_ack_convergence with operation_workflow_owner residuals.",
-    "expectedCausalModelChange": "Achieved bounded progress: focused NodeHandle reset proof is green, selected snapshot error cleared, snapshot coverage improved from 0/5 to 2/5, and fresh representative evidence migrated the first frontier to publication_ack_convergence while active_gate_snapshot_coverage became a deferred consumer behind owner_reconcile_pending.",
-    "representativeOutcome": "migrated",
-    "causalDebt": "Fresh artifact test-output/reports/rolling-restart-snapshot-lane-reset-close-20260520T055140Z.report.json has publication_ack_convergence first frontier, publication_pending dominant reason, active_gate_snapshot_coverage deferred with snapshot coverage 2/5, and split priority recovery residuals under operation_workflow_owner / workflow_progress and operation_workflow_owner / rebalancer_handoff.",
-    "crossBoundaryReview": "User pre-approved architectural escalation on 2026-05-20. The route widened from active-gate retry selection into the harness NodeHandle snapshot-lane lifecycle while leaving startup readiness timeout semantics and admin forced-repair semantics unchanged; fresh representative evidence now requires successor ownership instead of another startup_active_gate_owner local patch."
+    "hypothesis": "Publication convergence is not surfacing a durable handoff outcome that reconciles OPEN publication debt with active-gate pending owner reconcile and the retryable operation workflow leg. The publication owner must emit one canonical outcome instead of leaving consumers to reconstruct publication/workflow state.",
+    "stopConditionCheck": "Use `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-snapshot-lane-reset-close-20260520T055140Z.report.json --handoff-probe`, `npm run analyze:causal-model -- test-output/reports/rolling-restart-snapshot-lane-reset-close-20260520T055140Z.report.json`, and focused publication evidence tests before runtime edits, then rerun rolling-restart.",
+    "expectedCausalModelChange": "The handoff probe or representative rerun should move from publication_operation_workflow_handoff_leg_missing to a reduced publication-owned handoff state, owner-boundary migration, or green rolling-restart.",
+    "representativeOutcome": "pending-before-rerun",
+    "causalDebt": "Fresh artifact has publicationStatus OPEN, missingPublishedCount 4, publicationOwnerRecoveryOutcome waiting_for_publication, membershipPublicationHandoffOutcome write_deferred/enqueued, active-gate owner_reconcile_pending pendingReconcileCount 4, and operation workflow retryable advance_existing_operation evidence.",
+    "crossBoundaryReview": "Do not patch operation workflow, startup active-gate, readiness, timeout budgets, or analyzer-only routing in this runtime package."
   },
   "scenarioCausalClosure": {
     "referenceScenarioOrProbe": "rolling-restart test-output/reports/rolling-restart-snapshot-lane-reset-close-20260520T055140Z.report.json",
     "phaseChain": [
-      "publication convergence became ready after harness wrapper alignment",
-      "active-gate retry moved the selected snapshot failure from 100ms to 3000ms",
-      "snapshot-lane reset closure proof removed the selected snapshot error and improved coverage from 0/5 to 2/5",
-      "fresh representative evidence migrated the first frontier to publication_ack_convergence with split operation_workflow_owner residuals"
+      "snapshot-lane reset reduced active-gate selected snapshot failure",
+      "workflow runtime promotion was blocked by runtimePromotionAllowed=false",
+      "publication/workflow handoff causal gate selected topology_publication_owner / publication_convergence",
+      "runtime package now owns the publication evidence handoff outcome"
     ],
-    "currentFirstFrontier": "publication_ack_convergence / topology_publication_owner / publication_convergence / publication_pending in test-output/reports/rolling-restart-snapshot-lane-reset-close-20260520T055140Z.report.json.",
+    "currentFirstFrontier": "publication_ack_convergence / topology_publication_owner / publication_convergence with handoff probe result publication_operation_workflow_handoff_leg_missing.",
     "knownDownstreamBlockers": [
-      "operation_workflow_owner / workflow_progress has two priority recovery residual witnesses in recovering_in_flight",
-      "operation_workflow_owner / rebalancer_handoff has one residual witness behind the workflow_progress split"
+      "publication_active_gate_handoff_contract pending owner_reconcile_pending",
+      "membershipPublicationHandoffOutcome write_deferred and enqueued",
+      "activeGateOwnerCohort missingPublishedCount 4",
+      "operation_workflow_owner workflow_progress retryable advance_existing_operation"
     ],
-    "missingCausalEdge": "The harness snapshot-lane reset must close stale Admin API WebSockets and clear pending lane state before a normal-budget selected snapshot retry.",
-    "missingCausalEdgeProbe": "npm test -- test/distributed/harness/__tests__/cluster.test-part-3.js test/distributed/harness/__tests__/cluster-control-snapshot-repair-pressure.test.js",
-    "falsifyingProbe": "npm test -- test/distributed/harness/__tests__/cluster.test-part-3.js test/distributed/harness/__tests__/cluster-control-snapshot-repair-pressure.test.js",
-    "boundedProgressProof": "Focused NodeHandle and active-gate tests prove snapshot-lane reset closes the stale lane socket and that selected snapshot timeout retry gets the normal budget.",
-    "boundedProgressProofArtifact": "test/distributed/harness/__tests__/cluster.test-part-3.js and test/distributed/harness/__tests__/cluster-control-snapshot-repair-pressure.test.js",
-    "expectedObservableTransition": "Fresh representative evidence reduced active_gate_snapshot_coverage by increasing selected snapshot coverage from 0/5 to 2/5 and migrated the first frontier.",
-    "maxProgressBound": "one widened harness snapshot-lane lifecycle package before changing startup readiness or admin forced-repair runtime semantics",
-    "sameFrontierFallback": "If fresh representative evidence returns active_gate_snapshot_coverage with selectedSnapshotError after 3000ms and no selected coverage improvement after lane reset, use the user-approved architecture route before another local patch.",
-    "expectedNextFrontier": "operation_workflow_owner / workflow_progress successor, then operation_workflow_owner / rebalancer_handoff if still present",
-    "resultClassification": "migrated",
-    "stopCondition": "migrate-owner-boundary",
+    "missingCausalEdge": "Publication convergence must emit one owner outcome for the publication/workflow/active-gate handoff instead of leaving direct workflow promotion blocked.",
+    "missingCausalEdgeProbe": "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-snapshot-lane-reset-close-20260520T055140Z.report.json --handoff-probe",
+    "falsifyingProbe": "npm test -- test/control-plane/publication-recovery-evidence.test.js test/distributed/harness/__tests__/publication-evidence-open-membership.test.js",
+    "boundedProgressProof": "Focused tests should prove the publication owner aligns stale OPEN debt with active-gate handoff evidence and emits the structured reconcile/defer outcome.",
+    "boundedProgressProofArtifact": "src/control-plane/publication-recovery-evidence.js and focused publication evidence tests",
+    "expectedObservableTransition": "publication_operation_workflow_handoff_leg_missing reduces, pending reconcile debt shrinks, owner boundary migrates, or rolling-restart turns green.",
+    "maxProgressBound": "one topology_publication_owner / publication_convergence runtime slice before representative rerun",
+    "sameFrontierFallback": "If focused proof passes but representative evidence returns unchanged publication_operation_workflow_handoff_leg_missing with no metric reduction, stop for architecture instead of another local publication patch.",
+    "expectedNextFrontier": "representative-green, reduced publication handoff debt, or owner-boundary migration",
+    "resultClassification": "pending-before-probe",
+    "stopCondition": "continue-local-fix",
     "recentFrontierHistory": [
-      "work/packages/done-20260520-rolling-restart-publication-recovery-evidence-consistency.md / topology_publication_owner / publication_convergence / reduced",
-      "work/packages/done-20260519-topology-publication-unpublished-observation-producer-runtime.md / topology_publication_owner / publication_convergence / same-frontier"
+      "work/packages/done-20260520-priority-recovery-operation-workflow-owner-workflow-progress.md / operation_workflow_owner / workflow_progress / architecture-gap",
+      "work/packages/done-20260520-publication-workflow-handoff-contract-architecture.md / topology_publication_owner / publication_convergence / selected-runtime-successor"
     ],
-    "oscillationCheck": "The visible representative gate persisted after adjacent publication packages, but the fresh artifact migrated owner/boundary to startup_active_gate_owner / snapshot_coverage with publication ready; this package is the selected runtime successor rather than another publication patch.",
-    "handoffInvariant": "Startup active-gate snapshot coverage no longer owns the first frontier; successor work must preserve the selected snapshot coverage improvement while advancing the operation_workflow_owner priority recovery residuals."
+    "oscillationCheck": "Allowed because the active causal package selected this publication runtime successor and blocked direct workflow promotion.",
+    "handoffInvariant": "Publication owner emits the handoff outcome; operation workflow and active-gate consumers consume it without reproducing publication debt logic."
   },
   "rerunDecision": {
     "sourceArtifact": "test-output/reports/rolling-restart-snapshot-lane-reset-close-20260520T055140Z.report.json",
     "routeOwner": "topology_publication_owner",
     "routeBoundary": "publication_convergence",
-    "routeDominantReason": "publication_pending",
-    "routeCausalOutcome": "accept_classified_backpressure",
-    "stopMode": "classified_backpressure",
-    "nextLane": "scenario-release-gate",
-    "expectedDelta": "Snapshot coverage moved and the first frontier migrated; close this startup active-gate package and pursue the operation_workflow_owner / workflow_progress residual successor.",
+    "routeDominantReason": "publication_operation_workflow_handoff_leg_missing",
+    "routeCausalOutcome": "continue_local_fix",
+    "stopMode": "classified_local_blocker",
+    "nextLane": "runtime-owner-boundary",
+    "expectedDelta": "Move publication_operation_workflow_handoff_leg_missing by emitting or preserving the publication-owned handoff outcome, reducing pending reconcile debt, migrating owner boundary, or turning rolling-restart green.",
     "requiredRefreshCommands": [
-      "npm run work:package:route-after-rerun -- --artifact test-output/reports/rolling-restart-snapshot-lane-reset-close-20260520T055140Z.report.json --owner topology_publication_owner --boundary publication_convergence --dominant-reason publication_pending",
+      "npm run work:package:route-after-rerun -- --artifact test-output/reports/rolling-restart-snapshot-lane-reset-close-20260520T055140Z.report.json --owner topology_publication_owner --boundary publication_convergence --dominant-reason publication_operation_workflow_handoff_leg_missing",
+      "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-snapshot-lane-reset-close-20260520T055140Z.report.json --handoff-probe",
       "update Sprint Strategy Brief and Current Edge Card from the route result",
       "npm run work:repair",
       "npm run work:validate -- --pre-impl"
@@ -119,55 +131,42 @@
     "artifactBudget": "one-artifact",
     "proofCommandBudget": "two-or-three-canonical-commands",
     "commands": [
-      "npm test -- test/distributed/harness/__tests__/cluster-control-snapshot-repair-pressure.test.js",
-      "npm run work:evidence-summary -- test-output/reports/rolling-restart-harness-publication-pending-wrapper-20260520T050735Z.report.json",
-      "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-harness-publication-pending-wrapper-20260520T050735Z.report.json --handoff-probe"
+      "npm run work:advance -- --check"
     ],
     "decisionRecord": "Record classification in the current package or sprint edge card; open a separate classifier only for material route, owner, boundary, stop-condition, tracker-truth, or successor-selection changes.",
-    "successorAction": "open-runtime-owner-boundary",
+    "successorAction": "rerun-representative-evidence",
     "runtimePromotionRule": "When canonical owner and boundary are stable, prefer a runtime-owner-boundary successor and keep runtime files in candidateRuntimeFiles until that package activates them."
   },
   "architectureDecisionGate": {
     "status": "selected",
     "trigger": "frontier-oscillation",
     "triggerEvidence": [
-      "publication convergence is ready in the fresh artifact",
-      "active_gate_snapshot_coverage is the first frontier",
-      "selectedSnapshotError moved from authoritative repair participant pressure to a 3000ms selected snapshot timeout after the first retry patch",
-      "the rerun logs show repeated snapshot-lane admin clients after timeout reset",
-      "user pre-approved architectural escalation while pursuing rolling-restart green"
+      "publication_ack_convergence remains first frontier",
+      "publication_operation_workflow_handoff_leg_missing is reported by the handoff probe",
+      "runtimePromotionAllowed=false blocks direct workflow runtime edits",
+      "publication/workflow causal gate selected topology_publication_owner / publication_convergence"
     ],
     "choices": [
       {
-        "id": "bounded-harness-snapshot-retry",
-        "summary": "Retry a non-forced snapshot query after authoritative repair participant pressure or selected timeout, and close stale snapshot-lane sockets before retry.",
+        "id": "publication-owned-handoff-runtime",
+        "summary": "Implement one bounded publication-convergence runtime slice for the handoff outcome.",
         "route": "continue-local-proof",
         "proof": [
-          "npm test -- test/distributed/harness/__tests__/cluster.test-part-3.js test/distributed/harness/__tests__/cluster-control-snapshot-repair-pressure.test.js",
-          "node scripts/check-guideline-literals.js test/distributed/harness/cluster-segment-7-class-5.js test/distributed/harness/__tests__/cluster-control-snapshot-repair-pressure.test.js",
-          "npm run audit:runtime-grammar:file -- test/distributed/harness/cluster-segment-5.js test/distributed/harness/__tests__/cluster.test-part-3.js",
-          "node scripts/check-guideline-decision-boundaries.js test/distributed/harness/cluster-segment-5.js test/distributed/harness/cluster-segment-7-class-5.js test/distributed/harness/__tests__/cluster.test-part-3.js test/distributed/harness/__tests__/cluster-control-snapshot-repair-pressure.test.js"
+          "npm test -- test/control-plane/publication-recovery-evidence.test.js test/distributed/harness/__tests__/publication-evidence-open-membership.test.js",
+          "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-snapshot-lane-reset-close-20260520T055140Z.report.json --handoff-probe"
         ]
       },
       {
-        "id": "startup-readiness-runtime",
-        "summary": "Change startup readiness timeout semantics only if snapshot coverage retry cannot move the first frontier.",
-        "route": "owner-boundary-migration",
-        "proof": [
-          "npm test -- test/distributed/harness/__tests__/cluster.test-part-4.js"
-        ]
-      },
-      {
-        "id": "admin-forced-repair-runtime",
-        "summary": "Change admin forced-repair fallback semantics only if the harness retry proves insufficient.",
+        "id": "architecture-gap-stop",
+        "summary": "Stop if the publication evidence path cannot own the handoff without changing workflow or active-gate runtime contracts.",
         "route": "architecture-package",
         "proof": [
-          "npm test -- test/admin"
+          "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-snapshot-lane-reset-close-20260520T055140Z.report.json --handoff-probe"
         ]
       }
     ],
-    "selectedChoice": "bounded-harness-snapshot-retry",
-    "nextAction": "Close this package as migrated/reduced and continue with the operation_workflow_owner / workflow_progress successor."
+    "selectedChoice": "publication-owned-handoff-runtime",
+    "nextAction": "Implement the bounded publication evidence handoff slice and rerun rolling-restart."
   },
   "predecessor": null
 }
