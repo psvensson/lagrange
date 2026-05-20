@@ -66,6 +66,9 @@ const TEST_PUBLICATION_ACTIVE_GATE_HANDOFF_NEXT_ACTION = Object.freeze({
   RECONCILE_OWNER_MEMBERSHIP_PUBLICATION:
     'reconcile_owner_membership_publication',
 });
+const TEST_MEMBERSHIP_PUBLICATION_HANDOFF_OUTCOME_STATE = Object.freeze({
+  WRITE_DEFERRED: 'write_deferred',
+});
 const TEST_OPERATION_WORKFLOW_HANDOFF_STATE = 'deferred';
 const TEST_OPERATION_WORKFLOW_HANDOFF_REASON_CODE =
   'classified_backpressure';
@@ -1238,6 +1241,123 @@ test('buildCanonicalPublicationRecoveryEvidence narrows open publication debt fr
     t.end();
   });
 
+test('buildCanonicalPublicationRecoveryEvidence keeps write-deferred active-gate ACK debt aligned with a stale gate stream',
+  (t) => {
+    const missingPublishedNodeIds = [
+      TEST_NODE_ID.SECOND,
+      TEST_NODE_ID.THIRD,
+      TEST_NODE_ID.FOURTH,
+      TEST_NODE_ID.FIFTH,
+    ];
+    const evidence = buildCanonicalPublicationRecoveryEvidence({
+      publicationConvergence: {
+        publicationEpoch: TEST_PUBLICATION_EPOCH,
+        publicationStatus: CONTROL_PLANE_PUBLICATION_STATUS.OPEN,
+        recoveryProtocolState: RECOVERY_PROTOCOL_STATE.PUBLICATION_PENDING,
+        publishedActiveNodeIds: [TEST_NODE_ID.FIRST],
+        pendingAckNodeIds: TEST_EMPTY_NODE_IDS,
+        pendingAckCount: TEST_EMPTY_PUBLICATION_DEBT_COUNT,
+        missingPublishedNodeIds,
+        missingPublishedCount: missingPublishedNodeIds.length,
+        priorityRecoveryReasonCodes: [TEST_PUBLICATION_PENDING_REASON_CODE],
+        priorityPartitionSummary: TEST_SATISFIED_PRIORITY_PARTITION_SUMMARY,
+      },
+      publicationConvergenceGate: {
+        publicationEpoch: TEST_PUBLICATION_EPOCH,
+        publicationStatus: CONTROL_PLANE_PUBLICATION_STATUS.OPEN,
+        recoveryProtocolState: RECOVERY_PROTOCOL_STATE.PUBLICATION_PENDING,
+        pendingAckNodeIds: TEST_EMPTY_NODE_IDS,
+        pendingAckCount: TEST_EMPTY_PUBLICATION_DEBT_COUNT,
+        pendingAckEvidenceState:
+          PUBLICATION_RECOVERY_PENDING_ACK_EVIDENCE_STATE.COUNT_ONLY,
+        missingPublishedNodeIds,
+        missingPublishedCount: missingPublishedNodeIds.length,
+        reasonCodes: [TEST_PUBLICATION_PENDING_REASON_CODE],
+        publicationPending: true,
+        priorityPartitionSummary: TEST_SATISFIED_PRIORITY_PARTITION_SUMMARY,
+        publicationOwnerStream: {
+          publicationStatus: CONTROL_PLANE_PUBLICATION_STATUS.OPEN,
+          recoveryProtocolState: RECOVERY_PROTOCOL_STATE.PUBLICATION_PENDING,
+          pendingAckNodeIds: TEST_EMPTY_NODE_IDS,
+          pendingAckCount: TEST_EMPTY_PUBLICATION_DEBT_COUNT,
+          pendingAckEvidenceState:
+            PUBLICATION_RECOVERY_PENDING_ACK_EVIDENCE_STATE.COUNT_ONLY,
+          missingPublishedNodeIds,
+          missingPublishedCount: missingPublishedNodeIds.length,
+          streamOutcome: PUBLICATION_OWNER_STREAM_OUTCOME.PUBLISHING,
+          recoveryOutcome:
+            PUBLICATION_OWNER_RECOVERY_OUTCOME.WAITING_FOR_PUBLICATION,
+        },
+      },
+      activeGate: {
+        progress: {
+          expectedNodeCount: TEST_ACTIVE_GATE_EXPECTED_NODE_COUNT,
+          selectedPublishedActiveNodeIds: [TEST_NODE_ID.FIRST],
+          selectedPublishedActiveCount: TEST_PUBLICATION_DEBT_COUNT,
+          selectedMissingPublishedNodeIds: missingPublishedNodeIds,
+          publicationStatus: CONTROL_PLANE_PUBLICATION_STATUS.OPEN,
+          recoveryProtocolState: RECOVERY_PROTOCOL_STATE.PUBLICATION_PENDING,
+          pendingAckCount: TEST_PUBLICATION_DEBT_COUNT,
+          missingPublishedCount: missingPublishedNodeIds.length,
+          membershipPublicationHandoffOutcomeState:
+            TEST_MEMBERSHIP_PUBLICATION_HANDOFF_OUTCOME_STATE.WRITE_DEFERRED,
+          membershipPublicationHandoffOutcomeEnqueued: true,
+          publicationActiveGateHandoffState:
+            TEST_PUBLICATION_ACTIVE_GATE_HANDOFF_STATE.PENDING,
+          publicationActiveGateHandoffReasonCode:
+            TEST_PUBLICATION_ACTIVE_GATE_HANDOFF_REASON
+              .OWNER_RECONCILE_PENDING,
+          publicationActiveGateHandoffNextAction:
+            TEST_PUBLICATION_ACTIVE_GATE_HANDOFF_NEXT_ACTION
+              .RECONCILE_OWNER_MEMBERSHIP_PUBLICATION,
+          publicationActiveGateHandoffRuntimePromotionAllowed: false,
+          publicationActiveGateHandoffPendingReconcileNodeIds:
+            missingPublishedNodeIds,
+          publicationActiveGateHandoffPendingReconcileCount:
+            missingPublishedNodeIds.length,
+        },
+      },
+    });
+
+    t.equal(
+      evidence.publicationConvergenceGate.pendingAckCount,
+      TEST_PUBLICATION_DEBT_COUNT,
+    );
+    t.equal(
+      evidence.publicationConvergence.pendingAckCount,
+      TEST_PUBLICATION_DEBT_COUNT,
+    );
+    t.equal(
+      evidence.priorityRecoveryObservation.pendingAckCount,
+      TEST_PUBLICATION_DEBT_COUNT,
+    );
+    t.equal(
+      evidence.publicationConvergenceGate.publicationOwnerStream
+        .pendingAckCount,
+      TEST_PUBLICATION_DEBT_COUNT,
+    );
+    t.same(
+      evidence.publicationConvergenceGate.missingPublishedNodeIds,
+      missingPublishedNodeIds,
+    );
+    t.equal(
+      evidence.publicationConvergence.missingPublishedCount,
+      missingPublishedNodeIds.length,
+    );
+    t.match(evidence.publicationConvergence.publicationActiveGateHandoff, {
+      state: TEST_PUBLICATION_ACTIVE_GATE_HANDOFF_STATE.PENDING,
+      reasonCode:
+        TEST_PUBLICATION_ACTIVE_GATE_HANDOFF_REASON.OWNER_RECONCILE_PENDING,
+      nextAction:
+        TEST_PUBLICATION_ACTIVE_GATE_HANDOFF_NEXT_ACTION
+          .RECONCILE_OWNER_MEMBERSHIP_PUBLICATION,
+      runtimePromotionAllowed: false,
+      pendingReconcileCount: missingPublishedNodeIds.length,
+      pendingReconcileNodeIds: missingPublishedNodeIds,
+    });
+    t.end();
+  });
+
 test('buildCanonicalPublicationRecoveryEvidence carries classified workflow backpressure handoff',
   (t) => {
     const evidence = buildCanonicalPublicationRecoveryEvidence({
@@ -2208,4 +2328,3 @@ test('buildCanonicalPublicationRecoveryEvidence preemption adjudication and leas
 
   t.end();
 });
-

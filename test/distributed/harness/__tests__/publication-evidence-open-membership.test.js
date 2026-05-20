@@ -91,7 +91,10 @@ const STEADY_EMPTY_PROGRESS_CLASSES = Object.freeze({
 });
 const PUBLISHED_ACK_FRONTIER_TEST_NAME =
   'buildCanonicalPublicationEvidenceFromControlPlane closes publication ' +
-  'pending when published ACK evidence is acknowledged';
+    'pending when published ACK evidence is acknowledged';
+const CLOSED_GATE_WRAPPER_TEST_NAME =
+  'buildCanonicalPublicationEvidenceFromControlPlane keeps outer publication ' +
+    'pending aligned with a closed no-debt gate';
 const PUBLISHED_ACK_FRONTIER_EPOCH = 5;
 const PUBLISHED_ACK_FRONTIER_ZERO_COUNT = 0;
 const PUBLISHED_ACK_FRONTIER_AUTHORITATIVE_NODE_IDS = Object.freeze([
@@ -440,5 +443,52 @@ it(PUBLISHED_ACK_FRONTIER_TEST_NAME, () => {
   assert.equal(
     publicationEvidence.publicationConvergence.missingPublishedCount,
     PUBLISHED_ACK_FRONTIER_MISSING_NODE_IDS.length,
+  );
+});
+
+it(CLOSED_GATE_WRAPPER_TEST_NAME, () => {
+  const publicationEvidence = buildCanonicalPublicationEvidenceFromControlPlane({
+    publicationConvergence: {
+      recoveryProtocolState: RECOVERY_PROTOCOL_STATE.UNPUBLISHED_OBSERVATION,
+      pendingAckNodeIds: TEST_EMPTY_NODE_IDS,
+      pendingAckCount: TEST_EMPTY_COUNT,
+      missingPublishedNodeIds: TEST_EMPTY_NODE_IDS,
+      missingPublishedCount: TEST_EMPTY_COUNT,
+      publicationPending: true,
+      priorityRecoveryReasonCodes: TEST_EMPTY_GATE_REASONS,
+    },
+    publicationConvergenceGate: {
+      ready: false,
+      active: true,
+      recoveryProtocolState: RECOVERY_PROTOCOL_STATE.UNPUBLISHED_OBSERVATION,
+      requiredAckNodeIds: TEST_EMPTY_NODE_IDS,
+      acknowledgedNodeIds: TEST_EMPTY_NODE_IDS,
+      pendingAckNodeIds: TEST_EMPTY_NODE_IDS,
+      pendingAckCount: TEST_EMPTY_COUNT,
+      missingPublishedNodeIds: TEST_EMPTY_NODE_IDS,
+      missingPublishedCount: TEST_EMPTY_COUNT,
+      publicationPending: false,
+      prioritySpreadPending: false,
+      reasonCodes: TEST_EMPTY_GATE_REASONS,
+      reasons: TEST_EMPTY_GATE_REASONS,
+    },
+  });
+
+  assert.equal(
+    publicationEvidence.publicationConvergence.publicationPending,
+    false,
+  );
+  assert.equal(
+    publicationEvidence.publicationConvergence.publicationRecoveryGate
+      .publicationPending,
+    false,
+  );
+  assert.equal(
+    publicationEvidence.publicationConvergence.pendingAckCount,
+    TEST_EMPTY_COUNT,
+  );
+  assert.equal(
+    publicationEvidence.publicationConvergence.missingPublishedCount,
+    TEST_EMPTY_COUNT,
   );
 });

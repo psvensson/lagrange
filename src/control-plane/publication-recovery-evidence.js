@@ -97,7 +97,9 @@ const PUBLICATION_RECOVERY_EVIDENCE_TEXT = Object.freeze({
   COMMA: ',',
   EMPTY: '',
   PIPE: '|',
+  TRUE: 'true',
 });
+const PUBLICATION_RECOVERY_LEASE_DEFAULT_DURATION_MS = 5000;
 const PUBLICATION_RECOVERY_HANDOFF_FIELD = Object.freeze({
   NEXT_ACTION: 'nextAction',
   OPERATION_WORKFLOW_HANDOFF: 'operationWorkflowHandoff',
@@ -792,7 +794,7 @@ function normalizeOptionalString(value) {
 }
 
 function normalizeBoolean(value) {
-  return value === true || value === 'true';
+  return value === true || value === PUBLICATION_RECOVERY_EVIDENCE_TEXT.TRUE;
 }
 
 function hasClosedUnknownNoDebtPublicationGate(
@@ -1202,6 +1204,74 @@ function resolvePublicationMissingPublishedCount({
     }),
   ];
   return choices.find((choice) => choice.selected === true).count;
+}
+
+function activeGateOpenDebtOutrunsPublicationOwnerStream({
+  publicationStatus = null,
+  pendingAckEvidence = null,
+  missingPublishedCount = NUM.ZERO,
+  activeGateProgressRecords = PUBLICATION_RECOVERY_EVIDENCE_EMPTY_LIST,
+  publicationOwnerStream = null,
+} = {}) {
+  if (
+    !isRecord(publicationOwnerStream) ||
+    normalizeOptionalString(publicationStatus) !==
+      PUBLICATION_RECOVERY_PUBLICATION_STATUS.OPEN ||
+    !hasActiveGateSelectedPublicationMembershipOpenEvidence(
+      activeGateProgressRecords,
+    )
+  ) {
+    return false;
+  }
+  return normalizeNonNegativeInteger(pendingAckEvidence?.pendingAckCount) >
+    normalizeNonNegativeInteger(publicationOwnerStream.pendingAckCount) ||
+    normalizeNonNegativeInteger(missingPublishedCount) >
+      normalizeNonNegativeInteger(publicationOwnerStream.missingPublishedCount);
+}
+
+function alignPublicationRecoveryGateOwnerStreamWithOpenDebt(gate = null) {
+  if (!isRecord(gate)) {
+    return gate;
+  }
+  const pendingAckNodeIds = normalizeDistinctStringArray(
+    gate.pendingAckNodeIds,
+  );
+  const publicationOwnerStream = buildPublicationOwnerStreamState({
+    publicationRevision: gate.publicationEpoch,
+    desiredPublicationRevision: gate.publicationEpoch,
+    committedPublicationRevision:
+      gate.publicationOwnerStream?.revision?.committed?.value,
+    publicationStatus: gate.publicationStatus,
+    publicationObservationState: gate.publicationObservationState,
+    recoveryProtocolState: gate.recoveryProtocolState,
+    requiredAckNodeIds: gate.requiredAckNodeIds,
+    acknowledgedNodeIds: gate.acknowledgedNodeIds,
+    ...(pendingAckNodeIds.length > NUM.ZERO ? {pendingAckNodeIds} : {}),
+    pendingAckCount: gate.pendingAckCount,
+    pendingAckEvidenceState: gate.pendingAckEvidenceState,
+    missingPublishedNodeIds: gate.missingPublishedNodeIds,
+    missingPublishedCount: gate.missingPublishedCount,
+    priorityRecoveryReasonCodes: gate.reasonCodes,
+    prioritySpreadPending: gate.prioritySpreadPending,
+    prioritySpreadEvidenceUnavailable: gate.prioritySpreadEvidenceUnavailable,
+    pressureState: gate.pressureState,
+    pressureDeferred: gate.pressureDeferred,
+    pressureCoalesced: gate.pressureCoalesced,
+    pressureRetryAfterMs: gate.pressureRetryAfterMs,
+    pressureReasonCodes: gate.pressureReasonCodes,
+    publicationPendingHint: gate.publicationPending,
+  });
+  return Object.freeze({
+    ...gate,
+    publicationOwnerStream,
+    streamOutcome: publicationOwnerStream.streamOutcome,
+    ackState: publicationOwnerStream.ackState,
+    freshnessFence: publicationOwnerStream.freshnessFence,
+    recoveryOutcome: publicationOwnerStream.recoveryOutcome,
+    publicationPending:
+      isPublicationOwnerStreamPublicationPending(publicationOwnerStream),
+    ackPending: publicationOwnerStream.pendingAckCount > NUM.ZERO,
+  });
 }
 
 function normalizeActiveGateProgressRecords(options = {}) {
@@ -1870,9 +1940,18 @@ function buildCanonicalPublicationConvergenceGate(options = {}) {
             PUBLICATION_RECOVERY_ACTIVE_GATE_PROGRESS_FIELD
               .MISSING_PUBLISHED_COUNT,
           ),
-        ]),
+      ]),
     ],
   });
+  const activeGateOpenDebtRefreshesPublicationOwnerStream =
+    activeGateOpenDebtOutrunsPublicationOwnerStream({
+      publicationStatus: effectivePublicationStatus,
+      pendingAckEvidence,
+      missingPublishedCount,
+      activeGateProgressRecords,
+      publicationOwnerStream:
+        rawPublicationConvergenceGate?.publicationOwnerStream,
+    });
 
   if (
     !publicationConvergence &&
@@ -1888,6 +1967,9 @@ function buildCanonicalPublicationConvergenceGate(options = {}) {
     ...(rawPublicationConvergenceGate || {}),
     ...(countOnlyUnknownPublicationDeficit ? {
       pendingAckEvidenceState: null,
+      publicationOwnerStream: null,
+    } : {}),
+    ...(activeGateOpenDebtRefreshesPublicationOwnerStream ? {
       publicationOwnerStream: null,
     } : {}),
     openCountOnlyAckIsStale:
@@ -1946,13 +2028,19 @@ function buildCanonicalPublicationConvergenceGate(options = {}) {
       publicationConvergence?.pressureReasonCodes ??
       priorityRecoveryObservation?.pressureReasonCodes,
   });
+  const alignedPublicationConvergenceGate =
+    activeGateOpenDebtRefreshesPublicationOwnerStream ?
+      alignPublicationRecoveryGateOwnerStreamWithOpenDebt(
+        canonicalPublicationConvergenceGate,
+      ) :
+      canonicalPublicationConvergenceGate;
 
   return Array.isArray(rawPublicationConvergenceGate?.reasons) ?
     {
-      ...canonicalPublicationConvergenceGate,
+      ...alignedPublicationConvergenceGate,
       reasons: normalizeDistinctStringArray(rawPublicationConvergenceGate.reasons),
     } :
-    canonicalPublicationConvergenceGate;
+    alignedPublicationConvergenceGate;
 }
 
 function buildCanonicalPriorityRecoveryObservation(options = {}) {
@@ -2805,19 +2893,25 @@ const RECOVERY_PREEMPTION_DECISION = Object.freeze({
   CONTINUE: 'continue',
   PREEMPT_AND_BYPASS: 'preempt_and_bypass',
 });
+const RECOVERY_PREEMPTION_REASON = Object.freeze({
+  DOWNSTREAM_HANDOFF_PENDING:
+    'Downstream active-gate reconcile handoff is pending.',
+  LOCAL_EPOCH_STALE: 'Local coordination epoch is stale.',
+  NO_ACTIVE_TRIGGERS: 'No active preemption triggers detected.',
+});
 
 class TopologyEpochFencer {
-  constructor(currentEpoch = 0) {
-    this.currentEpoch = Number(currentEpoch) || 0;
+  constructor(currentEpoch = NUM.ZERO) {
+    this.currentEpoch = Number(currentEpoch) || NUM.ZERO;
   }
 
   advanceEpoch() {
-    this.currentEpoch += 1;
+    this.currentEpoch += NUM.ONE;
     return this.currentEpoch;
   }
 
   assertEpochValid(incomingEpoch) {
-    const epochNum = Number(incomingEpoch) || 0;
+    const epochNum = Number(incomingEpoch) || NUM.ZERO;
     if (epochNum < this.currentEpoch) {
       throw new Error(
         `Fencing Violation: Upstream operation epoch ${epochNum} ` +
@@ -2829,8 +2923,9 @@ class TopologyEpochFencer {
 }
 
 class PublicationRecoveryLease {
-  constructor(leaseDurationMs = 5000) {
-    this.leaseDurationMs = Number(leaseDurationMs) || 5000;
+  constructor(leaseDurationMs = PUBLICATION_RECOVERY_LEASE_DEFAULT_DURATION_MS) {
+    this.leaseDurationMs = Number(leaseDurationMs) ||
+      PUBLICATION_RECOVERY_LEASE_DEFAULT_DURATION_MS;
     this.grantedAt = null;
     this.active = false;
   }
@@ -2860,24 +2955,25 @@ class PublicationRecoveryLease {
 function adjudicateRecoveryPreemption(evidenceSnapshot) {
   const hasDownstreamPendingHandoff =
     Boolean(evidenceSnapshot?.publicationActiveGateHandoffPendingReconcileCount &&
-    evidenceSnapshot.publicationActiveGateHandoffPendingReconcileCount > 0);
+    evidenceSnapshot.publicationActiveGateHandoffPendingReconcileCount >
+      NUM.ZERO);
 
-  const localEpoch = Number(evidenceSnapshot?.localEpoch) || 0;
-  const globalEpoch = Number(evidenceSnapshot?.globalEpoch) || 0;
+  const localEpoch = Number(evidenceSnapshot?.localEpoch) || NUM.ZERO;
+  const globalEpoch = Number(evidenceSnapshot?.globalEpoch) || NUM.ZERO;
   const hasEpochMismatch = localEpoch < globalEpoch;
 
   if (hasDownstreamPendingHandoff || hasEpochMismatch) {
     return Object.freeze({
       decision: RECOVERY_PREEMPTION_DECISION.PREEMPT_AND_BYPASS,
       reason: hasDownstreamPendingHandoff
-        ? 'Downstream active-gate reconcile handoff is pending.'
-        : 'Local coordination epoch is stale.',
+        ? RECOVERY_PREEMPTION_REASON.DOWNSTREAM_HANDOFF_PENDING
+        : RECOVERY_PREEMPTION_REASON.LOCAL_EPOCH_STALE,
     });
   }
 
   return Object.freeze({
     decision: RECOVERY_PREEMPTION_DECISION.CONTINUE,
-    reason: 'No active preemption triggers detected.',
+    reason: RECOVERY_PREEMPTION_REASON.NO_ACTIVE_TRIGGERS,
   });
 }
 

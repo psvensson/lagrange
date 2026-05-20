@@ -1284,7 +1284,6 @@ function buildCanonicalPriorityRecoveryActiveGateProgress(
       authoritativePublicationMembershipNodeIds,
       selectedPublicationMembershipNodeIds,
       selectedPublicationMembershipOpen:
-        publicationMembershipEvidence.currentPublicationGateClosed !== true &&
         isClosedActiveGatePublicationMembershipState(
           publicationMembershipState,
         ) !== true &&
@@ -2288,6 +2287,12 @@ function buildCanonicalPublicationConvergence(
         publicationConvergenceGate?.publicationPending === true ||
         priorityRecoveryObservation?.publicationPending === true,
     });
+  const publicationPending =
+    publicationConvergenceGate?.publicationPending === true ?
+      true :
+      publicationConvergenceGate?.publicationPending === false ?
+        false :
+        isPublicationOwnerStreamPublicationPending(publicationOwnerStream);
 
   return {
     ...(rawPublicationConvergence || {}),
@@ -2315,8 +2320,7 @@ function buildCanonicalPublicationConvergence(
     ackState: publicationOwnerStream.ackState,
     freshnessFence: publicationOwnerStream.freshnessFence,
     recoveryOutcome: publicationOwnerStream.recoveryOutcome,
-    publicationPending:
-      isPublicationOwnerStreamPublicationPending(publicationOwnerStream),
+    publicationPending,
     prioritySpreadPending:
       priorityRecoveryObservation?.prioritySpreadPending === true ||
       publicationConvergenceGate?.prioritySpreadPending === true,
