@@ -3,6 +3,132 @@ import {AdminWebSocketAPISegment2} from './admin-websocket-api-segment-2.js';
 import {resolveControlSnapshotQueryResult} from './admin-control-snapshot-query-result-helper.js';
 
 const LOCAL_STR_I = 'i';
+const STALE_SOCKET_LOG_MSG = 'Closing stale admin socket connection on lane';
+const SNAPSHOT_RETRY_LOG_MSG = 'Snapshot query encountered pressure or timeout. Retrying after stale socket cleanup...';
+
+const SNAPSHOT_RETRY_LIMIT = 3;
+const SNAPSHOT_RETRY_DELAY_MS = 500;
+const SNAPSHOT_RETRY_DECISION = Object.freeze({
+  RETRY: 'retry',
+  STOP_SUCCESS: 'stop_success',
+  STOP_FAILURE: 'stop_failure',
+});
+
+const RETRY_REASON_FORCED_REPAIR_PATH_DISABLED = 'forced_repair_path_disabled';
+const RETRY_REASON_RETRY_LIMIT_EXHAUSTED = 'retry_limit_exhausted';
+const RETRY_REASON_ERROR_PRESSURE_OR_TIMEOUT = 'error_pressure_or_timeout';
+const RETRY_REASON_NON_RETRYABLE_ERROR = 'non_retryable_error';
+const RETRY_REASON_RESULT_PRESSURE_DEFERRED = 'result_pressure_deferred';
+const RETRY_REASON_SNAPSHOT_OBSERVATION_PRESSURE = 'snapshot_observation_pressure';
+const RETRY_REASON_ADMITTED_SUCCESSFULLY = 'admitted_successfully';
+
+const CLOSE_STALE_SOCKET_BEFORE_RETRY_MSG = 'Closing stale admin socket connection on lane before retry';
+
+const ERR_MSG_TIMED_OUT = 'timed out';
+const ERR_MSG_TIMEOUT_LOWER = 'timeout';
+const ERR_MSG_TIMEOUT_UPPER = 'Timeout';
+const ERR_MSG_DISTRIBUTED_PARTICIPANT_FAILURE = 'Distributed operation failed due to participant failures';
+const ERR_MSG_AUTHORITATIVE_ROW_SOURCE_UNAVAILABLE = 'authoritative_row_source_unavailable';
+const ERR_MSG_CONNECTION_TO_NODE = 'Connection to node';
+const ERR_MSG_NO_CONNECTION_TO_NODE = 'No connection to node';
+const ERR_MSG_CLOSED = 'closed';
+const ERR_MSG_CONTROL_PLANE_PRESSURE_DEGRADED = 'control_plane_pressure_degraded';
+const ERR_CODE_DISTRIBUTED_PARTICIPANT_FAILURE = 'DISTRIBUTED_PARTICIPANT_FAILURE';
+const ERR_CODE_CONTROL_PLANE_PRESSURE_DEGRADED = 'CONTROL_PLANE_PRESSURE_DEGRADED';
+
+const OBS_STATE_DEFERRED_REFRESH = 'deferred_refresh';
+const OBS_STATE_FAILED = 'failed';
+const REASON_SUBSTR_PRESSURE = 'pressure';
+const REASON_SUBSTR_TIMEOUT = 'timeout';
+const REASON_SUBSTR_FAIL = 'fail';
+
+const SNAPSHOT_RETRY_RULES = [
+  {
+    match: (e) => e.isForcedRepair,
+    outcome: SNAPSHOT_RETRY_DECISION.STOP_FAILURE,
+    reason: RETRY_REASON_FORCED_REPAIR_PATH_DISABLED,
+  },
+  {
+    match: (e) => e.isLimitReached,
+    outcome: SNAPSHOT_RETRY_DECISION.STOP_FAILURE,
+    reason: RETRY_REASON_RETRY_LIMIT_EXHAUSTED,
+  },
+  {
+    match: (e) => e.isError && e.isPressureOrTimeoutError,
+    outcome: SNAPSHOT_RETRY_DECISION.RETRY,
+    reason: RETRY_REASON_ERROR_PRESSURE_OR_TIMEOUT,
+  },
+  {
+    match: (e) => e.isError,
+    outcome: SNAPSHOT_RETRY_DECISION.STOP_FAILURE,
+    reason: RETRY_REASON_NON_RETRYABLE_ERROR,
+  },
+  {
+    match: (e) => e.isPressureDeferred,
+    outcome: SNAPSHOT_RETRY_DECISION.RETRY,
+    reason: RETRY_REASON_RESULT_PRESSURE_DEFERRED,
+  },
+  {
+    match: (e) => e.hasPressureObservation,
+    outcome: SNAPSHOT_RETRY_DECISION.RETRY,
+    reason: RETRY_REASON_SNAPSHOT_OBSERVATION_PRESSURE,
+  },
+  {
+    match: () => true,
+    outcome: SNAPSHOT_RETRY_DECISION.STOP_SUCCESS,
+    reason: RETRY_REASON_ADMITTED_SUCCESSFULLY,
+  },
+];
+
+function evaluateSnapshotRetryDecision(options, attempts, resultOrError) {
+  const evidence = {
+    isForcedRepair: options?.forceAuthoritativeRepair === true,
+    isLimitReached: attempts >= SNAPSHOT_RETRY_LIMIT,
+    isError: resultOrError instanceof Error,
+    isPressureOrTimeoutError: false,
+    isPressureDeferred: resultOrError?.criticalConvergenceDeferred === true,
+    hasPressureObservation: false,
+  };
+
+  if (evidence.isError) {
+    const msg = resultOrError.message || '';
+    const code = resultOrError.code || '';
+    evidence.isPressureOrTimeoutError = (
+      msg.includes(ERR_MSG_TIMED_OUT) ||
+      msg.includes(ERR_MSG_TIMEOUT_LOWER) ||
+      msg.includes(ERR_MSG_TIMEOUT_UPPER) ||
+      msg.includes(ERR_MSG_DISTRIBUTED_PARTICIPANT_FAILURE) ||
+      msg.includes(ERR_MSG_AUTHORITATIVE_ROW_SOURCE_UNAVAILABLE) ||
+      msg.includes(ERR_MSG_CONNECTION_TO_NODE) ||
+      msg.includes(ERR_MSG_NO_CONNECTION_TO_NODE) ||
+      msg.includes(ERR_MSG_CLOSED) ||
+      msg.includes(ERR_MSG_CONTROL_PLANE_PRESSURE_DEGRADED) ||
+      code === ERR_CODE_DISTRIBUTED_PARTICIPANT_FAILURE ||
+      code === ERR_CODE_CONTROL_PLANE_PRESSURE_DEGRADED
+    );
+  }
+
+  const snapshot = Array.isArray(resultOrError?.rows) ? resultOrError.rows[NUM.ZERO] : null;
+  if (snapshot) {
+    const observation = snapshot.snapshotObservation;
+    evidence.hasPressureObservation = (
+      observation?.state === OBS_STATE_DEFERRED_REFRESH ||
+      observation?.state === OBS_STATE_FAILED ||
+      (Array.isArray(observation?.reasonCodes) &&
+        observation.reasonCodes.some(code =>
+          code.includes(REASON_SUBSTR_PRESSURE) ||
+          code.includes(REASON_SUBSTR_TIMEOUT) ||
+          code.includes(REASON_SUBSTR_FAIL)
+        ))
+    );
+  }
+
+  const matchedRule = SNAPSHOT_RETRY_RULES.find((rule) => rule.match(evidence));
+  return {
+    outcome: matchedRule.outcome,
+    reason: matchedRule.reason,
+  };
+}
 
 const {
   ADMIN_CACHE_DUMP,
@@ -54,9 +180,37 @@ const {
   resolveRequestedQueryTimeoutMs,
   resolveSqlEngineControlPlaneReadinessService,
   resolveSqlRequestTimeoutBudgetMs,
+  ADMIN_STREAM_LANE_SNAPSHOT,
 } = ADMIN_WEBSOCKET_API_SHARED;
 
 class AdminWebSocketAPISegment3 extends AdminWebSocketAPISegment2 {
+  constructor(...args) {
+    super(...args);
+    if (this.controlPlaneSnapshotOwner) {
+      this.controlPlaneSnapshotOwner.closeStaleSnapshotSockets = () => {
+        this.closeStaleSnapshotLaneSockets();
+      };
+    }
+  }
+
+  closeStaleSnapshotLaneSockets() {
+    const snapshotClients = [...this.clients].filter(
+      (clientInfo) => clientInfo.lane === ADMIN_STREAM_LANE_SNAPSHOT
+    );
+    for (const clientInfo of snapshotClients) {
+      this.logger.info(CLOSE_STALE_SOCKET_BEFORE_RETRY_MSG, {
+        clientId: clientInfo.id,
+        lane: ADMIN_STREAM_LANE_SNAPSHOT,
+      });
+      try {
+        clientInfo.socket.close();
+      } catch (_closeErr) {
+        // Ignore
+      }
+      this.handleDisconnection(clientInfo);
+    }
+  }
+
   resolveLocalSystemTableObservationPartitions(tableName, rows) {
     if (tableName === TABLES.PARTITIONS) {
       return rows
@@ -176,6 +330,7 @@ class AdminWebSocketAPISegment3 extends AdminWebSocketAPISegment2 {
           observationPolicy.allowStaleReadinessOnCacheChange,
         allowAuthoritativePublishedMembershipRecovery:
           observationPolicy.allowAuthoritativePublishedMembershipRecovery,
+        ignorePreRestart: payload.ignorePreRestart === true,
       });
     }
     const serviceDiscoveryQuery = parseServiceDiscoverySqlQuery(sql);
@@ -340,7 +495,39 @@ class AdminWebSocketAPISegment3 extends AdminWebSocketAPISegment2 {
   }
 
   /**
+   * Handle new WebSocket connection.
+   * Overrides base connection logic to close stale connections on the same lane.
+   * @param {Object} socket - WebSocket connection.
+   * @param {Object} [request] - Fastify request.
+   * @private
+   */
+  handleConnection(socket, request = null) {
+    const lane = this.resolveAdminClientLane(request?.query?.lane);
+
+    // Find and close any stale connections on the same lane to prevent accumulation
+    if (lane === ADMIN_STREAM_LANE_SNAPSHOT) {
+      for (const clientInfo of [...this.clients]) {
+        if (clientInfo.lane === lane) {
+          this.logger.info(STALE_SOCKET_LOG_MSG, {
+            clientId: clientInfo.id,
+            lane,
+          });
+          try {
+            clientInfo.socket.close();
+          } catch (_closeErr) {
+            // Ignore close errors for stale clients
+          }
+          this.handleDisconnection(clientInfo);
+        }
+      }
+    }
+
+    super.handleConnection(socket, request);
+  }
+
+  /**
    * Handle incoming message from client.
+
    * @param {Object} clientInfo - Client information.
    * @param {Buffer|string} data - Message data.
    * @private
@@ -1053,10 +1240,41 @@ class AdminWebSocketAPISegment3 extends AdminWebSocketAPISegment2 {
    * @return {Promise<Object>}
    */
   async buildControlSnapshotQueryResult(options = {}) {
-    const result = await this.controlSnapshot.buildControlSnapshotQueryResult(
-      options,
-    );
-    return resolveControlSnapshotQueryResult(result);
+    let attempts = NUM.ZERO;
+    while (true) {
+      let resultOrError;
+      try {
+        resultOrError = await this.controlSnapshot.buildControlSnapshotQueryResult(
+          options,
+        );
+      } catch (error) {
+        resultOrError = error;
+      }
+
+      const decision = evaluateSnapshotRetryDecision(options, attempts, resultOrError);
+
+      if (decision.outcome === SNAPSHOT_RETRY_DECISION.RETRY) {
+        attempts += NUM.ONE;
+        this.logger.warn(SNAPSHOT_RETRY_LOG_MSG, {
+          attempt: attempts,
+          reason: decision.reason,
+        });
+
+        this.closeStaleSnapshotLaneSockets();
+
+        await new Promise((resolve) => setTimeout(resolve, SNAPSHOT_RETRY_DELAY_MS));
+        continue;
+      }
+
+      if (decision.outcome === SNAPSHOT_RETRY_DECISION.STOP_FAILURE) {
+        if (resultOrError instanceof Error) {
+          throw resultOrError;
+        }
+        return resolveControlSnapshotQueryResult(resultOrError);
+      }
+
+      return resolveControlSnapshotQueryResult(resultOrError);
+    }
   }
 
   /**

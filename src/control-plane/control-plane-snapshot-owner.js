@@ -184,6 +184,7 @@ class ControlPlaneSnapshotOwner {
   constructor(deps = {}) {
     this.controlSnapshot = deps.controlSnapshot || null;
     this.serviceDiscovery = deps.serviceDiscovery || null;
+    this.closeStaleSnapshotSockets = deps.closeStaleSnapshotSockets || null;
     this.lastObservedSnapshotExpectation = Object.freeze({
       expectedMinimumRevision: null,
       expectedResumeToken: null,
@@ -240,6 +241,7 @@ class ControlPlaneSnapshotOwner {
         'function' ?
         this.controlSnapshot.evaluateAuthoritativeControlSnapshotRepair(
           localSnapshot,
+          resolvedOptions,
         ) :
         null;
     const reasonCodes = normalizeDistinctStringArray(
@@ -249,6 +251,7 @@ class ControlPlaneSnapshotOwner {
       resolvedOptions.repairDeferred === true &&
       resolvedOptions.repairAttempted === true
     ) {
+      this.closeStaleSnapshotSockets?.();
       const observedSnapshot = attachSnapshotObservation(
         localSnapshot,
         buildDeferredSnapshotObservation(
