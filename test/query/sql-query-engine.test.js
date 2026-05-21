@@ -1346,6 +1346,87 @@ test('SQLQueryEngine - defaults system-table selects to recovery routing', async
   );
 });
 
+test('SQLQueryEngine - system-table selects honor replica-preferred routing',
+  async (t) => {
+    const partitionId = 'logs-p1';
+    const cache = createMockSystemCache(
+      [
+        {
+          table_name: TABLES.LOGS,
+        },
+      ],
+      [
+        {
+          partition_id: partitionId,
+          table_name: TABLES.LOGS,
+        },
+      ],
+      [
+        {
+          service_id: `${partitionId}-r1`,
+          service_type: SERVICE_TYPE.PARTITION,
+          partition_id: partitionId,
+          node_id: 'seed-node',
+          raft_role: 'leader',
+          address: `seed-node/partition/${partitionId}-r1`,
+          status: SERVICE_STATUS.ACTIVE,
+        },
+      ],
+    );
+    const engine = new SQLQueryEngine({
+      nodeId: 'select-node',
+      systemCache: cache,
+      messageRouter: createMockMessageRouter(),
+      distributedQueryPlanner: {
+        planSelect() {
+          return {
+            tablePlans: new Map([
+              [
+                TABLES.LOGS,
+                {
+                  partitions: [partitionId],
+                },
+              ],
+            ]),
+            diagnostics: {
+              tablePlans: [],
+            },
+          };
+        },
+      },
+    });
+    let capturedExecutionOptions = null;
+    engine.queryExecutor = {
+      async executeSelect(_ast, _partitionIds, _params, executionOptions = {}) {
+        capturedExecutionOptions = executionOptions;
+        return {
+          success: true,
+          rows: [],
+          count: 0,
+          distributedMetrics: {},
+        };
+      },
+    };
+
+    const result = await engine.executeQuery(
+      'SELECT * FROM logs WHERE log_id = \'log-1\'',
+      [],
+      {preferLeader: false},
+    );
+
+    t.equal(result.success, true, 'system-table select should still succeed');
+    t.equal(
+      capturedExecutionOptions?.preferLeader,
+      false,
+      'explicit replica-preferred routing should reach query execution',
+    );
+    t.equal(
+      capturedExecutionOptions?.routingReadinessDimension,
+      CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
+      'replica-preferred system-table select should keep recovery routing',
+    );
+  });
+
 test('SQLQueryEngine - defaults system-table writes to recovery routing', async (t) => {
   const partitionId = 'nodes-p1';
   const cache = createMockSystemCache(

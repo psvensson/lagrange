@@ -106,13 +106,15 @@ const PUBLICATION_RECOVERY_GATE_STREAM_RULES = Object.freeze([
       .PRIORITY_SPREAD_EVIDENCE_UNAVAILABLE,
     matches: (context) =>
       context.publicationOwnerStream?.recoveryOutcome ===
-        PUBLICATION_OWNER_RECOVERY_OUTCOME.WAITING_FOR_RECOVERY_EVIDENCE,
+        PUBLICATION_OWNER_RECOVERY_OUTCOME.WAITING_FOR_RECOVERY_EVIDENCE ||
+      context.prioritySpreadEvidenceUnavailable === true,
   }),
   Object.freeze({
     state: PUBLICATION_RECOVERY_GATE_STATE.PRIORITY_SPREAD_PENDING,
     matches: (context) =>
       context.publicationOwnerStream?.recoveryOutcome ===
-        PUBLICATION_OWNER_RECOVERY_OUTCOME.RECOVERING,
+        PUBLICATION_OWNER_RECOVERY_OUTCOME.RECOVERING ||
+      context.prioritySpreadPending === true,
   }),
   Object.freeze({
     state: PUBLICATION_RECOVERY_GATE_STATE.READY,
@@ -1152,6 +1154,9 @@ function buildPublicationRecoveryGateSnapshot(options = {}) {
   const dedupedReasonCodes = normalizeDistinctStringArray(reasonCodes);
   const state = resolvePublicationRecoveryGateState({
     publicationOwnerStream,
+    prioritySpreadPending: streamCompatibilityEvidence.prioritySpreadPending,
+    prioritySpreadEvidenceUnavailable:
+      streamCompatibilityEvidence.prioritySpreadEvidenceUnavailable,
   });
 
   return Object.freeze({

@@ -13,7 +13,7 @@ package can tell whether it is still following the right strategic path.
 - Expected green path: <expected package sequence from current residual to success>
 - Wrong direction signals: <evidence that the sprint is following the wrong path>
 - Next best package: <next package to continue or activate after the current package closes>
-- Stop or escalate rule: <condition that opens causal, architecture, or human escalation>
+- Stop or escalate rule: <condition that opens/selects autonomous architecture experiment, causal escalation, or human-only escalation for blocked/contradictory evidence>
 
 ## Sprint Systemic Insight Gate
 
@@ -28,4 +28,4 @@ shape of failure.
 5. Falsifier: <evidence that redirects owner, boundary, package sequence, or escalation path>
 6. Negative proof: <proof the change does not reintroduce old debt, reinterpret downstream symptoms, or depend on stale diagnostics>
 7. Representative checkpoint: <fresh route or rerun required before another local patch on the same unchanged artifact>
-8. Stop rule: <condition that triggers architecture or human escalation instead of another local patch>
+8. Stop rule: <condition that opens/selects an autonomous architecture experiment instead of another local patch; human escalation only for blocked/contradictory evidence>

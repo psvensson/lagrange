@@ -201,9 +201,53 @@ function hasConnectionClosedParticipantRepairCause(repair = null) {
     message.includes(CONTROL_SNAPSHOT_REPAIR_CONNECTION_CLOSED_SUFFIX),
   );
 }
-function hasDeferredRepairLocalControlSnapshotCoverage(snapshot = null) {
-  return resolveControlSnapshotCoverageNodeCount(snapshot) >=
-    CONTROL_SNAPSHOT_REPAIR_DEFERRED_MIN_NODE_COVERAGE;
+function resolveDeferredRepairMinNodeCoverage(
+  snapshot = null,
+  repairEvaluation = null,
+) {
+  if (!snapshot || typeof snapshot !== TYPEOF.OBJECT) {
+    return CONTROL_SNAPSHOT_REPAIR_DEFERRED_MIN_NODE_COVERAGE;
+  }
+  const coverageNodeIds = normalizeControlSnapshotNodeIdList([
+    ...normalizeControlSnapshotNodeIdList(
+      snapshot[CONTROL_SNAPSHOT_NODES_FIELD],
+    ),
+    ...normalizeControlSnapshotNodeIdList(
+      snapshot[CONTROL_SNAPSHOT_PROJECTED_NODES_FIELD],
+    ),
+    ...normalizeControlSnapshotNodeIdList(
+      snapshot.publishedNodes,
+    ),
+    ...normalizeControlSnapshotNodeIdList(
+      snapshot.suspectedOrTransitioningNodes,
+    ),
+    ...normalizeControlSnapshotNodeIdList(
+      snapshot.controlPlaneDiagnostics?.activeNodeViews?.authoritativeNodeIds,
+    ),
+    ...normalizeControlSnapshotNodeIdList(
+      snapshot.controlPlaneDiagnostics?.activeNodeViews?.effectiveNodeIds,
+    ),
+    ...normalizeControlSnapshotNodeIdList(
+      snapshot.controlPlaneDiagnostics?.activeNodeViews?.locallyEligibleNodeIds,
+    ),
+    ...selectDeferredRepairProjectionNodeIds(repairEvaluation),
+  ]);
+  const totalKnownNodes = coverageNodeIds.length;
+  if (totalKnownNodes === NUM.ZERO) {
+    return CONTROL_SNAPSHOT_REPAIR_DEFERRED_MIN_NODE_COVERAGE;
+  }
+  const quorumCount = Math.floor(totalKnownNodes / NUM.TWO) + NUM.ONE;
+  return Math.max(NUM.TWO, quorumCount);
+}
+function hasDeferredRepairLocalControlSnapshotCoverage(
+  snapshot = null,
+  repairEvaluation = null,
+) {
+  const minNodeCoverage = resolveDeferredRepairMinNodeCoverage(
+    snapshot,
+    repairEvaluation,
+  );
+  return resolveControlSnapshotCoverageNodeCount(snapshot) >= minNodeCoverage;
 }
 function selectDeferredRepairProjectionNodeIds(repairEvaluation = null) {
   return normalizeControlSnapshotNodeIdList(
@@ -232,9 +276,12 @@ function projectDeferredRepairCoverageSnapshot(
     ),
     ...selectDeferredRepairProjectionNodeIds(repairEvaluation),
   ]);
+  const minNodeCoverage = resolveDeferredRepairMinNodeCoverage(
+    snapshot,
+    repairEvaluation,
+  );
   if (
-    coverageNodeIds.length <
-      CONTROL_SNAPSHOT_REPAIR_DEFERRED_MIN_NODE_COVERAGE ||
+    coverageNodeIds.length < minNodeCoverage ||
     coverageNodeIds.length <= resolveControlSnapshotCoverageNodeCount(snapshot)
   ) {
     return snapshot;
@@ -259,7 +306,10 @@ function selectDeferredRepairLocalControlSnapshot(
     snapshot,
     repairEvaluation,
   );
-  return hasDeferredRepairLocalControlSnapshotCoverage(projectedSnapshot) ?
+  return hasDeferredRepairLocalControlSnapshotCoverage(
+    projectedSnapshot,
+    repairEvaluation,
+  ) ?
     projectedSnapshot :
     null;
 }
@@ -887,7 +937,7 @@ class AdminControlSnapshotPart2 extends AdminControlSnapshotPart1 {
       const fallbackSnapshot =
         await this.buildForcedRepairFailureLocalFallbackSnapshot(options);
       const fallbackEvaluation =
-        this.evaluateAuthoritativeControlSnapshotRepair(fallbackSnapshot);
+        this.evaluateAuthoritativeControlSnapshotRepair(fallbackSnapshot, options);
       deferredSnapshot =
         selectDeferredRepairLocalControlSnapshot(
           fallbackSnapshot,
@@ -898,7 +948,7 @@ class AdminControlSnapshotPart2 extends AdminControlSnapshotPart1 {
       return null;
     }
     const deferredEvaluation =
-      this.evaluateAuthoritativeControlSnapshotRepair(deferredSnapshot);
+      this.evaluateAuthoritativeControlSnapshotRepair(deferredSnapshot, options);
     const triggeredSnapshot =
       await this.triggerMembershipPublicationHandoffOwnerCommand(
         attachOrdinaryRepairDeferralDiagnostics(
@@ -1092,7 +1142,7 @@ class AdminControlSnapshotPart2 extends AdminControlSnapshotPart1 {
         reconcileAuthoritativeMembershipPublication: true,
       });
       const repairedEvaluation =
-        this.evaluateAuthoritativeControlSnapshotRepair(repairedSnapshot);
+        this.evaluateAuthoritativeControlSnapshotRepair(repairedSnapshot, options);
       return this.resolveSharedControlSnapshot(
         attachAuthoritativeRepairDiagnostics(repairedSnapshot, {
           repair,
@@ -1109,7 +1159,7 @@ class AdminControlSnapshotPart2 extends AdminControlSnapshotPart1 {
       );
     }
     const repairEvaluation =
-      this.evaluateAuthoritativeControlSnapshotRepair(snapshot);
+      this.evaluateAuthoritativeControlSnapshotRepair(snapshot, options);
     if (!this.canRunAuthoritativeControlSnapshotRepair()) {
       const triggeredSnapshot =
         await this.triggerMembershipPublicationHandoffOwnerCommand(
@@ -1304,7 +1354,7 @@ class AdminControlSnapshotPart2 extends AdminControlSnapshotPart1 {
       reconcileAuthoritativeMembershipPublication: true,
     });
     const repairedEvaluation =
-      this.evaluateAuthoritativeControlSnapshotRepair(repairedSnapshot);
+      this.evaluateAuthoritativeControlSnapshotRepair(repairedSnapshot, options);
     return this.resolveSharedControlSnapshot(
       attachAuthoritativeRepairDiagnostics(repairedSnapshot, {
         repair,
@@ -1325,7 +1375,10 @@ class AdminControlSnapshotPart2 extends AdminControlSnapshotPart1 {
     if (
       options.forceAuthoritativeRepair === true &&
       hasForcedRepairDeferredFailureCause(options.repair) &&
-      hasDeferredRepairLocalControlSnapshotCoverage(options.localSnapshot)
+      hasDeferredRepairLocalControlSnapshotCoverage(
+        options.localSnapshot,
+        options.repairEvaluation,
+      )
     ) {
       return true;
     }

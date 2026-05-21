@@ -3,7 +3,7 @@
 Load for test-first workflow, reliability harness work, and regression policy.
 
 Generated rules: 97
-Estimated tokens: 4097
+Estimated tokens: 4107
 Domains: testing
 
 ## Rules
@@ -43,7 +43,7 @@ Domains: testing
 33. [TEST-0033] If a package deliberately creates a new oversized file, it must name the follow-on extraction package before closure.
 34. [TEST-0034] If the representative scenario still fails after the fixture and focused tests pass, the package must record whether the fixture contract was correct and what new owner boundary now dominates.
 35. [TEST-0035] When the same owner boundary still dominates, validation must update the active package and sprint current blocker snapshot instead of forcing a new package split.
-36. [TEST-0036] Repeated crossings of the same owner boundary must escalate to a causal analysis package or architecture-gap classification unless the package includes a focused probe for the missing causal edge.
+36. [TEST-0036] Repeated crossings of the same owner boundary must escalate to a causal analysis package or autonomous architecture experiment unless the package includes a focused probe for the missing causal edge.
 37. [TEST-0037] The test must fail with the current code
 38. [TEST-0038] The next regression in that area must prove the reduced boundary, not only the immediate symptom.
 39. [TEST-0039] Tests must never be skipped.
@@ -79,7 +79,7 @@ Domains: testing
 69. [TEST-0069] The active scenario package owner and boundary must match the canonical current first frontier recorded in scenarioCausalClosure. If a package intentionally owns a diagnostic/support role while the first frontier stays elsewhere, it must record explicit ownerBoundaryMigrationProof metadata with from/to owner-boundary, reason, and focused evidence.
 70. [TEST-0070] When a package classifies a retryable or backpressure state as bounded rather than fixing runtime code, the validation must prove why the state is not the first frontier, which downstream blockers remain, and which stop condition prevents another local patch. That classification cannot rest on prose alone: it must name the focused probe command, proof artifact path, expected observable transition, maximum progress bound, and same-frontier fallback.
 71. [TEST-0071] If representative evidence oscillates between two related owner boundaries, the next validation surface must be a replayable handoff fixture or missing-edge probe that includes both boundaries. Focused owner tests for either boundary alone are insufficient. The fixture or probe must decide which owner owns progress, defer, retry, or terminal classification for the handoff before another owner-local runtime patch starts.
-72. [TEST-0072] When repeated scenario runs keep failing after local fixes or classification-only reductions, the next validation package must establish a causal-analysis boundary before more runtime fixes. At minimum it must validate the end-to-end phase model, cross-entity causal graph, budget/timeout accounting, invariant review, failure-class taxonomy, and architecture-level stop conditions.
+72. [TEST-0072] When repeated scenario runs keep failing after local fixes or classification-only reductions, the next validation package must establish a causal-analysis boundary or autonomous architecture experiment before more runtime fixes. At minimum it must validate the end-to-end phase model, cross-entity causal graph, budget/timeout accounting, invariant review, failure-class taxonomy, and architecture-level stop conditions.
 73. [TEST-0073] A runtime fix that follows causal-analysis escalation must cite the causal model or artifact it uses, then prove that its local regression changes the relevant causal edge rather than only improving the immediate symptom.
 74. [TEST-0074] Manual evidence summaries are allowed only when no extractor exists or the extractor output is insufficient. They must preserve the normalized owner fields from the artifact rather than reclassifying from raw logs, and the package must record why the extractor was not enough.
 75. [TEST-0075] The review must check package closure evidence, residual inventory, guardrail ledger, blocker migration notes, sprint snapshot consistency, and whether the last package's stated next action still matches current artifact evidence.

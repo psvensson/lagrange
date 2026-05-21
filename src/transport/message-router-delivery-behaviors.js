@@ -324,6 +324,7 @@ export async function deliverRemote(
       {
         deliveryPriority: options.deliveryPriority,
         deliverySource: options.deliverySource,
+        replacePendingKey: options.replacePendingKey,
         targetAddress,
         message: payload,
       },

@@ -16,6 +16,7 @@ function buildControlSnapshotResolveOptions(options = {}) {
         options.allowAuthoritativeReadinessRefresh,
     allowStaleReadinessOnCacheChange:
         options.allowStaleReadinessOnCacheChange,
+    ignorePreRestart: options.ignorePreRestart === true,
   };
 }
 

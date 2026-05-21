@@ -96,7 +96,7 @@ describe('work tracker architecture decision gate validation', () => {
         triggerEvidence: ARCHITECTURE_DECISION_GATE_EVIDENCE,
         choices: [],
         selectedChoice: null,
-        nextAction: 'Present choices to the human before implementation.',
+        nextAction: 'Select an architecture route before implementation.',
       },
     };
 
@@ -139,7 +139,7 @@ describe('work tracker architecture decision gate validation', () => {
 
       assert.match(errors, /status is presented/u);
       assert.match(errors, /runtime implementation is blocked/u);
-      assert.match(errors, /human-selected architecture route/u);
+      assert.match(errors, /selected architecture route/u);
     });
 
   it('accepts a selected architecture route with concrete choice proof', () => {
@@ -203,6 +203,30 @@ describe('work tracker architecture decision gate validation', () => {
       );
     });
 
+  it('auto-selects an architecture package route for architecture gaps',
+    () => {
+      const metadata = {
+        ...BASE_SCENARIO_METADATA,
+        scenarioCausalClosure: {
+          ...BASE_SCENARIO_METADATA.scenarioCausalClosure,
+          resultClassification: 'architecture-gap',
+          stopCondition: 'architecture-gap-stop',
+        },
+      };
+
+      const payload = buildArchitectureDecisionGatePayload(
+        metadata,
+        WORK_TRACKER_TEST_FILE,
+        {packageHistoryEntries: []},
+      );
+
+      assert.equal(payload.status, 'selected');
+      assert.equal(payload.selectedChoice, 'open-architecture-package');
+      assert.ok(payload.choices.some((choice) =>
+        choice.route === 'architecture-package'));
+      assert.match(payload.nextAction, /autonomous architecture experiment/u);
+    });
+
   it('blocks runtime edits while oscillation is watching', () => {
     const metadata = {
       ...BASE_SCENARIO_METADATA,
@@ -234,7 +258,7 @@ describe('work tracker architecture decision gate validation', () => {
     ).join('\n');
 
     assert.match(errors, /watching frontier-oscillation/u);
-    assert.match(errors, /owner-boundary migration/u);
+    assert.match(errors, /autonomous experiment/u);
   });
 
   it('includes the gate in current-blocker payload and markdown', () => {

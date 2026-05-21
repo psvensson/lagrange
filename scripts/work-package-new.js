@@ -150,8 +150,8 @@ const CAUSAL_DECISION_CONTRACT_TABLE_SEPARATOR =
   '| --- | --- | --- | --- | --- | --- |';
 const DEFAULT_RERUN_EXPECTED_DELTA =
   'Classify whether fresh representative evidence is green, reduced, ' +
-  'migrated, same-frontier, architecture-gap, contradictory, or needs a ' +
-  'bounded successor before runtime promotion.';
+  'migrated, same-frontier, architecture-gap, contradictory, or needs an ' +
+  'autonomous architecture experiment before runtime promotion.';
 const CLASSIFICATION_DEFAULT_MODE_INLINE_GATE = 'inline-gate-default';
 const CLASSIFICATION_DEFAULT_MODE_SEPARATE_PACKAGE =
   'separate-package-approved';
@@ -161,13 +161,15 @@ const CLASSIFICATION_DEFAULT_PROOF_BUDGET =
 const CLASSIFICATION_REASON_SUCCESSOR_SELECTION = 'successor-selection';
 const SUCCESSOR_ACTION_OPEN_RUNTIME_OWNER_BOUNDARY =
   'open-runtime-owner-boundary';
+const SUCCESSOR_ACTION_OPEN_ARCHITECTURE_EXPERIMENT =
+  'open-architecture-experiment';
 const SUCCESSOR_ACTION_RERUN_REPRESENTATIVE_EVIDENCE =
   'rerun-representative-evidence';
 const DEFAULT_EXPERIMENT_TIMEBOX = '24h';
 const DEFAULT_EXPERIMENT_MERGE_REQUIREMENT =
   'focused test plus canonical route or evidence command';
 const DEFAULT_EXPERIMENT_KILL_RULE =
-  'same frontier with no metric movement discards the experiment or escalates';
+  'same frontier with no metric movement opens/selects an autonomous architecture experiment; human escalation is only for contradictory or blocked evidence';
 const DEFAULT_EXPERIMENT_VALIDATION_TIER = 'single-owner';
 const OBSERVABLE_PREDICTION_ACCURACY_PENDING = 'pending-before-observation';
 const CAUSAL_OUTCOME_CONTINUE_LOCAL_FIX = 'continue_local_fix';
@@ -647,12 +649,12 @@ function buildCausalDecisionContractLines(
       'next owner slice.',
     '- Ping-pong stop rule: Do not bounce between adjacent owners on the same ' +
       'unchanged artifact; require fresh representative evidence, a concrete ' +
-      'metric reduction, owner/boundary migration proof, or architecture/human ' +
-      'stop before another local patch.',
+      'metric reduction, owner/boundary migration proof, or an autonomous ' +
+      'architecture experiment before another local patch.',
     '- Oscillation guard: If fresh representative evidence returns the same ' +
       'frontier or another symptom-shaped result, the next package must show ' +
-      'concrete reduction, migration, green, or an architecture/human stop ' +
-      'before another local patch.',
+      'concrete reduction, migration, green, or select/open an autonomous ' +
+      'architecture experiment before another local patch.',
   ];
 }
 
@@ -688,7 +690,8 @@ function buildDecisionExperimentGateLines(lane, flags, proof, metadata) {
       'fact must move before implementation is justified?',
     '- Architecture review: Before runtime edits, confirm whether this is ' +
       'still a local owner-boundary route, an owner-boundary migration, an ' +
-      'architecture/contract gap, or a human route.',
+      'autonomous architecture experiment, or a human-only route caused by ' +
+      'contradictory or blocked evidence.',
     `- Competing hypotheses: ${dominantReason} is real owner debt; the ` +
       'visible symptom is downstream lag; instrumentation or stale evidence ' +
       'is misleading; a different owner boundary owns the next move.',
@@ -698,7 +701,8 @@ function buildDecisionExperimentGateLines(lane, flags, proof, metadata) {
     `- Representative rerun: \`${representativeRerun}\``,
     '- Kill rule: If fresh representative evidence returns the same frontier ' +
       'and dominant reason with no concrete metric reduction, stop for ' +
-      'architecture or human escalation instead of opening another local patch.',
+      'an autonomous architecture experiment instead of opening another local ' +
+      'patch; use human escalation only for contradictory or blocked evidence.',
   ];
 }
 
@@ -812,6 +816,7 @@ function buildBoundedExperimentLines(metadata = {}) {
     `- Validation tier: \`${metadata[VALIDATION_TIER_FIELD] || DEFAULT_EXPERIMENT_VALIDATION_TIER}\``,
     `- Merge requirement: ${experiment[BOUNDED_EXPERIMENT_MERGE_REQUIREMENT_FIELD]}`,
     `- Kill rule: ${experiment[BOUNDED_EXPERIMENT_KILL_RULE_FIELD]}`,
+    '- Subagent sequencing is optional while the experiment stays information-first and avoids runtime contract changes.',
     '- The executor owns the implementation pass; a separate verifier-fixer is required before closure when runtime behavior, tests, scripts, or tracker truth changed.',
   ];
 }
@@ -956,6 +961,7 @@ function buildClassificationOnlyFastPathLines(isClassificationOnly) {
     EMPTY_TEXT,
     '- Runtime, test, script, and report paths stay out of `writeScope` and `commitScope` until fresh evidence promotes implementation.',
     '- Keep possible implementation files in `candidateRuntimeFiles` only.',
+    '- Subagent sequencing is optional until implementation or tracker-truth write scope is promoted.',
     '- Verifier-fixer proof is optional while the package remains classification-only and no implementation or tracker-truth write scope is present.',
     '- Use 2-3 canonical proof commands, then close and rerun evidence instead of adding more package ceremony.',
     EMPTY_TEXT,
@@ -1022,6 +1028,13 @@ function inferSuccessorAction(flags = {}) {
   if (explicitAction.length > NUM_ZERO) {
     return explicitAction;
   }
+  const routeOutcome = normalizeText(flags[FLAG_ROUTE_CAUSAL_OUTCOME]);
+  const routeStopMode = normalizeText(flags[FLAG_ROUTE_STOP_MODE]);
+  if (/\b(?:same[-_ ]frontier|architecture[-_ ]gap)\b/iu.test(
+    `${routeOutcome} ${routeStopMode}`,
+  )) {
+    return SUCCESSOR_ACTION_OPEN_ARCHITECTURE_EXPERIMENT;
+  }
   return isStableRuntimeRoute(flags) ?
     SUCCESSOR_ACTION_OPEN_RUNTIME_OWNER_BOUNDARY :
     SUCCESSOR_ACTION_RERUN_REPRESENTATIVE_EVIDENCE;
@@ -1031,6 +1044,9 @@ function inferNextLane(flags = {}, metadata = {}) {
   const successorAction = inferSuccessorAction(flags);
   if (successorAction === SUCCESSOR_ACTION_OPEN_RUNTIME_OWNER_BOUNDARY) {
     return LANE_RUNTIME_OWNER_BOUNDARY;
+  }
+  if (successorAction === SUCCESSOR_ACTION_OPEN_ARCHITECTURE_EXPERIMENT) {
+    return LANE_EXPERIMENT;
   }
   return normalizeText(metadata.lane) || LANE_LIGHTWEIGHT_MAINTENANCE;
 }
@@ -1091,7 +1107,10 @@ function buildClassificationEfficiencyMetadata(
     [CLASSIFICATION_EFFICIENCY_RUNTIME_PROMOTION_RULE_FIELD]:
       'When canonical owner and boundary are stable, prefer a ' +
       'runtime-owner-boundary successor and keep runtime files in ' +
-      'candidateRuntimeFiles until that package activates them.',
+      'candidateRuntimeFiles until that package activates them. If the ' +
+      'representative route is same-frontier with no reduction or an ' +
+      'architecture gap, open an autonomous architecture experiment before ' +
+      'more local runtime work.',
   };
 }
 
@@ -1282,7 +1301,7 @@ async function buildPackageContent(flags = {}) {
     ] || DEFAULT_RERUN_EXPECTED_DELTA}`,
     '- Local proof class: focused owner or diagnostic proof only; it is not representative-green proof.',
     '- Representative proof class: fresh representative rerun or canonical route-after-rerun result.',
-    '- Stop if unchanged: same-frontier with no concrete metric or shape reduction triggers architecture or human escalation instead of another local patch.',
+    '- Stop if unchanged: same-frontier with no concrete metric or shape reduction opens/selects an autonomous architecture experiment instead of another local patch; human escalation is only for contradictory or blocked evidence.',
     EMPTY_TEXT,
     '## Rerun Decision Gate',
     EMPTY_TEXT,
@@ -1349,7 +1368,7 @@ async function buildPackageContent(flags = {}) {
     EMPTY_TEXT,
     '1. Use `npm run work:advance -- --check` before adding more package prose; it combines doctor, subagent-next, and entry/pre-implementation validation.',
     '2. Keep the durable proof ladder to 3-5 commands by default: prefer `npm run work:scenario-route -- <artifact>` for representative routing, one focused test or extractor, and validation. Add static guardrails only when implementation files changed.',
-    '3. If this package only changes package, sprint, tracker, or ledger files, the next pass must run representative evidence, close as classification-only, open a concrete bug package, or present a human gate.',
+    '3. If this package only changes package, sprint, tracker, or ledger files, the next pass must run representative evidence, close as classification-only, open a concrete bug package, or open/select an autonomous architecture experiment. Human gates are only for blocked/contradictory evidence.',
     '4. Once an architecture gate has a selected route, do not open another gate unless fresh canonical evidence contradicts the selected route.',
     '5. For bounded experiments, move quickly inside the inherited owner boundary, but do not merge without the stated focused proof and canonical evidence movement.',
     EMPTY_TEXT,

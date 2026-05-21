@@ -44,10 +44,10 @@
     }
   ],
   "stats": {
-    "candidateCount": 310,
-    "dedupedRuleCount": 310,
-    "exportedRuleCount": 310,
-    "estimatedAllRulesTokens": 11654
+    "candidateCount": 309,
+    "dedupedRuleCount": 309,
+    "exportedRuleCount": 309,
+    "estimatedAllRulesTokens": 11672
   },
   "rules": [
     {
@@ -651,27 +651,12 @@
       "domain": "architecture",
       "strength": "must",
       "tags": [],
-      "rule": "Scenario-driven packages must prove what the original scenario does next: representative green, same frontier, reduced, migrated, classification-only, architecture gap, or human escalation.",
-      "score": 237,
-      "sources": [
-        {
-          "file": "system guidelines.md",
-          "line": 327,
-          "section": "System Guidelines — Mandatory Implementation Contract > 13. Closure Requires Proof, Review, And Truth Repair"
-        }
-      ]
-    },
-    {
-      "id": "ARCH-0038",
-      "domain": "architecture",
-      "strength": "must",
-      "tags": [],
       "rule": "Architectural exceptions must be explicit, owned, time-bounded, and recorded in an active spec or architecture note with a removal checkpoint.",
       "score": 237,
       "sources": [
         {
           "file": "system guidelines.md",
-          "line": 332,
+          "line": 333,
           "section": "System Guidelines — Mandatory Implementation Contract > 13. Closure Requires Proof, Review, And Truth Repair"
         }
       ]
@@ -1133,7 +1118,7 @@
       ]
     },
     {
-      "id": "ARCH-0039",
+      "id": "ARCH-0038",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [
@@ -1151,7 +1136,7 @@
       ]
     },
     {
-      "id": "ARCH-0040",
+      "id": "ARCH-0039",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [],
@@ -1166,7 +1151,7 @@
       ]
     },
     {
-      "id": "ARCH-0041",
+      "id": "ARCH-0040",
       "domain": "architecture",
       "strength": "must",
       "tags": [],
@@ -1181,7 +1166,7 @@
       ]
     },
     {
-      "id": "ARCH-0042",
+      "id": "ARCH-0041",
       "domain": "architecture",
       "strength": "must",
       "tags": [
@@ -1200,7 +1185,7 @@
       ]
     },
     {
-      "id": "ARCH-0043",
+      "id": "ARCH-0042",
       "domain": "architecture",
       "strength": "must",
       "tags": [],
@@ -1215,7 +1200,7 @@
       ]
     },
     {
-      "id": "ARCH-0044",
+      "id": "ARCH-0043",
       "domain": "architecture",
       "strength": "must",
       "tags": [
@@ -1233,7 +1218,7 @@
       ]
     },
     {
-      "id": "ARCH-0045",
+      "id": "ARCH-0044",
       "domain": "architecture",
       "strength": "must",
       "tags": [],
@@ -1248,7 +1233,7 @@
       ]
     },
     {
-      "id": "ARCH-0046",
+      "id": "ARCH-0045",
       "domain": "architecture",
       "strength": "must",
       "tags": [],
@@ -1263,7 +1248,7 @@
       ]
     },
     {
-      "id": "ARCH-0047",
+      "id": "ARCH-0046",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [
@@ -1280,7 +1265,7 @@
       ]
     },
     {
-      "id": "ARCH-0048",
+      "id": "ARCH-0047",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [],
@@ -1295,7 +1280,7 @@
       ]
     },
     {
-      "id": "ARCH-0049",
+      "id": "ARCH-0048",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [
@@ -1312,7 +1297,7 @@
       ]
     },
     {
-      "id": "ARCH-0050",
+      "id": "ARCH-0049",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [],
@@ -1391,7 +1376,7 @@
       ]
     },
     {
-      "id": "ARCH-0051",
+      "id": "ARCH-0050",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [],
@@ -1455,7 +1440,7 @@
       ]
     },
     {
-      "id": "ARCH-0052",
+      "id": "ARCH-0051",
       "domain": "architecture",
       "strength": "must",
       "tags": [
@@ -1472,7 +1457,7 @@
       ]
     },
     {
-      "id": "ARCH-0053",
+      "id": "ARCH-0052",
       "domain": "architecture",
       "strength": "must",
       "tags": [
@@ -1489,7 +1474,7 @@
       ]
     },
     {
-      "id": "ARCH-0054",
+      "id": "ARCH-0053",
       "domain": "architecture",
       "strength": "must",
       "tags": [
@@ -1547,7 +1532,7 @@
       "sources": [
         {
           "file": "workflow-guidelines.md",
-          "line": 201,
+          "line": 202,
           "section": "Workflow Guidelines Detail > Package Status And Closure"
         }
       ]
@@ -1562,7 +1547,7 @@
       "sources": [
         {
           "file": "workflow-guidelines.md",
-          "line": 204,
+          "line": 205,
           "section": "Workflow Guidelines Detail > Package Status And Closure"
         }
       ]
@@ -1577,7 +1562,7 @@
       "sources": [
         {
           "file": "workflow-guidelines.md",
-          "line": 241,
+          "line": 242,
           "section": "Workflow Guidelines Detail > Package Status And Closure"
         }
       ]
@@ -1592,7 +1577,7 @@
       "sources": [
         {
           "file": "workflow-guidelines.md",
-          "line": 338,
+          "line": 339,
           "section": "Workflow Guidelines Detail > Scenario Failure Migration"
         }
       ]
@@ -1609,7 +1594,7 @@
       "sources": [
         {
           "file": "workflow-guidelines.md",
-          "line": 380,
+          "line": 381,
           "section": "Workflow Guidelines Detail > Frontier Oscillation Escalation"
         }
       ]
@@ -1626,7 +1611,7 @@
       "sources": [
         {
           "file": "workflow-guidelines.md",
-          "line": 524,
+          "line": 527,
           "section": "Workflow Guidelines Detail > Classification-Only Fast Path"
         }
       ]
@@ -1641,7 +1626,7 @@
       "sources": [
         {
           "file": "workflow-guidelines.md",
-          "line": 650,
+          "line": 655,
           "section": "Workflow Guidelines Detail > LLM Current Edge Card And Trap List"
         }
       ]
@@ -1658,7 +1643,7 @@
       "sources": [
         {
           "file": "workflow-guidelines.md",
-          "line": 933,
+          "line": 943,
           "section": "Workflow Guidelines Detail > Sprint Architecture Decision Gate"
         }
       ]
@@ -1817,7 +1802,7 @@
       "tags": [
         "ownership"
       ],
-      "rule": "Repeated crossings of the same owner boundary must escalate to a causal analysis package or architecture-gap classification unless the package includes a focused probe for the missing causal edge.",
+      "rule": "Repeated crossings of the same owner boundary must escalate to a causal analysis package or autonomous architecture experiment unless the package includes a focused probe for the missing causal edge.",
       "score": 218,
       "sources": [
         {
@@ -1860,7 +1845,7 @@
       ]
     },
     {
-      "id": "ARCH-0055",
+      "id": "ARCH-0054",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [
@@ -1877,7 +1862,7 @@
       ]
     },
     {
-      "id": "ARCH-0056",
+      "id": "ARCH-0055",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [
@@ -1894,7 +1879,7 @@
       ]
     },
     {
-      "id": "ARCH-0057",
+      "id": "ARCH-0056",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [
@@ -1911,7 +1896,7 @@
       ]
     },
     {
-      "id": "ARCH-0058",
+      "id": "ARCH-0057",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [],
@@ -1926,7 +1911,7 @@
       ]
     },
     {
-      "id": "ARCH-0059",
+      "id": "ARCH-0058",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [
@@ -1944,7 +1929,7 @@
       ]
     },
     {
-      "id": "ARCH-0060",
+      "id": "ARCH-0059",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [],
@@ -1959,7 +1944,7 @@
       ]
     },
     {
-      "id": "ARCH-0061",
+      "id": "ARCH-0060",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [],
@@ -1974,7 +1959,7 @@
       ]
     },
     {
-      "id": "ARCH-0062",
+      "id": "ARCH-0061",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [],
@@ -1989,7 +1974,7 @@
       ]
     },
     {
-      "id": "ARCH-0063",
+      "id": "ARCH-0062",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [],
@@ -2051,7 +2036,7 @@
       ]
     },
     {
-      "id": "ARCH-0064",
+      "id": "ARCH-0063",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [
@@ -2068,7 +2053,7 @@
       ]
     },
     {
-      "id": "ARCH-0065",
+      "id": "ARCH-0064",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [],
@@ -2083,7 +2068,7 @@
       ]
     },
     {
-      "id": "ARCH-0066",
+      "id": "ARCH-0065",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [],
@@ -2098,7 +2083,7 @@
       ]
     },
     {
-      "id": "ARCH-0067",
+      "id": "ARCH-0066",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [
@@ -2116,7 +2101,7 @@
       ]
     },
     {
-      "id": "ARCH-0068",
+      "id": "ARCH-0067",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [],
@@ -2131,7 +2116,7 @@
       ]
     },
     {
-      "id": "ARCH-0069",
+      "id": "ARCH-0068",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [
@@ -2148,7 +2133,7 @@
       ]
     },
     {
-      "id": "ARCH-0070",
+      "id": "ARCH-0069",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [],
@@ -2163,7 +2148,7 @@
       ]
     },
     {
-      "id": "ARCH-0071",
+      "id": "ARCH-0070",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [],
@@ -2246,7 +2231,7 @@
       ]
     },
     {
-      "id": "ARCH-0072",
+      "id": "ARCH-0071",
       "domain": "architecture",
       "strength": "must",
       "tags": [
@@ -2264,7 +2249,7 @@
       ]
     },
     {
-      "id": "ARCH-0073",
+      "id": "ARCH-0072",
       "domain": "architecture",
       "strength": "must",
       "tags": [
@@ -2277,6 +2262,21 @@
           "file": "runtime-contracts.md",
           "line": 152,
           "section": "Runtime Contracts Detail > Runtime Shared-Metadata Gateways"
+        }
+      ]
+    },
+    {
+      "id": "ARCH-0073",
+      "domain": "architecture",
+      "strength": "must",
+      "tags": [],
+      "rule": "Scenario-driven packages must prove what the original scenario does next: representative green, same frontier, reduced, migrated, classification-only, architecture gap, autonomous architecture experiment, or human-only escalation for blocked/contradictory evidence.",
+      "score": 213,
+      "sources": [
+        {
+          "file": "system guidelines.md",
+          "line": 327,
+          "section": "System Guidelines — Mandatory Implementation Contract > 13. Closure Requires Proof, Review, And Truth Repair"
         }
       ]
     },
@@ -2354,7 +2354,7 @@
       "sources": [
         {
           "file": "workflow-guidelines.md",
-          "line": 222,
+          "line": 223,
           "section": "Workflow Guidelines Detail > Package Status And Closure"
         }
       ]
@@ -2369,7 +2369,7 @@
       "sources": [
         {
           "file": "workflow-guidelines.md",
-          "line": 229,
+          "line": 230,
           "section": "Workflow Guidelines Detail > Package Status And Closure"
         }
       ]
@@ -2386,7 +2386,7 @@
       "sources": [
         {
           "file": "workflow-guidelines.md",
-          "line": 291,
+          "line": 292,
           "section": "Workflow Guidelines Detail > Residual Closure Inventory"
         }
       ]
@@ -2401,7 +2401,7 @@
       "sources": [
         {
           "file": "workflow-guidelines.md",
-          "line": 443,
+          "line": 444,
           "section": "Workflow Guidelines Detail > Static Drift Ledger"
         }
       ]
@@ -2420,7 +2420,7 @@
       "sources": [
         {
           "file": "workflow-guidelines.md",
-          "line": 443,
+          "line": 444,
           "section": "Workflow Guidelines Detail > Static Drift Ledger"
         }
       ]
@@ -2435,7 +2435,7 @@
       "sources": [
         {
           "file": "workflow-guidelines.md",
-          "line": 551,
+          "line": 554,
           "section": "Workflow Guidelines Detail > Classification Efficiency Contract"
         }
       ]
@@ -2452,7 +2452,7 @@
       "sources": [
         {
           "file": "workflow-guidelines.md",
-          "line": 636,
+          "line": 641,
           "section": "Workflow Guidelines Detail > LLM Current Edge Card And Trap List"
         }
       ]
@@ -2467,7 +2467,7 @@
       "sources": [
         {
           "file": "workflow-guidelines.md",
-          "line": 683,
+          "line": 688,
           "section": "Workflow Guidelines Detail > LLM Current Edge Card And Trap List"
         }
       ]
@@ -2478,11 +2478,11 @@
       "strength": "must_not",
       "tags": [],
       "rule": "work/sprints/current-blocker.json is generated handoff state, but it must not be stale.",
-      "score": 209,
+      "score": 208,
       "sources": [
         {
           "file": "workflow-guidelines.md",
-          "line": 749,
+          "line": 754,
           "section": "Workflow Guidelines Detail > LLM Tool-First Triage"
         }
       ]
@@ -2497,25 +2497,8 @@
       "sources": [
         {
           "file": "workflow-guidelines.md",
-          "line": 794,
+          "line": 799,
           "section": "Workflow Guidelines Detail > Sub-Agent Sequencing"
-        }
-      ]
-    },
-    {
-      "id": "GOV-0027",
-      "domain": "governance",
-      "strength": "must_not",
-      "tags": [
-        "governance"
-      ],
-      "rule": "Roadmap status must not outrun representative evidence.",
-      "score": 208,
-      "sources": [
-        {
-          "file": "workflow-guidelines.md",
-          "line": 995,
-          "section": "Workflow Guidelines Detail > Roadmap And Work-Tracker Truth"
         }
       ]
     },
@@ -2585,7 +2568,7 @@
       ]
     },
     {
-      "id": "GOV-0028",
+      "id": "GOV-0027",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -2602,7 +2585,7 @@
       ]
     },
     {
-      "id": "GOV-0029",
+      "id": "GOV-0028",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -2617,7 +2600,7 @@
       ]
     },
     {
-      "id": "GOV-0030",
+      "id": "GOV-0029",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -2634,7 +2617,7 @@
       ]
     },
     {
-      "id": "GOV-0031",
+      "id": "GOV-0030",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -2652,7 +2635,7 @@
       ]
     },
     {
-      "id": "GOV-0032",
+      "id": "GOV-0031",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -2669,7 +2652,7 @@
       ]
     },
     {
-      "id": "GOV-0033",
+      "id": "GOV-0032",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -2686,7 +2669,7 @@
       ]
     },
     {
-      "id": "GOV-0034",
+      "id": "GOV-0033",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -2782,6 +2765,23 @@
           "file": "testing-guidelines.md",
           "line": 249,
           "section": "Testing Guidelines > Test-First Bug Fix Policy"
+        }
+      ]
+    },
+    {
+      "id": "GOV-0034",
+      "domain": "governance",
+      "strength": "must_not",
+      "tags": [
+        "governance"
+      ],
+      "rule": "Roadmap status must not outrun representative evidence.",
+      "score": 207,
+      "sources": [
+        {
+          "file": "workflow-guidelines.md",
+          "line": 1005,
+          "section": "Workflow Guidelines Detail > Roadmap And Work-Tracker Truth"
         }
       ]
     },
@@ -3124,7 +3124,7 @@
       "sources": [
         {
           "file": "workflow-guidelines.md",
-          "line": 233,
+          "line": 234,
           "section": "Workflow Guidelines Detail > Package Status And Closure"
         }
       ]
@@ -3141,7 +3141,7 @@
       "sources": [
         {
           "file": "workflow-guidelines.md",
-          "line": 237,
+          "line": 238,
           "section": "Workflow Guidelines Detail > Package Status And Closure"
         }
       ]
@@ -3175,7 +3175,7 @@
       "sources": [
         {
           "file": "workflow-guidelines.md",
-          "line": 335,
+          "line": 336,
           "section": "Workflow Guidelines Detail > Scenario Failure Migration"
         }
       ]
@@ -3224,7 +3224,7 @@
       "sources": [
         {
           "file": "workflow-guidelines.md",
-          "line": 874,
+          "line": 880,
           "section": "Workflow Guidelines Detail > Sprint Architecture Decision Gate"
         }
       ]
@@ -3241,7 +3241,7 @@
       "sources": [
         {
           "file": "workflow-guidelines.md",
-          "line": 897,
+          "line": 903,
           "section": "Workflow Guidelines Detail > Sprint Architecture Decision Gate"
         }
       ]
@@ -3256,7 +3256,7 @@
       "sources": [
         {
           "file": "workflow-guidelines.md",
-          "line": 925,
+          "line": 935,
           "section": "Workflow Guidelines Detail > Sprint Architecture Decision Gate"
         }
       ]
@@ -3656,7 +3656,7 @@
         "lifecycle",
         "timeout"
       ],
-      "rule": "When repeated scenario runs keep failing after local fixes or classification-only reductions, the next validation package must establish a causal-analysis boundary before more runtime fixes. At minimum it must validate the end-to-end phase model, cross-entity causal graph, budget/timeout accounting, invariant review, failure-class taxonomy, and architecture-level stop conditions.",
+      "rule": "When repeated scenario runs keep failing after local fixes or classification-only reductions, the next validation package must establish a causal-analysis boundary or autonomous architecture experiment before more runtime fixes. At minimum it must validate the end-to-end phase model, cross-entity causal graph, budget/timeout accounting, invariant review, failure-class taxonomy, and architecture-level stop conditions.",
       "score": 194,
       "sources": [
         {
@@ -3757,7 +3757,7 @@
       "sources": [
         {
           "file": "workflow-guidelines.md",
-          "line": 173,
+          "line": 174,
           "section": "Workflow Guidelines Detail > Core Logic Brief Gate > Causal Escalation Lane"
         }
       ]
@@ -3772,7 +3772,7 @@
       "sources": [
         {
           "file": "workflow-guidelines.md",
-          "line": 208,
+          "line": 209,
           "section": "Workflow Guidelines Detail > Package Status And Closure"
         }
       ]
@@ -3787,7 +3787,7 @@
       "sources": [
         {
           "file": "workflow-guidelines.md",
-          "line": 225,
+          "line": 226,
           "section": "Workflow Guidelines Detail > Package Status And Closure"
         }
       ]
@@ -3804,7 +3804,7 @@
       "sources": [
         {
           "file": "workflow-guidelines.md",
-          "line": 341,
+          "line": 342,
           "section": "Workflow Guidelines Detail > Scenario Failure Migration"
         }
       ]
@@ -3819,7 +3819,7 @@
       "sources": [
         {
           "file": "workflow-guidelines.md",
-          "line": 574,
+          "line": 577,
           "section": "Workflow Guidelines Detail > Post-Rerun Decision Gate"
         }
       ]
@@ -3836,7 +3836,7 @@
       "sources": [
         {
           "file": "workflow-guidelines.md",
-          "line": 580,
+          "line": 583,
           "section": "Workflow Guidelines Detail > Post-Rerun Decision Gate"
         }
       ]
@@ -3853,7 +3853,7 @@
       "sources": [
         {
           "file": "workflow-guidelines.md",
-          "line": 592,
+          "line": 596,
           "section": "Workflow Guidelines Detail > Decision Experiment Gate"
         }
       ]
@@ -3868,7 +3868,7 @@
       "sources": [
         {
           "file": "workflow-guidelines.md",
-          "line": 621,
+          "line": 626,
           "section": "Workflow Guidelines Detail > LLM Current Edge Card And Trap List"
         }
       ]
@@ -3885,7 +3885,7 @@
       "sources": [
         {
           "file": "workflow-guidelines.md",
-          "line": 680,
+          "line": 685,
           "section": "Workflow Guidelines Detail > LLM Current Edge Card And Trap List"
         }
       ]
@@ -3900,7 +3900,7 @@
       "sources": [
         {
           "file": "workflow-guidelines.md",
-          "line": 683,
+          "line": 688,
           "section": "Workflow Guidelines Detail > LLM Current Edge Card And Trap List"
         }
       ]
@@ -3962,7 +3962,7 @@
       "sources": [
         {
           "file": "workflow-guidelines.md",
-          "line": 788,
+          "line": 793,
           "section": "Workflow Guidelines Detail > Sub-Agent Sequencing"
         }
       ]
@@ -3977,7 +3977,7 @@
       "sources": [
         {
           "file": "workflow-guidelines.md",
-          "line": 804,
+          "line": 809,
           "section": "Workflow Guidelines Detail > Sub-Agent Sequencing"
         }
       ]
@@ -3992,7 +3992,7 @@
       "sources": [
         {
           "file": "workflow-guidelines.md",
-          "line": 811,
+          "line": 816,
           "section": "Workflow Guidelines Detail > Sub-Agent Sequencing"
         }
       ]
@@ -4009,7 +4009,7 @@
       "sources": [
         {
           "file": "workflow-guidelines.md",
-          "line": 961,
+          "line": 971,
           "section": "Workflow Guidelines Detail > Scenario Causal Closure Ledger"
         }
       ]
@@ -4211,7 +4211,7 @@
       "sources": [
         {
           "file": "workflow-guidelines.md",
-          "line": 788,
+          "line": 793,
           "section": "Workflow Guidelines Detail > Sub-Agent Sequencing"
         }
       ]
@@ -4226,7 +4226,7 @@
       "sources": [
         {
           "file": "workflow-guidelines.md",
-          "line": 819,
+          "line": 824,
           "section": "Workflow Guidelines Detail > Sub-Agent Sequencing"
         }
       ]
@@ -4358,7 +4358,7 @@
       "domain": "governance",
       "strength": "must",
       "tags": [],
-      "rule": "Final classification: representative-green, reduced, same-frontier, migrated, classification-only, architecture-gap, contradictory, or human escalation. Reduced requires a concrete metric delta; classification-only must name the accepted bounded/backpressure state and stop reason.",
+      "rule": "Final classification: representative-green, reduced, same-frontier, migrated, classification-only, architecture-gap, contradictory, or human-only escalation for blocked/contradictory evidence. Reduced requires a concrete metric delta; classification-only must name the accepted bounded/backpressure state and stop reason.",
       "score": 179,
       "sources": [
         {
@@ -4380,7 +4380,7 @@
       "sources": [
         {
           "file": "workflow-guidelines.md",
-          "line": 331,
+          "line": 332,
           "section": "Workflow Guidelines Detail > Scenario Failure Migration"
         }
       ]
@@ -4395,7 +4395,7 @@
       "sources": [
         {
           "file": "workflow-guidelines.md",
-          "line": 717,
+          "line": 722,
           "section": "Workflow Guidelines Detail > LLM Tool-First Triage"
         }
       ]
@@ -4427,7 +4427,7 @@
       "sources": [
         {
           "file": "workflow-guidelines.md",
-          "line": 909,
+          "line": 915,
           "section": "Workflow Guidelines Detail > Sprint Architecture Decision Gate"
         }
       ]
@@ -4440,27 +4440,12 @@
         "ownership",
         "governance"
       ],
-      "rule": "status: selected names the human-selected choice and opens the bounded route for the next package or new sprint. The selected route still must carry normal owner, boundary, scope, proof, sub-agent, validation, commit, and push evidence.",
+      "rule": "status: selected names the selected choice and opens the bounded route for the next package or new sprint. For architecture gaps and unchanged same-frontier/no-reduction evidence, the default selected route is architecture-package, implemented as an autonomous architecture experiment. The selected route still must carry normal owner, boundary, scope, proof, sub-agent, validation, commit, and push evidence.",
       "score": 176,
       "sources": [
         {
           "file": "workflow-guidelines.md",
-          "line": 913,
-          "section": "Workflow Guidelines Detail > Sprint Architecture Decision Gate"
-        }
-      ]
-    },
-    {
-      "id": "GOV-0075",
-      "domain": "governance",
-      "strength": "must",
-      "tags": [],
-      "rule": "The tracker infers a required gate from architecture-gap or human-escalation scenario closure. Frontier oscillation is rendered as watching; it becomes a required gate when the next local proof cannot reduce, migrate, or classify the edge without changing architecture.",
-      "score": 176,
-      "sources": [
-        {
-          "file": "workflow-guidelines.md",
-          "line": 917,
+          "line": 919,
           "section": "Workflow Guidelines Detail > Sprint Architecture Decision Gate"
         }
       ]
@@ -4598,7 +4583,7 @@
       ]
     },
     {
-      "id": "GOV-0076",
+      "id": "GOV-0075",
       "domain": "governance",
       "strength": "should",
       "tags": [],
@@ -4658,7 +4643,7 @@
       ]
     },
     {
-      "id": "GOV-0077",
+      "id": "GOV-0076",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -4669,13 +4654,13 @@
       "sources": [
         {
           "file": "workflow-guidelines.md",
-          "line": 398,
+          "line": 399,
           "section": "Workflow Guidelines Detail > Frontier Oscillation Escalation"
         }
       ]
     },
     {
-      "id": "GOV-0078",
+      "id": "GOV-0077",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -4686,7 +4671,7 @@
       "sources": [
         {
           "file": "workflow-guidelines.md",
-          "line": 690,
+          "line": 695,
           "section": "Workflow Guidelines Detail > LLM Tool-First Triage"
         }
       ]
@@ -4786,7 +4771,7 @@
       ]
     },
     {
-      "id": "GOV-0079",
+      "id": "GOV-0078",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -4803,7 +4788,7 @@
       ]
     },
     {
-      "id": "GOV-0080",
+      "id": "GOV-0079",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -4820,7 +4805,7 @@
       ]
     },
     {
-      "id": "GOV-0081",
+      "id": "GOV-0080",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -4869,7 +4854,7 @@
       ]
     },
     {
-      "id": "GOV-0082",
+      "id": "GOV-0081",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -4880,13 +4865,13 @@
       "sources": [
         {
           "file": "workflow-guidelines.md",
-          "line": 187,
+          "line": 188,
           "section": "Workflow Guidelines Detail > Core Logic Brief Gate > Causal Escalation Lane"
         }
       ]
     },
     {
-      "id": "GOV-0083",
+      "id": "GOV-0082",
       "domain": "governance",
       "strength": "may",
       "tags": [],
@@ -4895,13 +4880,13 @@
       "sources": [
         {
           "file": "workflow-guidelines.md",
-          "line": 653,
+          "line": 658,
           "section": "Workflow Guidelines Detail > LLM Current Edge Card And Trap List"
         }
       ]
     },
     {
-      "id": "GOV-0084",
+      "id": "GOV-0083",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -4912,7 +4897,7 @@
       "sources": [
         {
           "file": "workflow-guidelines.md",
-          "line": 729,
+          "line": 734,
           "section": "Workflow Guidelines Detail > LLM Tool-First Triage"
         }
       ]
@@ -4933,7 +4918,7 @@
       ]
     },
     {
-      "id": "GOV-0085",
+      "id": "GOV-0084",
       "domain": "governance",
       "strength": "may",
       "tags": [],
@@ -4948,7 +4933,7 @@
       ]
     },
     {
-      "id": "GOV-0086",
+      "id": "GOV-0085",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -4965,7 +4950,7 @@
       ]
     },
     {
-      "id": "GOV-0087",
+      "id": "GOV-0086",
       "domain": "governance",
       "strength": "may",
       "tags": [],
@@ -4980,7 +4965,7 @@
       ]
     },
     {
-      "id": "GOV-0088",
+      "id": "GOV-0087",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -4991,13 +4976,13 @@
       "sources": [
         {
           "file": "workflow-guidelines.md",
-          "line": 287,
+          "line": 288,
           "section": "Workflow Guidelines Detail > Residual Closure Inventory"
         }
       ]
     },
     {
-      "id": "GOV-0089",
+      "id": "GOV-0088",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -5009,13 +4994,13 @@
       "sources": [
         {
           "file": "workflow-guidelines.md",
-          "line": 383,
+          "line": 384,
           "section": "Workflow Guidelines Detail > Frontier Oscillation Escalation"
         }
       ]
     },
     {
-      "id": "GOV-0090",
+      "id": "GOV-0089",
       "domain": "governance",
       "strength": "may",
       "tags": [],
@@ -5024,7 +5009,7 @@
       "sources": [
         {
           "file": "workflow-guidelines.md",
-          "line": 398,
+          "line": 399,
           "section": "Workflow Guidelines Detail > Frontier Oscillation Escalation"
         }
       ]
@@ -5045,7 +5030,7 @@
       ]
     },
     {
-      "id": "GOV-0091",
+      "id": "GOV-0090",
       "domain": "governance",
       "strength": "may",
       "tags": [],
@@ -5054,30 +5039,30 @@
       "sources": [
         {
           "file": "workflow-guidelines.md",
-          "line": 794,
+          "line": 799,
           "section": "Workflow Guidelines Detail > Sub-Agent Sequencing"
         }
       ]
     },
     {
-      "id": "GOV-0092",
+      "id": "GOV-0091",
       "domain": "governance",
       "strength": "may",
       "tags": [
         "ownership"
       ],
-      "rule": "Use this gate when a scenario-driven or causal-escalation sprint may decide between continued local proof, owner-boundary migration, architecture work, or human escalation.",
+      "rule": "Use this gate when a scenario-driven or causal-escalation sprint may decide between continued local proof, owner-boundary migration, autonomous architecture experiment, or human-only escalation.",
       "score": 142,
       "sources": [
         {
           "file": "workflow-guidelines.md",
-          "line": 865,
+          "line": 870,
           "section": "Workflow Guidelines Detail > Sprint Architecture Decision Gate"
         }
       ]
     },
     {
-      "id": "GOV-0093",
+      "id": "GOV-0092",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -5094,7 +5079,7 @@
       ]
     },
     {
-      "id": "GOV-0094",
+      "id": "GOV-0093",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -5105,13 +5090,13 @@
       "sources": [
         {
           "file": "workflow-guidelines.md",
-          "line": 724,
+          "line": 729,
           "section": "Workflow Guidelines Detail > LLM Tool-First Triage"
         }
       ]
     },
     {
-      "id": "GOV-0095",
+      "id": "GOV-0094",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -5122,11 +5107,11 @@
       "sources": [
         {
           "file": "workflow-guidelines.md",
-          "line": 961,
+          "line": 971,
           "section": "Workflow Guidelines Detail > Scenario Causal Closure Ledger"
         }
       ]
     }
   ],
-  "generatedAt": "2026-05-20T03:54:47.771Z"
+  "generatedAt": "2026-05-21T15:26:08.265Z"
 }

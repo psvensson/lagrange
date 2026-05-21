@@ -1785,6 +1785,13 @@ function isPublicationActiveGateHandoffSnapshotCoverageStale(options = {}) {
     );
 }
 
+function resolvePublicationActiveGateHandoffQuorumCount(targetNodeIds = []) {
+  if (targetNodeIds.length === NUM.ZERO) {
+    return NUM.ZERO;
+  }
+  return Math.floor(targetNodeIds.length / NUM.TWO) + NUM.ONE;
+}
+
 function buildPublicationActiveGateHandoffSnapshotCoverageEvidence({
   targetNodeIds,
   options,
@@ -1798,11 +1805,14 @@ function buildPublicationActiveGateHandoffSnapshotCoverageEvidence({
     resolvePublicationActiveGateHandoffSnapshotCoverageRevision(options);
   const stale = isPublicationActiveGateHandoffSnapshotCoverageStale(options);
   const available = nodeIds.length > NUM.ZERO || revision !== null;
+  const quorumCount =
+    resolvePublicationActiveGateHandoffQuorumCount(targetNodeIds);
+  const coveredTargetNodeCount = targetNodeIds.length - missingNodeIds.length;
   const covered =
     available === true &&
     stale !== true &&
     targetNodeIds.length > NUM.ZERO &&
-    missingNodeIds.length === NUM.ZERO;
+    coveredTargetNodeCount >= quorumCount;
   return Object.freeze({
     state: stale === true ?
       PUBLICATION_ACTIVE_GATE_CATCHUP_FENCE_EVIDENCE_STATE.STALE :
@@ -1814,8 +1824,10 @@ function buildPublicationActiveGateHandoffSnapshotCoverageEvidence({
     available,
     stale,
     covered,
+    requiredQuorumNodeCount: quorumCount,
     nodeIds,
-    coveredNodeCount: nodeIds.length,
+    coveredNodeCount: coveredTargetNodeCount,
+    coveredTargetNodeCount,
     missingNodeIds,
     missingNodeCount: missingNodeIds.length,
     ...(revision !== null ? {revision} : {}),
@@ -1842,15 +1854,20 @@ function buildPublicationActiveGateHandoffPresenceEvidence({
   const missingNodeIds = normalizePublicationActiveGateHandoffNodeIdList(
     targetNodeIds.filter((nodeId) => !presentNodeIds.includes(nodeId)),
   );
+  const quorumCount =
+    resolvePublicationActiveGateHandoffQuorumCount(targetNodeIds);
+  const presentTargetNodeCount = targetNodeIds.length - missingNodeIds.length;
   return Object.freeze({
     targetNodeIds,
     presentNodeIds,
-    presentNodeCount: presentNodeIds.length,
+    requiredQuorumNodeCount: quorumCount,
+    presentNodeCount: presentTargetNodeCount,
+    presentTargetNodeCount,
     missingNodeIds,
     missingNodeCount: missingNodeIds.length,
     complete:
       targetNodeIds.length > NUM.ZERO &&
-      missingNodeIds.length === NUM.ZERO,
+      presentTargetNodeCount >= quorumCount,
   });
 }
 

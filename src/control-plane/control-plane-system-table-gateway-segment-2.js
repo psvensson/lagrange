@@ -24,6 +24,7 @@ import {
   buildProjectionControlPlaneReadIntent,
   buildOwnerContractOutcome,
   buildPressureAdmissionFailure,
+  canonicalizeSystemTableRow,
   createDeferredPromise,
   extractSqlOperationKind,
   extractSystemTableNameFromSql,
@@ -44,6 +45,9 @@ import {
 import {
   ControlPlaneSystemTableGatewaySegment1,
 } from './control-plane-system-table-gateway-segment-1.js';
+import {
+  getSchemaByTableName,
+} from '../bootstrap/system-table-schemas-constants.js';
 
 const LOCAL_STR_1NXSQ = 'maxObservedMutationQueueWaitMs';
 const LOCAL_STR_SLN22 = 'maxObservedTransportPendingNodeConnectionCount';
@@ -51,6 +55,22 @@ const LOCAL_STR_1UYEC = 'mutationFailureReasonCounts';
 const LOCAL_STR_1OW12 = 'authoritativeRowSourceUnavailableCount';
 const LOCAL_STR_1O67A = 'distributedParticipantFailureCount';
 const LOCAL_STR_1K86M = 'reconnectDeliveryFailureCount';
+
+function buildSchemaFilteredSqlMutationEntries(tableName, data) {
+  const schema = getSchemaByTableName(tableName);
+  if (!schema || !schema.columns) {
+    throw new Error(GATEWAY_ERROR_MSG.MUTATION_TABLE_REQUIRED);
+  }
+  const allowedColumns = new Set(
+    schema.columns.map((column) => column.name),
+  );
+  return Object.entries(canonicalizeSystemTableRow(tableName, data)).filter(
+    ([key, value]) => {
+      return allowedColumns.has(key) &&
+        typeof value !== TYPEOF.UNDEFINED;
+    },
+  );
+}
 
 class ControlPlaneSystemTableGatewaySegment2 extends ControlPlaneSystemTableGatewaySegment1 {
   incrementGatewayOutcomeMetric(bucketName, outcome) {
@@ -919,10 +939,9 @@ class ControlPlaneSystemTableGatewaySegment2 extends ControlPlaneSystemTableGate
       if (!mutation?.row || typeof mutation.row !== TYPEOF.OBJECT) {
         throw new Error(GATEWAY_ERROR_MSG.MUTATION_ROW_REQUIRED);
       }
-      const rowEntries = Object.entries(mutation.row).filter(
-        ([_key, value]) => {
-          return typeof value !== TYPEOF.UNDEFINED;
-        },
+      const rowEntries = buildSchemaFilteredSqlMutationEntries(
+        tableName,
+        mutation.row,
       );
       if (rowEntries.length === NUM.ZERO) {
         throw new Error(GATEWAY_ERROR_MSG.MUTATION_ROW_REQUIRED);
@@ -965,10 +984,9 @@ class ControlPlaneSystemTableGatewaySegment2 extends ControlPlaneSystemTableGate
     if (!mutation?.data || typeof mutation.data !== TYPEOF.OBJECT) {
       throw new Error(GATEWAY_ERROR_MSG.MUTATION_DATA_REQUIRED);
     }
-    const updateEntries = Object.entries(mutation.data).filter(
-      ([_key, value]) => {
-        return typeof value !== TYPEOF.UNDEFINED;
-      },
+    const updateEntries = buildSchemaFilteredSqlMutationEntries(
+      tableName,
+      mutation.data,
     );
     if (updateEntries.length === NUM.ZERO) {
       throw new Error(GATEWAY_ERROR_MSG.MUTATION_DATA_REQUIRED);

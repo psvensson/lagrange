@@ -39,6 +39,25 @@ const SERVE_ADMISSION_STATE = Object.freeze({
 });
 
 class ControlPlaneReadinessServiceSegment2 extends ControlPlaneReadinessServiceSegment1 {
+  constructor(options = {}) {
+    super(options);
+    const originalGetState = this.getPriorityControlPlaneRecoveryState;
+    if (typeof originalGetState === TYPEOF.FUNCTION) {
+      this.getPriorityControlPlaneRecoveryState = function(context = {}) {
+        const state = originalGetState.call(this, context);
+        if (state && typeof state === TYPEOF.OBJECT) {
+          const snapshot = this.resolveMembershipPublicationPlanningSnapshot(context);
+          const active = snapshot ? this.isPriorityControlPlaneRecoveryActive(snapshot) : true;
+          return Object.freeze({
+            ...state,
+            active: state.active === true && active === true,
+          });
+        }
+        return state;
+      };
+    }
+  }
+
   recordParticipationDecision(participation) {
     if (!participation || !this.participationDecisionLedger) {
       return;
@@ -950,6 +969,12 @@ class ControlPlaneReadinessServiceSegment2 extends ControlPlaneReadinessServiceS
     const priorityRecoveryActive = this.isPriorityControlPlaneRecoveryActive(
       membershipPublicationPlanningSnapshot,
     );
+    if (
+      priorityRecoveryActive === true &&
+      this.shouldAllowTransportBackedRecoveryGrace(context) === true
+    ) {
+      return true;
+    }
     const publicationSupportsRecovery =
       context.publicationHealthy === true ||
       (priorityRecoveryActive &&
@@ -962,7 +987,10 @@ class ControlPlaneReadinessServiceSegment2 extends ControlPlaneReadinessServiceS
       return false;
     }
     if (context.clusterMemberHealthy === true) {
-      return context.writableControlPlaneService === true;
+      return (
+        context.writableControlPlaneService === true ||
+        this.shouldAllowTransportBackedRecoveryGrace(context)
+      );
     }
     return this.shouldAllowTransportBackedRecoveryGrace(context);
   }

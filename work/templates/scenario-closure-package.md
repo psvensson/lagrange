@@ -69,7 +69,7 @@
     "boundedProgressProofArtifact": "path/to/focused-probe.test.js",
     "expectedObservableTransition": "before state -> after state or named classification",
     "maxProgressBound": "maximum retry/timer/dispatch bound before fallback",
-    "sameFrontierFallback": "same-frontier action",
+    "sameFrontierFallback": "open/select autonomous architecture experiment if no reduction or migration appears",
     "expectedNextFrontier": "expected next owner boundary",
     "resultClassification": "pending-before-probe",
     "stopCondition": "continue-local-fix",
@@ -157,7 +157,8 @@ or report edit is justified.
 - Successor action:
 - Runtime promotion rule: stable owner/boundary local-fix routes open a
   `runtime-owner-boundary` successor; do not open another classifier from the
-  same unchanged artifact.
+  same unchanged artifact. Same-frontier/no-reduction routes open an
+  autonomous architecture experiment before more local runtime work.
 
 ## Expected Representative Delta
 
@@ -166,6 +167,8 @@ or report edit is justified.
 - Local proof class:
 - Representative proof class:
 - Stop if unchanged:
+  open/select an autonomous architecture experiment before another local patch;
+  use human escalation only for contradictory or blocked evidence.
 
 ## Rerun Decision Gate
 

@@ -152,6 +152,7 @@ class NodeHandle {
         sql,
         params: Array.isArray(params) ? params : [],
         timeoutMs,
+        ignorePreRestart: options.ignorePreRestart === true,
       },
       'query',
       {
@@ -918,6 +919,7 @@ class NodeHandle {
       this.queryWithTimeout(sql, [], {
         lane,
         timeoutMs,
+        ignorePreRestart: options?.ignorePreRestart === true,
       });
     if (options?.forceAuthoritativeRepair === true) {
       return querySnapshot(NODE_CLIENT_CONTROL_SNAPSHOT_FORCE_REPAIR_SQL);

@@ -12,6 +12,6 @@
 - Observed signal: <filled at closure>
 - Prediction accuracy: <matched|partial|missed|contradicted>
 - Distinguished hypothesis at closure: <H1|H2|H3|evidence-incomplete>
-- Experiment decision at closure: <open-runtime-owner-boundary|open-architecture-contract|owner-boundary-migration|human-escalation|evidence-incomplete>
+- Experiment decision at closure: <open-runtime-owner-boundary|open-architecture-experiment|open-architecture-contract|owner-boundary-migration|human-escalation|evidence-incomplete>
 - Outcome evidence at closure: <focused command or artifact>
-- Stop rule: <what result prevents implementation>
+- Stop rule: <what result opens/selects an autonomous architecture experiment before implementation>

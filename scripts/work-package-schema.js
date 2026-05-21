@@ -135,6 +135,7 @@ const CLASSIFICATION_EFFICIENCY_SUCCESSOR_ACTIONS = Object.freeze([
   'open-runtime-owner-boundary',
   'open-tooling-bug',
   'open-causal-escalation',
+  'open-architecture-experiment',
   'present-human-gate',
   'rerun-representative-evidence',
 ]);
@@ -166,6 +167,14 @@ const EXPERIMENT_OUTCOME_FIELDS = Object.freeze([
   EXPERIMENT_OUTCOME_NEXT_OWNER_FIELD,
   EXPERIMENT_OUTCOME_NEXT_BOUNDARY_FIELD,
   EXPERIMENT_OUTCOME_EVIDENCE_FIELD,
+]);
+const EXPERIMENT_OUTCOME_DECISIONS = Object.freeze([
+  'open-runtime-owner-boundary',
+  'open-architecture-experiment',
+  'open-architecture-contract',
+  'owner-boundary-migration',
+  'human-escalation',
+  'evidence-incomplete',
 ]);
 const REQUIRED_PRE_IMPL_PROBE_FIELD = 'requiredPreImplProbe';
 const REQUIRED_PRE_IMPL_PROBE_COMMAND_FIELD = 'command';
@@ -634,7 +643,7 @@ function renderSchemaReference() {
     '- Treat the next implementation package as a falsifiable decision experiment, not a prose handoff.',
     '- Required fields: `Decision question`, `Architecture review`, `Competing hypotheses`, `Pre-edit focused probe`, `Success metrics`, `Representative rerun`, and `Kill rule`.',
     '- Success metrics must name a concrete metric/count/frontier movement, owner-boundary migration, or representative green condition.',
-    '- The kill rule must stop or escalate on unchanged same-frontier/no-reduction evidence instead of opening another local patch.',
+    '- The kill rule must open/select an autonomous architecture experiment on unchanged same-frontier/no-reduction evidence instead of opening another local patch. Human escalation is only for contradictory or blocked evidence.',
     EMPTY_TEXT,
     '## Representative Residual',
     EMPTY_TEXT,
@@ -686,6 +695,10 @@ function renderSchemaReference() {
     'Fields:',
     EMPTY_TEXT,
     renderEnumList(EXPERIMENT_OUTCOME_FIELDS),
+    EMPTY_TEXT,
+    'Decision values:',
+    EMPTY_TEXT,
+    renderEnumList(EXPERIMENT_OUTCOME_DECISIONS),
     EMPTY_TEXT,
     '## Required Pre-Implementation Probe',
     EMPTY_TEXT,
@@ -831,6 +844,7 @@ export {
   CLASSIFICATION_EFFICIENCY_SUCCESSOR_ACTION_FIELD,
   CLASSIFICATION_EFFICIENCY_SUCCESSOR_ACTIONS,
   EXPERIMENT_OUTCOME_DECISION_FIELD,
+  EXPERIMENT_OUTCOME_DECISIONS,
   EXPERIMENT_OUTCOME_DISTINGUISHED_HYPOTHESIS_FIELD,
   EXPERIMENT_OUTCOME_EVIDENCE_FIELD,
   EXPERIMENT_OUTCOME_FIELD,

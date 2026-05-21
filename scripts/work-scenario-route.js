@@ -45,11 +45,14 @@ const SPACE = ' ';
 const COMMAND_WORK_ADVANCE_CHECK = 'npm run work:advance -- --check';
 const COMMAND_WORK_PACKAGE_NEW_PREFIX = 'npm run work:package:new --';
 const LANE_DIAGNOSTIC_CLASSIFICATION = 'diagnostic-classification';
+const LANE_EXPERIMENT = 'experiment';
 const LANE_RUNTIME_OWNER_BOUNDARY = 'runtime-owner-boundary';
 const CAUSAL_OUTCOME_CONTINUE_LOCAL_FIX = 'continue_local_fix';
 const STOP_CONDITION_CLASSIFIED_LOCAL_BLOCKER = 'classified_local_blocker';
 const SUCCESSOR_ACTION_OPEN_RUNTIME_OWNER_BOUNDARY =
   'open-runtime-owner-boundary';
+const SUCCESSOR_ACTION_OPEN_ARCHITECTURE_EXPERIMENT =
+  'open-architecture-experiment';
 const SUCCESSOR_ACTION_RERUN_REPRESENTATIVE_EVIDENCE =
   'rerun-representative-evidence';
 const MARKDOWN_NONE_LIST_ITEM = '- `none`';
@@ -183,6 +186,13 @@ function hasStableRuntimeOwnerBoundary(route = {}) {
 }
 
 function suggestedSuccessorLane(route = {}, representativeEvidence = {}) {
+  const causalRouteText = [
+    representativeEvidence.causal?.outcome,
+    representativeEvidence.causal?.stopCondition,
+  ].map(normalizeText).join(SPACE);
+  if (/\b(?:same[-_ ]frontier|architecture[-_ ]gap)\b/iu.test(causalRouteText)) {
+    return LANE_EXPERIMENT;
+  }
   if (
     hasStableRuntimeOwnerBoundary(route) &&
     representativeEvidence.causal?.outcome === CAUSAL_OUTCOME_CONTINUE_LOCAL_FIX &&
@@ -195,6 +205,9 @@ function suggestedSuccessorLane(route = {}, representativeEvidence = {}) {
 }
 
 function suggestedSuccessorAction(route = {}, representativeEvidence = {}) {
+  if (suggestedSuccessorLane(route, representativeEvidence) === LANE_EXPERIMENT) {
+    return SUCCESSOR_ACTION_OPEN_ARCHITECTURE_EXPERIMENT;
+  }
   return suggestedSuccessorLane(route, representativeEvidence) ===
     LANE_RUNTIME_OWNER_BOUNDARY ?
     SUCCESSOR_ACTION_OPEN_RUNTIME_OWNER_BOUNDARY :

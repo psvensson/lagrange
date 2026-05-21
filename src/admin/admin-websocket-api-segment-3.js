@@ -1290,6 +1290,7 @@ class AdminWebSocketAPISegment3 extends AdminWebSocketAPISegment2 {
       sql: message.sql,
       params: message.params || [],
       timeoutMs: resolveRequestedQueryTimeoutMs(message.timeoutMs),
+      ignorePreRestart: message.ignorePreRestart === true,
     };
 
     this.logger.debug(ADMIN_LOG_MSG.EXECUTING_QUERY, {

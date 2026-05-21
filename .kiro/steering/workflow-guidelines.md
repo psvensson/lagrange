@@ -164,9 +164,10 @@ Required:
    failure bundles consume the changed contract.
 9. Representative scenario or blocker probe after focused proof.
 10. Final classification: representative-green, reduced, same-frontier,
-   migrated, classification-only, architecture-gap, contradictory, or human
-   escalation. `Reduced` requires a concrete metric delta; `classification-only`
-   must name the accepted bounded/backpressure state and stop reason.
+   migrated, classification-only, architecture-gap, contradictory, or
+   human-only escalation for blocked/contradictory evidence. `Reduced` requires
+   a concrete metric delta; `classification-only` must name the accepted
+   bounded/backpressure state and stop reason.
 
 ### Causal Escalation Lane
 
@@ -493,8 +494,10 @@ Required fields:
    owner, chasing a downstream consumer, or widening scope to hide the blocker.
 7. `Next best package`: the next package to continue or activate after the
    current package closes.
-8. `Stop or escalate rule`: the concrete condition that opens causal,
-   architecture, or human escalation instead of another local runtime patch.
+8. `Stop or escalate rule`: the concrete condition that opens/selects an
+   autonomous architecture experiment, causal escalation, or a human-only
+   escalation for blocked/contradictory evidence instead of another local
+   runtime patch.
 
 Update the brief when selected owner or boundary changes, fresh evidence
 contradicts the thesis, two or three material packages close, or frontier
@@ -535,7 +538,7 @@ Create a separate pure classification package only when at least one is true:
 
 1. owner, boundary, or required action changed
 2. runtime promotion is blocked until a route is selected
-3. the result is architecture-gap or human escalation
+3. the result is architecture-gap or a human-only blocked/contradictory escalation
 4. sprint/current-blocker truth would otherwise become misleading
 5. the classification creates a concrete successor package
 
@@ -584,8 +587,9 @@ proof can justify a bounded patch; representative proof requires a fresh rerun
 or route-after-rerun result.
 
 If the rerun is same-frontier with no concrete metric or shape reduction, stop
-local patching and present an architecture decision gate or human escalation
-before another implementation package.
+local patching and open/select an autonomous architecture experiment before
+another implementation package. Human escalation is an exception for
+contradictory, policy-blocked, credential-blocked, or unavailable evidence.
 
 ## Decision Experiment Gate
 
@@ -605,12 +609,13 @@ The gate names:
 7. kill rule
 
 The architecture review distinguishes local owner-boundary work from
-owner-boundary migration, architecture/contract gap, or human route. Competing
-hypotheses include stale evidence and wrong-owner explanations. The pre-edit
-probe and representative rerun are executable commands. Success metrics name
-concrete count, metric, frontier movement, migration, or representative green.
-The kill rule stops or escalates on unchanged same-frontier/no-reduction
-evidence instead of opening another local patch.
+owner-boundary migration, autonomous architecture experiment, or a human-only
+route for blocked/contradictory evidence. Competing hypotheses include stale
+evidence and wrong-owner explanations. The pre-edit probe and representative
+rerun are executable commands. Success metrics name concrete count, metric,
+frontier movement, migration, or representative green. The kill rule opens or
+selects the autonomous architecture experiment on unchanged
+same-frontier/no-reduction evidence instead of opening another local patch.
 
 Classification-only fast-path, pure classification, read/review/doc-only, and
 lightweight maintenance packages are exempt unless they promote runtime,
@@ -854,8 +859,8 @@ material covering:
 - budget and timeout accounting
 - invariant review
 - normalized failure-class taxonomy
-- stop conditions for local fix, owner migration, architecture work, or human
-  escalation
+- stop conditions for local fix, owner migration, autonomous architecture
+  experiment, or human-only escalation for blocked/contradictory evidence
 
 Runtime packages that follow cite the causal model, schema, decision table,
 fixture, extractor, or artifact they rely on.
@@ -863,9 +868,10 @@ fixture, extractor, or artifact they rely on.
 ## Sprint Architecture Decision Gate
 
 Use this gate when a scenario-driven or causal-escalation sprint may decide
-between continued local proof, owner-boundary migration, architecture work, or
-human escalation. The gate lets a sprint classify and route work in context; it
-does not authorize broad runtime edits from sprint prose.
+between continued local proof, owner-boundary migration, autonomous
+architecture experiment, or human-only escalation. The gate lets a sprint
+classify and route work in context; it does not authorize broad runtime edits
+from sprint prose.
 
 Required before the gate can decide:
 
@@ -898,7 +904,7 @@ Allowed gate decisions:
   bounded runtime package and must be converted into roadmap/spec/architecture
   scope first.
 - `human-escalation`: evidence is contradictory or blocked by policy,
-  credentials, or unavailable proof.
+  credentials, or unavailable proof. It is not the default same-frontier route.
 
 Tracker contract:
 
@@ -910,14 +916,18 @@ Tracker contract:
   concrete choices. `status: presented` means choices are visible but no route
   has been selected. Both states fail pre-implementation validation for active
   runtime/scenario work.
-- `status: selected` names the human-selected choice and opens the bounded
-  route for the next package or new sprint. The selected route still must carry
-  normal owner, boundary, scope, proof, sub-agent, validation, commit, and push
+- `status: selected` names the selected choice and opens the bounded route for
+  the next package or new sprint. For architecture gaps and unchanged
+  same-frontier/no-reduction evidence, the default selected route is
+  `architecture-package`, implemented as an autonomous architecture experiment.
+  The selected route still must carry normal owner, boundary, scope, proof,
+  sub-agent, validation, commit, and push evidence.
+- The tracker infers and surfaces an autonomous architecture package route from
+  `architecture-gap` scenario closure. Frontier oscillation is rendered as
+  `watching`; it becomes an autonomous architecture experiment when the next
+  local proof cannot reduce, migrate, or classify the edge without changing
+  architecture. Human escalation remains reserved for contradictory or blocked
   evidence.
-- The tracker infers a required gate from `architecture-gap` or
-  `human-escalation` scenario closure. Frontier oscillation is rendered as
-  `watching`; it becomes a required gate when the next local proof cannot
-  reduce, migrate, or classify the edge without changing architecture.
 
 Limits:
 

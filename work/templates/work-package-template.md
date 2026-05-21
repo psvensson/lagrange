@@ -65,7 +65,7 @@
     "boundedProgressProofArtifact": "path/to/focused-probe.test.js",
     "expectedObservableTransition": "before state -> after state or named classification",
     "maxProgressBound": "maximum retry/timer/dispatch bound before fallback",
-    "sameFrontierFallback": "named same-frontier action if the probe does not move",
+    "sameFrontierFallback": "open/select autonomous architecture experiment if the probe does not move",
     "expectedNextFrontier": "expected next owner boundary after this package",
     "resultClassification": "pending-before-probe",
     "stopCondition": "continue-local-fix",
@@ -171,7 +171,7 @@ Required at closure for `experiment` packages.
 
 - Distinguished hypothesis: `H1|H2|H3|evidence-incomplete`
 - Decision:
-  `open-runtime-owner-boundary|open-architecture-contract|owner-boundary-migration|human-escalation|evidence-incomplete`
+  `open-runtime-owner-boundary|open-architecture-experiment|open-architecture-contract|owner-boundary-migration|human-escalation|evidence-incomplete`
 - Next owner:
 - Next boundary:
 - Evidence command or artifact:
@@ -224,6 +224,8 @@ Oscillating-frontier gate:
       package whose `boundedExperiment.hypothesisDiscriminator` predicts
       different observables under H1 vs H2 vs H3 and whose
       `observablePrediction.predicted` is written before the probe runs.
+      Human escalation is not the default route; use it only when evidence is
+      contradictory, policy-blocked, credential-blocked, or unavailable.
 
 ## Classification-Only Fast Path
 
@@ -475,7 +477,9 @@ non-frontier with prose alone.
 - Max progress bound:
   name the maximum retry/timer/dispatch/owner-cycle bound before fallback.
 - Same-frontier fallback:
-  name the fallback action if the boundary does not reduce or migrate.
+  open/select an autonomous architecture experiment if the boundary does not
+  reduce or migrate; use human escalation only for contradictory or blocked
+  evidence.
 - Remaining-node fast path:
   when one node remains, name `Target node`, `Required action`,
   `Runtime promotion allowed`, `Goal`, and `Forbidden edits`.
@@ -488,6 +492,9 @@ non-frontier with prose alone.
 - Stop condition: one of `continue-local-fix`, `bounded-non-frontier`,
   `migrate-owner-boundary`, `classification-only-stop`,
   `architecture-gap-stop`, `representative-green`, or `human-escalation`.
+  Same-frontier/no-reduction uses `architecture-gap-stop` plus a selected
+  `architectureDecisionGate` route of `architecture-package` unless evidence is
+  explicitly blocked or contradictory.
 
 ## Frontier Transition Ledger
 

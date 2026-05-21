@@ -405,12 +405,12 @@ const DECISION_EXPERIMENT_GATE_VALID_CONTENT = [
   '## Decision Experiment Gate',
   '',
   '- Decision question: Does operation_workflow_owner / workflow_progress still own dispatch_pending, and what exact retry fact must move before implementation is justified?',
-  '- Architecture review: Confirm this is still a local owner-boundary route, owner-boundary migration, architecture contract gap, or human route.',
+  '- Architecture review: Confirm this is still a local owner-boundary route, owner-boundary migration, autonomous architecture experiment, or human-only route for blocked evidence.',
   '- Competing hypotheses: dispatch_pending is real owner debt; startup active-gate lag is downstream; instrumentation is stale; another boundary owns the next move.',
   '- Pre-edit focused probe: `node --test test/rebalancer/workflow-progress.test.js`',
   '- Success metrics: retry count reduces, frontier migrates, or representative rolling-restart turns green.',
   '- Representative rerun: `npm run work:package:route-after-rerun -- --artifact test-output/reports/rerun.report.json --owner operation_workflow_owner --boundary workflow_progress --dominant-reason dispatch_pending`',
-  '- Kill rule: If fresh representative evidence returns same-frontier unchanged with no concrete reduction, stop for architecture or human escalation.',
+  '- Kill rule: If fresh representative evidence returns same-frontier unchanged with no concrete reduction, open an autonomous architecture experiment; use human escalation only for blocked or contradictory evidence.',
   '',
 ].join('\n');
 const DECISION_EXPERIMENT_GATE_INVALID_CONTENT = [
@@ -2354,13 +2354,28 @@ describe('work tracker rerun decision validation', () => {
     assert.match(errors.join('\n'), /same-frontier rerun without concrete reduction/u);
   });
 
-  it('allows same-frontier no-reduction packages with human escalation', () => {
+  it('allows same-frontier no-reduction packages with an autonomous architecture experiment', () => {
     const sameFrontierMetadata = {
       ...SCENARIO_CAUSAL_CLOSURE_VALID_METADATA,
       scenarioCausalClosure: {
         ...SCENARIO_CAUSAL_CLOSURE_VALID_METADATA.scenarioCausalClosure,
         resultClassification: 'same-frontier',
-        stopCondition: 'human-escalation',
+        stopCondition: 'architecture-gap-stop',
+      },
+      architectureDecisionGate: {
+        status: 'selected',
+        trigger: 'frontier-oscillation',
+        triggerEvidence: ['same-frontier returned with no reduction'],
+        choices: [
+          {
+            id: 'open-architecture-package',
+            summary: 'Open an autonomous architecture experiment.',
+            route: 'architecture-package',
+            proof: ['npm run work:evidence-summary -- report.json'],
+          },
+        ],
+        selectedChoice: 'open-architecture-package',
+        nextAction: 'Open the autonomous architecture experiment.',
       },
     };
 
@@ -2371,6 +2386,74 @@ describe('work tracker rerun decision validation', () => {
     );
 
     assert.deepEqual(errors, []);
+  });
+
+  it('rejects same-frontier no-reduction packages that select another local proof', () => {
+    const sameFrontierMetadata = {
+      ...SCENARIO_CAUSAL_CLOSURE_VALID_METADATA,
+      scenarioCausalClosure: {
+        ...SCENARIO_CAUSAL_CLOSURE_VALID_METADATA.scenarioCausalClosure,
+        resultClassification: 'same-frontier',
+        stopCondition: 'continue-local-fix',
+      },
+      architectureDecisionGate: {
+        status: 'selected',
+        trigger: 'frontier-oscillation',
+        triggerEvidence: ['same-frontier returned with no reduction'],
+        choices: [
+          {
+            id: 'continue-local-proof',
+            summary: 'Try one more local proof.',
+            route: 'continue-local-proof',
+            proof: ['npm run work:evidence-summary -- report.json'],
+          },
+        ],
+        selectedChoice: 'continue-local-proof',
+        nextAction: 'Try another local proof.',
+      },
+    };
+
+    const errors = validateSameFrontierStopContract(
+      sameFrontierMetadata,
+      WORK_TRACKER_LEDGER_TEST_FILE,
+      {status: WORK_TRACKER_ACTIVE_STATUS},
+    );
+
+    assert.match(errors.join('\n'), /autonomous architecture experiment/u);
+  });
+
+  it('rejects same-frontier no-reduction packages that select owner migration', () => {
+    const sameFrontierMetadata = {
+      ...SCENARIO_CAUSAL_CLOSURE_VALID_METADATA,
+      scenarioCausalClosure: {
+        ...SCENARIO_CAUSAL_CLOSURE_VALID_METADATA.scenarioCausalClosure,
+        resultClassification: 'same-frontier',
+        stopCondition: 'continue-local-fix',
+      },
+      architectureDecisionGate: {
+        status: 'selected',
+        trigger: 'frontier-oscillation',
+        triggerEvidence: ['same-frontier returned with no reduction'],
+        choices: [
+          {
+            id: 'migrate-owner-boundary',
+            summary: 'Migrate to another owner boundary.',
+            route: 'owner-boundary-migration',
+            proof: ['npm run work:evidence-summary -- report.json'],
+          },
+        ],
+        selectedChoice: 'migrate-owner-boundary',
+        nextAction: 'Migrate to another owner boundary.',
+      },
+    };
+
+    const errors = validateSameFrontierStopContract(
+      sameFrontierMetadata,
+      WORK_TRACKER_LEDGER_TEST_FILE,
+      {status: WORK_TRACKER_ACTIVE_STATUS},
+    );
+
+    assert.match(errors.join('\n'), /route=architecture-package/u);
   });
 
   it('rejects a third same-frontier runtime package at entry', () => {
@@ -2416,7 +2499,7 @@ describe('work tracker rerun decision validation', () => {
     );
 
     assert.match(errors.join('\n'), /two-shot same-frontier rule/u);
-    assert.match(errors.join('\n'), /owner-boundary migration package/u);
+    assert.match(errors.join('\n'), /autonomous architecture experiment/u);
   });
 
   it('does not count prior same-frontier entries with concrete movement', () => {
@@ -2596,6 +2679,19 @@ describe('work tracker experiment outcome validation', () => {
       WORK_TRACKER_LEDGER_TEST_FILE,
       {status: WORK_TRACKER_ACTIVE_STATUS, phase: 'closure'},
     );
+    const architectureExperimentErrors = validateExperimentOutcomeContract(
+      {
+        status: WORK_TRACKER_ACTIVE_STATUS,
+        lane: LANE_EXPERIMENT,
+        experimentOutcome: {
+          distinguishedHypothesis: 'H1',
+          decision: 'open-architecture-experiment',
+          evidence: 'npm test -- test/rebalancer/probe.test.js',
+        },
+      },
+      WORK_TRACKER_LEDGER_TEST_FILE,
+      {status: WORK_TRACKER_ACTIVE_STATUS, phase: 'closure'},
+    );
     const incompleteErrors = validateExperimentOutcomeContract(
       {
         status: WORK_TRACKER_ACTIVE_STATUS,
@@ -2612,6 +2708,7 @@ describe('work tracker experiment outcome validation', () => {
 
     assert.match(missingErrors.join('\n'), /experimentOutcome is required/u);
     assert.deepEqual(validErrors, []);
+    assert.deepEqual(architectureExperimentErrors, []);
     assert.deepEqual(incompleteErrors, []);
   });
 });

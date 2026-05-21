@@ -74,6 +74,7 @@ function mapAdminMessageToPayload(message) {
       queryId: message.queryId || null,
       sql: message.sql,
       params: message.params || [],
+      ignorePreRestart: message.ignorePreRestart === true,
     };
     const timeoutMs = resolveOptionalTimeoutMs(message.timeoutMs);
     if (timeoutMs !== null) {

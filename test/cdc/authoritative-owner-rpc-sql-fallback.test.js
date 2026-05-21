@@ -39,6 +39,9 @@ const TEST_OWNER_RPC_SQL_FALLBACK_NAME =
 const TEST_OWNER_RPC_MESSAGE_ONLY_SQL_FALLBACK_NAME =
   'CDCIntegrationService - owner-RPC preferred SQL fallback recovers ' +
   'message-only query-timeout-shaped nodes reads through routed SQL';
+const TEST_OWNER_RPC_REPAIR_READ_LEADER_FIRST_NAME =
+  'CDCIntegrationService - owner-RPC preferred repair reads do not force ' +
+  'leader-first routing';
 const TEST_ROUTING_SNAPSHOT_SERVICE_ROW_COUNT = 2;
 const TEST_ROUTING_SNAPSHOT_ROUTABLE_SERVICE_COUNT = 2;
 const TEST_LAST_HEARTBEAT_MS = 5000;
@@ -93,11 +96,11 @@ async function assertOwnerRpcSqlFallbackRecovers(t, ownerRpcFailure) {
           sql,
           params = [],
           _forRead,
-          _preferLeader,
+          preferLeader,
           _preferSameLatencyGroup,
           options = {},
         ) {
-          ownerRpcReads.push({partitionId, sql, params, options});
+          ownerRpcReads.push({partitionId, sql, params, preferLeader, options});
           return ownerRpcFailure;
         },
       },
@@ -175,6 +178,11 @@ async function assertOwnerRpcSqlFallbackRecovers(t, ownerRpcFailure) {
     TEST_TIMEOUT_MS,
     'routed SQL fallback should preserve the query timeout budget',
   );
+  t.equal(
+    sqlFallbackReads[0]?.options?.preferLeader,
+    false,
+    'routed SQL fallback should avoid leader-first repair routing',
+  );
 }
 
 test(TEST_OWNER_RPC_SQL_FALLBACK_NAME, async (t) => {
@@ -192,4 +200,77 @@ test(TEST_OWNER_RPC_MESSAGE_ONLY_SQL_FALLBACK_NAME, async (t) => {
     error: TEST_QUERY_TIMEOUT_AFTER_MESSAGE,
     rows: [],
   });
+});
+
+test(TEST_OWNER_RPC_REPAIR_READ_LEADER_FIRST_NAME, async (t) => {
+  const ownerRpcReads = [];
+  const service = new CDCIntegrationService({
+    nodeId: TEST_NODE_ID,
+    sqlQueryEngine: {
+      queryExecutor: {
+        getPartitionRoutingSnapshot() {
+          return TEST_ROUTING_SNAPSHOT;
+        },
+        async executeOnPartition(
+          partitionId,
+          sql,
+          params = [],
+          forRead,
+          preferLeader,
+          preferSameLatencyGroup,
+          options = {},
+        ) {
+          ownerRpcReads.push({
+            partitionId,
+            sql,
+            params,
+            forRead,
+            preferLeader,
+            preferSameLatencyGroup,
+            options,
+          });
+          return {
+            success: true,
+            rows: [{...TEST_AUTHORITATIVE_NODE_ROW}],
+          };
+        },
+      },
+    },
+    partitionServicesProvider: TEST_EMPTY_MAP_FACTORY,
+  });
+  service.initialize();
+
+  const result = await service.executeAuthoritativeSystemTableRead(
+    SYSTEM_TABLE_NAME.NODES,
+    TEST_NODES_SQL,
+    [TEST_AUTHORITATIVE_NODE_ID],
+    {
+      preferOwnerRpcRead: TEST_OWNER_RPC_READ_PREFERENCE,
+      allowSqlFallback: TEST_ALLOW_SQL_FALLBACK,
+      queryOptions: {timeoutMs: TEST_TIMEOUT_MS},
+    },
+  );
+
+  t.equal(result.success, true, 'owner-rpc repair read should succeed');
+  t.equal(ownerRpcReads.length, 1, 'repair read should use one owner-rpc call');
+  t.equal(
+    ownerRpcReads[0]?.partitionId,
+    INITIAL_PARTITION_IDS[SYSTEM_TABLE_NAME.NODES],
+    'repair read should target the canonical nodes partition',
+  );
+  t.equal(
+    ownerRpcReads[0]?.forRead,
+    true,
+    'repair read should stay on the read execution path',
+  );
+  t.equal(
+    ownerRpcReads[0]?.preferLeader,
+    false,
+    'owner-rpc repair reads should let routing pick a healthy replica first',
+  );
+  t.equal(
+    ownerRpcReads[0]?.options?.timeoutMs,
+    TEST_TIMEOUT_MS,
+    'repair read should keep the caller timeout budget',
+  );
 });

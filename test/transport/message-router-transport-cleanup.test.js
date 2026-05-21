@@ -173,6 +173,36 @@ describe('MessageRouter transport cleanup verification', () => {
             'deliverRemote called for self-delivery',
           );
         });
+
+      it('should forward replacePendingKey option to enqueueOutbound', async () => {
+        await router.initialize({startServer: true});
+
+        let passedOptions = null;
+        const originalEnqueueOutbound = router.enqueueOutbound.bind(router);
+        router.enqueueOutbound = async (nodeId, deliverFn, options) => {
+          passedOptions = options;
+          return {acknowledged: true, data: 'ok'};
+        };
+
+        const remoteNodeId = 'remote-node-1';
+        await router.deliverRemote(
+          `${remoteNodeId}/partition/p1`,
+          'msg-id',
+          {type: 'TEST'},
+          remoteNodeId,
+          'corr-id',
+          {replacePendingKey: 'custom-coalesce-key'},
+        );
+
+        assert.ok(passedOptions, 'enqueueOutbound options were passed');
+        assert.strictEqual(
+          passedOptions.replacePendingKey,
+          'custom-coalesce-key',
+          'replacePendingKey was forwarded to enqueueOutbound',
+        );
+
+        router.enqueueOutbound = originalEnqueueOutbound;
+      });
     });
 
   /**

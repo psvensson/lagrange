@@ -1,6 +1,7 @@
 import {test} from '../../src/test-helpers/tap.js';
 import {
   isReplicaOperationInFlight,
+  isReplicaOperationStale,
   normalizeReplicaOperationRecord,
   summarizeReplicaOperationLiveness,
 } from '../../src/rebalancer/replica-operation-liveness.js';
@@ -455,6 +456,73 @@ test(
       record.targetNodeId,
       'seed-node',
       'failed source-removal rows should keep their target/source node identity for diagnostics',
+    );
+  },
+);
+
+test(
+  'isReplicaOperationStale bypasses pre-restart operations when ignorePreRestart is true',
+  async (t) => {
+    const uptimeSec = process.uptime();
+    const nowMs = Date.now();
+    const systemBootMs = nowMs - Math.floor(uptimeSec * 1000);
+
+    const oldRecord = normalizeReplicaOperationRecord({
+      operation_id: 'old-op',
+      type: 'MOVE_ASSIGNMENT',
+      replica_id: 'mg-1-r2',
+      source_node_id: 'seed-node',
+      target_node_id: 'target-node',
+      status: 'active',
+      workflow_step: 'SYNCING',
+      updated_at: systemBootMs - 5000,
+    }, {
+      nowMs,
+    });
+
+    const newRecord = normalizeReplicaOperationRecord({
+      operation_id: 'new-op',
+      type: 'MOVE_ASSIGNMENT',
+      replica_id: 'mg-1-r2',
+      source_node_id: 'seed-node',
+      target_node_id: 'target-node',
+      status: 'active',
+      workflow_step: 'SYNCING',
+      updated_at: systemBootMs + 1000,
+    }, {
+      nowMs,
+    });
+
+    oldRecord.ageMs = 120000;
+    newRecord.ageMs = 120000;
+
+    const testOptions = {
+      nowMs,
+      stepTimeoutMsByWorkflowStep: {
+        SYNCING: 5000,
+      },
+    };
+
+    t.equal(
+      isReplicaOperationStale(oldRecord, testOptions),
+      true,
+      'old record should be stale without bypass',
+    );
+    t.equal(
+      isReplicaOperationStale(newRecord, testOptions),
+      true,
+      'new record should be stale without bypass',
+    );
+
+    t.equal(
+      isReplicaOperationStale(oldRecord, { ...testOptions, ignorePreRestart: true }),
+      false,
+      'old record should NOT be stale with bypass enabled',
+    );
+    t.equal(
+      isReplicaOperationStale(newRecord, { ...testOptions, ignorePreRestart: true }),
+      true,
+      'new record should still be stale with bypass enabled',
     );
   },
 );

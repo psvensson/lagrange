@@ -572,7 +572,7 @@ class AdminControlSnapshotPart3 extends AdminControlSnapshotPart2 {
    * @return {Object|null}
    * @private
    */
-  evaluateAuthoritativeControlSnapshotRepair(snapshot = null) {
+  evaluateAuthoritativeControlSnapshotRepair(snapshot = null, options = {}) {
     if (!this.canRunAuthoritativeControlSnapshotRepair()) {
       return null;
     }
@@ -610,7 +610,7 @@ class AdminControlSnapshotPart3 extends AdminControlSnapshotPart2 {
       TABLES.REPLICA_OPERATIONS,
     );
     const replicaOperationSummary =
-      this.buildControlSnapshotReplicaOperationSummary(replicaOperationRows);
+      this.buildControlSnapshotReplicaOperationSummary(replicaOperationRows, options);
     const evaluation = evaluateAuthoritativeRepairPolicy({
       cacheStalenessMs: this.resolveControlSnapshotCacheStalenessMs(
         nodeRows,

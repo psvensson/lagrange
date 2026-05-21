@@ -675,6 +675,19 @@ function isReplicaOperationInFlight(record, options = {}) {
   if (isReplicaOperationTerminalSuccess(record)) {
     return false;
   }
+  if (options.ignorePreRestart === true) {
+    const nowMs = Number.isFinite(options.nowMs) ?
+      Math.floor(options.nowMs) :
+      Date.now();
+    const updatedAtMs = normalizeEpochMillis(record?.updatedAt);
+    const uptimeSec = typeof process !== 'undefined' && typeof process.uptime === 'function' ?
+      process.uptime() :
+      NUM.ZERO;
+    const processStartMs = nowMs - Math.floor(uptimeSec * TIME_MS.SECOND);
+    if (Number.isFinite(updatedAtMs) && updatedAtMs < processStartMs) {
+      return false;
+    }
+  }
   return !hasObservedCompletedReplicaOperation(record, options);
 }
 
@@ -700,6 +713,15 @@ function isReplicaOperationStale(record, options = {}) {
     Math.floor(options.nowMs) :
     Date.now();
   const updatedAtMs = normalizeEpochMillis(record?.updatedAt);
+  if (options.ignorePreRestart === true) {
+    const uptimeSec = typeof process !== 'undefined' && typeof process.uptime === 'function' ?
+      process.uptime() :
+      NUM.ZERO;
+    const processStartMs = nowMs - Math.floor(uptimeSec * TIME_MS.SECOND);
+    if (Number.isFinite(updatedAtMs) && updatedAtMs < processStartMs) {
+      return false;
+    }
+  }
   const staleTimeoutLookbackMs = Number.isFinite(
     options.staleTimeoutLookbackMs,
   ) && options.staleTimeoutLookbackMs > NUM.ZERO ?

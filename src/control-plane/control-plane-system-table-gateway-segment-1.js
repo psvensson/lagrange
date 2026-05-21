@@ -845,6 +845,9 @@ class ControlPlaneSystemTableGatewaySegment1 {
     if (options?.cancellationToken) {
       queryOptions.cancellationToken = options.cancellationToken;
     }
+    if (typeof options?.preferLeader === TYPEOF.BOOLEAN) {
+      queryOptions.preferLeader = options.preferLeader;
+    }
     queryOptions = copyOption(
       queryOptions,
       options,

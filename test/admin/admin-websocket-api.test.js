@@ -491,6 +491,44 @@ test('AdminWebSocketAPI - control snapshot query preserves requested repair time
     );
   });
 
+test('AdminWebSocketAPI - direct query preserves ignorePreRestart handoff',
+  async (t) => {
+    let observedPayload = null;
+    let sentResult = null;
+    const api = new AdminWebSocketAPI({
+      nodeId: 'test-node',
+      systemTableCache: createPopulatedCache(),
+      sqlQueryEngine: createMockQueryEngine(),
+    });
+    api.executeLocalQueryEnvelope = async (payload) => {
+      observedPayload = payload;
+      return {
+        success: true,
+        rows: [],
+      };
+    };
+    api.sendQueryResult = (_clientInfo, _queryId, result) => {
+      sentResult = result;
+    };
+
+    await api.handleQueryMessage(
+      {id: 'client-ignore-pre-restart'},
+      {
+        queryId: 'q-ignore-pre-restart',
+        sql: ADMIN_CONTROL_SNAPSHOT.QUERY_SQL,
+        params: [],
+        ignorePreRestart: true,
+      },
+    );
+
+    t.equal(
+      observedPayload?.ignorePreRestart,
+      true,
+      'direct WebSocket query should preserve ignorePreRestart into local execution',
+    );
+    t.equal(sentResult?.success, true);
+  });
+
 test('AdminWebSocketAPI - query execution SELECT', async (t) => {
   const api = new AdminWebSocketAPI({
     nodeId: 'test-node',

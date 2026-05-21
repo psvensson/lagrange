@@ -684,7 +684,10 @@ class SQLQueryEngineSegment6 extends SQLQueryEngineSegment5 {
       sessionId,
     });
 
-    const preferLeader = this.isSystemTable(tableName);
+    const preferLeader =
+      typeof queryOptions?.preferLeader === 'boolean' ?
+        queryOptions.preferLeader :
+        this.isSystemTable(tableName);
     for (const join of ast.joins || []) {
       const joinTableName = join.table?.name;
       if (!joinTableName) {

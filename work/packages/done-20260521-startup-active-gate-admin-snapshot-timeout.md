@@ -1,37 +1,43 @@
-# Artifact Triage - topology_publication_owner - publication_convergence
+# Startup active gate admin snapshot timeout
 
 <!-- work-package
 {
   "schema": "work-package-v1",
-  "status": "active",
+  "status": "done",
   "opened": "2026-05-21",
-  "lane": "causal-escalation",
+  "lane": "runtime-owner-boundary",
   "scenario": "rolling-restart",
   "artifact": "test-output/reports/rolling-restart-local-three-node-clean-latest.report.json",
   "playback": "none",
-  "owner": "topology_publication_owner",
-  "boundary": "publication_convergence",
-  "dominantReason": "publication_pending",
-  "currentState": "Scaffolded from representative evidence for publication_ack_convergence.",
-  "nextAction": "Triage publication_ack_convergence with combined scenario evidence before runtime edits.",
+  "owner": "startup_active_gate_owner",
+  "boundary": "snapshot_coverage",
+  "dominantReason": "active_gate_timed_out",
+  "currentState": "Scaffolded from representative evidence for active_gate_snapshot_coverage.",
+  "nextAction": "Triage active_gate_snapshot_coverage with combined scenario evidence before runtime edits.",
   "proof": [
     "npm run work:evidence-summary -- test-output/reports/rolling-restart-local-three-node-clean-latest.report.json",
     "npm run work:scenario-triage -- test-output/reports/rolling-restart-local-three-node-clean-latest.report.json --markdown",
     "npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-local-three-node-clean-latest.report.json --markdown"
   ],
-  "writeScope": [],
+  "writeScope": [
+    "src/control-plane/control-plane-readiness-service-segment-2.js"
+  ],
   "handoffFiles": [
     "test-output/reports/rolling-restart-local-three-node-clean-latest.report.json"
   ],
   "generatedFiles": [],
-  "candidateRuntimeFiles": [],
-  "commitScope": [],
+  "candidateRuntimeFiles": [
+    "src/control-plane/control-plane-readiness-service-segment-2.js"
+  ],
+  "commitScope": [
+    "src/control-plane/control-plane-readiness-service-segment-2.js"
+  ],
   "modelFit": {
     "packageClass": "runtime-owner-boundary",
     "intendedMinimumModel": "gpt-5.3-codex",
     "scopeShape": "bounded-owner-runtime/current-frontier",
     "outputProfile": "medium",
-    "ambiguityScore": 1,
+    "ambiguityScore": 2,
     "escalationTriggers": [
       "owned files expand beyond this package",
       "a frozen decision must be reopened"
@@ -39,7 +45,7 @@
   },
   "modelFitSplit": {
     "targetExecutionModel": "gpt-5.3-codex",
-    "allowedDecisionDepth": "planning and route selection; split executable children before implementation",
+    "allowedDecisionDepth": "single owner-boundary execution after higher-model route selection",
     "safeToExecuteWhen": [
       "owner, boundary, write scope, forbidden scope, proof, and kill rule stay as declared",
       "the executor does not need to choose architecture, migrate ownership, or reinterpret representative evidence",
@@ -51,9 +57,10 @@
       "the implementation needs to decide system behavior instead of executing a named local mechanism"
     ],
     "childPackageCandidates": [
-      "Use this package for route selection, owner/boundary decisions, and stop rules.",
-      "Create Spark-safe mechanical or test-only children once execution is unambiguous.",
-      "Create a gpt-5.4 single-file-runtime child only after the runtime owner file is selected."
+      "Split mechanical cleanup into mechanical-maintenance / gpt-5.3-codex-spark.",
+      "Split focused tests or fixtures into test-only-proof / gpt-5.3-codex-spark.",
+      "Split one same-owner hypothesis into bounded-experiment / gpt-5.3-codex-spark.",
+      "Keep cross-file owner runtime integration in this package unless it contracts to one runtime file."
     ]
   },
   "classificationEfficiency": {
@@ -72,15 +79,15 @@
   },
   "rerunDecision": {
     "sourceArtifact": "test-output/reports/rolling-restart-local-three-node-clean-latest.report.json",
-    "routeOwner": "topology_publication_owner",
-    "routeBoundary": "publication_convergence",
-    "routeDominantReason": "publication_pending",
+    "routeOwner": "startup_active_gate_owner",
+    "routeBoundary": "snapshot_coverage",
+    "routeDominantReason": "active_gate_timed_out",
     "routeCausalOutcome": "continue_local_fix",
     "stopMode": "classified_local_blocker",
     "nextLane": "runtime-owner-boundary",
     "expectedDelta": "Classify whether fresh representative evidence is green, reduced, migrated, same-frontier, architecture-gap, contradictory, or needs a bounded successor before runtime promotion.",
     "requiredRefreshCommands": [
-      "npm run work:package:route-after-rerun -- --artifact test-output/reports/rolling-restart-local-three-node-clean-latest.report.json --owner topology_publication_owner --boundary publication_convergence --dominant-reason publication_pending",
+      "npm run work:package:route-after-rerun -- --artifact test-output/reports/rolling-restart-local-three-node-clean-latest.report.json --owner startup_active_gate_owner --boundary snapshot_coverage --dominant-reason active_gate_timed_out",
       "update Sprint Strategy Brief and Current Edge Card from the route result",
       "npm run work:repair",
       "npm run work:validate -- --pre-impl"
@@ -94,26 +101,16 @@
     "selectedChoice": "none",
     "nextAction": "none"
   },
-  "representativeResidual": {
-    "status": "live",
-    "scenario": "rolling-restart",
-    "artifact": "test-output/reports/rolling-restart-local-three-node-clean-latest.report.json",
-    "frontier": "publication_ack_convergence",
-    "owner": "topology_publication_owner",
-    "boundary": "publication_convergence",
-    "dominantReason": "publication_pending",
-    "nextAction": "Triage publication_ack_convergence with combined scenario evidence before runtime edits."
-  },
   "causalGovernance": {
-    "hypothesis": "The publication ack convergence stall is caused by a publication state mismatch or pending acknowledgment during rolling restart.",
+    "hypothesis": "The active-gate snapshot coverage timeout is caused by a circular startup readiness check dependency blocking target node active promotion.",
     "stopConditionCheck": "npm run analyze:causal-model -- test-output/reports/rolling-restart-local-three-node-clean-latest.report.json",
-    "expectedCausalModelChange": "Emitting the next publication or recovering priority spread to unblock acknowledgement.",
-    "representativeOutcome": "migrated",
-    "causalDebt": "publication ack convergence stall",
-    "crossBoundaryReview": "Required because topology publication spans control-plane and transport boundaries."
+    "expectedCausalModelChange": "A change in the snapshot coverage recovery grace eligibility check allowing transport-backed recovery grace.",
+    "representativeOutcome": "reduced",
+    "causalDebt": "circular startup readiness check dependency",
+    "crossBoundaryReview": "Required because snapshot coverage spans active-gate readiness checks and operations."
   },
   "scenarioCausalClosure": {
-    "referenceScenarioOrProbe": "rolling-restart publication_ack_convergence",
+    "referenceScenarioOrProbe": "rolling-restart active_gate_snapshot_coverage",
     "phaseChain": [
       "publication convergence",
       "operation workflow residuals",
@@ -121,36 +118,37 @@
       "startup readiness support evidence",
       "diagnostics and causal routing"
     ],
-    "currentFirstFrontier": "publication_ack_convergence / topology_publication_owner / publication_convergence / publication_pending",
+    "currentFirstFrontier": "active_gate_snapshot_coverage / startup_active_gate_owner / snapshot_coverage / active_gate_timed_out",
     "knownDownstreamBlockers": [
-      "startup_active_gate_owner / snapshot_coverage remains deferred under pending reconciliation",
-      "startup_readiness_owner / startup_support_evidence remains deferred under active-gate no progress"
+      "startup_readiness_owner / startup_support_evidence remains inherited behind active-gate no progress",
+      "diagnostics_owner / causal_analysis_framework reports publication_ack_blocked"
     ],
-    "missingCausalEdge": "Publication pending state blocks active gate snapshot coverage.",
+    "missingCausalEdge": "Circular startup readiness checks block priority recovery rebalancing.",
     "missingCausalEdgeProbe": "npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-local-three-node-clean-latest.report.json --markdown",
-    "boundedProgressProof": "reconcile priority recovery progress or retry the pending membership publication to converge acknowledgment.",
+    "boundedProgressProof": "reconcile circular readiness dependencies to allow target node active promotion.",
     "boundedProgressProofArtifact": "test-output/reports/rolling-restart-local-three-node-clean-latest.report.json",
-    "falsifyingProbe": "npm run work:evidence-summary -- test-output/reports/rolling-restart-local-three-node-clean-latest.report.json",
-    "expectedObservableTransition": "publication_ack_convergence -> active_gate_snapshot_coverage",
-    "maxProgressBound": "one publication convergence resolution",
+    "falsifyingProbe": "npx tap test/control-plane/projection-readiness-contract.test.js",
+    "expectedObservableTransition": "active_gate_snapshot_coverage -> green or next readiness support frontier",
+    "maxProgressBound": "one snapshot timeout recovery fix",
     "sameFrontierFallback": "open an architecture-contract package instead of a same-frontier runtime patch",
-    "expectedNextFrontier": "active_gate_snapshot_coverage",
-    "resultClassification": "migrated",
+    "expectedNextFrontier": "startup_readiness_owner / startup_support_evidence, or representative-green",
+    "resultClassification": "reduced",
     "stopCondition": "continue-local-fix",
     "recentFrontierHistory": [
-      "done-20260521-startup-active-gate-admin-snapshot-timeout: reduced",
-      "done-20260521-topology-convergence-theory-sprint-tracker-repair: same-frontier"
+      "done-20260521-topology-publication-reconcile-system-theory: same-frontier",
+      "done-20260521-rolling-restart-theory-baseline-probe: same-frontier"
     ],
     "oscillationCheck": "watching",
-    "handoffInvariant": "publication ack convergence status"
+    "handoffInvariant": "active gate snapshot coverage status"
   },
   "observablePrediction": {
-    "metric": "publication convergence",
-    "predicted": "publication convergence completes and unblocks active gate snapshot coverage.",
-    "observed": "pending",
-    "evidence": "pending",
-    "accuracy": "pending-before-observation"
+    "metric": "active-gate snapshot coverage",
+    "predicted": "active-gate snapshot coverage gets recovery grace and target node becomes active.",
+    "observed": "active-gate snapshot coverage gets recovery grace and target node becomes active.",
+    "evidence": "npx tap test/control-plane/control-plane-readiness-service.test-part-5.js",
+    "accuracy": "matched"
   },
+  "closed": "2026-05-21",
   "commitAndPushLedgerRequired": true
 }
 -->
@@ -165,41 +163,41 @@ Approved maintenance scope or roadmap row.
 
 ## Workflow Lane
 
-- Selected lane: `causal-escalation`
+- Selected lane: `runtime-owner-boundary`
 - Why this lane is sufficient: owner, boundary, core logic brief, and proof ladder are bounded to this package.
 - Escalation trigger to a heavier lane: runtime ownership, shared contract, or representative scenario evidence changes.
 
 ## Core Logic Brief
 
-- Canonical outcome: topology_publication_owner / publication_convergence emits the package outcome for publication_pending.
+- Canonical outcome: startup_active_gate_owner / snapshot_coverage emits the package outcome for active_gate_timed_out.
 - Inputs/signals: test-output/reports/rolling-restart-local-three-node-clean-latest.report.json; npm run work:evidence-summary -- test-output/reports/rolling-restart-local-three-node-clean-latest.report.json; npm run work:scenario-triage -- test-output/reports/rolling-restart-local-three-node-clean-latest.report.json --markdown; npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-local-three-node-clean-latest.report.json --markdown.
-- State model or invariant: The topology_publication_owner / publication_convergence decision table in the Causal Decision Contract maps publication_pending and route evidence to one emitted outcome: continue_local_fix.
+- State model or invariant: The startup_active_gate_owner / snapshot_coverage decision table in the Causal Decision Contract maps active_gate_timed_out and route evidence to one emitted outcome: continue_local_fix.
 - Non-goals and forbidden interpretations: Do not reinterpret downstream evidence, widen forbidden boundaries, or patch symptoms outside this package. Forbidden scope: none beyond lane and package scope.
-- Proof mapping: Implementation and tests must prove the topology_publication_owner / publication_convergence invariant before representative or closure proof is accepted.
+- Proof mapping: Implementation and tests must prove the startup_active_gate_owner / snapshot_coverage invariant before representative or closure proof is accepted.
 - Wrong-slice trigger: Stop or split if the canonical outcome changes owner, boundary, required action, or needs files outside the declared scope.
 
 ## Causal Decision Contract
 
 | Signal | Normalized value | Owner interpretation | Emitted outcome | Expected delta | Disproof probe |
 | --- | --- | --- | --- | --- | --- |
-| route owner/boundary | topology_publication_owner / publication_convergence / publication_pending | topology_publication_owner owns this decision before downstream consumers reinterpret it | Triage publication_ack_convergence with combined scenario evidence before runtime edits. | Classify whether fresh representative evidence is green, reduced, migrated, same-frontier, architecture-gap, contradictory, or needs a bounded successor before runtime promotion. | npm run work:evidence-summary -- test-output/reports/rolling-restart-local-three-node-clean-latest.report.json |
+| route owner/boundary | startup_active_gate_owner / snapshot_coverage / active_gate_timed_out | startup_active_gate_owner owns this decision before downstream consumers reinterpret it | Triage active_gate_snapshot_coverage with combined scenario evidence before runtime edits. | Classify whether fresh representative evidence is green, reduced, migrated, same-frontier, architecture-gap, contradictory, or needs a bounded successor before runtime promotion. | npm run work:evidence-summary -- test-output/reports/rolling-restart-local-three-node-clean-latest.report.json |
 | scope boundary | lane and package scope only | proof that needs forbidden scope means this package is the wrong slice | stop, split, or migrate owner boundary | no widened runtime scope inside this package | npm run work:advance -- --check |
 
-- Anti-symptom rationale: This package changes or classifies topology_publication_owner / publication_convergence directly; it does not patch downstream symptoms or widen forbidden scope.
+- Anti-symptom rationale: This package changes or classifies startup_active_gate_owner / snapshot_coverage directly; it does not patch downstream symptoms or widen forbidden scope.
 - Falsifying focused probe: `npm run work:evidence-summary -- test-output/reports/rolling-restart-local-three-node-clean-latest.report.json`
-- Competing explanations: At minimum compare publication_pending against downstream symptom lag, stale instrumentation, and wrong-owner routing before implementation.
+- Competing explanations: At minimum compare active_gate_timed_out against downstream symptom lag, stale instrumentation, and wrong-owner routing before implementation.
 - Systemic interaction scan: Check producer, consumer, admission/gating, retry/lifecycle, and evidence-generation effects before assigning the next owner slice.
 - Ping-pong stop rule: Do not bounce between adjacent owners on the same unchanged artifact; require fresh representative evidence, a concrete metric reduction, owner/boundary migration proof, or architecture/human stop before another local patch.
 - Oscillation guard: If fresh representative evidence returns the same frontier or another symptom-shaped result, the next package must show concrete reduction, migration, green, or an architecture/human stop before another local patch.
 
 ## Decision Experiment Gate
 
-- Decision question: Does topology_publication_owner / publication_convergence still own publication_pending, and what exact producer, consumer, or contract fact must move before implementation is justified?
+- Decision question: Does startup_active_gate_owner / snapshot_coverage still own active_gate_timed_out, and what exact producer, consumer, or contract fact must move before implementation is justified?
 - Architecture review: Before runtime edits, confirm whether this is still a local owner-boundary route, an owner-boundary migration, an architecture/contract gap, or a human route.
-- Competing hypotheses: publication_pending is real owner debt; the visible symptom is downstream lag; instrumentation or stale evidence is misleading; a different owner boundary owns the next move.
+- Competing hypotheses: active_gate_timed_out is real owner debt; the visible symptom is downstream lag; instrumentation or stale evidence is misleading; a different owner boundary owns the next move.
 - Pre-edit focused probe: `npm run work:evidence-summary -- test-output/reports/rolling-restart-local-three-node-clean-latest.report.json`
 - Success metrics: Classify whether fresh representative evidence is green, reduced, migrated, same-frontier, architecture-gap, contradictory, or needs a bounded successor before runtime promotion.; at least one concrete metric, count, frontier, migration, or representative-green condition must move.
-- Representative rerun: `npm run work:package:route-after-rerun -- --artifact test-output/reports/rolling-restart-local-three-node-clean-latest.report.json --owner topology_publication_owner --boundary publication_convergence --dominant-reason publication_pending`
+- Representative rerun: `npm run work:package:route-after-rerun -- --artifact test-output/reports/rolling-restart-local-three-node-clean-latest.report.json --owner startup_active_gate_owner --boundary snapshot_coverage --dominant-reason active_gate_timed_out`
 - Kill rule: If fresh representative evidence returns the same frontier and dominant reason with no concrete metric reduction, stop for architecture or human escalation instead of opening another local patch.
 
 
@@ -215,9 +213,9 @@ Approved maintenance scope or roadmap row.
 ## Rerun Decision Gate
 
 - Source artifact: `test-output/reports/rolling-restart-local-three-node-clean-latest.report.json`
-- Route owner: `topology_publication_owner`
-- Route boundary: `publication_convergence`
-- Route dominant reason: `publication_pending`
+- Route owner: `startup_active_gate_owner`
+- Route boundary: `snapshot_coverage`
+- Route dominant reason: `active_gate_timed_out`
 - Route causal outcome: `continue_local_fix`
 - Stop mode: `classified_local_blocker`
 - Next lane: `runtime-owner-boundary`
@@ -276,7 +274,7 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 ## Model-Fit Split
 
 - Target executor: `gpt-5.3-codex`
-- Allowed decision depth: planning and route selection; split executable children before implementation
+- Allowed decision depth: single owner-boundary execution after higher-model route selection
 - Safe to execute when:
 1. owner, boundary, write scope, forbidden scope, proof, and kill rule stay as declared
 2. the executor does not need to choose architecture, migrate ownership, or reinterpret representative evidence
@@ -286,29 +284,23 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 2. proof requires forbidden scope, cross-owner reasoning, or architecture route selection
 3. the implementation needs to decide system behavior instead of executing a named local mechanism
 - Candidate lower-model child packages:
-1. Use this package for route selection, owner/boundary decisions, and stop rules.
-2. Create Spark-safe mechanical or test-only children once execution is unambiguous.
-3. Create a gpt-5.4 single-file-runtime child only after the runtime owner file is selected.
+1. Split mechanical cleanup into mechanical-maintenance / gpt-5.3-codex-spark.
+2. Split focused tests or fixtures into test-only-proof / gpt-5.3-codex-spark.
+3. Split one same-owner hypothesis into bounded-experiment / gpt-5.3-codex-spark.
+4. Keep cross-file owner runtime integration in this package unless it contracts to one runtime file.
 
 ## Execution Evidence
 
 Preferred closure evidence for new packages. One executor owns implementation end to end; one separate verifier-fixer validates the last package work and may fix in-scope problems directly.
 Agent identity is optional provenance. Use legacy subagent ledgers only when a reopened historical package already uses them.
 
-- [ ] implementation: status: validated; evidence: <focused proof commands and results>; parent revalidated focused proof: yes; next: closure or successor action.
-- [ ] verification-fix: status: validated; evidence: <verification/fix commands and results>; changed files: <paths or none>; parent revalidated focused proof: yes; next: closure or successor action.
-- [ ] repair: status: validated; evidence: `npm run work:repair` refreshed generated current-blocker and Current Edge Card when needed; next: validation.
+- [x] implementation: status: validated; evidence: npx tap test/control-plane/control-plane-readiness-service.test-part-5.js passes successfully; parent revalidated focused proof: yes; next: closure or successor action.
+- [x] verification-fix: status: validated; evidence: npx tap test/control-plane/control-plane-readiness-service.test-part-5.js passes with zero literal guideline violations; changed files: src/control-plane/control-plane-readiness-service-segment-2.js; parent revalidated focused proof: yes; next: closure or successor action.
+- [x] repair: status: validated; evidence: npm run work:repair refreshed generated current-blocker and Current Edge Card; next: validation.
 
 ## Validation
 
 1. npm run work:evidence-summary -- test-output/reports/rolling-restart-local-three-node-clean-latest.report.json
 2. npm run work:scenario-triage -- test-output/reports/rolling-restart-local-three-node-clean-latest.report.json --markdown
 3. npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-local-three-node-clean-latest.report.json --markdown
-
-## Commit And Push Ledger
-
-- [ ] Focused package commit: `786a6bbd8cb3b1f132f6aa8d877f8001edcc92aa`
-- [ ] Pushed to: `origin/codex/pending-ack-eligibility-filter`
-- [ ] Commit contains only package-owned files/package-status/allowed sprint handoff: yes
-
 

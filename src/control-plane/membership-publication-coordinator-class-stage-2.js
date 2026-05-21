@@ -1259,30 +1259,47 @@ class MembershipPublicationCoordinatorClassStage2 extends
           ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_VISIBLE_WRITE_ATTEMPTS;
         visibilityAttempt += NUM.ONE
       ) {
-        reconcileOutcome = await this.reconcileClusterMembership(context);
-        const visibleRow =
-          await this.readActiveGateMembershipPublicationVisibleReconcileRow(
-            reconcileOutcome,
-            target,
-            context,
-          );
-        if (visibleRow) {
-          return buildActiveGateMembershipPublicationReconcileOutcome(
-            ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_OUTCOME
-              .PUBLISHED_VISIBLE,
-            {
-              publicationRow: visibleRow,
+        try {
+          reconcileOutcome = await this.reconcileClusterMembership(context);
+          const visibleRow =
+            await this.readActiveGateMembershipPublicationVisibleReconcileRow(
+              reconcileOutcome,
               target,
-              controlPlaneConvergence: buildControlPlaneConvergenceOutcome({
-                pressureOutcome:
-                  CONTROL_PLANE_CONVERGENCE_PRESSURE_OUTCOME.CRITICAL_ADMITTED,
-                ownerKey: this.buildOwnerKey(),
-                operation:
-                  CONTROL_PLANE_CRITICAL_CONVERGENCE_OPERATION
-                    .ACTIVE_GATE_HANDOFF,
-              }),
-            },
-          );
+              context,
+            );
+          if (visibleRow) {
+            return buildActiveGateMembershipPublicationReconcileOutcome(
+              ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_OUTCOME
+                .PUBLISHED_VISIBLE,
+              {
+                publicationRow: visibleRow,
+                target,
+                controlPlaneConvergence: buildControlPlaneConvergenceOutcome({
+                  pressureOutcome:
+                    CONTROL_PLANE_CONVERGENCE_PRESSURE_OUTCOME.CRITICAL_ADMITTED,
+                  ownerKey: this.buildOwnerKey(),
+                  operation:
+                    CONTROL_PLANE_CRITICAL_CONVERGENCE_OPERATION
+                      .ACTIVE_GATE_HANDOFF,
+                }),
+              },
+            );
+          }
+        } catch (error) {
+          if (
+            visibilityAttempt + NUM.ONE >=
+            ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_VISIBLE_WRITE_ATTEMPTS
+          ) {
+            throw error;
+          }
+          const deferredOutcome =
+            resolveActiveGateMembershipPublicationErrorOutcome(error);
+          if (
+            deferredOutcome !==
+            ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_OUTCOME.WRITE_DEFERRED
+          ) {
+            throw error;
+          }
         }
       }
       const deferredContext =

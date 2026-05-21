@@ -6,11 +6,15 @@
 import {test} from '../../src/test-helpers/tap.js';
 import {BootstrapAPI, BootstrapStrategy} from '../../src/bootstrap/bootstrap-api.js';
 import {
+  BOOTSTRAP_API_ASSIGNMENT,
   BOOTSTRAP_API_LOG_MSG,
   BOOTSTRAP_API_READINESS_FIELD,
   BOOTSTRAP_API_RESPONSE_FIELD,
   BOOTSTRAP_API_ROUTE,
 } from '../../src/bootstrap/bootstrap-api-constants.js';
+import {
+  configureSyntheticMoveReplicaRegisterServiceHandoff,
+} from './move-replica-assignment-token-test-helpers.js';
 import {
   BOOTSTRAP_PHASE,
   BOOTSTRAP_PIPELINE_ERROR_CODE,
@@ -150,6 +154,7 @@ function createSatisfiedControlPlaneReadinessService() {
   const diagnostics = Object.freeze({
     publicationEpoch: 1,
     status: 'PUBLISHED',
+    publishedActiveNodeIds: Object.freeze(['seed-node-1']),
     priorityPartitionSummary: Object.freeze({
       satisfied: true,
       requiredDistinctNodeCount: 3,
@@ -917,6 +922,14 @@ async (t) => {
 
   await api.initialize(0, {listen: false});
   api.waitForRegisteredServiceCacheVisibility = async () => {};
+  const assignmentId = configureSyntheticMoveReplicaRegisterServiceHandoff(
+    api,
+    {
+      service_id: 'mg-1-r1',
+      node_id: 'joiner-node-1',
+      replica_id: 'mg-1-r1',
+    },
+  );
 
   const response = await api.getFastify().inject({
     method: 'POST',
@@ -927,6 +940,7 @@ async (t) => {
       node_id: 'joiner-node-1',
       group_id: 'mg-1',
       replica_id: 'mg-1-r1',
+      [BOOTSTRAP_API_ASSIGNMENT.FIELD_ID]: assignmentId,
       status: SERVICE_STATUS.STOPPED,
     },
   });
@@ -939,6 +953,11 @@ async (t) => {
     sqlCalls[0].sql,
     /^INSERT OR REPLACE INTO services \(/,
     'register-service should persist through the canonical services table',
+  );
+  t.notMatch(
+    sqlCalls[0].sql,
+    new RegExp(BOOTSTRAP_API_ASSIGNMENT.FIELD_ID),
+    'register-service SQL fallback should exclude assignment token metadata',
   );
   t.equal(
     sqlCalls[0].options.phaseScope,
@@ -1119,6 +1138,14 @@ test('BootstrapAPI - durable rejoin reuses existing message group without assign
     });
 
     await api.initialize(0, {listen: false});
+    api.bootstrapTopologySnapshotOwner.cacheAuthoritativeSystemTableSnapshotRows(
+      TABLES.SERVICES,
+      cacheData[TABLES.SERVICES],
+    );
+    api.bootstrapTopologySnapshotOwner.cacheAuthoritativeSystemTableSnapshotRows(
+      TABLES.MESSAGE_GROUPS,
+      cacheData[TABLES.MESSAGE_GROUPS],
+    );
     let reservationSweepCalled = false;
     let localAuthoritativeReadCount = 0;
     api.partitionServices = new Map([

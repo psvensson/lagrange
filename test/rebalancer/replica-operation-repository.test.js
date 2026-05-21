@@ -840,6 +840,11 @@ test(
       'replica_operations owner reads should use critical delivery priority',
     );
     t.equal(
+      capturedReads[0]?.options?.preferLeader,
+      false,
+      'replica_operations owner reads should prefer replica routing when the leader may be stopped',
+    );
+    t.equal(
       capturedReads[0]?.options?.coalescingKey,
       TEST_REPLICA_OPERATION_READ_COALESCING_KEY,
       'operation-id owner reads should coalesce by operation id',

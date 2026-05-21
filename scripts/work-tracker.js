@@ -430,10 +430,8 @@ const RERUN_DECISION_REQUIRED_COMMAND_PATTERNS = Object.freeze([
   /\bwork:validate\b[\s\S]*\bpre-impl\b/iu,
 ]);
 const SAME_FRONTIER_RESULT = 'same-frontier';
-const SAME_FRONTIER_ESCALATION_STOP_CONDITIONS = Object.freeze([
-  'architecture-gap-stop',
-  'human-escalation',
-]);
+const SAME_FRONTIER_HUMAN_EXCEPTION_PATTERN =
+  /\b(?:contradict|policy|credential|permission|unavailable|blocked|evidence-incomplete|human-only|manual-only)\b/iu;
 const SAME_FRONTIER_RUNTIME_SUCCESSOR_LANES = Object.freeze([
   LANE_RUNTIME_OWNER_BOUNDARY,
   LANE_SINGLE_FILE_RUNTIME,
@@ -496,11 +494,11 @@ const ARCHITECTURE_DECISION_GATE_CHOICE_ID_ARCHITECTURE_PACKAGE =
 const ARCHITECTURE_DECISION_GATE_CHOICE_ID_HUMAN_ESCALATION =
   'human-escalation';
 const ARCHITECTURE_DECISION_GATE_NEXT_ACTION_PRESENT =
-  'Present concrete architecture choices to the human before runtime implementation.';
+  'Select an autonomous architecture experiment unless evidence is contradictory or blocked.';
 const ARCHITECTURE_DECISION_GATE_NEXT_ACTION_SELECT =
-  'Wait for a human-selected architecture route before runtime implementation.';
+  'Select an architecture route before runtime implementation; default to an architecture package.';
 const ARCHITECTURE_DECISION_GATE_NEXT_ACTION_WATCH =
-  'Watch for repeated frontier oscillation and escalate if another local proof returns here.';
+  'Watch for repeated frontier oscillation; open an autonomous architecture experiment if another local proof returns here unchanged.';
 const OBSERVABLE_PREDICTION_ACCURACY_PENDING = 'pending-before-observation';
 const OBSERVABLE_PREDICTION_ACCURACY_MATCHED = 'matched';
 const OBSERVABLE_PREDICTION_ACCURACY_PARTIAL = 'partial';
@@ -515,6 +513,8 @@ const OBSERVABLE_PREDICTION_ACCURACIES = Object.freeze([
 ]);
 const EXPERIMENT_OUTCOME_DECISION_OPEN_RUNTIME = 'open-runtime-owner-boundary';
 const EXPERIMENT_OUTCOME_DECISION_OPEN_ARCHITECTURE =
+  'open-architecture-experiment';
+const EXPERIMENT_OUTCOME_DECISION_OPEN_ARCHITECTURE_CONTRACT =
   'open-architecture-contract';
 const EXPERIMENT_OUTCOME_DECISION_OWNER_MIGRATION =
   'owner-boundary-migration';
@@ -524,6 +524,7 @@ const EXPERIMENT_OUTCOME_DECISION_EVIDENCE_INCOMPLETE =
 const EXPERIMENT_OUTCOME_DECISIONS = Object.freeze([
   EXPERIMENT_OUTCOME_DECISION_OPEN_RUNTIME,
   EXPERIMENT_OUTCOME_DECISION_OPEN_ARCHITECTURE,
+  EXPERIMENT_OUTCOME_DECISION_OPEN_ARCHITECTURE_CONTRACT,
   EXPERIMENT_OUTCOME_DECISION_OWNER_MIGRATION,
   EXPERIMENT_OUTCOME_DECISION_HUMAN_ESCALATION,
   EXPERIMENT_OUTCOME_DECISION_EVIDENCE_INCOMPLETE,
@@ -3953,33 +3954,29 @@ export function validateSameFrontierStopContract(
     return [
       `${filePath}: two-shot same-frontier rule rejected a third ` +
       `${metadataLane(metadata)} package for ${metadataOwnerBoundaryKey(metadata)}; ` +
-      'open an owner-boundary migration package, architecture-contract package, or human escalation instead.',
+      'open an autonomous architecture experiment instead; human escalation is only for contradictory or blocked evidence.',
     ];
   }
   if (
     fileStatus !== STATUS_ACTIVE ||
     !metadata ||
     !isScenarioDrivenMetadata(metadata) ||
-    !metadataHasSameFrontierNoReduction(metadata)
+    !metadataIsSameFrontierWithoutMovement(metadata)
   ) {
     return [];
   }
-  const gate = metadata[ARCHITECTURE_DECISION_GATE_FIELD];
-  const gateStatus = normalizeLedgerText(gate?.status);
-  const stopCondition = scenarioClosureStopCondition(metadata);
   if (
-    [
-      ARCHITECTURE_DECISION_GATE_STATUS_REQUIRED,
-      ARCHITECTURE_DECISION_GATE_STATUS_PRESENTED,
-      ARCHITECTURE_DECISION_GATE_STATUS_SELECTED,
-    ].includes(gateStatus) ||
-    SAME_FRONTIER_ESCALATION_STOP_CONDITIONS.includes(stopCondition)
+    metadataHasSelectedArchitecturePackageRoute(metadata) ||
+    metadataHasSameFrontierHumanException(metadata)
   ) {
     return [];
   }
   return [
     `${filePath}: same-frontier rerun without concrete reduction must stop ` +
-    'local patching and record an architectureDecisionGate or human escalation before another local implementation package.',
+    'local patching and select/open an autonomous architecture experiment ' +
+    '(architectureDecisionGate route=architecture-package) before another ' +
+    'local implementation package; human escalation is only for contradictory ' +
+    'or blocked evidence.',
   ];
 }
 
@@ -4242,8 +4239,9 @@ export function validateFrontierOscillationContract(
   ) {
     errors.push(
       `${filePath}: frontier oscillation detected (${detection.reason}); ` +
-      'use the causal-escalation lane and a cross-boundary handoff package ' +
-      'before another local runtime patch. Recent related packages: ' +
+      'use the causal-escalation lane or an autonomous architecture ' +
+      'experiment with cross-boundary handoff proof before another local ' +
+      'runtime patch. Recent related packages: ' +
       detection.relatedEntries.map(frontierHistoryEntrySummary).join('; ') +
       '.',
     );
@@ -4333,13 +4331,13 @@ function architectureGateChoices(metadata = {}) {
     },
     {
       id: ARCHITECTURE_DECISION_GATE_CHOICE_ID_ARCHITECTURE_PACKAGE,
-      summary: 'Open a bounded architecture package for the missing owner contract.',
+      summary: 'Open a bounded autonomous architecture experiment for the missing owner contract.',
       route: ARCHITECTURE_DECISION_GATE_ROUTE_ARCHITECTURE_PACKAGE,
       proof: proofOrFallback,
     },
     {
       id: ARCHITECTURE_DECISION_GATE_CHOICE_ID_HUMAN_ESCALATION,
-      summary: 'Escalate to a human choice before creating or changing runtime packages.',
+      summary: 'Escalate to a human only when evidence is contradictory, policy-blocked, credential-blocked, or unavailable.',
       route: ARCHITECTURE_DECISION_GATE_ROUTE_HUMAN_ESCALATION,
       proof: proofOrFallback,
     },
@@ -4389,15 +4387,16 @@ export function buildArchitectureDecisionGatePayload(
 
   if (metadataHasArchitectureGap(metadata)) {
     return {
-      status: ARCHITECTURE_DECISION_GATE_STATUS_REQUIRED,
+      status: ARCHITECTURE_DECISION_GATE_STATUS_SELECTED,
       trigger: ARCHITECTURE_DECISION_GATE_TRIGGER_ARCHITECTURE_GAP,
       triggerEvidence: architectureGateEvidence(
         metadata,
         ARCHITECTURE_DECISION_GATE_TRIGGER_ARCHITECTURE_GAP,
       ),
       choices: architectureGateChoices(metadata),
-      selectedChoice: null,
-      nextAction: ARCHITECTURE_DECISION_GATE_NEXT_ACTION_PRESENT,
+      selectedChoice: ARCHITECTURE_DECISION_GATE_CHOICE_ID_ARCHITECTURE_PACKAGE,
+      nextAction:
+        'Open the autonomous architecture experiment package before runtime implementation resumes.',
     };
   }
 
@@ -4500,7 +4499,7 @@ function validateArchitectureGateSelectedChoice(filePath, gate) {
   const selectedChoice = normalizeLedgerText(gate.selectedChoice);
   if (selectedChoice.length === NUM_ZERO) {
     return [
-      `${filePath}: architectureDecisionGate.selectedChoice must name the human-selected architecture route.`,
+      `${filePath}: architectureDecisionGate.selectedChoice must name the selected architecture route.`,
     ];
   }
   const choices = Array.isArray(gate.choices) ? gate.choices : [];
@@ -4547,6 +4546,52 @@ function metadataHasSelectedNonLocalArchitectureRoute(metadata = {}) {
       ARCHITECTURE_DECISION_GATE_ROUTE_CONTINUE_LOCAL_PROOF);
 }
 
+function selectedArchitectureGateRoute(metadata = {}) {
+  const gate = metadata?.[ARCHITECTURE_DECISION_GATE_FIELD];
+  if (!isObjectRecord(gate)) {
+    return EMPTY_TEXT;
+  }
+  if (
+    normalizeLedgerText(gate.status) !==
+    ARCHITECTURE_DECISION_GATE_STATUS_SELECTED
+  ) {
+    return EMPTY_TEXT;
+  }
+  const selectedChoice = normalizeLedgerText(gate.selectedChoice);
+  const choices = Array.isArray(gate.choices) ? gate.choices : [];
+  const selected = choices.find((choice) =>
+    isObjectRecord(choice) &&
+    normalizeLedgerText(choice.id) === selectedChoice);
+  return selected ? normalizeLedgerText(selected.route) : EMPTY_TEXT;
+}
+
+function metadataHasSelectedArchitecturePackageRoute(metadata = {}) {
+  return selectedArchitectureGateRoute(metadata) ===
+    ARCHITECTURE_DECISION_GATE_ROUTE_ARCHITECTURE_PACKAGE;
+}
+
+function metadataHasSameFrontierHumanException(metadata = {}) {
+  const route = selectedArchitectureGateRoute(metadata);
+  const stopCondition = scenarioClosureStopCondition(metadata);
+  if (
+    route !== ARCHITECTURE_DECISION_GATE_ROUTE_HUMAN_ESCALATION &&
+    stopCondition !== ARCHITECTURE_DECISION_GATE_ROUTE_HUMAN_ESCALATION
+  ) {
+    return false;
+  }
+  return SAME_FRONTIER_HUMAN_EXCEPTION_PATTERN.test([
+    metadata?.dominantReason,
+    metadata?.nextAction,
+    metadata?.currentState,
+    metadata?.[ARCHITECTURE_DECISION_GATE_FIELD]?.nextAction,
+    ...(Array.isArray(
+      metadata?.[ARCHITECTURE_DECISION_GATE_FIELD]?.triggerEvidence,
+    ) ? metadata[ARCHITECTURE_DECISION_GATE_FIELD].triggerEvidence : []),
+    metadata?.[SCENARIO_CAUSAL_CLOSURE_METADATA_FIELD]?.missingCausalEdge,
+    metadata?.[SCENARIO_CAUSAL_CLOSURE_METADATA_FIELD]?.sameFrontierFallback,
+  ].map(normalizeLedgerText).join(' '));
+}
+
 function metadataIsOwnerBoundaryMigrationPackage(metadata = {}) {
   return isObjectRecord(metadata?.[OWNER_BOUNDARY_MIGRATION_PROOF_FIELD]);
 }
@@ -4565,15 +4610,7 @@ function metadataIsArchitectureContractPackage(metadata = {}) {
 }
 
 function metadataIsHumanEscalationPackage(metadata = {}) {
-  return scenarioClosureStopCondition(metadata) ===
-      ARCHITECTURE_DECISION_GATE_ROUTE_HUMAN_ESCALATION ||
-    /human[-_ ]escalation|human[-_ ]gate|present[-_ ]human/iu.test(
-      [
-        metadata?.dominantReason,
-        metadata?.nextAction,
-        metadata?.[EXPERIMENT_OUTCOME_FIELD]?.[EXPERIMENT_OUTCOME_DECISION_FIELD],
-      ].map(normalizeLedgerText).join(' '),
-    );
+  return metadataHasSameFrontierHumanException(metadata);
 }
 
 function metadataAllowsWatchingOscillationRuntimeEdit(metadata = {}) {
@@ -4655,7 +4692,7 @@ export function validateArchitectureDecisionGateContract(
   ) {
     errors.push(
       `${filePath}: architectureDecisionGate status is required; present ` +
-      'concrete architecture choices before implementation.',
+      'concrete architecture choices or select the autonomous architecture package before implementation.',
     );
   }
   if (
@@ -4665,7 +4702,7 @@ export function validateArchitectureDecisionGateContract(
   ) {
     errors.push(
       `${filePath}: architectureDecisionGate status is presented; runtime ` +
-      'implementation is blocked until a human-selected architecture route is recorded.',
+      'implementation is blocked until a selected architecture route is recorded.',
     );
   }
   if (
@@ -4679,8 +4716,9 @@ export function validateArchitectureDecisionGateContract(
     errors.push(
       `${filePath}: architectureDecisionGate is watching frontier-oscillation; ` +
       'pre-implementation cannot start another active runtime edit until ' +
-      'the next package is an experiment, owner-boundary migration, ' +
-      'architecture contract, human escalation, or selected non-local route.',
+      'the next package is an autonomous experiment, owner-boundary migration, ' +
+      'architecture contract, or selected architecture-package route; human ' +
+      'escalation is only for contradictory or blocked evidence.',
     );
   }
   if (
@@ -6229,7 +6267,8 @@ function buildProcessGuidanceLines(metadata = {}, fileStatus = DEFAULT_UNKNOWN) 
       'Admin stop applies: this active package owns no implementation write ' +
       'scope, so the next pass must run representative evidence, close as ' +
       'classification-only, open a concrete runtime/tooling bug package, or ' +
-      'present a human gate.',
+      'open an autonomous architecture experiment. Human gates are only for ' +
+      'contradictory or blocked evidence.',
     );
     if (!hasRepresentativeEvidenceProof(metadata)) {
       lines.push(
@@ -6365,12 +6404,16 @@ function buildDoctorSuggestion(error) {
       'Stable owner/boundary local-fix routes should open a runtime-owner-boundary successor.';
   }
   if (/same-frontier rerun without concrete reduction/iu.test(error)) {
-    return 'Stop local patching: record an architecture decision gate or human ' +
-      'escalation before opening another local implementation package.';
+    return 'Stop local patching: select/open an autonomous architecture ' +
+      'experiment with `architectureDecisionGate` route `architecture-package` ' +
+      'before another local implementation package. Use human escalation only ' +
+      'when evidence is contradictory, policy-blocked, credential-blocked, or unavailable.';
   }
   if (/architectureDecisionGate/iu.test(error)) {
     return 'Record `architectureDecisionGate` with concrete choices, proof, ' +
-      'and a selected human route before runtime implementation resumes. Use ' +
+      'and a selected architecture route before runtime implementation resumes. ' +
+      'Default to `architecture-package` for architecture gaps and unchanged ' +
+      'same-frontier evidence; use ' +
       '`work:package:new -- --from-artifact <artifact>` for bounded successor ' +
       'scaffolding when the route is a new package.';
   }

@@ -370,6 +370,7 @@ class Cluster5 extends Cluster4 {
           lane: ADMIN_SOCKET_LANE_SNAPSHOT,
           forceRepair: options.forceRepair === true,
           forceAuthoritativeRepair: options.forceRepair === true,
+          ignorePreRestart: readinessMode === CLUSTER_READINESS_MODE_LOAD,
         });
         await probeReachabilityDiagnostics();
         return buildSuccessfulSnapshotCoverageResult(snapshotResult);
@@ -394,6 +395,7 @@ class Cluster5 extends Cluster4 {
               lane: ADMIN_SOCKET_LANE_SNAPSHOT,
               forceRepair: false,
               forceAuthoritativeRepair: false,
+              ignorePreRestart: readinessMode === CLUSTER_READINESS_MODE_LOAD,
             });
             return buildSuccessfulSnapshotCoverageResult(
               retrySnapshotResult,

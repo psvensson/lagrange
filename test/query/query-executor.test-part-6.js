@@ -763,6 +763,512 @@ test('QueryExecutor - reconnect delivery deferral falls through to another ' +
     'read should return rows from the live candidate');
 });
 
+test('QueryExecutor - read candidate delivery reserves timeout budget for ' +
+  'alternate candidates', async (t) => {
+  const partitionId = 'p-read-budget-reserve';
+  const staleNodeId = 'node-stale';
+  const liveNodeId = 'node-live';
+  const spareNodeId = 'node-spare';
+  const staleAddress = `${staleNodeId}/partition/${partitionId}`;
+  const liveAddress = `${liveNodeId}/partition/${partitionId}`;
+  const spareAddress = `${spareNodeId}/partition/${partitionId}`;
+  const queryTimeoutMs = 6000;
+  const deliveries = [];
+  const systemCache = {
+    partitions: [
+      {partition_id: partitionId, leader_node_id: staleNodeId},
+    ],
+    services: [
+      {
+        service_id: `${partitionId}-r1`,
+        service_type: SERVICE_TYPE.PARTITION,
+        partition_id: partitionId,
+        node_id: staleNodeId,
+        raft_role: 'leader',
+        address: staleAddress,
+        status: SERVICE_STATUS.ACTIVE,
+      },
+      {
+        service_id: `${partitionId}-r2`,
+        service_type: SERVICE_TYPE.PARTITION,
+        partition_id: partitionId,
+        node_id: liveNodeId,
+        raft_role: 'follower',
+        address: liveAddress,
+        status: SERVICE_STATUS.ACTIVE,
+      },
+      {
+        service_id: `${partitionId}-r3`,
+        service_type: SERVICE_TYPE.PARTITION,
+        partition_id: partitionId,
+        node_id: spareNodeId,
+        raft_role: 'follower',
+        address: spareAddress,
+        status: SERVICE_STATUS.ACTIVE,
+      },
+    ],
+    get: function(type, key) {
+      if (type === TABLES.PARTITIONS) {
+        return this.partitions.find(
+          (partition) => partition.partition_id === key,
+        ) || null;
+      }
+      return null;
+    },
+    filter: function(type, predicate) {
+      if (type === TABLES.SERVICES) {
+        return this.services.filter(predicate);
+      }
+      if (type === TABLES.PARTITIONS) {
+        return this.partitions.filter(predicate);
+      }
+      return [];
+    },
+  };
+  const messageRouter = {
+    deliver: async (address, _message, options) => {
+      deliveries.push({address, timeoutMs: options?.timeoutMs});
+      if (address === staleAddress) {
+        return {
+          acknowledged: false,
+          success: false,
+          error: 'Message timeout',
+        };
+      }
+      return {
+        acknowledged: true,
+        success: true,
+        rows: [{node_id: liveNodeId}],
+      };
+    },
+  };
+  const executor = new QueryExecutor({
+    messageRouter,
+    systemCache,
+  });
+  executor.leaderRetryAttempts = 1;
+  executor.leaderRetryDelayMs = 1;
+
+  const result = await executor.executeOnPartition(
+    partitionId,
+    'SELECT * FROM nodes',
+    [],
+    true,
+    false,
+    false,
+    {timeoutMs: queryTimeoutMs},
+  );
+
+  t.equal(result.success, true,
+    'read should fall through from the stale candidate to a live alternate');
+  t.same(
+    deliveries.map((delivery) => delivery.address),
+    [staleAddress, liveAddress],
+    'delivery should attempt the live alternate before the read budget is exhausted',
+  );
+  t.ok(
+    deliveries[0].timeoutMs > 0 &&
+      deliveries[0].timeoutMs <= Math.floor(queryTimeoutMs / 2),
+    'first read candidate should not receive the full partition budget',
+  );
+  t.ok(
+    deliveries[1].timeoutMs > 0 &&
+      deliveries[1].timeoutMs <= queryTimeoutMs,
+    'alternate read candidate should receive a bounded remaining budget',
+  );
+});
+
+test('QueryExecutor - read delivery defers cold reconnect for a disconnected ' +
+  'single candidate', async (t) => {
+  const partitionId = 'p-read-cold-reconnect';
+  const disconnectedNodeId = 'node-disconnected';
+  const disconnectedAddress = `${disconnectedNodeId}/partition/${partitionId}`;
+  const queryTimeoutMs = 6000;
+  const reconnectDeferTimeoutMs = 1;
+  const deliveries = [];
+  const systemCache = {
+    partitions: [
+      {partition_id: partitionId, leader_node_id: disconnectedNodeId},
+    ],
+    services: [
+      {
+        service_id: `${partitionId}-r1`,
+        service_type: SERVICE_TYPE.PARTITION,
+        partition_id: partitionId,
+        node_id: disconnectedNodeId,
+        raft_role: 'leader',
+        address: disconnectedAddress,
+        status: SERVICE_STATUS.ACTIVE,
+      },
+    ],
+    get: function(type, key) {
+      if (type === TABLES.PARTITIONS) {
+        return this.partitions.find(
+          (partition) => partition.partition_id === key,
+        ) || null;
+      }
+      return null;
+    },
+    filter: function(type, predicate) {
+      if (type === TABLES.SERVICES) {
+        return this.services.filter(predicate);
+      }
+      if (type === TABLES.PARTITIONS) {
+        return this.partitions.filter(predicate);
+      }
+      return [];
+    },
+  };
+  const messageRouter = {
+    getConnectionState: () => 'disconnected',
+    deliver: async (address, _message, options) => {
+      deliveries.push({address, timeoutMs: options?.timeoutMs});
+      return {
+        acknowledged: false,
+        success: false,
+        error: `Connection to node ${disconnectedNodeId} closed`,
+        errorCode: 'ROUTER_CONNECTION_CLOSED',
+        retryAfterMs: 50,
+        deferRetry: true,
+      };
+    },
+  };
+  const executor = new QueryExecutor({
+    messageRouter,
+    systemCache,
+  });
+  executor.readRetryAttempts = 1;
+  executor.leaderRetryDelayMs = 1;
+
+  const result = await executor.executeOnPartition(
+    partitionId,
+    'SELECT * FROM replica_operations',
+    [],
+    true,
+    false,
+    false,
+    {
+      timeoutMs: queryTimeoutMs,
+      routingReadinessDimension:
+        CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
+    },
+  );
+
+  t.equal(result.success, false,
+    'read should fail fast when the only observed candidate is disconnected');
+  t.same(
+    deliveries,
+    [{address: disconnectedAddress, timeoutMs: reconnectDeferTimeoutMs}],
+    'disconnected read candidate should receive a reconnect-defer budget',
+  );
+  t.equal(
+    result.errorCode,
+    'ROUTER_CONNECTION_CLOSED',
+    'the failure should preserve the router connection error',
+  );
+});
+
+test('QueryExecutor - read delivery defers cold reconnect for an unobserved ' +
+  'single candidate', async (t) => {
+  const partitionId = 'p-read-cold-unobserved';
+  const unobservedNodeId = 'node-unobserved';
+  const unobservedAddress = `${unobservedNodeId}/partition/${partitionId}`;
+  const queryTimeoutMs = 6000;
+  const reconnectDeferTimeoutMs = 1;
+  const deliveries = [];
+  const systemCache = {
+    partitions: [
+      {partition_id: partitionId, leader_node_id: unobservedNodeId},
+    ],
+    services: [
+      {
+        service_id: `${partitionId}-r1`,
+        service_type: SERVICE_TYPE.PARTITION,
+        partition_id: partitionId,
+        node_id: unobservedNodeId,
+        raft_role: 'leader',
+        address: unobservedAddress,
+        status: SERVICE_STATUS.ACTIVE,
+      },
+    ],
+    get: function(type, key) {
+      if (type === TABLES.PARTITIONS) {
+        return this.partitions.find(
+          (partition) => partition.partition_id === key,
+        ) || null;
+      }
+      return null;
+    },
+    filter: function(type, predicate) {
+      if (type === TABLES.SERVICES) {
+        return this.services.filter(predicate);
+      }
+      if (type === TABLES.PARTITIONS) {
+        return this.partitions.filter(predicate);
+      }
+      return [];
+    },
+  };
+  const messageRouter = {
+    getConnectionState: () => 'unobserved',
+    deliver: async (address, _message, options) => {
+      deliveries.push({address, timeoutMs: options?.timeoutMs});
+      return {
+        acknowledged: false,
+        success: false,
+        error: `Connection to node ${unobservedNodeId} closed`,
+        errorCode: 'ROUTER_CONNECTION_CLOSED',
+        retryAfterMs: 50,
+        deferRetry: true,
+      };
+    },
+  };
+  const executor = new QueryExecutor({
+    messageRouter,
+    systemCache,
+  });
+  executor.readRetryAttempts = 1;
+  executor.leaderRetryDelayMs = 1;
+
+  const result = await executor.executeOnPartition(
+    partitionId,
+    'SELECT * FROM replica_operations',
+    [],
+    true,
+    false,
+    false,
+    {
+      timeoutMs: queryTimeoutMs,
+      routingReadinessDimension:
+        CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
+    },
+  );
+
+  t.equal(result.success, false,
+    'read should fail fast when the only candidate is unobserved');
+  t.same(
+    deliveries,
+    [{address: unobservedAddress, timeoutMs: reconnectDeferTimeoutMs}],
+    'unobserved read candidate should receive a reconnect-defer budget under recovery reads',
+  );
+  t.equal(
+    result.errorCode,
+    'ROUTER_CONNECTION_CLOSED',
+    'the failure should preserve the router connection error',
+  );
+});
+
+test('QueryExecutor - recovery read bounds connected stale candidate ack ' +
+  'timeout', async (t) => {
+  const partitionId = 'p-read-stale-connected';
+  const staleNodeId = 'node-stale';
+  const staleAddress = `${staleNodeId}/partition/${partitionId}`;
+  const queryTimeoutMs = 6000;
+  const reconnectIntervalMs = 1000;
+  const deliveries = [];
+  const systemCache = {
+    partitions: [
+      {partition_id: partitionId, leader_node_id: staleNodeId},
+    ],
+    services: [
+      {
+        service_id: `${partitionId}-r1`,
+        service_type: SERVICE_TYPE.PARTITION,
+        partition_id: partitionId,
+        node_id: staleNodeId,
+        raft_role: 'leader',
+        address: staleAddress,
+        status: SERVICE_STATUS.ACTIVE,
+      },
+    ],
+    get: function(type, key) {
+      if (type === TABLES.PARTITIONS) {
+        return this.partitions.find(
+          (partition) => partition.partition_id === key,
+        ) || null;
+      }
+      return null;
+    },
+    filter: function(type, predicate) {
+      if (type === TABLES.SERVICES) {
+        return this.services.filter(predicate);
+      }
+      if (type === TABLES.PARTITIONS) {
+        return this.partitions.filter(predicate);
+      }
+      return [];
+    },
+  };
+  const messageRouter = {
+    reconnectIntervalMs,
+    getConnectionState: () => 'connected',
+    deliver: async (address, _message, options) => {
+      deliveries.push({address, timeoutMs: options?.timeoutMs});
+      return {
+        acknowledged: false,
+        success: false,
+        error: 'Message timeout',
+        errorCode: 'ROUTER_MESSAGE_TIMEOUT',
+        retryAfterMs: reconnectIntervalMs,
+        deferRetry: true,
+      };
+    },
+  };
+  const executor = new QueryExecutor({
+    messageRouter,
+    systemCache,
+  });
+  executor.readRetryAttempts = 1;
+  executor.leaderRetryDelayMs = 1;
+
+  const result = await executor.executeOnPartition(
+    partitionId,
+    'SELECT * FROM nodes',
+    [],
+    true,
+    false,
+    false,
+    {
+      timeoutMs: queryTimeoutMs,
+      routingReadinessDimension:
+        CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
+    },
+  );
+
+  t.equal(result.success, false,
+    'read should defer when the connected recovery candidate does not ack');
+  t.same(
+    deliveries,
+    [{address: staleAddress, timeoutMs: reconnectIntervalMs}],
+    'connected stale recovery candidate should receive a bounded ack budget',
+  );
+  t.equal(
+    result.errorCode,
+    'ROUTER_MESSAGE_TIMEOUT',
+    'the failure should preserve the router timeout code',
+  );
+});
+
+test('QueryExecutor - priority recovery write defers cold reconnect and ' +
+  'widens to a live peer', async (t) => {
+  const partitionId = 'replica_operations-p1';
+  const disconnectedNodeId = 'node-disconnected';
+  const peerNodeId = 'node-peer';
+  const disconnectedAddress =
+    `${disconnectedNodeId}/partition/${partitionId}-r1`;
+  const peerAddress = `${peerNodeId}/partition/${partitionId}-r2`;
+  const queryTimeoutMs = 6000;
+  const reconnectDeferTimeoutMs = 1;
+  const deliveries = [];
+  const systemCache = {
+    partitions: [
+      {
+        partition_id: partitionId,
+        table_name: TABLES.REPLICA_OPERATIONS,
+        leader_node_id: disconnectedNodeId,
+      },
+    ],
+    services: [
+      {
+        service_id: `${partitionId}-r1`,
+        service_type: SERVICE_TYPE.PARTITION,
+        partition_id: partitionId,
+        node_id: disconnectedNodeId,
+        raft_role: 'leader',
+        address: disconnectedAddress,
+        status: SERVICE_STATUS.ACTIVE,
+      },
+      {
+        service_id: `${partitionId}-r2`,
+        service_type: SERVICE_TYPE.PARTITION,
+        partition_id: partitionId,
+        node_id: peerNodeId,
+        raft_role: 'follower',
+        address: peerAddress,
+        status: SERVICE_STATUS.ACTIVE,
+      },
+    ],
+    get: function(type, key) {
+      if (type === TABLES.PARTITIONS) {
+        return this.partitions.find(
+          (partition) => partition.partition_id === key,
+        ) || null;
+      }
+      return null;
+    },
+    filter: function(type, predicate) {
+      if (type === TABLES.SERVICES) {
+        return this.services.filter(predicate);
+      }
+      if (type === TABLES.PARTITIONS) {
+        return this.partitions.filter(predicate);
+      }
+      return [];
+    },
+  };
+  const messageRouter = {
+    getConnectionState: (nodeId) =>
+      nodeId === disconnectedNodeId ? 'disconnected' : 'connected',
+    deliver: async (address, _message, options) => {
+      deliveries.push({address, timeoutMs: options?.timeoutMs});
+      if (address === disconnectedAddress) {
+        return {
+          acknowledged: false,
+          success: false,
+          error: `Connection to node ${disconnectedNodeId} closed`,
+          errorCode: 'ROUTER_CONNECTION_CLOSED',
+          retryAfterMs: 50,
+          deferRetry: true,
+        };
+      }
+      return {
+        acknowledged: true,
+        success: true,
+        rows: [],
+        changes: 1,
+      };
+    },
+  };
+  const executor = new QueryExecutor({
+    messageRouter,
+    systemCache,
+  });
+  executor.leaderRetryAttempts = 1;
+  executor.leaderRetryDelayMs = 1;
+
+  const result = await executor.executeOnPartition(
+    partitionId,
+    'UPDATE replica_operations SET status = ? WHERE operation_id = ?',
+    ['completed', 'operation-1'],
+    false,
+    false,
+    false,
+    {
+      timeoutMs: queryTimeoutMs,
+      routingReadinessDimension:
+        CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
+    },
+  );
+
+  t.equal(result.success, true,
+    'priority recovery write should succeed through the live peer');
+  t.same(
+    deliveries.map((delivery) => delivery.address),
+    [disconnectedAddress, peerAddress],
+    'write should widen from the disconnected leader to the live peer',
+  );
+  t.equal(
+    deliveries[0].timeoutMs,
+    reconnectDeferTimeoutMs,
+    'disconnected leader write should receive a reconnect-defer budget',
+  );
+  t.ok(
+    deliveries[1].timeoutMs > reconnectDeferTimeoutMs &&
+      deliveries[1].timeoutMs <= queryTimeoutMs,
+    'live peer write should keep the remaining query budget',
+  );
+});
+
 test('QueryExecutor - inactive participant routing falls through to live ' +
   'participant for authoritative nodes read', async (t) => {
   const inactiveNodeId = '7493b0ab-a054-5fad-a91b-5e331db29304';

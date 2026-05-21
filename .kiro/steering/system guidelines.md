@@ -326,7 +326,8 @@ Required contract:
    must be fixed before package closure.
 5. Scenario-driven packages must prove what the original scenario does next:
    representative green, same frontier, reduced, migrated, classification-only,
-   architecture gap, or human escalation.
+   architecture gap, autonomous architecture experiment, or human-only
+   escalation for blocked/contradictory evidence.
 6. If a package discovers roadmap or architecture truth drift, repair the
    tracker, roadmap, or architecture record in the same closure cycle.
 7. Architectural exceptions must be explicit, owned, time-bounded, and recorded

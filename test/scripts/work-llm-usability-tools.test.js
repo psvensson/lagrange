@@ -110,6 +110,7 @@ test('shared package schema lists validator enums for LLM scaffolding', (t) => {
   t.match(rendered, /distinguishedHypothesis/u);
   t.match(rendered, /inline-gate-default/u);
   t.match(rendered, /open-runtime-owner-boundary/u);
+  t.match(rendered, /open-architecture-experiment/u);
   t.match(rendered, /Bounded Experiment Lane/u);
   t.match(rendered, /boundedExperiment/u);
   t.match(rendered, /hypothesis/u);
@@ -155,7 +156,6 @@ test('package scaffolder pre-fills Model Fit from schema defaults', async (t) =>
   t.match(content, /## Rerun Decision Gate/u);
   t.match(content, /## Classification Efficiency/u);
   t.match(content, /## Execution Evidence/u);
-  t.match(content, /review-fixed-metadata-only/u);
   t.match(content, /status: validated/u);
   t.match(content, /parent revalidated focused proof: yes/u);
   t.match(content, /Agent identity is optional provenance/u);
@@ -212,6 +212,7 @@ test('review subagent prompt allows metadata-only fixes inline',
   t.match(content, /Oscillation guard/u);
   t.match(content, /## Decision Experiment Gate/u);
   t.match(content, /Decision question: Does operation_workflow_owner \/ workflow_progress/u);
+  t.match(content, /autonomous architecture experiment/u);
   t.match(content, /Pre-edit focused probe: `node --test test\/rebalancer\/workflow-progress\.test\.js`/u);
   t.match(content, /Representative rerun: `npm run work:package:route-after-rerun/u);
   t.match(content, /Kill rule/u);
@@ -487,6 +488,26 @@ test('package scaffolder can mark classification-only fast path', async (t) => {
   t.match(content, /"artifactBudget": "one-artifact"/u);
 });
 
+test('package scaffolder routes same-frontier successors to architecture experiments',
+  async (t) => {
+    const content = await buildPackageContent({
+      'title': 'Same Frontier Architecture Experiment',
+      'slug': 'same-frontier-architecture-experiment',
+      'owner': OWNER_NAME,
+      'boundary': BOUNDARY_NAME,
+      'dominant-reason': 'same_frontier_no_reduction',
+      'next-action': 'Open the autonomous architecture experiment.',
+      'proof': [`npm run work:evidence-summary -- ${FIXTURE_PATH}`],
+      'route-causal-outcome': 'same-frontier',
+      'route-stop-mode': 'architecture-gap-stop',
+      'ledger': TEMP_LEDGER_PATH,
+    });
+
+    t.match(content, /"nextLane": "experiment"/u);
+    t.match(content, /"successorAction": "open-architecture-experiment"/u);
+    t.match(content, /autonomous architecture experiment/u);
+  });
+
 test('package scaffolder uses package filename date convention', async (t) => {
   const rendered = await runCli([
     '--title',
@@ -695,7 +716,7 @@ test('subagent-next emits the next required role and prompt', async (t) => {
   const rendered = lines.join('\n');
 
   t.match(rendered, /# Next Subagent/u);
-  t.match(rendered, /Role: `none`|Role: `review`/u);
+  t.match(rendered, /Role: `none`|Role: `review`|Role: `implementation`/u);
 });
 
 test('llm-start combines context, doctor, dirty scope, model ledger, and evidence',

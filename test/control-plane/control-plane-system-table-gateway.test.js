@@ -932,6 +932,7 @@ test('ControlPlaneSystemTableGateway owner-local reads honor explicit routed ' +
     strategy: CONTROL_PLANE_READ_STRATEGY.OWNER_LOCAL_NON_PROPAGATED,
   }, {
     allowSqlFallback: true,
+    preferLeader: false,
   });
 
   t.equal(result.success, true, 'owner-local read should succeed via routed authoritative fallback');
@@ -944,6 +945,11 @@ test('ControlPlaneSystemTableGateway owner-local reads honor explicit routed ' +
     authoritativeCalls[0]?.options?.allowSqlFallback,
     true,
     'owner-local reads should pass the explicit routed-authoritative opt-in to the owner',
+  );
+  t.equal(
+    authoritativeCalls[0]?.options?.queryOptions?.preferLeader,
+    false,
+    'owner-local reads should preserve replica-preferred routing intent',
   );
 });
 

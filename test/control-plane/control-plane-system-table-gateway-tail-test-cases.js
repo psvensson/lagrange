@@ -19,6 +19,8 @@ export function registerControlPlaneSystemTableGatewayTailTests({
   GATEWAY_MUTATION_STATUS_ACTIVE,
   GATEWAY_EXPECTED_FAILURE_MESSAGE,
 }) {
+  const GATEWAY_ASSIGNMENT_ID_FIELD = 'assignment_id';
+
   test('ControlPlaneSystemTableGateway submitMutation defers background writes ' +
     'while authority establishment is still pending', async (t) => {
     let updateCallCount = 0;
@@ -317,6 +319,7 @@ export function registerControlPlaneSystemTableGatewayTailTests({
         service_type: 'message_group',
         node_id: 'node-a',
         status: 'stopped',
+        [GATEWAY_ASSIGNMENT_ID_FIELD]: 'assignment-1',
       },
     }, {
       skipCacheWait: true,
@@ -333,6 +336,11 @@ export function registerControlPlaneSystemTableGatewayTailTests({
       sqlCalls[0].sql,
       /^INSERT OR REPLACE INTO services \(/,
       'fallback should emit an upsert statement for the system table',
+    );
+    t.notMatch(
+      sqlCalls[0].sql,
+      new RegExp(GATEWAY_ASSIGNMENT_ID_FIELD),
+      'fallback should omit metadata fields outside the services schema',
     );
     t.same(
       sqlCalls[0].params,

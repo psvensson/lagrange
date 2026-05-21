@@ -396,6 +396,11 @@ class AdminControlSnapshot extends AdminControlSnapshotPart6 {
       typeof this.systemTableCache?.getAll === TYPEOF.FUNCTION ?
         this.systemTableCache.getAll(TABLES.SERVICES) :
         ADMIN_CACHE_DUMP.EMPTY;
+    const isStartup =
+      this.startupRecoveryCoordinator &&
+      typeof this.startupRecoveryCoordinator.evaluate === TYPEOF.FUNCTION ?
+        this.startupRecoveryCoordinator.evaluate()?.ready !== true :
+        false;
     const livenessSummary = summarizeReplicaOperationLiveness(
       replicaOperationRows,
       {
@@ -403,6 +408,7 @@ class AdminControlSnapshot extends AdminControlSnapshotPart6 {
         serviceRows,
         nowMs: this.nowFn(),
         includeTimeline: true,
+        ignorePreRestart: isStartup || options.ignorePreRestart === true,
       },
     );
     return {
