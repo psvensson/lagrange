@@ -61,7 +61,7 @@ const LOG_REUSING_DURABLE_REJOIN_MEMBERSHIP =
 const LOG_RESUMING_JOIN_ADMISSION_PROGRESS =
   'Resuming join admission from canonical membership progress';
 const JOIN_ADMISSION_DELIVERY_PRIORITY = 'critical';
-const JOIN_ADMISSION_WRITE_RETRY_TIMEOUT_MS = TIME_MS.SECOND * NUM.TWO;
+const JOIN_ADMISSION_WRITE_RETRY_TIMEOUT_MS = TIME_MS.SECOND * NUM.THIRTY;
 const JOIN_ADMISSION_PUBLICATION = Object.freeze({
   META_SERVICE_ENDPOINT:
     'built-in meta service endpoint publication',

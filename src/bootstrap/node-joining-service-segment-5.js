@@ -844,6 +844,9 @@ class NodeJoiningServiceSegment5 extends NodeJoiningServiceSegment4 {
       rebalanceCoordinator: this.rebalanceCoordinator,
       bootstrapReadinessState: this.bootstrapReadinessState,
       executorOutcomeEmitter: this.replicaHandler?.executorOutcomeEmitter,
+      controlPlaneWriteRetryTimeoutMs: this.config.controlPlaneWriteRetryTimeoutMs,
+      controlPlaneWriteRetryBaseDelayMs: this.config.controlPlaneWriteRetryBaseDelayMs,
+      controlPlaneWriteRetryMaxDelayMs: this.config.controlPlaneWriteRetryMaxDelayMs,
     });
     this.heartbeatService = controlPlane.heartbeatService;
     if (

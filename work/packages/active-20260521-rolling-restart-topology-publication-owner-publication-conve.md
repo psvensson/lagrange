@@ -307,8 +307,8 @@ Agent identity is optional provenance. Use legacy subagent ledgers only when a r
 
 ## Commit And Push Ledger
 
-- [ ] Focused package commit: `pending`
-- [ ] Pushed to: `pending`
+- [ ] Focused package commit: `786a6bbd8cb3b1f132f6aa8d877f8001edcc92aa`
+- [ ] Pushed to: `origin/codex/pending-ack-eligibility-filter`
 - [ ] Commit contains only package-owned files/package-status/allowed sprint handoff: yes
 
 

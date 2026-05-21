@@ -138,6 +138,9 @@ class ControlPlaneSetup {
       bootstrapReadinessState,
       getLocalClusterIncarnationFence,
       executorOutcomeEmitter,
+      controlPlaneWriteRetryTimeoutMs,
+      controlPlaneWriteRetryBaseDelayMs,
+      controlPlaneWriteRetryMaxDelayMs,
     } = options;
 
     // Validate required dependencies
@@ -339,6 +342,9 @@ class ControlPlaneSetup {
         messageRouter,
         controlPlaneSystemTableGateway,
         systemMetadataOwners,
+        controlPlaneWriteRetryTimeoutMs,
+        controlPlaneWriteRetryBaseDelayMs,
+        controlPlaneWriteRetryMaxDelayMs,
       });
     const membershipPublicationService =
       new MembershipPublicationCoordinator({
