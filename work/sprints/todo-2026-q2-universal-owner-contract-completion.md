@@ -1,7 +1,7 @@
 # Universal Owner Contract Completion Sprint
 
 Status: todo. Activate this sprint only after
-`work/packages/active-20260521-rolling-restart-active-gate-snapshot-quorum.md`
+`work/packages/done-20260521-rolling-restart-active-gate-snapshot-quorum.md`
 is closed, superseded, or explicitly moved out of the active blocker slot.
 
 ## Sprint Strategy Brief

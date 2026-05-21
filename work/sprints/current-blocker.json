@@ -2,186 +2,35 @@
   "schema": "current-blocker-v1",
   "generatedBy": "scripts/work-tracker.js",
   "sprint": "none",
-  "package": "work/packages/active-20260521-rolling-restart-active-gate-snapshot-quorum.md",
-  "status": "active",
-  "lane": "causal-escalation",
-  "scenario": "rolling-restart",
-  "artifact": "test-output/report.json",
+  "package": "none",
+  "status": "none",
+  "lane": "none",
+  "scenario": "none",
+  "artifact": "none",
   "playback": "none",
-  "owner": "startup_active_gate_owner",
-  "boundary": "snapshot_coverage",
-  "dominantReason": "active_gate_timed_out",
-  "currentState": "Scaffolded from representative evidence for active_gate_snapshot_coverage.",
-  "nextAction": "Triage active_gate_snapshot_coverage with combined scenario evidence before runtime edits.",
-  "proof": [
-    "npm run work:scenario-route -- test-output/report.json --owner startup_active_gate_owner --boundary snapshot_coverage --dominant-reason active_gate_timed_out --explain active_gate_snapshot_coverage",
-    "npm run work:evidence-summary -- test-output/report.json",
-    "npm run work:scenario-triage -- test-output/report.json --markdown"
+  "owner": "none",
+  "boundary": "none",
+  "dominantReason": "none",
+  "currentState": "No active work package. Start a new package when implementation resumes.",
+  "nextAction": "Create or activate one focused package for the next executable concern.",
+  "proof": [],
+  "writeScope": [],
+  "handoffFiles": [],
+  "generatedFiles": [
+    "work/sprints/current-blocker.json",
+    "work/sprints/current-blocker.md"
   ],
-  "writeScope": [
-    "src/control-plane/publication-active-gate-handoff-contract.js"
-  ],
-  "handoffFiles": [
-    "test-output/report.json"
-  ],
-  "generatedFiles": [],
-  "candidateRuntimeFiles": [
-    "src/control-plane/publication-active-gate-handoff-contract.js"
-  ],
-  "commitScope": [
-    "src/control-plane/publication-active-gate-handoff-contract.js"
-  ],
+  "candidateRuntimeFiles": [],
+  "commitScope": [],
   "touchedFiles": [],
-  "modelFit": {
-    "packageClass": "runtime-owner-boundary",
-    "intendedMinimumModel": "gpt-5.3-codex",
-    "scopeShape": "bounded-owner-runtime/current-frontier",
-    "outputProfile": "medium",
-    "ambiguityScore": 1,
-    "escalationTriggers": [
-      "owned files expand beyond this package",
-      "a frozen decision must be reopened"
-    ]
-  },
-  "representativeResidual": {
-    "status": "live",
-    "scenario": "rolling-restart",
-    "artifact": "test-output/report.json",
-    "frontier": "active_gate_snapshot_coverage",
-    "owner": "startup_active_gate_owner",
-    "boundary": "snapshot_coverage",
-    "dominantReason": "active_gate_timed_out",
-    "nextAction": "Allow active gate quorum presence and snapshot coverage check during rolling restart."
-  },
-  "causalGovernance": {
-    "hypothesis": "The rolling-restart scenario times out because the active gate catchup fence requires 100% snapshot coverage and 100% presence of expected nodes. In a rolling restart, at least 1 node is restarting/offline, making it impossible to satisfy 100% coverage or presence. By allowing quorum-based coverage and presence, we maintain high availability and prevent stalls.",
-    "stopConditionCheck": "npm --silent run analyze:causal-model -- test-output/report.json",
-    "expectedCausalModelChange": "The active-gate catchup fence allows promotion when quorum-based presence and snapshot coverage are achieved.",
-    "representativeOutcome": "classification-only",
-    "causalDebt": "Requiring 100% node presence/coverage in a active-gate handoff contract prevents rolling restart convergence.",
-    "crossBoundaryReview": "Required across startup active gate and admin snapshot coverage."
-  },
-  "scenarioCausalClosure": {
-    "referenceScenarioOrProbe": "rolling-restart active_gate_snapshot_coverage",
-    "phaseChain": [
-      "publication convergence",
-      "operation workflow residuals",
-      "startup active-gate snapshot coverage",
-      "startup readiness support evidence"
-    ],
-    "currentFirstFrontier": "active_gate_snapshot_coverage / startup_active_gate_owner / snapshot_coverage / active_gate_timed_out",
-    "knownDownstreamBlockers": [
-      "startup_readiness_owner / startup_support_evidence remains deferred under active-gate no progress"
-    ],
-    "missingCausalEdge": "active gate handoff catchup fence must support quorum coverage and quorum presence",
-    "missingCausalEdgeProbe": "npm run work:scenario-route -- test-output/report.json --owner startup_active_gate_owner --boundary snapshot_coverage --dominant-reason active_gate_timed_out --explain active_gate_snapshot_coverage",
-    "boundedProgressProof": "focused rolling-restart scenario unit tests proving that quorum-based presence/coverage allows active gate promotion to advance and reconcile cluster membership",
-    "boundedProgressProofArtifact": "test-output/report.json",
-    "falsifyingProbe": "npm run work:evidence-summary -- test-output/report.json",
-    "expectedObservableTransition": "PROMOTION_DENIED -> PROMOTE_ACTIVE_GATE",
-    "maxProgressBound": "one local runtime pass plus verifier-fixer before closure",
-    "sameFrontierFallback": "if fresh evidence remains same-frontier with no active-gate participant-duration reduction, stop for architecture or owner migration rather than another local patch",
-    "expectedNextFrontier": "representative-green",
-    "resultClassification": "classification-only",
-    "stopCondition": "classification-only-stop",
-    "recentFrontierHistory": [
-      "done-20260521-rolling-restart-active-gate-snapshot-timeout-fix / startup_active_gate_owner / snapshot_coverage / active_gate_timed_out"
-    ],
-    "oscillationCheck": "fresh route classified local_runtime_owner_fix after quorum presence/coverage logic",
-    "handoffInvariant": "preserve dynamic fallback safety and high availability"
-  },
-  "observablePrediction": {
-    "metric": "active-gate stopped-seed cold-reconnect timeout under active_gate_snapshot_coverage",
-    "predicted": "Allowing quorum-based snapshot coverage and quorum presence in the active gate handoff contract prevents the active gate from stalling at PROMOTION_DENIED when 1 of 3 (or 1 of 5) nodes restarts.",
-    "observed": "Focused quorum probe observed activeGateCatchupFence.state=promotion_allowed for 3/5 target snapshot coverage and presence; representative artifact not refreshed.",
-    "accuracy": "partial",
-    "evidence": "node --input-type=module",
-    "metricDelta": 0
-  },
+  "modelFit": {},
+  "representativeResidual": {},
+  "causalGovernance": {},
+  "scenarioCausalClosure": {},
+  "observablePrediction": {},
   "experimentOutcome": {},
-  "rerunDecision": {
-    "sourceArtifact": "test-output/report.json",
-    "routeOwner": "startup_active_gate_owner",
-    "routeBoundary": "snapshot_coverage",
-    "routeDominantReason": "active_gate_timed_out",
-    "routeCausalOutcome": "continue_local_fix",
-    "stopMode": "classified_local_blocker",
-    "nextLane": "runtime-owner-boundary",
-    "expectedDelta": "Classify whether fresh representative evidence is green, reduced, migrated, same-frontier, architecture-gap, contradictory, or needs an autonomous architecture experiment before runtime promotion.",
-    "requiredRefreshCommands": [
-      "npm run work:package:route-after-rerun -- --artifact test-output/report.json --owner startup_active_gate_owner --boundary snapshot_coverage --dominant-reason active_gate_timed_out",
-      "update Sprint Strategy Brief and Current Edge Card from the route result",
-      "npm run work:repair",
-      "npm run work:validate -- --pre-impl"
-    ]
-  },
-  "classificationEfficiency": {
-    "defaultMode": "inline-gate-default",
-    "separatePackageReason": "successor-selection",
-    "artifactBudget": "one-artifact",
-    "proofCommandBudget": "two-or-three-canonical-commands",
-    "commands": [
-      "npm run work:evidence-summary -- test-output/report.json",
-      "npm run work:scenario-triage -- test-output/report.json --markdown",
-      "npm run analyze:priority-recovery-residuals -- test-output/report.json --markdown"
-    ],
-    "decisionRecord": "Record classification in the current package or sprint edge card; open a separate classifier only for material route, owner, boundary, stop-condition, tracker-truth, or successor-selection changes.",
-    "successorAction": "open-runtime-owner-boundary",
-    "runtimePromotionRule": "When canonical owner and boundary are stable, prefer a runtime-owner-boundary successor and keep runtime files in candidateRuntimeFiles until that package activates them. If the representative route is same-frontier with no reduction or an architecture gap, open an autonomous architecture experiment before more local runtime work."
-  },
-  "architectureDecisionGate": {
-    "status": "watching",
-    "trigger": "frontier-oscillation",
-    "triggerEvidence": [
-      "frontier returned to a recently closed related boundary",
-      "work/packages/done-20260521-startup-active-gate-admin-snapshot-timeout.md / startup_active_gate_owner / snapshot_coverage / reduced",
-      "work/packages/done-20260521-topology-publication-reconcile-system-theory.md / topology_publication_owner / publication_convergence / same-frontier",
-      "work/packages/done-20260521-rolling-restart-topology-publication-owner-publication-conve.md / topology_publication_owner / publication_convergence / migrated"
-    ],
-    "choices": [
-      {
-        "id": "continue-local-proof",
-        "summary": "Continue with a bounded local proof if the missing edge stays inside this owner boundary.",
-        "route": "continue-local-proof",
-        "proof": [
-          "npm run work:scenario-route -- test-output/report.json --owner startup_active_gate_owner --boundary snapshot_coverage --dominant-reason active_gate_timed_out --explain active_gate_snapshot_coverage",
-          "npm run work:evidence-summary -- test-output/report.json",
-          "npm run work:scenario-triage -- test-output/report.json --markdown"
-        ]
-      },
-      {
-        "id": "migrate-owner-boundary",
-        "summary": "Migrate the active package to the owner boundary named by the first frontier evidence.",
-        "route": "owner-boundary-migration",
-        "proof": [
-          "npm run work:scenario-route -- test-output/report.json --owner startup_active_gate_owner --boundary snapshot_coverage --dominant-reason active_gate_timed_out --explain active_gate_snapshot_coverage",
-          "npm run work:evidence-summary -- test-output/report.json",
-          "npm run work:scenario-triage -- test-output/report.json --markdown"
-        ]
-      },
-      {
-        "id": "open-architecture-package",
-        "summary": "Open a bounded autonomous architecture experiment for the missing owner contract.",
-        "route": "architecture-package",
-        "proof": [
-          "npm run work:scenario-route -- test-output/report.json --owner startup_active_gate_owner --boundary snapshot_coverage --dominant-reason active_gate_timed_out --explain active_gate_snapshot_coverage",
-          "npm run work:evidence-summary -- test-output/report.json",
-          "npm run work:scenario-triage -- test-output/report.json --markdown"
-        ]
-      },
-      {
-        "id": "human-escalation",
-        "summary": "Escalate to a human only when evidence is contradictory, policy-blocked, credential-blocked, or unavailable.",
-        "route": "human-escalation",
-        "proof": [
-          "npm run work:scenario-route -- test-output/report.json --owner startup_active_gate_owner --boundary snapshot_coverage --dominant-reason active_gate_timed_out --explain active_gate_snapshot_coverage",
-          "npm run work:evidence-summary -- test-output/report.json",
-          "npm run work:scenario-triage -- test-output/report.json --markdown"
-        ]
-      }
-    ],
-    "selectedChoice": null,
-    "nextAction": "Watch for repeated frontier oscillation; open an autonomous architecture experiment if another local proof returns here unchanged."
-  },
+  "rerunDecision": {},
+  "classificationEfficiency": {},
+  "architectureDecisionGate": {},
   "predecessor": null
 }

@@ -4,160 +4,153 @@
 
 ## Theory And Implementation Focus
 
-Theory under test: The rolling-restart scenario times out because the active gate catchup fence requires 100% snapshot coverage and 100% presence of expected nodes. In a rolling restart, at least 1 node is restarting/offline, making it impossible to satisfy 100% coverage or presence. By allowing quorum-based coverage and presence, we maintain high availability and prevent stalls.
+Theory under test: No active work package. Start a new package when implementation resumes.
 
-Causal question: active gate handoff catchup fence must support quorum coverage and quorum presence
+Causal question: none
 
-Implementation slice: Triage active_gate_snapshot_coverage with combined scenario evidence before runtime edits.
+Implementation slice: Create or activate one focused package for the next executable concern.
 
 Implementation files:
 
-1. `src/control-plane/publication-active-gate-handoff-contract.js`
-2. `src/control-plane/publication-active-gate-handoff-contract.js`
+1. None recorded
 
-Expected implementation delta: The active-gate catchup fence allows promotion when quorum-based presence and snapshot coverage are achieved.
+Expected implementation delta: unknown
 
-Falsifying probe: npm run work:scenario-route -- test-output/report.json --owner startup_active_gate_owner --boundary snapshot_coverage --dominant-reason active_gate_timed_out --explain active_gate_snapshot_coverage
+Falsifying probe: unknown
 
-Stop rule: if fresh evidence remains same-frontier with no active-gate participant-duration reduction, stop for architecture or owner migration rather than another local patch
+Stop rule: unknown
 
 Sprint: `none`
 
-Package: `work/packages/active-20260521-rolling-restart-active-gate-snapshot-quorum.md`
+Package: `none`
 
-Workflow lane: `causal-escalation`
+Workflow lane: `none`
 
-Scenario: `rolling-restart`
+Scenario: `none`
 
-Artifact: `test-output/report.json`
+Artifact: `none`
 
 Playback: `none`
 
 ## Boundary
 
-Owner: `startup_active_gate_owner`
+Owner: `none`
 
-Boundary: `snapshot_coverage`
+Boundary: `none`
 
-Dominant reason: `active_gate_timed_out`
+Dominant reason: `none`
 
-Current state: Scaffolded from representative evidence for active_gate_snapshot_coverage.
+Current state: No active work package. Start a new package when implementation resumes.
 
 ## Next Action
 
-Triage active_gate_snapshot_coverage with combined scenario evidence before runtime edits.
+Create or activate one focused package for the next executable concern.
 
 ## Proof Ladder
 
-1. `npm run work:scenario-route -- test-output/report.json --owner startup_active_gate_owner --boundary snapshot_coverage --dominant-reason active_gate_timed_out --explain active_gate_snapshot_coverage`
-2. `npm run work:evidence-summary -- test-output/report.json`
-3. `npm run work:scenario-triage -- test-output/report.json --markdown`
+1. None recorded
 
 ## Model Fit
 
-Package class: `runtime-owner-boundary`
+Package class: `unknown`
 
-Intended minimum model: `gpt-5.3-codex`
+Intended minimum model: `unknown`
 
-Scope shape: `bounded-owner-runtime/current-frontier`
+Scope shape: `unknown`
 
-Output profile: `medium`
+Output profile: `unknown`
 
 Escalation triggers:
 
-1. `owned files expand beyond this package`
-2. `a frozen decision must be reopened`
+1. None recorded
 
 ## Representative Residual
 
-Status: `live`
+Status: `unknown`
 
-Scenario: `rolling-restart`
+Scenario: `unknown`
 
-Artifact: `test-output/report.json`
+Artifact: `unknown`
 
-Frontier: `active_gate_snapshot_coverage`
+Frontier: `unknown`
 
-Owner: `startup_active_gate_owner`
+Owner: `unknown`
 
-Boundary: `snapshot_coverage`
+Boundary: `unknown`
 
-Dominant reason: `active_gate_timed_out`
+Dominant reason: `unknown`
 
-Next action: `Allow active gate quorum presence and snapshot coverage check during rolling restart.`
+Next action: `unknown`
 
 ## Causal Governance
 
-Causal hypothesis: `The rolling-restart scenario times out because the active gate catchup fence requires 100% snapshot coverage and 100% presence of expected nodes. In a rolling restart, at least 1 node is restarting/offline, making it impossible to satisfy 100% coverage or presence. By allowing quorum-based coverage and presence, we maintain high availability and prevent stalls.`
+Causal hypothesis: `unknown`
 
-Stop-condition check: `npm --silent run analyze:causal-model -- test-output/report.json`
+Stop-condition check: `unknown`
 
-Expected causal-model change: `The active-gate catchup fence allows promotion when quorum-based presence and snapshot coverage are achieved.`
+Expected causal-model change: `unknown`
 
-Representative outcome: `classification-only`
+Representative outcome: `unknown`
 
-Causal debt: `Requiring 100% node presence/coverage in a active-gate handoff contract prevents rolling restart convergence.`
+Causal debt: `unknown`
 
-Cross-boundary review: `Required across startup active gate and admin snapshot coverage.`
+Cross-boundary review: `unknown`
 
 ## Scenario Causal Closure
 
-Reference scenario/probe: `rolling-restart active_gate_snapshot_coverage`
+Reference scenario/probe: `unknown`
 
 Phase chain:
 
-1. `publication convergence`
-2. `operation workflow residuals`
-3. `startup active-gate snapshot coverage`
-4. `startup readiness support evidence`
+1. None recorded
 
-Current first frontier: `active_gate_snapshot_coverage / startup_active_gate_owner / snapshot_coverage / active_gate_timed_out`
+Current first frontier: `unknown`
 
 Known downstream blockers:
 
-1. `startup_readiness_owner / startup_support_evidence remains deferred under active-gate no progress`
+1. None recorded
 
-Missing causal edge: `active gate handoff catchup fence must support quorum coverage and quorum presence`
+Missing causal edge: `unknown`
 
-Missing causal edge probe: `npm run work:scenario-route -- test-output/report.json --owner startup_active_gate_owner --boundary snapshot_coverage --dominant-reason active_gate_timed_out --explain active_gate_snapshot_coverage`
+Missing causal edge probe: `unknown`
 
-Bounded progress proof: `focused rolling-restart scenario unit tests proving that quorum-based presence/coverage allows active gate promotion to advance and reconcile cluster membership`
+Bounded progress proof: `unknown`
 
-Bounded progress proof artifact: `test-output/report.json`
+Bounded progress proof artifact: `unknown`
 
-Expected observable transition: `PROMOTION_DENIED -> PROMOTE_ACTIVE_GATE`
+Expected observable transition: `unknown`
 
-Max progress bound: `one local runtime pass plus verifier-fixer before closure`
+Max progress bound: `unknown`
 
-Same-frontier fallback: `if fresh evidence remains same-frontier with no active-gate participant-duration reduction, stop for architecture or owner migration rather than another local patch`
+Same-frontier fallback: `unknown`
 
-Expected next frontier: `representative-green`
+Expected next frontier: `unknown`
 
-Result classification: `classification-only`
+Result classification: `unknown`
 
-Stop condition: `classification-only-stop`
+Stop condition: `unknown`
 
 Recent frontier history:
 
-1. `done-20260521-rolling-restart-active-gate-snapshot-timeout-fix / startup_active_gate_owner / snapshot_coverage / active_gate_timed_out`
+1. None recorded
 
-Oscillation check: `fresh route classified local_runtime_owner_fix after quorum presence/coverage logic`
+Oscillation check: `unknown`
 
-Handoff invariant: `preserve dynamic fallback safety and high availability`
+Handoff invariant: `unknown`
 
 ## Observable Prediction
 
-Metric: `active-gate stopped-seed cold-reconnect timeout under active_gate_snapshot_coverage`
+Metric: `unknown`
 
-Predicted: `Allowing quorum-based snapshot coverage and quorum presence in the active gate handoff contract prevents the active gate from stalling at PROMOTION_DENIED when 1 of 3 (or 1 of 5) nodes restarts.`
+Predicted: `unknown`
 
-Observed: `Focused quorum probe observed activeGateCatchupFence.state=promotion_allowed for 3/5 target snapshot coverage and presence; representative artifact not refreshed.`
+Observed: `unknown`
 
-Accuracy: `partial`
+Accuracy: `unknown`
 
-Evidence: `node --input-type=module`
+Evidence: `unknown`
 
-Metric delta: `0`
+Metric delta: `unknown`
 
 ## Experiment Outcome
 
@@ -173,96 +166,86 @@ Evidence: `unknown`
 
 ## Rerun Decision
 
-Source artifact: `test-output/report.json`
+Source artifact: `unknown`
 
-Route owner: `startup_active_gate_owner`
+Route owner: `unknown`
 
-Route boundary: `snapshot_coverage`
+Route boundary: `unknown`
 
-Route dominant reason: `active_gate_timed_out`
+Route dominant reason: `unknown`
 
-Route causal outcome: `continue_local_fix`
+Route causal outcome: `unknown`
 
-Stop mode: `classified_local_blocker`
+Stop mode: `unknown`
 
-Next lane: `runtime-owner-boundary`
+Next lane: `unknown`
 
-Expected delta: `Classify whether fresh representative evidence is green, reduced, migrated, same-frontier, architecture-gap, contradictory, or needs an autonomous architecture experiment before runtime promotion.`
+Expected delta: `unknown`
 
 Required refresh commands:
 
-1. `npm run work:package:route-after-rerun -- --artifact test-output/report.json --owner startup_active_gate_owner --boundary snapshot_coverage --dominant-reason active_gate_timed_out`
-2. `update Sprint Strategy Brief and Current Edge Card from the route result`
-3. `npm run work:repair`
-4. `npm run work:validate -- --pre-impl`
+1. None recorded
 
 ## Classification Efficiency
 
-Default mode: `inline-gate-default`
+Default mode: `unknown`
 
-Separate package reason: `successor-selection`
+Separate package reason: `unknown`
 
-Artifact budget: `one-artifact`
+Artifact budget: `unknown`
 
-Proof command budget: `two-or-three-canonical-commands`
+Proof command budget: `unknown`
 
 Commands:
 
-1. `npm run work:evidence-summary -- test-output/report.json`
-2. `npm run work:scenario-triage -- test-output/report.json --markdown`
-3. `npm run analyze:priority-recovery-residuals -- test-output/report.json --markdown`
+1. None recorded
 
-Decision record: `Record classification in the current package or sprint edge card; open a separate classifier only for material route, owner, boundary, stop-condition, tracker-truth, or successor-selection changes.`
+Decision record: `unknown`
 
-Successor action: `open-runtime-owner-boundary`
+Successor action: `unknown`
 
-Runtime promotion rule: `When canonical owner and boundary are stable, prefer a runtime-owner-boundary successor and keep runtime files in candidateRuntimeFiles until that package activates them. If the representative route is same-frontier with no reduction or an architecture gap, open an autonomous architecture experiment before more local runtime work.`
+Runtime promotion rule: `unknown`
 
 ## Architecture Decision Gate
 
-Status: `watching`
+Status: `unknown`
 
-Trigger: `frontier-oscillation`
+Trigger: `unknown`
 
 Trigger evidence:
 
-1. `frontier returned to a recently closed related boundary`
-2. `work/packages/done-20260521-startup-active-gate-admin-snapshot-timeout.md / startup_active_gate_owner / snapshot_coverage / reduced`
-3. `work/packages/done-20260521-topology-publication-reconcile-system-theory.md / topology_publication_owner / publication_convergence / same-frontier`
-4. `work/packages/done-20260521-rolling-restart-topology-publication-owner-publication-conve.md / topology_publication_owner / publication_convergence / migrated`
+1. None recorded
 
 Choices:
 
-1. `continue-local-proof` route=`continue-local-proof` - Continue with a bounded local proof if the missing edge stays inside this owner boundary.
-2. `migrate-owner-boundary` route=`owner-boundary-migration` - Migrate the active package to the owner boundary named by the first frontier evidence.
-3. `open-architecture-package` route=`architecture-package` - Open a bounded autonomous architecture experiment for the missing owner contract.
-4. `human-escalation` route=`human-escalation` - Escalate to a human only when evidence is contradictory, policy-blocked, credential-blocked, or unavailable.
+1. None recorded
 
 Selected choice: `unknown`
 
-Gate next action: Watch for repeated frontier oscillation; open an autonomous architecture experiment if another local proof returns here unchanged.
+Gate next action: unknown
 
 ## Scope
 
 Write scope:
 
-1. `src/control-plane/publication-active-gate-handoff-contract.js`
+1. None recorded
 
 Handoff files:
 
-1. `test-output/report.json`
+1. None recorded
 
 Generated files:
 
-1. None recorded
+1. `work/sprints/current-blocker.json`
+2. `work/sprints/current-blocker.md`
 
 Candidate runtime files:
 
-1. `src/control-plane/publication-active-gate-handoff-contract.js`
+1. None recorded
 
 Commit scope:
 
-1. `src/control-plane/publication-active-gate-handoff-contract.js`
+1. None recorded
 
 Legacy touched files:
 

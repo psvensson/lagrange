@@ -3,7 +3,7 @@
 <!-- work-package
 {
   "schema": "work-package-v1",
-  "status": "active",
+  "status": "done",
   "opened": "2026-05-21",
   "lane": "causal-escalation",
   "scenario": "rolling-restart",
@@ -147,7 +147,9 @@
     ],
     "oscillationCheck": "fresh route classified local_runtime_owner_fix after quorum presence/coverage logic",
     "handoffInvariant": "preserve dynamic fallback safety and high availability"
-  }
+  },
+  "closed": "2026-05-21",
+  "commitAndPushLedgerRequired": true
 }
 -->
 
@@ -293,7 +295,7 @@ Preferred closure evidence for new packages. One executor owns implementation en
 Agent identity is optional provenance. Use legacy subagent ledgers only when a reopened historical package already uses them.
 
 - [x] implementation: status: validated; evidence: implemented target-scoped quorum presence and snapshot coverage in `src/control-plane/publication-active-gate-handoff-contract.js`; `npm test -- test/control-plane/publication-active-gate-handoff-contract.test.js` pass; `node scripts/check-guideline-literals.js src/control-plane/publication-active-gate-handoff-contract.js` pass; `node scripts/check-guideline-decision-boundaries.js src/control-plane/publication-active-gate-handoff-contract.js` pass; `npm run audit:runtime-grammar:file -- src/control-plane/publication-active-gate-handoff-contract.js` pass; `git diff --check -- src/control-plane/publication-active-gate-handoff-contract.js` pass; `npm run work:scenario-route -- test-output/report.json --owner startup_active_gate_owner --boundary snapshot_coverage --dominant-reason active_gate_timed_out --explain active_gate_snapshot_coverage` pass; `npm run work:evidence-summary -- test-output/report.json` pass; `npm run work:scenario-triage -- test-output/report.json --markdown` pass; `npm run analyze:priority-recovery-residuals -- test-output/report.json --markdown` pass; parent revalidated focused proof: yes; next: verifier validation.
-- [x] verification-fix: status: validated; changed files: none; evidence: verifier-fixer reported target-scoped quorum logic, 1-of-1 behavior, extra non-target exclusion, stale/unavailable handling, and diagnostics compatibility verified; `npm run work:package:doctor -- --suggest work/packages/active-20260521-rolling-restart-active-gate-snapshot-quorum.md` pass; `npm run work:validate -- --pre-impl work/packages/active-20260521-rolling-restart-active-gate-snapshot-quorum.md` pass; `npm test -- test/control-plane/publication-active-gate-handoff-contract.test.js` pass; `npm run work:scenario-route -- test-output/report.json --owner startup_active_gate_owner --boundary snapshot_coverage --dominant-reason active_gate_timed_out --explain active_gate_snapshot_coverage` pass; `npm run work:evidence-summary -- test-output/report.json` pass; `npm run work:scenario-triage -- test-output/report.json --markdown` pass; parent revalidated focused proof: yes; next: closure validation.
+- [x] verification-fix: status: validated; changed files: none; evidence: verifier-fixer reported target-scoped quorum logic, 1-of-1 behavior, extra non-target exclusion, stale/unavailable handling, and diagnostics compatibility verified; `npm run work:package:doctor -- --suggest work/packages/done-20260521-rolling-restart-active-gate-snapshot-quorum.md` pass; `npm run work:validate -- --pre-impl work/packages/done-20260521-rolling-restart-active-gate-snapshot-quorum.md` pass; `npm test -- test/control-plane/publication-active-gate-handoff-contract.test.js` pass; `npm run work:scenario-route -- test-output/report.json --owner startup_active_gate_owner --boundary snapshot_coverage --dominant-reason active_gate_timed_out --explain active_gate_snapshot_coverage` pass; `npm run work:evidence-summary -- test-output/report.json` pass; `npm run work:scenario-triage -- test-output/report.json --markdown` pass; parent revalidated focused proof: yes; next: closure validation.
 - [x] repair: status: validated; evidence: `npm run work:repair` refreshed generated current-blocker and Current Edge Card; next: closure validation.
 
 ## Validation

@@ -26,7 +26,7 @@
     "test/control-plane/owner-outcome-contract.test.js"
   ],
   "handoffFiles": [
-    "work/packages/active-20260521-rolling-restart-active-gate-snapshot-quorum.md"
+    "work/packages/done-20260521-rolling-restart-active-gate-snapshot-quorum.md"
   ],
   "generatedFiles": [],
   "candidateRuntimeFiles": [
@@ -67,7 +67,7 @@
       "Split individual owner adapters into follow-on runtime-owner-boundary packages if more than two runtime owners need edits."
     ]
   },
-  "predecessor": "work/packages/active-20260521-rolling-restart-active-gate-snapshot-quorum.md"
+  "predecessor": "work/packages/done-20260521-rolling-restart-active-gate-snapshot-quorum.md"
 }
 -->
 
