@@ -150,6 +150,11 @@ Required contract:
    explicit named state variant.
 6. If a scalar or state has no clear owner, stop and define the owner first.
 7. Each concept has one name. Do not add synonyms for existing concepts.
+8. New source-code files use semantic names for the owner boundary, decision,
+   contract, state model, or consumer role they own.
+9. Do not introduce ordinal, segment, or grab-bag source filenames such as
+   `part-2`, `segment`, `misc`, `helpers`, or `utils` unless that name is an
+   established domain concept.
 
 Small local guards are allowed. Branch piles, absence-as-phase, and unowned
 reason-code strings are not.

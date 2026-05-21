@@ -117,30 +117,35 @@ already use those ledgers.
     next, and `--closure` before closing or committing.
 18. Static guardrails are architecture evidence. Do not weaken scripts,
     allowlists, scan scope, or lint rules to make a package pass.
-19. Scenario artifacts migrate only when normalized evidence changes owner,
+19. New or newly edited source-code files must finish at or below `1200`
+    lines. If a touched source-code file exceeds the cap, refactor or extract a
+    semantically named owner/helper/contract boundary before closure; new files
+    must be named for their semantic responsibility, not ordinal splits or
+    grab-bag helpers.
+20. Scenario artifacts migrate only when normalized evidence changes owner,
     boundary, or next required action; new counts, node ids, epochs, or timing
     alone do not justify package churn.
-20. Same-owner/same-action reductions stay in the current package. Smaller
+21. Same-owner/same-action reductions stay in the current package. Smaller
     counts, narrower node sets, better coverage, or clearer evidence update the
     Current Edge Card unless owner, boundary, required action, or stop state
     changes.
-21. Fixture-first is a package phase, not automatically a package boundary.
+22. Fixture-first is a package phase, not automatically a package boundary.
     Split fixture-only work only when it changes the selected edge, proves no
     runtime edit is justified, or creates reusable tooling.
-22. Package closure is atomic: rename/status, commit ledger, successor or
+23. Package closure is atomic: rename/status, commit ledger, successor or
     intentional no-active state, `current-blocker`, validation, commit, and push
     must move together. A `current-blocker` that points at a missing active
     package is a closure defect.
-23. When one node remains, use a remaining-node fast path: target node,
+24. When one node remains, use a remaining-node fast path: target node,
     required action, runtime-promotion flag, goal, and forbidden edits.
-24. Representative rerun artifacts use real unique timestamps or run ids, not
+25. Representative rerun artifacts use real unique timestamps or run ids, not
     placeholder names such as `T000000Z`.
-25. If a representative frontier returns to a recently closed related owner
+26. If a representative frontier returns to a recently closed related owner
     boundary or alternates between two related boundaries, stop local runtime
     patching and open a causal-escalation handoff package.
-26. A package is not done while in-scope residuals, tail consumers, guardrail
+27. A package is not done while in-scope residuals, tail consumers, guardrail
     drift, or unnamed scenario migration evidence remain.
-27. Sub-agents should maximize useful work per assignment. Use an executor for
+28. Sub-agents should maximize useful work per assignment. Use an executor for
     the implementation pass and a separate verifier-fixer before closure when a
     package changes code, tests, scripts, runtime contracts, or tracker truth.
     The verifier-fixer may fix in-scope problems directly, then rerun focused
@@ -149,9 +154,9 @@ already use those ledgers.
     them. Interrupted or partial-unvalidated attempts must be
     superseded/discarded/revalidated before closure, and closure requires parent
     local proof rerun with `parent revalidated focused proof: yes`.
-28. Commit and push focused package slices before starting the next package.
+29. Commit and push focused package slices before starting the next package.
     Use `npm run work:sprint:push -- <git-push-args>` for sprint pushes so the
     remaining sprint package list prints after a successful push. Do not sweep
     unrelated dirty worktree changes into the slice.
-29. If a local fix feels hard because the boundary is porous, reduce the
+30. If a local fix feels hard because the boundary is porous, reduce the
     boundary or raise the abstraction instead of adding another symptom patch.

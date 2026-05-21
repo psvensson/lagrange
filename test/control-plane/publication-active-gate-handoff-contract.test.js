@@ -3,6 +3,10 @@ import {
   CONTROL_PLANE_READINESS_REASON,
 } from '../../src/control-plane/control-plane-readiness-constants.js';
 import {
+  OWNER_OUTCOME_FRESHNESS,
+  OWNER_OUTCOME_STATE,
+} from '../../src/control-plane/owner-outcome-contract.js';
+import {
   PUBLICATION_ACTIVE_GATE_CATCHUP_FENCE_NEXT_ACTION,
   PUBLICATION_ACTIVE_GATE_CATCHUP_FENCE_REASON,
   PUBLICATION_ACTIVE_GATE_CATCHUP_FENCE_STATE,
@@ -68,6 +72,10 @@ const TEST_OPERATION_WORKFLOW_WAIT_MODE = 'event_driven';
 const TEST_OPERATION_WORKFLOW_PROGRESS_PHASE = 'dispatch_pending';
 const TEST_OPERATION_WORKFLOW_PARTITION_ID = 'control_plane_publications-p1';
 const TEST_OPERATION_WORKFLOW_OPERATION_ID = 'operator-1';
+const TEST_CROSS_OWNER_HANDOFF_CONTRACT_FIELD =
+  'crossOwnerHandoffContract';
+const TEST_ACTIVE_GATE_OWNER = 'active_gate_owner';
+const TEST_ACTIVE_GATE_PROMOTION_BOUNDARY = 'active_gate_promotion_gate';
 const TEST_JOINED_PENDING_RECONCILE_NODE_IDS = [
   TEST_NODE_2,
   TEST_NODE_3,
@@ -122,6 +130,49 @@ test('publication active-gate handoff contract schedules owner reconcile from on
         nextLegalAction:
           PUBLICATION_ACTIVE_GATE_CATCHUP_FENCE_NEXT_ACTION
             .RECONCILE_OWNER_MEMBERSHIP_PUBLICATION,
+      },
+    });
+    t.match(contract[TEST_CROSS_OWNER_HANDOFF_CONTRACT_FIELD], {
+      producerOwnerOutcome: {
+        owner: TEST_PUBLICATION_OWNER,
+        boundary: TEST_PUBLICATION_BOUNDARY,
+        state: OWNER_OUTCOME_STATE.PENDING,
+        outcome: PUBLICATION_ACTIVE_GATE_HANDOFF_STATE.PENDING,
+        reasonCodes: [
+          PUBLICATION_ACTIVE_GATE_HANDOFF_REASON.OWNER_RECONCILE_PENDING,
+        ],
+        freshness: OWNER_OUTCOME_FRESHNESS.STALE,
+        revision: TEST_PUBLICATION_EPOCH,
+        terminal: false,
+      },
+      consumerPrecondition: {
+        consumerOwner: TEST_ACTIVE_GATE_OWNER,
+        consumerBoundary: TEST_ACTIVE_GATE_PROMOTION_BOUNDARY,
+        observedNextAction:
+          PUBLICATION_ACTIVE_GATE_HANDOFF_NEXT_ACTION
+            .RECONCILE_OWNER_MEMBERSHIP_PUBLICATION,
+        promotionAllowed: false,
+      },
+      freshnessRevisionRequirement: {
+        requiredFreshness: OWNER_OUTCOME_FRESHNESS.FRESH,
+        observedFreshness: OWNER_OUTCOME_FRESHNESS.STALE,
+        publicationEpoch: TEST_PUBLICATION_EPOCH,
+        revisionObserved: true,
+        requirementSatisfied: false,
+      },
+      acknowledgementRule: {
+        requiredAckNodeIds: [TEST_NODE_1, TEST_NODE_2, TEST_NODE_3],
+        acknowledgedNodeIds: [TEST_NODE_1],
+        pendingAckNodeIds: [TEST_NODE_2, TEST_NODE_3],
+        acknowledgementSatisfied: false,
+      },
+      retryDeferBehavior: {
+        deferConsumer: true,
+        ownerReconcileRequired: true,
+      },
+      terminalCondition: {
+        terminal: false,
+        terminalState: OWNER_OUTCOME_STATE.PENDING,
       },
     });
   });

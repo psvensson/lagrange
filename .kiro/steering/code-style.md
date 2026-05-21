@@ -42,6 +42,20 @@ When writing or modifying code:
 4. **Line Length**: Maximum 100 characters per line
 5. **Unused Variables**: Prefix unused function parameters with underscore (e.g., `_unused`)
 
+## Source File Size And Naming
+
+- New or newly edited source-code files must finish at or below `1200` lines.
+- If an edit would leave a touched source-code file over `1200` lines, extract
+  a smaller semantic owner, helper, contract, state model, or consumer boundary
+  before closure.
+- New source-code files must be named for the semantic responsibility they own,
+  not for their position in a split.
+- Prefer names that describe the owner boundary, decision, contract, state
+  model, or consumer role.
+- Do not create new files with ordinal, segment, or grab-bag names such as
+  `part-2`, `segment`, `misc`, `helpers`, or `utils` unless that term is
+  already an established domain concept in the repository.
+
 ## Constants And Naming
 
 - Follow the scalar/state generation contract from
@@ -72,6 +86,8 @@ When writing or modifying code:
 - Ensure all new code follows the linting rules above
 - Break long lines appropriately to stay under 100 characters
 - Use consistent formatting with existing codebase patterns
+- Confirm every new or edited source-code file is at or below `1200` lines, or
+  refactor the touched file before closure.
 
 ## Related Checks
 

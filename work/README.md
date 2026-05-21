@@ -1086,11 +1086,15 @@ Avoid:
 
 Implementation speed depends on keeping owner files small enough to inspect.
 
-Use `npm run audit:file-size` to keep the current inherited large-file count
-from increasing. The ratchet uses these thresholds:
+Use `npm run audit:file-size` to keep source-file size debt from increasing.
+New or newly edited source-code files must finish at or below `1200` lines.
+If a package touches an inherited oversized source-code file, refactor or
+extract the touched file until it is at or below `1200` lines before closure.
 
-1. production JavaScript files over `800` lines
-2. test JavaScript files over `1200` lines
+New source-code files must be named for the semantic owner, contract, decision,
+state model, or consumer role they contain. Avoid ordinal, segment, or grab-bag
+names such as `part-2`, `segment`, `misc`, `helpers`, or `utils` unless that
+term is already an established domain concept.
 
 Use `npm run audit:file-size:strict` when a package explicitly owns file-size
 cleanup and should fail on any remaining oversized file.

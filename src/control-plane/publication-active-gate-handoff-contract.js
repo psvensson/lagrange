@@ -71,6 +71,17 @@ const PUBLICATION_OWNER_OUTCOME_ENVELOPE = Object.freeze({
     PUBLICATION_OPERATION_WORKFLOW_HANDOFF_BOUNDARY.PUBLICATION_CONVERGENCE,
   OWNER: PUBLICATION_OPERATION_WORKFLOW_HANDOFF_OWNER.TOPOLOGY_PUBLICATION_OWNER,
 });
+const PUBLICATION_ACTIVE_GATE_CONSUMER_HANDOFF = Object.freeze({
+  ACTIVE_GATE_OWNER: 'active_gate_owner',
+  BOUNDARY: 'active_gate_promotion_gate',
+});
+const PUBLICATION_ACTIVE_GATE_HANDOFF_RETRY = Object.freeze({
+  RETRY_AFTER_MS: NUM.ZERO,
+});
+const PUBLICATION_ACTIVE_GATE_HANDOFF_OBSERVATION = Object.freeze({
+  NOT_REQUIRED: 'not_required',
+  UNOBSERVED: 'unobserved',
+});
 
 const PUBLICATION_ACTIVE_GATE_CATCHUP_FENCE_STATE = Object.freeze({
   CATCHUP_BLOCKED: 'catchup_blocked',
@@ -172,6 +183,7 @@ const PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD = Object.freeze({
   CURRENT_OWNER: 'currentOwner',
   CURRENT_STEP_ID: 'currentStepId',
   CURRENT_STEP_STATE: 'currentStepState',
+  CROSS_OWNER_HANDOFF_CONTRACT: 'crossOwnerHandoffContract',
   DOMINANT_WITNESS: 'dominantWitness',
   DOWNSTREAM_BOUNDARY: 'downstreamBoundary',
   DOWNSTREAM_OWNER: 'downstreamOwner',
@@ -2075,17 +2087,43 @@ function buildPublicationActiveGateHandoffContract(options = {}) {
     handoffContract: options,
     decision,
   });
+  const publicationEpoch = resolvePublicationActiveGateHandoffPublicationEpoch(
+    options.publicationConvergence,
+  );
   const runtimePromotionAllowed =
     decision.runtimePromotionAllowed === true &&
     activeGateCatchupFence.promotionAllowed === true;
   const promotionDeniedByFence =
     decision.runtimePromotionAllowed === true &&
     runtimePromotionAllowed !== true;
+  const contractState = promotionDeniedByFence ?
+    PUBLICATION_ACTIVE_GATE_HANDOFF_STATE.DEGRADED :
+    decision.state;
+  const contractReasonCode = promotionDeniedByFence ?
+    PUBLICATION_ACTIVE_GATE_HANDOFF_REASON
+      .PUBLISHED_ACTIVE_COVERAGE_INCOMPLETE :
+    decision.reasonCode;
+  const contractNextAction = promotionDeniedByFence ?
+    PUBLICATION_ACTIVE_GATE_HANDOFF_NEXT_ACTION.OBSERVE_OWNER_HANDOFF :
+    decision.nextAction;
+  const crossOwnerHandoffContract =
+    buildPublicationActiveGateCrossOwnerHandoffContract({
+      publicationEpoch,
+      state: contractState,
+      reasonCode: contractReasonCode,
+      nextAction: contractNextAction,
+      runtimePromotionAllowed,
+      expectedNodeIds,
+      pendingRecoveryNodeIds,
+      pendingReconcileNodeIds,
+      publishedActiveNodeIds,
+      reconcileRequirement,
+      activeGateCatchupFence,
+      operationWorkflowHandoff,
+    });
   return Object.freeze({
     schemaVersion: PUBLICATION_ACTIVE_GATE_HANDOFF_SCHEMA_VERSION,
-    publicationEpoch: resolvePublicationActiveGateHandoffPublicationEpoch(
-      options.publicationConvergence,
-    ),
+    publicationEpoch,
     expectedNodeIds,
     expectedNodeCount: expectedNodeIds.length,
     publishedActiveNodeIds,
@@ -2098,16 +2136,11 @@ function buildPublicationActiveGateHandoffContract(options = {}) {
     pendingReconcileCount: pendingReconcileNodeIds.length,
     activeGateCatchupFence,
     runtimePromotionAllowed,
-    state: promotionDeniedByFence ?
-      PUBLICATION_ACTIVE_GATE_HANDOFF_STATE.DEGRADED :
-      decision.state,
-    reasonCode: promotionDeniedByFence ?
-      PUBLICATION_ACTIVE_GATE_HANDOFF_REASON
-        .PUBLISHED_ACTIVE_COVERAGE_INCOMPLETE :
-      decision.reasonCode,
-    nextAction: promotionDeniedByFence ?
-      PUBLICATION_ACTIVE_GATE_HANDOFF_NEXT_ACTION.OBSERVE_OWNER_HANDOFF :
-      decision.nextAction,
+    state: contractState,
+    reasonCode: contractReasonCode,
+    nextAction: contractNextAction,
+    [PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.CROSS_OWNER_HANDOFF_CONTRACT]:
+      crossOwnerHandoffContract,
     ...(operationWorkflowHandoff ?
       {
         [PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.OPERATION_WORKFLOW_HANDOFF]:
@@ -2209,6 +2242,150 @@ function resolvePublicationActiveGateOwnerOutcomeFreshness(contract = null) {
   return OWNER_OUTCOME_FRESHNESS.UNKNOWN;
 }
 
+function buildPublicationActiveGateOwnerOutcomeContract(value = {}) {
+  const ownerOutcomeState = resolvePublicationActiveGateOwnerOutcomeState(
+    value,
+  );
+  return Object.freeze({
+    owner: PUBLICATION_OWNER_OUTCOME_ENVELOPE.OWNER,
+    boundary: PUBLICATION_OWNER_OUTCOME_ENVELOPE.BOUNDARY,
+    state: ownerOutcomeState,
+    outcome:
+      typeof value?.state === TYPEOF.STRING ?
+        value.state :
+        PUBLICATION_ACTIVE_GATE_HANDOFF_STATE.UNAVAILABLE,
+    reasonCodes:
+      typeof value?.reasonCode === TYPEOF.STRING ?
+        [value.reasonCode] :
+        PUBLICATION_ACTIVE_GATE_HANDOFF_EMPTY_LIST,
+    nextAction:
+      typeof value?.nextAction === TYPEOF.STRING ?
+        value.nextAction :
+        PUBLICATION_ACTIVE_GATE_HANDOFF_NEXT_ACTION.OBSERVE_OWNER_HANDOFF,
+    freshness: resolvePublicationActiveGateOwnerOutcomeFreshness(value),
+    revision:
+      Number.isFinite(value?.publicationEpoch) ?
+        value.publicationEpoch :
+        PUBLICATION_ACTIVE_GATE_HANDOFF_UNKNOWN_EPOCH,
+    retryAfterMs: PUBLICATION_ACTIVE_GATE_HANDOFF_RETRY.RETRY_AFTER_MS,
+    terminal:
+      ownerOutcomeState === OWNER_OUTCOME_STATE.BLOCKED ||
+      ownerOutcomeState === OWNER_OUTCOME_STATE.FAILED,
+  });
+}
+
+function buildPublicationActiveGateAcknowledgementRule(value = {}) {
+  const pendingRecoveryNodeIdSet = new Set(
+    normalizePublicationActiveGateHandoffNodeIdList(
+      value.pendingRecoveryNodeIds,
+    ),
+  );
+  const requiredAckNodeIds = normalizePublicationActiveGateHandoffNodeIdList(
+    normalizePublicationActiveGateHandoffNodeIdList(
+      value.expectedNodeIds,
+    ).filter((nodeId) => !pendingRecoveryNodeIdSet.has(nodeId)),
+  );
+  const publishedNodeIdSet = new Set(
+    normalizePublicationActiveGateHandoffNodeIdList(
+      value.publishedActiveNodeIds,
+    ),
+  );
+  const acknowledgedNodeIds = requiredAckNodeIds.filter((nodeId) =>
+    publishedNodeIdSet.has(nodeId),
+  );
+  const pendingAckNodeIds = requiredAckNodeIds.filter((nodeId) =>
+    !publishedNodeIdSet.has(nodeId),
+  );
+  return Object.freeze({
+    requiredAckNodeIds,
+    acknowledgedNodeIds,
+    pendingAckNodeIds,
+    acknowledgementSatisfied: pendingAckNodeIds.length === NUM.ZERO,
+  });
+}
+
+function buildPublicationActiveGateDiagnosticVocabulary() {
+  return Object.freeze({
+    state: Object.freeze(Object.values(PUBLICATION_ACTIVE_GATE_HANDOFF_STATE)),
+    reasonCode: Object.freeze(
+      Object.values(PUBLICATION_ACTIVE_GATE_HANDOFF_REASON),
+    ),
+    nextAction: Object.freeze(
+      Object.values(PUBLICATION_ACTIVE_GATE_HANDOFF_NEXT_ACTION),
+    ),
+    catchupReason: Object.freeze(
+      Object.values(PUBLICATION_ACTIVE_GATE_CATCHUP_FENCE_REASON),
+    ),
+    workflowReason: Object.freeze(
+      Object.values(PUBLICATION_OPERATION_WORKFLOW_HANDOFF_REASON),
+    ),
+  });
+}
+
+function buildPublicationActiveGateCrossOwnerHandoffContract(value = {}) {
+  const producerOwnerOutcome =
+    buildPublicationActiveGateOwnerOutcomeContract(value);
+  const acknowledgementRule =
+    buildPublicationActiveGateAcknowledgementRule(value);
+  const revisionObserved =
+    Number.isFinite(value.publicationEpoch) &&
+    value.publicationEpoch > PUBLICATION_ACTIVE_GATE_HANDOFF_UNKNOWN_EPOCH;
+  const freshnessObserved =
+    producerOwnerOutcome.freshness === OWNER_OUTCOME_FRESHNESS.FRESH;
+  return Object.freeze({
+    schemaVersion: PUBLICATION_ACTIVE_GATE_HANDOFF_SCHEMA_VERSION,
+    producerOwnerOutcome,
+    consumerPrecondition: Object.freeze({
+      consumerOwner: PUBLICATION_ACTIVE_GATE_CONSUMER_HANDOFF.ACTIVE_GATE_OWNER,
+      consumerBoundary: PUBLICATION_ACTIVE_GATE_CONSUMER_HANDOFF.BOUNDARY,
+      reconcileRequirement: value.reconcileRequirement,
+      observedNextAction: value.nextAction,
+      requiredNextAction:
+        PUBLICATION_ACTIVE_GATE_HANDOFF_NEXT_ACTION.ADMIT_ACTIVE_GATE,
+      promotionAllowed: value.runtimePromotionAllowed === true,
+    }),
+    freshnessRevisionRequirement: Object.freeze({
+      requiredFreshness: OWNER_OUTCOME_FRESHNESS.FRESH,
+      observedFreshness: producerOwnerOutcome.freshness,
+      publicationEpoch: value.publicationEpoch,
+      durablePublicationRevision:
+        value.activeGateCatchupFence?.durablePublication?.publicationRevision ??
+        PUBLICATION_ACTIVE_GATE_HANDOFF_OBSERVATION.UNOBSERVED,
+      snapshotCoverageRevision:
+        value.activeGateCatchupFence?.snapshotCoverage?.revision ??
+        PUBLICATION_ACTIVE_GATE_HANDOFF_OBSERVATION.UNOBSERVED,
+      revisionObserved,
+      requirementSatisfied: revisionObserved && freshnessObserved,
+    }),
+    acknowledgementRule,
+    retryDeferBehavior: Object.freeze({
+      retryAfterMs: PUBLICATION_ACTIVE_GATE_HANDOFF_RETRY.RETRY_AFTER_MS,
+      deferConsumer: value.runtimePromotionAllowed !== true,
+      ownerReconcileRequired:
+        value.nextAction ===
+        PUBLICATION_ACTIVE_GATE_HANDOFF_NEXT_ACTION
+          .RECONCILE_OWNER_MEMBERSHIP_PUBLICATION,
+      ownerRecoveryWaitRequired:
+        value.nextAction ===
+        PUBLICATION_ACTIVE_GATE_HANDOFF_NEXT_ACTION.WAIT_OWNER_RECOVERY,
+      downstreamDeferred:
+        isPublicationActiveGateHandoffRecord(value.operationWorkflowHandoff),
+      downstreamOwner:
+        value.operationWorkflowHandoff?.downstreamOwner ??
+        PUBLICATION_ACTIVE_GATE_HANDOFF_OBSERVATION.NOT_REQUIRED,
+      downstreamBoundary:
+        value.operationWorkflowHandoff?.downstreamBoundary ??
+        PUBLICATION_ACTIVE_GATE_HANDOFF_OBSERVATION.NOT_REQUIRED,
+    }),
+    terminalCondition: Object.freeze({
+      terminal: producerOwnerOutcome.terminal,
+      terminalState: producerOwnerOutcome.state,
+      terminalReasonCodes: producerOwnerOutcome.reasonCodes,
+    }),
+    diagnosticVocabulary: buildPublicationActiveGateDiagnosticVocabulary(),
+  });
+}
+
 function buildPublicationActiveGateOwnerOutcomeEnvelope(value = null) {
   const contract = selectPublicationActiveGateHandoffContract(value);
   const handoffContract = isPublicationActiveGateHandoffRecord(contract) ?
@@ -2220,39 +2397,30 @@ function buildPublicationActiveGateOwnerOutcomeEnvelope(value = null) {
   const ownerOutcomeState = resolvePublicationActiveGateOwnerOutcomeState(
     normalizedContract,
   );
-  const normalizedReasonCodes =
-    typeof normalizedContract?.reasonCode === TYPEOF.STRING ?
-      [normalizedContract.reasonCode] :
-      [];
+  const producerOutcome = buildPublicationActiveGateOwnerOutcomeContract(
+    normalizedContract,
+  );
   return buildOwnerOutcomeEnvelope({
-    owner: PUBLICATION_OWNER_OUTCOME_ENVELOPE.OWNER,
-    boundary: PUBLICATION_OWNER_OUTCOME_ENVELOPE.BOUNDARY,
+    owner: producerOutcome.owner,
+    boundary: producerOutcome.boundary,
     state: ownerOutcomeState,
-    outcome:
-      typeof normalizedContract?.state === TYPEOF.STRING ?
-        normalizedContract.state :
-        PUBLICATION_ACTIVE_GATE_HANDOFF_STATE.UNAVAILABLE,
-    reasonCodes: normalizedReasonCodes,
-    nextAction:
-      typeof normalizedContract?.nextAction === TYPEOF.STRING ?
-        normalizedContract.nextAction :
-        PUBLICATION_ACTIVE_GATE_HANDOFF_NEXT_ACTION.OBSERVE_OWNER_HANDOFF,
-    freshness:
-      resolvePublicationActiveGateOwnerOutcomeFreshness(normalizedContract),
-    revision:
-      Number.isFinite(normalizedContract?.publicationEpoch) ?
-        normalizedContract.publicationEpoch :
-        PUBLICATION_ACTIVE_GATE_HANDOFF_UNKNOWN_EPOCH,
-    retryAfterMs: NUM.ZERO,
-    terminal:
-      ownerOutcomeState === OWNER_OUTCOME_STATE.BLOCKED ||
-      ownerOutcomeState === OWNER_OUTCOME_STATE.FAILED,
+    outcome: producerOutcome.outcome,
+    reasonCodes: producerOutcome.reasonCodes,
+    nextAction: producerOutcome.nextAction,
+    freshness: producerOutcome.freshness,
+    revision: producerOutcome.revision,
+    retryAfterMs: producerOutcome.retryAfterMs,
+    terminal: producerOutcome.terminal,
     evidence: {
       publicationEpoch: normalizedContract?.publicationEpoch,
       expectedNodeIds: normalizedContract?.expectedNodeIds,
       pendingReconcileNodeIds: normalizedContract?.pendingReconcileNodeIds,
       pendingRecoveryNodeIds: normalizedContract?.pendingRecoveryNodeIds,
       activeGateCatchupFence: normalizedContract?.activeGateCatchupFence,
+      crossOwnerHandoffContract:
+        normalizedContract?.[
+          PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.CROSS_OWNER_HANDOFF_CONTRACT
+        ] || null,
       operationWorkflowHandoff:
         normalizedContract?.operationWorkflowHandoff || null,
     },

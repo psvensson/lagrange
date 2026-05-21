@@ -726,12 +726,18 @@ Required workflow:
    response verbosity separately from model or reasoning effort.
 8. Use `npm run work:oversized-next -- --markdown` before inventing file-size
    cleanup packages from raw line counts.
-9. Use explicit metadata scope fields for new packages: `writeScope` for files
+9. Before closure, confirm every new or edited source-code file in package
+   scope is at or below `1200` lines. If a touched source-code file exceeds the
+   cap, refactor or extract a semantically named owner/helper/contract boundary
+   in the current package before closing. `work:oversized-next` may choose the
+   extraction order, but it is not a waiver for newly created or edited
+   oversize.
+10. Use explicit metadata scope fields for new packages: `writeScope` for files
    the package may edit, `handoffFiles` for read-only context,
    `generatedFiles` for deterministic outputs, `candidateRuntimeFiles` for
    files gated by a focused probe, and `commitScope` for focused commit
    containment. `touchedFiles` is legacy compatibility only.
-10. Use validation phases deliberately: `npm run work:validate -- --entry` for
+11. Use validation phases deliberately: `npm run work:validate -- --entry` for
     package shape, `--pre-impl` when review/fix proof is complete and
     implementation may still be pending, and `--closure` before close/commit.
 

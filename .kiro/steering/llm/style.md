@@ -2,17 +2,19 @@
 
 Load for coding-style and lint policy enforcement.
 
-Generated rules: 8
-Estimated tokens: 209
+Generated rules: 10
+Estimated tokens: 294
 Domains: style
 
 ## Rules
 
-1. [STYLE-0001] Do not inline domain/runtime scalars when an owner constant or explicit state variant should exist.
-2. [STYLE-0002] Do not introduce synonyms for an existing concept.
-3. [STYLE-0003] Do not expose semantic policy through combinable booleans when one named mode constant set should exist.
-4. [STYLE-0004] Do not leak raw storage or transport field shapes into runtime model names or contracts.
-5. [STYLE-0005] NEVER introduce eslint override comments.
-6. [STYLE-0006] Shared domain literals belong in their canonical owner module and must be imported from there.
-7. [STYLE-0007] All code must be written with ESLint rules in mind from the start.
-8. [STYLE-0008] When a boundary already owns a named mode vocabulary, call sites and tests should use that vocabulary directly instead of restating legacy boolean preferences.
+1. [STYLE-0001] Do not create new files with ordinal, segment, or grab-bag names such as part-2, segment, misc, helpers, or utils unless that term is already an established domain concept in the repository.
+2. [STYLE-0002] Do not inline domain/runtime scalars when an owner constant or explicit state variant should exist.
+3. [STYLE-0003] Do not introduce synonyms for an existing concept.
+4. [STYLE-0004] Do not expose semantic policy through combinable booleans when one named mode constant set should exist.
+5. [STYLE-0005] Do not leak raw storage or transport field shapes into runtime model names or contracts.
+6. [STYLE-0006] NEVER introduce eslint override comments.
+7. [STYLE-0007] New source-code files must be named for the semantic responsibility they own, not for their position in a split.
+8. [STYLE-0008] Shared domain literals belong in their canonical owner module and must be imported from there.
+9. [STYLE-0009] All code must be written with ESLint rules in mind from the start.
+10. [STYLE-0010] When a boundary already owns a named mode vocabulary, call sites and tests should use that vocabulary directly instead of restating legacy boolean preferences.

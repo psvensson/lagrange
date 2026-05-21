@@ -13,6 +13,14 @@ import {
   BOOTSTRAP_API_ROUTE,
 } from '../../src/bootstrap/bootstrap-api-constants.js';
 import {
+  SERVICE_REGISTRATION_HANDOFF_ACKNOWLEDGEMENT,
+  SERVICE_REGISTRATION_HANDOFF_FIELD,
+  SERVICE_REGISTRATION_HANDOFF_NEXT_ACTION,
+  SERVICE_REGISTRATION_HANDOFF_OUTCOME,
+  SERVICE_REGISTRATION_HANDOFF_OWNER,
+  SERVICE_REGISTRATION_HANDOFF_REASON,
+} from '../../src/bootstrap/owners/service-registration-handoff-owner.js';
+import {
   configureSyntheticMoveReplicaRegisterServiceHandoff,
 } from './move-replica-assignment-token-test-helpers.js';
 import {
@@ -45,6 +53,10 @@ import {
   CONTROL_PLANE_WORKLOAD_CLASS,
 } from '../../src/control-plane/control-plane-workload-profile.js';
 import {
+  OWNER_OUTCOME_FRESHNESS,
+  OWNER_OUTCOME_STATE,
+} from '../../src/control-plane/owner-outcome-contract.js';
+import {
   PRIORITY_CONTROL_PLANE_RECOVERY_HEALTH_FAILURE,
 } from '../../src/control-plane/startup-authority-snapshot-owner.js';
 
@@ -62,6 +74,8 @@ const TEST_BOOTSTRAP_RESPONSE_GROUP_ID = 'mg-seed-authority';
 const TEST_READY_STABLE_WINDOW_MS = 0;
 const TEST_READY_RETRY_AFTER_MS = 250;
 const TEST_REGISTER_SERVICE_RETRY_AFTER_MS = 1000;
+const TEST_CONTROL_PLANE_PRESSURE_DEGRADED_CODE =
+  'CONTROL_PLANE_PRESSURE_DEGRADED';
 const TEST_SQL_ENGINE_UNAVAILABLE_ERROR = 'SQL query engine not available';
 const TEST_REGISTER_SERVICE_NODE_ID = 'joiner-node-1';
 const TEST_REGISTER_SERVICE_GROUP_ID = 'mg-1';
@@ -701,7 +715,7 @@ test('BootstrapAPI - register-service returns retryable 503 when the control-pla
           return {
             success: false,
             error: 'Distributed operation failed due to participant failures',
-            errorCode: 'CONTROL_PLANE_PRESSURE_DEGRADED',
+            errorCode: TEST_CONTROL_PLANE_PRESSURE_DEGRADED_CODE,
             pressureAction: 'defer',
             pressureReason: 'transport_backpressure',
             retryAfterMs: 250,
@@ -746,7 +760,7 @@ test('BootstrapAPI - register-service returns retryable 503 when the control-pla
     const body = JSON.parse(response.body);
     t.equal(body.success, false,
       'register-service should fail closed under shared-pressure deferral');
-    t.equal(body.code, 'CONTROL_PLANE_PRESSURE_DEGRADED',
+    t.equal(body.code, TEST_CONTROL_PLANE_PRESSURE_DEGRADED_CODE,
       'register-service should propagate the typed gateway error code');
     t.equal(body.retryAfterMs, 250,
       'register-service should expose the retry hint from the gateway');
@@ -754,6 +768,39 @@ test('BootstrapAPI - register-service returns retryable 503 when the control-pla
       body.error,
       'Distributed operation failed due to participant failures',
       'register-service should preserve the canonical failure message',
+    );
+    t.match(
+      body[SERVICE_REGISTRATION_HANDOFF_FIELD.CONTRACT],
+      {
+        producerOwnerOutcome: {
+          owner: SERVICE_REGISTRATION_HANDOFF_OWNER.PRODUCER,
+          boundary: SERVICE_REGISTRATION_HANDOFF_OWNER.PRODUCER_BOUNDARY,
+          state: OWNER_OUTCOME_STATE.DEFERRED,
+          outcome: SERVICE_REGISTRATION_HANDOFF_OUTCOME.DEFERRED,
+          reasonCodes: [TEST_CONTROL_PLANE_PRESSURE_DEGRADED_CODE],
+          nextAction:
+            SERVICE_REGISTRATION_HANDOFF_NEXT_ACTION
+              .RETRY_SERVICE_REGISTRATION,
+          freshness: OWNER_OUTCOME_FRESHNESS.STALE,
+          retryAfterMs: 250,
+          terminal: false,
+        },
+        consumerPrecondition: {
+          consumerOwner: SERVICE_REGISTRATION_HANDOFF_OWNER.CONSUMER,
+          consumerBoundary:
+            SERVICE_REGISTRATION_HANDOFF_OWNER.CONSUMER_BOUNDARY,
+          handoffRequired: false,
+        },
+        acknowledgementRule: {
+          serviceRowAcknowledged: false,
+          acknowledgementSatisfied: false,
+        },
+        retryDeferBehavior: {
+          retryable: true,
+          deferConsumer: true,
+        },
+      },
+      'deferred register-service should surface the producer-consumer handoff contract',
     );
     t.ok(
       warnEvents.some((event) =>
@@ -808,7 +855,7 @@ test('BootstrapAPI - register-service returns typed retryable 503 while SQL engi
       'register-service should fail closed while startup SQL runtime is not wired',
     );
     const body = JSON.parse(response.body);
-    t.same(
+    t.match(
       body,
       {
         success: false,
@@ -817,6 +864,38 @@ test('BootstrapAPI - register-service returns typed retryable 503 while SQL engi
         retryAfterMs: TEST_REGISTER_SERVICE_RETRY_AFTER_MS,
       },
       'register-service should expose a typed retryable startup dependency response',
+    );
+    t.match(
+      body[SERVICE_REGISTRATION_HANDOFF_FIELD.CONTRACT],
+      {
+        producerOwnerOutcome: {
+          owner: SERVICE_REGISTRATION_HANDOFF_OWNER.PRODUCER,
+          boundary: SERVICE_REGISTRATION_HANDOFF_OWNER.PRODUCER_BOUNDARY,
+          state: OWNER_OUTCOME_STATE.DEFERRED,
+          outcome: SERVICE_REGISTRATION_HANDOFF_OUTCOME.DEFERRED,
+          reasonCodes: [
+            SERVICE_REGISTRATION_HANDOFF_REASON.SQL_ENGINE_UNAVAILABLE,
+          ],
+          nextAction:
+            SERVICE_REGISTRATION_HANDOFF_NEXT_ACTION
+              .RETRY_SERVICE_REGISTRATION,
+          freshness: OWNER_OUTCOME_FRESHNESS.STALE,
+          retryAfterMs: TEST_REGISTER_SERVICE_RETRY_AFTER_MS,
+          terminal: false,
+        },
+        freshnessRevisionRequirement: {
+          requiredFreshness: OWNER_OUTCOME_FRESHNESS.FRESH,
+          observedFreshness: OWNER_OUTCOME_FRESHNESS.STALE,
+          visibilityRequired: false,
+          visibilitySatisfied: true,
+          requirementSatisfied: false,
+        },
+        retryDeferBehavior: {
+          retryable: true,
+          deferConsumer: true,
+        },
+      },
+      'SQL unavailable should return the explicit retryable handoff contract',
     );
 
     await api.shutdown();
@@ -841,7 +920,7 @@ test('BootstrapAPI - register-service retries deferred services publication befo
             return {
               success: false,
               error: 'control_plane_pressure_degraded',
-              errorCode: 'CONTROL_PLANE_PRESSURE_DEGRADED',
+              errorCode: TEST_CONTROL_PLANE_PRESSURE_DEGRADED_CODE,
               pressureAction: 'defer',
               pressureReason: 'transport_backpressure',
               retryAfterMs: 250,
@@ -947,6 +1026,51 @@ async (t) => {
 
   t.equal(response.statusCode, 200,
     'register-service should not fail just because the bootstrap seed has not wired CDC mutations yet');
+  const responseBody = JSON.parse(response.body);
+  t.match(
+    responseBody[SERVICE_REGISTRATION_HANDOFF_FIELD.CONTRACT],
+    {
+      producerOwnerOutcome: {
+        owner: SERVICE_REGISTRATION_HANDOFF_OWNER.PRODUCER,
+        boundary: SERVICE_REGISTRATION_HANDOFF_OWNER.PRODUCER_BOUNDARY,
+        state: OWNER_OUTCOME_STATE.READY,
+        outcome: SERVICE_REGISTRATION_HANDOFF_OUTCOME.COMMITTED,
+        reasonCodes: [
+          SERVICE_REGISTRATION_HANDOFF_REASON.SERVICE_REGISTERED,
+        ],
+        nextAction: SERVICE_REGISTRATION_HANDOFF_NEXT_ACTION.PROCEED,
+        freshness: OWNER_OUTCOME_FRESHNESS.FRESH,
+        terminal: false,
+      },
+      consumerPrecondition: {
+        consumerOwner: SERVICE_REGISTRATION_HANDOFF_OWNER.CONSUMER,
+        consumerBoundary: SERVICE_REGISTRATION_HANDOFF_OWNER.CONSUMER_BOUNDARY,
+        handoffRequired: true,
+      },
+      freshnessRevisionRequirement: {
+        requiredFreshness: OWNER_OUTCOME_FRESHNESS.FRESH,
+        observedFreshness: OWNER_OUTCOME_FRESHNESS.FRESH,
+        visibilityRequired: true,
+        visibilitySatisfied: true,
+        requirementSatisfied: true,
+      },
+      acknowledgementRule: {
+        serviceRowAcknowledged: true,
+        cacheVisibilityAcknowledgement:
+          SERVICE_REGISTRATION_HANDOFF_ACKNOWLEDGEMENT.ACKNOWLEDGED,
+        sourceRemovalAcknowledgement:
+          SERVICE_REGISTRATION_HANDOFF_ACKNOWLEDGEMENT.ACKNOWLEDGED,
+        handoffCompletionAcknowledgement:
+          SERVICE_REGISTRATION_HANDOFF_ACKNOWLEDGEMENT.ACKNOWLEDGED,
+        acknowledgementSatisfied: true,
+      },
+      retryDeferBehavior: {
+        retryable: false,
+        deferConsumer: false,
+      },
+    },
+    'completed MOVE_REPLICA service registration should expose the fulfilled handoff contract',
+  );
   t.equal(sqlCalls.length, 1,
     'bootstrap register-service should route through the SQL fallback once');
   t.match(
