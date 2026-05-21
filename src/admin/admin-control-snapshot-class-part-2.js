@@ -23,12 +23,17 @@ import {
   shouldAttemptAuthoritativeRepair,
 } from './admin-authoritative-repair-evaluation.js';
 import {
+  buildPublicationActiveGateOwnerOutcomeEnvelope,
   hasPublicationActiveGateOwnerReconcileSignal,
   selectPublicationActiveGateHandoffContract,
 } from '../control-plane/publication-active-gate-handoff-contract.js';
 import {
   CONTROL_PLANE_CONVERGENCE_PRESSURE_OUTCOME,
 } from '../control-plane/control-plane-error-classification.js';
+import {
+  OWNER_OUTCOME_FRESHNESS,
+  OWNER_OUTCOME_STATE,
+} from '../control-plane/owner-outcome-contract.js';
 import {AdminControlSnapshotPart1} from './admin-control-snapshot-class-part-1.js';
 // ── file-local constants ────────────────────────────────────────────────────
 const ADMIN_CONTROL_SNAPSHOT_LITERAL = Object.freeze({
@@ -139,6 +144,18 @@ const CONTROL_SNAPSHOT_REPAIR_EVALUATION_FIELD = Object.freeze({
   NODE_COVERAGE: 'nodeCoverage',
   SHARED_METADATA: 'sharedMetadata',
   REFERENCED_NODE_IDS: 'referencedNodeIds',
+});
+const CONTROL_SNAPSHOT_OWNER_OUTCOME_STATE_PROGRESS_RANK = Object.freeze({
+  [OWNER_OUTCOME_STATE.FAILED]: NUM.ZERO,
+  [OWNER_OUTCOME_STATE.BLOCKED]: NUM.ONE,
+  [OWNER_OUTCOME_STATE.DEFERRED]: NUM.TWO,
+  [OWNER_OUTCOME_STATE.PENDING]: NUM.THREE,
+  [OWNER_OUTCOME_STATE.READY]: NUM.FOUR,
+});
+const CONTROL_SNAPSHOT_OWNER_OUTCOME_FRESHNESS_PROGRESS_RANK = Object.freeze({
+  [OWNER_OUTCOME_FRESHNESS.UNKNOWN]: NUM.ZERO,
+  [OWNER_OUTCOME_FRESHNESS.STALE]: NUM.ONE,
+  [OWNER_OUTCOME_FRESHNESS.FRESH]: NUM.TWO,
 });
 const CONTROL_SNAPSHOT_REPAIR_DEFERRED_MIN_NODE_COVERAGE = NUM.THREE;
 const CONTROL_SNAPSHOT_FORCED_REPAIR_QUERY_TIMEOUT_DIVISOR = NUM.TWO;
@@ -760,10 +777,78 @@ function normalizeControlSnapshotHandoffInteger(value, fallback = NUM.ZERO) {
     fallback;
 }
 
+function normalizeControlSnapshotHandoffOwnerOutcomeRevision(value) {
+  if (Number.isFinite(value)) {
+    return Math.max(NUM.ZERO, Math.floor(value));
+  }
+  const numericValue = Number(value);
+  return Number.isFinite(numericValue) ?
+    Math.max(NUM.ZERO, Math.floor(numericValue)) :
+    NUM.ZERO;
+}
+
+function resolveControlSnapshotHandoffOwnerOutcomeStateProgressRank(
+  state = ADMIN_CONTROL_SNAPSHOT_LITERAL.VALUE,
+) {
+  return Number.isFinite(
+    CONTROL_SNAPSHOT_OWNER_OUTCOME_STATE_PROGRESS_RANK[state],
+  ) ?
+    CONTROL_SNAPSHOT_OWNER_OUTCOME_STATE_PROGRESS_RANK[state] :
+    NUM.ZERO;
+}
+
+function resolveControlSnapshotHandoffOwnerOutcomeFreshnessProgressRank(
+  freshness = ADMIN_CONTROL_SNAPSHOT_LITERAL.VALUE,
+) {
+  return Number.isFinite(
+    CONTROL_SNAPSHOT_OWNER_OUTCOME_FRESHNESS_PROGRESS_RANK[freshness],
+  ) ?
+    CONTROL_SNAPSHOT_OWNER_OUTCOME_FRESHNESS_PROGRESS_RANK[freshness] :
+    NUM.ZERO;
+}
+
+function hasControlSnapshotHandoffOwnerOutcomeProgress(
+  currentOutcome = null,
+  refreshedOutcome = null,
+) {
+  const currentStateRank =
+    resolveControlSnapshotHandoffOwnerOutcomeStateProgressRank(
+      currentOutcome?.state,
+    );
+  const refreshedStateRank =
+    resolveControlSnapshotHandoffOwnerOutcomeStateProgressRank(
+      refreshedOutcome?.state,
+    );
+  if (refreshedStateRank > currentStateRank) {
+    return true;
+  }
+  const currentFreshnessRank =
+    resolveControlSnapshotHandoffOwnerOutcomeFreshnessProgressRank(
+      currentOutcome?.freshness,
+    );
+  const refreshedFreshnessRank =
+    resolveControlSnapshotHandoffOwnerOutcomeFreshnessProgressRank(
+      refreshedOutcome?.freshness,
+    );
+  if (refreshedFreshnessRank > currentFreshnessRank) {
+    return true;
+  }
+  return normalizeControlSnapshotHandoffOwnerOutcomeRevision(
+    refreshedOutcome?.revision,
+  ) >
+    normalizeControlSnapshotHandoffOwnerOutcomeRevision(
+      currentOutcome?.revision,
+    );
+}
+
 function selectControlSnapshotHandoffEvidence(snapshot = null) {
+  const controlPlaneDiagnostics =
+    snapshot?.[CONTROL_SNAPSHOT_CONTROL_PLANE_DIAGNOSTICS_FIELD];
   const handoff = selectPublicationActiveGateHandoffContract(
-    snapshot?.[CONTROL_SNAPSHOT_CONTROL_PLANE_DIAGNOSTICS_FIELD],
+    controlPlaneDiagnostics,
   );
+  const ownerOutcome =
+    buildPublicationActiveGateOwnerOutcomeEnvelope(controlPlaneDiagnostics);
   const hasHandoff =
     handoff &&
     typeof handoff === TYPEOF.OBJECT &&
@@ -805,6 +890,7 @@ function selectControlSnapshotHandoffEvidence(snapshot = null) {
       ],
       pendingReconcileNodeIds.length,
     ),
+    ownerOutcome,
     pendingReconcileNodeIds,
   });
 }
@@ -816,7 +902,13 @@ function buildControlSnapshotHandoffProgressComparison(
   const current = selectControlSnapshotHandoffEvidence(snapshot);
   const refreshed = selectControlSnapshotHandoffEvidence(refreshedSnapshot);
   const comparable = current.available === true && refreshed.available === true;
+  const ownerOutcomeProgressed =
+    hasControlSnapshotHandoffOwnerOutcomeProgress(
+      current.ownerOutcome,
+      refreshed.ownerOutcome,
+    );
   const progressSignals = Object.freeze({
+    ownerOutcomeProgressed,
     pendingReconcileCountDecreased:
       comparable &&
       refreshed.pendingReconcileCount < current.pendingReconcileCount,
@@ -843,9 +935,7 @@ function buildControlSnapshotHandoffProgressComparison(
     current,
     refreshed,
     progressSignals,
-    handoffProgressed: Object.values(progressSignals).some(
-      (signal) => signal === true,
-    ),
+    handoffProgressed: ownerOutcomeProgressed,
   });
 }
 
@@ -857,14 +947,13 @@ function buildControlSnapshotHandoffRefreshDecision(
     buildControlSnapshotHandoffProgressComparison(snapshot, refreshedSnapshot);
   const decisionSignals = Object.freeze({
     coverageIncreased:
+      handoffComparison.handoffProgressed === true &&
       resolveControlSnapshotCoverageNodeCount(refreshedSnapshot) >
         resolveControlSnapshotCoverageNodeCount(snapshot),
-    handoffProgressed: handoffComparison.handoffProgressed === true,
+    ownerOutcomeProgressed: handoffComparison.handoffProgressed === true,
   });
   return Object.freeze({
-    refreshed: Object.values(decisionSignals).some(
-      (signal) => signal === true,
-    ),
+    refreshed: decisionSignals.ownerOutcomeProgressed === true,
     decisionSignals,
     handoffComparison,
   });

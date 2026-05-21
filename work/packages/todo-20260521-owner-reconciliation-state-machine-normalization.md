@@ -26,7 +26,7 @@
     "test/rebalancer/operation-workflow-owner-decision.test.js"
   ],
   "handoffFiles": [
-    "work/packages/todo-20260521-cross-owner-handoff-contracts.md"
+    "work/packages/active-20260521-cross-owner-handoff-contracts.md"
   ],
   "generatedFiles": [],
   "candidateRuntimeFiles": [
@@ -67,7 +67,7 @@
       "Split each additional owner state-machine conversion into its own runtime-owner-boundary package after the first proof pattern is green."
     ]
   },
-  "predecessor": "work/packages/todo-20260521-cross-owner-handoff-contracts.md"
+  "predecessor": "work/packages/active-20260521-cross-owner-handoff-contracts.md"
 }
 -->
 

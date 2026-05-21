@@ -2128,27 +2128,29 @@ test('AdminControlSnapshot forced repair deferral triggers handoff owner command
     );
     t.equal(
       buildOptions.length,
-      3,
-      'a visible forced-deferral owner outcome should get one bounded snapshot rebuild',
+      2,
+      'a non-progressing forced-deferral owner outcome should not rebuild the snapshot from lower-level coverage deltas',
     );
     t.match(
-      buildOptions[2],
+      buildOptions[1],
       {
         forceAuthoritativeRepair: true,
         allowAuthoritativeRepair: true,
-        queryTimeoutMs: ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_SNAPSHOT_DIRECT_QUERY_TIMEOUT_MS,
+        queryTimeoutMs:
+          ACTIVE_GATE_SNAPSHOT_TEST_STATE
+            .ACTIVE_GATE_SNAPSHOT_DIRECT_QUERY_TIMEOUT_MS,
         preferAuthoritativePublicationRead: true,
         allowAuthoritativeReadinessRefresh:
           ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_HANDOFF_CATCHUP_READINESS_REFRESH,
         reconcileAuthoritativeMembershipPublication: false,
         publicationActiveGateHandoff,
       },
-      'the bounded rebuild should keep the forced repair context while avoiding readiness refresh',
+      'forced-deferral should issue one bounded publication-owner refresh attempt without treating it as progressed truth',
     );
     t.same(
       result.nodes,
-      [...ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_HANDOFF_RECONCILE_NODE_IDS],
-      'visible owner publication should improve the returned snapshot coverage above two-of-five',
+      [...localSnapshot.nodes],
+      'without owner outcome progress, forced-deferral should keep the current local coverage instead of promoting partial refresh results',
     );
     t.match(
       result.controlPlaneDiagnostics.publicationConvergence
@@ -2573,5 +2575,132 @@ test('AdminControlSnapshot repair-deferred shared owner attempts publication cat
         observationMode: 'repair_deferred',
       },
       'the trigger-only deferred snapshot should keep the structured deferred retry outcome',
+    );
+  });
+
+test('AdminControlSnapshot visible handoff refresh does not treat lower-level coverage changes as owner progress',
+  async (t) => {
+    const buildOptions = [];
+    const publicationActiveGateHandoff = {
+      state: ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_OWNER_COHORT_STATE_PENDING,
+      reasonCode:
+        ACTIVE_GATE_SNAPSHOT_TEST_STATE
+          .ACTIVE_GATE_OWNER_COHORT_REASON_OWNER_RECONCILE_PENDING,
+      nextAction:
+        ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_HANDOFF_NEXT_ACTION_RECONCILE,
+      expectedNodeIds: [
+        ...ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_HANDOFF_RECONCILE_NODE_IDS,
+      ],
+      publishedActiveNodeIds: [
+        ...ACTIVE_GATE_SNAPSHOT_TEST_STATE
+          .ACTIVE_GATE_HANDOFF_RECONCILE_PUBLISHED_NODE_IDS,
+      ],
+      pendingReconcileCount:
+        ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_HANDOFF_RECONCILE_PENDING_COUNT,
+      pendingReconcileNodeIds: [
+        ...ACTIVE_GATE_SNAPSHOT_TEST_STATE
+          .ACTIVE_GATE_HANDOFF_RECONCILE_PENDING_NODE_IDS,
+      ],
+    };
+    const visibleOwnerOutcome = {
+      state:
+        ACTIVE_GATE_SNAPSHOT_TEST_STATE
+          .ACTIVE_GATE_HANDOFF_RECONCILE_OUTCOME_PUBLISHED_VISIBLE,
+      publicationRow: {
+        publication_id:
+          ACTIVE_GATE_SNAPSHOT_TEST_STATE
+            .ACTIVE_GATE_HANDOFF_RECONCILE_RESULT_PUBLICATION_ID,
+      },
+    };
+    const staleSnapshot = {
+      nodes: [
+        ACTIVE_GATE_SNAPSHOT_TEST_STATE
+          .ACTIVE_GATE_HANDOFF_RECONCILE_PUBLISHED_NODE_IDS[0],
+      ],
+      controlPlaneDiagnostics: {
+        publicationActiveGateHandoff,
+        activeGateOwnerCohort: publicationActiveGateHandoff,
+        membershipPublicationHandoffOutcome: visibleOwnerOutcome,
+        publicationConvergence: {
+          publicationEpoch:
+            ACTIVE_GATE_SNAPSHOT_TEST_STATE
+              .ACTIVE_GATE_HANDOFF_RECONCILE_PUBLICATION_EPOCH,
+          status:
+            ACTIVE_GATE_SNAPSHOT_TEST_STATE
+              .ACTIVE_GATE_OWNER_TRUTH_PUBLICATION_STATUS,
+          publishedActiveNodeIds: [
+            ...ACTIVE_GATE_SNAPSHOT_TEST_STATE
+              .ACTIVE_GATE_HANDOFF_RECONCILE_PUBLISHED_NODE_IDS,
+          ],
+          membershipPublicationHandoffOutcome: visibleOwnerOutcome,
+        },
+      },
+    };
+    const refreshedSnapshot = {
+      nodes: [...ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_HANDOFF_RECONCILE_NODE_IDS],
+      controlPlaneDiagnostics: {
+        publicationActiveGateHandoff: {
+          ...publicationActiveGateHandoff,
+          pendingReconcileCount: 0,
+          pendingReconcileNodeIds: [],
+        },
+        activeGateOwnerCohort: {
+          ...publicationActiveGateHandoff,
+          pendingReconcileCount: 0,
+          pendingReconcileNodeIds: [],
+        },
+        publicationConvergence: {
+          publicationEpoch:
+            ACTIVE_GATE_SNAPSHOT_TEST_STATE
+              .ACTIVE_GATE_HANDOFF_RECONCILE_RESULT_PUBLICATION_EPOCH,
+          status:
+            ACTIVE_GATE_SNAPSHOT_TEST_STATE
+              .ACTIVE_GATE_OWNER_TRUTH_PUBLICATION_STATUS,
+          publishedActiveNodeIds: [
+            ...ACTIVE_GATE_SNAPSHOT_TEST_STATE
+              .ACTIVE_GATE_HANDOFF_RECONCILE_NODE_IDS,
+          ],
+        },
+      },
+    };
+    const snapshot = new AdminControlSnapshot({
+      nodeId:
+        ACTIVE_GATE_SNAPSHOT_TEST_STATE
+          .ACTIVE_GATE_HANDOFF_RECONCILE_LOCAL_NODE_ID,
+    });
+    snapshot.controlPlaneSnapshotOwner = new ControlPlaneSnapshotOwner({
+      controlSnapshot: snapshot,
+    });
+    snapshot.buildLocalControlSnapshot = async (options = {}) => {
+      buildOptions.push(options);
+      return buildOptions.length === 1 ? staleSnapshot : refreshedSnapshot;
+    };
+    snapshot.canRunAuthoritativeControlSnapshotRepair = () => false;
+
+    const result = await snapshot.resolveLocalControlSnapshot();
+
+    t.equal(
+      buildOptions.length,
+      1,
+      'without owner progress signals, visible handoff outcomes should not trigger a refresh rebuild',
+    );
+    t.same(
+      result.nodes,
+      [
+        ACTIVE_GATE_SNAPSHOT_TEST_STATE
+          .ACTIVE_GATE_HANDOFF_RECONCILE_PUBLISHED_NODE_IDS[0],
+      ],
+      'coverage-only refresh deltas should not be accepted as owner progress',
+    );
+    t.equal(
+      result.controlPlaneDiagnostics.publicationConvergence.publicationEpoch,
+      ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_HANDOFF_RECONCILE_PUBLICATION_EPOCH,
+      'the stale snapshot publication epoch should be retained when owner outcome progress is absent',
+    );
+    t.equal(
+      result.controlPlaneDiagnostics.publicationConvergence
+        .membershipPublicationHandoffOutcome?.state,
+      ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_HANDOFF_RECONCILE_OUTCOME_WRITE_DEFERRED,
+      'the retained snapshot should keep the deferred owner outcome instead of promoting stale coverage',
     );
   });

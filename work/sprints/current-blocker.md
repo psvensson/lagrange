@@ -4,32 +4,33 @@
 
 ## Theory And Implementation Focus
 
-Theory under test: Planned successor package after the shared owner outcome envelope exists.
+Theory under test: Planned successor package after consumers consume owner outcome envelopes.
 
-Causal question: consumers_reinterpret_owner_state
+Causal question: handoffs_not_explicit_everywhere
 
-Implementation slice: Cut over the first consumer vertical slice to consume owner outcomes instead of empty rows, stale cache, timeout text, or partial diagnostics.
+Implementation slice: Define and implement explicit producer-consumer handoff contracts for the highest-risk cross-owner boundaries.
 
 Implementation files:
 
-1. `src/admin/admin-control-snapshot-class-part-2.js`
-2. `src/bootstrap/bootstrap-api.js`
-3. `test/admin/admin-control-snapshot-repair-handoff-outcome-test-cases.js`
-4. `test/bootstrap/bootstrap-membership-owner-outcome-consumers.test.js`
-5. `src/control-plane/publication-owner-decision.js`
-6. `src/control-plane/publication-active-gate-handoff-contract.js`
+1. `src/control-plane/publication-active-gate-handoff-contract.js`
+2. `src/bootstrap/owners/service-registration-handoff-owner.js`
+3. `test/control-plane/publication-active-gate-handoff-contract.test.js`
+4. `test/bootstrap/bootstrap-api.test.js`
+5. `src/bootstrap/owners/move-replica-handoff-owner.js`
+6. `src/rebalancer/operation-workflow-owner-effects.js`
+7. `src/admin/admin-control-snapshot-class-part-2.js`
 
 Expected implementation delta: unknown
 
-Falsifying probe: npm run analyze:owner-files -- runtime_consumer_contract_owner owner_outcome_consumers
+Falsifying probe: npm run analyze:owner-files -- handoff_contract_owner cross_owner_handoff_contracts
 
 Stop rule: No architecture decision gate is required for this package.
 
 Sprint: `work/sprints/active-2026-q2-universal-owner-contract-completion.md`
 
-Package: `work/packages/active-20260521-owner-outcome-consumer-cutover.md`
+Package: `work/packages/active-20260521-cross-owner-handoff-contracts.md`
 
-Workflow lane: `runtime-owner-boundary`
+Workflow lane: `causal-escalation`
 
 Scenario: `none`
 
@@ -39,23 +40,23 @@ Playback: `none`
 
 ## Boundary
 
-Owner: `runtime_consumer_contract_owner`
+Owner: `handoff_contract_owner`
 
-Boundary: `owner_outcome_consumers`
+Boundary: `cross_owner_handoff_contracts`
 
-Dominant reason: `consumers_reinterpret_owner_state`
+Dominant reason: `handoffs_not_explicit_everywhere`
 
-Current state: Planned successor package after the shared owner outcome envelope exists.
+Current state: Planned successor package after consumers consume owner outcome envelopes.
 
 ## Next Action
 
-Cut over the first consumer vertical slice to consume owner outcomes instead of empty rows, stale cache, timeout text, or partial diagnostics.
+Define and implement explicit producer-consumer handoff contracts for the highest-risk cross-owner boundaries.
 
 ## Proof Ladder
 
-1. `npm run analyze:owner-files -- runtime_consumer_contract_owner owner_outcome_consumers`
-2. `npm test -- test/admin/admin-control-snapshot-repair-handoff-outcome-test-cases.js test/bootstrap/bootstrap-membership-owner-outcome-consumers.test.js`
-3. `npm run work:validate -- --pre-impl work/packages/active-20260521-owner-outcome-consumer-cutover.md`
+1. `npm run analyze:owner-files -- handoff_contract_owner cross_owner_handoff_contracts`
+2. `npm test -- test/control-plane/publication-active-gate-handoff-contract.test.js test/bootstrap/bootstrap-api.test.js`
+3. `npm run work:validate -- --pre-impl work/packages/active-20260521-cross-owner-handoff-contracts.md`
 
 ## Model Fit
 
@@ -74,21 +75,21 @@ Escalation triggers:
 
 ## Representative Residual
 
-Status: `unknown`
+Status: `active-contract-slice`
 
-Scenario: `unknown`
+Scenario: `universal-owner-contract-completion`
 
-Artifact: `unknown`
+Artifact: `work/sprints/current-blocker.md`
 
-Frontier: `unknown`
+Frontier: `cross_owner_handoff_contracts`
 
-Owner: `unknown`
+Owner: `handoff_contract_owner`
 
-Boundary: `unknown`
+Boundary: `cross_owner_handoff_contracts`
 
-Dominant reason: `unknown`
+Dominant reason: `handoffs_not_explicit_everywhere`
 
-Next action: `unknown`
+Next action: `Define explicit producer-consumer handoff contracts before additional consumer cutovers.`
 
 ## Causal Governance
 
@@ -236,14 +237,14 @@ Gate next action: No architecture decision gate is required for this package.
 
 Write scope:
 
-1. `src/admin/admin-control-snapshot-class-part-2.js`
-2. `src/bootstrap/bootstrap-api.js`
-3. `test/admin/admin-control-snapshot-repair-handoff-outcome-test-cases.js`
-4. `test/bootstrap/bootstrap-membership-owner-outcome-consumers.test.js`
+1. `src/control-plane/publication-active-gate-handoff-contract.js`
+2. `src/bootstrap/owners/service-registration-handoff-owner.js`
+3. `test/control-plane/publication-active-gate-handoff-contract.test.js`
+4. `test/bootstrap/bootstrap-api.test.js`
 
 Handoff files:
 
-1. `work/packages/done-20260521-universal-owner-outcome-envelope.md`
+1. `work/packages/done-20260521-owner-outcome-consumer-cutover.md`
 
 Generated files:
 
@@ -251,16 +252,17 @@ Generated files:
 
 Candidate runtime files:
 
-1. `src/control-plane/publication-owner-decision.js`
-2. `src/control-plane/publication-active-gate-handoff-contract.js`
+1. `src/bootstrap/owners/move-replica-handoff-owner.js`
+2. `src/rebalancer/operation-workflow-owner-effects.js`
+3. `src/admin/admin-control-snapshot-class-part-2.js`
 
 Commit scope:
 
-1. `src/admin/admin-control-snapshot-class-part-2.js`
-2. `src/bootstrap/bootstrap-api.js`
-3. `test/admin/admin-control-snapshot-repair-handoff-outcome-test-cases.js`
-4. `test/bootstrap/bootstrap-membership-owner-outcome-consumers.test.js`
-5. `work/packages/active-20260521-owner-outcome-consumer-cutover.md`
+1. `src/control-plane/publication-active-gate-handoff-contract.js`
+2. `src/bootstrap/owners/service-registration-handoff-owner.js`
+3. `test/control-plane/publication-active-gate-handoff-contract.test.js`
+4. `test/bootstrap/bootstrap-api.test.js`
+5. `work/packages/active-20260521-cross-owner-handoff-contracts.md`
 
 Legacy touched files:
 

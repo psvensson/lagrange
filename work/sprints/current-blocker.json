@@ -2,42 +2,43 @@
   "schema": "current-blocker-v1",
   "generatedBy": "scripts/work-tracker.js",
   "sprint": "work/sprints/active-2026-q2-universal-owner-contract-completion.md",
-  "package": "work/packages/active-20260521-owner-outcome-consumer-cutover.md",
+  "package": "work/packages/active-20260521-cross-owner-handoff-contracts.md",
   "status": "active",
-  "lane": "runtime-owner-boundary",
+  "lane": "causal-escalation",
   "scenario": "none",
   "artifact": "none",
   "playback": "none",
-  "owner": "runtime_consumer_contract_owner",
-  "boundary": "owner_outcome_consumers",
-  "dominantReason": "consumers_reinterpret_owner_state",
-  "currentState": "Planned successor package after the shared owner outcome envelope exists.",
-  "nextAction": "Cut over the first consumer vertical slice to consume owner outcomes instead of empty rows, stale cache, timeout text, or partial diagnostics.",
+  "owner": "handoff_contract_owner",
+  "boundary": "cross_owner_handoff_contracts",
+  "dominantReason": "handoffs_not_explicit_everywhere",
+  "currentState": "Planned successor package after consumers consume owner outcome envelopes.",
+  "nextAction": "Define and implement explicit producer-consumer handoff contracts for the highest-risk cross-owner boundaries.",
   "proof": [
-    "npm run analyze:owner-files -- runtime_consumer_contract_owner owner_outcome_consumers",
-    "npm test -- test/admin/admin-control-snapshot-repair-handoff-outcome-test-cases.js test/bootstrap/bootstrap-membership-owner-outcome-consumers.test.js",
-    "npm run work:validate -- --pre-impl work/packages/active-20260521-owner-outcome-consumer-cutover.md"
+    "npm run analyze:owner-files -- handoff_contract_owner cross_owner_handoff_contracts",
+    "npm test -- test/control-plane/publication-active-gate-handoff-contract.test.js test/bootstrap/bootstrap-api.test.js",
+    "npm run work:validate -- --pre-impl work/packages/active-20260521-cross-owner-handoff-contracts.md"
   ],
   "writeScope": [
-    "src/admin/admin-control-snapshot-class-part-2.js",
-    "src/bootstrap/bootstrap-api.js",
-    "test/admin/admin-control-snapshot-repair-handoff-outcome-test-cases.js",
-    "test/bootstrap/bootstrap-membership-owner-outcome-consumers.test.js"
+    "src/control-plane/publication-active-gate-handoff-contract.js",
+    "src/bootstrap/owners/service-registration-handoff-owner.js",
+    "test/control-plane/publication-active-gate-handoff-contract.test.js",
+    "test/bootstrap/bootstrap-api.test.js"
   ],
   "handoffFiles": [
-    "work/packages/done-20260521-universal-owner-outcome-envelope.md"
+    "work/packages/done-20260521-owner-outcome-consumer-cutover.md"
   ],
   "generatedFiles": [],
   "candidateRuntimeFiles": [
-    "src/control-plane/publication-owner-decision.js",
-    "src/control-plane/publication-active-gate-handoff-contract.js"
+    "src/bootstrap/owners/move-replica-handoff-owner.js",
+    "src/rebalancer/operation-workflow-owner-effects.js",
+    "src/admin/admin-control-snapshot-class-part-2.js"
   ],
   "commitScope": [
-    "src/admin/admin-control-snapshot-class-part-2.js",
-    "src/bootstrap/bootstrap-api.js",
-    "test/admin/admin-control-snapshot-repair-handoff-outcome-test-cases.js",
-    "test/bootstrap/bootstrap-membership-owner-outcome-consumers.test.js",
-    "work/packages/active-20260521-owner-outcome-consumer-cutover.md"
+    "src/control-plane/publication-active-gate-handoff-contract.js",
+    "src/bootstrap/owners/service-registration-handoff-owner.js",
+    "test/control-plane/publication-active-gate-handoff-contract.test.js",
+    "test/bootstrap/bootstrap-api.test.js",
+    "work/packages/active-20260521-cross-owner-handoff-contracts.md"
   ],
   "touchedFiles": [],
   "modelFit": {
@@ -45,13 +46,22 @@
     "intendedMinimumModel": "gpt-5.3-codex",
     "scopeShape": "bounded-owner-runtime/current-frontier",
     "outputProfile": "medium",
-    "ambiguityScore": 2,
+    "ambiguityScore": 3,
     "escalationTriggers": [
       "owned files expand beyond this package",
       "a frozen decision must be reopened"
     ]
   },
-  "representativeResidual": {},
+  "representativeResidual": {
+    "status": "active-contract-slice",
+    "scenario": "universal-owner-contract-completion",
+    "artifact": "work/sprints/current-blocker.md",
+    "frontier": "cross_owner_handoff_contracts",
+    "owner": "handoff_contract_owner",
+    "boundary": "cross_owner_handoff_contracts",
+    "dominantReason": "handoffs_not_explicit_everywhere",
+    "nextAction": "Define explicit producer-consumer handoff contracts before additional consumer cutovers."
+  },
   "causalGovernance": {},
   "scenarioCausalClosure": {},
   "observablePrediction": {},
@@ -66,5 +76,5 @@
     "selectedChoice": null,
     "nextAction": "No architecture decision gate is required for this package."
   },
-  "predecessor": "work/packages/done-20260521-universal-owner-outcome-envelope.md"
+  "predecessor": "work/packages/done-20260521-owner-outcome-consumer-cutover.md"
 }

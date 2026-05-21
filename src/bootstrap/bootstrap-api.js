@@ -50,6 +50,9 @@ import {
   BootstrapReadinessState,
 } from './bootstrap-readiness-state.js';
 import {
+  MEMBERSHIP_OWNER_OUTCOME_TYPE,
+} from './rejoin-hints-constants.js';
+import {
   CONTROL_PLANE_ROLLOUT_REQUIRED,
   assertRequiredControlPlaneRollout,
 } from '../runtime/control-plane-rollout-controls.js';
@@ -90,6 +93,8 @@ import {BootstrapClusterViewOwner} from
   './owners/bootstrap-cluster-view-owner.js';
 import {createBootstrapApiRuntimeMethods} from
   './bootstrap-api-runtime-methods.js';
+import {buildMembershipOwnerOutcome} from
+  '../control-plane/membership-lifecycle-controller.js';
 
 const LOCAL_STR_BOOTSTRAPAPI = 'BootstrapAPI';
 const LOCAL_STR_FUNCTION = 'function';
@@ -113,6 +118,10 @@ const BOOTSTRAP_CONTROL_PLANE_MUTATION_PROFILE =
 const BOOTSTRAP_ADMISSION_ID_PREFIX = 'bootstrap-admission';
 const BOOTSTRAP_ADMISSION_ID_SEPARATOR = ':';
 const BOOTSTRAP_ADMISSION_PEER_HINT_EMPTY = Object.freeze([]);
+const BOOTSTRAP_LEADER_READINESS_OPTION_FIELD = Object.freeze({
+  MEMBERSHIP_OWNER_OUTCOME: 'membershipOwnerOutcome',
+  STARTUP_MODE: 'startupMode',
+});
 /**
  * BootstrapAPI provides REST endpoints for node bootstrap and discovery.
  */
@@ -1655,6 +1664,37 @@ class BootstrapAPI {
   }
 }
 
+function normalizeBootstrapLeaderReadinessOptions(options = {}) {
+  const normalizedOptions =
+    options && typeof options === TYPEOF.OBJECT && !Array.isArray(options) ?
+      options :
+      {};
+  const membershipOwnerOutcome = buildMembershipOwnerOutcome({
+    membershipOwnerOutcome:
+      normalizedOptions[
+        BOOTSTRAP_LEADER_READINESS_OPTION_FIELD.MEMBERSHIP_OWNER_OUTCOME
+      ],
+    startupMode:
+      normalizedOptions[
+        BOOTSTRAP_LEADER_READINESS_OPTION_FIELD.STARTUP_MODE
+      ],
+  });
+  return {
+    ...normalizedOptions,
+    [BOOTSTRAP_LEADER_READINESS_OPTION_FIELD.MEMBERSHIP_OWNER_OUTCOME]:
+      membershipOwnerOutcome,
+    [BOOTSTRAP_LEADER_READINESS_OPTION_FIELD.STARTUP_MODE]:
+      membershipOwnerOutcome.startupMode,
+  };
+}
+
+function isBootstrapLeaderReadinessBlockedOwnerOutcome(
+  membershipOwnerOutcome = null,
+) {
+  return membershipOwnerOutcome?.outcomeType ===
+    MEMBERSHIP_OWNER_OUTCOME_TYPE.BLOCKED_STARTUP;
+}
+
 Object.assign(
   BootstrapAPI.prototype,
   createBootstrapApiRuntimeMethods({
@@ -1666,5 +1706,28 @@ Object.assign(
     typeofToken: TYPEOF,
   }),
 );
+
+BootstrapAPI.prototype.waitForServiceLeaders = async function(options = {}) {
+  const normalizedOptions =
+    normalizeBootstrapLeaderReadinessOptions(options);
+  const leaderStatus =
+    await this.serviceLeaderReadinessOwner.waitForServiceLeaders(
+      normalizedOptions,
+    );
+  if (
+    isBootstrapLeaderReadinessBlockedOwnerOutcome(
+      normalizedOptions[
+        BOOTSTRAP_LEADER_READINESS_OPTION_FIELD.MEMBERSHIP_OWNER_OUTCOME
+      ],
+    ) &&
+    leaderStatus?.ready === true
+  ) {
+    return {
+      ...leaderStatus,
+      ready: false,
+    };
+  }
+  return leaderStatus;
+};
 
 export {BootstrapAPI, BootstrapStrategy};

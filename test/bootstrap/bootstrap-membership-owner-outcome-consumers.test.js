@@ -108,3 +108,36 @@ test('BootstrapAPI leader readiness consumes membership owner outcome',
       'restart reentry outcome should dominate conflicting fresh startup mode',
     );
   });
+
+test('BootstrapAPI leader readiness does not treat blocked owner outcomes as ready',
+  async (t) => {
+    initializeTestEnvironment();
+
+    const api = new BootstrapAPI({
+      seedNodeId: 'seed-node-1',
+      seedNodeAddress: 'ws://localhost:8080',
+      systemTableCache: createCacheWithLeaderPartitions(),
+    });
+
+    api.getMissingServiceLeaders = () => ({
+      missingPartitionLeaders: [],
+      missingPartitionLeaderNodes: [],
+      missingPartitionLeaderAddresses: [],
+      missingMessageGroupLeaders: [],
+      missingMessageGroupLeaderNodes: [],
+      missingMessageGroupLeaderAddresses: [],
+    });
+
+    const status = await api.waitForServiceLeaders({
+      startupMode: STARTUP_JOIN_MODE.DURABLE_REJOIN,
+      membershipOwnerOutcome: buildMembershipOwnerOutcome({
+        startupMode: 'unsupported_mode',
+      }),
+    });
+
+    t.equal(
+      status.ready,
+      false,
+      'blocked startup owner outcome should keep leader readiness non-ready even when cache rows look complete',
+    );
+  });
