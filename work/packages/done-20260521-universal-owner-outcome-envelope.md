@@ -248,3 +248,9 @@ Agent identity is optional provenance. Use legacy subagent ledgers only when a r
 1. npm run analyze:owner-files -- runtime_contract_owner owner_outcome_envelope
 2. npm test -- test/control-plane/owner-outcome-contract.test.js
 3. npm run work:validate -- --pre-impl work/packages/done-20260521-universal-owner-outcome-envelope.md
+
+## Commit And Push Ledger
+
+- Focused package commit: f5f5beafa5e4e055dab34e49071712136f7d8642
+- Pushed to: origin/codex/pending-ack-eligibility-filter
+- Commit contains only package-owned files/package-status/allowed sprint handoff: yes
