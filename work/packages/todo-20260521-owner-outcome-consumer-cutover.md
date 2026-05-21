@@ -26,7 +26,7 @@
     "test/bootstrap/bootstrap-membership-owner-outcome-consumers.test.js"
   ],
   "handoffFiles": [
-    "work/packages/todo-20260521-universal-owner-outcome-envelope.md"
+    "work/packages/active-20260521-universal-owner-outcome-envelope.md"
   ],
   "generatedFiles": [],
   "candidateRuntimeFiles": [
@@ -67,7 +67,7 @@
       "Split additional consumers by owner boundary if the first vertical slice exposes unrelated admin, bootstrap, rebalancer, or query consumer work."
     ]
   },
-  "predecessor": "work/packages/todo-20260521-universal-owner-outcome-envelope.md"
+  "predecessor": "work/packages/active-20260521-universal-owner-outcome-envelope.md"
 }
 -->
 

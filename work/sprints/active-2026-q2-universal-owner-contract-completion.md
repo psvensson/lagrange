@@ -1,8 +1,8 @@
 # Universal Owner Contract Completion Sprint
 
-Status: todo. Activate this sprint only after
+Status: active. Activated after
 `work/packages/done-20260521-rolling-restart-active-gate-snapshot-quorum.md`
-is closed, superseded, or explicitly moved out of the active blocker slot.
+closed and moved out of the active blocker slot.
 
 ## Sprint Strategy Brief
 
@@ -24,17 +24,38 @@ is closed, superseded, or explicitly moved out of the active blocker slot.
 - Wrong direction signals: any package widens into unrelated runtime work,
   reopens active rolling-restart proof without fresh evidence, closes from a
   timeout/count-only delta, or skips the predecessor contract it depends on.
-- Next best package: `work/packages/todo-20260521-universal-owner-outcome-envelope.md`.
+- Next best package: `work/packages/active-20260521-universal-owner-outcome-envelope.md`.
 - Stop or escalate rule: if a package cannot preserve its owner/boundary or
   requires contradictory evidence, select/open an autonomous architecture
   experiment; use human escalation only for blocked, unavailable, or
   contradictory evidence.
 
+## Current Edge Card
+
+```text
+Representative artifact: none
+Visible first frontier: unknown
+Active package: work/packages/active-20260521-universal-owner-outcome-envelope.md
+Active package owner: runtime_contract_owner
+Active package boundary: owner_outcome_envelope
+Selected cause: owner_outcome_not_universal
+Required action: Add the shared owner outcome envelope and adapt the first control-plane owners without replacing local owner detail.
+Representative status: unknown
+Causal outcome: unknown
+Architecture gate: not-required / unknown
+Expected delta: unknown
+Current state: Planned successor package for making owner outcomes universal after the active rolling-restart package closes.
+Allowed edits: src/control-plane/owner-outcome-contract.js, src/control-plane/control-plane-system-table-gateway-shared.js, src/control-plane/publication-active-gate-handoff-contract.js, test/control-plane/owner-outcome-contract.test.js
+Candidate runtime files: src/control-plane/publication-owner-decision.js, src/control-plane/publication-recovery-state-machine.js
+Forbidden edits: owned files expand beyond this package, a frozen decision must be reopened
+Required latest proof: npm run analyze:owner-files -- runtime_contract_owner owner_outcome_envelope, npm test -- test/control-plane/owner-outcome-contract.test.js, npm run work:validate -- --pre-impl work/packages/active-20260521-universal-owner-outcome-envelope.md
+Allowed stop modes: representative-green, migrated, reduced, same-frontier, classification-only, architecture-gap, human-escalation
+```
+
 ## Activation Wiring
 
-1. Keep this sprint `todo` while the current active rolling-restart package is
-   still active.
-2. When the sprint starts, move package 1 below to `active` with
+1. Keep only one package in this sprint `active` at a time.
+2. When the next sprint package starts, move that package to `active` with
    `npm run work:package:move -- --write`.
 3. After each package closes, activate the next package in this queue. Each
    package also records the previous package in `predecessor`, so the execution
@@ -44,7 +65,7 @@ is closed, superseded, or explicitly moved out of the active blocker slot.
 
 ## Package Queue
 
-1. [Universal Owner Outcome Envelope](../packages/todo-20260521-universal-owner-outcome-envelope.md)
+1. [Universal Owner Outcome Envelope](../packages/active-20260521-universal-owner-outcome-envelope.md)
    - Lane: `runtime-owner-boundary`
    - Purpose: create the shared owner outcome envelope and adapt the first
      control-plane owners without losing local detail.
@@ -102,4 +123,4 @@ is closed, superseded, or explicitly moved out of the active blocker slot.
 1. Do not finish or rerun the active rolling-restart package in this sprint
    queue.
 2. Do not make Pro or Enterprise features part of this sprint.
-3. Do not edit runtime files while this sprint remains `todo`.
+3. Do not edit runtime files outside the active package write scope.

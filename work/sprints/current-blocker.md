@@ -4,27 +4,32 @@
 
 ## Theory And Implementation Focus
 
-Theory under test: No active work package. Start a new package when implementation resumes.
+Theory under test: Planned successor package for making owner outcomes universal after the active rolling-restart package closes.
 
-Causal question: none
+Causal question: owner_outcome_not_universal
 
-Implementation slice: Create or activate one focused package for the next executable concern.
+Implementation slice: Add the shared owner outcome envelope and adapt the first control-plane owners without replacing local owner detail.
 
 Implementation files:
 
-1. None recorded
+1. `src/control-plane/owner-outcome-contract.js`
+2. `src/control-plane/control-plane-system-table-gateway-shared.js`
+3. `src/control-plane/publication-active-gate-handoff-contract.js`
+4. `test/control-plane/owner-outcome-contract.test.js`
+5. `src/control-plane/publication-owner-decision.js`
+6. `src/control-plane/publication-recovery-state-machine.js`
 
 Expected implementation delta: unknown
 
-Falsifying probe: unknown
+Falsifying probe: npm run analyze:owner-files -- runtime_contract_owner owner_outcome_envelope
 
-Stop rule: unknown
+Stop rule: No architecture decision gate is required for this package.
 
-Sprint: `none`
+Sprint: `work/sprints/active-2026-q2-universal-owner-contract-completion.md`
 
-Package: `none`
+Package: `work/packages/active-20260521-universal-owner-outcome-envelope.md`
 
-Workflow lane: `none`
+Workflow lane: `runtime-owner-boundary`
 
 Scenario: `none`
 
@@ -34,35 +39,38 @@ Playback: `none`
 
 ## Boundary
 
-Owner: `none`
+Owner: `runtime_contract_owner`
 
-Boundary: `none`
+Boundary: `owner_outcome_envelope`
 
-Dominant reason: `none`
+Dominant reason: `owner_outcome_not_universal`
 
-Current state: No active work package. Start a new package when implementation resumes.
+Current state: Planned successor package for making owner outcomes universal after the active rolling-restart package closes.
 
 ## Next Action
 
-Create or activate one focused package for the next executable concern.
+Add the shared owner outcome envelope and adapt the first control-plane owners without replacing local owner detail.
 
 ## Proof Ladder
 
-1. None recorded
+1. `npm run analyze:owner-files -- runtime_contract_owner owner_outcome_envelope`
+2. `npm test -- test/control-plane/owner-outcome-contract.test.js`
+3. `npm run work:validate -- --pre-impl work/packages/active-20260521-universal-owner-outcome-envelope.md`
 
 ## Model Fit
 
-Package class: `unknown`
+Package class: `runtime-owner-boundary`
 
-Intended minimum model: `unknown`
+Intended minimum model: `gpt-5.3-codex`
 
-Scope shape: `unknown`
+Scope shape: `bounded-owner-runtime/current-frontier`
 
-Output profile: `unknown`
+Output profile: `medium`
 
 Escalation triggers:
 
-1. None recorded
+1. `owned files expand beyond this package`
+2. `a frozen decision must be reopened`
 
 ## Representative Residual
 
@@ -208,9 +216,9 @@ Runtime promotion rule: `unknown`
 
 ## Architecture Decision Gate
 
-Status: `unknown`
+Status: `not-required`
 
-Trigger: `unknown`
+Trigger: `none`
 
 Trigger evidence:
 
@@ -222,30 +230,37 @@ Choices:
 
 Selected choice: `unknown`
 
-Gate next action: unknown
+Gate next action: No architecture decision gate is required for this package.
 
 ## Scope
 
 Write scope:
 
-1. None recorded
+1. `src/control-plane/owner-outcome-contract.js`
+2. `src/control-plane/control-plane-system-table-gateway-shared.js`
+3. `src/control-plane/publication-active-gate-handoff-contract.js`
+4. `test/control-plane/owner-outcome-contract.test.js`
 
 Handoff files:
 
-1. None recorded
+1. `work/packages/done-20260521-rolling-restart-active-gate-snapshot-quorum.md`
 
 Generated files:
 
-1. `work/sprints/current-blocker.json`
-2. `work/sprints/current-blocker.md`
+1. None recorded
 
 Candidate runtime files:
 
-1. None recorded
+1. `src/control-plane/publication-owner-decision.js`
+2. `src/control-plane/publication-recovery-state-machine.js`
 
 Commit scope:
 
-1. None recorded
+1. `src/control-plane/owner-outcome-contract.js`
+2. `src/control-plane/control-plane-system-table-gateway-shared.js`
+3. `src/control-plane/publication-active-gate-handoff-contract.js`
+4. `test/control-plane/owner-outcome-contract.test.js`
+5. `work/packages/active-20260521-universal-owner-outcome-envelope.md`
 
 Legacy touched files:
 

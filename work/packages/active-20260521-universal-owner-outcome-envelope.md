@@ -3,7 +3,7 @@
 <!-- work-package
 {
   "schema": "work-package-v1",
-  "status": "todo",
+  "status": "active",
   "opened": "2026-05-21",
   "lane": "runtime-owner-boundary",
   "scenario": "none",
@@ -17,7 +17,7 @@
   "proof": [
     "npm run analyze:owner-files -- runtime_contract_owner owner_outcome_envelope",
     "npm test -- test/control-plane/owner-outcome-contract.test.js",
-    "npm run work:validate -- --pre-impl work/packages/todo-20260521-universal-owner-outcome-envelope.md"
+    "npm run work:validate -- --pre-impl work/packages/active-20260521-universal-owner-outcome-envelope.md"
   ],
   "writeScope": [
     "src/control-plane/owner-outcome-contract.js",
@@ -38,13 +38,14 @@
     "src/control-plane/control-plane-system-table-gateway-shared.js",
     "src/control-plane/publication-active-gate-handoff-contract.js",
     "test/control-plane/owner-outcome-contract.test.js",
-    "work/packages/todo-20260521-universal-owner-outcome-envelope.md"
+    "work/packages/active-20260521-universal-owner-outcome-envelope.md"
   ],
   "modelFit": {
     "packageClass": "runtime-owner-boundary",
     "intendedMinimumModel": "gpt-5.3-codex",
     "scopeShape": "bounded-owner-runtime/current-frontier",
     "outputProfile": "medium",
+    "ambiguityScore": 2,
     "escalationTriggers": [
       "owned files expand beyond this package",
       "a frozen decision must be reopened"
@@ -111,7 +112,7 @@ closed or been intentionally superseded.
 ## Core Logic Brief
 
 - Canonical outcome: runtime_contract_owner / owner_outcome_envelope emits the package outcome for owner_outcome_not_universal.
-- Inputs/signals: npm run analyze:owner-files -- runtime_contract_owner owner_outcome_envelope; npm test -- test/control-plane/owner-outcome-contract.test.js; npm run work:validate -- --pre-impl work/packages/todo-20260521-universal-owner-outcome-envelope.md.
+- Inputs/signals: npm run analyze:owner-files -- runtime_contract_owner owner_outcome_envelope; npm test -- test/control-plane/owner-outcome-contract.test.js; npm run work:validate -- --pre-impl work/packages/active-20260521-universal-owner-outcome-envelope.md.
 - State model or invariant: The runtime_contract_owner / owner_outcome_envelope decision table in the Causal Decision Contract maps owner_outcome_not_universal and route evidence to one emitted outcome: pending-before-rerun.
 - Non-goals and forbidden interpretations: Do not reinterpret downstream evidence, widen forbidden boundaries, or patch symptoms outside this package. Forbidden scope: none beyond lane and package scope.
 - Proof mapping: Implementation and tests must prove the runtime_contract_owner / owner_outcome_envelope invariant before representative or closure proof is accepted.
@@ -208,11 +209,12 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 - Intended minimum model: `gpt-5.3-codex`
 - Scope shape: `bounded-owner-runtime/current-frontier`
 - Output profile: `medium`
+- Ambiguity score: `2`
 - Owned files: `src/control-plane/owner-outcome-contract.js`, `src/control-plane/control-plane-system-table-gateway-shared.js`, `src/control-plane/publication-active-gate-handoff-contract.js`, `test/control-plane/owner-outcome-contract.test.js`
 - Forbidden files: none beyond declared write scope
 - Frozen decisions: package scope and lane stay bounded unless explicitly escalated.
 - Escalation triggers: owned files expand beyond this package, runtime ownership changes, or representative scenario evidence changes.
-- Focused proof: `npm run analyze:owner-files -- runtime_contract_owner owner_outcome_envelope`, `npm test -- test/control-plane/owner-outcome-contract.test.js`, `npm run work:validate -- --pre-impl work/packages/todo-20260521-universal-owner-outcome-envelope.md`
+- Focused proof: `npm run analyze:owner-files -- runtime_contract_owner owner_outcome_envelope`, `npm test -- test/control-plane/owner-outcome-contract.test.js`, `npm run work:validate -- --pre-impl work/packages/active-20260521-universal-owner-outcome-envelope.md`
 - Model ledger advisory: `escalate`
 
 ## Model-Fit Split
@@ -243,4 +245,4 @@ Agent identity is optional provenance. Use legacy subagent ledgers only when a r
 
 1. npm run analyze:owner-files -- runtime_contract_owner owner_outcome_envelope
 2. npm test -- test/control-plane/owner-outcome-contract.test.js
-3. npm run work:validate -- --pre-impl work/packages/todo-20260521-universal-owner-outcome-envelope.md
+3. npm run work:validate -- --pre-impl work/packages/active-20260521-universal-owner-outcome-envelope.md
