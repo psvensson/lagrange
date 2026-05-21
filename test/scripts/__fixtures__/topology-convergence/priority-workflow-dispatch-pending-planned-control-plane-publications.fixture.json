@@ -7,11 +7,52 @@
         "failureClass": "priority_recovery_progress_blocked"
       },
       "publicationConvergence": {
-        "publicationStatus": "OPEN",
+        "publicationEpoch": 1,
+        "publicationStatus": "PUBLISHED",
         "pendingAckCount": 0,
-        "missingPublishedCount": 1,
-        "publicationPending": true,
-        "recoveryProtocolState": "publication_pending",
+        "blockedNodeCount": 0,
+        "publishedActiveNodeIds": [
+          "node-1",
+          "node-2",
+          "node-3",
+          "node-4",
+          "node-5"
+        ],
+        "missingPublishedNodeIds": [],
+        "missingPublishedCount": 0,
+        "publicationPending": false,
+        "recoveryProtocolState": "steady_published",
+        "prioritySpreadPending": false,
+        "publicationActiveGateHandoff": {
+          "schemaVersion": 1,
+          "publicationEpoch": 1,
+          "expectedNodeIds": [
+            "node-1",
+            "node-2",
+            "node-3",
+            "node-4",
+            "node-5"
+          ],
+          "expectedNodeCount": 5,
+          "publishedActiveNodeIds": [
+            "node-1",
+            "node-2",
+            "node-3",
+            "node-4",
+            "node-5"
+          ],
+          "publishedActiveNodeCount": 5,
+          "missingPublishedNodeIds": [],
+          "missingPublishedCount": 0,
+          "pendingRecoveryNodeIds": [],
+          "pendingRecoveryCount": 0,
+          "pendingReconcileNodeIds": [],
+          "pendingReconcileCount": 0,
+          "runtimePromotionAllowed": false,
+          "state": "pending",
+          "reasonCode": "owner_reconcile_pending",
+          "nextAction": "reconcile_owner_membership_publication"
+        },
         "priorityRecoveryProgressSummary": {
           "topologyOperatorWitness": {
             "operatorId": "operation-1",
@@ -48,6 +89,12 @@
             "expectedNodeCount": 5,
             "snapshotCoverageNodeCount": 5,
             "snapshotCoverageComplete": true,
+            "publicationActiveGateHandoffState": "pending",
+            "publicationActiveGateHandoffReasonCode": "owner_reconcile_pending",
+            "publicationActiveGateHandoffNextAction": "reconcile_owner_membership_publication",
+            "publicationActiveGateHandoffRuntimePromotionAllowed": false,
+            "publicationActiveGateHandoffPendingReconcileNodeIds": [],
+            "publicationActiveGateHandoffPendingReconcileCount": 0,
             "selectedSnapshotRepairDeferred": false
           }
         }

@@ -144,46 +144,14 @@ Closure:
 - [ ] No relevant guardrail count increased.
 - [ ] Any out-of-scope inherited violation has a linked follow-on package.
 
-## Subagent Sequencing Ledger
+## Execution Evidence
 
-Required for this lane unless the user explicitly disables subagents.
-Use `npm run work:validate -- --pre-impl` before implementation and
-`npm run work:validate -- --closure` before close/commit. Before closure only,
-unavailable delegation may be recorded as `human-waived`,
-`tool-unavailable`, or `blocked-by-environment-policy` with `reason: ...`;
-closure still requires complete real proof unless human policy explicitly
-changes the package.
+Use one executor pass plus one separate verifier-fixer pass. The verifier-fixer
+may fix in-scope problems directly, then reruns focused proof. Legacy subagent
+ledgers are only for reopened packages that already use them.
 
-- [ ] Review subagent recorded:
-      Agent <name> (<agent-id>) reviewed <package>;
-      result `<clean|fixes-required>`.
-- [ ] Fix subagent recorded or explicitly not needed:
-      Agent <name> (<agent-id>) fixed <package>, or `not-needed` only when
-      review result is `clean`.
-- [ ] Implementation subagent recorded:
-      Agent <name> (<agent-id>) implemented <this package>;
-      parent revalidated focused proof: yes.
-
-## Subagent Progress Ledger
-
-Required with the sequencing ledger. Each real subagent appends one checked
-update after every completed subtask; the Sequencing Ledger remains the
-role-completion proof.
-
-- [ ] Agent <name> (<agent-id>) <role> context loaded: scope and blocker confirmed; evidence: package, sprint, and handoff files read; next: first focused probe.
-- [ ] Agent <name> (<agent-id>) <role> probe complete: state/cause confirmed or contradicted; evidence: command and result; next: edit, validate, or blocker handoff.
-- [ ] Agent <name> (<agent-id>) <role> validation complete: package proof refreshed; evidence: commands and results; next: final handoff or successor action.
-
-## Subagent Attempt Ledger
-
-Required with the sequencing ledger. Every real subagent attempt records the
-latest checkpoint, validation state, parent action, and recovery decision.
-Interrupted or partial-unvalidated attempts must be followed by a checked
-superseded/discarded/revalidated line before closure.
-
-- [ ] Agent <name> (<agent-id>) <role> attempt: status: <started|running|interrupted|partial-unvalidated|validated|superseded>; last checkpoint: context loaded; parent action: pending; evidence: package, sprint, and handoff files read; next: first focused probe.
-- [ ] Agent <name> (<agent-id>) <role> attempt: status: validated; last checkpoint: package proof refreshed; parent action: revalidated; evidence: commands and results; next: final handoff or successor action.
-- [ ] Agent <name> (<agent-id>) <role> recovery: status: superseded; last checkpoint: replaced interrupted or partial-unvalidated attempt; parent action: superseded; evidence: superseding proof; next: continue from clean checkpoint.
+- [ ] implementation: status: validated; evidence: <focused proof commands and results>; parent revalidated focused proof: yes; next: verification.
+- [ ] verification-fix: status: validated; evidence: <verification/fix commands and results>; changed files: <paths or none>; parent revalidated focused proof: yes; next: closure or successor action.
 
 ## Validation
 

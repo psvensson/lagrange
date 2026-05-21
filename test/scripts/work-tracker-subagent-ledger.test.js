@@ -514,6 +514,24 @@ const WORK_TRACKER_EXECUTION_EVIDENCE_CLEAN_CONTENT = [
   '- [x] implementation: status: validated; evidence: npm test -- test/example.test.js; parent revalidated focused proof: yes; next: closure.',
   '',
 ].join('\n');
+const WORK_TRACKER_EXECUTION_EVIDENCE_VERIFIED_CONTENT = [
+  '# Test Package',
+  '',
+  '## Execution Evidence',
+  '',
+  '- [x] implementation: status: validated; evidence: npm test -- test/example.test.js; parent revalidated focused proof: yes; next: verification.',
+  '- [x] verification-fix: status: validated; evidence: npm test -- test/example.test.js; changed files: none; parent revalidated focused proof: yes; next: closure.',
+  '',
+].join('\n');
+const WORK_TRACKER_EXECUTION_EVIDENCE_VERIFIED_NO_CHANGES_CONTENT = [
+  '# Test Package',
+  '',
+  '## Execution Evidence',
+  '',
+  '- [x] implementation: status: validated; evidence: npm test -- test/example.test.js; parent revalidated focused proof: yes; next: verification.',
+  '- [x] verification-fix: status: validated; evidence: npm test -- test/example.test.js; parent revalidated focused proof: yes; next: closure.',
+  '',
+].join('\n');
 const WORK_TRACKER_EXECUTION_EVIDENCE_WITH_AGENT_CONTENT = [
   '# Test Package',
   '',
@@ -1151,6 +1169,34 @@ describe('work tracker subagent sequencing ledger validation', () => {
     assert.deepEqual(errors, []);
   });
 
+  it('requires verifier-fixer evidence when closure verification is required', () => {
+    const missingVerifierErrors = validateExecutionEvidenceLedger(
+      WORK_TRACKER_EXECUTION_EVIDENCE_CLEAN_CONTENT,
+      WORK_TRACKER_LEDGER_TEST_FILE,
+      {requiresLedger: true, requiresVerificationFix: true},
+    );
+    const completeVerifierErrors = validateExecutionEvidenceLedger(
+      WORK_TRACKER_EXECUTION_EVIDENCE_VERIFIED_CONTENT,
+      WORK_TRACKER_LEDGER_TEST_FILE,
+      {requiresLedger: true, requiresVerificationFix: true},
+    );
+    const missingChangedFilesErrors = validateExecutionEvidenceLedger(
+      WORK_TRACKER_EXECUTION_EVIDENCE_VERIFIED_NO_CHANGES_CONTENT,
+      WORK_TRACKER_LEDGER_TEST_FILE,
+      {requiresLedger: true, requiresVerificationFix: true},
+    );
+
+    assert.match(
+      missingVerifierErrors.join('\n'),
+      /verification-fix item/u,
+    );
+    assert.deepEqual(completeVerifierErrors, []);
+    assert.match(
+      missingChangedFilesErrors.join('\n'),
+      /changed files:/u,
+    );
+  });
+
   it('accepts execution evidence with real agent provenance', () => {
     const errors = validateExecutionEvidenceLedger(
       WORK_TRACKER_EXECUTION_EVIDENCE_WITH_AGENT_CONTENT,
@@ -1646,7 +1692,7 @@ describe('work tracker package doctor', () => {
     assert.match(rendered, /Validation: ok/u);
   });
 
-  it('requires strict subagent closure proof for future closed runtime packages',
+  it('requires executor and verifier-fixer proof for future closed runtime packages',
     () => {
       const report = buildPackageDoctorLines(
         WORK_TRACKER_FUTURE_DONE_TEST_FILE,
@@ -1655,8 +1701,8 @@ describe('work tracker package doctor', () => {
       );
       const rendered = report.lines.join('\n');
 
-      assert.match(rendered, /parent revalidated focused proof: yes/u);
-      assert.match(rendered, /Subagent Progress And Attempt Ledger is required/u);
+      assert.match(rendered, /Execution Evidence is required/u);
+      assert.match(rendered, /implementation and verification-fix/u);
     });
 
   it('prints acceleration guidance for admin-heavy packages', () => {
@@ -1778,7 +1824,7 @@ describe('work tracker package doctor', () => {
     assert.match(rendered, /Classification-only result has implementation write scope/u);
   });
 
-  it('does not require subagent ledger proof for optional lanes', () => {
+  it('requires verifier-fixer proof for optional code-scope lanes at closure', () => {
     const openLedgerContent = WORK_TRACKER_DOCTOR_CONTENT.replace(
       /## Subagent Sequencing Ledger[\s\S]*$/u,
       WORK_TRACKER_LEDGER_OPEN_CONTENT.split('\n').slice(2).join('\n'),
@@ -1801,7 +1847,10 @@ describe('work tracker package doctor', () => {
 
     assert.deepEqual(entryReport.errors, []);
     assert.deepEqual(preImplReport.errors, []);
-    assert.deepEqual(closureReport.errors, []);
+    assert.match(
+      closureReport.errors.join('\n'),
+      /Execution Evidence is required with checked implementation and verification-fix/u,
+    );
   });
 
   it('surfaces scenario causal closure metadata in package doctor output', () => {

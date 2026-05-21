@@ -7,6 +7,7 @@
 
 import {test} from '../../src/test-helpers/tap.js';
 import {BootstrapService} from '../../src/bootstrap/bootstrap-service.js';
+import {LoggingService} from '../../src/logging/logging-service.js';
 import {NodeJoiningService} from '../../src/bootstrap/node-joining-service.js';
 import {BootstrapAPI} from '../../src/bootstrap/bootstrap-api.js';
 import {SYSTEM_TABLE_NAME} from '../../src/bootstrap/system-table-schemas-constants.js';
@@ -35,6 +36,9 @@ const POLL_INTERVAL_MS = 100;
 const CLEANUP_TIMEOUT_MS = 10000;
 const EXPECTED_NODE_COUNT = 3;
 const REQUIRED_REBALANCED_PARTITIONS = 1;
+const SEED_NODE_ID = '550e8400-e29b-41d4-a716-446655440401';
+const NODE2_ID = '550e8400-e29b-41d4-a716-446655440402';
+const NODE3_ID = '550e8400-e29b-41d4-a716-446655440403';
 
 async function withTimeout(task, timeoutMs, label) {
   let timeoutId;
@@ -185,7 +189,8 @@ function createMockProbeRebalanceCoordinator() {
 
 test('Three-node seed rebalance', {timeout: TEST_TIMEOUT_MS}, async (t) => {
   t.beforeEach(() => {
-    initializeTestEnvironment();
+    initializeTestEnvironment({ nodeId: SEED_NODE_ID });
+    LoggingService.getInstance().initialize({ level: 'info' });
   });
 
   t.afterEach(async () => {
@@ -196,9 +201,9 @@ test('Three-node seed rebalance', {timeout: TEST_TIMEOUT_MS}, async (t) => {
     'moves at least one partition replica off seed node',
     {timeout: TEST_TIMEOUT_MS},
     async (t) => {
-      const seedNodeId = '550e8400-e29b-41d4-a716-446655440401';
-      const node2Id = '550e8400-e29b-41d4-a716-446655440402';
-      const node3Id = '550e8400-e29b-41d4-a716-446655440403';
+      const seedNodeId = SEED_NODE_ID;
+      const node2Id = NODE2_ID;
+      const node3Id = NODE3_ID;
       const seedWsPort = getUniquePort();
       const node2WsPort = getUniquePort();
       const node3WsPort = getUniquePort();

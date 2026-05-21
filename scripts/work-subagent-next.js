@@ -61,7 +61,21 @@ async function buildSubagentNextLines(args = []) {
   if (args.includes(FLAG_HELP)) {
     return HELP_TEXT.split(NEWLINE);
   }
-  const packagePath = await resolvePackagePath(args);
+  let packagePath = EMPTY_TEXT;
+  try {
+    packagePath = await resolvePackagePath(args);
+  } catch (error) {
+    if (error.message !== 'No active work package was found.') {
+      throw error;
+    }
+    return [
+      '# Next Subagent',
+      EMPTY_TEXT,
+      'Package: `none`',
+      'Role: `none`',
+      'Status: No active package; create or activate a focused package before requesting a subagent prompt.',
+    ];
+  }
   const packageContent = await fs.readFile(packagePath, ENCODING_UTF8);
   const status = buildSubagentSequencingStatus(packageContent, packagePath);
   const lines = [

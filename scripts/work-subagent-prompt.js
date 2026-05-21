@@ -24,6 +24,7 @@ const NUM_MINUS_ONE = -1;
 const ROLE_REVIEW = 'review';
 const ROLE_FIX = 'fix';
 const ROLE_IMPLEMENTATION = 'implementation';
+const ROLE_VERIFICATION_FIX = 'verification-fix';
 const FLAG_ROLE = '--role';
 const FLAG_PACKAGE = '--package';
 const FLAG_AGENT_NAME = '--agent-name';
@@ -56,6 +57,7 @@ const VALID_ROLES = Object.freeze([
   ROLE_REVIEW,
   ROLE_FIX,
   ROLE_IMPLEMENTATION,
+  ROLE_VERIFICATION_FIX,
 ]);
 const OUTPUT_GUIDANCE_BY_PROFILE = Object.freeze({
   [OUTPUT_PROFILE_SMALL]:
@@ -69,7 +71,8 @@ const OUTPUT_GUIDANCE_BY_PROFILE = Object.freeze({
 });
 const HELP_TEXT = [
   'Usage:',
-  '  node scripts/work-subagent-prompt.js --role review|fix|implementation --package <package.md>',
+  '  node scripts/work-subagent-prompt.js --role implementation|verification-fix --package <package.md>',
+  '  node scripts/work-subagent-prompt.js --role review|fix --package <package.md>  # legacy',
   '',
   'Optional:',
   '  --agent-name <name> --agent-id <uuid>  Print the exact ledger line to record.',
@@ -239,9 +242,19 @@ function decisionExperimentGate(content) {
 }
 
 function roleTask(role, metadata, packagePath) {
+  if (role === ROLE_VERIFICATION_FIX) {
+    return [
+      'Verify the last implementation for this package as a separate verifier-fixer.',
+      'You may fix any in-scope problem yourself, then rerun the focused proof.',
+      'Do not silently widen scope; if the problem requires files outside writeScope',
+      'or a different owner boundary, stop and report the needed split.',
+      'Report changed files, commands run, pass/fail results, and remaining blockers.',
+    ].join(' ');
+  }
   if (role === ROLE_REVIEW) {
     return [
-      'Review the predecessor or most recently executed package named by this',
+      'Use this legacy review role only for a reopened package that already',
+      'uses review/fix ledgers. Review the predecessor or most recently executed package named by this',
       'package. Focus on package proof, residual inventory, guardrail ledger,',
       'blocker migration notes, sprint snapshot consistency, and whether the',
       'stated next action still matches artifact evidence. If every finding is',
@@ -253,7 +266,8 @@ function roleTask(role, metadata, packagePath) {
   }
   if (role === ROLE_FIX) {
     return [
-      'Fix only the actionable findings from the review subagent. Keep the',
+      'Use this legacy fix role only for a reopened package that already uses',
+      'review/fix ledgers. Fix only the actionable findings from the review subagent. Keep the',
       'write scope to the reviewed package and directly related tracker proof.',
       'Do not implement the new package yet.',
     ].join(' ');
@@ -280,6 +294,11 @@ function ledgerLine(role, packagePath, flags = {}) {
     return `- [x] fix: status: validated; ${agentPrefix}` +
       `evidence: fixed ${packagePath}; next: implementation.`;
   }
+  if (role === ROLE_VERIFICATION_FIX) {
+    return `- [x] verification-fix: status: validated; ${agentPrefix}` +
+      `evidence: verified and fixed ${packagePath}; changed files: <paths or none>; ` +
+      'parent revalidated focused proof: yes; next: closure or successor action.';
+  }
   return `- [x] implementation: status: validated; ${agentPrefix}` +
     `evidence: implemented ${packagePath}; ` +
     'parent revalidated focused proof: yes; next: closure or successor action.';
@@ -292,7 +311,7 @@ function reviewMetadataFixLedgerLine(packagePath, flags = {}) {
     `agent: Agent ${agentName} (${agentId}); ` :
     EMPTY_TEXT;
   if (!agentName || !agentId) {
-    return 'If the review directly fixes metadata-only findings, record: ' +
+    return 'For legacy review/fix ledgers, if the review directly fixes metadata-only findings, record: ' +
       '`- [x] review-fixed-metadata-only: status: validated; evidence: ' +
       'metadata-only package/sprint/tracker/handoff edits; next: validation.`';
   }
@@ -315,7 +334,7 @@ function validationCommandLines(role, packagePath, metadata) {
   for (const command of proofCommands) {
     lines.push(`- \`${command}\``);
   }
-  if (role === ROLE_IMPLEMENTATION) {
+  if (role === ROLE_IMPLEMENTATION || role === ROLE_VERIFICATION_FIX) {
     lines.push(`- \`npm run work:validate -- --closure ${packagePath}\``);
   }
   return lines.join(NEWLINE);
@@ -547,6 +566,9 @@ function buildSubagentPrompt(role, packagePath, content, args = []) {
     role === ROLE_REVIEW ?
       'If review findings are metadata-only, apply those edits directly and add a checked item naming the metadata-only files fixed before final review validation.' :
       EMPTY_TEXT,
+    role === ROLE_VERIFICATION_FIX ?
+      'For verification-fix, fix in-scope findings directly and include `changed files:` in the checked evidence item.' :
+      EMPTY_TEXT,
     EMPTY_TEXT,
     'Use this shape:',
     EMPTY_TEXT,
@@ -565,6 +587,8 @@ function buildSubagentPrompt(role, packagePath, content, args = []) {
     EMPTY_TEXT,
     role === ROLE_IMPLEMENTATION ?
       'The parent session records this implementation evidence only after rerunning the focused proof locally and truthfully adding `parent revalidated focused proof: yes`:' :
+      role === ROLE_VERIFICATION_FIX ?
+        'The parent session records this verifier-fixer evidence only after rerunning the focused proof locally and truthfully adding `parent revalidated focused proof: yes`:' :
       'Record this execution evidence line after the role completes:',
     EMPTY_TEXT,
     ledgerLine(role, packagePath, args),

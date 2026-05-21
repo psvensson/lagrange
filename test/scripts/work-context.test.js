@@ -57,6 +57,55 @@ const TEST_LIGHTWEIGHT_PACKAGE_CONTENT = [
   '-->',
   '',
 ].join('\n');
+const TEST_LIGHTWEIGHT_CODE_SCOPE_PACKAGE_CONTENT = [
+  '# Lightweight Code Scope Package',
+  '',
+  '<!-- work-package',
+  JSON.stringify({
+    schema: 'work-package-v1',
+    status: 'active',
+    lane: 'lightweight-maintenance',
+    scenario: 'none',
+    owner: 'workflow_tooling_owner',
+    boundary: 'steering_pack',
+    currentState: 'Workflow tooling needs a focused code update.',
+    nextAction: 'Edit the workflow tooling.',
+    writeScope: ['scripts/work-context.js'],
+    commitScope: ['scripts/work-context.js'],
+  }, null, 2),
+  '-->',
+  '',
+].join('\n');
+const TEST_LIGHTWEIGHT_CODE_SCOPE_IMPLEMENTED_CONTENT = [
+  TEST_LIGHTWEIGHT_CODE_SCOPE_PACKAGE_CONTENT,
+  '## Execution Evidence',
+  '',
+  '- [x] implementation: status: validated; evidence: node --test test/scripts/work-context.test.js; parent revalidated focused proof: yes; next: verification.',
+  '',
+].join('\n');
+const TEST_LIGHTWEIGHT_CODE_SCOPE_INVALID_IMPLEMENTATION_CONTENT = [
+  TEST_LIGHTWEIGHT_CODE_SCOPE_PACKAGE_CONTENT,
+  '## Execution Evidence',
+  '',
+  '- [x] implementation: status: validated; evidence: node --test test/scripts/work-context.test.js; next: verification.',
+  '',
+].join('\n');
+const TEST_LIGHTWEIGHT_CODE_SCOPE_VERIFIED_CONTENT = [
+  TEST_LIGHTWEIGHT_CODE_SCOPE_PACKAGE_CONTENT,
+  '## Execution Evidence',
+  '',
+  '- [x] implementation: status: validated; evidence: node --test test/scripts/work-context.test.js; parent revalidated focused proof: yes; next: verification.',
+  '- [x] verification-fix: status: validated; evidence: node --test test/scripts/work-context.test.js; changed files: none; parent revalidated focused proof: yes; next: closure.',
+  '',
+].join('\n');
+const TEST_LIGHTWEIGHT_CODE_SCOPE_INVALID_VERIFICATION_CONTENT = [
+  TEST_LIGHTWEIGHT_CODE_SCOPE_PACKAGE_CONTENT,
+  '## Execution Evidence',
+  '',
+  '- [x] implementation: status: validated; evidence: node --test test/scripts/work-context.test.js; parent revalidated focused proof: yes; next: verification.',
+  '- [x] verification-fix: status: validated; evidence: node --test test/scripts/work-context.test.js; parent revalidated focused proof: yes; next: closure.',
+  '',
+].join('\n');
 const REVIEW_AGENT_ID = '019e02b6-1920-7130-b040-da2e6f4efbc4';
 const FIX_AGENT_ID = '019e02b7-ece3-73a2-a664-389d40dfd575';
 const IMPLEMENTATION_AGENT_ID = '019e02b9-7651-7851-bc85-a0cef8a90176';
@@ -616,7 +665,7 @@ test('work context reports the next required subagent role', (t) => {
   );
 
   t.equal(missingLedger.role, 'none');
-  t.match(missingLedger.status, /direct implementation may proceed/u);
+  t.match(missingLedger.status, /implementation may proceed/u);
   t.equal(reviewOnly.role, 'fix');
   t.match(reviewOnly.status, /not-needed/u);
   t.equal(ready.role, 'none');
@@ -653,7 +702,7 @@ test('work context treats placeholder-only legacy ledgers as no process blocker'
     ].join('\n'));
 
     t.equal(status.role, 'none');
-    t.match(status.status, /direct implementation may proceed/u);
+    t.match(status.status, /implementation may proceed/u);
     t.end();
   });
 
@@ -683,6 +732,42 @@ test('work context treats lightweight lanes as subagent optional', (t) => {
   t.match(lightweight.status, /not required/u);
   t.end();
 });
+
+test('work context routes optional code-scope packages through verifier-fixer',
+  (t) => {
+    const missingEvidence = buildSubagentSequencingStatus(
+      TEST_LIGHTWEIGHT_CODE_SCOPE_PACKAGE_CONTENT,
+      TEST_PACKAGE_PATH,
+    );
+    const invalidImplementation = buildSubagentSequencingStatus(
+      TEST_LIGHTWEIGHT_CODE_SCOPE_INVALID_IMPLEMENTATION_CONTENT,
+      TEST_PACKAGE_PATH,
+    );
+    const implemented = buildSubagentSequencingStatus(
+      TEST_LIGHTWEIGHT_CODE_SCOPE_IMPLEMENTED_CONTENT,
+      TEST_PACKAGE_PATH,
+    );
+    const invalidVerification = buildSubagentSequencingStatus(
+      TEST_LIGHTWEIGHT_CODE_SCOPE_INVALID_VERIFICATION_CONTENT,
+      TEST_PACKAGE_PATH,
+    );
+    const verified = buildSubagentSequencingStatus(
+      TEST_LIGHTWEIGHT_CODE_SCOPE_VERIFIED_CONTENT,
+      TEST_PACKAGE_PATH,
+    );
+
+    t.equal(missingEvidence.role, 'implementation');
+    t.match(missingEvidence.status, /Execution evidence not recorded/u);
+    t.equal(invalidImplementation.role, 'implementation');
+    t.match(invalidImplementation.status, /parent revalidated focused proof/u);
+    t.equal(implemented.role, 'verification-fix');
+    t.match(implemented.status, /verifier-fixer/u);
+    t.equal(invalidVerification.role, 'verification-fix');
+    t.match(invalidVerification.status, /changed files:/u);
+    t.equal(verified.role, 'none');
+    t.match(verified.status, /verifier-fixer proof recorded/u);
+    t.end();
+  });
 
 test('work context does not mark strict-invalid subagent ledgers ready', (t) => {
   const ready = buildSubagentSequencingStatus(

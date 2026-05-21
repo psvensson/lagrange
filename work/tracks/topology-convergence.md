@@ -200,8 +200,8 @@ canonical owner-boundary evidence.
 
 ## Next Package
 
-Next continuation package:
-
-```text
-work/packages/active-20260513-priority-recovery-current-artifact-fixture-and-burndown.md
-```
+No active continuation package remains after
+`work/packages/done-20260520-priority-recovery-current-artifact-fixture-and-burndown.md`.
+The compact handoff-probe fixture now freezes the
+`control_plane_publications-p1` `dispatch_pending` / `planned` operation
+workflow witness for any later operation-progress runtime package.

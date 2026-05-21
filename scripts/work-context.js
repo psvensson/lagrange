@@ -13,6 +13,7 @@ import {
   findActivePackageFile,
   findActiveSprintFile,
   metadataRequiresSubagentSequencing,
+  metadataRequiresVerificationFix,
   validateExecutionEvidenceLedger,
   validateSubagentSequencingLedger,
 } from './work-tracker.js';
@@ -187,21 +188,26 @@ const SUBAGENT_LEDGER_IMPLEMENTATION_LABEL = 'Implementation subagent recorded';
 const SUBAGENT_ROLE_REVIEW = 'review';
 const SUBAGENT_ROLE_FIX = 'fix';
 const SUBAGENT_ROLE_IMPLEMENTATION = 'implementation';
+const SUBAGENT_ROLE_VERIFICATION_FIX = 'verification-fix';
 const SUBAGENT_ROLE_NONE = 'none';
 const SUBAGENT_STATUS_LEDGER_MISSING =
-  'Execution evidence not recorded; direct implementation may proceed, and closure requires validated implementation evidence.';
+  'Execution evidence not recorded; implementation may proceed as one executor pass, then verifier-fixer evidence is required before closure when scope changes code, tests, scripts, or tracker truth.';
 const SUBAGENT_STATUS_REVIEW_MISSING =
   'Review proof missing in legacy ledger; direct implementation may proceed when package scope and proof are explicit.';
 const SUBAGENT_STATUS_FIX_REQUIRED =
-  'Review found fixes-required; fix runtime/code findings before implementation, or record review-fixed-metadata-only for metadata-only fixes.';
+  'Legacy review found fixes-required; fix runtime/code findings before implementation, or record review-fixed-metadata-only for metadata-only fixes.';
 const SUBAGENT_STATUS_FIX_NOT_NEEDED_MISSING =
-  'Review is clean; record fix as not-needed or continue with execution evidence.';
+  'Legacy review is clean; record fix as not-needed or continue with execution evidence.';
 const SUBAGENT_STATUS_FIX_MISSING =
   'Fix proof missing in legacy ledger; record the required fix only when review found code/runtime fixes.';
 const SUBAGENT_STATUS_IMPLEMENTATION_MISSING =
-  'Review/fix proof recorded; implement directly and record execution evidence after focused proof.';
+  'Legacy review/fix proof recorded; implement directly and record execution evidence after focused proof.';
 const SUBAGENT_STATUS_IMPLEMENTATION_RECORDED =
   'Implementation proof recorded.';
+const SUBAGENT_STATUS_VERIFICATION_FIX_MISSING =
+  'Implementation proof recorded; run a separate verifier-fixer that may fix in-scope problems before closure.';
+const SUBAGENT_STATUS_VERIFICATION_FIX_RECORDED =
+  'Implementation and verifier-fixer proof recorded.';
 const SUBAGENT_STATUS_STRICT_VALIDATION_FAILED =
   'Legacy Subagent Sequencing Ledger strict validation failed; repair the recorded proof or replace it with Execution Evidence.';
 const SUBAGENT_STATUS_NOT_REQUIRED =
@@ -209,6 +215,8 @@ const SUBAGENT_STATUS_NOT_REQUIRED =
 const SUBAGENT_PROGRESS_CHECKED_ITEM_PATTERN = /^\[[xX]\]\s*/u;
 const SUBAGENT_LEDGER_CHECKED_LINE_PATTERN = /^-\s*\[[xX]\]\s*/mu;
 const EXECUTION_EVIDENCE_IMPLEMENTATION_PATTERN = /\bimplementation\b/iu;
+const EXECUTION_EVIDENCE_VERIFICATION_FIX_PATTERN =
+  /\bverification-fix\b/iu;
 const EXECUTION_EVIDENCE_PARENT_REVALIDATED_PATTERN =
   /\b(?:parent\s+revalidated\s+(?:focused\s+)?proof|parent\s+validation)\s*:\s*`?yes`?/iu;
 const SUBAGENT_PROGRESS_ITEM_LIMIT = 3;
@@ -234,6 +242,7 @@ const SUBAGENT_FIX_ERROR_PATTERN =
   /fix (?:entry|package|agent)|not-needed/iu;
 const SUBAGENT_IMPLEMENTATION_ERROR_PATTERN = /implementation/iu;
 const LEDGER_VALIDATION_REQUIRES_LEDGER = 'requiresLedger';
+const LEDGER_VALIDATION_REQUIRES_VERIFICATION_FIX = 'requiresVerificationFix';
 const LEDGER_VALIDATION_REQUIRES_STRICT_ENTRIES = 'requiresStrictEntries';
 const FIELD_LABELS = Object.freeze({
   ARTIFACT: 'Artifact',
@@ -1006,12 +1015,33 @@ function findCheckedImplementationExecutionEvidence(packageContent) {
       EXECUTION_EVIDENCE_IMPLEMENTATION_PATTERN.test(item));
 }
 
+function findCheckedVerificationFixExecutionEvidence(packageContent) {
+  return extractMarkdownSection(packageContent, PACKAGE_SECTION_EXECUTION_EVIDENCE)
+    .find((item) =>
+      SUBAGENT_PROGRESS_CHECKED_ITEM_PATTERN.test(item) &&
+      EXECUTION_EVIDENCE_VERIFICATION_FIX_PATTERN.test(item));
+}
+
 function buildSubagentSequencingStatus(
   packageContent = EMPTY_STRING,
   packagePath = EMPTY_STRING,
 ) {
+  if (
+    normalizeString(packagePath).toLowerCase() === 'none' &&
+    normalizeString(packageContent).length === NUM_ZERO
+  ) {
+    return buildSubagentRoleStatus(
+      SUBAGENT_ROLE_NONE,
+      'No active package; verifier-fixer applies when a future package reaches closure.',
+    );
+  }
   const metadata = parseOptionalPackageMetadata(packageContent, packagePath);
-  if (metadata && !metadataRequiresSubagentSequencing(metadata)) {
+  const requiresVerificationFix = metadataRequiresVerificationFix(metadata);
+  if (
+    metadata &&
+    !metadataRequiresSubagentSequencing(metadata) &&
+    !requiresVerificationFix
+  ) {
     return buildSubagentRoleStatus(
       SUBAGENT_ROLE_NONE,
       SUBAGENT_STATUS_NOT_REQUIRED,
@@ -1022,18 +1052,42 @@ function buildSubagentSequencingStatus(
   if (executionEvidenceItem) {
     const normalizedPackagePath = normalizeString(packagePath);
     if (normalizedPackagePath.length > NUM_ZERO) {
-      const evidenceErrors = validateExecutionEvidenceLedger(
+      const implementationEvidenceErrors = validateExecutionEvidenceLedger(
         packageContent,
         normalizedPackagePath,
         {
           [LEDGER_VALIDATION_REQUIRES_LEDGER]: true,
         },
       );
-      if (evidenceErrors.length > NUM_ZERO) {
+      if (implementationEvidenceErrors.length > NUM_ZERO) {
         return buildSubagentRoleStatus(
           SUBAGENT_ROLE_IMPLEMENTATION,
-          buildStrictValidationStatus(evidenceErrors),
+          buildStrictValidationStatus(implementationEvidenceErrors),
         );
+      }
+      if (requiresVerificationFix) {
+        const verificationEvidenceErrors = validateExecutionEvidenceLedger(
+          packageContent,
+          normalizedPackagePath,
+          {
+            [LEDGER_VALIDATION_REQUIRES_LEDGER]: true,
+            [LEDGER_VALIDATION_REQUIRES_VERIFICATION_FIX]: true,
+          },
+        );
+        const hasVerificationFix =
+          findCheckedVerificationFixExecutionEvidence(packageContent);
+        if (verificationEvidenceErrors.length > NUM_ZERO) {
+          if (!hasVerificationFix) {
+            return buildSubagentRoleStatus(
+              SUBAGENT_ROLE_VERIFICATION_FIX,
+              SUBAGENT_STATUS_VERIFICATION_FIX_MISSING,
+            );
+          }
+          return buildSubagentRoleStatus(
+            SUBAGENT_ROLE_VERIFICATION_FIX,
+            buildStrictValidationStatus(verificationEvidenceErrors),
+          );
+        }
       }
     } else if (!EXECUTION_EVIDENCE_PARENT_REVALIDATED_PATTERN.test(
       executionEvidenceItem,
@@ -1043,9 +1097,20 @@ function buildSubagentSequencingStatus(
         'Execution Evidence implementation item needs parent revalidation before closure.',
       );
     }
+    if (
+      requiresVerificationFix &&
+      !findCheckedVerificationFixExecutionEvidence(packageContent)
+    ) {
+      return buildSubagentRoleStatus(
+        SUBAGENT_ROLE_VERIFICATION_FIX,
+        SUBAGENT_STATUS_VERIFICATION_FIX_MISSING,
+      );
+    }
     return buildSubagentRoleStatus(
       SUBAGENT_ROLE_NONE,
-      SUBAGENT_STATUS_IMPLEMENTATION_RECORDED,
+      requiresVerificationFix ?
+        SUBAGENT_STATUS_VERIFICATION_FIX_RECORDED :
+        SUBAGENT_STATUS_IMPLEMENTATION_RECORDED,
     );
   }
   const ledger = extractMarkdownSectionText(
@@ -1054,13 +1119,17 @@ function buildSubagentSequencingStatus(
   );
   if (ledger.length === NUM_ZERO) {
     return buildSubagentRoleStatus(
-      SUBAGENT_ROLE_NONE,
+      (metadataRequiresSubagentSequencing(metadata) || requiresVerificationFix) ?
+        SUBAGENT_ROLE_IMPLEMENTATION :
+        SUBAGENT_ROLE_NONE,
       SUBAGENT_STATUS_LEDGER_MISSING,
     );
   }
   if (!SUBAGENT_LEDGER_CHECKED_LINE_PATTERN.test(ledger)) {
     return buildSubagentRoleStatus(
-      SUBAGENT_ROLE_NONE,
+      (metadataRequiresSubagentSequencing(metadata) || requiresVerificationFix) ?
+        SUBAGENT_ROLE_IMPLEMENTATION :
+        SUBAGENT_ROLE_NONE,
       SUBAGENT_STATUS_LEDGER_MISSING,
     );
   }

@@ -21,6 +21,26 @@ Run harness scenarios with:
 node test/distributed/run.js --config <config-path> [--scenario <scenario-name>] [--output <report-path>] [--verbose]
 ```
 
+## Live Monitoring Dashboard
+
+To simplify running and triaging local distributed scenarios, Lagrange provides a browser-based UI dashboard.
+
+### Standalone Local Mode (Recommended)
+
+Launch the userland test control dashboard on port `8181`:
+
+```bash
+npm run start:test-dashboard
+```
+
+Then open `http://127.0.0.1:8181/` in your browser.
+
+### Key Dashboard Features:
+1. **Interactive Controls**: Select any scenario-config combination and launch runs dynamically.
+2. **Real-time Log Streaming**: Uses Server-Sent Events (SSE) to stream combined stdout/stderr logs from all active container nodes.
+3. **Historical Run List**: View past executions complete with git commit hashes, execution durations, and final outcomes.
+4. **Examples Visualizer**: For scenarios reporting discrete data assertions (like `examples-catalog`), the dashboard lists individual passed/failed criteria with details.
+
 ## Failure Triage
 
 After a distributed harness failure, artifact-first triage is mandatory. Start

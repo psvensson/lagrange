@@ -75,6 +75,11 @@ Use the lightest valid lane:
   evidence when the scenario drove the work, and closure execution evidence.
   Agent identity is optional provenance; never invent agent IDs to satisfy
   process fields.
+- For real package work, use the executor plus verifier-fixer model. One
+  executor may own inspection, edits, and focused proof. A separate verifier-
+  fixer must verify the last package work before closure when code, tests,
+  scripts, runtime contracts, or tracker truth changed; it may fix in-scope
+  problems directly and must report changed files plus validation evidence.
 
 ## Coding Constraints
 

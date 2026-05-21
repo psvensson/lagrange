@@ -693,10 +693,13 @@ const DOCTOR_SUGGESTION_NONE =
 const LEDGER_VALIDATION_ALLOW_OPEN_IMPLEMENTATION = 'allowOpenImplementation';
 const LEDGER_VALIDATION_ALLOW_UNAVAILABLE_SUBAGENTS =
   'allowUnavailableSubagents';
+const LEDGER_VALIDATION_REQUIRES_VERIFICATION_FIX = 'requiresVerificationFix';
 const SUBAGENT_UNAVAILABLE_REASON_PATTERN = /\breason\s*:\s*\S+/iu;
 const SUBAGENT_PROGRESS_EVIDENCE_FIELD_PATTERN = /\bevidence\s*:/iu;
 const SUBAGENT_PROGRESS_NEXT_OR_BLOCKER_FIELD_PATTERN =
   /\b(?:next|blocker)\s*:/iu;
+const EXECUTION_EVIDENCE_CHANGED_FILES_FIELD_PATTERN =
+  /\bchanged files\s*:/iu;
 const SUBAGENT_ATTEMPT_STATUS_PATTERN =
   /\bstatus\s*:\s*`?([a-z-]+)`?/iu;
 const SUBAGENT_ATTEMPT_LAST_CHECKPOINT_FIELD_PATTERN =
@@ -721,8 +724,12 @@ const SUBAGENT_ATTEMPT_UNVALIDATED_STATUSES = Object.freeze([
 const SUBAGENT_ATTEMPT_VALIDATED_STATUS = 'validated';
 const SUBAGENT_ATTEMPT_SUPERSEDED_STATUS = 'superseded';
 const EXECUTION_EVIDENCE_IMPLEMENTATION_PATTERN = /\bimplementation\b/iu;
+const EXECUTION_EVIDENCE_VERIFICATION_FIX_PATTERN =
+  /\bverification-fix\b/iu;
 const EXECUTION_EVIDENCE_TERMINAL_STATUS_PATTERN =
-  /\bstatus\s*:\s*`?(?:validated|passed|green|success|done)`?/iu;
+  /\bstatus\s*:\s*`?(?:validated|passed|green|success|done|superseded)`?/iu;
+const VERIFICATION_FIX_SCOPE_PATTERN =
+  /^(?:src|test|scripts|work)\//u;
 const SUBAGENT_ATTEMPT_PARENT_TERMINAL_ACTIONS = Object.freeze([
   'discarded',
   'revalidated',
@@ -1271,6 +1278,11 @@ function findImplementationExecutionEvidenceItem(checkedItems = []) {
     EXECUTION_EVIDENCE_IMPLEMENTATION_PATTERN.test(item));
 }
 
+function findVerificationFixExecutionEvidenceItem(checkedItems = []) {
+  return checkedItems.find((item) =>
+    EXECUTION_EVIDENCE_VERIFICATION_FIX_PATTERN.test(item));
+}
+
 export function validateExecutionEvidenceLedger(content, filePath, options = {}) {
   const ledger = extractExecutionEvidenceLedger(content);
   if (!ledger) {
@@ -1310,6 +1322,8 @@ export function validateExecutionEvidenceLedger(content, filePath, options = {})
   }
   const implementationItem =
     findImplementationExecutionEvidenceItem(checkedItems);
+  const verificationFixItem =
+    findVerificationFixExecutionEvidenceItem(checkedItems);
   if (
     options[LEDGER_VALIDATION_REQUIRES_LEDGER] &&
     options[LEDGER_VALIDATION_ALLOW_OPEN_IMPLEMENTATION] !== true
@@ -1331,6 +1345,33 @@ export function validateExecutionEvidenceLedger(content, filePath, options = {})
           `${filePath}: Execution Evidence implementation item must record ` +
           '`parent revalidated focused proof: yes` before closure.',
         );
+      }
+    }
+    if (options[LEDGER_VALIDATION_REQUIRES_VERIFICATION_FIX] === true) {
+      if (!verificationFixItem) {
+        errors.push(
+          `${filePath}: Execution Evidence must include a checked ` +
+          'verification-fix item before closure.',
+        );
+      } else {
+        if (!EXECUTION_EVIDENCE_TERMINAL_STATUS_PATTERN.test(verificationFixItem)) {
+          errors.push(
+            `${filePath}: Execution Evidence verification-fix item must ` +
+            'record status validated, passed, green, success, done, or superseded.',
+          );
+        }
+        if (!SUBAGENT_PARENT_REVALIDATION_PATTERN.test(verificationFixItem)) {
+          errors.push(
+            `${filePath}: Execution Evidence verification-fix item must ` +
+            'record `parent revalidated focused proof: yes` before closure.',
+          );
+        }
+        if (!EXECUTION_EVIDENCE_CHANGED_FILES_FIELD_PATTERN.test(verificationFixItem)) {
+          errors.push(
+            `${filePath}: Execution Evidence verification-fix item must ` +
+            'record `changed files:` before closure.',
+          );
+        }
       }
     }
   }
@@ -2747,6 +2788,18 @@ export function metadataRequiresSubagentSequencing(metadata) {
   return !SUBAGENT_OPTIONAL_LANES.includes(metadataLane(metadata));
 }
 
+export function metadataRequiresVerificationFix(metadata) {
+  if (!metadata) {
+    return false;
+  }
+  const scopedPaths = [
+    ...metadataScopeList(metadata, SCOPE_FIELD_WRITE_SCOPE),
+    ...metadataScopeList(metadata, SCOPE_FIELD_COMMIT_SCOPE),
+  ];
+  return scopedPaths.some((filePath) =>
+    VERIFICATION_FIX_SCOPE_PATTERN.test(normalizeLedgerText(filePath)));
+}
+
 function validateCausalGovernanceField(filePath, fieldName, value) {
   const normalizedValue = normalizeLedgerText(value);
   if (
@@ -2889,7 +2942,10 @@ export function validateCausalGovernanceContract(
     );
   }
   if (
-    ((fileStatus === STATUS_DONE || fileStatus === STATUS_SUPERSEDED) || options.phase === VALIDATION_PHASE_CLOSURE) &&
+    ((fileStatus === STATUS_DONE || (
+      fileStatus !== STATUS_SUPERSEDED &&
+      options.phase === VALIDATION_PHASE_CLOSURE
+    ))) &&
     (representativeOutcome === CAUSAL_GOVERNANCE_PENDING_OUTCOME || representativeOutcome === 'pending-before-rerun')
   ) {
     errors.push(
@@ -3249,6 +3305,9 @@ export function validateObservablePredictionContract(
   }
 
   if (phase !== VALIDATION_PHASE_CLOSURE) {
+    return errors;
+  }
+  if (fileStatus === STATUS_SUPERSEDED) {
     return errors;
   }
 
@@ -5086,22 +5145,29 @@ function resolveValidationPhase(args = []) {
 }
 
 function buildSubagentValidationOptions(fileStatus, metadata, phase, options = {}) {
+  const requiresVerificationFix =
+    phase === VALIDATION_PHASE_CLOSURE &&
+    fileStatus !== STATUS_SUPERSEDED &&
+    metadataRequiresVerificationFix(metadata);
   const forceClosedPackageLedger =
     options.enforceClosureSubagentLedger === true &&
-    (fileStatus === STATUS_DONE || fileStatus === STATUS_SUPERSEDED) &&
+    fileStatus === STATUS_DONE &&
     metadataRequiresSubagentSequencing(metadata);
   const requiresSubagentLedger =
     metadata !== null &&
-    metadataRequiresSubagentSequencing(metadata) &&
+    (metadataRequiresSubagentSequencing(metadata) || requiresVerificationFix) &&
     (
       (fileStatus === STATUS_ACTIVE && phase === VALIDATION_PHASE_CLOSURE) ||
       isCurrentPolicyClosedSubagentMetadata(fileStatus, metadata) ||
-      forceClosedPackageLedger
+      forceClosedPackageLedger ||
+      requiresVerificationFix
     ) &&
     phase !== VALIDATION_PHASE_ENTRY;
   return {
-    skipSubagentLedger: phase === VALIDATION_PHASE_ENTRY,
+    skipSubagentLedger:
+      phase === VALIDATION_PHASE_ENTRY || fileStatus === STATUS_SUPERSEDED,
     requiresSubagentLedger,
+    requiresVerificationFix,
     allowOpenImplementation:
       phase === VALIDATION_PHASE_PRE_IMPL && fileStatus === STATUS_ACTIVE,
     allowUnavailableSubagents:
@@ -5344,7 +5410,14 @@ async function validatePackageFile(filePath, options = {}) {
           subagentValidation.allowOpenImplementation,
         [LEDGER_VALIDATION_ALLOW_PENDING_SUBAGENT_LEDGER]:
           fileStatus === STATUS_TODO,
+        [LEDGER_VALIDATION_REQUIRES_VERIFICATION_FIX]:
+          subagentValidation.requiresVerificationFix,
       }));
+    } else if (subagentValidation.requiresVerificationFix) {
+      errors.push(
+        `${relativePath}: Execution Evidence is required with checked ` +
+        'implementation and verification-fix items before closure.',
+      );
     } else if (subagentValidation.requiresSubagentLedger) {
       errors.push(...validateSubagentSequencingLedger(content, relativePath, {
         [LEDGER_VALIDATION_REQUIRES_LEDGER]:
@@ -5495,6 +5568,7 @@ async function validatePackageFile(filePath, options = {}) {
   ));
   const requiresCommitLedger =
     metadata !== null &&
+    fileStatus !== STATUS_SUPERSEDED &&
     metadata[METADATA_COMMIT_AND_PUSH_LEDGER_REQUIRED] === true;
   errors.push(...validateCommitAndPushLedger(content, relativePath, {
     [LEDGER_VALIDATION_REQUIRES_LEDGER]: requiresCommitLedger,
@@ -5776,8 +5850,16 @@ export function validateCurrentBlockerSnapshot(currentBlocker, options = {}) {
     );
   }
 
-  const packagePath = normalizeSnapshotPathValue(currentBlocker.package);
-  if (packagePath.length === NUM_ZERO) {
+  const isNoActiveSnapshot =
+    allowClosedSnapshot &&
+    currentBlocker.status === 'none' &&
+    normalizeLedgerText(currentBlocker.package) === 'none';
+  const packagePath = isNoActiveSnapshot ?
+    EMPTY_TEXT :
+    normalizeSnapshotPathValue(currentBlocker.package);
+  if (isNoActiveSnapshot) {
+    // A deliberate no-active snapshot is valid between package slices.
+  } else if (packagePath.length === NUM_ZERO) {
     errors.push(
       `${snapshotPath}: current-blocker package is required; run ` +
       `${CURRENT_BLOCKER_REPAIR_COMMAND}.`,
@@ -5867,10 +5949,17 @@ async function validateCurrentBlockerFreshness() {
   const errors = [];
   const activeSprintFile = await findActiveSprintFile();
   const activePackageFile = await findActivePackageFile(activeSprintFile);
+  const allowNoActiveSnapshot =
+    !activeSprintFile &&
+    !activePackageFile &&
+    currentBlocker.status === 'none';
   const allowClosedSnapshot =
     !activeSprintFile &&
     !activePackageFile &&
-    CURRENT_BLOCKER_CLOSED_STATUSES.includes(currentBlocker.status);
+    (
+      CURRENT_BLOCKER_CLOSED_STATUSES.includes(currentBlocker.status) ||
+      allowNoActiveSnapshot
+    );
   if (!activeSprintFile && !activePackageFile && !allowClosedSnapshot) {
     errors.push(
       `${CURRENT_BLOCKER_JSON_PATH}: ${ERROR_NO_ACTIVE_SPRINT} Run ` +
@@ -6347,7 +6436,14 @@ export function buildPackageDoctorLines(filePath, content, options = {}) {
           subagentValidation.allowOpenImplementation,
         [LEDGER_VALIDATION_ALLOW_PENDING_SUBAGENT_LEDGER]:
           fileStatus === STATUS_TODO,
+        [LEDGER_VALIDATION_REQUIRES_VERIFICATION_FIX]:
+          subagentValidation.requiresVerificationFix,
       }));
+    } else if (subagentValidation.requiresVerificationFix) {
+      errors.push(
+        `${relativePath}: Execution Evidence is required with checked ` +
+        'implementation and verification-fix items before closure.',
+      );
     } else if (subagentValidation.requiresSubagentLedger) {
       errors.push(...validateSubagentSequencingLedger(content, relativePath, {
         [LEDGER_VALIDATION_REQUIRES_LEDGER]:
@@ -6492,6 +6588,7 @@ export function buildPackageDoctorLines(filePath, content, options = {}) {
   ));
   const requiresCommitLedger =
     metadata !== null &&
+    fileStatus !== STATUS_SUPERSEDED &&
     metadata[METADATA_COMMIT_AND_PUSH_LEDGER_REQUIRED] === true;
   errors.push(...validateCommitAndPushLedger(content, relativePath, {
     [LEDGER_VALIDATION_REQUIRES_LEDGER]: requiresCommitLedger,
@@ -6802,6 +6899,47 @@ export function buildCurrentBlockerPayload(
       options,
     ),
     predecessor: metadata.predecessor || null,
+  };
+}
+
+function buildNoActiveCurrentBlockerPayload(activeSprintFile = null) {
+  return {
+    schema: CURRENT_BLOCKER_SCHEMA,
+    generatedBy: 'scripts/work-tracker.js',
+    sprint: activeSprintFile ?
+      normalizeRelativePath(activeSprintFile) :
+      CURRENT_BLOCKER_NO_ACTIVE_SPRINT,
+    package: 'none',
+    status: 'none',
+    lane: 'none',
+    scenario: 'none',
+    artifact: 'none',
+    playback: 'none',
+    owner: 'none',
+    boundary: 'none',
+    dominantReason: 'none',
+    currentState: 'No active work package. Start a new package when implementation resumes.',
+    nextAction: 'Create or activate one focused package for the next executable concern.',
+    proof: [],
+    writeScope: [],
+    handoffFiles: [],
+    generatedFiles: [
+      CURRENT_BLOCKER_JSON_PATH,
+      CURRENT_BLOCKER_MARKDOWN_PATH,
+    ],
+    candidateRuntimeFiles: [],
+    commitScope: [],
+    touchedFiles: [],
+    modelFit: {},
+    representativeResidual: {},
+    causalGovernance: {},
+    scenarioCausalClosure: {},
+    observablePrediction: {},
+    experimentOutcome: {},
+    rerunDecision: {},
+    classificationEfficiency: {},
+    architectureDecisionGate: {},
+    predecessor: null,
   };
 }
 
@@ -7375,6 +7513,21 @@ export function renderCurrentBlockerMarkdown(payload) {
 async function currentBlockerCommand(args) {
   const activeSprintFile = await findActiveSprintFile();
   const activePackageFile = await findActivePackageFile(activeSprintFile);
+  if (!activePackageFile) {
+    const payload = buildNoActiveCurrentBlockerPayload(activeSprintFile);
+    const jsonContent = `${JSON.stringify(payload, null, NUM_TWO)}${NEWLINE}`;
+    const markdownContent = renderCurrentBlockerMarkdown(payload);
+    if (args.includes(CLI_FLAG_WRITE)) {
+      await writeTextFile(CURRENT_BLOCKER_JSON_PATH, jsonContent);
+      await writeTextFile(CURRENT_BLOCKER_MARKDOWN_PATH, markdownContent);
+      console.log(
+        `Updated ${CURRENT_BLOCKER_JSON_PATH}, ${CURRENT_BLOCKER_MARKDOWN_PATH}.`,
+      );
+      return;
+    }
+    console.log(jsonContent);
+    return;
+  }
   await assertResolvableActivePackage(activeSprintFile, activePackageFile);
   const packageContent = await readTextFile(activePackageFile);
   const metadata = parsePackageMetadata(

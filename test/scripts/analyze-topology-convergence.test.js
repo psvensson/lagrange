@@ -157,6 +157,8 @@ const PUBLICATION_OPERATION_HANDOFF_PENDING_RECONCILE_NODE_IDS = [
   'node-3',
   'node-5',
 ];
+const COMPACT_HANDOFF_PENDING_RECONCILE_COUNT = 0;
+const COMPACT_HANDOFF_PENDING_RECONCILE_NODE_IDS = Object.freeze([]);
 const HANDOFF_CONTRACT_NEXT_ACTION_RECONCILE =
   'reconcile_owner_membership_publication';
 const OWNER_QUEUE_DEPTH_STATE_UNKNOWN = 'unknown';
@@ -530,6 +532,24 @@ describe('analyze-topology-convergence CLI', () => {
       ARG_HANDOFF_PROBE,
     );
 
+    assert.equal(output.schemaVersion, HANDOFF_PROBE_SCHEMA);
+    assert.equal(output.detected, HANDOFF_DETECTED_FALSE);
+    assert.deepEqual(output.missingEdge, {
+      id: OPERATION_WORKFLOW_HANDOFF_MISSING_EDGE_ID,
+      name: OPERATION_WORKFLOW_HANDOFF_MISSING_EDGE_NAME,
+    });
+    assert.deepEqual(output.contractEdge, {
+      id: HANDOFF_CONTRACT_EDGE_ID,
+      name: HANDOFF_CONTRACT_EDGE_NAME,
+    });
+    assert.equal(
+      output.resultClassification,
+      OPERATION_WORKFLOW_HANDOFF_RESULT_CLASSIFICATION,
+    );
+    assert.equal(
+      output.requiredProgressMechanism,
+      HANDOFF_REQUIRED_PROGRESS_MECHANISM_ADVANCE,
+    );
     assert.equal(output.operationWorkflow.owner, OPERATION_WORKFLOW_OWNER);
     assert.equal(output.operationWorkflow.boundary, WORKFLOW_PROGRESS_BOUNDARY);
     assert.equal(
@@ -544,6 +564,22 @@ describe('analyze-topology-convergence CLI', () => {
       output.operationWorkflow.source.topologyOperatorNextAction,
       TOPOLOGY_OPERATOR_NEXT_ACTION_ADVANCE_EXISTING_OPERATION,
     );
+    assert.deepEqual(output.handoffContract, {
+      state: HANDOFF_CONTRACT_STATE_PENDING,
+      reasonCode: OWNER_RECONCILE_PENDING_REASON,
+      nextAction: HANDOFF_CONTRACT_NEXT_ACTION_RECONCILE,
+      runtimePromotionAllowed: RUNTIME_PROMOTION_ALLOWED_FALSE,
+      pendingReconcileCount: COMPACT_HANDOFF_PENDING_RECONCILE_COUNT,
+      pendingReconcileNodeIds: COMPACT_HANDOFF_PENDING_RECONCILE_NODE_IDS,
+    });
+    assert.deepEqual(output.nextOwnerPath, {
+      edge: PRIORITY_EDGE_ID,
+      owner: OPERATION_WORKFLOW_OWNER,
+      boundary: WORKFLOW_PROGRESS_BOUNDARY,
+      evidencePath: OPERATION_WORKFLOW_WITNESS_EVIDENCE_PATH,
+      requiredAction: TOPOLOGY_OPERATOR_NEXT_ACTION_ADVANCE_EXISTING_OPERATION,
+      runtimePromotionAllowed: RUNTIME_PROMOTION_ALLOWED_FALSE,
+    });
   });
 
   it('prints active-gate snapshot timeout owner-edge split in handoff probe',

@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 
+import fs from 'node:fs';
 import {spawnSync} from 'node:child_process';
 import process from 'node:process';
 import {fileURLToPath} from 'node:url';
@@ -26,6 +27,7 @@ const FLAG_HELP = '--help';
 const FLAG_PACKAGE = '--package';
 const FLAG_WRITE = '--write';
 const FLAG_CHECK = '--check';
+const CURRENT_BLOCKER_JSON_PATH = 'work/sprints/current-blocker.json';
 const HELP_TEXT = [
   'Usage: node scripts/work-advance.js [--package <package.md>] [--write] [--check]',
   '',
@@ -62,7 +64,17 @@ async function resolvePackageBlocker(args = []) {
   const packagePath = parseOptionValue(args, FLAG_PACKAGE);
   return packagePath ?
     buildCurrentBlockerFromPackage(packagePath) :
-    buildCurrentBlockerFromActivePackage();
+    buildCurrentBlockerFromActivePackage().catch((error) => {
+      if (error.message !== 'No current blocker handoff was found.') {
+        throw error;
+      }
+      return {
+        currentBlocker: JSON.parse(
+          fs.readFileSync(CURRENT_BLOCKER_JSON_PATH, 'utf8'),
+        ),
+        packageContent: EMPTY_TEXT,
+      };
+    });
 }
 
 function appendCommandResult(lines, title, result) {
@@ -89,6 +101,7 @@ async function buildAdvanceLines(args = []) {
     );
   }
   const {currentBlocker, packageContent} = await resolvePackageBlocker(args);
+  const hasActivePackage = currentBlocker.package !== 'none';
   const subagentStatus = buildSubagentSequencingStatus(
     packageContent,
     currentBlocker.package,
@@ -104,19 +117,34 @@ async function buildAdvanceLines(args = []) {
     `Next action: ${currentBlocker.nextAction}`,
     `Next required subagent role: \`${subagentStatus.role}\``,
     `Subagent sequencing status: ${subagentStatus.status}`,
-    EMPTY_TEXT,
-    '## Package Doctor',
-    EMPTY_TEXT,
-    buildPackageDoctorLines(currentBlocker.package, packageContent, {
-      suggest: true,
-    }).lines.join(NEWLINE),
+  );
+  if (hasActivePackage) {
+    lines.push(
+      EMPTY_TEXT,
+      '## Package Doctor',
+      EMPTY_TEXT,
+      buildPackageDoctorLines(currentBlocker.package, packageContent, {
+        suggest: true,
+      }).lines.join(NEWLINE),
+    );
+  } else {
+    lines.push(
+      EMPTY_TEXT,
+      '## Package Doctor',
+      EMPTY_TEXT,
+      'No active package; package doctor is not applicable.',
+    );
+  }
+  lines.push(
     EMPTY_TEXT,
     '## Next Subagent',
     EMPTY_TEXT,
-    (await buildSubagentNextLines([
-      FLAG_PACKAGE,
-      currentBlocker.package,
-    ])).join(NEWLINE),
+    hasActivePackage ?
+      (await buildSubagentNextLines([
+        FLAG_PACKAGE,
+        currentBlocker.package,
+      ])).join(NEWLINE) :
+      (await buildSubagentNextLines([])).join(NEWLINE),
   );
   if (args.includes(FLAG_CHECK)) {
     appendCommandResult(

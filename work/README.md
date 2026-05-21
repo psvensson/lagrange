@@ -120,12 +120,14 @@ Use the tracker utility for current sprint/package mechanics:
 17. `npm run analyze:priority-recovery-residuals -- <artifact>` extracts
     priority-recovery partition witnesses by owner and boundary and prints
     package scaffolding commands for deliberate residual splits.
-18. `npm run work:subagent-prompt -- --role review|fix|implementation
+18. `npm run work:subagent-prompt -- --role implementation|verification-fix
     --package work/packages/active-...md` generates bounded role prompts and
-    the ledger-line shape to record after a real subagent returns. The prompt
-    includes the package spawn/execution model and tells the parent to set it
-    explicitly instead of relying on inherited high-model defaults. It records
-    `## Execution Evidence`; agent identity is optional provenance.
+    the ledger-line shape to record after a real subagent returns. Legacy
+    `review` and `fix` prompts remain available for reopened packages that
+    already use those ledgers. The prompt includes the package spawn/execution
+    model and tells the parent to set it explicitly instead of relying on
+    inherited high-model defaults. It records `## Execution Evidence`; agent
+    identity is optional provenance.
 19. `npm run work:oversized-next -- --markdown` turns oversized
     owner-boundary segment files into package-ready extraction candidates so
     file-size debt stays actionable rather than a broad background concern.
@@ -183,13 +185,13 @@ the package explicitly records a heavier audit or architecture reason:
    Once a gate has a selected route, future packages execute that route or
    rerun evidence; they do not open another architecture gate unless fresh
    canonical evidence contradicts the selection.
-6. Subagents are optional review capacity before implementation unless the
-   package or human explicitly requires them. Closure proof is the package's
-   `## Execution Evidence`: checked role items with `status: ...`,
-   `evidence: ...`, and either `next: ...` or `blocker: ...`. Implementation
-   closure also records `parent revalidated focused proof: yes`. Agent identity
-   is optional provenance and must never be invented. Legacy subagent ledgers
-   remain valid for packages already using them.
+6. Use the executor plus verifier-fixer model for real package work. One
+   executor owns inspect, edit, focused proof, and changed-file reporting. One
+   separate verifier-fixer then verifies the last package work, may fix any
+   in-scope problem directly, reruns focused proof, and reports changed files.
+   Closure proof is the package's `## Execution Evidence`. Agent identity is
+   optional provenance and must never be invented. Legacy review/fix/
+   implementation ledgers remain valid only for packages already using them.
 7. Use the `mechanical-maintenance` lane for docs, templates, schema text,
    package metadata, generated handoff text, and similarly mechanical edits
    that do not change runtime or test behavior. These packages should be
@@ -201,17 +203,19 @@ the package explicitly records a heavier audit or architecture reason:
 9. Use the `diagnostic-classification` lane when the package is driven by a
    representative artifact but edits only diagnostics, diagnostic tests, and
    work-tracker files. This lane keeps causal ledgers and representative
-   evidence, but does not require review/fix/implementation subagents unless
-   runtime ownership, shared contracts, or scenario behavior can change.
+   evidence; use executor proof and add verifier-fixer closure proof when the
+   package changes tests, scripts, tracker truth, runtime contracts, or
+   scenario behavior.
 10. Use the `experiment` lane for probe packages whose success criterion is
    information. An experiment closes green when it distinguishes competing
    hypotheses with a pre-registered observable prediction, even when no runtime
    line changes.
 11. Use the `bounded-experiment` lane for same-owner or tightly scoped
    hypothesis-driven slices that inherit current owner/boundary context and
-   merge only after focused proof plus canonical evidence movement. Pre-review
-   subagents are optional; post-hoc review is expected before merging runtime
-   behavior when the package declares it.
+   merge only after focused proof plus canonical evidence movement. The
+   executor owns the implementation pass; a separate verifier-fixer is required
+   before closure when runtime behavior, tests, scripts, or tracker truth
+   changed.
 12. Use the `single-file-runtime` lane for a preselected one-file runtime slice
    intended for `gpt-5.4`. It still needs a Core Logic Brief, focused proof,
    and explicit forbidden scope, and it must split as soon as a second runtime
@@ -348,19 +352,21 @@ route, scope, proof, and stop rule are explicit. Closure remains strict.
 
 The preferred package proof section is `## Execution Evidence`:
 
-1. Review, when used: `- [x] review: status: validated; evidence: <review command/result>; next: implementation or fixes.`
-2. Fix, when used: `- [x] fix: status: validated; evidence: <files/commands>; next: implementation.`
-3. Implementation: `- [x] implementation: status: validated; evidence: <focused proof commands and results>; parent revalidated focused proof: yes; next: closure or successor action.`
+1. Implementation: `- [x] implementation: status: validated; evidence: <focused proof commands and results>; parent revalidated focused proof: yes; next: verification.`
+2. Verification-fix: `- [x] verification-fix: status: validated; evidence: <verification/fix commands and results>; changed files: <paths or none>; parent revalidated focused proof: yes; next: closure or successor action.`
 
-Agent identity may be appended as `agent: Agent <name> (<agent-id>);` when a
-real subagent was used and recovery would benefit from that provenance. It is
-not required for implementation truth and must not be invented.
+`verification-fix` is mandatory before closing packages that change code, tests,
+scripts, runtime contracts, package/tracker truth, or generated handoff state.
+Pure Q&A and tiny docs-only changes may skip packages and verifier-fixer
+entirely. Agent identity may be appended as `agent: Agent <name> (<agent-id>);`
+when a real subagent was used and recovery would benefit from that provenance.
+It is not required for implementation truth and must not be invented.
 
 Worker-reported validation is handoff evidence only. The parent session must
-rerun focused proof locally before committing runtime edits or marking
-implementation complete. If a worker or local attempt stops with edited files
-and no validation, record `status: partial-unvalidated` with a `blocker:` or add
-a later checked superseded/revalidated evidence item before closure.
+rerun focused proof locally before committing runtime edits or marking package
+closure complete. If an executor or verifier-fixer stops with edited files and
+no validation, record `status: partial-unvalidated` with a `blocker:` or add a
+later checked superseded/revalidated evidence item before closure.
 
 Legacy `## Subagent Sequencing Ledger`, `## Subagent Progress Ledger`,
 `## Subagent Attempt Ledger`, and `## Subagent Progress And Attempt Ledger`
@@ -562,9 +568,9 @@ before implementation starts. At minimum, activation must:
 3. promote exact files from `candidateRuntimeFiles` into `writeScope` and
    `commitScope` only after focused owner-file proof such as
    `npm run analyze:owner-files -- <owner> [boundary] --markdown`
-4. replace review/fix subagent placeholders with real proof, or an allowed
-   waiver, before pre-implementation validation; replace implementation proof
-   before closure validation
+4. remove stale legacy review/fix placeholders before pre-implementation
+   validation; record checked implementation and, when scope requires it,
+   verifier-fixer proof before closure validation
 5. keep the package artifact path explicit and classify fresh evidence as
    `representative-green`, `reduced`, `same-frontier`, `migrated`, or
    `classification-only`
@@ -851,8 +857,8 @@ invented.
 
 Required workflow:
 
-1. Finish validation, static guardrails, residual closure, and the deep-dive
-   review first.
+1. Finish validation, static guardrails, residual closure, and required
+   verifier-fixer proof first.
 2. Rename or migrate the work package with the tracker command.
 3. Review the dirty worktree and separate unrelated changes.
 4. Commit only the package-owned files, package-status updates, and sprint
@@ -934,9 +940,10 @@ Pure classification packages must carry `classificationEfficiency` metadata:
 8. `runtimePromotionRule`: when stable owner/boundary evidence should move to
    `runtime-owner-boundary` work.
 
-Subagent sequencing is optional for pure classification packages that have no
-runtime, test, script, or report write scope. Sequencing resumes as soon as
-implementation scope is promoted.
+Verifier-fixer proof is optional for pure classification packages that have no
+runtime, test, script, report, or tracker-truth write scope. The
+executor/verifier-fixer path resumes as soon as implementation scope is
+promoted.
 
 ## Post-Rerun Decision Gate
 

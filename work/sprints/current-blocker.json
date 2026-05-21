@@ -2,160 +2,35 @@
   "schema": "current-blocker-v1",
   "generatedBy": "scripts/work-tracker.js",
   "sprint": "none",
-  "package": "work/packages/active-20260513-priority-recovery-current-artifact-fixture-and-burndown.md",
-  "status": "active",
-  "lane": "experiment",
-  "scenario": "rolling-restart",
-  "artifact": "test-output/reports/rolling-restart-green-only-baseline-20260513.report.json",
-  "playback": "test-output/reports/.playback/rolling-restart-green-only-baseline-20260513/rolling-restart/",
-  "owner": "diagnostics_owner",
-  "boundary": "priority_recovery_fixture_and_burndown",
-  "dominantReason": "priority_recovery_progress_blocked",
-  "currentState": "The current fixture-first blocker is the control_plane_publications-p1 operation workflow witness at topology operator step dispatch_pending/planned. Full rolling-restart reruns are not the first debugging surface.",
-  "nextAction": "Freeze control_plane_publications-p1 dispatch_pending/planned into a compact handoff-probe fixture and require that proof before any next runtime package reaches pre-implementation.",
-  "proof": [
-    "npm run analyze:topology-convergence -- test/scripts/__fixtures__/topology-convergence/priority-workflow-dispatch-pending-planned-control-plane-publications.fixture.json --handoff-probe",
-    "node --test test/scripts/analyze-topology-convergence.test.js",
-    "node --test test/scripts/priority-recovery-current-artifact-fixture.test.js",
-    "npm run work:validate -- --pre-impl work/packages/active-20260513-priority-recovery-current-artifact-fixture-and-burndown.md"
-  ],
-  "writeScope": [
-    "work/packages/active-20260513-priority-recovery-current-artifact-fixture-and-burndown.md",
-    "work/sprints/current-blocker.md",
+  "package": "none",
+  "status": "none",
+  "lane": "none",
+  "scenario": "none",
+  "artifact": "none",
+  "playback": "none",
+  "owner": "none",
+  "boundary": "none",
+  "dominantReason": "none",
+  "currentState": "No active work package. Start a new package when implementation resumes.",
+  "nextAction": "Create or activate one focused package for the next executable concern.",
+  "proof": [],
+  "writeScope": [],
+  "handoffFiles": [],
+  "generatedFiles": [
     "work/sprints/current-blocker.json",
-    "test/scripts/__fixtures__/topology-convergence/priority-workflow-dispatch-pending-planned-control-plane-publications.fixture.json",
-    "test/scripts/analyze-topology-convergence.test.js",
-    "test/scripts/priority-recovery-current-artifact-fixture.test.js"
+    "work/sprints/current-blocker.md"
   ],
-  "handoffFiles": [
-    "test-output/reports/rolling-restart-green-only-baseline-20260513.report.json",
-    "test-output/reports/.playback/rolling-restart-green-only-baseline-20260513/rolling-restart/failure-bundle.json"
-  ],
-  "generatedFiles": [],
-  "candidateRuntimeFiles": [
-    "scripts/analyze-topology-convergence.js"
-  ],
-  "commitScope": [
-    "work/packages/active-20260513-priority-recovery-current-artifact-fixture-and-burndown.md",
-    "work/sprints/current-blocker.md",
-    "work/sprints/current-blocker.json",
-    "test/scripts/__fixtures__/topology-convergence/priority-workflow-dispatch-pending-planned-control-plane-publications.fixture.json",
-    "test/scripts/analyze-topology-convergence.test.js",
-    "test/scripts/priority-recovery-current-artifact-fixture.test.js"
-  ],
+  "candidateRuntimeFiles": [],
+  "commitScope": [],
   "touchedFiles": [],
-  "modelFit": {
-    "packageClass": "experiment",
-    "intendedMinimumModel": "gpt-5.3-codex-spark",
-    "scopeShape": "leaf-slice",
-    "outputProfile": "medium",
-    "ambiguityScore": 2,
-    "escalationTriggers": [
-      "the fixture cannot reproduce the dispatch_pending/planned handoff probe",
-      "the work requires runtime owner changes instead of diagnostics fixture proof",
-      "fresh representative evidence changes the owner-boundary group shape"
-    ]
-  },
+  "modelFit": {},
   "representativeResidual": {},
-  "causalGovernance": {
-    "hypothesis": "If H1 is true, the compact fixture should reproduce the control_plane_publications-p1 dispatch_pending/planned operation workflow witness without a rolling-restart harness rerun.",
-    "stopConditionCheck": "npm run analyze:causal-model -- test/scripts/__fixtures__/topology-convergence/priority-workflow-dispatch-pending-planned-control-plane-publications.fixture.json plus npm run analyze:topology-convergence -- test/scripts/__fixtures__/topology-convergence/priority-workflow-dispatch-pending-planned-control-plane-publications.fixture.json --handoff-probe plus node --test test/scripts/analyze-topology-convergence.test.js",
-    "expectedCausalModelChange": "No runtime causal model changes in this package; the expected change is a replayable blocker proof surface for the next operation workflow package.",
-    "representativeOutcome": "pending-before-rerun",
-    "causalDebt": "The representative rolling-restart run remains red; this package reduces debugging uncertainty by making the dispatch_pending/planned witness replayable without a full harness run.",
-    "crossBoundaryReview": "Not yet active. When promoted, this package needs the standard scenario-release-gate review/fix/implementation sequence unless the host records tool-unavailable or human-waived with a reason."
-  },
-  "scenarioCausalClosure": {
-    "referenceScenarioOrProbe": "control_plane_publications-p1 dispatch_pending/planned handoff probe fixture",
-    "phaseChain": [
-      "publication convergence",
-      "priority recovery operation workflow progress",
-      "rebalancer handoff",
-      "startup active-gate snapshot coverage"
-    ],
-    "currentFirstFrontier": "priority_recovery_partition_progress remains blocked under operation_workflow_owner / workflow_progress for control_plane_publications-p1.",
-    "knownDownstreamBlockers": [
-      "operation_workflow_owner / rebalancer_handoff has a secondary residual group",
-      "startup_active_gate_owner / snapshot_coverage remains downstream",
-      "publication_ack_convergence remains satisfied with PUBLISHED and zero pending ACKs"
-    ],
-    "missingCausalEdge": "The missing edge is not repaired here; the package freezes dispatch_pending/planned so operation workflow advance proof can run without rolling-restart.",
-    "missingCausalEdgeProbe": "npm run analyze:topology-convergence -- test/scripts/__fixtures__/topology-convergence/priority-workflow-dispatch-pending-planned-control-plane-publications.fixture.json --handoff-probe",
-    "boundedProgressProof": "Bounded fixture proof must show control_plane_publications-p1 carries dispatch_pending/planned before the next runtime reconcile or advance package starts.",
-    "boundedProgressProofArtifact": "test/scripts/__fixtures__/topology-convergence/priority-workflow-dispatch-pending-planned-control-plane-publications.fixture.json",
-    "expectedObservableTransition": "A stable dispatch_pending/planned fixture exists for the next operation workflow package.",
-    "maxProgressBound": "one handoff-probe fixture extraction test",
-    "sameFrontierFallback": "If the fixture cannot preserve dispatch_pending/planned, keep this diagnostics package active and update the fixture before runtime work.",
-    "expectedNextFrontier": "operation-progress kernel package",
-    "resultClassification": "pending-before-probe",
-    "stopCondition": "continue-local-fix"
-  },
-  "observablePrediction": {
-    "metric": "operationWorkflow.source topology operator step",
-    "predicted": "control_plane_publications-p1 reports dispatch_pending/planned under operation_workflow_owner / workflow_progress",
-    "observed": "pending-before-observation",
-    "accuracy": "pending-before-observation",
-    "evidence": "pending-before-observation"
-  },
+  "causalGovernance": {},
+  "scenarioCausalClosure": {},
+  "observablePrediction": {},
   "experimentOutcome": {},
   "rerunDecision": {},
   "classificationEfficiency": {},
-  "architectureDecisionGate": {
-    "status": "watching",
-    "trigger": "frontier-oscillation",
-    "triggerEvidence": [
-      "adjacent owner-boundary fixes did not close the representative gate",
-      "work/packages/done-20260520-topology-publication-workflow-handoff-runtime.md / topology_publication_owner / publication_convergence / reduced",
-      "work/packages/done-20260520-topology-publication-remaining-pending-runtime.md / topology_publication_owner / publication_convergence / reduced"
-    ],
-    "choices": [
-      {
-        "id": "continue-local-proof",
-        "summary": "Continue with a bounded local proof if the missing edge stays inside this owner boundary.",
-        "route": "continue-local-proof",
-        "proof": [
-          "npm run analyze:topology-convergence -- test/scripts/__fixtures__/topology-convergence/priority-workflow-dispatch-pending-planned-control-plane-publications.fixture.json --handoff-probe",
-          "node --test test/scripts/analyze-topology-convergence.test.js",
-          "node --test test/scripts/priority-recovery-current-artifact-fixture.test.js",
-          "npm run work:validate -- --pre-impl work/packages/active-20260513-priority-recovery-current-artifact-fixture-and-burndown.md"
-        ]
-      },
-      {
-        "id": "migrate-owner-boundary",
-        "summary": "Migrate the active package to the owner boundary named by the first frontier evidence.",
-        "route": "owner-boundary-migration",
-        "proof": [
-          "npm run analyze:topology-convergence -- test/scripts/__fixtures__/topology-convergence/priority-workflow-dispatch-pending-planned-control-plane-publications.fixture.json --handoff-probe",
-          "node --test test/scripts/analyze-topology-convergence.test.js",
-          "node --test test/scripts/priority-recovery-current-artifact-fixture.test.js",
-          "npm run work:validate -- --pre-impl work/packages/active-20260513-priority-recovery-current-artifact-fixture-and-burndown.md"
-        ]
-      },
-      {
-        "id": "open-architecture-package",
-        "summary": "Open a bounded architecture package for the missing owner contract.",
-        "route": "architecture-package",
-        "proof": [
-          "npm run analyze:topology-convergence -- test/scripts/__fixtures__/topology-convergence/priority-workflow-dispatch-pending-planned-control-plane-publications.fixture.json --handoff-probe",
-          "node --test test/scripts/analyze-topology-convergence.test.js",
-          "node --test test/scripts/priority-recovery-current-artifact-fixture.test.js",
-          "npm run work:validate -- --pre-impl work/packages/active-20260513-priority-recovery-current-artifact-fixture-and-burndown.md"
-        ]
-      },
-      {
-        "id": "human-escalation",
-        "summary": "Escalate to a human choice before creating or changing runtime packages.",
-        "route": "human-escalation",
-        "proof": [
-          "npm run analyze:topology-convergence -- test/scripts/__fixtures__/topology-convergence/priority-workflow-dispatch-pending-planned-control-plane-publications.fixture.json --handoff-probe",
-          "node --test test/scripts/analyze-topology-convergence.test.js",
-          "node --test test/scripts/priority-recovery-current-artifact-fixture.test.js",
-          "npm run work:validate -- --pre-impl work/packages/active-20260513-priority-recovery-current-artifact-fixture-and-burndown.md"
-        ]
-      }
-    ],
-    "selectedChoice": null,
-    "nextAction": "Watch for repeated frontier oscillation and escalate if another local proof returns here."
-  },
+  "architectureDecisionGate": {},
   "predecessor": null
 }

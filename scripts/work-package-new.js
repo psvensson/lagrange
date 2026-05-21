@@ -812,7 +812,7 @@ function buildBoundedExperimentLines(metadata = {}) {
     `- Validation tier: \`${metadata[VALIDATION_TIER_FIELD] || DEFAULT_EXPERIMENT_VALIDATION_TIER}\``,
     `- Merge requirement: ${experiment[BOUNDED_EXPERIMENT_MERGE_REQUIREMENT_FIELD]}`,
     `- Kill rule: ${experiment[BOUNDED_EXPERIMENT_KILL_RULE_FIELD]}`,
-    '- Subagent sequencing is optional before implementation; use post-hoc review before merge when runtime behavior changed.',
+    '- The executor owns the implementation pass; a separate verifier-fixer is required before closure when runtime behavior, tests, scripts, or tracker truth changed.',
   ];
 }
 
@@ -956,7 +956,7 @@ function buildClassificationOnlyFastPathLines(isClassificationOnly) {
     EMPTY_TEXT,
     '- Runtime, test, script, and report paths stay out of `writeScope` and `commitScope` until fresh evidence promotes implementation.',
     '- Keep possible implementation files in `candidateRuntimeFiles` only.',
-    '- Subagent sequencing is optional while the package remains classification-only and no implementation write scope is present.',
+    '- Verifier-fixer proof is optional while the package remains classification-only and no implementation or tracker-truth write scope is present.',
     '- Use 2-3 canonical proof commands, then close and rerun evidence instead of adding more package ceremony.',
     EMPTY_TEXT,
   ];
@@ -1378,12 +1378,11 @@ async function buildPackageContent(flags = {}) {
     EMPTY_TEXT,
     '## Execution Evidence',
     EMPTY_TEXT,
-    'Preferred closure evidence for new packages. Agent identity is optional provenance; implementation proof, scope, status, and parent revalidation are blocking.',
-    'Use legacy subagent ledgers only when the package explicitly requires sequenced subagents.',
-    'If review directly fixes metadata-only findings, record `review-fixed-metadata-only` as execution evidence and continue without a separate fix package.',
+    'Preferred closure evidence for new packages. One executor owns implementation end to end; one separate verifier-fixer validates the last package work and may fix in-scope problems directly.',
+    'Agent identity is optional provenance. Use legacy subagent ledgers only when a reopened historical package already uses them.',
     EMPTY_TEXT,
-    '- [ ] review: status: not-needed; evidence: lane permits direct implementation or package review found no required fix; next: implementation.',
     '- [ ] implementation: status: validated; evidence: <focused proof commands and results>; parent revalidated focused proof: yes; next: closure or successor action.',
+    '- [ ] verification-fix: status: validated; evidence: <verification/fix commands and results>; changed files: <paths or none>; parent revalidated focused proof: yes; next: closure or successor action.',
     '- [ ] repair: status: validated; evidence: `npm run work:repair` refreshed generated current-blocker and Current Edge Card when needed; next: validation.',
     EMPTY_TEXT,
     '## Validation',

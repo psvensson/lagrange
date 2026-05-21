@@ -21,8 +21,10 @@ Use the lightest valid lane:
   ledgers and sub-agent sequencing unless runtime ownership can change.
 - Runtime owner-boundary work: use the full package lane with owner contract,
   static guardrails, focused tests, and affected consumers.
-- Scenario or release-gate work: use the full package lane with sequential
-  sub-agents, causal ledger, focused owner proof, and representative rerun.
+- Scenario or release-gate work: use the full package lane with causal ledger,
+  focused owner proof, representative rerun when needed, and a separate
+  verifier-fixer before closure when the package changes code, tests, scripts,
+  or tracker truth.
 
 When uncertain, choose the heavier lane only if runtime ownership, shared
 contracts, or representative scenario evidence can change.
@@ -53,11 +55,12 @@ script, or report paths. Keep possible implementation files in
 subagent sequencing/static runtime guardrails until implementation scope is
 promoted.
 
-Review subagents are capped route and predecessor gates by default. They should
-not run focused runtime tests, `npm run test:static`, broad extractor stacks,
-raw report JSON, raw logs, or older handoff-file archaeology unless the capped
-review commands contradict package routing, scope, stale blocker state, or
-metadata shape.
+Use subagents as large work owners, not ceremony. One executor may inspect,
+patch, test, and report evidence for the package. One separate verifier-fixer
+must verify the last package work before closure when code, tests, scripts,
+runtime contracts, or tracker truth changed; it may fix in-scope problems
+directly. Legacy review/fix subagents remain valid only for packages that
+already use those ledgers.
 
 ## Rules
 
@@ -110,8 +113,8 @@ metadata shape.
     `commitScope`. `touchedFiles` is legacy compatibility, not a write or
     subagent ownership contract.
 17. Validate at the right phase: `--entry` for shape, `--pre-impl` when
-    review/fix proof is clean and implementation is next, and `--closure`
-    before closing or committing.
+    route, scope, proof, and stop rule are explicit and implementation is
+    next, and `--closure` before closing or committing.
 18. Static guardrails are architecture evidence. Do not weaken scripts,
     allowlists, scan scope, or lint rules to make a package pass.
 19. Scenario artifacts migrate only when normalized evidence changes owner,
@@ -137,21 +140,15 @@ metadata shape.
     patching and open a causal-escalation handoff package.
 26. A package is not done while in-scope residuals, tail consumers, guardrail
     drift, or unnamed scenario migration evidence remain.
-27. Sub-agents are mandatory for runtime owner-boundary and scenario/release-gate
-    packages; they are optional for read/review/doc-only and lightweight
-    maintenance lanes unless the package declares otherwise. If the host cannot
-    expose delegation before implementation, record `human-waived`,
-    `tool-unavailable`, or `blocked-by-environment-policy` with a reason; do
-    not use that as closure proof.
-    When sub-agents run, each completed subtask gets one checked Subagent
-    Progress Ledger update with real agent identity, `evidence: ...`, and
-    `next: ...` or `blocker: ...`; this progress ledger does not replace the
-    Subagent Sequencing Ledger role proof. Each attempt also records a checked
-    Subagent Attempt Ledger checkpoint with status, last checkpoint, parent
-    action, evidence, and next/blocker. Interrupted or partial-unvalidated
-    attempts must be superseded/discarded/revalidated before closure, and
-    implementation completion requires parent local proof rerun with
-    `parent revalidated focused proof: yes`.
+27. Sub-agents should maximize useful work per assignment. Use an executor for
+    the implementation pass and a separate verifier-fixer before closure when a
+    package changes code, tests, scripts, runtime contracts, or tracker truth.
+    The verifier-fixer may fix in-scope problems directly, then rerun focused
+    proof. Record both roles in `## Execution Evidence`; legacy sequencing,
+    progress, and attempt ledgers are only for reopened packages already using
+    them. Interrupted or partial-unvalidated attempts must be
+    superseded/discarded/revalidated before closure, and closure requires parent
+    local proof rerun with `parent revalidated focused proof: yes`.
 28. Commit and push focused package slices before starting the next package.
     Use `npm run work:sprint:push -- <git-push-args>` for sprint pushes so the
     remaining sprint package list prints after a successful push. Do not sweep

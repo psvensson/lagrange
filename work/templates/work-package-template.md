@@ -540,16 +540,14 @@ Closure:
 
 ## Execution Evidence
 
-Preferred closure evidence for new packages. Agent identity is optional
-provenance; implementation proof, scope, status, and parent revalidation are
-blocking. Use legacy subagent ledgers only when this package explicitly requires
-sequenced subagents.
-If review directly fixes metadata-only findings, record
-`review-fixed-metadata-only` as execution evidence and continue without a
-separate fix package.
+Preferred closure evidence for new packages. One executor owns implementation
+end to end. One separate verifier-fixer verifies the last package work, may fix
+in-scope problems directly, reruns focused proof, and reports changed files.
+Agent identity is optional provenance. Use legacy subagent ledgers only when a
+reopened historical package already uses them.
 
-- [ ] review: status: not-needed; evidence: lane permits direct implementation or review found no required fix; next: implementation.
-- [ ] implementation: status: validated; evidence: <focused proof commands and results>; parent revalidated focused proof: yes; next: closure or successor action.
+- [ ] implementation: status: validated; evidence: <focused proof commands and results>; parent revalidated focused proof: yes; next: verification.
+- [ ] verification-fix: status: validated; evidence: <verification/fix commands and results>; changed files: <paths or none>; parent revalidated focused proof: yes; next: closure or successor action.
 - [ ] repair: status: validated; evidence: `npm run work:repair` refreshed generated current-blocker and Current Edge Card when needed; next: validation.
 
 ## Legacy Subagent Ledgers
