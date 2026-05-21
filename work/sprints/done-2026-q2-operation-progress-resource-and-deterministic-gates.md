@@ -1,6 +1,6 @@
 # Operation Progress Resource And Deterministic Gates Sprint
 
-Status: active, opened on 2026-05-20 after the rolling-restart green-gate
+Status: done on 2026-05-20. Opened after the rolling-restart green-gate
 sprint was closed as an architecture reset.
 
 ## Goal
@@ -36,10 +36,10 @@ deterministic simulation, and multiple failure-gate scenarios.
   admission, or timeout symptoms without consuming the `operation_progress`
   owner outcome; adding new segment files; or weakening guardrails so the
   package validates.
-- Next best package: keep the active package
+- Next best package: closed package
   `work/packages/done-20260520-operation-progress-resource-and-deterministic-gates.md`
-  as the architecture implementation package until entry/pre-implementation
-  validation passes.
+  completed the architecture implementation pass; fresh theory-ladder evidence
+  must select any successor.
 - Stop or escalate rule: stop if implementation requires changing publication,
   active-gate admission, timeout budgets, or weakening guardrails to make the
   package pass.

@@ -45,12 +45,16 @@ Packages still require AGPL roadmap or edition scope and local evidence.
 ## Local Divergence
 
 Current representative evidence has repeatedly oscillated between publication
-convergence and active-gate snapshot coverage. The stopped residual-closure
-sprint proved that local single-owner patches reduce symptoms without reducing
-the boundary. The systems-pattern hardening sprint turned successful
-distributed-systems patterns into local owner contracts, and the completion
-closure proved the live TiKV witness path, broad Cockroach admin tail proof, and
-stale active-reference validation before the paused topology sprint resumes.
+convergence, operation progress, and active-gate snapshot coverage. The stopped
+residual-closure sprint proved that local single-owner patches reduce symptoms
+without reducing the boundary. The systems-pattern hardening sprint turned
+successful distributed-systems patterns into local owner contracts, and the
+completion closure proved the live TiKV witness path, broad Cockroach admin tail
+proof, and stale active-reference validation before the paused topology sprint
+resumes. The next topology pass is a theory ladder: each sprint registers a
+theory, runs the smallest discriminator, records the result, and creates a
+successor from the observed evidence rather than opening another broad bugfix
+loop.
 
 Latest current handoff state:
 
@@ -94,24 +98,27 @@ or produces a narrower owner-boundary blocker selected by canonical evidence.
 
 ## Current Evidence
 
-- Continuation sprint context:
-  `work/sprints/done-2026-q2-operation-progress-resource-and-deterministic-gates.md`
-- Active successor package:
-  `work/packages/done-20260516-startup-active-gate-admin-snapshot-timeout-after-priority-recovery.md`
-- Artifact:
-  `test-output/reports/rolling-restart-after-workflow-progress-pending-coordination-gate-20260516.report.json`
-- Closed checkpoint predecessor:
-  `work/packages/done-20260516-rolling-restart-post-systems-pattern-checkpoint.md`
-- Representative owner boundary:
-  `startup_active_gate_owner / snapshot_coverage`
-- Extractor summary:
-  The latest artifact is red. `work:evidence-summary` selects
-  `active_gate_snapshot_coverage` with owner
-  `startup_active_gate_owner / snapshot_coverage`. Priority recovery is
-  satisfied with zero residual witnesses. The causal model classifies the
-  current blocker as `active_gate_snapshot_coverage_incomplete`, with selected
-  admin snapshot timeout and forced repair timeout as the concrete coverage
-  evidence.
+- Active theory sprint:
+  `work/sprints/done-2026-q2-topology-convergence-theory-ladder.md`
+- Active theory package:
+  `work/packages/done-20260521-topology-publication-reconcile-system-theory.md`
+- First theory:
+  fresh `rolling-restart` evidence distinguished H3: topology convergence
+  remains red at publication acknowledgement convergence.
+- Closed baseline:
+  `work/packages/done-20260521-rolling-restart-theory-baseline-probe.md`
+- Seed artifact:
+  `test-output/reports/rolling-restart-theory-baseline-20260521T035711Z.report.json`
+- Next holistic theory:
+  `work/packages/done-20260521-topology-publication-reconcile-system-theory.md`
+  should prove whether the accepted owner-reconcile handoff has visible bounded
+  wake/retry/reconcile/drain progress across publication owner, operation
+  workflow, active-gate snapshot coverage, startup readiness, and diagnostics.
+- Previous checkpoint:
+  `work/packages/done-20260520-operation-progress-resource-and-deterministic-gates.md`
+- Extractor plan:
+  run the representative gate once, then route the artifact with
+  `work:evidence-summary` and `work:scenario-route` before any runtime package.
 
 ## Codebase Analysis Notes
 
@@ -131,9 +138,10 @@ publication-evidence replay code rather than by the runtime owner alone.
 | `work/sprints/done-2026-q2-topology-convergence-residual-closure.md` | `bugfix` / `stabilization` | stopped | Stopped on 2026-05-15 by human direction. Retained as residual context only. |
 | `work/sprints/done-2026-q2-topology-convergence-complexity-reduction.md` | `stabilization` / `complexity-reduction` | done reduced | Canonical publication-to-active-gate handoff contract implemented end to end; representative run remains red at startup active-gate snapshot coverage. |
 | `work/sprints/done-2026-q2-topology-rolling-restart-green-gate-closure.md` | `stabilization` / `green-gate` | done/superseded | Closed on 2026-05-20 when the repeated rolling-restart symptom selected operation_progress architecture reset instead of another local symptom patch. |
-| `work/sprints/done-2026-q2-operation-progress-resource-and-deterministic-gates.md` | `architecture` / `green-gate` | active | Owns operation_progress as the single lifecycle resource with invariant, deterministic simulator, and multi-scenario gate proof. |
+| `work/sprints/done-2026-q2-operation-progress-resource-and-deterministic-gates.md` | `architecture` / `green-gate` | done | Owns operation_progress as the single lifecycle resource with invariant, deterministic simulator, and multi-scenario gate proof. |
 | `work/sprints/done-2026-q2-topology-convergence-systems-pattern-hardening.md` | `stabilization` / `systems-pattern-hardening` | done | Added handoff hygiene, publication-convergence causal selection, deterministic replay, active-gate catch-up fencing, topology operator witnesses, critical control-plane convergence, and owner-boundary file-size reduction contracts. |
 | `work/sprints/done-2026-q2-topology-systems-pattern-completion-closure.md` | `stabilization` / `systems-pattern-completion` | done | Closed the live TiKV operator witness summary path, broad Cockroach admin tail proof, and stale active-reference tracker guard before the paused topology sprint resumes. |
+| `work/sprints/done-2026-q2-topology-convergence-theory-ladder.md` | `experiment` / `theory-ladder` | done | Starts from one fresh rolling-restart baseline probe, then creates successor theory sprints from observed evidence. |
 
 ## Owner Boundaries
 
@@ -187,9 +195,8 @@ These are context candidates, not write authorization:
 
 ## Entry Condition
 
-When the rolling-restart gate is resumed, restart from fixture-first proof
-rather than another broad harness rerun. The next package must freeze or refresh
-the priority-recovery residual into a compact replayable fixture before any new
+When the rolling-restart gate is resumed, run one baseline probe as an
+experiment and route the artifact through canonical extractors before any new
 runtime owner-boundary slice starts.
 
 ## Exit Condition
@@ -200,8 +207,8 @@ canonical owner-boundary evidence.
 
 ## Next Package
 
-No active continuation package remains after
-`work/packages/done-20260520-priority-recovery-current-artifact-fixture-and-burndown.md`.
-The compact handoff-probe fixture now freezes the
-`control_plane_publications-p1` `dispatch_pending` / `planned` operation
-workflow witness for any later operation-progress runtime package.
+Active continuation:
+`work/packages/done-20260521-rolling-restart-theory-baseline-probe.md`.
+It created the fresh rolling-restart baseline artifact and recorded
+`work/packages/done-20260521-topology-publication-reconcile-system-theory.md`
+as the next holistic theory decision before any runtime package is promoted.
