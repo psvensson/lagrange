@@ -3,7 +3,7 @@
 <!-- work-package
 {
   "schema": "work-package-v1",
-  "status": "active",
+  "status": "done",
   "opened": "2026-05-21",
   "lane": "runtime-owner-boundary",
   "scenario": "none",
@@ -17,7 +17,7 @@
   "proof": [
     "npm run analyze:owner-files -- runtime_contract_owner owner_outcome_envelope",
     "npm test -- test/control-plane/owner-outcome-contract.test.js",
-    "npm run work:validate -- --pre-impl work/packages/active-20260521-universal-owner-outcome-envelope.md"
+    "npm run work:validate -- --pre-impl work/packages/done-20260521-universal-owner-outcome-envelope.md"
   ],
   "writeScope": [
     "src/control-plane/owner-outcome-contract.js",
@@ -38,7 +38,7 @@
     "src/control-plane/control-plane-system-table-gateway-shared.js",
     "src/control-plane/publication-active-gate-handoff-contract.js",
     "test/control-plane/owner-outcome-contract.test.js",
-    "work/packages/active-20260521-universal-owner-outcome-envelope.md"
+    "work/packages/done-20260521-universal-owner-outcome-envelope.md"
   ],
   "modelFit": {
     "packageClass": "runtime-owner-boundary",
@@ -68,7 +68,9 @@
       "Split individual owner adapters into follow-on runtime-owner-boundary packages if more than two runtime owners need edits."
     ]
   },
-  "predecessor": "work/packages/done-20260521-rolling-restart-active-gate-snapshot-quorum.md"
+  "predecessor": "work/packages/done-20260521-rolling-restart-active-gate-snapshot-quorum.md",
+  "closed": "2026-05-21",
+  "commitAndPushLedgerRequired": true
 }
 -->
 
@@ -112,7 +114,7 @@ closed or been intentionally superseded.
 ## Core Logic Brief
 
 - Canonical outcome: runtime_contract_owner / owner_outcome_envelope emits the package outcome for owner_outcome_not_universal.
-- Inputs/signals: npm run analyze:owner-files -- runtime_contract_owner owner_outcome_envelope; npm test -- test/control-plane/owner-outcome-contract.test.js; npm run work:validate -- --pre-impl work/packages/active-20260521-universal-owner-outcome-envelope.md.
+- Inputs/signals: npm run analyze:owner-files -- runtime_contract_owner owner_outcome_envelope; npm test -- test/control-plane/owner-outcome-contract.test.js; npm run work:validate -- --pre-impl work/packages/done-20260521-universal-owner-outcome-envelope.md.
 - State model or invariant: The runtime_contract_owner / owner_outcome_envelope decision table in the Causal Decision Contract maps owner_outcome_not_universal and route evidence to one emitted outcome: pending-before-rerun.
 - Non-goals and forbidden interpretations: Do not reinterpret downstream evidence, widen forbidden boundaries, or patch symptoms outside this package. Forbidden scope: none beyond lane and package scope.
 - Proof mapping: Implementation and tests must prove the runtime_contract_owner / owner_outcome_envelope invariant before representative or closure proof is accepted.
@@ -214,7 +216,7 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 - Forbidden files: none beyond declared write scope
 - Frozen decisions: package scope and lane stay bounded unless explicitly escalated.
 - Escalation triggers: owned files expand beyond this package, runtime ownership changes, or representative scenario evidence changes.
-- Focused proof: `npm run analyze:owner-files -- runtime_contract_owner owner_outcome_envelope`, `npm test -- test/control-plane/owner-outcome-contract.test.js`, `npm run work:validate -- --pre-impl work/packages/active-20260521-universal-owner-outcome-envelope.md`
+- Focused proof: `npm run analyze:owner-files -- runtime_contract_owner owner_outcome_envelope`, `npm test -- test/control-plane/owner-outcome-contract.test.js`, `npm run work:validate -- --pre-impl work/packages/done-20260521-universal-owner-outcome-envelope.md`
 - Model ledger advisory: `escalate`
 
 ## Model-Fit Split
@@ -237,12 +239,12 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 Preferred closure evidence for new packages. One executor owns implementation end to end; one separate verifier-fixer validates the last package work and may fix in-scope problems directly.
 Agent identity is optional provenance. Use legacy subagent ledgers only when a reopened historical package already uses them.
 
-- [ ] implementation: status: validated; evidence: <focused proof commands and results>; parent revalidated focused proof: yes; next: closure or successor action.
-- [ ] verification-fix: status: validated; evidence: <verification/fix commands and results>; changed files: <paths or none>; parent revalidated focused proof: yes; next: closure or successor action.
-- [ ] repair: status: validated; evidence: `npm run work:repair` refreshed generated current-blocker and Current Edge Card when needed; next: validation.
+- [x] implementation: status: validated; evidence: changed files: `src/control-plane/owner-outcome-contract.js`, `src/control-plane/control-plane-system-table-gateway-shared.js`, `src/control-plane/publication-active-gate-handoff-contract.js`, `test/control-plane/owner-outcome-contract.test.js`; implementation added shared owner outcome envelope plus gateway and active-gate adapters; parent fixed new literal guardrail violations in `src/control-plane/owner-outcome-contract.js`; commands/results: `npm run analyze:owner-files -- runtime_contract_owner owner_outcome_envelope` (pass), `npm test -- test/control-plane/owner-outcome-contract.test.js` (pass), `npm run work:validate -- --pre-impl work/packages/done-20260521-universal-owner-outcome-envelope.md` (pass), `node scripts/check-guideline-literals.js src/control-plane/owner-outcome-contract.js src/control-plane/control-plane-system-table-gateway-shared.js src/control-plane/publication-active-gate-handoff-contract.js` (pass), `node scripts/check-guideline-decision-boundaries.js src/control-plane/owner-outcome-contract.js src/control-plane/control-plane-system-table-gateway-shared.js src/control-plane/publication-active-gate-handoff-contract.js` (pass), `npm run audit:runtime-grammar:file -- src/control-plane/owner-outcome-contract.js src/control-plane/control-plane-system-table-gateway-shared.js src/control-plane/publication-active-gate-handoff-contract.js` (pass), `git diff --check` (pass); parent revalidated focused proof: yes; next: verifier-fixer pass.
+- [x] verification-fix: status: validated; evidence: inspected owner envelope + gateway/publication adapters for owner-boundary correctness, fail-closed behavior, null/undefined handling, local detail preservation, and caller-side reinterpretation; fixed publication adapter terminal classification so `blocked`/`failed` owner outcomes are terminal; added regression coverage for unavailable publication handoff envelope behavior; commands/results: `npm run work:package:doctor -- --suggest work/packages/done-20260521-universal-owner-outcome-envelope.md` (pass), `npm run work:validate -- --pre-impl work/packages/done-20260521-universal-owner-outcome-envelope.md` (pass), `npm run analyze:owner-files -- runtime_contract_owner owner_outcome_envelope` (pass), `npm test -- test/control-plane/owner-outcome-contract.test.js` (fail once on new expectation, then pass after in-scope test correction), `node scripts/check-guideline-literals.js src/control-plane/owner-outcome-contract.js src/control-plane/control-plane-system-table-gateway-shared.js src/control-plane/publication-active-gate-handoff-contract.js` (pass), `node scripts/check-guideline-decision-boundaries.js src/control-plane/owner-outcome-contract.js src/control-plane/control-plane-system-table-gateway-shared.js src/control-plane/publication-active-gate-handoff-contract.js` (pass), `npm run audit:runtime-grammar:file -- src/control-plane/owner-outcome-contract.js src/control-plane/control-plane-system-table-gateway-shared.js src/control-plane/publication-active-gate-handoff-contract.js` (pass), `git diff --check` (pass); parent reran package doctor, pre-impl validation, owner-files, focused test, literal guard, decision-boundary guard, runtime grammar audit, and `git diff --check` after verifier fix (all pass); changed files: `src/control-plane/publication-active-gate-handoff-contract.js`, `test/control-plane/owner-outcome-contract.test.js`; parent revalidated focused proof: yes; next: closure or successor action.
+- [x] repair: status: validated; evidence: `npm run work:repair` refreshed generated current-blocker and Current Edge Card; next: closure validation.
 
 ## Validation
 
 1. npm run analyze:owner-files -- runtime_contract_owner owner_outcome_envelope
 2. npm test -- test/control-plane/owner-outcome-contract.test.js
-3. npm run work:validate -- --pre-impl work/packages/active-20260521-universal-owner-outcome-envelope.md
+3. npm run work:validate -- --pre-impl work/packages/done-20260521-universal-owner-outcome-envelope.md

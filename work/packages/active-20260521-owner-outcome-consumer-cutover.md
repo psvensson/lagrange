@@ -3,7 +3,7 @@
 <!-- work-package
 {
   "schema": "work-package-v1",
-  "status": "todo",
+  "status": "active",
   "opened": "2026-05-21",
   "lane": "runtime-owner-boundary",
   "scenario": "none",
@@ -17,7 +17,7 @@
   "proof": [
     "npm run analyze:owner-files -- runtime_consumer_contract_owner owner_outcome_consumers",
     "npm test -- test/admin/admin-control-snapshot-repair-handoff-outcome-test-cases.js test/bootstrap/bootstrap-membership-owner-outcome-consumers.test.js",
-    "npm run work:validate -- --pre-impl work/packages/todo-20260521-owner-outcome-consumer-cutover.md"
+    "npm run work:validate -- --pre-impl work/packages/active-20260521-owner-outcome-consumer-cutover.md"
   ],
   "writeScope": [
     "src/admin/admin-control-snapshot-class-part-2.js",
@@ -26,7 +26,7 @@
     "test/bootstrap/bootstrap-membership-owner-outcome-consumers.test.js"
   ],
   "handoffFiles": [
-    "work/packages/active-20260521-universal-owner-outcome-envelope.md"
+    "work/packages/done-20260521-universal-owner-outcome-envelope.md"
   ],
   "generatedFiles": [],
   "candidateRuntimeFiles": [
@@ -38,13 +38,14 @@
     "src/bootstrap/bootstrap-api.js",
     "test/admin/admin-control-snapshot-repair-handoff-outcome-test-cases.js",
     "test/bootstrap/bootstrap-membership-owner-outcome-consumers.test.js",
-    "work/packages/todo-20260521-owner-outcome-consumer-cutover.md"
+    "work/packages/active-20260521-owner-outcome-consumer-cutover.md"
   ],
   "modelFit": {
     "packageClass": "runtime-owner-boundary",
     "intendedMinimumModel": "gpt-5.3-codex",
     "scopeShape": "bounded-owner-runtime/current-frontier",
     "outputProfile": "medium",
+    "ambiguityScore": 2,
     "escalationTriggers": [
       "owned files expand beyond this package",
       "a frozen decision must be reopened"
@@ -67,7 +68,7 @@
       "Split additional consumers by owner boundary if the first vertical slice exposes unrelated admin, bootstrap, rebalancer, or query consumer work."
     ]
   },
-  "predecessor": "work/packages/active-20260521-universal-owner-outcome-envelope.md"
+  "predecessor": "work/packages/done-20260521-universal-owner-outcome-envelope.md"
 }
 -->
 
@@ -108,7 +109,7 @@ This package depends on the universal owner outcome envelope package.
 ## Core Logic Brief
 
 - Canonical outcome: runtime_consumer_contract_owner / owner_outcome_consumers emits the package outcome for consumers_reinterpret_owner_state.
-- Inputs/signals: npm run analyze:owner-files -- runtime_consumer_contract_owner owner_outcome_consumers; npm test -- test/admin/admin-control-snapshot-repair-handoff-outcome-test-cases.js test/bootstrap/bootstrap-membership-owner-outcome-consumers.test.js; npm run work:validate -- --pre-impl work/packages/todo-20260521-owner-outcome-consumer-cutover.md.
+- Inputs/signals: npm run analyze:owner-files -- runtime_consumer_contract_owner owner_outcome_consumers; npm test -- test/admin/admin-control-snapshot-repair-handoff-outcome-test-cases.js test/bootstrap/bootstrap-membership-owner-outcome-consumers.test.js; npm run work:validate -- --pre-impl work/packages/active-20260521-owner-outcome-consumer-cutover.md.
 - State model or invariant: The runtime_consumer_contract_owner / owner_outcome_consumers decision table in the Causal Decision Contract maps consumers_reinterpret_owner_state and route evidence to one emitted outcome: pending-before-rerun.
 - Non-goals and forbidden interpretations: Do not reinterpret downstream evidence, widen forbidden boundaries, or patch symptoms outside this package. Forbidden scope: none beyond lane and package scope.
 - Proof mapping: Implementation and tests must prove the runtime_consumer_contract_owner / owner_outcome_consumers invariant before representative or closure proof is accepted.
@@ -205,11 +206,12 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 - Intended minimum model: `gpt-5.3-codex`
 - Scope shape: `bounded-owner-runtime/current-frontier`
 - Output profile: `medium`
+- Ambiguity score: `2`
 - Owned files: `src/admin/admin-control-snapshot-class-part-2.js`, `src/bootstrap/bootstrap-api.js`, `test/admin/admin-control-snapshot-repair-handoff-outcome-test-cases.js`, `test/bootstrap/bootstrap-membership-owner-outcome-consumers.test.js`
 - Forbidden files: none beyond declared write scope
 - Frozen decisions: package scope and lane stay bounded unless explicitly escalated.
 - Escalation triggers: owned files expand beyond this package, runtime ownership changes, or representative scenario evidence changes.
-- Focused proof: `npm run analyze:owner-files -- runtime_consumer_contract_owner owner_outcome_consumers`, `npm test -- test/admin/admin-control-snapshot-repair-handoff-outcome-test-cases.js test/bootstrap/bootstrap-membership-owner-outcome-consumers.test.js`, `npm run work:validate -- --pre-impl work/packages/todo-20260521-owner-outcome-consumer-cutover.md`
+- Focused proof: `npm run analyze:owner-files -- runtime_consumer_contract_owner owner_outcome_consumers`, `npm test -- test/admin/admin-control-snapshot-repair-handoff-outcome-test-cases.js test/bootstrap/bootstrap-membership-owner-outcome-consumers.test.js`, `npm run work:validate -- --pre-impl work/packages/active-20260521-owner-outcome-consumer-cutover.md`
 - Model ledger advisory: `escalate`
 
 ## Model-Fit Split
@@ -240,4 +242,4 @@ Agent identity is optional provenance. Use legacy subagent ledgers only when a r
 
 1. npm run analyze:owner-files -- runtime_consumer_contract_owner owner_outcome_consumers
 2. npm test -- test/admin/admin-control-snapshot-repair-handoff-outcome-test-cases.js test/bootstrap/bootstrap-membership-owner-outcome-consumers.test.js
-3. npm run work:validate -- --pre-impl work/packages/todo-20260521-owner-outcome-consumer-cutover.md
+3. npm run work:validate -- --pre-impl work/packages/active-20260521-owner-outcome-consumer-cutover.md

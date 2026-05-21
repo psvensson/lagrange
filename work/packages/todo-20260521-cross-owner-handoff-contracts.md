@@ -26,7 +26,7 @@
     "test/bootstrap/bootstrap-api.test.js"
   ],
   "handoffFiles": [
-    "work/packages/todo-20260521-owner-outcome-consumer-cutover.md"
+    "work/packages/active-20260521-owner-outcome-consumer-cutover.md"
   ],
   "generatedFiles": [],
   "candidateRuntimeFiles": [
@@ -68,7 +68,7 @@
       "Split bootstrap-runtime, publication-active-gate, operation-priority-recovery, admin-publication, gateway-CDC, and readiness-discovery into child packages if more than one contract changes runtime behavior."
     ]
   },
-  "predecessor": "work/packages/todo-20260521-owner-outcome-consumer-cutover.md"
+  "predecessor": "work/packages/active-20260521-owner-outcome-consumer-cutover.md"
 }
 -->
 

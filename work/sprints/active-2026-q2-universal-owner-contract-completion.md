@@ -24,7 +24,7 @@ closed and moved out of the active blocker slot.
 - Wrong direction signals: any package widens into unrelated runtime work,
   reopens active rolling-restart proof without fresh evidence, closes from a
   timeout/count-only delta, or skips the predecessor contract it depends on.
-- Next best package: `work/packages/active-20260521-universal-owner-outcome-envelope.md`.
+- Next best package: `work/packages/active-20260521-owner-outcome-consumer-cutover.md`.
 - Stop or escalate rule: if a package cannot preserve its owner/boundary or
   requires contradictory evidence, select/open an autonomous architecture
   experiment; use human escalation only for blocked, unavailable, or
@@ -35,20 +35,20 @@ closed and moved out of the active blocker slot.
 ```text
 Representative artifact: none
 Visible first frontier: unknown
-Active package: work/packages/active-20260521-universal-owner-outcome-envelope.md
-Active package owner: runtime_contract_owner
-Active package boundary: owner_outcome_envelope
-Selected cause: owner_outcome_not_universal
-Required action: Add the shared owner outcome envelope and adapt the first control-plane owners without replacing local owner detail.
+Active package: work/packages/active-20260521-owner-outcome-consumer-cutover.md
+Active package owner: runtime_consumer_contract_owner
+Active package boundary: owner_outcome_consumers
+Selected cause: consumers_reinterpret_owner_state
+Required action: Cut over the first consumer vertical slice to consume owner outcomes instead of empty rows, stale cache, timeout text, or partial diagnostics.
 Representative status: unknown
 Causal outcome: unknown
 Architecture gate: not-required / unknown
 Expected delta: unknown
-Current state: Planned successor package for making owner outcomes universal after the active rolling-restart package closes.
-Allowed edits: src/control-plane/owner-outcome-contract.js, src/control-plane/control-plane-system-table-gateway-shared.js, src/control-plane/publication-active-gate-handoff-contract.js, test/control-plane/owner-outcome-contract.test.js
-Candidate runtime files: src/control-plane/publication-owner-decision.js, src/control-plane/publication-recovery-state-machine.js
+Current state: Planned successor package after the shared owner outcome envelope exists.
+Allowed edits: src/admin/admin-control-snapshot-class-part-2.js, src/bootstrap/bootstrap-api.js, test/admin/admin-control-snapshot-repair-handoff-outcome-test-cases.js, test/bootstrap/bootstrap-membership-owner-outcome-consumers.test.js
+Candidate runtime files: src/control-plane/publication-owner-decision.js, src/control-plane/publication-active-gate-handoff-contract.js
 Forbidden edits: owned files expand beyond this package, a frozen decision must be reopened
-Required latest proof: npm run analyze:owner-files -- runtime_contract_owner owner_outcome_envelope, npm test -- test/control-plane/owner-outcome-contract.test.js, npm run work:validate -- --pre-impl work/packages/active-20260521-universal-owner-outcome-envelope.md
+Required latest proof: npm run analyze:owner-files -- runtime_consumer_contract_owner owner_outcome_consumers, npm test -- test/admin/admin-control-snapshot-repair-handoff-outcome-test-cases.js test/bootstrap/bootstrap-membership-owner-outcome-consumers.test.js, npm run work:validate -- --pre-impl work/packages/active-20260521-owner-outcome-consumer-cutover.md
 Allowed stop modes: representative-green, migrated, reduced, same-frontier, classification-only, architecture-gap, human-escalation
 ```
 
@@ -65,14 +65,14 @@ Allowed stop modes: representative-green, migrated, reduced, same-frontier, clas
 
 ## Package Queue
 
-1. [Universal Owner Outcome Envelope](../packages/active-20260521-universal-owner-outcome-envelope.md)
+1. [Universal Owner Outcome Envelope](../packages/done-20260521-universal-owner-outcome-envelope.md)
    - Lane: `runtime-owner-boundary`
    - Purpose: create the shared owner outcome envelope and adapt the first
      control-plane owners without losing local detail.
    - Acceptance: at least two owner-specific outcomes adapt into the envelope
      with state, reason, freshness, revision, retry, terminal, and evidence
      fields preserved.
-2. [Owner Outcome Consumer Cutover](../packages/todo-20260521-owner-outcome-consumer-cutover.md)
+2. [Owner Outcome Consumer Cutover](../packages/active-20260521-owner-outcome-consumer-cutover.md)
    - Lane: `runtime-owner-boundary`
    - Purpose: cut over the first consumer vertical slice so callers consume
      owner outcomes instead of reconstructing truth from rows, cache, or

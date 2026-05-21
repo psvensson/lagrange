@@ -4,30 +4,30 @@
 
 ## Theory And Implementation Focus
 
-Theory under test: Planned successor package for making owner outcomes universal after the active rolling-restart package closes.
+Theory under test: Planned successor package after the shared owner outcome envelope exists.
 
-Causal question: owner_outcome_not_universal
+Causal question: consumers_reinterpret_owner_state
 
-Implementation slice: Add the shared owner outcome envelope and adapt the first control-plane owners without replacing local owner detail.
+Implementation slice: Cut over the first consumer vertical slice to consume owner outcomes instead of empty rows, stale cache, timeout text, or partial diagnostics.
 
 Implementation files:
 
-1. `src/control-plane/owner-outcome-contract.js`
-2. `src/control-plane/control-plane-system-table-gateway-shared.js`
-3. `src/control-plane/publication-active-gate-handoff-contract.js`
-4. `test/control-plane/owner-outcome-contract.test.js`
+1. `src/admin/admin-control-snapshot-class-part-2.js`
+2. `src/bootstrap/bootstrap-api.js`
+3. `test/admin/admin-control-snapshot-repair-handoff-outcome-test-cases.js`
+4. `test/bootstrap/bootstrap-membership-owner-outcome-consumers.test.js`
 5. `src/control-plane/publication-owner-decision.js`
-6. `src/control-plane/publication-recovery-state-machine.js`
+6. `src/control-plane/publication-active-gate-handoff-contract.js`
 
 Expected implementation delta: unknown
 
-Falsifying probe: npm run analyze:owner-files -- runtime_contract_owner owner_outcome_envelope
+Falsifying probe: npm run analyze:owner-files -- runtime_consumer_contract_owner owner_outcome_consumers
 
 Stop rule: No architecture decision gate is required for this package.
 
 Sprint: `work/sprints/active-2026-q2-universal-owner-contract-completion.md`
 
-Package: `work/packages/active-20260521-universal-owner-outcome-envelope.md`
+Package: `work/packages/active-20260521-owner-outcome-consumer-cutover.md`
 
 Workflow lane: `runtime-owner-boundary`
 
@@ -39,23 +39,23 @@ Playback: `none`
 
 ## Boundary
 
-Owner: `runtime_contract_owner`
+Owner: `runtime_consumer_contract_owner`
 
-Boundary: `owner_outcome_envelope`
+Boundary: `owner_outcome_consumers`
 
-Dominant reason: `owner_outcome_not_universal`
+Dominant reason: `consumers_reinterpret_owner_state`
 
-Current state: Planned successor package for making owner outcomes universal after the active rolling-restart package closes.
+Current state: Planned successor package after the shared owner outcome envelope exists.
 
 ## Next Action
 
-Add the shared owner outcome envelope and adapt the first control-plane owners without replacing local owner detail.
+Cut over the first consumer vertical slice to consume owner outcomes instead of empty rows, stale cache, timeout text, or partial diagnostics.
 
 ## Proof Ladder
 
-1. `npm run analyze:owner-files -- runtime_contract_owner owner_outcome_envelope`
-2. `npm test -- test/control-plane/owner-outcome-contract.test.js`
-3. `npm run work:validate -- --pre-impl work/packages/active-20260521-universal-owner-outcome-envelope.md`
+1. `npm run analyze:owner-files -- runtime_consumer_contract_owner owner_outcome_consumers`
+2. `npm test -- test/admin/admin-control-snapshot-repair-handoff-outcome-test-cases.js test/bootstrap/bootstrap-membership-owner-outcome-consumers.test.js`
+3. `npm run work:validate -- --pre-impl work/packages/active-20260521-owner-outcome-consumer-cutover.md`
 
 ## Model Fit
 
@@ -236,14 +236,14 @@ Gate next action: No architecture decision gate is required for this package.
 
 Write scope:
 
-1. `src/control-plane/owner-outcome-contract.js`
-2. `src/control-plane/control-plane-system-table-gateway-shared.js`
-3. `src/control-plane/publication-active-gate-handoff-contract.js`
-4. `test/control-plane/owner-outcome-contract.test.js`
+1. `src/admin/admin-control-snapshot-class-part-2.js`
+2. `src/bootstrap/bootstrap-api.js`
+3. `test/admin/admin-control-snapshot-repair-handoff-outcome-test-cases.js`
+4. `test/bootstrap/bootstrap-membership-owner-outcome-consumers.test.js`
 
 Handoff files:
 
-1. `work/packages/done-20260521-rolling-restart-active-gate-snapshot-quorum.md`
+1. `work/packages/done-20260521-universal-owner-outcome-envelope.md`
 
 Generated files:
 
@@ -252,15 +252,15 @@ Generated files:
 Candidate runtime files:
 
 1. `src/control-plane/publication-owner-decision.js`
-2. `src/control-plane/publication-recovery-state-machine.js`
+2. `src/control-plane/publication-active-gate-handoff-contract.js`
 
 Commit scope:
 
-1. `src/control-plane/owner-outcome-contract.js`
-2. `src/control-plane/control-plane-system-table-gateway-shared.js`
-3. `src/control-plane/publication-active-gate-handoff-contract.js`
-4. `test/control-plane/owner-outcome-contract.test.js`
-5. `work/packages/active-20260521-universal-owner-outcome-envelope.md`
+1. `src/admin/admin-control-snapshot-class-part-2.js`
+2. `src/bootstrap/bootstrap-api.js`
+3. `test/admin/admin-control-snapshot-repair-handoff-outcome-test-cases.js`
+4. `test/bootstrap/bootstrap-membership-owner-outcome-consumers.test.js`
+5. `work/packages/active-20260521-owner-outcome-consumer-cutover.md`
 
 Legacy touched files:
 

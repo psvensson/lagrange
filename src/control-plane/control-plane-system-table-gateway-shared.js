@@ -39,6 +39,11 @@ import {
   OWNER_CONTRACT_STATE,
   buildOwnerContractOutcome,
 } from './owner-contract-outcome.js';
+import {
+  OWNER_OUTCOME_FRESHNESS,
+  OWNER_OUTCOME_STATE,
+  buildOwnerOutcomeEnvelope,
+} from './owner-outcome-contract.js';
 import {buildControlPlaneWorkloadProfile} from './control-plane-workload-profile.js';
 import {
   CONTROL_PLANE_SYSTEM_TABLE_VISIBILITY_STATE,
@@ -248,6 +253,10 @@ const GATEWAY_LOG_MSG = Object.freeze({
   READ_REJECTED: 'Control-plane metadata read rejected',
   MUTATION_DEFERRED: 'Control-plane metadata mutation deferred',
   MUTATION_REJECTED: 'Control-plane metadata mutation rejected',
+});
+const CONTROL_PLANE_GATEWAY_OWNER_OUTCOME = Object.freeze({
+  BOUNDARY: 'control_plane_system_table_gateway_mutation_contract',
+  OWNER: 'control_plane_system_table_gateway_owner',
 });
 const SYSTEM_TABLE_NAMES = new Set(Object.values(SYSTEM_TABLE_NAME));
 
@@ -843,6 +852,96 @@ function resolveControlPlaneMutationContractOutcome(
   });
 }
 
+function resolveControlPlaneMutationOutcomeFreshness(
+  visibilityState,
+  contractOutcome,
+) {
+  if (
+    visibilityState ===
+      CONTROL_PLANE_SYSTEM_TABLE_VISIBILITY_STATE.PENDING_VISIBILITY ||
+    visibilityState ===
+      CONTROL_PLANE_SYSTEM_TABLE_VISIBILITY_STATE
+        .AUTHORITATIVE_CONFIRMATION_PENDING ||
+    visibilityState ===
+      CONTROL_PLANE_SYSTEM_TABLE_VISIBILITY_STATE.DEFERRED_BY_PRESSURE
+  ) {
+    return OWNER_OUTCOME_FRESHNESS.STALE;
+  }
+  if (contractOutcome.contractState === OWNER_CONTRACT_STATE.READY) {
+    return OWNER_OUTCOME_FRESHNESS.FRESH;
+  }
+  if (
+    contractOutcome.contractState === OWNER_CONTRACT_STATE.PENDING ||
+    contractOutcome.contractState === OWNER_CONTRACT_STATE.DEFERRED
+  ) {
+    return OWNER_OUTCOME_FRESHNESS.STALE;
+  }
+  return OWNER_OUTCOME_FRESHNESS.UNKNOWN;
+}
+
+function resolveControlPlaneMutationOutcomeReasonCodes(result = {}) {
+  const localReasonCodes = normalizeDistinctStringArray(result?.reasonCodes);
+  if (localReasonCodes.length > NUM.ZERO) {
+    return localReasonCodes;
+  }
+  const errorCode = getControlPlaneErrorCode(result?.error || result);
+  if (typeof errorCode === TYPEOF.STRING && errorCode.length > NUM.ZERO) {
+    return [errorCode];
+  }
+  const failureSummary = getControlPlaneFailureSummary(result?.error || result);
+  if (
+    typeof failureSummary?.primaryReason === TYPEOF.STRING &&
+    failureSummary.primaryReason.length > NUM.ZERO
+  ) {
+    return [failureSummary.primaryReason];
+  }
+  return [];
+}
+
+function buildControlPlaneMutationOwnerOutcomeEnvelope(
+  result = {},
+  normalizedOutcome = null,
+) {
+  const outcomeSnapshot = resolveControlPlaneMutationOutcomeSnapshot(result);
+  const resolvedOutcome =
+    typeof normalizedOutcome === TYPEOF.STRING ?
+      normalizedOutcome :
+      outcomeSnapshot.outcome;
+  const contractOutcome = resolveControlPlaneMutationContractOutcome(
+    result,
+    resolvedOutcome,
+  );
+  const visibilityState = normalizeControlPlaneSystemTableVisibilityState(
+    result?.visibilityState,
+    null,
+  );
+  return buildOwnerOutcomeEnvelope({
+    owner: CONTROL_PLANE_GATEWAY_OWNER_OUTCOME.OWNER,
+    boundary: CONTROL_PLANE_GATEWAY_OWNER_OUTCOME.BOUNDARY,
+    state: contractOutcome.contractState,
+    outcome: resolvedOutcome,
+    reasonCodes: resolveControlPlaneMutationOutcomeReasonCodes(result),
+    nextAction: contractOutcome.nextAction,
+    freshness: resolveControlPlaneMutationOutcomeFreshness(
+      visibilityState,
+      contractOutcome,
+    ),
+    revision: Number.isFinite(result?.revision) ?
+      result.revision :
+      NUM.ZERO,
+    retryAfterMs: getControlPlaneRetryAfterMs(result),
+    terminal:
+      contractOutcome.contractState === OWNER_OUTCOME_STATE.BLOCKED ||
+      contractOutcome.contractState === OWNER_OUTCOME_STATE.FAILED,
+    evidence: {
+      completionState: outcomeSnapshot.completionState,
+      visibilityState,
+      success: result?.success === true,
+      failureSummary: getControlPlaneFailureSummary(result?.error || result),
+    },
+  });
+}
+
 function normalizeDistinctStringArray(values = []) {
   return [
     ...new Set(
@@ -1211,6 +1310,7 @@ export {
   resolveControlPlaneCacheReconcileIntent,
   resolveControlPlaneMutationContractOutcome,
   resolveControlPlaneMutationOutcomeSnapshot,
+  buildControlPlaneMutationOwnerOutcomeEnvelope,
   resolveControlPlaneSystemTableDeliverySource,
   resolveControlPlaneReadIntent,
   resolveAuthoritativeReadMode,

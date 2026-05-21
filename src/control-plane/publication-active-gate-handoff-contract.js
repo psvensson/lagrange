@@ -10,6 +10,11 @@ import {
   PRIORITY_RECOVERY_WAIT_MODE,
   PRIORITY_RECOVERY_WORKFLOW_PROGRESS_PHASE,
 } from './priority-recovery-diagnostics-constants.js';
+import {
+  OWNER_OUTCOME_FRESHNESS,
+  OWNER_OUTCOME_STATE,
+  buildOwnerOutcomeEnvelope,
+} from './owner-outcome-contract.js';
 
 const PUBLICATION_ACTIVE_GATE_HANDOFF_EMPTY_LIST = Object.freeze([]);
 const PUBLICATION_ACTIVE_GATE_HANDOFF_EMPTY_TEXT = '';
@@ -60,6 +65,11 @@ const PUBLICATION_OPERATION_WORKFLOW_HANDOFF_OWNER = Object.freeze({
 const PUBLICATION_OPERATION_WORKFLOW_HANDOFF_BOUNDARY = Object.freeze({
   PUBLICATION_CONVERGENCE: 'publication_convergence',
   WORKFLOW_PROGRESS: PRIORITY_RECOVERY_BLOCKING_BOUNDARY.WORKFLOW_PROGRESS,
+});
+const PUBLICATION_OWNER_OUTCOME_ENVELOPE = Object.freeze({
+  BOUNDARY:
+    PUBLICATION_OPERATION_WORKFLOW_HANDOFF_BOUNDARY.PUBLICATION_CONVERGENCE,
+  OWNER: PUBLICATION_OPERATION_WORKFLOW_HANDOFF_OWNER.TOPOLOGY_PUBLICATION_OWNER,
 });
 
 const PUBLICATION_ACTIVE_GATE_CATCHUP_FENCE_STATE = Object.freeze({
@@ -2167,6 +2177,88 @@ function hasFlattenedPublicationActiveGateHandoffSignal(value = null) {
     ).length > NUM.ZERO;
 }
 
+function resolvePublicationActiveGateOwnerOutcomeState(contract = null) {
+  if (!isPublicationActiveGateHandoffRecord(contract)) {
+    return OWNER_OUTCOME_STATE.FAILED;
+  }
+  if (contract.state === PUBLICATION_ACTIVE_GATE_HANDOFF_STATE.COMPLETE) {
+    return OWNER_OUTCOME_STATE.READY;
+  }
+  if (contract.state === PUBLICATION_ACTIVE_GATE_HANDOFF_STATE.PENDING) {
+    return OWNER_OUTCOME_STATE.PENDING;
+  }
+  if (contract.state === PUBLICATION_ACTIVE_GATE_HANDOFF_STATE.DEGRADED) {
+    return OWNER_OUTCOME_STATE.DEFERRED;
+  }
+  return OWNER_OUTCOME_STATE.BLOCKED;
+}
+
+function resolvePublicationActiveGateOwnerOutcomeFreshness(contract = null) {
+  if (!isPublicationActiveGateHandoffRecord(contract)) {
+    return OWNER_OUTCOME_FRESHNESS.UNKNOWN;
+  }
+  if (contract.state === PUBLICATION_ACTIVE_GATE_HANDOFF_STATE.COMPLETE) {
+    return OWNER_OUTCOME_FRESHNESS.FRESH;
+  }
+  if (
+    contract.state === PUBLICATION_ACTIVE_GATE_HANDOFF_STATE.PENDING ||
+    contract.state === PUBLICATION_ACTIVE_GATE_HANDOFF_STATE.DEGRADED
+  ) {
+    return OWNER_OUTCOME_FRESHNESS.STALE;
+  }
+  return OWNER_OUTCOME_FRESHNESS.UNKNOWN;
+}
+
+function buildPublicationActiveGateOwnerOutcomeEnvelope(value = null) {
+  const contract = selectPublicationActiveGateHandoffContract(value);
+  const handoffContract = isPublicationActiveGateHandoffRecord(contract) ?
+    contract :
+    null;
+  const normalizedContract = normalizePublicationActiveGateHandoffContract(
+    handoffContract,
+  );
+  const ownerOutcomeState = resolvePublicationActiveGateOwnerOutcomeState(
+    normalizedContract,
+  );
+  const normalizedReasonCodes =
+    typeof normalizedContract?.reasonCode === TYPEOF.STRING ?
+      [normalizedContract.reasonCode] :
+      [];
+  return buildOwnerOutcomeEnvelope({
+    owner: PUBLICATION_OWNER_OUTCOME_ENVELOPE.OWNER,
+    boundary: PUBLICATION_OWNER_OUTCOME_ENVELOPE.BOUNDARY,
+    state: ownerOutcomeState,
+    outcome:
+      typeof normalizedContract?.state === TYPEOF.STRING ?
+        normalizedContract.state :
+        PUBLICATION_ACTIVE_GATE_HANDOFF_STATE.UNAVAILABLE,
+    reasonCodes: normalizedReasonCodes,
+    nextAction:
+      typeof normalizedContract?.nextAction === TYPEOF.STRING ?
+        normalizedContract.nextAction :
+        PUBLICATION_ACTIVE_GATE_HANDOFF_NEXT_ACTION.OBSERVE_OWNER_HANDOFF,
+    freshness:
+      resolvePublicationActiveGateOwnerOutcomeFreshness(normalizedContract),
+    revision:
+      Number.isFinite(normalizedContract?.publicationEpoch) ?
+        normalizedContract.publicationEpoch :
+        PUBLICATION_ACTIVE_GATE_HANDOFF_UNKNOWN_EPOCH,
+    retryAfterMs: NUM.ZERO,
+    terminal:
+      ownerOutcomeState === OWNER_OUTCOME_STATE.BLOCKED ||
+      ownerOutcomeState === OWNER_OUTCOME_STATE.FAILED,
+    evidence: {
+      publicationEpoch: normalizedContract?.publicationEpoch,
+      expectedNodeIds: normalizedContract?.expectedNodeIds,
+      pendingReconcileNodeIds: normalizedContract?.pendingReconcileNodeIds,
+      pendingRecoveryNodeIds: normalizedContract?.pendingRecoveryNodeIds,
+      activeGateCatchupFence: normalizedContract?.activeGateCatchupFence,
+      operationWorkflowHandoff:
+        normalizedContract?.operationWorkflowHandoff || null,
+    },
+  });
+}
+
 function selectPublicationActiveGateProgressRecord(value = null) {
   if (!isPublicationActiveGateHandoffRecord(value)) {
     return null;
@@ -2665,6 +2757,7 @@ export {
   PUBLICATION_OPERATION_WORKFLOW_HANDOFF_REASON,
   PUBLICATION_OPERATION_WORKFLOW_HANDOFF_STATE,
   buildPublicationActiveGateHandoffContract,
+  buildPublicationActiveGateOwnerOutcomeEnvelope,
   buildPublicationOperationWorkflowHandoff,
   hasPublicationActiveGateOwnerReconcileSignal,
   normalizePublicationActiveGateHandoffContract,
