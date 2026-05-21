@@ -175,6 +175,21 @@ test('publication active-gate handoff contract schedules owner reconcile from on
         terminalState: OWNER_OUTCOME_STATE.PENDING,
       },
     });
+    t.ok(
+      contract[TEST_CROSS_OWNER_HANDOFF_CONTRACT_FIELD]
+        .diagnosticVocabulary.state.includes(
+          PUBLICATION_ACTIVE_GATE_HANDOFF_STATE.PENDING,
+        ),
+      'cross-owner handoff diagnostic vocabulary should include the current state',
+    );
+    t.ok(
+      contract[TEST_CROSS_OWNER_HANDOFF_CONTRACT_FIELD]
+        .diagnosticVocabulary.reasonCode.includes(
+          PUBLICATION_ACTIVE_GATE_HANDOFF_REASON
+            .OWNER_RECONCILE_PENDING,
+        ),
+      'cross-owner handoff diagnostic vocabulary should include the current reason code',
+    );
   });
 
 test('publication active-gate handoff emits classified workflow backpressure defer',

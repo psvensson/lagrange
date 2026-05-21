@@ -799,8 +799,27 @@ test('BootstrapAPI - register-service returns retryable 503 when the control-pla
           retryable: true,
           deferConsumer: true,
         },
+        terminalCondition: {
+          terminal: false,
+          terminalState: OWNER_OUTCOME_STATE.DEFERRED,
+        },
       },
       'deferred register-service should surface the producer-consumer handoff contract',
+    );
+    t.ok(
+      body[SERVICE_REGISTRATION_HANDOFF_FIELD.CONTRACT]
+        .diagnosticVocabulary.reasonCode.includes(
+          SERVICE_REGISTRATION_HANDOFF_REASON
+            .SERVICE_REGISTRATION_FAILED,
+        ),
+      'deferred register-service contract should include canonical reason diagnostics',
+    );
+    t.match(
+      body[SERVICE_REGISTRATION_HANDOFF_FIELD.CONTRACT].producerOwnerOutcome,
+      {
+        reasonCodes: [TEST_CONTROL_PLANE_PRESSURE_DEGRADED_CODE],
+      },
+      'deferred register-service contract should retain the typed producer reason',
     );
     t.ok(
       warnEvents.some((event) =>
@@ -1068,8 +1087,19 @@ async (t) => {
         retryable: false,
         deferConsumer: false,
       },
+      terminalCondition: {
+        terminal: false,
+        terminalState: OWNER_OUTCOME_STATE.READY,
+      },
     },
     'completed MOVE_REPLICA service registration should expose the fulfilled handoff contract',
+  );
+  t.ok(
+    responseBody[SERVICE_REGISTRATION_HANDOFF_FIELD.CONTRACT]
+      .diagnosticVocabulary.nextAction.includes(
+        SERVICE_REGISTRATION_HANDOFF_NEXT_ACTION.PROCEED,
+      ),
+    'fulfilled register-service contract should include next-action diagnostics',
   );
   t.equal(sqlCalls.length, 1,
     'bootstrap register-service should route through the SQL fallback once');
