@@ -164,10 +164,14 @@ const COMPACT_HANDOFF_PENDING_RECONCILE_COUNT = 0;
 const COMPACT_HANDOFF_PENDING_RECONCILE_NODE_IDS = Object.freeze([]);
 const HANDOFF_CONTRACT_NEXT_ACTION_RECONCILE =
   'reconcile_owner_membership_publication';
+const HANDOFF_CONTRACT_NEXT_ACTION_WAIT_OWNER_RECOVERY =
+  'wait_owner_recovery';
 const OWNER_QUEUE_DEPTH_STATE_UNKNOWN = 'unknown';
+const OWNER_QUEUE_DEPTH_STATE_OBSERVED = 'observed';
 const MEMBERSHIP_PUBLICATION_HANDOFF_OUTCOME_STATE_WRITE_DEFERRED =
   'write_deferred';
 const MEMBERSHIP_PUBLICATION_HANDOFF_OUTCOME_RETRY_AFTER_MS = 1000;
+const OWNER_RECOVERY_PENDING_WRITE_COUNT = 1;
 const TOPOLOGY_OPERATOR_CURRENT_STEP_ID_DISPATCH_PENDING =
   'dispatch_pending';
 const TOPOLOGY_OPERATOR_CURRENT_STEP_STATE_PLANNED = 'planned';
@@ -432,6 +436,8 @@ describe('analyze-topology-convergence CLI', () => {
       reasonCode: OWNER_RECONCILE_PENDING_REASON,
       nextAction: HANDOFF_CONTRACT_NEXT_ACTION_RECONCILE,
       runtimePromotionAllowed: RUNTIME_PROMOTION_ALLOWED_FALSE,
+      pendingRecoveryCount: 0,
+      pendingRecoveryNodeIds: [],
       pendingReconcileCount: 0,
       pendingReconcileNodeIds: [],
     });
@@ -516,6 +522,8 @@ describe('analyze-topology-convergence CLI', () => {
       reasonCode: OWNER_RECONCILE_PENDING_REASON,
       nextAction: HANDOFF_CONTRACT_NEXT_ACTION_RECONCILE,
       runtimePromotionAllowed: RUNTIME_PROMOTION_ALLOWED_FALSE,
+      pendingRecoveryCount: 0,
+      pendingRecoveryNodeIds: [],
       pendingReconcileCount:
         PUBLICATION_OPERATION_HANDOFF_PENDING_RECONCILE_COUNT,
       pendingReconcileNodeIds:
@@ -574,6 +582,8 @@ describe('analyze-topology-convergence CLI', () => {
       reasonCode: OWNER_RECONCILE_PENDING_REASON,
       nextAction: HANDOFF_CONTRACT_NEXT_ACTION_RECONCILE,
       runtimePromotionAllowed: RUNTIME_PROMOTION_ALLOWED_FALSE,
+      pendingRecoveryCount: 0,
+      pendingRecoveryNodeIds: [],
       pendingReconcileCount: COMPACT_HANDOFF_PENDING_RECONCILE_COUNT,
       pendingReconcileNodeIds: COMPACT_HANDOFF_PENDING_RECONCILE_NODE_IDS,
     });
@@ -738,6 +748,8 @@ describe('analyze-topology-convergence CLI', () => {
         reasonCode: OWNER_RECONCILE_PENDING_REASON,
         nextAction: HANDOFF_CONTRACT_NEXT_ACTION_RECONCILE,
         runtimePromotionAllowed: RUNTIME_PROMOTION_ALLOWED_FALSE,
+        pendingRecoveryCount: 0,
+        pendingRecoveryNodeIds: [],
         pendingReconcileCount: 0,
         pendingReconcileNodeIds: [],
       });
@@ -756,6 +768,8 @@ describe('analyze-topology-convergence CLI', () => {
           reasonCode: OWNER_RECONCILE_PENDING_REASON,
           nextAction: HANDOFF_CONTRACT_NEXT_ACTION_RECONCILE,
           runtimePromotionAllowed: RUNTIME_PROMOTION_ALLOWED_FALSE,
+          pendingRecoveryCount: 0,
+          pendingRecoveryNodeIds: [],
           pendingReconcileCount: 0,
           pendingReconcileNodeIds: [],
         },
@@ -796,6 +810,8 @@ describe('analyze-topology-convergence CLI', () => {
         reasonCode: OWNER_RECONCILE_PENDING_REASON,
         nextAction: HANDOFF_CONTRACT_NEXT_ACTION_RECONCILE,
         runtimePromotionAllowed: RUNTIME_PROMOTION_ALLOWED_FALSE,
+        pendingRecoveryCount: 0,
+        pendingRecoveryNodeIds: [],
         pendingReconcileCount:
           ACTIVE_GATE_OWNER_COHORT_PENDING_RECONCILE_COUNT,
         pendingReconcileNodeIds: ['node-2', 'node-3'],
@@ -890,6 +906,77 @@ describe('analyze-topology-convergence CLI', () => {
       activeGateOwnerCohortMissingPublishedCount:
         ACTIVE_GATE_OWNER_COHORT_PENDING_RECONCILE_COUNT,
     });
+  });
+
+  it('surfaces owner recovery wait evidence in the handoff probe', () => {
+    const fixture = readJson(PUBLICATION_ACTIVE_GATE_REDUCED_HANDOFF_FIXTURE_PATH);
+    const publication = fixture.scenarios[0].publicationConvergence;
+    const progress = publication.activeGate.progress;
+    const recoveryNodeId = ACTIVE_GATE_OWNER_COHORT_PENDING_RECONCILE_NODE_IDS
+      .split(',')[0];
+    const waitHandoff = {
+      ...publication.publicationActiveGateHandoff,
+      missingPublishedNodeIds: [],
+      missingPublishedCount: 0,
+      pendingRecoveryNodeIds: [recoveryNodeId],
+      pendingRecoveryCount: OWNER_RECOVERY_PENDING_WRITE_COUNT,
+      pendingReconcileNodeIds: [],
+      pendingReconcileCount: 0,
+      nextAction: HANDOFF_CONTRACT_NEXT_ACTION_WAIT_OWNER_RECOVERY,
+    };
+    publication.missingPublishedNodeIds = [];
+    publication.missingPublishedCount = 0;
+    publication.publicationActiveGateHandoff = waitHandoff;
+    progress.selectedControlPlaneOwnerQueueDepth = null;
+    progress.publicationActiveGateHandoffNextAction =
+      HANDOFF_CONTRACT_NEXT_ACTION_WAIT_OWNER_RECOVERY;
+    progress.publicationActiveGateHandoffPendingReconcileNodeIds = [];
+    progress.publicationActiveGateHandoffPendingReconcileCount = 0;
+    progress.activeGateOwnerCohortMissingPublishedNodeIds = [];
+    progress.activeGateOwnerCohortMissingPublishedCount = 0;
+    progress.activeGateOwnerCohortPendingRecoveryNodeIds = [recoveryNodeId];
+    progress.activeGateOwnerCohortPendingRecoveryCount =
+      OWNER_RECOVERY_PENDING_WRITE_COUNT;
+    progress.activeGateOwnerCohortPendingReconcileNodeIds = [];
+    progress.activeGateOwnerCohortPendingReconcileCount = 0;
+
+    const output = runAnalyzerJsonForFixture(fixture, ARG_HANDOFF_PROBE);
+
+    assert.equal(output.detected, HANDOFF_DETECTED_TRUE);
+    assert.equal(
+      output.resultClassification,
+      HANDOFF_CONTRACT_RESULT_CLASSIFICATION,
+    );
+    assert.deepEqual(output.handoffContract, {
+      state: HANDOFF_CONTRACT_STATE_PENDING,
+      reasonCode: OWNER_RECONCILE_PENDING_REASON,
+      nextAction: HANDOFF_CONTRACT_NEXT_ACTION_WAIT_OWNER_RECOVERY,
+      runtimePromotionAllowed: RUNTIME_PROMOTION_ALLOWED_FALSE,
+      pendingRecoveryCount: OWNER_RECOVERY_PENDING_WRITE_COUNT,
+      pendingRecoveryNodeIds: [recoveryNodeId],
+      pendingReconcileCount: 0,
+      pendingReconcileNodeIds: [],
+    });
+    assert.deepEqual(output.ownerRecoveryQueue, {
+      depth: {
+        state: OWNER_QUEUE_DEPTH_STATE_OBSERVED,
+        pendingWrites: OWNER_RECOVERY_PENDING_WRITE_COUNT,
+        pendingWriteGrowthCount: OWNER_QUEUE_DEPTH_STATE_UNKNOWN,
+      },
+      handoffOutcome: {
+        state: MEMBERSHIP_PUBLICATION_HANDOFF_OUTCOME_STATE_WRITE_DEFERRED,
+        reasonCode: OWNER_RECONCILE_PENDING_REASON,
+        enqueued: false,
+        retryAfterMs: 0,
+      },
+      pendingReconcileCount: 0,
+      activeGateOwnerCohortMissingPublishedCount: 0,
+    });
+    assert.equal(
+      output.nextOwnerPath.requiredAction,
+      HANDOFF_CONTRACT_NEXT_ACTION_WAIT_OWNER_RECOVERY,
+    );
+    assert.equal(output.runtimePromotionAllowed, RUNTIME_PROMOTION_ALLOWED_FALSE);
   });
 
   it('generates a package migration evidence block from analyzer output', () => {

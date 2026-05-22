@@ -255,7 +255,12 @@ const SELECTED_SNAPSHOT_SOURCE_TIMEOUT_RESET_NODE_ID =
 const SELECTED_SNAPSHOT_FORCE_REPAIR_TIMEOUT_NODE_ID =
   SNAPSHOT_REPLAY_TEST_NODE_ID.BASELINE;
 const SELECTED_SNAPSHOT_SOURCE_TIMEOUT_QUERY_TIMEOUT_MS = 3000;
-const SELECTED_SNAPSHOT_SOURCE_TIMEOUT_STARTUP_RETRY_TIMEOUT_MS = 30000;
+const SELECTED_SNAPSHOT_SOURCE_TIMEOUT_INITIAL_PROBE_TIMEOUT_MS = 5000;
+const SELECTED_SNAPSHOT_SOURCE_TIMEOUT_INITIAL_PROBE_DRIFT_MS = 1;
+const SELECTED_SNAPSHOT_SOURCE_TIMEOUT_INITIAL_PROBE_MIN_MS =
+  SELECTED_SNAPSHOT_SOURCE_TIMEOUT_INITIAL_PROBE_TIMEOUT_MS -
+  SELECTED_SNAPSHOT_SOURCE_TIMEOUT_INITIAL_PROBE_DRIFT_MS;
+const SELECTED_SNAPSHOT_SOURCE_TIMEOUT_STARTUP_RETRY_TIMEOUT_MS = 2500;
 const SELECTED_SNAPSHOT_SOURCE_TIMEOUT_LOAD_INITIAL_TIMEOUT_MS = 5000;
 const SELECTED_SNAPSHOT_SOURCE_TIMEOUT_LOAD_RETRY_TIMEOUT_MS = 15000;
 const SELECTED_SNAPSHOT_SOURCE_TIMEOUT_ERROR =
@@ -326,6 +331,7 @@ const SELECTED_SNAPSHOT_SOURCE_TIMEOUT_UNSELECTED_ERROR_PREFIX =
 const SELECTED_SNAPSHOT_SOURCE_TIMEOUT_SNAPSHOT_LANE = 'snapshot';
 const SELECTED_SNAPSHOT_SOURCE_TIMEOUT_LOAD_MODE = 'load';
 const SELECTED_SNAPSHOT_SOURCE_TIMEOUT_RETRY_REASON = 'selected_timeout';
+const SELECTED_SNAPSHOT_SOURCE_TIMEOUT_RETRY_AFTER_TOLERANCE_MS = 1;
 const ACTIVE_GATE_REACHABILITY_DELAY_TEST_NAME =
   'Unit: _waitForAllActive keeps terminal reachability delay from selected progress';
 const ACTIVE_GATE_REACHABILITY_DELAY_CLUSTER_SIZE = 5;
@@ -557,9 +563,9 @@ const SNAPSHOT_TIMEOUT_REPAIR_ASSERTION = Object.freeze({
   STARTUP_RETRY_COUNT:
     'selected-source startup retry should make one bounded retry after reset',
   STARTUP_RETRY_TIMEOUT_FLOOR:
-    'startup selected-source retry should restore the startup timeout floor',
+    'startup selected-source retry should reserve active-gate retry budget',
   STARTUP_RETRY_SCALED_TIMEOUT:
-    'startup selected-source retry should use the startup-scaled snapshot timeout floor',
+    'startup selected-source retry should not consume the full startup-scaled snapshot timeout',
   STARTUP_RETRY_EXHAUSTED_SOURCE:
     'retry-exhausted evidence should preserve the selected admin-ready source',
   STARTUP_RETRY_EXHAUSTED_ERROR:
@@ -646,6 +652,8 @@ const SNAPSHOT_TIMEOUT_REPAIR_ASSERTION = Object.freeze({
     'websocket-closed fixture should mark the selected snapshot repair deferred',
   WEBSOCKET_CLOSED_ALTERNATIVE_WITNESS:
     'websocket-closed fixture should keep an alternative witness entry available for handoff probes',
+  WEBSOCKET_CLOSED_RETRY_TIMEOUT:
+    'websocket-closed fixture should reserve active-gate retry budget',
 });
 
 function buildSelectedSnapshotSourceTimeoutError(nodeId, timeoutMs) {
@@ -1017,13 +1025,23 @@ test(SELECTED_SNAPSHOT_SOURCE_TIMEOUT_RESET_TEST_NAME, async () => {
     SNAPSHOT_TIMEOUT_REPAIR_ASSERTION.STARTUP_RETRY_COUNT,
   );
   assert.ok(
-    selectedCalls[SNAPSHOT_REPLAY_TEST_FIRST_CALL_INDEX].timeoutMs <
-      selectedCalls[SNAPSHOT_REPLAY_TEST_RETRY_CALL_INDEX].timeoutMs,
+    selectedCalls[SNAPSHOT_REPLAY_TEST_FIRST_CALL_INDEX].timeoutMs >=
+      SELECTED_SNAPSHOT_SOURCE_TIMEOUT_INITIAL_PROBE_MIN_MS &&
+      selectedCalls[SNAPSHOT_REPLAY_TEST_FIRST_CALL_INDEX].timeoutMs <=
+      SELECTED_SNAPSHOT_SOURCE_TIMEOUT_INITIAL_PROBE_TIMEOUT_MS,
     SNAPSHOT_TIMEOUT_REPAIR_ASSERTION.STARTUP_RETRY_TIMEOUT_FLOOR,
   );
-  assert.strictEqual(
-    selectedCalls[SNAPSHOT_REPLAY_TEST_RETRY_CALL_INDEX].timeoutMs,
-    SELECTED_SNAPSHOT_SOURCE_TIMEOUT_STARTUP_RETRY_TIMEOUT_MS,
+  assert.ok(
+    selectedCalls[SNAPSHOT_REPLAY_TEST_RETRY_CALL_INDEX].timeoutMs <
+      selectedCalls[SNAPSHOT_REPLAY_TEST_FIRST_CALL_INDEX].timeoutMs,
+    SNAPSHOT_TIMEOUT_REPAIR_ASSERTION.STARTUP_RETRY_TIMEOUT_FLOOR,
+  );
+  assert.ok(
+    selectedCalls[SNAPSHOT_REPLAY_TEST_RETRY_CALL_INDEX].timeoutMs >=
+      SELECTED_SNAPSHOT_SOURCE_TIMEOUT_STARTUP_RETRY_TIMEOUT_MS -
+        SELECTED_SNAPSHOT_SOURCE_TIMEOUT_INITIAL_PROBE_DRIFT_MS &&
+      selectedCalls[SNAPSHOT_REPLAY_TEST_RETRY_CALL_INDEX].timeoutMs <=
+        SELECTED_SNAPSHOT_SOURCE_TIMEOUT_STARTUP_RETRY_TIMEOUT_MS,
     SNAPSHOT_TIMEOUT_REPAIR_ASSERTION.STARTUP_RETRY_SCALED_TIMEOUT,
   );
   assert.ok(
@@ -1101,10 +1119,6 @@ test(SELECTED_SNAPSHOT_SOURCE_TIMEOUT_RETRY_EXHAUSTED_TEST_NAME, async () => {
     Date.now() + SNAPSHOT_REPLAY_TEST_DEADLINE_EXTENSION_MS,
     SNAPSHOT_REPLAY_TEST_EXPECTED_NODE_IDS,
   );
-  const selectedRetryTimeoutPattern = new RegExp(
-    String(SELECTED_SNAPSHOT_SOURCE_TIMEOUT_STARTUP_RETRY_TIMEOUT_MS),
-    'u',
-  );
   const selectedCalls = snapshotProbeCalls.filter((call) => {
     return call.nodeId === SELECTED_SNAPSHOT_SOURCE_TIMEOUT_RESET_NODE_ID;
   });
@@ -1114,20 +1128,24 @@ test(SELECTED_SNAPSHOT_SOURCE_TIMEOUT_RETRY_EXHAUSTED_TEST_NAME, async () => {
     SELECTED_SNAPSHOT_SOURCE_TIMEOUT_RESET_NODE_ID,
     SNAPSHOT_TIMEOUT_REPAIR_ASSERTION.STARTUP_RETRY_EXHAUSTED_SOURCE,
   );
-  assert.match(
-    coverage.selectedError,
-    selectedRetryTimeoutPattern,
-    SNAPSHOT_TIMEOUT_REPAIR_ASSERTION.STARTUP_RETRY_EXHAUSTED_ERROR,
-  );
-  assert.strictEqual(
-    coverage.selectedSnapshotTimeoutMs,
-    SELECTED_SNAPSHOT_SOURCE_TIMEOUT_STARTUP_RETRY_TIMEOUT_MS,
-    SNAPSHOT_TIMEOUT_REPAIR_ASSERTION.STARTUP_RETRY_EXHAUSTED_TIMEOUT,
-  );
   assert.strictEqual(
     selectedCalls.length,
     SNAPSHOT_REPLAY_TEST_BOUNDED_RETRY_CALL_COUNT,
     SNAPSHOT_TIMEOUT_REPAIR_ASSERTION.STARTUP_RETRY_COUNT,
+  );
+  assert.strictEqual(
+    coverage.selectedSnapshotTimeoutMs,
+    selectedCalls[SNAPSHOT_REPLAY_TEST_RETRY_CALL_INDEX].timeoutMs,
+    SNAPSHOT_TIMEOUT_REPAIR_ASSERTION.STARTUP_RETRY_EXHAUSTED_TIMEOUT,
+  );
+  const selectedRetryTimeoutPattern = new RegExp(
+    String(selectedCalls[SNAPSHOT_REPLAY_TEST_RETRY_CALL_INDEX].timeoutMs),
+    'u',
+  );
+  assert.match(
+    coverage.selectedError,
+    selectedRetryTimeoutPattern,
+    SNAPSHOT_TIMEOUT_REPAIR_ASSERTION.STARTUP_RETRY_EXHAUSTED_ERROR,
   );
   assert.deepStrictEqual(
     resetCalls,
@@ -1150,7 +1168,6 @@ test(SELECTED_SNAPSHOT_SOURCE_TIMEOUT_RETRY_EXHAUSTED_TEST_NAME, async () => {
       contractState: coverage.selectedSnapshotObservationContractState,
       refreshState: coverage.selectedSnapshotObservationRefreshState,
       nextAction: coverage.selectedSnapshotObservationNextAction,
-      retryAfterMs: coverage.selectedSnapshotObservationRetryAfterMs,
     },
     {
       mode: ADMIN_CONTROL_SNAPSHOT_OBSERVATION_MODE.REPAIR_DEFERRED,
@@ -1158,8 +1175,15 @@ test(SELECTED_SNAPSHOT_SOURCE_TIMEOUT_RETRY_EXHAUSTED_TEST_NAME, async () => {
       contractState: OWNER_CONTRACT_STATE.DEFERRED,
       refreshState: CONTROL_PLANE_SNAPSHOT_REFRESH_STATE.DEFERRED,
       nextAction: OWNER_CONTRACT_NEXT_ACTION.RETRY,
-      retryAfterMs: SELECTED_SNAPSHOT_SOURCE_TIMEOUT_STARTUP_RETRY_TIMEOUT_MS,
     },
+    SNAPSHOT_TIMEOUT_REPAIR_ASSERTION.STARTUP_RETRY_EXHAUSTED_OBSERVATION,
+  );
+  assert.ok(
+    coverage.selectedSnapshotObservationRetryAfterMs >=
+      SELECTED_SNAPSHOT_SOURCE_TIMEOUT_STARTUP_RETRY_TIMEOUT_MS -
+        SELECTED_SNAPSHOT_SOURCE_TIMEOUT_RETRY_AFTER_TOLERANCE_MS &&
+      coverage.selectedSnapshotObservationRetryAfterMs <=
+        SELECTED_SNAPSHOT_SOURCE_TIMEOUT_STARTUP_RETRY_TIMEOUT_MS,
     SNAPSHOT_TIMEOUT_REPAIR_ASSERTION.STARTUP_RETRY_EXHAUSTED_OBSERVATION,
   );
   assert.deepStrictEqual(
@@ -1868,8 +1892,16 @@ test(
       true,
       SNAPSHOT_TIMEOUT_REPAIR_ASSERTION.WEBSOCKET_CLOSED_REPAIR_DEFERRED,
     );
+    assert.strictEqual(
+      coverage.selectedSnapshotObservationRetryAfterMs,
+      SELECTED_SNAPSHOT_SOURCE_TIMEOUT_STARTUP_RETRY_TIMEOUT_MS,
+      SNAPSHOT_TIMEOUT_REPAIR_ASSERTION.WEBSOCKET_CLOSED_RETRY_TIMEOUT,
+    );
     assert.ok(
-      Object.hasOwn(coverage.publicationDisagreementByNodeId, SNAPSHOT_REPLAY_TEST_NODE_ID.BASELINE),
+      Object.hasOwn(
+        coverage.publicationDisagreementByNodeId,
+        SNAPSHOT_REPLAY_TEST_NODE_ID.BASELINE,
+      ),
       SNAPSHOT_TIMEOUT_REPAIR_ASSERTION.WEBSOCKET_CLOSED_ALTERNATIVE_WITNESS,
     );
   },

@@ -68,6 +68,19 @@ const AUTHORITATIVE_REPAIR_CAUSE_QUERY_PARTICIPANT_FAILURE =
   'query_participant_failure';
 const AUTHORITATIVE_REPAIR_CAUSE_CONTROL_PLANE_BACKPRESSURE =
   'control_plane_backpressure';
+const CONTROL_SNAPSHOT_REPAIR_CAUSE_TIMEOUT =
+  AUTHORITATIVE_REPAIR_CAUSE_QUERY_TIMEOUT;
+const CONTROL_SNAPSHOT_REPAIR_CAUSE_PARTICIPANT_FAILURE =
+  AUTHORITATIVE_REPAIR_CAUSE_QUERY_PARTICIPANT_FAILURE;
+const CONTROL_SNAPSHOT_EMPTY_REPAIR_CAUSE_CHAIN = ADMIN_CACHE_DUMP.EMPTY;
+const CONTROL_SNAPSHOT_ABSENT_REPAIR_DETAIL = null;
+const CONTROL_SNAPSHOT_ABSENT_HANDOFF_OUTCOME = null;
+const CONTROL_SNAPSHOT_ABSENT_HANDOFF_RETRY_AFTER_MS = null;
+const CONTROL_SNAPSHOT_ABSENT_DEFERRED_SNAPSHOT = null;
+const CONTROL_SNAPSHOT_AUTHORITATIVE_REPAIR_METHOD =
+  'ensureAuthoritativeDiscoveryCacheRepair';
+const CONTROL_SNAPSHOT_REPAIR_TIMEOUT_OPTION = 'queryTimeoutMs';
+const CONTROL_SNAPSHOT_LOCAL_TRANSPORT_FIELD = 'localQueryTransport';
 const CONTROL_SNAPSHOT_PUBLICATION_READ_REPAIR_ERROR_FRAGMENTS = Object.freeze([
   'leader is unknown',
   'leader unknown',
@@ -99,6 +112,8 @@ const CONTROL_SNAPSHOT_MEMBERSHIP_PUBLICATION_HANDOFF_OUTCOME_DATA_FIELD =
   });
 const CONTROL_SNAPSHOT_PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD = Object.freeze({
   NEXT_ACTION: 'nextAction',
+  PENDING_RECOVERY_COUNT: 'pendingRecoveryCount',
+  PENDING_RECOVERY_NODE_IDS: 'pendingRecoveryNodeIds',
   PENDING_RECONCILE_COUNT: 'pendingReconcileCount',
   PENDING_RECONCILE_NODE_IDS: 'pendingReconcileNodeIds',
   REASON_CODE: 'reasonCode',
@@ -161,7 +176,7 @@ const CONTROL_SNAPSHOT_OWNER_OUTCOME_FRESHNESS_PROGRESS_RANK = Object.freeze({
   [OWNER_OUTCOME_FRESHNESS.FRESH]: NUM.TWO,
 });
 const CONTROL_SNAPSHOT_REPAIR_DEFERRED_MIN_NODE_COVERAGE = NUM.THREE;
-const CONTROL_SNAPSHOT_FORCED_REPAIR_QUERY_TIMEOUT_DIVISOR = NUM.TWO;
+const CONTROL_SNAPSHOT_REPAIR_QUERY_TIMEOUT_DIVISOR = NUM.TWO;
 function normalizeControlSnapshotNodeIdList(values = []) {
   return [...new Set(
     (Array.isArray(values) ? values : ADMIN_CACHE_DUMP.EMPTY)
@@ -191,9 +206,9 @@ function hasPressureOrTimeoutRepairCause(repair = null) {
     repair.causeChain.filter(
       (value) => typeof value === TYPEOF.STRING && value.length > NUM.ZERO,
     ) :
-    ADMIN_CACHE_DUMP.EMPTY;
+    CONTROL_SNAPSHOT_EMPTY_REPAIR_CAUSE_CHAIN;
   return (
-    causeChain.includes(AUTHORITATIVE_REPAIR_CAUSE_QUERY_TIMEOUT) ||
+    causeChain.includes(CONTROL_SNAPSHOT_REPAIR_CAUSE_TIMEOUT) ||
     causeChain.includes(AUTHORITATIVE_REPAIR_CAUSE_CONTROL_PLANE_BACKPRESSURE)
   );
 }
@@ -202,10 +217,10 @@ function hasParticipantFailureRepairCause(repair = null) {
     repair.causeChain.filter(
       (value) => typeof value === TYPEOF.STRING && value.length > NUM.ZERO,
     ) :
-    ADMIN_CACHE_DUMP.EMPTY;
+    CONTROL_SNAPSHOT_EMPTY_REPAIR_CAUSE_CHAIN;
   return (
     causeChain.includes(
-      AUTHORITATIVE_REPAIR_CAUSE_QUERY_PARTICIPANT_FAILURE,
+      CONTROL_SNAPSHOT_REPAIR_CAUSE_PARTICIPANT_FAILURE,
     ) ||
     hasConnectionClosedParticipantRepairCause(repair) ||
     (
@@ -358,7 +373,6 @@ function shouldAttemptForcedRepairFailureLocalFallback(options = {}) {
 function resolveAuthoritativeRepairQueryTimeoutMs(options = {}) {
   const queryTimeoutMs = Number(options.queryTimeoutMs);
   if (
-    options.forceAuthoritativeRepair !== true ||
     !Number.isFinite(queryTimeoutMs) ||
     queryTimeoutMs <= NUM.ONE
   ) {
@@ -367,7 +381,7 @@ function resolveAuthoritativeRepairQueryTimeoutMs(options = {}) {
   return Math.max(
     NUM.ONE,
     Math.floor(
-      queryTimeoutMs / CONTROL_SNAPSHOT_FORCED_REPAIR_QUERY_TIMEOUT_DIVISOR,
+      queryTimeoutMs / CONTROL_SNAPSHOT_REPAIR_QUERY_TIMEOUT_DIVISOR,
     ),
   );
 }
@@ -473,7 +487,7 @@ function resolveControlSnapshotRepairParticipantFailureDetail(repair = null) {
     ],
   );
   if (!participantError) {
-    return null;
+    return CONTROL_SNAPSHOT_ABSENT_REPAIR_DETAIL;
   }
   const tableName = resolveControlSnapshotRepairFailureTableName(repair);
   return tableName ?
@@ -512,6 +526,15 @@ function isReadyLocalQueryTransportDiagnostic(localQueryTransport = null) {
       localQueryTransport.state || ADMIN_CONTROL_SNAPSHOT_LITERAL.VALUE,
     ).toLowerCase() === ADMIN_CONTROL_SNAPSHOT_LITERAL.READY
   );
+}
+function isReadyLocalTransportDiagnostic(localTransport = null) {
+  return isReadyLocalQueryTransportDiagnostic(localTransport);
+}
+function resolveAuthoritativeRepairTimeoutMs(options = {}) {
+  return resolveAuthoritativeRepairQueryTimeoutMs({
+    forceAuthoritativeRepair: options.forceAuthoritativeRepair,
+    queryTimeoutMs: options[CONTROL_SNAPSHOT_REPAIR_TIMEOUT_OPTION],
+  });
 }
 function attachAuthoritativeRepairDiagnostics(snapshot, options = {}) {
   if (!snapshot || typeof snapshot !== TYPEOF.OBJECT) {
@@ -646,7 +669,7 @@ function selectMembershipPublicationHandoffOutcome(snapshot = null) {
     typeof controlPlaneDiagnostics !== TYPEOF.OBJECT ||
     Array.isArray(controlPlaneDiagnostics)
   ) {
-    return null;
+    return CONTROL_SNAPSHOT_ABSENT_HANDOFF_OUTCOME;
   }
   const outcomeCandidates = [
     controlPlaneDiagnostics[
@@ -663,7 +686,7 @@ function selectMembershipPublicationHandoffOutcome(snapshot = null) {
     candidate &&
     typeof candidate === TYPEOF.OBJECT &&
     !Array.isArray(candidate),
-  ) || null;
+  ) || CONTROL_SNAPSHOT_ABSENT_HANDOFF_OUTCOME;
 }
 
 function isVisibleMembershipPublicationHandoffOutcome(outcome = null) {
@@ -716,7 +739,7 @@ function selectMembershipPublicationHandoffRetryAfterMs(snapshot = null) {
         .ENQUEUED
     ] !== false
   ) {
-    return null;
+    return CONTROL_SNAPSHOT_ABSENT_HANDOFF_RETRY_AFTER_MS;
   }
   return normalizeControlSnapshotRetryAfterMs(
     outcome[
@@ -893,6 +916,14 @@ function selectControlSnapshotHandoffEvidence(snapshot = null) {
       ],
     ) :
     ADMIN_CACHE_DUMP.EMPTY;
+  const pendingRecoveryNodeIds = hasHandoff ?
+    normalizeControlSnapshotNodeIdList(
+      handoff[
+        CONTROL_SNAPSHOT_PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD
+          .PENDING_RECOVERY_NODE_IDS
+      ],
+    ) :
+    ADMIN_CACHE_DUMP.EMPTY;
   return Object.freeze({
     available: hasHandoff === true,
     state: normalizeControlSnapshotHandoffText(
@@ -922,7 +953,15 @@ function selectControlSnapshotHandoffEvidence(snapshot = null) {
       ],
       pendingReconcileNodeIds.length,
     ),
+    pendingRecoveryCount: normalizeControlSnapshotHandoffInteger(
+      handoff?.[
+        CONTROL_SNAPSHOT_PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD
+          .PENDING_RECOVERY_COUNT
+      ],
+      pendingRecoveryNodeIds.length,
+    ),
     ownerOutcome,
+    pendingRecoveryNodeIds,
     pendingReconcileNodeIds,
   });
 }
@@ -948,6 +987,13 @@ function buildControlSnapshotHandoffProgressComparison(
       comparable &&
       refreshed.pendingReconcileNodeIds.length <
         current.pendingReconcileNodeIds.length,
+    pendingRecoveryCountDecreased:
+      comparable &&
+      refreshed.pendingRecoveryCount < current.pendingRecoveryCount,
+    pendingRecoveryNodeIdsDecreased:
+      comparable &&
+      refreshed.pendingRecoveryNodeIds.length <
+        current.pendingRecoveryNodeIds.length,
     ownerReconcilePendingChanged:
       comparable &&
       current.reasonCode ===
@@ -1034,7 +1080,7 @@ class AdminControlSnapshotPart2 extends AdminControlSnapshotPart1 {
         buildRepairFailureLocalSnapshotOptions(options),
       );
     } catch (_error) {
-      return null;
+      return CONTROL_SNAPSHOT_ABSENT_DEFERRED_SNAPSHOT;
     }
   }
 
@@ -1048,7 +1094,7 @@ class AdminControlSnapshotPart2 extends AdminControlSnapshotPart1 {
         repair: options.repair,
       }) !== true
     ) {
-      return null;
+      return CONTROL_SNAPSHOT_ABSENT_DEFERRED_SNAPSHOT;
     }
     let deferredSnapshot = selectDeferredRepairLocalControlSnapshot(
       localSnapshot,
@@ -1066,7 +1112,7 @@ class AdminControlSnapshotPart2 extends AdminControlSnapshotPart1 {
         );
     }
     if (!deferredSnapshot) {
-      return null;
+      return CONTROL_SNAPSHOT_ABSENT_DEFERRED_SNAPSHOT;
     }
     const deferredEvaluation =
       this.evaluateAuthoritativeControlSnapshotRepair(deferredSnapshot, options);
@@ -1224,12 +1270,13 @@ class AdminControlSnapshotPart2 extends AdminControlSnapshotPart1 {
       }
       let repair = null;
       try {
-        repair = await this.ensureAuthoritativeDiscoveryCacheRepair({
+        repair = await this[CONTROL_SNAPSHOT_AUTHORITATIVE_REPAIR_METHOD]({
           reason: CONTROL_SNAPSHOT_REPAIR_REASON,
           bypassReuse: true,
-          queryTimeoutMs: resolveAuthoritativeRepairQueryTimeoutMs({
+          [CONTROL_SNAPSHOT_REPAIR_TIMEOUT_OPTION]: resolveAuthoritativeRepairTimeoutMs({
             forceAuthoritativeRepair,
-            queryTimeoutMs: options.queryTimeoutMs,
+            [CONTROL_SNAPSHOT_REPAIR_TIMEOUT_OPTION]:
+              options[CONTROL_SNAPSHOT_REPAIR_TIMEOUT_OPTION],
           }),
         });
       } catch (repairError) {
@@ -1361,12 +1408,13 @@ class AdminControlSnapshotPart2 extends AdminControlSnapshotPart1 {
       });
     let repair = null;
     try {
-      repair = await this.ensureAuthoritativeDiscoveryCacheRepair({
+      repair = await this[CONTROL_SNAPSHOT_AUTHORITATIVE_REPAIR_METHOD]({
         reason: CONTROL_SNAPSHOT_REPAIR_REASON,
         bypassReuse: forceAuthoritativeRepair,
-        queryTimeoutMs: resolveAuthoritativeRepairQueryTimeoutMs({
+        [CONTROL_SNAPSHOT_REPAIR_TIMEOUT_OPTION]: resolveAuthoritativeRepairTimeoutMs({
           forceAuthoritativeRepair,
-          queryTimeoutMs: options.queryTimeoutMs,
+          [CONTROL_SNAPSHOT_REPAIR_TIMEOUT_OPTION]:
+            options[CONTROL_SNAPSHOT_REPAIR_TIMEOUT_OPTION],
         }),
         triggerCodes: repairEvaluation?.triggerCodes,
       });
@@ -1523,14 +1571,18 @@ class AdminControlSnapshotPart2 extends AdminControlSnapshotPart1 {
     if (
       options.forceAuthoritativeRepair !== true &&
       hasOnlyLeaderResolutionGapRepairCause(options.repair) &&
-      isReadyLocalQueryTransportDiagnostic(options.repair?.localQueryTransport)
+      isReadyLocalTransportDiagnostic(
+        options.repair?.[CONTROL_SNAPSHOT_LOCAL_TRANSPORT_FIELD],
+      )
     ) {
       return true;
     }
     if (
       options.forceAuthoritativeRepair !== true &&
       hasPressureOrTimeoutRepairCause(options.repair) &&
-      isReadyLocalQueryTransportDiagnostic(options.repair?.localQueryTransport)
+      isReadyLocalTransportDiagnostic(
+        options.repair?.[CONTROL_SNAPSHOT_LOCAL_TRANSPORT_FIELD],
+      )
     ) {
       return true;
     }

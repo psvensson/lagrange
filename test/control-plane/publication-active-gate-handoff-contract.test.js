@@ -605,6 +605,65 @@ test('publication active-gate selector accepts flattened active-gate progress ha
     );
   });
 
+test('publication active-gate selector preserves flattened pending recovery ids',
+  async (t) => {
+    const selectedHandoff = selectPublicationActiveGateHandoffContract({
+      publicationConvergence: {
+        publicationEpoch: TEST_PUBLICATION_EPOCH,
+        publicationStatus: TEST_PUBLICATION_STATUS_OPEN,
+        publishedActiveNodeIds: [TEST_NODE_1, TEST_NODE_2],
+        missingPublishedNodeIds: [...TEST_EMPTY_NODE_IDS],
+        activeGate: {
+          progress: {
+            publicationActiveGateHandoffState:
+              PUBLICATION_ACTIVE_GATE_HANDOFF_STATE.PENDING,
+            publicationActiveGateHandoffReasonCode:
+              PUBLICATION_ACTIVE_GATE_HANDOFF_REASON
+                .OWNER_RECONCILE_PENDING,
+            publicationActiveGateHandoffNextAction:
+              PUBLICATION_ACTIVE_GATE_HANDOFF_NEXT_ACTION.WAIT_OWNER_RECOVERY,
+            publicationActiveGateHandoffRuntimePromotionAllowed:
+              TEST_RUNTIME_PROMOTION_DENIED,
+            publicationActiveGateHandoffPendingRecoveryNodeIds: [
+              TEST_NODE_2,
+            ],
+            publicationActiveGateHandoffPendingRecoveryCount:
+              TEST_PENDING_ACK_COUNT,
+            publicationActiveGateHandoffPendingReconcileNodeIds:
+              TEST_EMPTY_NODE_IDS,
+            publicationActiveGateHandoffPendingReconcileCount:
+              TEST_PUBLICATION_ACK_CLOSED_COUNT,
+            selectedPublishedActiveNodeIds: [TEST_NODE_1, TEST_NODE_2],
+            selectedMissingPublishedNodeIds: [...TEST_EMPTY_NODE_IDS],
+          },
+        },
+      },
+    });
+    const target =
+      resolvePublicationActiveGateMembershipPublicationTarget(
+        selectedHandoff,
+      );
+
+    t.match(
+      selectedHandoff,
+      {
+        nextAction:
+          PUBLICATION_ACTIVE_GATE_HANDOFF_NEXT_ACTION.WAIT_OWNER_RECOVERY,
+        pendingRecoveryCount: TEST_PENDING_ACK_COUNT,
+        pendingRecoveryNodeIds: [TEST_NODE_2],
+        pendingReconcileCount: TEST_PUBLICATION_ACK_CLOSED_COUNT,
+        pendingReconcileNodeIds: [...TEST_EMPTY_NODE_IDS],
+        runtimePromotionAllowed: TEST_RUNTIME_PROMOTION_DENIED,
+      },
+      'flattened active-gate progress should preserve selected owner recovery debt',
+    );
+    t.same(
+      target.pendingReconcileNodeIds,
+      [...TEST_EMPTY_NODE_IDS],
+      'owner recovery debt should not become membership reconcile debt',
+    );
+  });
+
 test('publication active-gate selector preserves joined pending reconcile ids after publication ack closure',
   async (t) => {
     const selectedHandoff = selectPublicationActiveGateHandoffContract({

@@ -29,6 +29,8 @@ const TEST_OWNER_QUEUE_STOPPED_REASON = 'owner_queue_stopped';
 const TEST_SELECTED_SNAPSHOT_TIMEOUT_REASON = 'selected_timeout';
 const TEST_ACTIVE_GATE_HANDOFF_NEXT_ACTION_WAIT_OWNER_RECOVERY =
   'wait_owner_recovery';
+const TEST_AUTHORITATIVE_REPAIR_QUERY_TIMEOUT_DIVISOR = 2;
+const TEST_AUTHORITATIVE_REPAIR_RETRY_AFTER_MS = 16000;
 
 test('AdminControlSnapshot surfaces handoff owner outcome when repair is not selected',
   async (t) => {
@@ -1047,6 +1049,7 @@ test('AdminControlSnapshot keeps handoff reconcile outcomes out of publication o
 
 test('AdminControlSnapshot repair-deferred shared owner emits retry action after attempted repair',
   async (t) => {
+    let repairOptions = null;
     const localSnapshot = {
       nodes: ['node-1'],
       controlPlaneDiagnostics: {
@@ -1072,22 +1075,45 @@ test('AdminControlSnapshot repair-deferred shared owner emits retry action after
         },
       },
     });
-    snapshot.ensureAuthoritativeDiscoveryCacheRepair = async () => ({
-      applied: false,
-      failedTables: [TABLES.SERVICES],
-      causeChain: ['control_plane_backpressure'],
-      retryAfterMs: 16000,
-      localQueryTransport: {
-        state: 'ready',
-        ready: true,
-      },
-      errors: ['control_plane_pressure_degraded'],
-    });
+    snapshot.ensureAuthoritativeDiscoveryCacheRepair = async (options = {}) => {
+      repairOptions = options;
+      return {
+        applied: false,
+        failedTables: [TABLES.SERVICES],
+        causeChain: [
+          ACTIVE_GATE_SNAPSHOT_TEST_STATE
+            .ACTIVE_GATE_HANDOFF_RECONCILE_CONTROL_PLANE_BACKPRESSURE_CAUSE,
+        ],
+        retryAfterMs: TEST_AUTHORITATIVE_REPAIR_RETRY_AFTER_MS,
+        localQueryTransport: {
+          state:
+            ACTIVE_GATE_SNAPSHOT_TEST_STATE
+              .ACTIVE_GATE_HANDOFF_RECONCILE_LOCAL_QUERY_TRANSPORT_READY_STATE,
+          ready: true,
+        },
+        errors: [
+          ACTIVE_GATE_SNAPSHOT_TEST_STATE
+            .ACTIVE_GATE_HANDOFF_RECONCILE_PRESSURE_DEGRADED_ERROR,
+        ],
+      };
+    };
 
     const result = await snapshot.resolveLocalControlSnapshot({
       allowAuthoritativeRepair: true,
+      queryTimeoutMs:
+        ACTIVE_GATE_SNAPSHOT_TEST_STATE
+          .ACTIVE_GATE_AUTHORITATIVE_REPAIR_QUERY_TIMEOUT_MS,
     });
 
+    t.equal(
+      repairOptions?.queryTimeoutMs,
+      Math.floor(
+        ACTIVE_GATE_SNAPSHOT_TEST_STATE
+          .ACTIVE_GATE_AUTHORITATIVE_REPAIR_QUERY_TIMEOUT_MS /
+          TEST_AUTHORITATIVE_REPAIR_QUERY_TIMEOUT_DIVISOR,
+      ),
+      'non-forced repair should reserve caller query time for the deferred snapshot response',
+    );
     t.match(
       result,
       {
@@ -1096,7 +1122,7 @@ test('AdminControlSnapshot repair-deferred shared owner emits retry action after
           contractState: 'deferred',
           nextAction: 'retry',
           reasonCodes: ['cache_stale_watermark'],
-          retryAfterMs: 16000,
+          retryAfterMs: TEST_AUTHORITATIVE_REPAIR_RETRY_AFTER_MS,
           refreshState: 'deferred',
         },
         observationMode: 'repair_deferred',
@@ -1115,7 +1141,7 @@ test('AdminControlSnapshot repair-deferred shared owner emits retry action after
     );
   });
 
-test('AdminControlSnapshot threads caller query timeout into authoritative repair',
+test('AdminControlSnapshot reserves caller query timeout for authoritative repair',
   async (t) => {
     let repairOptions = null;
     const localSnapshot = {
@@ -1155,8 +1181,12 @@ test('AdminControlSnapshot threads caller query timeout into authoritative repai
 
     t.equal(
       repairOptions?.queryTimeoutMs,
-      ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_AUTHORITATIVE_REPAIR_QUERY_TIMEOUT_MS,
-      'authoritative snapshot repair should inherit the caller query budget',
+      Math.floor(
+        ACTIVE_GATE_SNAPSHOT_TEST_STATE
+          .ACTIVE_GATE_AUTHORITATIVE_REPAIR_QUERY_TIMEOUT_MS /
+          TEST_AUTHORITATIVE_REPAIR_QUERY_TIMEOUT_DIVISOR,
+      ),
+      'authoritative snapshot repair should leave caller query budget for the snapshot response',
     );
   });
 

@@ -101,6 +101,8 @@ const HANDOFF_PROBE_TARGET_ACTION_BUILD_REPLAYABLE_FIXTURE =
   'build_replayable_handoff_fixture';
 const HANDOFF_CONTRACT_NEXT_ACTION_RECONCILE_OWNER_MEMBERSHIP_PUBLICATION =
   'reconcile_owner_membership_publication';
+const HANDOFF_CONTRACT_NEXT_ACTION_WAIT_OWNER_RECOVERY =
+  'wait_owner_recovery';
 const HANDOFF_CONTRACT_REASON_OWNER_RECONCILE_PENDING =
   'owner_reconcile_pending';
 const HANDOFF_CONTRACT_STATE_COMPLETE = 'complete';
@@ -110,6 +112,8 @@ const HANDOFF_NOT_DETECTED = false;
 const RUNTIME_PROMOTION_DISALLOWED = false;
 const BOOLEAN_TRUE_TEXT = 'true';
 const BOOLEAN_FALSE_TEXT = 'false';
+const TYPEOF_OBJECT = 'object';
+const TYPEOF_STRING = 'string';
 const MARKDOWN_SECTION_OWNER_EVIDENCE_BLOCK =
   '## Generated Owner Evidence Block';
 const MARKDOWN_LIST_PREFIX = '- ';
@@ -146,6 +150,8 @@ const HANDOFF_CONTRACT_ABSENT = Object.freeze({
   reasonCode: ABSENT_VALUE,
   nextAction: ABSENT_VALUE,
   runtimePromotionAllowed: RUNTIME_PROMOTION_DISALLOWED,
+  pendingRecoveryCount: NUM_ZERO,
+  pendingRecoveryNodeIds: [],
   pendingReconcileCount: NUM_ZERO,
   pendingReconcileNodeIds: [],
 });
@@ -161,7 +167,10 @@ const HANDOFF_PROBE_DETECTION_RULES = Object.freeze([
       snapshot.firstFrontierEdgeId === EDGE_ID.ACTIVE_GATE_SNAPSHOT_COVERAGE &&
       snapshot.producerState === EDGE_STATE.SATISFIED &&
       HANDOFF_PROBE_CONSUMER_WAITING_STATES.has(snapshot.consumerState) &&
-      snapshot.missingPublishedCount > NUM_ZERO,
+      (
+        snapshot.missingPublishedCount > NUM_ZERO ||
+        snapshot.pendingRecoveryCount > NUM_ZERO
+      ),
   }),
 ]);
 const PROBE_REQUIRED_PROGRESS_MECHANISM_RULES = Object.freeze([
@@ -550,7 +559,7 @@ function buildHandoffConsumerSnapshotDiagnostics(graph, artifact) {
       progress?.[PROPERTY_SELECTED_SNAPSHOT_ADMIN_READY],
     ),
     [PROPERTY_SELECTED_SNAPSHOT_REACHABLE_BY]:
-      typeof selectedSnapshotReachableBy === 'string' &&
+      typeof selectedSnapshotReachableBy === TYPEOF_STRING &&
       selectedSnapshotReachableBy.length > NUM_ZERO ?
         selectedSnapshotReachableBy :
         UNKNOWN_VALUE,
@@ -598,7 +607,7 @@ function determineAlternativeSnapshotWitnessAvailability(
   }
   if (
     perNodePublicationDisagreementSet &&
-    typeof perNodePublicationDisagreementSet === 'object'
+    typeof perNodePublicationDisagreementSet === TYPEOF_OBJECT
   ) {
     return Object.keys(perNodePublicationDisagreementSet).some(
       (snapshotId) => snapshotId !== selectedSnapshotNodeId,
@@ -643,6 +652,10 @@ function buildHandoffProbeSnapshot(graph, producer, consumer) {
     missingPublishedCount: positiveNumberOrZero(
       producer?.source?.missingPublishedCount,
     ),
+    pendingRecoveryCount: positiveNumberOrZero(
+      consumer?.source?.publicationActiveGateHandoffPendingRecoveryCount ??
+        consumer?.source?.activeGateOwnerCohortPendingRecoveryCount,
+    ),
   };
 }
 
@@ -682,9 +695,22 @@ function buildProbeHandoffContract(consumerWitness) {
     source.publicationActiveGateHandoffPendingReconcileCount ??
       source.activeGateOwnerCohortPendingReconcileCount,
   );
+  const pendingRecoveryNodeIds = splitProbeNodeIds(
+    source.publicationActiveGateHandoffPendingRecoveryNodeIds ||
+      source.activeGateOwnerCohortPendingRecoveryNodeIds,
+  );
+  const pendingRecoveryCount = Math.max(
+    positiveNumberOrZero(
+      source.publicationActiveGateHandoffPendingRecoveryCount ??
+        source.activeGateOwnerCohortPendingRecoveryCount,
+    ),
+    pendingRecoveryNodeIds.length,
+  );
   const nextAction =
     source.publicationActiveGateHandoffNextAction ||
     (
+      pendingRecoveryCount > NUM_ZERO ?
+        HANDOFF_CONTRACT_NEXT_ACTION_WAIT_OWNER_RECOVERY :
       contractReasonCode ===
         HANDOFF_CONTRACT_REASON_OWNER_RECONCILE_PENDING ||
       pendingReconcileCount > NUM_ZERO ?
@@ -699,6 +725,8 @@ function buildProbeHandoffContract(consumerWitness) {
     runtimePromotionAllowed: probeBoolean(
       source.publicationActiveGateHandoffRuntimePromotionAllowed,
     ),
+    pendingRecoveryCount,
+    pendingRecoveryNodeIds,
     pendingReconcileCount,
     pendingReconcileNodeIds,
   };
