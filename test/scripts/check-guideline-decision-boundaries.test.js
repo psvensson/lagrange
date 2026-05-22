@@ -127,3 +127,145 @@ test('skips test files by default', async (t) => {
 
   t.equal(violations.length, 0);
 });
+
+test('detects raw null/undefined/empty-array assigned or returned to/from semantic targets', async (t) => {
+  const violationsNullReturn = collectDecisionBoundaryViolationsFromSource(
+    [
+      'export function deriveState() {',
+      '  return null;',
+      '}',
+    ].join('\n'),
+    '/repo/src/runtime/state-helper.js',
+  );
+  t.equal(violationsNullReturn.filter(v => v.kind === 'raw_null_empty_state_outcome').length, 1);
+
+  const violationsPropNull = collectDecisionBoundaryViolationsFromSource(
+    [
+      'export function decide() {',
+      '  return { outcome: null };',
+      '}',
+    ].join('\n'),
+    '/repo/src/runtime/state-helper.js',
+  );
+  t.equal(violationsPropNull.filter(v => v.kind === 'raw_null_empty_state_outcome').length, 1);
+
+  const violationsUndefinedAssign = collectDecisionBoundaryViolationsFromSource(
+    [
+      'export function check() {',
+      '  let status = undefined;',
+      '}',
+    ].join('\n'),
+    '/repo/src/runtime/state-helper.js',
+  );
+  t.equal(violationsUndefinedAssign.filter(v => v.kind === 'raw_null_empty_state_outcome').length, 1);
+
+  const violationsEmptyArrayAssign = collectDecisionBoundaryViolationsFromSource(
+    [
+      'export function check() {',
+      '  let outcome = [];',
+      '}',
+    ].join('\n'),
+    '/repo/src/runtime/state-helper.js',
+  );
+  t.equal(violationsEmptyArrayAssign.filter(v => v.kind === 'raw_null_empty_state_outcome').length, 1);
+
+  const compliantOutcome = collectDecisionBoundaryViolationsFromSource(
+    [
+      'export function decide() {',
+      '  let outcome = "success";',
+      '  return { status: "ready" };',
+      '}',
+    ].join('\n'),
+    '/repo/src/runtime/state-helper.js',
+  );
+  t.equal(compliantOutcome.filter(v => v.kind === 'raw_null_empty_state_outcome').length, 0);
+});
+
+test('detects mixed cache and SQL accesses in a decision function', async (t) => {
+  const violationsMixed = collectDecisionBoundaryViolationsFromSource(
+    [
+      'export function checkStatus() {',
+      '  const cached = myCache.get("key");',
+      '  const row = db.query("SELECT 1");',
+      '}',
+    ].join('\n'),
+    '/repo/src/runtime/decision-maker.js',
+  );
+  t.equal(violationsMixed.filter(v => v.kind === 'mixed_cache_and_sql_decision').length, 1);
+
+  const compliantCacheOnly = collectDecisionBoundaryViolationsFromSource(
+    [
+      'export function checkStatus() {',
+      '  const cached = myCache.get("key");',
+      '}',
+    ].join('\n'),
+    '/repo/src/runtime/decision-maker.js',
+  );
+  t.equal(compliantCacheOnly.filter(v => v.kind === 'mixed_cache_and_sql_decision').length, 0);
+
+  const compliantSqlOnly = collectDecisionBoundaryViolationsFromSource(
+    [
+      'export function checkStatus() {',
+      '  const row = db.query("SELECT 1");',
+      '}',
+    ].join('\n'),
+    '/repo/src/runtime/decision-maker.js',
+  );
+  t.equal(compliantSqlOnly.filter(v => v.kind === 'mixed_cache_and_sql_decision').length, 0);
+});
+
+test('detects schema-unsafe INSERT OR REPLACE / REPLACE INTO system table writes', async (t) => {
+  const violationsReplace = collectDecisionBoundaryViolationsFromSource(
+    [
+      'const query = "INSERT OR REPLACE INTO system_metadata VALUES (1)";',
+    ].join('\n'),
+    '/repo/src/runtime/db.js',
+  );
+  t.equal(violationsReplace.filter(v => v.kind === 'schema_unsafe_system_table_write').length, 1);
+
+  const compliantInsert = collectDecisionBoundaryViolationsFromSource(
+    [
+      'const query = "INSERT INTO system_metadata VALUES (1)";',
+    ].join('\n'),
+    '/repo/src/runtime/db.js',
+  );
+  t.equal(compliantInsert.filter(v => v.kind === 'schema_unsafe_system_table_write').length, 0);
+});
+
+test('detects local retry loops using setTimeout/setInterval or loops', async (t) => {
+  const violationsTimeoutRetry = collectDecisionBoundaryViolationsFromSource(
+    [
+      'export function schedule() {',
+      '  setTimeout(() => {',
+      '    retryCount++;',
+      '  }, 100);',
+      '}',
+    ].join('\n'),
+    '/repo/src/runtime/runner.js',
+  );
+  t.equal(violationsTimeoutRetry.filter(v => v.kind === 'local_retry_loop').length, 1);
+
+  const violationsWhileRetry = collectDecisionBoundaryViolationsFromSource(
+    [
+      'export function loop() {',
+      '  while (shouldRetry) {',
+      '    doSomething();',
+      '  }',
+      '}',
+    ].join('\n'),
+    '/repo/src/runtime/runner.js',
+  );
+  t.equal(violationsWhileRetry.filter(v => v.kind === 'local_retry_loop').length, 1);
+
+  const compliantTimeout = collectDecisionBoundaryViolationsFromSource(
+    [
+      'export function schedule() {',
+      '  setTimeout(() => {',
+      '    console.log("tick");',
+      '  }, 100);',
+      '}',
+    ].join('\n'),
+    '/repo/src/runtime/runner.js',
+  );
+  t.equal(compliantTimeout.filter(v => v.kind === 'local_retry_loop').length, 0);
+});

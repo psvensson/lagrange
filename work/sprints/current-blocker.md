@@ -4,31 +4,29 @@
 
 ## Theory And Implementation Focus
 
-Theory under test: Planned successor package after metadata/storage separation is proven.
+Theory under test: Central experiment and theory memory is implemented in the current worktree, with focused validation and a separate verifier-fixer pass green.
 
-Causal question: scenario_proof_not_contract_proof
+Causal question: theories_are_scattered_across_packages
 
-Implementation slice: Upgrade package validators and evidence tooling so owner-boundary closure proves named contract transitions rather than timeout symptom movement.
+Implementation slice: Formally close the ledger packages or activate the runtime successor after a focused commit/closure decision; do not redo the ledger implementation unless validation regresses.
 
 Implementation files:
 
-1. `scripts/work-tracker.js`
-2. `scripts/work-package-schema.js`
-3. `test/scripts/work-tracker-subagent-ledger.test.js`
-4. `test/scripts/work-llm-usability-tools.test.js`
-5. `src/control-plane/owner-outcome-contract.js`
+1. `work/theory-ledger.md`
+2. `work/templates/theory-ledger-entry.md`
+3. `work/README.md`
 
 Expected implementation delta: unknown
 
-Falsifying probe: npm test -- test/scripts/work-tracker-subagent-ledger.test.js test/scripts/work-tracker-architecture-decision-gate.test.js
+Falsifying probe: npm run work:validate -- --entry work/packages/active-20260522-experiment-theory-ledger-foundation.md
 
 Stop rule: No architecture decision gate is required for this package.
 
 Sprint: `work/sprints/active-2026-q2-universal-owner-contract-completion.md`
 
-Package: `work/packages/active-20260521-contract-proof-tooling.md`
+Package: `work/packages/active-20260522-experiment-theory-ledger-foundation.md`
 
-Workflow lane: `mechanical-maintenance`
+Workflow lane: `lightweight-maintenance`
 
 Scenario: `none`
 
@@ -40,25 +38,24 @@ Playback: `none`
 
 Owner: `workflow_tooling_owner`
 
-Boundary: `contract_proof_validation`
+Boundary: `experiment_theory_memory`
 
-Dominant reason: `scenario_proof_not_contract_proof`
+Dominant reason: `theories_are_scattered_across_packages`
 
-Current state: Planned successor package after metadata/storage separation is proven.
+Current state: Central experiment and theory memory is implemented in the current worktree, with focused validation and a separate verifier-fixer pass green.
 
 ## Next Action
 
-Upgrade package validators and evidence tooling so owner-boundary closure proves named contract transitions rather than timeout symptom movement.
+Formally close the ledger packages or activate the runtime successor after a focused commit/closure decision; do not redo the ledger implementation unless validation regresses.
 
 ## Proof Ladder
 
-1. `npm test -- test/scripts/work-tracker-subagent-ledger.test.js test/scripts/work-tracker-architecture-decision-gate.test.js`
-2. `npm test -- test/scripts/work-llm-usability-tools.test.js`
-3. `npm run work:validate -- --pre-impl work/packages/active-20260521-contract-proof-tooling.md`
+1. `npm run work:validate -- --entry work/packages/active-20260522-experiment-theory-ledger-foundation.md`
+2. `git diff --check -- work/packages/active-20260522-experiment-theory-ledger-foundation.md work/theory-ledger.md work/templates/theory-ledger-entry.md work/README.md`
 
 ## Model Fit
 
-Package class: `mechanical-maintenance`
+Package class: `bounded-implementation`
 
 Intended minimum model: `gpt-5.3-codex-spark`
 
@@ -70,6 +67,10 @@ Escalation triggers:
 
 1. `owned files expand beyond this package`
 2. `a frozen decision must be reopened`
+
+## Theory Ledger References
+
+1. `theory-20260522-experiment-theory-memory`
 
 ## Representative Residual
 
@@ -235,33 +236,28 @@ Gate next action: No architecture decision gate is required for this package.
 
 Write scope:
 
-1. `scripts/work-tracker.js`
-2. `scripts/work-package-schema.js`
-3. `test/scripts/work-tracker-subagent-ledger.test.js`
-4. `test/scripts/work-llm-usability-tools.test.js`
+1. `work/theory-ledger.md`
+2. `work/templates/theory-ledger-entry.md`
+3. `work/README.md`
 
 Handoff files:
 
-1. `work/packages/done-20260521-system-table-metadata-schema-separation.md`
+1. None recorded
 
 Generated files:
 
-1. `.kiro/steering/llm/architecture.md`
-2. `.kiro/steering/llm/testing.md`
+1. None recorded
 
 Candidate runtime files:
 
-1. `src/control-plane/owner-outcome-contract.js`
+1. None recorded
 
 Commit scope:
 
-1. `scripts/work-tracker.js`
-2. `scripts/work-package-schema.js`
-3. `test/scripts/work-tracker-subagent-ledger.test.js`
-4. `test/scripts/work-llm-usability-tools.test.js`
-5. `.kiro/steering/llm/architecture.md`
-6. `.kiro/steering/llm/testing.md`
-7. `work/packages/active-20260521-contract-proof-tooling.md`
+1. `work/theory-ledger.md`
+2. `work/templates/theory-ledger-entry.md`
+3. `work/README.md`
+4. `work/packages/active-20260522-experiment-theory-ledger-foundation.md`
 
 Legacy touched files:
 

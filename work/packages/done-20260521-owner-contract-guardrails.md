@@ -3,8 +3,9 @@
 <!-- work-package
 {
   "schema": "work-package-v1",
-  "status": "todo",
+  "status": "done",
   "opened": "2026-05-21",
+  "closed": "2026-05-22",
   "lane": "mechanical-maintenance",
   "scenario": "none",
   "artifact": "none",
@@ -17,7 +18,7 @@
   "proof": [
     "npm test -- test/scripts/check-guideline-decision-boundaries.test.js test/scripts/check-guideline-literals.test.js",
     "npm test -- test/scripts/work-tracker-subagent-ledger.test.js",
-    "npm run work:validate -- --pre-impl work/packages/todo-20260521-owner-contract-guardrails.md"
+    "npm run work:validate -- --pre-impl work/packages/active-20260521-owner-contract-guardrails.md"
   ],
   "writeScope": [
     "scripts/check-guideline-decision-boundaries.js",
@@ -48,13 +49,14 @@
     ".kiro/steering/llm/architecture.md",
     ".kiro/steering/llm/style.md",
     ".kiro/steering/llm/testing.md",
-    "work/packages/todo-20260521-owner-contract-guardrails.md"
+    "work/packages/active-20260521-owner-contract-guardrails.md"
   ],
   "modelFit": {
     "packageClass": "mechanical-maintenance",
     "intendedMinimumModel": "gpt-5.3-codex-spark",
     "scopeShape": "leaf-slice",
     "outputProfile": "small",
+    "ambiguityScore": 1,
     "escalationTriggers": [
       "owned files expand beyond this package",
       "a frozen decision must be reopened"
@@ -190,7 +192,7 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 - Forbidden files: `src/`
 - Frozen decisions: package scope and lane stay bounded unless explicitly escalated.
 - Escalation triggers: owned files expand beyond this package, runtime ownership changes, or representative scenario evidence changes.
-- Focused proof: `npm test -- test/scripts/check-guideline-decision-boundaries.test.js test/scripts/check-guideline-literals.test.js`, `npm test -- test/scripts/work-tracker-subagent-ledger.test.js`, `npm run work:validate -- --pre-impl work/packages/todo-20260521-owner-contract-guardrails.md`
+- Focused proof: `npm test -- test/scripts/check-guideline-decision-boundaries.test.js test/scripts/check-guideline-literals.test.js`, `npm test -- test/scripts/work-tracker-subagent-ledger.test.js`, `npm run work:validate -- --pre-impl work/packages/active-20260521-owner-contract-guardrails.md`
 - Model ledger advisory: `escalate`
 
 ## Model-Fit Split
@@ -213,12 +215,12 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 Preferred closure evidence for new packages. One executor owns implementation end to end; one separate verifier-fixer validates the last package work and may fix in-scope problems directly.
 Agent identity is optional provenance. Use legacy subagent ledgers only when a reopened historical package already uses them.
 
-- [ ] implementation: status: validated; evidence: <focused proof commands and results>; parent revalidated focused proof: yes; next: closure or successor action.
-- [ ] verification-fix: status: validated; evidence: <verification/fix commands and results>; changed files: <paths or none>; parent revalidated focused proof: yes; next: closure or successor action.
-- [ ] repair: status: validated; evidence: `npm run work:repair` refreshed generated current-blocker and Current Edge Card when needed; next: validation.
+- [x] implementation: status: validated; evidence: npm test -- test/scripts/check-guideline-decision-boundaries.test.js test/scripts/check-guideline-literals.test.js; parent revalidated focused proof: yes; next: closure.
+- [x] verification-fix: status: validated; evidence: npm test -- test/scripts/work-tracker-subagent-ledger.test.js; changed files: none; parent revalidated focused proof: yes; next: closure.
+- [x] repair: status: validated; evidence: `npm run work:repair` refreshed generated current-blocker and Current Edge Card; next: validation.
 
 ## Validation
 
 1. npm test -- test/scripts/check-guideline-decision-boundaries.test.js test/scripts/check-guideline-literals.test.js
 2. npm test -- test/scripts/work-tracker-subagent-ledger.test.js
-3. npm run work:validate -- --pre-impl work/packages/todo-20260521-owner-contract-guardrails.md
+3. npm run work:validate -- --closure work/packages/active-20260521-owner-contract-guardrails.md

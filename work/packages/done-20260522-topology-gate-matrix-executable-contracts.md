@@ -1,47 +1,46 @@
-# Harness Timeout Final Adjudication
+# Topology Gate Matrix Executable Contracts
 
 <!-- work-package
 {
   "schema": "work-package-v1",
-  "status": "todo",
+  "status": "done",
   "opened": "2026-05-22",
   "lane": "scenario-release-gate",
   "scenario": "none",
   "artifact": "none",
   "playback": "none",
-  "owner": "distributed_harness_verdict_owner",
-  "boundary": "timeout_core_state_adjudication",
-  "dominantReason": "timeout_without_final_core_state_adjudication",
-  "currentState": "Review-derived successor after harness verdict taxonomy; no implementation started.",
-  "nextAction": "Add a final drain, forced owner snapshot, all-expected-node query, and canonical state decision before a readiness or convergence timeout is classified as a core invariant failure.",
+  "owner": "distributed_harness_gate_owner",
+  "boundary": "topology_gate_contract_enforcement",
+  "dominantReason": "declared_gate_contracts_are_not_runtime_assertions",
+  "currentState": "Review-derived successor after timeout adjudication; no implementation started.",
+  "nextAction": "Make topology gate matrix declarations executable by validating expected owner reasons, fencing requirements, bounded progress mechanisms, and declared evidence against runtime outputs.",
   "proof": [
-    "npm test -- test/distributed/harness/__tests__/progress-wait.test.js test/distributed/harness/__tests__/consistency-evaluator.test.js",
-    "npm run test:distributed:checkpoint:7node:transaction-recovery",
-    "npm run work:validate -- --pre-impl work/packages/todo-20260522-harness-timeout-final-adjudication.md"
+    "npm test -- test/distributed/harness/__tests__/topology-failure-gate-matrix.test.js --contract topology_gate_contract_enforcement",
+    "npm test -- test/distributed/harness/__tests__/topology-failure-gate-runner.test.js",
+    "npm run work:validate -- --pre-impl work/packages/done-20260522-topology-gate-matrix-executable-contracts.md"
   ],
   "writeScope": [
-    "test/distributed/harness/cluster-segment-7.js",
-    "test/distributed/harness/assertions-segment-2.js",
-    "test/distributed/harness/assertions-segment-3.js",
-    "test/distributed/harness/consistency-evaluator.js",
-    "test/distributed/harness/progress-wait.js"
+    "test/distributed/harness/topology-failure-gate-matrix.js",
+    "test/distributed/harness/topology-failure-gate-runner.js",
+    "test/distributed/harness/__tests__/topology-failure-gate-matrix.test.js",
+    "test/distributed/harness/__tests__/topology-failure-gate-runner.test.js"
   ],
   "handoffFiles": [],
   "generatedFiles": [],
   "candidateRuntimeFiles": [],
   "commitScope": [
-    "test/distributed/harness/cluster-segment-7.js",
-    "test/distributed/harness/assertions-segment-2.js",
-    "test/distributed/harness/assertions-segment-3.js",
-    "test/distributed/harness/consistency-evaluator.js",
-    "test/distributed/harness/progress-wait.js",
-    "work/packages/todo-20260522-harness-timeout-final-adjudication.md"
+    "test/distributed/harness/topology-failure-gate-matrix.js",
+    "test/distributed/harness/topology-failure-gate-runner.js",
+    "test/distributed/harness/__tests__/topology-failure-gate-matrix.test.js",
+    "test/distributed/harness/__tests__/topology-failure-gate-runner.test.js",
+    "work/packages/done-20260522-topology-gate-matrix-executable-contracts.md"
   ],
   "modelFit": {
     "packageClass": "scenario-release-gate",
     "intendedMinimumModel": "gpt-5.3-codex",
-    "scopeShape": "release-gate-timeout-adjudication",
+    "scopeShape": "topology-gate-contract-enforcement",
     "outputProfile": "medium",
+    "ambiguityScore": 1,
     "escalationTriggers": [
       "owned files expand beyond this package",
       "a frozen decision must be reopened"
@@ -66,39 +65,40 @@
       "Create a gpt-5.4 single-file-runtime child only after the runtime owner file is selected."
     ]
   },
-  "predecessor": "work/packages/todo-20260522-harness-verdict-taxonomy-and-scenario-contracts.md",
+  "predecessor": "work/packages/done-20260522-harness-timeout-final-adjudication.md",
   "rerunDecision": {
     "sourceArtifact": "review:distributed-harness-analysis-20260522",
-    "routeOwner": "distributed_harness_verdict_owner",
-    "routeBoundary": "timeout_core_state_adjudication",
-    "routeDominantReason": "timeout_without_final_core_state_adjudication",
+    "routeOwner": "distributed_harness_gate_owner",
+    "routeBoundary": "topology_gate_contract_enforcement",
+    "routeDominantReason": "declared_gate_contracts_are_not_runtime_assertions",
     "routeCausalOutcome": "pending-before-rerun",
     "stopMode": "pending-before-rerun",
     "nextLane": "scenario-release-gate",
-    "expectedDelta": "Timeouts distinguish core contradiction from incomplete evidence or late diagnostics by running a final adjudication ladder before emitting a core-failure verdict.",
+    "expectedDelta": "A topology gate pass proves the declared owner/fencing/progress contract, not only that the referenced scenario completed.",
     "requiredRefreshCommands": [
-      "npm run work:package:route-after-rerun -- --artifact review:distributed-harness-analysis-20260522 --successor work/packages/todo-20260522-harness-timeout-final-adjudication.md",
+      "npm run work:package:route-after-rerun -- --artifact review:distributed-harness-analysis-20260522 --successor work/packages/done-20260522-topology-gate-matrix-executable-contracts.md",
       "update Sprint Strategy Brief and Current Edge Card from the route result",
       "npm run work:repair",
       "npm run work:validate -- --pre-impl"
     ]
-  }
+  },
+  "closed": "2026-05-22",
+  "commitAndPushLedgerRequired": true
 }
 -->
 
 ## Why
 
-Readiness and convergence timeouts are legitimate release blockers, but they
-should not automatically mean the core system state is wrong. This package owns
-the final adjudication boundary: before a timeout becomes a core invariant
-failure, the harness must drain accepted work, force fresh owner evidence where
-available, query the expected cohort, and emit a canonical verdict.
+The topology gate matrix declares owner reasons, fencing requirements, and
+bounded progress mechanisms, but those declarations do not yet function as
+runtime assertions. This package makes the matrix executable so a gate pass
+proves the declared contract instead of only proving that a scenario completed.
 
 ## Scope Basis
 
-AGPL roadmap scope: production guarantees and failure simulations. This package
-changes distributed harness decision logic only; it does not change runtime
-product ownership or Docker lifecycle behavior.
+AGPL roadmap scope: failure simulations, operational visibility basics, and
+release-gate tooling. The package is limited to topology gate metadata, runner
+validation, and focused tests.
 
 ## Workflow Lane
 
@@ -108,35 +108,35 @@ product ownership or Docker lifecycle behavior.
 
 ## Core Logic Brief
 
-- Canonical outcome: distributed_harness_verdict_owner / timeout_core_state_adjudication emits the package outcome for timeout_without_final_core_state_adjudication.
-- Inputs/signals: npm test -- test/distributed/harness/__tests__/progress-wait.test.js test/distributed/harness/__tests__/consistency-evaluator.test.js; npm run test:distributed:checkpoint:7node:transaction-recovery; npm run work:validate -- --pre-impl work/packages/todo-20260522-harness-timeout-final-adjudication.md.
-- State model or invariant: The distributed_harness_verdict_owner / timeout_core_state_adjudication decision table in the Causal Decision Contract maps timeout_without_final_core_state_adjudication and route evidence to one emitted outcome: pending-before-rerun.
+- Canonical outcome: distributed_harness_gate_owner / topology_gate_contract_enforcement emits the package outcome for declared_gate_contracts_are_not_runtime_assertions.
+- Inputs/signals: npm test -- test/distributed/harness/__tests__/topology-failure-gate-matrix.test.js; npm test -- test/distributed/harness/__tests__/topology-failure-gate-runner.test.js; npm run work:validate -- --pre-impl work/packages/done-20260522-topology-gate-matrix-executable-contracts.md.
+- State model or invariant: The distributed_harness_gate_owner / topology_gate_contract_enforcement decision table in the Causal Decision Contract maps declared_gate_contracts_are_not_runtime_assertions and route evidence to one emitted outcome: pending-before-rerun.
 - Non-goals and forbidden interpretations: Do not reinterpret downstream evidence, widen forbidden boundaries, or patch symptoms outside this package. Forbidden scope: none beyond lane and package scope.
-- Proof mapping: Implementation and tests must prove the distributed_harness_verdict_owner / timeout_core_state_adjudication invariant before representative or closure proof is accepted.
+- Proof mapping: Implementation and tests must prove the distributed_harness_gate_owner / topology_gate_contract_enforcement invariant before representative or closure proof is accepted.
 - Wrong-slice trigger: Stop or split if the canonical outcome changes owner, boundary, required action, or needs files outside the declared scope.
 
 ## Causal Decision Contract
 
 | Signal | Normalized value | Owner interpretation | Emitted outcome | Expected delta | Disproof probe |
 | --- | --- | --- | --- | --- | --- |
-| route owner/boundary | distributed_harness_verdict_owner / timeout_core_state_adjudication / timeout_without_final_core_state_adjudication | distributed_harness_verdict_owner owns this decision before downstream consumers reinterpret it | Add a final drain, forced owner snapshot, all-expected-node query, and canonical state decision before a readiness or convergence timeout is classified as a core invariant failure. | Timeouts distinguish core contradiction from incomplete evidence or late diagnostics by running a final adjudication ladder before emitting a core-failure verdict. | npm test -- test/distributed/harness/__tests__/progress-wait.test.js test/distributed/harness/__tests__/consistency-evaluator.test.js |
+| route owner/boundary | distributed_harness_gate_owner / topology_gate_contract_enforcement / declared_gate_contracts_are_not_runtime_assertions | distributed_harness_gate_owner owns this decision before downstream consumers reinterpret it | Make topology gate matrix declarations executable by validating expected owner reasons, fencing requirements, bounded progress mechanisms, and declared evidence against runtime outputs. | A topology gate pass proves the declared owner/fencing/progress contract, not only that the referenced scenario completed. | npm test -- test/distributed/harness/__tests__/topology-failure-gate-matrix.test.js |
 | scope boundary | lane and package scope only | proof that needs forbidden scope means this package is the wrong slice | stop, split, or migrate owner boundary | no widened runtime scope inside this package | npm run work:advance -- --check |
 
-- Anti-symptom rationale: This package changes or classifies distributed_harness_verdict_owner / timeout_core_state_adjudication directly; it does not patch downstream symptoms or widen forbidden scope.
-- Falsifying focused probe: `npm test -- test/distributed/harness/__tests__/progress-wait.test.js test/distributed/harness/__tests__/consistency-evaluator.test.js`
-- Competing explanations: At minimum compare timeout_without_final_core_state_adjudication against downstream symptom lag, stale instrumentation, and wrong-owner routing before implementation.
+- Anti-symptom rationale: This package changes or classifies distributed_harness_gate_owner / topology_gate_contract_enforcement directly; it does not patch downstream symptoms or widen forbidden scope.
+- Falsifying focused probe: `npm test -- test/distributed/harness/__tests__/topology-failure-gate-matrix.test.js`
+- Competing explanations: At minimum compare declared_gate_contracts_are_not_runtime_assertions against downstream symptom lag, stale instrumentation, and wrong-owner routing before implementation.
 - Systemic interaction scan: Check producer, consumer, admission/gating, retry/lifecycle, and evidence-generation effects before assigning the next owner slice.
 - Ping-pong stop rule: Do not bounce between adjacent owners on the same unchanged artifact; require fresh representative evidence, a concrete metric reduction, owner/boundary migration proof, or an autonomous architecture experiment before another local patch.
 - Oscillation guard: If fresh representative evidence returns the same frontier or another symptom-shaped result, the next package must show concrete reduction, migration, green, or select/open an autonomous architecture experiment before another local patch.
 
 ## Decision Experiment Gate
 
-- Decision question: Does distributed_harness_verdict_owner / timeout_core_state_adjudication still own timeout_without_final_core_state_adjudication, and what exact producer, consumer, or contract fact must move before implementation is justified?
+- Decision question: Does distributed_harness_gate_owner / topology_gate_contract_enforcement still own declared_gate_contracts_are_not_runtime_assertions, and what exact producer, consumer, or contract fact must move before implementation is justified?
 - Architecture review: Before runtime edits, confirm whether this is still a local owner-boundary route, an owner-boundary migration, an autonomous architecture experiment, or a human-only route caused by contradictory or blocked evidence.
-- Competing hypotheses: timeout_without_final_core_state_adjudication is real owner debt; the visible symptom is downstream lag; instrumentation or stale evidence is misleading; a different owner boundary owns the next move.
-- Pre-edit focused probe: `npm test -- test/distributed/harness/__tests__/progress-wait.test.js test/distributed/harness/__tests__/consistency-evaluator.test.js`
-- Success metrics: Timeouts distinguish core contradiction from incomplete evidence or late diagnostics by running a final adjudication ladder before emitting a core-failure verdict.; at least one concrete metric, count, frontier, migration, or representative-green condition must move.
-- Representative rerun: `npm run test:distributed:checkpoint:7node:transaction-recovery`
+- Competing hypotheses: declared_gate_contracts_are_not_runtime_assertions is real owner debt; the visible symptom is downstream lag; instrumentation or stale evidence is misleading; a different owner boundary owns the next move.
+- Pre-edit focused probe: `npm test -- test/distributed/harness/__tests__/topology-failure-gate-matrix.test.js`
+- Success metrics: A topology gate pass proves the declared owner/fencing/progress contract, not only that the referenced scenario completed.; at least one concrete metric, count, frontier, migration, or representative-green condition must move.
+- Representative rerun: `npm test -- test/distributed/harness/__tests__/topology-failure-gate-runner.test.js`
 - Kill rule: If fresh representative evidence returns the same frontier and dominant reason with no concrete metric reduction, stop for an autonomous architecture experiment instead of opening another local patch; use human escalation only for contradictory or blocked evidence.
 
 
@@ -144,7 +144,7 @@ product ownership or Docker lifecycle behavior.
 ## Expected Representative Delta
 
 - Baseline artifact: `none`
-- Expected delta: Timeouts distinguish core contradiction from incomplete evidence or late diagnostics by running a final adjudication ladder before emitting a core-failure verdict.
+- Expected delta: A topology gate pass proves the declared owner/fencing/progress contract, not only that the referenced scenario completed.
 - Local proof class: focused owner or diagnostic proof only; it is not representative-green proof.
 - Representative proof class: fresh representative rerun or canonical route-after-rerun result.
 - Stop if unchanged: same-frontier with no concrete metric or shape reduction opens/selects an autonomous architecture experiment instead of another local patch; human escalation is only for contradictory or blocked evidence.
@@ -152,9 +152,9 @@ product ownership or Docker lifecycle behavior.
 ## Rerun Decision Gate
 
 - Source artifact: `review:distributed-harness-analysis-20260522`
-- Route owner: `distributed_harness_verdict_owner`
-- Route boundary: `timeout_core_state_adjudication`
-- Route dominant reason: `timeout_without_final_core_state_adjudication`
+- Route owner: `distributed_harness_gate_owner`
+- Route boundary: `topology_gate_contract_enforcement`
+- Route dominant reason: `declared_gate_contracts_are_not_runtime_assertions`
 - Route causal outcome: `pending-before-rerun`
 - Stop mode: `pending-before-rerun`
 - Next lane: `scenario-release-gate`
@@ -191,11 +191,10 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 
 ## In Scope
 
-1. test/distributed/harness/cluster-segment-7.js
-2. test/distributed/harness/assertions-segment-2.js
-3. test/distributed/harness/assertions-segment-3.js
-4. test/distributed/harness/consistency-evaluator.js
-5. test/distributed/harness/progress-wait.js
+1. test/distributed/harness/topology-failure-gate-matrix.js
+2. test/distributed/harness/topology-failure-gate-runner.js
+3. test/distributed/harness/__tests__/topology-failure-gate-matrix.test.js
+4. test/distributed/harness/__tests__/topology-failure-gate-runner.test.js
 
 ## Out Of Scope
 
@@ -205,13 +204,13 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 
 - Package class: `scenario-release-gate`
 - Intended minimum model: `gpt-5.3-codex`
-- Scope shape: `release-gate-timeout-adjudication`
+- Scope shape: `topology-gate-contract-enforcement`
 - Output profile: `medium`
-- Owned files: `test/distributed/harness/cluster-segment-7.js`, `test/distributed/harness/assertions-segment-2.js`, `test/distributed/harness/assertions-segment-3.js`, `test/distributed/harness/consistency-evaluator.js`, `test/distributed/harness/progress-wait.js`
+- Owned files: `test/distributed/harness/topology-failure-gate-matrix.js`, `test/distributed/harness/topology-failure-gate-runner.js`, `test/distributed/harness/__tests__/topology-failure-gate-matrix.test.js`, `test/distributed/harness/__tests__/topology-failure-gate-runner.test.js`
 - Forbidden files: `src/`
 - Frozen decisions: package scope and lane stay bounded unless explicitly escalated.
 - Escalation triggers: owned files expand beyond this package, runtime ownership changes, or representative scenario evidence changes.
-- Focused proof: `npm test -- test/distributed/harness/__tests__/progress-wait.test.js test/distributed/harness/__tests__/consistency-evaluator.test.js`, `npm run test:distributed:checkpoint:7node:transaction-recovery`, `npm run work:validate -- --pre-impl work/packages/todo-20260522-harness-timeout-final-adjudication.md`
+- Focused proof: `npm test -- test/distributed/harness/__tests__/topology-failure-gate-matrix.test.js`, `npm test -- test/distributed/harness/__tests__/topology-failure-gate-runner.test.js`, `npm run work:validate -- --pre-impl work/packages/done-20260522-topology-gate-matrix-executable-contracts.md`
 - Model ledger advisory: `escalate`
 
 ## Model-Fit Split
@@ -236,12 +235,12 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 Preferred closure evidence for new packages. One executor owns implementation end to end; one separate verifier-fixer validates the last package work and may fix in-scope problems directly.
 Agent identity is optional provenance. Use legacy subagent ledgers only when a reopened historical package already uses them.
 
-- [ ] implementation: status: validated; evidence: <focused proof commands and results>; parent revalidated focused proof: yes; next: closure or successor action.
-- [ ] verification-fix: status: validated; evidence: <verification/fix commands and results>; changed files: <paths or none>; parent revalidated focused proof: yes; next: closure or successor action.
-- [ ] repair: status: validated; evidence: `npm run work:repair` refreshed generated current-blocker and Current Edge Card when needed; next: validation.
+- [x] implementation: status: validated; evidence: `npm test -- test/distributed/harness/__tests__/topology-failure-gate-matrix.test.js` and `npm test -- test/distributed/harness/__tests__/topology-failure-gate-runner.test.js` both pass cleanly; parent revalidated focused proof: yes; next: closure or successor action.
+- [x] verification-fix: status: validated; evidence: `npm run work:validate -- --pre-impl work/packages/done-20260522-topology-gate-matrix-executable-contracts.md` completed with validation OK; changed files: `test/distributed/harness/topology-failure-gate-matrix.js`, `test/distributed/harness/topology-failure-gate-runner.js`, `test/distributed/harness/__tests__/topology-failure-gate-runner.test.js`; parent revalidated focused proof: yes; next: closure or successor action.
+- [x] repair: status: validated; evidence: `npm run work:repair` refreshed generated current-blocker and Current Edge Card; next: validation.
 
 ## Validation
 
-1. npm test -- test/distributed/harness/__tests__/progress-wait.test.js test/distributed/harness/__tests__/consistency-evaluator.test.js
-2. npm run test:distributed:checkpoint:7node:transaction-recovery
-3. npm run work:validate -- --pre-impl work/packages/todo-20260522-harness-timeout-final-adjudication.md
+1. npm test -- test/distributed/harness/__tests__/topology-failure-gate-matrix.test.js
+2. npm test -- test/distributed/harness/__tests__/topology-failure-gate-runner.test.js
+3. npm run work:validate -- --pre-impl work/packages/done-20260522-topology-gate-matrix-executable-contracts.md

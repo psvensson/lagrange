@@ -37,11 +37,22 @@ const FILE_TRIAGE_SUMMARY = 'triage-summary.json';
 const FILE_REPORT_SUFFIX = '.report.json';
 const PROPERTY_FAILURE_BUNDLE = 'failureBundle';
 const PROPERTY_PUBLICATION_CONVERGENCE = 'publicationConvergence';
+const PROPERTY_SCENARIOS = 'scenarios';
+const PROPERTY_ACTIVE_GATE_PROGRESS = 'activeGateProgress';
+const PROPERTY_PROGRESS = 'progress';
 const PROPERTY_SUMMARY = 'summary';
+const PROPERTY_ACTIVE_GATE = 'activeGate';
+const PROPERTY_SELECTED_SNAPSHOT_ADMIN_READY = 'selectedSnapshotAdminReady';
+const PROPERTY_SELECTED_SNAPSHOT_NODE_ID = 'selectedSnapshotNodeId';
+const PROPERTY_SELECTED_SNAPSHOT_REACHABLE_BY = 'selectedSnapshotReachableBy';
+const PROPERTY_ALTERNATIVE_SNAPSHOT_WITNESS_AVAILABLE =
+  'alternativeSnapshotWitnessAvailable';
 const STDOUT_NEWLINE = '\n';
 const EMPTY_TEXT = '';
 const ABSENT_VALUE = 'absent';
 const UNKNOWN_VALUE = 'unknown';
+const PROPERTY_PER_NODE_PUBLICATION_DISAGREEMENT_SET =
+  'perNodePublicationDisagreementSet';
 const CLI_FLAG_PREFIX = '-';
 const FILE_JSON_EXTENSION = '.json';
 const MODE_SUMMARY = 'summary';
@@ -234,16 +245,14 @@ function main(argv) {
     }
     if (parsedArgs.mode === MODE_HANDOFF_PROBE) {
       process.stdout.write(
-        `${JSON.stringify(selectHandoffProbeOutput(graph), null, JSON_INDENT_SPACES)}\n`,
+        `${JSON.stringify(selectHandoffProbeOutput(graph, artifact), null, JSON_INDENT_SPACES)}\n`,
       );
       return EXIT_SUCCESS;
     }
     if (parsedArgs.mode === MODE_REPLAY_FIXTURE) {
       process.stdout.write(
         `${JSON.stringify(
-          buildTopologyConvergenceReplayFixture(graph, {
-            sourceArtifact: parsedArgs.artifactPath,
-          }),
+          selectReplayFixtureOutput(graph, artifact, parsedArgs.artifactPath),
           null,
           JSON_INDENT_SPACES,
         )}\n`,
@@ -417,7 +426,48 @@ function selectDominantFrontierEdge(graph) {
   return graph.frontier[NUM_ZERO] || null;
 }
 
-function selectHandoffProbeOutput(graph) {
+function selectReplayFixtureOutput(graph, artifact, sourceArtifact) {
+  const replayFixture = buildTopologyConvergenceReplayFixture(graph, {
+    sourceArtifact,
+  });
+  const diagnostics = buildHandoffConsumerSnapshotDiagnostics(graph, artifact);
+  const progress = selectHandoffArtifactProgress(graph, artifact);
+  if (!progress) {
+    return replayFixture;
+  }
+  return enrichReplayFixtureActiveGateProgress(
+    replayFixture,
+    buildReplayFixtureSnapshotDiagnostics(diagnostics, progress),
+  );
+}
+
+function enrichReplayFixtureActiveGateProgress(replayFixture, diagnostics) {
+  const publicationConvergence = replayFixture.publicationConvergence || {};
+  const activeGate = publicationConvergence[PROPERTY_ACTIVE_GATE] || {};
+  return {
+    ...replayFixture,
+    publicationConvergence: {
+      ...publicationConvergence,
+      [PROPERTY_ACTIVE_GATE]: {
+        ...activeGate,
+        [PROPERTY_PROGRESS]: {
+          ...(activeGate[PROPERTY_PROGRESS] || {}),
+          ...diagnostics,
+        },
+      },
+    },
+  };
+}
+
+function buildReplayFixtureSnapshotDiagnostics(diagnostics, progress) {
+  return {
+    ...diagnostics,
+    [PROPERTY_PER_NODE_PUBLICATION_DISAGREEMENT_SET]:
+      progress[PROPERTY_PER_NODE_PUBLICATION_DISAGREEMENT_SET] || {},
+  };
+}
+
+function selectHandoffProbeOutput(graph, artifact) {
   const producer = selectGraphEdge(
     graph.edges,
     EDGE_ID.PUBLICATION_ACK_CONVERGENCE,
@@ -436,6 +486,11 @@ function selectHandoffProbeOutput(graph) {
       handoffContractDetected,
       operationWorkflowWitness,
     });
+  const enrichedConsumer = buildHandoffConsumerWitness(
+    graph,
+    artifact,
+    consumerWitness,
+  );
 
   return {
     schemaVersion: SCHEMA_VERSION_PUBLICATION_ACTIVE_GATE_HANDOFF_PROBE_V1,
@@ -449,7 +504,7 @@ function selectHandoffProbeOutput(graph) {
     detected: handoffDetected ? HANDOFF_DETECTED : HANDOFF_NOT_DETECTED,
     producer: buildProbeWitness(producer),
     operationWorkflow: operationWorkflowWitness,
-    consumer: consumerWitness,
+    consumer: enrichedConsumer,
     handoffContract,
     ownerRecoveryQueue: buildProbeOwnerRecoveryQueue(consumerWitness),
     nextOwnerPath: buildProbeNextOwnerPath({
@@ -470,6 +525,86 @@ function selectHandoffProbeOutput(graph) {
     ),
     runtimePromotionAllowed: handoffContract.runtimePromotionAllowed,
   };
+}
+
+function buildHandoffConsumerWitness(graph, artifact, witness) {
+  return {
+    ...witness,
+    source: {
+      ...(witness?.source || {}),
+      ...buildHandoffConsumerSnapshotDiagnostics(graph, artifact),
+    },
+  };
+}
+
+function buildHandoffConsumerSnapshotDiagnostics(graph, artifact) {
+  const progress = selectHandoffArtifactProgress(graph, artifact);
+  if (!progress) {
+    return {};
+  }
+  const selectedSnapshotNodeId = progress?.[PROPERTY_SELECTED_SNAPSHOT_NODE_ID];
+  const selectedSnapshotReachableBy =
+    progress?.[PROPERTY_SELECTED_SNAPSHOT_REACHABLE_BY];
+  return {
+    [PROPERTY_SELECTED_SNAPSHOT_ADMIN_READY]: probeBooleanVariant(
+      progress?.[PROPERTY_SELECTED_SNAPSHOT_ADMIN_READY],
+    ),
+    [PROPERTY_SELECTED_SNAPSHOT_REACHABLE_BY]:
+      typeof selectedSnapshotReachableBy === 'string' &&
+      selectedSnapshotReachableBy.length > NUM_ZERO ?
+        selectedSnapshotReachableBy :
+        UNKNOWN_VALUE,
+    [PROPERTY_ALTERNATIVE_SNAPSHOT_WITNESS_AVAILABLE]:
+      determineAlternativeSnapshotWitnessAvailability(
+        progress[PROPERTY_ALTERNATIVE_SNAPSHOT_WITNESS_AVAILABLE],
+        progress[PROPERTY_PER_NODE_PUBLICATION_DISAGREEMENT_SET],
+        selectedSnapshotNodeId,
+      ),
+  };
+}
+
+function selectHandoffArtifactProgress(graph, artifact) {
+  const scenario = selectHandoffScenario(graph, artifact);
+  const publicationConvergence =
+    scenario?.[PROPERTY_PUBLICATION_CONVERGENCE] ||
+    artifact?.[PROPERTY_PUBLICATION_CONVERGENCE] ||
+    {};
+  return (
+    publicationConvergence?.activeGate?.[PROPERTY_ACTIVE_GATE_PROGRESS] ||
+    publicationConvergence?.activeGate?.[PROPERTY_PROGRESS] ||
+    publicationConvergence?.[PROPERTY_ACTIVE_GATE_PROGRESS] ||
+    publicationConvergence?.[PROPERTY_PROGRESS]
+  );
+}
+
+function selectHandoffScenario(graph, artifact) {
+  const scenarios = artifact?.[PROPERTY_SCENARIOS];
+  if (!Array.isArray(scenarios) || scenarios.length === NUM_ZERO) {
+    return artifact;
+  }
+  const targetScenario = graph?.scenario;
+  return scenarios.find((candidate) => candidate.scenario === targetScenario) ||
+    scenarios[NUM_ZERO];
+}
+
+function determineAlternativeSnapshotWitnessAvailability(
+  alternativeSnapshotWitnessAvailable,
+  perNodePublicationDisagreementSet,
+  selectedSnapshotNodeId,
+) {
+  if (alternativeSnapshotWitnessAvailable === true ||
+    alternativeSnapshotWitnessAvailable === false) {
+    return alternativeSnapshotWitnessAvailable;
+  }
+  if (
+    perNodePublicationDisagreementSet &&
+    typeof perNodePublicationDisagreementSet === 'object'
+  ) {
+    return Object.keys(perNodePublicationDisagreementSet).some(
+      (snapshotId) => snapshotId !== selectedSnapshotNodeId,
+    );
+  }
+  return UNKNOWN_VALUE;
 }
 
 function selectHandoffConsumerEdge(graph) {

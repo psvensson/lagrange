@@ -37,6 +37,10 @@ const COMMAND_GROUPS = Object.freeze([
         description: 'Summarize recent model, reasoning-effort, and output-profile fit signals.',
       }),
       Object.freeze({
+        command: 'npm run work:theory-ledger -- validate|list|new',
+        description: 'Validate, query, or append evidence-linked experiment/theory ledger entries.',
+      }),
+      Object.freeze({
         command: 'npm run work:validate -- --entry|--probe|--pre-impl|--closure',
         description: 'Validate active work-package metadata, probe packages, checklist state, and lane-required proof at a workflow phase.',
       }),

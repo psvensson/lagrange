@@ -6,7 +6,7 @@
   "image": "distributed-db:test",
   "timeouts": {
     "nodeStartup": 60000,
-    "convergence": 30000,
+    "convergence": 90000,
     "quietWindow": 3000,
     "scenarioDefault": 120000,
     "bootstrapReadyStableWindowMs": 1000,

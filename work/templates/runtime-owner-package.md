@@ -14,6 +14,9 @@
   "dominantReason": "current_owner_reason",
   "currentState": "one-line current state",
   "nextAction": "focused owner-boundary action",
+  "theoryLedgerRefs": [
+    "theory-YYYYMMDD-short-slug"
+  ],
   "proof": [
     "focused owner-path test",
     "affected consumer proof",
@@ -104,6 +107,10 @@ Before raw JSON, raw logs, broad file search, oversized segment files, or ad hoc
    `npm run work:subagent-prompt -- --role <role> --package <package>`.
 5. Large-file cleanup:
    `npm run work:oversized-next -- --markdown`.
+
+Use `theoryLedgerRefs` only as an advisory index into
+`work/theory-ledger.md`; package evidence, current-blocker, and artifacts remain
+the source of truth.
 
 If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which
 canonical extractor was tried and why it was insufficient.

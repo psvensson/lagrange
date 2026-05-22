@@ -352,6 +352,7 @@ const WORK_ADVANCE_COMMAND = 'npm run work:advance';
 const WORK_LLM_START_COMMAND = 'npm run work:llm-start';
 const WORK_VALIDATE_COMMAND = 'npm run work:validate';
 const WORK_SUBAGENT_NEXT_COMMAND = 'npm run work:subagent-next';
+const WORK_THEORY_LEDGER_LIST_COMMAND = 'npm run work:theory-ledger -- list';
 const PACKAGE_DOCTOR_COMMAND =
   'npm run work:package:doctor -- ' + TEST_PACKAGE_PATH;
 const PACKAGE_DOCTOR_SUGGEST_COMMAND =
@@ -382,6 +383,7 @@ const SECTION_USEFUL_COMMANDS = '## Useful Commands';
 const SECTION_FIRST_FILES = '## First Files To Read';
 const SECTION_SECONDARY_STEERING = '## Secondary Steering Packs';
 const SECTION_THEORY_IMPLEMENTATION = '## Theory And Implementation Focus';
+const SECTION_THEORY_LEDGER_REFS = '## Theory Ledger References';
 const SECTION_ACTIVE_CONSTRAINTS = '## Active Constraints';
 const SECTION_SUBAGENT_SEQUENCING = '## Subagent Sequencing';
 const SECTION_SUBAGENT_PROGRESS = '## Subagent Progress';
@@ -619,6 +621,21 @@ test('work context advertises triage commands before raw artifact reads',
         ' (present) - read only if needed: work package, sprint, or tracker files are in scope',
     ));
   });
+
+test('work context surfaces advisory theory ledger refs', async (t) => {
+  const theoryRef = 'theory-20260522-ledger-test';
+  const blocker = {
+    ...TEST_BLOCKER,
+    theoryLedgerRefs: [theoryRef],
+  };
+  const commands = buildUsefulCommands(blocker);
+  const lines = await buildContextLines(blocker, TEST_PACKAGE_CONTENT);
+  const rendered = lines.join('\n');
+
+  t.ok(commands.includes(WORK_THEORY_LEDGER_LIST_COMMAND));
+  t.ok(rendered.includes(SECTION_THEORY_LEDGER_REFS));
+  t.ok(rendered.includes(theoryRef));
+});
 
 test('work context builds a theory and implementation focus card', (t) => {
   const focus = buildTheoryImplementationFocus(TEST_BLOCKER);

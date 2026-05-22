@@ -44,10 +44,10 @@
     }
   ],
   "stats": {
-    "candidateCount": 314,
-    "dedupedRuleCount": 313,
-    "exportedRuleCount": 313,
-    "estimatedAllRulesTokens": 11886
+    "candidateCount": 315,
+    "dedupedRuleCount": 314,
+    "exportedRuleCount": 314,
+    "estimatedAllRulesTokens": 11996
   },
   "rules": [
     {
@@ -793,13 +793,13 @@
       "domain": "testing",
       "strength": "must_not",
       "tags": [],
-      "rule": "Do not close the package on local green proof alone while the reference scenario still fails for a different named reason.",
-      "score": 236,
+      "rule": "Combine before creating - If two existing pieces almost solve the problem, combine them. Do not create a third piece that reimplements both.",
+      "score": 235,
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 145,
-          "section": "Testing Guidelines > Scenario-Driven Failure Migration Validation Policy"
+          "line": 292,
+          "section": "Testing Guidelines > Reuse-First Fix Strategy > When fixing a bug"
         }
       ]
     },
@@ -808,33 +808,18 @@
       "domain": "testing",
       "strength": "must_not",
       "tags": [],
-      "rule": "Combine before creating - If two existing pieces almost solve the problem, combine them. Do not create a third piece that reimplements both.",
-      "score": 235,
-      "sources": [
-        {
-          "file": "testing-guidelines.md",
-          "line": 289,
-          "section": "Testing Guidelines > Reuse-First Fix Strategy > When fixing a bug"
-        }
-      ]
-    },
-    {
-      "id": "TEST-0005",
-      "domain": "testing",
-      "strength": "must_not",
-      "tags": [],
       "rule": "Do not close the second bug with only a local patch if the porous boundary remains unchanged.",
       "score": 235,
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 343,
+          "line": 346,
           "section": "Testing Guidelines > Bug-Cluster Escalation Policy"
         }
       ]
     },
     {
-      "id": "TEST-0006",
+      "id": "TEST-0005",
       "domain": "testing",
       "strength": "must_not",
       "tags": [
@@ -845,13 +830,13 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 391,
+          "line": 394,
           "section": "Testing Guidelines > System Guideline Conformance Gate for New and Existing Tests"
         }
       ]
     },
     {
-      "id": "TEST-0007",
+      "id": "TEST-0006",
       "domain": "testing",
       "strength": "must_not",
       "tags": [],
@@ -860,13 +845,13 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 426,
+          "line": 429,
           "section": "Testing Guidelines > Deterministic Control-Loop Regression Policy"
         }
       ]
     },
     {
-      "id": "TEST-0008",
+      "id": "TEST-0007",
       "domain": "testing",
       "strength": "must_not",
       "tags": [
@@ -877,13 +862,13 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 506,
+          "line": 509,
           "section": "Testing Guidelines > Test Duration Hard Limit"
         }
       ]
     },
     {
-      "id": "TEST-0009",
+      "id": "TEST-0008",
       "domain": "testing",
       "strength": "must_not",
       "tags": [],
@@ -892,7 +877,24 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 574,
+          "line": 577,
+          "section": "Testing Guidelines > No Skipped Tests Policy"
+        }
+      ]
+    },
+    {
+      "id": "TEST-0009",
+      "domain": "testing",
+      "strength": "must_not",
+      "tags": [
+        "testing"
+      ],
+      "rule": "Do not comment out tests to avoid running them",
+      "score": 234,
+      "sources": [
+        {
+          "file": "testing-guidelines.md",
+          "line": 578,
           "section": "Testing Guidelines > No Skipped Tests Policy"
         }
       ]
@@ -904,12 +906,12 @@
       "tags": [
         "testing"
       ],
-      "rule": "Do not comment out tests to avoid running them",
+      "rule": "If a test is failing, fix the code or the test - do not skip it",
       "score": 234,
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 575,
+          "line": 579,
           "section": "Testing Guidelines > No Skipped Tests Policy"
         }
       ]
@@ -921,13 +923,13 @@
       "tags": [
         "testing"
       ],
-      "rule": "If a test is failing, fix the code or the test - do not skip it",
+      "rule": "It is FORBIDDEN to: Add if (process.env.NODE_ENV === 'test') or similar environment checks that change runtime behavior for tests.",
       "score": 234,
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 576,
-          "section": "Testing Guidelines > No Skipped Tests Policy"
+          "line": 593,
+          "section": "Testing Guidelines > No Test-Only Code Paths in Production Code"
         }
       ]
     },
@@ -938,12 +940,12 @@
       "tags": [
         "testing"
       ],
-      "rule": "It is FORBIDDEN to: Add if (process.env.NODE_ENV === 'test') or similar environment checks that change runtime behavior for tests.",
+      "rule": "It is FORBIDDEN to: Introduce optional parameters, flags, or configuration that are only used by test harnesses to bypass real logic.",
       "score": 234,
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 590,
+          "line": 595,
           "section": "Testing Guidelines > No Test-Only Code Paths in Production Code"
         }
       ]
@@ -955,12 +957,12 @@
       "tags": [
         "testing"
       ],
-      "rule": "It is FORBIDDEN to: Introduce optional parameters, flags, or configuration that are only used by test harnesses to bypass real logic.",
+      "rule": "It is FORBIDDEN to: Create alternate constructors, factory methods, or initialization paths that only tests call.",
       "score": 234,
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 592,
+          "line": 597,
           "section": "Testing Guidelines > No Test-Only Code Paths in Production Code"
         }
       ]
@@ -972,12 +974,12 @@
       "tags": [
         "testing"
       ],
-      "rule": "It is FORBIDDEN to: Create alternate constructors, factory methods, or initialization paths that only tests call.",
+      "rule": "It is FORBIDDEN to: Weaken validation, skip steps, or short-circuit logic to make a test scenario easier to set up.",
       "score": 234,
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 594,
+          "line": 599,
           "section": "Testing Guidelines > No Test-Only Code Paths in Production Code"
         }
       ]
@@ -989,12 +991,12 @@
       "tags": [
         "testing"
       ],
-      "rule": "It is FORBIDDEN to: Weaken validation, skip steps, or short-circuit logic to make a test scenario easier to set up.",
+      "rule": "It is FORBIDDEN to: Export internal implementation details solely so tests can reach them.",
       "score": 234,
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 596,
+          "line": 601,
           "section": "Testing Guidelines > No Test-Only Code Paths in Production Code"
         }
       ]
@@ -1006,35 +1008,18 @@
       "tags": [
         "testing"
       ],
-      "rule": "It is FORBIDDEN to: Export internal implementation details solely so tests can reach them.",
-      "score": 234,
-      "sources": [
-        {
-          "file": "testing-guidelines.md",
-          "line": 598,
-          "section": "Testing Guidelines > No Test-Only Code Paths in Production Code"
-        }
-      ]
-    },
-    {
-      "id": "TEST-0017",
-      "domain": "testing",
-      "strength": "must_not",
-      "tags": [
-        "testing"
-      ],
       "rule": "DO NOT IGNORE - Failing tests indicate broken functionality",
       "score": 234,
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 619,
+          "line": 622,
           "section": "Testing Guidelines > Fix Failing Tests Immediately"
         }
       ]
     },
     {
-      "id": "TEST-0018",
+      "id": "TEST-0017",
       "domain": "testing",
       "strength": "must_not",
       "tags": [],
@@ -1043,13 +1028,13 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 620,
+          "line": 623,
           "section": "Testing Guidelines > Fix Failing Tests Immediately"
         }
       ]
     },
     {
-      "id": "TEST-0019",
+      "id": "TEST-0018",
       "domain": "testing",
       "strength": "must_not",
       "tags": [
@@ -1061,13 +1046,13 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 643,
+          "line": 646,
           "section": "Testing Guidelines > System-Table Mutation Test Requirements"
         }
       ]
     },
     {
-      "id": "TEST-0020",
+      "id": "TEST-0019",
       "domain": "testing",
       "strength": "must_not",
       "tags": [],
@@ -1076,13 +1061,13 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 676,
+          "line": 679,
           "section": "Testing Guidelines > Baseline-Discovered Bug Closure Policy"
         }
       ]
     },
     {
-      "id": "TEST-0021",
+      "id": "TEST-0020",
       "domain": "testing",
       "strength": "must_not",
       "tags": [
@@ -1093,13 +1078,13 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 682,
+          "line": 685,
           "section": "Testing Guidelines > Baseline-Discovered Bug Closure Policy"
         }
       ]
     },
     {
-      "id": "TEST-0022",
+      "id": "TEST-0021",
       "domain": "testing",
       "strength": "must_not",
       "tags": [
@@ -1110,13 +1095,13 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 806,
+          "line": 809,
           "section": "Testing Guidelines > Agent And Sub-Agent Validation Handoff Policy"
         }
       ]
     },
     {
-      "id": "TEST-0023",
+      "id": "TEST-0022",
       "domain": "testing",
       "strength": "must_not",
       "tags": [
@@ -1127,7 +1112,7 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 810,
+          "line": 813,
           "section": "Testing Guidelines > Agent And Sub-Agent Validation Handoff Policy"
         }
       ]
@@ -1406,7 +1391,7 @@
       ]
     },
     {
-      "id": "TEST-0024",
+      "id": "TEST-0023",
       "domain": "testing",
       "strength": "must_not",
       "tags": [
@@ -1417,13 +1402,13 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 581,
+          "line": 584,
           "section": "Testing Guidelines > No Test-Only Code Paths in Production Code"
         }
       ]
     },
     {
-      "id": "TEST-0025",
+      "id": "TEST-0024",
       "domain": "testing",
       "strength": "must_not",
       "tags": [],
@@ -1432,13 +1417,13 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 632,
+          "line": 635,
           "section": "Testing Guidelines > Fix Failing Tests Immediately"
         }
       ]
     },
     {
-      "id": "TEST-0026",
+      "id": "TEST-0025",
       "domain": "testing",
       "strength": "must_not",
       "tags": [
@@ -1449,7 +1434,7 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 648,
+          "line": 651,
           "section": "Testing Guidelines > System-Table Mutation Test Requirements"
         }
       ]
@@ -1696,7 +1681,7 @@
       ]
     },
     {
-      "id": "TEST-0027",
+      "id": "TEST-0026",
       "domain": "testing",
       "strength": "must",
       "tags": [],
@@ -1711,7 +1696,7 @@
       ]
     },
     {
-      "id": "TEST-0028",
+      "id": "TEST-0027",
       "domain": "testing",
       "strength": "must",
       "tags": [
@@ -1729,7 +1714,7 @@
       ]
     },
     {
-      "id": "TEST-0029",
+      "id": "TEST-0028",
       "domain": "testing",
       "strength": "must",
       "tags": [],
@@ -1744,7 +1729,7 @@
       ]
     },
     {
-      "id": "TEST-0030",
+      "id": "TEST-0029",
       "domain": "testing",
       "strength": "must",
       "tags": [
@@ -1761,7 +1746,7 @@
       ]
     },
     {
-      "id": "TEST-0031",
+      "id": "TEST-0030",
       "domain": "testing",
       "strength": "must",
       "tags": [],
@@ -1776,7 +1761,7 @@
       ]
     },
     {
-      "id": "TEST-0032",
+      "id": "TEST-0031",
       "domain": "testing",
       "strength": "must",
       "tags": [],
@@ -1796,7 +1781,7 @@
       ]
     },
     {
-      "id": "TEST-0033",
+      "id": "TEST-0032",
       "domain": "testing",
       "strength": "must",
       "tags": [],
@@ -1811,7 +1796,7 @@
       ]
     },
     {
-      "id": "TEST-0034",
+      "id": "TEST-0033",
       "domain": "testing",
       "strength": "must",
       "tags": [
@@ -1823,7 +1808,24 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 158,
+          "line": 161,
+          "section": "Testing Guidelines > Scenario-Driven Failure Migration Validation Policy"
+        }
+      ]
+    },
+    {
+      "id": "TEST-0034",
+      "domain": "testing",
+      "strength": "must",
+      "tags": [
+        "ownership"
+      ],
+      "rule": "When the same owner boundary still dominates, validation must update the active package and sprint current blocker snapshot instead of forcing a new package split.",
+      "score": 218,
+      "sources": [
+        {
+          "file": "testing-guidelines.md",
+          "line": 168,
           "section": "Testing Guidelines > Scenario-Driven Failure Migration Validation Policy"
         }
       ]
@@ -1835,35 +1837,18 @@
       "tags": [
         "ownership"
       ],
-      "rule": "When the same owner boundary still dominates, validation must update the active package and sprint current blocker snapshot instead of forcing a new package split.",
+      "rule": "Repeated crossings of the same owner boundary must escalate to a causal analysis package or autonomous architecture experiment unless the package includes a focused probe for the missing causal edge.",
       "score": 218,
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 165,
+          "line": 195,
           "section": "Testing Guidelines > Scenario-Driven Failure Migration Validation Policy"
         }
       ]
     },
     {
       "id": "TEST-0036",
-      "domain": "testing",
-      "strength": "must",
-      "tags": [
-        "ownership"
-      ],
-      "rule": "Repeated crossings of the same owner boundary must escalate to a causal analysis package or autonomous architecture experiment unless the package includes a focused probe for the missing causal edge.",
-      "score": 218,
-      "sources": [
-        {
-          "file": "testing-guidelines.md",
-          "line": 192,
-          "section": "Testing Guidelines > Scenario-Driven Failure Migration Validation Policy"
-        }
-      ]
-    },
-    {
-      "id": "TEST-0037",
       "domain": "testing",
       "strength": "must",
       "tags": [
@@ -1874,13 +1859,13 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 255,
+          "line": 258,
           "section": "Testing Guidelines > Test-First Bug Fix Policy"
         }
       ]
     },
     {
-      "id": "TEST-0038",
+      "id": "TEST-0037",
       "domain": "testing",
       "strength": "must",
       "tags": [],
@@ -1889,7 +1874,7 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 345,
+          "line": 348,
           "section": "Testing Guidelines > Bug-Cluster Escalation Policy"
         }
       ]
@@ -2069,7 +2054,7 @@
       ]
     },
     {
-      "id": "TEST-0039",
+      "id": "TEST-0038",
       "domain": "testing",
       "strength": "must_not",
       "tags": [
@@ -2080,7 +2065,7 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 572,
+          "line": 575,
           "section": "Testing Guidelines > No Skipped Tests Policy"
         }
       ]
@@ -2186,14 +2171,17 @@
       "id": "ARCH-0070",
       "domain": "architecture",
       "strength": "must_not",
-      "tags": [],
-      "rule": "Do not let old migration history, stale residual packages, or several sub-agents create competing active interpretations of the same blocker.",
+      "tags": [
+        "ownership",
+        "timeout"
+      ],
+      "rule": "Sprints and packages must never close from symptom movement alone (such as changed timeout durations, timing offsets, or message counts); they must prove the named contract transition or owner-boundary correctness.",
       "score": 215,
       "sources": [
         {
           "file": "doctrine.md",
-          "line": 390,
-          "section": "Lagrange Engineering Doctrine > 17. Sprint Execution Has One Current Boundary"
+          "line": 373,
+          "section": "Lagrange Engineering Doctrine > 16. Treat Failure Migration As Boundary Evidence"
         }
       ]
     },
@@ -2202,18 +2190,33 @@
       "domain": "architecture",
       "strength": "must_not",
       "tags": [],
-      "rule": "Parent-session notes, local/manual labels, and arbitrary text without a real agent id do not satisfy these roles unless the user explicitly disables sub-agents for that task.",
+      "rule": "Do not let old migration history, stale residual packages, or several sub-agents create competing active interpretations of the same blocker.",
       "score": 215,
       "sources": [
         {
           "file": "doctrine.md",
-          "line": 398,
+          "line": 394,
           "section": "Lagrange Engineering Doctrine > 17. Sprint Execution Has One Current Boundary"
         }
       ]
     },
     {
-      "id": "TEST-0040",
+      "id": "ARCH-0072",
+      "domain": "architecture",
+      "strength": "must_not",
+      "tags": [],
+      "rule": "Parent-session notes, local/manual labels, and arbitrary text without a real agent id do not satisfy these roles unless the user explicitly disables sub-agents for that task.",
+      "score": 215,
+      "sources": [
+        {
+          "file": "doctrine.md",
+          "line": 402,
+          "section": "Lagrange Engineering Doctrine > 17. Sprint Execution Has One Current Boundary"
+        }
+      ]
+    },
+    {
+      "id": "TEST-0039",
       "domain": "testing",
       "strength": "must",
       "tags": [
@@ -2224,13 +2227,13 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 773,
+          "line": 776,
           "section": "Testing Guidelines > Artifact-First Distributed Failure Triage Policy"
         }
       ]
     },
     {
-      "id": "TEST-0041",
+      "id": "TEST-0040",
       "domain": "testing",
       "strength": "must",
       "tags": [
@@ -2241,13 +2244,13 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 791,
+          "line": 794,
           "section": "Testing Guidelines > Agent And Sub-Agent Validation Handoff Policy"
         }
       ]
     },
     {
-      "id": "TEST-0042",
+      "id": "TEST-0041",
       "domain": "testing",
       "strength": "must",
       "tags": [
@@ -2258,13 +2261,13 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 812,
+          "line": 815,
           "section": "Testing Guidelines > Agent And Sub-Agent Validation Handoff Policy"
         }
       ]
     },
     {
-      "id": "TEST-0043",
+      "id": "TEST-0042",
       "domain": "testing",
       "strength": "must",
       "tags": [
@@ -2275,13 +2278,13 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 920,
+          "line": 923,
           "section": "Testing Guidelines > Availability Under Pressure Test Policy > Test structure"
         }
       ]
     },
     {
-      "id": "ARCH-0072",
+      "id": "ARCH-0073",
       "domain": "architecture",
       "strength": "must",
       "tags": [
@@ -2299,7 +2302,7 @@
       ]
     },
     {
-      "id": "ARCH-0073",
+      "id": "ARCH-0074",
       "domain": "architecture",
       "strength": "must",
       "tags": [
@@ -2316,7 +2319,7 @@
       ]
     },
     {
-      "id": "ARCH-0074",
+      "id": "ARCH-0075",
       "domain": "architecture",
       "strength": "must",
       "tags": [],
@@ -2327,6 +2330,24 @@
           "file": "system guidelines.md",
           "line": 332,
           "section": "System Guidelines — Mandatory Implementation Contract > 13. Closure Requires Proof, Review, And Truth Repair"
+        }
+      ]
+    },
+    {
+      "id": "TEST-0043",
+      "domain": "testing",
+      "strength": "must_not",
+      "tags": [
+        "ownership",
+        "timeout"
+      ],
+      "rule": "Do not close the package on local green proof alone while the reference scenario still fails for a different named reason. Sprints and packages must never close from symptom movement alone (such as changed timeout durations, timing offsets, or message counts); they must prove the named contract transition or owner-boundary correctness.",
+      "score": 212,
+      "sources": [
+        {
+          "file": "testing-guidelines.md",
+          "line": 145,
+          "section": "Testing Guidelines > Scenario-Driven Failure Migration Validation Policy"
         }
       ]
     },
@@ -2342,13 +2363,13 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 180,
+          "line": 183,
           "section": "Testing Guidelines > Scenario-Driven Failure Migration Validation Policy"
         }
       ]
     },
     {
-      "id": "ARCH-0075",
+      "id": "ARCH-0076",
       "domain": "architecture",
       "strength": "must",
       "tags": [],
@@ -2363,7 +2384,7 @@
       ]
     },
     {
-      "id": "ARCH-0076",
+      "id": "ARCH-0077",
       "domain": "architecture",
       "strength": "must",
       "tags": [],
@@ -2553,7 +2574,7 @@
       ]
     },
     {
-      "id": "ARCH-0077",
+      "id": "ARCH-0078",
       "domain": "architecture",
       "strength": "must",
       "tags": [],
@@ -2568,7 +2589,7 @@
       ]
     },
     {
-      "id": "ARCH-0078",
+      "id": "ARCH-0079",
       "domain": "architecture",
       "strength": "must",
       "tags": [
@@ -2586,7 +2607,7 @@
       ]
     },
     {
-      "id": "ARCH-0079",
+      "id": "ARCH-0080",
       "domain": "architecture",
       "strength": "must",
       "tags": [
@@ -2603,7 +2624,7 @@
       ]
     },
     {
-      "id": "ARCH-0080",
+      "id": "ARCH-0081",
       "domain": "architecture",
       "strength": "must",
       "tags": [],
@@ -2830,7 +2851,7 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 250,
+          "line": 253,
           "section": "Testing Guidelines > Test-First Bug Fix Policy"
         }
       ]
@@ -2845,7 +2866,7 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 324,
+          "line": 327,
           "section": "Testing Guidelines > Bug-Cluster Escalation Policy"
         }
       ]
@@ -2864,7 +2885,7 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 350,
+          "line": 353,
           "section": "Testing Guidelines > Owner-Path Regression Policy"
         }
       ]
@@ -2881,7 +2902,7 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 375,
+          "line": 378,
           "section": "Testing Guidelines > System Guideline Conformance Gate for New and Existing Tests"
         }
       ]
@@ -2898,7 +2919,7 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 402,
+          "line": 405,
           "section": "Testing Guidelines > Gateway Boundary Regression Policy"
         }
       ]
@@ -2918,7 +2939,7 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 418,
+          "line": 421,
           "section": "Testing Guidelines > Deterministic Control-Loop Regression Policy"
         }
       ]
@@ -2937,7 +2958,7 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 468,
+          "line": 471,
           "section": "Testing Guidelines > Continuity And Lifetime Regression Policy"
         }
       ]
@@ -2955,7 +2976,7 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 545,
+          "line": 548,
           "section": "Testing Guidelines > Timeout Budget and Classification Policy"
         }
       ]
@@ -2972,7 +2993,7 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 572,
+          "line": 575,
           "section": "Testing Guidelines > No Skipped Tests Policy"
         }
       ]
@@ -2989,7 +3010,7 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 584,
+          "line": 587,
           "section": "Testing Guidelines > No Test-Only Code Paths in Production Code"
         }
       ]
@@ -3006,7 +3027,7 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 609,
+          "line": 612,
           "section": "Testing Guidelines > No Test-Only Code Paths in Production Code"
         }
       ]
@@ -3023,7 +3044,7 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 614,
+          "line": 617,
           "section": "Testing Guidelines > Fix Failing Tests Immediately"
         }
       ]
@@ -3040,7 +3061,7 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 786,
+          "line": 789,
           "section": "Testing Guidelines > Agent And Sub-Agent Validation Handoff Policy"
         }
       ]
@@ -3058,7 +3079,7 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 823,
+          "line": 826,
           "section": "Testing Guidelines > Structured Deferred-Outcome Regression Policy"
         }
       ]
@@ -3076,7 +3097,7 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 845,
+          "line": 848,
           "section": "Testing Guidelines > Read-Side Repair Separation Regression Policy"
         }
       ]
@@ -3093,13 +3114,13 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 885,
+          "line": 888,
           "section": "Testing Guidelines > Availability Under Pressure Test Policy"
         }
       ]
     },
     {
-      "id": "ARCH-0081",
+      "id": "ARCH-0082",
       "domain": "architecture",
       "strength": "should",
       "tags": [],
@@ -3231,7 +3252,7 @@
       ]
     },
     {
-      "id": "ARCH-0082",
+      "id": "ARCH-0083",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [
@@ -3248,7 +3269,7 @@
       ]
     },
     {
-      "id": "ARCH-0083",
+      "id": "ARCH-0084",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [],
@@ -3312,7 +3333,7 @@
       ]
     },
     {
-      "id": "ARCH-0084",
+      "id": "ARCH-0085",
       "domain": "architecture",
       "strength": "must",
       "tags": [
@@ -3329,7 +3350,7 @@
       ]
     },
     {
-      "id": "ARCH-0085",
+      "id": "ARCH-0086",
       "domain": "architecture",
       "strength": "must",
       "tags": [
@@ -3347,7 +3368,7 @@
       ]
     },
     {
-      "id": "ARCH-0086",
+      "id": "ARCH-0087",
       "domain": "architecture",
       "strength": "must",
       "tags": [
@@ -3364,7 +3385,7 @@
       ]
     },
     {
-      "id": "ARCH-0087",
+      "id": "ARCH-0088",
       "domain": "architecture",
       "strength": "must",
       "tags": [
@@ -3382,7 +3403,7 @@
       ]
     },
     {
-      "id": "ARCH-0088",
+      "id": "ARCH-0089",
       "domain": "architecture",
       "strength": "must",
       "tags": [],
@@ -3397,7 +3418,7 @@
       ]
     },
     {
-      "id": "ARCH-0089",
+      "id": "ARCH-0090",
       "domain": "architecture",
       "strength": "must",
       "tags": [],
@@ -3412,7 +3433,7 @@
       ]
     },
     {
-      "id": "ARCH-0090",
+      "id": "ARCH-0091",
       "domain": "architecture",
       "strength": "must",
       "tags": [
@@ -3429,7 +3450,7 @@
       ]
     },
     {
-      "id": "ARCH-0091",
+      "id": "ARCH-0092",
       "domain": "architecture",
       "strength": "must",
       "tags": [],
@@ -3512,7 +3533,7 @@
       ]
     },
     {
-      "id": "ARCH-0092",
+      "id": "ARCH-0093",
       "domain": "architecture",
       "strength": "must",
       "tags": [],
@@ -3521,13 +3542,13 @@
       "sources": [
         {
           "file": "doctrine.md",
-          "line": 379,
+          "line": 383,
           "section": "Lagrange Engineering Doctrine > 17. Sprint Execution Has One Current Boundary"
         }
       ]
     },
     {
-      "id": "ARCH-0093",
+      "id": "ARCH-0094",
       "domain": "architecture",
       "strength": "must",
       "tags": [
@@ -3538,13 +3559,13 @@
       "sources": [
         {
           "file": "doctrine.md",
-          "line": 393,
+          "line": 397,
           "section": "Lagrange Engineering Doctrine > 17. Sprint Execution Has One Current Boundary"
         }
       ]
     },
     {
-      "id": "ARCH-0094",
+      "id": "ARCH-0095",
       "domain": "architecture",
       "strength": "should",
       "tags": [
@@ -3590,7 +3611,7 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 147,
+          "line": 150,
           "section": "Testing Guidelines > Scenario-Driven Failure Migration Validation Policy"
         }
       ]
@@ -3608,7 +3629,7 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 150,
+          "line": 153,
           "section": "Testing Guidelines > Scenario-Driven Failure Migration Validation Policy"
         }
       ]
@@ -3626,7 +3647,7 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 154,
+          "line": 157,
           "section": "Testing Guidelines > Scenario-Driven Failure Migration Validation Policy"
         }
       ]
@@ -3643,7 +3664,7 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 161,
+          "line": 164,
           "section": "Testing Guidelines > Scenario-Driven Failure Migration Validation Policy"
         }
       ]
@@ -3660,7 +3681,7 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 168,
+          "line": 171,
           "section": "Testing Guidelines > Scenario-Driven Failure Migration Validation Policy"
         }
       ]
@@ -3675,7 +3696,7 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 185,
+          "line": 188,
           "section": "Testing Guidelines > Scenario-Driven Failure Migration Validation Policy"
         }
       ]
@@ -3693,7 +3714,7 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 195,
+          "line": 198,
           "section": "Testing Guidelines > Scenario-Driven Failure Migration Validation Policy"
         }
       ]
@@ -3711,7 +3732,7 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 201,
+          "line": 204,
           "section": "Testing Guidelines > Scenario-Driven Failure Migration Validation Policy"
         }
       ]
@@ -3726,7 +3747,7 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 207,
+          "line": 210,
           "section": "Testing Guidelines > Scenario-Driven Failure Migration Validation Policy"
         }
       ]
@@ -3967,7 +3988,7 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 776,
+          "line": 779,
           "section": "Testing Guidelines > Artifact-First Distributed Failure Triage Policy"
         }
       ]
@@ -3982,7 +4003,7 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 796,
+          "line": 799,
           "section": "Testing Guidelines > Agent And Sub-Agent Validation Handoff Policy"
         }
       ]
@@ -3997,7 +4018,7 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 900,
+          "line": 903,
           "section": "Testing Guidelines > Availability Under Pressure Test Policy > Required coverage patterns"
         }
       ]
@@ -4065,7 +4086,7 @@
       ]
     },
     {
-      "id": "ARCH-0095",
+      "id": "ARCH-0096",
       "domain": "architecture",
       "strength": "may",
       "tags": [
@@ -4082,7 +4103,7 @@
       ]
     },
     {
-      "id": "ARCH-0096",
+      "id": "ARCH-0097",
       "domain": "architecture",
       "strength": "may",
       "tags": [
@@ -4099,7 +4120,7 @@
       ]
     },
     {
-      "id": "ARCH-0097",
+      "id": "ARCH-0098",
       "domain": "architecture",
       "strength": "may",
       "tags": [
@@ -4117,7 +4138,7 @@
       ]
     },
     {
-      "id": "ARCH-0098",
+      "id": "ARCH-0099",
       "domain": "architecture",
       "strength": "may",
       "tags": [
@@ -4134,7 +4155,7 @@
       ]
     },
     {
-      "id": "ARCH-0099",
+      "id": "ARCH-0100",
       "domain": "architecture",
       "strength": "may",
       "tags": [],
@@ -4178,7 +4199,7 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 178,
+          "line": 181,
           "section": "Testing Guidelines > Scenario-Driven Failure Migration Validation Policy"
         }
       ]
@@ -4195,7 +4216,7 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 256,
+          "line": 259,
           "section": "Testing Guidelines > Test-First Bug Fix Policy"
         }
       ]
@@ -4210,7 +4231,7 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 260,
+          "line": 263,
           "section": "Testing Guidelines > Test-First Bug Fix Policy"
         }
       ]
@@ -4227,7 +4248,7 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 264,
+          "line": 267,
           "section": "Testing Guidelines > Test-First Bug Fix Policy"
         }
       ]
@@ -4242,7 +4263,7 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 311,
+          "line": 314,
           "section": "Testing Guidelines > Reuse-First Fix Strategy > Periodic architecture check"
         }
       ]
@@ -4299,7 +4320,7 @@
       ]
     },
     {
-      "id": "ARCH-0100",
+      "id": "ARCH-0101",
       "domain": "architecture",
       "strength": "must",
       "tags": [
@@ -4328,7 +4349,7 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 446,
+          "line": 449,
           "section": "Testing Guidelines > Temporal Witness Replay Policy"
         }
       ]
@@ -4345,7 +4366,7 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 808,
+          "line": 811,
           "section": "Testing Guidelines > Agent And Sub-Agent Validation Handoff Policy"
         }
       ]
@@ -4362,7 +4383,7 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 728,
+          "line": 731,
           "section": "Testing Guidelines > Distributed Validation Ladder Policy"
         }
       ]
@@ -4379,13 +4400,13 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 750,
+          "line": 753,
           "section": "Testing Guidelines > Artifact-First Distributed Failure Triage Policy"
         }
       ]
     },
     {
-      "id": "ARCH-0101",
+      "id": "ARCH-0102",
       "domain": "architecture",
       "strength": "may",
       "tags": [
@@ -4462,7 +4483,7 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 265,
+          "line": 268,
           "section": "Testing Guidelines > Test-First Bug Fix Policy"
         }
       ]
@@ -4501,7 +4522,7 @@
       ]
     },
     {
-      "id": "ARCH-0102",
+      "id": "ARCH-0103",
       "domain": "architecture",
       "strength": "should",
       "tags": [
@@ -4518,7 +4539,7 @@
       ]
     },
     {
-      "id": "ARCH-0103",
+      "id": "ARCH-0104",
       "domain": "architecture",
       "strength": "should",
       "tags": [],
@@ -4566,7 +4587,7 @@
       ]
     },
     {
-      "id": "ARCH-0104",
+      "id": "ARCH-0105",
       "domain": "architecture",
       "strength": "should",
       "tags": [],
@@ -4592,13 +4613,13 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 370,
+          "line": 373,
           "section": "Testing Guidelines > Owner-Path Regression Policy"
         }
       ]
     },
     {
-      "id": "ARCH-0105",
+      "id": "ARCH-0106",
       "domain": "architecture",
       "strength": "may",
       "tags": [
@@ -4627,7 +4648,7 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 743,
+          "line": 746,
           "section": "Testing Guidelines > Distributed Validation Ladder Policy"
         }
       ]
@@ -4657,7 +4678,7 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 223,
+          "line": 226,
           "section": "Testing Guidelines > Runner Stability Boundary Policy"
         }
       ]
@@ -4672,7 +4693,7 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 242,
+          "line": 245,
           "section": "Testing Guidelines > Runner Parallelism Budget Policy"
         }
       ]
@@ -4687,7 +4708,7 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 315,
+          "line": 318,
           "section": "Testing Guidelines > Reuse-First Fix Strategy > Periodic architecture check"
         }
       ]
@@ -4736,7 +4757,7 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 767,
+          "line": 770,
           "section": "Testing Guidelines > Artifact-First Distributed Failure Triage Policy"
         }
       ]
@@ -4751,13 +4772,13 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 803,
+          "line": 806,
           "section": "Testing Guidelines > Agent And Sub-Agent Validation Handoff Policy"
         }
       ]
     },
     {
-      "id": "ARCH-0106",
+      "id": "ARCH-0107",
       "domain": "architecture",
       "strength": "should",
       "tags": [
@@ -4774,7 +4795,7 @@
       ]
     },
     {
-      "id": "ARCH-0107",
+      "id": "ARCH-0108",
       "domain": "architecture",
       "strength": "should",
       "tags": [],
@@ -4789,7 +4810,7 @@
       ]
     },
     {
-      "id": "ARCH-0108",
+      "id": "ARCH-0109",
       "domain": "architecture",
       "strength": "should",
       "tags": [],
@@ -4798,13 +4819,13 @@
       "sources": [
         {
           "file": "doctrine.md",
-          "line": 398,
+          "line": 402,
           "section": "Lagrange Engineering Doctrine > 17. Sprint Execution Has One Current Boundary"
         }
       ]
     },
     {
-      "id": "ARCH-0109",
+      "id": "ARCH-0110",
       "domain": "architecture",
       "strength": "may",
       "tags": [
@@ -4881,7 +4902,7 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 743,
+          "line": 746,
           "section": "Testing Guidelines > Distributed Validation Ladder Policy"
         }
       ]
@@ -4898,7 +4919,7 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 864,
+          "line": 867,
           "section": "Testing Guidelines > When to Run Full Test Suite"
         }
       ]
@@ -4953,7 +4974,7 @@
       ]
     },
     {
-      "id": "ARCH-0110",
+      "id": "ARCH-0111",
       "domain": "architecture",
       "strength": "may",
       "tags": [],
@@ -5065,7 +5086,7 @@
       ]
     },
     {
-      "id": "ARCH-0111",
+      "id": "ARCH-0112",
       "domain": "architecture",
       "strength": "should",
       "tags": [],
@@ -5181,5 +5202,5 @@
       ]
     }
   ],
-  "generatedAt": "2026-05-21T19:27:10.926Z"
+  "generatedAt": "2026-05-22T04:59:39.904Z"
 }

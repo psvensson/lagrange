@@ -1,3 +1,4 @@
+import fs from 'node:fs/promises';
 import {KEYS} from 'eslint-visitor-keys';
 import {
   FILE_CLASS,
@@ -42,6 +43,10 @@ const FUNCTION_TYPE = Object.freeze({
 const VIOLATION_KIND = Object.freeze({
   ASSIGNMENT: 'independent_if_semantic_assignment',
   RETURN: 'independent_if_semantic_returns',
+  RAW_NULL_OR_EMPTY_STATE: 'raw_null_empty_state_outcome',
+  MIXED_CACHE_AND_SQL: 'mixed_cache_and_sql_decision',
+  SCHEMA_UNSAFE_WRITE: 'schema_unsafe_system_table_write',
+  LOCAL_RETRY_LOOP: 'local_retry_loop',
 });
 
 const SEMANTIC_NAME_PART = Object.freeze([
@@ -292,6 +297,179 @@ function collectFunctionViolations(node, parent, filePath) {
   return violations;
 }
 
+function checkRawNullOrEmptyState(node, functionName, filePath, violations) {
+  if (node.type === 'AssignmentExpression' || node.type === 'VariableDeclarator') {
+    const targetNode = node.type === 'AssignmentExpression' ? node.left : node.id;
+    const valueNode = node.type === 'AssignmentExpression' ? node.right : node.init;
+    const targetName = extractTargetName(targetNode);
+    if (isSemanticName(targetName) && valueNode) {
+      if (
+        (valueNode.type === 'Literal' && valueNode.value === null) ||
+        (valueNode.type === 'Identifier' && valueNode.name === 'undefined') ||
+        (valueNode.type === 'ArrayExpression' && valueNode.elements.length === 0)
+      ) {
+        violations.push({
+          filePath,
+          line: node.loc?.start?.line || 1,
+          column: node.loc?.start?.column + 1 || 1,
+          functionName,
+          kind: VIOLATION_KIND.RAW_NULL_OR_EMPTY_STATE,
+          reason: `raw null or empty-state outcome assigned/declared for semantic target "${targetName}"`,
+          ruleReference: 'system guidelines.md §4.5 Raw null or undefined must not encode runtime state',
+        });
+      }
+    }
+  } else if (node.type === 'ReturnStatement') {
+    if (isSemanticName(functionName)) {
+      const arg = node.argument;
+      if (
+        arg &&
+        ((arg.type === 'Literal' && arg.value === null) ||
+         (arg.type === 'Identifier' && arg.name === 'undefined') ||
+         (arg.type === 'ArrayExpression' && arg.elements.length === 0))
+      ) {
+        violations.push({
+          filePath,
+          line: node.loc?.start?.line || 1,
+          column: node.loc?.start?.column + 1 || 1,
+          functionName,
+          kind: VIOLATION_KIND.RAW_NULL_OR_EMPTY_STATE,
+          reason: 'raw null or empty-state outcome returned for semantic target',
+          ruleReference: 'system guidelines.md §4.5 Raw null or undefined must not encode runtime state',
+        });
+      }
+    }
+    if (node.argument?.type === 'ObjectExpression') {
+      for (const prop of node.argument.properties || []) {
+        if (prop.type !== 'Property' || prop.computed === true) {
+          continue;
+        }
+        let keyName = null;
+        if (prop.key?.type === 'Identifier') {
+          keyName = prop.key.name;
+        } else if (prop.key?.type === 'Literal' && typeof prop.key.value === 'string') {
+          keyName = prop.key.value;
+        }
+        if (isSemanticName(keyName)) {
+          const val = prop.value;
+          if (
+            val &&
+            ((val.type === 'Literal' && val.value === null) ||
+             (val.type === 'Identifier' && val.name === 'undefined') ||
+             (val.type === 'ArrayExpression' && val.elements.length === 0))
+          ) {
+            violations.push({
+              filePath,
+              line: prop.loc?.start?.line || node.loc?.start?.line || 1,
+              column: prop.loc?.start?.column + 1 || node.loc?.start?.column + 1 || 1,
+              functionName,
+              kind: VIOLATION_KIND.RAW_NULL_OR_EMPTY_STATE,
+              reason: `semantic outcome object property "${keyName}" has raw null or empty-state value`,
+              ruleReference: 'system guidelines.md §4.5 Raw null or undefined must not encode runtime state',
+            });
+          }
+        }
+      }
+    }
+  }
+}
+
+function checkMixedCacheAndSqlDecision(node, functionName, filePath, fileClass, violations) {
+  if (fileClass !== FILE_CLASS.RUNTIME) {
+    return;
+  }
+  let hasCacheAccess = false;
+  let hasSqlAccess = false;
+  let cacheLine = null;
+  let sqlLine = null;
+
+  walkAst(node.body || node, (child) => {
+    if (child.type === 'Identifier') {
+      const name = child.name.toLowerCase();
+      if (name.includes('cache')) {
+        hasCacheAccess = true;
+        cacheLine = child.loc?.start?.line;
+      }
+      if (name.includes('sql') || name.includes('db') || name.includes('query') || name.includes('execute')) {
+        hasSqlAccess = true;
+        sqlLine = child.loc?.start?.line;
+      }
+    }
+  });
+
+  if (hasCacheAccess && hasSqlAccess) {
+    violations.push({
+      filePath,
+      line: cacheLine || node.loc?.start?.line || 1,
+      column: 1,
+      functionName,
+      kind: VIOLATION_KIND.MIXED_CACHE_AND_SQL,
+      reason: `decision branch mixes cache (line ${cacheLine}) and SQL/DB (line ${sqlLine}) as equivalent truth for one meaning`,
+      ruleReference: 'system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)',
+    });
+  }
+}
+
+function checkSchemaUnsafeWrite(node, filePath, violations) {
+  if (node.type === 'Literal' && typeof node.value === 'string') {
+    if (/\b(?:INSERT\s+OR\s+REPLACE|REPLACE\s+INTO)\b/iu.test(node.value)) {
+      violations.push({
+        filePath,
+        line: node.loc?.start?.line || 1,
+        column: node.loc?.start?.column + 1 || 1,
+        kind: VIOLATION_KIND.SCHEMA_UNSAFE_WRITE,
+        reason: 'INSERT OR REPLACE or full-row replacement is forbidden for steady-state lifecycle/status mutation of existing system rows',
+        ruleReference: 'system guidelines.md §6.3 Persistent system state authority',
+      });
+    }
+  }
+}
+
+function checkLocalRetryLoop(node, functionName, filePath, violations) {
+  walkAst(node.body || node, (child) => {
+    if (child.type === 'CallExpression') {
+      if (child.callee?.type === 'Identifier' &&
+          (child.callee.name === 'setTimeout' || child.callee.name === 'setInterval')) {
+        let hasRetry = false;
+        walkAst(child, (argNode) => {
+          if (argNode.type === 'Identifier' && argNode.name.toLowerCase().includes('retry')) {
+            hasRetry = true;
+          }
+        });
+        if (hasRetry) {
+          violations.push({
+            filePath,
+            line: child.loc?.start?.line || 1,
+            column: child.loc?.start?.column + 1 || 1,
+            functionName,
+            kind: VIOLATION_KIND.LOCAL_RETRY_LOOP,
+            reason: 'local retry loops using setTimeout or setInterval are forbidden; use canonical retry registries or owners instead',
+            ruleReference: 'system guidelines.md §7.1 and §9.7 Local retry loop guardrails',
+          });
+        }
+      }
+    } else if (child.type === 'WhileStatement' || child.type === 'DoWhileStatement' || child.type === 'ForStatement') {
+      let hasRetry = false;
+      walkAst(child, (loopNode) => {
+        if (loopNode.type === 'Identifier' && loopNode.name.toLowerCase().includes('retry')) {
+          hasRetry = true;
+        }
+      });
+      if (hasRetry) {
+        violations.push({
+          filePath,
+          line: child.loc?.start?.line || 1,
+          column: child.loc?.start?.column + 1 || 1,
+          functionName,
+          kind: VIOLATION_KIND.LOCAL_RETRY_LOOP,
+          reason: 'local retry loops using while, do-while, or for statement are forbidden; use canonical retry registries or owners instead',
+          ruleReference: 'system guidelines.md §7.1 and §9.7 Local retry loop guardrails',
+        });
+      }
+    }
+  });
+}
+
 function collectDecisionBoundaryViolationsFromSource(
   source,
   filePath,
@@ -306,6 +484,8 @@ function collectDecisionBoundaryViolationsFromSource(
   const violations = [];
 
   walkAst(ast, (node, parent, ancestors) => {
+    checkSchemaUnsafeWrite(node, filePath, violations);
+
     if (!isFunctionLikeNode(node)) {
       return;
     }
@@ -313,6 +493,14 @@ function collectDecisionBoundaryViolationsFromSource(
       return;
     }
     violations.push(...collectFunctionViolations(node, parent, filePath));
+
+    const functionName = getFunctionName(node, parent);
+    checkMixedCacheAndSqlDecision(node, functionName, filePath, fileClass, violations);
+    checkLocalRetryLoop(node, functionName, filePath, violations);
+
+    walkAst(node.body || node, (child) => {
+      checkRawNullOrEmptyState(child, functionName, filePath, violations);
+    });
   });
 
   return violations;
@@ -326,17 +514,107 @@ async function collectDecisionBoundaryViolations(pathsToScan, options = {}) {
   );
 }
 
+const DECISION_BASELINE_FILE_URL = new URL(
+  './check-guideline-decision-boundaries-baseline.json',
+  import.meta.url,
+);
+const FILE_NOT_FOUND_ERROR_CODE = 'ENOENT';
+const NUMERIC_LITERAL_ZERO = 0;
+const NUMERIC_LITERAL_ONE = 1;
+
+function buildDecisionBoundaryViolationIdentity(violation) {
+  return JSON.stringify([
+    violation.filePath,
+    violation.line,
+    violation.column,
+    violation.kind,
+  ]);
+}
+
+function summarizeDecisionBoundaryViolationsByFile(violations) {
+  const violationsByFile = new Map();
+  for (const violation of violations) {
+    const existing = violationsByFile.get(violation.filePath) || [];
+    existing.push(violation);
+    violationsByFile.set(violation.filePath, existing);
+  }
+  return [...violationsByFile.entries()]
+    .map(([filePath, fileViolations]) => ({
+      filePath,
+      violationCount: fileViolations.length,
+    }))
+    .sort((left, right) =>
+      right.violationCount - left.violationCount ||
+      left.filePath.localeCompare(right.filePath));
+}
+
+async function loadDecisionBoundaryBaseline() {
+  try {
+    const rawBaseline = await fs.readFile(
+      DECISION_BASELINE_FILE_URL,
+      'utf8',
+    );
+    const parsedBaseline = JSON.parse(rawBaseline);
+    return new Set(
+      (Array.isArray(parsedBaseline?.violations) ?
+        parsedBaseline.violations :
+        []).map(buildDecisionBoundaryViolationIdentity),
+    );
+  } catch (error) {
+    if (error?.code === FILE_NOT_FOUND_ERROR_CODE) {
+      return new Set();
+    }
+    throw error;
+  }
+}
+
+function applyDecisionBoundaryBaseline(report, baseline) {
+  const newViolations = [];
+  let inheritedViolationCount = NUMERIC_LITERAL_ZERO;
+  for (const violation of report.violations) {
+    if (baseline.has(buildDecisionBoundaryViolationIdentity(violation))) {
+      inheritedViolationCount += NUMERIC_LITERAL_ONE;
+      continue;
+    }
+    newViolations.push(violation);
+  }
+  return {
+    ...report,
+    rawViolationCount: report.totalViolationCount,
+    inheritedViolationCount,
+    baselineViolationCount: baseline.size,
+    totalViolationCount: newViolations.length,
+    filesWithViolations: summarizeDecisionBoundaryViolationsByFile(newViolations),
+    violations: newViolations,
+  };
+}
+
+async function collectDecisionBoundaryViolationsWithBaseline(
+  pathsToScan,
+  options = {},
+) {
+  const [report, baseline] = await Promise.all([
+    collectDecisionBoundaryViolations(pathsToScan, options),
+    loadDecisionBoundaryBaseline(),
+  ]);
+  return applyDecisionBoundaryBaseline(report, baseline);
+}
+
 function formatHumanSummary(report) {
-  return formatGuidelineHumanSummary(
-    report,
-    LOCAL_STR_1PNFN,
-  );
+  const summary = formatGuidelineHumanSummary(report, LOCAL_STR_1PNFN);
+  if (!Number.isFinite(report.inheritedViolationCount)) {
+    return summary;
+  }
+  return [
+    summary,
+    `Matched ${report.inheritedViolationCount} inherited decision-boundary baseline violations`,
+  ].join('\n');
 }
 
 async function main(argv = process.argv.slice(LOCAL_NUM_TWO)) {
   return runGuidelineCheck(
     argv,
-    collectDecisionBoundaryViolations,
+    collectDecisionBoundaryViolationsWithBaseline,
     formatHumanSummary,
   );
 }
@@ -346,7 +624,10 @@ runGuidelineCheckWhenDirect(import.meta.url, main);
 export {
   FILE_CLASS,
   RULE_REFERENCE,
+  applyDecisionBoundaryBaseline,
+  buildDecisionBoundaryViolationIdentity,
   classifyFilePath,
   collectDecisionBoundaryViolations,
+  collectDecisionBoundaryViolationsWithBaseline,
   collectDecisionBoundaryViolationsFromSource,
 };

@@ -1,6 +1,7 @@
 import {describe, it} from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import {execFileSync} from 'node:child_process';
 import {
   EDGE_STATE,
   buildTopologyConvergenceDecisionTable,
@@ -85,6 +86,7 @@ const REPORT_ARTIFACT_PATH_ACTIVE_GATE_OWNER_TRUTH =
   'test-output/reports/rolling-restart-green-gate-after-active-gate-owner-truth.report.json';
 const REPORT_ARTIFACT_PATH_PUBLICATION_PROJECTION_RECONCILIATION =
   'test-output/reports/rolling-restart-green-gate-after-priority-recovery-workflow-progress-after-snapshot-coverage.report.json';
+const REPORT_ARTIFACT_PATH_NETWORK_PARTITION = 'test-output/report.json';
 const PUBLICATION_ACK_PENDING_STATUS = 'ACK_PENDING';
 const PUBLICATION_UNKNOWN_STATUS = 'UNKNOWN';
 const PUBLICATION_PENDING_REASON = 'publication_pending';
@@ -167,6 +169,8 @@ const ACTIVE_GATE_TIMEOUT_SELECTED_SNAPSHOT_ERROR =
   'nodes:Query timeout after ' +
   String(ACTIVE_GATE_TIMEOUT_AUTHORITATIVE_QUERY_TIMEOUT_MS) +
   'ms';
+const ARG_HANDOFF_PROBE = '--handoff-probe';
+const ANALYZER_SCRIPT_PATH = 'scripts/analyze-topology-convergence.js';
 const ACTIVE_GATE_TIMEOUT_BLOCKERS = Object.freeze([
   'inactive_nodes=1',
   'snapshot_coverage=0/5',
@@ -270,6 +274,46 @@ function buildAckPendingPublicationFixtureFailureBundle() {
 
 function findEdge(edges, edgeId) {
   return edges.find((edge) => edge.id === edgeId);
+}
+
+function runHandoffProbe(artifactPath) {
+  const output = execFileSync(process.execPath, [
+    ANALYZER_SCRIPT_PATH,
+    artifactPath,
+    ARG_HANDOFF_PROBE,
+  ], {
+    encoding: JSON_ENCODING_UTF8,
+  });
+  return JSON.parse(output);
+}
+
+function selectArtifactSnapshotProgress(artifactPath, scenarioName) {
+  const report = JSON.parse(
+    fs.readFileSync(artifactPath, JSON_ENCODING_UTF8),
+  );
+  const scenario = Array.isArray(report.scenarios) ?
+    report.scenarios.find((entry) => entry.scenario === scenarioName) ||
+      report.scenarios[0] :
+    report;
+  const publicationConvergence = scenario?.publicationConvergence ||
+    report.publicationConvergence ||
+    {};
+  return (
+    publicationConvergence.activeGateProgress ||
+    publicationConvergence.activeGate?.progress
+  );
+}
+
+function hasAlternativeSnapshotWitness(progress) {
+  const perNodePublicationDisagreementSet =
+    progress?.perNodePublicationDisagreementSet;
+  if (!perNodePublicationDisagreementSet || typeof perNodePublicationDisagreementSet !== 'object') {
+    return 'unknown';
+  }
+  return Object.keys(perNodePublicationDisagreementSet).some(
+    (snapshotNodeId) =>
+      snapshotNodeId !== progress?.selectedSnapshotNodeId,
+  );
 }
 
 function assertNoNullOrUndefined(value) {
@@ -924,6 +968,31 @@ describe('TopologyConvergenceGraph', () => {
         PUBLICATION_ACK_FRONTIER_MISSING_NODE_IDS.length,
       );
       assertNoNullOrUndefined(graph);
+    });
+
+  it('surfaces selected snapshot admin readiness and alternative witness state in handoff probe',
+    () => {
+      const output = runHandoffProbe(REPORT_ARTIFACT_PATH_NETWORK_PARTITION);
+      const progress = selectArtifactSnapshotProgress(
+        REPORT_ARTIFACT_PATH_NETWORK_PARTITION,
+        output.scenario,
+      );
+
+      assert.equal(output.schemaVersion, 'topology-publication-active-gate-handoff-probe-v1');
+      assert.equal(output.consumer.edge, EDGE_SNAPSHOT_COVERAGE);
+      assert.equal(
+        output.consumer.source.selectedSnapshotAdminReady,
+        progress?.selectedSnapshotAdminReady ?? 'unknown',
+      );
+      assert.equal(
+        output.consumer.source.selectedSnapshotReachableBy,
+        progress?.selectedSnapshotReachableBy || 'unknown',
+      );
+      assert.equal(
+        output.consumer.source.alternativeSnapshotWitnessAvailable,
+        hasAlternativeSnapshotWitness(progress),
+      );
+      assertNoNullOrUndefined(output.consumer.source);
     });
 
   it('projects current steady-published missing active nodes under the publication owner',

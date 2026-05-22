@@ -2176,6 +2176,7 @@ async function assertConsistency(nodes, options = {}) {
           state: await queryNodeConsistencyState(node, {
             forceRepair,
             forceAuthoritativeRepair,
+            timeoutMs: options.timeoutMs,
           }),
         };
       } catch (error) {
@@ -2275,6 +2276,7 @@ async function waitForConsistencyConvergence(nodes, options = {}) {
         maxActiveNodeSkew: options.maxActiveNodeSkew,
         toleratePartitionSkew: options.toleratePartitionSkew === true,
         maxPartitionSkew: options.maxPartitionSkew,
+        timeoutMs: options.snapshotTimeoutMs ?? options.timeoutMs,
       });
       return;
     } catch (error) {

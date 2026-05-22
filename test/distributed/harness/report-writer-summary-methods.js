@@ -52,6 +52,8 @@ function createReportWriterSummaryMethods(options = {}) {
       null;
     return {
       passed: entry?.passed === true,
+      verdict: entry?.verdict || null,
+      verdictReason: entry?.verdictReason || null,
       clusterSize,
       durationMs: normalizeFiniteNumber(entry?.duration) || ZERO,
       performanceMetricsAvailable: performanceMeasurement.available,

@@ -752,6 +752,25 @@ function buildControlSnapshotHandoffProgressOptions(options = {}) {
     options;
 }
 
+function buildControlSnapshotHandoffDeferredOptions(
+  snapshot = null,
+  options = {},
+) {
+  const retryOptions = buildControlSnapshotHandoffRetryOptions(
+    snapshot,
+    options,
+  );
+  if (retryOptions === options) {
+    return options;
+  }
+  return {
+    ...retryOptions,
+    observationMode: ADMIN_CONTROL_SNAPSHOT_OBSERVATION_MODE.REPAIR_DEFERRED,
+    repairAttempted: true,
+    repairDeferred: true,
+  };
+}
+
 function resolveControlSnapshotCoverageNodeCount(snapshot = null) {
   const nodeIds = snapshot?.[CONTROL_SNAPSHOT_NODES_FIELD];
   return Array.isArray(nodeIds) ? nodeIds.length : NUM.ZERO;
@@ -1260,9 +1279,14 @@ class AdminControlSnapshotPart2 extends AdminControlSnapshotPart1 {
           triggeredSnapshot,
           options,
         );
+      const deferredHandoffOptions =
+        buildControlSnapshotHandoffDeferredOptions(
+          handoffRefresh.snapshot,
+          options,
+        );
       return this.resolveSharedControlSnapshot(
         handoffRefresh.snapshot,
-        options,
+        deferredHandoffOptions,
       );
     }
     if (
@@ -1283,18 +1307,25 @@ class AdminControlSnapshotPart2 extends AdminControlSnapshotPart1 {
           triggeredSnapshot,
           options,
         );
-      const sharedSnapshotOptions =
-        handoffRefresh.refreshed === true ?
-          options :
-          (repairEvaluation?.shouldRepair === true ?
-            {
-              ...options,
-              observationMode:
-                ADMIN_CONTROL_SNAPSHOT_OBSERVATION_MODE.REPAIR_DEFERRED,
-              repairEvaluation,
-              repairDeferred: true,
-            } :
-            options);
+      const deferredHandoffOptions =
+        buildControlSnapshotHandoffDeferredOptions(
+          handoffRefresh.snapshot,
+          options,
+        );
+      const shouldEmitDeferredObservation =
+        deferredHandoffOptions !== options ||
+        repairEvaluation?.shouldRepair === true;
+      const sharedSnapshotOptions = handoffRefresh.refreshed === true ?
+        options :
+        (shouldEmitDeferredObservation ?
+          {
+            ...deferredHandoffOptions,
+            repairEvaluation,
+            repairDeferred: true,
+            observationMode:
+              ADMIN_CONTROL_SNAPSHOT_OBSERVATION_MODE.REPAIR_DEFERRED,
+          } :
+          options);
       return this.resolveSharedControlSnapshot(
         handoffRefresh.refreshed === true ?
           handoffRefresh.snapshot :

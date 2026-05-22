@@ -2,8 +2,8 @@
 
 Load for bootstrap/join/rebalance/control-plane/runtime ownership and lifecycle work.
 
-Generated rules: 111
-Estimated tokens: 3763
+Generated rules: 112
+Estimated tokens: 3821
 Domains: architecture
 
 ## Rules
@@ -77,45 +77,46 @@ Domains: architecture
 67. [ARCH-0067] Do not let diagnostics views, retained owner state, bootstrap-normalized ingress state, or cache-local observations drift into a second operational authority by convention.
 68. [ARCH-0068] Do not force readers to reconstruct progress from object existence, local booleans, timestamps, or log strings.
 69. [ARCH-0069] Do not treat hot-path green tests as analysis closure while the original scenario now fails for a different named reason.
-70. [ARCH-0070] Do not let old migration history, stale residual packages, or several sub-agents create competing active interpretations of the same blocker.
-71. [ARCH-0071] Parent-session notes, local/manual labels, and arbitrary text without a real agent id do not satisfy these roles unless the user explicitly disables sub-agents for that task.
-72. [ARCH-0072] Shared truth surfaces such as startup, readiness, admin snapshot, service discovery, and harness convergence must have one snapshot owner.
-73. [ARCH-0073] Runtime shared-metadata access must cross canonical ingress owners.
-74. [ARCH-0074] Scenario-driven packages must prove what the original scenario does next: representative green, same frontier, reduced, migrated, classification-only, architecture gap, autonomous architecture experiment, or human-only escalation for blocked/contradictory evidence.
-75. [ARCH-0075] The system may slow under pressure, but it must remain correct.
-76. [ARCH-0076] State-mutating operations must be safe under retry and redelivery.
-77. [ARCH-0077] Query-plane traffic may use a separate ingress from metadata/control-plane traffic, but both planes must share the same pressure/admission contract.
-78. [ARCH-0078] A phase-scoped bridge must either become a runtime-owned bridge or be replaced before teardown.
-79. [ARCH-0079] Completion of a phase must reduce temporary machinery, not strand it.
-80. [ARCH-0080] Pressure must become admission, defer, reject, or coalescing signals.
-81. [ARCH-0081] New features should strengthen tables, services, policies, and canonical execution paths before introducing new user-visible concepts.
-82. [ARCH-0082] Do not begin the next package on the same architectural boundary while the current package still has unresolved in-scope residuals. Either finish the residuals in the current package or split them explicitly into a new package before moving on.
-83. [ARCH-0083] Use the model ledger as an advisory feedback loop for future model, reasoning-effort, and output-profile choice when a package produces useful evidence. Output profile controls final-response and handoff verbosity, not reasoning depth. It must not replace validation, review, sequencing, or closure proof.
-84. [ARCH-0084] Every durable concern must have one semantic owner.
-85. [ARCH-0085] Bootstrap, join, and recovery phases may initialize runtime mechanisms, but they must hand off to steady-state owners before phase completion.
-86. [ARCH-0086] When an owner-path read or write is unresolved because pressure, authority establishment, or recovery completion is still in flight, the owner must emit one structured deferred outcome.
-87. [ARCH-0087] For shared control-plane truth surfaces such as startup, readiness, admin snapshot, service discovery, and harness convergence, readers must observe through a canonical snapshot/watch owner.
-88. [ARCH-0088] Critical convergence traffic must keep stricter admission than diagnostics, observability, or broad repair.
-89. [ARCH-0089] In practice, node-state publication, membership publication, and authoritative operation visibility must be allowed to keep progressing under pressure conditions that may defer snapshot repair or admin reads.
-90. [ARCH-0090] After repeated bugs at one boundary, the next fix must reduce the number of paths, states, or owners that can cross it.
-91. [ARCH-0091] Scenario-driven sprints and packages must maintain scenario causal closure across the whole chain, not only the current first frontier.
-92. [ARCH-0092] An active sprint may have a long history, but execution must start from one current blocker snapshot.
-93. [ARCH-0093] If the semantic owner, owner boundary, or next required action changes, split or activate one new representative package and make the old boundary historical.
-94. [ARCH-0094] All service communication that should be a message goes through the MessageRouter.
-95. [ARCH-0095] A shared row may have several field owners only when the owned subsets are explicit and non-overlapping.
-96. [ARCH-0096] Collectors may gather evidence; one canonical adjudicator emits the final ready, admit, select, retryable, terminal, or blocked verdict.
-97. [ARCH-0097] Consumers may not maintain parallel system-data caches outside the declared owner or SystemTableCache.
-98. [ARCH-0098] For one owner key, at most one reconcile execution may be in flight.
-99. [ARCH-0099] Internal machinery may appear in diagnostics, but not as ordinary user-facing control surfaces unless explicitly designed as such.
-100. [ARCH-0100] Every active package must name its residual-closure inventory before code is treated as complete. At minimum that inventory must cover: - owner-path cutovers; - direct and tail consumers; - status, diagnostics, and reporting surfaces; - deletion of superseded paths or stale vocabulary; - required proof layers
-101. [ARCH-0101] Bootstrap, join, rejoin, recovery, split, rebalance, and readiness phases may initialize runtime mechanisms.
-102. [ARCH-0102] A human idea should first become either: - a sharpened roadmap item; - or a bounded work package
-103. [ARCH-0103] Active implementation should target one executable concern per work package.
-104. [ARCH-0104] Work-package status should live in the filename under work/ rather than in several parallel trackers.
-105. [ARCH-0105] A shared row may have multiple owners only when field subsets are explicit and non-overlapping.
-106. [ARCH-0106] Runtime packages that follow such a model should cite it as their scope basis and proof surface.
-107. [ARCH-0107] Implementation work should be as explicit and bounded as the runtime design.
-108. [ARCH-0108] Real sub-agents should accelerate this sequence, not replace it.
-109. [ARCH-0109] Bootstrap, join, and recovery phases may initialize runtime mechanisms.
-110. [ARCH-0110] Under load, the system may slow down, defer work, or reject new edge work with structured retry semantics.
-111. [ARCH-0111] Classification-only is a valid result only when the causal chain is still explicit, the focused probe command and artifact are named, the bounded-progress proof has an observable transition and bound, and the stop condition says why no local runtime patch should continue in that package.
+70. [ARCH-0070] Sprints and packages must never close from symptom movement alone (such as changed timeout durations, timing offsets, or message counts); they must prove the named contract transition or owner-boundary correctness.
+71. [ARCH-0071] Do not let old migration history, stale residual packages, or several sub-agents create competing active interpretations of the same blocker.
+72. [ARCH-0072] Parent-session notes, local/manual labels, and arbitrary text without a real agent id do not satisfy these roles unless the user explicitly disables sub-agents for that task.
+73. [ARCH-0073] Shared truth surfaces such as startup, readiness, admin snapshot, service discovery, and harness convergence must have one snapshot owner.
+74. [ARCH-0074] Runtime shared-metadata access must cross canonical ingress owners.
+75. [ARCH-0075] Scenario-driven packages must prove what the original scenario does next: representative green, same frontier, reduced, migrated, classification-only, architecture gap, autonomous architecture experiment, or human-only escalation for blocked/contradictory evidence.
+76. [ARCH-0076] The system may slow under pressure, but it must remain correct.
+77. [ARCH-0077] State-mutating operations must be safe under retry and redelivery.
+78. [ARCH-0078] Query-plane traffic may use a separate ingress from metadata/control-plane traffic, but both planes must share the same pressure/admission contract.
+79. [ARCH-0079] A phase-scoped bridge must either become a runtime-owned bridge or be replaced before teardown.
+80. [ARCH-0080] Completion of a phase must reduce temporary machinery, not strand it.
+81. [ARCH-0081] Pressure must become admission, defer, reject, or coalescing signals.
+82. [ARCH-0082] New features should strengthen tables, services, policies, and canonical execution paths before introducing new user-visible concepts.
+83. [ARCH-0083] Do not begin the next package on the same architectural boundary while the current package still has unresolved in-scope residuals. Either finish the residuals in the current package or split them explicitly into a new package before moving on.
+84. [ARCH-0084] Use the model ledger as an advisory feedback loop for future model, reasoning-effort, and output-profile choice when a package produces useful evidence. Output profile controls final-response and handoff verbosity, not reasoning depth. It must not replace validation, review, sequencing, or closure proof.
+85. [ARCH-0085] Every durable concern must have one semantic owner.
+86. [ARCH-0086] Bootstrap, join, and recovery phases may initialize runtime mechanisms, but they must hand off to steady-state owners before phase completion.
+87. [ARCH-0087] When an owner-path read or write is unresolved because pressure, authority establishment, or recovery completion is still in flight, the owner must emit one structured deferred outcome.
+88. [ARCH-0088] For shared control-plane truth surfaces such as startup, readiness, admin snapshot, service discovery, and harness convergence, readers must observe through a canonical snapshot/watch owner.
+89. [ARCH-0089] Critical convergence traffic must keep stricter admission than diagnostics, observability, or broad repair.
+90. [ARCH-0090] In practice, node-state publication, membership publication, and authoritative operation visibility must be allowed to keep progressing under pressure conditions that may defer snapshot repair or admin reads.
+91. [ARCH-0091] After repeated bugs at one boundary, the next fix must reduce the number of paths, states, or owners that can cross it.
+92. [ARCH-0092] Scenario-driven sprints and packages must maintain scenario causal closure across the whole chain, not only the current first frontier.
+93. [ARCH-0093] An active sprint may have a long history, but execution must start from one current blocker snapshot.
+94. [ARCH-0094] If the semantic owner, owner boundary, or next required action changes, split or activate one new representative package and make the old boundary historical.
+95. [ARCH-0095] All service communication that should be a message goes through the MessageRouter.
+96. [ARCH-0096] A shared row may have several field owners only when the owned subsets are explicit and non-overlapping.
+97. [ARCH-0097] Collectors may gather evidence; one canonical adjudicator emits the final ready, admit, select, retryable, terminal, or blocked verdict.
+98. [ARCH-0098] Consumers may not maintain parallel system-data caches outside the declared owner or SystemTableCache.
+99. [ARCH-0099] For one owner key, at most one reconcile execution may be in flight.
+100. [ARCH-0100] Internal machinery may appear in diagnostics, but not as ordinary user-facing control surfaces unless explicitly designed as such.
+101. [ARCH-0101] Every active package must name its residual-closure inventory before code is treated as complete. At minimum that inventory must cover: - owner-path cutovers; - direct and tail consumers; - status, diagnostics, and reporting surfaces; - deletion of superseded paths or stale vocabulary; - required proof layers
+102. [ARCH-0102] Bootstrap, join, rejoin, recovery, split, rebalance, and readiness phases may initialize runtime mechanisms.
+103. [ARCH-0103] A human idea should first become either: - a sharpened roadmap item; - or a bounded work package
+104. [ARCH-0104] Active implementation should target one executable concern per work package.
+105. [ARCH-0105] Work-package status should live in the filename under work/ rather than in several parallel trackers.
+106. [ARCH-0106] A shared row may have multiple owners only when field subsets are explicit and non-overlapping.
+107. [ARCH-0107] Runtime packages that follow such a model should cite it as their scope basis and proof surface.
+108. [ARCH-0108] Implementation work should be as explicit and bounded as the runtime design.
+109. [ARCH-0109] Real sub-agents should accelerate this sequence, not replace it.
+110. [ARCH-0110] Bootstrap, join, and recovery phases may initialize runtime mechanisms.
+111. [ARCH-0111] Under load, the system may slow down, defer work, or reject new edge work with structured retry semantics.
+112. [ARCH-0112] Classification-only is a valid result only when the causal chain is still explicit, the focused probe command and artifact are named, the bounded-progress proof has an observable transition and bound, and the stop condition says why no local runtime patch should continue in that package.

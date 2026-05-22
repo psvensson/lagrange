@@ -87,6 +87,7 @@ const PRIORITY_RECOVERY_PROGRESS_CLASSES_PATH =
   'report.scenarios[0].publicationConvergence.activeGate.progress.priorityRecoveryProgressClasses';
 const HANDOFF_PROBE_SCHEMA =
   'topology-publication-active-gate-handoff-probe-v1';
+const REPLAY_FIXTURE_SCHEMA = 'topology-convergence-replay-fixture-v1';
 const OPERATION_WORKFLOW_HANDOFF_MISSING_EDGE_ID =
   'publication_operation_workflow_handoff_leg_missing';
 const OPERATION_WORKFLOW_HANDOFF_MISSING_EDGE_NAME =
@@ -133,6 +134,8 @@ const SNAPSHOT_COVERAGE_ZERO_OF_FIVE = 0;
 const SNAPSHOT_COVERAGE_TWO_OF_FIVE = 2;
 const ACTIVE_GATE_SELECTED_SNAPSHOT_SOURCE =
   '11601fe0-72d6-5853-8590-ec2881853e72';
+const ACTIVE_GATE_ALTERNATIVE_SNAPSHOT_SOURCE =
+  '35a891b8-c1a0-5064-9c6e-2acfba61c2a7';
 const ACTIVE_GATE_CONNECTION_CLOSED_PARTICIPANT_NODE =
   '7493b0ab-a054-5fad-a91b-5e331db29304';
 const ACTIVE_GATE_CONNECTION_CLOSED_SELECTED_SNAPSHOT_ERROR =
@@ -175,6 +178,8 @@ const PRIORITY_RECOVERY_UNRESOLVED_RECOVERING_IN_FLIGHT =
 const PRIORITY_RECOVERY_BLOCKED_PARTITION_IDS_ABSENT = 'absent';
 const HANDOFF_PROBE_TARGET_ACTION_BUILD_REPLAYABLE_FIXTURE =
   'build_replayable_handoff_fixture';
+const SELECTED_SNAPSHOT_ADMIN_READY = true;
+const SELECTED_SNAPSHOT_REACHABLE_BY_ADMIN_HEALTH = 'admin_health';
 const SNAPSHOT_OBSERVATION_STATE_DEFERRED_REFRESH = 'deferred_refresh';
 const SNAPSHOT_OBSERVATION_CONTRACT_STATE_DEFERRED = 'deferred';
 const SNAPSHOT_OBSERVATION_REFRESH_STATE_DEFERRED = 'deferred';
@@ -660,6 +665,57 @@ describe('analyze-topology-convergence CLI', () => {
     );
     assert.equal(
       output.nextOwnerPath.requiredAction,
+      HANDOFF_PROBE_TARGET_ACTION_BUILD_REPLAYABLE_FIXTURE,
+    );
+  });
+
+  it('keeps selected snapshot witness diagnostics in replay fixtures', () => {
+    const fixture = buildConnectionClosedActiveGateFixture();
+    const progress =
+      fixture.scenarios[0].publicationConvergence.activeGate.progress;
+    const perNodePublicationDisagreementSet = {
+      [ACTIVE_GATE_SELECTED_SNAPSHOT_SOURCE]: [],
+      [ACTIVE_GATE_ALTERNATIVE_SNAPSHOT_SOURCE]: [],
+    };
+    Object.assign(progress, {
+      selectedSnapshotNodeId: ACTIVE_GATE_SELECTED_SNAPSHOT_SOURCE,
+      selectedSnapshotAdminReady: SELECTED_SNAPSHOT_ADMIN_READY,
+      selectedSnapshotReachableBy: SELECTED_SNAPSHOT_REACHABLE_BY_ADMIN_HEALTH,
+      perNodePublicationDisagreementSet,
+    });
+
+    const replay = runAnalyzerJsonForFixture(fixture, ARG_REPLAY_FIXTURE);
+    const replayProgress = replay.publicationConvergence.activeGate.progress;
+    const replayProbe = runAnalyzerJsonForFixture(replay, ARG_HANDOFF_PROBE);
+
+    assert.equal(replay.schemaVersion, REPLAY_FIXTURE_SCHEMA);
+    assert.equal(
+      replayProgress.selectedSnapshotAdminReady,
+      SELECTED_SNAPSHOT_ADMIN_READY,
+    );
+    assert.equal(
+      replayProgress.selectedSnapshotReachableBy,
+      SELECTED_SNAPSHOT_REACHABLE_BY_ADMIN_HEALTH,
+    );
+    assert.equal(replayProgress.alternativeSnapshotWitnessAvailable, true);
+    assert.deepEqual(
+      replayProgress.perNodePublicationDisagreementSet,
+      perNodePublicationDisagreementSet,
+    );
+    assert.equal(
+      replayProbe.consumer.source.selectedSnapshotAdminReady,
+      SELECTED_SNAPSHOT_ADMIN_READY,
+    );
+    assert.equal(
+      replayProbe.consumer.source.selectedSnapshotReachableBy,
+      SELECTED_SNAPSHOT_REACHABLE_BY_ADMIN_HEALTH,
+    );
+    assert.equal(
+      replayProbe.consumer.source.alternativeSnapshotWitnessAvailable,
+      true,
+    );
+    assert.equal(
+      replayProbe.nextOwnerPath.requiredAction,
       HANDOFF_PROBE_TARGET_ACTION_BUILD_REPLAYABLE_FIXTURE,
     );
   });

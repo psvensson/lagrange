@@ -4,6 +4,17 @@ import {
   CONTROL_PLANE_QUIESCENCE_CRITICAL_SYSTEM_OBSERVATION_STATE,
   buildControlPlaneQuiescencePressureSignalsFromDiagnostics,
 } from './control-plane-quiescence-snapshot.js';
+import {
+  ADMIN_CONTROL_SNAPSHOT_OBSERVATION_MODE,
+} from '../../../src/admin/admin-constants.js';
+import {
+  CONTROL_PLANE_SNAPSHOT_OBSERVATION_STATE,
+  CONTROL_PLANE_SNAPSHOT_REFRESH_STATE,
+} from '../../../src/control-plane/control-plane-snapshot-owner.js';
+import {
+  OWNER_CONTRACT_NEXT_ACTION,
+  OWNER_CONTRACT_STATE,
+} from '../../../src/control-plane/owner-contract-outcome.js';
 
 const {
   countCacheVisibleSatisfiedPriorityRecoveryOperations,
@@ -70,9 +81,24 @@ const CONTROL_SNAPSHOT_AUTHORITATIVE_REPAIR_FAILED_TEXT =
   'authoritative control snapshot repair failed';
 const CONTROL_SNAPSHOT_CONNECTION_TO_NODE_TEXT = 'connection to node';
 const CONTROL_SNAPSHOT_CONNECTION_CLOSED_TEXT = 'closed';
+const CONTROL_SNAPSHOT_WEBSOCKET_TEXT = 'websocket';
+const CONTROL_SNAPSHOT_CONNECTION_NOT_ESTABLISHED_TEXT =
+  'closed before the connection was established';
 const CONTROL_SNAPSHOT_RETRY_REASON_SELECTED_TIMEOUT = 'selected_timeout';
 const CONTROL_SNAPSHOT_RETRY_REASON_AUTHORITATIVE_REPAIR_PRESSURE =
   'authoritative_repair_pressure';
+const CONTROL_SNAPSHOT_OBSERVATION_REASON_SELECTED_TRANSPORT_CLOSED =
+  'selected_transport_closed';
+const CONTROL_SNAPSHOT_RETRY_REASON_NOT_APPLICABLE = 'not_applicable';
+const CONTROL_SNAPSHOT_REVISION_STATE_UNAVAILABLE = null;
+const CONTROL_SNAPSHOT_PUBLICATION_CONVERGENCE_UNAVAILABLE = null;
+const CONTROL_SNAPSHOT_PUBLICATION_CONVERGENCE_GATE_UNAVAILABLE = null;
+const CONTROL_SNAPSHOT_PUBLICATION_ACTIVE_GATE_HANDOFF_UNAVAILABLE = null;
+const CONTROL_SNAPSHOT_MEMBERSHIP_PUBLICATION_HANDOFF_OUTCOME_UNAVAILABLE =
+  null;
+const CONTROL_SNAPSHOT_PRIORITY_RECOVERY_DECISION_SNAPSHOTS_UNAVAILABLE =
+  null;
+const CRITICAL_SYSTEM_READY_NODE_IDS_UNAVAILABLE = Object.freeze([]);
 const SERVICE_DISCOVERY_NO_CANDIDATES_ERROR = 'no_service_discovery_candidates';
 const ACTIVE_WAIT_TIMEOUT_EVENT_INTERVAL_DIVISOR = 2;
 const CONTROL_SNAPSHOT_STARTUP_PROBE_TIMEOUT_SCALE = 2;
@@ -132,6 +158,33 @@ function buildControlSnapshotObservationSummary(snapshotPayload = null) {
   };
 }
 
+function buildControlSnapshotRetryObservationSummary({
+  retryAfterMs,
+  retryReason,
+}) {
+  if (retryReason === CONTROL_SNAPSHOT_RETRY_REASON_NOT_APPLICABLE) {
+    return buildControlSnapshotObservationSummary();
+  }
+  const normalizedRetryAfterMs = Number.isFinite(retryAfterMs) ?
+    Math.max(MIN_TIMEOUT_MS, Math.floor(retryAfterMs)) :
+    MIN_TIMEOUT_MS;
+  return {
+    snapshotObservationMode:
+      ADMIN_CONTROL_SNAPSHOT_OBSERVATION_MODE.REPAIR_DEFERRED,
+    snapshotObservationState:
+      CONTROL_PLANE_SNAPSHOT_OBSERVATION_STATE.DEFERRED_REFRESH,
+    snapshotObservationContractState: OWNER_CONTRACT_STATE.DEFERRED,
+    snapshotObservationRefreshState:
+      CONTROL_PLANE_SNAPSHOT_REFRESH_STATE.DEFERRED,
+    snapshotObservationNextAction: OWNER_CONTRACT_NEXT_ACTION.RETRY,
+    snapshotObservationReasonCodes: normalizeDistinctStringArray([
+      retryReason,
+    ]),
+    snapshotObservationRetryAfterMs: normalizedRetryAfterMs,
+    snapshotRepairDeferred: true,
+  };
+}
+
 function hasControlSnapshotReachabilityFallback(result = null) {
   return (
     result?.error === null &&
@@ -162,6 +215,16 @@ function isAuthoritativeRepairParticipantConnectionClosedProbeError(error) {
   );
 }
 
+function isSelectedSnapshotTransportClosedProbeError(error) {
+  const normalizedError = String(normalizeProbeError(error)).toLowerCase();
+  return (
+    normalizedError.includes(CONTROL_SNAPSHOT_WEBSOCKET_TEXT) &&
+    normalizedError.includes(
+      CONTROL_SNAPSHOT_CONNECTION_NOT_ESTABLISHED_TEXT,
+    )
+  );
+}
+
 function resolveSnapshotRetryReason({
   forceRepair,
   reachabilityDiagnostics,
@@ -175,7 +238,7 @@ function resolveSnapshotRetryReason({
     selectedTimeout: isTimeoutShapedProbeError(snapshotError) === true,
   };
   if (snapshotRetryEvidence.adminReady !== true) {
-    return null;
+    return CONTROL_SNAPSHOT_RETRY_REASON_NOT_APPLICABLE;
   }
   if (
     snapshotRetryEvidence.forceRepair === true &&
@@ -186,7 +249,20 @@ function resolveSnapshotRetryReason({
   if (snapshotRetryEvidence.selectedTimeout) {
     return CONTROL_SNAPSHOT_RETRY_REASON_SELECTED_TIMEOUT;
   }
-  return null;
+  return CONTROL_SNAPSHOT_RETRY_REASON_NOT_APPLICABLE;
+}
+
+function resolveSnapshotTerminalObservationReason({
+  reachabilityDiagnostics,
+  snapshotError,
+}) {
+  if (
+    reachabilityDiagnostics?.adminReady === true &&
+    isSelectedSnapshotTransportClosedProbeError(snapshotError)
+  ) {
+    return CONTROL_SNAPSHOT_OBSERVATION_REASON_SELECTED_TRANSPORT_CLOSED;
+  }
+  return CONTROL_SNAPSHOT_RETRY_REASON_NOT_APPLICABLE;
 }
 
 function resolveSnapshotRetryTimeoutMs(
@@ -207,6 +283,54 @@ function resolveSnapshotRetryTimeoutMs(
     normalizedSnapshotTimeoutMs,
     scaledProbeTimeoutMs,
   );
+}
+
+function selectAlternativeSnapshotWitness(
+  snapshotProbeResults,
+  selectedResult,
+) {
+  if (
+    selectedResult?.snapshotTimeoutEncountered !== true ||
+    selectedResult?.adminReady !== true
+  ) {
+    return selectedResult;
+  }
+  let alternativeResult = null;
+  for (const result of snapshotProbeResults) {
+    if (result?.nodeId === selectedResult?.nodeId || result?.error !== null) {
+      continue;
+    }
+    if (!alternativeResult) {
+      alternativeResult = result;
+      continue;
+    }
+    if (
+      result.missingExpectedNodeCount !==
+      alternativeResult.missingExpectedNodeCount
+    ) {
+      if (
+        result.missingExpectedNodeCount <
+        alternativeResult.missingExpectedNodeCount
+      ) {
+        alternativeResult = result;
+      }
+      continue;
+    }
+    if (result.observedNodeCount !== alternativeResult.observedNodeCount) {
+      if (result.observedNodeCount > alternativeResult.observedNodeCount) {
+        alternativeResult = result;
+      }
+      continue;
+    }
+    if (
+      Number.isFinite(result.capturedAtMs) &&
+      (!Number.isFinite(alternativeResult.capturedAtMs) ||
+        result.capturedAtMs > alternativeResult.capturedAtMs)
+    ) {
+      alternativeResult = result;
+    }
+  }
+  return alternativeResult || selectedResult;
 }
 
 class Cluster5 extends Cluster4 {
@@ -262,6 +386,7 @@ class Cluster5 extends Cluster4 {
       const buildSuccessfulSnapshotCoverageResult = (
         snapshotResult,
         successfulSnapshotTimeoutMs = snapshotTimeoutMs,
+        snapshotTimeoutEncountered = false,
       ) => {
         const snapshotPayload =
           this._extractControlSnapshotPayload(snapshotResult);
@@ -322,6 +447,7 @@ class Cluster5 extends Cluster4 {
           snapshotRevisionGap: snapshotSummary.snapshotRevisionGap,
           snapshotResumeToken: snapshotSummary.snapshotResumeToken,
           ...snapshotObservationSummary,
+          snapshotTimeoutEncountered,
           observedNodeIds,
           controlPlaneDiagnosticsAvailable:
             snapshotDiagnostics.controlPlaneDiagnosticsAvailable,
@@ -376,6 +502,10 @@ class Cluster5 extends Cluster4 {
         return buildSuccessfulSnapshotCoverageResult(snapshotResult);
       } catch (error) {
         let snapshotError = normalizeProbeError(error);
+        let finalSnapshotTimeoutMs = snapshotTimeoutMs;
+        let terminalObservationSummary = buildControlSnapshotObservationSummary();
+        const snapshotTimeoutEncountered =
+          isTimeoutShapedProbeError(snapshotError) === true;
         resetSnapshotLaneAfterTimeout(node, snapshotError);
         await probeReachabilityDiagnostics();
         const retryReason = resolveSnapshotRetryReason({
@@ -383,13 +513,14 @@ class Cluster5 extends Cluster4 {
           reachabilityDiagnostics,
           snapshotError,
         });
-        if (retryReason !== null) {
+        if (retryReason !== CONTROL_SNAPSHOT_RETRY_REASON_NOT_APPLICABLE) {
           try {
             const retrySnapshotTimeoutMs =
               resolveSnapshotRetryTimeoutMs(
                 snapshotTimeoutMs,
                 startupProbeTimeoutScale,
               );
+            finalSnapshotTimeoutMs = retrySnapshotTimeoutMs;
             const retrySnapshotResult = await node.getControlSnapshot({
               timeoutMs: retrySnapshotTimeoutMs,
               lane: ADMIN_SOCKET_LANE_SNAPSHOT,
@@ -400,16 +531,32 @@ class Cluster5 extends Cluster4 {
             return buildSuccessfulSnapshotCoverageResult(
               retrySnapshotResult,
               retrySnapshotTimeoutMs,
+              snapshotTimeoutEncountered,
             );
           } catch (retryError) {
             snapshotError = normalizeProbeError(retryError);
             resetSnapshotLaneAfterTimeout(node, snapshotError);
+            terminalObservationSummary =
+              buildControlSnapshotRetryObservationSummary({
+                retryAfterMs: finalSnapshotTimeoutMs,
+                retryReason,
+              });
           }
+        } else {
+          terminalObservationSummary =
+            buildControlSnapshotRetryObservationSummary({
+              retryAfterMs: finalSnapshotTimeoutMs,
+              retryReason: resolveSnapshotTerminalObservationReason({
+                reachabilityDiagnostics,
+                snapshotError,
+              }),
+            });
         }
         return {
           nodeId: node.id,
           error: snapshotError,
-          snapshotTimeoutMs,
+          snapshotTimeoutEncountered,
+          snapshotTimeoutMs: finalSnapshotTimeoutMs,
           reachabilityTimeoutMs,
           adminReady: reachabilityDiagnostics?.adminReady === true,
           reachable: reachabilityDiagnostics?.reachable === true,
@@ -427,21 +574,26 @@ class Cluster5 extends Cluster4 {
           missingExpectedNodeCount: expectedNodeSet.size,
           capturedAtMs: null,
           snapshotRevision: null,
-          snapshotRevisionState: null,
+          snapshotRevisionState: CONTROL_SNAPSHOT_REVISION_STATE_UNAVAILABLE,
           snapshotExpectedMinimumRevision: null,
           snapshotRevisionGap: null,
           snapshotResumeToken: null,
-          ...buildControlSnapshotObservationSummary(),
+          ...terminalObservationSummary,
           observedNodeIds: [],
           controlPlaneDiagnosticsAvailable: false,
-          publicationConvergence: null,
-          publicationConvergenceGate: null,
+          publicationConvergence:
+            CONTROL_SNAPSHOT_PUBLICATION_CONVERGENCE_UNAVAILABLE,
+          publicationConvergenceGate:
+            CONTROL_SNAPSHOT_PUBLICATION_CONVERGENCE_GATE_UNAVAILABLE,
           publishedMembershipObservation: null,
-          publicationActiveGateHandoff: null,
-          membershipPublicationHandoffOutcome: null,
+          publicationActiveGateHandoff:
+            CONTROL_SNAPSHOT_PUBLICATION_ACTIVE_GATE_HANDOFF_UNAVAILABLE,
+          membershipPublicationHandoffOutcome:
+            CONTROL_SNAPSHOT_MEMBERSHIP_PUBLICATION_HANDOFF_OUTCOME_UNAVAILABLE,
           activeGateOwnerCohort: null,
           priorityRecoveryObservation: null,
-          priorityRecoveryDecisionSnapshots: null,
+          priorityRecoveryDecisionSnapshots:
+            CONTROL_SNAPSHOT_PRIORITY_RECOVERY_DECISION_SNAPSHOTS_UNAVAILABLE,
           controlPlaneOwnerQueueDepth: null,
           cdcReplayLag: null,
           healthyReadinessNodeIds: [],
@@ -613,6 +765,10 @@ class Cluster5 extends Cluster4 {
         selectedResult = result;
       }
     }
+    selectedResult = selectAlternativeSnapshotWitness(
+      snapshotProbeResults,
+      selectedResult,
+    );
     const selectedReachabilityFallback =
       hasControlSnapshotReachabilityFallback(selectedResult);
     const selectedAdminReady =
@@ -800,6 +956,8 @@ class Cluster5 extends Cluster4 {
             Math.floor(result.snapshotObservationRetryAfterMs) :
             null,
           snapshotRepairDeferred: result.snapshotRepairDeferred === true,
+          snapshotTimeoutEncountered:
+            result.snapshotTimeoutEncountered === true,
           ...(result.publicationActiveGateHandoff ?
             {
               publicationActiveGateHandoff:
@@ -1086,7 +1244,7 @@ class Cluster5 extends Cluster4 {
       tableName,
       selectedNodeId: null,
       selectedCapturedAtMs: null,
-      readyNodeIds: [],
+      readyNodeIds: [...CRITICAL_SYSTEM_READY_NODE_IDS_UNAVAILABLE],
       readyDistinctNodeCount: ZERO,
       readyReplicaCount: ZERO,
       totalReplicaCount: ZERO,

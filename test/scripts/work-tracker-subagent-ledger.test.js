@@ -28,8 +28,10 @@ import {
   validateFrontierOscillationContract,
   validateModelFitContract,
   validateObservablePredictionContract,
+  validatePackageMetadataShape,
   validateProbePackageContract,
   validateRequiredPreImplProbeContract,
+  validateContractProofRequirement,
   validateRepresentativeResidualContract,
   validateRerunDecisionContract,
   validateScenarioCausalClosureContract,
@@ -57,6 +59,7 @@ const FIX_AGENT_ID = '019e02b7-ece3-73a2-a664-389d40dfd575';
 const IMPLEMENTATION_AGENT_ID = '019e02b9-7651-7851-bc85-a0cef8a90176';
 const TEST_COMMIT_SHA = 'abcdef1234567890abcdef1234567890abcdef12';
 const TEST_PUSH_TARGET = 'origin/main';
+const TEST_THEORY_LEDGER_REF = 'theory-20260522-ledger-test';
 const WORK_TRACKER_ACTIVE_STATUS = 'active';
 const WORK_TRACKER_DONE_STATUS = 'done';
 const LANE_READ_REVIEW_DOC_ONLY = 'read-review-doc-only';
@@ -1677,10 +1680,11 @@ describe('work tracker package doctor', () => {
   });
 
   it('prints a compact validation summary for a package', () => {
-    const report = buildPackageDoctorLines(
-      WORK_TRACKER_ACTIVE_DOCTOR_FILE,
-      WORK_TRACKER_DOCTOR_CONTENT,
+    const content = WORK_TRACKER_DOCTOR_CONTENT.replace(
+      '"proof": [',
+      `"theoryLedgerRefs": ["${TEST_THEORY_LEDGER_REF}"],\n  "proof": [`,
     );
+    const report = buildPackageDoctorLines(WORK_TRACKER_ACTIVE_DOCTOR_FILE, content);
     const rendered = report.lines.join('\n');
 
     assert.deepEqual(report.errors, []);
@@ -1688,6 +1692,7 @@ describe('work tracker package doctor', () => {
     assert.match(rendered, /Owner: workflow_tooling_owner/u);
     assert.match(rendered, /Output profile: medium/u);
     assert.match(rendered, /Write scope: 1/u);
+    assert.match(rendered, /Theory ledger refs: 1/u);
     assert.match(rendered, /Legacy touched files: 0/u);
     assert.match(rendered, /Validation: ok/u);
   });
@@ -3198,6 +3203,86 @@ describe('work tracker scenario causal closure validation', () => {
     assert.deepEqual(errors, []);
   });
 
+  describe('boundary family oscillation validation', () => {
+    it('rejects repeated adjacent-boundary oscillation inside the same boundary family', () => {
+      const metadata = {
+        ...SCENARIO_CAUSAL_CLOSURE_VALID_METADATA,
+        lane: LANE_RUNTIME_OWNER_BOUNDARY,
+        owner: 'rebalancer_owner',
+        boundary: 'publication_convergence',
+      };
+      const history = [
+        {
+          filePath: 'work/packages/done-20260515-active-gate.md',
+          metadata: {
+            scenario: 'rolling-restart',
+            owner: 'rebalancer_owner',
+            boundary: 'active-gate snapshot coverage',
+            scenarioCausalClosure: {
+              resultClassification: 'migrated',
+            },
+          },
+        },
+        {
+          filePath: 'work/packages/done-20260514-readiness.md',
+          metadata: {
+            scenario: 'rolling-restart',
+            owner: 'rebalancer_owner',
+            boundary: 'readiness support',
+            scenarioCausalClosure: {
+              resultClassification: 'migrated',
+            },
+          },
+        },
+      ];
+
+      const errors = validateFrontierOscillationContract(
+        metadata,
+        WORK_TRACKER_LEDGER_TEST_FILE,
+        {
+          packageHistoryEntries: history,
+          status: WORK_TRACKER_ACTIVE_STATUS,
+        },
+      );
+
+      assert.ok(errors.length > 0);
+      assert.match(errors[0], /repeated adjacent-boundary oscillation within the same boundary family/u);
+    });
+
+    it('accepts boundary family packages when there are fewer than two previous family packages', () => {
+      const metadata = {
+        ...SCENARIO_CAUSAL_CLOSURE_VALID_METADATA,
+        lane: LANE_RUNTIME_OWNER_BOUNDARY,
+        owner: 'rebalancer_owner',
+        boundary: 'publication_convergence',
+      };
+      const history = [
+        {
+          filePath: 'work/packages/done-20260515-active-gate.md',
+          metadata: {
+            scenario: 'rolling-restart',
+            owner: 'rebalancer_owner',
+            boundary: 'active-gate snapshot coverage',
+            scenarioCausalClosure: {
+              resultClassification: 'migrated',
+            },
+          },
+        },
+      ];
+
+      const errors = validateFrontierOscillationContract(
+        metadata,
+        WORK_TRACKER_LEDGER_TEST_FILE,
+        {
+          packageHistoryEntries: history,
+          status: WORK_TRACKER_ACTIVE_STATUS,
+        },
+      );
+
+      assert.deepEqual(errors, []);
+    });
+  });
+
   it('accepts causal escalation when oscillation handoff fields are recorded',
     () => {
       const metadata = {
@@ -3314,6 +3399,7 @@ describe('work tracker scenario causal closure validation', () => {
         owner: 'workflow_tooling_owner',
         boundary: 'scenario_causal_closure',
         nextAction: 'Keep causal closure visible in handoff.',
+        theoryLedgerRefs: [TEST_THEORY_LEDGER_REF],
         writeScope: ['scripts/work-tracker.js'],
         handoffFiles: ['work/packages/done-test-package.md'],
         generatedFiles: ['work/sprints/current-blocker.md'],
@@ -3368,6 +3454,7 @@ describe('work tracker scenario causal closure validation', () => {
         'scripts/work-tracker.js',
         'work/sprints/current-blocker.md',
       ]);
+      assert.deepEqual(payload.theoryLedgerRefs, [TEST_THEORY_LEDGER_REF]);
       assert.equal(payload.representativeResidual.status, 'red');
       assert.equal(
         payload.classificationEfficiency.defaultMode,
@@ -3385,6 +3472,8 @@ describe('work tracker scenario causal closure validation', () => {
       assert.match(rendered, /Falsifying probe/u);
       assert.match(rendered, /Workflow lane/u);
       assert.match(rendered, /Output profile/u);
+      assert.match(rendered, /## Theory Ledger References/u);
+      assert.match(rendered, new RegExp(TEST_THEORY_LEDGER_REF, 'u'));
       assert.match(rendered, /## Scope/u);
       assert.match(rendered, /Write scope/u);
       assert.match(rendered, /Commit scope/u);
@@ -3787,4 +3876,619 @@ describe('work tracker active scenario metadata shape', () => {
       assert.match(errors, /metadata proof must not be empty/u);
       assert.match(errors, /metadata modelFit must be an object/u);
     });
+});
+
+describe('work tracker contract proof requirement validation', () => {
+  it('allows active package in runtime-owner-boundary lane with correct contract transition naming and fixture/consumer proof', () => {
+    const metadata = {
+      status: WORK_TRACKER_ACTIVE_STATUS,
+      lane: LANE_RUNTIME_OWNER_BOUNDARY,
+      proof: [
+        'npm test -- test/rebalancer/operation-workflow-owner.test.js --fixture --consumer --contract-transition'
+      ]
+    };
+    const errors = validateContractProofRequirement(
+      metadata,
+      WORK_TRACKER_LEDGER_TEST_FILE,
+      { phase: 'pre-impl', status: WORK_TRACKER_ACTIVE_STATUS }
+    );
+    assert.deepEqual(errors, []);
+  });
+
+  it('allows active package in scenario-release-gate lane with correct contract transition naming', () => {
+    const metadata = {
+      status: WORK_TRACKER_ACTIVE_STATUS,
+      lane: 'scenario-release-gate',
+      proof: [
+        'npm test -- test/rebalancer/operation-workflow-owner.test.js --transition'
+      ]
+    };
+    const errors = validateContractProofRequirement(
+      metadata,
+      WORK_TRACKER_LEDGER_TEST_FILE,
+      { phase: 'pre-impl', status: WORK_TRACKER_ACTIVE_STATUS }
+    );
+    assert.deepEqual(errors, []);
+  });
+
+  it('rejects active packages in runtime/scenario lanes if they do not name a contract transition under proof', () => {
+    const metadata = {
+      status: WORK_TRACKER_ACTIVE_STATUS,
+      lane: LANE_RUNTIME_OWNER_BOUNDARY,
+      proof: [
+        'npm test -- test/other/operation-workflow-owner.test.js --timeout=500 --count=2 --fixture --consumer'
+      ]
+    };
+    const errors = validateContractProofRequirement(
+      metadata,
+      WORK_TRACKER_LEDGER_TEST_FILE,
+      { phase: 'pre-impl', status: WORK_TRACKER_ACTIVE_STATUS }
+    );
+    assert.ok(errors.length > 0);
+    assert.match(errors[0], /must name the contract transition under proof/u);
+  });
+
+
+
+  it('rejects owner-boundary packages lacking a focused contract fixture or affected consumer proof', () => {
+    const metadata = {
+      status: WORK_TRACKER_ACTIVE_STATUS,
+      lane: LANE_RUNTIME_OWNER_BOUNDARY,
+      proof: [
+        'npm test -- test/rebalancer/operation-workflow-owner.test.js --contract'
+      ]
+    };
+    const errors = validateContractProofRequirement(
+      metadata,
+      WORK_TRACKER_LEDGER_TEST_FILE,
+      { phase: 'pre-impl', status: WORK_TRACKER_ACTIVE_STATUS }
+    );
+    assert.ok(errors.length >= 2);
+    assert.match(errors.join('\n'), /must include a focused contract fixture/u);
+    assert.match(errors.join('\n'), /must include an affected consumer proof/u);
+  });
+
+  it('rejects scenario-driven owner-boundary packages lacking representative routing evidence', () => {
+    const metadata = {
+      status: WORK_TRACKER_ACTIVE_STATUS,
+      lane: LANE_RUNTIME_OWNER_BOUNDARY,
+      scenario: 'rolling-restart',
+      representativeResidual: {
+        status: 'red',
+        scenario: 'rolling-restart',
+        artifact: 'test-output/reports/example.report.json',
+        frontier: 'active_gate_snapshot_coverage',
+        owner: 'diagnostics_owner',
+        boundary: 'residual_inventory',
+        dominantReason: 'residual_inventory_incomplete',
+        nextAction: 'check the gate'
+      },
+      proof: [
+        'npm test -- test/rebalancer/operation-workflow-owner.test.js --contract --fixture --consumer'
+      ]
+    };
+    const errors = validateContractProofRequirement(
+      metadata,
+      WORK_TRACKER_LEDGER_TEST_FILE,
+      { phase: 'pre-impl', status: WORK_TRACKER_ACTIVE_STATUS }
+    );
+    assert.ok(errors.length > 0);
+    assert.match(errors[0], /must include representative routing evidence/u);
+  });
+
+  it('skips validation for non-active or non-pre-impl phases', () => {
+    const metadata = {
+      status: WORK_TRACKER_ACTIVE_STATUS,
+      lane: LANE_RUNTIME_OWNER_BOUNDARY,
+      proof: []
+    };
+    const errors = validateContractProofRequirement(
+      metadata,
+      WORK_TRACKER_LEDGER_TEST_FILE,
+      { phase: 'entry', status: WORK_TRACKER_ACTIVE_STATUS }
+    );
+    assert.deepEqual(errors, []);
+  });
+});
+
+describe('work tracker stabilityCredit validation', () => {
+  it('accepts optional theoryLedgerRefs as advisory ids', () => {
+    const metadata = {
+      schema: 'work-package-v1',
+      status: WORK_TRACKER_DONE_STATUS,
+      opened: '2026-05-22',
+      lane: LANE_LIGHTWEIGHT_MAINTENANCE,
+      scenario: 'none',
+      owner: 'workflow_tooling_owner',
+      boundary: 'experiment_theory_memory',
+      nextAction: 'cite a theory ledger ref',
+      stabilityCredit: 'instrumentation-only',
+      whyHighestLeverageNow: 'This advances the sprint goal.',
+      theoryLedgerRefs: [TEST_THEORY_LEDGER_REF],
+    };
+    const errors = validatePackageMetadataShape(
+      'work/packages/done-new-test.md',
+      WORK_TRACKER_DONE_STATUS,
+      metadata,
+    );
+
+    assert.deepEqual(errors, []);
+  });
+
+  it('rejects malformed theoryLedgerRefs', () => {
+    const metadata = {
+      schema: 'work-package-v1',
+      status: WORK_TRACKER_DONE_STATUS,
+      opened: '2026-05-22',
+      lane: LANE_LIGHTWEIGHT_MAINTENANCE,
+      scenario: 'none',
+      owner: 'workflow_tooling_owner',
+      boundary: 'experiment_theory_memory',
+      nextAction: 'reject malformed theory refs',
+      stabilityCredit: 'instrumentation-only',
+      whyHighestLeverageNow: 'This advances the sprint goal.',
+      theoryLedgerRefs: ['not-a-theory-id'],
+    };
+    const errors = validatePackageMetadataShape(
+      'work/packages/done-new-test.md',
+      WORK_TRACKER_DONE_STATUS,
+      metadata,
+    );
+
+    assert.match(errors.join('\n'), /theoryLedgerRefs/u);
+  });
+
+  it('accepts valid stabilityCredit values on new active packages', () => {
+    const metadata = {
+      schema: 'work-package-v1',
+      status: WORK_TRACKER_DONE_STATUS,
+      opened: '2026-05-22',
+      lane: LANE_MECHANICAL_MAINTENANCE,
+      scenario: 'none',
+      owner: 'rebalancer_owner',
+      boundary: 'membership_lifecycle',
+      nextAction: 'implement stabilityCredit validation',
+      stabilityCredit: 'local-proof-only',
+      whyHighestLeverageNow: 'This advances the sprint goal.',
+    };
+    const errors = validatePackageMetadataShape(
+      'work/packages/active-new-test.md',
+      WORK_TRACKER_DONE_STATUS,
+      metadata,
+    );
+    assert.deepEqual(errors, []);
+  });
+
+  it('rejects invalid stabilityCredit values', () => {
+    const metadata = {
+      schema: 'work-package-v1',
+      status: WORK_TRACKER_DONE_STATUS,
+      opened: '2026-05-22',
+      lane: LANE_MECHANICAL_MAINTENANCE,
+      scenario: 'none',
+      owner: 'rebalancer_owner',
+      boundary: 'membership_lifecycle',
+      nextAction: 'implement stabilityCredit validation',
+      stabilityCredit: 'not-a-valid-credit',
+      whyHighestLeverageNow: 'This advances the sprint goal.',
+    };
+    const errors = validatePackageMetadataShape(
+      'work/packages/active-new-test.md',
+      WORK_TRACKER_DONE_STATUS,
+      metadata,
+    );
+    assert.ok(errors.length > 0);
+    assert.match(errors[0], /metadata stabilityCredit must be one of/u);
+  });
+
+  it('rejects missing stabilityCredit on new active packages', () => {
+    const metadata = {
+      schema: 'work-package-v1',
+      status: WORK_TRACKER_DONE_STATUS,
+      opened: '2026-05-22',
+      lane: LANE_MECHANICAL_MAINTENANCE,
+      scenario: 'none',
+      owner: 'rebalancer_owner',
+      boundary: 'membership_lifecycle',
+      nextAction: 'implement stabilityCredit validation',
+      whyHighestLeverageNow: 'This advances the sprint goal.',
+    };
+    const errors = validatePackageMetadataShape(
+      'work/packages/active-new-test.md',
+      WORK_TRACKER_DONE_STATUS,
+      metadata,
+    );
+    assert.ok(errors.length > 0);
+    assert.match(errors[0], /metadata stabilityCredit is required/u);
+  });
+
+  it('allows missing stabilityCredit on older active packages', () => {
+    const metadata = {
+      schema: 'work-package-v1',
+      status: WORK_TRACKER_DONE_STATUS,
+      opened: '2026-05-18',
+      lane: LANE_MECHANICAL_MAINTENANCE,
+      scenario: 'none',
+      owner: 'rebalancer_owner',
+      boundary: 'membership_lifecycle',
+      nextAction: 'implement stabilityCredit validation',
+    };
+    const errors = validatePackageMetadataShape(
+      'work/packages/active-old-test.md',
+      WORK_TRACKER_DONE_STATUS,
+      metadata,
+    );
+    assert.deepEqual(errors, []);
+  });
+
+  it('rejects local-proof-only for runtime/scenario packages', () => {
+    const metadata = {
+      schema: 'work-package-v1',
+      status: WORK_TRACKER_DONE_STATUS,
+      opened: '2026-05-22',
+      lane: LANE_RUNTIME_OWNER_BOUNDARY,
+      scenario: 'rolling-restart',
+      owner: 'rebalancer_owner',
+      boundary: 'membership_lifecycle',
+      nextAction: 'implement stabilityCredit validation',
+      stabilityCredit: 'local-proof-only',
+      whyHighestLeverageNow: 'This advances the sprint goal.',
+    };
+    const errors = validatePackageMetadataShape(
+      'work/packages/active-new-test.md',
+      WORK_TRACKER_DONE_STATUS,
+      metadata,
+    );
+    assert.ok(errors.length > 0);
+    assert.match(errors[0], /cannot hide behind local proof/u);
+  });
+
+  it('allows representative credits for runtime/scenario packages', () => {
+    const metadata = {
+      schema: 'work-package-v1',
+      status: WORK_TRACKER_DONE_STATUS,
+      opened: '2026-05-22',
+      lane: LANE_RUNTIME_OWNER_BOUNDARY,
+      scenario: 'rolling-restart',
+      owner: 'rebalancer_owner',
+      boundary: 'membership_lifecycle',
+      nextAction: 'implement stabilityCredit validation',
+      stabilityCredit: 'representative-green',
+      whyHighestLeverageNow: 'This advances the sprint goal.',
+    };
+    const errors = validatePackageMetadataShape(
+      'work/packages/active-new-test.md',
+      WORK_TRACKER_DONE_STATUS,
+      metadata,
+    );
+    assert.deepEqual(errors, []);
+  });
+});
+
+describe('work tracker whyHighestLeverageNow validation', () => {
+  it('accepts valid whyHighestLeverageNow values on new active packages', () => {
+    const metadata = {
+      schema: 'work-package-v1',
+      status: WORK_TRACKER_DONE_STATUS,
+      opened: '2026-05-22',
+      lane: LANE_RUNTIME_OWNER_BOUNDARY,
+      scenario: 'rolling-restart',
+      owner: 'rebalancer_owner',
+      boundary: 'membership_lifecycle',
+      nextAction: 'implement leverage focus gate',
+      stabilityCredit: 'representative-green',
+      whyHighestLeverageNow: 'This advances the sprint goal of universal owner-contract completion.',
+    };
+    const errors = validatePackageMetadataShape(
+      'work/packages/active-new-test.md',
+      WORK_TRACKER_DONE_STATUS,
+      metadata,
+    );
+    assert.deepEqual(errors, []);
+  });
+
+  it('rejects missing whyHighestLeverageNow on new packages', () => {
+    const metadata = {
+      schema: 'work-package-v1',
+      status: WORK_TRACKER_DONE_STATUS,
+      opened: '2026-05-22',
+      lane: LANE_RUNTIME_OWNER_BOUNDARY,
+      scenario: 'rolling-restart',
+      owner: 'rebalancer_owner',
+      boundary: 'membership_lifecycle',
+      nextAction: 'implement leverage focus gate',
+      stabilityCredit: 'representative-green',
+    };
+    const errors = validatePackageMetadataShape(
+      'work/packages/active-new-test.md',
+      WORK_TRACKER_DONE_STATUS,
+      metadata,
+    );
+    assert.match(errors[0], /metadata whyHighestLeverageNow is required/u);
+  });
+
+  it('allows missing whyHighestLeverageNow on read-review-doc-only packages', () => {
+    const metadata = {
+      schema: 'work-package-v1',
+      status: WORK_TRACKER_DONE_STATUS,
+      opened: '2026-05-22',
+      lane: LANE_READ_REVIEW_DOC_ONLY,
+      scenario: 'none',
+      owner: 'rebalancer_owner',
+      boundary: 'membership_lifecycle',
+      nextAction: 'implement leverage focus gate',
+      stabilityCredit: 'local-proof-only',
+    };
+    const errors = validatePackageMetadataShape(
+      'work/packages/active-new-test.md',
+      WORK_TRACKER_DONE_STATUS,
+      metadata,
+    );
+    assert.deepEqual(errors, []);
+  });
+
+  it('rejects whyHighestLeverageNow without required leverage terms', () => {
+    const metadata = {
+      schema: 'work-package-v1',
+      status: WORK_TRACKER_DONE_STATUS,
+      opened: '2026-05-22',
+      lane: LANE_RUNTIME_OWNER_BOUNDARY,
+      scenario: 'rolling-restart',
+      owner: 'rebalancer_owner',
+      boundary: 'membership_lifecycle',
+      nextAction: 'implement leverage focus gate',
+      stabilityCredit: 'representative-green',
+      whyHighestLeverageNow: 'Doing random unrelated cleanups.',
+    };
+    const errors = validatePackageMetadataShape(
+      'work/packages/active-new-test.md',
+      WORK_TRACKER_DONE_STATUS,
+      metadata,
+    );
+    assert.match(errors[0], /metadata whyHighestLeverageNow must name the active sprint goal/u);
+  });
+
+  it('rejects placeholders on active packages but allows on todo/done packages', () => {
+    const metadataActive = {
+      schema: 'work-package-v1',
+      status: WORK_TRACKER_ACTIVE_STATUS,
+      opened: '2026-05-22',
+      lane: LANE_RUNTIME_OWNER_BOUNDARY,
+      scenario: 'rolling-restart',
+      owner: 'rebalancer_owner',
+      boundary: 'membership_lifecycle',
+      currentState: 'implementing leverage Focus Gate checks',
+      nextAction: 'implement leverage focus gate',
+      stabilityCredit: 'representative-green',
+      whyHighestLeverageNow: '<placeholder>',
+      proof: [],
+      writeScope: [],
+      handoffFiles: [],
+      generatedFiles: [],
+      candidateRuntimeFiles: [],
+      commitScope: [],
+      modelFit: {
+        packageClass: 'bounded-implementation',
+        intendedMinimumModel: 'gpt-5.3-codex-spark',
+        scopeShape: 'leaf-slice',
+        ambiguityScore: 1,
+        escalationTriggers: [],
+      },
+    };
+    const errorsActive = validatePackageMetadataShape(
+      'work/packages/active-new-test.md',
+      WORK_TRACKER_ACTIVE_STATUS,
+      metadataActive,
+    );
+    assert.match(errorsActive[0], /metadata whyHighestLeverageNow must be a concrete value/u);
+
+    const metadataTodo = {
+      schema: 'work-package-v1',
+      status: 'todo',
+      opened: '2026-05-22',
+      lane: LANE_RUNTIME_OWNER_BOUNDARY,
+      scenario: 'rolling-restart',
+      owner: 'rebalancer_owner',
+      boundary: 'membership_lifecycle',
+      nextAction: 'implement leverage focus gate',
+      stabilityCredit: 'representative-green',
+      whyHighestLeverageNow: '<placeholder>',
+    };
+    const errorsTodo = validatePackageMetadataShape(
+      'work/packages/todo-new-test.md',
+      'todo',
+      metadataTodo,
+    );
+    assert.deepEqual(errorsTodo, []);
+  });
+
+  describe('work tracker representativeRerunCadence validation', () => {
+    it('accepts valid representativeRerunCadence values on active runtime/scenario packages', () => {
+      const metadata = {
+        schema: 'work-package-v1',
+        status: 'todo',
+        opened: '2026-05-22',
+        lane: LANE_RUNTIME_OWNER_BOUNDARY,
+        scenario: 'rolling-restart',
+        owner: 'rebalancer_owner',
+        boundary: 'membership_lifecycle',
+        nextAction: 'implement cadence validation',
+        stabilityCredit: 'local-proof-only',
+        whyHighestLeverageNow: 'This advances the sprint goal.',
+        representativeRerunCadence: 'fresh-representative-rerun',
+        modelFit: {
+          packageClass: 'bounded-implementation',
+          intendedMinimumModel: 'gpt-5.3-codex-spark',
+          scopeShape: 'leaf-slice',
+          ambiguityScore: 1,
+          escalationTriggers: [],
+        },
+      };
+      const errors = validatePackageMetadataShape(
+        'work/packages/todo-new-test.md',
+        'todo',
+        metadata,
+      );
+      assert.deepEqual(errors, []);
+    });
+
+    it('rejects invalid representativeRerunCadence values', () => {
+      const metadata = {
+        schema: 'work-package-v1',
+        status: WORK_TRACKER_ACTIVE_STATUS,
+        opened: '2026-05-22',
+        lane: LANE_RUNTIME_OWNER_BOUNDARY,
+        scenario: 'rolling-restart',
+        owner: 'rebalancer_owner',
+        boundary: 'membership_lifecycle',
+        nextAction: 'implement cadence validation',
+        stabilityCredit: 'local-proof-only',
+        whyHighestLeverageNow: 'This advances the sprint goal.',
+        representativeRerunCadence: 'invalid-cadence-value',
+        modelFit: {
+          packageClass: 'bounded-implementation',
+          intendedMinimumModel: 'gpt-5.3-codex-spark',
+          scopeShape: 'leaf-slice',
+          ambiguityScore: 1,
+          escalationTriggers: [],
+        },
+      };
+      const errors = validatePackageMetadataShape(
+        'work/packages/active-new-test.md',
+        WORK_TRACKER_ACTIVE_STATUS,
+        metadata,
+      );
+      assert.ok(errors.length > 0);
+      assert.match(errors[0], /metadata representativeRerunCadence must be one of/u);
+    });
+
+    it('requires representativeRerunCadence for local-proof-only runtime/scenario packages', () => {
+      const metadata = {
+        schema: 'work-package-v1',
+        status: WORK_TRACKER_ACTIVE_STATUS,
+        opened: '2026-05-22',
+        lane: LANE_RUNTIME_OWNER_BOUNDARY,
+        scenario: 'rolling-restart',
+        owner: 'rebalancer_owner',
+        boundary: 'membership_lifecycle',
+        nextAction: 'implement cadence validation',
+        stabilityCredit: 'local-proof-only',
+        whyHighestLeverageNow: 'This advances the sprint goal.',
+        modelFit: {
+          packageClass: 'bounded-implementation',
+          intendedMinimumModel: 'gpt-5.3-codex-spark',
+          scopeShape: 'leaf-slice',
+          ambiguityScore: 1,
+          escalationTriggers: [],
+        },
+      };
+      const errors = validatePackageMetadataShape(
+        'work/packages/active-new-test.md',
+        WORK_TRACKER_ACTIVE_STATUS,
+        metadata,
+      );
+      assert.ok(errors.length > 0);
+      assert.match(errors[0], /must record representativeRerunCadence/u);
+    });
+  });
+
+  describe('work tracker codeQualityAdmission validation', () => {
+    it('requires codeQualityAdmission on new active maintenance/cleanup packages', () => {
+      const metadata = {
+        schema: 'work-package-v1',
+        status: WORK_TRACKER_ACTIVE_STATUS,
+        opened: '2026-05-22',
+        lane: LANE_MECHANICAL_MAINTENANCE,
+        scenario: 'none',
+        owner: 'workflow_tooling_owner',
+        boundary: 'code_quality_focus_policy',
+        currentState: 'implementing code quality admission validation',
+        nextAction: 'enforce quality admission',
+        stabilityCredit: 'local-proof-only',
+        whyHighestLeverageNow: 'This advances the universal owner contract sprint goal.',
+        modelFit: {
+          packageClass: 'mechanical-maintenance',
+          intendedMinimumModel: 'gpt-5.3-codex-spark',
+          scopeShape: 'leaf-slice',
+          ambiguityScore: 1,
+          escalationTriggers: [],
+        },
+      };
+      const errors = validatePackageMetadataShape(
+        'work/packages/active-new-test.md',
+        WORK_TRACKER_ACTIVE_STATUS,
+        metadata,
+      );
+      assert.ok(errors.length > 0);
+      assert.match(errors[0], /must record codeQualityAdmission/u);
+    });
+
+    it('rejects invalid codeQualityAdmission structures and reasons', () => {
+      const metadata = {
+        schema: 'work-package-v1',
+        status: WORK_TRACKER_ACTIVE_STATUS,
+        opened: '2026-05-22',
+        lane: LANE_MECHANICAL_MAINTENANCE,
+        scenario: 'none',
+        owner: 'workflow_tooling_owner',
+        boundary: 'code_quality_focus_policy',
+        currentState: 'implementing code quality admission validation',
+        nextAction: 'enforce quality admission',
+        stabilityCredit: 'local-proof-only',
+        whyHighestLeverageNow: 'This advances the universal owner contract sprint goal.',
+        codeQualityAdmission: {
+          reason: 'invalid-reason-here',
+          evidence: '',
+        },
+        modelFit: {
+          packageClass: 'mechanical-maintenance',
+          intendedMinimumModel: 'gpt-5.3-codex-spark',
+          scopeShape: 'leaf-slice',
+          ambiguityScore: 1,
+          escalationTriggers: [],
+        },
+      };
+      const errors = validatePackageMetadataShape(
+        'work/packages/active-new-test.md',
+        WORK_TRACKER_ACTIVE_STATUS,
+        metadata,
+      );
+      assert.ok(errors.length >= 2);
+      assert.match(errors[0], /metadata codeQualityAdmission.reason must be one of/u);
+      assert.match(errors[1], /metadata codeQualityAdmission.evidence must be a non-empty string/u);
+    });
+
+    it('allows valid codeQualityAdmission structures', () => {
+      const metadata = {
+        schema: 'work-package-v1',
+        status: WORK_TRACKER_ACTIVE_STATUS,
+        opened: '2026-05-22',
+        lane: LANE_MECHANICAL_MAINTENANCE,
+        scenario: 'none',
+        owner: 'workflow_tooling_owner',
+        boundary: 'code_quality_focus_policy',
+        currentState: 'implementing code quality admission validation',
+        nextAction: 'enforce quality admission',
+        stabilityCredit: 'local-proof-only',
+        whyHighestLeverageNow: 'This advances the universal owner contract sprint goal.',
+        codeQualityAdmission: {
+          reason: 'removes-duplicate-decision-paths',
+          evidence: 'This cleans up duplicate paths to improve active-gate snapshot convergence.',
+        },
+        modelFit: {
+          packageClass: 'mechanical-maintenance',
+          intendedMinimumModel: 'gpt-5.3-codex-spark',
+          scopeShape: 'leaf-slice',
+          ambiguityScore: 1,
+          escalationTriggers: [],
+        },
+      };
+      const errors = validatePackageMetadataShape(
+        'work/packages/active-new-test.md',
+        WORK_TRACKER_ACTIVE_STATUS,
+        metadata,
+      );
+      assert.deepEqual(errors, []);
+    });
+  });
 });

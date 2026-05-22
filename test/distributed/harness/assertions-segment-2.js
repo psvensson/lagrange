@@ -1,4 +1,5 @@
 import {CONVERGENCE_DEFAULTS, TIMEOUTS} from './constants.js';
+import {ConsistencyEvaluatorV2} from './consistency-evaluator.js';
 import {normalizeReplicaOperationRecord} from '../../../src/rebalancer/replica-operation-liveness.js';
 import {ASSERTIONS_SEGMENT_1} from './assertions-segment-1.js';
 import {
@@ -110,6 +111,15 @@ const OBSERVATION_SOURCE_SQL_FALLBACK = 'sql_fallback';
 const OBSERVATION_SOURCE_CONTROL_SNAPSHOT = 'control_snapshot';
 const OBSERVATION_MODE_SQL_FALLBACK = 'sql_fallback';
 const POST_REBALANCE_CLOSURE_MESSAGE_PREFIX = 'Post-rebalance closure: ';
+const FINAL_ADJUDICATION_DRAIN_TIMEOUT_MS = 2000;
+const FINAL_ADJUDICATION_DRAIN_REACHABILITY_TIMEOUT_MS = 200;
+const FINAL_ADJUDICATION_DRAIN_SNAPSHOT_TIMEOUT_MS = 200;
+const FINAL_ADJUDICATION_FINAL_REACHABILITY_TIMEOUT_MS = 500;
+const FINAL_ADJUDICATION_FINAL_SNAPSHOT_TIMEOUT_MS = 500;
+const FINAL_ADJUDICATION_POLL_INTERVAL_MS = 100;
+const FINAL_ADJUDICATION_EMPTY_IN_FLIGHT_COUNT = 0;
+const FINAL_ADJUDICATION_FORCE_REPAIR = true;
+const FINAL_ADJUDICATION_FORCE_AUTHORITATIVE_REPAIR = true;
 
 async function queryNodeConsistencyStateViaSql(node) {
   const [nodesResult, partResult, svcResult] = await Promise.all([
@@ -219,6 +229,7 @@ async function queryNodeConsistencyState(node, options = {}) {
     const snapshotState = await queryControlSnapshot(node, {
       forceRepair: options.forceRepair === true,
       forceAuthoritativeRepair: options.forceAuthoritativeRepair === true,
+      timeoutMs: options.timeoutMs,
     });
     return {
       nodeId: String(node?.id || VALUE_UNKNOWN),
@@ -829,8 +840,12 @@ async function waitForConvergence(nodes, options = {}) {
     'Operation history: ' +
     operationHistorySnippet;
 
+  const finalAdjudication = await runFinalAdjudication(nodes);
+
   const err = new Error(msg);
   err.diagnostics = {
+    consistencyVerdict: finalAdjudication.verdict,
+    finalAdjudication,
     voterCounts: voterSummary,
     leaders: leaderSummary,
     leaderChanges,
@@ -1162,6 +1177,94 @@ function buildPublicationConvergenceFromState(state) {
   };
 }
 
+async function runFinalAdjudication(nodes) {
+  const startDrain = Date.now();
+  while (Date.now() - startDrain < FINAL_ADJUDICATION_DRAIN_TIMEOUT_MS) {
+    let anyInFlight = false;
+    for (const node of nodes) {
+      try {
+        const report = await probeNodeReachability(node, {
+          timeoutMs: FINAL_ADJUDICATION_DRAIN_REACHABILITY_TIMEOUT_MS,
+        });
+        if (!report.reachable) {
+          continue;
+        }
+
+        const snapshot = typeof node.getControlSnapshot === 'function' ?
+          await queryControlSnapshot(node, {
+            timeoutMs: FINAL_ADJUDICATION_DRAIN_SNAPSHOT_TIMEOUT_MS,
+            lane: ADMIN_SOCKET_LANE_SNAPSHOT,
+          }) :
+          await queryConvergenceSnapshotViaSql(node);
+
+        if (
+          snapshot?.inFlightReplicaOperationCount >
+          FINAL_ADJUDICATION_EMPTY_IN_FLIGHT_COUNT
+        ) {
+          anyInFlight = true;
+          break;
+        }
+      } catch (_error) {
+        continue;
+      }
+    }
+    if (!anyInFlight) {
+      break;
+    }
+    await new Promise((resolve) =>
+      setTimeout(resolve, FINAL_ADJUDICATION_POLL_INTERVAL_MS),
+    );
+  }
+
+  const snapshots = [];
+  const reachableNodeIds = [];
+
+  await Promise.all(nodes.map(async (node) => {
+    try {
+      const report = await probeNodeReachability(node, {
+        timeoutMs: FINAL_ADJUDICATION_FINAL_REACHABILITY_TIMEOUT_MS,
+      });
+      if (report.reachable) {
+        reachableNodeIds.push(node.id);
+
+        const nodeState = await queryNodeConsistencyState(node, {
+          forceRepair: FINAL_ADJUDICATION_FORCE_REPAIR,
+          forceAuthoritativeRepair:
+            FINAL_ADJUDICATION_FORCE_AUTHORITATIVE_REPAIR,
+          timeoutMs: FINAL_ADJUDICATION_FINAL_SNAPSHOT_TIMEOUT_MS,
+        });
+
+        snapshots.push({
+          nodeId: nodeState.nodeId,
+          partitions: nodeState.partitions || [],
+          leaders: nodeState.leaders || {},
+          replicaRoleDiagnostics:
+            nodeState.controlPlaneDiagnostics?.replicaRoleDiagnostics || {},
+          replicaOperations: {
+            inFlightCount: nodeState.replicaOperations?.inFlightCount ??
+              (
+                nodeState.controlPlaneDiagnostics
+                  ?.replicaOperations?.inFlightCount ??
+                FINAL_ADJUDICATION_EMPTY_IN_FLIGHT_COUNT
+              ),
+            statusHistogram: nodeState.replicaOperations?.statusHistogram ||
+              nodeState.controlPlaneDiagnostics
+                ?.replicaOperations?.statusHistogram || {},
+          },
+        });
+      }
+    } catch (_error) {
+      return null;
+    }
+  }));
+
+  const evaluator = new ConsistencyEvaluatorV2();
+  return evaluator.evaluate({
+    reachableNodeIds,
+    snapshots,
+  });
+}
+
 export const ASSERTIONS_SEGMENT_2 = {
   TIMEOUTS,
   SERVICES_QUERY,
@@ -1286,4 +1389,5 @@ export const ASSERTIONS_SEGMENT_2 = {
   formatOperationHistoryEntry,
   cloneDiagnostics,
   buildPublicationConvergenceFromState,
+  runFinalAdjudication,
 };

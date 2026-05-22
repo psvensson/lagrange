@@ -43,6 +43,7 @@ import {
   LANE_DIAGNOSTIC_CLASSIFICATION,
   LANE_EXPERIMENT,
   LANE_MECHANICAL_MAINTENANCE,
+  LANE_READ_REVIEW_DOC_ONLY,
   LANE_RUNTIME_OWNER_BOUNDARY,
   LANE_SCENARIO_RELEASE_GATE,
   LANE_SINGLE_FILE_RUNTIME,
@@ -79,6 +80,7 @@ import {
   SCOPE_FIELD_GENERATED_FILES,
   SCOPE_FIELD_HANDOFF_FILES,
   SCOPE_FIELD_WRITE_SCOPE,
+  THEORY_LEDGER_REFS_FIELD,
   SUBAGENT_ATTEMPT_STATUSES,
   SUBAGENT_OPTIONAL_LANES,
   SUBAGENT_UNAVAILABLE_STATES,
@@ -92,6 +94,13 @@ import {
   VALIDATION_PHASE_PRE_IMPL,
   VALIDATION_PHASES,
   WORK_PACKAGE_METADATA_SCHEMA,
+  METADATA_FIELD_STABILITY_CREDIT,
+  METADATA_FIELD_WHY_HIGHEST_LEVERAGE_NOW,
+  METADATA_FIELD_REPRESENTATIVE_RERUN_CADENCE,
+  METADATA_FIELD_CODE_QUALITY_ADMISSION,
+  STABILITY_CREDIT_VALID_VALUES,
+  REPRESENTATIVE_RERUN_CADENCE_VALID_VALUES,
+  CODE_QUALITY_ADMISSION_REASONS,
   coreLogicBriefRequiredForLane,
 } from './work-package-schema.js';
 
@@ -279,6 +288,7 @@ const METADATA_FIELD_PROOF = 'proof';
 const METADATA_FIELD_ARTIFACT = 'artifact';
 const METADATA_FIELD_PLAYBACK = 'playback';
 const METADATA_FIELD_MODEL_FIT = 'modelFit';
+const THEORY_LEDGER_REF_PATTERN = /^theory-[0-9]{8}-[a-z0-9]+(?:-[a-z0-9]+)*$/u;
 const MODEL_FIT_METADATA_PACKAGE_CLASS_FIELD = 'packageClass';
 const MODEL_FIT_METADATA_INTENDED_MINIMUM_MODEL_FIELD =
   'intendedMinimumModel';
@@ -416,6 +426,12 @@ const FRONTIER_OSCILLATION_MATERIAL_RESULTS = Object.freeze([
   'same-frontier',
   'reduced',
   'classification-only',
+]);
+const BOUNDARY_FAMILY_OSCILLATION = Object.freeze([
+  'publication_convergence',
+  'active_gate_snapshot_coverage',
+  'readiness_support',
+  'operation_workflow_handoff',
 ]);
 const REPRESENTATIVE_MOVEMENT_RESULTS = Object.freeze([
   'representative-green',
@@ -808,7 +824,7 @@ function extractSubagentSequencingLedger(content) {
   return extractMarkdownLevelTwoSection(content, SUBAGENT_LEDGER_HEADING);
 }
 
-function extractExecutionEvidenceLedger(content) {
+export function extractExecutionEvidenceLedger(content) {
   return extractMarkdownLevelTwoSection(content, EXECUTION_EVIDENCE_HEADING);
 }
 
@@ -929,7 +945,7 @@ function findSubagentUnavailableState(content) {
   return state;
 }
 
-function extractCheckedChecklistItems(ledger) {
+export function extractCheckedChecklistItems(ledger) {
   const items = [];
   CHECKBOX_CHECKED_ITEM_PATTERN.lastIndex = NUM_ZERO;
   let match = CHECKBOX_CHECKED_ITEM_PATTERN.exec(ledger);
@@ -4139,6 +4155,22 @@ function frontierHistoryEntrySummary(entry) {
   ].filter((value) => value.length > NUM_ZERO).join(' / ');
 }
 
+function getNormalizedBoundary(metadata) {
+  return normalizeLedgerText(metadata?.boundary).toLowerCase();
+}
+
+function isOscillationFamilyBoundary(boundary) {
+  const norm = normalizeLedgerText(boundary).toLowerCase().replace(/[- ]/g, '_');
+  return BOUNDARY_FAMILY_OSCILLATION.includes(norm) ||
+         norm.includes('publication_convergence') ||
+         norm.includes('active_gate_snapshot_coverage') ||
+         norm.includes('readiness_support') ||
+         norm.includes('operation_workflow_handoff') ||
+         norm.includes('readiness') ||
+         norm.includes('workflow_progress') ||
+         norm.includes('operation_workflow');
+}
+
 function detectFrontierOscillation(metadata, filePath, packageHistoryEntries) {
   const currentKey = metadataOwnerBoundaryKey(metadata);
   const scenarioKey = metadataScenarioKey(metadata);
@@ -4153,6 +4185,26 @@ function detectFrontierOscillation(metadata, filePath, packageHistoryEntries) {
       entry.scenarioKey === scenarioKey &&
       isMaterialOscillationResult(entry.metadata))
     .slice(NUM_ZERO, FRONTIER_OSCILLATION_RECENT_HISTORY_LIMIT);
+
+  const currentBoundary = getNormalizedBoundary(metadata);
+  if (isOscillationFamilyBoundary(currentBoundary)) {
+    const familyEntries = recentEntries.filter((entry) =>
+      isOscillationFamilyBoundary(entry.metadata?.boundary),
+    );
+    if (familyEntries.length >= NUM_TWO) {
+      const uniqueBoundaries = new Set([
+        currentBoundary,
+        ...familyEntries.map((e) => getNormalizedBoundary(e.metadata)),
+      ].filter((b) => b.length > NUM_ZERO));
+      if (uniqueBoundaries.size >= NUM_TWO) {
+        return {
+          reason: 'repeated adjacent-boundary oscillation within the same boundary family',
+          relatedEntries: familyEntries.slice(NUM_ZERO, FRONTIER_OSCILLATION_RELATED_PACKAGE_LIMIT),
+        };
+      }
+    }
+  }
+
   const sameBoundaryEntry = recentEntries.find((entry) =>
     entry.ownerBoundaryKey === currentKey);
   if (sameBoundaryEntry) {
@@ -5119,7 +5171,7 @@ function validateActiveScenarioMetadataShape(filePath, metadata) {
   return errors;
 }
 
-function validatePackageMetadataShape(filePath, fileStatus, metadata) {
+export function validatePackageMetadataShape(filePath, fileStatus, metadata) {
   const errors = [];
   if (!metadata) {
     return errors;
@@ -5153,11 +5205,150 @@ function validatePackageMetadataShape(filePath, fileStatus, metadata) {
     SCOPE_FIELD_GENERATED_FILES,
     SCOPE_FIELD_CANDIDATE_RUNTIME_FILES,
     SCOPE_FIELD_COMMIT_SCOPE,
+    THEORY_LEDGER_REFS_FIELD,
   ]) {
     if (metadata[scopeField] !== undefined && !Array.isArray(metadata[scopeField])) {
       errors.push(`${filePath}: metadata ${scopeField} must be an array.`);
     }
   }
+  if (Array.isArray(metadata[THEORY_LEDGER_REFS_FIELD])) {
+    for (const theoryRef of metadata[THEORY_LEDGER_REFS_FIELD]) {
+      const normalizedRef = normalizeLedgerText(theoryRef);
+      if (!THEORY_LEDGER_REF_PATTERN.test(normalizedRef)) {
+        errors.push(
+          `${filePath}: metadata ${THEORY_LEDGER_REFS_FIELD} entries must ` +
+            `look like theory-YYYYMMDD-short-slug.`,
+        );
+      }
+    }
+  }
+  const isScenarioOrRuntimeLane = [
+    LANE_RUNTIME_OWNER_BOUNDARY,
+    LANE_SCENARIO_RELEASE_GATE,
+    LANE_CAUSAL_ESCALATION,
+  ].includes(metadata.lane);
+
+  const isNewPackage = metadata.opened && metadata.opened >= '2026-05-22';
+
+  if (isNewPackage) {
+    if (metadata.stabilityCredit === undefined) {
+      errors.push(`${filePath}: metadata stabilityCredit is required.`);
+    }
+    if (metadata.lane !== LANE_READ_REVIEW_DOC_ONLY) {
+      if (metadata.whyHighestLeverageNow === undefined) {
+        errors.push(`${filePath}: metadata whyHighestLeverageNow is required.`);
+      }
+    }
+  }
+
+  if (metadata.whyHighestLeverageNow !== undefined) {
+    const whyLeverage = String(metadata.whyHighestLeverageNow).trim();
+    if (whyLeverage.length === 0) {
+      errors.push(`${filePath}: metadata whyHighestLeverageNow must not be empty.`);
+    } else {
+      const LEVERAGE_FIELD_REQUIRED_TERMS_PATTERN =
+        /\b(?:sprint|goal|universal\s+owner|owner\s+contract|representative|gate|stability|frontier)\b/iu;
+      if (
+        !LEVERAGE_FIELD_REQUIRED_TERMS_PATTERN.test(whyLeverage) &&
+        !whyLeverage.includes('<placeholder>') &&
+        !whyLeverage.startsWith('<')
+      ) {
+        errors.push(
+          `${filePath}: metadata whyHighestLeverageNow must name the active sprint goal, ` +
+            `representative gate, or current first frontier it advances.`,
+        );
+      }
+      if (
+        fileStatus === STATUS_ACTIVE &&
+        (whyLeverage.includes('<placeholder>') || whyLeverage.startsWith('<'))
+      ) {
+        errors.push(
+          `${filePath}: metadata whyHighestLeverageNow must be a concrete value.`,
+        );
+      }
+    }
+  }
+
+  if (metadata.stabilityCredit !== undefined) {
+    if (!STABILITY_CREDIT_VALID_VALUES.includes(metadata.stabilityCredit)) {
+      errors.push(
+        `${filePath}: metadata stabilityCredit must be one of: ` +
+          `${STABILITY_CREDIT_VALID_VALUES.join(', ')}.`,
+      );
+    } else if (isScenarioOrRuntimeLane) {
+      const representativeCredits = [
+        'representative-green',
+        'representative-migrated',
+        'representative-reduced',
+      ];
+      if (
+        !representativeCredits.includes(metadata.stabilityCredit) &&
+        metadata.stabilityCredit !== 'local-proof-only'
+      ) {
+        errors.push(
+          `${filePath}: runtime/scenario packages cannot hide behind local proof; ` +
+            `metadata stabilityCredit must be one of: ${representativeCredits.join(', ')}, or local-proof-only with a valid cadence record.`,
+        );
+      }
+    }
+  }
+
+  const isMaintenanceOrCleanup =
+    metadata.lane === LANE_MECHANICAL_MAINTENANCE ||
+    metadata.lane === LANE_TEST_ONLY_PROOF ||
+    /cleanup|quality|refactor|maintenance/iu.test(metadata.boundary || '');
+
+  if (isNewPackage && fileStatus === STATUS_ACTIVE && isMaintenanceOrCleanup) {
+    if (metadata.codeQualityAdmission === undefined) {
+      errors.push(
+        `${filePath}: maintenance or cleanup package in active sprint must record codeQualityAdmission; ` +
+        `generic cleanup packages must state their stability-relevant effect before activation.`,
+      );
+    }
+  }
+
+  if (metadata.codeQualityAdmission !== undefined) {
+    const admission = metadata.codeQualityAdmission;
+    if (!isObjectRecord(admission)) {
+      errors.push(`${filePath}: metadata codeQualityAdmission must be an object.`);
+    } else {
+      const reason = normalizeLedgerText(admission.reason);
+      if (!CODE_QUALITY_ADMISSION_REASONS.includes(reason)) {
+        errors.push(
+          `${filePath}: metadata codeQualityAdmission.reason must be one of: ` +
+          `${CODE_QUALITY_ADMISSION_REASONS.join(', ')}.`,
+        );
+      }
+      const evidence = String(admission.evidence || '').trim();
+      if (evidence.length === 0) {
+        errors.push(`${filePath}: metadata codeQualityAdmission.evidence must be a non-empty string.`);
+      }
+    }
+  }
+
+  const isFocusedRuntimeOrScenarioLane = [
+    LANE_RUNTIME_OWNER_BOUNDARY,
+    LANE_SCENARIO_RELEASE_GATE,
+  ].includes(metadata.lane);
+
+  if (isFocusedRuntimeOrScenarioLane && metadata.stabilityCredit === 'local-proof-only') {
+    if (metadata.representativeRerunCadence === undefined) {
+      errors.push(
+        `${filePath}: focused runtime/scenario package with passing owner proof (local-proof-only) ` +
+          `must record representativeRerunCadence; runtime/scenario packages cannot hide behind local proof without a valid cadence record.`,
+      );
+    }
+  }
+
+  if (metadata.representativeRerunCadence !== undefined) {
+    if (!REPRESENTATIVE_RERUN_CADENCE_VALID_VALUES.includes(metadata.representativeRerunCadence)) {
+      errors.push(
+        `${filePath}: metadata representativeRerunCadence must be one of: ` +
+          `${REPRESENTATIVE_RERUN_CADENCE_VALID_VALUES.join(', ')}.`,
+      );
+    }
+  }
+
   if (fileStatus === STATUS_ACTIVE) {
     errors.push(...validateActivePackageMetadataShape(filePath, metadata));
     errors.push(...validateActiveScenarioMetadataShape(filePath, metadata));
@@ -5337,6 +5528,59 @@ async function validateExecutableContracts(metadata, filePath, options = {}) {
   return errors;
 }
 
+export function validateContractProofRequirement(metadata, filePath, options = {}) {
+  const errors = [];
+  if (!metadata || options.phase === VALIDATION_PHASE_ENTRY || options.status !== STATUS_ACTIVE) {
+    return errors;
+  }
+
+  const lane = metadataLane(metadata);
+
+  if (lane === LANE_RUNTIME_OWNER_BOUNDARY || lane === LANE_SCENARIO_RELEASE_GATE) {
+    const proof = Array.isArray(metadata.proof) ? metadata.proof : [];
+    const contractTransitionPattern = /\b(?:contract|transition|state|outcome|ready|pending|deferred|blocked|failed|rebalancer|lifecycle|membership|placement|cutover)\b/i;
+    let hasNamedTransition = false;
+    for (const cmd of proof) {
+      if (contractTransitionPattern.test(cmd)) {
+        hasNamedTransition = true;
+        break;
+      }
+    }
+    if (!hasNamedTransition) {
+      errors.push(
+        `${filePath}: runtime/scenario package proof commands must name the contract transition under proof, not only a changed timeout or count.`
+      );
+    }
+  }
+
+  if (lane === LANE_RUNTIME_OWNER_BOUNDARY) {
+    const proof = Array.isArray(metadata.proof) ? metadata.proof : [];
+    const proofText = proof.join(NEWLINE);
+    const hasFixture = /\bfixture\b/i.test(proofText);
+    const hasConsumer = /\bconsumer\b/i.test(proofText);
+    if (!hasFixture) {
+      errors.push(
+        `${filePath}: owner-boundary package proof commands must include a focused contract fixture.`
+      );
+    }
+    if (!hasConsumer) {
+      errors.push(
+        `${filePath}: owner-boundary package proof commands must include an affected consumer proof.`
+      );
+    }
+    if (isScenarioDrivenMetadata(metadata)) {
+      if (!hasRepresentativeEvidenceProof(metadata)) {
+        errors.push(
+          `${filePath}: scenario-driven owner-boundary package proof commands must include representative routing evidence.`
+        );
+      }
+    }
+  }
+
+  return errors;
+}
+
+
 export function validateProbePackageContract(content, filePath, metadata) {
   const errors = [];
   const markdownLineCount = content.split(NEWLINE).length;
@@ -5418,6 +5662,41 @@ async function validatePackageFile(filePath, options = {}) {
   errors.push(
     ...validatePackageMetadataShape(relativePath, fileStatus, metadata),
   );
+  if (fileStatus === STATUS_ACTIVE && metadata && metadata.predecessor) {
+    const isCurrentFocused = [
+      LANE_RUNTIME_OWNER_BOUNDARY,
+      LANE_SCENARIO_RELEASE_GATE,
+    ].includes(metadata.lane);
+
+    if (isCurrentFocused) {
+      const predPath = normalizeCliPath(metadata.predecessor);
+      if (await pathExists(predPath)) {
+        try {
+          const predContent = await readTextFile(predPath);
+          const predMetadata = parsePackageMetadata(predContent, predPath);
+          if (predMetadata) {
+            const isPredFocused = [
+              LANE_RUNTIME_OWNER_BOUNDARY,
+              LANE_SCENARIO_RELEASE_GATE,
+            ].includes(predMetadata.lane);
+
+            if (isPredFocused && predMetadata.stabilityCredit === 'local-proof-only') {
+              const hasCadenceRecord = predMetadata.representativeRerunCadence &&
+                REPRESENTATIVE_RERUN_CADENCE_VALID_VALUES.includes(predMetadata.representativeRerunCadence);
+              if (!hasCadenceRecord) {
+                errors.push(
+                  `${relativePath}: cannot activate adjacent runtime package because predecessor ` +
+                    `${metadata.predecessor} has only local proof and no cadence record.`,
+                );
+              }
+            }
+          }
+        } catch (err) {
+          // ignore parsing/reading errors
+        }
+      }
+    }
+  }
   if (phase === VALIDATION_PHASE_PROBE) {
     errors.push(...validateProbePackageContract(
       content,
@@ -5616,6 +5895,7 @@ async function validatePackageFile(filePath, options = {}) {
       isHistoricalClosedCommitLedgerMetadata(fileStatus, metadata),
   }));
   errors.push(...await validateExecutableContracts(metadata, relativePath, { phase, status: fileStatus }));
+  errors.push(...validateContractProofRequirement(metadata, relativePath, { phase, status: fileStatus }));
   return {
     errors,
     hasMetadata: metadata !== null,
@@ -6160,6 +6440,9 @@ function summarizeDoctorMetadata(metadata = {}) {
     commitScopeCount: Array.isArray(metadata[SCOPE_FIELD_COMMIT_SCOPE]) ?
       metadata[SCOPE_FIELD_COMMIT_SCOPE].length :
       NUM_ZERO,
+    theoryLedgerRefCount: Array.isArray(metadata[THEORY_LEDGER_REFS_FIELD]) ?
+      metadata[THEORY_LEDGER_REFS_FIELD].length :
+      NUM_ZERO,
     legacyTouchedFileCount: Array.isArray(metadata.touchedFiles) ?
       metadata.touchedFiles.length :
       NUM_ZERO,
@@ -6380,6 +6663,15 @@ function buildDoctorSuggestion(error) {
       'nextAction when diagnostic or classification work keeps a sprint ' +
       'representative residual live.';
   }
+  if (/whyHighestLeverageNow/iu.test(error)) {
+    return 'Add `whyHighestLeverageNow` metadata stating why this work is the highest-leverage next action for the active sprint goal, representative stability gate, or first frontier it advances.';
+  }
+  if (/representativeRerunCadence/iu.test(error)) {
+    return 'Add `representativeRerunCadence` metadata stating how a representative rerun is recorded (fresh-representative-rerun, scheduled-rerun-command, explicit-invalid-rerun-reason, or architecture-stop-reason) for focused runtime/scenario packages with passing local proof.';
+  }
+  if (/cannot activate adjacent runtime package because predecessor/iu.test(error)) {
+    return 'Perform a representative rerun or record a cadence record in the predecessor package before starting another adjacent runtime package.';
+  }
   if (/scenarioCausalClosure\.currentFirstFrontier/iu.test(error)) {
     return 'Update the package owner/boundary to the canonical first frontier, ' +
       'or add `ownerBoundaryMigrationProof` with from/to owner-boundary and ' +
@@ -6402,6 +6694,11 @@ function buildDoctorSuggestion(error) {
       'default mode, separate-package reason, one-artifact/two-or-three-command ' +
       'budget, decision record, successor action, and runtime promotion rule. ' +
       'Stable owner/boundary local-fix routes should open a runtime-owner-boundary successor.';
+  }
+  if (/codeQualityAdmission/iu.test(error)) {
+    return 'Add `codeQualityAdmission` metadata to maintenance/cleanup packages in active stability sprints, ' +
+      'stating a stability-relevant reason (removes-duplicate-decision-paths, preserves-owner-outcomes, ' +
+      'improves-evidence-fidelity, prevents-regression, or active-guardrail-requirement) and supporting evidence.';
   }
   if (/same-frontier rerun without concrete reduction/iu.test(error)) {
     return 'Stop local patching: select/open an autonomous architecture ' +
@@ -6668,6 +6965,11 @@ export function buildPackageDoctorLines(filePath, content, options = {}) {
   appendDoctorField(lines, 'Commit scope', String(metadataSummary.commitScopeCount));
   appendDoctorField(
     lines,
+    'Theory ledger refs',
+    String(metadataSummary.theoryLedgerRefCount),
+  );
+  appendDoctorField(
+    lines,
     'Legacy touched files',
     String(metadataSummary.legacyTouchedFileCount),
   );
@@ -6926,6 +7228,7 @@ export function buildCurrentBlockerPayload(
     candidateRuntimeFiles,
     commitScope,
     touchedFiles: legacyTouchedFiles,
+    theoryLedgerRefs: metadataArray(metadata, THEORY_LEDGER_REFS_FIELD),
     modelFit: metadata.modelFit || {},
     representativeResidual: isObjectRecord(
       metadata[REPRESENTATIVE_RESIDUAL_METADATA_FIELD],
@@ -6983,6 +7286,7 @@ function buildNoActiveCurrentBlockerPayload(activeSprintFile = null) {
     classificationEfficiency: {},
     architectureDecisionGate: {},
     predecessor: null,
+    theoryLedgerRefs: [],
   };
 }
 
@@ -7313,6 +7617,10 @@ export function renderCurrentBlockerMarkdown(payload) {
     'Escalation triggers:',
     '',
     formatMarkdownList(payload.modelFit?.escalationTriggers || []),
+    '',
+    '## Theory Ledger References',
+    '',
+    formatMarkdownList(payload.theoryLedgerRefs || []),
     '',
     '## Representative Residual',
     '',

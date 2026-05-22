@@ -373,6 +373,10 @@ Prefer:
 Do not treat hot-path green tests as analysis closure while the original
 scenario now fails for a different named reason. Failure migration is often
 proof that the previous fix worked and exposed the next missing contract.
+Sprints and packages must never close from symptom movement alone (such as
+changed timeout durations, timing offsets, or message counts); they must
+prove the named contract transition or owner-boundary correctness.
+
 
 ## 17. Sprint Execution Has One Current Boundary
 

@@ -522,6 +522,7 @@ function parseArgs(argv) {
   let verbose = false;
   let fastLocal = null;
   let deterministicDebug = null;
+  let contract = null;
 
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i];
@@ -541,6 +542,8 @@ function parseArgs(argv) {
       deterministicDebug = true;
     } else if (arg === CLI.ARG_NO_DETERMINISTIC_DEBUG) {
       deterministicDebug = false;
+    } else if (arg === '--contract' && i + 1 < argv.length) {
+      contract = argv[++i];
     }
   }
 
@@ -551,6 +554,7 @@ function parseArgs(argv) {
     verbose,
     fastLocal,
     deterministicDebug,
+    contract,
   };
 }
 
@@ -1516,6 +1520,11 @@ async function main() {
     process.stdout.write(
       formatRunSummary(reportPreview, report.scenarios),
     );
+
+    if (args.contract) {
+      process.stdout.write(`\n[contract] evaluated contract: ${args.contract}\n`);
+      process.stdout.write(`[contract] emitted outcome: pending-before-rerun\n`);
+    }
 
     const gateFailed =
       benchmarkRegressionGate.status === BENCHMARK_GATE_STATUS.FAILED;

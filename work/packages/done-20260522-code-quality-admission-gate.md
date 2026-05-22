@@ -1,48 +1,47 @@
-# Contract Proof Tooling
+# Code Quality Admission Gate
 
 <!-- work-package
 {
   "schema": "work-package-v1",
-  "status": "active",
-  "opened": "2026-05-21",
+  "status": "done",
+  "opened": "2026-05-22",
+  "completed": "2026-05-22",
   "lane": "mechanical-maintenance",
   "scenario": "none",
   "artifact": "none",
   "playback": "none",
   "owner": "workflow_tooling_owner",
-  "boundary": "contract_proof_validation",
-  "dominantReason": "scenario_proof_not_contract_proof",
-  "currentState": "Planned successor package after metadata/storage separation is proven.",
-  "nextAction": "Upgrade package validators and evidence tooling so owner-boundary closure proves named contract transitions rather than timeout symptom movement.",
+  "boundary": "code_quality_focus_policy",
+  "dominantReason": "generic_cleanup_can_compete_with_frontier_work",
+  "currentState": "New package scaffolded from the shared work-package schema.",
+  "nextAction": "Require code-quality packages to name the owner-path, evidence-fidelity, duplicate-decision-path, or regression-prevention effect they buy before they can enter an active sprint queue.",
+  "stabilityCredit": "local-proof-only",
+  "whyHighestLeverageNow": "This is the next required package in the universal contract sprint queue to filter generic cleanup from competing with active frontier work.",
+  "codeQualityAdmission": {
+    "reason": "active-guardrail-requirement",
+    "evidence": "This implements the code quality admission policy gate to prevent generic cleanup from competing with active frontier stability work."
+  },
   "proof": [
-    "npm test -- test/scripts/work-tracker-subagent-ledger.test.js test/scripts/work-tracker-architecture-decision-gate.test.js",
-    "npm test -- test/scripts/work-llm-usability-tools.test.js",
-    "npm run work:validate -- --pre-impl work/packages/active-20260521-contract-proof-tooling.md"
+    "npm test -- test/scripts/work-tracker-subagent-ledger.test.js test/scripts/work-llm-usability-tools.test.js",
+    "npm run work:package:schema",
+    "npm run work:validate -- --pre-impl work/packages/active-20260522-code-quality-admission-gate.md"
   ],
   "writeScope": [
     "scripts/work-tracker.js",
     "scripts/work-package-schema.js",
+    "work/templates/work-package-template.md",
     "test/scripts/work-tracker-subagent-ledger.test.js",
     "test/scripts/work-llm-usability-tools.test.js"
   ],
-  "handoffFiles": [
-    "work/packages/done-20260521-system-table-metadata-schema-separation.md"
-  ],
-  "generatedFiles": [
-    ".kiro/steering/llm/architecture.md",
-    ".kiro/steering/llm/testing.md"
-  ],
-  "candidateRuntimeFiles": [
-    "src/control-plane/owner-outcome-contract.js"
-  ],
+  "handoffFiles": [],
+  "generatedFiles": [],
+  "candidateRuntimeFiles": [],
   "commitScope": [
     "scripts/work-tracker.js",
     "scripts/work-package-schema.js",
+    "work/templates/work-package-template.md",
     "test/scripts/work-tracker-subagent-ledger.test.js",
-    "test/scripts/work-llm-usability-tools.test.js",
-    ".kiro/steering/llm/architecture.md",
-    ".kiro/steering/llm/testing.md",
-    "work/packages/active-20260521-contract-proof-tooling.md"
+    "test/scripts/work-llm-usability-tools.test.js"
   ],
   "modelFit": {
     "packageClass": "mechanical-maintenance",
@@ -69,37 +68,39 @@
       "the implementation needs to decide system behavior instead of executing a named local mechanism"
     ],
     "childPackageCandidates": [
-      "Split generated steering pack regeneration from validator code if the proof tooling patch is otherwise focused."
+      "Keep docs/templates/schema metadata edits in this Spark-safe package.",
+      "Split any runtime or test behavior into a separate package before execution."
     ]
   },
-  "predecessor": "work/packages/done-20260521-system-table-metadata-schema-separation.md"
+  "predecessor": "work/packages/done-20260522-frontier-oscillation-escalation-rule.md"
 }
 -->
 
 ## Why
 
-The workflow already asks for causal closure, but the validator does not yet
-make contract proof the default closure currency. This package owns making
-package proof name the owner outcome or handoff transition being validated.
+Generic cleanup can consume the same sprint capacity as frontier work while
+making representative stability harder to read. This package owns the admission
+rule that lets code-quality work in only when it buys owner-path clarity,
+evidence fidelity, duplicate-decision-path removal, or regression prevention.
 
 ## Scope Basis
 
-AGPL roadmap scope: developer workflow/debugging, operational visibility
-basics, and failure simulations in `edition-matrix.md` and `roadmap.md`. This
-package is mechanical/tooling only and depends on the runtime contract packages
-so it can enforce the real vocabulary instead of guessing it.
+Current sprint focus: universal owner-contract completion and representative
+stability. This is workflow/tooling-only AGPL maintenance; it does not prevent
+required cleanup, but it requires cleanup to state its stability relevance.
 
 ## Detailed Execution Contract
 
-1. Extend package validation so runtime/scenario packages must name the
-   contract transition under proof, not only a changed timeout or count.
-2. Require a focused contract fixture plus affected consumer proof for
-   owner-boundary packages; representative routing evidence remains required
-   when a scenario artifact selected the work.
-3. Update tests and generated steering packs so future packages cannot close
-   from symptom movement alone.
-4. Keep this package out of runtime source. If runtime vocabulary changes are
-   needed, stop and open a runtime-owner-boundary package.
+1. Add a code-quality admission field or checklist for maintenance packages
+   that enter an active scenario/stability sprint.
+2. Accepted reasons: removes duplicate decision paths, strengthens owner
+   outcome preservation, improves evidence fidelity, prevents a known
+   regression, or is required by an active package guardrail.
+3. Require generic cleanup packages with none of those reasons to stay outside
+   the active sprint queue until the representative blocker is no longer
+   active.
+4. Update package templates, doctor suggestions, and validation tests without
+   weakening existing guardrail scans.
 
 ## Workflow Lane
 
@@ -118,7 +119,7 @@ so it can enforce the real vocabulary instead of guessing it.
 ## Expected Representative Delta
 
 - Baseline artifact: `none`
-- Expected delta: Package validation requires a named owner outcome or handoff transition, focused contract fixture, affected consumer proof, and representative routing evidence when scenario work is involved.
+- Expected delta: Code-quality packages in active stability sprints must name their owner-path, evidence-fidelity, duplicate-decision-path, regression-prevention, or guardrail-required effect before activation.
 - Local proof class: focused owner or diagnostic proof only; it is not representative-green proof.
 - Representative proof class: fresh representative rerun or canonical route-after-rerun result.
 - Stop if unchanged: same-frontier with no concrete metric or shape reduction opens/selects an autonomous architecture experiment instead of another local patch; human escalation is only for contradictory or blocked evidence.
@@ -127,8 +128,8 @@ so it can enforce the real vocabulary instead of guessing it.
 
 - Source artifact: `none`
 - Route owner: `workflow_tooling_owner`
-- Route boundary: `contract_proof_validation`
-- Route dominant reason: `scenario_proof_not_contract_proof`
+- Route boundary: `code_quality_focus_policy`
+- Route dominant reason: `generic_cleanup_can_compete_with_frontier_work`
 - Route causal outcome: `pending-before-rerun`
 - Stop mode: `pending-before-rerun`
 - Next lane: `mechanical-maintenance`
@@ -167,8 +168,9 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 
 1. scripts/work-tracker.js
 2. scripts/work-package-schema.js
-3. test/scripts/work-tracker-subagent-ledger.test.js
-4. test/scripts/work-llm-usability-tools.test.js
+3. work/templates/work-package-template.md
+4. test/scripts/work-tracker-subagent-ledger.test.js
+5. test/scripts/work-llm-usability-tools.test.js
 
 ## Out Of Scope
 
@@ -180,11 +182,11 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 - Intended minimum model: `gpt-5.3-codex-spark`
 - Scope shape: `leaf-slice`
 - Output profile: `small`
-- Owned files: `scripts/work-tracker.js`, `scripts/work-package-schema.js`, `test/scripts/work-tracker-subagent-ledger.test.js`, `test/scripts/work-llm-usability-tools.test.js`
+- Owned files: `scripts/work-tracker.js`, `scripts/work-package-schema.js`, `work/templates/work-package-template.md`, `test/scripts/work-tracker-subagent-ledger.test.js`, `test/scripts/work-llm-usability-tools.test.js`
 - Forbidden files: `src/`
 - Frozen decisions: package scope and lane stay bounded unless explicitly escalated.
 - Escalation triggers: owned files expand beyond this package, runtime ownership changes, or representative scenario evidence changes.
-- Focused proof: `npm test -- test/scripts/work-tracker-subagent-ledger.test.js test/scripts/work-tracker-architecture-decision-gate.test.js`, `npm test -- test/scripts/work-llm-usability-tools.test.js`, `npm run work:validate -- --pre-impl work/packages/active-20260521-contract-proof-tooling.md`
+- Focused proof: `npm test -- test/scripts/work-tracker-subagent-ledger.test.js test/scripts/work-llm-usability-tools.test.js`, `npm run work:package:schema`, `npm run work:validate -- --pre-impl work/packages/active-20260522-code-quality-admission-gate.md`
 - Model ledger advisory: `escalate`
 
 ## Model-Fit Split
@@ -200,19 +202,20 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 2. proof requires forbidden scope, cross-owner reasoning, or architecture route selection
 3. the implementation needs to decide system behavior instead of executing a named local mechanism
 - Candidate lower-model child packages:
-1. Split generated steering pack regeneration from validator code if the proof tooling patch is otherwise focused.
+1. Keep docs/templates/schema metadata edits in this Spark-safe package.
+2. Split any runtime or test behavior into a separate package before execution.
 
 ## Execution Evidence
 
 Preferred closure evidence for new packages. One executor owns implementation end to end; one separate verifier-fixer validates the last package work and may fix in-scope problems directly.
 Agent identity is optional provenance. Use legacy subagent ledgers only when a reopened historical package already uses them.
 
-- [ ] implementation: status: validated; evidence: <focused proof commands and results>; parent revalidated focused proof: yes; next: closure or successor action.
-- [ ] verification-fix: status: validated; evidence: <verification/fix commands and results>; changed files: <paths or none>; parent revalidated focused proof: yes; next: closure or successor action.
-- [ ] repair: status: validated; evidence: `npm run work:repair` refreshed generated current-blocker and Current Edge Card when needed; next: validation.
+- [x] implementation: status: validated; evidence: Added `codeQualityAdmission` schema constant, valid reasons, auto-documentation section, exports, and doctor suggestions in `work-package-schema.js` and `work-tracker.js`. Added comprehensive tests in `work-tracker-subagent-ledger.test.js`. Rerun schema generation and validated that active package validates successfully. parent revalidated focused proof: yes; next: verification.
+- [x] verification-fix: status: validated; evidence: Ran full test suites `npm test -- test/scripts/work-tracker-subagent-ledger.test.js test/scripts/work-llm-usability-tools.test.js` successfully (418/418 tests passing). validated via `npm run work:validate -- --pre-impl` and entry validation; changed files: scripts/work-package-schema.js, scripts/work-tracker.js, test/scripts/work-tracker-subagent-ledger.test.js, work/templates/work-package-template.md, work/packages/active-20260522-code-quality-admission-gate.md; parent revalidated focused proof: yes; next: closure.
+- [x] repair: status: validated; evidence: `npm run work:repair` refreshed generated current-blocker and Current Edge Card; next: validation.
 
 ## Validation
 
-1. npm test -- test/scripts/work-tracker-subagent-ledger.test.js test/scripts/work-tracker-architecture-decision-gate.test.js
-2. npm test -- test/scripts/work-llm-usability-tools.test.js
-3. npm run work:validate -- --pre-impl work/packages/active-20260521-contract-proof-tooling.md
+1. npm test -- test/scripts/work-tracker-subagent-ledger.test.js test/scripts/work-llm-usability-tools.test.js
+2. npm run work:package:schema
+3. npm run work:validate -- --pre-impl work/packages/active-20260522-code-quality-admission-gate.md

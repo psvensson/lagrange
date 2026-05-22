@@ -28,6 +28,10 @@ Internal execution planning, work packages, and sprint tracking live under
 - `work/templates/`
   - Templates for ideas, generic work packages, and lane-specific package
     shapes.
+- `work/theory-ledger.md`
+  - Evidence-linked index for current experiments, causal theories, and
+    superseded hypotheses. It is advisory only: packages, current-blocker
+    files, and artifacts remain canonical.
 
 ## Recommended Workflow
 
@@ -155,10 +159,28 @@ Use the tracker utility for current sprint/package mechanics:
     for sprint pushes so the remaining package list is printed after a
     successful push.
 26. If the slice cannot be pushed because the remote or credentials are
-    unavailable, record the unpushed commit SHA and reason in the package or
+   unavailable, record the unpushed commit SHA and reason in the package or
    sprint handoff. If package-owned and unrelated dirty changes cannot be
    separated safely, stop for human direction instead of committing a mixed
    slice.
+
+## Experiment And Theory Ledger
+
+Use `work/theory-ledger.md` as a compact memory of experiments and theories
+that agents should consider before selecting or resuming work. The ledger is an
+index, not source of truth: package metadata, generated current-blocker files,
+and artifacts decide package status and routing.
+
+Update the ledger only at package closure, representative rerun routing,
+architecture gate decisions, or deliberate seed/backfill packages. Prefer
+supersession over rewriting older entries. If evidence is uncertain, stale, or
+not rerun after a route change, mark the entry `stale` or `needs-rerun` rather
+than inventing a conclusion.
+
+Each entry records an id, status, scenario/gate, owner/boundary, hypothesis,
+probe, artifact/result, representative movement, linked packages,
+supersession, and next implication. Start from
+`work/templates/theory-ledger-entry.md`.
 
 ## Workflow Acceleration Rules
 

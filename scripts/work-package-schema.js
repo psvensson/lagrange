@@ -60,6 +60,7 @@ const SCOPE_FIELD_HANDOFF_FILES = 'handoffFiles';
 const SCOPE_FIELD_GENERATED_FILES = 'generatedFiles';
 const SCOPE_FIELD_CANDIDATE_RUNTIME_FILES = 'candidateRuntimeFiles';
 const SCOPE_FIELD_COMMIT_SCOPE = 'commitScope';
+const THEORY_LEDGER_REFS_FIELD = 'theoryLedgerRefs';
 const OWNER_BOUNDARY_MIGRATION_PROOF_FIELD = 'ownerBoundaryMigrationProof';
 const OWNER_BOUNDARY_MIGRATION_PROOF_FROM_OWNER_FIELD = 'fromOwner';
 const OWNER_BOUNDARY_MIGRATION_PROOF_FROM_BOUNDARY_FIELD = 'fromBoundary';
@@ -285,6 +286,31 @@ const SUBAGENT_ATTEMPT_INTERRUPTED = 'interrupted';
 const SUBAGENT_ATTEMPT_PARTIAL_UNVALIDATED = 'partial-unvalidated';
 const SUBAGENT_ATTEMPT_VALIDATED = 'validated';
 const SUBAGENT_ATTEMPT_SUPERSEDED = 'superseded';
+
+const METADATA_FIELD_STABILITY_CREDIT = 'stabilityCredit';
+const METADATA_FIELD_WHY_HIGHEST_LEVERAGE_NOW = 'whyHighestLeverageNow';
+const METADATA_FIELD_REPRESENTATIVE_RERUN_CADENCE = 'representativeRerunCadence';
+const METADATA_FIELD_CODE_QUALITY_ADMISSION = 'codeQualityAdmission';
+const CODE_QUALITY_ADMISSION_REASONS = Object.freeze([
+  'removes-duplicate-decision-paths',
+  'preserves-owner-outcomes',
+  'improves-evidence-fidelity',
+  'prevents-regression',
+  'active-guardrail-requirement',
+]);
+const STABILITY_CREDIT_VALID_VALUES = Object.freeze([
+  'representative-green',
+  'representative-migrated',
+  'representative-reduced',
+  'local-proof-only',
+  'instrumentation-only',
+]);
+const REPRESENTATIVE_RERUN_CADENCE_VALID_VALUES = Object.freeze([
+  'fresh-representative-rerun',
+  'scheduled-rerun-command',
+  'explicit-invalid-rerun-reason',
+  'architecture-stop-reason',
+]);
 
 const VALID_PACKAGE_STATUSES = Object.freeze([
   STATUS_ACTIVE,
@@ -586,6 +612,31 @@ function renderSchemaReference() {
     EMPTY_TEXT,
     renderEnumList(WORKFLOW_LANES),
     EMPTY_TEXT,
+    '## Stability Credits',
+    EMPTY_TEXT,
+    renderEnumList(STABILITY_CREDIT_VALID_VALUES),
+    EMPTY_TEXT,
+    '## Leverage Focus Gate',
+    EMPTY_TEXT,
+    `- Metadata field: \`${METADATA_FIELD_WHY_HIGHEST_LEVERAGE_NOW}\``,
+    '- Purpose: justify why this package is the highest-leverage next action for the current sprint goal or representative stability gate.',
+    EMPTY_TEXT,
+    '## Code Quality Admission Gate',
+    EMPTY_TEXT,
+    `- Metadata field: \`${METADATA_FIELD_CODE_QUALITY_ADMISSION}\``,
+    '- Purpose: require cleanup or maintenance packages in active scenario/stability sprints to state their stability-relevant effect before activation.',
+    '- Allowed reasons:',
+    EMPTY_TEXT,
+    renderEnumList(CODE_QUALITY_ADMISSION_REASONS),
+    EMPTY_TEXT,
+    '## Representative Rerun Cadence Gates',
+    EMPTY_TEXT,
+    `- Metadata field: \`${METADATA_FIELD_REPRESENTATIVE_RERUN_CADENCE}\``,
+    '- Purpose: enforce a cadence of representative reruns on focused runtime/scenario packages.',
+    '- Allowed values:',
+    EMPTY_TEXT,
+    renderEnumList(REPRESENTATIVE_RERUN_CADENCE_VALID_VALUES),
+    EMPTY_TEXT,
     '## Model-Fit Package Splitter',
     EMPTY_TEXT,
     '- Purpose: split broad work into lower-model execution packages before implementation whenever ownership, scope, and proof can be made mechanical.',
@@ -619,6 +670,12 @@ function renderSchemaReference() {
     '## Scope Fields',
     EMPTY_TEXT,
     renderEnumList(WORK_PACKAGE_SCOPE_FIELDS),
+    EMPTY_TEXT,
+    '## Theory Ledger References',
+    EMPTY_TEXT,
+    `- Metadata field: \`${THEORY_LEDGER_REFS_FIELD}\``,
+    '- Optional array of `theory-YYYYMMDD-short-slug` ids related to the package.',
+    '- Advisory only: theory ledger refs help agents find context; packages, current-blocker, and artifacts remain source of truth.',
     EMPTY_TEXT,
     '## Core Logic Brief',
     EMPTY_TEXT,
@@ -938,6 +995,7 @@ export {
   SCOPE_FIELD_GENERATED_FILES,
   SCOPE_FIELD_HANDOFF_FILES,
   SCOPE_FIELD_WRITE_SCOPE,
+  THEORY_LEDGER_REFS_FIELD,
   SUBAGENT_OPTIONAL_LANES,
   SUBAGENT_ATTEMPT_STATUSES,
   SUBAGENT_UNAVAILABLE_STATES,
@@ -953,6 +1011,13 @@ export {
   WORK_PACKAGE_SCOPE_FIELDS,
   WORKFLOW_LANES,
   WORK_PACKAGE_METADATA_SCHEMA,
+  METADATA_FIELD_STABILITY_CREDIT,
+  METADATA_FIELD_WHY_HIGHEST_LEVERAGE_NOW,
+  METADATA_FIELD_REPRESENTATIVE_RERUN_CADENCE,
+  METADATA_FIELD_CODE_QUALITY_ADMISSION,
+  STABILITY_CREDIT_VALID_VALUES,
+  REPRESENTATIVE_RERUN_CADENCE_VALID_VALUES,
+  CODE_QUALITY_ADMISSION_REASONS,
   coreLogicBriefRequiredForLane,
   defaultOutputProfileForLane,
   defaultModelFitForLane,

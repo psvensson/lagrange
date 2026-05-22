@@ -1,5 +1,8 @@
 import {CLUSTER_SEGMENT_6} from './cluster-segment-6.js';
 import {Cluster5} from './cluster-segment-7-class-5.js';
+import {ASSERTIONS_SEGMENT_2} from './assertions-segment-2.js';
+const {runFinalAdjudication} = ASSERTIONS_SEGMENT_2;
+
 import {
   LIFECYCLE_REASON,
 } from '../../../src/bootstrap/lifecycle-controller-constants.js';
@@ -1497,7 +1500,10 @@ class Cluster extends Cluster5 {
         (inactiveSummary || 'none') +
         ')',
     );
+    const finalAdjudication = await runFinalAdjudication(Array.from(this._nodes.values()));
     timeoutError.diagnostics = {
+      consistencyVerdict: finalAdjudication.verdict,
+      finalAdjudication,
       activeGate: timeoutActiveGateDetails.activeGate,
       noProgress: finalNoProgressOwnerOutcome ?
         {
@@ -2088,7 +2094,10 @@ class Cluster extends Cluster5 {
         (instabilitySummary || 'none') +
         ')',
     );
+    const finalAdjudication = await runFinalAdjudication(Array.from(this._nodes.values()));
     timeoutError.diagnostics = {
+      consistencyVerdict: finalAdjudication.verdict,
+      finalAdjudication,
       activeGate: timeoutActiveGateDetails.activeGate,
       loadReadinessPhase,
       ...(stableWindowFailure ? {failure: stableWindowFailure} : {}),

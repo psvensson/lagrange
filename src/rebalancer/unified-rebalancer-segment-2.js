@@ -1,5 +1,6 @@
 import {UNIFIED_REBALANCER_SHARED} from './unified-rebalancer-shared.js';
 import {UnifiedRebalancerSegment1} from './unified-rebalancer-segment-1.js';
+import {TYPEOF} from '../constants/index.js';
 
 const {
   COLUMN,
@@ -18,7 +19,6 @@ const {
   TABLES,
   TOPOLOGY_IN_FLIGHT_REPLICA_OPERATION_SOURCE,
   TRANSPORT_TYPE,
-  TYPEOF,
   UNIFIED_REBALANCER_LITERAL,
   buildPriorityRecoveryOperationAssessment,
   getPartitionRowFromCache,

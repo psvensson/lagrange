@@ -20,12 +20,15 @@ closed and moved out of the active blocker slot.
 - Confidence and evidence: medium. Existing code has strong local examples
   (`publication-active-gate-handoff-contract`, gateway outcomes, publication
   recovery state machine), but not one repo-wide contract.
-- Expected green path: execute the package queue below in order, one active
-  package at a time, with predecessor closure before successor activation.
+- Expected green path: execute the experiment/theory ledger package sequence
+  first, then resume the paused representative/runtime successor work from the
+  queue below, one active package at a time, with predecessor closure before
+  successor activation.
 - Wrong direction signals: any package widens into unrelated runtime work,
   reopens active rolling-restart proof without fresh evidence, closes from a
   timeout/count-only delta, or skips the predecessor contract it depends on.
-- Next best package: `work/packages/done-20260521-owner-outcome-consumer-cutover.md`.
+- Next best package:
+  `work/packages/active-20260522-experiment-theory-ledger-foundation.md`.
 - Stop or escalate rule: if a package cannot preserve its owner/boundary or
   requires contradictory evidence, select/open an autonomous architecture
   experiment; use human escalation only for blocked, unavailable, or
@@ -36,20 +39,20 @@ closed and moved out of the active blocker slot.
 ```text
 Representative artifact: none
 Visible first frontier: unknown
-Active package: work/packages/active-20260521-contract-proof-tooling.md
+Active package: work/packages/active-20260522-experiment-theory-ledger-foundation.md
 Active package owner: workflow_tooling_owner
-Active package boundary: contract_proof_validation
-Selected cause: scenario_proof_not_contract_proof
-Required action: Upgrade package validators and evidence tooling so owner-boundary closure proves named contract transitions rather than timeout symptom movement.
+Active package boundary: experiment_theory_memory
+Selected cause: theories_are_scattered_across_packages
+Required action: Formally close the ledger packages or activate the runtime successor after a focused commit/closure decision; do not redo the ledger implementation unless validation regresses.
 Representative status: unknown
 Causal outcome: unknown
 Architecture gate: not-required / unknown
 Expected delta: unknown
-Current state: Planned successor package after metadata/storage separation is proven.
-Allowed edits: scripts/work-tracker.js, scripts/work-package-schema.js, test/scripts/work-tracker-subagent-ledger.test.js, test/scripts/work-llm-usability-tools.test.js
-Candidate runtime files: src/control-plane/owner-outcome-contract.js
+Current state: Central experiment and theory memory is implemented in the current worktree, with focused validation and a separate verifier-fixer pass green.
+Allowed edits: work/theory-ledger.md, work/templates/theory-ledger-entry.md, work/README.md
+Candidate runtime files: unknown
 Forbidden edits: owned files expand beyond this package, a frozen decision must be reopened
-Required latest proof: npm test -- test/scripts/work-tracker-subagent-ledger.test.js test/scripts/work-tracker-architecture-decision-gate.test.js, npm test -- test/scripts/work-llm-usability-tools.test.js, npm run work:validate -- --pre-impl work/packages/active-20260521-contract-proof-tooling.md
+Required latest proof: npm run work:validate -- --entry work/packages/active-20260522-experiment-theory-ledger-foundation.md, git diff --check -- work/packages/active-20260522-experiment-theory-ledger-foundation.md work/theory-ledger.md work/templates/theory-ledger-entry.md work/README.md
 Allowed stop modes: representative-green, migrated, reduced, same-frontier, classification-only, architecture-gap, human-escalation
 ```
 
@@ -65,6 +68,14 @@ Allowed stop modes: representative-green, migrated, reduced, same-frontier, clas
    child with disjoint write scope.
 
 ## Package Queue
+
+Items 13-17 were inserted on 2026-05-22 to sharpen tracker focus. They are the
+next non-runtime governance packages and do not override a fresh representative
+successor required by the Current Edge Card.
+
+Items 18-21 were promoted on 2026-05-22 to add a central experiment/theory
+memory before more runtime stability work resumes. They are tracker-memory
+packages and must preserve package/artifact evidence as source of truth.
 
 1. [Universal Owner Outcome Envelope](../packages/done-20260521-universal-owner-outcome-envelope.md)
    - Lane: `runtime-owner-boundary`
@@ -105,44 +116,119 @@ Allowed stop modes: representative-green, migrated, reduced, same-frontier, clas
      system-table write ingress.
    - Acceptance: selected insert/update/upsert paths filter through canonical
      schema or an explicit metadata boundary.
-7. [Contract Proof Tooling](../packages/active-20260521-contract-proof-tooling.md)
+7. [Contract Proof Tooling](../packages/done-20260521-contract-proof-tooling.md)
    - Lane: `mechanical-maintenance`
    - Purpose: require owner-outcome or handoff-transition proof instead of
      symptom-only scenario proof.
    - Acceptance: validators/tests require named contract transition, focused
      fixture, affected consumer proof, and representative routing evidence when
      scenario work is involved.
-8. [Owner Contract Guardrails](../packages/todo-20260521-owner-contract-guardrails.md)
+8. [Owner Contract Guardrails](../packages/done-20260521-owner-contract-guardrails.md)
    - Lane: `mechanical-maintenance`
    - Purpose: prevent old raw absence, mixed decision path, schema-unsafe,
      timeout-only, and local retry patterns from returning.
    - Acceptance: guardrails fail the converted anti-patterns without weakening
      existing scan scope or lint rules.
-9. [Harness Verdict Taxonomy And Scenario Contracts](../packages/todo-20260522-harness-verdict-taxonomy-and-scenario-contracts.md)
+9. [Harness Verdict Taxonomy And Scenario Contracts](../packages/done-20260522-harness-verdict-taxonomy-and-scenario-contracts.md)
    - Lane: `scenario-release-gate`
    - Purpose: separate core invariant failures from incomplete evidence,
      harness-invalid results, performance blocks, and expected load
      backpressure.
    - Acceptance: reports and summaries expose typed release-blocking verdicts
      without weakening the gate.
-10. [Harness Timeout Final Adjudication](../packages/todo-20260522-harness-timeout-final-adjudication.md)
+10. [Harness Timeout Final Adjudication](../packages/done-20260522-harness-timeout-final-adjudication.md)
     - Lane: `scenario-release-gate`
     - Purpose: run a final drain/snapshot/query adjudication ladder before a
       timeout is labeled as a core system failure.
     - Acceptance: timeouts classify core contradictions separately from late or
       incomplete evidence.
-11. [Topology Gate Matrix Executable Contracts](../packages/todo-20260522-topology-gate-matrix-executable-contracts.md)
+11. [Topology Gate Matrix Executable Contracts](../packages/done-20260522-topology-gate-matrix-executable-contracts.md)
     - Lane: `scenario-release-gate`
     - Purpose: make declared owner reasons, fencing requirements, bounded
       progress, and evidence requirements executable assertions.
     - Acceptance: a topology gate pass proves the declared contract, not only
       scenario completion.
-12. [Split Brain Scenario Safety Invariants](../packages/todo-20260522-split-brain-scenario-safety-invariants.md)
+12. [Split Brain Scenario Safety Invariants](../packages/done-20260522-split-brain-scenario-safety-invariants.md)
     - Lane: `scenario-release-gate`
     - Purpose: prove partition-time safety, not only post-heal convergence.
     - Acceptance: the scenario fails on unsafe minority acceptance, competing
       leaders, or acknowledged write loss during/after partition.
-13. [Node Failure Rebalance Acceptance Hardening](../packages/todo-20260522-node-failure-rebalance-acceptance-hardening.md)
+13. [Stability Credit Progress Labels](../packages/done-20260522-stability-credit-progress-labels.md)
+    - Lane: `mechanical-maintenance`
+    - Purpose: make representative stability movement the progress currency
+      for package accounting.
+    - Acceptance: package metadata, templates, doctor/context output, and
+      validation distinguish `representative-green`,
+      `representative-migrated`, `representative-reduced`,
+      `local-proof-only`, and `instrumentation-only`.
+14. [Package Leverage Focus Gate](../packages/done-20260522-package-leverage-focus-gate.md)
+    - Lane: `mechanical-maintenance`
+    - Purpose: require active packages to state why they are the
+      highest-leverage next move for the sprint goal or representative gate.
+    - Acceptance: active runtime/scenario/governance packages surface a compact
+      leverage statement tied to the current first frontier, sprint goal, or
+      representative stability gate.
+15. [Representative Rerun Cadence Gate](../packages/done-20260522-representative-rerun-cadence-gate.md)
+    - Lane: `mechanical-maintenance`
+    - Purpose: prevent chains of adjacent local runtime packages without fresh
+      representative evidence or an explicit rerun decision.
+    - Acceptance: after focused runtime proof, the tracker requires a fresh
+      representative rerun, a scheduled rerun record, an invalid-rerun reason,
+      or an architecture stop before another adjacent runtime package starts.
+16. [Frontier Oscillation Escalation Rule](../packages/done-20260522-frontier-oscillation-escalation-rule.md)
+    - Lane: `mechanical-maintenance`
+    - Purpose: make repeated ping-pong between publication convergence,
+      active-gate snapshot coverage, readiness, and operation handoff stop in
+      an architecture experiment unless representative evidence moves.
+    - Acceptance: tracker validation blocks same-family local patches after
+      repeated adjacent-boundary oscillation without representative green,
+      owner-boundary migration, metric reduction, or a selected architecture
+      experiment.
+17. [Code Quality Admission Gate](../packages/done-20260522-code-quality-admission-gate.md)
+    - Lane: `mechanical-maintenance`
+    - Purpose: keep generic cleanup from competing with current frontier work
+      unless it buys owner-path clarity, evidence fidelity,
+      duplicate-decision-path removal, regression prevention, or an active
+      guardrail requirement.
+    - Acceptance: code-quality packages entering an active stability sprint
+      must name one of those stability-relevant effects before activation.
+18. [Experiment Theory Ledger Foundation](../packages/active-20260522-experiment-theory-ledger-foundation.md)
+    - Lane: `lightweight-maintenance`
+    - Purpose: create a simple central evidence-linked ledger and entry
+      template for theories and experiments.
+    - Acceptance: `work/theory-ledger.md` and the entry template define IDs,
+      statuses, scenario/gate, owner/boundary, hypothesis, probe, artifact,
+      representative movement, linked packages, supersession, and next
+      implication, while explicitly leaving package/artifact evidence as
+      source of truth.
+19. [Experiment Theory Ledger Tooling](../packages/todo-20260522-experiment-theory-ledger-tooling.md)
+    - Lane: `mechanical-maintenance`
+    - Purpose: add minimal validation/list/append tooling so agents can use
+      the ledger without inconsistent hand edits.
+    - Acceptance: `npm run work:theory-ledger -- validate` catches missing
+      required fields, invalid statuses, duplicate IDs, missing evidence links,
+      and broken supersession references.
+20. [Experiment Theory Ledger Tracker Integration](../packages/todo-20260522-experiment-theory-ledger-tracker-integration.md)
+    - Lane: `mechanical-maintenance`
+    - Purpose: add package/context prompts for citing or updating theory
+      entries at evidence-changing points.
+    - Acceptance: package templates, package doctor/context output, and closure
+      guidance expose theory-ledger refs without making them mandatory for
+      legacy packages or replacing current-blocker authority.
+21. [Experiment Theory Ledger Initial Seed](../packages/todo-20260522-experiment-theory-ledger-initial-seed.md)
+    - Lane: `diagnostic-classification`
+    - Purpose: seed the ledger with only active/current sprint theories and
+      immediate predecessor outcomes that have package/artifact evidence.
+    - Acceptance: seed entries use conservative statuses, cite package/artifact
+      evidence, include supersession links where known, and avoid invented
+      historical proof.
+22. [Node Failure Rebalance Startup Active Gate Snapshot Watch Handoff Contract](../packages/todo-20260522-node-failure-rebalance-startup-active-gate-snapshot-watch-handoff-contract.md)
+    - Lane: `causal-escalation`
+    - Purpose: resume the paused startup active-gate snapshot/watch handoff
+      contract successor after the ledger sequence is implemented and seeded.
+    - Acceptance: focused owner proof emits a typed snapshot/watch handoff
+      outcome without weakening active-gate admission.
+23. [Node Failure Rebalance Acceptance Hardening](../packages/done-20260522-node-failure-rebalance-acceptance-hardening.md)
     - Lane: `scenario-release-gate`
     - Purpose: add acked-write, rebalance-closure, owner/fencing, and
       client-error classification proof to node-failure rebalance.

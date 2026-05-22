@@ -11,6 +11,7 @@ import {summarizeInvariantBreaches} from './invariant-breaches.js';
 import {buildPriorityRecoveryProgressSummary} from
   './priority-recovery-summary-normalization.js';
 import {createReportWriterSummaryMethods} from './report-writer-summary-methods.js';
+import {classifyScenarioVerdict} from './validation-matrix.js';
 
 /** Indentation for JSON output. */
 const JSON_INDENT = 2;
@@ -148,9 +149,16 @@ function buildScenarioEntry(scenarioName, result) {
       ?.priorityRecoveryObservation ||
     result.details?.diagnostics?.priorityRecoveryObservation ||
     null;
+  const invariantBreaches = resolveScenarioInvariantBreaches(result, normalizedDetails);
+  const verdictObj = classifyScenarioVerdict({
+    ...result,
+    invariantBreaches,
+  });
   const entry = {
     scenario: scenarioName,
     passed: Boolean(result.passed),
+    verdict: verdictObj.verdict,
+    verdictReason: verdictObj.reason,
     duration: result.duration || 0,
     clusterSize: normalizeClusterSize(result.clusterSize),
     startedAt: result.startedAt || null,
@@ -167,7 +175,7 @@ function buildScenarioEntry(scenarioName, result) {
     memoryLeakAssertion: result.memoryLeakAssertion || null,
     performanceDiagnostics: result.performanceDiagnostics || null,
     details: normalizedDetails,
-    invariantBreaches: resolveScenarioInvariantBreaches(result, normalizedDetails),
+    invariantBreaches,
     failureClassification: result.failureClassification || null,
     publicationConvergence: result.publicationConvergence || null,
     priorityRecoveryObservation,

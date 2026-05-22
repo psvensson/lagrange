@@ -3,6 +3,11 @@ const ONE = 1;
 const PERCENTILE_P50 = 0.5;
 const PERCENTILE_P95 = 0.95;
 const DEFAULT_SCENARIO = 'node-join-under-load';
+const DEFAULT_NODE_FAILURE_REBALANCE_SCENARIO = 'node-failure-rebalance';
+const LOAD_METRICS_AVAILABILITY = Object.freeze({
+  AVAILABLE: 'available',
+  SCENARIO_NOT_FOUND: 'scenario_not_found',
+});
 
 const DEFAULT_SHIP_GATE = Object.freeze({
   minimumRuns: 3,
@@ -162,6 +167,57 @@ function extractNodeJoinLoadMetrics(report, scenario = DEFAULT_SCENARIO) {
   };
 }
 
+function extractNodeFailureRebalanceLoadMetrics(
+  report,
+  scenario = DEFAULT_NODE_FAILURE_REBALANCE_SCENARIO,
+) {
+  const scenarioEntry = resolveScenarioEntry(report, scenario);
+  if (!scenarioEntry) {
+    return {
+      availability: LOAD_METRICS_AVAILABILITY.SCENARIO_NOT_FOUND,
+      failedOperations: ZERO,
+      attemptErrors: ZERO,
+      nonAdmissionAttemptErrors: ZERO,
+      queueDelayP95Ms: ZERO,
+      undispatchedRatio: ZERO,
+      timeoutWaits: ZERO,
+    };
+  }
+  const loadMetrics = resolveLoadMetricsFromScenarioEntry(scenarioEntry);
+  const failedCount = normalizeNonNegativeInteger(loadMetrics.failed, ZERO);
+  const errorCount = normalizeNonNegativeInteger(loadMetrics.errors, ZERO);
+  const targetOperations = normalizeNonNegativeInteger(
+    loadMetrics.targetOperations,
+    ZERO,
+  );
+  const undispatchedOperations = normalizeNonNegativeInteger(
+    loadMetrics.undispatchedOperations,
+    ZERO,
+  );
+
+  return {
+    availability: LOAD_METRICS_AVAILABILITY.AVAILABLE,
+    failedOperations: Math.max(failedCount, errorCount),
+    attemptErrors: normalizeNonNegativeInteger(loadMetrics.attemptErrors, ZERO),
+    nonAdmissionAttemptErrors: resolveNonAdmissionAttemptErrors(loadMetrics),
+    queueDelayP95Ms: normalizeNonNegativeInteger(
+      loadMetrics?.queueDelay?.p95,
+      ZERO,
+    ),
+    undispatchedRatio: targetOperations > ZERO ?
+      undispatchedOperations / targetOperations :
+      ZERO,
+    timeoutWaits: normalizeNonNegativeInteger(
+      loadMetrics?.nonAdmissionTimeoutWaits,
+      normalizeNonNegativeInteger(
+        loadMetrics?.waitReasons?.timeoutWaits,
+        ZERO,
+      ),
+    ),
+  };
+}
+
+
 function buildFailureModeSummary(runs = []) {
   const counts = new Map();
   for (const run of runs) {
@@ -253,6 +309,222 @@ function evaluateNumericGate(
   };
 }
 
+const HARNESS_VERDICTS = Object.freeze({
+  PASS: 'PASS',
+  FAIL_CORE_INVARIANT: 'FAIL_CORE_INVARIANT',
+  BLOCK_EVIDENCE_INCOMPLETE: 'BLOCK_EVIDENCE_INCOMPLETE',
+  BLOCK_HARNESS_INVALID: 'BLOCK_HARNESS_INVALID',
+  BLOCK_PERFORMANCE_REGRESSION: 'BLOCK_PERFORMANCE_REGRESSION',
+  BLOCK_PERFORMANCE_INVALID: 'BLOCK_PERFORMANCE_INVALID',
+});
+
+const SCENARIO_HARNESS_INVALID_PATTERNS = Object.freeze([
+  'readiness probe timed out',
+  'connection closed before response',
+  'query timed out',
+  'econnrefused',
+  'websocket',
+  'socket error',
+  'harness',
+  'teardown failed',
+]);
+
+const SCENARIO_CORE_INVARIANT_PATTERNS = Object.freeze([
+  'invariant',
+  'consistency',
+]);
+
+const SCENARIO_EVIDENCE_INCOMPLETE_PATTERNS = Object.freeze([
+  'timeout',
+  'incomplete',
+]);
+
+const READINESS_HARNESS_INVALID_PATTERNS = Object.freeze([
+  'harness',
+  'socket',
+  'refused',
+]);
+
+function messageMatchesAnyPattern(message, patterns) {
+  return patterns.some((pattern) => message.includes(pattern));
+}
+
+function hasMetricObject(value) {
+  return value && typeof value === 'object' && !Array.isArray(value);
+}
+
+function exceedsNumericLimit(observedValue, thresholdValue) {
+  const observed = normalizeFiniteNumber(observedValue);
+  const threshold = normalizeFiniteNumber(thresholdValue);
+  return observed !== null && threshold !== null && observed > threshold;
+}
+
+function buildScenarioVerdictEvidence(result) {
+  const message = String(result?.error || '').toLowerCase();
+  const loadMetrics = hasMetricObject(result?.loadMetrics) ?
+    result.loadMetrics :
+    null;
+  const failedOperations = Math.max(
+    normalizeNonNegativeInteger(loadMetrics?.failed, ZERO),
+    normalizeNonNegativeInteger(loadMetrics?.errors, ZERO),
+  );
+  const totalOperations = normalizeNonNegativeInteger(
+    loadMetrics?.total,
+    ZERO,
+  );
+  const hasInvariantBreach =
+    Array.isArray(result?.invariantBreaches) &&
+    result.invariantBreaches.length > ZERO;
+
+  return {
+    passed: result?.passed === true,
+    hasLoadMetrics: loadMetrics !== null,
+    hasNoCompletedOperations: loadMetrics !== null && totalOperations === ZERO,
+    hasHarnessFailureSignal: messageMatchesAnyPattern(
+      message,
+      SCENARIO_HARNESS_INVALID_PATTERNS,
+    ),
+    hasCoreInvariantSignal:
+      hasInvariantBreach ||
+      failedOperations > ZERO ||
+      messageMatchesAnyPattern(message, SCENARIO_CORE_INVARIANT_PATTERNS),
+    hasPerformanceRegressionSignal:
+      loadMetrics !== null &&
+      (
+        exceedsNumericLimit(
+          loadMetrics?.queueDelay?.p95,
+          DEFAULT_SHIP_GATE.maxQueueDelayP95MsP95,
+        ) ||
+        exceedsNumericLimit(
+          loadMetrics?.undispatchedRatio,
+          DEFAULT_SHIP_GATE.maxUndispatchedRatioP95,
+        ) ||
+        exceedsNumericLimit(
+          loadMetrics?.nonAdmissionTimeoutWaits,
+          DEFAULT_SHIP_GATE.maxTimeoutWaitsP95,
+        )
+      ),
+    hasEvidenceIncompleteSignal:
+      messageMatchesAnyPattern(message, SCENARIO_EVIDENCE_INCOMPLETE_PATTERNS) ||
+      loadMetrics === null ||
+      totalOperations === ZERO,
+  };
+}
+
+const SCENARIO_VERDICT_RULES = Object.freeze([
+  {
+    verdict: HARNESS_VERDICTS.PASS,
+    reason: 'scenario_passed',
+    matches: (evidence) => evidence.passed,
+  },
+  {
+    verdict: HARNESS_VERDICTS.BLOCK_HARNESS_INVALID,
+    reason: 'harness_connectivity_or_system_failure',
+    matches: (evidence) => evidence.hasHarnessFailureSignal,
+  },
+  {
+    verdict: HARNESS_VERDICTS.FAIL_CORE_INVARIANT,
+    reason: 'core_invariant_or_safety_violation',
+    matches: (evidence) => evidence.hasCoreInvariantSignal,
+  },
+  {
+    verdict: HARNESS_VERDICTS.BLOCK_PERFORMANCE_REGRESSION,
+    reason: 'performance_metric_exceeded_limits',
+    matches: (evidence) => evidence.hasPerformanceRegressionSignal,
+  },
+  {
+    verdict: HARNESS_VERDICTS.BLOCK_EVIDENCE_INCOMPLETE,
+    reason: 'execution_incomplete_or_metrics_missing',
+    matches: (evidence) => evidence.hasEvidenceIncompleteSignal,
+  },
+  {
+    verdict: HARNESS_VERDICTS.BLOCK_PERFORMANCE_INVALID,
+    reason: 'unknown_failure_mode',
+    matches: () => true,
+  },
+]);
+
+function classifyScenarioVerdict(result) {
+  const evidence = buildScenarioVerdictEvidence(result);
+  const rule = SCENARIO_VERDICT_RULES.find((candidate) =>
+    candidate.matches(evidence),
+  );
+  return {
+    verdict: rule.verdict,
+    reason: rule.reason,
+  };
+}
+
+function hasFailedCriterionMetric(failedCriteria, metricName) {
+  return failedCriteria.some((criterion) => criterion.metric === metricName);
+}
+
+function hasFailedCriterionReason(failedCriteria, reason) {
+  return failedCriteria.some((criterion) => criterion.reason === reason);
+}
+
+function hasDominantFailureModePattern(summary, patterns) {
+  const dominantMode = String(summary?.failureModes?.dominantMode || '');
+  return messageMatchesAnyPattern(dominantMode, patterns);
+}
+
+function buildReadinessVerdictEvidence(summary, failedCriteria) {
+  return {
+    hasFailedCriteria: failedCriteria.length > ZERO,
+    hasEvidenceIncomplete:
+      hasFailedCriterionMetric(failedCriteria, 'totalRuns') ||
+      hasFailedCriterionReason(failedCriteria, 'metric_unavailable'),
+    hasHarnessInvalid:
+      hasFailedCriterionReason(failedCriteria, 'harness_crashed') ||
+      hasFailedCriterionReason(failedCriteria, 'setup_failed') ||
+      hasDominantFailureModePattern(summary, READINESS_HARNESS_INVALID_PATTERNS),
+    hasCoreInvariantFailure:
+      hasFailedCriterionMetric(failedCriteria, 'failedOperations.p95') ||
+      hasFailedCriterionMetric(failedCriteria, 'failureRate'),
+    hasPerformanceRegression:
+      hasFailedCriterionMetric(failedCriteria, 'queueDelayP95Ms.p95') ||
+      hasFailedCriterionMetric(failedCriteria, 'undispatchedRatio.p95') ||
+      hasFailedCriterionMetric(failedCriteria, 'timeoutWaits.p95') ||
+      hasFailedCriterionMetric(
+        failedCriteria,
+        'nonAdmissionAttemptErrors.p95',
+      ),
+  };
+}
+
+const READINESS_VERDICT_RULES = Object.freeze([
+  {
+    verdict: HARNESS_VERDICTS.PASS,
+    reason: 'all_criteria_passed',
+    matches: (evidence) => !evidence.hasFailedCriteria,
+  },
+  {
+    verdict: HARNESS_VERDICTS.BLOCK_EVIDENCE_INCOMPLETE,
+    reason: 'insufficient_runs_or_metrics_unavailable',
+    matches: (evidence) => evidence.hasEvidenceIncomplete,
+  },
+  {
+    verdict: HARNESS_VERDICTS.BLOCK_HARNESS_INVALID,
+    reason: 'harness_system_error_or_crash',
+    matches: (evidence) => evidence.hasHarnessInvalid,
+  },
+  {
+    verdict: HARNESS_VERDICTS.FAIL_CORE_INVARIANT,
+    reason: 'safety_or_liveness_invariant_breached',
+    matches: (evidence) => evidence.hasCoreInvariantFailure,
+  },
+  {
+    verdict: HARNESS_VERDICTS.BLOCK_PERFORMANCE_REGRESSION,
+    reason: 'performance_slo_exceeded_under_load',
+    matches: (evidence) => evidence.hasPerformanceRegression,
+  },
+  {
+    verdict: HARNESS_VERDICTS.BLOCK_PERFORMANCE_INVALID,
+    reason: 'performance_measurement_invalid',
+    matches: () => true,
+  },
+]);
+
 function assessShipReadiness(summary, options = {}) {
   const gate = {
     ...DEFAULT_SHIP_GATE,
@@ -311,9 +583,18 @@ function assessShipReadiness(summary, options = {}) {
     ),
   ];
 
-  const failedCriteria = criteria.filter((criterion) => criterion.passed !== true);
+  const failedCriteria = criteria.filter(
+    (criterion) => criterion.passed !== true,
+  );
+  const evidence = buildReadinessVerdictEvidence(summary, failedCriteria);
+  const rule = READINESS_VERDICT_RULES.find((candidate) =>
+    candidate.matches(evidence),
+  );
+
   return {
     decision: failedCriteria.length === ZERO ? 'ship' : 'no-ship',
+    verdict: rule.verdict,
+    verdictReason: rule.reason,
     criteria,
     failedCriteria,
   };
@@ -322,7 +603,10 @@ function assessShipReadiness(summary, options = {}) {
 export {
   DEFAULT_SCENARIO,
   DEFAULT_SHIP_GATE,
+  HARNESS_VERDICTS,
   extractNodeJoinLoadMetrics,
+  extractNodeFailureRebalanceLoadMetrics,
   summarizeValidationRuns,
+  classifyScenarioVerdict,
   assessShipReadiness,
 };

@@ -2,50 +2,41 @@
   "schema": "current-blocker-v1",
   "generatedBy": "scripts/work-tracker.js",
   "sprint": "work/sprints/active-2026-q2-universal-owner-contract-completion.md",
-  "package": "work/packages/active-20260521-contract-proof-tooling.md",
+  "package": "work/packages/active-20260522-experiment-theory-ledger-foundation.md",
   "status": "active",
-  "lane": "mechanical-maintenance",
+  "lane": "lightweight-maintenance",
   "scenario": "none",
   "artifact": "none",
   "playback": "none",
   "owner": "workflow_tooling_owner",
-  "boundary": "contract_proof_validation",
-  "dominantReason": "scenario_proof_not_contract_proof",
-  "currentState": "Planned successor package after metadata/storage separation is proven.",
-  "nextAction": "Upgrade package validators and evidence tooling so owner-boundary closure proves named contract transitions rather than timeout symptom movement.",
+  "boundary": "experiment_theory_memory",
+  "dominantReason": "theories_are_scattered_across_packages",
+  "currentState": "Central experiment and theory memory is implemented in the current worktree, with focused validation and a separate verifier-fixer pass green.",
+  "nextAction": "Formally close the ledger packages or activate the runtime successor after a focused commit/closure decision; do not redo the ledger implementation unless validation regresses.",
   "proof": [
-    "npm test -- test/scripts/work-tracker-subagent-ledger.test.js test/scripts/work-tracker-architecture-decision-gate.test.js",
-    "npm test -- test/scripts/work-llm-usability-tools.test.js",
-    "npm run work:validate -- --pre-impl work/packages/active-20260521-contract-proof-tooling.md"
+    "npm run work:validate -- --entry work/packages/active-20260522-experiment-theory-ledger-foundation.md",
+    "git diff --check -- work/packages/active-20260522-experiment-theory-ledger-foundation.md work/theory-ledger.md work/templates/theory-ledger-entry.md work/README.md"
   ],
   "writeScope": [
-    "scripts/work-tracker.js",
-    "scripts/work-package-schema.js",
-    "test/scripts/work-tracker-subagent-ledger.test.js",
-    "test/scripts/work-llm-usability-tools.test.js"
+    "work/theory-ledger.md",
+    "work/templates/theory-ledger-entry.md",
+    "work/README.md"
   ],
-  "handoffFiles": [
-    "work/packages/done-20260521-system-table-metadata-schema-separation.md"
-  ],
-  "generatedFiles": [
-    ".kiro/steering/llm/architecture.md",
-    ".kiro/steering/llm/testing.md"
-  ],
-  "candidateRuntimeFiles": [
-    "src/control-plane/owner-outcome-contract.js"
-  ],
+  "handoffFiles": [],
+  "generatedFiles": [],
+  "candidateRuntimeFiles": [],
   "commitScope": [
-    "scripts/work-tracker.js",
-    "scripts/work-package-schema.js",
-    "test/scripts/work-tracker-subagent-ledger.test.js",
-    "test/scripts/work-llm-usability-tools.test.js",
-    ".kiro/steering/llm/architecture.md",
-    ".kiro/steering/llm/testing.md",
-    "work/packages/active-20260521-contract-proof-tooling.md"
+    "work/theory-ledger.md",
+    "work/templates/theory-ledger-entry.md",
+    "work/README.md",
+    "work/packages/active-20260522-experiment-theory-ledger-foundation.md"
   ],
   "touchedFiles": [],
+  "theoryLedgerRefs": [
+    "theory-20260522-experiment-theory-memory"
+  ],
   "modelFit": {
-    "packageClass": "mechanical-maintenance",
+    "packageClass": "bounded-implementation",
     "intendedMinimumModel": "gpt-5.3-codex-spark",
     "scopeShape": "leaf-slice",
     "outputProfile": "small",
@@ -70,5 +61,5 @@
     "selectedChoice": null,
     "nextAction": "No architecture decision gate is required for this package."
   },
-  "predecessor": "work/packages/done-20260521-system-table-metadata-schema-separation.md"
+  "predecessor": "work/packages/done-20260522-node-failure-rebalance-acceptance-hardening.md"
 }

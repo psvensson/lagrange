@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import {test} from '../../../../src/test-helpers/tap.js';
 import {ConsistencyEvaluatorV2} from '../consistency-evaluator.js';
+import {ASSERTIONS_SEGMENT_2} from '../assertions-segment-2.js';
+const {runFinalAdjudication} = ASSERTIONS_SEGMENT_2;
 
 const SNAPSHOT_TEMPLATE = Object.freeze({
   schemaVersion: 1,
@@ -197,3 +199,76 @@ test('ConsistencyEvaluatorV2 classifies missing leader on one ' +
     'node-2': '',
   });
 });
+
+test('runFinalAdjudication performs drain, queries mock nodes and evaluates consistency', async () => {
+  const mockNode1 = {
+    id: 'node-1',
+    getReachabilityDiagnostics: async () => {
+      return { nodeId: 'node-1', reachable: true, adminReady: true, reachableBy: 'socket', lastError: null };
+    },
+    getControlSnapshot: async () => {
+      return {
+        rows: [{
+          nodeId: 'node-1',
+          nodes: ['node-1', 'node-2'],
+          partitions: ['partition-1'],
+          leaders: {
+            'partition-1': 'node-1',
+          },
+          replicaOperations: {
+            inFlightCount: 0,
+            statusHistogram: {},
+          },
+          controlPlaneDiagnostics: {
+            replicaRoleDiagnostics: {
+              'partition-1': {
+                canonicalLeaderNodeId: 'node-1',
+                source: 'partitions',
+                inconsistentReplicaRoles: false,
+                replicaLeaderNodeIds: ['node-1'],
+              }
+            }
+          }
+        }]
+      };
+    }
+  };
+
+  const mockNode2 = {
+    id: 'node-2',
+    getReachabilityDiagnostics: async () => {
+      return { nodeId: 'node-2', reachable: true, adminReady: true, reachableBy: 'socket', lastError: null };
+    },
+    getControlSnapshot: async () => {
+      return {
+        rows: [{
+          nodeId: 'node-2',
+          nodes: ['node-1', 'node-2'],
+          partitions: ['partition-1'],
+          leaders: {
+            'partition-1': 'node-1',
+          },
+          replicaOperations: {
+            inFlightCount: 0,
+            statusHistogram: {},
+          },
+          controlPlaneDiagnostics: {
+            replicaRoleDiagnostics: {
+              'partition-1': {
+                canonicalLeaderNodeId: 'node-1',
+                source: 'partitions',
+                inconsistentReplicaRoles: false,
+                replicaLeaderNodeIds: ['node-1'],
+              }
+            }
+          }
+        }]
+      };
+    }
+  };
+
+  const result = await runFinalAdjudication([mockNode1, mockNode2]);
+  assert.equal(result.verdict, 'consistent');
+  assert.equal(result.hardFailure, false);
+});
+

@@ -19,6 +19,7 @@ const WORK_TRACKS_COMMAND = 'npm run work:tracks';
 const WORK_SPRINT_REMAINING_COMMAND = 'npm run work:sprint:remaining';
 const WORK_SPRINT_PUSH_COMMAND = 'npm run work:sprint:push -- <git-push-args>';
 const MODEL_LEDGER_SUMMARY_COMMAND = 'npm run work:model-ledger -- summary';
+const THEORY_LEDGER_COMMAND = 'npm run work:theory-ledger -- validate|list|new';
 const PACKAGE_NEW_COMMAND =
   'npm run work:package:new -- --lane <lane> --title <title> --slug <slug> --owner <owner> --boundary <boundary> --dominant-reason <reason> --next-action <action>';
 const PACKAGE_ROUTE_AFTER_RERUN_COMMAND =
@@ -96,6 +97,8 @@ const HARNESS_SUMMARY_DESCRIPTION =
   'List latest harness reports by scenario and status.';
 const MODEL_LEDGER_SUMMARY_DESCRIPTION =
   'Summarize recent model, reasoning-effort, and output-profile fit signals.';
+const THEORY_LEDGER_DESCRIPTION =
+  'Validate, query, or append evidence-linked experiment/theory ledger entries.';
 const LLM_START_DESCRIPTION =
   'Print combined LLM handoff, doctor suggestions, dirty scope, model ledger, and evidence summary.';
 const WORK_ADVANCE_DESCRIPTION =
@@ -195,6 +198,8 @@ const WORK_PACKAGE_ROUTE_AFTER_RERUN_SCRIPT_COMMAND =
   'node scripts/work-package-route-after-rerun.js';
 const WORK_PACKAGE_SCHEMA_SCRIPT = 'work:package:schema';
 const WORK_PACKAGE_SCHEMA_SCRIPT_COMMAND = 'node scripts/work-package-schema.js';
+const WORK_THEORY_LEDGER_SCRIPT = 'work:theory-ledger';
+const WORK_THEORY_LEDGER_SCRIPT_COMMAND = 'node scripts/work-theory-ledger.js';
 const WORK_SUBAGENT_PROMPT_SCRIPT = 'work:subagent-prompt';
 const WORK_SUBAGENT_PROMPT_SCRIPT_COMMAND = 'node scripts/work-subagent-prompt.js';
 const WORK_SUBAGENT_NEXT_SCRIPT = 'work:subagent-next';
@@ -246,6 +251,7 @@ test(ORIENTATION_GUARDRAILS_TEST_NAME, (t) => {
   t.match(rendered, WORK_SPRINT_REMAINING_COMMAND);
   t.match(rendered, WORK_SPRINT_PUSH_COMMAND);
   t.match(rendered, MODEL_LEDGER_SUMMARY_COMMAND);
+  t.match(rendered, THEORY_LEDGER_COMMAND);
   t.match(rendered, PACKAGE_NEW_COMMAND);
   t.match(rendered, PACKAGE_ROUTE_AFTER_RERUN_COMMAND);
   t.match(rendered, PACKAGE_SCHEMA_COMMAND);
@@ -278,6 +284,11 @@ test(ORIENTATION_GUARDRAILS_TEST_NAME, (t) => {
     findCommandEntry(MODEL_LEDGER_SUMMARY_COMMAND).group.title,
     ORIENTATION_GROUP_TITLE,
     MODEL_LEDGER_ORIENTATION_MESSAGE,
+  );
+  t.equal(
+    findCommandEntry(THEORY_LEDGER_COMMAND).group.title,
+    ORIENTATION_GROUP_TITLE,
+    'theory-ledger should be discoverable from orientation',
   );
   t.equal(
     findCommandEntry(WORK_LLM_START_COMMAND).group.title,
@@ -353,6 +364,11 @@ test(ORIENTATION_GUARDRAILS_TEST_NAME, (t) => {
     rendered,
     `${MODEL_LEDGER_SUMMARY_COMMAND}\`${COMMAND_ENTRY_SEPARATOR}` +
       MODEL_LEDGER_SUMMARY_DESCRIPTION,
+  );
+  t.match(
+    rendered,
+    `${THEORY_LEDGER_COMMAND}\`${COMMAND_ENTRY_SEPARATOR}` +
+      THEORY_LEDGER_DESCRIPTION,
   );
   t.match(
     rendered,
@@ -548,6 +564,10 @@ test(RUNTIME_GRAMMAR_TEST_NAME,
     t.equal(
       scripts[WORK_PACKAGE_SCHEMA_SCRIPT],
       WORK_PACKAGE_SCHEMA_SCRIPT_COMMAND,
+    );
+    t.equal(
+      scripts[WORK_THEORY_LEDGER_SCRIPT],
+      WORK_THEORY_LEDGER_SCRIPT_COMMAND,
     );
     t.equal(
       scripts[WORK_SUBAGENT_PROMPT_SCRIPT],

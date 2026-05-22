@@ -114,6 +114,7 @@
     "work:package:new": "node scripts/work-package-new.js",
     "work:package:route-after-rerun": "node scripts/work-package-route-after-rerun.js",
     "work:package:schema": "node scripts/work-package-schema.js",
+    "work:theory-ledger": "node scripts/work-theory-ledger.js",
     "work:subagent-next": "node scripts/work-subagent-next.js",
     "work:subagent-prompt": "node scripts/work-subagent-prompt.js",
     "work:evidence-summary": "node scripts/summarize-representative-evidence.js",

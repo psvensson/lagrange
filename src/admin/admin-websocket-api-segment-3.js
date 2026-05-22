@@ -193,11 +193,14 @@ class AdminWebSocketAPISegment3 extends AdminWebSocketAPISegment2 {
     }
   }
 
-  closeStaleSnapshotLaneSockets() {
+  closeStaleSnapshotLaneSockets(activeClientId = null) {
     const snapshotClients = [...this.clients].filter(
       (clientInfo) => clientInfo.lane === ADMIN_STREAM_LANE_SNAPSHOT
     );
     for (const clientInfo of snapshotClients) {
+      if (activeClientId && clientInfo.id === activeClientId) {
+        continue;
+      }
       this.logger.info(CLOSE_STALE_SOCKET_BEFORE_RETRY_MSG, {
         clientId: clientInfo.id,
         lane: ADMIN_STREAM_LANE_SNAPSHOT,
@@ -331,6 +334,7 @@ class AdminWebSocketAPISegment3 extends AdminWebSocketAPISegment2 {
         allowAuthoritativePublishedMembershipRecovery:
           observationPolicy.allowAuthoritativePublishedMembershipRecovery,
         ignorePreRestart: payload.ignorePreRestart === true,
+        activeClientId: executionContext?.clientInfo?.id || null,
       });
     }
     const serviceDiscoveryQuery = parseServiceDiscoverySqlQuery(sql);
@@ -1260,7 +1264,7 @@ class AdminWebSocketAPISegment3 extends AdminWebSocketAPISegment2 {
           reason: decision.reason,
         });
 
-        this.closeStaleSnapshotLaneSockets();
+        this.closeStaleSnapshotLaneSockets(options?.activeClientId || null);
 
         await new Promise((resolve) => setTimeout(resolve, SNAPSHOT_RETRY_DELAY_MS));
         continue;
@@ -1303,7 +1307,7 @@ class AdminWebSocketAPISegment3 extends AdminWebSocketAPISegment2 {
     });
 
     try {
-      const result = await this.executeLocalQueryEnvelope(payload);
+      const result = await this.executeLocalQueryEnvelope(payload, { clientInfo });
       this.sendQueryResult(clientInfo, queryId, result);
     } catch (error) {
       const errorCode = this.getErrorCode(error);

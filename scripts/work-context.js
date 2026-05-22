@@ -145,6 +145,7 @@ const DIRTY_SCOPE_OUTPUT_TITLE = '# Worktree Package Scope';
 const SECTION_THEORY_IMPLEMENTATION = 'Theory And Implementation Focus';
 const SECTION_ACTIVE_CONSTRAINTS = 'Active Constraints';
 const SECTION_CURRENT_BLOCKER = 'Current Blocker';
+const SECTION_THEORY_LEDGER_REFS = 'Theory Ledger References';
 const SECTION_CURRENT_STATE = 'Current State';
 const SECTION_NEXT_ACTION = 'Next Action';
 const SECTION_FIRST_FILES = 'First Files To Read';
@@ -268,6 +269,7 @@ const FIELD_LABELS = Object.freeze({
   PACKAGE_TITLE: 'Package title',
   PLAYBACK: 'Playback',
   PREDECESSOR: 'Predecessor',
+  THEORY_LEDGER_REFS: 'Theory ledger refs',
   SCENARIO: 'Scenario',
   SCOPE_SHAPE: 'Scope shape',
   SPRINT: 'Sprint',
@@ -349,6 +351,7 @@ const METADATA_FIELD_HANDOFF_FILES = 'handoffFiles';
 const METADATA_FIELD_GENERATED_FILES = 'generatedFiles';
 const METADATA_FIELD_CANDIDATE_RUNTIME_FILES = 'candidateRuntimeFiles';
 const METADATA_FIELD_COMMIT_SCOPE = 'commitScope';
+const METADATA_FIELD_THEORY_LEDGER_REFS = 'theoryLedgerRefs';
 const METADATA_FIELD_PREDECESSOR = 'predecessor';
 const METADATA_FIELD_MODEL_FIT = 'modelFit';
 const METADATA_FIELD_REPRESENTATIVE_RESIDUAL = 'representativeResidual';
@@ -554,6 +557,7 @@ async function buildCurrentBlockerFromPackage(packagePath) {
       candidateRuntimeFiles:
         metadataList(metadata, METADATA_FIELD_CANDIDATE_RUNTIME_FILES),
       commitScope: metadataList(metadata, METADATA_FIELD_COMMIT_SCOPE),
+      theoryLedgerRefs: metadataList(metadata, METADATA_FIELD_THEORY_LEDGER_REFS),
       modelFit: metadataModelFit(metadata),
       representativeResidual: metadataObject(
         metadata,
@@ -1722,6 +1726,9 @@ function buildUsefulCommands(currentBlocker) {
       ]),
     );
   }
+  if (normalizeStringList(currentBlocker.theoryLedgerRefs).length > NUM_ZERO) {
+    commands.push('npm run work:theory-ledger -- list');
+  }
   if (pathHasRealValue(currentBlocker.artifact)) {
     commands.push(
       commandWithPaths(NPM_RUN_WORK_EVIDENCE_SUMMARY_COMMAND, [
@@ -2041,6 +2048,13 @@ async function buildContextLines(currentBlocker, packageContent) {
   appendKeyValue(lines, FIELD_LABELS.PLAYBACK, playbackLabel);
   appendKeyValue(lines, FIELD_LABELS.PREDECESSOR, currentBlocker.predecessor);
   appendKeyValue(lines, FIELD_LABELS.PACKAGE_TITLE, packageTitle);
+
+  appendSection(lines, SECTION_THEORY_LEDGER_REFS);
+  appendList(
+    lines,
+    normalizeStringList(currentBlocker.theoryLedgerRefs),
+    'No related theory ledger refs recorded.',
+  );
 
   appendSection(lines, SECTION_SUBAGENT_SEQUENCING);
   appendKeyValue(lines, FIELD_LABELS.SUBAGENT_ROLE, subagentStatus.role);

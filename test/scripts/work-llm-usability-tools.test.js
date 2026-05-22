@@ -74,6 +74,8 @@ test('shared package schema lists validator enums for LLM scaffolding', (t) => {
   t.match(rendered, /Output Profiles/u);
   t.match(rendered, /extra-high/u);
   t.match(rendered, /writeScope/u);
+  t.match(rendered, /theoryLedgerRefs/u);
+  t.match(rendered, /Theory Ledger References/u);
   t.match(rendered, /Core Logic Brief/u);
   t.match(rendered, /Causal Decision Contract/u);
   t.match(rendered, /Decision Experiment Gate/u);

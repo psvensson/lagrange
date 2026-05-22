@@ -14,6 +14,16 @@
   "dominantReason": "current dominant reason",
   "currentState": "one-line current state",
   "nextAction": "next proof or implementation action",
+  "stabilityCredit": "representative-green|representative-migrated|representative-reduced|local-proof-only|instrumentation-only",
+  "whyHighestLeverageNow": "<why highest leverage now>",
+  "codeQualityAdmission": {
+    "reason": "removes-duplicate-decision-paths|preserves-owner-outcomes|improves-evidence-fidelity|prevents-regression|active-guardrail-requirement",
+    "evidence": "<stability-relevant effect evidence>"
+  },
+  "representativeRerunCadence": "fresh-representative-rerun|scheduled-rerun-command|explicit-invalid-rerun-reason|architecture-stop-reason",
+  "theoryLedgerRefs": [
+    "theory-YYYYMMDD-short-slug"
+  ],
   "proof": [
     "Focused owner test",
     "Representative scenario rerun"
@@ -194,6 +204,10 @@ Before raw JSON, raw logs, broad file search, oversized segment files, or ad hoc
    `npm run work:subagent-prompt -- --role <role> --package <package>`.
 5. Large-file cleanup:
    `npm run work:oversized-next -- --markdown`.
+
+Use `theoryLedgerRefs` only as an advisory index into
+`work/theory-ledger.md`; package evidence, current-blocker, and artifacts remain
+the source of truth.
 
 If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which
 canonical extractor was tried and why it was insufficient.

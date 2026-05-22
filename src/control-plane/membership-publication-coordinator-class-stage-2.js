@@ -360,6 +360,19 @@ function buildActiveGateMembershipPublicationVisibleReadRows(
   });
 }
 
+function resolveActiveGateMembershipPublicationReconcileOutcomeRow(
+  reconcileOutcome,
+  nowMs,
+) {
+  const publicationRows = buildActiveGateMembershipPublicationVisibleReadRows(
+    reconcileOutcome,
+    nowMs,
+  );
+  return publicationRows.length > NUM.ZERO ?
+    normalizeControlPlanePublicationRow(publicationRows[NUM.ZERO]) :
+    ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_EMPTY_OUTCOME;
+}
+
 function buildActiveGateMembershipPublicationReconcileContext({
   publicationActiveGateHandoff,
   target,
@@ -498,12 +511,12 @@ function buildActiveGateMembershipPublicationReconcileOutcome(
 function buildActiveGateMembershipPublicationDeferredContext(
   context,
   reconcileOutcome = ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_EMPTY_OUTCOME,
+  nowMs = null,
 ) {
-  const publicationRow =
-    reconcileOutcome?.publicationRow &&
-    typeof reconcileOutcome.publicationRow === TYPEOF.OBJECT ?
-      reconcileOutcome.publicationRow :
-      ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_EMPTY_OUTCOME;
+  const publicationRow = resolveActiveGateMembershipPublicationReconcileOutcomeRow(
+    reconcileOutcome,
+    nowMs,
+  );
   const deferredContext = publicationRow ===
     ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_EMPTY_OUTCOME ?
     context :
@@ -1250,6 +1263,8 @@ class MembershipPublicationCoordinatorClassStage2 extends
           CONTROL_PLANE_CRITICAL_CONVERGENCE_OPERATION.ACTIVE_GATE_HANDOFF,
       }),
     });
+    let lastReconcileOutcome =
+      ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_EMPTY_OUTCOME;
     try {
       let reconcileOutcome =
         ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_EMPTY_OUTCOME;
@@ -1261,6 +1276,7 @@ class MembershipPublicationCoordinatorClassStage2 extends
       ) {
         try {
           reconcileOutcome = await this.reconcileClusterMembership(context);
+          lastReconcileOutcome = reconcileOutcome;
           const visibleRow =
             await this.readActiveGateMembershipPublicationVisibleReconcileRow(
               reconcileOutcome,
@@ -1306,6 +1322,12 @@ class MembershipPublicationCoordinatorClassStage2 extends
         buildActiveGateMembershipPublicationDeferredContext(
           context,
           reconcileOutcome,
+          this.now(),
+        );
+      const deferredPublicationRow =
+        resolveActiveGateMembershipPublicationReconcileOutcomeRow(
+          reconcileOutcome,
+          this.now(),
         );
       const rawEnqueueOutcome = this.enqueueClusterMembershipReconcile(
         ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_REASON,
@@ -1328,7 +1350,10 @@ class MembershipPublicationCoordinatorClassStage2 extends
       return buildActiveGateMembershipPublicationReconcileOutcome(
         ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_OUTCOME.WRITE_DEFERRED,
         {
-          publicationRow: reconcileOutcome.publicationRow,
+          publicationRow: deferredPublicationRow ===
+            ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_EMPTY_OUTCOME ?
+            null :
+            deferredPublicationRow,
           target,
           enqueued,
           reasonCode:
@@ -1346,10 +1371,19 @@ class MembershipPublicationCoordinatorClassStage2 extends
       if (!deferredOutcome) {
         throw error;
       }
+      const deferredReconcileOutcome =
+        error.activeGateMembershipPublicationReconcileOutcome ||
+        lastReconcileOutcome;
       const deferredContext =
         buildActiveGateMembershipPublicationDeferredContext(
           context,
-          error.activeGateMembershipPublicationReconcileOutcome,
+          deferredReconcileOutcome,
+          this.now(),
+        );
+      const deferredPublicationRow =
+        resolveActiveGateMembershipPublicationReconcileOutcomeRow(
+          deferredReconcileOutcome,
+          this.now(),
         );
       const rawEnqueueOutcome = this.enqueueClusterMembershipReconcile(
         ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_REASON,
@@ -1376,9 +1410,10 @@ class MembershipPublicationCoordinatorClassStage2 extends
       return buildActiveGateMembershipPublicationReconcileOutcome(
         deferredOutcome,
         {
-          publicationRow:
-            error.activeGateMembershipPublicationReconcileOutcome
-              ?.publicationRow,
+          publicationRow: deferredPublicationRow ===
+            ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_EMPTY_OUTCOME ?
+            null :
+            deferredPublicationRow,
           target,
           enqueued,
           reasonCode:
