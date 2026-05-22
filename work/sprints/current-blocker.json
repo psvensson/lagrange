@@ -2,37 +2,34 @@
   "schema": "current-blocker-v1",
   "generatedBy": "scripts/work-tracker.js",
   "sprint": "none",
-  "package": "work/packages/active-20260522-rolling-restart-active-gate-pending-recovery-projection.md",
+  "package": "work/packages/active-20260522-rolling-restart-active-gate-owner-recovery-completion.md",
   "status": "active",
   "lane": "runtime-owner-boundary",
   "scenario": "rolling-restart",
-  "artifact": "test-output/reports/rolling-restart-owner-recovery-consumer-fix-20260522T215121Z.report.json",
+  "artifact": "test-output/reports/rolling-restart-active-gate-pending-recovery-projection-20260522T223745Z.report.json",
   "playback": "none",
   "owner": "startup_active_gate_owner",
-  "boundary": "publication_active_gate_handoff_pending_recovery_projection",
+  "boundary": "owner_recovery_completion",
   "dominantReason": "active_gate_timed_out",
-  "currentState": "Architecture analysis selected the pending-recovery projection successor. Rolling-restart remains blocked at active_gate_snapshot_coverage with wait_owner_recovery pending, runtimePromotionAllowed=false, activeGateOwnerCohortPendingRecoveryCount=1, and handoffContract/progress grammar exposing only pendingReconcile fields.",
-  "nextAction": "Project wait_owner_recovery pendingRecoveryNodeIds through the publication active-gate handoff contract, progress report, admin snapshot, and topology analyzer surfaces while preserving runtimePromotionAllowed=false.",
+  "currentState": "Pending-recovery projection is now canonical: the fresh rolling-restart handoff probe exposes wait_owner_recovery, pendingRecoveryCount=1, pendingRecoveryNodeIds=[11601fe0-72d6-5853-8590-ec2881853e72], runtimePromotionAllowed=false, owner queue pendingWrites=1, and handoffOutcome write_deferred/enqueued=false while snapshotCoverage remains 0/5.",
+  "nextAction": "Make wait_owner_recovery pendingRecoveryCount/nodeIds actionable for the owner recovery completion path so the selected snapshot owner can enqueue, complete, or explicitly classify recovery progress instead of remaining write_deferred/enqueued=false.",
   "proof": [
-    "npm test -- test/control-plane/publication-active-gate-handoff-contract.test.js test/admin/admin-control-snapshot-repair-handoff-outcome-test-cases.js test/scripts/analyze-topology-convergence.test.js test/distributed/harness/__tests__/cluster-control-snapshot-timeout-repair-test-cases.js # focused contract fixture and affected consumer proof",
-    "npm run work:evidence-summary -- test-output/reports/rolling-restart-owner-recovery-consumer-fix-20260522T215121Z.report.json",
-    "npm run audit:guideline:literals -- src/control-plane/publication-active-gate-handoff-contract.js src/admin/admin-control-snapshot-class-part-2.js src/diagnostics/topology-convergence-graph.js scripts/analyze-topology-convergence.js test/distributed/harness/cluster-segment-7-class-5.js ./test/control-plane/publication-active-gate-handoff-contract.test.js ./test/scripts/analyze-topology-convergence.test.js ./test/admin/admin-control-snapshot-repair-handoff-outcome-test-cases.js ./test/distributed/harness/__tests__/cluster-control-snapshot-timeout-repair-test-cases.js",
-    "npm run audit:guideline:decision-boundaries -- src/control-plane/publication-active-gate-handoff-contract.js src/admin/admin-control-snapshot-class-part-2.js src/diagnostics/topology-convergence-graph.js scripts/analyze-topology-convergence.js test/distributed/harness/cluster-segment-7-class-5.js",
-    "npm run audit:runtime-grammar:file -- src/control-plane/publication-active-gate-handoff-contract.js src/admin/admin-control-snapshot-class-part-2.js src/diagnostics/topology-convergence-graph.js scripts/analyze-topology-convergence.js test/distributed/harness/cluster-segment-7-class-5.js"
+    "npm test -- test/control-plane/publication-active-gate-handoff-contract.test.js test/admin/admin-control-snapshot-deferred-refresh-membership-observation-test-cases.js test/admin/admin-control-snapshot-repair-handoff-outcome-test-cases.js test/scripts/analyze-topology-convergence.test.js test/distributed/harness/__tests__/cluster-control-snapshot-timeout-repair-test-cases.js # focused contract fixture and affected consumer proof",
+    "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-active-gate-pending-recovery-projection-20260522T223745Z.report.json --handoff-probe",
+    "npm run work:evidence-summary -- test-output/reports/rolling-restart-active-gate-pending-recovery-projection-20260522T223745Z.report.json",
+    "npm run audit:guideline:literals -- src/control-plane/publication-active-gate-handoff-contract.js src/admin/admin-control-snapshot-class-part-2.js src/admin/admin-control-snapshot-class-part-6.js ./test/control-plane/publication-active-gate-handoff-contract.test.js ./test/admin/admin-control-snapshot-deferred-refresh-membership-observation-test-cases.js ./test/admin/admin-control-snapshot-repair-handoff-outcome-test-cases.js",
+    "npm run audit:guideline:decision-boundaries -- src/control-plane/publication-active-gate-handoff-contract.js src/admin/admin-control-snapshot-class-part-2.js src/admin/admin-control-snapshot-class-part-6.js",
+    "npm run audit:runtime-grammar:file -- src/control-plane/publication-active-gate-handoff-contract.js src/admin/admin-control-snapshot-class-part-2.js src/admin/admin-control-snapshot-class-part-6.js"
   ],
   "writeScope": [
     "src/control-plane/publication-active-gate-handoff-contract.js",
     "src/admin/admin-control-snapshot-class-part-2.js",
-    "src/diagnostics/topology-convergence-graph.js",
-    "scripts/analyze-topology-convergence.js",
+    "src/admin/admin-control-snapshot-class-part-6.js",
     "test/control-plane/publication-active-gate-handoff-contract.test.js",
-    "test/scripts/analyze-topology-convergence.test.js",
-    "test/admin/admin-control-snapshot-repair-handoff-outcome-test-cases.js",
-    "test/distributed/harness/cluster-segment-7-class-5.js",
-    "test/distributed/harness/__tests__/cluster-control-snapshot-timeout-repair-test-cases.js"
+    "test/admin/admin-control-snapshot-deferred-refresh-membership-observation-test-cases.js",
+    "test/admin/admin-control-snapshot-repair-handoff-outcome-test-cases.js"
   ],
   "handoffFiles": [
-    "test-output/reports/rolling-restart-owner-recovery-consumer-fix-20260522T215121Z.report.json",
     "test-output/reports/rolling-restart-active-gate-pending-recovery-projection-20260522T223745Z.report.json"
   ],
   "generatedFiles": [
@@ -40,19 +37,20 @@
     "work/sprints/current-blocker.json"
   ],
   "candidateRuntimeFiles": [
-    "test/distributed/harness/cluster-segment-7-class-4.js"
+    "scripts/analyze-topology-convergence.js",
+    "src/diagnostics/topology-convergence-graph.js",
+    "test/scripts/analyze-topology-convergence.test.js",
+    "test/distributed/harness/cluster-segment-7-class-5.js",
+    "test/distributed/harness/__tests__/cluster-control-snapshot-timeout-repair-test-cases.js"
   ],
   "commitScope": [
     "src/control-plane/publication-active-gate-handoff-contract.js",
     "src/admin/admin-control-snapshot-class-part-2.js",
-    "src/diagnostics/topology-convergence-graph.js",
-    "scripts/analyze-topology-convergence.js",
+    "src/admin/admin-control-snapshot-class-part-6.js",
     "test/control-plane/publication-active-gate-handoff-contract.test.js",
-    "test/scripts/analyze-topology-convergence.test.js",
+    "test/admin/admin-control-snapshot-deferred-refresh-membership-observation-test-cases.js",
     "test/admin/admin-control-snapshot-repair-handoff-outcome-test-cases.js",
-    "test/distributed/harness/cluster-segment-7-class-5.js",
-    "test/distributed/harness/__tests__/cluster-control-snapshot-timeout-repair-test-cases.js",
-    "work/packages/active-20260522-rolling-restart-active-gate-pending-recovery-projection.md",
+    "work/packages/active-20260522-rolling-restart-active-gate-owner-recovery-completion.md",
     "work/sprints/current-blocker.md",
     "work/sprints/current-blocker.json"
   ],
@@ -69,70 +67,61 @@
       "a frozen decision must be reopened"
     ]
   },
-  "representativeResidual": {
-    "status": "migrated",
-    "scenario": "rolling-restart",
-    "artifact": "test-output/reports/rolling-restart-owner-recovery-consumer-fix-20260522T215121Z.report.json",
-    "frontier": "active_gate_snapshot_coverage",
-    "owner": "startup_active_gate_owner",
-    "boundary": "publication_active_gate_handoff_pending_recovery_projection",
-    "dominantReason": "active_gate_timed_out",
-    "nextAction": "Project wait_owner_recovery pendingRecoveryNodeIds through the canonical handoff/report grammar and rerun focused proof before a representative rerun."
-  },
+  "representativeResidual": {},
   "causalGovernance": {
-    "hypothesis": "Rolling-restart remains blocked because wait_owner_recovery pendingRecoveryNodeIds are visible through activeGateOwnerCohort evidence but not through the selected publication active-gate handoff contract/progress grammar consumed by reports and diagnostics.",
-    "stopConditionCheck": "Run npm run analyze:causal-model -- test-output/reports/rolling-restart-owner-recovery-consumer-fix-20260522T215121Z.report.json, focused contract fixture and affected consumer proof, static guardrails, and representative evidence routing before closure; do not widen timeouts or allow runtime promotion from degraded recovery evidence.",
-    "expectedCausalModelChange": "The focused proof should make pendingRecoveryCount/nodeIds observable through the canonical handoff/report grammar, after which representative evidence can either move coverage or expose the next named recovery-completion edge.",
-    "representativeOutcome": "same-frontier",
-    "causalDebt": "Baseline artifact has snapshotCoverage=0/5, selected timeout after 50ms, repair_deferred/retry, wait_owner_recovery, activeGateOwnerCohortPendingRecoveryCount=1, and handoffContract pending-reconcile only.",
-    "crossBoundaryReview": "Keep selected-source retry budgets, owner recovery completion, startup readiness, load-readiness, and runtime promotion gates frozen until pending-recovery projection is canonical."
+    "hypothesis": "Rolling-restart remains blocked because wait_owner_recovery pendingRecoveryNodeIds are now visible through the canonical handoff/report grammar, but the owner recovery command path does not treat that pending recovery debt as an actionable completion/progress intent.",
+    "stopConditionCheck": "Run npm run analyze:causal-model -- test-output/reports/rolling-restart-active-gate-pending-recovery-projection-20260522T223745Z.report.json, focused contract and affected consumer proof, representative routing, static guardrails, and a fresh representative rerun before closure; do not reinterpret pending recovery debt as ready or runtime-promotable.",
+    "expectedCausalModelChange": "The handoff outcome should move from write_deferred/enqueued=false toward an enqueued, completed, or explicitly classified owner recovery outcome while runtimePromotionAllowed remains false until snapshot coverage improves.",
+    "representativeOutcome": "pending-before-rerun",
+    "causalDebt": "Fresh artifact has snapshotCoverage=0/5, selected timeout after 1116ms, repair_deferred/retry, wait_owner_recovery, activeGateOwnerCohortPendingRecoveryCount=1, selectedControlPlaneOwnerQueuePendingWrites=1, and membershipPublicationHandoffOutcome write_deferred/enqueued=false.",
+    "crossBoundaryReview": "Keep selected-source retry budgets, startup readiness, load-readiness, and runtime promotion gates frozen while owner recovery completion is made actionable."
   },
   "scenarioCausalClosure": {
-    "referenceScenarioOrProbe": "rolling-restart active_gate_snapshot_coverage wait_owner_recovery projection",
+    "referenceScenarioOrProbe": "rolling-restart active_gate_snapshot_coverage owner recovery completion",
     "phaseChain": [
       "publication convergence is ready",
+      "pendingRecoveryCount/nodeIds are visible on the selected handoff contract and active-gate progress",
       "selected source is admin_health ready but selected snapshot observation is repair_deferred/retry",
-      "wait_owner_recovery is pending with activeGateOwnerCohortPendingRecoveryCount=1",
-      "handoffContract and flattened progress expose pendingReconcile fields only",
+      "owner command outcome remains write_deferred/enqueued=false",
       "snapshotCoverage remains 0/5 and runtimePromotionAllowed=false"
     ],
-    "currentFirstFrontier": "active_gate_snapshot_coverage / startup_active_gate_owner / snapshot_coverage migrated to publication_active_gate_handoff_pending_recovery_projection / active_gate_timed_out",
+    "currentFirstFrontier": "active_gate_snapshot_coverage / startup_active_gate_owner / owner_recovery_completion / active_gate_timed_out",
     "knownDownstreamBlockers": [
       "startup readiness support remains inherited from active-gate no progress",
       "load-readiness is not reached",
       "runtime promotion remains unsafe while snapshotCoverage=0/5"
     ],
-    "missingCausalEdge": "wait_owner_recovery pendingRecoveryNodeIds must be projected through the publication active-gate handoff contract, admin snapshot, harness progress, and topology analyzer surfaces.",
-    "missingCausalEdgeProbe": "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-owner-recovery-consumer-fix-20260522T215121Z.report.json --handoff-probe",
-    "falsifyingProbe": "npm test -- test/control-plane/publication-active-gate-handoff-contract.test.js test/admin/admin-control-snapshot-repair-handoff-outcome-test-cases.js test/scripts/analyze-topology-convergence.test.js test/distributed/harness/__tests__/cluster-control-snapshot-timeout-repair-test-cases.js # focused contract fixture and affected consumer proof",
-    "boundedProgressProof": "Focused proof must show the reconcile/wait_owner_recovery progress mechanism carries pendingRecoveryCount/nodeIds on the selected handoff contract and flattened progress/report views while runtimePromotionAllowed remains false.",
-    "boundedProgressProofArtifact": "test-output/reports/rolling-restart-owner-recovery-consumer-fix-20260522T215121Z.report.json",
-    "expectedObservableTransition": "handoffContract, selected admin snapshot projection, and topology handoff probe agree on pendingRecoveryCount/nodeIds for wait_owner_recovery.",
-    "maxProgressBound": "one runtime-owner-boundary projection package before representative rerun",
-    "sameFrontierFallback": "If fresh representative evidence remains same-frontier with no canonical recovery projection or metric reduction, stop for architecture instead of another local patch.",
-    "expectedNextFrontier": "snapshot coverage movement, owner recovery completion, or same-frontier with canonical recovery evidence",
-    "resultClassification": "same-frontier",
+    "missingCausalEdge": "wait_owner_recovery pendingRecoveryNodeIds must become actionable owner recovery completion progress instead of remaining a write_deferred/enqueued=false handoff outcome.",
+    "missingCausalEdgeProbe": "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-active-gate-pending-recovery-projection-20260522T223745Z.report.json --handoff-probe",
+    "falsifyingProbe": "npm test -- test/control-plane/publication-active-gate-handoff-contract.test.js test/admin/admin-control-snapshot-deferred-refresh-membership-observation-test-cases.js test/admin/admin-control-snapshot-repair-handoff-outcome-test-cases.js test/scripts/analyze-topology-convergence.test.js test/distributed/harness/__tests__/cluster-control-snapshot-timeout-repair-test-cases.js # focused contract fixture and affected consumer proof",
+    "boundedProgressProof": "Focused proof must show wait_owner_recovery pending recovery debt causes an owner recovery reconcile/enqueue/drain/classification outcome without allowing runtime promotion.",
+    "boundedProgressProofArtifact": "test-output/reports/rolling-restart-active-gate-pending-recovery-projection-20260522T223745Z.report.json",
+    "expectedObservableTransition": "handoffOutcome changes from write_deferred/enqueued=false to an actionable owner recovery progress outcome, or the owner emits a distinct terminal/deferred recovery-completion classification.",
+    "maxProgressBound": "one runtime-owner-boundary owner recovery completion package before representative rerun",
+    "sameFrontierFallback": "If fresh representative evidence remains same-frontier with no outcome or metric movement, stop for an autonomous architecture experiment instead of another adjacent local patch.",
+    "expectedNextFrontier": "snapshot coverage movement, recovery completion, or architecture-gap classification",
+    "resultClassification": "pending-before-probe",
     "stopCondition": "continue-local-fix"
   },
   "observablePrediction": {
-    "metric": "handoffContract and flattened active-gate progress pendingRecoveryCount/nodeIds for wait_owner_recovery",
-    "predicted": "Focused proof exposes pendingRecoveryCount=1 and pendingRecoveryNodeIds for wait_owner_recovery through the selected handoff contract, admin snapshot, harness progress, and topology handoff probe while runtimePromotionAllowed remains false.",
-    "observed": "Focused proof and fresh representative handoff probe expose pendingRecoveryCount=1 and pendingRecoveryNodeIds=[11601fe0-72d6-5853-8590-ec2881853e72] for wait_owner_recovery while runtimePromotionAllowed=false.",
-    "accuracy": "partial",
-    "evidence": "npm test -- test/control-plane/publication-active-gate-handoff-contract.test.js test/admin/admin-control-snapshot-repair-handoff-outcome-test-cases.js test/scripts/analyze-topology-convergence.test.js test/distributed/harness/__tests__/cluster-control-snapshot-timeout-repair-test-cases.js; npm run analyze:topology-convergence -- test-output/reports/rolling-restart-active-gate-pending-recovery-projection-20260522T223745Z.report.json --handoff-probe"
+    "metric": "handoffOutcome state/enqueued and pendingRecoveryCount for wait_owner_recovery",
+    "predicted": "wait_owner_recovery with pendingRecoveryCount=1 moves from write_deferred/enqueued=false to an actionable owner recovery reconcile/enqueue/drain/classification outcome while runtimePromotionAllowed remains false.",
+    "observed": "pending-before-observation",
+    "accuracy": "pending-before-observation",
+    "evidence": "pending-before-observation"
   },
   "experimentOutcome": {},
   "rerunDecision": {
-    "sourceArtifact": "test-output/reports/rolling-restart-owner-recovery-consumer-fix-20260522T215121Z.report.json",
+    "sourceArtifact": "test-output/reports/rolling-restart-active-gate-pending-recovery-projection-20260522T223745Z.report.json",
     "routeOwner": "startup_active_gate_owner",
-    "routeBoundary": "publication_active_gate_handoff_pending_recovery_projection",
+    "routeBoundary": "owner_recovery_completion",
     "routeDominantReason": "active_gate_timed_out",
     "routeCausalOutcome": "continue_local_fix",
     "stopMode": "classified_local_blocker",
     "nextLane": "runtime-owner-boundary",
-    "expectedDelta": "Focused proof shows handoffContract and flattened progress carry pendingRecoveryCount/nodeIds for wait_owner_recovery; representative rerun should move snapshot coverage, reduce the same frontier, migrate to owner recovery completion, or stay same-frontier with new canonical recovery evidence.",
+    "expectedDelta": "Owner recovery pending evidence becomes actionable owner-command progress: wait_owner_recovery with pendingRecoveryCount=1 should enqueue or complete the owner recovery path instead of remaining write_deferred/enqueued=false.",
     "requiredRefreshCommands": [
-      "npm run work:package:route-after-rerun -- --artifact test-output/reports/rolling-restart-owner-recovery-consumer-fix-20260522T215121Z.report.json --owner startup_active_gate_owner --boundary publication_active_gate_handoff_pending_recovery_projection --dominant-reason active_gate_timed_out",
+      "npm run work:package:route-after-rerun -- --artifact test-output/reports/rolling-restart-active-gate-pending-recovery-projection-20260522T223745Z.report.json --owner startup_active_gate_owner --boundary owner_recovery_completion --dominant-reason active_gate_timed_out",
       "update Sprint Strategy Brief and Current Edge Card from the route result",
       "npm run work:repair",
       "npm run work:validate -- --pre-impl"
@@ -144,9 +133,9 @@
     "artifactBudget": "one-artifact",
     "proofCommandBudget": "two-or-three-canonical-commands",
     "commands": [
-      "npm test -- test/control-plane/publication-active-gate-handoff-contract.test.js test/admin/admin-control-snapshot-repair-handoff-outcome-test-cases.js test/scripts/analyze-topology-convergence.test.js test/distributed/harness/__tests__/cluster-control-snapshot-timeout-repair-test-cases.js",
-      "npm run audit:guideline:literals -- src/control-plane/publication-active-gate-handoff-contract.js src/admin/admin-control-snapshot-class-part-2.js src/diagnostics/topology-convergence-graph.js scripts/analyze-topology-convergence.js test/distributed/harness/cluster-segment-7-class-5.js ./test/control-plane/publication-active-gate-handoff-contract.test.js ./test/scripts/analyze-topology-convergence.test.js ./test/admin/admin-control-snapshot-repair-handoff-outcome-test-cases.js ./test/distributed/harness/__tests__/cluster-control-snapshot-timeout-repair-test-cases.js",
-      "npm run audit:guideline:decision-boundaries -- src/control-plane/publication-active-gate-handoff-contract.js src/admin/admin-control-snapshot-class-part-2.js src/diagnostics/topology-convergence-graph.js scripts/analyze-topology-convergence.js test/distributed/harness/cluster-segment-7-class-5.js"
+      "npm test -- test/control-plane/publication-active-gate-handoff-contract.test.js test/admin/admin-control-snapshot-deferred-refresh-membership-observation-test-cases.js test/admin/admin-control-snapshot-repair-handoff-outcome-test-cases.js",
+      "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-active-gate-pending-recovery-projection-20260522T223745Z.report.json --handoff-probe",
+      "npm run audit:guideline:literals -- src/control-plane/publication-active-gate-handoff-contract.js src/admin/admin-control-snapshot-class-part-2.js src/admin/admin-control-snapshot-class-part-6.js ./test/control-plane/publication-active-gate-handoff-contract.test.js ./test/admin/admin-control-snapshot-deferred-refresh-membership-observation-test-cases.js ./test/admin/admin-control-snapshot-repair-handoff-outcome-test-cases.js"
     ],
     "decisionRecord": "Record classification in the current package or sprint edge card; open a separate classifier only for material route, owner, boundary, stop-condition, tracker-truth, or successor-selection changes.",
     "successorAction": "open-runtime-owner-boundary",
