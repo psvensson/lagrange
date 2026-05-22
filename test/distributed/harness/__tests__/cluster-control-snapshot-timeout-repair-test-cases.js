@@ -1244,11 +1244,18 @@ test(SELECTED_SNAPSHOT_SOURCE_TIMEOUT_LOAD_RETRY_TEST_NAME, async () => {
     });
   }
 
-  const coverage = await cluster._probeControlSnapshotCoverage(
-    Date.now() + SNAPSHOT_REPLAY_TEST_DEADLINE_EXTENSION_MS,
-    SNAPSHOT_REPLAY_TEST_EXPECTED_NODE_IDS,
-    {readinessMode: SELECTED_SNAPSHOT_SOURCE_TIMEOUT_LOAD_MODE},
-  );
+  const originalDateNow = Date.now;
+  Date.now = () => SELECTED_SNAPSHOT_SOURCE_TIMEOUT_CAPTURED_AT_MS;
+  let coverage;
+  try {
+    coverage = await cluster._probeControlSnapshotCoverage(
+      Date.now() + SNAPSHOT_REPLAY_TEST_DEADLINE_EXTENSION_MS,
+      SNAPSHOT_REPLAY_TEST_EXPECTED_NODE_IDS,
+      {readinessMode: SELECTED_SNAPSHOT_SOURCE_TIMEOUT_LOAD_MODE},
+    );
+  } finally {
+    Date.now = originalDateNow;
+  }
   const selectedCalls = snapshotProbeCalls.filter((call) => {
     return call.nodeId === SELECTED_SNAPSHOT_SOURCE_TIMEOUT_RESET_NODE_ID;
   });

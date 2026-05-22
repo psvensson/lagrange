@@ -1,6 +1,6 @@
 # Universal Owner Contract Completion Sprint
 
-Status: active. Activated after
+Status: done. Activated after
 `work/packages/done-20260521-rolling-restart-active-gate-snapshot-quorum.md`
 closed and moved out of the active blocker slot.
 
@@ -37,22 +37,22 @@ closed and moved out of the active blocker slot.
 ## Current Edge Card
 
 ```text
-Representative artifact: test-output/report.json
-Visible first frontier: active_gate_snapshot_coverage / startup_active_gate_owner / snapshot_coverage / active_gate_timed_out
-Active package: work/packages/done-20260522-node-failure-rebalance-startup-active-gate-snapshot-watch-handoff-contract.md
+Representative artifact: none
+Visible first frontier: unknown
+Active package: work/packages/done-20260522-rolling-restart-reachability-timeout-floor-budget.md
 Active package owner: startup_active_gate_owner
 Active package boundary: snapshot_coverage
 Selected cause: active_gate_timed_out
-Required action: Implement the snapshot/watch owner handoff contract for WebSocket-closed selected snapshot source evidence by emitting a typed selectedSnapshotObservation and publication-active-gate handoff outcome before runtime promotion.
-Representative status: reduced
-Causal outcome: continue_local_fix
-Architecture gate: watching / unknown
-Expected delta: Handoff probe detects a typed publicationActiveGateHandoff or selectedSnapshotObservation contract for WebSocket-closed selected source evidence while runtimePromotionAllowed remains false until the contract allows promotion.
-Current state: Architecture discriminator selected the snapshot/watch owner handoff contract route: handoff probe is absent with runtimePromotionAllowed=false while selectedSnapshotAdminReady=true, selectedSnapshotReachableBy=admin_ws, and alternativeSnapshotWitnessAvailable=true.
-Allowed edits: work/packages/done-20260522-node-failure-rebalance-startup-active-gate-snapshot-watch-handoff-contract.md, work/sprints/active-2026-q2-universal-owner-contract-completion.md, work/sprints/current-blocker.md, work/sprints/current-blocker.json, work/model-ledger.jsonl, src/control-plane/publication-active-gate-handoff-contract.js, src/admin/admin-control-snapshot-class-part-1.js, src/admin/admin-control-snapshot-class-part-2.js, test/control-plane/publication-active-gate-handoff-contract.test.js, test/admin/admin-control-snapshot-repair-handoff-outcome-test-cases.js, test/distributed/harness/__tests__/cluster-control-snapshot-timeout-repair-test-cases.js
-Candidate runtime files: src/control-plane/control-plane-snapshot-owner.js
-Forbidden edits: Runtime promotion remains blocked until a canonical snapshot/watch handoff owner contract is emitted and proven.
-Required latest proof: npm test -- test/control-plane/publication-active-gate-handoff-contract.test.js test/admin/admin-control-snapshot-repair-handoff-outcome-test-cases.js test/distributed/harness/__tests__/cluster-control-snapshot-timeout-repair-test-cases.js, node scripts/check-guideline-literals.js src/control-plane/publication-active-gate-handoff-contract.js src/admin/admin-control-snapshot-class-part-1.js src/admin/admin-control-snapshot-class-part-2.js, node scripts/check-guideline-decision-boundaries.js src/control-plane/publication-active-gate-handoff-contract.js src/admin/admin-control-snapshot-class-part-1.js src/admin/admin-control-snapshot-class-part-2.js, npm run audit:runtime-grammar:file -- src/control-plane/publication-active-gate-handoff-contract.js src/admin/admin-control-snapshot-class-part-1.js src/admin/admin-control-snapshot-class-part-2.js, npm run analyze:topology-convergence -- test-output/report.json --handoff-probe, npm run analyze:topology-convergence -- test-output/report.json --replay-fixture
+Required action: Adjust CONTROL_SNAPSHOT_LATE_REACHABILITY_TIMEOUT_FLOOR_MS in cluster-segment-1.js.
+Representative status: unknown
+Causal outcome: unknown
+Architecture gate: not-required / unknown
+Expected delta: unknown
+Current state: New package scaffolded from the shared work-package schema.
+Allowed edits: test/distributed/harness/cluster-segment-1.js, test/distributed/harness/cluster-segment-7-class-5.js, test/distributed/harness/__tests__/cluster-control-snapshot-timeout-repair-test-cases.js
+Candidate runtime files: unknown
+Forbidden edits: owned files expand beyond this package, a frozen decision must be reopened
+Required latest proof: npm run work:validate -- --pre-impl --contract-ready, PROOF=focused-contract-fixture-and-affected-consumer npm test -- test/distributed/harness/__tests__/cluster-control-snapshot-timeout-repair-test-cases.js, node scripts/check-guideline-literals.js test/distributed/harness/cluster-segment-7-class-5.js test/distributed/harness/__tests__/cluster-control-snapshot-timeout-repair-test-cases.js, node scripts/check-guideline-decision-boundaries.js test/distributed/harness/cluster-segment-7-class-5.js test/distributed/harness/__tests__/cluster-control-snapshot-timeout-repair-test-cases.js
 Allowed stop modes: representative-green, migrated, reduced, same-frontier, classification-only, architecture-gap, human-escalation
 ```
 

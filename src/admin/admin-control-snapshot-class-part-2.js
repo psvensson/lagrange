@@ -132,6 +132,8 @@ const CONTROL_SNAPSHOT_REPAIR_FAILURE_DETAIL_SEPARATOR = ':';
 const CONTROL_SNAPSHOT_REPAIR_CONNECTION_CLOSED_PREFIX =
   'Connection to node ';
 const CONTROL_SNAPSHOT_REPAIR_CONNECTION_CLOSED_SUFFIX = ' closed';
+const CONTROL_SNAPSHOT_REPAIR_WEBSOCKET_MATCH_LOWER = 'websocket';
+const CONTROL_SNAPSHOT_REPAIR_CLOSED_MATCH_LOWER = 'closed';
 const CONTROL_SNAPSHOT_REPAIR_FAILURE_PARTICIPANT_ERROR_FIELD = 'error';
 const CONTROL_SNAPSHOT_REPAIR_FAILURE_PARTICIPANT_MESSAGE_FIELD = 'message';
 const CONTROL_SNAPSHOT_REPAIR_FAILURE_PARTICIPANT_FAILED_TABLE_FIELD =
@@ -332,10 +334,13 @@ function selectDeferredRepairLocalControlSnapshot(
     null;
 }
 function hasWebSocketClosedRepairCause(repair = null) {
-  return normalizeControlSnapshotRepairMessageList(repair).some((message) =>
-    message.includes('websocket') &&
-    message.includes('closed'),
-  );
+  return normalizeControlSnapshotRepairMessageList(repair).some((message) => {
+    const lowerMessage = message.toLowerCase();
+    return (
+      lowerMessage.includes(CONTROL_SNAPSHOT_REPAIR_WEBSOCKET_MATCH_LOWER) &&
+      lowerMessage.includes(CONTROL_SNAPSHOT_REPAIR_CLOSED_MATCH_LOWER)
+    );
+  });
 }
 function hasForcedRepairDeferredFailureCause(repair = null) {
   return (

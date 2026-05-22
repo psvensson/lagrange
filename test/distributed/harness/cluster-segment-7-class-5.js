@@ -194,8 +194,15 @@ function hasControlSnapshotReachabilityFallback(result = null) {
 }
 
 function resetSnapshotLaneAfterTimeout(node, error) {
+  const normalizedError = String(normalizeProbeError(error)).toLowerCase();
+  const isTransientOrClosed =
+    isTimeoutShapedProbeError(error) === true ||
+    isSelectedSnapshotTransportClosedProbeError(error) === true ||
+    normalizedError.includes('enotfound') ||
+    normalizedError.includes('eaddrnotavail') ||
+    normalizedError.includes('econnrefused');
   if (
-    isTimeoutShapedProbeError(error) !== true ||
+    isTransientOrClosed !== true ||
     typeof node?._resetAdminSocket !== TYPEOF_FUNCTION
   ) {
     return false;
@@ -236,6 +243,7 @@ function resolveSnapshotRetryReason({
       isAuthoritativeRepairParticipantConnectionClosedProbeError(snapshotError),
     forceRepair: forceRepair === true,
     selectedTimeout: isTimeoutShapedProbeError(snapshotError) === true,
+    selectedTransportClosed: isSelectedSnapshotTransportClosedProbeError(snapshotError),
   };
   if (snapshotRetryEvidence.adminReady !== true) {
     return CONTROL_SNAPSHOT_RETRY_REASON_NOT_APPLICABLE;
@@ -248,6 +256,9 @@ function resolveSnapshotRetryReason({
   }
   if (snapshotRetryEvidence.selectedTimeout) {
     return CONTROL_SNAPSHOT_RETRY_REASON_SELECTED_TIMEOUT;
+  }
+  if (snapshotRetryEvidence.selectedTransportClosed) {
+    return CONTROL_SNAPSHOT_OBSERVATION_REASON_SELECTED_TRANSPORT_CLOSED;
   }
   return CONTROL_SNAPSHOT_RETRY_REASON_NOT_APPLICABLE;
 }
