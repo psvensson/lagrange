@@ -2,36 +2,205 @@
   "schema": "current-blocker-v1",
   "generatedBy": "scripts/work-tracker.js",
   "sprint": "none",
-  "package": "none",
-  "status": "none",
-  "lane": "none",
-  "scenario": "none",
-  "artifact": "none",
+  "package": "work/packages/active-20260522-rolling-restart-load-readiness-snapshot-force-repair.md",
+  "status": "active",
+  "lane": "causal-escalation",
+  "scenario": "rolling-restart",
+  "artifact": "test-output/reports/rolling-restart-snapshot-source-contract-20260522T180652Z.report.json",
   "playback": "none",
-  "owner": "none",
-  "boundary": "none",
-  "dominantReason": "none",
-  "currentState": "No active work package. Start a new package when implementation resumes.",
-  "nextAction": "Create or activate one focused package for the next executable concern.",
-  "proof": [],
-  "writeScope": [],
-  "handoffFiles": [],
-  "generatedFiles": [
-    "work/sprints/current-blocker.json",
-    "work/sprints/current-blocker.md"
+  "owner": "startup_active_gate_owner",
+  "boundary": "snapshot_coverage",
+  "dominantReason": "snapshot_timeout",
+  "currentState": "Focused load-readiness force-repair handoff proof passed, and the fresh rolling-restart representative no longer reports publication_ack_convergence first. It now fails earlier at startup active-gate snapshot coverage: publication convergence is satisfied, priority recovery invariants pass, 4/5 nodes are active, selectedSnapshotAdminReady=true via admin_health, selectedSnapshotError=snapshot_timeout, snapshotCoverage=0/5, and the selected snapshot observation is repair_deferred.",
+  "nextAction": "Close this load-readiness handoff package as representative-migrated, then activate an architecture-contract successor for the selected snapshot timeout/admin_health handoff rather than another local timeout patch.",
+  "proof": [
+    "npm run work:validate -- --pre-impl work/packages/active-20260522-rolling-restart-load-readiness-snapshot-force-repair.md",
+    "npm run work:evidence-summary -- test-output/reports/rolling-restart-snapshot-source-contract-20260522T180652Z.report.json",
+    "npm run analyze:causal-model -- test-output/reports/rolling-restart-snapshot-source-contract-20260522T180652Z.report.json",
+    "PROOF=load-readiness-force-repair npm test -- test/distributed/harness/__tests__/cluster.test-part-6.js",
+    "git diff --check"
   ],
-  "candidateRuntimeFiles": [],
-  "commitScope": [],
+  "writeScope": [
+    "test/distributed/harness/cluster-segment-7.js",
+    "test/distributed/harness/__tests__/cluster-part-6-core-04-test-cases.js"
+  ],
+  "handoffFiles": [
+    "test-output/reports/rolling-restart-snapshot-source-contract-20260522T180652Z.report.json",
+    "test-output/reports/rolling-restart-load-readiness-force-repair-20260522T183247Z.report.json"
+  ],
+  "generatedFiles": [],
+  "candidateRuntimeFiles": [
+    "test/distributed/harness/cluster-segment-7.js",
+    "test/distributed/harness/__tests__/cluster-part-6-core-04-test-cases.js"
+  ],
+  "commitScope": [
+    "test/distributed/harness/cluster-segment-7.js",
+    "test/distributed/harness/__tests__/cluster-part-6-core-04-test-cases.js"
+  ],
   "touchedFiles": [],
-  "modelFit": {},
-  "representativeResidual": {},
-  "causalGovernance": {},
-  "scenarioCausalClosure": {},
-  "observablePrediction": {},
+  "theoryLedgerRefs": [],
+  "modelFit": {
+    "packageClass": "architecture-gap-analysis",
+    "intendedMinimumModel": "gpt-5.3-codex",
+    "scopeShape": "scenario-causal-escalation",
+    "outputProfile": "medium",
+    "ambiguityScore": 1,
+    "escalationTriggers": [
+      "owned files expand beyond active-gate load-readiness snapshot coverage",
+      "a frozen decision must be reopened"
+    ]
+  },
+  "representativeResidual": {
+    "status": "live",
+    "scenario": "rolling-restart",
+    "artifact": "test-output/reports/rolling-restart-load-readiness-force-repair-20260522T183247Z.report.json",
+    "frontier": "active_gate_snapshot_coverage",
+    "owner": "startup_active_gate_owner",
+    "boundary": "snapshot_coverage",
+    "dominantReason": "snapshot_timeout",
+    "nextAction": "Use the existing snapshot/watch owner handoff-contract architecture route for selected_timeout/admin_health evidence before another local runtime patch."
+  },
+  "causalGovernance": {
+    "hypothesis": "The fresh representative's publication_ack_convergence frontier is downstream of pre_load load-readiness snapshot coverage because waitForLoadReadinessStability never enables forced control-snapshot repair after repeated snapshot timeouts.",
+    "stopConditionCheck": "Prove that load-readiness stability passes forceRepair=false before the configured repair threshold and forceRepair=true after the threshold; then run npm run analyze:causal-model and representative routing to verify snapshotCoverage moves above 0/5 or the frontier migrates.",
+    "expectedCausalModelChange": "The source active-gate snapshot timeout no longer exhausts every control snapshot probe without entering the existing forced repair path.",
+    "representativeOutcome": "migrated",
+    "causalDebt": "The load-readiness handoff was missing and is now covered by focused proof, but the fresh representative did not reach pre_load. It migrated to startup active-gate snapshot coverage with selectedSnapshotAdminReady=true via admin_health, selectedSnapshotError=snapshot_timeout, selectedSnapshotObservation=repair_deferred, publication convergence satisfied, and runtime promotion still blocked.",
+    "crossBoundaryReview": "The package-owned edge moved: publication_ack_convergence is no longer the first frontier, but active-gate snapshot coverage remains unresolved before load-readiness. Frontier oscillation and prior same-boundary packages require the snapshot/watch handoff-contract route before another local selected-source timeout patch."
+  },
+  "scenarioCausalClosure": {
+    "referenceScenarioOrProbe": "rolling-restart",
+    "phaseChain": [
+      "Fresh representative passed the earlier startup active gate and reached pre_load load-readiness.",
+      "pre_load waitForLoadReadinessStability made five load active-gate attempts.",
+      "Every control snapshot witness failed while four nodes were reachable via admin_health.",
+      "Publication convergence then emitted missing_published_nodes_present because publication evidence was unavailable."
+    ],
+    "currentFirstFrontier": "active_gate_snapshot_coverage / startup_active_gate_owner / snapshot_coverage / snapshot_timeout",
+    "knownDownstreamBlockers": [
+      "load-readiness forceRepair proof passed but fresh representative failed before pre_load",
+      "publication convergence is now satisfied in the fresh representative",
+      "selectedSnapshotError=snapshot_timeout with selectedSnapshotAdminReady=true",
+      "selectedSnapshotObservation=repair_deferred with snapshotCoverage=0/5"
+    ],
+    "missingCausalEdge": "waitForLoadReadinessStability does not pass forceRepair to _probeClusterActiveState after the configured active-wait repair threshold.",
+    "missingCausalEdgeProbe": "PROOF=load-readiness-force-repair npm test -- test/distributed/harness/__tests__/cluster.test-part-6.js",
+    "falsifyingProbe": "npm run work:evidence-summary -- test-output/reports/rolling-restart-snapshot-source-contract-20260522T180652Z.report.json",
+    "boundedProgressProof": "Focused retry/timer proof passed: waitForLoadReadinessStability calls _probeClusterActiveState with forceRepair=false before the active-wait repair threshold and forceRepair=true after the threshold, then closes the load-readiness stable stage on complete snapshot coverage.",
+    "boundedProgressProofArtifact": "test-output/reports/rolling-restart-load-readiness-force-repair-20260522T183247Z.report.json",
+    "expectedObservableTransition": "Focused probe observes _probeClusterActiveState forceRepair sequence [false,true], and representative rerun either improves snapshotCoverage above 0/5, supplies publication evidence, migrates frontier, or turns green.",
+    "maxProgressBound": "one local active-gate load-readiness handoff fix",
+    "sameFrontierFallback": "If a fresh representative rerun returns the same frontier with snapshotCoverage=0/5 and no forced-repair metric movement, stop and open an autonomous architecture experiment instead of another local patch.",
+    "expectedNextFrontier": "snapshot/watch handoff contract route for selected_timeout/admin_health evidence, representative-green, representative-reduced, or architecture-gap stop",
+    "resultClassification": "migrated",
+    "stopCondition": "migrate-owner-boundary",
+    "recentFrontierHistory": [
+      "done-20260522-rolling-restart-websocket-closed-case-insensitivity-fix / startup_active_gate_owner / snapshot_coverage / reduced",
+      "done-20260522-rolling-restart-topology-publication-owner-publication-conve / topology_publication_owner / publication_convergence / reduced",
+      "done-20260522-rolling-restart-topology-publication-owner-publication-conve-2 / topology_publication_owner / publication_convergence / reduced"
+    ],
+    "oscillationCheck": "frontier-oscillation acknowledged; causal-escalation lane selected before another local runtime edit",
+    "handoffInvariant": "Publication convergence must consume owner evidence from active-gate snapshot coverage; this package may only cause load-readiness to enter the existing forced snapshot repair path, not reinterpret publication owner outcomes."
+  },
+  "observablePrediction": {
+    "metric": "load-readiness forceRepair handoff",
+    "predicted": "_probeClusterActiveState is called with forceRepair=false before the repair threshold and forceRepair=true after the threshold during waitForLoadReadinessStability.",
+    "observed": "Focused test observed forceRepair sequence [false,true] during waitForLoadReadinessStability and a ready loadReadinessStableWindow after the forced repair probe. Fresh rolling-restart rerun migrated the first frontier from publication_ack_convergence to active_gate_snapshot_coverage before pre_load, with publication convergence satisfied but selectedSnapshotError=snapshot_timeout and snapshotCoverage=0/5.",
+    "accuracy": "partial",
+    "evidence": "PROOF=load-readiness-force-repair npm test -- test/distributed/harness/__tests__/cluster.test-part-6.js; node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-load-readiness-force-repair-20260522T183247Z.report.json --verbose; npm run work:evidence-summary -- test-output/reports/rolling-restart-load-readiness-force-repair-20260522T183247Z.report.json; npm run analyze:topology-convergence -- test-output/reports/rolling-restart-load-readiness-force-repair-20260522T183247Z.report.json --handoff-probe"
+  },
   "experimentOutcome": {},
-  "rerunDecision": {},
-  "classificationEfficiency": {},
-  "architectureDecisionGate": {},
-  "predecessor": null,
-  "theoryLedgerRefs": []
+  "rerunDecision": {
+    "sourceArtifact": "test-output/reports/rolling-restart-load-readiness-force-repair-20260522T183247Z.report.json",
+    "routeOwner": "startup_active_gate_owner",
+    "routeBoundary": "snapshot_coverage",
+    "routeDominantReason": "snapshot_timeout",
+    "routeCausalOutcome": "continue_local_fix",
+    "stopMode": "architecture-gap-stop",
+    "nextLane": "causal-escalation",
+    "expectedDelta": "Fresh representative migrated away from the load-readiness publication frontier and exposed the earlier selected_timeout/admin_health snapshot handoff; the next package should extend the snapshot/watch handoff contract before runtime promotion.",
+    "requiredRefreshCommands": [
+      "npm run work:package:route-after-rerun -- --artifact test-output/reports/rolling-restart-load-readiness-force-repair-20260522T183247Z.report.json --owner startup_active_gate_owner --boundary snapshot_coverage --dominant-reason snapshot_timeout",
+      "update Sprint Strategy Brief and Current Edge Card from the route result",
+      "npm run work:repair",
+      "npm run work:validate -- --pre-impl"
+    ]
+  },
+  "classificationEfficiency": {
+    "defaultMode": "inline-gate-default",
+    "separatePackageReason": "successor-selection",
+    "artifactBudget": "one-artifact",
+    "proofCommandBudget": "two-or-three-canonical-commands",
+    "commands": [
+      "npm run work:evidence-summary -- test-output/reports/rolling-restart-snapshot-source-contract-20260522T180652Z.report.json",
+      "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-snapshot-source-contract-20260522T180652Z.report.json --handoff-probe",
+      "npm run analyze:distributed-failure -- --report test-output/reports/rolling-restart-snapshot-source-contract-20260522T180652Z.report.json"
+    ],
+    "decisionRecord": "Record classification in the current package or sprint edge card; open a separate classifier only for material route, owner, boundary, stop-condition, tracker-truth, or successor-selection changes.",
+    "successorAction": "open-runtime-owner-boundary",
+    "runtimePromotionRule": "When canonical owner and boundary are stable, prefer a runtime-owner-boundary successor and keep runtime files in candidateRuntimeFiles until that package activates them. If the representative route is same-frontier with no reduction or an architecture gap, open an autonomous architecture experiment before more local runtime work."
+  },
+  "architectureDecisionGate": {
+    "status": "watching",
+    "trigger": "frontier-oscillation",
+    "triggerEvidence": [
+      "frontier returned to a recently closed related boundary",
+      "work/packages/done-20260522-rolling-restart-websocket-closed-case-insensitivity-fix.md / startup_active_gate_owner / snapshot_coverage / reduced",
+      "work/packages/done-20260522-rolling-restart-topology-publication-owner-publication-conve.md / topology_publication_owner / publication_convergence / reduced",
+      "work/packages/done-20260522-rolling-restart-topology-publication-owner-publication-conve-2.md / topology_publication_owner / publication_convergence / reduced"
+    ],
+    "choices": [
+      {
+        "id": "continue-local-proof",
+        "summary": "Continue with a bounded local proof if the missing edge stays inside this owner boundary.",
+        "route": "continue-local-proof",
+        "proof": [
+          "npm run work:validate -- --pre-impl work/packages/active-20260522-rolling-restart-load-readiness-snapshot-force-repair.md",
+          "npm run work:evidence-summary -- test-output/reports/rolling-restart-snapshot-source-contract-20260522T180652Z.report.json",
+          "npm run analyze:causal-model -- test-output/reports/rolling-restart-snapshot-source-contract-20260522T180652Z.report.json",
+          "PROOF=load-readiness-force-repair npm test -- test/distributed/harness/__tests__/cluster.test-part-6.js",
+          "git diff --check"
+        ]
+      },
+      {
+        "id": "migrate-owner-boundary",
+        "summary": "Migrate the active package to the owner boundary named by the first frontier evidence.",
+        "route": "owner-boundary-migration",
+        "proof": [
+          "npm run work:validate -- --pre-impl work/packages/active-20260522-rolling-restart-load-readiness-snapshot-force-repair.md",
+          "npm run work:evidence-summary -- test-output/reports/rolling-restart-snapshot-source-contract-20260522T180652Z.report.json",
+          "npm run analyze:causal-model -- test-output/reports/rolling-restart-snapshot-source-contract-20260522T180652Z.report.json",
+          "PROOF=load-readiness-force-repair npm test -- test/distributed/harness/__tests__/cluster.test-part-6.js",
+          "git diff --check"
+        ]
+      },
+      {
+        "id": "open-architecture-package",
+        "summary": "Open a bounded autonomous architecture experiment for the missing owner contract.",
+        "route": "architecture-package",
+        "proof": [
+          "npm run work:validate -- --pre-impl work/packages/active-20260522-rolling-restart-load-readiness-snapshot-force-repair.md",
+          "npm run work:evidence-summary -- test-output/reports/rolling-restart-snapshot-source-contract-20260522T180652Z.report.json",
+          "npm run analyze:causal-model -- test-output/reports/rolling-restart-snapshot-source-contract-20260522T180652Z.report.json",
+          "PROOF=load-readiness-force-repair npm test -- test/distributed/harness/__tests__/cluster.test-part-6.js",
+          "git diff --check"
+        ]
+      },
+      {
+        "id": "human-escalation",
+        "summary": "Escalate to a human only when evidence is contradictory, policy-blocked, credential-blocked, or unavailable.",
+        "route": "human-escalation",
+        "proof": [
+          "npm run work:validate -- --pre-impl work/packages/active-20260522-rolling-restart-load-readiness-snapshot-force-repair.md",
+          "npm run work:evidence-summary -- test-output/reports/rolling-restart-snapshot-source-contract-20260522T180652Z.report.json",
+          "npm run analyze:causal-model -- test-output/reports/rolling-restart-snapshot-source-contract-20260522T180652Z.report.json",
+          "PROOF=load-readiness-force-repair npm test -- test/distributed/harness/__tests__/cluster.test-part-6.js",
+          "git diff --check"
+        ]
+      }
+    ],
+    "selectedChoice": null,
+    "nextAction": "Watch for repeated frontier oscillation; open an autonomous architecture experiment if another local proof returns here unchanged."
+  },
+  "predecessor": null
 }

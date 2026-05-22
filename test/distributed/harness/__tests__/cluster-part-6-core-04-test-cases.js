@@ -1,3 +1,23 @@
+const LOAD_READINESS_FORCE_REPAIR_TEST_NAME =
+  'Unit: waitForLoadReadinessStability enables force repair after snapshot ' +
+  'timeout progress stalls';
+const LOAD_READINESS_FORCE_REPAIR_START_MS = 1000;
+const LOAD_READINESS_FORCE_REPAIR_AFTER_MS = 1000;
+const LOAD_READINESS_FORCE_REPAIR_SECOND_PROBE_MS = 2100;
+const LOAD_READINESS_FORCE_REPAIR_OBSERVED_MS = 2500;
+const LOAD_READINESS_FORCE_REPAIR_SNAPSHOT_CAPTURED_AT_MS = 1200;
+const LOAD_READINESS_FORCE_REPAIR_STABLE_WINDOW_MS = 1000;
+const LOAD_READINESS_FORCE_REPAIR_TIMEOUT_MS = 4000;
+const LOAD_READINESS_FORCE_REPAIR_EXPECTED_PROBES = 2;
+const LOAD_READINESS_FORCE_REPAIR_EXPECTED_SLEEPS = 1;
+const LOAD_READINESS_FORCE_REPAIR_SEQUENCE = Object.freeze([false, true]);
+const LOAD_READINESS_FORCE_REPAIR_SEQUENCE_ASSERTION =
+  'load-readiness should enter forced repair after the active-wait threshold';
+const LOAD_READINESS_FORCE_REPAIR_SLEEP_ASSERTION =
+  'load-readiness should wait once before forced repair becomes eligible';
+const LOAD_READINESS_FORCE_REPAIR_STAGE_ASSERTION =
+  'forced repair success should close load readiness';
+
 export function registerClusterPart6Core04Tests(context) {
   const {
     assert,
@@ -402,6 +422,124 @@ export function registerClusterPart6Core04Tests(context) {
         LOAD_READINESS_PARTIAL_COVERAGE_FIRST_OBSERVED_MS,
       );
     });
+
+  test(LOAD_READINESS_FORCE_REPAIR_TEST_NAME, async () => {
+    const cluster = createCluster({
+      size: LOAD_READINESS_CANONICAL_CLUSTER_SIZE,
+      docker: {socketPath: LOAD_READINESS_CANONICAL_DOCKER_SOCKET},
+      image: LOAD_READINESS_CANONICAL_IMAGE,
+    });
+
+    cluster._config.timeouts = {
+      ...(cluster._config.timeouts || {}),
+      activeWaitForceRepairAfter: LOAD_READINESS_FORCE_REPAIR_AFTER_MS,
+    };
+
+    const recordedStages = [];
+    cluster._recordClusterStage = (stage, details = {}) => {
+      recordedStages.push({stage, details});
+    };
+    cluster._collectFailureLogs = async () => {
+      throw new Error(LOAD_READINESS_CANONICAL_LOG_FAILURE);
+    };
+
+    let sleepCallCount = LOAD_READINESS_CANONICAL_ZERO_COUNT;
+    let probeCallCount = LOAD_READINESS_CANONICAL_ZERO_COUNT;
+    let fakeNowMs = LOAD_READINESS_FORCE_REPAIR_START_MS;
+    const forceRepairByProbe = [];
+    const originalDateNow = Date.now;
+    Date.now = () => fakeNowMs;
+    cluster._sleep = async () => {
+      sleepCallCount += LOAD_READINESS_CANONICAL_SINGLE_PROBE_COUNT;
+      fakeNowMs = LOAD_READINESS_FORCE_REPAIR_SECOND_PROBE_MS;
+    };
+    cluster._probeClusterActiveState = async (_deadline, probeOptions = {}) => {
+      probeCallCount += LOAD_READINESS_CANONICAL_SINGLE_PROBE_COUNT;
+      forceRepairByProbe.push(probeOptions.forceRepair === true);
+      const forcedRepairProbe =
+        probeCallCount === LOAD_READINESS_FORCE_REPAIR_EXPECTED_PROBES;
+      if (forcedRepairProbe !== true) {
+        return {
+          allActive: false,
+          nodeDiagnostics: [],
+          snapshotCoverage: {
+            completeCoverage: false,
+            expectedNodeCount: LOAD_READINESS_CANONICAL_CLUSTER_SIZE,
+            bestCoverageNodeCount: LOAD_READINESS_CANONICAL_ZERO_COUNT,
+          },
+          publicationConvergenceGate: {
+            ready: false,
+            reasons: [],
+          },
+        };
+      }
+      fakeNowMs = LOAD_READINESS_FORCE_REPAIR_OBSERVED_MS;
+      return {
+        allActive: true,
+        nodeDiagnostics: [
+          {
+            nodeId: LOAD_READINESS_CANONICAL_NODE_A,
+            active: true,
+            state: LOAD_READINESS_CANONICAL_ACTIVE_STATE,
+            reasons: [],
+          },
+          {
+            nodeId: LOAD_READINESS_CANONICAL_NODE_B,
+            active: true,
+            state: LOAD_READINESS_CANONICAL_ACTIVE_STATE,
+            reasons: [],
+          },
+        ],
+        snapshotCoverage: {
+          completeCoverage: true,
+          expectedNodeCount: LOAD_READINESS_CANONICAL_CLUSTER_SIZE,
+          bestCoverageNodeCount: LOAD_READINESS_CANONICAL_CLUSTER_SIZE,
+          selectedCapturedAtMs:
+            LOAD_READINESS_FORCE_REPAIR_SNAPSHOT_CAPTURED_AT_MS,
+        },
+        publicationConvergenceGate: {
+          ready: true,
+          reasons: [],
+          publicationStatus: LOAD_READINESS_CANONICAL_PUBLICATION_STATUS,
+          pendingAckNodeIds: [],
+          missingPublishedNodeIds: [],
+          priorityPartitionSummary: {
+            satisfied: true,
+            blockedPartitionCount: LOAD_READINESS_CANONICAL_ZERO_COUNT,
+            totalSpreadGap: LOAD_READINESS_CANONICAL_ZERO_COUNT,
+          },
+        },
+      };
+    };
+
+    try {
+      await cluster.waitForLoadReadinessStability({
+        stableWindowMs: LOAD_READINESS_FORCE_REPAIR_STABLE_WINDOW_MS,
+        timeoutMs: LOAD_READINESS_FORCE_REPAIR_TIMEOUT_MS,
+      });
+    } finally {
+      Date.now = originalDateNow;
+    }
+
+    assert.deepEqual(
+      forceRepairByProbe,
+      LOAD_READINESS_FORCE_REPAIR_SEQUENCE,
+      LOAD_READINESS_FORCE_REPAIR_SEQUENCE_ASSERTION,
+    );
+    assert.equal(
+      sleepCallCount,
+      LOAD_READINESS_FORCE_REPAIR_EXPECTED_SLEEPS,
+      LOAD_READINESS_FORCE_REPAIR_SLEEP_ASSERTION,
+    );
+    const stableStage = recordedStages.find(
+      (entry) => entry.stage === LOAD_READINESS_CANONICAL_STAGE,
+    );
+    assert.equal(
+      stableStage?.details?.loadReadinessStableWindow?.state,
+      LOAD_READINESS_CANONICAL_READY_STATE,
+      LOAD_READINESS_FORCE_REPAIR_STAGE_ASSERTION,
+    );
+  });
 
   test(
     'Unit: waitForLoadReadinessStability fails fast when load ACTIVE progress stalls',

@@ -1565,6 +1565,12 @@ class Cluster extends Cluster5 {
     }
     const timeoutMs = this._resolveLoadReadinessStabilityTimeoutMs(options);
     const deadline = Date.now() + timeoutMs;
+    const forceRepairAfterMs = Number.isFinite(
+      this._config?.timeouts?.activeWaitForceRepairAfter,
+    ) ?
+      Math.max(ZERO, this._config.timeouts.activeWaitForceRepairAfter) :
+      TIMEOUTS.ACTIVE_WAIT_FORCE_REPAIR_AFTER;
+    const forceRepairThreshold = Date.now() + forceRepairAfterMs;
     const loadReadinessPhase = normalizeLoadReadinessPhase(
       options.loadReadinessPhase,
     );
@@ -1762,8 +1768,10 @@ class Cluster extends Cluster5 {
         intervalMs: ACTIVE_POLL_INTERVAL_MS,
         sleep: (ms) => this._sleep(ms),
         probe: async () => {
+          const forceRepair = Date.now() >= forceRepairThreshold;
           const activeProbe = await this._probeClusterActiveState(deadline, {
             mode: CLUSTER_READINESS_MODE_LOAD,
+            forceRepair,
           });
           const now = Date.now();
           if (activeProbe.allActive !== true) {
