@@ -3,7 +3,7 @@
 <!-- work-package
 {
   "schema": "work-package-v1",
-  "status": "active",
+  "status": "done",
   "opened": "2026-05-22",
   "lane": "lightweight-maintenance",
   "scenario": "none",
@@ -20,8 +20,8 @@
   "stabilityCredit": "instrumentation-only",
   "whyHighestLeverageNow": "This advances the sprint goal of universal owner-contract completion by making experiment and theory memory findable before more representative stability work accumulates.",
   "proof": [
-    "npm run work:validate -- --entry work/packages/active-20260522-experiment-theory-ledger-foundation.md",
-    "git diff --check -- work/packages/active-20260522-experiment-theory-ledger-foundation.md work/theory-ledger.md work/templates/theory-ledger-entry.md work/README.md"
+    "npm run work:validate -- --entry work/packages/done-20260522-experiment-theory-ledger-foundation.md",
+    "git diff --check -- work/packages/done-20260522-experiment-theory-ledger-foundation.md work/theory-ledger.md work/templates/theory-ledger-entry.md work/README.md"
   ],
   "writeScope": [
     "work/theory-ledger.md",
@@ -35,7 +35,7 @@
     "work/theory-ledger.md",
     "work/templates/theory-ledger-entry.md",
     "work/README.md",
-    "work/packages/active-20260522-experiment-theory-ledger-foundation.md"
+    "work/packages/done-20260522-experiment-theory-ledger-foundation.md"
   ],
   "modelFit": {
     "packageClass": "bounded-implementation",
@@ -67,7 +67,9 @@
       "Prefer bounded-experiment for one same-owner hypothesis with inherited context."
     ]
   },
-  "predecessor": "work/packages/done-20260522-node-failure-rebalance-acceptance-hardening.md"
+  "predecessor": "work/packages/done-20260522-node-failure-rebalance-acceptance-hardening.md",
+  "closed": "2026-05-22",
+  "commitAndPushLedgerRequired": true
 }
 -->
 
@@ -192,7 +194,7 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 - Forbidden files: `src/`
 - Frozen decisions: package scope and lane stay bounded unless explicitly escalated.
 - Escalation triggers: owned files expand beyond this package, runtime ownership changes, or representative scenario evidence changes.
-- Focused proof: `npm run work:validate -- --entry work/packages/active-20260522-experiment-theory-ledger-foundation.md`, `git diff --check -- work/packages/active-20260522-experiment-theory-ledger-foundation.md work/theory-ledger.md work/templates/theory-ledger-entry.md work/README.md`
+- Focused proof: `npm run work:validate -- --entry work/packages/done-20260522-experiment-theory-ledger-foundation.md`, `git diff --check -- work/packages/done-20260522-experiment-theory-ledger-foundation.md work/theory-ledger.md work/templates/theory-ledger-entry.md work/README.md`
 - Model ledger advisory: `escalate`
 
 ## Model-Fit Split
@@ -217,11 +219,17 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 Preferred closure evidence for new packages. One executor owns implementation end to end; one separate verifier-fixer validates the last package work and may fix in-scope problems directly.
 Agent identity is optional provenance. Use legacy subagent ledgers only when a reopened historical package already uses them.
 
-- [x] implementation: status: validated; evidence: added `work/theory-ledger.md`, `work/templates/theory-ledger-entry.md`, and `work/README.md`; ran `npm run work:validate -- --entry work/packages/active-20260522-experiment-theory-ledger-foundation.md` and `git diff --check -- work/packages/active-20260522-experiment-theory-ledger-foundation.md work/theory-ledger.md work/templates/theory-ledger-entry.md work/README.md`; parent revalidated focused proof: yes; next: verification.
+- [x] implementation: status: validated; evidence: added `work/theory-ledger.md`, `work/templates/theory-ledger-entry.md`, and `work/README.md`; ran `npm run work:validate -- --entry work/packages/done-20260522-experiment-theory-ledger-foundation.md` and `git diff --check -- work/packages/done-20260522-experiment-theory-ledger-foundation.md work/theory-ledger.md work/templates/theory-ledger-entry.md work/README.md`; parent revalidated focused proof: yes; next: verification.
 - [x] verification-fix: status: validated; evidence: Curie verifier-fixer found no blocking issues and reran `npm run work:theory-ledger -- validate`, targeted ledger tests, and five-package pre-impl validation successfully; changed files: none; parent revalidated focused proof: yes; next: closure decision.
 - [x] repair: status: validated; evidence: `npm run work:repair` refreshed generated current-blocker and Current Edge Card after ledger refs landed; parent revalidated focused proof: yes; next: validation.
 
 ## Validation
 
-1. npm run work:validate -- --entry work/packages/active-20260522-experiment-theory-ledger-foundation.md
-2. git diff --check -- work/packages/active-20260522-experiment-theory-ledger-foundation.md work/theory-ledger.md work/templates/theory-ledger-entry.md work/README.md
+1. npm run work:validate -- --entry work/packages/done-20260522-experiment-theory-ledger-foundation.md
+2. git diff --check -- work/packages/done-20260522-experiment-theory-ledger-foundation.md work/theory-ledger.md work/templates/theory-ledger-entry.md work/README.md
+
+## Commit And Push Ledger
+
+1. Focused package commit: b23a1ab300cc701eeb459ac1eca84bcdcb534107
+2. Pushed to: origin/codex/pending-ack-eligibility-filter
+3. Commit contains only package-owned files/package-status/allowed sprint handoff: yes

@@ -28,7 +28,7 @@ closed and moved out of the active blocker slot.
   reopens active rolling-restart proof without fresh evidence, closes from a
   timeout/count-only delta, or skips the predecessor contract it depends on.
 - Next best package:
-  `work/packages/active-20260522-experiment-theory-ledger-foundation.md`.
+  `work/packages/done-20260522-experiment-theory-ledger-foundation.md`.
 - Stop or escalate rule: if a package cannot preserve its owner/boundary or
   requires contradictory evidence, select/open an autonomous architecture
   experiment; use human escalation only for blocked, unavailable, or
@@ -37,22 +37,22 @@ closed and moved out of the active blocker slot.
 ## Current Edge Card
 
 ```text
-Representative artifact: none
-Visible first frontier: unknown
-Active package: work/packages/active-20260522-experiment-theory-ledger-foundation.md
-Active package owner: workflow_tooling_owner
-Active package boundary: experiment_theory_memory
-Selected cause: theories_are_scattered_across_packages
-Required action: Formally close the ledger packages or activate the runtime successor after a focused commit/closure decision; do not redo the ledger implementation unless validation regresses.
-Representative status: unknown
-Causal outcome: unknown
-Architecture gate: not-required / unknown
-Expected delta: unknown
-Current state: Central experiment and theory memory is implemented in the current worktree, with focused validation and a separate verifier-fixer pass green.
-Allowed edits: work/theory-ledger.md, work/templates/theory-ledger-entry.md, work/README.md
-Candidate runtime files: unknown
-Forbidden edits: owned files expand beyond this package, a frozen decision must be reopened
-Required latest proof: npm run work:validate -- --entry work/packages/active-20260522-experiment-theory-ledger-foundation.md, git diff --check -- work/packages/active-20260522-experiment-theory-ledger-foundation.md work/theory-ledger.md work/templates/theory-ledger-entry.md work/README.md
+Representative artifact: test-output/report.json
+Visible first frontier: active_gate_snapshot_coverage / startup_active_gate_owner / snapshot_coverage / active_gate_timed_out
+Active package: work/packages/done-20260522-node-failure-rebalance-startup-active-gate-snapshot-watch-handoff-contract.md
+Active package owner: startup_active_gate_owner
+Active package boundary: snapshot_coverage
+Selected cause: active_gate_timed_out
+Required action: Implement the snapshot/watch owner handoff contract for WebSocket-closed selected snapshot source evidence by emitting a typed selectedSnapshotObservation and publication-active-gate handoff outcome before runtime promotion.
+Representative status: reduced
+Causal outcome: continue_local_fix
+Architecture gate: watching / unknown
+Expected delta: Handoff probe detects a typed publicationActiveGateHandoff or selectedSnapshotObservation contract for WebSocket-closed selected source evidence while runtimePromotionAllowed remains false until the contract allows promotion.
+Current state: Architecture discriminator selected the snapshot/watch owner handoff contract route: handoff probe is absent with runtimePromotionAllowed=false while selectedSnapshotAdminReady=true, selectedSnapshotReachableBy=admin_ws, and alternativeSnapshotWitnessAvailable=true.
+Allowed edits: work/packages/done-20260522-node-failure-rebalance-startup-active-gate-snapshot-watch-handoff-contract.md, work/sprints/active-2026-q2-universal-owner-contract-completion.md, work/sprints/current-blocker.md, work/sprints/current-blocker.json, work/model-ledger.jsonl, src/control-plane/publication-active-gate-handoff-contract.js, src/admin/admin-control-snapshot-class-part-1.js, src/admin/admin-control-snapshot-class-part-2.js, test/control-plane/publication-active-gate-handoff-contract.test.js, test/admin/admin-control-snapshot-repair-handoff-outcome-test-cases.js, test/distributed/harness/__tests__/cluster-control-snapshot-timeout-repair-test-cases.js
+Candidate runtime files: src/control-plane/control-plane-snapshot-owner.js
+Forbidden edits: Runtime promotion remains blocked until a canonical snapshot/watch handoff owner contract is emitted and proven.
+Required latest proof: npm test -- test/control-plane/publication-active-gate-handoff-contract.test.js test/admin/admin-control-snapshot-repair-handoff-outcome-test-cases.js test/distributed/harness/__tests__/cluster-control-snapshot-timeout-repair-test-cases.js, node scripts/check-guideline-literals.js src/control-plane/publication-active-gate-handoff-contract.js src/admin/admin-control-snapshot-class-part-1.js src/admin/admin-control-snapshot-class-part-2.js, node scripts/check-guideline-decision-boundaries.js src/control-plane/publication-active-gate-handoff-contract.js src/admin/admin-control-snapshot-class-part-1.js src/admin/admin-control-snapshot-class-part-2.js, npm run audit:runtime-grammar:file -- src/control-plane/publication-active-gate-handoff-contract.js src/admin/admin-control-snapshot-class-part-1.js src/admin/admin-control-snapshot-class-part-2.js, npm run analyze:topology-convergence -- test-output/report.json --handoff-probe, npm run analyze:topology-convergence -- test-output/report.json --replay-fixture
 Allowed stop modes: representative-green, migrated, reduced, same-frontier, classification-only, architecture-gap, human-escalation
 ```
 
@@ -192,7 +192,7 @@ packages and must preserve package/artifact evidence as source of truth.
       guardrail requirement.
     - Acceptance: code-quality packages entering an active stability sprint
       must name one of those stability-relevant effects before activation.
-18. [Experiment Theory Ledger Foundation](../packages/active-20260522-experiment-theory-ledger-foundation.md)
+18. [Experiment Theory Ledger Foundation](../packages/done-20260522-experiment-theory-ledger-foundation.md)
     - Lane: `lightweight-maintenance`
     - Purpose: create a simple central evidence-linked ledger and entry
       template for theories and experiments.
@@ -201,28 +201,28 @@ packages and must preserve package/artifact evidence as source of truth.
       representative movement, linked packages, supersession, and next
       implication, while explicitly leaving package/artifact evidence as
       source of truth.
-19. [Experiment Theory Ledger Tooling](../packages/todo-20260522-experiment-theory-ledger-tooling.md)
+19. [Experiment Theory Ledger Tooling](../packages/done-20260522-experiment-theory-ledger-tooling.md)
     - Lane: `mechanical-maintenance`
     - Purpose: add minimal validation/list/append tooling so agents can use
       the ledger without inconsistent hand edits.
     - Acceptance: `npm run work:theory-ledger -- validate` catches missing
       required fields, invalid statuses, duplicate IDs, missing evidence links,
       and broken supersession references.
-20. [Experiment Theory Ledger Tracker Integration](../packages/todo-20260522-experiment-theory-ledger-tracker-integration.md)
+20. [Experiment Theory Ledger Tracker Integration](../packages/done-20260522-experiment-theory-ledger-tracker-integration.md)
     - Lane: `mechanical-maintenance`
     - Purpose: add package/context prompts for citing or updating theory
       entries at evidence-changing points.
     - Acceptance: package templates, package doctor/context output, and closure
       guidance expose theory-ledger refs without making them mandatory for
       legacy packages or replacing current-blocker authority.
-21. [Experiment Theory Ledger Initial Seed](../packages/todo-20260522-experiment-theory-ledger-initial-seed.md)
+21. [Experiment Theory Ledger Initial Seed](../packages/done-20260522-experiment-theory-ledger-initial-seed.md)
     - Lane: `diagnostic-classification`
     - Purpose: seed the ledger with only active/current sprint theories and
       immediate predecessor outcomes that have package/artifact evidence.
     - Acceptance: seed entries use conservative statuses, cite package/artifact
       evidence, include supersession links where known, and avoid invented
       historical proof.
-22. [Node Failure Rebalance Startup Active Gate Snapshot Watch Handoff Contract](../packages/todo-20260522-node-failure-rebalance-startup-active-gate-snapshot-watch-handoff-contract.md)
+22. [Node Failure Rebalance Startup Active Gate Snapshot Watch Handoff Contract](../packages/done-20260522-node-failure-rebalance-startup-active-gate-snapshot-watch-handoff-contract.md)
     - Lane: `causal-escalation`
     - Purpose: resume the paused startup active-gate snapshot/watch handoff
       contract successor after the ledger sequence is implemented and seeded.

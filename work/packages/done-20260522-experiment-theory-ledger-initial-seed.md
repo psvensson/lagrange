@@ -3,7 +3,7 @@
 <!-- work-package
 {
   "schema": "work-package-v1",
-  "status": "todo",
+  "status": "done",
   "opened": "2026-05-22",
   "lane": "diagnostic-classification",
   "scenario": "none",
@@ -24,7 +24,7 @@
   "proof": [
     "npm run work:context",
     "npm run work:theory-ledger -- validate",
-    "git diff --check -- work/theory-ledger.md work/packages/todo-20260522-experiment-theory-ledger-initial-seed.md"
+    "git diff --check -- work/theory-ledger.md work/packages/done-20260522-experiment-theory-ledger-initial-seed.md"
   ],
   "writeScope": [
     "work/theory-ledger.md"
@@ -34,7 +34,7 @@
   "candidateRuntimeFiles": [],
   "commitScope": [
     "work/theory-ledger.md",
-    "work/packages/todo-20260522-experiment-theory-ledger-initial-seed.md"
+    "work/packages/done-20260522-experiment-theory-ledger-initial-seed.md"
   ],
   "modelFit": {
     "packageClass": "diagnostic-classification",
@@ -74,13 +74,25 @@
     "commands": [
       "npm run work:context",
       "npm run work:theory-ledger -- validate",
-      "git diff --check -- work/theory-ledger.md work/packages/todo-20260522-experiment-theory-ledger-initial-seed.md"
+      "git diff --check -- work/theory-ledger.md work/packages/done-20260522-experiment-theory-ledger-initial-seed.md"
     ],
     "decisionRecord": "Record classification in the current package or sprint edge card; open a separate classifier only for material route, owner, boundary, stop-condition, tracker-truth, or successor-selection changes.",
     "successorAction": "rerun-representative-evidence",
     "runtimePromotionRule": "When canonical owner and boundary are stable, prefer a runtime-owner-boundary successor and keep runtime files in candidateRuntimeFiles until that package activates them. If the representative route is same-frontier with no reduction or an architecture gap, open an autonomous architecture experiment before more local runtime work."
   },
-  "predecessor": "work/packages/todo-20260522-experiment-theory-ledger-tracker-integration.md"
+  "representativeResidual": {
+    "status": "classification-only",
+    "scenario": "node-failure-rebalance",
+    "artifact": "test-output/report.json",
+    "frontier": "active_gate_snapshot_coverage",
+    "owner": "startup_active_gate_owner",
+    "boundary": "snapshot_coverage",
+    "dominantReason": "active_gate_timed_out",
+    "nextAction": "Resume the paused typed snapshot/watch handoff contract package after the ledger sequence closes."
+  },
+  "predecessor": "work/packages/done-20260522-experiment-theory-ledger-tracker-integration.md",
+  "closed": "2026-05-22",
+  "commitAndPushLedgerRequired": true
 }
 -->
 
@@ -189,7 +201,7 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 - Forbidden files: `src/`
 - Frozen decisions: package scope and lane stay bounded unless explicitly escalated.
 - Escalation triggers: owned files expand beyond this package, runtime ownership changes, or representative scenario evidence changes.
-- Focused proof: `npm run work:context`, `npm run work:theory-ledger -- validate`, `git diff --check -- work/theory-ledger.md work/packages/todo-20260522-experiment-theory-ledger-initial-seed.md`
+- Focused proof: `npm run work:context`, `npm run work:theory-ledger -- validate`, `git diff --check -- work/theory-ledger.md work/packages/done-20260522-experiment-theory-ledger-initial-seed.md`
 - Model ledger advisory: `escalate`
 
 ## Model-Fit Split
@@ -214,7 +226,7 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 Preferred closure evidence for new packages. One executor owns implementation end to end; one separate verifier-fixer validates the last package work and may fix in-scope problems directly.
 Agent identity is optional provenance. Use legacy subagent ledgers only when a reopened historical package already uses them.
 
-- [x] implementation: status: validated; evidence: seeded four entries in `work/theory-ledger.md` and wired `theoryLedgerRefs` into ledger and paused runtime packages; ran `npm run work:context`, `npm run work:theory-ledger -- validate`, and `git diff --check -- work/theory-ledger.md work/packages/todo-20260522-experiment-theory-ledger-initial-seed.md`; parent revalidated focused proof: yes; next: verification.
+- [x] implementation: status: validated; evidence: seeded four entries in `work/theory-ledger.md` and wired `theoryLedgerRefs` into ledger and paused runtime packages; ran `npm run work:context`, `npm run work:theory-ledger -- validate`, and `git diff --check -- work/theory-ledger.md work/packages/done-20260522-experiment-theory-ledger-initial-seed.md`; parent revalidated focused proof: yes; next: verification.
 - [x] verification-fix: status: validated; evidence: Curie verifier-fixer found no blocking issues and reran `npm run work:theory-ledger -- validate`, targeted ledger tests, and five-package pre-impl validation successfully; changed files: none; parent revalidated focused proof: yes; next: closure decision.
 - [x] repair: status: validated; evidence: `npm run work:repair` refreshed generated current-blocker and Current Edge Card after ledger refs landed; parent revalidated focused proof: yes; next: validation.
 
@@ -222,4 +234,10 @@ Agent identity is optional provenance. Use legacy subagent ledgers only when a r
 
 1. npm run work:context
 2. npm run work:theory-ledger -- validate
-3. git diff --check -- work/theory-ledger.md work/packages/todo-20260522-experiment-theory-ledger-initial-seed.md
+3. git diff --check -- work/theory-ledger.md work/packages/done-20260522-experiment-theory-ledger-initial-seed.md
+
+## Commit And Push Ledger
+
+1. Focused package commit: b23a1ab300cc701eeb459ac1eca84bcdcb534107
+2. Pushed to: origin/codex/pending-ack-eligibility-filter
+3. Commit contains only package-owned files/package-status/allowed sprint handoff: yes

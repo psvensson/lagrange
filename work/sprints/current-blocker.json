@@ -2,50 +2,28 @@
   "schema": "current-blocker-v1",
   "generatedBy": "scripts/work-tracker.js",
   "sprint": "work/sprints/active-2026-q2-universal-owner-contract-completion.md",
-  "package": "work/packages/active-20260522-experiment-theory-ledger-foundation.md",
-  "status": "active",
-  "lane": "lightweight-maintenance",
+  "package": "none",
+  "status": "none",
+  "lane": "none",
   "scenario": "none",
   "artifact": "none",
   "playback": "none",
-  "owner": "workflow_tooling_owner",
-  "boundary": "experiment_theory_memory",
-  "dominantReason": "theories_are_scattered_across_packages",
-  "currentState": "Central experiment and theory memory is implemented in the current worktree, with focused validation and a separate verifier-fixer pass green.",
-  "nextAction": "Formally close the ledger packages or activate the runtime successor after a focused commit/closure decision; do not redo the ledger implementation unless validation regresses.",
-  "proof": [
-    "npm run work:validate -- --entry work/packages/active-20260522-experiment-theory-ledger-foundation.md",
-    "git diff --check -- work/packages/active-20260522-experiment-theory-ledger-foundation.md work/theory-ledger.md work/templates/theory-ledger-entry.md work/README.md"
-  ],
-  "writeScope": [
-    "work/theory-ledger.md",
-    "work/templates/theory-ledger-entry.md",
-    "work/README.md"
-  ],
+  "owner": "none",
+  "boundary": "none",
+  "dominantReason": "none",
+  "currentState": "No active work package. Start a new package when implementation resumes.",
+  "nextAction": "Create or activate one focused package for the next executable concern.",
+  "proof": [],
+  "writeScope": [],
   "handoffFiles": [],
-  "generatedFiles": [],
+  "generatedFiles": [
+    "work/sprints/current-blocker.json",
+    "work/sprints/current-blocker.md"
+  ],
   "candidateRuntimeFiles": [],
-  "commitScope": [
-    "work/theory-ledger.md",
-    "work/templates/theory-ledger-entry.md",
-    "work/README.md",
-    "work/packages/active-20260522-experiment-theory-ledger-foundation.md"
-  ],
+  "commitScope": [],
   "touchedFiles": [],
-  "theoryLedgerRefs": [
-    "theory-20260522-experiment-theory-memory"
-  ],
-  "modelFit": {
-    "packageClass": "bounded-implementation",
-    "intendedMinimumModel": "gpt-5.3-codex-spark",
-    "scopeShape": "leaf-slice",
-    "outputProfile": "small",
-    "ambiguityScore": 1,
-    "escalationTriggers": [
-      "owned files expand beyond this package",
-      "a frozen decision must be reopened"
-    ]
-  },
+  "modelFit": {},
   "representativeResidual": {},
   "causalGovernance": {},
   "scenarioCausalClosure": {},
@@ -53,13 +31,7 @@
   "experimentOutcome": {},
   "rerunDecision": {},
   "classificationEfficiency": {},
-  "architectureDecisionGate": {
-    "status": "not-required",
-    "trigger": "none",
-    "triggerEvidence": [],
-    "choices": [],
-    "selectedChoice": null,
-    "nextAction": "No architecture decision gate is required for this package."
-  },
-  "predecessor": "work/packages/done-20260522-node-failure-rebalance-acceptance-hardening.md"
+  "architectureDecisionGate": {},
+  "predecessor": null,
+  "theoryLedgerRefs": []
 }

@@ -3,7 +3,7 @@
 <!-- work-package
 {
   "schema": "work-package-v1",
-  "status": "todo",
+  "status": "done",
   "opened": "2026-05-22",
   "lane": "mechanical-maintenance",
   "scenario": "none",
@@ -19,10 +19,14 @@
   ],
   "stabilityCredit": "instrumentation-only",
   "whyHighestLeverageNow": "This advances the sprint goal of universal owner-contract completion by putting theory memory into normal package flow without replacing representative gates or current-blocker truth.",
+  "codeQualityAdmission": {
+    "reason": "improves-evidence-fidelity",
+    "evidence": "The tracker integration surfaces theory-ledger references in package/context flow while preserving current-blocker and package evidence as canonical."
+  },
   "proof": [
     "npm test -- test/scripts/work-tracker-subagent-ledger.test.js test/scripts/work-llm-usability-tools.test.js test/scripts/work-context.test.js",
     "npm run work:theory-ledger -- validate",
-    "npm run work:validate -- --pre-impl work/packages/todo-20260522-experiment-theory-ledger-tracker-integration.md"
+    "npm run work:validate -- --pre-impl work/packages/done-20260522-experiment-theory-ledger-tracker-integration.md"
   ],
   "writeScope": [
     "scripts/work-tracker.js",
@@ -46,7 +50,7 @@
     "test/scripts/work-tracker-subagent-ledger.test.js",
     "test/scripts/work-llm-usability-tools.test.js",
     "test/scripts/work-context.test.js",
-    "work/packages/todo-20260522-experiment-theory-ledger-tracker-integration.md"
+    "work/packages/done-20260522-experiment-theory-ledger-tracker-integration.md"
   ],
   "modelFit": {
     "packageClass": "mechanical-maintenance",
@@ -77,7 +81,9 @@
       "Split any runtime or test behavior into a separate package before execution."
     ]
   },
-  "predecessor": "work/packages/todo-20260522-experiment-theory-ledger-tooling.md"
+  "predecessor": "work/packages/done-20260522-experiment-theory-ledger-tooling.md",
+  "closed": "2026-05-22",
+  "commitAndPushLedgerRequired": true
 }
 -->
 
@@ -198,7 +204,7 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 - Forbidden files: `src/`
 - Frozen decisions: package scope and lane stay bounded unless explicitly escalated.
 - Escalation triggers: owned files expand beyond this package, runtime ownership changes, or representative scenario evidence changes.
-- Focused proof: `npm test -- test/scripts/work-tracker-subagent-ledger.test.js test/scripts/work-llm-usability-tools.test.js test/scripts/work-context.test.js`, `npm run work:theory-ledger -- validate`, `npm run work:validate -- --pre-impl work/packages/todo-20260522-experiment-theory-ledger-tracker-integration.md`
+- Focused proof: `npm test -- test/scripts/work-tracker-subagent-ledger.test.js test/scripts/work-llm-usability-tools.test.js test/scripts/work-context.test.js`, `npm run work:theory-ledger -- validate`, `npm run work:validate -- --pre-impl work/packages/done-20260522-experiment-theory-ledger-tracker-integration.md`
 - Model ledger advisory: `escalate`
 
 ## Model-Fit Split
@@ -230,4 +236,10 @@ Agent identity is optional provenance. Use legacy subagent ledgers only when a r
 
 1. npm test -- test/scripts/work-tracker-subagent-ledger.test.js test/scripts/work-llm-usability-tools.test.js test/scripts/work-context.test.js
 2. npm run work:theory-ledger -- validate
-3. npm run work:validate -- --pre-impl work/packages/todo-20260522-experiment-theory-ledger-tracker-integration.md
+3. npm run work:validate -- --pre-impl work/packages/done-20260522-experiment-theory-ledger-tracker-integration.md
+
+## Commit And Push Ledger
+
+1. Focused package commit: b23a1ab300cc701eeb459ac1eca84bcdcb534107
+2. Pushed to: origin/codex/pending-ack-eligibility-filter
+3. Commit contains only package-owned files/package-status/allowed sprint handoff: yes

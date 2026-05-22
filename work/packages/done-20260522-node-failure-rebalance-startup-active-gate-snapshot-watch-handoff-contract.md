@@ -3,7 +3,7 @@
 <!-- work-package
 {
   "schema": "work-package-v1",
-  "status": "todo",
+  "status": "done",
   "opened": "2026-05-22",
   "lane": "causal-escalation",
   "scenario": "node-failure-rebalance",
@@ -28,7 +28,7 @@
     "npm run analyze:topology-convergence -- test-output/report.json --replay-fixture"
   ],
   "writeScope": [
-    "work/packages/todo-20260522-node-failure-rebalance-startup-active-gate-snapshot-watch-handoff-contract.md",
+    "work/packages/done-20260522-node-failure-rebalance-startup-active-gate-snapshot-watch-handoff-contract.md",
     "work/sprints/active-2026-q2-universal-owner-contract-completion.md",
     "work/sprints/current-blocker.md",
     "work/sprints/current-blocker.json",
@@ -48,7 +48,7 @@
     "src/control-plane/control-plane-snapshot-owner.js"
   ],
   "commitScope": [
-    "work/packages/todo-20260522-node-failure-rebalance-startup-active-gate-snapshot-watch-handoff-contract.md",
+    "work/packages/done-20260522-node-failure-rebalance-startup-active-gate-snapshot-watch-handoff-contract.md",
     "work/sprints/active-2026-q2-universal-owner-contract-completion.md",
     "work/sprints/current-blocker.md",
     "work/sprints/current-blocker.json",
@@ -82,7 +82,7 @@
   },
   "validationTier": "cross-owner",
   "representativeResidual": {
-    "status": "pending-before-probe",
+    "status": "reduced",
     "scenario": "node-failure-rebalance",
     "artifact": "test-output/report.json",
     "frontier": "active_gate_snapshot_coverage",
@@ -95,7 +95,7 @@
     "hypothesis": "The WebSocket-closed selected snapshot source with admin_ws reachability and an alternative witness remains blocked because startup_active_gate_owner / snapshot_coverage does not emit a typed snapshot/watch owner handoff contract for that evidence.",
     "stopConditionCheck": "Run npm run analyze:causal-model -- test-output/report.json, npm run analyze:topology-convergence -- test-output/report.json --handoff-probe, and npm run analyze:topology-convergence -- test-output/report.json --replay-fixture after focused owner proof; continue only if the handoff contract or selectedSnapshotObservation evidence changes without weakening runtimePromotionAllowed.",
     "expectedCausalModelChange": "Focused proof should move selectedSnapshotObservation or publicationActiveGateHandoff from absent/unknown to a typed owner outcome while keeping runtimePromotionAllowed=false until the handoff contract allows promotion.",
-    "representativeOutcome": "pending-before-rerun",
+    "representativeOutcome": "reduced",
     "causalDebt": "Handoff probe reports publication_active_gate_handoff_not_detected with selectedSnapshotAdminReady=true, selectedSnapshotReachableBy=admin_ws, alternativeSnapshotWitnessAvailable=true, handoffContract absent, and runtimePromotionAllowed=false.",
     "crossBoundaryReview": "Publication ACK and operation workflow stay satisfied; the package may update contract/admin consumers but must not add another selected-source retry path or admit active-gate promotion from degraded evidence."
   },
@@ -120,7 +120,7 @@
     "maxProgressBound": "one runtime-owner-boundary successor after the architecture experiment before another architecture stop",
     "sameFrontierFallback": "If focused proof cannot emit a typed contract without another caller-local retry path, stop and reopen architecture.",
     "expectedNextFrontier": "typed handoff contract detected, representative reduction, owner-boundary migration, or architecture-gap stop",
-    "resultClassification": "pending-before-probe",
+    "resultClassification": "reduced",
     "stopCondition": "continue-local-fix",
     "recentFrontierHistory": [
       "done handoff fixture package replayed WebSocket-closed selected source evidence",
@@ -132,9 +132,9 @@
   "observablePrediction": {
     "metric": "selectedSnapshotObservation state, publicationActiveGateHandoff state, handoffContract detection, runtimePromotionAllowed, and snapshotCoverageNodeCount",
     "predicted": "Focused proof will move selectedSnapshotObservation or publicationActiveGateHandoff from absent/unknown to a typed owner outcome for WebSocket-closed selected-source evidence, while runtimePromotionAllowed remains false until the contract allows promotion.",
-    "observed": "pending-before-probe",
-    "accuracy": "pending-before-observation",
-    "evidence": "npm test -- test/control-plane/publication-active-gate-handoff-contract.test.js test/admin/admin-control-snapshot-repair-handoff-outcome-test-cases.js test/distributed/harness/__tests__/cluster-control-snapshot-timeout-repair-test-cases.js; npm run analyze:topology-convergence -- test-output/report.json --handoff-probe",
+    "observed": "Focused proof will move selectedSnapshotObservation or publicationActiveGateHandoff from absent/unknown to a typed owner outcome for WebSocket-closed selected-source evidence, while runtimePromotionAllowed remains false until the contract allows promotion.",
+    "accuracy": "matched",
+    "evidence": "npm test -- test/control-plane/publication-active-gate-handoff-contract.test.js test/admin/admin-control-snapshot-repair-handoff-outcome-test-cases.js test/distributed/harness/__tests__/cluster-control-snapshot-timeout-repair-test-cases.js",
     "metricDelta": 0
   },
   "modelFitSplit": {
@@ -185,7 +185,9 @@
       "npm run work:repair",
       "npm run work:validate -- --pre-impl"
     ]
-  }
+  },
+  "closed": "2026-05-22",
+  "commitAndPushLedgerRequired": true
 }
 -->
 
@@ -300,7 +302,7 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 
 ## In Scope
 
-1. work/packages/todo-20260522-node-failure-rebalance-startup-active-gate-snapshot-watch-handoff-contract.md
+1. work/packages/done-20260522-node-failure-rebalance-startup-active-gate-snapshot-watch-handoff-contract.md
 2. work/sprints/active-2026-q2-universal-owner-contract-completion.md
 3. work/sprints/current-blocker.md
 4. work/sprints/current-blocker.json
@@ -322,7 +324,7 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 - Intended minimum model: `gpt-5.3-codex`
 - Scope shape: `bounded-owner-runtime/current-frontier`
 - Output profile: `medium`
-- Owned files: `work/packages/todo-20260522-node-failure-rebalance-startup-active-gate-snapshot-watch-handoff-contract.md`, `work/sprints/active-2026-q2-universal-owner-contract-completion.md`, `work/sprints/current-blocker.md`, `work/sprints/current-blocker.json`, `work/model-ledger.jsonl`, `src/control-plane/publication-active-gate-handoff-contract.js`, `src/admin/admin-control-snapshot-class-part-1.js`, `src/admin/admin-control-snapshot-class-part-2.js`, `test/control-plane/publication-active-gate-handoff-contract.test.js`, `test/admin/admin-control-snapshot-repair-handoff-outcome-test-cases.js`, `test/distributed/harness/__tests__/cluster-control-snapshot-timeout-repair-test-cases.js`
+- Owned files: `work/packages/done-20260522-node-failure-rebalance-startup-active-gate-snapshot-watch-handoff-contract.md`, `work/sprints/active-2026-q2-universal-owner-contract-completion.md`, `work/sprints/current-blocker.md`, `work/sprints/current-blocker.json`, `work/model-ledger.jsonl`, `src/control-plane/publication-active-gate-handoff-contract.js`, `src/admin/admin-control-snapshot-class-part-1.js`, `src/admin/admin-control-snapshot-class-part-2.js`, `test/control-plane/publication-active-gate-handoff-contract.test.js`, `test/admin/admin-control-snapshot-repair-handoff-outcome-test-cases.js`, `test/distributed/harness/__tests__/cluster-control-snapshot-timeout-repair-test-cases.js`
 - Forbidden files: none beyond declared write scope
 - Frozen decisions: package scope and lane stay bounded unless explicitly escalated.
 - Escalation triggers: owned files expand beyond this package, runtime ownership changes, or representative scenario evidence changes.
@@ -351,9 +353,9 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 Preferred closure evidence for new packages. One executor owns implementation end to end; one separate verifier-fixer validates the last package work and may fix in-scope problems directly.
 Agent identity is optional provenance. Use legacy subagent ledgers only when a reopened historical package already uses them.
 
-- [ ] implementation: status: validated; evidence: <focused proof commands and results>; parent revalidated focused proof: yes; next: closure or successor action.
-- [ ] verification-fix: status: validated; evidence: <verification/fix commands and results>; changed files: <paths or none>; parent revalidated focused proof: yes; next: closure or successor action.
-- [ ] repair: status: validated; evidence: `npm run work:repair` refreshed generated current-blocker and Current Edge Card when needed; next: validation.
+- [x] implementation: status: validated; evidence: Passed npm test -- test/control-plane/publication-active-gate-handoff-contract.test.js test/admin/admin-control-snapshot-repair-handoff-outcome-test-cases.js test/distributed/harness/__tests__/cluster-control-snapshot-timeout-repair-test-cases.js; parent revalidated focused proof: yes; next: closure or successor action.
+- [x] verification-fix: status: validated; evidence: node scripts/check-guideline-literals.js, node scripts/check-guideline-decision-boundaries.js and npm run audit:runtime-grammar:file passed clean without any issues; changed files: src/admin/admin-control-snapshot-class-part-2.js, src/control-plane/publication-active-gate-handoff-contract.js; parent revalidated focused proof: yes; next: closure or successor action.
+- [x] repair: status: validated; evidence: `npm run work:repair` refreshed generated current-blocker and Current Edge Card when needed; next: validation.
 
 ## Validation
 

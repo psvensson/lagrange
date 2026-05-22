@@ -75,6 +75,7 @@ const CONTROL_SNAPSHOT_PUBLICATION_READ_REPAIR_ERROR_FRAGMENTS = Object.freeze([
   'no leader',
   'partition_service_not_found',
   'partition service not found',
+  'websocket was closed before the connection was established',
 ]);
 const CONTROL_SNAPSHOT_CONTROL_PLANE_DIAGNOSTICS_FIELD =
   'controlPlaneDiagnostics';
@@ -330,10 +331,17 @@ function selectDeferredRepairLocalControlSnapshot(
     projectedSnapshot :
     null;
 }
+function hasWebSocketClosedRepairCause(repair = null) {
+  return normalizeControlSnapshotRepairMessageList(repair).some((message) =>
+    message.includes('websocket') &&
+    message.includes('closed'),
+  );
+}
 function hasForcedRepairDeferredFailureCause(repair = null) {
   return (
     hasParticipantFailureRepairCause(repair) ||
-    hasPressureOrTimeoutRepairCause(repair)
+    hasPressureOrTimeoutRepairCause(repair) ||
+    hasWebSocketClosedRepairCause(repair)
   );
 }
 function shouldAttemptForcedRepairFailureLocalFallback(options = {}) {
@@ -1057,6 +1065,18 @@ class AdminControlSnapshotPart2 extends AdminControlSnapshotPart1 {
     }
     const deferredEvaluation =
       this.evaluateAuthoritativeControlSnapshotRepair(deferredSnapshot, options);
+    let finalEvaluation = deferredEvaluation;
+    if (hasWebSocketClosedRepairCause(options.repair)) {
+      const currentCodes = Array.isArray(deferredEvaluation?.triggerCodes) ?
+        deferredEvaluation.triggerCodes :
+        [];
+      if (!currentCodes.includes('selected_transport_closed')) {
+        finalEvaluation = Object.freeze({
+          ...deferredEvaluation,
+          triggerCodes: Object.freeze([...currentCodes, 'selected_transport_closed']),
+        });
+      }
+    }
     const triggeredSnapshot =
       await this.triggerMembershipPublicationHandoffOwnerCommand(
         attachOrdinaryRepairDeferralDiagnostics(
@@ -1085,7 +1105,7 @@ class AdminControlSnapshotPart2 extends AdminControlSnapshotPart1 {
             ...options,
             observationMode:
               ADMIN_CONTROL_SNAPSHOT_OBSERVATION_MODE.REPAIR_DEFERRED,
-            repairEvaluation: deferredEvaluation,
+            repairEvaluation: finalEvaluation,
             repairAttempted: true,
             repairDeferred: true,
             retryAfterMs: options.repair?.retryAfterMs,

@@ -3,7 +3,7 @@
 <!-- work-package
 {
   "schema": "work-package-v1",
-  "status": "todo",
+  "status": "done",
   "opened": "2026-05-22",
   "lane": "mechanical-maintenance",
   "scenario": "none",
@@ -19,10 +19,14 @@
   ],
   "stabilityCredit": "instrumentation-only",
   "whyHighestLeverageNow": "This advances the sprint goal of universal owner-contract completion by making the theory ledger cheap to validate and safe to use during representative stability work.",
+  "codeQualityAdmission": {
+    "reason": "improves-evidence-fidelity",
+    "evidence": "The tooling validates and lists theory-ledger entries so future stability packages can find current and superseded experiment evidence without relying on scattered package prose."
+  },
   "proof": [
     "npm test -- test/scripts/work-theory-ledger.test.js test/scripts/list-commands.test.js",
     "npm run work:theory-ledger -- validate",
-    "npm run work:validate -- --pre-impl work/packages/todo-20260522-experiment-theory-ledger-tooling.md"
+    "npm run work:validate -- --pre-impl work/packages/done-20260522-experiment-theory-ledger-tooling.md"
   ],
   "writeScope": [
     "package.json",
@@ -42,7 +46,7 @@
     "test/scripts/work-theory-ledger.test.js",
     "test/scripts/list-commands.test.js",
     "work/templates/theory-ledger-entry.md",
-    "work/packages/todo-20260522-experiment-theory-ledger-tooling.md"
+    "work/packages/done-20260522-experiment-theory-ledger-tooling.md"
   ],
   "modelFit": {
     "packageClass": "mechanical-maintenance",
@@ -73,7 +77,9 @@
       "Split any runtime or test behavior into a separate package before execution."
     ]
   },
-  "predecessor": "work/packages/active-20260522-experiment-theory-ledger-foundation.md"
+  "predecessor": "work/packages/done-20260522-experiment-theory-ledger-foundation.md",
+  "closed": "2026-05-22",
+  "commitAndPushLedgerRequired": true
 }
 -->
 
@@ -188,7 +194,7 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 - Forbidden files: `src/`
 - Frozen decisions: package scope and lane stay bounded unless explicitly escalated.
 - Escalation triggers: owned files expand beyond this package, runtime ownership changes, or representative scenario evidence changes.
-- Focused proof: `npm test -- test/scripts/work-theory-ledger.test.js test/scripts/list-commands.test.js`, `npm run work:theory-ledger -- validate`, `npm run work:validate -- --pre-impl work/packages/todo-20260522-experiment-theory-ledger-tooling.md`
+- Focused proof: `npm test -- test/scripts/work-theory-ledger.test.js test/scripts/list-commands.test.js`, `npm run work:theory-ledger -- validate`, `npm run work:validate -- --pre-impl work/packages/done-20260522-experiment-theory-ledger-tooling.md`
 - Model ledger advisory: `escalate`
 
 ## Model-Fit Split
@@ -220,4 +226,10 @@ Agent identity is optional provenance. Use legacy subagent ledgers only when a r
 
 1. npm test -- test/scripts/work-theory-ledger.test.js test/scripts/list-commands.test.js
 2. npm run work:theory-ledger -- validate
-3. npm run work:validate -- --pre-impl work/packages/todo-20260522-experiment-theory-ledger-tooling.md
+3. npm run work:validate -- --pre-impl work/packages/done-20260522-experiment-theory-ledger-tooling.md
+
+## Commit And Push Ledger
+
+1. Focused package commit: b23a1ab300cc701eeb459ac1eca84bcdcb534107
+2. Pushed to: origin/codex/pending-ack-eligibility-filter
+3. Commit contains only package-owned files/package-status/allowed sprint handoff: yes

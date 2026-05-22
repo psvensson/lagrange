@@ -13,7 +13,7 @@
   "boundary": "snapshot_coverage",
   "dominantReason": "active_gate_timed_out",
   "currentState": "Architecture discriminator selected the startup_active_gate_owner / snapshot_coverage runtime-owner successor for the snapshot/watch owner handoff contract. Handoff probe still reports handoffContract absent and runtimePromotionAllowed=false while selectedSnapshotAdminReady=true, selectedSnapshotReachableBy=admin_ws, and alternativeSnapshotWitnessAvailable=true.",
-  "nextAction": "Close this architecture package as route-selected and continue in work/packages/todo-20260522-node-failure-rebalance-startup-active-gate-snapshot-watch-handoff-contract.md.",
+  "nextAction": "Close this architecture package as route-selected and continue in work/packages/done-20260522-node-failure-rebalance-startup-active-gate-snapshot-watch-handoff-contract.md.",
   "stabilityCredit": "local-proof-only",
   "whyHighestLeverageNow": "This is the current architecture stop for the active sprint first frontier after a focused WebSocket-closed handoff fixture proved the representative evidence is replayable but the handoff contract remains absent.",
   "proof": [
@@ -176,7 +176,7 @@
         ]
       }
     ],
-    "nextAction": "Continue in work/packages/todo-20260522-node-failure-rebalance-startup-active-gate-snapshot-watch-handoff-contract.md before runtime edits."
+    "nextAction": "Continue in work/packages/done-20260522-node-failure-rebalance-startup-active-gate-snapshot-watch-handoff-contract.md before runtime edits."
   },
   "rerunDecision": {
     "sourceArtifact": "test-output/report.json",
@@ -196,7 +196,7 @@
   },
   "closed": "2026-05-22",
   "commitAndPushLedgerRequired": true,
-  "successor": "work/packages/todo-20260522-node-failure-rebalance-startup-active-gate-snapshot-watch-handoff-contract.md"
+  "successor": "work/packages/done-20260522-node-failure-rebalance-startup-active-gate-snapshot-watch-handoff-contract.md"
 }
 -->
 
@@ -356,8 +356,8 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 Preferred closure evidence for new packages. One executor owns implementation end to end; one separate verifier-fixer validates the last package work and may fix in-scope problems directly.
 Agent identity is optional provenance. Use legacy subagent ledgers only when a reopened historical package already uses them.
 
-- [x] implementation: status: validated; evidence: `npm run analyze:topology-convergence -- test-output/report.json --handoff-probe` passed with detected=false, handoffContract absent, runtimePromotionAllowed=false, selectedSnapshotAdminReady=true, selectedSnapshotReachableBy=admin_ws, and alternativeSnapshotWitnessAvailable=true; `npm run analyze:topology-convergence -- test-output/report.json --replay-fixture` passed with the same WebSocket-closed selected-source evidence preserved; `npm run analyze:causal-model -- test-output/report.json` passed with active_gate_snapshot_coverage as the local blocker; route selected to `work/packages/todo-20260522-node-failure-rebalance-startup-active-gate-snapshot-watch-handoff-contract.md`; parent revalidated focused proof: yes; next: verifier-fixer, repair, closure migration.
-- [x] verification-fix: status: validated; evidence: `npm run work:package:doctor -- work/packages/done-20260522-node-failure-rebalance-active-gate-snapshot-architecture-experiment.md` passed; `npm run work:package:doctor -- work/packages/todo-20260522-node-failure-rebalance-startup-active-gate-snapshot-watch-handoff-contract.md` passed; `npm run work:validate -- --pre-impl --package work/packages/todo-20260522-node-failure-rebalance-startup-active-gate-snapshot-watch-handoff-contract.md` passed; `npm run work:validate -- --closure --package work/packages/done-20260522-node-failure-rebalance-active-gate-snapshot-architecture-experiment.md` failed before this fix on open execution-evidence items and observablePrediction mismatch; changed files: work/packages/done-20260522-node-failure-rebalance-active-gate-snapshot-architecture-experiment.md, work/sprints/current-blocker.json, work/sprints/current-blocker.md, work/sprints/active-2026-q2-universal-owner-contract-completion.md; parent revalidated focused proof: yes; next: closure migration.
+- [x] implementation: status: validated; evidence: `npm run analyze:topology-convergence -- test-output/report.json --handoff-probe` passed with detected=false, handoffContract absent, runtimePromotionAllowed=false, selectedSnapshotAdminReady=true, selectedSnapshotReachableBy=admin_ws, and alternativeSnapshotWitnessAvailable=true; `npm run analyze:topology-convergence -- test-output/report.json --replay-fixture` passed with the same WebSocket-closed selected-source evidence preserved; `npm run analyze:causal-model -- test-output/report.json` passed with active_gate_snapshot_coverage as the local blocker; route selected to `work/packages/done-20260522-node-failure-rebalance-startup-active-gate-snapshot-watch-handoff-contract.md`; parent revalidated focused proof: yes; next: verifier-fixer, repair, closure migration.
+- [x] verification-fix: status: validated; evidence: `npm run work:package:doctor -- work/packages/done-20260522-node-failure-rebalance-active-gate-snapshot-architecture-experiment.md` passed; `npm run work:package:doctor -- work/packages/done-20260522-node-failure-rebalance-startup-active-gate-snapshot-watch-handoff-contract.md` passed; `npm run work:validate -- --pre-impl --package work/packages/done-20260522-node-failure-rebalance-startup-active-gate-snapshot-watch-handoff-contract.md` passed; `npm run work:validate -- --closure --package work/packages/done-20260522-node-failure-rebalance-active-gate-snapshot-architecture-experiment.md` failed before this fix on open execution-evidence items and observablePrediction mismatch; changed files: work/packages/done-20260522-node-failure-rebalance-active-gate-snapshot-architecture-experiment.md, work/sprints/current-blocker.json, work/sprints/current-blocker.md, work/sprints/active-2026-q2-universal-owner-contract-completion.md; parent revalidated focused proof: yes; next: closure migration.
 - [x] repair: status: validated; evidence: `npm run work:repair` refreshed generated current-blocker and Current Edge Card; next: validation.
 
 ## Validation
