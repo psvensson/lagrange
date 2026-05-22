@@ -26,6 +26,9 @@ const TEST_PUBLISHED_ACTIVE_NODE_IDS_FIELD = 'publishedActiveNodeIds';
 const TEST_ALLOW_EMPTY_PRELOADED_ROWS_FIELD = 'allowEmptyPreloadedRows';
 const TEST_NODE_ROWS_FIELD = 'nodeRows';
 const TEST_OWNER_QUEUE_STOPPED_REASON = 'owner_queue_stopped';
+const TEST_SELECTED_SNAPSHOT_TIMEOUT_REASON = 'selected_timeout';
+const TEST_ACTIVE_GATE_HANDOFF_NEXT_ACTION_WAIT_OWNER_RECOVERY =
+  'wait_owner_recovery';
 
 test('AdminControlSnapshot surfaces handoff owner outcome when repair is not selected',
   async (t) => {
@@ -1950,7 +1953,11 @@ test('AdminControlSnapshot forced query timeout preserves metric-moving local sn
           contractState:
             ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_SNAPSHOT_REPAIR_DEFERRED_CONTRACT_STATE,
           nextAction: ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_SNAPSHOT_REPAIR_DEFERRED_NEXT_ACTION,
-          reasonCodes: ['discovery_node_coverage_gap'],
+          reasonCodes: [
+            ACTIVE_GATE_SNAPSHOT_TEST_STATE
+              .ACTIVE_GATE_SNAPSHOT_DISCOVERY_NODE_COVERAGE_GAP_TRIGGER,
+            TEST_SELECTED_SNAPSHOT_TIMEOUT_REASON,
+          ],
           retryAfterMs: ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_SNAPSHOT_DIRECT_QUERY_TIMEOUT_MS,
         },
         adminObservation: {
@@ -1962,6 +1969,22 @@ test('AdminControlSnapshot forced query timeout preserves metric-moving local sn
         },
         controlPlaneDiagnostics: {
           ordinaryRepairDeferred: true,
+          publicationActiveGateHandoff: {
+            pendingRecoveryNodeIds: [
+              ACTIVE_GATE_SNAPSHOT_TEST_STATE
+                .ACTIVE_GATE_SNAPSHOT_TIMEOUT_SELECTED_SOURCE_NODE_ID,
+            ],
+            pendingRecoveryCount: 1,
+            runtimePromotionAllowed: false,
+            state:
+              ACTIVE_GATE_SNAPSHOT_TEST_STATE
+                .ACTIVE_GATE_OWNER_COHORT_STATE_PENDING,
+            reasonCode:
+              ACTIVE_GATE_SNAPSHOT_TEST_STATE
+                .ACTIVE_GATE_OWNER_COHORT_REASON_OWNER_RECONCILE_PENDING,
+            nextAction:
+              TEST_ACTIVE_GATE_HANDOFF_NEXT_ACTION_WAIT_OWNER_RECOVERY,
+          },
         },
       },
       'forced query timeout should become a structured deferred owner observation',

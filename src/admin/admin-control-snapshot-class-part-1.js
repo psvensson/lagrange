@@ -634,12 +634,143 @@ class AdminControlSnapshotPart1 {
       options,
     );
     return attachControlSnapshotObservationMode(
-      attachControlSnapshotAuthorityCertificateRevision(sharedSnapshot),
+      attachControlSnapshotObservationActiveGateHandoff(
+        attachControlSnapshotAuthorityCertificateRevision(sharedSnapshot),
+        this,
+        options,
+      ),
       {
         ...options,
         sharedOwnerResolved: true,
       },
     );
   }
+}
+const CONTROL_SNAPSHOT_CONTROL_PLANE_DIAGNOSTICS_FIELD =
+  'controlPlaneDiagnostics';
+const CONTROL_SNAPSHOT_READINESS_BY_NODE_ID_FIELD = 'readinessByNodeId';
+const CONTROL_SNAPSHOT_REASON_CODES_FIELD = 'reasonCodes';
+function isControlSnapshotPlainRecord(value) {
+  return value && typeof value === TYPEOF.OBJECT && !Array.isArray(value);
+}
+function resolveControlSnapshotLocalNodeId(snapshot = null, owner = null) {
+  const snapshotNodeId = snapshot?.[ADMIN_CONTROL_SNAPSHOT_LITERAL.NODEID];
+  if (
+    typeof snapshotNodeId === TYPEOF.STRING &&
+    snapshotNodeId.length > NUM.ZERO
+  ) {
+    return snapshotNodeId;
+  }
+  return typeof owner?.nodeId === TYPEOF.STRING &&
+    owner.nodeId.length > NUM.ZERO ?
+    owner.nodeId :
+    ADMIN_CONTROL_SNAPSHOT_LITERAL.VALUE;
+}
+function buildControlSnapshotObservationReadinessByNodeId(
+  snapshot = null,
+  owner = null,
+  options = {},
+) {
+  const controlPlaneDiagnostics =
+    snapshot?.[CONTROL_SNAPSHOT_CONTROL_PLANE_DIAGNOSTICS_FIELD];
+  const nodeId = resolveControlSnapshotLocalNodeId(snapshot, owner);
+  const observationReasonCodes =
+    normalizeControlSnapshotObservationReasonCodes(snapshot, options);
+  if (
+    !isControlSnapshotPlainRecord(controlPlaneDiagnostics) ||
+    nodeId.length === NUM.ZERO ||
+    observationReasonCodes.length === NUM.ZERO
+  ) {
+    return controlPlaneDiagnostics?.[
+      CONTROL_SNAPSHOT_READINESS_BY_NODE_ID_FIELD
+    ];
+  }
+  const readinessByNodeId = isControlSnapshotPlainRecord(
+    controlPlaneDiagnostics[
+      CONTROL_SNAPSHOT_READINESS_BY_NODE_ID_FIELD
+    ],
+  ) ?
+    controlPlaneDiagnostics[
+      CONTROL_SNAPSHOT_READINESS_BY_NODE_ID_FIELD
+    ] :
+    {};
+  const readinessEntry = isControlSnapshotPlainRecord(
+    readinessByNodeId[nodeId],
+  ) ?
+    readinessByNodeId[nodeId] :
+    {};
+  return {
+    ...readinessByNodeId,
+    [nodeId]: {
+      ...readinessEntry,
+      [CONTROL_SNAPSHOT_REASON_CODES_FIELD]: uniqueSorted([
+        ...(Array.isArray(
+          readinessEntry[CONTROL_SNAPSHOT_REASON_CODES_FIELD],
+        ) ?
+          readinessEntry[CONTROL_SNAPSHOT_REASON_CODES_FIELD] :
+          []),
+        ...observationReasonCodes,
+      ]),
+    },
+  };
+}
+function attachControlSnapshotObservationActiveGateHandoff(
+  snapshot = null,
+  owner = null,
+  options = {},
+) {
+  const controlPlaneDiagnostics =
+    snapshot?.[CONTROL_SNAPSHOT_CONTROL_PLANE_DIAGNOSTICS_FIELD];
+  if (
+    !isControlSnapshotPlainRecord(snapshot) ||
+    !isControlSnapshotPlainRecord(controlPlaneDiagnostics) ||
+    typeof owner?.resolvePublicationActiveGateHandoffContract !==
+      TYPEOF.FUNCTION
+  ) {
+    return snapshot;
+  }
+  const readinessByNodeId = buildControlSnapshotObservationReadinessByNodeId(
+    snapshot,
+    owner,
+    options,
+  );
+  if (!isControlSnapshotPlainRecord(readinessByNodeId)) {
+    return snapshot;
+  }
+  const publicationActiveGateHandoff =
+    owner.resolvePublicationActiveGateHandoffContract({
+      controlPlaneDiagnostics,
+      activeNodeViews: controlPlaneDiagnostics.activeNodeViews,
+      publicationConvergence:
+        controlPlaneDiagnostics[
+          CONTROL_SNAPSHOT_PUBLICATION_CONVERGENCE_FIELD
+        ],
+      readinessByNodeId,
+    });
+  const publicationConvergence = isControlSnapshotPlainRecord(
+    controlPlaneDiagnostics[CONTROL_SNAPSHOT_PUBLICATION_CONVERGENCE_FIELD],
+  ) ?
+    {
+      ...controlPlaneDiagnostics[
+        CONTROL_SNAPSHOT_PUBLICATION_CONVERGENCE_FIELD
+      ],
+      [CONTROL_SNAPSHOT_PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD]:
+        publicationActiveGateHandoff,
+      [CONTROL_SNAPSHOT_ACTIVE_GATE_CATCHUP_FENCE_FIELD]:
+        publicationActiveGateHandoff.activeGateCatchupFence,
+    } :
+    controlPlaneDiagnostics[CONTROL_SNAPSHOT_PUBLICATION_CONVERGENCE_FIELD];
+  return {
+    ...snapshot,
+    [CONTROL_SNAPSHOT_CONTROL_PLANE_DIAGNOSTICS_FIELD]: {
+      ...controlPlaneDiagnostics,
+      [CONTROL_SNAPSHOT_READINESS_BY_NODE_ID_FIELD]: readinessByNodeId,
+      [CONTROL_SNAPSHOT_PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD]:
+        publicationActiveGateHandoff,
+      [CONTROL_SNAPSHOT_ACTIVE_GATE_CATCHUP_FENCE_FIELD]:
+        publicationActiveGateHandoff.activeGateCatchupFence,
+      [CONTROL_SNAPSHOT_PUBLICATION_CONVERGENCE_FIELD]: publicationConvergence,
+    },
+  };
 }
 export {AdminControlSnapshotPart1};

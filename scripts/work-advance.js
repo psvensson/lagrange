@@ -11,6 +11,7 @@ import {
 } from './work-context.js';
 import {
   buildPackageDoctorLines,
+  readTheoryLedgerContext,
 } from './work-tracker.js';
 import {
   buildSubagentNextLines,
@@ -101,6 +102,7 @@ async function buildAdvanceLines(args = []) {
     );
   }
   const {currentBlocker, packageContent} = await resolvePackageBlocker(args);
+  const theoryLedgerContext = await readTheoryLedgerContext();
   const hasActivePackage = currentBlocker.package !== 'none';
   const subagentStatus = buildSubagentSequencingStatus(
     packageContent,
@@ -125,6 +127,7 @@ async function buildAdvanceLines(args = []) {
       EMPTY_TEXT,
       buildPackageDoctorLines(currentBlocker.package, packageContent, {
         suggest: true,
+        theoryLedgerContext,
       }).lines.join(NEWLINE),
     );
   } else {

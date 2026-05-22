@@ -15,6 +15,9 @@ import {
   OWNER_CONTRACT_NEXT_ACTION,
   OWNER_CONTRACT_STATE,
 } from '../../../src/control-plane/owner-contract-outcome.js';
+import {
+  buildPublicationActiveGateHandoffContract,
+} from '../../../src/control-plane/publication-active-gate-handoff-contract.js';
 
 const {
   countCacheVisibleSatisfiedPriorityRecoveryOperations,
@@ -183,6 +186,40 @@ function buildControlSnapshotRetryObservationSummary({
     snapshotObservationRetryAfterMs: normalizedRetryAfterMs,
     snapshotRepairDeferred: true,
   };
+}
+
+function buildTerminalControlSnapshotActiveGateHandoff({
+  expectedNodeIds = [],
+  nodeId = null,
+  terminalObservationSummary = null,
+  selectedAdminReady = false,
+} = {}) {
+  const normalizedNodeId =
+    typeof nodeId === TYPEOF_STRING && nodeId.length > ZERO ? nodeId : null;
+  const reasonCodes = normalizeDistinctStringArray(
+    terminalObservationSummary?.snapshotObservationReasonCodes,
+  );
+  if (
+    !normalizedNodeId ||
+    selectedAdminReady !== true ||
+    !reasonCodes.includes(CONTROL_SNAPSHOT_RETRY_REASON_SELECTED_TIMEOUT)
+  ) {
+    return CONTROL_SNAPSHOT_PUBLICATION_ACTIVE_GATE_HANDOFF_UNAVAILABLE;
+  }
+  const normalizedExpectedNodeIds = normalizeDistinctStringArray([
+    ...expectedNodeIds,
+    normalizedNodeId,
+  ]);
+  return buildPublicationActiveGateHandoffContract({
+    expectedNodeIds: normalizedExpectedNodeIds,
+    publishedActiveNodeIds: normalizedExpectedNodeIds,
+    pendingRecoveryNodeIds: [normalizedNodeId],
+    readinessByNodeId: {
+      [normalizedNodeId]: {
+        reasonCodes,
+      },
+    },
+  });
 }
 
 function hasControlSnapshotReachabilityFallback(result = null) {
@@ -506,7 +543,6 @@ class Cluster5 extends Cluster4 {
           timeoutMs: snapshotTimeoutMs,
           lane: ADMIN_SOCKET_LANE_SNAPSHOT,
           forceRepair: options.forceRepair === true,
-          forceAuthoritativeRepair: options.forceRepair === true,
           ignorePreRestart: readinessMode === CLUSTER_READINESS_MODE_LOAD,
         });
         await probeReachabilityDiagnostics();
@@ -563,13 +599,21 @@ class Cluster5 extends Cluster4 {
               }),
             });
         }
+        const terminalAdminReady = reachabilityDiagnostics?.adminReady === true;
+        const terminalActiveGateHandoff =
+          buildTerminalControlSnapshotActiveGateHandoff({
+            expectedNodeIds: [...expectedNodeSet],
+            nodeId: node.id,
+            terminalObservationSummary,
+            selectedAdminReady: terminalAdminReady,
+          });
         return {
           nodeId: node.id,
           error: snapshotError,
           snapshotTimeoutEncountered,
           snapshotTimeoutMs: finalSnapshotTimeoutMs,
           reachabilityTimeoutMs,
-          adminReady: reachabilityDiagnostics?.adminReady === true,
+          adminReady: terminalAdminReady,
           reachable: reachabilityDiagnostics?.reachable === true,
           reachableBy:
             typeof reachabilityDiagnostics?.reachableBy === 'string' &&
@@ -597,11 +641,10 @@ class Cluster5 extends Cluster4 {
           publicationConvergenceGate:
             CONTROL_SNAPSHOT_PUBLICATION_CONVERGENCE_GATE_UNAVAILABLE,
           publishedMembershipObservation: null,
-          publicationActiveGateHandoff:
-            CONTROL_SNAPSHOT_PUBLICATION_ACTIVE_GATE_HANDOFF_UNAVAILABLE,
+          publicationActiveGateHandoff: terminalActiveGateHandoff,
           membershipPublicationHandoffOutcome:
             CONTROL_SNAPSHOT_MEMBERSHIP_PUBLICATION_HANDOFF_OUTCOME_UNAVAILABLE,
-          activeGateOwnerCohort: null,
+          activeGateOwnerCohort: terminalActiveGateHandoff,
           priorityRecoveryObservation: null,
           priorityRecoveryDecisionSnapshots:
             CONTROL_SNAPSHOT_PRIORITY_RECOVERY_DECISION_SNAPSHOTS_UNAVAILABLE,

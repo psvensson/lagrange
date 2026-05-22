@@ -1697,6 +1697,50 @@ describe('work tracker package doctor', () => {
     assert.match(rendered, /Validation: ok/u);
   });
 
+  it('validates cited theory ledger refs against loaded ledger entries', () => {
+    const content = WORK_TRACKER_DOCTOR_CONTENT.replace(
+      '"proof": [',
+      '"theoryLedgerRefs": ["theory-20260522-missing"],\n  "proof": [',
+    );
+    const report = buildPackageDoctorLines(
+      WORK_TRACKER_ACTIVE_DOCTOR_FILE,
+      content,
+      {theoryLedgerContext: {entries: [], errors: []}},
+    );
+
+    assert.match(
+      report.errors.join('\n'),
+      /theory-20260522-missing, but it is not present/u,
+    );
+  });
+
+  it('surfaces related theory candidates as advisory doctor guidance', () => {
+    const report = buildPackageDoctorLines(
+      WORK_TRACKER_ACTIVE_DOCTOR_FILE,
+      WORK_TRACKER_DOCTOR_CONTENT,
+      {
+        theoryLedgerContext: {
+          entries: [{
+            id: 'theory-20260522-package-doctor-repeat',
+            line: 12,
+            fields: {
+              Status: 'falsified',
+              'Scenario/gate': 'none / workflow_tooling',
+              'Owner/boundary': 'workflow_tooling_owner / package_doctor',
+              'Next implication': 'do not repeat broad doctor prose.',
+            },
+          }],
+          errors: [],
+        },
+      },
+    );
+    const rendered = report.lines.join('\n');
+
+    assert.match(rendered, /Related theory ledger candidates exist/u);
+    assert.match(rendered, /theory-20260522-package-doctor-repeat/u);
+    assert.match(rendered, /falsified/u);
+  });
+
   it('requires executor and verifier-fixer proof for future closed runtime packages',
     () => {
       const report = buildPackageDoctorLines(

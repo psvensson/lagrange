@@ -637,6 +637,40 @@ test('work context surfaces advisory theory ledger refs', async (t) => {
   t.ok(rendered.includes(theoryRef));
 });
 
+test('work context surfaces related theory candidates when refs are absent',
+  async (t) => {
+    const blocker = {
+      ...TEST_BLOCKER,
+      scenario: 'node-failure-rebalance',
+      owner: 'startup_active_gate_owner',
+      boundary: 'snapshot_coverage',
+      theoryLedgerRefs: [],
+    };
+    const lines = await buildContextLines(blocker, TEST_PACKAGE_CONTENT, {
+      theoryLedgerContext: {
+        entries: [{
+          id: 'theory-20260522-snapshot-watch-fixture',
+          line: 10,
+          fields: {
+            Status: 'superseded',
+            'Scenario/gate':
+              'node-failure-rebalance / active_gate_snapshot_coverage',
+            'Owner/boundary':
+              'startup_active_gate_owner / snapshot_coverage',
+            'Next implication':
+              'do not repeat the fixture-only route.',
+          },
+        }],
+        errors: [],
+      },
+    });
+    const rendered = lines.join('\n');
+
+    t.ok(rendered.includes('Related advisory candidates'));
+    t.ok(rendered.includes('theory-20260522-snapshot-watch-fixture'));
+    t.ok(rendered.includes('superseded'));
+  });
+
 test('work context builds a theory and implementation focus card', (t) => {
   const focus = buildTheoryImplementationFocus(TEST_BLOCKER);
 

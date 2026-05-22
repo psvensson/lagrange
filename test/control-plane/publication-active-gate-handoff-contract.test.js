@@ -76,6 +76,7 @@ const TEST_CROSS_OWNER_HANDOFF_CONTRACT_FIELD =
   'crossOwnerHandoffContract';
 const TEST_ACTIVE_GATE_OWNER = 'active_gate_owner';
 const TEST_ACTIVE_GATE_PROMOTION_BOUNDARY = 'active_gate_promotion_gate';
+const TEST_SELECTED_SNAPSHOT_TIMEOUT_REASON = 'selected_timeout';
 const TEST_JOINED_PENDING_RECONCILE_NODE_IDS = [
   TEST_NODE_2,
   TEST_NODE_3,
@@ -242,6 +243,53 @@ test('publication active-gate handoff emits classified workflow backpressure def
       workflowProgressPhaseId: TEST_OPERATION_WORKFLOW_PROGRESS_PHASE,
       partitionIds: [TEST_OPERATION_WORKFLOW_PARTITION_ID],
       operationIds: [TEST_OPERATION_WORKFLOW_OPERATION_ID],
+    });
+  });
+
+test('publication active-gate handoff waits on selected-timeout snapshot owner evidence',
+  async (t) => {
+    const contract = buildPublicationActiveGateHandoffContract({
+      expectedNodeIds: [TEST_NODE_1, TEST_NODE_2],
+      activeNodeViews: {
+        effectiveActiveNodeIds: [TEST_NODE_1, TEST_NODE_2],
+        snapshotCoverageRevision: TEST_SNAPSHOT_COVERAGE_REVISION,
+      },
+      publicationConvergence: {
+        publicationEpoch: TEST_PUBLICATION_EPOCH,
+        status: TEST_PUBLICATION_STATUS_PUBLISHED,
+        publicationRevision: TEST_PUBLICATION_REVISION,
+        publishedActiveNodeIds: [TEST_NODE_1, TEST_NODE_2],
+        missingPublishedNodeIds: [],
+      },
+      readinessByNodeId: {
+        [TEST_NODE_2]: {
+          reasonCodes: [TEST_SELECTED_SNAPSHOT_TIMEOUT_REASON],
+        },
+      },
+    });
+
+    t.match(contract, {
+      pendingRecoveryNodeIds: [TEST_NODE_2],
+      pendingReconcileNodeIds: [],
+      state: PUBLICATION_ACTIVE_GATE_HANDOFF_STATE.PENDING,
+      reasonCode:
+        PUBLICATION_ACTIVE_GATE_HANDOFF_REASON.OWNER_RECONCILE_PENDING,
+      nextAction:
+        PUBLICATION_ACTIVE_GATE_HANDOFF_NEXT_ACTION.WAIT_OWNER_RECOVERY,
+      runtimePromotionAllowed: false,
+    });
+    t.match(contract[TEST_CROSS_OWNER_HANDOFF_CONTRACT_FIELD], {
+      producerOwnerOutcome: {
+        state: OWNER_OUTCOME_STATE.PENDING,
+        reasonCodes: [
+          PUBLICATION_ACTIVE_GATE_HANDOFF_REASON.OWNER_RECONCILE_PENDING,
+        ],
+      },
+      retryDeferBehavior: {
+        deferConsumer: true,
+        ownerRecoveryWaitRequired: true,
+        ownerReconcileRequired: false,
+      },
     });
   });
 

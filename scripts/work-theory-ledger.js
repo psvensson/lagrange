@@ -57,6 +57,19 @@ const FIELD_NAMES = Object.freeze([
   FIELD_SUPERSEDED_BY,
   FIELD_NEXT_IMPLICATION,
 ]);
+export const THEORY_LEDGER_FIELDS = Object.freeze({
+  STATUS: FIELD_STATUS,
+  SCENARIO_GATE: FIELD_SCENARIO_GATE,
+  OWNER_BOUNDARY: FIELD_OWNER_BOUNDARY,
+  HYPOTHESIS: FIELD_HYPOTHESIS,
+  PROBE: FIELD_PROBE,
+  ARTIFACT_RESULT: FIELD_ARTIFACT_RESULT,
+  REPRESENTATIVE_MOVEMENT: FIELD_REPRESENTATIVE_MOVEMENT,
+  LINKED_PACKAGES: FIELD_LINKED_PACKAGES,
+  SUPERSEDES: FIELD_SUPERSEDES,
+  SUPERSEDED_BY: FIELD_SUPERSEDED_BY,
+  NEXT_IMPLICATION: FIELD_NEXT_IMPLICATION,
+});
 const STATUS_ACTIVE = 'active';
 const STATUS_SUPPORTED = 'supported';
 const STATUS_FALSIFIED = 'falsified';
@@ -78,6 +91,12 @@ const FIELD_PATTERN = /^-\s+([^:]+):\s*(.*)$/u;
 const BACKTICK_VALUE_PATTERN = /`([^`]+)`/gu;
 const PACKAGE_REFERENCE_PATTERN = /\bwork\/packages\/[a-z0-9][a-z0-9-]*\.md\b/gu;
 const ARTIFACT_REFERENCE_PATTERN = /\b(?:test-output|work|scripts|test)\/[^\s`,)]+/gu;
+const DEFAULT_RELATED_ENTRY_LIMIT = 5;
+const RELATED_SCORE_OWNER = 4;
+const RELATED_SCORE_BOUNDARY = 4;
+const RELATED_SCORE_SCENARIO = 3;
+const RELATED_SCORE_DOMINANT_REASON = 1;
+const NO_CONTEXT_VALUES = Object.freeze(['', 'none', 'unknown']);
 const HELP_TEXT = [
   'Usage:',
   '  node scripts/work-theory-ledger.js validate [--ledger <path>]',
@@ -91,6 +110,11 @@ function normalizeText(value) {
 
 function normalizeWhitespace(value) {
   return normalizeText(value).replace(/\s+/gu, SPACE);
+}
+
+function normalizeContextValue(value) {
+  const normalized = normalizeWhitespace(value).toLowerCase();
+  return NO_CONTEXT_VALUES.includes(normalized) ? EMPTY_TEXT : normalized;
 }
 
 function parseArgs(args = []) {
@@ -157,6 +181,81 @@ function parseTheoryReferenceList(value) {
     .split(',')
     .map((item) => normalizeText(item).replace(/^`|`$/gu, EMPTY_TEXT))
     .filter(Boolean);
+}
+
+function entryField(entry, fieldName) {
+  return normalizeWhitespace(entry?.fields?.[fieldName]);
+}
+
+function entryText(entry, fieldNames = FIELD_NAMES) {
+  return fieldNames
+    .map((fieldName) => entryField(entry, fieldName))
+    .join(SPACE)
+    .toLowerCase();
+}
+
+export function findMissingTheoryLedgerRefs(entries = [], refs = []) {
+  const ids = new Set(entries.map((entry) => entry.id));
+  return refs
+    .map((ref) => normalizeText(ref))
+    .filter(Boolean)
+    .filter((ref) => !ids.has(ref));
+}
+
+function scoreRelatedTheoryLedgerEntry(entry, context = {}) {
+  const owner = normalizeContextValue(context.owner);
+  const boundary = normalizeContextValue(context.boundary);
+  const scenario = normalizeContextValue(context.scenario);
+  const dominantReason = normalizeContextValue(context.dominantReason);
+  const ownerBoundary = entryField(entry, FIELD_OWNER_BOUNDARY).toLowerCase();
+  const scenarioGate = entryField(entry, FIELD_SCENARIO_GATE).toLowerCase();
+  const fullText = entryText(entry, [
+    FIELD_SCENARIO_GATE,
+    FIELD_OWNER_BOUNDARY,
+    FIELD_HYPOTHESIS,
+    FIELD_ARTIFACT_RESULT,
+    FIELD_REPRESENTATIVE_MOVEMENT,
+    FIELD_NEXT_IMPLICATION,
+  ]);
+  let score = NUM_ZERO;
+  if (owner && ownerBoundary.includes(owner)) {
+    score += RELATED_SCORE_OWNER;
+  }
+  if (boundary && ownerBoundary.includes(boundary)) {
+    score += RELATED_SCORE_BOUNDARY;
+  }
+  if (scenario && scenarioGate.includes(scenario)) {
+    score += RELATED_SCORE_SCENARIO;
+  }
+  if (dominantReason && fullText.includes(dominantReason)) {
+    score += RELATED_SCORE_DOMINANT_REASON;
+  }
+  return score;
+}
+
+export function findRelatedTheoryLedgerEntries(entries = [], context = {}, options = {}) {
+  const limit = options.limit || DEFAULT_RELATED_ENTRY_LIMIT;
+  const excludedRefs = new Set((options.excludeRefs || [])
+    .map((ref) => normalizeText(ref))
+    .filter(Boolean));
+  return entries
+    .map((entry) => ({
+      entry,
+      score: scoreRelatedTheoryLedgerEntry(entry, context),
+    }))
+    .filter((candidate) =>
+      candidate.score > NUM_ZERO && !excludedRefs.has(candidate.entry.id))
+    .sort((left, right) =>
+      right.score - left.score || left.entry.line - right.entry.line)
+    .slice(NUM_ZERO, limit)
+    .map((candidate) => candidate.entry);
+}
+
+export function summarizeTheoryLedgerEntry(entry) {
+  const status = entryField(entry, FIELD_STATUS) || 'unknown';
+  const ownerBoundary = entryField(entry, FIELD_OWNER_BOUNDARY) || 'unknown';
+  const nextImplication = entryField(entry, FIELD_NEXT_IMPLICATION) || 'unknown';
+  return `${entry.id} [${status}] ${ownerBoundary} - ${nextImplication}`;
 }
 
 export function extractTheoryLedgerEntries(content) {

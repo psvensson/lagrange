@@ -244,8 +244,8 @@ class ControlPlaneSnapshotOwner {
           resolvedOptions,
         ) :
         null;
-    const reasonCodes = normalizeDistinctStringArray(
-      repairEvaluation?.triggerCodes,
+    const reasonCodes = normalizeControlSnapshotRepairReasonCodes(
+      repairEvaluation, resolvedOptions,
     );
     if (
       resolvedOptions.repairDeferred === true &&
@@ -552,6 +552,24 @@ class ControlPlaneSnapshotOwner {
       }),
     );
   }
+}
+
+function normalizeControlSnapshotRepairReasonCodes(
+  repairEvaluation = null,
+  options = {},
+) {
+  const attemptedRepairTriggerCodes =
+    options.repairDeferred === true &&
+      options.repairAttempted === true &&
+      Array.isArray(options.repairEvaluation?.triggerCodes) ?
+      options.repairEvaluation.triggerCodes :
+      [];
+  return normalizeDistinctStringArray([
+    ...(Array.isArray(repairEvaluation?.triggerCodes) ?
+      repairEvaluation.triggerCodes :
+      []),
+    ...attemptedRepairTriggerCodes,
+  ]);
 }
 
 export {

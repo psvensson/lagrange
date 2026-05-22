@@ -17,6 +17,12 @@ import {
   validateExecutionEvidenceLedger,
   validateSubagentSequencingLedger,
 } from './work-tracker.js';
+import {
+  findMissingTheoryLedgerRefs,
+  findRelatedTheoryLedgerEntries,
+  summarizeTheoryLedgerEntry,
+  validateTheoryLedgerContent,
+} from './work-theory-ledger.js';
 
 const execFileAsync = promisify(execFile);
 
@@ -67,6 +73,7 @@ const LLM_DOMAIN_PACKS = Object.freeze({
   [LLM_DOMAIN_GOVERNANCE]: LLM_STEERING_GOVERNANCE_PATH,
 });
 const WORK_README_PATH = path.join('work', 'README.md');
+const THEORY_LEDGER_PATH = path.join('work', 'theory-ledger.md');
 const GIT_COMMAND = 'git';
 const GIT_STATUS_ARGS = Object.freeze(['status', '--short']);
 const NPM_RUN_WORK_CURRENT_BLOCKER_COMMAND = 'npm run work:current-blocker';
@@ -118,6 +125,7 @@ const SPACE = ' ';
 const NEWLINE = '\n';
 const PATH_PRESENT = 'present';
 const PATH_MISSING = 'missing';
+const THEORY_LEDGER_RELATED_LIMIT = 5;
 const PATH_PATTERN = 'pattern';
 const PATH_NONE = 'none';
 const OPTIONAL_TEXT_PRESENT = 'optional-text-present';
@@ -504,6 +512,59 @@ async function readOptionalTextFile(filePath) {
       status: OPTIONAL_TEXT_MISSING,
     };
   }
+}
+
+async function readTheoryLedgerContext() {
+  try {
+    const content = await readTextFile(THEORY_LEDGER_PATH);
+    return validateTheoryLedgerContent(content);
+  } catch (error) {
+    if (error.code === 'ENOENT') {
+      return {
+        entries: [],
+        errors: [`${THEORY_LEDGER_PATH} is missing.`],
+      };
+    }
+    return {
+      entries: [],
+      errors: [error.message],
+    };
+  }
+}
+
+function buildTheoryLedgerReferenceLines(currentBlocker = {}, ledgerContext = {}) {
+  const refs = normalizeStringList(currentBlocker.theoryLedgerRefs);
+  const entries = ledgerContext.entries || [];
+  const ledgerErrors = ledgerContext.errors || [];
+  if (ledgerErrors.length > NUM_ZERO) {
+    return [
+      `Theory ledger unavailable; run npm run work:theory-ledger -- validate. ${ledgerErrors[NUM_ZERO]}`,
+    ];
+  }
+  const entryById = new Map(entries.map((entry) => [entry.id, entry]));
+  const missingRefs = findMissingTheoryLedgerRefs(entries, refs);
+  if (refs.length > NUM_ZERO) {
+    const lines = refs
+      .map((ref) => entryById.get(ref))
+      .filter(Boolean)
+      .map(summarizeTheoryLedgerEntry);
+    for (const missingRef of missingRefs) {
+      lines.push(
+        `${missingRef} [missing] - run npm run work:theory-ledger -- validate and repair the package ref.`,
+      );
+    }
+    return lines;
+  }
+  const relatedEntries = findRelatedTheoryLedgerEntries(entries, currentBlocker, {
+    limit: THEORY_LEDGER_RELATED_LIMIT,
+  });
+  if (relatedEntries.length === NUM_ZERO) {
+    return ['No related theory ledger refs recorded.'];
+  }
+  return [
+    'No explicit refs recorded. Related advisory candidates to review before repeating an old route:',
+    ...relatedEntries.map(summarizeTheoryLedgerEntry),
+  ];
 }
 
 function parsePackageMetadata(content, filePath) {
@@ -1972,12 +2033,14 @@ async function resolveOptionalPathPresenceValue(filePath) {
   return resolvePathPresenceLabel(filePath);
 }
 
-async function buildContextLines(currentBlocker, packageContent) {
+async function buildContextLines(currentBlocker, packageContent, options = {}) {
   const lines = [OUTPUT_TITLE];
   const packageTitle = extractMarkdownTitle(packageContent || EMPTY_STRING);
   const firstReadPaths = await buildFirstReadPathLabels(currentBlocker);
   const secondarySteeringPacks =
     await buildSecondarySteeringPackLabels(currentBlocker);
+  const theoryLedgerContext =
+    options.theoryLedgerContext || await readTheoryLedgerContext();
   const gitStatus = await readGitStatus();
   const artifactLabel = await resolveOptionalPathPresenceValue(currentBlocker.artifact);
   const playbackLabel = await resolveOptionalPathPresenceValue(currentBlocker.playback);
@@ -2052,7 +2115,7 @@ async function buildContextLines(currentBlocker, packageContent) {
   appendSection(lines, SECTION_THEORY_LEDGER_REFS);
   appendList(
     lines,
-    normalizeStringList(currentBlocker.theoryLedgerRefs),
+    buildTheoryLedgerReferenceLines(currentBlocker, theoryLedgerContext),
     'No related theory ledger refs recorded.',
   );
 

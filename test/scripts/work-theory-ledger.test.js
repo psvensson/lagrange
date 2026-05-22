@@ -6,9 +6,12 @@ import {test} from '../../src/test-helpers/tap.js';
 import {
   appendTheoryLedgerEntry,
   extractTheoryLedgerEntries,
+  findMissingTheoryLedgerRefs,
+  findRelatedTheoryLedgerEntries,
   filterTheoryLedgerEntries,
   renderTheoryLedgerList,
   runCli,
+  summarizeTheoryLedgerEntry,
   validateTheoryLedgerContent,
 } from '../../scripts/work-theory-ledger.js';
 
@@ -151,6 +154,28 @@ test('list output can filter by status and owner', (t) => {
   t.equal(activeEntries.length, 1);
   t.match(output, new RegExp(THEORY_ID, 'u'));
   t.notMatch(output, new RegExp(SUPERSEDED_THEORY_ID, 'u'));
+  t.end();
+});
+
+test('related theory lookup finds prior owner and boundary theories', (t) => {
+  const entries = extractTheoryLedgerEntries(
+    ledgerWithEntries(SUPERSEDED_ENTRY, VALID_ENTRY),
+  );
+  const related = findRelatedTheoryLedgerEntries(entries, {
+    scenario: 'node-failure-rebalance',
+    owner: 'startup_active_gate_owner',
+    boundary: 'snapshot_coverage',
+  });
+
+  t.same(related.map((entry) => entry.id), [
+    SUPERSEDED_THEORY_ID,
+    THEORY_ID,
+  ]);
+  t.match(summarizeTheoryLedgerEntry(related[0]), /superseded/u);
+  t.same(findMissingTheoryLedgerRefs(entries, [
+    THEORY_ID,
+    'theory-20260522-missing',
+  ]), ['theory-20260522-missing']);
   t.end();
 });
 

@@ -1070,18 +1070,11 @@ class AdminControlSnapshotPart2 extends AdminControlSnapshotPart1 {
     }
     const deferredEvaluation =
       this.evaluateAuthoritativeControlSnapshotRepair(deferredSnapshot, options);
-    let finalEvaluation = deferredEvaluation;
-    if (hasWebSocketClosedRepairCause(options.repair)) {
-      const currentCodes = Array.isArray(deferredEvaluation?.triggerCodes) ?
-        deferredEvaluation.triggerCodes :
-        [];
-      if (!currentCodes.includes('selected_transport_closed')) {
-        finalEvaluation = Object.freeze({
-          ...deferredEvaluation,
-          triggerCodes: Object.freeze([...currentCodes, 'selected_transport_closed']),
-        });
-      }
-    }
+    const finalEvaluation =
+      appendControlSnapshotRepairEvaluationTriggerCode(
+        deferredEvaluation,
+        resolveControlSnapshotDeferredRepairTriggerCode(options.repair),
+      );
     const triggeredSnapshot =
       await this.triggerMembershipPublicationHandoffOwnerCommand(
         attachOrdinaryRepairDeferralDiagnostics(
@@ -1576,5 +1569,46 @@ class AdminControlSnapshotPart2 extends AdminControlSnapshotPart1 {
       publicationRows,
     ).authoritativeActiveNodeIds;
   }
+}
+const CONTROL_SNAPSHOT_SELECTED_TRANSPORT_CLOSED_REASON =
+  'selected_transport_closed';
+const CONTROL_SNAPSHOT_SELECTED_TIMEOUT_REASON = 'selected_timeout';
+const CONTROL_SNAPSHOT_DEFERRED_REPAIR_TRIGGER_RULES = Object.freeze([
+  Object.freeze({
+    reasonCode: CONTROL_SNAPSHOT_SELECTED_TRANSPORT_CLOSED_REASON,
+    matches: hasWebSocketClosedRepairCause,
+  }),
+  Object.freeze({
+    reasonCode: CONTROL_SNAPSHOT_SELECTED_TIMEOUT_REASON,
+    matches: hasPressureOrTimeoutRepairCause,
+  }),
+]);
+function resolveControlSnapshotDeferredRepairTriggerCode(repair = null) {
+  return CONTROL_SNAPSHOT_DEFERRED_REPAIR_TRIGGER_RULES.find((rule) =>
+    rule.matches(repair),
+  )?.reasonCode || null;
+}
+function appendControlSnapshotRepairEvaluationTriggerCode(
+  evaluation = null,
+  triggerCode = null,
+) {
+  if (
+    !evaluation ||
+    typeof evaluation !== TYPEOF.OBJECT ||
+    typeof triggerCode !== TYPEOF.STRING ||
+    triggerCode.length === NUM.ZERO
+  ) {
+    return evaluation;
+  }
+  const currentCodes = Array.isArray(evaluation.triggerCodes) ?
+    evaluation.triggerCodes :
+    ADMIN_CACHE_DUMP.EMPTY;
+  if (currentCodes.includes(triggerCode)) {
+    return evaluation;
+  }
+  return Object.freeze({
+    ...evaluation,
+    triggerCodes: Object.freeze([...currentCodes, triggerCode]),
+  });
 }
 export {AdminControlSnapshotPart2};

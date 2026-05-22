@@ -47,7 +47,11 @@ const SNAPSHOT_REPLAY_TEST_HANDOFF_REASON_OWNER_RECONCILE_PENDING =
   'owner_reconcile_pending';
 const SNAPSHOT_REPLAY_TEST_HANDOFF_NEXT_ACTION_RECONCILE =
   'reconcile_owner_membership_publication';
+const SNAPSHOT_REPLAY_TEST_HANDOFF_NEXT_ACTION_WAIT_OWNER_RECOVERY =
+  'wait_owner_recovery';
 const SNAPSHOT_REPLAY_TEST_HANDOFF_RUNTIME_PROMOTION_ALLOWED_FALSE = false;
+const SNAPSHOT_REPLAY_TEST_HANDOFF_PENDING_RECOVERY_COUNT = 1;
+const SNAPSHOT_REPLAY_TEST_HANDOFF_PENDING_RECONCILE_COUNT = 0;
 const SNAPSHOT_REPLAY_TEST_HANDOFF_OUTCOME_STATE_WRITE_DEFERRED =
   'write_deferred';
 const SNAPSHOT_REPLAY_TEST_HANDOFF_OUTCOME_REASON_READBACK =
@@ -240,8 +244,8 @@ const SELECTED_SNAPSHOT_SOURCE_WEBSOCKET_CLOSED_HANDOFF_FIXTURE_TEST_NAME =
   'Unit: _probeControlSnapshotCoverage replays selected-source websocket ' +
   'closure evidence with an alternative witness available';
 const SELECTED_SNAPSHOT_FORCE_REPAIR_TIMEOUT_FALLBACK_TEST_NAME =
-  'Unit: _probeControlSnapshotCoverage falls back to normal selected source ' +
-  'after forced repair timeout';
+  'Unit: _probeControlSnapshotCoverage keeps forced repair probes local-first ' +
+  'for the selected source';
 const SELECTED_SNAPSHOT_SOURCE_TIMEOUT_SELECTED_NODE_ID =
   SNAPSHOT_REPLAY_TEST_NODE_ID.BASELINE;
 const SELECTED_SNAPSHOT_SOURCE_TIMEOUT_FALLBACK_NODE_ID =
@@ -488,8 +492,8 @@ const SNAPSHOT_REPLAY_TEST_LATE_TIMEOUT_TEST_NAME =
 const SNAPSHOT_REPLAY_TEST_SNAPSHOT_LANE_FAILURE_TEST_NAME =
   'Unit: _probeControlSnapshotCoverage keeps snapshot-lane failures explicit';
 const SNAPSHOT_REPLAY_TEST_FORCED_REPAIR_TEST_NAME =
-  'Unit: _probeControlSnapshotCoverage sends forced repair probes through ' +
-  'authoritative snapshot repair';
+  'Unit: _probeControlSnapshotCoverage keeps forced repair probes on the ' +
+  'local-first snapshot path';
 const SNAPSHOT_REPLAY_TEST_ADMIN_ONLY_FAST_PATH_TEST_NAME =
   'Unit: _probeControlSnapshotCoverage uses the admin-only reachability fast path';
 const SNAPSHOT_REPLAY_TEST_SINGLE_NODE_CLUSTER_SIZE = 1;
@@ -568,6 +572,8 @@ const SNAPSHOT_TIMEOUT_REPAIR_ASSERTION = Object.freeze({
     'retry-exhausted evidence should classify the selected timeout reason',
   STARTUP_RETRY_EXHAUSTED_REPAIR:
     'retry-exhausted evidence should mark selected snapshot repair deferred',
+  STARTUP_RETRY_EXHAUSTED_HANDOFF:
+    'retry-exhausted evidence should synthesize the active-gate handoff contract',
   RETRY_SNAPSHOT_LANE:
     'selected-source retry proof should stay on the normal snapshot lane',
   LOAD_RETRY_SOURCE:
@@ -582,8 +588,6 @@ const SNAPSHOT_TIMEOUT_REPAIR_ASSERTION = Object.freeze({
     'load selected-source retry should keep the base snapshot timeout',
   LOAD_LANE_RESET:
     'load selected snapshot timeout should reset only the snapshot lane',
-  NORMAL_FALLBACK_AFTER_RESET:
-    'normal selected-source fallback must follow the snapshot lane reset',
   FORCED_REPAIR_SOURCE:
     'forced repair timeout fallback should preserve the selected admin-ready source',
   FORCED_REPAIR_CLEAR:
@@ -591,25 +595,25 @@ const SNAPSHOT_TIMEOUT_REPAIR_ASSERTION = Object.freeze({
   FORCED_REPAIR_COVERAGE:
     'normal selected-source fallback should recover authoritative coverage',
   FORCED_REPAIR_CALLS:
-    'selected source should fall back from forced repair to normal snapshot once',
+    'selected source should submit forced repair intent through local-first snapshot once',
   FORCED_REPAIR_LANE_RESET:
-    'forced repair timeout should reset only the selected snapshot lane',
+    'local-first forced repair should not reset the selected snapshot lane',
   FORCED_REPAIR_PATH:
-    'fixture should replay the forced repair snapshot probe path',
+    'fixture should replay the local-first forced repair snapshot probe path',
   FORCED_REPAIR_METRIC:
-    'authoritative repair should move the snapshot coverage metric',
+    'local-first repair should move the snapshot coverage metric',
   FORCED_REPAIR_SELECTED_SOURCE:
     'fixture should keep the handoff-selected 11601fe0... source',
   FORCED_REPAIR_TIMEOUT_BUDGET:
     'fixture should preserve the late probe timeout budget',
   FORCED_REPAIR_TIMEOUT_CHAIN:
-    'authoritative repair coverage should replace the selected timeout chain',
+    'local-first repair coverage should replace the selected timeout chain',
   FORCED_REPAIR_QUERY:
-    'selected witness should come from the authoritative snapshot repair query',
+    'selected witness should come from the local-first forced repair query',
   FORCED_REPAIR_SELECTED_ERROR:
     'selected witness should clear the report-selected timeout error',
   FORCED_REPAIR_DIRECT_SNAPSHOT:
-    'forced repair probes should stay on the snapshot lane and use direct authoritative repair',
+    'forced repair probes should stay on the snapshot lane and defer authoritative repair to the node client',
   ADMIN_FAST_PATH:
     'fixture should preserve the admin-only reachability fast path',
   ADMIN_FAST_PATH_REQUEST:
@@ -1168,6 +1172,42 @@ test(SELECTED_SNAPSHOT_SOURCE_TIMEOUT_RETRY_EXHAUSTED_TEST_NAME, async () => {
     true,
     SNAPSHOT_TIMEOUT_REPAIR_ASSERTION.STARTUP_RETRY_EXHAUSTED_REPAIR,
   );
+  assert.deepStrictEqual(
+    {
+      state: coverage.selectedPublicationActiveGateHandoff?.state,
+      reasonCode:
+        coverage.selectedPublicationActiveGateHandoff?.reasonCode,
+      nextAction:
+        coverage.selectedPublicationActiveGateHandoff?.nextAction,
+      runtimePromotionAllowed:
+        coverage.selectedPublicationActiveGateHandoff
+          ?.runtimePromotionAllowed,
+      pendingRecoveryNodeIds:
+        coverage.selectedPublicationActiveGateHandoff
+          ?.pendingRecoveryNodeIds,
+      pendingRecoveryCount:
+        coverage.selectedPublicationActiveGateHandoff?.pendingRecoveryCount,
+      pendingReconcileCount:
+        coverage.selectedPublicationActiveGateHandoff?.pendingReconcileCount,
+    },
+    {
+      state: SNAPSHOT_REPLAY_TEST_HANDOFF_STATE_PENDING,
+      reasonCode:
+        SNAPSHOT_REPLAY_TEST_HANDOFF_REASON_OWNER_RECONCILE_PENDING,
+      nextAction:
+        SNAPSHOT_REPLAY_TEST_HANDOFF_NEXT_ACTION_WAIT_OWNER_RECOVERY,
+      runtimePromotionAllowed:
+        SNAPSHOT_REPLAY_TEST_HANDOFF_RUNTIME_PROMOTION_ALLOWED_FALSE,
+      pendingRecoveryNodeIds: [
+        SELECTED_SNAPSHOT_SOURCE_TIMEOUT_RESET_NODE_ID,
+      ],
+      pendingRecoveryCount:
+        SNAPSHOT_REPLAY_TEST_HANDOFF_PENDING_RECOVERY_COUNT,
+      pendingReconcileCount:
+        SNAPSHOT_REPLAY_TEST_HANDOFF_PENDING_RECONCILE_COUNT,
+    },
+    SNAPSHOT_TIMEOUT_REPAIR_ASSERTION.STARTUP_RETRY_EXHAUSTED_HANDOFF,
+  );
 });
 
 test(SELECTED_SNAPSHOT_SOURCE_TIMEOUT_LOAD_RETRY_TEST_NAME, async () => {
@@ -1303,7 +1343,6 @@ test(SELECTED_SNAPSHOT_FORCE_REPAIR_TIMEOUT_FALLBACK_TEST_NAME, async () => {
   });
   const snapshotProbeCalls = [];
   const resetCalls = [];
-  let selectedSnapshotLaneReset = false;
 
   for (const nodeId of SNAPSHOT_REPLAY_TEST_EXPECTED_NODE_IDS) {
     cluster._nodes.set(nodeId, {
@@ -1314,12 +1353,6 @@ test(SELECTED_SNAPSHOT_FORCE_REPAIR_TIMEOUT_FALLBACK_TEST_NAME, async () => {
           NODE_ROLES.JOINER,
       _resetAdminSocket(lane) {
         resetCalls.push({nodeId, lane});
-        if (
-          nodeId === SELECTED_SNAPSHOT_FORCE_REPAIR_TIMEOUT_NODE_ID &&
-          lane === SELECTED_SNAPSHOT_SOURCE_TIMEOUT_SNAPSHOT_LANE
-        ) {
-          selectedSnapshotLaneReset = true;
-        }
       },
       async getStatus() {
         return {rows: [{status: SERVICE_STATUS.ACTIVE}]};
@@ -1350,11 +1383,6 @@ test(SELECTED_SNAPSHOT_FORCE_REPAIR_TIMEOUT_FALLBACK_TEST_NAME, async () => {
           if (options.forceAuthoritativeRepair === true) {
             throw new Error(SELECTED_SNAPSHOT_FORCE_REPAIR_TIMEOUT_ERROR);
           }
-          assert.strictEqual(
-            selectedSnapshotLaneReset,
-            true,
-            SNAPSHOT_TIMEOUT_REPAIR_ASSERTION.NORMAL_FALLBACK_AFTER_RESET,
-          );
           return {
             rows: [{
               nodes: SELECTED_SNAPSHOT_FORCE_REPAIR_TIMEOUT_NODE_IDS,
@@ -1404,12 +1432,6 @@ test(SELECTED_SNAPSHOT_FORCE_REPAIR_TIMEOUT_FALLBACK_TEST_NAME, async () => {
         nodeId: SELECTED_SNAPSHOT_FORCE_REPAIR_TIMEOUT_NODE_ID,
         lane: SELECTED_SNAPSHOT_SOURCE_TIMEOUT_SNAPSHOT_LANE,
         forceRepair: true,
-        forceAuthoritativeRepair: true,
-      },
-      {
-        nodeId: SELECTED_SNAPSHOT_FORCE_REPAIR_TIMEOUT_NODE_ID,
-        lane: SELECTED_SNAPSHOT_SOURCE_TIMEOUT_SNAPSHOT_LANE,
-        forceRepair: false,
         forceAuthoritativeRepair: false,
       },
     ],
@@ -1417,10 +1439,7 @@ test(SELECTED_SNAPSHOT_FORCE_REPAIR_TIMEOUT_FALLBACK_TEST_NAME, async () => {
   );
   assert.deepStrictEqual(
     resetCalls,
-    [{
-      nodeId: SELECTED_SNAPSHOT_FORCE_REPAIR_TIMEOUT_NODE_ID,
-      lane: SELECTED_SNAPSHOT_SOURCE_TIMEOUT_SNAPSHOT_LANE,
-    }],
+    [],
     SNAPSHOT_TIMEOUT_REPAIR_ASSERTION.FORCED_REPAIR_LANE_RESET,
   );
 });
@@ -1479,7 +1498,8 @@ test(
             });
             if (
               nodeId === SNAPSHOT_REPAIR_TIMEOUT_SELECTED_NODE_ID &&
-              options.forceAuthoritativeRepair === true
+              options.forceRepair === true &&
+              options.forceAuthoritativeRepair !== true
             ) {
               return {
                 rows: [{
@@ -1551,7 +1571,7 @@ test(
         snapshotProbeCalls.every((call) =>
           call.lane === SELECTED_SNAPSHOT_SOURCE_TIMEOUT_SNAPSHOT_LANE &&
           call.forceRepair === true &&
-          call.forceAuthoritativeRepair === true &&
+          call.forceAuthoritativeRepair === false &&
           call.timeoutMs === SNAPSHOT_REPAIR_TIMEOUT_QUERY_TIMEOUT_MS,
         ),
         SNAPSHOT_TIMEOUT_REPAIR_ASSERTION.FORCED_REPAIR_DIRECT_SNAPSHOT,

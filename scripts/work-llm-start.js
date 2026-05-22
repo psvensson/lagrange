@@ -10,7 +10,10 @@ import {
   buildCurrentBlockerFromPackage,
   buildDirtyScopeLines,
 } from './work-context.js';
-import {buildPackageDoctorLines} from './work-tracker.js';
+import {
+  buildPackageDoctorLines,
+  readTheoryLedgerContext,
+} from './work-tracker.js';
 import {buildSummary, readLedgerEntries, renderSummary} from './model-ledger.js';
 
 const ENCODING_UTF8 = 'utf8';
@@ -150,6 +153,7 @@ function appendSection(lines, title, content) {
 
 async function buildLlmStartLines(args = []) {
   const {currentBlocker, packageContent} = await readCurrentBlocker(args);
+  const theoryLedgerContext = await readTheoryLedgerContext();
   const lines = [TITLE];
   appendSection(
     lines,
@@ -161,6 +165,7 @@ async function buildLlmStartLines(args = []) {
     'Package Doctor',
     buildPackageDoctorLines(currentBlocker.package, packageContent, {
       suggest: true,
+      theoryLedgerContext,
     }).lines.join(NEWLINE),
   );
   appendSection(

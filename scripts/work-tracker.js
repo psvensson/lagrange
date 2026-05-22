@@ -103,6 +103,12 @@ import {
   CODE_QUALITY_ADMISSION_REASONS,
   coreLogicBriefRequiredForLane,
 } from './work-package-schema.js';
+import {
+  findMissingTheoryLedgerRefs,
+  findRelatedTheoryLedgerEntries,
+  summarizeTheoryLedgerEntry,
+  validateTheoryLedgerContent,
+} from './work-theory-ledger.js';
 
 const [
   CORE_LOGIC_BRIEF_CANONICAL_OUTCOME_FIELD,
@@ -288,7 +294,9 @@ const METADATA_FIELD_PROOF = 'proof';
 const METADATA_FIELD_ARTIFACT = 'artifact';
 const METADATA_FIELD_PLAYBACK = 'playback';
 const METADATA_FIELD_MODEL_FIT = 'modelFit';
+const DEFAULT_THEORY_LEDGER_PATH = path.join('work', 'theory-ledger.md');
 const THEORY_LEDGER_REF_PATTERN = /^theory-[0-9]{8}-[a-z0-9]+(?:-[a-z0-9]+)*$/u;
+const THEORY_LEDGER_RELATED_LIMIT = 5;
 const MODEL_FIT_METADATA_PACKAGE_CLASS_FIELD = 'packageClass';
 const MODEL_FIT_METADATA_INTENDED_MINIMUM_MODEL_FIELD =
   'intendedMinimumModel';
@@ -4817,6 +4825,26 @@ async function readJsonFile(filePath) {
   return JSON.parse(await readTextFile(filePath));
 }
 
+export async function readTheoryLedgerContext(
+  ledgerPath = DEFAULT_THEORY_LEDGER_PATH,
+) {
+  try {
+    const content = await readTextFile(ledgerPath);
+    return validateTheoryLedgerContent(content);
+  } catch (error) {
+    if (error.code === 'ENOENT') {
+      return {
+        entries: [],
+        errors: [`${ledgerPath} is missing.`],
+      };
+    }
+    return {
+      entries: [],
+      errors: [error.message],
+    };
+  }
+}
+
 async function writeTextFile(filePath, content) {
   await fs.writeFile(filePath, content, ENCODING_UTF8);
 }
@@ -5662,6 +5690,11 @@ async function validatePackageFile(filePath, options = {}) {
   errors.push(
     ...validatePackageMetadataShape(relativePath, fileStatus, metadata),
   );
+  errors.push(...validateTheoryLedgerReferenceContinuity(
+    relativePath,
+    metadata,
+    options.theoryLedgerContext,
+  ));
   if (fileStatus === STATUS_ACTIVE && metadata && metadata.predecessor) {
     const isCurrentFocused = [
       LANE_RUNTIME_OWNER_BOUNDARY,
@@ -6375,6 +6408,7 @@ async function validateCommand(args) {
   const phase = resolveValidationPhase(args);
   const targets = await resolveValidationTargets(args);
   const packageHistoryEntries = await collectPackageHistoryEntries();
+  const theoryLedgerContext = await readTheoryLedgerContext();
   const errors = [];
   if (!hasExplicitValidationTargets(args)) {
     errors.push(...(await validateCurrentBlockerFreshness()));
@@ -6393,6 +6427,7 @@ async function validateCommand(args) {
     const result = await validatePackageFile(filePath, {
       phase,
       packageHistoryEntries,
+      theoryLedgerContext,
     });
     errors.push(...result.errors);
   }
@@ -6408,6 +6443,75 @@ async function validateCommand(args) {
 
 function appendDoctorField(lines, label, value) {
   lines.push(`- ${label}: ${normalizeLedgerText(value) || DEFAULT_UNKNOWN}`);
+}
+
+function metadataTheoryLedgerRefs(metadata = {}) {
+  return normalizeMetadataStringList(metadata[THEORY_LEDGER_REFS_FIELD]);
+}
+
+function validateTheoryLedgerReferenceContinuity(
+  filePath,
+  metadata,
+  theoryLedgerContext = {},
+) {
+  const refs = metadataTheoryLedgerRefs(metadata);
+  if (refs.length === NUM_ZERO) {
+    return [];
+  }
+  if (!Array.isArray(theoryLedgerContext.entries)) {
+    return [];
+  }
+  const ledgerErrors = theoryLedgerContext.errors || [];
+  if (ledgerErrors.length > NUM_ZERO) {
+    return [
+      `${filePath}: metadata ${THEORY_LEDGER_REFS_FIELD} cannot be checked ` +
+      `because ${DEFAULT_THEORY_LEDGER_PATH} is invalid; run ` +
+      '`npm run work:theory-ledger -- validate`.',
+    ];
+  }
+  return findMissingTheoryLedgerRefs(theoryLedgerContext.entries || [], refs)
+    .map((missingRef) =>
+      `${filePath}: metadata ${THEORY_LEDGER_REFS_FIELD} references ` +
+      `${missingRef}, but it is not present in ${DEFAULT_THEORY_LEDGER_PATH}.`);
+}
+
+function buildTheoryLedgerGuidance(metadata = {}, theoryLedgerContext = {}) {
+  const refs = metadataTheoryLedgerRefs(metadata);
+  if (!Array.isArray(theoryLedgerContext.entries)) {
+    return [];
+  }
+  const ledgerErrors = theoryLedgerContext.errors || [];
+  const entries = theoryLedgerContext.entries || [];
+  if (ledgerErrors.length > NUM_ZERO) {
+    return [
+      `${DEFAULT_THEORY_LEDGER_PATH} could not be read as advisory memory; ` +
+      'run `npm run work:theory-ledger -- validate` before relying on prior theories.',
+    ];
+  }
+  const entryById = new Map(entries.map((entry) => [entry.id, entry]));
+  if (refs.length > NUM_ZERO) {
+    const resolvedRefs = refs
+      .map((ref) => entryById.get(ref))
+      .filter(Boolean)
+      .map(summarizeTheoryLedgerEntry);
+    if (resolvedRefs.length === NUM_ZERO) {
+      return [];
+    }
+    return [
+      `Resolved theory ledger refs: ${resolvedRefs.join('; ')}`,
+    ];
+  }
+  const relatedEntries = findRelatedTheoryLedgerEntries(entries, metadata, {
+    limit: THEORY_LEDGER_RELATED_LIMIT,
+  });
+  if (relatedEntries.length === NUM_ZERO) {
+    return [];
+  }
+  return [
+    'Related theory ledger candidates exist; review active, falsified, ' +
+      'superseded, stale, and needs-rerun status before choosing scope: ' +
+      relatedEntries.map(summarizeTheoryLedgerEntry).join('; '),
+  ];
 }
 
 function summarizeDoctorMetadata(metadata = {}) {
@@ -6760,6 +6864,11 @@ export function buildPackageDoctorLines(filePath, content, options = {}) {
     errors.push(`${relativePath}: closed package still has open checklist items.`);
   }
   errors.push(...validatePackageMetadataShape(relativePath, fileStatus, metadata));
+  errors.push(...validateTheoryLedgerReferenceContinuity(
+    relativePath,
+    metadata,
+    options.theoryLedgerContext,
+  ));
   const subagentValidation = buildSubagentValidationOptions(
     fileStatus,
     metadata,
@@ -6985,10 +7094,16 @@ export function buildPackageDoctorLines(filePath, content, options = {}) {
     metadataSummary.pureClassificationFastPath,
   );
   appendDoctorField(lines, 'Validation', errors.length === NUM_ZERO ? 'ok' : 'failed');
-  const processGuidance = buildProcessGuidanceLines(
-    metadata || {},
-    fileStatus,
-  );
+  const processGuidance = [
+    ...buildProcessGuidanceLines(
+      metadata || {},
+      fileStatus,
+    ),
+    ...buildTheoryLedgerGuidance(
+      metadata || {},
+      options.theoryLedgerContext,
+    ),
+  ];
   if (processGuidance.length > NUM_ZERO) {
     lines.push('', '## Process Guidance');
     for (const guidance of processGuidance) {
@@ -7030,9 +7145,11 @@ async function doctorCommand(args) {
   const packagePath = await resolveDoctorPackagePath(args);
   const content = await readTextFile(packagePath);
   const packageHistoryEntries = await collectPackageHistoryEntries();
+  const theoryLedgerContext = await readTheoryLedgerContext();
   const report = buildPackageDoctorLines(packagePath, content, {
     phase,
     packageHistoryEntries,
+    theoryLedgerContext,
     suggest: args.includes(CLI_FLAG_SUGGEST),
     fixDryRun: args.includes(CLI_FLAG_FIX_DRY_RUN),
   });
