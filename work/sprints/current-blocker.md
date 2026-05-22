@@ -4,33 +4,31 @@
 
 ## Theory And Implementation Focus
 
-Theory under test: Planned successor package after consumers consume owner outcome envelopes.
+Theory under test: Planned successor package after metadata/storage separation is proven.
 
-Causal question: handoffs_not_explicit_everywhere
+Causal question: scenario_proof_not_contract_proof
 
-Implementation slice: Define and implement explicit producer-consumer handoff contracts for the highest-risk cross-owner boundaries.
+Implementation slice: Upgrade package validators and evidence tooling so owner-boundary closure proves named contract transitions rather than timeout symptom movement.
 
 Implementation files:
 
-1. `src/control-plane/publication-active-gate-handoff-contract.js`
-2. `src/bootstrap/owners/service-registration-handoff-owner.js`
-3. `test/control-plane/publication-active-gate-handoff-contract.test.js`
-4. `test/bootstrap/bootstrap-api.test.js`
-5. `src/bootstrap/owners/move-replica-handoff-owner.js`
-6. `src/rebalancer/operation-workflow-owner-effects.js`
-7. `src/admin/admin-control-snapshot-class-part-2.js`
+1. `scripts/work-tracker.js`
+2. `scripts/work-package-schema.js`
+3. `test/scripts/work-tracker-subagent-ledger.test.js`
+4. `test/scripts/work-llm-usability-tools.test.js`
+5. `src/control-plane/owner-outcome-contract.js`
 
 Expected implementation delta: unknown
 
-Falsifying probe: npm run analyze:owner-files -- handoff_contract_owner cross_owner_handoff_contracts
+Falsifying probe: npm test -- test/scripts/work-tracker-subagent-ledger.test.js test/scripts/work-tracker-architecture-decision-gate.test.js
 
 Stop rule: No architecture decision gate is required for this package.
 
 Sprint: `work/sprints/active-2026-q2-universal-owner-contract-completion.md`
 
-Package: `work/packages/active-20260521-cross-owner-handoff-contracts.md`
+Package: `work/packages/active-20260521-contract-proof-tooling.md`
 
-Workflow lane: `causal-escalation`
+Workflow lane: `mechanical-maintenance`
 
 Scenario: `none`
 
@@ -40,33 +38,33 @@ Playback: `none`
 
 ## Boundary
 
-Owner: `handoff_contract_owner`
+Owner: `workflow_tooling_owner`
 
-Boundary: `cross_owner_handoff_contracts`
+Boundary: `contract_proof_validation`
 
-Dominant reason: `handoffs_not_explicit_everywhere`
+Dominant reason: `scenario_proof_not_contract_proof`
 
-Current state: Planned successor package after consumers consume owner outcome envelopes.
+Current state: Planned successor package after metadata/storage separation is proven.
 
 ## Next Action
 
-Define and implement explicit producer-consumer handoff contracts for the highest-risk cross-owner boundaries.
+Upgrade package validators and evidence tooling so owner-boundary closure proves named contract transitions rather than timeout symptom movement.
 
 ## Proof Ladder
 
-1. `npm run analyze:owner-files -- handoff_contract_owner cross_owner_handoff_contracts`
-2. `npm test -- test/control-plane/publication-active-gate-handoff-contract.test.js test/bootstrap/bootstrap-api.test.js`
-3. `npm run work:validate -- --pre-impl work/packages/active-20260521-cross-owner-handoff-contracts.md`
+1. `npm test -- test/scripts/work-tracker-subagent-ledger.test.js test/scripts/work-tracker-architecture-decision-gate.test.js`
+2. `npm test -- test/scripts/work-llm-usability-tools.test.js`
+3. `npm run work:validate -- --pre-impl work/packages/active-20260521-contract-proof-tooling.md`
 
 ## Model Fit
 
-Package class: `runtime-owner-boundary`
+Package class: `mechanical-maintenance`
 
-Intended minimum model: `gpt-5.3-codex`
+Intended minimum model: `gpt-5.3-codex-spark`
 
-Scope shape: `bounded-owner-runtime/current-frontier`
+Scope shape: `leaf-slice`
 
-Output profile: `medium`
+Output profile: `small`
 
 Escalation triggers:
 
@@ -75,21 +73,21 @@ Escalation triggers:
 
 ## Representative Residual
 
-Status: `active-contract-slice`
+Status: `unknown`
 
-Scenario: `universal-owner-contract-completion`
+Scenario: `unknown`
 
-Artifact: `work/sprints/current-blocker.md`
+Artifact: `unknown`
 
-Frontier: `cross_owner_handoff_contracts`
+Frontier: `unknown`
 
-Owner: `handoff_contract_owner`
+Owner: `unknown`
 
-Boundary: `cross_owner_handoff_contracts`
+Boundary: `unknown`
 
-Dominant reason: `handoffs_not_explicit_everywhere`
+Dominant reason: `unknown`
 
-Next action: `Define explicit producer-consumer handoff contracts before additional consumer cutovers.`
+Next action: `unknown`
 
 ## Causal Governance
 
@@ -237,32 +235,33 @@ Gate next action: No architecture decision gate is required for this package.
 
 Write scope:
 
-1. `src/control-plane/publication-active-gate-handoff-contract.js`
-2. `src/bootstrap/owners/service-registration-handoff-owner.js`
-3. `test/control-plane/publication-active-gate-handoff-contract.test.js`
-4. `test/bootstrap/bootstrap-api.test.js`
+1. `scripts/work-tracker.js`
+2. `scripts/work-package-schema.js`
+3. `test/scripts/work-tracker-subagent-ledger.test.js`
+4. `test/scripts/work-llm-usability-tools.test.js`
 
 Handoff files:
 
-1. `work/packages/done-20260521-owner-outcome-consumer-cutover.md`
+1. `work/packages/done-20260521-system-table-metadata-schema-separation.md`
 
 Generated files:
 
-1. None recorded
+1. `.kiro/steering/llm/architecture.md`
+2. `.kiro/steering/llm/testing.md`
 
 Candidate runtime files:
 
-1. `src/bootstrap/owners/move-replica-handoff-owner.js`
-2. `src/rebalancer/operation-workflow-owner-effects.js`
-3. `src/admin/admin-control-snapshot-class-part-2.js`
+1. `src/control-plane/owner-outcome-contract.js`
 
 Commit scope:
 
-1. `src/control-plane/publication-active-gate-handoff-contract.js`
-2. `src/bootstrap/owners/service-registration-handoff-owner.js`
-3. `test/control-plane/publication-active-gate-handoff-contract.test.js`
-4. `test/bootstrap/bootstrap-api.test.js`
-5. `work/packages/active-20260521-cross-owner-handoff-contracts.md`
+1. `scripts/work-tracker.js`
+2. `scripts/work-package-schema.js`
+3. `test/scripts/work-tracker-subagent-ledger.test.js`
+4. `test/scripts/work-llm-usability-tools.test.js`
+5. `.kiro/steering/llm/architecture.md`
+6. `.kiro/steering/llm/testing.md`
+7. `work/packages/active-20260521-contract-proof-tooling.md`
 
 Legacy touched files:
 

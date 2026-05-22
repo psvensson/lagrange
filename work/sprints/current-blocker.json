@@ -2,66 +2,60 @@
   "schema": "current-blocker-v1",
   "generatedBy": "scripts/work-tracker.js",
   "sprint": "work/sprints/active-2026-q2-universal-owner-contract-completion.md",
-  "package": "work/packages/active-20260521-cross-owner-handoff-contracts.md",
+  "package": "work/packages/active-20260521-contract-proof-tooling.md",
   "status": "active",
-  "lane": "causal-escalation",
+  "lane": "mechanical-maintenance",
   "scenario": "none",
   "artifact": "none",
   "playback": "none",
-  "owner": "handoff_contract_owner",
-  "boundary": "cross_owner_handoff_contracts",
-  "dominantReason": "handoffs_not_explicit_everywhere",
-  "currentState": "Planned successor package after consumers consume owner outcome envelopes.",
-  "nextAction": "Define and implement explicit producer-consumer handoff contracts for the highest-risk cross-owner boundaries.",
+  "owner": "workflow_tooling_owner",
+  "boundary": "contract_proof_validation",
+  "dominantReason": "scenario_proof_not_contract_proof",
+  "currentState": "Planned successor package after metadata/storage separation is proven.",
+  "nextAction": "Upgrade package validators and evidence tooling so owner-boundary closure proves named contract transitions rather than timeout symptom movement.",
   "proof": [
-    "npm run analyze:owner-files -- handoff_contract_owner cross_owner_handoff_contracts",
-    "npm test -- test/control-plane/publication-active-gate-handoff-contract.test.js test/bootstrap/bootstrap-api.test.js",
-    "npm run work:validate -- --pre-impl work/packages/active-20260521-cross-owner-handoff-contracts.md"
+    "npm test -- test/scripts/work-tracker-subagent-ledger.test.js test/scripts/work-tracker-architecture-decision-gate.test.js",
+    "npm test -- test/scripts/work-llm-usability-tools.test.js",
+    "npm run work:validate -- --pre-impl work/packages/active-20260521-contract-proof-tooling.md"
   ],
   "writeScope": [
-    "src/control-plane/publication-active-gate-handoff-contract.js",
-    "src/bootstrap/owners/service-registration-handoff-owner.js",
-    "test/control-plane/publication-active-gate-handoff-contract.test.js",
-    "test/bootstrap/bootstrap-api.test.js"
+    "scripts/work-tracker.js",
+    "scripts/work-package-schema.js",
+    "test/scripts/work-tracker-subagent-ledger.test.js",
+    "test/scripts/work-llm-usability-tools.test.js"
   ],
   "handoffFiles": [
-    "work/packages/done-20260521-owner-outcome-consumer-cutover.md"
+    "work/packages/done-20260521-system-table-metadata-schema-separation.md"
   ],
-  "generatedFiles": [],
+  "generatedFiles": [
+    ".kiro/steering/llm/architecture.md",
+    ".kiro/steering/llm/testing.md"
+  ],
   "candidateRuntimeFiles": [
-    "src/bootstrap/owners/move-replica-handoff-owner.js",
-    "src/rebalancer/operation-workflow-owner-effects.js",
-    "src/admin/admin-control-snapshot-class-part-2.js"
+    "src/control-plane/owner-outcome-contract.js"
   ],
   "commitScope": [
-    "src/control-plane/publication-active-gate-handoff-contract.js",
-    "src/bootstrap/owners/service-registration-handoff-owner.js",
-    "test/control-plane/publication-active-gate-handoff-contract.test.js",
-    "test/bootstrap/bootstrap-api.test.js",
-    "work/packages/active-20260521-cross-owner-handoff-contracts.md"
+    "scripts/work-tracker.js",
+    "scripts/work-package-schema.js",
+    "test/scripts/work-tracker-subagent-ledger.test.js",
+    "test/scripts/work-llm-usability-tools.test.js",
+    ".kiro/steering/llm/architecture.md",
+    ".kiro/steering/llm/testing.md",
+    "work/packages/active-20260521-contract-proof-tooling.md"
   ],
   "touchedFiles": [],
   "modelFit": {
-    "packageClass": "runtime-owner-boundary",
-    "intendedMinimumModel": "gpt-5.3-codex",
-    "scopeShape": "bounded-owner-runtime/current-frontier",
-    "outputProfile": "medium",
-    "ambiguityScore": 3,
+    "packageClass": "mechanical-maintenance",
+    "intendedMinimumModel": "gpt-5.3-codex-spark",
+    "scopeShape": "leaf-slice",
+    "outputProfile": "small",
+    "ambiguityScore": 1,
     "escalationTriggers": [
       "owned files expand beyond this package",
       "a frozen decision must be reopened"
     ]
   },
-  "representativeResidual": {
-    "status": "active-contract-slice",
-    "scenario": "universal-owner-contract-completion",
-    "artifact": "work/sprints/current-blocker.md",
-    "frontier": "cross_owner_handoff_contracts",
-    "owner": "handoff_contract_owner",
-    "boundary": "cross_owner_handoff_contracts",
-    "dominantReason": "handoffs_not_explicit_everywhere",
-    "nextAction": "Define explicit producer-consumer handoff contracts before additional consumer cutovers."
-  },
+  "representativeResidual": {},
   "causalGovernance": {},
   "scenarioCausalClosure": {},
   "observablePrediction": {},
@@ -76,5 +70,5 @@
     "selectedChoice": null,
     "nextAction": "No architecture decision gate is required for this package."
   },
-  "predecessor": "work/packages/done-20260521-owner-outcome-consumer-cutover.md"
+  "predecessor": "work/packages/done-20260521-system-table-metadata-schema-separation.md"
 }

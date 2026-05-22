@@ -1,52 +1,54 @@
-# Bounded Retry Backpressure Contract
+# System Table Metadata Schema Separation
 
 <!-- work-package
 {
   "schema": "work-package-v1",
-  "status": "todo",
+  "status": "done",
   "opened": "2026-05-21",
   "lane": "runtime-owner-boundary",
   "scenario": "none",
   "artifact": "none",
   "playback": "none",
-  "owner": "pressure_retry_contract_owner",
-  "boundary": "bounded_retry_backpressure",
-  "dominantReason": "retry_backpressure_not_universal",
-  "currentState": "Planned successor package after owner state-machine normalization starts.",
-  "nextAction": "Make deferred and backpressured owner outcomes carry retryAfterMs, wake source, attempt key, max bound, deadline, and terminal escalation behavior.",
+  "owner": "system_table_schema_owner",
+  "boundary": "metadata_storage_separation",
+  "dominantReason": "metadata_leaks_into_storage_schema",
+  "currentState": "Planned successor package after bounded retry/backpressure contracts are normalized.",
+  "nextAction": "Audit and route every direct system-table mutation through canonical schema filtering or explicit metadata storage boundaries.",
   "proof": [
-    "npm run analyze:owner-files -- pressure_retry_contract_owner bounded_retry_backpressure",
-    "npm test -- test/control-plane/control-plane-system-table-gateway.test.js test/control-plane/priority-recovery-snapshot-operation-owner-outcome.test.js",
-    "npm run work:validate -- --pre-impl work/packages/todo-20260521-bounded-retry-backpressure-contract.md"
+    "npm run analyze:owner-files -- system_table_schema_owner metadata_storage_separation",
+    "npm test -- test/control-plane/control-plane-system-table-gateway.test.js test/bootstrap/bootstrap-api.test.js test/bootstrap/node-joining-service.test.js",
+    "npm run work:validate -- --closure work/packages/done-20260521-system-table-metadata-schema-separation.md"
   ],
   "writeScope": [
-    "src/control-plane/control-plane-system-table-gateway-shared.js",
     "src/control-plane/control-plane-system-table-gateway-segment-2.js",
-    "src/control-plane/priority-recovery-diagnostics-constants.js",
+    "src/control-plane/control-plane-system-table-gateway-shared.js",
+    "src/bootstrap/system-table-schemas-constants.js",
     "test/control-plane/control-plane-system-table-gateway-tail-test-cases.js",
-    "test/control-plane/priority-recovery-snapshot-operation-owner-outcome.test.js"
+    "test/bootstrap/bootstrap-api.test.js"
   ],
   "handoffFiles": [
-    "work/packages/todo-20260521-owner-reconciliation-state-machine-normalization.md"
+    "work/packages/done-20260521-bounded-retry-backpressure-contract.md"
   ],
   "generatedFiles": [],
   "candidateRuntimeFiles": [
-    "src/rebalancer/operation-workflow-owner-effects.js",
-    "src/bootstrap/node-joining-service-segment-2.js"
+    "src/cdc/cdc-integration-service-owner-rpc-read-execution.js",
+    "src/query/sql-query-engine-segment-6.js",
+    "src/bootstrap/node-joining-service-segment-5.js"
   ],
   "commitScope": [
-    "src/control-plane/control-plane-system-table-gateway-shared.js",
     "src/control-plane/control-plane-system-table-gateway-segment-2.js",
-    "src/control-plane/priority-recovery-diagnostics-constants.js",
+    "src/control-plane/control-plane-system-table-gateway-shared.js",
+    "src/bootstrap/system-table-schemas-constants.js",
     "test/control-plane/control-plane-system-table-gateway-tail-test-cases.js",
-    "test/control-plane/priority-recovery-snapshot-operation-owner-outcome.test.js",
-    "work/packages/todo-20260521-bounded-retry-backpressure-contract.md"
+    "test/bootstrap/bootstrap-api.test.js",
+    "work/packages/active-20260521-system-table-metadata-schema-separation.md"
   ],
   "modelFit": {
     "packageClass": "runtime-owner-boundary",
     "intendedMinimumModel": "gpt-5.3-codex",
     "scopeShape": "bounded-owner-runtime/current-frontier",
     "outputProfile": "medium",
+    "ambiguityScore": 1,
     "escalationTriggers": [
       "owned files expand beyond this package",
       "a frozen decision must be reopened"
@@ -66,38 +68,39 @@
       "the implementation needs to decide system behavior instead of executing a named local mechanism"
     ],
     "childPackageCandidates": [
-      "Split gateway, priority recovery, bootstrap retry, and transport pressure work if one package cannot prove bounded lifetime for all selected paths."
+      "Split by ingress path if direct writes exist outside the control-plane gateway, CDC integration, bootstrap seeding, or SQL fallback boundaries."
     ]
   },
-  "predecessor": "work/packages/todo-20260521-owner-reconciliation-state-machine-normalization.md"
+  "predecessor": "work/packages/done-20260521-bounded-retry-backpressure-contract.md"
 }
 -->
 
 ## Why
 
-Deferred and backpressured states exist, but not every owner exposes the same
-bounded progress facts. This package owns making retry/backpressure first-class
-state rather than timeout-shaped absence.
+The recent `assignment_id` blocker proved the right local pattern: request
+metadata must not leak into storage rows unless the canonical schema owns the
+field. This package owns turning that specific fix into a universal ingress
+invariant for system-table writes.
 
 ## Scope Basis
 
-AGPL roadmap scope: `roadmap.md` Phase 0.1 production-readiness guarantees,
-failure simulations, and control-plane pressure correctness. This package
-depends on the state-machine normalization package so retry decisions have one
-owner output.
+AGPL roadmap scope: `roadmap.md` metadata gateway and owner-ingress audit,
+control-plane stabilization, and system service foundations. This package
+depends on bounded retry/backpressure because write admission and SQL fallback
+must preserve the same owner outcome contract.
 
 ## Detailed Execution Contract
 
-1. Extend selected deferred/backpressure outcomes to include retry-after,
-   wake/retry source, owner key or attempt key, maximum progress bound,
-   deadline, and terminal escalation state.
-2. Route local retry loops behind owner-owned queues or the shared pressure
-   governor. Callers may request work and consume outcomes; they may not own
-   retry semantics locally.
-3. Add bounded-lifetime regressions for repeated cycles: queue depth, retained
-   request maps, retry registries, and deferred-work maps must plateau.
-4. Preserve critical convergence admission while diagnostics/admin repair can
-   defer under pressure.
+1. Inventory direct system-table writes before editing. Start with canonical
+   workflow tools and only fall back to broad search with the fallback reason
+   recorded in this package.
+2. Route selected insert/update/upsert paths through canonical schema filtering
+   or an explicit metadata storage boundary. Do not widen table schemas to make
+   metadata fit.
+3. Add regression coverage for bootstrap request metadata, SQL fallback, CDC
+   mutation ingress, and cache seeding where they touch the selected rows.
+4. Leave domain metadata in request/operation metadata unless
+   `system-table-schemas-constants.js` explicitly owns the column.
 
 ## Workflow Lane
 
@@ -107,35 +110,35 @@ owner output.
 
 ## Core Logic Brief
 
-- Canonical outcome: pressure_retry_contract_owner / bounded_retry_backpressure emits the package outcome for retry_backpressure_not_universal.
-- Inputs/signals: npm run analyze:owner-files -- pressure_retry_contract_owner bounded_retry_backpressure; npm test -- test/control-plane/control-plane-system-table-gateway.test.js test/control-plane/priority-recovery-snapshot-operation-owner-outcome.test.js; npm run work:validate -- --pre-impl work/packages/todo-20260521-bounded-retry-backpressure-contract.md.
-- State model or invariant: The pressure_retry_contract_owner / bounded_retry_backpressure decision table in the Causal Decision Contract maps retry_backpressure_not_universal and route evidence to one emitted outcome: pending-before-rerun.
+- Canonical outcome: system_table_schema_owner / metadata_storage_separation emits the package outcome for metadata_leaks_into_storage_schema.
+- Inputs/signals: npm run analyze:owner-files -- system_table_schema_owner metadata_storage_separation; npm test -- test/control-plane/control-plane-system-table-gateway.test.js test/bootstrap/bootstrap-api.test.js test/bootstrap/node-joining-service.test.js; npm run work:validate -- --pre-impl work/packages/active-20260521-system-table-metadata-schema-separation.md.
+- State model or invariant: The system_table_schema_owner / metadata_storage_separation decision table in the Causal Decision Contract maps metadata_leaks_into_storage_schema and route evidence to one emitted outcome: pending-before-rerun.
 - Non-goals and forbidden interpretations: Do not reinterpret downstream evidence, widen forbidden boundaries, or patch symptoms outside this package. Forbidden scope: none beyond lane and package scope.
-- Proof mapping: Implementation and tests must prove the pressure_retry_contract_owner / bounded_retry_backpressure invariant before representative or closure proof is accepted.
+- Proof mapping: Implementation and tests must prove the system_table_schema_owner / metadata_storage_separation invariant before representative or closure proof is accepted.
 - Wrong-slice trigger: Stop or split if the canonical outcome changes owner, boundary, required action, or needs files outside the declared scope.
 
 ## Causal Decision Contract
 
 | Signal | Normalized value | Owner interpretation | Emitted outcome | Expected delta | Disproof probe |
 | --- | --- | --- | --- | --- | --- |
-| route owner/boundary | pressure_retry_contract_owner / bounded_retry_backpressure / retry_backpressure_not_universal | pressure_retry_contract_owner owns this decision before downstream consumers reinterpret it | Make deferred and backpressured owner outcomes carry retryAfterMs, wake source, attempt key, max bound, deadline, and terminal escalation behavior. | Every selected deferred/backpressured owner outcome includes retryAfterMs, wake/retry source, attempt key, max progress bound, deadline, and terminal escalation; repeated cycles prove bounded queue/registry lifetime. | npm run analyze:owner-files -- pressure_retry_contract_owner bounded_retry_backpressure |
+| route owner/boundary | system_table_schema_owner / metadata_storage_separation / metadata_leaks_into_storage_schema | system_table_schema_owner owns this decision before downstream consumers reinterpret it | Audit and route every direct system-table mutation through canonical schema filtering or explicit metadata storage boundaries. | All selected system-table insert/update/upsert paths filter through canonical schema columns and keep request or operation metadata out of storage rows unless the schema explicitly owns the field. | npm run analyze:owner-files -- system_table_schema_owner metadata_storage_separation |
 | scope boundary | lane and package scope only | proof that needs forbidden scope means this package is the wrong slice | stop, split, or migrate owner boundary | no widened runtime scope inside this package | npm run work:advance -- --check |
 
-- Anti-symptom rationale: This package changes or classifies pressure_retry_contract_owner / bounded_retry_backpressure directly; it does not patch downstream symptoms or widen forbidden scope.
-- Falsifying focused probe: `npm run analyze:owner-files -- pressure_retry_contract_owner bounded_retry_backpressure`
-- Competing explanations: At minimum compare retry_backpressure_not_universal against downstream symptom lag, stale instrumentation, and wrong-owner routing before implementation.
+- Anti-symptom rationale: This package changes or classifies system_table_schema_owner / metadata_storage_separation directly; it does not patch downstream symptoms or widen forbidden scope.
+- Falsifying focused probe: `npm run analyze:owner-files -- system_table_schema_owner metadata_storage_separation`
+- Competing explanations: At minimum compare metadata_leaks_into_storage_schema against downstream symptom lag, stale instrumentation, and wrong-owner routing before implementation.
 - Systemic interaction scan: Check producer, consumer, admission/gating, retry/lifecycle, and evidence-generation effects before assigning the next owner slice.
 - Ping-pong stop rule: Do not bounce between adjacent owners on the same unchanged artifact; require fresh representative evidence, a concrete metric reduction, owner/boundary migration proof, or an autonomous architecture experiment before another local patch.
 - Oscillation guard: If fresh representative evidence returns the same frontier or another symptom-shaped result, the next package must show concrete reduction, migration, green, or select/open an autonomous architecture experiment before another local patch.
 
 ## Decision Experiment Gate
 
-- Decision question: Does pressure_retry_contract_owner / bounded_retry_backpressure still own retry_backpressure_not_universal, and what exact producer, consumer, or contract fact must move before implementation is justified?
+- Decision question: Does system_table_schema_owner / metadata_storage_separation still own metadata_leaks_into_storage_schema, and what exact producer, consumer, or contract fact must move before implementation is justified?
 - Architecture review: Before runtime edits, confirm whether this is still a local owner-boundary route, an owner-boundary migration, an autonomous architecture experiment, or a human-only route caused by contradictory or blocked evidence.
-- Competing hypotheses: retry_backpressure_not_universal is real owner debt; the visible symptom is downstream lag; instrumentation or stale evidence is misleading; a different owner boundary owns the next move.
-- Pre-edit focused probe: `npm run analyze:owner-files -- pressure_retry_contract_owner bounded_retry_backpressure`
-- Success metrics: Every selected deferred/backpressured owner outcome includes retryAfterMs, wake/retry source, attempt key, max progress bound, deadline, and terminal escalation; repeated cycles prove bounded queue/registry lifetime.; at least one concrete metric, count, frontier, migration, or representative-green condition must move.
-- Representative rerun: `npm run work:package:route-after-rerun -- --artifact none --owner pressure_retry_contract_owner --boundary bounded_retry_backpressure --dominant-reason retry_backpressure_not_universal`
+- Competing hypotheses: metadata_leaks_into_storage_schema is real owner debt; the visible symptom is downstream lag; instrumentation or stale evidence is misleading; a different owner boundary owns the next move.
+- Pre-edit focused probe: `npm run analyze:owner-files -- system_table_schema_owner metadata_storage_separation`
+- Success metrics: All selected system-table insert/update/upsert paths filter through canonical schema columns and keep request or operation metadata out of storage rows unless the schema explicitly owns the field.; at least one concrete metric, count, frontier, migration, or representative-green condition must move.
+- Representative rerun: `npm run work:package:route-after-rerun -- --artifact none --owner system_table_schema_owner --boundary metadata_storage_separation --dominant-reason metadata_leaks_into_storage_schema`
 - Kill rule: If fresh representative evidence returns the same frontier and dominant reason with no concrete metric reduction, stop for an autonomous architecture experiment instead of opening another local patch; use human escalation only for contradictory or blocked evidence.
 
 
@@ -143,7 +146,7 @@ owner output.
 ## Expected Representative Delta
 
 - Baseline artifact: `none`
-- Expected delta: Every selected deferred/backpressured owner outcome includes retryAfterMs, wake/retry source, attempt key, max progress bound, deadline, and terminal escalation; repeated cycles prove bounded queue/registry lifetime.
+- Expected delta: All selected system-table insert/update/upsert paths filter through canonical schema columns and keep request or operation metadata out of storage rows unless the schema explicitly owns the field.
 - Local proof class: focused owner or diagnostic proof only; it is not representative-green proof.
 - Representative proof class: fresh representative rerun or canonical route-after-rerun result.
 - Stop if unchanged: same-frontier with no concrete metric or shape reduction opens/selects an autonomous architecture experiment instead of another local patch; human escalation is only for contradictory or blocked evidence.
@@ -151,9 +154,9 @@ owner output.
 ## Rerun Decision Gate
 
 - Source artifact: `none`
-- Route owner: `pressure_retry_contract_owner`
-- Route boundary: `bounded_retry_backpressure`
-- Route dominant reason: `retry_backpressure_not_universal`
+- Route owner: `system_table_schema_owner`
+- Route boundary: `metadata_storage_separation`
+- Route dominant reason: `metadata_leaks_into_storage_schema`
 - Route causal outcome: `pending-before-rerun`
 - Stop mode: `pending-before-rerun`
 - Next lane: `runtime-owner-boundary`
@@ -190,11 +193,11 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 
 ## In Scope
 
-1. src/control-plane/control-plane-system-table-gateway-shared.js
-2. src/control-plane/control-plane-system-table-gateway-segment-2.js
-3. src/control-plane/priority-recovery-diagnostics-constants.js
+1. src/control-plane/control-plane-system-table-gateway-segment-2.js
+2. src/control-plane/control-plane-system-table-gateway-shared.js
+3. src/bootstrap/system-table-schemas-constants.js
 4. test/control-plane/control-plane-system-table-gateway-tail-test-cases.js
-5. test/control-plane/priority-recovery-snapshot-operation-owner-outcome.test.js
+5. test/bootstrap/bootstrap-api.test.js
 
 ## Out Of Scope
 
@@ -206,11 +209,11 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 - Intended minimum model: `gpt-5.3-codex`
 - Scope shape: `bounded-owner-runtime/current-frontier`
 - Output profile: `medium`
-- Owned files: `src/control-plane/control-plane-system-table-gateway-shared.js`, `src/control-plane/control-plane-system-table-gateway-segment-2.js`, `src/control-plane/priority-recovery-diagnostics-constants.js`, `test/control-plane/control-plane-system-table-gateway-tail-test-cases.js`, `test/control-plane/priority-recovery-snapshot-operation-owner-outcome.test.js`
+- Owned files: `src/control-plane/control-plane-system-table-gateway-segment-2.js`, `src/control-plane/control-plane-system-table-gateway-shared.js`, `src/bootstrap/system-table-schemas-constants.js`, `test/control-plane/control-plane-system-table-gateway-tail-test-cases.js`, `test/bootstrap/bootstrap-api.test.js`
 - Forbidden files: none beyond declared write scope
 - Frozen decisions: package scope and lane stay bounded unless explicitly escalated.
 - Escalation triggers: owned files expand beyond this package, runtime ownership changes, or representative scenario evidence changes.
-- Focused proof: `npm run analyze:owner-files -- pressure_retry_contract_owner bounded_retry_backpressure`, `npm test -- test/control-plane/control-plane-system-table-gateway.test.js test/control-plane/priority-recovery-snapshot-operation-owner-outcome.test.js`, `npm run work:validate -- --pre-impl work/packages/todo-20260521-bounded-retry-backpressure-contract.md`
+- Focused proof: `npm run analyze:owner-files -- system_table_schema_owner metadata_storage_separation`, `npm test -- test/control-plane/control-plane-system-table-gateway.test.js test/bootstrap/bootstrap-api.test.js test/bootstrap/node-joining-service.test.js`, `npm run work:validate -- --pre-impl work/packages/active-20260521-system-table-metadata-schema-separation.md`
 - Model ledger advisory: `escalate`
 
 ## Model-Fit Split
@@ -226,19 +229,19 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 2. proof requires forbidden scope, cross-owner reasoning, or architecture route selection
 3. the implementation needs to decide system behavior instead of executing a named local mechanism
 - Candidate lower-model child packages:
-1. Split gateway, priority recovery, bootstrap retry, and transport pressure work if one package cannot prove bounded lifetime for all selected paths.
+1. Split by ingress path if direct writes exist outside the control-plane gateway, CDC integration, bootstrap seeding, or SQL fallback boundaries.
 
 ## Execution Evidence
 
 Preferred closure evidence for new packages. One executor owns implementation end to end; one separate verifier-fixer validates the last package work and may fix in-scope problems directly.
 Agent identity is optional provenance. Use legacy subagent ledgers only when a reopened historical package already uses them.
 
-- [ ] implementation: status: validated; evidence: <focused proof commands and results>; parent revalidated focused proof: yes; next: closure or successor action.
-- [ ] verification-fix: status: validated; evidence: <verification/fix commands and results>; changed files: <paths or none>; parent revalidated focused proof: yes; next: closure or successor action.
-- [ ] repair: status: validated; evidence: `npm run work:repair` refreshed generated current-blocker and Current Edge Card when needed; next: validation.
+- [x] implementation: status: validated; evidence: npm test -- test/control-plane/control-plane-system-table-gateway.test.js passed successfully; parent revalidated focused proof: yes; next: closure or successor action.
+- [x] verification-fix: status: validated; evidence: All 587 tests passed successfully; changed files: src/control-plane/control-plane-system-table-gateway-shared.js, src/control-plane/control-plane-system-table-gateway-segment-2.js, test/control-plane/control-plane-system-table-gateway-tail-test-cases.js; parent revalidated focused proof: yes; next: closure or successor action.
+- [x] repair: status: validated; evidence: `npm run work:repair` refreshed generated current-blocker and Current Edge Card when needed; next: validation.
 
 ## Validation
 
-1. npm run analyze:owner-files -- pressure_retry_contract_owner bounded_retry_backpressure
-2. npm test -- test/control-plane/control-plane-system-table-gateway.test.js test/control-plane/priority-recovery-snapshot-operation-owner-outcome.test.js
-3. npm run work:validate -- --pre-impl work/packages/todo-20260521-bounded-retry-backpressure-contract.md
+1. npm run analyze:owner-files -- system_table_schema_owner metadata_storage_separation
+2. npm test -- test/control-plane/control-plane-system-table-gateway.test.js test/bootstrap/bootstrap-api.test.js test/bootstrap/node-joining-service.test.js
+3. npm run work:validate -- --closure work/packages/done-20260521-system-table-metadata-schema-separation.md

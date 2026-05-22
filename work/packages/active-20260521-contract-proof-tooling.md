@@ -3,7 +3,7 @@
 <!-- work-package
 {
   "schema": "work-package-v1",
-  "status": "todo",
+  "status": "active",
   "opened": "2026-05-21",
   "lane": "mechanical-maintenance",
   "scenario": "none",
@@ -17,7 +17,7 @@
   "proof": [
     "npm test -- test/scripts/work-tracker-subagent-ledger.test.js test/scripts/work-tracker-architecture-decision-gate.test.js",
     "npm test -- test/scripts/work-llm-usability-tools.test.js",
-    "npm run work:validate -- --pre-impl work/packages/todo-20260521-contract-proof-tooling.md"
+    "npm run work:validate -- --pre-impl work/packages/active-20260521-contract-proof-tooling.md"
   ],
   "writeScope": [
     "scripts/work-tracker.js",
@@ -26,7 +26,7 @@
     "test/scripts/work-llm-usability-tools.test.js"
   ],
   "handoffFiles": [
-    "work/packages/todo-20260521-system-table-metadata-schema-separation.md"
+    "work/packages/done-20260521-system-table-metadata-schema-separation.md"
   ],
   "generatedFiles": [
     ".kiro/steering/llm/architecture.md",
@@ -42,13 +42,14 @@
     "test/scripts/work-llm-usability-tools.test.js",
     ".kiro/steering/llm/architecture.md",
     ".kiro/steering/llm/testing.md",
-    "work/packages/todo-20260521-contract-proof-tooling.md"
+    "work/packages/active-20260521-contract-proof-tooling.md"
   ],
   "modelFit": {
     "packageClass": "mechanical-maintenance",
     "intendedMinimumModel": "gpt-5.3-codex-spark",
     "scopeShape": "leaf-slice",
     "outputProfile": "small",
+    "ambiguityScore": 1,
     "escalationTriggers": [
       "owned files expand beyond this package",
       "a frozen decision must be reopened"
@@ -71,7 +72,7 @@
       "Split generated steering pack regeneration from validator code if the proof tooling patch is otherwise focused."
     ]
   },
-  "predecessor": "work/packages/todo-20260521-system-table-metadata-schema-separation.md"
+  "predecessor": "work/packages/done-20260521-system-table-metadata-schema-separation.md"
 }
 -->
 
@@ -183,7 +184,7 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 - Forbidden files: `src/`
 - Frozen decisions: package scope and lane stay bounded unless explicitly escalated.
 - Escalation triggers: owned files expand beyond this package, runtime ownership changes, or representative scenario evidence changes.
-- Focused proof: `npm test -- test/scripts/work-tracker-subagent-ledger.test.js test/scripts/work-tracker-architecture-decision-gate.test.js`, `npm test -- test/scripts/work-llm-usability-tools.test.js`, `npm run work:validate -- --pre-impl work/packages/todo-20260521-contract-proof-tooling.md`
+- Focused proof: `npm test -- test/scripts/work-tracker-subagent-ledger.test.js test/scripts/work-tracker-architecture-decision-gate.test.js`, `npm test -- test/scripts/work-llm-usability-tools.test.js`, `npm run work:validate -- --pre-impl work/packages/active-20260521-contract-proof-tooling.md`
 - Model ledger advisory: `escalate`
 
 ## Model-Fit Split
@@ -214,4 +215,4 @@ Agent identity is optional provenance. Use legacy subagent ledgers only when a r
 
 1. npm test -- test/scripts/work-tracker-subagent-ledger.test.js test/scripts/work-tracker-architecture-decision-gate.test.js
 2. npm test -- test/scripts/work-llm-usability-tools.test.js
-3. npm run work:validate -- --pre-impl work/packages/todo-20260521-contract-proof-tooling.md
+3. npm run work:validate -- --pre-impl work/packages/active-20260521-contract-proof-tooling.md

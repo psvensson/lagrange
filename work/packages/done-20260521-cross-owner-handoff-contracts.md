@@ -3,7 +3,7 @@
 <!-- work-package
 {
   "schema": "work-package-v1",
-  "status": "active",
+  "status": "done",
   "opened": "2026-05-21",
   "lane": "causal-escalation",
   "scenario": "none",
@@ -17,7 +17,7 @@
   "proof": [
     "npm run analyze:owner-files -- handoff_contract_owner cross_owner_handoff_contracts",
     "npm test -- test/control-plane/publication-active-gate-handoff-contract.test.js test/bootstrap/bootstrap-api.test.js",
-    "npm run work:validate -- --pre-impl work/packages/active-20260521-cross-owner-handoff-contracts.md"
+    "npm run work:validate -- --pre-impl work/packages/done-20260521-cross-owner-handoff-contracts.md"
   ],
   "writeScope": [
     "src/control-plane/publication-active-gate-handoff-contract.js",
@@ -39,7 +39,7 @@
     "src/bootstrap/owners/service-registration-handoff-owner.js",
     "test/control-plane/publication-active-gate-handoff-contract.test.js",
     "test/bootstrap/bootstrap-api.test.js",
-    "work/packages/active-20260521-cross-owner-handoff-contracts.md"
+    "work/packages/done-20260521-cross-owner-handoff-contracts.md"
   ],
   "modelFit": {
     "packageClass": "runtime-owner-boundary",
@@ -79,7 +79,9 @@
     "dominantReason": "handoffs_not_explicit_everywhere",
     "nextAction": "Define explicit producer-consumer handoff contracts before additional consumer cutovers."
   },
-  "predecessor": "work/packages/done-20260521-owner-outcome-consumer-cutover.md"
+  "predecessor": "work/packages/done-20260521-owner-outcome-consumer-cutover.md",
+  "closed": "2026-05-22",
+  "commitAndPushLedgerRequired": true
 }
 -->
 
@@ -120,7 +122,7 @@ consumers already accepting the owner outcome envelope.
 ## Core Logic Brief
 
 - Canonical outcome: handoff_contract_owner / cross_owner_handoff_contracts emits the package outcome for handoffs_not_explicit_everywhere.
-- Inputs/signals: npm run analyze:owner-files -- handoff_contract_owner cross_owner_handoff_contracts; npm test -- test/control-plane/publication-active-gate-handoff-contract.test.js test/bootstrap/bootstrap-api.test.js; npm run work:validate -- --pre-impl work/packages/active-20260521-cross-owner-handoff-contracts.md.
+- Inputs/signals: npm run analyze:owner-files -- handoff_contract_owner cross_owner_handoff_contracts; npm test -- test/control-plane/publication-active-gate-handoff-contract.test.js test/bootstrap/bootstrap-api.test.js; npm run work:validate -- --pre-impl work/packages/done-20260521-cross-owner-handoff-contracts.md.
 - State model or invariant: The handoff_contract_owner / cross_owner_handoff_contracts decision table in the Causal Decision Contract maps handoffs_not_explicit_everywhere and route evidence to one emitted outcome: pending-before-rerun.
 - Non-goals and forbidden interpretations: Do not reinterpret downstream evidence, widen forbidden boundaries, or patch symptoms outside this package. Forbidden scope: none beyond lane and package scope.
 - Proof mapping: Implementation and tests must prove the handoff_contract_owner / cross_owner_handoff_contracts invariant before representative or closure proof is accepted.
@@ -221,7 +223,7 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 - Forbidden files: none beyond declared write scope
 - Frozen decisions: package scope and lane stay bounded unless explicitly escalated.
 - Escalation triggers: owned files expand beyond this package, runtime ownership changes, or representative scenario evidence changes.
-- Focused proof: `npm run analyze:owner-files -- handoff_contract_owner cross_owner_handoff_contracts`, `npm test -- test/control-plane/publication-active-gate-handoff-contract.test.js test/bootstrap/bootstrap-api.test.js`, `npm run work:validate -- --pre-impl work/packages/active-20260521-cross-owner-handoff-contracts.md`
+- Focused proof: `npm run analyze:owner-files -- handoff_contract_owner cross_owner_handoff_contracts`, `npm test -- test/control-plane/publication-active-gate-handoff-contract.test.js test/bootstrap/bootstrap-api.test.js`, `npm run work:validate -- --pre-impl work/packages/done-20260521-cross-owner-handoff-contracts.md`
 - Model ledger advisory: `escalate`
 
 ## Model-Fit Split
@@ -244,12 +246,12 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 Preferred closure evidence for new packages. One executor owns implementation end to end; one separate verifier-fixer validates the last package work and may fix in-scope problems directly.
 Agent identity is optional provenance. Use legacy subagent ledgers only when a reopened historical package already uses them.
 
-- [x] implementation: status: validated; evidence: implemented explicit producer-consumer handoff contracts for publication-to-active-gate and bootstrap service-registration boundaries in `src/control-plane/publication-active-gate-handoff-contract.js`, `src/bootstrap/owners/service-registration-handoff-owner.js`, `test/control-plane/publication-active-gate-handoff-contract.test.js`, and `test/bootstrap/bootstrap-api.test.js`; publication active-gate handoff now includes a cross-owner contract with producer owner outcome, consumer precondition, freshness/revision requirement, acknowledgement rule, retry/defer behavior, terminal condition, and diagnostic vocabulary; bootstrap register-service now surfaces `serviceRegistrationHandoffContract` for success and typed retry/defer responses; focused tests assert stale/deferred producer evidence does not advance the consumer and typed handoff diagnostics replace generic timeout/error-only surfaces; commands/results: `npm run analyze:owner-files -- handoff_contract_owner cross_owner_handoff_contracts` (pass), `npm test -- test/control-plane/publication-active-gate-handoff-contract.test.js test/bootstrap/bootstrap-api.test.js` (pass, 173 assertions), `npm run work:validate -- --pre-impl work/packages/active-20260521-cross-owner-handoff-contracts.md` (pass), `node scripts/check-guideline-literals.js src/control-plane/publication-active-gate-handoff-contract.js src/bootstrap/owners/service-registration-handoff-owner.js` (pass), `node scripts/check-guideline-decision-boundaries.js src/control-plane/publication-active-gate-handoff-contract.js src/bootstrap/owners/service-registration-handoff-owner.js` (pass), `npm run audit:runtime-grammar:file -- src/control-plane/publication-active-gate-handoff-contract.js src/bootstrap/owners/service-registration-handoff-owner.js` (pass), `git diff --check -- src/control-plane/publication-active-gate-handoff-contract.js src/bootstrap/owners/service-registration-handoff-owner.js test/control-plane/publication-active-gate-handoff-contract.test.js test/bootstrap/bootstrap-api.test.js work/packages/active-20260521-cross-owner-handoff-contracts.md` (pass); parent revalidated focused proof: yes; next: verifier-fixer pass, then closure only after focused commit ledger can be recorded.
-- [x] verification-fix: status: validated; evidence: verified cross-owner contract shape coverage for publication-to-active-gate and bootstrap service-registration boundaries, then added focused regression assertions for `diagnosticVocabulary` and `terminalCondition` without runtime behavior changes; commands/results: `npm run analyze:owner-files -- handoff_contract_owner cross_owner_handoff_contracts` (pass), `npm test -- test/control-plane/publication-active-gate-handoff-contract.test.js test/bootstrap/bootstrap-api.test.js` (pass, 178 assertions), `npm run work:validate -- --pre-impl work/packages/active-20260521-cross-owner-handoff-contracts.md` (pass), `node scripts/check-guideline-literals.js src/control-plane/publication-active-gate-handoff-contract.js src/bootstrap/owners/service-registration-handoff-owner.js` (pass), `node scripts/check-guideline-decision-boundaries.js src/control-plane/publication-active-gate-handoff-contract.js src/bootstrap/owners/service-registration-handoff-owner.js` (pass), `npm run audit:runtime-grammar:file -- src/control-plane/publication-active-gate-handoff-contract.js src/bootstrap/owners/service-registration-handoff-owner.js` (pass), `git diff --check -- src/control-plane/publication-active-gate-handoff-contract.js src/bootstrap/owners/service-registration-handoff-owner.js test/control-plane/publication-active-gate-handoff-contract.test.js test/bootstrap/bootstrap-api.test.js work/packages/active-20260521-cross-owner-handoff-contracts.md` (pass); changed files: `test/control-plane/publication-active-gate-handoff-contract.test.js`, `test/bootstrap/bootstrap-api.test.js`, `work/packages/active-20260521-cross-owner-handoff-contracts.md`; parent revalidated focused proof: yes; next: closure is blocked until a truthful focused commit ledger is recorded for this package scope.
-- [ ] repair: status: validated; evidence: `npm run work:repair` refreshed generated current-blocker and Current Edge Card when needed; next: validation.
+- [x] implementation: status: validated; evidence: implemented explicit producer-consumer handoff contracts for publication-to-active-gate and bootstrap service-registration boundaries in `src/control-plane/publication-active-gate-handoff-contract.js`, `src/bootstrap/owners/service-registration-handoff-owner.js`, `test/control-plane/publication-active-gate-handoff-contract.test.js`, and `test/bootstrap/bootstrap-api.test.js`; publication active-gate handoff now includes a cross-owner contract with producer owner outcome, consumer precondition, freshness/revision requirement, acknowledgement rule, retry/defer behavior, terminal condition, and diagnostic vocabulary; bootstrap register-service now surfaces `serviceRegistrationHandoffContract` for success and typed retry/defer responses; focused tests assert stale/deferred producer evidence does not advance the consumer and typed handoff diagnostics replace generic timeout/error-only surfaces; commands/results: `npm run analyze:owner-files -- handoff_contract_owner cross_owner_handoff_contracts` (pass), `npm test -- test/control-plane/publication-active-gate-handoff-contract.test.js test/bootstrap/bootstrap-api.test.js` (pass, 173 assertions), `npm run work:validate -- --pre-impl work/packages/done-20260521-cross-owner-handoff-contracts.md` (pass), `node scripts/check-guideline-literals.js src/control-plane/publication-active-gate-handoff-contract.js src/bootstrap/owners/service-registration-handoff-owner.js` (pass), `node scripts/check-guideline-decision-boundaries.js src/control-plane/publication-active-gate-handoff-contract.js src/bootstrap/owners/service-registration-handoff-owner.js` (pass), `npm run audit:runtime-grammar:file -- src/control-plane/publication-active-gate-handoff-contract.js src/bootstrap/owners/service-registration-handoff-owner.js` (pass), `git diff --check -- src/control-plane/publication-active-gate-handoff-contract.js src/bootstrap/owners/service-registration-handoff-owner.js test/control-plane/publication-active-gate-handoff-contract.test.js test/bootstrap/bootstrap-api.test.js work/packages/done-20260521-cross-owner-handoff-contracts.md` (pass); parent revalidated focused proof: yes; next: verifier-fixer pass, then closure only after focused commit ledger can be recorded.
+- [x] verification-fix: status: validated; evidence: verified cross-owner contract shape coverage for publication-to-active-gate and bootstrap service-registration boundaries, then added focused regression assertions for `diagnosticVocabulary` and `terminalCondition` without runtime behavior changes; commands/results: `npm run analyze:owner-files -- handoff_contract_owner cross_owner_handoff_contracts` (pass), `npm test -- test/control-plane/publication-active-gate-handoff-contract.test.js test/bootstrap/bootstrap-api.test.js` (pass, 178 assertions), `npm run work:validate -- --pre-impl work/packages/done-20260521-cross-owner-handoff-contracts.md` (pass), `node scripts/check-guideline-literals.js src/control-plane/publication-active-gate-handoff-contract.js src/bootstrap/owners/service-registration-handoff-owner.js` (pass), `node scripts/check-guideline-decision-boundaries.js src/control-plane/publication-active-gate-handoff-contract.js src/bootstrap/owners/service-registration-handoff-owner.js` (pass), `npm run audit:runtime-grammar:file -- src/control-plane/publication-active-gate-handoff-contract.js src/bootstrap/owners/service-registration-handoff-owner.js` (pass), `git diff --check -- src/control-plane/publication-active-gate-handoff-contract.js src/bootstrap/owners/service-registration-handoff-owner.js test/control-plane/publication-active-gate-handoff-contract.test.js test/bootstrap/bootstrap-api.test.js work/packages/done-20260521-cross-owner-handoff-contracts.md` (pass); changed files: `test/control-plane/publication-active-gate-handoff-contract.test.js`, `test/bootstrap/bootstrap-api.test.js`, `work/packages/done-20260521-cross-owner-handoff-contracts.md`; parent revalidated focused proof: yes; next: closure is blocked until a truthful focused commit ledger is recorded for this package scope.
+- [x] repair: status: validated; evidence: `npm run work:repair` refreshed generated current-blocker and Current Edge Card when needed; next: validation.
 
 ## Validation
 
 1. npm run analyze:owner-files -- handoff_contract_owner cross_owner_handoff_contracts
 2. npm test -- test/control-plane/publication-active-gate-handoff-contract.test.js test/bootstrap/bootstrap-api.test.js
-3. npm run work:validate -- --pre-impl work/packages/active-20260521-cross-owner-handoff-contracts.md
+3. npm run work:validate -- --pre-impl work/packages/done-20260521-cross-owner-handoff-contracts.md

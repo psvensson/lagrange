@@ -7,8 +7,9 @@ closed and moved out of the active blocker slot.
 ## Sprint Strategy Brief
 
 - Goal state: owner outcomes, handoffs, reconciliation decisions,
-  retry/backpressure, metadata/schema ingress, proof tooling, and guardrails are
-  universal enough that future sprints inherit the pattern by default.
+  retry/backpressure, metadata/schema ingress, proof tooling, guardrails, and
+  distributed release-gate verdicts are universal enough that future sprints
+  inherit the pattern by default.
 - Current causal thesis: rolling-restart exposed the repeated shape, but the
   remaining universal work is systemic: consumers and validators still allow
   owner-local contracts to drift into partial, caller-reinterpreted forms.
@@ -34,21 +35,21 @@ closed and moved out of the active blocker slot.
 
 ```text
 Representative artifact: none
-Visible first frontier: cross_owner_handoff_contracts
-Active package: work/packages/active-20260521-cross-owner-handoff-contracts.md
-Active package owner: handoff_contract_owner
-Active package boundary: cross_owner_handoff_contracts
-Selected cause: handoffs_not_explicit_everywhere
-Required action: Define and implement explicit producer-consumer handoff contracts for the highest-risk cross-owner boundaries.
-Representative status: active-contract-slice
+Visible first frontier: unknown
+Active package: work/packages/active-20260521-contract-proof-tooling.md
+Active package owner: workflow_tooling_owner
+Active package boundary: contract_proof_validation
+Selected cause: scenario_proof_not_contract_proof
+Required action: Upgrade package validators and evidence tooling so owner-boundary closure proves named contract transitions rather than timeout symptom movement.
+Representative status: unknown
 Causal outcome: unknown
 Architecture gate: not-required / unknown
 Expected delta: unknown
-Current state: Planned successor package after consumers consume owner outcome envelopes.
-Allowed edits: src/control-plane/publication-active-gate-handoff-contract.js, src/bootstrap/owners/service-registration-handoff-owner.js, test/control-plane/publication-active-gate-handoff-contract.test.js, test/bootstrap/bootstrap-api.test.js
-Candidate runtime files: src/bootstrap/owners/move-replica-handoff-owner.js, src/rebalancer/operation-workflow-owner-effects.js, src/admin/admin-control-snapshot-class-part-2.js
+Current state: Planned successor package after metadata/storage separation is proven.
+Allowed edits: scripts/work-tracker.js, scripts/work-package-schema.js, test/scripts/work-tracker-subagent-ledger.test.js, test/scripts/work-llm-usability-tools.test.js
+Candidate runtime files: src/control-plane/owner-outcome-contract.js
 Forbidden edits: owned files expand beyond this package, a frozen decision must be reopened
-Required latest proof: npm run analyze:owner-files -- handoff_contract_owner cross_owner_handoff_contracts, npm test -- test/control-plane/publication-active-gate-handoff-contract.test.js test/bootstrap/bootstrap-api.test.js, npm run work:validate -- --pre-impl work/packages/active-20260521-cross-owner-handoff-contracts.md
+Required latest proof: npm test -- test/scripts/work-tracker-subagent-ledger.test.js test/scripts/work-tracker-architecture-decision-gate.test.js, npm test -- test/scripts/work-llm-usability-tools.test.js, npm run work:validate -- --pre-impl work/packages/active-20260521-contract-proof-tooling.md
 Allowed stop modes: representative-green, migrated, reduced, same-frontier, classification-only, architecture-gap, human-escalation
 ```
 
@@ -79,32 +80,32 @@ Allowed stop modes: representative-green, migrated, reduced, same-frontier, clas
      timeout text.
    - Acceptance: selected admin/bootstrap consumers branch only on normalized
      owner outcomes, with stale/deferred answers not cached as fresh truth.
-3. [Cross Owner Handoff Contracts](../packages/active-20260521-cross-owner-handoff-contracts.md)
+3. [Cross Owner Handoff Contracts](../packages/done-20260521-cross-owner-handoff-contracts.md)
    - Lane: `causal-escalation`
    - Purpose: make selected producer-consumer handoffs explicit across owner
      boundaries.
    - Acceptance: selected handoffs name producer outcome, consumer
      preconditions, freshness/revision rules, acknowledgement, retry/defer,
      terminal states, and diagnostics vocabulary.
-4. [Owner Reconciliation State Machine Normalization](../packages/todo-20260521-owner-reconciliation-state-machine-normalization.md)
+4. [Owner Reconciliation State Machine Normalization](../packages/done-20260521-owner-reconciliation-state-machine-normalization.md)
    - Lane: `runtime-owner-boundary`
    - Purpose: normalize the first nonconforming owner to evidence snapshot,
      decision table/state machine, canonical outcome, and effects.
    - Acceptance: selected owner emits one canonical outcome from one normalized
      snapshot and blocks caller-local decision piles for that boundary.
-5. [Bounded Retry Backpressure Contract](../packages/todo-20260521-bounded-retry-backpressure-contract.md)
+5. [Bounded Retry Backpressure Contract](../packages/done-20260521-bounded-retry-backpressure-contract.md)
    - Lane: `runtime-owner-boundary`
    - Purpose: make deferred/backpressured outcomes carry bounded retry and
      lifetime facts.
    - Acceptance: selected outcomes expose retry-after, wake source, attempt key,
      maximum progress bound, deadline, terminal escalation, and plateau proof.
-6. [System Table Metadata Schema Separation](../packages/todo-20260521-system-table-metadata-schema-separation.md)
+6. [System Table Metadata Schema Separation](../packages/done-20260521-system-table-metadata-schema-separation.md)
    - Lane: `runtime-owner-boundary`
    - Purpose: generalize the `assignment_id` schema-filtering lesson across
      system-table write ingress.
    - Acceptance: selected insert/update/upsert paths filter through canonical
      schema or an explicit metadata boundary.
-7. [Contract Proof Tooling](../packages/todo-20260521-contract-proof-tooling.md)
+7. [Contract Proof Tooling](../packages/active-20260521-contract-proof-tooling.md)
    - Lane: `mechanical-maintenance`
    - Purpose: require owner-outcome or handoff-transition proof instead of
      symptom-only scenario proof.
@@ -117,6 +118,36 @@ Allowed stop modes: representative-green, migrated, reduced, same-frontier, clas
      timeout-only, and local retry patterns from returning.
    - Acceptance: guardrails fail the converted anti-patterns without weakening
      existing scan scope or lint rules.
+9. [Harness Verdict Taxonomy And Scenario Contracts](../packages/todo-20260522-harness-verdict-taxonomy-and-scenario-contracts.md)
+   - Lane: `scenario-release-gate`
+   - Purpose: separate core invariant failures from incomplete evidence,
+     harness-invalid results, performance blocks, and expected load
+     backpressure.
+   - Acceptance: reports and summaries expose typed release-blocking verdicts
+     without weakening the gate.
+10. [Harness Timeout Final Adjudication](../packages/todo-20260522-harness-timeout-final-adjudication.md)
+    - Lane: `scenario-release-gate`
+    - Purpose: run a final drain/snapshot/query adjudication ladder before a
+      timeout is labeled as a core system failure.
+    - Acceptance: timeouts classify core contradictions separately from late or
+      incomplete evidence.
+11. [Topology Gate Matrix Executable Contracts](../packages/todo-20260522-topology-gate-matrix-executable-contracts.md)
+    - Lane: `scenario-release-gate`
+    - Purpose: make declared owner reasons, fencing requirements, bounded
+      progress, and evidence requirements executable assertions.
+    - Acceptance: a topology gate pass proves the declared contract, not only
+      scenario completion.
+12. [Split Brain Scenario Safety Invariants](../packages/todo-20260522-split-brain-scenario-safety-invariants.md)
+    - Lane: `scenario-release-gate`
+    - Purpose: prove partition-time safety, not only post-heal convergence.
+    - Acceptance: the scenario fails on unsafe minority acceptance, competing
+      leaders, or acknowledged write loss during/after partition.
+13. [Node Failure Rebalance Acceptance Hardening](../packages/todo-20260522-node-failure-rebalance-acceptance-hardening.md)
+    - Lane: `scenario-release-gate`
+    - Purpose: add acked-write, rebalance-closure, owner/fencing, and
+      client-error classification proof to node-failure rebalance.
+    - Acceptance: the scenario cannot pass from only total operations plus final
+      consistency.
 
 ## Non-Goals
 

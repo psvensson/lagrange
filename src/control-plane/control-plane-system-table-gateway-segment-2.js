@@ -958,15 +958,17 @@ class ControlPlaneSystemTableGatewaySegment2 extends ControlPlaneSystemTableGate
       };
     }
 
-    if (
-      !mutation?.whereClause ||
-      typeof mutation.whereClause !== TYPEOF.OBJECT
-    ) {
-      throw new Error(GATEWAY_ERROR_MSG.MUTATION_WHERE_REQUIRED);
+    const schema = getSchemaByTableName(tableName);
+    if (!schema || !schema.columns) {
+      throw new Error(GATEWAY_ERROR_MSG.MUTATION_TABLE_REQUIRED);
     }
+    const allowedColumns = new Set(
+      schema.columns.map((column) => column.name),
+    );
     const whereEntries = Object.entries(mutation.whereClause).filter(
-      ([_key, value]) => {
-        return typeof value !== TYPEOF.UNDEFINED;
+      ([key, value]) => {
+        return allowedColumns.has(key) &&
+          typeof value !== TYPEOF.UNDEFINED;
       },
     );
     if (whereEntries.length === NUM.ZERO) {

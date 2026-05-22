@@ -1,4 +1,5 @@
 import {CONTROL_PLANE_READINESS_DIMENSION} from './control-plane-readiness-constants.js';
+import {PRIORITY_RECOVERY_WAIT_MODE} from './priority-recovery-diagnostics-constants.js';
 import {
   buildPressureAdmissionFailure,
   PRESSURE_GOVERNOR_ACTION,
@@ -31,6 +32,7 @@ import {
 import {
   INITIAL_PARTITION_IDS,
   SYSTEM_TABLE_NAME,
+  getSchemaByTableName,
 } from '../bootstrap/system-table-schemas-constants.js';
 import {getSystemCachePrimaryKeyFieldOrFallback} from '../cache/system-cache-key-descriptor.js';
 import {canonicalizeSystemTableRow} from './system-row-normalizers.js';
@@ -734,16 +736,77 @@ function canonicalizeControlPlaneMutation(
   operation,
   tableName,
 ) {
+  const schema = tableName ? getSchemaByTableName(tableName) : null;
+  const allowedColumns = schema && schema.columns ?
+    new Set(schema.columns.map((c) => c.name)) :
+    null;
+
+  let row = mutation?.row;
+  if (
+    row &&
+    typeof row === TYPEOF.OBJECT &&
+    (operation === CONTROL_PLANE_MUTATION_OPERATION.INSERT ||
+      operation === CONTROL_PLANE_MUTATION_OPERATION.UPSERT)
+  ) {
+    const canonicalized = canonicalizeSystemTableRow(tableName, row);
+    if (allowedColumns) {
+      row = {};
+      for (const [key, value] of Object.entries(canonicalized)) {
+        if (allowedColumns.has(key) && typeof value !== TYPEOF.UNDEFINED) {
+          row[key] = value;
+        }
+      }
+    } else {
+      row = canonicalized;
+    }
+  }
+
+  let data = mutation?.data;
+  if (
+    data &&
+    typeof data === TYPEOF.OBJECT &&
+    operation === CONTROL_PLANE_MUTATION_OPERATION.UPDATE
+  ) {
+    const canonicalized = canonicalizeSystemTableRow(tableName, data);
+    if (allowedColumns) {
+      data = {};
+      for (const [key, value] of Object.entries(canonicalized)) {
+        if (allowedColumns.has(key) && typeof value !== TYPEOF.UNDEFINED) {
+          data[key] = value;
+        }
+      }
+    } else {
+      data = canonicalized;
+    }
+  }
+
+  let whereClause = mutation?.whereClause;
+  if (
+    whereClause &&
+    typeof whereClause === TYPEOF.OBJECT &&
+    (operation === CONTROL_PLANE_MUTATION_OPERATION.UPDATE ||
+      operation === CONTROL_PLANE_MUTATION_OPERATION.DELETE)
+  ) {
+    const canonicalized = canonicalizeSystemTableRow(tableName, whereClause);
+    if (allowedColumns) {
+      whereClause = {};
+      for (const [key, value] of Object.entries(canonicalized)) {
+        if (allowedColumns.has(key) && typeof value !== TYPEOF.UNDEFINED) {
+          whereClause[key] = value;
+        }
+      }
+    } else {
+      whereClause = canonicalized;
+    }
+  }
+
   return {
     ...mutation,
     operation,
     tableName,
-    row:
-      tableName &&
-      (operation === CONTROL_PLANE_MUTATION_OPERATION.INSERT ||
-      operation === CONTROL_PLANE_MUTATION_OPERATION.UPSERT) ?
-        canonicalizeSystemTableRow(tableName, mutation?.row) :
-        mutation?.row,
+    row,
+    data,
+    whereClause,
   };
 }
 
@@ -898,6 +961,47 @@ function resolveControlPlaneMutationOutcomeReasonCodes(result = {}) {
   return [];
 }
 
+function resolveControlPlaneWakeSource(result = {}, visibilityState) {
+  if (typeof result?.wakeSource === TYPEOF.STRING && result.wakeSource.length > NUM.ZERO) {
+    return result.wakeSource;
+  }
+  if (visibilityState === CONTROL_PLANE_SYSTEM_TABLE_VISIBILITY_STATE.DEFERRED_BY_PRESSURE) {
+    return 'pressure_governor';
+  }
+  return 'retry_registry';
+}
+
+function resolveControlPlaneAttemptKey(result = {}) {
+  if (typeof result?.attemptKey === TYPEOF.STRING && result.attemptKey.length > NUM.ZERO) {
+    return result.attemptKey;
+  }
+  if (typeof result?.coalescingKey === TYPEOF.STRING && result.coalescingKey.length > NUM.ZERO) {
+    return result.coalescingKey;
+  }
+  if (typeof result?.requestKey === TYPEOF.STRING && result.requestKey.length > NUM.ZERO) {
+    return result.requestKey;
+  }
+  return 'unknown_attempt_key';
+}
+
+function resolveControlPlaneDeadline(result = {}) {
+  if (Number.isFinite(result?.deadline)) {
+    return result.deadline;
+  }
+  const retryAfter = Number.isFinite(result?.retryAfterMs) ? result.retryAfterMs : 250;
+  return Date.now() + Math.max(30000, retryAfter * 10);
+}
+
+function resolveControlPlaneTerminalEscalationBehavior(result = {}) {
+  if (typeof result?.terminalEscalationBehavior === TYPEOF.STRING && result.terminalEscalationBehavior.length > NUM.ZERO) {
+    return result.terminalEscalationBehavior;
+  }
+  if (typeof result?.terminalEscalationState === TYPEOF.STRING && result.terminalEscalationState.length > NUM.ZERO) {
+    return result.terminalEscalationState;
+  }
+  return 'escalate';
+}
+
 function buildControlPlaneMutationOwnerOutcomeEnvelope(
   result = {},
   normalizedOutcome = null,
@@ -915,7 +1019,18 @@ function buildControlPlaneMutationOwnerOutcomeEnvelope(
     result?.visibilityState,
     null,
   );
-  return buildOwnerOutcomeEnvelope({
+  const isDeferredOrBackpressured =
+    contractOutcome.contractState === OWNER_CONTRACT_STATE.DEFERRED;
+
+  const wakeSource = resolveControlPlaneWakeSource(result, visibilityState);
+  const attemptKey = resolveControlPlaneAttemptKey(result);
+  const maxProgressBound = Number.isFinite(result?.maxProgressBound) ?
+    result.maxProgressBound :
+    NUM.FIVE;
+  const deadline = resolveControlPlaneDeadline(result);
+  const terminalEscalationBehavior = resolveControlPlaneTerminalEscalationBehavior(result);
+
+  const envelope = buildOwnerOutcomeEnvelope({
     owner: CONTROL_PLANE_GATEWAY_OWNER_OUTCOME.OWNER,
     boundary: CONTROL_PLANE_GATEWAY_OWNER_OUTCOME.BOUNDARY,
     state: contractOutcome.contractState,
@@ -938,8 +1053,26 @@ function buildControlPlaneMutationOwnerOutcomeEnvelope(
       visibilityState,
       success: result?.success === true,
       failureSummary: getControlPlaneFailureSummary(result?.error || result),
+      wakeSource,
+      attemptKey,
+      maxProgressBound,
+      deadline,
+      terminalEscalationBehavior,
     },
   });
+
+  if (isDeferredOrBackpressured) {
+    return Object.freeze({
+      ...envelope,
+      wakeSource,
+      attemptKey,
+      maxProgressBound,
+      deadline,
+      terminalEscalationBehavior,
+    });
+  }
+
+  return envelope;
 }
 
 function normalizeDistinctStringArray(values = []) {

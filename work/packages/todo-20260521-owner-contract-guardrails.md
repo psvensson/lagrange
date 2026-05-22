@@ -28,7 +28,7 @@
     "test/scripts/work-tracker-subagent-ledger.test.js"
   ],
   "handoffFiles": [
-    "work/packages/todo-20260521-contract-proof-tooling.md"
+    "work/packages/active-20260521-contract-proof-tooling.md"
   ],
   "generatedFiles": [
     ".kiro/steering/llm/architecture.md",
@@ -77,7 +77,7 @@
       "Split each guardrail family into a mechanical-maintenance child if one combined scanner creates noisy false positives."
     ]
   },
-  "predecessor": "work/packages/todo-20260521-contract-proof-tooling.md"
+  "predecessor": "work/packages/active-20260521-contract-proof-tooling.md"
 }
 -->
 

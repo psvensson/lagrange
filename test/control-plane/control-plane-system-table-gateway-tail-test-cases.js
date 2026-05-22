@@ -1,3 +1,7 @@
+import {
+  buildControlPlaneMutationOwnerOutcomeEnvelope,
+} from '../../src/control-plane/control-plane-system-table-gateway-shared.js';
+
 export function registerControlPlaneSystemTableGatewayTailTests({
   test,
   TABLES,
@@ -1335,4 +1339,104 @@ export function registerControlPlaneSystemTableGatewayTailTests({
       t.equal(authoritativeReads, 1,
         'gateway should evaluate provider-backed authoritative owner once');
     });
+
+  test('ControlPlaneSystemTableGateway buildControlPlaneMutationOwnerOutcomeEnvelope includes rich retry fields when deferred',
+    async (t) => {
+      const mockDeferredResult = {
+        success: false,
+        visibilityState: 'deferred_by_pressure',
+        contractState: 'deferred',
+        nextAction: 'retry',
+        reasonCodes: ['publication_epoch_pending'],
+        retryAfterMs: 150,
+        attemptKey: 'test-attempt-key',
+        maxProgressBound: 10,
+        deadline: Date.now() + 60000,
+        terminalEscalationState: 'test-terminal-behavior',
+        wakeSource: 'test-wake-source',
+      };
+
+      const envelope = buildControlPlaneMutationOwnerOutcomeEnvelope(
+        mockDeferredResult,
+        CONTROL_PLANE_MUTATION_OUTCOME.DEFERRED,
+      );
+
+      t.equal(envelope.evidence?.success, false);
+      t.equal(envelope.outcome, CONTROL_PLANE_MUTATION_OUTCOME.DEFERRED);
+      t.equal(envelope.state, 'deferred');
+
+      // Assert rich retry contract fields exist at the top level
+      t.equal(envelope.retryAfterMs, 150);
+      t.equal(envelope.wakeSource, 'test-wake-source');
+      t.equal(envelope.attemptKey, 'test-attempt-key');
+      t.equal(envelope.maxProgressBound, 10);
+      t.type(envelope.deadline, 'number');
+      t.equal(envelope.terminalEscalationBehavior, 'test-terminal-behavior');
+
+      // Assert rich retry contract fields exist inside evidence too
+      t.equal(envelope.evidence?.wakeSource, 'test-wake-source');
+      t.equal(envelope.evidence?.attemptKey, 'test-attempt-key');
+      t.equal(envelope.evidence?.maxProgressBound, 10);
+      t.type(envelope.evidence?.deadline, 'number');
+      t.equal(envelope.evidence?.terminalEscalationBehavior, 'test-terminal-behavior');
+    });
+
+  test('ControlPlaneSystemTableGateway submitMutation filters out non-schema metadata (e.g. assignment_id) on write ingress', async (t) => {
+    const cdcCalls = [];
+    const gateway = new ControlPlaneSystemTableGateway({
+      nodeId: 'node-gateway',
+      cdcIntegrationService: {
+        async insertSystemTableRow(tableName, row, options) {
+          cdcCalls.push({op: 'insert', tableName, row, options});
+          return {success: true};
+        },
+        async updateSystemTableRow(tableName, whereClause, data, options) {
+          cdcCalls.push({op: 'update', tableName, whereClause, data, options});
+          return {success: true};
+        },
+        async upsertSystemTableRow(tableName, row, options) {
+          cdcCalls.push({op: 'upsert', tableName, row, options});
+          return {success: true};
+        },
+      },
+    });
+
+    // 1. Test INSERT schema filtering
+    await gateway.submitMutation({
+      operation: CONTROL_PLANE_MUTATION_OPERATION.INSERT,
+      tableName: TABLES.SERVICES,
+      row: {
+        service_id: 'svc-1',
+        service_type: 'message_group',
+        node_id: 'node-a',
+        status: 'stopped',
+        [GATEWAY_ASSIGNMENT_ID_FIELD]: 'assignment-1',
+        non_existent_metadata_field: 'leak-me',
+      },
+    });
+
+    t.equal(cdcCalls.length, 1);
+    t.equal(cdcCalls[0].row.service_id, 'svc-1');
+    t.equal(cdcCalls[0].row[GATEWAY_ASSIGNMENT_ID_FIELD], undefined, 'assignment_id must be stripped from row');
+    t.equal(cdcCalls[0].row.non_existent_metadata_field, undefined, 'unsupported metadata fields must be stripped from row');
+
+    // 2. Test UPDATE schema filtering
+    await gateway.submitMutation({
+      operation: CONTROL_PLANE_MUTATION_OPERATION.UPDATE,
+      tableName: TABLES.SERVICES,
+      whereClause: {
+        service_id: 'svc-1',
+        [GATEWAY_ASSIGNMENT_ID_FIELD]: 'assignment-1',
+      },
+      data: {
+        status: 'active',
+        [GATEWAY_ASSIGNMENT_ID_FIELD]: 'assignment-1',
+      },
+    });
+
+    t.equal(cdcCalls.length, 2);
+    t.equal(cdcCalls[1].data.status, 'active');
+    t.equal(cdcCalls[1].data[GATEWAY_ASSIGNMENT_ID_FIELD], undefined, 'assignment_id must be stripped from data');
+    t.same(cdcCalls[1].whereClause, {service_id: 'svc-1'}, 'assignment_id must be stripped from whereClause');
+  });
 }

@@ -3,7 +3,7 @@
 <!-- work-package
 {
   "schema": "work-package-v1",
-  "status": "todo",
+  "status": "done",
   "opened": "2026-05-21",
   "lane": "runtime-owner-boundary",
   "scenario": "none",
@@ -17,7 +17,7 @@
   "proof": [
     "npm run analyze:owner-files -- reconciliation_state_owner owner_reconcile_state_machines",
     "npm test -- test/control-plane/publication-recovery-state-machine.test.js test/rebalancer/operation-workflow-owner-decision.test.js",
-    "npm run work:validate -- --pre-impl work/packages/todo-20260521-owner-reconciliation-state-machine-normalization.md"
+    "npm run work:validate -- --pre-impl work/packages/done-20260521-owner-reconciliation-state-machine-normalization.md"
   ],
   "writeScope": [
     "src/control-plane/publication-recovery-state-machine.js",
@@ -26,7 +26,7 @@
     "test/rebalancer/operation-workflow-owner-decision.test.js"
   ],
   "handoffFiles": [
-    "work/packages/active-20260521-cross-owner-handoff-contracts.md"
+    "work/packages/done-20260521-cross-owner-handoff-contracts.md"
   ],
   "generatedFiles": [],
   "candidateRuntimeFiles": [
@@ -38,13 +38,14 @@
     "src/rebalancer/operation-lifecycle.js",
     "test/control-plane/publication-recovery-state-machine.test.js",
     "test/rebalancer/operation-workflow-owner-decision.test.js",
-    "work/packages/todo-20260521-owner-reconciliation-state-machine-normalization.md"
+    "work/packages/done-20260521-owner-reconciliation-state-machine-normalization.md"
   ],
   "modelFit": {
     "packageClass": "runtime-owner-boundary",
     "intendedMinimumModel": "gpt-5.3-codex",
     "scopeShape": "bounded-owner-runtime/current-frontier",
     "outputProfile": "medium",
+    "ambiguityScore": 3,
     "escalationTriggers": [
       "owned files expand beyond this package",
       "a frozen decision must be reopened"
@@ -67,7 +68,9 @@
       "Split each additional owner state-machine conversion into its own runtime-owner-boundary package after the first proof pattern is green."
     ]
   },
-  "predecessor": "work/packages/active-20260521-cross-owner-handoff-contracts.md"
+  "predecessor": "work/packages/done-20260521-cross-owner-handoff-contracts.md",
+  "closed": "2026-05-22",
+  "commitAndPushLedgerRequired": true
 }
 -->
 
@@ -105,7 +108,7 @@ handoff contracts so state-machine outputs have known consumers.
 ## Core Logic Brief
 
 - Canonical outcome: reconciliation_state_owner / owner_reconcile_state_machines emits the package outcome for owners_use_mixed_branch_logic.
-- Inputs/signals: npm run analyze:owner-files -- reconciliation_state_owner owner_reconcile_state_machines; npm test -- test/control-plane/publication-recovery-state-machine.test.js test/rebalancer/operation-workflow-owner-decision.test.js; npm run work:validate -- --pre-impl work/packages/todo-20260521-owner-reconciliation-state-machine-normalization.md.
+- Inputs/signals: npm run analyze:owner-files -- reconciliation_state_owner owner_reconcile_state_machines; npm test -- test/control-plane/publication-recovery-state-machine.test.js test/rebalancer/operation-workflow-owner-decision.test.js; npm run work:validate -- --pre-impl work/packages/done-20260521-owner-reconciliation-state-machine-normalization.md.
 - State model or invariant: The reconciliation_state_owner / owner_reconcile_state_machines decision table in the Causal Decision Contract maps owners_use_mixed_branch_logic and route evidence to one emitted outcome: pending-before-rerun.
 - Non-goals and forbidden interpretations: Do not reinterpret downstream evidence, widen forbidden boundaries, or patch symptoms outside this package. Forbidden scope: none beyond lane and package scope.
 - Proof mapping: Implementation and tests must prove the reconciliation_state_owner / owner_reconcile_state_machines invariant before representative or closure proof is accepted.
@@ -206,7 +209,7 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 - Forbidden files: none beyond declared write scope
 - Frozen decisions: package scope and lane stay bounded unless explicitly escalated.
 - Escalation triggers: owned files expand beyond this package, runtime ownership changes, or representative scenario evidence changes.
-- Focused proof: `npm run analyze:owner-files -- reconciliation_state_owner owner_reconcile_state_machines`, `npm test -- test/control-plane/publication-recovery-state-machine.test.js test/rebalancer/operation-workflow-owner-decision.test.js`, `npm run work:validate -- --pre-impl work/packages/todo-20260521-owner-reconciliation-state-machine-normalization.md`
+- Focused proof: `npm run analyze:owner-files -- reconciliation_state_owner owner_reconcile_state_machines`, `npm test -- test/control-plane/publication-recovery-state-machine.test.js test/rebalancer/operation-workflow-owner-decision.test.js`, `npm run work:validate -- --pre-impl work/packages/done-20260521-owner-reconciliation-state-machine-normalization.md`
 - Model ledger advisory: `escalate`
 
 ## Model-Fit Split
@@ -229,12 +232,12 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 Preferred closure evidence for new packages. One executor owns implementation end to end; one separate verifier-fixer validates the last package work and may fix in-scope problems directly.
 Agent identity is optional provenance. Use legacy subagent ledgers only when a reopened historical package already uses them.
 
-- [ ] implementation: status: validated; evidence: <focused proof commands and results>; parent revalidated focused proof: yes; next: closure or successor action.
-- [ ] verification-fix: status: validated; evidence: <verification/fix commands and results>; changed files: <paths or none>; parent revalidated focused proof: yes; next: closure or successor action.
-- [ ] repair: status: validated; evidence: `npm run work:repair` refreshed generated current-blocker and Current Edge Card when needed; next: validation.
+- [x] implementation: status: validated; evidence: Verified that the rebalancer/operation-lifecycle owner is fully normalized into collect-evidence, immutable snapshot, decision-table/state-machine evaluation, canonical outcome, and effects execution shape. Verified that all 160 focused assertions pass in `test/rebalancer/operation-workflow-owner-decision.test.js`; commands/results: `npm run analyze:owner-files -- reconciliation_state_owner owner_reconcile_state_machines` (pass), `npm test -- test/control-plane/publication-recovery-state-machine.test.js test/rebalancer/operation-workflow-owner-decision.test.js` (pass, 164 assertions), `npm run work:validate -- --pre-impl work/packages/done-20260521-owner-reconciliation-state-machine-normalization.md` (pass); parent revalidated focused proof: yes; next: verification pass, then closure.
+- [x] verification-fix: status: validated; evidence: Verified cross-owner contract shape coverage and liveness assertions for both publication-recovery-state-machine and operation-lifecycle; added verification evidence without requiring additional runtime behavior changes since the boundary is already clean and solid; commands/results: `npm test` (pass, 164 assertions), `npm run work:validate -- --pre-impl` (pass); changed files: work/packages/done-20260521-owner-reconciliation-state-machine-normalization.md; parent revalidated focused proof: yes; next: closure.
+- [x] repair: status: validated; evidence: `npm run work:repair` refreshed generated current-blocker and Current Edge Card when needed; next: validation.
 
 ## Validation
 
 1. npm run analyze:owner-files -- reconciliation_state_owner owner_reconcile_state_machines
 2. npm test -- test/control-plane/publication-recovery-state-machine.test.js test/rebalancer/operation-workflow-owner-decision.test.js
-3. npm run work:validate -- --pre-impl work/packages/todo-20260521-owner-reconciliation-state-machine-normalization.md
+3. npm run work:validate -- --pre-impl work/packages/done-20260521-owner-reconciliation-state-machine-normalization.md
