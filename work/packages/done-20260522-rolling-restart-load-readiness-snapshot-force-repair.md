@@ -3,7 +3,7 @@
 <!-- work-package
 {
   "schema": "work-package-v1",
-  "status": "active",
+  "status": "done",
   "opened": "2026-05-22",
   "lane": "causal-escalation",
   "scenario": "rolling-restart",
@@ -18,7 +18,7 @@
   "whyHighestLeverageNow": "The previous timeout-floor fix removed the startup active-gate timeout, but the fresh representative now fails in pre_load load-readiness because waitForLoadReadinessStability never enables forced snapshot repair. This is the narrowest owner boundary that can move snapshotCoverage from 0/5 without inflating timeouts or changing publication ownership.",
   "representativeRerunCadence": "fresh-representative-rerun",
   "proof": [
-    "npm run work:validate -- --pre-impl work/packages/active-20260522-rolling-restart-load-readiness-snapshot-force-repair.md",
+    "npm run work:validate -- --pre-impl work/packages/done-20260522-rolling-restart-load-readiness-snapshot-force-repair.md",
     "npm run work:evidence-summary -- test-output/reports/rolling-restart-snapshot-source-contract-20260522T180652Z.report.json",
     "npm run analyze:causal-model -- test-output/reports/rolling-restart-snapshot-source-contract-20260522T180652Z.report.json",
     "PROOF=load-readiness-force-repair npm test -- test/distributed/harness/__tests__/cluster.test-part-6.js",
@@ -173,7 +173,10 @@
       "npm run work:repair",
       "npm run work:validate -- --pre-impl"
     ]
-  }
+  },
+  "closed": "2026-05-22",
+  "commitAndPushLedgerRequired": true,
+  "successor": "work/packages/active-20260522-rolling-restart-selected-timeout-handoff-contract.md"
 }
 -->
 
@@ -323,12 +326,18 @@ Agent identity is optional provenance. Use legacy subagent ledgers only when a r
 
 - [x] implementation: status: validated; evidence: added load-readiness active-gate forceRepair threshold handoff in `test/distributed/harness/cluster-segment-7.js` and focused coverage in `test/distributed/harness/__tests__/cluster-part-6-core-04-test-cases.js`; `PROOF=load-readiness-force-repair npm test -- test/distributed/harness/__tests__/cluster.test-part-6.js` passed; `git diff --check` passed; parent revalidated focused proof: yes; next: fresh representative rerun.
 - [x] guideline guardrail attempt: status: partial-unvalidated; evidence: `node scripts/check-guideline-literals.js test/distributed/harness/cluster-segment-7.js test/distributed/harness/__tests__/cluster-part-6-core-04-test-cases.js` and `node scripts/check-guideline-decision-boundaries.js test/distributed/harness/cluster-segment-7.js test/distributed/harness/__tests__/cluster-part-6-core-04-test-cases.js` were attempted and failed on pre-existing whole-file violations in oversized touched files; new constants and the focused handoff were not the reported decision-boundary debt; next: do not use these failing whole-file scans as closure proof for this narrow runtime package.
-- [x] verification-fix: status: validated; evidence: verified `waitForLoadReadinessStability` uses `_waitForAllActive`-aligned `activeWaitForceRepairAfter` threshold semantics and passes `_probeClusterActiveState(..., {forceRepair:false})` before threshold then `{forceRepair:true}` after threshold; confirmed no timeout widening or publication-gate bypass in the load-readiness loop; `PROOF=load-readiness-force-repair npm test -- test/distributed/harness/__tests__/cluster.test-part-6.js` passed (includes `Unit: waitForLoadReadinessStability enables force repair after snapshot timeout progress stalls`); `git diff --check` passed; changed files: `work/packages/active-20260522-rolling-restart-load-readiness-snapshot-force-repair.md`; parent revalidated focused proof: yes; next: closure or successor action.
+- [x] verification-fix: status: validated; evidence: verified `waitForLoadReadinessStability` uses `_waitForAllActive`-aligned `activeWaitForceRepairAfter` threshold semantics and passes `_probeClusterActiveState(..., {forceRepair:false})` before threshold then `{forceRepair:true}` after threshold; confirmed no timeout widening or publication-gate bypass in the load-readiness loop; `PROOF=load-readiness-force-repair npm test -- test/distributed/harness/__tests__/cluster.test-part-6.js` passed (includes `Unit: waitForLoadReadinessStability enables force repair after snapshot timeout progress stalls`); `git diff --check` passed; changed files: `work/packages/done-20260522-rolling-restart-load-readiness-snapshot-force-repair.md`; parent revalidated focused proof: yes; next: closure or successor action.
 - [x] repair: status: validated; evidence: `npm run work:repair` refreshed generated current-blocker and Current Edge Card when needed; next: closure validation after representative rerun.
+
+## Commit And Push Ledger
+
+1. Focused package commit: 18c0b9ec72ee8325c7e172e5ba83b451887127fc
+2. Pushed to: origin/codex/pending-ack-eligibility-filter
+3. Commit contains only package-owned files/package-status/allowed sprint handoff: yes
 
 ## Validation
 
-1. npm run work:validate -- --pre-impl work/packages/active-20260522-rolling-restart-load-readiness-snapshot-force-repair.md
+1. npm run work:validate -- --pre-impl work/packages/done-20260522-rolling-restart-load-readiness-snapshot-force-repair.md
 2. npm run work:evidence-summary -- test-output/reports/rolling-restart-snapshot-source-contract-20260522T180652Z.report.json
 3. npm run analyze:causal-model -- test-output/reports/rolling-restart-snapshot-source-contract-20260522T180652Z.report.json
 4. PROOF=load-readiness-force-repair npm test -- test/distributed/harness/__tests__/cluster.test-part-6.js
