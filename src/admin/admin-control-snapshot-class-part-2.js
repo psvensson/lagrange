@@ -1009,11 +1009,19 @@ function buildControlSnapshotHandoffProgressComparison(
       current.runtimePromotionAllowed !== true &&
       refreshed.runtimePromotionAllowed === true,
   });
+  const handoffEvidenceProgressed =
+    ownerOutcomeProgressed === true ||
+    progressSignals.pendingReconcileCountDecreased === true ||
+    progressSignals.pendingReconcileNodeIdsDecreased === true ||
+    progressSignals.pendingRecoveryCountDecreased === true ||
+    progressSignals.pendingRecoveryNodeIdsDecreased === true ||
+    progressSignals.ownerReconcilePendingChanged === true ||
+    progressSignals.runtimePromotionAllowed === true;
   return Object.freeze({
     current,
     refreshed,
     progressSignals,
-    handoffProgressed: ownerOutcomeProgressed,
+    handoffProgressed: handoffEvidenceProgressed,
   });
 }
 
@@ -1028,10 +1036,12 @@ function buildControlSnapshotHandoffRefreshDecision(
       handoffComparison.handoffProgressed === true &&
       resolveControlSnapshotCoverageNodeCount(refreshedSnapshot) >
         resolveControlSnapshotCoverageNodeCount(snapshot),
-    ownerOutcomeProgressed: handoffComparison.handoffProgressed === true,
+    handoffEvidenceProgressed: handoffComparison.handoffProgressed === true,
+    ownerOutcomeProgressed:
+      handoffComparison.progressSignals.ownerOutcomeProgressed === true,
   });
   return Object.freeze({
-    refreshed: decisionSignals.ownerOutcomeProgressed === true,
+    refreshed: decisionSignals.handoffEvidenceProgressed === true,
     decisionSignals,
     handoffComparison,
   });

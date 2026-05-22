@@ -2888,6 +2888,10 @@ function selectPublicationActiveGateHandoffContract(value = null) {
 function buildPublicationActiveGateHandoffEmptyReconcileTarget(
   handoffContract = null,
 ) {
+  const pendingRecoveryNodeIds =
+    normalizePublicationActiveGateHandoffNodeIdList(
+      handoffContract?.pendingRecoveryNodeIds,
+    );
   return Object.freeze({
     schemaVersion: PUBLICATION_ACTIVE_GATE_HANDOFF_SCHEMA_VERSION,
     state: PUBLICATION_ACTIVE_GATE_HANDOFF_TARGET_STATE.ABSENT,
@@ -2897,6 +2901,11 @@ function buildPublicationActiveGateHandoffEmptyReconcileTarget(
     requiredAckNodeIds: PUBLICATION_ACTIVE_GATE_HANDOFF_EMPTY_LIST,
     acknowledgedNodeIds: PUBLICATION_ACTIVE_GATE_HANDOFF_EMPTY_LIST,
     pendingReconcileNodeIds: PUBLICATION_ACTIVE_GATE_HANDOFF_EMPTY_LIST,
+    pendingRecoveryNodeIds,
+    pendingRecoveryCount: normalizePublicationActiveGateHandoffDebtCount(
+      handoffContract?.pendingRecoveryCount,
+      pendingRecoveryNodeIds,
+    ),
   });
 }
 
@@ -2954,6 +2963,8 @@ function buildPublicationActiveGateHandoffReconcileTarget(
     requiredAckNodeIds: publishedActiveNodeIds,
     acknowledgedNodeIds: publishedActiveNodeIds,
     pendingReconcileNodeIds: handoffContract.pendingReconcileNodeIds,
+    pendingRecoveryNodeIds: handoffContract.pendingRecoveryNodeIds,
+    pendingRecoveryCount: handoffContract.pendingRecoveryCount,
   });
 }
 
@@ -2980,6 +2991,32 @@ function resolvePublicationActiveGateMembershipPublicationTarget(value = null) {
   );
 }
 
+function hasPublicationActiveGateOwnerRecoveryWaitSignal(value = null) {
+  const handoffRecord =
+    isPublicationActiveGateHandoffRecord(value) ?
+      value :
+      PUBLICATION_ACTIVE_GATE_HANDOFF_ABSENT_RECORD;
+  const pendingRecoveryNodeIds =
+    normalizePublicationActiveGateHandoffNodeIdList(
+      handoffRecord?.[
+        PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.PENDING_RECOVERY_NODE_IDS
+      ],
+    );
+  const normalizedPendingRecoveryCount =
+    normalizePublicationActiveGateHandoffDebtCount(
+      handoffRecord?.[
+        PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.PENDING_RECOVERY_COUNT
+      ],
+      pendingRecoveryNodeIds,
+    );
+  return handoffRecord?.nextAction ===
+    PUBLICATION_ACTIVE_GATE_HANDOFF_NEXT_ACTION.WAIT_OWNER_RECOVERY &&
+    (
+      normalizedPendingRecoveryCount > NUM.ZERO ||
+      pendingRecoveryNodeIds.length > NUM.ZERO
+    );
+}
+
 function hasPublicationActiveGateOwnerReconcileSignal(value = null) {
   const selectedHandoffContract = selectPublicationActiveGateHandoffContract(
     value,
@@ -2990,6 +3027,9 @@ function hasPublicationActiveGateOwnerReconcileSignal(value = null) {
       selectedHandoffContract.nextAction ===
         PUBLICATION_ACTIVE_GATE_HANDOFF_NEXT_ACTION
           .RECONCILE_OWNER_MEMBERSHIP_PUBLICATION ||
+      hasPublicationActiveGateOwnerRecoveryWaitSignal(
+        selectedHandoffContract,
+      ) ||
       Number(
         selectedHandoffContract[
           PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.PENDING_RECONCILE_COUNT
@@ -3013,6 +3053,7 @@ function hasPublicationActiveGateOwnerReconcileSignal(value = null) {
   return handoffContract.nextAction ===
     PUBLICATION_ACTIVE_GATE_HANDOFF_NEXT_ACTION
       .RECONCILE_OWNER_MEMBERSHIP_PUBLICATION ||
+    hasPublicationActiveGateOwnerRecoveryWaitSignal(handoffContract) ||
     handoffContract.pendingReconcileCount > NUM.ZERO ||
     handoffContract.pendingReconcileNodeIds.length > NUM.ZERO;
 }

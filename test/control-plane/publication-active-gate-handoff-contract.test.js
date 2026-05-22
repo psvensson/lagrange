@@ -662,6 +662,21 @@ test('publication active-gate selector preserves flattened pending recovery ids'
       [...TEST_EMPTY_NODE_IDS],
       'owner recovery debt should not become membership reconcile debt',
     );
+    t.equal(
+      target.reconcileRequired,
+      false,
+      'owner recovery waits should not become membership publication writes',
+    );
+    t.same(
+      target.pendingRecoveryNodeIds,
+      [TEST_NODE_2],
+      'owner recovery waits should remain visible on the owner target',
+    );
+    t.equal(
+      hasPublicationActiveGateOwnerReconcileSignal(selectedHandoff),
+      true,
+      'owner recovery waits should still wake the selected owner command path',
+    );
   });
 
 test('publication active-gate selector preserves joined pending reconcile ids after publication ack closure',
