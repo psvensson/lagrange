@@ -89,7 +89,7 @@ class OperationWorkflowOwnerSegment4 extends OperationWorkflowOwnerSegment3 {
       REBALANCE_COORDINATOR_LOG_MSG.OPERATION_BLOCKED_BY_SAFETY_POLICY;
   }
 
-  async claimPendingDispatchOperation(operation) {
+  async claimPendingDispatchOperation(operation, options = {}) {
     if (
       !operation ||
       operation.workflowStep !== WORKFLOW_STEP.PENDING ||
@@ -101,13 +101,15 @@ class OperationWorkflowOwnerSegment4 extends OperationWorkflowOwnerSegment3 {
 
     if (this.shouldUsePriorityDispatchClaimNarrowPath(operation)) {
       const claimedOperation =
-        await this.claimPriorityDispatchTransition(operation);
+        await this.claimPriorityDispatchTransition(operation, options);
       if (claimedOperation) {
         return claimedOperation;
       }
-      const retryableClaimError =
-        this.buildPriorityDispatchClaimRetryableError(operation);
-      this.deferDispatchRetry(operation, retryableClaimError);
+      if (!this.isOperationDeferredRetryActive(operation.operationId)) {
+        const retryableClaimError =
+          this.buildPriorityDispatchClaimRetryableError(operation);
+        this.deferDispatchRetry(operation, retryableClaimError);
+      }
       return null;
     }
 
@@ -215,6 +217,25 @@ class OperationWorkflowOwnerSegment4 extends OperationWorkflowOwnerSegment3 {
   }
 
   /**
+   * Object dispatch input can be the only owner-local snapshot available when
+   * authoritative operation visibility is deferred during the retry.
+   *
+   * @param {string|Object} operationInput
+   * @return {boolean}
+   * @private
+   */
+  shouldPreserveDispatchInputForTransitionRetry(operationInput) {
+    return (
+      operationInput &&
+      typeof operationInput === TYPEOF.OBJECT &&
+      (
+        typeof operationInput.operationId === TYPEOF.STRING ||
+        typeof operationInput.operation_id === TYPEOF.STRING
+      )
+    );
+  }
+
+  /**
    * Normalize one dispatch input to a canonical operation object.
    * @param {string|Object} operationInput
    * @return {Promise<Object|null>}
@@ -315,12 +336,12 @@ class OperationWorkflowOwnerSegment4 extends OperationWorkflowOwnerSegment3 {
       }
     } else if (dispatchableWorkflowStep === WORKFLOW_STEP.PENDING) {
       const claimedOperation =
-        await this.claimPendingDispatchOperation(operation);
+        await this.claimPendingDispatchOperation(operation, {
+          preserveTransitionRetrySnapshot:
+            this.shouldPreserveDispatchInputForTransitionRetry(operationInput),
+        });
       if (!claimedOperation) {
-        const dispatchRetryScheduled = this.dispatchRetryTimerByOperationId.has(
-          operation.operationId,
-        );
-        if (dispatchRetryScheduled) {
+        if (this.isOperationDeferredRetryActive(operation.operationId)) {
           return this.buildSkippedOperationResult(
             REBALANCER_SKIP_REASON.DEFERRED_RETRY_PENDING,
             operation.operationId,
@@ -770,10 +791,8 @@ class OperationWorkflowOwnerSegment4 extends OperationWorkflowOwnerSegment3 {
         const claimedOperation =
           await this.claimPendingDispatchOperation(operation);
         if (!claimedOperation) {
-          const dispatchRetryScheduled =
-            this.dispatchRetryTimerByOperationId.has(operation.operationId);
           return this.buildSkippedOperationResult(
-            dispatchRetryScheduled ?
+            this.isOperationDeferredRetryActive(operation.operationId) ?
               REBALANCER_SKIP_REASON.DEFERRED_RETRY_PENDING :
               OPERATION_WORKFLOW_OWNER_REASON.OPERATION_NOT_DISPATCHABLE,
             operation.operationId,

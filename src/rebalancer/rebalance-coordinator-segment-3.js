@@ -786,9 +786,35 @@ class RebalanceCoordinatorSegment3 extends RebalanceCoordinatorSegment2 {
     let conflictingOperation =
       this.findEntityAddLikeConflictingOperation(operations);
     if (!conflictingOperation && operationObservation?.deferredOutcome) {
-      conflictingOperation = this.findEntityAddLikeConflictingOperation(
-        this.getCacheVisibleEntityOperations(context),
+      const cacheVisibleOperations = this.getCacheVisibleEntityOperations(
+        context,
       );
+      conflictingOperation = this.findEntityAddLikeConflictingOperation(
+        cacheVisibleOperations,
+      );
+      if (
+        !conflictingOperation &&
+        this.isPriorityControlPlanePartition(context?.partitionId)
+      ) {
+        const cacheVisibleAddLikeConflict =
+          await this.findCriticalAddLikeConflictingOperation(
+            cacheVisibleOperations,
+          );
+        if (cacheVisibleAddLikeConflict) {
+          throw this.createConcurrentOperationBudgetError(
+            normalizedMoveType,
+            NUM.ONE,
+            {
+              message:
+                LOCAL_STR_CRITICAL_PARTITION +
+                `${context.partitionId} already has an add-like operation ` +
+                LOCAL_STR_IN_FLIGHT,
+              conflictingOperationId:
+                cacheVisibleAddLikeConflict.operationId,
+            },
+          );
+        }
+      }
     }
     if (!conflictingOperation && operationObservation?.deferredOutcome) {
       if (

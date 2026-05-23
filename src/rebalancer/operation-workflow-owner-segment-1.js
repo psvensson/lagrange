@@ -559,6 +559,22 @@ class OperationWorkflowOwnerSegment1 {
   }
 
   /**
+   * @param {string|null} operationId
+   * @return {boolean}
+   * @private
+   */
+  isOperationDeferredRetryActive(operationId) {
+    return (
+      Boolean(operationId) &&
+      (
+        this.dispatchRetryTimerByOperationId.has(operationId) ||
+        this.transitionRetryTimerByOperationId.has(operationId) ||
+        this.hasActiveTransitionRetryGrace(operationId)
+      )
+    );
+  }
+
+  /**
    * Critical system-partition recovery must not fail terminally on transient
    * control-plane dispatch pressure. Keep the same operation alive and retry
    * through the owner lane instead of churning new failed rows.
@@ -584,7 +600,7 @@ class OperationWorkflowOwnerSegment1 {
     if (!operation) {
       return false;
     }
-    const workflowStep = operation.workflowStep;
+    const workflowStep = operation.workflowStep || operation.workflow_step;
     if (this.repository.isReplaceRemoveDispatchPhase(operation)) {
       return (
         workflowStep === WORKFLOW_STEP.ACTIVE ||
@@ -1397,15 +1413,21 @@ class OperationWorkflowOwnerSegment1 {
       if (this.isShuttingDown) {
         return;
       }
-      return this.operationWorkflowRunExclusive(
-        this.getOperationOwnerSingleFlightKey(operationId),
-        () => this.armCoordinatorCreatedOperation(operationSnapshot),
-      ).catch((retryError) => {
-        this.handleDeferredCoordinatorCreatedRemoteHandoffRetryFailure(
+      const handoffTimeoutDecision =
+        this.buildCoordinatorCreatedRemoteHandoffTimeoutDecision(
           operationSnapshot,
-          retryError,
         );
-      });
+      if (handoffTimeoutDecision.shouldStop) {
+        this.clearCreatedOperationHandoffRetry(operationId);
+        return false;
+      }
+      return this.wakeCoordinatorCreatedRemoteOwner(operationSnapshot)
+        .catch((retryError) => {
+          this.handleDeferredCoordinatorCreatedRemoteHandoffRetryFailure(
+            operationSnapshot,
+            retryError,
+          );
+        });
     }, delayMs);
     this.createdOperationHandoffRetryTimerByOperationId.set(
       operationId,

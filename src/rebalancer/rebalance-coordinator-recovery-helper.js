@@ -1,5 +1,8 @@
 import {REBALANCE_COORDINATOR_SHARED} from './rebalance-coordinator-shared.js';
 import {filterConcurrentAddBudgetOperations} from './rebalance-coordinator-priority-budget-helper.js';
+import {
+  REBALANCE_COORDINATOR_TYPE,
+} from './rebalance-coordinator-helper-common.js';
 
 const {
   NUM,
@@ -7,7 +10,6 @@ const {
   REBALANCE_COORDINATOR_EVENT,
   REBALANCE_COORDINATOR_LOG_MSG,
   OperationType,
-  REBALANCE_COORDINATOR_TYPE,
   SERVICE_TYPE,
   WORKFLOW_STEP,
 } = REBALANCE_COORDINATOR_SHARED;

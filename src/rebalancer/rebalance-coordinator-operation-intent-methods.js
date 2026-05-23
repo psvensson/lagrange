@@ -8,6 +8,7 @@ const {
   PRIORITY_RECENT_INTENT_TTL_MS,
   RECENT_INTENT_TTL_MS,
   RECENT_OPERATION_INTENT_VISIBILITY_STATE,
+  ReplicaStatus,
   SERVICE_TYPE,
   STRING,
   WORKFLOW_STEP,
@@ -151,7 +152,7 @@ class RebalanceCoordinatorOperationIntentMethods {
       return null;
     }
     const cachedOperation = cached.operation;
-    if (!cachedOperation || this.isOperationTerminal(cachedOperation)) {
+    if (!cachedOperation || this.isRecentOperationIntentTerminal(cachedOperation)) {
       this.recentOperationIntents.delete(dedupeKey);
       return null;
     }
@@ -180,7 +181,7 @@ class RebalanceCoordinatorOperationIntentMethods {
     }
     if (
       cacheVisibleOperation &&
-      this.isOperationTerminal(cacheVisibleOperation)
+      this.isRecentOperationIntentTerminal(cacheVisibleOperation)
     ) {
       this.pruneRecentOperationIntentsForOperation(cacheVisibleOperation);
       return null;
@@ -204,7 +205,9 @@ class RebalanceCoordinatorOperationIntentMethods {
         authoritativeEntityVisibility.state ===
         RECENT_OPERATION_INTENT_VISIBILITY_STATE.MATCHING
       ) {
-        if (this.isOperationTerminal(authoritativeEntityVisibility.operation)) {
+        if (this.isRecentOperationIntentTerminal(
+          authoritativeEntityVisibility.operation,
+        )) {
           this.pruneRecentOperationIntentsForOperation(
             authoritativeEntityVisibility.operation,
           );
@@ -234,7 +237,7 @@ class RebalanceCoordinatorOperationIntentMethods {
       this.recentOperationIntents.delete(dedupeKey);
       return null;
     }
-    if (this.isOperationTerminal(authoritativeOperation)) {
+    if (this.isRecentOperationIntentTerminal(authoritativeOperation)) {
       this.pruneRecentOperationIntentsForOperation(authoritativeOperation);
       return null;
     }
@@ -340,7 +343,7 @@ class RebalanceCoordinatorOperationIntentMethods {
    * @private
    */
   rememberOperationIntent(dedupeKey, operation) {
-    if (!operation || this.isOperationTerminal(operation)) {
+    if (!operation || this.isRecentOperationIntentTerminal(operation)) {
       this.recentOperationIntents.delete(dedupeKey);
       return;
     }
@@ -348,6 +351,30 @@ class RebalanceCoordinatorOperationIntentMethods {
       operation,
       expiresAt: Date.now() + this.getRecentOperationIntentTtlMs(operation),
     });
+  }
+
+  /**
+   * Recent create-intent rows are suppression hints, not semantic owners.
+   * A removed row must retire the hint even when the original operation type
+   * was add-like and the generic lifecycle grammar would treat removed as
+   * type-inconsistent rather than terminal.
+   *
+   * @param {Object|null} operation
+   * @return {boolean}
+   * @private
+   */
+  isRecentOperationIntentTerminal(operation) {
+    if (!operation) {
+      return false;
+    }
+    if (this.isOperationTerminal(operation)) {
+      return true;
+    }
+    return (
+      operation.workflowStep === WORKFLOW_STEP.REMOVED ||
+      operation.workflow_step === WORKFLOW_STEP.REMOVED ||
+      operation.status === ReplicaStatus.REMOVED
+    );
   }
 
   /**

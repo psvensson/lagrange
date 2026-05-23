@@ -747,7 +747,7 @@ class OperationWorkflowOwnerSegment3 extends OperationWorkflowOwnerSegment2 {
    * @return {Promise<Object|null>}
    * @private
    */
-  async claimPriorityDispatchTransition(operation) {
+  async claimPriorityDispatchTransition(operation, options = {}) {
     if (
       !operation ||
       operation.workflowStep !== WORKFLOW_STEP.PENDING ||
@@ -859,38 +859,28 @@ class OperationWorkflowOwnerSegment3 extends OperationWorkflowOwnerSegment2 {
           )) {
             throw error;
           }
-          projectedOperation[PRIORITY_DEFERRED_CLAIM_EXPECTED_STEP_FIELD] =
-            previousStep;
-          this.repository.recordOwnerPersistedTransitionVisibilityWitness(
-            projectedOperation,
-          );
-          this.repository.syncIncompleteOperationObservation(
-            projectedOperation,
-          );
-          this.operationWorkflowCoordinator.markTransitionCommitted(
+          this.operationWorkflowCoordinator.removeWorkflow(
             operation.operationId,
-            step,
           );
-          commitProjectedState(operation);
-          this.logger.warn(
-            REBALANCE_COORDINATOR_LOG_MSG.OPERATION_TRANSITION_RETRY_DEFERRED,
-            {
-              operationId: operation.operationId,
+          if (
+            !this.deferTransitionRetry(operation.operationId, error, {
               boundary: OPERATION_WORKFLOW_OWNER_LITERAL.DISPATCH,
               partitionId: operation.partitionId,
               workflowStep: previousStep,
-              delayMs: DISPATCH_RETRY_DELAY_MS,
-              errorMessage: this.normalizeErrorMessage(
-                error,
-                OPERATION_WORKFLOW_OWNER_LITERAL
-                  .RETRYABLE_CONTROL_DASH_PLANE_TRANSITION_FAILURE,
-              ),
+              updatedAt: operation.updatedAt,
+              createdAt: operation.createdAt,
+              operationSnapshot: options.preserveTransitionRetrySnapshot ===
+                true ?
+                operation :
+                null,
               ingress:
                 OPERATION_WORKFLOW_OWNER_LITERAL
                   .PRIORITY_CLAIM_DEFERRED_LOCAL,
-            },
-          );
-          return operation;
+            })
+          ) {
+            throw error;
+          }
+          return null;
         }
 
         if (!transitionCommitted) {
