@@ -229,6 +229,12 @@ Agent identity is optional provenance. Use the compact five-field shape for new 
 
 - no ledger update: package slices documentation and adds a structural checker only, with no runtime theory or representative evidence change.
 
+## Commit And Push Ledger
+
+- Focused package commit: `623b5138d5f9abcdea64cf214cebbe2253f8de86`
+- Pushed to: origin/codex/pending-ack-eligibility-filter
+- Commit contains only package-owned files/package-status/allowed sprint handoff: yes
+
 ## Validation
 
 1. npm run audit:architecture-slices
