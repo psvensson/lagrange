@@ -24,7 +24,7 @@ Stop rule: If the canonical extractors cannot distinguish the route, open an arc
 
 Sprint: `none`
 
-Package: `work/packages/active-20260523-rolling-restart-active-gate-snapshot-readiness-architecture-experiment.md`
+Package: `work/packages/done-20260523-rolling-restart-active-gate-snapshot-readiness-architecture-experiment.md`
 
 Workflow lane: `experiment`
 
@@ -252,7 +252,7 @@ Gate next action: Watch for repeated frontier oscillation; open an autonomous ar
 
 Write scope:
 
-1. `work/packages/active-20260523-rolling-restart-active-gate-snapshot-readiness-architecture-experiment.md`
+1. `work/packages/done-20260523-rolling-restart-active-gate-snapshot-readiness-architecture-experiment.md`
 
 Handoff files:
 
@@ -272,7 +272,7 @@ Candidate runtime files:
 
 Commit scope:
 
-1. `work/packages/active-20260523-rolling-restart-active-gate-snapshot-readiness-architecture-experiment.md`
+1. `work/packages/done-20260523-rolling-restart-active-gate-snapshot-readiness-architecture-experiment.md`
 2. `work/sprints/current-blocker.md`
 3. `work/sprints/current-blocker.json`
 

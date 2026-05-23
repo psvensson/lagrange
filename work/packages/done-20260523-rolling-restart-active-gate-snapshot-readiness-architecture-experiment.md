@@ -3,7 +3,7 @@
 <!-- work-package
 {
   "schema": "work-package-v1",
-  "status": "active",
+  "status": "done",
   "opened": "2026-05-23",
   "lane": "experiment",
   "scenario": "rolling-restart",
@@ -23,7 +23,7 @@
     "npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-single-inactive-admin-probe-snapshot-residual-20260523T071500Z.report.json"
   ],
   "writeScope": [
-    "work/packages/active-20260523-rolling-restart-active-gate-snapshot-readiness-architecture-experiment.md"
+    "work/packages/done-20260523-rolling-restart-active-gate-snapshot-readiness-architecture-experiment.md"
   ],
   "handoffFiles": [
     "test-output/reports/rolling-restart-selected-snapshot-timeout-repair-deferred-owner-recovery-20260523T061500Z.report.json",
@@ -39,7 +39,7 @@
     "test/distributed/harness/__tests__/cluster-active-gate-admin-probe-timeout-projection.test.js"
   ],
   "commitScope": [
-    "work/packages/active-20260523-rolling-restart-active-gate-snapshot-readiness-architecture-experiment.md",
+    "work/packages/done-20260523-rolling-restart-active-gate-snapshot-readiness-architecture-experiment.md",
     "work/sprints/current-blocker.md",
     "work/sprints/current-blocker.json"
   ],
@@ -170,7 +170,10 @@
       "npm run work:repair",
       "npm run work:validate -- --pre-impl"
     ]
-  }
+  },
+  "closed": "2026-05-23",
+  "commitAndPushLedgerRequired": true,
+  "successor": "work/packages/active-20260523-rolling-restart-startup-readiness-admin-availability-support-contract.md"
 }
 -->
 
@@ -274,7 +277,7 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 
 ## In Scope
 
-1. work/packages/active-20260523-rolling-restart-active-gate-snapshot-readiness-architecture-experiment.md
+1. work/packages/done-20260523-rolling-restart-active-gate-snapshot-readiness-architecture-experiment.md
 
 ## Out Of Scope
 
@@ -286,7 +289,7 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 - Intended minimum model: `gpt-5.3-codex`
 - Scope shape: `cross-owner-discriminator/current-frontier`
 - Output profile: `medium`
-- Owned files: `work/packages/active-20260523-rolling-restart-active-gate-snapshot-readiness-architecture-experiment.md`
+- Owned files: `work/packages/done-20260523-rolling-restart-active-gate-snapshot-readiness-architecture-experiment.md`
 - Forbidden files: `src/`
 - Frozen decisions: package scope and lane stay bounded unless explicitly escalated.
 - Escalation triggers: owned files expand beyond this package, runtime ownership changes, or representative scenario evidence changes.
@@ -327,6 +330,6 @@ Agent identity is optional provenance. Use legacy subagent ledgers only when a r
 
 ## Commit And Push Ledger
 
-1. Focused package commit: pending
-2. Pushed to: pending
-3. Commit contains only package-owned files/package-status/allowed sprint handoff: pending
+1. Focused package commit: 25785966a11fb36e8cd529809db2adca9cd6412d
+2. Pushed to: origin/codex/pending-ack-eligibility-filter
+3. Commit contains only package-owned files/package-status/allowed sprint handoff: yes
