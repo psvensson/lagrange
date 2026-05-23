@@ -138,7 +138,7 @@ test('package scaffolder pre-fills Model Fit from schema defaults', async (t) =>
     'ledger': TEMP_LEDGER_PATH,
   });
 
-  t.match(content, /"schema": "work-package-v1"/u);
+  t.match(content, /"schema": "work-package-v2"/u);
   t.match(content, /"lane": "lightweight-maintenance"/u);
   t.match(content, /"writeScope": \[/u);
   t.match(content, /"commitScope": \[/u);

@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 
 import process from 'node:process';
+import fsSync from 'node:fs';
+import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 
 const NEWLINE = '\n';
@@ -53,7 +55,77 @@ const OUTPUT_PROFILE_SMALL = 'small';
 const OUTPUT_PROFILE_MEDIUM = 'medium';
 const OUTPUT_PROFILE_HIGH = 'high';
 const OUTPUT_PROFILE_EXTRA_HIGH = 'extra-high';
-const WORK_PACKAGE_METADATA_SCHEMA = 'work-package-v1';
+const WORK_PACKAGE_METADATA_SCHEMA = 'work-package-v2';
+const WORK_PACKAGE_METADATA_SCHEMA_V1 = 'work-package-v1';
+
+function normalizeMetadata(metadata, filePath) {
+  if (!metadata) return metadata;
+  if (metadata.schema === 'work-package-v2') {
+    const shim = { ...metadata };
+
+    if (metadata.intent) {
+      for (const [k, v] of Object.entries(metadata.intent)) {
+        if (shim[k] === undefined) shim[k] = v;
+      }
+    }
+    if (metadata.scope) {
+      for (const [k, v] of Object.entries(metadata.scope)) {
+        if (shim[k] === undefined) shim[k] = v;
+      }
+    }
+    if (metadata.gates) {
+      for (const [k, v] of Object.entries(metadata.gates)) {
+        if (shim[k] === undefined) shim[k] = v;
+      }
+    }
+    if (metadata.modelFit) {
+      for (const [k, v] of Object.entries(metadata.modelFit)) {
+        if (shim[k] === undefined) shim[k] = v;
+      }
+    }
+    if (metadata.execution) {
+      for (const [k, v] of Object.entries(metadata.execution)) {
+        if (k === 'proof') continue;
+        if (shim[k] === undefined) shim[k] = v;
+      }
+      if (metadata.execution.proof) {
+        if (shim.proof === undefined) {
+          shim.proof = metadata.execution.proof.commands || [];
+        }
+      }
+    }
+
+    const companionFile = metadata.gates?.companionGatesFile;
+    if (companionFile && filePath) {
+      try {
+        const companionPath = path.resolve(path.dirname(filePath), companionFile);
+        if (fsSync.existsSync(companionPath)) {
+          const content = fsSync.readFileSync(companionPath, 'utf8');
+          let companionData = {};
+          if (companionPath.endsWith('.json')) {
+            companionData = JSON.parse(content);
+          } else {
+            const match = content.match(/<!--\s*(?:work-package-gates|companion-gates)\s*(\{[\s\S]*?\})\s*-->/u) || content.match(/<!--\s*work-package\s*(\{[\s\S]*?\})\s*-->/u);
+            if (match) {
+              companionData = JSON.parse(match[1]);
+            }
+          }
+          for (const [k, v] of Object.entries(companionData)) {
+            if (shim[k] === undefined) {
+              shim[k] = v;
+            }
+          }
+        }
+      } catch {
+        return shim;
+      }
+    }
+
+    return shim;
+  }
+  return metadata;
+}
+
 const CAUSAL_GOVERNANCE_PENDING_OUTCOME = 'pending-before-rerun';
 const SCOPE_FIELD_WRITE_SCOPE = 'writeScope';
 const SCOPE_FIELD_HANDOFF_FILES = 'handoffFiles';
@@ -1011,6 +1083,7 @@ export {
   WORK_PACKAGE_SCOPE_FIELDS,
   WORKFLOW_LANES,
   WORK_PACKAGE_METADATA_SCHEMA,
+  WORK_PACKAGE_METADATA_SCHEMA_V1,
   METADATA_FIELD_STABILITY_CREDIT,
   METADATA_FIELD_WHY_HIGHEST_LEVERAGE_NOW,
   METADATA_FIELD_REPRESENTATIVE_RERUN_CADENCE,
@@ -1021,5 +1094,6 @@ export {
   coreLogicBriefRequiredForLane,
   defaultOutputProfileForLane,
   defaultModelFitForLane,
+  normalizeMetadata,
   renderSchemaReference,
 };

@@ -1,190 +1,164 @@
 {
   "schema": "current-blocker-v1",
   "generatedBy": "scripts/work-tracker.js",
-  "sprint": "none",
-  "package": "work/packages/active-20260523-rolling-restart-active-gate-snapshot-readiness-architecture-experiment.md",
+  "sprint": "work/sprints/active-2026-q2-workflow-steering-core-logic-hardening.md",
+  "package": "work/packages/active-20260523-package-metadata-flattening-and-proof-unification.md",
   "status": "active",
-  "lane": "experiment",
-  "scenario": "rolling-restart",
-  "artifact": "test-output/reports/rolling-restart-single-inactive-admin-probe-snapshot-residual-20260523T071500Z.report.json",
+  "lane": "lightweight-maintenance",
+  "scenario": "none",
+  "artifact": "none",
   "playback": "none",
-  "owner": "startup_active_gate_owner",
-  "boundary": "snapshot_coverage",
-  "dominantReason": "active_gate_timed_out",
-  "currentState": "Canonical discriminator evidence selected H2: startup readiness/admin availability is now the owner boundary. H1 remains partially present as selected_snapshot_source_timeout/repair_deferred evidence, but distributed failure shows three inactive admin_not_ready nodes plus readiness_probe_timeout, and H3 stale selected-source instrumentation is unsupported because owner queue and repair-deferred signals are still open.",
-  "nextAction": "Close this experiment as owner-boundary migration and activate a startup_readiness_owner / startup_support_evidence successor for explicit admin availability gating into active-gate coverage progression.",
+  "owner": "workflow_tooling_owner",
+  "boundary": "package_schema_and_proof_shape",
+  "dominantReason": "package_ceremony_drift",
+  "currentState": "New package scaffolded from the shared work-package schema.",
+  "nextAction": "Flatten package schema and unify proof recording",
   "proof": [
-    "npm run work:evidence-summary -- test-output/reports/rolling-restart-single-inactive-admin-probe-snapshot-residual-20260523T071500Z.report.json",
-    "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-single-inactive-admin-probe-snapshot-residual-20260523T071500Z.report.json --explain active_gate_snapshot_coverage",
-    "npm run analyze:distributed-failure -- --report test-output/reports/rolling-restart-single-inactive-admin-probe-snapshot-residual-20260523T071500Z.report.json",
-    "npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-single-inactive-admin-probe-snapshot-residual-20260523T071500Z.report.json"
+    "npm run work:package:doctor -- --suggest work/packages/active-20260523-package-metadata-flattening-and-proof-unification.md",
+    "npm run work:validate -- --pre-impl work/packages/active-20260523-package-metadata-flattening-and-proof-unification.md",
+    "npm test -- test/scripts/work-tracker-subagent-ledger.test.js test/scripts/work-theory-ledger.test.js test/scripts/work-scenario-triage.test.js test/scripts/analyze-priority-recovery-residuals.test.js test/scripts/analyze-topology-convergence.test.js test/scripts/work-context.test.js test/scripts/work-llm-usability-tools.test.js",
+    "git diff --check -- scripts/work-package-schema.js scripts/work-context.js scripts/work-subagent-prompt.js scripts/work-tracker.js test/scripts/work-context.test.js test/scripts/work-llm-usability-tools.test.js work/packages/active-20260523-package-metadata-flattening-and-proof-unification.md work/sprints/current-blocker.json work/sprints/current-blocker.md work/sprints/active-2026-q2-workflow-steering-core-logic-hardening.md",
+    "npm run work:context"
   ],
   "writeScope": [
-    "work/packages/active-20260523-rolling-restart-active-gate-snapshot-readiness-architecture-experiment.md"
-  ],
-  "handoffFiles": [
-    "test-output/reports/rolling-restart-selected-snapshot-timeout-repair-deferred-owner-recovery-20260523T061500Z.report.json",
-    "test-output/reports/rolling-restart-single-inactive-admin-probe-snapshot-residual-20260523T071500Z.report.json"
-  ],
-  "generatedFiles": [
-    "work/sprints/current-blocker.md",
-    "work/sprints/current-blocker.json"
-  ],
-  "candidateRuntimeFiles": [
+    ".kiro/steering/llm/README.md",
+    ".kiro/steering/llm/architecture.md",
+    ".kiro/steering/llm/core.md",
+    ".kiro/steering/llm/governance.md",
+    ".kiro/steering/llm/manifest.json",
+    ".kiro/steering/llm/rules.json",
+    ".kiro/steering/testing-guidelines.md",
+    "AGENTS.md",
+    "roadmap.md",
+    "scripts/analyze-priority-recovery-residuals.js",
+    "scripts/analyze-topology-convergence.js",
+    "scripts/generate-steering-llm-pack.js",
+    "scripts/model-ledger.js",
+    "scripts/work-context.js",
+    "scripts/work-package-new.js",
+    "scripts/work-package-schema.js",
+    "scripts/work-scenario-triage.js",
+    "scripts/work-subagent-prompt.js",
+    "scripts/work-theory-ledger.js",
+    "scripts/work-tracker.js",
+    "src/bootstrap/owners/bootstrap-readiness-owner-class-part-2.js",
+    "src/control-plane/control-plane-readiness-service-segment-3.js",
+    "src/control-plane/publication-active-gate-handoff-contract.js",
+    "src/diagnostics/topology-convergence-graph.js",
+    "src/rebalancer/operation-lifecycle.js",
+    "src/rebalancer/operation-workflow-owner-ports.js",
+    "src/rebalancer/operation-workflow-owner-segment-1.js",
+    "src/rebalancer/operation-workflow-owner.js",
+    "src/rebalancer/operation-workflow-recovery-reconcile.js",
+    "src/rebalancer/rebalancer-planning-gate-methods.js",
+    "src/rebalancer/unified-rebalancer-segment-1.js",
+    "src/rebalancer/unified-rebalancer-segment-5.js",
+    "test/distributed/harness/__tests__/cluster-active-gate-startup-acknowledgement-test-cases.js",
+    "test/distributed/harness/__tests__/cluster.test-part-4.js",
     "test/distributed/harness/cluster-segment-7-class-4.js",
-    "test/distributed/harness/cluster-segment-7-class-5.js",
-    "test/distributed/harness/__tests__/cluster-active-gate-admin-probe-timeout-projection.test.js"
+    "test/rebalancer/cluster-readiness-gate.test.js",
+    "test/rebalancer/operation-workflow-owner-adapter.test.js",
+    "test/rebalancer/operation-workflow-owner-decision.test.js",
+    "test/rebalancer/unified-rebalancer-part-5-2-stage-2.js",
+    "test/rebalancer/unified-rebalancer.test-part-5.js",
+    "test/scripts/analyze-topology-convergence.test.js",
+    "test/scripts/work-context.test.js",
+    "test/scripts/work-llm-usability-tools.test.js",
+    "test/scripts/work-theory-ledger.test.js",
+    "test/scripts/work-tracker-subagent-ledger.test.js",
+    "work/templates/work-package-template.md",
+    "test/bootstrap/owners/",
+    "test/distributed/harness/__tests__/cluster-active-gate-selected-transport-closed-owner-recovery-projection.test.js",
+    "test/distributed/harness/__tests__/cluster-active-gate-startup-readiness-admin-availability.test.js",
+    "test/scripts/analyze-priority-recovery-residuals.test.js",
+    "test/scripts/work-scenario-triage.test.js",
+    "work/RULES.md"
   ],
+  "handoffFiles": [],
+  "generatedFiles": [],
+  "candidateRuntimeFiles": [],
   "commitScope": [
-    "work/packages/active-20260523-rolling-restart-active-gate-snapshot-readiness-architecture-experiment.md",
-    "work/sprints/current-blocker.md",
-    "work/sprints/current-blocker.json"
+    ".kiro/steering/llm/README.md",
+    ".kiro/steering/llm/architecture.md",
+    ".kiro/steering/llm/core.md",
+    ".kiro/steering/llm/governance.md",
+    ".kiro/steering/llm/manifest.json",
+    ".kiro/steering/llm/rules.json",
+    ".kiro/steering/testing-guidelines.md",
+    "AGENTS.md",
+    "roadmap.md",
+    "scripts/analyze-priority-recovery-residuals.js",
+    "scripts/analyze-topology-convergence.js",
+    "scripts/generate-steering-llm-pack.js",
+    "scripts/model-ledger.js",
+    "scripts/work-context.js",
+    "scripts/work-package-new.js",
+    "scripts/work-package-schema.js",
+    "scripts/work-scenario-triage.js",
+    "scripts/work-subagent-prompt.js",
+    "scripts/work-theory-ledger.js",
+    "scripts/work-tracker.js",
+    "src/bootstrap/owners/bootstrap-readiness-owner-class-part-2.js",
+    "src/control-plane/control-plane-readiness-service-segment-3.js",
+    "src/control-plane/publication-active-gate-handoff-contract.js",
+    "src/diagnostics/topology-convergence-graph.js",
+    "src/rebalancer/operation-lifecycle.js",
+    "src/rebalancer/operation-workflow-owner-ports.js",
+    "src/rebalancer/operation-workflow-owner-segment-1.js",
+    "src/rebalancer/operation-workflow-owner.js",
+    "src/rebalancer/operation-workflow-recovery-reconcile.js",
+    "src/rebalancer/rebalancer-planning-gate-methods.js",
+    "src/rebalancer/unified-rebalancer-segment-1.js",
+    "src/rebalancer/unified-rebalancer-segment-5.js",
+    "test/distributed/harness/__tests__/cluster-active-gate-startup-acknowledgement-test-cases.js",
+    "test/distributed/harness/__tests__/cluster.test-part-4.js",
+    "test/distributed/harness/cluster-segment-7-class-4.js",
+    "test/rebalancer/cluster-readiness-gate.test.js",
+    "test/rebalancer/operation-workflow-owner-adapter.test.js",
+    "test/rebalancer/operation-workflow-owner-decision.test.js",
+    "test/rebalancer/unified-rebalancer-part-5-2-stage-2.js",
+    "test/rebalancer/unified-rebalancer.test-part-5.js",
+    "test/scripts/analyze-topology-convergence.test.js",
+    "test/scripts/work-context.test.js",
+    "test/scripts/work-llm-usability-tools.test.js",
+    "test/scripts/work-theory-ledger.test.js",
+    "test/scripts/work-tracker-subagent-ledger.test.js",
+    "work/templates/work-package-template.md",
+    "test/bootstrap/owners/",
+    "test/distributed/harness/__tests__/cluster-active-gate-selected-transport-closed-owner-recovery-projection.test.js",
+    "test/distributed/harness/__tests__/cluster-active-gate-startup-readiness-admin-availability.test.js",
+    "test/scripts/analyze-priority-recovery-residuals.test.js",
+    "test/scripts/work-scenario-triage.test.js",
+    "work/RULES.md",
+    "work/packages/active-20260523-package-metadata-flattening-and-proof-unification.md"
   ],
   "touchedFiles": [],
   "theoryLedgerRefs": [],
   "modelFit": {
-    "packageClass": "architecture-experiment",
-    "intendedMinimumModel": "gpt-5.3-codex",
-    "scopeShape": "cross-owner-discriminator/current-frontier",
+    "packageClass": "bounded-implementation",
+    "intendedMinimumModel": "gpt-5.3-codex-spark",
+    "scopeShape": "leaf-slice",
     "outputProfile": "medium",
-    "ambiguityScore": 3,
     "escalationTriggers": [
       "owned files expand beyond this package",
       "a frozen decision must be reopened"
-    ]
-  },
-  "representativeResidual": {
-    "status": "migrated",
-    "scenario": "rolling-restart",
-    "artifact": "test-output/reports/rolling-restart-single-inactive-admin-probe-snapshot-residual-20260523T071500Z.report.json",
-    "frontier": "active_gate_snapshot_coverage",
-    "owner": "startup_active_gate_owner",
-    "boundary": "snapshot_coverage",
-    "dominantReason": "active_gate_timed_out",
-    "nextAction": "Activate startup_readiness_owner / startup_support_evidence successor for admin availability gating."
-  },
-  "causalGovernance": {
-    "hypothesis": "The same-frontier representative result may be caused by startup_active_gate_owner snapshot coverage debt, startup readiness/admin availability ownership, or stale selected-source instrumentation after publication and owner queues close.",
-    "stopConditionCheck": "Run the declared canonical evidence-summary, topology-convergence, distributed-failure, and `npm run analyze:causal-model` commands before selecting a follow-on package.",
-    "expectedCausalModelChange": "Observed: the experiment selected owner-boundary migration to startup_readiness_owner / startup_support_evidence for explicit admin availability gating before more active-gate snapshot coverage patches.",
-    "representativeOutcome": "migrated",
-    "causalDebt": "The local admin-probe timeout projection did not move representative metrics; active remained 2/5, snapshotCoverage stayed 1/5, selected_snapshot_source_timeout remained, distributed failure named readiness_probe_timeout, and three inactive nodes reported admin_not_ready connection-refused errors.",
-    "crossBoundaryReview": "Keep runtime edits, src/, timeout budgets, publication convergence, and priority recovery frozen while this experiment compares startup active-gate snapshot coverage against readiness/admin availability and selected-source instrumentation."
-  },
-  "scenarioCausalClosure": {
-    "referenceScenarioOrProbe": "rolling-restart active gate snapshot readiness architecture discriminator",
-    "phaseChain": [
-      "publication ACK convergence is closed with publishedActive=5/5 and pendingAck=0 in the fresh artifact",
-      "priority recovery residuals remain absent from the fresh representative",
-      "focused admin-probe projection proof passed locally",
-      "fresh representative stayed active_gate_snapshot_coverage with active=2/5 and snapshotCoverage=1/5",
-      "visible residual shifted to selected_snapshot_source_timeout, readiness_probe_timeout, and admin_not_ready connection-refused nodes"
     ],
-    "currentFirstFrontier": "active_gate_snapshot_coverage / startup_active_gate_owner / snapshot_coverage / active_gate_timed_out",
-    "knownDownstreamBlockers": [
-      "runtime promotion remains unsafe while snapshot coverage is incomplete",
-      "startup readiness support may be the next owner but must be proven before migration"
-    ],
-    "missingCausalEdge": "The system must distinguish whether selected snapshot timeout is true startup active-gate snapshot coverage debt, readiness/admin availability ownership, or selected-source instrumentation drift.",
-    "missingCausalEdgeProbe": "npm run analyze:distributed-failure -- --report test-output/reports/rolling-restart-single-inactive-admin-probe-snapshot-residual-20260523T071500Z.report.json",
-    "falsifyingProbe": "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-single-inactive-admin-probe-snapshot-residual-20260523T071500Z.report.json --explain active_gate_snapshot_coverage",
-    "boundedProgressProof": "Experiment proof must show a bounded route advance to one owner/boundary or record evidence-incomplete without changing runtime behavior.",
-    "boundedProgressProofArtifact": "test-output/reports/rolling-restart-single-inactive-admin-probe-snapshot-residual-20260523T071500Z.report.json",
-    "expectedObservableTransition": "Observed owner-boundary migration to startup_readiness_owner / startup_support_evidence for admin availability gating.",
-    "maxProgressBound": "one architecture experiment before any more local startup_active_gate_owner / snapshot_coverage runtime patch",
-    "sameFrontierFallback": "If the canonical extractors cannot distinguish the route, open an architecture contract or human escalation only for contradictory/blocked evidence.",
-    "expectedNextFrontier": "startup_readiness_owner / startup_support_evidence admin availability successor",
-    "resultClassification": "migrated",
-    "stopCondition": "migrate-owner-boundary"
+    "ambiguityScore": 1
   },
-  "observablePrediction": {
-    "metric": "Select the next owner/boundary and proof route: snapshot coverage runtime package, startup readiness owner-boundary migration, or instrumentation/architecture contract, with no runtime edits inside this experiment.",
-    "predicted": "Select the next owner/boundary and proof route: snapshot coverage runtime package, startup readiness owner-boundary migration, or instrumentation/architecture contract, with no runtime edits inside this experiment.",
-    "observed": "H2 selected: startup_readiness_owner / startup_support_evidence admin availability successor. H1 remains partial selected-source evidence; H3 unsupported.",
-    "accuracy": "partial",
-    "evidence": "test-output/reports/rolling-restart-single-inactive-admin-probe-snapshot-residual-20260523T071500Z.report.json"
-  },
-  "experimentOutcome": {
-    "distinguishedHypothesis": "H2 startup readiness/admin availability owner boundary",
-    "decision": "owner-boundary-migration",
-    "nextOwner": "startup_readiness_owner",
-    "nextBoundary": "startup_support_evidence",
-    "evidence": "work:evidence-summary and causal-model still route the topology frontier to startup_active_gate_owner / snapshot_coverage, but distributed-failure names readiness_probe_timeout plus admin_not_ready connection-refused nodes for the inactive set; prior local active-gate projection proof produced no representative metric movement, so readiness/admin availability must become explicit owner evidence before more active-gate runtime patches."
-  },
-  "rerunDecision": {
-    "sourceArtifact": "test-output/reports/rolling-restart-single-inactive-admin-probe-snapshot-residual-20260523T071500Z.report.json",
-    "routeOwner": "startup_active_gate_owner",
-    "routeBoundary": "snapshot_coverage",
-    "routeDominantReason": "active_gate_timed_out",
-    "routeCausalOutcome": "pending-before-rerun",
-    "stopMode": "pending-before-rerun",
-    "nextLane": "experiment",
-    "expectedDelta": "Classify whether fresh representative evidence is green, reduced, migrated, same-frontier, architecture-gap, contradictory, or needs an autonomous architecture experiment before runtime promotion.",
-    "requiredRefreshCommands": [
-      "npm run work:package:route-after-rerun -- --artifact test-output/reports/rolling-restart-single-inactive-admin-probe-snapshot-residual-20260523T071500Z.report.json --owner startup_active_gate_owner --boundary snapshot_coverage --dominant-reason active_gate_timed_out",
-      "update Sprint Strategy Brief and Current Edge Card from the route result",
-      "npm run work:repair",
-      "npm run work:validate -- --pre-impl"
-    ]
-  },
+  "representativeResidual": {},
+  "causalGovernance": {},
+  "scenarioCausalClosure": {},
+  "observablePrediction": {},
+  "experimentOutcome": {},
+  "rerunDecision": {},
   "classificationEfficiency": {},
   "architectureDecisionGate": {
-    "status": "watching",
-    "trigger": "frontier-oscillation",
-    "triggerEvidence": [
-      "frontier returned to a recently closed related boundary",
-      "work/packages/done-20260523-rolling-restart-wait-owner-recovery-reconcile-drain-runtime.md / startup_active_gate_owner / snapshot_coverage / reduced",
-      "work/packages/done-20260523-rolling-restart-startup-active-gate-owner-snapshot-coverage.md / startup_active_gate_owner / snapshot_coverage / migrated",
-      "work/packages/done-20260523-rolling-restart-single-inactive-admin-probe-snapshot-residual.md / startup_active_gate_owner / snapshot_coverage / same-frontier"
-    ],
-    "choices": [
-      {
-        "id": "continue-local-proof",
-        "summary": "Continue with a bounded local proof if the missing edge stays inside this owner boundary.",
-        "route": "continue-local-proof",
-        "proof": [
-          "npm run work:evidence-summary -- test-output/reports/rolling-restart-single-inactive-admin-probe-snapshot-residual-20260523T071500Z.report.json",
-          "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-single-inactive-admin-probe-snapshot-residual-20260523T071500Z.report.json --explain active_gate_snapshot_coverage",
-          "npm run analyze:distributed-failure -- --report test-output/reports/rolling-restart-single-inactive-admin-probe-snapshot-residual-20260523T071500Z.report.json",
-          "npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-single-inactive-admin-probe-snapshot-residual-20260523T071500Z.report.json"
-        ]
-      },
-      {
-        "id": "migrate-owner-boundary",
-        "summary": "Migrate the active package to the owner boundary named by the first frontier evidence.",
-        "route": "owner-boundary-migration",
-        "proof": [
-          "npm run work:evidence-summary -- test-output/reports/rolling-restart-single-inactive-admin-probe-snapshot-residual-20260523T071500Z.report.json",
-          "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-single-inactive-admin-probe-snapshot-residual-20260523T071500Z.report.json --explain active_gate_snapshot_coverage",
-          "npm run analyze:distributed-failure -- --report test-output/reports/rolling-restart-single-inactive-admin-probe-snapshot-residual-20260523T071500Z.report.json",
-          "npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-single-inactive-admin-probe-snapshot-residual-20260523T071500Z.report.json"
-        ]
-      },
-      {
-        "id": "open-architecture-package",
-        "summary": "Open a bounded autonomous architecture experiment for the missing owner contract.",
-        "route": "architecture-package",
-        "proof": [
-          "npm run work:evidence-summary -- test-output/reports/rolling-restart-single-inactive-admin-probe-snapshot-residual-20260523T071500Z.report.json",
-          "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-single-inactive-admin-probe-snapshot-residual-20260523T071500Z.report.json --explain active_gate_snapshot_coverage",
-          "npm run analyze:distributed-failure -- --report test-output/reports/rolling-restart-single-inactive-admin-probe-snapshot-residual-20260523T071500Z.report.json",
-          "npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-single-inactive-admin-probe-snapshot-residual-20260523T071500Z.report.json"
-        ]
-      },
-      {
-        "id": "human-escalation",
-        "summary": "Escalate to a human only when evidence is contradictory, policy-blocked, credential-blocked, or unavailable.",
-        "route": "human-escalation",
-        "proof": [
-          "npm run work:evidence-summary -- test-output/reports/rolling-restart-single-inactive-admin-probe-snapshot-residual-20260523T071500Z.report.json",
-          "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-single-inactive-admin-probe-snapshot-residual-20260523T071500Z.report.json --explain active_gate_snapshot_coverage",
-          "npm run analyze:distributed-failure -- --report test-output/reports/rolling-restart-single-inactive-admin-probe-snapshot-residual-20260523T071500Z.report.json",
-          "npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-single-inactive-admin-probe-snapshot-residual-20260523T071500Z.report.json"
-        ]
-      }
-    ],
+    "status": "not-required",
+    "trigger": "none",
+    "triggerEvidence": [],
+    "choices": [],
     "selectedChoice": null,
-    "nextAction": "Watch for repeated frontier oscillation; open an autonomous architecture experiment if another local proof returns here unchanged."
+    "nextAction": "No architecture decision gate is required for this package."
   },
   "predecessor": null
 }

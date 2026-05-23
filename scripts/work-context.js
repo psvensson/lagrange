@@ -23,6 +23,7 @@ import {
   summarizeTheoryLedgerEntry,
   validateTheoryLedgerContent,
 } from './work-theory-ledger.js';
+import {normalizeMetadata} from './work-package-schema.js';
 
 const execFileAsync = promisify(execFile);
 
@@ -577,7 +578,8 @@ function parsePackageMetadata(content, filePath) {
   if (closeIndex < NUM_ZERO) {
     throw new Error(`${filePath}: work-package metadata closing marker is missing.`);
   }
-  return JSON.parse(content.slice(jsonStart, closeIndex).trim());
+  const rawMetadata = JSON.parse(content.slice(jsonStart, closeIndex).trim());
+  return normalizeMetadata(rawMetadata, filePath);
 }
 
 function parseOptionalPackageMetadata(content, filePath) {

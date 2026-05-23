@@ -12,6 +12,7 @@ import {
   SUBAGENT_ATTEMPT_STATUSES,
   VALID_OUTPUT_PROFILES,
   defaultOutputProfileForLane,
+  normalizeMetadata,
 } from './work-package-schema.js';
 
 const ENCODING_UTF8 = 'utf8';
@@ -102,9 +103,10 @@ function parseMetadata(content, filePath) {
   if (closeIndex === NUM_MINUS_ONE) {
     throw new Error(`${filePath}: work-package metadata closing marker is missing.`);
   }
-  return JSON.parse(
+  const rawMetadata = JSON.parse(
     content.slice(openIndex + PACKAGE_METADATA_OPEN.length, closeIndex).trim(),
   );
+  return normalizeMetadata(rawMetadata, filePath);
 }
 
 function list(values = [], fallback = 'None recorded.') {

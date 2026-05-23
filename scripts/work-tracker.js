@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import fs from 'node:fs/promises';
+import fsSync from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
 import {fileURLToPath} from 'node:url';
@@ -94,6 +95,7 @@ import {
   VALIDATION_PHASE_PRE_IMPL,
   VALIDATION_PHASES,
   WORK_PACKAGE_METADATA_SCHEMA,
+  normalizeMetadata,
   METADATA_FIELD_STABILITY_CREDIT,
   METADATA_FIELD_WHY_HIGHEST_LEVERAGE_NOW,
   METADATA_FIELD_REPRESENTATIVE_RERUN_CADENCE,
@@ -108,6 +110,7 @@ import {
   findRelatedTheoryLedgerEntries,
   summarizeTheoryLedgerEntry,
   validateTheoryLedgerContent,
+  THEORY_LEDGER_FIELDS,
 } from './work-theory-ledger.js';
 
 const [
@@ -4911,7 +4914,7 @@ export function isGeneratedCurrentBlockerPath(filePath) {
     normalizedPath === CURRENT_BLOCKER_JSON_PATH;
 }
 
-function parsePackageMetadata(content, filePath) {
+export function parsePackageMetadata(content, filePath) {
   const openIndex = content.indexOf(PACKAGE_METADATA_OPEN);
   if (openIndex < NUM_ZERO) {
     return null;
@@ -4925,7 +4928,8 @@ function parsePackageMetadata(content, filePath) {
   }
   const jsonText = content.slice(jsonStart, closeIndex).trim();
   try {
-    return JSON.parse(jsonText);
+    const rawMetadata = JSON.parse(jsonText);
+    return normalizeMetadata(rawMetadata, filePath);
   } catch (error) {
     throw new Error(
       `${filePath}: work-package metadata is not valid JSON: ${error.message}`,
@@ -4943,7 +4947,44 @@ function replacePackageMetadata(content, metadata) {
   if (closeIndex < NUM_ZERO) {
     return content;
   }
-  const nextJson = JSON.stringify(metadata, null, NUM_TWO);
+
+  let metadataToSave = metadata;
+  if (metadata && metadata.schema === 'work-package-v2') {
+    metadataToSave = {
+      schema: 'work-package-v2',
+      status: metadata.status,
+      intent: { ...(metadata.intent || {}) },
+      scope: { ...(metadata.scope || {}) },
+      gates: { ...(metadata.gates || {}) },
+      modelFit: { ...(metadata.modelFit || {}) },
+      execution: { ...(metadata.execution || {}) }
+    };
+
+    const v2Keys = {
+      intent: ['opened', 'closed', 'lane', 'scenario', 'artifact', 'playback', 'owner', 'boundary', 'currentState', 'nextAction', 'dominantReason'],
+      scope: ['writeScope', 'handoffFiles', 'generatedFiles', 'candidateRuntimeFiles', 'commitScope'],
+      gates: ['whyHighestLeverageNow', 'stabilityCredit', 'representativeRerunCadence', 'codeQualityAdmission', 'companionGatesFile'],
+      modelFit: ['packageClass', 'intendedMinimumModel', 'scopeShape', 'outputProfile', 'escalationTriggers'],
+      execution: ['evidence', 'theoryLedgerRefs']
+    };
+
+    for (const [section, keys] of Object.entries(v2Keys)) {
+      for (const k of keys) {
+        if (metadata[k] !== undefined) {
+          metadataToSave[section][k] = metadata[k];
+        }
+      }
+    }
+
+    if (metadata.proof !== undefined) {
+      if (!metadataToSave.execution.proof) {
+        metadataToSave.execution.proof = {};
+      }
+      metadataToSave.execution.proof.commands = metadata.proof;
+    }
+  }
+
+  const nextJson = JSON.stringify(metadataToSave, null, NUM_TWO);
   return [
     content.slice(NUM_ZERO, jsonStart),
     NEWLINE,
@@ -5204,9 +5245,9 @@ export function validatePackageMetadataShape(filePath, fileStatus, metadata) {
   if (!metadata) {
     return errors;
   }
-  if (metadata.schema !== WORK_PACKAGE_METADATA_SCHEMA) {
+  if (metadata.schema !== 'work-package-v1' && metadata.schema !== 'work-package-v2') {
     errors.push(
-      `${filePath}: metadata schema must be ${WORK_PACKAGE_METADATA_SCHEMA}.`,
+      `${filePath}: metadata schema must be work-package-v1 or work-package-v2.`,
     );
   }
   if (metadata.status !== fileStatus) {
@@ -5517,7 +5558,7 @@ export function validateRequiredPreImplProbeContract(metadata, filePath) {
   return errors;
 }
 
-async function validateExecutableContracts(metadata, filePath, options = {}) {
+function validateExecutableContracts(metadata, filePath, options = {}) {
   const errors = [];
   if (!metadata || options.phase === VALIDATION_PHASE_ENTRY || options.status !== STATUS_ACTIVE) {
     return errors;
@@ -5534,20 +5575,22 @@ async function validateExecutableContracts(metadata, filePath, options = {}) {
       continue;
     }
     try {
-      const jsContent = await readTextFile(file);
-      const nullOrUndefinedMatch = jsContent.match(/\b(state|status)\s*=\s*(null|undefined)\b/iu);
-      if (nullOrUndefinedMatch) {
-        errors.push(
-          `${filePath}: runtime file "${file}" violates the AGENTS.md rule ` +
-          `by assigning "${nullOrUndefinedMatch[0]}". null and undefined must not encode domain/runtime state.`
-        );
-      }
-      const ifStatementMatches = jsContent.match(/if\s*\(\s*(state|status)\s*===[\s\S]*?\}\s*if\s*\(\s*(state|status)\s*===/g);
-      if (ifStatementMatches) {
-        errors.push(
-          `${filePath}: runtime file "${file}" contains consecutive independent if statements on state/status ` +
-          `("if (state === ... } if (state === ..."). This violates the AGENTS.md rule requiring a single structured state adjudicator/decision table.`
-        );
+      if (fsSync.existsSync(file)) {
+        const jsContent = fsSync.readFileSync(file, 'utf8');
+        const nullOrUndefinedMatch = jsContent.match(/\b(state|status)\s*=\s*(null|undefined)\b/iu);
+        if (nullOrUndefinedMatch) {
+          errors.push(
+            `${filePath}: runtime file "${file}" violates the work/RULES.md#coding-constraints rule ` +
+            `by assigning "${nullOrUndefinedMatch[0]}". null and undefined must not encode domain/runtime state.`
+          );
+        }
+        const ifStatementMatches = jsContent.match(/if\s*\(\s*(state|status)\s*===[\s\S]*?\}\s*if\s*\(\s*(state|status)\s*===/g);
+        if (ifStatementMatches) {
+          errors.push(
+            `${filePath}: runtime file "${file}" contains consecutive independent if statements on state/status ` +
+            `("if (state === ... } if (state === ..."). This violates the work/RULES.md#coding-constraints rule requiring a single structured state adjudicator/decision table.`
+          );
+        }
       }
     } catch (error) {
       // Ignore if file doesn't exist yet
@@ -5668,12 +5711,11 @@ export function validateProbePackageContract(content, filePath, metadata) {
   return errors;
 }
 
-async function validatePackageFile(filePath, options = {}) {
+function runPackageValidationsSync(filePath, content, fileStatus, metadata, options = {}) {
   const phase = options.phase || VALIDATION_PHASE_PRE_IMPL;
-  const content = await readTextFile(filePath);
   const relativePath = normalizeRelativePath(filePath);
-  const fileStatus = getPackageStatusFromPath(filePath);
   const errors = [];
+
   if (!fileStatus) {
     errors.push(`${relativePath}: package filename has no valid status prefix.`);
   }
@@ -5683,7 +5725,6 @@ async function validatePackageFile(filePath, options = {}) {
   ) {
     errors.push(`${relativePath}: closed package still has open checklist items.`);
   }
-  const metadata = parsePackageMetadata(content, relativePath);
   if (fileStatus === STATUS_ACTIVE && !metadata) {
     errors.push(`${relativePath}: active package metadata is required.`);
   }
@@ -5695,52 +5736,15 @@ async function validatePackageFile(filePath, options = {}) {
     metadata,
     options.theoryLedgerContext,
   ));
-  if (fileStatus === STATUS_ACTIVE && metadata && metadata.predecessor) {
-    const isCurrentFocused = [
-      LANE_RUNTIME_OWNER_BOUNDARY,
-      LANE_SCENARIO_RELEASE_GATE,
-    ].includes(metadata.lane);
+  errors.push(...validateTheoryLedgerGates(
+    relativePath,
+    content,
+    fileStatus,
+    metadata,
+    options.theoryLedgerContext,
+    phase,
+  ));
 
-    if (isCurrentFocused) {
-      const predPath = normalizeCliPath(metadata.predecessor);
-      if (await pathExists(predPath)) {
-        try {
-          const predContent = await readTextFile(predPath);
-          const predMetadata = parsePackageMetadata(predContent, predPath);
-          if (predMetadata) {
-            const isPredFocused = [
-              LANE_RUNTIME_OWNER_BOUNDARY,
-              LANE_SCENARIO_RELEASE_GATE,
-            ].includes(predMetadata.lane);
-
-            if (isPredFocused && predMetadata.stabilityCredit === 'local-proof-only') {
-              const hasCadenceRecord = predMetadata.representativeRerunCadence &&
-                REPRESENTATIVE_RERUN_CADENCE_VALID_VALUES.includes(predMetadata.representativeRerunCadence);
-              if (!hasCadenceRecord) {
-                errors.push(
-                  `${relativePath}: cannot activate adjacent runtime package because predecessor ` +
-                    `${metadata.predecessor} has only local proof and no cadence record.`,
-                );
-              }
-            }
-          }
-        } catch (err) {
-          // ignore parsing/reading errors
-        }
-      }
-    }
-  }
-  if (phase === VALIDATION_PHASE_PROBE) {
-    errors.push(...validateProbePackageContract(
-      content,
-      relativePath,
-      metadata,
-    ));
-    return {
-      errors,
-      hasMetadata: metadata !== null,
-    };
-  }
   const subagentValidation = buildSubagentValidationOptions(
     fileStatus,
     metadata,
@@ -5807,6 +5811,7 @@ async function validatePackageFile(filePath, options = {}) {
       }));
     }
   }
+
   errors.push(...validateCoreLogicBrief(content, relativePath, {
     [LEDGER_VALIDATION_REQUIRES_LEDGER]:
       phase !== VALIDATION_PHASE_ENTRY &&
@@ -5927,8 +5932,77 @@ async function validatePackageFile(filePath, options = {}) {
     [LEDGER_VALIDATION_ALLOW_MISSING_HISTORICAL_COMMIT_LEDGER]:
       isHistoricalClosedCommitLedgerMetadata(fileStatus, metadata),
   }));
-  errors.push(...await validateExecutableContracts(metadata, relativePath, { phase, status: fileStatus }));
+  errors.push(...validateExecutableContracts(metadata, relativePath, { phase, status: fileStatus }));
   errors.push(...validateContractProofRequirement(metadata, relativePath, { phase, status: fileStatus }));
+
+  return errors;
+}
+
+async function validatePackageFile(filePath, options = {}) {
+  const phase = options.phase || VALIDATION_PHASE_PRE_IMPL;
+  const content = await readTextFile(filePath);
+  const relativePath = normalizeRelativePath(filePath);
+  const fileStatus = getPackageStatusFromPath(filePath);
+  let metadata = null;
+  try {
+    metadata = parsePackageMetadata(content, relativePath);
+  } catch (err) {
+    // Ignore error here, it is caught in validations
+  }
+
+  const errors = runPackageValidationsSync(filePath, content, fileStatus, metadata, {
+    phase,
+    theoryLedgerContext: options.theoryLedgerContext,
+    enforceClosureSubagentLedger: options.enforceClosureSubagentLedger,
+    packageHistoryEntries: options.packageHistoryEntries,
+  });
+
+  if (fileStatus === STATUS_ACTIVE && metadata && metadata.predecessor) {
+    const isCurrentFocused = [
+      LANE_RUNTIME_OWNER_BOUNDARY,
+      LANE_SCENARIO_RELEASE_GATE,
+    ].includes(metadata.lane);
+
+    if (isCurrentFocused) {
+      const predPath = normalizeCliPath(metadata.predecessor);
+      if (await pathExists(predPath)) {
+        try {
+          const predContent = await readTextFile(predPath);
+          const predMetadata = parsePackageMetadata(predContent, predPath);
+          if (predMetadata) {
+            const isPredFocused = [
+              LANE_RUNTIME_OWNER_BOUNDARY,
+              LANE_SCENARIO_RELEASE_GATE,
+            ].includes(predMetadata.lane);
+
+            if (isPredFocused && predMetadata.stabilityCredit === 'local-proof-only') {
+              const hasCadenceRecord = predMetadata.representativeRerunCadence &&
+                REPRESENTATIVE_RERUN_CADENCE_VALID_VALUES.includes(predMetadata.representativeRerunCadence);
+              if (!hasCadenceRecord) {
+                errors.push(
+                  `${relativePath}: cannot activate adjacent runtime package because predecessor ` +
+                    `${metadata.predecessor} has only local proof and no cadence record.`,
+                );
+              }
+            }
+          }
+        } catch (err) {
+          // ignore parsing/reading errors
+        }
+      }
+    }
+  }
+  if (phase === VALIDATION_PHASE_PROBE) {
+    errors.push(...validateProbePackageContract(
+      content,
+      relativePath,
+      metadata,
+    ));
+    return {
+      errors,
+      hasMetadata: metadata !== null,
+    };
+  }
   return {
     errors,
     hasMetadata: metadata !== null,
@@ -6475,6 +6549,106 @@ function validateTheoryLedgerReferenceContinuity(
       `${missingRef}, but it is not present in ${DEFAULT_THEORY_LEDGER_PATH}.`);
 }
 
+function validateTheoryLedgerGates(
+  filePath,
+  content,
+  status,
+  metadata,
+  theoryLedgerContext = {},
+  phase = VALIDATION_PHASE_PRE_IMPL
+) {
+  const errors = [];
+  if (!metadata) {
+    return errors;
+  }
+  const normalizeText = (value) => String(value || '').trim();
+
+  const entries = theoryLedgerContext.entries || [];
+  const lane = metadata.lane;
+  const packageClass = metadata.modelFit?.packageClass;
+
+  // High risk check
+  const isHighRisk = [
+    LANE_RUNTIME_OWNER_BOUNDARY,
+    LANE_SCENARIO_RELEASE_GATE,
+    LANE_CAUSAL_ESCALATION,
+    LANE_EXPERIMENT,
+    LANE_BOUNDED_EXPERIMENT
+  ].includes(lane) || packageClass === 'workflow-tooling';
+
+  // Gate 1: Pre-implementation related-theory gate
+  if (isHighRisk && (phase === VALIDATION_PHASE_PRE_IMPL || phase === VALIDATION_PHASE_CLOSURE)) {
+    const refs = normalizeMetadataStringList(metadata[THEORY_LEDGER_REFS_FIELD]);
+    const hasAcknowledge = refs.length > NUM_ZERO && !refs.every(ref => ['none', 'n/a'].includes(ref.toLowerCase()));
+
+    if (!hasAcknowledge) {
+      // Find related theory candidates
+      const related = findRelatedTheoryLedgerEntries(entries, metadata, { limit: 5 });
+      if (related.length > NUM_ZERO) {
+        // Need to acknowledge or have a reason in the package content
+        const reasonRegex = /\b(?:not-applicable|planned-new-theory)\b/iu;
+        if (!reasonRegex.test(content)) {
+          errors.push(
+            `${filePath}: high-risk package must acknowledge related theories in ${THEORY_LEDGER_REFS_FIELD} ` +
+            `or explicitly record a concrete "not-applicable" or "planned-new-theory" reason in the package.`
+          );
+        }
+      }
+    }
+  }
+
+  // Gate 2: Superseded/falsified route guard
+  const citedTheoryIds = [...content.matchAll(/theory-[0-9]{8}-[a-z0-9-]+/gu)].map(m => m[0]);
+  const related = findRelatedTheoryLedgerEntries(entries, metadata, { limit: 5 });
+  const allTheories = [...new Set([...citedTheoryIds, ...related.map(e => e.id)])];
+
+  const entryById = new Map(entries.map((entry) => [entry.id, entry]));
+  const nonActiveStatuses = ['superseded', 'falsified', 'stale', 'needs-rerun'];
+
+  for (const theoryId of allTheories) {
+    const entry = entryById.get(theoryId);
+    if (entry) {
+      const entryStatus = normalizeText(entry.fields[THEORY_LEDGER_FIELDS.STATUS] || entry.fields['Status']).toLowerCase();
+      if (nonActiveStatuses.includes(entryStatus)) {
+        // Must explain why we are not repeating that route
+        const justificationKeywords = /\b(?:because|justification|rationale|instead|prevent|avoid|since|why)\b/iu;
+        if (!justificationKeywords.test(content)) {
+          errors.push(
+            `${filePath}: package cites or matches non-active theory ${theoryId} [${entryStatus}] ` +
+            `but does not provide a justification explanation (using because, instead, rationale, prevent, avoid) ` +
+            `to explain why this route is not being repeated.`
+          );
+        }
+      }
+    }
+  }
+
+  // Gate 3: Closure write-back gate
+  if (phase === VALIDATION_PHASE_CLOSURE) {
+    const noUpdateRegex = /\b(?:no ledger update|ledger update not needed|ledger: not-needed|theory-ledger: not-needed)\b/iu;
+    if (!noUpdateRegex.test(content)) {
+      const baseNameWithoutStatus = path.basename(filePath).replace(/^(active|done|todo|superseded)-/, '');
+
+      let hasLink = false;
+      for (const entry of entries) {
+        const linkedPkgs = normalizeText(entry.fields[THEORY_LEDGER_FIELDS.LINKED_PACKAGES] || entry.fields['Linked packages']).toLowerCase();
+        if (linkedPkgs.includes(baseNameWithoutStatus.toLowerCase())) {
+          hasLink = true;
+          break;
+        }
+      }
+      if (!hasLink) {
+        errors.push(
+          `${filePath}: closure requires either a theory ledger update linking to this package, ` +
+          `or explicitly recording "no ledger update" in the package.`
+        );
+      }
+    }
+  }
+
+  return errors;
+}
+
 function buildTheoryLedgerGuidance(metadata = {}, theoryLedgerContext = {}) {
   const refs = metadataTheoryLedgerRefs(metadata);
   if (!Array.isArray(theoryLedgerContext.entries)) {
@@ -6854,198 +7028,48 @@ export function buildPackageDoctorLines(filePath, content, options = {}) {
   } catch (error) {
     errors.push(error.message);
   }
-  if (!getPackageStatusFromPath(filePath)) {
-    errors.push(`${relativePath}: package filename has no valid status prefix.`);
-  }
-  if (
-    (fileStatus === STATUS_DONE || fileStatus === STATUS_SUPERSEDED) &&
-    hasOpenChecklist(content)
-  ) {
-    errors.push(`${relativePath}: closed package still has open checklist items.`);
-  }
-  errors.push(...validatePackageMetadataShape(relativePath, fileStatus, metadata));
-  errors.push(...validateTheoryLedgerReferenceContinuity(
-    relativePath,
-    metadata,
-    options.theoryLedgerContext,
-  ));
-  const subagentValidation = buildSubagentValidationOptions(
-    fileStatus,
-    metadata,
+
+  errors.push(...runPackageValidationsSync(filePath, content, fileStatus, metadata, {
     phase,
-  );
-  if (!subagentValidation.skipSubagentLedger) {
-    const hasExecutionEvidence =
-      extractExecutionEvidenceLedger(content) !== null;
-    if (hasExecutionEvidence) {
-      errors.push(...validateExecutionEvidenceLedger(content, relativePath, {
-        [LEDGER_VALIDATION_REQUIRES_LEDGER]:
-          subagentValidation.requiresSubagentLedger,
-        [LEDGER_VALIDATION_ALLOW_OPEN_IMPLEMENTATION]:
-          subagentValidation.allowOpenImplementation,
-        [LEDGER_VALIDATION_ALLOW_PENDING_SUBAGENT_LEDGER]:
-          fileStatus === STATUS_TODO,
-        [LEDGER_VALIDATION_REQUIRES_VERIFICATION_FIX]:
-          subagentValidation.requiresVerificationFix,
-      }));
-    } else if (subagentValidation.requiresVerificationFix) {
-      errors.push(
-        `${relativePath}: Execution Evidence is required with checked ` +
-        'implementation and verification-fix items before closure.',
-      );
-    } else if (subagentValidation.requiresSubagentLedger) {
-      errors.push(...validateSubagentSequencingLedger(content, relativePath, {
-        [LEDGER_VALIDATION_REQUIRES_LEDGER]:
-          subagentValidation.requiresSubagentLedger,
-        [LEDGER_VALIDATION_REQUIRES_STRICT_ENTRIES]:
-          subagentValidation.requiresSubagentLedger,
-        [LEDGER_VALIDATION_ALLOW_OPEN_IMPLEMENTATION]:
-          subagentValidation.allowOpenImplementation,
-        [LEDGER_VALIDATION_ALLOW_UNAVAILABLE_SUBAGENTS]:
-          subagentValidation.allowUnavailableSubagents,
-        [LEDGER_VALIDATION_ALLOW_PENDING_SUBAGENT_LEDGER]:
-          fileStatus === STATUS_TODO,
-      }));
-      errors.push(...validateSubagentProgressLedger(content, relativePath, {
-        [LEDGER_VALIDATION_REQUIRES_LEDGER]:
-          subagentValidation.requiresSubagentLedger,
-        [LEDGER_VALIDATION_REQUIRES_STRICT_ENTRIES]:
-          subagentValidation.requiresSubagentLedger,
-        [LEDGER_VALIDATION_ALLOW_OPEN_IMPLEMENTATION]:
-          subagentValidation.allowOpenImplementation,
-        [LEDGER_VALIDATION_ALLOW_UNAVAILABLE_SUBAGENTS]:
-          subagentValidation.allowUnavailableSubagents,
-        [LEDGER_VALIDATION_ALLOW_PENDING_SUBAGENT_LEDGER]:
-          fileStatus === STATUS_TODO,
-      }));
-      errors.push(...validateSubagentAttemptLedger(content, relativePath, {
-        [LEDGER_VALIDATION_REQUIRES_LEDGER]:
-          subagentValidation.requiresSubagentLedger,
-        [LEDGER_VALIDATION_REQUIRES_STRICT_ENTRIES]:
-          subagentValidation.requiresSubagentLedger,
-        [LEDGER_VALIDATION_ALLOW_OPEN_IMPLEMENTATION]:
-          subagentValidation.allowOpenImplementation,
-        [LEDGER_VALIDATION_ALLOW_UNAVAILABLE_SUBAGENTS]:
-          subagentValidation.allowUnavailableSubagents,
-        [LEDGER_VALIDATION_ALLOW_PENDING_SUBAGENT_LEDGER]:
-          fileStatus === STATUS_TODO,
-      }));
+    theoryLedgerContext: options.theoryLedgerContext,
+    packageHistoryEntries: options.packageHistoryEntries,
+  }));
+
+  if (fileStatus === STATUS_ACTIVE && metadata && metadata.predecessor) {
+    const isCurrentFocused = [
+      LANE_RUNTIME_OWNER_BOUNDARY,
+      LANE_SCENARIO_RELEASE_GATE,
+    ].includes(metadata.lane);
+
+    if (isCurrentFocused) {
+      const predPath = normalizeCliPath(metadata.predecessor);
+      if (fsSync.existsSync(predPath)) {
+        try {
+          const predContent = fsSync.readFileSync(predPath, 'utf8');
+          const predMetadata = parsePackageMetadata(predContent, predPath);
+          if (predMetadata) {
+            const isPredFocused = [
+              LANE_RUNTIME_OWNER_BOUNDARY,
+              LANE_SCENARIO_RELEASE_GATE,
+            ].includes(predMetadata.lane);
+
+            if (isPredFocused && predMetadata.stabilityCredit === 'local-proof-only') {
+              const hasCadenceRecord = predMetadata.representativeRerunCadence &&
+                REPRESENTATIVE_RERUN_CADENCE_VALID_VALUES.includes(predMetadata.representativeRerunCadence);
+              if (!hasCadenceRecord) {
+                errors.push(
+                  `${relativePath}: cannot activate adjacent runtime package because predecessor ` +
+                    `${metadata.predecessor} has only local proof and no cadence record.`,
+                );
+              }
+            }
+          }
+        } catch (err) {
+          // ignore
+        }
+      }
     }
   }
-  errors.push(...validateCoreLogicBrief(content, relativePath, {
-    [LEDGER_VALIDATION_REQUIRES_LEDGER]:
-      phase !== VALIDATION_PHASE_ENTRY &&
-      fileStatus === STATUS_ACTIVE &&
-      metadataRequiresCoreLogicBrief(metadata),
-    rejectGeneric:
-      phase !== VALIDATION_PHASE_ENTRY &&
-      metadataRequiresCausalDecisionContract(metadata, fileStatus),
-  }));
-  errors.push(...validateCausalDecisionContract(content, metadata, relativePath, {
-    [LEDGER_VALIDATION_REQUIRES_LEDGER]:
-      phase !== VALIDATION_PHASE_ENTRY &&
-      metadataRequiresCausalDecisionContract(metadata, fileStatus),
-    status: fileStatus,
-  }));
-  errors.push(...validateDecisionExperimentGate(content, metadata, relativePath, {
-    [LEDGER_VALIDATION_REQUIRES_LEDGER]:
-      phase !== VALIDATION_PHASE_ENTRY &&
-      metadataRequiresDecisionExperimentGate(metadata, fileStatus),
-    status: fileStatus,
-  }));
-  errors.push(...validateModelFitContract(content, relativePath, {
-    [LEDGER_VALIDATION_REQUIRES_LEDGER]:
-      fileStatus === STATUS_ACTIVE && metadata !== null,
-  }));
-  errors.push(...validateRepresentativeResidualContract(metadata, relativePath, {
-    [LEDGER_VALIDATION_REQUIRES_LEDGER]:
-      metadataRequiresRepresentativeResidual(metadata, fileStatus),
-    status: fileStatus,
-  }));
-  errors.push(...validateCausalGovernanceContract(metadata, relativePath, {
-    [LEDGER_VALIDATION_REQUIRES_LEDGER]:
-      fileStatus === STATUS_ACTIVE &&
-      metadata !== null &&
-      isScenarioDrivenMetadata(metadata),
-    status: fileStatus,
-  }));
-  errors.push(...validateScenarioCausalClosureContract(metadata, relativePath, {
-    [LEDGER_VALIDATION_REQUIRES_LEDGER]:
-      fileStatus === STATUS_ACTIVE &&
-      metadata !== null &&
-      isScenarioDrivenMetadata(metadata),
-    status: fileStatus,
-  }));
-  errors.push(...validateObservablePredictionContract(metadata, relativePath, {
-    [LEDGER_VALIDATION_REQUIRES_LEDGER]:
-      metadataRequiresObservablePrediction(metadata, fileStatus, phase),
-    status: fileStatus,
-    phase,
-  }));
-  errors.push(...validateExperimentOutcomeContract(metadata, relativePath, {
-    [LEDGER_VALIDATION_REQUIRES_LEDGER]:
-      metadataRequiresExperimentOutcome(metadata, fileStatus, phase),
-    status: fileStatus,
-    phase,
-  }));
-  errors.push(...validateRerunDecisionContract(metadata, relativePath, {
-    [LEDGER_VALIDATION_REQUIRES_LEDGER]:
-      metadataRequiresRerunDecision(metadata, fileStatus),
-    status: fileStatus,
-  }));
-  errors.push(...validateClassificationEfficiencyContract(
-    metadata,
-    relativePath,
-    {
-      [LEDGER_VALIDATION_REQUIRES_LEDGER]:
-        metadataRequiresClassificationEfficiency(metadata, fileStatus),
-      status: fileStatus,
-    },
-  ));
-  errors.push(...validateSameFrontierStopContract(metadata, relativePath, {
-    status: fileStatus,
-    phase,
-    packageHistoryEntries: options.packageHistoryEntries || [],
-  }));
-  errors.push(...validateScenarioFrontierOwnerBoundaryContract(
-    metadata,
-    relativePath,
-    {
-      [LEDGER_VALIDATION_REQUIRES_LEDGER]:
-        fileStatus === STATUS_ACTIVE &&
-        metadata !== null &&
-        isScenarioDrivenMetadata(metadata),
-      status: fileStatus,
-    },
-  ));
-  errors.push(...validateFrontierOscillationContract(
-    metadata,
-    relativePath,
-    {
-      packageHistoryEntries: options.packageHistoryEntries || [],
-      status: fileStatus,
-    },
-  ));
-  errors.push(...validateArchitectureDecisionGateContract(
-    metadata,
-    relativePath,
-    {
-      phase,
-      packageHistoryEntries: options.packageHistoryEntries || [],
-      status: fileStatus,
-    },
-  ));
-  const requiresCommitLedger =
-    metadata !== null &&
-    fileStatus !== STATUS_SUPERSEDED &&
-    metadata[METADATA_COMMIT_AND_PUSH_LEDGER_REQUIRED] === true;
-  errors.push(...validateCommitAndPushLedger(content, relativePath, {
-    [LEDGER_VALIDATION_REQUIRES_LEDGER]: requiresCommitLedger,
-    [LEDGER_VALIDATION_ALLOW_PENDING_COMMIT_LEDGER]:
-      fileStatus === STATUS_ACTIVE || fileStatus === STATUS_TODO,
-    [LEDGER_VALIDATION_ALLOW_MISSING_HISTORICAL_COMMIT_LEDGER]:
-      isHistoricalClosedCommitLedgerMetadata(fileStatus, metadata),
-  }));
 
   const metadataSummary = summarizeDoctorMetadata(metadata || {});
   const lines = ['# Work Package Doctor'];
@@ -8058,6 +8082,135 @@ async function currentBlockerCommand(args) {
 }
 
 async function repairCommand() {
+  const activeSprintFile = await findActiveSprintFile();
+  const activePackageFile = await findActivePackageFile(activeSprintFile);
+  if (activePackageFile) {
+    const content = await readTextFile(activePackageFile);
+    const relativePackagePath = normalizeRelativePath(activePackageFile);
+    let metadata = null;
+    try {
+      metadata = parsePackageMetadata(content, relativePackagePath);
+    } catch (err) {
+      console.warn(`Warning: Could not parse metadata for ${activePackageFile} to auto-heal schema: ${err.message}`);
+    }
+
+    if (metadata) {
+      let modified = false;
+
+      // 1. Auto-heal basic schema constraints
+      if (metadata.schema !== 'work-package-v1' && metadata.schema !== 'work-package-v2') {
+        metadata.schema = WORK_PACKAGE_METADATA_SCHEMA;
+        modified = true;
+      }
+      if (!metadata.opened) {
+        metadata.opened = new Date().toISOString().slice(0, 10);
+        modified = true;
+      }
+
+      // Initialize missing scope arrays
+      for (const scopeField of [
+        SCOPE_FIELD_WRITE_SCOPE,
+        SCOPE_FIELD_HANDOFF_FILES,
+        SCOPE_FIELD_GENERATED_FILES,
+        SCOPE_FIELD_CANDIDATE_RUNTIME_FILES,
+        SCOPE_FIELD_COMMIT_SCOPE,
+        THEORY_LEDGER_REFS_FIELD,
+      ]) {
+        if (metadata[scopeField] === undefined) {
+          metadata[scopeField] = [];
+          modified = true;
+        } else if (!Array.isArray(metadata[scopeField])) {
+          metadata[scopeField] = [metadata[scopeField]];
+          modified = true;
+        }
+      }
+
+      // Populate stabilityCredit / whyHighestLeverageNow defaults
+      const isNewPackage = metadata.opened && metadata.opened >= '2026-05-22';
+      if (isNewPackage) {
+        if (metadata.stabilityCredit === undefined) {
+          metadata.stabilityCredit = 'local-proof-only';
+          modified = true;
+        }
+        if (metadata.lane !== LANE_READ_REVIEW_DOC_ONLY && metadata.whyHighestLeverageNow === undefined) {
+          metadata.whyHighestLeverageNow = 'This package advances the active sprint goal and current first frontier.';
+          modified = true;
+        }
+      }
+
+      // Ambiguity score auto-healing
+      if (metadata.modelFit) {
+        if (metadata.modelFit.ambiguityScore === undefined) {
+          metadata.modelFit.ambiguityScore = 1;
+          modified = true;
+        }
+      }
+
+      // 2. Git status-based autocompletion for writeScope / commitScope
+      let gitStatusFiles = [];
+      try {
+        const stdout = execSync('git status --porcelain', { encoding: 'utf8' });
+        gitStatusFiles = stdout
+          .split('\n')
+          .map(line => {
+            if (line.length < 4) return '';
+            let file = line.slice(3).trim();
+            if (file.startsWith('"') && file.endsWith('"')) {
+              file = file.slice(1, -1);
+            }
+            return file;
+          })
+          .filter(Boolean)
+          .filter(file => {
+            if (file.startsWith('work/packages/')) return false;
+            if (file.startsWith('work/sprints/')) return false;
+            if (file === 'work/model-ledger.jsonl') return false;
+            if (file === 'work/theory-ledger.md') return false;
+            if (file === 'package.json' || file === 'package-lock.json') return false;
+
+            if (metadata.lane === 'mechanical-maintenance' && isSourceWritePath(file)) {
+              return false;
+            }
+            if (metadata.lane === 'test-only-proof' && !isTestOnlyProofWritePath(file)) {
+              return false;
+            }
+            if (metadata.lane === 'read-review-doc-only') {
+              return false;
+            }
+            return true;
+          });
+      } catch (err) {
+        // ignore
+      }
+
+      if (gitStatusFiles.length > 0) {
+        const uniqueWriteScope = [...new Set([...metadata.writeScope, ...gitStatusFiles])];
+        if (uniqueWriteScope.length !== metadata.writeScope.length || !uniqueWriteScope.every((v, i) => v === metadata.writeScope[i])) {
+          metadata.writeScope = uniqueWriteScope;
+          modified = true;
+        }
+      }
+
+      // Autocomplete commitScope
+      const targetCommitScope = [
+        ...metadata.writeScope,
+        ...metadata.generatedFiles,
+        relativePackagePath,
+      ];
+      const uniqueCommitScope = [...new Set([...metadata.commitScope, ...targetCommitScope])];
+      if (uniqueCommitScope.length !== metadata.commitScope.length || !uniqueCommitScope.every((v, i) => v === metadata.commitScope[i])) {
+        metadata.commitScope = uniqueCommitScope;
+        modified = true;
+      }
+
+      if (modified) {
+        const newContent = replacePackageMetadata(content, metadata);
+        await fs.writeFile(activePackageFile, newContent, 'utf8');
+        console.log(`Auto-healed active package metadata and autocompleted scopes in ${activePackageFile}`);
+      }
+    }
+  }
+
   await currentBlockerCommand([CLI_FLAG_WRITE]);
   const freshnessErrors = await validateCurrentBlockerFreshness();
   if (freshnessErrors.length > NUM_ZERO) {
@@ -8221,10 +8374,7 @@ function resolveGitInfo() {
     }
     return {commit, branch};
   } catch (err) {
-    return {
-      commit: 'ea52941843713c304d9e2a19fc96c6b62d30f029',
-      branch: 'origin/main',
-    };
+    throw new Error('Git repository info could not be resolved: ' + err.message);
   }
 }
 

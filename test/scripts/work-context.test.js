@@ -990,3 +990,64 @@ test('work context can scope dirty reports to an explicit package file',
       TEST_BOOTSTRAP_SOURCE_PATH,
     ]);
   });
+
+test('work context normalizes v2 package metadata for handoff fields',
+  async (t) => {
+    await fs.mkdir(TEMP_PACKAGE_ROOT, {recursive: true});
+    const tempDirectory = await fs.mkdtemp(
+      path.join(TEMP_PACKAGE_ROOT, TEMP_PACKAGE_PREFIX),
+    );
+    t.teardown(async () => {
+      await fs.rm(tempDirectory, {recursive: true, force: true});
+    });
+    const packagePath = path.join(tempDirectory, TEMP_PACKAGE_FILE_NAME);
+    await fs.writeFile(packagePath, [
+      '# Temp Package',
+      '',
+      '<!-- work-package',
+      JSON.stringify({
+        schema: 'work-package-v2',
+        status: 'active',
+        intent: {
+          lane: 'lightweight-maintenance',
+          scenario: 'none',
+          owner: TEMP_OWNER,
+          boundary: TEMP_BOUNDARY,
+          dominantReason: TEMP_DOMINANT_REASON,
+          currentState: 'Testing v2 metadata normalization.',
+          nextAction: 'Render normalized handoff.',
+        },
+        scope: {
+          writeScope: [TEST_BOOTSTRAP_SOURCE_PATH],
+          commitScope: [TEST_BOOTSTRAP_SOURCE_PATH],
+        },
+        execution: {
+          proof: {
+            commands: ['focused test'],
+          },
+          theoryLedgerRefs: ['theory-20260522-ledger-test'],
+        },
+        modelFit: {
+          packageClass: 'bounded-implementation',
+          intendedMinimumModel: 'gpt-5.3-codex-spark',
+          scopeShape: 'leaf-slice',
+          outputProfile: 'medium',
+          escalationTriggers: ['owned files expand beyond this package'],
+        },
+      }, null, 2),
+      '-->',
+      '',
+    ].join('\n'));
+
+    const packageBlocker = await buildCurrentBlockerFromPackage(packagePath);
+
+    t.equal(packageBlocker.currentBlocker.owner, TEMP_OWNER);
+    t.equal(packageBlocker.currentBlocker.boundary, TEMP_BOUNDARY);
+    t.same(packageBlocker.currentBlocker.proof, ['focused test']);
+    t.same(packageBlocker.currentBlocker.theoryLedgerRefs, [
+      'theory-20260522-ledger-test',
+    ]);
+    t.same(buildWriteScope(packageBlocker.currentBlocker), [
+      TEST_BOOTSTRAP_SOURCE_PATH,
+    ]);
+  });
