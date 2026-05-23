@@ -2,8 +2,8 @@
 
 <!-- work-package
 {
-  "schema": "work-package-v1",
-  "status": "active",
+  "schema": "work-package-v2",
+  "status": "todo",
   "opened": "YYYY-MM-DD",
   "lane": "lightweight-maintenance",
   "scenario": "none",
@@ -14,58 +14,22 @@
   "dominantReason": "maintenance_cleanup",
   "currentState": "one-line current state",
   "nextAction": "focused edit and validation",
-  "proof": [
-    "focused script or test",
-    "git diff --check"
-  ],
-  "writeScope": [
-    "path/to/file"
-  ],
+  "stabilityCredit": "local-proof-only",
+  "whyHighestLeverageNow": "why this maintenance slice is highest leverage now",
+  "proof": ["focused script or test", "git diff --check -- <files>"],
+  "theoryLedgerRefs": [],
+  "writeScope": ["path/to/file"],
   "handoffFiles": [],
   "generatedFiles": [],
   "candidateRuntimeFiles": [],
-  "commitScope": [
-    "path/to/file",
-    "work/packages/active-YYYYMMDD-package.md"
-  ],
-  "modelFit": {
-    "packageClass": "lightweight-maintenance",
-    "intendedMinimumModel": "gpt-5.3-codex-spark",
-    "scopeShape": "single-boundary-maintenance",
-    "escalationTriggers": [
-      "runtime ownership changes",
-      "shared contract changes",
-      "representative scenario evidence changes"
-    ]
-  }
+  "commitScope": ["path/to/file", "work/packages/done-YYYYMMDD-slug.md"]
 }
 -->
 
-## Why
-
-Describe the focused maintenance concern.
-
-## Lane
-
-- Selected lane: lightweight maintenance
-- Why this lane is sufficient:
-- Escalate to runtime/scenario lane if:
-
-## Core Logic Brief
-
-- Status: `not-needed` - no runtime, scenario, or shared contract decision changes.
-
 ## Scope
 
-In scope:
-
-1. Item
-
-Out of scope:
-
-1. Runtime ownership changes
-2. Shared runtime contract changes
-3. Representative scenario classification
+- In: one bounded tooling, template, test, or package-truth slice.
+- Out: runtime ownership, shared contracts, representative scenario routing.
 
 ## Validation
 
@@ -73,15 +37,4 @@ Out of scope:
 2. `git diff --check -- <files>`
 
 ## Execution Evidence
-
-Use one checked item per executor or verifier pass. The preferred compact
-shape is action, owner, files-changed, validation, and outcome.
-
-- [ ] action: implementation; owner: <owner>; files-changed: <paths or none>; validation: <command/result>; outcome: <validated|blocked>.
-
-## Closure
-
-- [ ] Focused proof passed.
-- [ ] `git diff --check` passed.
-- [ ] No runtime owner-boundary or scenario/release-gate obligation was added.
-- [ ] Commit and push ledger recorded if this package is closed as `done-...`.
+- [ ] action: implementation; owner: <owner>; files-changed: <paths>; validation: <command/result>; outcome: <validated|blocked>.

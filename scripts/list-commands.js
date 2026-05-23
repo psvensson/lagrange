@@ -5,6 +5,10 @@ const COMMAND_GROUPS = Object.freeze([
     title: 'Orientation',
     commands: Object.freeze([
       Object.freeze({
+        command: 'npm run work:help',
+        description: 'Print the unified workflow command index with diagnostic, triage, and validation entrypoints.',
+      }),
+      Object.freeze({
         command: 'npm run work:context',
         description: 'Print current blocker, first-read files, proof ladder, and dirty worktree.',
       }),

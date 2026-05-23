@@ -594,6 +594,63 @@ function mergeSourceRefs(existing = [], sourceRef = {}) {
   return [...existing, sourceRef];
 }
 
+function getWordSet(text) {
+  return new Set(
+    String(text || '')
+      .toLowerCase()
+      .replace(/[^\p{L}\p{N}\s]/gu, ' ')
+      .split(/\s+/)
+      .map(w => w.slice(0, 4))
+      .filter(w => w.length >= 3)
+  );
+}
+
+function isExtremelySimilar(wordsA, wordsB) {
+  if (wordsA.size === 0 || wordsB.size === 0) return false;
+  const intersection = new Set([...wordsA].filter(x => wordsB.has(x)));
+  const union = new Set([...wordsA, ...wordsB]);
+  const jaccard = intersection.size / union.size;
+  if (jaccard >= 0.55) {
+    return true;
+  }
+  const minSize = Math.min(wordsA.size, wordsB.size);
+  if (minSize >= 3 && intersection.size === minSize) {
+    return true;
+  }
+  return false;
+}
+
+function semanticDedupe(candidates) {
+  const sorted = [...candidates].sort((a, b) => b.score - a.score);
+  const result = [];
+
+  for (const candidate of sorted) {
+    const wordsCandidate = getWordSet(candidate.text);
+    let duplicateOf = null;
+
+    for (const existing of result) {
+      if (existing.domain !== candidate.domain) {
+        continue;
+      }
+      const wordsExisting = getWordSet(existing.text);
+      if (isExtremelySimilar(wordsCandidate, wordsExisting)) {
+        duplicateOf = existing;
+        break;
+      }
+    }
+
+    if (duplicateOf) {
+      for (const src of candidate.sources) {
+        duplicateOf.sources = mergeSourceRefs(duplicateOf.sources, src);
+      }
+    } else {
+      result.push(candidate);
+    }
+  }
+
+  return result;
+}
+
 function dedupeCandidates(candidates = []) {
   const deduped = new Map();
 
@@ -630,7 +687,8 @@ function dedupeCandidates(candidates = []) {
     });
   }
 
-  return [...deduped.values()];
+  const rawList = [...deduped.values()];
+  return semanticDedupe(rawList);
 }
 
 function compareRules(left, right) {
@@ -829,13 +887,14 @@ function renderReadme(manifestEntries = []) {
     '',
     'Recommended load strategy:',
     '',
-    '1. Always load `core.md`.',
-    '2. Load one domain pack based on task:',
+    '1. Load `lite.md` for a 30-second cold-start checklist.',
+    '2. Always load `core.md` for non-trivial implementation work.',
+    '3. Load one domain pack based on task:',
     '   - `architecture.md` for runtime/control-plane/bootstrap/join/rebalance work',
     '   - `testing.md` for test design and regression policy',
     '   - `style.md` for lint/style/naming policy',
     '   - `governance.md` for roadmap/scope checks',
-    '3. Use `rules.json` when you need IDs + source traceability.',
+    '4. Use `rules.json` when you need IDs + source traceability.',
     '',
     '## Pack Sizes',
     '',
@@ -848,6 +907,7 @@ function renderReadme(manifestEntries = []) {
     '',
     '## Notes',
     '',
+    '- `lite.md` is a manual must-not checklist for cold starts and template choice.',
     '- `rules.json` is the complete generated domain source with IDs and citations.',
     '- `core.md` is manually curated so the always-load contract stays memorable.',
     '- Domain Markdown packs are generated and compact for prompt loading.',

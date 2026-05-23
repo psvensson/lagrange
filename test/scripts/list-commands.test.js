@@ -11,6 +11,7 @@ const PACKAGE_JSON_ENCODING = 'utf8';
 const ORIENTATION_GROUP_TITLE = 'Orientation';
 const FOCUSED_VALIDATION_GROUP_TITLE = 'Focused Validation';
 const REPORT_TRIAGE_GROUP_TITLE = 'Report And Triage';
+const WORK_HELP_COMMAND = 'npm run work:help';
 const WORK_CONTEXT_COMMAND = 'npm run work:context';
 const WORK_ADVANCE_COMMAND = 'npm run work:advance';
 const WORK_LLM_START_COMMAND = 'npm run work:llm-start';
@@ -71,6 +72,8 @@ const STATE_MACHINE_PRESSURE_COMMAND = 'npm run audit:state-machine-pressure';
 const GUIDELINE_GUARDRAILS_GROUP_TITLE = 'Guideline Guardrails';
 const WORK_DIRTY_SCOPE_DESCRIPTION =
   'Report dirty worktree entries grouped as package-owned, tracker-generated, or unrelated.';
+const WORK_HELP_DESCRIPTION =
+  'Print the unified workflow command index with diagnostic, triage, and validation entrypoints.';
 const WORK_TRACKS_DESCRIPTION =
   'Print current tracks with status, active sprints, upcoming sprints, and track relation.';
 const WORK_SPRINT_REMAINING_DESCRIPTION =
@@ -123,6 +126,8 @@ const COMMAND_GROUPS_EXPORTED_MESSAGE =
   'command groups should be exported for tests';
 const WORK_CONTEXT_ORIENTATION_MESSAGE =
   'work context should remain the first orientation entrypoint';
+const WORK_HELP_ORIENTATION_MESSAGE =
+  'work help should be discoverable from orientation';
 const MODEL_LEDGER_ORIENTATION_MESSAGE =
   'model-ledger summary should be discoverable from orientation';
 const LLM_START_ORIENTATION_MESSAGE =
@@ -180,6 +185,8 @@ const ANALYZE_OWNER_GLOSSARY_SCRIPT_COMMAND =
   'node scripts/analyze-topology-convergence.js --glossary';
 const WORK_DIRTY_SCOPE_SCRIPT = 'work:dirty-scope';
 const WORK_DIRTY_SCOPE_SCRIPT_COMMAND = 'node scripts/work-context.js --dirty-scope';
+const WORK_HELP_SCRIPT = 'work:help';
+const WORK_HELP_SCRIPT_COMMAND = 'node scripts/list-commands.js';
 const WORK_TRACKS_SCRIPT = 'work:tracks';
 const WORK_TRACKS_SCRIPT_COMMAND = 'node scripts/work-track-summary.js';
 const WORK_SPRINT_REMAINING_SCRIPT = 'work:sprint:remaining';
@@ -243,6 +250,7 @@ function readPackageScripts() {
 test(ORIENTATION_GUARDRAILS_TEST_NAME, (t) => {
   const rendered = renderCommandList();
 
+  t.match(rendered, WORK_HELP_COMMAND);
   t.match(rendered, WORK_CONTEXT_COMMAND);
   t.match(rendered, WORK_ADVANCE_COMMAND);
   t.match(rendered, WORK_LLM_START_COMMAND);
@@ -269,6 +277,11 @@ test(ORIENTATION_GUARDRAILS_TEST_NAME, (t) => {
   t.ok(
     COMMAND_GROUPS.length > NONEMPTY_COMMAND_GROUP_COUNT,
     COMMAND_GROUPS_EXPORTED_MESSAGE,
+  );
+  t.equal(
+    findCommandEntry(WORK_HELP_COMMAND).group.title,
+    ORIENTATION_GROUP_TITLE,
+    WORK_HELP_ORIENTATION_MESSAGE,
   );
   t.equal(
     findCommandEntry(WORK_CONTEXT_COMMAND).group.title,
@@ -339,6 +352,11 @@ test(ORIENTATION_GUARDRAILS_TEST_NAME, (t) => {
     findCommandEntry(OVERSIZED_NEXT_COMMAND).group.title,
     FOCUSED_VALIDATION_GROUP_TITLE,
     OVERSIZED_NEXT_GROUP_MESSAGE,
+  );
+  t.match(
+    rendered,
+    `${WORK_HELP_COMMAND}\`${COMMAND_ENTRY_SEPARATOR}` +
+      WORK_HELP_DESCRIPTION,
   );
   t.match(
     rendered,
@@ -517,6 +535,10 @@ test(RUNTIME_GRAMMAR_TEST_NAME,
   (t) => {
     const scripts = readPackageScripts();
 
+    t.equal(
+      scripts[WORK_HELP_SCRIPT],
+      WORK_HELP_SCRIPT_COMMAND,
+    );
     t.equal(
       scripts[ANALYZE_OWNER_EXPLAIN_SCRIPT],
       ANALYZE_OWNER_EXPLAIN_SCRIPT_COMMAND,

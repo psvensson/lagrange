@@ -205,7 +205,7 @@ does not overlap an active Round 1 package.
    - Acceptance: validator no longer fails closure on legacy ledger fields;
      templates teach only `Execution Evidence`; ~400 lines of
      legacy-compat logic removed from `scripts/work-tracker.js`.
-10. [Lite Steering And Lite Package Templates](../packages/todo-20260523-lite-steering-and-lite-package-templates.md)
+10. [Lite Steering And Lite Package Templates](../packages/done-20260523-lite-steering-and-lite-package-templates.md)
     - Lane: `mechanical-maintenance`
     - Owner boundary: `steering_governance_owner / lite_pack_and_lite_templates`
     - Purpose: add `.kiro/steering/llm/lite.md` (~30 lines listing the
