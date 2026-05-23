@@ -1,6 +1,7 @@
 # Topology Publication Reconcile System Theory Sprint
 
-Status: done, closed on 2026-05-21.
+Status: superseded. Closed on May 23, 2026.
+
 Distinguished Outcome: H1 (hidden active queue) + H3 (operation residual predecessor).
 
 ## Goal

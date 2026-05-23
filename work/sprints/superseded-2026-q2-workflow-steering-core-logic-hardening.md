@@ -1,7 +1,7 @@
 # Workflow Steering Core Logic Hardening Sprint
 
-Status: todo. Created on May 23, 2026 from the read-only multi-agent project
-review.
+Status: superseded. Closed on May 23, 2026.
+
 
 ## Goal
 

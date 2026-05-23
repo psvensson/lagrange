@@ -1,9 +1,11 @@
 #!/usr/bin/env node
 
 import fs from 'node:fs/promises';
+import fsSync from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
 import {fileURLToPath} from 'node:url';
+import { normalizeMetadata } from './work-package-schema.js';
 
 const ENCODING_UTF8 = 'utf8';
 const EMPTY_TEXT = '';
@@ -20,6 +22,7 @@ const COMMAND_LIST = 'list';
 const COMMAND_NEW = 'new';
 const FLAG_PREFIX = '--';
 const FLAG_LEDGER = 'ledger';
+const FLAG_PACKAGES_DIR = 'packages-dir';
 const FLAG_STATUS = 'status';
 const FLAG_OWNER = 'owner';
 const FLAG_ID = 'id';
@@ -354,7 +357,101 @@ function validateSupersessionReferences(entries) {
   return errors;
 }
 
-export function validateTheoryLedgerContent(content) {
+function getPackagesMetadataSync(packagesDir) {
+  const dir = packagesDir || path.join('work', 'packages');
+  try {
+    if (!fsSync.existsSync(dir)) {
+      return [];
+    }
+    const files = fsSync.readdirSync(dir);
+    const packages = [];
+    for (const file of files) {
+      if (file.endsWith('.md')) {
+        const content = fsSync.readFileSync(path.join(dir, file), 'utf8');
+        const match = content.match(/<!--\s*work-package\s*(\{[\s\S]*?\})\s*-->/u);
+        if (match) {
+          try {
+            const rawMetadata = JSON.parse(match[1]);
+            const metadata = normalizeMetadata(rawMetadata, path.join(dir, file));
+            packages.push({
+              filename: file,
+              status: file.split('-')[0],
+              metadata,
+            });
+          } catch (e) {
+            // ignore
+          }
+        }
+      }
+    }
+    return packages;
+  } catch (e) {
+    return [];
+  }
+}
+
+function validateStaleActiveTheories(entries, packagesDir) {
+  const errors = [];
+  const packages = getPackagesMetadataSync(packagesDir);
+  for (const entry of entries) {
+    const status = entryField(entry, FIELD_STATUS);
+    if (status !== 'active') {
+      continue;
+    }
+    const ownerBoundary = entryField(entry, FIELD_OWNER_BOUNDARY);
+    const parts = ownerBoundary.split('/');
+    if (parts.length < NUM_TWO) {
+      continue;
+    }
+    const theoryOwner = parts[NUM_ZERO].trim().toLowerCase();
+    const theoryBoundary = parts[NUM_ONE].trim().toLowerCase();
+
+    // Parse theory date from entry ID: theory-YYYYMMDD-slug
+    const dateMatch = entry.id.match(/^theory-(\d{8})-/u);
+    if (!dateMatch) {
+      continue;
+    }
+    const theoryDateStr = dateMatch[NUM_ONE]; // YYYYMMDD
+
+    for (const pkg of packages) {
+      if (pkg.status !== 'done') {
+        continue;
+      }
+      // Parse package date from filename: done-YYYYMMDD-slug.md
+      const pkgDateMatch = pkg.filename.match(/^done-(\d{8})-/u);
+      if (!pkgDateMatch) {
+        continue;
+      }
+      const pkgDateStr = pkgDateMatch[NUM_ONE];
+
+      // If package is newer than or equal to theory date
+      if (pkgDateStr >= theoryDateStr) {
+        const pkgOwner = String(pkg.metadata.owner || EMPTY_TEXT).trim().toLowerCase();
+        const pkgBoundary = String(pkg.metadata.boundary || EMPTY_TEXT).trim().toLowerCase();
+
+        const matchesOwnerBoundary = (pkgOwner === theoryOwner && pkgBoundary === theoryBoundary);
+        const citesTheory = Array.isArray(pkg.metadata.theoryLedgerRefs) &&
+                            pkg.metadata.theoryLedgerRefs.includes(entry.id);
+
+        if (matchesOwnerBoundary || citesTheory) {
+          // Check if this closed package is linked in the theory
+          const linkedPackages = parseTheoryReferenceList(entry.fields[FIELD_LINKED_PACKAGES]);
+          const isLinked = linkedPackages.some(ref => {
+            const cleanRef = ref.replace(/^`|`$/gu, EMPTY_TEXT);
+            return pkg.filename.includes(cleanRef) || cleanRef.includes(pkg.filename);
+          });
+
+          if (!isLinked) {
+            errors.push(`${entry.id}: active theory is stale because newer closed package ${pkg.filename} in same owner/boundary is not linked in the ledger.`);
+          }
+        }
+      }
+    }
+  }
+  return errors;
+}
+
+export function validateTheoryLedgerContent(content, options = {}) {
   const entries = extractTheoryLedgerEntries(content);
   const errors = [];
   const seenIds = new Set();
@@ -368,6 +465,7 @@ export function validateTheoryLedgerContent(content) {
     errors.push(...validateEntryEvidence(entry));
   }
   errors.push(...validateSupersessionReferences(entries));
+  errors.push(...validateStaleActiveTheories(entries, options.packagesDir));
   return {entries, errors};
 }
 
@@ -472,8 +570,9 @@ async function readLedgerFile(ledgerPath) {
 
 async function runValidate(flags) {
   const ledgerPath = ledgerPathFromFlags(flags);
+  const packagesDir = firstFlag(flags, FLAG_PACKAGES_DIR);
   const content = await readLedgerFile(ledgerPath);
-  const {entries, errors} = validateTheoryLedgerContent(content);
+  const {entries, errors} = validateTheoryLedgerContent(content, { packagesDir });
   if (errors.length > NUM_ZERO) {
     throw new Error(errors.join(NEWLINE));
   }
@@ -482,8 +581,9 @@ async function runValidate(flags) {
 
 async function runList(flags) {
   const ledgerPath = ledgerPathFromFlags(flags);
+  const packagesDir = firstFlag(flags, FLAG_PACKAGES_DIR);
   const content = await readLedgerFile(ledgerPath);
-  const {entries, errors} = validateTheoryLedgerContent(content);
+  const {entries, errors} = validateTheoryLedgerContent(content, { packagesDir });
   if (errors.length > NUM_ZERO) {
     throw new Error(errors.join(NEWLINE));
   }
@@ -495,10 +595,11 @@ async function runList(flags) {
 
 async function runNew(flags) {
   const ledgerPath = ledgerPathFromFlags(flags);
+  const packagesDir = firstFlag(flags, FLAG_PACKAGES_DIR);
   const content = await readLedgerFile(ledgerPath);
   const entry = buildEntryFromFlags(flags);
   const nextContent = appendTheoryLedgerEntry(content, entry);
-  const validation = validateTheoryLedgerContent(nextContent);
+  const validation = validateTheoryLedgerContent(nextContent, { packagesDir });
   if (validation.errors.length > NUM_ZERO) {
     throw new Error(validation.errors.join(NEWLINE));
   }

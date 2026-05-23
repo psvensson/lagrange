@@ -4,8 +4,13 @@ import {REBALANCER_EVALUATION_METHODS} from './rebalancer-evaluation-methods.js'
 import {REBALANCER_NODE_EVENT_METHODS} from './rebalancer-node-event-methods.js';
 import {REBALANCER_PLANNING_GATE_METHODS} from './rebalancer-planning-gate-methods.js';
 import {REBALANCER_TRANSPORT_PRESSURE_METHODS} from './rebalancer-transport-pressure-methods.js';
+import {UNIFIED_REBALANCER_SEGMENT_4_STAGE_SHARED as STAGE_SHARED} from './unified-rebalancer-segment-4-stage-shared.js';
 
 const {REBALANCER_LOG_MSG} = UNIFIED_REBALANCER_SHARED;
+const {
+  NUM,
+  UNIFIED_REBALANCER_LITERAL,
+} = STAGE_SHARED;
 
 class UnifiedRebalancerSegment5 extends UnifiedRebalancerSegment4 {
   buildPriorityRecoveryVisibilityRebalanceDecision(event = {}, options = {}) {
@@ -26,6 +31,38 @@ class UnifiedRebalancerSegment5 extends UnifiedRebalancerSegment4 {
         baseDecision.visibilityProgress === true ||
         publicationEventScheduling.visibilityProgress === true,
       publicationEventScheduling,
+    });
+  }
+
+  buildPriorityRecoveryFollowUpAugmentationEvidence({
+    moves = [],
+    followUpMove = null,
+  } = {}) {
+    const baseEvidence =
+      super.buildPriorityRecoveryFollowUpAugmentationEvidence({
+        moves,
+        followUpMove,
+      });
+    const followUpPartitionId = String(
+      baseEvidence.followUpPartitionId ||
+        UNIFIED_REBALANCER_LITERAL.EMPTY_STRING,
+    ).trim();
+    const normalizedMoves = Array.isArray(moves) ? moves : [];
+    const currentFollowUpAlreadyPlanned =
+      followUpPartitionId.length > NUM.ZERO &&
+      normalizedMoves.some((move) =>
+        this.isPriorityRecoveryCurrentFollowUpMove(
+          move,
+          followUpPartitionId,
+        ),
+      );
+
+    return Object.freeze({
+      ...baseEvidence,
+      hasAddLikeCalculatedMove: currentFollowUpAlreadyPlanned,
+      followUpTargetsCurrentEntity:
+        followUpPartitionId.length > NUM.ZERO &&
+        followUpPartitionId === this.entityId,
     });
   }
 

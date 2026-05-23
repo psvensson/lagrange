@@ -2058,9 +2058,7 @@ function buildPublicationActiveGateHandoffContract(options = {}) {
       publicationConvergence: options.publicationConvergence,
     });
   const pendingRecoveryNodeIds =
-    normalizePublicationActiveGateHandoffNodeIdList(
-      options.pendingRecoveryNodeIds,
-    ).length > NUM.ZERO ?
+    Array.isArray(options.pendingRecoveryNodeIds) ?
       normalizePublicationActiveGateHandoffNodeIdList(
         options.pendingRecoveryNodeIds,
       ) :
@@ -2070,9 +2068,7 @@ function buildPublicationActiveGateHandoffContract(options = {}) {
         options.publicationConvergence,
       );
   const pendingReconcileNodeIds =
-    normalizePublicationActiveGateHandoffNodeIdList(
-      options.pendingReconcileNodeIds,
-    ).length > NUM.ZERO ?
+    Array.isArray(options.pendingReconcileNodeIds) ?
       normalizePublicationActiveGateHandoffNodeIdList(
         options.pendingReconcileNodeIds,
       ) :

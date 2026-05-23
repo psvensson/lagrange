@@ -3,7 +3,7 @@
 <!-- work-package
 {
   "schema": "work-package-v1",
-  "status": "active",
+  "status": "done",
   "opened": "2026-05-22",
   "lane": "causal-escalation",
   "scenario": "rolling-restart",
@@ -167,10 +167,10 @@
     "sourceArtifact": "test-output/reports/rolling-restart-load-readiness-force-repair-20260522T183247Z.report.json",
     "routeOwner": "startup_active_gate_owner",
     "routeBoundary": "snapshot_coverage",
-  "routeDominantReason": "snapshot_timeout",
-  "routeCausalOutcome": "continue_local_fix",
-  "stopMode": "classified_local_blocker",
-  "nextLane": "runtime-owner-boundary",
+    "routeDominantReason": "snapshot_timeout",
+    "routeCausalOutcome": "continue_local_fix",
+    "stopMode": "classified_local_blocker",
+    "nextLane": "runtime-owner-boundary",
     "expectedDelta": "Focused proof emits a typed handoff owner outcome for selected_timeout/admin_health evidence while runtimePromotionAllowed remains false until snapshot coverage is safe.",
     "requiredRefreshCommands": [
       "npm run work:package:route-after-rerun -- --artifact test-output/reports/rolling-restart-local-first-snapshot-repair-20260522T194728Z.report.json --owner startup_active_gate_owner --boundary snapshot_coverage --dominant-reason snapshot_timeout",
@@ -178,7 +178,10 @@
       "npm run work:repair",
       "npm run work:validate -- --pre-impl"
     ]
-  }
+  },
+  "closed": "2026-05-22",
+  "commitAndPushLedgerRequired": true,
+  "successor": "work/packages/done-20260522-rolling-restart-owner-recovery-architecture-experiment.md"
 }
 -->
 
@@ -344,7 +347,7 @@ Agent identity is optional provenance. Use legacy subagent ledgers only when a r
 - [x] implementation: status: validated; evidence: focused proof passed `npm test -- test/control-plane/publication-active-gate-handoff-contract.test.js test/admin/admin-control-snapshot-repair-handoff-outcome-test-cases.js test/distributed/harness/__tests__/cluster-control-snapshot-timeout-repair-test-cases.js` with 140/140 passing; static guardrails passed with 0 literal violations, 0 runtime-grammar violations, and decision-boundary unchanged at inherited 21; representative `test-output/reports/rolling-restart-selected-timeout-handoff-contract-20260522T192732Z.report.json` reduced to visible pending handoff `wait_owner_recovery` with runtimePromotionAllowed=false; parent revalidated focused proof: yes; next: successor action for missing owner-recovery queue/outcome.
 - [x] implementation falsification: status: validated; wrong-slice evidence would be no typed handoff in focused proof or representative; evidence: representative now includes `publicationActiveGateHandoffState=pending`, `reasonCode=owner_reconcile_pending`, `nextAction=wait_owner_recovery`, `pendingRecoveryCount=1`, and `runtimePromotionAllowed=false`; next: split/continue owner-recovery action.
 - [x] implementation: status: validated; evidence: local-first selected-source repair follow-up passed `npm test -- test/distributed/harness/__tests__/cluster-control-snapshot-timeout-repair-test-cases.js` with 11/11 and full focused proof `npm test -- test/control-plane/publication-active-gate-handoff-contract.test.js test/admin/admin-control-snapshot-repair-handoff-outcome-test-cases.js test/distributed/harness/__tests__/cluster-control-snapshot-timeout-repair-test-cases.js` with 140/140; static guardrails passed with 0 literal violations, 0 runtime-grammar violations, unchanged inherited 21 decision-boundary findings, and `git diff --check`; representative `test-output/reports/rolling-restart-local-first-snapshot-repair-20260522T194728Z.report.json` reduced publication convergence to ready but remains blocked at active_gate_snapshot_coverage with snapshotCoverage=0/5, selected_timeout, wait_owner_recovery, and absent owner-recovery queue/outcome; parent revalidated focused proof: yes; next: required verifier-fix closure or architecture experiment selection before another same-frontier runtime patch.
-- [ ] verification-fix: status: validated; evidence: <verification/fix commands and results>; changed files: <paths or none>; parent revalidated focused proof: yes; next: closure or successor action.
+- [x] verification-fix: status: validated; evidence: verifier-fixer `019e514d-3e22-7893-a64c-f2defd39d957` reran package doctor and pre-impl validation green, focused proof `npm test -- test/control-plane/publication-active-gate-handoff-contract.test.js test/admin/admin-control-snapshot-repair-handoff-outcome-test-cases.js test/distributed/harness/__tests__/cluster-control-snapshot-timeout-repair-test-cases.js` passed with 140/140 after the parent decision-boundary repair, literal guardrail reported 0 new violations, decision-boundary guardrail reported 0 violations with 4 inherited baseline matches, runtime-grammar audit reported 0 violations, evidence summary emitted active_gate_snapshot_coverage / continue_local_fix, and `git diff --check -- src/control-plane/publication-active-gate-handoff-contract.js src/admin/admin-control-snapshot-class-part-2.js` passed; changed files: `src/control-plane/publication-active-gate-handoff-contract.js`, `src/admin/admin-control-snapshot-class-part-2.js`; verifier changed files: none; parent revalidated focused proof: yes; next: closure and architecture-experiment successor action.
 - [x] repair: status: validated; evidence: `npm run work:repair` refreshed `work/sprints/current-blocker.json` and `work/sprints/current-blocker.md`; next: pre-implementation validation passed, closure still requires separate verifier-fix evidence.
 
 ## Validation
@@ -354,3 +357,9 @@ Agent identity is optional provenance. Use legacy subagent ledgers only when a r
 3. node scripts/check-guideline-decision-boundaries.js src/control-plane/publication-active-gate-handoff-contract.js src/control-plane/control-plane-snapshot-owner.js src/admin/admin-control-snapshot-class-part-1.js src/admin/admin-control-snapshot-class-part-2.js test/distributed/harness/cluster-segment-7-class-5.js test/distributed/harness/__tests__/cluster-control-snapshot-timeout-repair-test-cases.js
 4. npm run audit:runtime-grammar:file -- src/control-plane/publication-active-gate-handoff-contract.js src/control-plane/control-plane-snapshot-owner.js src/admin/admin-control-snapshot-class-part-1.js src/admin/admin-control-snapshot-class-part-2.js test/distributed/harness/cluster-segment-7-class-5.js test/distributed/harness/__tests__/cluster-control-snapshot-timeout-repair-test-cases.js
 5. npm run work:evidence-summary -- test-output/reports/rolling-restart-load-readiness-force-repair-20260522T183247Z.report.json
+
+## Commit And Push Ledger
+
+1. Focused package commit: d6a4a667553c43c8f23a80f50917fa138bdf073d
+2. Pushed to: origin/codex/pending-ack-eligibility-filter
+3. Commit contains only package-owned files/package-status/allowed sprint handoff: yes

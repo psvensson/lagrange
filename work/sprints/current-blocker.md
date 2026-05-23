@@ -20,7 +20,7 @@ Falsifying probe: unknown
 
 Stop rule: unknown
 
-Sprint: `work/sprints/active-2026-q2-workflow-steering-core-logic-hardening.md`
+Sprint: `work/sprints/active-2026-q2-rolling-restart-stability-hardening-final.md`
 
 Package: `none`
 

@@ -423,8 +423,8 @@ test('UnifiedRebalancer - Rebalancing Triggers', async (t) => {
       rebalancer.shutdown();
     },
   );
-});
-await t.test('cancels scheduled checks when losing leadership', async (t) => {
+
+  await t.test('cancels scheduled checks when losing leadership', async (t) => {
   const rebalancer = createTestRebalancer({
     entityId: 'partition-1',
     entityType: EntityType.PARTITION,
@@ -1244,3 +1244,4 @@ await t.test(
     );
   },
 );
+});

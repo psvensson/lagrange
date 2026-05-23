@@ -176,7 +176,7 @@
   },
   "closed": "2026-05-22",
   "commitAndPushLedgerRequired": true,
-  "successor": "work/packages/active-20260522-rolling-restart-selected-timeout-handoff-contract.md"
+  "successor": "work/packages/done-20260522-rolling-restart-selected-timeout-handoff-contract.md"
 }
 -->
 

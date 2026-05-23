@@ -2,161 +2,41 @@
 
 Manual always-load operating contract for LLM work in this repository.
 
-Use this before domain packs. Domain packs and source steering documents provide
-detail; this file carries the shape that should stay active in memory.
+Use this before domain packs. Domain packs and source steering documents provide detail; this file carries the shape that should stay active in memory.
+
+Refer to [work/RULES.md](file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/work/RULES.md) for the single canonical source of truth on repository process lanes, validator phases, proof requirements, coding constraints, and safety guidelines.
 
 ## North Star
 
-Preserve the highest-level owner boundary, choose the lightest process that
-proves the boundary was not weakened, and do not locally patch symptoms when
-the owner contract is porous.
+Preserve the highest-level owner boundary, choose the lightest process that proves the boundary was not weakened, and do not locally patch symptoms when the owner contract is porous.
 
 ## Process Weight
 
-Use the lightest valid lane:
+Refer to [work/RULES.md#lane-definitions](file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/work/RULES.md#lane-definitions) for canonical details on process lanes:
 
-- Read/review/doc-only: answer or edit docs; no package unless implementation
-  truth changes.
-- Lightweight maintenance: use a focused package and focused proof; omit causal
-  ledgers and sub-agent sequencing unless runtime ownership can change.
-- Runtime owner-boundary work: use the full package lane with owner contract,
-  static guardrails, focused tests, and affected consumers.
-- Scenario or release-gate work: use the full package lane with causal ledger,
-  focused owner proof, representative rerun when needed, and a separate
-  verifier-fixer before closure when the package changes code, tests, scripts,
-  or tracker truth.
+*   **Read/Review/Doc-Only**: Edit docs only; no package unless implementation truth changes.
+*   **Lightweight Maintenance**: Focused package/proof; subagents optional; no causal ledger.
+*   **Runtime Owner-Boundary**: Requires full package lane, focused proof, and static guardrails.
+*   **Scenario or Release-Gate**: Requires full package lane, causal ledger, focused owner proof, representative rerun evidence, and verifier-fixer split.
 
-When uncertain, choose the heavier lane only if runtime ownership, shared
-contracts, or representative scenario evidence can change.
+Runtime owner-boundary, scenario/release-gate, and causal-escalation packages must include a Core Logic Brief before implementation. Decision Experiment Gates are required for runtime/scenario/causal packages before implementation.
 
-Runtime owner-boundary, scenario/release-gate, and causal-escalation packages
-must include a Core Logic Brief before implementation: canonical outcome,
-inputs/signals, state model or invariant, non-goals, proof mapping, and
-wrong-slice trigger. Small docs and lightweight maintenance may record
-`not-needed` when no runtime, scenario, or shared contract decision changes.
-
-Before implementation, strict runtime/scenario/causal packages must also carry
-a Decision Experiment Gate: decision question, architecture review, competing
-hypotheses, pre-edit focused probe, success metrics, representative rerun, and
-kill rule. The gate is not required for classification-only fast paths or
-lightweight maintenance unless implementation scope is promoted.
-
-Active scenario-driven, release-gate, and causal-escalation sprints must keep a
-Sprint Strategy Brief near the top of the sprint file: goal state, current
-causal thesis, competing hypotheses, confidence and evidence, expected green
-path, wrong-direction signals, next best package, and stop or escalate rule.
-Update it when owner/boundary selection changes, evidence contradicts the
-thesis, several material packages close, or frontier oscillation appears.
-
-Classification-only packages use the fast path only when metadata records
-`classification-only` and `writeScope`/`commitScope` contain no runtime, test,
-script, or report paths. Keep possible implementation files in
-`candidateRuntimeFiles`, cap proof to two or three canonical commands, and skip
-subagent sequencing/static runtime guardrails until implementation scope is
-promoted.
-
-Use subagents as large work owners, not ceremony. One executor may inspect,
-patch, test, and report evidence for the package. One separate verifier-fixer
-must verify the last package work before closure when code, tests, scripts,
-runtime contracts, or tracker truth changed; it may fix in-scope problems
-directly. Legacy review/fix subagents remain valid only for packages that
-already use those ledgers.
+Active scenario-driven, release-gate, and causal-escalation sprints must keep a Sprint Strategy Brief near the top of the sprint file.
 
 ## Rules
 
-1. Start from `npm run work:context` for non-trivial implementation work; use
-   `npm run work:llm-start` when the next step needs package doctor, dirty
-   scope, model-ledger, or artifact summary context. Keep the named owner,
-   boundary, proof ladder, and out-of-scope list in view.
-2. Work one bounded concern at a time. Do not let a package become a bucket for
-   unrelated guardrail, runtime, presentation, or roadmap changes.
-3. For scenario-driven packages, keep the Current Edge Card in view before
-   editing: artifact, first frontier, owner, boundary, selected cause, allowed
-   edits, forbidden edits, first proof, and stop modes. Runtime edits require a
-   Core Logic Brief, classification gate, and implementation gate.
-4. Do not locally patch symptoms. Identify the semantic owner boundary, reduce
-   duplicate paths, prove the owner contract, and record what the representative
-   scenario does next.
-5. One concern has one semantic owner. Callers submit intent to the owner and
-   consume owner outcomes; they do not reproduce owner logic locally.
-6. One semantic decision has one path after ingress normalization. Avoid
-   fallback branches, helper-local verdicts, and combinable boolean policy.
-7. Runtime scalars and states have named owners. Do not use raw strings,
-   numbers, `null`, or `undefined` as domain/runtime state.
-8. Cache observes; owners decide. Cache visibility, elapsed time, and incidental
-   rows do not prove owner-managed phase completion.
-9. Phase code hands off completely. Bootstrap, join, recovery, split, and
-   rebalance phases must not leave steady state dependent on phase-owned wiring.
-10. Pressure may slow, defer, reject, or coalesce work; it must not produce
-   hidden drops, unbounded growth, incorrect results, or timeout-only failure.
-11. Events enqueue owner-key work. Long-running progression belongs in the
-    deterministic owner reconcile path with one in-flight execution per owner
-    key.
-12. Shared runtime contracts declare owner, evidence inputs, vocabulary,
-    allowed consumers, and forbidden reinterpretations. Diagnostics and reports
-    reuse that grammar.
-13. Tests prove the owner path and affected consumers, not only eventual local
-    convergence.
-14. Build or identify the replayable owner-decision fixture or narrow blocker
-    probe before runtime edits. If the selected edge cannot be represented,
-    stop as evidence-incomplete or create tooling instead of patching from a
-    representative red run alone.
-15. Use canonical workflow and artifact extractors before raw JSON slicing:
-    `work:evidence-summary`, `analyze:owner-files`,
-    `analyze:priority-recovery-residuals`, `work:package:doctor -- --suggest`,
-    `work:package:schema`, `work:package:new`, `work:subagent-prompt`, and
-    `work:oversized-next`. Ad hoc `jq` is a fallback only when no extractor
-    exists or the extractor output is insufficient, and that reason must be
-    recorded in the package.
-16. New package metadata uses explicit scope fields: `writeScope`,
-    `handoffFiles`, `generatedFiles`, `candidateRuntimeFiles`, and
-    `commitScope`. `touchedFiles` is legacy compatibility, not a write or
-    subagent ownership contract.
-17. Validate at the right phase: `--entry` for shape, `--pre-impl` when
-    route, scope, proof, and stop rule are explicit and implementation is
-    next, and `--closure` before closing or committing.
-18. Static guardrails are architecture evidence. Do not weaken scripts,
-    allowlists, scan scope, or lint rules to make a package pass.
-19. New or newly edited source-code files must finish at or below `1200`
-    lines. If a touched source-code file exceeds the cap, refactor or extract a
-    semantically named owner/helper/contract boundary before closure; new files
-    must be named for their semantic responsibility, not ordinal splits or
-    grab-bag helpers.
-20. Scenario artifacts migrate only when normalized evidence changes owner,
-    boundary, or next required action; new counts, node ids, epochs, or timing
-    alone do not justify package churn.
-21. Same-owner/same-action reductions stay in the current package. Smaller
-    counts, narrower node sets, better coverage, or clearer evidence update the
-    Current Edge Card unless owner, boundary, required action, or stop state
-    changes.
-22. Fixture-first is a package phase, not automatically a package boundary.
-    Split fixture-only work only when it changes the selected edge, proves no
-    runtime edit is justified, or creates reusable tooling.
-23. Package closure is atomic: rename/status, commit ledger, successor or
-    intentional no-active state, `current-blocker`, validation, commit, and push
-    must move together. A `current-blocker` that points at a missing active
-    package is a closure defect.
-24. When one node remains, use a remaining-node fast path: target node,
-    required action, runtime-promotion flag, goal, and forbidden edits.
-25. Representative rerun artifacts use real unique timestamps or run ids, not
-    placeholder names such as `T000000Z`.
-26. If a representative frontier returns to a recently closed related owner
-    boundary or alternates between two related boundaries, stop local runtime
-    patching and open a causal-escalation handoff package.
-27. A package is not done while in-scope residuals, tail consumers, guardrail
-    drift, or unnamed scenario migration evidence remain.
-28. Sub-agents should maximize useful work per assignment. Use an executor for
-    the implementation pass and a separate verifier-fixer before closure when a
-    package changes code, tests, scripts, runtime contracts, or tracker truth.
-    The verifier-fixer may fix in-scope problems directly, then rerun focused
-    proof. Record both roles in `## Execution Evidence`; legacy sequencing,
-    progress, and attempt ledgers are only for reopened packages already using
-    them. Interrupted or partial-unvalidated attempts must be
-    superseded/discarded/revalidated before closure, and closure requires parent
-    local proof rerun with `parent revalidated focused proof: yes`.
-29. Commit and push focused package slices before starting the next package.
-    Use `npm run work:sprint:push -- <git-push-args>` for sprint pushes so the
-    remaining sprint package list prints after a successful push. Do not sweep
-    unrelated dirty worktree changes into the slice.
-30. If a local fix feels hard because the boundary is porous, reduce the
-    boundary or raise the abstraction instead of adding another symptom patch.
+Refer to [work/RULES.md](file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/work/RULES.md) for complete coding and process rules. Keep these core principles active in memory:
+
+1.  **Workflow & Context**: Start from `npm run work:context` for non-trivial implementation work. Keep owner, boundary, proof ladder, and out-of-scope in view.
+2.  **Validator Phases**: Validate at the correct phase (`--entry` for shape, `--pre-impl` before editing, and `--closure` before closing/committing). See [work/RULES.md#validator-phases](file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/work/RULES.md#validator-phases).
+3.  **Proof Integrity**: Keep proof ladders to 3-5 executable commands. Never weaken guardrails, lint rules, or allowlists to make a package pass. See [work/RULES.md#proof-requirements](file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/work/RULES.md#proof-requirements).
+4.  **Coding Constraints**:
+    *   *No Inline Scalars*: Import or declare canonical constants.
+    *   *No State-Nulls*: Explicit variants must encode domain/runtime state; never use raw null/undefined.
+    *   *Single Path*: Use decision tables or state models instead of nested independent `if` statements.
+    *   *Owner Decides*: Cache observes; owners decide. Avoid helper-local verdicts.
+    *   *1200-Line Cap*: Touch/create files strictly <= 1200 lines. Refactor first if exceeded.
+    *   See [work/RULES.md#coding-constraints](file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/work/RULES.md#coding-constraints) for details.
+5.  **Owner boundaries**: Identify semantic owner boundaries, reduce duplicate paths, and do not locally patch symptoms.
+6.  **Subagents**: Assign subagents to maximize useful work per assignment (e.g. executor and verifier-fixer). Record roles in `## Execution Evidence`.
+7.  **Atomicity**: Package closure is atomic (renaming, status, blocker, validation, commit/push move together).

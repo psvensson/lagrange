@@ -1,7 +1,7 @@
 {
   "schema": "current-blocker-v1",
   "generatedBy": "scripts/work-tracker.js",
-  "sprint": "work/sprints/active-2026-q2-workflow-steering-core-logic-hardening.md",
+  "sprint": "work/sprints/active-2026-q2-rolling-restart-stability-hardening-final.md",
   "package": "none",
   "status": "none",
   "lane": "none",

@@ -75,6 +75,14 @@ function selectPublicationConvergence(artifact) {
     {};
 }
 
+function selectActiveGateProgress(publicationConvergence) {
+  return publicationConvergence?.activeGate?.progress ||
+    publicationConvergence?.activeGate?.activeGateProgress ||
+    publicationConvergence?.activeGateProgress ||
+    publicationConvergence?.progress ||
+    {};
+}
+
 function selectScenarioName(artifact) {
   return normalizeText(selectScenario(artifact).name) ||
     normalizeText(selectScenario(artifact).scenario) ||
@@ -231,6 +239,53 @@ function buildPriorityRecoveryResiduals(artifactPath, artifact) {
         `${right.owner}/${right.boundary}`,
       );
     });
+
+  const lowConfidenceResiduals = [];
+  if (witnesses.length === NUM_ZERO) {
+    const activeGateProgress = selectActiveGateProgress(publicationConvergence);
+    const pendingRecoveryNodeIdsStr = String(
+      activeGateProgress.publicationActiveGateHandoffPendingRecoveryNodeIds ||
+      activeGateProgress.activeGateOwnerCohortPendingRecoveryNodeIds ||
+      EMPTY_TEXT
+    );
+    const pendingRecoveryNodeIds = pendingRecoveryNodeIdsStr
+      .split(',')
+      .map(id => id.trim())
+      .filter(Boolean);
+
+    const pendingRecoveryCount = Number(
+      activeGateProgress.publicationActiveGateHandoffPendingRecoveryCount ??
+      activeGateProgress.activeGateOwnerCohortPendingRecoveryCount ??
+      NUM_ZERO
+    );
+
+    const priorityRecoveryDominantReason = String(
+      activeGateProgress.priorityRecoveryProgressClasses?.dominantReason ||
+      activeGateProgress.priorityRecoveryProgressClasses?.source?.dominantReason ||
+      activeGateProgress.progress?.priorityRecoveryProgressClasses?.dominantReason ||
+      EMPTY_TEXT
+    );
+
+    const ownerRecoveryPendingWrites = Number(
+      activeGateProgress.selectedControlPlaneOwnerQueuePendingWrites ??
+      NUM_ZERO
+    );
+
+    if (pendingRecoveryNodeIds.length > NUM_ZERO || pendingRecoveryCount > NUM_ZERO || priorityRecoveryDominantReason === 'PRIORITY_CONTROL_PLANE_RECOVERY_PENDING' || ownerRecoveryPendingWrites > NUM_ZERO) {
+      const nodeIds = pendingRecoveryNodeIds.length > NUM_ZERO ? pendingRecoveryNodeIds : [UNKNOWN_VALUE];
+      for (const nodeId of nodeIds) {
+        lowConfidenceResiduals.push({
+          nodeId,
+          owner: 'startup_active_gate_owner',
+          boundary: 'snapshot_coverage',
+          source: 'active_gate_cohort_recovery_pending',
+          reasonCode: 'priority_recovery_zero_witness_conflict',
+          confidence: 'low',
+        });
+      }
+    }
+  }
+
   const scenario = selectScenarioName(artifact);
   return {
     schemaVersion: SCHEMA_VERSION,
@@ -242,6 +297,7 @@ function buildPriorityRecoveryResiduals(artifactPath, artifact) {
     ownerBoundaryGroups,
     suggestedSuccessors: ownerBoundaryGroups.map((group) =>
       buildSuccessorSuggestion(group, artifactPath, scenario)),
+    lowConfidenceResiduals,
   };
 }
 
@@ -255,9 +311,21 @@ function renderMarkdown(summary) {
     `- Owner-boundary groups: \`${summary.ownerBoundaryGroupCount}\``,
     `- Split required: \`${summary.splitRequired}\``,
     EMPTY_TEXT,
-    '## Groups',
-    EMPTY_TEXT,
   ];
+
+  if (summary.lowConfidenceResiduals && summary.lowConfidenceResiduals.length > NUM_ZERO) {
+    lines.push('## Low-Confidence Derived Residuals', EMPTY_TEXT);
+    for (const residual of summary.lowConfidenceResiduals) {
+      lines.push(
+        `- Node \`${residual.nodeId}\`: ` +
+        `derived from \`${residual.source}\` with reason \`${residual.reasonCode}\` (confidence: \`${residual.confidence}\`); ` +
+        `owner \`${residual.owner}\`, boundary \`${residual.boundary}\``
+      );
+    }
+    lines.push(EMPTY_TEXT);
+  }
+
+  lines.push('## Groups', EMPTY_TEXT);
   if (summary.ownerBoundaryGroups.length === NUM_ZERO) {
     lines.push(MARKDOWN_NO_WITNESSES_LINE);
   }

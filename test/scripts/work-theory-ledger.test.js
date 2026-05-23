@@ -72,7 +72,7 @@ function ledgerWithEntries(...entries) {
 
 test('valid ledger entries parse and validate', (t) => {
   const content = ledgerWithEntries(SUPERSEDED_ENTRY, VALID_ENTRY);
-  const validation = validateTheoryLedgerContent(content);
+  const validation = validateTheoryLedgerContent(content, { packagesDir: 'non-existent' });
 
   t.same(validation.errors, []);
   t.equal(validation.entries.length, 2);
@@ -85,7 +85,7 @@ test('valid ledger entries parse and validate', (t) => {
 });
 
 test('empty ledger validates before initial seed', (t) => {
-  const validation = validateTheoryLedgerContent(TEST_LEDGER_HEADER);
+  const validation = validateTheoryLedgerContent(TEST_LEDGER_HEADER, { packagesDir: 'non-existent' });
 
   t.same(validation.errors, []);
   t.equal(validation.entries.length, 0);
@@ -96,7 +96,7 @@ test('invalid status is rejected', (t) => {
   const content = ledgerWithEntries(
     VALID_ENTRY.replace('- Status: active', '- Status: maybe'),
   );
-  const validation = validateTheoryLedgerContent(content);
+  const validation = validateTheoryLedgerContent(content, { packagesDir: 'non-existent' });
 
   t.match(validation.errors.join('\n'), /invalid status maybe/u);
   t.end();
@@ -114,7 +114,7 @@ test('missing evidence links are rejected', (t) => {
         '- Linked packages: none',
       ),
   );
-  const validation = validateTheoryLedgerContent(content);
+  const validation = validateTheoryLedgerContent(content, { packagesDir: 'non-existent' });
 
   t.match(validation.errors.join('\n'), /Artifact\/result must include/u);
   t.match(validation.errors.join('\n'), /Linked packages must include/u);
@@ -124,6 +124,7 @@ test('missing evidence links are rejected', (t) => {
 test('duplicate ids are rejected', (t) => {
   const validation = validateTheoryLedgerContent(
     ledgerWithEntries(VALID_ENTRY, VALID_ENTRY),
+    { packagesDir: 'non-existent' },
   );
 
   t.match(validation.errors.join('\n'), /duplicate theory id/u);
@@ -135,7 +136,7 @@ test('broken supersession references are rejected', (t) => {
     '- Supersedes: none',
     '- Supersedes: theory-20260522-missing',
   );
-  const validation = validateTheoryLedgerContent(ledgerWithEntries(brokenEntry));
+  const validation = validateTheoryLedgerContent(ledgerWithEntries(brokenEntry), { packagesDir: 'non-existent' });
 
   t.match(validation.errors.join('\n'), /references missing/u);
   t.end();
@@ -185,6 +186,8 @@ test('new command appends a valid entry', async (t) => {
     'new',
     '--ledger',
     ledgerPath,
+    '--packages-dir',
+    'non-existent',
     '--id',
     'theory-20260522-ledger-tooling',
     '--status',
@@ -207,7 +210,7 @@ test('new command appends a valid entry', async (t) => {
     'tracker integration can cite validated theory ids.',
   ]);
   const content = await fs.readFile(ledgerPath, 'utf8');
-  const validation = validateTheoryLedgerContent(content);
+  const validation = validateTheoryLedgerContent(content, { packagesDir: 'non-existent' });
 
   t.match(output, /Added theory-20260522-ledger-tooling/u);
   t.same(validation.errors, []);
@@ -216,7 +219,41 @@ test('new command appends a valid entry', async (t) => {
 
 test('validate command reports clean ledger', async (t) => {
   const ledgerPath = await makeTempLedger(ledgerWithEntries(VALID_ENTRY));
-  const output = await runCli(['validate', '--ledger', ledgerPath]);
+  const output = await runCli(['validate', '--ledger', ledgerPath, '--packages-dir', 'non-existent']);
 
   t.equal(output, 'Theory ledger validation OK for 1 entry.');
+});
+
+test('stale active theory is detected and warns/fails', async (t) => {
+  // Create a temporary packages directory with a newer closed package
+  const packagesDir = await fs.mkdtemp(path.join(os.tmpdir(), 'packages-test-'));
+  const pkgContent = [
+    '<!-- work-package',
+    JSON.stringify({
+      owner: 'startup_active_gate_owner',
+      boundary: 'snapshot_coverage',
+      theoryLedgerRefs: [THEORY_ID]
+    }),
+    '-->'
+  ].join('\n');
+  const pkgFilename = `done-20260523-some-successor.md`;
+  await fs.writeFile(path.join(packagesDir, pkgFilename), pkgContent, 'utf8');
+
+  // Ledger does not link the package yet
+  const content = ledgerWithEntries(VALID_ENTRY);
+  const validation = validateTheoryLedgerContent(content, { packagesDir });
+
+  t.equal(validation.errors.length, 1);
+  t.match(validation.errors[0], /active theory is stale because newer closed package/u);
+
+  // Link the package in the ledger
+  const linkedEntry = VALID_ENTRY.replace(
+    '- Linked packages: `work/packages/todo-20260522-node-failure-rebalance-startup-active-gate-snapshot-watch-handoff-contract.md`',
+    `- Linked packages: \`work/packages/todo-20260522-node-failure-rebalance-startup-active-gate-snapshot-watch-handoff-contract.md\`, \`work/packages/${pkgFilename}\``
+  );
+  const validationClean = validateTheoryLedgerContent(ledgerWithEntries(linkedEntry), { packagesDir });
+  t.same(validationClean.errors, []);
+
+  // Cleanup temp directory
+  await fs.rm(packagesDir, { recursive: true, force: true });
 });

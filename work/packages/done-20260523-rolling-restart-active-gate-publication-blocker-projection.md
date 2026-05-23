@@ -218,7 +218,7 @@
   },
   "closed": "2026-05-23",
   "commitAndPushLedgerRequired": true,
-  "successor": "work/packages/active-20260523-rolling-restart-selected-snapshot-timeout-repair-deferred-owner-recovery.md"
+  "successor": "work/packages/done-20260523-rolling-restart-selected-snapshot-timeout-repair-deferred-owner-recovery.md"
 }
 -->
 

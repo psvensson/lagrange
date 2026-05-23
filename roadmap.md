@@ -55,7 +55,7 @@ be completed.
 Phase 0.1 is capability-complete in several areas, but not exit-complete.
 Representative gate status is the current source of truth for closure.
 
-Open exit blockers as of May 8, 2026:
+Open exit blockers as of May 23, 2026:
 
 | Exit area | Capability Exists | Representative Gate Green | Current blocker |
 |-----------|-------------------|---------------------------|-----------------|
@@ -63,6 +63,7 @@ Open exit blockers as of May 8, 2026:
 | Spec-led runtime modularization follow-on | 🔲 | 🔧 | Active successor sprint in `work/sprints/active-2026-q2-spec-led-runtime-modularization.md`; activated by human direction after the prior rolling-restart package closed |
 | Rolling restart under load | ✅ | 🔧 | Gate remains open, but the rolling-restart residuals are archived as predecessor evidence behind the core topology control-plane rewrite track |
 | Priority recovery progress under load | ✅ | 🔧 | Priority-recovery progress remains evidence for the operation-owner successor packages instead of a separate active representative track |
+| Workflow steering & template noise reduction | ✅ | 🔧 | Active sprint in `work/sprints/active-2026-q2-workflow-steering-core-logic-hardening.md`; active package `work/packages/active-20260523-steering-template-noise-reduction.md` is deduplicating rule compiler outputs, shrinking templates, and aligning subagent validation wording |
 | Metadata gateway and owner-ingress audit | ✅ | ✅ | `npm run test:metadata-gateway:audit` passed on April 26, 2026 |
 | Decision-boundary guardrail | ✅ | ✅ | `npm run audit:guideline:decision-boundaries` passed on April 26, 2026 |
 | Literal-owner guardrail | ✅ | ✅ | `npm run audit:guideline:literals` passed on April 27, 2026 with 0 new and 0 inherited violations; the inherited baseline is retired at 0 entries |

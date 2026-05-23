@@ -217,7 +217,7 @@
   },
   "closed": "2026-05-23",
   "commitAndPushLedgerRequired": true,
-  "successor": "work/packages/active-20260523-rolling-restart-single-inactive-admin-probe-snapshot-residual.md"
+  "successor": "work/packages/done-20260523-rolling-restart-single-inactive-admin-probe-snapshot-residual.md"
 }
 -->
 

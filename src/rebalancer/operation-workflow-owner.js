@@ -46,6 +46,11 @@ const OPERATION_WORKFLOW_OWNER_PRIORITY_RECOVERY_REENTRY_TABLE_NAME =
   PRIORITY_RECOVERY_PROVENANCE_SOURCE.PRIORITY_RECOVERY_SNAPSHOT;
 const OPERATION_WORKFLOW_OWNER_PRIORITY_RECOVERY_REENTRY_CACHE_OPERATION =
   PRIORITY_RECOVERY_PROVENANCE_SOURCE.PRIORITY_RECOVERY_SNAPSHOT;
+const OPERATION_WORKFLOW_OWNER_PRIORITY_RECOVERY_REENTRY_OPTION =
+  Object.freeze({
+    ALLOW_OWNER_LANE_RETRY: 'allowOwnerLaneRetry',
+    EXECUTE_OWNER_OBSERVATION_EFFECT: 'executeOwnerObservationEffect',
+  });
 const OPERATION_WORKFLOW_OWNER_DISPATCH_PENDING_REENTRY_STATE =
   Object.freeze({
     OPERATION_UNAVAILABLE: 'operation_unavailable',
@@ -454,7 +459,12 @@ function normalizePriorityRecoveryDispatchPendingOwnerSnapshot(
   owner.schedulePriorityRecoveryDispatchPendingReentry(
     normalizedSnapshot,
     [operation],
-    {allowOwnerLaneRetry: true},
+    {
+      [OPERATION_WORKFLOW_OWNER_PRIORITY_RECOVERY_REENTRY_OPTION
+        .ALLOW_OWNER_LANE_RETRY]: true,
+      [OPERATION_WORKFLOW_OWNER_PRIORITY_RECOVERY_REENTRY_OPTION
+        .EXECUTE_OWNER_OBSERVATION_EFFECT]: false,
+    },
   );
   return normalizedSnapshot;
 }
@@ -771,7 +781,7 @@ class OperationWorkflowOwner extends OperationWorkflowOwnerSegment7 {
 
     const singleFlightKey = this.getOperationOwnerSingleFlightKey(operationId);
     try {
-      return await this.operationWorkflowRunExclusive(
+      const result = await this.operationWorkflowRunExclusive(
         singleFlightKey,
         () => this.runOperationWorkflowOwnerAdapter(
           operationInput,
@@ -783,6 +793,7 @@ class OperationWorkflowOwner extends OperationWorkflowOwnerSegment7 {
           },
         ),
       );
+      return result?.applied === true;
     } catch (error) {
       if (
         this.deferCoordinatorCreatedRemoteHandoffRetry(operationInput, error)

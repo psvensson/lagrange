@@ -31,6 +31,8 @@ const LOAD_GATE_PROJECTION_TEST_BLOCKED_PHASE = 'CONTROL_READY';
 const LOAD_GATE_PROJECTION_TEST_BLOCKED_STATE = 'degraded';
 const LOAD_GATE_PROJECTION_TEST_PENDING_REASON =
   'PRIORITY_CONTROL_PLANE_RECOVERY_PENDING';
+const LOAD_GATE_PROJECTION_TEST_PRIORITY_SPREAD_PENDING_REASON =
+  'priority_control_plane_spread_pending';
 const LOAD_GATE_PROJECTION_TEST_STABLE_WINDOW_REASON =
   'READINESS_STABLE_WINDOW_PENDING';
 const LOAD_GATE_PROJECTION_TEST_OBSERVABILITY_BACKLOG_REASON =
@@ -44,7 +46,20 @@ const LOAD_GATE_PROJECTION_TEST_GATE_STATE = 'ready';
 const LOAD_GATE_PROJECTION_TEST_GATE_SOURCE =
   'load_publication_gate_projection';
 const LOAD_GATE_PROJECTION_TEST_REACHABILITY_SOURCE = 'admin_health';
+const LOAD_GATE_PROJECTION_TEST_CONTROL_SNAPSHOT_SOURCE = 'control_snapshot';
 const LOAD_GATE_PROJECTION_TEST_PRIORITY_PARTITION_COUNT = 5;
+const LOAD_GATE_PROJECTION_TEST_BLOCKED_PARTITION_ID = 'partition-a';
+const LOAD_GATE_PROJECTION_TEST_SPREAD_GAP = 1;
+const ACTIVE_GATE_BUDGET_CONTRACT_TEST_CLUSTER_SIZE = 2;
+const ACTIVE_GATE_BUDGET_CONTRACT_TEST_NODE_A = 'node-a';
+const ACTIVE_GATE_BUDGET_CONTRACT_TEST_NODE_B = 'node-b';
+const ACTIVE_GATE_BUDGET_CONTRACT_TEST_NODE_IDS = Object.freeze([
+  ACTIVE_GATE_BUDGET_CONTRACT_TEST_NODE_A,
+  ACTIVE_GATE_BUDGET_CONTRACT_TEST_NODE_B,
+]);
+const ACTIVE_GATE_BUDGET_CONTRACT_TEST_TIMEOUT_MS = 1000;
+const ACTIVE_GATE_BUDGET_CONTRACT_TEST_READY_STATUS = 200;
+const ACTIVE_GATE_BUDGET_CONTRACT_TEST_REACHABILITY_SOURCE = 'admin_health';
 const STARTUP_SNAPSHOT_PROJECTION_TEST_NODE_A = 'node-a';
 const STARTUP_SNAPSHOT_PROJECTION_TEST_NODE_B = 'node-b';
 const STARTUP_SNAPSHOT_PROJECTION_TEST_NODE_C = 'node-c';
@@ -419,6 +434,77 @@ test('Unit: _probeClusterActiveState probes node status in parallel',
     const probeResult = await probePromise;
     assert.strictEqual(probeResult.allActive, true);
   });
+
+test(
+  'Unit: _probeClusterActiveState starts snapshot coverage before slow ' +
+    'readiness resolves',
+  async () => {
+    const cluster = createCluster({
+      size: ACTIVE_GATE_BUDGET_CONTRACT_TEST_CLUSTER_SIZE,
+      docker: {socketPath: '/var/run/docker.sock'},
+      image: 'distributed-db:test',
+    });
+
+    let readinessStartedCount = 0;
+    let readinessResolvedCount = 0;
+    let snapshotCoverageStartedBeforeReadinessResolved = false;
+
+    const createSlowReadinessNode = (nodeId) => ({
+      id: nodeId,
+      role: nodeId === ACTIVE_GATE_BUDGET_CONTRACT_TEST_NODE_A ?
+        NODE_ROLES.SEED :
+        NODE_ROLES.JOINER,
+      async probeBootstrapReadiness() {
+        readinessStartedCount += 1;
+        await new Promise((resolve) => setImmediate(resolve));
+        readinessResolvedCount += 1;
+        return {
+          status: ACTIVE_GATE_BUDGET_CONTRACT_TEST_READY_STATUS,
+        };
+      },
+      async getReachabilityDiagnostics() {
+        return {
+          adminReady: true,
+          reachable: true,
+          reachableBy: ACTIVE_GATE_BUDGET_CONTRACT_TEST_REACHABILITY_SOURCE,
+        };
+      },
+    });
+
+    for (const nodeId of ACTIVE_GATE_BUDGET_CONTRACT_TEST_NODE_IDS) {
+      cluster._nodes.set(nodeId, createSlowReadinessNode(nodeId));
+    }
+
+    cluster._probeControlSnapshotCoverage = async (_deadline, expectedNodeIds) => {
+      snapshotCoverageStartedBeforeReadinessResolved =
+        readinessStartedCount === expectedNodeIds.length &&
+        readinessResolvedCount === 0;
+      return {
+        completeCoverage: true,
+        expectedNodeCount: expectedNodeIds.length,
+        bestCoverageNodeCount: expectedNodeIds.length,
+        selectedNodeId: ACTIVE_GATE_BUDGET_CONTRACT_TEST_NODE_A,
+        selectedAdminReady: true,
+        selectedReachableBy: ACTIVE_GATE_BUDGET_CONTRACT_TEST_REACHABILITY_SOURCE,
+        selectedObservedNodeIds: expectedNodeIds,
+        selectedPublishedActiveNodeIds: expectedNodeIds,
+        selectedMissingPublishedNodeIds: Object.freeze([]),
+        publicationDisagreementByNodeId: Object.freeze({}),
+      };
+    };
+
+    const probeResult = await cluster._probeClusterActiveState(
+      Date.now() + ACTIVE_GATE_BUDGET_CONTRACT_TEST_TIMEOUT_MS,
+    );
+
+    assert.strictEqual(
+      snapshotCoverageStartedBeforeReadinessResolved,
+      true,
+      'snapshot coverage should not wait for slow readiness probes',
+    );
+    assert.strictEqual(probeResult.allActive, true);
+  },
+);
 
 test('Unit: _probeClusterActiveState prefers traffic readiness probe in load mode',
   async () => {
@@ -877,8 +963,13 @@ test(
 
     assert.strictEqual(
       probeResult.snapshotCoverage.selectedAdminReady,
-      false,
-      'fixture should preserve selected snapshot reachability timeout',
+      true,
+      'selected snapshot reachability timeout should be tolerable with canonical snapshot evidence',
+    );
+    assert.strictEqual(
+      probeResult.snapshotCoverage.selectedSnapshotReachableBy,
+      LOAD_GATE_PROJECTION_TEST_CONTROL_SNAPSHOT_SOURCE,
+      'selected snapshot should name the control snapshot fallback witness',
     );
     assert.strictEqual(
       probeResult.publicationConvergenceGate.ready,
@@ -1011,9 +1102,17 @@ test(
                 acknowledgedNodeIds: ['node-a', 'node-b'],
                 priorityPartitionSummary: {
                   satisfied: false,
-                  blockedPartitionCount: 1,
-                  totalSpreadGap: 1,
+                  blockedPartitions: [{
+                    partitionId: LOAD_GATE_PROJECTION_TEST_BLOCKED_PARTITION_ID,
+                    spreadGap: LOAD_GATE_PROJECTION_TEST_SPREAD_GAP,
+                  }],
                 },
+              },
+              publicationConvergenceGate: {
+                ready: false,
+                reasons: [
+                  LOAD_GATE_PROJECTION_TEST_PRIORITY_SPREAD_PENDING_REASON,
+                ],
               },
             },
           }],
@@ -1079,13 +1178,15 @@ test(
         publicationConvergence: {
           publicationEpoch: 10,
           publicationStatus: 'PUBLISHED',
-          publishedActiveNodeIds: ['node-a', 'node-b'],
+          publishedActiveNodeIds: ['node-b'],
           pendingAckNodeIds: [],
-          acknowledgedNodeIds: ['node-a', 'node-b'],
+          acknowledgedNodeIds: ['node-b'],
           priorityPartitionSummary: {
             satisfied: false,
-            blockedPartitionCount: 1,
-            totalSpreadGap: 1,
+            blockedPartitions: [{
+              partitionId: LOAD_GATE_PROJECTION_TEST_BLOCKED_PARTITION_ID,
+              spreadGap: LOAD_GATE_PROJECTION_TEST_SPREAD_GAP,
+            }],
           },
         },
       },

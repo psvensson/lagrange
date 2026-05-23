@@ -46,6 +46,8 @@ const SNAPSHOT_REPLAY_TEST_HANDOFF_REASON_OWNER_RECONCILE_PENDING =
   'owner_reconcile_pending';
 const SNAPSHOT_REPLAY_TEST_HANDOFF_NEXT_ACTION_RECONCILE =
   'reconcile_owner_membership_publication';
+const SNAPSHOT_REPLAY_TEST_HANDOFF_NEXT_ACTION_WAIT_OWNER_RECOVERY =
+  'wait_owner_recovery';
 const SNAPSHOT_REPLAY_TEST_HANDOFF_RUNTIME_PROMOTION_ALLOWED_FALSE = false;
 const SNAPSHOT_REPLAY_TEST_HANDOFF_OUTCOME_STATE_WRITE_DEFERRED =
   'write_deferred';
@@ -335,6 +337,18 @@ const ACTIVE_GATE_PARTIAL_RESIDUAL_STALE_CAPTURED_AT_MS =
 const ACTIVE_GATE_STARTUP_OWNER_RECONCILE_STALE_ACK_TEST_NAME =
   'Unit: _probeClusterActiveState resolves stale selected ACK covered by ' +
   'startup owner-reconcile handoff';
+const ACTIVE_GATE_STARTUP_OWNER_RECOVERY_STALE_ACK_TEST_NAME =
+  'Unit: _probeClusterActiveState resolves stale selected ACK covered by ' +
+  'startup owner-recovery handoff';
+const ACTIVE_GATE_STARTUP_OWNER_RECOVERY_PROJECTION_TEST_NAME =
+  'Unit: _probeControlSnapshotCoverage projects pending owner-recovery ' +
+  'node into startup snapshot coverage';
+const ACTIVE_GATE_STARTUP_OWNER_RECOVERY_SELECTED_TIMEOUT_TEST_NAME =
+  'Unit: _probeClusterActiveState projects selected-timeout owner-recovery ' +
+  'node during startup';
+const ACTIVE_GATE_STARTUP_OWNER_RECOVERY_INHERITED_TIMEOUT_TEST_NAME =
+  'Unit: _probeClusterActiveState projects selected-timeout inherited ' +
+  'readiness support during startup';
 const ACTIVE_GATE_STARTUP_OWNER_RECONCILE_STALE_ACK_GUARDRAIL_TEST_NAME =
   'Unit: _probeClusterActiveState keeps stale selected ACK blocked without ' +
   'startup owner-reconcile handoff';
@@ -369,6 +383,10 @@ const ACTIVE_GATE_STARTUP_OWNER_RECONCILE_PENDING_ACK_NODE_IDS =
   ]);
 const ACTIVE_GATE_STARTUP_OWNER_RECONCILE_EMPTY_PENDING_ACK_NODE_IDS =
   Object.freeze([]);
+const ACTIVE_GATE_STARTUP_OWNER_RECONCILE_EMPTY_PENDING_RECONCILE_NODE_IDS =
+  Object.freeze([]);
+const ACTIVE_GATE_STARTUP_OWNER_RECONCILE_EMPTY_PENDING_RECOVERY_NODE_IDS =
+  Object.freeze([]);
 const ACTIVE_GATE_STARTUP_OWNER_RECONCILE_PENDING_RECONCILE_NODE_IDS =
   Object.freeze([
     SNAPSHOT_REPLAY_TEST_NODE_ID.BASELINE,
@@ -378,6 +396,55 @@ const ACTIVE_GATE_STARTUP_OWNER_RECONCILE_NO_ACK_HANDOFF_NODE_IDS =
   Object.freeze([
     SNAPSHOT_REPLAY_TEST_NODE_ID.BASELINE,
   ]);
+const ACTIVE_GATE_STARTUP_OWNER_RECOVERY_PROJECTION_OBSERVED_NODE_IDS =
+  Object.freeze([
+    SNAPSHOT_REPLAY_TEST_NODE_ID.BASELINE,
+  ]);
+const ACTIVE_GATE_STARTUP_OWNER_RECOVERY_PROJECTION_PUBLISHED_NODE_IDS =
+  Object.freeze([
+    SNAPSHOT_REPLAY_TEST_NODE_ID.SEED,
+  ]);
+const ACTIVE_GATE_STARTUP_OWNER_RECOVERY_PROJECTION_PENDING_NODE_IDS =
+  Object.freeze([
+    SNAPSHOT_REPLAY_TEST_NODE_ID.ADMIN_READY_STALE,
+  ]);
+const ACTIVE_GATE_STARTUP_OWNER_RECOVERY_PROJECTION_NODE_IDS = Object.freeze([
+  SNAPSHOT_REPLAY_TEST_NODE_ID.BASELINE,
+  SNAPSHOT_REPLAY_TEST_NODE_ID.SEED,
+  SNAPSHOT_REPLAY_TEST_NODE_ID.ADMIN_READY_STALE,
+]);
+const ACTIVE_GATE_STARTUP_OWNER_RECOVERY_SELECTED_TIMEOUT_NODE_ID =
+  SNAPSHOT_REPLAY_TEST_NODE_ID.ADMIN_READY_STALE;
+const ACTIVE_GATE_STARTUP_OWNER_RECOVERY_SELECTED_TIMEOUT_ERROR =
+  'Admin API query timed out for node ' +
+  ACTIVE_GATE_STARTUP_OWNER_RECOVERY_SELECTED_TIMEOUT_NODE_ID +
+  ' on lane snapshot after 100ms';
+const ACTIVE_GATE_STARTUP_OWNER_RECOVERY_READINESS_TIMEOUT_ERROR =
+  'Node readiness probe timed out for ' +
+  ACTIVE_GATE_STARTUP_OWNER_RECOVERY_SELECTED_TIMEOUT_NODE_ID;
+const ACTIVE_GATE_STARTUP_OWNER_RECOVERY_INHERITED_TIMEOUT_NODE_ID =
+  SNAPSHOT_REPLAY_TEST_NODE_ID.SEED;
+const ACTIVE_GATE_STARTUP_OWNER_RECOVERY_INHERITED_TIMEOUT_ERROR =
+  'Node readiness probe timed out for ' +
+  ACTIVE_GATE_STARTUP_OWNER_RECOVERY_INHERITED_TIMEOUT_NODE_ID;
+const ACTIVE_GATE_STARTUP_OWNER_RECOVERY_SELECTED_TIMEOUT_RETRY_AFTER_MS = 100;
+const ACTIVE_GATE_STARTUP_OWNER_RECOVERY_OWNER_QUEUE_PENDING_WRITES = 1;
+const ACTIVE_GATE_STARTUP_OWNER_RECOVERY_OWNER_QUEUE_GROWTH_COUNT = 0;
+const ACTIVE_GATE_STARTUP_OWNER_RECOVERY_HANDOFF_ENQUEUED = false;
+const ACTIVE_GATE_STARTUP_OWNER_RECOVERY_ADMISSION_DEGRADED =
+  'degraded_but_proceeding';
+const ACTIVE_GATE_STARTUP_OWNER_RECOVERY_OBSERVATION_MODE =
+  ADMIN_CONTROL_SNAPSHOT_OBSERVATION_MODE.REPAIR_DEFERRED;
+const ACTIVE_GATE_STARTUP_OWNER_RECOVERY_OBSERVATION_STATE =
+  CONTROL_PLANE_SNAPSHOT_OBSERVATION_STATE.DEFERRED_REFRESH;
+const ACTIVE_GATE_STARTUP_OWNER_RECOVERY_OBSERVATION_CONTRACT_STATE =
+  OWNER_CONTRACT_STATE.DEFERRED;
+const ACTIVE_GATE_STARTUP_OWNER_RECOVERY_OBSERVATION_NEXT_ACTION =
+  OWNER_CONTRACT_NEXT_ACTION.RETRY;
+const ACTIVE_GATE_STARTUP_OWNER_RECOVERY_REASON_SELECTED_TIMEOUT =
+  'selected_timeout';
+const ACTIVE_GATE_STARTUP_OWNER_RECOVERY_WRITE_DEFERRED =
+  SNAPSHOT_REPLAY_TEST_HANDOFF_OUTCOME_STATE_WRITE_DEFERRED;
 const ACTIVE_GATE_NO_PROGRESS_BEST_SNAPSHOT_TEST_NAME =
   'Unit: _waitForAllActive keeps metric-moving snapshot when terminal probe ' +
   'regresses to selected timeout';
@@ -697,9 +764,12 @@ test(ACTIVE_GATE_PARTIAL_RESIDUAL_TEST_NAME, async () => {
 
 function buildStartupOwnerReconcilePartialCoverageCluster({
   includeOwnerReconcileHandoff,
+  handoffNextAction = SNAPSHOT_REPLAY_TEST_HANDOFF_NEXT_ACTION_RECONCILE,
   pendingAckNodeIds = ACTIVE_GATE_STARTUP_OWNER_RECONCILE_PENDING_ACK_NODE_IDS,
   pendingReconcileNodeIds =
     ACTIVE_GATE_STARTUP_OWNER_RECONCILE_PENDING_RECONCILE_NODE_IDS,
+  pendingRecoveryNodeIds =
+    ACTIVE_GATE_STARTUP_OWNER_RECONCILE_EMPTY_PENDING_RECOVERY_NODE_IDS,
   handoffMissingPublishedNodeIds =
     ACTIVE_GATE_STARTUP_OWNER_RECONCILE_MISSING_NODE_IDS,
 }) {
@@ -743,7 +813,7 @@ function buildStartupOwnerReconcilePartialCoverageCluster({
           state: SNAPSHOT_REPLAY_TEST_HANDOFF_STATE_PENDING,
           reasonCode:
             SNAPSHOT_REPLAY_TEST_HANDOFF_REASON_OWNER_RECONCILE_PENDING,
-          nextAction: SNAPSHOT_REPLAY_TEST_HANDOFF_NEXT_ACTION_RECONCILE,
+          nextAction: handoffNextAction,
           runtimePromotionAllowed:
             SNAPSHOT_REPLAY_TEST_HANDOFF_RUNTIME_PROMOTION_ALLOWED_FALSE,
           publishedActiveNodeIds:
@@ -751,6 +821,8 @@ function buildStartupOwnerReconcilePartialCoverageCluster({
           missingPublishedNodeIds: handoffMissingPublishedNodeIds,
           pendingReconcileNodeIds,
           pendingReconcileCount: pendingReconcileNodeIds.length,
+          pendingRecoveryNodeIds,
+          pendingRecoveryCount: pendingRecoveryNodeIds.length,
         } :
         null;
     return {
@@ -821,6 +893,391 @@ test(ACTIVE_GATE_STARTUP_OWNER_RECONCILE_STALE_ACK_TEST_NAME, async () => {
     'selected snapshot still records the stale pending ACK witness',
   );
 });
+
+test(ACTIVE_GATE_STARTUP_OWNER_RECOVERY_STALE_ACK_TEST_NAME, async () => {
+  const cluster = buildStartupOwnerReconcilePartialCoverageCluster({
+    includeOwnerReconcileHandoff: true,
+    handoffNextAction:
+      SNAPSHOT_REPLAY_TEST_HANDOFF_NEXT_ACTION_WAIT_OWNER_RECOVERY,
+    pendingReconcileNodeIds:
+      ACTIVE_GATE_STARTUP_OWNER_RECONCILE_EMPTY_PENDING_RECONCILE_NODE_IDS,
+    pendingRecoveryNodeIds:
+      ACTIVE_GATE_STARTUP_OWNER_RECONCILE_PENDING_ACK_NODE_IDS,
+  });
+
+  const probeResult = await cluster._probeClusterActiveState(
+    Date.now() + ACTIVE_GATE_PARTIAL_RESIDUAL_TIMEOUT_MS,
+  );
+
+  assert.strictEqual(
+    probeResult.allActive,
+    true,
+    'owner-recovery handoff should resolve stale selected ACK for startup',
+  );
+  assert.deepStrictEqual(
+    probeResult.snapshotCoverage.selectedPendingAckNodeIds,
+    ACTIVE_GATE_STARTUP_OWNER_RECONCILE_PENDING_ACK_NODE_IDS,
+    'selected snapshot still records the stale pending ACK witness',
+  );
+  assert.deepStrictEqual(
+    probeResult.snapshotCoverage.selectedPublicationActiveGateHandoff
+      .pendingRecoveryNodeIds,
+    ACTIVE_GATE_STARTUP_OWNER_RECONCILE_PENDING_ACK_NODE_IDS,
+    'owner-recovery handoff should preserve pending recovery diagnostics',
+  );
+});
+
+test(ACTIVE_GATE_STARTUP_OWNER_RECOVERY_PROJECTION_TEST_NAME, async () => {
+  const cluster = createCluster({
+    size: SNAPSHOT_REPLAY_TEST_CLUSTER_SIZE,
+    docker: {socketPath: SNAPSHOT_REPLAY_TEST_DOCKER_SOCKET_PATH},
+    image: SNAPSHOT_REPLAY_TEST_IMAGE,
+  });
+  cluster._nodes.set(SNAPSHOT_REPLAY_TEST_NODE_ID.SEED, {
+    id: SNAPSHOT_REPLAY_TEST_NODE_ID.SEED,
+    role: NODE_ROLES.SEED,
+    async getStatus() {
+      return {rows: [{status: SERVICE_STATUS.ACTIVE}]};
+    },
+    async getReachabilityDiagnostics() {
+      return {
+        reachable: true,
+        adminReady: true,
+        reachableBy: SNAPSHOT_REPLAY_TEST_ADMIN_HEALTH_SOURCE,
+        lastError: null,
+      };
+    },
+    async getControlSnapshot() {
+      return {
+        rows: [{
+          nodes: ACTIVE_GATE_STARTUP_OWNER_RECOVERY_PROJECTION_OBSERVED_NODE_IDS,
+          capturedAtMs: SNAPSHOT_REPLAY_TEST_SEED_CAPTURED_AT_MS,
+          controlPlaneDiagnostics: {
+            publicationConvergence: {
+              publicationEpoch: ACTIVE_GATE_PARTIAL_RESIDUAL_PUBLICATION_EPOCH,
+              publicationStatus: CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED,
+              publishedActiveNodeIds:
+                ACTIVE_GATE_STARTUP_OWNER_RECOVERY_PROJECTION_PUBLISHED_NODE_IDS,
+              publicationActiveGateHandoff: {
+                state: SNAPSHOT_REPLAY_TEST_HANDOFF_STATE_PENDING,
+                reasonCode:
+                  SNAPSHOT_REPLAY_TEST_HANDOFF_REASON_OWNER_RECONCILE_PENDING,
+                nextAction:
+                  SNAPSHOT_REPLAY_TEST_HANDOFF_NEXT_ACTION_WAIT_OWNER_RECOVERY,
+                runtimePromotionAllowed:
+                  SNAPSHOT_REPLAY_TEST_HANDOFF_RUNTIME_PROMOTION_ALLOWED_FALSE,
+                pendingReconcileNodeIds:
+                  ACTIVE_GATE_STARTUP_OWNER_RECONCILE_EMPTY_PENDING_RECONCILE_NODE_IDS,
+                pendingRecoveryNodeIds:
+                  ACTIVE_GATE_STARTUP_OWNER_RECOVERY_PROJECTION_PENDING_NODE_IDS,
+              },
+            },
+          },
+        }],
+      };
+    },
+    async getLogs(_options) {
+      return SNAPSHOT_REPLAY_TEST_EMPTY_LOG;
+    },
+  });
+
+  const coverage = await cluster._probeControlSnapshotCoverage(
+    Date.now() + ACTIVE_GATE_PARTIAL_RESIDUAL_TIMEOUT_MS,
+    SNAPSHOT_REPLAY_TEST_EXPECTED_NODE_IDS,
+  );
+
+  assert.deepStrictEqual(
+    new Set(coverage.selectedObservedNodeIds),
+    new Set(ACTIVE_GATE_STARTUP_OWNER_RECOVERY_PROJECTION_NODE_IDS),
+    'owner-recovery handoff should project the pending recovery node',
+  );
+  assert.strictEqual(
+    coverage.bestCoverageNodeCount,
+    ACTIVE_GATE_STARTUP_OWNER_RECOVERY_PROJECTION_NODE_IDS.length,
+    'owner-recovery projection should move startup snapshot coverage',
+  );
+  assert.strictEqual(
+    coverage.completeCoverage,
+    false,
+    'owner-recovery projection should not complete active-gate coverage',
+  );
+});
+
+test(
+  ACTIVE_GATE_STARTUP_OWNER_RECOVERY_SELECTED_TIMEOUT_TEST_NAME,
+  async () => {
+    const cluster = createCluster({
+      size: SNAPSHOT_REPLAY_TEST_CLUSTER_SIZE,
+      docker: {socketPath: SNAPSHOT_REPLAY_TEST_DOCKER_SOCKET_PATH},
+      image: SNAPSHOT_REPLAY_TEST_IMAGE,
+    });
+    for (const nodeId of SNAPSHOT_REPLAY_TEST_EXPECTED_NODE_IDS) {
+      cluster._nodes.set(nodeId, {
+        id: nodeId,
+        role:
+          nodeId === SNAPSHOT_REPLAY_TEST_NODE_ID.SEED ?
+            NODE_ROLES.SEED :
+            NODE_ROLES.JOINER,
+        async probeBootstrapReadiness() {
+          if (
+            nodeId ===
+            ACTIVE_GATE_STARTUP_OWNER_RECOVERY_SELECTED_TIMEOUT_NODE_ID
+          ) {
+            throw new Error(
+              ACTIVE_GATE_STARTUP_OWNER_RECOVERY_READINESS_TIMEOUT_ERROR,
+            );
+          }
+          return {
+            status: ACTIVE_GATE_STARTUP_OWNER_RECONCILE_STATUS,
+            phase: ACTIVE_GATE_STARTUP_OWNER_RECONCILE_PHASE,
+            state: ACTIVE_GATE_STARTUP_OWNER_RECONCILE_STATE,
+            reasons: [],
+          };
+        },
+        async getReachabilityDiagnostics() {
+          return {
+            reachable: true,
+            adminReady: true,
+            reachableBy: SNAPSHOT_REPLAY_TEST_ADMIN_HEALTH_SOURCE,
+            lastError: null,
+          };
+        },
+        async getLogs(_options) {
+          return SNAPSHOT_REPLAY_TEST_EMPTY_LOG;
+        },
+      });
+    }
+    cluster._probeControlSnapshotCoverage = async () => ({
+      completeCoverage: false,
+      expectedNodeCount: SNAPSHOT_REPLAY_TEST_CLUSTER_SIZE,
+      bestCoverageNodeCount:
+        ACTIVE_GATE_STARTUP_OWNER_RECOVERY_PROJECTION_PENDING_NODE_IDS.length,
+      selectedNodeId:
+        ACTIVE_GATE_STARTUP_OWNER_RECOVERY_SELECTED_TIMEOUT_NODE_ID,
+      selectedSnapshotNodeId:
+        ACTIVE_GATE_STARTUP_OWNER_RECOVERY_SELECTED_TIMEOUT_NODE_ID,
+      selectedAdminReady: true,
+      selectedSnapshotAdminReady: true,
+      selectedReachableBy: SNAPSHOT_REPLAY_TEST_ADMIN_HEALTH_SOURCE,
+      selectedSnapshotReachableBy: SNAPSHOT_REPLAY_TEST_ADMIN_HEALTH_SOURCE,
+      selectedError: ACTIVE_GATE_STARTUP_OWNER_RECOVERY_SELECTED_TIMEOUT_ERROR,
+      selectedSnapshotObservationMode:
+        ACTIVE_GATE_STARTUP_OWNER_RECOVERY_OBSERVATION_MODE,
+      selectedSnapshotObservationState:
+        ACTIVE_GATE_STARTUP_OWNER_RECOVERY_OBSERVATION_STATE,
+      selectedSnapshotObservationContractState:
+        ACTIVE_GATE_STARTUP_OWNER_RECOVERY_OBSERVATION_CONTRACT_STATE,
+      selectedSnapshotObservationRefreshState:
+        CONTROL_PLANE_SNAPSHOT_REFRESH_STATE.DEFERRED,
+      selectedSnapshotObservationNextAction:
+        ACTIVE_GATE_STARTUP_OWNER_RECOVERY_OBSERVATION_NEXT_ACTION,
+      selectedSnapshotObservationRetryAfterMs:
+        ACTIVE_GATE_STARTUP_OWNER_RECOVERY_SELECTED_TIMEOUT_RETRY_AFTER_MS,
+      selectedSnapshotObservationReasonCodes: [
+        ACTIVE_GATE_STARTUP_OWNER_RECOVERY_REASON_SELECTED_TIMEOUT,
+      ],
+      selectedSnapshotRepairDeferred: true,
+      selectedObservedNodeIds:
+        ACTIVE_GATE_STARTUP_OWNER_RECOVERY_PROJECTION_PENDING_NODE_IDS,
+      selectedPublishedActiveNodeIds:
+        ACTIVE_GATE_STARTUP_OWNER_RECOVERY_PROJECTION_PUBLISHED_NODE_IDS,
+      selectedPendingAckNodeIds:
+        ACTIVE_GATE_STARTUP_OWNER_RECONCILE_EMPTY_PENDING_ACK_NODE_IDS,
+      selectedMissingPublishedNodeIds:
+        ACTIVE_GATE_STARTUP_OWNER_RECONCILE_EMPTY_PENDING_ACK_NODE_IDS,
+      selectedPublicationActiveGateHandoff: {
+        state: SNAPSHOT_REPLAY_TEST_HANDOFF_STATE_PENDING,
+        reasonCode:
+          SNAPSHOT_REPLAY_TEST_HANDOFF_REASON_OWNER_RECONCILE_PENDING,
+        nextAction:
+          SNAPSHOT_REPLAY_TEST_HANDOFF_NEXT_ACTION_WAIT_OWNER_RECOVERY,
+        runtimePromotionAllowed:
+          SNAPSHOT_REPLAY_TEST_HANDOFF_RUNTIME_PROMOTION_ALLOWED_FALSE,
+        pendingReconcileNodeIds:
+          ACTIVE_GATE_STARTUP_OWNER_RECONCILE_EMPTY_PENDING_RECONCILE_NODE_IDS,
+        pendingRecoveryNodeIds:
+          ACTIVE_GATE_STARTUP_OWNER_RECOVERY_PROJECTION_PENDING_NODE_IDS,
+      },
+      selectedMembershipPublicationHandoffOutcome: {
+        state: ACTIVE_GATE_STARTUP_OWNER_RECOVERY_WRITE_DEFERRED,
+        reasonCode:
+          SNAPSHOT_REPLAY_TEST_HANDOFF_REASON_OWNER_RECONCILE_PENDING,
+        enqueued: ACTIVE_GATE_STARTUP_OWNER_RECOVERY_HANDOFF_ENQUEUED,
+        retryAfterMs:
+          ACTIVE_GATE_STARTUP_OWNER_RECOVERY_SELECTED_TIMEOUT_RETRY_AFTER_MS,
+      },
+      selectedControlPlaneOwnerQueueDepth: {
+        pendingWrites:
+          ACTIVE_GATE_STARTUP_OWNER_RECOVERY_OWNER_QUEUE_PENDING_WRITES,
+        pendingWriteGrowthCount:
+          ACTIVE_GATE_STARTUP_OWNER_RECOVERY_OWNER_QUEUE_GROWTH_COUNT,
+      },
+    });
+
+    const probeResult = await cluster._probeClusterActiveState(
+      Date.now() + ACTIVE_GATE_PARTIAL_RESIDUAL_TIMEOUT_MS,
+    );
+    const projectedDiagnostic = probeResult.nodeDiagnostics.find(
+      (diagnostic) =>
+        diagnostic.nodeId ===
+          ACTIVE_GATE_STARTUP_OWNER_RECOVERY_SELECTED_TIMEOUT_NODE_ID,
+    );
+
+    assert.strictEqual(
+      projectedDiagnostic.active,
+      true,
+      'selected-timeout owner-recovery node should be projected active',
+    );
+    assert.strictEqual(
+      projectedDiagnostic.admissionState,
+      ACTIVE_GATE_STARTUP_OWNER_RECOVERY_ADMISSION_DEGRADED,
+      'selected-timeout owner-recovery projection stays degraded',
+    );
+    assert.strictEqual(
+      probeResult.allActive,
+      true,
+      'selected-timeout owner-recovery progress should satisfy startup gate',
+    );
+  },
+);
+
+test(
+  ACTIVE_GATE_STARTUP_OWNER_RECOVERY_INHERITED_TIMEOUT_TEST_NAME,
+  async () => {
+    const cluster = createCluster({
+      size: SNAPSHOT_REPLAY_TEST_CLUSTER_SIZE,
+      docker: {socketPath: SNAPSHOT_REPLAY_TEST_DOCKER_SOCKET_PATH},
+      image: SNAPSHOT_REPLAY_TEST_IMAGE,
+    });
+    for (const nodeId of SNAPSHOT_REPLAY_TEST_EXPECTED_NODE_IDS) {
+      cluster._nodes.set(nodeId, {
+        id: nodeId,
+        role:
+          nodeId === SNAPSHOT_REPLAY_TEST_NODE_ID.SEED ?
+            NODE_ROLES.SEED :
+            NODE_ROLES.JOINER,
+        async probeBootstrapReadiness() {
+          if (
+            nodeId ===
+            ACTIVE_GATE_STARTUP_OWNER_RECOVERY_INHERITED_TIMEOUT_NODE_ID
+          ) {
+            throw new Error(
+              ACTIVE_GATE_STARTUP_OWNER_RECOVERY_INHERITED_TIMEOUT_ERROR,
+            );
+          }
+          return {
+            status: ACTIVE_GATE_STARTUP_OWNER_RECONCILE_STATUS,
+            phase: ACTIVE_GATE_STARTUP_OWNER_RECONCILE_PHASE,
+            state: ACTIVE_GATE_STARTUP_OWNER_RECONCILE_STATE,
+            reasons: [],
+          };
+        },
+        async getReachabilityDiagnostics() {
+          return {
+            reachable: true,
+            adminReady: true,
+            reachableBy: SNAPSHOT_REPLAY_TEST_ADMIN_HEALTH_SOURCE,
+            lastError: null,
+          };
+        },
+        async getLogs(_options) {
+          return SNAPSHOT_REPLAY_TEST_EMPTY_LOG;
+        },
+      });
+    }
+    cluster._probeControlSnapshotCoverage = async () => ({
+      completeCoverage: false,
+      expectedNodeCount: SNAPSHOT_REPLAY_TEST_CLUSTER_SIZE,
+      bestCoverageNodeCount:
+        ACTIVE_GATE_STARTUP_OWNER_RECOVERY_PROJECTION_PENDING_NODE_IDS.length,
+      selectedNodeId:
+        ACTIVE_GATE_STARTUP_OWNER_RECOVERY_SELECTED_TIMEOUT_NODE_ID,
+      selectedSnapshotNodeId:
+        ACTIVE_GATE_STARTUP_OWNER_RECOVERY_SELECTED_TIMEOUT_NODE_ID,
+      selectedAdminReady: true,
+      selectedSnapshotAdminReady: true,
+      selectedReachableBy: SNAPSHOT_REPLAY_TEST_ADMIN_HEALTH_SOURCE,
+      selectedSnapshotReachableBy: SNAPSHOT_REPLAY_TEST_ADMIN_HEALTH_SOURCE,
+      selectedError: ACTIVE_GATE_STARTUP_OWNER_RECOVERY_SELECTED_TIMEOUT_ERROR,
+      selectedSnapshotObservationMode:
+        ACTIVE_GATE_STARTUP_OWNER_RECOVERY_OBSERVATION_MODE,
+      selectedSnapshotObservationState:
+        ACTIVE_GATE_STARTUP_OWNER_RECOVERY_OBSERVATION_STATE,
+      selectedSnapshotObservationContractState:
+        ACTIVE_GATE_STARTUP_OWNER_RECOVERY_OBSERVATION_CONTRACT_STATE,
+      selectedSnapshotObservationRefreshState:
+        CONTROL_PLANE_SNAPSHOT_REFRESH_STATE.DEFERRED,
+      selectedSnapshotObservationNextAction:
+        ACTIVE_GATE_STARTUP_OWNER_RECOVERY_OBSERVATION_NEXT_ACTION,
+      selectedSnapshotObservationRetryAfterMs:
+        ACTIVE_GATE_STARTUP_OWNER_RECOVERY_SELECTED_TIMEOUT_RETRY_AFTER_MS,
+      selectedSnapshotObservationReasonCodes: [
+        ACTIVE_GATE_STARTUP_OWNER_RECOVERY_REASON_SELECTED_TIMEOUT,
+      ],
+      selectedSnapshotRepairDeferred: true,
+      selectedObservedNodeIds:
+        ACTIVE_GATE_STARTUP_OWNER_RECOVERY_PROJECTION_PENDING_NODE_IDS,
+      selectedPublishedActiveNodeIds:
+        ACTIVE_GATE_STARTUP_OWNER_RECOVERY_PROJECTION_PUBLISHED_NODE_IDS,
+      selectedPendingAckNodeIds:
+        ACTIVE_GATE_STARTUP_OWNER_RECONCILE_EMPTY_PENDING_ACK_NODE_IDS,
+      selectedMissingPublishedNodeIds:
+        ACTIVE_GATE_STARTUP_OWNER_RECONCILE_EMPTY_PENDING_ACK_NODE_IDS,
+      selectedPublicationActiveGateHandoff: {
+        state: SNAPSHOT_REPLAY_TEST_HANDOFF_STATE_PENDING,
+        reasonCode:
+          SNAPSHOT_REPLAY_TEST_HANDOFF_REASON_OWNER_RECONCILE_PENDING,
+        nextAction:
+          SNAPSHOT_REPLAY_TEST_HANDOFF_NEXT_ACTION_WAIT_OWNER_RECOVERY,
+        runtimePromotionAllowed:
+          SNAPSHOT_REPLAY_TEST_HANDOFF_RUNTIME_PROMOTION_ALLOWED_FALSE,
+        pendingReconcileNodeIds:
+          ACTIVE_GATE_STARTUP_OWNER_RECONCILE_EMPTY_PENDING_RECONCILE_NODE_IDS,
+        pendingRecoveryNodeIds:
+          ACTIVE_GATE_STARTUP_OWNER_RECOVERY_PROJECTION_PENDING_NODE_IDS,
+      },
+      selectedMembershipPublicationHandoffOutcome: {
+        state: ACTIVE_GATE_STARTUP_OWNER_RECOVERY_WRITE_DEFERRED,
+        reasonCode:
+          SNAPSHOT_REPLAY_TEST_HANDOFF_REASON_OWNER_RECONCILE_PENDING,
+        enqueued: ACTIVE_GATE_STARTUP_OWNER_RECOVERY_HANDOFF_ENQUEUED,
+        retryAfterMs:
+          ACTIVE_GATE_STARTUP_OWNER_RECOVERY_SELECTED_TIMEOUT_RETRY_AFTER_MS,
+      },
+      selectedControlPlaneOwnerQueueDepth: {
+        pendingWrites:
+          ACTIVE_GATE_STARTUP_OWNER_RECOVERY_OWNER_QUEUE_PENDING_WRITES,
+        pendingWriteGrowthCount:
+          ACTIVE_GATE_STARTUP_OWNER_RECOVERY_OWNER_QUEUE_GROWTH_COUNT,
+      },
+    });
+
+    const probeResult = await cluster._probeClusterActiveState(
+      Date.now() + ACTIVE_GATE_PARTIAL_RESIDUAL_TIMEOUT_MS,
+    );
+    const projectedDiagnostic = probeResult.nodeDiagnostics.find(
+      (diagnostic) =>
+        diagnostic.nodeId ===
+          ACTIVE_GATE_STARTUP_OWNER_RECOVERY_INHERITED_TIMEOUT_NODE_ID,
+    );
+
+    assert.strictEqual(
+      projectedDiagnostic.active,
+      true,
+      'inherited readiness timeout should be projected active',
+    );
+    assert.strictEqual(
+      projectedDiagnostic.admissionState,
+      ACTIVE_GATE_STARTUP_OWNER_RECOVERY_ADMISSION_DEGRADED,
+      'inherited readiness projection stays degraded',
+    );
+    assert.strictEqual(
+      probeResult.allActive,
+      true,
+      'inherited readiness support should satisfy startup gate',
+    );
+  },
+);
 
 test(
   ACTIVE_GATE_STARTUP_OWNER_RECONCILE_STALE_ACK_GUARDRAIL_TEST_NAME,

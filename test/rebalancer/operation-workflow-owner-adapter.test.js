@@ -312,7 +312,7 @@ test('operation workflow adapter executes canonical effect commands', async (t) 
       }),
       command:
         OPERATION_WORKFLOW_EFFECT_COMMANDS
-          .RETAIN_PUBLICATION_FOR_RETRY_COMMAND,
+          .RECONCILE_STALE_PROGRESS_COMMAND,
       applied: true,
     },
     {

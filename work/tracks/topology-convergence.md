@@ -142,6 +142,10 @@ publication-evidence replay code rather than by the runtime owner alone.
 | `work/sprints/done-2026-q2-topology-convergence-systems-pattern-hardening.md` | `stabilization` / `systems-pattern-hardening` | done | Added handoff hygiene, publication-convergence causal selection, deterministic replay, active-gate catch-up fencing, topology operator witnesses, critical control-plane convergence, and owner-boundary file-size reduction contracts. |
 | `work/sprints/done-2026-q2-topology-systems-pattern-completion-closure.md` | `stabilization` / `systems-pattern-completion` | done | Closed the live TiKV operator witness summary path, broad Cockroach admin tail proof, and stale active-reference tracker guard before the paused topology sprint resumes. |
 | `work/sprints/done-2026-q2-topology-convergence-theory-ladder.md` | `experiment` / `theory-ladder` | done | Starts from one fresh rolling-restart baseline probe, then creates successor theory sprints from observed evidence. |
+| `work/sprints/superseded-2026-q2-topology-publication-reconcile-system-theory.md` | `experiment` / `theory-ladder` | superseded | Superseded on May 23, 2026. |
+| `work/sprints/superseded-2026-q2-workflow-steering-core-logic-hardening.md` | `stabilization` / `ceremony-hardening` | superseded | Superseded on May 23, 2026. |
+| `work/sprints/done-2026-q2-rolling-restart-stability-hardening-final.md` | `stabilization` / `rolling-restart` | done | Focused push to make the system stable under 5-node rolling restarts. |
+
 
 ## Owner Boundaries
 

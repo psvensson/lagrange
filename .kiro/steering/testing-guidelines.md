@@ -558,17 +558,12 @@ Required behavior:
 4. Include timeout class and budget context in integration or harness failure
    artifacts used for diagnosis.
 
-## Distributed Harness Failure Triage Script
-Distributed-harness local procedure lives in
-`test/distributed/README.local.md`.
+## External Testing Procedures and Resources
 
-## Distributed Scenario Policy SQL Ownership Gate
-Distributed-scenario local procedure lives in
-`test/distributed/README.local.md`.
-
-## Property-Based Test Iteration Limit
-Project-local property-test iteration guidance lives in
-`test/README.local.md`.
+For additional testing-related details, refer to the following resources:
+- **Distributed Harness & Scenario Policies**: Local procedures and guidelines live in `test/distributed/README.local.md`.
+- **Property-Based Testing**: Project-local property-test iteration guidance lives in `test/README.local.md`.
+- **Node Join Convergence SLO Strategy**: Integration-specific node-join convergence procedures live in `test/integration/README.local.md`.
 
 ## No Skipped Tests Policy
 
@@ -691,10 +686,6 @@ distributed baseline:
 9. If two baseline failures cluster at the same architectural boundary, record
    the boundary and open a consolidation task/spec before continuing with more
    local fixes.
-
-## Node Join Convergence SLO Strategy
-Integration-specific node-join convergence procedure lives in
-`test/integration/README.local.md`.
 
 ## Boundary-Transition Scenario Layer Policy
 

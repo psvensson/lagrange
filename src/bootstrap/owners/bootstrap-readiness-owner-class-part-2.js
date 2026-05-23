@@ -16,6 +16,9 @@ import {
 } from '../shared/local-query-transport-readiness.js';
 import {CONTROL_PLANE_WRITE_HEALTH_STATE} from '../control-plane-write-health-owner.js';
 import {BootstrapReadinessOwnerPart1} from './bootstrap-readiness-owner-class-part-1.js';
+const PRIORITY_CONTROL_PLANE_RECOVERY_DIAGNOSTICS_UNAVAILABLE =
+  'priority_control_plane_recovery_diagnostics_unavailable';
+
 const BOOTSTRAP_READINESS_OWNER_LITERAL = Object.freeze({
   STARTING: 'starting',
   BOOTSTRAPPING: 'bootstrapping',
@@ -271,11 +274,23 @@ class BootstrapReadinessOwner extends BootstrapReadinessOwnerPart1 {
     if (error) {
       details.error = error?.message || String(error);
     }
-    return {
+    const isWebSocketClosed = error && (
+      String(error).includes('WebSocket') ||
+      String(error).includes('closed') ||
+      String(error).includes('transport')
+    );
+    if (isWebSocketClosed) {
+      details.retryAfterMs = 15000;
+    }
+    const health = {
       healthy: false,
-      reasonCode: LIFECYCLE_REASON.PRIORITY_CONTROL_PLANE_RECOVERY_PENDING,
+      reasonCode: PRIORITY_CONTROL_PLANE_RECOVERY_DIAGNOSTICS_UNAVAILABLE,
       details,
     };
+    if (isWebSocketClosed) {
+      health.retryAfterMs = 15000;
+    }
+    return health;
   }
   getControlPlaneWriteHealth() {
     const provider = this.getControlPlaneWriteHealthProvider();

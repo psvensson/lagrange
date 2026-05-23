@@ -52,7 +52,7 @@ Each entry must include these labels:
 
 ## theory-20260522-experiment-theory-memory
 
-- Status: active
+- Status: supported
 - Scenario/gate: none / workflow_tooling
 - Owner/boundary: workflow_tooling_owner / experiment_theory_memory
 - Hypothesis: a compact advisory theory ledger lets agents find current experiments and superseded theories without replacing package or artifact truth.
@@ -94,14 +94,44 @@ Each entry must include these labels:
 
 ## theory-20260522-snapshot-watch-handoff-contract
 
-- Status: active
+- Status: stale
 - Scenario/gate: node-failure-rebalance / active_gate_snapshot_coverage
 - Owner/boundary: startup_active_gate_owner / snapshot_coverage
 - Hypothesis: WebSocket-closed selected snapshot source evidence with admin_ws reachability and an alternative witness remains blocked because startup_active_gate_owner / snapshot_coverage does not emit a typed snapshot/watch owner handoff contract.
 - Probe: `npm run analyze:topology-convergence -- test-output/report.json --handoff-probe`
 - Artifact/result: `test-output/report.json` - handoff probe reports handoffContract absent and runtimePromotionAllowed=false while selectedSnapshotAdminReady=true, selectedSnapshotReachableBy=admin_ws, and alternativeSnapshotWitnessAvailable=true.
 - Representative movement: pending-before-probe
-- Linked packages: `work/packages/done-20260522-node-failure-rebalance-active-gate-snapshot-architecture-experiment.md`, `work/packages/todo-20260522-node-failure-rebalance-startup-active-gate-snapshot-watch-handoff-contract.md`
+- Linked packages: `work/packages/done-20260522-node-failure-rebalance-active-gate-snapshot-architecture-experiment.md`, `work/packages/todo-20260522-node-failure-rebalance-startup-active-gate-snapshot-watch-handoff-contract.md`, `work/packages/active-20260523-recovery-reason-taxonomy-handoff-semantics.md`
 - Supersedes: theory-20260522-snapshot-watch-fixture
 - Superseded by: none
 - Next implication: resume the paused typed handoff contract runtime package after the ledger sequence closes.
+
+## theory-20260513-rolling-restart-preflight-green-gate-confirmation
+
+- Status: supported
+- Scenario/gate: rolling-restart / release_gate
+- Owner/boundary: release_gate_owner / rolling_restart_green_gate_confirmation
+- Hypothesis: Executing the representative rolling-restart scenario after all focused proof packages are closed will confirm whether the system is stable or identify residual active_gate_snapshot_coverage debt.
+- Probe: `node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-preflight-green-gate-confirmation.report.json --fast-local --verbose`
+- Artifact/result: `test-output/reports/rolling-restart-preflight-green-gate-confirmation.report.json`
+- Representative movement: same-frontier
+- Linked packages: `work/packages/done-20260513-rolling-restart-preflight-green-gate-confirmation.md`
+- Supersedes: none
+- Superseded by: none
+- Next implication: Close the confirmation package as same-frontier, and proceed with successor package work for active_gate_snapshot_coverage_incomplete.
+
+## theory-20260523-rolling-restart-recovery-reconcile-recursion-fix
+
+- Status: proved
+- Scenario/gate: rolling-restart / release_gate
+- Owner/boundary: operation_workflow_owner / workflow_progress
+- Hypothesis: The sequential rolling restart triggers an infinite loop or call stack exhaustion in OperationWorkflowRecoveryReconcile getPriorityRecoveryDecisionSnapshotForPartitionOperations during re-entry reconcile checks.
+- Probe: npm run work:advance -- --check
+- Artifact/result: test-output/reports/rolling-restart-preflight-green-gate-confirmation.report.json
+- Representative movement: representative-green
+- Linked packages: work/packages/done-20260523-rolling-restart-recovery-reconcile-recursion-fix.md, work/packages/done-20260523-priority-recovery-operation-workflow-owner-workflow-progress.md, work/packages/done-20260523-rolling-restart-priority-recovery-event-wait-architecture-experiment.md
+- Supersedes: none
+- Superseded by: none
+- Next implication: Successfully stabilized the rolling-restart scenario.
+
+

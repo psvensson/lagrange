@@ -1,6 +1,8 @@
 import {CLUSTER_SEGMENT_7_CLASS_SHARED} from './cluster-segment-7-class-shared.js';
 import {buildCanonicalPublicationEvidenceFromControlPlane} from
   './publication-evidence-contract.js';
+import {isStartupAdminReachabilityTransientError} from
+  './startup-readiness-evidence.js';
 
 const {
   ACTIVE_PROBE_ACTIVITY_SOURCE_BOOTSTRAP_READINESS,
@@ -101,6 +103,12 @@ const SELECTED_SNAPSHOT_OBSERVATION_MODE_REPAIR_DEFERRED = 'repair_deferred';
 const SELECTED_SNAPSHOT_OBSERVATION_NEXT_ACTION_RETRY = 'retry';
 const SELECTED_SNAPSHOT_OBSERVATION_REASON_SELECTED_TIMEOUT =
   'selected_timeout';
+const SELECTED_SNAPSHOT_OBSERVATION_REASON_SELECTED_TRANSPORT_CLOSED =
+  'selected_transport_closed';
+const SELECTED_SNAPSHOT_OWNER_RECOVERY_REPAIR_REASONS = Object.freeze([
+  SELECTED_SNAPSHOT_OBSERVATION_REASON_SELECTED_TIMEOUT,
+  SELECTED_SNAPSHOT_OBSERVATION_REASON_SELECTED_TRANSPORT_CLOSED,
+]);
 const SELECTED_SNAPSHOT_OWNER_QUEUE_PENDING_WRITES_FIELD = 'pendingWrites';
 const SELECTED_SNAPSHOT_OWNER_QUEUE_PENDING_WRITE_GROWTH_COUNT_FIELD =
   'pendingWriteGrowthCount';
@@ -111,6 +119,7 @@ const SELECTED_SNAPSHOT_HANDOFF_OUTCOME_RETRY_AFTER_MS_FIELD = 'retryAfterMs';
 const SELECTED_SNAPSHOT_HANDOFF_OUTCOME_STATE_WRITE_DEFERRED =
   'write_deferred';
 const EMPTY_STRING = '';
+const REACHABILITY_PROBE_TIMEOUT_FLOOR_MS = 1000;
 const ACTIVE_PROBE_PHASE_UNAVAILABLE = null;
 const ACTIVE_PROBE_REASONS_UNAVAILABLE = Object.freeze([]);
 const ACTIVE_PROBE_ADMISSION_REASON_UNAVAILABLE = null;
@@ -205,6 +214,16 @@ const STARTUP_SNAPSHOT_PROJECTION_OUTCOME_APPLY = Object.freeze({
   admissionState: STARTUP_ADMISSION_STATE_DEGRADED,
   admissionReason: ACTIVE_PROBE_REASON_STARTUP_SNAPSHOT_READY,
 });
+const STARTUP_ADMIN_AVAILABILITY_SUPPORT_OUTCOME_KEEP = Object.freeze({
+  project: false,
+});
+const STARTUP_ADMIN_AVAILABILITY_SUPPORT_OUTCOME_APPLY = Object.freeze({
+  project: true,
+  active: true,
+  activitySource: ACTIVE_PROBE_ACTIVITY_SOURCE_STARTUP_ADMIN_PROJECTION,
+  admissionState: STARTUP_ADMISSION_STATE_DEGRADED,
+  admissionReason: ACTIVE_PROBE_ACTIVITY_SOURCE_STARTUP_ADMIN_PROJECTION,
+});
 const STARTUP_SNAPSHOT_PROJECTION_DECISION_TABLE = Object.freeze([
   Object.freeze({
     outcome: STARTUP_SNAPSHOT_PROJECTION_OUTCOME_APPLY,
@@ -260,6 +279,21 @@ const STARTUP_SNAPSHOT_PROJECTION_DECISION_TABLE = Object.freeze([
       evidence.snapshotCoverageComplete === true &&
       evidence.selectedSnapshotAdminReady === true &&
       evidence.snapshotWitnessClean === true &&
+      evidence.nodeCanonicalActive === true &&
+      evidence.nodePublicationDisagreementCount === ZERO,
+  }),
+]);
+const STARTUP_ADMIN_AVAILABILITY_SUPPORT_DECISION_TABLE = Object.freeze([
+  Object.freeze({
+    outcome: STARTUP_ADMIN_AVAILABILITY_SUPPORT_OUTCOME_APPLY,
+    matches: (evidence) =>
+      evidence.readinessMode === CLUSTER_READINESS_MODE_STARTUP &&
+      evidence.diagnosticActive !== true &&
+      evidence.adminAvailabilityTransient === true &&
+      evidence.publicationGateReady === true &&
+      evidence.snapshotCoverageComplete !== true &&
+      evidence.selectedSnapshotAdminReady === true &&
+      evidence.selectedSnapshotTimeoutOwnerRecoveryProjectionReady === true &&
       evidence.nodeCanonicalActive === true &&
       evidence.nodePublicationDisagreementCount === ZERO,
   }),
@@ -335,7 +369,16 @@ function hasSelectedSnapshotBoundedRetry(value) {
 function normalizeSelectedSnapshotTimeoutOwnerRecoveryHandoff(
   snapshotCoverage,
 ) {
-  const handoff = snapshotCoverage?.selectedPublicationActiveGateHandoff;
+  const handoff =
+    snapshotCoverage?.selectedPublicationActiveGateHandoff &&
+      typeof snapshotCoverage.selectedPublicationActiveGateHandoff ===
+        TYPEOF_OBJECT ?
+      snapshotCoverage.selectedPublicationActiveGateHandoff :
+      snapshotCoverage?.selectedActiveGateOwnerCohort &&
+        typeof snapshotCoverage.selectedActiveGateOwnerCohort ===
+          TYPEOF_OBJECT ?
+        snapshotCoverage.selectedActiveGateOwnerCohort :
+        null;
   return handoff &&
     typeof handoff === TYPEOF_OBJECT &&
     Array.isArray(handoff) !== true ?
@@ -364,8 +407,16 @@ function normalizeSelectedSnapshotOwnerQueueDepth(snapshotCoverage) {
 }
 
 function hasSelectedSnapshotTimeoutRepairDeferredEvidence(snapshotCoverage) {
+  const reasonCodes = normalizeDistinctStringArray(
+    snapshotCoverage?.selectedSnapshotObservationReasonCodes,
+  );
   return (
-    isTimeoutShapedProbeError(snapshotCoverage?.selectedError) === true &&
+    (
+      isTimeoutShapedProbeError(snapshotCoverage?.selectedError) === true ||
+      reasonCodes.includes(
+        SELECTED_SNAPSHOT_OBSERVATION_REASON_SELECTED_TRANSPORT_CLOSED,
+      )
+    ) &&
     snapshotCoverage?.selectedSnapshotRepairDeferred === true &&
     snapshotCoverage?.selectedSnapshotObservationMode ===
       SELECTED_SNAPSHOT_OBSERVATION_MODE_REPAIR_DEFERRED &&
@@ -374,9 +425,9 @@ function hasSelectedSnapshotTimeoutRepairDeferredEvidence(snapshotCoverage) {
     hasSelectedSnapshotBoundedRetry(
       snapshotCoverage?.selectedSnapshotObservationRetryAfterMs,
     ) &&
-    normalizeDistinctStringArray(
-      snapshotCoverage?.selectedSnapshotObservationReasonCodes,
-    ).includes(SELECTED_SNAPSHOT_OBSERVATION_REASON_SELECTED_TIMEOUT)
+    reasonCodes.some((reasonCode) =>
+      SELECTED_SNAPSHOT_OWNER_RECOVERY_REPAIR_REASONS.includes(reasonCode),
+    )
   );
 }
 
@@ -798,6 +849,19 @@ function hasDiagnosticAdminProbeTimeoutSignal(diagnostic) {
   });
 }
 
+function hasDiagnosticTransientAdminAvailabilitySignal(diagnostic) {
+  return normalizeDistinctStringArray(diagnostic?.reasons).some((reason) => {
+    const adminNotReadyPrefix =
+      ACTIVE_PROBE_REASON_ADMIN_NOT_READY + '=';
+    if (!reason.startsWith(adminNotReadyPrefix)) {
+      return false;
+    }
+    return isStartupAdminReachabilityTransientError(
+      reason.slice(adminNotReadyPrefix.length),
+    );
+  });
+}
+
 function normalizeStartupSnapshotProjectionEvidence(
   diagnostic,
   projectionContext,
@@ -819,6 +883,8 @@ function normalizeStartupSnapshotProjectionEvidence(
     diagnosticActive: diagnostic?.active === true,
     timeoutShaped: hasDiagnosticReadinessTimeoutSignal(diagnostic),
     adminProbeTimeoutShaped: hasDiagnosticAdminProbeTimeoutSignal(diagnostic),
+    adminAvailabilityTransient:
+      hasDiagnosticTransientAdminAvailabilitySignal(diagnostic),
     nodeCanonicalActive:
       projectionContext.publishedActiveNodeIds.includes(nodeId) ||
       projectionContext.healthyReadinessNodeIds.includes(nodeId),
@@ -841,12 +907,49 @@ function decideStartupSnapshotProjection(evidence) {
   return decision?.outcome || STARTUP_SNAPSHOT_PROJECTION_OUTCOME_KEEP;
 }
 
+function decideStartupAdminAvailabilitySupport(evidence) {
+  const decision =
+    STARTUP_ADMIN_AVAILABILITY_SUPPORT_DECISION_TABLE.find((candidate) =>
+      candidate.matches(evidence),
+    );
+  return decision?.outcome ||
+    STARTUP_ADMIN_AVAILABILITY_SUPPORT_OUTCOME_KEEP;
+}
+
 function projectStartupSnapshotDiagnostic(diagnostic, projectionContext) {
   const evidence = normalizeStartupSnapshotProjectionEvidence(
     diagnostic,
     projectionContext,
   );
   const outcome = decideStartupSnapshotProjection(evidence);
+  if (outcome.project !== true) {
+    return diagnostic;
+  }
+  return {
+    ...diagnostic,
+    active: outcome.active,
+    state: ACTIVE_STATE.toLowerCase(),
+    reasons: normalizeDistinctStringArray([
+      ...normalizeDistinctStringArray(diagnostic?.reasons),
+      outcome.admissionReason,
+    ]),
+    activitySource: outcome.activitySource,
+    admissionState: outcome.admissionState,
+    admissionReason: outcome.admissionReason,
+    sourceError: diagnostic?.error || null,
+    error: null,
+  };
+}
+
+function projectStartupAdminAvailabilityDiagnostic(
+  diagnostic,
+  projectionContext,
+) {
+  const evidence = normalizeStartupSnapshotProjectionEvidence(
+    diagnostic,
+    projectionContext,
+  );
+  const outcome = decideStartupAdminAvailabilitySupport(evidence);
   if (outcome.project !== true) {
     return diagnostic;
   }
@@ -1202,10 +1305,13 @@ class Cluster4 extends Cluster3 {
     const nodeDiagnosticsPromise = Promise.all(
       nodes.map(async (node) => {
         const remainingMs = Math.max(MIN_TIMEOUT_MS, deadline - Date.now());
-        const probeTimeoutMs = Math.min(
-          ADMIN_QUERY_TIMEOUT_MS,
-          CLUSTER_ACTIVE_NODE_PROBE_TIMEOUT_MS,
-          remainingMs,
+        const probeTimeoutMs = Math.max(
+          REACHABILITY_PROBE_TIMEOUT_FLOOR_MS,
+          Math.min(
+            ADMIN_QUERY_TIMEOUT_MS,
+            CLUSTER_ACTIVE_NODE_PROBE_TIMEOUT_MS,
+            remainingMs,
+          ),
         );
         let attemptedReadinessProbe = false;
         let attemptedReadinessProbeSource = ACTIVE_PROBE_ACTIVITY_SOURCE_STATUS;
@@ -1465,10 +1571,17 @@ class Cluster4 extends Cluster3 {
     const startupProjectedNodeDiagnostics = nodeDiagnostics.map((diagnostic) =>
       projectStartupSnapshotDiagnostic(diagnostic, startupProjectionContext),
     );
-    const projectedNodeDiagnostics = startupProjectedNodeDiagnostics.map(
-      (diagnostic) =>
+    const startupReadinessProjectedNodeDiagnostics =
+      startupProjectedNodeDiagnostics.map((diagnostic) =>
+        projectStartupAdminAvailabilityDiagnostic(
+          diagnostic,
+          startupProjectionContext,
+        ),
+      );
+    const projectedNodeDiagnostics =
+      startupReadinessProjectedNodeDiagnostics.map((diagnostic) =>
         projectLoadPublicationGateDiagnostic(diagnostic, projectionContext),
-    );
+      );
     const activeByStatus = projectedNodeDiagnostics.every(
       (diagnostic) => diagnostic.active === true,
     );

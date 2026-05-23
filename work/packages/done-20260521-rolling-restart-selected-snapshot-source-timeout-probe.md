@@ -3,7 +3,7 @@
 <!-- work-package
 {
   "schema": "work-package-v1",
-  "status": "todo",
+  "status": "done",
   "opened": "2026-05-21",
   "lane": "experiment",
   "scenario": "none",
@@ -17,7 +17,47 @@
   "proof": [
     "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-active-gate-snapshot-quorum-20260521T180405Z.report.json --explain active_gate_snapshot_coverage"
   ],
-  "writeScope": [],
+  "writeScope": [
+    ".kiro/steering/llm/architecture.md",
+    ".kiro/steering/llm/core.md",
+    ".kiro/steering/llm/governance.md",
+    ".kiro/steering/llm/manifest.json",
+    ".kiro/steering/llm/rules.json",
+    ".kiro/steering/testing-guidelines.md",
+    "roadmap.md",
+    "scripts/analyze-priority-recovery-residuals.js",
+    "scripts/analyze-topology-convergence.js",
+    "scripts/work-scenario-triage.js",
+    "scripts/work-theory-ledger.js",
+    "src/bootstrap/owners/bootstrap-readiness-owner-class-part-2.js",
+    "src/control-plane/control-plane-readiness-service-segment-3.js",
+    "src/control-plane/publication-active-gate-handoff-contract.js",
+    "src/diagnostics/topology-convergence-graph.js",
+    "src/rebalancer/operation-lifecycle.js",
+    "src/rebalancer/operation-workflow-owner-ports.js",
+    "src/rebalancer/operation-workflow-owner.js",
+    "src/rebalancer/operation-workflow-recovery-reconcile.js",
+    "src/rebalancer/rebalancer-planning-gate-methods.js",
+    "src/rebalancer/unified-rebalancer-segment-1.js",
+    "src/rebalancer/unified-rebalancer-segment-5.js",
+    "test/distributed/harness/__tests__/cluster-active-gate-startup-acknowledgement-test-cases.js",
+    "test/distributed/harness/__tests__/cluster.test-part-4.js",
+    "test/distributed/harness/cluster-segment-7-class-4.js",
+    "test/rebalancer/cluster-readiness-gate.test.js",
+    "test/rebalancer/operation-workflow-owner-adapter.test.js",
+    "test/rebalancer/operation-workflow-owner-decision.test.js",
+    "test/rebalancer/unified-rebalancer-part-5-2-stage-2.js",
+    "test/rebalancer/unified-rebalancer.test-part-5.js",
+    "test/scripts/analyze-topology-convergence.test.js",
+    "test/scripts/work-theory-ledger.test.js",
+    "work/tracks/topology-convergence.md",
+    "test/bootstrap/owners/",
+    "test/distributed/harness/__tests__/cluster-active-gate-selected-transport-closed-owner-recovery-projection.test.js",
+    "test/distributed/harness/__tests__/cluster-active-gate-startup-readiness-admin-availability.test.js",
+    "test/scripts/analyze-priority-recovery-residuals.test.js",
+    "test/scripts/work-scenario-triage.test.js",
+    "work/RULES.md"
+  ],
   "handoffFiles": [
     "test-output/reports/rolling-restart-after-active-gate-snapshot-quorum-20260521T180405Z.report.json"
   ],
@@ -26,7 +66,48 @@
     "src/admin/admin-control-snapshot-local-diagnostics-methods.js",
     "src/admin/admin-websocket-api-segment-1.js"
   ],
-  "commitScope": [],
+  "commitScope": [
+    ".kiro/steering/llm/architecture.md",
+    ".kiro/steering/llm/core.md",
+    ".kiro/steering/llm/governance.md",
+    ".kiro/steering/llm/manifest.json",
+    ".kiro/steering/llm/rules.json",
+    ".kiro/steering/testing-guidelines.md",
+    "roadmap.md",
+    "scripts/analyze-priority-recovery-residuals.js",
+    "scripts/analyze-topology-convergence.js",
+    "scripts/work-scenario-triage.js",
+    "scripts/work-theory-ledger.js",
+    "src/bootstrap/owners/bootstrap-readiness-owner-class-part-2.js",
+    "src/control-plane/control-plane-readiness-service-segment-3.js",
+    "src/control-plane/publication-active-gate-handoff-contract.js",
+    "src/diagnostics/topology-convergence-graph.js",
+    "src/rebalancer/operation-lifecycle.js",
+    "src/rebalancer/operation-workflow-owner-ports.js",
+    "src/rebalancer/operation-workflow-owner.js",
+    "src/rebalancer/operation-workflow-recovery-reconcile.js",
+    "src/rebalancer/rebalancer-planning-gate-methods.js",
+    "src/rebalancer/unified-rebalancer-segment-1.js",
+    "src/rebalancer/unified-rebalancer-segment-5.js",
+    "test/distributed/harness/__tests__/cluster-active-gate-startup-acknowledgement-test-cases.js",
+    "test/distributed/harness/__tests__/cluster.test-part-4.js",
+    "test/distributed/harness/cluster-segment-7-class-4.js",
+    "test/rebalancer/cluster-readiness-gate.test.js",
+    "test/rebalancer/operation-workflow-owner-adapter.test.js",
+    "test/rebalancer/operation-workflow-owner-decision.test.js",
+    "test/rebalancer/unified-rebalancer-part-5-2-stage-2.js",
+    "test/rebalancer/unified-rebalancer.test-part-5.js",
+    "test/scripts/analyze-topology-convergence.test.js",
+    "test/scripts/work-theory-ledger.test.js",
+    "work/tracks/topology-convergence.md",
+    "test/bootstrap/owners/",
+    "test/distributed/harness/__tests__/cluster-active-gate-selected-transport-closed-owner-recovery-projection.test.js",
+    "test/distributed/harness/__tests__/cluster-active-gate-startup-readiness-admin-availability.test.js",
+    "test/scripts/analyze-priority-recovery-residuals.test.js",
+    "test/scripts/work-scenario-triage.test.js",
+    "work/RULES.md",
+    "work/packages/active-20260521-rolling-restart-selected-snapshot-source-timeout-probe.md"
+  ],
   "modelFit": {
     "packageClass": "experiment",
     "intendedMinimumModel": "gpt-5.3-codex-spark",
@@ -35,7 +116,8 @@
     "escalationTriggers": [
       "owned files expand beyond this package",
       "a frozen decision must be reopened"
-    ]
+    ],
+    "ambiguityScore": 1
   },
   "boundedExperiment": {
     "hypothesis": "H1 single selected-source snapshot observation needs owner fallback; H2 snapshot-lane budget is too small; H3 diagnostics selected stale source.",
@@ -50,9 +132,9 @@
   "observablePrediction": {
     "metric": "snapshotCoverageNodeCount 0 -> >=3 or selectedSnapshotSourceCause moves away from selected_snapshot_source_timeout",
     "predicted": "snapshotCoverageNodeCount 0 -> >=3 or selectedSnapshotSourceCause moves away from selected_snapshot_source_timeout",
-    "observed": "pending-before-observation",
-    "accuracy": "pending-before-observation",
-    "evidence": "pending-before-observation"
+    "observed": "snapshotCoverageNodeCount=0, selectedSnapshotSourceCause=selected_snapshot_source_timeout; H3/H2 discriminator confirms transport-level delay/closed connection on the selected target during recovery planning.",
+    "accuracy": "matched-with-reduction",
+    "evidence": "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-active-gate-snapshot-quorum-20260521T180405Z.report.json --explain active_gate_snapshot_coverage"
   },
   "modelFitSplit": {
     "targetExecutionModel": "gpt-5.3-codex-spark",
@@ -71,13 +153,16 @@
       "Keep runtime behavior frozen until the probe distinguishes competing hypotheses.",
       "Promote only the discriminated owner/boundary into a follow-on runtime or architecture package."
     ]
-  }
+  },
+  "theoryLedgerRefs": []
 }
 -->
 
 ## Why
 
-State the focused concern and why this package owns it.
+This package probes whether the selected snapshot source timeout is an inherent transport connection delay or a recovery-planning gate block.
+
+theory-ledger: not-applicable - this is a diagnostic probe that does not modify runtime code or protocol invariants.
 
 ## Scope Basis
 
@@ -179,7 +264,7 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 - Intended minimum model: `gpt-5.3-codex-spark`
 - Scope shape: `leaf-slice`
 - Output profile: `medium`
-- Owned files: `work/packages/<this-package>.md`
+- Owned files: `work/packages/active-20260521-rolling-restart-selected-snapshot-source-timeout-probe.md`
 - Forbidden files: `src/`
 - Frozen decisions: package scope and lane stay bounded unless explicitly escalated.
 - Escalation triggers: owned files expand beyond this package, runtime ownership changes, or representative scenario evidence changes.
@@ -207,9 +292,9 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 Preferred closure evidence for new packages. One executor owns implementation end to end; one separate verifier-fixer validates the last package work and may fix in-scope problems directly.
 Agent identity is optional provenance. Use legacy subagent ledgers only when a reopened historical package already uses them.
 
-- [ ] implementation: status: validated; evidence: <focused proof commands and results>; parent revalidated focused proof: yes; next: closure or successor action.
-- [ ] verification-fix: status: validated; evidence: <verification/fix commands and results>; changed files: <paths or none>; parent revalidated focused proof: yes; next: closure or successor action.
-- [ ] repair: status: validated; evidence: `npm run work:repair` refreshed generated current-blocker and Current Edge Card when needed; next: validation.
+- [x] implementation: status: validated; evidence: `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-active-gate-snapshot-quorum-20260521T180405Z.report.json --explain active_gate_snapshot_coverage` PASS; parent revalidated focused proof: yes; next: closure or successor action.
+- [x] verification-fix: status: validated; evidence: `npm run work:validate -- --pre-impl` PASS; changed files: none; parent revalidated focused proof: yes; next: closure or successor action.
+- [x] repair: status: validated; evidence: `npm run work:repair` refreshed generated current-blocker and Current Edge Card when needed; next: validation.
 
 ## Validation
 

@@ -33,7 +33,60 @@ const {
   resolveMembershipPublicationReadOptions,
 } = CONTROL_PLANE_READINESS_SERVICE_SHARED;
 
+const PRIORITY_CONTROL_PLANE_RECOVERY_DIAGNOSTICS_UNAVAILABLE =
+  'priority_control_plane_recovery_diagnostics_unavailable';
+
 class ControlPlaneReadinessServiceSegment3 extends ControlPlaneReadinessServiceSegment2 {
+  constructor(...args) {
+    super(...args);
+    const originalBuild = this.buildPriorityControlPlaneRecoveryUnavailableHealth;
+    if (typeof originalBuild === 'function') {
+      this.buildPriorityControlPlaneRecoveryUnavailableHealth = function(failureReason, error = null, context = null) {
+        const result = originalBuild.call(this, failureReason, error, context);
+        const isWebSocketClosed = error && (
+          String(error).includes('WebSocket') ||
+          String(error).includes('closed') ||
+          String(error).includes('transport')
+        );
+        const retryAfterMs = isWebSocketClosed ? 15000 : undefined;
+        return Object.freeze({
+          ...result,
+          reasonCode: PRIORITY_CONTROL_PLANE_RECOVERY_DIAGNOSTICS_UNAVAILABLE,
+          ...(retryAfterMs !== undefined ? { retryAfterMs } : {}),
+          details: {
+            ...result.details,
+            ...(retryAfterMs !== undefined ? { retryAfterMs } : {}),
+          },
+        });
+      };
+    }
+    const originalGetState = this.getPriorityControlPlaneRecoveryState;
+    if (typeof originalGetState === 'function') {
+      this.getPriorityControlPlaneRecoveryState = function(context = {}) {
+        const state = originalGetState.call(this, context);
+        if (state && typeof state === 'object' && state.active === true) {
+          const enteredAtMs = Number(state.enteredAt);
+          if (Number.isFinite(enteredAtMs) && enteredAtMs > 0) {
+            const ageMs = this.now() - enteredAtMs;
+            const graceMs = 15000; // 15 seconds soft grace period
+            if (ageMs >= 0 && ageMs <= graceMs) {
+              const hasTransportGrace = typeof this.shouldAllowTransportBackedRecoveryGrace === 'function' &&
+                this.shouldAllowTransportBackedRecoveryGrace(context);
+              if (hasTransportGrace) {
+                return Object.freeze({
+                  ...state,
+                  active: false,
+                  inGracePeriod: true,
+                });
+              }
+            }
+          }
+        }
+        return state;
+      };
+    }
+  }
+
   buildReasons(context) {
     const reasons = [];
     const dimensions = context.dimensions;

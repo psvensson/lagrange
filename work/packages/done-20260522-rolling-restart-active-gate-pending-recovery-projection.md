@@ -188,7 +188,7 @@
   },
   "closed": "2026-05-22",
   "commitAndPushLedgerRequired": true,
-  "successor": "work/packages/active-20260522-rolling-restart-active-gate-owner-recovery-completion.md"
+  "successor": "work/packages/done-20260522-rolling-restart-active-gate-owner-recovery-completion.md"
 }
 -->
 

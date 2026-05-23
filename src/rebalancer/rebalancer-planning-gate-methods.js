@@ -262,13 +262,15 @@ const REBALANCER_PLANNING_GATE_METHODS = {
     }
 
     const result = this.clusterReadinessSignal.evaluate({
-      partitionServices: new Map(),
-      messageGroupServices: new Map(),
+      partitionServices: this.partitionServices || new Map(),
+      messageGroupServices: this.messageGroupServices || new Map(),
       cdcSubscriptionsActive: true,
+      requirePropagationLeader: this.requirePropagationLeader !== false,
     });
 
     if (result.ready) {
       this.clusterReadinessConfirmed = true;
+      this.clusterReadinessState = 'evidence_confirmed';
       this.logger.info(REBALANCER_LOG_MSG.CLUSTER_READINESS_CONFIRMED, {
         entityId: this.entityId,
       });
@@ -278,6 +280,7 @@ const REBALANCER_PLANNING_GATE_METHODS = {
     const elapsed = now - this.clusterReadinessStartMs;
     if (elapsed >= this.clusterReadinessTimeoutMs) {
       this.clusterReadinessConfirmed = true;
+      this.clusterReadinessState = 'degraded_timeout';
       this.logger.warn(REBALANCER_LOG_MSG.CLUSTER_READINESS_TIMEOUT, {
         entityId: this.entityId,
         elapsedMs: elapsed,

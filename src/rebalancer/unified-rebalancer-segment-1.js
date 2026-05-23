@@ -264,8 +264,12 @@ class UnifiedRebalancerSegment1 extends EventEmitter {
     // When provided, defers first planning cycle until cluster is ready.
     this.clusterReadinessSignal = options.clusterReadinessSignal || null;
     this.clusterReadinessConfirmed = !this.clusterReadinessSignal;
+    this.clusterReadinessState = this.clusterReadinessSignal ? 'pending' : 'intentionally_relaxed';
     this.clusterReadinessStartMs = null;
     this.clusterReadinessTimeoutMs = CLUSTER_READINESS_TIMEOUT_MS;
+    this.partitionServices = options.partitionServices || null;
+    this.messageGroupServices = options.messageGroupServices || null;
+    this.requirePropagationLeader = options.requirePropagationLeader !== false;
 
     // Planning is delegated to MovePlanner (single-path planning).
     this.movePlanner = new MovePlanner({
@@ -635,6 +639,16 @@ class UnifiedRebalancerSegment1 extends EventEmitter {
         messageRouter: this.messageRouter,
         cdcIntegrationService: this.cdcIntegrationService,
       });
+    }
+
+    if (Object.hasOwn(options, 'partitionServices')) {
+      this.partitionServices = options.partitionServices || null;
+    }
+    if (Object.hasOwn(options, 'messageGroupServices')) {
+      this.messageGroupServices = options.messageGroupServices || null;
+    }
+    if (Object.hasOwn(options, 'requirePropagationLeader')) {
+      this.requirePropagationLeader = options.requirePropagationLeader !== false;
     }
 
     if (

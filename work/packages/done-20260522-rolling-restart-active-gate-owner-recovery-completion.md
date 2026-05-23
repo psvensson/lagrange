@@ -3,7 +3,7 @@
 <!-- work-package
 {
   "schema": "work-package-v1",
-  "status": "active",
+  "status": "done",
   "opened": "2026-05-22",
   "lane": "runtime-owner-boundary",
   "scenario": "rolling-restart",
@@ -54,7 +54,7 @@
     "test/control-plane/publication-active-gate-handoff-contract.test.js",
     "test/admin/admin-control-snapshot-deferred-refresh-membership-observation-test-cases.js",
     "test/admin/admin-control-snapshot-repair-handoff-outcome-test-cases.js",
-    "work/packages/active-20260522-rolling-restart-active-gate-owner-recovery-completion.md",
+    "work/packages/done-20260522-rolling-restart-active-gate-owner-recovery-completion.md",
     "work/sprints/current-blocker.md",
     "work/sprints/current-blocker.json"
   ],
@@ -123,7 +123,7 @@
     "hypothesis": "Rolling-restart remains blocked because wait_owner_recovery pendingRecoveryNodeIds are now visible through the canonical handoff/report grammar, but the owner recovery command path does not treat that pending recovery debt as an actionable completion/progress intent.",
     "stopConditionCheck": "Run npm run analyze:causal-model -- test-output/reports/rolling-restart-active-gate-pending-recovery-projection-20260522T223745Z.report.json, focused contract and affected consumer proof, representative routing, static guardrails, and a fresh representative rerun before closure; do not reinterpret pending recovery debt as ready or runtime-promotable.",
     "expectedCausalModelChange": "The handoff outcome should move from write_deferred/enqueued=false toward an enqueued, completed, or explicitly classified owner recovery outcome while runtimePromotionAllowed remains false until snapshot coverage improves.",
-    "representativeOutcome": "pending-before-rerun",
+    "representativeOutcome": "migrated",
     "causalDebt": "Fresh artifact has snapshotCoverage=0/5, selected timeout after 1116ms, repair_deferred/retry, wait_owner_recovery, activeGateOwnerCohortPendingRecoveryCount=1, selectedControlPlaneOwnerQueuePendingWrites=1, and membershipPublicationHandoffOutcome write_deferred/enqueued=false.",
     "crossBoundaryReview": "Keep selected-source retry budgets, startup readiness, load-readiness, and runtime promotion gates frozen while owner recovery completion is made actionable."
   },
@@ -157,10 +157,13 @@
   "observablePrediction": {
     "metric": "handoffOutcome state/enqueued and pendingRecoveryCount for wait_owner_recovery",
     "predicted": "wait_owner_recovery with pendingRecoveryCount=1 moves from write_deferred/enqueued=false to an actionable owner recovery reconcile/enqueue/drain/classification outcome while runtimePromotionAllowed remains false.",
-    "observed": "pending-before-observation",
-    "accuracy": "pending-before-observation",
-    "evidence": "pending-before-observation"
-  }
+    "observed": "Focused proof and verifier-fixer show wait_owner_recovery pending recovery debt wakes the selected owner command path and preserves pendingRecoveryNodeIds without allowing runtime promotion; the fresh representative moved away from owner_recovery_completion and now routes to startup_active_gate_owner / snapshot_coverage with handoffContract absent.",
+    "accuracy": "partial",
+    "evidence": "npm test -- test/control-plane/publication-active-gate-handoff-contract.test.js test/admin/admin-control-snapshot-deferred-refresh-membership-observation-test-cases.js test/admin/admin-control-snapshot-repair-handoff-outcome-test-cases.js test/scripts/analyze-topology-convergence.test.js test/distributed/harness/__tests__/cluster-control-snapshot-timeout-repair-test-cases.js; node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-active-gate-owner-recovery-completion-20260522T230812Z.report.json --fast-local --verbose; npm run work:package:route-after-rerun -- --artifact test-output/reports/rolling-restart-active-gate-owner-recovery-completion-20260522T230812Z.report.json --owner startup_active_gate_owner --boundary snapshot_coverage --dominant-reason active_gate_timed_out"
+  },
+  "closed": "2026-05-22",
+  "commitAndPushLedgerRequired": true,
+  "successor": "work/packages/done-20260522-rolling-restart-active-gate-snapshot-watch-handoff-contract.md"
 }
 -->
 
@@ -310,7 +313,7 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 Preferred closure evidence for new packages. One executor owns implementation end to end; one separate verifier-fixer validates the last package work and may fix in-scope problems directly.
 Agent identity is optional provenance. Use legacy subagent ledgers only when a reopened historical package already uses them.
 
-- [x] implementation falsification: status: validated; wrong-slice evidence would be wait_owner_recovery requiring publication target widening, runtime promotion while recovery debt remains, or owner/boundary migration; evidence: pre-edit `npm test -- test/control-plane/publication-active-gate-handoff-contract.test.js test/admin/admin-control-snapshot-deferred-refresh-membership-observation-test-cases.js test/admin/admin-control-snapshot-repair-handoff-outcome-test-cases.js` failed in existing flat-coverage refresh proof, then implementation kept recovery debt out of publication targets and made it a handoff-only owner wake; next: run full proof ladder.
+- [x] implementation falsification: status: validated; wrong-slice evidence would be wait_owner_recovery requiring publication target widening, runtime promotion while recovery debt remains, or owner/boundary migration; evidence: pre-edit `npm test -- test/control-plane/publication-active-gate-handoff-contract.test.js test/admin/admin-control-snapshot-deferred-refresh-membership-observation-test-cases.js test/admin/admin-control-snapshot-repair-handoff-outcome-test-cases.js` failed in existing flat-coverage refresh proof, then implementation kept recovery debt out of publication targets and made it a handoff-only owner wake; parent revalidated focused proof: yes; next: run full proof ladder.
 - [x] implementation: status: validated; evidence: `npm test -- test/control-plane/publication-active-gate-handoff-contract.test.js test/admin/admin-control-snapshot-deferred-refresh-membership-observation-test-cases.js test/admin/admin-control-snapshot-repair-handoff-outcome-test-cases.js` passed after edits; files: `src/control-plane/publication-active-gate-handoff-contract.js`, `src/admin/admin-control-snapshot-class-part-2.js`, `src/admin/admin-control-snapshot-class-part-6.js`, `test/control-plane/publication-active-gate-handoff-contract.test.js`, `test/admin/admin-control-snapshot-deferred-refresh-membership-observation-test-cases.js`; parent revalidated focused proof: yes; next: full proof ladder and representative rerun.
 - [x] verification-fix: status: validated; evidence: Lovelace verifier-fixer made no edits and reported `npm test -- test/control-plane/publication-active-gate-handoff-contract.test.js test/admin/admin-control-snapshot-deferred-refresh-membership-observation-test-cases.js test/admin/admin-control-snapshot-repair-handoff-outcome-test-cases.js test/scripts/analyze-topology-convergence.test.js test/distributed/harness/__tests__/cluster-control-snapshot-timeout-repair-test-cases.js` pass 230/230, handoff probe pass with `wait_owner_recovery` and pendingRecoveryCount=1, evidence-summary pass, literal/decision-boundary/runtime-grammar audits pass; changed files: none; parent revalidated focused proof: yes with the same 230/230 command; next: closure or successor action.
 - [x] representative rerun: status: validated; evidence: `node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-active-gate-owner-recovery-completion-20260522T230812Z.report.json --fast-local --verbose` failed 0/1 with active=4/5 and snapshotCoverage=0/5, but the old owner recovery edge moved out of evidence: handoff probe reports detected=false, handoffContract absent, pendingRecoveryCount=0, owner queue unknown, and canonical route is `startup_active_gate_owner / snapshot_coverage / active_gate_timed_out`; `npm run work:package:route-after-rerun -- --artifact test-output/reports/rolling-restart-active-gate-owner-recovery-completion-20260522T230812Z.report.json --owner startup_active_gate_owner --boundary snapshot_coverage --dominant-reason active_gate_timed_out` selected a runtime-owner-boundary successor; next: migrate to snapshot_coverage successor.
@@ -324,3 +327,9 @@ Agent identity is optional provenance. Use legacy subagent ledgers only when a r
 4. npm run audit:guideline:literals -- src/control-plane/publication-active-gate-handoff-contract.js src/admin/admin-control-snapshot-class-part-2.js src/admin/admin-control-snapshot-class-part-6.js ./test/control-plane/publication-active-gate-handoff-contract.test.js ./test/admin/admin-control-snapshot-deferred-refresh-membership-observation-test-cases.js ./test/admin/admin-control-snapshot-repair-handoff-outcome-test-cases.js
 5. npm run audit:guideline:decision-boundaries -- src/control-plane/publication-active-gate-handoff-contract.js src/admin/admin-control-snapshot-class-part-2.js src/admin/admin-control-snapshot-class-part-6.js
 6. npm run audit:runtime-grammar:file -- src/control-plane/publication-active-gate-handoff-contract.js src/admin/admin-control-snapshot-class-part-2.js src/admin/admin-control-snapshot-class-part-6.js
+
+## Commit And Push Ledger
+
+1. Focused package commit: 899123964649ae70d8b85498157a00068c574f8b
+2. Pushed to: origin/codex/pending-ack-eligibility-filter
+3. Commit contains only package-owned files/package-status/allowed sprint handoff: yes

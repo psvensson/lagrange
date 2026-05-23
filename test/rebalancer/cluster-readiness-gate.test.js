@@ -305,4 +305,81 @@ test('UnifiedRebalancer - Cluster Readiness Gate', async (t) => {
       t.equal(rebalancer.clusterReadinessConfirmed, false);
       rebalancer.shutdown();
     });
+
+  await t.test('distinguishes evidence-confirmed, intentionally-relaxed, and degraded-timeout readiness states',
+    async (t) => {
+      // 1. Intentionally relaxed readiness
+      const relaxedRebalancer = createRebalancerWithSignal(null);
+      relaxedRebalancer.initialize();
+      t.equal(relaxedRebalancer.clusterReadinessState, 'intentionally_relaxed');
+      relaxedRebalancer.shutdown();
+
+      // 2. Evidence confirmed readiness
+      const readySignal = {
+        evaluate: () => ({ready: true, unmetConditions: []}),
+      };
+      const confirmedRebalancer = createRebalancerWithSignal(readySignal);
+      confirmedRebalancer.initialize();
+      confirmedRebalancer.setLeader(true);
+      confirmedRebalancer.cancelScheduledCheck();
+      confirmedRebalancer.lastStateChangeTime = Date.now() - 20000;
+      await confirmedRebalancer.checkRebalance();
+      t.equal(confirmedRebalancer.clusterReadinessState, 'evidence_confirmed');
+      confirmedRebalancer.shutdown();
+
+      // 3. Degraded timeout readiness
+      const unreadySignal = {
+        evaluate: () => ({ready: false, unmetConditions: ['nodesRegistered']}),
+      };
+      const degradedRebalancer = createRebalancerWithSignal(unreadySignal);
+      degradedRebalancer.initialize();
+      degradedRebalancer.setLeader(true);
+      degradedRebalancer.cancelScheduledCheck();
+      degradedRebalancer.clusterReadinessStartMs = Date.now() - CLUSTER_READINESS_TIMEOUT_MS - 1;
+      degradedRebalancer.lastStateChangeTime = Date.now() - 20000;
+      await degradedRebalancer.checkRebalance();
+      t.equal(degradedRebalancer.clusterReadinessState, 'degraded_timeout');
+      degradedRebalancer.shutdown();
+    });
+
+  await t.test('passes real evidence and requirePropagationLeader policy down to the signal',
+    async (t) => {
+      let passedContext = null;
+      const signal = {
+        evaluate: (ctx) => {
+          passedContext = ctx;
+          return {ready: true, unmetConditions: []};
+        },
+      };
+
+      const customPartitionServices = new Map([['p1', {}]]);
+      const customMessageGroupServices = new Map([['mg1', {}]]);
+
+      const rebalancer = new UnifiedRebalancer({
+        entityId: 'partition-1',
+        entityType: EntityType.PARTITION,
+        nodeId: 'node-1',
+        systemTableCache: createMockCache(),
+        cdcIntegrationService: createMockCdcService(),
+        tablePolicyService: createMockPolicyService(),
+        messageRouter: createMockMessageRouter(),
+        rebalanceCoordinator: createMockCoordinator(),
+        clusterReadinessSignal: signal,
+        partitionServices: customPartitionServices,
+        messageGroupServices: customMessageGroupServices,
+        requirePropagationLeader: false,
+      });
+
+      rebalancer.initialize();
+      rebalancer.setLeader(true);
+      rebalancer.cancelScheduledCheck();
+      rebalancer.lastStateChangeTime = Date.now() - 20000;
+      await rebalancer.checkRebalance();
+
+      t.ok(passedContext);
+      t.equal(passedContext.partitionServices, customPartitionServices);
+      t.equal(passedContext.messageGroupServices, customMessageGroupServices);
+      t.equal(passedContext.requirePropagationLeader, false);
+      rebalancer.shutdown();
+    });
 });

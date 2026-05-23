@@ -74,7 +74,95 @@ function buildExtractorCommands(artifactPath) {
   ];
 }
 
+function selectPublicationConvergence(artifact) {
+  const scenario = artifact.scenarios?.[NUM_ZERO] ||
+    artifact.failureBundle?.scenarios?.[NUM_ZERO] ||
+    artifact.summary?.scenarios?.[NUM_ZERO] ||
+    artifact;
+  return scenario.publicationConvergence ||
+    artifact.publicationConvergence ||
+    artifact.failureBundle?.publicationConvergence ||
+    artifact.summary?.publicationConvergence ||
+    {};
+}
+
+function selectActiveGateProgress(publicationConvergence) {
+  return publicationConvergence?.activeGate?.progress ||
+    publicationConvergence?.activeGate?.activeGateProgress ||
+    publicationConvergence?.activeGateProgress ||
+    publicationConvergence?.progress ||
+    {};
+}
+
+function checkSignalConflict(artifact, priorityRecoveryResiduals) {
+  const publicationConvergence = selectPublicationConvergence(artifact);
+  const activeGateProgress = selectActiveGateProgress(publicationConvergence);
+
+  const pendingRecoveryCount = Number(
+    activeGateProgress.publicationActiveGateHandoffPendingRecoveryCount ??
+    activeGateProgress.activeGateOwnerCohortPendingRecoveryCount ??
+    NUM_ZERO
+  );
+
+  const pendingRecoveryNodeIdsStr = String(
+    activeGateProgress.publicationActiveGateHandoffPendingRecoveryNodeIds ||
+    activeGateProgress.activeGateOwnerCohortPendingRecoveryNodeIds ||
+    EMPTY_TEXT
+  );
+  const pendingRecoveryNodeIds = pendingRecoveryNodeIdsStr
+    .split(',')
+    .map(id => id.trim())
+    .filter(Boolean);
+
+  const priorityRecoveryDominantReason = String(
+    activeGateProgress.priorityRecoveryProgressClasses?.dominantReason ||
+    activeGateProgress.priorityRecoveryProgressClasses?.source?.dominantReason ||
+    activeGateProgress.progress?.priorityRecoveryProgressClasses?.dominantReason ||
+    EMPTY_TEXT
+  );
+
+  const ownerRecoveryPendingWrites = Number(
+    activeGateProgress.selectedControlPlaneOwnerQueuePendingWrites ??
+    NUM_ZERO
+  );
+
+  const handoffOutcomeState = String(
+    activeGateProgress.membershipPublicationHandoffOutcomeState ||
+    EMPTY_TEXT
+  );
+
+  // A conflict exists if the active gate is waiting on recovery (pendingRecoveryCount > 0 or dominantReason is PRIORITY_CONTROL_PLANE_RECOVERY_PENDING)
+  // but priorityRecoveryResiduals reports zero witness count (witnessCount === 0).
+  const isConflict = (pendingRecoveryCount > NUM_ZERO ||
+    priorityRecoveryDominantReason === 'PRIORITY_CONTROL_PLANE_RECOVERY_PENDING' ||
+    ownerRecoveryPendingWrites > NUM_ZERO) &&
+    priorityRecoveryResiduals.witnessCount === NUM_ZERO;
+
+  if (isConflict) {
+    return {
+      conflictDetected: true,
+      pendingRecoveryCount,
+      pendingRecoveryNodeIds,
+      witnessCount: priorityRecoveryResiduals.witnessCount,
+      priorityRecoveryDominantReason: priorityRecoveryDominantReason || 'PRIORITY_CONTROL_PLANE_RECOVERY_PENDING',
+      ownerRecoveryPendingWrites,
+      handoffOutcomeState,
+    };
+  }
+
+  return null;
+}
+
 function buildPackageCommand(summary) {
+  if (summary.signalConflict) {
+    return [
+      'npm run work:package:new --',
+      `--from-artifact ${summary.sourceArtifact}`,
+      '--owner diagnostics_owner',
+      '--boundary scenario_triage_signal_conflict',
+      '--dominant-reason priority_recovery_zero_witness_conflict',
+    ].join(' ');
+  }
   const witness = summary.representativeEvidence.topology.dominantWitness;
   return [
     'npm run work:package:new --',
@@ -94,12 +182,14 @@ function buildScenarioTriageSummary(artifactPath, artifact) {
     artifactPath,
     artifact,
   );
+  const signalConflict = checkSignalConflict(artifact, priorityRecoveryResiduals);
   const summary = {
     schemaVersion: OUTPUT_SCHEMA_VERSION,
     sourceArtifact: artifactPath,
     scenario: representativeEvidence.scenario,
     representativeEvidence,
     priorityRecoveryResiduals,
+    signalConflict,
     extractorCommands: buildExtractorCommands(artifactPath),
   };
   return {
@@ -118,7 +208,7 @@ function markdownList(values = []) {
 function renderMarkdown(summary) {
   const witness = summary.representativeEvidence.topology.dominantWitness;
   const causal = summary.representativeEvidence.causal;
-  return [
+  const lines = [
     '# Scenario Triage',
     EMPTY_TEXT,
     `- Source artifact: \`${summary.sourceArtifact}\``,
@@ -130,20 +220,55 @@ function renderMarkdown(summary) {
     `- Causal outcome: \`${causal.outcome}\``,
     `- Stop condition: \`${causal.stopCondition}\``,
     EMPTY_TEXT,
+  ];
+
+  if (summary.signalConflict) {
+    lines.push(
+      '## Signal Conflict Detected',
+      EMPTY_TEXT,
+      `- Conflict status: \`TRUE\``,
+      `- Active gate pending recovery count: \`${summary.signalConflict.pendingRecoveryCount}\``,
+      `- Pending recovery node IDs: \`${JSON.stringify(summary.signalConflict.pendingRecoveryNodeIds)}\``,
+      `- Priority recovery residual witness count: \`${summary.signalConflict.witnessCount}\``,
+      `- Dominant recovery pending reason: \`${summary.signalConflict.priorityRecoveryDominantReason}\``,
+      `- Owner recovery pending writes: \`${summary.signalConflict.ownerRecoveryPendingWrites}\``,
+      `- Handoff outcome state: \`${summary.signalConflict.handoffOutcomeState}\``,
+      EMPTY_TEXT
+    );
+  }
+
+  lines.push(
     '## Priority Recovery Residuals',
     EMPTY_TEXT,
     `- Witnesses: \`${summary.priorityRecoveryResiduals.witnessCount}\``,
     `- Owner-boundary groups: \`${summary.priorityRecoveryResiduals.ownerBoundaryGroupCount}\``,
     `- Split required: \`${summary.priorityRecoveryResiduals.splitRequired}\``,
-    EMPTY_TEXT,
+    EMPTY_TEXT
+  );
+
+  if (summary.priorityRecoveryResiduals.lowConfidenceResiduals && summary.priorityRecoveryResiduals.lowConfidenceResiduals.length > NUM_ZERO) {
+    lines.push('### Low-Confidence Derived Residuals', EMPTY_TEXT);
+    for (const residual of summary.priorityRecoveryResiduals.lowConfidenceResiduals) {
+      lines.push(
+        `- Node \`${residual.nodeId}\`: ` +
+        `derived from \`${residual.source}\` with reason \`${residual.reasonCode}\` (confidence: \`${residual.confidence}\`); ` +
+        `owner \`${residual.owner}\`, boundary \`${residual.boundary}\``
+      );
+    }
+    lines.push(EMPTY_TEXT);
+  }
+
+  lines.push(
     '## Suggested Package Command',
     EMPTY_TEXT,
     `- \`${summary.suggestedPackageCommand}\``,
     EMPTY_TEXT,
     '## Extractor Commands',
     EMPTY_TEXT,
-    markdownList(summary.extractorCommands),
-  ].join(NEWLINE);
+    markdownList(summary.extractorCommands)
+  );
+
+  return lines.join(NEWLINE);
 }
 
 async function runCli(args = process.argv.slice(NUM_TWO)) {

@@ -189,7 +189,7 @@ class OperationWorkflowOwnerSegment7Stage5 extends OperationWorkflowOwnerSegment
         snapshot;
     this.schedulePriorityRecoveryDispatchPendingReentry(
       normalizedSnapshot,
-      operation ? [operation] : operations,
+      operation ? [operation] : operations, {executeOwnerObservationEffect: false},
     );
     return normalizedSnapshot;
   }
@@ -341,7 +341,7 @@ class OperationWorkflowOwnerSegment7Stage5 extends OperationWorkflowOwnerSegment
   applyPriorityRecoveryDispatchPendingReentryAction(
     operation,
     action,
-    decisionSnapshot = null,
+    decisionSnapshot = null, options = {},
   ) {
     if (
       action ===
@@ -349,7 +349,7 @@ class OperationWorkflowOwnerSegment7Stage5 extends OperationWorkflowOwnerSegment
     ) {
       this.applyPriorityRecoveryDispatchPendingOwnerProgress(
         operation,
-        decisionSnapshot,
+        decisionSnapshot, options,
       ).catch((error) => {
         this.handleDeferredCoordinatorCreatedRemoteHandoffRetryFailure(
           operation,
@@ -373,7 +373,7 @@ class OperationWorkflowOwnerSegment7Stage5 extends OperationWorkflowOwnerSegment
 
   async applyPriorityRecoveryDispatchPendingOwnerProgress(
     operation,
-    decisionSnapshot,
+    decisionSnapshot, options = {},
   ) {
     if (
       this.shouldReconcilePriorityRecoveryDispatchPendingDrain(
@@ -386,7 +386,7 @@ class OperationWorkflowOwnerSegment7Stage5 extends OperationWorkflowOwnerSegment
     ) {
       return true;
     }
-    return this.armCoordinatorCreatedOperation(operation);
+    return applyPriorityRecoveryDispatchPendingOwnerEffectOrArm(this, operation, decisionSnapshot, options);
   }
 
   buildPriorityRecoveryDispatchPendingDrainEvidence(decisionSnapshot) {
@@ -561,16 +561,43 @@ class OperationWorkflowOwnerSegment7Stage5 extends OperationWorkflowOwnerSegment
         snapshot,
         operations,
       );
-    const action = this.resolvePriorityRecoveryDispatchPendingReentryAction(
-      snapshot,
-      operation,
-      options,
-    );
-    return this.applyPriorityRecoveryDispatchPendingReentryAction(
-      operation,
-      action,
-      snapshot,
-    );
+    if (!operation || !operation.operationId) {
+      return false;
+    }
+    const operationId = operation.operationId;
+    this._reentryLocks = this._reentryLocks || new Set();
+    if (this._reentryLocks.has(operationId)) {
+      this.logger.debug('Bypassing re-entrant priority recovery dispatch scheduling', {
+        operationId,
+        partitionId: operation.partitionId,
+      });
+      return false;
+    }
+    this._reentryLocks.add(operationId);
+
+    setImmediate(() => {
+      try {
+        const action = this.resolvePriorityRecoveryDispatchPendingReentryAction(
+          snapshot,
+          operation,
+          options,
+        );
+        this.applyPriorityRecoveryDispatchPendingReentryAction(
+          operation,
+          action,
+          snapshot,
+          options,
+        );
+      } catch (error) {
+        this.logger.error('Error during priority recovery dispatch reentry', {
+          operationId,
+          error: error.message,
+        });
+      } finally {
+        this._reentryLocks.delete(operationId);
+      }
+    });
+    return true;
   }
 
   async handleRecovery() {
@@ -853,6 +880,99 @@ class OperationWorkflowOwnerSegment7Stage5 extends OperationWorkflowOwnerSegment
 
     return fallbackMessage;
   }
+}
+
+const PRIORITY_RECOVERY_DISPATCH_PENDING_OWNER_EFFECT_COMMAND =
+  Object.freeze({
+    RECONCILE_STALE_PROGRESS: 'reconcile_stale_progress_command',
+    WAKE_REMOTE_OWNER: 'wake_remote_owner_command',
+  });
+
+const PRIORITY_RECOVERY_DISPATCH_PENDING_OWNER_EFFECT_ACTION =
+  Object.freeze({
+    ARM_OWNER: 'arm_owner',
+    RECONCILE_STALE_PROGRESS: 'reconcile_stale_progress',
+    WAKE_REMOTE_OWNER: 'wake_remote_owner',
+  });
+
+const PRIORITY_RECOVERY_DISPATCH_PENDING_OWNER_EFFECT_ACTION_BY_COMMAND =
+  Object.freeze(new Map([
+    [
+      PRIORITY_RECOVERY_DISPATCH_PENDING_OWNER_EFFECT_COMMAND
+        .RECONCILE_STALE_PROGRESS,
+      PRIORITY_RECOVERY_DISPATCH_PENDING_OWNER_EFFECT_ACTION
+        .RECONCILE_STALE_PROGRESS,
+    ],
+    [
+      PRIORITY_RECOVERY_DISPATCH_PENDING_OWNER_EFFECT_COMMAND
+        .WAKE_REMOTE_OWNER,
+      PRIORITY_RECOVERY_DISPATCH_PENDING_OWNER_EFFECT_ACTION
+        .WAKE_REMOTE_OWNER,
+    ],
+  ]));
+
+const PRIORITY_RECOVERY_DISPATCH_PENDING_OWNER_EFFECT_HANDLER =
+  Object.freeze(new Map([
+    [
+      PRIORITY_RECOVERY_DISPATCH_PENDING_OWNER_EFFECT_ACTION.ARM_OWNER,
+      (owner, operation) => owner.armCoordinatorCreatedOperation(operation),
+    ],
+    [
+      PRIORITY_RECOVERY_DISPATCH_PENDING_OWNER_EFFECT_ACTION
+        .RECONCILE_STALE_PROGRESS,
+      (owner, operation) =>
+        owner.operationWorkflowOwnerPorts.reconcileStaleProgress(operation),
+    ],
+    [
+      PRIORITY_RECOVERY_DISPATCH_PENDING_OWNER_EFFECT_ACTION.WAKE_REMOTE_OWNER,
+      (owner, operation) =>
+        owner.operationWorkflowOwnerPorts.wakeRemoteOwner(operation),
+    ],
+  ]));
+
+function resolvePriorityRecoveryDispatchPendingOwnerEffectAction(
+  owner,
+  operation,
+  decisionSnapshot,
+  options,
+) {
+  if (options.executeOwnerObservationEffect === false) {
+    return PRIORITY_RECOVERY_DISPATCH_PENDING_OWNER_EFFECT_ACTION.ARM_OWNER;
+  }
+  const operationOwnerObservation =
+    decisionSnapshot?.operationOwnerObservation;
+  const commandAction =
+    PRIORITY_RECOVERY_DISPATCH_PENDING_OWNER_EFFECT_ACTION_BY_COMMAND.get(
+      operationOwnerObservation?.effectCommand,
+    );
+  if (commandAction) {
+    return commandAction;
+  }
+  return (
+    !operationOwnerObservation &&
+      owner.repository.isOperationLocallyOwned(operation) !== true ?
+      PRIORITY_RECOVERY_DISPATCH_PENDING_OWNER_EFFECT_ACTION
+        .WAKE_REMOTE_OWNER :
+      PRIORITY_RECOVERY_DISPATCH_PENDING_OWNER_EFFECT_ACTION.ARM_OWNER
+  );
+}
+
+function applyPriorityRecoveryDispatchPendingOwnerEffectOrArm(
+  owner,
+  operation,
+  decisionSnapshot,
+  options,
+) {
+  const action = resolvePriorityRecoveryDispatchPendingOwnerEffectAction(
+    owner,
+    operation,
+    decisionSnapshot,
+    options,
+  );
+  return PRIORITY_RECOVERY_DISPATCH_PENDING_OWNER_EFFECT_HANDLER.get(action)(
+    owner,
+    operation,
+  );
 }
 
 export {OperationWorkflowOwnerSegment7Stage5};

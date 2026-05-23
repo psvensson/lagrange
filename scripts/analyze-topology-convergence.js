@@ -679,13 +679,18 @@ function buildProbeWitness(edge) {
 
 function buildProbeHandoffContract(consumerWitness) {
   const source = consumerWitness?.source || {};
+  const selectedSnapshotObservationReasonCodes = splitProbeValues(
+    source.selectedSnapshotObservationReasonCodes,
+  ).filter((reasonCode) => probeContractText(reasonCode));
   const contractState =
     source.publicationActiveGateHandoffState ||
     source.activeGateOwnerCohortState ||
+    probeContractText(source.selectedSnapshotObservationContractState) ||
     ABSENT_VALUE;
   const contractReasonCode =
     source.publicationActiveGateHandoffReasonCode ||
     source.activeGateOwnerCohortReasonCode ||
+    selectedSnapshotObservationReasonCodes[NUM_ZERO] ||
     ABSENT_VALUE;
   const pendingReconcileNodeIds = splitProbeNodeIds(
     source.publicationActiveGateHandoffPendingReconcileNodeIds ||
@@ -708,6 +713,7 @@ function buildProbeHandoffContract(consumerWitness) {
   );
   const nextAction =
     source.publicationActiveGateHandoffNextAction ||
+    probeContractText(source.selectedSnapshotObservationNextAction) ||
     (
       pendingRecoveryCount > NUM_ZERO ?
         HANDOFF_CONTRACT_NEXT_ACTION_WAIT_OWNER_RECOVERY :
@@ -896,10 +902,14 @@ function arrayOrEmpty(value) {
 }
 
 function splitProbeNodeIds(value) {
+  return splitProbeValues(value);
+}
+
+function splitProbeValues(value) {
   return String(value || EMPTY_TEXT)
     .split(CSV_SEPARATOR)
-    .map((nodeId) => nodeId.trim())
-    .filter((nodeId) => nodeId.length > NUM_ZERO);
+    .map((item) => item.trim())
+    .filter((item) => item.length > NUM_ZERO);
 }
 
 function probeBoolean(value) {
@@ -917,6 +927,18 @@ function probeBooleanVariant(value) {
     return false;
   }
   return UNKNOWN_VALUE;
+}
+
+function probeContractText(value) {
+  if (
+    typeof value === TYPEOF_STRING &&
+    value.length > NUM_ZERO &&
+    value !== UNKNOWN_VALUE &&
+    value !== ABSENT_VALUE
+  ) {
+    return value;
+  }
+  return EMPTY_TEXT;
 }
 
 function probeNumberOrUnknown(value) {

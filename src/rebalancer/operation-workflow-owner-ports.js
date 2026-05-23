@@ -663,6 +663,21 @@ async function wakeOperationWorkflowRemoteOwner(owner, operation) {
   return owner.wakeCoordinatorCreatedRemoteOwner(operation);
 }
 
+async function reconcileOperationWorkflowStaleProgress(
+  owner,
+  operation,
+  context,
+) {
+  if (
+    typeof owner.repository?.isOperationLocallyOwned ===
+      OPERATION_WORKFLOW_OWNER_PORT_FUNCTION_TYPE &&
+    owner.repository.isOperationLocallyOwned(operation) !== true
+  ) {
+    return wakeOperationWorkflowRemoteOwner(owner, operation);
+  }
+  return owner.reconcileOperationLifecycle(operation, context);
+}
+
 function createOperationWorkflowOwnerPorts(owner) {
   return Object.freeze({
     async readDurableOperation(
@@ -736,7 +751,11 @@ function createOperationWorkflowOwnerPorts(owner) {
       return owner.reconcileOperationLifecycle(operation, context);
     },
     reconcileStaleProgress(operation, context) {
-      return owner.reconcileOperationLifecycle(operation, context);
+      return reconcileOperationWorkflowStaleProgress(
+        owner,
+        operation,
+        context,
+      );
     },
     retainPublicationForRetry(operation, context) {
       return owner.reconcileOperationLifecycle(operation, context);

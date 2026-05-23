@@ -45,9 +45,9 @@
   ],
   "stats": {
     "candidateCount": 315,
-    "dedupedRuleCount": 314,
-    "exportedRuleCount": 314,
-    "estimatedAllRulesTokens": 11996
+    "dedupedRuleCount": 306,
+    "exportedRuleCount": 306,
+    "estimatedAllRulesTokens": 11652
   },
   "rules": [
     {
@@ -242,6 +242,11 @@
           "file": "system guidelines.md",
           "line": 218,
           "section": "System Guidelines — Mandatory Implementation Contract > 7. Phase Code Must Hand Off To Runtime Owners"
+        },
+        {
+          "file": "runtime-contracts.md",
+          "line": 227,
+          "section": "Runtime Contracts Detail > Deterministic Control-Plane Progression"
         }
       ]
     },
@@ -477,23 +482,6 @@
       "domain": "architecture",
       "strength": "must_not",
       "tags": [
-        "ownership"
-      ],
-      "rule": "Events enqueue owner-key work; they do not execute long-running progression.",
-      "score": 241,
-      "sources": [
-        {
-          "file": "runtime-contracts.md",
-          "line": 227,
-          "section": "Runtime Contracts Detail > Deterministic Control-Plane Progression"
-        }
-      ]
-    },
-    {
-      "id": "ARCH-0028",
-      "domain": "architecture",
-      "strength": "must_not",
-      "tags": [
         "ownership",
         "lifecycle"
       ],
@@ -508,7 +496,7 @@
       ]
     },
     {
-      "id": "ARCH-0029",
+      "id": "ARCH-0028",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [
@@ -525,7 +513,7 @@
       ]
     },
     {
-      "id": "ARCH-0030",
+      "id": "ARCH-0029",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [],
@@ -540,7 +528,7 @@
       ]
     },
     {
-      "id": "ARCH-0031",
+      "id": "ARCH-0030",
       "domain": "architecture",
       "strength": "must",
       "tags": [
@@ -558,7 +546,7 @@
       ]
     },
     {
-      "id": "ARCH-0032",
+      "id": "ARCH-0031",
       "domain": "architecture",
       "strength": "must",
       "tags": [
@@ -575,7 +563,7 @@
       ]
     },
     {
-      "id": "ARCH-0033",
+      "id": "ARCH-0032",
       "domain": "architecture",
       "strength": "must",
       "tags": [
@@ -594,7 +582,7 @@
       ]
     },
     {
-      "id": "ARCH-0034",
+      "id": "ARCH-0033",
       "domain": "architecture",
       "strength": "must",
       "tags": [
@@ -611,7 +599,7 @@
       ]
     },
     {
-      "id": "ARCH-0035",
+      "id": "ARCH-0034",
       "domain": "architecture",
       "strength": "must",
       "tags": [
@@ -628,7 +616,7 @@
       ]
     },
     {
-      "id": "ARCH-0036",
+      "id": "ARCH-0035",
       "domain": "architecture",
       "strength": "must",
       "tags": [
@@ -645,7 +633,7 @@
       ]
     },
     {
-      "id": "ARCH-0037",
+      "id": "ARCH-0036",
       "domain": "architecture",
       "strength": "must",
       "tags": [
@@ -662,7 +650,7 @@
       ]
     },
     {
-      "id": "ARCH-0038",
+      "id": "ARCH-0037",
       "domain": "architecture",
       "strength": "must",
       "tags": [],
@@ -877,7 +865,7 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 577,
+          "line": 572,
           "section": "Testing Guidelines > No Skipped Tests Policy"
         }
       ]
@@ -894,7 +882,7 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 578,
+          "line": 573,
           "section": "Testing Guidelines > No Skipped Tests Policy"
         }
       ]
@@ -911,7 +899,7 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 579,
+          "line": 574,
           "section": "Testing Guidelines > No Skipped Tests Policy"
         }
       ]
@@ -928,7 +916,7 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 593,
+          "line": 588,
           "section": "Testing Guidelines > No Test-Only Code Paths in Production Code"
         }
       ]
@@ -945,7 +933,7 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 595,
+          "line": 590,
           "section": "Testing Guidelines > No Test-Only Code Paths in Production Code"
         }
       ]
@@ -962,7 +950,7 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 597,
+          "line": 592,
           "section": "Testing Guidelines > No Test-Only Code Paths in Production Code"
         }
       ]
@@ -979,7 +967,7 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 599,
+          "line": 594,
           "section": "Testing Guidelines > No Test-Only Code Paths in Production Code"
         }
       ]
@@ -996,7 +984,7 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 601,
+          "line": 596,
           "section": "Testing Guidelines > No Test-Only Code Paths in Production Code"
         }
       ]
@@ -1013,7 +1001,7 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 622,
+          "line": 617,
           "section": "Testing Guidelines > Fix Failing Tests Immediately"
         }
       ]
@@ -1028,7 +1016,7 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 623,
+          "line": 618,
           "section": "Testing Guidelines > Fix Failing Tests Immediately"
         }
       ]
@@ -1046,7 +1034,7 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 646,
+          "line": 641,
           "section": "Testing Guidelines > System-Table Mutation Test Requirements"
         }
       ]
@@ -1061,7 +1049,7 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 679,
+          "line": 674,
           "section": "Testing Guidelines > Baseline-Discovered Bug Closure Policy"
         }
       ]
@@ -1078,7 +1066,7 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 685,
+          "line": 680,
           "section": "Testing Guidelines > Baseline-Discovered Bug Closure Policy"
         }
       ]
@@ -1095,7 +1083,7 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 809,
+          "line": 800,
           "section": "Testing Guidelines > Agent And Sub-Agent Validation Handoff Policy"
         }
       ]
@@ -1112,13 +1100,13 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 813,
+          "line": 804,
           "section": "Testing Guidelines > Agent And Sub-Agent Validation Handoff Policy"
         }
       ]
     },
     {
-      "id": "ARCH-0039",
+      "id": "ARCH-0038",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [
@@ -1136,7 +1124,7 @@
       ]
     },
     {
-      "id": "ARCH-0040",
+      "id": "ARCH-0039",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [],
@@ -1151,7 +1139,7 @@
       ]
     },
     {
-      "id": "ARCH-0041",
+      "id": "ARCH-0040",
       "domain": "architecture",
       "strength": "must",
       "tags": [],
@@ -1166,7 +1154,7 @@
       ]
     },
     {
-      "id": "ARCH-0042",
+      "id": "ARCH-0041",
       "domain": "architecture",
       "strength": "must",
       "tags": [
@@ -1185,7 +1173,7 @@
       ]
     },
     {
-      "id": "ARCH-0043",
+      "id": "ARCH-0042",
       "domain": "architecture",
       "strength": "must",
       "tags": [],
@@ -1200,7 +1188,7 @@
       ]
     },
     {
-      "id": "ARCH-0044",
+      "id": "ARCH-0043",
       "domain": "architecture",
       "strength": "must",
       "tags": [
@@ -1218,7 +1206,7 @@
       ]
     },
     {
-      "id": "ARCH-0045",
+      "id": "ARCH-0044",
       "domain": "architecture",
       "strength": "must",
       "tags": [],
@@ -1233,7 +1221,7 @@
       ]
     },
     {
-      "id": "ARCH-0046",
+      "id": "ARCH-0045",
       "domain": "architecture",
       "strength": "must",
       "tags": [],
@@ -1244,11 +1232,16 @@
           "file": "system guidelines.md",
           "line": 291,
           "section": "System Guidelines — Mandatory Implementation Contract > 11. Mutations Are Idempotent"
+        },
+        {
+          "file": "runtime-contracts.md",
+          "line": 376,
+          "section": "Runtime Contracts Detail > Idempotency"
         }
       ]
     },
     {
-      "id": "ARCH-0047",
+      "id": "ARCH-0046",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [
@@ -1265,7 +1258,7 @@
       ]
     },
     {
-      "id": "ARCH-0048",
+      "id": "ARCH-0047",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [],
@@ -1280,7 +1273,7 @@
       ]
     },
     {
-      "id": "ARCH-0049",
+      "id": "ARCH-0048",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [
@@ -1297,7 +1290,7 @@
       ]
     },
     {
-      "id": "ARCH-0050",
+      "id": "ARCH-0049",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [],
@@ -1355,6 +1348,11 @@
           "file": "roadmap.md",
           "line": 193,
           "section": "Roadmap Steering Pointer > Sprint Continuation And Package Split Policy"
+        },
+        {
+          "file": "workflow-guidelines.md",
+          "line": 805,
+          "section": "Workflow Guidelines Detail > Sub-Agent Sequencing"
         }
       ]
     },
@@ -1376,7 +1374,7 @@
       ]
     },
     {
-      "id": "ARCH-0051",
+      "id": "ARCH-0050",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [],
@@ -1402,7 +1400,7 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 584,
+          "line": 579,
           "section": "Testing Guidelines > No Test-Only Code Paths in Production Code"
         }
       ]
@@ -1417,7 +1415,7 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 635,
+          "line": 630,
           "section": "Testing Guidelines > Fix Failing Tests Immediately"
         }
       ]
@@ -1434,13 +1432,13 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 651,
+          "line": 646,
           "section": "Testing Guidelines > System-Table Mutation Test Requirements"
         }
       ]
     },
     {
-      "id": "ARCH-0052",
+      "id": "ARCH-0051",
       "domain": "architecture",
       "strength": "must",
       "tags": [
@@ -1457,7 +1455,7 @@
       ]
     },
     {
-      "id": "ARCH-0053",
+      "id": "ARCH-0052",
       "domain": "architecture",
       "strength": "must",
       "tags": [
@@ -1474,7 +1472,7 @@
       ]
     },
     {
-      "id": "ARCH-0054",
+      "id": "ARCH-0053",
       "domain": "architecture",
       "strength": "must",
       "tags": [
@@ -1880,7 +1878,7 @@
       ]
     },
     {
-      "id": "ARCH-0055",
+      "id": "ARCH-0054",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [
@@ -1897,7 +1895,7 @@
       ]
     },
     {
-      "id": "ARCH-0056",
+      "id": "ARCH-0055",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [
@@ -1914,7 +1912,7 @@
       ]
     },
     {
-      "id": "ARCH-0057",
+      "id": "ARCH-0056",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [
@@ -1931,7 +1929,7 @@
       ]
     },
     {
-      "id": "ARCH-0058",
+      "id": "ARCH-0057",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [],
@@ -1946,7 +1944,7 @@
       ]
     },
     {
-      "id": "ARCH-0059",
+      "id": "ARCH-0058",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [
@@ -1964,7 +1962,7 @@
       ]
     },
     {
-      "id": "ARCH-0060",
+      "id": "ARCH-0059",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [],
@@ -1979,7 +1977,7 @@
       ]
     },
     {
-      "id": "ARCH-0061",
+      "id": "ARCH-0060",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [],
@@ -1994,7 +1992,7 @@
       ]
     },
     {
-      "id": "ARCH-0062",
+      "id": "ARCH-0061",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [],
@@ -2009,7 +2007,7 @@
       ]
     },
     {
-      "id": "ARCH-0063",
+      "id": "ARCH-0062",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [],
@@ -2065,13 +2063,13 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 575,
+          "line": 570,
           "section": "Testing Guidelines > No Skipped Tests Policy"
         }
       ]
     },
     {
-      "id": "ARCH-0064",
+      "id": "ARCH-0063",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [
@@ -2088,7 +2086,7 @@
       ]
     },
     {
-      "id": "ARCH-0065",
+      "id": "ARCH-0064",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [],
@@ -2103,7 +2101,7 @@
       ]
     },
     {
-      "id": "ARCH-0066",
+      "id": "ARCH-0065",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [],
@@ -2118,7 +2116,7 @@
       ]
     },
     {
-      "id": "ARCH-0067",
+      "id": "ARCH-0066",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [
@@ -2136,7 +2134,7 @@
       ]
     },
     {
-      "id": "ARCH-0068",
+      "id": "ARCH-0067",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [],
@@ -2151,7 +2149,7 @@
       ]
     },
     {
-      "id": "ARCH-0069",
+      "id": "ARCH-0068",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [
@@ -2168,7 +2166,7 @@
       ]
     },
     {
-      "id": "ARCH-0070",
+      "id": "ARCH-0069",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [
@@ -2186,7 +2184,7 @@
       ]
     },
     {
-      "id": "ARCH-0071",
+      "id": "ARCH-0070",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [],
@@ -2201,7 +2199,7 @@
       ]
     },
     {
-      "id": "ARCH-0072",
+      "id": "ARCH-0071",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [],
@@ -2227,7 +2225,7 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 776,
+          "line": 767,
           "section": "Testing Guidelines > Artifact-First Distributed Failure Triage Policy"
         }
       ]
@@ -2244,7 +2242,7 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 794,
+          "line": 785,
           "section": "Testing Guidelines > Agent And Sub-Agent Validation Handoff Policy"
         }
       ]
@@ -2261,7 +2259,7 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 815,
+          "line": 806,
           "section": "Testing Guidelines > Agent And Sub-Agent Validation Handoff Policy"
         }
       ]
@@ -2278,13 +2276,13 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 923,
+          "line": 914,
           "section": "Testing Guidelines > Availability Under Pressure Test Policy > Test structure"
         }
       ]
     },
     {
-      "id": "ARCH-0073",
+      "id": "ARCH-0072",
       "domain": "architecture",
       "strength": "must",
       "tags": [
@@ -2298,11 +2296,16 @@
           "file": "runtime-contracts.md",
           "line": 90,
           "section": "Runtime Contracts Detail > Snapshot Readers And Repair"
+        },
+        {
+          "file": "doctrine.md",
+          "line": 117,
+          "section": "Lagrange Engineering Doctrine > 5. Slower Under Pressure, Never Less Correct"
         }
       ]
     },
     {
-      "id": "ARCH-0074",
+      "id": "ARCH-0073",
       "domain": "architecture",
       "strength": "must",
       "tags": [
@@ -2319,7 +2322,7 @@
       ]
     },
     {
-      "id": "ARCH-0075",
+      "id": "ARCH-0074",
       "domain": "architecture",
       "strength": "must",
       "tags": [],
@@ -2369,7 +2372,7 @@
       ]
     },
     {
-      "id": "ARCH-0076",
+      "id": "ARCH-0075",
       "domain": "architecture",
       "strength": "must",
       "tags": [],
@@ -2380,21 +2383,6 @@
           "file": "runtime-contracts.md",
           "line": 329,
           "section": "Runtime Contracts Detail > Pressure, Backpressure, And Resource Lifetime"
-        }
-      ]
-    },
-    {
-      "id": "ARCH-0077",
-      "domain": "architecture",
-      "strength": "must",
-      "tags": [],
-      "rule": "State-mutating operations must be safe under retry and redelivery.",
-      "score": 212,
-      "sources": [
-        {
-          "file": "runtime-contracts.md",
-          "line": 376,
-          "section": "Runtime Contracts Detail > Idempotency"
         }
       ]
     },
@@ -2427,6 +2415,11 @@
           "file": "workflow-guidelines.md",
           "line": 223,
           "section": "Workflow Guidelines Detail > Package Status And Closure"
+        },
+        {
+          "file": "roadmap.md",
+          "line": 75,
+          "section": "Roadmap Steering Pointer > Work Intake And Execution Flow"
         }
       ]
     },
@@ -2559,22 +2552,7 @@
       ]
     },
     {
-      "id": "GOV-0026",
-      "domain": "governance",
-      "strength": "must_not",
-      "tags": [],
-      "rule": "Parent-session notes, local/manual labels, and arbitrary text without a real agent id do not satisfy review, fix, or implementation roles at closure.",
-      "score": 208,
-      "sources": [
-        {
-          "file": "workflow-guidelines.md",
-          "line": 805,
-          "section": "Workflow Guidelines Detail > Sub-Agent Sequencing"
-        }
-      ]
-    },
-    {
-      "id": "ARCH-0078",
+      "id": "ARCH-0076",
       "domain": "architecture",
       "strength": "must",
       "tags": [],
@@ -2589,7 +2567,7 @@
       ]
     },
     {
-      "id": "ARCH-0079",
+      "id": "ARCH-0077",
       "domain": "architecture",
       "strength": "must",
       "tags": [
@@ -2607,7 +2585,7 @@
       ]
     },
     {
-      "id": "ARCH-0080",
+      "id": "ARCH-0078",
       "domain": "architecture",
       "strength": "must",
       "tags": [
@@ -2624,7 +2602,7 @@
       ]
     },
     {
-      "id": "ARCH-0081",
+      "id": "ARCH-0079",
       "domain": "architecture",
       "strength": "must",
       "tags": [],
@@ -2639,7 +2617,7 @@
       ]
     },
     {
-      "id": "GOV-0027",
+      "id": "GOV-0026",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -2656,7 +2634,7 @@
       ]
     },
     {
-      "id": "GOV-0028",
+      "id": "GOV-0027",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -2671,7 +2649,7 @@
       ]
     },
     {
-      "id": "GOV-0029",
+      "id": "GOV-0028",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -2688,7 +2666,7 @@
       ]
     },
     {
-      "id": "GOV-0030",
+      "id": "GOV-0029",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -2706,7 +2684,7 @@
       ]
     },
     {
-      "id": "GOV-0031",
+      "id": "GOV-0030",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -2723,7 +2701,7 @@
       ]
     },
     {
-      "id": "GOV-0032",
+      "id": "GOV-0031",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -2740,7 +2718,7 @@
       ]
     },
     {
-      "id": "GOV-0033",
+      "id": "GOV-0032",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -2823,7 +2801,7 @@
       ]
     },
     {
-      "id": "GOV-0034",
+      "id": "GOV-0033",
       "domain": "governance",
       "strength": "must_not",
       "tags": [
@@ -2993,7 +2971,7 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 575,
+          "line": 570,
           "section": "Testing Guidelines > No Skipped Tests Policy"
         }
       ]
@@ -3010,7 +2988,7 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 587,
+          "line": 582,
           "section": "Testing Guidelines > No Test-Only Code Paths in Production Code"
         }
       ]
@@ -3027,7 +3005,7 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 612,
+          "line": 607,
           "section": "Testing Guidelines > No Test-Only Code Paths in Production Code"
         }
       ]
@@ -3044,7 +3022,7 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 617,
+          "line": 612,
           "section": "Testing Guidelines > Fix Failing Tests Immediately"
         }
       ]
@@ -3061,7 +3039,7 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 789,
+          "line": 780,
           "section": "Testing Guidelines > Agent And Sub-Agent Validation Handoff Policy"
         }
       ]
@@ -3079,7 +3057,7 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 826,
+          "line": 817,
           "section": "Testing Guidelines > Structured Deferred-Outcome Regression Policy"
         }
       ]
@@ -3097,7 +3075,7 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 848,
+          "line": 839,
           "section": "Testing Guidelines > Read-Side Repair Separation Regression Policy"
         }
       ]
@@ -3114,13 +3092,13 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 888,
+          "line": 879,
           "section": "Testing Guidelines > Availability Under Pressure Test Policy"
         }
       ]
     },
     {
-      "id": "ARCH-0082",
+      "id": "ARCH-0080",
       "domain": "architecture",
       "strength": "should",
       "tags": [],
@@ -3135,7 +3113,7 @@
       ]
     },
     {
-      "id": "GOV-0035",
+      "id": "GOV-0034",
       "domain": "governance",
       "strength": "must_not",
       "tags": [
@@ -3152,7 +3130,7 @@
       ]
     },
     {
-      "id": "GOV-0036",
+      "id": "GOV-0035",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -3167,7 +3145,7 @@
       ]
     },
     {
-      "id": "GOV-0037",
+      "id": "GOV-0036",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -3184,7 +3162,7 @@
       ]
     },
     {
-      "id": "GOV-0038",
+      "id": "GOV-0037",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -3201,7 +3179,7 @@
       ]
     },
     {
-      "id": "GOV-0039",
+      "id": "GOV-0038",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -3218,24 +3196,7 @@
       ]
     },
     {
-      "id": "GOV-0040",
-      "domain": "governance",
-      "strength": "must_not",
-      "tags": [
-        "style"
-      ],
-      "rule": "Completed work packages are renamed to done-... in the filename, then committed and pushed as a focused package slice before the next slice starts. Packages closed under the current tracker workflow carry a Commit And Push Ledger naming the focused package commit SHA, pushed remote/branch, and package-only commit confirmation. Historical closed-package proof must not be backfilled by invention; if a package is reopened, migrated, or closed again, the current proof rules apply.",
-      "score": 202,
-      "sources": [
-        {
-          "file": "roadmap.md",
-          "line": 75,
-          "section": "Roadmap Steering Pointer > Work Intake And Execution Flow"
-        }
-      ]
-    },
-    {
-      "id": "GOV-0041",
+      "id": "GOV-0039",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -3252,7 +3213,7 @@
       ]
     },
     {
-      "id": "ARCH-0083",
+      "id": "ARCH-0081",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [
@@ -3269,7 +3230,7 @@
       ]
     },
     {
-      "id": "ARCH-0084",
+      "id": "ARCH-0082",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [],
@@ -3284,7 +3245,7 @@
       ]
     },
     {
-      "id": "GOV-0042",
+      "id": "GOV-0040",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -3301,7 +3262,7 @@
       ]
     },
     {
-      "id": "GOV-0043",
+      "id": "GOV-0041",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -3318,7 +3279,7 @@
       ]
     },
     {
-      "id": "GOV-0044",
+      "id": "GOV-0042",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -3333,7 +3294,7 @@
       ]
     },
     {
-      "id": "ARCH-0085",
+      "id": "ARCH-0083",
       "domain": "architecture",
       "strength": "must",
       "tags": [
@@ -3350,7 +3311,7 @@
       ]
     },
     {
-      "id": "ARCH-0086",
+      "id": "ARCH-0084",
       "domain": "architecture",
       "strength": "must",
       "tags": [
@@ -3364,11 +3325,16 @@
           "file": "doctrine.md",
           "line": 81,
           "section": "Lagrange Engineering Doctrine > 4. Phase Code Must Hand Off Completely"
+        },
+        {
+          "file": "runtime-contracts.md",
+          "line": 172,
+          "section": "Runtime Contracts Detail > Bootstrap And Phase Handoff"
         }
       ]
     },
     {
-      "id": "ARCH-0087",
+      "id": "ARCH-0085",
       "domain": "architecture",
       "strength": "must",
       "tags": [
@@ -3385,25 +3351,7 @@
       ]
     },
     {
-      "id": "ARCH-0088",
-      "domain": "architecture",
-      "strength": "must",
-      "tags": [
-        "ownership",
-        "readiness"
-      ],
-      "rule": "For shared control-plane truth surfaces such as startup, readiness, admin snapshot, service discovery, and harness convergence, readers must observe through a canonical snapshot/watch owner.",
-      "score": 198,
-      "sources": [
-        {
-          "file": "doctrine.md",
-          "line": 117,
-          "section": "Lagrange Engineering Doctrine > 5. Slower Under Pressure, Never Less Correct"
-        }
-      ]
-    },
-    {
-      "id": "ARCH-0089",
+      "id": "ARCH-0086",
       "domain": "architecture",
       "strength": "must",
       "tags": [],
@@ -3418,7 +3366,7 @@
       ]
     },
     {
-      "id": "ARCH-0090",
+      "id": "ARCH-0087",
       "domain": "architecture",
       "strength": "must",
       "tags": [],
@@ -3433,7 +3381,7 @@
       ]
     },
     {
-      "id": "ARCH-0091",
+      "id": "ARCH-0088",
       "domain": "architecture",
       "strength": "must",
       "tags": [
@@ -3450,7 +3398,7 @@
       ]
     },
     {
-      "id": "ARCH-0092",
+      "id": "ARCH-0089",
       "domain": "architecture",
       "strength": "must",
       "tags": [],
@@ -3465,7 +3413,7 @@
       ]
     },
     {
-      "id": "GOV-0045",
+      "id": "GOV-0043",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -3480,7 +3428,7 @@
       ]
     },
     {
-      "id": "GOV-0046",
+      "id": "GOV-0044",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -3498,7 +3446,7 @@
       ]
     },
     {
-      "id": "GOV-0047",
+      "id": "GOV-0045",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -3516,7 +3464,7 @@
       ]
     },
     {
-      "id": "GOV-0048",
+      "id": "GOV-0046",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -3533,7 +3481,7 @@
       ]
     },
     {
-      "id": "ARCH-0093",
+      "id": "ARCH-0090",
       "domain": "architecture",
       "strength": "must",
       "tags": [],
@@ -3548,7 +3496,7 @@
       ]
     },
     {
-      "id": "ARCH-0094",
+      "id": "ARCH-0091",
       "domain": "architecture",
       "strength": "must",
       "tags": [
@@ -3565,7 +3513,7 @@
       ]
     },
     {
-      "id": "ARCH-0095",
+      "id": "ARCH-0092",
       "domain": "architecture",
       "strength": "should",
       "tags": [
@@ -3753,7 +3701,7 @@
       ]
     },
     {
-      "id": "GOV-0049",
+      "id": "GOV-0047",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -3766,11 +3714,16 @@
           "file": "workflow-guidelines.md",
           "line": 90,
           "section": "Workflow Guidelines Detail > Core Logic Brief Gate"
+        },
+        {
+          "file": "workflow-guidelines.md",
+          "line": 596,
+          "section": "Workflow Guidelines Detail > Decision Experiment Gate"
         }
       ]
     },
     {
-      "id": "GOV-0050",
+      "id": "GOV-0048",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -3787,7 +3740,7 @@
       ]
     },
     {
-      "id": "GOV-0051",
+      "id": "GOV-0049",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -3802,7 +3755,7 @@
       ]
     },
     {
-      "id": "GOV-0052",
+      "id": "GOV-0050",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -3819,7 +3772,7 @@
       ]
     },
     {
-      "id": "GOV-0053",
+      "id": "GOV-0051",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -3834,7 +3787,7 @@
       ]
     },
     {
-      "id": "GOV-0054",
+      "id": "GOV-0052",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -3849,7 +3802,7 @@
       ]
     },
     {
-      "id": "GOV-0055",
+      "id": "GOV-0053",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -3864,7 +3817,7 @@
       ]
     },
     {
-      "id": "GOV-0056",
+      "id": "GOV-0054",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -3881,7 +3834,7 @@
       ]
     },
     {
-      "id": "GOV-0057",
+      "id": "GOV-0055",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -3896,7 +3849,7 @@
       ]
     },
     {
-      "id": "GOV-0058",
+      "id": "GOV-0056",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -3913,24 +3866,7 @@
       ]
     },
     {
-      "id": "GOV-0059",
-      "domain": "governance",
-      "strength": "must",
-      "tags": [
-        "ownership"
-      ],
-      "rule": "Active runtime owner-boundary, scenario/release-gate, and causal-escalation packages must carry a compact ## Decision Experiment Gate before implementation starts.",
-      "score": 191,
-      "sources": [
-        {
-          "file": "workflow-guidelines.md",
-          "line": 596,
-          "section": "Workflow Guidelines Detail > Decision Experiment Gate"
-        }
-      ]
-    },
-    {
-      "id": "GOV-0060",
+      "id": "GOV-0057",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -3945,7 +3881,7 @@
       ]
     },
     {
-      "id": "GOV-0061",
+      "id": "GOV-0058",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -3962,7 +3898,7 @@
       ]
     },
     {
-      "id": "GOV-0062",
+      "id": "GOV-0059",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -3988,7 +3924,7 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 779,
+          "line": 770,
           "section": "Testing Guidelines > Artifact-First Distributed Failure Triage Policy"
         }
       ]
@@ -4003,7 +3939,7 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 799,
+          "line": 790,
           "section": "Testing Guidelines > Agent And Sub-Agent Validation Handoff Policy"
         }
       ]
@@ -4018,13 +3954,13 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 903,
+          "line": 894,
           "section": "Testing Guidelines > Availability Under Pressure Test Policy > Required coverage patterns"
         }
       ]
     },
     {
-      "id": "GOV-0063",
+      "id": "GOV-0060",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -4039,7 +3975,7 @@
       ]
     },
     {
-      "id": "GOV-0064",
+      "id": "GOV-0061",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -4054,7 +3990,7 @@
       ]
     },
     {
-      "id": "GOV-0065",
+      "id": "GOV-0062",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -4069,7 +4005,7 @@
       ]
     },
     {
-      "id": "GOV-0066",
+      "id": "GOV-0063",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -4086,7 +4022,7 @@
       ]
     },
     {
-      "id": "ARCH-0096",
+      "id": "ARCH-0093",
       "domain": "architecture",
       "strength": "may",
       "tags": [
@@ -4099,11 +4035,16 @@
           "file": "system guidelines.md",
           "line": 100,
           "section": "System Guidelines — Mandatory Implementation Contract > 2. One Semantic Owner Per Concern"
+        },
+        {
+          "file": "runtime-contracts.md",
+          "line": 26,
+          "section": "Runtime Contracts Detail > Owner And Path Detail"
         }
       ]
     },
     {
-      "id": "ARCH-0097",
+      "id": "ARCH-0094",
       "domain": "architecture",
       "strength": "may",
       "tags": [
@@ -4120,7 +4061,7 @@
       ]
     },
     {
-      "id": "ARCH-0098",
+      "id": "ARCH-0095",
       "domain": "architecture",
       "strength": "may",
       "tags": [
@@ -4138,7 +4079,7 @@
       ]
     },
     {
-      "id": "ARCH-0099",
+      "id": "ARCH-0096",
       "domain": "architecture",
       "strength": "may",
       "tags": [
@@ -4155,7 +4096,7 @@
       ]
     },
     {
-      "id": "ARCH-0100",
+      "id": "ARCH-0097",
       "domain": "architecture",
       "strength": "may",
       "tags": [],
@@ -4269,7 +4210,7 @@
       ]
     },
     {
-      "id": "GOV-0067",
+      "id": "GOV-0064",
       "domain": "governance",
       "strength": "must_not",
       "tags": [
@@ -4288,7 +4229,7 @@
       ]
     },
     {
-      "id": "GOV-0068",
+      "id": "GOV-0065",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -4303,7 +4244,7 @@
       ]
     },
     {
-      "id": "GOV-0069",
+      "id": "GOV-0066",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -4320,7 +4261,7 @@
       ]
     },
     {
-      "id": "ARCH-0101",
+      "id": "ARCH-0098",
       "domain": "architecture",
       "strength": "must",
       "tags": [
@@ -4366,7 +4307,7 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 811,
+          "line": 802,
           "section": "Testing Guidelines > Agent And Sub-Agent Validation Handoff Policy"
         }
       ]
@@ -4383,7 +4324,7 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 731,
+          "line": 722,
           "section": "Testing Guidelines > Distributed Validation Ladder Policy"
         }
       ]
@@ -4396,17 +4337,17 @@
         "ownership"
       ],
       "rule": "Distributed artifact triage must start with npm run work:evidence-summary -- <artifact>, the focused extractor for the failure class such as npm run analyze:priority-recovery-residuals -- <artifact>, and npm run analyze:owner-files -- <owner> [boundary] before broad text search, raw JSON slicing, ad hoc jq, or raw logs.",
-      "score": 181,
+      "score": 182,
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 753,
+          "line": 744,
           "section": "Testing Guidelines > Artifact-First Distributed Failure Triage Policy"
         }
       ]
     },
     {
-      "id": "ARCH-0102",
+      "id": "ARCH-0099",
       "domain": "architecture",
       "strength": "may",
       "tags": [
@@ -4425,7 +4366,7 @@
       ]
     },
     {
-      "id": "GOV-0070",
+      "id": "GOV-0067",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -4440,7 +4381,7 @@
       ]
     },
     {
-      "id": "GOV-0071",
+      "id": "GOV-0068",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -4457,7 +4398,7 @@
       ]
     },
     {
-      "id": "GOV-0072",
+      "id": "GOV-0069",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -4489,7 +4430,7 @@
       ]
     },
     {
-      "id": "GOV-0073",
+      "id": "GOV-0070",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -4504,7 +4445,7 @@
       ]
     },
     {
-      "id": "GOV-0074",
+      "id": "GOV-0071",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -4522,7 +4463,7 @@
       ]
     },
     {
-      "id": "ARCH-0103",
+      "id": "ARCH-0100",
       "domain": "architecture",
       "strength": "should",
       "tags": [
@@ -4539,7 +4480,7 @@
       ]
     },
     {
-      "id": "ARCH-0104",
+      "id": "ARCH-0101",
       "domain": "architecture",
       "strength": "should",
       "tags": [],
@@ -4587,7 +4528,7 @@
       ]
     },
     {
-      "id": "ARCH-0105",
+      "id": "ARCH-0102",
       "domain": "architecture",
       "strength": "should",
       "tags": [],
@@ -4619,23 +4560,6 @@
       ]
     },
     {
-      "id": "ARCH-0106",
-      "domain": "architecture",
-      "strength": "may",
-      "tags": [
-        "ownership"
-      ],
-      "rule": "A shared row may have multiple owners only when field subsets are explicit and non-overlapping.",
-      "score": 175,
-      "sources": [
-        {
-          "file": "runtime-contracts.md",
-          "line": 26,
-          "section": "Runtime Contracts Detail > Owner And Path Detail"
-        }
-      ]
-    },
-    {
       "id": "TEST-0090",
       "domain": "testing",
       "strength": "should",
@@ -4648,13 +4572,13 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 746,
+          "line": 737,
           "section": "Testing Guidelines > Distributed Validation Ladder Policy"
         }
       ]
     },
     {
-      "id": "GOV-0075",
+      "id": "GOV-0072",
       "domain": "governance",
       "strength": "should",
       "tags": [],
@@ -4714,7 +4638,7 @@
       ]
     },
     {
-      "id": "GOV-0076",
+      "id": "GOV-0073",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -4731,7 +4655,7 @@
       ]
     },
     {
-      "id": "GOV-0077",
+      "id": "GOV-0074",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -4757,7 +4681,7 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 770,
+          "line": 761,
           "section": "Testing Guidelines > Artifact-First Distributed Failure Triage Policy"
         }
       ]
@@ -4772,13 +4696,13 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 806,
+          "line": 797,
           "section": "Testing Guidelines > Agent And Sub-Agent Validation Handoff Policy"
         }
       ]
     },
     {
-      "id": "ARCH-0107",
+      "id": "ARCH-0103",
       "domain": "architecture",
       "strength": "should",
       "tags": [
@@ -4795,7 +4719,7 @@
       ]
     },
     {
-      "id": "ARCH-0108",
+      "id": "ARCH-0104",
       "domain": "architecture",
       "strength": "should",
       "tags": [],
@@ -4810,7 +4734,7 @@
       ]
     },
     {
-      "id": "ARCH-0109",
+      "id": "ARCH-0105",
       "domain": "architecture",
       "strength": "should",
       "tags": [],
@@ -4825,24 +4749,7 @@
       ]
     },
     {
-      "id": "ARCH-0110",
-      "domain": "architecture",
-      "strength": "may",
-      "tags": [
-        "lifecycle"
-      ],
-      "rule": "Bootstrap, join, and recovery phases may initialize runtime mechanisms.",
-      "score": 165,
-      "sources": [
-        {
-          "file": "runtime-contracts.md",
-          "line": 172,
-          "section": "Runtime Contracts Detail > Bootstrap And Phase Handoff"
-        }
-      ]
-    },
-    {
-      "id": "GOV-0078",
+      "id": "GOV-0075",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -4859,7 +4766,7 @@
       ]
     },
     {
-      "id": "GOV-0079",
+      "id": "GOV-0076",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -4876,7 +4783,7 @@
       ]
     },
     {
-      "id": "GOV-0080",
+      "id": "GOV-0077",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -4902,7 +4809,7 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 746,
+          "line": 737,
           "section": "Testing Guidelines > Distributed Validation Ladder Policy"
         }
       ]
@@ -4919,13 +4826,13 @@
       "sources": [
         {
           "file": "testing-guidelines.md",
-          "line": 867,
+          "line": 858,
           "section": "Testing Guidelines > When to Run Full Test Suite"
         }
       ]
     },
     {
-      "id": "GOV-0081",
+      "id": "GOV-0078",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -4942,7 +4849,7 @@
       ]
     },
     {
-      "id": "GOV-0082",
+      "id": "GOV-0079",
       "domain": "governance",
       "strength": "may",
       "tags": [],
@@ -4957,7 +4864,7 @@
       ]
     },
     {
-      "id": "GOV-0083",
+      "id": "GOV-0080",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -4974,7 +4881,7 @@
       ]
     },
     {
-      "id": "ARCH-0111",
+      "id": "ARCH-0106",
       "domain": "architecture",
       "strength": "may",
       "tags": [],
@@ -4989,7 +4896,7 @@
       ]
     },
     {
-      "id": "GOV-0084",
+      "id": "GOV-0081",
       "domain": "governance",
       "strength": "may",
       "tags": [],
@@ -5004,7 +4911,7 @@
       ]
     },
     {
-      "id": "GOV-0085",
+      "id": "GOV-0082",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -5021,7 +4928,7 @@
       ]
     },
     {
-      "id": "GOV-0086",
+      "id": "GOV-0083",
       "domain": "governance",
       "strength": "may",
       "tags": [],
@@ -5036,7 +4943,7 @@
       ]
     },
     {
-      "id": "GOV-0087",
+      "id": "GOV-0084",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -5053,7 +4960,7 @@
       ]
     },
     {
-      "id": "GOV-0088",
+      "id": "GOV-0085",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -5071,7 +4978,7 @@
       ]
     },
     {
-      "id": "GOV-0089",
+      "id": "GOV-0086",
       "domain": "governance",
       "strength": "may",
       "tags": [],
@@ -5086,7 +4993,7 @@
       ]
     },
     {
-      "id": "ARCH-0112",
+      "id": "ARCH-0107",
       "domain": "architecture",
       "strength": "should",
       "tags": [],
@@ -5101,7 +5008,7 @@
       ]
     },
     {
-      "id": "GOV-0090",
+      "id": "GOV-0087",
       "domain": "governance",
       "strength": "may",
       "tags": [],
@@ -5116,7 +5023,7 @@
       ]
     },
     {
-      "id": "GOV-0091",
+      "id": "GOV-0088",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -5133,7 +5040,7 @@
       ]
     },
     {
-      "id": "GOV-0092",
+      "id": "GOV-0089",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -5150,7 +5057,7 @@
       ]
     },
     {
-      "id": "GOV-0093",
+      "id": "GOV-0090",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -5168,7 +5075,7 @@
       ]
     },
     {
-      "id": "GOV-0094",
+      "id": "GOV-0091",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -5185,7 +5092,7 @@
       ]
     },
     {
-      "id": "GOV-0095",
+      "id": "GOV-0092",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -5202,5 +5109,5 @@
       ]
     }
   ],
-  "generatedAt": "2026-05-22T04:59:39.904Z"
+  "generatedAt": "2026-05-23T09:13:14.983Z"
 }

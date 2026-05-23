@@ -122,6 +122,8 @@ const PRIORITY_RECOVERY_EVENT_DRIVEN_WAIT_REASON =
   'priority_recovery_event_driven_wait';
 const SELECTED_SNAPSHOT_SOURCE_TIMEOUT_REASON =
   'selected_snapshot_source_timeout';
+const SELECTED_SNAPSHOT_TRANSPORT_CLOSED_REASON =
+  'selected_transport_closed';
 const FORCED_REPAIR_SNAPSHOT_TIMEOUT_REASON =
   'forced_repair_snapshot_timeout';
 const AUTHORITATIVE_CONTROL_SNAPSHOT_QUERY_TIMEOUT_REASON =
@@ -130,6 +132,8 @@ const AUTHORITATIVE_CONTROL_SNAPSHOT_QUERY_PRESSURE_REASON =
   'authoritative_control_snapshot_query_pressure';
 const ACTIVE_GATE_SNAPSHOT_OWNER_EDGE_AUTHORITATIVE_QUERY =
   'authoritative_control_snapshot_query_pressure';
+const ACTIVE_GATE_SNAPSHOT_OWNER_EDGE_SELECTED_SOURCE =
+  'selected_snapshot_source_selection';
 const SNAPSHOT_COVERAGE_ZERO_OF_FIVE = 0;
 const SNAPSHOT_COVERAGE_TWO_OF_FIVE = 2;
 const ACTIVE_GATE_SELECTED_SNAPSHOT_SOURCE =
@@ -143,6 +147,12 @@ const ACTIVE_GATE_CONNECTION_CLOSED_SELECTED_SNAPSHOT_ERROR =
   `${ACTIVE_GATE_SELECTED_SNAPSHOT_SOURCE} on lane snapshot: ` +
   'Authoritative control snapshot repair failed: nodes:Connection to node ' +
   `${ACTIVE_GATE_CONNECTION_CLOSED_PARTICIPANT_NODE} closed`;
+const ACTIVE_GATE_ADMIN_CONNECTION_CLOSED_SELECTED_SNAPSHOT_ERROR =
+  'Admin API query connection closed before response for node ' +
+  `${ACTIVE_GATE_SELECTED_SNAPSHOT_SOURCE} on lane snapshot; ` +
+  'forced repair snapshot failed: ' +
+  'Admin API query connection closed before response for node ' +
+  `${ACTIVE_GATE_SELECTED_SNAPSHOT_SOURCE} on lane snapshot`;
 const ACTIVE_GATE_SELECTED_SNAPSHOT_TIMEOUT_MS = 3349;
 const EXPECTED_NODE_COUNT = 5;
 const MISSING_PUBLISHED_COUNT = 4;
@@ -678,6 +688,93 @@ describe('analyze-topology-convergence CLI', () => {
       HANDOFF_PROBE_TARGET_ACTION_BUILD_REPLAYABLE_FIXTURE,
     );
   });
+
+  it('replays selected snapshot source connection closure pressure', () => {
+    const fixture = buildConnectionClosedActiveGateFixture();
+    const progress =
+      fixture.scenarios[0].publicationConvergence.activeGate.progress;
+    Object.assign(progress, {
+      selectedSnapshotError:
+        ACTIVE_GATE_ADMIN_CONNECTION_CLOSED_SELECTED_SNAPSHOT_ERROR,
+      selectedSnapshotAdminReady: SELECTED_SNAPSHOT_ADMIN_READY,
+      selectedSnapshotReachableBy: SELECTED_SNAPSHOT_REACHABLE_BY_ADMIN_HEALTH,
+      perNodePublicationDisagreementSet: {
+        [ACTIVE_GATE_SELECTED_SNAPSHOT_SOURCE]: [],
+        [ACTIVE_GATE_ALTERNATIVE_SNAPSHOT_SOURCE]: [],
+      },
+    });
+
+    const output = runAnalyzerJsonForFixture(fixture, ARG_HANDOFF_PROBE);
+
+    assert.deepEqual(output.consumer.reasons, [
+      ACTIVE_GATE_TIMED_OUT_REASON,
+      SNAPSHOT_COVERAGE_INCOMPLETE_REASON,
+      SELECTED_SNAPSHOT_TRANSPORT_CLOSED_REASON,
+    ]);
+    assert.equal(
+      output.consumer.source.selectedSnapshotNodeId,
+      ACTIVE_GATE_SELECTED_SNAPSHOT_SOURCE,
+    );
+    assert.equal(
+      output.consumer.source.selectedSnapshotSourceCause,
+      SELECTED_SNAPSHOT_TRANSPORT_CLOSED_REASON,
+    );
+    assert.equal(
+      output.consumer.source.activeGateSnapshotOwnerEdge,
+      ACTIVE_GATE_SNAPSHOT_OWNER_EDGE_SELECTED_SOURCE,
+    );
+    assert.equal(
+      output.nextOwnerPath.requiredAction,
+      HANDOFF_PROBE_TARGET_ACTION_BUILD_REPLAYABLE_FIXTURE,
+    );
+  });
+
+  it('surfaces selected snapshot observation retry contracts in the handoff probe',
+    () => {
+      const fixture = buildConnectionClosedActiveGateFixture();
+      const progress =
+        fixture.scenarios[0].publicationConvergence.activeGate.progress;
+      Object.assign(progress, {
+        selectedSnapshotError:
+          ACTIVE_GATE_ADMIN_CONNECTION_CLOSED_SELECTED_SNAPSHOT_ERROR,
+        selectedSnapshotObservationState:
+          SNAPSHOT_OBSERVATION_STATE_DEFERRED_REFRESH,
+        selectedSnapshotObservationContractState:
+          SNAPSHOT_OBSERVATION_CONTRACT_STATE_DEFERRED,
+        selectedSnapshotObservationRefreshState:
+          SNAPSHOT_OBSERVATION_REFRESH_STATE_DEFERRED,
+        selectedSnapshotObservationNextAction:
+          SNAPSHOT_OBSERVATION_NEXT_ACTION_RETRY,
+        selectedSnapshotObservationRetryAfterMs:
+          SNAPSHOT_OBSERVATION_RETRY_AFTER_MS,
+        selectedSnapshotObservationReasonCodes: [
+          SELECTED_SNAPSHOT_TRANSPORT_CLOSED_REASON,
+        ],
+        selectedSnapshotRepairDeferred: true,
+      });
+
+      const output = runAnalyzerJsonForFixture(fixture, ARG_HANDOFF_PROBE);
+
+      assert.deepEqual(output.contractEdge, {
+        id: HANDOFF_CONTRACT_EDGE_ID,
+        name: HANDOFF_CONTRACT_EDGE_NAME,
+      });
+      assert.deepEqual(output.handoffContract, {
+        state: SNAPSHOT_OBSERVATION_CONTRACT_STATE_DEFERRED,
+        reasonCode: SELECTED_SNAPSHOT_TRANSPORT_CLOSED_REASON,
+        nextAction: SNAPSHOT_OBSERVATION_NEXT_ACTION_RETRY,
+        runtimePromotionAllowed: RUNTIME_PROMOTION_ALLOWED_FALSE,
+        pendingRecoveryCount: 0,
+        pendingRecoveryNodeIds: [],
+        pendingReconcileCount: 0,
+        pendingReconcileNodeIds: [],
+      });
+      assert.equal(
+        output.nextOwnerPath.requiredAction,
+        SNAPSHOT_OBSERVATION_NEXT_ACTION_RETRY,
+      );
+      assert.equal(output.runtimePromotionAllowed, RUNTIME_PROMOTION_ALLOWED_FALSE);
+    });
 
   it('keeps selected snapshot witness diagnostics in replay fixtures', () => {
     const fixture = buildConnectionClosedActiveGateFixture();
