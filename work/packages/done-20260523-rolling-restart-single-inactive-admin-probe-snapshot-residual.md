@@ -3,7 +3,7 @@
 <!-- work-package
 {
   "schema": "work-package-v1",
-  "status": "active",
+  "status": "done",
   "opened": "2026-05-23",
   "lane": "causal-escalation",
   "scenario": "rolling-restart",
@@ -54,7 +54,7 @@
     "test/distributed/harness/cluster-segment-7-class-4.js",
     "test/distributed/harness/cluster-segment-7-class-5.js",
     "test/distributed/harness/__tests__/cluster-active-gate-admin-probe-timeout-projection.test.js",
-    "work/packages/active-20260523-rolling-restart-single-inactive-admin-probe-snapshot-residual.md",
+    "work/packages/done-20260523-rolling-restart-single-inactive-admin-probe-snapshot-residual.md",
     "work/sprints/current-blocker.md",
     "work/sprints/current-blocker.json"
   ],
@@ -227,7 +227,10 @@
       "npm run work:repair",
       "npm run work:validate -- --pre-impl"
     ]
-  }
+  },
+  "closed": "2026-05-23",
+  "commitAndPushLedgerRequired": true,
+  "successor": "work/packages/active-20260523-rolling-restart-active-gate-snapshot-readiness-architecture-experiment.md"
 }
 -->
 
@@ -386,7 +389,7 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 Preferred closure evidence for new packages. One executor owns implementation end to end; one separate verifier-fixer validates the last package work and may fix in-scope problems directly.
 Agent identity is optional provenance. Use legacy subagent ledgers only when a reopened historical package already uses them.
 
-- [x] implementation: status: validated local-proof-only; evidence: `npm test -- test/distributed/harness/__tests__/cluster-active-gate-admin-probe-timeout-projection.test.js` PASS; `npm run audit:guideline:literals -- test/distributed/harness/cluster-segment-7-class-4.js test/distributed/harness/cluster-segment-7-class-5.js` PASS; `npm run audit:guideline:decision-boundaries -- test/distributed/harness/cluster-segment-7-class-4.js test/distributed/harness/cluster-segment-7-class-5.js` PASS; `npm run audit:runtime-grammar:file -- test/distributed/harness/cluster-segment-7-class-4.js test/distributed/harness/cluster-segment-7-class-5.js` PASS; `git diff --check -- test/distributed/harness/cluster-segment-7-class-4.js test/distributed/harness/cluster-segment-7-class-5.js test/distributed/harness/__tests__/cluster-active-gate-admin-probe-timeout-projection.test.js work/packages/active-20260523-rolling-restart-single-inactive-admin-probe-snapshot-residual.md work/packages/done-20260523-rolling-restart-selected-snapshot-timeout-repair-deferred-owner-recovery.md work/sprints/current-blocker.md work/sprints/current-blocker.json` PASS; representative `node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-single-inactive-admin-probe-snapshot-residual-20260523T071500Z.report.json --fast-local --verbose` FAILED same-frontier with active=2/5, snapshotCoverage=1/5, selected_snapshot_source_timeout, readiness_probe_timeout, and admin_not_ready residuals; parent revalidated focused proof: yes; next: open architecture experiment successor.
+- [x] implementation: status: validated local-proof-only; evidence: `npm test -- test/distributed/harness/__tests__/cluster-active-gate-admin-probe-timeout-projection.test.js` PASS; `npm run audit:guideline:literals -- test/distributed/harness/cluster-segment-7-class-4.js test/distributed/harness/cluster-segment-7-class-5.js` PASS; `npm run audit:guideline:decision-boundaries -- test/distributed/harness/cluster-segment-7-class-4.js test/distributed/harness/cluster-segment-7-class-5.js` PASS; `npm run audit:runtime-grammar:file -- test/distributed/harness/cluster-segment-7-class-4.js test/distributed/harness/cluster-segment-7-class-5.js` PASS; `git diff --check -- test/distributed/harness/cluster-segment-7-class-4.js test/distributed/harness/cluster-segment-7-class-5.js test/distributed/harness/__tests__/cluster-active-gate-admin-probe-timeout-projection.test.js work/packages/done-20260523-rolling-restart-single-inactive-admin-probe-snapshot-residual.md work/packages/done-20260523-rolling-restart-selected-snapshot-timeout-repair-deferred-owner-recovery.md work/sprints/current-blocker.md work/sprints/current-blocker.json` PASS; representative `node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-single-inactive-admin-probe-snapshot-residual-20260523T071500Z.report.json --fast-local --verbose` FAILED same-frontier with active=2/5, snapshotCoverage=1/5, selected_snapshot_source_timeout, readiness_probe_timeout, and admin_not_ready residuals; parent revalidated focused proof: yes; next: open architecture experiment successor.
 - [x] verification-fix: status: validated; evidence: Lovelace (`019e51f8-0cf1-7d72-b608-fb8908a36604`) reran `npm test -- test/distributed/harness/__tests__/cluster-active-gate-admin-probe-timeout-projection.test.js` PASS, `npm run audit:guideline:literals -- test/distributed/harness/cluster-segment-7-class-4.js test/distributed/harness/cluster-segment-7-class-5.js` PASS, `npm run audit:guideline:decision-boundaries -- test/distributed/harness/cluster-segment-7-class-4.js test/distributed/harness/cluster-segment-7-class-5.js` PASS, `npm run audit:runtime-grammar:file -- test/distributed/harness/cluster-segment-7-class-4.js test/distributed/harness/cluster-segment-7-class-5.js` PASS, and `git diff --check -- test/distributed/harness/cluster-segment-7-class-4.js test/distributed/harness/__tests__/cluster-active-gate-admin-probe-timeout-projection.test.js` PASS; follow-up verifier classified fresh artifact with `npm run work:evidence-summary -- test-output/reports/rolling-restart-single-inactive-admin-probe-snapshot-residual-20260523T071500Z.report.json` PASS and `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-single-inactive-admin-probe-snapshot-residual-20260523T071500Z.report.json --explain active_gate_snapshot_coverage` PASS as same-frontier, active=2/5, snapshotCoverage=1/5, selectedSnapshotTimeoutMs=100, selected source timed out, dominant residual `startup_active_gate_owner / snapshot_coverage / active_gate_timed_out`; changed files: none; parent revalidated focused proof: yes; next: closure with architecture experiment successor.
 - [x] repair: status: validated; evidence: `npm run work:repair` refreshed generated current-blocker and Current Edge Card; next: validation.
 
@@ -405,6 +408,6 @@ Agent identity is optional provenance. Use legacy subagent ledgers only when a r
 
 ## Commit And Push Ledger
 
-1. Focused package commit: pending
-2. Pushed to: pending
-3. Commit contains only package-owned files/package-status/allowed sprint handoff: pending
+1. Focused package commit: 0027456310abd2901610b56b2dcb6d38bcfb8984
+2. Pushed to: origin/codex/pending-ack-eligibility-filter
+3. Commit contains only package-owned files/package-status/allowed sprint handoff: yes
