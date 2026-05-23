@@ -1,0 +1,471 @@
+import {CAUSAL_DECISION_CONTRACT_INVALID_CONTENT, CAUSAL_DECISION_CONTRACT_OSCILLATION_METADATA, CAUSAL_DECISION_CONTRACT_VALID_CONTENT, CAUSAL_GOVERNANCE_INVALID_METADATA, CAUSAL_GOVERNANCE_MISSING_METADATA, CAUSAL_GOVERNANCE_VALID_METADATA, CLASSIFICATION_EFFICIENCY_VALID_METADATA, CLASSIFICATION_ONLY_FAST_PATH_METADATA, CLASSIFICATION_ONLY_WITH_IMPLEMENTATION_SCOPE_METADATA, CORE_LOGIC_BRIEF_GENERIC_CONTENT, CORE_LOGIC_BRIEF_INCOMPLETE_CONTENT, CORE_LOGIC_BRIEF_NOT_NEEDED_CONTENT, CORE_LOGIC_BRIEF_VALID_CONTENT, DECISION_EXPERIMENT_GATE_INVALID_CONTENT, DECISION_EXPERIMENT_GATE_VALID_CONTENT, FIX_AGENT_ID, IMPLEMENTATION_AGENT_ID, LANE_BOUNDED_EXPERIMENT, LANE_CAUSAL_ESCALATION, LANE_DIAGNOSTIC_CLASSIFICATION, LANE_EXPERIMENT, LANE_LIGHTWEIGHT_MAINTENANCE, LANE_MECHANICAL_MAINTENANCE, LANE_READ_REVIEW_DOC_ONLY, LANE_RUNTIME_OWNER_BOUNDARY, LANE_SINGLE_FILE_RUNTIME, LANE_TEST_ONLY_PROOF, MODEL_FIT_INCOMPLETE_SPARK_SAFE_CONTENT, MODEL_FIT_MISSING_CONTENT, MODEL_FIT_VALID_SPARK_SAFE_CONTENT, REPRESENTATIVE_RESIDUAL_INVALID_METADATA, REPRESENTATIVE_RESIDUAL_MISSING_METADATA, REPRESENTATIVE_RESIDUAL_VALID_METADATA, RERUN_DECISION_VALID_METADATA, REVIEW_AGENT_ID, SCENARIO_CAUSAL_CLOSURE_INVALID_METADATA, SCENARIO_CAUSAL_CLOSURE_MISSING_METADATA, SCENARIO_CAUSAL_CLOSURE_VALID_METADATA, SPRINT_STRATEGY_BRIEF_INCOMPLETE_CONTENT, SPRINT_STRATEGY_BRIEF_VALID_CONTENT, TEST_COMMIT_SHA, TEST_PUSH_TARGET, TEST_THEORY_LEDGER_REF, WORK_TRACKER_ACTIVE_DOCTOR_FILE, WORK_TRACKER_ACTIVE_STATUS, WORK_TRACKER_ATTEMPT_LEDGER_BAD_CONTENT, WORK_TRACKER_ATTEMPT_LEDGER_CLEAN_CONTENT, WORK_TRACKER_ATTEMPT_LEDGER_CODEX_NAMED_AGENT_CONTENT, WORK_TRACKER_ATTEMPT_LEDGER_GENERIC_IDENTITY_CONTENT, WORK_TRACKER_ATTEMPT_LEDGER_NOT_NEEDED_CONTENT, WORK_TRACKER_ATTEMPT_LEDGER_OPEN_PARTIAL_CONTENT, WORK_TRACKER_ATTEMPT_LEDGER_PARTIAL_CONTENT, WORK_TRACKER_ATTEMPT_LEDGER_SUPERSEDED_CONTENT, WORK_TRACKER_COMBINED_PROGRESS_ATTEMPT_LEDGER_CONTENT, WORK_TRACKER_COMBINED_PROGRESS_ATTEMPT_LEDGER_LOCAL_RUNTIME_CONTENT, WORK_TRACKER_COMMIT_LEDGER_LEGACY_VALID_CONTENT, WORK_TRACKER_COMMIT_LEDGER_PENDING_CONTENT, WORK_TRACKER_COMMIT_LEDGER_TEMPLATE_CONTENT, WORK_TRACKER_COMMIT_LEDGER_VALID_CONTENT, WORK_TRACKER_CURRENT_BLOCKER_MARKDOWN, WORK_TRACKER_DOCTOR_CONTENT, WORK_TRACKER_DONE_STATUS, WORK_TRACKER_DONE_TEST_FILE, WORK_TRACKER_EXECUTION_EVIDENCE_CLEAN_CONTENT, WORK_TRACKER_EXECUTION_EVIDENCE_FIVE_FIELD_CONTENT, WORK_TRACKER_EXECUTION_EVIDENCE_OPEN_CONTENT, WORK_TRACKER_EXECUTION_EVIDENCE_UNVALIDATED_CONTENT, WORK_TRACKER_EXECUTION_EVIDENCE_VERIFIED_CONTENT, WORK_TRACKER_EXECUTION_EVIDENCE_VERIFIED_NO_CHANGES_CONTENT, WORK_TRACKER_EXECUTION_EVIDENCE_WITH_AGENT_CONTENT, WORK_TRACKER_FUTURE_DONE_STRICT_CONTENT, WORK_TRACKER_FUTURE_DONE_TEST_FILE, WORK_TRACKER_LEDGER_AMBIGUOUS_REVIEW_NOT_NEEDED_CONTENT, WORK_TRACKER_LEDGER_BAD_NOT_NEEDED_CONTENT, WORK_TRACKER_LEDGER_CHECKED_PENDING_CONTENT, WORK_TRACKER_LEDGER_CHECKED_TEMPLATE_CONTENT, WORK_TRACKER_LEDGER_CLEAN_CONTENT, WORK_TRACKER_LEDGER_FIRST_PACKAGE_CONTENT, WORK_TRACKER_LEDGER_FIXES_REQUIRED_CONTENT, WORK_TRACKER_LEDGER_LEGACY_DONE_CONTENT, WORK_TRACKER_LEDGER_LOCAL_IMPLEMENTATION_CONTENT, WORK_TRACKER_LEDGER_LOCAL_PATH_CONTENT, WORK_TRACKER_LEDGER_LOCAL_PATH_TEST_FILE, WORK_TRACKER_LEDGER_MANUAL_FIX_NOTE_CONTENT, WORK_TRACKER_LEDGER_NO_AGENT_ID_CONTENT, WORK_TRACKER_LEDGER_NO_LEDGER_CONTENT, WORK_TRACKER_LEDGER_NUMBERED_PRE_IMPL_CONTENT, WORK_TRACKER_LEDGER_OPEN_CONTENT, WORK_TRACKER_LEDGER_PRE_IMPL_CONTENT, WORK_TRACKER_LEDGER_REVIEW_FIXED_METADATA_CONTENT, WORK_TRACKER_LEDGER_REVIEW_FIXED_RUNTIME_CONTENT, WORK_TRACKER_LEDGER_REVIEW_FIXED_WRONG_AGENT_CONTENT, WORK_TRACKER_LEDGER_TEST_FILE, WORK_TRACKER_LEDGER_UNAVAILABLE_CONTENT, WORK_TRACKER_LEDGER_UNVALIDATED_IMPLEMENTATION_CONTENT, WORK_TRACKER_PROGRESS_LEDGER_BAD_CONTENT, WORK_TRACKER_PROGRESS_LEDGER_CLEAN_CONTENT, WORK_TRACKER_PROGRESS_LEDGER_NOT_NEEDED_CONTENT, WORK_TRACKER_PROGRESS_LEDGER_OPEN_CONTENT, assert, buildCurrentBlockerPayload, buildPackageDoctorLines, describe, findActivePackageLinkInSprint, isGeneratedCurrentBlockerPath, it, metadataHasClassificationOnlyOutcome, metadataRequiresSubagentSequencing, metadataUsesClassificationOnlyFastPath, metadataUsesPureClassificationFastPath, path, renderCurrentBlockerMarkdown, renderCurrentEdgeCardSection, resolveSprintPackageReference, upsertSprintCurrentEdgeCard, validateActiveWorkReferences, validateCausalDecisionContract, validateCausalGovernanceContract, validateClassificationEfficiencyContract, validateCommitAndPushLedger, validateContractProofRequirement, validateCoreLogicBrief, validateCurrentBlockerPayloadFreshness, validateCurrentBlockerSnapshot, validateDecisionExperimentGate, validateExecutionEvidenceLedger, validateExperimentOutcomeContract, validateFrontierOscillationContract, validateModelFitContract, validateObservablePredictionContract, validatePackageMetadataShape, validateProbePackageContract, validateRepresentativeResidualContract, validateRequiredPreImplProbeContract, validateRerunDecisionContract, validateSameFrontierStopContract, validateScenarioCausalClosureContract, validateScenarioFrontierOwnerBoundaryContract, validateSprintCurrentEdgeCard, validateSprintStrategyBrief, validateSubagentAttemptLedger, validateSubagentProgressLedger, validateSubagentSequencingLedger} from './work-tracker-subagent-ledger-fixtures.js';
+
+describe('work tracker package doctor', () => {
+  it('recognizes generated current-blocker handoff files as tracker output', () => {
+    assert.equal(
+      isGeneratedCurrentBlockerPath(WORK_TRACKER_CURRENT_BLOCKER_MARKDOWN),
+      true,
+    );
+  });
+
+  it('prints a compact validation summary for a package', () => {
+    const content = WORK_TRACKER_DOCTOR_CONTENT.replace(
+      '"proof": [',
+      `"theoryLedgerRefs": ["${TEST_THEORY_LEDGER_REF}"],\n  "proof": [`,
+    );
+    const report = buildPackageDoctorLines(WORK_TRACKER_ACTIVE_DOCTOR_FILE, content);
+    const rendered = report.lines.join('\n');
+
+    assert.deepEqual(report.errors, []);
+    assert.match(rendered, /# Work Package Doctor/u);
+    assert.match(rendered, /Owner: workflow_tooling_owner/u);
+    assert.match(rendered, /Output profile: medium/u);
+    assert.match(rendered, /Write scope: 1/u);
+    assert.match(rendered, /Theory ledger refs: 1/u);
+    assert.match(rendered, /Legacy touched files: 0/u);
+    assert.match(rendered, /Validation: ok/u);
+  });
+
+  it('validates cited theory ledger refs against loaded ledger entries', () => {
+    const content = WORK_TRACKER_DOCTOR_CONTENT.replace(
+      '"proof": [',
+      '"theoryLedgerRefs": ["theory-20260522-missing"],\n  "proof": [',
+    );
+    const report = buildPackageDoctorLines(
+      WORK_TRACKER_ACTIVE_DOCTOR_FILE,
+      content,
+      {theoryLedgerContext: {entries: [], errors: []}},
+    );
+
+    assert.match(
+      report.errors.join('\n'),
+      /theory-20260522-missing, but it is not present/u,
+    );
+  });
+
+  it('surfaces related theory candidates as advisory doctor guidance', () => {
+    const report = buildPackageDoctorLines(
+      WORK_TRACKER_ACTIVE_DOCTOR_FILE,
+      WORK_TRACKER_DOCTOR_CONTENT,
+      {
+        theoryLedgerContext: {
+          entries: [{
+            id: 'theory-20260522-package-doctor-repeat',
+            line: 12,
+            fields: {
+              Status: 'falsified',
+              'Scenario/gate': 'none / workflow_tooling',
+              'Owner/boundary': 'workflow_tooling_owner / package_doctor',
+              'Next implication': 'do not repeat broad doctor prose.',
+            },
+          }],
+          errors: [],
+        },
+      },
+    );
+    const rendered = report.lines.join('\n');
+
+    assert.match(rendered, /Related theory ledger candidates exist/u);
+    assert.match(rendered, /theory-20260522-package-doctor-repeat/u);
+    assert.match(rendered, /falsified/u);
+  });
+
+  it('Gate 1: requires pre-implementation related-theory acknowledgment or explicit reason', () => {
+    // Keep lightweight-maintenance lane, but set packageClass to workflow-tooling so it's high-risk for theories
+    const content = WORK_TRACKER_DOCTOR_CONTENT.replace(
+      '"packageClass": "bounded-implementation"',
+      '"packageClass": "workflow-tooling"'
+    );
+    const report = buildPackageDoctorLines(
+      WORK_TRACKER_ACTIVE_DOCTOR_FILE,
+      content,
+      {
+        phase: 'pre-impl',
+        theoryLedgerContext: {
+          entries: [{
+            id: 'theory-20260522-pkg-doctor-related',
+            line: 1,
+            fields: {
+              Status: 'active',
+              'Scenario/gate': 'none / workflow_tooling',
+              'Owner/boundary': 'workflow_tooling_owner / package_doctor',
+            }
+          }],
+          errors: [],
+        }
+      }
+    );
+
+    assert.match(
+      report.errors.join('\n'),
+      /high-risk package must acknowledge related theories/u
+    );
+
+    // If reason is present, it should pass
+    const contentWithReason = content + '\nThis package is not-applicable for old theories.';
+    const reportWithReason = buildPackageDoctorLines(
+      WORK_TRACKER_ACTIVE_DOCTOR_FILE,
+      contentWithReason,
+      {
+        phase: 'pre-impl',
+        theoryLedgerContext: {
+          entries: [{
+            id: 'theory-20260522-pkg-doctor-related',
+            line: 1,
+            fields: {
+              Status: 'active',
+              'Scenario/gate': 'none / workflow_tooling',
+              'Owner/boundary': 'workflow_tooling_owner / package_doctor',
+            }
+          }],
+          errors: [],
+        }
+      }
+    );
+    assert.deepEqual(reportWithReason.errors, []);
+  });
+
+  it('Gate 2: requires justification explanation when citing/matching non-active theories', () => {
+    // Cites or matches non-active theory, but doesn't have justification keywords
+    const content = WORK_TRACKER_DOCTOR_CONTENT + '\nCiting theory-20260522-stale-theory.';
+    const report = buildPackageDoctorLines(
+      WORK_TRACKER_ACTIVE_DOCTOR_FILE,
+      content,
+      {
+        phase: 'pre-impl',
+        theoryLedgerContext: {
+          entries: [{
+            id: 'theory-20260522-stale-theory',
+            line: 1,
+            fields: {
+              Status: 'stale',
+              'Scenario/gate': 'none / workflow_tooling',
+              'Owner/boundary': 'workflow_tooling_owner / package_doctor',
+            }
+          }],
+          errors: [],
+        }
+      }
+    );
+
+    assert.match(
+      report.errors.join('\n'),
+      /does not provide a justification explanation/u
+    );
+
+    // With a justification keyword (e.g. "instead"), it should pass
+    const contentWithJustification = content + '\nWe use this instead.';
+    const reportWithJustification = buildPackageDoctorLines(
+      WORK_TRACKER_ACTIVE_DOCTOR_FILE,
+      contentWithJustification,
+      {
+        phase: 'pre-impl',
+        theoryLedgerContext: {
+          entries: [{
+            id: 'theory-20260522-stale-theory',
+            line: 1,
+            fields: {
+              Status: 'stale',
+              'Scenario/gate': 'none / workflow_tooling',
+              'Owner/boundary': 'workflow_tooling_owner / package_doctor',
+            }
+          }],
+          errors: [],
+        }
+      }
+    );
+    assert.deepEqual(reportWithJustification.errors, []);
+  });
+
+  it('Gate 3: requires package linked in the ledger or explicit "no ledger update" at closure', () => {
+    // Set status to todo and change write scope to README.md to avoid subagent ledger closure checks
+    const content = WORK_TRACKER_DOCTOR_CONTENT.replace(
+      '"status": "active"',
+      '"status": "todo"'
+    ).replaceAll(
+      'scripts/work-tracker.js',
+      'README.md'
+    );
+    const report = buildPackageDoctorLines(
+      'work/packages/todo-20260507-doctor-test.md',
+      content,
+      {
+        phase: 'closure',
+        theoryLedgerContext: {
+          entries: [],
+          errors: [],
+        }
+      }
+    );
+
+    assert.match(
+      report.errors.join('\n'),
+      /closure requires either a theory ledger update linking to this package/u
+    );
+
+    // With explicit "no ledger update", it should pass
+    const contentWithNoUpdate = content + '\nledger: not-needed';
+    const reportWithNoUpdate = buildPackageDoctorLines(
+      'work/packages/todo-20260507-doctor-test.md',
+      contentWithNoUpdate,
+      {
+        phase: 'closure',
+        theoryLedgerContext: {
+          entries: [],
+          errors: [],
+        }
+      }
+    );
+    assert.deepEqual(reportWithNoUpdate.errors, []);
+  });
+
+  it('requires executor and verifier-fixer proof for future closed runtime packages',
+    () => {
+      const report = buildPackageDoctorLines(
+        WORK_TRACKER_FUTURE_DONE_TEST_FILE,
+        WORK_TRACKER_FUTURE_DONE_STRICT_CONTENT,
+        {phase: 'closure'},
+      );
+      const rendered = report.lines.join('\n');
+
+      assert.match(rendered, /Execution Evidence is required/u);
+      assert.match(rendered, /implementation and verification-fix/u);
+    });
+
+  it('prints acceleration guidance for admin-heavy packages', () => {
+    const content = [
+      '# Admin Package',
+      '',
+      '<!-- work-package',
+      JSON.stringify({
+        schema: 'work-package-v1',
+        status: WORK_TRACKER_ACTIVE_STATUS,
+        opened: '2026-05-18',
+        lane: LANE_READ_REVIEW_DOC_ONLY,
+        scenario: 'none',
+        artifact: 'none',
+        playback: 'none',
+        owner: 'release_gate_owner',
+        boundary: 'representative_evidence',
+        dominantReason: 'fresh_evidence_required',
+        currentState: 'Metadata-only package needs a hard next action.',
+        nextAction: 'Run representative evidence before more package edits.',
+        proof: [
+          'npm run work:evidence-summary -- test-output/reports/a.report.json',
+          'npm run work:scenario-triage -- test-output/reports/a.report.json --markdown',
+          'npm run analyze:topology-convergence -- test-output/reports/a.report.json',
+          'npm run analyze:causal-model -- test-output/reports/a.report.json',
+          'npm run analyze:priority-recovery-residuals -- test-output/reports/a.report.json --markdown',
+          'npm run summarize:harness -- --report-dir test-output/reports',
+        ],
+        writeScope: ['work/packages/active-admin-package.md'],
+        handoffFiles: [],
+        generatedFiles: [],
+        candidateRuntimeFiles: [],
+        commitScope: ['work/packages/active-admin-package.md'],
+        modelFit: {
+          packageClass: 'bounded-implementation',
+          intendedMinimumModel: 'gpt-5.3-codex-spark',
+          scopeShape: 'leaf-slice',
+          outputProfile: 'small',
+          escalationTriggers: ['runtime ownership changes'],
+          ambiguityScore: 1,
+        },
+      }, null, 2),
+      '-->',
+      '',
+      '## Model Fit',
+      '',
+      '- Package class: `bounded-implementation`',
+      '- Intended minimum model: `gpt-5.3-codex-spark`',
+      '- Scope shape: `leaf-slice`',
+      '- Output profile: `small`',
+      '- Owned files: `work/packages/active-admin-package.md`',
+      '- Forbidden files: `src/`',
+      '- Frozen decisions: metadata-only package stops after one pass.',
+      '- Escalation triggers: runtime ownership changes.',
+      '- Focused proof: `npm run work:advance -- --check`',
+      '',
+    ].join('\n');
+    const report = buildPackageDoctorLines(
+      'work/packages/active-admin-package.md',
+      content,
+    );
+    const rendered = report.lines.join('\n');
+
+    assert.deepEqual(report.errors, []);
+    assert.match(rendered, /## Process Guidance/u);
+    assert.match(rendered, /Proof ladder is heavy/u);
+    assert.match(rendered, /Admin stop applies/u);
+  });
+
+  it('allows classification-only fast path without subagent ledger', () => {
+    const content = [
+      '# Classification Only Package',
+      '',
+      '<!-- work-package',
+      JSON.stringify(CLASSIFICATION_ONLY_FAST_PATH_METADATA, null, 2),
+      '-->',
+      '',
+      CORE_LOGIC_BRIEF_VALID_CONTENT.split('\n').slice(2).join('\n'),
+      CAUSAL_DECISION_CONTRACT_VALID_CONTENT.split('\n').slice(2).join('\n'),
+      MODEL_FIT_VALID_SPARK_SAFE_CONTENT.split('\n').slice(2).join('\n'),
+    ].join('\n');
+    const report = buildPackageDoctorLines(
+      WORK_TRACKER_LEDGER_TEST_FILE,
+      content,
+    );
+    const rendered = report.lines.join('\n');
+
+    assert.deepEqual(report.errors, []);
+    assert.match(rendered, /Classification-only fast path: yes/u);
+    assert.match(rendered, /Classification-only proof ladder is compact/u);
+    assert.match(rendered, /subagent sequencing and static guardrails are not required/u);
+  });
+
+  it('keeps classification-only implementation scope on the normal lane', () => {
+    const content = [
+      '# Classification Only Package',
+      '',
+      '<!-- work-package',
+      JSON.stringify(
+        CLASSIFICATION_ONLY_WITH_IMPLEMENTATION_SCOPE_METADATA,
+        null,
+        2,
+      ),
+      '-->',
+      '',
+      CORE_LOGIC_BRIEF_VALID_CONTENT.split('\n').slice(2).join('\n'),
+      MODEL_FIT_VALID_SPARK_SAFE_CONTENT.split('\n').slice(2).join('\n'),
+    ].join('\n');
+    const report = buildPackageDoctorLines(
+      WORK_TRACKER_LEDGER_TEST_FILE,
+      content,
+    );
+    const rendered = report.lines.join('\n');
+
+    assert.doesNotMatch(
+      report.errors.join('\n'),
+      /Subagent Sequencing Ledger is required/u,
+    );
+    assert.match(rendered, /Classification-only fast path: no/u);
+    assert.match(rendered, /Classification-only result has implementation write scope/u);
+  });
+
+  it('requires verifier-fixer proof for optional code-scope lanes at closure', () => {
+    const openLedgerContent = WORK_TRACKER_DOCTOR_CONTENT.replace(
+      /## Subagent Sequencing Ledger[\s\S]*$/u,
+      WORK_TRACKER_LEDGER_OPEN_CONTENT.split('\n').slice(2).join('\n'),
+    );
+    const entryReport = buildPackageDoctorLines(
+      WORK_TRACKER_ACTIVE_DOCTOR_FILE,
+      openLedgerContent,
+      {phase: 'entry'},
+    );
+    const preImplReport = buildPackageDoctorLines(
+      WORK_TRACKER_ACTIVE_DOCTOR_FILE,
+      openLedgerContent,
+      {phase: 'pre-impl'},
+    );
+    const closureReport = buildPackageDoctorLines(
+      WORK_TRACKER_ACTIVE_DOCTOR_FILE,
+      openLedgerContent,
+      {phase: 'closure'},
+    );
+
+    assert.deepEqual(entryReport.errors, []);
+    assert.deepEqual(preImplReport.errors, []);
+    assert.match(
+      closureReport.errors.join('\n'),
+      /Execution Evidence is required with checked implementation and verification-fix/u,
+    );
+  });
+
+  it('treats legacy subagent ledger sections as advisory once execution evidence exists',
+    () => {
+      const content = [
+        WORK_TRACKER_DOCTOR_CONTENT,
+        '',
+        WORK_TRACKER_EXECUTION_EVIDENCE_VERIFIED_CONTENT
+          .split('\n')
+          .slice(2)
+          .join('\n'),
+        '',
+        '## Subagent Progress Ledger',
+        '',
+        '- [ ] Agent Review (<agent-id>) old placeholder entry without closure proof.',
+        '',
+        '## Theory Ledger Update',
+        '',
+        'no ledger update',
+        '',
+      ].join('\n');
+      const report = buildPackageDoctorLines(
+        WORK_TRACKER_ACTIVE_DOCTOR_FILE,
+        content,
+        {phase: 'closure'},
+      );
+      const rendered = report.lines.join('\n');
+
+      assert.deepEqual(report.errors, []);
+      assert.match(rendered, /Legacy subagent ledger section detected/u);
+      assert.match(rendered, /advisory, not closure gates/u);
+    });
+
+  it('surfaces scenario causal closure metadata in package doctor output', () => {
+    const scenarioDoctorContent = WORK_TRACKER_DOCTOR_CONTENT.replace(
+      '"scenario": "none"',
+      '"scenario": "rolling-restart"',
+    ).replace(
+      '"owner": "workflow_tooling_owner"',
+      '"owner": "operation_workflow_owner"',
+    ).replace(
+      '"boundary": "package_doctor"',
+      '"boundary": "workflow_progress"',
+    ).replace(
+      '"modelFit": {',
+      '"causalGovernance": ' +
+        JSON.stringify(CAUSAL_GOVERNANCE_VALID_METADATA.causalGovernance) +
+        ',\n    "scenarioCausalClosure": ' +
+        JSON.stringify(
+          SCENARIO_CAUSAL_CLOSURE_VALID_METADATA.scenarioCausalClosure,
+        ) +
+        ',\n    "modelFit": {',
+    );
+    const report = buildPackageDoctorLines(
+      WORK_TRACKER_ACTIVE_DOCTOR_FILE,
+      scenarioDoctorContent,
+    );
+    const rendered = report.lines.join('\n');
+
+    assert.deepEqual(report.errors, []);
+    assert.match(rendered, /Scenario causal closure: recorded/u);
+  });
+
+  it('prints concrete fix dry-run suggestions for schema failures', () => {
+    const invalidDoctorContent = WORK_TRACKER_DOCTOR_CONTENT.replace(
+      '"scenario": "none"',
+      '"scenario": "rolling-restart"',
+    ).replace(
+      '"modelFit": {',
+      '"causalGovernance": ' +
+        JSON.stringify(CAUSAL_GOVERNANCE_INVALID_METADATA.causalGovernance) +
+        ',\n    "scenarioCausalClosure": ' +
+        JSON.stringify(
+          SCENARIO_CAUSAL_CLOSURE_INVALID_METADATA.scenarioCausalClosure,
+        ) +
+        ',\n    "modelFit": {',
+    );
+    const report = buildPackageDoctorLines(
+      WORK_TRACKER_ACTIVE_DOCTOR_FILE,
+      invalidDoctorContent,
+      {fixDryRun: true},
+    );
+    const rendered = report.lines.join('\n');
+
+    assert.notDeepEqual(report.errors, []);
+    assert.match(rendered, /## Fix Dry Run/u);
+    assert.match(rendered, /work:package:schema/u);
+    assert.match(rendered, /analyze:topology-convergence/u);
+  });
+});

@@ -277,8 +277,8 @@ Round 1 or Round 2.
       semantic owner, and proposed successor package; rebalancer README
       and query README updated to point at the inventory instead of the
       current "temporary wrappers" prose.
-14. [Oversized Test File Cap And Top Offender Split](../packages/todo-20260523-oversized-test-file-cap-and-top-offender-split.md)
-    - Lane: `test-only-proof`
+14. [Oversized Test File Cap And Top Offender Split](../packages/done-20260523-oversized-test-file-cap-and-top-offender-split.md)
+    - Lane: `lightweight-maintenance`
     - Owner boundary: `test_quality_owner / oversized_test_files`
     - Purpose: introduce a hard cap (1,500 lines) in
       `scripts/check-file-size-thresholds.js` for test files and split
