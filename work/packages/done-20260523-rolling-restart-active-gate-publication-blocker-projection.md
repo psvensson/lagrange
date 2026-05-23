@@ -3,7 +3,7 @@
 <!-- work-package
 {
   "schema": "work-package-v1",
-  "status": "active",
+  "status": "done",
   "opened": "2026-05-23",
   "lane": "causal-escalation",
   "scenario": "rolling-restart",
@@ -47,7 +47,7 @@
   "commitScope": [
     "test/distributed/harness/cluster-segment-2.js",
     "test/distributed/harness/__tests__/active-gate-closure-classification.test.js",
-    "work/packages/active-20260523-rolling-restart-active-gate-publication-blocker-projection.md",
+    "work/packages/done-20260523-rolling-restart-active-gate-publication-blocker-projection.md",
     "work/sprints/current-blocker.md",
     "work/sprints/current-blocker.json"
   ],
@@ -208,14 +208,17 @@
     ],
     "nextAction": "Run the focused proof, then implement only the selected active-gate consumer projection."
   },
-    "observablePrediction": {
+  "observablePrediction": {
     "metric": "active-gate publication_gate blocker count and publication convergence readiness",
     "predicted": "Focused proof will remove publication_convergence_missing, publication_missing_active_node, and publication_not_published blockers under complete handoff coverage; fresh representative will drop stale publication_gate blockers, move counts, migrate owner/boundary, or pass.",
     "observed": "Focused proof made load publication convergence ready with no publication_gate blockers; fresh representative reports blockers=inactive_nodes=5,snapshot_coverage=1/5,snapshot_error and no publication_gate blockers.",
     "accuracy": "partial",
     "evidence": "test-output/reports/rolling-restart-active-gate-publication-blocker-projection-20260523T054500Z.report.json",
     "metricDelta": 7
-  }
+  },
+  "closed": "2026-05-23",
+  "commitAndPushLedgerRequired": true,
+  "successor": "work/packages/active-20260523-rolling-restart-selected-snapshot-timeout-repair-deferred-owner-recovery.md"
 }
 -->
 
@@ -313,3 +316,9 @@ AGPL rolling-restart stability work in the active sprint. This package is bounde
 4. npm run audit:runtime-grammar:file -- test/distributed/harness/cluster-segment-2.js
 5. node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-active-gate-publication-blocker-projection-20260523T054500Z.report.json --fast-local --verbose
 6. npm run work:evidence-summary -- test-output/reports/rolling-restart-active-gate-publication-blocker-projection-20260523T054500Z.report.json
+
+## Commit And Push Ledger
+
+1. Focused package commit: 98bfaae973e1ee9aa409939bdc16d96a87bad0a4
+2. Pushed to: origin/codex/pending-ack-eligibility-filter
+3. Commit contains only package-owned files/package-status/allowed sprint handoff: yes
