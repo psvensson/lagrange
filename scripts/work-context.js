@@ -24,6 +24,7 @@ import {
   validateTheoryLedgerContent,
 } from './work-theory-ledger.js';
 import {normalizeMetadata} from './work-package-schema.js';
+import {recommendLaneForPackage} from './work-lane-picker.js';
 
 const execFileAsync = promisify(execFile);
 
@@ -288,6 +289,7 @@ const FIELD_LABELS = Object.freeze({
   CHOICES: 'Choices',
   SELECTED_CHOICE: 'Selected choice',
   WORKFLOW_LANE: 'Workflow lane',
+  RECOMMENDED_LANE: 'Recommended lane',
   STOP_CONDITION_CHECK: 'Stop-condition check',
   STOP_RULE: 'Stop rule',
   SUBAGENT_ROLE: 'Next required subagent role',
@@ -2101,6 +2103,12 @@ async function buildContextLines(currentBlocker, packageContent, options = {}) {
   appendKeyValue(lines, FIELD_LABELS.PACKAGE, currentBlocker.package);
   appendKeyValue(lines, FIELD_LABELS.STATUS, currentBlocker.status);
   appendKeyValue(lines, FIELD_LABELS.WORKFLOW_LANE, currentBlocker.lane);
+  const laneRecommendation = recommendLaneForPackage(currentBlocker);
+  appendKeyValue(
+    lines,
+    FIELD_LABELS.RECOMMENDED_LANE,
+    `${laneRecommendation.canonicalLane} -> ${laneRecommendation.packageLane}`,
+  );
   appendKeyValue(lines, FIELD_LABELS.SCENARIO, currentBlocker.scenario);
   appendKeyValue(lines, FIELD_LABELS.OWNER, currentBlocker.owner);
   appendKeyValue(lines, FIELD_LABELS.BOUNDARY, currentBlocker.boundary);

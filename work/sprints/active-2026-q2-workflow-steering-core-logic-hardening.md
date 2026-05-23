@@ -223,7 +223,7 @@ does not overlap an active Round 1 package.
       comprehensive, and `npm run steering:llm:pack` is named in
       `AGENTS.md` and validated to run cleanly after any
       `.kiro/steering/*.md` source edit.
-11. [Lane Model Simplification And Picker](../packages/todo-20260523-lane-model-simplification-and-picker.md)
+11. [Lane Model Simplification And Picker](../packages/done-20260523-lane-model-simplification-and-picker.md)
     - Lane: `lightweight-maintenance`
     - Owner boundary: `workflow_tooling_owner / lane_model`
     - Purpose: collapse the 13 lane constants into 5–6 (read-doc,

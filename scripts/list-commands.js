@@ -21,6 +21,10 @@ const COMMAND_GROUPS = Object.freeze([
         description: 'Print combined LLM handoff, doctor suggestions, dirty scope, model ledger, and evidence summary.',
       }),
       Object.freeze({
+        command: 'npm run work:lane-picker -- --docs-only|--maintenance|--tests-only|--experiment|--runtime|--scenario',
+        description: 'Recommend one canonical lane bucket and compatible package lane from a few workflow signals.',
+      }),
+      Object.freeze({
         command: 'npm run work:dirty-scope',
         description: 'Report dirty worktree entries grouped as package-owned, tracker-generated, or unrelated.',
       }),

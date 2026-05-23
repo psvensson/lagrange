@@ -521,6 +521,7 @@ test('work context advertises triage commands before raw artifact reads',
     t.ok(rendered.includes('Playback: ' + TEST_PLAYBACK_PATH + ' (missing)'));
     t.ok(rendered.includes(SECTION_THEORY_IMPLEMENTATION));
     t.ok(rendered.includes('Theory under test: Causal edge should reduce.'));
+    t.ok(rendered.includes('Recommended lane: runtime -> runtime-owner-boundary'));
     t.ok(rendered.includes('Causal question: dispatch wake proof'));
     t.ok(rendered.includes('Implementation slice: Next action.'));
     t.ok(rendered.includes(

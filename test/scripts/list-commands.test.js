@@ -15,6 +15,8 @@ const WORK_HELP_COMMAND = 'npm run work:help';
 const WORK_CONTEXT_COMMAND = 'npm run work:context';
 const WORK_ADVANCE_COMMAND = 'npm run work:advance';
 const WORK_LLM_START_COMMAND = 'npm run work:llm-start';
+const WORK_LANE_PICKER_COMMAND =
+  'npm run work:lane-picker -- --docs-only|--maintenance|--tests-only|--experiment|--runtime|--scenario';
 const WORK_DIRTY_SCOPE_COMMAND = 'npm run work:dirty-scope';
 const WORK_TRACKS_COMMAND = 'npm run work:tracks';
 const WORK_SPRINT_REMAINING_COMMAND = 'npm run work:sprint:remaining';
@@ -72,6 +74,8 @@ const STATE_MACHINE_PRESSURE_COMMAND = 'npm run audit:state-machine-pressure';
 const GUIDELINE_GUARDRAILS_GROUP_TITLE = 'Guideline Guardrails';
 const WORK_DIRTY_SCOPE_DESCRIPTION =
   'Report dirty worktree entries grouped as package-owned, tracker-generated, or unrelated.';
+const WORK_LANE_PICKER_DESCRIPTION =
+  'Recommend one canonical lane bucket and compatible package lane from a few workflow signals.';
 const WORK_HELP_DESCRIPTION =
   'Print the unified workflow command index with diagnostic, triage, and validation entrypoints.';
 const WORK_TRACKS_DESCRIPTION =
@@ -132,6 +136,8 @@ const MODEL_LEDGER_ORIENTATION_MESSAGE =
   'model-ledger summary should be discoverable from orientation';
 const LLM_START_ORIENTATION_MESSAGE =
   'combined llm-start handoff should be discoverable from orientation';
+const WORK_LANE_PICKER_ORIENTATION_MESSAGE =
+  'lane picker should be discoverable from orientation';
 const WORK_ADVANCE_ORIENTATION_MESSAGE =
   'advance handoff should be discoverable from orientation';
 const DIRTY_SCOPE_ORIENTATION_MESSAGE =
@@ -196,6 +202,8 @@ const WORK_SPRINT_PUSH_SCRIPT = 'work:sprint:push';
 const WORK_SPRINT_PUSH_SCRIPT_COMMAND = 'node scripts/work-sprint-push.js';
 const WORK_LLM_START_SCRIPT = 'work:llm-start';
 const WORK_LLM_START_SCRIPT_COMMAND = 'node scripts/work-llm-start.js';
+const WORK_LANE_PICKER_SCRIPT = 'work:lane-picker';
+const WORK_LANE_PICKER_SCRIPT_COMMAND = 'node scripts/work-lane-picker.js';
 const WORK_ADVANCE_SCRIPT = 'work:advance';
 const WORK_ADVANCE_SCRIPT_COMMAND = 'node scripts/work-advance.js';
 const WORK_PACKAGE_NEW_SCRIPT = 'work:package:new';
@@ -254,6 +262,7 @@ test(ORIENTATION_GUARDRAILS_TEST_NAME, (t) => {
   t.match(rendered, WORK_CONTEXT_COMMAND);
   t.match(rendered, WORK_ADVANCE_COMMAND);
   t.match(rendered, WORK_LLM_START_COMMAND);
+  t.match(rendered, WORK_LANE_PICKER_COMMAND);
   t.match(rendered, WORK_DIRTY_SCOPE_COMMAND);
   t.match(rendered, WORK_TRACKS_COMMAND);
   t.match(rendered, WORK_SPRINT_REMAINING_COMMAND);
@@ -307,6 +316,11 @@ test(ORIENTATION_GUARDRAILS_TEST_NAME, (t) => {
     findCommandEntry(WORK_LLM_START_COMMAND).group.title,
     ORIENTATION_GROUP_TITLE,
     LLM_START_ORIENTATION_MESSAGE,
+  );
+  t.equal(
+    findCommandEntry(WORK_LANE_PICKER_COMMAND).group.title,
+    ORIENTATION_GROUP_TITLE,
+    WORK_LANE_PICKER_ORIENTATION_MESSAGE,
   );
   t.equal(
     findCommandEntry(WORK_DIRTY_SCOPE_COMMAND).group.title,
@@ -392,6 +406,11 @@ test(ORIENTATION_GUARDRAILS_TEST_NAME, (t) => {
     rendered,
     `${WORK_LLM_START_COMMAND}\`${COMMAND_ENTRY_SEPARATOR}` +
       LLM_START_DESCRIPTION,
+  );
+  t.match(
+    rendered,
+    `${WORK_LANE_PICKER_COMMAND}\`${COMMAND_ENTRY_SEPARATOR}` +
+      WORK_LANE_PICKER_DESCRIPTION,
   );
   t.match(
     rendered,
@@ -570,6 +589,10 @@ test(RUNTIME_GRAMMAR_TEST_NAME,
     t.equal(
       scripts[WORK_LLM_START_SCRIPT],
       WORK_LLM_START_SCRIPT_COMMAND,
+    );
+    t.equal(
+      scripts[WORK_LANE_PICKER_SCRIPT],
+      WORK_LANE_PICKER_SCRIPT_COMMAND,
     );
     t.equal(
       scripts[WORK_ADVANCE_SCRIPT],
