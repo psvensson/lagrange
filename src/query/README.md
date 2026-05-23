@@ -27,6 +27,10 @@ budget enforcement.
   routing behavior.
 - `canonical-leader-routing.js` for canonical leader-gap decisions.
 - `runtime-runner.js` and `execution-context.js` for runtime API changes.
+- Existing `sql-query-engine-segment-*`, `query-executor-segment-*`, and
+  `table-creation-service-class-part-*` files are legacy compatibility
+  surfaces. Use `work/inventory/ordinal-segments.md` when opening semantic
+  migration packages for these files.
 
 ## Do Not
 
@@ -36,6 +40,8 @@ budget enforcement.
 - Do not infer write leader identity from supporting service metadata when the
   canonical owner row exists.
 - Do not leak raw storage, transport, or parser shapes into runtime contracts.
+- Do not add new `segment`, `stage`, or `part` files when extracting; use
+  owner-specific names for new boundaries.
 
 ## Proof Surface
 

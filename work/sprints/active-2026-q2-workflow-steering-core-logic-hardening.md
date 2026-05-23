@@ -258,7 +258,7 @@ Round 1 or Round 2.
     - Acceptance: every domain file under 500 lines; `INDEX.md` lists
       one-line descriptions; no broken references from steering packs
       or roadmap.
-13. [Ordinal Segment Inventory And Migration Plan](../packages/todo-20260523-ordinal-segment-inventory-and-migration-plan.md)
+13. [Ordinal Segment Inventory And Migration Plan](../packages/done-20260523-ordinal-segment-inventory-and-migration-plan.md)
     - Lane: `diagnostic-classification`
     - Owner boundary: `runtime_modularization_owner / ordinal_segment_inventory`
     - Purpose: catalogue every `*-segment-N`, `*-stage-N`, and `*-part-N`
