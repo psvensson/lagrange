@@ -7,8 +7,9 @@ Welcome, developer or AI agent. This repository operates under a strict, validat
 To align with this repository's structure, read and defer to the following canonical documents:
 
 1.  **Steering Load Order**:
-    *   Load `.kiro/steering/llm/README.md` first.
-    *   Load `.kiro/steering/llm/core.md` second (manual always-load operating contract).
+    *   Load `.kiro/steering/llm/README.md` first as the pack index.
+    *   Load `.kiro/steering/llm/boot.md` second for precedence, lane vocabulary, and per-lane first commands.
+    *   Load `.kiro/steering/llm/core.md` third (manual always-load operating contract).
     *   Load the primary domain pack named by `npm run work:context`.
 2.  **Workflow Rules & Coding Constraints**:
     *   Refer to [work/RULES.md](file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/work/RULES.md) for the single canon of rules.

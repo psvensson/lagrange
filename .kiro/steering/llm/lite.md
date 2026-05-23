@@ -1,7 +1,8 @@
 # Lite Steering
 
-Thirty-second checklist for cold starts. Use this to choose the first tool and
-template, then load `core.md` and the domain pack named by `work:context`.
+Thirty-second checklist for cold starts. Use `boot.md` for precedence, lane
+vocabulary, and first-command routing. Use this file only as the short
+must-not list, then load `core.md` and the domain pack named by `work:context`.
 
 ## Must Not
 
