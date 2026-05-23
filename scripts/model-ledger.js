@@ -349,9 +349,9 @@ async function readLedgerEntries(filePath) {
     try {
       entries.push(JSON.parse(line));
     } catch (error) {
-      throw new Error(
-        `${filePath}: invalid JSONL at line ${index + NUM_ONE}: ` +
-        error.message,
+      console.warn(
+        `Warning: ${filePath}: invalid JSONL at line ${index + NUM_ONE}: ` +
+        error.message + `, skipping line.`,
       );
     }
   }

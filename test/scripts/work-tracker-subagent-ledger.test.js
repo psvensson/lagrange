@@ -201,6 +201,7 @@ const CLASSIFICATION_ONLY_FAST_PATH_METADATA = Object.freeze({
     scopeShape: 'owner-boundary-contraction/current-frontier',
     outputProfile: 'medium',
     escalationTriggers: Object.freeze(['runtime ownership changes']),
+    ambiguityScore: 1,
   }),
   representativeResidual: Object.freeze({
     status: 'classification-only',
@@ -981,6 +982,7 @@ const WORK_TRACKER_DOCTOR_CONTENT = [
       scopeShape: 'leaf-slice',
       outputProfile: 'medium',
       escalationTriggers: ['package doctor expands beyond work tracker'],
+      ambiguityScore: 1,
     },
   }, null, 2),
   '-->',
@@ -1741,6 +1743,155 @@ describe('work tracker package doctor', () => {
     assert.match(rendered, /falsified/u);
   });
 
+  it('Gate 1: requires pre-implementation related-theory acknowledgment or explicit reason', () => {
+    // Keep lightweight-maintenance lane, but set packageClass to workflow-tooling so it's high-risk for theories
+    const content = WORK_TRACKER_DOCTOR_CONTENT.replace(
+      '"packageClass": "bounded-implementation"',
+      '"packageClass": "workflow-tooling"'
+    );
+    const report = buildPackageDoctorLines(
+      WORK_TRACKER_ACTIVE_DOCTOR_FILE,
+      content,
+      {
+        phase: 'pre-impl',
+        theoryLedgerContext: {
+          entries: [{
+            id: 'theory-20260522-pkg-doctor-related',
+            line: 1,
+            fields: {
+              Status: 'active',
+              'Scenario/gate': 'none / workflow_tooling',
+              'Owner/boundary': 'workflow_tooling_owner / package_doctor',
+            }
+          }],
+          errors: [],
+        }
+      }
+    );
+
+    assert.match(
+      report.errors.join('\n'),
+      /high-risk package must acknowledge related theories/u
+    );
+
+    // If reason is present, it should pass
+    const contentWithReason = content + '\nThis package is not-applicable for old theories.';
+    const reportWithReason = buildPackageDoctorLines(
+      WORK_TRACKER_ACTIVE_DOCTOR_FILE,
+      contentWithReason,
+      {
+        phase: 'pre-impl',
+        theoryLedgerContext: {
+          entries: [{
+            id: 'theory-20260522-pkg-doctor-related',
+            line: 1,
+            fields: {
+              Status: 'active',
+              'Scenario/gate': 'none / workflow_tooling',
+              'Owner/boundary': 'workflow_tooling_owner / package_doctor',
+            }
+          }],
+          errors: [],
+        }
+      }
+    );
+    assert.deepEqual(reportWithReason.errors, []);
+  });
+
+  it('Gate 2: requires justification explanation when citing/matching non-active theories', () => {
+    // Cites or matches non-active theory, but doesn't have justification keywords
+    const content = WORK_TRACKER_DOCTOR_CONTENT + '\nCiting theory-20260522-stale-theory.';
+    const report = buildPackageDoctorLines(
+      WORK_TRACKER_ACTIVE_DOCTOR_FILE,
+      content,
+      {
+        phase: 'pre-impl',
+        theoryLedgerContext: {
+          entries: [{
+            id: 'theory-20260522-stale-theory',
+            line: 1,
+            fields: {
+              Status: 'stale',
+              'Scenario/gate': 'none / workflow_tooling',
+              'Owner/boundary': 'workflow_tooling_owner / package_doctor',
+            }
+          }],
+          errors: [],
+        }
+      }
+    );
+
+    assert.match(
+      report.errors.join('\n'),
+      /does not provide a justification explanation/u
+    );
+
+    // With a justification keyword (e.g. "instead"), it should pass
+    const contentWithJustification = content + '\nWe use this instead.';
+    const reportWithJustification = buildPackageDoctorLines(
+      WORK_TRACKER_ACTIVE_DOCTOR_FILE,
+      contentWithJustification,
+      {
+        phase: 'pre-impl',
+        theoryLedgerContext: {
+          entries: [{
+            id: 'theory-20260522-stale-theory',
+            line: 1,
+            fields: {
+              Status: 'stale',
+              'Scenario/gate': 'none / workflow_tooling',
+              'Owner/boundary': 'workflow_tooling_owner / package_doctor',
+            }
+          }],
+          errors: [],
+        }
+      }
+    );
+    assert.deepEqual(reportWithJustification.errors, []);
+  });
+
+  it('Gate 3: requires package linked in the ledger or explicit "no ledger update" at closure', () => {
+    // Set status to todo and change write scope to README.md to avoid subagent ledger closure checks
+    const content = WORK_TRACKER_DOCTOR_CONTENT.replace(
+      '"status": "active"',
+      '"status": "todo"'
+    ).replaceAll(
+      'scripts/work-tracker.js',
+      'README.md'
+    );
+    const report = buildPackageDoctorLines(
+      'work/packages/todo-20260507-doctor-test.md',
+      content,
+      {
+        phase: 'closure',
+        theoryLedgerContext: {
+          entries: [],
+          errors: [],
+        }
+      }
+    );
+
+    assert.match(
+      report.errors.join('\n'),
+      /closure requires either a theory ledger update linking to this package/u
+    );
+
+    // With explicit "no ledger update", it should pass
+    const contentWithNoUpdate = content + '\nledger: not-needed';
+    const reportWithNoUpdate = buildPackageDoctorLines(
+      'work/packages/todo-20260507-doctor-test.md',
+      contentWithNoUpdate,
+      {
+        phase: 'closure',
+        theoryLedgerContext: {
+          entries: [],
+          errors: [],
+        }
+      }
+    );
+    assert.deepEqual(reportWithNoUpdate.errors, []);
+  });
+
   it('requires executor and verifier-fixer proof for future closed runtime packages',
     () => {
       const report = buildPackageDoctorLines(
@@ -1791,6 +1942,7 @@ describe('work tracker package doctor', () => {
           scopeShape: 'leaf-slice',
           outputProfile: 'small',
           escalationTriggers: ['runtime ownership changes'],
+          ambiguityScore: 1,
         },
       }, null, 2),
       '-->',

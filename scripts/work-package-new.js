@@ -6,6 +6,7 @@ import process from 'node:process';
 import {fileURLToPath} from 'node:url';
 import {buildRepresentativeEvidenceSummary} from './summarize-representative-evidence.js';
 import {buildSummary, readLedgerEntries} from './model-ledger.js';
+import {parsePackageMetadata} from './work-tracker.js';
 import {
   CLASSIFICATION_EFFICIENCY_ARTIFACT_BUDGET_FIELD,
   CLASSIFICATION_EFFICIENCY_COMMANDS_FIELD,
@@ -69,6 +70,7 @@ import {
   VALIDATION_TIERS,
   WORKFLOW_LANES,
   WORK_PACKAGE_METADATA_SCHEMA,
+  THEORY_LEDGER_REFS_FIELD,
   coreLogicBriefRequiredForLane,
   defaultModelFitForLane,
   renderSchemaReference,
@@ -1177,6 +1179,7 @@ async function buildPackageContent(flags = {}) {
       'New package scaffolded from the shared work-package schema.',
     nextAction: normalizeText(flags[FLAG_NEXT_ACTION]),
     proof,
+    [THEORY_LEDGER_REFS_FIELD]: ['none'],
     [SCOPE_FIELD_WRITE_SCOPE]: writeScope,
     [SCOPE_FIELD_HANDOFF_FILES]: handoffFiles,
     [SCOPE_FIELD_GENERATED_FILES]: generatedFiles,
@@ -1253,6 +1256,16 @@ async function buildPackageContent(flags = {}) {
   const predecessor = normalizeText(flags[FLAG_PREDECESSOR]);
   if (predecessor) {
     metadata.predecessor = predecessor;
+    try {
+      // Find the predecessor file and parse its metadata to inherit theoryLedgerRefs
+      const predContent = await fs.readFile(predecessor, 'utf8');
+      const predMetadata = parsePackageMetadata(predContent, predecessor);
+      if (predMetadata && Array.isArray(predMetadata[THEORY_LEDGER_REFS_FIELD])) {
+        metadata[THEORY_LEDGER_REFS_FIELD] = predMetadata[THEORY_LEDGER_REFS_FIELD];
+      }
+    } catch (e) {
+      // ignore if predecessor file does not exist or fails to parse
+    }
   }
 
   return [
