@@ -197,3 +197,9 @@ Agent identity is optional provenance. Use the compact five-field shape for new 
 ## Theory Ledger Update
 
 no ledger update
+
+## Commit And Push Ledger
+
+- Focused package commit: c77ed8c9555aeaf22c79b18c56c5326c76384964
+- Pushed to: origin/codex/pending-ack-eligibility-filter
+- Commit contains only package-owned files/package-status/allowed sprint handoff: yes
