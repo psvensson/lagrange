@@ -103,7 +103,7 @@ Within each round, ordering follows Operating Rule 3
      recovery context.
    - Acceptance: triage prints an explicit signal-conflict section for the
      seed artifact and tests cover the conflict case.
-2. [Workflow Package Tooling Reliability](../packages/todo-20260523-workflow-package-tooling-reliability.md)
+2. [Workflow Package Tooling Reliability](../packages/done-20260523-workflow-package-tooling-reliability.md)
    - Lane: `lightweight-maintenance`
    - Owner boundary: `workflow_tooling_owner / package_validation_and_ledgers`
    - Purpose: reduce package ceremony drift by unifying validator/doctor
@@ -138,7 +138,7 @@ Within each round, ordering follows Operating Rule 3
    - Acceptance: focused control-plane/bootstrap tests prove separate typed
      outcomes for pending recovery, grace-period reads, transport dampening,
      unavailable diagnostics, and no pending recovery.
-5. [Evidence Based Rebalancer Readiness Gate](../packages/todo-20260523-evidence-based-rebalancer-readiness-gate.md)
+5. [Evidence Based Rebalancer Readiness Gate](../packages/done-20260523-evidence-based-rebalancer-readiness-gate.md)
    - Lane: `runtime-owner-boundary`
    - Owner boundary: `rebalancer_planning_owner / cluster_readiness_gate`
    - Purpose: replace timer-confirmed cluster readiness with evidence-backed or
