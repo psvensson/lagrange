@@ -193,7 +193,7 @@ does not overlap an active Round 1 package.
      existing active and queued packages still validate after a
      compatibility shim; a doctor pass on every Round 1 package returns
      zero schema-shape suggestions.
-9. [Legacy Subagent Progress Ledger Retirement](../packages/todo-20260523-legacy-subagent-progress-ledger-retirement.md)
+9. [Legacy Subagent Progress Ledger Retirement](../packages/done-20260523-legacy-subagent-progress-ledger-retirement.md)
    - Lane: `lightweight-maintenance`
    - Owner boundary: `workflow_tooling_owner / execution_evidence_ledger`
    - Purpose: stop validating the legacy `Subagent Progress` ledger as a

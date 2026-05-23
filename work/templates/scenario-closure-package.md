@@ -201,8 +201,7 @@ Out of scope:
 ## Execution Evidence
 
 Use one executor pass plus one separate verifier-fixer pass. The verifier-fixer
-may fix in-scope problems directly, then reruns focused proof. Legacy subagent
-ledgers are only for reopened packages that already use them.
+may fix in-scope problems directly, then reruns focused proof.
 
 - [ ] implementation: status: validated; evidence: <focused proof commands and results>; parent revalidated focused proof: yes; next: verification.
 - [ ] verification-fix: status: validated; evidence: <verification/fix commands and results>; changed files: <paths or none>; parent revalidated focused proof: yes; next: closure or successor action.

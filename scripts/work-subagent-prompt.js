@@ -285,25 +285,27 @@ function roleTask(role, metadata, packagePath) {
 function ledgerLine(role, packagePath, flags = {}) {
   const agentName = parseOptionValue(flags, FLAG_AGENT_NAME);
   const agentId = parseOptionValue(flags, FLAG_AGENT_ID);
-  const agentPrefix = agentName && agentId ?
-    `agent: Agent ${agentName} (${agentId}); ` :
-    EMPTY_TEXT;
+  const ownerValue = agentName && agentId ?
+    `Agent ${agentName} (${agentId})` :
+    'local';
   if (role === ROLE_REVIEW) {
-    return `- [x] review: status: validated; ${agentPrefix}` +
-      `evidence: reviewed ${packagePath}; next: implementation or fixes.`;
+    return `- [x] action: review; owner: ${ownerValue}; ` +
+      'files-changed: none; ' +
+      `validation: reviewed ${packagePath}; outcome: validated.`;
   }
   if (role === ROLE_FIX) {
-    return `- [x] fix: status: validated; ${agentPrefix}` +
-      `evidence: fixed ${packagePath}; next: implementation.`;
+    return `- [x] action: fix; owner: ${ownerValue}; ` +
+      `files-changed: <paths or none>; validation: fixed ${packagePath}; ` +
+      'outcome: validated.';
   }
   if (role === ROLE_VERIFICATION_FIX) {
-    return `- [x] verification-fix: status: validated; ${agentPrefix}` +
-      `evidence: verified and fixed ${packagePath}; changed files: <paths or none>; ` +
-      'parent revalidated focused proof: yes; next: closure or successor action.';
+    return `- [x] action: verification-fix; owner: ${ownerValue}; ` +
+      `files-changed: <paths or none>; validation: verified and fixed ${packagePath}; ` +
+      'parent revalidated focused proof: yes; outcome: validated.';
   }
-  return `- [x] implementation: status: validated; ${agentPrefix}` +
-    `evidence: implemented ${packagePath}; ` +
-    'parent revalidated focused proof: yes; next: closure or successor action.';
+  return `- [x] action: implementation; owner: ${ownerValue}; ` +
+    `files-changed: <paths or none>; validation: implemented ${packagePath}; ` +
+    'parent revalidated focused proof: yes; outcome: validated.';
 }
 
 function reviewMetadataFixLedgerLine(packagePath, flags = {}) {
@@ -564,18 +566,18 @@ function buildSubagentPrompt(role, packagePath, content, args = []) {
     '## Execution Evidence',
     EMPTY_TEXT,
     'Append one checked `## Execution Evidence` item in the package after completed implementation or validation work. Agent identity is optional provenance; do not invent names or ids.',
-    'Each checked item must include status, evidence, and next or blocker. Before edits, include a falsification item naming what evidence would prove this package is the wrong slice.',
+    'Each checked item should use the five fields `action:`, `owner:`, `files-changed:`, `validation:`, and `outcome:`. Before edits, include a falsification item naming what evidence would prove this package is the wrong slice.',
     role === ROLE_REVIEW ?
       'If review findings are metadata-only, apply those edits directly and add a checked item naming the metadata-only files fixed before final review validation.' :
       EMPTY_TEXT,
     role === ROLE_VERIFICATION_FIX ?
-      'For verification-fix, fix in-scope findings directly and include `changed files:` in the checked evidence item.' :
+      'For verification-fix, fix in-scope findings directly and include `files-changed:` in the checked evidence item.' :
       EMPTY_TEXT,
     EMPTY_TEXT,
     'Use this shape:',
     EMPTY_TEXT,
-    `- [ ] ${role}: status: \`<running|partial-unvalidated|validated|superseded>\`; evidence: <command/result/files>; next: <next step>.`,
-    `- [ ] ${role} falsification: status: validated; wrong-slice evidence would be <owner/boundary/result change>; evidence: <command/result/files>; next: edit, validate, split, or blocker handoff.`,
+    `- [ ] action: ${role}; owner: ${metadata.owner || '<owner>'}; files-changed: <paths or none>; validation: <command/result/files>; outcome: <running|partial-unvalidated|validated|superseded|blocked>.`,
+    `- [ ] action: ${role} falsification; owner: ${metadata.owner || '<owner>'}; files-changed: none; validation: wrong-slice evidence would be <owner/boundary/result change>; outcome: validated.`,
     EMPTY_TEXT,
     'If blocked, append `blocker:` instead of `next:` and stop for the parent session rather than continuing silently.',
     EMPTY_TEXT,

@@ -536,6 +536,15 @@ const WORK_TRACKER_EXECUTION_EVIDENCE_VERIFIED_NO_CHANGES_CONTENT = [
   '- [x] verification-fix: status: validated; evidence: npm test -- test/example.test.js; parent revalidated focused proof: yes; next: closure.',
   '',
 ].join('\n');
+const WORK_TRACKER_EXECUTION_EVIDENCE_FIVE_FIELD_CONTENT = [
+  '# Test Package',
+  '',
+  '## Execution Evidence',
+  '',
+  '- [x] action: implementation; owner: workflow_tooling_owner; files-changed: scripts/work-tracker.js; validation: npm test -- test/example.test.js; parent revalidated focused proof: yes; outcome: validated.',
+  '- [x] action: verification-fix; owner: workflow_tooling_owner; files-changed: none; validation: npm test -- test/example.test.js; parent revalidated focused proof: yes; outcome: validated.',
+  '',
+].join('\n');
 const WORK_TRACKER_EXECUTION_EVIDENCE_WITH_AGENT_CONTENT = [
   '# Test Package',
   '',
@@ -1169,6 +1178,16 @@ describe('work tracker subagent sequencing ledger validation', () => {
       WORK_TRACKER_EXECUTION_EVIDENCE_CLEAN_CONTENT,
       WORK_TRACKER_LEDGER_TEST_FILE,
       {requiresLedger: true},
+    );
+
+    assert.deepEqual(errors, []);
+  });
+
+  it('accepts compact five-field execution evidence as closure proof', () => {
+    const errors = validateExecutionEvidenceLedger(
+      WORK_TRACKER_EXECUTION_EVIDENCE_FIVE_FIELD_CONTENT,
+      WORK_TRACKER_LEDGER_TEST_FILE,
+      {requiresLedger: true, requiresVerificationFix: true},
     );
 
     assert.deepEqual(errors, []);
@@ -2053,6 +2072,37 @@ describe('work tracker package doctor', () => {
       /Execution Evidence is required with checked implementation and verification-fix/u,
     );
   });
+
+  it('treats legacy subagent ledger sections as advisory once execution evidence exists',
+    () => {
+      const content = [
+        WORK_TRACKER_DOCTOR_CONTENT,
+        '',
+        WORK_TRACKER_EXECUTION_EVIDENCE_VERIFIED_CONTENT
+          .split('\n')
+          .slice(2)
+          .join('\n'),
+        '',
+        '## Subagent Progress Ledger',
+        '',
+        '- [ ] Agent Review (<agent-id>) old placeholder entry without closure proof.',
+        '',
+        '## Theory Ledger Update',
+        '',
+        'no ledger update',
+        '',
+      ].join('\n');
+      const report = buildPackageDoctorLines(
+        WORK_TRACKER_ACTIVE_DOCTOR_FILE,
+        content,
+        {phase: 'closure'},
+      );
+      const rendered = report.lines.join('\n');
+
+      assert.deepEqual(report.errors, []);
+      assert.match(rendered, /Legacy subagent ledger section detected/u);
+      assert.match(rendered, /advisory, not closure gates/u);
+    });
 
   it('surfaces scenario causal closure metadata in package doctor output', () => {
     const scenarioDoctorContent = WORK_TRACKER_DOCTOR_CONTENT.replace(

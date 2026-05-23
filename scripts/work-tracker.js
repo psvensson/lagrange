@@ -728,6 +728,12 @@ const SUBAGENT_PROGRESS_NEXT_OR_BLOCKER_FIELD_PATTERN =
   /\b(?:next|blocker)\s*:/iu;
 const EXECUTION_EVIDENCE_CHANGED_FILES_FIELD_PATTERN =
   /\bchanged files\s*:/iu;
+const EXECUTION_EVIDENCE_FILES_CHANGED_FIELD_PATTERN =
+  /\bfiles-changed\s*:/iu;
+const EXECUTION_EVIDENCE_ACTION_FIELD_PATTERN = /\baction\s*:/iu;
+const EXECUTION_EVIDENCE_OWNER_FIELD_PATTERN = /\bowner\s*:/iu;
+const EXECUTION_EVIDENCE_VALIDATION_FIELD_PATTERN = /\bvalidation\s*:/iu;
+const EXECUTION_EVIDENCE_OUTCOME_FIELD_PATTERN = /\boutcome\s*:/iu;
 const SUBAGENT_ATTEMPT_STATUS_PATTERN =
   /\bstatus\s*:\s*`?([a-z-]+)`?/iu;
 const SUBAGENT_ATTEMPT_LAST_CHECKPOINT_FIELD_PATTERN =
@@ -756,6 +762,8 @@ const EXECUTION_EVIDENCE_VERIFICATION_FIX_PATTERN =
   /\bverification-fix\b/iu;
 const EXECUTION_EVIDENCE_TERMINAL_STATUS_PATTERN =
   /\bstatus\s*:\s*`?(?:validated|passed|green|success|done|superseded)`?/iu;
+const EXECUTION_EVIDENCE_TERMINAL_OUTCOME_PATTERN =
+  /\boutcome\s*:\s*`?(?:validated|passed|green|success|done|superseded)`?/iu;
 const VERIFICATION_FIX_SCOPE_PATTERN =
   /^(?:src|test|scripts|work)\//u;
 const SUBAGENT_ATTEMPT_PARENT_TERMINAL_ACTIONS = Object.freeze([
@@ -1270,26 +1278,35 @@ function validateCheckedExecutionEvidenceItem(content, filePath, options = {}) {
       `${filePath}: Execution Evidence checked item ${checkedItemError}.`,
     );
   }
+  const usesFiveFieldShape = hasFiveFieldExecutionEvidenceItem(content);
   const status = parseAttemptStatus(content);
-  if (!status) {
+  if (!usesFiveFieldShape && !status) {
     errors.push(
       `${filePath}: Execution Evidence checked item must include ` +
-      '`status:`.',
-    );
-  }
-  if (!SUBAGENT_PROGRESS_EVIDENCE_FIELD_PATTERN.test(content)) {
-    errors.push(
-      `${filePath}: Execution Evidence checked item must include ` +
-      '`evidence:`.',
-    );
-  }
-  if (!SUBAGENT_PROGRESS_NEXT_OR_BLOCKER_FIELD_PATTERN.test(content)) {
-    errors.push(
-      `${filePath}: Execution Evidence checked item must include ` +
-      '`next:` or `blocker:`.',
+      '`status:` or the five fields `action:`, `owner:`, `files-changed:`, ' +
+      '`validation:`, and `outcome:`.',
     );
   }
   if (
+    !usesFiveFieldShape &&
+    !SUBAGENT_PROGRESS_EVIDENCE_FIELD_PATTERN.test(content)
+  ) {
+    errors.push(
+      `${filePath}: Execution Evidence checked item must include ` +
+      '`evidence:` or the five-field evidence shape.',
+    );
+  }
+  if (
+    !usesFiveFieldShape &&
+    !SUBAGENT_PROGRESS_NEXT_OR_BLOCKER_FIELD_PATTERN.test(content)
+  ) {
+    errors.push(
+      `${filePath}: Execution Evidence checked item must include ` +
+      '`next:` or `blocker:`, or the five-field evidence shape.',
+    );
+  }
+  if (
+    status &&
     options[LEDGER_VALIDATION_ALLOW_OPEN_IMPLEMENTATION] !== true &&
     SUBAGENT_ATTEMPT_OPEN_STATUSES.includes(status)
   ) {
@@ -1309,6 +1326,30 @@ function findImplementationExecutionEvidenceItem(checkedItems = []) {
 function findVerificationFixExecutionEvidenceItem(checkedItems = []) {
   return checkedItems.find((item) =>
     EXECUTION_EVIDENCE_VERIFICATION_FIX_PATTERN.test(item));
+}
+
+function hasFiveFieldExecutionEvidenceItem(content) {
+  return (
+    EXECUTION_EVIDENCE_ACTION_FIELD_PATTERN.test(content) &&
+    EXECUTION_EVIDENCE_OWNER_FIELD_PATTERN.test(content) &&
+    EXECUTION_EVIDENCE_FILES_CHANGED_FIELD_PATTERN.test(content) &&
+    EXECUTION_EVIDENCE_VALIDATION_FIELD_PATTERN.test(content) &&
+    EXECUTION_EVIDENCE_OUTCOME_FIELD_PATTERN.test(content)
+  );
+}
+
+function hasTerminalExecutionEvidenceItem(content) {
+  return (
+    EXECUTION_EVIDENCE_TERMINAL_STATUS_PATTERN.test(content) ||
+    EXECUTION_EVIDENCE_TERMINAL_OUTCOME_PATTERN.test(content)
+  );
+}
+
+function hasExecutionEvidenceChangedFilesField(content) {
+  return (
+    EXECUTION_EVIDENCE_CHANGED_FILES_FIELD_PATTERN.test(content) ||
+    EXECUTION_EVIDENCE_FILES_CHANGED_FIELD_PATTERN.test(content)
+  );
 }
 
 export function validateExecutionEvidenceLedger(content, filePath, options = {}) {
@@ -1362,10 +1403,10 @@ export function validateExecutionEvidenceLedger(content, filePath, options = {})
         'implementation item before closure.',
       );
     } else {
-      if (!EXECUTION_EVIDENCE_TERMINAL_STATUS_PATTERN.test(implementationItem)) {
+      if (!hasTerminalExecutionEvidenceItem(implementationItem)) {
         errors.push(
           `${filePath}: Execution Evidence implementation item must record ` +
-          'status validated, passed, green, success, or done.',
+          'status or outcome validated, passed, green, success, or done.',
         );
       }
       if (!SUBAGENT_PARENT_REVALIDATION_PATTERN.test(implementationItem)) {
@@ -1382,10 +1423,10 @@ export function validateExecutionEvidenceLedger(content, filePath, options = {})
           'verification-fix item before closure.',
         );
       } else {
-        if (!EXECUTION_EVIDENCE_TERMINAL_STATUS_PATTERN.test(verificationFixItem)) {
+        if (!hasTerminalExecutionEvidenceItem(verificationFixItem)) {
           errors.push(
             `${filePath}: Execution Evidence verification-fix item must ` +
-            'record status validated, passed, green, success, done, or superseded.',
+            'record status or outcome validated, passed, green, success, done, or superseded.',
           );
         }
         if (!SUBAGENT_PARENT_REVALIDATION_PATTERN.test(verificationFixItem)) {
@@ -1394,10 +1435,10 @@ export function validateExecutionEvidenceLedger(content, filePath, options = {})
             'record `parent revalidated focused proof: yes` before closure.',
           );
         }
-        if (!EXECUTION_EVIDENCE_CHANGED_FILES_FIELD_PATTERN.test(verificationFixItem)) {
+        if (!hasExecutionEvidenceChangedFilesField(verificationFixItem)) {
           errors.push(
             `${filePath}: Execution Evidence verification-fix item must ` +
-            'record `changed files:` before closure.',
+            'record `changed files:` or `files-changed:` before closure.',
           );
         }
       }
@@ -5773,42 +5814,11 @@ function runPackageValidationsSync(filePath, content, fileStatus, metadata, opti
         'implementation and verification-fix items before closure.',
       );
     } else if (subagentValidation.requiresSubagentLedger) {
-      errors.push(...validateSubagentSequencingLedger(content, relativePath, {
-        [LEDGER_VALIDATION_REQUIRES_LEDGER]:
-          subagentValidation.requiresSubagentLedger,
-        [LEDGER_VALIDATION_REQUIRES_STRICT_ENTRIES]:
-          subagentValidation.requiresSubagentLedger,
-        [LEDGER_VALIDATION_ALLOW_OPEN_IMPLEMENTATION]:
-          subagentValidation.allowOpenImplementation,
-        [LEDGER_VALIDATION_ALLOW_UNAVAILABLE_SUBAGENTS]:
-          subagentValidation.allowUnavailableSubagents,
-        [LEDGER_VALIDATION_ALLOW_PENDING_SUBAGENT_LEDGER]:
-          fileStatus === STATUS_TODO,
-      }));
-      errors.push(...validateSubagentProgressLedger(content, relativePath, {
-        [LEDGER_VALIDATION_REQUIRES_LEDGER]:
-          subagentValidation.requiresSubagentLedger,
-        [LEDGER_VALIDATION_REQUIRES_STRICT_ENTRIES]:
-          subagentValidation.requiresSubagentLedger,
-        [LEDGER_VALIDATION_ALLOW_OPEN_IMPLEMENTATION]:
-          subagentValidation.allowOpenImplementation,
-        [LEDGER_VALIDATION_ALLOW_UNAVAILABLE_SUBAGENTS]:
-          subagentValidation.allowUnavailableSubagents,
-        [LEDGER_VALIDATION_ALLOW_PENDING_SUBAGENT_LEDGER]:
-          fileStatus === STATUS_TODO,
-      }));
-      errors.push(...validateSubagentAttemptLedger(content, relativePath, {
-        [LEDGER_VALIDATION_REQUIRES_LEDGER]:
-          subagentValidation.requiresSubagentLedger,
-        [LEDGER_VALIDATION_REQUIRES_STRICT_ENTRIES]:
-          subagentValidation.requiresSubagentLedger,
-        [LEDGER_VALIDATION_ALLOW_OPEN_IMPLEMENTATION]:
-          subagentValidation.allowOpenImplementation,
-        [LEDGER_VALIDATION_ALLOW_UNAVAILABLE_SUBAGENTS]:
-          subagentValidation.allowUnavailableSubagents,
-        [LEDGER_VALIDATION_ALLOW_PENDING_SUBAGENT_LEDGER]:
-          fileStatus === STATUS_TODO,
-      }));
+      errors.push(
+        `${relativePath}: Execution Evidence is required with a checked ` +
+        'implementation item before closure; legacy subagent ledgers are ' +
+        'advisory provenance only.',
+      );
     }
   }
 
@@ -6787,7 +6797,30 @@ function buildProofLadderGuidance(metadata = {}) {
     'durable commands.';
 }
 
-function buildProcessGuidanceLines(metadata = {}, fileStatus = DEFAULT_UNKNOWN) {
+function hasLegacySubagentLedger(content) {
+  return (
+    extractSubagentSequencingLedger(content) !== null ||
+    extractSubagentProgressLedger(content) !== null ||
+    extractSubagentAttemptLedger(content) !== null
+  );
+}
+
+function buildLegacySubagentLedgerGuidance(content) {
+  if (!hasLegacySubagentLedger(content)) {
+    return [];
+  }
+  return [
+    'Legacy subagent ledger section detected: keep it as historical ' +
+      'provenance, but migrate the next closure to `## Execution Evidence`; ' +
+      'legacy ledger fields are advisory, not closure gates.',
+  ];
+}
+
+function buildProcessGuidanceLines(
+  metadata = {},
+  fileStatus = DEFAULT_UNKNOWN,
+  content = EMPTY_TEXT,
+) {
   const lines = [buildProofLadderGuidance(metadata)];
   const isActivePackage = fileStatus === STATUS_ACTIVE;
   const hasImplementationWrites = hasImplementationWriteScope(metadata);
@@ -6844,6 +6877,7 @@ function buildProcessGuidanceLines(metadata = {}, fileStatus = DEFAULT_UNKNOWN) 
       'keep them only when implementation files changed.',
     );
   }
+  lines.push(...buildLegacySubagentLedgerGuidance(content));
   const architectureGate = metadata?.[ARCHITECTURE_DECISION_GATE_FIELD];
   if (
     isObjectRecord(architectureGate) &&
@@ -7122,6 +7156,7 @@ export function buildPackageDoctorLines(filePath, content, options = {}) {
     ...buildProcessGuidanceLines(
       metadata || {},
       fileStatus,
+      content,
     ),
     ...buildTheoryLedgerGuidance(
       metadata || {},

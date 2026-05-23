@@ -89,10 +89,10 @@ test('shared package schema lists validator enums for LLM scaffolding', (t) => {
   t.match(rendered, /tool-unavailable/u);
   t.match(rendered, /Execution Evidence/u);
   t.match(rendered, /Agent identity is optional provenance/u);
-  t.match(rendered, /Subagent Progress Ledger/u);
-  t.match(rendered, /review-fixed-metadata-only/u);
-  t.match(rendered, /evidence: \.\.\./u);
-  t.match(rendered, /Subagent Attempt Ledger/u);
+  t.match(rendered, /files-changed:/u);
+  t.match(rendered, /validation:/u);
+  t.match(rendered, /outcome:/u);
+  t.match(rendered, /historical provenance only/u);
   t.match(rendered, /partial-unvalidated/u);
   t.match(rendered, /pending-before-rerun/u);
   t.match(rendered, /classification-only-stop/u);
@@ -158,7 +158,9 @@ test('package scaffolder pre-fills Model Fit from schema defaults', async (t) =>
   t.match(content, /## Rerun Decision Gate/u);
   t.match(content, /## Classification Efficiency/u);
   t.match(content, /## Execution Evidence/u);
-  t.match(content, /status: validated/u);
+  t.match(content, /action: implementation/u);
+  t.match(content, /files-changed:/u);
+  t.match(content, /outcome:/u);
   t.match(content, /parent revalidated focused proof: yes/u);
   t.match(content, /Agent identity is optional provenance/u);
   t.match(content, /work:advance -- --check/u);

@@ -126,9 +126,9 @@ Use the tracker utility for current sprint/package mechanics:
     package scaffolding commands for deliberate residual splits.
 18. `npm run work:subagent-prompt -- --role implementation|verification-fix
     --package work/packages/active-...md` generates bounded role prompts and
-    the ledger-line shape to record after a real subagent returns. Legacy
-    `review` and `fix` prompts remain available for reopened packages that
-    already use those ledgers. The prompt includes the package spawn/execution
+    the `## Execution Evidence` line shape to record after a real subagent
+    returns. Legacy `review` and `fix` prompts remain available for historical
+    inspection only. The prompt includes the package spawn/execution
     model and tells the parent to set it explicitly instead of relying on
     inherited high-model defaults. It records `## Execution Evidence`; agent
     identity is optional provenance.
@@ -212,8 +212,7 @@ the package explicitly records a heavier audit or architecture reason:
    separate verifier-fixer then verifies the last package work, may fix any
    in-scope problem directly, reruns focused proof, and reports changed files.
    Closure proof is the package's `## Execution Evidence`. Agent identity is
-   optional provenance and must never be invented. Legacy review/fix/
-   implementation ledgers remain valid only for packages already using them.
+   optional provenance and must never be invented.
 7. Use the `mechanical-maintenance` lane for docs, templates, schema text,
    package metadata, generated handoff text, and similarly mechanical edits
    that do not change runtime or test behavior. These packages should be
@@ -390,9 +389,9 @@ closure complete. If an executor or verifier-fixer stops with edited files and
 no validation, record `status: partial-unvalidated` with a `blocker:` or add a
 later checked superseded/revalidated evidence item before closure.
 
-Legacy `## Subagent Sequencing Ledger`, `## Subagent Progress Ledger`,
-`## Subagent Attempt Ledger`, and `## Subagent Progress And Attempt Ledger`
-sections remain valid for packages already using them.
+Historical subagent ledger sections are provenance only. If a package with
+those sections is reopened or closed again, migrate the current proof to
+`## Execution Evidence`.
 
 `npm run work:validate -- --entry` validates package shape and contracts.
 `--pre-impl` no longer blocks on process ledgers when implementation scope is
@@ -400,14 +399,13 @@ bounded. `--closure` is strict: implementation evidence must be checked,
 terminal, focused-proof-backed, and parent-revalidated before package closure.
 
 Legacy active metadata packages without `lane` remain strict. Historical
-`done-...` packages without the ledger remain valid unless they add a ledger
-with open or incomplete required entries. In legacy subagent ledgers, checked
-closure entries must contain real agent identities. In `## Execution Evidence`,
+`done-...` packages without `## Execution Evidence` remain valid. Legacy
+subagent ledgers are no longer closure gates, but doctor output reminds
+maintainers to migrate them at the next closure. In `## Execution Evidence`,
 agent identity is optional, but template placeholders such as `<...>` and
 pending markers such as `pending-before-implementation-resumes` remain closure
 validation failures. Historical closed-package proof is not backfilled by
-invention; if a package is reopened, migrated, or closed again, the current
-proof rules apply.
+invention.
 
 ## Commit And Push Ledger
 

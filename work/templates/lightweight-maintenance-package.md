@@ -72,13 +72,12 @@ Out of scope:
 1. Focused script or test:
 2. `git diff --check -- <files>`
 
-## Subagent Progress Ledger
+## Execution Evidence
 
-Optional for this lane unless the package or user explicitly asks for
-subagents. If used, each real subagent appends one checked update after every
-completed subtask.
+Use one checked item per executor or verifier pass. The preferred compact
+shape is action, owner, files-changed, validation, and outcome.
 
-- [ ] Agent <name> (<agent-id>) <role> subtask complete: state; evidence: command/result/files; next: next step or final handoff.
+- [ ] action: implementation; owner: <owner>; files-changed: <paths or none>; validation: <command/result>; outcome: <validated|blocked>.
 
 ## Closure
 
