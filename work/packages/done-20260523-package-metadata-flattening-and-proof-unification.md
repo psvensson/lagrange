@@ -3,7 +3,7 @@
 <!-- work-package
 {
   "schema": "work-package-v1",
-  "status": "active",
+  "status": "done",
   "opened": "2026-05-23",
   "lane": "lightweight-maintenance",
   "scenario": "none",
@@ -15,10 +15,10 @@
   "currentState": "New package scaffolded from the shared work-package schema.",
   "nextAction": "Flatten package schema and unify proof recording",
   "proof": [
-    "npm run work:package:doctor -- --suggest work/packages/active-20260523-package-metadata-flattening-and-proof-unification.md",
-    "npm run work:validate -- --pre-impl work/packages/active-20260523-package-metadata-flattening-and-proof-unification.md",
+    "npm run work:package:doctor -- --suggest work/packages/done-20260523-package-metadata-flattening-and-proof-unification.md",
+    "npm run work:validate -- --pre-impl work/packages/done-20260523-package-metadata-flattening-and-proof-unification.md",
     "npm test -- test/scripts/work-tracker-subagent-ledger.test.js test/scripts/work-theory-ledger.test.js test/scripts/work-scenario-triage.test.js test/scripts/analyze-priority-recovery-residuals.test.js test/scripts/analyze-topology-convergence.test.js test/scripts/work-context.test.js test/scripts/work-llm-usability-tools.test.js",
-    "git diff --check -- scripts/work-package-schema.js scripts/work-context.js scripts/work-subagent-prompt.js scripts/work-tracker.js test/scripts/work-context.test.js test/scripts/work-llm-usability-tools.test.js work/packages/active-20260523-package-metadata-flattening-and-proof-unification.md work/sprints/current-blocker.json work/sprints/current-blocker.md work/sprints/active-2026-q2-workflow-steering-core-logic-hardening.md",
+    "git diff --check -- scripts/work-package-schema.js scripts/work-context.js scripts/work-subagent-prompt.js scripts/work-tracker.js test/scripts/work-context.test.js test/scripts/work-llm-usability-tools.test.js work/packages/done-20260523-package-metadata-flattening-and-proof-unification.md work/sprints/current-blocker.json work/sprints/current-blocker.md work/sprints/active-2026-q2-workflow-steering-core-logic-hardening.md",
     "npm run work:context"
   ],
   "theoryLedgerRefs": [],
@@ -136,7 +136,7 @@
     "test/scripts/analyze-priority-recovery-residuals.test.js",
     "test/scripts/work-scenario-triage.test.js",
     "work/RULES.md",
-    "work/packages/active-20260523-package-metadata-flattening-and-proof-unification.md"
+    "work/packages/done-20260523-package-metadata-flattening-and-proof-unification.md"
   ],
   "modelFit": {
     "packageClass": "bounded-implementation",
@@ -169,7 +169,9 @@
     ]
   },
   "stabilityCredit": "local-proof-only",
-  "whyHighestLeverageNow": "This package advances the active sprint goal and current first frontier."
+  "whyHighestLeverageNow": "This package advances the active sprint goal and current first frontier.",
+  "closed": "2026-05-23",
+  "commitAndPushLedgerRequired": true
 }
 -->
 
@@ -261,7 +263,7 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 - Intended minimum model: `gpt-5.3-codex-spark`
 - Scope shape: `leaf-slice`
 - Output profile: `medium`
-- Owned files: `work/packages/active-20260523-package-metadata-flattening-and-proof-unification.md`
+- Owned files: `work/packages/done-20260523-package-metadata-flattening-and-proof-unification.md`
 - Forbidden files: `src/`
 - Frozen decisions: package scope and lane stay bounded unless explicitly escalated.
 - Escalation triggers: owned files expand beyond this package, runtime ownership changes, or representative scenario evidence changes.
@@ -291,14 +293,20 @@ Preferred closure evidence for new packages. One executor owns implementation en
 Agent identity is optional provenance. Use legacy subagent ledgers only when a reopened historical package already uses them.
 
 - [x] implementation: status: validated; evidence: repaired `scripts/work-package-schema.js` duplicate export and v2 proof-command normalization, normalized v2 package metadata in `scripts/work-context.js`, updated v2 scaffolder/context regression tests, expanded package scope, and refreshed generated blocker state with `npm run work:repair`; proof: package doctor pass, pre-impl validation pass, focused workflow TAP batch 655/655 pass, scoped `git diff --check` pass, `npm run work:context` pass; parent revalidated focused proof: yes; next: verification.
-- [x] implementation falsification: status: validated; wrong-slice evidence would be `work:context` still rendering v2 package fields as unknown, proof commands missing after v2 normalization, or `scripts/work-package-schema.js` staying outside package scope; evidence: `npm run work:package:doctor -- --suggest work/packages/active-20260523-package-metadata-flattening-and-proof-unification.md` pass, `npm run work:validate -- --pre-impl work/packages/active-20260523-package-metadata-flattening-and-proof-unification.md` pass, implementation subagent Locke (`019e5437-9e8f-76f0-947b-2477a38c7025`) confirmed `scripts/work-package-schema.js` belongs in writeScope/commitScope; next: verification.
+- [x] implementation falsification: status: validated; wrong-slice evidence would be `work:context` still rendering v2 package fields as unknown, proof commands missing after v2 normalization, or `scripts/work-package-schema.js` staying outside package scope; evidence: `npm run work:package:doctor -- --suggest work/packages/done-20260523-package-metadata-flattening-and-proof-unification.md` pass, `npm run work:validate -- --pre-impl work/packages/done-20260523-package-metadata-flattening-and-proof-unification.md` pass, implementation subagent Locke (`019e5437-9e8f-76f0-947b-2477a38c7025`) confirmed `scripts/work-package-schema.js` belongs in writeScope/commitScope; next: verification.
 - [x] verification-fix: status: validated; evidence: verifier-fixer Franklin (`019e543d-ebc2-7061-88cc-b0852e3873aa`) ran package doctor, pre-impl validation, `npm test -- test/scripts/work-context.test.js test/scripts/work-llm-usability-tools.test.js`, scoped `git diff --check`, and `npm run work:context`; changed files: none; parent revalidated focused proof: yes; next: closure validation.
 - [x] repair: status: validated; evidence: `npm run work:repair` refreshed generated current-blocker and Current Edge Card after package scope changes; next: verification.
 
 ## Validation
 
-1. `npm run work:package:doctor -- --suggest work/packages/active-20260523-package-metadata-flattening-and-proof-unification.md`
-2. `npm run work:validate -- --pre-impl work/packages/active-20260523-package-metadata-flattening-and-proof-unification.md`
+1. `npm run work:package:doctor -- --suggest work/packages/done-20260523-package-metadata-flattening-and-proof-unification.md`
+2. `npm run work:validate -- --pre-impl work/packages/done-20260523-package-metadata-flattening-and-proof-unification.md`
 3. `npm test -- test/scripts/work-tracker-subagent-ledger.test.js test/scripts/work-theory-ledger.test.js test/scripts/work-scenario-triage.test.js test/scripts/analyze-priority-recovery-residuals.test.js test/scripts/analyze-topology-convergence.test.js test/scripts/work-context.test.js test/scripts/work-llm-usability-tools.test.js`
-4. `git diff --check -- scripts/work-package-schema.js scripts/work-context.js scripts/work-subagent-prompt.js scripts/work-tracker.js test/scripts/work-context.test.js test/scripts/work-llm-usability-tools.test.js work/packages/active-20260523-package-metadata-flattening-and-proof-unification.md work/sprints/current-blocker.json work/sprints/current-blocker.md work/sprints/active-2026-q2-workflow-steering-core-logic-hardening.md`
+4. `git diff --check -- scripts/work-package-schema.js scripts/work-context.js scripts/work-subagent-prompt.js scripts/work-tracker.js test/scripts/work-context.test.js test/scripts/work-llm-usability-tools.test.js work/packages/done-20260523-package-metadata-flattening-and-proof-unification.md work/sprints/current-blocker.json work/sprints/current-blocker.md work/sprints/active-2026-q2-workflow-steering-core-logic-hardening.md`
 5. `npm run work:context`
+
+## Commit And Push Ledger
+
+1. Focused package commit: 371fa6b428619609fb2445f61cb4bbdec5bbbb95
+2. Pushed to: origin/codex/pending-ack-eligibility-filter
+3. Commit contains only package-owned files/package-status/allowed sprint handoff: yes
